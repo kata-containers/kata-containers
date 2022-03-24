@@ -8,12 +8,14 @@ package containerdshim
 import (
 	"context"
 	"fmt"
+	"github.com/sirupsen/logrus"
 
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 )
 
 func startContainer(ctx context.Context, s *service, c *container) (retErr error) {
+	shimLog.WithField("container", c.id).Debug("start container")
 	defer func() {
 		if retErr != nil {
 			// notify the wait goroutine to continue
@@ -78,7 +80,8 @@ func startContainer(ctx context.Context, s *service, c *container) (retErr error
 			return err
 		}
 		c.ttyio = tty
-		go ioCopy(c.exitIOch, c.stdinCloser, tty, stdin, stdout, stderr)
+
+		go ioCopy(shimLog.WithField("container", c.id), c.exitIOch, c.stdinCloser, tty, stdin, stdout, stderr)
 	} else {
 		// close the io exit channel, since there is no io for this container,
 		// otherwise the following wait goroutine will hang on this channel.
@@ -94,6 +97,10 @@ func startContainer(ctx context.Context, s *service, c *container) (retErr error
 }
 
 func startExec(ctx context.Context, s *service, containerID, execID string) (e *exec, retErr error) {
+	shimLog.WithFields(logrus.Fields{
+		"container": containerID,
+		"exec":      execID,
+	}).Debug("start container execution")
 	// start an exec
 	c, err := s.getContainer(containerID)
 	if err != nil {
@@ -140,7 +147,10 @@ func startExec(ctx context.Context, s *service, containerID, execID string) (e *
 	}
 	execs.ttyio = tty
 
-	go ioCopy(execs.exitIOch, execs.stdinCloser, tty, stdin, stdout, stderr)
+	go ioCopy(shimLog.WithFields(logrus.Fields{
+		"container": c.id,
+		"exec":      execID,
+	}), execs.exitIOch, execs.stdinCloser, tty, stdin, stdout, stderr)
 
 	go wait(ctx, s, c, execID)
 

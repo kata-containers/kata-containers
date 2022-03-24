@@ -31,12 +31,17 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 	if execID == "" {
 		//wait until the io closed, then wait the container
 		<-c.exitIOch
+		shimLog.WithField("container", c.id).Debug("The container io streams closed")
 	} else {
 		execs, err = c.getExec(execID)
 		if err != nil {
 			return exitCode255, err
 		}
 		<-execs.exitIOch
+		shimLog.WithFields(logrus.Fields{
+			"container": c.id,
+			"exec":      execID,
+		}).Debug("The container process io streams closed")
 		//This wait could be triggered before exec start which
 		//will get the exec's id, thus this assignment must after
 		//the exec exit, to make sure it get the exec's id.
@@ -82,13 +87,17 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 		c.exitTime = timeStamp
 
 		c.exitCh <- uint32(ret)
-
+		shimLog.WithField("container", c.id).Debug("The container status is StatusStopped")
 	} else {
 		execs.status = task.StatusStopped
 		execs.exitCode = ret
 		execs.exitTime = timeStamp
 
 		execs.exitCh <- uint32(ret)
+		shimLog.WithFields(logrus.Fields{
+			"container": c.id,
+			"exec":      execID,
+		}).Debug("The container exec status is StatusStopped")
 	}
 	s.mu.Unlock()
 
