@@ -1036,7 +1036,7 @@ mod tests {
             let dest_filename: String;
 
             if !d.src.is_empty() {
-                src = dir.path().join(d.src.to_string());
+                src = dir.path().join(d.src);
                 src_filename = src
                     .to_str()
                     .expect("failed to convert src to filename")
@@ -1046,7 +1046,7 @@ mod tests {
             }
 
             if !d.dest.is_empty() {
-                dest = dir.path().join(d.dest.to_string());
+                dest = dir.path().join(d.dest);
                 dest_filename = dest
                     .to_str()
                     .expect("failed to convert dest to filename")
