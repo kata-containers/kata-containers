@@ -31,7 +31,7 @@ func TestAttachVhostUserBlkDevice(t *testing.T) {
 
 	tmpDir, err := os.MkdirTemp("", "")
 	dm := &deviceManager{
-		blockDriver:           VirtioBlock,
+		blockDriver:           config.VirtioBlock,
 		devices:               make(map[string]api.Device),
 		vhostUserStoreEnabled: true,
 		vhostUserStorePath:    tmpDir,

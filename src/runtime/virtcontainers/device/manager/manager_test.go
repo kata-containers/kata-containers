@@ -26,7 +26,7 @@ const dirMode = os.FileMode(0750) | os.ModeDir
 
 func TestNewDevice(t *testing.T) {
 	dm := &deviceManager{
-		blockDriver: VirtioBlock,
+		blockDriver: config.VirtioBlock,
 		devices:     make(map[string]api.Device),
 	}
 	savedSysDevPrefix := config.SysDevPrefix
@@ -96,7 +96,7 @@ func TestNewDevice(t *testing.T) {
 
 func TestAttachVFIODevice(t *testing.T) {
 	dm := &deviceManager{
-		blockDriver: VirtioBlock,
+		blockDriver: config.VirtioBlock,
 		devices:     make(map[string]api.Device),
 	}
 	tmpDir, err := os.MkdirTemp("", "")
@@ -155,7 +155,7 @@ func TestAttachVFIODevice(t *testing.T) {
 
 func TestAttachGenericDevice(t *testing.T) {
 	dm := &deviceManager{
-		blockDriver: VirtioBlock,
+		blockDriver: config.VirtioBlock,
 		devices:     make(map[string]api.Device),
 	}
 	path := "/dev/tty2"
@@ -180,7 +180,7 @@ func TestAttachGenericDevice(t *testing.T) {
 
 func TestAttachBlockDevice(t *testing.T) {
 	dm := &deviceManager{
-		blockDriver: VirtioBlock,
+		blockDriver: config.VirtioBlock,
 		devices:     make(map[string]api.Device),
 	}
 	path := "/dev/hda"
@@ -203,7 +203,7 @@ func TestAttachBlockDevice(t *testing.T) {
 	assert.Nil(t, err)
 
 	// test virtio SCSI driver
-	dm.blockDriver = VirtioSCSI
+	dm.blockDriver = config.VirtioSCSI
 	device, err = dm.NewDevice(deviceInfo)
 	assert.Nil(t, err)
 	err = device.Attach(context.Background(), devReceiver)
@@ -214,7 +214,7 @@ func TestAttachBlockDevice(t *testing.T) {
 }
 
 func TestAttachDetachDevice(t *testing.T) {
-	dm := NewDeviceManager(VirtioSCSI, false, "", nil)
+	dm := NewDeviceManager(config.VirtioSCSI, false, "", nil)
 
 	path := "/dev/hda"
 	deviceInfo := config.DeviceInfo{
