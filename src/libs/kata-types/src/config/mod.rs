@@ -21,7 +21,7 @@ pub mod default;
 mod agent;
 pub mod hypervisor;
 
-use self::agent::Agent;
+pub use self::agent::Agent;
 pub use self::hypervisor::{
     BootInfo, DragonballConfig, Hypervisor, QemuConfig, HYPERVISOR_NAME_DRAGONBALL,
     HYPERVISOR_NAME_QEMU,
