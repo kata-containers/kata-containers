@@ -57,8 +57,11 @@ jobs:
       - name: Prepare confidential container rootfs
         if: ${{ matrix.asset == 'rootfs-initrd' }}
         run: |
-          wget -P include_rootfs/etc/ https://raw.githubusercontent.com/confidential-containers/documentation/main/demos/ssh-demo/aa-offline_fs_kbc-keys.json
-          envsubst < docs/how-to/data/confidential-agent-config.toml.in > include_rootfs/etc/kata-config.toml
+          pushd include_rootfs/etc
+          curl -LO https://raw.githubusercontent.com/confidential-containers/documentation/main/demos/ssh-demo/aa-offline_fs_kbc-keys.json
+          mkdir kata-containers
+          envsubst < docs/how-to/data/confidential-agent-config.toml.in > kata-containers/agent.toml
+          popd
         env:
           AA_KBC_PARAMS: offline_fs_kbc::null
 
