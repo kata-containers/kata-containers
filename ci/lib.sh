@@ -39,8 +39,3 @@ run_static_checks()
 	bash "$tests_repo_dir/.ci/static-checks.sh" "$@"
 }
 
-run_go_test()
-{
-	clone_tests_repo
-	bash "$tests_repo_dir/.ci/go-test.sh"
-}
