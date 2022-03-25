@@ -44,9 +44,6 @@ test_coverage_file="coverage.txt"
 # file will be added to the master coverage file.
 tmp_coverage_file="${test_coverage_file}.tmp"
 
-# Permissions to create coverage files with
-coverage_file_mode=0644
-
 warn()
 {
 	local msg="$*"
@@ -135,9 +132,8 @@ test_go_package()
 	if [ -f "${tmp_coverage_file}" ]; then
 		# Save these package test results into the
 		# master coverage file.
-		run_as_user "$user" chmod "${coverage_file_mode}" "$tmp_coverage_file"
-		tail -n +2 "$tmp_coverage_file" >> "$test_coverage_file"
-		run_as_user "$user" rm -f "$tmp_coverage_file"
+		run_as_user "$user" tail -n +2 "$tmp_coverage_file" >> "$test_coverage_file"
+		rm -f "$tmp_coverage_file"
 	fi
 }
 
