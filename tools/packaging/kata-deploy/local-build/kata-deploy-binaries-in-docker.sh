@@ -20,10 +20,6 @@ if [ "${script_dir}" != "${PWD}" ]; then
 	ln -sf "${script_dir}/build" "${PWD}/build"
 fi
 
-install_yq_script_path="${script_dir}/../../../../ci/install_yq.sh"
-
-cp "${install_yq_script_path}" "${script_dir}/dockerbuild/install_yq.sh"
-
 docker build -q -t build-kata-deploy \
 	--build-arg IMG_USER="${USER}" \
 	--build-arg UID=${uid} \
