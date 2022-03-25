@@ -44,10 +44,10 @@ impl AgentManager for KataAgent {
 
 // implement for health service
 macro_rules! impl_health_service {
-    ($($name: tt | $req: ty | $resp: ty),*) => {
+    ($(impl $name:ident ($req:ident, $resp:ident)),*) => {
         #[async_trait]
         impl HealthService for KataAgent {
-            $(async fn $name(&self, req: $req) -> Result<$resp> {
+            $(async fn $name(&self, req: crate::$req) -> Result<crate::$resp> {
                 let r = req.into();
                 let (mut client, timeout, _) = self.get_health_client().await.context("get health client")?;
                 let resp = client.$name(new_ttrpc_ctx(timeout * MILLISECOND_TO_NANOSECOND), &r).await?;
@@ -58,19 +58,18 @@ macro_rules! impl_health_service {
 }
 
 impl_health_service!(
-    check | crate::CheckRequest | crate::HealthCheckResponse,
-    version | crate::CheckRequest | crate::VersionCheckResponse
+    impl check (CheckRequest, HealthCheckResponse),
+    impl version (CheckRequest, VersionCheckResponse)
 );
 
 macro_rules! impl_agent {
-    ($($name: tt | $req: ty | $resp: ty | $new_timeout: expr),*) => {
+    ($(impl $name:ident ($req:ident, $resp:ident) await $new_timeout:expr),*) => {
         #[async_trait]
         impl Agent for KataAgent {
-            $(async fn $name(&self, req: $req) -> Result<$resp> {
-                let r = req.into();
+            $(async fn $name(&self, req: crate::$req) -> Result<crate::$resp> {
+                let r = reeq.into();
                 let (mut client, mut timeout, _) = self.get_agent_client().await.context("get client")?;
 
-                // update new timeout
                 if let Some(v) = $new_timeout {
                     timeout = v;
                 }
@@ -83,28 +82,28 @@ macro_rules! impl_agent {
 }
 
 impl_agent!(
-    create_container | crate::CreateContainerRequest | crate::Empty | None,
-    start_container | crate::ContainerID | crate::Empty | None,
-    remove_container | crate::RemoveContainerRequest | crate::Empty | None,
-    exec_process | crate::ExecProcessRequest | crate::Empty | None,
-    signal_process | crate::SignalProcessRequest | crate::Empty | None,
-    wait_process | crate::WaitProcessRequest | crate::WaitProcessResponse | Some(0),
-    update_container | crate::UpdateContainerRequest | crate::Empty | None,
-    stats_container | crate::ContainerID | crate::StatsContainerResponse | None,
-    pause_container | crate::ContainerID | crate::Empty | None,
-    resume_container | crate::ContainerID | crate::Empty | None,
-    write_stdin | crate::WriteStreamRequest | crate::WriteStreamResponse | None,
-    read_stdout | crate::ReadStreamRequest | crate::ReadStreamResponse | None,
-    read_stderr | crate::ReadStreamRequest | crate::ReadStreamResponse | None,
-    close_stdin | crate::CloseStdinRequest | crate::Empty | None,
-    tty_win_resize | crate::TtyWinResizeRequest | crate::Empty | None,
-    update_interface | crate::UpdateInterfaceRequest | crate::Interface | None,
-    update_routes | crate::UpdateRoutesRequest | crate::Routes | None,
-    add_arp_neighbors | crate::AddArpNeighborRequest | crate::Empty | None,
-    list_interfaces | crate::Empty | crate::Interfaces | None,
-    list_routes | crate::Empty | crate::Routes | None,
-    create_sandbox | crate::CreateSandboxRequest | crate::Empty | None,
-    destroy_sandbox | crate::Empty | crate::Empty | None,
-    copy_file | crate::CopyFileRequest | crate::Empty | None,
-    get_oom_event | crate::Empty | crate::OomEventResponse | Some(0)
+    impl create_container (CreateContainerRequest, Empty) await None,
+    impl start_container (ContainerID, Empty) await None,
+    impl remove_container (RemoveContainerRequest, Empty) await None,
+    impl exec_process (ExecProcessRequest, Empty) await None,
+    impl signal_process (SignalProcessRequest, Empty) await None,
+    impl wait_process (WaitProcessRequest, WaitProcessResponse) await Some(0),
+    impl update_container (UpdateContainerRequest, Empty) await None,
+    impl stats_container (ContainerID, StatsContainerResponse) await None,
+    impl pause_container (ContainerID, Empty) await None,
+    impl resume_container (ContainerID, Empty) await None,
+    impl write_stdin (WriteStreamRequest, WriteStreamResponse) await None,
+    impl read_stdout (ReadStreamRequest, ReadStreamResponse) await None,
+    impl read_stderr (ReadStreamRequest, ReadStreamResponse) await None,
+    impl close_stdin (CloseStdinRequest, Empty) await None,
+    impl tty_win_resize (TtyWinResizeRequest, Empty) await None,
+    impl update_interface (UpdateInterfaceRequest, Interface) await None,
+    impl update_routes (UpdateRoutesRequest, Routes) await None,
+    impl add_arp_neighbors (AddArpNeighborRequest, Empty) await None,
+    impl list_interfaces (Empty, Interfaces) await None,
+    impl list_routes (Empty, Routes) await None,
+    impl create_sandbox (CreateSandboxRequest, Empty) await None,
+    impl destroy_sandbox (Empty, Empty) await None,
+    impl copy_file (CopyFileRequest, Empty) await None,
+    impl get_oom_event (Empty, OomEventResponse) await Some(0)
 );
