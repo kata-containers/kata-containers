@@ -599,7 +599,7 @@ hook:
 
 go-test: $(GENERATED_FILES)
 	go clean -testcache
-	$(QUIET_TEST)../../ci/go-test.sh
+	$(QUIET_TEST)./go-test.sh
 
 fast-test: $(GENERATED_FILES)
 	go clean -testcache
