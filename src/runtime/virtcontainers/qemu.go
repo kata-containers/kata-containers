@@ -38,6 +38,7 @@ import (
 	pkgUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -129,6 +130,8 @@ const (
 	fallbackFileBackedMemDir = "/dev/shm"
 
 	qemuStopSandboxTimeoutSecs = 15
+
+	qomPathPrefix = "/machine/peripheral/"
 )
 
 // agnostic list of kernel parameters
@@ -1396,31 +1399,68 @@ func (q *qemu) hotplugAddVhostUserBlkDevice(ctx context.Context, vAttr *config.V
 	}()
 
 	driver := "vhost-user-blk-pci"
-	addr, bridge, err := q.arch.addDeviceToBridge(ctx, vAttr.DevID, types.PCI)
-	if err != nil {
-		return err
-	}
 
-	defer func() {
-		if err != nil {
-			q.arch.removeDeviceFromBridge(vAttr.DevID)
+	machineType := q.HypervisorConfig().HypervisorMachineType
+
+	switch machineType {
+	case QemuVirt:
+		if q.state.PCIeRootPort <= 0 {
+			return fmt.Errorf("Vhost-user-blk device is a PCIe device if machine type is virt. Need to add the PCIe Root Port by setting the pcie_root_port parameter in the configuration for virt")
 		}
-	}()
 
-	bridgeSlot, err := vcTypes.PciSlotFromInt(bridge.Addr)
-	if err != nil {
-		return err
-	}
-	devSlot, err := vcTypes.PciSlotFromString(addr)
-	if err != nil {
-		return err
-	}
-	vAttr.PCIPath, err = vcTypes.PciPathFromSlots(bridgeSlot, devSlot)
+		//The addr of a dev is corresponding with device:function for PCIe in qemu which starting from 0
+		//Since the dev is the first and only one on this bus(root port), it should be 0.
+		addr := "00"
 
-	if err = q.qmpMonitorCh.qmp.ExecutePCIVhostUserDevAdd(q.qmpMonitorCh.ctx, driver, devID, vAttr.DevID, addr, bridge.ID); err != nil {
-		return err
-	}
+		bridgeId := fmt.Sprintf("%s%d", pcieRootPortPrefix, len(drivers.AllPCIeDevs))
+		drivers.AllPCIeDevs[devID] = true
 
+		bridgeQomPath := fmt.Sprintf("%s%s", qomPathPrefix, bridgeId)
+		bridgeSlot, err := q.qomGetSlot(bridgeQomPath)
+		if err != nil {
+			return err
+		}
+
+		devSlot, err := vcTypes.PciSlotFromString(addr)
+		if err != nil {
+			return err
+		}
+
+		vAttr.PCIPath, err = vcTypes.PciPathFromSlots(bridgeSlot, devSlot)
+		if err != nil {
+			return err
+		}
+
+		if err = q.qmpMonitorCh.qmp.ExecutePCIVhostUserDevAdd(q.qmpMonitorCh.ctx, driver, devID, vAttr.DevID, addr, bridgeId); err != nil {
+			return err
+		}
+
+	default:
+		addr, bridge, err := q.arch.addDeviceToBridge(ctx, vAttr.DevID, types.PCI)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if err != nil {
+				q.arch.removeDeviceFromBridge(vAttr.DevID)
+			}
+		}()
+
+		bridgeSlot, err := vcTypes.PciSlotFromInt(bridge.Addr)
+		if err != nil {
+			return err
+		}
+
+		devSlot, err := vcTypes.PciSlotFromString(addr)
+		if err != nil {
+			return err
+		}
+		vAttr.PCIPath, err = vcTypes.PciPathFromSlots(bridgeSlot, devSlot)
+
+		if err = q.qmpMonitorCh.qmp.ExecutePCIVhostUserDevAdd(q.qmpMonitorCh.ctx, driver, devID, vAttr.DevID, addr, bridge.ID); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -1462,8 +1502,13 @@ func (q *qemu) hotplugVhostUserDevice(ctx context.Context, vAttr *config.VhostUs
 			return fmt.Errorf("Incorrect vhost-user device type found")
 		}
 	} else {
-		if err := q.arch.removeDeviceFromBridge(vAttr.DevID); err != nil {
-			return err
+
+		machineType := q.HypervisorConfig().HypervisorMachineType
+
+		if machineType != QemuVirt {
+			if err := q.arch.removeDeviceFromBridge(vAttr.DevID); err != nil {
+				return err
+			}
 		}
 
 		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
@@ -2316,7 +2361,7 @@ func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machin
 		addr          string
 	)
 	switch machineType {
-	case QemuQ35:
+	case QemuQ35, QemuVirt:
 		bus = defaultBridgeBus
 		chassis = "0"
 		multiFunction = false
