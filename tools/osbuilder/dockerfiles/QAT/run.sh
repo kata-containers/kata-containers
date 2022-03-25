@@ -39,9 +39,9 @@ grab_kata_repos()
     # Check out all the repos we will use now, so we can try and ensure they use the specified branch
     # Only check out the branch needed, and make it shallow and thus space/bandwidth efficient
     # Use a green prompt with white text for easy viewing
-    /bin/echo -e "\n\e[1;42mClone and checkout Kata repos\e[0m" 
-    git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${kata_repo} ${kata_repo_path}
-    git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${tests_repo} ${tests_repo_path}
+    /bin/echo -e "\n\e[1;42mClone and checkout Kata repos\e[0m"
+    [ -d "${kata_repo_path}" ] || git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${kata_repo} ${kata_repo_path}
+    [ -d "${tests_repo_path}" ] || git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${tests_repo} ${tests_repo_path}
 }
 
 configure_kernel()
@@ -164,6 +164,7 @@ main()
 	done
 	shift $((OPTIND-1))
 
+	sudo chown -R qatbuilder:qatbuilder /home/qatbuilder
 	grab_qat_drivers
 	grab_kata_repos
 	configure_kernel
