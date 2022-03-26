@@ -4,7 +4,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+mod trans_from_agent;
 mod trans_from_shim;
+mod trans_into_agent;
 mod trans_into_shim;
 
 use std::fmt;
@@ -69,6 +71,12 @@ pub struct ContainerID {
     pub container_id: String,
 }
 
+impl ToString for ContainerID {
+    fn to_string(&self) -> String {
+        self.container_id.clone()
+    }
+}
+
 impl ContainerID {
     pub fn new(container_id: &str) -> Result<Self> {
         validate::verify_id(container_id).context("verify container id")?;
@@ -105,6 +113,14 @@ impl ContainerProcess {
             process_type,
         })
     }
+
+    pub fn container_id(&self) -> &str {
+        &self.container_id.container_id
+    }
+
+    pub fn exec_id(&self) -> &str {
+        &self.exec_id
+    }
 }
 #[derive(Debug, Clone)]
 pub struct ContainerConfig {
@@ -130,7 +146,7 @@ impl PID {
 
 #[derive(Debug, Clone)]
 pub struct KillRequest {
-    pub process_id: ContainerProcess,
+    pub process: ContainerProcess,
     pub signal: u32,
     pub all: bool,
 }
@@ -143,14 +159,14 @@ pub struct ShutdownRequest {
 
 #[derive(Debug, Clone)]
 pub struct ResizePTYRequest {
-    pub process_id: ContainerProcess,
+    pub process: ContainerProcess,
     pub width: u32,
     pub height: u32,
 }
 
 #[derive(Debug, Clone)]
 pub struct ExecProcessRequest {
-    pub process_id: ContainerProcess,
+    pub process: ContainerProcess,
     pub terminal: bool,
     pub stdin: Option<String>,
     pub stdout: Option<String>,

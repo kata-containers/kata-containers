@@ -20,14 +20,11 @@ fn new_ttrpc_ctx(timeout: i64) -> ttrpc_ctx::Context {
 
 #[async_trait]
 impl AgentManager for KataAgent {
-    async fn set_socket_address(&self, address: &str) -> Result<()> {
-        let mut inner = self.inner.lock().await;
-        inner.socket_address = address.to_string();
-        Ok(())
-    }
-
-    async fn start(&self) -> Result<()> {
-        info!(sl!(), "begin to connect agent");
+    async fn start(&self, address: &str) -> Result<()> {
+        info!(sl!(), "begin to connect agent {:?}", address);
+        self.set_socket_address(address)
+            .await
+            .context("set socket")?;
         self.connect_agent_server()
             .await
             .context("connect agent server")?;
