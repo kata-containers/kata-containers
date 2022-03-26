@@ -12,6 +12,7 @@ pub mod hooks;
 pub mod k8s;
 pub mod mount;
 pub mod numa;
+pub mod rand;
 pub mod spec;
 pub mod validate;
 

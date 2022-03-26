@@ -68,7 +68,7 @@ pub fn get_hypervisor_plugin(name: &str) -> Option<Arc<dyn ConfigPlugin>> {
 }
 
 /// Configuration information for block device.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct BlockDeviceInfo {
     /// Disable block device from being used for a container's rootfs.
     ///
@@ -194,7 +194,7 @@ impl BlockDeviceInfo {
 }
 
 /// Guest kernel boot information.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct BootInfo {
     /// Path to guest kernel file on host
     #[serde(default)]
@@ -245,7 +245,7 @@ impl BootInfo {
 }
 
 /// Virtual CPU configuration information.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct CpuInfo {
     /// CPU features, comma-separated list of cpu features to pass to the cpu.
     /// For example, `cpu_features = "pmu=off,vmx=off"
@@ -321,7 +321,7 @@ impl CpuInfo {
 }
 
 /// Configuration information for shared filesystem, such virtio-9p and virtio-fs.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct DebugInfo {
     /// This option changes the default hypervisor and kernel parameters to enable debug output
     /// where available.
@@ -358,7 +358,7 @@ impl DebugInfo {
 }
 
 /// Virtual machine device configuration information.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct DeviceInfo {
     /// Bridges can be used to hot plug devices.
     ///
@@ -427,7 +427,7 @@ impl DeviceInfo {
 }
 
 /// Configuration information for virtual machine.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct MachineInfo {
     /// Virtual machine model/type.
     #[serde(default)]
@@ -495,7 +495,7 @@ impl MachineInfo {
 }
 
 /// Virtual machine memory configuration information.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct MemoryInfo {
     /// Default memory size in MiB for SB/VM.
     #[serde(default)]
@@ -597,7 +597,7 @@ impl MemoryInfo {
 }
 
 /// Configuration information for virtual machine.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct NetworkInfo {
     /// If vhost-net backend for virtio-net is not desired, set to true.
     ///
@@ -635,7 +635,7 @@ impl NetworkInfo {
 }
 
 /// Configuration information for virtual machine.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct SecurityInfo {
     /// Enable running QEMU VMM as a non-root user.
     ///
@@ -721,7 +721,7 @@ impl SecurityInfo {
 }
 
 /// Configuration information for shared filesystem, such virtio-9p and virtio-fs.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct SharedFsInfo {
     /// Shared file system type:
     /// - virtio-fs (default)
@@ -862,7 +862,7 @@ impl SharedFsInfo {
 }
 
 /// Common configuration information for hypervisors.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Hypervisor {
     /// Path to the hypervisor executable.
     #[serde(default)]
@@ -1035,7 +1035,7 @@ mod vendor {
     use super::*;
 
     /// Vendor customization runtime configuration.
-    #[derive(Debug, Default, Deserialize, Serialize)]
+    #[derive(Clone, Debug, Default, Deserialize, Serialize)]
     pub struct HypervisorVendor {}
 
     impl ConfigOps for HypervisorVendor {}
