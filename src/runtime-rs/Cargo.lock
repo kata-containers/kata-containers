@@ -78,6 +78,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
+name = "awaitgroup"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc17ab023b4091c10ff099f9deebaeeb59b5189df07e554c4fef042b70745d68"
+
+[[package]]
 name = "backtrace"
 version = "0.3.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -647,7 +653,7 @@ dependencies = [
  "slog",
  "slog-scope",
  "thiserror",
- "toml",
+ "toml 0.5.8",
 ]
 
 [[package]]
@@ -1699,6 +1705,15 @@ dependencies = [
 
 [[package]]
 name = "toml"
+version = "0.4.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "758664fc71a3a69038656bee8b6be6477d2a6c315a6b81f7081f591bffa4111f"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "toml"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a31142970826733df8241ef35dc040ef98c679ab14d7c3e54d827099b3acecaa"
@@ -1848,11 +1863,31 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 name = "virt_container"
 version = "0.1.0"
 dependencies = [
+ "agent",
  "anyhow",
  "async-trait",
+ "awaitgroup",
  "common",
+ "containerd-shim-protos",
+ "futures 0.3.21",
+ "hypervisor",
+ "kata-sys-util",
  "kata-types",
+ "lazy_static",
+ "libc",
+ "logging",
+ "nix 0.16.1",
+ "oci",
+ "protobuf",
+ "resource",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "slog",
+ "slog-scope",
  "tokio",
+ "toml 0.4.10",
+ "url",
 ]
 
 [[package]]
