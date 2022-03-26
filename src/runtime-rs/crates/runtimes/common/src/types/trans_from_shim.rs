@@ -82,7 +82,7 @@ impl TryFrom<api::ExecProcessRequest> for Request {
     fn try_from(from: api::ExecProcessRequest) -> Result<Self> {
         let spec = from.get_spec();
         Ok(Request::ExecProcess(ExecProcessRequest {
-            process_id: ContainerProcess::new(&from.id, &from.exec_id).context("new process id")?,
+            process: ContainerProcess::new(&from.id, &from.exec_id).context("new process id")?,
             terminal: from.terminal,
             stdin: (!from.stdin.is_empty()).then(|| from.stdin.clone()),
             stdout: (!from.stdout.is_empty()).then(|| from.stdout.clone()),
@@ -97,7 +97,7 @@ impl TryFrom<api::KillRequest> for Request {
     type Error = anyhow::Error;
     fn try_from(from: api::KillRequest) -> Result<Self> {
         Ok(Request::KillProcess(KillRequest {
-            process_id: ContainerProcess::new(&from.id, &from.exec_id).context("new process id")?,
+            process: ContainerProcess::new(&from.id, &from.exec_id).context("new process id")?,
             signal: from.signal,
             all: from.all,
         }))
@@ -145,7 +145,7 @@ impl TryFrom<api::ResizePtyRequest> for Request {
     type Error = anyhow::Error;
     fn try_from(from: api::ResizePtyRequest) -> Result<Self> {
         Ok(Request::ResizeProcessPTY(ResizePTYRequest {
-            process_id: ContainerProcess::new(&from.id, &from.exec_id).context("new process id")?,
+            process: ContainerProcess::new(&from.id, &from.exec_id).context("new process id")?,
             width: from.width,
             height: from.height,
         }))

@@ -12,6 +12,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+use kata_sys_util::spec::get_bundle_path;
 use kata_types::{container::ContainerType, k8s};
 use unix_socket::UnixListener;
 
@@ -32,7 +33,7 @@ impl ShimExecutor {
     }
 
     fn do_start(&mut self) -> Result<PathBuf> {
-        let bundle_path = self.get_bundle_path().context("get bundle path")?;
+        let bundle_path = get_bundle_path().context("get bundle path")?;
         let spec = self.load_oci_spec(&bundle_path)?;
         let (container_type, id) = k8s::container_type_with_id(&spec);
 
@@ -66,7 +67,7 @@ impl ShimExecutor {
             return Err(anyhow!("invalid param"));
         }
 
-        let bundle_path = self.get_bundle_path().context("get bundle path")?;
+        let bundle_path = get_bundle_path().context("get bundle path")?;
         let self_exec = std::env::current_exe().map_err(Error::SelfExec)?;
         let mut command = std::process::Command::new(self_exec);
 
@@ -109,7 +110,7 @@ impl ShimExecutor {
     fn get_shim_info_from_sandbox(&self, sandbox_id: &str) -> Result<(PathBuf, u32)> {
         // All containers of a pod share the same pod socket address.
         let address = self.socket_address(sandbox_id).context("socket address")?;
-        let bundle_path = self.get_bundle_path().context("get bundle path")?;
+        let bundle_path = get_bundle_path().context("get bundle path")?;
         let parent_bundle_path = Path::new(&bundle_path)
             .parent()
             .unwrap_or_else(|| Path::new(""));
@@ -165,19 +166,13 @@ mod tests {
         let cmd = executor.new_command().unwrap();
         assert_eq!(cmd.get_args().len(), 8);
         assert_eq!(cmd.get_envs().len(), 1);
-        assert_eq!(
-            cmd.get_current_dir().unwrap(),
-            executor.get_bundle_path().unwrap()
-        );
+        assert_eq!(cmd.get_current_dir().unwrap(), get_bundle_path().unwrap());
 
         executor.args.debug = true;
         let cmd = executor.new_command().unwrap();
         assert_eq!(cmd.get_args().len(), 9);
         assert_eq!(cmd.get_envs().len(), 1);
-        assert_eq!(
-            cmd.get_current_dir().unwrap(),
-            executor.get_bundle_path().unwrap()
-        );
+        assert_eq!(cmd.get_current_dir().unwrap(), get_bundle_path().unwrap());
     }
 
     #[test]

@@ -60,10 +60,6 @@ impl ShimExecutor {
         data.parse::<u32>().context(Error::ParsePid)
     }
 
-    pub(crate) fn get_bundle_path(&self) -> Result<PathBuf> {
-        std::env::current_dir().context(Error::GetBundlePath)
-    }
-
     pub(crate) fn socket_address(&self, id: &str) -> Result<PathBuf> {
         if id.is_empty() {
             return Err(anyhow!(Error::EmptySandboxId));
@@ -72,8 +68,6 @@ impl ShimExecutor {
         let data = [&self.args.address, &self.args.namespace, id].join("/");
         let mut hasher = sha2::Sha256::new();
         hasher.update(data);
-
-        // Follow
         // https://github.com/containerd/containerd/blob/main/runtime/v2/shim/util_unix.go#L68 to
         // generate a shim socket path.
         Ok(PathBuf::from(format!(
@@ -88,6 +82,8 @@ impl ShimExecutor {
 mod tests {
     use super::*;
     use serial_test::serial;
+
+    use kata_sys_util::spec::get_bundle_path;
 
     #[test]
     #[serial]
@@ -111,7 +107,7 @@ mod tests {
         executor
             .write_address(bundle_path, Path::new("12345"))
             .unwrap();
-        let dir = executor.get_bundle_path().unwrap();
+        let dir = get_bundle_path().unwrap();
         let file_path = &dir.join("address");
         let buf = std::fs::read_to_string(file_path).unwrap();
         assert_eq!(&buf, "12345");

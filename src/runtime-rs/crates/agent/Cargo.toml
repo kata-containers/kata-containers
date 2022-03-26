@@ -21,6 +21,7 @@ tokio = { version = "1.8.0", features = ["fs", "rt"] }
 url = "2.2.2"
 
 kata-types = { path = "../../../libs/kata-types"}
+logging = { path = "../../../libs/logging"}
 oci = { path = "../../../libs/oci" }
 protocols = { path = "../../../libs/protocols", features=["async"] }
 

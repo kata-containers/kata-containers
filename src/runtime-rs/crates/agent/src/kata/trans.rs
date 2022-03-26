@@ -254,8 +254,8 @@ impl From<agent::Routes> for Routes {
 impl From<CreateContainerRequest> for agent::CreateContainerRequest {
     fn from(from: CreateContainerRequest) -> Self {
         Self {
-            container_id: from.container_id,
-            exec_id: from.exec_id,
+            container_id: from.process_id.container_id(),
+            exec_id: from.process_id.exec_id(),
             string_user: from_option(from.string_user),
             devices: from_vec(from.devices),
             storages: from_vec(from.storages),
@@ -321,8 +321,8 @@ impl From<ContainerID> for agent::ResumeContainerRequest {
 impl From<SignalProcessRequest> for agent::SignalProcessRequest {
     fn from(from: SignalProcessRequest) -> Self {
         Self {
-            container_id: from.container_id,
-            exec_id: from.exec_id,
+            container_id: from.process_id.container_id(),
+            exec_id: from.process_id.exec_id(),
             signal: from.signal,
             unknown_fields: Default::default(),
             cached_size: Default::default(),
@@ -333,8 +333,8 @@ impl From<SignalProcessRequest> for agent::SignalProcessRequest {
 impl From<WaitProcessRequest> for agent::WaitProcessRequest {
     fn from(from: WaitProcessRequest) -> Self {
         Self {
-            container_id: from.container_id,
-            exec_id: from.exec_id,
+            container_id: from.process_id.container_id(),
+            exec_id: from.process_id.exec_id(),
             unknown_fields: Default::default(),
             cached_size: Default::default(),
         }
@@ -355,8 +355,8 @@ impl From<UpdateContainerRequest> for agent::UpdateContainerRequest {
 impl From<WriteStreamRequest> for agent::WriteStreamRequest {
     fn from(from: WriteStreamRequest) -> Self {
         Self {
-            container_id: from.container_id,
-            exec_id: from.exec_id,
+            container_id: from.process_id.container_id(),
+            exec_id: from.process_id.exec_id(),
             data: from.data,
             unknown_fields: Default::default(),
             cached_size: Default::default(),
@@ -373,8 +373,8 @@ impl From<agent::WriteStreamResponse> for WriteStreamResponse {
 impl From<ExecProcessRequest> for agent::ExecProcessRequest {
     fn from(from: ExecProcessRequest) -> Self {
         Self {
-            container_id: from.container_id,
-            exec_id: from.exec_id,
+            container_id: from.process_id.container_id(),
+            exec_id: from.process_id.exec_id(),
             string_user: from_option(from.string_user),
             process: from_option(from.process),
             unknown_fields: Default::default(),
@@ -523,8 +523,8 @@ impl From<agent::StatsContainerResponse> for StatsContainerResponse {
 impl From<ReadStreamRequest> for agent::ReadStreamRequest {
     fn from(from: ReadStreamRequest) -> Self {
         Self {
-            container_id: from.container_id,
-            exec_id: from.exec_id,
+            container_id: from.process_id.container_id(),
+            exec_id: from.process_id.exec_id(),
             len: from.len,
             unknown_fields: Default::default(),
             cached_size: Default::default(),
@@ -541,8 +541,8 @@ impl From<agent::ReadStreamResponse> for ReadStreamResponse {
 impl From<CloseStdinRequest> for agent::CloseStdinRequest {
     fn from(from: CloseStdinRequest) -> Self {
         Self {
-            container_id: from.container_id,
-            exec_id: from.exec_id,
+            container_id: from.process_id.container_id(),
+            exec_id: from.process_id.exec_id(),
             unknown_fields: Default::default(),
             cached_size: Default::default(),
         }
@@ -552,8 +552,8 @@ impl From<CloseStdinRequest> for agent::CloseStdinRequest {
 impl From<TtyWinResizeRequest> for agent::TtyWinResizeRequest {
     fn from(from: TtyWinResizeRequest) -> Self {
         Self {
-            container_id: from.container_id,
-            exec_id: from.exec_id,
+            container_id: from.process_id.container_id(),
+            exec_id: from.process_id.exec_id(),
             row: from.row,
             column: from.column,
             unknown_fields: Default::default(),
