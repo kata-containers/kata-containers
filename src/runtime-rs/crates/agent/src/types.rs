@@ -97,8 +97,7 @@ pub struct Routes {
 
 #[derive(PartialEq, Clone, Default)]
 pub struct CreateContainerRequest {
-    pub container_id: String,
-    pub exec_id: String,
+    pub process_id: ContainerProcessID,
     pub string_user: Option<StringUser>,
     pub devices: Vec<Device>,
     pub storages: Vec<Storage>,
@@ -121,6 +120,29 @@ impl ContainerID {
     }
 }
 
+#[derive(PartialEq, Clone, Default)]
+pub struct ContainerProcessID {
+    pub container_id: ContainerID,
+    pub exec_id: String,
+}
+
+impl ContainerProcessID {
+    pub fn new(container_id: &str, exec_id: &str) -> Self {
+        Self {
+            container_id: ContainerID::new(container_id),
+            exec_id: exec_id.to_string(),
+        }
+    }
+
+    pub fn container_id(&self) -> String {
+        self.container_id.container_id.clone()
+    }
+
+    pub fn exec_id(&self) -> String {
+        self.exec_id.clone()
+    }
+}
+
 #[derive(PartialEq, Clone, Debug, Default)]
 pub struct RemoveContainerRequest {
     pub container_id: String,
@@ -138,15 +160,13 @@ impl RemoveContainerRequest {
 
 #[derive(PartialEq, Clone, Default)]
 pub struct SignalProcessRequest {
-    pub container_id: String,
-    pub exec_id: String,
+    pub process_id: ContainerProcessID,
     pub signal: u32,
 }
 
 #[derive(PartialEq, Clone, Default)]
 pub struct WaitProcessRequest {
-    pub container_id: String,
-    pub exec_id: String,
+    pub process_id: ContainerProcessID,
 }
 
 #[derive(PartialEq, Clone, Default)]
@@ -165,8 +185,7 @@ pub struct UpdateContainerRequest {
 
 #[derive(PartialEq, Clone, Default)]
 pub struct WriteStreamRequest {
-    pub container_id: String,
-    pub exec_id: String,
+    pub process_id: ContainerProcessID,
     pub data: Vec<u8>,
 }
 
@@ -177,8 +196,7 @@ pub struct WriteStreamResponse {
 
 #[derive(PartialEq, Clone, Default)]
 pub struct ExecProcessRequest {
-    pub container_id: String,
-    pub exec_id: String,
+    pub process_id: ContainerProcessID,
     pub string_user: Option<StringUser>,
     pub process: Option<oci::Process>,
 }
@@ -297,8 +315,7 @@ pub struct WaitProcessResponse {
 
 #[derive(PartialEq, Clone, Default)]
 pub struct ReadStreamRequest {
-    pub container_id: String,
-    pub exec_id: String,
+    pub process_id: ContainerProcessID,
     pub len: u32,
 }
 
@@ -309,14 +326,12 @@ pub struct ReadStreamResponse {
 
 #[derive(PartialEq, Clone, Default)]
 pub struct CloseStdinRequest {
-    pub container_id: String,
-    pub exec_id: String,
+    pub process_id: ContainerProcessID,
 }
 
 #[derive(PartialEq, Clone, Default)]
 pub struct TtyWinResizeRequest {
-    pub container_id: String,
-    pub exec_id: String,
+    pub process_id: ContainerProcessID,
     pub row: u32,
     pub column: u32,
 }

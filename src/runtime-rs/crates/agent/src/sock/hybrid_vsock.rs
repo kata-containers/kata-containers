@@ -56,7 +56,7 @@ impl Sock for HybridVsock {
                 }
             }
         }
-        Err(anyhow!("cannot connect to agent ttrpc server"))
+        Err(anyhow!("cannot connect to agent ttrpc server {:?}", config))
     }
 }
 

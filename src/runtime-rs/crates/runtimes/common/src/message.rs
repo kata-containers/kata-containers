@@ -3,8 +3,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
+use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use containerd_shim_protos::{events::task::TaskOOM, protobuf::Message as ProtobufMessage};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 /// message receiver buffer size
@@ -15,7 +17,11 @@ pub enum Action {
     Start,
     Stop,
     Shutdown,
+    Event(Arc<dyn Event>),
 }
+
+unsafe impl Send for Message {}
+unsafe impl Sync for Message {}
 
 #[derive(Debug)]
 pub struct Message {
@@ -40,5 +46,27 @@ impl Message {
                 resp_sender: Some(resp_sender),
             },
         )
+    }
+}
+
+const TASK_OOM_EVENT_TOPIC: &str = "/tasks/oom";
+
+pub trait Event: std::fmt::Debug + Send {
+    fn r#type(&self) -> String;
+    fn type_url(&self) -> String;
+    fn value(&self) -> Result<Vec<u8>>;
+}
+
+impl Event for TaskOOM {
+    fn r#type(&self) -> String {
+        TASK_OOM_EVENT_TOPIC.to_string()
+    }
+
+    fn type_url(&self) -> String {
+        "containerd.events.TaskOOM".to_string()
+    }
+
+    fn value(&self) -> Result<Vec<u8>> {
+        self.write_to_bytes().context("get oom value")
     }
 }

@@ -7,11 +7,7 @@
 #[macro_use]
 extern crate slog;
 
-macro_rules! sl {
-    () => {
-        slog_scope::logger().new(slog::o!("subsystem" => "agent"))
-    };
-}
+logging::logger_with_subsystem!(sl, "agent");
 
 pub mod kata;
 mod log_forwarder;
@@ -19,14 +15,15 @@ mod sock;
 mod types;
 pub use types::{
     ARPNeighbor, ARPNeighbors, AddArpNeighborRequest, BlkioStatsEntry, CheckRequest,
-    CloseStdinRequest, ContainerID, CopyFileRequest, CreateContainerRequest, CreateSandboxRequest,
-    Empty, ExecProcessRequest, GetGuestDetailsRequest, GuestDetailsResponse, HealthCheckResponse,
-    IPAddress, IPFamily, Interface, Interfaces, ListProcessesRequest, MemHotplugByProbeRequest,
-    OnlineCPUMemRequest, OomEventResponse, ReadStreamRequest, ReadStreamResponse,
-    RemoveContainerRequest, ReseedRandomDevRequest, Route, Routes, SetGuestDateTimeRequest,
-    SignalProcessRequest, StatsContainerResponse, Storage, TtyWinResizeRequest,
-    UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest, VersionCheckResponse,
-    WaitProcessRequest, WaitProcessResponse, WriteStreamRequest, WriteStreamResponse,
+    CloseStdinRequest, ContainerID, ContainerProcessID, CopyFileRequest, CreateContainerRequest,
+    CreateSandboxRequest, Empty, ExecProcessRequest, GetGuestDetailsRequest, GuestDetailsResponse,
+    HealthCheckResponse, IPAddress, IPFamily, Interface, Interfaces, ListProcessesRequest,
+    MemHotplugByProbeRequest, OnlineCPUMemRequest, OomEventResponse, ReadStreamRequest,
+    ReadStreamResponse, RemoveContainerRequest, ReseedRandomDevRequest, Route, Routes,
+    SetGuestDateTimeRequest, SignalProcessRequest, StatsContainerResponse, Storage,
+    TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
+    VersionCheckResponse, WaitProcessRequest, WaitProcessResponse, WriteStreamRequest,
+    WriteStreamResponse,
 };
 
 use anyhow::Result;
@@ -34,8 +31,7 @@ use async_trait::async_trait;
 
 #[async_trait]
 pub trait AgentManager: Send + Sync {
-    async fn set_socket_address(&self, address: &str) -> Result<()>;
-    async fn start(&self) -> Result<()>;
+    async fn start(&self, address: &str) -> Result<()>;
     async fn stop(&self);
 }
 
@@ -57,6 +53,7 @@ pub trait Agent: AgentManager + HealthService + Send + Sync {
     async fn list_routes(&self, req: Empty) -> Result<Routes>;
     async fn update_interface(&self, req: UpdateInterfaceRequest) -> Result<Interface>;
     async fn update_routes(&self, req: UpdateRoutesRequest) -> Result<Routes>;
+
     // container
     async fn create_container(&self, req: CreateContainerRequest) -> Result<Empty>;
     async fn pause_container(&self, req: ContainerID) -> Result<Empty>;

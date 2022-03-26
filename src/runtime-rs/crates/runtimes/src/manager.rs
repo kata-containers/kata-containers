@@ -25,7 +25,7 @@ use wasm_container::WasmContainer;
 struct RuntimeHandlerManagerInner {
     id: String,
     msg_sender: Sender<Message>,
-    runtime_instance: Option<RuntimeInstance>,
+    runtime_instance: Option<Arc<RuntimeInstance>>,
 }
 
 impl RuntimeHandlerManagerInner {
@@ -37,26 +37,22 @@ impl RuntimeHandlerManagerInner {
         })
     }
 
-    async fn init_runtime_handler(&mut self, runtime_name: &str) -> Result<()> {
-        info!(sl!(), "new runtime handler {}", runtime_name);
-
-        let runtime_handler = match runtime_name {
+    async fn init_runtime_handler(
+        &mut self,
+        netns: Option<String>,
+        config: &TomlConfig,
+    ) -> Result<()> {
+        info!(sl!(), "new runtime handler {}", &config.runtime.name);
+        let runtime_handler = match config.runtime.name.as_str() {
             #[cfg(feature = "linux")]
-            name if name == LinuxContainer::name() => {
-                LinuxContainer::init().context("init linux container")?;
-                LinuxContainer::new_handler()
-            }
+            name if name == LinuxContainer::name() => LinuxContainer::new_handler(),
             #[cfg(feature = "wasm")]
-            name if name == WasmContainer::name() => {
-                WasmContainer::init().context("init wasm container")?;
-                WasmContainer::new_handler()
-            }
+            name if name == WasmContainer::name() => WasmContainer::new_handler(),
             #[cfg(feature = "virt")]
-            name if name == VirtContainer::name() => {
-                VirtContainer::init().context("init virt container")?;
+            name if name == VirtContainer::name() || name.is_empty() => {
                 VirtContainer::new_handler()
             }
-            _ => return Err(anyhow!("Unsupported runtime: {}", runtime_name)),
+            _ => return Err(anyhow!("Unsupported runtime: {}", &config.runtime.name)),
         };
         let runtime_instance = runtime_handler
             .new_instance(&self.id, self.msg_sender.clone())
@@ -66,10 +62,10 @@ impl RuntimeHandlerManagerInner {
         // start sandbox
         runtime_instance
             .sandbox
-            .start()
+            .start(netns, config)
             .await
             .context("start sandbox")?;
-        self.runtime_instance = Some(runtime_instance);
+        self.runtime_instance = Some(Arc::new(runtime_instance));
         Ok(())
     }
 
@@ -79,15 +75,39 @@ impl RuntimeHandlerManagerInner {
             return Ok(());
         }
 
+        #[cfg(feature = "linux")]
+        LinuxContainer::init().context("init linux container")?;
+        #[cfg(feature = "wasm")]
+        WasmContainer::init().context("init wasm container")?;
+        #[cfg(feature = "virt")]
+        VirtContainer::init().context("init virt container")?;
+
+        let netns = if let Some(linux) = &spec.linux {
+            let mut netns = None;
+            for ns in &linux.namespaces {
+                if ns.r#type.as_str() != oci::NETWORKNAMESPACE {
+                    continue;
+                }
+
+                if !ns.path.is_empty() {
+                    netns = Some(ns.path.clone());
+                    break;
+                }
+            }
+            netns
+        } else {
+            None
+        };
+
         let config = load_config(spec).context("load config")?;
-        self.init_runtime_handler(&config.runtime.name)
+        self.init_runtime_handler(netns, &config)
             .await
             .context("init runtime handler")?;
 
         Ok(())
     }
 
-    fn get_runtime_instance(&self) -> Option<RuntimeInstance> {
+    fn get_runtime_instance(&self) -> Option<Arc<RuntimeInstance>> {
         self.runtime_instance.clone()
     }
 }
@@ -112,25 +132,35 @@ impl RuntimeHandlerManager {
         Ok(())
     }
 
+    async fn get_runtime_instance(&self) -> Result<Arc<RuntimeInstance>> {
+        let inner = self.inner.read().await;
+        inner
+            .get_runtime_instance()
+            .ok_or_else(|| anyhow!("runtime not ready"))
+    }
+
+    async fn try_init_runtime_instance(&self, spec: &oci::Spec) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.try_init(spec).await
+    }
+
     pub async fn handler_message(&self, req: Request) -> Result<Response> {
         if let Request::CreateContainer(req) = req {
             // get oci spec
             let bundler_path = format!("{}/{}", req.bundle, oci::OCI_SPEC_CONFIG_FILE_NAME);
             let spec = oci::Spec::load(&bundler_path).context("load spec")?;
 
-            let mut inner = self.inner.write().await;
-            inner
-                .try_init(&spec)
+            self.try_init_runtime_instance(&spec)
                 .await
-                .context("try init runtime handler")?;
-
-            let instance = inner
+                .context("try init runtime instance")?;
+            let instance = self
                 .get_runtime_instance()
-                .ok_or_else(|| anyhow!("runtime not ready"))?;
+                .await
+                .context("get runtime instance")?;
 
             let shim_pid = instance
                 .container_manager
-                .create_container(req)
+                .create_container(req, spec)
                 .await
                 .context("create container")?;
             Ok(Response::CreateContainer(shim_pid))
@@ -140,12 +170,12 @@ impl RuntimeHandlerManager {
     }
 
     pub async fn handler_request(&self, req: Request) -> Result<Response> {
-        let inner = self.inner.read().await;
-        let instance = inner
+        let instance = self
             .get_runtime_instance()
-            .ok_or_else(|| anyhow!("runtime not ready"))?;
-        let sandbox = instance.sandbox;
-        let cm = instance.container_manager;
+            .await
+            .context("get runtime instance")?;
+        let sandbox = instance.sandbox.clone();
+        let cm = instance.container_manager.clone();
 
         match req {
             Request::CreateContainer(req) => Err(anyhow!("Unreachable request {:?}", req)),
