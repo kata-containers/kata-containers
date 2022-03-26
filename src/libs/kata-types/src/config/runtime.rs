@@ -17,6 +17,10 @@ pub struct Runtime {
     #[serde(default)]
     pub name: String,
 
+    /// Hypervisor name: Plan to support dragonball, qemu
+    #[serde(default)]
+    pub hypervisor_name: String,
+
     /// If enabled, the runtime will log additional debug messages to the system log.
     #[serde(default, rename = "enable_debug")]
     pub debug: bool,
