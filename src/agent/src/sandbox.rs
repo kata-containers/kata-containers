@@ -32,6 +32,8 @@ use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tracing::instrument;
 
+pub const ERR_INVALID_CONTAINER_ID: &str = "Invalid container id";
+
 type UeventWatcher = (Box<dyn UeventMatcher>, oneshot::Sender<Uevent>);
 
 #[derive(Debug)]
@@ -232,7 +234,7 @@ impl Sandbox {
     pub fn find_container_process(&mut self, cid: &str, eid: &str) -> Result<&mut Process> {
         let ctr = self
             .get_container(cid)
-            .ok_or_else(|| anyhow!("Invalid container id"))?;
+            .ok_or_else(|| anyhow!(ERR_INVALID_CONTAINER_ID))?;
 
         if eid.is_empty() {
             return ctr
