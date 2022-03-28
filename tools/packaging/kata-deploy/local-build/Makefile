@@ -15,8 +15,11 @@ endef
 
 kata-tarball: | all-parallel merge-builds
 
-all-parallel:
-	${MAKE} -f $(MK_PATH) all -j$$(( $$(nproc) - 1  )) NO_TTY="true" V=
+$(MK_DIR)/dockerbuild/install_yq.sh:
+	$(MK_DIR)/kata-deploy-copy-yq-installer.sh
+
+%-parallel: $(MK_DIR)/dockerbuild/install_yq.sh
+	${MAKE} -f $(MK_PATH) $(subst -parallel,,$@) -j$$(( $$(nproc) - 1  ))  V=
 
 all: cloud-hypervisor-tarball \
 	firecracker-tarball \
@@ -55,7 +58,7 @@ shim-v2-tarball:
 	${MAKE} $@-build
 
 ovmf-tarball:
- 	${MAKE} $@-build
+	${MAKE} $@-build
 
 merge-builds:
 	$(MK_DIR)/kata-deploy-merge-builds.sh build

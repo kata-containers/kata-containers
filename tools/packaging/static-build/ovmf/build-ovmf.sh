@@ -17,8 +17,6 @@ ovmf_dir="edk2"
 ovmf_version="${ovmf_version:-}"
 kata_version="${kata_version:-}"
 
-#DESTDIR=${DESTDIR:-${PWD}}
-
 if [ -z "$ovmf_repo" ]; then
        info "Get ovmf information from runtime versions.yaml"
        ovmf_url=$(get_from_kata_deps "externals.ovmf.url" "${kata_version}")
@@ -28,7 +26,7 @@ fi
 
 [ -n "$ovmf_repo" ] || die "failed to get ovmf repo"
 
-[ -n "$ovmf_version" ] || ovmf_version=$(get_from_kata_deps "externals.ovmf.commit" "${kata_version}")
+[ -n "$ovmf_version" ] || ovmf_version=$(get_from_kata_deps "externals.ovmf.version" "${kata_version}")
 [ -n "$ovmf_version" ] || die "failed to get ovmf version or commit"
 
 info "Build ${ovmf_repo} version: ${ovmf_version}"
@@ -51,6 +49,7 @@ source edksetup.sh
 set -u
 
 info "Creating dummy grub file"
+#required for building AmdSev package without grub
 touch OvmfPkg/AmdSev/Grub/grub.efi
 
 info "Building ovmf"
