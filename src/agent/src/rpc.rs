@@ -82,6 +82,7 @@ use std::path::PathBuf;
 const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
 
+const ERR_CANNOT_GET_WRITER: &str = "Cannot get writer";
 const ERR_INVALID_BLOCK_SIZE: &str = "Invalid block size";
 
 // Convenience macro to obtain the scope logger
@@ -574,7 +575,7 @@ impl AgentService {
             }
         };
 
-        let writer = writer.ok_or_else(|| anyhow!("cannot get writer"))?;
+        let writer = writer.ok_or_else(|| anyhow!(ERR_CANNOT_GET_WRITER))?;
         writer.lock().await.write_all(req.data.as_slice()).await?;
 
         let mut resp = WriteStreamResponse::new();
@@ -1861,7 +1862,7 @@ mod tests {
     use crate::{protocols::agent_ttrpc::AgentService as _, skip_if_not_root};
     use nix::mount;
     use oci::{Hook, Hooks};
-    use tempfile::tempdir;
+    use tempfile::{tempdir, TempDir};
     use ttrpc::{r#async::TtrpcContext, MessageHeader};
 
     // Parameters:
@@ -1897,6 +1898,44 @@ mod tests {
             metadata: std::collections::HashMap::new(),
             timeout_nano: 0,
         }
+    }
+
+    fn create_dummy_opts() -> CreateOpts {
+        let root = Root {
+            path: String::from("/"),
+            ..Default::default()
+        };
+
+        let spec = Spec {
+            linux: Some(oci::Linux::default()),
+            root: Some(root),
+            ..Default::default()
+        };
+
+        CreateOpts {
+            cgroup_name: "".to_string(),
+            use_systemd_cgroup: false,
+            no_pivot_root: false,
+            no_new_keyring: false,
+            spec: Some(spec),
+            rootless_euid: false,
+            rootless_cgroup: false,
+        }
+    }
+
+    fn create_linuxcontainer() -> (LinuxContainer, TempDir) {
+        let dir = tempdir().expect("failed to make tempdir");
+
+        (
+            LinuxContainer::new(
+                "some_id",
+                dir.path().join("rootfs").to_str().unwrap(),
+                create_dummy_opts(),
+                &slog_scope::logger(),
+            )
+            .unwrap(),
+            dir,
+        )
     }
 
     #[test]
@@ -1989,6 +2028,149 @@ mod tests {
         let result = agent_service.add_arp_neighbors(&ctx, req).await;
 
         assert!(result.is_err(), "expected add arp neighbors to fail");
+    }
+
+    #[tokio::test]
+    async fn test_do_write_stream() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            create_container: bool,
+            has_fd: bool,
+            has_tty: bool,
+            break_pipe: bool,
+
+            container_id: &'a str,
+            exec_id: &'a str,
+            data: Vec<u8>,
+            result: Result<protocols::agent::WriteStreamResponse>,
+        }
+
+        impl Default for TestData<'_> {
+            fn default() -> Self {
+                TestData {
+                    create_container: true,
+                    has_fd: true,
+                    has_tty: true,
+                    break_pipe: false,
+
+                    container_id: "1",
+                    exec_id: "2",
+                    data: vec![1, 2, 3],
+                    result: Ok(WriteStreamResponse {
+                        len: 3,
+                        ..WriteStreamResponse::default()
+                    }),
+                }
+            }
+        }
+
+        let tests = &[
+            TestData {
+                ..Default::default()
+            },
+            TestData {
+                has_tty: false,
+                ..Default::default()
+            },
+            TestData {
+                break_pipe: true,
+                result: Err(anyhow!(std::io::Error::from_raw_os_error(libc::EPIPE))),
+                ..Default::default()
+            },
+            TestData {
+                create_container: false,
+                result: Err(anyhow!(crate::sandbox::ERR_INVALID_CONTAINER_ID)),
+                ..Default::default()
+            },
+            TestData {
+                container_id: "8181",
+                result: Err(anyhow!(crate::sandbox::ERR_INVALID_CONTAINER_ID)),
+                ..Default::default()
+            },
+            TestData {
+                data: vec![],
+                result: Ok(WriteStreamResponse {
+                    len: 0,
+                    ..WriteStreamResponse::default()
+                }),
+                ..Default::default()
+            },
+            TestData {
+                has_fd: false,
+                result: Err(anyhow!(ERR_CANNOT_GET_WRITER)),
+                ..Default::default()
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let logger = slog::Logger::root(slog::Discard, o!());
+            let mut sandbox = Sandbox::new(&logger).unwrap();
+
+            let (rfd, wfd) = unistd::pipe().unwrap();
+            if d.break_pipe {
+                unistd::close(rfd).unwrap();
+            }
+
+            if d.create_container {
+                let (mut linux_container, _root) = create_linuxcontainer();
+                let exec_process_id = 2;
+
+                linux_container.id = "1".to_string();
+
+                let mut exec_process = Process::new(
+                    &logger,
+                    &oci::Process::default(),
+                    &exec_process_id.to_string(),
+                    false,
+                    1,
+                )
+                .unwrap();
+
+                let fd = {
+                    if d.has_fd {
+                        Some(wfd)
+                    } else {
+                        None
+                    }
+                };
+
+                if d.has_tty {
+                    exec_process.parent_stdin = None;
+                    exec_process.term_master = fd;
+                } else {
+                    exec_process.parent_stdin = fd;
+                    exec_process.term_master = None;
+                }
+                linux_container
+                    .processes
+                    .insert(exec_process_id, exec_process);
+
+                sandbox.add_container(linux_container);
+            }
+
+            let agent_service = Box::new(AgentService {
+                sandbox: Arc::new(Mutex::new(sandbox)),
+            });
+
+            let result = agent_service
+                .do_write_stream(protocols::agent::WriteStreamRequest {
+                    container_id: d.container_id.to_string(),
+                    exec_id: d.exec_id.to_string(),
+                    data: d.data.clone(),
+                    ..Default::default()
+                })
+                .await;
+
+            if !d.break_pipe {
+                unistd::close(rfd).unwrap();
+            }
+            unistd::close(wfd).unwrap();
+
+            let msg = format!("{}, result: {:?}", msg, result);
+            assert_result!(d.result, result, msg);
+        }
     }
 
     #[tokio::test]
