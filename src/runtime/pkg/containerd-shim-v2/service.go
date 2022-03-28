@@ -776,6 +776,8 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 			return empty, errors.New("The exec process does not exist")
 		}
 		processStatus = execs.status
+	} else {
+		r.All = true
 	}
 
 	// According to CRI specs, kubelet will call StopPodSandbox()
