@@ -28,7 +28,6 @@ readonly shimv2_builder="${static_build_dir}/shim-v2/build.sh"
 
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
 
-#is this the right location for this build script?
 readonly ovmf_builder="${static_build_dir}/ovmf/build-ovmf.sh"
 
 ARCH=$(uname -m)

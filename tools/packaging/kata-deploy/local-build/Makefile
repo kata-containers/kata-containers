@@ -15,8 +15,8 @@ endef
 
 kata-tarball: | all-parallel merge-builds
 
-all-parallel:
-	${MAKE} -f $(MK_PATH) all -j$$(( $$(nproc) - 1  )) NO_TTY="true" V=
+%-parallel:
+	${MAKE} -f $(MK_PATH) $(subst -parallel,,$@) -j$$(( $$(nproc) - 1  )) NO_TTY="true" V=
 
 all: cloud-hypervisor-tarball \
 	firecracker-tarball \
@@ -55,7 +55,7 @@ shim-v2-tarball:
 	${MAKE} $@-build
 
 ovmf-tarball:
- 	${MAKE} $@-build
+	${MAKE} $@-build
 
 merge-builds:
 	$(MK_DIR)/kata-deploy-merge-builds.sh build

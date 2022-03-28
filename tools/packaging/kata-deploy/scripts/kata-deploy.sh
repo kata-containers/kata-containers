@@ -226,7 +226,9 @@ function configure_kata() {
 			-e 's#.*service_offload = .+#service_offload = true#' \
 			"/opt/kata/share/defaults/kata-containers/configuration-qemu.toml" > \
 			"/opt/kata/share/defaults/kata-containers/configuration-cc.toml"
-		sed -Ei -e 's|(^firmware = ).+|\1 "/opt/kata/share/ovmf/OVMF.fd"|' ${cc_config}
+		if [ "${CONFIGURE_SEV:-}" == "yes" ]; then
+			sed -Ei -e 's|(^firmware = ).+|\1 "/opt/kata/share/ovmf/OVMF.fd"|' ${cc_config}
+		fi
 	fi
 }
 
