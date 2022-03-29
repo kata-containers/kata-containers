@@ -8,6 +8,7 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+set -o errtrace
 
 readonly project="kata-containers"
 
@@ -196,6 +197,18 @@ handle_build() {
 	tar tvf "${tarball_name}"
 }
 
+silent_mode_error_trap() {
+	local stdout="$1"
+	local stderr="$2"
+	local t="$3"
+	local log_file="$4"
+	exec 1>&${stdout}
+	exec 2>&${stderr}
+	error "Failed to build: $t, logs:"
+	cat "${log_file}"
+	exit 1
+}
+
 main() {
 	local build_targets
 	local silent
@@ -248,11 +261,15 @@ main() {
 		(
 			cd "${builddir}"
 			if [ "${silent}" == true ]; then
-				if ! handle_build "${t}" &>"$log_file"; then
-					error "Failed to build: $t, logs:"
-					cat "${log_file}"
-					exit 1
-				fi
+				local stdout
+				local stderr
+				# Save stdout and stderr, to be restored
+				# by silent_mode_error_trap() in case of
+				# build failure.
+				exec {stdout}>&1
+				exec {stderr}>&2
+				trap "silent_mode_error_trap $stdout $stderr $t \"$log_file\"" ERR
+				handle_build "${t}" &>"$log_file"
 			else
 				handle_build "${t}"
 			fi
