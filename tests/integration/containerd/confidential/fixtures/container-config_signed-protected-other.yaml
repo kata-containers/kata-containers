@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 metadata:
-  name: kata-cc-busybox
+  name: kata-cc-busybox-signed-other
 image:
   image: quay.io/kata-containers/confidential-containers:other_signed
 command:
