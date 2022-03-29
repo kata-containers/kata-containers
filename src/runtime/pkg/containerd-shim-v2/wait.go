@@ -67,6 +67,7 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 		if c.cType.IsSandbox() {
 			// cancel watcher
 			if s.monitor != nil {
+				shimLog.WithField("sandbox", s.sandbox.ID()).Info("cancel watcher")
 				s.monitor <- nil
 			}
 			if err = s.sandbox.Stop(ctx, true); err != nil {
@@ -110,6 +111,7 @@ func watchSandbox(ctx context.Context, s *service) {
 		return
 	}
 	err := <-s.monitor
+	shimLog.WithError(err).WithField("sandbox", s.sandbox.ID()).Info("watchSandbox gets an error or stop signal")
 	if err == nil {
 		return
 	}
