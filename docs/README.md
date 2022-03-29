@@ -30,7 +30,6 @@ See the [how-to documentation](how-to).
 * [GPU Passthrough with Kata](./use-cases/GPU-passthrough-and-Kata.md)
 * [SR-IOV with Kata](./use-cases/using-SRIOV-and-kata.md)
 * [Intel QAT with Kata](./use-cases/using-Intel-QAT-and-kata.md)
-* [VPP with Kata](./use-cases/using-vpp-and-kata.md)
 * [SPDK vhost-user with Kata](./use-cases/using-SPDK-vhostuser-and-kata.md)
 * [Intel SGX with Kata](./use-cases/using-Intel-SGX-and-kata.md)
 
