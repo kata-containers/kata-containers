@@ -64,6 +64,7 @@ version: The kata version that will be use to create the tarball
 options:
 
 -h|--help      	      : Show this help
+-s             	      : Silent mode (produce output in case of failure only)
 --build=<asset>       :
 	all
 	cloud-hypervisor
