@@ -24,9 +24,15 @@ const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "agent.unified_cgroup_hierarchy";
 const CONFIG_FILE: &str = "agent.config_file";
 
+const DEFAULT_DEBUG_CONSOLE: bool = false;
+const DEFAULT_DEBUG_CONSOLE_VPORT: i32 = 0;
+const DEFAULT_DEV_MODE: bool = false;
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
+const DEFAULT_LOG_VPORT: i32 = 0;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
 const DEFAULT_CONTAINER_PIPE_SIZE: i32 = 0;
+const DEFAULT_TRACING: bool = false;
+const DEFAULT_UNIFIED_CGROUP_HIERARCHY: bool = false;
 const VSOCK_ADDR: &str = "vsock://-1";
 const VSOCK_PORT: u16 = 1024;
 
@@ -140,16 +146,16 @@ macro_rules! parse_cmdline_param {
 impl Default for AgentConfig {
     fn default() -> Self {
         AgentConfig {
-            debug_console: false,
-            dev_mode: false,
+            debug_console: DEFAULT_DEBUG_CONSOLE,
+            dev_mode: DEFAULT_DEV_MODE,
             log_level: DEFAULT_LOG_LEVEL,
             hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
-            debug_console_vport: 0,
-            log_vport: 0,
+            debug_console_vport: DEFAULT_DEBUG_CONSOLE_VPORT,
+            log_vport: DEFAULT_LOG_VPORT,
             container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
             server_addr: format!("{}:{}", VSOCK_ADDR, VSOCK_PORT),
-            unified_cgroup_hierarchy: false,
-            tracing: false,
+            unified_cgroup_hierarchy: DEFAULT_UNIFIED_CGROUP_HIERARCHY,
+            tracing: DEFAULT_TRACING,
             endpoints: Default::default(),
             supports_seccomp: rpc::have_seccomp(),
         }
