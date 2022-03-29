@@ -84,6 +84,39 @@ To install the `protoc` command on a Fedora/CentOS/RHEL system:
 $ sudo dnf install -y protobuf-compiler
 ```
 
+## Configuring the agent
+
+The agent can be configured in a couple of ways.
+
+If running under the supervision of the Kata runtime, the agent will be automatically configured according to some properties in the runtime's `configuration.toml` file (see [runtime configuration](../runtime/README.md#configuration)). For example, the `enable_debug` option under the `[agent.kata]` section can be used to set debug-level logs. However, not all the accepted configurations are mapped into `configuration.toml`, so any additional options should be passed directly to the agent via kernel parameters.
+
+Any kernel parameter is be specified in the `kernel_params` property in the runtime's `configuration.toml`. As an example, to enable the Agent support for unified cgroup hierarchy and set debug logs, write the following line in `configuration.toml`:
+
+```
+kernel_params = "agent.unified_cgroup_hierarchy=true agent.log=debug"
+```
+
+The agent options passed via kernel parameters have the `agent.OPTION` format, where `OPTION` can be:
+
+| Option | Description | Example |
+|-|-|-|
+|`debug_console`|Enable debug console|`agent.debug_console`|
+|`devmode`|Enable `devmode`|`agent.devmode`|
+|`trace`|Enable agent [tracing](#tracing)|`agent.trace`|
+|`log`|Set the log level. Accepted values are: fatal, panic, critical, error, warn, info (default), debug, trace.|`agent.log=debug`|
+|`server_addr`|Set the ttRPC server address. The default value is `vsock://-1:1024`|`agent.server_address=unix:///path/to/server.socket`|
+|`hotplug_timeout`|Set the hotplug timeout in seconds. The default value is 3.|`agent.hotplug_timeout=10`|
+|`debug_console_vport`|Set the debug console `vsock` port. Used when debugging for Cloud Hypervisor and Firecracker hypervisors. The default value is 0.|`agent.debug_console_vport=1026`|
+|`log_vport`|Set the `vsock` log port. The default value is 0.|`agent.log_vport=5555`|
+|`container_pipe_size`|Set the container pipe size. The default size is 0.|`agent.container_pipe_size=1024`|
+|`unified_cgroup_hierarchy`|Whether to use unified cgroup hierarchy or not. Accepted values are: true, false (default)|`agent.unified_cgroup_hierarchy=true`|
+
+Alternatively those options can be defined in a configuration file (see a sample file [here](samples/configuration-all-endpoints.toml)) and then passed via `agent.config_file` kernel parameter (note that the file must be in the guest's filesystem). Or if the agent is running in [stand alone](#run-the-agent-stand-alone) mode, you can pass the file's path via `--config` parameter.
+
+Some use cases may require that the agent's API have endpoints blocked (all are allowed by default). If you have such as requirement then you can define a list of only allowed endpoints in the agent configuration file, by writing the list in the `allowed` property under the `[endpoints]` section. See in the sample file [here](samples/configuration-all-endpoints.toml) as an example.
+
+The `KATA_AGENT_SERVER_ADDR`, `KATA_AGENT_LOG_LEVEL`, and `KATA_AGENT_TRACING` environment variables are also recognized by the agent process. They are equivalent to the `agent.server_addr`, `agent.log`, and `agent.trace` options respectively.
+
 ## Custom guest image and kernel assets
 
 If you wish to develop or test changes to the agent, you will need to create a
