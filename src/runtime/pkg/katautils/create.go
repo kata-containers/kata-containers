@@ -18,6 +18,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vf "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -234,7 +235,7 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 	}
 
 	if !rootFs.Mounted {
-		if rootFs.Source != "" && rootFs.Type != vc.NydusRootFSType {
+		if rootFs.Source != "" && !utils.IsRafsImageRootFS(rootFs.ExtraOptions) {
 			realPath, err := ResolvePath(rootFs.Source)
 			if err != nil {
 				return vc.Process{}, err
