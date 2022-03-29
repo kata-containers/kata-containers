@@ -19,14 +19,16 @@ FIXTURES_DIR="${BATS_TEST_DIRNAME}/fixtures"
 crictl_delete_cc_pod() {
 	local sandbox_name="$1"
 	local pod_id="$(sudo crictl pods --name ${sandbox_name} -q)"
-	local container_id="$(sudo crictl ps --pod ${pod_id} -q)"
+	local container_ids="$(sudo crictl ps --pod ${pod_id} -q)"
 
-	if [ -n "$container_id" ]; then
-		sudo crictl stop "$container_id"
-		sudo crictl rm "$container_id"
+	if [ -n "${container_ids}" ]; then
+		while read -r container_id; do
+			sudo crictl stop "${container_id}"
+			sudo crictl rm "${container_id}"
+		done <<< "${container_ids}"
 	fi
-	sudo crictl stopp "$pod_id"
-	sudo crictl rmp "$pod_id"
+	sudo crictl stopp "${pod_id}"
+	sudo crictl rmp "${pod_id}"
 }
 
 # Delete the pod if it exists, otherwise just return.
