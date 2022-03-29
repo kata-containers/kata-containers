@@ -182,30 +182,22 @@ bump_repo() {
 		info "Updating kata-deploy / kata-cleanup image tags"
 		local version_to_replace="${current_version}"
 		local replacement="${new_version}"
-		local removed_files=false
-		if [ "${target_branch}" == "main" ]; then
+		local need_commit=false
+		if [ "${target_branch}" == "main" ];then
 			if [[ "${new_version}" =~ "rc" ]]; then
-				## this is the case 2) where we remove te kata-deploy / kata-cleanup stable files
+				## We are bumping from alpha to RC, should drop kata-deploy-stable yamls.
 				git rm "${kata_deploy_stable_yaml}"
 				git rm "${kata_cleanup_stable_yaml}"
 
-				removed_files=true
+				need_commit=true
 			fi
-
-			## these are the cases 1) and 2), where "alpha" and "rc0" are tagged as "latest"
-			version_to_replace="latest"
-			replacement="latest"
-		else
-			if [[ "${new_version}" =~ "rc" ]]; then
-				## we're in a stable branch, coming from "rcX" (tagged as latest) and we're going
-				## to "rcX+1", which should still be tagged as latest.
+		elif [ "${new_version}" != *"rc"* ]; then
+			## We are on a stable branch and creating new stable releases.
+			## Need to change kata-deploy / kata-cleanup to use the stable tags.
+			if [[ "${version_to_replace}" =~ "rc" ]]; then
+				## Coming from "rcX" so from the latest tag.
 				version_to_replace="latest"
-				replacement="latest"
 			fi
-		fi
-
-		if [ "${version_to_replace}" != "${replacement}" ] || [ "${removed_files}" == "true" ]; then
-			## this covers case 3), as it has changes on kata-deploy / kata-cleanup  files
 			sed -i "s#${registry}:${version_to_replace}#${registry}:${replacement}#g" "${kata_deploy_yaml}"
 			sed -i "s#${registry}:${version_to_replace}#${registry}:${replacement}#g" "${kata_cleanup_yaml}"
 
@@ -214,6 +206,10 @@ bump_repo() {
 			git add "${kata_deploy_yaml}"
 			git add "${kata_cleanup_yaml}"
 
+			need_commit=true
+		fi
+
+		if [ "${need_commit}" == "true" ]; then
 			info "Creating the commit with the kata-deploy changes"
 			local commit_msg="$(generate_kata_deploy_commit $new_version)"
 			git commit -s -m "${commit_msg}"
