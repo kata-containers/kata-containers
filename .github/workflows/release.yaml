@@ -26,6 +26,7 @@ jobs:
 
       - name: Build ${{ matrix.asset }}
         run: |
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-copy-yq-installer.sh
           ./tools/packaging/kata-deploy/local-build/kata-deploy-binaries-in-docker.sh --build="${KATA_ASSET}"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
