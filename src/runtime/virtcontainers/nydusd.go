@@ -9,7 +9,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -450,26 +449,12 @@ type extraOption struct {
 	Snapshotdir string `json:"snapshotdir"`
 }
 
-const extraOptionKey = "extraoption="
-
 func parseExtraOption(options []string) (*extraOption, error) {
-	extraOpt := ""
-	for _, opt := range options {
-		if strings.HasPrefix(opt, extraOptionKey) {
-			extraOpt = strings.TrimPrefix(opt, extraOptionKey)
-		}
+	if len(options) != 2 || len(options[1]) == 0 {
+		return nil, errors.New("rafs option cannot be empty")
 	}
-	if len(extraOpt) == 0 {
-		return nil, errors.New("no extraoption found")
-	}
-
-	opt, err := base64.StdEncoding.DecodeString(extraOpt)
-	if err != nil {
-		return nil, errors.Wrap(err, "base64 decoding err")
-	}
-
 	no := &extraOption{}
-	if err := json.Unmarshal(opt, no); err != nil {
+	if err := json.Unmarshal([]byte(options[1]), no); err != nil {
 		return nil, errors.Wrapf(err, "json unmarshal err")
 	}
 	if len(no.Config) == 0 || len(no.Snapshotdir) == 0 || len(no.Source) == 0 {

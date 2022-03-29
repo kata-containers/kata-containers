@@ -54,8 +54,9 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		rootFs.Source = m.Source
 		rootFs.Type = m.Type
 		rootFs.Options = m.Options
+		rootFs.ExtraOptions = m.ExtraOptions
+		shimLog.Infof("-------------------->extraOptions: %v", m.ExtraOptions)
 	}
-
 	detach := !r.Terminal
 	ociSpec, bundlePath, err := loadSpec(r)
 
@@ -266,7 +267,7 @@ func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
 		if katautils.IsBlockDevice(m.Source) && !s.config.HypervisorConfig.DisableBlockDeviceUse {
 			return false, nil
 		}
-		if m.Type == vc.NydusRootFSType {
+		if len(m.ExtraOptions) != 0 {
 			// if kata + nydus, do not mount
 			return false, nil
 		}

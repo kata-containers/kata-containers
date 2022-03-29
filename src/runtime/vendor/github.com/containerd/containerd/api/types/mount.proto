@@ -18,7 +18,7 @@ syntax = "proto3";
 
 package containerd.types;
 
-import weak "gogoproto/gogo.proto";
+import "gogoproto/gogo.proto";
 
 option go_package = "github.com/containerd/containerd/api/types;types";
 
@@ -42,4 +42,9 @@ message Mount {
 
 	// Options specifies zero or more fstab style mount options.
 	repeated string options = 4;
+
+	// ExtraOption specifies zero or more extra options except fstab style options
+	// just like configs that runtime need, take nydus as an example, kata-shim runtime needs
+	// nydus image metadata file path and nydus daemon configurations
+	repeated string extra_options = 5;
 }

@@ -234,7 +234,7 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 	}
 
 	if !rootFs.Mounted {
-		if rootFs.Source != "" && rootFs.Type != vc.NydusRootFSType {
+		if rootFs.Source != "" && len(rootFs.ExtraOptions) == 0 {
 			realPath, err := ResolvePath(rootFs.Source)
 			if err != nil {
 				return vc.Process{}, err

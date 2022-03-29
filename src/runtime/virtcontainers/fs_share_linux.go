@@ -321,7 +321,7 @@ func (f *FilesystemShare) shareRootFilesystemWithNydus(ctx context.Context, c *C
 	if err != nil {
 		return nil, err
 	}
-	extraOption, err := parseExtraOption(c.rootFs.Options)
+	extraOption, err := parseExtraOption(c.rootFs.ExtraOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -371,7 +371,7 @@ func (f *FilesystemShare) shareRootFilesystemWithNydus(ctx context.Context, c *C
 
 //func (c *Container) shareRootfs(ctx context.Context) (*grpc.Storage, string, error) {
 func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container) (*SharedFile, error) {
-	if c.rootFs.Type == NydusRootFSType {
+	if utils.IsRafsImageRootFS(c.rootFs.ExtraOptions) {
 		return f.shareRootFilesystemWithNydus(ctx, c)
 	}
 	rootfsGuestPath := filepath.Join(kataGuestSharedDir(), c.id, c.rootfsSuffix)
@@ -453,7 +453,7 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 }
 
 func (f *FilesystemShare) UnshareRootFilesystem(ctx context.Context, c *Container) error {
-	if c.rootFs.Type == NydusRootFSType {
+	if len(c.rootFs.ExtraOptions) != 0 {
 		if err2 := nydusContainerCleanup(ctx, getMountPath(c.sandbox.id), c); err2 != nil {
 			f.Logger().WithError(err2).Error("rollback failed nydusContainerCleanup")
 		}

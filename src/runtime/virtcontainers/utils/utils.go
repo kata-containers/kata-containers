@@ -458,3 +458,7 @@ func getAllParentPaths(path string) []string {
 	// remove the "/" or "." from the return result
 	return paths[1:]
 }
+
+func IsRafsImageRootFS(extroOptions []string) bool {
+	return len(extroOptions) == 2 && extroOptions[0] == "rafs"
+}
