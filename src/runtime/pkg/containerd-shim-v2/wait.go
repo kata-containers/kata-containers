@@ -15,7 +15,6 @@ import (
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/mount"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/codes"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 )
@@ -156,13 +155,11 @@ func watchOOMEvents(ctx context.Context, s *service) {
 		default:
 			containerID, err := s.sandbox.GetOOMEvent(ctx)
 			if err != nil {
-				shimLog.WithError(err).Warn("failed to get OOM event from sandbox")
-				// If the GetOOMEvent call is not implemented, then the agent is most likely an older version,
-				// stop attempting to get OOM events.
-				// for rust agent, the response code is not found
-				if isGRPCErrorCode(codes.NotFound, err) || err.Error() == "Dead agent" {
+				if err.Error() == "ttrpc: closed" || err.Error() == "Dead agent" {
+					shimLog.WithError(err).Warn("agent has shutdown, return from watching of OOM events")
 					return
 				}
+				shimLog.WithError(err).Warn("failed to get OOM event from sandbox")
 				time.Sleep(defaultCheckInterval)
 				continue
 			}
