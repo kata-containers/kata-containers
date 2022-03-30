@@ -28,6 +28,7 @@ docker build -q -t build-kata-deploy \
 
 docker run \
 	-v /var/run/docker.sock:/var/run/docker.sock \
+	-v $HOME/.docker:$HOME/.docker \
 	--user ${uid}:${gid} \
 	--env USER=${USER} -v "${kata_dir}:${kata_dir}" \
 	--rm \
