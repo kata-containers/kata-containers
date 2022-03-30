@@ -117,27 +117,16 @@ test_coverage()
 		warn "As a result, only a subset of tests will be run"
 		warn "(run this script as a non-privileged to ensure all tests are run)."
 	else
-		if [ "$CI" = true ] && [ -n "$KATA_DEV_MODE" ]; then
-			warn "Dangerous to set CI and KATA_DEV_MODE together."
-			warn "NOT running tests as root."
-		else
-			# Run the unit-tests *twice* (since some must run as root and
-			# others must run as non-root), combining the resulting test
-			# coverage files.
-			users+=" root"
-		fi
+		# Run the unit-tests *twice* (since some must run as
+		# root and others must run as non-root), combining the
+		# resulting test coverage files.
+		users+=" root"
 	fi
 
 	echo "INFO: Currently running as user '$(id -un)'"
 	for user in $users; do
 	    test_go_package "$package" "$user"
 	done
-}
-
-# Run the tests locally
-test_local()
-{
-	eval go test "$go_test_flags" "$package"
 }
 
 main()
@@ -167,22 +156,13 @@ main()
 		shift
 	done
 
-	run_coverage=no
-	if [ "$CI" = true ] || [ -n "$KATA_DEV_MODE" ]; then
-		run_coverage=yes
-	fi
-
 	local go_ldflags
 	[ "$(go env GOARCH)" = s390x ] && go_ldflags="-extldflags -Wl,--s390-pgste"
 
 	# KATA_GO_TEST_FLAGS can be set to change the flags passed to "go test".
 	go_test_flags=${KATA_GO_TEST_FLAGS:-"-v $race -timeout $timeout_value -ldflags '$go_ldflags'"}
 
-	if [ "$run_coverage" = yes ]; then
-		test_coverage
-	else
-		test_local
-	fi
+	test_coverage
 }
 
 main "$@"
