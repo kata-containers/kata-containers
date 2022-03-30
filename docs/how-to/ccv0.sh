@@ -106,7 +106,6 @@ Commands:
 - kubernetes_create_ssh_demo_pod:   Create a Kata CC runtime pod based on the ssh demo
 - kubernetes_delete_cc_pod:         Delete the Kata CC runtime busybox-based pod in Kubernetes
 - kubernetes_delete_ssh_demo_pod:   Delete the Kata CC runtime pod based on the ssh demo
-- open_kata_console:                Stream the kata runtime's console
 - open_kata_shell:                  Open a shell into the kata runtime
 - rebuild_and_install_kata:         Rebuild the kata runtime and agent and build and install the image
 - shim_pull_image:                  Run PullImage command against the shim with ctr
@@ -146,7 +145,7 @@ rebuild_and_install_kata() {
 # Based on the jenkins_job_build.sh script in kata-containers/tests/.ci - checks out source code and installs dependencies
 initialize() {
     # We need git to checkout and bootstrap the ci scripts and some other packages used in testing
-    sudo apt-get update && sudo apt-get install -y curl git socat qemu-utils
+    sudo apt-get update && sudo apt-get install -y curl git qemu-utils
     
     grep -qxF "export GOPATH=\${HOME}/go" "${PROFILE}" || echo "export GOPATH=\${HOME}/go" >> "${PROFILE}"
     grep -qxF "export GOROOT=/usr/local/go" "${PROFILE}" || echo "export GOROOT=/usr/local/go" >> "${PROFILE}"
@@ -208,8 +207,9 @@ build_and_install_kata_runtime() {
 }
 
 configure() {
-    debug_function configure_kata_to_use_rootfs
-    debug_function enable_full_debug
+    configure_kata_to_use_rootfs
+    enable_full_debug
+    enable_agent_console
 
     # Switch image offload to true in kata config
     switch_image_service_offload "on"
@@ -468,11 +468,6 @@ run_kata_and_capture_logs() {
 get_ids() {
     guest_cid=$(sudo ss -H --vsock | awk '{print $6}' | cut -d: -f1)
     sandbox_id=$(ps -ef | grep qemu | egrep -o "sandbox-[^,][^,]*" | sed 's/sandbox-//g' | awk '{print $1}')
-}
-
-open_kata_console() {
-    get_ids
-    sudo -E sandbox_id=${sandbox_id} su -c 'cd /var/run/vc/vm/${sandbox_id} && socat "stdin,raw,echo=0,escape=0x11" "unix-connect:console.sock"'
 }
 
 open_kata_shell() {
