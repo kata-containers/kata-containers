@@ -42,8 +42,7 @@ usage()
 {
 	cat <<EOF
 
-Usage: $script_name help
-       $script_name [options] [cmd]
+Usage: $script_name [options]
 
 Options:
 
@@ -68,14 +67,6 @@ EOF
 
 		printf "    --%-10.10s # %s\n" "$option" "$description"
 	done
-
-	cat <<EOF
-
-Commands:
-
-    help           # Show usage.
-
-EOF
 }
 
 # Run a command as either root or the current user (which might still be root).
@@ -175,11 +166,6 @@ main()
 
 		shift
 	done
-
-	# Consume getopt cruft
-	[ "$1" = "--" ] && shift
-
-	[ "$1" = "help" ] && usage && exit 0
 
 	run_coverage=no
 	if [ "$CI" = true ] || [ -n "$KATA_DEV_MODE" ]; then
