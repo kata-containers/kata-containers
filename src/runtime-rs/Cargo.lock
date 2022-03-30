@@ -514,6 +514,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "hypervisor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "kata-types",
+ "libc",
+ "logging",
+ "serde_json",
+ "slog",
+ "slog-scope",
+ "thiserror",
+]
+
+[[package]]
 name = "idna"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
