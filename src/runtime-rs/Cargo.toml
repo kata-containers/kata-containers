@@ -3,4 +3,6 @@ members = [
     "crates/shim",
     # TODO: current only for check, delete after use the agent crate
     "crates/agent",
+    # TODO: current only for check, delete after use the hypervisor crate
+    "crates/hypervisor",
 ]
