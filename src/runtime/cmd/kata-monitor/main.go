@@ -21,7 +21,7 @@ import (
 const defaultListenAddress = "127.0.0.1:8090"
 
 var monitorListenAddr = flag.String("listen-address", defaultListenAddress, "The address to listen on for HTTP requests.")
-var runtimeEndpoint = flag.String("runtime-endpoint", "/run/containerd/containerd.sock", `Endpoint of CRI container runtime service. (default: "/run/containerd/containerd.sock")`)
+var runtimeEndpoint = flag.String("runtime-endpoint", "/run/containerd/containerd.sock", "Endpoint of CRI container runtime service.")
 var logLevel = flag.String("log-level", "info", "Log level of logrus(trace/debug/info/warn/error/fatal/panic).")
 
 // These values are overridden via ldflags
