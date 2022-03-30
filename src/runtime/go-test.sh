@@ -47,9 +47,6 @@ tmp_coverage_file="${test_coverage_file}.tmp"
 # Permissions to create coverage files with
 coverage_file_mode=0644
 
-# Name of HTML format coverage file
-html_report_file="coverage.html"
-
 warn()
 {
 	local msg="$*"
@@ -92,7 +89,6 @@ EOF
 Commands:
 
     help           # Show usage.
-    html-coverage  # Run tests and create HTML coverage report.
 
 EOF
 }
@@ -120,16 +116,6 @@ run_as_user()
 	else
 		eval "$cmd"
 	fi
-}
-
-# Run the tests and generate an HTML report of the results
-test_html_coverage()
-{
-	test_coverage
-
-	go tool cover -html="${test_coverage_file}" -o "${html_report_file}"
-
-	run_as_user "current" chmod "${coverage_file_mode}" "${html_report_file}"
 }
 
 # Test a single golang package
@@ -246,9 +232,7 @@ main()
 	# KATA_GO_TEST_FLAGS can be set to change the flags passed to "go test".
 	go_test_flags=${KATA_GO_TEST_FLAGS:-"-v $race -timeout $timeout_value -ldflags '$go_ldflags'"}
 
-	if [ "$1" = "html-coverage" ]; then
-		test_html_coverage
-	elif [ "$run_coverage" = yes ]; then
+	if [ "$run_coverage" = yes ]; then
 		test_coverage
 	else
 		test_local
