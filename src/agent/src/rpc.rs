@@ -40,8 +40,7 @@ use rustjail::specconv::CreateOpts;
 
 use nix::errno::Errno;
 use nix::mount::MsFlags;
-use nix::sys::signal::Signal;
-use nix::sys::{signal, stat};
+use nix::sys::stat;
 use nix::unistd::{self, Pid};
 use rustjail::cgroups::Manager;
 use rustjail::process::ProcessOperations;
@@ -71,7 +70,6 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing::instrument;
 
 use libc::{self, c_char, c_ushort, pid_t, winsize, TIOCSWINSZ};
-use std::convert::TryFrom;
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::prelude::PermissionsExt;
@@ -399,20 +397,15 @@ impl AgentService {
             "exec-id" => eid.clone(),
         );
 
-        let mut sig = Signal::try_from(req.signal as i32).map_err(|e| {
-            anyhow!(e).context(format!(
-                "failed to convert {:?} to signal (container-id: {}, exec-id: {})",
-                req.signal, cid, eid
-            ))
-        })?;
+        let mut sig: libc::c_int = req.signal as libc::c_int;
         {
             let mut sandbox = s.lock().await;
             let p = sandbox.find_container_process(cid.as_str(), eid.as_str())?;
             // For container initProcess, if it hasn't installed handler for "SIGTERM" signal,
             // it will ignore the "SIGTERM" signal sent to it, thus send it "SIGKILL" signal
             // instead of "SIGTERM" to terminate it.
-            if p.init && sig == Signal::SIGTERM && !is_signal_handled(p.pid, sig as u32) {
-                sig = Signal::SIGKILL;
+            if p.init && sig == libc::SIGTERM && !is_signal_handled(p.pid, sig as u32) {
+                sig = libc::SIGKILL;
             }
             p.signal(sig)?;
         }
@@ -438,7 +431,8 @@ impl AgentService {
 
             let pids = self.get_pids(&cid).await?;
             for pid in pids.iter() {
-                if let Err(err) = signal::kill(Pid::from_raw(*pid), Some(sig)) {
+                let res = unsafe { libc::kill(*pid, sig) };
+                if let Err(err) = Errno::result(res).map(drop) {
                     warn!(
                         sl!(),
                         "signal failed";
