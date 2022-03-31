@@ -83,7 +83,7 @@ assets:
       uscan-url: >-
         https://github.com/firecracker-microvm/firecracker/tags
         .*/v?(\d\S+)\.tar\.gz
-      version: "v0.23.1"
+      version: "v0.23.4"
 
     qemu:
       description: "VMM that uses KVM"
