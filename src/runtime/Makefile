@@ -62,8 +62,6 @@ RUNTIME_OUTPUT = $(CURDIR)/$(TARGET)
 RUNTIME_DIR = $(CLI_DIR)/$(TARGET)
 BINLIST += $(TARGET)
 
-DESTDIR ?= /
-
 ifeq ($(PREFIX),)
 PREFIX        := /usr
 EXEC_PREFIX   := $(PREFIX)/local

@@ -3,6 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# Default destination directory prefix
+DESTDIR ?= /
+
 # Create a set of standard rules for a project such that:
 #
 # - The component depends on its Makefile.

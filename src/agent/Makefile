@@ -45,12 +45,11 @@ ifneq ($(EXTRA_RUSTFEATURES),)
     override EXTRA_RUSTFEATURES := --features "$(EXTRA_RUSTFEATURES)"
 endif
 
+##VAR DESTDIR=<path> is a directory prepended to each installed target file
 include ../../utils.mk
 
 TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
 
-##VAR DESTDIR=<path> is a directory prepended to each installed target file
-DESTDIR :=
 ##VAR BINDIR=<path> is a directory for installing executable programs
 BINDIR := /usr/bin
 

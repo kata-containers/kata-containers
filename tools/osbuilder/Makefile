@@ -170,7 +170,6 @@ test-initrd-only:
 list-distros:
 	@ $(ROOTFS_BUILDER) -l
 
-DESTDIR := /
 KATADIR := /usr/libexec/kata-containers
 OSBUILDER_DIR := $(KATADIR)/osbuilder
 INSTALL_DIR :=$(DESTDIR)/$(OSBUILDER_DIR)
