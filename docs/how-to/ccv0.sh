@@ -434,7 +434,7 @@ call_crictl_create_cc_pod() {
 call_crictl_create_cc_container() {
     # Create container configuration yaml based on our test copy of busybox
     local pod_config="${FIXTURES_DIR}/pod-config.yaml"
-    local container_config="${FIXTURES_DIR}/container-config.yaml"
+    local container_config="${FIXTURES_DIR}/${CONTAINER_CONFIG_FILE:-container-config.yaml}"
     local pod_name=${crictl_sandbox_name}
     crictl_create_cc_container ${pod_name} ${pod_config} ${container_config}
     sudo crictl ps -a
