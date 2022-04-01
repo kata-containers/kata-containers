@@ -11,7 +11,7 @@ set -o pipefail
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-#project_name
+# Project_name
 readonly project_name="kata-containers"
 [ -n "${GOPATH:-}" ] || GOPATH="${HOME}/go"
 # Fetch the first element from GOPATH as working directory
@@ -35,29 +35,33 @@ readonly default_config_whitelist="${script_dir}/configs/fragments/whitelist.con
 readonly GV_INTEL="intel"
 readonly GV_NVIDIA="nvidia"
 
-#Path to kernel directory
+# Path to kernel directory
 kernel_path=""
-#Experimental kernel support. Pull from virtio-fs GitLab instead of kernel.org
+
+# Experimental kernel support. Pull from virtio-fs GitLab instead of kernel.org
 build_type=""
-#Force generate config when setup
+
+# Force generate config when setup
 force_setup_generate_config="false"
+
 #GPU kernel support
 gpu_vendor=""
-#Confidential guest type 
+
+#Confidential guest type
 conf_guest=""
-#
+
 patches_path=""
-#
+
 hypervisor_target=""
-#
+
 arch_target=""
-#
+
 kernel_config_path=""
-#
+
 skip_config_checks="false"
-# destdir
+
 DESTDIR="${DESTDIR:-/}"
-#PREFIX=
+
 PREFIX="${PREFIX:-/usr}"
 
 packaging_scripts_dir="${script_dir}/../scripts"
@@ -103,7 +107,10 @@ EOF
 	exit "$exit_code"
 }
 
-# Convert architecture to the name used by the Linux kernel build system
+# Convert architecture to the name used by the Linux kernel build
+# system.
+#
+# - arg1 - Architecture.
 arch_to_kernel() {
 	local -r arch="$1"
 
@@ -116,6 +123,11 @@ arch_to_kernel() {
 	esac
 }
 
+# Download and unpack the TDX kernel source for the specified kernel
+# version.
+#
+# - arg1 - Kernel version number.
+# - arg2 - Destination directory which will contain the unpacked kernel source.
 get_tdx_kernel() {
 	local version="${1}"
 	local kernel_path=${2}
@@ -132,6 +144,11 @@ get_tdx_kernel() {
 	tar --strip-components=1 -xf ${kernel_tarball} -C ${kernel_path}
 }
 
+# Download and unpack the kernel source for the specified kernel
+# version.
+#
+# - arg1 - Kernel version number.
+# - arg2 - Destination directory which will contain the unpacked kernel source.
 get_kernel() {
 	local version="${1:-}"
 
@@ -144,7 +161,7 @@ get_kernel() {
 		return
 	fi
 
-		#Remove extra 'v'
+		# Remove extra 'v'
 		version=${version#v}
 
 		major_version=$(echo "${version}" | cut -d. -f1)
@@ -176,6 +193,9 @@ get_kernel() {
 		mv "linux-${version}" "${kernel_path}"
 }
 
+# Return the major.minor kernel version for the specified kernel.
+#
+# - arg1 - Full kernel version.
 get_major_kernel_version() {
 	local version="${1}"
 	[ -n "${version}" ] || die "kernel version not provided"
@@ -185,10 +205,10 @@ get_major_kernel_version() {
 }
 
 # Make a kernel config file from generic and arch specific
-# fragments
-# - arg1 - path to arch specific fragments
-# - arg2 - path to kernel sources
+# fragments.
 #
+# - arg1 - Path to arch specific fragments.
+# - arg2 - Path to kernel sources.
 get_kernel_frag_path() {
 	local arch_path="$1"
 	local common_path="${arch_path}/../common"
@@ -244,15 +264,17 @@ get_kernel_frag_path() {
 
 	info "Constructing config from fragments: ${config_path}"
 
-
 	export KCONFIG_CONFIG=${config_path}
 	export ARCH=${arch_target}
 	cd ${kernel_path}
 
 	local results
+
 	results=$( ${cmdpath} -r -n ${all_configs} )
+
 	# Only consider results highlighting "not in final"
 	results=$(grep "${not_in_string}" <<< "$results")
+
 	# Do not care about options that are in whitelist
 	results=$(grep -v -f ${default_config_whitelist} <<< "$results")
 
@@ -290,10 +312,11 @@ get_kernel_frag_path() {
 }
 
 # Locate and return the path to the relevant kernel config file
-# - arg1: kernel version
-# - arg2: hypervisor target
-# - arg3: arch target
-# - arg4: kernel source path
+#
+# - arg1 - Kernel version.
+# - arg2 - Hypervisor target.
+# - arg3 - Arch target.
+# - arg4 - Kernel source path.
 get_default_kernel_config() {
 	local version="${1}"
 
@@ -463,7 +486,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:deEfg:hk:p:t:v:x:" opt; do	
+	while getopts "a:b:c:deEfg:hk:p:t:v:x:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -546,7 +569,7 @@ main() {
 			kernel_version=$(get_from_kata_deps "assets.kernel.version")
 		fi
 	fi
-	#Remove extra 'v'
+	# Remove extra 'v'
 	kernel_version="${kernel_version#v}"
 
 	if [ -z "${kernel_path}" ]; then
