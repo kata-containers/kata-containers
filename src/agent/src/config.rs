@@ -11,6 +11,7 @@ use std::fs;
 use std::str::FromStr;
 use std::time;
 use tracing::instrument;
+use url::Url;
 
 const DEBUG_CONSOLE_FLAG: &str = "agent.debug_console";
 const DEV_MODE_FLAG: &str = "agent.devmode";
@@ -24,6 +25,8 @@ const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "agent.unified_cgroup_hierarchy";
 const CONFIG_FILE: &str = "agent.config_file";
 const CONTAINER_POLICY_FILE: &str = "agent.container_policy_file";
+const HTTPS_PROXY: &str = "agent.https_proxy";
+const NO_PROXY: &str = "agent.no_proxy";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
@@ -84,6 +87,8 @@ pub struct AgentConfig {
     pub supports_seccomp: bool,
     pub container_policy_path: String,
     pub aa_kbc_params: String,
+    pub https_proxy: String,
+    pub no_proxy: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -101,6 +106,8 @@ pub struct AgentConfigBuilder {
     pub endpoints: Option<EndpointsConfig>,
     pub container_policy_path: Option<String>,
     pub aa_kbc_params: Option<String>,
+    pub https_proxy: Option<String>,
+    pub no_proxy: Option<String>,
 }
 
 macro_rules! config_override {
@@ -164,6 +171,8 @@ impl Default for AgentConfig {
             supports_seccomp: rpc::have_seccomp(),
             container_policy_path: String::from(""),
             aa_kbc_params: String::from(""),
+            https_proxy: String::from(""),
+            no_proxy: String::from(""),
         }
     }
 }
@@ -194,6 +203,8 @@ impl FromStr for AgentConfig {
         config_override!(agent_config_builder, agent_config, tracing);
         config_override!(agent_config_builder, agent_config, container_policy_path);
         config_override!(agent_config_builder, agent_config, aa_kbc_params);
+        config_override!(agent_config_builder, agent_config, https_proxy);
+        config_override!(agent_config_builder, agent_config, no_proxy);
 
         // Populate the allowed endpoints hash set, if we got any from the config file.
         if let Some(endpoints) = agent_config_builder.endpoints {
@@ -298,6 +309,9 @@ impl AgentConfig {
                 config.container_policy_path,
                 get_container_policy_path_value
             );
+
+            parse_cmdline_param!(param, HTTPS_PROXY, config.https_proxy, get_url_value);
+            parse_cmdline_param!(param, NO_PROXY, config.no_proxy, get_string_value);
         }
 
         if let Ok(addr) = env::var(SERVER_ADDR_ENV_VAR) {
@@ -474,6 +488,12 @@ fn get_container_policy_path_value(param: &str) -> Result<String> {
     Ok(value)
 }
 
+#[instrument]
+fn get_url_value(param: &str) -> Result<String> {
+    let value = get_string_value(param)?;
+    Ok(Url::parse(&value)?.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -536,6 +556,8 @@ mod tests {
             unified_cgroup_hierarchy: bool,
             tracing: bool,
             container_policy_path: &'a str,
+            https_proxy: &'a str,
+            no_proxy: &'a str,
         }
 
         impl Default for TestData<'_> {
@@ -552,6 +574,8 @@ mod tests {
                     unified_cgroup_hierarchy: false,
                     tracing: false,
                     container_policy_path: "",
+                    https_proxy: "",
+                    no_proxy: "",
                 }
             }
         }
@@ -926,6 +950,26 @@ mod tests {
                 container_policy_path: "/etc/containers/policy.json",
                 ..Default::default()
             },
+            TestData {
+                contents: "agent.https_proxy=http://proxy.url.com:81/",
+                https_proxy: "http://proxy.url.com:81/",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.https_proxy=http://192.168.1.100:81/",
+                https_proxy: "http://192.168.1.100:81/",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.no_proxy=*.internal.url.com",
+                no_proxy: "*.internal.url.com",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.no_proxy=192.168.1.0/24,172.16.0.0/12",
+                no_proxy: "192.168.1.0/24,172.16.0.0/12",
+                ..Default::default()
+            },
         ];
 
         let dir = tempdir().expect("failed to create tmpdir");
@@ -978,6 +1022,8 @@ mod tests {
                 "{}",
                 msg
             );
+            assert_eq!(d.https_proxy, config.https_proxy, "{}", msg);
+            assert_eq!(d.no_proxy, config.no_proxy, "{}", msg);
 
             for v in vars_to_unset {
                 env::remove_var(v);
