@@ -45,8 +45,8 @@ ifneq ($(EXTRA_RUSTFEATURES),)
     override EXTRA_RUSTFEATURES := --features "$(EXTRA_RUSTFEATURES)"
 endif
 
-##VAR DESTDIR=<path> is a directory prepended to each installed target file
-include ../../utils.mk
+UTILS_MK = ../../utils.mk
+include $(UTILS_MK)
 
 TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
 
@@ -171,13 +171,13 @@ show-summary: show-header
 	@printf "\n"
 
 ## help: Show help comments that start with `##VAR` and `##TARGET`
-help: Makefile show-summary
+help: Makefile $(UTILS_MK) show-summary
 	@echo "==========================Help============================="
 	@echo "Variables:"
-	@sed -n 's/^##VAR//p' $< | sort
+	@sed -n 's/^##VAR//p' $^ 2>/dev/null | sort
 	@echo ""
 	@echo "Targets:"
-	@sed -n 's/^##TARGET//p' $< | sort
+	@sed -n 's/^##TARGET//p' $^ 2>/dev/null | sort
 
 TARPAULIN_ARGS:=-v --workspace
 install-tarpaulin:

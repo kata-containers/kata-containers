@@ -120,6 +120,8 @@ $(IMAGES_BUILD_DEST)/kata-containers-initrd-%.img: rootfs-%
 .PHONY: all
 all: image initrd
 
+include $(MK_DIR)/../../utils.mk
+
 .PHONY: rootfs
 rootfs: $(TARGET_ROOTFS_MARKER)
 

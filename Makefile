@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+MK_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+
 # List of available components
 COMPONENTS =
 
@@ -26,8 +28,9 @@ all: logging-crate-tests build
 logging-crate-tests:
 	make -C src/libs/logging
 
-include utils.mk
-include ./tools/packaging/kata-deploy/local-build/Makefile
+include $(MK_DIR)/utils.mk
+
+include $(MK_DIR)/tools/packaging/kata-deploy/local-build/Makefile
 
 # Create the rules
 $(eval $(call create_all_rules,$(COMPONENTS),$(TOOLS),$(STANDARD_TARGETS)))

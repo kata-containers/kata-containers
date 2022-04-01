@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-include ../../../utils.mk
+MK_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
 .DEFAULT_GOAL := default
 default: build
@@ -22,6 +22,8 @@ vendor:
 
 test:
 	@cargo test --all -- --nocapture
+
+include $(MK_DIR)/../../../utils.mk
 
 install:
 

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-include ../../../utils.mk
+MK_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
 .DEFAULT_GOAL := default
 default: build
@@ -21,6 +21,8 @@ vendor:
 	cargo vendor
 
 test:
+
+include $(MK_DIR)/../../../utils.mk
 
 install:
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --target $(TRIPLE) --path .

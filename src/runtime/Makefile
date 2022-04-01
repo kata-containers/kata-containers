@@ -8,6 +8,8 @@
 SKIP_GO_VERSION_CHECK=
 include golang.mk
 
+MK_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+
 #Get ARCH.
 ifeq ($(ARCH),)
     ifneq (,$(golang_version_raw))
@@ -507,6 +509,8 @@ define SHOW_ARCH
 endef
 
 all: runtime containerd-shim-v2 monitor
+
+include $(MK_DIR)/../../utils.mk
 
 # Targets that depend on .git-commit can use $(shell cat .git-commit) to get a
 # git revision string.  They will only be rebuilt if the revision string

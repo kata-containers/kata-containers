@@ -3,7 +3,17 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# The entire contents of this file must be contained within
+# this guard!
+ifeq ($(INCLUDED_UTILS_MK),)
+
+# Note:
+#
+# Since this file defines rules, it should be included
+# in other makefiles *after* their default rule has been defined.
+
 # Default destination directory prefix
+##VAR DESTDIR=<path> is a directory prepended to each installed target file
 DESTDIR ?= /
 
 # Create a set of standard rules for a project such that:
@@ -163,3 +173,85 @@ standard_rust_check:
 	cargo clippy --all-targets --all-features --release \
 		-- \
 		-D warnings
+
+# Install a file (full version).
+#
+# params:
+#
+# $1 : File to install.
+# $2 : Directory path where file will be installed.
+# $3 : Permissions to apply to the installed file.
+define INSTALL_FILE_FULL
+    install \
+        --mode $3 \
+        --owner $(KATA_INSTALL_OWNER) \
+        --group $(KATA_INSTALL_GROUP) \
+        -D $1 $2/$(notdir $1) || exit 1;
+endef
+
+# Install a file (honouring $(DESTDIR))
+#
+# params:
+#
+# $1 : File to install.
+# $2 : Directory path below $(DESTDIR) where file should be installed.
+# $3 : Permissions to apply to the installed file.
+define INSTALL_FILE
+    $(call INSTALL_FILE_FULL,$1,$(DESTDIR)/$2,$(KATA_INSTALL_EXE_PERMS))
+endef
+
+# Install an executable file.
+#
+# params:
+#
+# $1 : File to install.
+# $2 : Directory path where file will be installed.
+define INSTALL_EXEC
+    $(call INSTALL_FILE,$1,$2,$(KATA_INSTALL_EXE_PERMS))
+endef
+
+# Install a non-executable file.
+#
+# params:
+#
+# $1 : File to install.
+# $2 : Directory path where file will be installed.
+define INSTALL_NON_EXEC
+    $(call INSTALL_FILE,$1,$2,$(KATA_INSTALL_STD_PERMS))
+endef
+
+# Install a configuration file.
+#
+# params:
+#
+# $1 : File to install.
+# $2 : Directory path where file will be installed.
+define INSTALL_CONFIG
+    $(call INSTALL_FILE,$1,$2,$(KATA_INSTALL_CFG_PERMS))
+endef
+
+# Install a completion file.
+#
+# params:
+#
+# $1 : File to install.
+# $2 : Directory path where file will be installed.
+define INSTALL_COMPLETION
+    $(call INSTALL_FILE,$1,$2,$(KATA_INSTALL_CMP_PERMS))
+endef
+
+# Install a system service file.
+#
+# params:
+#
+# $1 : File to install.
+# $2 : Directory path where file will be installed.
+define INSTALL_SERVICE
+    $(call INSTALL_FILE,$1,$2,$(KATA_INSTALL_SVC_PERMS))
+endef
+
+# Set the magic variable to avoid the contents of this file being
+# included multiple times.
+INCLUDED_UTILS_MK = 1
+
+endif # INCLUDED_UTILS_MK

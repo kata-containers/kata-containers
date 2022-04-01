@@ -30,6 +30,9 @@ all: cloud-hypervisor-tarball \
 	shim-v2-tarball \
 	virtiofsd-tarball
 
+# For KATA_INSTALL_* variables
+include $(MK_DIR)/../../../../utils.mk
+
 %-tarball-build: $(MK_DIR)/dockerbuild/install_yq.sh
 	$(call BUILD,$*)
 
