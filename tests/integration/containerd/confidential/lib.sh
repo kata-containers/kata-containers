@@ -200,6 +200,21 @@ add_kernel_params() {
 		"$RUNTIME_CONFIG_PATH"
 }
 
+# Get the 'kernel_params' property on kata's configuration.toml
+#
+# Environment variables:
+#	RUNTIME_CONFIG_PATH - path to kata's configuration.toml. If it is not
+#			      export then it will figure out the path via
+#			      `kata-runtime env` and export its value.
+#
+get_kernel_params() {
+	load_RUNTIME_CONFIG_PATH
+
+        local kernel_params=$(sed -n -e 's#^kernel_params = "\(.*\)"#\1#gp' \
+                "$RUNTIME_CONFIG_PATH")
+	echo "$kernel_params"
+}
+
 # Clear the 'kernel_params' property on kata's configuration.toml
 #
 # Environment variables:

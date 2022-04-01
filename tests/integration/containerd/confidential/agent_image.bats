@@ -59,7 +59,19 @@ setup() {
 
 	echo "Reconfigure Kata Containers"
 	switch_image_service_offload on
-	clear_kernel_params
+	kernel_params=$(get_kernel_params)
+
+        local_dns=$(grep nameserver /etc/resolv.conf \
+            /run/systemd/resolve/resolv.conf  2>/dev/null \
+            |grep -v "127.0.0.53" | cut -d " " -f 2 | head -n 1)
+
+        if [ ! -z "$HTTPS_PROXY" ]; then
+	    add_kernel_params "agent.https_proxy=$HTTPS_PROXY"
+            sed -i -e 's/8.8.8.8/'${local_dns}'/' "${pod_config}"
+        elif [ ! -z "$https_proxy" ]; then
+	    add_kernel_params "agent.https_proxy=$https_proxy"
+            sed -i -e 's/8.8.8.8/'${local_dns}'/' "${pod_config}"
+        fi
 }
 
 @test "[cc][agent][cri][containerd] Test can pull an unencrypted image inside the guest" {
@@ -147,6 +159,7 @@ teardown() {
 	crictl_delete_cc_pod_if_exists "$sandbox_name" || true
 
 	clear_kernel_params
+        add_kernel_params "$kernel_params"
 	switch_image_service_offload off
 	disable_full_debug
 
