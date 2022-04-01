@@ -344,25 +344,25 @@ fn set_gauge_vec_meminfo(gv: &prometheus::GaugeVec, meminfo: &procfs::Meminfo) {
 #[instrument]
 fn set_gauge_vec_cpu_time(gv: &prometheus::GaugeVec, cpu: &str, cpu_time: &procfs::CpuTime) {
     gv.with_label_values(&[cpu, "user"])
-        .set(cpu_time.user as f64);
+        .set(cpu_time.user_ms() as f64);
     gv.with_label_values(&[cpu, "nice"])
-        .set(cpu_time.nice as f64);
+        .set(cpu_time.nice_ms() as f64);
     gv.with_label_values(&[cpu, "system"])
-        .set(cpu_time.system as f64);
+        .set(cpu_time.system_ms() as f64);
     gv.with_label_values(&[cpu, "idle"])
-        .set(cpu_time.idle as f64);
+        .set(cpu_time.idle_ms() as f64);
     gv.with_label_values(&[cpu, "iowait"])
-        .set(cpu_time.iowait.unwrap_or(0) as f64);
+        .set(cpu_time.iowait_ms().unwrap_or(0) as f64);
     gv.with_label_values(&[cpu, "irq"])
-        .set(cpu_time.irq.unwrap_or(0) as f64);
+        .set(cpu_time.irq_ms().unwrap_or(0) as f64);
     gv.with_label_values(&[cpu, "softirq"])
-        .set(cpu_time.softirq.unwrap_or(0) as f64);
+        .set(cpu_time.softirq_ms().unwrap_or(0) as f64);
     gv.with_label_values(&[cpu, "steal"])
-        .set(cpu_time.steal.unwrap_or(0) as f64);
+        .set(cpu_time.steal_ms().unwrap_or(0) as f64);
     gv.with_label_values(&[cpu, "guest"])
-        .set(cpu_time.guest.unwrap_or(0) as f64);
+        .set(cpu_time.guest_ms().unwrap_or(0) as f64);
     gv.with_label_values(&[cpu, "guest_nice"])
-        .set(cpu_time.guest_nice.unwrap_or(0) as f64);
+        .set(cpu_time.guest_nice_ms().unwrap_or(0) as f64);
 }
 
 #[instrument]
