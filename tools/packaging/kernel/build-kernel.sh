@@ -8,6 +8,11 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# This script parses the output of other scripts, so protect against
+# the scenario where the output is internationalised.
+export LC_ALL="C"
+export LANG="C"
+
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
