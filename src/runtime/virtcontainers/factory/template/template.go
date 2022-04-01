@@ -27,6 +27,10 @@ type template struct {
 var templateWaitForAgent = 2 * time.Second
 var templateLog = logrus.WithField("source", "virtcontainers/factory/template")
 
+const (
+	clhStateFile = "state.json"
+)
+
 // Fetch finds and returns a pre-built template factory.
 // TODO: save template metadata and fetch from storage.
 func Fetch(config vc.VMConfig, templatePath string) (base.FactoryBase, error) {
@@ -127,6 +131,14 @@ func (t *template) createTemplateVM(ctx context.Context) error {
 	config.HypervisorConfig.MemoryPath = t.statePath + "/memory"
 	config.HypervisorConfig.DevicesStatePath = t.statePath + "/state"
 
+	if t.config.HypervisorType == vc.ClhHypervisor {
+		config.HypervisorConfig.DevicesStatePath = t.statePath + "/" + clhStateFile
+		// Cloud Hypervisor use "hybrid VSOCK" which uses a local
+		// UNIX socket rather than the host kernel to handle communication with the
+		// guest. As such, we need to specify the path to the UNIX socket.
+		config.HypervisorConfig.VMStorePath = t.statePath
+	}
+
 	vm, err := vc.NewVM(ctx, config)
 	if err != nil {
 		return err
@@ -167,6 +179,10 @@ func (t *template) createFromTemplateVM(ctx context.Context, c vc.VMConfig) (*vc
 	config.HypervisorConfig.VMStorePath = c.HypervisorConfig.VMStorePath
 	config.HypervisorConfig.RunStorePath = c.HypervisorConfig.RunStorePath
 
+	if t.config.HypervisorType == vc.ClhHypervisor {
+		config.HypervisorConfig.DevicesStatePath = t.statePath + "/" + clhStateFile
+	}
+
 	return vc.NewVM(ctx, config)
 }
 
@@ -176,7 +192,11 @@ func (t *template) checkTemplateVM() error {
 		return err
 	}
 
-	_, err = os.Stat(t.statePath + "/state")
+	stateFile := "/state"
+	if t.config.HypervisorType == vc.ClhHypervisor {
+		stateFile = "/" + clhStateFile
+	}
+	_, err = os.Stat(t.statePath + stateFile)
 	return err
 }
 

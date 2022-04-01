@@ -327,7 +327,7 @@ func (v *VM) SyncTime(ctx context.Context) error {
 	return v.agent.setGuestDateTime(ctx, now)
 }
 
-func (v *VM) assignSandbox(s *Sandbox) error {
+func (v *VM) assignSandbox(s *Sandbox, ctx context.Context) error {
 	// add vm symlinks
 	// - link vm socket from sandbox dir (/run/vc/vm/sbid/<kata.sock>) to vm dir (/run/vc/vm/vmid/<kata.sock>)
 	// - link 9pfs share path from sandbox dir (/run/kata-containers/shared/sandboxes/sbid/) to vm dir (/run/vc/vm/vmid/shared/)
@@ -352,8 +352,11 @@ func (v *VM) assignSandbox(s *Sandbox) error {
 	os.RemoveAll(sbSharePath)
 	os.RemoveAll(sbSockDir)
 
-	if err := os.Symlink(vmSharePath, sbSharePath); err != nil {
-		return err
+	caps := v.hypervisor.Capabilities(ctx)
+	if caps.IsFsSharingSupported() {
+		if err := os.Symlink(vmSharePath, sbSharePath); err != nil {
+			return err
+		}
 	}
 
 	if err := os.Symlink(vmSockDir, sbSockDir); err != nil {

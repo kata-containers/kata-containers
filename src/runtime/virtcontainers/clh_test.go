@@ -94,6 +94,16 @@ func (c *clhClientMock) BootVM(ctx context.Context) (*http.Response, error) {
 }
 
 //nolint:golint
+func (c *clhClientMock) PauseVM(ctx context.Context) (*http.Response, error) {
+	return nil, nil
+}
+
+//nolint:golint
+func (c *clhClientMock) ResumeVM(ctx context.Context) (*http.Response, error) {
+	return nil, nil
+}
+
+//nolint:golint
 func (c *clhClientMock) VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error) {
 	return nil, nil
 }
@@ -110,6 +120,16 @@ func (c *clhClientMock) VmAddDiskPut(ctx context.Context, diskConfig chclient.Di
 
 //nolint:golint
 func (c *clhClientMock) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chclient.VmRemoveDevice) (*http.Response, error) {
+	return nil, nil
+}
+
+//nolint:golint
+func (c *clhClientMock) VmSnapshotPut(ctx context.Context, vmSnapshotConfig chclient.VmSnapshotConfig) (*http.Response, error) {
+	return nil, nil
+}
+
+//nolint:golint
+func (c *clhClientMock) VmRestorePut(ctx context.Context, restoreConfig chclient.RestoreConfig) (*http.Response, error) {
 	return nil, nil
 }
 
@@ -197,6 +217,32 @@ func TestCloudHypervisorBootVM(t *testing.T) {
 	var ctx context.Context
 	if err := clh.bootVM(ctx); err != nil {
 		t.Errorf("cloudHypervisor.bootVM() error = %v", err)
+	}
+}
+
+func TestCloudHypervisorPauseVM(t *testing.T) {
+	clh := &cloudHypervisor{}
+	clh.APIClient = &clhClientMock{}
+	var ctx context.Context
+	if err := clh.PauseVM(ctx); err != nil {
+		t.Errorf("cloudHypervisor.bootVM() error = %v", err)
+	}
+}
+
+func TestCloudHypervisorSaveVM(t *testing.T) {
+	clh := &cloudHypervisor{}
+	clh.APIClient = &clhClientMock{}
+	if err := clh.SaveVM(); err != nil {
+		t.Errorf("cloudHypervisor.SaveVM() error = %v", err)
+	}
+}
+
+func TestCloudHypervisorResumeVM(t *testing.T) {
+	clh := &cloudHypervisor{}
+	clh.APIClient = &clhClientMock{}
+	var ctx context.Context
+	if err := clh.ResumeVM(ctx); err != nil {
+		t.Errorf("cloudHypervisor.ResumeVM() error = %v", err)
 	}
 }
 
