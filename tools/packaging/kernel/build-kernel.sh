@@ -7,6 +7,9 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+set -o errtrace
+
+[ -n "${DEBUG:-}" ] && set -o xtrace
 
 # This script parses the output of other scripts, so protect against
 # the scenario where the output is internationalised.
