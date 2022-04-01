@@ -212,6 +212,38 @@ get_major_kernel_version() {
 	echo "${major_version}.${minor_version}"
 }
 
+# Check a single fragment file containing kernel configuration
+# options, whitespace and comments.
+#
+# - arg1 - Config file to check.
+check_config_file()
+{
+	local file="${1:-}"
+
+	[ -n "$file" ] || die "need kernel config file"
+	[ -e "$file" ] || die "missing kernel config file: $file"
+
+	local results
+
+	# Crude file check
+	results=$(grep -Env "^(CONFIG_|#|$)" "$file")
+		[ -n "$results" ] && \
+		die "invalid data in file '$file': $results"
+
+	# Check config values more carefully.
+	#
+	# Note the use of 'grep -n' to show the line number of
+	# invalid entries (which is why the 2nd grep starts
+	# with ":" as that's grep's line number delimiter).
+	results=$(grep -En "^CONFIG_" "$file" |\
+		grep -Ev ":CONFIG_[A-Z0-9_]+=[mMnNyY0-9]+$")
+
+	[ -n "$results" ] && \
+		die "config option specified without value in file '$file': $results"
+
+	true
+}
+
 # Make a kernel config file from generic and arch specific
 # fragments.
 #
@@ -269,6 +301,13 @@ get_kernel_frag_path() {
 		local conf_configs="$(ls ${arch_path}/${conf_guest}/*.conf)"
 		all_configs="${all_configs} ${conf_configs}"
 	fi
+
+	# Perform some basic checks
+	local file
+	for file in ${all_configs}
+	do
+		check_config_file "$file"
+	done
 
 	info "Constructing config from fragments: ${config_path}"
 
