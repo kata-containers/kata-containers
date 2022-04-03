@@ -87,6 +87,8 @@ const MODPROBE_PATH: &str = "/sbin/modprobe";
 
 const ERR_CANNOT_GET_WRITER: &str = "Cannot get writer";
 const ERR_INVALID_BLOCK_SIZE: &str = "Invalid block size";
+const ERR_NO_LINUX_FIELD: &str = "Spec does not contain linux field";
+const ERR_NO_SANDBOX_PIDNS: &str = "Sandbox does not have sandbox_pidns";
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -1588,7 +1590,7 @@ fn update_container_namespaces(
     let linux = spec
         .linux
         .as_mut()
-        .ok_or_else(|| anyhow!("Spec didn't container linux field"))?;
+        .ok_or_else(|| anyhow!(ERR_NO_LINUX_FIELD))?;
 
     let namespaces = linux.namespaces.as_mut_slice();
     for namespace in namespaces.iter_mut() {
@@ -1615,7 +1617,7 @@ fn update_container_namespaces(
         if let Some(ref pidns) = &sandbox.sandbox_pidns {
             pid_ns.path = String::from(pidns.path.as_str());
         } else {
-            return Err(anyhow!("failed to get sandbox pidns"));
+            return Err(anyhow!(ERR_NO_SANDBOX_PIDNS));
         }
     }
 
@@ -1879,8 +1881,8 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocols::agent_ttrpc::AgentService as _;
-    use oci::{Hook, Hooks};
+    use crate::{namespace::Namespace, protocols::agent_ttrpc::AgentService as _};
+    use oci::{Hook, Hooks, Linux, LinuxNamespace};
     use tempfile::{tempdir, TempDir};
     use ttrpc::{r#async::TtrpcContext, MessageHeader};
 
@@ -2189,6 +2191,139 @@ mod tests {
 
             let msg = format!("{}, result: {:?}", msg, result);
             assert_result!(d.result, result, msg);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_update_container_namespaces() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            has_linux_in_spec: bool,
+            sandbox_pidns_path: Option<&'a str>,
+
+            namespaces: Vec<LinuxNamespace>,
+            use_sandbox_pidns: bool,
+            result: Result<()>,
+            expected_namespaces: Vec<LinuxNamespace>,
+        }
+
+        impl Default for TestData<'_> {
+            fn default() -> Self {
+                TestData {
+                    has_linux_in_spec: true,
+                    sandbox_pidns_path: Some("sharedpidns"),
+                    namespaces: vec![
+                        LinuxNamespace {
+                            r#type: NSTYPEIPC.to_string(),
+                            path: "ipcpath".to_string(),
+                        },
+                        LinuxNamespace {
+                            r#type: NSTYPEUTS.to_string(),
+                            path: "utspath".to_string(),
+                        },
+                    ],
+                    use_sandbox_pidns: false,
+                    result: Ok(()),
+                    expected_namespaces: vec![
+                        LinuxNamespace {
+                            r#type: NSTYPEIPC.to_string(),
+                            path: "".to_string(),
+                        },
+                        LinuxNamespace {
+                            r#type: NSTYPEUTS.to_string(),
+                            path: "".to_string(),
+                        },
+                        LinuxNamespace {
+                            r#type: NSTYPEPID.to_string(),
+                            path: "".to_string(),
+                        },
+                    ],
+                }
+            }
+        }
+
+        let tests = &[
+            TestData {
+                ..Default::default()
+            },
+            TestData {
+                use_sandbox_pidns: true,
+                expected_namespaces: vec![
+                    LinuxNamespace {
+                        r#type: NSTYPEIPC.to_string(),
+                        path: "".to_string(),
+                    },
+                    LinuxNamespace {
+                        r#type: NSTYPEUTS.to_string(),
+                        path: "".to_string(),
+                    },
+                    LinuxNamespace {
+                        r#type: NSTYPEPID.to_string(),
+                        path: "sharedpidns".to_string(),
+                    },
+                ],
+                ..Default::default()
+            },
+            TestData {
+                namespaces: vec![],
+                use_sandbox_pidns: true,
+                expected_namespaces: vec![LinuxNamespace {
+                    r#type: NSTYPEPID.to_string(),
+                    path: "sharedpidns".to_string(),
+                }],
+                ..Default::default()
+            },
+            TestData {
+                namespaces: vec![],
+                use_sandbox_pidns: false,
+                expected_namespaces: vec![LinuxNamespace {
+                    r#type: NSTYPEPID.to_string(),
+                    path: "".to_string(),
+                }],
+                ..Default::default()
+            },
+            TestData {
+                namespaces: vec![],
+                sandbox_pidns_path: None,
+                use_sandbox_pidns: true,
+                result: Err(anyhow!(ERR_NO_SANDBOX_PIDNS)),
+                expected_namespaces: vec![],
+                ..Default::default()
+            },
+            TestData {
+                has_linux_in_spec: false,
+                result: Err(anyhow!(ERR_NO_LINUX_FIELD)),
+                ..Default::default()
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let logger = slog::Logger::root(slog::Discard, o!());
+            let mut sandbox = Sandbox::new(&logger).unwrap();
+            if let Some(pidns_path) = d.sandbox_pidns_path {
+                let mut sandbox_pidns = Namespace::new(&logger);
+                sandbox_pidns.path = pidns_path.to_string();
+                sandbox.sandbox_pidns = Some(sandbox_pidns);
+            }
+
+            let mut oci = Spec::default();
+            if d.has_linux_in_spec {
+                oci.linux = Some(Linux {
+                    namespaces: d.namespaces.clone(),
+                    ..Default::default()
+                });
+            }
+
+            let result = update_container_namespaces(&sandbox, &mut oci, d.use_sandbox_pidns);
+
+            let msg = format!("{}, result: {:?}", msg, result);
+
+            assert_result!(d.result, result, msg);
+            if let Some(linux) = oci.linux {
+                assert_eq!(d.expected_namespaces, linux.namespaces, "{}", msg);
+            }
         }
     }
 
