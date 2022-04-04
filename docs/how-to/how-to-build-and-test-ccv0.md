@@ -44,6 +44,12 @@ $ chmod u+x ccv0.sh
       ```
       `skopeo` is
       required for passing source credentials and verifying container image signatures using the kata agent.
+    - By default the build and configuration are using `QEMU` as the hypervisor. In order to use `Cloud Hypervisor` instead
+      set:
+      ```
+      $ export KATA_HYPERVISOR="cloud-hypervisor"
+      ```
+      before running the build.
 
 - At this point you can provision a Kata confidential containers pod and container with either
   [`crictl`](#using-crictl-for-end-to-end-provisioning-of-a-kata-confidential-containers-pod-with-an-unencrypted-image),
@@ -55,6 +61,7 @@ $ chmod u+x ccv0.sh
 - Run the full build process with Kubernetes off, so it's configure doesn't interfere with `crictl` using:
   ```bash
   $ export KUBERNETES="no"
+  $ export KATA_HYPERVISOR="qemu"
   $ ~/ccv0.sh -d build_and_install_all
   ```
     > **Note**: Much of this script has to be run as `sudo`, so you are likely to get prompted for your password.
@@ -70,7 +77,8 @@ $ chmod u+x ccv0.sh
         - Create, build and install a rootfs for the Kata hypervisor to use. For 'CCv0' this is currently based on Ubuntu
         20.04 and has extra packages like `umoci` added.
         - Build the Kata guest kernel
-        - Install QEMU
+        - Install the hypervisor (in order to select which hypervisor will be used, the `KATA_HYPERVISOR` environment
+        variable can be used to select between `qemu` or `cloud-hypervisor`)
     > **Note**: Depending on how where your VMs are hosted and how IPs are shared you might get an error from docker
     during matching `ERROR: toomanyrequests: Too Many Requests`. To get past
     this, login into Docker Hub and pull the images used with:
@@ -454,8 +462,8 @@ it ever being available to the host.
 
 As well as being able to use the script as above to build all of `kata-containers` from scratch it can be used to just
 re-build bits of it by running the script with different parameters. For example after the first build you will often
-not need to re-install the dependencies, QEMU or the Guest kernel, but just test code changes made to the runtime and
-agent. This can be done by running `~/ccv0.sh rebuild_and_install_kata`. (*Note this does a hard checkout*
+not need to re-install the dependencies, the hypervisor or the Guest kernel, but just test code changes made to the
+runtime and agent. This can be done by running `~/ccv0.sh rebuild_and_install_kata`. (*Note this does a hard checkout*
 *from git, so if your changes are only made locally it is better to do the individual steps e.g.* 
 `~/ccv0.sh build_kata_runtime && ~/ccv0.sh build_and_add_agent_to_rootfs && ~/ccv0.sh build_and_install_rootfs`).
 There are commands for a lot of steps in building, setting up and testing and the full list can be seen by running
@@ -480,6 +488,7 @@ Commands:
 - build_and_add_agent_to_rootfs:Builds the kata-agent and adds it to the rootfs
 - build_and_install_rootfs:     Builds and installs the rootfs image
 - install_guest_kernel:         Setup, build and install the guest kernel
+- build_cloud_hypervisor        Checkout, patch, build and install Cloud Hypervisor
 - build_qemu:                   Checkout, patch, build and install QEMU
 - init_kubernetes:              initialize a Kubernetes cluster on this system
 - crictl_create_cc_pod          Use crictl to create a new kata cc pod

@@ -91,6 +91,7 @@ Commands:
 - build_and_install_all:            Build and install everything
 - build_and_install_rootfs:         Builds and installs the rootfs image
 - build_kata_runtime:               Build and install the kata runtime
+- build_cloud_hypervisor            Checkout, patch, build and install Cloud Hypervisor
 - build_qemu:                       Checkout, patch, build and install QEMU
 - configure:                        Configure Kata to use rootfs and enable debug
 - connect_to_ssh_demo_pod:          Ssh into the ssh demo pod, showing that the decryption succeeded
@@ -127,7 +128,18 @@ build_and_install_all() {
     create_a_local_rootfs
     build_and_install_rootfs
     install_guest_kernel_image
-    build_qemu
+    case "$KATA_HYPERVISOR" in
+        "qemu") 
+            build_qemu
+            ;;
+        "cloud-hypervisor") 
+            build_cloud_hypervisor
+            ;;
+        *)
+            echo "Invalid option: $KATA_HYPERVISOR is not supported." >&2
+            ;;
+    esac
+
     check_kata_runtime
     if [ "${KUBERNETES}" == "yes" ]; then
         init_kubernetes
@@ -199,7 +211,7 @@ check_out_repos() {
 
 build_and_install_kata_runtime() {
     pushd ${katacontainers_repo_dir}/src/runtime
-    make clean && make && sudo -E PATH=$PATH make install
+    make clean && make DEFAULT_HYPERVISOR=${KATA_HYPERVISOR} && sudo -E PATH=$PATH make DEFAULT_HYPERVISOR=${KATA_HYPERVISOR} install
     debug_output "We should have created Kata runtime binaries:: /usr/local/bin/kata-runtime and /usr/local/bin/containerd-shim-kata-v2"
     debug_output "We should have made the Kata configuration file: /usr/share/defaults/kata-containers/configuration.toml"
     debug_output "kata-runtime version: $(kata-runtime version)"
@@ -328,6 +340,14 @@ install_guest_kernel_image() {
 
 build_qemu() {
     ${tests_repo_dir}/.ci/install_qemu.sh
+}
+
+build_cloud_hypervisor() {
+    # While we still rely on the C version of virtiofsd, let's
+    # install QEMU, which will then bring virtiofsd together.
+    build_qemu
+
+    ${tests_repo_dir}/.ci/install_cloud_hypervisor.sh
 }
 
 check_kata_runtime() {
@@ -579,6 +599,9 @@ main() {
             ;;
         install_guest_kernel)
             install_guest_kernel_image
+            ;;
+        build_cloud_hypervisor)
+            build_cloud_hypervisor
             ;;
         build_qemu)
             build_qemu
