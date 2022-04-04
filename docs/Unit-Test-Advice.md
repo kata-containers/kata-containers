@@ -277,7 +277,9 @@ mod tests {
 
 ## Temporary files
 
-Always delete temporary files on success.
+Use `t.TempDir()` to create temporary directory. The directory created by
+`t.TempDir()` is automatically removed when the test and all its subtests
+complete.
 
 ### Golang temporary files
 
@@ -286,11 +288,7 @@ func TestSomething(t *testing.T) {
     assert := assert.New(t)
 
     // Create a temporary directory
-    tmpdir, err := os.MkdirTemp("", "")
-    assert.NoError(err)
-
-    // Delete it at the end of the test
-    defer os.RemoveAll(tmpdir) 
+    tmpdir := t.TempDir()
 
     // Add test logic that will use the tmpdir here...
 }

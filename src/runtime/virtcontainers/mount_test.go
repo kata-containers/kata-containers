@@ -318,14 +318,12 @@ func TestIsWatchable(t *testing.T) {
 	result = isWatchableMount(path)
 	assert.False(result)
 
-	testPath, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(testPath)
+	testPath := t.TempDir()
 
 	// Verify secret is successful (single file mount):
 	//   /tmppath/kubernetes.io~secret/super-secret-thing
 	secretpath := filepath.Join(testPath, K8sSecret)
-	err = os.MkdirAll(secretpath, 0777)
+	err := os.MkdirAll(secretpath, 0777)
 	assert.NoError(err)
 	secret := filepath.Join(secretpath, "super-secret-thing")
 	_, err = os.Create(secret)

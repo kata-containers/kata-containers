@@ -18,9 +18,7 @@ import (
 
 func TestAdd(t *testing.T) {
 	var err error
-	kataDirectVolumeRootPath, err = os.MkdirTemp(os.TempDir(), "add-test")
-	assert.Nil(t, err)
-	defer os.RemoveAll(kataDirectVolumeRootPath)
+	kataDirectVolumeRootPath = t.TempDir()
 	var volumePath = "/a/b/c"
 	var basePath = "a"
 	actual := MountInfo{
@@ -54,9 +52,7 @@ func TestAdd(t *testing.T) {
 
 func TestRecordSandboxId(t *testing.T) {
 	var err error
-	kataDirectVolumeRootPath, err = os.MkdirTemp(os.TempDir(), "recordSanboxId-test")
-	assert.Nil(t, err)
-	defer os.RemoveAll(kataDirectVolumeRootPath)
+	kataDirectVolumeRootPath = t.TempDir()
 
 	var volumePath = "/a/b/c"
 	mntInfo := MountInfo{
@@ -82,9 +78,7 @@ func TestRecordSandboxId(t *testing.T) {
 
 func TestRecordSandboxIdNoMountInfoFile(t *testing.T) {
 	var err error
-	kataDirectVolumeRootPath, err = os.MkdirTemp(os.TempDir(), "recordSanboxId-test")
-	assert.Nil(t, err)
-	defer os.RemoveAll(kataDirectVolumeRootPath)
+	kataDirectVolumeRootPath = t.TempDir()
 
 	var volumePath = "/a/b/c"
 	sandboxId := uuid.Generate().String()
