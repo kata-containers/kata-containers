@@ -189,7 +189,7 @@ there.
   pulled on the guest:
     - Find all the `rootfs` directories under in the pod's shared directory with:
       ```bash
-      $ pod_id=$(ps -ef | grep qemu | egrep -o "sandbox-[^,][^,]*" | sed 's/sandbox-//g' | awk '{print $1}')
+      $ pod_id=$(ps -ef | grep containerd-shim-kata-v2 | egrep -o "id [^,][^,].* " | awk '{print $2}')
       $ sudo find /run/kata-containers/shared/sandboxes/${pod_id}/shared -name rootfs
       ```
       which should only show a single `rootfs` directory if the container image was pulled on the guest, not the host

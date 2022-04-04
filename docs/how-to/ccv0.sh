@@ -467,7 +467,7 @@ run_kata_and_capture_logs() {
 
 get_ids() {
     guest_cid=$(sudo ss -H --vsock | awk '{print $6}' | cut -d: -f1)
-    sandbox_id=$(ps -ef | grep qemu | egrep -o "sandbox-[^,][^,]*" | sed 's/sandbox-//g' | awk '{print $1}')
+    sandbox_id=$(ps -ef | grep containerd-shim-kata-v2 | egrep -o "id [^,][^,].* " | awk '{print $2}')
 }
 
 open_kata_shell() {
