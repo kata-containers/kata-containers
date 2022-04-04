@@ -7,7 +7,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -118,11 +117,7 @@ func TestArchKernelParamHandler(t *testing.T) {
 func TestKvmIsUsable(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	savedKvmDevice := kvmDevice
 	fakeKVMDevice := filepath.Join(dir, "kvm")
@@ -132,7 +127,7 @@ func TestKvmIsUsable(t *testing.T) {
 		kvmDevice = savedKvmDevice
 	}()
 
-	err = kvmIsUsable()
+	err := kvmIsUsable()
 	assert.Error(err)
 
 	err = createEmptyFile(fakeKVMDevice)

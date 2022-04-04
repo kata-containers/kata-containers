@@ -458,12 +458,8 @@ func TestMkdirAllWithInheritedOwnerSuccessful(t *testing.T) {
 		t.Skip("Test disabled as requires root user")
 	}
 	assert := assert.New(t)
-	tmpDir1, err := os.MkdirTemp("", "test")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpDir1)
-	tmpDir2, err := os.MkdirTemp("", "test")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpDir2)
+	tmpDir1 := t.TempDir()
+	tmpDir2 := t.TempDir()
 
 	testCases := []struct {
 		before    func(rootDir string, uid, gid int)
@@ -474,7 +470,7 @@ func TestMkdirAllWithInheritedOwnerSuccessful(t *testing.T) {
 	}{
 		{
 			before: func(rootDir string, uid, gid int) {
-				err = syscall.Chown(rootDir, uid, gid)
+				err := syscall.Chown(rootDir, uid, gid)
 				assert.NoError(err)
 			},
 			rootDir:   tmpDir1,
@@ -485,7 +481,7 @@ func TestMkdirAllWithInheritedOwnerSuccessful(t *testing.T) {
 		{
 			before: func(rootDir string, uid, gid int) {
 				// remove the tmpDir2 so the MkdirAllWithInheritedOwner() call creates them from /tmp
-				err = os.RemoveAll(tmpDir2)
+				err := os.RemoveAll(tmpDir2)
 				assert.NoError(err)
 			},
 			rootDir:   tmpDir2,
@@ -502,8 +498,10 @@ func TestMkdirAllWithInheritedOwnerSuccessful(t *testing.T) {
 
 		err := MkdirAllWithInheritedOwner(tc.targetDir, 0700)
 		assert.NoError(err)
-		// remove the first parent "/tmp" from the assertion as it's owned by root
-		for _, p := range getAllParentPaths(tc.targetDir)[1:] {
+		// tmpDir1: /tmp/TestMkdirAllWithInheritedOwnerSuccessful/001
+		// tmpDir2: /tmp/TestMkdirAllWithInheritedOwnerSuccessful/002
+		// remove the first two parent "/tmp/TestMkdirAllWithInheritedOwnerSuccessful" from the assertion as it's owned by root
+		for _, p := range getAllParentPaths(tc.targetDir)[2:] {
 			info, err := os.Stat(p)
 			assert.NoError(err)
 			assert.True(info.IsDir())
@@ -520,12 +518,10 @@ func TestChownToParent(t *testing.T) {
 		t.Skip("Test disabled as requires root user")
 	}
 	assert := assert.New(t)
-	rootDir, err := os.MkdirTemp("", "root")
-	assert.NoError(err)
-	defer os.RemoveAll(rootDir)
+	rootDir := t.TempDir()
 	uid := 1234
 	gid := 5678
-	err = syscall.Chown(rootDir, uid, gid)
+	err := syscall.Chown(rootDir, uid, gid)
 	assert.NoError(err)
 
 	targetDir := path.Join(rootDir, "foo")

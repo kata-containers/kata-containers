@@ -26,9 +26,7 @@ func TestNewTtyIOFifoReopen(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.TODO()
 
-	testDir, err := os.MkdirTemp("", "kata-")
-	assert.NoError(err)
-	defer os.RemoveAll(testDir)
+	testDir := t.TempDir()
 
 	fifoPath, err := os.MkdirTemp(testDir, "fifo-path-")
 	assert.NoError(err)
@@ -104,9 +102,7 @@ func TestIoCopy(t *testing.T) {
 	testBytes2 := []byte("Test2")
 	testBytes3 := []byte("Test3")
 
-	testDir, err := os.MkdirTemp("", "kata-")
-	assert.NoError(err)
-	defer os.RemoveAll(testDir)
+	testDir := t.TempDir()
 
 	fifoPath, err := os.MkdirTemp(testDir, "fifo-path-")
 	assert.NoError(err)

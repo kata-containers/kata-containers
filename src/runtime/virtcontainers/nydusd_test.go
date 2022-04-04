@@ -8,7 +8,6 @@ package virtcontainers
 import (
 	"context"
 	"encoding/base64"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,7 +18,6 @@ import (
 )
 
 func TestNydusdStart(t *testing.T) {
-	assert := assert.New(t)
 	// nolint: govet
 	type fields struct {
 		pid             int
@@ -33,13 +31,8 @@ func TestNydusdStart(t *testing.T) {
 		setupShareDirFn func() error
 	}
 
-	sourcePath, err := ioutil.TempDir("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(sourcePath)
-
-	socketDir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(socketDir)
+	sourcePath := t.TempDir()
+	socketDir := t.TempDir()
 
 	sockPath := filepath.Join(socketDir, "vhost-user.sock")
 	apiSockPath := filepath.Join(socketDir, "api.sock")
@@ -115,13 +108,8 @@ func TestNydusdArgs(t *testing.T) {
 func TestNydusdValid(t *testing.T) {
 	assert := assert.New(t)
 
-	sourcePath, err := ioutil.TempDir("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(sourcePath)
-
-	socketDir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(socketDir)
+	sourcePath := t.TempDir()
+	socketDir := t.TempDir()
 
 	sockPath := filepath.Join(socketDir, "vhost-user.sock")
 	apiSockPath := filepath.Join(socketDir, "api.sock")
@@ -135,7 +123,7 @@ func TestNydusdValid(t *testing.T) {
 		}
 	}
 	nd := newNydsudFunc()
-	err = nd.valid()
+	err := nd.valid()
 	assert.NoError(err)
 
 	nd = newNydsudFunc()

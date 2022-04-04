@@ -71,11 +71,7 @@ func TestCCCheckCLIFunction(t *testing.T) {
 func TestCheckCheckKernelModulesNoNesting(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	savedSysModuleDir := sysModuleDir
 	savedProcCPUInfo := procCPUInfo
@@ -91,7 +87,7 @@ func TestCheckCheckKernelModulesNoNesting(t *testing.T) {
 		procCPUInfo = savedProcCPUInfo
 	}()
 
-	err = os.MkdirAll(sysModuleDir, testDirMode)
+	err := os.MkdirAll(sysModuleDir, testDirMode)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,11 +152,7 @@ func TestCheckCheckKernelModulesNoNesting(t *testing.T) {
 func TestCheckCheckKernelModulesNoUnrestrictedGuest(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	savedSysModuleDir := sysModuleDir
 	savedProcCPUInfo := procCPUInfo
@@ -176,7 +168,7 @@ func TestCheckCheckKernelModulesNoUnrestrictedGuest(t *testing.T) {
 		procCPUInfo = savedProcCPUInfo
 	}()
 
-	err = os.MkdirAll(sysModuleDir, testDirMode)
+	err := os.MkdirAll(sysModuleDir, testDirMode)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,11 +247,7 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	savedSysModuleDir := sysModuleDir
 	savedProcCPUInfo := procCPUInfo
@@ -275,7 +263,7 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 		procCPUInfo = savedProcCPUInfo
 	}()
 
-	err = os.MkdirAll(sysModuleDir, testDirMode)
+	err := os.MkdirAll(sysModuleDir, testDirMode)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -405,11 +393,7 @@ func TestArchKernelParamHandler(t *testing.T) {
 func TestKvmIsUsable(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	savedKvmDevice := kvmDevice
 	fakeKVMDevice := filepath.Join(dir, "kvm")
@@ -419,7 +403,7 @@ func TestKvmIsUsable(t *testing.T) {
 		kvmDevice = savedKvmDevice
 	}()
 
-	err = kvmIsUsable()
+	err := kvmIsUsable()
 	assert.Error(err)
 
 	err = createEmptyFile(fakeKVMDevice)
@@ -457,9 +441,7 @@ foo     : bar
 func TestSetCPUtype(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	savedArchRequiredCPUFlags := archRequiredCPUFlags
 	savedArchRequiredCPUAttribs := archRequiredCPUAttribs
