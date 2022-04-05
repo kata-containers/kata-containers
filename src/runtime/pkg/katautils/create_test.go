@@ -216,7 +216,6 @@ func TestCreateSandboxConfigFail(t *testing.T) {
 	assert := assert.New(t)
 
 	tmpdir, bundlePath, _ := ktu.SetupOCIConfigFile(t)
-	defer os.RemoveAll(tmpdir)
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
@@ -250,7 +249,6 @@ func TestCreateSandboxFail(t *testing.T) {
 	assert := assert.New(t)
 
 	tmpdir, bundlePath, _ := ktu.SetupOCIConfigFile(t)
-	defer os.RemoveAll(tmpdir)
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
@@ -273,7 +271,6 @@ func TestCreateSandboxAnnotations(t *testing.T) {
 	assert := assert.New(t)
 
 	tmpdir, bundlePath, _ := ktu.SetupOCIConfigFile(t)
-	defer os.RemoveAll(tmpdir)
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
@@ -350,8 +347,7 @@ func TestCheckForFips(t *testing.T) {
 func TestCreateContainerContainerConfigFail(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
-	defer os.RemoveAll(tmpdir)
+	_, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
@@ -378,8 +374,7 @@ func TestCreateContainerContainerConfigFail(t *testing.T) {
 func TestCreateContainerFail(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
-	defer os.RemoveAll(tmpdir)
+	_, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
@@ -413,8 +408,7 @@ func TestCreateContainer(t *testing.T) {
 		mockSandbox.CreateContainerFunc = nil
 	}()
 
-	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
-	defer os.RemoveAll(tmpdir)
+	_, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
