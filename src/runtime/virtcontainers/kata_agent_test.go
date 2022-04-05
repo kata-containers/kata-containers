@@ -191,8 +191,7 @@ func TestKataAgentSendReq(t *testing.T) {
 func TestHandleEphemeralStorage(t *testing.T) {
 	k := kataAgent{}
 	var ociMounts []specs.Mount
-	mountSource := "/tmp/mountPoint"
-	os.Mkdir(mountSource, 0755)
+	mountSource := t.TempDir()
 
 	mount := specs.Mount{
 		Type:   KataEphemeralDevType,
@@ -212,8 +211,7 @@ func TestHandleEphemeralStorage(t *testing.T) {
 func TestHandleLocalStorage(t *testing.T) {
 	k := kataAgent{}
 	var ociMounts []specs.Mount
-	mountSource := "/tmp/mountPoint"
-	os.Mkdir(mountSource, 0755)
+	mountSource := t.TempDir()
 
 	mount := specs.Mount{
 		Type:   KataLocalDevType,
@@ -688,8 +686,7 @@ func TestHandleShm(t *testing.T) {
 	// In case the type of mount is ephemeral, the container mount is not
 	// shared with the sandbox shm.
 	ociMounts[0].Type = KataEphemeralDevType
-	mountSource := "/tmp/mountPoint"
-	os.Mkdir(mountSource, 0755)
+	mountSource := t.TempDir()
 	ociMounts[0].Source = mountSource
 	k.handleShm(ociMounts, sandbox)
 
