@@ -22,6 +22,7 @@ var testContainerIDHook = "test-container-id"
 var testControllerIDHook = "test-controller-id"
 var testBinHookPath = "../../virtcontainers/hook/mock/hook"
 var testBundlePath = "/test/bundle"
+var mockHookLogFile = "/tmp/mock_hook.log"
 
 func getMockHookBinPath() string {
 	return testBinHookPath
@@ -49,12 +50,17 @@ func createWrongHook() specs.Hook {
 	}
 }
 
+func cleanMockHookLogFile() {
+	_ = os.Remove(mockHookLogFile)
+}
+
 func TestRunHook(t *testing.T) {
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
 	assert := assert.New(t)
+	t.Cleanup(cleanMockHookLogFile)
 
 	ctx := context.Background()
 	spec := specs.Spec{}
@@ -87,6 +93,7 @@ func TestPreStartHooks(t *testing.T) {
 	}
 
 	assert := assert.New(t)
+	t.Cleanup(cleanMockHookLogFile)
 
 	ctx := context.Background()
 
@@ -129,6 +136,7 @@ func TestPostStartHooks(t *testing.T) {
 	}
 
 	assert := assert.New(t)
+	t.Cleanup(cleanMockHookLogFile)
 
 	ctx := context.Background()
 
@@ -173,6 +181,7 @@ func TestPostStopHooks(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := context.Background()
+	t.Cleanup(cleanMockHookLogFile)
 
 	// Hooks field is nil
 	spec := specs.Spec{}
