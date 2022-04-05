@@ -58,7 +58,7 @@ $ chmod u+x ccv0.sh
 
 ### Using `crictl` for end-to-end provisioning of a Kata confidential containers pod with an unencrypted image
 
-- Run the full build process with Kubernetes off, so it's configure doesn't interfere with `crictl` using:
+- Run the full build process with Kubernetes turned off, so its configuration doesn't interfere with `crictl` using:
   ```bash
   $ export KUBERNETES="no"
   $ export KATA_HYPERVISOR="qemu"
