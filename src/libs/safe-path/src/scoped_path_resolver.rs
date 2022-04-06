@@ -319,6 +319,97 @@ mod tests {
         // Detect symlink loop.
         fs::symlink("/endpoint_b", rootfs_path.join("endpoint_a")).unwrap();
         fs::symlink("/endpoint_a", rootfs_path.join("endpoint_b")).unwrap();
+        scoped_resolve(rootfs_path, "endpoint_a").unwrap_err();
+    }
+
+    #[test]
+    fn test_scoped_join() {
+        // create temporary directory to emulate container rootfs with symlink
+        let rootfs_dir = tempdir().expect("failed to create tmpdir");
+        let rootfs_path = &rootfs_dir.path();
+
+        assert_eq!(
+            scoped_join(&rootfs_path, "a").unwrap(),
+            rootfs_path.join("a")
+        );
+        assert_eq!(
+            scoped_join(&rootfs_path, "./a").unwrap(),
+            rootfs_path.join("a")
+        );
+        assert_eq!(
+            scoped_join(&rootfs_path, "././a").unwrap(),
+            rootfs_path.join("a")
+        );
+        assert_eq!(
+            scoped_join(&rootfs_path, "c/d/../../a").unwrap(),
+            rootfs_path.join("a")
+        );
+        assert_eq!(
+            scoped_join(&rootfs_path, "c/d/../../../.././a").unwrap(),
+            rootfs_path.join("a")
+        );
+        assert_eq!(
+            scoped_join(&rootfs_path, "../../a").unwrap(),
+            rootfs_path.join("a")
+        );
+        assert_eq!(
+            scoped_join(&rootfs_path, "./../a").unwrap(),
+            rootfs_path.join("a")
+        );
+    }
+
+    #[test]
+    fn test_scoped_join_symlink() {
+        // create temporary directory to emulate container rootfs with symlink
+        let rootfs_dir = tempdir().expect("failed to create tmpdir");
+        let rootfs_path = &rootfs_dir.path();
+        DirBuilder::new()
+            .recursive(true)
+            .create(rootfs_dir.path().join("b/c"))
+            .unwrap();
+        fs::symlink("b/c", rootfs_dir.path().join("a")).unwrap();
+
+        let target = rootfs_path.join("b/c");
+        assert_eq!(scoped_join(&rootfs_path, "a").unwrap(), target);
+        assert_eq!(scoped_join(&rootfs_path, "./a").unwrap(), target);
+        assert_eq!(scoped_join(&rootfs_path, "././a").unwrap(), target);
+        assert_eq!(scoped_join(&rootfs_path, "b/c/../../a").unwrap(), target);
+        assert_eq!(
+            scoped_join(&rootfs_path, "b/c/../../../.././a").unwrap(),
+            target
+        );
+        assert_eq!(scoped_join(&rootfs_path, "../../a").unwrap(), target);
+        assert_eq!(scoped_join(&rootfs_path, "./../a").unwrap(), target);
+        assert_eq!(scoped_join(&rootfs_path, "a/../../../a").unwrap(), target);
+        assert_eq!(scoped_join(&rootfs_path, "a/../../../b/c").unwrap(), target);
+    }
+
+    #[test]
+    fn test_scoped_join_symlink_loop() {
+        // create temporary directory to emulate container rootfs with symlink
+        let rootfs_dir = tempdir().expect("failed to create tmpdir");
+        let rootfs_path = &rootfs_dir.path();
+        fs::symlink("/endpoint_b", rootfs_path.join("endpoint_a")).unwrap();
+        fs::symlink("/endpoint_a", rootfs_path.join("endpoint_b")).unwrap();
         scoped_join(rootfs_path, "endpoint_a").unwrap_err();
+    }
+
+    #[test]
+    fn test_scoped_join_unicode_character() {
+        // create temporary directory to emulate container rootfs with symlink
+        let rootfs_dir = tempdir().expect("failed to create tmpdir");
+        let rootfs_path = &rootfs_dir.path().canonicalize().unwrap();
+
+        let path = scoped_join(rootfs_path, "您好").unwrap();
+        assert_eq!(path, rootfs_path.join("您好"));
+
+        let path = scoped_join(rootfs_path, "../../../您好").unwrap();
+        assert_eq!(path, rootfs_path.join("您好"));
+
+        let path = scoped_join(rootfs_path, "。。/您好").unwrap();
+        assert_eq!(path, rootfs_path.join("。。/您好"));
+
+        let path = scoped_join(rootfs_path, "您好/../../test").unwrap();
+        assert_eq!(path, rootfs_path.join("test"));
     }
 }
