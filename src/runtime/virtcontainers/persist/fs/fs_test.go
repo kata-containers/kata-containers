@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func getFsDriver() (*FS, error) {
-	driver, err := MockFSInit()
+func getFsDriver(t *testing.T) (*FS, error) {
+	driver, err := MockFSInit(t.TempDir())
 	if err != nil {
 		return nil, fmt.Errorf("failed to init fs driver")
 	}
@@ -27,16 +27,8 @@ func getFsDriver() (*FS, error) {
 	return fs.FS, nil
 }
 
-func initTestDir() func() {
-	return func() {
-		os.RemoveAll(MockStorageRootPath())
-	}
-}
-
 func TestFsLockShared(t *testing.T) {
-	defer initTestDir()()
-
-	fs, err := getFsDriver()
+	fs, err := getFsDriver(t)
 	assert.Nil(t, err)
 	assert.NotNil(t, fs)
 
@@ -61,9 +53,7 @@ func TestFsLockShared(t *testing.T) {
 }
 
 func TestFsLockExclusive(t *testing.T) {
-	defer initTestDir()()
-
-	fs, err := getFsDriver()
+	fs, err := getFsDriver(t)
 	assert.Nil(t, err)
 	assert.NotNil(t, fs)
 
@@ -89,9 +79,7 @@ func TestFsLockExclusive(t *testing.T) {
 }
 
 func TestFsDriver(t *testing.T) {
-	defer initTestDir()()
-
-	fs, err := getFsDriver()
+	fs, err := getFsDriver(t)
 	assert.Nil(t, err)
 	assert.NotNil(t, fs)
 
@@ -162,12 +150,10 @@ func TestFsDriver(t *testing.T) {
 }
 
 func TestGlobalReadWrite(t *testing.T) {
-	defer initTestDir()()
-
 	relPath := "test/123/aaa.json"
 	data := "hello this is testing global read write"
 
-	fs, err := getFsDriver()
+	fs, err := getFsDriver(t)
 	assert.Nil(t, err)
 	assert.NotNil(t, fs)
 
