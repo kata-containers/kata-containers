@@ -1,0 +1,47 @@
+#!/usr/bin/env bats
+# Copyright (c) 2022 Red Hat
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# This is an agent configuration file used to test the API endpoints can be
+# blocked. The list of allowed endpoints below excludes 'ExecProcessRequest',
+# as a result it is expected the agent won't allow the container tool to exec
+# a process on a running container.
+
+[endpoints]
+# All endpoints except "ExecProcessRequest" are allowed.
+allowed = [
+        "AddARPNeighborsRequest",
+        "AddSwapRequest",
+        "CloseStdinRequest",
+        "CopyFileRequest",
+        "CreateContainerRequest",
+        "CreateSandboxRequest",
+        "DestroySandboxRequest",
+        "GetMetricsRequest",
+        "GetOOMEventRequest",
+        "GuestDetailsRequest",
+        "ListInterfacesRequest",
+        "ListRoutesRequest",
+        "MemHotplugByProbeRequest",
+        "OnlineCPUMemRequest",
+        "PauseContainerRequest",
+        "PullImageRequest",
+        "ReadStreamRequest",
+        "RemoveContainerRequest",
+        "ReseedRandomDevRequest",
+        "ResizeVolumeRequest",
+        "ResumeContainerRequest",
+        "SetGuestDateTimeRequest",
+        "SignalProcessRequest",
+        "StartContainerRequest",
+        "StatsContainerRequest",
+        "TtyWinResizeRequest",
+        "UpdateContainerRequest",
+        "UpdateInterfaceRequest",
+        "UpdateRoutesRequest",
+        "VolumeStatsRequest",
+        "WaitProcessRequest",
+        "WriteStreamRequest"
+]

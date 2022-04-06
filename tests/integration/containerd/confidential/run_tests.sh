@@ -14,7 +14,8 @@ source "${cidir}/lib.sh"
 main() {
 	# Ensure bats is installed.
 	${cidir}/install_bats.sh >/dev/null
-	bats ${script_dir}/agent_image.bats
+	bats ${script_dir}/agent_image.bats \
+		${script_dir}/agent_api.bats
 }
 
 main $@

@@ -585,3 +585,103 @@ function arch_to_kernel() {
 		*) die "unsupported architecture: ${arch}";;
 	esac
 }
+
+# Copy local files to the guest image.
+#
+# Parameters:
+#	$1      - destination directory in the image. It is created if not exist.
+#	$2..*   - list of local files.
+#
+cp_to_guest_img() {
+	local dest_dir="$1"
+	shift # remaining arguments are the list of files.
+	local src_files=($@)
+
+	if [ "${#src_files[@]}" -eq 0 ]; then
+		echo "Expected a list of files"
+		return 1
+	fi
+
+	# Open the original initrd/image, inject the agent file
+	local image_path="$(kata-runtime kata-env --json | jq -r .Image.Path)"
+	if [ -f "$image_path" ]; then
+		local tmp_mnt="$(mktemp -d)"
+		if ! sudo mount -o loop,offset=$((512*6144)) "$image_path" \
+			"$tmp_mnt"; then
+			echo "Failed to mount the image file: $image_path"
+			rm -rf "$tmp_mnt"
+			return 1
+		fi
+
+		mkdir -p "${tmp_mnt}/${dest_dir}"
+		for file in ${src_files[@]}; do
+			if [ ! -f "$file" ]; then
+				echo "File not found, not copying: $file"
+				continue
+			fi
+			sudo cp -f "${file}" "${tmp_mnt}/${dest_dir}"
+		done
+
+		sudo umount "$tmp_mnt"
+		rm -rf ${tmp_mnt}
+	else
+		local initrd_path="$(kata-runtime kata-env --json | \
+			jq -r .Initrd.Path)"
+		if [ ! -f "$initrd_path" ]; then
+			echo "Guest initrd and image not found"
+			return 1
+		fi
+		# TODO: implement me.
+	fi
+}
+
+# Find the path to the current guest image file.
+#
+# Return the guest image file.
+#
+find_guest_img() {
+	local file=""
+
+	for img_type in Image Initrd; do
+		file="$(kata-runtime kata-env --json | \
+			jq -r .${img_type}.Path)"
+		[ -f "$file" ] && break
+	done
+
+	echo "$file"
+}
+
+# Copy the current guest image file to a temporary file, unless a destination
+# file path is given.
+#
+# Parameters:
+# 	$1      - copy to file.
+#
+# Return the destination file path.
+#
+save_guest_img() {
+	local dest_file="${1:-}"
+	local file="$(find_guest_img)"
+
+	[ -n "$dest_file" ] || dest_file="$(mktemp -t "$(basename $file).XXXXXXXXXX")"
+
+	cp -f "$file" "$dest_file"
+	echo "$dest_file"
+}
+
+# Overwrite the current guest image file with the one given.
+#
+# Parameters:
+# 	$1      - the new image file.
+#
+new_guest_img() {
+	local new_file="${1:-}"
+	local file="$(find_guest_img)"
+
+	if [ ! -f "$new_file" ]; then
+		echo "Cannot set guest image as the file does not exit: $new_file"
+		return 1
+	fi
+
+	sudo cp -f "$new_file" "$file"
+}
