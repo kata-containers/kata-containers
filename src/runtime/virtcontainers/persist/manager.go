@@ -28,12 +28,7 @@ var (
 		RootFSName:     fs.Init,
 		RootlessFSName: fs.RootlessInit,
 	}
-	mockTesting = false
 )
-
-func EnableMockTesting() {
-	mockTesting = true
-}
 
 // GetDriver returns new PersistDriver according to driver name
 func GetDriverByName(name string) (persistapi.PersistDriver, error) {
@@ -56,8 +51,9 @@ func GetDriver() (persistapi.PersistDriver, error) {
 		return nil, expErr
 	}
 
-	if mockTesting {
-		return fs.MockFSInit()
+	mock, err := fs.MockAutoInit()
+	if mock != nil || err != nil {
+		return mock, err
 	}
 
 	if rootless.IsRootless() {
