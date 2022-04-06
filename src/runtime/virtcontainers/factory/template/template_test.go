@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/mock"
 )
 
@@ -32,8 +31,7 @@ func TestTemplateFactory(t *testing.T) {
 
 	templateWaitForAgent = 1 * time.Microsecond
 
-	testDir := fs.MockStorageRootPath()
-	defer fs.MockStorageDestroy()
+	testDir := t.TempDir()
 
 	hyperConfig := vc.HypervisorConfig{
 		KernelPath: testDir,
