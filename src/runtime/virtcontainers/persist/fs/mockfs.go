@@ -30,10 +30,6 @@ func MockRunVMStoragePath() string {
 	return filepath.Join(MockStorageRootPath(), vmPathSuffix)
 }
 
-func MockStorageDestroy() {
-	os.RemoveAll(MockStorageRootPath())
-}
-
 func MockFSInit() (persistapi.PersistDriver, error) {
 	driver, err := Init()
 	if err != nil {
