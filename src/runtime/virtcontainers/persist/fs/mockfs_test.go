@@ -13,19 +13,19 @@ import (
 
 func TestMockAutoInit(t *testing.T) {
 	assert := assert.New(t)
-	orgMockTesting := mockTesting
+	orgMockRootPath := mockRootPath
 	defer func() {
-		mockTesting = orgMockTesting
+		mockRootPath = orgMockRootPath
 	}()
 
-	mockTesting = false
+	mockRootPath = ""
 
 	fsd, err := MockAutoInit()
 	assert.Nil(fsd)
 	assert.NoError(err)
 
 	// Testing mock driver
-	mockTesting = true
+	mockRootPath = t.TempDir()
 	fsd, err = MockAutoInit()
 	assert.NoError(err)
 	expectedFS, err := MockFSInit(MockStorageRootPath())

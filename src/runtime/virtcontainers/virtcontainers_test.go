@@ -57,8 +57,6 @@ var testHyperstartTtySocket = ""
 // cleanUp Removes any stale sandbox/container state that can affect
 // the next test to run.
 func cleanUp() {
-	os.RemoveAll(fs.MockRunStoragePath())
-	os.RemoveAll(fs.MockRunVMStoragePath())
 	syscall.Unmount(GetSharePath(testSandboxID), syscall.MNT_DETACH|UmountNoFollow)
 	os.RemoveAll(testDir)
 	os.MkdirAll(testDir, DirMode)
@@ -107,8 +105,6 @@ func setupClh() {
 func TestMain(m *testing.M) {
 	var err error
 
-	fs.EnableMockTesting()
-
 	flag.Parse()
 
 	logger := logrus.NewEntry(logrus.New())
@@ -124,6 +120,8 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
+
+	fs.EnableMockTesting(filepath.Join(testDir, "mockfs"))
 
 	fmt.Printf("INFO: Creating virtcontainers test directory %s\n", testDir)
 	err = os.MkdirAll(testDir, DirMode)
