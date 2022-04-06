@@ -910,7 +910,6 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, str
 	grpcSpec.Linux.Resources.Devices = nil
 	grpcSpec.Linux.Resources.Pids = nil
 	grpcSpec.Linux.Resources.BlockIO = nil
-	grpcSpec.Linux.Resources.HugepageLimits = nil
 	grpcSpec.Linux.Resources.Network = nil
 	if grpcSpec.Linux.Resources.CPU != nil {
 		grpcSpec.Linux.Resources.CPU.Cpus = ""

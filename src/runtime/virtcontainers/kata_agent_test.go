@@ -609,7 +609,7 @@ func TestConstrainGRPCSpec(t *testing.T) {
 	assert.NotNil(g.Linux.Resources.Memory)
 	assert.Nil(g.Linux.Resources.Pids)
 	assert.Nil(g.Linux.Resources.BlockIO)
-	assert.Nil(g.Linux.Resources.HugepageLimits)
+	assert.Len(g.Linux.Resources.HugepageLimits, 0)
 	assert.Nil(g.Linux.Resources.Network)
 	assert.NotNil(g.Linux.Resources.CPU)
 	assert.Equal(g.Process.SelinuxLabel, "")
