@@ -14,5 +14,4 @@ FROM ${IMAGE_REGISTRY}/@distro@:@OS_VERSION@
 # RUN commands
 
 # This will install the proper packages to build Kata components
-@INSTALL_MUSL@
 @INSTALL_RUST@
