@@ -7,25 +7,27 @@ package fs
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 )
 
-var mockTesting = false
+var mockRootPath = ""
 
 type MockFS struct {
 	// inherit from FS. Overwrite if needed.
 	*FS
 }
 
-func EnableMockTesting() {
-	mockTesting = true
+func EnableMockTesting(rootPath string) {
+	mockRootPath = rootPath
 }
 
 func MockStorageRootPath() string {
-	return filepath.Join(os.TempDir(), "vc", "mockfs")
+	if mockRootPath == "" {
+		panic("Using uninitialized mock storage root path")
+	}
+	return mockRootPath
 }
 
 func MockRunStoragePath() string {
@@ -54,7 +56,7 @@ func MockFSInit(rootPath string) (persistapi.PersistDriver, error) {
 }
 
 func MockAutoInit() (persistapi.PersistDriver, error) {
-	if mockTesting {
+	if mockRootPath != "" {
 		return MockFSInit(MockStorageRootPath())
 	}
 	return nil, nil
