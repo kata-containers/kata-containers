@@ -20,7 +20,7 @@ go_test_flags="${KATA_GO_TEST_FLAGS}"
 if [ -z "$go_test_flags" ]; then
     # KATA_GO_TEST_TIMEOUT can be set to any value accepted by
     # "go test -timeout X"
-    go_test_flags="-v -timeout ${KATA_GO_TEST_TIMEOUT:-30s}"
+    go_test_flags="-timeout ${KATA_GO_TEST_TIMEOUT:-30s}"
 
     # -race flag is not supported on s390x
     [ "$(go env GOARCH)" != "s390x" ] && go_test_flags+=" -race"
