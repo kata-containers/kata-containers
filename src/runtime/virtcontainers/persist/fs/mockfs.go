@@ -36,7 +36,7 @@ func MockRunVMStoragePath() string {
 	return filepath.Join(MockStorageRootPath(), vmPathSuffix)
 }
 
-func MockFSInit() (persistapi.PersistDriver, error) {
+func MockFSInit(rootPath string) (persistapi.PersistDriver, error) {
 	driver, err := Init()
 	if err != nil {
 		return nil, fmt.Errorf("Could not create Mock FS driver: %v", err)
@@ -47,7 +47,7 @@ func MockFSInit() (persistapi.PersistDriver, error) {
 		return nil, fmt.Errorf("Could not create Mock FS driver")
 	}
 
-	fsDriver.storageRootPath = MockStorageRootPath()
+	fsDriver.storageRootPath = rootPath
 	fsDriver.driverName = "mockfs"
 
 	return &MockFS{fsDriver}, nil
@@ -55,7 +55,7 @@ func MockFSInit() (persistapi.PersistDriver, error) {
 
 func MockAutoInit() (persistapi.PersistDriver, error) {
 	if mockTesting {
-		return MockFSInit()
+		return MockFSInit(MockStorageRootPath())
 	}
 	return nil, nil
 }

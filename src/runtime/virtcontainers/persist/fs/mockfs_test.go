@@ -28,7 +28,7 @@ func TestMockAutoInit(t *testing.T) {
 	mockTesting = true
 	fsd, err = MockAutoInit()
 	assert.NoError(err)
-	expectedFS, err := MockFSInit()
+	expectedFS, err := MockFSInit(MockStorageRootPath())
 	assert.NoError(err)
 	assert.Equal(expectedFS, fsd)
 }
