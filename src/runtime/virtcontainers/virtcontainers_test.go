@@ -15,7 +15,6 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
@@ -108,7 +107,7 @@ func setupClh() {
 func TestMain(m *testing.M) {
 	var err error
 
-	persist.EnableMockTesting()
+	fs.EnableMockTesting()
 
 	flag.Parse()
 
