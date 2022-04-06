@@ -13,9 +13,15 @@ import (
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 )
 
+var mockTesting = false
+
 type MockFS struct {
 	// inherit from FS. Overwrite if needed.
 	*FS
+}
+
+func EnableMockTesting() {
+	mockTesting = true
 }
 
 func MockStorageRootPath() string {
@@ -45,4 +51,11 @@ func MockFSInit() (persistapi.PersistDriver, error) {
 	fsDriver.driverName = "mockfs"
 
 	return &MockFS{fsDriver}, nil
+}
+
+func MockAutoInit() (persistapi.PersistDriver, error) {
+	if mockTesting {
+		return MockFSInit()
+	}
+	return nil, nil
 }
