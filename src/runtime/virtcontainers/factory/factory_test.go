@@ -12,7 +12,6 @@ import (
 
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory/base"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/mock"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
@@ -39,10 +38,10 @@ func TestNewFactory(t *testing.T) {
 	_, err = NewFactory(ctx, config, false)
 	assert.Error(err)
 
-	defer fs.MockStorageDestroy()
+	testDir := t.TempDir()
 	config.VMConfig.HypervisorConfig = vc.HypervisorConfig{
-		KernelPath: fs.MockStorageRootPath(),
-		ImagePath:  fs.MockStorageRootPath(),
+		KernelPath: testDir,
+		ImagePath:  testDir,
 	}
 
 	// direct
@@ -69,7 +68,7 @@ func TestNewFactory(t *testing.T) {
 	defer hybridVSockTTRPCMock.Stop()
 
 	config.Template = true
-	config.TemplatePath = fs.MockStorageRootPath()
+	config.TemplatePath = testDir
 	f, err = NewFactory(ctx, config, false)
 	assert.Nil(err)
 	f.CloseFactory(ctx)
@@ -134,8 +133,7 @@ func TestCheckVMConfig(t *testing.T) {
 	err = checkVMConfig(config1, config2)
 	assert.Nil(err)
 
-	testDir := fs.MockStorageRootPath()
-	defer fs.MockStorageDestroy()
+	testDir := t.TempDir()
 
 	config1.HypervisorConfig = vc.HypervisorConfig{
 		KernelPath: testDir,
@@ -155,8 +153,7 @@ func TestCheckVMConfig(t *testing.T) {
 func TestFactoryGetVM(t *testing.T) {
 	assert := assert.New(t)
 
-	testDir := fs.MockStorageRootPath()
-	defer fs.MockStorageDestroy()
+	testDir := t.TempDir()
 
 	hyperConfig := vc.HypervisorConfig{
 		KernelPath: testDir,
@@ -321,8 +318,7 @@ func TestDeepCompare(t *testing.T) {
 	config.VMConfig = vc.VMConfig{
 		HypervisorType: vc.MockHypervisor,
 	}
-	testDir := fs.MockStorageRootPath()
-	defer fs.MockStorageDestroy()
+	testDir := t.TempDir()
 
 	config.VMConfig.HypervisorConfig = vc.HypervisorConfig{
 		KernelPath: testDir,
