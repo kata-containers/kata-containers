@@ -230,6 +230,7 @@ impl AsRef<Path> for PinnedPathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsString;
     use std::fs::DirBuilder;
     use std::io::Write;
     use std::os::unix::fs::{symlink, MetadataExt};
@@ -396,5 +397,48 @@ mod tests {
         let path = path.open_child(OsStr::new("child")).unwrap();
         let content = fs::read_to_string(&path).unwrap();
         assert_eq!(&content, "test");
+
+        path.open_child(&OsString::from("__does_not_exist__"))
+            .unwrap_err();
+        path.open_child(&OsString::from("test/a")).unwrap_err();
+    }
+
+    #[test]
+    fn test_prepare_path_component() {
+        assert!(PinnedPathBuf::prepare_path_component(&OsString::from("")).is_err());
+        assert!(PinnedPathBuf::prepare_path_component(&OsString::from(".")).is_err());
+        assert!(PinnedPathBuf::prepare_path_component(&OsString::from("..")).is_err());
+        assert!(PinnedPathBuf::prepare_path_component(&OsString::from("/")).is_err());
+        assert!(PinnedPathBuf::prepare_path_component(&OsString::from("//")).is_err());
+        assert!(PinnedPathBuf::prepare_path_component(&OsString::from("a/b")).is_err());
+        assert!(PinnedPathBuf::prepare_path_component(&OsString::from("./b")).is_err());
+        assert!(PinnedPathBuf::prepare_path_component(&OsString::from("a/.")).is_err());
+        assert!(PinnedPathBuf::prepare_path_component(&OsString::from("a/..")).is_err());
+        assert!(PinnedPathBuf::prepare_path_component(&OsString::from("a/./")).is_err());
+        assert!(PinnedPathBuf::prepare_path_component(&OsString::from("a/../")).is_err());
+        assert!(PinnedPathBuf::prepare_path_component(&OsString::from("a/./a")).is_err());
+        assert!(PinnedPathBuf::prepare_path_component(&OsString::from("a/../a")).is_err());
+
+        assert!(PinnedPathBuf::prepare_path_component(&OsString::from("a")).is_ok());
+        assert!(PinnedPathBuf::prepare_path_component(&OsString::from("a.b")).is_ok());
+        assert!(PinnedPathBuf::prepare_path_component(&OsString::from("a..b")).is_ok());
+    }
+
+    #[test]
+    fn test_target_fs_object_changed() {
+        let rootfs_dir = tempfile::tempdir().expect("failed to create tmpdir");
+        let rootfs_path = rootfs_dir.path();
+        let file = rootfs_path.join("child");
+        fs::write(&file, "test").unwrap();
+
+        let path = PinnedPathBuf::from_path(&file).unwrap();
+        let path3 = fs::read_link(path.as_path()).unwrap();
+        assert_eq!(&path3, path.target());
+        fs::rename(file, rootfs_path.join("child2")).unwrap();
+        let path4 = fs::read_link(path.as_path()).unwrap();
+        assert_ne!(&path4, path.target());
+        fs::remove_file(rootfs_path.join("child2")).unwrap();
+        let path5 = fs::read_link(path.as_path()).unwrap();
+        assert_ne!(&path4, &path5);
     }
 }

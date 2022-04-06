@@ -253,9 +253,42 @@ mod tests {
         builder.create("../../.").unwrap();
         builder.create("").unwrap();
         builder.create_with_unscoped_path("/").unwrap();
-        builder.create_with_unscoped_path(".").unwrap();
-        builder.create_with_unscoped_path("..").unwrap();
-        builder.create_with_unscoped_path("../../.").unwrap();
-        builder.create_with_unscoped_path("").unwrap();
+        builder.create_with_unscoped_path("/..").unwrap();
+        builder.create_with_unscoped_path("/../.").unwrap();
+    }
+
+    #[test]
+    fn test_create_with_absolute_path() {
+        // create temporary directory to emulate container rootfs with symlink
+        let rootfs_dir = tempdir().expect("failed to create tmpdir");
+        DirBuilder::new()
+            .create(rootfs_dir.path().join("b"))
+            .unwrap();
+        symlink(rootfs_dir.path().join("b"), rootfs_dir.path().join("a")).unwrap();
+        let rootfs_path = &rootfs_dir.path().join("a");
+
+        let mut builder = ScopedDirBuilder::new(&rootfs_path).unwrap();
+        builder.create_with_unscoped_path("/").unwrap_err();
+        builder
+            .create_with_unscoped_path(rootfs_path.join("../__xxxx___xxx__"))
+            .unwrap_err();
+        builder
+            .create_with_unscoped_path(rootfs_path.join("c/d"))
+            .unwrap_err();
+
+        // Return `AlreadyExist` when recursive is false
+        builder.create_with_unscoped_path(&rootfs_path).unwrap_err();
+        builder
+            .create_with_unscoped_path(rootfs_path.join("."))
+            .unwrap_err();
+
+        builder.recursive(true);
+        builder.create_with_unscoped_path(&rootfs_path).unwrap();
+        builder
+            .create_with_unscoped_path(rootfs_path.join("."))
+            .unwrap();
+        builder
+            .create_with_unscoped_path(rootfs_path.join("c/d"))
+            .unwrap();
     }
 }
