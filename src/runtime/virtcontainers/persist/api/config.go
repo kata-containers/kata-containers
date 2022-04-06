@@ -206,6 +206,9 @@ type HypervisorConfig struct {
 
 	// EnableVhostUserStore is used to indicate if host supports vhost-user-blk/scsi
 	EnableVhostUserStore bool
+
+	// Multi Qmp Sockets
+	QmpSocks []string
 }
 
 // KataAgentConfig is a structure storing information needed

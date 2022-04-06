@@ -17,6 +17,11 @@ kernel = "@KERNELPATH@"
 image = "@IMAGEPATH@"
 machine_type = "@MACHINETYPE@"
 
+# Qmp socks
+# comma-separated list of qmp name
+# For example, `qmp_socks = ["cni.sock", "csi.sock"]`
+qmp_socks = []
+
 # Enable confidential guest support.
 # Toggling that setting may trigger different hardware features, ranging
 # from memory encryption to both memory and CPU-state encryption and integrity.

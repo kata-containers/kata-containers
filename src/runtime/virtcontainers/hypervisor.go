@@ -501,6 +501,9 @@ type HypervisorConfig struct {
 
 	// Disable selinux from the hypervisor process
 	DisableSeLinux bool
+
+	// Multi Qmp Sockets
+	QmpSocks []string
 }
 
 // vcpu mapping from vcpu number to thread number
