@@ -124,14 +124,10 @@ func TestSetEphemeralStorageType(t *testing.T) {
 
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp(testDir, "foo")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	ephePath := filepath.Join(dir, vc.K8sEmptyDir, "tmp-volume")
-	err = os.MkdirAll(ephePath, testDirMode)
+	err := os.MkdirAll(ephePath, testDirMode)
 	assert.Nil(err)
 
 	err = syscall.Mount("tmpfs", ephePath, "tmpfs", 0, "")
@@ -308,17 +304,13 @@ func TestCreateSandboxAnnotations(t *testing.T) {
 func TestCheckForFips(t *testing.T) {
 	assert := assert.New(t)
 
-	path, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(path)
-
 	val := procFIPS
-	procFIPS = filepath.Join(path, "fips-enabled")
+	procFIPS = filepath.Join(t.TempDir(), "fips-enabled")
 	defer func() {
 		procFIPS = val
 	}()
 
-	err = os.WriteFile(procFIPS, []byte("1"), 0644)
+	err := os.WriteFile(procFIPS, []byte("1"), 0644)
 	assert.NoError(err)
 
 	hconfig := vc.HypervisorConfig{

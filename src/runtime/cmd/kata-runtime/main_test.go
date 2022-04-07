@@ -258,14 +258,12 @@ func TestMainBeforeSubCommands(t *testing.T) {
 func TestMainBeforeSubCommandsInvalidLogFile(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "katatest")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	logFile := filepath.Join(tmpdir, "log")
 
 	// create the file as the wrong type to force a failure
-	err = os.MkdirAll(logFile, testDirMode)
+	err := os.MkdirAll(logFile, testDirMode)
 	assert.NoError(err)
 
 	set := flag.NewFlagSet("", 0)
@@ -281,9 +279,7 @@ func TestMainBeforeSubCommandsInvalidLogFile(t *testing.T) {
 func TestMainBeforeSubCommandsInvalidLogFormat(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "katatest")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	logFile := filepath.Join(tmpdir, "log")
 
@@ -302,7 +298,7 @@ func TestMainBeforeSubCommandsInvalidLogFormat(t *testing.T) {
 
 	ctx := createCLIContext(set)
 
-	err = beforeSubcommands(ctx)
+	err := beforeSubcommands(ctx)
 	assert.Error(err)
 	assert.NotNil(kataLog.Logger.Out)
 }
@@ -310,9 +306,7 @@ func TestMainBeforeSubCommandsInvalidLogFormat(t *testing.T) {
 func TestMainBeforeSubCommandsLoadConfigurationFail(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "katatest")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	logFile := filepath.Join(tmpdir, "log")
 	configFile := filepath.Join(tmpdir, "config")
@@ -345,9 +339,7 @@ func TestMainBeforeSubCommandsLoadConfigurationFail(t *testing.T) {
 func TestMainBeforeSubCommandsShowCCConfigPaths(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "katatest")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	set := flag.NewFlagSet("", 0)
 	set.Bool("show-default-config-paths", true, "")
@@ -409,9 +401,7 @@ func TestMainBeforeSubCommandsShowCCConfigPaths(t *testing.T) {
 func TestMainFatal(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "katatest")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	var exitStatus int
 	savedExitFunc := exitFunc
@@ -633,9 +623,7 @@ func TestMainCreateRuntime(t *testing.T) {
 func TestMainVersionPrinter(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "katatest")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	savedOutputFile := defaultOutputFile
 

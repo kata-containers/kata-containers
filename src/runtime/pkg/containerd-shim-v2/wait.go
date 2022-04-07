@@ -15,7 +15,6 @@ import (
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/mount"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/codes"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 )
@@ -31,12 +30,17 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 	if execID == "" {
 		//wait until the io closed, then wait the container
 		<-c.exitIOch
+		shimLog.WithField("container", c.id).Debug("The container io streams closed")
 	} else {
 		execs, err = c.getExec(execID)
 		if err != nil {
 			return exitCode255, err
 		}
 		<-execs.exitIOch
+		shimLog.WithFields(logrus.Fields{
+			"container": c.id,
+			"exec":      execID,
+		}).Debug("The container process io streams closed")
 		//This wait could be triggered before exec start which
 		//will get the exec's id, thus this assignment must after
 		//the exec exit, to make sure it get the exec's id.
@@ -63,6 +67,7 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 		if c.cType.IsSandbox() {
 			// cancel watcher
 			if s.monitor != nil {
+				shimLog.WithField("sandbox", s.sandbox.ID()).Info("cancel watcher")
 				s.monitor <- nil
 			}
 			if err = s.sandbox.Stop(ctx, true); err != nil {
@@ -82,13 +87,17 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 		c.exitTime = timeStamp
 
 		c.exitCh <- uint32(ret)
-
+		shimLog.WithField("container", c.id).Debug("The container status is StatusStopped")
 	} else {
 		execs.status = task.StatusStopped
 		execs.exitCode = ret
 		execs.exitTime = timeStamp
 
 		execs.exitCh <- uint32(ret)
+		shimLog.WithFields(logrus.Fields{
+			"container": c.id,
+			"exec":      execID,
+		}).Debug("The container exec status is StatusStopped")
 	}
 	s.mu.Unlock()
 
@@ -102,6 +111,7 @@ func watchSandbox(ctx context.Context, s *service) {
 		return
 	}
 	err := <-s.monitor
+	shimLog.WithError(err).WithField("sandbox", s.sandbox.ID()).Info("watchSandbox gets an error or stop signal")
 	if err == nil {
 		return
 	}
@@ -147,13 +157,11 @@ func watchOOMEvents(ctx context.Context, s *service) {
 		default:
 			containerID, err := s.sandbox.GetOOMEvent(ctx)
 			if err != nil {
-				shimLog.WithError(err).Warn("failed to get OOM event from sandbox")
-				// If the GetOOMEvent call is not implemented, then the agent is most likely an older version,
-				// stop attempting to get OOM events.
-				// for rust agent, the response code is not found
-				if isGRPCErrorCode(codes.NotFound, err) || err.Error() == "Dead agent" {
+				if err.Error() == "ttrpc: closed" || err.Error() == "Dead agent" {
+					shimLog.WithError(err).Warn("agent has shutdown, return from watching of OOM events")
 					return
 				}
+				shimLog.WithError(err).Warn("failed to get OOM event from sandbox")
 				time.Sleep(defaultCheckInterval)
 				continue
 			}

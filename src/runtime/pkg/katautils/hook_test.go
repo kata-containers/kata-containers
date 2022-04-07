@@ -20,7 +20,7 @@ import (
 var testKeyHook = "test-key"
 var testContainerIDHook = "test-container-id"
 var testControllerIDHook = "test-controller-id"
-var testBinHookPath = "/usr/bin/virtcontainers/bin/test/hook"
+var testBinHookPath = "mockhook/hook"
 var testBundlePath = "/test/bundle"
 
 func getMockHookBinPath() string {

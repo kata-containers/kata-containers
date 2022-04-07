@@ -26,6 +26,7 @@ jobs:
 
       - name: Build ${{ matrix.asset }}
         run: |
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-copy-yq-installer.sh
           ./tools/packaging/kata-deploy/local-build/kata-deploy-binaries-in-docker.sh --build="${KATA_ASSET}"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
@@ -140,13 +141,10 @@ jobs:
       - uses: actions/checkout@v2
       - name: generate-and-upload-tarball
         run: |
-          pushd $GITHUB_WORKSPACE/src/agent
-          cargo vendor >> .cargo/config
-          popd
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
           tarball="kata-containers-$tag-vendor.tar.gz"
           pushd $GITHUB_WORKSPACE
-          tar -cvzf "${tarball}" src/agent/.cargo/config src/agent/vendor
+          bash -c "tools/packaging/release/generate_vendor.sh ${tarball}"
           GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}" 
           popd
 

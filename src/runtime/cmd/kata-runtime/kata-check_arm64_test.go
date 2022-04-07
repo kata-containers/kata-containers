@@ -67,11 +67,7 @@ foo     : bar
 		{validContents, validNormalizeVendorName, validNormalizeModelName, false},
 	}
 
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	savedProcCPUInfo := procCPUInfo
 
@@ -84,7 +80,7 @@ foo     : bar
 		procCPUInfo = savedProcCPUInfo
 	}()
 
-	_, _, err = getCPUDetails()
+	_, _, err := getCPUDetails()
 	// ENOENT
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))

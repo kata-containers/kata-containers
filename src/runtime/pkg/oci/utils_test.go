@@ -410,12 +410,10 @@ func TestGetShmSizeBindMounted(t *testing.T) {
 		t.Skip("Test disabled as requires root privileges")
 	}
 
-	dir, err := os.MkdirTemp("", "")
-	assert.Nil(t, err)
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	shmPath := filepath.Join(dir, "shm")
-	err = os.Mkdir(shmPath, 0700)
+	err := os.Mkdir(shmPath, 0700)
 	assert.Nil(t, err)
 
 	size := 8192
@@ -473,15 +471,13 @@ func TestMain(m *testing.M) {
 func TestAddAssetAnnotations(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	// Create a pretend asset file
 	// (required since the existence of binary asset annotations is verified).
 	fakeAssetFile := filepath.Join(tmpdir, "fake-binary")
 
-	err = os.WriteFile(fakeAssetFile, []byte(""), fileMode)
+	err := os.WriteFile(fakeAssetFile, []byte(""), fileMode)
 	assert.NoError(err)
 
 	expectedAnnotations := map[string]string{

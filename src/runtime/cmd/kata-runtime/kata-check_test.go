@@ -155,11 +155,7 @@ func makeCPUInfoFile(path, vendorID, flags string) error {
 
 // nolint: unused, deadcode
 func genericTestGetCPUDetails(t *testing.T, validVendor string, validModel string, validContents string, data []testCPUDetail) {
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	savedProcCPUInfo := procCPUInfo
 
@@ -172,7 +168,7 @@ func genericTestGetCPUDetails(t *testing.T, validVendor string, validModel strin
 		procCPUInfo = savedProcCPUInfo
 	}()
 
-	_, _, err = getCPUDetails()
+	_, _, err := getCPUDetails()
 	// ENOENT
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
@@ -197,11 +193,7 @@ func genericTestGetCPUDetails(t *testing.T, validVendor string, validModel strin
 func genericCheckCLIFunction(t *testing.T, cpuData []testCPUData, moduleData []testModuleData) {
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	_, config, err := makeRuntimeConfig(dir)
 	assert.NoError(err)
@@ -307,15 +299,11 @@ func TestCheckGetCPUInfo(t *testing.T) {
 		{"foo\n\nbar\nbaz\n\n", "foo", false},
 	}
 
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	file := filepath.Join(dir, "cpuinfo")
 	// file doesn't exist
-	_, err = getCPUInfo(file)
+	_, err := getCPUInfo(file)
 	assert.Error(err)
 
 	for _, d := range data {
@@ -527,11 +515,7 @@ func TestCheckHaveKernelModule(t *testing.T) {
 
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	savedModProbeCmd := modProbeCmd
 	savedSysModuleDir := sysModuleDir
@@ -545,7 +529,7 @@ func TestCheckHaveKernelModule(t *testing.T) {
 		sysModuleDir = savedSysModuleDir
 	}()
 
-	err = os.MkdirAll(sysModuleDir, testDirMode)
+	err := os.MkdirAll(sysModuleDir, testDirMode)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -577,11 +561,7 @@ func TestCheckHaveKernelModule(t *testing.T) {
 func TestCheckCheckKernelModules(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	savedModProbeCmd := modProbeCmd
 	savedSysModuleDir := sysModuleDir
@@ -595,7 +575,7 @@ func TestCheckCheckKernelModules(t *testing.T) {
 		sysModuleDir = savedSysModuleDir
 	}()
 
-	err = os.MkdirAll(sysModuleDir, testDirMode)
+	err := os.MkdirAll(sysModuleDir, testDirMode)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -662,11 +642,7 @@ func TestCheckCheckKernelModulesUnreadableFile(t *testing.T) {
 		t.Skip(ktu.TestDisabledNeedNonRoot)
 	}
 
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	testData := map[string]kernelModule{
 		"foo": {
@@ -691,7 +667,7 @@ func TestCheckCheckKernelModulesUnreadableFile(t *testing.T) {
 	}()
 
 	modPath := filepath.Join(sysModuleDir, "foo/parameters")
-	err = os.MkdirAll(modPath, testDirMode)
+	err := os.MkdirAll(modPath, testDirMode)
 	assert.NoError(err)
 
 	modParamFile := filepath.Join(modPath, "param1")
@@ -710,11 +686,7 @@ func TestCheckCheckKernelModulesUnreadableFile(t *testing.T) {
 func TestCheckCheckKernelModulesInvalidFileContents(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	testData := map[string]kernelModule{
 		"foo": {
@@ -739,7 +711,7 @@ func TestCheckCheckKernelModulesInvalidFileContents(t *testing.T) {
 	}()
 
 	modPath := filepath.Join(sysModuleDir, "foo/parameters")
-	err = os.MkdirAll(modPath, testDirMode)
+	err := os.MkdirAll(modPath, testDirMode)
 	assert.NoError(err)
 
 	modParamFile := filepath.Join(modPath, "param1")
@@ -755,11 +727,7 @@ func TestCheckCheckKernelModulesInvalidFileContents(t *testing.T) {
 func TestCheckCLIFunctionFail(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	_, config, err := makeRuntimeConfig(dir)
 	assert.NoError(err)
@@ -788,11 +756,7 @@ func TestCheckCLIFunctionFail(t *testing.T) {
 func TestCheckKernelParamHandler(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	savedModProbeCmd := modProbeCmd
 	savedSysModuleDir := sysModuleDir
@@ -870,9 +834,7 @@ func TestCheckKernelParamHandler(t *testing.T) {
 func TestArchRequiredKernelModules(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	_, config, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(err)
@@ -885,11 +847,7 @@ func TestArchRequiredKernelModules(t *testing.T) {
 		return
 	}
 
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	savedModProbeCmd := modProbeCmd
 	savedSysModuleDir := sysModuleDir

@@ -364,11 +364,7 @@ func TestEnvGetMetaInfo(t *testing.T) {
 }
 
 func TestEnvGetHostInfo(t *testing.T) {
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	expectedHostDetails, err := getExpectedHostDetails(tmpdir)
 	assert.NoError(t, err)
@@ -389,13 +385,9 @@ func TestEnvGetHostInfo(t *testing.T) {
 }
 
 func TestEnvGetHostInfoNoProcCPUInfo(t *testing.T) {
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
-	_, err = getExpectedHostDetails(tmpdir)
+	_, err := getExpectedHostDetails(tmpdir)
 	assert.NoError(t, err)
 
 	err = os.Remove(procCPUInfo)
@@ -406,13 +398,9 @@ func TestEnvGetHostInfoNoProcCPUInfo(t *testing.T) {
 }
 
 func TestEnvGetHostInfoNoOSRelease(t *testing.T) {
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
-	_, err = getExpectedHostDetails(tmpdir)
+	_, err := getExpectedHostDetails(tmpdir)
 	assert.NoError(t, err)
 
 	err = os.Remove(osRelease)
@@ -423,13 +411,9 @@ func TestEnvGetHostInfoNoOSRelease(t *testing.T) {
 }
 
 func TestEnvGetHostInfoNoProcVersion(t *testing.T) {
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
-	_, err = getExpectedHostDetails(tmpdir)
+	_, err := getExpectedHostDetails(tmpdir)
 	assert.NoError(t, err)
 
 	err = os.Remove(procVersion)
@@ -440,11 +424,7 @@ func TestEnvGetHostInfoNoProcVersion(t *testing.T) {
 }
 
 func TestEnvGetEnvInfo(t *testing.T) {
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	// Run test twice to ensure the individual component debug+trace
 	// options are tested.
@@ -474,9 +454,7 @@ func TestEnvGetEnvInfo(t *testing.T) {
 func TestEnvGetEnvInfoNoHypervisorVersion(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	configFile, config, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(err)
@@ -501,20 +479,14 @@ func TestEnvGetEnvInfoNoHypervisorVersion(t *testing.T) {
 func TestEnvGetEnvInfoAgentError(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
-	_, _, err = makeRuntimeConfig(tmpdir)
+	_, _, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(err)
 }
 
 func TestEnvGetEnvInfoNoOSRelease(t *testing.T) {
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	configFile, config, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(t, err)
@@ -530,11 +502,7 @@ func TestEnvGetEnvInfoNoOSRelease(t *testing.T) {
 }
 
 func TestEnvGetEnvInfoNoProcCPUInfo(t *testing.T) {
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	configFile, config, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(t, err)
@@ -550,11 +518,7 @@ func TestEnvGetEnvInfoNoProcCPUInfo(t *testing.T) {
 }
 
 func TestEnvGetEnvInfoNoProcVersion(t *testing.T) {
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	configFile, config, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(t, err)
@@ -570,11 +534,7 @@ func TestEnvGetEnvInfoNoProcVersion(t *testing.T) {
 }
 
 func TestEnvGetRuntimeInfo(t *testing.T) {
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	configFile, config, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(t, err)
@@ -587,11 +547,7 @@ func TestEnvGetRuntimeInfo(t *testing.T) {
 }
 
 func TestEnvGetAgentInfo(t *testing.T) {
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	_, config, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(t, err)
@@ -726,11 +682,7 @@ func testEnvShowJSONSettings(t *testing.T, tmpdir string, tmpfile *os.File) erro
 }
 
 func TestEnvShowSettings(t *testing.T) {
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	tmpfile, err := os.CreateTemp("", "envShowSettings-")
 	assert.NoError(t, err)
@@ -747,11 +699,7 @@ func TestEnvShowSettings(t *testing.T) {
 }
 
 func TestEnvShowSettingsInvalidFile(t *testing.T) {
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	tmpfile, err := os.CreateTemp("", "envShowSettings-")
 	assert.NoError(t, err)
@@ -771,11 +719,7 @@ func TestEnvShowSettingsInvalidFile(t *testing.T) {
 }
 
 func TestEnvHandleSettings(t *testing.T) {
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	configFile, config, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(t, err)
@@ -805,9 +749,7 @@ func TestEnvHandleSettings(t *testing.T) {
 func TestEnvHandleSettingsInvalidParams(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	configFile, _, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(err)
@@ -859,11 +801,7 @@ func TestEnvHandleSettingsInvalidRuntimeConfigType(t *testing.T) {
 }
 
 func TestEnvCLIFunction(t *testing.T) {
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	configFile, config, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(t, err)
@@ -904,11 +842,7 @@ func TestEnvCLIFunction(t *testing.T) {
 }
 
 func TestEnvCLIFunctionFail(t *testing.T) {
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	configFile, config, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(t, err)
@@ -940,9 +874,7 @@ func TestEnvCLIFunctionFail(t *testing.T) {
 func TestGetHypervisorInfo(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	_, config, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(err)
@@ -962,9 +894,7 @@ func TestGetHypervisorInfo(t *testing.T) {
 func TestGetHypervisorInfoSocket(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	_, config, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(err)

@@ -126,9 +126,7 @@ fn announce(logger: &Logger, config: &AgentConfig) {
 // output to the vsock port specified, or stdout.
 async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool>) -> Result<()> {
     let mut reader = PipeStream::from_fd(rfd);
-    let mut writer: Box<dyn AsyncWrite + Unpin + Send>;
-
-    if vsock_port > 0 {
+    let mut writer: Box<dyn AsyncWrite + Unpin + Send> = if vsock_port > 0 {
         let listenfd = socket::socket(
             AddressFamily::Vsock,
             SockType::Stream,
@@ -140,10 +138,10 @@ async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool
         socket::bind(listenfd, &addr)?;
         socket::listen(listenfd, 1)?;
 
-        writer = Box::new(util::get_vsock_stream(listenfd).await?);
+        Box::new(util::get_vsock_stream(listenfd).await?)
     } else {
-        writer = Box::new(tokio::io::stdout());
-    }
+        Box::new(tokio::io::stdout())
+    };
 
     let _ = util::interruptable_io_copier(&mut reader, &mut writer, shutdown).await;
 

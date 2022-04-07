@@ -101,7 +101,7 @@ Start an ACRN based Kata Container,
 $ sudo docker run -ti --runtime=kata-runtime busybox sh
 ```
 
-You will see ACRN(`acrn-dm`) is now running on your system, as well as a `kata-shim`, `kata-proxy`. You should obtain an interactive shell prompt. Verify that all the Kata processes terminate once you exit the container.
+You will see ACRN(`acrn-dm`) is now running on your system, as well as a `kata-shim`. You should obtain an interactive shell prompt. Verify that all the Kata processes terminate once you exit the container.
 
 ```bash
 $ ps -ef | grep -E "kata|acrn"

@@ -7,6 +7,7 @@ package containerdshim
 
 import (
 	"context"
+	"github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"path/filepath"
@@ -25,9 +26,7 @@ func TestNewTtyIOFifoReopen(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.TODO()
 
-	testDir, err := os.MkdirTemp("", "kata-")
-	assert.NoError(err)
-	defer os.RemoveAll(testDir)
+	testDir := t.TempDir()
 
 	fifoPath, err := os.MkdirTemp(testDir, "fifo-path-")
 	assert.NoError(err)
@@ -103,9 +102,7 @@ func TestIoCopy(t *testing.T) {
 	testBytes2 := []byte("Test2")
 	testBytes3 := []byte("Test3")
 
-	testDir, err := os.MkdirTemp("", "kata-")
-	assert.NoError(err)
-	defer os.RemoveAll(testDir)
+	testDir := t.TempDir()
 
 	fifoPath, err := os.MkdirTemp(testDir, "fifo-path-")
 	assert.NoError(err)
@@ -179,7 +176,7 @@ func TestIoCopy(t *testing.T) {
 		defer tty.close()
 
 		// start the ioCopy threads : copy from src to dst
-		go ioCopy(exitioch, stdinCloser, tty, dstInW, srcOutR, srcErrR)
+		go ioCopy(logrus.WithContext(context.Background()), exitioch, stdinCloser, tty, dstInW, srcOutR, srcErrR)
 
 		var firstW, secondW, thirdW io.WriteCloser
 		var firstR, secondR, thirdR io.Reader

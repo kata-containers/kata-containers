@@ -9,7 +9,6 @@
 package main
 
 import (
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,9 +17,7 @@ import (
 func testSetCPUTypeGeneric(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	savedArchRequiredCPUFlags := archRequiredCPUFlags
 	savedArchRequiredCPUAttribs := archRequiredCPUAttribs
