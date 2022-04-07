@@ -14,13 +14,13 @@ unsafe impl Sync for Vsock {}
 
 #[derive(Debug, PartialEq)]
 pub struct Vsock {
-    cid: u32,
+    vsock_cid: u32,
     port: u32,
 }
 
 impl Vsock {
-    pub fn new(cid: u32, port: u32) -> Self {
-        Self { cid, port }
+    pub fn new(vsock_cid: u32, port: u32) -> Self {
+        Self { vsock_cid, port }
     }
 }
 

@@ -5,7 +5,7 @@
 //
 
 use anyhow::{Context, Result};
-use containerd_shim_protos::shim::shim::DeleteResponse;
+use containerd_shim_protos::api;
 use protobuf::Message;
 
 use crate::{shim::ShimExecutor, Error};
@@ -19,8 +19,8 @@ impl ShimExecutor {
         Ok(())
     }
 
-    fn do_cleanup(&self) -> Result<DeleteResponse> {
-        let mut rsp = DeleteResponse::new();
+    fn do_cleanup(&self) -> Result<api::DeleteResponse> {
+        let mut rsp = api::DeleteResponse::new();
         rsp.set_exit_status(128 + libc::SIGKILL as u32);
         let mut exited_time = protobuf::well_known_types::Timestamp::new();
         let seconds = std::time::SystemTime::now()
@@ -30,42 +30,7 @@ impl ShimExecutor {
         exited_time.set_seconds(seconds);
         rsp.set_exited_at(exited_time);
 
-        // TODO: implement cleanup
+        service::ServiceManager::cleanup(&self.args.id).context("cleanup")?;
         Ok(rsp)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use serial_test::serial;
-    use tests_utils::gen_id;
-
-    use super::*;
-    use crate::Args;
-
-    #[test]
-    #[serial]
-    fn test_shim_delete() {
-        let dir = tempfile::tempdir().unwrap();
-        let bundle_path = dir.path();
-        std::env::set_current_dir(bundle_path).unwrap();
-
-        let id = gen_id(16);
-        let namespace = gen_id(16);
-        let args = Args {
-            id,
-            namespace,
-            address: "containerd_socket".into(),
-            publish_binary: "containerd".into(),
-            socket: "socket".into(),
-            bundle: bundle_path.to_str().unwrap().into(),
-            debug: false,
-        };
-
-        let executor = ShimExecutor::new(args);
-
-        let resp = executor.do_cleanup().unwrap();
-        assert_eq!(resp.exit_status, 128 + libc::SIGKILL as u32);
-        assert!(resp.exited_at.as_ref().unwrap().seconds > 0);
     }
 }

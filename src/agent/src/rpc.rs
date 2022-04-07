@@ -124,7 +124,7 @@ impl AgentService {
     ) -> Result<()> {
         let cid = req.container_id.clone();
 
-        kata_sys_util::validate::verify_cid(&cid)?;
+        kata_sys_util::validate::verify_id(&cid)?;
 
         let mut oci_spec = req.OCI.clone();
         let use_sandbox_pidns = req.get_sandbox_pidns();
