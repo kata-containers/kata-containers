@@ -167,19 +167,6 @@ func (q *qemuAmd64) bridges(number uint32) {
 	q.Bridges = genericBridges(number, q.qemuMachine.Type)
 }
 
-func (q *qemuAmd64) cpuModel() string {
-	cpuModel := defaultCPUModel
-
-	// VMX is not migratable yet.
-	// issue: https://github.com/kata-containers/runtime/issues/1750
-	if q.vmFactory {
-		hvLogger.WithField("subsystem", "qemuAmd64").Warn("VMX is not migratable yet: turning it off")
-		cpuModel += ",vmx=off"
-	}
-
-	return cpuModel
-}
-
 func (q *qemuAmd64) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {
 	return genericMemoryTopology(memoryMb, hostMemoryMb, slots, q.memoryOffset)
 }
