@@ -1552,4 +1552,55 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_parse_mount_flags_and_options() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            options_vec: Vec<&'a str>,
+            result: (MsFlags, &'a str),
+        }
+
+        let tests = &[
+            TestData {
+                options_vec: vec![],
+                result: (MsFlags::empty(), ""),
+            },
+            TestData {
+                options_vec: vec!["ro"],
+                result: (MsFlags::MS_RDONLY, ""),
+            },
+            TestData {
+                options_vec: vec!["rw"],
+                result: (MsFlags::empty(), ""),
+            },
+            TestData {
+                options_vec: vec!["ro", "rw"],
+                result: (MsFlags::empty(), ""),
+            },
+            TestData {
+                options_vec: vec!["ro", "nodev"],
+                result: (MsFlags::MS_RDONLY | MsFlags::MS_NODEV, ""),
+            },
+            TestData {
+                options_vec: vec!["option1", "nodev", "option2"],
+                result: (MsFlags::MS_NODEV, "option1,option2"),
+            },
+            TestData {
+                options_vec: vec!["rbind", "", "ro"],
+                result: (MsFlags::MS_BIND | MsFlags::MS_REC | MsFlags::MS_RDONLY, ""),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = parse_mount_flags_and_options(d.options_vec.clone());
+
+            let msg = format!("{}: result: {:?}", msg, result);
+
+            let expected_result = (d.result.0, d.result.1.to_owned());
+            assert_eq!(expected_result, result, "{}", msg);
+        }
+    }
 }
