@@ -17,18 +17,14 @@ import (
 )
 
 func TestFileExists(t *testing.T) {
-	dir, err := os.MkdirTemp("", "katatest")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	file := filepath.Join(dir, "foo")
 
 	assert.False(t, katautils.FileExists(file),
 		fmt.Sprintf("File %q should not exist", file))
 
-	err = createEmptyFile(file)
+	err := createEmptyFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,14 +50,10 @@ func TestGetKernelVersion(t *testing.T) {
 		{validContents, validVersion, false},
 	}
 
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	subDir := filepath.Join(tmpdir, "subdir")
-	err = os.MkdirAll(subDir, testDirMode)
+	err := os.MkdirAll(subDir, testDirMode)
 	assert.NoError(t, err)
 
 	_, err = getKernelVersion()
@@ -103,11 +95,7 @@ func TestGetDistroDetails(t *testing.T) {
 
 	const unknown = "<<unknown>>"
 
-	tmpdir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	testOSRelease := filepath.Join(tmpdir, "os-release")
 	testOSReleaseClr := filepath.Join(tmpdir, "os-release-clr")
@@ -131,7 +119,7 @@ VERSION_ID="%s"
 `, nonClrExpectedName, nonClrExpectedVersion)
 
 	subDir := filepath.Join(tmpdir, "subdir")
-	err = os.MkdirAll(subDir, testDirMode)
+	err := os.MkdirAll(subDir, testDirMode)
 	assert.NoError(t, err)
 
 	// override

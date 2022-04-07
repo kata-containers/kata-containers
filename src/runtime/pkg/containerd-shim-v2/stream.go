@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/containerd/fifo"
+	"github.com/sirupsen/logrus"
 )
 
 // The buffer size used to specify the buffer for IO streams copy
@@ -86,18 +87,20 @@ func newTtyIO(ctx context.Context, stdin, stdout, stderr string, console bool) (
 	return ttyIO, nil
 }
 
-func ioCopy(exitch, stdinCloser chan struct{}, tty *ttyIO, stdinPipe io.WriteCloser, stdoutPipe, stderrPipe io.Reader) {
+func ioCopy(shimLog *logrus.Entry, exitch, stdinCloser chan struct{}, tty *ttyIO, stdinPipe io.WriteCloser, stdoutPipe, stderrPipe io.Reader) {
 	var wg sync.WaitGroup
 
 	if tty.Stdin != nil {
 		wg.Add(1)
 		go func() {
+			shimLog.Debug("stdin io stream copy started")
 			p := bufPool.Get().(*[]byte)
 			defer bufPool.Put(p)
 			io.CopyBuffer(stdinPipe, tty.Stdin, *p)
 			// notify that we can close process's io safely.
 			close(stdinCloser)
 			wg.Done()
+			shimLog.Debug("stdin io stream copy exited")
 		}()
 	}
 
@@ -105,6 +108,7 @@ func ioCopy(exitch, stdinCloser chan struct{}, tty *ttyIO, stdinPipe io.WriteClo
 		wg.Add(1)
 
 		go func() {
+			shimLog.Debug("stdout io stream copy started")
 			p := bufPool.Get().(*[]byte)
 			defer bufPool.Put(p)
 			io.CopyBuffer(tty.Stdout, stdoutPipe, *p)
@@ -113,20 +117,24 @@ func ioCopy(exitch, stdinCloser chan struct{}, tty *ttyIO, stdinPipe io.WriteClo
 				// close stdin to make the other routine stop
 				tty.Stdin.Close()
 			}
+			shimLog.Debug("stdout io stream copy exited")
 		}()
 	}
 
 	if tty.Stderr != nil && stderrPipe != nil {
 		wg.Add(1)
 		go func() {
+			shimLog.Debug("stderr io stream copy started")
 			p := bufPool.Get().(*[]byte)
 			defer bufPool.Put(p)
 			io.CopyBuffer(tty.Stderr, stderrPipe, *p)
 			wg.Done()
+			shimLog.Debug("stderr io stream copy exited")
 		}()
 	}
 
 	wg.Wait()
 	tty.close()
 	close(exitch)
+	shimLog.Debug("all io stream copy goroutines exited")
 }

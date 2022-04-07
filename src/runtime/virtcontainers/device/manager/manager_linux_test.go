@@ -29,22 +29,20 @@ func TestAttachVhostUserBlkDevice(t *testing.T) {
 		rootEnabled = false
 	}
 
-	tmpDir, err := os.MkdirTemp("", "")
+	tmpDir := t.TempDir()
 	dm := &deviceManager{
 		blockDriver:           config.VirtioBlock,
 		devices:               make(map[string]api.Device),
 		vhostUserStoreEnabled: true,
 		vhostUserStorePath:    tmpDir,
 	}
-	assert.Nil(t, err)
-	defer os.RemoveAll(tmpDir)
 
 	vhostUserDevNodePath := filepath.Join(tmpDir, "/block/devices/")
 	vhostUserSockPath := filepath.Join(tmpDir, "/block/sockets/")
 	deviceNodePath := filepath.Join(vhostUserDevNodePath, "vhostblk0")
 	deviceSockPath := filepath.Join(vhostUserSockPath, "vhostblk0")
 
-	err = os.MkdirAll(vhostUserDevNodePath, dirMode)
+	err := os.MkdirAll(vhostUserDevNodePath, dirMode)
 	assert.Nil(t, err)
 	err = os.MkdirAll(vhostUserSockPath, dirMode)
 	assert.Nil(t, err)

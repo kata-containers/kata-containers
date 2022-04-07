@@ -67,22 +67,15 @@ Using a proxy for multiplexing the connections between the VM and the host uses
 4.5MB per [POD][2]. In a high density deployment this could add up to GBs of
 memory that could have been used to host more PODs. When we talk about density
 each kilobyte matters and it might be the decisive factor between run another
-POD or not. For example if you have 500 PODs running in a server, the same
-amount of [`kata-proxy`][3] processes will be running and consuming for around
-2250MB of RAM. Before making the decision not to use VSOCKs, you should ask
+POD or not. Before making the decision not to use VSOCKs, you should ask
 yourself, how many more containers can run with the memory RAM consumed by the
 Kata proxies?
 
 ### Reliability
 
-[`kata-proxy`][3] is in charge of multiplexing the connections between virtual
-machine and host processes, if it dies all connections get broken. For example
-if you have a [POD][2] with 10 containers running, if `kata-proxy` dies it would
-be impossible to contact your containers, though they would still be running.
 Since communication via VSOCKs is direct, the only way to lose communication
 with the containers is if the VM itself or the `containerd-shim-kata-v2` dies, if this happens
 the containers are removed automatically.
 
 [1]: https://wiki.qemu.org/Features/VirtioVsock
 [2]: ./vcpu-handling.md#virtual-cpus-and-kubernetes-pods
-[3]: https://github.com/kata-containers/proxy

@@ -178,13 +178,11 @@ impl Builder {
     pub fn init(self) -> Exporter {
         let Builder { port, cid, logger } = self;
 
-        let cid_str: String;
-
-        if self.cid == libc::VMADDR_CID_ANY {
-            cid_str = ANY_CID.to_string();
+        let cid_str: String = if self.cid == libc::VMADDR_CID_ANY {
+            ANY_CID.to_string()
         } else {
-            cid_str = format!("{}", self.cid);
-        }
+            format!("{}", self.cid)
+        };
 
         Exporter {
             port,

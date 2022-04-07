@@ -8,8 +8,8 @@ use std::fs::File;
 use std::os::unix::io::RawFd;
 use tokio::sync::mpsc::Sender;
 
+use nix::errno::Errno;
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
-use nix::sys::signal::{self, Signal};
 use nix::sys::wait::{self, WaitStatus};
 use nix::unistd::{self, Pid};
 use nix::Result;
@@ -80,7 +80,7 @@ pub struct Process {
 pub trait ProcessOperations {
     fn pid(&self) -> Pid;
     fn wait(&self) -> Result<WaitStatus>;
-    fn signal(&self, sig: Signal) -> Result<()>;
+    fn signal(&self, sig: libc::c_int) -> Result<()>;
 }
 
 impl ProcessOperations for Process {
@@ -92,8 +92,10 @@ impl ProcessOperations for Process {
         wait::waitpid(Some(self.pid()), None)
     }
 
-    fn signal(&self, sig: Signal) -> Result<()> {
-        signal::kill(self.pid(), Some(sig))
+    fn signal(&self, sig: libc::c_int) -> Result<()> {
+        let res = unsafe { libc::kill(self.pid().into(), sig) };
+
+        Errno::result(res).map(drop)
     }
 }
 
@@ -281,6 +283,6 @@ mod tests {
         // signal to every process in the process
         // group of the calling process.
         process.pid = 0;
-        assert!(process.signal(Signal::SIGCONT).is_ok());
+        assert!(process.signal(libc::SIGCONT).is_ok());
     }
 }

@@ -18,9 +18,7 @@ import (
 func TestNewVM(t *testing.T) {
 	assert := assert.New(t)
 
-	testDir, err := os.MkdirTemp("", "vmfactory-tmp-")
-	assert.Nil(err)
-	defer os.RemoveAll(testDir)
+	testDir := t.TempDir()
 
 	config := VMConfig{
 		HypervisorType: MockHypervisor,
@@ -33,7 +31,7 @@ func TestNewVM(t *testing.T) {
 	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 
 	var vm *VM
-	_, err = NewVM(ctx, config)
+	_, err := NewVM(ctx, config)
 	assert.Error(err)
 
 	config.HypervisorConfig = hyperConfig
@@ -65,9 +63,7 @@ func TestNewVM(t *testing.T) {
 	defer func() {
 		urandomDev = savedUrandomDev
 	}()
-	tmpdir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 	urandomDev = filepath.Join(tmpdir, "urandom")
 	data := make([]byte, 512)
 	err = os.WriteFile(urandomDev, data, os.FileMode(0640))
@@ -98,9 +94,7 @@ func TestVMConfigValid(t *testing.T) {
 	err := config.Valid()
 	assert.Error(err)
 
-	testDir, err := os.MkdirTemp("", "vmfactory-tmp-")
-	assert.Nil(err)
-	defer os.RemoveAll(testDir)
+	testDir := t.TempDir()
 
 	config.HypervisorConfig = HypervisorConfig{
 		KernelPath: testDir,

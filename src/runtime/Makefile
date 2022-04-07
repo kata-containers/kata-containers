@@ -589,12 +589,10 @@ $(GENERATED_FILES): %: %.in $(MAKEFILE_LIST) VERSION .git-commit
 
 generate-config: $(CONFIGS)
 
-test: install-hook go-test
+test: hook go-test
 
-install-hook:
-	make -C virtcontainers hook
-	echo "installing mock hook"
-	sudo -E make -C virtcontainers install
+hook:
+	make -C pkg/katautils/mockhook
 
 go-test: $(GENERATED_FILES)
 	go clean -testcache

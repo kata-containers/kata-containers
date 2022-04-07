@@ -308,9 +308,7 @@ func TestQemuAddDeviceSerialPortDev(t *testing.T) {
 func TestQemuAddDeviceKataVSOCK(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	vsockFilename := filepath.Join(dir, "vsock")
 

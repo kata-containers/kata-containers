@@ -24,14 +24,11 @@ func TestSandboxSharedFilesystem(t *testing.T) {
 
 	assert := assert.New(t)
 	// create temporary files to mount:
-	testMountPath, err := os.MkdirTemp("", "sandbox-test")
-	assert.NoError(err)
-	defer os.RemoveAll(testMountPath)
+	testMountPath := t.TempDir()
 
 	// create a new shared directory for our test:
 	kataHostSharedDirSaved := kataHostSharedDir
-	testHostDir, err := os.MkdirTemp("", "kata-Cleanup")
-	assert.NoError(err)
+	testHostDir := t.TempDir()
 	kataHostSharedDir = func() string {
 		return testHostDir
 	}
@@ -66,7 +63,6 @@ func TestSandboxSharedFilesystem(t *testing.T) {
 	dir := kataHostSharedDir()
 	err = os.MkdirAll(path.Join(dir, sandbox.id), 0777)
 	assert.Nil(err)
-	defer os.RemoveAll(dir)
 
 	// Test the prepare function. We expect it to succeed
 	err = sandbox.fsShare.Prepare(sandbox.ctx)

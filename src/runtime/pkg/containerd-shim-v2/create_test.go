@@ -382,9 +382,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 func TestCreateLoadRuntimeConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	config, err := createAllRuntimeConfigFiles(tmpdir, "qemu")
 	assert.NoError(err)

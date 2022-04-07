@@ -758,7 +758,7 @@ func (q *qemu) setupVirtioMem(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// backend memory size must be multiple of 2Mib
+	// backend memory size must be multiple of 4Mib
 	sizeMB := (int(maxMem) - int(q.config.MemorySize)) >> 2 << 2
 
 	share, target, memoryBack, err := q.getMemArgs()
@@ -783,7 +783,6 @@ func (q *qemu) setupVirtioMem(ctx context.Context) error {
 
 	err = q.qmpMonitorCh.qmp.ExecMemdevAdd(q.qmpMonitorCh.ctx, memoryBack, "virtiomem", target, sizeMB, share, "virtio-mem-pci", "virtiomem0", addr, bridge.ID)
 	if err == nil {
-		q.config.VirtioMem = true
 		q.Logger().Infof("Setup %dMB virtio-mem-pci success", sizeMB)
 	} else {
 		help := ""
@@ -1841,7 +1840,7 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 		threadID := fmt.Sprintf("%d", hc.Properties.Thread)
 
 		// If CPU type is IBM pSeries, Z or arm virt, we do not set socketID and threadID
-		if machine.Type == "pseries" || machine.Type == "s390-ccw-virtio" || machine.Type == "virt" {
+		if machine.Type == "pseries" || machine.Type == QemuCCWVirtio || machine.Type == "virt" {
 			socketID = ""
 			threadID = ""
 			dieID = ""
