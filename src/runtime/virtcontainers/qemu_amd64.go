@@ -38,6 +38,8 @@ const (
 
 	defaultQemuMachineOptions = "accel=kvm,kernel_irqchip=on"
 
+	splitIrqChipMachineOptions = "accel=kvm,kernel_irqchip=split"
+
 	qmpMigrationWaitTimeout = 5 * time.Second
 )
 
@@ -96,7 +98,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	// IOMMU and Guest Protection require a split IRQ controller for handling interrupts
 	// otherwise QEMU won't be able to create the kernel irqchip
 	if config.IOMMU || config.ConfidentialGuest {
-		mp.Options = "accel=kvm,kernel_irqchip=split"
+		mp.Options = splitIrqChipMachineOptions
 	}
 
 	if config.IOMMU {
