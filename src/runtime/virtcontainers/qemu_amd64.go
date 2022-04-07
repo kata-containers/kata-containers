@@ -41,11 +41,6 @@ const (
 	qmpMigrationWaitTimeout = 5 * time.Second
 )
 
-var qemuPaths = map[string]string{
-	QemuQ35:     defaultQemuPath,
-	QemuMicrovm: defaultQemuPath,
-}
-
 var kernelParams = []Param{
 	{"tsc", "reliable"},
 	{"no_timer_check", ""},
@@ -114,7 +109,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	q := &qemuAmd64{
 		qemuArchBase: qemuArchBase{
 			qemuMachine:          *mp,
-			qemuExePath:          qemuPaths[machineType],
+			qemuExePath:          defaultQemuPath,
 			memoryOffset:         config.MemOffset,
 			kernelParamsNonDebug: kernelParamsNonDebug,
 			kernelParamsDebug:    kernelParamsDebug,
