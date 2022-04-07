@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/docker/go-units"
+	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
@@ -165,6 +166,15 @@ func getPagesizeFromOpt(fsOpts []string) string {
 		}
 	}
 	return ""
+}
+
+func getFSGroupChangePolicy(policy volume.FSGroupChangePolicy) pbTypes.FSGroupChangePolicy {
+	switch policy {
+	case volume.FSGroupChangeOnRootMismatch:
+		return pbTypes.FSGroupChangePolicy_OnRootMismatch
+	default:
+		return pbTypes.FSGroupChangePolicy_Always
+	}
 }
 
 // Shared path handling:
@@ -1467,6 +1477,12 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.De
 	}
 	if len(vol.Options) == 0 {
 		vol.Options = m.Options
+	}
+	if m.FSGroup != nil {
+		vol.FsGroup = &grpc.FSGroup{
+			GroupId:           uint32(*m.FSGroup),
+			GroupChangePolicy: getFSGroupChangePolicy(m.FSGroupChangePolicy),
+		}
 	}
 
 	return vol, nil

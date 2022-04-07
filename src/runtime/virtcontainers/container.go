@@ -639,6 +639,26 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 			c.mounts[i].Type = mntInfo.FsType
 			c.mounts[i].Options = mntInfo.Options
 			c.mounts[i].ReadOnly = readonly
+
+			for key, value := range mntInfo.Metadata {
+				switch key {
+				case volume.FSGroupMetadataKey:
+					gid, err := strconv.Atoi(value)
+					if err != nil {
+						c.Logger().WithError(err).Errorf("invalid group id value %s provided for key %s", value, volume.FSGroupMetadataKey)
+						continue
+					}
+					c.mounts[i].FSGroup = &gid
+				case volume.FSGroupChangePolicyMetadataKey:
+					if _, exists := mntInfo.Metadata[volume.FSGroupMetadataKey]; !exists {
+						c.Logger().Errorf("%s specified without provding the group id with key %s", volume.FSGroupChangePolicyMetadataKey, volume.FSGroupMetadataKey)
+						continue
+					}
+					c.mounts[i].FSGroupChangePolicy = volume.FSGroupChangePolicy(value)
+				default:
+					c.Logger().Warnf("Ignoring unsupported direct-assignd volume metadata key: %s, value: %s", key, value)
+				}
+			}
 		}
 
 		var stat unix.Stat_t

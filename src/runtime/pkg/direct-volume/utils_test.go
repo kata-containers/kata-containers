@@ -25,7 +25,11 @@ func TestAdd(t *testing.T) {
 		VolumeType: "block",
 		Device:     "/dev/sda",
 		FsType:     "ext4",
-		Options:    []string{"journal_dev", "noload"},
+		Metadata: map[string]string{
+			FSGroupMetadataKey:             "3000",
+			FSGroupChangePolicyMetadataKey: string(FSGroupChangeOnRootMismatch),
+		},
+		Options: []string{"journal_dev", "noload"},
 	}
 	buf, err := json.Marshal(actual)
 	assert.Nil(t, err)
@@ -39,6 +43,7 @@ func TestAdd(t *testing.T) {
 	assert.Equal(t, expected.Device, actual.Device)
 	assert.Equal(t, expected.FsType, actual.FsType)
 	assert.Equal(t, expected.Options, actual.Options)
+	assert.Equal(t, expected.Metadata, actual.Metadata)
 
 	// Remove the file
 	err = Remove(volumePath)
