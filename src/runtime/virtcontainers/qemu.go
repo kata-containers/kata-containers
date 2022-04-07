@@ -499,7 +499,6 @@ func (q *qemu) createVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
 		sourcePath: sharedPath,
 		socketPath: virtiofsdSocketPath,
 		extraArgs:  q.config.VirtioFSExtraArgs,
-		debug:      q.config.Debug,
 		cache:      q.config.VirtioFSCache,
 	}, nil
 }
