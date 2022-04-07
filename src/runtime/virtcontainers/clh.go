@@ -234,7 +234,6 @@ func (clh *cloudHypervisor) createVirtiofsDaemon(sharedPath string) (VirtiofsDae
 		sourcePath: sharedPath,
 		socketPath: virtiofsdSocketPath,
 		extraArgs:  clh.config.VirtioFSExtraArgs,
-		debug:      clh.config.Debug,
 		cache:      clh.config.VirtioFSCache,
 	}, nil
 }
@@ -302,7 +301,6 @@ func (clh *cloudHypervisor) loadVirtiofsDaemon(sharedPath string) (VirtiofsDaemo
 	return &virtiofsd{
 		PID:        clh.state.VirtiofsDaemonPid,
 		sourcePath: sharedPath,
-		debug:      clh.config.Debug,
 		socketPath: virtiofsdSocketPath,
 	}, nil
 }
