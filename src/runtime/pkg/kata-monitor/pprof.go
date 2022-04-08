@@ -63,8 +63,10 @@ func (km *KataMonitor) proxyRequest(w http.ResponseWriter, r *http.Request,
 	}
 
 	uri := fmt.Sprintf("http://shim%s", r.URL.String())
+	monitorLog.Debugf("proxyRequest to: %s, uri: %s", socketAddress, uri)
 	resp, err := client.Get(uri)
 	if err != nil {
+		serveError(w, http.StatusInternalServerError, fmt.Sprintf("failed to request %s through %s", uri, socketAddress))
 		return
 	}
 
