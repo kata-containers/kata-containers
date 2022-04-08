@@ -512,6 +512,7 @@ pub fn grpc_to_oci(grpc: &grpc::Spec) -> oci::Spec {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     #[macro_export]
     macro_rules! skip_if_not_root {
         () => {
@@ -520,5 +521,163 @@ mod tests {
                 return;
             }
         };
+    }
+
+    #[test]
+    fn test_process_grpc_to_oci() {
+        #[derive(Debug)]
+        struct TestData {
+            grpcproc: grpc::Process,
+            result: oci::Process,
+        }
+
+        let tests = &[
+            TestData {
+                // All fields specified
+                grpcproc: grpc::Process {
+                    Terminal: true,
+                    ConsoleSize: protobuf::SingularPtrField::<grpc::Box>::some(grpc::Box {
+                        Height: 123,
+                        Width: 456,
+                        ..Default::default()
+                    }),
+                    User: protobuf::SingularPtrField::<grpc::User>::some(grpc::User {
+                        UID: 1234,
+                        GID: 5678,
+                        AdditionalGids: Vec::from([910, 1112]),
+                        Username: String::from("username"),
+                        ..Default::default()
+                    }),
+                    Args: protobuf::RepeatedField::from(Vec::from([
+                        String::from("arg1"),
+                        String::from("arg2"),
+                    ])),
+                    Env: protobuf::RepeatedField::from(Vec::from([String::from("env")])),
+                    Cwd: String::from("cwd"),
+                    Capabilities: protobuf::SingularPtrField::some(grpc::LinuxCapabilities {
+                        Bounding: protobuf::RepeatedField::from(Vec::from([String::from("bnd")])),
+                        Effective: protobuf::RepeatedField::from(Vec::from([String::from("eff")])),
+                        Inheritable: protobuf::RepeatedField::from(Vec::from([String::from(
+                            "inher",
+                        )])),
+                        Permitted: protobuf::RepeatedField::from(Vec::from([String::from("perm")])),
+                        Ambient: protobuf::RepeatedField::from(Vec::from([String::from("amb")])),
+                        ..Default::default()
+                    }),
+                    Rlimits: protobuf::RepeatedField::from(Vec::from([
+                        grpc::POSIXRlimit {
+                            Type: String::from("r#type"),
+                            Hard: 123,
+                            Soft: 456,
+                            ..Default::default()
+                        },
+                        grpc::POSIXRlimit {
+                            Type: String::from("r#type2"),
+                            Hard: 789,
+                            Soft: 1011,
+                            ..Default::default()
+                        },
+                    ])),
+                    NoNewPrivileges: true,
+                    ApparmorProfile: String::from("apparmor profile"),
+                    OOMScoreAdj: 123456,
+                    SelinuxLabel: String::from("Selinux Label"),
+                    ..Default::default()
+                },
+                result: oci::Process {
+                    terminal: true,
+                    console_size: Some(oci::Box {
+                        height: 123,
+                        width: 456,
+                    }),
+                    user: oci::User {
+                        uid: 1234,
+                        gid: 5678,
+                        additional_gids: Vec::from([910, 1112]),
+                        username: String::from("username"),
+                    },
+                    args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                    env: Vec::from([String::from("env")]),
+                    cwd: String::from("cwd"),
+                    capabilities: Some(oci::LinuxCapabilities {
+                        bounding: Vec::from([String::from("bnd")]),
+                        effective: Vec::from([String::from("eff")]),
+                        inheritable: Vec::from([String::from("inher")]),
+                        permitted: Vec::from([String::from("perm")]),
+                        ambient: Vec::from([String::from("amb")]),
+                    }),
+                    rlimits: Vec::from([
+                        oci::PosixRlimit {
+                            r#type: String::from("r#type"),
+                            hard: 123,
+                            soft: 456,
+                        },
+                        oci::PosixRlimit {
+                            r#type: String::from("r#type2"),
+                            hard: 789,
+                            soft: 1011,
+                        },
+                    ]),
+                    no_new_privileges: true,
+                    apparmor_profile: String::from("apparmor profile"),
+                    oom_score_adj: Some(123456),
+                    selinux_label: String::from("Selinux Label"),
+                },
+            },
+            TestData {
+                // None ConsoleSize
+                grpcproc: grpc::Process {
+                    ConsoleSize: protobuf::SingularPtrField::<grpc::Box>::none(),
+                    OOMScoreAdj: 0,
+                    ..Default::default()
+                },
+                result: oci::Process {
+                    console_size: None,
+                    oom_score_adj: Some(0),
+                    ..Default::default()
+                },
+            },
+            TestData {
+                // None User
+                grpcproc: grpc::Process {
+                    User: protobuf::SingularPtrField::<grpc::User>::none(),
+                    OOMScoreAdj: 0,
+                    ..Default::default()
+                },
+                result: oci::Process {
+                    user: oci::User {
+                        uid: 0,
+                        gid: 0,
+                        additional_gids: vec![],
+                        username: String::from(""),
+                    },
+                    oom_score_adj: Some(0),
+                    ..Default::default()
+                },
+            },
+            TestData {
+                // None Capabilities
+                grpcproc: grpc::Process {
+                    Capabilities: protobuf::SingularPtrField::none(),
+                    OOMScoreAdj: 0,
+                    ..Default::default()
+                },
+                result: oci::Process {
+                    capabilities: None,
+                    oom_score_adj: Some(0),
+                    ..Default::default()
+                },
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = process_grpc_to_oci(&d.grpcproc);
+
+            let msg = format!("{}, result: {:?}", msg, result);
+
+            assert_eq!(d.result, result, "{}", msg);
+        }
     }
 }
