@@ -125,7 +125,8 @@ virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
 #
 # Format example:
 #   ["-o", "arg1=xxx,arg2", "-o", "hello world", "--arg3=yyy"]
-#
+# Examples:
+#   Set virtiofsd log level to debug : ["-o", "log_level=debug"] or ["-d"]
 # see `virtiofsd -h` for possible options.
 virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
 
