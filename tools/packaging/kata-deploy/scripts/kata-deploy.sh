@@ -62,7 +62,7 @@ function configure_cri_runtime() {
 	crio)
 		configure_crio
 		;;
-	containerd | k3s | k3s-agent)
+	containerd | k3s*)
 		configure_containerd
 		;;
 	esac
