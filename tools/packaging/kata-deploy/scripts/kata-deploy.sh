@@ -39,13 +39,28 @@ function get_container_runtime() {
                 die "invalid node name"
 	fi
 	if echo "$runtime" | grep -qE 'containerd.*-k3s'; then
-		if systemctl is-active --quiet k3s-agent; then
-			echo "k3s-agent"
-		else
-			echo "k3s"
-		fi
+		echo $(k3s_service_name)
 	else
 		echo "$runtime" | awk -F '[:]' '{print $1}'
+	fi
+}
+
+function k3s_service_name() {
+	local k3s_service=""
+	if [ -x /sbin/openrc-run ]; then
+		k3s_service=$(ls /etc/init.d/ | grep k3s)
+	else
+		if systemctl is-active --quiet k3s-agent; then
+			k3s_service="k3s-agent"
+		else
+			k3s_service="k3s"
+		fi
+	fi
+
+	if [ $(echo "$k3s_service" | wc -l) -eq 1 ]; then 
+		echo "$k3s_service"
+	else
+		die "can't identify k3s service, expect one and only one name like k3s*, but get ${k3s_service}"; 
 	fi
 }
 
@@ -66,8 +81,8 @@ function configure_cri_runtime() {
 		configure_containerd
 		;;
 	esac
-	systemctl daemon-reload
-	systemctl restart "$1"
+	
+	restart_service "$1"
 }
 
 function configure_different_shims_base() {
@@ -216,6 +231,15 @@ function configure_containerd() {
 	done
 }
 
+function restart_service() {
+    if [ -x /sbin/openrc-run ]; then
+        service "$1" restart
+    else
+        systemctl daemon-reload
+        systemctl restart "$1"
+    fi
+}
+
 function remove_artifacts() {
 	echo "deleting kata artifacts"
 	rm -rf /opt/kata/
@@ -248,10 +272,11 @@ function cleanup_containerd() {
 
 function reset_runtime() {
 	kubectl label node "$NODE_NAME" katacontainers.io/kata-runtime-
-	systemctl daemon-reload
-	systemctl restart "$1"
+
+	restart_service "$1"
+	# Also restart kubelet if run crio or containerd
 	if [ "$1" == "crio" ] || [ "$1" == "containerd" ]; then
-		systemctl restart kubelet
+		restart_service kubelet
 	fi
 }
 
