@@ -46,7 +46,7 @@ The following link shows the latest list of limitations:
 # Contributing
 
 If you would like to work on resolving a limitation, please refer to the
-[contributors guide](https://github.com/kata-containers/community/blob/master/CONTRIBUTING.md).
+[contributors guide](https://github.com/kata-containers/community/blob/main/CONTRIBUTING.md).
 If you wish to raise an issue for a new limitation, either
 [raise an issue directly on the runtime](https://github.com/kata-containers/kata-containers/issues/new)
 or see the
