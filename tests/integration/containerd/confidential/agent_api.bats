@@ -39,13 +39,9 @@ setup() {
 
 	# Check that the agent allow ExecProcessRequest requests by default.
 	#
+	echo "Check can create a container and exec a command"
 	crictl_create_cc_pod "$pod_config"
-	crictl_create_cc_container "$sandbox_name" "$pod_config" \
-		"$container_config"
-
-	pod_id=$(crictl pods --name "$sandbox_name" -q)
-	container_id=$(crictl ps --pod ${pod_id} -q)
-	crictl exec "$container_id" cat /proc/cmdline
+	assert_container "$container_config"
 
 	# Check that the agent endpoints can be restricted. In this case it will
 	# have ExecProcessRequest blocked.
@@ -61,12 +57,11 @@ setup() {
 	crictl_create_cc_container "$sandbox_name" "$pod_config" \
 		"$container_config"
 
-	pod_id=$(crictl pods --name "$sandbox_name" -q)
-	container_id=$(crictl ps --pod ${pod_id} -q)
-	# The endpoint ExecProcessRequest is not allowed so this exec
+	# The endpoint ExecProcessRequest is not allowed so any exec
 	# operation should fail.
-	! crictl exec "$container_id" cat /proc/cmdline
-
+	echo "Check cannot exec on container"
+	! assert_can_exec_on_container
+	echo "Check failed to exec because the endpoint is blocked"
 	assert_logs_contain "ExecProcessRequest is blocked"
 }
 

@@ -22,6 +22,14 @@ assert_container() {
 		"$container_config"
 
 	echo "Check the container is operational"
+	assert_can_exec_on_container
+}
+
+# Check the container is operational by running a simple command.
+#
+# Note: the global $sandbox_name should be set already.
+#
+assert_can_exec_on_container() {
 	local pod_id=$(crictl pods --name "$sandbox_name" -q)
 	local container_id=$(crictl ps --pod ${pod_id} -q)
 	crictl exec "$container_id" cat /proc/cmdline
