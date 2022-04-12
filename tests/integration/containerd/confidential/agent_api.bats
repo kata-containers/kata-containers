@@ -5,19 +5,8 @@
 #
 
 load "${BATS_TEST_DIRNAME}/lib.sh"
+load "${BATS_TEST_DIRNAME}/asserts.sh"
 load "${BATS_TEST_DIRNAME}/../../../common.bash"
-
-# Check the containerd logged messages on host have a given message.
-#
-# Parameters:
-#      $1 - the message
-#
-# Note: get the logs since the global $start_date.
-#
-assert_containerd_logs_contain() {
-	local message="$1"
-	journalctl -x -t containerd --since "$start_date" | grep "$message"
-}
 
 setup() {
 	start_date=$(date +"%Y-%m-%d %H:%M:%S")
@@ -78,7 +67,7 @@ setup() {
 	# operation should fail.
 	! crictl exec "$container_id" cat /proc/cmdline
 
-	assert_containerd_logs_contain "ExecProcessRequest is blocked"
+	assert_logs_contain "ExecProcessRequest is blocked"
 }
 
 teardown() {

@@ -51,6 +51,10 @@ assert_container_fail() {
 #
 assert_logs_contain() {
 	local message="$1"
-	journalctl -x -t kata --since "$start_date" | grep "$message"
+	local cmd="journalctl -x"
+	for syslog_id in kata containerd crio;do
+		cmd+=" -t \"$syslog_id\""
+	done
+	cmd+=" --since \"$start_date\""
+	eval $cmd | grep "$message"
 }
-
