@@ -51,28 +51,19 @@ export CONTAINER_ID="${CONTAINER_ID:-0123456789}"
 source /etc/os-release || source /usr/lib/os-release
 grep -Eq "\<fedora\>" /etc/os-release 2> /dev/null && export USE_PODMAN=true
 
-export BATS_TEST_DIRNAME="${tests_repo_dir}/integration/containerd/confidential"
+
 # If we've already checked out the test repo then source the confidential scripts
-[ -d "${BATS_TEST_DIRNAME}" ] && source "${BATS_TEST_DIRNAME}/lib.sh"
+if [ "${KUBERNETES}" == "yes" ]; then
+    export BATS_TEST_DIRNAME="${tests_repo_dir}/integration/kubernetes/confidential"
+    [ -d "${BATS_TEST_DIRNAME}" ] && source "${BATS_TEST_DIRNAME}/lib.sh"
+else
+    export BATS_TEST_DIRNAME="${tests_repo_dir}/integration/containerd/confidential"
+    [ -d "${BATS_TEST_DIRNAME}" ] && source "${BATS_TEST_DIRNAME}/lib.sh"
+fi
+
+[ -d "${BATS_TEST_DIRNAME}" ] && source "${BATS_TEST_DIRNAME}/../../confidential/lib.sh"
 
 export RUNTIME_CONFIG_PATH=/etc/kata-containers/configuration.toml
-
-debug_output() {
-    if [ -n "${DEBUG}" ]
-    then
-        echo "$(date): $@"
-    fi
-}
-
-debug_function() {
-    debug_output "> $@"
-    start=$(date +%s%N | cut -b1-13)
-    $@;
-    status=$?
-    end=$(date +%s%N | cut -b1-13)
-    time=`expr ${end} - ${start}`
-    debug_output "< $@. Time taken: $(echo "scale=2; ${time} / 1000" | bc -l)s. RC: ${status}"
-}
 
 usage() {
     exit_code="$1"
@@ -197,6 +188,7 @@ check_out_repos() {
     sudo -E git reset --hard origin/${tests_branch}
 
     source "${BATS_TEST_DIRNAME}/lib.sh"
+    source "${BATS_TEST_DIRNAME}/../../confidential/lib.sh"
 
     popd
 
@@ -215,9 +207,6 @@ check_out_repos() {
 build_and_install_kata_runtime() {
     pushd ${katacontainers_repo_dir}/src/runtime
     make clean && make DEFAULT_HYPERVISOR=${KATA_HYPERVISOR} && sudo -E PATH=$PATH make DEFAULT_HYPERVISOR=${KATA_HYPERVISOR} install
-    debug_output "We should have created Kata runtime binaries:: /usr/local/bin/kata-runtime and /usr/local/bin/containerd-shim-kata-v2"
-    debug_output "We should have made the Kata configuration file: /usr/share/defaults/kata-containers/configuration.toml"
-    debug_output "kata-runtime version: $(kata-runtime version)"
     popd
 }
 
@@ -233,7 +222,7 @@ configure() {
     add_kernel_params "agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
 
     # If using AA then need to add the agent_config
-    if [ "${AA_KBC}" == "offline_fs_kbc" ]; then
+    if [ "${AA_KBC:-}" == "offline_fs_kbc" ]; then
         add_kernel_params "agent.config_file=/etc/agent-config.toml"
     fi
 
@@ -247,8 +236,8 @@ configure_kata_to_use_rootfs() {
 }
 
 build_and_add_agent_to_rootfs() {
-    debug_function build_a_custom_kata_agent
-    debug_function add_custom_agent_to_rootfs
+    build_a_custom_kata_agent
+    add_custom_agent_to_rootfs
 }
 
 build_a_custom_kata_agent() {
@@ -260,7 +249,6 @@ build_a_custom_kata_agent() {
     [ ${ARCH} == "ppc64le" ] || [ ${ARCH} == "s390x" ] && export LIBC=gnu || export LIBC=musl
     [ ${ARCH} == "ppc64le" ] && export ARCH=powerpc64le
 
-    debug_output "Kata agent built: $(ls -al ${katacontainers_repo_dir}/src/agent/target/${ARCH}-unknown-linux-${LIBC}/release/kata-agent)"
     # Run a make install into the rootfs directory in order to create the kata-agent.service file which is required when we add to the rootfs
     sudo -E PATH=$PATH make install DESTDIR="${ROOTFS}"
     popd
@@ -271,7 +259,7 @@ create_a_local_rootfs() {
     pushd ${katacontainers_repo_dir}/tools/osbuilder/rootfs-builder
     export distro="ubuntu"
     [[ -z "${USE_PODMAN:-}" ]] && use_docker="${use_docker:-1}"
-    sudo -E OS_VERSION="${OS_VERSION:-}" GOPATH=$GOPATH EXTRA_PKGS="vim iputils-ping net-tools" DEBUG="${DEBUG}" USE_DOCKER="${use_docker:-}" SKOPEO=${SKOPEO:-} AA_KBC=${AA_KBC:-} UMOCI=yes SECCOMP=yes ./rootfs.sh -r ${ROOTFS_DIR} ${distro}
+    sudo -E OS_VERSION="${OS_VERSION:-}" GOPATH=$GOPATH EXTRA_PKGS="vim iputils-ping net-tools" DEBUG="${DEBUG:-}" USE_DOCKER="${use_docker:-}" SKOPEO=${SKOPEO:-} AA_KBC=${AA_KBC:-} UMOCI=yes SECCOMP=yes ./rootfs.sh -r ${ROOTFS_DIR} ${distro}
 
      # Install_rust.sh during rootfs.sh switches us to the main branch of the tests repo, so switch back now
     pushd "${tests_repo_dir}"
@@ -282,7 +270,7 @@ create_a_local_rootfs() {
 
     # If offline key broker set then include ssh-demo keys and config from
     # https://github.com/confidential-containers/documentation/tree/main/demos/ssh-demo
-    if [ "${AA_KBC}" == "offline_fs_kbc" ]; then
+    if [ "${AA_KBC:-}" == "offline_fs_kbc" ]; then
         curl -Lo "${HOME}/aa-offline_fs_kbc-keys.json" https://raw.githubusercontent.com/confidential-containers/documentation/main/demos/ssh-demo/aa-offline_fs_kbc-keys.json
         sudo mv "${HOME}/aa-offline_fs_kbc-keys.json" "${ROOTFS_DIR}/etc/aa-offline_fs_kbc-keys.json"
         local rootfs_agent_config="${ROOTFS_DIR}/etc/agent-config.toml"
@@ -302,13 +290,12 @@ add_custom_agent_to_rootfs() {
     sudo install -o root -g root -m 0550 -t ${ROOTFS_DIR}/usr/bin ${katacontainers_repo_dir}/src/agent/target/${ARCH}-unknown-linux-${LIBC}/release/kata-agent
     sudo install -o root -g root -m 0440 ../../../src/agent/kata-agent.service ${ROOTFS_DIR}/usr/lib/systemd/system/
     sudo install -o root -g root -m 0440 ../../../src/agent/kata-containers.target ${ROOTFS_DIR}/usr/lib/systemd/system/
-    debug_output "Added kata agent to rootfs: $(ls -al ${ROOTFS_DIR}/usr/bin/kata-agent)"
     popd
 }
 
 build_and_install_rootfs() {
-    debug_function build_rootfs_image
-    debug_function install_rootfs_image
+    build_rootfs_image
+    install_rootfs_image
 }
 
 build_rootfs_image() {
@@ -337,7 +324,6 @@ install_guest_kernel_image() {
     sudo -E PATH=$PATH ./build-kernel.sh build
     sudo chmod u+wrx /usr/share/kata-containers/ # Give user permission to install kernel
     sudo -E PATH=$PATH ./build-kernel.sh install
-    debug_output "New kernel installed to $(ls -al /usr/share/kata-containers/vmlinux*)"
     popd
 }
 
@@ -395,13 +381,13 @@ spec:
 EOF
 }
 
-kubernetes_create_cc_pod() {
-    kubectl apply -f ${k8s_pod_file} && pod=$(kubectl get pods -o jsonpath='{.items..metadata.name}') && kubectl wait --for=condition=ready pods/$pod
-    kubectl get pod $pod
+call_kubernetes_create_cc_pod() {
+    kubernetes_create_cc_pod ${k8s_pod_file}
 }
 
-kubernetes_delete_cc_pod() {
-    kubectl delete -f ${k8s_pod_file}
+call_kubernetes_delete_cc_pod() {
+    pod_name=$(kubectl get pods -o jsonpath='{.items..metadata.name}')
+    kubernetes_delete_cc_pod $pod_name
 }
 
 # Check out the doc repo if required and pushd
@@ -622,10 +608,10 @@ main() {
             crictl_delete_cc
             ;;
         kubernetes_create_cc_pod)
-            kubernetes_create_cc_pod
+            call_kubernetes_create_cc_pod
             ;;
         kubernetes_delete_cc_pod)
-            kubernetes_delete_cc_pod
+            call_kubernetes_delete_cc_pod
             ;;
         kubernetes_create_ssh_demo_pod)
             kubernetes_create_ssh_demo_pod
