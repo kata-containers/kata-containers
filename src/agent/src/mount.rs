@@ -85,11 +85,11 @@ lazy_static! {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct InitMount {
-    fstype: &'static str,
-    src: &'static str,
-    dest: &'static str,
-    options: Vec<&'static str>,
+pub struct InitMount<'a> {
+    fstype: &'a str,
+    src: &'a str,
+    dest: &'a str,
+    options: Vec<&'a str>,
 }
 
 #[rustfmt::skip]
@@ -115,7 +115,7 @@ lazy_static!{
 
 #[rustfmt::skip]
 lazy_static! {
-    pub static ref INIT_ROOTFS_MOUNTS: Vec<InitMount> = vec![
+    pub static ref INIT_ROOTFS_MOUNTS: Vec<InitMount<'static>> = vec![
         InitMount{fstype: "proc", src: "proc", dest: "/proc", options: vec!["nosuid", "nodev", "noexec"]},
         InitMount{fstype: "sysfs", src: "sysfs", dest: "/sys", options: vec!["nosuid", "nodev", "noexec"]},
         InitMount{fstype: "devtmpfs", src: "dev", dest: "/dev", options: vec!["nosuid"]},
@@ -776,7 +776,7 @@ pub fn get_cgroup_mounts(
     logger: &Logger,
     cg_path: &str,
     unified_cgroup_hierarchy: bool,
-) -> Result<Vec<InitMount>> {
+) -> Result<Vec<InitMount<'static>>> {
     // cgroup v2
     // https://github.com/kata-containers/agent/blob/8c9bbadcd448c9a67690fbe11a860aaacc69813c/agent.go#L1249
     if unified_cgroup_hierarchy {
@@ -1608,6 +1608,109 @@ mod tests {
 
             if result.is_ok() {
                 nix::mount::umount(&mount_point).unwrap();
+            }
+
+            let msg = format!("{}: result: {:?}", msg, result);
+            if d.error_contains.is_empty() {
+                assert!(result.is_ok(), "{}", msg);
+            } else {
+                assert!(result.is_err(), "{}", msg);
+                let error_msg = format!("{}", result.unwrap_err());
+                assert!(error_msg.contains(d.error_contains), "{}", msg);
+            }
+        }
+    }
+
+    #[test]
+    fn test_mount_to_rootfs() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            test_user: TestUserType,
+            src: &'a str,
+            options: Vec<&'a str>,
+            error_contains: &'a str,
+            deny_mount_dir_permission: bool,
+            // if true src will be prepended with a temporary directory
+            mask_src: bool,
+        }
+
+        impl Default for TestData<'_> {
+            fn default() -> Self {
+                TestData {
+                    test_user: TestUserType::Any,
+                    src: "src",
+                    options: vec![],
+                    error_contains: "",
+                    deny_mount_dir_permission: false,
+                    mask_src: true,
+                }
+            }
+        }
+
+        let tests = &[
+            TestData {
+                test_user: TestUserType::NonRootOnly,
+                error_contains: "EPERM: Operation not permitted",
+                ..Default::default()
+            },
+            TestData {
+                test_user: TestUserType::NonRootOnly,
+                src: "dev",
+                mask_src: false,
+                ..Default::default()
+            },
+            TestData {
+                test_user: TestUserType::RootOnly,
+                ..Default::default()
+            },
+            TestData {
+                test_user: TestUserType::NonRootOnly,
+                deny_mount_dir_permission: true,
+                error_contains: "could not create directory",
+                ..Default::default()
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+            if d.test_user == TestUserType::RootOnly {
+                skip_loop_if_not_root!(msg);
+            } else if d.test_user == TestUserType::NonRootOnly {
+                skip_loop_if_root!(msg);
+            }
+
+            let drain = slog::Discard;
+            let logger = slog::Logger::root(drain, o!());
+            let tempdir = tempdir().unwrap();
+
+            let src = if d.mask_src {
+                tempdir.path().join(&d.src)
+            } else {
+                Path::new(d.src).to_path_buf()
+            };
+            let dest = tempdir.path().join("mnt");
+            let init_mount = InitMount {
+                fstype: "tmpfs",
+                src: src.to_str().unwrap(),
+                dest: dest.to_str().unwrap(),
+                options: d.options.clone(),
+            };
+
+            if d.deny_mount_dir_permission {
+                fs::set_permissions(dest.parent().unwrap(), fs::Permissions::from_mode(0o000))
+                    .unwrap();
+            }
+
+            let result = mount_to_rootfs(&logger, &init_mount);
+
+            // restore permissions so tempdir can be cleaned up
+            if d.deny_mount_dir_permission {
+                fs::set_permissions(dest.parent().unwrap(), fs::Permissions::from_mode(0o755))
+                    .unwrap();
+            }
+
+            if result.is_ok() && d.mask_src {
+                nix::mount::umount(&dest).unwrap();
             }
 
             let msg = format!("{}: result: {:?}", msg, result);
