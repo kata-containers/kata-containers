@@ -175,6 +175,15 @@ func main() {
 }
 
 func indexPage(w http.ResponseWriter, r *http.Request) {
+	htmlResponse := kataMonitor.IfReturnHTMLResponse(w, r)
+	if htmlResponse {
+		indexPageHTML(w, r)
+	} else {
+		indexPageText(w, r)
+	}
+}
+
+func indexPageText(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Available HTTP endpoints:\n"))
 
 	spacing := 0
@@ -184,11 +193,33 @@ func indexPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	spacing = spacing + 3
+	formatter := fmt.Sprintf("%%-%ds: %%s\n", spacing)
 
-	formattedString := fmt.Sprintf("%%-%ds: %%s\n", spacing)
 	for _, endpoint := range endpoints {
-		w.Write([]byte(fmt.Sprintf(formattedString, endpoint.path, endpoint.desc)))
+		w.Write([]byte(fmt.Sprintf(formatter, endpoint.path, endpoint.desc)))
 	}
+}
+
+func indexPageHTML(w http.ResponseWriter, r *http.Request) {
+
+	w.Write([]byte("<h1>Available HTTP endpoints:</h1>\n"))
+
+	var formattedString string
+	needLinkPaths := []string{"/metrics", "/sandboxes"}
+
+	w.Write([]byte("<ul>"))
+	for _, endpoint := range endpoints {
+		formattedString = fmt.Sprintf("<b>%s</b>: %s\n", endpoint.path, endpoint.desc)
+		for _, linkPath := range needLinkPaths {
+			if linkPath == endpoint.path {
+				formattedString = fmt.Sprintf("<b><a href='%s'>%s</a></b>: %s\n", endpoint.path, endpoint.path, endpoint.desc)
+				break
+			}
+		}
+		formattedString = fmt.Sprintf("<li>%s</li>", formattedString)
+		w.Write([]byte(formattedString))
+	}
+	w.Write([]byte("</ul>"))
 }
 
 // initLog setup logger
