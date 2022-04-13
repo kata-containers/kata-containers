@@ -70,8 +70,6 @@ type virtiofsd struct {
 	sourcePath string
 	// extraArgs list of extra args to append to virtiofsd command
 	extraArgs []string
-	// debug flag
-	debug bool
 	// PID process ID of virtiosd process
 	PID int
 }
@@ -199,14 +197,8 @@ func (v *virtiofsd) args(FdSocketNumber uint) ([]string, error) {
 		"-o", "source=" + v.sourcePath,
 		// fd number of vhost-user socket
 		fmt.Sprintf("--fd=%v", FdSocketNumber),
-	}
-
-	if v.debug {
-		// enable debug output (implies -f)
-		args = append(args, "-d")
-	} else {
 		// foreground operation
-		args = append(args, "-f")
+		"-f",
 	}
 
 	if len(v.extraArgs) != 0 {

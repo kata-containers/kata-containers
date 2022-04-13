@@ -1498,6 +1498,130 @@ mod tests {
     }
 
     #[test]
+    fn test_mount_storage() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            test_user: TestUserType,
+            storage: Storage,
+            error_contains: &'a str,
+
+            make_source_dir: bool,
+            make_mount_dir: bool,
+            deny_mount_permission: bool,
+        }
+
+        impl Default for TestData<'_> {
+            fn default() -> Self {
+                TestData {
+                    test_user: TestUserType::Any,
+                    storage: Storage {
+                        mount_point: "mnt".to_string(),
+                        source: "src".to_string(),
+                        fstype: "tmpfs".to_string(),
+                        ..Default::default()
+                    },
+                    make_source_dir: true,
+                    make_mount_dir: false,
+                    deny_mount_permission: false,
+                    error_contains: "",
+                }
+            }
+        }
+
+        let tests = &[
+            TestData {
+                test_user: TestUserType::NonRootOnly,
+                error_contains: "EPERM: Operation not permitted",
+                ..Default::default()
+            },
+            TestData {
+                test_user: TestUserType::RootOnly,
+                ..Default::default()
+            },
+            TestData {
+                storage: Storage {
+                    mount_point: "mnt".to_string(),
+                    source: "src".to_string(),
+                    fstype: "bind".to_string(),
+                    ..Default::default()
+                },
+                make_source_dir: false,
+                make_mount_dir: true,
+                error_contains: "Could not create mountpoint",
+                ..Default::default()
+            },
+            TestData {
+                test_user: TestUserType::NonRootOnly,
+                deny_mount_permission: true,
+                error_contains: "Could not create mountpoint",
+                ..Default::default()
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+            if d.test_user == TestUserType::RootOnly {
+                skip_loop_if_not_root!(msg);
+            } else if d.test_user == TestUserType::NonRootOnly {
+                skip_loop_if_root!(msg);
+            }
+
+            let drain = slog::Discard;
+            let logger = slog::Logger::root(drain, o!());
+
+            let tempdir = tempdir().unwrap();
+
+            let source = tempdir.path().join(&d.storage.source);
+            let mount_point = tempdir.path().join(&d.storage.mount_point);
+
+            let storage = Storage {
+                source: source.to_str().unwrap().to_string(),
+                mount_point: mount_point.to_str().unwrap().to_string(),
+                ..d.storage.clone()
+            };
+
+            if d.make_source_dir {
+                fs::create_dir_all(&storage.source).unwrap();
+            }
+            if d.make_mount_dir {
+                fs::create_dir_all(&storage.mount_point).unwrap();
+            }
+
+            if d.deny_mount_permission {
+                fs::set_permissions(
+                    mount_point.parent().unwrap(),
+                    fs::Permissions::from_mode(0o000),
+                )
+                .unwrap();
+            }
+
+            let result = mount_storage(&logger, &storage);
+
+            // restore permissions so tempdir can be cleaned up
+            if d.deny_mount_permission {
+                fs::set_permissions(
+                    mount_point.parent().unwrap(),
+                    fs::Permissions::from_mode(0o755),
+                )
+                .unwrap();
+            }
+
+            if result.is_ok() {
+                nix::mount::umount(&mount_point).unwrap();
+            }
+
+            let msg = format!("{}: result: {:?}", msg, result);
+            if d.error_contains.is_empty() {
+                assert!(result.is_ok(), "{}", msg);
+            } else {
+                assert!(result.is_err(), "{}", msg);
+                let error_msg = format!("{}", result.unwrap_err());
+                assert!(error_msg.contains(d.error_contains), "{}", msg);
+            }
+        }
+    }
+
+    #[test]
     fn test_get_pagesize_and_size_from_option() {
         let expected_pagesize = 2048;
         let expected_size = 107374182;
@@ -1550,6 +1674,57 @@ mod tests {
             } else {
                 assert!(r.is_err());
             }
+        }
+    }
+
+    #[test]
+    fn test_parse_mount_flags_and_options() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            options_vec: Vec<&'a str>,
+            result: (MsFlags, &'a str),
+        }
+
+        let tests = &[
+            TestData {
+                options_vec: vec![],
+                result: (MsFlags::empty(), ""),
+            },
+            TestData {
+                options_vec: vec!["ro"],
+                result: (MsFlags::MS_RDONLY, ""),
+            },
+            TestData {
+                options_vec: vec!["rw"],
+                result: (MsFlags::empty(), ""),
+            },
+            TestData {
+                options_vec: vec!["ro", "rw"],
+                result: (MsFlags::empty(), ""),
+            },
+            TestData {
+                options_vec: vec!["ro", "nodev"],
+                result: (MsFlags::MS_RDONLY | MsFlags::MS_NODEV, ""),
+            },
+            TestData {
+                options_vec: vec!["option1", "nodev", "option2"],
+                result: (MsFlags::MS_NODEV, "option1,option2"),
+            },
+            TestData {
+                options_vec: vec!["rbind", "", "ro"],
+                result: (MsFlags::MS_BIND | MsFlags::MS_REC | MsFlags::MS_RDONLY, ""),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = parse_mount_flags_and_options(d.options_vec.clone());
+
+            let msg = format!("{}: result: {:?}", msg, result);
+
+            let expected_result = (d.result.0, d.result.1.to_owned());
+            assert_eq!(expected_result, result, "{}", msg);
         }
     }
 }

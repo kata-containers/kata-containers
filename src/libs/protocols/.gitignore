@@ -1,6 +1,7 @@
 Cargo.lock
 src/agent.rs
 src/agent_ttrpc.rs
+src/csi.rs
 src/empty.rs
 src/health.rs
 src/health_ttrpc.rs
