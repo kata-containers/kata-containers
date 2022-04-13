@@ -851,4 +851,50 @@ mod tests {
         let p = s.find_container_process("not-exist-cid", "");
         assert!(p.is_err(), "Expecting Error, Got {:?}", p);
     }
+
+    #[tokio::test]
+    async fn test_find_process() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut s = Sandbox::new(&logger).unwrap();
+        let (mut linux_container, _root) = create_linuxcontainer();
+
+        // add process with pid of 99
+        let test_pid = 99;
+        let mut test_process = Process::new(&logger, &oci::Process::default(), "this_is_a_test_process", true, 1).unwrap();
+        // processes interally only have pids when manually set
+        test_process.pid = test_pid;
+
+        linux_container.processes.insert(
+            test_pid,
+            test_process,
+        );
+
+        s.add_container(linux_container);
+
+        let find_result = s.find_process(test_pid);
+
+        // test first if it finds anything
+        assert!(
+            find_result.is_some(),
+            "Should be able to find a process");
+
+        let found_process = find_result.unwrap();
+
+        // then test if it founds the correct process
+        assert_eq!(
+            found_process.pid, test_pid,
+            "Should be able to find correct process"
+        );
+
+        // to test for nonexistent pids, any pid that isn't the one set
+        // above should work, as linuxcontainer starts with no processes
+        let nonexistent_test_pid = 1234;
+        
+        let find_result = s.find_process(nonexistent_test_pid);
+
+        assert!(
+            find_result.is_none(),
+            "Shouldn't find a process for non existent pid"
+        );
+    }
 }
