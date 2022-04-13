@@ -764,6 +764,12 @@ func addHypervisporNetworkOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConf
 		return err
 	}
 
+        if err := newAnnotationConfiguration(ocispec, vcAnnotations.NumQueues).setUint(func(numQueues uint64) {
+                sbConfig.HypervisorConfig.NumQueues = uint32(numQueues)
+        }); err != nil {
+                return err
+        }
+
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.RxRateLimiterMaxRate).setUint(func(rxRateLimiterMaxRate uint64) {
 		sbConfig.HypervisorConfig.RxRateLimiterMaxRate = rxRateLimiterMaxRate
 	}); err != nil {

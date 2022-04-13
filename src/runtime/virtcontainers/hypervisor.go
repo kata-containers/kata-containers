@@ -501,6 +501,9 @@ type HypervisorConfig struct {
 
 	// Disable selinux from the hypervisor process
 	DisableSeLinux bool
+
+	// NumQueues is the number of queues for NIC
+	NumQueues uint32
 }
 
 // vcpu mapping from vcpu number to thread number
@@ -577,6 +580,13 @@ func (conf *HypervisorConfig) Valid() error {
 	if conf.Msize9p == 0 && conf.SharedFS != config.VirtioFS {
 		conf.Msize9p = defaultMsize9p
 	}
+
+	if conf.NumQueues == 0 {
+		conf.NumQueues = conf.NumVCPUs
+	} else if conf.NumQueues > conf.NumVCPUs {
+		hvLogger.Warnf("The NumQueues should not be larger than NumVCPUs, Setting NumQueues to NumVCPUs (%d)", conf.NumVCPUs)
+		conf.NumQueues = conf.NumVCPUs
+	}	
 
 	return nil
 }

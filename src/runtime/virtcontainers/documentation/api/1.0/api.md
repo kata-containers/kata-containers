@@ -348,6 +348,9 @@ type HypervisorConfig struct {
 	// Enable or disable different hardware features, ranging
 	// from memory encryption to both memory and CPU-state encryption and integrity.
 	ConfidentialGuest bool
+
+	// NumQueues is the number of queues for NIC
+	NumQueues uint32
 }
 ```
 

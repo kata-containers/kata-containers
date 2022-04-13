@@ -229,6 +229,13 @@ const (
 
 	// EnableRootlessHypervisor is a sandbox annotation to enable rootless hypervisor (only supported in QEMU currently).
 	EnableRootlessHypervisor = kataAnnotHypervisorPrefix + "rootless"
+
+	//
+	//      NIC Multi Queue annotations
+	// 
+
+	// NumQueues is a sandbox annotation for the number of queues for NIC.
+	NumQueues = kataAnnotHypervisorPrefix + "num_queues"
 )
 
 // Runtime related annotations

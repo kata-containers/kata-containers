@@ -516,7 +516,7 @@ func xConnectVMNetwork(ctx context.Context, endpoint Endpoint, h Hypervisor) err
 	queues := 0
 	caps := h.Capabilities(ctx)
 	if caps.IsMultiQueueSupported() {
-		queues = int(h.HypervisorConfig().NumVCPUs)
+		queues = int(h.HypervisorConfig().NumQueues)
 	}
 
 	disableVhostNet := h.HypervisorConfig().DisableVhostNet
