@@ -6,6 +6,7 @@
 package volume
 
 import (
+	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
 	"os"
@@ -20,7 +21,6 @@ func TestAdd(t *testing.T) {
 	var err error
 	kataDirectVolumeRootPath = t.TempDir()
 	var volumePath = "/a/b/c"
-	var basePath = "a"
 	actual := MountInfo{
 		VolumeType: "block",
 		Device:     "/dev/sda",
@@ -40,14 +40,15 @@ func TestAdd(t *testing.T) {
 	assert.Equal(t, expected.FsType, actual.FsType)
 	assert.Equal(t, expected.Options, actual.Options)
 
+	_, err = os.Stat(filepath.Join(kataDirectVolumeRootPath, b64.URLEncoding.EncodeToString([]byte(volumePath))))
+	assert.Nil(t, err)
 	// Remove the file
 	err = Remove(volumePath)
 	assert.Nil(t, err)
-	_, err = os.Stat(filepath.Join(kataDirectVolumeRootPath, basePath))
+	_, err = os.Stat(filepath.Join(kataDirectVolumeRootPath, b64.URLEncoding.EncodeToString([]byte(volumePath))))
 	assert.True(t, errors.Is(err, os.ErrNotExist))
-
-	// Test invalid mount info json
-	assert.Error(t, Add(volumePath, "{invalid json}"))
+	_, err = os.Stat(filepath.Join(kataDirectVolumeRootPath))
+	assert.Nil(t, err)
 }
 
 func TestRecordSandboxId(t *testing.T) {
