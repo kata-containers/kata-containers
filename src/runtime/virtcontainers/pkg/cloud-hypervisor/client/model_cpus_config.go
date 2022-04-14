@@ -21,6 +21,7 @@ type CpusConfig struct {
 	Topology    *CpuTopology   `json:"topology,omitempty"`
 	MaxPhysBits *int32         `json:"max_phys_bits,omitempty"`
 	Affinity    *[]CpuAffinity `json:"affinity,omitempty"`
+	Features    *CpuFeatures   `json:"features,omitempty"`
 }
 
 // NewCpusConfig instantiates a new CpusConfig object
@@ -190,6 +191,38 @@ func (o *CpusConfig) SetAffinity(v []CpuAffinity) {
 	o.Affinity = &v
 }
 
+// GetFeatures returns the Features field value if set, zero value otherwise.
+func (o *CpusConfig) GetFeatures() CpuFeatures {
+	if o == nil || o.Features == nil {
+		var ret CpuFeatures
+		return ret
+	}
+	return *o.Features
+}
+
+// GetFeaturesOk returns a tuple with the Features field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CpusConfig) GetFeaturesOk() (*CpuFeatures, bool) {
+	if o == nil || o.Features == nil {
+		return nil, false
+	}
+	return o.Features, true
+}
+
+// HasFeatures returns a boolean if a field has been set.
+func (o *CpusConfig) HasFeatures() bool {
+	if o != nil && o.Features != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetFeatures gets a reference to the given CpuFeatures and assigns it to the Features field.
+func (o *CpusConfig) SetFeatures(v CpuFeatures) {
+	o.Features = &v
+}
+
 func (o CpusConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if true {
@@ -206,6 +239,9 @@ func (o CpusConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Affinity != nil {
 		toSerialize["affinity"] = o.Affinity
+	}
+	if o.Features != nil {
+		toSerialize["features"] = o.Features
 	}
 	return json.Marshal(toSerialize)
 }
