@@ -306,6 +306,28 @@ paths:
         "500":
           description: The new device could not be added to the VM instance.
       summary: Add a new vsock device to the VM
+  /vm.add-vdpa:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VdpaConfig'
+        description: The details of the new vDPA device
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PciDeviceInfo'
+          description: The new vDPA device was successfully added to the VM instance.
+        "204":
+          description: The new vDPA device was successfully (cold) added to the VM
+            instance.
+        "500":
+          description: The new vDPA device could not be added to the VM instance.
+      summary: Add a new vDPA device to the VM
   /vm.snapshot:
     put:
       requestBody:
@@ -386,7 +408,7 @@ components:
     VmInfo:
       description: Virtual Machine information
       example:
-        memory_actual_size: 3
+        memory_actual_size: 7
         state: Created
         config:
           console:
@@ -472,6 +494,8 @@ components:
                 refill_time: 0
             id: id
           cpus:
+            features:
+              amx: true
             topology:
               dies_per_package: 5
               threads_per_core: 1
@@ -500,37 +524,48 @@ components:
             id: id
           kernel:
             path: path
+          vdpa:
+          - pci_segment: 7
+            path: path
+            num_queues: 3
+            iommu: false
+            id: id
+          - pci_segment: 7
+            path: path
+            num_queues: 3
+            iommu: false
+            id: id
           numa:
           - distances:
-            - distance: 4
-              destination: 0
-            - distance: 4
-              destination: 0
+            - distance: 7
+              destination: 8
+            - distance: 7
+              destination: 8
             cpus:
-            - 6
-            - 6
+            - 4
+            - 4
             sgx_epc_sections:
             - sgx_epc_sections
             - sgx_epc_sections
             memory_zones:
             - memory_zones
             - memory_zones
-            guest_numa_id: 7
+            guest_numa_id: 0
           - distances:
-            - distance: 4
-              destination: 0
-            - distance: 4
-              destination: 0
+            - distance: 7
+              destination: 8
+            - distance: 7
+              destination: 8
             cpus:
-            - 6
-            - 6
+            - 4
+            - 4
             sgx_epc_sections:
             - sgx_epc_sections
             - sgx_epc_sections
             memory_zones:
             - memory_zones
             - memory_zones
-            guest_numa_id: 7
+            guest_numa_id: 0
           tdx:
             firmware: firmware
           rng:
@@ -538,10 +573,10 @@ components:
             src: /dev/urandom
           sgx_epc:
           - prefault: false
-            size: 0
+            size: 6
             id: id
           - prefault: false
-            size: 0
+            size: 6
             id: id
           fs:
           - pci_segment: 6
@@ -568,9 +603,9 @@ components:
             cid: 3
           platform:
             iommu_segments:
-            - 7
-            - 7
-            num_pci_segments: 8
+            - 3
+            - 3
+            num_pci_segments: 3
           pmem:
           - pci_segment: 6
             mergeable: false
@@ -801,6 +836,8 @@ components:
               refill_time: 0
           id: id
         cpus:
+          features:
+            amx: true
           topology:
             dies_per_package: 5
             threads_per_core: 1
@@ -829,37 +866,48 @@ components:
           id: id
         kernel:
           path: path
+        vdpa:
+        - pci_segment: 7
+          path: path
+          num_queues: 3
+          iommu: false
+          id: id
+        - pci_segment: 7
+          path: path
+          num_queues: 3
+          iommu: false
+          id: id
         numa:
         - distances:
-          - distance: 4
-            destination: 0
-          - distance: 4
-            destination: 0
+          - distance: 7
+            destination: 8
+          - distance: 7
+            destination: 8
           cpus:
-          - 6
-          - 6
+          - 4
+          - 4
           sgx_epc_sections:
           - sgx_epc_sections
           - sgx_epc_sections
           memory_zones:
           - memory_zones
           - memory_zones
-          guest_numa_id: 7
+          guest_numa_id: 0
         - distances:
-          - distance: 4
-            destination: 0
-          - distance: 4
-            destination: 0
+          - distance: 7
+            destination: 8
+          - distance: 7
+            destination: 8
           cpus:
-          - 6
-          - 6
+          - 4
+          - 4
           sgx_epc_sections:
           - sgx_epc_sections
           - sgx_epc_sections
           memory_zones:
           - memory_zones
           - memory_zones
-          guest_numa_id: 7
+          guest_numa_id: 0
         tdx:
           firmware: firmware
         rng:
@@ -867,10 +915,10 @@ components:
           src: /dev/urandom
         sgx_epc:
         - prefault: false
-          size: 0
+          size: 6
           id: id
         - prefault: false
-          size: 0
+          size: 6
           id: id
         fs:
         - pci_segment: 6
@@ -897,9 +945,9 @@ components:
           cid: 3
         platform:
           iommu_segments:
-          - 7
-          - 7
-          num_pci_segments: 8
+          - 3
+          - 3
+          num_pci_segments: 3
         pmem:
         - pci_segment: 6
           mergeable: false
@@ -1007,6 +1055,10 @@ components:
           items:
             $ref: '#/components/schemas/DeviceConfig'
           type: array
+        vdpa:
+          items:
+            $ref: '#/components/schemas/VdpaConfig'
+          type: array
         vsock:
           $ref: '#/components/schemas/VsockConfig'
         sgx_epc:
@@ -1044,6 +1096,13 @@ components:
             type: integer
           type: array
       type: object
+    CpuFeatures:
+      example:
+        amx: true
+      properties:
+        amx:
+          type: boolean
+      type: object
     CpuTopology:
       example:
         dies_per_package: 5
@@ -1062,6 +1121,8 @@ components:
       type: object
     CpusConfig:
       example:
+        features:
+          amx: true
         topology:
           dies_per_package: 5
           threads_per_core: 1
@@ -1096,6 +1157,8 @@ components:
           items:
             $ref: '#/components/schemas/CpuAffinity'
           type: array
+        features:
+          $ref: '#/components/schemas/CpuFeatures'
       required:
       - boot_vcpus
       - max_vcpus
@@ -1103,9 +1166,9 @@ components:
     PlatformConfig:
       example:
         iommu_segments:
-        - 7
-        - 7
-        num_pci_segments: 8
+        - 3
+        - 3
+        num_pci_segments: 3
       properties:
         num_pci_segments:
           format: int16
@@ -1579,6 +1642,31 @@ components:
       required:
       - path
       type: object
+    VdpaConfig:
+      example:
+        pci_segment: 7
+        path: path
+        num_queues: 3
+        iommu: false
+        id: id
+      properties:
+        path:
+          type: string
+        num_queues:
+          default: 1
+          type: integer
+        iommu:
+          default: false
+          type: boolean
+        pci_segment:
+          format: int16
+          type: integer
+        id:
+          type: string
+      required:
+      - num_queues
+      - path
+      type: object
     VsockConfig:
       example:
         pci_segment: 7
@@ -1610,7 +1698,7 @@ components:
     SgxEpcConfig:
       example:
         prefault: false
-        size: 0
+        size: 6
         id: id
       properties:
         id:
@@ -1638,8 +1726,8 @@ components:
       type: object
     NumaDistance:
       example:
-        distance: 4
-        destination: 0
+        distance: 7
+        destination: 8
       properties:
         destination:
           format: int32
@@ -1654,20 +1742,20 @@ components:
     NumaConfig:
       example:
         distances:
-        - distance: 4
-          destination: 0
-        - distance: 4
-          destination: 0
+        - distance: 7
+          destination: 8
+        - distance: 7
+          destination: 8
         cpus:
-        - 6
-        - 6
+        - 4
+        - 4
         sgx_epc_sections:
         - sgx_epc_sections
         - sgx_epc_sections
         memory_zones:
         - memory_zones
         - memory_zones
-        guest_numa_id: 7
+        guest_numa_id: 0
       properties:
         guest_numa_id:
           format: int32
