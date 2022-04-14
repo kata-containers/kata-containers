@@ -10,6 +10,7 @@ package katautils
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -175,6 +176,20 @@ type agent struct {
 	Tracing             bool     `toml:"enable_tracing"`
 	DebugConsoleEnabled bool     `toml:"debug_console_enabled"`
 	DialTimeout         uint32   `toml:"dial_timeout"`
+}
+
+func (orig *tomlConfig) Clone() tomlConfig {
+	clone := *orig
+	clone.Hypervisor = make(map[string]hypervisor)
+	clone.Agent = make(map[string]agent)
+
+	for key, value := range orig.Hypervisor {
+		clone.Hypervisor[key] = value
+	}
+	for key, value := range orig.Agent {
+		clone.Agent[key] = value
+	}
+	return clone
 }
 
 func (h hypervisor) path() (string, error) {
@@ -1309,6 +1324,70 @@ func decodeConfig(configPath string) (tomlConfig, string, error) {
 	return tomlConf, resolved, nil
 }
 
+func decodeDropIns(mainConfigPath string, tomlConf *tomlConfig) error {
+	configDir := filepath.Dir(mainConfigPath)
+	dropInDir := filepath.Join(configDir, "config.d")
+
+	files, err := ioutil.ReadDir(dropInDir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("error reading %q directory: %s", dropInDir, err)
+		} else {
+			return nil
+		}
+	}
+
+	for _, file := range files {
+		dropInFpath := filepath.Join(dropInDir, file.Name())
+
+		err = updateFromDropIn(dropInFpath, tomlConf)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func updateFromDropIn(dropInFpath string, tomlConf *tomlConfig) error {
+	configData, err := os.ReadFile(dropInFpath)
+	if err != nil {
+		return fmt.Errorf("error reading file %q: %s", dropInFpath, err)
+	}
+
+	// Ordinarily, BurntSushi only updates fields of tomlConfig that are
+	// changed by the file and leaves the rest alone.  This doesn't apply
+	// though to tomlConfig substructures that are stored in maps.  Their
+	// previous contents are erased by toml.Decode() and only fields changed by
+	// the file are set.  To work around this, a bit of juggling is needed to
+	// preserve the previous contents and merge them manually with the incoming
+	// changes afterwards, using reflection.
+	tomlConfOrig := tomlConf.Clone()
+
+	var md toml.MetaData
+	md, err = toml.Decode(string(configData), &tomlConf)
+
+	if err != nil {
+		return fmt.Errorf("error decoding file %q: %s", dropInFpath, err)
+	}
+
+	if len(md.Undecoded()) > 0 {
+		msg := fmt.Sprintf("warning: undecoded keys in %q: %+v", dropInFpath, md.Undecoded())
+		kataUtilsLogger.Warn(msg)
+	}
+
+	for _, key := range md.Keys() {
+		err = applyKey(*tomlConf, key, &tomlConfOrig)
+		if err != nil {
+			return fmt.Errorf("error applying key '%+v' from drop-in file %q: %s", key, dropInFpath, err)
+		}
+	}
+
+	tomlConf.Hypervisor = tomlConfOrig.Hypervisor
+	tomlConf.Agent = tomlConfOrig.Agent
+
+	return nil
+}
 
 func applyKey(sourceConf tomlConfig, key []string, targetConf *tomlConfig) error {
 	// Any key that might need treatment provided by this function has to have
