@@ -27,6 +27,7 @@ impl UUID {
     }
 }
 
+/// From: convert UUID to string
 impl From<&UUID> for String {
     fn from(from: &UUID) -> Self {
         let time_low = BigEndian::read_u32(&from.0[..4]);
@@ -57,13 +58,17 @@ mod tests {
 
     #[test]
     fn test_uuid() {
-        let uuid = UUID::new();
-        let sss: String = String::from(&uuid);
-        println!("{}", sss);
+        let uuid1 = UUID::new();
+        let s1: String = String::from(&uuid1);
 
-        let uuid2 = UUID([0u8, 1u8, 2u8, 3u8, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
-        let sss2 = String::from(&uuid2);
-        println!("Display: {}", uuid2);
-        assert_eq!(&sss2, "00010203-0405-0607-0809-0a0b0c0d0e0f");
+        let uuid2 = UUID::new();
+        let s2: String = String::from(&uuid2);
+
+        assert_eq!(s1.len(), s2.len());
+        assert_ne!(s1, s2);
+
+        let uuid3 = UUID([0u8, 1u8, 2u8, 3u8, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+        let s3 = String::from(&uuid3);
+        assert_eq!(&s3, "00010203-0405-0607-0809-0a0b0c0d0e0f");
     }
 }

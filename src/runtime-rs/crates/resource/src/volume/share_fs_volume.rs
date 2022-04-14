@@ -7,7 +7,6 @@
 use std::{path::Path, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
-use log::debug;
 use nix::sys::stat::{stat, SFlag};
 
 use super::Volume;
@@ -53,6 +52,7 @@ impl ShareFsVolume {
                             | SFlag::S_IFREG;
                         if !file_type.contains(SFlag::from_bits_truncate(stat.st_mode)) {
                             debug!(
+                                sl!(),
                             "Ignoring non-regular file as FS sharing not supported. mount: {:?}",
                             m
                         );

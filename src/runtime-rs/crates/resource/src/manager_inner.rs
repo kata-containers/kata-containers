@@ -15,6 +15,7 @@ use oci::LinuxResources;
 
 use crate::{
     cgroups::CgroupsResource,
+    network::{self, Network},
     rootfs::{RootFsResource, Rootfs},
     share_fs::{self, ShareFs},
     volume::{Volume, VolumeResource},
@@ -23,10 +24,9 @@ use crate::{
 
 pub(crate) struct ResourceManagerInner {
     sid: String,
-    // TODO: remove
-    #[allow(dead_code)]
     agent: Arc<dyn Agent>,
     hypervisor: Arc<dyn Hypervisor>,
+    network: Option<Arc<dyn Network>>,
     share_fs: Option<Arc<dyn ShareFs>>,
 
     pub rootfs_resource: RootFsResource,
@@ -45,6 +45,7 @@ impl ResourceManagerInner {
             sid: sid.to_string(),
             agent,
             hypervisor,
+            network: None,
             share_fs: None,
             rootfs_resource: RootFsResource::new(),
             volume_resource: VolumeResource::new(),
@@ -66,9 +67,57 @@ impl ResourceManagerInner {
                         .context("setup share fs device before start vm")?;
                     self.share_fs = Some(share_fs);
                 }
+                ResourceConfig::Network(c) => {
+                    let d = network::new(&c).await.context("new network")?;
+                    d.setup(self.hypervisor.as_ref())
+                        .await
+                        .context("setup network")?;
+                    self.network = Some(d)
+                }
             };
         }
 
+        Ok(())
+    }
+
+    async fn handle_interfaces(&self, network: &dyn Network) -> Result<()> {
+        for i in network.interfaces().await.context("get interfaces")? {
+            // update interface
+            info!(sl!(), "update interface {:?}", i);
+            self.agent
+                .update_interface(agent::UpdateInterfaceRequest { interface: Some(i) })
+                .await
+                .context("update interface")?;
+        }
+
+        Ok(())
+    }
+
+    async fn handle_neighbours(&self, network: &dyn Network) -> Result<()> {
+        let neighbors = network.neighs().await.context("neighs")?;
+        if !neighbors.is_empty() {
+            info!(sl!(), "update neighbors {:?}", neighbors);
+            self.agent
+                .add_arp_neighbors(agent::AddArpNeighborRequest {
+                    neighbors: Some(agent::ARPNeighbors { neighbors }),
+                })
+                .await
+                .context("update neighbors")?;
+        }
+        Ok(())
+    }
+
+    async fn handle_routes(&self, network: &dyn Network) -> Result<()> {
+        let routes = network.routes().await.context("routes")?;
+        if !routes.is_empty() {
+            info!(sl!(), "update routes {:?}", routes);
+            self.agent
+                .update_routes(agent::UpdateRoutesRequest {
+                    route: Some(agent::Routes { routes }),
+                })
+                .await
+                .context("update routes")?;
+        }
         Ok(())
     }
 
@@ -80,6 +129,16 @@ impl ResourceManagerInner {
                 .context("setup share fs device after start vm")?;
         }
 
+        if let Some(network) = self.network.as_ref() {
+            let network = network.as_ref();
+            self.handle_interfaces(network)
+                .await
+                .context("handle interfaces")?;
+            self.handle_neighbours(network)
+                .await
+                .context("handle neighbors")?;
+            self.handle_routes(network).await.context("handle routes")?;
+        }
         Ok(())
     }
 
