@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	goruntime "runtime"
 	"strings"
 
@@ -1306,6 +1307,54 @@ func decodeConfig(configPath string) (tomlConfig, string, error) {
 	}
 
 	return tomlConf, resolved, nil
+}
+
+
+// Copies a TOML value of the source field identified by its TOML key to the
+// corresponding field of the target.  Basically
+// 'target[tomlKeyName] = source[tomlKeyNmae]'.
+func copyFieldValue(source reflect.Value, tomlKeyName string, target reflect.Value) error {
+	val, err := getValue(source, tomlKeyName)
+	if err != nil {
+		return fmt.Errorf("error getting key %q from a decoded drop-in conf file: %s", tomlKeyName, err)
+	}
+	err = setValue(target, tomlKeyName, val)
+	if err != nil {
+		return fmt.Errorf("error setting key %q to a new value '%v': %s", tomlKeyName, val.Interface(), err)
+	}
+	return nil
+}
+
+// The first argument is expected to be a reflect.Value of a tomlConfig
+// substructure (hypervisor, agent), the second argument is a TOML key
+// corresponding to the substructure field whose TOML value is queried.
+// Return value corresponds to 'tomlConfStruct[tomlKey]'.
+func getValue(tomlConfStruct reflect.Value, tomlKey string) (reflect.Value, error) {
+	tomlConfStructType := tomlConfStruct.Type()
+	for j := 0; j < tomlConfStruct.NumField(); j++ {
+		fieldTomlTag := tomlConfStructType.Field(j).Tag.Get("toml")
+		if fieldTomlTag == tomlKey {
+			return tomlConfStruct.Field(j), nil
+		}
+	}
+	return reflect.Value{}, fmt.Errorf("key %q not found", tomlKey)
+}
+
+// The first argument is expected to be a reflect.Value of a tomlConfig
+// substructure (hypervisor, agent), the second argument is a TOML key
+// corresponding to the substructure field whose TOML value is to be changed,
+// the third argument is a reflect.Value representing the new TOML value.
+// An equivalent of 'tomlConfStruct[tomlKey] = newVal'.
+func setValue(tomlConfStruct reflect.Value, tomlKey string, newVal reflect.Value) error {
+	tomlConfStructType := tomlConfStruct.Type()
+	for j := 0; j < tomlConfStruct.NumField(); j++ {
+		fieldTomlTag := tomlConfStructType.Field(j).Tag.Get("toml")
+		if fieldTomlTag == tomlKey {
+			tomlConfStruct.Field(j).Set(newVal)
+			return nil
+		}
+	}
+	return fmt.Errorf("key %q not found", tomlKey)
 }
 
 // checkConfig checks the validity of the specified config.
