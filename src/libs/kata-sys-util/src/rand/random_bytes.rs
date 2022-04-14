@@ -46,6 +46,17 @@ mod tests {
     fn random_bytes() {
         let b = RandomBytes::new(16);
         assert_eq!(b.bytes.len(), 16);
-        println!("{:?}", b.bytes);
+
+        // check lower hex
+        let lower_hex = format!("{:x}", b);
+        assert_eq!(lower_hex, lower_hex.to_lowercase());
+
+        // check upper hex
+        let upper_hex = format!("{:X}", b);
+        assert_eq!(upper_hex, upper_hex.to_uppercase());
+
+        // check new random bytes
+        let b1 = RandomBytes::new(16);
+        assert_ne!(b.bytes, b1.bytes);
     }
 }

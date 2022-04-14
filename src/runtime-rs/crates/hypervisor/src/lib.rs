@@ -10,6 +10,7 @@ extern crate slog;
 logging::logger_with_subsystem!(sl, "hypervisor");
 
 pub mod device;
+pub use device::*;
 
 use std::collections::HashMap;
 
