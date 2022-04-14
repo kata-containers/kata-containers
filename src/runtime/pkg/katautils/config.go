@@ -1321,6 +1321,11 @@ func decodeConfig(configPath string) (tomlConfig, string, error) {
 		return tomlConf, resolved, err
 	}
 
+	err = decodeDropIns(resolved, &tomlConf)
+	if err != nil {
+		return tomlConf, resolved, err
+	}
+
 	return tomlConf, resolved, nil
 }
 
