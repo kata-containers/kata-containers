@@ -1310,6 +1310,59 @@ func decodeConfig(configPath string) (tomlConfig, string, error) {
 }
 
 
+func applyKey(sourceConf tomlConfig, key []string, targetConf *tomlConfig) error {
+	// Any key that might need treatment provided by this function has to have
+	// (at least) three components: [ map_name map_key_name field_toml_tag ],
+	// e.g. [agent kata enable_tracing] or [hypervisor qemu confidential_guest].
+	if len(key) < 3 {
+		return nil
+	}
+	switch key[0] {
+	case "agent":
+		return applyAgentKey(sourceConf, key[1:], targetConf)
+	case "hypervisor":
+		return applyHypervisorKey(sourceConf, key[1:], targetConf)
+		// The table the 'key' is in is not stored in a map so no special handling
+		// is needed.
+	}
+	return nil
+}
+
+// Both of the following functions copy the value of a 'sourceConf' field
+// identified by the TOML tag in 'key' into the corresponding field in
+// 'targetConf'.
+func applyAgentKey(sourceConf tomlConfig, key []string, targetConf *tomlConfig) error {
+	agentName := key[0]
+	tomlKeyName := key[1]
+
+	sourceAgentConf := sourceConf.Agent[agentName]
+	targetAgentConf := targetConf.Agent[agentName]
+
+	err := copyFieldValue(reflect.ValueOf(&sourceAgentConf).Elem(), tomlKeyName, reflect.ValueOf(&targetAgentConf).Elem())
+	if err != nil {
+		return err
+	}
+
+	targetConf.Agent[agentName] = targetAgentConf
+	return nil
+}
+
+func applyHypervisorKey(sourceConf tomlConfig, key []string, targetConf *tomlConfig) error {
+	hypervisorName := key[0]
+	tomlKeyName := key[1]
+
+	sourceHypervisorConf := sourceConf.Hypervisor[hypervisorName]
+	targetHypervisorConf := targetConf.Hypervisor[hypervisorName]
+
+	err := copyFieldValue(reflect.ValueOf(&sourceHypervisorConf).Elem(), tomlKeyName, reflect.ValueOf(&targetHypervisorConf).Elem())
+	if err != nil {
+		return err
+	}
+
+	targetConf.Hypervisor[hypervisorName] = targetHypervisorConf
+	return nil
+}
+
 // Copies a TOML value of the source field identified by its TOML key to the
 // corresponding field of the target.  Basically
 // 'target[tomlKeyName] = source[tomlKeyNmae]'.
