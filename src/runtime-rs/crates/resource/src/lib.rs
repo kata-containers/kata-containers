@@ -15,6 +15,8 @@ logging::logger_with_subsystem!(sl, "resource");
 pub mod cgroups;
 pub mod manager;
 mod manager_inner;
+pub mod network;
+use network::NetworkConfig;
 pub mod rootfs;
 pub mod share_fs;
 pub mod volume;
@@ -24,5 +26,6 @@ use kata_types::config::hypervisor::SharedFsInfo;
 
 #[derive(Debug)]
 pub enum ResourceConfig {
+    Network(NetworkConfig),
     ShareFs(SharedFsInfo),
 }

@@ -11,7 +11,6 @@ use std::{sync::Arc, vec::Vec};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::mount::Mount;
-use log::{error, info};
 use nix::sys::stat::{self, SFlag};
 use tokio::sync::RwLock;
 
@@ -90,6 +89,7 @@ impl RootFsResource {
         let inner = self.inner.read().await;
         for r in &inner.rootfs {
             info!(
+                sl!(),
                 "rootfs {:?}: count {}",
                 r.get_guest_rootfs_path().await,
                 Arc::strong_count(r)
@@ -114,7 +114,7 @@ fn get_block_device(file_path: &str) -> Option<u64> {
             }
         }
         Err(err) => {
-            error!("failed to stat for {} {:?}", file_path, err);
+            error!(sl!(), "failed to stat for {} {:?}", file_path, err);
             return None;
         }
     };
