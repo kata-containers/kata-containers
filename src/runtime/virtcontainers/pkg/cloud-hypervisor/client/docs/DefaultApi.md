@@ -18,6 +18,7 @@ Method | HTTP request | Description
 [**VmAddFsPut**](DefaultApi.md#VmAddFsPut) | **Put** /vm.add-fs | Add a new virtio-fs device to the VM
 [**VmAddNetPut**](DefaultApi.md#VmAddNetPut) | **Put** /vm.add-net | Add a new network device to the VM
 [**VmAddPmemPut**](DefaultApi.md#VmAddPmemPut) | **Put** /vm.add-pmem | Add a new pmem device to the VM
+[**VmAddVdpaPut**](DefaultApi.md#VmAddVdpaPut) | **Put** /vm.add-vdpa | Add a new vDPA device to the VM
 [**VmAddVsockPut**](DefaultApi.md#VmAddVsockPut) | **Put** /vm.add-vsock | Add a new vsock device to the VM
 [**VmCountersGet**](DefaultApi.md#VmCountersGet) | **Get** /vm.counters | Get counters from the VM
 [**VmInfoGet**](DefaultApi.md#VmInfoGet) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
@@ -851,6 +852,70 @@ Other parameters are passed through a pointer to a apiVmAddPmemPutRequest struct
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **pmemConfig** | [**PmemConfig**](PmemConfig.md) | The details of the new pmem device | 
+
+### Return type
+
+[**PciDeviceInfo**](PciDeviceInfo.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: application/json
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
+[[Back to Model list]](../README.md#documentation-for-models)
+[[Back to README]](../README.md)
+
+
+## VmAddVdpaPut
+
+> PciDeviceInfo VmAddVdpaPut(ctx).VdpaConfig(vdpaConfig).Execute()
+
+Add a new vDPA device to the VM
+
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    vdpaConfig := *openapiclient.NewVdpaConfig("Path_example", int32(123)) // VdpaConfig | The details of the new vDPA device
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddVdpaPut(context.Background()).VdpaConfig(vdpaConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddVdpaPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddVdpaPut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddVdpaPut`: %v\n", resp)
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmAddVdpaPutRequest struct via the builder pattern
+
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **vdpaConfig** | [**VdpaConfig**](VdpaConfig.md) | The details of the new vDPA device | 
 
 ### Return type
 

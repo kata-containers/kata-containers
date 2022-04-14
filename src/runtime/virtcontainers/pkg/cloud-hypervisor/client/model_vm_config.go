@@ -30,6 +30,7 @@ type VmConfig struct {
 	Serial    *ConsoleConfig          `json:"serial,omitempty"`
 	Console   *ConsoleConfig          `json:"console,omitempty"`
 	Devices   *[]DeviceConfig         `json:"devices,omitempty"`
+	Vdpa      *[]VdpaConfig           `json:"vdpa,omitempty"`
 	Vsock     *VsockConfig            `json:"vsock,omitempty"`
 	SgxEpc    *[]SgxEpcConfig         `json:"sgx_epc,omitempty"`
 	Tdx       *TdxConfig              `json:"tdx,omitempty"`
@@ -516,6 +517,38 @@ func (o *VmConfig) SetDevices(v []DeviceConfig) {
 	o.Devices = &v
 }
 
+// GetVdpa returns the Vdpa field value if set, zero value otherwise.
+func (o *VmConfig) GetVdpa() []VdpaConfig {
+	if o == nil || o.Vdpa == nil {
+		var ret []VdpaConfig
+		return ret
+	}
+	return *o.Vdpa
+}
+
+// GetVdpaOk returns a tuple with the Vdpa field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VmConfig) GetVdpaOk() (*[]VdpaConfig, bool) {
+	if o == nil || o.Vdpa == nil {
+		return nil, false
+	}
+	return o.Vdpa, true
+}
+
+// HasVdpa returns a boolean if a field has been set.
+func (o *VmConfig) HasVdpa() bool {
+	if o != nil && o.Vdpa != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetVdpa gets a reference to the given []VdpaConfig and assigns it to the Vdpa field.
+func (o *VmConfig) SetVdpa(v []VdpaConfig) {
+	o.Vdpa = &v
+}
+
 // GetVsock returns the Vsock field value if set, zero value otherwise.
 func (o *VmConfig) GetVsock() VsockConfig {
 	if o == nil || o.Vsock == nil {
@@ -783,6 +816,9 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Devices != nil {
 		toSerialize["devices"] = o.Devices
+	}
+	if o.Vdpa != nil {
+		toSerialize["vdpa"] = o.Vdpa
 	}
 	if o.Vsock != nil {
 		toSerialize["vsock"] = o.Vsock
