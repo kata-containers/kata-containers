@@ -14,6 +14,7 @@ import (
 	"syscall"
 
 	merr "github.com/hashicorp/go-multierror"
+	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/pkg/errors"
@@ -325,6 +326,7 @@ func bindMountContainerRootfs(ctx context.Context, shareDir, cid, cRootFs string
 }
 
 // Mount describes a container mount.
+// nolint: govet
 type Mount struct {
 	// Source is the source of the mount.
 	Source string
@@ -352,6 +354,14 @@ type Mount struct {
 
 	// ReadOnly specifies if the mount should be read only or not
 	ReadOnly bool
+
+	// FSGroup a group ID that the group ownership of the files for the mounted volume
+	// will need to be changed when set.
+	FSGroup *int
+
+	// FSGroupChangePolicy specifies the policy that will be used when applying
+	// group id ownership change for a volume.
+	FSGroupChangePolicy volume.FSGroupChangePolicy
 }
 
 func isSymlink(path string) bool {
