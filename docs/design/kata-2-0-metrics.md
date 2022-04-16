@@ -51,6 +51,7 @@ The `kata-monitor` management agent should be started on each node where the Kat
 > **Note**: a *node* running Kata containers will be either a single host system or a worker node belonging to a K8s cluster capable of running Kata pods.
 
 - Aggregate sandbox metrics running on the node, adding the `sandbox_id` label to them.
+- Attach the additional `cri_uid`, `cri_name` and `cri_namespace` labels to the sandbox metrics, tracking the `uid`, `name` and `namespace` Kubernetes pod metadata.
 - Expose a new Prometheus target, allowing all node metrics coming from the Kata shim to be collected by Prometheus indirectly. This simplifies the targets count in Prometheus and avoids exposing shim's metrics by `ip:port`.
 
 Only one `kata-monitor` process runs in each node.
