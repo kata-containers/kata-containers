@@ -126,7 +126,7 @@ func TestKvmIsUsable(t *testing.T) {
 		kvmDevice = savedKvmDevice
 	}()
 
-	err = kvmIsUsable()
+	err := kvmIsUsable()
 	assert.Error(err)
 
 	err = createEmptyFile(fakeKVMDevice)
