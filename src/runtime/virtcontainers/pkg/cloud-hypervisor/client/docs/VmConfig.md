@@ -18,6 +18,7 @@ Name | Type | Description | Notes
 **Serial** | Pointer to [**ConsoleConfig**](ConsoleConfig.md) |  | [optional] 
 **Console** | Pointer to [**ConsoleConfig**](ConsoleConfig.md) |  | [optional] 
 **Devices** | Pointer to [**[]DeviceConfig**](DeviceConfig.md) |  | [optional] 
+**Vdpa** | Pointer to [**[]VdpaConfig**](VdpaConfig.md) |  | [optional] 
 **Vsock** | Pointer to [**VsockConfig**](VsockConfig.md) |  | [optional] 
 **SgxEpc** | Pointer to [**[]SgxEpcConfig**](SgxEpcConfig.md) |  | [optional] 
 **Tdx** | Pointer to [**TdxConfig**](TdxConfig.md) |  | [optional] 
@@ -399,6 +400,31 @@ SetDevices sets Devices field to given value.
 `func (o *VmConfig) HasDevices() bool`
 
 HasDevices returns a boolean if a field has been set.
+
+### GetVdpa
+
+`func (o *VmConfig) GetVdpa() []VdpaConfig`
+
+GetVdpa returns the Vdpa field if non-nil, zero value otherwise.
+
+### GetVdpaOk
+
+`func (o *VmConfig) GetVdpaOk() (*[]VdpaConfig, bool)`
+
+GetVdpaOk returns a tuple with the Vdpa field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetVdpa
+
+`func (o *VmConfig) SetVdpa(v []VdpaConfig)`
+
+SetVdpa sets Vdpa field to given value.
+
+### HasVdpa
+
+`func (o *VmConfig) HasVdpa() bool`
+
+HasVdpa returns a boolean if a field has been set.
 
 ### GetVsock
 
