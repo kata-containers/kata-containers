@@ -1304,6 +1304,44 @@ func (clh *cloudHypervisor) addVSock(cid int64, path string) {
 	clh.vmconfig.Vsock = chclient.NewVsockConfig(cid, path)
 }
 
+func (clh *cloudHypervisor) getRateLimiterConfig(bwSize, bwOneTimeBurst, opsSize, opsOneTimeBurst int64) *chclient.RateLimiterConfig {
+	if bwSize == 0 && opsSize == 0 {
+		return nil
+	}
+
+	rateLimiterConfig := chclient.NewRateLimiterConfig()
+
+	if bwSize != 0 {
+		bwTokenBucket := chclient.NewTokenBucket(bwSize, int64(utils.DefaultRateLimiterRefillTimeMilliSecs))
+
+		if bwOneTimeBurst != 0 {
+			bwTokenBucket.SetOneTimeBurst(bwOneTimeBurst)
+		}
+
+		rateLimiterConfig.SetBandwidth(*bwTokenBucket)
+	}
+
+	if opsSize != 0 {
+		opsTokenBucket := chclient.NewTokenBucket(opsSize, int64(utils.DefaultRateLimiterRefillTimeMilliSecs))
+
+		if opsOneTimeBurst != 0 {
+			opsTokenBucket.SetOneTimeBurst(opsOneTimeBurst)
+		}
+
+		rateLimiterConfig.SetOps(*opsTokenBucket)
+	}
+
+	return rateLimiterConfig
+}
+
+func (clh *cloudHypervisor) getNetRateLimiterConfig() *chclient.RateLimiterConfig {
+	return clh.getRateLimiterConfig(
+		int64(utils.RevertBytes(uint64(clh.config.NetRateLimiterBwMaxRate/8))),
+		int64(utils.RevertBytes(uint64(clh.config.NetRateLimiterBwOneTimeBurst/8))),
+		clh.config.NetRateLimiterOpsMaxRate,
+		clh.config.NetRateLimiterOpsOneTimeBurst)
+}
+
 func (clh *cloudHypervisor) addNet(e Endpoint) error {
 	clh.Logger().WithField("endpoint-type", e).Debugf("Adding Endpoint of type %v", e)
 
@@ -1323,9 +1361,15 @@ func (clh *cloudHypervisor) addNet(e Endpoint) error {
 		"tap": tapPath,
 	}).Info("Adding Net")
 
+	netRateLimiterConfig := clh.getNetRateLimiterConfig()
+
 	net := chclient.NewNetConfig()
 	net.Mac = &mac
 	net.Tap = &tapPath
+	if netRateLimiterConfig != nil {
+		net.SetRateLimiterConfig(*netRateLimiterConfig)
+	}
+
 	if clh.vmconfig.Net != nil {
 		*clh.vmconfig.Net = append(*clh.vmconfig.Net, *net)
 	} else {
