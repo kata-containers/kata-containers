@@ -904,4 +904,98 @@ mod tests {
             assert_eq!(d.result, result, "{}", msg);
         }
     }
+
+    #[test]
+    fn test_mount_grpc_to_oci() {
+        #[derive(Debug)]
+        struct TestData {
+            grpcmount: grpc::Mount,
+            result: oci::Mount,
+        }
+
+        let tests = &[
+            TestData {
+                // Default fields
+                grpcmount: grpc::Mount {
+                    ..Default::default()
+                },
+                result: oci::Mount {
+                    ..Default::default()
+                },
+            },
+            TestData {
+                grpcmount: grpc::Mount {
+                    destination: String::from("destination"),
+                    source: String::from("source"),
+                    field_type: String::from("fieldtype"),
+                    options: protobuf::RepeatedField::from(Vec::from([
+                        String::from("option1"),
+                        String::from("option2"),
+                    ])),
+                    ..Default::default()
+                },
+                result: oci::Mount {
+                    destination: String::from("destination"),
+                    source: String::from("source"),
+                    r#type: String::from("fieldtype"),
+                    options: Vec::from([String::from("option1"), String::from("option2")]),
+                },
+            },
+            TestData {
+                grpcmount: grpc::Mount {
+                    destination: String::from("destination"),
+                    source: String::from("source"),
+                    field_type: String::from("fieldtype"),
+                    options: protobuf::RepeatedField::from(Vec::new()),
+                    ..Default::default()
+                },
+                result: oci::Mount {
+                    destination: String::from("destination"),
+                    source: String::from("source"),
+                    r#type: String::from("fieldtype"),
+                    options: Vec::new(),
+                },
+            },
+            TestData {
+                grpcmount: grpc::Mount {
+                    destination: String::new(),
+                    source: String::from("source"),
+                    field_type: String::from("fieldtype"),
+                    options: protobuf::RepeatedField::from(Vec::from([String::from("option1")])),
+                    ..Default::default()
+                },
+                result: oci::Mount {
+                    destination: String::new(),
+                    source: String::from("source"),
+                    r#type: String::from("fieldtype"),
+                    options: Vec::from([String::from("option1")]),
+                },
+            },
+            TestData {
+                grpcmount: grpc::Mount {
+                    destination: String::from("destination"),
+                    source: String::from("source"),
+                    field_type: String::new(),
+                    options: protobuf::RepeatedField::from(Vec::from([String::from("option1")])),
+                    ..Default::default()
+                },
+                result: oci::Mount {
+                    destination: String::from("destination"),
+                    source: String::from("source"),
+                    r#type: String::new(),
+                    options: Vec::from([String::from("option1")]),
+                },
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = mount_grpc_to_oci(&d.grpcmount);
+
+            let msg = format!("{}, result: {:?}", msg, result);
+
+            assert_eq!(d.result, result, "{}", msg);
+        }
+    }
 }
