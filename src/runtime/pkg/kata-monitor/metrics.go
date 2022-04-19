@@ -78,6 +78,21 @@ func (km *KataMonitor) ProcessMetricsRequest(w http.ResponseWriter, r *http.Requ
 		scrapeDurationsHistogram.Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
 
+	// this is likely the same as `kata-runtime metrics <SANDBOX>`.
+	sandboxID, err := getSandboxIDFromReq(r)
+	if err == nil && sandboxID != "" {
+		metrics, err := GetSandboxMetrics(sandboxID)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		w.Write([]byte(metrics))
+		return
+	}
+
+	// if no sandbox provided, will get all sandbox's metrics.
+
 	// prepare writer for writing response.
 	contentType := expfmt.Negotiate(r.Header)
 
