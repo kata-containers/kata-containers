@@ -92,6 +92,7 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**VmAddFsPut**](docs/DefaultApi.md#vmaddfsput) | **Put** /vm.add-fs | Add a new virtio-fs device to the VM
 *DefaultApi* | [**VmAddNetPut**](docs/DefaultApi.md#vmaddnetput) | **Put** /vm.add-net | Add a new network device to the VM
 *DefaultApi* | [**VmAddPmemPut**](docs/DefaultApi.md#vmaddpmemput) | **Put** /vm.add-pmem | Add a new pmem device to the VM
+*DefaultApi* | [**VmAddVdpaPut**](docs/DefaultApi.md#vmaddvdpaput) | **Put** /vm.add-vdpa | Add a new vDPA device to the VM
 *DefaultApi* | [**VmAddVsockPut**](docs/DefaultApi.md#vmaddvsockput) | **Put** /vm.add-vsock | Add a new vsock device to the VM
 *DefaultApi* | [**VmCountersGet**](docs/DefaultApi.md#vmcountersget) | **Get** /vm.counters | Get counters from the VM
 *DefaultApi* | [**VmInfoGet**](docs/DefaultApi.md#vminfoget) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
@@ -111,6 +112,7 @@ Class | Method | HTTP request | Description
  - [CmdLineConfig](docs/CmdLineConfig.md)
  - [ConsoleConfig](docs/ConsoleConfig.md)
  - [CpuAffinity](docs/CpuAffinity.md)
+ - [CpuFeatures](docs/CpuFeatures.md)
  - [CpuTopology](docs/CpuTopology.md)
  - [CpusConfig](docs/CpusConfig.md)
  - [DeviceConfig](docs/DeviceConfig.md)
@@ -135,6 +137,7 @@ Class | Method | HTTP request | Description
  - [SgxEpcConfig](docs/SgxEpcConfig.md)
  - [TdxConfig](docs/TdxConfig.md)
  - [TokenBucket](docs/TokenBucket.md)
+ - [VdpaConfig](docs/VdpaConfig.md)
  - [VmAddDevice](docs/VmAddDevice.md)
  - [VmConfig](docs/VmConfig.md)
  - [VmInfo](docs/VmInfo.md)
