@@ -432,38 +432,14 @@ fn get_container_pipe_size(param: &str) -> Result<i32> {
 
 #[cfg(test)]
 mod tests {
+    use crate::assert_result;
+
     use super::*;
     use anyhow::anyhow;
     use std::fs::File;
     use std::io::Write;
     use std::time;
     use tempfile::tempdir;
-
-    // Parameters:
-    //
-    // 1: expected Result
-    // 2: actual Result
-    // 3: string used to identify the test on error
-    macro_rules! assert_result {
-        ($expected_result:expr, $actual_result:expr, $msg:expr) => {
-            if $expected_result.is_ok() {
-                let expected_level = $expected_result.as_ref().unwrap();
-                let actual_level = $actual_result.unwrap();
-                assert!(*expected_level == actual_level, "{}", $msg);
-            } else {
-                let expected_error = $expected_result.as_ref().unwrap_err();
-                let expected_error_msg = format!("{:?}", expected_error);
-
-                if let Err(actual_error) = $actual_result {
-                    let actual_error_msg = format!("{:?}", actual_error);
-
-                    assert!(expected_error_msg == actual_error_msg, "{}", $msg);
-                } else {
-                    assert!(expected_error_msg == "expected error, got OK", "{}", $msg);
-                }
-            }
-        };
-    }
 
     #[test]
     fn test_new() {
