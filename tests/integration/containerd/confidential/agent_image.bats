@@ -101,5 +101,5 @@ teardown() {
 
 	# Print the logs and cleanup resources.
 	echo "-- Kata logs:"
-	sudo journalctl -xe -t kata --since "$start_date"
+	sudo journalctl -xe -t kata --since "$test_start_time"
 }

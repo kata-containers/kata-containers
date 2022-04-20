@@ -55,7 +55,7 @@ assert_container_fail() {
 # Parameters:
 #	$1 - the message
 #
-# Note: get the logs since the global $start_date.
+# Note: get the logs since the global $test_start_time.
 #
 assert_logs_contain() {
 	local message="$1"
@@ -63,6 +63,6 @@ assert_logs_contain() {
 	for syslog_id in kata containerd crio;do
 		cmd+=" -t \"$syslog_id\""
 	done
-	cmd+=" --since \"$start_date\""
+	cmd+=" --since \"$test_start_time\""
 	eval $cmd | grep "$message"
 }

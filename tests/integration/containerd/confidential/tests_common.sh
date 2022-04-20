@@ -9,13 +9,13 @@ load "${BATS_TEST_DIRNAME}/asserts.sh"
 # Common setup for tests.
 #
 # Global variables exported:
-#	$start_date          - test start time
+#	$test_start_time     - test start time.
 #	$pod_config          - path to default pod configuration file.
 #	$sandbox_name        - the sandbox name set on default pod configuration.
 #	$saved_kernel_params - saved the original list of kernel parameters.
 #
 setup_common() {
-	export start_date=$(date +"%Y-%m-%d %H:%M:%S")
+	export test_start_time="$(date +"%Y-%m-%d %H:%M:%S")"
 	export sandbox_name="kata-cc-busybox-sandbox"
 	export pod_config="${FIXTURES_DIR}/pod-config.yaml"
 
