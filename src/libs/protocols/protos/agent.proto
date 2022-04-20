@@ -399,6 +399,17 @@ message SetGuestDateTimeRequest {
 	int64 Usec = 2;
 }
 
+// FSGroup consists of the group id and group ownership change policy
+// that a volume should have its ownership changed to.
+message FSGroup {
+	// GroupID is the ID that the group ownership of the
+	// files in the mounted volume will need to be changed to.
+	uint32 group_id = 2;
+	// GroupChangePolicy specifies the policy for applying group id
+	// ownership change on a mounted volume.
+	types.FSGroupChangePolicy group_change_policy = 3;
+}
+
 // Storage represents both the rootfs of the container, and any volume that
 // could have been defined through the Mount list of the OCI specification.
 message Storage {
@@ -422,11 +433,14 @@ message Storage {
 	// device, "9p" for shared filesystem, or "tmpfs" for shared /dev/shm.
 	string fstype = 4;
 	// Options describes the additional options that might be needed to
-	// mount properly the storage filesytem.
+	// mount properly the storage filesystem.
 	repeated string options = 5;
 	// MountPoint refers to the path where the storage should be mounted
 	// inside the VM.
 	string mount_point = 6;
+	// FSGroup consists of the group ID and group ownership change policy
+	// that the mounted volume must have its group ID changed to when specified.
+	FSGroup fs_group = 7;
 }
 
 // Device represents only the devices that could have been defined through the

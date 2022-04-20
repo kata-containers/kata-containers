@@ -686,4 +686,61 @@ mod tests {
             assert_eq!(d.result, result, "{}", msg);
         }
     }
+
+    #[test]
+    fn test_root_grpc_to_oci() {
+        #[derive(Debug)]
+        struct TestData {
+            grpcroot: grpc::Root,
+            result: oci::Root,
+        }
+
+        let tests = &[
+            TestData {
+                // Default fields
+                grpcroot: grpc::Root {
+                    ..Default::default()
+                },
+                result: oci::Root {
+                    ..Default::default()
+                },
+            },
+            TestData {
+                // Specified fields, readonly false
+                grpcroot: grpc::Root {
+                    Path: String::from("path"),
+                    Readonly: false,
+                    ..Default::default()
+                },
+                result: oci::Root {
+                    path: String::from("path"),
+                    readonly: false,
+                    ..Default::default()
+                },
+            },
+            TestData {
+                // Specified fields, readonly true
+                grpcroot: grpc::Root {
+                    Path: String::from("path"),
+                    Readonly: true,
+                    ..Default::default()
+                },
+                result: oci::Root {
+                    path: String::from("path"),
+                    readonly: true,
+                    ..Default::default()
+                },
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = root_grpc_to_oci(&d.grpcroot);
+
+            let msg = format!("{}, result: {:?}", msg, result);
+
+            assert_eq!(d.result, result, "{}", msg);
+        }
+    }
 }

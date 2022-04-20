@@ -325,7 +325,28 @@ paths:
           description: The new device was successfully (cold) added to the VM instance.
         500:
           description: The new device could not be added to the VM instance.
-
+  
+  /vm.add-vdpa:
+    put:
+      summary: Add a new vDPA device to the VM
+      requestBody:
+        description: The details of the new vDPA device
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VdpaConfig'
+        required: true
+      responses:
+        200:
+          description: The new vDPA device was successfully added to the VM instance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PciDeviceInfo'
+        204:
+          description: The new vDPA device was successfully (cold) added to the VM instance.
+        500:
+          description: The new vDPA device could not be added to the VM instance.
 
   /vm.snapshot:
     put:
@@ -505,6 +526,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DeviceConfig'
+        vdpa:
+          type: array
+          items:
+            $ref: '#/components/schemas/VdpaConfig'
         vsock:
             $ref: '#/components/schemas/VsockConfig'
         sgx_epc:
@@ -536,6 +561,12 @@ components:
           type: array
           items:
             type: integer
+
+    CpuFeatures:
+      type: object
+      properties:
+        amx:
+          type: boolean
 
     CpuTopology:
       type: object
@@ -571,6 +602,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CpuAffinity'
+        features:
+          $ref: '#/components/schemas/CpuFeatures'
 
     PlatformConfig:
       type: object
@@ -912,6 +945,26 @@ components:
       properties:
         path:
           type: string
+        iommu:
+          type: boolean
+          default: false
+        pci_segment:
+          type: integer
+          format: int16
+        id:
+          type: string
+
+    VdpaConfig:
+      required:
+      - path
+      - num_queues
+      type: object
+      properties:
+        path:
+          type: string
+        num_queues:
+          type: integer
+          default: 1
         iommu:
           type: boolean
           default: false
