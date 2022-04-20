@@ -4,27 +4,11 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-load "${BATS_TEST_DIRNAME}/lib.sh"
-load "${BATS_TEST_DIRNAME}/asserts.sh"
 load "${BATS_TEST_DIRNAME}/../../../common.bash"
+load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	start_date=$(date +"%Y-%m-%d %H:%M:%S")
-	sandbox_name="kata-cc-busybox-sandbox"
-	pod_config="${FIXTURES_DIR}/pod-config.yaml"
-	pod_id=""
-
-	echo "Delete any existing ${sandbox_name} pod"
-	crictl_delete_cc_pod_if_exists "$sandbox_name"
-
-	echo "Prepare containerd for Confidential Container"
-	SAVED_CONTAINERD_CONF_FILE="/etc/containerd/config.toml.$$"
-	configure_cc_containerd "$SAVED_CONTAINERD_CONF_FILE"
-
-	echo "Reconfigure Kata Containers"
-	clear_kernel_params
-	switch_image_service_offload on
-	enable_full_debug
+	setup_common
 
 	# Test will change the guest image so let's save it to restore
 	# on teardown.
@@ -40,7 +24,7 @@ setup() {
 	# Check that the agent allow ExecProcessRequest requests by default.
 	#
 	echo "Check can create a container and exec a command"
-	crictl_create_cc_pod "$pod_config"
+	create_test_pod
 	assert_container "$container_config"
 
 	# Check that the agent endpoints can be restricted. In this case it will
@@ -53,7 +37,7 @@ setup() {
 	add_kernel_params \
 		"agent.config_file=/tests/fixtures/${agent_config_filename}"
 
-	crictl_create_cc_pod "$pod_config"
+	create_test_pod
 	crictl_create_cc_container "$sandbox_name" "$pod_config" \
 		"$container_config"
 
@@ -66,18 +50,9 @@ setup() {
 }
 
 teardown() {
-	# Restore containerd to pre-test state.
-	if [ -f "$SAVED_CONTAINERD_CONF_FILE" ]; then
-		systemctl stop containerd || true
-		sleep 5
-		mv -f "$SAVED_CONTAINERD_CONF_FILE" "/etc/containerd/config.toml"
-		systemctl start containerd || true
-	fi
+	teardown_common
 
 	# Restore the original guest image file.
 	new_guest_img "$saved_img" || true
 	rm -f "$saved_img"
-
-	switch_image_service_offload off
-	disable_full_debug
 }

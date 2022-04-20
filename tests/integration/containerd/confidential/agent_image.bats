@@ -4,8 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-load "${BATS_TEST_DIRNAME}/lib.sh"
-load "${BATS_TEST_DIRNAME}/asserts.sh"
+load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 # Currently the agent can only check images signature if using skopeo.
 # There isn't a way to probe the agent to determine if skopeo is present
@@ -23,55 +22,8 @@ skip_if_skopeo_not_present () {
 	fi
 }
 
-# Create the test pod.
-#
-# Note: the global $sandbox_name, $pod_config should be set
-# 	already. It also relies on $CI and $DEBUG exported by CI scripts or
-# 	the developer, to decide how to set debug flags.
-#
-create_test_pod() {
-	# On CI mode we only want to enable the agent debug for the case of
-	# the test failure to obtain logs.
-	if [ "${CI:-}" == "true" ]; then
-		enable_full_debug
-	elif [ "${DEBUG:-}" == "true" ]; then
-		enable_full_debug
-		enable_agent_console
-	fi
-
-	echo "Create the test sandbox"
-	crictl_create_cc_pod "$pod_config"
-}
-
 setup() {
-	start_date=$(date +"%Y-%m-%d %H:%M:%S")
-
-	sandbox_name="kata-cc-busybox-sandbox"
-	pod_config="${FIXTURES_DIR}/pod-config.yaml"
-	pod_id=""
-
-	echo "Delete any existing ${sandbox_name} pod"
-	crictl_delete_cc_pod_if_exists "$sandbox_name"
-
-	echo "Prepare containerd for Confidential Container"
-	SAVED_CONTAINERD_CONF_FILE="/etc/containerd/config.toml.$$"
-	configure_cc_containerd "$SAVED_CONTAINERD_CONF_FILE"
-
-	echo "Reconfigure Kata Containers"
-	switch_image_service_offload on
-	kernel_params=$(get_kernel_params)
-
-        local_dns=$(grep nameserver /etc/resolv.conf \
-            /run/systemd/resolve/resolv.conf  2>/dev/null \
-            |grep -v "127.0.0.53" | cut -d " " -f 2 | head -n 1)
-
-        if [ ! -z "$HTTPS_PROXY" ]; then
-	    add_kernel_params "agent.https_proxy=$HTTPS_PROXY"
-            sed -i -e 's/8.8.8.8/'${local_dns}'/' "${pod_config}"
-        elif [ ! -z "$https_proxy" ]; then
-	    add_kernel_params "agent.https_proxy=$https_proxy"
-            sed -i -e 's/8.8.8.8/'${local_dns}'/' "${pod_config}"
-        fi
+	setup_common
 }
 
 @test "[cc][agent][cri][containerd] Test can pull an unencrypted image inside the guest" {
@@ -145,29 +97,9 @@ setup() {
 }
 
 teardown() {
+	teardown_common
+
 	# Print the logs and cleanup resources.
 	echo "-- Kata logs:"
 	sudo journalctl -xe -t kata --since "$start_date"
-
-	# Allow to not destroy the environment if you are developing/debugging
-	# tests.
-	if [[ "${CI:-false}" == "false" && "${DEBUG:-}" == true ]]; then
-		echo "Leaving changes and created resources untoughted"
-		return
-	fi
-
-	crictl_delete_cc_pod_if_exists "$sandbox_name" || true
-
-	clear_kernel_params
-        add_kernel_params "$kernel_params"
-	switch_image_service_offload off
-	disable_full_debug
-
-	# Restore containerd to pre-test state.
-	if [ -f "$SAVED_CONTAINERD_CONF_FILE" ]; then
-		systemctl stop containerd || true
-		sleep 5
-		mv -f "$SAVED_CONTAINERD_CONF_FILE" "/etc/containerd/config.toml"
-		systemctl start containerd || true
-	fi
 }
