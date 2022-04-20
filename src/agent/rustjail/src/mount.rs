@@ -1286,6 +1286,113 @@ mod tests {
         let ret = stat::stat(path);
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
     }
+
+    #[test]
+    fn test_mount_from() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            source: &'a str,
+            destination: &'a str,
+            r#type: &'a str,
+            flags: MsFlags,
+            error_contains: &'a str,
+
+            // if true, a directory will be created at path in source
+            make_source_directory: bool,
+            // if true, a file will be created at path in source
+            make_source_file: bool,
+        }
+
+        impl Default for TestData<'_> {
+            fn default() -> Self {
+                TestData {
+                    source: "tmp",
+                    destination: "dest",
+                    r#type: "tmpfs",
+                    flags: MsFlags::empty(),
+                    error_contains: "",
+                    make_source_directory: true,
+                    make_source_file: false,
+                }
+            }
+        }
+
+        let tests = &[
+            TestData {
+                ..Default::default()
+            },
+            TestData {
+                flags: MsFlags::MS_BIND,
+                ..Default::default()
+            },
+            TestData {
+                r#type: "bind",
+                ..Default::default()
+            },
+            TestData {
+                r#type: "cgroup2",
+                ..Default::default()
+            },
+            TestData {
+                r#type: "bind",
+                make_source_directory: false,
+                error_contains: &format!("{}", std::io::Error::from_raw_os_error(libc::ENOENT)),
+                ..Default::default()
+            },
+            TestData {
+                r#type: "bind",
+                make_source_directory: false,
+                make_source_file: true,
+                ..Default::default()
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+            let tempdir = tempdir().unwrap();
+
+            let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap();
+            defer!({
+                unistd::close(rfd).unwrap();
+                unistd::close(wfd).unwrap();
+            });
+
+            let source_path = tempdir.path().join(d.source).to_str().unwrap().to_string();
+            if d.make_source_directory {
+                std::fs::create_dir_all(&source_path).unwrap();
+            } else if d.make_source_file {
+                std::fs::write(&source_path, []).unwrap();
+            }
+
+            let mount = Mount {
+                source: source_path,
+                destination: d.destination.to_string(),
+                r#type: d.r#type.to_string(),
+                options: vec![],
+            };
+
+            let result = mount_from(
+                wfd,
+                &mount,
+                tempdir.path().to_str().unwrap(),
+                d.flags,
+                "",
+                "",
+            );
+
+            let msg = format!("{}: result: {:?}", msg, result);
+
+            if d.error_contains.is_empty() {
+                assert!(result.is_ok(), "{}", msg);
+            } else {
+                assert!(result.is_err(), "{}", msg);
+
+                let error_msg = format!("{}", result.unwrap_err());
+                assert!(error_msg.contains(d.error_contains), "{}", msg);
+            }
+        }
+    }
+
     #[test]
     fn test_check_proc_mount() {
         let mount = oci::Mount {
