@@ -25,6 +25,11 @@ const cpBinaryName = "cp"
 
 const fileMode0755 = os.FileMode(0755)
 
+// The DefaultRateLimiterRefillTime is used for calculating the rate at
+// which a TokenBucket is replinished, in cases where a RateLimiter is
+// applied to either network or disk I/O.
+const DefaultRateLimiterRefillTimeMilliSecs = 1000
+
 // MibToBytesShift the number to shift needed to convert MiB to Bytes
 const MibToBytesShift = 20
 

@@ -930,7 +930,7 @@ func (fc *firecracker) fcAddNetDevice(ctx context.Context, endpoint Endpoint) {
 	// The implementation of rate limiter is based on TBF.
 	// Rate Limiter defines a token bucket with a maximum capacity (size) to store tokens, and an interval for refilling purposes (refill_time).
 	// The refill-rate is derived from size and refill_time, and it is the constant rate at which the tokens replenish.
-	refillTime := uint64(1000)
+	refillTime := uint64(utils.DefaultRateLimiterRefillTimeMilliSecs)
 	var rxRateLimiter models.RateLimiter
 	rxSize := fc.config.RxRateLimiterMaxRate
 	if rxSize > 0 {
