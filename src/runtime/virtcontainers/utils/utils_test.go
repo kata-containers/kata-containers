@@ -569,3 +569,14 @@ func TestGetAllParentPaths(t *testing.T) {
 		assert.Equal(tc.parents, getAllParentPaths(tc.targetPath))
 	}
 }
+
+func TestRevertBytes(t *testing.T) {
+	assert := assert.New(t)
+
+	//10MB
+	testNum := uint64(10000000)
+	expectedNum := uint64(10485760)
+
+	num := RevertBytes(testNum)
+	assert.Equal(expectedNum, num)
+}
