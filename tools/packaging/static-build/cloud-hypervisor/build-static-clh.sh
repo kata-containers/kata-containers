@@ -48,7 +48,8 @@ build_clh_from_source() {
     info "Build ${cloud_hypervisor_repo} version: ${cloud_hypervisor_version}"
     repo_dir=$(basename "${cloud_hypervisor_repo}")
     repo_dir="${repo_dir//.git}"
-    [ -d "${repo_dir}" ] || git clone "${cloud_hypervisor_repo}"
+    rm -rf "${repo_dir}"
+    git clone "${cloud_hypervisor_repo}"
     pushd "${repo_dir}"
     git fetch || true
     git checkout "${cloud_hypervisor_version}"
