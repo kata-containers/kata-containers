@@ -99,7 +99,18 @@ $ sudo systemctl restart kubelet
 $ sudo kubeadm init --ignore-preflight-errors=all --cri-socket /var/run/crio/crio.sock --pod-network-cidr=10.244.0.0/16
 
 # If using containerd
-$ sudo kubeadm init --ignore-preflight-errors=all --cri-socket /run/containerd/containerd.sock --pod-network-cidr=10.244.0.0/16
+$ cat <<EOF | tee kubeadm-config.yaml
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: InitConfiguration
+nodeRegistration:
+  criSocket: "/run/containerd/containerd.sock"
+---
+kind: KubeletConfiguration
+apiVersion: kubelet.config.k8s.io/v1beta1
+cgroupDriver: cgroupfs
+podCIDR: "10.244.0.0/16"
+EOF
+$ sudo kubeadm init --ignore-preflight-errors=all --config kubeadm-config.yaml
 
 $ export KUBECONFIG=/etc/kubernetes/admin.conf
 ```
