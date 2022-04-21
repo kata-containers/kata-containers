@@ -46,16 +46,22 @@ setup_common() {
 		enable_agent_console
 	fi
 
-	local local_dns=$(grep nameserver /etc/resolv.conf \
-		/run/systemd/resolve/resolv.conf  2>/dev/null \
-		|grep -v "127.0.0.53" | cut -d " " -f 2 | head -n 1)
-
-	if [ ! -z "$HTTPS_PROXY" ]; then
-		add_kernel_params "agent.https_proxy=$HTTPS_PROXY"
-		sed -i -e 's/8.8.8.8/'${local_dns}'/' "${pod_config}"
-	elif [ ! -z "$https_proxy" ]; then
+	# In case the tests run behind a firewall where images needed to be
+	# fetched through a proxy.
+	local https_proxy="${HTTPS_PROXY:-${https_proxy:-}}"
+	if [ -n "$https_proxy" ]; then
+		echo "Enable agent https proxy"
 		add_kernel_params "agent.https_proxy=$https_proxy"
+
+		local local_dns=$(grep nameserver /etc/resolv.conf \
+			/run/systemd/resolve/resolv.conf  2>/dev/null \
+			|grep -v "127.0.0.53" | cut -d " " -f 2 | head -n 1)
+		local new_file="${BATS_FILE_TMPDIR}/$(basename ${pod_config})"
+		echo "New pod configuration with local dns: $new_file"
+		cp -f "${pod_config}" "${new_file}"
+		pod_config="$new_file"
 		sed -i -e 's/8.8.8.8/'${local_dns}'/' "${pod_config}"
+		cat "$pod_config"
 	fi
 }
 
