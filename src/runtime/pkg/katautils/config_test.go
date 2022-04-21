@@ -810,6 +810,10 @@ func TestNewClhHypervisorConfig(t *testing.T) {
 	kernelPath := path.Join(tmpdir, "kernel")
 	imagePath := path.Join(tmpdir, "image")
 	virtioFsDaemon := path.Join(tmpdir, "virtiofsd")
+	netRateLimiterBwMaxRate := int64(1000)
+	netRateLimiterBwOneTimeBurst := int64(1000)
+	netRateLimiterOpsMaxRate := int64(0)
+	netRateLimiterOpsOneTimeBurst := int64(1000)
 
 	for _, file := range []string{imagePath, hypervisorPath, kernelPath, virtioFsDaemon} {
 		err := createEmptyFile(file)
@@ -817,11 +821,15 @@ func TestNewClhHypervisorConfig(t *testing.T) {
 	}
 
 	hypervisor := hypervisor{
-		Path:           hypervisorPath,
-		Kernel:         kernelPath,
-		Image:          imagePath,
-		VirtioFSDaemon: virtioFsDaemon,
-		VirtioFSCache:  "always",
+		Path:                          hypervisorPath,
+		Kernel:                        kernelPath,
+		Image:                         imagePath,
+		VirtioFSDaemon:                virtioFsDaemon,
+		VirtioFSCache:                 "always",
+		NetRateLimiterBwMaxRate:       netRateLimiterBwMaxRate,
+		NetRateLimiterBwOneTimeBurst:  netRateLimiterBwOneTimeBurst,
+		NetRateLimiterOpsMaxRate:      netRateLimiterOpsMaxRate,
+		NetRateLimiterOpsOneTimeBurst: netRateLimiterOpsOneTimeBurst,
 	}
 	config, err := newClhHypervisorConfig(hypervisor)
 	if err != nil {
@@ -852,6 +860,22 @@ func TestNewClhHypervisorConfig(t *testing.T) {
 		t.Errorf("Expected VirtioFSCache %v, got %v", true, config.VirtioFSCache)
 	}
 
+	if config.NetRateLimiterBwMaxRate != netRateLimiterBwMaxRate {
+		t.Errorf("Expected value for network bandwidth rate limiter %v, got %v", netRateLimiterBwMaxRate, config.NetRateLimiterBwMaxRate)
+	}
+
+	if config.NetRateLimiterBwOneTimeBurst != netRateLimiterBwOneTimeBurst {
+		t.Errorf("Expected value for network bandwidth one time burst %v, got %v", netRateLimiterBwOneTimeBurst, config.NetRateLimiterBwOneTimeBurst)
+	}
+
+	if config.NetRateLimiterOpsMaxRate != netRateLimiterOpsMaxRate {
+		t.Errorf("Expected value for network operations rate limiter %v, got %v", netRateLimiterOpsMaxRate, config.NetRateLimiterOpsMaxRate)
+	}
+
+	// We expect 0 (zero) here as netRateLimiterOpsMaxRate is not set (set to zero).
+	if config.NetRateLimiterOpsOneTimeBurst != 0 {
+		t.Errorf("Expected value for network operations one time burst %v, got %v", netRateLimiterOpsOneTimeBurst, config.NetRateLimiterOpsOneTimeBurst)
+	}
 }
 
 func TestHypervisorDefaults(t *testing.T) {
