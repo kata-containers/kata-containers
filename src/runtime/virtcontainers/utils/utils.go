@@ -458,3 +458,19 @@ func getAllParentPaths(path string) []string {
 	// remove the "/" or "." from the return result
 	return paths[1:]
 }
+
+// In Cloud Hypervisor, as well as in Firecracker, the crate used by the VMMs
+// accepts the size of rate limiter in scaling factors of 2^10(1024).
+// But in kata-defined rate limiter, for better Human-readability, we prefer
+// scaling factors of 10^3(1000).
+//
+// func revertBytes reverts num from scaling factors of 1000 to 1024, e.g.
+// 10000000(10MB) to 10485760.
+func RevertBytes(num uint64) uint64 {
+	a := num / 1000
+	b := num % 1000
+	if a == 0 {
+		return num
+	}
+	return 1024*RevertBytes(a) + b
+}
