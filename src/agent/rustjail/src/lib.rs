@@ -998,4 +998,94 @@ mod tests {
             assert_eq!(d.result, result, "{}", msg);
         }
     }
+
+    #[test]
+    fn test_hook_grpc_to_oci<'a>() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            grpchook: &'a [grpc::Hook],
+            result: Vec<oci::Hook>,
+        }
+
+        let tests = &[
+            TestData {
+                // Default fields
+                grpchook: &[
+                    grpc::Hook {
+                        Timeout: 0,
+                        ..Default::default()
+                    },
+                    grpc::Hook {
+                        Timeout: 0,
+                        ..Default::default()
+                    },
+                ],
+                result: vec![
+                    oci::Hook {
+                        timeout: Some(0),
+                        ..Default::default()
+                    },
+                    oci::Hook {
+                        timeout: Some(0),
+                        ..Default::default()
+                    },
+                ],
+            },
+            TestData {
+                // Specified fields
+                grpchook: &[
+                    grpc::Hook {
+                        Path: String::from("path"),
+                        Args: protobuf::RepeatedField::from(Vec::from([
+                            String::from("arg1"),
+                            String::from("arg2"),
+                        ])),
+                        Env: protobuf::RepeatedField::from(Vec::from([
+                            String::from("env1"),
+                            String::from("env2"),
+                        ])),
+                        Timeout: 10,
+                        ..Default::default()
+                    },
+                    grpc::Hook {
+                        Path: String::from("path2"),
+                        Args: protobuf::RepeatedField::from(Vec::from([
+                            String::from("arg3"),
+                            String::from("arg4"),
+                        ])),
+                        Env: protobuf::RepeatedField::from(Vec::from([
+                            String::from("env3"),
+                            String::from("env4"),
+                        ])),
+                        Timeout: 20,
+                        ..Default::default()
+                    },
+                ],
+                result: vec![
+                    oci::Hook {
+                        path: String::from("path"),
+                        args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        env: Vec::from([String::from("env1"), String::from("env2")]),
+                        timeout: Some(10),
+                    },
+                    oci::Hook {
+                        path: String::from("path2"),
+                        args: Vec::from([String::from("arg3"), String::from("arg4")]),
+                        env: Vec::from([String::from("env3"), String::from("env4")]),
+                        timeout: Some(20),
+                    },
+                ],
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = hook_grpc_to_oci(d.grpchook);
+
+            let msg = format!("{}, result: {:?}", msg, result);
+
+            assert_eq!(d.result, result, "{}", msg);
+        }
+    }
 }
