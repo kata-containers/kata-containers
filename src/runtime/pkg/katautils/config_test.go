@@ -1654,3 +1654,69 @@ func TestValidateBindMounts(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadDropInConfiguration(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	// Test Runtime and Hypervisor to represent structures stored directly and
+	// in maps, respectively.  For each of them, test
+	// - a key that's only set in the base config file
+	// - a key that's only set in a drop-in
+	// - a key that's set in the base config file and then changed by a drop-in
+	// - a key that's set in a drop-in and then overridden by another drop-in
+	// Avoid default values to reduce the risk of mistaking a result of
+	// something having gone wrong with the expected value.
+
+	runtimeConfigFileData := `
+[hypervisor.qemu]
+path = "/usr/bin/qemu-kvm"
+default_bridges = 3
+[runtime]
+enable_debug = true
+internetworking_model="tcfilter"
+`
+	dropInData := `
+[hypervisor.qemu]
+default_vcpus = 2
+default_bridges = 4
+shared_fs = "virtio-fs"
+[runtime]
+sandbox_cgroup_only=true
+internetworking_model="macvtap"
+vfio_mode="guest-kernel"
+`
+	dropInOverrideData := `
+[hypervisor.qemu]
+shared_fs = "virtio-9p"
+[runtime]
+vfio_mode="vfio"
+`
+
+	configPath := path.Join(tmpdir, "runtime.toml")
+	err := createConfig(configPath, runtimeConfigFileData)
+	assert.NoError(t, err)
+
+	dropInDir := path.Join(tmpdir, "config.d")
+	err = os.Mkdir(dropInDir, os.FileMode(0777))
+	assert.NoError(t, err)
+
+	dropInPath := path.Join(dropInDir, "10-base")
+	err = createConfig(dropInPath, dropInData)
+	assert.NoError(t, err)
+
+	dropInOverridePath := path.Join(dropInDir, "10-override")
+	err = createConfig(dropInOverridePath, dropInOverrideData)
+	assert.NoError(t, err)
+
+	config, _, err := decodeConfig(configPath)
+	assert.NoError(t, err)
+
+	assert.Equal(t, config.Hypervisor["qemu"].Path, "/usr/bin/qemu-kvm")
+	assert.Equal(t, config.Hypervisor["qemu"].NumVCPUs, int32(2))
+	assert.Equal(t, config.Hypervisor["qemu"].DefaultBridges, uint32(4))
+	assert.Equal(t, config.Hypervisor["qemu"].SharedFS, "virtio-9p")
+	assert.Equal(t, config.Runtime.Debug, true)
+	assert.Equal(t, config.Runtime.SandboxCgroupOnly, true)
+	assert.Equal(t, config.Runtime.InterNetworkModel, "macvtap")
+	assert.Equal(t, config.Runtime.VfioMode, "vfio")
+}
