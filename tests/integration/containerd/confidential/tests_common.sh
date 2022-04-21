@@ -5,6 +5,7 @@
 
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/asserts.sh"
+load "${BATS_TEST_DIRNAME}/../../confidential/lib.sh"
 
 # Common setup for tests.
 #
