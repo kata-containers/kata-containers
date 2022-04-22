@@ -23,8 +23,9 @@ use cgroups::freezer::FreezerState;
 use oci::{LinuxNamespace, Root, Spec};
 use protobuf::{Message, RepeatedField, SingularPtrField};
 use protocols::agent::{
-    AddSwapRequest, AgentDetails, CopyFileRequest, GuestDetailsResponse, Interfaces, Metrics,
-    OOMEvent, ReadStreamResponse, Routes, StatsContainerResponse, VolumeStatsRequest,
+    AddSwapRequest, AgentDetails, CopyFileRequest, GetIPTablesRequest, GetIPTablesResponse,
+    GuestDetailsResponse, Interfaces, Metrics, OOMEvent, ReadStreamResponse, Routes,
+    SetIPTablesRequest, SetIPTablesResponse, StatsContainerResponse, VolumeStatsRequest,
     WaitProcessResponse, WriteStreamResponse,
 };
 use protocols::csi::{VolumeCondition, VolumeStatsResponse, VolumeUsage, VolumeUsage_Unit};
@@ -75,7 +76,7 @@ use std::time::Duration;
 
 use nix::unistd::{Gid, Uid};
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
 
@@ -86,6 +87,12 @@ const ERR_CANNOT_GET_WRITER: &str = "Cannot get writer";
 const ERR_INVALID_BLOCK_SIZE: &str = "Invalid block size";
 const ERR_NO_LINUX_FIELD: &str = "Spec does not contain linux field";
 const ERR_NO_SANDBOX_PIDNS: &str = "Sandbox does not have sandbox_pidns";
+
+// IPTABLES_RESTORE_WAIT_SEC is the timeout value provided to iptables-restore --wait. Since we
+// don't expect other writers to iptables, we don't expect contention for grabbing the iptables
+// filesystem lock. Based on this, 5 seconds seems a resonable timeout period in case the lock is
+// not available.
+const IPTABLES_RESTORE_WAIT_SEC: u64 = 5;
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -994,6 +1001,140 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
         })
     }
 
+    async fn get_ip_tables(
+        &self,
+        ctx: &TtrpcContext,
+        req: GetIPTablesRequest,
+    ) -> ttrpc::Result<GetIPTablesResponse> {
+        trace_rpc_call!(ctx, "get_iptables", req);
+        is_allowed!(req);
+
+        info!(sl!(), "get_ip_tables: request received");
+
+        let cmd = if req.is_ipv6 {
+            "/sbin/ip6tables-save"
+        } else {
+            "/sbin/iptables-save"
+        }
+        .to_string();
+
+        match Command::new(cmd.clone()).output() {
+            Ok(output) => Ok(GetIPTablesResponse {
+                data: output.stdout,
+                ..Default::default()
+            }),
+            Err(e) => {
+                warn!(sl!(), "failed to run {}: {:?}", cmd, e.kind());
+                return Err(ttrpc_error!(ttrpc::Code::INTERNAL, e));
+            }
+        }
+    }
+
+    async fn set_ip_tables(
+        &self,
+        ctx: &TtrpcContext,
+        req: SetIPTablesRequest,
+    ) -> ttrpc::Result<SetIPTablesResponse> {
+        trace_rpc_call!(ctx, "set_iptables", req);
+        is_allowed!(req);
+
+        info!(sl!(), "set_ip_tables request received");
+
+        let cmd = if req.is_ipv6 {
+            "/sbin/ip6tables-restore"
+        } else {
+            "/sbin/iptables-restore"
+        }
+        .to_string();
+
+        let mut child = match Command::new(cmd.clone())
+            .arg("--wait")
+            .arg(IPTABLES_RESTORE_WAIT_SEC.to_string())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(e) => {
+                warn!(sl!(), "failure to spawn {}: {:?}", cmd, e.kind());
+                return Err(ttrpc_error!(ttrpc::Code::INTERNAL, e));
+            }
+        };
+
+        let mut stdin = match child.stdin.take() {
+            Some(si) => si,
+            None => {
+                println!("failed to get stdin from child");
+                return Err(ttrpc_error!(
+                    ttrpc::Code::INTERNAL,
+                    "failed to take stdin from child".to_string()
+                ));
+            }
+        };
+
+        let (tx, rx) = tokio::sync::oneshot::channel::<i32>();
+        let handle = tokio::spawn(async move {
+            let _ = match stdin.write_all(&req.data) {
+                Ok(o) => o,
+                Err(e) => {
+                    warn!(sl!(), "error writing stdin: {:?}", e.kind());
+                    return;
+                }
+            };
+            if tx.send(1).is_err() {
+                warn!(sl!(), "stdin writer thread receiver dropped");
+            };
+        });
+
+        if tokio::time::timeout(Duration::from_secs(IPTABLES_RESTORE_WAIT_SEC), rx)
+            .await
+            .is_err()
+        {
+            return Err(ttrpc_error!(
+                ttrpc::Code::INTERNAL,
+                "timeout waiting for stdin writer to complete".to_string()
+            ));
+        }
+
+        if handle.await.is_err() {
+            return Err(ttrpc_error!(
+                ttrpc::Code::INTERNAL,
+                "stdin writer thread failure".to_string()
+            ));
+        }
+
+        let output = match child.wait_with_output() {
+            Ok(o) => o,
+            Err(e) => {
+                warn!(
+                    sl!(),
+                    "failure waiting for spawned {} to complete: {:?}",
+                    cmd,
+                    e.kind()
+                );
+                return Err(ttrpc_error!(ttrpc::Code::INTERNAL, e));
+            }
+        };
+
+        if !output.status.success() {
+            warn!(sl!(), "{} failed: {:?}", cmd, output.stderr);
+            return Err(ttrpc_error!(
+                ttrpc::Code::INTERNAL,
+                format!(
+                    "{} failed: {:?}",
+                    cmd,
+                    String::from_utf8_lossy(&output.stderr)
+                )
+            ));
+        }
+
+        Ok(SetIPTablesResponse {
+            data: output.stdout,
+            ..Default::default()
+        })
+    }
+
     async fn list_interfaces(
         &self,
         ctx: &TtrpcContext,
@@ -1879,6 +2020,7 @@ mod tests {
         skip_if_not_root,
     };
     use nix::mount;
+    use nix::sched::{unshare, CloneFlags};
     use oci::{Hook, Hooks, Linux, LinuxNamespace};
     use tempfile::{tempdir, TempDir};
     use ttrpc::{r#async::TtrpcContext, MessageHeader};
@@ -2814,5 +2956,163 @@ OtherField:other
 
         assert_eq!(stats.used, 3);
         assert_eq!(stats.available, available - 2);
+    }
+
+    #[tokio::test]
+    async fn test_ip_tables() {
+        skip_if_not_root!();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Sandbox::new(&logger).unwrap();
+        let agent_service = Box::new(AgentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+        });
+
+        let ctx = mk_ttrpc_context();
+
+        // Move to a new netns in order to ensure we don't trash the hosts' iptables
+        unshare(CloneFlags::CLONE_NEWNET).unwrap();
+
+        // Get initial iptables, we expect to be empty:
+        let result = agent_service
+            .get_ip_tables(
+                &ctx,
+                GetIPTablesRequest {
+                    is_ipv6: false,
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(result.is_ok(), "get ip tables should succeed");
+        assert_eq!(
+            result.unwrap().data.len(),
+            0,
+            "ip tables should be empty initially"
+        );
+
+        // Initial ip6 ip tables should also be empty:
+        let result = agent_service
+            .get_ip_tables(
+                &ctx,
+                GetIPTablesRequest {
+                    is_ipv6: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(result.is_ok(), "get ip6 tables should succeed");
+        assert_eq!(
+            result.unwrap().data.len(),
+            0,
+            "ip tables should be empty initially"
+        );
+
+        // Verify that attempting to write 'empty' iptables results in no error:
+        let empty_rules = "";
+        let result = agent_service
+            .set_ip_tables(
+                &ctx,
+                SetIPTablesRequest {
+                    is_ipv6: false,
+                    data: empty_rules.as_bytes().to_vec(),
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(result.is_ok(), "set ip tables with no data should succeed");
+
+        // Verify that attempting to write "garbage" iptables results in an error:
+        let garbage_rules = r#"
+this
+is
+just garbage
+"#;
+        let result = agent_service
+            .set_ip_tables(
+                &ctx,
+                SetIPTablesRequest {
+                    is_ipv6: false,
+                    data: garbage_rules.as_bytes().to_vec(),
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(result.is_err(), "set iptables with garbage should fail");
+
+        // Verify setup of valid iptables:Setup  valid set of iptables:
+        let valid_rules = r#"
+*nat
+-A PREROUTING -d 192.168.103.153/32 -j DNAT --to-destination 192.168.188.153
+
+COMMIT
+
+"#;
+        let result = agent_service
+            .set_ip_tables(
+                &ctx,
+                SetIPTablesRequest {
+                    is_ipv6: false,
+                    data: valid_rules.as_bytes().to_vec(),
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(result.is_ok(), "set ip tables should succeed");
+
+        let result = agent_service
+            .get_ip_tables(
+                &ctx,
+                GetIPTablesRequest {
+                    is_ipv6: false,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert!(!result.data.is_empty(), "we should have non-zero output:");
+        assert!(
+            std::str::from_utf8(&*result.data).unwrap().contains(
+                "PREROUTING -d 192.168.103.153/32 -j DNAT --to-destination 192.168.188.153"
+            ),
+            "We should see the resulting rule"
+        );
+
+        // Verify setup of valid ip6tables:
+        let valid_ipv6_rules = r#"
+*filter
+-A INPUT -s 2001:db8:100::1/128 -i sit+ -p tcp -m tcp --sport 512:65535
+
+COMMIT
+
+"#;
+        let result = agent_service
+            .set_ip_tables(
+                &ctx,
+                SetIPTablesRequest {
+                    is_ipv6: true,
+                    data: valid_ipv6_rules.as_bytes().to_vec(),
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(result.is_ok(), "set ip6 tables should succeed");
+
+        let result = agent_service
+            .get_ip_tables(
+                &ctx,
+                GetIPTablesRequest {
+                    is_ipv6: true,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert!(!result.data.is_empty(), "we should have non-zero output:");
+        assert!(
+            std::str::from_utf8(&*result.data)
+                .unwrap()
+                .contains("INPUT -s 2001:db8:100::1/128 -i sit+ -p tcp -m tcp --sport 512:65535"),
+            "We should see the resulting rule"
+        );
     }
 }
