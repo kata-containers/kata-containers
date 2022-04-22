@@ -13,10 +13,24 @@ setup() {
 	# Test will change the guest image so let's save it to restore
 	# on teardown.
 	saved_img="$(save_guest_img)"
+
+	agent_config_file="${FIXTURES_DIR}/agent-configuration-no-exec.toml"
+
+	# In case the tests run behind a firewall where images needed to be fetched
+	# through a proxy.
+	local https_proxy="${HTTPS_PROXY:-${https_proxy:-}}"
+	if [ -n "$https_proxy" ]; then
+		local new_file="${BATS_FILE_TMPDIR}/$(basename ${agent_config_file})"
+		echo "https_proxy = '${https_proxy}'" > "$new_file"
+		cat $agent_config_file >> "$new_file"
+		agent_config_file="$new_file"
+		# Print the file content just for the sake of debugging.
+		echo "New agent configure file with HTTPS proxy: $agent_config_file"
+		cat $agent_config_file
+	fi
 }
 
 @test "[cc][agent][cri][containerd] Test agent API endpoint can be restricted" {
-	local agent_config_filename="agent-configuration-no-exec.toml"
 	local container_config="${FIXTURES_DIR}/container-config.yaml"
 	local pod_id=""
 	local container_id=""
@@ -32,10 +46,9 @@ setup() {
 	#
 	crictl_delete_cc_pod_if_exists "$sandbox_name"
 	# Copy an configuration file to the guest image and pass to the agent.
-	cp_to_guest_img "/tests/fixtures" \
-		"${FIXTURES_DIR}/${agent_config_filename}"
+	cp_to_guest_img "/tests/fixtures" "${agent_config_file}"
 	add_kernel_params \
-		"agent.config_file=/tests/fixtures/${agent_config_filename}"
+		"agent.config_file=/tests/fixtures/$(basename ${agent_config_file})"
 
 	create_test_pod
 	crictl_create_cc_container "$sandbox_name" "$pod_config" \
