@@ -400,7 +400,7 @@ fn memory_oci_to_ttrpc(
             Swap: mem.swap.unwrap_or(0),
             Kernel: mem.kernel.unwrap_or(0),
             KernelTCP: mem.kernel_tcp.unwrap_or(0),
-            Swappiness: mem.swappiness.unwrap_or(0) as u64,
+            Swappiness: mem.swappiness.unwrap_or(0),
             DisableOOMKiller: mem.disable_oom_killer.unwrap_or(false),
             unknown_fields: protobuf::UnknownFields::new(),
             cached_size: protobuf::CachedSize::default(),
