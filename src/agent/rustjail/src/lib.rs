@@ -265,7 +265,7 @@ pub fn resources_grpc_to_oci(res: &grpc::LinuxResources) -> oci::LinuxResources 
             swap: Some(mem.Swap),
             kernel: Some(mem.Kernel),
             kernel_tcp: Some(mem.KernelTCP),
-            swappiness: Some(mem.Swappiness as i64),
+            swappiness: Some(mem.Swappiness),
             disable_oom_killer: Some(mem.DisableOOMKiller),
         })
     } else {
