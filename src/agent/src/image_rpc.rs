@@ -65,6 +65,7 @@ impl ImageService {
     ) -> Result<()> {
         let source_image = format!("{}{}", "docker://", image);
 
+
         let tmp_cid_path = Path::new("/tmp/").join(cid);
         let oci_path = tmp_cid_path.join(IMAGE_OCI);
         let target_path_oci = format!("oci://{}:latest", oci_path.to_string_lossy());
