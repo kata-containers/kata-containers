@@ -248,6 +248,15 @@ externals:
     url: "https://github.com/containerd/nydus-snapshotter"
     version: "v0.2.3"
 
+  ovmf:
+    description: "Firmware, implementation of UEFI for virtual machines."
+    url: "https://github.com/tianocore/edk2"
+    x86_64:
+      description: "Vanilla firmware build"
+      version: "edk2-stable202202"
+      package: "OvmfPkg/OvmfPkgX64.dsc"
+      package_output_dir: "OvmfX64"
+      
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
     url: "https://gitlab.com/virtio-fs/virtiofsd"
