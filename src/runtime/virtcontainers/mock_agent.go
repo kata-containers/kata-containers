@@ -250,3 +250,11 @@ func (n *mockAgent) getGuestVolumeStats(ctx context.Context, volumeGuestPath str
 func (n *mockAgent) resizeGuestVolume(ctx context.Context, volumeGuestPath string, size uint64) error {
 	return nil
 }
+
+func (k *mockAgent) getIPTables(ctx context.Context, isIPv6 bool) ([]byte, error) {
+	return nil, nil
+}
+
+func (k *mockAgent) setIPTables(ctx context.Context, isIPv6 bool, data []byte) error {
+	return nil
+}

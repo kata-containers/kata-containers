@@ -142,6 +142,8 @@ const (
 	grpcAddSwapRequest           = "grpc.AddSwapRequest"
 	grpcVolumeStatsRequest       = "grpc.VolumeStatsRequest"
 	grpcResizeVolumeRequest      = "grpc.ResizeVolumeRequest"
+	grpcGetIPTablesRequest       = "grpc.GetIPTablesRequest"
+	grpcSetIPTablesRequest       = "grpc.SetIPTablesRequest"
 )
 
 // newKataAgent returns an agent from an agent type.
@@ -1977,6 +1979,12 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers[grpcResizeVolumeRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.ResizeVolume(ctx, req.(*grpc.ResizeVolumeRequest))
 	}
+	k.reqHandlers[grpcGetIPTablesRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.GetIPTables(ctx, req.(*grpc.GetIPTablesRequest))
+	}
+	k.reqHandlers[grpcSetIPTablesRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.SetIPTables(ctx, req.(*grpc.SetIPTablesRequest))
+	}
 }
 
 func (k *kataAgent) getReqContext(ctx context.Context, reqName string) (newCtx context.Context, cancel context.CancelFunc) {
@@ -2193,6 +2201,26 @@ func (k *kataAgent) getAgentMetrics(ctx context.Context, req *grpc.GetMetricsReq
 	}
 
 	return resp.(*grpc.Metrics), nil
+}
+
+func (k *kataAgent) getIPTables(ctx context.Context, isIPv6 bool) ([]byte, error) {
+	resp, err := k.sendReq(ctx, &grpc.GetIPTablesRequest{IsIpv6: isIPv6})
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*grpc.GetIPTablesResponse).Data, nil
+}
+
+func (k *kataAgent) setIPTables(ctx context.Context, isIPv6 bool, data []byte) error {
+	_, err := k.sendReq(ctx, &grpc.SetIPTablesRequest{
+		IsIpv6: isIPv6,
+		Data:   data,
+	})
+	if err != nil {
+		k.Logger().WithError(err).Errorf("setIPTables request to agent failed")
+	}
+
+	return err
 }
 
 func (k *kataAgent) getGuestVolumeStats(ctx context.Context, volumeGuestPath string) ([]byte, error) {

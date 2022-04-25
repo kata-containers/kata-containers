@@ -191,9 +191,15 @@ type agent interface {
 	// getAgentMetrics get metrics of agent and guest through agent
 	getAgentMetrics(context.Context, *grpc.GetMetricsRequest) (*grpc.Metrics, error)
 
-	//getGuestVolumeStats get the filesystem stats of a volume specified by the volume mount path on the guest.
+	// getGuestVolumeStats get the filesystem stats of a volume specified by the volume mount path on the guest.
 	getGuestVolumeStats(ctx context.Context, volumeGuestPath string) ([]byte, error)
 
 	// resizeGuestVolume resizes a volume specified by the volume mount path on the guest.
 	resizeGuestVolume(ctx context.Context, volumeGuestPath string, size uint64) error
+
+	// getIPTables obtains the iptables from the guest
+	getIPTables(ctx context.Context, isIPv6 bool) ([]byte, error)
+
+	// setIPTables sets the iptables from the guest
+	setIPTables(ctx context.Context, isIPv6 bool, data []byte) error
 }
