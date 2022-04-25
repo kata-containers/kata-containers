@@ -814,6 +814,10 @@ func TestNewClhHypervisorConfig(t *testing.T) {
 	netRateLimiterBwOneTimeBurst := int64(1000)
 	netRateLimiterOpsMaxRate := int64(0)
 	netRateLimiterOpsOneTimeBurst := int64(1000)
+	diskRateLimiterBwMaxRate := int64(1000)
+	diskRateLimiterBwOneTimeBurst := int64(1000)
+	diskRateLimiterOpsMaxRate := int64(0)
+	diskRateLimiterOpsOneTimeBurst := int64(1000)
 
 	for _, file := range []string{imagePath, hypervisorPath, kernelPath, virtioFsDaemon} {
 		err := createEmptyFile(file)
@@ -821,15 +825,19 @@ func TestNewClhHypervisorConfig(t *testing.T) {
 	}
 
 	hypervisor := hypervisor{
-		Path:                          hypervisorPath,
-		Kernel:                        kernelPath,
-		Image:                         imagePath,
-		VirtioFSDaemon:                virtioFsDaemon,
-		VirtioFSCache:                 "always",
-		NetRateLimiterBwMaxRate:       netRateLimiterBwMaxRate,
-		NetRateLimiterBwOneTimeBurst:  netRateLimiterBwOneTimeBurst,
-		NetRateLimiterOpsMaxRate:      netRateLimiterOpsMaxRate,
-		NetRateLimiterOpsOneTimeBurst: netRateLimiterOpsOneTimeBurst,
+		Path:                           hypervisorPath,
+		Kernel:                         kernelPath,
+		Image:                          imagePath,
+		VirtioFSDaemon:                 virtioFsDaemon,
+		VirtioFSCache:                  "always",
+		NetRateLimiterBwMaxRate:        netRateLimiterBwMaxRate,
+		NetRateLimiterBwOneTimeBurst:   netRateLimiterBwOneTimeBurst,
+		NetRateLimiterOpsMaxRate:       netRateLimiterOpsMaxRate,
+		NetRateLimiterOpsOneTimeBurst:  netRateLimiterOpsOneTimeBurst,
+		DiskRateLimiterBwMaxRate:       diskRateLimiterBwMaxRate,
+		DiskRateLimiterBwOneTimeBurst:  diskRateLimiterBwOneTimeBurst,
+		DiskRateLimiterOpsMaxRate:      diskRateLimiterOpsMaxRate,
+		DiskRateLimiterOpsOneTimeBurst: diskRateLimiterOpsOneTimeBurst,
 	}
 	config, err := newClhHypervisorConfig(hypervisor)
 	if err != nil {
@@ -875,6 +883,23 @@ func TestNewClhHypervisorConfig(t *testing.T) {
 	// We expect 0 (zero) here as netRateLimiterOpsMaxRate is not set (set to zero).
 	if config.NetRateLimiterOpsOneTimeBurst != 0 {
 		t.Errorf("Expected value for network operations one time burst %v, got %v", netRateLimiterOpsOneTimeBurst, config.NetRateLimiterOpsOneTimeBurst)
+	}
+
+	if config.DiskRateLimiterBwMaxRate != diskRateLimiterBwMaxRate {
+		t.Errorf("Expected value for disk bandwidth rate limiter %v, got %v", diskRateLimiterBwMaxRate, config.DiskRateLimiterBwMaxRate)
+	}
+
+	if config.DiskRateLimiterBwOneTimeBurst != diskRateLimiterBwOneTimeBurst {
+		t.Errorf("Expected value for disk bandwidth one time burst %v, got %v", diskRateLimiterBwOneTimeBurst, config.DiskRateLimiterBwOneTimeBurst)
+	}
+
+	if config.DiskRateLimiterOpsMaxRate != diskRateLimiterOpsMaxRate {
+		t.Errorf("Expected value for disk operations rate limiter %v, got %v", diskRateLimiterOpsMaxRate, config.DiskRateLimiterOpsMaxRate)
+	}
+
+	// We expect 0 (zero) here as diskRateLimiterOpsMaxRate is not set (set to zero).
+	if config.DiskRateLimiterOpsOneTimeBurst != 0 {
+		t.Errorf("Expected value for disk operations one time burst %v, got %v", diskRateLimiterOpsOneTimeBurst, config.DiskRateLimiterOpsOneTimeBurst)
 	}
 }
 
