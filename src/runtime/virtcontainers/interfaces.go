@@ -79,6 +79,9 @@ type VCSandbox interface {
 
 	GuestVolumeStats(ctx context.Context, volumePath string) ([]byte, error)
 	ResizeGuestVolume(ctx context.Context, volumePath string, size uint64) error
+
+	GetIPTables(ctx context.Context, isIPv6 bool) ([]byte, error)
+	SetIPTables(ctx context.Context, isIPv6 bool, data []byte) error
 }
 
 // VCContainer is the Container interface
