@@ -73,6 +73,7 @@ const defaultEnableIOMMU bool = false
 const defaultEnableIOMMUPlatform bool = false
 const defaultFileBackedMemRootDir string = ""
 const defaultEnableDebug bool = false
+const defaultLogLevel string = "warn"
 const defaultDisableNestingChecks bool = false
 const defaultMsize9p uint32 = 8192
 const defaultHotplugVFIOOnRootBus bool = false

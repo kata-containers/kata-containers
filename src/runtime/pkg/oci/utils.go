@@ -126,6 +126,8 @@ type RuntimeConfig struct {
 	Debug bool
 	Trace bool
 
+	LogLevel logrus.Level
+
 	//Determines if seccomp should be applied inside guest
 	DisableGuestSeccomp bool
 

@@ -277,6 +277,12 @@ kernel_modules=[]
 # (default: disabled)
 #enable_debug = true
 #
+# Specifies the runtime debug log level
+# loglevel is valid when enable_debug config is true
+# loglevel optional values: panic, fatal, error, warn/warning, info, debug, trace
+# (default: "warn")
+#loglevel = "warn"
+#
 # Internetworking model
 # Determines how the VM should be connected to the
 # the container network interface

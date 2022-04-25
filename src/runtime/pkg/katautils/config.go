@@ -149,6 +149,7 @@ type runtime struct {
 	SandboxBindMounts         []string `toml:"sandbox_bind_mounts"`
 	Experimental              []string `toml:"experimental"`
 	Debug                     bool     `toml:"enable_debug"`
+	LogLevel                  string   `toml:"loglevel"`
 	Tracing                   bool     `toml:"enable_tracing"`
 	DisableNewNetNs           bool     `toml:"disable_new_netns"`
 	DisableGuestSeccomp       bool     `toml:"disable_guest_seccomp"`
@@ -1104,7 +1105,14 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	}
 
 	config.Debug = tomlConf.Runtime.Debug
-	if !tomlConf.Runtime.Debug {
+	config.LogLevel, err = logrus.ParseLevel(tomlConf.Runtime.LogLevel)
+	if err != nil {
+		return "", oci.RuntimeConfig{}, err
+	}
+
+	if tomlConf.Runtime.Debug {
+		kataUtilsLogger.Logger.Level = config.LogLevel
+	} else {
 		// If debug is not required, switch back to the original
 		// default log priority, otherwise continue in debug mode.
 		kataUtilsLogger.Logger.Level = originalLoggerLevel
