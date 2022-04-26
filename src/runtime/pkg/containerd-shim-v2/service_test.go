@@ -41,8 +41,7 @@ func TestServiceCreate(t *testing.T) {
 
 	assert := assert.New(t)
 
-	tmpdir, bundleDir, _ := ktu.SetupOCIConfigFile(t)
-	defer os.RemoveAll(tmpdir)
+	_, bundleDir, _ := ktu.SetupOCIConfigFile(t)
 
 	ctx := context.Background()
 

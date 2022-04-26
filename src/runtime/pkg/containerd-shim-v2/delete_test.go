@@ -7,7 +7,6 @@
 package containerdshim
 
 import (
-	"os"
 	"testing"
 
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
@@ -25,8 +24,8 @@ func TestDeleteContainerSuccessAndFail(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	rootPath, bundlePath, _ := ktu.SetupOCIConfigFile(t)
-	defer os.RemoveAll(rootPath)
+	_, bundlePath, _ := ktu.SetupOCIConfigFile(t)
+
 	_, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
