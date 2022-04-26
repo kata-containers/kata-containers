@@ -262,6 +262,7 @@ pub fn bind_mount_unchecked<S: AsRef<Path>, D: AsRef<Path>>(
         .canonicalize()
         .map_err(|_e| Error::InvalidPath(src.to_path_buf()))?;
 
+    create_mount_destination(src, dst, "/", "bind")?;
     // Bind mount `src` to `dst`.
     mount(
         Some(&abs_src),

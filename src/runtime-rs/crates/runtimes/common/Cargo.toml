@@ -21,6 +21,7 @@ thiserror = "^1.0"
 tokio = { version = "1.8.0", features = ["rt-multi-thread", "process", "fs"] }
 ttrpc = { version = "0.6.0" }
 
+agent = { path = "../../agent" }
 kata-sys-util = { path = "../../../../libs/kata-sys-util" }
 kata-types = { path = "../../../../libs/kata-types" }
 oci = { path = "../../../../libs/oci" }

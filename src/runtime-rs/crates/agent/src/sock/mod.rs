@@ -79,6 +79,7 @@ impl AsyncRead for Stream {
 }
 
 /// Connect config
+#[derive(Debug)]
 pub struct ConnectConfig {
     dial_timeout_ms: u64,
     reconnect_timeout_ms: u64,

@@ -82,6 +82,12 @@ impl KataAgent {
         })
     }
 
+    pub(crate) async fn set_socket_address(&self, address: &str) -> Result<()> {
+        let mut inner = self.inner.lock().await;
+        inner.socket_address = address.to_string();
+        Ok(())
+    }
+
     pub(crate) async fn connect_agent_server(&self) -> Result<()> {
         let mut inner = self.inner.lock().await;
 

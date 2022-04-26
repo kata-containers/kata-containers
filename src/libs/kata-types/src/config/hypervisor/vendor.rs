@@ -8,7 +8,7 @@
 use super::*;
 
 /// Vendor customization runtime configuration.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct HypervisorVendor {}
 
 impl ConfigOps for HypervisorVendor {}
