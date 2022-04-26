@@ -27,6 +27,22 @@ $ kubectl apply -f kata-rbac/base/kata-rbac.yaml
 $ kubectl apply -k kata-deploy/overlays/k3s
 ```
 
+#### RKE2 cluster
+
+For your [RKE2](https://docs.rke2.io/) cluster, run:
+
+```sh
+$ git clone github.com/kata-containers/kata-containers
+```
+
+Check and switch to the stable branch of your choice, if wanted, and then run:
+
+```bash
+$ cd kata-containers/kata-containers/tools/packaging/kata-deploy
+$ kubectl apply -f kata-rbac/base/kata-rbac.yaml
+$ kubectl apply -k kata-deploy/overlays/rke2
+```
+
 #### Vanilla Kubernetes cluster
 
 ##### Installing the latest image
