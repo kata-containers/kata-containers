@@ -6,6 +6,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/../../confidential/lib.sh"
 
 setup() {
 	setup_common
