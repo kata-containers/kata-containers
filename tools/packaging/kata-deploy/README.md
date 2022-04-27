@@ -45,7 +45,7 @@ $ kubectl apply -k kata-deploy/overlays/k3s
 
 #### Ensure kata-deploy is ready
 ```bash
-kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
+$ kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
 ```
 
 ### Run a sample workload
