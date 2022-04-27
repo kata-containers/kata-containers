@@ -271,7 +271,7 @@ pub fn resources_grpc_to_oci(res: &grpc::LinuxResources) -> oci::LinuxResources 
             swap: Some(mem.Swap),
             kernel: Some(mem.Kernel),
             kernel_tcp: Some(mem.KernelTCP),
-            swappiness: Some(mem.Swappiness as i64),
+            swappiness: Some(mem.Swappiness),
             disable_oom_killer: Some(mem.DisableOOMKiller),
         })
     } else {
@@ -737,6 +737,267 @@ mod tests {
             let msg = format!("test[{}]: {:?}", i, d);
 
             let result = root_grpc_to_oci(&d.grpcroot);
+
+            let msg = format!("{}, result: {:?}", msg, result);
+
+            assert_eq!(d.result, result, "{}", msg);
+        }
+    }
+
+    #[test]
+    fn test_hooks_grpc_to_oci() {
+        #[derive(Debug)]
+        struct TestData {
+            grpchooks: grpc::Hooks,
+            result: oci::Hooks,
+        }
+
+        let tests = &[
+            TestData {
+                // Default fields
+                grpchooks: grpc::Hooks {
+                    ..Default::default()
+                },
+                result: oci::Hooks {
+                    ..Default::default()
+                },
+            },
+            TestData {
+                // All specified
+                grpchooks: grpc::Hooks {
+                    Prestart: protobuf::RepeatedField::from(Vec::from([
+                        grpc::Hook {
+                            Path: String::from("prestartpath"),
+                            Args: protobuf::RepeatedField::from(Vec::from([
+                                String::from("arg1"),
+                                String::from("arg2"),
+                            ])),
+                            Env: protobuf::RepeatedField::from(Vec::from([
+                                String::from("env1"),
+                                String::from("env2"),
+                            ])),
+                            Timeout: 10,
+                            ..Default::default()
+                        },
+                        grpc::Hook {
+                            Path: String::from("prestartpath2"),
+                            Args: protobuf::RepeatedField::from(Vec::from([
+                                String::from("arg3"),
+                                String::from("arg4"),
+                            ])),
+                            Env: protobuf::RepeatedField::from(Vec::from([
+                                String::from("env3"),
+                                String::from("env4"),
+                            ])),
+                            Timeout: 25,
+                            ..Default::default()
+                        },
+                    ])),
+                    Poststart: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                        Path: String::from("poststartpath"),
+                        Args: protobuf::RepeatedField::from(Vec::from([
+                            String::from("arg1"),
+                            String::from("arg2"),
+                        ])),
+                        Env: protobuf::RepeatedField::from(Vec::from([
+                            String::from("env1"),
+                            String::from("env2"),
+                        ])),
+                        Timeout: 10,
+                        ..Default::default()
+                    }])),
+                    Poststop: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                        Path: String::from("poststoppath"),
+                        Args: protobuf::RepeatedField::from(Vec::from([
+                            String::from("arg1"),
+                            String::from("arg2"),
+                        ])),
+                        Env: protobuf::RepeatedField::from(Vec::from([
+                            String::from("env1"),
+                            String::from("env2"),
+                        ])),
+                        Timeout: 10,
+                        ..Default::default()
+                    }])),
+                    ..Default::default()
+                },
+                result: oci::Hooks {
+                    prestart: Vec::from([
+                        oci::Hook {
+                            path: String::from("prestartpath"),
+                            args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                            env: Vec::from([String::from("env1"), String::from("env2")]),
+                            timeout: Some(10),
+                        },
+                        oci::Hook {
+                            path: String::from("prestartpath2"),
+                            args: Vec::from([String::from("arg3"), String::from("arg4")]),
+                            env: Vec::from([String::from("env3"), String::from("env4")]),
+                            timeout: Some(25),
+                        },
+                    ]),
+                    poststart: Vec::from([oci::Hook {
+                        path: String::from("poststartpath"),
+                        args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        env: Vec::from([String::from("env1"), String::from("env2")]),
+                        timeout: Some(10),
+                    }]),
+                    poststop: Vec::from([oci::Hook {
+                        path: String::from("poststoppath"),
+                        args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        env: Vec::from([String::from("env1"), String::from("env2")]),
+                        timeout: Some(10),
+                    }]),
+                },
+            },
+            TestData {
+                // Prestart empty
+                grpchooks: grpc::Hooks {
+                    Prestart: protobuf::RepeatedField::from(Vec::from([])),
+                    Poststart: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                        Path: String::from("poststartpath"),
+                        Args: protobuf::RepeatedField::from(Vec::from([
+                            String::from("arg1"),
+                            String::from("arg2"),
+                        ])),
+                        Env: protobuf::RepeatedField::from(Vec::from([
+                            String::from("env1"),
+                            String::from("env2"),
+                        ])),
+                        Timeout: 10,
+                        ..Default::default()
+                    }])),
+                    Poststop: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                        Path: String::from("poststoppath"),
+                        Args: protobuf::RepeatedField::from(Vec::from([
+                            String::from("arg1"),
+                            String::from("arg2"),
+                        ])),
+                        Env: protobuf::RepeatedField::from(Vec::from([
+                            String::from("env1"),
+                            String::from("env2"),
+                        ])),
+                        Timeout: 10,
+                        ..Default::default()
+                    }])),
+                    ..Default::default()
+                },
+                result: oci::Hooks {
+                    prestart: Vec::from([]),
+                    poststart: Vec::from([oci::Hook {
+                        path: String::from("poststartpath"),
+                        args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        env: Vec::from([String::from("env1"), String::from("env2")]),
+                        timeout: Some(10),
+                    }]),
+                    poststop: Vec::from([oci::Hook {
+                        path: String::from("poststoppath"),
+                        args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        env: Vec::from([String::from("env1"), String::from("env2")]),
+                        timeout: Some(10),
+                    }]),
+                },
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = hooks_grpc_to_oci(&d.grpchooks);
+
+            let msg = format!("{}, result: {:?}", msg, result);
+
+            assert_eq!(d.result, result, "{}", msg);
+        }
+    }
+
+    #[test]
+    fn test_mount_grpc_to_oci() {
+        #[derive(Debug)]
+        struct TestData {
+            grpcmount: grpc::Mount,
+            result: oci::Mount,
+        }
+
+        let tests = &[
+            TestData {
+                // Default fields
+                grpcmount: grpc::Mount {
+                    ..Default::default()
+                },
+                result: oci::Mount {
+                    ..Default::default()
+                },
+            },
+            TestData {
+                grpcmount: grpc::Mount {
+                    destination: String::from("destination"),
+                    source: String::from("source"),
+                    field_type: String::from("fieldtype"),
+                    options: protobuf::RepeatedField::from(Vec::from([
+                        String::from("option1"),
+                        String::from("option2"),
+                    ])),
+                    ..Default::default()
+                },
+                result: oci::Mount {
+                    destination: String::from("destination"),
+                    source: String::from("source"),
+                    r#type: String::from("fieldtype"),
+                    options: Vec::from([String::from("option1"), String::from("option2")]),
+                },
+            },
+            TestData {
+                grpcmount: grpc::Mount {
+                    destination: String::from("destination"),
+                    source: String::from("source"),
+                    field_type: String::from("fieldtype"),
+                    options: protobuf::RepeatedField::from(Vec::new()),
+                    ..Default::default()
+                },
+                result: oci::Mount {
+                    destination: String::from("destination"),
+                    source: String::from("source"),
+                    r#type: String::from("fieldtype"),
+                    options: Vec::new(),
+                },
+            },
+            TestData {
+                grpcmount: grpc::Mount {
+                    destination: String::new(),
+                    source: String::from("source"),
+                    field_type: String::from("fieldtype"),
+                    options: protobuf::RepeatedField::from(Vec::from([String::from("option1")])),
+                    ..Default::default()
+                },
+                result: oci::Mount {
+                    destination: String::new(),
+                    source: String::from("source"),
+                    r#type: String::from("fieldtype"),
+                    options: Vec::from([String::from("option1")]),
+                },
+            },
+            TestData {
+                grpcmount: grpc::Mount {
+                    destination: String::from("destination"),
+                    source: String::from("source"),
+                    field_type: String::new(),
+                    options: protobuf::RepeatedField::from(Vec::from([String::from("option1")])),
+                    ..Default::default()
+                },
+                result: oci::Mount {
+                    destination: String::from("destination"),
+                    source: String::from("source"),
+                    r#type: String::new(),
+                    options: Vec::from([String::from("option1")]),
+                },
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = mount_grpc_to_oci(&d.grpcmount);
 
             let msg = format!("{}, result: {:?}", msg, result);
 

@@ -381,6 +381,12 @@ func TestBindMountFailingMount(t *testing.T) {
 	assert.Error(err)
 }
 
+func cleanupFooMount() {
+	dest := filepath.Join(testDir, "fooDirDest")
+
+	syscall.Unmount(dest, 0)
+}
+
 func TestBindMountSuccessful(t *testing.T) {
 	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
@@ -389,9 +395,7 @@ func TestBindMountSuccessful(t *testing.T) {
 
 	source := filepath.Join(testDir, "fooDirSrc")
 	dest := filepath.Join(testDir, "fooDirDest")
-	syscall.Unmount(dest, 0)
-	os.Remove(source)
-	os.Remove(dest)
+	t.Cleanup(cleanupFooMount)
 
 	err := os.MkdirAll(source, mountPerm)
 	assert.NoError(err)
@@ -401,8 +405,6 @@ func TestBindMountSuccessful(t *testing.T) {
 
 	err = bindMount(context.Background(), source, dest, false, "private")
 	assert.NoError(err)
-
-	syscall.Unmount(dest, 0)
 }
 
 func TestBindMountReadonlySuccessful(t *testing.T) {
@@ -413,9 +415,7 @@ func TestBindMountReadonlySuccessful(t *testing.T) {
 
 	source := filepath.Join(testDir, "fooDirSrc")
 	dest := filepath.Join(testDir, "fooDirDest")
-	syscall.Unmount(dest, 0)
-	os.Remove(source)
-	os.Remove(dest)
+	t.Cleanup(cleanupFooMount)
 
 	err := os.MkdirAll(source, mountPerm)
 	assert.NoError(err)
@@ -425,8 +425,6 @@ func TestBindMountReadonlySuccessful(t *testing.T) {
 
 	err = bindMount(context.Background(), source, dest, true, "private")
 	assert.NoError(err)
-
-	defer syscall.Unmount(dest, 0)
 
 	// should not be able to create file in read-only mount
 	destFile := filepath.Join(dest, "foo")
@@ -442,9 +440,7 @@ func TestBindMountInvalidPgtypes(t *testing.T) {
 
 	source := filepath.Join(testDir, "fooDirSrc")
 	dest := filepath.Join(testDir, "fooDirDest")
-	syscall.Unmount(dest, 0)
-	os.Remove(source)
-	os.Remove(dest)
+	t.Cleanup(cleanupFooMount)
 
 	err := os.MkdirAll(source, mountPerm)
 	assert.NoError(err)

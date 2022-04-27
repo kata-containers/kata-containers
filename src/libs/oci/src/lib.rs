@@ -381,7 +381,7 @@ pub struct LinuxMemory {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "kernelTCP")]
     pub kernel_tcp: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub swappiness: Option<i64>,
+    pub swappiness: Option<u64>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
