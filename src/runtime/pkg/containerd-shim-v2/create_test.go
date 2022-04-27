@@ -50,7 +50,6 @@ func TestCreateSandboxSuccess(t *testing.T) {
 	}()
 
 	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
-	// defer os.RemoveAll(tmpdir)
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
@@ -99,7 +98,6 @@ func TestCreateSandboxFail(t *testing.T) {
 	assert := assert.New(t)
 
 	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
-	defer os.RemoveAll(tmpdir)
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
@@ -137,7 +135,6 @@ func TestCreateSandboxConfigFail(t *testing.T) {
 	assert := assert.New(t)
 
 	tmpdir, bundlePath, _ := ktu.SetupOCIConfigFile(t)
-	defer os.RemoveAll(tmpdir)
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
@@ -187,7 +184,6 @@ func TestCreateContainerSuccess(t *testing.T) {
 	}
 
 	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
-	defer os.RemoveAll(tmpdir)
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
@@ -227,7 +223,6 @@ func TestCreateContainerFail(t *testing.T) {
 	assert := assert.New(t)
 
 	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
-	defer os.RemoveAll(tmpdir)
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
@@ -278,7 +273,6 @@ func TestCreateContainerConfigFail(t *testing.T) {
 	}()
 
 	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
-	defer os.RemoveAll(tmpdir)
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)

@@ -16,7 +16,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use nix::mount::MsFlags;
-use nix::unistd::Gid;
+use nix::unistd::{Gid, Uid};
 
 use regex::Regex;
 
@@ -29,6 +29,7 @@ use crate::device::{
 use crate::linux_abi::*;
 use crate::pci;
 use crate::protocols::agent::Storage;
+use crate::protocols::types::FSGroupChangePolicy;
 use crate::Sandbox;
 #[cfg(target_arch = "s390x")]
 use crate::{ccw, device::get_virtio_blk_ccw_device_name};
@@ -42,6 +43,11 @@ pub const MOUNT_GUEST_TAG: &str = "kataShared";
 
 // Allocating an FSGroup that owns the pod's volumes
 const FS_GID: &str = "fsgid";
+
+const RW_MASK: u32 = 0o660;
+const RO_MASK: u32 = 0o440;
+const EXEC_MASK: u32 = 0o110;
+const MODE_SETGID: u32 = 0o2000;
 
 #[rustfmt::skip]
 lazy_static! {
@@ -222,7 +228,7 @@ async fn ephemeral_storage_handler(
             let meta = fs::metadata(&storage.mount_point)?;
             let mut permission = meta.permissions();
 
-            let o_mode = meta.mode() | 0o2000;
+            let o_mode = meta.mode() | MODE_SETGID;
             permission.set_mode(o_mode);
             fs::set_permissions(&storage.mount_point, permission)?;
         }
@@ -272,7 +278,7 @@ async fn local_storage_handler(
 
         if need_set_fsgid {
             // set SetGid mode mask.
-            o_mode |= 0o2000;
+            o_mode |= MODE_SETGID;
         }
         permission.set_mode(o_mode);
 
@@ -321,25 +327,38 @@ fn allocate_hugepages(logger: &Logger, options: &[String]) -> Result<()> {
 
     // sysfs entry is always of the form hugepages-${pagesize}kB
     // Ref: https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt
-    let path = Path::new(SYS_FS_HUGEPAGES_PREFIX).join(format!("hugepages-{}kB", pagesize / 1024));
-
-    if !path.exists() {
-        fs::create_dir_all(&path).context("create hugepages-size directory")?;
-    }
+    let path = Path::new(SYS_FS_HUGEPAGES_PREFIX)
+        .join(format!("hugepages-{}kB", pagesize / 1024))
+        .join("nr_hugepages");
 
     // write numpages to nr_hugepages file.
-    let path = path.join("nr_hugepages");
     let numpages = format!("{}", size / pagesize);
     info!(logger, "write {} pages to {:?}", &numpages, &path);
 
     let mut file = OpenOptions::new()
         .write(true)
-        .create(true)
         .open(&path)
         .context(format!("open nr_hugepages directory {:?}", &path))?;
 
     file.write_all(numpages.as_bytes())
         .context(format!("write nr_hugepages failed: {:?}", &path))?;
+
+    // Even if the write succeeds, the kernel isn't guaranteed to be
+    // able to allocate all the pages we requested.  Verify that it
+    // did.
+    let verify = fs::read_to_string(&path).context(format!("reading {:?}", &path))?;
+    let allocated = verify
+        .trim_end()
+        .parse::<u64>()
+        .map_err(|_| anyhow!("Unexpected text {:?} in {:?}", &verify, &path))?;
+    if allocated != size / pagesize {
+        return Err(anyhow!(
+            "Only allocated {} of {} hugepages of size {}",
+            allocated,
+            numpages,
+            pagesize
+        ));
+    }
 
     Ok(())
 }
@@ -476,7 +495,9 @@ fn common_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> 
     // Mount the storage device.
     let mount_point = storage.mount_point.to_string();
 
-    mount_storage(logger, storage).and(Ok(mount_point))
+    mount_storage(logger, storage)?;
+    set_ownership(logger, storage)?;
+    Ok(mount_point)
 }
 
 // nvdimm_storage_handler handles the storage for NVDIMM driver.
@@ -558,6 +579,91 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
         options.as_str(),
         &logger,
     )
+}
+
+#[instrument]
+pub fn set_ownership(logger: &Logger, storage: &Storage) -> Result<()> {
+    let logger = logger.new(o!("subsystem" => "mount", "fn" => "set_ownership"));
+
+    // If fsGroup is not set, skip performing ownership change
+    if storage.fs_group.is_none() {
+        return Ok(());
+    }
+    let fs_group = storage.get_fs_group();
+
+    let mut read_only = false;
+    let opts_vec: Vec<String> = storage.options.to_vec();
+    if opts_vec.contains(&String::from("ro")) {
+        read_only = true;
+    }
+
+    let mount_path = Path::new(&storage.mount_point);
+    let metadata = mount_path.metadata().map_err(|err| {
+        error!(logger, "failed to obtain metadata for mount path";
+            "mount-path" => mount_path.to_str(),
+            "error" => err.to_string(),
+        );
+        err
+    })?;
+
+    if fs_group.group_change_policy == FSGroupChangePolicy::OnRootMismatch
+        && metadata.gid() == fs_group.group_id
+    {
+        let mut mask = if read_only { RO_MASK } else { RW_MASK };
+        mask |= EXEC_MASK;
+
+        // With fsGroup change policy to OnRootMismatch, if the current
+        // gid of the mount path root directory matches the desired gid
+        // and the current permission of mount path root directory is correct,
+        // then ownership change will be skipped.
+        let current_mode = metadata.permissions().mode();
+        if (mask & current_mode == mask) && (current_mode & MODE_SETGID != 0) {
+            info!(logger, "skipping ownership change for volume";
+                "mount-path" => mount_path.to_str(),
+                "fs-group" => fs_group.group_id.to_string(),
+            );
+            return Ok(());
+        }
+    }
+
+    info!(logger, "performing recursive ownership change";
+        "mount-path" => mount_path.to_str(),
+        "fs-group" => fs_group.group_id.to_string(),
+    );
+    recursive_ownership_change(
+        mount_path,
+        None,
+        Some(Gid::from_raw(fs_group.group_id)),
+        read_only,
+    )
+}
+
+#[instrument]
+pub fn recursive_ownership_change(
+    path: &Path,
+    uid: Option<Uid>,
+    gid: Option<Gid>,
+    read_only: bool,
+) -> Result<()> {
+    let mut mask = if read_only { RO_MASK } else { RW_MASK };
+    if path.is_dir() {
+        for entry in fs::read_dir(&path)? {
+            recursive_ownership_change(entry?.path().as_path(), uid, gid, read_only)?;
+        }
+        mask |= EXEC_MASK;
+        mask |= MODE_SETGID;
+    }
+    nix::unistd::chown(path, uid, gid)?;
+
+    if gid.is_some() {
+        let metadata = path.metadata()?;
+        let mut permission = metadata.permissions();
+        let target_mode = metadata.mode() | mask;
+        permission.set_mode(target_mode);
+        fs::set_permissions(path, permission)?;
+    }
+
+    Ok(())
 }
 
 /// Looks for `mount_point` entry in the /proc/mounts.
@@ -912,6 +1018,8 @@ fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
 mod tests {
     use super::*;
     use crate::{skip_if_not_root, skip_loop_if_not_root, skip_loop_if_root};
+    use protobuf::RepeatedField;
+    use protocols::agent::FSGroup;
     use std::fs::File;
     use std::fs::OpenOptions;
     use std::io::Write;
@@ -1536,6 +1644,214 @@ mod tests {
                 assert_eq!(expected.1, size);
             } else {
                 assert!(r.is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn test_set_ownership() {
+        skip_if_not_root!();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+
+        #[derive(Debug)]
+        struct TestData<'a> {
+            mount_path: &'a str,
+            fs_group: Option<FSGroup>,
+            read_only: bool,
+            expected_group_id: u32,
+            expected_permission: u32,
+        }
+
+        let tests = &[
+            TestData {
+                mount_path: "foo",
+                fs_group: None,
+                read_only: false,
+                expected_group_id: 0,
+                expected_permission: 0,
+            },
+            TestData {
+                mount_path: "rw_mount",
+                fs_group: Some(FSGroup {
+                    group_id: 3000,
+                    group_change_policy: FSGroupChangePolicy::Always,
+                    unknown_fields: Default::default(),
+                    cached_size: Default::default(),
+                }),
+                read_only: false,
+                expected_group_id: 3000,
+                expected_permission: RW_MASK | EXEC_MASK | MODE_SETGID,
+            },
+            TestData {
+                mount_path: "ro_mount",
+                fs_group: Some(FSGroup {
+                    group_id: 3000,
+                    group_change_policy: FSGroupChangePolicy::OnRootMismatch,
+                    unknown_fields: Default::default(),
+                    cached_size: Default::default(),
+                }),
+                read_only: true,
+                expected_group_id: 3000,
+                expected_permission: RO_MASK | EXEC_MASK | MODE_SETGID,
+            },
+        ];
+
+        let tempdir = tempdir().expect("failed to create tmpdir");
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let mount_dir = tempdir.path().join(d.mount_path);
+            fs::create_dir(&mount_dir)
+                .unwrap_or_else(|_| panic!("{}: failed to create root directory", msg));
+
+            let directory_mode = mount_dir.as_path().metadata().unwrap().permissions().mode();
+            let mut storage_data = Storage::new();
+            if d.read_only {
+                storage_data.set_options(RepeatedField::from_slice(&[
+                    "foo".to_string(),
+                    "ro".to_string(),
+                ]));
+            }
+            if let Some(fs_group) = d.fs_group.clone() {
+                storage_data.set_fs_group(fs_group);
+            }
+            storage_data.mount_point = mount_dir.clone().into_os_string().into_string().unwrap();
+
+            let result = set_ownership(&logger, &storage_data);
+            assert!(result.is_ok());
+
+            assert_eq!(
+                mount_dir.as_path().metadata().unwrap().gid(),
+                d.expected_group_id
+            );
+            assert_eq!(
+                mount_dir.as_path().metadata().unwrap().permissions().mode(),
+                (directory_mode | d.expected_permission)
+            );
+        }
+    }
+
+    #[test]
+    fn test_recursive_ownership_change() {
+        skip_if_not_root!();
+
+        const COUNT: usize = 5;
+
+        #[derive(Debug)]
+        struct TestData<'a> {
+            // Directory where the recursive ownership change should be performed on
+            path: &'a str,
+
+            // User ID for ownership change
+            uid: u32,
+
+            // Group ID for ownership change
+            gid: u32,
+
+            // Set when the permission should be read-only
+            read_only: bool,
+
+            // The expected permission of all directories after ownership change
+            expected_permission_directory: u32,
+
+            // The expected permission of all files after ownership change
+            expected_permission_file: u32,
+        }
+
+        let tests = &[
+            TestData {
+                path: "no_gid_change",
+                uid: 0,
+                gid: 0,
+                read_only: false,
+                expected_permission_directory: 0,
+                expected_permission_file: 0,
+            },
+            TestData {
+                path: "rw_gid_change",
+                uid: 0,
+                gid: 3000,
+                read_only: false,
+                expected_permission_directory: RW_MASK | EXEC_MASK | MODE_SETGID,
+                expected_permission_file: RW_MASK,
+            },
+            TestData {
+                path: "ro_gid_change",
+                uid: 0,
+                gid: 3000,
+                read_only: true,
+                expected_permission_directory: RO_MASK | EXEC_MASK | MODE_SETGID,
+                expected_permission_file: RO_MASK,
+            },
+        ];
+
+        let tempdir = tempdir().expect("failed to create tmpdir");
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let mount_dir = tempdir.path().join(d.path);
+            fs::create_dir(&mount_dir)
+                .unwrap_or_else(|_| panic!("{}: failed to create root directory", msg));
+
+            let directory_mode = mount_dir.as_path().metadata().unwrap().permissions().mode();
+            let mut file_mode: u32 = 0;
+
+            // create testing directories and files
+            for n in 1..COUNT {
+                let nest_dir = mount_dir.join(format!("nested{}", n));
+                fs::create_dir(&nest_dir)
+                    .unwrap_or_else(|_| panic!("{}: failed to create nest directory", msg));
+
+                for f in 1..COUNT {
+                    let filename = nest_dir.join(format!("file{}", f));
+                    File::create(&filename)
+                        .unwrap_or_else(|_| panic!("{}: failed to create file", msg));
+                    file_mode = filename.as_path().metadata().unwrap().permissions().mode();
+                }
+            }
+
+            let uid = if d.uid > 0 {
+                Some(Uid::from_raw(d.uid))
+            } else {
+                None
+            };
+            let gid = if d.gid > 0 {
+                Some(Gid::from_raw(d.gid))
+            } else {
+                None
+            };
+            let result = recursive_ownership_change(&mount_dir, uid, gid, d.read_only);
+
+            assert!(result.is_ok());
+
+            assert_eq!(mount_dir.as_path().metadata().unwrap().gid(), d.gid);
+            assert_eq!(
+                mount_dir.as_path().metadata().unwrap().permissions().mode(),
+                (directory_mode | d.expected_permission_directory)
+            );
+
+            for n in 1..COUNT {
+                let nest_dir = mount_dir.join(format!("nested{}", n));
+                for f in 1..COUNT {
+                    let filename = nest_dir.join(format!("file{}", f));
+                    let file = Path::new(&filename);
+
+                    assert_eq!(file.metadata().unwrap().gid(), d.gid);
+                    assert_eq!(
+                        file.metadata().unwrap().permissions().mode(),
+                        (file_mode | d.expected_permission_file)
+                    );
+                }
+
+                let dir = Path::new(&nest_dir);
+                assert_eq!(dir.metadata().unwrap().gid(), d.gid);
+                assert_eq!(
+                    dir.metadata().unwrap().permissions().mode(),
+                    (directory_mode | d.expected_permission_directory)
+                );
             }
         }
     }

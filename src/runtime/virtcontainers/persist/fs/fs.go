@@ -29,11 +29,11 @@ const dirMode = os.FileMode(0700) | os.ModeDir
 // fileMode is the permission bits used for creating a file
 const fileMode = os.FileMode(0600)
 
-// storagePathSuffix is the suffix used for all storage paths
+// StoragePathSuffix is the suffix used for all storage paths
 //
 // Note: this very brief path represents "virtcontainers". It is as
 // terse as possible to minimise path length.
-const storagePathSuffix = "vc"
+const StoragePathSuffix = "vc"
 
 // sandboxPathSuffix is the suffix used for sandbox storage
 const sandboxPathSuffix = "sbs"
@@ -64,7 +64,7 @@ func Init() (persistapi.PersistDriver, error) {
 	return &FS{
 		sandboxState:    &persistapi.SandboxState{},
 		containerState:  make(map[string]persistapi.ContainerState),
-		storageRootPath: filepath.Join("/run", storagePathSuffix),
+		storageRootPath: filepath.Join("/run", StoragePathSuffix),
 		driverName:      "fs",
 	}, nil
 }

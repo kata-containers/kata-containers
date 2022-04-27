@@ -16,6 +16,15 @@ enum IPFamily {
 	v6 = 1;
 }
 
+// FSGroupChangePolicy defines the policy for applying group id ownership change on a mounted volume.
+enum FSGroupChangePolicy {
+	// Always indicates that the volume ownership will always be changed.
+	Always = 0;
+	// OnRootMismatch indicates that the volume ownership will be changed only
+	// when the ownership of the root directory does not match with the expected group id for the volume.
+	OnRootMismatch = 1;
+}
+
 message IPAddress {
 	IPFamily family = 1;
 	string address = 2;

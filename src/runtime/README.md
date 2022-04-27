@@ -10,6 +10,7 @@ This repository contains the following components:
 |-|-|
 | `containerd-shim-kata-v2` | The [shimv2 runtime](../../docs/design/architecture/README.md#runtime) |
 | `kata-runtime` | [utility program](../../docs/design/architecture/README.md#utility-program) |
+| `kata-monitor` | [metrics collector daemon](cmd/kata-monitor/README.md) |
 
 For details of the other Kata Containers repositories, see the
 [repository summary](https://github.com/kata-containers/kata-containers).

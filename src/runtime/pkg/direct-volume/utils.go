@@ -17,6 +17,25 @@ import (
 
 const (
 	mountInfoFileName = "mountInfo.json"
+
+	FSGroupMetadataKey             = "fsGroup"
+	FSGroupChangePolicyMetadataKey = "fsGroupChangePolicy"
+)
+
+// FSGroupChangePolicy holds policies that will be used for applying fsGroup to a volume.
+// This type and the allowed values are tracking the PodFSGroupChangePolicy defined in
+// https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/api/core/v1/types.go
+// It is up to the client using the direct-assigned volume feature (e.g. CSI drivers) to determine
+// the optimal setting for this change policy (i.e. from Pod spec or assuming volume ownership
+// based on the storage offering).
+type FSGroupChangePolicy string
+
+const (
+	// FSGroupChangeAlways indicates that volume's ownership should always be changed.
+	FSGroupChangeAlways FSGroupChangePolicy = "Always"
+	// FSGroupChangeOnRootMismatch indicates that volume's ownership will be changed
+	// only when ownership of root directory does not match with the desired group id.
+	FSGroupChangeOnRootMismatch FSGroupChangePolicy = "OnRootMismatch"
 )
 
 var kataDirectVolumeRootPath = "/run/kata-containers/shared/direct-volumes"

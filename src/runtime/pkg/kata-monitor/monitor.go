@@ -27,6 +27,7 @@ const (
 	RuntimeCRIO                 = "cri-o"
 	fsMonitorRetryDelaySeconds  = 60
 	podCacheRefreshDelaySeconds = 5
+	contentTypeHtml             = "text/html"
 )
 
 // SetLogger sets the logger for katamonitor package.
@@ -194,7 +195,41 @@ func (km *KataMonitor) GetAgentURL(w http.ResponseWriter, r *http.Request) {
 // ListSandboxes list all sandboxes running in Kata
 func (km *KataMonitor) ListSandboxes(w http.ResponseWriter, r *http.Request) {
 	sandboxes := km.sandboxCache.getSandboxList()
+	htmlResponse := IfReturnHTMLResponse(w, r)
+	if htmlResponse {
+		listSandboxesHtml(sandboxes, w)
+	} else {
+		listSandboxesText(sandboxes, w)
+	}
+}
+
+func listSandboxesText(sandboxes []string, w http.ResponseWriter) {
 	for _, s := range sandboxes {
 		w.Write([]byte(fmt.Sprintf("%s\n", s)))
 	}
+}
+func listSandboxesHtml(sandboxes []string, w http.ResponseWriter) {
+	w.Write([]byte("<h1>Sandbox list</h1>\n"))
+	w.Write([]byte("<ul>\n"))
+	for _, s := range sandboxes {
+		w.Write([]byte(fmt.Sprintf("<li>%s: <a href='/debug/pprof/?sandbox=%s'>pprof</a>, <a href='/metrics?sandbox=%s'>metrics</a>, <a href='/agent-url?sandbox=%s'>agent-url</a></li>\n", s, s, s, s)))
+	}
+	w.Write([]byte("</ul>\n"))
+}
+
+// IfReturnHTMLResponse returns true if request accepts html response
+// NOTE: IfReturnHTMLResponse will also set response header to `text/html`
+func IfReturnHTMLResponse(w http.ResponseWriter, r *http.Request) bool {
+	accepts := r.Header["Accept"]
+	for _, accept := range accepts {
+		fields := strings.Split(accept, ",")
+		for _, field := range fields {
+			if field == contentTypeHtml {
+				w.Header().Set("Content-Type", contentTypeHtml)
+				return true
+			}
+		}
+	}
+
+	return false
 }

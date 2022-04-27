@@ -149,7 +149,12 @@ impl Sandbox {
     pub fn remove_sandbox_storage(&self, path: &str) -> Result<()> {
         let mounts = vec![path.to_string()];
         remove_mounts(&mounts)?;
-        fs::remove_dir_all(path).context(format!("failed to remove dir {:?}", path))?;
+        // "remove_dir" will fail if the mount point is backed by a read-only filesystem.
+        // This is the case with the device mapper snapshotter, where we mount the block device directly
+        // at the underlying sandbox path which was provided from the base RO kataShared path from the host.
+        if let Err(err) = fs::remove_dir(path) {
+            warn!(self.logger, "failed to remove dir {}, {:?}", path, err);
+        }
         Ok(())
     }
 
@@ -562,19 +567,8 @@ mod tests {
             .remove_sandbox_storage(invalid_dir.to_str().unwrap())
             .is_err());
 
-        // Now, create a double mount as this guarantees the directory cannot
-        // be deleted after the first umount.
-        for _i in 0..2 {
-            assert!(bind_mount(srcdir_path, destdir_path, &logger).is_ok());
-        }
+        assert!(bind_mount(srcdir_path, destdir_path, &logger).is_ok());
 
-        assert!(
-            s.remove_sandbox_storage(destdir_path).is_err(),
-            "Expect fail as deletion cannot happen due to the second mount."
-        );
-
-        // This time it should work as the previous two calls have undone the double
-        // mount.
         assert!(s.remove_sandbox_storage(destdir_path).is_ok());
     }
 

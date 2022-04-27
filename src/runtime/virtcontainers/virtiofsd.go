@@ -6,7 +6,6 @@
 package virtcontainers
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"net"
@@ -136,24 +135,14 @@ func (v *virtiofsd) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
 
 	v.Logger().WithField("path", v.path).Info()
 	v.Logger().WithField("args", strings.Join(args, " ")).Info()
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return pid, err
-	}
 
 	if err = utils.StartCmd(cmd); err != nil {
 		return pid, err
 	}
 
-	// Monitor virtiofsd's stderr and stop sandbox if virtiofsd quits
 	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			v.Logger().WithField("source", "virtiofsd").Info(scanner.Text())
-		}
-		v.Logger().Info("virtiofsd quits")
-		// Wait to release resources of virtiofsd process
 		cmd.Process.Wait()
+		v.Logger().Info("virtiofsd quits")
 		if onQuit != nil {
 			onQuit()
 		}

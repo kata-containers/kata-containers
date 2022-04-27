@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"code.cloudfoundry.org/bytefmt"
+	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
@@ -190,8 +191,7 @@ func TestKataAgentSendReq(t *testing.T) {
 func TestHandleEphemeralStorage(t *testing.T) {
 	k := kataAgent{}
 	var ociMounts []specs.Mount
-	mountSource := "/tmp/mountPoint"
-	os.Mkdir(mountSource, 0755)
+	mountSource := t.TempDir()
 
 	mount := specs.Mount{
 		Type:   KataEphemeralDevType,
@@ -211,8 +211,7 @@ func TestHandleEphemeralStorage(t *testing.T) {
 func TestHandleLocalStorage(t *testing.T) {
 	k := kataAgent{}
 	var ociMounts []specs.Mount
-	mountSource := "/tmp/mountPoint"
-	os.Mkdir(mountSource, 0755)
+	mountSource := t.TempDir()
 
 	mount := specs.Mount{
 		Type:   KataLocalDevType,
@@ -234,6 +233,7 @@ func TestHandleLocalStorage(t *testing.T) {
 }
 
 func TestHandleDeviceBlockVolume(t *testing.T) {
+	var gid = 2000
 	k := kataAgent{}
 
 	// nolint: govet
@@ -313,6 +313,27 @@ func TestHandleDeviceBlockVolume(t *testing.T) {
 			resultVol: &pb.Storage{
 				Driver: kataSCSIDevType,
 				Source: testSCSIAddr,
+			},
+		},
+		{
+			BlockDeviceDriver: config.VirtioBlock,
+			inputMount: Mount{
+				FSGroup:             &gid,
+				FSGroupChangePolicy: volume.FSGroupChangeOnRootMismatch,
+			},
+			inputDev: &drivers.BlockDevice{
+				BlockDrive: &config.BlockDrive{
+					PCIPath:  testPCIPath,
+					VirtPath: testVirtPath,
+				},
+			},
+			resultVol: &pb.Storage{
+				Driver: kataBlkDevType,
+				Source: testPCIPath.String(),
+				FsGroup: &pb.FSGroup{
+					GroupId:           uint32(gid),
+					GroupChangePolicy: pbTypes.FSGroupChangePolicy_OnRootMismatch,
+				},
 			},
 		},
 	}
@@ -609,7 +630,7 @@ func TestConstrainGRPCSpec(t *testing.T) {
 	assert.NotNil(g.Linux.Resources.Memory)
 	assert.Nil(g.Linux.Resources.Pids)
 	assert.Nil(g.Linux.Resources.BlockIO)
-	assert.Nil(g.Linux.Resources.HugepageLimits)
+	assert.Len(g.Linux.Resources.HugepageLimits, 0)
 	assert.Nil(g.Linux.Resources.Network)
 	assert.NotNil(g.Linux.Resources.CPU)
 	assert.Equal(g.Process.SelinuxLabel, "")
@@ -665,8 +686,7 @@ func TestHandleShm(t *testing.T) {
 	// In case the type of mount is ephemeral, the container mount is not
 	// shared with the sandbox shm.
 	ociMounts[0].Type = KataEphemeralDevType
-	mountSource := "/tmp/mountPoint"
-	os.Mkdir(mountSource, 0755)
+	mountSource := t.TempDir()
 	ociMounts[0].Source = mountSource
 	k.handleShm(ociMounts, sandbox)
 
