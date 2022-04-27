@@ -11,7 +11,25 @@ be utilized to install Kata Containers on a running Kubernetes cluster.
 
 ### Install Kata on a running Kubernetes cluster
 
-#### Installing the latest image
+#### k3s cluster
+
+For your [k3s](https://k3s.io/) cluster, run:
+
+```sh
+$ git clone github.com/kata-containers/kata-containers
+```
+
+Check and switch to the stable branch of your choice, if wanted, and then run:
+
+```bash
+$ cd kata-containers/kata-containers/tools/packaging/kata-deploy
+$ kubectl apply -f kata-rbac/base/kata-rbac.yaml
+$ kubectl apply -k kata-deploy/overlays/k3s
+```
+
+#### Vanilla Kubernetes cluster
+
+##### Installing the latest image
 
 The latest image refers to pre-release and release candidate content.  For stable releases, please, use the "stable" instructions.
 
@@ -20,7 +38,7 @@ $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-contai
 $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
 ```
 
-#### Installing the stable image
+##### Installing the stable image
 
 The stable image refers to the last stable releases content.
 
@@ -30,17 +48,6 @@ The stable image refers to the last stable releases content.
 ```bash
 $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
 $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy-stable.yaml
-```
-
-#### For your [k3s](https://k3s.io/) cluster, do:
-
-```sh
-$ GO111MODULE=auto go get github.com/kata-containers/kata-containers
-```
-
-```bash
-$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy
-$ kubectl apply -k kata-deploy/overlays/k3s
 ```
 
 #### Ensure kata-deploy is ready
