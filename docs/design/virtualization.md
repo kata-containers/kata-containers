@@ -39,7 +39,7 @@ Details of each solution and a summary are provided below.
 Kata Containers with QEMU has complete compatibility with Kubernetes.
 
 Depending on the host architecture, Kata Containers supports various machine types,
-for example `pc` and `q35` on x86 systems, `virt` on ARM systems and `pseries` on IBM Power systems. The default Kata Containers
+for example `q35` on x86 systems, `virt` on ARM systems and `pseries` on IBM Power systems. The default Kata Containers
 machine type is `q35`. The machine type and its [`Machine accelerators`](#machine-accelerators) can
 be changed by editing the runtime [`configuration`](architecture/README.md#configuration) file.
 
@@ -60,9 +60,8 @@ Machine accelerators are architecture specific and can be used to improve the pe
 and enable specific features of the machine types. The following machine accelerators
 are used in Kata Containers:
 
-- NVDIMM: This machine accelerator is x86 specific and only supported by `pc` and
-`q35` machine types. `nvdimm` is used to provide the root filesystem as a persistent
-memory device to the Virtual Machine.
+- NVDIMM: This machine accelerator is x86 specific and only supported by `q35` machine types.
+`nvdimm` is used to provide the root filesystem as a persistent memory device to the Virtual Machine.
 
 #### Hotplug devices
 
