@@ -81,7 +81,7 @@
   - Download the standard `systemd(1)` service file and install to
     `/etc/systemd/system/`:
 
-    - https://raw.githubusercontent.com/containerd/containerd/master/containerd.service
+    - https://raw.githubusercontent.com/containerd/containerd/main/containerd.service
 
     > **Notes:**
     >
