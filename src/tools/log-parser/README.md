@@ -50,25 +50,25 @@ Additional to the fields above, the tool also expects the following field:
 
 The primary logfiles the tool reads are:
 
-- The [runtime](https://github.com/kata-containers/kata-containers/tree/main/src/runtime) log.
+- The [runtime](../../runtime) log.
 
   This log also includes
-  [virtcontainers](https://github.com/containers/virtcontainers) log entries and
-  [agent](https://github.com/kata-containers/kata-containers/tree/main/src/agent) best effort logs unpacking (unless `--no-agent-unpack` is specified)
+  [virtcontainers](../../runtime/virtcontainers) log entries and
+  [agent](../../agent) best effort logs unpacking (unless `--no-agent-unpack` is specified).
 
 ## Usage
 
 To merge all logs:
 
-1. [Enable full debug](https://github.com/kata-containers/kata-containers/blob/main/docs/Developer-Guide.md#enable-full-debug).
+1. [Enable full debug](../../../docs/Developer-Guide.md#enable-full-debug).
 1. Clear the systemd journal (optional):
    ```
    $ sudo systemctl stop systemd-journald
    $ sudo rm -f /var/log/journal/*/* /run/log/journal/*/*
    $ sudo systemctl start systemd-journald   
    ```
-1. Create a container.
-1. Collect the logs.
+1. Create a Kata container.
+1. Collect the logs (alternatively to journal clearing you may consider constraining collected logs by adding `--since=<container creation time>`).
    ```
    $ sudo journalctl -q -o cat -a -t kata > ./kata.log
    ```
@@ -78,8 +78,8 @@ To merge all logs:
    ```
 1. To install the program:
    ```
-   $ go get -d github.com/kata-containers/tests
-   $ pushd $GOPATH/src/github.com/kata-containers/tests/cmd/log-parser && make install && popd
+   $ go get -d github.com/kata-containers/kata-containers
+   $ pushd $GOPATH/src/github.com/kata-containers/kata-containers/src/tools/log-parser && make install && popd
    ```
 1. To run the program:
    ```
@@ -88,7 +88,7 @@ To merge all logs:
 
 ### Advanced processing using jq
 
-[jq](https://stedolan.github.io/jq/) is a command-line JSON processor which can be combined with `kata-log-parser`
+[jq](https://stedolan.github.io/jq) is a command-line JSON processor which can be combined with `kata-log-parser`
 to filter and fetch specific log entries.
 
 #### Examples
