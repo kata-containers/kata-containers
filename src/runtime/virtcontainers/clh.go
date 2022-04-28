@@ -442,6 +442,11 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 			disk := chclient.NewDiskConfig(imagePath)
 			disk.SetReadonly(true)
 
+			diskRateLimiterConfig := clh.getDiskRateLimiterConfig()
+			if diskRateLimiterConfig != nil {
+				disk.SetRateLimiterConfig(*diskRateLimiterConfig)
+			}
+
 			if clh.vmconfig.Disks != nil {
 				*clh.vmconfig.Disks = append(*clh.vmconfig.Disks, *disk)
 			} else {
@@ -666,6 +671,11 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 	clhDisk.Readonly = &drive.ReadOnly
 	clhDisk.VhostUser = func(b bool) *bool { return &b }(false)
 	clhDisk.Id = &driveID
+
+	diskRateLimiterConfig := clh.getDiskRateLimiterConfig()
+	if diskRateLimiterConfig != nil {
+		clhDisk.SetRateLimiterConfig(*diskRateLimiterConfig)
+	}
 
 	pciInfo, _, err := cl.VmAddDiskPut(ctx, clhDisk)
 
@@ -1304,6 +1314,52 @@ func (clh *cloudHypervisor) addVSock(cid int64, path string) {
 	clh.vmconfig.Vsock = chclient.NewVsockConfig(cid, path)
 }
 
+func (clh *cloudHypervisor) getRateLimiterConfig(bwSize, bwOneTimeBurst, opsSize, opsOneTimeBurst int64) *chclient.RateLimiterConfig {
+	if bwSize == 0 && opsSize == 0 {
+		return nil
+	}
+
+	rateLimiterConfig := chclient.NewRateLimiterConfig()
+
+	if bwSize != 0 {
+		bwTokenBucket := chclient.NewTokenBucket(bwSize, int64(utils.DefaultRateLimiterRefillTimeMilliSecs))
+
+		if bwOneTimeBurst != 0 {
+			bwTokenBucket.SetOneTimeBurst(bwOneTimeBurst)
+		}
+
+		rateLimiterConfig.SetBandwidth(*bwTokenBucket)
+	}
+
+	if opsSize != 0 {
+		opsTokenBucket := chclient.NewTokenBucket(opsSize, int64(utils.DefaultRateLimiterRefillTimeMilliSecs))
+
+		if opsOneTimeBurst != 0 {
+			opsTokenBucket.SetOneTimeBurst(opsOneTimeBurst)
+		}
+
+		rateLimiterConfig.SetOps(*opsTokenBucket)
+	}
+
+	return rateLimiterConfig
+}
+
+func (clh *cloudHypervisor) getNetRateLimiterConfig() *chclient.RateLimiterConfig {
+	return clh.getRateLimiterConfig(
+		int64(utils.RevertBytes(uint64(clh.config.NetRateLimiterBwMaxRate/8))),
+		int64(utils.RevertBytes(uint64(clh.config.NetRateLimiterBwOneTimeBurst/8))),
+		clh.config.NetRateLimiterOpsMaxRate,
+		clh.config.NetRateLimiterOpsOneTimeBurst)
+}
+
+func (clh *cloudHypervisor) getDiskRateLimiterConfig() *chclient.RateLimiterConfig {
+	return clh.getRateLimiterConfig(
+		int64(utils.RevertBytes(uint64(clh.config.DiskRateLimiterBwMaxRate/8))),
+		int64(utils.RevertBytes(uint64(clh.config.DiskRateLimiterBwOneTimeBurst/8))),
+		clh.config.DiskRateLimiterOpsMaxRate,
+		clh.config.DiskRateLimiterOpsOneTimeBurst)
+}
+
 func (clh *cloudHypervisor) addNet(e Endpoint) error {
 	clh.Logger().WithField("endpoint-type", e).Debugf("Adding Endpoint of type %v", e)
 
@@ -1323,9 +1379,15 @@ func (clh *cloudHypervisor) addNet(e Endpoint) error {
 		"tap": tapPath,
 	}).Info("Adding Net")
 
+	netRateLimiterConfig := clh.getNetRateLimiterConfig()
+
 	net := chclient.NewNetConfig()
 	net.Mac = &mac
 	net.Tap = &tapPath
+	if netRateLimiterConfig != nil {
+		net.SetRateLimiterConfig(*netRateLimiterConfig)
+	}
+
 	if clh.vmconfig.Net != nil {
 		*clh.vmconfig.Net = append(*clh.vmconfig.Net, *net)
 	} else {
@@ -1435,5 +1497,5 @@ func (clh *cloudHypervisor) vmInfo() (chclient.VmInfo, error) {
 }
 
 func (clh *cloudHypervisor) IsRateLimiterBuiltin() bool {
-	return false
+	return true
 }

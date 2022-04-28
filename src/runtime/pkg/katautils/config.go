@@ -74,70 +74,78 @@ type factory struct {
 }
 
 type hypervisor struct {
-	Path                    string   `toml:"path"`
-	JailerPath              string   `toml:"jailer_path"`
-	Kernel                  string   `toml:"kernel"`
-	CtlPath                 string   `toml:"ctlpath"`
-	Initrd                  string   `toml:"initrd"`
-	Image                   string   `toml:"image"`
-	Firmware                string   `toml:"firmware"`
-	FirmwareVolume          string   `toml:"firmware_volume"`
-	MachineAccelerators     string   `toml:"machine_accelerators"`
-	CPUFeatures             string   `toml:"cpu_features"`
-	KernelParams            string   `toml:"kernel_params"`
-	MachineType             string   `toml:"machine_type"`
-	BlockDeviceDriver       string   `toml:"block_device_driver"`
-	EntropySource           string   `toml:"entropy_source"`
-	SharedFS                string   `toml:"shared_fs"`
-	VirtioFSDaemon          string   `toml:"virtio_fs_daemon"`
-	VirtioFSCache           string   `toml:"virtio_fs_cache"`
-	VhostUserStorePath      string   `toml:"vhost_user_store_path"`
-	FileBackedMemRootDir    string   `toml:"file_mem_backend"`
-	GuestHookPath           string   `toml:"guest_hook_path"`
-	GuestMemoryDumpPath     string   `toml:"guest_memory_dump_path"`
-	HypervisorPathList      []string `toml:"valid_hypervisor_paths"`
-	JailerPathList          []string `toml:"valid_jailer_paths"`
-	CtlPathList             []string `toml:"valid_ctlpaths"`
-	VirtioFSDaemonList      []string `toml:"valid_virtio_fs_daemon_paths"`
-	VirtioFSExtraArgs       []string `toml:"virtio_fs_extra_args"`
-	PFlashList              []string `toml:"pflashes"`
-	VhostUserStorePathList  []string `toml:"valid_vhost_user_store_paths"`
-	FileBackedMemRootList   []string `toml:"valid_file_mem_backends"`
-	EntropySourceList       []string `toml:"valid_entropy_sources"`
-	EnableAnnotations       []string `toml:"enable_annotations"`
-	RxRateLimiterMaxRate    uint64   `toml:"rx_rate_limiter_max_rate"`
-	TxRateLimiterMaxRate    uint64   `toml:"tx_rate_limiter_max_rate"`
-	MemOffset               uint64   `toml:"memory_offset"`
-	VirtioFSCacheSize       uint32   `toml:"virtio_fs_cache_size"`
-	DefaultMaxVCPUs         uint32   `toml:"default_maxvcpus"`
-	MemorySize              uint32   `toml:"default_memory"`
-	MemSlots                uint32   `toml:"memory_slots"`
-	DefaultBridges          uint32   `toml:"default_bridges"`
-	Msize9p                 uint32   `toml:"msize_9p"`
-	PCIeRootPort            uint32   `toml:"pcie_root_port"`
-	NumVCPUs                int32    `toml:"default_vcpus"`
-	BlockDeviceCacheSet     bool     `toml:"block_device_cache_set"`
-	BlockDeviceCacheDirect  bool     `toml:"block_device_cache_direct"`
-	BlockDeviceCacheNoflush bool     `toml:"block_device_cache_noflush"`
-	EnableVhostUserStore    bool     `toml:"enable_vhost_user_store"`
-	DisableBlockDeviceUse   bool     `toml:"disable_block_device_use"`
-	MemPrealloc             bool     `toml:"enable_mem_prealloc"`
-	HugePages               bool     `toml:"enable_hugepages"`
-	VirtioMem               bool     `toml:"enable_virtio_mem"`
-	IOMMU                   bool     `toml:"enable_iommu"`
-	IOMMUPlatform           bool     `toml:"enable_iommu_platform"`
-	Debug                   bool     `toml:"enable_debug"`
-	DisableNestingChecks    bool     `toml:"disable_nesting_checks"`
-	EnableIOThreads         bool     `toml:"enable_iothreads"`
-	DisableImageNvdimm      bool     `toml:"disable_image_nvdimm"`
-	HotplugVFIOOnRootBus    bool     `toml:"hotplug_vfio_on_root_bus"`
-	DisableVhostNet         bool     `toml:"disable_vhost_net"`
-	GuestMemoryDumpPaging   bool     `toml:"guest_memory_dump_paging"`
-	ConfidentialGuest       bool     `toml:"confidential_guest"`
-	GuestSwap               bool     `toml:"enable_guest_swap"`
-	Rootless                bool     `toml:"rootless"`
-	DisableSeccomp          bool     `toml:"disable_seccomp"`
-	DisableSeLinux          bool     `toml:"disable_selinux"`
+	Path                           string   `toml:"path"`
+	JailerPath                     string   `toml:"jailer_path"`
+	Kernel                         string   `toml:"kernel"`
+	CtlPath                        string   `toml:"ctlpath"`
+	Initrd                         string   `toml:"initrd"`
+	Image                          string   `toml:"image"`
+	Firmware                       string   `toml:"firmware"`
+	FirmwareVolume                 string   `toml:"firmware_volume"`
+	MachineAccelerators            string   `toml:"machine_accelerators"`
+	CPUFeatures                    string   `toml:"cpu_features"`
+	KernelParams                   string   `toml:"kernel_params"`
+	MachineType                    string   `toml:"machine_type"`
+	BlockDeviceDriver              string   `toml:"block_device_driver"`
+	EntropySource                  string   `toml:"entropy_source"`
+	SharedFS                       string   `toml:"shared_fs"`
+	VirtioFSDaemon                 string   `toml:"virtio_fs_daemon"`
+	VirtioFSCache                  string   `toml:"virtio_fs_cache"`
+	VhostUserStorePath             string   `toml:"vhost_user_store_path"`
+	FileBackedMemRootDir           string   `toml:"file_mem_backend"`
+	GuestHookPath                  string   `toml:"guest_hook_path"`
+	GuestMemoryDumpPath            string   `toml:"guest_memory_dump_path"`
+	HypervisorPathList             []string `toml:"valid_hypervisor_paths"`
+	JailerPathList                 []string `toml:"valid_jailer_paths"`
+	CtlPathList                    []string `toml:"valid_ctlpaths"`
+	VirtioFSDaemonList             []string `toml:"valid_virtio_fs_daemon_paths"`
+	VirtioFSExtraArgs              []string `toml:"virtio_fs_extra_args"`
+	PFlashList                     []string `toml:"pflashes"`
+	VhostUserStorePathList         []string `toml:"valid_vhost_user_store_paths"`
+	FileBackedMemRootList          []string `toml:"valid_file_mem_backends"`
+	EntropySourceList              []string `toml:"valid_entropy_sources"`
+	EnableAnnotations              []string `toml:"enable_annotations"`
+	RxRateLimiterMaxRate           uint64   `toml:"rx_rate_limiter_max_rate"`
+	TxRateLimiterMaxRate           uint64   `toml:"tx_rate_limiter_max_rate"`
+	MemOffset                      uint64   `toml:"memory_offset"`
+	DiskRateLimiterBwMaxRate       int64    `toml:"disk_rate_limiter_bw_max_rate"`
+	DiskRateLimiterBwOneTimeBurst  int64    `toml:"disk_rate_limiter_bw_one_time_burst"`
+	DiskRateLimiterOpsMaxRate      int64    `toml:"disk_rate_limiter_ops_max_rate"`
+	DiskRateLimiterOpsOneTimeBurst int64    `toml:"disk_rate_limiter_ops_one_time_burst"`
+	NetRateLimiterBwMaxRate        int64    `toml:"net_rate_limiter_bw_max_rate"`
+	NetRateLimiterBwOneTimeBurst   int64    `toml:"net_rate_limiter_bw_one_time_burst"`
+	NetRateLimiterOpsMaxRate       int64    `toml:"net_rate_limiter_ops_max_rate"`
+	NetRateLimiterOpsOneTimeBurst  int64    `toml:"net_rate_limiter_ops_one_time_burst"`
+	VirtioFSCacheSize              uint32   `toml:"virtio_fs_cache_size"`
+	DefaultMaxVCPUs                uint32   `toml:"default_maxvcpus"`
+	MemorySize                     uint32   `toml:"default_memory"`
+	MemSlots                       uint32   `toml:"memory_slots"`
+	DefaultBridges                 uint32   `toml:"default_bridges"`
+	Msize9p                        uint32   `toml:"msize_9p"`
+	PCIeRootPort                   uint32   `toml:"pcie_root_port"`
+	NumVCPUs                       int32    `toml:"default_vcpus"`
+	BlockDeviceCacheSet            bool     `toml:"block_device_cache_set"`
+	BlockDeviceCacheDirect         bool     `toml:"block_device_cache_direct"`
+	BlockDeviceCacheNoflush        bool     `toml:"block_device_cache_noflush"`
+	EnableVhostUserStore           bool     `toml:"enable_vhost_user_store"`
+	DisableBlockDeviceUse          bool     `toml:"disable_block_device_use"`
+	MemPrealloc                    bool     `toml:"enable_mem_prealloc"`
+	HugePages                      bool     `toml:"enable_hugepages"`
+	VirtioMem                      bool     `toml:"enable_virtio_mem"`
+	IOMMU                          bool     `toml:"enable_iommu"`
+	IOMMUPlatform                  bool     `toml:"enable_iommu_platform"`
+	Debug                          bool     `toml:"enable_debug"`
+	DisableNestingChecks           bool     `toml:"disable_nesting_checks"`
+	EnableIOThreads                bool     `toml:"enable_iothreads"`
+	DisableImageNvdimm             bool     `toml:"disable_image_nvdimm"`
+	HotplugVFIOOnRootBus           bool     `toml:"hotplug_vfio_on_root_bus"`
+	DisableVhostNet                bool     `toml:"disable_vhost_net"`
+	GuestMemoryDumpPaging          bool     `toml:"guest_memory_dump_paging"`
+	ConfidentialGuest              bool     `toml:"confidential_guest"`
+	GuestSwap                      bool     `toml:"enable_guest_swap"`
+	Rootless                       bool     `toml:"rootless"`
+	DisableSeccomp                 bool     `toml:"disable_seccomp"`
+	DisableSeLinux                 bool     `toml:"disable_selinux"`
 }
 
 type runtime struct {
@@ -482,12 +490,68 @@ func (h hypervisor) getInitrdAndImage() (initrd string, image string, err error)
 	return
 }
 
+func (h hypervisor) getDiskRateLimiterBwMaxRate() int64 {
+	return h.DiskRateLimiterBwMaxRate
+}
+
+func (h hypervisor) getDiskRateLimiterBwOneTimeBurst() int64 {
+	if h.DiskRateLimiterBwOneTimeBurst != 0 && h.getDiskRateLimiterBwMaxRate() == 0 {
+		kataUtilsLogger.Warn("The DiskRateLimiterBwOneTimeBurst is set but DiskRateLimiterBwMaxRate is not set, this option will be ignored.")
+
+		h.DiskRateLimiterBwOneTimeBurst = 0
+	}
+
+	return h.DiskRateLimiterBwOneTimeBurst
+}
+
+func (h hypervisor) getDiskRateLimiterOpsMaxRate() int64 {
+	return h.DiskRateLimiterOpsMaxRate
+}
+
+func (h hypervisor) getDiskRateLimiterOpsOneTimeBurst() int64 {
+	if h.DiskRateLimiterOpsOneTimeBurst != 0 && h.getDiskRateLimiterOpsMaxRate() == 0 {
+		kataUtilsLogger.Warn("The DiskRateLimiterOpsOneTimeBurst is set but DiskRateLimiterOpsMaxRate is not set, this option will be ignored.")
+
+		h.DiskRateLimiterOpsOneTimeBurst = 0
+	}
+
+	return h.DiskRateLimiterOpsOneTimeBurst
+}
+
 func (h hypervisor) getRxRateLimiterCfg() uint64 {
 	return h.RxRateLimiterMaxRate
 }
 
 func (h hypervisor) getTxRateLimiterCfg() uint64 {
 	return h.TxRateLimiterMaxRate
+}
+
+func (h hypervisor) getNetRateLimiterBwMaxRate() int64 {
+	return h.NetRateLimiterBwMaxRate
+}
+
+func (h hypervisor) getNetRateLimiterBwOneTimeBurst() int64 {
+	if h.NetRateLimiterBwOneTimeBurst != 0 && h.getNetRateLimiterBwMaxRate() == 0 {
+		kataUtilsLogger.Warn("The NetRateLimiterBwOneTimeBurst is set but NetRateLimiterBwMaxRate is not set, this option will be ignored.")
+
+		h.NetRateLimiterBwOneTimeBurst = 0
+	}
+
+	return h.NetRateLimiterBwOneTimeBurst
+}
+
+func (h hypervisor) getNetRateLimiterOpsMaxRate() int64 {
+	return h.NetRateLimiterOpsMaxRate
+}
+
+func (h hypervisor) getNetRateLimiterOpsOneTimeBurst() int64 {
+	if h.NetRateLimiterOpsOneTimeBurst != 0 && h.getNetRateLimiterOpsMaxRate() == 0 {
+		kataUtilsLogger.Warn("The NetRateLimiterOpsOneTimeBurst is set but NetRateLimiterOpsMaxRate is not set, this option will be ignored.")
+
+		h.NetRateLimiterOpsOneTimeBurst = 0
+	}
+
+	return h.NetRateLimiterOpsOneTimeBurst
 }
 
 func (h hypervisor) getIOMMUPlatform() bool {
@@ -828,52 +892,60 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	}
 
 	return vc.HypervisorConfig{
-		HypervisorPath:          hypervisor,
-		HypervisorPathList:      h.HypervisorPathList,
-		KernelPath:              kernel,
-		InitrdPath:              initrd,
-		ImagePath:               image,
-		FirmwarePath:            firmware,
-		MachineAccelerators:     machineAccelerators,
-		KernelParams:            vc.DeserializeParams(strings.Fields(kernelParams)),
-		HypervisorMachineType:   machineType,
-		NumVCPUs:                h.defaultVCPUs(),
-		DefaultMaxVCPUs:         h.defaultMaxVCPUs(),
-		MemorySize:              h.defaultMemSz(),
-		MemSlots:                h.defaultMemSlots(),
-		MemOffset:               h.defaultMemOffset(),
-		VirtioMem:               h.VirtioMem,
-		EntropySource:           h.GetEntropySource(),
-		EntropySourceList:       h.EntropySourceList,
-		DefaultBridges:          h.defaultBridges(),
-		DisableBlockDeviceUse:   h.DisableBlockDeviceUse,
-		SharedFS:                sharedFS,
-		VirtioFSDaemon:          h.VirtioFSDaemon,
-		VirtioFSDaemonList:      h.VirtioFSDaemonList,
-		VirtioFSCacheSize:       h.VirtioFSCacheSize,
-		VirtioFSCache:           h.VirtioFSCache,
-		MemPrealloc:             h.MemPrealloc,
-		HugePages:               h.HugePages,
-		FileBackedMemRootDir:    h.FileBackedMemRootDir,
-		FileBackedMemRootList:   h.FileBackedMemRootList,
-		Debug:                   h.Debug,
-		DisableNestingChecks:    h.DisableNestingChecks,
-		BlockDeviceDriver:       blockDriver,
-		BlockDeviceCacheSet:     h.BlockDeviceCacheSet,
-		BlockDeviceCacheDirect:  h.BlockDeviceCacheDirect,
-		BlockDeviceCacheNoflush: h.BlockDeviceCacheNoflush,
-		EnableIOThreads:         h.EnableIOThreads,
-		Msize9p:                 h.msize9p(),
-		HotplugVFIOOnRootBus:    h.HotplugVFIOOnRootBus,
-		PCIeRootPort:            h.PCIeRootPort,
-		DisableVhostNet:         true,
-		GuestHookPath:           h.guestHookPath(),
-		VirtioFSExtraArgs:       h.VirtioFSExtraArgs,
-		SGXEPCSize:              defaultSGXEPCSize,
-		EnableAnnotations:       h.EnableAnnotations,
-		DisableSeccomp:          h.DisableSeccomp,
-		ConfidentialGuest:       h.ConfidentialGuest,
-		DisableSeLinux:          h.DisableSeLinux,
+		HypervisorPath:                 hypervisor,
+		HypervisorPathList:             h.HypervisorPathList,
+		KernelPath:                     kernel,
+		InitrdPath:                     initrd,
+		ImagePath:                      image,
+		FirmwarePath:                   firmware,
+		MachineAccelerators:            machineAccelerators,
+		KernelParams:                   vc.DeserializeParams(strings.Fields(kernelParams)),
+		HypervisorMachineType:          machineType,
+		NumVCPUs:                       h.defaultVCPUs(),
+		DefaultMaxVCPUs:                h.defaultMaxVCPUs(),
+		MemorySize:                     h.defaultMemSz(),
+		MemSlots:                       h.defaultMemSlots(),
+		MemOffset:                      h.defaultMemOffset(),
+		VirtioMem:                      h.VirtioMem,
+		EntropySource:                  h.GetEntropySource(),
+		EntropySourceList:              h.EntropySourceList,
+		DefaultBridges:                 h.defaultBridges(),
+		DisableBlockDeviceUse:          h.DisableBlockDeviceUse,
+		SharedFS:                       sharedFS,
+		VirtioFSDaemon:                 h.VirtioFSDaemon,
+		VirtioFSDaemonList:             h.VirtioFSDaemonList,
+		VirtioFSCacheSize:              h.VirtioFSCacheSize,
+		VirtioFSCache:                  h.VirtioFSCache,
+		MemPrealloc:                    h.MemPrealloc,
+		HugePages:                      h.HugePages,
+		FileBackedMemRootDir:           h.FileBackedMemRootDir,
+		FileBackedMemRootList:          h.FileBackedMemRootList,
+		Debug:                          h.Debug,
+		DisableNestingChecks:           h.DisableNestingChecks,
+		BlockDeviceDriver:              blockDriver,
+		BlockDeviceCacheSet:            h.BlockDeviceCacheSet,
+		BlockDeviceCacheDirect:         h.BlockDeviceCacheDirect,
+		BlockDeviceCacheNoflush:        h.BlockDeviceCacheNoflush,
+		EnableIOThreads:                h.EnableIOThreads,
+		Msize9p:                        h.msize9p(),
+		HotplugVFIOOnRootBus:           h.HotplugVFIOOnRootBus,
+		PCIeRootPort:                   h.PCIeRootPort,
+		DisableVhostNet:                true,
+		GuestHookPath:                  h.guestHookPath(),
+		VirtioFSExtraArgs:              h.VirtioFSExtraArgs,
+		SGXEPCSize:                     defaultSGXEPCSize,
+		EnableAnnotations:              h.EnableAnnotations,
+		DisableSeccomp:                 h.DisableSeccomp,
+		ConfidentialGuest:              h.ConfidentialGuest,
+		DisableSeLinux:                 h.DisableSeLinux,
+		NetRateLimiterBwMaxRate:        h.getNetRateLimiterBwMaxRate(),
+		NetRateLimiterBwOneTimeBurst:   h.getNetRateLimiterBwOneTimeBurst(),
+		NetRateLimiterOpsMaxRate:       h.getNetRateLimiterOpsMaxRate(),
+		NetRateLimiterOpsOneTimeBurst:  h.getNetRateLimiterOpsOneTimeBurst(),
+		DiskRateLimiterBwMaxRate:       h.getDiskRateLimiterBwMaxRate(),
+		DiskRateLimiterBwOneTimeBurst:  h.getDiskRateLimiterBwOneTimeBurst(),
+		DiskRateLimiterOpsMaxRate:      h.getDiskRateLimiterOpsMaxRate(),
+		DiskRateLimiterOpsOneTimeBurst: h.getDiskRateLimiterOpsOneTimeBurst(),
 	}, nil
 }
 
