@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"time"
@@ -48,7 +49,7 @@ func DoGet(sandboxID string, timeoutInSeconds time.Duration, urlPath string) ([]
 		return nil, err
 	}
 
-	resp, err := client.Get(fmt.Sprintf("http://shim/%s", urlPath))
+	resp, err := client.Get(fmt.Sprintf("http://shim%s", urlPath))
 	if err != nil {
 		return nil, err
 	}
@@ -72,19 +73,29 @@ func DoPut(sandboxID string, timeoutInSeconds time.Duration, urlPath, contentTyp
 		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPut, fmt.Sprintf("http://shim/%s", urlPath), bytes.NewBuffer(payload))
+	req, err := http.NewRequest(http.MethodPut, fmt.Sprintf("http://shim%s", urlPath), bytes.NewBuffer(payload))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", contentType)
 
 	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()
 		}
 	}()
-	return err
+
+	if resp.StatusCode != http.StatusOK {
+		data, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("error sending put: url: %s, status code: %d, response data: %s", urlPath, resp.StatusCode, string(data))
+	}
+
+	return nil
 }
 
 // DoPost will make a POST request to the shim endpoint that handles the given sandbox ID
@@ -94,11 +105,21 @@ func DoPost(sandboxID string, timeoutInSeconds time.Duration, urlPath, contentTy
 		return err
 	}
 
-	resp, err := client.Post(fmt.Sprintf("http://shim/%s", urlPath), contentType, bytes.NewBuffer(payload))
+	resp, err := client.Post(fmt.Sprintf("http://shim%s", urlPath), contentType, bytes.NewBuffer(payload))
+	if err != nil {
+		return err
+	}
+
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()
 		}
 	}()
-	return err
+
+	if resp.StatusCode != http.StatusOK {
+		data, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("error sending post: url: %s, status code: %d, response data: %s", urlPath, resp.StatusCode, string(data))
+	}
+
+	return nil
 }
