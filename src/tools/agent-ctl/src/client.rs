@@ -473,10 +473,8 @@ fn create_ttrpc_client(
             if path.starts_with('@') {
                 abstract_socket = true;
 
-                // Remove the magic abstract-socket request character ('@')
-                // and crucially add a trailing nul terminator (required to
-                // interoperate with the ttrpc crate).
-                path = path[1..].to_string() + &"\x00".to_string();
+                // Remove the magic abstract-socket request character ('@').
+                path = path[1..].to_string();
             }
 
             if abstract_socket {
