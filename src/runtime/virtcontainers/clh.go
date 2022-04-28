@@ -101,6 +101,8 @@ type clhClient interface {
 	ResumeVM(ctx context.Context) (*http.Response, error)
 	// Add/remove CPUs to/from the VM
 	VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error)
+	// Resize a memory zone
+	VmResizeZonePut(ctx context.Context, vmResizeZone chclient.VmResizeZone) (*http.Response, error)
 	// Add VFIO PCI device to the VM
 	VmAddDevicePut(ctx context.Context, vmAddDevice chclient.VmAddDevice) (chclient.PciDeviceInfo, *http.Response, error)
 	// Add a new disk device to the VM
@@ -148,6 +150,10 @@ func (c *clhClientApi) ResumeVM(ctx context.Context) (*http.Response, error) {
 
 func (c *clhClientApi) VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error) {
 	return c.ApiInternal.VmResizePut(ctx).VmResize(vmResize).Execute()
+}
+
+func (c *clhClientApi) VmResizeZonePut(ctx context.Context, vmResizeZone chclient.VmResizeZone) (*http.Response, error) {
+	return c.ApiInternal.VmResizeZonePut(ctx).VmResizeZone(vmResizeZone).Execute()
 }
 
 func (c *clhClientApi) VmAddDevicePut(ctx context.Context, vmAddDevice chclient.VmAddDevice) (chclient.PciDeviceInfo, *http.Response, error) {
@@ -838,6 +844,16 @@ func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, m
 	}
 
 	currentMem := utils.MemUnit(info.Config.Memory.Size) * utils.Byte
+	if info.Config.Memory.HasZones() {
+		// Vm templating use memory zone
+		zones := *info.Config.Memory.Zones
+		for _, zone := range zones {
+			if zone.GetId() == templateZoneId {
+				currentMem += utils.MemUnit(zone.Size) * utils.Byte
+			}
+		}
+	}
+
 	newMem := utils.MemUnit(reqMemMB) * utils.MiB
 
 	// Early Check to verify if boot memory is the same as requested
@@ -872,14 +888,29 @@ func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, m
 	ctx, cancelResize := context.WithTimeout(ctx, clhAPITimeout*time.Second)
 	defer cancelResize()
 
-	resize := *chclient.NewVmResize()
-	// OpenApi does not support uint64, convert to int64
-	resize.DesiredRam = func(i int64) *int64 { return &i }(int64(newMem.ToBytes()))
-	clh.Logger().WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Debug("updating VM memory")
-	if _, err = cl.VmResizePut(ctx, resize); err != nil {
-		clh.Logger().WithError(err).WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Warnf("failed to update memory %s", openAPIClientError(err))
-		err = fmt.Errorf("Failed to resize memory from %d to %d: %s", currentMem, newMem, openAPIClientError(err))
-		return uint32(currentMem.ToMiB()), MemoryDevice{}, openAPIClientError(err)
+	if !info.Config.Memory.HasZones() {
+		// Resize memory when no using memory zone, hotplug method can be acpi or virtio-mem
+		resize := *chclient.NewVmResize()
+		// OpenApi does not support uint64, convert to int64
+		resize.DesiredRam = func(i int64) *int64 { return &i }(int64(newMem.ToBytes()))
+		clh.Logger().WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Debug("updating VM memory")
+		if _, err = cl.VmResizePut(ctx, resize); err != nil {
+			clh.Logger().WithError(err).WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Warnf("failed to update memory %s", openAPIClientError(err))
+			err = fmt.Errorf("Failed to resize memory from %d to %d: %s", currentMem, newMem, openAPIClientError(err))
+			return uint32(currentMem.ToMiB()), MemoryDevice{}, openAPIClientError(err)
+		}
+	} else {
+		// Resizing a memory zone, hotplug method must be virtio-mem
+		resizeZone := *chclient.NewVmResizeZone()
+		// OpenApi does not support uint64, convert to int64
+		resizeZone.SetId(templateZoneId)
+		resizeZone.DesiredRam = func(i int64) *int64 { return &i }(int64(newMem.ToBytes()))
+		clh.Logger().WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Debug("updating VM memory")
+		if _, err = cl.VmResizeZonePut(ctx, resizeZone); err != nil {
+			clh.Logger().WithError(err).WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Warnf("failed to update memory %s", openAPIClientError(err))
+			err = fmt.Errorf("Failed to resize memory from %d to %d: %s", currentMem, newMem, openAPIClientError(err))
+			return uint32(currentMem.ToMiB()), MemoryDevice{}, openAPIClientError(err)
+		}
 	}
 
 	return uint32(newMem.ToMiB()), MemoryDevice{SizeMB: int(hotplugSize.ToMiB())}, nil
