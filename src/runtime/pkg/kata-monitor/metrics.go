@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	containerdshim "github.com/kata-containers/kata-containers/src/runtime/pkg/containerd-shim-v2"
 	mutils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils/shimclient"
 	"github.com/prometheus/client_golang/prometheus"
@@ -239,7 +240,7 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 }
 
 func getParsedMetrics(sandboxID string, sandboxMetadata sandboxCRIMetadata) ([]*dto.MetricFamily, error) {
-	body, err := shimclient.DoGet(sandboxID, defaultTimeout, "metrics")
+	body, err := shimclient.DoGet(sandboxID, defaultTimeout, containerdshim.MetricsUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +250,7 @@ func getParsedMetrics(sandboxID string, sandboxMetadata sandboxCRIMetadata) ([]*
 
 // GetSandboxMetrics will get sandbox's metrics from shim
 func GetSandboxMetrics(sandboxID string) (string, error) {
-	body, err := shimclient.DoGet(sandboxID, defaultTimeout, "metrics")
+	body, err := shimclient.DoGet(sandboxID, defaultTimeout, containerdshim.MetricsUrl)
 	if err != nil {
 		return "", err
 	}

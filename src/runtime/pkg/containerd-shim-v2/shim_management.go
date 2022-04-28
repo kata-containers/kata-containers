@@ -33,12 +33,13 @@ import (
 )
 
 const (
-	DirectVolumePathKey = "path"
-
+	DirectVolumePathKey   = "path"
+	AgentUrl              = "/agent-url"
 	DirectVolumeStatUrl   = "/direct-volume/stats"
 	DirectVolumeResizeUrl = "/direct-volume/resize"
 	IPTablesUrl           = "/iptables"
 	IP6TablesUrl          = "/ip6tables"
+	MetricsUrl            = "/metrics"
 )
 
 var (
@@ -260,8 +261,8 @@ func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec
 
 	// bind handler
 	m := http.NewServeMux()
-	m.Handle("/metrics", http.HandlerFunc(s.serveMetrics))
-	m.Handle("/agent-url", http.HandlerFunc(s.agentURL))
+	m.Handle(MetricsUrl, http.HandlerFunc(s.serveMetrics))
+	m.Handle(AgentUrl, http.HandlerFunc(s.agentURL))
 	m.Handle(DirectVolumeStatUrl, http.HandlerFunc(s.serveVolumeStats))
 	m.Handle(DirectVolumeResizeUrl, http.HandlerFunc(s.serveVolumeResize))
 	m.Handle(IPTablesUrl, http.HandlerFunc(s.ipTablesHandler))
