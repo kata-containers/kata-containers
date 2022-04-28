@@ -4,7 +4,7 @@
 
 The Kata Containers agent control tool (`kata-agent-ctl`) is a low-level test
 tool. It allows basic interaction with the Kata Containers agent,
-`kata-agent`, that runs inside the virtual machine.
+`kata-agent`, that runs inside the virtual machine (VM).
 
 Unlike the Kata Runtime, which only ever makes sequences of correctly ordered
 and valid agent API calls, this tool allows users to make arbitrary agent API
@@ -117,7 +117,7 @@ establish the VSOCK guest CID value to connect to the agent.
 
 1. Start a Kata Container
 
-1. Establish the VSOCK guest CID number for the virtual machine:
+1. Establish the VSOCK guest CID number for the VM:
 
    ```sh
    $ guest_cid=$(sudo ss -H --vsock | awk '{print $6}' | cut -d: -f1)
