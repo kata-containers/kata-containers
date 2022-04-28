@@ -50,17 +50,6 @@ func TestFCTruncateID(t *testing.T) {
 	assert.Equal(expectedID, id)
 }
 
-func TestRevertBytes(t *testing.T) {
-	assert := assert.New(t)
-
-	//10MB
-	testNum := uint64(10000000)
-	expectedNum := uint64(10485760)
-
-	num := revertBytes(testNum)
-	assert.Equal(expectedNum, num)
-}
-
 func TestFCParseVersion(t *testing.T) {
 	assert := assert.New(t)
 
