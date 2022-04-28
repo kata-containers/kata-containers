@@ -211,9 +211,11 @@ $ sudo install -o root -g root -m 0755 ~/.cargo/bin/kata-agent-ctl /usr/local/bi
 
 > **Warnings:**
 >
-> - This method is **only** for testing and development!
+> - These methods are **only** for testing and development!
 > - Only continue if you are using a non-critical system
 >   (such as a freshly installed VM environment).
+
+#### Use a Unix abstract domain socket
 
 1. Start the agent, specifying a local socket for it to communicate on:
 
@@ -233,3 +235,31 @@ $ sudo install -o root -g root -m 0755 ~/.cargo/bin/kata-agent-ctl /usr/local/bi
    >
    > The `@` in the server address is required - it denotes an abstract
    > socket which the agent requires (see `unix(7)`).
+
+#### Use a VSOCK loopback socket
+
+VSOCK supports a special CID value of `1` (known symbolically as
+`VMADDR_CID_LOCAL`) which assumes that the VM is actually
+the local environment. This is effectively a `localhost` or loopback
+interface which does not require an actual VM to be
+running.
+
+1. Start the agent, specifying the local VSOCK socket for it to communicate on:
+
+   ```sh
+   $ vsock_loopback_cid=1
+   $ agent_vsock_port=1024
+
+   $ sudo KATA_AGENT_SERVER_ADDR="vsock://${vsock_loopback_cid}:${agent_vsock_port}" target/x86_64-unknown-linux-musl/release/kata-agent
+   ```
+
+   > **Note:** This example assumes an Intel x86-64 system.
+
+1. Run the tool in the same environment:
+
+   ```sh
+   $ vsock_loopback_cid=1
+   $ agent_vsock_port=1024
+
+   $ cargo run -- -l debug connect --server-address "vsock://${vsock_loopback_cid}:${agent_vsock_port}" --bundle-dir "$bundle_dir" -c Check -c GetGuestDetails
+   ```
