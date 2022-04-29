@@ -1,0 +1,15 @@
+[package]
+name = "dragonball"
+version = "0.1.0"
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+description = "A secure sandbox for Kata Containers"
+keywords = ["kata-containers", "sandbox", "vmm", "dragonball"]
+homepage = "https://katacontainers.io/"
+repository = "https://github.com/kata-containers/kata-containers.git"
+license = "Apache-2.0"
+edition = "2018"
+
+[dependencies]
+arc-swap = "1.5.0"
+dbs-device = "0.1.0"
+thiserror = "1"
