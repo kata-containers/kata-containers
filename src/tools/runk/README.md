@@ -93,7 +93,7 @@ $ bundle_dir="bundle"
 $ rootfs_dir="$bundle_dir/rootfs"
 $ image="busybox"
 $ mkdir -p "$rootfs_dir" && (cd "$bundle_dir" && runk spec)
-$ sudo docker export $(sudo docker create "$image") | tar -C "$rootfs_dir" -xvf -
+$ sudo docker export $(sudo docker create "$image") | tar -C "$rootfs_dir" -xf -
 ```
 
 > **Note:**
@@ -160,7 +160,7 @@ $ sudo runk delete test
 ### Prerequisites for `runk` with containerd
 
 * `containerd` v1.2.4 or above
-* `cri-tool`
+* `cri-tools`
 
 > **Note:**
 > [`cri-tools`](https://github.com/kubernetes-sigs/cri-tools) is a set of tools for CRI
@@ -197,6 +197,8 @@ version = 2
   runtime_type = "io.containerd.runc.v2"
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runk]
   runtime_type = "io.containerd.runc.v2"
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runk.options]
+    BinaryName = "/usr/local/bin/runk"
 EOF
 ```
 
