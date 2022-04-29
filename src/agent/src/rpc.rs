@@ -1802,7 +1802,7 @@ async fn do_add_swap(sandbox: &Arc<Mutex<Sandbox>>, req: &AddSwapRequest) -> Res
 // - config.json at /<CONTAINER_BASE>/<cid>/config.json
 // - container rootfs bind mounted at /<CONTAINER_BASE>/<cid>/rootfs
 // - modify container spec root to point to /<CONTAINER_BASE>/<cid>/rootfs
-fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
+pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     let spec_root = if let Some(sr) = &spec.root {
         sr
     } else {

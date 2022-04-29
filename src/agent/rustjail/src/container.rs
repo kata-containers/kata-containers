@@ -23,6 +23,8 @@ use crate::cgroups::fs::Manager as FsManager;
 #[cfg(test)]
 use crate::cgroups::mock::Manager as FsManager;
 use crate::cgroups::Manager;
+#[cfg(feature = "standard-oci-runtime")]
+use crate::console;
 use crate::log_child;
 use crate::process::Process;
 #[cfg(feature = "seccomp")]
@@ -64,7 +66,7 @@ use tokio::sync::Mutex;
 
 use crate::utils;
 
-const EXEC_FIFO_FILENAME: &str = "exec.fifo";
+pub const EXEC_FIFO_FILENAME: &str = "exec.fifo";
 
 const INIT: &str = "INIT";
 const NO_PIVOT: &str = "NO_PIVOT";
@@ -74,6 +76,10 @@ const CLOG_FD: &str = "CLOG_FD";
 const FIFO_FD: &str = "FIFO_FD";
 const HOME_ENV_KEY: &str = "HOME";
 const PIDNS_FD: &str = "PIDNS_FD";
+const CONSOLE_SOCKET_FD: &str = "CONSOLE_SOCKET_FD";
+
+#[cfg(feature = "standard-oci-runtime")]
+const OCI_AGENT_BINARY: &str = "oci-kata-agent";
 
 #[derive(Debug)]
 pub struct ContainerStatus {
@@ -82,7 +88,7 @@ pub struct ContainerStatus {
 }
 
 impl ContainerStatus {
-    fn new() -> Self {
+    pub fn new() -> Self {
         ContainerStatus {
             pre_status: ContainerState::Created,
             cur_status: ContainerState::Created,
@@ -99,6 +105,12 @@ impl ContainerStatus {
     }
 }
 
+impl Default for ContainerStatus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub type Config = CreateOpts;
 type NamespaceType = String;
 
@@ -106,7 +118,7 @@ lazy_static! {
     // This locker ensures the child exit signal will be received by the right receiver.
     pub static ref WAIT_PID_LOCKER: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
 
-    static ref NAMESPACES: HashMap<&'static str, CloneFlags> = {
+    pub static ref NAMESPACES: HashMap<&'static str, CloneFlags> = {
         let mut m = HashMap::new();
         m.insert("user", CloneFlags::CLONE_NEWUSER);
         m.insert("ipc", CloneFlags::CLONE_NEWIPC);
@@ -119,7 +131,7 @@ lazy_static! {
     };
 
 // type to name hashmap, better to be in NAMESPACES
-    static ref TYPETONAME: HashMap<&'static str, &'static str> = {
+    pub static ref TYPETONAME: HashMap<&'static str, &'static str> = {
         let mut m = HashMap::new();
         m.insert("ipc", "ipc");
         m.insert("user", "user");
@@ -236,6 +248,8 @@ pub struct LinuxContainer {
     pub status: ContainerStatus,
     pub created: SystemTime,
     pub logger: Logger,
+    #[cfg(feature = "standard-oci-runtime")]
+    pub console_socket: PathBuf,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -359,7 +373,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
             )));
         }
     }
-
     log_child!(cfd_log, "child process start run");
     let buf = read_sync(crfd)?;
     let spec_str = std::str::from_utf8(&buf)?;
@@ -378,6 +391,9 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let cm_str = std::str::from_utf8(&buf)?;
 
     let cm: FsManager = serde_json::from_str(cm_str)?;
+
+    #[cfg(feature = "standard-oci-runtime")]
+    let csocket_fd = console::setup_console_socket(&std::env::var(CONSOLE_SOCKET_FD)?)?;
 
     let p = if spec.process.is_some() {
         spec.process.as_ref().unwrap()
@@ -670,10 +686,19 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let _ = unistd::close(crfd);
     let _ = unistd::close(cwfd);
 
-    unistd::setsid().context("create a new session")?;
     if oci_process.terminal {
-        unsafe {
-            libc::ioctl(0, libc::TIOCSCTTY);
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "standard-oci-runtime")] {
+                if let Some(csocket_fd) = csocket_fd {
+                    console::setup_master_console(csocket_fd)?;
+                } else {
+                    return Err(anyhow!("failed to get console master socket fd"));
+                }
+            }
+            else {
+                unistd::setsid().context("create a new session")?;
+                unsafe { libc::ioctl(0, libc::TIOCSCTTY) };
+            }
         }
     }
 
@@ -926,8 +951,24 @@ impl BaseContainer for LinuxContainer {
             let _ = unistd::close(pid);
         });
 
-        let exec_path = std::env::current_exe()?;
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "standard-oci-runtime")] {
+                let exec_path = PathBuf::from(OCI_AGENT_BINARY);
+            }
+            else {
+                let exec_path = std::env::current_exe()?;
+            }
+        }
+
         let mut child = std::process::Command::new(exec_path);
+
+        #[allow(unused_mut)]
+        let mut console_name = PathBuf::from("");
+        #[cfg(feature = "standard-oci-runtime")]
+        if !self.console_socket.as_os_str().is_empty() {
+            console_name = self.console_socket.clone();
+        }
+
         let mut child = child
             .arg("init")
             .stdin(child_stdin)
@@ -937,7 +978,8 @@ impl BaseContainer for LinuxContainer {
             .env(NO_PIVOT, format!("{}", self.config.no_pivot_root))
             .env(CRFD_FD, format!("{}", crfd))
             .env(CWFD_FD, format!("{}", cwfd))
-            .env(CLOG_FD, format!("{}", cfd_log));
+            .env(CLOG_FD, format!("{}", cfd_log))
+            .env(CONSOLE_SOCKET_FD, console_name);
 
         if p.init {
             child = child.env(FIFO_FD, format!("{}", fifofd));
@@ -1419,7 +1461,15 @@ impl LinuxContainer {
                 .unwrap()
                 .as_secs(),
             logger: logger.new(o!("module" => "rustjail", "subsystem" => "container", "cid" => id)),
+            #[cfg(feature = "standard-oci-runtime")]
+            console_socket: Path::new("").to_path_buf(),
         })
+    }
+
+    #[cfg(feature = "standard-oci-runtime")]
+    pub fn set_console_socket(&mut self, console_socket: &Path) -> Result<()> {
+        self.console_socket = console_socket.to_path_buf();
+        Ok(())
     }
 }
 
@@ -1460,7 +1510,7 @@ use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
+pub async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
     let logger = logger.new(o!("action" => "execute-hook"));
 
     let binary = PathBuf::from(h.path.as_str());
