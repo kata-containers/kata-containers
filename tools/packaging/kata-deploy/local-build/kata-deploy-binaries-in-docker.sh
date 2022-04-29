@@ -29,6 +29,7 @@ docker build -q -t build-kata-deploy \
 docker run \
 	-v /var/run/docker.sock:/var/run/docker.sock \
 	--user ${uid}:${gid} \
+	--env EXTRA_PKGS="${EXTRA_PKGS}" \
 	--env USER=${USER} -v "${kata_dir}:${kata_dir}" \
 	--rm \
 	-w ${script_dir} \
