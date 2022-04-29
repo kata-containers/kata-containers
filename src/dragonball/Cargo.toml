@@ -11,7 +11,23 @@ edition = "2018"
 
 [dependencies]
 arc-swap = "1.5.0"
+dbs-address-space = "0.1.0"
 dbs-allocator = "0.1.0"
 dbs-boot = "0.2.0"
 dbs-device = "0.1.0"
+kvm-bindings = "0.5.0"
+kvm-ioctls = "0.11.0"
+libc = "0.2.39"
+log = "0.4.14"
+nix = "0.23.1"
+serde = "1.0.27"
+serde_derive = "1.0.27"
+serde_json = "1.0.9"
+slog = "2.5.2"
+slog-scope = "4.4.0"
 thiserror = "1"
+vmm-sys-util = "0.9.0"
+vm-memory = { version = "0.7.0", features = ["backend-mmap"] }
+
+[features]
+atomic-guest-memory = []
