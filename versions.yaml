@@ -158,6 +158,11 @@ assets:
       description: "Linux kernel that supports TDX"
       url: "https://github.com/intel/tdx/archive/refs/tags"
       tag: "tdx-guest-v5.15-4"
+    sev:
+      description: "Linux kernel with efi_secret support"
+      url: "https://github.com/confidential-containers-demo/\
+      linux/archive/refs/tags/"
+      tag: "efi-secret-v5.17-rc6"
 
   kernel-experimental:
     description: "Linux kernel with virtio-fs support"
