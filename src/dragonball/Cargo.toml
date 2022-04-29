@@ -11,5 +11,7 @@ edition = "2018"
 
 [dependencies]
 arc-swap = "1.5.0"
+dbs-allocator = "0.1.0"
+dbs-boot = "0.2.0"
 dbs-device = "0.1.0"
 thiserror = "1"
