@@ -144,21 +144,16 @@ pub fn is_process_running(pid: Pid) -> Result<bool> {
 
 pub fn get_current_container_state(status: &Status) -> Result<ContainerState> {
     let running = is_process_running(Pid::from_raw(status.pid))?;
-    let mut has_fifo = false;
 
-    if running {
-        let fifo = get_fifo_path(status);
-        if fifo.exists() {
-            has_fifo = true
-        }
-    }
+    let fifo = get_fifo_path(status);
+    let has_fifo = fifo.exists();
 
     if running && !has_fifo {
         // TODO: Check paused status.
         // runk does not support pause command currently.
     }
 
-    if !running {
+    if !running && !has_fifo {
         Ok(ContainerState::Stopped)
     } else if has_fifo {
         Ok(ContainerState::Created)
