@@ -1017,6 +1017,7 @@ fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::test_utils::TestUserType;
     use crate::{skip_if_not_root, skip_loop_if_not_root, skip_loop_if_root};
     use protobuf::RepeatedField;
     use protocols::agent::FSGroup;
@@ -1025,13 +1026,6 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
     use tempfile::tempdir;
-
-    #[derive(Debug, PartialEq)]
-    enum TestUserType {
-        RootOnly,
-        NonRootOnly,
-        Any,
-    }
 
     #[test]
     fn test_mount() {
