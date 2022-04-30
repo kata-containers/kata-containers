@@ -85,4 +85,15 @@ pub mod test_utils {
             }
         };
     }
+
+    #[macro_export]
+    macro_rules! skip_loop_by_user {
+        ($msg:expr, $user:expr) => {
+            if $user == TestUserType::RootOnly {
+                skip_loop_if_not_root!($msg);
+            } else if $user == TestUserType::NonRootOnly {
+                skip_loop_if_root!($msg);
+            }
+        };
+    }
 }
