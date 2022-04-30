@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::Kill;
 use anyhow::{anyhow, Result};
 use libcontainer::status::{self, get_current_container_state, Status};
-use liboci_cli::Kill;
 use nix::{
     sys::signal::{kill, Signal},
     unistd::Pid,
@@ -22,7 +22,8 @@ pub fn run(opts: Kill, state_root: &Path, logger: &Logger) -> Result<()> {
 
     // TODO: liboci-cli does not support --all option for kill command.
     // After liboci-cli supports the option, we will change the following code.
-    let all = false;
+    // as a workaround we use a custom Kill command.
+    let all = opts.all;
     if all {
         let pids = status::get_all_pid(&status.cgroup_manager)?;
         for pid in pids {
