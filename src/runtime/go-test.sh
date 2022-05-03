@@ -15,14 +15,19 @@ long_options=(
 	[package:]="Specify test package to run"
 )
 
-# Set default test run timeout value.
-#
-# KATA_GO_TEST_TIMEOUT can be set to any value accepted by
-# "go test -timeout X"
-timeout_value=${KATA_GO_TEST_TIMEOUT:-30s}
+# Set up go test flags
+go_test_flags="${KATA_GO_TEST_FLAGS}"
+if [ -z "$go_test_flags" ]; then
+    # KATA_GO_TEST_TIMEOUT can be set to any value accepted by
+    # "go test -timeout X"
+    go_test_flags="-v -timeout ${KATA_GO_TEST_TIMEOUT:-30s}"
 
-# -race flag is not supported on s390x
-[ "$(go env GOARCH)" != "s390x" ] && race="-race"
+    # -race flag is not supported on s390x
+    [ "$(go env GOARCH)" != "s390x" ] && go_test_flags+=" -race"
+
+    # s390x requires special linker flags
+    [ "$(go env GOARCH)" = s390x ] && go_test_flags+=" -ldflags '-extldflags -Wl,--s390-pgste'"
+fi
 
 # The "master" coverage file that contains the coverage results for
 # all packages run under all scenarios.
@@ -155,12 +160,6 @@ main()
 
 		shift
 	done
-
-	local go_ldflags
-	[ "$(go env GOARCH)" = s390x ] && go_ldflags="-extldflags -Wl,--s390-pgste"
-
-	# KATA_GO_TEST_FLAGS can be set to change the flags passed to "go test".
-	go_test_flags=${KATA_GO_TEST_FLAGS:-"-v $race -timeout $timeout_value -ldflags '$go_ldflags'"}
 
 	test_coverage
 }
