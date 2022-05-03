@@ -384,6 +384,7 @@ func TestCloudHypervisorHotplugAddBlockDevice(t *testing.T) {
 	clh := &cloudHypervisor{}
 	clh.config = clhConfig
 	clh.APIClient = &clhClientMock{}
+	clh.devicesIds = make(map[string]string)
 
 	clh.config.BlockDeviceDriver = config.VirtioBlock
 	err = clh.hotplugAddBlockDevice(&config.BlockDrive{Pmem: false})
@@ -406,6 +407,7 @@ func TestCloudHypervisorHotplugRemoveDevice(t *testing.T) {
 	clh := &cloudHypervisor{}
 	clh.config = clhConfig
 	clh.APIClient = &clhClientMock{}
+	clh.devicesIds = make(map[string]string)
 
 	_, err = clh.HotplugRemoveDevice(context.Background(), &config.BlockDrive{}, BlockDev)
 	assert.NoError(err, "Hotplug remove block device expected no error")
