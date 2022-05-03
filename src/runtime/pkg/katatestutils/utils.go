@@ -346,11 +346,10 @@ func IsInGitHubActions() bool {
 func SetupOCIConfigFile(t *testing.T) (rootPath string, bundlePath, ociConfigFile string) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "katatest-")
-	assert.NoError(err)
+	tmpdir := t.TempDir()
 
 	bundlePath = filepath.Join(tmpdir, "bundle")
-	err = os.MkdirAll(bundlePath, testDirMode)
+	err := os.MkdirAll(bundlePath, testDirMode)
 	assert.NoError(err)
 
 	ociConfigFile = filepath.Join(bundlePath, "config.json")

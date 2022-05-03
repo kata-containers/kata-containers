@@ -391,7 +391,7 @@ fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool
 
     if let Some(swappiness) = memory.swappiness {
         if (0..=100).contains(&swappiness) {
-            mem_controller.set_swappiness(swappiness as u64)?;
+            mem_controller.set_swappiness(swappiness)?;
         } else {
             return Err(anyhow!(
                 "invalid value:{}. valid memory swappiness range is 0-100",

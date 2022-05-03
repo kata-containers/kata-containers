@@ -7,19 +7,27 @@ package fs
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 )
+
+var mockRootPath = ""
 
 type MockFS struct {
 	// inherit from FS. Overwrite if needed.
 	*FS
 }
 
+func EnableMockTesting(rootPath string) {
+	mockRootPath = rootPath
+}
+
 func MockStorageRootPath() string {
-	return filepath.Join(os.TempDir(), "vc", "mockfs")
+	if mockRootPath == "" {
+		panic("Using uninitialized mock storage root path")
+	}
+	return mockRootPath
 }
 
 func MockRunStoragePath() string {
@@ -30,11 +38,7 @@ func MockRunVMStoragePath() string {
 	return filepath.Join(MockStorageRootPath(), vmPathSuffix)
 }
 
-func MockStorageDestroy() {
-	os.RemoveAll(MockStorageRootPath())
-}
-
-func MockFSInit() (persistapi.PersistDriver, error) {
+func MockFSInit(rootPath string) (persistapi.PersistDriver, error) {
 	driver, err := Init()
 	if err != nil {
 		return nil, fmt.Errorf("Could not create Mock FS driver: %v", err)
@@ -45,8 +49,15 @@ func MockFSInit() (persistapi.PersistDriver, error) {
 		return nil, fmt.Errorf("Could not create Mock FS driver")
 	}
 
-	fsDriver.storageRootPath = MockStorageRootPath()
+	fsDriver.storageRootPath = rootPath
 	fsDriver.driverName = "mockfs"
 
 	return &MockFS{fsDriver}, nil
+}
+
+func MockAutoInit() (persistapi.PersistDriver, error) {
+	if mockRootPath != "" {
+		return MockFSInit(MockStorageRootPath())
+	}
+	return nil, nil
 }

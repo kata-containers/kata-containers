@@ -27,6 +27,7 @@ import (
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client"
 	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 	ops "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/operations"
@@ -84,8 +85,6 @@ const (
 	fcMetricsFifo = "metrics.fifo"
 
 	defaultFcConfig = "fcConfig.json"
-	// storagePathSuffix mirrors persist/fs/fs.go:storagePathSuffix
-	storagePathSuffix = "vc"
 )
 
 // Specify the minimum version of firecracker supported
@@ -244,7 +243,7 @@ func (fc *firecracker) setPaths(hypervisorConfig *HypervisorConfig) {
 	// <cgroups_base>/<exec_file_name>/<id>/
 	hypervisorName := filepath.Base(hypervisorConfig.HypervisorPath)
 	//fs.RunStoragePath cannot be used as we need exec perms
-	fc.chrootBaseDir = filepath.Join("/run", storagePathSuffix)
+	fc.chrootBaseDir = filepath.Join("/run", fs.StoragePathSuffix)
 
 	fc.vmPath = filepath.Join(fc.chrootBaseDir, hypervisorName, fc.id)
 	fc.jailerRoot = filepath.Join(fc.vmPath, "root") // auto created by jailer
