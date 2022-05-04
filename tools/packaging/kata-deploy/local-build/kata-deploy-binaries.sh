@@ -116,6 +116,7 @@ install_cc_image() {
 	export SKOPEO=yes
 	export UMOCI=yes
 	export AA_KBC="offline_fs_kbc"
+	export KATA_BUILD_CC=yes
 
 	"${rootfs_builder}" --imagetype=image --prefix="${cc_prefix}" --destdir="${destdir}"
 }
