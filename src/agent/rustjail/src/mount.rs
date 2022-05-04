@@ -32,15 +32,20 @@ use crate::log_child;
 
 // Info reveals information about a particular mounted filesystem. This
 // struct is populated from the content in the /proc/<pid>/mountinfo file.
-#[derive(std::fmt::Debug)]
+#[derive(std::fmt::Debug, PartialEq)]
 pub struct Info {
     mount_point: String,
     optional: String,
     fstype: String,
 }
 
-const MOUNTINFOFORMAT: &str = "{d} {d} {d}:{d} {} {} {} {}";
+const MOUNTINFO_FORMAT: &str = "{d} {d} {d}:{d} {} {} {} {}";
+const MOUNTINFO_PATH: &str = "/proc/self/mountinfo";
 const PROC_PATH: &str = "/proc";
+
+const ERR_FAILED_PARSE_MOUNTINFO: &str = "failed to parse mountinfo file";
+const ERR_FAILED_PARSE_MOUNTINFO_FINAL_FIELDS: &str =
+    "failed to parse final fields in mountinfo file";
 
 // since libc didn't defined this const for musl, thus redefined it here.
 #[cfg(all(target_os = "linux", target_env = "gnu", not(target_arch = "s390x")))]
@@ -518,7 +523,7 @@ pub fn pivot_rootfs<P: ?Sized + NixPath + std::fmt::Debug>(path: &P) -> Result<(
 }
 
 fn rootfs_parent_mount_private(path: &str) -> Result<()> {
-    let mount_infos = parse_mount_table()?;
+    let mount_infos = parse_mount_table(MOUNTINFO_PATH)?;
 
     let mut max_len = 0;
     let mut mount_point = String::from("");
@@ -546,8 +551,8 @@ fn rootfs_parent_mount_private(path: &str) -> Result<()> {
 
 // Parse /proc/self/mountinfo because comparing Dev and ino does not work from
 // bind mounts
-fn parse_mount_table() -> Result<Vec<Info>> {
-    let file = File::open("/proc/self/mountinfo")?;
+fn parse_mount_table(mountinfo_path: &str) -> Result<Vec<Info>> {
+    let file = File::open(mountinfo_path)?;
     let reader = BufReader::new(file);
     let mut infos = Vec::new();
 
@@ -569,7 +574,7 @@ fn parse_mount_table() -> Result<Vec<Info>> {
 
         let (_id, _parent, _major, _minor, _root, mount_point, _opts, optional) = scan_fmt!(
             &line,
-            MOUNTINFOFORMAT,
+            MOUNTINFO_FORMAT,
             i32,
             i32,
             i32,
@@ -578,12 +583,17 @@ fn parse_mount_table() -> Result<Vec<Info>> {
             String,
             String,
             String
-        )?;
+        )
+        .map_err(|_| anyhow!(ERR_FAILED_PARSE_MOUNTINFO))?;
 
         let fields: Vec<&str> = line.split(" - ").collect();
         if fields.len() == 2 {
-            let (fstype, _source, _vfs_opts) =
-                scan_fmt!(fields[1], "{} {} {}", String, String, String)?;
+            let final_fields: Vec<&str> = fields[1].split_whitespace().collect();
+
+            if final_fields.len() != 3 {
+                return Err(anyhow!(ERR_FAILED_PARSE_MOUNTINFO_FINAL_FIELDS));
+            }
+            let fstype = final_fields[0].to_string();
 
             let mut optional_new = String::new();
             if optional != "-" {
@@ -598,7 +608,7 @@ fn parse_mount_table() -> Result<Vec<Info>> {
 
             infos.push(info);
         } else {
-            return Err(anyhow!("failed to parse mount info file".to_string()));
+            return Err(anyhow!(ERR_FAILED_PARSE_MOUNTINFO));
         }
     }
 
@@ -619,7 +629,7 @@ fn chroot<P: ?Sized + NixPath>(_path: &P) -> Result<(), nix::Error> {
 
 pub fn ms_move_root(rootfs: &str) -> Result<bool> {
     unistd::chdir(rootfs)?;
-    let mount_infos = parse_mount_table()?;
+    let mount_infos = parse_mount_table(MOUNTINFO_PATH)?;
 
     let root_path = Path::new(rootfs);
     let abs_root_buf = root_path.absolutize()?;
@@ -1046,10 +1056,12 @@ fn readonly_path(path: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assert_result;
     use crate::skip_if_not_root;
     use std::fs::create_dir;
     use std::fs::create_dir_all;
     use std::fs::remove_dir_all;
+    use std::io;
     use std::os::unix::fs;
     use std::os::unix::io::AsRawFd;
     use tempfile::tempdir;
@@ -1505,6 +1517,121 @@ mod tests {
 
             // Perform the checks
             assert!(result == t.result, "{}", msg);
+        }
+    }
+
+    #[test]
+    fn test_parse_mount_table() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            mountinfo_data: Option<&'a str>,
+            result: Result<Vec<Info>>,
+        }
+
+        let tests = &[
+            TestData {
+                mountinfo_data: Some(
+                    "22 933 0:20 / /sys rw,nodev shared:2 - sysfs sysfs rw,noexec",
+                ),
+                result: Ok(vec![Info {
+                    mount_point: "/sys".to_string(),
+                    optional: "shared:2".to_string(),
+                    fstype: "sysfs".to_string(),
+                }]),
+            },
+            TestData {
+                mountinfo_data: Some(
+                    r#"22 933 0:20 / /sys rw,nodev - sysfs sysfs rw,noexec
+                       81 13 1:2 / /tmp/dir rw shared:2 - tmpfs tmpfs rw"#,
+                ),
+                result: Ok(vec![
+                    Info {
+                        mount_point: "/sys".to_string(),
+                        optional: "".to_string(),
+                        fstype: "sysfs".to_string(),
+                    },
+                    Info {
+                        mount_point: "/tmp/dir".to_string(),
+                        optional: "shared:2".to_string(),
+                        fstype: "tmpfs".to_string(),
+                    },
+                ]),
+            },
+            TestData {
+                mountinfo_data: Some(
+                    "22 933 0:20 /foo\040-\040bar /sys rw,nodev shared:2 - sysfs sysfs rw,noexec",
+                ),
+                result: Ok(vec![Info {
+                    mount_point: "/sys".to_string(),
+                    optional: "shared:2".to_string(),
+                    fstype: "sysfs".to_string(),
+                }]),
+            },
+            TestData {
+                mountinfo_data: Some(""),
+                result: Ok(vec![]),
+            },
+            TestData {
+                mountinfo_data: Some("invalid line data - sysfs sysfs rw"),
+                result: Err(anyhow!(ERR_FAILED_PARSE_MOUNTINFO)),
+            },
+            TestData {
+                mountinfo_data: Some("22 96 0:21 / /sys rw,noexec - sysfs"),
+                result: Err(anyhow!(ERR_FAILED_PARSE_MOUNTINFO_FINAL_FIELDS)),
+            },
+            TestData {
+                mountinfo_data: Some("22 96 0:21 / /sys rw,noexec - sysfs sysfs rw rw"),
+                result: Err(anyhow!(ERR_FAILED_PARSE_MOUNTINFO_FINAL_FIELDS)),
+            },
+            TestData {
+                mountinfo_data: Some("22 96 0:21 / /sys rw,noexec shared:2 - x - x"),
+                result: Err(anyhow!(ERR_FAILED_PARSE_MOUNTINFO)),
+            },
+            TestData {
+                mountinfo_data: Some("-"),
+                result: Err(anyhow!(ERR_FAILED_PARSE_MOUNTINFO)),
+            },
+            TestData {
+                mountinfo_data: Some("--"),
+                result: Err(anyhow!(ERR_FAILED_PARSE_MOUNTINFO)),
+            },
+            TestData {
+                mountinfo_data: Some("- -"),
+                result: Err(anyhow!(ERR_FAILED_PARSE_MOUNTINFO)),
+            },
+            TestData {
+                mountinfo_data: Some(" - "),
+                result: Err(anyhow!(ERR_FAILED_PARSE_MOUNTINFO)),
+            },
+            TestData {
+                mountinfo_data: Some(
+                    r#"22 933 0:20 / /sys rw,nodev - sysfs sysfs rw,noexec
+                       invalid line
+                       81 13 1:2 / /tmp/dir rw shared:2 - tmpfs tmpfs rw"#,
+                ),
+                result: Err(anyhow!(ERR_FAILED_PARSE_MOUNTINFO)),
+            },
+            TestData {
+                mountinfo_data: None,
+                result: Err(anyhow!(io::Error::from_raw_os_error(libc::ENOENT))),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let tempdir = tempdir().unwrap();
+            let mountinfo_path = tempdir.path().join("mountinfo");
+
+            if let Some(mountinfo_data) = d.mountinfo_data {
+                std::fs::write(&mountinfo_path, mountinfo_data).unwrap();
+            }
+
+            let result = parse_mount_table(mountinfo_path.to_str().unwrap());
+
+            let msg = format!("{}: result: {:?}", msg, result);
+
+            assert_result!(d.result, result, msg);
         }
     }
 

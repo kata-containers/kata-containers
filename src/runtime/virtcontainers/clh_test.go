@@ -52,17 +52,21 @@ func newClhConfig() (HypervisorConfig, error) {
 	}
 
 	return HypervisorConfig{
-		KernelPath:        testClhKernelPath,
-		ImagePath:         testClhImagePath,
-		HypervisorPath:    testClhPath,
-		NumVCPUs:          defaultVCPUs,
-		BlockDeviceDriver: config.VirtioBlock,
-		MemorySize:        defaultMemSzMiB,
-		DefaultBridges:    defaultBridges,
-		DefaultMaxVCPUs:   uint32(64),
-		SharedFS:          config.VirtioFS,
-		VirtioFSCache:     virtioFsCacheAlways,
-		VirtioFSDaemon:    testVirtiofsdPath,
+		KernelPath:                    testClhKernelPath,
+		ImagePath:                     testClhImagePath,
+		HypervisorPath:                testClhPath,
+		NumVCPUs:                      defaultVCPUs,
+		BlockDeviceDriver:             config.VirtioBlock,
+		MemorySize:                    defaultMemSzMiB,
+		DefaultBridges:                defaultBridges,
+		DefaultMaxVCPUs:               uint32(64),
+		SharedFS:                      config.VirtioFS,
+		VirtioFSCache:                 virtioFsCacheAlways,
+		VirtioFSDaemon:                testVirtiofsdPath,
+		NetRateLimiterBwMaxRate:       int64(0),
+		NetRateLimiterBwOneTimeBurst:  int64(0),
+		NetRateLimiterOpsMaxRate:      int64(0),
+		NetRateLimiterOpsOneTimeBurst: int64(0),
 	}, nil
 }
 
@@ -186,6 +190,181 @@ func TestCloudHypervisorAddNetCheckEnpointTypes(t *testing.T) {
 
 			} else if err == nil {
 				assert.Equal(*(*clh.vmconfig.Net)[0].Tap, tapPath)
+			}
+		})
+	}
+}
+
+// Check AddNet properly sets up the network rate limiter
+func TestCloudHypervisorNetRateLimiter(t *testing.T) {
+	assert := assert.New(t)
+
+	tapPath := "/path/to/tap"
+
+	validVeth := &VethEndpoint{}
+	validVeth.NetPair.TapInterface.TAPIface.Name = tapPath
+
+	type args struct {
+		bwMaxRate       int64
+		bwOneTimeBurst  int64
+		opsMaxRate      int64
+		opsOneTimeBurst int64
+	}
+
+	//nolint: govet
+	tests := []struct {
+		name                  string
+		args                  args
+		expectsRateLimiter    bool
+		expectsBwBucketToken  bool
+		expectsOpsBucketToken bool
+	}{
+		// Bandwidth
+		{
+			"Bandwidth | max rate with one time burst",
+			args{
+				bwMaxRate:      int64(1000),
+				bwOneTimeBurst: int64(10000),
+			},
+			true,  // expectsRateLimiter
+			true,  // expectsBwBucketToken
+			false, // expectsOpsBucketToken
+		},
+		{
+			"Bandwidth | max rate without one time burst",
+			args{
+				bwMaxRate: int64(1000),
+			},
+			true,  // expectsRateLimiter
+			true,  // expectsBwBucketToken
+			false, // expectsOpsBucketToken
+		},
+		{
+			"Bandwidth | no max rate with one time burst",
+			args{
+				bwOneTimeBurst: int64(10000),
+			},
+			false, // expectsRateLimiter
+			false, // expectsBwBucketToken
+			false, // expectsOpsBucketToken
+		},
+		{
+			"Bandwidth | no max rate and no one time burst",
+			args{},
+			false, // expectsRateLimiter
+			false, // expectsBwBucketToken
+			false, // expectsOpsBucketToken
+		},
+
+		// Operations
+		{
+			"Operations | max rate with one time burst",
+			args{
+				opsMaxRate:      int64(1000),
+				opsOneTimeBurst: int64(10000),
+			},
+			true,  // expectsRateLimiter
+			false, // expectsBwBucketToken
+			true,  // expectsOpsBucketToken
+		},
+		{
+			"Operations | max rate without one time burst",
+			args{
+				opsMaxRate: int64(1000),
+			},
+			true,  // expectsRateLimiter
+			false, // expectsBwBucketToken
+			true,  // expectsOpsBucketToken
+		},
+		{
+			"Operations | no max rate with one time burst",
+			args{
+				opsOneTimeBurst: int64(10000),
+			},
+			false, // expectsRateLimiter
+			false, // expectsBwBucketToken
+			false, // expectsOpsBucketToken
+		},
+		{
+			"Operations | no max rate and no one time burst",
+			args{},
+			false, // expectsRateLimiter
+			false, // expectsBwBucketToken
+			false, // expectsOpsBucketToken
+		},
+
+		// Bandwidth and Operations
+		{
+			"Bandwidth and Operations | max rate with one time burst",
+			args{
+				bwMaxRate:       int64(1000),
+				bwOneTimeBurst:  int64(10000),
+				opsMaxRate:      int64(1000),
+				opsOneTimeBurst: int64(10000),
+			},
+			true, // expectsRateLimiter
+			true, // expectsBwBucketToken
+			true, // expectsOpsBucketToken
+		},
+		{
+			"Bandwidth and Operations | max rate without one time burst",
+			args{
+				bwMaxRate:  int64(1000),
+				opsMaxRate: int64(1000),
+			},
+			true, // expectsRateLimiter
+			true, // expectsBwBucketToken
+			true, // expectsOpsBucketToken
+		},
+		{
+			"Bandwidth and Operations | no max rate with one time burst",
+			args{
+				bwOneTimeBurst:  int64(10000),
+				opsOneTimeBurst: int64(10000),
+			},
+			false, // expectsRateLimiter
+			false, // expectsBwBucketToken
+			false, // expectsOpsBucketToken
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clhConfig, err := newClhConfig()
+			assert.NoError(err)
+
+			clhConfig.NetRateLimiterBwMaxRate = tt.args.bwMaxRate
+			clhConfig.NetRateLimiterBwOneTimeBurst = tt.args.bwOneTimeBurst
+			clhConfig.NetRateLimiterOpsMaxRate = tt.args.opsMaxRate
+			clhConfig.NetRateLimiterOpsOneTimeBurst = tt.args.opsOneTimeBurst
+
+			clh := &cloudHypervisor{}
+			clh.config = clhConfig
+			clh.APIClient = &clhClientMock{}
+
+			if err := clh.addNet(validVeth); err != nil {
+				t.Errorf("cloudHypervisor.addNet() error = %v", err)
+			} else {
+				netConfig := (*clh.vmconfig.Net)[0]
+
+				assert.Equal(netConfig.HasRateLimiterConfig(), tt.expectsRateLimiter)
+				if tt.expectsRateLimiter {
+					rateLimiterConfig := netConfig.GetRateLimiterConfig()
+					assert.Equal(rateLimiterConfig.HasBandwidth(), tt.expectsBwBucketToken)
+					assert.Equal(rateLimiterConfig.HasOps(), tt.expectsOpsBucketToken)
+
+					if tt.expectsBwBucketToken {
+						bwBucketToken := rateLimiterConfig.GetBandwidth()
+						assert.Equal(bwBucketToken.GetSize(), int64(utils.RevertBytes(uint64(tt.args.bwMaxRate/8))))
+						assert.Equal(bwBucketToken.GetOneTimeBurst(), int64(utils.RevertBytes(uint64(tt.args.bwOneTimeBurst/8))))
+					}
+
+					if tt.expectsOpsBucketToken {
+						opsBucketToken := rateLimiterConfig.GetOps()
+						assert.Equal(opsBucketToken.GetSize(), int64(tt.args.opsMaxRate))
+						assert.Equal(opsBucketToken.GetOneTimeBurst(), int64(tt.args.opsOneTimeBurst))
+					}
+				}
 			}
 		})
 	}
@@ -384,6 +563,7 @@ func TestCloudHypervisorHotplugAddBlockDevice(t *testing.T) {
 	clh := &cloudHypervisor{}
 	clh.config = clhConfig
 	clh.APIClient = &clhClientMock{}
+	clh.devicesIds = make(map[string]string)
 
 	clh.config.BlockDeviceDriver = config.VirtioBlock
 	err = clh.hotplugAddBlockDevice(&config.BlockDrive{Pmem: false})
@@ -406,6 +586,7 @@ func TestCloudHypervisorHotplugRemoveDevice(t *testing.T) {
 	clh := &cloudHypervisor{}
 	clh.config = clhConfig
 	clh.APIClient = &clhClientMock{}
+	clh.devicesIds = make(map[string]string)
 
 	_, err = clh.HotplugRemoveDevice(context.Background(), &config.BlockDrive{}, BlockDev)
 	assert.NoError(err, "Hotplug remove block device expected no error")

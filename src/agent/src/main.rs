@@ -417,3 +417,59 @@ fn reset_sigpipe() {
 
 use crate::config::AgentConfig;
 use std::os::unix::io::{FromRawFd, RawFd};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::test_utils::TestUserType;
+
+    #[tokio::test]
+    async fn test_create_logger_task() {
+        #[derive(Debug)]
+        struct TestData {
+            vsock_port: u32,
+            test_user: TestUserType,
+            result: Result<()>,
+        }
+
+        let tests = &[
+            TestData {
+                // non-root user cannot use privileged vsock port
+                vsock_port: 1,
+                test_user: TestUserType::NonRootOnly,
+                result: Err(anyhow!(nix::errno::Errno::from_i32(libc::EACCES))),
+            },
+            TestData {
+                // passing vsock_port 0 causes logger task to write to stdout
+                vsock_port: 0,
+                test_user: TestUserType::Any,
+                result: Ok(()),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            if d.test_user == TestUserType::RootOnly {
+                skip_if_not_root!();
+            } else if d.test_user == TestUserType::NonRootOnly {
+                skip_if_root!();
+            }
+
+            let msg = format!("test[{}]: {:?}", i, d);
+            let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap();
+            defer!({
+                // rfd is closed by the use of PipeStream in the crate_logger_task function,
+                // but we will attempt to close in case of a failure
+                let _ = unistd::close(rfd);
+                unistd::close(wfd).unwrap();
+            });
+
+            let (shutdown_tx, shutdown_rx) = channel(true);
+
+            shutdown_tx.send(true).unwrap();
+            let result = create_logger_task(rfd, d.vsock_port, shutdown_rx).await;
+
+            let msg = format!("{}, result: {:?}", msg, result);
+            assert_result!(d.result, result, msg);
+        }
+    }
+}

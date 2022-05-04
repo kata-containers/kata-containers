@@ -5,7 +5,14 @@
 #![allow(clippy::module_inception)]
 
 #[cfg(test)]
-mod test_utils {
+pub mod test_utils {
+    #[derive(Debug, PartialEq)]
+    pub enum TestUserType {
+        RootOnly,
+        NonRootOnly,
+        Any,
+    }
+
     #[macro_export]
     macro_rules! skip_if_root {
         () => {
