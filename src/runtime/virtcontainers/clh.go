@@ -165,6 +165,7 @@ type cloudHypervisor struct {
 	APIClient      clhClient
 	ctx            context.Context
 	id             string
+	devicesIds     map[string]string
 	vmconfig       chclient.VmConfig
 	state          CloudHypervisorState
 	config         HypervisorConfig
@@ -360,6 +361,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 	clh.id = id
 	clh.state.state = clhNotReady
+	clh.devicesIds = make(map[string]string)
 
 	clh.Logger().WithField("function", "CreateVM").Info("creating Sandbox")
 
@@ -667,7 +669,6 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 	clhDisk := *chclient.NewDiskConfig(drive.File)
 	clhDisk.Readonly = &drive.ReadOnly
 	clhDisk.VhostUser = func(b bool) *bool { return &b }(false)
-	clhDisk.Id = &driveID
 
 	pciInfo, _, err := cl.VmAddDiskPut(ctx, clhDisk)
 
@@ -675,6 +676,7 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 		return fmt.Errorf("failed to hotplug block device %+v %s", drive, openAPIClientError(err))
 	}
 
+	clh.devicesIds[driveID] = pciInfo.GetId()
 	drive.PCIPath, err = clhPciInfoToPath(pciInfo)
 
 	return err
@@ -688,11 +690,11 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 	// Create the clh device config via the constructor to ensure default values are properly assigned
 	clhDevice := *chclient.NewVmAddDevice()
 	clhDevice.Path = &device.SysfsDev
-	clhDevice.Id = &device.ID
 	pciInfo, _, err := cl.VmAddDevicePut(ctx, clhDevice)
 	if err != nil {
 		return fmt.Errorf("Failed to hotplug device %+v %s", device, openAPIClientError(err))
 	}
+	clh.devicesIds[device.ID] = pciInfo.GetId()
 
 	// clh doesn't use bridges, so the PCI path is simply the slot
 	// number of the device.  This will break if clh starts using
@@ -753,13 +755,15 @@ func (clh *cloudHypervisor) HotplugRemoveDevice(ctx context.Context, devInfo int
 	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
 	defer cancel()
 
+	originalDeviceID := clh.devicesIds[deviceID]
 	remove := *chclient.NewVmRemoveDevice()
-	remove.Id = &deviceID
+	remove.Id = &originalDeviceID
 	_, err := cl.VmRemoveDevicePut(ctx, remove)
 	if err != nil {
 		err = fmt.Errorf("failed to hotplug remove (unplug) device %+v: %s", devInfo, openAPIClientError(err))
 	}
 
+	delete(clh.devicesIds, deviceID)
 	return nil, err
 }
 
