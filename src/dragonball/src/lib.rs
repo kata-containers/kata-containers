@@ -8,6 +8,8 @@
 
 /// Address space manager for virtual machines.
 pub mod address_space_manager;
+/// Structs to maintain configuration information.
+pub mod config_manager;
 /// Device manager for virtual machines.
 pub mod device_manager;
 /// Resource manager for virtual machines.
