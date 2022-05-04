@@ -40,7 +40,11 @@ function get_container_runtime() {
                 die "invalid node name"
 	fi
 	if echo "$runtime" | grep -qE 'containerd.*-k3s'; then
-		if systemctl is-active --quiet k3s-agent; then
+		if systemctl is-active --quiet rke2-agent; then
+			echo "rke2-agent"
+		elif systemctl is-active --quiet rke2-server; then
+			echo "rke2-server"
+		elif systemctl is-active --quiet k3s-agent; then
 			echo "k3s-agent"
 		else
 			echo "k3s"
@@ -63,7 +67,7 @@ function configure_cri_runtime() {
 	crio)
 		configure_crio
 		;;
-	containerd | k3s | k3s-agent)
+	containerd | k3s | k3s-agent | rke2-agent | rke2-server)
 		configure_containerd
 		;;
 	esac
@@ -241,7 +245,7 @@ function cleanup_cri_runtime() {
 	crio)
 		cleanup_crio
 		;;
-	containerd | k3s | k3s-agent)
+	containerd | k3s | k3s-agent | rke2-agent | rke2-server)
 		cleanup_containerd
 		;;
 	esac
@@ -280,7 +284,7 @@ function main() {
 	# CRI-O isn't consistent with the naming -- let's use crio to match the service file
 	if [ "$runtime" == "cri-o" ]; then
 		runtime="crio"
-	elif [ "$runtime" == "k3s" ] || [ "$runtime" == "k3s-agent" ]; then
+	elif [ "$runtime" == "k3s" ] || [ "$runtime" == "k3s-agent" ] || [ "$runtime" == "rke2-agent" ] || [ "$runtime" == "rke2-server" ]; then
 		containerd_conf_tmpl_file="${containerd_conf_file}.tmpl"
 		if [ ! -f "$containerd_conf_tmpl_file" ]; then
 			cp "$containerd_conf_file" "$containerd_conf_tmpl_file"
@@ -303,11 +307,10 @@ function main() {
 	fi
 
 	# only install / remove / update if we are dealing with CRIO or containerd
-	if [[ "$runtime" =~ ^(crio|containerd|k3s|k3s-agent)$ ]]; then
+	if [[ "$runtime" =~ ^(crio|containerd|k3s|k3s-agent|rke2-agent|rke2-server)$ ]]; then
 
 		case "$action" in
 		install)
-
 			install_artifacts
 			configure_cri_runtime "$runtime"
 			configure_kata

@@ -1,0 +1,12 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kata-deploy
+  namespace: kube-system
+spec:
+  template:
+    spec:
+      volumes:
+        - name: containerd-conf
+          hostPath:
+            path: /var/lib/rancher/rke2/agent/etc/containerd/

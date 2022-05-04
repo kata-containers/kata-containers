@@ -380,11 +380,47 @@ type HypervisorConfig struct {
 	// Enable SGX. Hardware-based isolation and memory encryption.
 	SGXEPCSize int64
 
+	// DiskRateLimiterBwRate is used to control disk I/O bandwidth on VM level.
+	// The same value, defined in bits per second, is used for inbound and outbound bandwidth.
+	DiskRateLimiterBwMaxRate int64
+
+	// DiskRateLimiterBwOneTimeBurst is used to control disk I/O bandwidth on VM level.
+	// This increases the initial max rate and this initial extra credit does *NOT* replenish
+	// and can be used for an *initial* burst of data.
+	DiskRateLimiterBwOneTimeBurst int64
+
+	// DiskRateLimiterOpsRate is used to control disk I/O operations on VM level.
+	// The same value, defined in operations per second, is used for inbound and outbound bandwidth.
+	DiskRateLimiterOpsMaxRate int64
+
+	// DiskRateLimiterOpsOneTimeBurst is used to control disk I/O operations on VM level.
+	// This increases the initial max rate and this initial extra credit does *NOT* replenish
+	// and can be used for an *initial* burst of data.
+	DiskRateLimiterOpsOneTimeBurst int64
+
 	// RxRateLimiterMaxRate is used to control network I/O inbound bandwidth on VM level.
 	RxRateLimiterMaxRate uint64
 
 	// TxRateLimiterMaxRate is used to control network I/O outbound bandwidth on VM level.
 	TxRateLimiterMaxRate uint64
+
+	// NetRateLimiterBwRate is used to control network I/O bandwidth on VM level.
+	// The same value, defined in bits per second, is used for inbound and outbound bandwidth.
+	NetRateLimiterBwMaxRate int64
+
+	// NetRateLimiterBwOneTimeBurst is used to control network I/O bandwidth on VM level.
+	// This increases the initial max rate and this initial extra credit does *NOT* replenish
+	// and can be used for an *initial* burst of data.
+	NetRateLimiterBwOneTimeBurst int64
+
+	// NetRateLimiterOpsRate is used to control network I/O operations on VM level.
+	// The same value, defined in operations per second, is used for inbound and outbound bandwidth.
+	NetRateLimiterOpsMaxRate int64
+
+	// NetRateLimiterOpsOneTimeBurst is used to control network I/O operations on VM level.
+	// This increases the initial max rate and this initial extra credit does *NOT* replenish
+	// and can be used for an *initial* burst of data.
+	NetRateLimiterOpsOneTimeBurst int64
 
 	// MemOffset specifies memory space for nvdimm device
 	MemOffset uint64
