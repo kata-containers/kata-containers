@@ -270,6 +270,10 @@ get_kernel_frag_path() {
 	fi
 
 	if [[ "${conf_guest}" != "" ]];then
+		info "Enabling config for confidential guest trust storage protection"
+		local cryptsetup_configs="$(ls ${common_path}/confidential_containers/cryptsetup.conf)"
+		all_configs="${all_configs} ${cryptsetup_configs}"
+
 		info "Enabling config for '${conf_guest}' confidential guest protection"
 		local conf_configs="$(ls ${arch_path}/${conf_guest}/*.conf)"
 		all_configs="${all_configs} ${conf_configs}"
