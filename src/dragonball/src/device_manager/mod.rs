@@ -8,6 +8,9 @@ pub mod console_manager;
 /// Console Manager for virtual machines console device.
 pub use self::console_manager::ConsoleManager;
 
+mod legacy;
+pub use self::legacy::{Error as LegacyDeviceError, LegacyDeviceManager};
+
 /// Errors related to device manager operations.
 #[derive(Debug, thiserror::Error)]
 pub enum DeviceMgrError {
