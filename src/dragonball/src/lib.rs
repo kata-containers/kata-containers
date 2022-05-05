@@ -12,6 +12,8 @@ pub mod address_space_manager;
 pub mod config_manager;
 /// Device manager for virtual machines.
 pub mod device_manager;
+/// Errors related to Virtual machine manager.
+pub mod error;
 /// Resource manager for virtual machines.
 pub mod resource_manager;
 /// Virtual machine manager for virtual machines.
