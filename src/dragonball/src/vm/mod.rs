@@ -3,6 +3,9 @@
 
 use serde_derive::{Deserialize, Serialize};
 
+mod kernel_config;
+pub use self::kernel_config::KernelConfigInfo;
+
 /// Configuration information for user defined NUMA nodes.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct NumaRegionInfo {
