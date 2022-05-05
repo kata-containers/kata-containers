@@ -1,17 +1,33 @@
 # Kata 3.0 Architecture
 ## Overview
-In cloud-native scenarios, there is an increased demand for container startup speed, resource consumption, stability, and security. To achieve this, we would like to introduce you to a solid and secure Rust version kata-runtime. We chose Rust because it is designed to prevent developers from accidentally introducing flaws in their code that can lead to buffer overflows, missing pointer checks, integer range errors, or other memory-related vulnerabilities. Besides, in contrast to Go, Rust makes a variety of design trade-offs in order to obtain the fastest feasible execution performance.
+In cloud-native scenarios, there is an increased demand for container startup speed, resource consumption, stability, and security, areas where the present Kata Containers runtime is challenged relative to other runtimes. To achieve this, we propose a solid, field-tested and secure Rust version of the kata-runtime.
+
 Also, we provide the following designs:
 
 - Turn key solution with builtin Dragonball Sandbox
 - Async io to reduce resource consumption
 - Extensible framework for multiple services, runtimes and hypervisors
 - Lifecycle management for sandbox and container associated resources
+
+### Rationale for choosing Rust
+
+We chose Rust because it is designed as a system language with a focus on efficiency.
+In contrast to Go, Rust makes a variety of design trade-offs in order to obtain
+good execution performance, with innovative techniques that, in contrast to C or
+C++, provide reasonable protection against common memory errors (buffer
+overflow, invalid pointers, range errors), error checking (ensuring errors are
+dealt with), thread safety, ownership of resources, and more.
+
+These benefits were verified in our project when the Kata Containers guest agent
+was rewritten in Rust. We notably saw a significant reduction in memory usage
+with the Rust-based implementation.
+
+
 ## Design
 ### Architecture
 ![architecture](./images/architecture.png)
 ### Built-in VMM
-#### Why Need Built-in VMM
+#### Current Kata 2.x architecture
 ![not_builtin_vmm](./images/not_built_in_vmm.png)
 As shown in the figure, runtime and VMM are separate processes. The runtime process forks the VMM process and interacts through the inter-process RPC. Typically, process interaction consumes more resources than peers within the process, and it will result in relatively low efficiency. At the same time, the cost of resource operation and maintenance should be considered. For example, when performing resource recovery under abnormal conditions, the exception of any process must be detected by others and activate the appropriate resource recovery process. If there are additional processes, the recovery becomes even more difficult.
 #### How To Support Built-in VMM
@@ -52,7 +68,7 @@ The kata-runtime is controlled by TOKIO_RUNTIME_WORKER_THREADS to run the OS thr
   └─ container stdin io thread(M * tokio task)
 ```
 ### Extensible Framework
-The Rust version kata-runtime is designed with the extension of service, runtime, and hypervisor, combined with configuration to meet the needs of different scenarios. At present, the service provides a register mechanism to support multiple services. Services could interact with runtime through messages. In addition, the runtime handler handles messages from services. To meet the needs of a binary that supports multiple runtimes and hypervisors, the startup must obtain the runtime handler type and hypervisor type through configuration.
+The Kata 3.x runtime is designed with the extension of service, runtime, and hypervisor, combined with configuration to meet the needs of different scenarios. At present, the service provides a register mechanism to support multiple services. Services could interact with runtime through messages. In addition, the runtime handler handles messages from services. To meet the needs of a binary that supports multiple runtimes and hypervisors, the startup must obtain the runtime handler type and hypervisor type through configuration.
 
 ![framework](./images/framework.png)
 ### Resource Manager
