@@ -45,9 +45,8 @@ func deviceLogger() *logrus.Entry {
 	return api.DeviceLogger()
 }
 
-// Identify PCIe device by /sys/bus/pci/slots/xx/max_bus_speed, sample content "8.0 GT/s PCIe"
-// The /sys/bus/pci/slots/xx/address contains bdf, sample content "0000:04:00"
-// bdf format: bus:slot.function
+// Identify PCIe device by reading the size of the PCI config space
+// Plain PCI device have 256 bytes of config space where PCIe devices have 4K
 func isPCIeDevice(bdf string) bool {
 	if len(strings.Split(bdf, ":")) == 2 {
 		bdf = PCIDomain + ":" + bdf
