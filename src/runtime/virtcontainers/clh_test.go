@@ -97,6 +97,14 @@ func (c *clhClientMock) BootVM(ctx context.Context) (*http.Response, error) {
 	return nil, nil
 }
 
+func (c *clhClientMock) PauseVM(ctx context.Context) (*http.Response, error) {
+	return nil, nil
+}
+
+func (c *clhClientMock) ResumeVM(ctx context.Context) (*http.Response, error) {
+	return nil, nil
+}
+
 //nolint:golint
 func (c *clhClientMock) VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error) {
 	return nil, nil
@@ -115,6 +123,10 @@ func (c *clhClientMock) VmAddDiskPut(ctx context.Context, diskConfig chclient.Di
 //nolint:golint
 func (c *clhClientMock) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chclient.VmRemoveDevice) (*http.Response, error) {
 	return nil, nil
+}
+
+func (c *clhClientMock) VmAddNetPut(ctx context.Context, netConfig chclient.NetConfig) (chclient.PciDeviceInfo, *http.Response, error) {
+	return chclient.PciDeviceInfo{}, nil, nil
 }
 
 func TestCloudHypervisorAddVSock(t *testing.T) {

@@ -2499,6 +2499,15 @@ type qemuGrpc struct {
 	// q.qemuConfig.SMP.
 	// So just transport q.qemuConfig.SMP from VM Cache server to runtime.
 	QemuSMP govmmQemu.SMP
+
+	// send vsock contextid to client
+	ContextID uint64
+
+	// send path and pid of virtio-fs to client if needed
+	SharedFS          string
+	SourcePath        string
+	SocketPath        string
+	VirtiofsDaemonPid int
 }
 
 func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
@@ -2524,6 +2533,41 @@ func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig,
 	q.qemuConfig.SMP = qp.QemuSMP
 
 	q.arch.setBridges(q.state.Bridges)
+
+	vsock := types.VSock{ContextID: qp.ContextID, Port: uint32(vSockPort)}
+	q.qemuConfig.Devices, err = q.arch.appendVSock(ctx, q.qemuConfig.Devices, vsock)
+	if err != nil {
+		return err
+	}
+	q.qemuConfig.PidFile = filepath.Join(q.config.VMStorePath, q.id, "pid")
+
+	if qp.SharedFS == config.VirtioFS {
+		q.virtiofsDaemon = &virtiofsd{
+			path:       q.config.VirtioFSDaemon,
+			sourcePath: qp.SourcePath,
+			socketPath: qp.SocketPath,
+			extraArgs:  q.config.VirtioFSExtraArgs,
+			cache:      q.config.VirtioFSCache,
+			PID:        qp.VirtiofsDaemonPid,
+		}
+
+		q.state.VirtiofsDaemonPid = qp.VirtiofsDaemonPid
+
+
+		// monitor of virtiofsd
+		go func() {
+			pid := qp.State.VirtiofsDaemonPid
+			process, err := os.FindProcess(pid)
+			for err == nil {
+				// send a signal 0 to check virtiofsd alive
+				time.Sleep(20 * time.Millisecond)
+				err = process.Signal(syscall.Signal(0))
+			}
+			q.Logger().Info("virtiofsd quits")    
+			q.StopVM(ctx, false)
+		}()
+	}
+
 	return nil
 }
 
@@ -2538,6 +2582,26 @@ func (q *qemu) toGrpc(ctx context.Context) ([]byte, error) {
 		NvdimmCount:    q.nvdimmCount,
 
 		QemuSMP: q.qemuConfig.SMP,
+	}
+
+	// set vsock contextid
+	for _, device := range q.qemuConfig.Devices {
+		if vsockdev, ok := device.(govmmQemu.VSOCKDevice); ok {
+			qp.ContextID = vsockdev.ContextID
+			break
+		}
+	}
+
+	// set virtio-fs daemon pid
+	if q.config.SharedFS == config.VirtioFS {
+		qp.SharedFS = config.VirtioFS
+		qp.VirtiofsDaemonPid  = q.state.VirtiofsDaemonPid
+		qp.SourcePath = q.config.SharedPath
+		virtiofsdSocketPath, err := q.vhostFSSocketPath(q.id)
+		if err != nil {
+			return nil, err
+		}
+		qp.SocketPath = virtiofsdSocketPath
 	}
 
 	return json.Marshal(&qp)
@@ -2617,6 +2681,17 @@ func (q *qemu) Check() error {
 }
 
 func (q *qemu) GenerateSocket(id string) (interface{}, error) {
+	// if vsock already exsist, return it directly
+	// for vmcache, we don't need another random vsock
+	for _, device := range q.qemuConfig.Devices {
+		if vsockdev, ok := device.(govmmQemu.VSOCKDevice); ok {
+			return types.VSock{
+				VhostFd:   vsockdev.VHostFD,
+				ContextID: vsockdev.ContextID,
+				Port:      uint32(vSockPort),
+			}, nil
+		}
+	}
 	return generateVMSocket(id, q.config.VMStorePath)
 }
 

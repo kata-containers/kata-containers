@@ -92,6 +92,10 @@ type clhClient interface {
 	VmInfoGet(ctx context.Context) (chclient.VmInfo, *http.Response, error) //nolint:golint
 	// Boot the VM
 	BootVM(ctx context.Context) (*http.Response, error)
+	// Pause the VM
+	PauseVM(ctx context.Context) (*http.Response, error)
+	// Resume the VM
+	ResumeVM(ctx context.Context) (*http.Response, error)
 	// Add/remove CPUs to/from the VM
 	VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error)
 	// Add VFIO PCI device to the VM
@@ -125,6 +129,14 @@ func (c *clhClientApi) VmInfoGet(ctx context.Context) (chclient.VmInfo, *http.Re
 
 func (c *clhClientApi) BootVM(ctx context.Context) (*http.Response, error) {
 	return c.ApiInternal.BootVM(ctx).Execute()
+}
+
+func (c *clhClientApi) PauseVM(ctx context.Context) (*http.Response, error) {
+	return c.ApiInternal.PauseVM(ctx).Execute()
+}
+
+func (c *clhClientApi) ResumeVM(ctx context.Context) (*http.Response, error) {
+	return c.ApiInternal.ResumeVM(ctx).Execute()
 }
 
 func (c *clhClientApi) VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error) {
@@ -518,7 +530,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		ApiInternal: chclient.NewAPIClient(cfg).DefaultApi,
 	}
 
-	clh.virtiofsDaemon, err = clh.createVirtiofsDaemon(filepath.Join(GetSharePath(clh.id)))
+	clh.virtiofsDaemon, err = clh.createVirtiofsDaemon(hypervisorConfig.SharedPath)
 	if err != nil {
 		return err
 	}
@@ -893,8 +905,16 @@ func (clh *cloudHypervisor) Cleanup(ctx context.Context) error {
 }
 
 func (clh *cloudHypervisor) PauseVM(ctx context.Context) error {
+	span, _ := katatrace.Trace(ctx, clh.Logger(), "PauseVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
+	defer span.End()
 	clh.Logger().WithField("function", "PauseVM").Info("Pause Sandbox")
-	return nil
+
+	cl := clh.client()
+	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	defer cancel()
+
+	_, err := cl.PauseVM(ctx)
+	return openAPIClientError(err)
 }
 
 func (clh *cloudHypervisor) SaveVM() error {
@@ -903,8 +923,16 @@ func (clh *cloudHypervisor) SaveVM() error {
 }
 
 func (clh *cloudHypervisor) ResumeVM(ctx context.Context) error {
+	span, _ := katatrace.Trace(ctx, clh.Logger(), "ResumeVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
+	defer span.End()
 	clh.Logger().WithField("function", "ResumeVM").Info("Resume Sandbox")
-	return nil
+
+	cl := clh.client()
+	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	defer cancel()
+
+	_, err := cl.ResumeVM(ctx)
+	return openAPIClientError(err)
 }
 
 // stopSandbox will stop the Sandbox's VM.
@@ -915,12 +943,89 @@ func (clh *cloudHypervisor) StopVM(ctx context.Context, waitOnly bool) (err erro
 	return clh.terminate(ctx, waitOnly)
 }
 
+type clhGrpc struct {
+	ID    string
+	State CloudHypervisorState
+	ApiSocket string
+
+	// send path and pid of virtio-fs to client if needed
+	SharedFS          string
+	SourcePath        string
+	SocketPath        string
+	
+}
+
 func (clh *cloudHypervisor) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
-	return errors.New("cloudHypervisor is not supported by VM cache")
+	var cp clhGrpc
+	err := json.Unmarshal(j, &cp)
+	if err != nil {
+		return err
+	}
+
+	clh.id = cp.ID
+	clh.config = *hypervisorConfig
+	clh.state = cp.State
+	clh.state.apiSocket = cp.ApiSocket 
+	clh.ctx = ctx
+
+	cfg := chclient.NewConfiguration()
+	cfg.HTTPClient = &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, path string) (net.Conn, error) {
+				addr, err := net.ResolveUnixAddr("unix", clh.state.apiSocket)
+				if err != nil {
+					return nil, err
+				}
+
+				return net.DialUnix("unix", nil, addr)
+			},
+		},
+	}
+	clh.APIClient = &clhClientApi{
+		ApiInternal: chclient.NewAPIClient(cfg).DefaultApi,
+	}
+
+	if cp.SharedFS == config.VirtioFS {
+		clh.virtiofsDaemon = &virtiofsd{
+			path:       clh.config.VirtioFSDaemon,
+			sourcePath: cp.SourcePath,
+			socketPath: cp.SocketPath,
+			extraArgs:  clh.config.VirtioFSExtraArgs,
+			cache:      clh.config.VirtioFSCache,
+			PID:        cp.State.VirtiofsDaemonPid,
+		}
+
+	        // monitor of virtiofsd
+	        go func() {
+        	        pid := cp.State.VirtiofsDaemonPid
+			process, err := os.FindProcess(pid)
+                	for err == nil {
+				// send a signal 0 to check virtiofsd alive
+				time.Sleep(20 * time.Millisecond)
+				err = process.Signal(syscall.Signal(0))
+			}
+			clh.Logger().Info("virtiofsd quits")	
+                	clh.StopVM(ctx, false)
+        	}()
+	}
+
+	return nil
 }
 
 func (clh *cloudHypervisor) toGrpc(ctx context.Context) ([]byte, error) {
-	return nil, errors.New("cloudHypervisor is not supported by VM cache")
+	cp := clhGrpc{
+		ID:    clh.id,
+		State: clh.state,
+		ApiSocket: clh.state.apiSocket,
+	}
+
+	// set virtio-fs daemon pid
+	if clh.config.SharedFS == config.VirtioFS {
+		cp.SharedFS = config.VirtioFS
+		cp.SourcePath = clh.config.SharedPath
+		cp.SocketPath = clh.state.apiSocket
+	}
+	return json.Marshal(&cp)
 }
 
 func (clh *cloudHypervisor) Save() (s hv.HypervisorState) {
@@ -1019,6 +1124,9 @@ func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err e
 	pidRunning := true
 	if pid == 0 {
 		pidRunning = false
+	} else {
+		clhRunning, _ := clh.isClhRunning(clhStopSandboxTimeout)
+		pidRunning = clhRunning 
 	}
 
 	defer func() {
@@ -1031,19 +1139,16 @@ func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err e
 	clh.Logger().Debug("Stopping Cloud Hypervisor")
 
 	if pidRunning && !waitOnly {
-		clhRunning, _ := clh.isClhRunning(clhStopSandboxTimeout)
-		if clhRunning {
-			ctx, cancel := context.WithTimeout(context.Background(), clhStopSandboxTimeout*time.Second)
-			defer cancel()
-			if _, err = clh.client().ShutdownVMM(ctx); err != nil {
-				return err
-			}
+		ctx, cancel := context.WithTimeout(context.Background(), clhStopSandboxTimeout*time.Second)
+		defer cancel()
+		if _, err = clh.client().ShutdownVMM(ctx); err != nil {
+			return err
 		}
-	}
-
-	if err = utils.WaitLocalProcess(pid, clhStopSandboxTimeout, syscall.Signal(0), clh.Logger()); err != nil {
-		return err
-	}
+	} else if waitOnly && pidRunning {
+		if err = utils.WaitLocalProcess(pid, clhStopSandboxTimeout, syscall.Signal(0), clh.Logger()); err != nil {
+			return err
+		}
+	}	
 
 	clh.Logger().Debug("stop virtiofsDaemon")
 
@@ -1165,6 +1270,9 @@ func (clh *cloudHypervisor) launchClh() (int, error) {
 	}
 
 	cmdHypervisor.Stderr = cmdHypervisor.Stdout
+
+	// to be a daemon process
+	cmdHypervisor.SysProcAttr = &syscall.SysProcAttr{Setsid: true,}
 
 	err = utils.StartCmd(cmdHypervisor)
 	if err != nil {

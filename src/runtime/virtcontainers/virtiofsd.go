@@ -131,6 +131,9 @@ func (v *virtiofsd) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
 	}
 	cmd.Args = append(cmd.Args, args...)
 
+	// to be a daemon process
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true,}
+
 	v.Logger().WithField("path", v.path).Info()
 	v.Logger().WithField("args", strings.Join(args, " ")).Info()
 

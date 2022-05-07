@@ -1341,8 +1341,8 @@ func checkFactoryConfig(config oci.RuntimeConfig) error {
 	}
 
 	if config.FactoryConfig.VMCacheNumber > 0 {
-		if config.HypervisorType != vc.QemuHypervisor {
-			return errors.New("VM cache just support qemu")
+		if config.HypervisorType != vc.QemuHypervisor && config.HypervisorType != vc.ClhHypervisor {
+			return errors.New("VM cache just support qemu and cloud hypervisor")
 		}
 	}
 
