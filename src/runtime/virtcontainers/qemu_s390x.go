@@ -39,9 +39,7 @@ const (
 )
 
 // Verify needed parameters
-var kernelParams = []Param{
-	{"console", "ttysclp0"},
-}
+var kernelParams = []Param{}
 
 var ccwbridge = types.NewBridge(types.CCW, "", make(map[uint32]string, types.CCWBridgeMaxCapacity), 0)
 
@@ -111,6 +109,8 @@ func (q *qemuS390x) appendConsole(ctx context.Context, devices []govmmQemu.Devic
 	if err != nil {
 		return devices, fmt.Errorf("Failed to append console %v", err)
 	}
+
+	q.kernelParams = append(q.kernelParams, Param{"console", "ttysclp0"})
 
 	serial := govmmQemu.SerialDevice{
 		Driver:        virtioSerialCCW,

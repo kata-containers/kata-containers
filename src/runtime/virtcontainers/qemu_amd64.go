@@ -56,8 +56,6 @@ var kernelParams = []Param{
 	{"i8042.noaux", "1"},
 	{"noreplace-smp", ""},
 	{"reboot", "k"},
-	{"console", "hvc0"},
-	{"console", "hvc1"},
 	{"cryptomgr.notests", ""},
 	{"net.ifnames", "0"},
 	{"pci", "lastbus=0"},
