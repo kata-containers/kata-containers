@@ -259,6 +259,8 @@ func TestQemuArchBaseAppendConsoles(t *testing.T) {
 	devices, err = qemuArchBase.appendConsole(context.Background(), devices, path)
 	assert.NoError(err)
 	assert.Equal(expectedOut, devices)
+	assert.Contains(qemuArchBase.kernelParams, Param{"console", "hvc0"})
+	assert.Contains(qemuArchBase.kernelParams, Param{"console", "hvc1"})
 }
 
 func TestQemuArchBaseAppendImage(t *testing.T) {

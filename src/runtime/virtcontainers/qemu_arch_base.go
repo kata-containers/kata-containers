@@ -337,6 +337,12 @@ func (q *qemuArchBase) appendConsole(_ context.Context, devices []govmmQemu.Devi
 
 	devices = append(devices, console)
 
+	consoleKernelParams := []Param{
+		{"console", "hvc0"},
+		{"console", "hvc1"},
+	}
+	q.kernelParams = append(q.kernelParams, consoleKernelParams...)
+
 	return devices, nil
 }
 
