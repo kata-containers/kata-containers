@@ -41,8 +41,6 @@ const tpmHostPath = "/dev/tpmrm0"
 var kernelParams = []Param{
 	{"rcupdate.rcu_expedited", "1"},
 	{"reboot", "k"},
-	{"console", "hvc0"},
-	{"console", "hvc1"},
 	{"cryptomgr.notests", ""},
 	{"net.ifnames", "0"},
 }
