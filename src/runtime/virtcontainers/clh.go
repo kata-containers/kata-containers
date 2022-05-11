@@ -9,11 +9,15 @@
 package virtcontainers
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -99,8 +103,6 @@ type clhClient interface {
 	VmAddDiskPut(ctx context.Context, diskConfig chclient.DiskConfig) (chclient.PciDeviceInfo, *http.Response, error)
 	// Remove a device from the VM
 	VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chclient.VmRemoveDevice) (*http.Response, error)
-	// Add a new net device to the VM
-	VmAddNetPut(ctx context.Context, netConfig chclient.NetConfig) (chclient.PciDeviceInfo, *http.Response, error)
 }
 
 type clhClientApi struct {
@@ -144,19 +146,66 @@ func (c *clhClientApi) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chc
 	return c.ApiInternal.VmRemoveDevicePut(ctx).VmRemoveDevice(vmRemoveDevice).Execute()
 }
 
-func (c *clhClientApi) VmAddNetPut(ctx context.Context, netConfig chclient.NetConfig) (chclient.PciDeviceInfo, *http.Response, error) {
-	return c.ApiInternal.VmAddNetPut(ctx).NetConfig(netConfig).Execute()
-}
-
 // This is done in order to be able to override such a function as part of
 // our unit tests, as when testing bootVM we're on a mocked scenario already.
-var vmAddNetPutRequest = func(clh *cloudHypervisor, ctx context.Context) error {
-	cl := clh.client()
+var vmAddNetPutRequest = func(clh *cloudHypervisor) error {
+	addr, err := net.ResolveUnixAddr("unix", clh.state.apiSocket)
+	if err != nil {
+		return err
+	}
+
+	conn, err := net.DialUnix("unix", nil, addr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
 
 	for _, netDevice := range *clh.netDevices {
-		_, _, err := cl.VmAddNetPut(ctx, netDevice)
+		netDeviceAsJson, err := json.Marshal(netDevice)
 		if err != nil {
 			return err
+		}
+		netDeviceAsIoReader := bytes.NewBuffer(netDeviceAsJson)
+
+		req, err := http.NewRequest(http.MethodPut, "http://localhost/api/v1/vm.add-net", netDeviceAsIoReader)
+		if err != nil {
+			return err
+		}
+
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Length", strconv.Itoa(int(netDeviceAsIoReader.Len())))
+
+		payload, err := httputil.DumpRequest(req, true)
+		if err != nil {
+			return err
+		}
+
+		payloadn, err := conn.Write([]byte(payload))
+		if err != nil {
+			return err
+		}
+		if payloadn != len(payload) {
+			return fmt.Errorf("Failed to send all the request to Cloud Hypervisor. %d bytes expect to send, but only %d sent", len(payload), payloadn)
+		}
+
+		reader := bufio.NewReader(conn)
+		resp, err := http.ReadResponse(reader, req)
+		if err != nil {
+			return err
+		}
+
+		respBody, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		resp.Body.Close()
+		resp.Body = ioutil.NopCloser(bytes.NewBuffer(respBody))
+
+		if resp.StatusCode != 204 {
+			clh.Logger().Errorf("vmAddNetPut failed with error '%d'. Response: %+v", resp.StatusCode, resp)
+			return fmt.Errorf("Failed to add the network device '%+v' to Cloud Hypervisor: %v", netDevice, resp.StatusCode)
 		}
 	}
 
@@ -1283,8 +1332,8 @@ func openAPIClientError(err error) error {
 	return fmt.Errorf("error: %v reason: %s", err, reason)
 }
 
-func (clh *cloudHypervisor) vmAddNetPut(ctx context.Context) error {
-	return vmAddNetPutRequest(clh, ctx)
+func (clh *cloudHypervisor) vmAddNetPut() error {
+	return vmAddNetPutRequest(clh)
 }
 
 func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
@@ -1314,7 +1363,7 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 		return fmt.Errorf("VM state is not 'Created' after 'CreateVM'")
 	}
 
-	err = clh.vmAddNetPut(ctx)
+	err = clh.vmAddNetPut()
 	if err != nil {
 		return err
 	}

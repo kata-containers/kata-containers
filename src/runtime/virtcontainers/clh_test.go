@@ -117,11 +117,6 @@ func (c *clhClientMock) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice ch
 	return nil, nil
 }
 
-//nolint:golint
-func (c *clhClientMock) VmAddNetPut(ctx context.Context, netConfig chclient.NetConfig) (chclient.PciDeviceInfo, *http.Response, error) {
-	return chclient.PciDeviceInfo{}, nil, nil
-}
-
 func TestCloudHypervisorAddVSock(t *testing.T) {
 	assert := assert.New(t)
 	clh := cloudHypervisor{}
@@ -380,7 +375,7 @@ func TestCloudHypervisorBootVM(t *testing.T) {
 	clh.APIClient = &clhClientMock{}
 
 	savedVmAddNetPutRequestFunc := vmAddNetPutRequest
-	vmAddNetPutRequest = func(clh *cloudHypervisor, ctx context.Context) error { return nil }
+	vmAddNetPutRequest = func(clh *cloudHypervisor) error { return nil }
 	defer func() {
 		vmAddNetPutRequest = savedVmAddNetPutRequestFunc
 	}()
@@ -499,7 +494,7 @@ func TestCloudHypervisorStartSandbox(t *testing.T) {
 	assert.NoError(err)
 
 	savedVmAddNetPutRequestFunc := vmAddNetPutRequest
-	vmAddNetPutRequest = func(clh *cloudHypervisor, ctx context.Context) error { return nil }
+	vmAddNetPutRequest = func(clh *cloudHypervisor) error { return nil }
 	defer func() {
 		vmAddNetPutRequest = savedVmAddNetPutRequestFunc
 	}()
