@@ -17,6 +17,7 @@ jobs:
           - rootfs-image
           - rootfs-initrd
           - shim-v2
+          - virtiofsd
     steps:
       - uses: actions/checkout@v2
       - name: Install docker

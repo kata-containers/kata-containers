@@ -24,6 +24,7 @@ jobs:
           - firecracker
           - rootfs-image
           - rootfs-initrd
+          - virtiofsd
     steps:
       - uses: actions/checkout@v2
       - name: Install docker
