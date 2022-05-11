@@ -700,11 +700,11 @@ options to have the kernel boot messages logged into the system journal.
 For generic information on enabling debug in the configuration file, see the
 [Enable full debug](#enable-full-debug) section.
 
-The kernel boot messages will appear in the `containerd` or `CRI-O` log appropriately,
+The kernel boot messages will appear in the `kata` logs (and in the `containerd` or `CRI-O` log appropriately).
 such as:
 
 ```bash
-$ sudo journalctl -t containerd
+$ sudo journalctl -t kata
 -- Logs begin at Thu 2020-02-13 16:20:40 UTC, end at Thu 2020-02-13 16:30:23 UTC. --
 ...
 time="2020-09-15T14:56:23.095113803+08:00" level=debug msg="reading guest console" console-protocol=unix console-url=/run/vc/vm/ab9f633385d4987828d342e47554fc6442445b32039023eeddaa971c1bb56791/console.sock pid=107642 sandbox=ab9f633385d4987828d342e47554fc6442445b32039023eeddaa971c1bb56791 source=virtcontainers subsystem=sandbox vmconsole="[    0.395399] brd: module loaded"
@@ -714,3 +714,4 @@ time="2020-09-15T14:56:23.105268162+08:00" level=debug msg="reading guest consol
 time="2020-09-15T14:56:23.121121598+08:00" level=debug msg="reading guest console" console-protocol=unix console-url=/run/vc/vm/ab9f633385d4987828d342e47554fc6442445b32039023eeddaa971c1bb56791/console.sock pid=107642 sandbox=ab9f633385d4987828d342e47554fc6442445b32039023eeddaa971c1bb56791 source=virtcontainers subsystem=sandbox vmconsole="[    0.421324] memmap_init_zone_device initialised 32768 pages in 12ms"
 ...
 ```
+Refer to the [kata-log-parser documentation](../src/tools/log-parser/README.md) which is useful to fetch these.

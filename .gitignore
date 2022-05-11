@@ -10,4 +10,5 @@ src/agent/kata-agent.service
 src/agent/protocols/src/*.rs
 !src/agent/protocols/src/lib.rs
 build
+src/tools/log-parser/kata-log-parser
 
