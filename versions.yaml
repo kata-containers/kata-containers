@@ -243,6 +243,17 @@ externals:
     url: "https://github.com/containerd/nydus-snapshotter"
     version: "v0.1.0"
 
+  virtiofsd:
+    description: "vhost-user virtio-fs device backend written in Rust"
+    url: "https://gitlab.com/virtio-fs/virtiofsd"
+    version: "v1.2.0"
+    meta:
+      # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.2.0,
+      # this is the link labelled virtiofsd-v1.2.0.zip
+      #
+      # yamllint disable-line rule:line-length
+      binary: "https://gitlab.com/virtio-fs/virtiofsd/uploads/b26d9891caac83209a3fdd24bcf2ae86/virtiofsd-v1.2.0.zip"
+
 languages:
   description: |
     Details of programming languages required to build system
