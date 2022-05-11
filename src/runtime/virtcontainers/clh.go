@@ -148,6 +148,21 @@ func (c *clhClientApi) VmAddNetPut(ctx context.Context, netConfig chclient.NetCo
 	return c.ApiInternal.VmAddNetPut(ctx).NetConfig(netConfig).Execute()
 }
 
+// This is done in order to be able to override such a function as part of
+// our unit tests, as when testing bootVM we're on a mocked scenario already.
+var vmAddNetPutRequest = func(clh *cloudHypervisor, ctx context.Context) error {
+	cl := clh.client()
+
+	for _, netDevice := range *clh.netDevices {
+		_, _, err := cl.VmAddNetPut(ctx, netDevice)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 //
 // Cloud hypervisor state
 //
@@ -170,6 +185,7 @@ type cloudHypervisor struct {
 	APIClient      clhClient
 	ctx            context.Context
 	id             string
+	netDevices     *[]chclient.NetConfig
 	devicesIds     map[string]string
 	vmconfig       chclient.VmConfig
 	state          CloudHypervisorState
@@ -1267,6 +1283,10 @@ func openAPIClientError(err error) error {
 	return fmt.Errorf("error: %v reason: %s", err, reason)
 }
 
+func (clh *cloudHypervisor) vmAddNetPut(ctx context.Context) error {
+	return vmAddNetPutRequest(clh, ctx)
+}
+
 func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 
 	cl := clh.client()
@@ -1292,6 +1312,11 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 
 	if info.State != clhStateCreated {
 		return fmt.Errorf("VM state is not 'Created' after 'CreateVM'")
+	}
+
+	err = clh.vmAddNetPut(ctx)
+	if err != nil {
+		return err
 	}
 
 	clh.Logger().Debug("Booting VM")
@@ -1397,10 +1422,10 @@ func (clh *cloudHypervisor) addNet(e Endpoint) error {
 		net.SetRateLimiterConfig(*netRateLimiterConfig)
 	}
 
-	if clh.vmconfig.Net != nil {
-		*clh.vmconfig.Net = append(*clh.vmconfig.Net, *net)
+	if clh.netDevices != nil {
+		*clh.netDevices = append(*clh.netDevices, *net)
 	} else {
-		clh.vmconfig.Net = &[]chclient.NetConfig{*net}
+		clh.netDevices = &[]chclient.NetConfig{*net}
 	}
 
 	return nil

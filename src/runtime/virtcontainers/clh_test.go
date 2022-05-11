@@ -148,19 +148,19 @@ func TestCloudHypervisorAddNetCheckNetConfigListValues(t *testing.T) {
 	err := clh.addNet(e)
 	assert.Nil(err)
 
-	assert.Equal(len(*clh.vmconfig.Net), 1)
+	assert.Equal(len(*clh.netDevices), 1)
 	if err == nil {
-		assert.Equal(*(*clh.vmconfig.Net)[0].Mac, macTest)
-		assert.Equal(*(*clh.vmconfig.Net)[0].Tap, tapPath)
+		assert.Equal(*(*clh.netDevices)[0].Mac, macTest)
+		assert.Equal(*(*clh.netDevices)[0].Tap, tapPath)
 	}
 
 	err = clh.addNet(e)
 	assert.Nil(err)
 
-	assert.Equal(len(*clh.vmconfig.Net), 2)
+	assert.Equal(len(*clh.netDevices), 2)
 	if err == nil {
-		assert.Equal(*(*clh.vmconfig.Net)[1].Mac, macTest)
-		assert.Equal(*(*clh.vmconfig.Net)[1].Tap, tapPath)
+		assert.Equal(*(*clh.netDevices)[1].Mac, macTest)
+		assert.Equal(*(*clh.netDevices)[1].Tap, tapPath)
 	}
 }
 
@@ -194,7 +194,7 @@ func TestCloudHypervisorAddNetCheckEnpointTypes(t *testing.T) {
 				t.Errorf("cloudHypervisor.addNet() error = %v, wantErr %v", err, tt.wantErr)
 
 			} else if err == nil {
-				assert.Equal(*(*clh.vmconfig.Net)[0].Tap, tapPath)
+				assert.Equal(*(*clh.netDevices)[0].Tap, tapPath)
 			}
 		})
 	}
@@ -350,7 +350,7 @@ func TestCloudHypervisorNetRateLimiter(t *testing.T) {
 			if err := clh.addNet(validVeth); err != nil {
 				t.Errorf("cloudHypervisor.addNet() error = %v", err)
 			} else {
-				netConfig := (*clh.vmconfig.Net)[0]
+				netConfig := (*clh.netDevices)[0]
 
 				assert.Equal(netConfig.HasRateLimiterConfig(), tt.expectsRateLimiter)
 				if tt.expectsRateLimiter {
@@ -378,6 +378,13 @@ func TestCloudHypervisorNetRateLimiter(t *testing.T) {
 func TestCloudHypervisorBootVM(t *testing.T) {
 	clh := &cloudHypervisor{}
 	clh.APIClient = &clhClientMock{}
+
+	savedVmAddNetPutRequestFunc := vmAddNetPutRequest
+	vmAddNetPutRequest = func(clh *cloudHypervisor, ctx context.Context) error { return nil }
+	defer func() {
+		vmAddNetPutRequest = savedVmAddNetPutRequestFunc
+	}()
+
 	var ctx context.Context
 	if err := clh.bootVM(ctx); err != nil {
 		t.Errorf("cloudHypervisor.bootVM() error = %v", err)
@@ -490,6 +497,12 @@ func TestCloudHypervisorStartSandbox(t *testing.T) {
 
 	store, err := persist.GetDriver()
 	assert.NoError(err)
+
+	savedVmAddNetPutRequestFunc := vmAddNetPutRequest
+	vmAddNetPutRequest = func(clh *cloudHypervisor, ctx context.Context) error { return nil }
+	defer func() {
+		vmAddNetPutRequest = savedVmAddNetPutRequestFunc
+	}()
 
 	clhConfig.VMStorePath = store.RunVMStoragePath()
 	clhConfig.RunStorePath = store.RunStoragePath()
