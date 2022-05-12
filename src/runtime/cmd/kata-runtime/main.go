@@ -35,7 +35,7 @@ const arch = goruntime.GOARCH
 
 var exitFunc = os.Exit
 
-var usage = fmt.Sprintf(`%s runtime
+var usage = fmt.Sprintf(`%s foobarruntime
 
 %s is a command line program for running applications packaged
 according to the Open Container Initiative (OCI).`, katautils.NAME, katautils.NAME)
