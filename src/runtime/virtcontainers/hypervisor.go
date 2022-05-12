@@ -47,6 +47,9 @@ const (
 	// ClhHypervisor is the ICH hypervisor.
 	ClhHypervisor HypervisorType = "clh"
 
+	// VirtFramework is the Darwin Virtualization.framework hypervisor
+	VirtframeworkHypervisor HypervisorType = "virtframework"
+
 	// MockHypervisor is a mock hypervisor for testing purposes
 	MockHypervisor HypervisorType = "mock"
 
