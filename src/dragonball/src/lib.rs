@@ -5,6 +5,8 @@
 //! Machine(KVM) which is optimized for container workloads.
 
 #![warn(missing_docs)]
+//TODO: Remove this, after the rest of dragonball has been committed.
+#![allow(dead_code)]
 
 /// Address space manager for virtual machines.
 pub mod address_space_manager;
