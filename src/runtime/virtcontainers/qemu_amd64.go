@@ -122,6 +122,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			disableNvdimm:        config.DisableImageNvdimm,
 			dax:                  true,
 			protection:           noneProtection,
+			legacySerial:         config.LegacySerial,
 		},
 		vmFactory: factory,
 	}
