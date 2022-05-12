@@ -66,6 +66,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			kernelParamsNonDebug: kernelParamsNonDebug,
 			kernelParamsDebug:    kernelParamsDebug,
 			kernelParams:         kernelParams,
+			legacySerial:         false,
 		},
 	}
 	// Set first bridge type to CCW

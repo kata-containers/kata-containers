@@ -74,6 +74,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			kernelParamsDebug:    kernelParamsDebug,
 			kernelParams:         kernelParams,
 			protection:           noneProtection,
+			legacySerial:         config.LegacySerial,
 		},
 	}
 

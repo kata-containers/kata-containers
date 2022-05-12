@@ -389,6 +389,9 @@ valid_entropy_sources = @DEFVALIDENTROPYSOURCES@
 # be default_memory.
 #enable_guest_swap = true
 
+# use legacy serial for guest console if available and implemented for architecture. Default false
+#use_legacy_serial = true
+
 [factory]
 # VM templating support. Once enabled, new VMs are created from template
 # using vm cloning. They will share the same initial kernel, initramfs and
