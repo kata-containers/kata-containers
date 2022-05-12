@@ -146,6 +146,7 @@ type hypervisor struct {
 	Rootless                       bool     `toml:"rootless"`
 	DisableSeccomp                 bool     `toml:"disable_seccomp"`
 	DisableSeLinux                 bool     `toml:"disable_selinux"`
+	LegacySerial                   bool     `toml:"use_legacy_serial"`
 }
 
 type runtime struct {
@@ -775,6 +776,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		ConfidentialGuest:       h.ConfidentialGuest,
 		GuestSwap:               h.GuestSwap,
 		Rootless:                h.Rootless,
+		LegacySerial:            h.LegacySerial,
 	}, nil
 }
 
@@ -1132,6 +1134,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		GuestSwap:               defaultGuestSwap,
 		Rootless:                defaultRootlessHypervisor,
 		DisableSeccomp:          defaultDisableSeccomp,
+		LegacySerial:            defaultLegacySerial,
 	}
 }
 
