@@ -184,21 +184,24 @@ initialize() {
 
 check_out_repos() {
     echo "Creating repo: ${tests_repo} and branch ${tests_branch} into ${tests_repo_dir}..."
-    mkdir -p $(dirname "${tests_repo_dir}") && sudo chown -R ${USER}:${USER} $(dirname "${tests_repo_dir}")
-    [ -d "${tests_repo_dir}" ] || git clone "https://${tests_repo}.git" "${tests_repo_dir}"
+    # Due to git https://github.blog/2022-04-12-git-security-vulnerability-announced/ the tests repo needs
+    # to be owned by root as it is re-checked out in rootfs.sh
+    mkdir -p $(dirname "${tests_repo_dir}")
+    [ -d "${tests_repo_dir}" ] || sudo -E git clone "https://${tests_repo}.git" "${tests_repo_dir}"
+    sudo -E chown -R root:root "${tests_repo_dir}"
     pushd "${tests_repo_dir}"
-    git fetch
+    sudo -E git fetch
     if [ -n "${tests_branch}" ]; then
-        git checkout ${tests_branch}
+        sudo -E git checkout ${tests_branch}
     fi
-    git reset --hard origin/${tests_branch}
+    sudo -E git reset --hard origin/${tests_branch}
 
     source "${BATS_TEST_DIRNAME}/lib.sh"
 
     popd
 
     echo "Creating repo: ${katacontainers_repo} and branch ${katacontainers_branch} into ${katacontainers_repo_dir}..."
-    mkdir -p $(dirname "${katacontainers_repo_dir}") && sudo chown -R ${USER}:${USER} $(dirname "${katacontainers_repo_dir}")
+    mkdir -p $(dirname "${katacontainers_repo_dir}")
     [ -d "${katacontainers_repo_dir}" ] || git clone "https://${katacontainers_repo}.git" "${katacontainers_repo_dir}"
     pushd "${katacontainers_repo_dir}"
     git fetch
@@ -272,7 +275,7 @@ create_a_local_rootfs() {
 
      # Install_rust.sh during rootfs.sh switches us to the main branch of the tests repo, so switch back now
     pushd "${tests_repo_dir}"
-    git checkout ${tests_branch}
+    sudo -E git checkout ${tests_branch}
     popd
     # During the ./rootfs.sh call the kata agent is built as root, so we need to update the permissions, so we can rebuild it
     sudo chown -R ${USER}:${USER} "${katacontainers_repo_dir}/src/agent/"
