@@ -479,13 +479,11 @@ func (h hypervisor) getInitrdAndImage() (initrd string, image string, err error)
 
 	image, errImage := h.image()
 
-	if h.ConfidentialGuest && h.MachineType == vc.QemuCCWVirtio {
-		if image != "" || initrd != "" {
-			return "", "", errors.New("Neither the image nor initrd path may be set for Secure Execution")
-		}
-	} else if image != "" && initrd != "" {
+	if image != "" && initrd != "" {
 		return "", "", errors.New("having both an image and an initrd defined in the configuration file is not supported")
-	} else if errInitrd != nil && errImage != nil {
+	}
+
+	if errInitrd != nil && errImage != nil {
 		return "", "", fmt.Errorf("Either initrd or image must be set to a valid path (initrd: %v) (image: %v)", errInitrd, errImage)
 	}
 
@@ -671,6 +669,16 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	pflashes, err := h.PFlash()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
+	}
+
+	if image != "" && initrd != "" {
+		return vc.HypervisorConfig{},
+			errors.New("having both an image and an initrd defined in the configuration file is not supported")
+	}
+
+	if image == "" && initrd == "" {
+		return vc.HypervisorConfig{},
+			errors.New("either image or initrd must be defined in the configuration file")
 	}
 
 	firmware, err := h.firmware()

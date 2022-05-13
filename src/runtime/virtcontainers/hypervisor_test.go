@@ -144,18 +144,6 @@ func TestHypervisorConfigBothInitrdAndImage(t *testing.T) {
 	testHypervisorConfigValid(t, hypervisorConfig, false)
 }
 
-func TestHypervisorConfigSecureExecution(t *testing.T) {
-	hypervisorConfig := &HypervisorConfig{
-		KernelPath:            fmt.Sprintf("%s/%s", testDir, testKernel),
-		InitrdPath:            fmt.Sprintf("%s/%s", testDir, testInitrd),
-		ConfidentialGuest:     true,
-		HypervisorMachineType: QemuCCWVirtio,
-	}
-
-	// Secure Execution should only specify a kernel (encrypted image contains all components)
-	testHypervisorConfigValid(t, hypervisorConfig, false)
-}
-
 func TestHypervisorConfigValidTemplateConfig(t *testing.T) {
 	hypervisorConfig := &HypervisorConfig{
 		KernelPath:       fmt.Sprintf("%s/%s", testDir, testKernel),
