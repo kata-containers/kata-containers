@@ -6,6 +6,7 @@
 #![allow(unknown_lints)]
 
 use std::collections::HashMap;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -13,6 +14,7 @@ use std::time::SystemTime;
 use anyhow::{ensure, Context, Result};
 use async_recursion::async_recursion;
 use nix::mount::{umount, MsFlags};
+use nix::unistd::{Gid, Uid};
 use slog::{debug, error, info, warn, Logger};
 use thiserror::Error;
 use tokio::fs;
@@ -80,7 +82,8 @@ impl Drop for Storage {
 }
 
 async fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
-    if fs::symlink_metadata(&from).await?.file_type().is_symlink() {
+    let metadata = fs::symlink_metadata(&from).await?;
+    if metadata.file_type().is_symlink() {
         // if source is a symlink, create new symlink with same link source. If
         // the symlink exists, remove and create new one:
         if fs::symlink_metadata(&to).await.is_ok() {
@@ -88,8 +91,15 @@ async fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
         }
         fs::symlink(fs::read_link(&from).await?, &to).await?;
     } else {
-        fs::copy(from, to).await?;
+        fs::copy(&from, &to).await?;
     }
+    // preserve the source uid and gid to the destination.
+    nix::unistd::chown(
+        to.as_ref(),
+        Some(Uid::from_raw(metadata.uid())),
+        Some(Gid::from_raw(metadata.gid())),
+    )?;
+
     Ok(())
 }
 
@@ -106,14 +116,29 @@ impl Storage {
 
     async fn update_target(&self, logger: &Logger, source_path: impl AsRef<Path>) -> Result<()> {
         let source_file_path = source_path.as_ref();
+        let metadata = source_file_path.symlink_metadata()?;
 
         // if we are creating a directory: just create it, nothing more to do
-        if source_file_path.symlink_metadata()?.file_type().is_dir() {
+        if metadata.file_type().is_dir() {
             let dest_file_path = self.make_target_path(&source_file_path)?;
 
             fs::create_dir_all(&dest_file_path)
                 .await
                 .with_context(|| format!("Unable to mkdir all for {}", dest_file_path.display()))?;
+            // set the directory permissions to match the source directory permissions
+            fs::set_permissions(&dest_file_path, metadata.permissions())
+                .await
+                .with_context(|| {
+                    format!("Unable to set permissions for {}", dest_file_path.display())
+                })?;
+            // preserve the source directory uid and gid to the destination.
+            nix::unistd::chown(
+                &dest_file_path,
+                Some(Uid::from_raw(metadata.uid())),
+                Some(Gid::from_raw(metadata.gid())),
+            )
+            .with_context(|| format!("Unable to set ownership for {}", dest_file_path.display()))?;
+
             return Ok(());
         }
 
@@ -504,6 +529,7 @@ mod tests {
     use super::*;
     use crate::mount::is_mounted;
     use crate::skip_if_not_root;
+    use nix::unistd::{Gid, Uid};
     use std::fs;
     use std::thread;
 
@@ -895,20 +921,28 @@ mod tests {
 
     #[tokio::test]
     async fn test_copy() {
+        skip_if_not_root!();
+
         // prepare tmp src/destination
         let source_dir = tempfile::tempdir().unwrap();
         let dest_dir = tempfile::tempdir().unwrap();
+        let uid = Uid::from_raw(10);
+        let gid = Gid::from_raw(200);
 
         // verify copy of a regular file
         let src_file = source_dir.path().join("file.txt");
         let dst_file = dest_dir.path().join("file.txt");
         fs::write(&src_file, "foo").unwrap();
+        nix::unistd::chown(&src_file, Some(uid), Some(gid)).unwrap();
+
         copy(&src_file, &dst_file).await.unwrap();
         // verify destination:
-        assert!(!fs::symlink_metadata(dst_file)
+        assert!(!fs::symlink_metadata(&dst_file)
             .unwrap()
             .file_type()
             .is_symlink());
+        assert_eq!(fs::metadata(&dst_file).unwrap().uid(), uid.as_raw());
+        assert_eq!(fs::metadata(&dst_file).unwrap().gid(), gid.as_raw());
 
         // verify copy of a symlink
         let src_symlink_file = source_dir.path().join("symlink_file.txt");
@@ -916,7 +950,7 @@ mod tests {
         tokio::fs::symlink(&src_file, &src_symlink_file)
             .await
             .unwrap();
-        copy(src_symlink_file, &dst_symlink_file).await.unwrap();
+        copy(&src_symlink_file, &dst_symlink_file).await.unwrap();
         // verify destination:
         assert!(fs::symlink_metadata(&dst_symlink_file)
             .unwrap()
@@ -924,6 +958,8 @@ mod tests {
             .is_symlink());
         assert_eq!(fs::read_link(&dst_symlink_file).unwrap(), src_file);
         assert_eq!(fs::read_to_string(&dst_symlink_file).unwrap(), "foo");
+        assert_ne!(fs::metadata(&dst_symlink_file).unwrap().uid(), uid.as_raw());
+        assert_ne!(fs::metadata(&dst_symlink_file).unwrap().gid(), gid.as_raw());
     }
 
     #[tokio::test]
@@ -1069,6 +1105,8 @@ mod tests {
 
     #[tokio::test]
     async fn watch_directory() {
+        skip_if_not_root!();
+
         // Prepare source directory:
         // ./tmp/1.txt
         // ./tmp/A/B/2.txt
@@ -1079,7 +1117,9 @@ mod tests {
 
         // A/C is an empty directory
         let empty_dir = "A/C";
-        fs::create_dir_all(source_dir.path().join(empty_dir)).unwrap();
+        let path = source_dir.path().join(empty_dir);
+        fs::create_dir_all(&path).unwrap();
+        nix::unistd::chown(&path, Some(Uid::from_raw(10)), Some(Gid::from_raw(200))).unwrap();
 
         // delay 20 ms between writes to files in order to ensure filesystem timestamps are unique
         thread::sleep(Duration::from_millis(20));
@@ -1123,7 +1163,9 @@ mod tests {
 
         // create another empty directory A/C/D
         let empty_dir = "A/C/D";
-        fs::create_dir_all(source_dir.path().join(empty_dir)).unwrap();
+        let path = source_dir.path().join(empty_dir);
+        fs::create_dir_all(&path).unwrap();
+        nix::unistd::chown(&path, Some(Uid::from_raw(10)), Some(Gid::from_raw(200))).unwrap();
         assert_eq!(entry.scan(&logger).await.unwrap(), 1);
         assert!(dest_dir.path().join(empty_dir).exists());
     }

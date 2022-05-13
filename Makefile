@@ -15,6 +15,7 @@ TOOLS =
 TOOLS += agent-ctl
 TOOLS += trace-forwarder
 TOOLS += runk
+TOOLS += log-parser
 
 STANDARD_TARGETS = build check clean install test vendor
 

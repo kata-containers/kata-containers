@@ -1018,7 +1018,7 @@ fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
 mod tests {
     use super::*;
     use crate::test_utils::test_utils::TestUserType;
-    use crate::{skip_if_not_root, skip_loop_if_not_root, skip_loop_if_root};
+    use crate::{skip_if_not_root, skip_loop_by_user, skip_loop_if_not_root, skip_loop_if_root};
     use protobuf::RepeatedField;
     use protocols::agent::FSGroup;
     use std::fs::File;
@@ -1112,11 +1112,7 @@ mod tests {
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
 
-            if d.test_user == TestUserType::RootOnly {
-                skip_loop_if_not_root!(msg);
-            } else if d.test_user == TestUserType::NonRootOnly {
-                skip_loop_if_root!(msg);
-            }
+            skip_loop_by_user!(msg, d.test_user);
 
             let src: PathBuf;
             let dest: PathBuf;
@@ -1649,11 +1645,8 @@ mod tests {
 
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
-            if d.test_user == TestUserType::RootOnly {
-                skip_loop_if_not_root!(msg);
-            } else if d.test_user == TestUserType::NonRootOnly {
-                skip_loop_if_root!(msg);
-            }
+
+            skip_loop_by_user!(msg, d.test_user);
 
             let drain = slog::Discard;
             let logger = slog::Logger::root(drain, o!());
@@ -1762,11 +1755,7 @@ mod tests {
 
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
-            if d.test_user == TestUserType::RootOnly {
-                skip_loop_if_not_root!(msg);
-            } else if d.test_user == TestUserType::NonRootOnly {
-                skip_loop_if_root!(msg);
-            }
+            skip_loop_by_user!(msg, d.test_user);
 
             let drain = slog::Discard;
             let logger = slog::Logger::root(drain, o!());
