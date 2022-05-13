@@ -27,7 +27,8 @@ all: cloud-hypervisor-tarball \
 	qemu-tarball \
 	rootfs-image-tarball \
 	rootfs-initrd-tarball \
-	shim-v2-tarball
+	shim-v2-tarball \
+	virtiofsd-tarball
 
 %-tarball-build: $(MK_DIR)/dockerbuild/install_yq.sh
 	$(call BUILD,$*)
@@ -55,6 +56,9 @@ rootfs-initrd-tarball:
 	${MAKE} $@-build
 
 shim-v2-tarball:
+	${MAKE} $@-build
+
+virtiofsd-tarball:
 	${MAKE} $@-build
 
 merge-builds:
