@@ -5,6 +5,7 @@
 //! Machine(KVM) which is optimized for container workloads.
 
 #![warn(missing_docs)]
+
 //TODO: Remove this, after the rest of dragonball has been committed.
 #![allow(dead_code)]
 
@@ -20,3 +21,6 @@ pub mod error;
 pub mod resource_manager;
 /// Virtual machine manager for virtual machines.
 pub mod vm;
+
+mod io_manager;
+pub use self::io_manager::IoManagerCached;
