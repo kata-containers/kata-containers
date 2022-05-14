@@ -17,6 +17,8 @@ pub mod config_manager;
 pub mod device_manager;
 /// Errors related to Virtual machine manager.
 pub mod error;
+/// Metrics system.
+pub mod metric;
 /// Resource manager for virtual machines.
 pub mod resource_manager;
 /// Virtual machine manager for virtual machines.
