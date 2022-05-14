@@ -6,7 +6,6 @@
 //! Machine(KVM) which is optimized for container workloads.
 
 #![warn(missing_docs)]
-
 //TODO: Remove this, after the rest of dragonball has been committed.
 #![allow(dead_code)]
 
@@ -18,12 +17,14 @@ pub mod config_manager;
 pub mod device_manager;
 /// Errors related to Virtual machine manager.
 pub mod error;
-/// Signal handler for virtual machines.
-pub mod signal_handler;
+/// KVM operation context for virtual machines.
+pub mod kvm_context;
 /// Metrics system.
 pub mod metric;
 /// Resource manager for virtual machines.
 pub mod resource_manager;
+/// Signal handler for virtual machines.
+pub mod signal_handler;
 /// Virtual machine manager for virtual machines.
 pub mod vm;
 
