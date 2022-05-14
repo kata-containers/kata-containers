@@ -19,7 +19,7 @@ use dbs_utils::time::TimestampUs;
 use kvm_bindings::{KVM_SYSTEM_EVENT_RESET, KVM_SYSTEM_EVENT_SHUTDOWN};
 use kvm_ioctls::{VcpuExit, VcpuFd};
 use libc::{c_int, c_void, siginfo_t};
-use log::{error, info, warn};
+use log::{error, info};
 use seccompiler::{apply_filter, BpfProgram, Error as SecError};
 use vmm_sys_util::eventfd::EventFd;
 use vmm_sys_util::signal::{register_signal_handler, Killable};
@@ -216,8 +216,8 @@ pub enum VcpuResponse {
 
 /// List of events that the vcpu_state_sender can send.
 pub enum VcpuStateEvent {
-    /// For Hotplug
-    Hotplug((bool, u32)),
+    /// (result, response) for hotplug, result 0 means failure, 1 means success.
+    Hotplug((i32, u32)),
 }
 
 /// Wrapper over vCPU that hides the underlying interactions with the vCPU thread.
@@ -541,7 +541,7 @@ impl Vcpu {
             MAGIC_IOPORT_DEBUG_INFO => {
                 if data.len() == 4 {
                     let data = unsafe { std::ptr::read(data.as_ptr() as *const u32) };
-                    warn!("KDBG: guest kernel debug info: 0x{:x}", data);
+                    log::warn!("KDBG: guest kernel debug info: 0x{:x}", data);
                     checked = true;
                 }
             }
