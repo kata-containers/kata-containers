@@ -446,7 +446,7 @@ impl DeviceManager {
         self.set_guest_kernel_log_stream(dmesg_fifo)
             .map_err(|_| StartMicrovmError::EventFd)?;
 
-        slog::info!(self.logger, "init console path: {:?}", com1_sock_path);
+        info!(self.logger, "init console path: {:?}", com1_sock_path);
         if let Some(path) = com1_sock_path {
             if let Some(legacy_manager) = self.legacy_manager.as_ref() {
                 let com1 = legacy_manager.get_com1_serial();
@@ -479,19 +479,6 @@ impl DeviceManager {
                 .unwrap()
                 .set_output_stream(stream);
         }
-        Ok(())
-    }
-
-    /// Restore legacy devices
-    pub fn restore_legacy_devices(
-        &mut self,
-        dmesg_fifo: Option<Box<dyn io::Write + Send>>,
-        com1_sock_path: Option<String>,
-    ) -> std::result::Result<(), StartMicrovmError> {
-        self.set_guest_kernel_log_stream(dmesg_fifo)
-            .map_err(|_| StartMicrovmError::EventFd)?;
-        slog::info!(self.logger, "restore console path: {:?}", com1_sock_path);
-        // TODO: restore console
         Ok(())
     }
 
