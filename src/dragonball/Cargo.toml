@@ -19,6 +19,7 @@ dbs-boot = "0.2.0"
 dbs-device = "0.1.0"
 dbs-interrupt = { version = "0.1.0", features = ["kvm-irq"] }
 dbs-legacy-devices = "0.1.0"
+dbs-upcall = { version = "0.1.0", optional = true }
 dbs-utils = "0.1.0"
 dbs-virtio-devices = { version = "0.1.0", optional = true, features = ["virtio-mmio"] }
 kvm-bindings = "0.5.0"
@@ -45,12 +46,13 @@ slog-async = "2.7.0"
 
 [features]
 atomic-guest-memory = []
+hotplug = ["dbs-upcall", "virtio-vsock"]
 virtio-vsock = ["dbs-virtio-devices/virtio-vsock", "virtio-queue"]
 
 [patch.'crates-io']
-dbs-device = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "84eee5737cc7d85f9921c94a93e6b9dc4ae24a39" }
-dbs-interrupt = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "84eee5737cc7d85f9921c94a93e6b9dc4ae24a39" }
-dbs-legacy-devices = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "84eee5737cc7d85f9921c94a93e6b9dc4ae24a39" }
-dbs-utils = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "84eee5737cc7d85f9921c94a93e6b9dc4ae24a39" }
-dbs-virtio-devices = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "84eee5737cc7d85f9921c94a93e6b9dc4ae24a39" }
-dbs-upcall = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "84eee5737cc7d85f9921c94a93e6b9dc4ae24a39" }
+dbs-device = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "127621db934af5ffba558e44b77afa00cdf62af6" }
+dbs-interrupt = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "127621db934af5ffba558e44b77afa00cdf62af6" }
+dbs-legacy-devices = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "127621db934af5ffba558e44b77afa00cdf62af6" }
+dbs-upcall = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "127621db934af5ffba558e44b77afa00cdf62af6" }
+dbs-utils = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "127621db934af5ffba558e44b77afa00cdf62af6" }
+dbs-virtio-devices = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "127621db934af5ffba558e44b77afa00cdf62af6" }
