@@ -14,4 +14,7 @@ Currently we have following device manager:
 
 ## Device supported
 `VIRTIO-VSOCK`
+`i8042`
+`COM1`
+`COM2`
 
