@@ -12,7 +12,10 @@
 #[cfg(feature = "dbs-virtio-devices")]
 use dbs_virtio_devices::Error as VirtIoError;
 
+use crate::address_space_manager;
 use crate::device_manager;
+use crate::vcpu;
+use crate::vm;
 
 /// Shorthand result type for internal VMM commands.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -23,8 +26,20 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// of the host (for example if Dragonball doesn't have permissions to open the KVM fd).
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Empty AddressSpace from parameters.
+    #[error("Empty AddressSpace from parameters")]
+    AddressSpace,
+
+    /// The zero page extends past the end of guest_mem.
+    #[error("the guest zero page extends past the end of guest memory")]
+    ZeroPagePastRamEnd,
+
+    /// Error writing the zero page of guest memory.
+    #[error("failed to write to guest zero page")]
+    ZeroPageSetup,
+
     /// Failure occurs in issuing KVM ioctls and errors will be returned from kvm_ioctls lib.
-    #[error("failure in issuing KVM ioctl command")]
+    #[error("failure in issuing KVM ioctl command: {0}")]
     Kvm(#[source] kvm_ioctls::Error),
 
     /// The host kernel reports an unsupported KVM API version.
@@ -32,17 +47,30 @@ pub enum Error {
     KvmApiVersion(i32),
 
     /// Cannot initialize the KVM context due to missing capabilities.
-    #[error("missing KVM capability")]
+    #[error("missing KVM capability: {0:?}")]
     KvmCap(kvm_ioctls::Cap),
 
     #[cfg(target_arch = "x86_64")]
-    #[error("failed to configure MSRs")]
+    #[error("failed to configure MSRs: {0:?}")]
     /// Cannot configure MSRs
     GuestMSRs(dbs_arch::msr::Error),
 
     /// MSR inner error
     #[error("MSR inner error")]
     Msr(vmm_sys_util::fam::Error),
+
+    /// Error writing MP table to memory.
+    #[cfg(target_arch = "x86_64")]
+    #[error("failed to write MP table to guest memory: {0}")]
+    MpTableSetup(#[source] dbs_boot::mptable::Error),
+
+    /// Fail to boot system
+    #[error("failed to boot system: {0}")]
+    BootSystem(#[source] dbs_boot::Error),
+
+    /// Cannot open the VM file descriptor.
+    #[error(transparent)]
+    Vm(vm::VmError),
 }
 
 /// Errors associated with starting the instance.
@@ -51,6 +79,48 @@ pub enum StartMicrovmError {
     /// Cannot read from an Event file descriptor.
     #[error("failure while reading from EventFd file descriptor")]
     EventFd,
+
+    /// The start command was issued more than once.
+    #[error("the virtual machine is already running")]
+    MicroVMAlreadyRunning,
+
+    /// Cannot start the VM because the kernel was not configured.
+    #[error("cannot start the virtual machine without kernel configuration")]
+    MissingKernelConfig,
+
+    #[cfg(feature = "hotplug")]
+    /// Upcall initialize miss vsock device.
+    #[error("the upcall client needs a virtio-vsock device for communication")]
+    UpcallMissVsock,
+
+    /// Upcall is not ready
+    #[error("the upcall client is not ready")]
+    UpcallNotReady,
+
+    /// Configuration passed in is invalidate.
+    #[error("invalid virtual machine configuration: {0} ")]
+    ConfigureInvalid(String),
+
+    /// This error is thrown by the minimal boot loader implementation.
+    /// It is related to a faulty memory configuration.
+    #[error("failure while configuring boot information for the virtual machine: {0}")]
+    ConfigureSystem(#[source] Error),
+
+    /// Cannot configure the VM.
+    #[error("failure while configuring the virtual machine: {0}")]
+    ConfigureVm(#[source] vm::VmError),
+
+    /// Cannot load initrd.
+    #[error("cannot load Initrd into guest memory: {0}")]
+    InitrdLoader(#[from] LoadInitrdError),
+
+    /// Cannot load kernel due to invalid memory configuration or invalid kernel image.
+    #[error("cannot load guest kernel into guest memory: {0}")]
+    KernelLoader(#[source] linux_loader::loader::Error),
+
+    /// Cannot load command line string.
+    #[error("failure while configuring guest kernel commandline: {0}")]
+    LoadCommandline(#[source] linux_loader::loader::Error),
 
     /// The device manager was not configured.
     #[error("the device manager failed to manage devices: {0}")]
@@ -69,4 +139,45 @@ pub enum StartMicrovmError {
     /// Cannot initialize a MMIO Vsock Device or add a device to the MMIO Bus.
     #[error("failure while registering virtio-vsock device: {0}")]
     RegisterVsockDevice(#[source] device_manager::DeviceMgrError),
+
+    /// Address space manager related error, e.g.cannot access guest address space manager.
+    #[error("address space manager related error: {0}")]
+    AddressManagerError(#[source] address_space_manager::AddressManagerError),
+
+    /// Cannot create a new vCPU file descriptor.
+    #[error("vCPU related error: {0}")]
+    Vcpu(#[source] vcpu::VcpuManagerError),
+
+    #[cfg(feature = "hotplug")]
+    /// Upcall initialize Error.
+    #[error("failure while initializing the upcall client: {0}")]
+    UpcallInitError(#[source] dbs_upcall::UpcallClientError),
+
+    #[cfg(feature = "hotplug")]
+    /// Upcall connect Error.
+    #[error("failure while connecting the upcall client: {0}")]
+    UpcallConnectError(#[source] dbs_upcall::UpcallClientError),
+}
+
+/// Errors associated with starting the instance.
+#[derive(Debug, thiserror::Error)]
+pub enum StopMicrovmError {
+    /// Guest memory has not been initialized.
+    #[error("Guest memory has not been initialized")]
+    GuestMemoryNotInitialized,
+
+    /// Cannnot remove devices
+    #[error("Failed to remove devices in device_manager {0}")]
+    DeviceManager(#[source] device_manager::DeviceMgrError),
+}
+
+/// Errors associated with loading initrd
+#[derive(Debug, thiserror::Error)]
+pub enum LoadInitrdError {
+    /// Cannot load initrd due to an invalid memory configuration.
+    #[error("failed to load the initrd image to guest memory")]
+    LoadInitrd,
+    /// Cannot load initrd due to an invalid image.
+    #[error("failed to read the initrd image: {0}")]
+    ReadInitrd(#[source] std::io::Error),
 }

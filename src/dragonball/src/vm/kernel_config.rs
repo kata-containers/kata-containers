@@ -8,7 +8,7 @@ pub struct KernelConfigInfo {
     /// The descriptor to the kernel file.
     kernel_file: File,
     /// The descriptor to the initrd file, if there is one
-    initrd_file: Option<File>,
+    pub initrd_file: Option<File>,
     /// The commandline for guest kernel.
     cmdline: linux_loader::cmdline::Cmdline,
 }
