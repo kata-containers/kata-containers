@@ -8,6 +8,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use arc_swap::ArcSwap;
 use dbs_address_space::AddressSpace;
+#[cfg(target_arch = "aarch64")]
+use dbs_arch::{DeviceType, MMIODeviceInfo};
 use dbs_device::device_manager::{Error as IoManagerError, IoManager, IoManagerContext};
 use dbs_device::resources::Resource;
 use dbs_device::DeviceIo;
@@ -20,6 +22,8 @@ use kvm_ioctls::VmFd;
 use dbs_device::resources::ResourceConstraint;
 #[cfg(feature = "dbs-virtio-devices")]
 use dbs_virtio_devices as virtio;
+#[cfg(feature = "virtio-vsock")]
+use dbs_virtio_devices::vsock::backend::VsockInnerConnector;
 #[cfg(feature = "dbs-virtio-devices")]
 use dbs_virtio_devices::{
     mmio::{
@@ -38,7 +42,8 @@ use dbs_upcall::{
 use crate::address_space_manager::GuestAddressSpaceImpl;
 use crate::error::StartMicrovmError;
 use crate::resource_manager::ResourceManager;
-use crate::vm::KernelConfigInfo;
+use crate::vm::{KernelConfigInfo, Vm};
+use crate::IoManagerCached;
 
 /// Virtual machine console device manager.
 pub mod console_manager;
@@ -240,6 +245,10 @@ impl DeviceOpContext {
         }
     }
 
+    pub(crate) fn create_boot_ctx(vm: &Vm, epoll_mgr: Option<EpollManager>) -> Self {
+        Self::new(epoll_mgr, vm.device_manager(), None, None, false)
+    }
+
     pub(crate) fn get_vm_as(&self) -> Result<GuestAddressSpaceImpl> {
         match self.vm_as.as_ref() {
             Some(v) => Ok(v.clone()),
@@ -303,6 +312,23 @@ impl DeviceOpContext {
 
 #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
 impl DeviceOpContext {
+    pub(crate) fn create_hotplug_ctx(vm: &Vm, epoll_mgr: Option<EpollManager>) -> Self {
+        let vm_as = vm.vm_as().expect("VM should have memory ready").clone();
+
+        let vm_config = vm.vm_config().clone();
+
+        let mut ctx = Self::new(
+            epoll_mgr,
+            vm.device_manager(),
+            Some(vm_as),
+            vm.vm_address_space().cloned(),
+            true,
+        );
+        ctx.upcall_client = vm.upcall_client().clone();
+
+        ctx
+    }
+
     fn call_hotplug_device(
         &self,
         req: DevMgrRequest,
@@ -380,6 +406,8 @@ pub struct DeviceManager {
     pub(crate) legacy_manager: Option<LegacyDeviceManager>,
     #[cfg(feature = "virtio-vsock")]
     pub(crate) vsock_manager: VsockDeviceMgr,
+    #[cfg(target_arch = "aarch64")]
+    mmio_device_info: HashMap<(DeviceType, String), MMIODeviceInfo>,
 }
 
 impl DeviceManager {
@@ -401,7 +429,14 @@ impl DeviceManager {
             legacy_manager: None,
             #[cfg(feature = "virtio-vsock")]
             vsock_manager: VsockDeviceMgr::default(),
+            #[cfg(target_arch = "aarch64")]
+            mmio_device_info: HashMap::new(),
         }
+    }
+
+    /// Get the underlying IoManager to dispatch IO read/write requests.
+    pub fn io_manager(&self) -> IoManagerCached {
+        IoManagerCached::new(self.io_manager.clone())
     }
 
     /// Create the underline interrupt manager for the device manager.
@@ -494,6 +529,12 @@ impl DeviceManager {
         self.con_manager.reset_console()
     }
 
+    #[cfg(target_arch = "aarch64")]
+    /// Return mmio device info for FDT build.
+    pub fn get_mmio_device_info(&self) -> Option<&HashMap<(DeviceType, String), MMIODeviceInfo>> {
+        Some(&self.mmio_device_info)
+    }
+
     /// Create all registered devices when booting the associated virtual machine.
     pub fn create_devices(
         &mut self,
@@ -521,6 +562,21 @@ impl DeviceManager {
         ctx.generate_kernel_boot_args(kernel_config)
             .map_err(StartMicrovmError::DeviceManager)?;
 
+        Ok(())
+    }
+
+    /// Start all registered devices when booting the associated virtual machine.
+    pub fn start_devices(&mut self) -> std::result::Result<(), StartMicrovmError> {
+        Ok(())
+    }
+
+    /// Remove all devices when shutdown the associated virtual machine
+    pub fn remove_devices(
+        &mut self,
+        _vm_as: GuestAddressSpaceImpl,
+        _epoll_mgr: EpollManager,
+        _address_space: Option<&AddressSpace>,
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -686,6 +742,24 @@ impl DeviceManager {
         } else {
             ctx.io_context.commit_tx(tx);
             Ok(())
+        }
+    }
+}
+
+#[cfg(feature = "hotplug")]
+impl DeviceManager {
+    /// Get Unix Domain Socket path for the vsock device.
+    pub fn get_vsock_inner_connector(&mut self) -> Option<VsockInnerConnector> {
+        #[cfg(feature = "virtio-vsock")]
+        {
+            self.vsock_manager
+                .get_default_connector()
+                .map(|d| Some(d))
+                .unwrap_or(None)
+        }
+        #[cfg(not(feature = "virtio-vsock"))]
+        {
+            return None;
         }
     }
 }

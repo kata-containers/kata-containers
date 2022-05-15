@@ -6,6 +6,7 @@
 mod sm;
 pub mod vcpu_impl;
 pub mod vcpu_manager;
+pub use vcpu_manager::{VcpuManager, VcpuManagerError};
 
 #[cfg(target_arch = "x86_64")]
 use dbs_arch::cpuid::VpmuFeatureLevel;
