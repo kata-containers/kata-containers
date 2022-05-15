@@ -27,8 +27,8 @@ pub(crate) const EPOLL_EVENT_API_REQUEST: u32 = 1;
 /// Shared information between vmm::vmm_thread_event_loop() and VmmEpollHandler.
 pub(crate) struct EventContext {
     pub api_event_fd: EventFd,
-    pub api_event_flag: bool,
-    pub exit_evt_flag: bool,
+    pub api_event_triggered: bool,
+    pub exit_evt_triggered: bool,
 }
 
 impl EventContext {
@@ -36,8 +36,8 @@ impl EventContext {
     pub fn new(api_event_fd: EventFd) -> Result<Self> {
         Ok(EventContext {
             api_event_fd,
-            api_event_flag: false,
-            exit_evt_flag: false,
+            api_event_triggered: false,
+            exit_evt_triggered: false,
         })
     }
 }
@@ -131,7 +131,7 @@ impl MutEventSubscriber for VmmEpollHandler {
                 if let Err(e) = vmm.event_ctx.api_event_fd.read() {
                     error!("event_manager: failed to read API eventfd, {:?}", e);
                 }
-                vmm.event_ctx.api_event_flag = true;
+                vmm.event_ctx.api_event_triggered = true;
                 self.vmm_event_count.fetch_add(1, Ordering::AcqRel);
             }
             EPOLL_EVENT_EXIT => {
@@ -144,7 +144,7 @@ impl MutEventSubscriber for VmmEpollHandler {
                     }
                     None => warn!("event_manager: leftover exit event in epoll context!"),
                 }
-                vmm.event_ctx.exit_evt_flag = true;
+                vmm.event_ctx.exit_evt_triggered = true;
                 self.vmm_event_count.fetch_add(1, Ordering::AcqRel);
             }
             _ => error!("event_manager: unknown epoll slot number {}", events.data()),

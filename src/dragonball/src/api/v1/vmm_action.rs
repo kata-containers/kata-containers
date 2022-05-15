@@ -12,7 +12,7 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use log::{debug, error, warn};
 use vmm_sys_util::eventfd::EventFd;
 
-use crate::error::Result;
+use crate::error::{Result, StartMicrovmError, StopMicrovmError};
 use crate::event_manager::EventManager;
 use crate::vm::{KernelConfigInfo, VmConfigInfo};
 use crate::vmm::Vmm;
@@ -22,19 +22,39 @@ use super::*;
 /// Wrapper for all errors associated with VMM actions.
 #[derive(Debug, thiserror::Error)]
 pub enum VmmActionError {
+    /// Invalid virtual machine instance ID.
+    #[error("the virtual machine instance ID is invalid")]
+    InvalidVMID,
+
     /// The action `ConfigureBootSource` failed either because of bad user input or an internal
     /// error.
     #[error("failed to configure boot source for VM: {0}")]
     BootSource(#[source] BootSourceConfigError),
+
+    /// The action `StartMicroVm` failed either because of bad user input or an internal error.
+    #[error("failed to boot the VM: {0}")]
+    StartMicroVm(#[source] StartMicroVmError),
+
+    /// The action `StopMicroVm` failed either because of bad user input or an internal error.
+    #[error("failed to shutdown the VM: {0}")]
+    StopMicrovm(#[source] StopMicrovmError),
 }
 
 /// This enum represents the public interface of the VMM. Each action contains various
 /// bits of information (ids, paths, etc.).
 #[derive(Clone, Debug, PartialEq)]
 pub enum VmmAction {
-    /// Configure the boot source of the microVM using as input the `ConfigureBootSource`. This
-    /// action can only be called before the microVM has booted.
+    /// Configure the boot source of the microVM using `BootSourceConfig`.
+    /// This action can only be called before the microVM has booted.
     ConfigureBootSource(BootSourceConfig),
+
+    /// Launch the microVM. This action can only be called before the microVM has booted.
+    StartMicroVm,
+
+    /// Shutdown the vmicroVM. This action can only be called after the microVM has booted.
+    /// When vmm is used as the crate by the other process, which is need to
+    /// shutdown the vcpu threads and destory all of the object.
+    ShutdownMicroVm,
 }
 
 /// The enum represents the response sent by the VMM in case of success. The response is either
@@ -75,7 +95,7 @@ impl VmmService {
     }
 
     /// Handle requests from the HTTP API Server and send back replies.
-    pub fn run_vmm_action(&mut self, vmm: &mut Vmm, _event_mgr: &mut EventManager) -> Result<()> {
+    pub fn run_vmm_action(&mut self, vmm: &mut Vmm, event_mgr: &mut EventManager) -> Result<()> {
         let request = match self.from_api.try_recv() {
             Ok(t) => *t,
             Err(TryRecvError::Empty) => {
@@ -92,6 +112,8 @@ impl VmmService {
             VmmAction::ConfigureBootSource(boot_source_body) => {
                 self.configure_boot_source(vmm, boot_source_body)
             }
+            VmmAction::StartMicroVm => self.start_microvm(vmm, event_mgr),
+            VmmAction::ShutdownMicroVm => self.shutdown_microvm(vmm),
         };
 
         debug!("send vmm response: {:?}", response);
@@ -113,12 +135,14 @@ impl VmmService {
         boot_source_config: BootSourceConfig,
     ) -> VmmRequestResult {
         use super::BootSourceConfigError::{
-            InvalidInitrdPath, InvalidKernelCommandLine, InvalidKernelPath, InvalidVMID,
+            InvalidInitrdPath, InvalidKernelCommandLine, InvalidKernelPath,
             UpdateNotAllowedPostBoot,
         };
         use super::VmmActionError::BootSource;
 
-        let vm = vmm.get_vm_by_id_mut("").ok_or(BootSource(InvalidVMID))?;
+        let vm = vmm
+            .get_vm_by_id_mut("")
+            .ok_or(VmmActionError::InvalidVMID)?;
         if vm.is_vm_initialized() {
             return Err(BootSource(UpdateNotAllowedPostBoot));
         }
@@ -142,6 +166,30 @@ impl VmmService {
 
         let kernel_config = KernelConfigInfo::new(kernel_file, initrd_file, cmdline);
         vm.set_kernel_config(kernel_config);
+
+        Ok(VmmData::Empty)
+    }
+
+    fn start_microvm(&mut self, vmm: &mut Vmm, event_mgr: &mut EventManager) -> VmmRequestResult {
+        use self::StartMicrovmError::MicroVMAlreadyRunning;
+        use self::VmmActionError::StartMicrovm;
+
+        let vmm_seccomp_filter = vmm.vmm_seccomp_filter();
+        let vcpu_seccomp_filter = vmm.vcpu_seccomp_filter();
+        let vm = vmm
+            .get_vm_by_id_mut("")
+            .ok_or(VmmActionError::InvalidVMID)?;
+        if vm.is_vm_initialized() {
+            return Err(StartMicrovm(MicroVMAlreadyRunning));
+        }
+
+        vm.start_microvm(event_mgr, vmm_seccomp_filter, vcpu_seccomp_filter)
+            .map(|_| VmmData::Empty)
+            .map_err(StartMicrovm)
+    }
+
+    fn shutdown_microvm(&mut self, vmm: &mut Vmm) -> VmmRequestResult {
+        vmm.event_ctx.exit_evt_triggered = true;
 
         Ok(VmmData::Empty)
     }

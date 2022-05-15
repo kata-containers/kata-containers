@@ -21,6 +21,7 @@ use vm_memory::{Address, Bytes, GuestAddress, GuestAddressSpace, GuestMemory};
 
 use crate::address_space_manager::{GuestAddressSpaceImpl, GuestMemoryImpl};
 use crate::error::{Error, Result, StartMicrovmError};
+use crate::event_manager::EventManager;
 use crate::vm::{Vm, VmError};
 
 /// Configures the system and should be called once per vm before starting vcpu
@@ -272,5 +273,21 @@ impl Vm {
         self.vm_fd
             .create_pit2(pit_config)
             .map_err(|e| StartMicrovmError::ConfigureVm(VmError::VmSetup(e)))
+    }
+
+    pub(crate) fn register_events(
+        &mut self,
+        event_mgr: &mut EventManager,
+    ) -> std::result::Result<(), StartMicrovmError> {
+        let reset_evt = self
+            .device_manager
+            .get_reset_eventfd()
+            .map_err(StartMicrovmError::DeviceManager)?;
+        event_mgr
+            .register_exit_eventfd(&reset_evt)
+            .map_err(|_| StartMicrovmError::RegisterEvent)?;
+        self.reset_eventfd = Some(reset_evt);
+
+        Ok(())
     }
 }
