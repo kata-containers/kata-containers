@@ -22,6 +22,7 @@ use vmm_sys_util::eventfd::EventFd;
 use super::{Vm, VmError};
 use crate::address_space_manager::{GuestAddressSpaceImpl, GuestMemoryImpl};
 use crate::error::{Error, StartMicrovmError};
+use crate::event_manager::EventManager;
 
 /// Configures the system and should be called once per vm before starting vcpu threads.
 /// For aarch64, we only setup the FDT.
@@ -141,5 +142,17 @@ impl Vm {
             &initrd,
         )
         .map_err(StartMicrovmError::ConfigureSystem)
+    }
+
+    pub(crate) fn register_events(
+        &mut self,
+        event_mgr: &mut EventManager,
+    ) -> std::result::Result<(), StartMicrovmError> {
+        let reset_evt = self.get_reset_eventfd().ok_or(StartMicrovmError::EventFd)?;
+        event_mgr
+            .register_exit_eventfd(reset_evt)
+            .map_err(|_| StartMicrovmError::RegisterEvent)?;
+
+        Ok(())
     }
 }

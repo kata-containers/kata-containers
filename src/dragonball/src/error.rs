@@ -72,10 +72,14 @@ pub enum Error {
 
 /// Errors associated with starting the instance.
 #[derive(Debug, thiserror::Error)]
-pub enum StartMicrovmError {
+pub enum StartMicroVmError {
     /// Cannot read from an Event file descriptor.
     #[error("failure while reading from EventFd file descriptor")]
     EventFd,
+
+    /// Cannot add event to Epoll.
+    #[error("failure while registering epoll event for file descriptor")]
+    RegisterEvent,
 
     /// The start command was issued more than once.
     #[error("the virtual machine is already running")]

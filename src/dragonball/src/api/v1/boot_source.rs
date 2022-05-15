@@ -35,10 +35,6 @@ pub struct BootSourceConfig {
 /// Errors associated with actions on `BootSourceConfig`.
 #[derive(Debug, thiserror::Error)]
 pub enum BootSourceConfigError {
-    /// The virutal machine instance ID is invalid.
-    #[error("the virtual machine instance ID is invalid")]
-    InvalidVMID,
-
     /// The kernel file cannot be opened.
     #[error(
         "the kernel file cannot be opened due to invalid kernel path or invalid permissions: {0}"

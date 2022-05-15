@@ -124,18 +124,18 @@ impl Vmm {
                     }
 
                     let mut v = vmm.lock().unwrap();
-                    if v.event_ctx.api_event_flag {
+                    if v.event_ctx.api_event_triggered {
                         // The run_vmm_action() needs to access event_mgr, so it could
                         // not be handled in EpollHandler::handle_events(). It has been
                         // delayed to the main loop.
-                        v.event_ctx.api_event_flag = false;
+                        v.event_ctx.api_event_triggered = false;
                         service
                             .run_vmm_action(&mut v, &mut event_mgr)
                             .unwrap_or_else(|_| {
                                 warn!("got spurious notification from api thread");
                             });
                     }
-                    if v.event_ctx.exit_evt_flag {
+                    if v.event_ctx.exit_evt_triggered {
                         info!("Gracefully terminated VMM control loop");
                         return v.stop(EXIT_CODE_OK as i32);
                     }

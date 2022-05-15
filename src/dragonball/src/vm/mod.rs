@@ -31,6 +31,7 @@ use crate::api::v1::{InstanceInfo, InstanceState};
 use crate::device_manager::console_manager::DmesgWriter;
 use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
 use crate::error::{LoadInitrdError, Result, StartMicrovmError, StopMicrovmError};
+use crate::event_manager::EventManager;
 use crate::kvm_context::KvmContext;
 use crate::resource_manager::ResourceManager;
 use crate::vcpu::{VcpuManager, VcpuManagerError};
@@ -355,20 +356,7 @@ impl Vm {
         if !self.is_vm_initialized() {
             Ok(DeviceOpContext::create_boot_ctx(self, epoll_mgr))
         } else {
-            #[cfg(feature = "hotplug")]
-            {
-                if self.upcall_client().is_none() {
-                    Err(StartMicrovmError::UpcallMissVsock)
-                } else if self.is_upcall_client_ready() {
-                    Ok(DeviceOpContext::create_hotplug_ctx(self, epoll_mgr))
-                } else {
-                    Err(StartMicrovmError::UpcallNotReady)
-                }
-            }
-            #[cfg(not(feature = "hotplug"))]
-            {
-                Err(StartMicrovmError::MicroVMAlreadyRunning)
-            }
+            self.create_device_hotplug_context(epoll_mgr)
         }
     }
 
@@ -671,12 +659,70 @@ impl Vm {
         )
         .map_err(StartMicrovmError::KernelLoader);
     }
+
+    /// Set up the initial microVM state and start the vCPU threads.
+    ///
+    /// This is the main entrance of the Vm object, to bring up the virtual machine instance into
+    /// running state.
+    pub fn start_microvm(
+        &mut self,
+        event_mgr: &mut EventManager,
+        vmm_seccomp_filter: BpfProgram,
+        vcpu_seccomp_filter: BpfProgram,
+    ) -> std::result::Result<(), StartMicrovmError> {
+        info!(self.logger, "VM: received instance start command");
+        if self.is_vm_initialized() {
+            return Err(StartMicrovmError::MicroVMAlreadyRunning);
+        }
+
+        let request_ts = TimestampUs::default();
+        self.start_instance_request_ts = request_ts.time_us;
+        self.start_instance_request_cpu_ts = request_ts.cputime_us;
+
+        self.init_dmesg_logger();
+        self.check_health()?;
+
+        // Use expect() to crash if the other thread poisoned this lock.
+        self.shared_info
+            .write()
+            .expect("Failed to start microVM because shared info couldn't be written due to poisoned lock")
+            .state = InstanceState::Starting;
+
+        self.init_guest_memory()?;
+        let vm_as = self.vm_as().cloned().ok_or(StartMicrovmError::AddressManagerError(
+            AddressManagerError::GuestMemoryNotInitialized,
+        ))?;
+
+        self.init_vcpu_manager(vm_as.clone(), vcpu_seccomp_filter)
+            .map_err(StartMicrovmError::Vcpu)?;
+        self.init_microvm(event_mgr.epoll_manager(), vm_as.clone(), request_ts)?;
+        self.init_configure_system(&vm_as)?;
+        self.init_upcall()?;
+
+        info!(self.logger, "VM: register events");
+        self.register_events(event_mgr)?;
+
+        info!(self.logger, "VM: start vcpus");
+        self.vcpu_manager()
+            .map_err(StartMicrovmError::Vcpu)?
+            .start_boot_vcpus(vmm_seccomp_filter)
+            .map_err(StartMicrovmError::Vcpu)?;
+
+        // Use expect() to crash if the other thread poisoned this lock.
+        self.shared_info
+            .write()
+            .expect("Failed to start microVM because shared info couldn't be written due to poisoned lock")
+            .state = InstanceState::Running;
+
+        info!(self.logger, "VM started");
+        Ok(())
+    }
 }
 
 #[cfg(feature = "hotplug")]
 impl Vm {
     /// initialize upcall client for guest os
-    pub(crate) fn init_upcall(&mut self) -> std::result::Result<(), StartMicrovmError> {
+    fn new_upcall(&mut self) -> std::result::Result<(), StartMicrovmError> {
         // get vsock inner connector for upcall
         let inner_connector = self
             .device_manager
@@ -698,8 +744,51 @@ impl Vm {
         Ok(())
     }
 
+    fn init_upcall(&mut self) -> std::result::Result<(), StartMicrovmError> {
+        info!(self.logger, "VM upcall init");
+        if let Err(e) = self.new_upcall() {
+            info!(
+                self.logger,
+                "VM upcall init failed, no support hotplug: {}", e
+            );
+            Err(e)
+        } else {
+            self.vcpu_manager()
+                .map_err(StartMicrovmError::Vcpu)?
+                .set_upcall_channel(self.upcall_client().clone());
+            Ok(())
+        }
+    }
+
     /// Get upcall client.
     pub fn upcall_client(&self) -> &Option<Arc<UpcallClient<DevMgrService>>> {
         &self.upcall_client
+    }
+
+    fn create_device_hotplug_context(
+        &self,
+        epoll_mgr: Option<EpollManager>,
+    ) -> std::result::Result<DeviceOpContext, StartMicrovmError> {
+        if self.upcall_client().is_none() {
+            Err(StartMicrovmError::UpcallMissVsock)
+        } else if self.is_upcall_client_ready() {
+            Ok(DeviceOpContext::create_hotplug_ctx(self, epoll_mgr))
+        } else {
+            Err(StartMicrovmError::UpcallNotReady)
+        }
+    }
+}
+
+#[cfg(not(feature = "hotplug"))]
+impl Vm {
+    fn init_upcall(&mut self) -> std::result::Result<(), StartMicrovmError> {
+        Ok(())
+    }
+
+    fn create_device_hotplug_context(
+        &self,
+        _epoll_mgr: Option<EpollManager>,
+    ) -> std::result::Result<DeviceOpContext, StartMicrovmError> {
+        Err(StartMicrovmError::MicroVMAlreadyRunning)
     }
 }
