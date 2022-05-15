@@ -17,6 +17,9 @@ use crate::event_manager::EventManager;
 use crate::vm::{CpuTopology, KernelConfigInfo, VmConfigInfo};
 use crate::vmm::Vmm;
 
+#[cfg(feature = "virtio-vsock")]
+use crate::device_manager::vsock_dev_mgr::{VsockDeviceConfigInfo, VsockDeviceError};
+
 use super::*;
 
 /// Wrapper for all errors associated with VMM actions.
@@ -43,6 +46,11 @@ pub enum VmmActionError {
     /// input or an internal error.
     #[error("failed to set configuration for the VM: {0}")]
     MachineConfig(#[source] VmConfigError),
+
+    #[cfg(feature = "virtio-vsock")]
+    /// The action `InsertVsockDevice` failed either because of bad user input or an internal error.
+    #[error("failed to add virtio-vsock device: {0}")]
+    Vsock(#[source] VsockDeviceError),
 }
 
 /// This enum represents the public interface of the VMM. Each action contains various
@@ -67,6 +75,12 @@ pub enum VmmAction {
     /// Set the microVM configuration (memory & vcpu) using `VmConfig` as input. This
     /// action can only be called before the microVM has booted.
     SetVmConfiguration(VmConfigInfo),
+
+    #[cfg(feature = "virtio-vsock")]
+    /// Add a new vsock device or update one that already exists using the
+    /// `VsockDeviceConfig` as input. This action can only be called before the microVM has
+    /// booted. The response is sent using the `OutcomeSender`.
+    InsertVsockDevice(VsockDeviceConfigInfo),
 }
 
 /// The enum represents the response sent by the VMM in case of success. The response is either
@@ -134,6 +148,8 @@ impl VmmService {
             VmmAction::SetVmConfiguration(machine_config) => {
                 self.set_vm_configuration(vmm, machine_config)
             }
+            #[cfg(feature = "virtio-vsock")]
+            VmmAction::InsertVsockDevice(vsock_cfg) => self.add_vsock_device(vmm, vsock_cfg),
         };
 
         debug!("send vmm response: {:?}", response);
@@ -342,5 +358,39 @@ impl VmmService {
         self.machine_config = config;
 
         Ok(VmmData::Empty)
+    }
+
+    #[cfg(feature = "virtio-vsock")]
+    fn add_vsock_device(&self, vmm: &mut Vmm, config: VsockDeviceConfigInfo) -> VmmRequestResult {
+        let vm = vmm
+            .get_vm_by_id_mut("")
+            .ok_or(VmmActionError::InvalidVMID)?;
+        if vm.is_vm_initialized() {
+            return Err(VmmActionError::Vsock(
+                VsockDeviceError::UpdateNotAllowedPostBoot,
+            ));
+        }
+
+        // VMADDR_CID_ANY (-1U) means any address for binding;
+        // VMADDR_CID_HYPERVISOR (0) is reserved for services built into the hypervisor;
+        // VMADDR_CID_RESERVED (1) must not be used;
+        // VMADDR_CID_HOST (2) is the well-known address of the host.
+        if config.guest_cid <= 2 {
+            return Err(VmmActionError::Vsock(VsockDeviceError::GuestCIDInvalid(
+                config.guest_cid,
+            )));
+        }
+
+        info!("add_vsock_device: {:?}", config);
+        let ctx = vm.create_device_op_context(None).map_err(|e| {
+            info!("create device op context error: {:?}", e);
+            VmmActionError::Vsock(VsockDeviceError::UpdateNotAllowedPostBoot)
+        })?;
+
+        vm.device_manager_mut()
+            .vsock_manager
+            .insert_device(ctx, config)
+            .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::Vsock)
     }
 }
