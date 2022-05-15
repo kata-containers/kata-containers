@@ -689,9 +689,12 @@ impl Vm {
             .state = InstanceState::Starting;
 
         self.init_guest_memory()?;
-        let vm_as = self.vm_as().cloned().ok_or(StartMicrovmError::AddressManagerError(
-            AddressManagerError::GuestMemoryNotInitialized,
-        ))?;
+        let vm_as = self
+            .vm_as()
+            .cloned()
+            .ok_or(StartMicrovmError::AddressManagerError(
+                AddressManagerError::GuestMemoryNotInitialized,
+            ))?;
 
         self.init_vcpu_manager(vm_as.clone(), vcpu_seccomp_filter)
             .map_err(StartMicrovmError::Vcpu)?;
