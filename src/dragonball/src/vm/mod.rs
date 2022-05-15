@@ -250,6 +250,11 @@ impl Vm {
         &self.device_manager
     }
 
+    /// Gets a mutable reference to the device manager by this VM.
+    pub fn device_manager_mut(&mut self) -> &mut DeviceManager {
+        &mut self.device_manager
+    }
+
     /// Get a reference to EpollManager.
     pub fn epoll_manager(&self) -> &EpollManager {
         &self.epoll_manager
