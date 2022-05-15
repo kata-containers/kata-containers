@@ -178,3 +178,24 @@ pub enum LoadInitrdError {
     #[error("failed to read the initrd image: {0}")]
     ReadInitrd(#[source] std::io::Error),
 }
+
+/// A dedicated error type to glue with the vmm_epoll crate.
+#[derive(Debug, thiserror::Error)]
+pub enum EpollError {
+    /// Generic internal error.
+    #[error("unclassfied internal error")]
+    InternalError,
+
+    /// Errors from the epoll subsystem.
+    #[error("failed to issue epoll syscall: {0}")]
+    EpollMgr(#[from] dbs_utils::epoll_manager::Error),
+
+    /// Generic IO errors.
+    #[error(transparent)]
+    IOError(std::io::Error),
+
+    #[cfg(feature = "dbs-virtio-devices")]
+    /// Errors from virtio devices.
+    #[error("failed to manager Virtio device: {0}")]
+    VirtIoDevice(#[source] VirtIoError),
+}

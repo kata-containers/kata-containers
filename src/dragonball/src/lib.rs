@@ -32,8 +32,13 @@ pub mod vcpu;
 /// Virtual machine manager for virtual machines.
 pub mod vm;
 
+mod event_manager;
 mod io_manager;
+mod vmm;
+
+pub use self::error::StartMicrovmError;
 pub use self::io_manager::IoManagerCached;
+pub use self::vmm::Vmm;
 
 /// Success exit code.
 pub const EXIT_CODE_OK: u8 = 0;
