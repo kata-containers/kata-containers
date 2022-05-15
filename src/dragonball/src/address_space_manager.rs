@@ -27,7 +27,7 @@ use dbs_address_space::{
     AddressSpaceRegionType, NumaNode, NumaNodeInfo, MPOL_MF_MOVE, MPOL_PREFERRED,
 };
 use dbs_allocator::Constraint;
-use kvm_bindings::{kvm_userspace_memory_region, KVM_MEM_LOG_DIRTY_PAGES};
+use kvm_bindings::kvm_userspace_memory_region;
 use kvm_ioctls::VmFd;
 use log::{debug, error, info, warn};
 use nix::sys::mman;
@@ -245,6 +245,11 @@ impl AddressSpaceMgr {
         self.address_space.is_some()
     }
 
+    /// Gets address space.
+    pub fn address_space(&self) -> Option<&AddressSpace> {
+        self.address_space.as_ref()
+    }
+
     /// Create the address space for a virtual machine.
     ///
     /// This method is designed to be called when starting up a virtual machine instead of at
@@ -393,11 +398,8 @@ impl AddressSpaceMgr {
             let host_addr = mmap_reg
                 .get_host_address(MemoryRegionAddress(0))
                 .map_err(|_e| AddressManagerError::InvalidOperation)?;
-            let flags = if param.dirty_page_logging {
-                KVM_MEM_LOG_DIRTY_PAGES
-            } else {
-                0
-            };
+            let flags = 0u32;
+
             let mem_region = kvm_userspace_memory_region {
                 slot: slot as u32,
                 guest_phys_addr: reg.start_addr().raw_value(),
