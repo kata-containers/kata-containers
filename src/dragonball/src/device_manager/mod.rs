@@ -71,6 +71,16 @@ pub mod virtio_net_dev_mgr;
 #[cfg(feature = "virtio-net")]
 use self::virtio_net_dev_mgr::VirtioNetDeviceMgr;
 
+#[cfg(feature = "virtio-fs")]
+/// virtio-block device manager
+pub mod fs_dev_mgr;
+#[cfg(feature = "virtio-fs")]
+use self::fs_dev_mgr::FsDeviceMgr;
+#[cfg(feature = "virtio-fs")]
+mod memory_region_handler;
+#[cfg(feature = "virtio-fs")]
+pub use self::memory_region_handler::*;
+
 macro_rules! info(
     ($l:expr, $($args:tt)+) => {
         slog::info!($l, $($args)+; slog::o!("subsystem" => "device_manager"))
@@ -435,6 +445,9 @@ pub struct DeviceManager {
 
     #[cfg(feature = "virtio-net")]
     pub(crate) virtio_net_manager: VirtioNetDeviceMgr,
+
+    #[cfg(feature = "virtio-fs")]
+    fs_manager: Arc<Mutex<FsDeviceMgr>>,
 }
 
 impl DeviceManager {
@@ -463,6 +476,8 @@ impl DeviceManager {
             block_manager: BlockDeviceMgr::default(),
             #[cfg(feature = "virtio-net")]
             virtio_net_manager: VirtioNetDeviceMgr::default(),
+            #[cfg(feature = "virtio-fs")]
+            fs_manager: Arc::new(Mutex::new(FsDeviceMgr::default())),
         }
     }
 
@@ -587,6 +602,14 @@ impl DeviceManager {
         self.block_manager
             .attach_devices(&mut ctx)
             .map_err(StartMicrovmError::BlockDeviceError)?;
+
+        #[cfg(feature = "virtio-fs")]
+        {
+            let mut fs_manager = self.fs_manager.lock().unwrap();
+            fs_manager
+                .attach_devices(&mut ctx)
+                .map_err(StartMicrovmError::FsDeviceError)?;
+        }
 
         #[cfg(feature = "virtio-net")]
         self.virtio_net_manager
