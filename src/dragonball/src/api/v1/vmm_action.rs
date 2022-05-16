@@ -21,6 +21,10 @@ use crate::vmm::Vmm;
 use crate::device_manager::blk_dev_mgr::{
     BlockDeviceConfigInfo, BlockDeviceConfigUpdateInfo, BlockDeviceError, BlockDeviceMgr,
 };
+#[cfg(feature = "virtio-fs")]
+use crate::device_manager::fs_dev_mgr::{
+    FsDeviceConfigInfo, FsDeviceConfigUpdateInfo, FsDeviceError, FsDeviceMgr, FsMountConfigInfo,
+};
 #[cfg(feature = "virtio-net")]
 use crate::device_manager::virtio_net_dev_mgr::{
     VirtioNetDeviceConfigInfo, VirtioNetDeviceConfigUpdateInfo, VirtioNetDeviceError,
@@ -74,6 +78,11 @@ pub enum VmmActionError {
     /// Net device related errors.
     #[error("virtio-net device error: {0}")]
     VirtioNet(#[source] VirtioNetDeviceError),
+
+    #[cfg(feature = "virtio-fs")]
+    /// The action `InsertFsDevice` failed either because of bad user input or an internal error.
+    #[error("virtio-fs device: {0}")]
+    FsDevice(#[source] FsDeviceError),
 }
 
 /// This enum represents the public interface of the VMM. Each action contains various
@@ -129,6 +138,22 @@ pub enum VmmAction {
     /// Update a network interface, after microVM start. Currently, the only updatable properties
     /// are the RX and TX rate limiters.
     UpdateNetworkInterface(VirtioNetDeviceConfigUpdateInfo),
+
+    #[cfg(feature = "virtio-fs")]
+    /// Add a new shared fs device or update one that already exists using the
+    /// `FsDeviceConfig` as input. This action can only be called before the microVM has
+    /// booted.
+    InsertFsDevice(FsDeviceConfigInfo),
+
+    #[cfg(feature = "virtio-fs")]
+    /// Attach a new virtiofs Backend fs or detach an existing virtiofs Backend fs using the
+    /// `FsMountConfig` as input. This action can only be called _after_ the microVM has
+    /// booted.
+    ManipulateFsBackendFs(FsMountConfigInfo),
+
+    #[cfg(feature = "virtio-fs")]
+    /// Update fs rate limiter, after microVM start.
+    UpdateFsDevice(FsDeviceConfigUpdateInfo),
 }
 
 /// The enum represents the response sent by the VMM in case of success. The response is either
@@ -217,6 +242,17 @@ impl VmmService {
             #[cfg(feature = "virtio-net")]
             VmmAction::UpdateNetworkInterface(netif_update) => {
                 self.update_net_rate_limiters(vmm, netif_update)
+            }
+            #[cfg(feature = "virtio-fs")]
+            VmmAction::InsertFsDevice(fs_cfg) => self.add_fs_device(vmm, fs_cfg),
+
+            #[cfg(feature = "virtio-fs")]
+            VmmAction::ManipulateFsBackendFs(fs_mount_cfg) => {
+                self.manipulate_fs_backend_fs(vmm, fs_mount_cfg)
+            }
+            #[cfg(feature = "virtio-fs")]
+            VmmAction::UpdateFsDevice(fs_update_cfg) => {
+                self.update_fs_rate_limiters(vmm, fs_update_cfg)
             }
         };
 
@@ -565,5 +601,64 @@ impl VmmService {
         VirtioNetDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::VirtioNet)
+    }
+
+    #[cfg(feature = "virtio-fs")]
+    fn add_fs_device(&mut self, vmm: &mut Vmm, config: FsDeviceConfigInfo) -> VmmRequestResult {
+        let vm = vmm
+            .get_vm_by_id_mut("")
+            .ok_or(VmmActionError::InvalidVMID)?;
+        let hotplug = vm.is_vm_initialized();
+        if !cfg!(feature = "hotplug") && hotplug {
+            return Err(VmmActionError::FsDevice(
+                FsDeviceError::UpdateNotAllowedPostBoot,
+            ));
+        }
+
+        let ctx = vm.create_device_op_context(None).map_err(|e| {
+            info!("create device op context error: {:?}", e);
+            VmmActionError::FsDevice(FsDeviceError::UpdateNotAllowedPostBoot)
+        })?;
+        FsDeviceMgr::insert_device(vm.device_manager_mut(), ctx, config)
+            .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::FsDevice)
+    }
+
+    #[cfg(feature = "virtio-fs")]
+    fn manipulate_fs_backend_fs(
+        &self,
+        vmm: &mut Vmm,
+        config: FsMountConfigInfo,
+    ) -> VmmRequestResult {
+        let vm = vmm
+            .get_vm_by_id_mut("")
+            .ok_or(VmmActionError::InvalidVMID)?;
+
+        if !vm.is_vm_initialized() {
+            return Err(VmmActionError::FsDevice(FsDeviceError::MicroVMNotRunning));
+        }
+
+        FsDeviceMgr::manipulate_backend_fs(vm.device_manager_mut(), config)
+            .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::FsDevice)
+    }
+
+    #[cfg(feature = "virtio-fs")]
+    fn update_fs_rate_limiters(
+        &self,
+        vmm: &mut Vmm,
+        config: FsDeviceConfigUpdateInfo,
+    ) -> VmmRequestResult {
+        let vm = vmm
+            .get_vm_by_id_mut("")
+            .ok_or(VmmActionError::InvalidVMID)?;
+
+        if !vm.is_vm_initialized() {
+            return Err(VmmActionError::FsDevice(FsDeviceError::MicroVMNotRunning));
+        }
+
+        FsDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), config)
+            .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::FsDevice)
     }
 }

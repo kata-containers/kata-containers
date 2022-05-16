@@ -176,7 +176,7 @@ pub struct BlockDeviceConfigInfo {
     pub no_drop: bool,
     /// Block device multi-queue
     pub num_queues: usize,
-    /// Virtio queue size.
+    /// Virtio queue size. Size: byte
     pub queue_size: u16,
     /// Rate Limiter for I/O operations.
     pub rate_limiter: Option<RateLimiterConfigInfo>,
