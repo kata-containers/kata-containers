@@ -21,6 +21,11 @@ use crate::vmm::Vmm;
 use crate::device_manager::blk_dev_mgr::{
     BlockDeviceConfigInfo, BlockDeviceConfigUpdateInfo, BlockDeviceError, BlockDeviceMgr,
 };
+#[cfg(feature = "virtio-net")]
+use crate::device_manager::virtio_net_dev_mgr::{
+    VirtioNetDeviceConfigInfo, VirtioNetDeviceConfigUpdateInfo, VirtioNetDeviceError,
+    VirtioNetDeviceMgr,
+};
 #[cfg(feature = "virtio-vsock")]
 use crate::device_manager::vsock_dev_mgr::{VsockDeviceConfigInfo, VsockDeviceError};
 
@@ -64,6 +69,11 @@ pub enum VmmActionError {
     /// Block device related errors.
     #[error("virtio-blk device error: {0}")]
     Block(#[source] BlockDeviceError),
+
+    #[cfg(feature = "virtio-net")]
+    /// Net device related errors.
+    #[error("virtio-net device error: {0}")]
+    VirtioNet(#[source] VirtioNetDeviceError),
 }
 
 /// This enum represents the public interface of the VMM. Each action contains various
@@ -108,6 +118,17 @@ pub enum VmmAction {
     /// Update a block device, after microVM start. Currently, the only updatable properties
     /// are the RX and TX rate limiters.
     UpdateBlockDevice(BlockDeviceConfigUpdateInfo),
+
+    #[cfg(feature = "virtio-net")]
+    /// Add a new network interface config or update one that already exists using the
+    /// `NetworkInterfaceConfig` as input. This action can only be called before the microVM has
+    /// booted. The response is sent using the `OutcomeSender`.
+    InsertNetworkDevice(VirtioNetDeviceConfigInfo),
+
+    #[cfg(feature = "virtio-net")]
+    /// Update a network interface, after microVM start. Currently, the only updatable properties
+    /// are the RX and TX rate limiters.
+    UpdateNetworkInterface(VirtioNetDeviceConfigUpdateInfo),
 }
 
 /// The enum represents the response sent by the VMM in case of success. The response is either
@@ -188,6 +209,14 @@ impl VmmService {
             #[cfg(feature = "virtio-blk")]
             VmmAction::RemoveBlockDevice(drive_id) => {
                 self.remove_block_device(vmm, event_mgr, &drive_id)
+            }
+            #[cfg(feature = "virtio-net")]
+            VmmAction::InsertNetworkDevice(virtio_net_cfg) => {
+                self.add_virtio_net_device(vmm, event_mgr, virtio_net_cfg)
+            }
+            #[cfg(feature = "virtio-net")]
+            VmmAction::UpdateNetworkInterface(netif_update) => {
+                self.update_net_rate_limiters(vmm, netif_update)
             }
         };
 
@@ -494,5 +523,47 @@ impl VmmService {
         BlockDeviceMgr::remove_device(vm.device_manager_mut(), ctx, drive_id)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::Block)
+    }
+
+    #[cfg(feature = "virtio-net")]
+    fn add_virtio_net_device(
+        &mut self,
+        vmm: &mut Vmm,
+        event_mgr: &mut EventManager,
+        config: VirtioNetDeviceConfigInfo,
+    ) -> VmmRequestResult {
+        let vm = vmm
+            .get_vm_by_id_mut("")
+            .ok_or(VmmActionError::InvalidVMID)?;
+        let ctx = vm
+            .create_device_op_context(Some(event_mgr.epoll_manager()))
+            .map_err(|e| {
+                if let StartMicrovmError::MicroVMAlreadyRunning = e {
+                    VmmActionError::VirtioNet(VirtioNetDeviceError::UpdateNotAllowedPostBoot)
+                } else if let StartMicrovmError::UpcallNotReady = e {
+                    VmmActionError::UpcallNotReady
+                } else {
+                    VmmActionError::StartMicrovm(e)
+                }
+            })?;
+
+        VirtioNetDeviceMgr::insert_device(vm.device_manager_mut(), ctx, config)
+            .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::VirtioNet)
+    }
+
+    #[cfg(feature = "virtio-net")]
+    fn update_net_rate_limiters(
+        &mut self,
+        vmm: &mut Vmm,
+        config: VirtioNetDeviceConfigUpdateInfo,
+    ) -> VmmRequestResult {
+        let vm = vmm
+            .get_vm_by_id_mut("")
+            .ok_or(VmmActionError::InvalidVMID)?;
+
+        VirtioNetDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), config)
+            .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::VirtioNet)
     }
 }

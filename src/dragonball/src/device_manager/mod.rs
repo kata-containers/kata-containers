@@ -65,6 +65,12 @@ pub mod blk_dev_mgr;
 #[cfg(feature = "virtio-blk")]
 use self::blk_dev_mgr::BlockDeviceMgr;
 
+#[cfg(feature = "virtio-net")]
+/// Device manager for virtio-net devices.
+pub mod virtio_net_dev_mgr;
+#[cfg(feature = "virtio-net")]
+use self::virtio_net_dev_mgr::VirtioNetDeviceMgr;
+
 macro_rules! info(
     ($l:expr, $($args:tt)+) => {
         slog::info!($l, $($args)+; slog::o!("subsystem" => "device_manager"))
@@ -426,6 +432,9 @@ pub struct DeviceManager {
     // If there is a Root Block Device, this should be added as the first element of the list.
     // This is necessary because we want the root to always be mounted on /dev/vda.
     pub(crate) block_manager: BlockDeviceMgr,
+
+    #[cfg(feature = "virtio-net")]
+    pub(crate) virtio_net_manager: VirtioNetDeviceMgr,
 }
 
 impl DeviceManager {
@@ -452,6 +461,8 @@ impl DeviceManager {
             vsock_manager: VsockDeviceMgr::default(),
             #[cfg(feature = "virtio-blk")]
             block_manager: BlockDeviceMgr::default(),
+            #[cfg(feature = "virtio-net")]
+            virtio_net_manager: VirtioNetDeviceMgr::default(),
         }
     }
 
@@ -576,6 +587,11 @@ impl DeviceManager {
         self.block_manager
             .attach_devices(&mut ctx)
             .map_err(StartMicrovmError::BlockDeviceError)?;
+
+        #[cfg(feature = "virtio-net")]
+        self.virtio_net_manager
+            .attach_devices(&mut ctx)
+            .map_err(StartMicrovmError::VirtioNetDeviceError)?;
 
         #[cfg(feature = "virtio-vsock")]
         self.vsock_manager.attach_devices(&mut ctx)?;
