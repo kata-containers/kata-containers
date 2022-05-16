@@ -168,6 +168,11 @@ pub enum StartMicroVmError {
     /// Virtio-net errors.
     #[error("virtio-net errors: {0}")]
     VirtioNetDeviceError(#[source] device_manager::virtio_net_dev_mgr::VirtioNetDeviceError),
+
+    #[cfg(feature = "virtio-fs")]
+    /// Virtio-fs errors.
+    #[error("virtio-fs errors: {0}")]
+    FsDeviceError(#[source] device_manager::fs_dev_mgr::FsDeviceError),
 }
 
 /// Errors associated with starting the instance.
