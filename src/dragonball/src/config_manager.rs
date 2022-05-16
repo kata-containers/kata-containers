@@ -757,4 +757,67 @@ mod tests {
         assert_eq!(config5.content, config3.content);
         assert_eq!(configs.len(), 0);
     }
+
+    #[test]
+    fn test_rate_limiter_configs() {
+        const SIZE: u64 = 1024 * 1024;
+        const ONE_TIME_BURST: u64 = 1024;
+        const REFILL_TIME: u64 = 1000;
+
+        let c: TokenBucketConfigInfo = TokenBucketConfigInfo {
+            size: SIZE,
+            one_time_burst: ONE_TIME_BURST,
+            refill_time: REFILL_TIME,
+        };
+        let b: TokenBucket = c.into();
+        assert_eq!(b.capacity(), SIZE);
+        assert_eq!(b.one_time_burst(), ONE_TIME_BURST);
+        assert_eq!(b.refill_time_ms(), REFILL_TIME);
+
+        let mut rlc = RateLimiterConfigInfo {
+            bandwidth: TokenBucketConfigInfo {
+                size: SIZE,
+                one_time_burst: ONE_TIME_BURST,
+                refill_time: REFILL_TIME,
+            },
+            ops: TokenBucketConfigInfo {
+                size: SIZE * 2,
+                one_time_burst: 0,
+                refill_time: REFILL_TIME * 2,
+            },
+        };
+        let rl: RateLimiter = (&rlc).try_into().unwrap();
+        assert_eq!(rl.bandwidth().unwrap().capacity(), SIZE);
+        assert_eq!(rl.bandwidth().unwrap().one_time_burst(), ONE_TIME_BURST);
+        assert_eq!(rl.bandwidth().unwrap().refill_time_ms(), REFILL_TIME);
+        assert_eq!(rl.ops().unwrap().capacity(), SIZE * 2);
+        assert_eq!(rl.ops().unwrap().one_time_burst(), 0);
+        assert_eq!(rl.ops().unwrap().refill_time_ms(), REFILL_TIME * 2);
+
+        let bandwidth = TokenBucketConfigInfo {
+            size: SIZE * 2,
+            one_time_burst: ONE_TIME_BURST * 2,
+            refill_time: REFILL_TIME * 2,
+        };
+        rlc.update_bandwidth(bandwidth);
+        assert_eq!(rlc.bandwidth.size, SIZE * 2);
+        assert_eq!(rlc.bandwidth.one_time_burst, ONE_TIME_BURST * 2);
+        assert_eq!(rlc.bandwidth.refill_time, REFILL_TIME * 2);
+        assert_eq!(rlc.ops.size, SIZE * 2);
+        assert_eq!(rlc.ops.one_time_burst, 0);
+        assert_eq!(rlc.ops.refill_time, REFILL_TIME * 2);
+
+        let ops = TokenBucketConfigInfo {
+            size: SIZE * 3,
+            one_time_burst: ONE_TIME_BURST * 3,
+            refill_time: REFILL_TIME * 3,
+        };
+        rlc.update_ops(ops);
+        assert_eq!(rlc.bandwidth.size, SIZE * 2);
+        assert_eq!(rlc.bandwidth.one_time_burst, ONE_TIME_BURST * 2);
+        assert_eq!(rlc.bandwidth.refill_time, REFILL_TIME * 2);
+        assert_eq!(rlc.ops.size, SIZE * 3);
+        assert_eq!(rlc.ops.one_time_burst, ONE_TIME_BURST * 3);
+        assert_eq!(rlc.ops.refill_time, REFILL_TIME * 3);
+    }
 }
