@@ -17,6 +17,10 @@ use crate::event_manager::EventManager;
 use crate::vm::{CpuTopology, KernelConfigInfo, VmConfigInfo};
 use crate::vmm::Vmm;
 
+#[cfg(feature = "virtio-blk")]
+use crate::device_manager::blk_dev_mgr::{
+    BlockDeviceConfigInfo, BlockDeviceConfigUpdateInfo, BlockDeviceError, BlockDeviceMgr,
+};
 #[cfg(feature = "virtio-vsock")]
 use crate::device_manager::vsock_dev_mgr::{VsockDeviceConfigInfo, VsockDeviceError};
 
@@ -28,6 +32,10 @@ pub enum VmmActionError {
     /// Invalid virtual machine instance ID.
     #[error("the virtual machine instance ID is invalid")]
     InvalidVMID,
+
+    /// Failed to hotplug, due to Upcall not ready.
+    #[error("Upcall not ready, can't hotplug device.")]
+    UpcallNotReady,
 
     /// The action `ConfigureBootSource` failed either because of bad user input or an internal
     /// error.
@@ -51,6 +59,11 @@ pub enum VmmActionError {
     /// The action `InsertVsockDevice` failed either because of bad user input or an internal error.
     #[error("failed to add virtio-vsock device: {0}")]
     Vsock(#[source] VsockDeviceError),
+
+    #[cfg(feature = "virtio-blk")]
+    /// Block device related errors.
+    #[error("virtio-blk device error: {0}")]
+    Block(#[source] BlockDeviceError),
 }
 
 /// This enum represents the public interface of the VMM. Each action contains various
@@ -81,6 +94,20 @@ pub enum VmmAction {
     /// `VsockDeviceConfig` as input. This action can only be called before the microVM has
     /// booted. The response is sent using the `OutcomeSender`.
     InsertVsockDevice(VsockDeviceConfigInfo),
+
+    #[cfg(feature = "virtio-blk")]
+    /// Add a new block device or update one that already exists using the `BlockDeviceConfig` as
+    /// input. This action can only be called before the microVM has booted.
+    InsertBlockDevice(BlockDeviceConfigInfo),
+
+    #[cfg(feature = "virtio-blk")]
+    /// Remove a new block device for according to given drive_id
+    RemoveBlockDevice(String),
+
+    #[cfg(feature = "virtio-blk")]
+    /// Update a block device, after microVM start. Currently, the only updatable properties
+    /// are the RX and TX rate limiters.
+    UpdateBlockDevice(BlockDeviceConfigUpdateInfo),
 }
 
 /// The enum represents the response sent by the VMM in case of success. The response is either
@@ -150,6 +177,18 @@ impl VmmService {
             }
             #[cfg(feature = "virtio-vsock")]
             VmmAction::InsertVsockDevice(vsock_cfg) => self.add_vsock_device(vmm, vsock_cfg),
+            #[cfg(feature = "virtio-blk")]
+            VmmAction::InsertBlockDevice(block_device_config) => {
+                self.add_block_device(vmm, event_mgr, block_device_config)
+            }
+            #[cfg(feature = "virtio-blk")]
+            VmmAction::UpdateBlockDevice(blk_update) => {
+                self.update_blk_rate_limiters(vmm, blk_update)
+            }
+            #[cfg(feature = "virtio-blk")]
+            VmmAction::RemoveBlockDevice(drive_id) => {
+                self.remove_block_device(vmm, event_mgr, &drive_id)
+            }
         };
 
         debug!("send vmm response: {:?}", response);
@@ -392,5 +431,68 @@ impl VmmService {
             .insert_device(ctx, config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::Vsock)
+    }
+
+    #[cfg(feature = "virtio-blk")]
+    // Only call this function as part of the API.
+    // If the drive_id does not exist, a new Block Device Config is added to the list.
+    fn add_block_device(
+        &mut self,
+        vmm: &mut Vmm,
+        event_mgr: &mut EventManager,
+        config: BlockDeviceConfigInfo,
+    ) -> VmmRequestResult {
+        let vm = vmm
+            .get_vm_by_id_mut("")
+            .ok_or(VmmActionError::InvalidVMID)?;
+        let ctx = vm
+            .create_device_op_context(Some(event_mgr.epoll_manager()))
+            .map_err(|e| {
+                if let StartMicrovmError::UpcallNotReady = e {
+                    return VmmActionError::UpcallNotReady;
+                }
+                VmmActionError::Block(BlockDeviceError::UpdateNotAllowedPostBoot)
+            })?;
+
+        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, config)
+            .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::Block)
+    }
+
+    #[cfg(feature = "virtio-blk")]
+    /// Updates configuration for an emulated net device as described in `config`.
+    fn update_blk_rate_limiters(
+        &mut self,
+        vmm: &mut Vmm,
+        config: BlockDeviceConfigUpdateInfo,
+    ) -> VmmRequestResult {
+        let vm = vmm
+            .get_vm_by_id_mut("")
+            .ok_or(VmmActionError::InvalidVMID)?;
+
+        BlockDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), config)
+            .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::Block)
+    }
+
+    #[cfg(feature = "virtio-blk")]
+    // Only call this function as part of the API.
+    // If the drive_id does not exist, a new Block Device Config is added to the list.
+    fn remove_block_device(
+        &mut self,
+        vmm: &mut Vmm,
+        event_mgr: &mut EventManager,
+        drive_id: &str,
+    ) -> VmmRequestResult {
+        let vm = vmm
+            .get_vm_by_id_mut("")
+            .ok_or(VmmActionError::InvalidVMID)?;
+        let ctx = vm
+            .create_device_op_context(Some(event_mgr.epoll_manager()))
+            .map_err(|_| VmmActionError::Block(BlockDeviceError::UpdateNotAllowedPostBoot))?;
+
+        BlockDeviceMgr::remove_device(vm.device_manager_mut(), ctx, drive_id)
+            .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::Block)
     }
 }
