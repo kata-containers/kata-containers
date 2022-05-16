@@ -59,6 +59,12 @@ pub mod vsock_dev_mgr;
 #[cfg(feature = "virtio-vsock")]
 use self::vsock_dev_mgr::VsockDeviceMgr;
 
+#[cfg(feature = "virtio-blk")]
+/// virtio-block device manager
+pub mod blk_dev_mgr;
+#[cfg(feature = "virtio-blk")]
+use self::blk_dev_mgr::BlockDeviceMgr;
+
 macro_rules! info(
     ($l:expr, $($args:tt)+) => {
         slog::info!($l, $($args)+; slog::o!("subsystem" => "device_manager"))
@@ -71,21 +77,27 @@ pub enum DeviceMgrError {
     /// Invalid operation.
     #[error("invalid device manager operation")]
     InvalidOperation,
+
     /// Failed to get device resource.
     #[error("failed to get device assigned resources")]
     GetDeviceResource,
+
     /// Appending to kernel command line failed.
     #[error("failed to add kernel command line parameter for device: {0}")]
     Cmdline(#[source] linux_loader::cmdline::Error),
+
     /// Failed to manage console devices.
     #[error(transparent)]
     ConsoleManager(console_manager::ConsoleManagerError),
+
     /// Failed to create the device.
     #[error("failed to create virtual device: {0}")]
     CreateDevice(#[source] io::Error),
+
     /// Failed to perform an operation on the bus.
     #[error(transparent)]
     IoManager(IoManagerError),
+
     /// Failure from legacy device manager.
     #[error(transparent)]
     LegacyManager(legacy::Error),
@@ -409,6 +421,11 @@ pub struct DeviceManager {
     pub(crate) mmio_device_info: HashMap<(DeviceType, String), MMIODeviceInfo>,
     #[cfg(feature = "virtio-vsock")]
     pub(crate) vsock_manager: VsockDeviceMgr,
+
+    #[cfg(feature = "virtio-blk")]
+    // If there is a Root Block Device, this should be added as the first element of the list.
+    // This is necessary because we want the root to always be mounted on /dev/vda.
+    pub(crate) block_manager: BlockDeviceMgr,
 }
 
 impl DeviceManager {
@@ -433,6 +450,8 @@ impl DeviceManager {
             mmio_device_info: HashMap::new(),
             #[cfg(feature = "virtio-vsock")]
             vsock_manager: VsockDeviceMgr::default(),
+            #[cfg(feature = "virtio-blk")]
+            block_manager: BlockDeviceMgr::default(),
         }
     }
 
@@ -553,9 +572,18 @@ impl DeviceManager {
         self.create_legacy_devices(&mut ctx)?;
         self.init_legacy_devices(dmesg_fifo, com1_sock_path, &mut ctx)?;
 
+        #[cfg(feature = "virtio-blk")]
+        self.block_manager
+            .attach_devices(&mut ctx)
+            .map_err(StartMicrovmError::BlockDeviceError)?;
+
         #[cfg(feature = "virtio-vsock")]
         self.vsock_manager.attach_devices(&mut ctx)?;
 
+        #[cfg(feature = "virtio-blk")]
+        self.block_manager
+            .generate_kernel_boot_args(kernel_config)
+            .map_err(StartMicrovmError::DeviceManager)?;
         ctx.generate_kernel_boot_args(kernel_config)
             .map_err(StartMicrovmError::DeviceManager)?;
 
@@ -570,10 +598,21 @@ impl DeviceManager {
     /// Remove all devices when shutdown the associated virtual machine
     pub fn remove_devices(
         &mut self,
-        _vm_as: GuestAddressSpaceImpl,
-        _epoll_mgr: EpollManager,
-        _address_space: Option<&AddressSpace>,
+        vm_as: GuestAddressSpaceImpl,
+        epoll_mgr: EpollManager,
+        address_space: Option<&AddressSpace>,
     ) -> Result<()> {
+        // create context for removing devices
+        let mut ctx = DeviceOpContext::new(
+            Some(epoll_mgr),
+            self,
+            Some(vm_as),
+            address_space.cloned(),
+            true,
+        );
+
+        #[cfg(feature = "virtio-blk")]
+        self.block_manager.remove_devices(&mut ctx)?;
         Ok(())
     }
 }
