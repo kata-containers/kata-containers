@@ -242,7 +242,7 @@ impl ConfigItem for FsDeviceConfigInfo {
 }
 
 /// Configuration information of manipulating backend fs for a virtiofs device.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Default)]
 pub struct FsMountConfigInfo {
     /// Mount operations, mount, update, umount
     pub ops: String,

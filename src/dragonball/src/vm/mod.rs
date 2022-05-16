@@ -814,3 +814,17 @@ impl Vm {
         Err(StartMicroVmError::MicroVMAlreadyRunning)
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    impl Vm {
+        pub fn set_instance_state(&mut self, mstate: InstanceState) {
+            self.shared_info
+            .write()
+            .expect("Failed to start microVM because shared info couldn't be written due to poisoned lock")
+            .state = mstate;
+        }
+    }
+}
