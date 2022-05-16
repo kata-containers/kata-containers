@@ -163,6 +163,11 @@ pub enum StartMicroVmError {
     /// Virtio-blk errors.
     #[error("virtio-blk errors: {0}")]
     BlockDeviceError(#[source] device_manager::blk_dev_mgr::BlockDeviceError),
+
+    #[cfg(feature = "virtio-net")]
+    /// Virtio-net errors.
+    #[error("virtio-net errors: {0}")]
+    VirtioNetDeviceError(#[source] device_manager::virtio_net_dev_mgr::VirtioNetDeviceError),
 }
 
 /// Errors associated with starting the instance.

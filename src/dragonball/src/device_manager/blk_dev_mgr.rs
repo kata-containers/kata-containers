@@ -20,7 +20,9 @@ use dbs_virtio_devices::block::{aio::Aio, io_uring::IoUring, Block, LocalFile, U
 use serde_derive::{Deserialize, Serialize};
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
-use crate::config_manager::{ConfigItem, DeviceConfigInfo, RateLimiterConfigInfo};
+use crate::config_manager::{
+    get_bucket_update, ConfigItem, DeviceConfigInfo, RateLimiterConfigInfo,
+};
 use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
 use crate::vm::KernelConfigInfo;
 
@@ -42,27 +44,6 @@ macro_rules! error(
         slog::error!($l, $($args)+; slog::o!("subsystem" => "block_manager"))
     };
 );
-
-macro_rules! get_bucket_update {
-    ($self:ident, $rate_limiter: ident, $metric: ident) => {{
-        match &$self.$rate_limiter {
-            Some(rl_cfg) => {
-                let tb_cfg = &rl_cfg.$metric;
-                dbs_utils::rate_limiter::RateLimiter::make_bucket(
-                    tb_cfg.size,
-                    tb_cfg.one_time_burst,
-                    tb_cfg.refill_time,
-                )
-                // Updated active rate-limiter.
-                .map(dbs_utils::rate_limiter::BucketUpdate::Update)
-                // Updated/deactivated rate-limiter
-                .unwrap_or(dbs_utils::rate_limiter::BucketUpdate::Disabled)
-            }
-            // No update to the rate-limiter.
-            None => dbs_utils::rate_limiter::BucketUpdate::None,
-        }
-    }};
-}
 
 /// Default queue size for VirtIo block devices.
 pub const QUEUE_SIZE: u16 = 128;
