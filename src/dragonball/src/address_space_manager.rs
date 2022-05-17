@@ -622,6 +622,11 @@ impl AddressSpaceMgr {
         self.vm_as.as_ref()
     }
 
+    /// Get the guest memory.
+    pub fn vm_memory(&self) -> Option<<GuestAddressSpaceImpl as GuestAddressSpace>::T> {
+        self.get_vm_as().map(|m| m.memory())
+    }
+
     /// Get the base to slot map
     pub fn get_base_to_slot_map(&self) -> Arc<Mutex<HashMap<u64, u32>>> {
         self.base_to_slot.clone()
