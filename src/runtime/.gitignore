@@ -2,6 +2,7 @@
 *.patch
 *.swp
 coverage.txt
+coverage.txt.tmp
 coverage.html
 .git-commit
 .git-commit.tmp
