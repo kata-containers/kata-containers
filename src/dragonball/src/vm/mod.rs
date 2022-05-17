@@ -827,4 +827,10 @@ pub mod tests {
             .state = mstate;
         }
     }
+
+    pub fn create_vm_instance() -> Vm {
+        let instance_info = Arc::new(RwLock::new(InstanceInfo::default()));
+        let epoll_manager = EpollManager::default();
+        Vm::new(None, instance_info, epoll_manager).unwrap()
+    }
 }

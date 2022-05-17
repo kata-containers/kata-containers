@@ -1011,3 +1011,168 @@ impl DeviceManager {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use kvm_ioctls::Kvm;
+    use test_utils::skip_if_not_root;
+    use vm_memory::{GuestAddress, MmapRegion};
+
+    use super::*;
+    use crate::vm::CpuTopology;
+
+    impl DeviceManager {
+        pub fn new_test_mgr() -> Self {
+            let kvm = Kvm::new().unwrap();
+            let vm = kvm.create_vm().unwrap();
+            let vm_fd = Arc::new(vm);
+            let epoll_manager = EpollManager::default();
+            let res_manager = Arc::new(ResourceManager::new(None));
+            let logger = slog_scope::logger().new(slog::o!());
+
+            DeviceManager {
+                vm_fd: Arc::clone(&vm_fd),
+                con_manager: ConsoleManager::new(epoll_manager, &logger),
+                io_manager: Arc::new(ArcSwap::new(Arc::new(IoManager::new()))),
+                io_lock: Arc::new(Mutex::new(())),
+                irq_manager: Arc::new(KvmIrqManager::new(vm_fd.clone())),
+                res_manager,
+
+                legacy_manager: None,
+                #[cfg(feature = "virtio-blk")]
+                block_manager: BlockDeviceMgr::default(),
+                #[cfg(feature = "virtio-fs")]
+                fs_manager: Arc::new(Mutex::new(FsDeviceMgr::default())),
+                #[cfg(feature = "virtio-net")]
+                virtio_net_manager: VirtioNetDeviceMgr::default(),
+                #[cfg(feature = "virtio-vsock")]
+                vsock_manager: VsockDeviceMgr::default(),
+                #[cfg(target_arch = "aarch64")]
+                mmio_device_info: HashMap::new(),
+
+                logger,
+            }
+        }
+    }
+
+    #[test]
+    fn test_create_device_manager() {
+        skip_if_not_root!();
+        let mgr = DeviceManager::new_test_mgr();
+        let _ = mgr.io_manager();
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[test]
+    fn test_create_devices() {
+        skip_if_not_root!();
+        use crate::vm::VmConfigInfo;
+
+        let epoll_manager = EpollManager::default();
+        let vmm = Arc::new(Mutex::new(crate::vmm::tests::create_vmm_instance()));
+        let event_mgr = crate::event_manager::EventManager::new(&vmm, epoll_manager).unwrap();
+        let mut vm = crate::vm::tests::create_vm_instance();
+        let vm_config = VmConfigInfo {
+            vcpu_count: 1,
+            max_vcpu_count: 1,
+            cpu_pm: "off".to_string(),
+            mem_type: "shmem".to_string(),
+            mem_file_path: "".to_string(),
+            mem_size_mib: 16,
+            serial_path: None,
+            cpu_topology: CpuTopology {
+                threads_per_core: 1,
+                cores_per_die: 1,
+                dies_per_socket: 1,
+                sockets: 1,
+            },
+            vpmu_feature: 0,
+        };
+        vm.set_vm_config(vm_config);
+        vm.init_guest_memory().unwrap();
+        vm.setup_interrupt_controller().unwrap();
+        let vm_as = vm.vm_as().cloned().unwrap();
+        let kernel_temp_file = vmm_sys_util::tempfile::TempFile::new().unwrap();
+        let kernel_file = kernel_temp_file.into_file();
+        let mut cmdline = crate::vm::KernelConfigInfo::new(
+            kernel_file,
+            None,
+            linux_loader::cmdline::Cmdline::new(0x1000),
+        );
+
+        let address_space = vm.vm_address_space().cloned();
+        let mgr = vm.device_manager_mut();
+        let guard = mgr.io_manager.load();
+        let mut lcr = [0u8];
+        // 0x3f8 is the adddress of serial device
+        guard.pio_read(0x3f8 + 3, &mut lcr).unwrap_err();
+        assert_eq!(lcr[0], 0x0);
+
+        mgr.create_interrupt_manager().unwrap();
+        mgr.create_devices(
+            vm_as,
+            event_mgr.epoll_manager(),
+            &mut cmdline,
+            None,
+            None,
+            address_space.as_ref(),
+        )
+        .unwrap();
+        let guard = mgr.io_manager.load();
+        guard.pio_read(0x3f8 + 3, &mut lcr).unwrap();
+        assert_eq!(lcr[0], 0x3);
+    }
+
+    #[cfg(feature = "virtio-fs")]
+    #[test]
+    fn test_handler_insert_region() {
+        skip_if_not_root!();
+
+        use dbs_virtio_devices::VirtioRegionHandler;
+        use lazy_static::__Deref;
+        use vm_memory::{GuestAddressSpace, GuestMemory, GuestMemoryRegion};
+
+        let vm = crate::test_utils::tests::create_vm_for_test();
+        let ctx = DeviceOpContext::new(
+            Some(vm.epoll_manager().clone()),
+            vm.device_manager(),
+            Some(vm.vm_as().unwrap().clone()),
+            vm.vm_address_space().cloned(),
+            true,
+        );
+        let guest_addr = GuestAddress(0x200000000000);
+
+        let cache_len = 1024 * 1024 * 1024;
+        let mmap_region = MmapRegion::build(
+            None,
+            cache_len as usize,
+            libc::PROT_NONE,
+            libc::MAP_ANONYMOUS | libc::MAP_NORESERVE | libc::MAP_PRIVATE,
+        )
+        .unwrap();
+
+        let guest_mmap_region =
+            Arc::new(vm_memory::GuestRegionMmap::new(mmap_region, guest_addr).unwrap());
+
+        let mut handler = DeviceVirtioRegionHandler {
+            vm_as: ctx.get_vm_as().unwrap(),
+            address_space: ctx.address_space.as_ref().unwrap().clone(),
+        };
+        handler.insert_region(guest_mmap_region).unwrap();
+        let mut find_region = false;
+        let find_region_ptr = &mut find_region;
+
+        let guard = vm.vm_as().unwrap().clone().memory();
+
+        let mem = guard.deref();
+        for region in mem.iter() {
+            if region.start_addr() == guest_addr && region.len() == cache_len {
+                *find_region_ptr = true;
+            }
+        }
+
+        assert!(find_region);
+    }
+}
