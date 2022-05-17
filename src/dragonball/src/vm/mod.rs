@@ -815,7 +815,22 @@ impl Vm {
 
 #[cfg(test)]
 pub mod tests {
+    #[cfg(feature = "test-resources")]
+    use std::fs::File;
+    use std::os::unix::io::AsRawFd;
+    #[cfg(feature = "test-resources")]
+    use std::path::PathBuf;
+
+    use kvm_ioctls::Kvm;
+    use kvm_ioctls::VcpuExit;
+    use linux_loader::cmdline::Cmdline;
+    use vm_memory::GuestMemory;
+    use vmm_sys_util::tempfile::TempFile;
+
     use super::*;
+    use crate::test_utils::tests::create_vm_for_test;
+    #[cfg(feature = "test-resources")]
+    use crate::vmm::tests::create_vmm_instance;
 
     impl Vm {
         pub fn set_instance_state(&mut self, mstate: InstanceState) {
@@ -824,5 +839,368 @@ pub mod tests {
             .expect("Failed to start microVM because shared info couldn't be written due to poisoned lock")
             .state = mstate;
         }
+    }
+
+    pub fn create_vm_instance() -> Vm {
+        // Call for kvm too frequently would cause error in some host kernel.
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        let kvm = Kvm::new().unwrap();
+        let instance_info = Arc::new(RwLock::new(InstanceInfo::default()));
+        let epoll_manager = EpollManager::default();
+        Vm::new(Some(kvm.as_raw_fd()), instance_info, epoll_manager).unwrap()
+    }
+
+    #[test]
+    fn test_create_vm_instance() {
+        let vm = create_vm_instance();
+        assert!(vm.check_health().is_err());
+        assert!(vm.kernel_config.is_none());
+        assert!(vm.get_reset_eventfd().is_none());
+        assert!(!vm.is_vm_initialized());
+        assert!(!vm.is_vm_running());
+        assert!(vm.reset_console().is_ok());
+    }
+
+    #[test]
+    fn test_vm_init_guest_memory() {
+        let vm_config = VmConfigInfo {
+            vcpu_count: 1,
+            max_vcpu_count: 3,
+            cpu_pm: "off".to_string(),
+            ht_enabled: false,
+            mem_type: "shmem".to_string(),
+            mem_file_path: "".to_string(),
+            mem_size_mib: 16,
+            reserve_memory_bytes: 1024 * 1024,
+            serial_path: None,
+            cpu_topology: CpuTopology {
+                threads_per_core: 1,
+                cores_per_die: 1,
+                dies_per_socket: 1,
+                sockets: 1,
+            },
+            vpmu_feature: 0,
+        };
+
+        let mut vm = create_vm_instance();
+        vm.set_vm_config(vm_config);
+        assert!(vm.init_guest_memory().is_ok());
+        let vm_memory = vm.address_space.vm_memory().unwrap();
+
+        assert_eq!(vm_memory.num_regions(), 1);
+        assert_eq!(vm_memory.last_addr(), GuestAddress(0xffffff));
+
+        // Reconfigure an already configured vm will be ignored and just return OK.
+        let vm_config = VmConfigInfo {
+            vcpu_count: 1,
+            max_vcpu_count: 3,
+            cpu_pm: "off".to_string(),
+            ht_enabled: false,
+            mem_type: "shmem".to_string(),
+            mem_file_path: "".to_string(),
+            mem_size_mib: 16,
+            reserve_memory_bytes: 0,
+            serial_path: None,
+            cpu_topology: CpuTopology {
+                threads_per_core: 1,
+                cores_per_die: 1,
+                dies_per_socket: 1,
+                sockets: 1,
+            },
+            vpmu_feature: 0,
+        };
+        vm.set_vm_config(vm_config);
+        assert!(vm.init_guest_memory().is_ok());
+        let vm_memory = vm.address_space.vm_memory().unwrap();
+        assert_eq!(vm_memory.num_regions(), 1);
+        assert_eq!(vm_memory.last_addr(), GuestAddress(0xffffff));
+
+        let obj_addr = GuestAddress(0xf0);
+        vm_memory.write_obj(67u8, obj_addr).unwrap();
+        let read_val: u8 = vm_memory.read_obj(obj_addr).unwrap();
+        assert_eq!(read_val, 67u8);
+    }
+
+    #[test]
+    fn test_vm_create_devices() {
+        let vmm = Arc::new(Mutex::new(crate::vmm::tests::create_vmm_instance()));
+        let epoll_mgr = EpollManager::default();
+
+        let mut guard = vmm.lock().unwrap();
+        let vm = guard.get_vm_by_id_mut("").unwrap();
+
+        let vm_config = VmConfigInfo {
+            vcpu_count: 1,
+            max_vcpu_count: 3,
+            cpu_pm: "off".to_string(),
+            ht_enabled: false,
+            mem_type: "shmem".to_string(),
+            mem_file_path: "".to_string(),
+            mem_size_mib: 16,
+            reserve_memory_bytes: 1024 * 1024,
+            serial_path: None,
+            cpu_topology: CpuTopology {
+                threads_per_core: 1,
+                cores_per_die: 1,
+                dies_per_socket: 1,
+                sockets: 1,
+            },
+            vpmu_feature: 0,
+        };
+
+        vm.set_vm_config(vm_config);
+        assert!(vm.init_guest_memory().is_ok());
+        assert!(vm.setup_interrupt_controller().is_ok());
+
+        let vm_memory = vm.address_space.vm_memory().unwrap();
+        assert_eq!(vm_memory.num_regions(), 1);
+        assert_eq!(vm_memory.last_addr(), GuestAddress(0xffffff));
+
+        let kernel_file = TempFile::new().unwrap();
+        let cmd_line = Cmdline::new(64);
+
+        vm.set_kernel_config(KernelConfigInfo::new(
+            kernel_file.into_file(),
+            None,
+            cmd_line,
+            "".to_owned(),
+        ));
+
+        vm.init_devices(epoll_mgr).unwrap();
+    }
+
+    #[test]
+    fn test_vm_delete_devices() {
+        let mut vm = create_vm_for_test();
+        let epoll_mgr = EpollManager::default();
+
+        vm.setup_interrupt_controller().unwrap();
+        vm.init_devices(epoll_mgr).unwrap();
+        assert!(vm.remove_devices().is_ok());
+    }
+
+    #[test]
+    fn test_run_code() {
+        use std::io::{self, Write};
+        // This example is based on https://lwn.net/Articles/658511/
+        let code = [
+            0xba, 0xf8, 0x03, /* mov $0x3f8, %dx */
+            0x00, 0xd8, /* add %bl, %al */
+            0x04, b'0', /* add $'0', %al */
+            0xee, /* out %al, (%dx) */
+            0xb0, b'\n', /* mov $'\n', %al */
+            0xee,  /* out %al, (%dx) */
+            0xf4,  /* hlt */
+        ];
+        let load_addr = GuestAddress(0x1000);
+        let kvm = Kvm::new().unwrap();
+        let instance_info = Arc::new(RwLock::new(InstanceInfo::default()));
+        let epoll_manager = EpollManager::default();
+        let mut vm = Vm::new(Some(kvm.as_raw_fd()), instance_info, epoll_manager).unwrap();
+
+        let vcpu_count = 1;
+        let vm_config = VmConfigInfo {
+            vcpu_count,
+            max_vcpu_count: 1,
+            cpu_pm: "off".to_string(),
+            ht_enabled: false,
+            mem_type: "shmem".to_string(),
+            mem_file_path: "".to_string(),
+            mem_size_mib: 10,
+            reserve_memory_bytes: 0,
+            serial_path: None,
+            cpu_topology: CpuTopology {
+                threads_per_core: 1,
+                cores_per_die: 1,
+                dies_per_socket: 1,
+                sockets: 1,
+            },
+            vpmu_feature: 0,
+        };
+
+        vm.set_vm_config(vm_config);
+        vm.init_guest_memory().unwrap();
+
+        let vm_memory = vm.address_space.vm_memory().unwrap();
+        vm_memory.write_obj(code, load_addr).unwrap();
+
+        let vcpu_fd = vm.vm_fd().create_vcpu(0).unwrap();
+        let mut vcpu_sregs = vcpu_fd.get_sregs().unwrap();
+        assert_ne!(vcpu_sregs.cs.base, 0);
+        assert_ne!(vcpu_sregs.cs.selector, 0);
+        vcpu_sregs.cs.base = 0;
+        vcpu_sregs.cs.selector = 0;
+        vcpu_fd.set_sregs(&vcpu_sregs).unwrap();
+
+        let mut vcpu_regs = vcpu_fd.get_regs().unwrap();
+
+        vcpu_regs.rip = 0x1000;
+        vcpu_regs.rax = 2;
+        vcpu_regs.rbx = 3;
+        vcpu_regs.rflags = 2;
+        vcpu_fd.set_regs(&vcpu_regs).unwrap();
+
+        match vcpu_fd.run().expect("run failed") {
+            VcpuExit::IoOut(0x3f8, data) => {
+                assert_eq!(data.len(), 1);
+                io::stdout().write_all(data).unwrap();
+            }
+            VcpuExit::Hlt => {
+                io::stdout().write_all(b"KVM_EXIT_HLT\n").unwrap();
+            }
+            r => panic!("unexpected exit reason: {:?}", r),
+        }
+    }
+
+    // this test case need specific resources and is recommended to run
+    // via dbuvm docker image
+    #[cfg(feature = "test-resources")]
+    #[test]
+    fn test_load_kernel() {
+        let kernel_path = "./test_resources/linux-loader/test_elf.bin";
+        let kernel_path_buf = PathBuf::from(kernel_path);
+        if !kernel_path_buf.exists() {
+            panic!("Test resource file not found: {}", kernel_path);
+        }
+
+        let vm_config = VmConfigInfo {
+            vcpu_count: 1,
+            max_vcpu_count: 3,
+            cpu_pm: "off".to_string(),
+            ht_enabled: false,
+            mem_type: "shmem".to_string(),
+            mem_file_path: "".to_string(),
+            mem_size_mib: 16,
+            reserve_memory_bytes: 1024 * 1024,
+            serial_path: None,
+            cpu_topology: CpuTopology {
+                threads_per_core: 1,
+                cores_per_die: 1,
+                dies_per_socket: 1,
+                sockets: 1,
+            },
+            vpmu_feature: 0,
+        };
+
+        let mut vm = create_vm_instance();
+        vm.set_vm_config(vm_config);
+        assert!(vm.init_guest_memory().is_ok());
+
+        let cmd_line = Cmdline::new(64);
+
+        // no kernel config
+        let vm_memory = vm.address_space.vm_memory().unwrap();
+        let res = vm.load_kernel(&vm_memory);
+        assert!(matches!(res, Err(StartMicrovmError::MissingKernelConfig)));
+
+        // success
+        vm.set_kernel_config(KernelConfigInfo::new(
+            File::open(kernel_path).unwrap(),
+            None,
+            cmd_line,
+            "".to_owned(),
+        ));
+
+        let res = vm.load_kernel(&vm_memory);
+        assert!(res.is_ok());
+    }
+
+    // this test case need specific resources and is recommended to run
+    // via dbuvm docker image
+    #[test]
+    #[cfg(feature = "test-resources")]
+    fn test_load_initrd() {
+        let initrd_path = "./test_resources/img/x86_64/initrd/initrd.img";
+        let initrd_path_buf = PathBuf::from(initrd_path);
+        if !initrd_path_buf.exists() {
+            panic!("Test resource file not found: {}", initrd_path);
+        }
+
+        let vm_config = VmConfigInfo {
+            vcpu_count: 1,
+            max_vcpu_count: 3,
+            cpu_pm: "off".to_string(),
+            ht_enabled: false,
+            mem_type: "shmem".to_string(),
+            mem_file_path: "".to_string(),
+            mem_size_mib: 64,
+            reserve_memory_bytes: 1024 * 1024,
+            serial_path: None,
+            cpu_topology: CpuTopology {
+                threads_per_core: 1,
+                cores_per_die: 1,
+                dies_per_socket: 1,
+                sockets: 1,
+            },
+            vpmu_feature: 0,
+        };
+
+        let mut vm = create_vm_instance();
+        vm.set_vm_config(vm_config);
+        vm.init_guest_memory().unwrap();
+
+        let vm_memory = vm.address_space.vm_memory().unwrap();
+
+        vm.load_initrd(&vm_memory, &mut File::open(initrd_path).unwrap())
+            .unwrap();
+    }
+
+    // this test case need specific resources and is recommended to run
+    // via dbuvm docker image
+    #[test]
+    #[cfg(feature = "test-resources")]
+    fn test_start_microvm() {
+        let kernel_path = "./test_resources/linux-loader/test_elf.bin";
+        let kernel_path_buf = PathBuf::from(kernel_path);
+        if !kernel_path_buf.exists() {
+            panic!("Test resource file not found: {}", kernel_path);
+        }
+
+        let kvm = Kvm::new().unwrap();
+        let instance_info = Arc::new(RwLock::new(InstanceInfo::default()));
+        let epoll_manager = EpollManager::default();
+
+        let mut vm = Vm::new(Some(kvm.as_raw_fd()), instance_info, epoll_manager).unwrap();
+
+        let vm_config = VmConfigInfo {
+            vcpu_count: 1,
+            max_vcpu_count: 2,
+            cpu_pm: "off".to_string(),
+            ht_enabled: false,
+            mem_type: "shmem".to_string(),
+            mem_file_path: "".to_string(),
+            mem_size_mib: 16,
+            reserve_memory_bytes: 0,
+            serial_path: None,
+            cpu_topology: CpuTopology {
+                threads_per_core: 1,
+                cores_per_die: 1,
+                dies_per_socket: 1,
+                sockets: 1,
+            },
+            vpmu_feature: 0,
+        };
+        vm.set_vm_config(vm_config);
+        vm.init_guest_memory().unwrap();
+
+        vm.init_vcpu_manager(vm.vm_as().unwrap().clone(), BpfProgram::default())
+            .unwrap();
+
+        let cmd_line = Cmdline::new(64);
+        vm.set_kernel_config(KernelConfigInfo::new(
+            File::open(kernel_path).unwrap(),
+            None,
+            cmd_line,
+            "".to_owned(),
+        ));
+
+        let vmm = Arc::new(Mutex::new(create_vmm_instance()));
+
+        let epoll_mgr = EpollManager::default();
+        let mut event_mgr =
+            EventManager::new(&vmm, epoll_mgr).expect("Cannot create epoll manager");
+
+        let res = vm.start_microvm(&mut event_mgr, BpfProgram::default(), BpfProgram::default());
+        assert!(res.is_ok());
     }
 }
