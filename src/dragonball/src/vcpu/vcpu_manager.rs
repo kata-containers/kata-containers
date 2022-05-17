@@ -1041,3 +1041,378 @@ impl MutEventSubscriber for VcpuEpollHandler {
         ops.add(Events::new(&self.eventfd, EventSet::IN)).unwrap();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::io::AsRawFd;
+    use std::sync::{Arc, RwLock};
+
+    use dbs_utils::epoll_manager::EpollManager;
+    #[cfg(feature = "hotplug")]
+    use dbs_virtio_devices::vsock::backend::VsockInnerBackend;
+    use seccompiler::BpfProgram;
+    use test_utils::skip_if_not_root;
+    use vmm_sys_util::eventfd::EventFd;
+
+    use super::*;
+    use crate::api::v1::InstanceInfo;
+    use crate::vcpu::vcpu_impl::tests::{EmulationCase, EMULATE_RES};
+    use crate::vm::{CpuTopology, Vm, VmConfigInfo};
+
+    fn get_vm() -> Vm {
+        let instance_info = Arc::new(RwLock::new(InstanceInfo::default()));
+        let epoll_manager = EpollManager::default();
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let mut vm = Vm::new(None, instance_info, epoll_manager).unwrap();
+        let vm_config = VmConfigInfo {
+            vcpu_count: 1,
+            max_vcpu_count: 3,
+            cpu_pm: "off".to_string(),
+            mem_type: "shmem".to_string(),
+            mem_file_path: "".to_string(),
+            mem_size_mib: 100,
+            serial_path: None,
+            cpu_topology: CpuTopology {
+                threads_per_core: 1,
+                cores_per_die: 3,
+                dies_per_socket: 1,
+                sockets: 1,
+            },
+            vpmu_feature: 0,
+        };
+        vm.set_vm_config(vm_config);
+        vm.init_guest_memory().unwrap();
+
+        vm.init_vcpu_manager(vm.vm_as().unwrap().clone(), BpfProgram::default())
+            .unwrap();
+
+        vm.vcpu_manager()
+            .unwrap()
+            .set_reset_event_fd(EventFd::new(libc::EFD_NONBLOCK).unwrap())
+            .unwrap();
+
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            vm.setup_interrupt_controller().unwrap();
+        }
+
+        vm
+    }
+
+    fn get_present_unstart_vcpus(vcpu_manager: &std::sync::MutexGuard<'_, VcpuManager>) -> u8 {
+        vcpu_manager
+            .vcpu_infos
+            .iter()
+            .fold(0, |sum, info| sum + info.vcpu.is_some() as u8)
+    }
+
+    #[test]
+    fn test_vcpu_manager_config() {
+        skip_if_not_root!();
+        let instance_info = Arc::new(RwLock::new(InstanceInfo::default()));
+        let epoll_manager = EpollManager::default();
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let mut vm = Vm::new(None, instance_info, epoll_manager).unwrap();
+        let vm_config = VmConfigInfo {
+            vcpu_count: 1,
+            max_vcpu_count: 2,
+            cpu_pm: "off".to_string(),
+            mem_type: "shmem".to_string(),
+            mem_file_path: "".to_string(),
+            mem_size_mib: 1,
+            serial_path: None,
+            cpu_topology: CpuTopology {
+                threads_per_core: 1,
+                cores_per_die: 2,
+                dies_per_socket: 1,
+                sockets: 1,
+            },
+            vpmu_feature: 0,
+        };
+        vm.set_vm_config(vm_config.clone());
+        vm.init_guest_memory().unwrap();
+
+        vm.init_vcpu_manager(vm.vm_as().unwrap().clone(), BpfProgram::default())
+            .unwrap();
+
+        let mut vcpu_manager = vm.vcpu_manager().unwrap();
+
+        // test the vcpu_config
+        assert_eq!(
+            vcpu_manager.vcpu_infos.len(),
+            vm_config.max_vcpu_count as usize
+        );
+        assert_eq!(
+            vcpu_manager.vcpu_config.boot_vcpu_count,
+            vm_config.vcpu_count
+        );
+        assert_eq!(
+            vcpu_manager.vcpu_config.max_vcpu_count,
+            vm_config.max_vcpu_count
+        );
+
+        let reset_event_fd = EventFd::new(libc::EFD_NONBLOCK).unwrap();
+        let reset_event_fd_raw = reset_event_fd.as_raw_fd();
+        vcpu_manager.set_reset_event_fd(reset_event_fd).unwrap();
+
+        // test the reset_event_fd
+        assert_eq!(
+            vcpu_manager.reset_event_fd.as_ref().unwrap().as_raw_fd(),
+            reset_event_fd_raw
+        );
+    }
+
+    #[test]
+    fn test_vcpu_manager_boot_vcpus() {
+        skip_if_not_root!();
+        let vm = get_vm();
+        let mut vcpu_manager = vm.vcpu_manager().unwrap();
+
+        // test create boot vcpu
+        assert!(vcpu_manager
+            .create_boot_vcpus(TimestampUs::default(), GuestAddress(0))
+            .is_ok());
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 1);
+
+        // test start boot vcpus
+        assert!(vcpu_manager.start_boot_vcpus(BpfProgram::default()).is_ok());
+    }
+
+    #[test]
+    fn test_vcpu_manager_operate_vcpus() {
+        skip_if_not_root!();
+        let vm = get_vm();
+        let mut vcpu_manager = vm.vcpu_manager().unwrap();
+
+        // test create vcpu more than max
+        let res = vcpu_manager.create_vcpus(20, None, None);
+        assert!(matches!(res, Err(VcpuManagerError::ExpectedVcpuExceedMax)));
+
+        // test create vcpus
+        assert!(vcpu_manager.create_vcpus(2, None, None).is_ok());
+        assert_eq!(vcpu_manager.present_vcpus_count(), 0);
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 2);
+        assert_eq!(vcpu_manager.vcpus().len(), 2);
+        assert_eq!(vcpu_manager.vcpus_mut().len(), 2);
+
+        // test start vcpus
+        assert!(vcpu_manager
+            .start_vcpus(1, BpfProgram::default(), false)
+            .is_ok());
+        assert_eq!(vcpu_manager.present_vcpus_count(), 1);
+        assert_eq!(vcpu_manager.present_vcpus(), vec![0]);
+        assert!(vcpu_manager
+            .start_vcpus(2, BpfProgram::default(), false)
+            .is_ok());
+        assert_eq!(vcpu_manager.present_vcpus_count(), 2);
+        assert_eq!(vcpu_manager.present_vcpus(), vec![0, 1]);
+
+        // test start vcpus more than created
+        let res = vcpu_manager.start_vcpus(3, BpfProgram::default(), false);
+        assert!(matches!(res, Err(VcpuManagerError::VcpuNotCreate)));
+
+        // test start vcpus less than started
+        assert!(vcpu_manager
+            .start_vcpus(1, BpfProgram::default(), false)
+            .is_ok());
+    }
+    #[test]
+    fn test_vcpu_manager_pause_resume_vcpus() {
+        skip_if_not_root!();
+        *(EMULATE_RES.lock().unwrap()) = EmulationCase::Error(libc::EINTR);
+
+        let vm = get_vm();
+        let mut vcpu_manager = vm.vcpu_manager().unwrap();
+        assert!(vcpu_manager
+            .create_boot_vcpus(TimestampUs::default(), GuestAddress(0))
+            .is_ok());
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 1);
+        assert!(vcpu_manager.start_boot_vcpus(BpfProgram::default()).is_ok());
+
+        // invalid cpuid for pause
+        let cpu_indexes = vec![2];
+        let res = vcpu_manager.pause_vcpus(&cpu_indexes);
+        assert!(matches!(res, Err(VcpuManagerError::VcpuNotFound(_))));
+
+        // pause success
+        let cpu_indexes = vec![0];
+        assert!(vcpu_manager.pause_vcpus(&cpu_indexes).is_ok());
+
+        // invalid cpuid for resume
+        let cpu_indexes = vec![2];
+        let res = vcpu_manager.resume_vcpus(&cpu_indexes);
+        assert!(matches!(res, Err(VcpuManagerError::VcpuNotFound(_))));
+
+        // success resume
+        let cpu_indexes = vec![0];
+        assert!(vcpu_manager.resume_vcpus(&cpu_indexes).is_ok());
+
+        // pause and resume all
+        assert!(vcpu_manager.pause_all_vcpus().is_ok());
+        assert!(vcpu_manager.resume_all_vcpus().is_ok());
+    }
+
+    #[test]
+    fn test_vcpu_manager_exit_vcpus() {
+        skip_if_not_root!();
+        *(EMULATE_RES.lock().unwrap()) = EmulationCase::Error(libc::EINTR);
+
+        let vm = get_vm();
+        let mut vcpu_manager = vm.vcpu_manager().unwrap();
+
+        assert!(vcpu_manager
+            .create_boot_vcpus(TimestampUs::default(), GuestAddress(0))
+            .is_ok());
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 1);
+
+        assert!(vcpu_manager.start_boot_vcpus(BpfProgram::default()).is_ok());
+
+        // invalid cpuid for exit
+        let cpu_indexes = vec![2];
+
+        let res = vcpu_manager.exit_vcpus(&cpu_indexes);
+        assert!(matches!(res, Err(VcpuManagerError::VcpuNotFound(_))));
+
+        // exit success
+        let cpu_indexes = vec![0];
+        assert!(vcpu_manager.exit_vcpus(&cpu_indexes).is_ok());
+    }
+
+    #[test]
+    fn test_vcpu_manager_exit_all_vcpus() {
+        skip_if_not_root!();
+        *(EMULATE_RES.lock().unwrap()) = EmulationCase::Error(libc::EINTR);
+
+        let vm = get_vm();
+        let mut vcpu_manager = vm.vcpu_manager().unwrap();
+
+        assert!(vcpu_manager
+            .create_boot_vcpus(TimestampUs::default(), GuestAddress(0))
+            .is_ok());
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 1);
+
+        assert!(vcpu_manager.start_boot_vcpus(BpfProgram::default()).is_ok());
+
+        // exit all success
+        assert!(vcpu_manager.exit_all_vcpus().is_ok());
+        assert_eq!(vcpu_manager.vcpu_infos.len(), 0);
+        assert!(vcpu_manager.io_manager.is_none());
+    }
+
+    #[test]
+    fn test_vcpu_manager_revalidate_vcpus_cache() {
+        skip_if_not_root!();
+        *(EMULATE_RES.lock().unwrap()) = EmulationCase::Error(libc::EINTR);
+
+        let vm = get_vm();
+        let mut vcpu_manager = vm.vcpu_manager().unwrap();
+
+        assert!(vcpu_manager
+            .create_boot_vcpus(TimestampUs::default(), GuestAddress(0))
+            .is_ok());
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 1);
+
+        assert!(vcpu_manager.start_boot_vcpus(BpfProgram::default()).is_ok());
+
+        // invalid cpuid for exit
+        let cpu_indexes = vec![2];
+
+        let res = vcpu_manager.revalidate_vcpus_cache(&cpu_indexes);
+        assert!(matches!(res, Err(VcpuManagerError::VcpuNotFound(_))));
+
+        // revalidate success
+        let cpu_indexes = vec![0];
+        assert!(vcpu_manager.revalidate_vcpus_cache(&cpu_indexes).is_ok());
+    }
+
+    #[test]
+    fn test_vcpu_manager_revalidate_all_vcpus_cache() {
+        skip_if_not_root!();
+        *(EMULATE_RES.lock().unwrap()) = EmulationCase::Error(libc::EINTR);
+
+        let vm = get_vm();
+        let mut vcpu_manager = vm.vcpu_manager().unwrap();
+
+        assert!(vcpu_manager
+            .create_boot_vcpus(TimestampUs::default(), GuestAddress(0))
+            .is_ok());
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 1);
+
+        assert!(vcpu_manager.start_boot_vcpus(BpfProgram::default()).is_ok());
+
+        // revalidate all success
+        assert!(vcpu_manager.revalidate_all_vcpus_cache().is_ok());
+    }
+
+    #[test]
+    #[cfg(feature = "hotplug")]
+    fn test_vcpu_manager_resize_cpu() {
+        skip_if_not_root!();
+        let vm = get_vm();
+        let mut vcpu_manager = vm.vcpu_manager().unwrap();
+
+        assert!(vcpu_manager
+            .create_boot_vcpus(TimestampUs::default(), GuestAddress(0))
+            .is_ok());
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 1);
+
+        assert!(vcpu_manager.start_boot_vcpus(BpfProgram::default()).is_ok());
+
+        // set vcpus in hotplug action
+        let cpu_ids = vec![0];
+        vcpu_manager.set_vcpus_action(VcpuAction::Hotplug, cpu_ids);
+
+        // vcpu is already in hotplug process
+        let res = vcpu_manager.resize_vcpu(1, None);
+        assert!(matches!(
+            res,
+            Err(VcpuManagerError::VcpuResize(
+                VcpuResizeError::VcpuIsHotplugging
+            ))
+        ));
+
+        // clear vcpus action
+        let cpu_ids = vec![0];
+        vcpu_manager.set_vcpus_action(VcpuAction::None, cpu_ids);
+
+        // no upcall channel
+        let res = vcpu_manager.resize_vcpu(1, None);
+        assert!(matches!(
+            res,
+            Err(VcpuManagerError::VcpuResize(
+                VcpuResizeError::UpdateNotAllowedPostBoot
+            ))
+        ));
+
+        // init upcall channel
+        let dev_mgr_service = DevMgrService {};
+        let vsock_backend = VsockInnerBackend::new().unwrap();
+        let connector = vsock_backend.get_connector();
+        let epoll_manager = EpollManager::default();
+        let mut upcall_client =
+            UpcallClient::new(connector, epoll_manager, dev_mgr_service).unwrap();
+        assert!(upcall_client.connect().is_ok());
+        vcpu_manager.set_upcall_channel(Some(Arc::new(upcall_client)));
+
+        // success: no need to resize
+        vcpu_manager.resize_vcpu(1, None).unwrap();
+
+        // exceeed max vcpu count
+        let res = vcpu_manager.resize_vcpu(4, None);
+        assert!(matches!(
+            res,
+            Err(VcpuManagerError::VcpuResize(
+                VcpuResizeError::ExpectedVcpuExceedMax
+            ))
+        ));
+
+        // remove vcpu 0
+        let res = vcpu_manager.resize_vcpu(0, None);
+        assert!(matches!(
+            res,
+            Err(VcpuManagerError::VcpuResize(
+                VcpuResizeError::Vcpu0CanNotBeRemoved
+            ))
+        ));
+    }
+}
