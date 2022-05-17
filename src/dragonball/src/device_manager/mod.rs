@@ -544,7 +544,11 @@ impl DeviceManager {
                     .create_socket_console(com1, path)
                     .map_err(StartMicroVmError::DeviceManager)?;
             }
-        } else if let Some(legacy_manager) = self.legacy_manager.as_ref() {
+            return Ok(());
+        }
+        // TODO: remove create_stdio_console?
+        #[cfg(not(test))]
+        if let Some(legacy_manager) = self.legacy_manager.as_ref() {
             let com1 = legacy_manager.get_com1_serial();
             self.con_manager
                 .create_stdio_console(com1)
