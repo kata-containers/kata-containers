@@ -53,6 +53,7 @@ virtio-blk = ["dbs-virtio-devices/virtio-blk", "virtio-queue"]
 virtio-net = ["dbs-virtio-devices/virtio-net", "virtio-queue"]
 # virtio-fs only work on atomic-guest-memory
 virtio-fs = ["dbs-virtio-devices/virtio-fs", "virtio-queue", "atomic-guest-memory"]
+test-resources = []
 
 [patch.'crates-io']
 dbs-device = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
