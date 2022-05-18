@@ -21,5 +21,7 @@ jobs:
         go-version: ${{ matrix.go-version }}
     - name: Checkout code
       uses: actions/checkout@v2
-    - name: Build utils
+    - name: Build runtime
+      run: make runtime
+    - name: Test runtime
       run: ./ci/darwin-test.sh

@@ -17,10 +17,11 @@ build_working_packages() {
 	device_manager=$runtimedir/virtcontainers/device/manager
 	rc_pkg_dir=$runtimedir/pkg/resourcecontrol/
 	utils_pkg_dir=$runtimedir/virtcontainers/utils
+	katautils=$runtimedir/pkg/katautils
+	oci=$runtimedir/pkg/oci
+	vc=$runtimedir/virtcontainers
 
 	# broken packages :( :
-	#katautils=$runtimedir/pkg/katautils
-	#oci=$runtimedir/pkg/oci
 	#vc=$runtimedir/virtcontainers
 
 	pkgs=(
@@ -29,7 +30,11 @@ build_working_packages() {
 		"$device_drivers"
 		"$device_manager"
 		"$utils_pkg_dir"
-		"$rc_pkg_dir")
+		"$rc_pkg_dir"
+                "$katautils"
+                "$oci"
+                "$vc"
+            )
 	for pkg in "${pkgs[@]}"; do
 		echo building "$pkg"
 		pushd "$pkg" &>/dev/null
