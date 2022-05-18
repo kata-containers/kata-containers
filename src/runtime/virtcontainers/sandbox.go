@@ -42,7 +42,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cpuset"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -748,18 +747,18 @@ func rwLockSandbox(sandboxID string) (func() error, error) {
 // sandbox structure, based on a container ID.
 func (s *Sandbox) findContainer(containerID string) (*Container, error) {
 	if s == nil {
-		return nil, vcTypes.ErrNeedSandbox
+		return nil, types.ErrNeedSandbox
 	}
 
 	if containerID == "" {
-		return nil, vcTypes.ErrNeedContainerID
+		return nil, types.ErrNeedContainerID
 	}
 
 	if c, ok := s.containers[containerID]; ok {
 		return c, nil
 	}
 
-	return nil, errors.Wrapf(vcTypes.ErrNoSuchContainer, "Could not find the container %q from the sandbox %q containers list",
+	return nil, errors.Wrapf(types.ErrNoSuchContainer, "Could not find the container %q from the sandbox %q containers list",
 		containerID, s.id)
 }
 
@@ -767,15 +766,15 @@ func (s *Sandbox) findContainer(containerID string) (*Container, error) {
 // sandbox structure, based on a container ID.
 func (s *Sandbox) removeContainer(containerID string) error {
 	if s == nil {
-		return vcTypes.ErrNeedSandbox
+		return types.ErrNeedSandbox
 	}
 
 	if containerID == "" {
-		return vcTypes.ErrNeedContainerID
+		return types.ErrNeedContainerID
 	}
 
 	if _, ok := s.containers[containerID]; !ok {
-		return errors.Wrapf(vcTypes.ErrNoSuchContainer, "Could not remove the container %q from the sandbox %q containers list",
+		return errors.Wrapf(types.ErrNoSuchContainer, "Could not remove the container %q from the sandbox %q containers list",
 			containerID, s.id)
 	}
 
@@ -1421,7 +1420,7 @@ func (s *Sandbox) KillContainer(ctx context.Context, containerID string, signal 
 // DeleteContainer deletes a container from the sandbox
 func (s *Sandbox) DeleteContainer(ctx context.Context, containerID string) (VCContainer, error) {
 	if containerID == "" {
-		return nil, vcTypes.ErrNeedContainerID
+		return nil, types.ErrNeedContainerID
 	}
 
 	// Fetch the container.
@@ -1457,7 +1456,7 @@ func (s *Sandbox) DeleteContainer(ctx context.Context, containerID string) (VCCo
 // StatusContainer gets the status of a container
 func (s *Sandbox) StatusContainer(containerID string) (ContainerStatus, error) {
 	if containerID == "" {
-		return ContainerStatus{}, vcTypes.ErrNeedContainerID
+		return ContainerStatus{}, types.ErrNeedContainerID
 	}
 
 	if c, ok := s.containers[containerID]; ok {
@@ -1476,7 +1475,7 @@ func (s *Sandbox) StatusContainer(containerID string) (ContainerStatus, error) {
 		}, nil
 	}
 
-	return ContainerStatus{}, vcTypes.ErrNoSuchContainer
+	return ContainerStatus{}, types.ErrNoSuchContainer
 }
 
 // EnterContainer is the virtcontainers container command execution entry point.
@@ -1723,7 +1722,7 @@ func (s *Sandbox) Stop(ctx context.Context, force bool) error {
 // setSandboxState sets the in-memory state of the sandbox.
 func (s *Sandbox) setSandboxState(state types.StateString) error {
 	if state == "" {
-		return vcTypes.ErrNeedState
+		return types.ErrNeedState
 	}
 
 	// update in-memory state
@@ -2328,7 +2327,7 @@ func (s *Sandbox) getSandboxCPUSet() (string, string, error) {
 func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err error) {
 	virtLog.Info("fetch sandbox")
 	if sandboxID == "" {
-		return nil, vcTypes.ErrNeedSandboxID
+		return nil, types.ErrNeedSandboxID
 	}
 
 	var config SandboxConfig

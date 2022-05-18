@@ -33,7 +33,6 @@ import (
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	"github.com/gogo/protobuf/proto"
@@ -419,7 +418,7 @@ func (k *kataAgent) configure(ctx context.Context, h Hypervisor, id, sharePath s
 		}
 	case types.MockHybridVSock:
 	default:
-		return vcTypes.ErrInvalidConfigType
+		return types.ErrInvalidConfigType
 	}
 
 	// Neither create shared directory nor add 9p device if hypervisor
@@ -2152,7 +2151,7 @@ func (k *kataAgent) copyFile(ctx context.Context, src, dst string) error {
 	return nil
 }
 
-func (k *kataAgent) addSwap(ctx context.Context, PCIPath vcTypes.PciPath) error {
+func (k *kataAgent) addSwap(ctx context.Context, PCIPath types.PciPath) error {
 	span, ctx := katatrace.Trace(ctx, k.Logger(), "addSwap", kataAgentTracingTags)
 	defer span.End()
 

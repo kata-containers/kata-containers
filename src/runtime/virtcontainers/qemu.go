@@ -40,7 +40,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -1329,15 +1328,15 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 			}
 		}()
 
-		bridgeSlot, err := vcTypes.PciSlotFromInt(bridge.Addr)
+		bridgeSlot, err := types.PciSlotFromInt(bridge.Addr)
 		if err != nil {
 			return err
 		}
-		devSlot, err := vcTypes.PciSlotFromString(addr)
+		devSlot, err := types.PciSlotFromString(addr)
 		if err != nil {
 			return err
 		}
-		drive.PCIPath, err = vcTypes.PciPathFromSlots(bridgeSlot, devSlot)
+		drive.PCIPath, err = types.PciPathFromSlots(bridgeSlot, devSlot)
 		if err != nil {
 			return err
 		}
@@ -1421,12 +1420,12 @@ func (q *qemu) hotplugAddVhostUserBlkDevice(ctx context.Context, vAttr *config.V
 			return err
 		}
 
-		devSlot, err := vcTypes.PciSlotFromString(addr)
+		devSlot, err := types.PciSlotFromString(addr)
 		if err != nil {
 			return err
 		}
 
-		vAttr.PCIPath, err = vcTypes.PciPathFromSlots(bridgeSlot, devSlot)
+		vAttr.PCIPath, err = types.PciPathFromSlots(bridgeSlot, devSlot)
 		if err != nil {
 			return err
 		}
@@ -1446,16 +1445,16 @@ func (q *qemu) hotplugAddVhostUserBlkDevice(ctx context.Context, vAttr *config.V
 			}
 		}()
 
-		bridgeSlot, err := vcTypes.PciSlotFromInt(bridge.Addr)
+		bridgeSlot, err := types.PciSlotFromInt(bridge.Addr)
 		if err != nil {
 			return err
 		}
 
-		devSlot, err := vcTypes.PciSlotFromString(addr)
+		devSlot, err := types.PciSlotFromString(addr)
 		if err != nil {
 			return err
 		}
-		vAttr.PCIPath, err = vcTypes.PciPathFromSlots(bridgeSlot, devSlot)
+		vAttr.PCIPath, err = types.PciPathFromSlots(bridgeSlot, devSlot)
 
 		if err = q.qmpMonitorCh.qmp.ExecutePCIVhostUserDevAdd(q.qmpMonitorCh.ctx, driver, devID, vAttr.DevID, addr, bridge.ID); err != nil {
 			return err
@@ -1520,48 +1519,48 @@ func (q *qemu) hotplugVhostUserDevice(ctx context.Context, vAttr *config.VhostUs
 }
 
 // Query QMP to find the PCI slot of a device, given its QOM path or ID
-func (q *qemu) qomGetSlot(qomPath string) (vcTypes.PciSlot, error) {
+func (q *qemu) qomGetSlot(qomPath string) (types.PciSlot, error) {
 	addr, err := q.qmpMonitorCh.qmp.ExecQomGet(q.qmpMonitorCh.ctx, qomPath, "addr")
 	if err != nil {
-		return vcTypes.PciSlot{}, err
+		return types.PciSlot{}, err
 	}
 	addrf, ok := addr.(float64)
 	// XXX going via float makes no real sense, but that's how
 	// JSON works, and we'll get away with it for the small values
 	// we have here
 	if !ok {
-		return vcTypes.PciSlot{}, fmt.Errorf("addr QOM property of %q is %T not a number", qomPath, addr)
+		return types.PciSlot{}, fmt.Errorf("addr QOM property of %q is %T not a number", qomPath, addr)
 	}
 	addri := int(addrf)
 
 	slotNum, funcNum := addri>>3, addri&0x7
 	if funcNum != 0 {
-		return vcTypes.PciSlot{}, fmt.Errorf("Unexpected non-zero PCI function (%02x.%1x) on %q",
+		return types.PciSlot{}, fmt.Errorf("Unexpected non-zero PCI function (%02x.%1x) on %q",
 			slotNum, funcNum, qomPath)
 	}
 
-	return vcTypes.PciSlotFromInt(slotNum)
+	return types.PciSlotFromInt(slotNum)
 }
 
 // Query QMP to find a device's PCI path given its QOM path or ID
-func (q *qemu) qomGetPciPath(qemuID string) (vcTypes.PciPath, error) {
+func (q *qemu) qomGetPciPath(qemuID string) (types.PciPath, error) {
 	// XXX: For now we assume there's exactly one bridge, since
 	// that's always how we configure qemu from Kata for now.  It
 	// would be good to generalize this to different PCI
 	// topologies
 	devSlot, err := q.qomGetSlot(qemuID)
 	if err != nil {
-		return vcTypes.PciPath{}, err
+		return types.PciPath{}, err
 	}
 
 	busq, err := q.qmpMonitorCh.qmp.ExecQomGet(q.qmpMonitorCh.ctx, qemuID, "parent_bus")
 	if err != nil {
-		return vcTypes.PciPath{}, err
+		return types.PciPath{}, err
 	}
 
 	bus, ok := busq.(string)
 	if !ok {
-		return vcTypes.PciPath{}, fmt.Errorf("parent_bus QOM property of %s is %t not a string", qemuID, busq)
+		return types.PciPath{}, fmt.Errorf("parent_bus QOM property of %s is %t not a string", qemuID, busq)
 	}
 
 	// `bus` is the QOM path of the QOM bus object, but we need
@@ -1570,16 +1569,16 @@ func (q *qemu) qomGetPciPath(qemuID string) (vcTypes.PciPath, error) {
 	// path component.
 	idx := strings.LastIndex(bus, "/")
 	if idx == -1 {
-		return vcTypes.PciPath{}, fmt.Errorf("Bus has unexpected QOM path %s", bus)
+		return types.PciPath{}, fmt.Errorf("Bus has unexpected QOM path %s", bus)
 	}
 	bridge := bus[:idx]
 
 	bridgeSlot, err := q.qomGetSlot(bridge)
 	if err != nil {
-		return vcTypes.PciPath{}, err
+		return types.PciPath{}, err
 	}
 
-	return vcTypes.PciPathFromSlots(bridgeSlot, devSlot)
+	return types.PciPathFromSlots(bridgeSlot, devSlot)
 }
 
 func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op Operation) (err error) {
@@ -1740,15 +1739,15 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 			}
 		}()
 
-		bridgeSlot, err := vcTypes.PciSlotFromInt(bridge.Addr)
+		bridgeSlot, err := types.PciSlotFromInt(bridge.Addr)
 		if err != nil {
 			return err
 		}
-		devSlot, err := vcTypes.PciSlotFromString(addr)
+		devSlot, err := types.PciSlotFromString(addr)
 		if err != nil {
 			return err
 		}
-		pciPath, err := vcTypes.PciPathFromSlots(bridgeSlot, devSlot)
+		pciPath, err := types.PciPathFromSlots(bridgeSlot, devSlot)
 		endpoint.SetPciPath(pciPath)
 
 		var machine govmmQemu.Machine
