@@ -13,7 +13,6 @@ import (
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/net/context"
 )
@@ -217,7 +216,7 @@ func (n *mockAgent) copyFile(ctx context.Context, src, dst string) error {
 }
 
 // addSwap is the Noop agent setup swap. It does nothing.
-func (n *mockAgent) addSwap(ctx context.Context, PCIPath vcTypes.PciPath) error {
+func (n *mockAgent) addSwap(ctx context.Context, PCIPath types.PciPath) error {
 	return nil
 }
 
