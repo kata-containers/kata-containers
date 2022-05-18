@@ -797,7 +797,7 @@ func (q *qemu) setupVirtioMem(ctx context.Context) error {
 	return err
 }
 
-// startSandbox will start the Sandbox's VM.
+// StartVM will start the Sandbox's VM.
 func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 	span, ctx := katatrace.Trace(ctx, q.Logger(), "StartVM", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
@@ -969,7 +969,7 @@ func (q *qemu) waitVM(ctx context.Context, timeout int) error {
 	return nil
 }
 
-// stopSandbox will stop the Sandbox's VM.
+// StopVM will stop the Sandbox's VM.
 func (q *qemu) StopVM(ctx context.Context, waitOnly bool) error {
 	span, _ := katatrace.Trace(ctx, q.Logger(), "StopVM", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
@@ -2039,7 +2039,7 @@ func (q *qemu) ResumeVM(ctx context.Context) error {
 	return q.togglePauseSandbox(ctx, false)
 }
 
-// addDevice will add extra devices to Qemu command line.
+// AddDevice will add extra devices to Qemu command line.
 func (q *qemu) AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
 	var err error
 	span, _ := katatrace.Trace(ctx, q.Logger(), "AddDevice", qemuTracingTags)
@@ -2098,8 +2098,8 @@ func (q *qemu) AddDevice(ctx context.Context, devInfo interface{}, devType Devic
 	return err
 }
 
-// getSandboxConsole builds the path of the console where we can read
-// logs coming from the sandbox.
+// GetVMConsole builds the path of the console where we can read logs coming
+// from the sandbox.
 func (q *qemu) GetVMConsole(ctx context.Context, id string) (string, string, error) {
 	span, _ := katatrace.Trace(ctx, q.Logger(), "GetVMConsole", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
@@ -2172,7 +2172,7 @@ func (q *qemu) Disconnect(ctx context.Context) {
 	q.qmpShutdown()
 }
 
-// resizeMemory get a request to update the VM memory to reqMemMB
+// ResizeMemory gets a request to update the VM memory to reqMemMB
 // Memory update is managed with two approaches
 // Add memory to VM:
 // When memory is required to be added we hotplug memory
