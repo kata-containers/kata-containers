@@ -1755,7 +1755,7 @@ fn is_signal_handled(proc_status_file: &str, signum: u32) -> bool {
                 warn!(sl!(), "parse the SigCgt field failed");
                 return false;
             }
-            let sig_cgt_str = mask_vec[1];
+            let sig_cgt_str = mask_vec[1].trim();
             let sig_cgt_mask = match u64::from_str_radix(sig_cgt_str, 16) {
                 Ok(h) => h,
                 Err(_) => {
@@ -2531,6 +2531,26 @@ OtherField:other
             },
             TestData {
                 status_file_data: Some("SigCgt:000000004b813efb"),
+                signum: 4,
+                result: true,
+            },
+            TestData {
+                status_file_data: Some("SigCgt:\t000000004b813efb"),
+                signum: 4,
+                result: true,
+            },
+            TestData {
+                status_file_data: Some("SigCgt: 000000004b813efb"),
+                signum: 4,
+                result: true,
+            },
+            TestData {
+                status_file_data: Some("SigCgt:000000004b813efb "),
+                signum: 4,
+                result: true,
+            },
+            TestData {
+                status_file_data: Some("SigCgt:\t000000004b813efb "),
                 signum: 4,
                 result: true,
             },

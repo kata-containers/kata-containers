@@ -176,6 +176,9 @@ DEFDISABLEBLOCK := false
 DEFSHAREDFS_CLH_VIRTIOFS := virtio-fs
 DEFSHAREDFS_QEMU_VIRTIOFS := virtio-fs
 DEFVIRTIOFSDAEMON := $(LIBEXECDIR)/kata-qemu/virtiofsd
+ifeq ($(ARCH),amd64)
+DEFVIRTIOFSDAEMON := $(LIBEXECDIR)/virtiofsd
+endif
 DEFVALIDVIRTIOFSDAEMONPATHS := [\"$(DEFVIRTIOFSDAEMON)\"]
 # Default DAX mapping cache size in MiB
 #if value is 0, DAX is not enabled
@@ -596,7 +599,7 @@ hook:
 
 go-test: $(GENERATED_FILES)
 	go clean -testcache
-	$(QUIET_TEST)../../ci/go-test.sh
+	$(QUIET_TEST)./go-test.sh
 
 fast-test: $(GENERATED_FILES)
 	go clean -testcache

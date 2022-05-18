@@ -322,7 +322,26 @@ generate_qemu_options() {
 	# But since QEMU 5.2 the daemon is built as part of the tools set
 	# (disabled with --disable-tools) thus it needs to be explicitely
 	# enabled.
-	qemu_options+=(functionality:--enable-virtiofsd)
+	#
+	# From Kata Containers 2.5.0-alpha2 x86_64 has been using the new
+	# implementation of virtiofs daemon, which is not part of QEMU.
+	# For the other arches, at least for now, keep building from while
+	# building QEMU.
+	#
+	# IOW, other arches are still using the C version of the virtiofsd.
+	case "$arch" in
+	aarch64)
+		qemu_options+=(functionality:--enable-virtiofsd)
+		;;
+	x86_64)
+		;;
+	ppc64le)
+		qemu_options+=(functionality:--enable-virtiofsd)
+		;;
+	s390x)
+		qemu_options+=(functionality:--enable-virtiofsd)
+		;;
+	esac
 	qemu_options+=(functionality:--enable-virtfs)
 
 	# Don't build linux-user bsd-user
