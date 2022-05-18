@@ -297,3 +297,145 @@ impl Default for VsockDeviceMgr {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    impl PartialEq for VsockDeviceError {
+        fn eq(&self, other: &VsockDeviceError) -> bool {
+            use VsockDeviceError::*;
+            match (self, other) {
+                (InvalidVMID, InvalidVMID) => true,
+                (DeviceIDAlreadyExist(s), DeviceIDAlreadyExist(o)) => s == o,
+                (GuestCIDInvalid(s), GuestCIDInvalid(o)) => s == o,
+                (GuestCIDAlreadyInUse(s), GuestCIDAlreadyInUse(o)) => s == o,
+                (UDSPathAlreadyInUse(s), UDSPathAlreadyInUse(o)) => s == o,
+                (NetAddrAlreadyInUse(s), NetAddrAlreadyInUse(o)) => s == o,
+                (UpdateNotAllowedPostBoot, UpdateNotAllowedPostBoot) => true,
+                (VsockIdAlreadyExists(s), VsockIdAlreadyExists(o)) => s == o,
+                (CreateInnerBackend(s), CreateInnerBackend(o)) => s.kind() == o.kind(),
+                _ => false,
+            }
+        }
+    }
+
+    #[test]
+    fn test_create_vsock_device_manager() {
+        let mut mgr = DeviceManager::new_test_mgr();
+
+        let config = VsockDeviceConfigInfo {
+            id: "vsock_1".to_string(),
+            guest_cid: 1,
+            uds_path: Some("/path/to/uds1".to_string()),
+            tcp_addr: None,
+            queue_size: vec![128],
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        assert_eq!(
+            mgr.vsock_manager.insert_device(ctx, config).unwrap_err(),
+            VsockDeviceError::GuestCIDInvalid(1)
+        );
+        assert_eq!(mgr.vsock_manager.info_list.len(), 0);
+
+        let config = VsockDeviceConfigInfo {
+            id: "vsock_4".to_string(),
+            guest_cid: 3,
+            uds_path: Some("/path/to/uds3".to_string()),
+            tcp_addr: None,
+            queue_size: vec![128],
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        mgr.vsock_manager.insert_device(ctx, config).unwrap();
+        assert_eq!(mgr.vsock_manager.info_list[0].config.id, "vsock_4");
+        assert_eq!(mgr.vsock_manager.info_list[0].config.guest_cid, 3);
+        assert_eq!(
+            mgr.vsock_manager.info_list[0].config.uds_path,
+            Some("/path/to/uds3".to_owned())
+        );
+        assert_eq!(mgr.vsock_manager.info_list.len(), 1);
+
+        // Update existing entry.
+        let config = VsockDeviceConfigInfo {
+            id: "vsock_4".to_string(),
+            guest_cid: 4,
+            uds_path: Some("/path/to/uds4".to_string()),
+            tcp_addr: None,
+            queue_size: vec![128],
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        mgr.vsock_manager.insert_device(ctx, config).unwrap();
+        assert_eq!(mgr.vsock_manager.info_list[0].config.id, "vsock_4");
+        assert_eq!(mgr.vsock_manager.info_list[0].config.guest_cid, 4);
+        assert_eq!(
+            mgr.vsock_manager.info_list[0].config.uds_path,
+            Some("/path/to/uds4".to_owned())
+        );
+        assert_eq!(mgr.vsock_manager.info_list.len(), 1);
+
+        let config = VsockDeviceConfigInfo {
+            id: "vsock_5".to_string(),
+            guest_cid: 4,
+            uds_path: Some("/path/to/uds5".to_string()),
+            tcp_addr: None,
+            queue_size: vec![128],
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        assert_eq!(
+            mgr.vsock_manager.insert_device(ctx, config).unwrap_err(),
+            VsockDeviceError::GuestCIDAlreadyInUse(4)
+        );
+        assert_eq!(mgr.vsock_manager.info_list.len(), 1);
+
+        let config = VsockDeviceConfigInfo {
+            id: "vsock_5".to_string(),
+            guest_cid: 5,
+            uds_path: Some("/path/to/uds4".to_string()),
+            tcp_addr: None,
+            queue_size: vec![128],
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        assert_eq!(
+            mgr.vsock_manager.insert_device(ctx, config).unwrap_err(),
+            VsockDeviceError::UDSPathAlreadyInUse("/path/to/uds4".to_string())
+        );
+        assert_eq!(mgr.vsock_manager.info_list.len(), 1);
+
+        // Insert second entry
+        let config = VsockDeviceConfigInfo {
+            id: "vsock_5".to_string(),
+            guest_cid: 5,
+            uds_path: Some("/path/to/uds5".to_string()),
+            tcp_addr: None,
+            queue_size: vec![128],
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        mgr.vsock_manager.insert_device(ctx, config).unwrap();
+        assert_eq!(mgr.vsock_manager.info_list[0].config.id, "vsock_4");
+        assert_eq!(mgr.vsock_manager.info_list[0].config.guest_cid, 4);
+        assert_eq!(
+            mgr.vsock_manager.info_list[0].config.uds_path,
+            Some("/path/to/uds4".to_owned())
+        );
+        assert_eq!(mgr.vsock_manager.info_list[1].config.id, "vsock_5");
+        assert_eq!(mgr.vsock_manager.info_list[1].config.guest_cid, 5);
+        assert_eq!(
+            mgr.vsock_manager.info_list[1].config.uds_path,
+            Some("/path/to/uds5".to_owned())
+        );
+        assert_eq!(mgr.vsock_manager.info_list.len(), 2);
+    }
+}
