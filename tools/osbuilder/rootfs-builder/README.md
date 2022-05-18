@@ -82,12 +82,6 @@ must be met:
    $ docker info | grep 'Default Runtime: runc'
    ```
 
-   Note:
-
-   This requirement is specific to the Clear Containers runtime.
-   See [issue](https://github.com/clearcontainers/runtime/issues/828) for
-   more information.
-
 3. Export `USE_DOCKER` variable.
 
    ```
