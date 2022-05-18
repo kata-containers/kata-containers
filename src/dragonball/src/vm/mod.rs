@@ -817,11 +817,9 @@ impl Vm {
 pub mod tests {
     #[cfg(feature = "test-resources")]
     use std::fs::File;
-    use std::os::unix::io::AsRawFd;
     #[cfg(feature = "test-resources")]
     use std::path::PathBuf;
 
-    use kvm_ioctls::Kvm;
     use kvm_ioctls::VcpuExit;
     use linux_loader::cmdline::Cmdline;
     use vm_memory::GuestMemory;
@@ -842,12 +840,9 @@ pub mod tests {
     }
 
     pub fn create_vm_instance() -> Vm {
-        // Call for kvm too frequently would cause error in some host kernel.
-        std::thread::sleep(std::time::Duration::from_millis(5));
-        let kvm = Kvm::new().unwrap();
         let instance_info = Arc::new(RwLock::new(InstanceInfo::default()));
         let epoll_manager = EpollManager::default();
-        Vm::new(Some(kvm.as_raw_fd()), instance_info, epoll_manager).unwrap()
+        Vm::new(None, instance_info, epoll_manager).unwrap()
     }
 
     #[test]
@@ -993,10 +988,9 @@ pub mod tests {
             0xf4,  /* hlt */
         ];
         let load_addr = GuestAddress(0x1000);
-        let kvm = Kvm::new().unwrap();
         let instance_info = Arc::new(RwLock::new(InstanceInfo::default()));
         let epoll_manager = EpollManager::default();
-        let mut vm = Vm::new(Some(kvm.as_raw_fd()), instance_info, epoll_manager).unwrap();
+        let mut vm = Vm::new(None, instance_info, epoll_manager).unwrap();
 
         let vcpu_count = 1;
         let vm_config = VmConfigInfo {
@@ -1156,11 +1150,10 @@ pub mod tests {
             panic!("Test resource file not found: {}", kernel_path);
         }
 
-        let kvm = Kvm::new().unwrap();
         let instance_info = Arc::new(RwLock::new(InstanceInfo::default()));
         let epoll_manager = EpollManager::default();
 
-        let mut vm = Vm::new(Some(kvm.as_raw_fd()), instance_info, epoll_manager).unwrap();
+        let mut vm = Vm::new(None, instance_info, epoll_manager).unwrap();
 
         let vm_config = VmConfigInfo {
             vcpu_count: 1,

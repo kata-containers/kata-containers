@@ -763,13 +763,11 @@ impl Drop for Vcpu {
 
 #[cfg(test)]
 pub mod tests {
-    use std::os::unix::io::AsRawFd;
     use std::sync::mpsc::{channel, Receiver};
     use std::sync::Mutex;
 
     use arc_swap::ArcSwap;
     use dbs_device::device_manager::IoManager;
-    use kvm_ioctls::Kvm;
     use lazy_static::lazy_static;
 
     use super::*;
@@ -817,11 +815,8 @@ pub mod tests {
     #[cfg(target_arch = "x86_64")]
     fn create_vcpu() -> (Vcpu, Receiver<VcpuStateEvent>) {
         // Call for kvm too frequently would cause error in some host kernel.
-        std::thread::sleep(std::time::Duration::from_millis(5));
-
-        let kvm = Kvm::new().unwrap();
-        let vm = Arc::new(kvm.create_vm().unwrap());
-        let kvm_context = KvmContext::new(Some(kvm.as_raw_fd())).unwrap();
+        let kvm_context = KvmContext::new(None).unwrap();
+        let vm = kvm_context.kvm().create_vm().unwrap();
         let vcpu_fd = Arc::new(vm.create_vcpu(0).unwrap());
         let io_manager = IoManagerCached::new(Arc::new(ArcSwap::new(Arc::new(IoManager::new()))));
         let supported_cpuid = kvm_context

@@ -223,7 +223,7 @@ mod tests {
         assert!(c.max_memslots >= 32);
 
         let kvm = Kvm::new().unwrap();
-        let f = unsafe { File::from_raw_fd(kvm.as_raw_fd()) };
+        let f = std::mem::ManuallyDrop::new(unsafe { File::from_raw_fd(kvm.as_raw_fd()) });
         let m1 = f.metadata().unwrap();
         let m2 = File::open("/dev/kvm").unwrap().metadata().unwrap();
 
