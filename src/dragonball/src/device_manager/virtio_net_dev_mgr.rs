@@ -385,3 +385,255 @@ impl Default for VirtioNetDeviceMgr {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::str;
+
+    use super::*;
+    use crate::test_utils::tests::create_vm_for_test;
+
+    fn create_netif(
+        id: &str,
+        name: &str,
+        mac: &str,
+        allow_duplicate_mac: bool,
+    ) -> VirtioNetDeviceConfigInfo {
+        VirtioNetDeviceConfigInfo {
+            iface_id: String::from(id),
+            host_dev_name: String::from(name),
+            guest_mac: Some(MacAddr::parse_str(mac).unwrap()),
+            rx_rate_limiter: Some(RateLimiterConfigInfo::default()),
+            tx_rate_limiter: Some(RateLimiterConfigInfo::default()),
+            num_queues: NUM_QUEUES,
+            queue_size: 128,
+            allow_duplicate_mac,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        }
+    }
+
+    #[test]
+    fn test_insert_virtio_net_device() {
+        let mut mgr = DeviceManager::new_test_mgr();
+
+        let id_1 = "id_1";
+        let mut host_dev_name_1 = "dev1";
+        let mut guest_mac_1 = "01:23:45:67:89:0a";
+
+        // Test create.
+        let netif_1 = create_netif(id_1, host_dev_name_1, guest_mac_1, false);
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        VirtioNetDeviceMgr::insert_device(&mut mgr, ctx, netif_1).unwrap();
+        assert_eq!(mgr.virtio_net_manager.info_list.len(), 1);
+
+        // Test update mac address (this test does not modify the tap).
+        guest_mac_1 = "01:23:45:67:89:0b";
+        let netif_1 = create_netif(id_1, host_dev_name_1, guest_mac_1, false);
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        VirtioNetDeviceMgr::insert_device(&mut mgr, ctx, netif_1).unwrap();
+        // assert!(VirtioNetDeviceMgr::insert_device(&mut mgr, ctx, netif_1.into()).is_ok());
+        assert_eq!(mgr.virtio_net_manager.info_list.len(), 1);
+
+        // Test update host_dev_name (the tap will be updated).
+        host_dev_name_1 = "dev2";
+        let netif_1 = create_netif(id_1, host_dev_name_1, guest_mac_1, false);
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        VirtioNetDeviceMgr::insert_device(&mut mgr, ctx, netif_1).unwrap();
+        assert_eq!(mgr.virtio_net_manager.info_list.len(), 1);
+    }
+
+    #[test]
+    // need Privileged
+    fn test_update_net_device_ratelimiters() {
+        //Init vm for test.
+        let mut vm = create_vm_for_test();
+        let device_op_ctx = DeviceOpContext::new(
+            Some(vm.epoll_manager().clone()),
+            vm.device_manager(),
+            Some(vm.vm_as().unwrap().clone()),
+            vm.vm_address_space().cloned(),
+            false,
+        );
+
+        //Add device for test.
+
+        let id_1 = "id_1";
+        let host_dev_name_1 = "dev1";
+        let guest_mac_1 = "01:23:45:67:89:0a";
+
+        let netif_1 = create_netif(id_1, host_dev_name_1, guest_mac_1, false);
+        VirtioNetDeviceMgr::insert_device(vm.device_manager_mut(), device_op_ctx, netif_1).unwrap();
+        assert_eq!(vm.device_manager().virtio_net_manager.info_list.len(), 1);
+
+        let mut device_op_ctx = DeviceOpContext::new(
+            Some(vm.epoll_manager().clone()),
+            vm.device_manager(),
+            Some(vm.vm_as().unwrap().clone()),
+            vm.vm_address_space().cloned(),
+            false,
+        );
+
+        let cfg = VirtioNetDeviceConfigUpdateInfo {
+            iface_id: String::from(id_1),
+            rx_rate_limiter: None,
+            tx_rate_limiter: None,
+        };
+
+        vm.device_manager_mut()
+            .virtio_net_manager
+            .attach_devices(&mut device_op_ctx)
+            .unwrap();
+
+        //Patch while the epoll handler is invalid.
+        let expected_error = "could not send patch message to the net epoll handler".to_string();
+
+        assert_eq!(
+            VirtioNetDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), cfg)
+                .unwrap_err()
+                .to_string(),
+            expected_error
+        );
+
+        //Invalid iface id.
+        let cfg2 = VirtioNetDeviceConfigUpdateInfo {
+            iface_id: String::from("2"),
+            rx_rate_limiter: None,
+            tx_rate_limiter: None,
+        };
+
+        let expected_error = format!("invalid virtio-net iface id '{0}'", cfg2.iface_id);
+
+        assert_eq!(
+            VirtioNetDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), cfg2)
+                .unwrap_err()
+                .to_string(),
+            expected_error
+        );
+    }
+
+    #[test]
+    fn test_virtio_net_insert_error_cases() {
+        let mut mgr = DeviceManager::new_test_mgr();
+
+        let id_1 = "id_1";
+        let host_dev_name_1 = "dev3";
+        let guest_mac_1 = "01:23:45:67:89:0a";
+
+        // Adding the first valid network config.
+        let netif_1 = create_netif(id_1, host_dev_name_1, guest_mac_1, false);
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        VirtioNetDeviceMgr::insert_device(&mut mgr, ctx, netif_1).unwrap();
+        assert_eq!(mgr.virtio_net_manager.info_list.len(), 1);
+
+        // Error Cases for CREATE
+        // Error Case: Add new network config with the same mac as netif_1.
+        let id_2 = "id_2";
+        let host_dev_name_2 = "dev4";
+        let guest_mac_2 = "01:23:45:67:89:0b";
+
+        let netif_2 = create_netif(id_2, host_dev_name_2, guest_mac_1, false);
+        let expected_error = format!("the guest MAC address {} is already in use", guest_mac_1);
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        assert_eq!(
+            VirtioNetDeviceMgr::insert_device(&mut mgr, ctx, netif_2)
+                .unwrap_err()
+                .to_string(),
+            expected_error
+        );
+        assert_eq!(mgr.virtio_net_manager.info_list.len(), 1);
+
+        // Error Cases for CREATE
+        // Error Case: Add new network config with the same host_dev_name as netif_1.
+        let netif_2 = create_netif(id_2, host_dev_name_1, guest_mac_2, false);
+        let expected_error = format!(
+            "the host device name {} is already in use",
+            netif_2.host_dev_name
+        );
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        assert_eq!(
+            VirtioNetDeviceMgr::insert_device(&mut mgr, ctx, netif_2)
+                .unwrap_err()
+                .to_string(),
+            expected_error
+        );
+        assert_eq!(mgr.virtio_net_manager.info_list.len(), 1);
+
+        // Adding the second valid network config.
+        let netif_2 = create_netif(id_2, host_dev_name_2, guest_mac_2, false);
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        assert!(VirtioNetDeviceMgr::insert_device(&mut mgr, ctx, netif_2).is_ok());
+        assert_eq!(mgr.virtio_net_manager.info_list.len(), 2);
+
+        // Error Cases for UPDATE
+        // Error Case: Update netif_2 mac using the same mac as netif_1.
+        let netif_2 = create_netif(id_2, host_dev_name_2, guest_mac_1, false);
+        let expected_error = format!("the guest MAC address {} is already in use", guest_mac_1);
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        assert_eq!(
+            VirtioNetDeviceMgr::insert_device(&mut mgr, ctx, netif_2)
+                .unwrap_err()
+                .to_string(),
+            expected_error
+        );
+        assert_eq!(mgr.virtio_net_manager.info_list.len(), 2);
+
+        // Error Cases for UPDATE
+        // Error Case: Update netif_2 dev_host_name using the same dev_host_name as netif_1.
+        let netif_2 = create_netif(id_2, host_dev_name_1, guest_mac_2, false);
+        let expected_error = format!(
+            "the host device name {} is already in use",
+            netif_2.host_dev_name
+        );
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        assert_eq!(
+            VirtioNetDeviceMgr::insert_device(&mut mgr, ctx, netif_2)
+                .unwrap_err()
+                .to_string(),
+            expected_error
+        );
+        assert_eq!(mgr.virtio_net_manager.info_list.len(), 2);
+
+        // Adding the third valid network config with same mac
+        let id_3 = "id_3";
+        let host_dev_name_3 = "dev5";
+
+        let netif_3 = create_netif(id_3, host_dev_name_3, guest_mac_2, true);
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        VirtioNetDeviceMgr::insert_device(&mut mgr, ctx, netif_3).unwrap();
+        assert_eq!(mgr.virtio_net_manager.info_list.len(), 3);
+    }
+
+    #[test]
+    fn test_virtio_net_error_display() {
+        let err = VirtioNetDeviceError::InvalidVMID;
+        let _ = format!("{}{:?}", err, err);
+
+        let err = VirtioNetDeviceError::InvalidIfaceId("1".to_string());
+        let _ = format!("{}{:?}", err, err);
+
+        let err = VirtioNetDeviceError::InvalidQueueNum(0);
+        let _ = format!("{}{:?}", err, err);
+
+        let err = VirtioNetDeviceError::DeviceManager(DeviceMgrError::GetDeviceResource);
+        let _ = format!("{}{:?}", err, err);
+
+        let err = VirtioNetDeviceError::DeviceIDAlreadyExist(String::from("1"));
+        let _ = format!("{}{:?}", err, err);
+
+        let err = VirtioNetDeviceError::GuestMacAddressInUse(String::from("1"));
+        let _ = format!("{}{:?}", err, err);
+
+        let err = VirtioNetDeviceError::HostDeviceNameInUse(String::from("1"));
+        let _ = format!("{}{:?}", err, err);
+
+        let err = VirtioNetDeviceError::Virtio(virtio::Error::DescriptorChainTooShort);
+        let _ = format!("{}{:?}", err, err);
+
+        let err = VirtioNetDeviceError::OpenTap(TapError::InvalidIfname);
+        let _ = format!("{}{:?}", err, err);
+
+        let err = VirtioNetDeviceError::UpdateNotAllowedPostBoot;
+        let _ = format!("{}{:?}", err, err);
+    }
+}
