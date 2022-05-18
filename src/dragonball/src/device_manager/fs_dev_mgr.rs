@@ -526,3 +526,185 @@ impl Default for FsDeviceMgr {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::tests::create_vm_for_test;
+
+    fn create_fs_conf(tag: &str, sock_path: &str) -> FsDeviceConfigInfo {
+        FsDeviceConfigInfo {
+            sock_path: String::from(sock_path),
+            tag: String::from(tag),
+            num_queues: 0,
+            queue_size: 0,
+            cache_size: 0,
+            thread_pool_size: 0,
+            cache_policy: String::from(""),
+            writeback_cache: false,
+            no_open: false,
+            xattr: false,
+            drop_sys_resource: false,
+            mode: String::from("vhostuser"),
+            killpriv_v2: false,
+            no_readdir: false,
+            rate_limiter: None,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        }
+    }
+
+    #[test]
+    fn test_insert_virtio_fs_device() {
+        let mut mgr = DeviceManager::new_test_mgr();
+        // Test create.
+        let fscfg = FsDeviceConfigInfo::default();
+
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        FsDeviceMgr::insert_device(&mut mgr, ctx, fscfg).unwrap();
+        assert_eq!(mgr.fs_manager.lock().unwrap().info_list.len(), 1);
+    }
+
+    #[test]
+    fn test_virtio_fs_insert_error_cases() {
+        let mut mgr = DeviceManager::new_test_mgr();
+
+        let tag_1 = "tag_1";
+        let tag_2 = "tag_2";
+        let sock_path_1 = "path_1";
+        let sock_path_2 = "path_2";
+
+        // Adding the first valid fs config.
+        let conf_1 = create_fs_conf(tag_1, sock_path_1);
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        FsDeviceMgr::insert_device(&mut mgr, ctx, conf_1).unwrap();
+        assert_eq!(mgr.fs_manager.lock().unwrap().info_list.len(), 1);
+
+        // Error Cases for CREATE
+        // Error Case: Add new fs config with the same sock_path as conf_1.
+        let conf_2 = create_fs_conf(tag_2, sock_path_1);
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        let res = FsDeviceMgr::insert_device(&mut mgr, ctx, conf_2);
+        if let Err(FsDeviceError::FsDevicePathAlreadyExists(_)) = res {
+            assert_eq!(mgr.fs_manager.lock().unwrap().info_list.len(), 1);
+        } else {
+            panic!();
+        }
+
+        // Adding the second valid fs config.
+        let conf_2 = create_fs_conf(tag_2, sock_path_2);
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        FsDeviceMgr::insert_device(&mut mgr, ctx, conf_2).unwrap();
+        assert_eq!(mgr.fs_manager.lock().unwrap().info_list.len(), 2);
+
+        // Error Cases for UPDATE
+        // Error Case: Update conf_2 using the same sock_path as conf_1.
+        let conf_2 = create_fs_conf(tag_2, sock_path_1);
+        let ctx = DeviceOpContext::new(None, &mgr, None, None, false);
+        let res = FsDeviceMgr::insert_device(&mut mgr, ctx, conf_2);
+        if let Err(FsDeviceError::FsDevicePathAlreadyExists(_)) = res {
+            assert_eq!(mgr.fs_manager.lock().unwrap().info_list.len(), 2);
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    fn test_update_fs_device_ratelimiters() {
+        // Init vm for test.
+        let mut vm = create_vm_for_test();
+        let device_op_ctx = DeviceOpContext::new(
+            Some(vm.epoll_manager().clone()),
+            vm.device_manager(),
+            Some(vm.vm_as().unwrap().clone()),
+            vm.vm_address_space().cloned(),
+            false,
+        );
+
+        // Add device for test.
+        let fscfg = FsDeviceConfigInfo::default();
+        FsDeviceMgr::insert_device(vm.device_manager_mut(), device_op_ctx, fscfg).unwrap();
+        assert_eq!(
+            vm.device_manager()
+                .fs_manager
+                .lock()
+                .unwrap()
+                .info_list
+                .len(),
+            1
+        );
+
+        let mut device_op_ctx = DeviceOpContext::new(
+            Some(vm.epoll_manager().clone()),
+            vm.device_manager(),
+            Some(vm.vm_as().unwrap().clone()),
+            vm.vm_address_space().cloned(),
+            false,
+        );
+
+        let cfg = FsDeviceConfigUpdateInfo {
+            tag: String::default(),
+            rate_limiter: None,
+        };
+
+        vm.device_manager()
+            .fs_manager
+            .lock()
+            .unwrap()
+            .attach_devices(&mut device_op_ctx)
+            .unwrap();
+
+        // Patch while the epoll handler is invalid.
+        let expected_error =
+            "could not send patch message to the VirtioFs epoll handler".to_string();
+
+        assert_eq!(
+            FsDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), cfg)
+                .unwrap_err()
+                .to_string(),
+            expected_error
+        );
+
+        // Invalid iface id.
+        let cfg2 = FsDeviceConfigUpdateInfo {
+            tag: String::from("2"),
+            rate_limiter: None,
+        };
+
+        let expected_error = format!("invalid fs tag'{0}'", cfg2.tag);
+
+        assert_eq!(
+            FsDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), cfg2)
+                .unwrap_err()
+                .to_string(),
+            expected_error
+        );
+    }
+
+    #[test]
+    fn test_fs_error_display() {
+        let err = FsDeviceError::InvalidFs;
+        let _ = format!("{}{:?}", err, err);
+
+        let err = FsDeviceError::FsDeviceTagAlreadyExists(String::from("1"));
+        let _ = format!("{}{:?}", err, err);
+
+        let err = FsDeviceError::FsDevicePathAlreadyExists(String::from("1"));
+        let _ = format!("{}{:?}", err, err);
+
+        let err = FsDeviceError::UpdateNotAllowedPostBoot;
+        let _ = format!("{}{:?}", err, err);
+
+        let err = FsDeviceError::AttachBackendFailed(String::from("1"));
+        let _ = format!("{}{:?}", err, err);
+
+        let err = FsDeviceError::MicroVMMustRunning;
+        let _ = format!("{}{:?}", err, err);
+
+        let err = FsDeviceError::InvalidTag(String::from("1"));
+        let _ = format!("{}{:?}", err, err);
+
+        let err = FsDeviceError::VirtioFsEpollHanderSendFail;
+        let _ = format!("{}{:?}", err, err);
+    }
+}
