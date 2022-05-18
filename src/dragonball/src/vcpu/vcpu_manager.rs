@@ -1062,7 +1062,6 @@ mod tests {
     fn get_vm() -> Vm {
         let instance_info = Arc::new(RwLock::new(InstanceInfo::default()));
         let epoll_manager = EpollManager::default();
-        std::thread::sleep(std::time::Duration::from_millis(200));
         let mut vm = Vm::new(None, instance_info, epoll_manager).unwrap();
         let vm_config = VmConfigInfo {
             vcpu_count: 1,
@@ -1111,7 +1110,6 @@ mod tests {
         skip_if_not_root!();
         let instance_info = Arc::new(RwLock::new(InstanceInfo::default()));
         let epoll_manager = EpollManager::default();
-        std::thread::sleep(std::time::Duration::from_millis(200));
         let mut vm = Vm::new(None, instance_info, epoll_manager).unwrap();
         let vm_config = VmConfigInfo {
             vcpu_count: 1,
