@@ -32,7 +32,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -632,18 +631,18 @@ func clhDriveIndexToID(i int) string {
 // and/or kernel enumerates it.  They get away with it only because
 // they don't use bridges, and so the bus is always 0.  Under that
 // assumption convert a clh PciDeviceInfo into a PCI path
-func clhPciInfoToPath(pciInfo chclient.PciDeviceInfo) (vcTypes.PciPath, error) {
+func clhPciInfoToPath(pciInfo chclient.PciDeviceInfo) (types.PciPath, error) {
 	tokens := strings.Split(pciInfo.Bdf, ":")
 	if len(tokens) != 3 || tokens[0] != "0000" || tokens[1] != "00" {
-		return vcTypes.PciPath{}, fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
+		return types.PciPath{}, fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
 	}
 
 	tokens = strings.Split(tokens[2], ".")
 	if len(tokens) != 2 || tokens[1] != "0" || len(tokens[0]) != 2 {
-		return vcTypes.PciPath{}, fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
+		return types.PciPath{}, fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
 	}
 
-	return vcTypes.PciPathFromString(tokens[0])
+	return types.PciPathFromString(tokens[0])
 }
 
 func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) error {
@@ -719,7 +718,7 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 		return fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
 	}
 
-	device.GuestPciPath, err = vcTypes.PciPathFromString(tokens[0])
+	device.GuestPciPath, err = types.PciPathFromString(tokens[0])
 
 	return err
 }

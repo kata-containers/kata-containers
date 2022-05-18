@@ -23,7 +23,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -405,7 +404,7 @@ func (c *Container) GetPatchedOCISpec() *specs.Spec {
 // container.
 func (c *Container) setContainerState(state types.StateString) error {
 	if state == "" {
-		return vcTypes.ErrNeedState
+		return types.ErrNeedState
 	}
 
 	c.Logger().Debugf("Setting container state from %v to %v", c.state.State, state)
