@@ -48,6 +48,7 @@ const (
 	clhHypervisorTableType         = "clh"
 	qemuHypervisorTableType        = "qemu"
 	acrnHypervisorTableType        = "acrn"
+	vfwHypervisorTableType         = "vfw"
 
 	// the maximum amount of PCI bridges that can be cold plugged in a VM
 	maxPCIBridges uint32 = 5
@@ -950,6 +951,60 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	}, nil
 }
 
+func newVfwHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
+	kernel, err := h.kernel()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	initrd, err := h.initrd()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	image, err := h.image()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	kernelParams := h.kernelParams()
+
+	blockDriver, err := h.blockDeviceDriver()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	sharedFS := config.VirtioFS
+
+	return vc.HypervisorConfig{
+		HypervisorPath:          "",
+		HypervisorPathList:      h.HypervisorPathList,
+		KernelPath:              kernel,
+		InitrdPath:              initrd,
+		ImagePath:               image,
+		KernelParams:            vc.DeserializeParams(strings.Fields(kernelParams)),
+		NumVCPUs:                h.defaultVCPUs(),
+		DefaultMaxVCPUs:         h.defaultMaxVCPUs(),
+		MemorySize:              h.defaultMemSz(),
+		MemSlots:                h.defaultMemSlots(),
+		MemOffset:               h.defaultMemOffset(),
+		VirtioMem:               h.VirtioMem,
+		DefaultBridges:          h.defaultBridges(),
+		DisableBlockDeviceUse:   h.DisableBlockDeviceUse,
+		SharedFS:                sharedFS,
+		MemPrealloc:             h.MemPrealloc,
+		HugePages:               h.HugePages,
+		Debug:                   h.Debug,
+		DisableNestingChecks:    h.DisableNestingChecks,
+		BlockDeviceDriver:       blockDriver,
+		BlockDeviceCacheSet:     h.BlockDeviceCacheSet,
+		BlockDeviceCacheDirect:  h.BlockDeviceCacheDirect,
+		BlockDeviceCacheNoflush: h.BlockDeviceCacheNoflush,
+		EnableIOThreads:         h.EnableIOThreads,
+		GuestHookPath:           h.guestHookPath(),
+	}, nil
+}
+
 func newFactoryConfig(f factory) (oci.FactoryConfig, error) {
 	if f.TemplatePath == "" {
 		f.TemplatePath = defaultTemplatePath
@@ -983,6 +1038,9 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 		case clhHypervisorTableType:
 			config.HypervisorType = vc.ClhHypervisor
 			hConfig, err = newClhHypervisorConfig(hypervisor)
+		case vfwHypervisorTableType:
+			config.HypervisorType = vc.VirtframeworkHypervisor
+			hConfig, err = newVfwHypervisorConfig(hypervisor)
 		}
 
 		if err != nil {
