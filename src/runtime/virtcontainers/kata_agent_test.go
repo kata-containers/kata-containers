@@ -35,7 +35,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/mock"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
 
 const sysHugepagesDir = "/sys/kernel/mm/hugepages"
@@ -45,7 +44,7 @@ var (
 	testBlockDeviceCtrPath = "testBlockDeviceCtrPath"
 	testDevNo              = "testDevNo"
 	testNvdimmID           = "testNvdimmID"
-	testPCIPath, _         = vcTypes.PciPathFromString("04/02")
+	testPCIPath, _         = types.PciPathFromString("04/02")
 	testSCSIAddr           = "testSCSIAddr"
 	testVirtPath           = "testVirtPath"
 )
@@ -372,11 +371,11 @@ func TestHandleBlockVolume(t *testing.T) {
 	vDestination := "/VhostUserBlk/destination"
 	bDestination := "/DeviceBlock/destination"
 	dDestination := "/DeviceDirectBlock/destination"
-	vPCIPath, err := vcTypes.PciPathFromString("01/02")
+	vPCIPath, err := types.PciPathFromString("01/02")
 	assert.NoError(t, err)
-	bPCIPath, err := vcTypes.PciPathFromString("03/04")
+	bPCIPath, err := types.PciPathFromString("03/04")
 	assert.NoError(t, err)
-	dPCIPath, err := vcTypes.PciPathFromString("04/05")
+	dPCIPath, err := types.PciPathFromString("04/05")
 	assert.NoError(t, err)
 
 	vDev := drivers.NewVhostUserBlkDevice(&config.DeviceInfo{ID: vDevID})
