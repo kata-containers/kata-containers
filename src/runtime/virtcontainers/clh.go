@@ -537,7 +537,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	return nil
 }
 
-// startSandbox will start the VMM and boot the virtual machine for the given sandbox.
+// StartVM will start the VMM and boot the virtual machine for the given sandbox.
 func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "StartVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
@@ -591,8 +591,8 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 	return nil
 }
 
-// getSandboxConsole builds the path of the console where we can read
-// logs coming from the sandbox.
+// GetVMConsole builds the path of the console where we can read logs coming
+// from the sandbox.
 func (clh *cloudHypervisor) GetVMConsole(ctx context.Context, id string) (string, string, error) {
 	clh.Logger().WithField("function", "GetVMConsole").WithField("id", id).Info("Get Sandbox Console")
 	master, slave, err := console.NewPty()
@@ -906,7 +906,7 @@ func (clh *cloudHypervisor) ResumeVM(ctx context.Context) error {
 	return nil
 }
 
-// stopSandbox will stop the Sandbox's VM.
+// StopVM will stop the Sandbox's VM.
 func (clh *cloudHypervisor) StopVM(ctx context.Context, waitOnly bool) (err error) {
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "StopVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
