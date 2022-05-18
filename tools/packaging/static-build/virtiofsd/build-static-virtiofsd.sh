@@ -52,7 +52,7 @@ init_env() {
        LIBC="gnu"
        ARCH="powerpc64le"
      ;;
-     "s390")
+     "s390x")
        LIBC="gnu"
      ;;
      "x86_64")
