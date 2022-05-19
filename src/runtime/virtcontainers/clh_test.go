@@ -10,6 +10,7 @@ package virtcontainers
 
 import (
 	"context"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -129,25 +130,30 @@ func TestCloudHypervisorAddVSock(t *testing.T) {
 // Check addNet appends to the network config list new configurations.
 // Check that the elements in the list has the correct values
 func TestCloudHypervisorAddNetCheckNetConfigListValues(t *testing.T) {
-	macTest := "00:00:00:00:00"
-	tapPath := "/path/to/tap"
-
 	assert := assert.New(t)
+
+	macTest := "00:00:00:00:00"
+
+	file, err := ioutil.TempFile("", "netFd")
+	assert.Nil(err)
+	defer os.Remove(file.Name())
+
+	vmFds := make([]*os.File, 1)
+	vmFds = append(vmFds, file)
 
 	clh := cloudHypervisor{}
 	clh.netDevicesFiles = make(map[string][]*os.File)
 
 	e := &VethEndpoint{}
 	e.NetPair.TAPIface.HardAddr = macTest
-	e.NetPair.TapInterface.TAPIface.Name = tapPath
+	e.NetPair.TapInterface.VMFds = vmFds
 
-	err := clh.addNet(e)
+	err = clh.addNet(e)
 	assert.Nil(err)
 
 	assert.Equal(len(*clh.netDevices), 1)
 	if err == nil {
 		assert.Equal(*(*clh.netDevices)[0].Mac, macTest)
-		assert.Equal(*(*clh.netDevices)[0].Tap, tapPath)
 	}
 
 	err = clh.addNet(e)
@@ -156,7 +162,6 @@ func TestCloudHypervisorAddNetCheckNetConfigListValues(t *testing.T) {
 	assert.Equal(len(*clh.netDevices), 2)
 	if err == nil {
 		assert.Equal(*(*clh.netDevices)[1].Mac, macTest)
-		assert.Equal(*(*clh.netDevices)[1].Tap, tapPath)
 	}
 }
 
@@ -165,10 +170,18 @@ func TestCloudHypervisorAddNetCheckNetConfigListValues(t *testing.T) {
 func TestCloudHypervisorAddNetCheckEnpointTypes(t *testing.T) {
 	assert := assert.New(t)
 
-	tapPath := "/path/to/tap"
+	macTest := "00:00:00:00:00"
+
+	file, err := ioutil.TempFile("", "netFd")
+	assert.Nil(err)
+	defer os.Remove(file.Name())
+
+	vmFds := make([]*os.File, 1)
+	vmFds = append(vmFds, file)
 
 	validVeth := &VethEndpoint{}
-	validVeth.NetPair.TapInterface.TAPIface.Name = tapPath
+	validVeth.NetPair.TAPIface.HardAddr = macTest
+	validVeth.NetPair.TapInterface.VMFds = vmFds
 
 	type args struct {
 		e Endpoint
@@ -189,9 +202,9 @@ func TestCloudHypervisorAddNetCheckEnpointTypes(t *testing.T) {
 			clh.netDevicesFiles = make(map[string][]*os.File)
 			if err := clh.addNet(tt.args.e); (err != nil) != tt.wantErr {
 				t.Errorf("cloudHypervisor.addNet() error = %v, wantErr %v", err, tt.wantErr)
-
 			} else if err == nil {
-				assert.Equal(*(*clh.netDevices)[0].Tap, tapPath)
+				files := clh.netDevicesFiles[macTest]
+				assert.Equal(files, vmFds)
 			}
 		})
 	}
@@ -201,10 +214,15 @@ func TestCloudHypervisorAddNetCheckEnpointTypes(t *testing.T) {
 func TestCloudHypervisorNetRateLimiter(t *testing.T) {
 	assert := assert.New(t)
 
-	tapPath := "/path/to/tap"
+	file, err := ioutil.TempFile("", "netFd")
+	assert.Nil(err)
+	defer os.Remove(file.Name())
+
+	vmFds := make([]*os.File, 1)
+	vmFds = append(vmFds, file)
 
 	validVeth := &VethEndpoint{}
-	validVeth.NetPair.TapInterface.TAPIface.Name = tapPath
+	validVeth.NetPair.TapInterface.VMFds = vmFds
 
 	type args struct {
 		bwMaxRate       int64
