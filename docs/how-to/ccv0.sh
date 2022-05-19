@@ -328,14 +328,12 @@ install_guest_kernel_image() {
 }
 
 build_qemu() {
+    ${tests_repo_dir}/.ci/install_virtiofsd.sh
     ${tests_repo_dir}/.ci/install_qemu.sh
 }
 
 build_cloud_hypervisor() {
-    # While we still rely on the C version of virtiofsd, let's
-    # install QEMU, which will then bring virtiofsd together.
-    build_qemu
-
+    ${tests_repo_dir}/.ci/install_virtiofsd.sh
     ${tests_repo_dir}/.ci/install_cloud_hypervisor.sh
 }
 
