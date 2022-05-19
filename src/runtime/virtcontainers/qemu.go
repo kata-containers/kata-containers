@@ -552,13 +552,6 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		return err
 	}
 
-	// Breaks hypervisor abstration Has Kata Specific logic
-	kernel := govmmQemu.Kernel{
-		Path:       kernelPath,
-		InitrdPath: initrdPath,
-		Params:     q.kernelParameters(),
-	}
-
 	incoming := q.setupTemplate(&knobs, &memory)
 
 	// With the current implementations, VM templating will not work with file
@@ -628,6 +621,14 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 	qemuPath, err := q.qemuPath()
 	if err != nil {
 		return err
+	}
+
+	// Breaks hypervisor abstraction has Kata Specific logic
+	kernel := govmmQemu.Kernel{
+		Path:       kernelPath,
+		InitrdPath: initrdPath,
+		// some devices configuration may also change kernel params, make sure this is called afterwards
+		Params: q.kernelParameters(),
 	}
 
 	qemuConfig := govmmQemu.Config{

@@ -169,6 +169,7 @@ type qemuArchBase struct {
 	vhost         bool
 	disableNvdimm bool
 	dax           bool
+	legacySerial  bool
 }
 
 const (
@@ -318,24 +319,50 @@ func (q *qemuArchBase) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8
 }
 
 func (q *qemuArchBase) appendConsole(_ context.Context, devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
-	serial := govmmQemu.SerialDevice{
-		Driver:        govmmQemu.VirtioSerial,
-		ID:            "serial0",
-		DisableModern: q.nestedRun,
-		MaxPorts:      uint(2),
+	var serial, console govmmQemu.Device
+	var consoleKernelParams []Param
+
+	if q.legacySerial {
+		serial = govmmQemu.LegacySerialDevice{
+			Chardev: "charconsole0",
+		}
+
+		console = govmmQemu.CharDevice{
+			Driver:   govmmQemu.LegacySerial,
+			Backend:  govmmQemu.Socket,
+			DeviceID: "console0",
+			ID:       "charconsole0",
+			Path:     path,
+		}
+
+		consoleKernelParams = []Param{
+			{"console", "ttyS0"},
+		}
+	} else {
+		serial = govmmQemu.SerialDevice{
+			Driver:        govmmQemu.VirtioSerial,
+			ID:            "serial0",
+			DisableModern: q.nestedRun,
+			MaxPorts:      uint(2),
+		}
+
+		console = govmmQemu.CharDevice{
+			Driver:   govmmQemu.Console,
+			Backend:  govmmQemu.Socket,
+			DeviceID: "console0",
+			ID:       "charconsole0",
+			Path:     path,
+		}
+
+		consoleKernelParams = []Param{
+			{"console", "hvc0"},
+			{"console", "hvc1"},
+		}
 	}
 
 	devices = append(devices, serial)
-
-	console := govmmQemu.CharDevice{
-		Driver:   govmmQemu.Console,
-		Backend:  govmmQemu.Socket,
-		DeviceID: "console0",
-		ID:       "charconsole0",
-		Path:     path,
-	}
-
 	devices = append(devices, console)
+	q.kernelParams = append(q.kernelParams, consoleKernelParams...)
 
 	return devices, nil
 }

@@ -91,6 +91,7 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.virtio_fs_daemon` | string | virtio-fs `vhost-user` daemon path |
 | `io.katacontainers.config.hypervisor.virtio_fs_extra_args` | string | extra options passed to `virtiofs` daemon |
 | `io.katacontainers.config.hypervisor.enable_guest_swap` | `boolean` | enable swap in the guest |
+| `io.katacontainers.config.hypervisor.use_legacy_serial` | `boolean` | uses legacy serial device for guest's console (QEMU) |
 
 ## Container Options
 | Key | Value Type | Comments |
@@ -172,7 +173,7 @@ kind: Pod
 metadata:
   name: pod2
   annotations:
-    io.katacontainers.config.runtime.disable_guest_seccomp: false
+    io.katacontainers.config.runtime.disable_guest_seccomp: "false"
 spec:
   runtimeClassName: kata
   containers:
