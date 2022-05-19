@@ -19,11 +19,11 @@ impl NetnsGuard {
         let old_netns = if !new_netns_path.is_empty() {
             let current_netns_path = format!("/proc/{}/task/{}/ns/{}", getpid(), gettid(), "net");
             let old_netns = File::open(&current_netns_path)
-                .context(format!("open current netns path {}", &current_netns_path))?;
+                .with_context(|| format!("open current netns path {}", &current_netns_path))?;
             let new_netns = File::open(&new_netns_path)
-                .context(format!("open new netns path {}", &new_netns_path))?;
+                .with_context(|| format!("open new netns path {}", &new_netns_path))?;
             setns(new_netns.as_raw_fd(), CloneFlags::CLONE_NEWNET)
-                .context("set netns to new netns")?;
+                .with_context(|| "set netns to new netns")?;
             info!(
                 sl!(),
                 "set netns from old {:?} to new {:?} tid {}",
