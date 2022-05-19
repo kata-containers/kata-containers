@@ -46,7 +46,8 @@ parts:
       # put everything in stage
       cd ${SNAPCRAFT_STAGE}
 
-      yq_path="./yq"
+      mkdir -p "${SNAPCRAFT_STAGE}/bin/"
+      yq_path="${SNAPCRAFT_STAGE}/bin/yq"
       yq_pkg="github.com/mikefarah/yq"
       goos="linux"
       case "$(uname -m)" in
@@ -82,7 +83,7 @@ parts:
     override-build: |
       [ "$(uname -m)" = "ppc64le" ] || [ "$(uname -m)" = "s390x" ] && sudo apt-get --no-install-recommends install -y protobuf-compiler
 
-      yq=${SNAPCRAFT_STAGE}/yq
+      yq=${SNAPCRAFT_STAGE}/bin/yq
 
       # set GOPATH
       export GOPATH=${SNAPCRAFT_STAGE}/gopath
@@ -185,7 +186,7 @@ parts:
       - bison
       - flex
     override-build: |
-      yq=${SNAPCRAFT_STAGE}/yq
+      yq=${SNAPCRAFT_STAGE}/bin/yq
       export PATH="${PATH}:${SNAPCRAFT_STAGE}"
       export GOPATH=${SNAPCRAFT_STAGE}/gopath
       kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
@@ -249,7 +250,7 @@ parts:
       - libselinux1-dev
       - ninja-build
     override-build: |
-      yq=${SNAPCRAFT_STAGE}/yq
+      yq=${SNAPCRAFT_STAGE}/bin/yq
       export GOPATH=${SNAPCRAFT_STAGE}/gopath
       export GO111MODULE="auto"
       kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
