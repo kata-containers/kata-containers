@@ -33,8 +33,6 @@ const qmpMigrationWaitTimeout = 10 * time.Second
 const defaultQemuMachineOptions = "usb=off,accel=kvm,gic-version=host"
 
 var kernelParams = []Param{
-	{"console", "hvc0"},
-	{"console", "hvc1"},
 	{"iommu.passthrough", "0"},
 }
 
@@ -64,6 +62,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			disableNvdimm:        config.DisableImageNvdimm,
 			dax:                  true,
 			protection:           noneProtection,
+			legacySerial:         config.LegacySerial,
 		},
 	}
 

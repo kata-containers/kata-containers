@@ -56,8 +56,6 @@ var kernelParams = []Param{
 	{"i8042.noaux", "1"},
 	{"noreplace-smp", ""},
 	{"reboot", "k"},
-	{"console", "hvc0"},
-	{"console", "hvc1"},
 	{"cryptomgr.notests", ""},
 	{"net.ifnames", "0"},
 	{"pci", "lastbus=0"},
@@ -124,6 +122,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			disableNvdimm:        config.DisableImageNvdimm,
 			dax:                  true,
 			protection:           noneProtection,
+			legacySerial:         config.LegacySerial,
 		},
 		vmFactory: factory,
 	}

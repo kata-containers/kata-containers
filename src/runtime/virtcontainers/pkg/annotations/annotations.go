@@ -130,6 +130,9 @@ const (
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
 	EntropySource = kataAnnotHypervisorPrefix + "entropy_source"
 
+	// UseLegacySerial sets legacy serial device for guest console if available and implemented for architecture
+	UseLegacySerial = kataAnnotHypervisorPrefix + "use_legacy_serial"
+
 	//
 	//	CPU Annotations
 	//
