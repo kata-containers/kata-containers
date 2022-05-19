@@ -135,6 +135,7 @@ func TestCloudHypervisorAddNetCheckNetConfigListValues(t *testing.T) {
 	assert := assert.New(t)
 
 	clh := cloudHypervisor{}
+	clh.netDevicesFiles = make(map[string][]*os.File)
 
 	e := &VethEndpoint{}
 	e.NetPair.TAPIface.HardAddr = macTest
@@ -185,6 +186,7 @@ func TestCloudHypervisorAddNetCheckEnpointTypes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			clh := &cloudHypervisor{}
+			clh.netDevicesFiles = make(map[string][]*os.File)
 			if err := clh.addNet(tt.args.e); (err != nil) != tt.wantErr {
 				t.Errorf("cloudHypervisor.addNet() error = %v, wantErr %v", err, tt.wantErr)
 
@@ -339,6 +341,7 @@ func TestCloudHypervisorNetRateLimiter(t *testing.T) {
 			clhConfig.NetRateLimiterOpsOneTimeBurst = tt.args.opsOneTimeBurst
 
 			clh := &cloudHypervisor{}
+			clh.netDevicesFiles = make(map[string][]*os.File)
 			clh.config = clhConfig
 			clh.APIClient = &clhClientMock{}
 
