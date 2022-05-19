@@ -11,7 +11,7 @@ use anyhow::{anyhow, Context, Result};
 fn override_driver(bdf: &str, driver: &str) -> Result<()> {
     let driver_override = format!("/sys/bus/pci/devices/{}/driver_override", bdf);
     fs::write(&driver_override, driver)
-        .context(format!("echo {} > {}", driver, &driver_override))?;
+        .with_context(|| format!("echo {} > {}", driver, &driver_override))?;
     info!(sl!(), "echo {} > {}", driver, driver_override);
     Ok(())
 }
@@ -138,7 +138,7 @@ pub fn bind_device_to_host(bdf: &str, host_driver: &str, _vendor_device_id: &str
 
     // echo bdf > /sys/bus/pci/drivers_probe
     std::fs::write(PCI_DRIVER_PROBE, bdf)
-        .context(format!("echo {} > {}", bdf, PCI_DRIVER_PROBE))?;
+        .with_context(|| format!("echo {} > {}", bdf, PCI_DRIVER_PROBE))?;
     info!(sl!(), "echo {} > {}", bdf, PCI_DRIVER_PROBE);
 
     Ok(())
