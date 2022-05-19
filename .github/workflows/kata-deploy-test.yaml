@@ -47,6 +47,7 @@ jobs:
           - rootfs-image
           - rootfs-initrd
           - shim-v2
+          - virtiofsd
     steps:
       - name: get-PR-ref
         id: get-PR-ref

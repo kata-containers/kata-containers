@@ -1041,15 +1041,13 @@ func (cw *consoleWatcher) start(s *Sandbox) (err error) {
 		}
 
 		if err := scanner.Err(); err != nil {
-			if err == io.EOF {
-				s.Logger().Info("console watcher quits")
-			} else {
-				s.Logger().WithError(err).WithFields(logrus.Fields{
-					"console-protocol": cw.proto,
-					"console-url":      cw.consoleURL,
-					"sandbox":          s.id,
-				}).Error("Failed to read guest console logs")
-			}
+			s.Logger().WithError(err).WithFields(logrus.Fields{
+				"console-protocol": cw.proto,
+				"console-url":      cw.consoleURL,
+				"sandbox":          s.id,
+			}).Error("Failed to read guest console logs")
+		} else { // The error is `nil` in case of io.EOF
+			s.Logger().Info("console watcher quits")
 		}
 	}()
 

@@ -31,7 +31,7 @@ See below example config:
   [plugins.cri]
     [plugins.cri.containerd]
        [plugins.cri.containerd.runtimes.runc]
-         runtime_type = "io.containerd.runc.v1"
+         runtime_type = "io.containerd.runc.v2"
          privileged_without_host_devices = false
        [plugins.cri.containerd.runtimes.kata]
          runtime_type = "io.containerd.kata.v2"
