@@ -114,8 +114,8 @@ const (
 // SysDevPrefix is static string of /sys/dev
 var SysDevPrefix = "/sys/dev"
 
-// SysIOMMUPath is static string of /sys/kernel/iommu_groups
-var SysIOMMUPath = "/sys/kernel/iommu_groups"
+// SysIOMMUGroupPath is static string of /sys/kernel/iommu_groups
+var SysIOMMUGroupPath = "/sys/kernel/iommu_groups"
 
 // SysBusPciDevicesPath is static string of /sys/bus/pci/devices
 var SysBusPciDevicesPath = "/sys/bus/pci/devices"
@@ -268,14 +268,8 @@ const (
 	VFIOAPDeviceMediatedType
 )
 
-type VFIODev interface {
-	GetID() *string
-	GetType() VFIODeviceType
-	GetSysfsDev() *string
-}
-
 // VFIOPCIDev represents a VFIO PCI device used for hotplugging
-type VFIOPCIDev struct {
+type VFIODev struct {
 	// ID is used to identify this drive in the hypervisor options.
 	ID string
 
@@ -305,44 +299,12 @@ type VFIOPCIDev struct {
 
 	// IsPCIe specifies device is PCIe or PCI
 	IsPCIe bool
-}
-
-func (d VFIOPCIDev) GetID() *string {
-	return &d.ID
-}
-
-func (d VFIOPCIDev) GetType() VFIODeviceType {
-	return d.Type
-}
-
-func (d VFIOPCIDev) GetSysfsDev() *string {
-	return &d.SysfsDev
-}
-
-type VFIOAPDev struct {
-	// ID is used to identify this drive in the hypervisor options.
-	ID string
-
-	// sysfsdev of VFIO mediated device
-	SysfsDev string
 
 	// APDevices are the Adjunct Processor devices assigned to the mdev
 	APDevices []string
 
-	// Type of VFIO device
-	Type VFIODeviceType
-}
-
-func (d VFIOAPDev) GetID() *string {
-	return &d.ID
-}
-
-func (d VFIOAPDev) GetType() VFIODeviceType {
-	return d.Type
-}
-
-func (d VFIOAPDev) GetSysfsDev() *string {
-	return &d.SysfsDev
+	// Rank identifies a device in a IOMMU group
+	Rank int
 }
 
 // RNGDev represents a random number generator device

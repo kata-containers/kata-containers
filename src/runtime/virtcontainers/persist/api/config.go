@@ -135,6 +135,10 @@ type HypervisorConfig struct {
 	// The PCIe Root Port device is used to hot-plug the PCIe device
 	PCIeRootPort uint32
 
+	// PCIeSwitchPort is used to indicate the number of PCIe Switch Downstream Port
+	// devices. The PCIe Switch Downstream Port is used to hot-plug the PCIe devices.
+	PCIeSwitchPort uint32
+
 	// NumVCPUs specifies default number of vCPUs for the VM.
 	NumVCPUs uint32
 

@@ -76,7 +76,6 @@ type factory struct {
 	VMCacheNumber   uint   `toml:"vm_cache_number"`
 	Template        bool   `toml:"enable_template"`
 }
-
 type hypervisor struct {
 	Path                           string      `toml:"path"`
 	JailerPath                     string      `toml:"jailer_path"`
@@ -131,6 +130,7 @@ type hypervisor struct {
 	MemSlots                       uint32      `toml:"memory_slots"`
 	DefaultBridges                 uint32      `toml:"default_bridges"`
 	Msize9p                        uint32      `toml:"msize_9p"`
+	PCIeSwitchPort                 uint32      `toml:"pcie_switch_port"`
 	PCIeRootPort                   uint32      `toml:"pcie_root_port"`
 	NumVCPUs                       int32       `toml:"default_vcpus"`
 	BlockDeviceCacheSet            bool        `toml:"block_device_cache_set"`
@@ -149,6 +149,7 @@ type hypervisor struct {
 	EnableIOThreads                bool        `toml:"enable_iothreads"`
 	DisableImageNvdimm             bool        `toml:"disable_image_nvdimm"`
 	HotplugVFIOOnRootBus           bool        `toml:"hotplug_vfio_on_root_bus"`
+	HotPlugVFIO                    hv.PCIePort `toml:"hotplug_vfio"`
 	ColdPlugVFIO                   hv.PCIePort `toml:"cold_plug_vfio"`
 	DisableVhostNet                bool        `toml:"disable_vhost_net"`
 	GuestMemoryDumpPaging          bool        `toml:"guest_memory_dump_paging"`
@@ -292,6 +293,12 @@ func (h hypervisor) coldPlugVFIO() hv.PCIePort {
 		return defaultColdPlugVFIO
 	}
 	return h.ColdPlugVFIO
+}
+func (h hypervisor) hotPlugVFIO() hv.PCIePort {
+	if h.HotPlugVFIO == "" {
+		return defaultHotPlugVFIO
+	}
+	return h.HotPlugVFIO
 }
 
 func (h hypervisor) firmwareVolume() (string, error) {
@@ -864,7 +871,9 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableImageNvdimm:      h.DisableImageNvdimm,
 		HotplugVFIOOnRootBus:    h.HotplugVFIOOnRootBus,
 		ColdPlugVFIO:            h.coldPlugVFIO(),
+		HotPlugVFIO:             h.HotPlugVFIO,
 		PCIeRootPort:            h.PCIeRootPort,
+		PCIeSwitchPort:          h.PCIeSwitchPort,
 		DisableVhostNet:         h.DisableVhostNet,
 		EnableVhostUserStore:    h.EnableVhostUserStore,
 		VhostUserStorePath:      h.vhostUserStorePath(),
@@ -877,7 +886,6 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		GuestMemoryDumpPath:     h.GuestMemoryDumpPath,
 		GuestMemoryDumpPaging:   h.GuestMemoryDumpPaging,
 		ConfidentialGuest:       h.ConfidentialGuest,
-		SevSnpGuest:             h.SevSnpGuest,
 		GuestSwap:               h.GuestSwap,
 		Rootless:                h.Rootless,
 		LegacySerial:            h.LegacySerial,
@@ -1059,7 +1067,9 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		Msize9p:                        h.msize9p(),
 		HotplugVFIOOnRootBus:           h.HotplugVFIOOnRootBus,
 		ColdPlugVFIO:                   h.coldPlugVFIO(),
+		HotPlugVFIO:                    h.hotPlugVFIO(),
 		PCIeRootPort:                   h.PCIeRootPort,
+		PCIeSwitchPort:                 h.PCIeSwitchPort,
 		DisableVhostNet:                true,
 		GuestHookPath:                  h.guestHookPath(),
 		VirtioFSExtraArgs:              h.VirtioFSExtraArgs,
@@ -1290,6 +1300,8 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		Msize9p:                  defaultMsize9p,
 		HotplugVFIOOnRootBus:     defaultHotplugVFIOOnRootBus,
 		ColdPlugVFIO:             defaultColdPlugVFIO,
+		HotPlugVFIO:              defaultHotPlugVFIO,
+		PCIeSwitchPort:           defaultPCIeSwitchPort,
 		PCIeRootPort:             defaultPCIeRootPort,
 		GuestHookPath:            defaultGuestHookPath,
 		VhostUserStorePath:       defaultVhostUserStorePath,

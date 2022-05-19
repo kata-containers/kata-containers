@@ -47,9 +47,9 @@ func deviceLogger() *logrus.Entry {
 	return api.DeviceLogger()
 }
 
-// Identify PCIe device by reading the size of the PCI config space
+// IsPCIeDevice Identify PCIe device by reading the size of the PCI config space
 // Plain PCI device have 256 bytes of config space where PCIe devices have 4K
-func isPCIeDevice(bdf string) bool {
+func IsPCIeDevice(bdf string) bool {
 	if len(strings.Split(bdf, ":")) == 2 {
 		bdf = PCIDomain + ":" + bdf
 	}
@@ -164,7 +164,7 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo, ignoreBusAssignme
 	vfioDevs := []*config.VFIODev{}
 
 	vfioGroup := filepath.Base(device.HostPath)
-	iommuDevicesPath := filepath.Join(config.SysIOMMUPath, vfioGroup, "devices")
+	iommuDevicesPath := filepath.Join(config.SysIOMMUGroupPath, vfioGroup, "devices")
 
 	deviceFiles, err := os.ReadDir(iommuDevicesPath)
 	if err != nil {
@@ -174,7 +174,7 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo, ignoreBusAssignme
 	// Pass all devices in iommu group
 	for i, deviceFile := range deviceFiles {
 		//Get bdf of device eg 0000:00:1c.0
-		deviceBDF, deviceSysfsDev, vfioDeviceType, err := getVFIODetails(deviceFile.Name(), iommuDevicesPath)
+		deviceBDF, deviceSysfsDev, vfioDeviceType, err := GetVFIODetails(deviceFile.Name(), iommuDevicesPath)
 		if err != nil {
 			return nil, err
 		}
@@ -196,15 +196,16 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo, ignoreBusAssignme
 
 		switch vfioDeviceType {
 		case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
-			isPCIe := isPCIeDevice(deviceBDF)
+			isPCIe := IsPCIeDevice(deviceBDF)
 			// Do not directly assign to `vfio` -- need to access field still
-			vfioPCI := config.VFIOPCIDev{
+			vfioPCI := config.VFIODev{
 				ID:       id,
 				Type:     vfioDeviceType,
 				BDF:      deviceBDF,
 				SysfsDev: deviceSysfsDev,
 				IsPCIe:   isPCIe,
 				Class:    pciClass,
+				Rank:     -1,
 			}
 			if isPCIe && !ignoreBusAssignment {
 				vfioPCI.Bus = fmt.Sprintf("%s%d", pcieRootPortPrefix, len(AllPCIeDevs))
@@ -216,7 +217,7 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo, ignoreBusAssignme
 			if err != nil {
 				return nil, err
 			}
-			vfio = config.VFIOAPDev{
+			vfio = config.VFIODev{
 				ID:        id,
 				SysfsDev:  deviceSysfsDev,
 				Type:      config.VFIOAPDeviceMediatedType,

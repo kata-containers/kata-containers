@@ -101,15 +101,10 @@ type HypervisorPidKey struct{}
 
 // SandboxStatus describes a sandbox status.
 type SandboxStatus struct {
-	ContainersStatus []ContainerStatus
-
-	// Annotations allow clients to store arbitrary values,
-	// for example to add additional status values required
-	// to support particular specifications.
-	Annotations map[string]string
-
+	Annotations      map[string]string
 	ID               string
 	Hypervisor       HypervisorType
+	ContainersStatus []ContainerStatus
 	State            types.SandboxState
 	HypervisorConfig HypervisorConfig
 }
@@ -176,10 +171,8 @@ type SandboxConfig struct {
 
 	// SharePidNs sets all containers to share the same sandbox level pid namespace.
 	SharePidNs bool
-
 	// SystemdCgroup enables systemd cgroup support
 	SystemdCgroup bool
-
 	// SandboxCgroupOnly enables cgroup only at podlevel in the host
 	SandboxCgroupOnly bool
 
@@ -620,6 +613,12 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	if err := validateHypervisorConfig(&sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
 	}
+	// Aggregate all the container devices and update the HV config
+	var devices []config.DeviceInfo
+	for _, ct := range sandboxConfig.Containers {
+		devices = append(devices, ct.DeviceInfos...)
+	}
+	sandboxConfig.HypervisorConfig.RawDevices = devices
 
 	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
 	// until we have TDISP/IDE PCIe support.
@@ -1709,7 +1708,6 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 	defer span.End()
 
 	for i := range s.config.Containers {
-
 		c, err := newContainer(ctx, s, &s.config.Containers[i])
 		if err != nil {
 			return err
@@ -1728,7 +1726,6 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 	if err := s.updateResources(ctx); err != nil {
 		return err
 	}
-
 	if err := s.resourceControllerUpdate(ctx); err != nil {
 		return err
 	}
@@ -1740,7 +1737,6 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 	if err := s.storeSandbox(ctx); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -1904,15 +1900,11 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 		// adding a group of VFIO devices
 		for _, dev := range vfioDevices {
 			if _, err := s.hypervisor.HotplugAddDevice(ctx, dev, VfioDev); err != nil {
-				bdf := ""
-				if pciDevice, ok := (*dev).(config.VFIOPCIDev); ok {
-					bdf = pciDevice.BDF
-				}
 				s.Logger().
 					WithFields(logrus.Fields{
 						"sandbox":         s.id,
-						"vfio-device-ID":  (*dev).GetID(),
-						"vfio-device-BDF": bdf,
+						"vfio-device-ID":  dev.ID,
+						"vfio-device-BDF": dev.BDF,
 					}).WithError(err).Error("failed to hotplug VFIO device")
 				return err
 			}
@@ -1961,15 +1953,11 @@ func (s *Sandbox) HotplugRemoveDevice(ctx context.Context, device api.Device, de
 		// remove a group of VFIO devices
 		for _, dev := range vfioDevices {
 			if _, err := s.hypervisor.HotplugRemoveDevice(ctx, dev, VfioDev); err != nil {
-				bdf := ""
-				if pciDevice, ok := (*dev).(config.VFIOPCIDev); ok {
-					bdf = pciDevice.BDF
-				}
 				s.Logger().WithError(err).
 					WithFields(logrus.Fields{
 						"sandbox":         s.id,
-						"vfio-device-ID":  (*dev).GetID(),
-						"vfio-device-BDF": bdf,
+						"vfio-device-ID":  dev.ID,
+						"vfio-device-BDF": dev.BDF,
 					}).Error("failed to hot unplug VFIO device")
 				return err
 			}

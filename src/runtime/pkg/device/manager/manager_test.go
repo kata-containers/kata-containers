@@ -116,14 +116,14 @@ func TestAttachVFIODevice(t *testing.T) {
 	_, err = os.Create(deviceConfigFile)
 	assert.Nil(t, err)
 
-	savedIOMMUPath := config.SysIOMMUPath
-	config.SysIOMMUPath = tmpDir
+	savedIOMMUPath := config.SysIOMMUGroupPath
+	config.SysIOMMUGroupPath = tmpDir
 
 	savedSysBusPciDevicesPath := config.SysBusPciDevicesPath
 	config.SysBusPciDevicesPath = devicesDir
 
 	defer func() {
-		config.SysIOMMUPath = savedIOMMUPath
+		config.SysIOMMUGroupPath = savedIOMMUPath
 		config.SysBusPciDevicesPath = savedSysBusPciDevicesPath
 	}()
 

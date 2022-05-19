@@ -17,13 +17,13 @@ import (
 func TestVirtiofsdStart(t *testing.T) {
 	// nolint: govet
 	type fields struct {
-		path       string
+		ctx        context.Context
 		socketPath string
 		cache      string
-		extraArgs  []string
 		sourcePath string
+		path       string
+		extraArgs  []string
 		PID        int
-		ctx        context.Context
 	}
 
 	sourcePath := t.TempDir()
@@ -41,13 +41,13 @@ func TestVirtiofsdStart(t *testing.T) {
 
 	// nolint: govet
 	tests := []struct {
-		name    string
 		fields  fields
+		name    string
 		wantErr bool
 	}{
-		{"empty config", fields{}, true},
-		{"Directory socket does not exist", NoDirectorySocket, true},
-		{"valid config", validConfig, false},
+		{name: "empty config", fields: fields{}, wantErr: true},
+		{name: "Directory socket does not exist", fields: NoDirectorySocket, wantErr: true},
+		{name: "valid config", fields: validConfig, wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

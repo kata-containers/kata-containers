@@ -656,6 +656,7 @@ func (q *QMP) executeCommand(ctx context.Context, name string, args map[string]i
 	filter *qmpEventFilter) error {
 
 	_, err := q.executeCommandWithResponse(ctx, name, args, nil, filter)
+
 	return err
 }
 
@@ -1191,6 +1192,7 @@ func (q *QMP) ExecutePCIVFIODeviceAdd(ctx context.Context, devID, bdf, addr, bus
 	if bus != "" {
 		args["bus"] = bus
 	}
+
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 

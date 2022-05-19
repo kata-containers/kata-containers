@@ -58,7 +58,6 @@ func (p PCIePort) String() string {
 
 type HypervisorState struct {
 	BlockIndexMap map[int]struct{}
-
 	// Type of hypervisor, E.g. qemu/firecracker/acrn.
 	Type string
 	UUID string
@@ -68,6 +67,7 @@ type HypervisorState struct {
 	// Belows are qemu specific
 	// Refs: virtcontainers/qemu.go:QemuState
 	Bridges []Bridge
+
 	// HotpluggedCPUs is the list of CPUs that were hot-added
 	HotpluggedVCPUs []CPUDevice
 
@@ -75,6 +75,8 @@ type HypervisorState struct {
 	VirtiofsDaemonPid    int
 	Pid                  int
 	PCIeRootPort         int
+	PCIeSwitchPort       int
 	ColdPlugVFIO         PCIePort
+	HotPlugVFIO          PCIePort
 	HotplugVFIOOnRootBus bool
 }

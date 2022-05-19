@@ -566,6 +566,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		GuestHookPath:         defaultGuestHookPath,
 		VhostUserStorePath:    defaultVhostUserStorePath,
 		VirtioFSCache:         defaultVirtioFSCacheMode,
+		HotPlugVFIO:           defaultHotPlugVFIO,
 		BlockDeviceAIO:        defaultBlockDeviceAIO,
 		DisableGuestSeLinux:   defaultDisableGuestSeLinux,
 		ColdPlugVFIO:          defaultColdPlugVFIO,
