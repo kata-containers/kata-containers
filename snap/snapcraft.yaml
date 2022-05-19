@@ -1,4 +1,5 @@
 name: kata-containers
+website: https://github.com/kata-containers/kata-containers
 summary: Build lightweight VMs that seamlessly plug into the containers ecosystem
 description: |
   Kata Containers is an open source project and community working to build a
@@ -19,7 +20,6 @@ parts:
       - git-extras
     override-pull: |
       version="9999"
-      kata_url="https://github.com/kata-containers/kata-containers"
 
       if echo "${GITHUB_REF:-}" | grep -q -E "^refs/tags"; then
         version=$(echo ${GITHUB_REF:-} | cut -d/ -f3)
