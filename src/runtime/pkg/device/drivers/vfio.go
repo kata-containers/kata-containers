@@ -33,6 +33,9 @@ const (
 )
 
 var (
+	// AllPCIeDevs deduces the correct bus number. The BDF keeps track that
+	// we're not accounting for the very same device, if a user provides the
+	// devices multiple times.
 	AllPCIeDevs = map[string]bool{}
 )
 
@@ -169,23 +172,18 @@ func (device *VFIODevice) Load(ds config.DeviceState) {
 	for _, dev := range ds.VFIODevs {
 		var vfio config.VFIODev
 
-		vfioDeviceType := (*device.VfioDevs[0]).GetType()
-		switch vfioDeviceType {
+		switch dev.Type {
 		case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
-			bdf := ""
-			if pciDev, ok := (*dev).(config.VFIOPCIDev); ok {
-				bdf = pciDev.BDF
-			}
-			vfio = config.VFIOPCIDev{
-				ID:       *(*dev).GetID(),
-				Type:     config.VFIODeviceType((*dev).GetType()),
-				BDF:      bdf,
-				SysfsDev: *(*dev).GetSysfsDev(),
+			vfio = config.VFIODev{
+				ID:       dev.ID,
+				Type:     config.VFIODeviceType(dev.Type),
+				BDF:      dev.BDF,
+				SysfsDev: dev.SysfsDev,
 			}
 		case config.VFIOAPDeviceMediatedType:
-			vfio = config.VFIOAPDev{
-				ID:       *(*dev).GetID(),
-				SysfsDev: *(*dev).GetSysfsDev(),
+			vfio = config.VFIODev{
+				ID:       dev.ID,
+				SysfsDev: dev.SysfsDev,
 			}
 		default:
 			deviceLogger().WithError(
@@ -200,7 +198,7 @@ func (device *VFIODevice) Load(ds config.DeviceState) {
 
 // It should implement GetAttachCount() and DeviceID() as api.Device implementation
 // here it shares function from *GenericDevice so we don't need duplicate codes
-func getVFIODetails(deviceFileName, iommuDevicesPath string) (deviceBDF, deviceSysfsDev string, vfioDeviceType config.VFIODeviceType, err error) {
+func GetVFIODetails(deviceFileName, iommuDevicesPath string) (deviceBDF, deviceSysfsDev string, vfioDeviceType config.VFIODeviceType, err error) {
 	sysfsDevStr := filepath.Join(iommuDevicesPath, deviceFileName)
 	vfioDeviceType, err = GetVFIODeviceType(sysfsDevStr)
 	if err != nil {

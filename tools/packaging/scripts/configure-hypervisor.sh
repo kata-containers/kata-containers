@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env bash 
 #
 # Copyright (c) 2018 Intel Corporation
 #
@@ -13,6 +13,8 @@
 # XXX: Every option group *MUST* be documented explaining why it has
 # been specified.
 #---------------------------------------------------------------------
+
+set -x
 
 script_name=${0##*/}
 

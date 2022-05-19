@@ -109,3 +109,5 @@ const defaultVMCacheEndpoint string = "/var/run/kata-containers/cache.sock"
 var defaultRuntimeConfiguration = "@CONFIG_PATH@"
 
 const defaultColdPlugVFIO = hv.NoPort
+const defaultHotPlugVFIO = hv.BridgePort
+const defaultPCIeSwitchPort = 0

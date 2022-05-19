@@ -246,6 +246,7 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		DisableImageNvdimm:      sconfig.HypervisorConfig.DisableImageNvdimm,
 		HotplugVFIOOnRootBus:    sconfig.HypervisorConfig.HotplugVFIOOnRootBus,
 		PCIeRootPort:            sconfig.HypervisorConfig.PCIeRootPort,
+		PCIeSwitchPort:          sconfig.HypervisorConfig.PCIeSwitchPort,
 		BootToBeTemplate:        sconfig.HypervisorConfig.BootToBeTemplate,
 		BootFromTemplate:        sconfig.HypervisorConfig.BootFromTemplate,
 		DisableVhostNet:         sconfig.HypervisorConfig.DisableVhostNet,
