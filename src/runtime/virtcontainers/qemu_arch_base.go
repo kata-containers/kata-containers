@@ -54,7 +54,7 @@ type qemuArch interface {
 	capabilities() types.Capabilities
 
 	// bridges sets the number bridges for the machine type
-	bridges(number uint32)
+	//bridges(number uint32)
 
 	// cpuTopology returns the CPU topology for the given amount of vcpus
 	cpuTopology(vcpus, maxvcpus uint32) govmmQemu.SMP
@@ -114,13 +114,13 @@ type qemuArch interface {
 	removeDeviceFromBridge(ID string) error
 
 	// getBridges grants access to Bridges
-	getBridges() []types.Bridge
+	//getBridges() []types.Bridge
 
 	// setBridges grants access to Bridges
-	setBridges(bridges []types.Bridge)
+	//setBridges(bridges []types.Bridge)
 
 	// addBridge adds a new Bridge to the list of Bridges
-	addBridge(types.Bridge)
+	//addBridge(types.Bridge)
 
 	// getPFlash() get pflash from configuration
 	getPFlash() ([]string, error)
@@ -138,10 +138,13 @@ type qemuArch interface {
 	setIgnoreSharedMemoryMigrationCaps(context.Context, *govmmQemu.QMP) error
 
 	// appendPCIeRootPortDevice appends a pcie-root-port device to pcie.0 bus
-	appendPCIeRootPortDevice(devices []govmmQemu.Device, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device
+	appendPCIeRootPortDevice(devices []govmmQemu.Device, numOfPorts uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device
 
 	// appendPCIeSwitch appends a ioh3420 device to a pcie-root-port
-	appendPCIeSwitchPortDevice(devices []govmmQemu.Device, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device
+	appendPCIeSwitchPortDevice(devices []govmmQemu.Device, numberOfPorts map[uint32]uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device
+
+	// appendPCIBridge appaneds a PCI bridge to a the pcie.0 bus
+	appendPCIBridgePortDevice(devices []govmmQemu.Device, numOfPorts uint32) []govmmQemu.Device
 
 	// append vIOMMU device
 	appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error)
@@ -194,7 +197,7 @@ const (
 // is added on the qemu command line. In case of x86_64, the first two PCI
 // addresses (0 and 1) are used by the platform while in case of ARM, address
 // 0 is reserved.
-const bridgePCIStartAddr = 2
+//const bridgePCIStartAddr = 2
 
 const (
 	// QemuQ35 is the QEMU Q35 machine type for amd64
@@ -470,7 +473,8 @@ func (q *qemuArchBase) appendSCSIController(_ context.Context, devices []govmmQe
 
 // appendBridges appends to devices the given bridges
 func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
-	return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
+	return []govmmQemu.Device{}
+	//return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
 }
 
 func generic9PVolume(volume types.Volume, nestedRun bool) govmmQemu.FSDevice {
@@ -806,12 +810,21 @@ func (q *qemuArchBase) appendPCIeRootPortDevice(devices []govmmQemu.Device, numb
 }
 
 // appendPCIeSwitchPortDevice appends a PCIe Switch with <number> ports
-func (q *qemuArchBase) appendPCIeSwitchPortDevice(devices []govmmQemu.Device, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
-	return genericAppendPCIeSwitchPort(devices, number, q.qemuMachine.Type, memSize32bit, memSize64bit)
+func (q *qemuArchBase) appendPCIeSwitchPortDevice(devices []govmmQemu.Device, numberOfPorts map[uint32]uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
+	return genericAppendPCIeSwitchPort(devices, numberOfPorts, q.qemuMachine.Type, memSize32bit, memSize64bit)
+}
+
+// appendPCIBridgePortDevice appends a PCI Bridge with <number> ports
+func (q *qemuArchBase) appendPCIBridgePortDevice(devices []govmmQemu.Device, numberOfPorts uint32) []govmmQemu.Device {
+	return genericAppendPCIBridgePort(devices, numberOfPorts, q.qemuMachine.Type)
+}
+
+func isPowerOfTwo(x uint64) bool {
+	return (x != 0) && ((x & (x - 1)) == 0)
 }
 
 // getBARsMaxAddressableMemory we need to know the BAR sizes to configure the
-// PCIe Root Port or PCIe Downstream Port attaching a device with huge BARs.
+// PCIe Root Port or PCIe Downstream Port attaching a device 	 huge BARs.
 func (q *qemuArchBase) getBARsMaxAddressableMemory() (uint64, uint64) {
 
 	pci := nvpci.New()

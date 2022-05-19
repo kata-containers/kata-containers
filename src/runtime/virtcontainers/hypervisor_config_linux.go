@@ -40,9 +40,9 @@ func validateHypervisorConfig(conf *HypervisorConfig) error {
 		conf.MemorySize = defaultMemSzMiB
 	}
 
-	if conf.DefaultBridges == 0 {
-		conf.DefaultBridges = defaultBridges
-	}
+	//	if conf.DefaultBridges == 0 {
+	//		conf.DefaultBridges = defaultBridges
+	//	}
 
 	if conf.BlockDeviceDriver == "" {
 		conf.BlockDeviceDriver = defaultBlockDriver

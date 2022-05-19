@@ -11,10 +11,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/container-orchestrated-devices/container-device-interface/pkg/cdi"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -46,6 +48,55 @@ func NewVFIODevice(devInfo *config.DeviceInfo) *VFIODevice {
 			DeviceInfo: devInfo,
 		},
 	}
+}
+
+type hotplugInfo struct {
+	cliqueID    uint32
+	attachToPCI bool
+}
+
+func getAttachAffinity() map[string]hotplugInfo {
+	var (
+		registry = cdi.GetRegistry()
+		devices  = registry.DeviceDB().ListDevices()
+		info     = make(map[string]hotplugInfo)
+	)
+	if len(devices) == 0 {
+		return nil
+	}
+
+	for _, device := range devices {
+		dev := registry.DeviceDB().GetDevice(device)
+
+		var (
+			bdf string
+			id  string
+			pci string
+		)
+
+		if _bdf, ok := dev.Annotations["bdf"]; ok {
+			bdf = _bdf
+		}
+		if _id, ok := dev.Annotations["clique-id"]; ok {
+			id = _id
+		}
+		if _pci, ok := dev.Annotations["attach-pci"]; ok {
+			pci = _pci
+		}
+
+		num, _ := strconv.ParseUint(id, 10, 32)
+
+		hpInfo := hotplugInfo{}
+
+		hpInfo.cliqueID = uint32(num)
+		if pci == "true" {
+			hpInfo.attachToPCI = true
+		} else {
+			hpInfo.attachToPCI = false
+		}
+		info[bdf] = hpInfo
+	}
+	return info
 }
 
 // Attach is standard interface of api.Device, it's used to add device to some

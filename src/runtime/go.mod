@@ -2,6 +2,8 @@ module github.com/kata-containers/kata-containers/src/runtime
 
 go 1.19
 
+replace github.com/container-orchestrated-devices/container-device-interface => /home/zvonkok/github.com/zvonkok/container-device-interface
+
 require (
 	code.cloudfoundry.org/bytefmt v0.0.0-20211005130812-5bb3c17173e5
 	github.com/BurntSushi/toml v1.2.0

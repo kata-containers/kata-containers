@@ -28,8 +28,8 @@ func newAcrnConfig() HypervisorConfig {
 		NumVCPUs:          defaultVCPUs,
 		MemorySize:        defaultMemSzMiB,
 		BlockDeviceDriver: config.VirtioBlock,
-		DefaultBridges:    defaultBridges,
-		DefaultMaxVCPUs:   MaxAcrnVCPUs(),
+		//DefaultBridges:    defaultBridges,
+		DefaultMaxVCPUs: MaxAcrnVCPUs(),
 		// Adding this here, as hypervisorconfig.valid()
 		// forcefully adds it even when 9pfs is not supported
 		Msize9p: defaultMsize9p,

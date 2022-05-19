@@ -53,7 +53,7 @@ const (
 	dragonballHypervisorTableType  = "dragonball"
 
 	// the maximum amount of PCI bridges that can be cold plugged in a VM
-	maxPCIBridges uint32 = 5
+	//	maxPCIBridges uint32 = 5
 )
 
 type tomlConfig struct {
@@ -463,18 +463,19 @@ func (h hypervisor) defaultMaxMemSz() uint64 {
 	return h.DefaultMaxMemorySize
 }
 
-func (h hypervisor) defaultBridges() uint32 {
-	if h.DefaultBridges == 0 {
-		return defaultBridgesCount
+/*
+	func (h hypervisor) defaultBridges() uint32 {
+		if h.DefaultBridges == 0 {
+			return defaultBridgesCount
+		}
+
+		if h.DefaultBridges > maxPCIBridges {
+			return maxPCIBridges
+		}
+
+		return h.DefaultBridges
 	}
-
-	if h.DefaultBridges > maxPCIBridges {
-		return maxPCIBridges
-	}
-
-	return h.DefaultBridges
-}
-
+*/
 func (h hypervisor) defaultVirtioFSCache() string {
 	if h.VirtioFSCache == "" {
 		return defaultVirtioFSCacheMode

@@ -200,10 +200,10 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 	}
 
 	ss.Config.HypervisorConfig = persistapi.HypervisorConfig{
-		NumVCPUs:                sconfig.HypervisorConfig.NumVCPUs,
-		DefaultMaxVCPUs:         sconfig.HypervisorConfig.DefaultMaxVCPUs,
-		MemorySize:              sconfig.HypervisorConfig.MemorySize,
-		DefaultBridges:          sconfig.HypervisorConfig.DefaultBridges,
+		NumVCPUs:        sconfig.HypervisorConfig.NumVCPUs,
+		DefaultMaxVCPUs: sconfig.HypervisorConfig.DefaultMaxVCPUs,
+		MemorySize:      sconfig.HypervisorConfig.MemorySize,
+		//DefaultBridges:          sconfig.HypervisorConfig.DefaultBridges,
 		Msize9p:                 sconfig.HypervisorConfig.Msize9p,
 		MemSlots:                sconfig.HypervisorConfig.MemSlots,
 		MemOffset:               sconfig.HypervisorConfig.MemOffset,
@@ -441,10 +441,10 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 
 	hconf := savedConf.HypervisorConfig
 	sconfig.HypervisorConfig = HypervisorConfig{
-		NumVCPUs:                hconf.NumVCPUs,
-		DefaultMaxVCPUs:         hconf.DefaultMaxVCPUs,
-		MemorySize:              hconf.MemorySize,
-		DefaultBridges:          hconf.DefaultBridges,
+		NumVCPUs:        hconf.NumVCPUs,
+		DefaultMaxVCPUs: hconf.DefaultMaxVCPUs,
+		MemorySize:      hconf.MemorySize,
+		//DefaultBridges:          hconf.DefaultBridges,
 		Msize9p:                 hconf.Msize9p,
 		MemSlots:                hconf.MemSlots,
 		MemOffset:               hconf.MemOffset,

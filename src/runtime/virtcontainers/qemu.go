@@ -21,6 +21,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,6 +29,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/container-orchestrated-devices/container-device-interface/pkg/cdi"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 
@@ -278,12 +281,12 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 		create = true
 	}
 
-	q.arch.setBridges(q.state.Bridges)
+	//q.arch.setBridges(q.state.Bridges)
 	q.arch.setPFlash(q.config.PFlash)
 
 	if create {
-		q.Logger().Debug("Creating bridges")
-		q.arch.bridges(q.config.DefaultBridges)
+		//q.Logger().Debug("Creating bridges")
+		//arch.bridges(q.config.DefaultBridges)
 
 		q.Logger().Debug("Creating UUID")
 		q.state.UUID = uuid.Generate().String()
@@ -417,7 +420,7 @@ func (q *qemu) buildDevices(ctx context.Context, initrdPath string) ([]govmmQemu
 
 	// Add bridges before any other devices. This way we make sure that
 	// bridge gets the first available PCI address i.e bridgePCIStartAddr
-	devices = q.arch.appendBridges(devices)
+	//devices = q.arch.appendBridges(devices)
 
 	devices, err = q.arch.appendConsole(ctx, devices, console)
 	if err != nil {
@@ -737,10 +740,61 @@ func (q *qemu) checkBpfEnabled() {
 	}
 }
 
+type hotplugInfo struct {
+	cliqueID    uint32
+	attachToPCI bool
+}
+
+func (q *qemu) getCliqueIDs() map[string]hotplugInfo {
+	var (
+		registry = cdi.GetRegistry()
+		devices  = registry.DeviceDB().ListDevices()
+		info     = make(map[string]hotplugInfo)
+	)
+	if len(devices) == 0 {
+		q.Logger().Warnf("No CDI devices found")
+		return nil
+	}
+
+	for _, device := range devices {
+		dev := registry.DeviceDB().GetDevice(device)
+
+		var (
+			bdf string
+			id  string
+			pci string
+		)
+
+		if _bdf, ok := dev.Annotations["bdf"]; ok {
+			bdf = _bdf
+		}
+		if _id, ok := dev.Annotations["clique-id"]; ok {
+			id = _id
+		}
+		if _pci, ok := dev.Annotations["attach-pci"]; ok {
+			pci = _pci
+		}
+
+		num, _ := strconv.ParseUint(id, 10, 32)
+
+		hpInfo := hotplugInfo{}
+
+		hpInfo.cliqueID = uint32(num)
+		if pci == "true" {
+			hpInfo.attachToPCI = true
+		} else {
+			hpInfo.attachToPCI = false
+		}
+		info[bdf] = hpInfo
+	}
+	return info
+}
+
 // If a user uses 8 GPUs with 4 devices in each IOMMU Group that means we need
 // to hotplug 32 devices. We do not have enough PCIe root bus slots to
 // accomplish this task. Kata will use already some slots for vfio-xxxx-pci
-// devices.
+// devices. With CDI we can provide meta information and hot-plug PCIe devices
+// thar are not needed to a PCI port.
 // Max PCI slots per root bus is 32
 // Max PCIe root ports is 16
 // Max PCIe switch ports is 16
@@ -796,6 +850,10 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 
 	numOfVhostUserBlockDevices := len(hypervisorConfig.VhostUserBlkDevices)
 	}
+	if q.state.HotPlugVFIO == hv.BridgePort {
+		qemuConfig.Devices = q.arch.appendPCIBridgePortDevice(qemuConfig.Devices, numOfPCIHotPlugPorts)
+	}
+
 	return nil
 }
 
@@ -1799,7 +1857,7 @@ func (q *qemu) hotplugVFIODeviceSwitchPort(ctx context.Context, device *config.V
 }
 
 func (q *qemu) hotplugVFIODeviceBridgePort(ctx context.Context, device *config.VFIODev) (err error) {
-	addr, bridge, err := q.arch.addDeviceToBridge(ctx, device.ID, types.PCI)
+	/*addr, bridge, err := q.arch.addDeviceToBridge(ctx, device.ID, types.PCI)
 	if err != nil {
 		return err
 	}
@@ -1808,10 +1866,12 @@ func (q *qemu) hotplugVFIODeviceBridgePort(ctx context.Context, device *config.V
 		if err != nil {
 			q.arch.removeDeviceFromBridge(device.ID)
 		}
-	}()
-	return q.executePCIVFIODeviceAdd(device, addr, bridge.ID)
+	}()*/
+	device.Bus = fmt.Sprintf("%s0", pciBridgePrefix)
+	return q.executeVFIODeviceAdd(device)
 }
 
+/* REMOVE
 func (q *qemu) executePCIVFIODeviceAdd(device *config.VFIODev, addr string, bridgeID string) error {
 	switch device.Type {
 	case config.VFIOPCIDeviceNormalType:
@@ -1824,6 +1884,7 @@ func (q *qemu) executePCIVFIODeviceAdd(device *config.VFIODev, addr string, brid
 		return fmt.Errorf("Incorrect VFIO device type found")
 	}
 }
+*/
 
 func (q *qemu) executeVFIODeviceAdd(device *config.VFIODev) error {
 	switch device.Type {
@@ -2470,10 +2531,31 @@ func (q *qemu) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSiz
 	return currentMemory, addMemDevice, nil
 }
 
+// nolint: unused, deadcode
+func genericMemoryTopology(memoryMb, hostMemoryMb uint64, slots uint8, memoryOffset uint64) govmmQemu.Memory {
+	// image NVDIMM device needs memory space 1024MB
+	// See https://github.com/clearcontainers/runtime/issues/380
+	memoryOffset += 1024
+
+	memMax := fmt.Sprintf("%dM", hostMemoryMb+memoryOffset)
+
+	mem := fmt.Sprintf("%dM", memoryMb)
+
+	memory := govmmQemu.Memory{
+		Size:   mem,
+		Slots:  slots,
+		MaxMem: memMax,
+	}
+
+	return memory
+}
+
+/*
 // genericAppendBridges appends to devices the given bridges
 // nolint: unused, deadcode
+
 func genericAppendBridges(devices []govmmQemu.Device, bridges []types.Bridge, machineType string) []govmmQemu.Device {
-	bus := defaultPCBridgeBus
+	bus := defaultPCIBridgeBus
 	switch machineType {
 	case QemuQ35, QemuVirt:
 		bus = defaultBridgeBus
@@ -2498,7 +2580,7 @@ func genericAppendBridges(devices []govmmQemu.Device, bridges []types.Bridge, ma
 				// Each bridge is required to be assigned a unique chassis id > 0
 				Chassis: idx + 1,
 				SHPC:    false,
-				Addr:    strconv.FormatInt(int64(bridges[idx].Addr), 10),
+				//				Addr:    strconv.FormatInt(int64(bridges[idx].Addr), 10),
 				// Certain guest BIOS versions think
 				// !SHPC means no hotplug, and won't
 				// reserve the IO and memory windows
@@ -2520,7 +2602,9 @@ func genericAppendBridges(devices []govmmQemu.Device, bridges []types.Bridge, ma
 
 	return devices
 }
+*/
 
+/*
 func genericBridges(number uint32, machineType string) []types.Bridge {
 	var bridges []types.Bridge
 	var bt types.Type
@@ -2546,24 +2630,64 @@ func genericBridges(number uint32, machineType string) []types.Bridge {
 
 	return bridges
 }
+*/
 
-// nolint: unused, deadcode
-func genericMemoryTopology(memoryMb, hostMemoryMb uint64, slots uint8, memoryOffset uint64) govmmQemu.Memory {
-	// image NVDIMM device needs memory space 1024MB
-	// See https://github.com/clearcontainers/runtime/issues/380
-	memoryOffset += 1024
+// The recommendation is to populate one PCI-PCI Bridge under the
+// PCI Express to PCI Bridge until is full and then plug a new PCI-PCI Bridge...
+//
+//	pcie.0 bus
+//	----------------------------------------------
+//	     |                            |
+//	-----------               -------------------
+//	| PCI Dev |               | PCIe-PCI Bridge |
+//	-----------               -------------------
+//	                            |            |
+//	               ------------------    ------------------
+//	               | PCI-PCI Bridge |    | PCI-PCI Bridge |
+//	               ------------------    ------------------
+//	                                      |           |
+//	                               -----------     -----------
+//	                               | PCI Dev |     | PCI Dev |  ... max 32
+//	                               -----------     -----------
+//
+// genericAppendPCIBridgePort appends a PCI Bridge to the topoloty
+// special handling for Q35, Virt, Pseries and CCWVirtio, we are keeping the
+// root bus clean for PCIe root ports, we can attach up to 32 devices to a single
+// PCI-PCI Bridge
+func genericAppendPCIBridgePort(devices []govmmQemu.Device, numOfPorts uint32, machineType string) []govmmQemu.Device {
 
-	memMax := fmt.Sprintf("%dM", hostMemoryMb+memoryOffset)
-
-	mem := fmt.Sprintf("%dM", memoryMb)
-
-	memory := govmmQemu.Memory{
-		Size:   mem,
-		Slots:  slots,
-		MaxMem: memMax,
+	// The hierarchy starts with a PCIePCI Bridge and on a seond level we're
+	// adding a PCI-PCI Bridge with 32 slots should be enough for most use-case
+	// If the number of ports exceeds 32 we're adding a second PCI-PCI Bridge
+	pciePCIBridge := govmmQemu.PCIePCIBridgeDevice{
+		ID:  fmt.Sprintf("%s%d", pciePCIBridgePrefix, 0),
+		Bus: defaultBridgeBus,
 	}
+	devices = append(devices, pciePCIBridge)
 
-	return memory
+	pciBridge := govmmQemu.PCIBridgeDevice{
+		Bus:     pciePCIBridge.ID,
+		ID:      fmt.Sprintf("%s%d", pciBridgePrefix, 0),
+		Chassis: 1,
+		// Certain guest BIOS versions think
+		// !SHPC means no hotplug, and won't
+		// reserve the IO and memory windows
+		// that will be needed for devices
+		// added underneath this bridge.  This
+		// will only break for certain
+		// combinations of exact qemu, BIOS
+		// and guest kernel versions, but for
+		// consistency, just hint the usual
+		// default windows for a bridge (as
+		// the BIOS would use with SHPC) so
+		// that we can do ACPI hotplug.
+		IOReserve:     "4k",
+		MemReserve:    "1m",
+		Pref64Reserve: "1m",
+	}
+	devices = append(devices, pciBridge)
+
+	return devices
 }
 
 // genericAppendPCIeRootPort appends to devices the given pcie-root-port
@@ -2623,7 +2747,7 @@ func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machin
 //          -------------           --------------
 */
 // genericAppendPCIeSwitch adds a PCIe Swtich
-func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, number uint32, machineType string, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
+func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, numberOfPorts map[uint32]uint32, machineType string, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
 
 	// Q35, Virt have the correct PCIe support,
 	// hence ignore all other machines
@@ -2643,8 +2767,10 @@ func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, number uint32, mach
 		MemReserve:    fmt.Sprintf("%dB", memSize32bit),
 		Pref64Reserve: fmt.Sprintf("%dB", memSize64bit),
 	}
+	sort.Ints(pcieSwitches)
 
-	devices = append(devices, pcieRootPort)
+	nextChassis := 0
+	nextID := 0
 
 	pcieSwitchUpstreamPort := govmmQemu.PCIeSwitchUpstreamPortDevice{
 		ID:  fmt.Sprintf("%s%d", config.PCIeSwitchUpstreamPortPrefix, 0),
@@ -2652,11 +2778,7 @@ func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, number uint32, mach
 	}
 	devices = append(devices, pcieSwitchUpstreamPort)
 
-	currentChassis, err := strconv.Atoi(pcieRootPort.Chassis)
-	if err != nil {
-		return devices
-	}
-	nextChassis := currentChassis + 1
+		ports := numberOfPorts[uint32(pcieSwitch)]
 
 	for i := uint32(0); i < number; i++ {
 
@@ -2668,10 +2790,10 @@ func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, number uint32, mach
 			// TODO: MemReserve:    fmt.Sprintf("%dB", memSize32bit),
 			// TODO: Pref64Reserve: fmt.Sprintf("%dB", memSize64bit),
 		}
-		devices = append(devices, pcieSwitchDownstreamPort)
 	}
 
 	return devices
+
 }
 
 func (q *qemu) GetThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
@@ -2813,7 +2935,7 @@ func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig,
 
 	q.qemuConfig.SMP = qp.QemuSMP
 
-	q.arch.setBridges(q.state.Bridges)
+	//q.arch.setBridges(q.state.Bridges)
 	return nil
 }
 
@@ -2850,14 +2972,16 @@ func (q *qemu) Save() (s hv.HypervisorState) {
 	s.HotpluggedMemory = q.state.HotpluggedMemory
 	s.HotplugVFIOOnRootBus = q.state.HotplugVFIOOnRootBus
 
-	for _, bridge := range q.arch.getBridges() {
-		s.Bridges = append(s.Bridges, hv.Bridge{
-			DeviceAddr: bridge.Devices,
-			Type:       string(bridge.Type),
-			ID:         bridge.ID,
-			Addr:       bridge.Addr,
-		})
-	}
+	/*
+		for _, bridge := range q.arch.getBridges() {
+			s.Bridges = append(s.Bridges, hv.Bridge{
+				DeviceAddr: bridge.Devices,
+				Type:       string(bridge.Type),
+				ID:         bridge.ID,
+				Addr:       bridge.Addr,
+			})
+		}
+	*/
 
 	for _, cpu := range q.state.HotpluggedVCPUs {
 		s.HotpluggedVCPUs = append(s.HotpluggedVCPUs, hv.CPUDevice{
@@ -2873,9 +2997,9 @@ func (q *qemu) Load(s hv.HypervisorState) {
 	q.state.HotplugVFIOOnRootBus = s.HotplugVFIOOnRootBus
 	q.state.VirtiofsDaemonPid = s.VirtiofsDaemonPid
 
-	for _, bridge := range s.Bridges {
-		q.state.Bridges = append(q.state.Bridges, types.NewBridge(types.Type(bridge.Type), bridge.ID, bridge.DeviceAddr, bridge.Addr))
-	}
+	//for _, bridge := range s.Bridges {
+	//	q.state.Bridges = append(q.state.Bridges, types.NewBridge(types.Type(bridge.Type), bridge.ID, bridge.DeviceAddr, bridge.Addr))
+	//}
 
 	for _, cpu := range s.HotpluggedVCPUs {
 		q.state.HotpluggedVCPUs = append(q.state.HotpluggedVCPUs, hv.CPUDevice{

@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/container-orchestrated-devices/container-device-interface/pkg/cdi"
 	"github.com/pkg/errors"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
@@ -385,8 +386,6 @@ type HypervisorConfig struct {
 	RunStorePath string
 	// SELinux label for the VM
 	SELinuxProcessLabel string
-
-	HotPlugVFIO hv.PCIePort
 	// Supplementary group IDs.
 	Groups []uint32
 	// JailerPathList is the list of jailer paths names allowed in annotations
@@ -487,16 +486,30 @@ type HypervisorConfig struct {
 	// This increases the initial max rate and this initial extra credit does *NOT* replenish
 	// and can be used for an *initial* burst of data.
 	DiskRateLimiterOpsOneTimeBurst int64
+	// PCIeRootPort is used to indicate the number of PCIe Root Port devices
+	// The PCIe Root Port device is used to hot-plug the PCIe device
+	PCIeRootPort uint32
+	// PCIeSwitchPort is used to indicate the number of PCIe Switch Downstream Port
+	// devices. The PCIe Switch Downstream Port is used to hot-plug the PCIe devices.
+	PCIeSwitchPort uint32
+
+	// PCIBridgePort is used to indicate the nubmer of PCI Bridge Port devices
+	// The PCI Bridge Port device is used to hot-plug PCI devices
+	PCIBridgePort uint32
+
+	// HotPlugVFIO is used to determine if a VFIO device is attached to
+	// root or switch port
+	HotPlugVFIO hv.PCIePort
 	// NumVCPUs specifies default number of vCPUs for the VM.
 	NumVCPUs uint32
 	//DefaultMaxVCPUs specifies the maximum number of vCPUs for the VM.
 	DefaultMaxVCPUs uint32
 	// DefaultMem specifies default memory size in MiB for the VM.
-	MemorySize     uint32
-	PCIeSwitchPort uint32
+	MemorySize uint32
 	// DefaultBridges specifies default number of bridges for the VM.
 	// Bridges can be used to hot plug devices
-	DefaultBridges uint32
+	//DefaultBridges uint32
+
 	// Msize9p is used as the msize for 9p shares
 	Msize9p uint32
 	// MemSlots specifies default memory slots the VM.
@@ -511,9 +524,6 @@ type HypervisorConfig struct {
 	Uid uint32
 	// Group ID.
 	Gid uint32
-	// PCIeRootPort is used to indicate the number of PCIe Root Port devices
-	// The PCIe Root Port device is used to hot-plug the PCIe device
-	PCIeRootPort uint32
 	// VirtioMem is used to enable/disable virtio-mem
 	VirtioMem bool
 	// BlockDeviceCacheNoflush specifies cache-related options for block devices.
@@ -581,6 +591,8 @@ type HypervisorConfig struct {
 	// GuestMemoryDumpPaging is used to indicate if enable paging
 	// for QEMU dump-guest-memory command
 	GuestMemoryDumpPaging bool
+	// CDIDevices detected by the runtime
+	CDIDevices []*cdi.Device
 }
 
 // vcpu mapping from vcpu number to thread number

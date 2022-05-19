@@ -1589,6 +1589,124 @@ func (vhostuserDev VhostUserDevice) deviceName(config *Config) string {
 	}
 }
 
+// PCIePCIBridgeDevice used to start a PCI topology
+type PCIePCIBridgeDevice struct {
+	ID  string
+	Bus string
+}
+
+// QemuParams returns the qemu parameters built out of the PCIePCIBridgeDevice.
+func (b PCIePCIBridgeDevice) QemuParams(config *Config) []string {
+	var qemuParams []string
+	var deviceParams []string
+
+	driver := PCIePCIBridgeDriver
+
+	deviceParams = append(deviceParams, fmt.Sprintf("%s,id=%s", driver, b.ID))
+	deviceParams = append(deviceParams, fmt.Sprintf("bus=%s", b.Bus))
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
+	return qemuParams
+}
+
+// Valid returns true if the PCIePCIBridgeDevice structure is valid and complete.
+func (b PCIePCIBridgeDevice) Valid() bool {
+	if b.ID == "" {
+		return false
+	}
+	if b.Bus == "" {
+		return false
+	}
+	return true
+}
+
+// PCIBridgeDevice used to hotplug PCI devices
+type PCIBridgeDevice struct {
+
+	// Bus number where the bridge is plugged, typically pci.0 or pcie.0
+	Bus string
+
+	// ID is used to identify the bridge in qemu
+	ID string
+
+	// Chassis number
+	Chassis int
+
+	// SHPC is used to enable or disable the standard hot plug controller
+	SHPC bool
+
+	// PCI Slot
+	Addr string
+
+	// ROMFile specifies the ROM file being used for this device.
+	ROMFile string
+
+	// Address range reservations for devices behind the bridge
+	// NB: strings seem an odd choice, but if they were integers,
+	// they'd default to 0 by Go's rules in all the existing users
+	// who don't set them.  0 is a valid value for certain cases,
+	// but not you want by default.
+	IOReserve     string
+	MemReserve    string
+	Pref64Reserve string
+}
+
+// QemuParams returns the qemu parameters built out of the PCIePCIBridgeDevice.
+func (b PCIBridgeDevice) QemuParams(config *Config) []string {
+
+	var qemuParams []string
+	var deviceParams []string
+
+	driver := PCIBridgeDriver
+
+	shpc := "off"
+
+	if b.SHPC {
+		shpc = "on"
+	}
+	deviceParams = append(deviceParams, fmt.Sprintf("%s,bus=%s,id=%s,chassis_nr=%d,shpc=%s", driver, b.Bus, b.ID, b.Chassis, shpc))
+
+	if b.Addr != "" {
+		addr, err := strconv.Atoi(b.Addr)
+		if err == nil && addr >= 0 {
+			deviceParams = append(deviceParams, fmt.Sprintf("addr=%x", addr))
+		}
+	}
+
+	var transport VirtioTransport
+	if transport.isVirtioPCI(config) && b.ROMFile != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", b.ROMFile))
+	}
+
+	if b.IOReserve != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("io-reserve=%s", b.IOReserve))
+	}
+	if b.MemReserve != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("mem-reserve=%s", b.MemReserve))
+	}
+	if b.Pref64Reserve != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("pref64-reserve=%s", b.Pref64Reserve))
+	}
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
+
+	return qemuParams
+
+}
+
+// Valid returns true if the PCIePCIBridgeDevice structure is valid and complete.
+func (b PCIBridgeDevice) Valid() bool {
+	if b.ID == "" {
+		return false
+	}
+	if b.Bus == "" {
+		return false
+	}
+	return true
+}
+
 // PCIeRootPortDevice represents a memory balloon device.
 // nolint: govet
 type PCIeRootPortDevice struct {
@@ -1954,115 +2072,6 @@ func (scsiCon SCSIController) deviceName(config *Config) string {
 	}
 
 	return SCSIControllerTransport[scsiCon.Transport]
-}
-
-// BridgeType is the type of the bridge
-type BridgeType uint
-
-const (
-	// PCIBridge is a pci bridge
-	PCIBridge BridgeType = iota
-
-	// PCIEBridge is a pcie bridge
-	PCIEBridge
-)
-
-// BridgeDevice represents a qemu bridge device like pci-bridge, pxb, etc.
-// nolint: govet
-type BridgeDevice struct {
-	// Type of the bridge
-	Type BridgeType
-
-	// Bus number where the bridge is plugged, typically pci.0 or pcie.0
-	Bus string
-
-	// ID is used to identify the bridge in qemu
-	ID string
-
-	// Chassis number
-	Chassis int
-
-	// SHPC is used to enable or disable the standard hot plug controller
-	SHPC bool
-
-	// PCI Slot
-	Addr string
-
-	// ROMFile specifies the ROM file being used for this device.
-	ROMFile string
-
-	// Address range reservations for devices behind the bridge
-	// NB: strings seem an odd choice, but if they were integers,
-	// they'd default to 0 by Go's rules in all the existing users
-	// who don't set them.  0 is a valid value for certain cases,
-	// but not you want by default.
-	IOReserve     string
-	MemReserve    string
-	Pref64Reserve string
-}
-
-// Valid returns true if the BridgeDevice structure is valid and complete.
-func (bridgeDev BridgeDevice) Valid() bool {
-	if bridgeDev.Type != PCIBridge && bridgeDev.Type != PCIEBridge {
-		return false
-	}
-
-	if bridgeDev.Bus == "" {
-		return false
-	}
-
-	if bridgeDev.ID == "" {
-		return false
-	}
-
-	return true
-}
-
-// QemuParams returns the qemu parameters built out of this bridge device.
-func (bridgeDev BridgeDevice) QemuParams(config *Config) []string {
-	var qemuParams []string
-	var deviceParams []string
-	var driver DeviceDriver
-
-	switch bridgeDev.Type {
-	case PCIEBridge:
-		driver = PCIePCIBridgeDriver
-		deviceParams = append(deviceParams, fmt.Sprintf("%s,bus=%s,id=%s", driver, bridgeDev.Bus, bridgeDev.ID))
-	default:
-		driver = PCIBridgeDriver
-		shpc := "off"
-		if bridgeDev.SHPC {
-			shpc = "on"
-		}
-		deviceParams = append(deviceParams, fmt.Sprintf("%s,bus=%s,id=%s,chassis_nr=%d,shpc=%s", driver, bridgeDev.Bus, bridgeDev.ID, bridgeDev.Chassis, shpc))
-	}
-
-	if bridgeDev.Addr != "" {
-		addr, err := strconv.Atoi(bridgeDev.Addr)
-		if err == nil && addr >= 0 {
-			deviceParams = append(deviceParams, fmt.Sprintf("addr=%x", addr))
-		}
-	}
-
-	var transport VirtioTransport
-	if transport.isVirtioPCI(config) && bridgeDev.ROMFile != "" {
-		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", bridgeDev.ROMFile))
-	}
-
-	if bridgeDev.IOReserve != "" {
-		deviceParams = append(deviceParams, fmt.Sprintf("io-reserve=%s", bridgeDev.IOReserve))
-	}
-	if bridgeDev.MemReserve != "" {
-		deviceParams = append(deviceParams, fmt.Sprintf("mem-reserve=%s", bridgeDev.MemReserve))
-	}
-	if bridgeDev.Pref64Reserve != "" {
-		deviceParams = append(deviceParams, fmt.Sprintf("pref64-reserve=%s", bridgeDev.Pref64Reserve))
-	}
-
-	qemuParams = append(qemuParams, "-device")
-	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
-
-	return qemuParams
 }
 
 // VSOCKDevice represents a AF_VSOCK socket.
