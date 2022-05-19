@@ -173,7 +173,7 @@ kind: Pod
 metadata:
   name: pod2
   annotations:
-    io.katacontainers.config.runtime.disable_guest_seccomp: false
+    io.katacontainers.config.runtime.disable_guest_seccomp: "false"
 spec:
   runtimeClassName: kata
   containers:
