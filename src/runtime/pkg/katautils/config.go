@@ -75,7 +75,6 @@ type factory struct {
 	VMCacheNumber   uint   `toml:"vm_cache_number"`
 	Template        bool   `toml:"enable_template"`
 }
-
 type hypervisor struct {
 	Path                           string          `toml:"path"`
 	JailerPath                     string          `toml:"jailer_path"`

@@ -650,8 +650,8 @@ func TestSandboxCreateAssets(t *testing.T) {
 
 	// nolint: govet
 	type testData struct {
-		assetType   types.AssetType
 		annotations map[string]string
+		assetType   types.AssetType
 	}
 
 	tmpfile, err := os.CreateTemp("", "virtcontainers-test-")
@@ -687,50 +687,50 @@ func TestSandboxCreateAssets(t *testing.T) {
 
 	data := []testData{
 		{
-			types.FirmwareAsset,
-			map[string]string{
+			assetType: types.FirmwareAsset,
+			annotations: map[string]string{
 				annotations.FirmwarePath: filename,
 				annotations.FirmwareHash: assetContentHash,
 			},
 		},
 		{
-			types.HypervisorAsset,
-			map[string]string{
+			assetType: types.HypervisorAsset,
+			annotations: map[string]string{
 				annotations.HypervisorPath: filename,
 				annotations.HypervisorHash: assetContentHash,
 			},
 		},
 		{
-			types.HypervisorCtlAsset,
-			map[string]string{
+			assetType: types.HypervisorCtlAsset,
+			annotations: map[string]string{
 				annotations.HypervisorCtlPath: filename,
 				annotations.HypervisorCtlHash: assetContentHash,
 			},
 		},
 		{
-			types.ImageAsset,
-			map[string]string{
+			assetType: types.ImageAsset,
+			annotations: map[string]string{
 				annotations.ImagePath: filename,
 				annotations.ImageHash: assetContentHash,
 			},
 		},
 		{
-			types.InitrdAsset,
-			map[string]string{
+			assetType: types.InitrdAsset,
+			annotations: map[string]string{
 				annotations.InitrdPath: filename,
 				annotations.InitrdHash: assetContentHash,
 			},
 		},
 		{
-			types.JailerAsset,
-			map[string]string{
+			assetType: types.JailerAsset,
+			annotations: map[string]string{
 				annotations.JailerPath: filename,
 				annotations.JailerHash: assetContentHash,
 			},
 		},
 		{
-			types.KernelAsset,
-			map[string]string{
+			assetType: types.KernelAsset,
+			annotations: map[string]string{
 				annotations.KernelPath: filename,
 				annotations.KernelHash: assetContentHash,
 			},
@@ -1407,58 +1407,58 @@ func TestSandbox_Cgroups(t *testing.T) {
 
 	// nolint: govet
 	tests := []struct {
-		name     string
 		s        *Sandbox
+		name     string
 		wantErr  bool
 		needRoot bool
 	}{
 		{
-			"New sandbox",
-			&Sandbox{},
-			true,
-			false,
+			name:     "New sandbox",
+			s:        &Sandbox{},
+			wantErr:  true,
+			needRoot: false,
 		},
 		{
-			"New sandbox, new config",
-			&Sandbox{config: &SandboxConfig{}},
-			false,
-			true,
+			name:     "New sandbox, new config",
+			s:        &Sandbox{config: &SandboxConfig{}},
+			wantErr:  false,
+			needRoot: true,
 		},
 		{
-			"sandbox, container no sandbox type",
-			&Sandbox{
+			name: "sandbox, container no sandbox type",
+			s: &Sandbox{
 				config: &SandboxConfig{Containers: []ContainerConfig{
 					{},
 				}}},
-			false,
-			true,
+			wantErr:  false,
+			needRoot: true,
 		},
 		{
-			"sandbox, container sandbox type",
-			&Sandbox{
+			name: "sandbox, container sandbox type",
+			s: &Sandbox{
 				config: &SandboxConfig{Containers: []ContainerConfig{
 					sandboxContainer,
 				}}},
-			false,
-			true,
+			wantErr:  false,
+			needRoot: true,
 		},
 		{
-			"sandbox, empty linux json",
-			&Sandbox{
+			name: "sandbox, empty linux json",
+			s: &Sandbox{
 				config: &SandboxConfig{Containers: []ContainerConfig{
 					emptyJSONLinux,
 				}}},
-			false,
-			true,
+			wantErr:  false,
+			needRoot: true,
 		},
 		{
-			"sandbox, successful config",
-			&Sandbox{
+			name: "sandbox, successful config",
+			s: &Sandbox{
 				config: &SandboxConfig{Containers: []ContainerConfig{
 					successfulContainer,
 				}}},
-			false,
-			true,
+			wantErr:  false,
+			needRoot: true,
 		},
 	}
 	for _, tt := range tests {

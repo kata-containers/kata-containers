@@ -35,10 +35,8 @@ type HypervisorState struct {
 	UUID string
 	// clh sepcific: refer to 'virtcontainers/clh.go:CloudHypervisorState'
 	APISocket string
-
-	// Belows are qemu specific
-	// Refs: virtcontainers/qemu.go:QemuState
-	Bridges []Bridge
+	// Attach a VFIO device either on a root or switch port
+	HotPlugVFIO PCIePort
 	// HotpluggedCPUs is the list of CPUs that were hot-added
 	HotpluggedVCPUs []CPUDevice
 

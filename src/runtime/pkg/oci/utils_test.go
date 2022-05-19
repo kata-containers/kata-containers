@@ -823,22 +823,22 @@ func TestRegexpContains(t *testing.T) {
 
 	//nolint: govet
 	type testData struct {
-		regexps  []string
 		toMatch  string
+		regexps  []string
 		expected bool
 	}
 
 	data := []testData{
-		{[]string{}, "", false},
-		{[]string{}, "nonempty", false},
-		{[]string{"simple"}, "simple", true},
-		{[]string{"simple"}, "some_simple_text", true},
-		{[]string{"simple"}, "simp", false},
-		{[]string{"one", "two"}, "one", true},
-		{[]string{"one", "two"}, "two", true},
-		{[]string{"o*"}, "oooo", true},
-		{[]string{"o*"}, "oooa", true},
-		{[]string{"^o*$"}, "oooa", false},
+		{regexps: []string{}, toMatch: "", expected: false},
+		{regexps: []string{}, toMatch: "nonempty", expected: false},
+		{regexps: []string{"simple"}, toMatch: "simple", expected: true},
+		{regexps: []string{"simple"}, toMatch: "some_simple_text", expected: true},
+		{regexps: []string{"simple"}, toMatch: "simp", expected: false},
+		{regexps: []string{"one", "two"}, toMatch: "one", expected: true},
+		{regexps: []string{"one", "two"}, toMatch: "two", expected: true},
+		{regexps: []string{"o*"}, toMatch: "oooo", expected: true},
+		{regexps: []string{"o*"}, toMatch: "oooa", expected: true},
+		{regexps: []string{"^o*$"}, toMatch: "oooa", expected: false},
 	}
 
 	for _, d := range data {
@@ -852,25 +852,25 @@ func TestCheckPathIsInGlobs(t *testing.T) {
 
 	//nolint: govet
 	type testData struct {
-		globs    []string
 		toMatch  string
+		globs    []string
 		expected bool
 	}
 
 	data := []testData{
-		{[]string{}, "", false},
-		{[]string{}, "nonempty", false},
-		{[]string{"simple"}, "simple", false},
-		{[]string{"simple"}, "some_simple_text", false},
-		{[]string{"/bin/ls"}, "/bin/ls", true},
-		{[]string{"/bin/ls", "/bin/false"}, "/bin/ls", true},
-		{[]string{"/bin/ls", "/bin/false"}, "/bin/false", true},
-		{[]string{"/bin/ls", "/bin/false"}, "/bin/bar", false},
-		{[]string{"/bin/*ls*"}, "/bin/ls", true},
-		{[]string{"/bin/*ls*"}, "/bin/false", true},
-		{[]string{"bin/ls"}, "/bin/ls", false},
-		{[]string{"./bin/ls"}, "/bin/ls", false},
-		{[]string{"*/bin/ls"}, "/bin/ls", false},
+		{globs: []string{}, toMatch: "", expected: false},
+		{globs: []string{}, toMatch: "nonempty", expected: false},
+		{globs: []string{"simple"}, toMatch: "simple", expected: false},
+		{globs: []string{"simple"}, toMatch: "some_simple_text", expected: false},
+		{globs: []string{"/bin/ls"}, toMatch: "/bin/ls", expected: true},
+		{globs: []string{"/bin/ls", "/bin/false"}, toMatch: "/bin/ls", expected: true},
+		{globs: []string{"/bin/ls", "/bin/false"}, toMatch: "/bin/false", expected: true},
+		{globs: []string{"/bin/ls", "/bin/false"}, toMatch: "/bin/bar", expected: false},
+		{globs: []string{"/bin/*ls*"}, toMatch: "/bin/ls", expected: true},
+		{globs: []string{"/bin/*ls*"}, toMatch: "/bin/false", expected: true},
+		{globs: []string{"bin/ls"}, toMatch: "/bin/ls", expected: false},
+		{globs: []string{"./bin/ls"}, toMatch: "/bin/ls", expected: false},
+		{globs: []string{"*/bin/ls"}, toMatch: "/bin/ls", expected: false},
 	}
 
 	for _, d := range data {
@@ -925,10 +925,10 @@ func TestParseAnnotationUintConfiguration(t *testing.T) {
 
 	// nolint: govet
 	testCases := []struct {
-		annotations map[string]string
-		expected    uint64
 		err         error
+		annotations map[string]string
 		validFunc   func(uint64) error
+		expected    uint64
 	}{
 		{
 			annotations: map[string]string{key: ""},
@@ -1009,10 +1009,10 @@ func TestParseAnnotationBoolConfiguration(t *testing.T) {
 
 	// nolint: govet
 	testCases := []struct {
+		err                 error
 		annotationKey       string
 		annotationValueList []string
 		expected            bool
-		err                 error
 	}{
 		{
 			annotationKey:       boolKey,
@@ -1209,8 +1209,8 @@ func TestNewMount(t *testing.T) {
 	assert := assert.New(t)
 
 	testCases := []struct {
-		out vc.Mount
 		in  specs.Mount
+		out vc.Mount
 	}{
 		{
 			in: specs.Mount{

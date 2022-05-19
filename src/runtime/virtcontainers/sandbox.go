@@ -612,6 +612,12 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	if err := validateHypervisorConfig(&sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
 	}
+	// Aggregate all the container devices and update the HV config
+	var devices []config.DeviceInfo
+	for _, ct := range sandboxConfig.Containers {
+		devices = append(devices, ct.DeviceInfos...)
+	}
+	sandboxConfig.HypervisorConfig.RawDevices = devices
 
 	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
 	// until we have TDISP/IDE PCIe support.

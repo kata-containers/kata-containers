@@ -188,13 +188,13 @@ func TestCloudHypervisorAddNetCheckEnpointTypes(t *testing.T) {
 	}
 	// nolint: govet
 	tests := []struct {
-		name    string
 		args    args
+		name    string
 		wantErr bool
 	}{
-		{"TapEndpoint", args{e: &TapEndpoint{}}, true},
-		{"Empty VethEndpoint", args{e: &VethEndpoint{}}, true},
-		{"Valid VethEndpoint", args{e: validVeth}, false},
+		{name: "TapEndpoint", args: args{e: &TapEndpoint{}}, wantErr: true},
+		{name: "Empty VethEndpoint", args: args{e: &VethEndpoint{}}, wantErr: true},
+		{name: "Valid VethEndpoint", args: args{e: validVeth}, wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

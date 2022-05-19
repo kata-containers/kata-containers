@@ -769,7 +769,6 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		fwCfg := govmmQemu.FwCfg{
 			Name: "opt/ovmf/X-PciMmio64Mb",
 			Str:  pciMmio64Mb,
-		}
 		qemuConfig.FwCfg = append(qemuConfig.FwCfg, fwCfg)
 	}
 
@@ -796,38 +795,6 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 	vfioOnSwitchPort := (q.state.HotPlugVFIO == config.SwitchPort || q.state.ColdPlugVFIO == config.SwitchPort)
 
 	numOfVhostUserBlockDevices := len(hypervisorConfig.VhostUserBlkDevices)
-
-	// If number of PCIe root ports > 16 then bail out otherwise we may
-	// use up all slots or IO memory on the root bus and vfio-XXX-pci devices
-	// cannot be added which are crucial for Kata max slots on root bus is 32
-	// max slots on the complete pci(e) topology is 256 in QEMU
-	if vfioOnRootPort {
-		// On Arm the vhost-user-block device is a PCIe device we need
-		// to account for it in the number of pluggable ports
-		if machineType == QemuVirt {
-			numOfPluggablePorts = numOfPluggablePorts + uint32(numOfVhostUserBlockDevices)
-		}
-		if numOfPluggablePorts > maxPCIeRootPort {
-			return fmt.Errorf("Number of PCIe Root Ports exceeed allowed max of %d", maxPCIeRootPort)
-		}
-		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
-		return nil
-	}
-	if vfioOnSwitchPort {
-		// On Arm the vhost-user-block device is a PCIe device we need
-		// to account for it in the number of pluggable ports
-		if machineType == QemuVirt {
-			numOfPluggableRootPorts := uint32(numOfVhostUserBlockDevices)
-			if numOfPluggableRootPorts > maxPCIeRootPort {
-				return fmt.Errorf("Number of PCIe Root Ports exceeed allowed max of %d", maxPCIeRootPort)
-			}
-			qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggableRootPorts, memSize32bit, memSize64bit)
-		}
-		if numOfPluggablePorts > maxPCIeSwitchPort {
-			return fmt.Errorf("Number of PCIe Switch Ports exceeed allowed max of %d", maxPCIeSwitchPort)
-		}
-		qemuConfig.Devices = q.arch.appendPCIeSwitchPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
-		return nil
 	}
 	return nil
 }
