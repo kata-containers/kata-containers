@@ -65,11 +65,11 @@ impl PhysicalEndpoint {
         // get vendor and device id from pci space (sys/bus/pci/devices/$bdf)
         let iface_device_path = sys_pci_devices_path.join(&bdf).join("device");
         let device_id = std::fs::read_to_string(&iface_device_path)
-            .context(format!("read device path {:?}", &iface_device_path))?;
+            .with_context(|| format!("read device path {:?}", &iface_device_path))?;
 
         let iface_vendor_path = sys_pci_devices_path.join(&bdf).join("vendor");
         let vendor_id = std::fs::read_to_string(&iface_vendor_path)
-            .context(format!("read vendor path {:?}", &iface_vendor_path))?;
+            .with_context(|| format!("read vendor path {:?}", &iface_vendor_path))?;
 
         Ok(Self {
             iface_name: name.to_string(),
@@ -99,10 +99,7 @@ impl Endpoint for PhysicalEndpoint {
             &self.driver,
             &self.vendor_device_id.vendor_device_id(),
         )
-        .context(format!(
-            "bind physical endpoint from {} to vfio",
-            &self.driver
-        ))?;
+        .with_context(|| format!("bind physical endpoint from {} to vfio", &self.driver))?;
 
         // set vfio's bus type, pci or mmio. Mostly use pci by default.
         let mode = match self.driver.as_str() {
@@ -116,7 +113,7 @@ impl Endpoint for PhysicalEndpoint {
             sysfs_path: "".to_string(),
             bus_slot_func: self.bdf.clone(),
             mode: device::VfioBusMode::new(mode)
-                .context(format!("new vfio bus mode {:?}", mode))?,
+                .with_context(|| format!("new vfio bus mode {:?}", mode))?,
         });
         hypervisor.add_device(d).await.context("add device")?;
         Ok(())
@@ -136,10 +133,12 @@ impl Endpoint for PhysicalEndpoint {
             &self.driver,
             &self.vendor_device_id.vendor_device_id(),
         )
-        .context(format!(
-            "bind physical endpoint device from vfio to {}",
-            &self.driver
-        ))?;
+        .with_context(|| {
+            format!(
+                "bind physical endpoint device from vfio to {}",
+                &self.driver
+            )
+        })?;
         Ok(())
     }
 }

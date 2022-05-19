@@ -279,6 +279,16 @@ languages:
         building Kata
       newest-version: "1.58.1"
 
+  golangci-lint:
+    description: "golangci-lint"
+    notes: "'version' is the default minimum version used by this project."
+    version: "1.41.1"
+    meta:
+      description: |
+        'newest-version' is the latest version known to work when
+        building Kata
+      newest-version: "1.46.2"
+
 specs:
   description: "Details of important specifications"
 

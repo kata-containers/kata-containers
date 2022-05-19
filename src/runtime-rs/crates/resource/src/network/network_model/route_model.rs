@@ -56,7 +56,7 @@ impl NetworkModel for RouteModel {
                 .args(&ca)
                 .output()
                 .await
-                .context(format!("run command ip args {:?}", &ca))?;
+                .with_context(|| format!("run command ip args {:?}", &ca))?;
             if !output.status.success() {
                 return Err(anyhow!(
                     "run command ip args {:?} error {}",

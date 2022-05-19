@@ -49,18 +49,18 @@ impl VolumeResource {
                 let shm_size = shm_volume::DEFAULT_SHM_SIZE;
                 Arc::new(
                     shm_volume::ShmVolume::new(m, shm_size)
-                        .context(format!("new shm volume {:?}", m))?,
+                        .with_context(|| format!("new shm volume {:?}", m))?,
                 )
             } else if share_fs_volume::is_share_fs_volume(m) {
                 Arc::new(
                     share_fs_volume::ShareFsVolume::new(share_fs, m, cid)
                         .await
-                        .context(format!("new share fs volume {:?}", m))?,
+                        .with_context(|| format!("new share fs volume {:?}", m))?,
                 )
             } else if block_volume::is_block_volume(m) {
                 Arc::new(
                     block_volume::BlockVolume::new(m)
-                        .context(format!("new block volume {:?}", m))?,
+                        .with_context(|| format!("new block volume {:?}", m))?,
                 )
             } else if is_skip_volume(m) {
                 info!(sl!(), "skip volume {:?}", m);
@@ -68,7 +68,7 @@ impl VolumeResource {
             } else {
                 Arc::new(
                     default_volume::DefaultVolume::new(m)
-                        .context(format!("new default volume {:?}", m))?,
+                        .with_context(|| format!("new default volume {:?}", m))?,
                 )
             };
 
