@@ -21,8 +21,8 @@ parts:
       version="9999"
       kata_url="https://github.com/kata-containers/kata-containers"
 
-      if echo "${GITHUB_REF}" | grep -q -E "^refs/tags"; then
-        version=$(echo ${GITHUB_REF} | cut -d/ -f3)
+      if echo "${GITHUB_REF:-}" | grep -q -E "^refs/tags"; then
+        version=$(echo ${GITHUB_REF:-} | cut -d/ -f3)
         git checkout ${version}
       fi
 
