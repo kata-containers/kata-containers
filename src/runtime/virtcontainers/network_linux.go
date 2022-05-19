@@ -411,6 +411,16 @@ func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Lin
 		flags := netlink.TUNTAP_VNET_HDR | netlink.TUNTAP_NO_PI
 		if queues > 0 {
 			flags |= netlink.TUNTAP_MULTI_QUEUE_DEFAULTS
+		} else {
+			// We need to enforce `queues = 1` here in case
+			// multi-queue is *not* supported, the reason being
+			// `linkModify()`, a method called by `LinkAdd()`, only
+			// returning the file descriptor of the opened tuntap
+			// device when the queues are set to *non zero*.
+			//
+			// Please, for more information, refer to:
+			// https://github.com/kata-containers/kata-containers/blob/e6e5d2593ac319329269d7b58c30f99ba7b2bf5a/src/runtime/vendor/github.com/vishvananda/netlink/link_linux.go#L1164-L1316
+			queues = 1
 		}
 		newLink = &netlink.Tuntap{
 			LinkAttrs: netlink.LinkAttrs{Name: name},

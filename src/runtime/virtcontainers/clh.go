@@ -1457,25 +1457,22 @@ func (clh *cloudHypervisor) addNet(e Endpoint) error {
 	mac := e.HardwareAddr()
 	netPair := e.NetworkPair()
 	if netPair == nil {
-		return errors.New("net Pair to be added is nil, needed to get TAP path")
+		return errors.New("net Pair to be added is nil, needed to get TAP file descriptors")
 	}
 
-	tapPath := netPair.TapInterface.TAPIface.Name
-	if tapPath == "" {
-		return errors.New("TAP path in network pair is empty")
+	if len(netPair.TapInterface.VMFds) == 0 {
+		return errors.New("The file descriptors for the network pair are not present")
 	}
 	clh.netDevicesFiles[mac] = netPair.TapInterface.VMFds
 
 	clh.Logger().WithFields(log.Fields{
 		"mac": mac,
-		"tap": tapPath,
 	}).Info("Adding Net")
 
 	netRateLimiterConfig := clh.getNetRateLimiterConfig()
 
 	net := chclient.NewNetConfig()
 	net.Mac = &mac
-	net.Tap = &tapPath
 	if netRateLimiterConfig != nil {
 		net.SetRateLimiterConfig(*netRateLimiterConfig)
 	}
