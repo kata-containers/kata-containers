@@ -408,7 +408,7 @@ func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Lin
 
 	switch expectedLink.Type() {
 	case (&netlink.Tuntap{}).Type():
-		flags := netlink.TUNTAP_VNET_HDR
+		flags := netlink.TUNTAP_VNET_HDR | netlink.TUNTAP_NO_PI
 		if queues > 0 {
 			flags |= netlink.TUNTAP_MULTI_QUEUE_DEFAULTS
 		}
