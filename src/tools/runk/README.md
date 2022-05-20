@@ -60,18 +60,14 @@ are welcome.
 Regarding features compared to `runc`, see the `Status of runk` section in the [issue](https://github.com/kata-containers/kata-containers/issues/2784).
 
 ## Building
-
-`runk` uses the modified the `kata-agent` binary, `oci-kata-agent`, which is an agent to be called from `runk`.
-Therefore, you also need to build the `oci-kata-agent` to run `runk`.
-
-You can build both `runk` and `oci-kata-agent` as follows.
+You can build `runk` as follows.
 
 ```bash
 $ cd runk
 $ make
 ```
 
-To install `runk` and `oci-kata-agent` into default directory for install executable program (`/usr/local/bin`):
+To install `runk` into default directory for install executable program (`/usr/local/bin`):
 
 ```bash
 $ sudo make install

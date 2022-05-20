@@ -28,6 +28,7 @@ enum SubCommand {
     Common(CommonCmd),
     #[clap(flatten)]
     Custom(CustomCmd),
+    Init {},
 }
 
 // Copy from https://github.com/containers/youki/blob/v0.0.3/crates/liboci-cli/src/lib.rs#L38-L44
@@ -84,6 +85,7 @@ async fn cmd_run(subcmd: SubCommand, root_path: &Path, logger: &Logger) -> Resul
         SubCommand::Custom(cmd) => match cmd {
             CustomCmd::Kill(kill) => commands::kill::run(kill, root_path, logger),
         },
+        _ => unreachable!(),
     }
 }
 
@@ -112,6 +114,11 @@ fn setup_logger(
 
 async fn real_main() -> Result<()> {
     let cli = Cli::parse();
+
+    if let SubCommand::Init {} = cli.subcmd {
+        rustjail::container::init_child();
+        exit(0);
+    }
 
     let root_path = if let Some(path) = cli.global.root {
         path
