@@ -606,7 +606,7 @@ cp_to_guest_img() {
 	rootfs_dir="$(mktemp -d)"
 
 	# Open the original initrd/image, inject the agent file
-	local image_path="$(kata-runtime kata-env --json | jq -r .Image.Path)"
+	local image_path="$(sudo kata-runtime kata-env --json | jq -r .Image.Path)"
 	if [ -f "$image_path" ]; then
 		if ! sudo mount -o loop,offset=$((512*6144)) "$image_path" \
 			"$rootfs_dir"; then
@@ -629,13 +629,18 @@ cp_to_guest_img() {
 			return 1
 		fi
 	fi
-	mkdir -p "${rootfs_dir}/${dest_dir}"
+	sudo mkdir -p "${rootfs_dir}/${dest_dir}"
 	for file in ${src_files[@]}; do
-		if [ ! -f "$file" ]; then
+		if [ ! -f "$file" ] && [ ! -d "$file" ]; then
 			echo "File not found, not copying: $file"
 			continue
 		fi
-		cp -af "${file}" "${rootfs_dir}/${dest_dir}"
+
+		if [ -f "$file" ]; then
+			sudo cp -af "${file}" "${rootfs_dir}/${dest_dir}"
+		else
+			sudo cp -ad "${file}" "${rootfs_dir}/${dest_dir}"
+		fi
 	done
 
 	if [ -f "$image_path" ]; then

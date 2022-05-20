@@ -1,0 +1,4 @@
+docker:
+    quay.io/kata-containers/confidential-containers:
+        sigstore: file:///etc/containers/quay_verification/signatures
+        sigstore-staging: file:///etc/containers/quay_verification/signatures

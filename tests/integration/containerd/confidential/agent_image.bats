@@ -26,6 +26,7 @@ skip_if_skopeo_not_present () {
 
 setup() {
 	setup_common
+	copy_files_to_guest
 }
 
 @test "$test_tag Test can pull an unencrypted image inside the guest" {

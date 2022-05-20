@@ -10,6 +10,7 @@
 
 source "${BATS_TEST_DIRNAME}/../../../lib/common.bash"
 FIXTURES_DIR="${BATS_TEST_DIRNAME}/fixtures"
+SHARED_FIXTURES_DIR="${BATS_TEST_DIRNAME}/../../confidential/fixtures"
 
 # Toggle between true and false the service_offload configuration of
 # the Kata agent.
@@ -173,4 +174,18 @@ load_runtime_config_path() {
 	if [ -z "$RUNTIME_CONFIG_PATH" ]; then
 		extract_kata_env
 	fi
+}
+
+copy_files_to_guest() {
+	rootfs_directory="etc/containers/"
+	signatures_dir="${SHARED_FIXTURES_DIR}/quay_verification/signatures"
+
+	if [ ! -d "${signatures_dir}" ]; then
+		sudo mkdir "${signatures_dir}"
+	fi
+
+	sudo tar -zvxf "${SHARED_FIXTURES_DIR}/quay_verification/signatures.tar" -C "${signatures_dir}"
+
+	cp_to_guest_img "${rootfs_directory}" "${SHARED_FIXTURES_DIR}/quay_verification"
+	cp_to_guest_img "${rootfs_directory}" "${SHARED_FIXTURES_DIR}/registries.d"
 }
