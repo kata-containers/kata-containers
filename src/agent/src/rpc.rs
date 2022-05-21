@@ -40,12 +40,10 @@ use rustjail::specconv::CreateOpts;
 
 use nix::errno::Errno;
 use nix::mount::MsFlags;
-use nix::sys::stat;
+use nix::sys::{stat, statfs};
 use nix::unistd::{self, Pid};
 use rustjail::cgroups::Manager;
 use rustjail::process::ProcessOperations;
-
-use sysinfo::{DiskExt, System, SystemExt};
 
 use crate::device::{
     add_devices, get_virtio_blk_pci_device_name, update_device_cgroup, update_env_pci,
@@ -71,7 +69,6 @@ use tracing::instrument;
 
 use libc::{self, c_char, c_ushort, pid_t, winsize, TIOCSWINSZ};
 use std::fs;
-use std::os::unix::fs::MetadataExt;
 use std::os::unix::prelude::PermissionsExt;
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -1452,20 +1449,12 @@ fn get_memory_info(block_size: bool, hotplug: bool) -> Result<(u64, bool)> {
 fn get_volume_capacity_stats(path: &str) -> Result<VolumeUsage> {
     let mut usage = VolumeUsage::new();
 
-    let s = System::new();
-    for disk in s.disks() {
-        if let Some(v) = disk.name().to_str() {
-            if v.to_string().eq(path) {
-                usage.available = disk.available_space();
-                usage.total = disk.total_space();
-                usage.used = usage.total - usage.available;
-                usage.unit = VolumeUsage_Unit::BYTES; // bytes
-                break;
-            }
-        } else {
-            return Err(anyhow!(nix::Error::EINVAL));
-        }
-    }
+    let stat = statfs::statfs(path)?;
+    let block_size = stat.block_size() as u64;
+    usage.total = stat.blocks() * block_size;
+    usage.available = stat.blocks_free() * block_size;
+    usage.used = usage.total - usage.available;
+    usage.unit = VolumeUsage_Unit::BYTES;
 
     Ok(usage)
 }
@@ -1473,20 +1462,11 @@ fn get_volume_capacity_stats(path: &str) -> Result<VolumeUsage> {
 fn get_volume_inode_stats(path: &str) -> Result<VolumeUsage> {
     let mut usage = VolumeUsage::new();
 
-    let s = System::new();
-    for disk in s.disks() {
-        if let Some(v) = disk.name().to_str() {
-            if v.to_string().eq(path) {
-                let meta = fs::metadata(disk.mount_point())?;
-                let inode = meta.ino();
-                usage.used = inode;
-                usage.unit = VolumeUsage_Unit::INODES;
-                break;
-            }
-        } else {
-            return Err(anyhow!(nix::Error::EINVAL));
-        }
-    }
+    let stat = statfs::statfs(path)?;
+    usage.total = stat.files();
+    usage.available = stat.files_free();
+    usage.used = usage.total - usage.available;
+    usage.unit = VolumeUsage_Unit::INODES;
 
     Ok(usage)
 }
@@ -1866,7 +1846,8 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocols::agent_ttrpc::AgentService as _;
+    use crate::{protocols::agent_ttrpc::AgentService as _, skip_if_not_root};
+    use nix::mount;
     use oci::{Hook, Hooks};
     use ttrpc::{r#async::TtrpcContext, MessageHeader};
 
@@ -2196,5 +2177,67 @@ mod tests {
                 assert!(d.expect_error, "{}", msg);
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_volume_capacity_stats() {
+        skip_if_not_root!();
+
+        // Verify error if path does not exist
+        assert!(get_volume_capacity_stats("/does-not-exist").is_err());
+
+        // Create a new tmpfs mount, and verify the initial values
+        let mount_dir = tempfile::tempdir().unwrap();
+        mount::mount(
+            Some("tmpfs"),
+            mount_dir.path().to_str().unwrap(),
+            Some("tmpfs"),
+            mount::MsFlags::empty(),
+            None::<&str>,
+        )
+        .unwrap();
+        let mut stats = get_volume_capacity_stats(mount_dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(stats.used, 0);
+        assert_ne!(stats.available, 0);
+        let available = stats.available;
+
+        // Verify that writing a file will result in increased utilization
+        fs::write(mount_dir.path().join("file.dat"), "foobar").unwrap();
+        stats = get_volume_capacity_stats(mount_dir.path().to_str().unwrap()).unwrap();
+
+        assert_eq!(stats.used, 4 * 1024);
+        assert_eq!(stats.available, available - 4 * 1024);
+    }
+
+    #[tokio::test]
+    async fn test_get_volume_inode_stats() {
+        skip_if_not_root!();
+
+        // Verify error if path does not exist
+        assert!(get_volume_inode_stats("/does-not-exist").is_err());
+
+        // Create a new tmpfs mount, and verify the initial values
+        let mount_dir = tempfile::tempdir().unwrap();
+        mount::mount(
+            Some("tmpfs"),
+            mount_dir.path().to_str().unwrap(),
+            Some("tmpfs"),
+            mount::MsFlags::empty(),
+            None::<&str>,
+        )
+        .unwrap();
+        let mut stats = get_volume_inode_stats(mount_dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(stats.used, 1);
+        assert_ne!(stats.available, 0);
+        let available = stats.available;
+
+        // Verify that creating a directory and writing a file will result in increased utilization
+        let dir = mount_dir.path().join("foobar");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.as_path().join("file.dat"), "foobar").unwrap();
+        stats = get_volume_inode_stats(mount_dir.path().to_str().unwrap()).unwrap();
+
+        assert_eq!(stats.used, 3);
+        assert_eq!(stats.available, available - 2);
     }
 }
