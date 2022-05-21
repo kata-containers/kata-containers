@@ -130,8 +130,14 @@ func Stats(volumePath string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	urlSafeDevicePath := url.PathEscape(volumePath)
-	body, err := shimclient.DoGet(sandboxId, defaultTimeout, containerdshim.DirectVolumeStatUrl+"/"+urlSafeDevicePath)
+	volumeMountInfo, err := volume.VolumeMountInfo(volumePath)
+	if err != nil {
+		return nil, err
+	}
+
+	urlSafeDevicePath := url.PathEscape(volumeMountInfo.Device)
+	body, err := shimclient.DoGet(sandboxId, defaultTimeout,
+		fmt.Sprintf("%s?%s=%s", containerdshim.DirectVolumeStatUrl, containerdshim.DirectVolumePathKey, urlSafeDevicePath))
 	if err != nil {
 		return nil, err
 	}
@@ -144,8 +150,13 @@ func Resize(volumePath string, size uint64) error {
 	if err != nil {
 		return err
 	}
+	volumeMountInfo, err := volume.VolumeMountInfo(volumePath)
+	if err != nil {
+		return err
+	}
+
 	resizeReq := containerdshim.ResizeRequest{
-		VolumePath: volumePath,
+		VolumePath: volumeMountInfo.Device,
 		Size:       size,
 	}
 	encoded, err := json.Marshal(resizeReq)
