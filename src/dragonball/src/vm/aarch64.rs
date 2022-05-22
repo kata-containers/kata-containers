@@ -7,6 +7,7 @@
 // found in the THIRD-PARTY file.
 
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::ops::Deref;
 
 use dbs_arch::gic::GICDevice;
@@ -14,15 +15,13 @@ use dbs_arch::{DeviceInfoForFDT, DeviceType};
 use dbs_boot::InitrdConfig;
 use dbs_utils::epoll_manager::EpollManager;
 use dbs_utils::time::TimestampUs;
-use std::fmt::Debug;
+use linux_loader::loader::Cmdline;
 use vm_memory::{GuestAddressSpace, GuestMemory};
 use vmm_sys_util::eventfd::EventFd;
 
 use super::{Vm, VmError};
 use crate::address_space_manager::{GuestAddressSpaceImpl, GuestMemoryImpl};
-use crate::error::Error;
-use crate::StartMicrovmError;
-use linux_loader::loader::Cmdline;
+use crate::error::{Error, StartMicrovmError};
 
 /// Configures the system and should be called once per vm before starting vcpu threads.
 /// For aarch64, we only setup the FDT.
@@ -35,7 +34,7 @@ use linux_loader::loader::Cmdline;
 /// * `device_info` - A hashmap containing the attached devices for building FDT device nodes.
 /// * `gic_device` - The GIC device.
 /// * `initrd` - Information about an optional initrd.
-pub fn configure_system<T: DeviceInfoForFDT + Clone + Debug, M: GuestMemory>(
+fn configure_system<T: DeviceInfoForFDT + Clone + Debug, M: GuestMemory>(
     guest_mem: &M,
     cmdline: &str,
     vcpu_mpidr: Vec<u64>,
@@ -62,6 +61,18 @@ impl Vm {
         &self.irqchip_handle.as_ref().unwrap()
     }
 
+    /// Creates the irq chip in-kernel device model.
+    pub fn setup_interrupt_controller(&mut self) -> std::result::Result<(), StartMicrovmError> {
+        let vcpu_count = self.vm_config.vcpu_count;
+
+        self.irqchip_handle = Some(
+            dbs_arch::gic::create_gic(&self.vm_fd, vcpu_count.into())
+                .map_err(|e| StartMicrovmError::ConfigureVm(VmError::SetupGIC(e)))?,
+        );
+
+        Ok(())
+    }
+
     /// Initialize the virtual machine instance.
     ///
     /// It initialize the virtual machine instance by:
@@ -76,13 +87,7 @@ impl Vm {
         epoll_mgr: EpollManager,
         vm_as: GuestAddressSpaceImpl,
         request_ts: TimestampUs,
-    ) -> std::result::Result<(), StartMicrovmError> {
-        let kernel_loader_result = self.load_kernel(vm_as.memory().deref())?;
-        // On aarch64, the vCPUs need to be created (i.e call KVM_CREATE_VCPU) and configured before
-        // setting up the IRQ chip because the `KVM_CREATE_VCPU` ioctl will return error if the IRQCHIP
-        // was already initialized.
-        // Search for `kvm_arch_vcpu_create` in arch/arm/kvm/arm.c.
-
+    ) -> Result<(), StartMicrovmError> {
         let reset_eventfd =
             EventFd::new(libc::EFD_NONBLOCK).map_err(|_| StartMicrovmError::EventFd)?;
         self.reset_eventfd = Some(
@@ -90,29 +95,21 @@ impl Vm {
                 .try_clone()
                 .map_err(|_| StartMicrovmError::EventFd)?,
         );
-
         self.vcpu_manager()
             .map_err(StartMicrovmError::Vcpu)?
             .set_reset_event_fd(reset_eventfd);
+
+        // On aarch64, the vCPUs need to be created (i.e call KVM_CREATE_VCPU) and configured before
+        // setting up the IRQ chip because the `KVM_CREATE_VCPU` ioctl will return error if the IRQCHIP
+        // was already initialized.
+        // Search for `kvm_arch_vcpu_create` in arch/arm/kvm/arm.c.
+        let kernel_loader_result = self.load_kernel(vm_as.memory().deref())?;
         self.vcpu_manager()
             .map_err(StartMicrovmError::Vcpu)?
             .create_boot_vcpus(request_ts, kernel_loader_result.kernel_load)
             .map_err(StartMicrovmError::Vcpu)?;
-
         self.setup_interrupt_controller()?;
         self.init_devices(epoll_mgr)?;
-
-        Ok(())
-    }
-
-    /// Creates the irq chip in-kernel device model.
-    pub fn setup_interrupt_controller(&mut self) -> std::result::Result<(), StartMicrovmError> {
-        let vcpu_count = self.vm_config.vcpu_count;
-
-        self.irqchip_handle = Some(
-            dbs_arch::gic::create_gic(&self.fd, vcpu_count.into())
-                .map_err(|e| StartMicrovmError::ConfigureVm(VmError::SetupGIC(e)))?,
-        );
 
         Ok(())
     }
@@ -133,8 +130,8 @@ impl Vm {
             .into_iter()
             .map(|cpu| cpu.get_mpidr())
             .collect();
-
         let guest_memory = vm_memory.memory();
+
         configure_system(
             guest_memory,
             cmdline.as_str(),

@@ -4,12 +4,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod sm;
-pub mod vcpu_impl;
-pub mod vcpu_manager;
-pub use vcpu_manager::{VcpuManager, VcpuManagerError};
+mod vcpu_impl;
+mod vcpu_manager;
 
 #[cfg(target_arch = "x86_64")]
 use dbs_arch::cpuid::VpmuFeatureLevel;
+
+pub use vcpu_manager::{VcpuManager, VcpuManagerError};
 
 /// vcpu config collection
 pub struct VcpuConfig {

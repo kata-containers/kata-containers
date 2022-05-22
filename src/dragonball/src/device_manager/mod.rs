@@ -22,8 +22,6 @@ use kvm_ioctls::VmFd;
 use dbs_device::resources::ResourceConstraint;
 #[cfg(feature = "dbs-virtio-devices")]
 use dbs_virtio_devices as virtio;
-#[cfg(feature = "virtio-vsock")]
-use dbs_virtio_devices::vsock::backend::VsockInnerConnector;
 #[cfg(feature = "dbs-virtio-devices")]
 use dbs_virtio_devices::{
     mmio::{
@@ -38,6 +36,8 @@ use dbs_upcall::{
     DevMgrRequest, DevMgrService, MmioDevRequest, UpcallClient, UpcallClientError,
     UpcallClientRequest, UpcallClientResponse,
 };
+#[cfg(feature = "hotplug")]
+use dbs_virtio_devices::vsock::backend::VsockInnerConnector;
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
 use crate::error::StartMicrovmError;
@@ -99,6 +99,10 @@ pub enum DeviceMgrError {
     /// Failed to hotplug the device.
     #[error("failed to hotplug virtual device")]
     HotplugDevice(#[source] UpcallClientError),
+
+    /// Failed to free device resource.
+    #[error("failed to free device resources: {0}")]
+    ResourceError(#[source] crate::resource_manager::ResourceError),
 }
 
 /// Specialized version of `std::result::Result` for device manager operations.
@@ -315,8 +319,6 @@ impl DeviceOpContext {
     pub(crate) fn create_hotplug_ctx(vm: &Vm, epoll_mgr: Option<EpollManager>) -> Self {
         let vm_as = vm.vm_as().expect("VM should have memory ready").clone();
 
-        let vm_config = vm.vm_config().clone();
-
         let mut ctx = Self::new(
             epoll_mgr,
             vm.device_manager(),
@@ -325,7 +327,6 @@ impl DeviceOpContext {
             true,
         );
         ctx.upcall_client = vm.upcall_client().clone();
-
         ctx
     }
 
@@ -404,10 +405,10 @@ pub struct DeviceManager {
 
     pub(crate) con_manager: ConsoleManager,
     pub(crate) legacy_manager: Option<LegacyDeviceManager>,
+    #[cfg(target_arch = "aarch64")]
+    pub(crate) mmio_device_info: HashMap<(DeviceType, String), MMIODeviceInfo>,
     #[cfg(feature = "virtio-vsock")]
     pub(crate) vsock_manager: VsockDeviceMgr,
-    #[cfg(target_arch = "aarch64")]
-    mmio_device_info: HashMap<(DeviceType, String), MMIODeviceInfo>,
 }
 
 impl DeviceManager {
@@ -425,12 +426,13 @@ impl DeviceManager {
             res_manager,
             vm_fd,
             logger: logger.new(slog::o!()),
+
             con_manager: ConsoleManager::new(epoll_manager, logger),
             legacy_manager: None,
-            #[cfg(feature = "virtio-vsock")]
-            vsock_manager: VsockDeviceMgr::default(),
             #[cfg(target_arch = "aarch64")]
             mmio_device_info: HashMap::new(),
+            #[cfg(feature = "virtio-vsock")]
+            vsock_manager: VsockDeviceMgr::default(),
         }
     }
 
@@ -452,6 +454,7 @@ impl DeviceManager {
     }
 
     /// Create legacy devices associted virtual machine
+    #[allow(unused_variables)]
     pub fn create_legacy_devices(
         &mut self,
         ctx: &mut DeviceOpContext,
@@ -529,12 +532,6 @@ impl DeviceManager {
         self.con_manager.reset_console()
     }
 
-    #[cfg(target_arch = "aarch64")]
-    /// Return mmio device info for FDT build.
-    pub fn get_mmio_device_info(&self) -> Option<&HashMap<(DeviceType, String), MMIODeviceInfo>> {
-        Some(&self.mmio_device_info)
-    }
-
     /// Create all registered devices when booting the associated virtual machine.
     pub fn create_devices(
         &mut self,
@@ -579,8 +576,10 @@ impl DeviceManager {
     ) -> Result<()> {
         Ok(())
     }
+}
 
-    #[cfg(target_arch = "x86_64")]
+#[cfg(target_arch = "x86_64")]
+impl DeviceManager {
     /// Get the underlying eventfd for vm exit notification.
     pub fn get_reset_eventfd(&self) -> Result<vmm_sys_util::eventfd::EventFd> {
         if let Some(legacy) = self.legacy_manager.as_ref() {
@@ -592,6 +591,14 @@ impl DeviceManager {
                 io::Error::from_raw_os_error(libc::ENOENT),
             )))
         }
+    }
+}
+
+#[cfg(target_arch = "aarch64")]
+impl DeviceManager {
+    /// Return mmio device info for FDT build.
+    pub fn get_mmio_device_info(&self) -> Option<&HashMap<(DeviceType, String), MMIODeviceInfo>> {
+        Some(&self.mmio_device_info)
     }
 }
 
@@ -694,7 +701,9 @@ impl DeviceManager {
 
         // unregister Resource manager
         let resources = device.get_assigned_resources();
-        ctx.res_manager.free_device_resources(&resources);
+        ctx.res_manager
+            .free_device_resources(&resources)
+            .map_err(DeviceMgrError::ResourceError)?;
 
         Ok(())
     }

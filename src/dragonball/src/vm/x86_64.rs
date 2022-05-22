@@ -15,14 +15,13 @@ use dbs_boot::{add_e820_entry, bootparam, layout, mptable, BootParamsWrapper, In
 use dbs_utils::epoll_manager::EpollManager;
 use dbs_utils::time::TimestampUs;
 use kvm_bindings::{kvm_irqchip, kvm_pit_config, kvm_pit_state2, KVM_PIT_SPEAKER_DUMMY};
+use linux_loader::cmdline::Cmdline;
 use slog::info;
 use vm_memory::{Address, Bytes, GuestAddress, GuestAddressSpace, GuestMemory};
 
 use crate::address_space_manager::{GuestAddressSpaceImpl, GuestMemoryImpl};
 use crate::error::{Error, Result, StartMicrovmError};
 use crate::vm::{Vm, VmError};
-
-use linux_loader::cmdline::Cmdline;
 
 /// Configures the system and should be called once per vm before starting vcpu
 /// threads.
@@ -40,7 +39,7 @@ use linux_loader::cmdline::Cmdline;
 /// * `max_cpus` - Max number of virtual CPUs the guest will have.
 /// * `rsv_mem_bytes` - Reserve memory from microVM..
 #[allow(clippy::too_many_arguments)]
-pub fn configure_system<M: GuestMemory>(
+fn configure_system<M: GuestMemory>(
     guest_mem: &M,
     address_space: Option<&AddressSpace>,
     cmdline_addr: GuestAddress,
@@ -136,12 +135,14 @@ pub fn configure_system<M: GuestMemory>(
 impl Vm {
     /// Get the status of in-kernel PIT.
     pub fn get_pit_state(&self) -> Result<kvm_pit_state2> {
-        self.fd.get_pit2().map_err(|e| Error::Vm(VmError::Irq(e)))
+        self.vm_fd
+            .get_pit2()
+            .map_err(|e| Error::Vm(VmError::Irq(e)))
     }
 
     /// Set the status of in-kernel PIT.
     pub fn set_pit_state(&self, pit_state: &kvm_pit_state2) -> Result<()> {
-        self.fd
+        self.vm_fd
             .set_pit2(pit_state)
             .map_err(|e| Error::Vm(VmError::Irq(e)))
     }
@@ -152,7 +153,7 @@ impl Vm {
             chip_id,
             ..kvm_irqchip::default()
         };
-        self.fd
+        self.vm_fd
             .get_irqchip(&mut irqchip)
             .map(|_| irqchip)
             .map_err(|e| Error::Vm(VmError::Irq(e)))
@@ -160,7 +161,7 @@ impl Vm {
 
     /// Set the status of in-kernel ioapic.
     pub fn set_irqchip_state(&self, irqchip: &kvm_irqchip) -> Result<()> {
-        self.fd
+        self.vm_fd
             .set_irqchip(irqchip)
             .map_err(|e| Error::Vm(VmError::Irq(e)))
     }
@@ -204,7 +205,6 @@ impl Vm {
 
         let vm_memory = vm_as.memory();
         let kernel_loader_result = self.load_kernel(vm_memory.deref())?;
-
         self.vcpu_manager()
             .map_err(StartMicrovmError::Vcpu)?
             .create_boot_vcpus(request_ts, kernel_loader_result.kernel_load)
@@ -243,7 +243,7 @@ impl Vm {
 
     /// Initializes the guest memory.
     pub(crate) fn init_tss(&mut self) -> std::result::Result<(), StartMicrovmError> {
-        self.fd
+        self.vm_fd
             .set_tss_address(dbs_boot::layout::KVM_TSS_ADDRESS.try_into().unwrap())
             .map_err(|e| StartMicrovmError::ConfigureVm(VmError::VmSetup(e)))
     }
@@ -252,7 +252,7 @@ impl Vm {
     pub(crate) fn setup_interrupt_controller(
         &mut self,
     ) -> std::result::Result<(), StartMicrovmError> {
-        self.fd
+        self.vm_fd
             .create_irq_chip()
             .map_err(|e| StartMicrovmError::ConfigureVm(VmError::VmSetup(e)))
     }
@@ -269,7 +269,7 @@ impl Vm {
 
         // Safe because we know that our file is a VM fd, we know the kernel will only read the
         // correct amount of memory from our pointer, and we verify the return result.
-        self.fd
+        self.vm_fd
             .create_pit2(pit_config)
             .map_err(|e| StartMicrovmError::ConfigureVm(VmError::VmSetup(e)))
     }
