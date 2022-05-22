@@ -12,10 +12,7 @@
 #[cfg(feature = "dbs-virtio-devices")]
 use dbs_virtio_devices::Error as VirtIoError;
 
-use crate::address_space_manager;
-use crate::device_manager;
-use crate::vcpu;
-use crate::vm;
+use crate::{address_space_manager, device_manager, vcpu, vm};
 
 /// Shorthand result type for internal VMM commands.
 pub type Result<T> = std::result::Result<T, Error>;

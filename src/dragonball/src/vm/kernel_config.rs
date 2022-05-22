@@ -8,7 +8,7 @@ pub struct KernelConfigInfo {
     /// The descriptor to the kernel file.
     kernel_file: File,
     /// The descriptor to the initrd file, if there is one
-    pub initrd_file: Option<File>,
+    initrd_file: Option<File>,
     /// The commandline for guest kernel.
     cmdline: linux_loader::cmdline::Cmdline,
 }
@@ -30,6 +30,11 @@ impl KernelConfigInfo {
     /// Get a mutable reference to the kernel file.
     pub fn kernel_file_mut(&mut self) -> &mut File {
         &mut self.kernel_file
+    }
+
+    /// Get an immutable reference to the initrd file.
+    pub fn initrd_file(&self) -> Option<&File> {
+        self.initrd_file.as_ref()
     }
 
     /// Get a mutable reference to the initrd file.

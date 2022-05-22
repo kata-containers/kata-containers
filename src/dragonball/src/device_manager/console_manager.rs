@@ -353,7 +353,7 @@ pub struct DmesgWriter {
 
 impl DmesgWriter {
     /// Creates a new instance.
-    pub fn new(logger: slog::Logger) -> Self {
+    pub fn new(logger: &slog::Logger) -> Self {
         Self {
             buf: BytesMut::with_capacity(1024),
             logger: logger.new(slog::o!("subsystem" => "dmesg")),
