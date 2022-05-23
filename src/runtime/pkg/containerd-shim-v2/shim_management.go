@@ -32,6 +32,8 @@ import (
 )
 
 const (
+	DirectVolumePathKey = "path"
+
 	DirectVolumeStatUrl   = "/direct-volume/stats"
 	DirectVolumeResizeUrl = "/direct-volume/resize"
 )
@@ -139,7 +141,16 @@ func decodeAgentMetrics(body string) []*dto.MetricFamily {
 }
 
 func (s *service) serveVolumeStats(w http.ResponseWriter, r *http.Request) {
-	volumePath, err := url.PathUnescape(strings.TrimPrefix(r.URL.Path, DirectVolumeStatUrl))
+	val := r.URL.Query().Get(DirectVolumePathKey)
+	if val == "" {
+		msg := fmt.Sprintf("Required parameter %s not found", DirectVolumePathKey)
+		shimMgtLog.Info(msg)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(msg))
+		return
+	}
+
+	volumePath, err := url.PathUnescape(val)
 	if err != nil {
 		shimMgtLog.WithError(err).Error("failed to unescape the volume stat url path")
 		w.WriteHeader(http.StatusInternalServerError)
