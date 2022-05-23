@@ -81,8 +81,3 @@ standard-oci-runtime = ["rustjail/standard-oci-runtime"]
 [[bin]]
 name = "kata-agent"
 path = "src/main.rs"
-
-[[bin]]
-name = "oci-kata-agent"
-path = "src/main.rs"
-required-features = ["standard-oci-runtime"]
