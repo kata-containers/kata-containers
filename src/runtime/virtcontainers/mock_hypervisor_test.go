@@ -21,9 +21,9 @@ func TestMockHypervisorCreateVM(t *testing.T) {
 		config: &SandboxConfig{
 			ID: "mock_sandbox",
 			HypervisorConfig: HypervisorConfig{
-				KernelPath:     "",
-				ImagePath:      "",
-				HypervisorPath: "",
+				KernelPath:     fmt.Sprintf("%s/%s", testDir, testKernel),
+				ImagePath:      fmt.Sprintf("%s/%s", testDir, testImage),
+				HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
 			},
 		},
 	}
@@ -32,16 +32,6 @@ func TestMockHypervisorCreateVM(t *testing.T) {
 	assert.NoError(err)
 
 	ctx := context.Background()
-
-	// wrong config
-	err = m.CreateVM(ctx, sandbox.config.ID, network, &sandbox.config.HypervisorConfig)
-	assert.Error(err)
-
-	sandbox.config.HypervisorConfig = HypervisorConfig{
-		KernelPath:     fmt.Sprintf("%s/%s", testDir, testKernel),
-		ImagePath:      fmt.Sprintf("%s/%s", testDir, testImage),
-		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
-	}
 
 	err = m.CreateVM(ctx, sandbox.config.ID, network, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
