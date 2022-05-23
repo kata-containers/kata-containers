@@ -178,6 +178,15 @@ where
     info_list: Vec<DeviceConfigInfo<T>>,
 }
 
+impl<T> Default for DeviceConfigInfos<T>
+where
+    T: ConfigItem + Clone,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> DeviceConfigInfos<T>
 where
     T: ConfigItem + Clone,
@@ -221,10 +230,14 @@ where
         }
     }
 
-    #[allow(dead_code)]
     /// Get number of device configuration information objects.
     pub fn len(&self) -> usize {
         self.info_list.len()
+    }
+
+    /// Returns true if the device configuration information objects is empty.
+    pub fn is_empty(&self) -> bool {
+        self.info_list.len() == 0
     }
 
     /// Add a device configuration information object at the tail.
