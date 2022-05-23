@@ -784,14 +784,13 @@ impl VcpuManager {
 mod hotplug {
     use std::cmp::Ordering;
 
-    use super::*;
-    #[cfg(not(test))]
-    use dbs_upcall::CpuDevRequest;
-    use dbs_upcall::{DevMgrRequest, DevMgrResponse, UpcallClientRequest, UpcallClientResponse};
+    use dbs_upcall::{CpuDevRequest, DevMgrRequest};
 
-    #[cfg(all(target_arch = "x86_64", not(test)))]
+    use super::*;
+
+    #[cfg(all(target_arch = "x86_64"))]
     use dbs_boot::mptable::APIC_VERSION;
-    #[cfg(all(target_arch = "aarch64", not(test)))]
+    #[cfg(all(target_arch = "aarch64"))]
     const APIC_VERSION: u8 = 0;
 
     #[cfg(feature = "dbs-upcall")]
@@ -933,6 +932,9 @@ mod hotplug {
             upcall_client: Arc<UpcallClient<DevMgrService>>,
             request: DevMgrRequest,
         ) -> std::result::Result<(), VcpuManagerError> {
+            // This is used to fix clippy warnings.
+            use dbs_upcall::{DevMgrResponse, UpcallClientRequest, UpcallClientResponse};
+
             let vcpu_state_event = self.vcpu_state_event.try_clone().unwrap();
             let vcpu_state_sender = self.vcpu_state_sender.clone();
 

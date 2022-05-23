@@ -426,13 +426,13 @@ mod tests {
         };
 
         writer.flush().unwrap();
-        writer.write("".as_bytes()).unwrap();
-        writer.write("\n".as_bytes()).unwrap();
-        writer.write("\n\n".as_bytes()).unwrap();
-        writer.write("\n\n\n".as_bytes()).unwrap();
-        writer.write("12\n23\n34\n56".as_bytes()).unwrap();
-        writer.write("78".as_bytes()).unwrap();
-        writer.write("90\n".as_bytes()).unwrap();
+        writer.write_all("".as_bytes()).unwrap();
+        writer.write_all("\n".as_bytes()).unwrap();
+        writer.write_all("\n\n".as_bytes()).unwrap();
+        writer.write_all("\n\n\n".as_bytes()).unwrap();
+        writer.write_all("12\n23\n34\n56".as_bytes()).unwrap();
+        writer.write_all("78".as_bytes()).unwrap();
+        writer.write_all("90\n".as_bytes()).unwrap();
         writer.flush().unwrap();
     }
 

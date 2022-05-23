@@ -642,7 +642,7 @@ impl AddressSpaceMgr {
         let node = self
             .numa_nodes
             .entry(guest_numa_node_id)
-            .or_insert(NumaNode::new());
+            .or_insert_with(NumaNode::new);
         node.add_info(&NumaNodeInfo {
             base: region.start_addr(),
             size: region.len(),
@@ -736,7 +736,7 @@ mod tests {
             .unwrap();
         val = gmem.read_obj(GuestAddress(GUEST_MEM_START + 0x1)).unwrap();
         assert_eq!(val, 0xa5);
-        val = gmem.read_obj(GuestAddress(GUEST_MEM_START + 0x0)).unwrap();
+        val = gmem.read_obj(GuestAddress(GUEST_MEM_START)).unwrap();
         assert_eq!(val, 1);
         val = gmem.read_obj(GuestAddress(GUEST_MEM_START + 0x2)).unwrap();
         assert_eq!(val, 3);
@@ -837,7 +837,7 @@ mod tests {
             size: mem_size >> 20,
             host_numa_node_id: None,
             guest_numa_node_id: Some(0),
-            vcpu_ids: cpu_vec.clone(),
+            vcpu_ids: cpu_vec,
         }];
         let mut builder = AddressSpaceMgrBuilder::new("hugeshmem", "").unwrap();
         builder.toggle_prealloc(true);
@@ -852,9 +852,9 @@ mod tests {
         assert_eq!(builder.mem_type, "shmem");
         assert_eq!(builder.mem_file, "/tmp/shmem");
         assert_eq!(builder.mem_index, 0);
-        assert_eq!(builder.mem_suffix, true);
-        assert_eq!(builder.mem_prealloc, false);
-        assert_eq!(builder.dirty_page_logging, false);
+        assert!(builder.mem_suffix);
+        assert!(!builder.mem_prealloc);
+        assert!(!builder.dirty_page_logging);
         assert!(builder.vmfd.is_none());
 
         assert_eq!(&builder.get_next_mem_file(), "/tmp/shmem0");
@@ -867,10 +867,10 @@ mod tests {
         assert_eq!(&builder.get_next_mem_file(), "/tmp/shmem");
         assert_eq!(builder.mem_index, 3);
 
-        builder.toggle_prealloc(true);
-        builder.toggle_dirty_page_logging(true);
-        assert_eq!(builder.mem_prealloc, true);
-        assert_eq!(builder.dirty_page_logging, true);
+        builder.set_prealloc(true);
+        builder.set_dirty_page_logging(true);
+        assert!(builder.mem_prealloc);
+        assert!(builder.dirty_page_logging);
     }
 
     #[test]
