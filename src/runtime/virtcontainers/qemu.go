@@ -513,7 +513,6 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 	span, ctx := katatrace.Trace(ctx, q.Logger(), "CreateVM", qemuTracingTags, map[string]string{"VM_ID": q.id})
 	defer span.End()
 
-	// Breaks hypervisor abstraction Has Kata Specific logic: See within
 	if err := q.setup(ctx, id, hypervisorConfig); err != nil {
 		return err
 	}
