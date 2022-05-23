@@ -189,11 +189,6 @@ func (fc *firecracker) truncateID(id string) string {
 }
 
 func (fc *firecracker) setConfig(config *HypervisorConfig) error {
-	err := config.Valid()
-	if err != nil {
-		return err
-	}
-
 	fc.config = *config
 
 	return nil

@@ -529,59 +529,6 @@ func (conf *HypervisorConfig) CheckTemplateConfig() error {
 	return nil
 }
 
-func (conf *HypervisorConfig) Valid() error {
-
-	// Kata specific checks. Should be done outside the hypervisor
-	if conf.KernelPath == "" {
-		return fmt.Errorf("Missing kernel path")
-	}
-
-	if conf.ImagePath == "" && conf.InitrdPath == "" {
-		return fmt.Errorf("Missing image and initrd path")
-	}
-
-	if conf.ImagePath != "" && conf.InitrdPath != "" {
-		return fmt.Errorf("Image and initrd path cannot be both set")
-	}
-
-	if err := conf.CheckTemplateConfig(); err != nil {
-		return err
-	}
-
-	if conf.NumVCPUs == 0 {
-		conf.NumVCPUs = defaultVCPUs
-	}
-
-	if conf.MemorySize == 0 {
-		conf.MemorySize = defaultMemSzMiB
-	}
-
-	if conf.DefaultBridges == 0 {
-		conf.DefaultBridges = defaultBridges
-	}
-
-	if conf.BlockDeviceDriver == "" {
-		conf.BlockDeviceDriver = defaultBlockDriver
-	} else if conf.BlockDeviceDriver == config.VirtioBlock && conf.HypervisorMachineType == "s390-ccw-virtio" {
-		conf.BlockDeviceDriver = config.VirtioBlockCCW
-	}
-
-	if conf.DefaultMaxVCPUs == 0 || conf.DefaultMaxVCPUs > defaultMaxVCPUs {
-		conf.DefaultMaxVCPUs = defaultMaxVCPUs
-	}
-
-	if conf.ConfidentialGuest && conf.NumVCPUs != conf.DefaultMaxVCPUs {
-		hvLogger.Warnf("Confidential guests do not support hotplugging of vCPUs. Setting DefaultMaxVCPUs to NumVCPUs (%d)", conf.NumVCPUs)
-		conf.DefaultMaxVCPUs = conf.NumVCPUs
-	}
-
-	if conf.Msize9p == 0 && conf.SharedFS != config.VirtioFS {
-		conf.Msize9p = defaultMsize9p
-	}
-
-	return nil
-}
-
 // AddKernelParam allows the addition of new kernel parameters to an existing
 // hypervisor configuration.
 func (conf *HypervisorConfig) AddKernelParam(p Param) error {

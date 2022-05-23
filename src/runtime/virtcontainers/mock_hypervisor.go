@@ -33,6 +33,7 @@ func (m *mockHypervisor) HypervisorConfig() HypervisorConfig {
 
 func (m *mockHypervisor) setConfig(config *HypervisorConfig) error {
 	m.config = *config
+
 	return nil
 }
 

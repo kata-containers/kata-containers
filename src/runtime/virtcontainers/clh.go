@@ -189,11 +189,6 @@ var clhDebugKernelParams = []Param{
 //###########################################################
 
 func (clh *cloudHypervisor) setConfig(config *HypervisorConfig) error {
-	err := config.Valid()
-	if err != nil {
-		return err
-	}
-
 	clh.config = *config
 
 	return nil
