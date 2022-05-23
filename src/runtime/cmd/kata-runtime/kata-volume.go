@@ -7,10 +7,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
 
 	containerdshim "github.com/kata-containers/kata-containers/src/runtime/pkg/containerd-shim-v2"
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
+	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils/shimclient"
 
 	"github.com/urfave/cli"
@@ -89,12 +90,14 @@ var statsCommand = cli.Command{
 			Destination: &volumePath,
 		},
 	},
-	Action: func(c *cli.Context) (string, error) {
+	Action: func(c *cli.Context) error {
 		stats, err := Stats(volumePath)
 		if err != nil {
-			return "", cli.NewExitError(err.Error(), 1)
+			return cli.NewExitError(err.Error(), 1)
 		}
-		return string(stats), nil
+
+		fmt.Println(string(stats))
+		return nil
 	},
 }
 
