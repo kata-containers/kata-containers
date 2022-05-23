@@ -1194,6 +1194,6 @@ pub mod tests {
             EventManager::new(&vmm, epoll_mgr).expect("Cannot create epoll manager");
 
         let res = vm.start_microvm(&mut event_mgr, BpfProgram::default(), BpfProgram::default());
-        assert!(res.is_ok());
+        res.unwrap();
     }
 }
