@@ -133,7 +133,7 @@ In our case, there will be a variety of resources, and every resource has severa
 
   The `Dragonball` could work as an external hypervisor. However, stability and performance is challenging in this case. Built in VMM could optimise the container overhead, and it's easy to maintain stability.
 
-  `runD` is the `containerd-shim-v2` counterpart of `runC` and can run a pod/containers. `Dragonball` is a `microvm`/VMM that is designed to run container workloads. Instead of microvm/VMM, we sometimes refer to it as secure sandbox.
+  `runD` is the `containerd-shim-v2` counterpart of `runC` and can run a pod/containers. `Dragonball` is a `microvm`/VMM that is designed to run container workloads. Instead of `microvm`/VMM, we sometimes refer to it as secure sandbox.
 
 - QEMU, Cloud Hypervisor and Firecracker support are planned, but how that would work. Are they working in separate process?
  
@@ -141,8 +141,29 @@ In our case, there will be a variety of resources, and every resource has severa
 
 - What is `upcall`?
   
+    The `upcall` is used to hotplug CPU/memory/MMIO devices, and it solves two issues.
+    1. avoid dependency on PCI/ACPI
+    2. avoid dependency on `udevd` within guest and get deterministic results for hotplug operations. So `upcall` is an alternative to ACPI based CPU/memory/device hotplug. And we may cooperate with the community to add support for ACPI based CPU/memory/device hotplug if needed.
+   
     `Dbs-upcall` is a `vsock-based` direct communication tool between VMM and guests. The server side of the `upcall` is a driver in guest kernel (kernel patches are needed for this feature) and it'll start to serve the requests once the kernel has started. And the client side is in VMM , it'll be a thread that communicates with VSOCK through `uds`. We have accomplished device hotplug / hot-unplug directly through `upcall` in order to avoid virtualization of ACPI  to minimize virtual machine's overhead. And there could be many other usage through this direct communication channel. It's already open source.
    https://github.com/openanolis/dragonball-sandbox/tree/main/crates/dbs-upcall 
+
+- The URL below says the kernel patches work with 4.19, but do they also work with 5.15+ ?
+  
+  Forward compatibility should be achievable, we have ported it to 5.10 based kernel.
+
+- Are these patches platform-specific or would they work for any architecture that supports VSOCK?
+  
+  It's almost platform independent, but some message related to CPU hotplug are platform dependent.
+
+- Could the kernel driver be replaced with a userland daemon in the guest using loopback VSOCK?
+  
+  We need to create device nodes for hot-added CPU/memory/devices, so it's not easy for userspace daemon to do these tasks.
+
+- The fact that `upcall` allows communication between the VMM and the guest suggests that this architecture might be incompatible with https://github.com/confidential-containers where the VMM should have no knowledge of what happens inside the VM.
+  
+  1. `TDX` doesn't support CPU/memory hotplug yet.
+  2. For ACPI based device hotplug, it depends on ACPI `DSDT` table, and the guest kernel will execute `ASL` code to handle during handling those hotplug event. And it should be easier to audit VSOCK based communication than ACPI `ASL` methods.
 
 - What is the security boundary for the monolithic / "Built-in VMM" case?
   
