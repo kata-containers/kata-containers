@@ -670,6 +670,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.PCIeRootPort] = "2"
 	ocispec.Annotations[vcAnnotations.IOMMUPlatform] = "true"
 	ocispec.Annotations[vcAnnotations.SGXEPC] = "64Mi"
+	ocispec.Annotations[vcAnnotations.UseLegacySerial] = "true"
 	// 10Mbit
 	ocispec.Annotations[vcAnnotations.RxRateLimiterMaxRate] = "10000000"
 	ocispec.Annotations[vcAnnotations.TxRateLimiterMaxRate] = "10000000"
@@ -706,6 +707,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(config.HypervisorConfig.PCIeRootPort, uint32(2))
 	assert.Equal(config.HypervisorConfig.IOMMUPlatform, true)
 	assert.Equal(config.HypervisorConfig.SGXEPCSize, int64(67108864))
+	assert.Equal(config.HypervisorConfig.LegacySerial, true)
 	assert.Equal(config.HypervisorConfig.RxRateLimiterMaxRate, uint64(10000000))
 	assert.Equal(config.HypervisorConfig.TxRateLimiterMaxRate, uint64(10000000))
 

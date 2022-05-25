@@ -28,7 +28,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -426,7 +425,7 @@ func (a *Acrn) CreateVM(ctx context.Context, id string, network Network, hypervi
 	return nil
 }
 
-// startSandbox will start the Sandbox's VM.
+// StartVM will start the Sandbox's VM.
 func (a *Acrn) StartVM(ctx context.Context, timeoutSecs int) error {
 	span, ctx := katatrace.Trace(ctx, a.Logger(), "StartVM", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
@@ -486,7 +485,7 @@ func (a *Acrn) waitVM(ctx context.Context, timeoutSecs int) error {
 	return nil
 }
 
-// stopSandbox will stop the Sandbox's VM.
+// StopVM will stop the Sandbox's VM.
 func (a *Acrn) StopVM(ctx context.Context, waitOnly bool) (err error) {
 	span, _ := katatrace.Trace(ctx, a.Logger(), "StopVM", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
@@ -543,7 +542,7 @@ func (a *Acrn) updateBlockDevice(drive *config.BlockDrive) error {
 	slot := AcrnBlkdDevSlot[drive.Index]
 
 	//Explicitly set PCIPath to NULL, so that VirtPath can be used
-	drive.PCIPath = vcTypes.PciPath{}
+	drive.PCIPath = types.PciPath{}
 
 	args := []string{"blkrescan", a.acrnConfig.Name, fmt.Sprintf("%d,%s", slot, drive.File)}
 
@@ -600,7 +599,7 @@ func (a *Acrn) ResumeVM(ctx context.Context) error {
 	return nil
 }
 
-// addDevice will add extra devices to acrn command line.
+// AddDevice will add extra devices to acrn command line.
 func (a *Acrn) AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
 	var err error
 	span, _ := katatrace.Trace(ctx, a.Logger(), "AddDevice", acrnTracingTags, map[string]string{"sandbox_id": a.id})
@@ -633,8 +632,8 @@ func (a *Acrn) AddDevice(ctx context.Context, devInfo interface{}, devType Devic
 	return err
 }
 
-// getSandboxConsole builds the path of the console where we can read
-// logs coming from the sandbox.
+// GetVMConsole builds the path of the console where we can read logs coming
+// from the sandbox.
 func (a *Acrn) GetVMConsole(ctx context.Context, id string) (string, string, error) {
 	span, _ := katatrace.Trace(ctx, a.Logger(), "GetVMConsole", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()

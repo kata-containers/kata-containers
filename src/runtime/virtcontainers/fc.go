@@ -200,7 +200,7 @@ func (fc *firecracker) setConfig(config *HypervisorConfig) error {
 }
 
 // CreateVM For firecracker this call only sets the internal structure up.
-// The sandbox will be created and started through startSandbox().
+// The sandbox will be created and started through StartVM().
 func (fc *firecracker) CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error {
 	fc.ctx = ctx
 
@@ -763,7 +763,7 @@ func (fc *firecracker) fcInitConfiguration(ctx context.Context) error {
 	return nil
 }
 
-// startSandbox will start the hypervisor for the given sandbox.
+// StartVM will start the hypervisor for the given sandbox.
 // In the context of firecracker, this will start the hypervisor,
 // for configuration, but not yet start the actual virtual machine
 func (fc *firecracker) StartVM(ctx context.Context, timeout int) error {
@@ -881,7 +881,7 @@ func (fc *firecracker) cleanupJail(ctx context.Context) {
 	}
 }
 
-// stopSandbox will stop the Sandbox's VM.
+// StopVM will stop the Sandbox's VM.
 func (fc *firecracker) StopVM(ctx context.Context, waitOnly bool) (err error) {
 	span, _ := katatrace.Trace(ctx, fc.Logger(), "StopVM", fcTracingTags, map[string]string{"sandbox_id": fc.id})
 	defer span.End()
@@ -1025,7 +1025,7 @@ func (fc *firecracker) fcUpdateBlockDrive(ctx context.Context, path, id string) 
 	return nil
 }
 
-// addDevice will add extra devices to firecracker.  Limited to configure before the
+// AddDevice will add extra devices to firecracker.  Limited to configure before the
 // virtual machine starts.  Devices include drivers and network interfaces only.
 func (fc *firecracker) AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
 	span, _ := katatrace.Trace(ctx, fc.Logger(), "AddDevice", fcTracingTags, map[string]string{"sandbox_id": fc.id})
@@ -1128,8 +1128,8 @@ func (fc *firecracker) HotplugRemoveDevice(ctx context.Context, devInfo interfac
 	}
 }
 
-// getSandboxConsole builds the path of the console where we can read
-// logs coming from the sandbox.
+// GetVMConsole builds the path of the console where we can read logs coming
+// from the sandbox.
 func (fc *firecracker) GetVMConsole(ctx context.Context, id string) (string, string, error) {
 	master, slave, err := console.NewPty()
 	if err != nil {

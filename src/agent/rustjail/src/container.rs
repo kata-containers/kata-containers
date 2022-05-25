@@ -78,9 +78,6 @@ const HOME_ENV_KEY: &str = "HOME";
 const PIDNS_FD: &str = "PIDNS_FD";
 const CONSOLE_SOCKET_FD: &str = "CONSOLE_SOCKET_FD";
 
-#[cfg(feature = "standard-oci-runtime")]
-const OCI_AGENT_BINARY: &str = "oci-kata-agent";
-
 #[derive(Debug)]
 pub struct ContainerStatus {
     pre_status: ContainerState,
@@ -951,15 +948,7 @@ impl BaseContainer for LinuxContainer {
             let _ = unistd::close(pid);
         });
 
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "standard-oci-runtime")] {
-                let exec_path = PathBuf::from(OCI_AGENT_BINARY);
-            }
-            else {
-                let exec_path = std::env::current_exe()?;
-            }
-        }
-
+        let exec_path = std::env::current_exe()?;
         let mut child = std::process::Command::new(exec_path);
 
         #[allow(unused_mut)]

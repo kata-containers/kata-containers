@@ -537,6 +537,9 @@ type HypervisorConfig struct {
 
 	// Disable selinux from the hypervisor process
 	DisableSeLinux bool
+
+	// Use legacy serial for the guest console
+	LegacySerial bool
 }
 
 // vcpu mapping from vcpu number to thread number

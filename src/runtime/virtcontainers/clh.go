@@ -32,7 +32,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -538,7 +537,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	return nil
 }
 
-// startSandbox will start the VMM and boot the virtual machine for the given sandbox.
+// StartVM will start the VMM and boot the virtual machine for the given sandbox.
 func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "StartVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
@@ -592,8 +591,8 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 	return nil
 }
 
-// getSandboxConsole builds the path of the console where we can read
-// logs coming from the sandbox.
+// GetVMConsole builds the path of the console where we can read logs coming
+// from the sandbox.
 func (clh *cloudHypervisor) GetVMConsole(ctx context.Context, id string) (string, string, error) {
 	clh.Logger().WithField("function", "GetVMConsole").WithField("id", id).Info("Get Sandbox Console")
 	master, slave, err := console.NewPty()
@@ -632,18 +631,18 @@ func clhDriveIndexToID(i int) string {
 // and/or kernel enumerates it.  They get away with it only because
 // they don't use bridges, and so the bus is always 0.  Under that
 // assumption convert a clh PciDeviceInfo into a PCI path
-func clhPciInfoToPath(pciInfo chclient.PciDeviceInfo) (vcTypes.PciPath, error) {
+func clhPciInfoToPath(pciInfo chclient.PciDeviceInfo) (types.PciPath, error) {
 	tokens := strings.Split(pciInfo.Bdf, ":")
 	if len(tokens) != 3 || tokens[0] != "0000" || tokens[1] != "00" {
-		return vcTypes.PciPath{}, fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
+		return types.PciPath{}, fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
 	}
 
 	tokens = strings.Split(tokens[2], ".")
 	if len(tokens) != 2 || tokens[1] != "0" || len(tokens[0]) != 2 {
-		return vcTypes.PciPath{}, fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
+		return types.PciPath{}, fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
 	}
 
-	return vcTypes.PciPathFromString(tokens[0])
+	return types.PciPathFromString(tokens[0])
 }
 
 func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) error {
@@ -719,7 +718,7 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 		return fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
 	}
 
-	device.GuestPciPath, err = vcTypes.PciPathFromString(tokens[0])
+	device.GuestPciPath, err = types.PciPathFromString(tokens[0])
 
 	return err
 }
@@ -907,7 +906,7 @@ func (clh *cloudHypervisor) ResumeVM(ctx context.Context) error {
 	return nil
 }
 
-// stopSandbox will stop the Sandbox's VM.
+// StopVM will stop the Sandbox's VM.
 func (clh *cloudHypervisor) StopVM(ctx context.Context, waitOnly bool) (err error) {
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "StopVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
