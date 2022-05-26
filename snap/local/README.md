@@ -43,14 +43,14 @@ $ make -C tools/packaging snap
 > only run the snap build in a minimal host environment.
 
 To install the resulting snap image, snap must be put in [classic mode][3] and the
-security confinement must be disabled (*--classic*). Also since the resulting snap
-has not been signed the verification of signature must be omitted (*--dangerous*).
+security confinement must be disabled (`--classic`). Also since the resulting snap
+has not been signed the verification of signature must be omitted (`--dangerous`).
 
 ```sh
-$ sudo snap install --classic --dangerous kata-containers_[VERSION]_[ARCH].snap
+$ sudo snap install --classic --dangerous "kata-containers_${version}_${arch}.snap"
 ```
 
-Replace `VERSION` with the current version of Kata Containers and `ARCH` with
+Replace `${version}` with the current version of Kata Containers and `${arch}` with
 the system architecture.
 
 ## Configure Kata Containers
