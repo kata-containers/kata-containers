@@ -616,6 +616,8 @@ components:
           items:
             type: integer
             format: int16
+        serial_number:
+          type: string
 
     MemoryZoneConfig:
       required:
