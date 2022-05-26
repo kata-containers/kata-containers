@@ -161,6 +161,8 @@ var vmAddNetPutRequest = func(clh *cloudHypervisor) error {
 	defer conn.Close()
 
 	for _, netDevice := range *clh.netDevices {
+		clh.Logger().Infof("Adding the net device to the Cloud Hypervisor VM configuration: %+v", netDevice)
+
 		netDeviceAsJson, err := json.Marshal(netDevice)
 		if err != nil {
 			return err
@@ -1465,10 +1467,6 @@ func (clh *cloudHypervisor) addNet(e Endpoint) error {
 	}
 	clh.netDevicesFiles[mac] = netPair.TapInterface.VMFds
 
-	clh.Logger().WithFields(log.Fields{
-		"mac": mac,
-	}).Info("Adding Net")
-
 	netRateLimiterConfig := clh.getNetRateLimiterConfig()
 
 	net := chclient.NewNetConfig()
@@ -1482,6 +1480,8 @@ func (clh *cloudHypervisor) addNet(e Endpoint) error {
 	} else {
 		clh.netDevices = &[]chclient.NetConfig{*net}
 	}
+
+	clh.Logger().Infof("Storing the Cloud Hypervisor network configuration: %+v", net)
 
 	return nil
 }
