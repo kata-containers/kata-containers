@@ -28,6 +28,20 @@ Run the command below which will use the packaging Makefile to build the snap im
 $ make -C tools/packaging snap
 ```
 
+> **Warning:**
+>
+> By default, `snapcraft` will create a clean virtual machine
+> environment to build the snap in using the `multipass` tool.
+>
+> However, `multipass` is silently disabled when `--destructive-mode` is
+> used.
+>
+> Since building the Kata Containers package currently requires
+> `--destructive-mode`, the snap will be built using the host
+> environment. To avoid parts of the build auto-detecting additional
+> features to enable (for example for QEMU), we recommend that you
+> only run the snap build in a minimal host environment.
+
 To install the resulting snap image, snap must be put in [classic mode][3] and the
 security confinement must be disabled (*--classic*). Also since the resulting snap
 has not been signed the verification of signature must be omitted (*--dangerous*).
