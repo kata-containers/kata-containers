@@ -88,6 +88,20 @@ pub struct VsockDeviceConfigInfo {
     pub use_generic_irq: Option<bool>,
 }
 
+impl Default for VsockDeviceConfigInfo {
+    fn default() -> Self {
+        Self {
+            id: String::default(),
+            guest_cid: 0,
+            uds_path: None,
+            tcp_addr: None,
+            queue_size: Vec::from(QUEUE_SIZES),
+            use_shared_irq: None,
+            use_generic_irq: None,
+        }
+    }
+}
+
 impl VsockDeviceConfigInfo {
     /// Get number and size of queues supported.
     pub fn queue_sizes(&self) -> Vec<u16> {
