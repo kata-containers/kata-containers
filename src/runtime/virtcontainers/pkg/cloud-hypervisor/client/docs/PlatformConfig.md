@@ -6,6 +6,7 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **NumPciSegments** | Pointer to **int32** |  | [optional] 
 **IommuSegments** | Pointer to **[]int32** |  | [optional] 
+**SerialNumber** | Pointer to **string** |  | [optional] 
 
 ## Methods
 
@@ -75,6 +76,31 @@ SetIommuSegments sets IommuSegments field to given value.
 `func (o *PlatformConfig) HasIommuSegments() bool`
 
 HasIommuSegments returns a boolean if a field has been set.
+
+### GetSerialNumber
+
+`func (o *PlatformConfig) GetSerialNumber() string`
+
+GetSerialNumber returns the SerialNumber field if non-nil, zero value otherwise.
+
+### GetSerialNumberOk
+
+`func (o *PlatformConfig) GetSerialNumberOk() (*string, bool)`
+
+GetSerialNumberOk returns a tuple with the SerialNumber field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetSerialNumber
+
+`func (o *PlatformConfig) SetSerialNumber(v string)`
+
+SetSerialNumber sets SerialNumber field to given value.
+
+### HasSerialNumber
+
+`func (o *PlatformConfig) HasSerialNumber() bool`
+
+HasSerialNumber returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
