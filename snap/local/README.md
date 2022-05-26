@@ -22,10 +22,10 @@ $ sudo snap install kata-containers --classic
 
 ## Build and install snap image
 
-Run next command at the root directory of the packaging repository.
+Run the command below which will use the packaging Makefile to build the snap image:
 
 ```sh
-$ make snap
+$ make -C tools/packaging snap
 ```
 
 To install the resulting snap image, snap must be put in [classic mode][3] and the
