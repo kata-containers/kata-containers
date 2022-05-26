@@ -17,20 +17,20 @@ use crate::vm::{CpuTopology, KernelConfigInfo, VmConfigInfo};
 use crate::vmm::Vmm;
 
 #[cfg(feature = "virtio-blk")]
-use crate::device_manager::blk_dev_mgr::{
+pub use crate::device_manager::blk_dev_mgr::{
     BlockDeviceConfigInfo, BlockDeviceConfigUpdateInfo, BlockDeviceError, BlockDeviceMgr,
 };
 #[cfg(feature = "virtio-fs")]
-use crate::device_manager::fs_dev_mgr::{
+pub use crate::device_manager::fs_dev_mgr::{
     FsDeviceConfigInfo, FsDeviceConfigUpdateInfo, FsDeviceError, FsDeviceMgr, FsMountConfigInfo,
 };
 #[cfg(feature = "virtio-net")]
-use crate::device_manager::virtio_net_dev_mgr::{
+pub use crate::device_manager::virtio_net_dev_mgr::{
     VirtioNetDeviceConfigInfo, VirtioNetDeviceConfigUpdateInfo, VirtioNetDeviceError,
     VirtioNetDeviceMgr,
 };
 #[cfg(feature = "virtio-vsock")]
-use crate::device_manager::vsock_dev_mgr::{VsockDeviceConfigInfo, VsockDeviceError};
+pub use crate::device_manager::vsock_dev_mgr::{VsockDeviceConfigInfo, VsockDeviceError};
 
 use super::*;
 

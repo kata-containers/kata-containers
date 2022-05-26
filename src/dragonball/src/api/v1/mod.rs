@@ -4,9 +4,7 @@
 //! API Version 1 related data structures to configure the vmm.
 
 mod vmm_action;
-pub use self::vmm_action::{
-    VmmAction, VmmActionError, VmmData, VmmRequest, VmmResponse, VmmService,
-};
+pub use self::vmm_action::*;
 
 /// Wrapper for configuring the microVM boot source.
 mod boot_source;
