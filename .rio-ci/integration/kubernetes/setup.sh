@@ -30,7 +30,7 @@ function main() {
   export GLOBAL_CONFIG=${GLOBAL_CONFIG:-/kubeconfig}
   IMAGE_URL="docker.apple.com/aci/rekursion/rekursion-allinone:latest"
 
-  ksmith spawn --force --priority "${PRIORITY_CLASS}" --image ${IMAGE_URL} --owner "$(whoami)" "${CLUSTER_NAME}" --kubeconfig "${GLOBAL_CONFIG}"
+  ksmith spawn --force --priority "${PRIORITY_CLASS}" --image ${IMAGE_URL} --owner "$(whoami)" "${CLUSTER_NAME}" --kubeconfig "${GLOBAL_CONFIG}" --apc-system latest
 
   CURRENT_DIR=$(pwd)
 
