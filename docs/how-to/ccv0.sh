@@ -138,7 +138,8 @@ build_and_install_all() {
 }
 
 rebuild_and_install_kata() {
-    check_out_repos
+    checkout_tests_repo
+    checkout_kata_containers_repo
     build_and_install_kata_runtime
     build_and_add_agent_to_rootfs
     build_and_install_rootfs
@@ -158,12 +159,16 @@ initialize() {
     . ${PROFILE}
     mkdir -p "${GOPATH}"
 
-    check_out_repos
+    checkout_tests_repo
 
     pushd "${tests_repo_dir}"
     local ci_dir_name=".ci"
     sudo -E PATH=$PATH -s "${ci_dir_name}/install_go.sh" -p -f
     sudo -E PATH=$PATH -s "${ci_dir_name}/install_rust.sh"
+    # Need to change ownership of rustup so later process can create temp files there
+    sudo chown -R ${USER}:${USER} "${HOME}/.rustup"
+
+    checkout_kata_containers_repo
 
     # Run setup, but don't install kata as we will build it ourselves in locations matching the developer guide
     export INSTALL_KATA="no"
@@ -173,7 +178,7 @@ initialize() {
     popd
 }
 
-check_out_repos() {
+checkout_tests_repo() {
     echo "Creating repo: ${tests_repo} and branch ${tests_branch} into ${tests_repo_dir}..."
     # Due to git https://github.blog/2022-04-12-git-security-vulnerability-announced/ the tests repo needs
     # to be owned by root as it is re-checked out in rootfs.sh
@@ -186,22 +191,18 @@ check_out_repos() {
         sudo -E git checkout ${tests_branch}
     fi
     sudo -E git reset --hard origin/${tests_branch}
+    popd
 
     source "${BATS_TEST_DIRNAME}/lib.sh"
     source "${BATS_TEST_DIRNAME}/../../confidential/lib.sh"
+}
 
-    popd
-
-    echo "Creating repo: ${katacontainers_repo} and branch ${katacontainers_branch} into ${katacontainers_repo_dir}..."
-    mkdir -p $(dirname "${katacontainers_repo_dir}")
-    [ -d "${katacontainers_repo_dir}" ] || git clone "https://${katacontainers_repo}.git" "${katacontainers_repo_dir}"
-    pushd "${katacontainers_repo_dir}"
-    git fetch
-    if [ -n "${katacontainers_branch}" ]; then
-        git checkout ${katacontainers_branch}
-    fi
-    git reset --hard origin/${katacontainers_branch}
-    popd
+# Note: clone_katacontainers_repo using go, so that needs to be installed first
+checkout_kata_containers_repo() {
+    source "${tests_repo_dir}/.ci/lib.sh"
+    echo "Creating repo: ${katacontainers_repo} and branch ${kata_default_branch} into ${katacontainers_repo_dir}..."
+    clone_katacontainers_repo
+    sudo -E chown -R ${USER}:${USER} "${katacontainers_repo_dir}"
 }
 
 build_and_install_kata_runtime() {
