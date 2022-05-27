@@ -48,6 +48,16 @@ impl Container {
             }
         }
 
+        if let Some(process) = spec.process.as_ref() {
+            // runk always launches containers with detached mode, so users have to
+            // use a console socket with run or create operation when a terminal is used.
+            if process.terminal && self.console_socket.is_none() {
+                return Err(anyhow!(
+                    "cannot allocate a pseudo-TTY without setting a console socket"
+                ));
+            }
+        }
+
         Ok(ContainerContext {
             id: self.id,
             bundle: self.bundle,
@@ -66,7 +76,7 @@ impl Container {
 mod tests {
     use super::*;
     use crate::container::CONFIG_FILE_NAME;
-    use oci::Spec;
+    use oci::{self, Spec};
     use std::{fs::File, path::PathBuf};
     use tempfile::tempdir;
 
@@ -117,5 +127,38 @@ mod tests {
             .unwrap();
 
         assert_eq!(test_ctx, ctx);
+    }
+
+    #[test]
+    fn test_create_ctx_tty_err() {
+        let bundle_dir = tempdir().unwrap();
+        let config_file = bundle_dir.path().join(CONFIG_FILE_NAME);
+
+        let mut spec = Spec::default();
+        spec.process = Some(oci::Process::default());
+        spec.process.as_mut().unwrap().terminal = true;
+
+        let file = File::create(config_file).unwrap();
+        serde_json::to_writer(&file, &spec).unwrap();
+
+        let test_data = TestData {
+            id: String::from("test"),
+            bundle: PathBuf::from(bundle_dir.into_path()),
+            root: PathBuf::from("test"),
+            console_socket: None,
+            spec: Spec::default(),
+            no_pivot_root: false,
+        };
+
+        let ctx = ContainerBuilder::default()
+            .id(test_data.id.clone())
+            .bundle(test_data.bundle.clone())
+            .root(test_data.root.clone())
+            .console_socket(test_data.console_socket.clone())
+            .build()
+            .unwrap()
+            .create_ctx();
+
+        assert!(ctx.is_err());
     }
 }
