@@ -18,6 +18,7 @@ import (
 type PlatformConfig struct {
 	NumPciSegments *int32   `json:"num_pci_segments,omitempty"`
 	IommuSegments  *[]int32 `json:"iommu_segments,omitempty"`
+	SerialNumber   *string  `json:"serial_number,omitempty"`
 }
 
 // NewPlatformConfig instantiates a new PlatformConfig object
@@ -101,6 +102,38 @@ func (o *PlatformConfig) SetIommuSegments(v []int32) {
 	o.IommuSegments = &v
 }
 
+// GetSerialNumber returns the SerialNumber field value if set, zero value otherwise.
+func (o *PlatformConfig) GetSerialNumber() string {
+	if o == nil || o.SerialNumber == nil {
+		var ret string
+		return ret
+	}
+	return *o.SerialNumber
+}
+
+// GetSerialNumberOk returns a tuple with the SerialNumber field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetSerialNumberOk() (*string, bool) {
+	if o == nil || o.SerialNumber == nil {
+		return nil, false
+	}
+	return o.SerialNumber, true
+}
+
+// HasSerialNumber returns a boolean if a field has been set.
+func (o *PlatformConfig) HasSerialNumber() bool {
+	if o != nil && o.SerialNumber != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetSerialNumber gets a reference to the given string and assigns it to the SerialNumber field.
+func (o *PlatformConfig) SetSerialNumber(v string) {
+	o.SerialNumber = &v
+}
+
 func (o PlatformConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.NumPciSegments != nil {
@@ -108,6 +141,9 @@ func (o PlatformConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.IommuSegments != nil {
 		toSerialize["iommu_segments"] = o.IommuSegments
+	}
+	if o.SerialNumber != nil {
+		toSerialize["serial_number"] = o.SerialNumber
 	}
 	return json.Marshal(toSerialize)
 }

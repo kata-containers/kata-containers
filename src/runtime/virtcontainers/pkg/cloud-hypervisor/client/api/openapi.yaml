@@ -606,6 +606,7 @@ components:
             - 3
             - 3
             num_pci_segments: 3
+            serial_number: serial_number
           pmem:
           - pci_segment: 6
             mergeable: false
@@ -948,6 +949,7 @@ components:
           - 3
           - 3
           num_pci_segments: 3
+          serial_number: serial_number
         pmem:
         - pci_segment: 6
           mergeable: false
@@ -1169,6 +1171,7 @@ components:
         - 3
         - 3
         num_pci_segments: 3
+        serial_number: serial_number
       properties:
         num_pci_segments:
           format: int16
@@ -1178,6 +1181,8 @@ components:
             format: int16
             type: integer
           type: array
+        serial_number:
+          type: string
       type: object
     MemoryZoneConfig:
       example:
