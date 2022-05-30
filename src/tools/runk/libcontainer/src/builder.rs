@@ -37,20 +37,20 @@ impl Container {
             // If the rootfs path in the spec file is a relative path,
             // convert it into a canonical path to pass validation of rootfs in the agent.
             if !&rootfs_path.is_absolute() {
-                let rootfs_name = rootfs_path
-                    .file_name()
-                    .ok_or_else(|| anyhow!("invalid rootfs name"))?;
                 spec_root.path = bundle_canon
-                    .join(rootfs_name)
+                    .join(rootfs_path)
+                    .canonicalize()?
                     .to_str()
                     .map(|s| s.to_string())
-                    .ok_or_else(|| anyhow!("failed to convert bundle path"))?;
+                    .ok_or_else(|| {
+                        anyhow!("failed to convert a rootfs path into a canonical path")
+                    })?;
             }
         }
 
         Ok(ContainerContext {
             id: self.id,
-            bundle: self.bundle,
+            bundle: bundle_canon,
             state_root: self.root,
             spec,
             // TODO: liboci-cli does not support --no-pivot option for create and run command.
