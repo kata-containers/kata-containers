@@ -246,7 +246,7 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 # Enabling this will result in the VM having a vIOMMU device
 # This will also add the following options to the kernel's
 # command line: intel_iommu=on,iommu=pt
-#enable_iommu = true
+enable_iommu = true
 
 # Enable IOMMU_PLATFORM, default false
 # Enabling this will result in the VM device having iommu_platform=on set
