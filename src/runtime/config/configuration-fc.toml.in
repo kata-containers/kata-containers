@@ -140,12 +140,6 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_FC@"
 # result in memory pre allocation
 #enable_hugepages = true
 
-# Enable vIOMMU, default false
-# Enabling this will result in the VM having a vIOMMU device
-# This will also add the following options to the kernel's
-# command line: intel_iommu=on,iommu=pt
-#enable_iommu = true
-
 # This option changes the default hypervisor and kernel parameters
 # to enable debug output where available.
 #
@@ -161,13 +155,6 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_FC@"
 # This is the msize used for 9p shares. It is the number of bytes
 # used for 9p packet payload.
 #msize_9p = @DEFMSIZE9P@
-
-# VFIO devices are hotplugged on a bridge by default.
-# Enable hotplugging on root bus. This may be required for devices with
-# a large PCI bar, as this is a current limitation with hotplugging on
-# a bridge.
-# Default false
-#hotplug_vfio_on_root_bus = true
 
 #
 # Default entropy source.
