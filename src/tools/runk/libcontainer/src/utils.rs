@@ -45,7 +45,8 @@ pub(crate) mod test_utils {
     use std::time::SystemTime;
 
     pub const TEST_CONTAINER_ID: &str = "test";
-    pub const TEST_BUNDLE_PATH: &str = "/test";
+    pub const TEST_STATE_ROOT_PATH: &str = "/state";
+    pub const TEST_BUNDLE_PATH: &str = "/bundle";
     pub const TEST_ANNOTATION: &str = "test";
     pub const TEST_CGM_DATA: &str = r#"{
         "paths": {
@@ -92,6 +93,7 @@ pub(crate) mod test_utils {
         let oci_state = create_dummy_oci_state();
         let created = SystemTime::now();
         let status = Status::new(
+            Path::new(TEST_STATE_ROOT_PATH),
             Path::new(TEST_BUNDLE_PATH),
             oci_state.clone(),
             1,

@@ -95,6 +95,7 @@ impl ContainerContext {
         let oci_state = ctr.oci_state()?;
         let status = Status::new(
             &self.state_root,
+            &self.bundle,
             oci_state,
             ctr.init_process_start_time,
             ctr.created,
@@ -141,7 +142,7 @@ mod tests {
 
     #[test]
     fn test_get_fifo_path() {
-        let test_data = PathBuf::from(TEST_BUNDLE_PATH)
+        let test_data = PathBuf::from(TEST_STATE_ROOT_PATH)
             .join(TEST_CONTAINER_ID)
             .join(EXEC_FIFO_FILENAME);
         let status = create_dummy_status();
