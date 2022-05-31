@@ -18,11 +18,11 @@ const (
 	pidTypeProcessGroupId = 2
 
 	// Pid affects the current pid
-	Pid PidType = pidtypePid
+	Pid PidType = pidTypePid
 	// ThreadGroup affects all threads in the group
-	ThreadGroup PidType = pidtypeTgid
+	ThreadGroup PidType = pidTypeThreadGroupId
 	// ProcessGroup affects all processes in the group
-	ProcessGroup PidType = pidtypePgid
+	ProcessGroup PidType = pidTypeProcessGroupId
 )
 
 // Create a new sched core domain
