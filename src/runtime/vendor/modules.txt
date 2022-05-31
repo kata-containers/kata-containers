@@ -305,6 +305,11 @@ github.com/vishvananda/netlink/nl
 # github.com/vishvananda/netns v0.0.0-20210104183010-2eb08e3e575f
 ## explicit
 github.com/vishvananda/netns
+# gitlab.com/nvidia/cloud-native/go-nvlib v0.0.0-20220601114329-47893b162965
+## explicit
+gitlab.com/nvidia/cloud-native/go-nvlib/pkg/nvpci
+gitlab.com/nvidia/cloud-native/go-nvlib/pkg/nvpci/bytes
+gitlab.com/nvidia/cloud-native/go-nvlib/pkg/nvpci/mmio
 # go.opencensus.io v0.23.0
 go.opencensus.io
 go.opencensus.io/internal
