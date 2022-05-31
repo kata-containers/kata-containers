@@ -1,4 +1,5 @@
 name: kata-containers
+website: https://github.com/kata-containers/kata-containers
 summary: Build lightweight VMs that seamlessly plug into the containers ecosystem
 description: |
   Kata Containers is an open source project and community working to build a
@@ -19,10 +20,9 @@ parts:
       - git-extras
     override-pull: |
       version="9999"
-      kata_url="https://github.com/kata-containers/kata-containers"
 
-      if echo "${GITHUB_REF}" | grep -q -E "^refs/tags"; then
-        version=$(echo ${GITHUB_REF} | cut -d/ -f3)
+      if echo "${GITHUB_REF:-}" | grep -q -E "^refs/tags"; then
+        version=$(echo ${GITHUB_REF:-} | cut -d/ -f3)
         git checkout ${version}
       fi
 
@@ -46,7 +46,8 @@ parts:
       # put everything in stage
       cd ${SNAPCRAFT_STAGE}
 
-      yq_path="./yq"
+      mkdir -p "${SNAPCRAFT_STAGE}/bin/"
+      yq_path="${SNAPCRAFT_STAGE}/bin/yq"
       yq_pkg="github.com/mikefarah/yq"
       goos="linux"
       case "$(uname -m)" in
@@ -82,7 +83,7 @@ parts:
     override-build: |
       [ "$(uname -m)" = "ppc64le" ] || [ "$(uname -m)" = "s390x" ] && sudo apt-get --no-install-recommends install -y protobuf-compiler
 
-      yq=${SNAPCRAFT_STAGE}/yq
+      yq=${SNAPCRAFT_STAGE}/bin/yq
 
       # set GOPATH
       export GOPATH=${SNAPCRAFT_STAGE}/gopath
@@ -185,7 +186,7 @@ parts:
       - bison
       - flex
     override-build: |
-      yq=${SNAPCRAFT_STAGE}/yq
+      yq=${SNAPCRAFT_STAGE}/bin/yq
       export PATH="${PATH}:${SNAPCRAFT_STAGE}"
       export GOPATH=${SNAPCRAFT_STAGE}/gopath
       kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
@@ -249,7 +250,7 @@ parts:
       - libselinux1-dev
       - ninja-build
     override-build: |
-      yq=${SNAPCRAFT_STAGE}/yq
+      yq=${SNAPCRAFT_STAGE}/bin/yq
       export GOPATH=${SNAPCRAFT_STAGE}/gopath
       export GO111MODULE="auto"
       kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
@@ -316,12 +317,47 @@ parts:
       # Hack: move qemu to /
       "snap/kata-containers/current/": "./"
 
+  virtiofsd:
+    plugin: nil
+    after: [godeps]
+    override-build: |
+      # Currently, only one platform uses the new rust virtiofsd. The
+      # others make use of QEMU's C implementation.
+      #
+      # See "tools/packaging/scripts/configure-hypervisor.sh".
+      if [ "$(uname -m)" = 'x86_64' ]
+      then
+          echo "INFO: Building rust version of virtiofsd"
+      else
+          echo "INFO: Building QEMU's C version of virtiofsd"
+          # Handled by the 'qemu' part, so nothing more to do here.
+          exit 0
+      fi
+
+      # put everything in stage
+      cd ${SNAPCRAFT_STAGE}
+
+      export PATH="$PATH:${SNAPCRAFT_STAGE}/bin"
+      export GOPATH=${SNAPCRAFT_STAGE}/gopath
+
+      kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
+      cd "${kata_dir}"
+      # Download the rust implementation of virtiofsd
+      tools/packaging/static-build/virtiofsd/build-static-virtiofsd.sh
+      sudo install \
+        --owner='root' \
+        --group='root' \
+        --mode=0755 \
+        -D \
+        --target-directory="${SNAPCRAFT_PART_INSTALL}/usr/libexec/" \
+        virtiofsd/virtiofsd
+
   cloud-hypervisor:
     plugin: nil
     after: [godeps]
     override-build: |
       arch=$(uname -m)
-      if [ "{$arch}" == "aarch64" ] || [ "${arch}" == "x64_64" ]; then 
+      if [ "{$arch}" == "aarch64" ] || [ "${arch}" == "x64_64" ]; then
           sudo apt-get -y update
           sudo apt-get -y install ca-certificates curl gnupg lsb-release
           curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
