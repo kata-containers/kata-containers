@@ -312,7 +312,7 @@ working properly with the Kata Containers VM.
 
 ### Build OpenSSL Intel® QAT engine container
 
-Use the OpenSSL Intel® QAT [Dockerfile](https://github.com/intel/intel-device-plugins-for-kubernetes/tree/master/demo/openssl-qat-engine) 
+Use the OpenSSL Intel® QAT [Dockerfile](https://github.com/intel/intel-device-plugins-for-kubernetes/tree/main/demo/openssl-qat-engine) 
 to build a container image with an optimized OpenSSL engine for 
 Intel® QAT. Using `docker build` with the Kata Containers runtime can sometimes
 have issues. Therefore, make sure that `runc` is the default Docker container 
@@ -444,7 +444,7 @@ $ sudo docker save -o openssl-qat-engine.tar openssl-qat-engine:latest
 $ sudo ctr -n=k8s.io images import openssl-qat-engine.tar
 ```
 
-The [Intel® QAT Plugin](https://github.com/intel/intel-device-plugins-for-kubernetes/blob/master/cmd/qat_plugin/README.md)
+The [Intel® QAT Plugin](https://github.com/intel/intel-device-plugins-for-kubernetes/blob/main/cmd/qat_plugin/README.md)
 needs to be started so that the virtual functions can be discovered and
 used by Kubernetes. 
 
