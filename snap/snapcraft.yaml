@@ -357,7 +357,7 @@ parts:
     after: [godeps]
     override-build: |
       arch=$(uname -m)
-      if [ "{$arch}" == "aarch64" ] || [ "${arch}" == "x64_64" ]; then
+      if [ "${arch}" == "aarch64" ] || [ "${arch}" == "x86_64" ]; then
           sudo apt-get -y update
           sudo apt-get -y install ca-certificates curl gnupg lsb-release
           curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
