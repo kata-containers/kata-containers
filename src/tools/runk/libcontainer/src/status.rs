@@ -42,6 +42,7 @@ pub struct Status {
 impl Status {
     pub fn new(
         root: &Path,
+        bundle: &Path,
         oci_state: OCIState,
         process_start_time: u64,
         created_time: SystemTime,
@@ -64,7 +65,7 @@ impl Status {
             id: oci_state.id,
             pid: oci_state.pid,
             root: root.to_path_buf(),
-            bundle: PathBuf::from(&oci_state.bundle),
+            bundle: bundle.to_path_buf(),
             rootfs,
             process_start_time,
             created,
@@ -209,6 +210,7 @@ mod tests {
         let oci_state = create_dummy_oci_state();
         let created = SystemTime::now();
         let status = Status::new(
+            Path::new(TEST_STATE_ROOT_PATH),
             Path::new(TEST_BUNDLE_PATH),
             oci_state.clone(),
             1,
