@@ -14,7 +14,7 @@ running Kubernetes Cluster very straightforward.
 
 ## Build a snap package
 
-See [the snap documentation](../../snap).
+See [the snap documentation](../../snap/local).
 
 ## Build static binaries
 
