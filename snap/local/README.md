@@ -92,7 +92,7 @@ and [configured][7].
 [1]: https://docs.snapcraft.io/snaps/intro
 [2]: ../../docs/design/architecture/README.md#root-filesystem-image
 [3]: https://docs.snapcraft.io/reference/confinement#classic
-[4]: https://github.com/kata-containers/runtime#configuration
+[4]: https://github.com/kata-containers/kata-containers/tree/main/src/runtime#configuration
 [5]: https://docs.docker.com/engine/reference/commandline/dockerd
 [6]: ../../docs/install/docker/ubuntu-docker-install.md
 [7]: ../../docs/Developer-Guide.md#configure-to-use-initrd-or-rootfs-image
