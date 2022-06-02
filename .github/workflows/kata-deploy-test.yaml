@@ -1,5 +1,10 @@
 on:
   workflow_dispatch: # this is used to trigger the workflow on non-main branches
+    inputs:
+      pr:
+        description: 'PR number from the selected branch to test'
+        type: string
+        required: true
   issue_comment:
     types: [created, edited]
 
@@ -13,19 +18,20 @@ jobs:
       && github.event_name == 'issue_comment'
       && github.event.action == 'created'
       && startsWith(github.event.comment.body, '/test_kata_deploy')
+      || github.event_name == 'workflow_dispatch'
     steps:
-      - name: Check membership
+      - name: Check membership on comment or dispatch
         uses: kata-containers/is-organization-member@1.0.1
         id: is_organization_member
         with:
           organization: kata-containers
-          username: ${{ github.event.comment.user.login }}
+          username: ${{ github.event.comment.user.login || github.event.sender.login }}
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Fail if not member
         run: |
           result=${{ steps.is_organization_member.outputs.result }}
           if [ $result == false ]; then
-              user=${{ github.event.comment.user.login }}
+              user=${{ github.event.comment.user.login || github.event.sender.login }}
               echo Either ${user} is not part of the kata-containers organization
               echo or ${user} has its Organization Visibility set to Private at
               echo https://github.com/orgs/kata-containers/people?query=${user}
@@ -52,8 +58,12 @@ jobs:
       - name: get-PR-ref
         id: get-PR-ref
         run: |
-            ref=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.pull_request.url' | sed  's#^.*\/pulls#refs\/pull#' | sed 's#$#\/merge#')
-            echo "reference for PR: " ${ref}
+            if [ ${{ github.event_name }} == 'issue_comment' ]; then
+                ref=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.pull_request.url' | sed  's#^.*\/pulls#refs\/pull#' | sed 's#$#\/merge#')
+            else # workflow_dispatch
+                ref="refs/pull/${{ github.event.inputs.pr }}/merge"
+            fi
+            echo "reference for PR: " ${ref} "event:" ${{ github.event_name }}
             echo "##[set-output name=pr-ref;]${ref}"
       - uses: actions/checkout@v2
         with:
@@ -88,8 +98,12 @@ jobs:
       - name: get-PR-ref
         id: get-PR-ref
         run: |
-            ref=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.pull_request.url' | sed  's#^.*\/pulls#refs\/pull#' | sed 's#$#\/merge#')
-            echo "reference for PR: " ${ref}
+            if [ ${{ github.event_name }} == 'issue_comment' ]; then
+                ref=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.pull_request.url' | sed  's#^.*\/pulls#refs\/pull#' | sed 's#$#\/merge#')
+            else # workflow_dispatch
+                ref="refs/pull/${{ github.event.inputs.pr }}/merge"
+            fi
+            echo "reference for PR: " ${ref} "event:" ${{ github.event_name }}
             echo "##[set-output name=pr-ref;]${ref}"
       - uses: actions/checkout@v2
         with:
@@ -115,8 +129,12 @@ jobs:
       - name: get-PR-ref
         id: get-PR-ref
         run: |
-            ref=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.pull_request.url' | sed  's#^.*\/pulls#refs\/pull#' | sed 's#$#\/merge#')
-            echo "reference for PR: " ${ref}
+            if [ ${{ github.event_name }} == 'issue_comment' ]; then
+                ref=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.pull_request.url' | sed  's#^.*\/pulls#refs\/pull#' | sed 's#$#\/merge#')
+            else # workflow_dispatch
+                ref="refs/pull/${{ github.event.inputs.pr }}/merge"
+            fi
+            echo "reference for PR: " ${ref} "event:" ${{ github.event_name }}
             echo "##[set-output name=pr-ref;]${ref}"
       - uses: actions/checkout@v2
         with:
