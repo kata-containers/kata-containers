@@ -1032,7 +1032,19 @@ impl BaseContainer for LinuxContainer {
         let st = self.oci_state()?;
 
         for pid in self.processes.keys() {
-            signal::kill(Pid::from_raw(*pid), Some(Signal::SIGKILL))?;
+            match signal::kill(Pid::from_raw(*pid), Some(Signal::SIGKILL)) {
+                Err(Errno::ESRCH) => {
+                    info!(
+                        self.logger,
+                        "kill encounters ESRCH, pid: {}, container: {}",
+                        pid,
+                        self.id.clone()
+                    );
+                    continue;
+                }
+                Err(err) => return Err(anyhow!(err)),
+                Ok(_) => continue,
+            }
         }
 
         if spec.hooks.is_some() {
