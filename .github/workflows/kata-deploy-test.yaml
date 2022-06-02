@@ -1,4 +1,5 @@
 on:
+  workflow_dispatch: # this is used to trigger the workflow on non-main branches
   issue_comment:
     types: [created, edited]
 
