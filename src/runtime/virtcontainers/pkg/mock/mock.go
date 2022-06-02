@@ -12,12 +12,13 @@ import (
 	"net/url"
 	"os"
 
+	"path"
+	"strings"
+
 	"github.com/containerd/ttrpc"
 	gpb "github.com/gogo/protobuf/types"
 	aTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	pb "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
-	"path"
-	"strings"
 )
 
 const VSockPrefix = "mock://"
@@ -238,4 +239,12 @@ func (p *HybridVSockTTRPCMockImp) GetVolumeStats(ctx context.Context, req *pb.Vo
 
 func (p *HybridVSockTTRPCMockImp) ResizeVolume(ctx context.Context, req *pb.ResizeVolumeRequest) (*gpb.Empty, error) {
 	return &gpb.Empty{}, nil
+}
+
+func (p *HybridVSockTTRPCMockImp) GetIPTables(ctx context.Context, req *pb.GetIPTablesRequest) (*pb.GetIPTablesResponse, error) {
+	return &pb.GetIPTablesResponse{}, nil
+}
+
+func (p *HybridVSockTTRPCMockImp) SetIPTables(ctx context.Context, req *pb.SetIPTablesRequest) (*pb.SetIPTablesResponse, error) {
+	return &pb.SetIPTablesResponse{}, nil
 }
