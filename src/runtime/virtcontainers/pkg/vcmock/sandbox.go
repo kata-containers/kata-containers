@@ -261,3 +261,11 @@ func (s *Sandbox) GuestVolumeStats(ctx context.Context, path string) ([]byte, er
 func (s *Sandbox) ResizeGuestVolume(ctx context.Context, path string, size uint64) error {
 	return nil
 }
+
+func (s *Sandbox) GetIPTables(ctx context.Context, isIPv6 bool) ([]byte, error) {
+	return nil, nil
+}
+
+func (s *Sandbox) SetIPTables(ctx context.Context, isIPv6 bool, data []byte) error {
+	return nil
+}
