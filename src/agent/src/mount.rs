@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-use nix::mount::MsFlags;
+use nix::mount::{MsFlags, umount};
 use nix::unistd::{Gid, Uid};
 
 use regex::Regex;
@@ -778,11 +778,18 @@ pub async fn add_storages(
             }
         };
 
-        // Todo need to rollback the mounted storage if err met.
-        let mount_point = res?;
-
-        if !mount_point.is_empty() {
-            mount_list.push(mount_point);
+        match res {
+            Ok(mount_point) => {
+                if !mount_point.is_empty() {
+                    mount_list.push(mount_point);
+                }
+            }
+            Err(e) => {
+                for m in mount_list {
+                    let _ = umount(m.as_str());
+                }
+                return Err(anyhow!("handle storage {} failed case {:?}", handler_name, e))
+            }
         }
     }
 
