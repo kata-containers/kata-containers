@@ -250,6 +250,9 @@ USER_VARS += RUNTIMENAME
 USER_VARS += HYPERVISOR_DB
 USER_VARS += PIPESIZE
 USER_VARS += DBSHAREDFS
+USER_VARS += KATA_INSTALL_GROUP
+USER_VARS += KATA_INSTALL_OWNER
+USER_VARS += KATA_INSTALL_CFG_PERMS
 
 SOURCES := \
   $(shell find . 2>&1 | grep -E '.*\.rs$$') \
@@ -316,10 +319,6 @@ endef
 
 define INSTALL_FILE
 	install -D -m 644 $1 $(DESTDIR)$2/$1 || exit 1;
-endef
-
-define INSTALL_CONFIG
-	sudo install --mode 0644 -D $1 $(DESTDIR)$2/$(notdir $1);
 endef
 
 # Returns the name of the kernel file to use based on the provided KERNELTYPE.
