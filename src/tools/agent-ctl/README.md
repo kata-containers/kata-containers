@@ -60,7 +60,6 @@ $ mkdir -p "$rootfs_dir" && (cd "$bundle_dir" && runc spec)
 $ sudo docker export $(sudo docker create "$image") | tar -C "$rootfs_dir" -xvf -
 ```
 
-
 ### Specify API commands to run
 
 The tool allows one or more API commands to be specified using the `-c` or
