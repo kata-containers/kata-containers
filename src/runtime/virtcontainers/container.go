@@ -260,6 +260,9 @@ type ContainerConfig struct {
 
 	// ReadOnlyRootfs indicates if the rootfs should be mounted readonly
 	ReadonlyRootfs bool
+
+	// EnableVCPUsPinning controls whether vCPU threads are pinned to fixed CPUs
+	EnableVCPUsPinning bool
 }
 
 // valid checks that the container configuration is valid.
