@@ -7,13 +7,14 @@ package containerdshim
 
 import (
 	"context"
-	"github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/containerd/fifo"
 	"github.com/stretchr/testify/assert"
@@ -45,7 +46,7 @@ func TestNewTtyIOFifoReopen(t *testing.T) {
 	defer outr.Close()
 	errr = createReadFifo(stderr)
 	defer errr.Close()
-	tty, err = newTtyIO(ctx, "", stdout, stderr, false)
+	tty, err = newTtyIO(ctx, "", "", "", stdout, stderr, false)
 	assert.NoError(err)
 	defer tty.close()
 
@@ -72,9 +73,9 @@ func TestNewTtyIOFifoReopen(t *testing.T) {
 		}
 	}
 
-	checkFifoWrite(tty.Stdout)
+	checkFifoWrite(tty.io.Stdout())
 	checkFifoRead(outr)
-	checkFifoWrite(tty.Stderr)
+	checkFifoWrite(tty.io.Stderr())
 	checkFifoRead(errr)
 
 	err = outr.Close()
@@ -84,8 +85,8 @@ func TestNewTtyIOFifoReopen(t *testing.T) {
 
 	// Make sure that writing to tty fifo will not get `EPIPE`
 	// when the read side is closed
-	checkFifoWrite(tty.Stdout)
-	checkFifoWrite(tty.Stderr)
+	checkFifoWrite(tty.io.Stdout())
+	checkFifoWrite(tty.io.Stderr())
 
 	// Reopen the fifo
 	outr = createReadFifo(stdout)
@@ -171,7 +172,7 @@ func TestIoCopy(t *testing.T) {
 			defer srcInW.Close()
 		}
 
-		tty, err := newTtyIO(ctx, srcStdinPath, dstStdoutPath, dstStderrPath, false)
+		tty, err := newTtyIO(ctx, "", "", srcStdinPath, dstStdoutPath, dstStderrPath, false)
 		assert.NoError(err)
 		defer tty.close()
 
