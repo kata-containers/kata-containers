@@ -1282,6 +1282,7 @@ fn agent_cmd_sandbox_get_ip_tables(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     _options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -2003,6 +2004,7 @@ fn agent_cmd_sandbox_set_ip_tables(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     _options: &mut Options,
     args: &str,
 ) -> Result<()> {
