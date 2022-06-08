@@ -148,6 +148,8 @@ async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool
 }
 
 async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    // Enable backtrace on panic *and* any error by default.
+    // This is done to get a backtrace if early setup fails.
     env::set_var("RUST_BACKTRACE", "full");
 
     // List of tasks that need to be stopped for a clean shutdown
@@ -200,6 +202,12 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // Recreate a logger with the log level get from "/proc/cmdline".
     let (logger, logger_async_guard) =
         logging::create_logger(NAME, "agent", config.log_level, writer);
+
+    // Disable backtrace on error unless debug is enabled.
+    match config.log_level {
+        slog::Level::Debug | slog::Level::Trace => (),
+        _ => env::set_var("RUST_LIB_BACKTRACE", "0"),
+    }
 
     announce(&logger, &config);
 
@@ -421,6 +429,7 @@ use std::os::unix::io::{FromRawFd, RawFd};
 mod tests {
     use super::*;
     use crate::test_utils::test_utils::TestUserType;
+    use serial_test::serial;
 
     #[tokio::test]
     async fn test_create_logger_task() {
@@ -469,6 +478,115 @@ mod tests {
 
             let msg = format!("{}, result: {:?}", msg, result);
             assert_result!(d.result, result, msg);
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_real_main_backtrace_on_error() {
+        // Value chosen to ensure real_main() fails
+        const INVALID_SERVER_ADDR: &str = "invalid server address";
+
+        // Eye-catcher that marks the start of the backtrace added by anyhow.
+        const BACKTRACE_TAG: &str = "Stack backtrace:";
+
+        #[derive(Debug)]
+        struct TestData {
+            log_level: slog::Level,
+            expect_backtrace: bool,
+        }
+
+        lazy_static::initialize(&AGENT_CONFIG);
+
+        let tests = &[
+            TestData {
+                log_level: slog::Level::Info,
+                expect_backtrace: false,
+            },
+            TestData {
+                log_level: config::DEFAULT_LOG_LEVEL,
+                expect_backtrace: false,
+            },
+            TestData {
+                log_level: slog::Level::Debug,
+                expect_backtrace: true,
+            },
+            TestData {
+                log_level: slog::Level::Trace,
+                expect_backtrace: true,
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            // Since the agent (and its dependencies!) use static data, the
+            // only reliable way to ensure a clean environment is to run each
+            // test in a separate process.
+            let pid = unsafe { libc::fork() };
+
+            if pid > 0 {
+                // Parent
+
+                let mut status: libc::c_int = 0;
+
+                let result = unsafe { libc::waitpid(pid, &mut status as *mut i32, 0) };
+                assert_eq!(result, pid);
+
+                let ret = libc::WEXITSTATUS(status);
+                assert_eq!(ret, 0, "{:?}", msg);
+            } else {
+                // The test runs in the child
+
+                env::remove_var("RUST_BACKTRACE");
+                env::remove_var("RUST_LIB_BACKTRACE");
+
+                // Modify the global config
+                {
+                    let test_cfg = AgentConfig {
+                        log_level: d.log_level,
+                        server_addr: INVALID_SERVER_ADDR.into(),
+
+                        ..Default::default()
+                    };
+
+                    let cfg_ref = AGENT_CONFIG.clone();
+                    let mut cfg = cfg_ref.write().await;
+
+                    *cfg = test_cfg;
+                }
+
+                // Save the modified config
+                let ro_cfg = AGENT_CONFIG.clone();
+                let msg = format!("{:?}, global config: {:?}", msg, ro_cfg.read().await);
+                drop(ro_cfg);
+
+                let result = real_main().await;
+
+                // Due to INVALID_SERVER_ADDR
+                assert!(result.is_err(), "{:?}", msg);
+
+                let msg = format!(
+                    "{:?}, result: {:?}, RUST_BACKTRACE: {:?}, RUST_LIB_BACKTRACE: {:?}",
+                    msg,
+                    result,
+                    env::var("RUST_BACKTRACE").unwrap_or_else(|_| "<not-set>".to_string()),
+                    env::var("RUST_LIB_BACKTRACE").unwrap_or_else(|_| "<not-set>".to_string())
+                );
+
+                // The format is critical here to ensure we
+                // get the backtrace when it is generated.
+                let err_msg = format!("{:?}", result);
+
+                let matched = err_msg.contains(BACKTRACE_TAG);
+
+                match matched {
+                    true => assert!(d.expect_backtrace, "{:?}", msg),
+                    false => assert!(!d.expect_backtrace, "{:?}", msg),
+                };
+
+                exit(0);
+            }
         }
     }
 }

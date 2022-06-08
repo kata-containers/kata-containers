@@ -22,7 +22,7 @@ slog-scope = "4.1.2"
 scan_fmt = "0.2.6"
 regex = "1.5.5"
 path-absolutize = "1.2.0"
-anyhow = "1.0.32"
+anyhow = {version = "1.0.57", features = ["backtrace"] }
 cgroups = { package = "cgroups-rs", version = "0.2.8" }
 rlimit = "0.5.3"
 cfg-if = "0.1.0"

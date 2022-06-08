@@ -24,7 +24,7 @@ const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "agent.unified_cgroup_hierarchy";
 const CONFIG_FILE: &str = "agent.config_file";
 
-const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
+pub const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
 const DEFAULT_CONTAINER_PIPE_SIZE: i32 = 0;
 const VSOCK_ADDR: &str = "vsock://-1";
