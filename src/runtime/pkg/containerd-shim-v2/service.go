@@ -7,6 +7,7 @@ package containerdshim
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	sysexec "os/exec"
@@ -83,6 +84,11 @@ func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown fu
 	vci.SetLogger(ctx, shimLog)
 	katautils.SetLogger(ctx, shimLog, shimLog.Logger.Level)
 
+	ns, found := namespaces.Namespace(ctx)
+	if !found {
+		return nil, fmt.Errorf("shim namespace cannot be empty")
+	}
+
 	s := &service{
 		id:         id,
 		pid:        uint32(os.Getpid()),
@@ -91,6 +97,7 @@ func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown fu
 		events:     make(chan interface{}, chSize),
 		ec:         make(chan exit, bufferSize),
 		cancel:     shutdown,
+		namespace:  ns,
 	}
 
 	go s.processExits()
@@ -128,6 +135,9 @@ type service struct {
 	cancel func()
 
 	id string
+
+	// Namespace from upper container engine
+	namespace string
 
 	mu          sync.Mutex
 	eventSendMu sync.Mutex
