@@ -41,7 +41,6 @@ pub mod seccomp;
 pub mod specconv;
 pub mod sync;
 pub mod sync_with_async;
-pub mod utils;
 pub mod validator;
 
 use std::collections::HashMap;

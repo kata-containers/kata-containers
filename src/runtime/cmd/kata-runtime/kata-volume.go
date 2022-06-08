@@ -163,5 +163,5 @@ func Resize(volumePath string, size uint64) error {
 	if err != nil {
 		return err
 	}
-	return shimclient.DoPost(sandboxId, defaultTimeout, containerdshim.DirectVolumeResizeUrl, encoded)
+	return shimclient.DoPost(sandboxId, defaultTimeout, containerdshim.DirectVolumeResizeUrl, "application/json", encoded)
 }

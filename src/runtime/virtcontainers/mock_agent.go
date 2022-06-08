@@ -254,3 +254,11 @@ func (n *mockAgent) resizeGuestVolume(ctx context.Context, volumeGuestPath strin
 func (k *mockAgent) PullImage(ctx context.Context, req *image.PullImageReq) (*image.PullImageResp, error) {
 	return nil, nil
 }
+
+func (k *mockAgent) getIPTables(ctx context.Context, isIPv6 bool) ([]byte, error) {
+	return nil, nil
+}
+
+func (k *mockAgent) setIPTables(ctx context.Context, isIPv6 bool, data []byte) error {
+	return nil
+}

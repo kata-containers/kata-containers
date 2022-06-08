@@ -244,3 +244,11 @@ func (p *HybridVSockTTRPCMockImp) ResizeVolume(ctx context.Context, req *pb.Resi
 func (p *HybridVSockTTRPCMockImp) PullImage(ctx context.Context, req *pb.PullImageRequest) (*gpb.Empty, error) {
 	return &gpb.Empty{}, nil
 }
+
+func (p *HybridVSockTTRPCMockImp) GetIPTables(ctx context.Context, req *pb.GetIPTablesRequest) (*pb.GetIPTablesResponse, error) {
+	return &pb.GetIPTablesResponse{}, nil
+}
+
+func (p *HybridVSockTTRPCMockImp) SetIPTables(ctx context.Context, req *pb.SetIPTablesRequest) (*pb.SetIPTablesResponse, error) {
+	return &pb.SetIPTablesResponse{}, nil
+}

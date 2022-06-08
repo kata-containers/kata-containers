@@ -5,7 +5,7 @@
 
 OS_NAME=centos
 OS_VERSION=${OS_VERSION:-stream9}
-PACKAGES=chrony
+PACKAGES="chrony iptables"
 [ "$AGENT_INIT" = no ] && PACKAGES+=" systemd"
 [ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp"
 
