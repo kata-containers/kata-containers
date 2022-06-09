@@ -18,6 +18,7 @@ mod tests {
         KATA_ANNO_CFG_HYPERVISOR_PATH, KATA_ANNO_CFG_HYPERVISOR_VHOSTUSER_STORE_PATH,
         KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_DAEMON, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS,
         KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM, KATA_ANNO_CFG_KERNEL_MODULES,
+        KATA_ANNO_CFG_RUNTIME_NAME,
     };
     use kata_types::config::KataConfig;
     use kata_types::config::{QemuConfig, TomlConfig};
@@ -118,7 +119,7 @@ mod tests {
         );
         anno_hash.insert(
             KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY.to_string(),
-            "100".to_string(),
+            "100MiB".to_string(),
         );
         anno_hash.insert(
             KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS.to_string(),
@@ -169,9 +170,7 @@ mod tests {
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(content).unwrap();
 
-        assert!(anno
-            .update_config_by_annotation(&mut config, "qemu", "agent0")
-            .is_ok());
+        assert!(anno.update_config_by_annotation(&mut config).is_ok());
         KataConfig::set_active_config(Some(config), "qemu", "agnet0");
         if let Some(ag) = KataConfig::get_default_config().get_agent() {
             assert_eq!(
@@ -292,9 +291,10 @@ mod tests {
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(content).unwrap();
 
-        assert!(anno
-            .update_config_by_annotation(&mut config, "qemu", "agent0")
-            .is_err());
+        assert!(anno.update_config_by_annotation(&mut config).is_ok());
+        if let Some(hv) = KataConfig::get_default_config().get_hypervisor() {
+            assert_eq!(hv.blockdev_info.block_device_driver, "virtio-blk");
+        }
     }
 
     #[test]
@@ -315,9 +315,10 @@ mod tests {
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(content).unwrap();
 
-        assert!(anno
-            .update_config_by_annotation(&mut config, "qemu", "agent0")
-            .is_err());
+        assert!(anno.update_config_by_annotation(&mut config).is_ok());
+        if let Some(hv) = KataConfig::get_default_config().get_hypervisor() {
+            assert!(hv.memory_info.enable_guest_swap)
+        }
     }
 
     #[test]
@@ -341,9 +342,7 @@ mod tests {
         let path = Path::new(path).join("tests/texture/configuration-anno-0.toml");
         let content = fs::read_to_string(&path).unwrap();
         let mut config = TomlConfig::load(&content).unwrap();
-        assert!(anno
-            .update_config_by_annotation(&mut config, "qemu", "agent0")
-            .is_err());
+        assert!(anno.update_config_by_annotation(&mut config).is_err());
     }
 
     #[test]
@@ -366,9 +365,7 @@ mod tests {
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(&content).unwrap();
 
-        assert!(anno
-            .update_config_by_annotation(&mut config, "qemu", "agent0")
-            .is_err());
+        assert!(anno.update_config_by_annotation(&mut config).is_err());
     }
 
     #[test]
@@ -388,9 +385,7 @@ mod tests {
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(content).unwrap();
 
-        assert!(anno
-            .update_config_by_annotation(&mut config, "qemu", "agent0")
-            .is_err());
+        assert!(anno.update_config_by_annotation(&mut config).is_err());
     }
 
     #[test]
@@ -411,9 +406,7 @@ mod tests {
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(content).unwrap();
 
-        assert!(anno
-            .update_config_by_annotation(&mut config, "qemu", "agent0")
-            .is_err());
+        assert!(anno.update_config_by_annotation(&mut config).is_err());
     }
 
     #[test]
@@ -434,9 +427,7 @@ mod tests {
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(content).unwrap();
 
-        assert!(anno
-            .update_config_by_annotation(&mut config, "qemu", "agent0")
-            .is_err());
+        assert!(anno.update_config_by_annotation(&mut config).is_err());
     }
 
     #[test]
@@ -457,9 +448,7 @@ mod tests {
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(content).unwrap();
 
-        assert!(anno
-            .update_config_by_annotation(&mut config, "qemu", "agent0")
-            .is_err());
+        assert!(anno.update_config_by_annotation(&mut config).is_err());
     }
 
     #[test]
@@ -480,8 +469,25 @@ mod tests {
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(content).unwrap();
 
-        assert!(anno
-            .update_config_by_annotation(&mut config, "qemu", "agent0")
-            .is_err());
+        assert!(anno.update_config_by_annotation(&mut config).is_err());
+    }
+
+    #[test]
+    fn test_fail_to_change_runtime_name() {
+        let content = include_str!("texture/configuration-anno-0.toml");
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(content).unwrap();
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CFG_RUNTIME_NAME.to_string(),
+            "other-container".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(content).unwrap();
+        assert!(anno.update_config_by_annotation(&mut config).is_err());
     }
 }
