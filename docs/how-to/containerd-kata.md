@@ -93,8 +93,8 @@ $ popd
 You can install the `cri-tools` from source code:
 
 ```bash
-$ go get github.com/kubernetes-incubator/cri-tools
-$ pushd $GOPATH/src/github.com/kubernetes-incubator/cri-tools
+$ go get github.com/kubernetes-sigs/cri-tools
+$ pushd $GOPATH/src/github.com/kubernetes-sigs/cri-tools
 $ make
 $ sudo -E make install
 $ popd
