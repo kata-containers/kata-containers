@@ -320,7 +320,7 @@ fn real_main() -> Result<()> {
 
 fn main() {
     if let Err(e) = real_main() {
-        eprintln!("ERROR: {}", e);
+        eprintln!("ERROR: {:#?}", e);
         exit(1);
     }
 }
