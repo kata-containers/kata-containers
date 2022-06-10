@@ -635,6 +635,12 @@ func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) e
 		return err
 	}
 
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.EnableVCPUsPinning).setBool(func(EnableVCPUsPinning bool) {
+		sbConfig.HypervisorConfig.EnableVCPUsPinning = EnableVCPUsPinning
+	}); err != nil {
+		return err
+	}
+
 	return newAnnotationConfiguration(ocispec, vcAnnotations.DefaultMaxVCPUs).setUintWithCheck(func(maxVCPUs uint64) error {
 		max := uint32(maxVCPUs)
 

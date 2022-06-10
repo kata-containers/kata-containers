@@ -2406,16 +2406,19 @@ func (s *Sandbox) fetchContainers(ctx context.Context) error {
 }
 
 // checkVCPUsPinning is used to support CPUSet mode of kata container.
-// CPUSet mode is on when all containers' enableVCPUsPinning attributes
-//are set to true. Then it fetches sandbox's number of vCPUs requested
-// and number of CPUs contained in CPUSet. If the two numbers are equal,
-// each vCPU thread is then pinned to one real cpu in CPUSet.
+// CPUSet mode is on when Sandbox.HypervisorConfig.EnableVCPUsPinning
+// is set to true. Then it fetches sandbox's number of vCPU threads
+// and number of CPUs in CPUSet. If the two are equal, each vCPU thread
+// is then pinned to one fixed CPU in CPUSet.
 func (s *Sandbox) checkVCPUsPinning(ctx context.Context) error {
 	if s.config == nil {
+		return fmt.Errorf("no hypervisor config found")
+	}
+	if s.config.HypervisorConfig.EnableVCPUsPinning == false {
 		return nil
 	}
 
-	// fetch vCPU and CPUSet configs
+	// fetch vCPU thread ids and CPUSet
 	vCPUThreadsMap, err := s.hypervisor.GetThreadIDs(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get vCPU thread ids from hypervisor: %v", err)
@@ -2430,26 +2433,9 @@ func (s *Sandbox) checkVCPUsPinning(ctx context.Context) error {
 	}
 	cpuSetSlice := cpuSet.ToSlice()
 
-	// check if all containers have enabled vCPU threads pinning, so that sandbox can turn on CPUSet mode
-	canEnableVCPUsPinning := true
-	for _, containerConfig := range s.config.Containers {
-		if containerConfig.EnableVCPUsPinning == false {
-			canEnableVCPUsPinning = false
-			break
-		}
-	}
-	if canEnableVCPUsPinning == false {
-		if s.isVCPUsPinningOn {
-			s.isVCPUsPinningOn = false
-			if err := s.resetVCPUsPinning(ctx, vCPUThreadsMap, cpuSetSlice); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	// check if vCPU and CPU numbers are equal, so that sandbox can turn on CPUSet mode
+	// check if vCPU thread numbers and CPU numbers are equal
 	numVCPUs, numCPUs := len(vCPUThreadsMap.vcpus), len(cpuSetSlice)
+	// if not equal, we should reset threads scheduling to random pattern
 	if numVCPUs != numCPUs {
 		if s.isVCPUsPinningOn {
 			s.isVCPUsPinningOn = false
@@ -2459,6 +2445,8 @@ func (s *Sandbox) checkVCPUsPinning(ctx context.Context) error {
 		}
 		return nil
 	}
+
+	// if equal, we can now start vCPU threads pinning
 	i := 0
 	for _, tid := range vCPUThreadsMap.vcpus {
 		unixCPUSet := unix.CPUSet{}
@@ -2475,8 +2463,7 @@ func (s *Sandbox) checkVCPUsPinning(ctx context.Context) error {
 	return nil
 }
 
-// resetVCPUsPinning cancels current pinning and restores
-// default random cpu allocation to vCPU threads
+// resetVCPUsPinning cancels current pinning and restores default random vCPU threads scheduling
 func (s *Sandbox) resetVCPUsPinning(ctx context.Context, vCPUThreadsMap VcpuThreadIDs, cpuSetSlice []int) error {
 	unixCPUSet := unix.CPUSet{}
 	for cpuId := range cpuSetSlice {
