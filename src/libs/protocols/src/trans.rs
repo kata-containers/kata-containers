@@ -515,7 +515,7 @@ impl From<crate::oci::LinuxMemory> for oci::LinuxMemory {
 
         let mut swappiness = None;
         if from.get_Swappiness() > 0 {
-            swappiness = Some(from.get_Swappiness() as i64);
+            swappiness = Some(from.get_Swappiness());
         }
 
         let disable_oom_killer = Some(from.get_DisableOOMKiller());
