@@ -160,7 +160,7 @@ DEFMEMSZ := 2048
 DEFMEMSLOTS := 10
 #Default number of bridges
 DEFBRIDGES := 1
-DEFENABLEANNOTATIONS := []
+DEFENABLEANNOTATIONS := [\"enable_iommu\"]
 DEFDISABLEGUESTSECCOMP := true
 DEFDISABLEGUESTEMPTYDIR := false
 #Default experimental features enabled
