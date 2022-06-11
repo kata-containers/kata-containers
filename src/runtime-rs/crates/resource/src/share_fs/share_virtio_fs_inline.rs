@@ -78,6 +78,7 @@ impl ShareFs for ShareVirtioFsInline {
             driver_options: Vec::new(),
             source: String::from(MOUNT_GUEST_TAG),
             fs_type: String::from(FS_TYPE_VIRTIO_FS),
+            fs_group: None,
             options: shared_options,
             mount_point: String::from(KATA_GUEST_SHARE_DIR),
         };

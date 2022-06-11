@@ -45,6 +45,7 @@ impl ShmVolume {
                 driver_options: Vec::new(),
                 source: String::from("shm"),
                 fs_type: String::from("tmpfs"),
+                fs_group: None,
                 options,
                 mount_point: mount_path.to_string(),
             };
