@@ -12,7 +12,7 @@ logging::logger_with_subsystem!(sl, "agent");
 pub mod kata;
 mod log_forwarder;
 mod sock;
-mod types;
+pub mod types;
 pub use types::{
     ARPNeighbor, ARPNeighbors, AddArpNeighborRequest, BlkioStatsEntry, CheckRequest,
     CloseStdinRequest, ContainerID, ContainerProcessID, CopyFileRequest, CreateContainerRequest,

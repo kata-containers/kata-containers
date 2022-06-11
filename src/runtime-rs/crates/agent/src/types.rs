@@ -15,6 +15,24 @@ impl Empty {
     }
 }
 
+impl Default for FSGroupChangePolicy {
+    fn default() -> Self {
+        FSGroupChangePolicy::Always
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum FSGroupChangePolicy {
+    Always = 0,
+    OnRootMismatch = 1,
+}
+
+#[derive(Debug, PartialEq, Clone, Default)]
+pub struct FSGroup {
+    pub group_id: u32,
+    pub group_change_policy: FSGroupChangePolicy,
+}
+
 #[derive(PartialEq, Clone, Default)]
 pub struct StringUser {
     pub uid: String,
@@ -37,6 +55,7 @@ pub struct Storage {
     pub driver_options: Vec<String>,
     pub source: String,
     pub fs_type: String,
+    pub fs_group: Option<FSGroup>,
     pub options: Vec<String>,
     pub mount_point: String,
 }

@@ -16,13 +16,14 @@ use crate::{
         ARPNeighbor, ARPNeighbors, AddArpNeighborRequest, AgentDetails, BlkioStats,
         BlkioStatsEntry, CgroupStats, CheckRequest, CloseStdinRequest, ContainerID,
         CopyFileRequest, CpuStats, CpuUsage, CreateContainerRequest, CreateSandboxRequest, Device,
-        Empty, ExecProcessRequest, GuestDetailsResponse, HealthCheckResponse, HugetlbStats,
-        IPAddress, IPFamily, Interface, Interfaces, KernelModule, MemHotplugByProbeRequest,
-        MemoryData, MemoryStats, NetworkStats, OnlineCPUMemRequest, PidsStats, ReadStreamRequest,
-        ReadStreamResponse, RemoveContainerRequest, ReseedRandomDevRequest, Route, Routes,
-        SetGuestDateTimeRequest, SignalProcessRequest, StatsContainerResponse, Storage, StringUser,
-        ThrottlingData, TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest,
-        UpdateRoutesRequest, VersionCheckResponse, WaitProcessRequest, WriteStreamRequest,
+        Empty, ExecProcessRequest, FSGroup, FSGroupChangePolicy, GuestDetailsResponse,
+        HealthCheckResponse, HugetlbStats, IPAddress, IPFamily, Interface, Interfaces,
+        KernelModule, MemHotplugByProbeRequest, MemoryData, MemoryStats, NetworkStats,
+        OnlineCPUMemRequest, PidsStats, ReadStreamRequest, ReadStreamResponse,
+        RemoveContainerRequest, ReseedRandomDevRequest, Route, Routes, SetGuestDateTimeRequest,
+        SignalProcessRequest, StatsContainerResponse, Storage, StringUser, ThrottlingData,
+        TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
+        VersionCheckResponse, WaitProcessRequest, WriteStreamRequest,
     },
     OomEventResponse, WaitProcessResponse, WriteStreamResponse,
 };
@@ -72,6 +73,22 @@ impl From<empty::Empty> for Empty {
     }
 }
 
+impl From<FSGroup> for agent::FSGroup {
+    fn from(from: FSGroup) -> Self {
+        let policy = match from.group_change_policy {
+            FSGroupChangePolicy::Always => types::FSGroupChangePolicy::Always,
+            FSGroupChangePolicy::OnRootMismatch => types::FSGroupChangePolicy::OnRootMismatch,
+        };
+
+        Self {
+            group_id: from.group_id,
+            group_change_policy: policy,
+            unknown_fields: Default::default(),
+            cached_size: Default::default(),
+        }
+    }
+}
+
 impl From<StringUser> for agent::StringUser {
     fn from(from: StringUser) -> Self {
         Self {
@@ -105,6 +122,7 @@ impl From<Storage> for agent::Storage {
             driver_options: from_vec(from.driver_options),
             source: from.source,
             fstype: from.fs_type,
+            fs_group: from_option(from.fs_group),
             options: from_vec(from.options),
             mount_point: from.mount_point,
             unknown_fields: Default::default(),
