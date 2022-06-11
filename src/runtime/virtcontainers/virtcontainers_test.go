@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 	"testing"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
@@ -53,16 +52,6 @@ var testVirtiofsdPath = ""
 
 var testHyperstartCtlSocket = ""
 var testHyperstartTtySocket = ""
-
-// cleanUp Removes any stale sandbox/container state that can affect
-// the next test to run.
-func cleanUp() {
-	syscall.Unmount(GetSharePath(testSandboxID), syscall.MNT_DETACH|UmountNoFollow)
-	os.RemoveAll(testDir)
-	os.MkdirAll(testDir, DirMode)
-
-	setup()
-}
 
 func setup() {
 	os.Mkdir(filepath.Join(testDir, testBundle), DirMode)
