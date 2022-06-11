@@ -13,7 +13,7 @@ futures = "0.3.19"
 lazy_static = "1.4.0"
 libc = ">=0.2.39"
 nix = "0.16.0"
-protobuf = "2.23.0"
+protobuf = "2.27.0"
 serde = { version = "1.0.100", features = ["derive"] }
 serde_derive = "1.0.27"
 serde_json = "1.0.39"
