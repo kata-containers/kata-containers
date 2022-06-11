@@ -12,7 +12,7 @@ async = ["ttrpc/async", "async-trait"]
 [dependencies]
 ttrpc = { version = "0.6.0" }
 async-trait = { version = "0.1.42", optional = true }
-protobuf = { version = "=2.14.0", features = ["with-serde"] }
+protobuf = { version = "2.27.0", features = ["with-serde"] }
 serde = { version = "1.0.130", features = ["derive"], optional = true }
 serde_json = { version = "1.0.68", optional = true }
 oci = { path = "../oci" }
