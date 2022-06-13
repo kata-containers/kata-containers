@@ -166,6 +166,11 @@ static AGENT_CMDS: &[AgentCmd] = &[
         fp: agent_cmd_sandbox_get_guest_details,
     },
     AgentCmd {
+        name: "GetIptables",
+        st: ServiceType::Agent,
+        fp: agent_cmd_sandbox_get_ip_tables,
+    },
+    AgentCmd {
         name: "GetMetrics",
         st: ServiceType::Agent,
         fp: agent_cmd_sandbox_get_metrics,
@@ -234,6 +239,11 @@ static AGENT_CMDS: &[AgentCmd] = &[
         name: "SetGuestDateTime",
         st: ServiceType::Agent,
         fp: agent_cmd_sandbox_set_guest_date_time,
+    },
+    AgentCmd {
+        name: "SetIptables",
+        st: ServiceType::Agent,
+        fp: agent_cmd_sandbox_set_ip_tables,
     },
     AgentCmd {
         name: "SignalProcess",
@@ -1268,6 +1278,30 @@ fn agent_cmd_sandbox_get_guest_details(
     Ok(())
 }
 
+fn agent_cmd_sandbox_get_ip_tables(
+    ctx: &Context,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    _image: &ImageClient,
+    _options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let req: GetIPTablesRequest = utils::make_request(args)?;
+
+    let ctx = clone_context(ctx);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .get_ip_tables(ctx, &req)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
 fn agent_cmd_container_wait_process(
     ctx: &Context,
     client: &AgentServiceClient,
@@ -1959,6 +1993,30 @@ fn agent_cmd_sandbox_set_guest_date_time(
     let reply = client
         .set_guest_date_time(ctx, &req)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_sandbox_set_ip_tables(
+    ctx: &Context,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    _image: &ImageClient,
+    _options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let req: SetIPTablesRequest = utils::make_request(args)?;
+
+    let ctx = clone_context(ctx);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .set_ip_tables(ctx, &req)
+        .map_err(|e| anyhow!(e).context(ERR_API_FAILED))?;
 
     info!(sl!(), "response received";
         "response" => format!("{:?}", reply));

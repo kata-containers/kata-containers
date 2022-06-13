@@ -42,7 +42,7 @@ use nix::pty;
 use nix::sched::{self, CloneFlags};
 use nix::sys::signal::{self, Signal};
 use nix::sys::stat::{self, Mode};
-use nix::unistd::{self, fork, ForkResult, Gid, Pid, Uid};
+use nix::unistd::{self, fork, ForkResult, Gid, Pid, Uid, User};
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::io::AsRawFd;
 
@@ -63,8 +63,6 @@ use async_trait::async_trait;
 use rlimit::{setrlimit, Resource, Rlim};
 use tokio::io::AsyncBufReadExt;
 use tokio::sync::Mutex;
-
-use crate::utils;
 
 pub const EXEC_FIFO_FILENAME: &str = "exec.fifo";
 
@@ -662,12 +660,17 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         }
     }
 
-    // set the "HOME" env getting from "/etc/passwd", if
-    // there's no uid entry in /etc/passwd, set "/" as the
-    // home env.
     if env::var_os(HOME_ENV_KEY).is_none() {
-        let home_dir = utils::home_dir(guser.uid).unwrap_or_else(|_| String::from("/"));
-        env::set_var(HOME_ENV_KEY, home_dir);
+        // try to set "HOME" env by uid
+        if let Ok(Some(user)) = User::from_uid(Uid::from_raw(guser.uid)) {
+            if let Ok(user_home_dir) = user.dir.into_os_string().into_string() {
+                env::set_var(HOME_ENV_KEY, user_home_dir);
+            }
+        }
+        // set default home dir as "/" if "HOME" env is still empty
+        if env::var_os(HOME_ENV_KEY).is_none() {
+            env::set_var(HOME_ENV_KEY, String::from("/"));
+        }
     }
 
     let exec_file = Path::new(&args[0]);
@@ -1063,7 +1066,19 @@ impl BaseContainer for LinuxContainer {
         let st = self.oci_state()?;
 
         for pid in self.processes.keys() {
-            signal::kill(Pid::from_raw(*pid), Some(Signal::SIGKILL))?;
+            match signal::kill(Pid::from_raw(*pid), Some(Signal::SIGKILL)) {
+                Err(Errno::ESRCH) => {
+                    info!(
+                        self.logger,
+                        "kill encounters ESRCH, pid: {}, container: {}",
+                        pid,
+                        self.id.clone()
+                    );
+                    continue;
+                }
+                Err(err) => return Err(anyhow!(err)),
+                Ok(_) => continue,
+            }
         }
 
         if spec.hooks.is_some() {

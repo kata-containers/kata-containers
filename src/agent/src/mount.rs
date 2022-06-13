@@ -859,8 +859,9 @@ pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Resul
     }
 
     Err(anyhow!(
-        "failed to find FS type for mount point {}",
-        mount_point
+        "failed to find FS type for mount point {}, mount file content: {:?}",
+        mount_point,
+        fs::read_to_string(mount_file)
     ))
 }
 

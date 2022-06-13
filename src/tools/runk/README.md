@@ -149,6 +149,26 @@ $ sudo runk state test
 $ sudo runk delete test
 ```
 
+## Using `runk` from `Podman`
+
+`runk` can run containers using [`Podman`](https://github.com/containers/podman).
+
+First, install `Podman` from source code or package by following the
+[`Podman` installation instructions](https://podman.io/getting-started/installation).
+
+### Running a container with `Podman` command line
+
+```bash
+$ sudo podman --runtime /usr/local/bin/runk run -it --rm busybox sh
+/ #
+```
+
+> **Note:**
+> `runk` does not support some commands except
+> [OCI standard operations](https://github.com/opencontainers/runtime-spec/blob/main/runtime.md#operations)
+> yet, so those commands do not work in `Podman`. Regarding commands currently
+> implemented in `runk`, see the [Status of `runk`](#status-of-runk) section.
+
 ## Using `runk` from `containerd`
 
 `runk` can run containers with the containerd runtime handler support on `containerd`.

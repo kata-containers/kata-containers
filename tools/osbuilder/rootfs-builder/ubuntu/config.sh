@@ -5,7 +5,7 @@
 OS_NAME=ubuntu
 # This should be Ubuntu's code name, e.g. "focal" (Focal Fossa) for 20.04
 OS_VERSION=${OS_VERSION:-focal}
-PACKAGES=chrony
+PACKAGES="chrony iptables"
 [ "$AGENT_INIT" = no ] && PACKAGES+=" init"
 [ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp2"
 [ "$SKOPEO" = yes ] && PACKAGES+=" libgpgme11"

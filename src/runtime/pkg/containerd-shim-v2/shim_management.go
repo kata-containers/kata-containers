@@ -29,13 +29,17 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	"github.com/sirupsen/logrus"
 )
 
 const (
-	DirectVolumePathKey = "path"
-
+	DirectVolumePathKey   = "path"
+	AgentUrl              = "/agent-url"
 	DirectVolumeStatUrl   = "/direct-volume/stats"
 	DirectVolumeResizeUrl = "/direct-volume/resize"
+	IPTablesUrl           = "/iptables"
+	IP6TablesUrl          = "/ip6tables"
+	MetricsUrl            = "/metrics"
 )
 
 var (
@@ -195,6 +199,48 @@ func (s *service) serveVolumeResize(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(""))
 }
 
+func (s *service) ip6TablesHandler(w http.ResponseWriter, r *http.Request) {
+	s.genericIPTablesHandler(w, r, true)
+}
+
+func (s *service) ipTablesHandler(w http.ResponseWriter, r *http.Request) {
+	s.genericIPTablesHandler(w, r, false)
+}
+
+func (s *service) genericIPTablesHandler(w http.ResponseWriter, r *http.Request, isIPv6 bool) {
+	logger := shimMgtLog.WithFields(logrus.Fields{"handler": "iptables", "ipv6": isIPv6})
+
+	switch r.Method {
+	case http.MethodPut:
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			logger.WithError(err).Error("failed to read request body")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		if err = s.sandbox.SetIPTables(context.Background(), isIPv6, body); err != nil {
+			logger.WithError(err).Error("failed to set IPTables")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+		}
+		w.Write([]byte(""))
+
+	case http.MethodGet:
+		buf, err := s.sandbox.GetIPTables(context.Background(), isIPv6)
+		if err != nil {
+			logger.WithError(err).Error("failed to get IPTables")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+		}
+		w.Write(buf)
+	default:
+		w.WriteHeader(http.StatusNotImplemented)
+		return
+	}
+}
+
 func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec) {
 	// metrics socket will under sandbox's bundle path
 	metricsAddress := SocketAddress(s.id)
@@ -215,10 +261,12 @@ func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec
 
 	// bind handler
 	m := http.NewServeMux()
-	m.Handle("/metrics", http.HandlerFunc(s.serveMetrics))
-	m.Handle("/agent-url", http.HandlerFunc(s.agentURL))
+	m.Handle(MetricsUrl, http.HandlerFunc(s.serveMetrics))
+	m.Handle(AgentUrl, http.HandlerFunc(s.agentURL))
 	m.Handle(DirectVolumeStatUrl, http.HandlerFunc(s.serveVolumeStats))
 	m.Handle(DirectVolumeResizeUrl, http.HandlerFunc(s.serveVolumeResize))
+	m.Handle(IPTablesUrl, http.HandlerFunc(s.ipTablesHandler))
+	m.Handle(IP6TablesUrl, http.HandlerFunc(s.ip6TablesHandler))
 	s.mountPprofHandle(m, ociSpec)
 
 	// register shim metrics

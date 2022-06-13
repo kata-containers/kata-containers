@@ -22,21 +22,35 @@ $ sudo snap install kata-containers --classic
 
 ## Build and install snap image
 
-Run next command at the root directory of the packaging repository.
+Run the command below which will use the packaging Makefile to build the snap image:
 
 ```sh
-$ make snap
+$ make -C tools/packaging snap
 ```
+
+> **Warning:**
+>
+> By default, `snapcraft` will create a clean virtual machine
+> environment to build the snap in using the `multipass` tool.
+>
+> However, `multipass` is silently disabled when `--destructive-mode` is
+> used.
+>
+> Since building the Kata Containers package currently requires
+> `--destructive-mode`, the snap will be built using the host
+> environment. To avoid parts of the build auto-detecting additional
+> features to enable (for example for QEMU), we recommend that you
+> only run the snap build in a minimal host environment.
 
 To install the resulting snap image, snap must be put in [classic mode][3] and the
-security confinement must be disabled (*--classic*). Also since the resulting snap
-has not been signed the verification of signature must be omitted (*--dangerous*).
+security confinement must be disabled (`--classic`). Also since the resulting snap
+has not been signed the verification of signature must be omitted (`--dangerous`).
 
 ```sh
-$ sudo snap install --classic --dangerous kata-containers_[VERSION]_[ARCH].snap
+$ sudo snap install --classic --dangerous "kata-containers_${version}_${arch}.snap"
 ```
 
-Replace `VERSION` with the current version of Kata Containers and `ARCH` with
+Replace `${version}` with the current version of Kata Containers and `${arch}` with
 the system architecture.
 
 ## Configure Kata Containers
@@ -76,12 +90,12 @@ then a new configuration file can be [created](#configure-kata-containers)
 and [configured][7].
 
 [1]: https://docs.snapcraft.io/snaps/intro
-[2]: ../docs/design/architecture/README.md#root-filesystem-image
+[2]: ../../docs/design/architecture/README.md#root-filesystem-image
 [3]: https://docs.snapcraft.io/reference/confinement#classic
-[4]: https://github.com/kata-containers/runtime#configuration
+[4]: https://github.com/kata-containers/kata-containers/tree/main/src/runtime#configuration
 [5]: https://docs.docker.com/engine/reference/commandline/dockerd
-[6]: ../docs/install/docker/ubuntu-docker-install.md
-[7]: ../docs/Developer-Guide.md#configure-to-use-initrd-or-rootfs-image
+[6]: ../../docs/install/docker/ubuntu-docker-install.md
+[7]: ../../docs/Developer-Guide.md#configure-to-use-initrd-or-rootfs-image
 [8]: https://snapcraft.io/kata-containers
-[9]: ../docs/Developer-Guide.md#run-kata-containers-with-docker
-[10]: ../docs/Developer-Guide.md#run-kata-containers-with-kubernetes
+[9]: ../../docs/Developer-Guide.md#run-kata-containers-with-docker
+[10]: ../../docs/Developer-Guide.md#run-kata-containers-with-kubernetes

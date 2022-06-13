@@ -83,6 +83,8 @@ type VCSandbox interface {
 
 	// Image management inside Sandbox
 	image.ImageService
+	GetIPTables(ctx context.Context, isIPv6 bool) ([]byte, error)
+	SetIPTables(ctx context.Context, isIPv6 bool, data []byte) error
 }
 
 // VCContainer is the Container interface

@@ -58,10 +58,7 @@ pub fn setup_master_console(socket_fd: RawFd) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::skip_if_not_root;
-    use std::fs::File;
     use std::os::unix::net::UnixListener;
-    use std::path::PathBuf;
     use tempfile::{self, tempdir};
 
     const CONSOLE_SOCKET: &str = "console-socket";
