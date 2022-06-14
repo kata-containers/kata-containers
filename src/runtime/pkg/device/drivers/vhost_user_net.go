@@ -10,25 +10,25 @@ import (
 	"context"
 	"encoding/hex"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
-// VhostUserSCSIDevice is a SCSI vhost-user based device
-type VhostUserSCSIDevice struct {
+// VhostUserNetDevice is a network vhost-user based device
+type VhostUserNetDevice struct {
 	*GenericDevice
 	config.VhostUserDeviceAttrs
 }
 
 //
-// VhostUserSCSIDevice's implementation of the device interface:
+// VhostUserNetDevice's implementation of the device interface:
 //
 
 // Attach is standard interface of api.Device, it's used to add device to some
 // DeviceReceiver
-func (device *VhostUserSCSIDevice) Attach(ctx context.Context, devReceiver api.DeviceReceiver) (err error) {
+func (device *VhostUserNetDevice) Attach(ctx context.Context, devReceiver api.DeviceReceiver) (err error) {
 	skip, err := device.bumpAttachCount(true)
 	if err != nil {
 		return err
@@ -58,24 +58,24 @@ func (device *VhostUserSCSIDevice) Attach(ctx context.Context, devReceiver api.D
 
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
-func (device *VhostUserSCSIDevice) Detach(ctx context.Context, devReceiver api.DeviceReceiver) error {
+func (device *VhostUserNetDevice) Detach(ctx context.Context, devReceiver api.DeviceReceiver) error {
 	_, err := device.bumpAttachCount(false)
 	return err
 }
 
 // DeviceType is standard interface of api.Device, it returns device type
-func (device *VhostUserSCSIDevice) DeviceType() config.DeviceType {
-	return config.VhostUserSCSI
+func (device *VhostUserNetDevice) DeviceType() config.DeviceType {
+	return config.VhostUserNet
 }
 
 // GetDeviceInfo returns device information used for creating
-func (device *VhostUserSCSIDevice) GetDeviceInfo() interface{} {
+func (device *VhostUserNetDevice) GetDeviceInfo() interface{} {
 	device.Type = device.DeviceType()
 	return &device.VhostUserDeviceAttrs
 }
 
 // Save converts Device to DeviceState
-func (device *VhostUserSCSIDevice) Save() persistapi.DeviceState {
+func (device *VhostUserNetDevice) Save() persistapi.DeviceState {
 	ds := device.GenericDevice.Save()
 	ds.Type = string(device.DeviceType())
 	ds.VhostUserDev = &persistapi.VhostUserDeviceAttrs{
@@ -88,7 +88,7 @@ func (device *VhostUserSCSIDevice) Save() persistapi.DeviceState {
 }
 
 // Load loads DeviceState and converts it to specific device
-func (device *VhostUserSCSIDevice) Load(ds persistapi.DeviceState) {
+func (device *VhostUserNetDevice) Load(ds persistapi.DeviceState) {
 	device.GenericDevice = &GenericDevice{}
 	device.GenericDevice.Load(ds)
 

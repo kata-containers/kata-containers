@@ -16,9 +16,9 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 
 	"github.com/sirupsen/logrus"
