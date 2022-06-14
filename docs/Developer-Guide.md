@@ -116,7 +116,7 @@ detailed below.
 The Kata logs appear in the `containerd` log files, along with logs from `containerd` itself.
 
 For more information about `containerd` debug, please see the
-[`containerd` documentation](https://github.com/containerd/containerd/blob/master/docs/getting-started.md).
+[`containerd` documentation](https://github.com/containerd/containerd/blob/main/docs/getting-started.md).
 
 #### Enabling full `containerd` debug
 
