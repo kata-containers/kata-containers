@@ -8,7 +8,7 @@ package drivers
 import (
 	"testing"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/stretchr/testify/assert"
 )
 
