@@ -251,29 +251,31 @@ impl DeviceOpContext {
         &self.logger
     }
 
+    #[allow(unused_variables)]
     fn generate_kernel_boot_args(&mut self, kernel_config: &mut KernelConfigInfo) -> Result<()> {
-        if !self.is_hotplug {
+        if self.is_hotplug {
             return Err(DeviceMgrError::InvalidOperation);
         }
 
         #[cfg(feature = "dbs-virtio-devices")]
-        let cmdline = kernel_config.kernel_cmdline_mut();
+        {
+            let cmdline = kernel_config.kernel_cmdline_mut();
 
-        #[cfg(feature = "dbs-virtio-devices")]
-        for device in self.virtio_devices.iter() {
-            let (mmio_base, mmio_size, irq) = DeviceManager::get_virtio_device_info(device)?;
+            for device in self.virtio_devices.iter() {
+                let (mmio_base, mmio_size, irq) = DeviceManager::get_virtio_device_info(device)?;
 
-            // as per doc, [virtio_mmio.]device=<size>@<baseaddr>:<irq> needs to be appended
-            // to kernel commandline for virtio mmio devices to get recognized
-            // the size parameter has to be transformed to KiB, so dividing hexadecimal value in
-            // bytes to 1024; further, the '{}' formatting rust construct will automatically
-            // transform it to decimal
-            cmdline
-                .insert(
-                    "virtio_mmio.device",
-                    &format!("{}K@0x{:08x}:{}", mmio_size / 1024, mmio_base, irq),
-                )
-                .map_err(DeviceMgrError::Cmdline)?;
+                // as per doc, [virtio_mmio.]device=<size>@<baseaddr>:<irq> needs to be appended
+                // to kernel commandline for virtio mmio devices to get recognized
+                // the size parameter has to be transformed to KiB, so dividing hexadecimal value in
+                // bytes to 1024; further, the '{}' formatting rust construct will automatically
+                // transform it to decimal
+                cmdline
+                    .insert(
+                        "virtio_mmio.device",
+                        &format!("{}K@0x{:08x}:{}", mmio_size / 1024, mmio_base, irq),
+                    )
+                    .map_err(DeviceMgrError::Cmdline)?;
+            }
         }
 
         Ok(())
