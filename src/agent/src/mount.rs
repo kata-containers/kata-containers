@@ -840,15 +840,13 @@ pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Resul
         return Err(anyhow!("Invalid mount point {}", mount_point));
     }
 
-    let file = File::open(mount_file)?;
-    let reader = BufReader::new(file);
+    let content = fs::read_to_string(mount_file)?;
 
     let re = Regex::new(format!("device .+ mounted on {} with fstype (.+)", mount_point).as_str())?;
 
     // Read the file line by line using the lines() iterator from std::io::BufRead.
-    for (_index, line) in reader.lines().enumerate() {
-        let line = line?;
-        let capes = match re.captures(line.as_str()) {
+    for (_index, line) in content.lines().enumerate() {
+        let capes = match re.captures(line) {
             Some(c) => c,
             None => continue,
         };
@@ -861,7 +859,7 @@ pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Resul
     Err(anyhow!(
         "failed to find FS type for mount point {}, mount file content: {:?}",
         mount_point,
-        fs::read_to_string(mount_file)
+        content
     ))
 }
 
