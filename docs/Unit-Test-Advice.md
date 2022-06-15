@@ -320,7 +320,7 @@ mod tests {
 
 ## Test user
 
-[Unit tests are run *twice*](https://github.com/kata-containers/tests/blob/main/.ci/go-test.sh):
+[Unit tests are run *twice*](../src/runtime/go-test.sh):
 
 - as the current user
 - as the `root` user (if different to the current user)
