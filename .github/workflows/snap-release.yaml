@@ -26,7 +26,7 @@ jobs:
           # Check semantic versioning format (x.y.z) and if the current tag is the latest tag
           if echo "${current_version}" | grep -q "^[[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]\+$" && echo -e "$latest_version\n$current_version" | sort -C -V; then
             # Current version is the latest version, build it
-            snapcraft -d snap --destructive-mode
+            snapcraft snap --debug --destructive-mode
           fi
 
       - name: Upload snap
