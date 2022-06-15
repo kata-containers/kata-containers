@@ -24,4 +24,4 @@ jobs:
       - name: Build snap
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         run: |
-          snapcraft -d snap --destructive-mode
+          snapcraft snap --debug --destructive-mode
