@@ -317,6 +317,29 @@ generate_qemu_options() {
 	# Don't build the qemu-io, qemu-nbd and qemu-image tools
 	qemu_options+=(size:--disable-tools)
 
+	# Kata Containers may be configured to use the virtiofs daemon.
+	#
+	# But since QEMU 5.2 the daemon is built as part of the tools set
+	# (disabled with --disable-tools) thus it needs to be explicitely
+	# enabled.
+	#
+	# From Kata Containers 2.5.0-alpha2 all arches but powerpc have been
+        # using the new implementation of virtiofs daemon, which is not part
+       	# of QEMU.
+	# For the powwer, at least for now, keep building virtiofsd while
+	# building QEMU.
+	case "$arch" in
+	aarch64)
+	        ;;
+	x86_64)
+	        ;;
+	ppc64le)
+	        qemu_options+=(functionality:--enable-virtiofsd)
+	        ;;
+	s390x)
+	        ;;
+	esac
+
 	qemu_options+=(functionality:--enable-virtfs)
 
 	# Don't build linux-user bsd-user

@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	sysexec "os/exec"
+	goruntime "runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -234,9 +236,19 @@ func (s *service) StartShim(ctx context.Context, opts cdshim.StartOpts) (_ strin
 
 	cmd.ExtraFiles = append(cmd.ExtraFiles, f)
 
+	goruntime.LockOSThread()
+	if os.Getenv("SCHED_CORE") != "" {
+		if err := utils.Create(utils.ProcessGroup); err != nil {
+			return "", errors.Wrap(err, "enable sched core support")
+		}
+	}
+
 	if err := cmd.Start(); err != nil {
 		return "", err
 	}
+
+	goruntime.UnlockOSThread()
+
 	defer func() {
 		if retErr != nil {
 			cmd.Process.Kill()

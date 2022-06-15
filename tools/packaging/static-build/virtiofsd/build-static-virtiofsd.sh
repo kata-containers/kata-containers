@@ -71,11 +71,11 @@ build_virtiofsd_from_source() {
    git clone --depth 1 --branch ${virtiofsd_version} ${virtiofsd_url} virtiofsd
    pushd virtiofsd
 
-   RUSTFLAGS='-C target-feature=+crt-static -C link-self-contained=yes'
-   LIBSECCOMP_LINK_TYPE=static
-   LIBSECCOMP_LIB_PATH=/usr/lib/${ARCH_LIBC}
-   LIBCAPNG_LINK_TYPE=static
-   LIBCAPNG_LIB_PATH=/usr/lib/${ARCH_LIBC}
+   export RUSTFLAGS='-C target-feature=+crt-static -C link-self-contained=yes'
+   export LIBSECCOMP_LINK_TYPE=static
+   export LIBSECCOMP_LIB_PATH=/usr/lib/${ARCH_LIBC}
+   export LIBCAPNG_LINK_TYPE=static
+   export LIBCAPNG_LIB_PATH=/usr/lib/${ARCH_LIBC}
    
    cargo build --release --target ${ARCH}-unknown-linux-${LIBC}
 
