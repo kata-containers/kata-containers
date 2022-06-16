@@ -68,7 +68,7 @@ the Kata logs import to the EFK stack.
 > stack they are able to utilise in order to modify and test as necessary.
 
 Minikube by default
-[configures](https://github.com/kubernetes/minikube/blob/master/deploy/iso/minikube-iso/board/coreos/minikube/rootfs-overlay/etc/systemd/journald.conf)
+[configures](https://github.com/kubernetes/minikube/blob/master/deploy/iso/minikube-iso/board/minikube/x86_64/rootfs-overlay/etc/systemd/journald.conf)
  the `systemd-journald` with the
 [`Storage=volatile`](https://www.freedesktop.org/software/systemd/man/journald.conf.html) option,
 which results in the journal being stored in `/run/log/journal`. Unfortunately, the Minikube EFK
@@ -163,7 +163,7 @@ sub-filter on, for instance, the `SYSLOG_IDENTIFIER` to differentiate the Kata c
 on the `PRIORITY` to filter out critical issues etc.
 
 Kata generates a significant amount of Kata specific information, which can be seen as
-[`logfmt`](https://github.com/kata-containers/tests/tree/main/cmd/log-parser#logfile-requirements).
+[`logfmt`](../../src/tools/log-parser/README.md#logfile-requirements).
 data contained in the `MESSAGE` field. Imported as-is, there is no easy way to filter on that data
 in Kibana:
 
