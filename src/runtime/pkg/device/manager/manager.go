@@ -17,7 +17,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
-	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -242,7 +241,7 @@ func (dm *deviceManager) IsDeviceAttached(id string) bool {
 }
 
 // LoadDevices load devices from persist state
-func (dm *deviceManager) LoadDevices(devStates []persistapi.DeviceState) {
+func (dm *deviceManager) LoadDevices(devStates []config.DeviceState) {
 	dm.Lock()
 	defer dm.Unlock()
 

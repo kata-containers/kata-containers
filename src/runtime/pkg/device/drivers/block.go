@@ -12,7 +12,6 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
-	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -159,13 +158,13 @@ func (device *BlockDevice) GetDeviceInfo() interface{} {
 }
 
 // Save converts Device to DeviceState
-func (device *BlockDevice) Save() persistapi.DeviceState {
+func (device *BlockDevice) Save() config.DeviceState {
 	ds := device.GenericDevice.Save()
 	ds.Type = string(device.DeviceType())
 
 	drive := device.BlockDrive
 	if drive != nil {
-		ds.BlockDrive = &persistapi.BlockDrive{
+		ds.BlockDrive = &config.BlockDriveState{
 			File:     drive.File,
 			Format:   drive.Format,
 			ID:       drive.ID,
@@ -183,7 +182,7 @@ func (device *BlockDevice) Save() persistapi.DeviceState {
 }
 
 // Load loads DeviceState and converts it to specific device
-func (device *BlockDevice) Load(ds persistapi.DeviceState) {
+func (device *BlockDevice) Load(ds config.DeviceState) {
 	device.GenericDevice = &GenericDevice{}
 	device.GenericDevice.Load(ds)
 

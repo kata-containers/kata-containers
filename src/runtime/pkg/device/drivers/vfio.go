@@ -18,7 +18,6 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
-	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -174,14 +173,14 @@ func (device *VFIODevice) GetDeviceInfo() interface{} {
 }
 
 // Save converts Device to DeviceState
-func (device *VFIODevice) Save() persistapi.DeviceState {
+func (device *VFIODevice) Save() config.DeviceState {
 	ds := device.GenericDevice.Save()
 	ds.Type = string(device.DeviceType())
 
 	devs := device.VfioDevs
 	for _, dev := range devs {
 		if dev != nil {
-			ds.VFIODevs = append(ds.VFIODevs, &persistapi.VFIODev{
+			ds.VFIODevs = append(ds.VFIODevs, &config.VFIODevState{
 				ID:       dev.ID,
 				Type:     uint32(dev.Type),
 				BDF:      dev.BDF,
@@ -193,7 +192,7 @@ func (device *VFIODevice) Save() persistapi.DeviceState {
 }
 
 // Load loads DeviceState and converts it to specific device
-func (device *VFIODevice) Load(ds persistapi.DeviceState) {
+func (device *VFIODevice) Load(ds config.DeviceState) {
 	device.GenericDevice = &GenericDevice{}
 	device.GenericDevice.Load(ds)
 
