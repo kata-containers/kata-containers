@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
-	"sync"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
@@ -40,10 +39,6 @@ func marshalPtr(data interface{}, length int) (internal.Pointer, error) {
 // Returns an error if the given value isn't representable in exactly
 // length bytes.
 func marshalBytes(data interface{}, length int) (buf []byte, err error) {
-	if data == nil {
-		return nil, errors.New("can't marshal a nil value")
-	}
-
 	switch value := data.(type) {
 	case encoding.BinaryMarshaler:
 		buf, err = value.MarshalBinary()
@@ -82,30 +77,22 @@ func makeBuffer(dst interface{}, length int) (internal.Pointer, []byte) {
 	return internal.NewSlicePointer(buf), buf
 }
 
-var bytesReaderPool = sync.Pool{
-	New: func() interface{} {
-		return new(bytes.Reader)
-	},
-}
-
 // unmarshalBytes converts a byte buffer into an arbitrary value.
 //
 // Prefer using Map.unmarshalKey and Map.unmarshalValue if possible, since
 // those have special cases that allow more types to be encoded.
-//
-// The common int32 and int64 types are directly handled to avoid
-// unnecessary heap allocations as happening in the default case.
 func unmarshalBytes(data interface{}, buf []byte) error {
 	switch value := data.(type) {
 	case unsafe.Pointer:
-		var dst []byte
-		// Use unsafe.Slice when we drop support for pre1.17 (https://github.com/golang/go/issues/19367)
-		// We could opt for removing unsafe.Pointer support in the lib as well
-		sh := (*reflect.SliceHeader)(unsafe.Pointer(&dst))
-		sh.Data = uintptr(value)
-		sh.Len = len(buf)
-		sh.Cap = len(buf)
+		// This could be solved in Go 1.17 by unsafe.Slice instead. (https://github.com/golang/go/issues/19367)
+		// We could opt for removing unsafe.Pointer support in the lib as well.
+		sh := &reflect.SliceHeader{ //nolint:govet
+			Data: uintptr(value),
+			Len:  len(buf),
+			Cap:  len(buf),
+		}
 
+		dst := *(*[]byte)(unsafe.Pointer(sh))
 		copy(dst, buf)
 		runtime.KeepAlive(value)
 		return nil
@@ -119,38 +106,12 @@ func unmarshalBytes(data interface{}, buf []byte) error {
 	case *[]byte:
 		*value = buf
 		return nil
-	case *int32:
-		if len(buf) < 4 {
-			return errors.New("int32 requires 4 bytes")
-		}
-		*value = int32(internal.NativeEndian.Uint32(buf))
-		return nil
-	case *uint32:
-		if len(buf) < 4 {
-			return errors.New("uint32 requires 4 bytes")
-		}
-		*value = internal.NativeEndian.Uint32(buf)
-		return nil
-	case *int64:
-		if len(buf) < 8 {
-			return errors.New("int64 requires 8 bytes")
-		}
-		*value = int64(internal.NativeEndian.Uint64(buf))
-		return nil
-	case *uint64:
-		if len(buf) < 8 {
-			return errors.New("uint64 requires 8 bytes")
-		}
-		*value = internal.NativeEndian.Uint64(buf)
-		return nil
 	case string:
 		return errors.New("require pointer to string")
 	case []byte:
 		return errors.New("require pointer to []byte")
 	default:
-		rd := bytesReaderPool.Get().(*bytes.Reader)
-		rd.Reset(buf)
-		defer bytesReaderPool.Put(rd)
+		rd := bytes.NewReader(buf)
 		if err := binary.Read(rd, internal.NativeEndian, value); err != nil {
 			return fmt.Errorf("decoding %T: %v", value, err)
 		}
@@ -181,7 +142,7 @@ func marshalPerCPUValue(slice interface{}, elemLength int) (internal.Pointer, er
 		return internal.Pointer{}, fmt.Errorf("per-CPU value exceeds number of CPUs")
 	}
 
-	alignedElemLength := internal.Align(elemLength, 8)
+	alignedElemLength := align(elemLength, 8)
 	buf := make([]byte, alignedElemLength*possibleCPUs)
 
 	for i := 0; i < sliceLen; i++ {
@@ -250,4 +211,8 @@ func unmarshalPerCPUValue(slicePtr interface{}, elemLength int, buf []byte) erro
 
 	reflect.ValueOf(slicePtr).Elem().Set(slice)
 	return nil
+}
+
+func align(n, alignment int) int {
+	return (int(n) + alignment - 1) / alignment * alignment
 }

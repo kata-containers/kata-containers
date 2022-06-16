@@ -5,12 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 )
 
 type stringTable []byte
 
 func readStringTable(r io.Reader) (stringTable, error) {
-	contents, err := io.ReadAll(r)
+	contents, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, fmt.Errorf("can't read string table: %v", err)
 	}
@@ -51,4 +52,9 @@ func (st stringTable) Lookup(offset uint32) (string, error) {
 	}
 
 	return string(str[:end]), nil
+}
+
+func (st stringTable) LookupName(offset uint32) (Name, error) {
+	str, err := st.Lookup(offset)
+	return Name(str), err
 }

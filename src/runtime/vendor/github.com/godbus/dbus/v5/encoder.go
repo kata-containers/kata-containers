@@ -5,33 +5,28 @@ import (
 	"encoding/binary"
 	"io"
 	"reflect"
-	"strings"
-	"unicode/utf8"
 )
 
 // An encoder encodes values to the D-Bus wire format.
 type encoder struct {
 	out   io.Writer
-	fds   []int
 	order binary.ByteOrder
 	pos   int
 }
 
 // NewEncoder returns a new encoder that writes to out in the given byte order.
-func newEncoder(out io.Writer, order binary.ByteOrder, fds []int) *encoder {
-	enc := newEncoderAtOffset(out, 0, order, fds)
-	return enc
+func newEncoder(out io.Writer, order binary.ByteOrder) *encoder {
+	return newEncoderAtOffset(out, 0, order)
 }
 
 // newEncoderAtOffset returns a new encoder that writes to out in the given
 // byte order. Specify the offset to initialize pos for proper alignment
 // computation.
-func newEncoderAtOffset(out io.Writer, offset int, order binary.ByteOrder, fds []int) *encoder {
+func newEncoderAtOffset(out io.Writer, offset int, order binary.ByteOrder) *encoder {
 	enc := new(encoder)
 	enc.out = out
 	enc.order = order
 	enc.pos = offset
-	enc.fds = fds
 	return enc
 }
 
@@ -80,9 +75,6 @@ func (enc *encoder) Encode(vs ...interface{}) (err error) {
 // encode encodes the given value to the writer and panics on error. depth holds
 // the depth of the container nesting.
 func (enc *encoder) encode(v reflect.Value, depth int) {
-	if depth > 64 {
-		panic(FormatError("input exceeds depth limitation"))
-	}
 	enc.align(alignment(v.Type()))
 	switch v.Kind() {
 	case reflect.Uint8:
@@ -105,14 +97,7 @@ func (enc *encoder) encode(v reflect.Value, depth int) {
 		enc.binwrite(uint16(v.Uint()))
 		enc.pos += 2
 	case reflect.Int, reflect.Int32:
-		if v.Type() == unixFDType {
-			fd := v.Int()
-			idx := len(enc.fds)
-			enc.fds = append(enc.fds, int(fd))
-			enc.binwrite(uint32(idx))
-		} else {
-			enc.binwrite(int32(v.Int()))
-		}
+		enc.binwrite(int32(v.Int()))
 		enc.pos += 4
 	case reflect.Uint, reflect.Uint32:
 		enc.binwrite(uint32(v.Uint()))
@@ -127,21 +112,9 @@ func (enc *encoder) encode(v reflect.Value, depth int) {
 		enc.binwrite(v.Float())
 		enc.pos += 8
 	case reflect.String:
-		str := v.String()
-		if !utf8.ValidString(str) {
-			panic(FormatError("input has a not-utf8 char in string"))
-		}
-		if strings.IndexByte(str, byte(0)) != -1 {
-			panic(FormatError("input has a null char('\\000') in string"))
-		}
-		if v.Type() == objectPathType {
-			if !ObjectPath(str).IsValid() {
-				panic(FormatError("invalid object path"))
-			}
-		}
-		enc.encode(reflect.ValueOf(uint32(len(str))), depth)
+		enc.encode(reflect.ValueOf(uint32(len(v.String()))), depth)
 		b := make([]byte, v.Len()+1)
-		copy(b, str)
+		copy(b, v.String())
 		b[len(b)-1] = 0
 		n, err := enc.out.Write(b)
 		if err != nil {
@@ -151,23 +124,20 @@ func (enc *encoder) encode(v reflect.Value, depth int) {
 	case reflect.Ptr:
 		enc.encode(v.Elem(), depth)
 	case reflect.Slice, reflect.Array:
+		if depth >= 64 {
+			panic(FormatError("input exceeds container depth limit"))
+		}
 		// Lookahead offset: 4 bytes for uint32 length (with alignment),
 		// plus alignment for elements.
 		n := enc.padding(0, 4) + 4
 		offset := enc.pos + n + enc.padding(n, alignment(v.Type().Elem()))
 
 		var buf bytes.Buffer
-		bufenc := newEncoderAtOffset(&buf, offset, enc.order, enc.fds)
+		bufenc := newEncoderAtOffset(&buf, offset, enc.order)
 
 		for i := 0; i < v.Len(); i++ {
 			bufenc.encode(v.Index(i), depth+1)
 		}
-
-		if buf.Len() > 1<<26 {
-			panic(FormatError("input exceeds array size limitation"))
-		}
-
-		enc.fds = bufenc.fds
 		enc.encode(reflect.ValueOf(uint32(buf.Len())), depth)
 		length := buf.Len()
 		enc.align(alignment(v.Type().Elem()))
@@ -176,10 +146,13 @@ func (enc *encoder) encode(v reflect.Value, depth int) {
 		}
 		enc.pos += length
 	case reflect.Struct:
+		if depth >= 64 && v.Type() != signatureType {
+			panic(FormatError("input exceeds container depth limit"))
+		}
 		switch t := v.Type(); t {
 		case signatureType:
 			str := v.Field(0)
-			enc.encode(reflect.ValueOf(byte(str.Len())), depth)
+			enc.encode(reflect.ValueOf(byte(str.Len())), depth+1)
 			b := make([]byte, str.Len()+1)
 			copy(b, str.String())
 			b[len(b)-1] = 0
@@ -203,6 +176,9 @@ func (enc *encoder) encode(v reflect.Value, depth int) {
 	case reflect.Map:
 		// Maps are arrays of structures, so they actually increase the depth by
 		// 2.
+		if depth >= 63 {
+			panic(FormatError("input exceeds container depth limit"))
+		}
 		if !isKeyType(v.Type().Key()) {
 			panic(InvalidTypeError{v.Type()})
 		}
@@ -213,13 +189,12 @@ func (enc *encoder) encode(v reflect.Value, depth int) {
 		offset := enc.pos + n + enc.padding(n, 8)
 
 		var buf bytes.Buffer
-		bufenc := newEncoderAtOffset(&buf, offset, enc.order, enc.fds)
+		bufenc := newEncoderAtOffset(&buf, offset, enc.order)
 		for _, k := range keys {
 			bufenc.align(8)
 			bufenc.encode(k, depth+2)
 			bufenc.encode(v.MapIndex(k), depth+2)
 		}
-		enc.fds = bufenc.fds
 		enc.encode(reflect.ValueOf(uint32(buf.Len())), depth)
 		length := buf.Len()
 		enc.align(8)

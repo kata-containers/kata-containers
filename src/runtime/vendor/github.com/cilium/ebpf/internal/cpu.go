@@ -2,7 +2,7 @@ package internal
 
 import (
 	"fmt"
-	"os"
+	"io/ioutil"
 	"strings"
 	"sync"
 )
@@ -24,7 +24,7 @@ func PossibleCPUs() (int, error) {
 }
 
 func parseCPUsFromFile(path string) (int, error) {
-	spec, err := os.ReadFile(path)
+	spec, err := ioutil.ReadFile(path)
 	if err != nil {
 		return 0, err
 	}

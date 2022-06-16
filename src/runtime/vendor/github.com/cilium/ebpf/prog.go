@@ -57,21 +57,16 @@ type ProgramSpec struct {
 	// Name is passed to the kernel as a debug aid. Must only contain
 	// alpha numeric and '_' characters.
 	Name string
-
 	// Type determines at which hook in the kernel a program will run.
 	Type       ProgramType
 	AttachType AttachType
-	// Name of a kernel data structure or function to attach to. Its
-	// interpretation depends on Type and AttachType.
-	AttachTo string
-	// The program to attach to. Must be provided manually.
-	AttachTarget *Program
+	// Name of a kernel data structure to attach to. It's interpretation
+	// depends on Type and AttachType.
+	AttachTo     string
 	Instructions asm.Instructions
-
 	// Flags is passed to the kernel and specifies additional program
 	// load attributes.
 	Flags uint32
-
 	// License of the program. Some helpers are only available if
 	// the license is deemed compatible with the GPL.
 	//
@@ -151,7 +146,7 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *handleCache) (*Program, error) {
 	if len(spec.Instructions) == 0 {
-		return nil, errors.New("instructions cannot be empty")
+		return nil, errors.New("Instructions cannot be empty")
 	}
 
 	if spec.ByteOrder != nil && spec.ByteOrder != internal.NativeEndian {
@@ -171,16 +166,16 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		kv = v.Kernel()
 	}
 
-	attr := &internal.BPFProgLoadAttr{
-		ProgType:           uint32(spec.Type),
-		ProgFlags:          spec.Flags,
-		ExpectedAttachType: uint32(spec.AttachType),
-		License:            internal.NewStringPointer(spec.License),
-		KernelVersion:      kv,
+	attr := &bpfProgLoadAttr{
+		progType:           spec.Type,
+		progFlags:          spec.Flags,
+		expectedAttachType: spec.AttachType,
+		license:            internal.NewStringPointer(spec.License),
+		kernelVersion:      kv,
 	}
 
 	if haveObjName() == nil {
-		attr.ProgName = internal.NewBPFObjName(spec.Name)
+		attr.progName = internal.NewBPFObjName(spec.Name)
 	}
 
 	var err error
@@ -195,35 +190,35 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	var btfDisabled bool
 	var core btf.COREFixups
 	if spec.BTF != nil {
-		core, err = spec.BTF.Fixups(targetBTF)
+		core, err = btf.ProgramFixups(spec.BTF, targetBTF)
 		if err != nil {
 			return nil, fmt.Errorf("CO-RE relocations: %w", err)
 		}
 
-		handle, err := handles.btfHandle(spec.BTF.Spec())
+		handle, err := handles.btfHandle(btf.ProgramSpec(spec.BTF))
 		btfDisabled = errors.Is(err, btf.ErrNotSupported)
 		if err != nil && !btfDisabled {
 			return nil, fmt.Errorf("load BTF: %w", err)
 		}
 
 		if handle != nil {
-			attr.ProgBTFFd = uint32(handle.FD())
+			attr.progBTFFd = uint32(handle.FD())
 
-			recSize, bytes, err := spec.BTF.LineInfos()
+			recSize, bytes, err := btf.ProgramLineInfos(spec.BTF)
 			if err != nil {
 				return nil, fmt.Errorf("get BTF line infos: %w", err)
 			}
-			attr.LineInfoRecSize = recSize
-			attr.LineInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
-			attr.LineInfo = internal.NewSlicePointer(bytes)
+			attr.lineInfoRecSize = recSize
+			attr.lineInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
+			attr.lineInfo = internal.NewSlicePointer(bytes)
 
-			recSize, bytes, err = spec.BTF.FuncInfos()
+			recSize, bytes, err = btf.ProgramFuncInfos(spec.BTF)
 			if err != nil {
 				return nil, fmt.Errorf("get BTF function infos: %w", err)
 			}
-			attr.FuncInfoRecSize = recSize
-			attr.FuncInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
-			attr.FuncInfo = internal.NewSlicePointer(bytes)
+			attr.funcInfoRecSize = recSize
+			attr.funcInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
+			attr.funcInfo = internal.NewSlicePointer(bytes)
 		}
 	}
 
@@ -243,41 +238,16 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	}
 
 	bytecode := buf.Bytes()
-	attr.Instructions = internal.NewSlicePointer(bytecode)
-	attr.InsCount = uint32(len(bytecode) / asm.InstructionSize)
+	attr.instructions = internal.NewSlicePointer(bytecode)
+	attr.insCount = uint32(len(bytecode) / asm.InstructionSize)
 
 	if spec.AttachTo != "" {
-		if spec.AttachTarget != nil {
-			info, err := spec.AttachTarget.Info()
-			if err != nil {
-				return nil, fmt.Errorf("load target BTF: %w", err)
-			}
-
-			btfID, ok := info.BTFID()
-			if !ok {
-				return nil, fmt.Errorf("load target BTF: no BTF info available")
-			}
-			btfHandle, err := btf.NewHandleFromID(btfID)
-			if err != nil {
-				return nil, fmt.Errorf("load target BTF: %w", err)
-			}
-			defer btfHandle.Close()
-
-			targetBTF = btfHandle.Spec()
-			if err != nil {
-				return nil, fmt.Errorf("load target BTF: %w", err)
-			}
-		}
-
 		target, err := resolveBTFType(targetBTF, spec.AttachTo, spec.Type, spec.AttachType)
 		if err != nil {
 			return nil, err
 		}
 		if target != nil {
-			attr.AttachBTFID = uint32(target.ID())
-		}
-		if spec.AttachTarget != nil {
-			attr.AttachProgFd = uint32(spec.AttachTarget.FD())
+			attr.attachBTFID = target.ID()
 		}
 	}
 
@@ -289,12 +259,12 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	var logBuf []byte
 	if opts.LogLevel > 0 {
 		logBuf = make([]byte, logSize)
-		attr.LogLevel = opts.LogLevel
-		attr.LogSize = uint32(len(logBuf))
-		attr.LogBuf = internal.NewSlicePointer(logBuf)
+		attr.logLevel = opts.LogLevel
+		attr.logSize = uint32(len(logBuf))
+		attr.logBuf = internal.NewSlicePointer(logBuf)
 	}
 
-	fd, err := internal.BPFProgLoad(attr)
+	fd, err := bpfProgLoad(attr)
 	if err == nil {
 		return &Program{internal.CString(logBuf), fd, spec.Name, "", spec.Type}, nil
 	}
@@ -303,20 +273,17 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	if opts.LogLevel == 0 && opts.LogSize >= 0 {
 		// Re-run with the verifier enabled to get better error messages.
 		logBuf = make([]byte, logSize)
-		attr.LogLevel = 1
-		attr.LogSize = uint32(len(logBuf))
-		attr.LogBuf = internal.NewSlicePointer(logBuf)
+		attr.logLevel = 1
+		attr.logSize = uint32(len(logBuf))
+		attr.logBuf = internal.NewSlicePointer(logBuf)
 
-		fd, logErr = internal.BPFProgLoad(attr)
-		if logErr == nil {
-			fd.Close()
-		}
+		_, logErr = bpfProgLoad(attr)
 	}
 
 	if errors.Is(logErr, unix.EPERM) && logBuf[0] == 0 {
 		// EPERM due to RLIMIT_MEMLOCK happens before the verifier, so we can
 		// check that the log is empty to reduce false positives.
-		return nil, fmt.Errorf("load program: %w (MEMLOCK bay be too low, consider rlimit.RemoveMemlock)", logErr)
+		return nil, fmt.Errorf("load program: RLIMIT_MEMLOCK may be too low: %w", logErr)
 	}
 
 	err = internal.ErrorWithLog(err, logBuf, logErr)
@@ -343,7 +310,7 @@ func NewProgramFromFD(fd int) (*Program, error) {
 //
 // Returns ErrNotExist, if there is no eBPF program with the given id.
 func NewProgramFromID(id ProgramID) (*Program, error) {
-	fd, err := internal.BPFObjGetFDByID(internal.BPF_PROG_GET_FD_BY_ID, uint32(id))
+	fd, err := bpfObjGetFDByID(internal.BPF_PROG_GET_FD_BY_ID, uint32(id))
 	if err != nil {
 		return nil, fmt.Errorf("get program by id: %w", err)
 	}
@@ -710,44 +677,45 @@ func ProgramGetNextID(startID ProgramID) (ProgramID, error) {
 //
 // Deprecated: use ProgramInfo.ID() instead.
 func (p *Program) ID() (ProgramID, error) {
-	info, err := bpfGetProgInfoByFD(p.fd, nil)
+	info, err := bpfGetProgInfoByFD(p.fd)
 	if err != nil {
 		return ProgramID(0), err
 	}
 	return ProgramID(info.id), nil
 }
 
-func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachType AttachType) (btf.Type, error) {
+func resolveBTFType(kernel *btf.Spec, name string, progType ProgramType, attachType AttachType) (btf.Type, error) {
 	type match struct {
 		p ProgramType
 		a AttachType
 	}
 
+	var target btf.Type
 	var typeName, featureName string
 	switch (match{progType, attachType}) {
 	case match{LSM, AttachLSMMac}:
+		target = new(btf.Func)
 		typeName = "bpf_lsm_" + name
 		featureName = name + " LSM hook"
+
 	case match{Tracing, AttachTraceIter}:
+		target = new(btf.Func)
 		typeName = "bpf_iter_" + name
 		featureName = name + " iterator"
-	case match{Extension, AttachNone}:
-		typeName = name
-		featureName = fmt.Sprintf("freplace %s", name)
+
 	default:
 		return nil, nil
 	}
 
-	if spec == nil {
+	if kernel == nil {
 		var err error
-		spec, err = btf.LoadKernelSpec()
+		kernel, err = btf.LoadKernelSpec()
 		if err != nil {
 			return nil, fmt.Errorf("load kernel spec: %w", err)
 		}
 	}
 
-	var target *btf.Func
-	err := spec.FindType(typeName, &target)
+	err := kernel.FindType(typeName, target)
 	if errors.Is(err, btf.ErrNotFound) {
 		return nil, &internal.UnsupportedFeatureError{
 			Name: featureName,
@@ -756,6 +724,5 @@ func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachTyp
 	if err != nil {
 		return nil, fmt.Errorf("resolve BTF for %s: %w", featureName, err)
 	}
-
 	return target, nil
 }

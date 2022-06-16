@@ -26,27 +26,6 @@ var (
 	}
 )
 
-func MakeNoObjectError(path ObjectPath) Error {
-	return Error{
-		"org.freedesktop.DBus.Error.NoSuchObject",
-		[]interface{}{fmt.Sprintf("No such object '%s'", string(path))},
-	}
-}
-
-func MakeUnknownMethodError(methodName string) Error {
-	return Error{
-		"org.freedesktop.DBus.Error.UnknownMethod",
-		[]interface{}{fmt.Sprintf("Unknown / invalid method '%s'", methodName)},
-	}
-}
-
-func MakeUnknownInterfaceError(ifaceName string) Error {
-	return Error{
-		"org.freedesktop.DBus.Error.UnknownInterface",
-		[]interface{}{fmt.Sprintf("Object does not implement the interface '%s'", ifaceName)},
-	}
-}
-
 func MakeFailedError(err error) *Error {
 	return &Error{
 		"org.freedesktop.DBus.Error.Failed",
@@ -149,11 +128,6 @@ func (conn *Conn) handleCall(msg *Message) {
 	ifaceName, _ := msg.Headers[FieldInterface].value.(string)
 	sender, hasSender := msg.Headers[FieldSender].value.(string)
 	serial := msg.serial
-
-	if len(name) == 0 {
-		conn.sendError(ErrMsgUnknownMethod, sender, serial)
-	}
-
 	if ifaceName == "org.freedesktop.DBus.Peer" {
 		switch name {
 		case "Ping":
@@ -161,26 +135,29 @@ func (conn *Conn) handleCall(msg *Message) {
 		case "GetMachineId":
 			conn.sendReply(sender, serial, conn.uuid)
 		default:
-			conn.sendError(MakeUnknownMethodError(name), sender, serial)
+			conn.sendError(ErrMsgUnknownMethod, sender, serial)
 		}
 		return
+	}
+	if len(name) == 0 {
+		conn.sendError(ErrMsgUnknownMethod, sender, serial)
 	}
 
 	object, ok := conn.handler.LookupObject(path)
 	if !ok {
-		conn.sendError(MakeNoObjectError(path), sender, serial)
+		conn.sendError(ErrMsgNoObject, sender, serial)
 		return
 	}
 
 	iface, exists := object.LookupInterface(ifaceName)
 	if !exists {
-		conn.sendError(MakeUnknownInterfaceError(ifaceName), sender, serial)
+		conn.sendError(ErrMsgUnknownInterface, sender, serial)
 		return
 	}
 
 	m, exists := iface.LookupMethod(name)
 	if !exists {
-		conn.sendError(MakeUnknownMethodError(name), sender, serial)
+		conn.sendError(ErrMsgUnknownMethod, sender, serial)
 		return
 	}
 	args, err := conn.decodeArguments(m, sender, msg)

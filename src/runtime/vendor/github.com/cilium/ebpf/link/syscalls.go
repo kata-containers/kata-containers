@@ -88,11 +88,10 @@ var haveProgAttachReplace = internal.FeatureTest("BPF_PROG_ATTACH atomic replace
 })
 
 type bpfLinkCreateAttr struct {
-	progFd      uint32
-	targetFd    uint32
-	attachType  ebpf.AttachType
-	flags       uint32
-	targetBTFID uint32
+	progFd     uint32
+	targetFd   uint32
+	attachType ebpf.AttachType
+	flags      uint32
 }
 
 func bpfLinkCreate(attr *bpfLinkCreateAttr) (*internal.FD, error) {

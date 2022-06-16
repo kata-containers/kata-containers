@@ -10,16 +10,14 @@ type decoder struct {
 	in    io.Reader
 	order binary.ByteOrder
 	pos   int
-	fds   []int
 }
 
 // newDecoder returns a new decoder that reads values from in. The input is
 // expected to be in the given byte order.
-func newDecoder(in io.Reader, order binary.ByteOrder, fds []int) *decoder {
+func newDecoder(in io.Reader, order binary.ByteOrder) *decoder {
 	dec := new(decoder)
 	dec.in = in
 	dec.order = order
-	dec.fds = fds
 	return dec
 }
 
@@ -55,7 +53,7 @@ func (dec *decoder) Decode(sig Signature) (vs []interface{}, err error) {
 	vs = make([]interface{}, 0)
 	s := sig.str
 	for s != "" {
-		err, rem := validSingle(s, &depthCounter{})
+		err, rem := validSingle(s, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -152,7 +150,7 @@ func (dec *decoder) decode(s string, depth int) interface{} {
 		if len(sig.str) == 0 {
 			panic(FormatError("variant signature is empty"))
 		}
-		err, rem := validSingle(sig.str, &depthCounter{})
+		err, rem := validSingle(sig.str, 0)
 		if err != nil {
 			panic(err)
 		}
@@ -163,11 +161,7 @@ func (dec *decoder) decode(s string, depth int) interface{} {
 		variant.value = dec.decode(sig.str, depth+1)
 		return variant
 	case 'h':
-		idx := dec.decode("u", depth).(uint32)
-		if int(idx) < len(dec.fds) {
-			return UnixFD(dec.fds[idx])
-		}
-		return UnixFDIndex(idx)
+		return UnixFDIndex(dec.decode("u", depth).(uint32))
 	case 'a':
 		if len(s) > 1 && s[1] == '{' {
 			ksig := s[2:3]
@@ -225,7 +219,7 @@ func (dec *decoder) decode(s string, depth int) interface{} {
 		v := make([]interface{}, 0)
 		s = s[1 : len(s)-1]
 		for s != "" {
-			err, rem := validSingle(s, &depthCounter{})
+			err, rem := validSingle(s, 0)
 			if err != nil {
 				panic(err)
 			}

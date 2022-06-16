@@ -24,5 +24,6 @@ linters:
 
     # Could be enabled later:
     # - gocyclo
+    # - prealloc
     # - maligned
     # - gosec

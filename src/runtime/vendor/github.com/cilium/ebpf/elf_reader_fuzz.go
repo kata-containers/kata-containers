@@ -1,4 +1,3 @@
-//go:build gofuzz
 // +build gofuzz
 
 // Use with https://github.com/dvyukov/go-fuzz
