@@ -158,17 +158,8 @@ func (device *VhostUserBlkDevice) GetDeviceInfo() interface{} {
 func (device *VhostUserBlkDevice) Save() config.DeviceState {
 	ds := device.GenericDevice.Save()
 	ds.Type = string(device.DeviceType())
+	ds.VhostUserDev = device.VhostUserDeviceAttrs
 
-	vAttr := device.VhostUserDeviceAttrs
-	if vAttr != nil {
-		ds.VhostUserDev = &config.VhostUserDeviceAttrsState{
-			DevID:      vAttr.DevID,
-			SocketPath: vAttr.SocketPath,
-			Type:       string(vAttr.Type),
-			PCIPath:    vAttr.PCIPath,
-			Index:      vAttr.Index,
-		}
-	}
 	return ds
 }
 
@@ -176,19 +167,7 @@ func (device *VhostUserBlkDevice) Save() config.DeviceState {
 func (device *VhostUserBlkDevice) Load(ds config.DeviceState) {
 	device.GenericDevice = &GenericDevice{}
 	device.GenericDevice.Load(ds)
-
-	dev := ds.VhostUserDev
-	if dev == nil {
-		return
-	}
-
-	device.VhostUserDeviceAttrs = &config.VhostUserDeviceAttrs{
-		DevID:      dev.DevID,
-		SocketPath: dev.SocketPath,
-		Type:       config.DeviceType(dev.Type),
-		PCIPath:    dev.PCIPath,
-		Index:      dev.Index,
-	}
+	device.VhostUserDeviceAttrs = ds.VhostUserDev
 }
 
 // It should implement GetAttachCount() and DeviceID() as api.Device implementation

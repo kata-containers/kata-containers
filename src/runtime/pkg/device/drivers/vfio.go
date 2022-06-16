@@ -180,12 +180,7 @@ func (device *VFIODevice) Save() config.DeviceState {
 	devs := device.VfioDevs
 	for _, dev := range devs {
 		if dev != nil {
-			ds.VFIODevs = append(ds.VFIODevs, &config.VFIODevState{
-				ID:       dev.ID,
-				Type:     uint32(dev.Type),
-				BDF:      dev.BDF,
-				SysfsDev: dev.SysfsDev,
-			})
+			ds.VFIODevs = append(ds.VFIODevs, dev)
 		}
 	}
 	return ds

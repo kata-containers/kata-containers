@@ -18,7 +18,7 @@ import (
 // VhostUserNetDevice is a network vhost-user based device
 type VhostUserNetDevice struct {
 	*GenericDevice
-	config.VhostUserDeviceAttrs
+	*config.VhostUserDeviceAttrs
 }
 
 //
@@ -70,19 +70,16 @@ func (device *VhostUserNetDevice) DeviceType() config.DeviceType {
 // GetDeviceInfo returns device information used for creating
 func (device *VhostUserNetDevice) GetDeviceInfo() interface{} {
 	device.Type = device.DeviceType()
-	return &device.VhostUserDeviceAttrs
+	return device.VhostUserDeviceAttrs
 }
 
 // Save converts Device to DeviceState
 func (device *VhostUserNetDevice) Save() config.DeviceState {
 	ds := device.GenericDevice.Save()
 	ds.Type = string(device.DeviceType())
-	ds.VhostUserDev = &config.VhostUserDeviceAttrsState{
-		DevID:      device.DevID,
-		SocketPath: device.SocketPath,
-		Type:       string(device.Type),
-		MacAddress: device.MacAddress,
-	}
+
+	ds.VhostUserDev = device.VhostUserDeviceAttrs
+
 	return ds
 }
 
@@ -91,17 +88,7 @@ func (device *VhostUserNetDevice) Load(ds config.DeviceState) {
 	device.GenericDevice = &GenericDevice{}
 	device.GenericDevice.Load(ds)
 
-	dev := ds.VhostUserDev
-	if dev == nil {
-		return
-	}
-
-	device.VhostUserDeviceAttrs = config.VhostUserDeviceAttrs{
-		DevID:      dev.DevID,
-		SocketPath: dev.SocketPath,
-		Type:       config.DeviceType(dev.Type),
-		MacAddress: dev.MacAddress,
-	}
+	device.VhostUserDeviceAttrs = ds.VhostUserDev
 }
 
 // It should implement GetAttachCount() and DeviceID() as api.Device implementation
