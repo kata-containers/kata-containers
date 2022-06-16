@@ -668,7 +668,7 @@ EOF
 		attestation_agent_branch="$(get_package_version_from_kata_yaml externals.attestation-agent.branch)"
 		info "Install attestation-agent with KBC ${AA_KBC}"
 		git clone "${attestation_agent_url}" --branch "${attestation_agent_branch}"
-		pushd attestation-agent
+		pushd attestation-agent/app
 		source "${HOME}/.cargo/env"
 		target="${ARCH}-unknown-linux-${LIBC}"
 		if [ "${AA_KBC}" == "eaa_kbc" ] && [ "${ARCH}" == "x86_64" ]; then
