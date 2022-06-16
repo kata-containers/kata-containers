@@ -19,7 +19,6 @@ scan_fmt = "0.2.3"
 scopeguard = "1.0.0"
 thiserror = "1.0.26"
 regex = "1.5.5"
-serial_test = "0.5.1"
 sysinfo = "0.23.0"
 
 # Async helpers
@@ -65,6 +64,7 @@ clap = { version = "3.0.1", features = ["derive"] }
 
 [dev-dependencies]
 tempfile = "3.1.0"
+serial_test = "0.5.1"
 
 [workspace]
 members = [
