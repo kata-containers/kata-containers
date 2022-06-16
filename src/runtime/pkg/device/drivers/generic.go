@@ -12,7 +12,6 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
-	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 )
 
 // GenericDevice refers to a device that is neither a VFIO device, block device or VhostUserDevice.
@@ -128,8 +127,8 @@ func (device *GenericDevice) bumpAttachCount(attach bool) (skip bool, err error)
 }
 
 // Save converts Device to DeviceState
-func (device *GenericDevice) Save() persistapi.DeviceState {
-	dss := persistapi.DeviceState{
+func (device *GenericDevice) Save() config.DeviceState {
+	dss := config.DeviceState{
 		ID:          device.ID,
 		Type:        string(device.DeviceType()),
 		RefCount:    device.RefCount,
@@ -148,7 +147,7 @@ func (device *GenericDevice) Save() persistapi.DeviceState {
 }
 
 // Load loads DeviceState and converts it to specific device
-func (device *GenericDevice) Load(ds persistapi.DeviceState) {
+func (device *GenericDevice) Load(ds config.DeviceState) {
 	device.ID = ds.ID
 	device.RefCount = ds.RefCount
 	device.AttachCount = ds.AttachCount

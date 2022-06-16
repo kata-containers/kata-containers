@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package persistapi
+package config
 
 import vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 
@@ -12,7 +12,7 @@ import vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtconta
 
 // BlockDrive represents a block storage drive which may be used in case the storage
 // driver has an underlying block storage device.
-type BlockDrive struct {
+type BlockDriveState struct {
 	// File is the path to the disk-image/device which will be used with this drive
 	File string
 
@@ -50,7 +50,7 @@ type BlockDrive struct {
 }
 
 // VFIODev represents a VFIO drive used for hotplugging
-type VFIODev struct {
+type VFIODevState struct {
 	// ID is used to identify this drive in the hypervisor options.
 	ID string
 
@@ -65,7 +65,7 @@ type VFIODev struct {
 }
 
 // VhostUserDeviceAttrs represents data shared by most vhost-user devices
-type VhostUserDeviceAttrs struct {
+type VhostUserDeviceAttrsState struct {
 	DevID      string
 	SocketPath string
 	Type       string
@@ -89,11 +89,11 @@ type DeviceState struct {
 	// for example, for BlockDevice, we can set DriverOptions["block-driver"]="virtio-blk"
 	DriverOptions map[string]string
 
-	// VhostUserDeviceAttrs is specific for vhost-user device driver
-	VhostUserDev *VhostUserDeviceAttrs `json:",omitempty"`
+	// VhostUserDeviceAttrsState is specific for vhost-user device driver
+	VhostUserDev *VhostUserDeviceAttrsState `json:",omitempty"`
 
 	// BlockDrive is specific for block device driver
-	BlockDrive *BlockDrive `json:",omitempty"`
+	BlockDrive *BlockDriveState `json:",omitempty"`
 
 	ID string
 
@@ -108,8 +108,8 @@ type DeviceState struct {
 	// More info in mknod(1).
 	DevType string
 
-	// VFIODev is specific VFIO device driver
-	VFIODevs []*VFIODev `json:",omitempty"`
+	// VFIODevState is specific VFIO device driver
+	VFIODevs []*VFIODevState `json:",omitempty"`
 
 	RefCount    uint
 	AttachCount uint

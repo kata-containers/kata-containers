@@ -11,7 +11,6 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
-	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
 )
@@ -156,13 +155,13 @@ func (device *VhostUserBlkDevice) GetDeviceInfo() interface{} {
 }
 
 // Save converts Device to DeviceState
-func (device *VhostUserBlkDevice) Save() persistapi.DeviceState {
+func (device *VhostUserBlkDevice) Save() config.DeviceState {
 	ds := device.GenericDevice.Save()
 	ds.Type = string(device.DeviceType())
 
 	vAttr := device.VhostUserDeviceAttrs
 	if vAttr != nil {
-		ds.VhostUserDev = &persistapi.VhostUserDeviceAttrs{
+		ds.VhostUserDev = &config.VhostUserDeviceAttrsState{
 			DevID:      vAttr.DevID,
 			SocketPath: vAttr.SocketPath,
 			Type:       string(vAttr.Type),
@@ -174,7 +173,7 @@ func (device *VhostUserBlkDevice) Save() persistapi.DeviceState {
 }
 
 // Load loads DeviceState and converts it to specific device
-func (device *VhostUserBlkDevice) Load(ds persistapi.DeviceState) {
+func (device *VhostUserBlkDevice) Load(ds config.DeviceState) {
 	device.GenericDevice = &GenericDevice{}
 	device.GenericDevice.Load(ds)
 
