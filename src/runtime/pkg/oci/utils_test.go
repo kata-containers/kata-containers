@@ -1196,6 +1196,11 @@ func TestCalculateSandboxSizing(t *testing.T) {
 			expectedCPU: 100,
 			expectedMem: 0,
 		},
+		{
+			spec:        makeSizingAnnotations("4294967296", "400", "100"),
+			expectedCPU: 4,
+			expectedMem: 4096,
+		},
 	}
 
 	for _, tt := range testCases {

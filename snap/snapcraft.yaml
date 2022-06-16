@@ -52,6 +52,36 @@ parts:
       curl -LO https://golang.org/dl/${tarfile}
       tar -xf ${tarfile} --strip-components=1
 
+  rustdeps:
+    after: [metadata]
+    plugin: nil
+    prime:
+      - -*
+    build-packages:
+      - curl
+    override-build: |
+      source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
+
+      # put everything in stage
+      cd "${SNAPCRAFT_STAGE}"
+
+      version="$(${yq} r ${kata_dir}/versions.yaml languages.rust.meta.newest-version)"
+      if ! command -v rustup > /dev/null; then
+        curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain ${version}
+      fi
+
+      export PATH=${PATH}:${HOME}/.cargo/bin
+      rustup toolchain install ${version}
+      rustup default ${version}
+      if [ "${arch}" == "ppc64le" ] || [ "${arch}" == "s390x" ] ; then
+        [ ${arch} == "ppc64le"] && arch="powerpc64le"
+        rustup target add ${arch}-unknown-linux-gnu
+      else
+        rustup target add ${arch}-unknown-linux-musl
+        $([ "$(whoami)" != "root" ] && echo sudo) ln -sf /usr/bin/g++ /bin/musl-g++
+      fi
+      rustup component add rustfmt
+
   image:
     after: [godeps, qemu, kernel]
     plugin: nil
@@ -271,25 +301,26 @@ parts:
 
   virtiofsd:
     plugin: nil
-    after: [godeps]
+    after: [godeps, rustdeps]
     override-build: |
       source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
 
-      # Currently, only one platform uses the new rust virtiofsd. The
-      # others make use of QEMU's C implementation.
+      # Currently, powerpc makes use of the QEMU's C implementation.
+      # The other platforms make use of the new rust virtiofsd.
       #
       # See "tools/packaging/scripts/configure-hypervisor.sh".
-      if [ "${arch}" = 'x86_64' ]
+      if [ "${arch}" == "ppc64le" ]
       then
-          echo "INFO: Building rust version of virtiofsd"
-      else
           echo "INFO: Building QEMU's C version of virtiofsd"
           # Handled by the 'qemu' part, so nothing more to do here.
           exit 0
+      else
+          echo "INFO: Building rust version of virtiofsd"
       fi
 
       cd "${kata_dir}"
 
+      export PATH=${PATH}:${HOME}/.cargo/bin
       # Download the rust implementation of virtiofsd
       tools/packaging/static-build/virtiofsd/build-static-virtiofsd.sh
       sudo install \

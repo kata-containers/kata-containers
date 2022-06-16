@@ -79,7 +79,7 @@ a "`BUG: feature X not implemented see {bug-url}`" type error.
 - Don't use multiple log calls when a single log call could be used.
 
 - Use structured logging where possible to allow
-  [standard tooling](https://github.com/kata-containers/tests/tree/main/cmd/log-parser)
+  [standard tooling](../src/tools/log-parser)
   be able to extract the log fields.
 
 ### Names

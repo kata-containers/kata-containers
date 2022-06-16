@@ -160,7 +160,7 @@ DEFMEMSZ := 2048
 DEFMEMSLOTS := 10
 #Default number of bridges
 DEFBRIDGES := 1
-DEFENABLEANNOTATIONS := []
+DEFENABLEANNOTATIONS := [\"enable_iommu\"]
 DEFDISABLEGUESTSECCOMP := true
 DEFDISABLEGUESTEMPTYDIR := false
 #Default experimental features enabled
@@ -175,9 +175,9 @@ DEFVALIDENTROPYSOURCES := [\"/dev/urandom\",\"/dev/random\",\"\"]
 DEFDISABLEBLOCK := false
 DEFSHAREDFS_CLH_VIRTIOFS := virtio-fs
 DEFSHAREDFS_QEMU_VIRTIOFS := virtio-fs
-DEFVIRTIOFSDAEMON := $(LIBEXECDIR)/kata-qemu/virtiofsd
-ifeq ($(ARCH),amd64)
 DEFVIRTIOFSDAEMON := $(LIBEXECDIR)/virtiofsd
+ifeq ($(ARCH),ppc64le)
+DEFVIRTIOFSDAEMON := $(LIBEXECDIR)/kata-qemu/virtiofsd
 endif
 DEFVALIDVIRTIOFSDAEMONPATHS := [\"$(DEFVIRTIOFSDAEMON)\"]
 # Default DAX mapping cache size in MiB
