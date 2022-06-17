@@ -2201,40 +2201,57 @@ func (k *kataAgent) setGuestDateTime(ctx context.Context, tv time.Time) error {
 func (k *kataAgent) copyFile(ctx context.Context, src, dst string) error {
 	var st unix.Stat_t
 
-	err := unix.Stat(src, &st)
+	err := unix.Lstat(src, &st)
 	if err != nil {
 		return fmt.Errorf("Could not get file %s information: %v", src, err)
 	}
 
-	b, err := os.ReadFile(src)
-	if err != nil {
-		return fmt.Errorf("Could not read file %s: %v", src, err)
+	cpReq := &grpc.CopyFileRequest{
+		Path:     dst,
+		DirMode:  uint32(DirMode),
+		FileMode: st.Mode,
+		Uid:      int32(st.Uid),
+		Gid:      int32(st.Gid),
 	}
 
-	fileSize := int64(len(b))
+	var b []byte
+
+	switch sflag := st.Mode & unix.S_IFMT; sflag {
+	case unix.S_IFREG:
+		var err error
+		// TODO: Support incrementail file copying instead of loading whole file into memory
+		b, err = os.ReadFile(src)
+		if err != nil {
+			return fmt.Errorf("Could not read file %s: %v", src, err)
+		}
+		cpReq.FileSize = int64(len(b))
+
+	case unix.S_IFDIR:
+
+	case unix.S_IFLNK:
+		symlink, err := os.Readlink(src)
+		if err != nil {
+			return fmt.Errorf("Could not read symlink %s: %v", src, err)
+		}
+		cpReq.Data = []byte(symlink)
+
+	default:
+		return fmt.Errorf("Unsupported file type: %o", sflag)
+	}
 
 	k.Logger().WithFields(logrus.Fields{
 		"source": src,
 		"dest":   dst,
 	}).Debugf("Copying file from host to guest")
 
-	cpReq := &grpc.CopyFileRequest{
-		Path:     dst,
-		DirMode:  uint32(DirMode),
-		FileMode: uint32(st.Mode),
-		FileSize: fileSize,
-		Uid:      int32(st.Uid),
-		Gid:      int32(st.Gid),
-	}
-
 	// Handle the special case where the file is empty
-	if fileSize == 0 {
-		_, err = k.sendReq(ctx, cpReq)
+	if cpReq.FileSize == 0 {
+		_, err := k.sendReq(ctx, cpReq)
 		return err
 	}
 
 	// Copy file by parts if it's needed
-	remainingBytes := fileSize
+	remainingBytes := cpReq.FileSize
 	offset := int64(0)
 	for remainingBytes > 0 {
 		bytesToCopy := int64(len(b))
