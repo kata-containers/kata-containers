@@ -1944,6 +1944,38 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
         }
     }
 
+    let sflag = stat::SFlag::from_bits_truncate(req.file_mode);
+
+    if sflag.contains(stat::SFlag::S_IFDIR) {
+        fs::create_dir(path.clone()).or_else(|e| {
+            if e.kind() != std::io::ErrorKind::AlreadyExists {
+                return Err(e);
+            }
+            Ok(())
+        })?;
+
+        std::fs::set_permissions(path.clone(), std::fs::Permissions::from_mode(req.file_mode))?;
+
+        unistd::chown(
+            &path,
+            Some(Uid::from_raw(req.uid as u32)),
+            Some(Gid::from_raw(req.gid as u32)),
+        )?;
+
+        return Ok(());
+    }
+
+    if sflag.contains(stat::SFlag::S_IFLNK) {
+        let src = PathBuf::from(String::from_utf8(req.data.clone()).unwrap());
+
+        unistd::symlinkat(&src, None, &path)?;
+        let path_str = CString::new(path.to_str().unwrap())?;
+        let ret = unsafe { libc::lchown(path_str.as_ptr(), req.uid as u32, req.gid as u32) };
+        Errno::result(ret).map(drop)?;
+
+        return Ok(());
+    }
+
     let mut tmpfile = path.clone();
     tmpfile.set_extension("tmp");
 
