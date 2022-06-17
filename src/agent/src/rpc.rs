@@ -8,8 +8,9 @@ use rustjail::{pipestream::PipeStream, process::StreamType};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::sync::Mutex;
 
-use std::ffi::CString;
+use std::ffi::{CString, OsStr};
 use std::io;
+use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::sync::Arc;
 use ttrpc::{
@@ -1854,6 +1855,38 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
                 std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(req.dir_mode))?;
             }
         }
+    }
+
+    let sflag = stat::SFlag::from_bits_truncate(req.file_mode);
+
+    if sflag.contains(stat::SFlag::S_IFDIR) {
+        fs::create_dir(&path).or_else(|e| {
+            if e.kind() != std::io::ErrorKind::AlreadyExists {
+                return Err(e);
+            }
+            Ok(())
+        })?;
+
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(req.file_mode))?;
+
+        unistd::chown(
+            &path,
+            Some(Uid::from_raw(req.uid as u32)),
+            Some(Gid::from_raw(req.gid as u32)),
+        )?;
+
+        return Ok(());
+    }
+
+    if sflag.contains(stat::SFlag::S_IFLNK) {
+        let src = PathBuf::from(OsStr::from_bytes(&req.data));
+        unistd::symlinkat(&src, None, &path)?;
+        let path_str = CString::new(path.as_os_str().as_bytes())?;
+
+        let ret = unsafe { libc::lchown(path_str.as_ptr(), req.uid as u32, req.gid as u32) };
+        Errno::result(ret).map(drop)?;
+
+        return Ok(());
     }
 
     let mut tmpfile = path.clone();
