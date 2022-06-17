@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -239,22 +240,42 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 	if !caps.IsFsSharingSupported() {
 		f.Logger().Debug("filesystem sharing is not supported, files will be copied")
 
-		fileInfo, err := os.Stat(m.Source)
-		if err != nil {
-			return nil, err
+		var ignored bool
+		srcRoot := filepath.Clean(m.Source)
+
+		walk := func(srcPath string, d fs.DirEntry, err error) error {
+
+			if err != nil {
+				return err
+			}
+
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+
+			if !(info.Mode().IsRegular() || info.Mode().IsDir() || (info.Mode()&os.ModeSymlink) == os.ModeSymlink) {
+				f.Logger().WithField("ignored-file", srcPath).Debug("Ignoring non-regular file as FS sharing not supported")
+				if srcPath == srcRoot {
+					// Ignore the mount if this is not a regular file (excludes socket, device, ...) as it cannot be handled by
+					// a simple copy. But this should not be treated as an error, only as a limitation.
+					ignored = true
+					return filepath.SkipDir
+				}
+				return nil
+			}
+
+			dstPath := filepath.Join(guestPath, srcPath[len(srcRoot):])
+
+			return f.sandbox.agent.copyFile(ctx, srcPath, dstPath)
 		}
 
-		// Ignore the mount if this is not a regular file (excludes
-		// directory, socket, device, ...) as it cannot be handled by
-		// a simple copy. But this should not be treated as an error,
-		// only as a limitation.
-		if !fileInfo.Mode().IsRegular() {
-			f.Logger().WithField("ignored-file", m.Source).Debug("Ignoring non-regular file as FS sharing not supported")
+		if err := filepath.WalkDir(srcRoot, walk); err != nil {
+			c.Logger().WithField("failed-file", m.Source).Debugf("failed to copy file to sandbox: %v", err)
+			return nil, err
+		}
+		if ignored {
 			return nil, nil
-		}
-
-		if err := f.sandbox.agent.copyFile(ctx, m.Source, guestPath); err != nil {
-			return nil, err
 		}
 	} else {
 		// These mounts are created in the shared dir
