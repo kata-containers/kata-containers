@@ -1114,7 +1114,7 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU, memSizeMB uint32) {
 	// ... to result in VM resources of 1 (MB) for memory, and 3 for CPU (2200 mCPU rounded up to 3).
 	annotation, ok := spec.Annotations[ctrAnnotations.SandboxCPUPeriod]
 	if ok {
-		period, err = strconv.ParseUint(annotation, 10, 32)
+		period, err = strconv.ParseUint(annotation, 10, 64)
 		if err != nil {
 			ociLog.Warningf("sandbox-sizing: failure to parse SandboxCPUPeriod: %s", annotation)
 			period = 0
@@ -1123,7 +1123,7 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU, memSizeMB uint32) {
 
 	annotation, ok = spec.Annotations[ctrAnnotations.SandboxCPUQuota]
 	if ok {
-		quota, err = strconv.ParseInt(annotation, 10, 32)
+		quota, err = strconv.ParseInt(annotation, 10, 64)
 		if err != nil {
 			ociLog.Warningf("sandbox-sizing: failure to parse SandboxCPUQuota: %s", annotation)
 			quota = 0
@@ -1132,7 +1132,7 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU, memSizeMB uint32) {
 
 	annotation, ok = spec.Annotations[ctrAnnotations.SandboxMem]
 	if ok {
-		memory, err = strconv.ParseInt(annotation, 10, 32)
+		memory, err = strconv.ParseInt(annotation, 10, 64)
 		if err != nil {
 			ociLog.Warningf("sandbox-sizing: failure to parse SandboxMem: %s", annotation)
 			memory = 0

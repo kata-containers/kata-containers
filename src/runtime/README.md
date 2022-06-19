@@ -125,7 +125,7 @@ $ kata-runtime env
 
 For detailed information and analysis on obtaining logs for other system
 components, see the documentation for the
-[`kata-log-parser`](https://github.com/kata-containers/tests/tree/main/cmd/log-parser)
+[`kata-log-parser`](../tools/log-parser)
 tool.
 
 ### Kata containerd shimv2

@@ -15,6 +15,14 @@ Available metrics include:
 All the provided metrics are in Prometheus format. While `kata-monitor` can be used as a standalone daemon on any host running Kata Containers workloads and can be used for retrieving profiling data from the running Kata runtimes, its main expected usage is to be deployed as a DaemonSet on a Kubernetes cluster: there Prometheus should scrape the metrics from the kata-monitor endpoints.
 For more information on the Kata Containers metrics architecture and a detailed list of the available metrics provided by Kata monitor check the [Kata 2.0 Metrics Design](../../../../docs/design/kata-2-0-metrics.md) document.
 
+## Local network considerations
+
+The `kata-monitor` daemon is not run unless explicitly
+[started](#kata-monitor-arguments). However, when it is running it
+will accept connections on the `localhost` network interface (by
+default) and provide metrics to any client process that connects to
+it, whether they are privileged or not.
+
 ## Usage
 Each `kata-monitor` instance detects and monitors the Kata Container workloads running on the same node.
 
