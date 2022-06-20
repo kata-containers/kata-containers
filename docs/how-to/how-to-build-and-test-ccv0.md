@@ -312,9 +312,9 @@ In our test repository there are three tagged images:
 
 | Test Image | Base Image used | Signature status | GPG key status |
 | --- | --- | --- | --- |
-| `quay.io/kata-containers/confidential-containers:signed` | `busybox:1.33.1` | [signature](./../../tools/osbuilder/rootfs-builder/signed-container-artifacts/signatures.tar) embedded in kata rootfs |  [public key](./../../tools/osbuilder/rootfs-builder/signed-container-artifacts/public.gpg) embedded in kata rootfs |
+| `quay.io/kata-containers/confidential-containers:signed` | `busybox:1.33.1` | [signature](https://github.com/kata-containers/tests/tree/CCv0/integration/confidential/fixtures/quay_verification/signatures.tar) embedded in kata rootfs |  [public key](https://github.com/kata-containers/tests/tree/CCv0/integration/confidential/fixtures/quay_verification/public.gpg) embedded in kata rootfs |
 | `quay.io/kata-containers/confidential-containers:unsigned` | `busybox:1.33.1` | not signed | not signed |
-| `quay.io/kata-containers/confidential-containers:other_signed` | `nginx:1.21.3` | [signature](./../../tools/osbuilder/rootfs-builder/signed-container-artifacts/signatures.tar) embedded in kata rootfs | GPG key not kept |
+| `quay.io/kata-containers/confidential-containers:other_signed` | `nginx:1.21.3` | [signature](https://github.com/kata-containers/tests/tree/CCv0/integration/confidential/fixtures/quay_verification/signatures.tar) embedded in kata rootfs | GPG key not kept |
 
 Using a standard unsigned `busybox` image that can be pulled from another, *unprotected*, `quay.io` repository we can
 test a few scenarios.
@@ -333,9 +333,14 @@ to create containers from these images using `crictl`:
 the guest agent code has been implemented, the Kata confidential-containers build needs to be run with 
 `export SKOPEO=yes` as documented [above](#basic-script-set-up-and-optional-environment-variables) in order to use the
 image signature verification function.
+
 - If you don't already have a Kata sandbox pod created with `crictl`, then follow the 
 [instructions above](#using-crictl-for-end-to-end-provisioning-of-a-kata-confidential-containers-pod-with-an-unencrypted-image)
 up to, and including, the `~/ccv0.sh crictl_create_cc_pod` command.
+
+- In order to enable the guest image, you will need to copy over the policy and signature files needed by running 
+`~/ccv0.sh copy_files_to_guest`and then re-running `~/ccv0.sh crictl_create_cc_pod` which will delete and recreate 
+your pod - adding in the new files.
  
 - To test the fallback behaviour works using an unsigned image from an *unprotected* registry we can pull the `busybox`
 image by running:

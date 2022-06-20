@@ -86,6 +86,7 @@ Commands:
 - build_qemu:                       Checkout, patch, build and install QEMU
 - configure:                        Configure Kata to use rootfs and enable debug
 - connect_to_ssh_demo_pod:          Ssh into the ssh demo pod, showing that the decryption succeeded
+- copy_files_to_guest               Copies signature verification files to guest
 - create_rootfs:                    Create a local rootfs
 - crictl_create_cc_container        Use crictl to create a new busybox container in the kata cc pod
 - crictl_create_cc_pod              Use crictl to create a new kata cc pod
@@ -533,6 +534,10 @@ shim_pull_image() {
     ${ctr_shim_command}
 }
 
+call_copy_files_to_guest() {
+    copy_files_to_guest
+}
+
 main() {
     while getopts "dh" opt; do
         case "$opt" in
@@ -641,6 +646,9 @@ main() {
             ;;
         agent_create_container)
             agent_create_container
+            ;;
+        copy_files_to_guest)
+            call_copy_files_to_guest
             ;;
         *)
             usage 1
