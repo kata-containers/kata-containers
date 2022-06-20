@@ -158,10 +158,10 @@ func watchOOMEvents(ctx context.Context, s *service) {
 			containerID, err := s.sandbox.GetOOMEvent(ctx)
 			if err != nil {
 				if err.Error() == "ttrpc: closed" || err.Error() == "Dead agent" {
-					shimLog.WithError(err).Warn("agent has shutdown, return from watching of OOM events")
+					shimLog.WithError(err).Info("agent has shutdown, return from watching of OOM events")
 					return
 				}
-				shimLog.WithError(err).Warn("failed to get OOM event from sandbox")
+				shimLog.WithError(err).Info("failed to get OOM event from sandbox")
 				time.Sleep(defaultCheckInterval)
 				continue
 			}

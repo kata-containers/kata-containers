@@ -1,5 +1,17 @@
 # Storage
 
+## Limits
+
+Kata Containers is [compatible](README.md#compatibility) with existing
+standards and runtime. From the perspective of storage, this means no
+limits are placed on the amount of storage a container
+[workload](README.md#workload) may use.
+
+Since cgroups are not able to set limits on storage allocation, if you
+wish to constrain the amount of storage a container uses, consider
+using an existing facility such as `quota(1)` limits or
+[device mapper](#devicemapper) limits.
+
 ## virtio SCSI
 
 If a block-based graph driver is [configured](README.md#configuration),

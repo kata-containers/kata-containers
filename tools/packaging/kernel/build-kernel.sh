@@ -132,6 +132,23 @@ get_tdx_kernel() {
 	tar --strip-components=1 -xf ${kernel_tarball} -C ${kernel_path}
 }
 
+get_sev_kernel() {
+	local version="${1}"
+	local kernel_path=${2}
+
+	mkdir -p ${kernel_path}
+
+	kernel_url=$(get_from_kata_deps "assets.kernel.sev.url")
+	kernel_tarball="${version}.tar.gz"
+
+	if [ ! -f "${kernel_tarball}" ]; then
+	   curl --fail -OL "${kernel_url}${kernel_tarball}"
+	fi
+	
+	mkdir -p ${kernel_path}
+	tar --strip-components=1 -xf ${kernel_tarball} -C ${kernel_path}
+}
+
 get_kernel() {
 	local version="${1:-}"
 
@@ -141,6 +158,9 @@ get_kernel() {
 
 	if [ "${conf_guest}" == "tdx" ]; then
 		get_tdx_kernel ${version} ${kernel_path}
+		return
+	elif [ "${conf_guest}" == "sev" ]; then
+		get_sev_kernel ${version} ${kernel_path}
 		return
 	fi
 
@@ -399,6 +419,9 @@ build_kernel() {
 	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
 	make -j $(nproc) ARCH="${arch_target}"
+	if [ "${conf_guest}" == "sev" ]; then
+		make -j $(nproc --ignore=1) INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH=${kernel_path} modules_install
+	fi
 	[ "$arch_target" != "powerpc" ] && ([ -e "arch/${arch_target}/boot/bzImage" ] || [ -e "arch/${arch_target}/boot/Image.gz" ])
 	[ -e "vmlinux" ]
 	([ "${hypervisor_target}" == "firecracker" ] || [ "${hypervisor_target}" == "cloud-hypervisor" ]) && [ "${arch_target}" == "arm64" ] && [ -e "arch/${arch_target}/boot/Image" ]
@@ -542,6 +565,9 @@ main() {
 			esac
 		elif [[ "${conf_guest}" == "tdx" ]]; then
 			 kernel_version=$(get_from_kata_deps "assets.kernel.tdx.tag")
+		elif [[ "${conf_guest}" == "sev" ]]; then
+			#If specifying a tag for kernel_version, must be formatted version-like to avoid unintended parsing issues
+			 kernel_version=$(get_from_kata_deps "assets.kernel.sev.tag")
 		else
 			kernel_version=$(get_from_kata_deps "assets.kernel.version")
 		fi

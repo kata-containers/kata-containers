@@ -9,11 +9,15 @@
 package virtcontainers
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -142,6 +146,80 @@ func (c *clhClientApi) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chc
 	return c.ApiInternal.VmRemoveDevicePut(ctx).VmRemoveDevice(vmRemoveDevice).Execute()
 }
 
+// This is done in order to be able to override such a function as part of
+// our unit tests, as when testing bootVM we're on a mocked scenario already.
+var vmAddNetPutRequest = func(clh *cloudHypervisor) error {
+	addr, err := net.ResolveUnixAddr("unix", clh.state.apiSocket)
+	if err != nil {
+		return err
+	}
+
+	conn, err := net.DialUnix("unix", nil, addr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	for _, netDevice := range *clh.netDevices {
+		clh.Logger().Infof("Adding the net device to the Cloud Hypervisor VM configuration: %+v", netDevice)
+
+		netDeviceAsJson, err := json.Marshal(netDevice)
+		if err != nil {
+			return err
+		}
+		netDeviceAsIoReader := bytes.NewBuffer(netDeviceAsJson)
+
+		req, err := http.NewRequest(http.MethodPut, "http://localhost/api/v1/vm.add-net", netDeviceAsIoReader)
+		if err != nil {
+			return err
+		}
+
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Length", strconv.Itoa(int(netDeviceAsIoReader.Len())))
+
+		payload, err := httputil.DumpRequest(req, true)
+		if err != nil {
+			return err
+		}
+
+		files := clh.netDevicesFiles[*netDevice.Mac]
+		var fds []int
+		for _, f := range files {
+			fds = append(fds, int(f.Fd()))
+		}
+		oob := syscall.UnixRights(fds...)
+		payloadn, oobn, err := conn.WriteMsgUnix([]byte(payload), oob, nil)
+		if err != nil {
+			return err
+		}
+		if payloadn != len(payload) || oobn != len(oob) {
+			return fmt.Errorf("Failed to send all the request to Cloud Hypervisor. %d bytes expect to send as payload, %d bytes expect to send as oob date,  but only %d sent as payload, and %d sent as oob", len(payload), len(oob), payloadn, oobn)
+		}
+
+		reader := bufio.NewReader(conn)
+		resp, err := http.ReadResponse(reader, req)
+		if err != nil {
+			return err
+		}
+
+		respBody, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		resp.Body.Close()
+		resp.Body = ioutil.NopCloser(bytes.NewBuffer(respBody))
+
+		if resp.StatusCode != 204 {
+			clh.Logger().Errorf("vmAddNetPut failed with error '%d'. Response: %+v", resp.StatusCode, resp)
+			return fmt.Errorf("Failed to add the network device '%+v' to Cloud Hypervisor: %v", netDevice, resp.StatusCode)
+		}
+	}
+
+	return nil
+}
+
 //
 // Cloud hypervisor state
 //
@@ -159,15 +237,17 @@ func (s *CloudHypervisorState) reset() {
 }
 
 type cloudHypervisor struct {
-	console        console.Console
-	virtiofsDaemon VirtiofsDaemon
-	APIClient      clhClient
-	ctx            context.Context
-	id             string
-	devicesIds     map[string]string
-	vmconfig       chclient.VmConfig
-	state          CloudHypervisorState
-	config         HypervisorConfig
+	console         console.Console
+	virtiofsDaemon  VirtiofsDaemon
+	APIClient       clhClient
+	ctx             context.Context
+	id              string
+	netDevices      *[]chclient.NetConfig
+	devicesIds      map[string]string
+	netDevicesFiles map[string][]*os.File
+	vmconfig        chclient.VmConfig
+	state           CloudHypervisorState
+	config          HypervisorConfig
 }
 
 var clhKernelParams = []Param{
@@ -359,6 +439,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	clh.id = id
 	clh.state.state = clhNotReady
 	clh.devicesIds = make(map[string]string)
+	clh.netDevicesFiles = make(map[string][]*os.File)
 
 	clh.Logger().WithField("function", "CreateVM").Info("creating Sandbox")
 
@@ -1261,6 +1342,10 @@ func openAPIClientError(err error) error {
 	return fmt.Errorf("error: %v reason: %s", err, reason)
 }
 
+func (clh *cloudHypervisor) vmAddNetPut() error {
+	return vmAddNetPutRequest(clh)
+}
+
 func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 
 	cl := clh.client()
@@ -1286,6 +1371,11 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 
 	if info.State != clhStateCreated {
 		return fmt.Errorf("VM state is not 'Created' after 'CreateVM'")
+	}
+
+	err = clh.vmAddNetPut()
+	if err != nil {
+		return err
 	}
 
 	clh.Logger().Debug("Booting VM")
@@ -1369,33 +1459,29 @@ func (clh *cloudHypervisor) addNet(e Endpoint) error {
 	mac := e.HardwareAddr()
 	netPair := e.NetworkPair()
 	if netPair == nil {
-		return errors.New("net Pair to be added is nil, needed to get TAP path")
+		return errors.New("net Pair to be added is nil, needed to get TAP file descriptors")
 	}
 
-	tapPath := netPair.TapInterface.TAPIface.Name
-	if tapPath == "" {
-		return errors.New("TAP path in network pair is empty")
+	if len(netPair.TapInterface.VMFds) == 0 {
+		return errors.New("The file descriptors for the network pair are not present")
 	}
-
-	clh.Logger().WithFields(log.Fields{
-		"mac": mac,
-		"tap": tapPath,
-	}).Info("Adding Net")
+	clh.netDevicesFiles[mac] = netPair.TapInterface.VMFds
 
 	netRateLimiterConfig := clh.getNetRateLimiterConfig()
 
 	net := chclient.NewNetConfig()
 	net.Mac = &mac
-	net.Tap = &tapPath
 	if netRateLimiterConfig != nil {
 		net.SetRateLimiterConfig(*netRateLimiterConfig)
 	}
 
-	if clh.vmconfig.Net != nil {
-		*clh.vmconfig.Net = append(*clh.vmconfig.Net, *net)
+	if clh.netDevices != nil {
+		*clh.netDevices = append(*clh.netDevices, *net)
 	} else {
-		clh.vmconfig.Net = &[]chclient.NetConfig{*net}
+		clh.netDevices = &[]chclient.NetConfig{*net}
 	}
+
+	clh.Logger().Infof("Storing the Cloud Hypervisor network configuration: %+v", net)
 
 	return nil
 }
