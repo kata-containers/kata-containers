@@ -33,6 +33,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.KATA_GITHUB_ACTIONS_PR_SIZE_TOKEN }}
         run: |
           pr=${{ github.event.number }}
+          # Removing man-db, workflow kept failing, fixes: #4480
+          sudo apt -y remove --purge man-db
           sudo apt -y install diffstat patchutils
 
           pr-add-size-label.sh -p "$pr"
