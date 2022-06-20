@@ -161,5 +161,6 @@ file {
   options {
     go_package: "github.com/containerd/containerd/runtime/v2/runc/options;options"
   }
+  weak_dependency: 0
   syntax: "proto3"
 }
