@@ -753,6 +753,11 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 	clhDisk.Readonly = &drive.ReadOnly
 	clhDisk.VhostUser = func(b bool) *bool { return &b }(false)
 
+	queues := int32(clh.config.NumVCPUs)
+	queueSize := int32(1024)
+	clhDisk.NumQueues = &queues
+	clhDisk.QueueSize = &queueSize
+
 	diskRateLimiterConfig := clh.getDiskRateLimiterConfig()
 	if diskRateLimiterConfig != nil {
 		clhDisk.SetRateLimiterConfig(*diskRateLimiterConfig)
