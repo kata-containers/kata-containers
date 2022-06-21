@@ -11,6 +11,18 @@ set -e
 source "${BATS_TEST_DIRNAME}/../../../lib/common.bash"
 FIXTURES_DIR="${BATS_TEST_DIRNAME}/fixtures"
 
+# Inject a unique id into the pod-config yaml template.
+#
+# Global variables exported:
+#	$pod_config          - path to default pod configuration file.
+#
+get_pod_config() {
+	if [ ! -f "${FIXTURES_DIR}/pod-config.yaml" ]; then
+    	sudo -E UUIDGEN="$(uuidgen)" envsubst < ${FIXTURES_DIR}/pod-config.yaml.in | sudo tee "${FIXTURES_DIR}/pod-config.yaml"
+	fi
+    export pod_config="${FIXTURES_DIR}/pod-config.yaml"
+}
+
 # Delete the containers alongside the Pod.
 #
 # Parameters:

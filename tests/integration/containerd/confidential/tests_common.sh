@@ -18,7 +18,7 @@ load "${BATS_TEST_DIRNAME}/../../confidential/lib.sh"
 setup_common() {
 	export test_start_time="$(date +"%Y-%m-%d %H:%M:%S")"
 	export sandbox_name="kata-cc-busybox-sandbox"
-	export pod_config="${FIXTURES_DIR}/pod-config.yaml"
+	get_pod_config
 
 	echo "Delete any existing ${sandbox_name} pod"
 	crictl_delete_cc_pod_if_exists "$sandbox_name"
