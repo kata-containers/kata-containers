@@ -180,7 +180,7 @@ externals:
   cni-plugins:
     description: "CNI network plugins"
     url: "https://github.com/containernetworking/plugins"
-    commit: "485be65581341430f9106a194a98f0f2412245fb"
+    commit: "main"
 
   conmon:
     description: "An OCI container runtime monitor"
