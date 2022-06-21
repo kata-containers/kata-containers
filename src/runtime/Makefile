@@ -167,6 +167,11 @@ DEFDISABLEGUESTEMPTYDIR := false
 DEFAULTEXPFEATURES := []
 
 DEFDISABLESELINUX := false
+#Default SeccomSandbox param
+#The same default policy is used by libvirt
+#More explanation on https://lists.gnu.org/archive/html/qemu-devel/2017-02/msg03348.html
+# Note: "elevateprivileges=deny" doesn't work with daemonize option, so it's removed from the seccomp sandbox
+DEFSECCOMPSANDBOXPARAM := on,obsolete=deny,spawn=deny,resourcecontrol=deny
 
 #Default entropy source
 DEFENTROPYSOURCE := /dev/urandom
@@ -459,6 +464,7 @@ USER_VARS += DEFVIRTIOFSCACHE
 USER_VARS += DEFVIRTIOFSEXTRAARGS
 USER_VARS += DEFENABLEANNOTATIONS
 USER_VARS += DEFENABLEIOTHREADS
+USER_VARS += DEFSECCOMPSANDBOXPARAM
 USER_VARS += DEFENABLEVHOSTUSERSTORE
 USER_VARS += DEFVHOSTUSERSTOREPATH
 USER_VARS += DEFVALIDVHOSTUSERSTOREPATHS
