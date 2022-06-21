@@ -714,4 +714,4 @@ time="2020-09-15T14:56:23.105268162+08:00" level=debug msg="reading guest consol
 time="2020-09-15T14:56:23.121121598+08:00" level=debug msg="reading guest console" console-protocol=unix console-url=/run/vc/vm/ab9f633385d4987828d342e47554fc6442445b32039023eeddaa971c1bb56791/console.sock pid=107642 sandbox=ab9f633385d4987828d342e47554fc6442445b32039023eeddaa971c1bb56791 source=virtcontainers subsystem=sandbox vmconsole="[    0.421324] memmap_init_zone_device initialised 32768 pages in 12ms"
 ...
 ```
-Refer to the [kata-log-parser documentation](../src/tools/log-parser/README.md) which is useful to fetch these.
+Refer to the [kata-log-parser documentation](../src/tools/log-parser) which is useful to fetch these.
