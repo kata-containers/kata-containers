@@ -161,7 +161,7 @@ assets:
     sev:
       description: "Linux kernel with efi_secret support"
       url: "https://github.com/confidential-containers-demo/\
-      linux/archive/refs/tags/"
+        linux/archive/refs/tags/"
       tag: "efi-secret-v5.17-rc6"
 
   kernel-experimental:
@@ -201,7 +201,7 @@ externals:
     # containerd from v1.5.0 used the path unix socket
     # instead of abstract socket, thus kata wouldn's support the containerd's
     # version older than them.
-    version: "v1.5.2"
+    version: "v1.6.6"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
