@@ -563,8 +563,13 @@ EOF
 
 	if [ -f "$chrony_systemd_service" ]; then
 		# Remove user option, user could not exist in the rootfs
+		# Set the /var/lib/chrony for ReadWritePaths to be ignored if
+		# its nonexistent, this broke the service on boot previously
+		# due to the directory not being present "(code=exited, status=226/NAMESPACE)"
 		sed -i -e 's/^\(ExecStart=.*\)-u [[:alnum:]]*/\1/g' \
-		       -e '/^\[Unit\]/a ConditionPathExists=\/dev\/ptp0' ${chrony_systemd_service}
+		       -e '/^\[Unit\]/a ConditionPathExists=\/dev\/ptp0' \
+		       -e 's/^ReadWritePaths=\(.\+\) \/var\/lib\/chrony \(.\+\)$/ReadWritePaths=\1 -\/var\/lib\/chrony \2/m' \
+		       ${chrony_systemd_service}
 	fi
 
 	AGENT_DIR="${ROOTFS_DIR}/usr/bin"
