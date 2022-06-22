@@ -19,6 +19,8 @@ jobs:
 
       - name: Build snap
         run: |
+          # Removing man-db, workflow kept failing, fixes: #4480
+          sudo apt -y remove --purge man-db
           sudo apt-get install -y git git-extras
           kata_url="https://github.com/kata-containers/kata-containers"
           latest_version=$(git ls-remote --tags ${kata_url}  | egrep -o "refs.*" | egrep -v "\-alpha|\-rc|{}" | egrep -o "[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+" | sort -V -r | head -1)

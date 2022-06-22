@@ -74,7 +74,7 @@ parts:
       rustup toolchain install ${version}
       rustup default ${version}
       if [ "${arch}" == "ppc64le" ] || [ "${arch}" == "s390x" ] ; then
-        [ ${arch} == "ppc64le"] && arch="powerpc64le"
+        [ "${arch}" == "ppc64le" ] && arch="powerpc64le"
         rustup target add ${arch}-unknown-linux-gnu
       else
         rustup target add ${arch}-unknown-linux-musl
