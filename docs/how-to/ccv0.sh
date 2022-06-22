@@ -432,8 +432,8 @@ call_crictl_create_cc_pod() {
     # Update iptables to allow forwarding to the cni0 bridge avoiding issues caused by the docker0 bridge
     sudo iptables -P FORWARD ACCEPT
     
-    # Create crictl pod config
-    local pod_config="${FIXTURES_DIR}/pod-config.yaml"
+    # get_pod_config in tests_common exports `pod_config` that points to the prepared pod config yaml 
+    get_pod_config
 
     crictl_delete_cc_pod_if_exists "${crictl_sandbox_name}"
     crictl_create_cc_pod "${pod_config}"
@@ -442,7 +442,9 @@ call_crictl_create_cc_pod() {
 
 call_crictl_create_cc_container() {
     # Create container configuration yaml based on our test copy of busybox
-    local pod_config="${FIXTURES_DIR}/pod-config.yaml"
+    # get_pod_config in tests_common exports `pod_config` that points to the prepared pod config yaml 
+    get_pod_config
+
     local container_config="${FIXTURES_DIR}/${CONTAINER_CONFIG_FILE:-container-config.yaml}"
     local pod_name=${crictl_sandbox_name}
     crictl_create_cc_container ${pod_name} ${pod_config} ${container_config}
