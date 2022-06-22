@@ -681,8 +681,10 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 	// Add PCIe Root Port devices to hypervisor
 	// The pcie.0 bus do not support hot-plug, but PCIe device can be hot-plugged into PCIe Root Port.
 	// For more details, please see https://github.com/qemu/qemu/blob/master/docs/pcie.txt
+	memSize32bit, memSize64bit := q.arch.getBARsMaxAddressableMemory()
+
 	if hypervisorConfig.PCIeRootPort > 0 {
-		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, hypervisorConfig.PCIeRootPort)
+		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, hypervisorConfig.PCIeRootPort, memSize32bit, memSize64bit)
 	}
 
 	q.qemuConfig = qemuConfig
@@ -2373,7 +2375,7 @@ func genericMemoryTopology(memoryMb, hostMemoryMb uint64, slots uint8, memoryOff
 }
 
 // genericAppendPCIeRootPort appends to devices the given pcie-root-port
-func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machineType string) []govmmQemu.Device {
+func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machineType string, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
 	var (
 		bus           string
 		chassis       string
@@ -2399,6 +2401,8 @@ func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machin
 				Slot:          strconv.FormatUint(uint64(i), 10),
 				Multifunction: multiFunction,
 				Addr:          addr,
+				MemReserve:    fmt.Sprintf("%dB", memSize32bit),
+				Pref64Reserve: fmt.Sprintf("%dB", memSize64bit),
 			},
 		)
 	}
