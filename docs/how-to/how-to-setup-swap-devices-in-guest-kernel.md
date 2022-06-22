@@ -27,6 +27,8 @@ $ image="quay.io/prometheus/busybox:latest"
 $ cat << EOF > "${pod_yaml}"
 metadata:
   name: busybox-sandbox1
+  uid: $(uuidgen)
+  namespace: default
 EOF
 $ cat << EOF > "${container_yaml}"
 metadata:
