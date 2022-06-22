@@ -1171,7 +1171,7 @@ fn do_exec(args: &[String]) -> ! {
     unreachable!()
 }
 
-fn update_namespaces(logger: &Logger, spec: &mut Spec, init_pid: RawFd) -> Result<()> {
+pub fn update_namespaces(logger: &Logger, spec: &mut Spec, init_pid: RawFd) -> Result<()> {
     info!(logger, "updating namespaces");
     let linux = spec
         .linux
