@@ -1487,7 +1487,7 @@ dependencies = [
 [[package]]
 name = "image-rs"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/image-rs#ec5f7c53f1860e64c883828ec4c84b03d9b7d123"
+source = "git+https://github.com/confidential-containers/image-rs?rev=ec5f7c53f1860e64c883828ec4c84b03d9b7d123#ec5f7c53f1860e64c883828ec4c84b03d9b7d123"
 dependencies = [
  "anyhow",
  "flate2",
@@ -3304,7 +3304,7 @@ dependencies = [
 [[package]]
 name = "signature"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/image-rs#ec5f7c53f1860e64c883828ec4c84b03d9b7d123"
+source = "git+https://github.com/confidential-containers/image-rs?rev=ec5f7c53f1860e64c883828ec4c84b03d9b7d123#ec5f7c53f1860e64c883828ec4c84b03d9b7d123"
 dependencies = [
  "anyhow",
  "base64",
