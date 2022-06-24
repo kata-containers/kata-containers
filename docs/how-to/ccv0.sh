@@ -273,8 +273,6 @@ create_a_local_rootfs() {
     # If offline key broker set then include ssh-demo keys and config from
     # https://github.com/confidential-containers/documentation/tree/main/demos/ssh-demo
     if [ "${AA_KBC:-}" == "offline_fs_kbc" ]; then
-        curl -Lo "${HOME}/aa-offline_fs_kbc-keys.json" https://raw.githubusercontent.com/confidential-containers/documentation/main/demos/ssh-demo/aa-offline_fs_kbc-keys.json
-        sudo mv "${HOME}/aa-offline_fs_kbc-keys.json" "${ROOTFS_DIR}/etc/aa-offline_fs_kbc-keys.json"
         local rootfs_agent_config="${ROOTFS_DIR}/etc/agent-config.toml"
         sudo -E AA_KBC_PARAMS="offline_fs_kbc::null" envsubst < ${katacontainers_repo_dir}/docs/how-to/data/confidential-agent-config.toml.in | sudo tee ${rootfs_agent_config}
     fi
@@ -390,41 +388,18 @@ call_kubernetes_delete_cc_pod() {
     kubernetes_delete_cc_pod $pod_name
 }
 
-# Check out the doc repo if required and pushd
-pushd_ssh_demo() {
-    local doc_repo=github.com/confidential-containers/documentation
-    local doc_repo_dir="${GOPATH}/src/${doc_repo}"
-    mkdir -p $(dirname ${doc_repo_dir}) && sudo chown -R ${USER}:${USER} $(dirname ${doc_repo_dir})
-    if [ ! -d "${doc_repo_dir}" ]; then
-        git clone https://${doc_repo} "${doc_repo_dir}"
-        pushd "${doc_repo_dir}/demos/ssh-demo"
-        # Update runtimeClassName from kata-cc to kata
-        sudo sed -i -e 's/\([[:blank:]]*runtimeClassName: \).*/\1kata/g' "${doc_repo_dir}/demos/ssh-demo/k8s-cc-ssh.yaml"
-        chmod 600 ccv0-ssh
-    else 
-        pushd "${doc_repo_dir}/demos/ssh-demo"
-    fi
+call_kubernetes_create_ssh_demo_pod() {
+    setup_decryption_files_in_guest
+    kubernetes_create_ssh_demo_pod
 }
 
-kubernetes_create_ssh_demo_pod() {
-    pushd_ssh_demo
-    kubectl apply -f k8s-cc-ssh.yaml && pod=$(kubectl get pods -o jsonpath='{.items..metadata.name}') && kubectl wait --for=condition=ready pods/$pod
-    kubectl get pod $pod
-    popd
+call_connect_to_ssh_demo_pod() {
+    connect_to_ssh_demo_pod
 }
 
-connect_to_ssh_demo_pod() {
-    local doc_repo=github.com/confidential-containers/documentation
-    local doc_repo_dir="${GOPATH}/src/${doc_repo}"
-    local ssh_command="ssh -i ${doc_repo_dir}/demos/ssh-demo/ccv0-ssh root@$(kubectl get service ccv0-ssh -o jsonpath="{.spec.clusterIP}")"
-    echo "Issuing command '${ssh_command}'"
-    ${ssh_command}
-}
-
-kubernetes_delete_ssh_demo_pod() {
-    pushd_ssh_demo
-    kubectl delete -f k8s-cc-ssh.yaml
-    popd
+call_kubernetes_delete_ssh_demo_pod() {
+    pod=$(kubectl get pods -o jsonpath='{.items..metadata.name}')
+    kubernetes_delete_ssh_demo_pod $pod
 }
 
 crictl_sandbox_name=kata-cc-busybox-sandbox
@@ -618,13 +593,13 @@ main() {
             call_kubernetes_delete_cc_pod
             ;;
         kubernetes_create_ssh_demo_pod)
-            kubernetes_create_ssh_demo_pod
+            call_kubernetes_create_ssh_demo_pod
             ;;
         connect_to_ssh_demo_pod)
-            connect_to_ssh_demo_pod
+            call_connect_to_ssh_demo_pod
             ;;
         kubernetes_delete_ssh_demo_pod)
-            kubernetes_delete_ssh_demo_pod
+            call_kubernetes_delete_ssh_demo_pod
             ;;
         test)
             test_kata_runtime
