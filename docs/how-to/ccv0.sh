@@ -37,6 +37,8 @@ export PROFILE="${HOME}/.profile"
 if [ -r "${HOME}/.bash_profile" ]; then
     export PROFILE="${HOME}/.bash_profile"
 fi
+# Stop PS1: unbound variable error happening
+export PS1=${PS1:-}
 
 # Create a bunch of common, derived values up front so we don't need to create them in all the different functions
 . ${PROFILE}
