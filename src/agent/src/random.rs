@@ -82,7 +82,7 @@ mod tests {
         if nix::unistd::Uid::effective().is_root() {
             assert!(ret.is_ok());
         } else {
-            assert!(!ret.is_ok());
+            assert!(ret.is_err());
         }
     }
 
@@ -90,6 +90,6 @@ mod tests {
     fn test_reseed_rng_zero_data() {
         let seed = [];
         let ret = reseed_rng(&seed);
-        assert!(!ret.is_ok());
+        assert!(ret.is_err());
     }
 }
