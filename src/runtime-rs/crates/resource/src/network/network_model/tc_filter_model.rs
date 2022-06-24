@@ -4,9 +4,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
-use tokio::process::Command;
+use rtnetlink::Handle;
+use scopeguard::defer;
 
 use super::{NetworkModel, NetworkModelType};
 use crate::network::NetworkPair;
@@ -19,7 +20,6 @@ impl TcFilterModel {
         Ok(Self {})
     }
 }
-
 #[async_trait]
 impl NetworkModel for TcFilterModel {
     fn model_type(&self) -> NetworkModelType {
@@ -27,69 +27,74 @@ impl NetworkModel for TcFilterModel {
     }
 
     async fn add(&self, pair: &NetworkPair) -> Result<()> {
-        let tap_name = &pair.tap.tap_iface.name;
-        let virt_name = &pair.virt_iface.name;
+        let (connection, handle, _) = rtnetlink::new_connection().context("new connection")?;
+        let thread_handler = tokio::spawn(connection);
 
-        add_qdisc_ingress(tap_name)
-            .await
-            .context("add qdisc ingress for tap link")?;
-        add_qdisc_ingress(virt_name)
-            .await
-            .context("add qdisc ingress")?;
+        defer!({
+            thread_handler.abort();
+        });
 
-        add_redirect_tcfilter(tap_name, virt_name)
+        let tap_index = fetch_index(&handle, pair.tap.tap_iface.name.as_str())
             .await
-            .context("add tc filter for tap")?;
-        add_redirect_tcfilter(virt_name, tap_name)
+            .context("fetch tap by index")?;
+        let virt_index = fetch_index(&handle, pair.virt_iface.name.as_str())
             .await
-            .context("add tc filter")?;
+            .context("fetch virt by index")?;
+
+        handle
+            .qdisc()
+            .add(tap_index as i32)
+            .ingress()
+            .execute()
+            .await
+            .context("add tap ingress")?;
+
+        handle
+            .qdisc()
+            .add(virt_index as i32)
+            .ingress()
+            .execute()
+            .await
+            .context("add virt ingress")?;
+
+        handle
+            .traffic_filter(tap_index as i32)
+            .add()
+            .protocol(0x0003)
+            .egress()
+            .redirect(virt_index)
+            .execute()
+            .await
+            .context("add tap egress")?;
+
+        handle
+            .traffic_filter(virt_index as i32)
+            .add()
+            .protocol(0x0003)
+            .egress()
+            .redirect(tap_index)
+            .execute()
+            .await
+            .context("add virt egress")?;
         Ok(())
     }
 
     async fn del(&self, pair: &NetworkPair) -> Result<()> {
-        del_qdisc(&pair.virt_iface.name)
-            .await
-            .context("del qdisc")?;
+        let (connection, handle, _) = rtnetlink::new_connection().context("new connection")?;
+        let thread_handler = tokio::spawn(connection);
+        defer!({
+            thread_handler.abort();
+        });
+        let virt_index = fetch_index(&handle, &pair.virt_iface.name).await?;
+        handle.qdisc().del(virt_index as i32).execute().await?;
         Ok(())
     }
 }
 
-// TODO: use netlink replace tc command
-async fn add_qdisc_ingress(dev: &str) -> Result<()> {
-    let output = Command::new("/sbin/tc")
-        .args(&["qdisc", "add", "dev", dev, "handle", "ffff:", "ingress"])
-        .output()
+async fn fetch_index(handle: &Handle, name: &str) -> Result<u32> {
+    let link = crate::network::network_pair::get_link_by_name(handle, name)
         .await
-        .context("add tc")?;
-    if !output.status.success() {
-        return Err(anyhow!("{}", String::from_utf8(output.stderr)?));
-    }
-    Ok(())
-}
-
-async fn add_redirect_tcfilter(src: &str, dst: &str) -> Result<()> {
-    let output = Command::new("/sbin/tc")
-        .args(&[
-            "filter", "add", "dev", src, "parent", "ffff:", "protocol", "all", "u32", "match",
-            "u8", "0", "0", "action", "mirred", "egress", "redirect", "dev", dst,
-        ])
-        .output()
-        .await
-        .context("add redirect tcfilter")?;
-    if !output.status.success() {
-        return Err(anyhow!("{}", String::from_utf8(output.stderr)?));
-    }
-    Ok(())
-}
-
-async fn del_qdisc(dev: &str) -> Result<()> {
-    let output = Command::new("/sbin/tc")
-        .args(&["qdisc", "del", "dev", dev, "handle", "ffff:", "ingress"])
-        .output()
-        .await
-        .context("del qdisc")?;
-    if !output.status.success() {
-        return Err(anyhow!("{}", String::from_utf8(output.stderr)?));
-    }
-    Ok(())
+        .context("get link by name")?;
+    let base = link.attrs();
+    Ok(base.index)
 }
