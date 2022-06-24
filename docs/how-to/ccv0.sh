@@ -231,6 +231,8 @@ configure() {
     fi
 
     configure_cc_containerd
+    # From crictl v1.24.1 the default timoout leads to the pod creation failing, so update it
+    sudo crictl config --set timeout=10
 }
 
 configure_kata_to_use_rootfs() {
