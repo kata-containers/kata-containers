@@ -32,6 +32,7 @@ The `nydus-sandbox.yaml` looks like below:
 metadata:
   attempt: 1
   name: nydus-sandbox
+  uid: nydus-uid
   namespace: default
 log_directory: /tmp
 linux:
