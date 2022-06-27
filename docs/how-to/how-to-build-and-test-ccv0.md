@@ -339,7 +339,7 @@ image signature verification function.
 up to, and including, the `~/ccv0.sh crictl_create_cc_pod` command.
 
 - In order to enable the guest image, you will need to copy over the policy and signature files needed by running 
-`~/ccv0.sh copy_files_to_guest`and then re-running `~/ccv0.sh crictl_create_cc_pod` which will delete and recreate 
+`~/ccv0.sh copy_signature_files_to_guest`and then re-running `~/ccv0.sh crictl_create_cc_pod` which will delete and recreate 
 your pod - adding in the new files.
  
 - To test the fallback behaviour works using an unsigned image from an *unprotected* registry we can pull the `busybox`

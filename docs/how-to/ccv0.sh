@@ -88,7 +88,7 @@ Commands:
 - build_qemu:                       Checkout, patch, build and install QEMU
 - configure:                        Configure Kata to use rootfs and enable debug
 - connect_to_ssh_demo_pod:          Ssh into the ssh demo pod, showing that the decryption succeeded
-- copy_files_to_guest               Copies signature verification files to guest
+- copy_signature_files_to_guest     Copies signature verification files to guest
 - create_rootfs:                    Create a local rootfs
 - crictl_create_cc_container        Use crictl to create a new busybox container in the kata cc pod
 - crictl_create_cc_pod              Use crictl to create a new kata cc pod
@@ -222,14 +222,6 @@ configure() {
     # Switch image offload to true in kata config
     switch_image_service_offload "on"
 
-    # Temp PoC verify code: Inject policy path config parameter
-    add_kernel_params "agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
-
-    # If using AA then need to add the agent_config
-    if [ "${AA_KBC:-}" == "offline_fs_kbc" ]; then
-        add_kernel_params "agent.config_file=/etc/agent-config.toml"
-    fi
-
     configure_cc_containerd
     # From crictl v1.24.1 the default timoout leads to the pod creation failing, so update it
     sudo crictl config --set timeout=10
@@ -273,13 +265,6 @@ create_a_local_rootfs() {
     popd
     # During the ./rootfs.sh call the kata agent is built as root, so we need to update the permissions, so we can rebuild it
     sudo chown -R ${USER}:${USER} "${katacontainers_repo_dir}/src/agent/"
-
-    # If offline key broker set then include ssh-demo keys and config from
-    # https://github.com/confidential-containers/documentation/tree/main/demos/ssh-demo
-    if [ "${AA_KBC:-}" == "offline_fs_kbc" ]; then
-        local rootfs_agent_config="${ROOTFS_DIR}/etc/agent-config.toml"
-        sudo -E AA_KBC_PARAMS="offline_fs_kbc::null" envsubst < ${katacontainers_repo_dir}/docs/how-to/data/confidential-agent-config.toml.in | sudo tee ${rootfs_agent_config}
-    fi
 
     popd
 }
@@ -515,7 +500,8 @@ shim_pull_image() {
     ${ctr_shim_command}
 }
 
-call_copy_files_to_guest() {
+call_copy_signature_files_to_guest() {
+    add_kernel_params "agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
     copy_files_to_guest
 }
 
@@ -628,8 +614,8 @@ main() {
         agent_create_container)
             agent_create_container
             ;;
-        copy_files_to_guest)
-            call_copy_files_to_guest
+        copy_signature_files_to_guest)
+            call_copy_signature_files_to_guest
             ;;
         *)
             usage 1
