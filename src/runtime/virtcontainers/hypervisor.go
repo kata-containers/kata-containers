@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -50,7 +49,6 @@ const (
 	// MockHypervisor is a mock hypervisor for testing purposes
 	MockHypervisor HypervisorType = "mock"
 
-	procMemInfo = "/proc/meminfo"
 	procCPUInfo = "/proc/cpuinfo"
 
 	defaultVCPUs = 1
@@ -797,39 +795,6 @@ func DeserializeParams(parameters []string) []Param {
 	}
 
 	return params
-}
-
-func GetHostMemorySizeKb(memInfoPath string) (uint64, error) {
-	f, err := os.Open(memInfoPath)
-	if err != nil {
-		return 0, err
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		// Expected format: ["MemTotal:", "1234", "kB"]
-		parts := strings.Fields(scanner.Text())
-
-		// Sanity checks: Skip malformed entries.
-		if len(parts) < 3 || parts[0] != "MemTotal:" || parts[2] != "kB" {
-			continue
-		}
-
-		sizeKb, err := strconv.ParseUint(parts[1], 0, 64)
-		if err != nil {
-			continue
-		}
-
-		return sizeKb, nil
-	}
-
-	// Handle errors that may have occurred during the reading of the file.
-	if err := scanner.Err(); err != nil {
-		return 0, err
-	}
-
-	return 0, fmt.Errorf("unable get MemTotal from %s", memInfoPath)
 }
 
 // CheckCmdline checks whether an option or parameter is present in the kernel command line.
