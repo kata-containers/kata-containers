@@ -310,16 +310,6 @@ show_runtime_log_details()
 	end_section
 }
 
-show_throttler_log_details()
-{
-	local title="Throttler logs"
-	subheading "$title"
-
-	start_section "$title"
-	find_system_journal_problems "throttler" "@PROJECT_TYPE@-ksm-throttler"
-	end_section
-}
-
 show_log_details()
 {
 	local title="Logfiles"
@@ -328,7 +318,6 @@ show_log_details()
 	heading "$title"
 
 	show_runtime_log_details
-	show_throttler_log_details
 	show_containerd_shimv2_log_details
 
 	separator
@@ -357,7 +346,6 @@ show_package_versions()
 	for project in @PROJECT_TYPE@
 	do
 		pattern+="|${project}-runtime"
-		pattern+="|${project}-ksm-throttler"
 		pattern+="|${project}-containers-image"
 	done
 
@@ -729,50 +717,6 @@ release_device()
 	losetup -d "$device"
 }
 
-show_throttler_details()
-{
-	start_section "KSM throttler"
-
-	heading "KSM throttler"
-
-	subheading "version"
-
-	local throttlers
-	local throttler
-
-	throttlers=$(find /usr/libexec /usr/lib* -type f |\
-		grep -v trigger |\
-		egrep "(cc|kata)-ksm-throttler" |\
-		sort -u)
-
-	echo "$throttlers" | while read throttler
-	do
-		[ -z "$throttler" ] && continue
-
-		local cmd
-		cmd="$throttler --version"
-		run_cmd_and_show_quoted_output "" "$cmd"
-	done
-
-	subheading "systemd service"
-
-	local unit
-
-	# Note: "vc-throttler" is the old CC service, replaced by
-	# "kata-vc-throttler".
-	for unit in \
-		"cc-ksm-throttler" \
-		"kata-ksm-throttler" \
-		"kata-vc-throttler" \
-		"vc-throttler"
-	do
-		have_service "${unit}" && \
-			run_cmd_and_show_quoted_output "" "systemctl show ${unit}"
-	done
-
-	end_section
-}
-
 show_kata_monitor_version()
 {
 	start_section "Kata Monitor"
@@ -862,7 +806,6 @@ show_details()
 	show_runtime
 	show_runtime_configs
 	show_containerd_shimv2
-	show_throttler_details
 	show_image_details
 	show_initrd_details
 	show_log_details
