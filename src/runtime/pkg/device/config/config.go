@@ -441,3 +441,45 @@ func getVhostUserDevName(dirname string, majorNum, minorNum uint32) (string, err
 	return "", fmt.Errorf("Required device node (%d:%d) doesn't exist under directory %s",
 		majorNum, minorNum, dirname)
 }
+
+// DeviceState is a structure which represents host devices
+// plugged to a hypervisor, one Device can be shared among containers in POD
+// Refs: virtcontainers/device/drivers/generic.go:GenericDevice
+type DeviceState struct {
+	// DriverOptions is specific options for each device driver
+	// for example, for BlockDevice, we can set DriverOptions["block-driver"]="virtio-blk"
+	DriverOptions map[string]string
+
+	// VhostUserDeviceAttrs is specific for vhost-user device driver
+	VhostUserDev *VhostUserDeviceAttrs `json:",omitempty"`
+
+	// BlockDrive is specific for block device driver
+	BlockDrive *BlockDrive `json:",omitempty"`
+
+	ID string
+
+	// Type is used to specify driver type
+	// Refs: virtcontainers/device/config/config.go:DeviceType
+	Type string
+
+	// Type of device: c, b, u or p
+	// c , u - character(unbuffered)
+	// p - FIFO
+	// b - block(buffered) special file
+	// More info in mknod(1).
+	DevType string
+
+	// VFIODev is specific VFIO device driver
+	VFIODevs []*VFIODev `json:",omitempty"`
+
+	RefCount    uint
+	AttachCount uint
+
+	// Major, minor numbers for device.
+	Major int64
+	Minor int64
+
+	// ColdPlug specifies whether the device must be cold plugged (true)
+	// or hot plugged (false).
+	ColdPlug bool
+}

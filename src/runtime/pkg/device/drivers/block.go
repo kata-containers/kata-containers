@@ -10,9 +10,8 @@ import (
 	"context"
 	"path/filepath"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -159,51 +158,21 @@ func (device *BlockDevice) GetDeviceInfo() interface{} {
 }
 
 // Save converts Device to DeviceState
-func (device *BlockDevice) Save() persistapi.DeviceState {
+func (device *BlockDevice) Save() config.DeviceState {
 	ds := device.GenericDevice.Save()
 	ds.Type = string(device.DeviceType())
 
-	drive := device.BlockDrive
-	if drive != nil {
-		ds.BlockDrive = &persistapi.BlockDrive{
-			File:     drive.File,
-			Format:   drive.Format,
-			ID:       drive.ID,
-			Index:    drive.Index,
-			MmioAddr: drive.MmioAddr,
-			PCIPath:  drive.PCIPath,
-			SCSIAddr: drive.SCSIAddr,
-			NvdimmID: drive.NvdimmID,
-			VirtPath: drive.VirtPath,
-			DevNo:    drive.DevNo,
-			Pmem:     drive.Pmem,
-		}
-	}
+	ds.BlockDrive = device.BlockDrive
+
 	return ds
 }
 
 // Load loads DeviceState and converts it to specific device
-func (device *BlockDevice) Load(ds persistapi.DeviceState) {
+func (device *BlockDevice) Load(ds config.DeviceState) {
 	device.GenericDevice = &GenericDevice{}
 	device.GenericDevice.Load(ds)
 
-	bd := ds.BlockDrive
-	if bd == nil {
-		return
-	}
-	device.BlockDrive = &config.BlockDrive{
-		File:     bd.File,
-		Format:   bd.Format,
-		ID:       bd.ID,
-		Index:    bd.Index,
-		MmioAddr: bd.MmioAddr,
-		PCIPath:  bd.PCIPath,
-		SCSIAddr: bd.SCSIAddr,
-		NvdimmID: bd.NvdimmID,
-		VirtPath: bd.VirtPath,
-		DevNo:    bd.DevNo,
-		Pmem:     bd.Pmem,
-	}
+	device.BlockDrive = ds.BlockDrive
 }
 
 // It should implement GetAttachCount() and DeviceID() as api.Device implementation

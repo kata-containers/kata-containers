@@ -9,10 +9,10 @@ import (
 	"context"
 	"runtime"
 
+	deviceApi "github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
+	deviceConfig "github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
-	deviceApi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
-	deviceConfig "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/sirupsen/logrus"
