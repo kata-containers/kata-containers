@@ -196,7 +196,7 @@ impl ImageService {
             let v: Vec<&str> = image.rsplit('/').collect();
             if !v[0].is_empty() {
                 // ':' have special meaning for umoci during upack
-                cid = v[0].replace(":", "_");
+                cid = v[0].replace(':', "_");
             } else {
                 return Err(anyhow!("Invalid image name. {}", image));
             }
