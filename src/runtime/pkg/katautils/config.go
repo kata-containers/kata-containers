@@ -24,6 +24,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	"github.com/pbnjay/memory"
 	"github.com/sirupsen/logrus"
 )
 
@@ -112,6 +113,7 @@ type hypervisor struct {
 	DefaultMaxVCPUs         uint32   `toml:"default_maxvcpus"`
 	MemorySize              uint32   `toml:"default_memory"`
 	MemSlots                uint32   `toml:"memory_slots"`
+	DefaultMaxMemorySize    uint64   `toml:"default_maxmemory"`
 	DefaultBridges          uint32   `toml:"default_bridges"`
 	Msize9p                 uint32   `toml:"msize_9p"`
 	PCIeRootPort            uint32   `toml:"pcie_root_port"`
@@ -390,6 +392,20 @@ func (h hypervisor) defaultMemOffset() uint64 {
 	return offset
 }
 
+func (h hypervisor) defaultMaxMemSz() uint64 {
+	hostMemory := memory.TotalMemory() / 1024 / 1024 //MiB
+
+	if h.DefaultMaxMemorySize == 0 {
+		return hostMemory
+	}
+
+	if h.DefaultMaxMemorySize > hostMemory {
+		return hostMemory
+	}
+
+	return h.DefaultMaxMemorySize
+}
+
 func (h hypervisor) defaultBridges() uint32 {
 	if h.DefaultBridges == 0 {
 		return defaultBridgesCount
@@ -567,6 +583,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
 		MemorySize:            h.defaultMemSz(),
 		MemSlots:              h.defaultMemSlots(),
+		DefaultMaxMemorySize:  h.defaultMaxMemSz(),
 		EntropySource:         h.GetEntropySource(),
 		EntropySourceList:     h.EntropySourceList,
 		DefaultBridges:        h.defaultBridges(),
@@ -678,6 +695,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemorySize:              h.defaultMemSz(),
 		MemSlots:                h.defaultMemSlots(),
 		MemOffset:               h.defaultMemOffset(),
+		DefaultMaxMemorySize:    h.defaultMaxMemSz(),
 		VirtioMem:               h.VirtioMem,
 		EntropySource:           h.GetEntropySource(),
 		EntropySourceList:       h.EntropySourceList,
@@ -773,6 +791,7 @@ func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
 		MemorySize:            h.defaultMemSz(),
 		MemSlots:              h.defaultMemSlots(),
+		DefaultMaxMemorySize:  h.defaultMaxMemSz(),
 		EntropySource:         h.GetEntropySource(),
 		EntropySourceList:     h.EntropySourceList,
 		DefaultBridges:        h.defaultBridges(),
@@ -850,6 +869,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemorySize:              h.defaultMemSz(),
 		MemSlots:                h.defaultMemSlots(),
 		MemOffset:               h.defaultMemOffset(),
+		DefaultMaxMemorySize:    h.defaultMaxMemSz(),
 		VirtioMem:               h.VirtioMem,
 		EntropySource:           h.GetEntropySource(),
 		EntropySourceList:       h.EntropySourceList,

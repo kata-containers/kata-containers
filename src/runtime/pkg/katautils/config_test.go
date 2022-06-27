@@ -22,6 +22,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	"github.com/pbnjay/memory"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -85,6 +86,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := path.Join(dir, "virtiofsd")
 	epcSize := int64(0)
+	maxMemory := uint64(memory.TotalMemory() / 1024 / 1024)
 
 	configFileOptions := ktu.RuntimeConfigOptions{
 		Hypervisor:           "qemu",
@@ -104,6 +106,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		DefaultVCPUCount:     defaultVCPUCount,
 		DefaultMaxVCPUCount:  defaultMaxVCPUCount,
 		DefaultMemSize:       defaultMemSize,
+		DefaultMaxMemorySize: maxMemory,
 		DefaultMsize9p:       defaultMsize9p,
 		HypervisorDebug:      hypervisorDebug,
 		RuntimeDebug:         runtimeDebug,
@@ -153,6 +156,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		NumVCPUs:              defaultVCPUCount,
 		DefaultMaxVCPUs:       getCurrentCpuNum(),
 		MemorySize:            defaultMemSize,
+		DefaultMaxMemorySize:  maxMemory,
 		DisableBlockDeviceUse: disableBlockDevice,
 		BlockDeviceDriver:     defaultBlockDeviceDriver,
 		DefaultBridges:        defaultBridgesCount,

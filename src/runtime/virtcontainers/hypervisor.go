@@ -402,6 +402,9 @@ type HypervisorConfig struct {
 	// DefaultMem specifies default memory size in MiB for the VM.
 	MemorySize uint32
 
+	// DefaultMaxMemorySize specifies the maximum amount of RAM in MiB for the VM.
+	DefaultMaxMemorySize uint64
+
 	// DefaultBridges specifies default number of bridges for the VM.
 	// Bridges can be used to hot plug devices
 	DefaultBridges uint32
