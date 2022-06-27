@@ -302,18 +302,6 @@ func (q *qemu) cpuTopology() govmmQemu.SMP {
 	return q.arch.cpuTopology(q.config.NumVCPUs, q.config.DefaultMaxVCPUs)
 }
 
-func (q *qemu) hostMemMB() (uint64, error) {
-	hostMemKb, err := GetHostMemorySizeKb(procMemInfo)
-	if err != nil {
-		return 0, fmt.Errorf("Unable to read memory info: %s", err)
-	}
-	if hostMemKb == 0 {
-		return 0, fmt.Errorf("Error host memory size 0")
-	}
-
-	return hostMemKb / 1024, nil
-}
-
 func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
 	hostMemMb := q.config.DefaultMaxMemorySize
 	memMb := uint64(q.config.MemorySize)
