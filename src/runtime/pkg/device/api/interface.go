@@ -9,8 +9,7 @@ package api
 import (
 	"context"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/sirupsen/logrus"
 )
 
@@ -78,10 +77,10 @@ type Device interface {
 	Dereference() uint
 
 	// Save converts Device to DeviceState
-	Save() persistapi.DeviceState
+	Save() config.DeviceState
 
 	// Load loads DeviceState and converts it to specific device
-	Load(persistapi.DeviceState)
+	Load(config.DeviceState)
 }
 
 // DeviceManager can be used to create a new device, this can be used as single
@@ -94,5 +93,5 @@ type DeviceManager interface {
 	IsDeviceAttached(string) bool
 	GetDeviceByID(string) Device
 	GetAllDevices() []Device
-	LoadDevices([]persistapi.DeviceState)
+	LoadDevices([]config.DeviceState)
 }

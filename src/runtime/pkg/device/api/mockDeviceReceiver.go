@@ -8,7 +8,7 @@ package api
 import (
 	"context"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 )
 
 // MockDeviceReceiver is a fake DeviceReceiver API implementation only used for test

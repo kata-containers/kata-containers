@@ -9,9 +9,8 @@ package drivers
 import (
 	"context"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
 )
@@ -156,40 +155,19 @@ func (device *VhostUserBlkDevice) GetDeviceInfo() interface{} {
 }
 
 // Save converts Device to DeviceState
-func (device *VhostUserBlkDevice) Save() persistapi.DeviceState {
+func (device *VhostUserBlkDevice) Save() config.DeviceState {
 	ds := device.GenericDevice.Save()
 	ds.Type = string(device.DeviceType())
+	ds.VhostUserDev = device.VhostUserDeviceAttrs
 
-	vAttr := device.VhostUserDeviceAttrs
-	if vAttr != nil {
-		ds.VhostUserDev = &persistapi.VhostUserDeviceAttrs{
-			DevID:      vAttr.DevID,
-			SocketPath: vAttr.SocketPath,
-			Type:       string(vAttr.Type),
-			PCIPath:    vAttr.PCIPath,
-			Index:      vAttr.Index,
-		}
-	}
 	return ds
 }
 
 // Load loads DeviceState and converts it to specific device
-func (device *VhostUserBlkDevice) Load(ds persistapi.DeviceState) {
+func (device *VhostUserBlkDevice) Load(ds config.DeviceState) {
 	device.GenericDevice = &GenericDevice{}
 	device.GenericDevice.Load(ds)
-
-	dev := ds.VhostUserDev
-	if dev == nil {
-		return
-	}
-
-	device.VhostUserDeviceAttrs = &config.VhostUserDeviceAttrs{
-		DevID:      dev.DevID,
-		SocketPath: dev.SocketPath,
-		Type:       config.DeviceType(dev.Type),
-		PCIPath:    dev.PCIPath,
-		Index:      dev.Index,
-	}
+	device.VhostUserDeviceAttrs = ds.VhostUserDev
 }
 
 // It should implement GetAttachCount() and DeviceID() as api.Device implementation
