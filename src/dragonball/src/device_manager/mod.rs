@@ -29,10 +29,10 @@ use dbs_virtio_devices::{
     VirtioDevice,
 };
 
-#[cfg(feature = "hotplug")]
+#[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
 use dbs_upcall::{
-    MmioDevRequest, DevMgrRequest, DevMgrService, UpcallClient, UpcallClientError,
-    UpcallClientRequest, UpcallClientResponse
+    DevMgrRequest, DevMgrService, MmioDevRequest, UpcallClient, UpcallClientError,
+    UpcallClientRequest, UpcallClientResponse,
 };
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
@@ -90,7 +90,7 @@ pub enum DeviceMgrError {
     #[error(transparent)]
     Virtio(virtio::Error),
 
-    #[cfg(feature = "hotplug")]
+    #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
     /// Failed to hotplug the device.
     #[error("failed to hotplug virtual device")]
     HotplugDevice(#[source] UpcallClientError),
@@ -199,7 +199,7 @@ pub struct DeviceOpContext {
     logger: slog::Logger,
     is_hotplug: bool,
 
-    #[cfg(feature = "hotplug")]
+    #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
     upcall_client: Option<Arc<UpcallClient<DevMgrService>>>,
     #[cfg(feature = "dbs-virtio-devices")]
     virtio_devices: Vec<Arc<DbsMmioV2Device>>,
@@ -233,7 +233,7 @@ impl DeviceOpContext {
             address_space,
             logger,
             is_hotplug,
-            #[cfg(feature = "hotplug")]
+            #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
             upcall_client: None,
             #[cfg(feature = "dbs-virtio-devices")]
             virtio_devices: Vec::new(),
@@ -301,7 +301,7 @@ impl DeviceOpContext {
     }
 }
 
-#[cfg(feature = "hotplug")]
+#[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
 impl DeviceOpContext {
     fn call_hotplug_device(
         &self,
@@ -360,6 +360,11 @@ impl DeviceOpContext {
 
         self.call_hotplug_device(req, callback)
     }
+}
+
+#[cfg(all(feature = "hotplug", feature = "acpi"))]
+impl DeviceOpContext {
+    // TODO: We will implement this when we develop ACPI virtualization
 }
 
 /// Device manager for virtual machines, which manages all device for a virtual machine.

@@ -45,8 +45,9 @@ slog-term = "2.9.0"
 slog-async = "2.7.0"
 
 [features]
+acpi = []
 atomic-guest-memory = []
-hotplug = ["dbs-upcall", "virtio-vsock"]
+hotplug = ["virtio-vsock"]
 virtio-vsock = ["dbs-virtio-devices/virtio-vsock", "virtio-queue"]
 
 [patch.'crates-io']

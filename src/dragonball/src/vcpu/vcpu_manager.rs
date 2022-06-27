@@ -15,7 +15,7 @@ use std::sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender};
 use std::sync::{Arc, Barrier, Mutex, RwLock};
 use std::time::Duration;
 
-#[cfg(feature = "hotplug")]
+#[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
 use dbs_upcall::{DevMgrService, UpcallClient};
 use dbs_utils::epoll_manager::{EpollManager, EventOps, EventSet, Events, MutEventSubscriber};
 use dbs_utils::time::TimestampUs;
@@ -206,7 +206,7 @@ pub struct VcpuManager {
     vcpus_in_action: (VcpuAction, Vec<u8>),
     pub(crate) reset_event_fd: Option<EventFd>,
 
-    #[cfg(feature = "hotplug")]
+    #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
     upcall_channel: Option<Arc<UpcallClient<DevMgrService>>>,
 
     // X86 specific fields.
@@ -290,7 +290,7 @@ impl VcpuManager {
             action_sycn_tx: None,
             vcpus_in_action: (VcpuAction::None, Vec::new()),
             reset_event_fd: None,
-            #[cfg(feature = "hotplug")]
+            #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
             upcall_channel: None,
             #[cfg(target_arch = "x86_64")]
             supported_cpuid,
@@ -794,6 +794,7 @@ mod hotplug {
     #[cfg(all(target_arch = "aarch64", not(test)))]
     const APIC_VERSION: u8 = 0;
 
+    #[cfg(feature = "dbs-upcall")]
     impl VcpuManager {
         /// add upcall channel for vcpu manager
         pub fn set_upcall_channel(
