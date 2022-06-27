@@ -315,11 +315,7 @@ func (q *qemu) hostMemMB() (uint64, error) {
 }
 
 func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
-	hostMemMb, err := q.hostMemMB()
-	if err != nil {
-		return govmmQemu.Memory{}, err
-	}
-
+	hostMemMb := q.config.DefaultMaxMemorySize
 	memMb := uint64(q.config.MemorySize)
 
 	return q.arch.memoryTopology(memMb, hostMemMb, uint8(q.config.MemSlots)), nil
@@ -779,12 +775,8 @@ func (q *qemu) getMemArgs() (bool, string, string, error) {
 }
 
 func (q *qemu) setupVirtioMem(ctx context.Context) error {
-	maxMem, err := q.hostMemMB()
-	if err != nil {
-		return err
-	}
 	// backend memory size must be multiple of 4Mib
-	sizeMB := (int(maxMem) - int(q.config.MemorySize)) >> 2 << 2
+	sizeMB := (int(q.config.DefaultMaxMemorySize) - int(q.config.MemorySize)) >> 2 << 2
 
 	share, target, memoryBack, err := q.getMemArgs()
 	if err != nil {
@@ -1970,8 +1962,6 @@ func (q *qemu) hotplugMemory(memDev *MemoryDevice, op Operation) (int, error) {
 		return 0, err
 	}
 
-	currentMemory := int(q.config.MemorySize) + q.state.HotpluggedMemory
-
 	if memDev.SizeMB == 0 {
 		memLog.Debug("hotplug is not required")
 		return 0, nil
@@ -1985,17 +1975,7 @@ func (q *qemu) hotplugMemory(memDev *MemoryDevice, op Operation) (int, error) {
 		return 0, nil
 	case AddDevice:
 		memLog.WithField("operation", "add").Debugf("Requested to add memory: %d MB", memDev.SizeMB)
-		maxMem, err := q.hostMemMB()
-		if err != nil {
-			return 0, err
-		}
 
-		// Don't exceed the maximum amount of memory
-		if currentMemory+memDev.SizeMB > int(maxMem) {
-			// Fixme: return a typed error
-			return 0, fmt.Errorf("Unable to hotplug %d MiB memory, the SB has %d MiB and the maximum amount is %d MiB",
-				memDev.SizeMB, currentMemory, maxMem)
-		}
 		memoryAdded, err := q.hotplugAddMemory(memDev)
 		if err != nil {
 			return memoryAdded, err
@@ -2231,6 +2211,11 @@ func (q *qemu) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSiz
 	case currentMemory < reqMemMB:
 		//hotplug
 		addMemMB := reqMemMB - currentMemory
+
+		if currentMemory+addMemMB > uint32(q.config.DefaultMaxMemorySize) {
+			addMemMB = uint32(q.config.DefaultMaxMemorySize) - currentMemory
+		}
+
 		memHotplugMB, err := calcHotplugMemMiBSize(addMemMB, memoryBlockSizeMB)
 		if err != nil {
 			return currentMemory, MemoryDevice{}, err
