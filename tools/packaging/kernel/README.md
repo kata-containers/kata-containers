@@ -47,7 +47,7 @@ Options:
 	-g <vendor> 	: GPU vendor, intel or nvidia.
 	-h          	: Display this help.
 	-k <path>   	: Path to kernel to build.
-	-p <path>   	: Path to a directory with patches to apply to kernel.
+	-p <path>   	: Path to a directory with patches to apply to kernel, only patches in top-level directory are applied.
 	-t <hypervisor>	: Hypervisor_target.
 	-v <version>	: Kernel version to use if kernel path not provided.
 ```
@@ -76,7 +76,7 @@ $ ./build-kernel.sh setup
 The script `./build-kernel.sh` tries to apply the patches from
 `${GOPATH}/src/github.com/kata-containers/kata-containers/tools/packaging/kernel/patches/` when it
 sets up a kernel. If you want to add a source modification, add a patch on this
-directory.
+directory. Patches present in the top-level directory are applied, with subdirectories being ignored.
 
 The script also adds a kernel config file from
 `${GOPATH}/src/github.com/kata-containers/kata-containers/tools/packaging/kernel/configs/` to `.config`

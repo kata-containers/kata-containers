@@ -11,10 +11,10 @@ runtimedir=$cidir/../src/runtime
 
 build_working_packages() {
 	# working packages:
-	device_api=$runtimedir/virtcontainers/device/api
-	device_config=$runtimedir/virtcontainers/device/config
-	device_drivers=$runtimedir/virtcontainers/device/drivers
-	device_manager=$runtimedir/virtcontainers/device/manager
+	device_api=$runtimedir/pkg/device/api
+	device_config=$runtimedir/pkg/device/config
+	device_drivers=$runtimedir/pkg/device/drivers
+	device_manager=$runtimedir/pkg/device/manager
 	rc_pkg_dir=$runtimedir/pkg/resourcecontrol/
 	utils_pkg_dir=$runtimedir/virtcontainers/utils
 

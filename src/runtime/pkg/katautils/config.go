@@ -16,12 +16,12 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
@@ -95,6 +95,7 @@ type hypervisor struct {
 	FileBackedMemRootDir           string   `toml:"file_mem_backend"`
 	GuestHookPath                  string   `toml:"guest_hook_path"`
 	GuestMemoryDumpPath            string   `toml:"guest_memory_dump_path"`
+	SeccompSandbox                 string   `toml:"seccompsandbox"`
 	HypervisorPathList             []string `toml:"valid_hypervisor_paths"`
 	JailerPathList                 []string `toml:"valid_jailer_paths"`
 	CtlPathList                    []string `toml:"valid_ctlpaths"`
@@ -767,6 +768,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EnableVhostUserStore:    h.EnableVhostUserStore,
 		VhostUserStorePath:      h.vhostUserStorePath(),
 		VhostUserStorePathList:  h.VhostUserStorePathList,
+		SeccompSandbox:          h.SeccompSandbox,
 		GuestHookPath:           h.guestHookPath(),
 		RxRateLimiterMaxRate:    rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:    txRateLimiterMaxRate,
