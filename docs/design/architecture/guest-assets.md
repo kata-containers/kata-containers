@@ -43,7 +43,7 @@ an image and an initrd, both of which are created using the
 >
 > - If you are using a [packaged version of Kata
 >   Containers](../../install), you can see image details by running the
->   [`kata-collect-data.sh`](../../../src/runtime/data/kata-collect-data.sh.in)
+>   [`kata-collect-data.sh`](../../../src/runtime/data/kata-collect-data.sh)
 >   script as `root` and looking at the "Image details" section of the
 >   output.
 

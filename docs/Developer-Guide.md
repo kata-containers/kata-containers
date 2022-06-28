@@ -455,7 +455,7 @@ Refer to the [Run Kata Containers with Kubernetes](how-to/run-kata-with-k8s.md) 
 If you are unable to create a Kata Container first ensure you have
 [enabled full debug](#enable-full-debug)
 before attempting to create a container. Then run the
-[`kata-collect-data.sh`](../src/runtime/data/kata-collect-data.sh.in)
+[`kata-collect-data.sh`](../src/runtime/data/kata-collect-data.sh)
 script and paste its output directly into a
 [GitHub issue](https://github.com/kata-containers/kata-containers/issues/new).
 

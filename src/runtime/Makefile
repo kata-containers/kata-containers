@@ -44,7 +44,6 @@ PROJECT_NAME = Kata Containers
 PROJECT_TAG = kata-containers
 PROJECT_ORG = $(PROJECT_TAG)
 PROJECT_URL = https://github.com/$(PROJECT_ORG)
-PROJECT_BUG_URL = $(PROJECT_URL)/kata-containers/issues/new
 
 # list of scripts to install
 SCRIPTS :=
@@ -89,7 +88,6 @@ COLLECT_SCRIPT = data/kata-collect-data.sh
 # @RUNTIME_NAME@ should be replaced with the target in generated files
 RUNTIME_NAME = $(TARGET)
 
-GENERATED_FILES += $(COLLECT_SCRIPT)
 GENERATED_VARS = \
 		VERSION \
 		CONFIG_ACRN_IN \

@@ -5,8 +5,12 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+RUNTIME_VERSION_INFO=$( kata-runtime --version | sed -n 's/^.*: //p' )
+read -r VERSION COMMIT <<< $( echo $RUNTIME_VERSION_INFO )
+
+typeset -r project_name="Kata Containers"
 typeset -r script_name=${0##*/}
-typeset -r runtime_name="@RUNTIME_NAME@"
+typeset -r runtime_name="kata-runtime"
 typeset -r runtime_path=$(command -v "$runtime_name" 2>/dev/null)
 typeset -r runtime_snap_name="kata-containers.runtime"
 typeset -r runtime_snap_path=$(command -v "$runtime_snap_name" 2>/dev/null)
@@ -18,8 +22,8 @@ typeset -r containerd_shim_v2=$(command -v "$containerd_shim_v2_name" 2>/dev/nul
 typeset -r kata_monitor_name="kata-monitor"
 typeset -r kata_monitor=$(command -v "$kata_monitor_name" 2>/dev/null)
 
-typeset -r issue_url="@PROJECT_BUG_URL@"
-typeset -r script_version="@VERSION@ (commit @COMMIT@)"
+typeset -r issue_url="https://github.com/kata-containers/kata-containers/issues/new"
+typeset -r script_version="$VERSION (commit $COMMIT)"
 
 typeset -r unknown="unknown"
 
@@ -79,13 +83,18 @@ problem_exclude_pattern+=")"
 
 usage()
 {
+<<<<<<< Updated upstream
 	cat <<EOT
 Usage: $script_name [options]
+=======
+	cat <<EOF
+Usage: $script_name [command] [options]
+>>>>>>> Stashed changes
 
-Summary: Collect data about an installation of @PROJECT_NAME@.
+Summary: Collect data about an installation of $project_name.
 
 Description: Run this script as root to obtain a markdown-formatted summary
-  of the environment of the @PROJECT_NAME@ installation. The output of this script
+  of the environment of the $PROJECT_NAME installation. The output of this script
   can be pasted directly into a github issue at the address below:
 
       $issue_url
@@ -95,14 +104,14 @@ Options:
  -h | --help    : show this usage summary.
  -v | --version : show program version.
 
-EOT
+EOF
 }
 
 version()
 {
-	cat <<EOT
+	cat <<EOF
 $script_name version $script_version
-EOT
+EOF
 }
 
 die()
@@ -142,21 +151,21 @@ start_section()
 {
 	local title="$1"
 
-	cat <<EOT
+	cat <<EOF
 <details>
 <summary>${title}</summary>
 <p>
 
-EOT
+EOF
 }
 
 end_section()
 {
-	cat <<EOT
+	cat <<EOF
 
 </p>
 </details>
-EOT
+EOF
 }
 
 show_header()
@@ -231,7 +240,7 @@ show_runtime_configs()
 
 	local configs config
 
-	configs=$($runtime --@PROJECT_TYPE@-show-default-config-paths)
+	configs=$($runtime --kata-show-default-config-paths)
 	if [ $? -ne 0 ]; then
 		version=$($runtime --version|tr '\n' ' ')
 		die "failed to check config files - runtime is probably too old ($version)"
@@ -242,10 +251,9 @@ show_runtime_configs()
 	show_quoted_text "" "$configs"
 
 	# add in the standard defaults for good measure "just in case"
-	configs+=" /etc/@PROJECT_TAG@/configuration.toml"
-	configs+=" /usr/share/defaults/@PROJECT_TAG@/configuration.toml"
-	configs+=" @CONFIG_PATH@"
-	configs+=" @SYSCONFIG@"
+	configs+=" /etc/kata-containers/configuration.toml"
+	configs+=" /usr/share/defaults/kata-containers/configuration.toml"
+	configs+=" /etc/kata-containers/configuration.toml"
 
 	# create a unique list of config files
 	configs=$(echo $configs|tr ' ' '\n'|sort -u)
@@ -306,7 +314,7 @@ show_runtime_log_details()
 	subheading "$title"
 
 	start_section "$title"
-	find_system_journal_problems "runtime" "@RUNTIME_NAME@"
+	find_system_journal_problems "runtime" "kata-runtime"
 	end_section
 }
 
@@ -343,7 +351,7 @@ show_package_versions()
 	pattern+="|runv"
 
 	# core components
-	for project in @PROJECT_TYPE@
+	for project in kata
 	do
 		pattern+="|${project}-runtime"
 		pattern+="|${project}-containers-image"
@@ -496,7 +504,7 @@ show_runtime()
 
 	msg "Runtime is \`$runtime\`."
 
-	cmd="@PROJECT_TYPE@-env"
+	cmd="kata-env"
 
 	heading "\`$cmd\`"
 
@@ -616,7 +624,7 @@ get_initrd_details()
 # Returns: Full path to the image file.
 get_image_file()
 {
-	local cmd="@PROJECT_TYPE@-env"
+	local cmd="kata-env"
 	local cmdline="$runtime $cmd"
 
 	local image=$(eval "$cmdline" 2>/dev/null |\
@@ -631,7 +639,7 @@ get_image_file()
 # Returns: Full path to the initrd file.
 get_initrd_file()
 {
-	local cmd="@PROJECT_TYPE@-env"
+	local cmd="kata-env"
 	local cmdline="$runtime $cmd"
 
 	local initrd=$(eval "$cmdline" 2>/dev/null |\
