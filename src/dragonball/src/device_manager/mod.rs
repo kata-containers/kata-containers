@@ -5,6 +5,7 @@
 
 use std::io;
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::collections::HashMap;
 
 use arc_swap::ArcSwap;
 use dbs_address_space::AddressSpace;
@@ -321,6 +322,33 @@ impl DeviceOpContext {
 
         Ok(())
     }
+
+    #[cfg(target_arch = "aarch64")]
+    fn generate_virtio_device_info(&self) -> Result<HashMap<(DeviceType, String), MMIODeviceInfo>> {
+        let mut dev_info = HashMap::new();
+        #[cfg(feature = "dbs-virtio-devices")]
+        for (_index, device) in self.virtio_devices.iter().enumerate() {
+            let (mmio_base, mmio_size, irq) = DeviceManager::get_virtio_mmio_device_info(device)?;
+            let dev_type;
+            let device_id;
+            if let Some(mmiov2_device) =
+                device.as_any().downcast_ref::<DbsMmioV2Device>()
+            {
+                dev_type = mmiov2_device.get_device_type();
+                device_id = None;
+            } else {
+                return Err(DeviceMgrError::InvalidOperation);
+            }
+            dev_info.insert(
+                (
+                    DeviceType::Virtio(dev_type),
+                    format!("virtio-{}@0x{:08x?}", dev_type, mmio_base),
+                ),
+                MMIODeviceInfo::new(mmio_base, mmio_size, vec![irq], device_id),
+            );
+        }
+        Ok(dev_info)
+    }
 }
 
 #[cfg(all(feature = "hotplug", not(feature = "dbs-upcall")))]
@@ -626,6 +654,14 @@ impl DeviceManager {
         ctx.generate_kernel_boot_args(kernel_config)
             .map_err(StartMicroVmError::DeviceManager)?;
 
+        #[cfg(target_arch = "aarch64")]
+        {
+            let dev_info = ctx
+                .generate_virtio_device_info()
+                .map_err(StartMicrovmError::DeviceManager)?;
+            self.mmio_device_info.extend(dev_info);
+        }
+
         Ok(())
     }
 
@@ -678,6 +714,25 @@ impl DeviceManager {
     /// Return mmio device info for FDT build.
     pub fn get_mmio_device_info(&self) -> Option<&HashMap<(DeviceType, String), MMIODeviceInfo>> {
         Some(&self.mmio_device_info)
+    }
+
+    #[cfg(feature = "dbs-virtio-devices")]
+    fn get_virtio_mmio_device_info(device: &Arc<DbsMmioV2Device>) -> Result<(u64, u64, u32)> {
+        let resources = device.get_assigned_resources();
+        let irq = resources
+            .get_legacy_irq()
+            .ok_or(DeviceMgrError::GetDeviceResource)?;
+
+        if let Some(mmio_dev) = device
+            .as_any()
+            .downcast_ref::<DbsMmioV2Device>()
+        {
+            if let Resource::MmioAddressRange { base, size } = mmio_dev.get_mmio_cfg_res() {
+                return Ok((base, size, irq));
+            }
+        }
+
+        Err(DeviceMgrError::GetDeviceResource)
     }
 }
 
