@@ -91,7 +91,7 @@ impl NetworkModel for TcFilterModel {
     }
 }
 
-async fn fetch_index(handle: &Handle, name: &str) -> Result<u32> {
+pub async fn fetch_index(handle: &Handle, name: &str) -> Result<u32> {
     let link = crate::network::network_pair::get_link_by_name(handle, name)
         .await
         .context("get link by name")?;
