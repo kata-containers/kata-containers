@@ -848,20 +848,52 @@ pub mod tests {
         (vcpu, rx)
     }
 
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(target_arch = "aarch64")]
+    fn create_vcpu() -> (Vcpu, Receiver<VcpuStateEvent>) {
+        // Call for kvm too frequently would cause error in some host kernel.
+        std::thread::sleep(std::time::Duration::from_millis(5));
+
+        let kvm = Kvm::new().unwrap();
+        let vm = Arc::new(kvm.create_vm().unwrap());
+        let kvm_context = KvmContext::new(Some(kvm.as_raw_fd())).unwrap();
+        let vcpu_fd = Arc::new(vm.create_vcpu(0).unwrap());
+        let io_manager = IoManagerCached::new(Arc::new(ArcSwap::new(Arc::new(IoManager::new()))));
+        let reset_event_fd = EventFd::new(libc::EFD_NONBLOCK).unwrap();
+        let vcpu_state_event = EventFd::new(libc::EFD_NONBLOCK).unwrap();
+        let (tx, rx) = channel();
+        let time_stamp = TimestampUs::default();
+
+        let vcpu = Vcpu::new_aarch64(
+            0,
+            vcpu_fd,
+            io_manager,
+            reset_event_fd,
+            vcpu_state_event,
+            tx,
+            time_stamp,
+            false,
+        )
+        .unwrap();
+
+        (vcpu, rx)
+    }
+
     #[test]
     fn test_vcpu_run_emulation() {
         let (mut vcpu, _) = create_vcpu();
 
-        // Io in
-        *(EMULATE_RES.lock().unwrap()) = EmulationCase::IoIn;
-        let res = vcpu.run_emulation();
-        assert!(matches!(res, Ok(VcpuEmulation::Handled)));
+        #[cfg(target_arch = "x86_64")]
+        {
+            // Io in
+            *(EMULATE_RES.lock().unwrap()) = EmulationCase::IoIn;
+            let res = vcpu.run_emulation();
+            assert!(matches!(res, Ok(VcpuEmulation::Handled)));
 
-        // Io out
-        *(EMULATE_RES.lock().unwrap()) = EmulationCase::IoOut;
-        let res = vcpu.run_emulation();
-        assert!(matches!(res, Ok(VcpuEmulation::Handled)));
+            // Io out
+            *(EMULATE_RES.lock().unwrap()) = EmulationCase::IoOut;
+            let res = vcpu.run_emulation();
+            assert!(matches!(res, Ok(VcpuEmulation::Handled)));
+        }
 
         // Mmio read
         *(EMULATE_RES.lock().unwrap()) = EmulationCase::MmioRead;
