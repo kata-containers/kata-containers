@@ -44,6 +44,7 @@ require (
 	github.com/urfave/cli v1.22.2
 	github.com/vishvananda/netlink v1.1.1-0.20210924202909-187053b97868
 	github.com/vishvananda/netns v0.0.0-20210104183010-2eb08e3e575f
+	gitlab.com/nvidia/cloud-native/go-nvlib v0.0.0-20220601114329-47893b162965
 	go.opentelemetry.io/otel v1.3.0
 	go.opentelemetry.io/otel/exporters/jaeger v1.0.0
 	go.opentelemetry.io/otel/sdk v1.3.0
