@@ -29,6 +29,12 @@ use dbs_virtio_devices::{
     VirtioDevice,
 };
 
+#[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
+use dbs_upcall::{
+    DevMgrRequest, DevMgrService, MmioDevRequest, UpcallClient, UpcallClientError,
+    UpcallClientRequest, UpcallClientResponse,
+};
+
 use crate::address_space_manager::GuestAddressSpaceImpl;
 use crate::error::StartMicrovmError;
 use crate::resource_manager::ResourceManager;
@@ -83,6 +89,11 @@ pub enum DeviceMgrError {
     /// Error from Virtio subsystem.
     #[error(transparent)]
     Virtio(virtio::Error),
+
+    #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
+    /// Failed to hotplug the device.
+    #[error("failed to hotplug virtual device")]
+    HotplugDevice(#[source] UpcallClientError),
 }
 
 /// Specialized version of `std::result::Result` for device manager operations.
@@ -188,6 +199,8 @@ pub struct DeviceOpContext {
     logger: slog::Logger,
     is_hotplug: bool,
 
+    #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
+    upcall_client: Option<Arc<UpcallClient<DevMgrService>>>,
     #[cfg(feature = "dbs-virtio-devices")]
     virtio_devices: Vec<Arc<DbsMmioV2Device>>,
 }
@@ -220,6 +233,8 @@ impl DeviceOpContext {
             address_space,
             logger,
             is_hotplug,
+            #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
+            upcall_client: None,
             #[cfg(feature = "dbs-virtio-devices")]
             virtio_devices: Vec::new(),
         }
@@ -236,33 +251,120 @@ impl DeviceOpContext {
         &self.logger
     }
 
+    #[allow(unused_variables)]
     fn generate_kernel_boot_args(&mut self, kernel_config: &mut KernelConfigInfo) -> Result<()> {
-        if !self.is_hotplug {
+        if self.is_hotplug {
             return Err(DeviceMgrError::InvalidOperation);
         }
 
         #[cfg(feature = "dbs-virtio-devices")]
-        let cmdline = kernel_config.kernel_cmdline_mut();
+        {
+            let cmdline = kernel_config.kernel_cmdline_mut();
 
-        #[cfg(feature = "dbs-virtio-devices")]
-        for device in self.virtio_devices.iter() {
-            let (mmio_base, mmio_size, irq) = DeviceManager::get_virtio_device_info(device)?;
+            for device in self.virtio_devices.iter() {
+                let (mmio_base, mmio_size, irq) = DeviceManager::get_virtio_device_info(device)?;
 
-            // as per doc, [virtio_mmio.]device=<size>@<baseaddr>:<irq> needs to be appended
-            // to kernel commandline for virtio mmio devices to get recognized
-            // the size parameter has to be transformed to KiB, so dividing hexadecimal value in
-            // bytes to 1024; further, the '{}' formatting rust construct will automatically
-            // transform it to decimal
-            cmdline
-                .insert(
-                    "virtio_mmio.device",
-                    &format!("{}K@0x{:08x}:{}", mmio_size / 1024, mmio_base, irq),
-                )
-                .map_err(DeviceMgrError::Cmdline)?;
+                // as per doc, [virtio_mmio.]device=<size>@<baseaddr>:<irq> needs to be appended
+                // to kernel commandline for virtio mmio devices to get recognized
+                // the size parameter has to be transformed to KiB, so dividing hexadecimal value in
+                // bytes to 1024; further, the '{}' formatting rust construct will automatically
+                // transform it to decimal
+                cmdline
+                    .insert(
+                        "virtio_mmio.device",
+                        &format!("{}K@0x{:08x}:{}", mmio_size / 1024, mmio_base, irq),
+                    )
+                    .map_err(DeviceMgrError::Cmdline)?;
+            }
         }
 
         Ok(())
     }
+}
+
+#[cfg(not(feature = "hotplug"))]
+impl DeviceOpContext {
+    pub(crate) fn insert_hotplug_mmio_device(
+        &self,
+        _dev: &Arc<dyn DeviceIo>,
+        _callback: Option<()>,
+    ) -> Result<()> {
+        Err(DeviceMgrError::InvalidOperation)
+    }
+
+    pub(crate) fn remove_hotplug_mmio_device(
+        &self,
+        _dev: &Arc<dyn DeviceIo>,
+        _callback: Option<()>,
+    ) -> Result<()> {
+        Err(DeviceMgrError::InvalidOperation)
+    }
+}
+
+#[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
+impl DeviceOpContext {
+    fn call_hotplug_device(
+        &self,
+        req: DevMgrRequest,
+        callback: Option<Box<dyn Fn(UpcallClientResponse) + Send>>,
+    ) -> Result<()> {
+        if let Some(upcall_client) = self.upcall_client.as_ref() {
+            if let Some(cb) = callback {
+                upcall_client
+                    .send_request(UpcallClientRequest::DevMgr(req), cb)
+                    .map_err(DeviceMgrError::HotplugDevice)?;
+            } else {
+                upcall_client
+                    .send_request_without_result(UpcallClientRequest::DevMgr(req))
+                    .map_err(DeviceMgrError::HotplugDevice)?;
+            }
+            Ok(())
+        } else {
+            Err(DeviceMgrError::InvalidOperation)
+        }
+    }
+
+    pub(crate) fn insert_hotplug_mmio_device(
+        &self,
+        dev: &Arc<DbsMmioV2Device>,
+        callback: Option<Box<dyn Fn(UpcallClientResponse) + Send>>,
+    ) -> Result<()> {
+        if !self.is_hotplug {
+            return Err(DeviceMgrError::InvalidOperation);
+        }
+
+        let (mmio_base, mmio_size, mmio_irq) = DeviceManager::get_virtio_device_info(dev)?;
+        let req = DevMgrRequest::AddMmioDev(MmioDevRequest {
+            mmio_base,
+            mmio_size,
+            mmio_irq,
+        });
+
+        self.call_hotplug_device(req, callback)
+    }
+
+    pub(crate) fn remove_hotplug_mmio_device(
+        &self,
+        dev: &Arc<DbsMmioV2Device>,
+        callback: Option<Box<dyn Fn(UpcallClientResponse) + Send>>,
+    ) -> Result<()> {
+        if !self.is_hotplug {
+            return Err(DeviceMgrError::InvalidOperation);
+        }
+        let (mmio_base, mmio_size, mmio_irq) = DeviceManager::get_virtio_device_info(dev)?;
+        let req = DevMgrRequest::DelMmioDev(MmioDevRequest {
+            mmio_base,
+            mmio_size,
+            mmio_irq,
+        });
+
+        self.call_hotplug_device(req, callback)
+    }
+}
+
+#[cfg(all(feature = "hotplug", feature = "acpi"))]
+impl DeviceOpContext {
+    // TODO: We will implement this when we develop ACPI virtualization
 }
 
 /// Device manager for virtual machines, which manages all device for a virtual machine.
@@ -351,7 +453,7 @@ impl DeviceManager {
         self.set_guest_kernel_log_stream(dmesg_fifo)
             .map_err(|_| StartMicrovmError::EventFd)?;
 
-        slog::info!(self.logger, "init console path: {:?}", com1_sock_path);
+        info!(self.logger, "init console path: {:?}", com1_sock_path);
         if let Some(path) = com1_sock_path {
             if let Some(legacy_manager) = self.legacy_manager.as_ref() {
                 let com1 = legacy_manager.get_com1_serial();
@@ -384,19 +486,6 @@ impl DeviceManager {
                 .unwrap()
                 .set_output_stream(stream);
         }
-        Ok(())
-    }
-
-    /// Restore legacy devices
-    pub fn restore_legacy_devices(
-        &mut self,
-        dmesg_fifo: Option<Box<dyn io::Write + Send>>,
-        com1_sock_path: Option<String>,
-    ) -> std::result::Result<(), StartMicrovmError> {
-        self.set_guest_kernel_log_stream(dmesg_fifo)
-            .map_err(|_| StartMicrovmError::EventFd)?;
-        slog::info!(self.logger, "restore console path: {:?}", com1_sock_path);
-        // TODO: restore console
         Ok(())
     }
 
