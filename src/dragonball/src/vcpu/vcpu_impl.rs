@@ -452,9 +452,6 @@ impl Vcpu {
                     Ok(VcpuEmulation::Handled)
                 }
                 VcpuExit::MmioWrite(addr, data) => {
-                    #[cfg(target_arch = "aarch64")]
-                    self.check_boot_complete_signal(addr, data);
-
                     let _ = self.io_mgr.mmio_write(addr, data);
                     METRICS.vcpu.exit_mmio_write.inc();
                     Ok(VcpuEmulation::Handled)
