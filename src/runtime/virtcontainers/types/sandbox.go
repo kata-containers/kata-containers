@@ -314,7 +314,6 @@ type Cmd struct {
 	User         string
 	PrimaryGroup string
 	WorkDir      string
-	Console      string
 
 	Args                []string
 	Envs                []EnvVar
