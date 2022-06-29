@@ -30,6 +30,8 @@ readonly virtiofsd_builder="${static_build_dir}/virtiofsd/build-static-virtiofsd
 
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
 
+readonly cc_prefix="/opt/confidential-containers"
+
 ARCH=$(uname -m)
 
 workdir="${WORKDIR:-$PWD}"
@@ -81,6 +83,16 @@ options:
 EOF
 
 	exit "${return_code}"
+}
+
+#Install cc capable guest image
+install_cc_image() {
+	info "Create CC image"
+	export SKOPEO=yes
+	export UMOCI=yes
+	export AA_KBC="offline_fs_kbc"
+
+	"${rootfs_builder}" --imagetype=image --prefix="${cc_prefix}" --destdir="${destdir}"
 }
 
 #Install guest image
@@ -180,6 +192,8 @@ handle_build() {
 		install_virtiofsd
 		;;
 
+	cc-rootfs-image) install_cc_image ;;
+
 	cloud-hypervisor) install_clh ;;
 
 	firecracker) install_firecracker ;;
@@ -227,6 +241,7 @@ main() {
 	local build_targets
 	local silent
 	build_targets=(
+		cc-rootfs-image
 		cloud-hypervisor
 		firecracker
 		kernel
