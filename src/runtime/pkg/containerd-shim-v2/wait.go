@@ -53,6 +53,11 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 			"container": c.id,
 			"pid":       processID,
 		}).Error("Wait for process failed")
+
+		// set return code if wait failed
+		if ret == 0 {
+			ret = exitCode255
+		}
 	}
 
 	timeStamp := time.Now()
