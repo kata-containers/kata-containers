@@ -18,8 +18,9 @@ import (
 	"strings"
 
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
+	"gitlab.com/nvidia/cloud-native/go-nvlib/pkg/nvpci"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
@@ -138,7 +139,7 @@ type qemuArch interface {
 	setIgnoreSharedMemoryMigrationCaps(context.Context, *govmmQemu.QMP) error
 
 	// appendPCIeRootPortDevice appends a pcie-root-port device to pcie.0 bus
-	appendPCIeRootPortDevice(devices []govmmQemu.Device, number uint32) []govmmQemu.Device
+	appendPCIeRootPortDevice(devices []govmmQemu.Device, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device
 
 	// append vIOMMU device
 	appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error)
@@ -151,6 +152,10 @@ type qemuArch interface {
 	// a firmware, returns a string containing the path to the firmware that should
 	// be used with the -bios option, ommit -bios option if the path is empty.
 	appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string) ([]govmmQemu.Device, string, error)
+
+	// scans the PCIe space and returns the biggest BAR sizes for 32-bit
+	// and 64-bit addressable memory
+	getBARsMaxAddressableMemory() (uint64, uint64)
 }
 
 type qemuArchBase struct {
@@ -787,8 +792,39 @@ func (q *qemuArchBase) addBridge(b types.Bridge) {
 }
 
 // appendPCIeRootPortDevice appends to devices the given pcie-root-port
-func (q *qemuArchBase) appendPCIeRootPortDevice(devices []govmmQemu.Device, number uint32) []govmmQemu.Device {
-	return genericAppendPCIeRootPort(devices, number, q.qemuMachine.Type)
+func (q *qemuArchBase) appendPCIeRootPortDevice(devices []govmmQemu.Device, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
+	return genericAppendPCIeRootPort(devices, number, q.qemuMachine.Type, memSize32bit, memSize64bit)
+}
+
+func (q *qemuArchBase) getBARsMaxAddressableMemory() (uint64, uint64) {
+
+	pci := nvpci.New()
+	devs, _ := pci.GetAllDevices()
+
+	// Since we do not know which devices are going to be hotplugged,
+	// we're going to use the GPU with the biggest BARs to initialize the
+	// root port, this should work for all other devices as well.
+	// defaults are 2MB for both, if no suitable devices found
+	max32bit := uint64(2 * 1024 * 1024)
+	max64bit := uint64(2 * 1024 * 1024)
+
+	for _, dev := range devs {
+		if !dev.IsGPU() {
+			continue
+		}
+		memSize32bit, memSize64bit := dev.Resources.GetTotalAddressableMemory(true)
+		if max32bit < memSize32bit {
+			max32bit = memSize32bit
+		}
+		if max64bit < memSize64bit {
+			max64bit = memSize64bit
+		}
+	}
+	// The actual 32bit is most of the time a power of 2 but we need some
+	// buffer so double that to leave space for other IO functions.
+	// The 64bit size is not a power of 2 and hence is already rounded up
+	// to the higher value.
+	return max32bit * 2, max64bit
 }
 
 // appendIOMMU appends a virtual IOMMU device
