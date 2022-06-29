@@ -187,16 +187,27 @@ func cmdEnvs(spec specs.Spec, envs []types.EnvVar) []types.EnvVar {
 
 func newMount(m specs.Mount) vc.Mount {
 	readonly := false
+	bind := false
 	for _, flag := range m.Options {
-		if flag == "ro" {
+		switch flag {
+		case "rbind", "bind":
+			bind = true
+		case "ro":
 			readonly = true
-			break
 		}
 	}
+
+	// normal bind mounts, set type to bind.
+	// https://github.com/opencontainers/runc/blob/v1.1.3/libcontainer/specconv/spec_linux.go#L512-L520
+	mountType := m.Type
+	if mountType != vc.KataEphemeralDevType && mountType != vc.KataLocalDevType && bind {
+		mountType = "bind"
+	}
+
 	return vc.Mount{
 		Source:      m.Source,
 		Destination: m.Destination,
-		Type:        m.Type,
+		Type:        mountType,
 		Options:     m.Options,
 		ReadOnly:    readonly,
 	}
@@ -912,9 +923,6 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 		SandboxBindMounts: runtime.SandboxBindMounts,
 
 		DisableGuestSeccomp: runtime.DisableGuestSeccomp,
-
-		// Q: Is this really necessary? @weizhang555
-		// Spec: &ocispec,
 
 		Experimental: runtime.Experimental,
 	}
