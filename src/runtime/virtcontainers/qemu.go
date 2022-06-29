@@ -461,11 +461,6 @@ func (q *qemu) setupFileBackedMem(knobs *govmmQemu.Knobs, memory *govmmQemu.Memo
 }
 
 func (q *qemu) setConfig(config *HypervisorConfig) error {
-	err := config.Valid()
-	if err != nil {
-		return err
-	}
-
 	q.config = *config
 
 	return nil
@@ -513,7 +508,6 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 	span, ctx := katatrace.Trace(ctx, q.Logger(), "CreateVM", qemuTracingTags, map[string]string{"VM_ID": q.id})
 	defer span.End()
 
-	// Breaks hypervisor abstraction Has Kata Specific logic: See within
 	if err := q.setup(ctx, id, hypervisorConfig); err != nil {
 		return err
 	}

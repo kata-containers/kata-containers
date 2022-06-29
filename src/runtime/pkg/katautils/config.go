@@ -220,7 +220,7 @@ func (h hypervisor) initrd() (string, error) {
 	p := h.Initrd
 
 	if p == "" {
-		return "", errors.New("initrd is not set")
+		return "", nil
 	}
 
 	return ResolvePath(p)
@@ -230,7 +230,7 @@ func (h hypervisor) image() (string, error) {
 	p := h.Image
 
 	if p == "" {
-		return "", errors.New("image is not set")
+		return "", nil
 	}
 
 	return ResolvePath(p)
@@ -474,24 +474,6 @@ func (h hypervisor) vhostUserStorePath() string {
 	return h.VhostUserStorePath
 }
 
-func (h hypervisor) getInitrdAndImage() (initrd string, image string, err error) {
-	initrd, errInitrd := h.initrd()
-
-	image, errImage := h.image()
-
-	if h.ConfidentialGuest && h.MachineType == vc.QemuCCWVirtio {
-		if image != "" || initrd != "" {
-			return "", "", errors.New("Neither the image nor initrd path may be set for Secure Execution")
-		}
-	} else if image != "" && initrd != "" {
-		return "", "", errors.New("having both an image and an initrd defined in the configuration file is not supported")
-	} else if errInitrd != nil && errImage != nil {
-		return "", "", fmt.Errorf("Either initrd or image must be set to a valid path (initrd: %v) (image: %v)", errInitrd, errImage)
-	}
-
-	return
-}
-
 func (h hypervisor) getDiskRateLimiterBwMaxRate() int64 {
 	return h.DiskRateLimiterBwMaxRate
 }
@@ -601,7 +583,12 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	initrd, image, err := h.getInitrdAndImage()
+	initrd, err := h.initrd()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	image, err := h.image()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
 	}
@@ -663,7 +650,12 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	initrd, image, err := h.getInitrdAndImage()
+	initrd, err := h.initrd()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	image, err := h.image()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
 	}
@@ -857,7 +849,12 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	initrd, image, err := h.getInitrdAndImage()
+	initrd, err := h.initrd()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	image, err := h.image()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
 	}

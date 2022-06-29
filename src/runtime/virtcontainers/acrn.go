@@ -348,10 +348,6 @@ func (a *Acrn) createDummyVirtioBlkDev(ctx context.Context, devices []Device) ([
 }
 
 func (a *Acrn) setConfig(config *HypervisorConfig) error {
-	if err := config.Valid(); err != nil {
-		return err
-	}
-
 	a.config = *config
 
 	return nil

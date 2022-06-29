@@ -26,7 +26,7 @@ const (
 )
 
 var (
-	pmemLog = logrus.WithField("source", "virtcontainers/device/config")
+	pmemLog = logrus.WithField("source", "pkg/device/config")
 )
 
 // SetLogger sets up a logger for this pkg
