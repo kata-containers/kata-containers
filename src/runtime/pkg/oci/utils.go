@@ -105,7 +105,6 @@ type RuntimeConfig struct {
 	//Experimental features enabled
 	Experimental []exp.Feature
 
-	Console        string
 	JaegerEndpoint string
 	JaegerUser     string
 	JaegerPassword string
@@ -861,8 +860,8 @@ func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error
 
 // SandboxConfig converts an OCI compatible runtime configuration file
 // to a virtcontainers sandbox configuration structure.
-func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, console string, detach, systemdCgroup bool) (vc.SandboxConfig, error) {
-	containerConfig, err := ContainerConfig(ocispec, bundlePath, cid, console, detach)
+func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid string, detach, systemdCgroup bool) (vc.SandboxConfig, error) {
+	containerConfig, err := ContainerConfig(ocispec, bundlePath, cid, detach)
 	if err != nil {
 		return vc.SandboxConfig{}, err
 	}
@@ -947,7 +946,7 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 
 // ContainerConfig converts an OCI compatible runtime configuration
 // file to a virtcontainers container configuration structure.
-func ContainerConfig(ocispec specs.Spec, bundlePath, cid, console string, detach bool) (vc.ContainerConfig, error) {
+func ContainerConfig(ocispec specs.Spec, bundlePath, cid string, detach bool) (vc.ContainerConfig, error) {
 	rootfs := vc.RootFs{Target: ocispec.Root.Path, Mounted: true}
 	if !filepath.IsAbs(rootfs.Target) {
 		rootfs.Target = filepath.Join(bundlePath, ocispec.Root.Path)
@@ -962,7 +961,6 @@ func ContainerConfig(ocispec specs.Spec, bundlePath, cid, console string, detach
 		User:            strconv.FormatUint(uint64(ocispec.Process.User.UID), 10),
 		PrimaryGroup:    strconv.FormatUint(uint64(ocispec.Process.User.GID), 10),
 		Interactive:     ocispec.Process.Terminal,
-		Console:         console,
 		Detach:          detach,
 		NoNewPrivileges: ocispec.Process.NoNewPrivileges,
 	}

@@ -51,7 +51,7 @@ func TestCreateSandboxSuccess(t *testing.T) {
 
 	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
 
-	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
+	runtimeConfig, err := newTestRuntimeConfig(tmpdir, true)
 	assert.NoError(err)
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)
@@ -99,7 +99,7 @@ func TestCreateSandboxFail(t *testing.T) {
 
 	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
 
-	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
+	runtimeConfig, err := newTestRuntimeConfig(tmpdir, true)
 	assert.NoError(err)
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)
@@ -136,7 +136,7 @@ func TestCreateSandboxConfigFail(t *testing.T) {
 
 	tmpdir, bundlePath, _ := ktu.SetupOCIConfigFile(t)
 
-	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
+	runtimeConfig, err := newTestRuntimeConfig(tmpdir, true)
 	assert.NoError(err)
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)
@@ -185,7 +185,7 @@ func TestCreateContainerSuccess(t *testing.T) {
 
 	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
 
-	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
+	runtimeConfig, err := newTestRuntimeConfig(tmpdir, true)
 	assert.NoError(err)
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)
@@ -224,7 +224,7 @@ func TestCreateContainerFail(t *testing.T) {
 
 	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
 
-	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
+	runtimeConfig, err := newTestRuntimeConfig(tmpdir, true)
 	assert.NoError(err)
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)
@@ -274,7 +274,7 @@ func TestCreateContainerConfigFail(t *testing.T) {
 
 	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
 
-	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
+	runtimeConfig, err := newTestRuntimeConfig(tmpdir, true)
 	assert.NoError(err)
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)

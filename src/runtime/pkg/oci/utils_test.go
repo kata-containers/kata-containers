@@ -38,7 +38,6 @@ const (
 var (
 	tempRoot       = ""
 	tempBundlePath = ""
-	consolePath    = ""
 )
 
 func createConfig(fileName string, fileData string) (string, error) {
@@ -72,7 +71,6 @@ func TestMinimalSandboxConfig(t *testing.T) {
 
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
-		Console:        consolePath,
 	}
 
 	capList := []string{"CAP_AUDIT_WRITE", "CAP_KILL", "CAP_NET_BIND_SERVICE"}
@@ -94,7 +92,6 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		PrimaryGroup:        "0",
 		SupplementaryGroups: []string{"10", "29"},
 		Interactive:         true,
-		Console:             consolePath,
 		NoNewPrivileges:     true,
 		Capabilities: &specs.LinuxCapabilities{
 			Bounding:    capList,
@@ -181,7 +178,7 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		SystemdCgroup: true,
 	}
 
-	sandboxConfig, err := SandboxConfig(spec, runtimeConfig, tempBundlePath, containerID, consolePath, false, true)
+	sandboxConfig, err := SandboxConfig(spec, runtimeConfig, tempBundlePath, containerID, false, true)
 	assert.NoError(err)
 
 	assert.Exactly(sandboxConfig, expectedSandboxConfig)
@@ -452,7 +449,6 @@ func TestMain(m *testing.M) {
 	}
 
 	tempBundlePath = filepath.Join(tempRoot, "ocibundle")
-	consolePath = filepath.Join(tempRoot, "console")
 
 	/* Create temp bundle directory if necessary */
 	err = os.MkdirAll(tempBundlePath, dirMode)
@@ -513,7 +509,6 @@ func TestAddAssetAnnotations(t *testing.T) {
 
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
-		Console:        consolePath,
 	}
 
 	// Try annotations without enabling them first
@@ -567,7 +562,6 @@ func TestAddAgentAnnotations(t *testing.T) {
 
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
-		Console:        consolePath,
 	}
 
 	ocispec.Annotations[vcAnnotations.KernelModules] = strings.Join(expectedAgentConfig.KernelModules, KernelModulesSeparator)
@@ -594,7 +588,6 @@ func TestContainerPipeSizeAnnotation(t *testing.T) {
 
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
-		Console:        consolePath,
 	}
 
 	ocispec.Annotations[vcAnnotations.AgentContainerPipeSize] = "foo"
@@ -629,7 +622,6 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
-		Console:        consolePath,
 	}
 	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{".*"}
 	runtimeConfig.HypervisorConfig.FileBackedMemRootList = []string{"/dev/shm*"}
@@ -743,7 +735,6 @@ func TestAddProtectedHypervisorAnnotations(t *testing.T) {
 
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
-		Console:        consolePath,
 	}
 	ocispec.Annotations[vcAnnotations.KernelParams] = "vsyscall=emulate iommu=on"
 	err := addAnnotations(ocispec, &config, runtimeConfig)
@@ -809,7 +800,6 @@ func TestAddRuntimeAnnotations(t *testing.T) {
 
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
-		Console:        consolePath,
 	}
 
 	ocispec.Annotations[vcAnnotations.DisableGuestSeccomp] = "true"

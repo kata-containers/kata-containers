@@ -44,7 +44,7 @@ func TestFactoryCLIFunctionInit(t *testing.T) {
 
 	tmpdir := t.TempDir()
 
-	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
+	runtimeConfig, err := newTestRuntimeConfig(tmpdir, true)
 	assert.NoError(err)
 
 	set := flag.NewFlagSet("", 0)
@@ -91,7 +91,7 @@ func TestFactoryCLIFunctionDestroy(t *testing.T) {
 
 	tmpdir := t.TempDir()
 
-	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
+	runtimeConfig, err := newTestRuntimeConfig(tmpdir, true)
 	assert.NoError(err)
 
 	set := flag.NewFlagSet("", 0)
@@ -123,7 +123,7 @@ func TestFactoryCLIFunctionStatus(t *testing.T) {
 
 	tmpdir := t.TempDir()
 
-	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
+	runtimeConfig, err := newTestRuntimeConfig(tmpdir, true)
 	assert.NoError(err)
 
 	set := flag.NewFlagSet("", 0)
