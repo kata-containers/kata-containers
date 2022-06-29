@@ -1593,7 +1593,7 @@ func (s *Sandbox) ResumeContainer(ctx context.Context, containerID string) error
 }
 
 // createContainers registers all containers, create the
-// containers in the guest and starts one shim per container.
+// containers in the guest.
 func (s *Sandbox) createContainers(ctx context.Context) error {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "createContainers", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
