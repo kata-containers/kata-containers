@@ -1017,7 +1017,7 @@ func TestHypervisorDefaultsKernel(t *testing.T) {
 	assert.Equal(h.kernelParams(), kernelParams, "custom hypervisor kernel parameterms wrong")
 }
 
-// The default initrd path is not returned by h.initrd()
+// The default initrd path is not returned by h.initrd(), it isn't an error if path isn't provided
 func TestHypervisorDefaultsInitrd(t *testing.T) {
 	assert := assert.New(t)
 
@@ -1041,18 +1041,18 @@ func TestHypervisorDefaultsInitrd(t *testing.T) {
 	defaultInitrdPath = testInitrdPath
 	h := hypervisor{}
 	p, err := h.initrd()
-	assert.Error(err)
+	assert.NoError(err)
 	assert.Equal(p, "", "default Image path wrong")
 
 	// test path resolution
 	defaultInitrdPath = testInitrdLinkPath
 	h = hypervisor{}
 	p, err = h.initrd()
-	assert.Error(err)
+	assert.NoError(err)
 	assert.Equal(p, "")
 }
 
-// The default image path is not returned by h.image()
+// The default image path is not returned by h.image(), it isn't an error if path isn't provided
 func TestHypervisorDefaultsImage(t *testing.T) {
 	assert := assert.New(t)
 
@@ -1076,14 +1076,14 @@ func TestHypervisorDefaultsImage(t *testing.T) {
 	defaultImagePath = testImagePath
 	h := hypervisor{}
 	p, err := h.image()
-	assert.Error(err)
+	assert.NoError(err)
 	assert.Equal(p, "", "default Image path wrong")
 
 	// test path resolution
 	defaultImagePath = testImageLinkPath
 	h = hypervisor{}
 	p, err = h.image()
-	assert.Error(err)
+	assert.NoError(err)
 	assert.Equal(p, "")
 }
 

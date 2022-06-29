@@ -593,6 +593,10 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		s.Logger().WithError(err).Debug("restore sandbox failed")
 	}
 
+	if err := validateHypervisorConfig(&sandboxConfig.HypervisorConfig); err != nil {
+		return nil, err
+	}
+
 	// store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
