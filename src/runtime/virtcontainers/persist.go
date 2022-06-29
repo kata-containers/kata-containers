@@ -8,8 +8,9 @@ package virtcontainers
 import (
 	"errors"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
+	devconfig "github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
@@ -65,7 +66,7 @@ func (s *Sandbox) dumpHypervisor(ss *persistapi.SandboxState) {
 	ss.HypervisorState.BlockIndexMap = s.state.BlockIndexMap
 }
 
-func deviceToDeviceState(devices []api.Device) (dss []persistapi.DeviceState) {
+func deviceToDeviceState(devices []api.Device) (dss []devconfig.DeviceState) {
 	for _, dev := range devices {
 		dss = append(dss, dev.Save())
 	}
@@ -324,7 +325,7 @@ func (s *Sandbox) loadAgent(as persistapi.AgentState) {
 	}
 }
 
-func (s *Sandbox) loadDevices(devStates []persistapi.DeviceState) {
+func (s *Sandbox) loadDevices(devStates []devconfig.DeviceState) {
 	s.devManager.LoadDevices(devStates)
 }
 

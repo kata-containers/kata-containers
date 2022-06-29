@@ -7,16 +7,22 @@ package containerdshim
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"net/url"
 	"sync"
-	"syscall"
 
-	"github.com/containerd/fifo"
 	"github.com/sirupsen/logrus"
 )
 
-// The buffer size used to specify the buffer for IO streams copy
-const bufSize = 32 << 10
+const (
+	// The buffer size used to specify the buffer for IO streams copy
+	bufSize = 32 << 10
+
+	shimLogPluginBinary = "binary"
+	shimLogPluginFifo   = "fifo"
+	shimLogPluginFile   = "file"
+)
 
 var (
 	bufPool = sync.Pool{
@@ -27,76 +33,84 @@ var (
 	}
 )
 
+type stdio struct {
+	Stdin   string
+	Stdout  string
+	Stderr  string
+	Console bool
+}
+type IO interface {
+	io.Closer
+	Stdin() io.ReadCloser
+	Stdout() io.Writer
+	Stderr() io.Writer
+}
+
 type ttyIO struct {
-	Stdin  io.ReadCloser
-	Stdout io.Writer
-	Stderr io.Writer
+	io  IO
+	raw *stdio
 }
 
 func (tty *ttyIO) close() {
-
-	if tty.Stdin != nil {
-		tty.Stdin.Close()
-		tty.Stdin = nil
-	}
-	cf := func(w io.Writer) {
-		if w == nil {
-			return
-		}
-		if c, ok := w.(io.WriteCloser); ok {
-			c.Close()
-		}
-	}
-	cf(tty.Stdout)
-	cf(tty.Stderr)
+	tty.io.Close()
 }
 
-func newTtyIO(ctx context.Context, stdin, stdout, stderr string, console bool) (*ttyIO, error) {
-	var in io.ReadCloser
-	var outw io.Writer
-	var errw io.Writer
+// newTtyIO creates a new ttyIO struct.
+// ns(namespace)/id(container ID) are used for containerd binary IO.
+// containerd will pass the ns/id as ENV to the binary log driver,
+// and the binary log driver will use ns/id to get the log options config file.
+// for example nerdctl: https://github.com/containerd/nerdctl/blob/v0.21.0/pkg/logging/logging.go#L102
+func newTtyIO(ctx context.Context, ns, id, stdin, stdout, stderr string, console bool) (*ttyIO, error) {
 	var err error
+	var io IO
 
-	if stdin != "" {
-		in, err = fifo.OpenFifo(ctx, stdin, syscall.O_RDONLY|syscall.O_NONBLOCK, 0)
-		if err != nil {
-			return nil, err
-		}
+	raw := &stdio{
+		Stdin:   stdin,
+		Stdout:  stdout,
+		Stderr:  stderr,
+		Console: console,
 	}
 
-	if stdout != "" {
-		outw, err = fifo.OpenFifo(ctx, stdout, syscall.O_RDWR, 0)
-		if err != nil {
-			return nil, err
-		}
+	uri, err := url.Parse(stdout)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse stdout uri: %w", err)
 	}
 
-	if !console && stderr != "" {
-		errw, err = fifo.OpenFifo(ctx, stderr, syscall.O_RDWR, 0)
-		if err != nil {
-			return nil, err
-		}
+	if uri.Scheme == "" {
+		uri.Scheme = "fifo"
 	}
 
-	ttyIO := &ttyIO{
-		Stdin:  in,
-		Stdout: outw,
-		Stderr: errw,
+	switch uri.Scheme {
+	case shimLogPluginFifo:
+		io, err = newPipeIO(ctx, raw)
+	case shimLogPluginBinary:
+		io, err = newBinaryIO(ctx, ns, id, uri)
+	case shimLogPluginFile:
+		io, err = newFileIO(ctx, raw, uri)
+	default:
+		return nil, fmt.Errorf("unknown STDIO scheme %s", uri.Scheme)
 	}
 
-	return ttyIO, nil
+	if err != nil {
+		return nil, fmt.Errorf("failed to creat io stream: %w", err)
+	}
+
+	return &ttyIO{
+		io:  io,
+		raw: raw,
+	}, nil
 }
 
 func ioCopy(shimLog *logrus.Entry, exitch, stdinCloser chan struct{}, tty *ttyIO, stdinPipe io.WriteCloser, stdoutPipe, stderrPipe io.Reader) {
 	var wg sync.WaitGroup
 
-	if tty.Stdin != nil {
+	if tty.io.Stdin() != nil {
 		wg.Add(1)
 		go func() {
 			shimLog.Debug("stdin io stream copy started")
 			p := bufPool.Get().(*[]byte)
 			defer bufPool.Put(p)
-			io.CopyBuffer(stdinPipe, tty.Stdin, *p)
+			io.CopyBuffer(stdinPipe, tty.io.Stdin(), *p)
 			// notify that we can close process's io safely.
 			close(stdinCloser)
 			wg.Done()
@@ -104,30 +118,30 @@ func ioCopy(shimLog *logrus.Entry, exitch, stdinCloser chan struct{}, tty *ttyIO
 		}()
 	}
 
-	if tty.Stdout != nil {
+	if tty.io.Stdout() != nil {
 		wg.Add(1)
 
 		go func() {
 			shimLog.Debug("stdout io stream copy started")
 			p := bufPool.Get().(*[]byte)
 			defer bufPool.Put(p)
-			io.CopyBuffer(tty.Stdout, stdoutPipe, *p)
+			io.CopyBuffer(tty.io.Stdout(), stdoutPipe, *p)
 			wg.Done()
-			if tty.Stdin != nil {
+			if tty.io.Stdin() != nil {
 				// close stdin to make the other routine stop
-				tty.Stdin.Close()
+				tty.io.Stdin().Close()
 			}
 			shimLog.Debug("stdout io stream copy exited")
 		}()
 	}
 
-	if tty.Stderr != nil && stderrPipe != nil {
+	if tty.io.Stderr() != nil && stderrPipe != nil {
 		wg.Add(1)
 		go func() {
 			shimLog.Debug("stderr io stream copy started")
 			p := bufPool.Get().(*[]byte)
 			defer bufPool.Put(p)
-			io.CopyBuffer(tty.Stderr, stderrPipe, *p)
+			io.CopyBuffer(tty.io.Stderr(), stderrPipe, *p)
 			wg.Done()
 			shimLog.Debug("stderr io stream copy exited")
 		}()
@@ -137,4 +151,11 @@ func ioCopy(shimLog *logrus.Entry, exitch, stdinCloser chan struct{}, tty *ttyIO
 	tty.close()
 	close(exitch)
 	shimLog.Debug("all io stream copy goroutines exited")
+}
+
+func wc(w io.WriteCloser) error {
+	if w == nil {
+		return nil
+	}
+	return w.Close()
 }

@@ -36,7 +36,7 @@ fi
 
 echo "INFO: Apply patches from $patches_dir"
 if [ -d "$patches_dir" ]; then
-	patches=($(find "$patches_dir" -name '*.patch'|sort -t- -k1,1n))
+	patches=($(find "$patches_dir" -maxdepth 1 -name '*.patch'|sort -t- -k1,1n))
 	echo "INFO: Found ${#patches[@]} patches"
 	for patch in ${patches[@]}; do
 		echo "INFO: Apply $patch"
