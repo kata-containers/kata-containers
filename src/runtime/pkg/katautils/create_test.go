@@ -28,7 +28,6 @@ import (
 )
 
 const (
-	testConsole                 = "/dev/pts/999"
 	testContainerTypeAnnotation = "io.kubernetes.cri-o.ContainerType"
 	testSandboxIDAnnotation     = "io.kubernetes.cri-o.SandboxID"
 	testContainerTypeContainer  = "container"
@@ -50,7 +49,7 @@ func init() {
 }
 
 // newTestRuntimeConfig creates a new RuntimeConfig
-func newTestRuntimeConfig(dir, consolePath string, create bool) (oci.RuntimeConfig, error) {
+func newTestRuntimeConfig(dir string, create bool) (oci.RuntimeConfig, error) {
 	if dir == "" {
 		return oci.RuntimeConfig{}, errors.New("BUG: need directory")
 	}
@@ -63,7 +62,6 @@ func newTestRuntimeConfig(dir, consolePath string, create bool) (oci.RuntimeConf
 	return oci.RuntimeConfig{
 		HypervisorType:   vc.QemuHypervisor,
 		HypervisorConfig: hypervisorConfig,
-		Console:          consolePath,
 	}, nil
 }
 
@@ -213,7 +211,7 @@ func TestCreateSandboxConfigFail(t *testing.T) {
 
 	tmpdir, bundlePath, _ := ktu.SetupOCIConfigFile(t)
 
-	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
+	runtimeConfig, err := newTestRuntimeConfig(tmpdir, true)
 	assert.NoError(err)
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)
@@ -233,7 +231,7 @@ func TestCreateSandboxConfigFail(t *testing.T) {
 
 	rootFs := vc.RootFs{Mounted: true}
 
-	_, _, err = CreateSandbox(context.Background(), testingImpl, spec, runtimeConfig, rootFs, testContainerID, bundlePath, testConsole, true, true)
+	_, _, err = CreateSandbox(context.Background(), testingImpl, spec, runtimeConfig, rootFs, testContainerID, bundlePath, true, true)
 	assert.Error(err)
 }
 
@@ -246,7 +244,7 @@ func TestCreateSandboxFail(t *testing.T) {
 
 	tmpdir, bundlePath, _ := ktu.SetupOCIConfigFile(t)
 
-	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
+	runtimeConfig, err := newTestRuntimeConfig(tmpdir, true)
 	assert.NoError(err)
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)
@@ -254,7 +252,7 @@ func TestCreateSandboxFail(t *testing.T) {
 
 	rootFs := vc.RootFs{Mounted: true}
 
-	_, _, err = CreateSandbox(context.Background(), testingImpl, spec, runtimeConfig, rootFs, testContainerID, bundlePath, testConsole, true, true)
+	_, _, err = CreateSandbox(context.Background(), testingImpl, spec, runtimeConfig, rootFs, testContainerID, bundlePath, true, true)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 }
@@ -268,7 +266,7 @@ func TestCreateSandboxAnnotations(t *testing.T) {
 
 	tmpdir, bundlePath, _ := ktu.SetupOCIConfigFile(t)
 
-	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
+	runtimeConfig, err := newTestRuntimeConfig(tmpdir, true)
 	assert.NoError(err)
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)
@@ -290,7 +288,7 @@ func TestCreateSandboxAnnotations(t *testing.T) {
 		testingImpl.CreateSandboxFunc = nil
 	}()
 
-	sandbox, _, err := CreateSandbox(context.Background(), testingImpl, spec, runtimeConfig, rootFs, testContainerID, bundlePath, testConsole, true, true)
+	sandbox, _, err := CreateSandbox(context.Background(), testingImpl, spec, runtimeConfig, rootFs, testContainerID, bundlePath, true, true)
 	assert.NoError(err)
 
 	netNsPath, err := sandbox.Annotations("nerdctl/network-namespace")
@@ -356,7 +354,7 @@ func TestCreateContainerContainerConfigFail(t *testing.T) {
 	rootFs := vc.RootFs{Mounted: true}
 
 	for _, disableOutput := range []bool{true, false} {
-		_, err = CreateContainer(context.Background(), mockSandbox, spec, rootFs, testContainerID, bundlePath, testConsole, disableOutput, false)
+		_, err = CreateContainer(context.Background(), mockSandbox, spec, rootFs, testContainerID, bundlePath, disableOutput, false)
 		assert.Error(err)
 		assert.False(vcmock.IsMockError(err))
 		assert.True(strings.Contains(err.Error(), containerType))
@@ -383,7 +381,7 @@ func TestCreateContainerFail(t *testing.T) {
 	rootFs := vc.RootFs{Mounted: true}
 
 	for _, disableOutput := range []bool{true, false} {
-		_, err = CreateContainer(context.Background(), mockSandbox, spec, rootFs, testContainerID, bundlePath, testConsole, disableOutput, false)
+		_, err = CreateContainer(context.Background(), mockSandbox, spec, rootFs, testContainerID, bundlePath, disableOutput, false)
 		assert.Error(err)
 		assert.True(vcmock.IsMockError(err))
 	}
@@ -417,7 +415,7 @@ func TestCreateContainer(t *testing.T) {
 	rootFs := vc.RootFs{Mounted: true}
 
 	for _, disableOutput := range []bool{true, false} {
-		_, err = CreateContainer(context.Background(), mockSandbox, spec, rootFs, testContainerID, bundlePath, testConsole, disableOutput, false)
+		_, err = CreateContainer(context.Background(), mockSandbox, spec, rootFs, testContainerID, bundlePath, disableOutput, false)
 		assert.NoError(err)
 	}
 }
