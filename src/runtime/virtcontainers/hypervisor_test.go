@@ -8,7 +8,6 @@ package virtcontainers
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
@@ -252,55 +251,6 @@ func TestAddKernelParamInvalid(t *testing.T) {
 
 	err := config.AddKernelParam(invalid[0])
 	assert.Error(err)
-}
-
-func TestGetHostMemorySizeKb(t *testing.T) {
-	assert := assert.New(t)
-	type testData struct {
-		contents       string
-		expectedResult int
-		expectError    bool
-	}
-
-	data := []testData{
-		{
-			`
-			MemTotal:      1 kB
-			MemFree:       2 kB
-			SwapTotal:     3 kB
-			SwapFree:      4 kB
-			`,
-			1024,
-			false,
-		},
-		{
-			`
-			MemFree:       2 kB
-			SwapTotal:     3 kB
-			SwapFree:      4 kB
-			`,
-			0,
-			true,
-		},
-	}
-
-	dir := t.TempDir()
-
-	file := filepath.Join(dir, "meminfo")
-	_, err := GetHostMemorySizeKb(file)
-	assert.Error(err)
-
-	for _, d := range data {
-		err = os.WriteFile(file, []byte(d.contents), os.FileMode(0640))
-		assert.NoError(err)
-		defer os.Remove(file)
-
-		hostMemKb, err := GetHostMemorySizeKb(file)
-
-		assert.False((d.expectError && err == nil))
-		assert.False((!d.expectError && err != nil))
-		assert.NotEqual(hostMemKb, d.expectedResult)
-	}
 }
 
 func TestCheckCmdline(t *testing.T) {
