@@ -226,6 +226,7 @@ type RuntimeConfigOptions struct {
 	DefaultVCPUCount     uint32
 	DefaultMaxVCPUCount  uint32
 	DefaultMemSize       uint32
+	DefaultMaxMemorySize uint64
 	DefaultMsize9p       uint32
 	DisableBlock         bool
 	EnableIOThreads      bool

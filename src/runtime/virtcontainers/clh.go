@@ -475,12 +475,9 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	// Enable hugepages if needed
 	clh.vmconfig.Memory.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
 	if !clh.config.ConfidentialGuest {
-		hostMemKb, err := GetHostMemorySizeKb(procMemInfo)
-		if err != nil {
-			return nil
-		}
+		hotplugSize := clh.config.DefaultMaxMemorySize
 		// OpenAPI only supports int64 values
-		clh.vmconfig.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hostMemKb) * utils.KiB).ToBytes()))
+		clh.vmconfig.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hotplugSize) * utils.MiB).ToBytes()))
 	}
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs), int32(clh.config.DefaultMaxVCPUs))
@@ -875,6 +872,11 @@ func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, m
 	info, err := clh.vmInfo()
 	if err != nil {
 		return 0, MemoryDevice{}, err
+	}
+
+	maxHotplugSize := utils.MemUnit(*info.Config.Memory.HotplugSize) * utils.Byte
+	if reqMemMB > uint32(maxHotplugSize.ToMiB()) {
+		reqMemMB = uint32(maxHotplugSize.ToMiB())
 	}
 
 	currentMem := utils.MemUnit(info.Config.Memory.Size) * utils.Byte
