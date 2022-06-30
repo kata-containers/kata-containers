@@ -95,6 +95,14 @@ install_cc_image() {
 	"${rootfs_builder}" --imagetype=image --prefix="${cc_prefix}" --destdir="${destdir}"
 }
 
+#Install all components that are not assets
+install_cc_shimv2() {
+	GO_VERSION="$(yq r ${versions_yaml} languages.golang.meta.newest-version)"
+	export GO_VERSION
+	export REMOVE_VMM_CONFIGS="acrn fc"
+	DESTDIR="${destdir}" PREFIX="${cc_prefix}" EXTRA_OPTS="DEFSERVICEOFFLOAD=true" "${shimv2_builder}"
+}
+
 #Install guest image
 install_image() {
 	info "Create image"
@@ -194,6 +202,8 @@ handle_build() {
 
 	cc-rootfs-image) install_cc_image ;;
 
+	cc-shim-v2) install_cc_shimv2 ;;
+
 	cloud-hypervisor) install_clh ;;
 
 	firecracker) install_firecracker ;;
@@ -242,6 +252,7 @@ main() {
 	local silent
 	build_targets=(
 		cc-rootfs-image
+		cc-shim-v2
 		cloud-hypervisor
 		firecracker
 		kernel
