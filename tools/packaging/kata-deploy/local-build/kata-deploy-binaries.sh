@@ -238,6 +238,15 @@ handle_build() {
 		install_virtiofsd
 		;;
 
+	cc)
+		install_cc_clh
+		install_cc_kernel
+		install_cc_qemu
+		install_cc_image
+		install_cc_shimv2
+		install_cc_virtiofsd
+		;;
+
 	cc-cloud-hypervisor) install_cc_clh ;;
 
 	cc-kernel) install_cc_kernel ;;
