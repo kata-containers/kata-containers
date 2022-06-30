@@ -72,3 +72,6 @@ image: kata-tarball
 
 cc-rootfs-image-tarball:
 	${MAKE} $@-build
+
+cc-shim-v2-tarball:
+	${MAKE} $@-build
