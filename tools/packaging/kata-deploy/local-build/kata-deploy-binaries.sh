@@ -81,6 +81,13 @@ options:
 	rootfs-initrd
 	shim-v2
 	virtiofsd
+	cc
+	cc-cloud-hypervisor
+	cc-kernel
+	cc-qemu
+	cc-rootfs-image
+	cc-shimv2
+	cc-virtiofsd
 EOF
 
 	exit "${return_code}"
