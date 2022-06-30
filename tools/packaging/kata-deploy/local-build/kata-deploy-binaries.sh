@@ -108,6 +108,12 @@ install_cc_image() {
 	"${rootfs_builder}" --imagetype=image --prefix="${cc_prefix}" --destdir="${destdir}"
 }
 
+#Install CC kernel asset
+install_cc_kernel() {
+	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
+	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -f -v "${kernel_version}"
+}
+
 #Install all components that are not assets
 install_cc_shimv2() {
 	GO_VERSION="$(yq r ${versions_yaml} languages.golang.meta.newest-version)"
@@ -214,6 +220,8 @@ handle_build() {
 		;;
 
 	cc-cloud-hypervisor) install_cc_clh ;;
+
+	cc-kernel) install_cc_kernel ;;
 
 	cc-rootfs-image) install_cc_image ;;
 

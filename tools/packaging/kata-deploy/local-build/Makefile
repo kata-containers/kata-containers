@@ -73,6 +73,9 @@ image: kata-tarball
 cc-cloud-hypervisor-tarball:
 	${MAKE} $@-build
 
+cc-kernel-tarball:
+	${MAKE} $@-build
+
 cc-rootfs-image-tarball:
 	${MAKE} $@-build
 
