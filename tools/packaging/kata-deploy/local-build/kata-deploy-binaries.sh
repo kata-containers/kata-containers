@@ -31,6 +31,7 @@ readonly virtiofsd_builder="${static_build_dir}/virtiofsd/build-static-virtiofsd
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
 
 readonly cc_prefix="/opt/confidential-containers"
+readonly qemu_cc_builder="${static_build_dir}/qemu/build-static-qemu-cc.sh"
 
 ARCH=$(uname -m)
 
@@ -112,6 +113,15 @@ install_cc_image() {
 install_cc_kernel() {
 	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -f -v "${kernel_version}"
+}
+
+# Install static CC qemu asset
+install_cc_qemu() {
+	info "build static CC qemu"
+	export qemu_repo="$(yq r $versions_yaml assets.hypervisor.qemu.url)"
+	export qemu_version="$(yq r $versions_yaml assets.hypervisor.qemu.version)"
+	"${qemu_cc_builder}"
+	tar xvf "${builddir}/kata-static-qemu-cc.tar.gz" -C "${destdir}"
 }
 
 #Install all components that are not assets
@@ -222,6 +232,8 @@ handle_build() {
 	cc-cloud-hypervisor) install_cc_clh ;;
 
 	cc-kernel) install_cc_kernel ;;
+
+	cc-qemu) install_cc_qemu ;;
 
 	cc-rootfs-image) install_cc_image ;;
 

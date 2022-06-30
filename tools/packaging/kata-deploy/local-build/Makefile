@@ -76,6 +76,9 @@ cc-cloud-hypervisor-tarball:
 cc-kernel-tarball:
 	${MAKE} $@-build
 
+cc-qemu-tarball:
+	${MAKE} $@-build
+
 cc-rootfs-image-tarball:
 	${MAKE} $@-build
 
