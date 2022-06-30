@@ -84,3 +84,6 @@ cc-rootfs-image-tarball:
 
 cc-shim-v2-tarball:
 	${MAKE} $@-build
+
+cc-virtiofsd-tarball:
+	${MAKE} $@-build

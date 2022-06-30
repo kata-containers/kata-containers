@@ -132,6 +132,15 @@ install_cc_shimv2() {
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" EXTRA_OPTS="DEFSERVICEOFFLOAD=true" "${shimv2_builder}"
 }
 
+# Install static CC virtiofsd asset
+install_cc_virtiofsd() {
+	info "build static CC virtiofsd"
+	"${virtiofsd_builder}"
+	info "Install static CC virtiofsd"
+	mkdir -p "${destdir}/${cc_prefix}/libexec/"
+	sudo install -D --owner root --group root --mode 0744 virtiofsd/virtiofsd "${destdir}/${cc_prefix}/libexec/virtiofsd"
+}
+
 #Install guest image
 install_image() {
 	info "Create image"
@@ -238,6 +247,8 @@ handle_build() {
 	cc-rootfs-image) install_cc_image ;;
 
 	cc-shim-v2) install_cc_shimv2 ;;
+
+	cc-virtiofsd) install_cc_virtiofsd ;;
 
 	cloud-hypervisor) install_clh ;;
 
