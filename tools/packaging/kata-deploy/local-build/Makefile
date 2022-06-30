@@ -70,6 +70,13 @@ install-tarball:
 image: kata-tarball
 	$(MK_DIR)kata-deploy-build-and-upload-image.sh $(CURDIR)/kata-static.tar.xz
 
+cc: cc-cloud-hypervisor-tarball \
+	cc-kernel-tarball \
+	cc-qemu-tarball \
+	cc-rootfs-image-tarball \
+	cc-shim-v2-tarball \
+	cc-virtiofsd-tarball
+
 cc-cloud-hypervisor-tarball:
 	${MAKE} $@-build
 
