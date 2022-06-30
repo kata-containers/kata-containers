@@ -85,6 +85,19 @@ EOF
 	exit "${return_code}"
 }
 
+# Install static CC cloud-hypervisor asset
+install_cc_clh() {
+	if [[ "${ARCH}" == "x86_64" ]]; then
+		export features="tdx"
+	fi
+
+	info "build static CC cloud-hypervisor"
+	"${clh_builder}"
+	info "Install static CC cloud-hypervisor"
+	mkdir -p "${destdir}/${cc_prefix}/bin/"
+	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor/cloud-hypervisor "${destdir}/${cc_prefix}/bin/cloud-hypervisor"
+}
+
 #Install cc capable guest image
 install_cc_image() {
 	info "Create CC image"
@@ -199,6 +212,8 @@ handle_build() {
 		install_shimv2
 		install_virtiofsd
 		;;
+
+	cc-cloud-hypervisor) install_cc_clh ;;
 
 	cc-rootfs-image) install_cc_image ;;
 
