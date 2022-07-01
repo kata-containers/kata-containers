@@ -29,12 +29,12 @@ fi
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${repo_root_dir}/src/runtime" \
 	"${container_image}" \
-	bash -c "make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch}"
+	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch}"
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${repo_root_dir}/src/runtime" \
 	"${container_image}" \
-	bash -c "make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}" install"
+	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}" install"
 
 sudo sed -i -e '/^initrd =/d' "${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-qemu.toml"
 sudo sed -i -e '/^initrd =/d' "${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-fc.toml"
