@@ -222,7 +222,7 @@ pub trait BaseContainer {
     async fn start(&mut self, p: Process) -> Result<()>;
     async fn run(&mut self, p: Process) -> Result<()>;
     async fn destroy(&mut self) -> Result<()>;
-    fn exec(&mut self) -> Result<()>;
+    async fn exec(&mut self) -> Result<()>;
 }
 
 // LinuxContainer protected by Mutex
@@ -632,11 +632,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     if oci_process.capabilities.is_some() {
         let c = oci_process.capabilities.as_ref().unwrap();
         capabilities::drop_privileges(cfd_log, c)?;
-    }
-
-    if init {
-        // notify parent to run poststart hooks
-        write_sync(cwfd, SYNC_SUCCESS, "")?;
     }
 
     let args = oci_process.args.to_vec();
@@ -1054,7 +1049,7 @@ impl BaseContainer for LinuxContainer {
         self.start(p).await?;
 
         if init {
-            self.exec()?;
+            self.exec().await?;
             self.status.transition(ContainerState::Running);
         }
 
@@ -1102,7 +1097,7 @@ impl BaseContainer for LinuxContainer {
         Ok(())
     }
 
-    fn exec(&mut self) -> Result<()> {
+    async fn exec(&mut self) -> Result<()> {
         let fifo = format!("{}/{}", &self.root, EXEC_FIFO_FILENAME);
         let fd = fcntl::open(fifo.as_str(), OFlag::O_WRONLY, Mode::from_bits_truncate(0))?;
         let data: &[u8] = &[0];
@@ -1114,6 +1109,26 @@ impl BaseContainer for LinuxContainer {
             .as_secs();
 
         self.status.transition(ContainerState::Running);
+
+        let spec = self
+            .config
+            .spec
+            .as_ref()
+            .ok_or_else(|| anyhow!("OCI spec was not found"))?;
+        let st = self.oci_state()?;
+
+        // run poststart hook
+        if spec.hooks.is_some() {
+            info!(self.logger, "poststart hook");
+            let hooks = spec
+                .hooks
+                .as_ref()
+                .ok_or_else(|| anyhow!("OCI hooks were not found"))?;
+            for h in hooks.poststart.iter() {
+                execute_hook(&self.logger, h, &st).await?;
+            }
+        }
+
         unistd::close(fd)?;
 
         Ok(())
@@ -1335,20 +1350,6 @@ async fn join_namespaces(
         // notify child run prestart hooks completed
         info!(logger, "notify child run prestart hook completed!");
         write_async(pipe_w, SYNC_SUCCESS, "").await?;
-
-        info!(logger, "notify child parent ready to run poststart hook!");
-        // wait to run poststart hook
-        read_async(pipe_r).await?;
-        info!(logger, "get ready to run poststart hook!");
-
-        // run poststart hook
-        if spec.hooks.is_some() {
-            info!(logger, "poststart hook");
-            let hooks = spec.hooks.as_ref().unwrap();
-            for h in hooks.poststart.iter() {
-                execute_hook(&logger, h, st).await?;
-            }
-        }
     }
 
     info!(logger, "wait for child process ready to run exec");
@@ -2090,9 +2091,10 @@ mod tests {
         assert!(ret.is_ok(), "Expecting Ok, Got {:?}", ret);
     }
 
-    #[test]
-    fn test_linuxcontainer_exec() {
-        let ret = new_linux_container_and_then(|mut c: LinuxContainer| c.exec());
+    #[tokio::test]
+    async fn test_linuxcontainer_exec() {
+        let (c, _dir) = new_linux_container();
+        let ret = c.unwrap().exec().await;
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
     }
 
