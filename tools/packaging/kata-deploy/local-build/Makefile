@@ -70,8 +70,32 @@ install-tarball:
 image: kata-tarball
 	$(MK_DIR)kata-deploy-build-and-upload-image.sh $(CURDIR)/kata-static.tar.xz
 
+cc-tarball: | cc-parallel merge-builds
+
+cc-parallel: $(MK_DIR)/dockerbuild/install_yq.sh
+	${MAKE} -f $(MK_PATH) cc -j$$(( $$(nproc) - 1  )) V=
+
+cc: cc-cloud-hypervisor-tarball \
+	cc-kernel-tarball \
+	cc-qemu-tarball \
+	cc-rootfs-image-tarball \
+	cc-shim-v2-tarball \
+	cc-virtiofsd-tarball
+
+cc-cloud-hypervisor-tarball:
+	${MAKE} $@-build
+
+cc-kernel-tarball:
+	${MAKE} $@-build
+
+cc-qemu-tarball:
+	${MAKE} $@-build
+
 cc-rootfs-image-tarball:
 	${MAKE} $@-build
 
 cc-shim-v2-tarball:
+	${MAKE} $@-build
+
+cc-virtiofsd-tarball:
 	${MAKE} $@-build

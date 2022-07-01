@@ -31,6 +31,7 @@ readonly virtiofsd_builder="${static_build_dir}/virtiofsd/build-static-virtiofsd
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
 
 readonly cc_prefix="/opt/confidential-containers"
+readonly qemu_cc_builder="${static_build_dir}/qemu/build-static-qemu-cc.sh"
 
 ARCH=$(uname -m)
 
@@ -80,9 +81,29 @@ options:
 	rootfs-initrd
 	shim-v2
 	virtiofsd
+	cc
+	cc-cloud-hypervisor
+	cc-kernel
+	cc-qemu
+	cc-rootfs-image
+	cc-shimv2
+	cc-virtiofsd
 EOF
 
 	exit "${return_code}"
+}
+
+# Install static CC cloud-hypervisor asset
+install_cc_clh() {
+	if [[ "${ARCH}" == "x86_64" ]]; then
+		export features="tdx"
+	fi
+
+	info "build static CC cloud-hypervisor"
+	"${clh_builder}"
+	info "Install static CC cloud-hypervisor"
+	mkdir -p "${destdir}/${cc_prefix}/bin/"
+	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor/cloud-hypervisor "${destdir}/${cc_prefix}/bin/cloud-hypervisor"
 }
 
 #Install cc capable guest image
@@ -95,12 +116,36 @@ install_cc_image() {
 	"${rootfs_builder}" --imagetype=image --prefix="${cc_prefix}" --destdir="${destdir}"
 }
 
+#Install CC kernel asset
+install_cc_kernel() {
+	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
+	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -f -v "${kernel_version}"
+}
+
+# Install static CC qemu asset
+install_cc_qemu() {
+	info "build static CC qemu"
+	export qemu_repo="$(yq r $versions_yaml assets.hypervisor.qemu.url)"
+	export qemu_version="$(yq r $versions_yaml assets.hypervisor.qemu.version)"
+	"${qemu_cc_builder}"
+	tar xvf "${builddir}/kata-static-qemu-cc.tar.gz" -C "${destdir}"
+}
+
 #Install all components that are not assets
 install_cc_shimv2() {
 	GO_VERSION="$(yq r ${versions_yaml} languages.golang.meta.newest-version)"
 	export GO_VERSION
 	export REMOVE_VMM_CONFIGS="acrn fc"
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" EXTRA_OPTS="DEFSERVICEOFFLOAD=true" "${shimv2_builder}"
+}
+
+# Install static CC virtiofsd asset
+install_cc_virtiofsd() {
+	info "build static CC virtiofsd"
+	"${virtiofsd_builder}"
+	info "Install static CC virtiofsd"
+	mkdir -p "${destdir}/${cc_prefix}/libexec/"
+	sudo install -D --owner root --group root --mode 0744 virtiofsd/virtiofsd "${destdir}/${cc_prefix}/libexec/virtiofsd"
 }
 
 #Install guest image
@@ -200,9 +245,26 @@ handle_build() {
 		install_virtiofsd
 		;;
 
+	cc)
+		install_cc_clh
+		install_cc_kernel
+		install_cc_qemu
+		install_cc_image
+		install_cc_shimv2
+		install_cc_virtiofsd
+		;;
+
+	cc-cloud-hypervisor) install_cc_clh ;;
+
+	cc-kernel) install_cc_kernel ;;
+
+	cc-qemu) install_cc_qemu ;;
+
 	cc-rootfs-image) install_cc_image ;;
 
 	cc-shim-v2) install_cc_shimv2 ;;
+
+	cc-virtiofsd) install_cc_virtiofsd ;;
 
 	cloud-hypervisor) install_clh ;;
 
