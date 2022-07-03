@@ -966,15 +966,6 @@ pub mod tests {
     fn test_vcpu_check_io_port_info() {
         let (vcpu, _receiver) = create_vcpu();
 
-        // boot complete signal
-        let res = vcpu
-            .check_io_port_info(
-                MAGIC_IOPORT_SIGNAL_GUEST_BOOT_COMPLETE,
-                &[MAGIC_VALUE_SIGNAL_GUEST_BOOT_COMPLETE],
-            )
-            .unwrap();
-        assert!(res);
-
         // debug info signal
         let res = vcpu
             .check_io_port_info(MAGIC_IOPORT_DEBUG_INFO, &[0, 0, 0, 0])
