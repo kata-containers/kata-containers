@@ -30,7 +30,6 @@ macro_rules! get_bucket_update {
         }
     }};
 }
-pub(crate) use get_bucket_update;
 
 /// Trait for generic configuration information.
 pub trait ConfigItem {
@@ -414,7 +413,7 @@ mod tests {
         Exist,
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Default)]
     pub struct DummyConfigInfo {
         id: String,
         content: String,

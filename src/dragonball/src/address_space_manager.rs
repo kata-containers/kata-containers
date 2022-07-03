@@ -867,8 +867,8 @@ mod tests {
         assert_eq!(&builder.get_next_mem_file(), "/tmp/shmem");
         assert_eq!(builder.mem_index, 3);
 
-        builder.set_prealloc(true);
-        builder.set_dirty_page_logging(true);
+        builder.toggle_prealloc(true);
+        builder.toggle_dirty_page_logging(true);
         assert!(builder.mem_prealloc);
         assert!(builder.dirty_page_logging);
     }
