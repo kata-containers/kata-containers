@@ -10,7 +10,6 @@ use std::fs::File;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
 use log::{debug, error, info, warn};
-use vmm_sys_util::eventfd::EventFd;
 
 use crate::error::{Result, StartMicrovmError, StopMicrovmError};
 use crate::event_manager::EventManager;
