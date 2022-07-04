@@ -36,7 +36,7 @@ mod event_manager;
 mod io_manager;
 mod vmm;
 
-pub use self::error::StartMicrovmError;
+pub use self::error::StartMicroVmError;
 pub use self::io_manager::IoManagerCached;
 pub use self::vmm::Vmm;
 

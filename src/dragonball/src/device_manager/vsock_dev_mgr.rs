@@ -17,7 +17,7 @@ use dbs_virtio_devices::vsock::Vsock;
 use dbs_virtio_devices::Error as VirtioError;
 use serde_derive::{Deserialize, Serialize};
 
-use super::StartMicrovmError;
+use super::StartMicroVmError;
 use crate::config_manager::{ConfigItem, DeviceConfigInfo, DeviceConfigInfos};
 use crate::device_manager::{DeviceManager, DeviceOpContext};
 
@@ -185,11 +185,11 @@ impl VsockDeviceMgr {
     pub fn attach_devices(
         &mut self,
         ctx: &mut DeviceOpContext,
-    ) -> std::result::Result<(), StartMicrovmError> {
+    ) -> std::result::Result<(), StartMicroVmError> {
         let epoll_mgr = ctx
             .epoll_mgr
             .clone()
-            .ok_or(StartMicrovmError::CreateVsockDevice(
+            .ok_or(StartMicroVmError::CreateVsockDevice(
                 virtio::Error::InvalidInput,
             ))?;
 
@@ -209,32 +209,32 @@ impl VsockDeviceMgr {
                     epoll_mgr.clone(),
                 )
                 .map_err(VirtioError::VirtioVsockError)
-                .map_err(StartMicrovmError::CreateVsockDevice)?,
+                .map_err(StartMicroVmError::CreateVsockDevice)?,
             );
             if let Some(uds_path) = info.config.uds_path.as_ref() {
                 let unix_backend = VsockUnixStreamBackend::new(uds_path.clone())
                     .map_err(VirtioError::VirtioVsockError)
-                    .map_err(StartMicrovmError::CreateVsockDevice)?;
+                    .map_err(StartMicroVmError::CreateVsockDevice)?;
                 device
                     .add_backend(Box::new(unix_backend), true)
                     .map_err(VirtioError::VirtioVsockError)
-                    .map_err(StartMicrovmError::CreateVsockDevice)?;
+                    .map_err(StartMicroVmError::CreateVsockDevice)?;
             }
             if let Some(tcp_addr) = info.config.tcp_addr.as_ref() {
                 let tcp_backend = VsockTcpBackend::new(tcp_addr.clone())
                     .map_err(VirtioError::VirtioVsockError)
-                    .map_err(StartMicrovmError::CreateVsockDevice)?;
+                    .map_err(StartMicroVmError::CreateVsockDevice)?;
                 device
                     .add_backend(Box::new(tcp_backend), false)
                     .map_err(VirtioError::VirtioVsockError)
-                    .map_err(StartMicrovmError::CreateVsockDevice)?;
+                    .map_err(StartMicroVmError::CreateVsockDevice)?;
             }
             // add inner backend to the the first added vsock device
             if let Some(inner_backend) = self.default_inner_backend.take() {
                 device
                     .add_backend(Box::new(inner_backend), false)
                     .map_err(VirtioError::VirtioVsockError)
-                    .map_err(StartMicrovmError::CreateVsockDevice)?;
+                    .map_err(StartMicroVmError::CreateVsockDevice)?;
             }
             let device = DeviceManager::create_mmio_virtio_device_with_features(
                 device,
@@ -243,7 +243,7 @@ impl VsockDeviceMgr {
                 info.config.use_shared_irq.unwrap_or(self.use_shared_irq),
                 info.config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
             )
-            .map_err(StartMicrovmError::RegisterVsockDevice)?;
+            .map_err(StartMicroVmError::RegisterVsockDevice)?;
             info.device = Some(device);
         }
 
