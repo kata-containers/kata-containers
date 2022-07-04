@@ -85,12 +85,12 @@ impl Vmm {
     }
 
     /// Get a reference to a virtual machine managed by the VMM.
-    pub fn get_vm_by_id(&self, _id: &str) -> Option<&Vm> {
+    pub fn get_vm(&self) -> Option<&Vm> {
         Some(&self.vm)
     }
 
     /// Get a mutable reference to a virtual machine managed by the VMM.
-    pub fn get_vm_by_id_mut(&mut self, _id: &str) -> Option<&mut Vm> {
+    pub fn get_vm_mut(&mut self) -> Option<&mut Vm> {
         Some(&mut self.vm)
     }
 
@@ -156,7 +156,7 @@ impl Vmm {
     /// Waits for all vCPUs to exit and terminates the Dragonball process.
     fn stop(&mut self, exit_code: i32) -> i32 {
         info!("Vmm is stopping.");
-        if let Some(vm) = self.get_vm_by_id_mut("") {
+        if let Some(vm) = self.get_vm_mut() {
             if vm.is_vm_initialized() {
                 if let Err(e) = vm.remove_devices() {
                     warn!("failed to remove devices: {:?}", e);
