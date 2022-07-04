@@ -323,11 +323,11 @@ impl DeviceOpContext {
     }
 }
 
-#[cfg(not(feature = "hotplug"))]
+#[cfg(all(feature = "hotplug", not(feature = "dbs-upcall")))]
 impl DeviceOpContext {
     pub(crate) fn insert_hotplug_mmio_device(
         &self,
-        _dev: &Arc<dyn DeviceIo>,
+        _dev: &Arc<DbsMmioV2Device>,
         _callback: Option<()>,
     ) -> Result<()> {
         Err(DeviceMgrError::InvalidOperation)
