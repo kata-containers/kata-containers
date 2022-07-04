@@ -20,7 +20,7 @@ use slog::info;
 use vm_memory::{Address, Bytes, GuestAddress, GuestAddressSpace, GuestMemory};
 
 use crate::address_space_manager::{GuestAddressSpaceImpl, GuestMemoryImpl};
-use crate::error::{Error, Result, StartMicrovmError};
+use crate::error::{Error, Result, StartMicroVmError};
 use crate::event_manager::EventManager;
 use crate::vm::{Vm, VmError};
 
@@ -183,7 +183,7 @@ impl Vm {
         epoll_mgr: EpollManager,
         vm_as: GuestAddressSpaceImpl,
         request_ts: TimestampUs,
-    ) -> std::result::Result<(), StartMicrovmError> {
+    ) -> std::result::Result<(), StartMicroVmError> {
         info!(self.logger, "VM: start initializing microvm ...");
 
         self.init_tss()?;
@@ -195,9 +195,9 @@ impl Vm {
 
         let reset_event_fd = self.device_manager.get_reset_eventfd().unwrap();
         self.vcpu_manager()
-            .map_err(StartMicrovmError::Vcpu)?
+            .map_err(StartMicroVmError::Vcpu)?
             .set_reset_event_fd(reset_event_fd)
-            .map_err(StartMicrovmError::Vcpu)?;
+            .map_err(StartMicroVmError::Vcpu)?;
 
         if self.vm_config.cpu_pm == "on" {
             // TODO: add cpu_pm support. issue #4590.
@@ -207,9 +207,9 @@ impl Vm {
         let vm_memory = vm_as.memory();
         let kernel_loader_result = self.load_kernel(vm_memory.deref())?;
         self.vcpu_manager()
-            .map_err(StartMicrovmError::Vcpu)?
+            .map_err(StartMicroVmError::Vcpu)?
             .create_boot_vcpus(request_ts, kernel_loader_result.kernel_load)
-            .map_err(StartMicrovmError::Vcpu)?;
+            .map_err(StartMicroVmError::Vcpu)?;
 
         info!(self.logger, "VM: initializing microvm done");
         Ok(())
@@ -224,10 +224,10 @@ impl Vm {
         vm_memory: &GuestMemoryImpl,
         cmdline: &Cmdline,
         initrd: Option<InitrdConfig>,
-    ) -> std::result::Result<(), StartMicrovmError> {
+    ) -> std::result::Result<(), StartMicroVmError> {
         let cmdline_addr = GuestAddress(dbs_boot::layout::CMDLINE_START);
         linux_loader::loader::load_cmdline(vm_memory, cmdline_addr, cmdline)
-            .map_err(StartMicrovmError::LoadCommandline)?;
+            .map_err(StartMicroVmError::LoadCommandline)?;
 
         configure_system(
             vm_memory,
@@ -239,27 +239,27 @@ impl Vm {
             self.vm_config.max_vcpu_count,
             self.vm_config.reserve_memory_bytes,
         )
-        .map_err(StartMicrovmError::ConfigureSystem)
+        .map_err(StartMicroVmError::ConfigureSystem)
     }
 
     /// Initializes the guest memory.
-    pub(crate) fn init_tss(&mut self) -> std::result::Result<(), StartMicrovmError> {
+    pub(crate) fn init_tss(&mut self) -> std::result::Result<(), StartMicroVmError> {
         self.vm_fd
             .set_tss_address(dbs_boot::layout::KVM_TSS_ADDRESS.try_into().unwrap())
-            .map_err(|e| StartMicrovmError::ConfigureVm(VmError::VmSetup(e)))
+            .map_err(|e| StartMicroVmError::ConfigureVm(VmError::VmSetup(e)))
     }
 
     /// Creates the irq chip and an in-kernel device model for the PIT.
     pub(crate) fn setup_interrupt_controller(
         &mut self,
-    ) -> std::result::Result<(), StartMicrovmError> {
+    ) -> std::result::Result<(), StartMicroVmError> {
         self.vm_fd
             .create_irq_chip()
-            .map_err(|e| StartMicrovmError::ConfigureVm(VmError::VmSetup(e)))
+            .map_err(|e| StartMicroVmError::ConfigureVm(VmError::VmSetup(e)))
     }
 
     /// Creates an in-kernel device model for the PIT.
-    pub(crate) fn create_pit(&self) -> std::result::Result<(), StartMicrovmError> {
+    pub(crate) fn create_pit(&self) -> std::result::Result<(), StartMicroVmError> {
         info!(self.logger, "VM: create pit");
         // We need to enable the emulation of a dummy speaker port stub so that writing to port 0x61
         // (i.e. KVM_SPEAKER_BASE_ADDRESS) does not trigger an exit to user space.
@@ -272,20 +272,20 @@ impl Vm {
         // correct amount of memory from our pointer, and we verify the return result.
         self.vm_fd
             .create_pit2(pit_config)
-            .map_err(|e| StartMicrovmError::ConfigureVm(VmError::VmSetup(e)))
+            .map_err(|e| StartMicroVmError::ConfigureVm(VmError::VmSetup(e)))
     }
 
     pub(crate) fn register_events(
         &mut self,
         event_mgr: &mut EventManager,
-    ) -> std::result::Result<(), StartMicrovmError> {
+    ) -> std::result::Result<(), StartMicroVmError> {
         let reset_evt = self
             .device_manager
             .get_reset_eventfd()
-            .map_err(StartMicrovmError::DeviceManager)?;
+            .map_err(StartMicroVmError::DeviceManager)?;
         event_mgr
             .register_exit_eventfd(&reset_evt)
-            .map_err(|_| StartMicrovmError::RegisterEvent)?;
+            .map_err(|_| StartMicroVmError::RegisterEvent)?;
         self.reset_eventfd = Some(reset_evt);
 
         Ok(())

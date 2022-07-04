@@ -12,11 +12,12 @@ use slog::{error, info};
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
 use crate::config_manager::{
-    get_bucket_update, ConfigItem, DeviceConfigInfo, DeviceConfigInfos, RateLimiterConfigInfo,
+    ConfigItem, DeviceConfigInfo, DeviceConfigInfos, RateLimiterConfigInfo,
 };
 use crate::device_manager::{
     DbsMmioV2Device, DeviceManager, DeviceMgrError, DeviceOpContext, DeviceVirtioRegionHandler,
 };
+use crate::get_bucket_update;
 
 use super::DbsVirtioDevice;
 

@@ -11,7 +11,7 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
 use log::{debug, error, info, warn};
 
-use crate::error::{Result, StartMicrovmError, StopMicrovmError};
+use crate::error::{Result, StartMicroVmError, StopMicrovmError};
 use crate::event_manager::EventManager;
 use crate::vm::{CpuTopology, KernelConfigInfo, VmConfigInfo};
 use crate::vmm::Vmm;
@@ -310,8 +310,8 @@ impl VmmService {
     }
 
     fn start_microvm(&mut self, vmm: &mut Vmm, event_mgr: &mut EventManager) -> VmmRequestResult {
-        use self::StartMicrovmError::MicroVMAlreadyRunning;
-        use self::VmmActionError::StartMicrovm;
+        use self::StartMicroVmError::MicroVMAlreadyRunning;
+        use self::VmmActionError::StartMicroVm;
 
         let vmm_seccomp_filter = vmm.vmm_seccomp_filter();
         let vcpu_seccomp_filter = vmm.vcpu_seccomp_filter();
@@ -319,12 +319,12 @@ impl VmmService {
             .get_vm_by_id_mut("")
             .ok_or(VmmActionError::InvalidVMID)?;
         if vm.is_vm_initialized() {
-            return Err(StartMicrovm(MicroVMAlreadyRunning));
+            return Err(StartMicroVm(MicroVMAlreadyRunning));
         }
 
         vm.start_microvm(event_mgr, vmm_seccomp_filter, vcpu_seccomp_filter)
             .map(|_| VmmData::Empty)
-            .map_err(StartMicrovm)
+            .map_err(StartMicroVm)
     }
 
     fn shutdown_microvm(&mut self, vmm: &mut Vmm) -> VmmRequestResult {
@@ -512,7 +512,7 @@ impl VmmService {
         let ctx = vm
             .create_device_op_context(Some(event_mgr.epoll_manager()))
             .map_err(|e| {
-                if let StartMicrovmError::UpcallNotReady = e {
+                if let StartMicroVmError::UpcallNotReady = e {
                     return VmmActionError::UpcallNotReady;
                 }
                 VmmActionError::Block(BlockDeviceError::UpdateNotAllowedPostBoot)
@@ -573,12 +573,12 @@ impl VmmService {
         let ctx = vm
             .create_device_op_context(Some(event_mgr.epoll_manager()))
             .map_err(|e| {
-                if let StartMicrovmError::MicroVMAlreadyRunning = e {
+                if let StartMicroVmError::MicroVMAlreadyRunning = e {
                     VmmActionError::VirtioNet(VirtioNetDeviceError::UpdateNotAllowedPostBoot)
-                } else if let StartMicrovmError::UpcallNotReady = e {
+                } else if let StartMicroVmError::UpcallNotReady = e {
                     VmmActionError::UpcallNotReady
                 } else {
-                    VmmActionError::StartMicrovm(e)
+                    VmmActionError::StartMicroVm(e)
                 }
             })?;
 
