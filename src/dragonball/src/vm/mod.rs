@@ -110,8 +110,6 @@ pub struct VmConfigInfo {
     pub vcpu_count: u8,
     /// Max number of vcpu can be added
     pub max_vcpu_count: u8,
-    /// Enable or disable hyperthreading.
-    pub ht_enabled: bool,
     /// cpu power management.
     pub cpu_pm: String,
     /// cpu topology information
@@ -135,7 +133,6 @@ impl Default for VmConfigInfo {
         VmConfigInfo {
             vcpu_count: 1,
             max_vcpu_count: 1,
-            ht_enabled: false,
             cpu_pm: String::from("on"),
             cpu_topology: CpuTopology {
                 threads_per_core: 1,
