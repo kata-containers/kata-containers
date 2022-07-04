@@ -135,7 +135,7 @@ impl MutEventSubscriber for VmmEpollHandler {
                 self.vmm_event_count.fetch_add(1, Ordering::AcqRel);
             }
             EPOLL_EVENT_EXIT => {
-                let vm = vmm.get_vm_by_id("").unwrap();
+                let vm = vmm.get_vm().unwrap();
                 match vm.get_reset_eventfd() {
                     Some(ev) => {
                         if let Err(e) = ev.read() {
