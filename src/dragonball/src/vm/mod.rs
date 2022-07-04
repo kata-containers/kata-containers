@@ -125,8 +125,6 @@ pub struct VmConfigInfo {
     pub mem_file_path: String,
     /// The memory size in MiB.
     pub mem_size_mib: usize,
-    /// reserve memory bytes
-    pub reserve_memory_bytes: u64,
 
     /// sock path
     pub serial_path: Option<String>,
@@ -149,7 +147,6 @@ impl Default for VmConfigInfo {
             mem_type: String::from("shmem"),
             mem_file_path: String::from(""),
             mem_size_mib: 128,
-            reserve_memory_bytes: 0,
             serial_path: None,
         }
     }
@@ -510,12 +507,6 @@ impl Vm {
 
         // vcpu boot up require local memory. reserve 100 MiB memory
         let mem_size = (self.vm_config.mem_size_mib as u64) << 20;
-        let reserve_memory_bytes = self.vm_config.reserve_memory_bytes;
-        if reserve_memory_bytes > (mem_size >> 1) as u64 {
-            return Err(StartMicroVmError::ConfigureInvalid(String::from(
-                "invalid reserve_memory_bytes",
-            )));
-        }
 
         let mem_type = self.vm_config.mem_type.clone();
         let mut mem_file_path = String::from("");
@@ -543,12 +534,10 @@ impl Vm {
 
         info!(
             self.logger,
-            "VM: mem_type:{} mem_file_path:{}, mem_size:{}, reserve_memory_bytes:{}, \
-		numa_regions:{:?}",
+            "VM: mem_type:{} mem_file_path:{}, mem_size:{}, numa_regions:{:?}",
             mem_type,
             mem_file_path,
             mem_size,
-            reserve_memory_bytes,
             numa_regions,
         );
 
