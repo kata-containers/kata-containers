@@ -279,9 +279,7 @@ impl VmmService {
         };
         use super::VmmActionError::BootSource;
 
-        let vm = vmm
-            .get_vm_by_id_mut("")
-            .ok_or(VmmActionError::InvalidVMID)?;
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
         if vm.is_vm_initialized() {
             return Err(BootSource(UpdateNotAllowedPostBoot));
         }
@@ -315,9 +313,7 @@ impl VmmService {
 
         let vmm_seccomp_filter = vmm.vmm_seccomp_filter();
         let vcpu_seccomp_filter = vmm.vcpu_seccomp_filter();
-        let vm = vmm
-            .get_vm_by_id_mut("")
-            .ok_or(VmmActionError::InvalidVMID)?;
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
         if vm.is_vm_initialized() {
             return Err(StartMicroVm(MicroVMAlreadyRunning));
         }
@@ -342,9 +338,7 @@ impl VmmService {
         use self::VmConfigError::*;
         use self::VmmActionError::MachineConfig;
 
-        let vm = vmm
-            .get_vm_by_id_mut("")
-            .ok_or(VmmActionError::InvalidVMID)?;
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
         if vm.is_vm_initialized() {
             return Err(MachineConfig(UpdateNotAllowedPostBoot));
         }
@@ -455,9 +449,7 @@ impl VmmService {
 
     #[cfg(feature = "virtio-vsock")]
     fn add_vsock_device(&self, vmm: &mut Vmm, config: VsockDeviceConfigInfo) -> VmmRequestResult {
-        let vm = vmm
-            .get_vm_by_id_mut("")
-            .ok_or(VmmActionError::InvalidVMID)?;
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
         if vm.is_vm_initialized() {
             return Err(VmmActionError::Vsock(
                 VsockDeviceError::UpdateNotAllowedPostBoot,
@@ -496,9 +488,7 @@ impl VmmService {
         event_mgr: &mut EventManager,
         config: BlockDeviceConfigInfo,
     ) -> VmmRequestResult {
-        let vm = vmm
-            .get_vm_by_id_mut("")
-            .ok_or(VmmActionError::InvalidVMID)?;
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
         let ctx = vm
             .create_device_op_context(Some(event_mgr.epoll_manager()))
             .map_err(|e| {
@@ -520,9 +510,7 @@ impl VmmService {
         vmm: &mut Vmm,
         config: BlockDeviceConfigUpdateInfo,
     ) -> VmmRequestResult {
-        let vm = vmm
-            .get_vm_by_id_mut("")
-            .ok_or(VmmActionError::InvalidVMID)?;
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
 
         BlockDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), config)
             .map(|_| VmmData::Empty)
@@ -538,9 +526,7 @@ impl VmmService {
         event_mgr: &mut EventManager,
         drive_id: &str,
     ) -> VmmRequestResult {
-        let vm = vmm
-            .get_vm_by_id_mut("")
-            .ok_or(VmmActionError::InvalidVMID)?;
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
         let ctx = vm
             .create_device_op_context(Some(event_mgr.epoll_manager()))
             .map_err(|_| VmmActionError::Block(BlockDeviceError::UpdateNotAllowedPostBoot))?;
@@ -557,9 +543,7 @@ impl VmmService {
         event_mgr: &mut EventManager,
         config: VirtioNetDeviceConfigInfo,
     ) -> VmmRequestResult {
-        let vm = vmm
-            .get_vm_by_id_mut("")
-            .ok_or(VmmActionError::InvalidVMID)?;
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
         let ctx = vm
             .create_device_op_context(Some(event_mgr.epoll_manager()))
             .map_err(|e| {
@@ -583,9 +567,7 @@ impl VmmService {
         vmm: &mut Vmm,
         config: VirtioNetDeviceConfigUpdateInfo,
     ) -> VmmRequestResult {
-        let vm = vmm
-            .get_vm_by_id_mut("")
-            .ok_or(VmmActionError::InvalidVMID)?;
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
 
         VirtioNetDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), config)
             .map(|_| VmmData::Empty)
@@ -594,9 +576,7 @@ impl VmmService {
 
     #[cfg(feature = "virtio-fs")]
     fn add_fs_device(&mut self, vmm: &mut Vmm, config: FsDeviceConfigInfo) -> VmmRequestResult {
-        let vm = vmm
-            .get_vm_by_id_mut("")
-            .ok_or(VmmActionError::InvalidVMID)?;
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
         let hotplug = vm.is_vm_initialized();
         if !cfg!(feature = "hotplug") && hotplug {
             return Err(VmmActionError::FsDevice(
@@ -619,9 +599,7 @@ impl VmmService {
         vmm: &mut Vmm,
         config: FsMountConfigInfo,
     ) -> VmmRequestResult {
-        let vm = vmm
-            .get_vm_by_id_mut("")
-            .ok_or(VmmActionError::InvalidVMID)?;
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
 
         if !vm.is_vm_initialized() {
             return Err(VmmActionError::FsDevice(FsDeviceError::MicroVMNotRunning));
@@ -638,9 +616,7 @@ impl VmmService {
         vmm: &mut Vmm,
         config: FsDeviceConfigUpdateInfo,
     ) -> VmmRequestResult {
-        let vm = vmm
-            .get_vm_by_id_mut("")
-            .ok_or(VmmActionError::InvalidVMID)?;
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
 
         if !vm.is_vm_initialized() {
             return Err(VmmActionError::FsDevice(FsDeviceError::MicroVMNotRunning));
