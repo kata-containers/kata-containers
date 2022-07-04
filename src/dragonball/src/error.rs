@@ -149,12 +149,12 @@ pub enum StartMicroVmError {
     #[error("vCPU related error: {0}")]
     Vcpu(#[source] vcpu::VcpuManagerError),
 
-    #[cfg(feature = "hotplug")]
+    #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
     /// Upcall initialize Error.
     #[error("failure while initializing the upcall client: {0}")]
     UpcallInitError(#[source] dbs_upcall::UpcallClientError),
 
-    #[cfg(feature = "hotplug")]
+    #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
     /// Upcall connect Error.
     #[error("failure while connecting the upcall client: {0}")]
     UpcallConnectError(#[source] dbs_upcall::UpcallClientError),

@@ -147,6 +147,7 @@ pub enum VcpuResizeError {
     #[error("Removable vcpu not enough, removable vcpu num: {0}, number to remove: {1}, present vcpu count {2}")]
     LackRemovableVcpus(u16, u16, u16),
 
+    #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
     /// Cannot update the configuration by upcall channel.
     #[error("cannot update the configuration by upcall channel: {0}")]
     Upcall(#[source] dbs_upcall::UpcallClientError),
@@ -782,13 +783,14 @@ impl VcpuManager {
 
 #[cfg(feature = "hotplug")]
 mod hotplug {
+    #[cfg(feature = "dbs-upcall")]
+    use super::*;
+    #[cfg(feature = "dbs-upcall")]
+    use dbs_upcall::{CpuDevRequest, DevMgrRequest};
+    #[cfg(feature = "dbs-upcall")]
     use std::cmp::Ordering;
 
-    use dbs_upcall::{CpuDevRequest, DevMgrRequest};
-
-    use super::*;
-
-    #[cfg(all(target_arch = "x86_64"))]
+    #[cfg(all(target_arch = "x86_64", feature = "dbs-upcall"))]
     use dbs_boot::mptable::APIC_VERSION;
     #[cfg(all(target_arch = "aarch64"))]
     const APIC_VERSION: u8 = 0;
