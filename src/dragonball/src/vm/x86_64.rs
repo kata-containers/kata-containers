@@ -48,7 +48,6 @@ fn configure_system<M: GuestMemory>(
     initrd: &Option<InitrdConfig>,
     boot_cpus: u8,
     max_cpus: u8,
-    rsv_mem_bytes: u64,
 ) -> super::Result<()> {
     const KERNEL_BOOT_FLAG_MAGIC: u16 = 0xaa55;
     const KERNEL_HDR_MAGIC: u32 = 0x5372_6448;
@@ -109,17 +108,6 @@ fn configure_system<M: GuestMemory>(
             )
             .map_err(Error::BootSystem)?;
         }
-    }
-
-    // reserve memory from microVM.
-    if rsv_mem_bytes > 0 {
-        add_e820_entry(
-            &mut params.0,
-            mem_end.raw_value().max(mmio_end.raw_value()) + 1,
-            rsv_mem_bytes,
-            bootparam::E820_RESERVED,
-        )
-        .map_err(Error::BootSystem)?;
     }
 
     let zero_page_addr = GuestAddress(layout::ZERO_PAGE_START);
@@ -237,7 +225,6 @@ impl Vm {
             &initrd,
             self.vm_config.vcpu_count,
             self.vm_config.max_vcpu_count,
-            self.vm_config.reserve_memory_bytes,
         )
         .map_err(StartMicroVmError::ConfigureSystem)
     }
