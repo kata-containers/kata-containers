@@ -10,6 +10,8 @@ use dbs_device::DeviceIo;
 use dbs_utils::rate_limiter::{RateLimiter, TokenBucket};
 use serde_derive::{Deserialize, Serialize};
 
+/// Get bucket update for rate limiter.
+#[macro_export]
 macro_rules! get_bucket_update {
     ($self:ident, $rate_limiter: ident, $metric: ident) => {{
         match &$self.$rate_limiter {

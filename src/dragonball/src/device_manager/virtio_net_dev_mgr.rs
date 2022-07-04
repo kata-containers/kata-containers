@@ -18,9 +18,10 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
 use crate::config_manager::{
-    get_bucket_update, ConfigItem, DeviceConfigInfo, DeviceConfigInfos, RateLimiterConfigInfo,
+    ConfigItem, DeviceConfigInfo, DeviceConfigInfos, RateLimiterConfigInfo,
 };
 use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
+use crate::get_bucket_update;
 
 use super::DbsMmioV2Device;
 

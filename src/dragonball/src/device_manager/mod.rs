@@ -40,7 +40,7 @@ use dbs_upcall::{
 use dbs_virtio_devices::vsock::backend::VsockInnerConnector;
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
-use crate::error::StartMicrovmError;
+use crate::error::StartMicroVmError;
 use crate::resource_manager::ResourceManager;
 use crate::vm::{KernelConfigInfo, Vm};
 use crate::IoManagerCached;
@@ -503,7 +503,7 @@ impl DeviceManager {
     pub fn create_legacy_devices(
         &mut self,
         ctx: &mut DeviceOpContext,
-    ) -> std::result::Result<(), StartMicrovmError> {
+    ) -> std::result::Result<(), StartMicroVmError> {
         #[cfg(target_arch = "x86_64")]
         {
             let mut tx = ctx.io_context.begin_tx();
@@ -517,7 +517,7 @@ impl DeviceManager {
                 }
                 Err(e) => {
                     ctx.io_context.cancel_tx(tx);
-                    return Err(StartMicrovmError::LegacyDevice(e));
+                    return Err(StartMicroVmError::LegacyDevice(e));
                 }
             }
         }
@@ -531,10 +531,10 @@ impl DeviceManager {
         dmesg_fifo: Option<Box<dyn io::Write + Send>>,
         com1_sock_path: Option<String>,
         _ctx: &mut DeviceOpContext,
-    ) -> std::result::Result<(), StartMicrovmError> {
+    ) -> std::result::Result<(), StartMicroVmError> {
         // Connect serial ports to the console and dmesg_fifo.
         self.set_guest_kernel_log_stream(dmesg_fifo)
-            .map_err(|_| StartMicrovmError::EventFd)?;
+            .map_err(|_| StartMicroVmError::EventFd)?;
 
         info!(self.logger, "init console path: {:?}", com1_sock_path);
         if let Some(path) = com1_sock_path {
@@ -542,13 +542,13 @@ impl DeviceManager {
                 let com1 = legacy_manager.get_com1_serial();
                 self.con_manager
                     .create_socket_console(com1, path)
-                    .map_err(StartMicrovmError::DeviceManager)?;
+                    .map_err(StartMicroVmError::DeviceManager)?;
             }
         } else if let Some(legacy_manager) = self.legacy_manager.as_ref() {
             let com1 = legacy_manager.get_com1_serial();
             self.con_manager
                 .create_stdio_console(com1)
-                .map_err(StartMicrovmError::DeviceManager)?;
+                .map_err(StartMicroVmError::DeviceManager)?;
         }
 
         Ok(())
@@ -586,7 +586,7 @@ impl DeviceManager {
         com1_sock_path: Option<String>,
         dmesg_fifo: Option<Box<dyn io::Write + Send>>,
         address_space: Option<&AddressSpace>,
-    ) -> std::result::Result<(), StartMicrovmError> {
+    ) -> std::result::Result<(), StartMicroVmError> {
         let mut ctx = DeviceOpContext::new(
             Some(epoll_mgr),
             self,
@@ -601,20 +601,20 @@ impl DeviceManager {
         #[cfg(feature = "virtio-blk")]
         self.block_manager
             .attach_devices(&mut ctx)
-            .map_err(StartMicrovmError::BlockDeviceError)?;
+            .map_err(StartMicroVmError::BlockDeviceError)?;
 
         #[cfg(feature = "virtio-fs")]
         {
             let mut fs_manager = self.fs_manager.lock().unwrap();
             fs_manager
                 .attach_devices(&mut ctx)
-                .map_err(StartMicrovmError::FsDeviceError)?;
+                .map_err(StartMicroVmError::FsDeviceError)?;
         }
 
         #[cfg(feature = "virtio-net")]
         self.virtio_net_manager
             .attach_devices(&mut ctx)
-            .map_err(StartMicrovmError::VirtioNetDeviceError)?;
+            .map_err(StartMicroVmError::VirtioNetDeviceError)?;
 
         #[cfg(feature = "virtio-vsock")]
         self.vsock_manager.attach_devices(&mut ctx)?;
@@ -622,15 +622,15 @@ impl DeviceManager {
         #[cfg(feature = "virtio-blk")]
         self.block_manager
             .generate_kernel_boot_args(kernel_config)
-            .map_err(StartMicrovmError::DeviceManager)?;
+            .map_err(StartMicroVmError::DeviceManager)?;
         ctx.generate_kernel_boot_args(kernel_config)
-            .map_err(StartMicrovmError::DeviceManager)?;
+            .map_err(StartMicroVmError::DeviceManager)?;
 
         Ok(())
     }
 
     /// Start all registered devices when booting the associated virtual machine.
-    pub fn start_devices(&mut self) -> std::result::Result<(), StartMicrovmError> {
+    pub fn start_devices(&mut self) -> std::result::Result<(), StartMicroVmError> {
         Ok(())
     }
 

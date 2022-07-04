@@ -30,7 +30,7 @@ use crate::address_space_manager::{
 use crate::api::v1::{InstanceInfo, InstanceState};
 use crate::device_manager::console_manager::DmesgWriter;
 use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
-use crate::error::{LoadInitrdError, Result, StartMicrovmError, StopMicrovmError};
+use crate::error::{LoadInitrdError, Result, StartMicroVmError, StopMicrovmError};
 use crate::event_manager::EventManager;
 use crate::kvm_context::KvmContext;
 use crate::resource_manager::ResourceManager;
@@ -357,7 +357,7 @@ impl Vm {
     pub fn create_device_op_context(
         &mut self,
         epoll_mgr: Option<EpollManager>,
-    ) -> std::result::Result<DeviceOpContext, StartMicrovmError> {
+    ) -> std::result::Result<DeviceOpContext, StartMicroVmError> {
         if !self.is_vm_initialized() {
             Ok(DeviceOpContext::create_boot_ctx(self, epoll_mgr))
         } else {
@@ -365,9 +365,9 @@ impl Vm {
         }
     }
 
-    pub(crate) fn check_health(&self) -> std::result::Result<(), StartMicrovmError> {
+    pub(crate) fn check_health(&self) -> std::result::Result<(), StartMicroVmError> {
         if self.kernel_config.is_none() {
-            return Err(StartMicrovmError::MissingKernelConfig);
+            return Err(StartMicroVmError::MissingKernelConfig);
         }
         Ok(())
     }
@@ -432,25 +432,25 @@ impl Vm {
     pub(crate) fn init_devices(
         &mut self,
         epoll_manager: EpollManager,
-    ) -> std::result::Result<(), StartMicrovmError> {
+    ) -> std::result::Result<(), StartMicroVmError> {
         info!(self.logger, "VM: initializing devices ...");
 
         let com1_sock_path = self.vm_config.serial_path.clone();
         let kernel_config = self
             .kernel_config
             .as_mut()
-            .ok_or(StartMicrovmError::MissingKernelConfig)?;
+            .ok_or(StartMicroVmError::MissingKernelConfig)?;
 
         info!(self.logger, "VM: create interrupt manager");
         self.device_manager
             .create_interrupt_manager()
-            .map_err(StartMicrovmError::DeviceManager)?;
+            .map_err(StartMicroVmError::DeviceManager)?;
 
         info!(self.logger, "VM: create devices");
         let vm_as =
             self.address_space
                 .get_vm_as()
-                .ok_or(StartMicrovmError::AddressManagerError(
+                .ok_or(StartMicroVmError::AddressManagerError(
                     AddressManagerError::GuestMemoryNotInitialized,
                 ))?;
         self.device_manager.create_devices(
@@ -501,7 +501,7 @@ impl Vm {
         Box::new(DmesgWriter::new(&self.logger))
     }
 
-    pub(crate) fn init_guest_memory(&mut self) -> std::result::Result<(), StartMicrovmError> {
+    pub(crate) fn init_guest_memory(&mut self) -> std::result::Result<(), StartMicroVmError> {
         info!(self.logger, "VM: initializing guest memory...");
         // We are not allowing reinitialization of vm guest memory.
         if self.address_space.is_initialized() {
@@ -512,7 +512,7 @@ impl Vm {
         let mem_size = (self.vm_config.mem_size_mib as u64) << 20;
         let reserve_memory_bytes = self.vm_config.reserve_memory_bytes;
         if reserve_memory_bytes > (mem_size >> 1) as u64 {
-            return Err(StartMicrovmError::ConfigureInvalid(String::from(
+            return Err(StartMicroVmError::ConfigureInvalid(String::from(
                 "invalid reserve_memory_bytes",
             )));
         }
@@ -553,11 +553,11 @@ impl Vm {
         );
 
         let mut address_space_param = AddressSpaceMgrBuilder::new(&mem_type, &mem_file_path)
-            .map_err(StartMicrovmError::AddressManagerError)?;
+            .map_err(StartMicroVmError::AddressManagerError)?;
         address_space_param.set_kvm_vm_fd(self.vm_fd.clone());
         self.address_space
             .create_address_space(&self.resource_manager, &numa_regions, address_space_param)
-            .map_err(StartMicrovmError::AddressManagerError)?;
+            .map_err(StartMicroVmError::AddressManagerError)?;
 
         info!(self.logger, "VM: initializing guest memory done");
         Ok(())
@@ -566,18 +566,18 @@ impl Vm {
     fn init_configure_system(
         &mut self,
         vm_as: &GuestAddressSpaceImpl,
-    ) -> std::result::Result<(), StartMicrovmError> {
+    ) -> std::result::Result<(), StartMicroVmError> {
         let vm_memory = vm_as.memory();
         let kernel_config = self
             .kernel_config
             .as_ref()
-            .ok_or(StartMicrovmError::MissingKernelConfig)?;
+            .ok_or(StartMicroVmError::MissingKernelConfig)?;
         //let cmdline = kernel_config.cmdline.clone();
         let initrd: Option<InitrdConfig> = match kernel_config.initrd_file() {
             Some(f) => {
                 let initrd_file = f.try_clone();
                 if initrd_file.is_err() {
-                    return Err(StartMicrovmError::InitrdLoader(
+                    return Err(StartMicroVmError::InitrdLoader(
                         LoadInitrdError::ReadInitrd(io::Error::from(io::ErrorKind::InvalidData)),
                     ));
                 }
@@ -638,12 +638,12 @@ impl Vm {
     fn load_kernel(
         &mut self,
         vm_memory: &GuestMemoryImpl,
-    ) -> std::result::Result<KernelLoaderResult, StartMicrovmError> {
+    ) -> std::result::Result<KernelLoaderResult, StartMicroVmError> {
         // This is the easy way out of consuming the value of the kernel_cmdline.
         let kernel_config = self
             .kernel_config
             .as_mut()
-            .ok_or(StartMicrovmError::MissingKernelConfig)?;
+            .ok_or(StartMicroVmError::MissingKernelConfig)?;
         let high_mem_addr = GuestAddress(dbs_boot::get_kernel_start());
 
         #[cfg(target_arch = "x86_64")]
@@ -653,7 +653,7 @@ impl Vm {
             kernel_config.kernel_file_mut(),
             Some(high_mem_addr),
         )
-        .map_err(StartMicrovmError::KernelLoader);
+        .map_err(StartMicroVmError::KernelLoader);
 
         #[cfg(target_arch = "aarch64")]
         return linux_loader::loader::pe::PE::load(
@@ -662,7 +662,7 @@ impl Vm {
             kernel_config.kernel_file_mut(),
             Some(high_mem_addr),
         )
-        .map_err(StartMicrovmError::KernelLoader);
+        .map_err(StartMicroVmError::KernelLoader);
     }
 
     /// Set up the initial microVM state and start the vCPU threads.
@@ -674,10 +674,10 @@ impl Vm {
         event_mgr: &mut EventManager,
         vmm_seccomp_filter: BpfProgram,
         vcpu_seccomp_filter: BpfProgram,
-    ) -> std::result::Result<(), StartMicrovmError> {
+    ) -> std::result::Result<(), StartMicroVmError> {
         info!(self.logger, "VM: received instance start command");
         if self.is_vm_initialized() {
-            return Err(StartMicrovmError::MicroVMAlreadyRunning);
+            return Err(StartMicroVmError::MicroVMAlreadyRunning);
         }
 
         let request_ts = TimestampUs::default();
@@ -697,12 +697,12 @@ impl Vm {
         let vm_as = self
             .vm_as()
             .cloned()
-            .ok_or(StartMicrovmError::AddressManagerError(
+            .ok_or(StartMicroVmError::AddressManagerError(
                 AddressManagerError::GuestMemoryNotInitialized,
             ))?;
 
         self.init_vcpu_manager(vm_as.clone(), vcpu_seccomp_filter)
-            .map_err(StartMicrovmError::Vcpu)?;
+            .map_err(StartMicroVmError::Vcpu)?;
         self.init_microvm(event_mgr.epoll_manager(), vm_as.clone(), request_ts)?;
         self.init_configure_system(&vm_as)?;
         self.init_upcall()?;
@@ -712,9 +712,9 @@ impl Vm {
 
         info!(self.logger, "VM: start vcpus");
         self.vcpu_manager()
-            .map_err(StartMicrovmError::Vcpu)?
+            .map_err(StartMicroVmError::Vcpu)?
             .start_boot_vcpus(vmm_seccomp_filter)
-            .map_err(StartMicrovmError::Vcpu)?;
+            .map_err(StartMicroVmError::Vcpu)?;
 
         // Use expect() to crash if the other thread poisoned this lock.
         self.shared_info
@@ -730,29 +730,29 @@ impl Vm {
 #[cfg(feature = "hotplug")]
 impl Vm {
     /// initialize upcall client for guest os
-    fn new_upcall(&mut self) -> std::result::Result<(), StartMicrovmError> {
+    fn new_upcall(&mut self) -> std::result::Result<(), StartMicroVmError> {
         // get vsock inner connector for upcall
         let inner_connector = self
             .device_manager
             .get_vsock_inner_connector()
-            .ok_or(StartMicrovmError::UpcallMissVsock)?;
+            .ok_or(StartMicroVmError::UpcallMissVsock)?;
         let mut upcall_client = UpcallClient::new(
             inner_connector,
             self.epoll_manager.clone(),
             DevMgrService::default(),
         )
-        .map_err(StartMicrovmError::UpcallInitError)?;
+        .map_err(StartMicroVmError::UpcallInitError)?;
 
         upcall_client
             .connect()
-            .map_err(StartMicrovmError::UpcallConnectError)?;
+            .map_err(StartMicroVmError::UpcallConnectError)?;
         self.upcall_client = Some(Arc::new(upcall_client));
 
         info!(self.logger, "upcall client init success");
         Ok(())
     }
 
-    fn init_upcall(&mut self) -> std::result::Result<(), StartMicrovmError> {
+    fn init_upcall(&mut self) -> std::result::Result<(), StartMicroVmError> {
         info!(self.logger, "VM upcall init");
         if let Err(e) = self.new_upcall() {
             info!(
@@ -762,7 +762,7 @@ impl Vm {
             Err(e)
         } else {
             self.vcpu_manager()
-                .map_err(StartMicrovmError::Vcpu)?
+                .map_err(StartMicroVmError::Vcpu)?
                 .set_upcall_channel(self.upcall_client().clone());
             Ok(())
         }
@@ -776,27 +776,27 @@ impl Vm {
     fn create_device_hotplug_context(
         &self,
         epoll_mgr: Option<EpollManager>,
-    ) -> std::result::Result<DeviceOpContext, StartMicrovmError> {
+    ) -> std::result::Result<DeviceOpContext, StartMicroVmError> {
         if self.upcall_client().is_none() {
-            Err(StartMicrovmError::UpcallMissVsock)
+            Err(StartMicroVmError::UpcallMissVsock)
         } else if self.is_upcall_client_ready() {
             Ok(DeviceOpContext::create_hotplug_ctx(self, epoll_mgr))
         } else {
-            Err(StartMicrovmError::UpcallNotReady)
+            Err(StartMicroVmError::UpcallNotReady)
         }
     }
 }
 
 #[cfg(not(feature = "hotplug"))]
 impl Vm {
-    fn init_upcall(&mut self) -> std::result::Result<(), StartMicrovmError> {
+    fn init_upcall(&mut self) -> std::result::Result<(), StartMicroVmError> {
         Ok(())
     }
 
     fn create_device_hotplug_context(
         &self,
         _epoll_mgr: Option<EpollManager>,
-    ) -> std::result::Result<DeviceOpContext, StartMicrovmError> {
-        Err(StartMicrovmError::MicroVMAlreadyRunning)
+    ) -> std::result::Result<DeviceOpContext, StartMicroVmError> {
+        Err(StartMicroVmError::MicroVMAlreadyRunning)
     }
 }
