@@ -1200,3 +1200,79 @@ func TestCalculateSandboxSizing(t *testing.T) {
 		assert.Equal(tt.expectedMem, mem, "unexpected memory")
 	}
 }
+
+func TestNewMount(t *testing.T) {
+	assert := assert.New(t)
+
+	testCases := []struct {
+		out vc.Mount
+		in  specs.Mount
+	}{
+		{
+			in: specs.Mount{
+				Source:      "proc",
+				Destination: "/proc",
+				Type:        "proc",
+				Options:     nil,
+			},
+			out: vc.Mount{
+				Source:      "proc",
+				Destination: "/proc",
+				Type:        "proc",
+				Options:     nil,
+			},
+		},
+		{
+			in: specs.Mount{
+				Source:      "proc",
+				Destination: "/proc",
+				Type:        "proc",
+				Options:     []string{"ro"},
+			},
+			out: vc.Mount{
+				Source:      "proc",
+				Destination: "/proc",
+				Type:        "proc",
+				Options:     []string{"ro"},
+				ReadOnly:    true,
+			},
+		},
+		{
+			in: specs.Mount{
+				Source:      "/abc",
+				Destination: "/def",
+				Type:        "none",
+				Options:     []string{"bind"},
+			},
+			out: vc.Mount{
+				Source:      "/abc",
+				Destination: "/def",
+				Type:        "bind",
+				Options:     []string{"bind"},
+			},
+		}, {
+			in: specs.Mount{
+				Source:      "/abc",
+				Destination: "/def",
+				Type:        "none",
+				Options:     []string{"rbind"},
+			},
+			out: vc.Mount{
+				Source:      "/abc",
+				Destination: "/def",
+				Type:        "bind",
+				Options:     []string{"rbind"},
+			},
+		},
+	}
+
+	for _, tt := range testCases {
+		actualMount := newMount(tt.in)
+
+		assert.Equal(tt.out.Source, actualMount.Source, "unexpected mount source")
+		assert.Equal(tt.out.Destination, actualMount.Destination, "unexpected mount destination")
+		assert.Equal(tt.out.Type, actualMount.Type, "unexpected mount type")
+		assert.Equal(tt.out.Options, actualMount.Options, "unexpected mount options")
+		assert.Equal(tt.out.ReadOnly, actualMount.ReadOnly, "unexpected mount ReadOnly")
+	}
+}
