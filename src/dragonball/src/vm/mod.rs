@@ -20,7 +20,7 @@ use slog::{error, info};
 use vm_memory::{Bytes, GuestAddress, GuestAddressSpace};
 use vmm_sys_util::eventfd::EventFd;
 
-#[cfg(feature = "hotplug")]
+#[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
 use dbs_upcall::{DevMgrService, UpcallClient};
 
 use crate::address_space_manager::{
@@ -195,7 +195,7 @@ pub struct Vm {
     #[cfg(target_arch = "aarch64")]
     irqchip_handle: Option<Box<dyn dbs_arch::gic::GICDevice>>,
 
-    #[cfg(feature = "hotplug")]
+    #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
     upcall_client: Option<Arc<UpcallClient<DevMgrService>>>,
 }
 
@@ -240,7 +240,7 @@ impl Vm {
 
             #[cfg(target_arch = "aarch64")]
             irqchip_handle: None,
-            #[cfg(feature = "hotplug")]
+            #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
             upcall_client: None,
         })
     }
@@ -305,7 +305,7 @@ impl Vm {
 
     /// returns true if system upcall service is ready
     pub fn is_upcall_client_ready(&self) -> bool {
-        #[cfg(feature = "hotplug")]
+        #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
         {
             if let Some(upcall_client) = self.upcall_client() {
                 return upcall_client.is_ready();
@@ -705,6 +705,7 @@ impl Vm {
             .map_err(StartMicroVmError::Vcpu)?;
         self.init_microvm(event_mgr.epoll_manager(), vm_as.clone(), request_ts)?;
         self.init_configure_system(&vm_as)?;
+        #[cfg(feature = "dbs-upcall")]
         self.init_upcall()?;
 
         info!(self.logger, "VM: register events");
@@ -730,6 +731,7 @@ impl Vm {
 #[cfg(feature = "hotplug")]
 impl Vm {
     /// initialize upcall client for guest os
+    #[cfg(feature = "dbs-upcall")]
     fn new_upcall(&mut self) -> std::result::Result<(), StartMicroVmError> {
         // get vsock inner connector for upcall
         let inner_connector = self
@@ -752,6 +754,7 @@ impl Vm {
         Ok(())
     }
 
+    #[cfg(feature = "dbs-upcall")]
     fn init_upcall(&mut self) -> std::result::Result<(), StartMicroVmError> {
         info!(self.logger, "VM upcall init");
         if let Err(e) = self.new_upcall() {
@@ -769,10 +772,12 @@ impl Vm {
     }
 
     /// Get upcall client.
+    #[cfg(feature = "dbs-upcall")]
     pub fn upcall_client(&self) -> &Option<Arc<UpcallClient<DevMgrService>>> {
         &self.upcall_client
     }
 
+    #[cfg(feature = "dbs-upcall")]
     fn create_device_hotplug_context(
         &self,
         epoll_mgr: Option<EpollManager>,
@@ -784,6 +789,15 @@ impl Vm {
         } else {
             Err(StartMicroVmError::UpcallNotReady)
         }
+    }
+
+    // We will support hotplug without upcall in future stages.
+    #[cfg(not(feature = "dbs-upcall"))]
+    fn create_device_hotplug_context(
+        &self,
+        _epoll_mgr: Option<EpollManager>,
+    ) -> std::result::Result<DeviceOpContext, StartMicroVmError> {
+        Err(StartMicroVmError::MicroVMAlreadyRunning)
     }
 }
 
