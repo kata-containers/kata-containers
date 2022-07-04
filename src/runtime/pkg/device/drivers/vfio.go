@@ -118,6 +118,8 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 				Type:      config.VFIOAPDeviceMediatedType,
 				APDevices: devices,
 			}
+		default:
+			return fmt.Errorf("Failed to append device: VFIO device type unrecognized")
 		}
 		device.VfioDevs = append(device.VfioDevs, &vfio)
 	}
@@ -216,12 +218,9 @@ func (device *VFIODevice) Load(ds config.DeviceState) {
 	for _, dev := range ds.VFIODevs {
 		var vfio config.VFIODev
 
-		if (*device.VfioDevs[0]).GetType() == config.VFIOAPDeviceMediatedType {
-			vfio = config.VFIOAPDev{
-				ID:       *(*dev).GetID(),
-				SysfsDev: *(*dev).GetSysfsDev(),
-			}
-		} else {
+		vfioDeviceType := (*device.VfioDevs[0]).GetType()
+		switch vfioDeviceType {
+		case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
 			bdf := ""
 			if pciDev, ok := (*dev).(config.VFIOPCIDev); ok {
 				bdf = pciDev.BDF
@@ -232,6 +231,16 @@ func (device *VFIODevice) Load(ds config.DeviceState) {
 				BDF:      bdf,
 				SysfsDev: *(*dev).GetSysfsDev(),
 			}
+		case config.VFIOAPDeviceMediatedType:
+			vfio = config.VFIOAPDev{
+				ID:       *(*dev).GetID(),
+				SysfsDev: *(*dev).GetSysfsDev(),
+			}
+		default:
+			deviceLogger().WithError(
+				fmt.Errorf("VFIO device type unrecognized"),
+			).Error("Failed to append device")
+			return
 		}
 
 		device.VfioDevs = append(device.VfioDevs, &vfio)

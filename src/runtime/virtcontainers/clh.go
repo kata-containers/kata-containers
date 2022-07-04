@@ -856,13 +856,8 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
 	defer cancel()
 
-	pciDevice, ok := (*device).(config.VFIOPCIDev)
-	if !ok {
-		return fmt.Errorf("VFIO device %+v is not PCI, only PCI is supported in Cloud Hypervisor", device)
-	}
-
 	// Create the clh device config via the constructor to ensure default values are properly assigned
-	clhDevice := *chclient.NewDeviceConfig(device.SysfsDev)
+	clhDevice := *chclient.NewDeviceConfig(*(*device).GetSysfsDev())
 	pciInfo, _, err := cl.VmAddDevicePut(ctx, clhDevice)
 	if err != nil {
 		return fmt.Errorf("Failed to hotplug device %+v %s", device, openAPIClientError(err))
@@ -885,6 +880,11 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 	}
 
 	guestPciPath, err := types.PciPathFromString(tokens[0])
+
+	pciDevice, ok := (*device).(config.VFIOPCIDev)
+	if !ok {
+		return fmt.Errorf("VFIO device %+v is not PCI, only PCI is supported in Cloud Hypervisor", device)
+	}
 	pciDevice.GuestPciPath = guestPciPath
 	*device = pciDevice
 
