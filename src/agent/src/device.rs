@@ -764,8 +764,8 @@ async fn vfio_pci_device_handler(
     let mut group = None;
 
     for opt in device.options.iter() {
-        let (host, pcipath) =
-            split_vfio_pci_option(opt).ok_or_else(|| anyhow!("Malformed VFIO option {:?}", opt))?;
+        let (host, pcipath) = split_vfio_pci_option(opt)
+            .ok_or_else(|| anyhow!("Malformed VFIO PCI option {:?}", opt))?;
         let host =
             pci::Address::from_str(host).context("Bad host PCI address in VFIO option {:?}")?;
         let pcipath = pci::Path::from_str(pcipath)?;
@@ -809,7 +809,7 @@ async fn vfio_pci_device_handler(
 
 // The VFIO AP (Adjunct Processor) device handler takes all the APQNs provided as device options
 // and awaits them. It sets the minimum AP rescan time of 5 seconds and temporarily adds that
-// amoutn to the hotplug timeout.
+// amount to the hotplug timeout.
 #[cfg(target_arch = "s390x")]
 #[instrument]
 async fn vfio_ap_device_handler(

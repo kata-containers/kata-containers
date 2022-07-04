@@ -1,18 +1,18 @@
-// Copyright (c) IBM Corp. 2022
+// Copyright (c) IBM Corp. 2023
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-
 use std::fmt;
 use std::str::FromStr;
 
 use anyhow::{anyhow, Context};
 
-// IBM Adjunct Processor (AP) is the bus used by IBM Crypto Express hardware security modules on
-// IBM Z & LinuxONE (s390x)
-// AP bus ID follow the format <xx>.<xxxx> [1, p. 476], where
-//   - <xx> is the adapter ID, i.e. the card and
-//   - <xxxx> is the adapter domain.
+// IBM Adjunct Processor (AP) is used for cryptographic operations
+// by IBM Crypto Express hardware security modules on IBM zSystem & LinuxONE (s390x).
+// In Linux, virtual cryptographic devices are called AP queues.
+// The name of an AP queue respects a format <xx>.<xxxx> in hexadecimal notation [1, p.467]:
+//   - <xx> is an adapter ID
+//   - <xxxx> is an adapter domain ID
 // [1] https://www.ibm.com/docs/en/linuxonibm/pdf/lku5dd05.pdf
 
 #[derive(Debug)]
@@ -37,17 +37,17 @@ impl FromStr for Address {
         let split: Vec<&str> = s.split('.').collect();
         if split.len() != 2 {
             return Err(anyhow!(
-                "Wrong AP bus format. It needs to be in the form <xx>.<xxxx>, got {:?}",
+                "Wrong AP bus format. It needs to be in the form <xx>.<xxxx> (e.g. 0a.003f), got {:?}",
                 s
             ));
         }
 
         let adapter_id = u8::from_str_radix(split[0], 16).context(format!(
-            "Wrong AP bus format. AP ID needs to be in the form <xx>, got {:?}",
+            "Wrong AP bus format. AP ID needs to be in the form <xx> (e.g. 0a), got {:?}",
             split[0]
         ))?;
         let adapter_domain = u16::from_str_radix(split[1], 16).context(format!(
-            "Wrong AP bus format. AP domain needs to be in the form <xxxx>, got {:?}",
+            "Wrong AP bus format. AP domain needs to be in the form <xxxx> (e.g. 003f), got {:?}",
             split[1]
         ))?;
 
