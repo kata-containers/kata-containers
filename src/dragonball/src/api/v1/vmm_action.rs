@@ -428,16 +428,6 @@ impl VmmService {
 
         config.mem_file_path = machine_config.mem_file_path.clone();
 
-        let reserve_memory_bytes = machine_config.reserve_memory_bytes;
-        // Reserved memory must be 2MB aligned and less than half of the total memory.
-        if reserve_memory_bytes % 0x200000 != 0
-            || reserve_memory_bytes > (config.mem_size_mib as u64) << 20
-        {
-            return Err(MachineConfig(InvalidReservedMemorySize(
-                reserve_memory_bytes as usize >> 20,
-            )));
-        }
-        config.reserve_memory_bytes = reserve_memory_bytes;
         if config.mem_type == "hugetlbfs" && config.mem_file_path.is_empty() {
             return Err(MachineConfig(InvalidMemFilePath("".to_owned())));
         }
