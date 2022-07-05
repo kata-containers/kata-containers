@@ -587,14 +587,20 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     // only change stdio devices owner when user
     // isn't root.
-    if guser.uid != 0 {
-        set_stdio_permissions(guser.uid)?;
+    if !uid.is_root() {
+        set_stdio_permissions(uid)?;
     }
 
     setid(uid, gid)?;
 
     if !guser.additional_gids.is_empty() {
-        setgroups(guser.additional_gids.as_slice()).map_err(|e| {
+        let gids: Vec<Gid> = guser
+            .additional_gids
+            .iter()
+            .map(|gid| Gid::from_raw(*gid))
+            .collect();
+
+        unistd::setgroups(&gids).map_err(|e| {
             let _ = write_sync(
                 cwfd,
                 SYNC_FAILED,
@@ -730,7 +736,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 // within the container to the specified user.
 // The ownership needs to match because it is created outside of
 // the container and needs to be localized.
-fn set_stdio_permissions(uid: libc::uid_t) -> Result<()> {
+fn set_stdio_permissions(uid: Uid) -> Result<()> {
     let meta = fs::metadata("/dev/null")?;
     let fds = [
         std::io::stdin().as_raw_fd(),
@@ -745,19 +751,13 @@ fn set_stdio_permissions(uid: libc::uid_t) -> Result<()> {
             continue;
         }
 
-        // According to the POSIX specification, -1 is used to indicate that owner and group
-        // are not to be changed.  Since uid_t and gid_t are unsigned types, we have to wrap
-        // around to get -1.
-        let gid = 0u32.wrapping_sub(1);
-
         // We only change the uid owner (as it is possible for the mount to
         // prefer a different gid, and there's no reason for us to change it).
         // The reason why we don't just leave the default uid=X mount setup is
         // that users expect to be able to actually use their console. Without
         // this code, you couldn't effectively run as a non-root user inside a
         // container and also have a console set up.
-        let res = unsafe { libc::fchown(*fd, uid, gid) };
-        Errno::result(res).map_err(|e| anyhow!(e).context("set stdio permissions failed"))?;
+        unistd::fchown(*fd, Some(uid), None).with_context(|| "set stdio permissions failed")?;
     }
 
     Ok(())
@@ -1477,12 +1477,6 @@ impl LinuxContainer {
     }
 }
 
-fn setgroups(grps: &[libc::gid_t]) -> Result<()> {
-    let ret = unsafe { libc::setgroups(grps.len(), grps.as_ptr() as *const libc::gid_t) };
-    Errno::result(ret).map(drop)?;
-    Ok(())
-}
-
 use std::fs::OpenOptions;
 use std::io::Write;
 
@@ -1652,6 +1646,7 @@ mod tests {
     use super::*;
     use crate::process::Process;
     use crate::skip_if_not_root;
+    use nix::unistd::Uid;
     use std::fs;
     use std::os::unix::fs::MetadataExt;
     use std::os::unix::io::AsRawFd;
@@ -1797,7 +1792,7 @@ mod tests {
         let old_uid = meta.uid();
 
         let uid = 1000;
-        set_stdio_permissions(uid).unwrap();
+        set_stdio_permissions(Uid::from_raw(uid)).unwrap();
 
         let meta = fs::metadata("/dev/stdin").unwrap();
         assert_eq!(meta.uid(), uid);
@@ -1809,7 +1804,7 @@ mod tests {
         assert_eq!(meta.uid(), uid);
 
         // restore the uid
-        set_stdio_permissions(old_uid).unwrap();
+        set_stdio_permissions(Uid::from_raw(old_uid)).unwrap();
     }
 
     #[test]
