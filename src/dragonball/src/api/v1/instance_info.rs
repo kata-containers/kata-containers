@@ -54,6 +54,8 @@ pub struct InstanceInfo {
     pub async_state: AsyncState,
     /// List of tids of vcpu threads (vcpu index, tid)
     pub tids: Vec<(u8, u32)>,
+    /// Last instance downtime
+    pub last_instance_downtime: u64,
 }
 
 impl InstanceInfo {
@@ -66,6 +68,7 @@ impl InstanceInfo {
             pid: std::process::id(),
             async_state: AsyncState::Uninitialized,
             tids: Vec::new(),
+            last_instance_downtime: 0,
         }
     }
 }
@@ -79,6 +82,7 @@ impl Default for InstanceInfo {
             pid: std::process::id(),
             async_state: AsyncState::Uninitialized,
             tids: Vec::new(),
+            last_instance_downtime: 0,
         }
     }
 }

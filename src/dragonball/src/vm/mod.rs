@@ -420,6 +420,18 @@ impl Vm {
     pub fn resume_all_vcpus_with_downtime(&mut self) -> std::result::Result<(), VcpuManagerError> {
         self.vcpu_manager()?.resume_all_vcpus()?;
 
+        if self.start_instance_downtime != 0 {
+            let now = TimestampUs::default();
+            let downtime = now.time_us - self.start_instance_downtime;
+            info!(self.logger, "VM: instance downtime: {} us", downtime);
+            self.start_instance_downtime = 0;
+            if let Ok(mut info) = self.shared_info.write() {
+                info.last_instance_downtime = downtime;
+            } else {
+                error!(self.logger, "Failed to update live upgrade downtime, couldn't be written due to poisoned lock");
+            }
+        }
+
         Ok(())
     }
 
