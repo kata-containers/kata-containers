@@ -631,6 +631,7 @@ impl DeviceManager {
 
     /// Start all registered devices when booting the associated virtual machine.
     pub fn start_devices(&mut self) -> std::result::Result<(), StartMicroVmError> {
+        // TODO: add vfio support here. issue #4589.
         Ok(())
     }
 
