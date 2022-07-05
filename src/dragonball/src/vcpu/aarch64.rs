@@ -8,15 +8,18 @@
 
 use std::sync::mpsc::{channel, Sender};
 use std::sync::Arc;
+use std::ops::Deref;
 
 use crate::IoManagerCached;
 use dbs_utils::time::TimestampUs;
+use dbs_arch::regs;
+use dbs_boot::get_fdt_addr;
 use kvm_ioctls::{VcpuFd, VmFd};
-use vm_memory::GuestAddress;
+use vm_memory::{Address, GuestAddress, GuestAddressSpace};
 use vmm_sys_util::eventfd::EventFd;
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
-use crate::vcpu::vcpu_impl::{Result, Vcpu, VcpuStateEvent};
+use crate::vcpu::vcpu_impl::{Result, Vcpu, VcpuStateEvent, VcpuError};
 use crate::vcpu::VcpuConfig;
 
 #[allow(unused)]
@@ -83,7 +86,34 @@ impl Vcpu {
         kernel_load_addr: Option<GuestAddress>,
         _pgtable_addr: Option<GuestAddress>,
     ) -> Result<()> {
-        // TODO: add arm vcpu configure() function. issue: #4445
+        let mut kvi: kvm_bindings::kvm_vcpu_init = kvm_bindings::kvm_vcpu_init::default();
+
+        // This reads back the kernel's preferred target type.
+        vm_fd
+            .get_preferred_target(&mut kvi)
+            .map_err(VcpuError::VcpuArmPreferredTarget)?;
+        // We already checked that the capability is supported.
+        kvi.features[0] |= 1 << kvm_bindings::KVM_ARM_VCPU_PSCI_0_2;
+        // Non-boot cpus are powered off initially.
+        if self.id > 0 {
+            kvi.features[0] |= 1 << kvm_bindings::KVM_ARM_VCPU_POWER_OFF;
+        }
+
+        self.fd.vcpu_init(&kvi).map_err(VcpuError::VcpuArmInit)?;
+
+        if let Some(address) = kernel_load_addr {
+            regs::setup_regs(
+                &self.fd,
+                self.id,
+                address.raw_value(),
+                get_fdt_addr(vm_as.memory().deref()),
+            )
+            .map_err(VcpuError::REGSConfiguration)?;
+        }
+
+        self.mpidr =
+            regs::read_mpidr(&self.fd).map_err(VcpuError::REGSConfiguration)?;
+
         Ok(())
     }
 
