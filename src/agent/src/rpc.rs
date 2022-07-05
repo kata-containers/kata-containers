@@ -269,7 +269,7 @@ impl AgentService {
             .get_container(&cid)
             .ok_or_else(|| anyhow!("Invalid container id"))?;
 
-        ctr.exec()?;
+        ctr.exec().await?;
 
         if sid == cid {
             return Ok(());
