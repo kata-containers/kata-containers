@@ -669,6 +669,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
 		EnableAnnotations:     h.EnableAnnotations,
+		DisableSeLinux:        h.DisableSeLinux,
 	}, nil
 }
 
@@ -805,6 +806,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		GuestSwap:               h.GuestSwap,
 		Rootless:                h.Rootless,
 		LegacySerial:            h.LegacySerial,
+		DisableSeLinux:          h.DisableSeLinux,
 	}, nil
 }
 
@@ -869,6 +871,7 @@ func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		BlockDeviceDriver:     blockDriver,
 		DisableVhostNet:       h.DisableVhostNet,
 		GuestHookPath:         h.guestHookPath(),
+		DisableSeLinux:        h.DisableSeLinux,
 		EnableAnnotations:     h.EnableAnnotations,
 	}, nil
 }
