@@ -27,6 +27,10 @@ const USE_SHARED_IRQ: bool = true;
 const USE_GENERIC_IRQ: bool = true;
 // Default cache size is 2 Gi since this is a typical VM memory size.
 const DEFAULT_CACHE_SIZE: u64 = 2 * 1024 * 1024 * 1024;
+// We have 2 supported fs device mode, vhostuser and virtio
+const VHOSTUSER_FS_MODE: &str = "vhostuser";
+// We have 2 supported fs device mode, vhostuser and virtio
+const VIRTIO_FS_MODE: &str = "virtio";
 
 /// Errors associated with `FsDeviceConfig`.
 #[derive(Debug, thiserror::Error)]
@@ -152,7 +156,7 @@ impl std::default::Default for FsDeviceConfigInfo {
 impl FsDeviceConfigInfo {
     /// The default mode is set to 'virtio' for 'virtio-fs' device.
     pub fn default_fs_mode() -> String {
-        String::from("virtio")
+        String::from(VIRTIO_FS_MODE)
     }
 
     /// The default cache policy
@@ -227,7 +231,7 @@ impl ConfigItem for FsDeviceConfigInfo {
     fn check_conflicts(&self, other: &Self) -> Result<(), FsDeviceError> {
         if self.tag == other.tag {
             Err(FsDeviceError::FsDeviceTagAlreadyExists(self.tag.clone()))
-        } else if self.mode.as_str() == "vhostuser" && self.sock_path == other.sock_path {
+        } else if self.mode.as_str() == VHOSTUSER_FS_MODE && self.sock_path == other.sock_path {
             Err(FsDeviceError::FsDevicePathAlreadyExists(
                 self.sock_path.clone(),
             ))
@@ -354,8 +358,8 @@ impl FsDeviceMgr {
         ctx: &mut DeviceOpContext,
         epoll_mgr: EpollManager,
     ) -> std::result::Result<DbsVirtioDevice, FsDeviceError> {
-        match config.mode.as_str() {
-            "virtio" => Self::attach_virtio_fs_devices(config, ctx, epoll_mgr),
+        match &config.mode as &str {
+            VIRTIO_FS_MODE => Self::attach_virtio_fs_devices(config, ctx, epoll_mgr),
             _ => Err(FsDeviceError::CreateFsDevice(virtio::Error::InvalidInput)),
         }
     }
