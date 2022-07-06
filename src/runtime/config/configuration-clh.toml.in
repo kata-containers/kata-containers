@@ -105,6 +105,12 @@ default_memory = @DEFMEMSZ@
 # This is will determine the times that memory will be hotadded to sandbox/VM.
 #memory_slots = @DEFMEMSLOTS@
 
+# Default maximum memory in MiB per SB / VM
+# unspecified or == 0           --> will be set to the actual amount of physical RAM
+# > 0 <= amount of physical RAM --> will be set to the specified number
+# > amount of physical RAM      --> will be set to the actual amount of physical RAM
+default_maxmemory = @DEFMAXMEMSZ@
+
 # Shared file system type:
 #   - virtio-fs (default)
 #   - virtio-fs-nydus

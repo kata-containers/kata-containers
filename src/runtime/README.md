@@ -87,6 +87,27 @@ following locations (in order):
 
 > **Note:** For both binaries, the first path that exists will be used.
 
+#### Drop-in configuration file fragments
+
+To enable changing configuration without changing the configuration file
+itself, drop-in configuration file fragments are supported.  Once a
+configuration file is parsed, if there is a subdirectory called `config.d` in
+the same directory as the configuration file its contents will be loaded
+in alphabetical order and each item will be parsed as a config file.  Settings
+loaded from these configuration file fragments override settings loaded from
+the main configuration file and earlier fragments.  Users are encouraged to use
+familiar naming conventions to order the fragments (e.g. `config.d/10-this`,
+`config.d/20-that` etc.).
+
+Non-existent or empty `config.d` directory is not an error (in other words, not
+using configuration file fragments is fine).  On the other hand, if fragments
+are used, they must be valid - any errors while parsing fragments (unreadable
+fragment files, contents not valid TOML) are treated the same as errors
+while parsing the main configuration file.  A `config.d` subdirectory affects
+only the `configuration.toml` _in the same directory_.  For fragments in
+`config.d` to be parsed, there has to be a valid main configuration file _in
+that location_ (it can be empty though).
+
 ### Hypervisor specific configuration
 
 Kata Containers supports multiple hypervisors so your `configuration.toml`

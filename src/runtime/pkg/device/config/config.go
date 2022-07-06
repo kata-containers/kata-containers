@@ -444,7 +444,7 @@ func getVhostUserDevName(dirname string, majorNum, minorNum uint32) (string, err
 
 // DeviceState is a structure which represents host devices
 // plugged to a hypervisor, one Device can be shared among containers in POD
-// Refs: virtcontainers/device/drivers/generic.go:GenericDevice
+// Refs: pkg/device/drivers/generic.go:GenericDevice
 type DeviceState struct {
 	// DriverOptions is specific options for each device driver
 	// for example, for BlockDevice, we can set DriverOptions["block-driver"]="virtio-blk"
@@ -459,7 +459,7 @@ type DeviceState struct {
 	ID string
 
 	// Type is used to specify driver type
-	// Refs: virtcontainers/device/config/config.go:DeviceType
+	// Refs: pkg/device/config/config.go:DeviceType
 	Type string
 
 	// Type of device: c, b, u or p
