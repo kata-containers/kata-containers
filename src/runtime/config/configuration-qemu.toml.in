@@ -406,6 +406,9 @@ valid_entropy_sources = @DEFVALIDENTROPYSOURCES@
 # use legacy serial for guest console if available and implemented for architecture. Default false
 #use_legacy_serial = true
 
+# disable applying SELinux on the VMM process (default false)
+disable_selinux=@DEFDISABLESELINUX@
+
 [factory]
 # VM templating support. Once enabled, new VMs are created from template
 # using vm cloning. They will share the same initial kernel, initramfs and
@@ -522,9 +525,6 @@ internetworking_model="@DEFNETWORKMODEL_QEMU@"
 # within the guest
 # (default: true)
 disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
-
-# disable applying SELinux on the VMM process (default false)
-disable_selinux=@DEFDISABLESELINUX@
 
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).
