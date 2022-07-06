@@ -16,6 +16,9 @@ use crate::event_manager::EventManager;
 use crate::vm::{CpuTopology, KernelConfigInfo, VmConfigInfo};
 use crate::vmm::Vmm;
 
+use self::VmConfigError::*;
+use self::VmmActionError::MachineConfig;
+
 #[cfg(feature = "virtio-blk")]
 pub use crate::device_manager::blk_dev_mgr::{
     BlockDeviceConfigInfo, BlockDeviceConfigUpdateInfo, BlockDeviceError, BlockDeviceMgr,
@@ -335,9 +338,6 @@ impl VmmService {
         vmm: &mut Vmm,
         machine_config: VmConfigInfo,
     ) -> VmmRequestResult {
-        use self::VmConfigError::*;
-        use self::VmmActionError::MachineConfig;
-
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
         if vm.is_vm_initialized() {
             return Err(MachineConfig(UpdateNotAllowedPostBoot));
@@ -356,27 +356,7 @@ impl VmmService {
 
         if config.cpu_topology != machine_config.cpu_topology {
             let cpu_topology = &machine_config.cpu_topology;
-            // Check if dies_per_socket, cores_per_die, threads_per_core and socket number is valid
-            if cpu_topology.threads_per_core < 1 || cpu_topology.threads_per_core > 2 {
-                return Err(MachineConfig(InvalidThreadsPerCore(
-                    cpu_topology.threads_per_core,
-                )));
-            }
-            let vcpu_count_from_topo = cpu_topology
-                .sockets
-                .checked_mul(cpu_topology.dies_per_socket)
-                .ok_or(MachineConfig(VcpuCountExceedsMaximum))?
-                .checked_mul(cpu_topology.cores_per_die)
-                .ok_or(MachineConfig(VcpuCountExceedsMaximum))?
-                .checked_mul(cpu_topology.threads_per_core)
-                .ok_or(MachineConfig(VcpuCountExceedsMaximum))?;
-            if vcpu_count_from_topo > MAX_SUPPORTED_VCPUS {
-                return Err(MachineConfig(VcpuCountExceedsMaximum));
-            }
-            if vcpu_count_from_topo < config.vcpu_count {
-                return Err(MachineConfig(InvalidCpuTopology(vcpu_count_from_topo)));
-            }
-            config.cpu_topology = cpu_topology.clone();
+            config.cpu_topology = handle_cpu_topology(cpu_topology, config.vcpu_count)?.clone();
         } else {
             // the same default
             let mut default_cpu_topology = CpuTopology {
@@ -626,4 +606,32 @@ impl VmmService {
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::FsDevice)
     }
+}
+
+fn handle_cpu_topology(
+    cpu_topology: &CpuTopology,
+    vcpu_count: u8,
+) -> std::result::Result<&CpuTopology, VmmActionError> {
+    // Check if dies_per_socket, cores_per_die, threads_per_core and socket number is valid
+    if cpu_topology.threads_per_core < 1 || cpu_topology.threads_per_core > 2 {
+        return Err(MachineConfig(InvalidThreadsPerCore(
+            cpu_topology.threads_per_core,
+        )));
+    }
+    let vcpu_count_from_topo = cpu_topology
+        .sockets
+        .checked_mul(cpu_topology.dies_per_socket)
+        .ok_or(MachineConfig(VcpuCountExceedsMaximum))?
+        .checked_mul(cpu_topology.cores_per_die)
+        .ok_or(MachineConfig(VcpuCountExceedsMaximum))?
+        .checked_mul(cpu_topology.threads_per_core)
+        .ok_or(MachineConfig(VcpuCountExceedsMaximum))?;
+    if vcpu_count_from_topo > MAX_SUPPORTED_VCPUS {
+        return Err(MachineConfig(VcpuCountExceedsMaximum));
+    }
+    if vcpu_count_from_topo < vcpu_count {
+        return Err(MachineConfig(InvalidCpuTopology(vcpu_count_from_topo)));
+    }
+
+    Ok(cpu_topology)
 }
