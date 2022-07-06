@@ -21,6 +21,7 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
 use crate::config_manager::{ConfigItem, DeviceConfigInfo, RateLimiterConfigInfo};
+use crate::device_manager::blk_dev_mgr::BlockDeviceError::InvalidDeviceId;
 use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
 use crate::get_bucket_update;
 use crate::vm::KernelConfigInfo;

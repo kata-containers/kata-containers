@@ -6,20 +6,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the THIRD-PARTY file.
 
+use std::ops::Deref;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::Arc;
-use std::ops::Deref;
 
 use crate::IoManagerCached;
-use dbs_utils::time::TimestampUs;
 use dbs_arch::regs;
 use dbs_boot::get_fdt_addr;
+use dbs_utils::time::TimestampUs;
 use kvm_ioctls::{VcpuFd, VmFd};
 use vm_memory::{Address, GuestAddress, GuestAddressSpace};
 use vmm_sys_util::eventfd::EventFd;
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
-use crate::vcpu::vcpu_impl::{Result, Vcpu, VcpuStateEvent, VcpuError};
+use crate::vcpu::vcpu_impl::{Result, Vcpu, VcpuError, VcpuStateEvent};
 use crate::vcpu::VcpuConfig;
 
 #[allow(unused)]
@@ -111,8 +111,7 @@ impl Vcpu {
             .map_err(VcpuError::REGSConfiguration)?;
         }
 
-        self.mpidr =
-            regs::read_mpidr(&self.fd).map_err(VcpuError::REGSConfiguration)?;
+        self.mpidr = regs::read_mpidr(&self.fd).map_err(VcpuError::REGSConfiguration)?;
 
         Ok(())
     }
