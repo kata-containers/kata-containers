@@ -75,8 +75,8 @@ jobs:
         #
         # - A SoB comment can be any length (as it is unreasonable to penalise
         #   people with long names/email addresses :)
-        pattern: '^.+(\n([a-zA-Z].{0,72}|[^a-zA-Z\n].*|[^\s\n]*|Signed-off-by:.*|))+$'
-        error: 'Body line too long (max 72)'
+        pattern: '^.+(\n([a-zA-Z].{0,150}|[^a-zA-Z\n].*|[^\s\n]*|Signed-off-by:.*|))+$'
+        error: 'Body line too long (max 150)'
         post_error: ${{ env.error_msg }}
 
     - name: Check Fixes
