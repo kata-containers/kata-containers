@@ -83,21 +83,19 @@ problem_exclude_pattern+=")"
 
 usage()
 {
-<<<<<<< Updated upstream
-	cat <<EOT
-Usage: $script_name [options]
-=======
 	cat <<EOF
 Usage: $script_name [command] [options]
->>>>>>> Stashed changes
 
 Summary: Collect data about an installation of $project_name.
 
 Description: Run this script as root to obtain a markdown-formatted summary
-  of the environment of the $PROJECT_NAME installation. The output of this script
+  of the environment of the $project_name installation. The output of this script
   can be pasted directly into a github issue at the address below:
 
       $issue_url
+
+Commands:
+ show-image-details : outputs the YAML describing the image
 
 Options:
 
@@ -742,13 +740,8 @@ show_kata_monitor_version()
 
 # Retrieve details of the image containing
 # the rootfs used to boot the virtual machine.
-show_image_details()
+image_details()
 {
-	local title="Image details"
-	start_section "$title"
-
-	heading "$title"
-
 	local image
 	local details
 
@@ -757,11 +750,29 @@ show_image_details()
 	if [ -n "$image" ]
 	then
 		details=$(get_image_details "$image")
-		show_quoted_text "yaml" "$details"
+		msg "$details"
 	else
 		msg "No image"
 	fi
 
+}
+
+show_image_details()
+{
+	local details
+
+	local title="Image details"
+	start_section "$title"
+
+	heading "$title"
+
+	details=$(image_details)
+	if [ "$details" != "No image" ]; then
+		show_quoted_text "yaml" "$details"
+	else
+		msg "$details"
+	fi
+	
 	separator
 
 	end_section
@@ -769,25 +780,39 @@ show_image_details()
 
 # Retrieve details of the initrd containing
 # the rootfs used to boot the virtual machine.
-show_initrd_details()
+initrd_details()
 {
-	start_section "Initrd details"
-
+	
 	local initrd
 	local details
 
 	initrd=$(get_initrd_file)
 
-	heading "Initrd details"
-
 	if [ -n "$initrd" ]
 	then
 		details=$(get_initrd_details "$initrd")
-		show_quoted_text "yaml" "$details"
+		msg "$details"
 	else
 		msg "No initrd"
 	fi
 
+}
+
+show_initrd_details()
+{
+	local details
+
+	start_section "Initrd details"
+	heading "Initrd details"
+
+	details=$(initrd_details)
+
+	if [ "$details" != "No initrd" ]; then
+		show_quoted_text "yaml" "$details"
+	else
+		msg "$details"
+	fi
+	
 	separator
 
 	end_section
@@ -841,6 +866,13 @@ show_details()
 
 main()
 {
+	if [ "$1" = "show-image-details" ]; then
+		image_details && \
+		separator && \
+		initrd_details && \
+		exit 0 || die "failed to determine image details"
+	fi
+
 	args=$(getopt \
 		-n "$script_name" \
 		-a \
