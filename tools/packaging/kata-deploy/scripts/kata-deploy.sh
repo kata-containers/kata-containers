@@ -18,7 +18,6 @@ shims=(
 	"qemu"
 	"clh"
 )
-[ "${CONFIGURE_CC:-}" == "yes" ] && shims+=("cc")
 
 default_shim="qemu"
 
@@ -185,8 +184,7 @@ function configure_containerd_runtime() {
 	else
 		cat <<EOF | tee -a "$containerd_conf_file"
 [$runtime_table]
-  runtime_type = "${runtime_type}" \
-$([ "$runtime" == "kata-cc" ] && printf '\n  cri_handler = "cc"')
+  runtime_type = "${runtime_type}"
   privileged_without_host_devices = true
   pod_annotations = ["io.katacontainers.*"]
 EOF
@@ -220,17 +218,6 @@ function configure_containerd() {
 	for shim in "${shims[@]}"; do
 		configure_containerd_runtime $shim
 	done
-}
-
-function configure_kata() {
-	if [ "${CONFIGURE_CC:-}" == "yes" ]; then
-		sed -E \
-			-e 's#^image = .+#initrd = "/opt/kata/share/kata-containers/kata-containers-initrd.img"#' \
-			-e 's#^(kernel_params = .+)"#\1 agent.config_file=/etc/kata-containers/agent.toml"#' \
-			-e 's#.*service_offload = .+#service_offload = true#' \
-			"/opt/kata/share/defaults/kata-containers/configuration-qemu.toml" > \
-			"/opt/kata/share/defaults/kata-containers/configuration-cc.toml"
-	fi
 }
 
 function remove_artifacts() {
@@ -313,7 +300,6 @@ function main() {
 		install)
 			install_artifacts
 			configure_cri_runtime "$runtime"
-			configure_kata
 			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
 			;;
 		cleanup)
