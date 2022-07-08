@@ -351,6 +351,16 @@ pub struct DmesgWriter {
     logger: slog::Logger,
 }
 
+impl DmesgWriter {
+    /// Creates a new instance.
+    pub fn new(logger: &slog::Logger) -> Self {
+        Self {
+            buf: BytesMut::with_capacity(1024),
+            logger: logger.new(slog::o!("subsystem" => "dmesg")),
+        }
+    }
+}
+
 impl io::Write for DmesgWriter {
     /// 0000000   [                   0   .   0   3   4   9   1   6   ]       R
     ///          5b  20  20  20  20  30  2e  30  33  34  39  31  36  5d  20  52
@@ -416,13 +426,13 @@ mod tests {
         };
 
         writer.flush().unwrap();
-        writer.write("".as_bytes()).unwrap();
-        writer.write("\n".as_bytes()).unwrap();
-        writer.write("\n\n".as_bytes()).unwrap();
-        writer.write("\n\n\n".as_bytes()).unwrap();
-        writer.write("12\n23\n34\n56".as_bytes()).unwrap();
-        writer.write("78".as_bytes()).unwrap();
-        writer.write("90\n".as_bytes()).unwrap();
+        writer.write_all("".as_bytes()).unwrap();
+        writer.write_all("\n".as_bytes()).unwrap();
+        writer.write_all("\n\n".as_bytes()).unwrap();
+        writer.write_all("\n\n\n".as_bytes()).unwrap();
+        writer.write_all("12\n23\n34\n56".as_bytes()).unwrap();
+        writer.write_all("78".as_bytes()).unwrap();
+        writer.write_all("90\n".as_bytes()).unwrap();
         writer.flush().unwrap();
     }
 

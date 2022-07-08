@@ -32,6 +32,11 @@ impl KernelConfigInfo {
         &mut self.kernel_file
     }
 
+    /// Get an immutable reference to the initrd file.
+    pub fn initrd_file(&self) -> Option<&File> {
+        self.initrd_file.as_ref()
+    }
+
     /// Get a mutable reference to the initrd file.
     pub fn initrd_file_mut(&mut self) -> Option<&mut File> {
         self.initrd_file.as_mut()

@@ -10,6 +10,29 @@ use dbs_device::DeviceIo;
 use dbs_utils::rate_limiter::{RateLimiter, TokenBucket};
 use serde_derive::{Deserialize, Serialize};
 
+/// Get bucket update for rate limiter.
+#[macro_export]
+macro_rules! get_bucket_update {
+    ($self:ident, $rate_limiter: ident, $metric: ident) => {{
+        match &$self.$rate_limiter {
+            Some(rl_cfg) => {
+                let tb_cfg = &rl_cfg.$metric;
+                dbs_utils::rate_limiter::RateLimiter::make_bucket(
+                    tb_cfg.size,
+                    tb_cfg.one_time_burst,
+                    tb_cfg.refill_time,
+                )
+                // Updated active rate-limiter.
+                .map(dbs_utils::rate_limiter::BucketUpdate::Update)
+                // Updated/deactivated rate-limiter
+                .unwrap_or(dbs_utils::rate_limiter::BucketUpdate::Disabled)
+            }
+            // No update to the rate-limiter.
+            None => dbs_utils::rate_limiter::BucketUpdate::None,
+        }
+    }};
+}
+
 /// Trait for generic configuration information.
 pub trait ConfigItem {
     /// Related errors.
@@ -178,6 +201,15 @@ where
     info_list: Vec<DeviceConfigInfo<T>>,
 }
 
+impl<T> Default for DeviceConfigInfos<T>
+where
+    T: ConfigItem + Clone,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> DeviceConfigInfos<T>
 where
     T: ConfigItem + Clone,
@@ -221,10 +253,14 @@ where
         }
     }
 
-    #[allow(dead_code)]
     /// Get number of device configuration information objects.
     pub fn len(&self) -> usize {
         self.info_list.len()
+    }
+
+    /// Returns true if the device configuration information objects is empty.
+    pub fn is_empty(&self) -> bool {
+        self.info_list.len() == 0
     }
 
     /// Add a device configuration information object at the tail.
@@ -379,7 +415,7 @@ mod tests {
         Exist,
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Default)]
     pub struct DummyConfigInfo {
         id: String,
         content: String,

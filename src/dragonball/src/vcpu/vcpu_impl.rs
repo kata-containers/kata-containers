@@ -964,16 +964,7 @@ pub mod tests {
     #[cfg(target_arch = "x86_64")]
     #[test]
     fn test_vcpu_check_io_port_info() {
-        let (vcpu, receiver) = create_vcpu();
-
-        // boot complete signal
-        let res = vcpu
-            .check_io_port_info(
-                MAGIC_IOPORT_SIGNAL_GUEST_BOOT_COMPLETE,
-                &[MAGIC_VALUE_SIGNAL_GUEST_BOOT_COMPLETE],
-            )
-            .unwrap();
-        assert!(res);
+        let (vcpu, _receiver) = create_vcpu();
 
         // debug info signal
         let res = vcpu

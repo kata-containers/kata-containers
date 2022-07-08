@@ -27,7 +27,7 @@ use dbs_address_space::{
     AddressSpaceRegionType, NumaNode, NumaNodeInfo, MPOL_MF_MOVE, MPOL_PREFERRED,
 };
 use dbs_allocator::Constraint;
-use kvm_bindings::{kvm_userspace_memory_region, KVM_MEM_LOG_DIRTY_PAGES};
+use kvm_bindings::kvm_userspace_memory_region;
 use kvm_ioctls::VmFd;
 use log::{debug, error, info, warn};
 use nix::sys::mman;
@@ -245,6 +245,11 @@ impl AddressSpaceMgr {
         self.address_space.is_some()
     }
 
+    /// Gets address space.
+    pub fn address_space(&self) -> Option<&AddressSpace> {
+        self.address_space.as_ref()
+    }
+
     /// Create the address space for a virtual machine.
     ///
     /// This method is designed to be called when starting up a virtual machine instead of at
@@ -393,11 +398,8 @@ impl AddressSpaceMgr {
             let host_addr = mmap_reg
                 .get_host_address(MemoryRegionAddress(0))
                 .map_err(|_e| AddressManagerError::InvalidOperation)?;
-            let flags = if param.dirty_page_logging {
-                KVM_MEM_LOG_DIRTY_PAGES
-            } else {
-                0
-            };
+            let flags = 0u32;
+
             let mem_region = kvm_userspace_memory_region {
                 slot: slot as u32,
                 guest_phys_addr: reg.start_addr().raw_value(),
@@ -640,7 +642,7 @@ impl AddressSpaceMgr {
         let node = self
             .numa_nodes
             .entry(guest_numa_node_id)
-            .or_insert(NumaNode::new());
+            .or_insert_with(NumaNode::new);
         node.add_info(&NumaNodeInfo {
             base: region.start_addr(),
             size: region.len(),
@@ -734,7 +736,7 @@ mod tests {
             .unwrap();
         val = gmem.read_obj(GuestAddress(GUEST_MEM_START + 0x1)).unwrap();
         assert_eq!(val, 0xa5);
-        val = gmem.read_obj(GuestAddress(GUEST_MEM_START + 0x0)).unwrap();
+        val = gmem.read_obj(GuestAddress(GUEST_MEM_START)).unwrap();
         assert_eq!(val, 1);
         val = gmem.read_obj(GuestAddress(GUEST_MEM_START + 0x2)).unwrap();
         assert_eq!(val, 3);
@@ -835,7 +837,7 @@ mod tests {
             size: mem_size >> 20,
             host_numa_node_id: None,
             guest_numa_node_id: Some(0),
-            vcpu_ids: cpu_vec.clone(),
+            vcpu_ids: cpu_vec,
         }];
         let mut builder = AddressSpaceMgrBuilder::new("hugeshmem", "").unwrap();
         builder.toggle_prealloc(true);
@@ -850,9 +852,9 @@ mod tests {
         assert_eq!(builder.mem_type, "shmem");
         assert_eq!(builder.mem_file, "/tmp/shmem");
         assert_eq!(builder.mem_index, 0);
-        assert_eq!(builder.mem_suffix, true);
-        assert_eq!(builder.mem_prealloc, false);
-        assert_eq!(builder.dirty_page_logging, false);
+        assert!(builder.mem_suffix);
+        assert!(!builder.mem_prealloc);
+        assert!(!builder.dirty_page_logging);
         assert!(builder.vmfd.is_none());
 
         assert_eq!(&builder.get_next_mem_file(), "/tmp/shmem0");
@@ -867,8 +869,8 @@ mod tests {
 
         builder.toggle_prealloc(true);
         builder.toggle_dirty_page_logging(true);
-        assert_eq!(builder.mem_prealloc, true);
-        assert_eq!(builder.dirty_page_logging, true);
+        assert!(builder.mem_prealloc);
+        assert!(builder.dirty_page_logging);
     }
 
     #[test]
