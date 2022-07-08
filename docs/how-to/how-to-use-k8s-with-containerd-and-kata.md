@@ -1,15 +1,15 @@
-# How to use Kata Containers and CRI (containerd plugin) with Kubernetes
+# How to use Kata Containers and containerd with Kubernetes
 
 This document describes how to set up a single-machine Kubernetes (k8s) cluster.
 
 The Kubernetes cluster will use the
-[CRI containerd](https://github.com/containerd/containerd/) and
-[Kata Containers](https://katacontainers.io) to launch untrusted workloads.
+[containerd](https://github.com/containerd/containerd/) and
+[Kata Containers](https://katacontainers.io) to launch workloads.
 
 ## Requirements
 
 - Kubernetes, Kubelet, `kubeadm`
-- containerd with `cri` plug-in
+- containerd
 - Kata Containers
 
 > **Note:** For information about the supported versions of these components,
@@ -149,7 +149,7 @@ $ sudo -E kubectl taint nodes --all node-role.kubernetes.io/master-
 
 ## Create runtime class for Kata Containers
 
-By default, all pods are created with the default runtime configured in CRI containerd plugin.
+By default, all pods are created with the default runtime configured in containerd.
 From Kubernetes v1.12, users can use [`RuntimeClass`](https://kubernetes.io/docs/concepts/containers/runtime-class/#runtime-class) to specify a different runtime for Pods.
 
 ```bash
@@ -166,7 +166,7 @@ $ sudo -E kubectl apply -f runtime.yaml
 
 ## Run pod in Kata Containers
 
-If a pod has the `runtimeClassName` set to `kata`, the CRI plugin runs the pod with the
+If a pod has the `runtimeClassName` set to `kata`, the CRI runs the pod with the
 [Kata Containers runtime](../../src/runtime/README.md).
 
 - Create an pod configuration that using Kata Containers runtime
