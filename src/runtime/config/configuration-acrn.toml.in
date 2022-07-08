@@ -118,6 +118,9 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_ACRN@"
 # but it will not abort container execution.
 #guest_hook_path = "/usr/share/oci/hooks"
 
+# disable applying SELinux on the VMM process (default false)
+disable_selinux=@DEFDISABLESELINUX@
+
 [agent.@PROJECT_TYPE@]
 # If enabled, make the agent display debug-level messages.
 # (default: disabled)
@@ -185,9 +188,6 @@ internetworking_model="@DEFNETWORKMODEL_ACRN@"
 # within the guest
 # (default: true)
 disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
-
-# disable applying SELinux on the VMM process (default false)
-disable_selinux=@DEFDISABLESELINUX@
 
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).
