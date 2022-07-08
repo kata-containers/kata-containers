@@ -132,9 +132,9 @@ The `RuntimeClass` is suggested.
 
 The following configuration includes two runtime classes:
 - `plugins.cri.containerd.runtimes.runc`: the runc, and it is the default runtime.
-- `plugins.cri.containerd.runtimes.kata`: The function in containerd (reference [the document here](https://github.com/containerd/containerd/tree/master/runtime/v2#binary-naming)) 
+- `plugins.cri.containerd.runtimes.kata`: The function in containerd (reference [the document here](https://github.com/containerd/containerd/tree/main/runtime/v2#binary-naming)) 
   where the dot-connected string `io.containerd.kata.v2` is translated to `containerd-shim-kata-v2` (i.e. the 
-  binary name of the Kata implementation of [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2)).
+  binary name of the Kata implementation of [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/main/runtime/v2)).
 
 ```toml
     [plugins.cri.containerd]
