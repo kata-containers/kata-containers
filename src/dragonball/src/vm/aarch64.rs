@@ -21,7 +21,7 @@ use vmm_sys_util::eventfd::EventFd;
 
 use super::{Vm, VmError};
 use crate::address_space_manager::{GuestAddressSpaceImpl, GuestMemoryImpl};
-use crate::error::{Error, StartMicrovmError};
+use crate::error::{Error, StartMicroVmError};
 use crate::event_manager::EventManager;
 
 /// Configures the system and should be called once per vm before starting vcpu threads.
@@ -63,12 +63,12 @@ impl Vm {
     }
 
     /// Creates the irq chip in-kernel device model.
-    pub fn setup_interrupt_controller(&mut self) -> std::result::Result<(), StartMicrovmError> {
+    pub fn setup_interrupt_controller(&mut self) -> std::result::Result<(), StartMicroVmError> {
         let vcpu_count = self.vm_config.vcpu_count;
 
         self.irqchip_handle = Some(
             dbs_arch::gic::create_gic(&self.vm_fd, vcpu_count.into())
-                .map_err(|e| StartMicrovmError::ConfigureVm(VmError::SetupGIC(e)))?,
+                .map_err(|e| StartMicroVmError::ConfigureVm(VmError::SetupGIC(e)))?,
         );
 
         Ok(())
@@ -88,16 +88,16 @@ impl Vm {
         epoll_mgr: EpollManager,
         vm_as: GuestAddressSpaceImpl,
         request_ts: TimestampUs,
-    ) -> Result<(), StartMicrovmError> {
+    ) -> Result<(), StartMicroVmError> {
         let reset_eventfd =
-            EventFd::new(libc::EFD_NONBLOCK).map_err(|_| StartMicrovmError::EventFd)?;
+            EventFd::new(libc::EFD_NONBLOCK).map_err(|_| StartMicroVmError::EventFd)?;
         self.reset_eventfd = Some(
             reset_eventfd
                 .try_clone()
-                .map_err(|_| StartMicrovmError::EventFd)?,
+                .map_err(|_| StartMicroVmError::EventFd)?,
         );
         self.vcpu_manager()
-            .map_err(StartMicrovmError::Vcpu)?
+            .map_err(StartMicroVmError::Vcpu)?
             .set_reset_event_fd(reset_eventfd);
 
         // On aarch64, the vCPUs need to be created (i.e call KVM_CREATE_VCPU) and configured before
@@ -106,9 +106,9 @@ impl Vm {
         // Search for `kvm_arch_vcpu_create` in arch/arm/kvm/arm.c.
         let kernel_loader_result = self.load_kernel(vm_as.memory().deref())?;
         self.vcpu_manager()
-            .map_err(StartMicrovmError::Vcpu)?
+            .map_err(StartMicroVmError::Vcpu)?
             .create_boot_vcpus(request_ts, kernel_loader_result.kernel_load)
-            .map_err(StartMicrovmError::Vcpu)?;
+            .map_err(StartMicroVmError::Vcpu)?;
         self.setup_interrupt_controller()?;
         self.init_devices(epoll_mgr)?;
 
@@ -124,8 +124,8 @@ impl Vm {
         vm_memory: &GuestMemoryImpl,
         cmdline: &Cmdline,
         initrd: Option<InitrdConfig>,
-    ) -> std::result::Result<(), StartMicrovmError> {
-        let vcpu_manager = self.vcpu_manager().map_err(StartMicrovmError::Vcpu)?;
+    ) -> std::result::Result<(), StartMicroVmError> {
+        let vcpu_manager = self.vcpu_manager().map_err(StartMicroVmError::Vcpu)?;
         let vcpu_mpidr = vcpu_manager
             .vcpus()
             .into_iter()
@@ -141,17 +141,17 @@ impl Vm {
             self.get_irqchip(),
             &initrd,
         )
-        .map_err(StartMicrovmError::ConfigureSystem)
+        .map_err(StartMicroVmError::ConfigureSystem)
     }
 
     pub(crate) fn register_events(
         &mut self,
         event_mgr: &mut EventManager,
-    ) -> std::result::Result<(), StartMicrovmError> {
-        let reset_evt = self.get_reset_eventfd().ok_or(StartMicrovmError::EventFd)?;
+    ) -> std::result::Result<(), StartMicroVmError> {
+        let reset_evt = self.get_reset_eventfd().ok_or(StartMicroVmError::EventFd)?;
         event_mgr
             .register_exit_eventfd(reset_evt)
-            .map_err(|_| StartMicrovmError::RegisterEvent)?;
+            .map_err(|_| StartMicroVmError::RegisterEvent)?;
 
         Ok(())
     }

@@ -13,6 +13,8 @@ use dbs_address_space::AddressSpace;
 use dbs_arch::{DeviceType, MMIODeviceInfo};
 use dbs_device::device_manager::{Error as IoManagerError, IoManager, IoManagerContext};
 use dbs_device::resources::Resource;
+#[cfg(target_arch = "aarch64")]
+use dbs_device::resources::DeviceResources;
 use dbs_device::DeviceIo;
 use dbs_interrupt::KvmIrqManager;
 use dbs_legacy_devices::ConsoleHandler;
@@ -532,11 +534,31 @@ impl DeviceManager {
         &mut self,
         ctx: &mut DeviceOpContext,
     ) -> std::result::Result<(), StartMicroVmError> {
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(
+            any(target_arch = "x86_64",
+                all(target_arch = "aarch64", feature = "dbs-virtio-devices")
+            )
+        )]
         {
             let mut tx = ctx.io_context.begin_tx();
-            let legacy_manager =
-                LegacyDeviceManager::create_manager(&mut tx.io_manager, Some(self.vm_fd.clone()));
+            let legacy_manager;
+
+            #[cfg(target_arch = "x86_64")]
+            {
+                let legacy_manager =
+                    LegacyDeviceManager::create_manager(&mut tx.io_manager, Some(self.vm_fd.clone()));
+            }
+
+            #[cfg(target_arch = "aarch64")]
+            #[cfg(feature = "dbs-virtio-devices")]
+            {
+                let resources = self.get_legacy_resources()?;
+                legacy_manager = LegacyDeviceManager::create_manager(
+                    &mut tx.io_manager,
+                    Some(self.vm_fd.clone()),
+                    &resources,
+                );
+            }
 
             match legacy_manager {
                 Ok(v) => {
@@ -658,7 +680,7 @@ impl DeviceManager {
         {
             let dev_info = ctx
                 .generate_virtio_device_info()
-                .map_err(StartMicrovmError::DeviceManager)?;
+                .map_err(StartMicroVmError::DeviceManager)?;
             self.mmio_device_info.extend(dev_info);
         }
 
@@ -714,6 +736,78 @@ impl DeviceManager {
     /// Return mmio device info for FDT build.
     pub fn get_mmio_device_info(&self) -> Option<&HashMap<(DeviceType, String), MMIODeviceInfo>> {
         Some(&self.mmio_device_info)
+    }
+
+    #[cfg(feature = "dbs-virtio-devices")]
+    fn get_legacy_resources(
+        &mut self,
+    ) -> std::result::Result<HashMap<String, DeviceResources>, StartMicroVmError> {
+        let mut resources = HashMap::new();
+        let legacy_devices = vec![
+            (DeviceType::Serial, String::from("com1")),
+            (DeviceType::Serial, String::from("com2")),
+            (DeviceType::RTC, String::from("rtc")),
+        ];
+
+        for (device_type, device_id) in legacy_devices {
+            let res = self.allocate_mmio_device_resource()?;
+            self.add_mmio_device_info(&res, device_type, device_id.clone(), None);
+            resources.insert(device_id.clone(), res);
+        }
+
+        Ok(resources)
+    }
+
+    fn mmio_device_info_to_resources(
+        &self,
+        key: &(DeviceType, String),
+    ) -> std::result::Result<DeviceResources, StartMicroVmError> {
+        self.mmio_device_info
+            .get(key)
+            .map(|info| {
+                let mut resources = DeviceResources::new();
+                resources.append(Resource::LegacyIrq(info.irqs[0]));
+                resources.append(Resource::MmioAddressRange {
+                    base: info.base,
+                    size: info.size,
+                });
+                resources
+            })
+            .ok_or(StartMicroVmError::DeviceManager(
+                DeviceMgrError::GetDeviceResource,
+            ))
+    }
+
+    #[cfg(feature = "dbs-virtio-devices")]
+    fn allocate_mmio_device_resource(
+        &self,
+    ) -> std::result::Result<DeviceResources, StartMicroVmError> {
+        let mut requests = Vec::new();
+        requests.push(ResourceConstraint::MmioAddress {
+            range: None,
+            align: MMIO_DEFAULT_CFG_SIZE,
+            size: MMIO_DEFAULT_CFG_SIZE,
+        });
+        requests.push(ResourceConstraint::LegacyIrq { irq: None });
+
+        self.res_manager
+            .allocate_device_resources(&requests, false)
+            .map_err(StartMicroVmError::AllocateResource)
+    }
+
+    fn add_mmio_device_info(
+        &mut self,
+        resource: &DeviceResources,
+        device_type: DeviceType,
+        device_id: String,
+        msi_device_id: Option<u32>,
+    ) {
+        let (base, size) = resource.get_mmio_address_ranges()[0];
+        let irq = resource.get_legacy_irq().unwrap();
+        self.mmio_device_info.insert(
+            (device_type, device_id),
+            MMIODeviceInfo::new(base, size, vec![irq], msi_device_id),
+        );
     }
 
     #[cfg(feature = "dbs-virtio-devices")]
