@@ -3,18 +3,20 @@
 
 //! Device manager to manage IO devices for a virtual machine.
 
+#[cfg(target_arch = "aarch64")]
+use std::collections::HashMap;
+
 use std::io;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::collections::HashMap;
 
 use arc_swap::ArcSwap;
 use dbs_address_space::AddressSpace;
 #[cfg(target_arch = "aarch64")]
 use dbs_arch::{DeviceType, MMIODeviceInfo};
 use dbs_device::device_manager::{Error as IoManagerError, IoManager, IoManagerContext};
-use dbs_device::resources::Resource;
 #[cfg(target_arch = "aarch64")]
 use dbs_device::resources::DeviceResources;
+use dbs_device::resources::Resource;
 use dbs_device::DeviceIo;
 use dbs_interrupt::KvmIrqManager;
 use dbs_legacy_devices::ConsoleHandler;
@@ -54,7 +56,10 @@ pub mod console_manager;
 pub use self::console_manager::ConsoleManager;
 
 mod legacy;
-pub use self::legacy::{Error as LegacyDeviceError, LegacyDeviceManager, aarch64::{COM1, COM2, RTC}};
+pub use self::legacy::{Error as LegacyDeviceError, LegacyDeviceManager};
+
+#[cfg(target_arch = "aarch64")]
+pub use self::legacy::aarch64::{COM1, COM2, RTC};
 
 #[cfg(feature = "virtio-vsock")]
 /// Device manager for user-space vsock devices.
@@ -333,9 +338,7 @@ impl DeviceOpContext {
             let (mmio_base, mmio_size, irq) = DeviceManager::get_virtio_mmio_device_info(device)?;
             let dev_type;
             let device_id;
-            if let Some(mmiov2_device) =
-                device.as_any().downcast_ref::<DbsMmioV2Device>()
-            {
+            if let Some(mmiov2_device) = device.as_any().downcast_ref::<DbsMmioV2Device>() {
                 dev_type = mmiov2_device.get_device_type();
                 device_id = None;
             } else {
@@ -534,19 +537,20 @@ impl DeviceManager {
         &mut self,
         ctx: &mut DeviceOpContext,
     ) -> std::result::Result<(), StartMicroVmError> {
-        #[cfg(
-            any(target_arch = "x86_64",
-                all(target_arch = "aarch64", feature = "dbs-virtio-devices")
-            )
-        )]
+        #[cfg(any(
+            target_arch = "x86_64",
+            all(target_arch = "aarch64", feature = "dbs-virtio-devices")
+        ))]
         {
             let mut tx = ctx.io_context.begin_tx();
             let legacy_manager;
 
             #[cfg(target_arch = "x86_64")]
             {
-                let legacy_manager =
-                    LegacyDeviceManager::create_manager(&mut tx.io_manager, Some(self.vm_fd.clone()));
+                legacy_manager = LegacyDeviceManager::create_manager(
+                    &mut tx.io_manager,
+                    Some(self.vm_fd.clone()),
+                );
             }
 
             #[cfg(target_arch = "aarch64")]
@@ -817,10 +821,7 @@ impl DeviceManager {
             .get_legacy_irq()
             .ok_or(DeviceMgrError::GetDeviceResource)?;
 
-        if let Some(mmio_dev) = device
-            .as_any()
-            .downcast_ref::<DbsMmioV2Device>()
-        {
+        if let Some(mmio_dev) = device.as_any().downcast_ref::<DbsMmioV2Device>() {
             if let Resource::MmioAddressRange { base, size } = mmio_dev.get_mmio_cfg_res() {
                 return Ok((base, size, irq));
             }

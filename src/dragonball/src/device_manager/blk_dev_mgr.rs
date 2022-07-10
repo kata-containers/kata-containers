@@ -372,8 +372,7 @@ impl BlockDeviceMgr {
                 for info in mgr.info_list.iter() {
                     info.config.check_conflicts(&config)?;
                 }
-                let config2 = config.clone();
-                let index = mgr.create(config2)?;
+                let index = mgr.create(config.clone())?;
                 if !ctx.is_hotplug {
                     return Ok(());
                 }
@@ -497,8 +496,6 @@ impl BlockDeviceMgr {
     ) -> std::result::Result<Box<Block<GuestAddressSpaceImpl>>, virtio::Error> {
         let epoll_mgr = ctx.epoll_mgr.clone().ok_or(virtio::Error::InvalidInput)?;
 
-        // Safe to unwrap() because we have verified it when parsing device type.
-        //let path = cfg.path_on_host.to_str().unwrap();
         let mut block_files: Vec<Box<dyn Ufile>> = vec![];
 
         match cfg.device_type {
@@ -762,7 +759,7 @@ impl BlockDeviceMgr {
 }
 
 impl Default for BlockDeviceMgr {
-    /// Constructor for the BlockDeviceConfigs. It initializes an empty LinkedList.
+    /// Constructor for the BlockDeviceMgr. It initializes an empty LinkedList.
     fn default() -> BlockDeviceMgr {
         BlockDeviceMgr {
             info_list: VecDeque::<BlockDeviceInfo>::new(),

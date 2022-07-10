@@ -64,7 +64,7 @@ impl TryFrom<AddressMessage> for Address {
     }
 }
 
-pub(crate) fn parse_ip(ip: &Vec<u8>, family: u8) -> Result<IpAddr> {
+pub(crate) fn parse_ip(ip: &[u8], family: u8) -> Result<IpAddr> {
     let support_len = if family as u16 == AF_INET { 4 } else { 16 };
     if ip.len() != support_len {
         return Err(anyhow!(
