@@ -59,6 +59,8 @@ skip_config_checks="false"
 DESTDIR="${DESTDIR:-/}"
 #PREFIX=
 PREFIX="${PREFIX:-/usr}"
+#Kernel URL
+kernel_url=""
 
 packaging_scripts_dir="${script_dir}/../scripts"
 source "${packaging_scripts_dir}/lib.sh"
@@ -97,6 +99,7 @@ Options:
 	-p <path>   	: Path to a directory with patches to apply to kernel.
 	-s          	: Skip .config checks
 	-t <hypervisor>	: Hypervisor_target.
+	-u <url>	: Kernel URL to be used to download the kernel tarball.
 	-v <version>	: Kernel version to use if kernel path not provided.
 	-x <type>	: Confidential guest protection type, such as sev and tdx
 EOF
@@ -123,7 +126,7 @@ get_tee_kernel() {
 
 	mkdir -p ${kernel_path}
 
-	kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
+	[ -z "${kernel_url}" ] && kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
 	kernel_tarball="${version}.tar.gz"
 
 	if [ ! -f "${kernel_tarball}" ]; then
@@ -468,7 +471,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:deEfg:hk:p:t:v:x:" opt; do	
+	while getopts "a:b:c:deEfg:hk:p:t:u:v:x:" opt; do	
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -510,6 +513,9 @@ main() {
 				;;
 			t)
 				hypervisor_target="${OPTARG}"
+				;;
+			u)	
+				kernel_url="${OPTARG}"
 				;;
 			v)
 				kernel_version="${OPTARG}"
