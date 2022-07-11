@@ -63,7 +63,7 @@ pub enum VmError {
     /// Cannot setup GIC
     #[cfg(target_arch = "aarch64")]
     #[error("failed to configure GIC")]
-    SetupGIC(dbs_arch::gic::Error),
+    SetupGIC(GICError),
 }
 
 /// Configuration information for user defined NUMA nodes.
@@ -187,7 +187,7 @@ pub struct Vm {
     // Arm specific fields.
     // On aarch64 we need to keep around the fd obtained by creating the VGIC device.
     #[cfg(target_arch = "aarch64")]
-    irqchip_handle: Option<Box<dyn dbs_arch::gic::GICDevice>>,
+    irqchip_handle: Option<Box<dyn GICDevice>>,
 
     #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
     upcall_client: Option<Arc<UpcallClient<DevMgrService>>>,
