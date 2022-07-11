@@ -19,7 +19,7 @@ $(MK_DIR)/dockerbuild/install_yq.sh:
 	$(MK_DIR)/kata-deploy-copy-yq-installer.sh
 
 all-parallel: $(MK_DIR)/dockerbuild/install_yq.sh
-	${MAKE} -f $(MK_PATH) all -j$$(( $$(nproc) - 1  )) V=
+	${MAKE} -f $(MK_PATH) all -j $(shell nproc ${CI:+--ignore 1}) V=
 
 all: cloud-hypervisor-tarball \
 	firecracker-tarball \

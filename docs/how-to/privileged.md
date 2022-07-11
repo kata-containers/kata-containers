@@ -40,7 +40,7 @@ See below example config:
            ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration.toml"
 ```
 
- - [Kata Containers with Containerd and CRI documentation](how-to-use-k8s-with-cri-containerd-and-kata.md)
+ - [How to use Kata Containers and containerd with Kubernetes](how-to-use-k8s-with-containerd-and-kata.md)
  - [Containerd CRI config documentation](https://github.com/containerd/containerd/blob/main/docs/cri/config.md)
 
 #### CRI-O
