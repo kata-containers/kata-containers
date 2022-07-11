@@ -156,18 +156,26 @@ pub(crate) mod aarch64 {
 
     type Result<T> = ::std::result::Result<T, Error>;
 
+    /// LegacyDeviceType: com1
+    pub const COM1: &str = "com1";
+    /// LegacyDeviceType: com2
+    pub const COM2: &str = "com2";
+    /// LegacyDeviceType: rtc
+    pub const RTC: &str = "rtc";
+
     impl LegacyDeviceManager {
+        /// Create a LegacyDeviceManager instance handling legacy devices.
         pub fn create_manager(
             bus: &mut IoManager,
             vm_fd: Option<Arc<VmFd>>,
             resources: &HashMap<String, DeviceResources>,
         ) -> Result<Self> {
             let (com1_device, com1_eventfd) =
-                Self::create_com_device(bus, vm_fd.as_ref(), resources.get("com1").unwrap())?;
+                Self::create_com_device(bus, vm_fd.as_ref(), resources.get(COM1).unwrap())?;
             let (com2_device, com2_eventfd) =
-                Self::create_com_device(bus, vm_fd.as_ref(), resources.get("com2").unwrap())?;
+                Self::create_com_device(bus, vm_fd.as_ref(), resources.get(COM2).unwrap())?;
             let (rtc_device, rtc_eventfd) =
-                Self::create_rtc_device(bus, vm_fd.as_ref(), resources.get("rtc").unwrap())?;
+                Self::create_rtc_device(bus, vm_fd.as_ref(), resources.get(RTC).unwrap())?;
 
             Ok(LegacyDeviceManager {
                 _rtc_device: rtc_device,
