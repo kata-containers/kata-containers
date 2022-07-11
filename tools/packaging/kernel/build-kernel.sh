@@ -116,33 +116,18 @@ arch_to_kernel() {
 	esac
 }
 
-get_tdx_kernel() {
+get_tee_kernel() {
 	local version="${1}"
-	local kernel_path=${2}
+	local kernel_path="${2}"
+	local tee="${3}"
 
 	mkdir -p ${kernel_path}
 
-	kernel_url=$(get_from_kata_deps "assets.kernel.tdx.url")
+	kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
 	kernel_tarball="${version}.tar.gz"
 
 	if [ ! -f "${kernel_tarball}" ]; then
 	   curl --fail -OL "${kernel_url}/${kernel_tarball}"
-	fi
-
-	tar --strip-components=1 -xf ${kernel_tarball} -C ${kernel_path}
-}
-
-get_sev_kernel() {
-	local version="${1}"
-	local kernel_path=${2}
-
-	mkdir -p ${kernel_path}
-
-	kernel_url=$(get_from_kata_deps "assets.kernel.sev.url")
-	kernel_tarball="${version}.tar.gz"
-
-	if [ ! -f "${kernel_tarball}" ]; then
-	   curl --fail -OL "${kernel_url}${kernel_tarball}"
 	fi
 	
 	mkdir -p ${kernel_path}
@@ -156,11 +141,8 @@ get_kernel() {
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
 	[ ! -d "${kernel_path}" ] || die "kernel_path already exist"
 
-	if [ "${conf_guest}" == "tdx" ]; then
-		get_tdx_kernel ${version} ${kernel_path}
-		return
-	elif [ "${conf_guest}" == "sev" ]; then
-		get_sev_kernel ${version} ${kernel_path}
+	if [ "${conf_guest}" != "" ]; then
+		get_tee_kernel ${version} ${kernel_path} ${conf_guest}
 		return
 	fi
 
@@ -563,11 +545,9 @@ main() {
 				kernel_version=$(get_from_kata_deps "assets.kernel-experimental.tag")
 			;;
 			esac
-		elif [[ "${conf_guest}" == "tdx" ]]; then
-			 kernel_version=$(get_from_kata_deps "assets.kernel.tdx.tag")
-		elif [[ "${conf_guest}" == "sev" ]]; then
+		elif [[ "${conf_guest}" != "" ]]; then
 			#If specifying a tag for kernel_version, must be formatted version-like to avoid unintended parsing issues
-			 kernel_version=$(get_from_kata_deps "assets.kernel.sev.tag")
+			kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.tag")
 		else
 			kernel_version=$(get_from_kata_deps "assets.kernel.version")
 		fi
