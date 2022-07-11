@@ -9,7 +9,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -59,6 +61,8 @@ var cdromMajors = map[int64]string{
 // https://github.com/torvalds/linux/blob/master/include/uapi/linux/major.h
 // #define FLOPPY_MAJOR		2
 const floppyMajor = int64(2)
+
+const loopMajor = int64(7)
 
 // Process gathers data related to a container process.
 type Process struct {
@@ -794,6 +798,41 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 	// from the configuration. This should happen at create.
 	var storedDevices []ContainerDevice
 	for _, info := range contConfig.DeviceInfos {
+		// if it's a loop device retrive the vhost-user-blk information
+		var stat unix.Stat_t
+		if info.Major == loopMajor {
+			backingFile := fmt.Sprintf("/sys/block/loop%d/loop/backing_file", info.Minor)
+			data, err := ioutil.ReadFile(backingFile)
+			if err != nil {
+				return fmt.Errorf("fail to read (%s): %v", backingFile, err)
+			}
+
+			backingFilePath := strings.TrimSpace(string(data))
+			devicePath := strings.TrimSuffix(backingFilePath, ".img")
+			if err := unix.Stat(devicePath, &stat); err != nil {
+				return fmt.Errorf("stat %q failed: %v", devicePath, err)
+			}
+
+			// detach loopback device
+			device := fmt.Sprintf("/dev/loop%d", info.Minor)
+			args := []string{"-d", device}
+			cmd := exec.Command("losetup", args...)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("Failed to remove loopback device: %s: %v %s", device, err, out)
+			}
+
+			// remove the temp backing file
+			if err := os.Remove(backingFilePath); err != nil {
+				return fmt.Errorf("fail to remove (%s): %s", backingFilePath, err.Error())
+			}
+
+			info.HostPath = devicePath
+			info.DevType = "b"
+			info.Major = int64(unix.Major(uint64(stat.Rdev)))
+			info.Minor = int64(unix.Minor(uint64(stat.Rdev)))
+		}
+
 		dev, err := c.sandbox.devManager.NewDevice(info)
 		if err != nil {
 			return err
