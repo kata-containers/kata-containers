@@ -42,9 +42,8 @@ type VMConfig struct {
 	HypervisorConfig HypervisorConfig
 }
 
-// Valid Check VMConfig validity.
 func (c *VMConfig) Valid() error {
-	return c.HypervisorConfig.Valid()
+	return validateHypervisorConfig(&c.HypervisorConfig)
 }
 
 // ToGrpc convert VMConfig struct to grpc format pb.GrpcVMConfig.

@@ -193,7 +193,7 @@ parts:
       # Setup and build kernel
       ./build-kernel.sh -v "${kernel_version}" -d setup
       cd ${kernel_dir_prefix}*
-      make -j $(($(nproc)-1)) EXTRAVERSION=".container"
+      make -j $(nproc ${CI:+--ignore 1}) EXTRAVERSION=".container"
 
       kernel_suffix="${kernel_version}.container"
       kata_kernel_dir="${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers"
@@ -282,7 +282,7 @@ parts:
       esac
 
       # build and install
-      make -j $(($(nproc)-1))
+      make -j $(nproc ${CI:+--ignore 1})
       make install DESTDIR="${SNAPCRAFT_PART_INSTALL}"
     prime:
       - -snap/

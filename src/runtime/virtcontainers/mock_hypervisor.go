@@ -31,10 +31,6 @@ func (m *mockHypervisor) HypervisorConfig() HypervisorConfig {
 }
 
 func (m *mockHypervisor) setConfig(config *HypervisorConfig) error {
-	if err := config.Valid(); err != nil {
-		return err
-	}
-
 	return nil
 }
 
