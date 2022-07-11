@@ -71,6 +71,7 @@ See the [official documentation](docs) including:
 - [Developer guide](docs/Developer-Guide.md)
 - [Design documents](docs/design)
   - [Architecture overview](docs/design/architecture)
+  - [Architecture 3.0 overview](docs/design/architecture_3.0/)
 
 ## Configuration
 
