@@ -72,8 +72,10 @@ RUN git clone --depth=1 "${QEMU_REPO}" qemu && \
     git fetch --depth=1 origin "${QEMU_VERSION}" && git checkout FETCH_HEAD && \
     scripts/git-submodule.sh update meson capstone && \
     /root/patch_qemu.sh "${QEMU_VERSION}" "/root/kata_qemu/patches" && \
-    (PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s "kata-qemu${BUILD_SUFFIX}" | xargs ./configure \
-	--with-pkgversion="kata-static${BUILD_SUFFIX}") && \
+    [ -n "${BUILD_SUFFIX}" ] && HYPERVISOR_NAME="kata-qemu-${BUILD_SUFFIX}" || HYPERVISOR_NAME="kata-qemu" && \
+    [ -n "${BUILD_SUFFIX}" ] && PKGVERSION="kata-static-${BUILD_SUFFIX}" || PKGVERSION="kata-static" && \
+    (PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s "${HYPERVISOR_NAME}" | xargs ./configure \
+	--with-pkgversion="${PKGVERSION}") && \
     make -j"$(nproc ${CI:+--ignore 1})" && \
     make install DESTDIR="${QEMU_DESTDIR}" && \
     /root/static-build/scripts/qemu-build-post.sh
