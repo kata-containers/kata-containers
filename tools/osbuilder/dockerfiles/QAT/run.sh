@@ -90,14 +90,14 @@ build_qat_drivers()
     KERNEL_ROOTFS_DIR=${KERNEL_MAJOR_VERSION}.${KERNEL_PATHLEVEL}.${KERNEL_SUBLEVEL}${KERNEL_EXTRAVERSION}
     cd $QAT_SRC
     KERNEL_SOURCE_ROOT=${linux_kernel_path} ./configure ${QAT_CONFIGURE_OPTIONS}
-    make all -j$(nproc) 
+    make all -j $($(nproc ${CI:+--ignore 1})) 
 }
 
 add_qat_to_rootfs()
 {
     /bin/echo -e "\n\e[1;42mCopy driver modules to rootfs\e[0m"
     cd $QAT_SRC
-    sudo -E make INSTALL_MOD_PATH=${ROOTFS_DIR} qat-driver-install -j$(nproc)
+    sudo -E make INSTALL_MOD_PATH=${ROOTFS_DIR} qat-driver-install -j$(nproc --ignore=1)
     sudo cp $QAT_SRC/build/usdm_drv.ko ${ROOTFS_DIR}/lib/modules/${KERNEL_ROOTFS_DIR}/updates/drivers
     sudo depmod -a -b ${ROOTFS_DIR} ${KERNEL_ROOTFS_DIR}
     cd ${kata_repo_path}/tools/osbuilder/image-builder

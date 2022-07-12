@@ -105,7 +105,6 @@ type RuntimeConfig struct {
 	//Experimental features enabled
 	Experimental []exp.Feature
 
-	Console        string
 	JaegerEndpoint string
 	JaegerUser     string
 	JaegerPassword string
@@ -187,16 +186,27 @@ func cmdEnvs(spec specs.Spec, envs []types.EnvVar) []types.EnvVar {
 
 func newMount(m specs.Mount) vc.Mount {
 	readonly := false
+	bind := false
 	for _, flag := range m.Options {
-		if flag == "ro" {
+		switch flag {
+		case "rbind", "bind":
+			bind = true
+		case "ro":
 			readonly = true
-			break
 		}
 	}
+
+	// normal bind mounts, set type to bind.
+	// https://github.com/opencontainers/runc/blob/v1.1.3/libcontainer/specconv/spec_linux.go#L512-L520
+	mountType := m.Type
+	if mountType != vc.KataEphemeralDevType && mountType != vc.KataLocalDevType && bind {
+		mountType = "bind"
+	}
+
 	return vc.Mount{
 		Source:      m.Source,
 		Destination: m.Destination,
-		Type:        m.Type,
+		Type:        mountType,
 		Options:     m.Options,
 		ReadOnly:    readonly,
 	}
@@ -861,8 +871,8 @@ func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error
 
 // SandboxConfig converts an OCI compatible runtime configuration file
 // to a virtcontainers sandbox configuration structure.
-func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, console string, detach, systemdCgroup bool) (vc.SandboxConfig, error) {
-	containerConfig, err := ContainerConfig(ocispec, bundlePath, cid, console, detach)
+func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid string, detach, systemdCgroup bool) (vc.SandboxConfig, error) {
+	containerConfig, err := ContainerConfig(ocispec, bundlePath, cid, detach)
 	if err != nil {
 		return vc.SandboxConfig{}, err
 	}
@@ -913,9 +923,6 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 
 		DisableGuestSeccomp: runtime.DisableGuestSeccomp,
 
-		// Q: Is this really necessary? @weizhang555
-		// Spec: &ocispec,
-
 		Experimental: runtime.Experimental,
 	}
 
@@ -947,7 +954,7 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 
 // ContainerConfig converts an OCI compatible runtime configuration
 // file to a virtcontainers container configuration structure.
-func ContainerConfig(ocispec specs.Spec, bundlePath, cid, console string, detach bool) (vc.ContainerConfig, error) {
+func ContainerConfig(ocispec specs.Spec, bundlePath, cid string, detach bool) (vc.ContainerConfig, error) {
 	rootfs := vc.RootFs{Target: ocispec.Root.Path, Mounted: true}
 	if !filepath.IsAbs(rootfs.Target) {
 		rootfs.Target = filepath.Join(bundlePath, ocispec.Root.Path)
@@ -962,7 +969,6 @@ func ContainerConfig(ocispec specs.Spec, bundlePath, cid, console string, detach
 		User:            strconv.FormatUint(uint64(ocispec.Process.User.UID), 10),
 		PrimaryGroup:    strconv.FormatUint(uint64(ocispec.Process.User.GID), 10),
 		Interactive:     ocispec.Process.Terminal,
-		Console:         console,
 		Detach:          detach,
 		NoNewPrivileges: ocispec.Process.NoNewPrivileges,
 	}

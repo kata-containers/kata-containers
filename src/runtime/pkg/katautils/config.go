@@ -10,8 +10,10 @@ package katautils
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 	goruntime "runtime"
 	"strings"
 
@@ -24,6 +26,7 @@ import (
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	"github.com/pbnjay/memory"
 	"github.com/sirupsen/logrus"
 )
 
@@ -121,6 +124,7 @@ type hypervisor struct {
 	DefaultMaxVCPUs                uint32   `toml:"default_maxvcpus"`
 	MemorySize                     uint32   `toml:"default_memory"`
 	MemSlots                       uint32   `toml:"memory_slots"`
+	DefaultMaxMemorySize           uint64   `toml:"default_maxmemory"`
 	DefaultBridges                 uint32   `toml:"default_bridges"`
 	Msize9p                        uint32   `toml:"msize_9p"`
 	PCIeRootPort                   uint32   `toml:"pcie_root_port"`
@@ -176,6 +180,20 @@ type agent struct {
 	DialTimeout         uint32   `toml:"dial_timeout"`
 }
 
+func (orig *tomlConfig) Clone() tomlConfig {
+	clone := *orig
+	clone.Hypervisor = make(map[string]hypervisor)
+	clone.Agent = make(map[string]agent)
+
+	for key, value := range orig.Hypervisor {
+		clone.Hypervisor[key] = value
+	}
+	for key, value := range orig.Agent {
+		clone.Agent[key] = value
+	}
+	return clone
+}
+
 func (h hypervisor) path() (string, error) {
 	p := h.Path
 
@@ -220,7 +238,7 @@ func (h hypervisor) initrd() (string, error) {
 	p := h.Initrd
 
 	if p == "" {
-		return "", errors.New("initrd is not set")
+		return "", nil
 	}
 
 	return ResolvePath(p)
@@ -230,7 +248,7 @@ func (h hypervisor) image() (string, error) {
 	p := h.Image
 
 	if p == "" {
-		return "", errors.New("image is not set")
+		return "", nil
 	}
 
 	return ResolvePath(p)
@@ -400,6 +418,20 @@ func (h hypervisor) defaultMemOffset() uint64 {
 	return offset
 }
 
+func (h hypervisor) defaultMaxMemSz() uint64 {
+	hostMemory := memory.TotalMemory() / 1024 / 1024 //MiB
+
+	if h.DefaultMaxMemorySize == 0 {
+		return hostMemory
+	}
+
+	if h.DefaultMaxMemorySize > hostMemory {
+		return hostMemory
+	}
+
+	return h.DefaultMaxMemorySize
+}
+
 func (h hypervisor) defaultBridges() uint32 {
 	if h.DefaultBridges == 0 {
 		return defaultBridgesCount
@@ -472,24 +504,6 @@ func (h hypervisor) vhostUserStorePath() string {
 		return defaultVhostUserStorePath
 	}
 	return h.VhostUserStorePath
-}
-
-func (h hypervisor) getInitrdAndImage() (initrd string, image string, err error) {
-	initrd, errInitrd := h.initrd()
-
-	image, errImage := h.image()
-
-	if h.ConfidentialGuest && h.MachineType == vc.QemuCCWVirtio {
-		if image != "" || initrd != "" {
-			return "", "", errors.New("Neither the image nor initrd path may be set for Secure Execution")
-		}
-	} else if image != "" && initrd != "" {
-		return "", "", errors.New("having both an image and an initrd defined in the configuration file is not supported")
-	} else if errInitrd != nil && errImage != nil {
-		return "", "", fmt.Errorf("Either initrd or image must be set to a valid path (initrd: %v) (image: %v)", errInitrd, errImage)
-	}
-
-	return
 }
 
 func (h hypervisor) getDiskRateLimiterBwMaxRate() int64 {
@@ -601,7 +615,12 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	initrd, image, err := h.getInitrdAndImage()
+	initrd, err := h.initrd()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	image, err := h.image()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
 	}
@@ -635,6 +654,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
 		MemorySize:            h.defaultMemSz(),
 		MemSlots:              h.defaultMemSlots(),
+		DefaultMaxMemorySize:  h.defaultMaxMemSz(),
 		EntropySource:         h.GetEntropySource(),
 		EntropySourceList:     h.EntropySourceList,
 		DefaultBridges:        h.defaultBridges(),
@@ -649,6 +669,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
 		EnableAnnotations:     h.EnableAnnotations,
+		DisableSeLinux:        h.DisableSeLinux,
 	}, nil
 }
 
@@ -663,7 +684,12 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	initrd, image, err := h.getInitrdAndImage()
+	initrd, err := h.initrd()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	image, err := h.image()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
 	}
@@ -736,6 +762,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemorySize:              h.defaultMemSz(),
 		MemSlots:                h.defaultMemSlots(),
 		MemOffset:               h.defaultMemOffset(),
+		DefaultMaxMemorySize:    h.defaultMaxMemSz(),
 		VirtioMem:               h.VirtioMem,
 		EntropySource:           h.GetEntropySource(),
 		EntropySourceList:       h.EntropySourceList,
@@ -779,6 +806,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		GuestSwap:               h.GuestSwap,
 		Rootless:                h.Rootless,
 		LegacySerial:            h.LegacySerial,
+		DisableSeLinux:          h.DisableSeLinux,
 	}, nil
 }
 
@@ -833,6 +861,7 @@ func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
 		MemorySize:            h.defaultMemSz(),
 		MemSlots:              h.defaultMemSlots(),
+		DefaultMaxMemorySize:  h.defaultMaxMemSz(),
 		EntropySource:         h.GetEntropySource(),
 		EntropySourceList:     h.EntropySourceList,
 		DefaultBridges:        h.defaultBridges(),
@@ -842,6 +871,7 @@ func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		BlockDeviceDriver:     blockDriver,
 		DisableVhostNet:       h.DisableVhostNet,
 		GuestHookPath:         h.guestHookPath(),
+		DisableSeLinux:        h.DisableSeLinux,
 		EnableAnnotations:     h.EnableAnnotations,
 	}, nil
 }
@@ -857,7 +887,12 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	initrd, image, err := h.getInitrdAndImage()
+	initrd, err := h.initrd()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	image, err := h.image()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
 	}
@@ -910,6 +945,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemorySize:                     h.defaultMemSz(),
 		MemSlots:                       h.defaultMemSlots(),
 		MemOffset:                      h.defaultMemOffset(),
+		DefaultMaxMemorySize:           h.defaultMaxMemSz(),
 		VirtioMem:                      h.VirtioMem,
 		EntropySource:                  h.GetEntropySource(),
 		EntropySourceList:              h.EntropySourceList,
@@ -1305,7 +1341,177 @@ func decodeConfig(configPath string) (tomlConfig, string, error) {
 		return tomlConf, resolved, err
 	}
 
+	err = decodeDropIns(resolved, &tomlConf)
+	if err != nil {
+		return tomlConf, resolved, err
+	}
+
 	return tomlConf, resolved, nil
+}
+
+func decodeDropIns(mainConfigPath string, tomlConf *tomlConfig) error {
+	configDir := filepath.Dir(mainConfigPath)
+	dropInDir := filepath.Join(configDir, "config.d")
+
+	files, err := ioutil.ReadDir(dropInDir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("error reading %q directory: %s", dropInDir, err)
+		} else {
+			return nil
+		}
+	}
+
+	for _, file := range files {
+		dropInFpath := filepath.Join(dropInDir, file.Name())
+
+		err = updateFromDropIn(dropInFpath, tomlConf)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func updateFromDropIn(dropInFpath string, tomlConf *tomlConfig) error {
+	configData, err := os.ReadFile(dropInFpath)
+	if err != nil {
+		return fmt.Errorf("error reading file %q: %s", dropInFpath, err)
+	}
+
+	// Ordinarily, BurntSushi only updates fields of tomlConfig that are
+	// changed by the file and leaves the rest alone.  This doesn't apply
+	// though to tomlConfig substructures that are stored in maps.  Their
+	// previous contents are erased by toml.Decode() and only fields changed by
+	// the file are set.  To work around this, a bit of juggling is needed to
+	// preserve the previous contents and merge them manually with the incoming
+	// changes afterwards, using reflection.
+	tomlConfOrig := tomlConf.Clone()
+
+	var md toml.MetaData
+	md, err = toml.Decode(string(configData), &tomlConf)
+
+	if err != nil {
+		return fmt.Errorf("error decoding file %q: %s", dropInFpath, err)
+	}
+
+	if len(md.Undecoded()) > 0 {
+		msg := fmt.Sprintf("warning: undecoded keys in %q: %+v", dropInFpath, md.Undecoded())
+		kataUtilsLogger.Warn(msg)
+	}
+
+	for _, key := range md.Keys() {
+		err = applyKey(*tomlConf, key, &tomlConfOrig)
+		if err != nil {
+			return fmt.Errorf("error applying key '%+v' from drop-in file %q: %s", key, dropInFpath, err)
+		}
+	}
+
+	tomlConf.Hypervisor = tomlConfOrig.Hypervisor
+	tomlConf.Agent = tomlConfOrig.Agent
+
+	return nil
+}
+
+func applyKey(sourceConf tomlConfig, key []string, targetConf *tomlConfig) error {
+	// Any key that might need treatment provided by this function has to have
+	// (at least) three components: [ map_name map_key_name field_toml_tag ],
+	// e.g. [agent kata enable_tracing] or [hypervisor qemu confidential_guest].
+	if len(key) < 3 {
+		return nil
+	}
+	switch key[0] {
+	case "agent":
+		return applyAgentKey(sourceConf, key[1:], targetConf)
+	case "hypervisor":
+		return applyHypervisorKey(sourceConf, key[1:], targetConf)
+		// The table the 'key' is in is not stored in a map so no special handling
+		// is needed.
+	}
+	return nil
+}
+
+// Both of the following functions copy the value of a 'sourceConf' field
+// identified by the TOML tag in 'key' into the corresponding field in
+// 'targetConf'.
+func applyAgentKey(sourceConf tomlConfig, key []string, targetConf *tomlConfig) error {
+	agentName := key[0]
+	tomlKeyName := key[1]
+
+	sourceAgentConf := sourceConf.Agent[agentName]
+	targetAgentConf := targetConf.Agent[agentName]
+
+	err := copyFieldValue(reflect.ValueOf(&sourceAgentConf).Elem(), tomlKeyName, reflect.ValueOf(&targetAgentConf).Elem())
+	if err != nil {
+		return err
+	}
+
+	targetConf.Agent[agentName] = targetAgentConf
+	return nil
+}
+
+func applyHypervisorKey(sourceConf tomlConfig, key []string, targetConf *tomlConfig) error {
+	hypervisorName := key[0]
+	tomlKeyName := key[1]
+
+	sourceHypervisorConf := sourceConf.Hypervisor[hypervisorName]
+	targetHypervisorConf := targetConf.Hypervisor[hypervisorName]
+
+	err := copyFieldValue(reflect.ValueOf(&sourceHypervisorConf).Elem(), tomlKeyName, reflect.ValueOf(&targetHypervisorConf).Elem())
+	if err != nil {
+		return err
+	}
+
+	targetConf.Hypervisor[hypervisorName] = targetHypervisorConf
+	return nil
+}
+
+// Copies a TOML value of the source field identified by its TOML key to the
+// corresponding field of the target.  Basically
+// 'target[tomlKeyName] = source[tomlKeyNmae]'.
+func copyFieldValue(source reflect.Value, tomlKeyName string, target reflect.Value) error {
+	val, err := getValue(source, tomlKeyName)
+	if err != nil {
+		return fmt.Errorf("error getting key %q from a decoded drop-in conf file: %s", tomlKeyName, err)
+	}
+	err = setValue(target, tomlKeyName, val)
+	if err != nil {
+		return fmt.Errorf("error setting key %q to a new value '%v': %s", tomlKeyName, val.Interface(), err)
+	}
+	return nil
+}
+
+// The first argument is expected to be a reflect.Value of a tomlConfig
+// substructure (hypervisor, agent), the second argument is a TOML key
+// corresponding to the substructure field whose TOML value is queried.
+// Return value corresponds to 'tomlConfStruct[tomlKey]'.
+func getValue(tomlConfStruct reflect.Value, tomlKey string) (reflect.Value, error) {
+	tomlConfStructType := tomlConfStruct.Type()
+	for j := 0; j < tomlConfStruct.NumField(); j++ {
+		fieldTomlTag := tomlConfStructType.Field(j).Tag.Get("toml")
+		if fieldTomlTag == tomlKey {
+			return tomlConfStruct.Field(j), nil
+		}
+	}
+	return reflect.Value{}, fmt.Errorf("key %q not found", tomlKey)
+}
+
+// The first argument is expected to be a reflect.Value of a tomlConfig
+// substructure (hypervisor, agent), the second argument is a TOML key
+// corresponding to the substructure field whose TOML value is to be changed,
+// the third argument is a reflect.Value representing the new TOML value.
+// An equivalent of 'tomlConfStruct[tomlKey] = newVal'.
+func setValue(tomlConfStruct reflect.Value, tomlKey string, newVal reflect.Value) error {
+	tomlConfStructType := tomlConfStruct.Type()
+	for j := 0; j < tomlConfStruct.NumField(); j++ {
+		fieldTomlTag := tomlConfStructType.Field(j).Tag.Get("toml")
+		if fieldTomlTag == tomlKey {
+			tomlConfStruct.Field(j).Set(newVal)
+			return nil
+		}
+	}
+	return fmt.Errorf("key %q not found", tomlKey)
 }
 
 // checkConfig checks the validity of the specified config.

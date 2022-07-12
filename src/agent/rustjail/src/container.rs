@@ -222,7 +222,7 @@ pub trait BaseContainer {
     async fn start(&mut self, p: Process) -> Result<()>;
     async fn run(&mut self, p: Process) -> Result<()>;
     async fn destroy(&mut self) -> Result<()>;
-    fn exec(&mut self) -> Result<()>;
+    async fn exec(&mut self) -> Result<()>;
 }
 
 // LinuxContainer protected by Mutex
@@ -587,14 +587,20 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     // only change stdio devices owner when user
     // isn't root.
-    if guser.uid != 0 {
-        set_stdio_permissions(guser.uid)?;
+    if !uid.is_root() {
+        set_stdio_permissions(uid)?;
     }
 
     setid(uid, gid)?;
 
     if !guser.additional_gids.is_empty() {
-        setgroups(guser.additional_gids.as_slice()).map_err(|e| {
+        let gids: Vec<Gid> = guser
+            .additional_gids
+            .iter()
+            .map(|gid| Gid::from_raw(*gid))
+            .collect();
+
+        unistd::setgroups(&gids).map_err(|e| {
             let _ = write_sync(
                 cwfd,
                 SYNC_FAILED,
@@ -632,11 +638,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     if oci_process.capabilities.is_some() {
         let c = oci_process.capabilities.as_ref().unwrap();
         capabilities::drop_privileges(cfd_log, c)?;
-    }
-
-    if init {
-        // notify parent to run poststart hooks
-        write_sync(cwfd, SYNC_SUCCESS, "")?;
     }
 
     let args = oci_process.args.to_vec();
@@ -730,7 +731,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 // within the container to the specified user.
 // The ownership needs to match because it is created outside of
 // the container and needs to be localized.
-fn set_stdio_permissions(uid: libc::uid_t) -> Result<()> {
+fn set_stdio_permissions(uid: Uid) -> Result<()> {
     let meta = fs::metadata("/dev/null")?;
     let fds = [
         std::io::stdin().as_raw_fd(),
@@ -745,19 +746,13 @@ fn set_stdio_permissions(uid: libc::uid_t) -> Result<()> {
             continue;
         }
 
-        // According to the POSIX specification, -1 is used to indicate that owner and group
-        // are not to be changed.  Since uid_t and gid_t are unsigned types, we have to wrap
-        // around to get -1.
-        let gid = 0u32.wrapping_sub(1);
-
         // We only change the uid owner (as it is possible for the mount to
         // prefer a different gid, and there's no reason for us to change it).
         // The reason why we don't just leave the default uid=X mount setup is
         // that users expect to be able to actually use their console. Without
         // this code, you couldn't effectively run as a non-root user inside a
         // container and also have a console set up.
-        let res = unsafe { libc::fchown(*fd, uid, gid) };
-        Errno::result(res).map_err(|e| anyhow!(e).context("set stdio permissions failed"))?;
+        unistd::fchown(*fd, Some(uid), None).with_context(|| "set stdio permissions failed")?;
     }
 
     Ok(())
@@ -1054,7 +1049,7 @@ impl BaseContainer for LinuxContainer {
         self.start(p).await?;
 
         if init {
-            self.exec()?;
+            self.exec().await?;
             self.status.transition(ContainerState::Running);
         }
 
@@ -1102,7 +1097,7 @@ impl BaseContainer for LinuxContainer {
         Ok(())
     }
 
-    fn exec(&mut self) -> Result<()> {
+    async fn exec(&mut self) -> Result<()> {
         let fifo = format!("{}/{}", &self.root, EXEC_FIFO_FILENAME);
         let fd = fcntl::open(fifo.as_str(), OFlag::O_WRONLY, Mode::from_bits_truncate(0))?;
         let data: &[u8] = &[0];
@@ -1114,6 +1109,26 @@ impl BaseContainer for LinuxContainer {
             .as_secs();
 
         self.status.transition(ContainerState::Running);
+
+        let spec = self
+            .config
+            .spec
+            .as_ref()
+            .ok_or_else(|| anyhow!("OCI spec was not found"))?;
+        let st = self.oci_state()?;
+
+        // run poststart hook
+        if spec.hooks.is_some() {
+            info!(self.logger, "poststart hook");
+            let hooks = spec
+                .hooks
+                .as_ref()
+                .ok_or_else(|| anyhow!("OCI hooks were not found"))?;
+            for h in hooks.poststart.iter() {
+                execute_hook(&self.logger, h, &st).await?;
+            }
+        }
+
         unistd::close(fd)?;
 
         Ok(())
@@ -1335,20 +1350,6 @@ async fn join_namespaces(
         // notify child run prestart hooks completed
         info!(logger, "notify child run prestart hook completed!");
         write_async(pipe_w, SYNC_SUCCESS, "").await?;
-
-        info!(logger, "notify child parent ready to run poststart hook!");
-        // wait to run poststart hook
-        read_async(pipe_r).await?;
-        info!(logger, "get ready to run poststart hook!");
-
-        // run poststart hook
-        if spec.hooks.is_some() {
-            info!(logger, "poststart hook");
-            let hooks = spec.hooks.as_ref().unwrap();
-            for h in hooks.poststart.iter() {
-                execute_hook(&logger, h, st).await?;
-            }
-        }
     }
 
     info!(logger, "wait for child process ready to run exec");
@@ -1475,12 +1476,6 @@ impl LinuxContainer {
         self.console_socket = console_socket.to_path_buf();
         Ok(())
     }
-}
-
-fn setgroups(grps: &[libc::gid_t]) -> Result<()> {
-    let ret = unsafe { libc::setgroups(grps.len(), grps.as_ptr() as *const libc::gid_t) };
-    Errno::result(ret).map(drop)?;
-    Ok(())
 }
 
 use std::fs::OpenOptions;
@@ -1652,6 +1647,7 @@ mod tests {
     use super::*;
     use crate::process::Process;
     use crate::skip_if_not_root;
+    use nix::unistd::Uid;
     use std::fs;
     use std::os::unix::fs::MetadataExt;
     use std::os::unix::io::AsRawFd;
@@ -1797,7 +1793,7 @@ mod tests {
         let old_uid = meta.uid();
 
         let uid = 1000;
-        set_stdio_permissions(uid).unwrap();
+        set_stdio_permissions(Uid::from_raw(uid)).unwrap();
 
         let meta = fs::metadata("/dev/stdin").unwrap();
         assert_eq!(meta.uid(), uid);
@@ -1809,7 +1805,7 @@ mod tests {
         assert_eq!(meta.uid(), uid);
 
         // restore the uid
-        set_stdio_permissions(old_uid).unwrap();
+        set_stdio_permissions(Uid::from_raw(old_uid)).unwrap();
     }
 
     #[test]
@@ -2090,9 +2086,10 @@ mod tests {
         assert!(ret.is_ok(), "Expecting Ok, Got {:?}", ret);
     }
 
-    #[test]
-    fn test_linuxcontainer_exec() {
-        let ret = new_linux_container_and_then(|mut c: LinuxContainer| c.exec());
+    #[tokio::test]
+    async fn test_linuxcontainer_exec() {
+        let (c, _dir) = new_linux_container();
+        let ret = c.unwrap().exec().await;
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
     }
 
