@@ -25,9 +25,9 @@ done
 
 if [[ -n "${BUILD_SUFFIX}" ]]; then
 	echo "Rename binaries using $BUILD_SUFFIX"
-	find -name 'qemu-system-*' -exec mv {} {}-experimental \;
+	find -name 'qemu-system-*' -exec mv {} {}-$BUILD_SUFFIX \;
 	if [[ ${ARCH} != "x86_64" ]]; then
-		find -name 'virtiofsd' -exec mv {} {}-experimental \;
+		find -name 'virtiofsd' -exec mv {} {}-$BUILD_SUFFIX \;
 	fi
 fi
 
