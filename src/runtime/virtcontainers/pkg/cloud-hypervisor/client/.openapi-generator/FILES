@@ -39,6 +39,7 @@ docs/TokenBucket.md
 docs/VdpaConfig.md
 docs/VmAddDevice.md
 docs/VmConfig.md
+docs/VmCoredumpData.md
 docs/VmInfo.md
 docs/VmRemoveDevice.md
 docs/VmResize.md
@@ -81,6 +82,7 @@ model_token_bucket.go
 model_vdpa_config.go
 model_vm_add_device.go
 model_vm_config.go
+model_vm_coredump_data.go
 model_vm_info.go
 model_vm_remove_device.go
 model_vm_resize.go
