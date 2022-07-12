@@ -21,6 +21,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	"github.com/pbnjay/memory"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
@@ -172,20 +173,20 @@ func TestQemuCPUTopology(t *testing.T) {
 
 func TestQemuMemoryTopology(t *testing.T) {
 	mem := uint32(1000)
+	maxMem := memory.TotalMemory() / 1024 / 1024 //MiB
 	slots := uint32(8)
 	assert := assert.New(t)
 
 	q := &qemu{
 		arch: &qemuArchBase{},
 		config: HypervisorConfig{
-			MemorySize: mem,
-			MemSlots:   slots,
+			MemorySize:           mem,
+			MemSlots:             slots,
+			DefaultMaxMemorySize: maxMem,
 		},
 	}
 
-	hostMemKb, err := GetHostMemorySizeKb(procMemInfo)
-	assert.NoError(err)
-	memMax := fmt.Sprintf("%dM", int(float64(hostMemKb)/1024))
+	memMax := fmt.Sprintf("%dM", int(maxMem))
 
 	expectedOut := govmmQemu.Memory{
 		Size:   fmt.Sprintf("%dM", mem),

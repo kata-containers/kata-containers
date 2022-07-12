@@ -33,8 +33,6 @@ const (
 	testDirMode     = os.FileMode(0750)
 	testFileMode    = os.FileMode(0640)
 	testExeFileMode = os.FileMode(0750)
-
-	testConsole = "/dev/pts/999"
 )
 
 var (
@@ -151,7 +149,7 @@ func newTestHypervisorConfig(dir string, create bool) (vc.HypervisorConfig, erro
 }
 
 // newTestRuntimeConfig creates a new RuntimeConfig
-func newTestRuntimeConfig(dir, consolePath string, create bool) (oci.RuntimeConfig, error) {
+func newTestRuntimeConfig(dir string, create bool) (oci.RuntimeConfig, error) {
 	if dir == "" {
 		return oci.RuntimeConfig{}, errors.New("BUG: need directory")
 	}
@@ -164,7 +162,6 @@ func newTestRuntimeConfig(dir, consolePath string, create bool) (oci.RuntimeConf
 	return oci.RuntimeConfig{
 		HypervisorType:   vc.QemuHypervisor,
 		HypervisorConfig: hypervisorConfig,
-		Console:          consolePath,
 	}, nil
 }
 

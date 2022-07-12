@@ -246,7 +246,7 @@ impl AgentService {
             .get_container(&cid)
             .ok_or_else(|| anyhow!("Invalid container id"))?;
 
-        ctr.exec()?;
+        ctr.exec().await?;
 
         if sid == cid {
             return Ok(());
@@ -1769,34 +1769,25 @@ fn is_signal_handled(proc_status_file: &str, signum: u32) -> bool {
     let sig_mask: u64 = 1 << shift_count;
     let reader = BufReader::new(file);
 
-    // Read the file line by line using the lines() iterator from std::io::BufRead.
-    for (_index, line) in reader.lines().enumerate() {
-        let line = match line {
-            Ok(l) => l,
-            Err(_) => {
-                warn!(sl!(), "failed to read file {}", proc_status_file);
-                return false;
-            }
-        };
-        if line.starts_with("SigCgt:") {
+    // read lines start with SigBlk/SigIgn/SigCgt and check any match the signal mask
+    reader
+        .lines()
+        .flatten()
+        .filter(|line| {
+            line.starts_with("SigBlk:")
+                || line.starts_with("SigIgn:")
+                || line.starts_with("SigCgt:")
+        })
+        .any(|line| {
             let mask_vec: Vec<&str> = line.split(':').collect();
-            if mask_vec.len() != 2 {
-                warn!(sl!(), "parse the SigCgt field failed");
-                return false;
-            }
-            let sig_cgt_str = mask_vec[1].trim();
-            let sig_cgt_mask = match u64::from_str_radix(sig_cgt_str, 16) {
-                Ok(h) => h,
-                Err(_) => {
-                    warn!(sl!(), "failed to parse the str {} to hex", sig_cgt_str);
-                    return false;
+            if mask_vec.len() == 2 {
+                let sig_str = mask_vec[1].trim();
+                if let Ok(sig) = u64::from_str_radix(sig_str, 16) {
+                    return sig & sig_mask == sig_mask;
                 }
-            };
-
-            return (sig_cgt_mask & sig_mask) == sig_mask;
-        }
-    }
-    false
+            }
+            false
+        })
 }
 
 fn do_mem_hotplug_by_probe(addrs: &[u64]) -> Result<()> {
@@ -2618,7 +2609,12 @@ OtherField:other
             TestData {
                 status_file_data: Some("SigBlk:0000000000000001"),
                 signum: 1,
-                result: false,
+                result: true,
+            },
+            TestData {
+                status_file_data: Some("SigIgn:0000000000000001"),
+                signum: 1,
+                result: true,
             },
             TestData {
                 status_file_data: None,

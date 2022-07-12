@@ -134,6 +134,12 @@ default_memory = @DEFMEMSZ@
 # This is will determine the times that memory will be hotadded to sandbox/VM.
 #memory_slots = @DEFMEMSLOTS@
 
+# Default maximum memory in MiB per SB / VM
+# unspecified or == 0           --> will be set to the actual amount of physical RAM
+# > 0 <= amount of physical RAM --> will be set to the specified number
+# > amount of physical RAM      --> will be set to the actual amount of physical RAM
+default_maxmemory = @DEFMAXMEMSZ@
+
 # The size in MiB will be plused to max memory of hypervisor.
 # It is the memory address space for the NVDIMM devie.
 # If set block storage driver (block_device_driver) to "nvdimm",
@@ -400,6 +406,9 @@ valid_entropy_sources = @DEFVALIDENTROPYSOURCES@
 # use legacy serial for guest console if available and implemented for architecture. Default false
 #use_legacy_serial = true
 
+# disable applying SELinux on the VMM process (default false)
+disable_selinux=@DEFDISABLESELINUX@
+
 [factory]
 # VM templating support. Once enabled, new VMs are created from template
 # using vm cloning. They will share the same initial kernel, initramfs and
@@ -516,9 +525,6 @@ internetworking_model="@DEFNETWORKMODEL_QEMU@"
 # within the guest
 # (default: true)
 disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
-
-# disable applying SELinux on the VMM process (default false)
-disable_selinux=@DEFDISABLESELINUX@
 
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).
