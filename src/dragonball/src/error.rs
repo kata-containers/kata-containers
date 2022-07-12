@@ -12,7 +12,7 @@
 #[cfg(feature = "dbs-virtio-devices")]
 use dbs_virtio_devices::Error as VirtIoError;
 
-use crate::{address_space_manager, device_manager, vcpu, vm};
+use crate::{address_space_manager, device_manager, vcpu, vm, resource_manager};
 
 /// Shorthand result type for internal VMM commands.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -73,6 +73,10 @@ pub enum Error {
 /// Errors associated with starting the instance.
 #[derive(Debug, thiserror::Error)]
 pub enum StartMicroVmError {
+    /// Failed to allocate resources.
+    #[error("cannot allocate resources")]
+    AllocateResource(#[source] resource_manager::ResourceError),
+
     /// Cannot read from an Event file descriptor.
     #[error("failure while reading from EventFd file descriptor")]
     EventFd,
