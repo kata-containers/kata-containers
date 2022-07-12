@@ -20,6 +20,7 @@ Method | HTTP request | Description
 [**VmAddPmemPut**](DefaultApi.md#VmAddPmemPut) | **Put** /vm.add-pmem | Add a new pmem device to the VM
 [**VmAddVdpaPut**](DefaultApi.md#VmAddVdpaPut) | **Put** /vm.add-vdpa | Add a new vDPA device to the VM
 [**VmAddVsockPut**](DefaultApi.md#VmAddVsockPut) | **Put** /vm.add-vsock | Add a new vsock device to the VM
+[**VmCoredumpPut**](DefaultApi.md#VmCoredumpPut) | **Put** /vm.coredump | Takes a VM coredump.
 [**VmCountersGet**](DefaultApi.md#VmCountersGet) | **Get** /vm.counters | Get counters from the VM
 [**VmInfoGet**](DefaultApi.md#VmInfoGet) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
 [**VmReceiveMigrationPut**](DefaultApi.md#VmReceiveMigrationPut) | **Put** /vm.receive-migration | Receive a VM migration from URL
@@ -698,7 +699,7 @@ import (
 )
 
 func main() {
-    fsConfig := *openapiclient.NewFsConfig("Tag_example", "Socket_example", int32(123), int32(123), false, int64(123)) // FsConfig | The details of the new virtio-fs
+    fsConfig := *openapiclient.NewFsConfig("Tag_example", "Socket_example", int32(123), int32(123)) // FsConfig | The details of the new virtio-fs
 
     configuration := openapiclient.NewConfiguration()
     api_client := openapiclient.NewAPIClient(configuration)
@@ -993,6 +994,68 @@ No authorization required
 
 - **Content-Type**: application/json
 - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
+[[Back to Model list]](../README.md#documentation-for-models)
+[[Back to README]](../README.md)
+
+
+## VmCoredumpPut
+
+> VmCoredumpPut(ctx).VmCoredumpData(vmCoredumpData).Execute()
+
+Takes a VM coredump.
+
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    vmCoredumpData := *openapiclient.NewVmCoredumpData() // VmCoredumpData | The coredump configuration
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmCoredumpPut(context.Background()).VmCoredumpData(vmCoredumpData).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmCoredumpPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmCoredumpPutRequest struct via the builder pattern
+
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **vmCoredumpData** | [**VmCoredumpData**](VmCoredumpData.md) | The coredump configuration | 
+
+### Return type
+
+ (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: application/json
+- **Accept**: Not defined
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
 [[Back to Model list]](../README.md#documentation-for-models)
