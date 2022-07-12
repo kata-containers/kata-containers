@@ -84,6 +84,7 @@ options:
 	cc
 	cc-cloud-hypervisor
 	cc-kernel
+	cc-tdx-kernel
 	cc-qemu
 	cc-rootfs-image
 	cc-shimv2
@@ -114,6 +115,22 @@ install_cc_image() {
 	export AA_KBC="offline_fs_kbc"
 
 	"${rootfs_builder}" --imagetype=image --prefix="${cc_prefix}" --destdir="${destdir}"
+}
+
+#Install CC kernel assert, with TEE support
+install_cc_tee_kernel() {
+	tee="${1}"
+
+	[ "${tee}" != "tdx" ] && die "Non supported TEE"
+
+	export kernel_version="$(yq r $versions_yaml assets.kernel.${tee}.tag)"
+	export kernel_url="$(yq r $versions_yaml assets.kernel.${tee}.url)"
+	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -x "${tee}" -v "${kernel_version}" -u "${kernel_url}"
+}
+
+#Install CC kernel assert for Intel TDX
+install_cc_tdx_kernel() {
+	install_cc_tee_kernel "tdx"
 }
 
 #Install CC kernel asset
@@ -257,6 +274,8 @@ handle_build() {
 	cc-cloud-hypervisor) install_cc_clh ;;
 
 	cc-kernel) install_cc_kernel ;;
+
+	cc-tdx-kernel) install_cc_tdx_kernel ;;
 
 	cc-qemu) install_cc_qemu ;;
 
