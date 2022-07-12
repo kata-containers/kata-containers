@@ -86,6 +86,7 @@ options:
 	cc-kernel
 	cc-tdx-kernel
 	cc-qemu
+	cc-tdx-qemu
 	cc-rootfs-image
 	cc-shimv2
 	cc-virtiofsd
@@ -137,6 +138,23 @@ install_cc_tdx_kernel() {
 install_cc_kernel() {
 	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -f -v "${kernel_version}"
+}
+
+install_cc_tee_qemu() {
+	tee="${1}"
+
+	[ "${tee}" != "tdx" ] && die "Non supported TEE"
+
+	export qemu_repo="$(yq r $versions_yaml assets.hypervisor.qemu.${tee}.url)"
+	export qemu_version="$(yq r $versions_yaml assets.hypervisor.qemu.${tee}.tag)"
+	export tee="${tee}"
+	"${qemu_cc_builder}"
+	tar xvf "${builddir}/kata-static-${tee}-qemu-cc.tar.gz" -C "${destdir}"
+}
+
+
+install_cc_tdx_qemu() {
+	install_cc_tee_qemu "tdx"
 }
 
 # Install static CC qemu asset
@@ -278,6 +296,8 @@ handle_build() {
 	cc-tdx-kernel) install_cc_tdx_kernel ;;
 
 	cc-qemu) install_cc_qemu ;;
+
+	cc-tdx-qemu) install_cc_tdx_qemu ;;
 
 	cc-rootfs-image) install_cc_image ;;
 

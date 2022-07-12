@@ -14,6 +14,7 @@ source "${script_dir}/../../scripts/lib.sh"
 
 qemu_repo="${qemu_repo:-}"
 qemu_version="${qemu_version:-}"
+tee="${tee:-}"
 
 export prefix="/opt/confidential-containers/"
 
@@ -28,4 +29,7 @@ fi
 [ -n "$qemu_version" ] || qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.version")
 [ -n "$qemu_version" ] || die "failed to get qemu version"
 
-"${script_dir}/build-base-qemu.sh" "${qemu_repo}" "${qemu_version}" "" "kata-static-qemu-cc.tar.gz"
+
+tarball_name="kata-static-qemu-cc.tar.gz"
+[ -n "${tee}" ] && tarball_name="kata-static-${tee}-qemu-cc.tar.gz"
+"${script_dir}/build-base-qemu.sh" "${qemu_repo}" "${qemu_version}" "${tee}" "${tarball_name}"

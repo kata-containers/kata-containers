@@ -94,6 +94,9 @@ cc-tdx-kernel-tarball:
 cc-qemu-tarball:
 	${MAKE} $@-build
 
+cc-tdx-qemu-tarball:
+	${MAKE} $@-build
+
 cc-rootfs-image-tarball:
 	${MAKE} $@-build
 
