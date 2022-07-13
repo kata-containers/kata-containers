@@ -16,7 +16,7 @@ be utilized to install Kata Containers on a running Kubernetes cluster.
 For your [k3s](https://k3s.io/) cluster, run:
 
 ```sh
-$ git clone github.com/kata-containers/kata-containers
+$ git clone https://github.com/kata-containers/kata-containers
 ```
 
 Check and switch to the stable branch of your choice, if wanted, and then run:
