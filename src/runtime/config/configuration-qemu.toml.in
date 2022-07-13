@@ -187,7 +187,12 @@ virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
 # Your distribution recommends: @DEFVALIDVIRTIOFSDAEMONPATHS@
 valid_virtio_fs_daemon_paths = @DEFVALIDVIRTIOFSDAEMONPATHS@
 
-# Default size of DAX cache in MiB
+# Default size of DAX cache in MiB.
+# To enable DAX the virtio_fs_cache should be whether auto or always.
+# DAX is disabled if is set to 0.
+# Currently, you need to build an experimental QEMU to use DAX with virtiofs,
+# see the official documentation for details:
+# https://github.com/kata-containers/kata-containers/blob/main/docs/how-to/how-to-build-experimental-qemu.md
 virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
 
 # Default size of virtqueues
