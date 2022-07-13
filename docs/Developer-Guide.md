@@ -425,7 +425,7 @@ To build utilizing the same options as Kata, you should make use of the `configu
 $ cd $your_qemu_directory
 $ $packaging_dir/scripts/configure-hypervisor.sh kata-qemu > kata.cfg
 $ eval ./configure "$(cat kata.cfg)"
-$ make -j $(nproc)
+$ make -j $(nproc --ignore=1)
 $ sudo -E make install
 ```
 

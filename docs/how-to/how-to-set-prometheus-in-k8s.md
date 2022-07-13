@@ -19,7 +19,7 @@ Also you should ensure that `kubectl` working correctly.
 > **Note**: More information about Kubernetes integrations:
 >   - [Run Kata Containers with Kubernetes](run-kata-with-k8s.md)
 >   - [How to use Kata Containers and Containerd](containerd-kata.md)
->   - [How to use Kata Containers and CRI (containerd plugin) with Kubernetes](how-to-use-k8s-with-cri-containerd-and-kata.md)
+>   - [How to use Kata Containers and containerd with Kubernetes](how-to-use-k8s-with-containerd-and-kata.md)
 
 ## Configure Prometheus
 
