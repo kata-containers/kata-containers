@@ -2058,6 +2058,7 @@ mod tests {
         let result = load_kernel_module(&m);
         assert!(result.is_err(), "load module should failed");
 
+        skip_if_not_root!();
         // case 3: normal module.
         // normally this module should eixsts...
         m.name = "bridge".to_string();
