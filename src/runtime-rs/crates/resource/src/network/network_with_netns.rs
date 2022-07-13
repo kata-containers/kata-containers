@@ -17,7 +17,7 @@ use scopeguard::defer;
 use tokio::sync::RwLock;
 
 use super::{
-    endpoint::{Endpoint, PhysicalEndpoint, VethEndpoint},
+    endpoint::{Endpoint, IPVlanEndpoint, PhysicalEndpoint, VethEndpoint},
     network_entity::NetworkEntity,
     network_info::network_info_from_link::NetworkInfoFromLink,
     utils::{link, netns},
@@ -184,6 +184,12 @@ async fn create_endpoint(
                 )
                 .await
                 .context("veth endpoint")?;
+                Arc::new(ret)
+            }
+            "ipvlan" => {
+                let ret = IPVlanEndpoint::new(handle, &attrs.name, idx, config.queues)
+                    .await
+                    .context("ipvlan endpoint")?;
                 Arc::new(ret)
             }
             _ => return Err(anyhow!("unsupported link type: {}", link_type)),
