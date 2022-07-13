@@ -1,0 +1,14 @@
+# Copyright (c) 2022 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+[package]
+name = "kata-ctl"
+version = "0.0.0"
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+edition = "2021"
+
+[dependencies]
+clap = "2.33.0"
+anyhow = "1.0.31"
