@@ -7,6 +7,7 @@ Name | Type | Description | Notes
 **BootVcpus** | **int32** |  | [default to 1]
 **MaxVcpus** | **int32** |  | [default to 1]
 **Topology** | Pointer to [**CpuTopology**](CpuTopology.md) |  | [optional] 
+**KvmHyperv** | Pointer to **bool** |  | [optional] [default to false]
 **MaxPhysBits** | Pointer to **int32** |  | [optional] 
 **Affinity** | Pointer to [**[]CpuAffinity**](CpuAffinity.md) |  | [optional] 
 **Features** | Pointer to [**CpuFeatures**](CpuFeatures.md) |  | [optional] 
@@ -94,6 +95,31 @@ SetTopology sets Topology field to given value.
 `func (o *CpusConfig) HasTopology() bool`
 
 HasTopology returns a boolean if a field has been set.
+
+### GetKvmHyperv
+
+`func (o *CpusConfig) GetKvmHyperv() bool`
+
+GetKvmHyperv returns the KvmHyperv field if non-nil, zero value otherwise.
+
+### GetKvmHypervOk
+
+`func (o *CpusConfig) GetKvmHypervOk() (*bool, bool)`
+
+GetKvmHypervOk returns a tuple with the KvmHyperv field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetKvmHyperv
+
+`func (o *CpusConfig) SetKvmHyperv(v bool)`
+
+SetKvmHyperv sets KvmHyperv field to given value.
+
+### HasKvmHyperv
+
+`func (o *CpusConfig) HasKvmHyperv() bool`
+
+HasKvmHyperv returns a boolean if a field has been set.
 
 ### GetMaxPhysBits
 
