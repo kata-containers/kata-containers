@@ -76,6 +76,6 @@ RUN git clone --depth=1 "${QEMU_REPO}" qemu && \
     [ -n "${BUILD_SUFFIX}" ] && PKGVERSION="kata-static-${BUILD_SUFFIX}" || PKGVERSION="kata-static" && \
     (PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s "${HYPERVISOR_NAME}" | xargs ./configure \
 	--with-pkgversion="${PKGVERSION}") && \
-    make -j"$(nproc)" && \
+    make -j"$(nproc ${CI:+--ignore 1})" && \
     make install DESTDIR="${QEMU_DESTDIR}" && \
     /root/static-build/scripts/qemu-build-post.sh

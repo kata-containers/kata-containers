@@ -15,7 +15,7 @@ After choosing one CRI implementation, you must make the appropriate configurati
 to ensure it integrates with Kata Containers.
 
 Kata Containers 1.5 introduced the `shimv2` for containerd 1.2.0, reducing the components
-required to spawn pods and containers, and this is the preferred way to run Kata Containers with Kubernetes ([as documented here](../how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-containerd-to-use-kata-containers)).
+required to spawn pods and containers, and this is the preferred way to run Kata Containers with Kubernetes ([as documented here](../how-to/how-to-use-k8s-with-containerd-and-kata.md#configure-containerd-to-use-kata-containers)).
 
 An equivalent shim implementation for CRI-O is planned.
 
@@ -57,7 +57,7 @@ content shown below:
 
 To customize containerd to select Kata Containers runtime, follow our
 "Configure containerd to use Kata Containers" internal documentation
-[here](../how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-containerd-to-use-kata-containers).
+[here](../how-to/how-to-use-k8s-with-containerd-and-kata.md#configure-containerd-to-use-kata-containers).
 
 ## Install Kubernetes
 
@@ -85,7 +85,7 @@ Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-tim
 Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-timeout=15m --container-runtime-endpoint=unix:///run/containerd/containerd.sock"
 ```
 For more information about containerd see the "Configure Kubelet to use containerd"
-documentation [here](../how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-kubelet-to-use-containerd).
+documentation [here](../how-to/how-to-use-k8s-with-containerd-and-kata.md#configure-kubelet-to-use-containerd).
 
 ## Run a Kubernetes pod with Kata Containers
 

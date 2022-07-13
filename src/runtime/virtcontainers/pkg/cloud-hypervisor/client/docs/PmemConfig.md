@@ -7,7 +7,6 @@ Name | Type | Description | Notes
 **File** | **string** |  | 
 **Size** | Pointer to **int64** |  | [optional] 
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
-**Mergeable** | Pointer to **bool** |  | [optional] [default to false]
 **DiscardWrites** | Pointer to **bool** |  | [optional] [default to false]
 **PciSegment** | Pointer to **int32** |  | [optional] 
 **Id** | Pointer to **string** |  | [optional] 
@@ -100,31 +99,6 @@ SetIommu sets Iommu field to given value.
 `func (o *PmemConfig) HasIommu() bool`
 
 HasIommu returns a boolean if a field has been set.
-
-### GetMergeable
-
-`func (o *PmemConfig) GetMergeable() bool`
-
-GetMergeable returns the Mergeable field if non-nil, zero value otherwise.
-
-### GetMergeableOk
-
-`func (o *PmemConfig) GetMergeableOk() (*bool, bool)`
-
-GetMergeableOk returns a tuple with the Mergeable field if it's non-nil, zero value otherwise
-and a boolean to check if the value has been set.
-
-### SetMergeable
-
-`func (o *PmemConfig) SetMergeable(v bool)`
-
-SetMergeable sets Mergeable field to given value.
-
-### HasMergeable
-
-`func (o *PmemConfig) HasMergeable() bool`
-
-HasMergeable returns a boolean if a field has been set.
 
 ### GetDiscardWrites
 
