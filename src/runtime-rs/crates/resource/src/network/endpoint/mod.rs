@@ -8,6 +8,8 @@ mod physical_endpoint;
 pub use physical_endpoint::PhysicalEndpoint;
 mod veth_endpoint;
 pub use veth_endpoint::VethEndpoint;
+mod ipvlan_endpoint;
+pub use ipvlan_endpoint::IPVlanEndpoint;
 
 use anyhow::Result;
 use async_trait::async_trait;

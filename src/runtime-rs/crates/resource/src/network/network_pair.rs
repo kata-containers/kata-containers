@@ -54,6 +54,7 @@ impl NetworkPair {
         let tap_link = create_link(handle, &tap_iface_name, queues)
             .await
             .context("create link")?;
+
         let virt_link = get_link_by_name(handle, virt_iface_name.clone().as_str())
             .await
             .context("get link by name")?;
