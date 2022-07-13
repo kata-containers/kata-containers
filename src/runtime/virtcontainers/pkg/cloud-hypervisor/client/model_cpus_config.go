@@ -19,6 +19,7 @@ type CpusConfig struct {
 	BootVcpus   int32          `json:"boot_vcpus"`
 	MaxVcpus    int32          `json:"max_vcpus"`
 	Topology    *CpuTopology   `json:"topology,omitempty"`
+	KvmHyperv   *bool          `json:"kvm_hyperv,omitempty"`
 	MaxPhysBits *int32         `json:"max_phys_bits,omitempty"`
 	Affinity    *[]CpuAffinity `json:"affinity,omitempty"`
 	Features    *CpuFeatures   `json:"features,omitempty"`
@@ -32,6 +33,8 @@ func NewCpusConfig(bootVcpus int32, maxVcpus int32) *CpusConfig {
 	this := CpusConfig{}
 	this.BootVcpus = bootVcpus
 	this.MaxVcpus = maxVcpus
+	var kvmHyperv bool = false
+	this.KvmHyperv = &kvmHyperv
 	return &this
 }
 
@@ -44,6 +47,8 @@ func NewCpusConfigWithDefaults() *CpusConfig {
 	this.BootVcpus = bootVcpus
 	var maxVcpus int32 = 1
 	this.MaxVcpus = maxVcpus
+	var kvmHyperv bool = false
+	this.KvmHyperv = &kvmHyperv
 	return &this
 }
 
@@ -125,6 +130,38 @@ func (o *CpusConfig) HasTopology() bool {
 // SetTopology gets a reference to the given CpuTopology and assigns it to the Topology field.
 func (o *CpusConfig) SetTopology(v CpuTopology) {
 	o.Topology = &v
+}
+
+// GetKvmHyperv returns the KvmHyperv field value if set, zero value otherwise.
+func (o *CpusConfig) GetKvmHyperv() bool {
+	if o == nil || o.KvmHyperv == nil {
+		var ret bool
+		return ret
+	}
+	return *o.KvmHyperv
+}
+
+// GetKvmHypervOk returns a tuple with the KvmHyperv field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CpusConfig) GetKvmHypervOk() (*bool, bool) {
+	if o == nil || o.KvmHyperv == nil {
+		return nil, false
+	}
+	return o.KvmHyperv, true
+}
+
+// HasKvmHyperv returns a boolean if a field has been set.
+func (o *CpusConfig) HasKvmHyperv() bool {
+	if o != nil && o.KvmHyperv != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetKvmHyperv gets a reference to the given bool and assigns it to the KvmHyperv field.
+func (o *CpusConfig) SetKvmHyperv(v bool) {
+	o.KvmHyperv = &v
 }
 
 // GetMaxPhysBits returns the MaxPhysBits field value if set, zero value otherwise.
@@ -233,6 +270,9 @@ func (o CpusConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Topology != nil {
 		toSerialize["topology"] = o.Topology
+	}
+	if o.KvmHyperv != nil {
+		toSerialize["kvm_hyperv"] = o.KvmHyperv
 	}
 	if o.MaxPhysBits != nil {
 		toSerialize["max_phys_bits"] = o.MaxPhysBits

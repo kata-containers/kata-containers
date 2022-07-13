@@ -366,6 +366,24 @@ paths:
         405:
           description: The VM instance could not be snapshotted because it is not booted.
 
+  /vm.coredump:
+    put:
+      summary: Takes a VM coredump.
+      requestBody:
+        description: The coredump configuration
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmCoredumpData'
+        required: true
+      responses:
+        204:
+          description: The VM instance was successfully coredumped.
+        404:
+          description: The VM instance could not be coredumped because it is not created.
+        405:
+          description: The VM instance could not be coredumped because it is not booted.
+
   /vm.restore:
     put:
       summary: Restore a VM from a snapshot.
@@ -596,6 +614,9 @@ components:
           type: integer
         topology:
           $ref: '#/components/schemas/CpuTopology'
+        kvm_hyperv:
+          type: boolean
+          default: false
         max_phys_bits:
           type: integer
         affinity:
@@ -870,8 +891,6 @@ components:
 
     FsConfig:
       required:
-      - cache_size
-      - dax
       - num_queues
       - queue_size
       - socket
@@ -888,13 +907,6 @@ components:
         queue_size:
           type: integer
           default: 1024
-        dax:
-          type: boolean
-          default: true
-        cache_size:
-          type: integer
-          format: int64
-          default: 8589934592
         pci_segment:
           type: integer
           format: int16
@@ -912,9 +924,6 @@ components:
           type: integer
           format: int64
         iommu:
-          type: boolean
-          default: false
-        mergeable:
           type: boolean
           default: false
         discard_writes:
@@ -1105,6 +1114,12 @@ components:
           type: string
 
     VmSnapshotConfig:
+      type: object
+      properties:
+        destination_url:
+          type: string
+
+    VmCoredumpData:
       type: object
       properties:
         destination_url:
