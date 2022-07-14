@@ -5,6 +5,7 @@
 
 use anyhow::{anyhow, Result};
 use nix::sys::stat::Mode;
+use oci::Process;
 use std::{
     fs::{DirBuilder, File},
     io::{prelude::*, BufReader},
@@ -33,10 +34,30 @@ pub fn create_dir_with_mode<P: AsRef<Path>>(path: P, mode: Mode, recursive: bool
         .create(path)?)
 }
 
+// Validate process just like runc, https://github.com/opencontainers/runc/pull/623
+pub fn validate_process_spec(process: &Option<Process>) -> Result<()> {
+    let process = process
+        .as_ref()
+        .ok_or_else(|| anyhow!("process property must not be empty"))?;
+    if process.cwd.is_empty() {
+        return Err(anyhow!("cwd property must not be empty"));
+    }
+    let cwd = Path::new(process.cwd.as_str());
+    if !cwd.is_absolute() {
+        return Err(anyhow!("cwd must be an absolute path"));
+    }
+    if process.args.is_empty() {
+        return Err(anyhow!("args must not be empty"));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 pub(crate) mod test_utils {
+    use super::*;
     use crate::status::Status;
     use nix::unistd::getpid;
+    use oci::Process;
     use oci::State as OCIState;
     use oci::{ContainerState, Root, Spec};
     use rustjail::cgroups::fs::Manager as CgroupManager;
@@ -57,6 +78,7 @@ pub(crate) mod test_utils {
         },
         "cpath": "test"
     }"#;
+    pub const TEST_ROOTFS_PATH: &str = "rootfs";
 
     pub fn create_dummy_opts() -> CreateOpts {
         let spec = Spec {
@@ -95,7 +117,7 @@ pub(crate) mod test_utils {
         let status = Status::new(
             Path::new(TEST_STATE_ROOT_PATH),
             Path::new(TEST_BUNDLE_PATH),
-            oci_state.clone(),
+            oci_state,
             1,
             created,
             cgm,
@@ -104,5 +126,25 @@ pub(crate) mod test_utils {
         .unwrap();
 
         status
+    }
+
+    #[test]
+    pub fn test_validate_process_spec() {
+        let valid_process = Process {
+            args: vec!["test".to_string()],
+            cwd: "/".to_string(),
+            ..Default::default()
+        };
+        assert!(validate_process_spec(&None).is_err());
+        assert!(validate_process_spec(&Some(valid_process.clone())).is_ok());
+        let mut invalid_process = valid_process.clone();
+        invalid_process.args = vec![];
+        assert!(validate_process_spec(&Some(invalid_process)).is_err());
+        let mut invalid_process = valid_process.clone();
+        invalid_process.cwd = "".to_string();
+        assert!(validate_process_spec(&Some(invalid_process)).is_err());
+        let mut invalid_process = valid_process;
+        invalid_process.cwd = "test/".to_string();
+        assert!(validate_process_spec(&Some(invalid_process)).is_err());
     }
 }
