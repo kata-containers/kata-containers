@@ -85,6 +85,9 @@ cc: cc-cloud-hypervisor-tarball \
 cc-cloud-hypervisor-tarball:
 	${MAKE} $@-build
 
+cc-tdx-cloud-hypervisor-tarball:
+	${MAKE} $@-build
+
 cc-kernel-tarball:
 	${MAKE} $@-build
 

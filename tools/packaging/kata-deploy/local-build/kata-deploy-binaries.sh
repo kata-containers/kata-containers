@@ -108,6 +108,11 @@ install_cc_clh() {
 	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor/cloud-hypervisor "${destdir}/${cc_prefix}/bin/cloud-hypervisor"
 }
 
+# Install static CC cloud-hypervisor asset
+install_tdx_cc_clh() {
+	install_cc_clh
+}
+
 #Install cc capable guest image
 install_cc_image() {
 	info "Create CC image"
@@ -290,6 +295,8 @@ handle_build() {
 		;;
 
 	cc-cloud-hypervisor) install_cc_clh ;;
+
+	cc-tdx-cloud-hypervisor) install_tdx_cc_clh ;;
 
 	cc-kernel) install_cc_kernel ;;
 
