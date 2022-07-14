@@ -1092,6 +1092,16 @@ impl BaseContainer for LinuxContainer {
         fs::remove_dir_all(&self.root)?;
 
         if let Some(cgm) = self.cgroup_manager.as_mut() {
+            // Kill all of the processes created in this container to prevent
+            // the leak of some daemon process when this container shared pidns
+            // with the sandbox.
+            let pids = cgm.get_pids().context("get cgroup pids")?;
+            for i in pids {
+                if let Err(e) = signal::kill(Pid::from_raw(i), Signal::SIGKILL) {
+                    warn!(self.logger, "kill the process {} error: {:?}", i, e);
+                }
+            }
+
             cgm.destroy().context("destroy cgroups")?;
         }
         Ok(())
