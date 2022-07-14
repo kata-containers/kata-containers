@@ -16,13 +16,15 @@ pub mod sandbox;
 use std::sync::Arc;
 
 use agent::kata::KataAgent;
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use common::{message::Message, RuntimeHandler, RuntimeInstance};
-use hypervisor::Hypervisor;
+use hypervisor::{dragonball::Dragonball, Hypervisor};
 use kata_types::config::{hypervisor::register_hypervisor_plugin, DragonballConfig, TomlConfig};
 use resource::ResourceManager;
 use tokio::sync::mpsc::Sender;
+
+const HYPERVISOR_DRAGONBALL: &str = "dragonball";
 
 unsafe impl Send for VirtContainer {}
 unsafe impl Sync for VirtContainer {}
@@ -49,14 +51,9 @@ impl RuntimeHandler for VirtContainer {
         &self,
         sid: &str,
         msg_sender: Sender<Message>,
+        config: &TomlConfig,
     ) -> Result<RuntimeInstance> {
-        let (toml_config, _) = TomlConfig::load_from_file("").context("load config")?;
-
-        // TODO: new sandbox and container manager
-        // TODO: get from hypervisor
-        let hypervisor = new_hypervisor(&toml_config)
-            .await
-            .context("new hypervisor")?;
+        let hypervisor = new_hypervisor(config).await.context("new hypervisor")?;
 
         // get uds from hypervisor and get config from toml_config
         let agent = Arc::new(KataAgent::new(kata_types::config::Agent {
@@ -77,7 +74,7 @@ impl RuntimeHandler for VirtContainer {
             sid,
             agent.clone(),
             hypervisor.clone(),
-            &toml_config,
+            config,
         )?);
         let pid = std::process::id();
 
@@ -104,7 +101,24 @@ impl RuntimeHandler for VirtContainer {
     }
 }
 
-async fn new_hypervisor(_toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>> {
-    // TODO: implement ready hypervisor
-    todo!()
+async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>> {
+    let hypervisor_name = &toml_config.runtime.hypervisor_name;
+    let hypervisor_config = toml_config
+        .hypervisor
+        .get(hypervisor_name)
+        .ok_or_else(|| anyhow!("failed to get hypervisor for {}", &hypervisor_name))
+        .context("get hypervisor")?;
+
+    // TODO: support other hypervisor
+    // issue: https://github.com/kata-containers/kata-containers/issues/4634
+    match hypervisor_name.as_str() {
+        HYPERVISOR_DRAGONBALL => {
+            let mut hypervisor = Dragonball::new();
+            hypervisor
+                .set_hypervisor_config(hypervisor_config.clone())
+                .await;
+            Ok(Arc::new(hypervisor))
+        }
+        _ => Err(anyhow!("Unsupported hypervisor {}", &hypervisor_name)),
+    }
 }

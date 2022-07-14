@@ -21,6 +21,10 @@ pub struct Runtime {
     #[serde(default)]
     pub hypervisor_name: String,
 
+    /// Agent name
+    #[serde(default)]
+    pub agent_name: String,
+
     /// If enabled, the runtime will log additional debug messages to the system log.
     #[serde(default, rename = "enable_debug")]
     pub debug: bool,

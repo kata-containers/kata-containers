@@ -8,8 +8,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use common::{message::Message, RuntimeHandler, RuntimeInstance};
+use kata_types::config::TomlConfig;
 use tokio::sync::mpsc::Sender;
-
 unsafe impl Send for WasmContainer {}
 unsafe impl Sync for WasmContainer {}
 pub struct WasmContainer {}
@@ -32,6 +32,7 @@ impl RuntimeHandler for WasmContainer {
         &self,
         _sid: &str,
         _msg_sender: Sender<Message>,
+        _config: &TomlConfig,
     ) -> Result<RuntimeInstance> {
         todo!()
     }

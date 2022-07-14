@@ -55,7 +55,7 @@ impl RuntimeHandlerManagerInner {
             _ => return Err(anyhow!("Unsupported runtime: {}", &config.runtime.name)),
         };
         let runtime_instance = runtime_handler
-            .new_instance(&self.id, self.msg_sender.clone())
+            .new_instance(&self.id, self.msg_sender.clone(), config)
             .await
             .context("new runtime instance")?;
 
@@ -276,6 +276,9 @@ fn load_config(spec: &oci::Spec) -> Result<TomlConfig> {
         String::from("")
     };
     info!(sl!(), "get config path {:?}", &config_path);
-    let (toml_config, _) = TomlConfig::load_from_file(&config_path).context("load toml config")?;
+    let (mut toml_config, _) =
+        TomlConfig::load_from_file(&config_path).context("load toml config")?;
+    annotation.update_config_by_annotation(&mut toml_config)?;
+    info!(sl!(), "get config content {:?}", &toml_config);
     Ok(toml_config)
 }

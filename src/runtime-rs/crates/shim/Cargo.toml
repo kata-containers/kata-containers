@@ -22,8 +22,8 @@ log = "0.4.14"
 nix = "0.23.1"
 protobuf = "2.27.0"
 sha2 = "=0.9.3"
-slog = {version = "2.7.0", features = ["std", "release_max_level_trace", "max_level_trace"]}
-slog-async = "2.7.0"
+slog = {version = "2.5.2", features = ["std", "release_max_level_trace", "max_level_trace"]}
+slog-async = "2.5.2"
 slog-scope = "4.4.0"
 slog-stdlog = "4.1.0"
 thiserror = "1.0.30"

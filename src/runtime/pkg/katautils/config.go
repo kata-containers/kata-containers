@@ -51,6 +51,7 @@ const (
 	clhHypervisorTableType         = "clh"
 	qemuHypervisorTableType        = "qemu"
 	acrnHypervisorTableType        = "acrn"
+	dragonballHypervisorTableType  = "dragonball"
 
 	// the maximum amount of PCI bridges that can be cold plugged in a VM
 	maxPCIBridges uint32 = 5
@@ -989,6 +990,30 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	}, nil
 }
 
+func newDragonballHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
+	kernel, err := h.kernel()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+	image, err := h.image()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+	kernelParams := h.kernelParams()
+
+	return vc.HypervisorConfig{
+		KernelPath:      kernel,
+		ImagePath:       image,
+		KernelParams:    vc.DeserializeParams(strings.Fields(kernelParams)),
+		NumVCPUs:        h.defaultVCPUs(),
+		DefaultMaxVCPUs: h.defaultMaxVCPUs(),
+		MemorySize:      h.defaultMemSz(),
+		MemSlots:        h.defaultMemSlots(),
+		EntropySource:   h.GetEntropySource(),
+		Debug:           h.Debug,
+	}, nil
+}
+
 func newFactoryConfig(f factory) (oci.FactoryConfig, error) {
 	if f.TemplatePath == "" {
 		f.TemplatePath = defaultTemplatePath
@@ -1022,6 +1047,9 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 		case clhHypervisorTableType:
 			config.HypervisorType = vc.ClhHypervisor
 			hConfig, err = newClhHypervisorConfig(hypervisor)
+		case dragonballHypervisorTableType:
+			config.HypervisorType = vc.DragonballHypervisor
+			hConfig, err = newDragonballHypervisorConfig(hypervisor)
 		}
 
 		if err != nil {

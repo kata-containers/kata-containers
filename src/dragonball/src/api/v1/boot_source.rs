@@ -5,7 +5,7 @@
 use serde_derive::{Deserialize, Serialize};
 
 /// Default guest kernel command line:
-/// - `reboot=k` shut down the guest on reboot, instead of well... rebooting;
+/// - `reboot=k` shutdown the guest on reboot, instead of well... rebooting;
 /// - `panic=1` on panic, reboot after 1 second;
 /// - `pci=off` do not scan for PCI devices (ser boot time);
 /// - `nomodules` disable loadable kernel module support;

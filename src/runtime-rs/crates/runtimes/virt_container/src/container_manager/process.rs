@@ -39,7 +39,7 @@ pub struct Process {
 
     pub height: u32,
     pub width: u32,
-    pub status: ProcessStatus,
+    pub status: Arc<RwLock<ProcessStatus>>,
 
     pub exit_status: Arc<RwLock<ProcessExitStatus>>,
     pub exit_watcher_rx: Option<watch::Receiver<bool>>,
@@ -73,7 +73,7 @@ impl Process {
             terminal,
             height: 0,
             width: 0,
-            status: ProcessStatus::Created,
+            status: Arc::new(RwLock::new(ProcessStatus::Created)),
             exit_status: Arc::new(RwLock::new(ProcessExitStatus::new())),
             exit_watcher_rx: Some(receiver),
             exit_watcher_tx: Some(sender),
@@ -133,8 +133,8 @@ impl Process {
         let logger = self.logger.new(o!("io name" => io_name));
         let _ = tokio::spawn(async move {
             match tokio::io::copy(&mut reader, &mut writer).await {
-                Err(e) => warn!(logger, "io: failed to copy stdin stream {}", e),
-                Ok(length) => warn!(logger, "io: stop to copy stdin stream length {}", length),
+                Err(e) => warn!(logger, "io: failed to copy stream {}", e),
+                Ok(length) => warn!(logger, "io: stop to copy stream length {}", length),
             };
 
             wgw.done();
@@ -147,8 +147,9 @@ impl Process {
         let logger = self.logger.clone();
         info!(logger, "start run io wait");
         let process = self.process.clone();
-        let status = self.exit_status.clone();
+        let exit_status = self.exit_status.clone();
         let exit_notifier = self.exit_watcher_tx.take();
+        let status = self.status.clone();
 
         let _ = tokio::spawn(async move {
             //wait on all of the container's io stream terminated
@@ -171,8 +172,13 @@ impl Process {
 
             info!(logger, "end wait process exit code {}", resp.status);
 
-            let mut locked_status = status.write().await;
-            locked_status.update_exit_code(resp.status);
+            let mut exit_status = exit_status.write().await;
+            exit_status.update_exit_code(resp.status);
+            drop(exit_status);
+
+            let mut status = status.write().await;
+            *status = ProcessStatus::Stopped;
+            drop(status);
 
             drop(exit_notifier);
             info!(logger, "end io wait thread");
@@ -195,17 +201,28 @@ impl Process {
             stdout: self.stdout.clone(),
             stderr: self.stderr.clone(),
             terminal: self.terminal,
-            status: self.status,
+            status: self.get_status().await,
             exit_status: exit_status.exit_code,
             exited_at: exit_status.exit_time,
         })
     }
 
-    pub fn stop(&mut self) {
-        self.status = ProcessStatus::Stopped;
+    pub async fn stop(&mut self) {
+        let mut status = self.status.write().await;
+        *status = ProcessStatus::Stopped;
     }
 
     pub async fn close_io(&mut self) {
         self.wg_stdin.wait().await;
+    }
+
+    pub async fn get_status(&self) -> ProcessStatus {
+        let status = self.status.read().await;
+        *status
+    }
+
+    pub async fn set_status(&self, new_status: ProcessStatus) {
+        let mut status = self.status.write().await;
+        *status = new_status;
     }
 }

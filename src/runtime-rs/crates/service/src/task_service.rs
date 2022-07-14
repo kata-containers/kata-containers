@@ -47,9 +47,8 @@ where
         .await
         .map_err(|err| ttrpc::Error::Others(format!("failed to handler message {:?}", err)))?;
     debug!(logger, "<==== task service {:?}", &resp);
-    Ok(resp
-        .try_into()
-        .map_err(|err| ttrpc::Error::Others(format!("failed to translate to shim {:?}", err)))?)
+    resp.try_into()
+        .map_err(|err| ttrpc::Error::Others(format!("failed to translate to shim {:?}", err)))
 }
 
 macro_rules! impl_service {

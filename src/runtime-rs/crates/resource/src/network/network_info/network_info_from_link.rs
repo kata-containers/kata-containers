@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{convert::TryFrom, net::Ipv4Addr};
+use std::convert::TryFrom;
 
 use agent::{ARPNeighbor, IPAddress, IPFamily, Interface, Route};
 use anyhow::{Context, Result};
@@ -16,7 +16,7 @@ use netlink_packet_route::{
 
 use super::NetworkInfo;
 use crate::network::utils::{
-    address::Address,
+    address::{parse_ip, Address},
     link::{self, LinkAttrs},
 };
 
@@ -66,10 +66,15 @@ async fn handle_addresses(handle: &rtnetlink::Handle, attrs: &LinkAttrs) -> Resu
         .set_link_index_filter(attrs.index)
         .execute();
 
-    let mut addresses = Vec::new();
-    while let Some(addr_msg) = addr_msg_list.try_next().await? {
-        if addr_msg.header.family as i32 != libc::AF_INET {
-            warn!(sl!(), "unsupported ipv6 addr. {:?}", addr_msg);
+    let mut addresses = vec![];
+    while let Some(addr_msg) = addr_msg_list
+        .try_next()
+        .await
+        .context("try next address msg")?
+    {
+        let family = addr_msg.header.family as i32;
+        if family != libc::AF_INET && family != libc::AF_INET6 {
+            warn!(sl!(), "unsupported ip family {}", family);
             continue;
         }
         let a = Address::try_from(addr_msg).context("get addr from msg")?;
@@ -99,12 +104,13 @@ fn generate_neigh(name: &str, n: &NeighbourMessage) -> Result<ARPNeighbor> {
     for nla in &n.nlas {
         match nla {
             Nla::Destination(addr) => {
-                if addr.len() != 4 {
-                    continue;
-                }
-                let dest = Ipv4Addr::new(addr[0], addr[1], addr[2], addr[3]);
+                let dest = parse_ip(addr, n.header.family).context("parse ip")?;
                 let addr = Some(IPAddress {
-                    family: IPFamily::V4,
+                    family: if dest.is_ipv4() {
+                        IPFamily::V4
+                    } else {
+                        IPFamily::V6
+                    },
                     address: dest.to_string(),
                     mask: "".to_string(),
                 });
@@ -136,7 +142,11 @@ async fn handle_neighbors(
     let name = &attrs.name;
     let mut neighs = vec![];
     let mut neigh_msg_list = handle.neighbours().get().execute();
-    while let Some(neigh) = neigh_msg_list.try_next().await? {
+    while let Some(neigh) = neigh_msg_list
+        .try_next()
+        .await
+        .context("try next neigh msg")?
+    {
         // get neigh filter with index
         if neigh.header.ifindex == attrs.index {
             neighs.push(generate_neigh(name, &neigh).context("generate neigh")?)
@@ -170,10 +180,14 @@ fn generate_route(name: &str, route: &RouteMessage) -> Result<Option<Route>> {
     }))
 }
 
-async fn handle_routes(handle: &rtnetlink::Handle, attrs: &LinkAttrs) -> Result<Vec<Route>> {
+async fn get_route_from_msg(
+    routes: &mut Vec<Route>,
+    handle: &rtnetlink::Handle,
+    attrs: &LinkAttrs,
+    ip_version: rtnetlink::IpVersion,
+) -> Result<()> {
     let name = &attrs.name;
-    let mut routes = vec![];
-    let mut route_msg_list = handle.route().get(rtnetlink::IpVersion::V4).execute();
+    let mut route_msg_list = handle.route().get(ip_version).execute();
     while let Some(route) = route_msg_list.try_next().await? {
         // get route filter with index
         if let Some(index) = route.output_interface() {
@@ -184,6 +198,17 @@ async fn handle_routes(handle: &rtnetlink::Handle, attrs: &LinkAttrs) -> Result<
             }
         }
     }
+    Ok(())
+}
+
+async fn handle_routes(handle: &rtnetlink::Handle, attrs: &LinkAttrs) -> Result<Vec<Route>> {
+    let mut routes = vec![];
+    get_route_from_msg(&mut routes, handle, attrs, rtnetlink::IpVersion::V4)
+        .await
+        .context("get ip v4 route")?;
+    get_route_from_msg(&mut routes, handle, attrs, rtnetlink::IpVersion::V6)
+        .await
+        .context("get ip v6 route")?;
     Ok(routes)
 }
 

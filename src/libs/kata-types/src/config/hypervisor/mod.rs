@@ -620,6 +620,10 @@ pub struct NetworkInfo {
     /// Default 0-sized value means unlimited rate.
     #[serde(default)]
     pub tx_rate_limiter_max_rate: u64,
+
+    /// network queues
+    #[serde(default)]
+    pub network_queues: u32,
 }
 
 impl NetworkInfo {
