@@ -49,8 +49,8 @@ impl ContainerInner {
         self.init_process.process.container_id()
     }
 
-    pub(crate) fn check_state(&self, states: Vec<ProcessStatus>) -> Result<()> {
-        let state = self.init_process.status;
+    pub(crate) async fn check_state(&self, states: Vec<ProcessStatus>) -> Result<()> {
+        let state = self.init_process.get_status().await;
         if states.contains(&state) {
             return Ok(());
         }
@@ -62,8 +62,9 @@ impl ContainerInner {
         ))
     }
 
-    pub(crate) fn set_state(&mut self, state: ProcessStatus) {
-        self.init_process.status = state;
+    pub(crate) async fn set_state(&mut self, state: ProcessStatus) {
+        let mut status = self.init_process.status.write().await;
+        *status = state;
     }
 
     pub(crate) async fn start_exec_process(&mut self, process: &ContainerProcess) -> Result<()> {
@@ -79,9 +80,9 @@ impl ContainerInner {
                 process: Some(exec.oci_process.clone()),
             })
             .await
-            .map(|_| {
-                exec.process.status = ProcessStatus::Running;
-            })
+            .context("exec process")?;
+        exec.process.set_status(ProcessStatus::Running).await;
+        Ok(())
     }
 
     pub(crate) async fn win_resize_process(
@@ -91,6 +92,7 @@ impl ContainerInner {
         width: u32,
     ) -> Result<()> {
         self.check_state(vec![ProcessStatus::Created, ProcessStatus::Running])
+            .await
             .context("check state")?;
 
         self.agent
@@ -118,6 +120,7 @@ impl ContainerInner {
 
     pub(crate) async fn start_container(&mut self, cid: &ContainerID) -> Result<()> {
         self.check_state(vec![ProcessStatus::Created, ProcessStatus::Stopped])
+            .await
             .context("check state")?;
 
         self.agent
@@ -127,7 +130,7 @@ impl ContainerInner {
             .await
             .context("start container")?;
 
-        self.set_state(ProcessStatus::Running);
+        self.set_state(ProcessStatus::Running).await;
 
         Ok(())
     }
@@ -179,7 +182,7 @@ impl ContainerInner {
 
         // close the exit channel to wakeup wait service
         // send to notify watchers who are waiting for the process exit
-        self.init_process.stop();
+        self.init_process.stop().await;
         Ok(())
     }
 
@@ -192,6 +195,7 @@ impl ContainerInner {
         info!(logger, "begin to stop process");
         // do not stop again when state stopped, may cause multi cleanup resource
         self.check_state(vec![ProcessStatus::Running])
+            .await
             .context("check state")?;
 
         // if use force mode to stop container, stop always successful
@@ -215,7 +219,7 @@ impl ContainerInner {
                     .exec_processes
                     .get_mut(&process.exec_id)
                     .ok_or_else(|| anyhow!("failed to find exec"))?;
-                exec.process.stop();
+                exec.process.stop().await;
             }
         }
 

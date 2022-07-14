@@ -12,9 +12,9 @@ use std::io;
 use std::sync::{Arc, Mutex};
 
 use dbs_device::device_manager::Error as IoManagerError;
-use dbs_legacy_devices::SerialDevice;
 #[cfg(target_arch = "aarch64")]
 use dbs_legacy_devices::RTCDevice;
+use dbs_legacy_devices::SerialDevice;
 use vmm_sys_util::eventfd::EventFd;
 
 // The I8042 Data Port (IO Port 0x60) is used for reading data that was received from a I8042 device or from the I8042 controller itself and writing data to a I8042 device or to the I8042 controller itself.
@@ -149,10 +149,10 @@ pub(crate) mod x86_64 {
 #[cfg(target_arch = "aarch64")]
 pub(crate) mod aarch64 {
     use super::*;
-    use dbs_device::device_manager::{IoManager};
+    use dbs_device::device_manager::IoManager;
     use dbs_device::resources::DeviceResources;
-    use std::collections::HashMap;
     use kvm_ioctls::VmFd;
+    use std::collections::HashMap;
 
     type Result<T> = ::std::result::Result<T, Error>;
 
@@ -194,7 +194,7 @@ pub(crate) mod aarch64 {
         ) -> Result<(Arc<Mutex<SerialDevice>>, EventFd)> {
             let eventfd = EventFd::new(libc::EFD_NONBLOCK).map_err(Error::EventFd)?;
             let device = Arc::new(Mutex::new(SerialDevice::new(
-                eventfd.try_clone().map_err(Error::EventFd)?
+                eventfd.try_clone().map_err(Error::EventFd)?,
             )));
 
             bus.register_device_io(device.clone(), resources.get_all_resources())

@@ -22,10 +22,7 @@ use super::{
 };
 
 lazy_static! {
-    pub(crate) static ref SHARED_DIR_VIRTIO_FS_OPTIONS: Vec::<String> = vec![
-        String::from("default_permissions,allow_other,rootmode=040000,user_id=0,group_id=0"),
-        String::from("nodev"),
-    ];
+    pub(crate) static ref SHARED_DIR_VIRTIO_FS_OPTIONS: Vec::<String> = vec![String::from("nodev")];
 }
 
 #[derive(Debug, Clone)]
@@ -70,16 +67,13 @@ impl ShareFs for ShareVirtioFsInline {
         // setup storage
         let mut storages: Vec<Storage> = Vec::new();
 
-        let mut shared_options = SHARED_DIR_VIRTIO_FS_OPTIONS.clone();
-        shared_options.push(format!("tag={}", MOUNT_GUEST_TAG));
-
         let shared_volume: Storage = Storage {
             driver: String::from(KATA_VIRTIO_FS_DEV_TYPE),
             driver_options: Vec::new(),
             source: String::from(MOUNT_GUEST_TAG),
             fs_type: String::from(FS_TYPE_VIRTIO_FS),
             fs_group: None,
-            options: shared_options,
+            options: SHARED_DIR_VIRTIO_FS_OPTIONS.clone(),
             mount_point: String::from(KATA_GUEST_SHARE_DIR),
         };
 

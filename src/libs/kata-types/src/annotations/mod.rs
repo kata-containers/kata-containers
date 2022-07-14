@@ -14,6 +14,7 @@ use serde::Deserialize;
 
 use crate::config::hypervisor::get_hypervisor_plugin;
 use crate::config::TomlConfig;
+use crate::sl;
 
 /// CRI-containerd specific annotations.
 pub mod cri_containerd;
@@ -274,6 +275,13 @@ pub const KATA_ANNO_CFG_HYPERVISOR_MSIZE_9P: &str = "io.katacontainers.config.hy
 // Runtime related annotations
 /// Prefix for Runtime configurations.
 pub const KATA_ANNO_CFG_RUNTIME_PREFIX: &str = "io.katacontainers.config.runtime.";
+/// runtime name
+pub const KATA_ANNO_CFG_RUNTIME_NAME: &str = "io.katacontainers.config.runtime.name";
+/// hypervisor name
+pub const KATA_ANNO_CFG_RUNTIME_HYPERVISOR: &str =
+    "io.katacontainers.config.runtime.hypervisor_name";
+/// agent name
+pub const KATA_ANNO_CFG_RUNTIME_AGENT: &str = "io.katacontainers.config.runtime.agent_name";
 /// A sandbox annotation that determines if seccomp should be applied inside guest.
 pub const KATA_ANNO_CFG_DISABLE_GUEST_SECCOMP: &str =
     "io.katacontainers.config.runtime.disable_guest_seccomp";
@@ -396,30 +404,24 @@ impl Annotation {
 
 impl Annotation {
     /// update config info by annotation
-    pub fn update_config_by_annotation(
-        &self,
-        config: &mut TomlConfig,
-        hypervisor_name: &str,
-        agent_name: &str,
-    ) -> Result<()> {
-        if config.hypervisor.get_mut(hypervisor_name).is_none() {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("hypervisor {} not found", hypervisor_name),
-            ));
+    pub fn update_config_by_annotation(&self, config: &mut TomlConfig) -> Result<()> {
+        if let Some(hv) = self.annotations.get(KATA_ANNO_CFG_RUNTIME_HYPERVISOR) {
+            if config.hypervisor.get(hv).is_some() {
+                config.runtime.hypervisor_name = hv.to_string();
+            }
         }
+        if let Some(ag) = self.annotations.get(KATA_ANNO_CFG_RUNTIME_AGENT) {
+            if config.agent.get(ag).is_some() {
+                config.runtime.agent_name = ag.to_string();
+            }
+        }
+        let hypervisor_name = &config.runtime.hypervisor_name;
+        let agent_name = &config.runtime.agent_name;
 
-        if config.agent.get_mut(agent_name).is_none() {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("agent {} not found", agent_name),
-            ));
-        }
         let bool_err = io::Error::new(io::ErrorKind::InvalidData, "parse bool error".to_string());
         let u32_err = io::Error::new(io::ErrorKind::InvalidData, "parse u32 error".to_string());
         let u64_err = io::Error::new(io::ErrorKind::InvalidData, "parse u64 error".to_string());
         let i32_err = io::Error::new(io::ErrorKind::InvalidData, "parse i32 error".to_string());
-
         let mut hv = config.hypervisor.get_mut(hypervisor_name).unwrap();
         let mut ag = config.agent.get_mut(agent_name).unwrap();
         for (key, value) in &self.annotations {
@@ -632,32 +634,40 @@ impl Annotation {
                         hv.machine_info.entropy_source = value.to_string();
                     }
                     //	Hypervisor Memory related annotations
-                    KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY => match self.get_value::<u32>(key) {
-                        Ok(r) => {
-                            let mem = r.unwrap_or_default();
-                            if mem
-                                < get_hypervisor_plugin(hypervisor_name)
-                                    .unwrap()
-                                    .get_min_memory()
-                            {
-                                return Err(io::Error::new(
-                                    io::ErrorKind::InvalidData,
-                                    format!(
-                                        "Memory specified in annotation {} is less than minimum required {}",
-                                        mem,
-                                        get_hypervisor_plugin(hypervisor_name)
-                                            .unwrap()
-                                            .get_min_memory()
-                                    ),
-                                ));
-                            } else {
-                                hv.memory_info.default_memory = mem;
+                    KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY => {
+                        match byte_unit::Byte::from_str(value) {
+                            Ok(mem_bytes) => {
+                                let memory_size = mem_bytes
+                                    .get_adjusted_unit(byte_unit::ByteUnit::MiB)
+                                    .get_value()
+                                    as u32;
+                                info!(sl!(), "get mem {} from annotations: {}", memory_size, value);
+                                if memory_size
+                                    < get_hypervisor_plugin(hypervisor_name)
+                                        .unwrap()
+                                        .get_min_memory()
+                                {
+                                    return Err(io::Error::new(
+                                        io::ErrorKind::InvalidData,
+                                        format!(
+                                            "memory specified in annotation {} is less than minimum limitation {}",
+                                            memory_size,
+                                            get_hypervisor_plugin(hypervisor_name)
+                                                .unwrap()
+                                                .get_min_memory()
+                                        ),
+                                    ));
+                                }
+                                hv.memory_info.default_memory = memory_size;
+                            }
+                            Err(error) => {
+                                error!(
+                                    sl!(),
+                                    "failed to parse byte from string {} error {:?}", value, error
+                                );
                             }
                         }
-                        Err(_e) => {
-                            return Err(u32_err);
-                        }
-                    },
+                    }
                     KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS => match self.get_value::<u32>(key) {
                         Ok(v) => {
                             hv.memory_info.memory_slots = v.unwrap_or_default();
@@ -829,7 +839,21 @@ impl Annotation {
                             return Err(u32_err);
                         }
                     },
-                    //update runtume config
+                    //update runtime config
+                    KATA_ANNO_CFG_RUNTIME_NAME => {
+                        let runtime = vec!["virt-container", "linux-container", "wasm-container"];
+                        if runtime.contains(&value.as_str()) {
+                            config.runtime.name = value.to_string();
+                        } else {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                format!(
+                                    "runtime specified in annotation {} is not in {:?}",
+                                    &value, &runtime
+                                ),
+                            ));
+                        }
+                    }
                     KATA_ANNO_CFG_DISABLE_GUEST_SECCOMP => match self.get_value::<bool>(key) {
                         Ok(r) => {
                             config.runtime.disable_guest_seccomp = r.unwrap_or_default();
@@ -876,10 +900,7 @@ impl Annotation {
                         config.runtime.vfio_mode = value.to_string();
                     }
                     _ => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            format!("Annotation {} not enabled", key),
-                        ));
+                        warn!(sl!(), "Annotation {} not enabled", key);
                     }
                 }
             }

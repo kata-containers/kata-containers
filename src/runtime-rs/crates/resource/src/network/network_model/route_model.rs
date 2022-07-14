@@ -70,13 +70,13 @@ impl NetworkModel for RouteModel {
         // change sysctl for tap0_kata
         // echo 1 > /proc/sys/net/ipv4/conf/tap0_kata/accept_local
         let accept_local_path = format!("/proc/sys/net/ipv4/conf/{}/accept_local", &tap_name);
-        std::fs::write(&accept_local_path, "1".to_string())
+        std::fs::write(&accept_local_path, "1")
             .with_context(|| format!("Failed to echo 1 > {}", &accept_local_path))?;
 
         // echo 1 > /proc/sys/net/ipv4/conf/eth0/proxy_arp
         // This enabled ARP reply on peer eth0 to prevent without any reply on VPC
         let proxy_arp_path = format!("/proc/sys/net/ipv4/conf/{}/proxy_arp", &virt_name);
-        std::fs::write(&proxy_arp_path, "1".to_string())
+        std::fs::write(&proxy_arp_path, "1")
             .with_context(|| format!("Failed to echo 1 > {}", &proxy_arp_path))?;
 
         Ok(())

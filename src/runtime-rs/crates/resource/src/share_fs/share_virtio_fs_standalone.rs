@@ -133,6 +133,7 @@ impl ShareVirtioFsStandalone {
                 }
             }
         }
+        inner.pid = None;
 
         Ok(())
     }

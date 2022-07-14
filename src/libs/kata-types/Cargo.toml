@@ -11,6 +11,7 @@ license = "Apache-2.0"
 edition = "2018"
 
 [dependencies]
+byte-unit = "3.1.4"
 glob = "0.3.0"
 lazy_static = "1.4.0"
 num_cpus = "1.13.1"

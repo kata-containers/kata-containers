@@ -332,7 +332,7 @@ impl VmmService {
         Ok(VmmData::Empty)
     }
 
-    /// Set virtual machine configuration configurations.
+    /// Set virtual machine configuration.
     pub fn set_vm_configuration(
         &mut self,
         vmm: &mut Vmm,
@@ -498,8 +498,7 @@ impl VmmService {
     }
 
     #[cfg(feature = "virtio-blk")]
-    // Only call this function as part of the API.
-    // If the drive_id does not exist, a new Block Device Config is added to the list.
+    // Remove the device
     fn remove_block_device(
         &mut self,
         vmm: &mut Vmm,
