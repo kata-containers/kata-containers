@@ -31,9 +31,10 @@ futures = "0.3.17"
 tokio = { version = "1.20.0", features = ["full"] }
 tokio-vsock = "0.3.1"
 
-netlink-sys = { version = "0.7.0", features = ["tokio_socket",]}
-rtnetlink = "0.8.0"
-netlink-packet-utils = "0.4.1"
+netlink-sys = { version = "0.8.3", features = ["tokio_socket"]}
+netlink-proto = "0.10.0"
+rtnetlink = "0.10.1"
+netlink-packet-utils = "0.5.1"
 ipnetwork = "0.17.0"
 
 # Note: this crate sets the slog 'max_*' features which allows the log level

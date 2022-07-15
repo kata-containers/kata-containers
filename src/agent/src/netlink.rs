@@ -164,7 +164,7 @@ impl Handle {
         let request = self.handle.link().get();
 
         let filtered = match filter {
-            LinkFilter::Name(name) => request.set_name_filter(name.to_owned()),
+            LinkFilter::Name(name) => request.match_name(name.to_owned()),
             LinkFilter::Index(index) => request.match_index(index),
             _ => request, // Post filters
         };

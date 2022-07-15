@@ -10,9 +10,8 @@ use crate::AGENT_CONFIG;
 use slog::Logger;
 
 use anyhow::{anyhow, Result};
-use netlink_sys::{protocols, SocketAddr, TokioSocket};
+use netlink_sys::{protocols, AsyncSocket, AsyncSocketExt, TokioSocket};
 use std::fmt::Debug;
-use std::os::unix::io::FromRawFd;
 use std::sync::Arc;
 use tokio::select;
 use tokio::sync::watch::Receiver;
@@ -175,18 +174,7 @@ pub async fn watch_uevents(
 
     info!(logger, "starting uevents handler");
 
-    let mut socket;
-
-    unsafe {
-        let fd = libc::socket(
-            libc::AF_NETLINK,
-            libc::SOCK_DGRAM | libc::SOCK_CLOEXEC,
-            protocols::NETLINK_KOBJECT_UEVENT as libc::c_int,
-        );
-        socket = TokioSocket::from_raw_fd(fd);
-    }
-
-    socket.bind(&SocketAddr::new(0, 1))?;
+    let mut socket = TokioSocket::new(protocols::NETLINK_KOBJECT_UEVENT)?;
 
     loop {
         select! {
