@@ -1,0 +1,34 @@
+name: Check 
+on: [pull_request]
+jobs:
+  cargo-deny:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        checks:
+          - advisories
+          - bans licenses sources
+        tomls: [./src/agent/Cargo.toml,
+                ./src/agent/rustjail/Cargo.toml,
+                ./src/agent/vsock-exporter/Cargo.toml,
+                ./src/libs/Cargo.toml,
+                ./src/libs/logging/Cargo.toml,
+                ./src/libs/oci/Cargo.toml,
+                ./src/libs/protocols/Cargo.toml,
+                ./src/libs/safe-path/Cargo.toml,
+                ./src/tools/agent-ctl/Cargo.toml,
+                ./src/tools/runk/libcontainer/Cargo.toml,
+                ./src/tools/runk/Cargo.toml,
+                ./src/tools/trace-forwarder/Cargo.toml]
+
+    continue-on-error: ${{ matrix.checks == 'advisories' }}
+
+    steps:
+    - name: "Checkout code"
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && ( success() || failure() ) }}
+      uses: actions/checkout@v2
+    - name: "Check Rust Licenses"
+      uses: EmbarkStudios/cargo-deny-action@v1
+      with:
+        command: check ${{ matrix.checks }}
+        entrypoint: ${{ matrix.tomls }}
