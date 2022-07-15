@@ -2,7 +2,7 @@
 # Copyright (c) 2020 Ant Group
 #
 # SPDX-License-Identifier: Apache-2.0
-from ubuntu:20.04
+from ubuntu:22.04
 
 
 WORKDIR /root/qemu
@@ -44,10 +44,12 @@ RUN apt-get update && apt-get upgrade -y && \
 	    libseccomp-dev \
 	    libseccomp2 \
 	    patch \
-	    python \
-	    python-dev \
+	    python3 \
+	    python3-dev \
 	    rsync \
-	    zlib1g-dev && \
+	    zlib1g-dev \
+	    liburing-dev \
+	    bzip2 && \
     if [ "$(uname -m)" != "s390x" ]; then apt-get install -y --no-install-recommends libpmem-dev; fi && \
     apt-get clean && rm -rf /var/lib/apt/lists/
 
