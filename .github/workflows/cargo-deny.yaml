@@ -8,18 +8,18 @@ jobs:
         checks:
           - advisories
           - bans licenses sources
-        tomls: [./src/agent/Cargo.toml,
-                ./src/agent/rustjail/Cargo.toml,
-                ./src/agent/vsock-exporter/Cargo.toml,
-                ./src/libs/Cargo.toml,
-                ./src/libs/logging/Cargo.toml,
-                ./src/libs/oci/Cargo.toml,
-                ./src/libs/protocols/Cargo.toml,
-                ./src/libs/safe-path/Cargo.toml,
-                ./src/tools/agent-ctl/Cargo.toml,
-                ./src/tools/runk/libcontainer/Cargo.toml,
-                ./src/tools/runk/Cargo.toml,
-                ./src/tools/trace-forwarder/Cargo.toml]
+        tomls: [./src/agent/,
+                ./src/agent/rustjail/,
+                ./src/agent/vsock-exporter/,
+                ./src/libs/,
+                ./src/libs/logging/,
+                ./src/libs/oci/,
+                ./src/libs/protocols/,
+                ./src/libs/safe-path/,
+                ./src/tools/agent-ctl/,
+                ./src/tools/runk/libcontainer/,
+                ./src/tools/runk/,
+                ./src/tools/trace-forwarder/]
 
     continue-on-error: ${{ matrix.checks == 'advisories' }}
 
