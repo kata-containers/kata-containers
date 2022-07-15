@@ -631,7 +631,7 @@ dependencies = [
  "logging",
  "netlink-packet-utils",
  "netlink-sys",
- "nix 0.23.1",
+ "nix 0.24.1",
  "oci",
  "opentelemetry",
  "procfs",
@@ -674,7 +674,7 @@ dependencies = [
  "kata-types",
  "lazy_static",
  "libc",
- "nix 0.23.1",
+ "nix 0.24.1",
  "oci",
  "once_cell",
  "rand 0.7.3",
@@ -913,6 +913,18 @@ checksum = "9f866317acbd3a240710c63f065ffb1e4fd466259045ccb504130b7f668f35c6"
 dependencies = [
  "bitflags",
  "cc",
+ "cfg-if 1.0.0",
+ "libc",
+ "memoffset",
+]
+
+[[package]]
+name = "nix"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f17df307904acd05aa8e32e97bb20f2a0df1728bbc2d771ae8f9a90463441e9"
+dependencies = [
+ "bitflags",
  "cfg-if 1.0.0",
  "libc",
  "memoffset",
