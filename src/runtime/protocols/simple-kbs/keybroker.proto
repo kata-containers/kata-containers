@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package keybroker;
+
+option go_package = "./simple-kbs";
+
+message BundleRequest {
+
+    // for platform verification
+    // the cert chain includes the PDH
+    string CertificateChain = 1;
+    // Required to construct launch blob
+    uint32 Policy = 2;
+
+}
+
+message BundleResponse {
+    string GuestOwnerPublicKey = 1;
+    string LaunchBlob = 2;
+
+    // GUID
+    string LaunchId = 3;
+}
+
+message RequestDetails {
+    string Guid = 1;
+    string Format = 2;
+    string SecretType = 3;
+    string Id = 4;
+}
+
+message SecretRequest {
+    // b64 encoded string
+    string LaunchMeasurement = 1;
+    string LaunchId = 2;
+
+    uint32 Policy = 3;
+
+    // Hints for secret validation,
+    uint32 ApiMajor = 4;
+    uint32 ApiMinor = 5;
+    uint32 BuildId = 6;
+
+    // The fw digest that the guest was launched with. Hopefully we can
+    // get this from QEMU. Pass this in as a base64 string.
+    string FwDigest = 7;
+
+    // Flexible description of launch provided by orchestrator
+    // and logged by KBS.
+    string LaunchDescription = 8;
+
+    repeated RequestDetails SecretRequests = 9;
+}
+
+message SecretResponse {
+    string LaunchSecretHeader = 1;
+    string LaunchSecretData = 2;
+}
+
+service KeyBrokerService {
+    rpc GetBundle(BundleRequest) returns (BundleResponse) {};
+    rpc GetSecret(SecretRequest) returns (SecretResponse) {};
+}
+
