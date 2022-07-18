@@ -412,7 +412,6 @@ steps:
   configured and created using the VM as a single node cluster and with `AA_KBC` set to `offline_fs_kbc`. 
   ```bash
   $ export KUBERNETES="yes"
-  $ export SKOPEO="yes"
   $ export AA_KBC=offline_fs_kbc
   $ ~/ccv0.sh build_and_install_all
   ```
