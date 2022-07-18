@@ -98,7 +98,8 @@ impl Vm {
         );
         self.vcpu_manager()
             .map_err(StartMicroVmError::Vcpu)?
-            .set_reset_event_fd(reset_eventfd);
+            .set_reset_event_fd(reset_eventfd)
+            .map_err(StartMicroVmError::Vcpu)?;
 
         // On aarch64, the vCPUs need to be created (i.e call KVM_CREATE_VCPU) and configured before
         // setting up the IRQ chip because the `KVM_CREATE_VCPU` ioctl will return error if the IRQCHIP
