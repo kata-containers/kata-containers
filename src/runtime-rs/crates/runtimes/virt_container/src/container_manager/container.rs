@@ -427,7 +427,7 @@ fn handle_pid_namespace(namespaces: &[oci::LinuxNamespace]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::amend_spec;
-
+    use crate::container_manager::container::handle_pid_namespace;
     #[test]
     fn test_amend_spec_disable_guest_seccomp() {
         let mut spec = oci::Spec {
@@ -447,5 +447,39 @@ mod tests {
         // disable_guest_seccomp = true
         amend_spec(&mut spec, true).unwrap();
         assert!(spec.linux.as_ref().unwrap().seccomp.is_none());
+    }
+    #[test]
+    fn test_handle_pid_namespace() {
+        let namespaces = vec![
+            oci::LinuxNamespace {
+                r#type: "pid".to_string(),
+                path: "".to_string(),
+            },
+            oci::LinuxNamespace {
+                r#type: "network".to_string(),
+                path: "".to_string(),
+            },
+            oci::LinuxNamespace {
+                r#type: "ipc".to_string(),
+                path: "".to_string(),
+            },
+            oci::LinuxNamespace {
+                r#type: "uts".to_string(),
+                path: "".to_string(),
+            },
+            oci::LinuxNamespace {
+                r#type: "mount".to_string(),
+                path: "".to_string(),
+            },
+            oci::LinuxNamespace {
+                r#type: "user".to_string(),
+                path: "".to_string(),
+            },
+            oci::LinuxNamespace {
+                r#type: "cgroup".to_string(),
+                path: "".to_string(),
+            },
+        ];
+        assert!(!handle_pid_namespace(&namespaces));
     }
 }
