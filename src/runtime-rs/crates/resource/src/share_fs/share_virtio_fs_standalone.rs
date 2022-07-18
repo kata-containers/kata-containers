@@ -128,7 +128,7 @@ impl ShareVirtioFsStandalone {
             info!(sl!(), "shutdown virtiofsd pid {}", pid);
             let pid = ::nix::unistd::Pid::from_raw(pid as i32);
             if let Err(err) = ::nix::sys::signal::kill(pid, nix::sys::signal::SIGKILL) {
-                if err != ::nix::Error::Sys(nix::errno::Errno::ESRCH) {
+                if err != ::nix::Error::ESRCH {
                     return Err(anyhow!("failed to kill virtiofsd pid {} {}", pid, err));
                 }
             }

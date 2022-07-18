@@ -68,9 +68,6 @@ const PROC_DEVICE_INDEX: usize = 0;
 const PROC_PATH_INDEX: usize = 1;
 const PROC_TYPE_INDEX: usize = 2;
 
-// Sadly nix/libc doesn't have UMOUNT_NOFOLLOW although it's there since Linux 2.6.34
-const UMOUNT_NOFOLLOW: i32 = 0x8;
-
 lazy_static! {
     static ref MAX_MOUNT_PARAM_SIZE: usize =
         if let Ok(Some(v)) = unistd::sysconf(unistd::SysconfVar::PAGE_SIZE) {
@@ -763,7 +760,7 @@ pub fn umount_all<P: AsRef<Path>>(mountpoint: P, lazy_umount: bool) -> Result<()
 // Counterpart of nix::umount2, with support of `UMOUNT_FOLLOW`.
 fn umount2<P: AsRef<Path>>(path: P, lazy_umount: bool) -> std::io::Result<()> {
     let path_ptr = path.as_ref().as_os_str().as_bytes().as_ptr() as *const c_char;
-    let mut flags = UMOUNT_NOFOLLOW;
+    let mut flags = MntFlags::UMOUNT_NOFOLLOW.bits();
     if lazy_umount {
         flags |= MntFlags::MNT_DETACH.bits();
     }
