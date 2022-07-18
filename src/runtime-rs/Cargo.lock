@@ -455,8 +455,7 @@ dependencies = [
 [[package]]
 name = "dbs-arch"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d235999408e59e60d18461debfb31d504813cfa5e497ff9d45c1c319980cf74a"
+source = "git+https://github.com/openanolis/dragonball-sandbox.git?rev=7a8e832b53d66994d6a16f0513d69f540583dcd0#7a8e832b53d66994d6a16f0513d69f540583dcd0"
 dependencies = [
  "kvm-bindings",
  "kvm-ioctls",
@@ -469,8 +468,7 @@ dependencies = [
 [[package]]
 name = "dbs-boot"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37036c65dc89724ff5628cee6c48ebe75027f989398317b2a5155924ba9c2bf7"
+source = "git+https://github.com/openanolis/dragonball-sandbox.git?rev=7a8e832b53d66994d6a16f0513d69f540583dcd0#7a8e832b53d66994d6a16f0513d69f540583dcd0"
 dependencies = [
  "dbs-arch",
  "kvm-bindings",
@@ -485,7 +483,7 @@ dependencies = [
 [[package]]
 name = "dbs-device"
 version = "0.1.0"
-source = "git+https://github.com/openanolis/dragonball-sandbox.git?rev=84eee5737cc7d85f9921c94a93e6b9dc4ae24a39#84eee5737cc7d85f9921c94a93e6b9dc4ae24a39"
+source = "git+https://github.com/openanolis/dragonball-sandbox.git?rev=7a8e832b53d66994d6a16f0513d69f540583dcd0#7a8e832b53d66994d6a16f0513d69f540583dcd0"
 dependencies = [
  "thiserror",
 ]
@@ -493,7 +491,7 @@ dependencies = [
 [[package]]
 name = "dbs-interrupt"
 version = "0.1.0"
-source = "git+https://github.com/openanolis/dragonball-sandbox.git?rev=84eee5737cc7d85f9921c94a93e6b9dc4ae24a39#84eee5737cc7d85f9921c94a93e6b9dc4ae24a39"
+source = "git+https://github.com/openanolis/dragonball-sandbox.git?rev=7a8e832b53d66994d6a16f0513d69f540583dcd0#7a8e832b53d66994d6a16f0513d69f540583dcd0"
 dependencies = [
  "dbs-device",
  "kvm-bindings",
@@ -505,7 +503,7 @@ dependencies = [
 [[package]]
 name = "dbs-legacy-devices"
 version = "0.1.0"
-source = "git+https://github.com/openanolis/dragonball-sandbox.git?rev=84eee5737cc7d85f9921c94a93e6b9dc4ae24a39#84eee5737cc7d85f9921c94a93e6b9dc4ae24a39"
+source = "git+https://github.com/openanolis/dragonball-sandbox.git?rev=7a8e832b53d66994d6a16f0513d69f540583dcd0#7a8e832b53d66994d6a16f0513d69f540583dcd0"
 dependencies = [
  "dbs-device",
  "dbs-utils",
@@ -528,7 +526,7 @@ dependencies = [
 [[package]]
 name = "dbs-utils"
 version = "0.1.0"
-source = "git+https://github.com/openanolis/dragonball-sandbox.git?rev=84eee5737cc7d85f9921c94a93e6b9dc4ae24a39#84eee5737cc7d85f9921c94a93e6b9dc4ae24a39"
+source = "git+https://github.com/openanolis/dragonball-sandbox.git?rev=7a8e832b53d66994d6a16f0513d69f540583dcd0#7a8e832b53d66994d6a16f0513d69f540583dcd0"
 dependencies = [
  "anyhow",
  "event-manager",
@@ -543,7 +541,7 @@ dependencies = [
 [[package]]
 name = "dbs-virtio-devices"
 version = "0.1.0"
-source = "git+https://github.com/openanolis/dragonball-sandbox.git?rev=84eee5737cc7d85f9921c94a93e6b9dc4ae24a39#84eee5737cc7d85f9921c94a93e6b9dc4ae24a39"
+source = "git+https://github.com/openanolis/dragonball-sandbox.git?rev=7a8e832b53d66994d6a16f0513d69f540583dcd0#7a8e832b53d66994d6a16f0513d69f540583dcd0"
 dependencies = [
  "blobfs",
  "byteorder",
@@ -3060,4 +3058,4 @@ dependencies = [
 [[patch.unused]]
 name = "dbs-upcall"
 version = "0.1.0"
-source = "git+https://github.com/openanolis/dragonball-sandbox.git?rev=84eee5737cc7d85f9921c94a93e6b9dc4ae24a39#84eee5737cc7d85f9921c94a93e6b9dc4ae24a39"
+source = "git+https://github.com/openanolis/dragonball-sandbox.git?rev=7a8e832b53d66994d6a16f0513d69f540583dcd0#7a8e832b53d66994d6a16f0513d69f540583dcd0"
