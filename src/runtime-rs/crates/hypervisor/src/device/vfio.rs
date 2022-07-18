@@ -6,7 +6,9 @@
 
 use std::{fs, path::Path, process::Command};
 
-use anyhow::{anyhow, Context, Result};
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use anyhow::anyhow;
+use anyhow::{Context, Result};
 
 fn override_driver(bdf: &str, driver: &str) -> Result<()> {
     let driver_override = format!("/sys/bus/pci/devices/{}/driver_override", bdf);
