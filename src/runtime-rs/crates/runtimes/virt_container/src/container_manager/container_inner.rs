@@ -193,7 +193,13 @@ impl ContainerInner {
     ) -> Result<()> {
         let logger = logger_with_process(process);
         info!(logger, "begin to stop process");
+
         // do not stop again when state stopped, may cause multi cleanup resource
+        let state = self.init_process.get_status().await;
+        if state == ProcessStatus::Stopped {
+            return Ok(());
+        }
+
         self.check_state(vec![ProcessStatus::Running])
             .await
             .context("check state")?;
