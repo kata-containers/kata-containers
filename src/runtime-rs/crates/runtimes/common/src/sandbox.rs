@@ -7,11 +7,9 @@
 use anyhow::Result;
 use async_trait::async_trait;
 
-use kata_types::config::TomlConfig;
-
 #[async_trait]
 pub trait Sandbox: Send + Sync {
-    async fn start(&self, netns: Option<String>, config: &TomlConfig) -> Result<()>;
+    async fn start(&self, netns: Option<String>) -> Result<()>;
     async fn stop(&self) -> Result<()>;
     async fn cleanup(&self, container_id: &str) -> Result<()>;
     async fn shutdown(&self) -> Result<()>;
