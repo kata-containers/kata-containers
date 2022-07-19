@@ -118,58 +118,39 @@ type SandboxResourceSizing struct {
 
 // SandboxConfig is a Sandbox configuration.
 type SandboxConfig struct {
+	// Annotations keys must be unique strings and must be name-spaced
+	// with e.g. reverse domain notation (org.clearlinux.key).
+	Annotations    map[string]string
+	Hostname       string
+	ID             string
+	HypervisorType HypervisorType
 	// Volumes is a list of shared volumes between the host and the Sandbox.
 	Volumes []types.Volume
-
+	// SandboxBindMounts - list of paths to mount into guest
+	SandboxBindMounts []string
+	// Experimental features enabled
+	Experimental []exp.Feature
 	// Containers describe the list of containers within a Sandbox.
 	// This list can be empty and populated by adding containers
 	// to the Sandbox a posteriori.
 	//TODO: this should be a map to avoid duplicated containers
-	Containers []ContainerConfig
-
-	// SandboxBindMounts - list of paths to mount into guest
-	SandboxBindMounts []string
-
-	// Experimental features enabled
-	Experimental []exp.Feature
-
-	// Annotations keys must be unique strings and must be name-spaced
-	// with e.g. reverse domain notation (org.clearlinux.key).
-	Annotations map[string]string
-
-	ID string
-
-	Hostname string
-
-	HypervisorType HypervisorType
-
-	AgentConfig KataAgentConfig
-
-	NetworkConfig NetworkConfig
-
+	Containers       []ContainerConfig
+	NetworkConfig    NetworkConfig
+	AgentConfig      KataAgentConfig
 	HypervisorConfig HypervisorConfig
-
+	ShmSize          uint64
 	SandboxResources SandboxResourceSizing
-
+	VfioMode         config.VFIOModeType
 	// StaticResourceMgmt indicates if the shim should rely on statically sizing the sandbox (VM)
 	StaticResourceMgmt bool
-
 	// Offload the CRI image management service to the Kata agent.
 	ServiceOffload bool
-
-	ShmSize uint64
-
-	VfioMode config.VFIOModeType
-
 	// SharePidNs sets all containers to share the same sandbox level pid namespace.
 	SharePidNs bool
-
 	// SystemdCgroup enables systemd cgroup support
 	SystemdCgroup bool
-
 	// SandboxCgroupOnly enables cgroup only at podlevel in the host
-	SandboxCgroupOnly bool
-
+	SandboxCgroupOnly   bool
 	DisableGuestSeccomp bool
 }
 
@@ -1225,6 +1206,13 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 		return s.hypervisor.StartVM(ctx, VmStartTimeout)
 	}); err != nil {
 		return err
+	}
+
+	// not sure how we know that this callback has been executed
+	if s.config.HypervisorConfig.ConfidentialGuest && s.config.HypervisorConfig.GuestPreAttestation {
+		if err := s.hypervisor.AttestVM(ctx); err != nil {
+			return err
+		}
 	}
 
 	// In case of vm factory, network interfaces are hotplugged

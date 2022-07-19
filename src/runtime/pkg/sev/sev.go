@@ -16,14 +16,17 @@ import (
 )
 
 type GuestPreAttestationConfig struct {
-	Proxy            string
-	Policy           uint32
-	Keyset           string
-	LaunchId         string
-	KernelPath       string
-	InitrdPath       string
-	FwPath           string
-	KernelParameters string
+	Proxy               string
+	Keyset              string
+	LaunchId            string
+	KernelPath          string
+	InitrdPath          string
+	FwPath              string
+	KernelParameters    string
+	CertChainPath       string
+	KeyBrokerSecretType string
+	KeyBrokerSecretGuid string
+	Policy              uint32
 }
 
 type guidLE [16]byte
