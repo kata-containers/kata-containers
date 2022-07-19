@@ -15,8 +15,8 @@ use async_trait::async_trait;
 
 use super::NetworkPair;
 
-const TC_FILTER_NET_MODEL_STR: &str = "tcfilter";
-const ROUTE_NET_MODEL_STR: &str = "route";
+pub(crate) const TC_FILTER_NET_MODEL_STR: &str = "tcfilter";
+pub(crate) const ROUTE_NET_MODEL_STR: &str = "route";
 
 pub enum NetworkModelType {
     NoneModel,
