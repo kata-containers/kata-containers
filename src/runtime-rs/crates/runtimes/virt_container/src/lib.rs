@@ -51,9 +51,9 @@ impl RuntimeHandler for VirtContainer {
         &self,
         sid: &str,
         msg_sender: Sender<Message>,
-        config: &TomlConfig,
+        config: Arc<TomlConfig>,
     ) -> Result<RuntimeInstance> {
-        let hypervisor = new_hypervisor(config).await.context("new hypervisor")?;
+        let hypervisor = new_hypervisor(&config).await.context("new hypervisor")?;
 
         // get uds from hypervisor and get config from toml_config
         let agent = Arc::new(KataAgent::new(kata_types::config::Agent {

@@ -24,6 +24,7 @@ use crate::{
 
 pub(crate) struct ResourceManagerInner {
     sid: String,
+    toml_config: Arc<TomlConfig>,
     agent: Arc<dyn Agent>,
     hypervisor: Arc<dyn Hypervisor>,
     network: Option<Arc<dyn Network>>,
@@ -39,18 +40,24 @@ impl ResourceManagerInner {
         sid: &str,
         agent: Arc<dyn Agent>,
         hypervisor: Arc<dyn Hypervisor>,
-        toml_config: &TomlConfig,
+        toml_config: Arc<TomlConfig>,
     ) -> Result<Self> {
+        let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
         Ok(Self {
             sid: sid.to_string(),
+            toml_config,
             agent,
             hypervisor,
             network: None,
             share_fs: None,
             rootfs_resource: RootFsResource::new(),
             volume_resource: VolumeResource::new(),
-            cgroups_resource: CgroupsResource::new(sid, toml_config)?,
+            cgroups_resource,
         })
+    }
+
+    pub fn config(&self) -> Arc<TomlConfig> {
+        self.toml_config.clone()
     }
 
     pub async fn prepare_before_start_vm(

@@ -32,7 +32,7 @@ impl RuntimeHandler for WasmContainer {
         &self,
         _sid: &str,
         _msg_sender: Sender<Message>,
-        _config: &TomlConfig,
+        _config: Arc<TomlConfig>,
     ) -> Result<RuntimeInstance> {
         todo!()
     }
