@@ -12,5 +12,5 @@
 // /sys/fs/cgroup/memory/kata_overhead/$CGPATH where $CGPATH is
 // defined by the orchestrator.
 pub(crate) fn gen_overhead_path(path: &str) -> String {
-    format!("/kata_overhead/{}", path.trim_start_matches('/'))
+    format!("kata_overhead/{}", path.trim_start_matches('/'))
 }
