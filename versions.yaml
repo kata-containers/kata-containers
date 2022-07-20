@@ -241,12 +241,12 @@ externals:
   nydus:
     description: "Nydus image acceleration service"
     url: "https://github.com/dragonflyoss/image-service"
-    version: "v1.1.2"
+    version: "v2.1.0-alpha.4"
 
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
     url: "https://github.com/containerd/nydus-snapshotter"
-    version: "v0.1.0"
+    version: "v0.2.3"
 
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
