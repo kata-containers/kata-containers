@@ -1792,7 +1792,6 @@ func (k *kataAgent) connect(ctx context.Context) error {
 	k.Logger().WithField("url", k.state.URL).Info("New client")
 	client, err := kataclient.NewAgentClient(k.ctx, k.state.URL, k.dialTimout)
 	if err != nil {
-		k.dead = true
 		return err
 	}
 
