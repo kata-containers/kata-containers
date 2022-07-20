@@ -10,10 +10,9 @@ import (
 	"io"
 
 	"github.com/go-openapi/runtime"
+	"github.com/go-openapi/strfmt"
 
-	strfmt "github.com/go-openapi/strfmt"
-
-	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 )
 
 // PutMmdsConfigReader is a Reader for the PutMmdsConfig structure.
@@ -24,21 +23,18 @@ type PutMmdsConfigReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *PutMmdsConfigReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
-
 	case 204:
 		result := NewPutMmdsConfigNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
-
 	case 400:
 		result := NewPutMmdsConfigBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
-
 	default:
 		result := NewPutMmdsConfigDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -56,7 +52,7 @@ func NewPutMmdsConfigNoContent() *PutMmdsConfigNoContent {
 	return &PutMmdsConfigNoContent{}
 }
 
-/*PutMmdsConfigNoContent handles this case with default header values.
+/* PutMmdsConfigNoContent describes a response with status code 204, with default header values.
 
 MMDS configuration was created/updated.
 */
@@ -77,7 +73,7 @@ func NewPutMmdsConfigBadRequest() *PutMmdsConfigBadRequest {
 	return &PutMmdsConfigBadRequest{}
 }
 
-/*PutMmdsConfigBadRequest handles this case with default header values.
+/* PutMmdsConfigBadRequest describes a response with status code 400, with default header values.
 
 MMDS configuration cannot be updated due to bad input.
 */
@@ -87,6 +83,9 @@ type PutMmdsConfigBadRequest struct {
 
 func (o *PutMmdsConfigBadRequest) Error() string {
 	return fmt.Sprintf("[PUT /mmds/config][%d] putMmdsConfigBadRequest  %+v", 400, o.Payload)
+}
+func (o *PutMmdsConfigBadRequest) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PutMmdsConfigBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
@@ -108,7 +107,7 @@ func NewPutMmdsConfigDefault(code int) *PutMmdsConfigDefault {
 	}
 }
 
-/*PutMmdsConfigDefault handles this case with default header values.
+/* PutMmdsConfigDefault describes a response with status code -1, with default header values.
 
 Internal server error
 */
@@ -124,7 +123,10 @@ func (o *PutMmdsConfigDefault) Code() int {
 }
 
 func (o *PutMmdsConfigDefault) Error() string {
-	return fmt.Sprintf("[PUT /mmds/config][%d] PutMmdsConfig default  %+v", o._statusCode, o.Payload)
+	return fmt.Sprintf("[PUT /mmds/config][%d] putMmdsConfig default  %+v", o._statusCode, o.Payload)
+}
+func (o *PutMmdsConfigDefault) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PutMmdsConfigDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

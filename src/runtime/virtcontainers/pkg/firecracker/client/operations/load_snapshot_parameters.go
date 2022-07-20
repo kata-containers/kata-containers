@@ -13,65 +13,78 @@ import (
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/runtime"
 	cr "github.com/go-openapi/runtime/client"
+	"github.com/go-openapi/strfmt"
 
-	strfmt "github.com/go-openapi/strfmt"
-
-	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 )
 
-// NewLoadSnapshotParams creates a new LoadSnapshotParams object
-// with the default values initialized.
+// NewLoadSnapshotParams creates a new LoadSnapshotParams object,
+// with the default timeout for this client.
+//
+// Default values are not hydrated, since defaults are normally applied by the API server side.
+//
+// To enforce default values in parameter, use SetDefaults or WithDefaults.
 func NewLoadSnapshotParams() *LoadSnapshotParams {
-	var ()
 	return &LoadSnapshotParams{
-
 		timeout: cr.DefaultTimeout,
 	}
 }
 
 // NewLoadSnapshotParamsWithTimeout creates a new LoadSnapshotParams object
-// with the default values initialized, and the ability to set a timeout on a request
+// with the ability to set a timeout on a request.
 func NewLoadSnapshotParamsWithTimeout(timeout time.Duration) *LoadSnapshotParams {
-	var ()
 	return &LoadSnapshotParams{
-
 		timeout: timeout,
 	}
 }
 
 // NewLoadSnapshotParamsWithContext creates a new LoadSnapshotParams object
-// with the default values initialized, and the ability to set a context for a request
+// with the ability to set a context for a request.
 func NewLoadSnapshotParamsWithContext(ctx context.Context) *LoadSnapshotParams {
-	var ()
 	return &LoadSnapshotParams{
-
 		Context: ctx,
 	}
 }
 
 // NewLoadSnapshotParamsWithHTTPClient creates a new LoadSnapshotParams object
-// with the default values initialized, and the ability to set a custom HTTPClient for a request
+// with the ability to set a custom HTTPClient for a request.
 func NewLoadSnapshotParamsWithHTTPClient(client *http.Client) *LoadSnapshotParams {
-	var ()
 	return &LoadSnapshotParams{
 		HTTPClient: client,
 	}
 }
 
-/*LoadSnapshotParams contains all the parameters to send to the API endpoint
-for the load snapshot operation typically these are written to a http.Request
+/* LoadSnapshotParams contains all the parameters to send to the API endpoint
+   for the load snapshot operation.
+
+   Typically these are written to a http.Request.
 */
 type LoadSnapshotParams struct {
 
-	/*Body
-	  The configuration used for loading a snaphot.
+	/* Body.
 
+	   The configuration used for loading a snaphot.
 	*/
 	Body *models.SnapshotLoadParams
 
 	timeout    time.Duration
 	Context    context.Context
 	HTTPClient *http.Client
+}
+
+// WithDefaults hydrates default values in the load snapshot params (not the query body).
+//
+// All values with no default are reset to their zero value.
+func (o *LoadSnapshotParams) WithDefaults() *LoadSnapshotParams {
+	o.SetDefaults()
+	return o
+}
+
+// SetDefaults hydrates default values in the load snapshot params (not the query body).
+//
+// All values with no default are reset to their zero value.
+func (o *LoadSnapshotParams) SetDefaults() {
+	// no default values defined for this parameter
 }
 
 // WithTimeout adds the timeout to the load snapshot params
@@ -125,7 +138,6 @@ func (o *LoadSnapshotParams) WriteToRequest(r runtime.ClientRequest, reg strfmt.
 		return err
 	}
 	var res []error
-
 	if o.Body != nil {
 		if err := r.SetBodyParam(o.Body); err != nil {
 			return err
