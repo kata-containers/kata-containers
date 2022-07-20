@@ -6,14 +6,16 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	strfmt "github.com/go-openapi/strfmt"
+	"context"
 
 	"github.com/go-openapi/errors"
+	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 	"github.com/go-openapi/validate"
 )
 
 // Metrics Describes the configuration option for the metrics capability.
+//
 // swagger:model Metrics
 type Metrics struct {
 
@@ -42,6 +44,11 @@ func (m *Metrics) validateMetricsPath(formats strfmt.Registry) error {
 		return err
 	}
 
+	return nil
+}
+
+// ContextValidate validates this metrics based on context it is used
+func (m *Metrics) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	return nil
 }
 

@@ -10,10 +10,9 @@ import (
 	"io"
 
 	"github.com/go-openapi/runtime"
+	"github.com/go-openapi/strfmt"
 
-	strfmt "github.com/go-openapi/strfmt"
-
-	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 )
 
 // PutLoggerReader is a Reader for the PutLogger structure.
@@ -24,21 +23,18 @@ type PutLoggerReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *PutLoggerReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
-
 	case 204:
 		result := NewPutLoggerNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
-
 	case 400:
 		result := NewPutLoggerBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
-
 	default:
 		result := NewPutLoggerDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -56,7 +52,7 @@ func NewPutLoggerNoContent() *PutLoggerNoContent {
 	return &PutLoggerNoContent{}
 }
 
-/*PutLoggerNoContent handles this case with default header values.
+/* PutLoggerNoContent describes a response with status code 204, with default header values.
 
 Logger created.
 */
@@ -77,7 +73,7 @@ func NewPutLoggerBadRequest() *PutLoggerBadRequest {
 	return &PutLoggerBadRequest{}
 }
 
-/*PutLoggerBadRequest handles this case with default header values.
+/* PutLoggerBadRequest describes a response with status code 400, with default header values.
 
 Logger cannot be initialized due to bad input.
 */
@@ -87,6 +83,9 @@ type PutLoggerBadRequest struct {
 
 func (o *PutLoggerBadRequest) Error() string {
 	return fmt.Sprintf("[PUT /logger][%d] putLoggerBadRequest  %+v", 400, o.Payload)
+}
+func (o *PutLoggerBadRequest) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PutLoggerBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
@@ -108,7 +107,7 @@ func NewPutLoggerDefault(code int) *PutLoggerDefault {
 	}
 }
 
-/*PutLoggerDefault handles this case with default header values.
+/* PutLoggerDefault describes a response with status code -1, with default header values.
 
 Internal server error.
 */
@@ -125,6 +124,9 @@ func (o *PutLoggerDefault) Code() int {
 
 func (o *PutLoggerDefault) Error() string {
 	return fmt.Sprintf("[PUT /logger][%d] putLogger default  %+v", o._statusCode, o.Payload)
+}
+func (o *PutLoggerDefault) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PutLoggerDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
