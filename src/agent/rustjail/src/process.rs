@@ -4,25 +4,24 @@
 //
 
 use libc::pid_t;
+use std::collections::HashMap;
 use std::fs::File;
 use std::os::unix::io::{AsRawFd, RawFd};
-use tokio::sync::mpsc::Sender;
+use std::sync::Arc;
 
 use nix::errno::Errno;
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use nix::sys::wait::{self, WaitStatus};
-use nix::unistd::{self, Pid};
+use nix::unistd::{self, dup, Pid};
 use nix::Result;
 
+use anyhow::{anyhow, Result as AnyResult};
 use oci::Process as OCIProcess;
 use slog::Logger;
+use tokio::io::{split, ReadHalf, WriteHalf};
+use tokio::sync::{mpsc::Sender, Mutex, Notify};
 
 use crate::pipestream::PipeStream;
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::io::{split, ReadHalf, WriteHalf};
-use tokio::sync::Mutex;
-use tokio::sync::Notify;
 
 macro_rules! close_process_stream {
     ($self: ident, $stream:ident, $stream_type: ident) => {
@@ -193,9 +192,12 @@ impl Process {
         }
     }
 
-    fn get_stream_and_store(&mut self, stream_type: StreamType) -> Option<(Reader, Writer)> {
-        let fd = self.get_fd(&stream_type)?;
-        let stream = PipeStream::from_fd(fd);
+    fn get_stream_and_store(&mut self, stream_type: StreamType) -> AnyResult<(Reader, Writer)> {
+        let fd = self
+            .get_fd(&stream_type)
+            .ok_or_else(|| anyhow!("no such stream {:?}", stream_type))?;
+        let stream =
+            PipeStream::from_fd(dup(fd).map_err(|e| anyhow!("fail to dup stream fd: {}", e))?);
 
         let (reader, writer) = split(stream);
         let reader = Arc::new(Mutex::new(reader));
@@ -204,25 +206,23 @@ impl Process {
         self.readers.insert(stream_type.clone(), reader.clone());
         self.writers.insert(stream_type, writer.clone());
 
-        Some((reader, writer))
+        Ok((reader, writer))
     }
 
-    pub fn get_reader(&mut self, stream_type: StreamType) -> Option<Reader> {
+    pub fn get_reader(&mut self, stream_type: StreamType) -> AnyResult<Reader> {
         if let Some(reader) = self.readers.get(&stream_type) {
-            return Some(reader.clone());
+            return Ok(reader.clone());
         }
 
-        let (reader, _) = self.get_stream_and_store(stream_type)?;
-        Some(reader)
+        Ok(self.get_stream_and_store(stream_type)?.0)
     }
 
-    pub fn get_writer(&mut self, stream_type: StreamType) -> Option<Writer> {
+    pub fn get_writer(&mut self, stream_type: StreamType) -> AnyResult<Writer> {
         if let Some(writer) = self.writers.get(&stream_type) {
-            return Some(writer.clone());
+            return Ok(writer.clone());
         }
 
-        let (_, writer) = self.get_stream_and_store(stream_type)?;
-        Some(writer)
+        Ok(self.get_stream_and_store(stream_type)?.1)
     }
 
     pub fn close_stream(&mut self, stream_type: StreamType) {

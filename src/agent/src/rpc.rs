@@ -583,14 +583,19 @@ impl AgentService {
 
             // use ptmx io
             if p.term_master.is_some() {
-                p.get_writer(StreamType::TermMaster)
+                p.get_writer(StreamType::TermMaster).map_err(|e| {
+                    error!(sl!(), "get term master stream writer failed: {}", e);
+                    anyhow!(ERR_CANNOT_GET_WRITER)
+                })?
             } else {
                 // use piped io
-                p.get_writer(StreamType::ParentStdin)
+                p.get_writer(StreamType::ParentStdin).map_err(|e| {
+                    error!(sl!(), "get piped stream writer failed: {}", e);
+                    anyhow!(ERR_CANNOT_GET_WRITER)
+                })?
             }
         };
 
-        let writer = writer.ok_or_else(|| anyhow!(ERR_CANNOT_GET_WRITER))?;
         writer.lock().await.write_all(req.data.as_slice()).await?;
 
         let mut resp = WriteStreamResponse::new();
@@ -616,23 +621,17 @@ impl AgentService {
 
             if p.term_master.is_some() {
                 term_exit_notifier = p.term_exit_notifier.clone();
-                p.get_reader(StreamType::TermMaster)
+                p.get_reader(StreamType::TermMaster)?
             } else if stdout {
                 if p.parent_stdout.is_some() {
-                    p.get_reader(StreamType::ParentStdout)
+                    p.get_reader(StreamType::ParentStdout)?
                 } else {
-                    None
+                    return Err(anyhow!("cannot get stream reader"));
                 }
             } else {
-                p.get_reader(StreamType::ParentStderr)
+                p.get_reader(StreamType::ParentStderr)?
             }
         };
-
-        if reader.is_none() {
-            return Err(anyhow!(nix::Error::EINVAL));
-        }
-
-        let reader = reader.ok_or_else(|| anyhow!("cannot get stream reader"))?;
 
         tokio::select! {
             _ = term_exit_notifier.notified() => {
