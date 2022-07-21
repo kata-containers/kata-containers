@@ -200,11 +200,13 @@ func (rh *remoteHypervisor) AddDevice(ctx context.Context, devInfo interface{}, 
 }
 
 func (rh *remoteHypervisor) HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
-	panic(notImplemented("HotplugAddDevice"))
+	logrus.Printf("HotplugAddDevice: devInfo=%#v", devInfo)
+	return "HotplugAddDevice is not implemented", nil
 }
 
 func (rh *remoteHypervisor) HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
-	panic(notImplemented("HotplugRemoveDevice"))
+	logrus.Printf("HotplugRemoveDevice: devInfo=%#v", devInfo)
+	return "HotplugRemoveDevice is not implemented", nil
 }
 
 func (rh *remoteHypervisor) ResizeMemory(ctx context.Context, memMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {

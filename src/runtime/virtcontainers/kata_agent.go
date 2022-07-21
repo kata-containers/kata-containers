@@ -1196,7 +1196,7 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 			kataDevice = k.appendVfioDevice(dev, device, c)
 		}
 
-		if kataDevice == nil {
+		if kataDevice == nil || kataDevice.Type == "" {
 			continue
 		}
 
