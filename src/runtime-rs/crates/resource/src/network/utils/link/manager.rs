@@ -103,6 +103,11 @@ fn link_info(mut infos: Vec<Info>) -> Box<dyn Link> {
                         link = Some(Box::new(IpVlan::default()));
                     }
                 }
+                InfoKind::MacVlan => {
+                    if link.is_none() {
+                        link = Some(Box::new(MacVlan::default()));
+                    }
+                }
                 InfoKind::Vlan => {
                     if link.is_none() {
                         link = Some(Box::new(Vlan::default()));
@@ -128,6 +133,9 @@ fn link_info(mut infos: Vec<Info>) -> Box<dyn Link> {
                 }
                 InfoData::IpVlan(_) => {
                     link = Some(Box::new(IpVlan::default()));
+                }
+                InfoData::MacVlan(_) => {
+                    link = Some(Box::new(MacVlan::default()));
                 }
                 InfoData::Vlan(_) => {
                     link = Some(Box::new(Vlan::default()));
@@ -244,6 +252,26 @@ impl Link for IpVlan {
     }
     fn r#type(&self) -> &'static str {
         "ipvlan"
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Default)]
+pub struct MacVlan {
+    attrs: Option<LinkAttrs>,
+
+    /// on create only
+    pub peer_name: String,
+}
+
+impl Link for MacVlan {
+    fn attrs(&self) -> &LinkAttrs {
+        self.attrs.as_ref().unwrap()
+    }
+    fn set_attrs(&mut self, attr: LinkAttrs) {
+        self.attrs = Some(attr)
+    }
+    fn r#type(&self) -> &'static str {
+        "macvlan"
     }
 }
 
