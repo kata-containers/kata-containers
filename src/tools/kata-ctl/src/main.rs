@@ -4,21 +4,25 @@
 //
 
 use anyhow::{anyhow, Result};
-use clap::{crate_name, crate_version, App, Arg, SubCommand};
+use clap::{crate_name, App, Arg, SubCommand};
 use std::process::exit;
 
 mod utils;
+mod version;
 
 const DESCRIPTION_TEXT: &str = r#"DESCRIPTION:
     kata-ctl description placeholder."#;
 
 const ABOUT_TEXT: &str = "Kata Containers control tool";
 
+const NAME: &str = "kata-ctl";
+
 fn real_main() -> Result<()> {
     let name = crate_name!();
+    let version = version::get();
 
     let app = App::new(name)
-        .version(crate_version!())
+        .version(&*version)
         .about(ABOUT_TEXT)
         .long_about(DESCRIPTION_TEXT)
         .subcommand(
@@ -113,7 +117,7 @@ fn real_main() -> Result<()> {
             Ok(())
         }
         "version" => {
-            println!("Not implemented");
+            println!("{} version {} (type: rust)", NAME, version);
             Ok(())
         }
         _ => return Err(anyhow!(format!("invalid sub-command: {:?}", subcmd))),
