@@ -94,7 +94,7 @@ checksum = "1b827f9d9f6c2fff719d25f5d44cbc8d2ef6df1ef00d055c5c14d5dc25529579"
 dependencies = [
  "libc",
  "log",
- "nix",
+ "nix 0.23.1",
  "regex",
 ]
 
@@ -376,7 +376,7 @@ dependencies = [
  "kata-types",
  "lazy_static",
  "libc",
- "nix",
+ "nix 0.24.2",
  "num_cpus",
  "oci",
  "once_cell",
@@ -503,6 +503,18 @@ checksum = "9f866317acbd3a240710c63f065ffb1e4fd466259045ccb504130b7f668f35c6"
 dependencies = [
  "bitflags",
  "cc",
+ "cfg-if",
+ "libc",
+ "memoffset",
+]
+
+[[package]]
+name = "nix"
+version = "0.24.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "195cdbc1741b8134346d515b3a56a1c94b0912758009cfd53f99ea0f57b065fc"
+dependencies = [
+ "bitflags",
  "cfg-if",
  "libc",
  "memoffset",
@@ -1108,7 +1120,7 @@ dependencies = [
  "futures",
  "libc",
  "log",
- "nix",
+ "nix 0.23.1",
  "protobuf",
  "protobuf-codegen-pure",
  "thiserror",
@@ -1162,7 +1174,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e32675ee2b3ce5df274c0ab52d19b28789632406277ca26bffee79a8e27dc133"
 dependencies = [
  "libc",
- "nix",
+ "nix 0.23.1",
 ]
 
 [[package]]

@@ -10,6 +10,10 @@ mod veth_endpoint;
 pub use veth_endpoint::VethEndpoint;
 mod ipvlan_endpoint;
 pub use ipvlan_endpoint::IPVlanEndpoint;
+mod vlan_endpoint;
+pub use vlan_endpoint::VlanEndpoint;
+mod macvlan_endpoint;
+pub use macvlan_endpoint::MacVlanEndpoint;
 mod endpoints_test;
 
 use anyhow::Result;
