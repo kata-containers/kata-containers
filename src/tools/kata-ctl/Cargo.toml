@@ -5,7 +5,7 @@
 
 [package]
 name = "kata-ctl"
-version = "0.0.0"
+version = "0.0.1"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2021"
 
