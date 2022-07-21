@@ -1250,6 +1250,9 @@ func newRemoteHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	return vc.HypervisorConfig{
 		RemoteHypervisorSocket:  h.RemoteHypervisorSocket,
 		RemoteHypervisorTimeout: h.RemoteHypervisorTimeout,
+
+		// No valid value so avoid to append block device to list in kata_agent.appendDevices
+		BlockDeviceDriver: "dummy",
 	}, nil
 }
 
