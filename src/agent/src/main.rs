@@ -110,10 +110,6 @@ enum SubCommand {
 fn announce(logger: &Logger, config: &AgentConfig) {
     info!(logger, "announce";
     "agent-commit" => version::VERSION_COMMIT,
-
-    // Avoid any possibility of confusion with the old agent
-    "agent-type" => "rust",
-
     "agent-version" =>  version::AGENT_VERSION,
     "api-version" => version::API_VERSION,
     "config" => format!("{:?}", config),
