@@ -40,7 +40,7 @@ use rustjail::process::Process;
 use rustjail::specconv::CreateOpts;
 
 use nix::errno::Errno;
-use nix::mount::MsFlags;
+use nix::mount::{umount, MsFlags};
 use nix::sys::{stat, statfs};
 use nix::unistd::{self, Pid};
 use rustjail::cgroups::Manager;
@@ -552,6 +552,15 @@ impl AgentService {
                 return Ok(resp);
             }
         };
+
+        let rootfs_path = Path::new(CONTAINER_BASE)
+            .join("shared/containers")
+            .join(&cid)
+            .join("rootfs");
+        umount(rootfs_path.to_str().unwrap()).context(format!(
+            "failed to unmount rootfs on container exit {:?}",
+            rootfs_path
+        ))?;
 
         // need to close all fd
         // ignore errors for some fd might be closed by stream
