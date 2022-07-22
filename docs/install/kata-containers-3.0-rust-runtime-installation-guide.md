@@ -44,6 +44,38 @@ architectures:
 
 ## Build from source installation
 
+### Rust Environment Set Up
+
+* Download `Rustup` and install  `Rust`
+    > **Notes:**
+    > Rust version 1.58 is needed
+
+    Example for `x86_64`
+    ```
+    $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    $ source $HOME/.cargo/env
+    $ rustup install 1.58
+    $ rustup default 1.58-x86_64-unknown-linux-gnu
+    ```
+
+* Musl support for fully static binary
+    
+    Example for `x86_64`
+    ```
+    $ rustup target add x86_64-unknown-linux-musl
+    ```
+* [Musl `libc`](http://musl.libc.org/) install
+
+    Example for musl 1.2.3
+    ```
+    $ wget https://git.musl-libc.org/cgit/musl/snapshot/musl-1.2.3.tar.gz
+    $ tar vxf musl-1.2.3.tar.gz
+    $ cd musl-1.2.3/
+    $ ./configure --prefix=/usr/local/
+    $ make && sudo make install
+    ```
+
+
 ### Install Kata 3.0 Rust Runtime Shim
 
 ```
