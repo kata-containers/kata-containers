@@ -163,7 +163,7 @@ fn generate_route(name: &str, route: &RouteMessage) -> Result<Option<Route>> {
     Ok(Some(Route {
         dest: route
             .destination_prefix()
-            .map(|(addr, _)| addr.to_string())
+            .map(|(addr, prefix)| format!("{}/{}", addr, prefix))
             .unwrap_or_default(),
         gateway: route.gateway().map(|v| v.to_string()).unwrap_or_default(),
         device: name.to_string(),
