@@ -14,7 +14,7 @@ import (
 )
 
 func TestMockHypervisorCreateVM(t *testing.T) {
-	var m *mockHypervisor
+	m := &mockHypervisor{}
 	assert := assert.New(t)
 
 	sandbox := &Sandbox{
