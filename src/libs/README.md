@@ -5,6 +5,6 @@ or published to [`crates.io`](https://crates.io/index.html).
 Currently it provides following library crates:
 
 | Library | Description |
-|-|-|-|
+|-|-|
 | [logging](logging/) | Facilities to setup logging subsystem based slog. |
 | [safe-path](safe-path/) | Utilities to safely resolve filesystem paths. |
