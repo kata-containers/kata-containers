@@ -20,6 +20,7 @@ impl TcFilterModel {
         Ok(Self {})
     }
 }
+
 #[async_trait]
 impl NetworkModel for TcFilterModel {
     fn model_type(&self) -> NetworkModelType {
@@ -60,22 +61,25 @@ impl NetworkModel for TcFilterModel {
         handle
             .traffic_filter(tap_index as i32)
             .add()
-            .protocol(0x0003)
-            .egress()
+            .parent(0xffff0000)
+            // get protocol with network byte order
+            .protocol(0x0003_u16.to_be())
             .redirect(virt_index)
             .execute()
             .await
-            .context("add tap egress")?;
+            .context("add redirect for tap")?;
 
         handle
             .traffic_filter(virt_index as i32)
             .add()
-            .protocol(0x0003)
-            .egress()
+            .parent(0xffff0000)
+            // get protocol with network byte order
+            .protocol(0x0003_u16.to_be())
             .redirect(tap_index)
             .execute()
             .await
-            .context("add virt egress")?;
+            .context("add redirect for virt")?;
+
         Ok(())
     }
 
