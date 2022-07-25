@@ -15,7 +15,6 @@ use common::{
 };
 use containerd_shim_protos::events::task::TaskOOM;
 use hypervisor::Hypervisor;
-use kata_types::config::TomlConfig;
 use resource::{
     network::{NetworkConfig, NetworkWithNetNsConfig},
     ResourceConfig, ResourceManager,
@@ -79,10 +78,10 @@ impl VirtSandbox {
         &self,
         _id: &str,
         netns: Option<String>,
-        config: &TomlConfig,
     ) -> Result<Vec<ResourceConfig>> {
         let mut resource_configs = vec![];
 
+        let config = self.resource_manager.config().await;
         if let Some(netns_path) = netns {
             let network_config = ResourceConfig::Network(NetworkConfig::NetworkResourceWithNetNs(
                 NetworkWithNetNsConfig {
@@ -109,7 +108,7 @@ impl VirtSandbox {
 
 #[async_trait]
 impl Sandbox for VirtSandbox {
-    async fn start(&self, netns: Option<String>, config: &TomlConfig) -> Result<()> {
+    async fn start(&self, netns: Option<String>) -> Result<()> {
         let id = &self.sid;
 
         // if sandbox running, return
@@ -127,7 +126,7 @@ impl Sandbox for VirtSandbox {
 
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
-        let resources = self.prepare_for_start_sandbox(id, netns, config).await?;
+        let resources = self.prepare_for_start_sandbox(id, netns).await?;
         self.resource_manager
             .prepare_before_start_vm(resources)
             .await

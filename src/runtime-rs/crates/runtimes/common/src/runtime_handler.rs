@@ -36,7 +36,7 @@ pub trait RuntimeHandler: Send + Sync {
         &self,
         sid: &str,
         msg_sender: Sender<Message>,
-        config: &TomlConfig,
+        config: Arc<TomlConfig>,
     ) -> Result<RuntimeInstance>;
 
     fn cleanup(&self, id: &str) -> Result<()>;
