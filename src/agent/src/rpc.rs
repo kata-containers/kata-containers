@@ -2262,6 +2262,7 @@ mod tests {
                     if d.has_fd {
                         Some(wfd)
                     } else {
+                        unistd::close(wfd).unwrap();
                         None
                     }
                 };
@@ -2296,13 +2297,14 @@ mod tests {
             if !d.break_pipe {
                 unistd::close(rfd).unwrap();
             }
-            unistd::close(wfd).unwrap();
+            // XXX: Do not close wfd.
+            // the fd will be closed on Process's dropping.
+            // unistd::close(wfd).unwrap();
 
             let msg = format!("{}, result: {:?}", msg, result);
             assert_result!(d.result, result, msg);
         }
     }
-
     #[tokio::test]
     async fn test_update_container_namespaces() {
         #[derive(Debug)]
