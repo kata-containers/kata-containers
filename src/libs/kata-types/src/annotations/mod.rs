@@ -16,6 +16,8 @@ use crate::config::hypervisor::get_hypervisor_plugin;
 use crate::config::TomlConfig;
 use crate::sl;
 
+use self::cri_containerd::{SANDBOX_CPU_PERIOD_KEY, SANDBOX_CPU_QUOTA_KEY, SANDBOX_MEM_KEY};
+
 /// CRI-containerd specific annotations.
 pub mod cri_containerd;
 
@@ -374,6 +376,37 @@ impl Annotation {
     /// Get the annotation of container type.
     pub fn get_container_type(&self) -> Option<String> {
         self.get(CONTAINER_TYPE_KEY)
+    }
+
+    /// Get the annotation of cpu quota for sandbox
+    pub fn get_sandbox_cpu_quota(&self) -> u64 {
+        let value = self
+            .get_value::<u64>(SANDBOX_CPU_QUOTA_KEY)
+            .unwrap_or(Some(0));
+        if let Some(q) = value {
+            return q;
+        }
+        0
+    }
+
+    /// Get the annotation of cpu period for sandbox
+    pub fn get_sandbox_cpu_period(&self) -> i64 {
+        let value = self
+            .get_value::<i64>(SANDBOX_CPU_PERIOD_KEY)
+            .unwrap_or(Some(0));
+        if let Some(p) = value {
+            return p;
+        }
+        0
+    }
+
+    /// Get the annotation of memory for sandbox
+    pub fn get_sandbox_mem(&self) -> i64 {
+        let value = self.get_value::<i64>(SANDBOX_MEM_KEY).unwrap_or(Some(0));
+        if let Some(m) = value {
+            return m;
+        }
+        0
     }
 
     /// Get the annotation to specify the Resources.Memory.Swappiness.
