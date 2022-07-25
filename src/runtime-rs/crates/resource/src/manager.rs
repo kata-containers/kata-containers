@@ -25,7 +25,7 @@ impl ResourceManager {
         sid: &str,
         agent: Arc<dyn Agent>,
         hypervisor: Arc<dyn Hypervisor>,
-        toml_config: &TomlConfig,
+        toml_config: Arc<TomlConfig>,
     ) -> Result<Self> {
         Ok(Self {
             inner: Arc::new(RwLock::new(ResourceManagerInner::new(
@@ -35,6 +35,11 @@ impl ResourceManager {
                 toml_config,
             )?)),
         })
+    }
+
+    pub async fn config(&self) -> Arc<TomlConfig> {
+        let inner = self.inner.read().await;
+        inner.config()
     }
 
     pub async fn prepare_before_start_vm(&self, device_configs: Vec<ResourceConfig>) -> Result<()> {

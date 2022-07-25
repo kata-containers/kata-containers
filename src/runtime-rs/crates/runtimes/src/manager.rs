@@ -40,7 +40,7 @@ impl RuntimeHandlerManagerInner {
     async fn init_runtime_handler(
         &mut self,
         netns: Option<String>,
-        config: &TomlConfig,
+        config: Arc<TomlConfig>,
     ) -> Result<()> {
         info!(sl!(), "new runtime handler {}", &config.runtime.name);
         let runtime_handler = match config.runtime.name.as_str() {
@@ -62,7 +62,7 @@ impl RuntimeHandlerManagerInner {
         // start sandbox
         runtime_instance
             .sandbox
-            .start(netns, config)
+            .start(netns)
             .await
             .context("start sandbox")?;
         self.runtime_instance = Some(Arc::new(runtime_instance));
@@ -100,7 +100,7 @@ impl RuntimeHandlerManagerInner {
         };
 
         let config = load_config(spec).context("load config")?;
-        self.init_runtime_handler(netns, &config)
+        self.init_runtime_handler(netns, Arc::new(config))
             .await
             .context("init runtime handler")?;
 

@@ -78,8 +78,9 @@ impl Container {
     pub async fn create(&self, mut spec: oci::Spec) -> Result<()> {
         // process oci spec
         let mut inner = self.inner.write().await;
+        let toml_config = self.resource_manager.config().await;
         let config = &self.config;
-        amend_spec(&mut spec).context("load spec")?;
+        amend_spec(&mut spec, toml_config.runtime.disable_guest_seccomp).context("load spec")?;
 
         // handler rootfs
         let rootfs = self
@@ -372,12 +373,14 @@ impl Container {
     }
 }
 
-fn amend_spec(spec: &mut oci::Spec) -> Result<()> {
+fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
     // hook should be done on host
     spec.hooks = None;
 
     if let Some(linux) = spec.linux.as_mut() {
-        linux.seccomp = None;
+        if disable_guest_seccomp {
+            linux.seccomp = None;
+        }
 
         if let Some(resource) = linux.resources.as_mut() {
             resource.devices = Vec::new();
@@ -399,4 +402,30 @@ fn amend_spec(spec: &mut oci::Spec) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::amend_spec;
+
+    #[test]
+    fn test_amend_spec_disable_guest_seccomp() {
+        let mut spec = oci::Spec {
+            linux: Some(oci::Linux {
+                seccomp: Some(oci::LinuxSeccomp::default()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        assert!(spec.linux.as_ref().unwrap().seccomp.is_some());
+
+        // disable_guest_seccomp = false
+        amend_spec(&mut spec, false).unwrap();
+        assert!(spec.linux.as_ref().unwrap().seccomp.is_some());
+
+        // disable_guest_seccomp = true
+        amend_spec(&mut spec, true).unwrap();
+        assert!(spec.linux.as_ref().unwrap().seccomp.is_none());
+    }
 }
