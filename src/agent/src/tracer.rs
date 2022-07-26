@@ -69,6 +69,8 @@ macro_rules! trace_rpc_call {
             propagator.extract(&extract_carrier_from_ttrpc($ctx))
         });
 
+        info!(sl!(), "rpc call from shim to agent: {:?}", $name);
+
         // generate tracing span
         let rpc_span = span!(tracing::Level::INFO, $name, "mod"="rpc.rs", req=?$req);
 
