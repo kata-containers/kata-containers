@@ -34,6 +34,10 @@ if [ "${ovmf_build}" == "x86_64" ]; then
        [ -n "$ovmf_version" ] || ovmf_version=$(get_from_kata_deps "externals.ovmf.x86_64.version" "${kata_version}")
        [ -n "$ovmf_package" ] || ovmf_package=$(get_from_kata_deps "externals.ovmf.x86_64.package" "${kata_version}")
        [ -n "$package_output_dir" ] || package_output_dir=$(get_from_kata_deps "externals.ovmf.x86_64.package_output_dir" "${kata_version}")
+elif [ "${ovmf_build}" == "sev" ]; then
+       [ -n "$ovmf_version" ] || ovmf_version=$(get_from_kata_deps "externals.ovmf.sev.version" "${kata_version}")
+       [ -n "$ovmf_package" ] || ovmf_package=$(get_from_kata_deps "externals.ovmf.sev.package" "${kata_version}")
+       [ -n "$package_output_dir" ] || package_output_dir=$(get_from_kata_deps "externals.ovmf.sev.package_output_dir" "${kata_version}")
 fi
 
 [ -n "$ovmf_version" ] || die "failed to get ovmf version or commit"
@@ -45,6 +49,7 @@ sudo docker build -t "${container_image}" "${script_dir}"
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
 	--env DESTDIR="${DESTDIR}" --env PREFIX="${PREFIX}" \
+	--env ovmf_build="${ovmf_build}" \
 	--env ovmf_repo="${ovmf_repo}" \
 	--env ovmf_version="${ovmf_version}" \
 	--env ovmf_package="${ovmf_package}" \
