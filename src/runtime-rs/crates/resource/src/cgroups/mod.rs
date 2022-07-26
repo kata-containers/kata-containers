@@ -100,13 +100,16 @@ impl CgroupsResource {
         for cg_pid in self.cgroup_manager.tasks() {
             self.cgroup_manager.remove_task(cg_pid);
         }
-        self.cgroup_manager.delete()?;
+
+        self.cgroup_manager
+            .delete()
+            .context("delete cgroup manager")?;
 
         if let Some(overhead) = self.overhead_cgroup_manager.as_ref() {
             for cg_pid in overhead.tasks() {
                 overhead.remove_task(cg_pid);
             }
-            overhead.delete()?;
+            overhead.delete().context("delete overhead")?;
         }
 
         Ok(())

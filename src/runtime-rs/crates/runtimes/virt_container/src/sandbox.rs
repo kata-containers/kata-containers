@@ -210,13 +210,16 @@ impl Sandbox for VirtSandbox {
 
     async fn stop(&self) -> Result<()> {
         info!(sl!(), "begin stop sandbox");
-        // TODO: stop sandbox
+        self.hypervisor.stop_vm().await.context("stop vm")?;
         Ok(())
     }
 
     async fn shutdown(&self) -> Result<()> {
         info!(sl!(), "shutdown");
 
+        self.stop().await.context("stop")?;
+
+        info!(sl!(), "delete cgroup");
         self.resource_manager
             .delete_cgroups()
             .await
