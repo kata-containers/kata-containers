@@ -13,6 +13,7 @@ source "${script_dir}/../../scripts/lib.sh"
 
 # disabling set -u because scripts attempt to expand undefined variables
 set +u
+ovmf_build="${ovmf_build:-x86_64}"
 ovmf_repo="${ovmf_repo:-}"
 ovmf_dir="edk2"
 ovmf_version="${ovmf_version:-}"
@@ -44,6 +45,12 @@ make -C BaseTools/
 
 info "Calling edksetup script"
 source edksetup.sh
+
+if [ "${ovmf_build}" == "sev" ]; then
+       info "Creating dummy grub file"
+       #required for building AmdSev package without grub
+       touch OvmfPkg/AmdSev/Grub/grub.efi
+fi
 
 info "Building ovmf"
 build -b "${build_target}" -t "${toolchain}" -a "${architecture}" -p "${ovmf_package}"
