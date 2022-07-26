@@ -990,7 +990,7 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) error {
 		if err == nil {
 			scanner := bufio.NewScanner(f)
 			for scanner.Scan() {
-				q.Logger().Debug(scanner.Text())
+				q.Logger().WithField("file", q.qemuConfig.LogFile).Debug(scanner.Text())
 			}
 			if err := scanner.Err(); err != nil {
 				q.Logger().WithError(err).Debug("read qemu log failed")
