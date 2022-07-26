@@ -32,6 +32,8 @@ ALL_ARCHES = $(patsubst $(ARCH_DIR)/%$(ARCH_FILE_SUFFIX),%,$(ARCH_FILES))
 # Build as safely as possible
 export CGO_CPPFLAGS = -D_FORTIFY_SOURCE=2 -fstack-protector
 
+HOST_OS := $(shell uname)
+
 ifeq (,$(realpath $(ARCH_FILE)))
     $(error "ERROR: invalid architecture: '$(ARCH)'")
 else
@@ -51,7 +53,6 @@ SCRIPTS :=
 
 # list of binaries to install
 BINLIST :=
-BINLIBEXECLIST :=
 
 BIN_PREFIX = $(PROJECT_TYPE)
 PROJECT_DIR = $(PROJECT_TAG)
@@ -96,6 +97,7 @@ GENERATED_VARS = \
 		CONFIG_QEMU_IN \
 		CONFIG_CLH_IN \
 		CONFIG_FC_IN \
+		CONFIG_VFW_IN \
 		$(USER_VARS)
 SCRIPTS += $(COLLECT_SCRIPT)
 SCRIPTS_DIR := $(BINDIR)
@@ -104,6 +106,7 @@ BASH_COMPLETIONS := data/completions/bash/kata-runtime
 BASH_COMPLETIONSDIR := $(SHAREDIR)/bash-completion/completions
 
 PKGDATADIR := $(PREFIXDEPS)/share/$(PROJECT_DIR)
+PKGDATADIR_DARWIN := $(PREFIX)/local/share/$(PROJECT_DIR)
 PKGRUNDIR := $(LOCALSTATEDIR)/run/$(PROJECT_DIR)
 PKGLIBEXECDIR := $(LIBEXECDIR)/$(PROJECT_DIR)
 
@@ -120,12 +123,19 @@ HYPERVISOR_ACRN = acrn
 HYPERVISOR_FC = firecracker
 HYPERVISOR_QEMU = qemu
 HYPERVISOR_CLH = cloud-hypervisor
+HYPERVISOR_VFW = virtualization-framework
 
 # Determines which hypervisor is specified in $(CONFIG_FILE).
-DEFAULT_HYPERVISOR ?= $(HYPERVISOR_QEMU)
+ifeq ($(HOST_OS),Linux)
+       DEFAULT_HYPERVISOR ?= $(HYPERVISOR_QEMU)
+endif
+
+ifeq ($(HOST_OS),Darwin)
+       DEFAULT_HYPERVISOR ?= $(HYPERVISOR_VFW)
+endif
 
 # List of hypervisors this build system can generate configuration for.
-HYPERVISORS := $(HYPERVISOR_ACRN) $(HYPERVISOR_FC) $(HYPERVISOR_QEMU) $(HYPERVISOR_CLH)
+HYPERVISORS := $(HYPERVISOR_ACRN) $(HYPERVISOR_FC) $(HYPERVISOR_QEMU) $(HYPERVISOR_CLH) $(HYPERVISOR_VFW)
 
 QEMUPATH := $(QEMUBINDIR)/$(QEMUCMD)
 QEMUVALIDHYPERVISORPATHS := [\"$(QEMUPATH)\"]
@@ -224,6 +234,7 @@ MONITOR = kata-monitor
 MONITOR_OUTPUT = $(CURDIR)/$(MONITOR)
 MONITOR_DIR = $(CLI_DIR)/kata-monitor
 
+RUNTIME_TARGETS := runtime containerd-shim-v2 monitor
 
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 VERSION := ${shell cat ./VERSION}
@@ -329,6 +340,26 @@ ifneq (,$(ACRNCMD))
     KERNELPATH_ACRN = $(KERNELDIR)/$(KERNEL_NAME_ACRN)
 endif
 
+ifneq (,$(VFW))
+    KNOWN_HYPERVISORS += $(HYPERVISOR_VFW)
+
+    CONFIG_FILE_VFW = configuration-vfw.toml
+    CONFIG_VFW = config/$(CONFIG_FILE_VFW)
+    CONFIG_VFW_IN = $(CONFIG_VFW).in
+
+    CONFIG_PATH_VFW = $(abspath $(CONFDIR)/$(CONFIG_FILE_VFW))
+    CONFIG_PATHS += $(CONFIG_PATH_VFW)
+
+    CONFIGS += $(CONFIG_VFW)
+
+    # vfw-specific options (all should be suffixed by "_VFW")
+    DEFNETWORKMODEL_VFW := none
+    KERNELTYPE_VFW = uncompressed
+    KERNEL_NAME_VFW = $(call MAKE_KERNEL_NAME,$(KERNELTYPE_VFW))
+    KERNELPATH_VFW = $(PKGDATADIR_DARWIN)/$(KERNEL_NAME_VFW)
+    IMAGEPATH_VFW = $(PKGDATADIR_DARWIN)/$(IMAGENAME)
+endif
+
 ifeq (,$(KNOWN_HYPERVISORS))
     $(error "ERROR: No hypervisors known for architecture $(ARCH) (looked for: $(HYPERVISORS))")
 endif
@@ -361,6 +392,10 @@ ifeq ($(DEFAULT_HYPERVISOR),$(HYPERVISOR_CLH))
     DEFAULT_HYPERVISOR_CONFIG = $(CONFIG_FILE_CLH)
 endif
 
+ifeq ($(DEFAULT_HYPERVISOR),$(HYPERVISOR_VFW))
+    DEFAULT_HYPERVISOR_CONFIG = $(CONFIG_FILE_VFW)
+endif
+
 CONFDIR := $(DEFAULTSDIR)/$(PROJECT_DIR)
 SYSCONFDIR := $(SYSCONFDIR)/$(PROJECT_DIR)
 
@@ -381,6 +416,7 @@ USER_VARS += CONFIG_CLH_IN
 USER_VARS += CONFIG_FC_IN
 USER_VARS += CONFIG_PATH
 USER_VARS += CONFIG_QEMU_IN
+USER_VARS += CONFIG_VFW_IN
 USER_VARS += DESTDIR
 USER_VARS += DEFAULT_HYPERVISOR
 USER_VARS += ACRNCMD
@@ -400,16 +436,19 @@ USER_VARS += FCVALIDJAILERPATHS
 USER_VARS += SYSCONFIG
 USER_VARS += IMAGENAME
 USER_VARS += IMAGEPATH
+USER_VARS += IMAGEPATH_VFW
 USER_VARS += MACHINETYPE
 USER_VARS += KERNELDIR
 USER_VARS += KERNELTYPE
 USER_VARS += KERNELTYPE_FC
 USER_VARS += KERNELTYPE_ACRN
 USER_VARS += KERNELTYPE_CLH
+USER_VARS += KERNELTYPE_VFW
 USER_VARS += KERNELPATH_ACRN
 USER_VARS += KERNELPATH
 USER_VARS += KERNELPATH_CLH
 USER_VARS += KERNELPATH_FC
+USER_VARS += KERNELPATH_VFW
 USER_VARS += KERNELVIRTIOFSPATH
 USER_VARS += FIRMWAREPATH
 USER_VARS += FIRMWAREVOLUMEPATH
@@ -420,6 +459,7 @@ USER_VARS += KERNELPARAMS
 USER_VARS += LIBEXECDIR
 USER_VARS += LOCALSTATEDIR
 USER_VARS += PKGDATADIR
+USER_VARS += PKGDATADIR_DARWIN
 USER_VARS += PKGLIBEXECDIR
 USER_VARS += PKGRUNDIR
 USER_VARS += PREFIX
@@ -450,6 +490,7 @@ USER_VARS += DEFNETWORKMODEL_ACRN
 USER_VARS += DEFNETWORKMODEL_CLH
 USER_VARS += DEFNETWORKMODEL_FC
 USER_VARS += DEFNETWORKMODEL_QEMU
+USER_VARS += DEFNETWORKMODEL_VFW
 USER_VARS += DEFDISABLEGUESTEMPTYDIR
 USER_VARS += DEFDISABLEGUESTSECCOMP
 USER_VARS += DEFDISABLESELINUX
@@ -517,7 +558,17 @@ define SHOW_ARCH
   $(shell printf "\\t%s%s\\\n" "$(1)" $(if $(filter $(ARCH),$(1))," (default)",""))
 endef
 
-all: runtime containerd-shim-v2 monitor
+
+all: $(RUNTIME_TARGETS)
+
+ifeq ($(HOST_OS),Linux)
+    READLINK = readlink
+endif
+
+ifeq ($(HOST_OS),Darwin)
+    READLINK = greadlink
+endif
+
 
 # Targets that depend on .git-commit can use $(shell cat .git-commit) to get a
 # git revision string.  They will only be rebuilt if the revision string
@@ -574,7 +625,7 @@ $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 
 $(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
 	$(QUIET_BUILD)(cd $(MONITOR_DIR)/ && go build \
-		--ldflags "-X main.GitCommit=$(shell cat .git-commit)" $(BUILDFLAGS) -o $@ .)
+		--ldflags "-X main.GitCommit=$(shell git rev-parse HEAD)" $(BUILDFLAGS) -o $@ .)
 
 .PHONY: \
 	check \
@@ -649,9 +700,6 @@ install-containerd-shim-v2: $(SHIMV2)
 
 install-monitor: $(MONITOR)
 	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
-
-install-bin-libexec: $(BINLIBEXECLIST)
-	$(QUIET_INST)$(foreach f,$(BINLIBEXECLIST),$(call INSTALL_EXEC,$f,$(PKGLIBEXECDIR)))
 
 install-configs: $(CONFIGS)
 	$(QUIET_INST)$(foreach f,$(CONFIGS),$(call INSTALL_CONFIG,$f,$(dir $(CONFIG_PATH))))
@@ -758,15 +806,13 @@ endif
 	@printf "\tbinary installation path (BINDIR) : %s\n" $(abspath $(BINDIR))
 	@printf "\tbinaries to install :\n"
 	@printf \
-          "$(foreach b,$(sort $(BINLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+          "$(foreach b,$(sort $(BINLIST)),$(shell printf "\\t - $(shell $(READLINK) -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
-          "$(foreach b,$(sort $(SHIMV2)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+          "$(foreach b,$(sort $(SHIMV2)),$(shell printf "\\t - $(shell $(READLINK) -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
-          "$(foreach b,$(sort $(MONITOR)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+          "$(foreach b,$(sort $(MONITOR)),$(shell printf "\\t - $(shell $(READLINK) -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
-          "$(foreach b,$(sort $(BINLIBEXECLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(PKGLIBEXECDIR)/$(b))\\\n"))"
-	@printf \
-          "$(foreach s,$(sort $(SCRIPTS)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(s))\\\n"))"
+          "$(foreach s,$(sort $(SCRIPTS)),$(shell printf "\\t - $(shell $(READLINK) -m $(DESTDIR)/$(BINDIR)/$(s))\\\n"))"
 	@printf "\tconfigs to install (CONFIGS) :\n"
 	@printf \
 	  "$(foreach c,$(sort $(CONFIGS)),$(shell printf "\\t - $(c)\\\n"))"
