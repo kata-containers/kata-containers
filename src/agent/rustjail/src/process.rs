@@ -28,7 +28,6 @@ macro_rules! close_process_stream {
     ($self: ident, $stream:ident, $stream_type: ident) => {
         if $self.$stream.is_some() {
             $self.close_stream(StreamType::$stream_type);
-            let _ = unistd::close($self.$stream.unwrap());
             $self.$stream = None;
         }
     };
@@ -225,7 +224,7 @@ impl Process {
         Some(writer)
     }
 
-    pub fn close_stream(&mut self, stream_type: StreamType) {
+    fn close_stream(&mut self, stream_type: StreamType) {
         let _ = self.readers.remove(&stream_type);
         let _ = self.writers.remove(&stream_type);
     }
