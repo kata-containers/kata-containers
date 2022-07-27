@@ -80,8 +80,8 @@ impl Container {
         let mut inner = self.inner.write().await;
         let toml_config = self.resource_manager.config().await;
         let config = &self.config;
-        amend_spec(&mut spec, toml_config.runtime.disable_guest_seccomp).context("load spec")?;
-
+        let sandbox_pidns = amend_spec(&mut spec, toml_config.runtime.disable_guest_seccomp)
+            .context("load spec")?;
         // handler rootfs
         let rootfs = self
             .resource_manager
@@ -143,7 +143,7 @@ impl Container {
             storages,
             oci: Some(spec),
             guest_hooks: None,
-            sandbox_pidns: false,
+            sandbox_pidns,
             rootfs_mounts: vec![],
         };
 
@@ -373,7 +373,7 @@ impl Container {
     }
 }
 
-fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
+fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<bool> {
     // hook should be done on host
     spec.hooks = None;
 
@@ -390,6 +390,8 @@ fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
             resource.network = None;
         }
 
+        // Host pidns path does not make sense in kata. Let's just align it with
+        // sandbox namespace whenever it is set.
         let mut ns: Vec<oci::LinuxNamespace> = Vec::new();
         for n in linux.namespaces.iter() {
             match n.r#type.as_str() {
@@ -399,15 +401,33 @@ fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
         }
 
         linux.namespaces = ns;
+
+        return Ok(handle_pid_namespace(&linux.namespaces));
     }
 
-    Ok(())
+    Ok(false)
+}
+
+// handle_pid_namespace checks if Pid namespace for a container needs to be shared with its sandbox
+// pid namespace.
+fn handle_pid_namespace(namespaces: &[oci::LinuxNamespace]) -> bool {
+    for n in namespaces.iter() {
+        match n.r#type.as_str() {
+            oci::PIDNAMESPACE => {
+                if !n.path.is_empty() {
+                    return true;
+                }
+            }
+            _ => continue,
+        }
+    }
+    false
 }
 
 #[cfg(test)]
 mod tests {
     use super::amend_spec;
-
+    use crate::container_manager::container::handle_pid_namespace;
     #[test]
     fn test_amend_spec_disable_guest_seccomp() {
         let mut spec = oci::Spec {
@@ -427,5 +447,39 @@ mod tests {
         // disable_guest_seccomp = true
         amend_spec(&mut spec, true).unwrap();
         assert!(spec.linux.as_ref().unwrap().seccomp.is_none());
+    }
+    #[test]
+    fn test_handle_pid_namespace() {
+        let namespaces = vec![
+            oci::LinuxNamespace {
+                r#type: "pid".to_string(),
+                path: "".to_string(),
+            },
+            oci::LinuxNamespace {
+                r#type: "network".to_string(),
+                path: "".to_string(),
+            },
+            oci::LinuxNamespace {
+                r#type: "ipc".to_string(),
+                path: "".to_string(),
+            },
+            oci::LinuxNamespace {
+                r#type: "uts".to_string(),
+                path: "".to_string(),
+            },
+            oci::LinuxNamespace {
+                r#type: "mount".to_string(),
+                path: "".to_string(),
+            },
+            oci::LinuxNamespace {
+                r#type: "user".to_string(),
+                path: "".to_string(),
+            },
+            oci::LinuxNamespace {
+                r#type: "cgroup".to_string(),
+                path: "".to_string(),
+            },
+        ];
+        assert!(!handle_pid_namespace(&namespaces));
     }
 }
