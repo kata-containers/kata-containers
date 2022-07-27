@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Intel Corporation
+// Copyright (c) 2022 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -13,4 +13,21 @@ const KATA_CTL_VERSION: &str = "@KATA_CTL_VERSION@";
 
 pub fn get() -> String {
     format!("{}-{}", KATA_CTL_VERSION, crate_version!())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use semver::{Version};
+
+    #[test]
+    fn test_get() {
+        let version = get();
+	    let v = Version::parse(&version).unwrap();
+
+	    assert!(!v.major.to_string().is_empty());
+	    assert!(!v.minor.to_string().is_empty());
+	    assert!(!v.patch.to_string().is_empty());
+	    assert!(!v.pre.to_string().is_empty());
+    }
 }
