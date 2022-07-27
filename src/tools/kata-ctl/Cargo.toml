@@ -10,5 +10,8 @@ authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2021"
 
 [dependencies]
-clap = "2.33.0"
 anyhow = "1.0.31"
+clap = "2.33.0"
+
+[dev-dependencies]
+semver = "1.0.12"
