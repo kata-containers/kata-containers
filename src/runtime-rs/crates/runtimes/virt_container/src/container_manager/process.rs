@@ -129,13 +129,24 @@ impl Process {
         mut reader: Box<dyn AsyncRead + Send + Unpin>,
         mut writer: Box<dyn AsyncWrite + Send + Unpin>,
     ) -> Result<()> {
+        info!(self.logger, "run io copy for {}", io_name);
         let io_name = io_name.to_string();
         let logger = self.logger.new(o!("io name" => io_name));
         let _ = tokio::spawn(async move {
-            match tokio::io::copy(&mut reader, &mut writer).await {
-                Err(e) => warn!(logger, "io: failed to copy stream {}", e),
-                Ok(length) => warn!(logger, "io: stop to copy stream length {}", length),
-            };
+            loop {
+                match tokio::io::copy(&mut reader, &mut writer).await {
+                    Err(e) => {
+                        if let Some(error_code) = e.raw_os_error() {
+                            if error_code == libc::EAGAIN {
+                                continue;
+                            }
+                        }
+                        warn!(logger, "io: failed to copy stream {}", e);
+                    }
+                    Ok(length) => warn!(logger, "io: stop to copy stream length {}", length),
+                };
+                break;
+            }
 
             wgw.done();
         });
