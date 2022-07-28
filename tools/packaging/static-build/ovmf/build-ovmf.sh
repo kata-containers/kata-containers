@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # Copyright (c) 2022 IBM
+# Copyright (c) 2022 Intel
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -15,7 +16,6 @@ source "${script_dir}/../../scripts/lib.sh"
 set +u
 ovmf_build="${ovmf_build:-x86_64}"
 ovmf_repo="${ovmf_repo:-}"
-ovmf_dir="edk2"
 ovmf_version="${ovmf_version:-}"
 ovmf_package="${ovmf_package:-}"
 package_output_dir="${package_output_dir:-}"
@@ -29,6 +29,8 @@ build_target="${build_target:-RELEASE}"
 [ -n "$ovmf_version" ] || die "failed to get ovmf version or commit"
 [ -n "$ovmf_package" ] || die "failed to get ovmf package or commit"
 [ -n "$package_output_dir" ] || die "failed to get ovmf package or commit"
+
+ovmf_dir="${ovmf_repo##*/}"
 
 info "Build ${ovmf_repo} version: ${ovmf_version}"
 
