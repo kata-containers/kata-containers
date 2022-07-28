@@ -129,6 +129,7 @@ impl Process {
         mut reader: Box<dyn AsyncRead + Send + Unpin>,
         mut writer: Box<dyn AsyncWrite + Send + Unpin>,
     ) -> Result<()> {
+        info!(sl!(), "run io copy for {}", io_name);
         let io_name = io_name.to_string();
         let logger = self.logger.new(o!("io name" => io_name));
         let _ = tokio::spawn(async move {
