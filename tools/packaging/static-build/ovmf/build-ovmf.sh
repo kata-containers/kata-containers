@@ -36,9 +36,8 @@ info "Build ${ovmf_repo} version: ${ovmf_version}"
 
 build_root=$(mktemp -d)
 pushd $build_root
-git clone "${ovmf_repo}"
+git clone --single-branch --depth 1 -b "${ovmf_version}" "${ovmf_repo}"
 cd "${ovmf_dir}"
-git checkout "${ovmf_version}"
 git submodule init
 git submodule update
 
