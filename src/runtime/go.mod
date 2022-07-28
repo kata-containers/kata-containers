@@ -7,7 +7,7 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/blang/semver/v4 v4.0.0
-	github.com/containerd/cgroups v1.0.3
+	github.com/containerd/cgroups v1.0.5-0.20220625035431-cf7417bca682
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.6.6
 	github.com/containerd/cri-containerd v1.11.1-0.20190125013620-4dd6735020f5
