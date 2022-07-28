@@ -18,7 +18,7 @@ use nix::{
     sys::stat::Mode,
 };
 use tokio::{
-    fs::File,
+    fs::OpenOptions,
     io::{AsyncRead, AsyncWrite},
     net::UnixStream as AsyncUnixStream,
 };
@@ -47,8 +47,20 @@ impl ShimIo {
         stdout: &Option<String>,
         stderr: &Option<String>,
     ) -> Result<Self> {
+        info!(
+            sl!(),
+            "new shim io stdin {:?} stdout {:?} stderr {:?}", stdin, stdout, stderr
+        );
+
         let stdin_fd: Option<Box<dyn AsyncRead + Send + Unpin>> = if let Some(stdin) = stdin {
-            match File::open(&stdin).await {
+            info!(sl!(), "open stdin {:?}", &stdin);
+            match OpenOptions::new()
+                .read(true)
+                .write(false)
+                .custom_flags(libc::O_NONBLOCK)
+                .open(&stdin)
+                .await
+            {
                 Ok(file) => Some(Box::new(file)),
                 Err(err) => {
                     error!(sl!(), "failed to open {} error {:?}", &stdin, err);
@@ -60,6 +72,8 @@ impl ShimIo {
         };
 
         let get_url = |url: &Option<String>| -> Option<Url> {
+            info!(sl!(), "get url for {:?}", url);
+
             match url {
                 None => None,
                 Some(out) => match Url::parse(out.as_str()) {
@@ -79,6 +93,7 @@ impl ShimIo {
 
         let stdout_url = get_url(stdout);
         let get_fd = |url: &Option<Url>| -> Option<Box<dyn AsyncWrite + Send + Unpin>> {
+            info!(sl!(), "get fd for {:?}", &url);
             if let Some(url) = url {
                 if url.scheme() == "fifo" {
                     let path = url.path();
