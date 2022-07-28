@@ -80,6 +80,7 @@ async fn cmd_run(subcmd: SubCommand, root_path: &Path, logger: &Logger) -> Resul
             CommonCmd::Spec(spec) => commands::spec::run(spec, logger),
             CommonCmd::List(list) => commands::list::run(list, root_path, logger),
             CommonCmd::Exec(exec) => commands::exec::run(exec, root_path, logger).await,
+            CommonCmd::Ps(ps) => commands::ps::run(ps, root_path, logger),
             _ => {
                 return Err(anyhow!("command is not implemented yet"));
             }
