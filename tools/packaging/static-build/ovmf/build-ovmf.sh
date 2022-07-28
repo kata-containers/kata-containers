@@ -54,19 +54,41 @@ if [ "${ovmf_build}" == "sev" ]; then
 fi
 
 info "Building ovmf"
-build -b "${build_target}" -t "${toolchain}" -a "${architecture}" -p "${ovmf_package}"
+build_cmd="build -b ${build_target} -t ${toolchain} -a ${architecture} -p ${ovmf_package}"
+if [ "${ovmf_build}" == "tdx" ]; then
+	build_cmd+=" -D DEBUG_ON_SERIAL_PORT=TRUE -D TDX_MEM_PARTIAL_ACCEPT=512 -D TDX_EMULATION_ENABLE=FALSE -D TDX_ACCEPT_PAGE_SIZE=2M"
+fi
+
+eval "${build_cmd}"
 
 info "Done Building"
 
-build_path="Build/${package_output_dir}/${build_target}_${toolchain}/FV/OVMF.fd"
-stat "${build_path}"
+build_path_target_toolchain="Build/${package_output_dir}/${build_target}_${toolchain}"
+build_path_fv="${build_path_target_toolchain}/FV"
+stat "${build_path_fv}/OVMF.fd"
+if [ "${ovmf_build}" == "tdx" ]; then
+	build_path_arch="${build_path_target_toolchain}/X64"
+	stat "${build_path_fv}/OVMF_CODE.fd"
+	stat "${build_path_fv}/OVMF_VARS.fd"
+	stat "${build_path_arch}/DumpTdxEventLog.efi"
+fi
 
 #need to leave tmp dir
 popd
 
 info "Install fd to destdir"
-mkdir -p "$DESTDIR/$PREFIX/share/ovmf"
-cp $build_root/$ovmf_dir/"${build_path}" "$DESTDIR/$PREFIX/share/ovmf"
+install_dir="${DESTDIR}/${PREFIX}/share/ovmf"
+if [ "${ovmf_build}" == "tdx" ]; then
+	install_dir="$DESTDIR/$PREFIX/share/tdvf"
+fi
+
+mkdir -p "${install_dir}"
+install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF.fd "${install_dir}"
+if [ "${ovmf_build}" == "tdx" ]; then
+	install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF_CODE.fd ${install_dir}
+	install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF_VARS.fd ${install_dir}
+	install $build_root/$ovmf_dir/"${build_path_arch}"/DumpTdxEventLog.efi ${install_dir}
+fi
 
 pushd $DESTDIR
 tar -czvf "${ovmf_dir}-${ovmf_build}.tar.gz" "./$PREFIX"
