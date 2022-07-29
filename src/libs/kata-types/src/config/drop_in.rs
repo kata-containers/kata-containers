@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+pub use drop_in_directory_handling::load;
+
 mod toml_tree_ops {
     // The following pair of functions implement toml::Value tree merging, with
     // the second argument being merged into the first one and consumed in the

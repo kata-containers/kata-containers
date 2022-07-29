@@ -19,6 +19,7 @@ use crate::{eother, sl};
 pub mod default;
 
 mod agent;
+mod drop_in;
 pub mod hypervisor;
 
 pub use self::agent::Agent;
@@ -94,21 +95,15 @@ impl TomlConfig {
     /// If `config_file` is valid, it will used, otherwise a built-in default path list will be
     /// scanned.
     pub fn load_from_file<P: AsRef<Path>>(config_file: P) -> Result<(TomlConfig, PathBuf)> {
-        let file_path = if !config_file.as_ref().as_os_str().is_empty() {
-            fs::canonicalize(config_file)?
-        } else {
-            Self::get_default_config_file()?
-        };
+        let mut result = Self::load_raw_from_file(config_file);
+        if let Ok((ref mut config, _)) = result {
+            Hypervisor::adjust_config(config)?;
+            Runtime::adjust_config(config)?;
+            Agent::adjust_config(config)?;
+            info!(sl!(), "get kata config: {:?}", config);
+        }
 
-        info!(
-            sl!(),
-            "load configuration from: {}",
-            file_path.to_string_lossy()
-        );
-        let content = fs::read_to_string(&file_path)?;
-        let config = Self::load(&content)?;
-
-        Ok((config, file_path))
+        result
     }
 
     /// Load raw Kata configuration information from configuration files.
@@ -127,13 +122,15 @@ impl TomlConfig {
             "load configuration from: {}",
             file_path.to_string_lossy()
         );
-        let content = fs::read_to_string(&file_path)?;
-        let config: TomlConfig = toml::from_str(&content)?;
+        let config = drop_in::load(&file_path)?;
 
         Ok((config, file_path))
     }
 
     /// Load Kata configuration information from string.
+    ///
+    /// This function only works with `configuration.toml` and does not handle
+    /// drop-in config file fragments in config.d/.
     pub fn load(content: &str) -> Result<TomlConfig> {
         let mut config: TomlConfig = toml::from_str(content)?;
         Hypervisor::adjust_config(&mut config)?;
