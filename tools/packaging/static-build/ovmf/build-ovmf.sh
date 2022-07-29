@@ -67,3 +67,8 @@ popd
 info "Install fd to destdir"
 mkdir -p "$DESTDIR/$PREFIX/share/ovmf"
 cp $build_root/$ovmf_dir/"${build_path}" "$DESTDIR/$PREFIX/share/ovmf"
+
+pushd $DESTDIR
+tar -czvf "${ovmf_dir}-${ovmf_build}.tar.gz" "./$PREFIX"
+rm -rf $(dirname ./$PREFIX) 
+popd
