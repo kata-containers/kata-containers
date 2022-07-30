@@ -9,11 +9,11 @@ use std::io::{self, Error};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 
+use super::endpoint_persist::{EndpointState, VlanEndpointState};
 use super::Endpoint;
 use crate::network::network_model::TC_FILTER_NET_MODEL_STR;
 use crate::network::{utils, NetworkPair};
 use hypervisor::{device::NetworkConfig, Device, Hypervisor};
-
 #[derive(Debug)]
 pub struct VlanEndpoint {
     pub(crate) net_pair: NetworkPair,
@@ -84,5 +84,15 @@ impl Endpoint for VlanEndpoint {
             .context("error removing device by hypervisor")?;
 
         Ok(())
+    }
+
+    async fn save(&self) -> Option<EndpointState> {
+        Some(EndpointState {
+            vlan_endpoint: Some(VlanEndpointState {
+                if_name: self.net_pair.virt_iface.name.clone(),
+                network_qos: self.net_pair.network_qos,
+            }),
+            ..Default::default()
+        })
     }
 }
