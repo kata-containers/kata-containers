@@ -142,7 +142,11 @@ fn real_main() -> Result<()> {
     let action = parse_args(&args).context("parse args")?;
     match action {
         Action::Start(args) => ShimExecutor::new(args).start().context("shim start")?,
-        Action::Delete(args) => ShimExecutor::new(args).delete().context("shim delete")?,
+        Action::Delete(args) => {
+            let mut shim = ShimExecutor::new(args);
+            let rt = get_tokio_runtime().context("get tokio runtime")?;
+            rt.block_on(shim.delete())?
+        }
         Action::Run(args) => {
             // set mnt namespace
             // need setup before other async call

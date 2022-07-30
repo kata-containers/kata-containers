@@ -24,6 +24,11 @@ use oci::LinuxResources;
 use persist::sandbox_persist::Persist;
 use tokio::sync::RwLock;
 
+pub struct CgroupArgs {
+    pub sid: String,
+    pub config: TomlConfig,
+}
+
 pub struct CgroupConfig {
     pub path: String,
     pub overhead_path: String,
@@ -228,7 +233,7 @@ impl CgroupsResource {
 #[async_trait]
 impl Persist for CgroupsResource {
     type State = CgroupState;
-    type ConstructorArgs = ();
+    type ConstructorArgs = CgroupArgs;
     /// Save a state of the component.
     async fn save(&self) -> Result<Self::State> {
         Ok(CgroupState {
@@ -239,15 +244,11 @@ impl Persist for CgroupsResource {
     }
     /// Restore a component from a specified state.
     async fn restore(
-        _resource_args: Self::ConstructorArgs,
+        cgroup_args: Self::ConstructorArgs,
         cgroup_state: Self::State,
     ) -> Result<Self> {
         let hier = cgroups_rs::hierarchies::auto();
-        let config = CgroupConfig {
-            path: "".to_string(),
-            overhead_path: "".to_string(),
-            sandbox_cgroup_only: true,
-        };
+        let config = CgroupConfig::new(&cgroup_args.sid, &cgroup_args.config)?;
         let path = cgroup_state.path.unwrap_or_default();
         let cgroup_manager = Cgroup::load(hier, path.as_str());
         Ok(Self {
