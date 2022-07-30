@@ -10,13 +10,16 @@ use anyhow::{anyhow, Context, Result};
 use common::{
     message::Message,
     types::{Request, Response},
-    RuntimeHandler, RuntimeInstance,
+    RuntimeHandler, RuntimeInstance, Sandbox,
 };
 use kata_types::{annotations::Annotation, config::TomlConfig};
-use tokio::sync::{mpsc::Sender, RwLock};
-
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
+use persist::sandbox_persist::Persist;
+use tokio::sync::{mpsc::Sender, RwLock};
+use virt_container::sandbox::SandboxRestoreArgs;
+use virt_container::sandbox::VirtSandbox;
+use virt_container::sandbox_persist::{SandboxState, SandboxTYPE};
 #[cfg(feature = "virt")]
 use virt_container::VirtContainer;
 #[cfg(feature = "wasm")]
@@ -127,8 +130,36 @@ impl RuntimeHandlerManager {
         })
     }
 
-    pub fn cleanup(_id: &str) -> Result<()> {
-        // TODO: load runtime from persist and cleanup
+    pub async fn cleanup(&self) -> Result<()> {
+        let inner = self.inner.read().await;
+        let sender = inner.msg_sender.clone();
+        let sandbox_state = persist::from_disk::<SandboxState>(&inner.id)
+            .context("failed to load the sandbox state")?;
+        let sandbox_args = SandboxRestoreArgs {
+            sid: inner.id.clone(),
+            toml_config: TomlConfig::default(),
+            sender,
+        };
+        match sandbox_state.sandbox_type {
+            SandboxTYPE::VIRTCONTAINER => {
+                let sandbox = VirtSandbox::restore(sandbox_args, sandbox_state)
+                    .await
+                    .context("failed to retore the sandbox")?;
+                sandbox
+                    .cleanup(&inner.id)
+                    .await
+                    .context("failed to cleanup the resource")?;
+            }
+            SandboxTYPE::LINUXCONTAINER => {
+                // TODO :support linux container
+                return Ok(());
+            }
+            SandboxTYPE::WASMCONTAINER => {
+                // TODO :support wasm container
+                return Ok(());
+            }
+        }
+
         Ok(())
     }
 

@@ -64,5 +64,5 @@ pub trait Hypervisor: Send + Sync {
     async fn cleanup(&self) -> Result<()>;
     async fn check(&self) -> Result<()>;
     async fn get_jailer_root(&self) -> Result<String>;
-    async fn save(&self) -> Result<HypervisorState>;
+    async fn save_state(&self) -> Result<HypervisorState>;
 }

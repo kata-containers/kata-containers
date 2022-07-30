@@ -12,15 +12,15 @@ use std::{fs, path::Path};
 use crate::{shim::ShimExecutor, Error};
 
 impl ShimExecutor {
-    pub fn delete(&mut self) -> Result<()> {
+    pub async fn delete(&mut self) -> Result<()> {
         self.args.validate(true).context("validate")?;
-        let rsp = self.do_cleanup().context("do cleanup")?;
+        let rsp = self.do_cleanup().await.context("do cleanup")?;
         rsp.write_to_writer(&mut std::io::stdout())
             .context(Error::FileWrite(format!("write {:?} to stdout", rsp)))?;
         Ok(())
     }
 
-    fn do_cleanup(&self) -> Result<api::DeleteResponse> {
+    async fn do_cleanup(&self) -> Result<api::DeleteResponse> {
         let mut rsp = api::DeleteResponse::new();
         rsp.set_exit_status(128 + libc::SIGKILL as u32);
         let mut exited_time = protobuf::well_known_types::Timestamp::new();
@@ -41,7 +41,9 @@ impl ShimExecutor {
             info!(sl!(), "remote socket path: {:?}", &file_path);
             fs::remove_file(file_path).ok();
         }
-        service::ServiceManager::cleanup(&self.args.id).context("cleanup")?;
+        service::ServiceManager::cleanup(&self.args.id)
+            .await
+            .context("cleanup")?;
         Ok(rsp)
     }
 }

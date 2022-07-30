@@ -17,7 +17,7 @@ use oci::LinuxResources;
 use persist::sandbox_persist::Persist;
 
 use crate::{
-    cgroups::CgroupsResource,
+    cgroups::{CgroupArgs, CgroupsResource},
     manager::ManagerArgs,
     network::{self, Network},
     rootfs::{RootFsResource, Rootfs},
@@ -226,8 +226,12 @@ impl Persist for ResourceManagerInner {
         resource_args: Self::ConstructorArgs,
         resource_state: Self::State,
     ) -> Result<Self> {
+        let args = CgroupArgs {
+            sid: resource_args.sid.clone(),
+            config: resource_args.config,
+        };
         Ok(Self {
-            sid: "".to_string(),
+            sid: resource_args.sid,
             agent: resource_args.agent,
             hypervisor: resource_args.hypervisor,
             network: None,
@@ -235,11 +239,11 @@ impl Persist for ResourceManagerInner {
             rootfs_resource: RootFsResource::new(),
             volume_resource: VolumeResource::new(),
             cgroups_resource: CgroupsResource::restore(
-                (),
+                args,
                 resource_state.cgroup_state.unwrap_or_default(),
             )
             .await?,
-            toml_config: Arc::new(resource_args.config),
+            toml_config: Arc::new(TomlConfig::default()),
         })
     }
 }
