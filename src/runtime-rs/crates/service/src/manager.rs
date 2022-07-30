@@ -29,8 +29,7 @@ use crate::task_service::TaskService;
 
 /// message buffer size
 const MESSAGE_BUFFER_SIZE: usize = 8;
-
-pub const KATA_PATH: &str = "/run/kata";
+use persist::KATA_PATH;
 
 pub struct ServiceManager {
     receiver: Option<Receiver<Message>>,

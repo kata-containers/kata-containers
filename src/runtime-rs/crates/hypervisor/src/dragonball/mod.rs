@@ -7,10 +7,10 @@
 mod inner;
 mod inner_device;
 mod inner_hypervisor;
+use super::HypervisorState;
 use inner::DragonballInner;
+use persist::sandbox_persist::Persist;
 pub mod vmm_instance;
-
-pub const RUN_PATH_PREFIX: &str = "/run/kata";
 
 use std::sync::Arc;
 
@@ -126,5 +126,30 @@ impl Hypervisor for Dragonball {
     async fn get_jailer_root(&self) -> Result<String> {
         let inner = self.inner.read().await;
         inner.get_jailer_root().await
+    }
+
+    async fn save(&self) -> Result<HypervisorState> {
+        Hypervisor::save(self).await
+    }
+}
+
+#[async_trait]
+impl Persist for Dragonball {
+    type State = HypervisorState;
+    type ConstructorArgs = ();
+    /// Save a state of the component.
+    async fn save(&self) -> Result<Self::State> {
+        let inner = self.inner.read().await;
+        inner.save().await
+    }
+    /// Restore a component from a specified state.
+    async fn restore(
+        hypervisor_args: Self::ConstructorArgs,
+        hypervisor_state: Self::State,
+    ) -> Result<Self> {
+        let inner = DragonballInner::restore(hypervisor_args, hypervisor_state).await?;
+        Ok(Self {
+            inner: Arc::new(RwLock::new(inner)),
+        })
     }
 }

@@ -12,6 +12,7 @@ logging::logger_with_subsystem!(sl, "virt-container");
 mod container_manager;
 pub mod health_check;
 pub mod sandbox;
+pub mod sandbox_persist;
 
 use std::sync::Arc;
 
@@ -19,12 +20,10 @@ use agent::kata::KataAgent;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use common::{message::Message, RuntimeHandler, RuntimeInstance};
-use hypervisor::{dragonball::Dragonball, Hypervisor};
+use hypervisor::{dragonball::Dragonball, Hypervisor, HYPERVISOR_DRAGONBALL};
 use kata_types::config::{hypervisor::register_hypervisor_plugin, DragonballConfig, TomlConfig};
 use resource::ResourceManager;
 use tokio::sync::mpsc::Sender;
-
-const HYPERVISOR_DRAGONBALL: &str = "dragonball";
 
 unsafe impl Send for VirtContainer {}
 unsafe impl Sync for VirtContainer {}

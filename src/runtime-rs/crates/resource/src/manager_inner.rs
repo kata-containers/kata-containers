@@ -6,15 +6,19 @@
 
 use std::sync::Arc;
 
+use crate::resource_persist::ResourceState;
 use agent::{Agent, Storage};
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 use hypervisor::Hypervisor;
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
 use oci::LinuxResources;
+use persist::sandbox_persist::Persist;
 
 use crate::{
     cgroups::CgroupsResource,
+    manager::ManagerArgs,
     network::{self, Network},
     rootfs::{RootFsResource, Rootfs},
     share_fs::{self, ShareFs},
@@ -196,5 +200,48 @@ impl ResourceManagerInner {
     pub async fn dump(&self) {
         self.rootfs_resource.dump().await;
         self.volume_resource.dump().await;
+    }
+}
+
+#[async_trait]
+impl Persist for ResourceManagerInner {
+    type State = ResourceState;
+    type ConstructorArgs = ManagerArgs;
+
+    /// Save a state of ResourceManagerInner
+    async fn save(&self) -> Result<Self::State> {
+        let mut endpoint_state = vec![];
+        if let Some(network) = &self.network {
+            if let Some(ens) = network.save().await {
+                endpoint_state = ens;
+            }
+        }
+        let cgroup_state = self.cgroups_resource.save().await?;
+        Ok(ResourceState {
+            endpoint: endpoint_state,
+            cgroup_state: Some(cgroup_state),
+        })
+    }
+
+    /// Restore ResourceManagerInner
+    async fn restore(
+        resource_args: Self::ConstructorArgs,
+        resource_state: Self::State,
+    ) -> Result<Self> {
+        Ok(Self {
+            sid: "".to_string(),
+            agent: resource_args.agent,
+            hypervisor: resource_args.hypervisor,
+            network: None,
+            share_fs: None,
+            rootfs_resource: RootFsResource::new(),
+            volume_resource: VolumeResource::new(),
+            cgroups_resource: CgroupsResource::restore(
+                (),
+                resource_state.cgroup_state.unwrap_or_default(),
+            )
+            .await?,
+            toml_config: Arc::new(resource_args.config),
+        })
     }
 }
