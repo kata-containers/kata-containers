@@ -21,16 +21,14 @@ use resource::{
     network::{NetworkConfig, NetworkWithNetNsConfig},
     ResourceConfig, ResourceManager,
 };
-use tokio::sync::{
-    mpsc::{channel, Sender},
-    Mutex, RwLock,
-};
+use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 
 use crate::{health_check::HealthCheck, sandbox_persist::SandboxTYPE};
 use persist::{self, sandbox_persist::Persist};
 pub struct SandboxRestoreArgs {
     pub sid: String,
     pub toml_config: TomlConfig,
+    pub sender: Sender<Message>,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -171,7 +169,12 @@ impl Sandbox for VirtSandbox {
                 .context("get storages for sandbox")?,
             sandbox_pidns: false,
             sandbox_id: id.to_string(),
-            guest_hook_path: "".to_string(),
+            guest_hook_path: self
+                .hypervisor
+                .hypervisor_config()
+                .await
+                .security_info
+                .guest_hook_path,
             kernel_modules: vec![],
         };
 
@@ -252,7 +255,9 @@ impl Sandbox for VirtSandbox {
     }
 
     async fn cleanup(&self, _id: &str) -> Result<()> {
-        // TODO: cleanup
+        self.resource_manager.delete_cgroups().await?;
+        self.hypervisor.cleanup().await?;
+        // TODO: cleanup other snadbox resource
         Ok(())
     }
 }
@@ -267,7 +272,7 @@ impl Persist for VirtSandbox {
         let sandbox_state = crate::sandbox_persist::SandboxState {
             sandbox_type: SandboxTYPE::VIRTCONTAINER,
             resource: Some(self.resource_manager.save().await?),
-            hypervisor: Some(self.hypervisor.save().await?),
+            hypervisor: Some(self.hypervisor.save_state().await?),
         };
         persist::to_disk(&sandbox_state, &self.sid)?;
         Ok(sandbox_state)
@@ -306,10 +311,9 @@ impl Persist for VirtSandbox {
             config,
         };
         let resource_manager = Arc::new(ResourceManager::restore(args, r).await?);
-        let (sender, _receiver) = channel::<Message>(1);
         Ok(Self {
             sid: sid.to_string(),
-            msg_sender: Arc::new(Mutex::new(sender)),
+            msg_sender: Arc::new(Mutex::new(sandbox_args.sender)),
             inner: Arc::new(RwLock::new(SandboxInner::new())),
             agent,
             hypervisor,

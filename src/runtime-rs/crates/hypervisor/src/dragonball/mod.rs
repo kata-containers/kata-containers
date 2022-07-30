@@ -14,7 +14,7 @@ pub mod vmm_instance;
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use tokio::sync::RwLock;
@@ -128,8 +128,8 @@ impl Hypervisor for Dragonball {
         inner.get_jailer_root().await
     }
 
-    async fn save(&self) -> Result<HypervisorState> {
-        Hypervisor::save(self).await
+    async fn save_state(&self) -> Result<HypervisorState> {
+        self.save().await
     }
 }
 
@@ -140,7 +140,7 @@ impl Persist for Dragonball {
     /// Save a state of the component.
     async fn save(&self) -> Result<Self::State> {
         let inner = self.inner.read().await;
-        inner.save().await
+        inner.save().await.context("save hypervisor state")
     }
     /// Restore a component from a specified state.
     async fn restore(
