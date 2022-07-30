@@ -16,3 +16,4 @@ common = { path = "../runtimes/common" }
 containerd-shim-protos = { version = "0.2.0", features = ["async"]}
 logging = { path = "../../../libs/logging"}
 runtimes = { path = "../runtimes" }
+persist = { path = "../persist" }

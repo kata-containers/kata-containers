@@ -6,6 +6,7 @@
 
 use std::io::{self, Error};
 
+use super::endpoint_persist::{EndpointState, IpVlanEndpointState};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 
@@ -86,5 +87,15 @@ impl Endpoint for IPVlanEndpoint {
             .context("error removing device by hypervisor")?;
 
         Ok(())
+    }
+
+    async fn save(&self) -> Option<EndpointState> {
+        Some(EndpointState {
+            ipvlan_endpoint: Some(IpVlanEndpointState {
+                if_name: self.net_pair.virt_iface.name.clone(),
+                network_qos: self.net_pair.network_qos,
+            }),
+            ..Default::default()
+        })
     }
 }

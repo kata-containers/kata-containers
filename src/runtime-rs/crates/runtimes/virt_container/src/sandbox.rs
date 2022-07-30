@@ -6,22 +6,32 @@
 
 use std::sync::Arc;
 
-use agent::{self, Agent};
-use anyhow::{Context, Result};
+use agent::{self, kata::KataAgent, Agent};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use common::{
     message::{Action, Message},
     Sandbox,
 };
 use containerd_shim_protos::events::task::TaskOOM;
-use hypervisor::Hypervisor;
+use hypervisor::{dragonball::Dragonball, Hypervisor, HYPERVISOR_DRAGONBALL};
+use kata_types::config::TomlConfig;
 use resource::{
+    manager::ManagerArgs,
     network::{NetworkConfig, NetworkWithNetNsConfig},
     ResourceConfig, ResourceManager,
 };
-use tokio::sync::{mpsc::Sender, Mutex, RwLock};
+use tokio::sync::{
+    mpsc::{channel, Sender},
+    Mutex, RwLock,
+};
 
-use crate::health_check::HealthCheck;
+use crate::{health_check::HealthCheck, sandbox_persist::SandboxTYPE};
+use persist::{self, sandbox_persist::Persist};
+pub struct SandboxRestoreArgs {
+    pub sid: String,
+    pub toml_config: TomlConfig,
+}
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum SandboxState {
@@ -205,6 +215,7 @@ impl Sandbox for VirtSandbox {
             }
         });
         self.monitor.start(id, self.agent.clone());
+        self.save().await.context("save state")?;
         Ok(())
     }
 
@@ -243,5 +254,66 @@ impl Sandbox for VirtSandbox {
     async fn cleanup(&self, _id: &str) -> Result<()> {
         // TODO: cleanup
         Ok(())
+    }
+}
+
+#[async_trait]
+impl Persist for VirtSandbox {
+    type State = crate::sandbox_persist::SandboxState;
+    type ConstructorArgs = SandboxRestoreArgs;
+    /// Save a state of the component.
+    async fn save(&self) -> Result<Self::State> {
+        let sandbox_state = crate::sandbox_persist::SandboxState {
+            sandbox_type: SandboxTYPE::VIRTCONTAINER,
+            resource: Some(self.resource_manager.save().await?),
+            hypervisor: Some(self.hypervisor.save().await?),
+        };
+        persist::to_disk(&sandbox_state, &self.sid)?;
+        Ok(sandbox_state)
+    }
+    /// Restore a component from a specified state.
+    async fn restore(
+        sandbox_args: Self::ConstructorArgs,
+        sandbox_state: Self::State,
+    ) -> Result<Self> {
+        let config = sandbox_args.toml_config;
+        let r = sandbox_state.resource.unwrap_or_default();
+        let h = sandbox_state.hypervisor.unwrap_or_default();
+        let hypervisor = match h.hypervisor_type.as_str() {
+            // TODO support other hypervisors
+            HYPERVISOR_DRAGONBALL => Ok(Arc::new(Dragonball::restore((), h).await?)),
+            _ => Err(anyhow!("Unsupported hypervisor {}", &h.hypervisor_type)),
+        }?;
+        let agent = Arc::new(KataAgent::new(kata_types::config::Agent {
+            debug: true,
+            enable_tracing: false,
+            server_port: 1024,
+            log_port: 1025,
+            dial_timeout_ms: 10,
+            reconnect_timeout_ms: 3_000,
+            request_timeout_ms: 30_000,
+            health_check_request_timeout_ms: 90_000,
+            kernel_modules: Default::default(),
+            container_pipe_size: 0,
+            debug_console_enabled: false,
+        }));
+        let sid = sandbox_args.sid;
+        let args = ManagerArgs {
+            sid: sid.clone(),
+            agent: agent.clone(),
+            hypervisor: hypervisor.clone(),
+            config,
+        };
+        let resource_manager = Arc::new(ResourceManager::restore(args, r).await?);
+        let (sender, _receiver) = channel::<Message>(1);
+        Ok(Self {
+            sid: sid.to_string(),
+            msg_sender: Arc::new(Mutex::new(sender)),
+            inner: Arc::new(RwLock::new(SandboxInner::new())),
+            agent,
+            hypervisor,
+            resource_manager,
+            monitor: Arc::new(HealthCheck::new(true, false)),
+        })
     }
 }

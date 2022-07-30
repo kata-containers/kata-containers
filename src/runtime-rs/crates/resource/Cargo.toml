@@ -18,6 +18,7 @@ nix = "0.24.1"
 rand = "^0.7.2"
 rtnetlink = "0.10.0"
 scopeguard = "1.0.0"
+serde = { version = "1.0.138", features = ["derive"] }
 slog = "2.5.2"
 slog-scope = "4.4.0"
 tokio = { version = "1.8.0", features = ["process"] }
@@ -30,4 +31,5 @@ kata-sys-util = { path = "../../../libs/kata-sys-util" }
 logging = { path = "../../../libs/logging" }
 oci = { path = "../../../libs/oci" }
 actix-rt = "2.7.0"
+persist = { path = "../persist"}
 [features]
