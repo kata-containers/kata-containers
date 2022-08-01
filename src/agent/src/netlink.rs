@@ -904,7 +904,7 @@ mod tests {
             .expect("prepare: failed to delete neigh");
     }
 
-    fn prepare_env_for_test_add_one_arp_neighbor(dummy_name: &str, ip: &str) {
+    fn prepare_env_for_test_add_one_arp_neighbor(dummy_name: &str, ip: &str, mac: &str) {
         clean_env_for_test_add_one_arp_neighbor(dummy_name, ip);
         // modprobe dummy
         Command::new("modprobe")
@@ -915,6 +915,12 @@ mod tests {
         // ip link add dummy type dummy
         Command::new("ip")
             .args(&["link", "add", dummy_name, "type", "dummy"])
+            .output()
+            .expect("failed to add dummy interface");
+
+        // ip link set dummy address 6a:92:3a:59:70:aa
+        Command::new("ip")
+            .args(&["link", "set", dummy_name, "address", mac])
             .output()
             .expect("failed to add dummy interface");
 
@@ -939,7 +945,7 @@ mod tests {
         let to_ip = "169.254.1.1";
         let dummy_name = "dummy_for_arp";
 
-        prepare_env_for_test_add_one_arp_neighbor(dummy_name, to_ip);
+        prepare_env_for_test_add_one_arp_neighbor(dummy_name, to_ip, mac);
 
         let mut ip_address = IPAddress::new();
         ip_address.set_address(to_ip.to_string());
