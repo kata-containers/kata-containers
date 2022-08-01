@@ -59,6 +59,8 @@ skip_config_checks="false"
 DESTDIR="${DESTDIR:-/}"
 #PREFIX=
 PREFIX="${PREFIX:-/usr}"
+#Kernel URL
+kernel_url=""
 
 packaging_scripts_dir="${script_dir}/../scripts"
 source "${packaging_scripts_dir}/lib.sh"
@@ -97,6 +99,7 @@ Options:
 	-p <path>   	: Path to a directory with patches to apply to kernel.
 	-s          	: Skip .config checks
 	-t <hypervisor>	: Hypervisor_target.
+	-u <url>	: Kernel URL to be used to download the kernel tarball.
 	-v <version>	: Kernel version to use if kernel path not provided.
 	-x <type>	: Confidential guest protection type, such as sev and tdx
 EOF
@@ -116,33 +119,18 @@ arch_to_kernel() {
 	esac
 }
 
-get_tdx_kernel() {
+get_tee_kernel() {
 	local version="${1}"
-	local kernel_path=${2}
+	local kernel_path="${2}"
+	local tee="${3}"
 
 	mkdir -p ${kernel_path}
 
-	kernel_url=$(get_from_kata_deps "assets.kernel.tdx.url")
+	[ -z "${kernel_url}" ] && kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
 	kernel_tarball="${version}.tar.gz"
 
 	if [ ! -f "${kernel_tarball}" ]; then
 	   curl --fail -OL "${kernel_url}/${kernel_tarball}"
-	fi
-
-	tar --strip-components=1 -xf ${kernel_tarball} -C ${kernel_path}
-}
-
-get_sev_kernel() {
-	local version="${1}"
-	local kernel_path=${2}
-
-	mkdir -p ${kernel_path}
-
-	kernel_url=$(get_from_kata_deps "assets.kernel.sev.url")
-	kernel_tarball="${version}.tar.gz"
-
-	if [ ! -f "${kernel_tarball}" ]; then
-	   curl --fail -OL "${kernel_url}${kernel_tarball}"
 	fi
 	
 	mkdir -p ${kernel_path}
@@ -156,11 +144,8 @@ get_kernel() {
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
 	[ ! -d "${kernel_path}" ] || die "kernel_path already exist"
 
-	if [ "${conf_guest}" == "tdx" ]; then
-		get_tdx_kernel ${version} ${kernel_path}
-		return
-	elif [ "${conf_guest}" == "sev" ]; then
-		get_sev_kernel ${version} ${kernel_path}
+	if [ "${conf_guest}" != "" ]; then
+		get_tee_kernel ${version} ${kernel_path} ${conf_guest}
 		return
 	fi
 
@@ -486,7 +471,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:deEfg:hk:p:t:v:x:" opt; do	
+	while getopts "a:b:c:deEfg:hk:p:t:u:v:x:" opt; do	
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -529,6 +514,9 @@ main() {
 			t)
 				hypervisor_target="${OPTARG}"
 				;;
+			u)	
+				kernel_url="${OPTARG}"
+				;;
 			v)
 				kernel_version="${OPTARG}"
 				;;
@@ -563,11 +551,9 @@ main() {
 				kernel_version=$(get_from_kata_deps "assets.kernel-experimental.tag")
 			;;
 			esac
-		elif [[ "${conf_guest}" == "tdx" ]]; then
-			 kernel_version=$(get_from_kata_deps "assets.kernel.tdx.tag")
-		elif [[ "${conf_guest}" == "sev" ]]; then
+		elif [[ "${conf_guest}" != "" ]]; then
 			#If specifying a tag for kernel_version, must be formatted version-like to avoid unintended parsing issues
-			 kernel_version=$(get_from_kata_deps "assets.kernel.sev.tag")
+			kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.tag")
 		else
 			kernel_version=$(get_from_kata_deps "assets.kernel.version")
 		fi

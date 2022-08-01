@@ -20,6 +20,8 @@ import (
 	"sync"
 	"syscall"
 
+	v1 "github.com/containerd/cgroups/stats/v1"
+	v2 "github.com/containerd/cgroups/v2/stats"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -698,7 +700,7 @@ func (s *Sandbox) createResourceController() error {
 		return fmt.Errorf("Could not create the sandbox resource controller %v", err)
 	}
 
-	// Now that the sandbox resource controller is created, we can set the state controller paths..
+	// Now that the sandbox resource controller is created, we can set the state controller paths.
 	s.state.SandboxCgroupPath = s.sandboxController.ID()
 	s.state.OverheadCgroupPath = ""
 
@@ -709,7 +711,7 @@ func (s *Sandbox) createResourceController() error {
 		// into the sandbox resource controller.
 		// We're creating an overhead controller, with no constraints. Everything but
 		// the vCPU threads will eventually make it there.
-		overheadController, err := resCtrl.NewResourceController(fmt.Sprintf("/%s/%s", resCtrlKataOverheadID, s.id), &specs.LinuxResources{})
+		overheadController, err := resCtrl.NewResourceController(fmt.Sprintf("%s%s", resCtrlKataOverheadID, s.id), &specs.LinuxResources{})
 		// TODO: support systemd cgroups overhead cgroup
 		// https://github.com/kata-containers/kata-containers/issues/2963
 		if err != nil {
@@ -1544,8 +1546,15 @@ func (s *Sandbox) Stats(ctx context.Context) (SandboxStats, error) {
 	stats := SandboxStats{}
 
 	// TODO Do we want to aggregate the overhead cgroup stats to the sandbox ones?
-	stats.CgroupStats.CPUStats.CPUUsage.TotalUsage = metrics.CPU.Usage.Total
-	stats.CgroupStats.MemoryStats.Usage.Usage = metrics.Memory.Usage.Usage
+	switch mt := metrics.(type) {
+	case v1.Metrics:
+		stats.CgroupStats.CPUStats.CPUUsage.TotalUsage = mt.CPU.Usage.Total
+		stats.CgroupStats.MemoryStats.Usage.Usage = mt.Memory.Usage.Usage
+	case v2.Metrics:
+		stats.CgroupStats.CPUStats.CPUUsage.TotalUsage = mt.CPU.UsageUsec
+		stats.CgroupStats.MemoryStats.Usage.Usage = mt.Memory.Usage
+	}
+
 	tids, err := s.hypervisor.GetThreadIDs(ctx)
 	if err != nil {
 		return stats, err

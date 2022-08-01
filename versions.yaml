@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v24.0"
+      version: "v25.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -83,7 +83,7 @@ assets:
       uscan-url: >-
         https://github.com/firecracker-microvm/firecracker/tags
         .*/v?(\d\S+)\.tar\.gz
-      version: "v0.23.4"
+      version: "v1.1.0"
 
     qemu:
       description: "VMM that uses KVM"
@@ -236,17 +236,31 @@ externals:
     uscan-url: >-
       https://github.com/opencontainers/runc/tags
       .*/v?(\d\S+)\.tar\.gz
-    version: "v1.0.1"
+    version: "v1.1.0"
 
   nydus:
     description: "Nydus image acceleration service"
     url: "https://github.com/dragonflyoss/image-service"
-    version: "v1.1.2"
+    version: "v2.1.0-alpha.4"
 
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
     url: "https://github.com/containerd/nydus-snapshotter"
-    version: "v0.1.0"
+    version: "v0.2.3"
+
+  ovmf:
+    description: "Firmware, implementation of UEFI for virtual machines."
+    url: "https://github.com/tianocore/edk2"
+    x86_64:
+      description: "Vanilla firmware build"
+      version: "edk2-stable202202"
+      package: "OvmfPkg/OvmfPkgX64.dsc"
+      package_output_dir: "OvmfX64"
+    sev:
+      description: "AmdSev build needed for SEV measured direct boot."
+      version: "edk2-stable202202"
+      package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
+      package_output_dir: "AmdSev"
 
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
