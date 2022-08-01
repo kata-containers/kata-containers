@@ -10,10 +10,9 @@ import (
 	"io"
 
 	"github.com/go-openapi/runtime"
+	"github.com/go-openapi/strfmt"
 
-	strfmt "github.com/go-openapi/strfmt"
-
-	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 )
 
 // PutGuestVsockReader is a Reader for the PutGuestVsock structure.
@@ -24,21 +23,18 @@ type PutGuestVsockReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *PutGuestVsockReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
-
 	case 204:
 		result := NewPutGuestVsockNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
-
 	case 400:
 		result := NewPutGuestVsockBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
-
 	default:
 		result := NewPutGuestVsockDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -56,7 +52,7 @@ func NewPutGuestVsockNoContent() *PutGuestVsockNoContent {
 	return &PutGuestVsockNoContent{}
 }
 
-/*PutGuestVsockNoContent handles this case with default header values.
+/* PutGuestVsockNoContent describes a response with status code 204, with default header values.
 
 Vsock created/updated
 */
@@ -77,7 +73,7 @@ func NewPutGuestVsockBadRequest() *PutGuestVsockBadRequest {
 	return &PutGuestVsockBadRequest{}
 }
 
-/*PutGuestVsockBadRequest handles this case with default header values.
+/* PutGuestVsockBadRequest describes a response with status code 400, with default header values.
 
 Vsock cannot be created due to bad input
 */
@@ -87,6 +83,9 @@ type PutGuestVsockBadRequest struct {
 
 func (o *PutGuestVsockBadRequest) Error() string {
 	return fmt.Sprintf("[PUT /vsock][%d] putGuestVsockBadRequest  %+v", 400, o.Payload)
+}
+func (o *PutGuestVsockBadRequest) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PutGuestVsockBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
@@ -108,7 +107,7 @@ func NewPutGuestVsockDefault(code int) *PutGuestVsockDefault {
 	}
 }
 
-/*PutGuestVsockDefault handles this case with default header values.
+/* PutGuestVsockDefault describes a response with status code -1, with default header values.
 
 Internal server error
 */
@@ -125,6 +124,9 @@ func (o *PutGuestVsockDefault) Code() int {
 
 func (o *PutGuestVsockDefault) Error() string {
 	return fmt.Sprintf("[PUT /vsock][%d] putGuestVsock default  %+v", o._statusCode, o.Payload)
+}
+func (o *PutGuestVsockDefault) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PutGuestVsockDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

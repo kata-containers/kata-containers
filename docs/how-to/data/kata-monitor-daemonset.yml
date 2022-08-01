@@ -45,6 +45,9 @@ spec:
         - name: containerdsocket
           mountPath: /run/containerd/containerd.sock
           readOnly: true
+        - name: sbs
+          mountPath: /run/vc/sbs/
+          readOnly: true
       terminationGracePeriodSeconds: 30
       volumes:
       - name: containerdtask
@@ -53,3 +56,6 @@ spec:
       - name: containerdsocket
         hostPath:
           path: /run/containerd/containerd.sock
+      - name: sbs
+        hostPath:
+          path: /run/vc/sbs/

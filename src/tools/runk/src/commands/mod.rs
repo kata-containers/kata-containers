@@ -5,6 +5,7 @@
 
 pub mod create;
 pub mod delete;
+pub mod exec;
 pub mod kill;
 pub mod list;
 pub mod run;

@@ -1607,6 +1607,106 @@ func (a *DefaultApiService) VmAddVsockPutExecute(r ApiVmAddVsockPutRequest) (Pci
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
+type ApiVmCoredumpPutRequest struct {
+	ctx            _context.Context
+	ApiService     *DefaultApiService
+	vmCoredumpData *VmCoredumpData
+}
+
+// The coredump configuration
+func (r ApiVmCoredumpPutRequest) VmCoredumpData(vmCoredumpData VmCoredumpData) ApiVmCoredumpPutRequest {
+	r.vmCoredumpData = &vmCoredumpData
+	return r
+}
+
+func (r ApiVmCoredumpPutRequest) Execute() (*_nethttp.Response, error) {
+	return r.ApiService.VmCoredumpPutExecute(r)
+}
+
+/*
+VmCoredumpPut Takes a VM coredump.
+
+ @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+ @return ApiVmCoredumpPutRequest
+*/
+func (a *DefaultApiService) VmCoredumpPut(ctx _context.Context) ApiVmCoredumpPutRequest {
+	return ApiVmCoredumpPutRequest{
+		ApiService: a,
+		ctx:        ctx,
+	}
+}
+
+// Execute executes the request
+func (a *DefaultApiService) VmCoredumpPutExecute(r ApiVmCoredumpPutRequest) (*_nethttp.Response, error) {
+	var (
+		localVarHTTPMethod   = _nethttp.MethodPut
+		localVarPostBody     interface{}
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmCoredumpPut")
+	if err != nil {
+		return nil, GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/vm.coredump"
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
+	if r.vmCoredumpData == nil {
+		return nil, reportError("vmCoredumpData is required and must be specified")
+	}
+
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{"application/json"}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	// body params
+	localVarPostBody = r.vmCoredumpData
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarHTTPResponse, err
+	}
+
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		return localVarHTTPResponse, newErr
+	}
+
+	return localVarHTTPResponse, nil
+}
+
 type ApiVmCountersGetRequest struct {
 	ctx        _context.Context
 	ApiService *DefaultApiService

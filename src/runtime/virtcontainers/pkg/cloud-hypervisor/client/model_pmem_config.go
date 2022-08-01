@@ -19,7 +19,6 @@ type PmemConfig struct {
 	File          string  `json:"file"`
 	Size          *int64  `json:"size,omitempty"`
 	Iommu         *bool   `json:"iommu,omitempty"`
-	Mergeable     *bool   `json:"mergeable,omitempty"`
 	DiscardWrites *bool   `json:"discard_writes,omitempty"`
 	PciSegment    *int32  `json:"pci_segment,omitempty"`
 	Id            *string `json:"id,omitempty"`
@@ -34,8 +33,6 @@ func NewPmemConfig(file string) *PmemConfig {
 	this.File = file
 	var iommu bool = false
 	this.Iommu = &iommu
-	var mergeable bool = false
-	this.Mergeable = &mergeable
 	var discardWrites bool = false
 	this.DiscardWrites = &discardWrites
 	return &this
@@ -48,8 +45,6 @@ func NewPmemConfigWithDefaults() *PmemConfig {
 	this := PmemConfig{}
 	var iommu bool = false
 	this.Iommu = &iommu
-	var mergeable bool = false
-	this.Mergeable = &mergeable
 	var discardWrites bool = false
 	this.DiscardWrites = &discardWrites
 	return &this
@@ -141,38 +136,6 @@ func (o *PmemConfig) HasIommu() bool {
 // SetIommu gets a reference to the given bool and assigns it to the Iommu field.
 func (o *PmemConfig) SetIommu(v bool) {
 	o.Iommu = &v
-}
-
-// GetMergeable returns the Mergeable field value if set, zero value otherwise.
-func (o *PmemConfig) GetMergeable() bool {
-	if o == nil || o.Mergeable == nil {
-		var ret bool
-		return ret
-	}
-	return *o.Mergeable
-}
-
-// GetMergeableOk returns a tuple with the Mergeable field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *PmemConfig) GetMergeableOk() (*bool, bool) {
-	if o == nil || o.Mergeable == nil {
-		return nil, false
-	}
-	return o.Mergeable, true
-}
-
-// HasMergeable returns a boolean if a field has been set.
-func (o *PmemConfig) HasMergeable() bool {
-	if o != nil && o.Mergeable != nil {
-		return true
-	}
-
-	return false
-}
-
-// SetMergeable gets a reference to the given bool and assigns it to the Mergeable field.
-func (o *PmemConfig) SetMergeable(v bool) {
-	o.Mergeable = &v
 }
 
 // GetDiscardWrites returns the DiscardWrites field value if set, zero value otherwise.
@@ -281,9 +244,6 @@ func (o PmemConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Iommu != nil {
 		toSerialize["iommu"] = o.Iommu
-	}
-	if o.Mergeable != nil {
-		toSerialize["mergeable"] = o.Mergeable
 	}
 	if o.DiscardWrites != nil {
 		toSerialize["discard_writes"] = o.DiscardWrites

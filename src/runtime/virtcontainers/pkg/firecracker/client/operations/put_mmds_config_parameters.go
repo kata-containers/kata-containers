@@ -13,65 +13,78 @@ import (
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/runtime"
 	cr "github.com/go-openapi/runtime/client"
+	"github.com/go-openapi/strfmt"
 
-	strfmt "github.com/go-openapi/strfmt"
-
-	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 )
 
-// NewPutMmdsConfigParams creates a new PutMmdsConfigParams object
-// with the default values initialized.
+// NewPutMmdsConfigParams creates a new PutMmdsConfigParams object,
+// with the default timeout for this client.
+//
+// Default values are not hydrated, since defaults are normally applied by the API server side.
+//
+// To enforce default values in parameter, use SetDefaults or WithDefaults.
 func NewPutMmdsConfigParams() *PutMmdsConfigParams {
-	var ()
 	return &PutMmdsConfigParams{
-
 		timeout: cr.DefaultTimeout,
 	}
 }
 
 // NewPutMmdsConfigParamsWithTimeout creates a new PutMmdsConfigParams object
-// with the default values initialized, and the ability to set a timeout on a request
+// with the ability to set a timeout on a request.
 func NewPutMmdsConfigParamsWithTimeout(timeout time.Duration) *PutMmdsConfigParams {
-	var ()
 	return &PutMmdsConfigParams{
-
 		timeout: timeout,
 	}
 }
 
 // NewPutMmdsConfigParamsWithContext creates a new PutMmdsConfigParams object
-// with the default values initialized, and the ability to set a context for a request
+// with the ability to set a context for a request.
 func NewPutMmdsConfigParamsWithContext(ctx context.Context) *PutMmdsConfigParams {
-	var ()
 	return &PutMmdsConfigParams{
-
 		Context: ctx,
 	}
 }
 
 // NewPutMmdsConfigParamsWithHTTPClient creates a new PutMmdsConfigParams object
-// with the default values initialized, and the ability to set a custom HTTPClient for a request
+// with the ability to set a custom HTTPClient for a request.
 func NewPutMmdsConfigParamsWithHTTPClient(client *http.Client) *PutMmdsConfigParams {
-	var ()
 	return &PutMmdsConfigParams{
 		HTTPClient: client,
 	}
 }
 
-/*PutMmdsConfigParams contains all the parameters to send to the API endpoint
-for the put mmds config operation typically these are written to a http.Request
+/* PutMmdsConfigParams contains all the parameters to send to the API endpoint
+   for the put mmds config operation.
+
+   Typically these are written to a http.Request.
 */
 type PutMmdsConfigParams struct {
 
-	/*Body
-	  The MMDS configuration as JSON.
+	/* Body.
 
+	   The MMDS configuration as JSON.
 	*/
 	Body *models.MmdsConfig
 
 	timeout    time.Duration
 	Context    context.Context
 	HTTPClient *http.Client
+}
+
+// WithDefaults hydrates default values in the put mmds config params (not the query body).
+//
+// All values with no default are reset to their zero value.
+func (o *PutMmdsConfigParams) WithDefaults() *PutMmdsConfigParams {
+	o.SetDefaults()
+	return o
+}
+
+// SetDefaults hydrates default values in the put mmds config params (not the query body).
+//
+// All values with no default are reset to their zero value.
+func (o *PutMmdsConfigParams) SetDefaults() {
+	// no default values defined for this parameter
 }
 
 // WithTimeout adds the timeout to the put mmds config params
@@ -125,7 +138,6 @@ func (o *PutMmdsConfigParams) WriteToRequest(r runtime.ClientRequest, reg strfmt
 		return err
 	}
 	var res []error
-
 	if o.Body != nil {
 		if err := r.SetBodyParam(o.Body); err != nil {
 			return err
