@@ -771,7 +771,7 @@ func (q *QMP) ExecuteQuit(ctx context.Context) error {
 	return q.executeCommand(ctx, "quit", nil, nil)
 }
 
-func (q *QMP) blockdevAddBaseArgs(driver, device, blockdevID string, ro bool) (map[string]interface{}, map[string]interface{}) {
+func (q *QMP) blockdevAddBaseArgs(driver, device, blockdevID, aio string, ro bool) (map[string]interface{}, map[string]interface{}) {
 	var args map[string]interface{}
 
 	blockdevArgs := map[string]interface{}{
@@ -780,6 +780,7 @@ func (q *QMP) blockdevAddBaseArgs(driver, device, blockdevID string, ro bool) (m
 		"file": map[string]interface{}{
 			"driver":   driver,
 			"filename": device,
+			"aio":      aio,
 		},
 	}
 
@@ -793,8 +794,8 @@ func (q *QMP) blockdevAddBaseArgs(driver, device, blockdevID string, ro bool) (m
 // path of the device to add, e.g., /dev/rdb0, and blockdevID is an identifier
 // used to name the device.  As this identifier will be passed directly to QMP,
 // it must obey QMP's naming rules, e,g., it must start with a letter.
-func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, device, blockdevID string, ro bool) error {
-	args, _ := q.blockdevAddBaseArgs("host_device", device, blockdevID, ro)
+func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, device, blockdevID, aio string, ro bool) error {
+	args, _ := q.blockdevAddBaseArgs("host_device", device, blockdevID, aio, ro)
 
 	return q.executeCommand(ctx, "blockdev-add", args, nil)
 }
@@ -806,8 +807,8 @@ func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, device, blockdevID string,
 // direct denotes whether use of O_DIRECT (bypass the host page cache)
 // is enabled.  noFlush denotes whether flush requests for the device are
 // ignored.
-func (q *QMP) ExecuteBlockdevAddWithCache(ctx context.Context, device, blockdevID string, direct, noFlush, ro bool) error {
-	args, blockdevArgs := q.blockdevAddBaseArgs("host_device", device, blockdevID, ro)
+func (q *QMP) ExecuteBlockdevAddWithCache(ctx context.Context, device, blockdevID, aio string, direct, noFlush, ro bool) error {
+	args, blockdevArgs := q.blockdevAddBaseArgs("host_device", device, blockdevID, aio, ro)
 
 	blockdevArgs["cache"] = map[string]interface{}{
 		"direct":   direct,
@@ -820,8 +821,8 @@ func (q *QMP) ExecuteBlockdevAddWithCache(ctx context.Context, device, blockdevI
 // ExecuteBlockdevAddWithDriverCache has three one parameter driver
 // than ExecuteBlockdevAddWithCache.
 // Parameter driver can set the driver of block device.
-func (q *QMP) ExecuteBlockdevAddWithDriverCache(ctx context.Context, driver, device, blockdevID string, direct, noFlush, ro bool) error {
-	args, blockdevArgs := q.blockdevAddBaseArgs(driver, device, blockdevID, ro)
+func (q *QMP) ExecuteBlockdevAddWithDriverCache(ctx context.Context, driver, device, blockdevID, aio string, direct, noFlush, ro bool) error {
+	args, blockdevArgs := q.blockdevAddBaseArgs(driver, device, blockdevID, aio, ro)
 
 	blockdevArgs["cache"] = map[string]interface{}{
 		"direct":   direct,
