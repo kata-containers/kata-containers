@@ -6,30 +6,31 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	strfmt "github.com/go-openapi/strfmt"
+	"context"
 
 	"github.com/go-openapi/errors"
+	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 	"github.com/go-openapi/validate"
 )
 
-// MachineConfiguration Describes the number of vCPUs, memory size, Hyperthreading capabilities and the CPU template.
+// MachineConfiguration Describes the number of vCPUs, memory size, SMT capabilities and the CPU template.
+//
 // swagger:model MachineConfiguration
 type MachineConfiguration struct {
 
 	// cpu template
-	CPUTemplate CPUTemplate `json:"cpu_template,omitempty"`
-
-	// Flag for enabling/disabling Hyperthreading
-	// Required: true
-	HtEnabled *bool `json:"ht_enabled"`
+	CPUTemplate *CPUTemplate `json:"cpu_template,omitempty"`
 
 	// Memory size of VM
 	// Required: true
 	MemSizeMib *int64 `json:"mem_size_mib"`
 
+	// Flag for enabling/disabling simultaneous multithreading. Can be enabled only on x86.
+	Smt *bool `json:"smt,omitempty"`
+
 	// Enable dirty page tracking. If this is enabled, then incremental guest memory snapshots can be created. These belong to diff snapshots, which contain, besides the microVM state, only the memory dirtied since a previous snapshot. Full snapshots each contain a full copy of the guest memory.
-	TrackDirtyPages bool `json:"track_dirty_pages,omitempty"`
+	TrackDirtyPages *bool `json:"track_dirty_pages,omitempty"`
 
 	// Number of vCPUs (either 1 or an even number)
 	// Required: true
@@ -43,10 +44,6 @@ func (m *MachineConfiguration) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validateCPUTemplate(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateHtEnabled(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -65,25 +62,19 @@ func (m *MachineConfiguration) Validate(formats strfmt.Registry) error {
 }
 
 func (m *MachineConfiguration) validateCPUTemplate(formats strfmt.Registry) error {
-
 	if swag.IsZero(m.CPUTemplate) { // not required
 		return nil
 	}
 
-	if err := m.CPUTemplate.Validate(formats); err != nil {
-		if ve, ok := err.(*errors.Validation); ok {
-			return ve.ValidateName("cpu_template")
+	if m.CPUTemplate != nil {
+		if err := m.CPUTemplate.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("cpu_template")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("cpu_template")
+			}
+			return err
 		}
-		return err
-	}
-
-	return nil
-}
-
-func (m *MachineConfiguration) validateHtEnabled(formats strfmt.Registry) error {
-
-	if err := validate.Required("ht_enabled", "body", m.HtEnabled); err != nil {
-		return err
 	}
 
 	return nil
@@ -104,12 +95,42 @@ func (m *MachineConfiguration) validateVcpuCount(formats strfmt.Registry) error 
 		return err
 	}
 
-	if err := validate.MinimumInt("vcpu_count", "body", int64(*m.VcpuCount), 1, false); err != nil {
+	if err := validate.MinimumInt("vcpu_count", "body", *m.VcpuCount, 1, false); err != nil {
 		return err
 	}
 
-	if err := validate.MaximumInt("vcpu_count", "body", int64(*m.VcpuCount), 32, false); err != nil {
+	if err := validate.MaximumInt("vcpu_count", "body", *m.VcpuCount, 32, false); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// ContextValidate validate this machine configuration based on the context it is used
+func (m *MachineConfiguration) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+	var res []error
+
+	if err := m.contextValidateCPUTemplate(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if len(res) > 0 {
+		return errors.CompositeValidationError(res...)
+	}
+	return nil
+}
+
+func (m *MachineConfiguration) contextValidateCPUTemplate(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.CPUTemplate != nil {
+		if err := m.CPUTemplate.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("cpu_template")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("cpu_template")
+			}
+			return err
+		}
 	}
 
 	return nil

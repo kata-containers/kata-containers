@@ -111,10 +111,6 @@ enum SubCommand {
 fn announce(logger: &Logger, config: &AgentConfig) {
     info!(logger, "announce";
     "agent-commit" => version::VERSION_COMMIT,
-
-    // Avoid any possibility of confusion with the old agent
-    "agent-type" => "rust",
-
     "agent-version" =>  version::AGENT_VERSION,
     "api-version" => version::API_VERSION,
     "config" => format!("{:?}", config),
@@ -214,7 +210,7 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     if config.log_level == slog::Level::Trace {
         // Redirect ttrpc log calls to slog iff full debug requested
-        ttrpc_log_guard = Ok(slog_stdlog::init().map_err(|e| e)?);
+        ttrpc_log_guard = Ok(slog_stdlog::init()?);
     }
 
     if config.tracing {
