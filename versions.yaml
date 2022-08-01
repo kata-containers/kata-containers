@@ -262,6 +262,12 @@ externals:
       package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
       package_output_dir: "AmdSev"
 
+  td-shim:
+    description: "Confidential Containers Shim Firmware"
+    url: "https://github.com/confidential-containers/td-shim"
+    version: "5f62a0e367b1845a54e534d103ed4a697a599ac3"
+    toolchain: "nightly-2022-04-07"
+
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
     url: "https://gitlab.com/virtio-fs/virtiofsd"
