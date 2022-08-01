@@ -688,7 +688,7 @@ fn oci_to_ttrpc(bundle_dir: &str, cid: &str, oci: &ociSpec) -> Result<ttrpcSpec>
 
     let root = match &oci.root {
         Some(r) => {
-            let ttrpc_root = root_oci_to_ttrpc(bundle_dir, r).map_err(|e| e)?;
+            let ttrpc_root = root_oci_to_ttrpc(bundle_dir, r)?;
 
             protobuf::SingularPtrField::some(ttrpc_root)
         }

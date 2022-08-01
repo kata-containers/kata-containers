@@ -9,6 +9,7 @@ use libcontainer::status::{get_current_container_state, Status};
 use liboci_cli::List;
 use oci::ContainerState;
 use slog::{info, Logger};
+use std::fmt::Write as _;
 use std::{fs, os::unix::prelude::MetadataExt, path::Path};
 use std::{io, io::Write};
 use tabwriter::TabWriter;
@@ -48,15 +49,16 @@ pub fn run(_: List, root: &Path, logger: &Logger) -> Result<()> {
             Some(user) => String::from(user.name().to_string_lossy()),
             None => format!("#{}", metadata.uid()),
         };
-        content.push_str(&format!(
-            "{}\t{}\t{}\t{}\t{}\t{}\n",
+        let _ = writeln!(
+            content,
+            "{}\t{}\t{}\t{}\t{}\t{}",
             container_id,
             pid,
             get_container_state_name(state),
             status.bundle.display(),
             status.created,
             owner
-        ));
+        );
     }
 
     let mut tab_writer = TabWriter::new(io::stdout());
