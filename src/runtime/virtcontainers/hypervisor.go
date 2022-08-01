@@ -371,6 +371,9 @@ type HypervisorConfig struct {
 	// SeccompSandbox is the qemu function which enables the seccomp feature
 	SeccompSandbox string
 
+	// BlockiDeviceAIO specifies the I/O API to be used.
+	BlockDeviceAIO string
+
 	// KernelParams are additional guest kernel parameters.
 	KernelParams []Param
 

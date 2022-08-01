@@ -208,6 +208,20 @@ virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 # or nvdimm.
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER_QEMU@"
 
+# aio is the I/O mechanism used by qemu
+# Options:
+#
+#   - threads
+#     Pthread based disk I/O.
+#
+#   - native
+#     Native Linux I/O.
+#
+#   - io_uring
+#     Linux io_uring API. This provides the fastest I/O operations on Linux, requires kernel>5.1 and
+#     qemu >=5.0.
+block_device_aio = "@DEFBLOCKDEVICEAIO_QEMU@"
+
 # Specifies cache-related options will be set to block devices or not.
 # Default false
 #block_device_cache_set = true
