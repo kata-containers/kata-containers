@@ -88,6 +88,12 @@ build_and_install_libseccomp() {
     ./configure --prefix="${libseccomp_install_dir}" CFLAGS="${cflags}" --enable-static --host="${arch}"
     make
     make install
+
+    # 4786 - libseccomp.so link not created
+    if [[ -f /usr/lib64/libseccomp.so.2 && ! -f /usr/lib64/libseccomp.so ]]; then
+      ln -sf libseccomp.so.2 /usr/lib64/libseccomp.so
+    fi
+
     popd
     echo "Libseccomp installed successfully"
 }
