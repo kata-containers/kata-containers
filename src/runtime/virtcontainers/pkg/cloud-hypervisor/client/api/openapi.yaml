@@ -347,6 +347,23 @@ paths:
           description: The VM instance could not be snapshotted because it is not
             booted.
       summary: Returns a VM snapshot.
+  /vm.coredump:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmCoredumpData'
+        description: The coredump configuration
+        required: true
+      responses:
+        "204":
+          description: The VM instance was successfully coredumped.
+        "404":
+          description: The VM instance could not be coredumped because it is not created.
+        "405":
+          description: The VM instance could not be coredumped because it is not booted.
+      summary: Takes a VM coredump.
   /vm.restore:
     put:
       requestBody:
@@ -408,7 +425,7 @@ components:
     VmInfo:
       description: Virtual Machine information
       example:
-        memory_actual_size: 7
+        memory_actual_size: 3
         state: Created
         config:
           console:
@@ -496,6 +513,7 @@ components:
           cpus:
             features:
               amx: true
+            kvm_hyperv: false
             topology:
               dies_per_package: 5
               threads_per_core: 1
@@ -514,58 +532,58 @@ components:
               - 3
               - 3
           devices:
-          - pci_segment: 3
+          - pci_segment: 6
             path: path
             iommu: false
             id: id
-          - pci_segment: 3
+          - pci_segment: 6
             path: path
             iommu: false
             id: id
           kernel:
             path: path
           vdpa:
-          - pci_segment: 7
+          - pci_segment: 3
             path: path
             num_queues: 3
             iommu: false
             id: id
-          - pci_segment: 7
+          - pci_segment: 3
             path: path
             num_queues: 3
             iommu: false
             id: id
           numa:
           - distances:
-            - distance: 7
-              destination: 8
-            - distance: 7
-              destination: 8
+            - distance: 8
+              destination: 4
+            - distance: 8
+              destination: 4
             cpus:
-            - 4
-            - 4
+            - 0
+            - 0
             sgx_epc_sections:
             - sgx_epc_sections
             - sgx_epc_sections
             memory_zones:
             - memory_zones
             - memory_zones
-            guest_numa_id: 0
+            guest_numa_id: 6
           - distances:
-            - distance: 7
-              destination: 8
-            - distance: 7
-              destination: 8
+            - distance: 8
+              destination: 4
+            - distance: 8
+              destination: 4
             cpus:
-            - 4
-            - 4
+            - 0
+            - 0
             sgx_epc_sections:
             - sgx_epc_sections
             - sgx_epc_sections
             memory_zones:
             - memory_zones
             - memory_zones
-            guest_numa_id: 0
+            guest_numa_id: 6
           tdx:
             firmware: firmware
           rng:
@@ -573,30 +591,26 @@ components:
             src: /dev/urandom
           sgx_epc:
           - prefault: false
-            size: 6
+            size: 7
             id: id
           - prefault: false
-            size: 6
+            size: 7
             id: id
           fs:
           - pci_segment: 6
             num_queues: 1
             queue_size: 2
-            cache_size: 6
-            dax: true
             tag: tag
             socket: socket
             id: id
           - pci_segment: 6
             num_queues: 1
             queue_size: 2
-            cache_size: 6
-            dax: true
             tag: tag
             socket: socket
             id: id
           vsock:
-            pci_segment: 7
+            pci_segment: 0
             iommu: false
             socket: socket
             id: id
@@ -605,20 +619,18 @@ components:
             iommu_segments:
             - 3
             - 3
-            num_pci_segments: 3
+            num_pci_segments: 7
             serial_number: serial_number
           pmem:
-          - pci_segment: 6
-            mergeable: false
+          - pci_segment: 5
             file: file
-            size: 5
+            size: 6
             iommu: false
             id: id
             discard_writes: false
-          - pci_segment: 6
-            mergeable: false
+          - pci_segment: 5
             file: file
-            size: 5
+            size: 6
             iommu: false
             id: id
             discard_writes: false
@@ -839,6 +851,7 @@ components:
         cpus:
           features:
             amx: true
+          kvm_hyperv: false
           topology:
             dies_per_package: 5
             threads_per_core: 1
@@ -857,58 +870,58 @@ components:
             - 3
             - 3
         devices:
-        - pci_segment: 3
+        - pci_segment: 6
           path: path
           iommu: false
           id: id
-        - pci_segment: 3
+        - pci_segment: 6
           path: path
           iommu: false
           id: id
         kernel:
           path: path
         vdpa:
-        - pci_segment: 7
+        - pci_segment: 3
           path: path
           num_queues: 3
           iommu: false
           id: id
-        - pci_segment: 7
+        - pci_segment: 3
           path: path
           num_queues: 3
           iommu: false
           id: id
         numa:
         - distances:
-          - distance: 7
-            destination: 8
-          - distance: 7
-            destination: 8
+          - distance: 8
+            destination: 4
+          - distance: 8
+            destination: 4
           cpus:
-          - 4
-          - 4
+          - 0
+          - 0
           sgx_epc_sections:
           - sgx_epc_sections
           - sgx_epc_sections
           memory_zones:
           - memory_zones
           - memory_zones
-          guest_numa_id: 0
+          guest_numa_id: 6
         - distances:
-          - distance: 7
-            destination: 8
-          - distance: 7
-            destination: 8
+          - distance: 8
+            destination: 4
+          - distance: 8
+            destination: 4
           cpus:
-          - 4
-          - 4
+          - 0
+          - 0
           sgx_epc_sections:
           - sgx_epc_sections
           - sgx_epc_sections
           memory_zones:
           - memory_zones
           - memory_zones
-          guest_numa_id: 0
+          guest_numa_id: 6
         tdx:
           firmware: firmware
         rng:
@@ -916,30 +929,26 @@ components:
           src: /dev/urandom
         sgx_epc:
         - prefault: false
-          size: 6
+          size: 7
           id: id
         - prefault: false
-          size: 6
+          size: 7
           id: id
         fs:
         - pci_segment: 6
           num_queues: 1
           queue_size: 2
-          cache_size: 6
-          dax: true
           tag: tag
           socket: socket
           id: id
         - pci_segment: 6
           num_queues: 1
           queue_size: 2
-          cache_size: 6
-          dax: true
           tag: tag
           socket: socket
           id: id
         vsock:
-          pci_segment: 7
+          pci_segment: 0
           iommu: false
           socket: socket
           id: id
@@ -948,20 +957,18 @@ components:
           iommu_segments:
           - 3
           - 3
-          num_pci_segments: 3
+          num_pci_segments: 7
           serial_number: serial_number
         pmem:
-        - pci_segment: 6
-          mergeable: false
+        - pci_segment: 5
           file: file
-          size: 5
+          size: 6
           iommu: false
           id: id
           discard_writes: false
-        - pci_segment: 6
-          mergeable: false
+        - pci_segment: 5
           file: file
-          size: 5
+          size: 6
           iommu: false
           id: id
           discard_writes: false
@@ -1125,6 +1132,7 @@ components:
       example:
         features:
           amx: true
+        kvm_hyperv: false
         topology:
           dies_per_package: 5
           threads_per_core: 1
@@ -1153,6 +1161,9 @@ components:
           type: integer
         topology:
           $ref: '#/components/schemas/CpuTopology'
+        kvm_hyperv:
+          default: false
+          type: boolean
         max_phys_bits:
           type: integer
         affinity:
@@ -1170,7 +1181,7 @@ components:
         iommu_segments:
         - 3
         - 3
-        num_pci_segments: 3
+        num_pci_segments: 7
         serial_number: serial_number
       properties:
         num_pci_segments:
@@ -1538,8 +1549,6 @@ components:
         pci_segment: 6
         num_queues: 1
         queue_size: 2
-        cache_size: 6
-        dax: true
         tag: tag
         socket: socket
         id: id
@@ -1554,20 +1563,12 @@ components:
         queue_size:
           default: 1024
           type: integer
-        dax:
-          default: true
-          type: boolean
-        cache_size:
-          format: int64
-          type: integer
         pci_segment:
           format: int16
           type: integer
         id:
           type: string
       required:
-      - cache_size
-      - dax
       - num_queues
       - queue_size
       - socket
@@ -1575,10 +1576,9 @@ components:
       type: object
     PmemConfig:
       example:
-        pci_segment: 6
-        mergeable: false
+        pci_segment: 5
         file: file
-        size: 5
+        size: 6
         iommu: false
         id: id
         discard_writes: false
@@ -1589,9 +1589,6 @@ components:
           format: int64
           type: integer
         iommu:
-          default: false
-          type: boolean
-        mergeable:
           default: false
           type: boolean
         discard_writes:
@@ -1629,7 +1626,7 @@ components:
       type: object
     DeviceConfig:
       example:
-        pci_segment: 3
+        pci_segment: 6
         path: path
         iommu: false
         id: id
@@ -1649,7 +1646,7 @@ components:
       type: object
     VdpaConfig:
       example:
-        pci_segment: 7
+        pci_segment: 3
         path: path
         num_queues: 3
         iommu: false
@@ -1674,7 +1671,7 @@ components:
       type: object
     VsockConfig:
       example:
-        pci_segment: 7
+        pci_segment: 0
         iommu: false
         socket: socket
         id: id
@@ -1703,7 +1700,7 @@ components:
     SgxEpcConfig:
       example:
         prefault: false
-        size: 6
+        size: 7
         id: id
       properties:
         id:
@@ -1731,8 +1728,8 @@ components:
       type: object
     NumaDistance:
       example:
-        distance: 7
-        destination: 8
+        distance: 8
+        destination: 4
       properties:
         destination:
           format: int32
@@ -1747,20 +1744,20 @@ components:
     NumaConfig:
       example:
         distances:
-        - distance: 7
-          destination: 8
-        - distance: 7
-          destination: 8
+        - distance: 8
+          destination: 4
+        - distance: 8
+          destination: 4
         cpus:
-        - 4
-        - 4
+        - 0
+        - 0
         sgx_epc_sections:
         - sgx_epc_sections
         - sgx_epc_sections
         memory_zones:
         - memory_zones
         - memory_zones
-        guest_numa_id: 0
+        guest_numa_id: 6
       properties:
         guest_numa_id:
           format: int32
@@ -1837,6 +1834,13 @@ components:
           type: string
       type: object
     VmSnapshotConfig:
+      example:
+        destination_url: destination_url
+      properties:
+        destination_url:
+          type: string
+      type: object
+    VmCoredumpData:
       example:
         destination_url: destination_url
       properties:

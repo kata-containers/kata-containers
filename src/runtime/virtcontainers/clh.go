@@ -149,6 +149,11 @@ func (c *clhClientApi) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chc
 // This is done in order to be able to override such a function as part of
 // our unit tests, as when testing bootVM we're on a mocked scenario already.
 var vmAddNetPutRequest = func(clh *cloudHypervisor) error {
+	if clh.netDevices == nil {
+		clh.Logger().Info("No network device has been configured by the upper layer")
+		return nil
+	}
+
 	addr, err := net.ResolveUnixAddr("unix", clh.state.apiSocket)
 	if err != nil {
 		return err
@@ -1499,15 +1504,12 @@ func (clh *cloudHypervisor) addVolume(volume types.Volume) error {
 		return err
 	}
 
-	// disable DAX if VirtioFSCacheSize is 0
-	dax := clh.config.VirtioFSCacheSize != 0
-
 	// numQueues and queueSize are required, let's use the
 	// default values defined by cloud-hypervisor
 	numQueues := int32(1)
 	queueSize := int32(1024)
 
-	fs := chclient.NewFsConfig(volume.MountTag, vfsdSockPath, numQueues, queueSize, dax, int64(clh.config.VirtioFSCacheSize<<20))
+	fs := chclient.NewFsConfig(volume.MountTag, vfsdSockPath, numQueues, queueSize)
 	clh.vmconfig.Fs = &[]chclient.FsConfig{*fs}
 
 	clh.Logger().Debug("Adding share volume to hypervisor: ", volume.MountTag)

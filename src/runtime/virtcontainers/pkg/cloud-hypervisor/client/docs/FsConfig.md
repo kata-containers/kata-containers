@@ -8,8 +8,6 @@ Name | Type | Description | Notes
 **Socket** | **string** |  | 
 **NumQueues** | **int32** |  | [default to 1]
 **QueueSize** | **int32** |  | [default to 1024]
-**Dax** | **bool** |  | [default to true]
-**CacheSize** | **int64** |  | 
 **PciSegment** | Pointer to **int32** |  | [optional] 
 **Id** | Pointer to **string** |  | [optional] 
 
@@ -17,7 +15,7 @@ Name | Type | Description | Notes
 
 ### NewFsConfig
 
-`func NewFsConfig(tag string, socket string, numQueues int32, queueSize int32, dax bool, cacheSize int64, ) *FsConfig`
+`func NewFsConfig(tag string, socket string, numQueues int32, queueSize int32, ) *FsConfig`
 
 NewFsConfig instantiates a new FsConfig object
 This constructor will assign default values to properties that have it defined,
@@ -110,46 +108,6 @@ and a boolean to check if the value has been set.
 `func (o *FsConfig) SetQueueSize(v int32)`
 
 SetQueueSize sets QueueSize field to given value.
-
-
-### GetDax
-
-`func (o *FsConfig) GetDax() bool`
-
-GetDax returns the Dax field if non-nil, zero value otherwise.
-
-### GetDaxOk
-
-`func (o *FsConfig) GetDaxOk() (*bool, bool)`
-
-GetDaxOk returns a tuple with the Dax field if it's non-nil, zero value otherwise
-and a boolean to check if the value has been set.
-
-### SetDax
-
-`func (o *FsConfig) SetDax(v bool)`
-
-SetDax sets Dax field to given value.
-
-
-### GetCacheSize
-
-`func (o *FsConfig) GetCacheSize() int64`
-
-GetCacheSize returns the CacheSize field if non-nil, zero value otherwise.
-
-### GetCacheSizeOk
-
-`func (o *FsConfig) GetCacheSizeOk() (*int64, bool)`
-
-GetCacheSizeOk returns a tuple with the CacheSize field if it's non-nil, zero value otherwise
-and a boolean to check if the value has been set.
-
-### SetCacheSize
-
-`func (o *FsConfig) SetCacheSize(v int64)`
-
-SetCacheSize sets CacheSize field to given value.
 
 
 ### GetPciSegment

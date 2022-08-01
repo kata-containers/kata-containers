@@ -10,10 +10,9 @@ import (
 	"io"
 
 	"github.com/go-openapi/runtime"
+	"github.com/go-openapi/strfmt"
 
-	strfmt "github.com/go-openapi/strfmt"
-
-	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 )
 
 // PutMetricsReader is a Reader for the PutMetrics structure.
@@ -24,21 +23,18 @@ type PutMetricsReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *PutMetricsReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
-
 	case 204:
 		result := NewPutMetricsNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
-
 	case 400:
 		result := NewPutMetricsBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
-
 	default:
 		result := NewPutMetricsDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -56,7 +52,7 @@ func NewPutMetricsNoContent() *PutMetricsNoContent {
 	return &PutMetricsNoContent{}
 }
 
-/*PutMetricsNoContent handles this case with default header values.
+/* PutMetricsNoContent describes a response with status code 204, with default header values.
 
 Metrics system created.
 */
@@ -77,7 +73,7 @@ func NewPutMetricsBadRequest() *PutMetricsBadRequest {
 	return &PutMetricsBadRequest{}
 }
 
-/*PutMetricsBadRequest handles this case with default header values.
+/* PutMetricsBadRequest describes a response with status code 400, with default header values.
 
 Metrics system cannot be initialized due to bad input.
 */
@@ -87,6 +83,9 @@ type PutMetricsBadRequest struct {
 
 func (o *PutMetricsBadRequest) Error() string {
 	return fmt.Sprintf("[PUT /metrics][%d] putMetricsBadRequest  %+v", 400, o.Payload)
+}
+func (o *PutMetricsBadRequest) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PutMetricsBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
@@ -108,7 +107,7 @@ func NewPutMetricsDefault(code int) *PutMetricsDefault {
 	}
 }
 
-/*PutMetricsDefault handles this case with default header values.
+/* PutMetricsDefault describes a response with status code -1, with default header values.
 
 Internal server error.
 */
@@ -125,6 +124,9 @@ func (o *PutMetricsDefault) Code() int {
 
 func (o *PutMetricsDefault) Error() string {
 	return fmt.Sprintf("[PUT /metrics][%d] putMetrics default  %+v", o._statusCode, o.Payload)
+}
+func (o *PutMetricsDefault) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PutMetricsDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

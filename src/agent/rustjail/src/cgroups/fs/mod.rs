@@ -911,9 +911,8 @@ pub fn get_paths() -> Result<HashMap<String, String>> {
     Ok(m)
 }
 
-pub fn get_mounts() -> Result<HashMap<String, String>> {
+pub fn get_mounts(paths: &HashMap<String, String>) -> Result<HashMap<String, String>> {
     let mut m = HashMap::new();
-    let paths = get_paths()?;
 
     for l in fs::read_to_string(MOUNTS)?.lines() {
         let p: Vec<&str> = l.splitn(2, " - ").collect();
@@ -951,7 +950,7 @@ impl Manager {
         let mut m = HashMap::new();
 
         let paths = get_paths()?;
-        let mounts = get_mounts()?;
+        let mounts = get_mounts(&paths)?;
 
         for key in paths.keys() {
             let mnt = mounts.get(key);
