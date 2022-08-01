@@ -524,6 +524,7 @@ dependencies = [
  "nix",
  "oci",
  "rustjail",
+ "scopeguard",
  "serde",
  "serde_json",
  "slog",
@@ -954,6 +955,7 @@ dependencies = [
  "slog",
  "slog-async",
  "tabwriter",
+ "tempfile",
  "tokio",
  "users",
 ]

@@ -11,6 +11,7 @@ WORKDIR /root/qemu
 # This is required to keep build dependencies with security fixes.
 ARG CACHE_TIMEOUT
 RUN echo "$CACHE_TIMEOUT"
+ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get upgrade -y && \
     apt-get --no-install-recommends install -y \
@@ -59,6 +60,12 @@ ARG BUILD_SUFFIX
 ARG QEMU_DESTDIR
 ARG QEMU_TARBALL
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN git clone  https://github.com/axboe/liburing/ ~/liburing && \
+    cd ~/liburing && \
+    git checkout tags/liburing-2.1 && \
+    make && make install && ldconfig
+
 COPY scripts/configure-hypervisor.sh /root/configure-hypervisor.sh
 COPY qemu /root/kata_qemu
 COPY scripts/apply_patches.sh /root/apply_patches.sh
@@ -66,14 +73,15 @@ COPY scripts/patch_qemu.sh /root/patch_qemu.sh
 COPY static-build/scripts/qemu-build-post.sh /root/static-build/scripts/qemu-build-post.sh
 COPY static-build/qemu.blacklist /root/static-build/qemu.blacklist
 
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN git clone --depth=1 "${QEMU_REPO}" qemu && \
     cd qemu && \
     git fetch --depth=1 origin "${QEMU_VERSION}" && git checkout FETCH_HEAD && \
     scripts/git-submodule.sh update meson capstone && \
     /root/patch_qemu.sh "${QEMU_VERSION}" "/root/kata_qemu/patches" && \
-    (PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s "kata-qemu${BUILD_SUFFIX}" | xargs ./configure \
-	--with-pkgversion="kata-static${BUILD_SUFFIX}") && \
+    [ -n "${BUILD_SUFFIX}" ] && HYPERVISOR_NAME="kata-qemu-${BUILD_SUFFIX}" || HYPERVISOR_NAME="kata-qemu" && \
+    [ -n "${BUILD_SUFFIX}" ] && PKGVERSION="kata-static-${BUILD_SUFFIX}" || PKGVERSION="kata-static" && \
+    (PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s "${HYPERVISOR_NAME}" | xargs ./configure \
+	--with-pkgversion="${PKGVERSION}") && \
     make -j"$(nproc ${CI:+--ignore 1})" && \
     make install DESTDIR="${QEMU_DESTDIR}" && \
     /root/static-build/scripts/qemu-build-post.sh

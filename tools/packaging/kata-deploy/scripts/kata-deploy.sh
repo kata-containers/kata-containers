@@ -98,10 +98,7 @@ function configure_different_shims_base() {
 			fi
 		fi
 
-		cat << EOF | tee "$shim_file"
-#!/usr/bin/env bash
-KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-${shim}.toml /opt/kata/bin/containerd-shim-kata-v2 "\$@"
-EOF
+		ln -sf /opt/kata/bin/containerd-shim-kata-v2 "${shim_file}"
 		chmod +x "$shim_file"
 
 		if [ "${shim}" == "${default_shim}" ]; then
@@ -129,12 +126,15 @@ function cleanup_different_shims_base() {
 
 function configure_crio_runtime() {
 	local runtime="kata"
+	local configuration="configuration"
 	if [ -n "${1-}" ]; then
 		runtime+="-$1"
+		configuration+="-$1"
 	fi
 
 	local kata_path="/usr/local/bin/containerd-shim-${runtime}-v2"
 	local kata_conf="crio.runtime.runtimes.${runtime}"
+	local kata_config_path="/opt/kata/share/defaults/kata-containers/$configuration.toml"
 
 	cat <<EOF | tee -a "$crio_drop_in_conf_file"
 
@@ -143,6 +143,7 @@ function configure_crio_runtime() {
 	runtime_path = "${kata_path}"
 	runtime_type = "vm"
 	runtime_root = "/run/vc"
+	runtime_config_path = "${kata_config_path}"
 	privileged_without_host_devices = true
 EOF
 }

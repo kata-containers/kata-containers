@@ -41,7 +41,7 @@ func TestIsSystemdCgroup(t *testing.T) {
 	}
 }
 
-func TestValidCgroupPath(t *testing.T) {
+func TestValidCgroupPathV1(t *testing.T) {
 	assert := assert.New(t)
 
 	for _, t := range []struct {
@@ -62,12 +62,14 @@ func TestValidCgroupPath(t *testing.T) {
 		{"/../hi/foo", false, false},
 		{"o / m /../ g", false, false},
 		{"/overhead/foobar", false, false},
+		{"/kata/afhts2e5d4g5s", false, false},
+		{"/kubepods/besteffort/podxxx-afhts2e5d4g5s/kata_afhts2e5d4g5s", false, false},
 		{"/sys/fs/cgroup/cpu/sandbox/kata_foobar", false, false},
+		{"kata_overhead/afhts2e5d4g5s", false, false},
 
 		// invalid systemd paths
 		{"o / m /../ g", true, true},
 		{"slice:kata", true, true},
-		{"/kata/afhts2e5d4g5s", true, true},
 		{"a:b:c:d", true, true},
 		{":::", true, true},
 		{"", true, true},
@@ -83,7 +85,7 @@ func TestValidCgroupPath(t *testing.T) {
 		{"x.slice:kata:55555", true, false},
 		{"system.slice:kata:afhts2e5d4g5s", true, false},
 	} {
-		path, err := ValidCgroupPath(t.path, t.systemdCgroup)
+		path, err := ValidCgroupPathV1(t.path, t.systemdCgroup)
 		if t.error {
 			assert.Error(err)
 			continue
@@ -97,6 +99,73 @@ func TestValidCgroupPath(t *testing.T) {
 				"%v should have prefix %v", path, cleanPath)
 		} else if t.systemdCgroup {
 			assert.Equal(t.path, path)
+		} else {
+			assert.True(
+				strings.HasPrefix(path, DefaultResourceControllerID),
+				"%v should have prefix /%v", path, DefaultResourceControllerID)
+		}
+	}
+
+}
+
+func TestValidCgroupPathV2(t *testing.T) {
+	assert := assert.New(t)
+
+	for _, t := range []struct {
+		path          string
+		systemdCgroup bool
+		error         bool
+	}{
+		// empty paths
+		{"../../../", false, false},
+		{"../", false, false},
+		{".", false, false},
+		{"../../../", false, false},
+		{"./../", false, false},
+
+		// valid no-systemd paths
+		{"../../../foo", false, false},
+		{"/../hi", false, false},
+		{"/../hi/foo", false, false},
+		{"o / m /../ g", false, false},
+		{"/overhead/foobar", false, false},
+		{"/kata/afhts2e5d4g5s", false, false},
+		{"/kubepods/besteffort/podxxx-afhts2e5d4g5s/kata_afhts2e5d4g5s", false, false},
+		{"/sys/fs/cgroup/cpu/sandbox/kata_foobar", false, false},
+		{"kata_overhead/afhts2e5d4g5s", false, false},
+
+		// invalid systemd paths
+		{"o / m /../ g", true, true},
+		{"slice:kata", true, true},
+		{"a:b:c:d", true, true},
+		{":::", true, true},
+		{"", true, true},
+		{":", true, true},
+		{"::", true, true},
+		{":::", true, true},
+		{"a:b", true, true},
+		{"a:b:", true, true},
+		{":a:b", true, true},
+		{"@:@:@", true, true},
+
+		// valid systemd paths
+		{"x.slice:kata:55555", true, false},
+		{"system.slice:kata:afhts2e5d4g5s", true, false},
+	} {
+		path, err := ValidCgroupPathV2(t.path, t.systemdCgroup)
+		if t.error {
+			assert.Error(err)
+			continue
+		} else {
+			assert.NoError(err)
+		}
+
+		if filepath.IsAbs(t.path) {
+			cleanPath := filepath.Dir(filepath.Clean(t.path))
+			assert.True(strings.HasPrefix(path, cleanPath),
+				"%v should have prefix %v", path, cleanPath)
+		} else if t.systemdCgroup {
+			assert.Equal(filepath.Join("/", t.path), path)
 		} else {
 			assert.True(
 				strings.HasPrefix(path, DefaultResourceControllerID),
