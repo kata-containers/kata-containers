@@ -8,9 +8,10 @@ use std::os::unix::io::RawFd;
 
 use anyhow::{Context, Result};
 use kata_sys_util::spec::get_bundle_path;
+use nix::errno::Errno;
 
 use crate::{
-    logger,
+    core_sched, logger,
     shim::{ShimExecutor, ENV_KATA_RUNTIME_BIND_FD},
     Error,
 };
@@ -23,6 +24,12 @@ impl ShimExecutor {
         let path = bundle_path.join("log");
         let _logger_guard =
             logger::set_logger(path.to_str().unwrap(), &sid, self.args.debug).context("set logger");
+        if try_core_sched().is_err() {
+            warn!(
+                sl!(),
+                "Failed to enable core sched since prctl() returns non-zero value."
+            );
+        }
 
         self.do_run()
             .await
@@ -61,4 +68,18 @@ fn get_server_fd() -> Result<RawFd> {
         .parse::<RawFd>()
         .map_err(|_| Error::ServerFd(env_fd))?;
     Ok(fd)
+}
+
+// TODO: currently we log a warning on fail (i.e. kernel version < 5.14), maybe just exit
+fn try_core_sched() -> Result<(), Errno> {
+    if let Ok(v) = std::env::var("SCHED_CORE") {
+        info!(
+            sl!(),
+            "containerd wants to enable core scheduling, SCHED_CORE={}(expected 1)", v
+        );
+        if !v.is_empty() {
+            return core_sched::core_sched_create(core_sched::PROCESS_GROUP);
+        }
+    }
+    Ok(())
 }
