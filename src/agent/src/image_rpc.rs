@@ -4,6 +4,7 @@
 //
 
 use std::env;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 use std::process::{Command, ExitStatus};
@@ -110,10 +111,11 @@ impl ImageService {
             let mut error_message = format!("failed to pull image: {:?}", status);
 
             if let Err(e) = fs::remove_dir_all(&tmp_cid_path) {
-                error_message.push_str(&format!(
+                let _ = write!(
+                    error_message,
                     " and clean up of temporary container directory {:?} failed with error {:?}",
                     tmp_cid_path, e
-                ));
+                );
             };
             return Err(anyhow!(error_message));
         }
