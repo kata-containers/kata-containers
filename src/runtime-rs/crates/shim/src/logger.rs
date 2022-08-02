@@ -35,7 +35,7 @@ pub(crate) fn set_logger(path: &str, sid: &str, is_debug: bool) -> Result<slog_a
     } else {
         log::Level::Info
     };
-    let _ = slog_stdlog::init_with_level(level).context(format!("init with level {}", level))?;
+    slog_stdlog::init_with_level(level).context(format!("init with level {}", level))?;
 
     Ok(async_guard)
 }
