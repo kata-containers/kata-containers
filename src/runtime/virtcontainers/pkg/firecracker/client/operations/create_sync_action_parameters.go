@@ -13,62 +13,75 @@ import (
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/runtime"
 	cr "github.com/go-openapi/runtime/client"
+	"github.com/go-openapi/strfmt"
 
-	strfmt "github.com/go-openapi/strfmt"
-
-	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 )
 
-// NewCreateSyncActionParams creates a new CreateSyncActionParams object
-// with the default values initialized.
+// NewCreateSyncActionParams creates a new CreateSyncActionParams object,
+// with the default timeout for this client.
+//
+// Default values are not hydrated, since defaults are normally applied by the API server side.
+//
+// To enforce default values in parameter, use SetDefaults or WithDefaults.
 func NewCreateSyncActionParams() *CreateSyncActionParams {
-	var ()
 	return &CreateSyncActionParams{
-
 		timeout: cr.DefaultTimeout,
 	}
 }
 
 // NewCreateSyncActionParamsWithTimeout creates a new CreateSyncActionParams object
-// with the default values initialized, and the ability to set a timeout on a request
+// with the ability to set a timeout on a request.
 func NewCreateSyncActionParamsWithTimeout(timeout time.Duration) *CreateSyncActionParams {
-	var ()
 	return &CreateSyncActionParams{
-
 		timeout: timeout,
 	}
 }
 
 // NewCreateSyncActionParamsWithContext creates a new CreateSyncActionParams object
-// with the default values initialized, and the ability to set a context for a request
+// with the ability to set a context for a request.
 func NewCreateSyncActionParamsWithContext(ctx context.Context) *CreateSyncActionParams {
-	var ()
 	return &CreateSyncActionParams{
-
 		Context: ctx,
 	}
 }
 
 // NewCreateSyncActionParamsWithHTTPClient creates a new CreateSyncActionParams object
-// with the default values initialized, and the ability to set a custom HTTPClient for a request
+// with the ability to set a custom HTTPClient for a request.
 func NewCreateSyncActionParamsWithHTTPClient(client *http.Client) *CreateSyncActionParams {
-	var ()
 	return &CreateSyncActionParams{
 		HTTPClient: client,
 	}
 }
 
-/*CreateSyncActionParams contains all the parameters to send to the API endpoint
-for the create sync action operation typically these are written to a http.Request
+/* CreateSyncActionParams contains all the parameters to send to the API endpoint
+   for the create sync action operation.
+
+   Typically these are written to a http.Request.
 */
 type CreateSyncActionParams struct {
 
-	/*Info*/
+	// Info.
 	Info *models.InstanceActionInfo
 
 	timeout    time.Duration
 	Context    context.Context
 	HTTPClient *http.Client
+}
+
+// WithDefaults hydrates default values in the create sync action params (not the query body).
+//
+// All values with no default are reset to their zero value.
+func (o *CreateSyncActionParams) WithDefaults() *CreateSyncActionParams {
+	o.SetDefaults()
+	return o
+}
+
+// SetDefaults hydrates default values in the create sync action params (not the query body).
+//
+// All values with no default are reset to their zero value.
+func (o *CreateSyncActionParams) SetDefaults() {
+	// no default values defined for this parameter
 }
 
 // WithTimeout adds the timeout to the create sync action params
@@ -122,7 +135,6 @@ func (o *CreateSyncActionParams) WriteToRequest(r runtime.ClientRequest, reg str
 		return err
 	}
 	var res []error
-
 	if o.Info != nil {
 		if err := r.SetBodyParam(o.Info); err != nil {
 			return err

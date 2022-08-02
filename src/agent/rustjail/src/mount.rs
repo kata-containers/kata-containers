@@ -780,18 +780,31 @@ fn mount_from(
             Path::new(&dest).parent().unwrap()
         };
 
-        let _ = fs::create_dir_all(&dir).map_err(|e| {
+        fs::create_dir_all(&dir).map_err(|e| {
             log_child!(
                 cfd_log,
                 "create dir {}: {}",
                 dir.to_str().unwrap(),
                 e.to_string()
-            )
-        });
+            );
+            e
+        })?;
 
         // make sure file exists so we can bind over it
         if !src.is_dir() {
-            let _ = OpenOptions::new().create(true).write(true).open(&dest);
+            let _ = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(&dest)
+                .map_err(|e| {
+                    log_child!(
+                        cfd_log,
+                        "open/create dest error. {}: {:?}",
+                        dest.as_str(),
+                        e
+                    );
+                    e
+                })?;
         }
         src.to_str().unwrap().to_string()
     } else {
@@ -804,8 +817,10 @@ fn mount_from(
         }
     };
 
-    let _ = stat::stat(dest.as_str())
-        .map_err(|e| log_child!(cfd_log, "dest stat error. {}: {:?}", dest.as_str(), e));
+    let _ = stat::stat(dest.as_str()).map_err(|e| {
+        log_child!(cfd_log, "dest stat error. {}: {:?}", dest.as_str(), e);
+        e
+    })?;
 
     mount(
         Some(src.as_str()),

@@ -64,7 +64,7 @@ impl Handle {
     pub async fn update_interface(&mut self, iface: &Interface) -> Result<()> {
         // The reliable way to find link is using hardware address
         // as filter. However, hardware filter might not be supported
-        // by netlink, we may have to dump link list and the find the
+        // by netlink, we may have to dump link list and then find the
         // target link. filter using name or family is supported, but
         // we cannot use that to find target link.
         // let's try if hardware address filter works. -_-
@@ -178,7 +178,7 @@ impl Handle {
                 .with_context(|| format!("Failed to parse MAC address: {}", addr))?;
 
             // Hardware filter might not be supported by netlink,
-            // we may have to dump link list and the find the target link.
+            // we may have to dump link list and then find the target link.
             stream
                 .try_filter(|f| {
                     let result = f.nlas.iter().any(|n| match n {
