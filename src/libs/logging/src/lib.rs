@@ -545,13 +545,13 @@ mod tests {
             let msg = format!("test[{}]", i);
 
             // Create a writer for the logger drain to use
-            let writer = NamedTempFile::new()
-                .unwrap_or_else(|_| panic!("{:}: failed to create tempfile", msg));
+            let writer =
+                NamedTempFile::new().unwrap_or_else(|_| panic!("{:}: failed to create tempfile", msg));
 
             // Used to check file contents before the temp file is unlinked
             let mut writer_ref = writer
                 .reopen()
-                .unwrap_or_else(|e| panic!("{:?}: failed to clone tempfile, {}", msg, e));
+                .unwrap_or_else(|_| panic!("{:?}: failed to clone tempfile", msg));
 
             let (logger, logger_guard) = create_logger(name, source, d.slog_level, writer);
 
@@ -565,11 +565,11 @@ mod tests {
             let mut contents = String::new();
             writer_ref
                 .read_to_string(&mut contents)
-                .unwrap_or_else(|e| panic!("{:?}: failed to read tempfile contents, {}", msg, e));
+                .unwrap_or_else(|_| panic!("{:?}: failed to read tempfile contents", msg));
 
             // Convert file to JSON
             let fields: Value = serde_json::from_str(&contents)
-                .unwrap_or_else(|e| panic!("{:?}: failed to convert logfile to json, {}", msg, e));
+                .unwrap_or_else(|_| panic!("{:?}: failed to convert logfile to json", msg));
 
             // Check the expected JSON fields
 

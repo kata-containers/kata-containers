@@ -72,13 +72,10 @@ pub async fn run(opts: Delete, root: &Path, logger: &Logger) -> Result<()> {
         }
         _ => {
             if opts.force {
-                match kill(Pid::from_raw(status.pid), Some(Signal::SIGKILL)) {
-                    Err(errno) => {
-                        if errno != Errno::ESRCH {
-                            return Err(anyhow!("{}", errno));
-                        }
+                if let Err(errno) = kill(Pid::from_raw(status.pid), Some(Signal::SIGKILL)) {
+                    if errno != Errno::ESRCH {
+                        return Err(anyhow!("{}", errno));
                     }
-                    Ok(()) => {}
                 }
                 destroy_container(&status)?;
             } else {
