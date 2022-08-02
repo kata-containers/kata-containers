@@ -545,8 +545,8 @@ mod tests {
             let msg = format!("test[{}]", i);
 
             // Create a writer for the logger drain to use
-            let writer =
-                NamedTempFile::new().unwrap_or_else(|_| panic!("{:}: failed to create tempfile", msg));
+            let writer = NamedTempFile::new()
+                .unwrap_or_else(|_| panic!("{:}: failed to create tempfile", msg));
 
             // Used to check file contents before the temp file is unlinked
             let mut writer_ref = writer
