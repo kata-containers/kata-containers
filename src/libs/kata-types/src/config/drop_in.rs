@@ -212,3 +212,171 @@ mod toml_tree_ops {
         }
     }
 }
+
+mod drop_in_directory_handling {
+    use crate::config::TomlConfig;
+    use std::fs;
+    use std::io::{self, Result};
+    use std::path::{Path, PathBuf};
+
+    fn get_dropin_dir_path(base_cfg_file_path: &Path) -> Result<PathBuf> {
+        let mut dropin_dir = base_cfg_file_path.to_path_buf();
+        if !dropin_dir.pop() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "base cfg file path too short",
+            ));
+        }
+        dropin_dir.push("config.d");
+        Ok(dropin_dir)
+    }
+
+    fn update_from_dropin(base_config: &mut toml::Value, dropin_file: &fs::DirEntry) -> Result<()> {
+        if !dropin_file.file_type()?.is_file() {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "drop-in cfg file can only be a regular file or a symlink",
+            ));
+        }
+        let dropin_contents = fs::read_to_string(&dropin_file.path())?;
+        let dropin_config: toml::Value = toml::from_str(&dropin_contents)?;
+        super::toml_tree_ops::merge(base_config, dropin_config);
+        Ok(())
+    }
+
+    fn update_from_dropins(base_config: &mut toml::Value, dropin_dir: &Path) -> Result<()> {
+        let dropin_files_iter = match fs::read_dir(dropin_dir) {
+            Ok(iter) => iter,
+            Err(err) => {
+                if err.kind() == io::ErrorKind::NotFound {
+                    return Ok(());
+                } else {
+                    return Err(err);
+                }
+            }
+        };
+
+        let mut dropin_files = dropin_files_iter.collect::<Result<Vec<_>>>()?;
+        dropin_files.sort_by_key(|direntry| direntry.file_name());
+        for dropin_file in &dropin_files {
+            update_from_dropin(base_config, dropin_file)?;
+        }
+        Ok(())
+    }
+
+    pub fn load(base_cfg_file_path: &Path) -> Result<TomlConfig> {
+        let base_toml_str = fs::read_to_string(&base_cfg_file_path)?;
+        let mut base_config: toml::Value = toml::from_str(&base_toml_str)?;
+        let dropin_dir = get_dropin_dir_path(base_cfg_file_path)?;
+
+        update_from_dropins(&mut base_config, &dropin_dir)?;
+
+        let config: TomlConfig = base_config.try_into()?;
+        Ok(config)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use std::io::Write;
+
+        const BASE_CONFIG_DATA: &str = r#"
+            [hypervisor.qemu]
+            path = "/usr/bin/qemu-kvm"
+            default_bridges = 3
+            [runtime]
+            enable_debug = true
+            internetworking_model="tcfilter"
+        "#;
+
+        fn check_base_config(config: &TomlConfig) {
+            assert_eq!(
+                config.hypervisor["qemu"].path,
+                "/usr/bin/qemu-kvm".to_string()
+            );
+            assert_eq!(config.hypervisor["qemu"].device_info.default_bridges, 3);
+            assert!(config.runtime.debug);
+            assert_eq!(config.runtime.internetworking_model, "tcfilter".to_string());
+        }
+
+        fn create_file(path: &Path, contents: &[u8]) -> Result<()> {
+            fs::File::create(path)?.write_all(contents)
+        }
+
+        #[test]
+        fn test_no_dropins_dir() {
+            let tmpdir = tempfile::tempdir().unwrap();
+
+            let config_path = tmpdir.path().join("runtime.toml");
+            create_file(&config_path, BASE_CONFIG_DATA.as_bytes()).unwrap();
+
+            let config = load(&config_path).unwrap();
+            check_base_config(&config);
+        }
+
+        #[test]
+        fn test_no_dropins() {
+            let tmpdir = tempfile::tempdir().unwrap();
+
+            let config_path = tmpdir.path().join("runtime.toml");
+            create_file(&config_path, BASE_CONFIG_DATA.as_bytes()).unwrap();
+
+            let dropin_dir = tmpdir.path().join("config.d");
+            fs::create_dir(&dropin_dir).unwrap();
+
+            let config = load(&config_path).unwrap();
+            check_base_config(&config);
+        }
+
+        #[test]
+        fn test_dropins() {
+            let tmpdir = tempfile::tempdir().unwrap();
+
+            let dropin_data = r#"
+                [hypervisor.qemu]
+                default_vcpus = 2
+                default_bridges = 4
+                shared_fs = "virtio-fs"
+                [runtime]
+                sandbox_cgroup_only=true
+                internetworking_model="macvtap"
+                vfio_mode="guest-kernel"
+            "#;
+
+            let dropin_override_data = r#"
+                [hypervisor.qemu]
+                shared_fs = "virtio-9p"
+                [runtime]
+                vfio_mode="vfio"
+            "#;
+
+            let config_path = tmpdir.path().join("runtime.toml");
+            create_file(&config_path, BASE_CONFIG_DATA.as_bytes()).unwrap();
+
+            let dropin_dir = tmpdir.path().join("config.d");
+            fs::create_dir(&dropin_dir).unwrap();
+
+            let dropin_path = dropin_dir.join("10-base");
+            create_file(&dropin_path, dropin_data.as_bytes()).unwrap();
+
+            let dropin_override_path = dropin_dir.join("20-override");
+            create_file(&dropin_override_path, dropin_override_data.as_bytes()).unwrap();
+
+            let config = load(&config_path).unwrap();
+            assert_eq!(
+                config.hypervisor["qemu"].path,
+                "/usr/bin/qemu-kvm".to_string()
+            );
+            assert_eq!(config.hypervisor["qemu"].cpu_info.default_vcpus, 2);
+            assert_eq!(config.hypervisor["qemu"].device_info.default_bridges, 4);
+            assert_eq!(
+                config.hypervisor["qemu"].shared_fs.shared_fs.as_deref(),
+                Some("virtio-9p")
+            );
+            assert!(config.runtime.debug);
+            assert!(config.runtime.sandbox_cgroup_only);
+            assert_eq!(config.runtime.internetworking_model, "macvtap".to_string());
+            assert_eq!(config.runtime.vfio_mode, "vfio".to_string());
+        }
+    }
+}
