@@ -8,7 +8,6 @@ use std::os::unix::io::RawFd;
 
 use anyhow::{Context, Result};
 use kata_sys_util::spec::get_bundle_path;
-use nix::errno::Errno;
 
 use crate::{
     core_sched, logger,
@@ -71,14 +70,11 @@ fn get_server_fd() -> Result<RawFd> {
 }
 
 // TODO: currently we log a warning on fail (i.e. kernel version < 5.14), maybe just exit
-fn try_core_sched() -> Result<(), Errno> {
+// TODO: more test on higher version of kernel
+fn try_core_sched() -> Result<()> {
     if let Ok(v) = std::env::var("SCHED_CORE") {
-        info!(
-            sl!(),
-            "containerd wants to enable core scheduling, SCHED_CORE={}(expected 1)", v
-        );
         if !v.is_empty() {
-            return core_sched::core_sched_create(core_sched::PROCESS_GROUP);
+            core_sched::core_sched_create(core_sched::PROCESS_GROUP)?
         }
     }
     Ok(())
