@@ -90,7 +90,8 @@ if [ "${ovmf_build}" == "tdx" ]; then
 	install $build_root/$ovmf_dir/"${build_path_arch}"/DumpTdxEventLog.efi ${install_dir}
 fi
 
+local_dir=${PWD}
 pushd $DESTDIR
-tar -czvf "${ovmf_dir}-${ovmf_build}.tar.gz" "./$PREFIX"
+tar -czvf "${local_dir}/${ovmf_dir}-${ovmf_build}.tar.gz" "./$PREFIX"
 rm -rf $(dirname ./$PREFIX) 
 popd
