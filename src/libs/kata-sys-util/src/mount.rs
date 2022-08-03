@@ -739,18 +739,15 @@ pub fn umount_all<P: AsRef<Path>>(mountpoint: P, lazy_umount: bool) -> Result<()
     }
 
     loop {
-        match umount2(mountpoint.as_ref(), lazy_umount) {
-            Err(e) => {
-                // EINVAL is returned if the target is not a mount point, indicating that we are
-                // done. It can also indicate a few other things (such as invalid flags) which we
-                // unfortunately end up squelching here too.
-                if e.kind() == io::ErrorKind::InvalidInput {
-                    break;
-                } else {
-                    return Err(Error::Umount(mountpoint.as_ref().to_path_buf(), e));
-                }
+        if let Err(e) = umount2(mountpoint.as_ref(), lazy_umount) {
+            // EINVAL is returned if the target is not a mount point, indicating that we are
+            // done. It can also indicate a few other things (such as invalid flags) which we
+            // unfortunately end up squelching here too.
+            if e.kind() == io::ErrorKind::InvalidInput {
+                break;
+            } else {
+                return Err(Error::Umount(mountpoint.as_ref().to_path_buf(), e));
             }
-            Ok(()) => (),
         }
     }
 
