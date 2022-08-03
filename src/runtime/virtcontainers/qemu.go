@@ -1292,13 +1292,19 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 		return nil
 	}
 
-	aio := q.config.BlockDeviceAIO
+	qblkDevice := govmmQemu.BlockDevice{
+		ID:       drive.ID,
+		File:     drive.File,
+		ReadOnly: drive.ReadOnly,
+		AIO:      govmmQemu.BlockDeviceAIO(q.config.BlockDeviceAIO),
+	}
+
 	if drive.Swap {
-		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAddWithDriverCache(q.qmpMonitorCh.ctx, "file", drive.File, drive.ID, aio, false, false, false)
+		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAddWithDriverCache(q.qmpMonitorCh.ctx, "file", &qblkDevice, false, false)
 	} else if q.config.BlockDeviceCacheSet {
-		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAddWithCache(q.qmpMonitorCh.ctx, drive.File, drive.ID, aio, q.config.BlockDeviceCacheDirect, q.config.BlockDeviceCacheNoflush, drive.ReadOnly)
+		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAddWithCache(q.qmpMonitorCh.ctx, &qblkDevice, q.config.BlockDeviceCacheDirect, q.config.BlockDeviceCacheNoflush)
 	} else {
-		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAdd(q.qmpMonitorCh.ctx, drive.File, drive.ID, aio, drive.ReadOnly)
+		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAdd(q.qmpMonitorCh.ctx, &qblkDevice)
 	}
 	if err != nil {
 		return err
