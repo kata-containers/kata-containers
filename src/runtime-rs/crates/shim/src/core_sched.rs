@@ -38,7 +38,7 @@ pub const PR_SCHED_CORE_SHARE_FROM: usize = 3;
 pub fn core_sched_create(pidtype: usize) -> Result<(), Errno> {
     let errno = unsafe { nix::libc::prctl(PR_SCHED_CORE, PR_SCHED_CORE_CREATE, 0, pidtype, 0) };
     if errno != 0 {
-        Err(nix::errno::Errno::from_i32(errno))
+        Err(nix::errno::Errno::from_i32(-errno))
     } else {
         Ok(())
     }
@@ -50,7 +50,7 @@ pub fn core_sched_share_from(pid: usize, pidtype: usize) -> Result<(), Errno> {
     let errno =
         unsafe { nix::libc::prctl(PR_SCHED_CORE, PR_SCHED_CORE_SHARE_FROM, pid, pidtype, 0) };
     if errno != 0 {
-        Err(nix::errno::Errno::from_i32(errno))
+        Err(nix::errno::Errno::from_i32(-errno))
     } else {
         Ok(())
     }
@@ -87,18 +87,15 @@ mod tests {
             // therefore it does not make sense to assert a successful prctl call
             // but we can still make sure that the return value is a possible value
             let e = core_sched_create(PROCESS_GROUP);
-            match e {
-                Err(errno) => {
-                    if errno != EINVAL
-                        && errno != ENODEV
-                        && errno != ENOMEM
-                        && errno != EPERM
-                        && errno != ESRCH
-                    {
-                        panic!("impossible return value {:?}", errno);
-                    }
+            if let Err(errno) = e {
+                if errno != EINVAL
+                    && errno != ENODEV
+                    && errno != ENOMEM
+                    && errno != EPERM
+                    && errno != ESRCH
+                {
+                    panic!("impossible return value {:?}", errno);
                 }
-                Ok(()) => {}
             }
         }
     }
