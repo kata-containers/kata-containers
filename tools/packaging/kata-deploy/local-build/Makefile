@@ -85,19 +85,10 @@ cc: cc-cloud-hypervisor-tarball \
 cc-cloud-hypervisor-tarball:
 	${MAKE} $@-build
 
-cc-tdx-cloud-hypervisor-tarball:
-	${MAKE} $@-build
-
 cc-kernel-tarball:
 	${MAKE} $@-build
 
-cc-tdx-kernel-tarball:
-	${MAKE} $@-build
-
 cc-qemu-tarball:
-	${MAKE} $@-build
-
-cc-tdx-qemu-tarball:
 	${MAKE} $@-build
 
 cc-rootfs-image-tarball:
@@ -107,4 +98,19 @@ cc-shim-v2-tarball:
 	${MAKE} $@-build
 
 cc-virtiofsd-tarball:
+	${MAKE} $@-build
+
+cc-tdx-cloud-hypervisor-tarball:
+	${MAKE} $@-build
+
+cc-tdx-kernel-tarball:
+	${MAKE} $@-build
+
+cc-tdx-qemu-tarball:
+	${MAKE} $@-build
+
+cc-tdx-td-shim-tarball:
+	${MAKE} $@-build
+
+cc-tdx-tdvf-tarball:
 	${MAKE} $@-build
