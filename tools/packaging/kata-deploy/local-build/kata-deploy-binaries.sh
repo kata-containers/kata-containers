@@ -27,6 +27,7 @@ readonly kernel_builder="${static_build_dir}/kernel/build.sh"
 readonly ovmf_builder="${static_build_dir}/ovmf/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
 readonly shimv2_builder="${static_build_dir}/shim-v2/build.sh"
+readonly td_shim_builder="${static_build_dir}/td-shim/build.sh"
 readonly virtiofsd_builder="${static_build_dir}/virtiofsd/build-static-virtiofsd.sh"
 
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
@@ -188,6 +189,11 @@ install_cc_tdx_qemu() {
 	install_cc_tee_qemu "tdx"
 }
 
+install_cc_tdx_td_shim() {
+	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${td_shim_builder}"
+	tar xvf "${builddir}/td-shim.tar.gz" -C "${destdir}"
+}
+
 install_cc_tee_ovmf() {
 	tee="${1}"
 	tarball_name="${2}"
@@ -323,6 +329,8 @@ handle_build() {
 	cc-tdx-kernel) install_cc_tdx_kernel ;;
 
 	cc-tdx-qemu) install_cc_tdx_qemu ;;
+
+	cc-tdx-td-shim) install_cc_tdx_td_shim ;;
 
 	cc-tdx-tdvf) install_cc_tdx_tdvf ;;
 
