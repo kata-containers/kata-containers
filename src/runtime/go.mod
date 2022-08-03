@@ -20,11 +20,11 @@ require (
 	github.com/docker/go-units v0.4.0
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/go-ini/ini v1.28.2
-	github.com/go-openapi/errors v0.18.0
-	github.com/go-openapi/runtime v0.18.0
-	github.com/go-openapi/strfmt v0.18.0
-	github.com/go-openapi/swag v0.19.14
-	github.com/go-openapi/validate v0.18.0
+	github.com/go-openapi/errors v0.20.2
+	github.com/go-openapi/runtime v0.19.21
+	github.com/go-openapi/strfmt v0.21.1
+	github.com/go-openapi/swag v0.21.1
+	github.com/go-openapi/validate v0.22.0
 	github.com/godbus/dbus/v5 v5.0.6
 	github.com/gogo/protobuf v1.3.2
 	github.com/hashicorp/go-multierror v1.1.1
