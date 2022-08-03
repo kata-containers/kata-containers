@@ -13,70 +13,84 @@ import (
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/runtime"
 	cr "github.com/go-openapi/runtime/client"
+	"github.com/go-openapi/strfmt"
 
-	strfmt "github.com/go-openapi/strfmt"
-
-	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 )
 
-// NewPatchGuestDriveByIDParams creates a new PatchGuestDriveByIDParams object
-// with the default values initialized.
+// NewPatchGuestDriveByIDParams creates a new PatchGuestDriveByIDParams object,
+// with the default timeout for this client.
+//
+// Default values are not hydrated, since defaults are normally applied by the API server side.
+//
+// To enforce default values in parameter, use SetDefaults or WithDefaults.
 func NewPatchGuestDriveByIDParams() *PatchGuestDriveByIDParams {
-	var ()
 	return &PatchGuestDriveByIDParams{
-
 		timeout: cr.DefaultTimeout,
 	}
 }
 
 // NewPatchGuestDriveByIDParamsWithTimeout creates a new PatchGuestDriveByIDParams object
-// with the default values initialized, and the ability to set a timeout on a request
+// with the ability to set a timeout on a request.
 func NewPatchGuestDriveByIDParamsWithTimeout(timeout time.Duration) *PatchGuestDriveByIDParams {
-	var ()
 	return &PatchGuestDriveByIDParams{
-
 		timeout: timeout,
 	}
 }
 
 // NewPatchGuestDriveByIDParamsWithContext creates a new PatchGuestDriveByIDParams object
-// with the default values initialized, and the ability to set a context for a request
+// with the ability to set a context for a request.
 func NewPatchGuestDriveByIDParamsWithContext(ctx context.Context) *PatchGuestDriveByIDParams {
-	var ()
 	return &PatchGuestDriveByIDParams{
-
 		Context: ctx,
 	}
 }
 
 // NewPatchGuestDriveByIDParamsWithHTTPClient creates a new PatchGuestDriveByIDParams object
-// with the default values initialized, and the ability to set a custom HTTPClient for a request
+// with the ability to set a custom HTTPClient for a request.
 func NewPatchGuestDriveByIDParamsWithHTTPClient(client *http.Client) *PatchGuestDriveByIDParams {
-	var ()
 	return &PatchGuestDriveByIDParams{
 		HTTPClient: client,
 	}
 }
 
-/*PatchGuestDriveByIDParams contains all the parameters to send to the API endpoint
-for the patch guest drive by ID operation typically these are written to a http.Request
+/* PatchGuestDriveByIDParams contains all the parameters to send to the API endpoint
+   for the patch guest drive by ID operation.
+
+   Typically these are written to a http.Request.
 */
 type PatchGuestDriveByIDParams struct {
 
-	/*Body
-	  Guest drive properties
+	/* Body.
 
+	   Guest drive properties
 	*/
 	Body *models.PartialDrive
-	/*DriveID
-	  The id of the guest drive
 
+	/* DriveID.
+
+	   The id of the guest drive
 	*/
 	DriveID string
 
 	timeout    time.Duration
 	Context    context.Context
 	HTTPClient *http.Client
+}
+
+// WithDefaults hydrates default values in the patch guest drive by ID params (not the query body).
+//
+// All values with no default are reset to their zero value.
+func (o *PatchGuestDriveByIDParams) WithDefaults() *PatchGuestDriveByIDParams {
+	o.SetDefaults()
+	return o
+}
+
+// SetDefaults hydrates default values in the patch guest drive by ID params (not the query body).
+//
+// All values with no default are reset to their zero value.
+func (o *PatchGuestDriveByIDParams) SetDefaults() {
+	// no default values defined for this parameter
 }
 
 // WithTimeout adds the timeout to the patch guest drive by ID params
@@ -141,7 +155,6 @@ func (o *PatchGuestDriveByIDParams) WriteToRequest(r runtime.ClientRequest, reg 
 		return err
 	}
 	var res []error
-
 	if o.Body != nil {
 		if err := r.SetBodyParam(o.Body); err != nil {
 			return err

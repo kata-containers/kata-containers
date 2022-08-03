@@ -6,14 +6,16 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	strfmt "github.com/go-openapi/strfmt"
+	"context"
 
 	"github.com/go-openapi/errors"
+	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 	"github.com/go-openapi/validate"
 )
 
 // PartialDrive partial drive
+//
 // swagger:model PartialDrive
 type PartialDrive struct {
 
@@ -22,8 +24,10 @@ type PartialDrive struct {
 	DriveID *string `json:"drive_id"`
 
 	// Host level path for the guest drive
-	// Required: true
-	PathOnHost *string `json:"path_on_host"`
+	PathOnHost string `json:"path_on_host,omitempty"`
+
+	// rate limiter
+	RateLimiter *RateLimiter `json:"rate_limiter,omitempty"`
 }
 
 // Validate validates this partial drive
@@ -34,7 +38,7 @@ func (m *PartialDrive) Validate(formats strfmt.Registry) error {
 		res = append(res, err)
 	}
 
-	if err := m.validatePathOnHost(formats); err != nil {
+	if err := m.validateRateLimiter(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -53,10 +57,50 @@ func (m *PartialDrive) validateDriveID(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *PartialDrive) validatePathOnHost(formats strfmt.Registry) error {
+func (m *PartialDrive) validateRateLimiter(formats strfmt.Registry) error {
+	if swag.IsZero(m.RateLimiter) { // not required
+		return nil
+	}
 
-	if err := validate.Required("path_on_host", "body", m.PathOnHost); err != nil {
-		return err
+	if m.RateLimiter != nil {
+		if err := m.RateLimiter.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("rate_limiter")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("rate_limiter")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ContextValidate validate this partial drive based on the context it is used
+func (m *PartialDrive) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+	var res []error
+
+	if err := m.contextValidateRateLimiter(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if len(res) > 0 {
+		return errors.CompositeValidationError(res...)
+	}
+	return nil
+}
+
+func (m *PartialDrive) contextValidateRateLimiter(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.RateLimiter != nil {
+		if err := m.RateLimiter.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("rate_limiter")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("rate_limiter")
+			}
+			return err
+		}
 	}
 
 	return nil
