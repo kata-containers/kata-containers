@@ -108,11 +108,6 @@ install_cc_clh() {
 	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor/cloud-hypervisor "${destdir}/${cc_prefix}/bin/cloud-hypervisor"
 }
 
-# Install static CC cloud-hypervisor asset
-install_tdx_cc_clh() {
-	install_cc_clh
-}
-
 #Install cc capable guest image
 install_cc_image() {
 	info "Create CC image"
@@ -123,43 +118,10 @@ install_cc_image() {
 	"${rootfs_builder}" --imagetype=image --prefix="${cc_prefix}" --destdir="${destdir}"
 }
 
-#Install CC kernel assert, with TEE support
-install_cc_tee_kernel() {
-	tee="${1}"
-
-	[ "${tee}" != "tdx" ] && die "Non supported TEE"
-
-	export kernel_version="$(yq r $versions_yaml assets.kernel.${tee}.tag)"
-	export kernel_url="$(yq r $versions_yaml assets.kernel.${tee}.url)"
-	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -x "${tee}" -v "${kernel_version}" -u "${kernel_url}"
-}
-
-#Install CC kernel assert for Intel TDX
-install_cc_tdx_kernel() {
-	install_cc_tee_kernel "tdx"
-}
-
 #Install CC kernel asset
 install_cc_kernel() {
 	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -f -v "${kernel_version}"
-}
-
-install_cc_tee_qemu() {
-	tee="${1}"
-
-	[ "${tee}" != "tdx" ] && die "Non supported TEE"
-
-	export qemu_repo="$(yq r $versions_yaml assets.hypervisor.qemu.${tee}.url)"
-	export qemu_version="$(yq r $versions_yaml assets.hypervisor.qemu.${tee}.tag)"
-	export tee="${tee}"
-	"${qemu_cc_builder}"
-	tar xvf "${builddir}/kata-static-${tee}-qemu-cc.tar.gz" -C "${destdir}"
-}
-
-
-install_cc_tdx_qemu() {
-	install_cc_tee_qemu "tdx"
 }
 
 # Install static CC qemu asset
@@ -186,6 +148,43 @@ install_cc_virtiofsd() {
 	info "Install static CC virtiofsd"
 	mkdir -p "${destdir}/${cc_prefix}/libexec/"
 	sudo install -D --owner root --group root --mode 0744 virtiofsd/virtiofsd "${destdir}/${cc_prefix}/libexec/virtiofsd"
+}
+
+# Install static CC cloud-hypervisor asset
+install_tdx_cc_clh() {
+	install_cc_clh
+}
+
+#Install CC kernel assert, with TEE support
+install_cc_tee_kernel() {
+	tee="${1}"
+
+	[ "${tee}" != "tdx" ] && die "Non supported TEE"
+
+	export kernel_version="$(yq r $versions_yaml assets.kernel.${tee}.tag)"
+	export kernel_url="$(yq r $versions_yaml assets.kernel.${tee}.url)"
+	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -x "${tee}" -v "${kernel_version}" -u "${kernel_url}"
+}
+
+#Install CC kernel assert for Intel TDX
+install_cc_tdx_kernel() {
+	install_cc_tee_kernel "tdx"
+}
+
+install_cc_tee_qemu() {
+	tee="${1}"
+
+	[ "${tee}" != "tdx" ] && die "Non supported TEE"
+
+	export qemu_repo="$(yq r $versions_yaml assets.hypervisor.qemu.${tee}.url)"
+	export qemu_version="$(yq r $versions_yaml assets.hypervisor.qemu.${tee}.tag)"
+	export tee="${tee}"
+	"${qemu_cc_builder}"
+	tar xvf "${builddir}/kata-static-${tee}-qemu-cc.tar.gz" -C "${destdir}"
+}
+
+install_cc_tdx_qemu() {
+	install_cc_tee_qemu "tdx"
 }
 
 #Install guest image
@@ -296,21 +295,21 @@ handle_build() {
 
 	cc-cloud-hypervisor) install_cc_clh ;;
 
-	cc-tdx-cloud-hypervisor) install_tdx_cc_clh ;;
-
 	cc-kernel) install_cc_kernel ;;
 
-	cc-tdx-kernel) install_cc_tdx_kernel ;;
-
 	cc-qemu) install_cc_qemu ;;
-
-	cc-tdx-qemu) install_cc_tdx_qemu ;;
 
 	cc-rootfs-image) install_cc_image ;;
 
 	cc-shim-v2) install_cc_shimv2 ;;
 
 	cc-virtiofsd) install_cc_virtiofsd ;;
+
+	cc-tdx-cloud-hypervisor) install_tdx_cc_clh ;;
+
+	cc-tdx-kernel) install_cc_tdx_kernel ;;
+
+	cc-tdx-qemu) install_cc_tdx_qemu ;;
 
 	cloud-hypervisor) install_clh ;;
 
