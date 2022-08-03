@@ -1020,9 +1020,7 @@ pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec, process: &Process) -> Result<(
 }
 
 fn mask_path(path: &str) -> Result<()> {
-    if !path.starts_with('/') || path.contains("..") {
-        return Err(anyhow!(nix::Error::EINVAL));
-    }
+    check_paths(path)?;
 
     match mount(
         Some("/dev/null"),
@@ -1040,9 +1038,7 @@ fn mask_path(path: &str) -> Result<()> {
 }
 
 fn readonly_path(path: &str) -> Result<()> {
-    if !path.starts_with('/') || path.contains("..") {
-        return Err(anyhow!(nix::Error::EINVAL));
-    }
+    check_paths(path)?;
 
     if let Err(e) = mount(
         Some(&path[1..]),
@@ -1065,6 +1061,16 @@ fn readonly_path(path: &str) -> Result<()> {
         None::<&str>,
     )?;
 
+    Ok(())
+}
+
+fn check_paths(path: &str) -> Result<()> {
+    if !path.starts_with('/') || path.contains("..") {
+        return Err(anyhow!(
+            "Cannot mount {} (path does not start with '/' or contains '..').",
+            path
+        ));
+    }
     Ok(())
 }
 
@@ -1417,6 +1423,55 @@ mod tests {
                 let error_msg = format!("{}", result.unwrap_err());
                 assert!(error_msg.contains(d.error_contains), "{}", msg);
             }
+        }
+    }
+
+    #[test]
+    fn test_check_paths() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            name: &'a str,
+            path: &'a str,
+            result: Result<()>,
+        }
+
+        let tests = &[
+            TestData {
+                name: "valid path",
+                path: "/foo/bar",
+                result: Ok(()),
+            },
+            TestData {
+                name: "does not starts with /",
+                path: "foo/bar",
+                result: Err(anyhow!(
+                    "Cannot mount foo/bar (path does not start with '/' or contains '..')."
+                )),
+            },
+            TestData {
+                name: "contains ..",
+                path: "../foo/bar",
+                result: Err(anyhow!(
+                    "Cannot mount ../foo/bar (path does not start with '/' or contains '..')."
+                )),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d.name);
+
+            let result = check_paths(d.path);
+
+            let msg = format!("{}: result: {:?}", msg, result);
+
+            if d.result.is_ok() {
+                assert!(result.is_ok());
+                continue;
+            }
+
+            let expected_error = format!("{}", d.result.as_ref().unwrap_err());
+            let actual_error = format!("{}", result.unwrap_err());
+            assert!(actual_error == expected_error, "{}", msg);
         }
     }
 
