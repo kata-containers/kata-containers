@@ -101,7 +101,7 @@ assets:
       tdx:
         description: "VMM that uses KVM and supports TDX"
         url: "https://github.com/intel/qemu-dcp"
-        tag: "SPR-BKC-QEMU-v2.2"
+        tag: "SPR-BKC-QEMU-v2.5"
 
     qemu-experimental:
       description: "QEMU with virtiofs support"
