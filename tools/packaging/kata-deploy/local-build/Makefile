@@ -109,3 +109,5 @@ cc-tdx-kernel-tarball:
 cc-tdx-qemu-tarball:
 	${MAKE} $@-build
 
+cc-tdx-tdvf-tarball:
+	${MAKE} $@-build

@@ -24,6 +24,7 @@ readonly versions_yaml="${repo_root_dir}/versions.yaml"
 readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
 readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
+readonly ovmf_builder="${static_build_dir}/ovmf/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
 readonly shimv2_builder="${static_build_dir}/shim-v2/build.sh"
 readonly virtiofsd_builder="${static_build_dir}/virtiofsd/build-static-virtiofsd.sh"
@@ -187,6 +188,18 @@ install_cc_tdx_qemu() {
 	install_cc_tee_qemu "tdx"
 }
 
+install_cc_tee_ovmf() {
+	tee="${1}"
+	tarball_name="${2}"
+
+	DESTDIR="${destdir}" PREFIX="${cc_prefix}" ovmf_build="${tee}" "${ovmf_builder}"
+	tar xvf "${builddir}/${tarball_name}" -C "${destdir}"
+}
+
+install_cc_tdx_tdvf() {
+	install_cc_tee_ovmf "tdx" "edk2-staging-tdx.tar.gz"
+}
+
 #Install guest image
 install_image() {
 	info "Create image"
@@ -310,6 +323,8 @@ handle_build() {
 	cc-tdx-kernel) install_cc_tdx_kernel ;;
 
 	cc-tdx-qemu) install_cc_tdx_qemu ;;
+
+	cc-tdx-tdvf) install_cc_tdx_tdvf ;;
 
 	cloud-hypervisor) install_clh ;;
 
