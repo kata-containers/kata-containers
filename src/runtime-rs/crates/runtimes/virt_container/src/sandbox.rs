@@ -158,6 +158,15 @@ impl Sandbox for VirtSandbox {
             .await
             .context("setup device after start vm")?;
 
+        // get guest hook path
+        let guest_hook_path = self
+            .hypervisor
+            .hypervisor_config()
+            .await
+            .security_info
+            .guest_hook_path
+            .clone();
+
         // create sandbox in vm
         let req = agent::CreateSandboxRequest {
             hostname: "".to_string(),
@@ -169,12 +178,7 @@ impl Sandbox for VirtSandbox {
                 .context("get storages for sandbox")?,
             sandbox_pidns: false,
             sandbox_id: id.to_string(),
-            guest_hook_path: self
-                .hypervisor
-                .hypervisor_config()
-                .await
-                .security_info
-                .guest_hook_path,
+            guest_hook_path,
             kernel_modules: vec![],
         };
 

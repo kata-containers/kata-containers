@@ -73,7 +73,7 @@ impl RuntimeHandler for VirtContainer {
             sid,
             agent.clone(),
             hypervisor.clone(),
-            config,
+            Arc::clone(&config),
         )?);
         let pid = std::process::id();
 
