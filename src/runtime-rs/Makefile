@@ -21,6 +21,16 @@ ARCH_DIR = arch
 ARCH_FILE_SUFFIX = -options.mk
 ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 
+
+ifeq ($(ARCH), s390x)
+##TARGET default: build code
+default:
+	@echo "s390x not support currently"
+	exit 0
+else
+default: runtime show-header
+endif
+
 ifeq (,$(realpath $(ARCH_FILE)))
     $(error "ERROR: invalid architecture: '$(ARCH)'")
 else
@@ -326,9 +336,6 @@ $(if $(findstring uncompressed,$1),vmlinux.container,vmlinuz.container)
 endef
 
 .DEFAULT_GOAL := default
-
-##TARGET default: build code
-default: runtime show-header
 
 runtime: $(TARGET)
 
