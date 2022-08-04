@@ -43,3 +43,4 @@
 - [How to run rootless vmm](how-to-run-rootless-vmm.md)
 - [How to run Docker with Kata Containers](how-to-run-docker-with-kata.md)
 - [How to run Kata Containers with `nydus`](how-to-use-virtio-fs-nydus-with-kata.md)
+- [How to run Kata Containers with AMD SEV-SNP](how-to-run-kata-containers-with-SNP-VMs.md)
