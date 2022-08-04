@@ -18,7 +18,7 @@ CONFIG_X86_SGX_KVM=y
 
 * Kubernetes cluster configured with:
    * [`kata-deploy`](../../tools/packaging/kata-deploy) based Kata Containers installation
-   * [Intel SGX Kubernetes device plugin](https://github.com/intel/intel-device-plugins-for-kubernetes/tree/main/cmd/sgx_plugin#deploying-with-pre-built-images)
+   * [Intel SGX Kubernetes device plugin](https://github.com/intel/intel-device-plugins-for-kubernetes/tree/main/cmd/sgx_plugin#deploying-with-pre-built-images) and associated components including [operator](https://github.com/intel/intel-device-plugins-for-kubernetes/blob/main/cmd/operator/README.md) and dependencies
 
 > Note: Kata Containers supports creating VM sandboxes with Intel® SGX enabled
 > using [cloud-hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor/) and [QEMU](https://www.qemu.org/) VMMs only.
@@ -99,4 +99,4 @@ because socket passthrough is not supported. An alternative is to deploy the `ae
 container.
 * Projects like [Gramine Shielded Containers (GSC)](https://gramine-gsc.readthedocs.io/en/latest/) are
 also known to work. For GSC specifically, the Kata guest kernel needs to have the `CONFIG_NUMA=y`
-enabled and at least one CPU online when running the GSC container.
+enabled and at least one CPU online when running the GSC container. The Kata Containers guest kernel currently has CONFIG_NUMA=y enabled by default.
