@@ -21,14 +21,19 @@ ARCH_DIR = arch
 ARCH_FILE_SUFFIX = -options.mk
 ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 
-
 ifeq ($(ARCH), s390x)
-##TARGET default: build code
 default:
 	@echo "s390x not support currently"
 	exit 0
+test:
+	@echo "s390x not support currently"
+	exit 0
 else
+##TARGET default: build code
 default: runtime show-header
+#TARGET test: run cargo tests
+test:
+	@cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
 endif
 
 ifeq (,$(realpath $(ARCH_FILE)))
@@ -365,10 +370,6 @@ clean:
 
 vendor:
 	@cargo vendor
-
-#TARGET test: run cargo tests
-test:
-	@cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
 
 ##TARGET check: run test
 check: $(GENERATED_FILES) standard_rust_check
