@@ -13,6 +13,7 @@ containerd_conf_file_backup="${containerd_conf_file}.bak"
 
 shims=(
 	"qemu"
+	"qemu-tdx"
 	"clh"
 )
 
@@ -186,12 +187,15 @@ function remove_artifacts() {
 		/opt/confidential-containers/share/defaults/kata-containers/ \
 		/opt/confidential-containers/share/bash-completion/completions/kata-runtime \
 		/opt/confidential-containers/share/kata-qemu/ \
+		/opt/confidential-containers/share/kata-qemu-tdx/ \
 		/opt/confidential-containers/share/kata-containers/ \
+		/opt/confidential-containers/share/tdvf/ \
 		/opt/confidential-containers/bin/kata-monitor \
 		/opt/confidential-containers/bin/containerd-shim-kata-v2 \
 		/opt/confidential-containers/bin/kata-runtime \
 		/opt/confidential-containers/bin/kata-collect-data.sh \
 		/opt/confidential-containers/bin/qemu-system-x86_64 \
+		/opt/confidential-containers/bin/qemu-system-x86_64-tdx \
 		/opt/confidential-containers/bin/cloud-hypervisor
 }
 
