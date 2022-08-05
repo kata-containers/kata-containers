@@ -17,5 +17,6 @@ RUN apt-get update && \
         nasm \
         python \
         python3 \
+        python3-distutils \
         uuid-dev && \
     apt-get clean && rm -rf /var/lib/lists/
