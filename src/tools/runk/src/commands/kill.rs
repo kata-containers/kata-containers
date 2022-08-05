@@ -4,44 +4,22 @@
 //
 
 use crate::Kill;
-use anyhow::{anyhow, Result};
-use libcontainer::status::{self, get_current_container_state, Status};
-use nix::{
-    sys::signal::{kill, Signal},
-    unistd::Pid,
-};
-use oci::ContainerState;
+use anyhow::Result;
+use libcontainer::container::Container;
+use nix::sys::signal::Signal;
 use slog::{info, Logger};
 use std::{convert::TryFrom, path::Path, str::FromStr};
 
 pub fn run(opts: Kill, state_root: &Path, logger: &Logger) -> Result<()> {
     let container_id = &opts.container_id;
-    let status = Status::load(state_root, container_id)?;
-    let current_state = get_current_container_state(&status)?;
+    let container = Container::load(state_root, container_id)?;
     let sig = parse_signal(&opts.signal)?;
 
     // TODO: liboci-cli does not support --all option for kill command.
     // After liboci-cli supports the option, we will change the following code.
     // as a workaround we use a custom Kill command.
     let all = opts.all;
-    if all {
-        let pids = status::get_all_pid(&status.cgroup_manager)?;
-        for pid in pids {
-            if !status::is_process_running(pid)? {
-                continue;
-            }
-            kill(pid, sig)?;
-        }
-    } else {
-        if current_state == ContainerState::Stopped {
-            return Err(anyhow!("container {} not running", container_id));
-        }
-
-        let p = Pid::from_raw(status.pid);
-        if status::is_process_running(p)? {
-            kill(p, sig)?;
-        }
-    }
+    container.kill(sig, all)?;
 
     info!(&logger, "kill command finished successfully");
 
