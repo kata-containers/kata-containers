@@ -503,11 +503,7 @@ mod tests {
         let root = tempdir().unwrap();
         // let bundle = temp
         let id = "test".to_string();
-        create_activated_dirs(
-            &root.path().to_path_buf(),
-            &id,
-            &bundle_dir.path().to_path_buf(),
-        );
+        create_activated_dirs(root.path(), &id, bundle_dir.path());
         let pid = getpid().as_raw();
 
         let mut spec = create_dummy_spec();
@@ -517,7 +513,7 @@ mod tests {
             .to_string_lossy()
             .to_string();
 
-        let status = create_dummy_status(&id, pid, &root.path().to_path_buf(), &spec);
+        let status = create_dummy_status(&id, pid, root.path(), &spec);
         status.save().unwrap();
 
         let result = ActivatedContainerBuilder::default()
@@ -600,13 +596,9 @@ mod tests {
             .join(TEST_ROOTFS_PATH)
             .to_string_lossy()
             .to_string();
-        create_activated_dirs(
-            &root.path().to_path_buf(),
-            &id,
-            &bundle_dir.path().to_path_buf(),
-        );
+        create_activated_dirs(root.path(), &id, bundle_dir.path());
 
-        let status = create_dummy_status(&id, pid, &root.path().to_path_buf(), &spec);
+        let status = create_dummy_status(&id, pid, root.path(), &spec);
         status.save().unwrap();
         let launcher = ActivatedContainerBuilder::default()
             .id(id)
