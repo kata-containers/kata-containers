@@ -35,7 +35,8 @@ install target/x86_64-unknown-uefi/release/final-boot-kernel.bin ${install_dir}/
 popd #td-shim
 popd #${build_root}
 
+local_dir=${PWD}
 pushd ${DESTDIR}
-tar -czvf "td-shim.tar.gz" "./$PREFIX"
+tar -czvf "${local_dir}/td-shim.tar.gz" "./$PREFIX"
 rm -rf $(dirname ./$PREFIX)
 popd #${DESTDIR}
