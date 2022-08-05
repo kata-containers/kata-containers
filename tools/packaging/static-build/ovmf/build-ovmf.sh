@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # Copyright (c) 2022 IBM
+# Copyright (c) 2022 Intel
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -15,7 +16,6 @@ source "${script_dir}/../../scripts/lib.sh"
 set +u
 ovmf_build="${ovmf_build:-x86_64}"
 ovmf_repo="${ovmf_repo:-}"
-ovmf_dir="edk2"
 ovmf_version="${ovmf_version:-}"
 ovmf_package="${ovmf_package:-}"
 package_output_dir="${package_output_dir:-}"
@@ -30,13 +30,14 @@ build_target="${build_target:-RELEASE}"
 [ -n "$ovmf_package" ] || die "failed to get ovmf package or commit"
 [ -n "$package_output_dir" ] || die "failed to get ovmf package or commit"
 
+ovmf_dir="${ovmf_repo##*/}"
+
 info "Build ${ovmf_repo} version: ${ovmf_version}"
 
 build_root=$(mktemp -d)
 pushd $build_root
-git clone "${ovmf_repo}"
+git clone --single-branch --depth 1 -b "${ovmf_version}" "${ovmf_repo}"
 cd "${ovmf_dir}"
-git checkout "${ovmf_version}"
 git submodule init
 git submodule update
 
@@ -53,16 +54,44 @@ if [ "${ovmf_build}" == "sev" ]; then
 fi
 
 info "Building ovmf"
-build -b "${build_target}" -t "${toolchain}" -a "${architecture}" -p "${ovmf_package}"
+build_cmd="build -b ${build_target} -t ${toolchain} -a ${architecture} -p ${ovmf_package}"
+if [ "${ovmf_build}" == "tdx" ]; then
+	build_cmd+=" -D DEBUG_ON_SERIAL_PORT=TRUE -D TDX_MEM_PARTIAL_ACCEPT=512 -D TDX_EMULATION_ENABLE=FALSE -D TDX_ACCEPT_PAGE_SIZE=2M"
+fi
+
+eval "${build_cmd}"
 
 info "Done Building"
 
-build_path="Build/${package_output_dir}/${build_target}_${toolchain}/FV/OVMF.fd"
-stat "${build_path}"
+build_path_target_toolchain="Build/${package_output_dir}/${build_target}_${toolchain}"
+build_path_fv="${build_path_target_toolchain}/FV"
+stat "${build_path_fv}/OVMF.fd"
+if [ "${ovmf_build}" == "tdx" ]; then
+	build_path_arch="${build_path_target_toolchain}/X64"
+	stat "${build_path_fv}/OVMF_CODE.fd"
+	stat "${build_path_fv}/OVMF_VARS.fd"
+	stat "${build_path_arch}/DumpTdxEventLog.efi"
+fi
 
 #need to leave tmp dir
 popd
 
 info "Install fd to destdir"
-mkdir -p "$DESTDIR/$PREFIX/share/ovmf"
-cp $build_root/$ovmf_dir/"${build_path}" "$DESTDIR/$PREFIX/share/ovmf"
+install_dir="${DESTDIR}/${PREFIX}/share/ovmf"
+if [ "${ovmf_build}" == "tdx" ]; then
+	install_dir="$DESTDIR/$PREFIX/share/tdvf"
+fi
+
+mkdir -p "${install_dir}"
+install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF.fd "${install_dir}"
+if [ "${ovmf_build}" == "tdx" ]; then
+	install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF_CODE.fd ${install_dir}
+	install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF_VARS.fd ${install_dir}
+	install $build_root/$ovmf_dir/"${build_path_arch}"/DumpTdxEventLog.efi ${install_dir}
+fi
+
+local_dir=${PWD}
+pushd $DESTDIR
+tar -czvf "${local_dir}/${ovmf_dir}-${ovmf_build}.tar.gz" "./$PREFIX"
+rm -rf $(dirname ./$PREFIX) 
+popd
