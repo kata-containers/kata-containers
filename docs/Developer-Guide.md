@@ -86,6 +86,27 @@ $ sudo sed -i '/^disable_guest_seccomp/ s/true/false/' /etc/kata-containers/conf
 
 This will pass container seccomp profiles to the kata agent.
 
+## Enable SELinux on the guest
+
+> **Note:**
+>
+> - To enable SELinux on the guest, SELinux MUST be also enabled on the host.
+> - You MUST create and build a rootfs image for SELinux in advance.
+>   See [Create a rootfs image](#create-a-rootfs-image) and [Build a rootfs image](#build-a-rootfs-image).
+> - SELinux on the guest is supported in only a rootfs image currently, so
+>   you cannot enable SELinux with the agent init (`AGENT_INIT=yes`) yet.
+
+Enable guest SELinux in Enforcing mode as follows:
+
+```
+$ sudo sed -i '/^disable_guest_selinux/ s/true/false/g' /etc/kata-containers/configuration.toml
+```
+
+The runtime automatically will set `selinux=1` to the kernel parameters and `xattr` option to
+`virtiofsd` when `disable_guest_selinux` is set to `false`.
+
+If you want to enable SELinux in Permissive mode, add `enforcing=0` to the kernel parameters.
+
 ## Enable full debug
 
 Enable full debug as follows:
@@ -256,6 +277,12 @@ If you want to build the agent without seccomp capability, you need to run the `
 $ script -fec 'sudo -E AGENT_INIT=yes USE_DOCKER=true SECCOMP=no ./rootfs.sh "${distro}"'
 ```
 
+If you want to enable SELinux on the guest, you MUST choose `centos` and run the `rootfs.sh` script with `SELINUX=yes` as follows.
+
+```
+$ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true SELINUX=yes ./rootfs.sh centos'
+```
+
 > **Note:**
 >
 > - Check the [compatibility matrix](../tools/osbuilder/README.md#platform-distro-compatibility-matrix) before creating rootfs.
@@ -282,6 +309,19 @@ $ pushd  kata-containers/tools/osbuilder/image-builder
 $ script -fec 'sudo -E USE_DOCKER=true ./image_builder.sh "${ROOTFS_DIR}"'
 $ popd
 ```
+
+If you want to enable SELinux on the guest, you MUST run the `image_builder.sh` script with `SELINUX=yes`
+to label the guest image as follows.
+To label the image on the host, you need to make sure that SELinux is enabled (`selinuxfs` is mounted) on the host
+and the rootfs MUST be created by running the `rootfs.sh` with `SELINUX=yes`.
+
+```
+$ script -fec 'sudo -E USE_DOCKER=true SELINUX=yes ./image_builder.sh ${ROOTFS_DIR}'
+```
+
+Currently, the `image_builder.sh` uses `chcon` as an interim solution in order to apply `container_runtime_exec_t`
+to the `kata-agent`. Hence, if you run `restorecon` to the guest image after running the `image_builder.sh`,
+the `kata-agent` needs to be labeled `container_runtime_exec_t` again by yourself.
 
 > **Notes:**
 >
