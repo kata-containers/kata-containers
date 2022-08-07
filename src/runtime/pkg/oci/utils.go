@@ -128,6 +128,9 @@ type RuntimeConfig struct {
 	//Determines if seccomp should be applied inside guest
 	DisableGuestSeccomp bool
 
+	//SELinux security context applied to the container process inside guest.
+	GuestSeLinuxLabel string
+
 	// Sandbox sizing information which, if provided, indicates the size of
 	// the sandbox needed for the workload(s)
 	SandboxCPUs  uint32
@@ -944,6 +947,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 		SandboxBindMounts: runtime.SandboxBindMounts,
 
 		DisableGuestSeccomp: runtime.DisableGuestSeccomp,
+
+		GuestSeLinuxLabel: runtime.GuestSeLinuxLabel,
 
 		Experimental: runtime.Experimental,
 	}

@@ -36,6 +36,7 @@ import (
 	"context"
 	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/opencontainers/selinux/go-selinux"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
@@ -69,6 +70,9 @@ const (
 	kernelParamDebugConsole           = "agent.debug_console"
 	kernelParamDebugConsoleVPort      = "agent.debug_console_vport"
 	kernelParamDebugConsoleVPortValue = "1026"
+
+	// Default SELinux type applied to the container process inside guest
+	defaultSeLinuxContainerType = "container_t"
 )
 
 var (
@@ -895,7 +899,7 @@ func (k *kataAgent) removeIgnoredOCIMount(spec *specs.Spec, ignoredMounts map[st
 	return nil
 }
 
-func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, stripVfio bool) {
+func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, disableGuestSeLinux bool, guestSeLinuxLabel string, stripVfio bool) error {
 	// Disable Hooks since they have been handled on the host and there is
 	// no reason to send them to the agent. It would make no sense to try
 	// to apply them on the guest.
@@ -907,11 +911,34 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, str
 		grpcSpec.Linux.Seccomp = nil
 	}
 
-	// Disable SELinux inside of the virtual machine, the label will apply
-	// to the KVM process
+	// Pass SELinux label for the container process to the agent.
 	if grpcSpec.Process.SelinuxLabel != "" {
-		k.Logger().Info("SELinux label from config will be applied to the hypervisor process, not the VM workload")
-		grpcSpec.Process.SelinuxLabel = ""
+		if !disableGuestSeLinux {
+			k.Logger().Info("SELinux label will be applied to the container process inside guest")
+
+			var label string
+			if guestSeLinuxLabel != "" {
+				label = guestSeLinuxLabel
+			} else {
+				label = grpcSpec.Process.SelinuxLabel
+			}
+
+			processContext, err := selinux.NewContext(label)
+			if err != nil {
+				return err
+			}
+
+			// Change the type from KVM to container because the type passed from the high-level
+			// runtime is for KVM process.
+			if guestSeLinuxLabel == "" {
+				processContext["type"] = defaultSeLinuxContainerType
+			}
+			grpcSpec.Process.SelinuxLabel = processContext.Get()
+		} else {
+			k.Logger().Info("Empty SELinux label for the process and the mount because guest SELinux is disabled")
+			grpcSpec.Process.SelinuxLabel = ""
+			grpcSpec.Linux.MountLabel = ""
+		}
 	}
 
 	// By now only CPU constraints are supported
@@ -973,6 +1000,8 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, str
 		}
 		grpcSpec.Linux.Devices = linuxDevices
 	}
+
+	return nil
 }
 
 func (k *kataAgent) handleShm(mounts []specs.Mount, sandbox *Sandbox) {
@@ -1256,9 +1285,20 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	passSeccomp := !sandbox.config.DisableGuestSeccomp && sandbox.seccompSupported
 
+	// Currently, guest SELinux can be enabled only when SELinux is enabled on the host side.
+	if !sandbox.config.HypervisorConfig.DisableGuestSeLinux && !selinux.GetEnabled() {
+		return nil, fmt.Errorf("Guest SELinux is enabled, but SELinux is disabled on the host side")
+	}
+	if sandbox.config.HypervisorConfig.DisableGuestSeLinux && sandbox.config.GuestSeLinuxLabel != "" {
+		return nil, fmt.Errorf("Custom SELinux security policy is provided, but guest SELinux is disabled")
+	}
+
 	// We need to constrain the spec to make sure we're not
 	// passing irrelevant information to the agent.
-	k.constrainGRPCSpec(grpcSpec, passSeccomp, sandbox.config.VfioMode == config.VFIOModeGuestKernel)
+	err = k.constrainGRPCSpec(grpcSpec, passSeccomp, sandbox.config.HypervisorConfig.DisableGuestSeLinux, sandbox.config.GuestSeLinuxLabel, sandbox.config.VfioMode == config.VFIOModeGuestKernel)
+	if err != nil {
+		return nil, err
+	}
 
 	req := &grpc.CreateContainerRequest{
 		ContainerId:  c.id,
