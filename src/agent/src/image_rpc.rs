@@ -33,6 +33,8 @@ const AA_GETRESOURCE_PORT: &str = "127.0.0.1:50001";
 const OCICRYPT_CONFIG_PATH: &str = "/tmp/ocicrypt_config.json";
 // kata rootfs is readonly, use tmpfs before CC storage is implemented.
 const KATA_CC_IMAGE_WORK_DIR: &str = "/run/image/";
+const KATA_CC_PAUSE_BUNDLE: &str = "/pause_bundle";
+const CONFIG_JSON: &str = "config.json";
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -146,6 +148,32 @@ impl ImageService {
         Ok(())
     }
 
+    // pause image is packaged in rootfs for CC
+    fn unpack_pause_image(cid: &str) -> Result<()> {
+        let cc_pause_bundle = Path::new(KATA_CC_PAUSE_BUNDLE);
+        if !cc_pause_bundle.exists() {
+            return Err(anyhow!("Pause image not present in rootfs"));
+        }
+
+        info!(sl!(), "use guest pause image cid {:?}", cid);
+        let pause_bundle = Path::new(CONTAINER_BASE).join(&cid);
+        let pause_rootfs = pause_bundle.join("rootfs");
+        let pause_config = pause_bundle.join(CONFIG_JSON);
+        let pause_binary = pause_rootfs.join("pause");
+        fs::create_dir_all(&pause_rootfs)?;
+        if !pause_config.exists() {
+            fs::copy(
+                cc_pause_bundle.join(CONFIG_JSON),
+                pause_bundle.join(CONFIG_JSON),
+            )?;
+        }
+        if !pause_binary.exists() {
+            fs::copy(cc_pause_bundle.join("rootfs").join("pause"), pause_binary)?;
+        }
+
+        Ok(())
+    }
+
     // If we fail to start the AA, Skopeo/ocicrypt won't be able to unwrap keys
     // and container decryption will fail.
     fn init_attestation_agent() {
@@ -204,6 +232,16 @@ impl ImageService {
             }
         } else {
             verify_cid(&cid)?;
+        }
+
+        // Can switch to use cid directly when we remove umoci
+        let v: Vec<&str> = image.rsplit('/').collect();
+        if !v[0].is_empty() && v[0].starts_with("pause:") {
+            Self::unpack_pause_image(&cid)?;
+
+            let mut sandbox = self.sandbox.lock().await;
+            sandbox.images.insert(String::from(image), cid.to_string());
+            return Ok(image.to_owned());
         }
 
         if !aa_kbc_params.is_empty() {
