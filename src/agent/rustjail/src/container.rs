@@ -30,6 +30,7 @@ use crate::log_child;
 use crate::process::Process;
 #[cfg(feature = "seccomp")]
 use crate::seccomp;
+use crate::selinux;
 use crate::specconv::CreateOpts;
 use crate::{mount, validator};
 
@@ -537,6 +538,8 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         }
     }
 
+    let selinux_enabled = selinux::is_enabled()?;
+
     sched::unshare(to_new & !CloneFlags::CLONE_NEWUSER)?;
 
     if userns {
@@ -636,6 +639,18 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     // NoNewPrivileges
     if oci_process.no_new_privileges {
         capctl::prctl::set_no_new_privs().map_err(|_| anyhow!("cannot set no new privileges"))?;
+    }
+
+    // Set SELinux label
+    if !oci_process.selinux_label.is_empty() {
+        if !selinux_enabled {
+            return Err(anyhow!(
+                "SELinux label for the process is provided but SELinux is not enabled on the running kernel"
+            ));
+        }
+
+        log_child!(cfd_log, "Set SELinux label to the container process");
+        selinux::set_exec_label(&oci_process.selinux_label)?;
     }
 
     // Log unknown seccomp system calls in advance before the log file descriptor closes.
