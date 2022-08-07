@@ -247,6 +247,9 @@ const (
 	// DisableGuestSeccomp is a sandbox annotation that determines if seccomp should be applied inside guest.
 	DisableGuestSeccomp = kataAnnotRuntimePrefix + "disable_guest_seccomp"
 
+	// GuestSeLinuxLabel is a SELinux security policy that is applied to a container process inside guest.
+	GuestSeLinuxLabel = kataAnnotRuntimePrefix + "guest_selinux_label"
+
 	// SandboxCgroupOnly is a sandbox annotation that determines if kata processes are managed only in sandbox cgroup.
 	SandboxCgroupOnly = kataAnnotRuntimePrefix + "sandbox_cgroup_only"
 

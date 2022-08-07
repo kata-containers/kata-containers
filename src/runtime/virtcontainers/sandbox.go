@@ -126,14 +126,17 @@ type SandboxResourceSizing struct {
 
 // SandboxConfig is a Sandbox configuration.
 type SandboxConfig struct {
-	// Volumes is a list of shared volumes between the host and the Sandbox.
-	Volumes []types.Volume
+	// Annotations keys must be unique strings and must be name-spaced
+	Annotations map[string]string
 
-	// Containers describe the list of containers within a Sandbox.
-	// This list can be empty and populated by adding containers
-	// to the Sandbox a posteriori.
-	//TODO: this should be a map to avoid duplicated containers
-	Containers []ContainerConfig
+	// Custom SELinux security policy to the container process inside the VM
+	GuestSeLinuxLabel string
+
+	HypervisorType HypervisorType
+
+	ID string
+
+	Hostname string
 
 	// SandboxBindMounts - list of paths to mount into guest
 	SandboxBindMounts []string
@@ -141,30 +144,28 @@ type SandboxConfig struct {
 	// Experimental features enabled
 	Experimental []exp.Feature
 
-	// Annotations keys must be unique strings and must be name-spaced
-	// with e.g. reverse domain notation (org.clearlinux.key).
-	Annotations map[string]string
+	// Containers describe the list of containers within a Sandbox.
+	// This list can be empty and populated by adding containers
+	// to the Sandbox a posteriori.
+	// TODO: this should be a map to avoid duplicated containers
+	Containers []ContainerConfig
 
-	ID string
-
-	Hostname string
-
-	HypervisorType HypervisorType
-
-	AgentConfig KataAgentConfig
+	Volumes []types.Volume
 
 	NetworkConfig NetworkConfig
 
+	AgentConfig KataAgentConfig
+
 	HypervisorConfig HypervisorConfig
-
-	SandboxResources SandboxResourceSizing
-
-	// StaticResourceMgmt indicates if the shim should rely on statically sizing the sandbox (VM)
-	StaticResourceMgmt bool
 
 	ShmSize uint64
 
+	SandboxResources SandboxResourceSizing
+
 	VfioMode config.VFIOModeType
+
+	// StaticResourceMgmt indicates if the shim should rely on statically sizing the sandbox (VM)
+	StaticResourceMgmt bool
 
 	// SharePidNs sets all containers to share the same sandbox level pid namespace.
 	SharePidNs bool

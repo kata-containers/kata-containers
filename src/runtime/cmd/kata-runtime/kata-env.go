@@ -76,6 +76,7 @@ type RuntimeConfigInfo struct {
 type RuntimeInfo struct {
 	Config              RuntimeConfigInfo
 	Path                string
+	GuestSeLinuxLabel   string
 	Experimental        []exp.Feature
 	Version             RuntimeVersionInfo
 	Debug               bool
@@ -186,6 +187,7 @@ func getRuntimeInfo(configFile string, config oci.RuntimeConfig) RuntimeInfo {
 		SandboxCgroupOnly:   config.SandboxCgroupOnly,
 		Experimental:        config.Experimental,
 		DisableGuestSeccomp: config.DisableGuestSeccomp,
+		GuestSeLinuxLabel:   config.GuestSeLinuxLabel,
 	}
 }
 

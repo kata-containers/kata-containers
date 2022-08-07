@@ -181,6 +181,15 @@ func (q *qemu) kernelParameters() string {
 	// set the maximum number of vCPUs
 	params = append(params, Param{"nr_cpus", fmt.Sprintf("%d", q.config.DefaultMaxVCPUs)})
 
+	// set the SELinux params in accordance with the runtime configuration, disable_guest_selinux.
+	if q.config.DisableGuestSeLinux {
+		q.Logger().Info("Set selinux=0 to kernel params because SELinux on the guest is disabled")
+		params = append(params, Param{"selinux", "0"})
+	} else {
+		q.Logger().Info("Set selinux=1 to kernel params because SELinux on the guest is enabled")
+		params = append(params, Param{"selinux", "1"})
+	}
+
 	// add the params specified by the provided config. As the kernel
 	// honours the last parameter value set and since the config-provided
 	// params are added here, they will take priority over the defaults.
@@ -474,6 +483,13 @@ func (q *qemu) createVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
 		}
 		nd.setupShareDirFn = nd.setupPassthroughFS
 		return nd, nil
+	}
+
+	// Set the xattr option for virtiofsd daemon to enable extended attributes
+	// in virtiofs if SELinux on the guest side is enabled.
+	if !q.config.DisableGuestSeLinux {
+		q.Logger().Info("Set the xattr option for virtiofsd")
+		q.config.VirtioFSExtraArgs = append(q.config.VirtioFSExtraArgs, "-o", "xattr")
 	}
 
 	// default use virtiofsd
@@ -846,7 +862,6 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 	// the SELinux label. If these processes require privileged, we do
 	// notwant to run them under confinement.
 	if !q.config.DisableSeLinux {
-
 		if err := label.SetProcessLabel(q.config.SELinuxProcessLabel); err != nil {
 			return err
 		}
