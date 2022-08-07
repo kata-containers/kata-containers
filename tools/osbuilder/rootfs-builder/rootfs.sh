@@ -704,6 +704,9 @@ EOF
 
 		skopeo copy "${pause_repo}":"${pause_version}" oci:pause:"${pause_version}"
 		umoci unpack --image pause:"${pause_version}"  "${ROOTFS_DIR}/pause_bundle"
+
+		info "Install init_trusted_storage script for CC"
+		install -o root -g root -m 0500 "${script_dir}/init_trusted_storage.sh" "${ROOTFS_DIR}/usr/bin/kata-init-trusted-storage"
 	fi
 
 	info "Creating summary file"

@@ -89,6 +89,8 @@ pub const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
 const ANNO_K8S_IMAGE_NAME: &str = "io.kubernetes.cri.image-name";
 const CONFIG_JSON: &str = "config.json";
+const INIT_TRUSTED_STORAGE: &str = "/usr/bin/kata-init-trusted-storage";
+const TRUSTED_STORAGE_DEVICE: &str = "/dev/trusted_store";
 
 const IPTABLES_SAVE: &str = "/sbin/iptables-save";
 const IPTABLES_RESTORE: &str = "/sbin/iptables-restore";
@@ -216,6 +218,30 @@ impl AgentService {
         // match real devices inside the VM. This step is necessary since we
         // cannot predict everything from the caller.
         add_devices(&req.devices.to_vec(), &mut oci, &self.sandbox).await?;
+
+        let linux = oci
+            .linux
+            .as_mut()
+            .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
+
+        for specdev in &mut linux.devices {
+            let dev_major_minor = format!("{}:{}", specdev.major, specdev.minor);
+
+            if specdev.path == TRUSTED_STORAGE_DEVICE {
+                let data_integrity = AGENT_CONFIG.read().await.data_integrity;
+                info!(
+                    sl!(),
+                    "trusted_store device major:min {}, enable data integrity {}",
+                    dev_major_minor,
+                    data_integrity.to_string()
+                );
+
+                Command::new(INIT_TRUSTED_STORAGE)
+                    .args(&[&dev_major_minor, &data_integrity.to_string()])
+                    .output()
+                    .expect("Failed to initialize confidential storage");
+            }
+        }
 
         // Both rootfs and volumes (invoked with --volume for instance) will
         // be processed the same way. The idea is to always mount any provided
