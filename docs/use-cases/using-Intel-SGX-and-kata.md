@@ -25,9 +25,6 @@ CONFIG_X86_SGX_KVM=y
 
 ### Kata Containers Configuration
 
-Before running a Kata Container make sure that your version of `crio` or `containerd`
-supports annotations.
-
 For `containerd` check in `/etc/containerd/config.toml` that the list of `pod_annotations` passed
 to the `sandbox` are: `["io.katacontainers.*", "sgx.intel.com/epc"]`.
 
@@ -99,4 +96,4 @@ because socket passthrough is not supported. An alternative is to deploy the `ae
 container.
 * Projects like [Gramine Shielded Containers (GSC)](https://gramine-gsc.readthedocs.io/en/latest/) are
 also known to work. For GSC specifically, the Kata guest kernel needs to have the `CONFIG_NUMA=y`
-enabled and at least one CPU online when running the GSC container. The Kata Containers guest kernel currently has CONFIG_NUMA=y enabled by default.
+enabled and at least one CPU online when running the GSC container. The Kata Containers guest kernel currently has `CONFIG_NUMA=y` enabled by default.
