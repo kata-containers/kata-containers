@@ -58,8 +58,20 @@ jobs:
         cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/setup.sh
       env:
         GOPATH: ${{ runner.workspace }}/kata-containers
-    - name: Installing rust
+    - name: Check If Only Docs Changed
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+      id: changed-files-docs
+      uses: tj-actions/changed-files@v25
+      with:
+        files: docs
+        path: src/github.com/${{ github.repository }}
+        json: "true"
+    - name: Doc Only Static Checks
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && steps.changed-files-docs.outputs.only_changed == 'true' }}
+      run: |
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && make docs-url-alive-check
+    - name: Installing rust
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && steps.changed-files-docs.outputs.only_changed == 'false' }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/install_rust.sh
         PATH=$PATH:"$HOME/.cargo/bin"
@@ -75,22 +87,22 @@ jobs:
         echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> $GITHUB_ENV
     # Check whether the vendored code is up-to-date & working as the first thing
     - name: Check vendored code
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && steps.changed-files-docs.outputs.only_changed == 'false' }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make vendor
     - name: Static Checks
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && steps.changed-files-docs.outputs.only_changed == 'false' }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make static-checks
     - name: Run Compiler Checks
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && steps.changed-files-docs.outputs.only_changed == 'false' }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make check
     - name: Run Unit Tests
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && steps.changed-files-docs.outputs.only_changed == 'false' }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make test
     - name: Run Unit Tests As Root User
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && steps.changed-files-docs.outputs.only_changed == 'false' }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && sudo -E PATH="$PATH" make test
