@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+pub mod cgroup_persist;
 mod utils;
 
 use std::{
@@ -13,12 +14,20 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+use async_trait::async_trait;
+use cgroup_persist::CgroupState;
 use cgroups_rs::{cgroup_builder::CgroupBuilder, Cgroup, CgroupPid, CpuResources, Resources};
 use hypervisor::Hypervisor;
 use kata_sys_util::spec::load_oci_spec;
 use kata_types::config::TomlConfig;
 use oci::LinuxResources;
+use persist::sandbox_persist::Persist;
 use tokio::sync::RwLock;
+
+pub struct CgroupArgs {
+    pub sid: String,
+    pub config: TomlConfig,
+}
 
 pub struct CgroupConfig {
     pub path: String,
@@ -48,6 +57,7 @@ pub struct CgroupsResource {
     resources: Arc<RwLock<HashMap<String, Resources>>>,
     cgroup_manager: Cgroup,
     overhead_cgroup_manager: Option<Cgroup>,
+    cgroup_config: CgroupConfig,
 }
 
 impl CgroupsResource {
@@ -91,6 +101,7 @@ impl CgroupsResource {
             cgroup_manager,
             resources: Arc::new(RwLock::new(HashMap::new())),
             overhead_cgroup_manager,
+            cgroup_config: config,
         })
     }
 
@@ -216,5 +227,35 @@ impl CgroupsResource {
             cpu: self.calc_cpu_resources(linux_resources),
             ..Default::default()
         }
+    }
+}
+
+#[async_trait]
+impl Persist for CgroupsResource {
+    type State = CgroupState;
+    type ConstructorArgs = CgroupArgs;
+    /// Save a state of the component.
+    async fn save(&self) -> Result<Self::State> {
+        Ok(CgroupState {
+            path: Some(self.cgroup_config.path.clone()),
+            overhead_path: Some(self.cgroup_config.overhead_path.clone()),
+            sandbox_cgroup_only: self.cgroup_config.sandbox_cgroup_only,
+        })
+    }
+    /// Restore a component from a specified state.
+    async fn restore(
+        cgroup_args: Self::ConstructorArgs,
+        cgroup_state: Self::State,
+    ) -> Result<Self> {
+        let hier = cgroups_rs::hierarchies::auto();
+        let config = CgroupConfig::new(&cgroup_args.sid, &cgroup_args.config)?;
+        let path = cgroup_state.path.unwrap_or_default();
+        let cgroup_manager = Cgroup::load(hier, path.as_str());
+        Ok(Self {
+            cgroup_manager,
+            resources: Arc::new(RwLock::new(HashMap::new())),
+            overhead_cgroup_manager: None,
+            cgroup_config: config,
+        })
     }
 }

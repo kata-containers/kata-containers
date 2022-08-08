@@ -17,6 +17,7 @@ use network_with_netns::NetworkWithNetns;
 mod network_pair;
 use network_pair::NetworkPair;
 mod utils;
+pub use endpoint::endpoint_persist::EndpointState;
 
 use std::sync::Arc;
 
@@ -35,6 +36,7 @@ pub trait Network: Send + Sync {
     async fn interfaces(&self) -> Result<Vec<agent::Interface>>;
     async fn routes(&self) -> Result<Vec<agent::Route>>;
     async fn neighs(&self) -> Result<Vec<agent::ARPNeighbor>>;
+    async fn save(&self) -> Option<Vec<EndpointState>>;
 }
 
 pub async fn new(config: &NetworkConfig) -> Result<Arc<dyn Network>> {

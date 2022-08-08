@@ -4,18 +4,21 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{collections::HashSet, fs::create_dir_all, path::PathBuf};
-
+use super::vmm_instance::VmmInstance;
+use crate::{
+    device::Device, hypervisor_persist::HypervisorState, kernel_param::KernelParams, VmmState,
+    HYPERVISOR_DRAGONBALL, VM_ROOTFS_DRIVER_BLK,
+};
 use anyhow::{anyhow, Context, Result};
+use async_trait::async_trait;
 use dragonball::{
     api::v1::{BlockDeviceConfigInfo, BootSourceConfig},
     vm::VmConfigInfo,
 };
 use kata_sys_util::mount;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
-
-use super::{vmm_instance::VmmInstance, RUN_PATH_PREFIX};
-use crate::{device::Device, kernel_param::KernelParams, VmmState, VM_ROOTFS_DRIVER_BLK};
+use persist::{sandbox_persist::Persist, KATA_PATH};
+use std::{collections::HashSet, fs::create_dir_all, path::PathBuf};
 
 const DRAGONBALL_KERNEL: &str = "vmlinux";
 const DRAGONBALL_ROOT_FS: &str = "rootfs";
@@ -137,7 +140,7 @@ impl DragonballInner {
             .map_err(|e| anyhow!("Failed to create dir {} err : {:?}", self.jailer_root, e))?;
 
         // create run dir
-        self.run_dir = [RUN_PATH_PREFIX, self.id.as_str()].join("/");
+        self.run_dir = [KATA_PATH, self.id.as_str()].join("/");
         create_dir_all(self.run_dir.as_str())
             .with_context(|| format!("failed to create dir {}", self.run_dir.as_str()))?;
 
@@ -305,5 +308,45 @@ impl DragonballInner {
 
     pub fn hypervisor_config(&self) -> HypervisorConfig {
         self.config.clone()
+    }
+}
+
+#[async_trait]
+impl Persist for DragonballInner {
+    type State = HypervisorState;
+    type ConstructorArgs = ();
+    /// Save a state of the component.
+    async fn save(&self) -> Result<Self::State> {
+        Ok(HypervisorState {
+            hypervisor_type: HYPERVISOR_DRAGONBALL.to_string(),
+            id: self.id.clone(),
+            vm_path: self.vm_path.clone(),
+            jailed: self.jailed,
+            jailer_root: self.jailer_root.clone(),
+            netns: self.netns.clone(),
+            config: self.hypervisor_config(),
+            run_dir: self.run_dir.clone(),
+            cached_block_devices: self.cached_block_devices.clone(),
+            ..Default::default()
+        })
+    }
+    /// Restore a component from a specified state.
+    async fn restore(
+        _hypervisor_args: Self::ConstructorArgs,
+        hypervisor_state: Self::State,
+    ) -> Result<Self> {
+        Ok(DragonballInner {
+            id: hypervisor_state.id,
+            vm_path: hypervisor_state.vm_path,
+            jailed: hypervisor_state.jailed,
+            jailer_root: hypervisor_state.jailer_root,
+            netns: hypervisor_state.netns,
+            config: hypervisor_state.config,
+            state: VmmState::NotReady,
+            vmm_instance: VmmInstance::new(""),
+            run_dir: hypervisor_state.run_dir,
+            pending_devices: vec![],
+            cached_block_devices: hypervisor_state.cached_block_devices,
+        })
     }
 }

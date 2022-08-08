@@ -9,5 +9,5 @@ extern crate slog;
 
 logging::logger_with_subsystem!(sl, "runtimes");
 
-mod manager;
+pub mod manager;
 pub use manager::RuntimeHandlerManager;
