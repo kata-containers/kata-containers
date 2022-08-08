@@ -271,8 +271,8 @@ externals:
   td-shim:
     description: "Confidential Containers Shim Firmware"
     url: "https://github.com/confidential-containers/td-shim"
-    version: "5f62a0e367b1845a54e534d103ed4a697a599ac3"
-    toolchain: "nightly-2022-04-07"
+    version: "cf9592ef70bd6ba4c7ab1330d278a743f5ba3133"
+    toolchain: "nightly-2022-05-15"
 
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
