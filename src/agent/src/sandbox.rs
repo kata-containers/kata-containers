@@ -24,7 +24,7 @@ use slog::Logger;
 use std::collections::HashMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{thread, time};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -43,14 +43,14 @@ pub struct Sandbox {
     pub hostname: String,
     pub containers: HashMap<String, LinuxContainer>,
     pub network: Network,
-    pub mounts: Vec<String>,
-    pub container_mounts: HashMap<String, Vec<String>>,
+    pub mounts: Vec<PathBuf>,
+    pub container_mounts: HashMap<String, Vec<PathBuf>>,
     pub uevent_map: HashMap<String, Uevent>,
     pub uevent_watchers: Vec<Option<UeventWatcher>>,
     pub shared_utsns: Namespace,
     pub shared_ipcns: Namespace,
     pub sandbox_pidns: Option<Namespace>,
-    pub storages: HashMap<String, u32>,
+    pub storages: HashMap<PathBuf, u32>,
     pub running: bool,
     pub no_pivot_root: bool,
     pub sender: Option<tokio::sync::oneshot::Sender<i32>>,
@@ -105,10 +105,10 @@ impl Sandbox {
     // It's assumed that caller is calling this method after
     // acquiring a lock on sandbox.
     #[instrument]
-    pub fn set_sandbox_storage(&mut self, path: &str) -> bool {
+    pub fn set_sandbox_storage(&mut self, path: &PathBuf) -> bool {
         match self.storages.get_mut(path) {
             None => {
-                self.storages.insert(path.to_string(), 1);
+                self.storages.insert(path.to_path_buf(), 1);
                 true
             }
             Some(count) => {
@@ -128,9 +128,12 @@ impl Sandbox {
     // It's assumed that caller is calling this method after
     // acquiring a lock on sandbox.
     #[instrument]
-    pub fn unset_sandbox_storage(&mut self, path: &str) -> Result<bool> {
+    pub fn unset_sandbox_storage(&mut self, path: &PathBuf) -> Result<bool> {
         match self.storages.get_mut(path) {
-            None => Err(anyhow!("Sandbox storage with path {} not found", path)),
+            None => Err(anyhow!(
+                "Sandbox storage with path {} not found",
+                path.display()
+            )),
             Some(count) => {
                 *count -= 1;
                 if *count < 1 {
@@ -148,14 +151,19 @@ impl Sandbox {
     // It's assumed that caller is calling this method after
     // acquiring a lock on sandbox.
     #[instrument]
-    pub fn remove_sandbox_storage(&self, path: &str) -> Result<()> {
-        let mounts = vec![path.to_string()];
+    pub fn remove_sandbox_storage(&self, path: &Path) -> Result<()> {
+        let mounts = vec![path];
         remove_mounts(&mounts)?;
         // "remove_dir" will fail if the mount point is backed by a read-only filesystem.
         // This is the case with the device mapper snapshotter, where we mount the block device directly
         // at the underlying sandbox path which was provided from the base RO kataShared path from the host.
         if let Err(err) = fs::remove_dir(path) {
-            warn!(self.logger, "failed to remove dir {}, {:?}", path, err);
+            warn!(
+                self.logger,
+                "failed to remove dir {}, {:?}",
+                path.display(),
+                err
+            );
         }
         Ok(())
     }
@@ -167,9 +175,9 @@ impl Sandbox {
     // It's assumed that caller is calling this method after
     // acquiring a lock on sandbox.
     #[instrument]
-    pub fn unset_and_remove_sandbox_storage(&mut self, path: &str) -> Result<()> {
+    pub fn unset_and_remove_sandbox_storage(&mut self, path: &PathBuf) -> Result<()> {
         if self.unset_sandbox_storage(path)? {
-            return self.remove_sandbox_storage(path);
+            return self.remove_sandbox_storage(&path);
         }
 
         Ok(())
@@ -486,10 +494,7 @@ mod tests {
     use tempfile::{tempdir, Builder, TempDir};
     use test_utils::skip_if_not_root;
 
-    fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), Error> {
-        let src_path = Path::new(src);
-        let dst_path = Path::new(dst);
-
+    fn bind_mount(src_path: &Path, dst_path: &Path, logger: &Logger) -> Result<(), Error> {
         baremount(src_path, dst_path, "bind", MsFlags::MS_BIND, "", logger)
     }
 
@@ -502,13 +507,13 @@ mod tests {
         let mut s = Sandbox::new(&logger).unwrap();
 
         let tmpdir = Builder::new().tempdir().unwrap();
-        let tmpdir_path = tmpdir.path().to_str().unwrap();
+        let tmpdir_path = tmpdir.path().to_path_buf();
 
         // Add a new sandbox storage
-        let new_storage = s.set_sandbox_storage(tmpdir_path);
+        let new_storage = s.set_sandbox_storage(&tmpdir_path);
 
         // Check the reference counter
-        let ref_count = s.storages[tmpdir_path];
+        let ref_count = s.storages[&tmpdir_path];
         assert_eq!(
             ref_count, 1,
             "Invalid refcount, got {} expected 1.",
@@ -517,12 +522,12 @@ mod tests {
         assert!(new_storage);
 
         // Use the existing sandbox storage
-        let new_storage = s.set_sandbox_storage(tmpdir_path);
+        let new_storage = s.set_sandbox_storage(&tmpdir_path);
         assert!(!new_storage, "Should be false as already exists.");
 
         // Since we are using existing storage, the reference counter
         // should be 2 by now.
-        let ref_count = s.storages[tmpdir_path];
+        let ref_count = s.storages[&tmpdir_path];
         assert_eq!(
             ref_count, 2,
             "Invalid refcount, got {} expected 2.",
@@ -539,41 +544,42 @@ mod tests {
         let s = Sandbox::new(&logger).unwrap();
 
         let tmpdir = Builder::new().tempdir().unwrap();
-        let tmpdir_path = tmpdir.path().to_str().unwrap();
+        let tmpdir_path = tmpdir.path();
 
         let srcdir = Builder::new()
             .prefix("src")
             .tempdir_in(tmpdir_path)
             .unwrap();
-        let srcdir_path = srcdir.path().to_str().unwrap();
+        let srcdir_path = srcdir.path();
 
         let destdir = Builder::new()
             .prefix("dest")
-            .tempdir_in(tmpdir_path)
+            .tempdir_in(tmpdir_path.to_path_buf())
             .unwrap();
-        let destdir_path = destdir.path().to_str().unwrap();
+        let destdir_path = destdir.path();
 
         let emptydir = Builder::new()
             .prefix("empty")
-            .tempdir_in(tmpdir_path)
+            .tempdir_in(tmpdir_path.to_path_buf())
             .unwrap();
 
         assert!(
-            s.remove_sandbox_storage(srcdir_path).is_err(),
+            s.remove_sandbox_storage(&srcdir_path.to_path_buf())
+                .is_err(),
             "Expect Err as the directory is not a mountpoint"
         );
 
-        assert!(s.remove_sandbox_storage("").is_err());
+        assert!(s.remove_sandbox_storage(&PathBuf::new()).is_err());
 
         let invalid_dir = emptydir.path().join("invalid");
 
+        assert!(s.remove_sandbox_storage(&invalid_dir).is_err());
+
+        assert!(bind_mount(&srcdir_path, &destdir_path, &logger).is_ok());
+
         assert!(s
-            .remove_sandbox_storage(invalid_dir.to_str().unwrap())
-            .is_err());
-
-        assert!(bind_mount(srcdir_path, destdir_path, &logger).is_ok());
-
-        assert!(s.remove_sandbox_storage(destdir_path).is_ok());
+            .remove_sandbox_storage(&destdir_path.to_path_buf())
+            .is_ok());
     }
 
     #[tokio::test]
@@ -585,32 +591,32 @@ mod tests {
         let mut s = Sandbox::new(&logger).unwrap();
 
         assert!(
-            s.unset_and_remove_sandbox_storage("/tmp/testEphePath")
+            s.unset_and_remove_sandbox_storage(&PathBuf::from("/tmp/testEphePath"))
                 .is_err(),
             "Should fail because sandbox storage doesn't exist"
         );
 
         let tmpdir = Builder::new().tempdir().unwrap();
-        let tmpdir_path = tmpdir.path().to_str().unwrap();
+        let tmpdir_path = tmpdir.path();
 
         let srcdir = Builder::new()
             .prefix("src")
             .tempdir_in(tmpdir_path)
             .unwrap();
-        let srcdir_path = srcdir.path().to_str().unwrap();
+        let srcdir_path = srcdir.path();
 
         let destdir = Builder::new()
             .prefix("dest")
             .tempdir_in(tmpdir_path)
             .unwrap();
-        let destdir_path = destdir.path().to_str().unwrap();
+        let destdir_path = destdir.path().to_path_buf();
 
-        assert!(bind_mount(srcdir_path, destdir_path, &logger).is_ok());
+        assert!(bind_mount(&srcdir_path, &destdir_path, &logger).is_ok());
 
-        assert!(s.set_sandbox_storage(destdir_path));
-        assert!(s.unset_and_remove_sandbox_storage(destdir_path).is_ok());
+        assert!(s.set_sandbox_storage(&destdir_path));
+        assert!(s.unset_and_remove_sandbox_storage(&destdir_path).is_ok());
 
-        let other_dir_str;
+        let other_dir_path;
         {
             // Create another folder in a separate scope to ensure that is
             // deleted
@@ -618,13 +624,13 @@ mod tests {
                 .prefix("dir")
                 .tempdir_in(tmpdir_path)
                 .unwrap();
-            let other_dir_path = other_dir.path().to_str().unwrap();
-            other_dir_str = other_dir_path.to_string();
+            other_dir_path = other_dir.path().to_path_buf();
+            //other_dir_str = other_dir_path.as_os_str();
 
-            assert!(s.set_sandbox_storage(other_dir_path));
+            assert!(s.set_sandbox_storage(&other_dir_path));
         }
 
-        assert!(s.unset_and_remove_sandbox_storage(&other_dir_str).is_err());
+        assert!(s.unset_and_remove_sandbox_storage(&other_dir_path).is_err());
     }
 
     #[tokio::test]
@@ -633,23 +639,23 @@ mod tests {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
 
-        let storage_path = "/tmp/testEphe";
+        let storage_path = PathBuf::from("/tmp/testEphe");
 
         // Add a new sandbox storage
-        assert!(s.set_sandbox_storage(storage_path));
+        assert!(s.set_sandbox_storage(&storage_path));
         // Use the existing sandbox storage
         assert!(
-            !s.set_sandbox_storage(storage_path),
+            !s.set_sandbox_storage(&storage_path),
             "Expects false as the storage is not new."
         );
 
         assert!(
-            !s.unset_sandbox_storage(storage_path).unwrap(),
+            !s.unset_sandbox_storage(&storage_path).unwrap(),
             "Expects false as there is still a storage."
         );
 
         // Reference counter should decrement to 1.
-        let ref_count = s.storages[storage_path];
+        let ref_count = s.storages[&storage_path];
         assert_eq!(
             ref_count, 1,
             "Invalid refcount, got {} expected 1.",
@@ -657,7 +663,7 @@ mod tests {
         );
 
         assert!(
-            s.unset_sandbox_storage(storage_path).unwrap(),
+            s.unset_sandbox_storage(&storage_path).unwrap(),
             "Expects true as there is still a storage."
         );
 
@@ -665,15 +671,15 @@ mod tests {
         // there should not be any reference in sandbox struct
         // for the given storage
         assert!(
-            !s.storages.contains_key(storage_path),
+            !s.storages.contains_key(&storage_path),
             "The storages map should not contain the key {}",
-            storage_path
+            storage_path.display()
         );
 
         // If no container is using the sandbox storage, the reference
         // counter for it should not exist.
         assert!(
-            s.unset_sandbox_storage(storage_path).is_err(),
+            s.unset_sandbox_storage(&storage_path).is_err(),
             "Expects false as the reference counter should no exist."
         );
     }

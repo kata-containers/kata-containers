@@ -12,13 +12,14 @@ use cgroups::freezer::FreezerState;
 use libc::{self, pid_t};
 use oci::LinuxResources;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::string::String;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Manager {
     pub paths: HashMap<String, String>,
     pub mounts: HashMap<String, String>,
-    pub cpath: String,
+    pub cpath: PathBuf,
 }
 
 impl CgroupManager for Manager {
@@ -56,11 +57,11 @@ impl CgroupManager for Manager {
 }
 
 impl Manager {
-    pub fn new(cpath: &str) -> Result<Self> {
+    pub fn new(cpath: &PathBuf) -> Result<Self> {
         Ok(Self {
             paths: HashMap::new(),
             mounts: HashMap::new(),
-            cpath: cpath.to_string(),
+            cpath: cpath.to_path_buf(),
         })
     }
 

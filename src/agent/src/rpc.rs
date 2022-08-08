@@ -1720,14 +1720,14 @@ fn update_container_namespaces(
 }
 
 fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<()> {
-    let mut cmounts: Vec<String> = vec![];
+    let mut cmounts: Vec<PathBuf> = vec![];
 
     // Find the sandbox storage used by this container
     let mounts = sandbox.container_mounts.get(cid);
     if let Some(mounts) = mounts {
         for m in mounts.iter() {
-            if sandbox.storages.get(m).is_some() {
-                cmounts.push(m.to_string());
+            if sandbox.storages.get(&PathBuf::from(m)).is_some() {
+                cmounts.push(PathBuf::from(m));
             }
         }
     }

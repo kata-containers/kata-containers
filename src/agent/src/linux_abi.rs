@@ -7,6 +7,7 @@
 
 #[cfg(target_arch = "aarch64")]
 use std::fs;
+use std::path::PathBuf;
 
 pub const SYSFS_DIR: &str = "/sys";
 #[cfg(any(
@@ -15,22 +16,22 @@ pub const SYSFS_DIR: &str = "/sys";
     target_arch = "x86_64",
     target_arch = "x86"
 ))]
-pub fn create_pci_root_bus_path() -> String {
-    String::from("/devices/pci0000:00")
+pub fn create_pci_root_bus_path() -> PathBuf {
+    PathBuf::from("/devices/pci0000:00")
 }
 
 #[cfg(target_arch = "aarch64")]
-pub fn create_pci_root_bus_path() -> String {
-    let ret = String::from("/devices/platform/4010000000.pcie/pci0000:00");
+pub fn create_pci_root_bus_path() -> PathBuf {
+    let ret = PathBuf::from("/devices/platform/4010000000.pcie/pci0000:00");
 
-    let acpi_root_bus_path = String::from("/devices/pci0000:00");
-    let mut acpi_sysfs_dir = String::from(SYSFS_DIR);
-    let mut sysfs_dir = String::from(SYSFS_DIR);
-    let mut start_root_bus_path = String::from("/devices/platform/");
-    let end_root_bus_path = String::from("/pci0000:00");
+    let acpi_root_bus_path = PathBuf::from("/devices/pci0000:00");
+    let mut acpi_sysfs_dir = PathBuf::from(SYSFS_DIR);
+    let mut sysfs_dir = PathBuf::from(SYSFS_DIR);
+    let mut start_root_bus_path = PathBuf::from("/devices/platform/");
+    let end_root_bus_path = PathBuf::from("/pci0000:00");
 
     // check if there is pci bus path for acpi
-    acpi_sysfs_dir.push_str(&acpi_root_bus_path);
+    acpi_sysfs_dir = acpi_sysfs_dir.join(&acpi_root_bus_path);
     if let Ok(_) = fs::metadata(&acpi_sysfs_dir) {
         return acpi_root_bus_path;
     }
@@ -46,17 +47,17 @@ pub fn create_pci_root_bus_path() -> String {
             Err(_) => return ret,
         };
         let dir_name = match pathname.file_name() {
-            Some(p) => p.to_str(),
+            Some(p) => p.to_os_str(),
             None => return ret,
         };
         let dir_name = match dir_name {
             Some(p) => p,
             None => return ret,
         };
-        let dir_name = String::from(dir_name);
+        let dir_name = OsString::from(dir_name);
         if dir_name.ends_with(".pcie") {
-            start_root_bus_path.push_str(&dir_name);
-            start_root_bus_path.push_str(&end_root_bus_path);
+            start_root_bus_path.join(&dir_name);
+            start_root_bus_path.join(&end_root_bus_path);
             return start_root_bus_path;
         }
     }
@@ -65,8 +66,8 @@ pub fn create_pci_root_bus_path() -> String {
 }
 
 #[cfg(target_arch = "s390x")]
-pub fn create_ccw_root_bus_path() -> String {
-    String::from("/devices/css0")
+pub fn create_ccw_root_bus_path() -> PathBuf {
+    PathBuf::from("/devices/css0")
 }
 // From https://www.kernel.org/doc/Documentation/acpi/namespace.txt
 // The Linux kernel's core ACPI subsystem creates struct acpi_device

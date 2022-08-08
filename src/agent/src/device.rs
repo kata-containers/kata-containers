@@ -55,7 +55,7 @@ pub const DRIVER_OVERLAYFS_TYPE: &str = "overlayfs";
 pub const FS_TYPE_HUGETLB: &str = "hugetlbfs";
 
 #[instrument]
-pub fn online_device(path: &str) -> Result<()> {
+pub fn online_device(path: &Path) -> Result<()> {
     fs::write(path, "1")?;
     Ok(())
 }
@@ -141,14 +141,13 @@ where
 // the sysfs path for the PCI host bridge, based on the PCI path
 // provided.
 #[instrument]
-pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String> {
+pub fn pcipath_to_sysfs(root_bus_sysfs: &Path, pcipath: &pci::Path) -> Result<PathBuf> {
     let mut bus = "0000:00".to_string();
-    let mut relpath = String::new();
-
+    let mut relpath = PathBuf::from("/");
     for i in 0..pcipath.len() {
         let bdf = format!("{}:{}", bus, pcipath[i]);
 
-        relpath = format!("{}/{}", relpath, bdf);
+        relpath.push(&bdf);
 
         if i == pcipath.len() - 1 {
             // Final device need not be a bridge
@@ -156,19 +155,20 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
         }
 
         // Find out the bus exposed by bridge
-        let bridgebuspath = format!("{}{}/pci_bus", root_bus_sysfs, relpath);
+        let mut pci_bus_path = root_bus_sysfs.as_os_str().to_owned();
+        pci_bus_path.push(&relpath);
+        let bridgebuspath = Path::new(&pci_bus_path).join("pci_bus");
         let mut files: Vec<_> = fs::read_dir(&bridgebuspath)?.collect();
-
         match files.pop() {
             Some(busfile) if files.is_empty() => {
                 bus = busfile?
                     .file_name()
                     .into_string()
-                    .map_err(|e| anyhow!("Bad filename under {}: {:?}", &bridgebuspath, e))?;
+                    .map_err(|e| anyhow!("Bad filename under {:?}: {:?}", &bridgebuspath, e))?;
             }
             _ => {
                 return Err(anyhow!(
-                    "Expected exactly one PCI bus in {}, got {} instead",
+                    "Expected exactly one PCI bus in {:?}, got {} instead",
                     bridgebuspath,
                     // Adjust to original value as we've already popped
                     files.len() + 1
@@ -221,7 +221,7 @@ struct VirtioBlkPciMatcher {
 impl VirtioBlkPciMatcher {
     fn new(relpath: &str) -> VirtioBlkPciMatcher {
         let root_bus = create_pci_root_bus_path();
-        let re = format!(r"^{}{}/virtio[0-9]+/block/", root_bus, relpath);
+        let re = format!(r"^{}{}/virtio[0-9]+/block/", root_bus.display(), relpath);
 
         VirtioBlkPciMatcher {
             rex: Regex::new(&re).expect("BUG: failed to compile VirtioBlkPciMatcher regex"),
@@ -240,9 +240,11 @@ pub async fn get_virtio_blk_pci_device_name(
     sandbox: &Arc<Mutex<Sandbox>>,
     pcipath: &pci::Path,
 ) -> Result<String> {
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
-    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
-    let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path);
+    let root_bus_sysfs_str = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path().display());
+    let root_bus_sysfs = Path::new(&root_bus_sysfs_str);
+
+    let sysfs_rel_path = pcipath_to_sysfs(root_bus_sysfs, pcipath)?;
+    let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path.to_string_lossy());
 
     let uev = wait_for_uevent(sandbox, matcher).await?;
     Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
@@ -344,7 +346,7 @@ impl PciMatcher {
     fn new(relpath: &str) -> Result<PciMatcher> {
         let root_bus = create_pci_root_bus_path();
         Ok(PciMatcher {
-            devpath: format!("{}{}", root_bus, relpath),
+            devpath: format!("{}{}", root_bus.display(), relpath),
         })
     }
 }
@@ -359,9 +361,11 @@ pub async fn wait_for_pci_device(
     sandbox: &Arc<Mutex<Sandbox>>,
     pcipath: &pci::Path,
 ) -> Result<pci::Address> {
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
-    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
-    let matcher = PciMatcher::new(&sysfs_rel_path)?;
+    let root_bus_sysfs_str = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path().display());
+    let root_bus_sysfs = Path::new(&root_bus_sysfs_str);
+
+    let sysfs_rel_path = pcipath_to_sysfs(root_bus_sysfs, pcipath)?;
+    let matcher = PciMatcher::new(&sysfs_rel_path.to_string_lossy())?;
 
     let uev = wait_for_uevent(sandbox, matcher).await?;
 
@@ -1241,14 +1245,14 @@ mod tests {
     #[test]
     fn test_pcipath_to_sysfs() {
         let testdir = tempdir().expect("failed to create tmpdir");
-        let rootbuspath = testdir.path().to_str().unwrap();
+        let rootbuspath = testdir.path();
 
         let path2 = pci::Path::from_str("02").unwrap();
         let path23 = pci::Path::from_str("02/03").unwrap();
         let path234 = pci::Path::from_str("02/03/04").unwrap();
 
         let relpath = pcipath_to_sysfs(rootbuspath, &path2);
-        assert_eq!(relpath.unwrap(), "/0000:00:02.0");
+        assert_eq!(relpath.unwrap(), Path::new("/0000:00:02.0"));
 
         let relpath = pcipath_to_sysfs(rootbuspath, &path23);
         assert!(relpath.is_err());
@@ -1257,12 +1261,12 @@ mod tests {
         assert!(relpath.is_err());
 
         // Create mock sysfs files for the device at 0000:00:02.0
-        let bridge2path = format!("{}{}", rootbuspath, "/0000:00:02.0");
+        let bridge2path = rootbuspath.join("0000:00:02.0");
 
         fs::create_dir_all(&bridge2path).unwrap();
 
         let relpath = pcipath_to_sysfs(rootbuspath, &path2);
-        assert_eq!(relpath.unwrap(), "/0000:00:02.0");
+        assert_eq!(relpath.unwrap(), Path::new("/0000:00:02.0"));
 
         let relpath = pcipath_to_sysfs(rootbuspath, &path23);
         assert!(relpath.is_err());
@@ -1272,34 +1276,37 @@ mod tests {
 
         // Create mock sysfs files to indicate that 0000:00:02.0 is a bridge to bus 01
         let bridge2bus = "0000:01";
-        let bus2path = format!("{}/pci_bus/{}", bridge2path, bridge2bus);
+        let bus2path = bridge2path.join("pci_bus").join(bridge2bus);
 
         fs::create_dir_all(bus2path).unwrap();
 
         let relpath = pcipath_to_sysfs(rootbuspath, &path2);
-        assert_eq!(relpath.unwrap(), "/0000:00:02.0");
+        assert_eq!(relpath.unwrap(), Path::new("/0000:00:02.0"));
 
         let relpath = pcipath_to_sysfs(rootbuspath, &path23);
-        assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0");
+        assert_eq!(relpath.unwrap(), Path::new("/0000:00:02.0/0000:01:03.0"));
 
         let relpath = pcipath_to_sysfs(rootbuspath, &path234);
         assert!(relpath.is_err());
 
         // Create mock sysfs files for a bridge at 0000:01:03.0 to bus 02
-        let bridge3path = format!("{}/0000:01:03.0", bridge2path);
+        let bridge3path = bridge2path.join("0000:01:03.0");
         let bridge3bus = "0000:02";
-        let bus3path = format!("{}/pci_bus/{}", bridge3path, bridge3bus);
+        let bus3path = bridge3path.join("pci_bus").join(bridge3bus);
 
-        fs::create_dir_all(bus3path).unwrap();
+        fs::create_dir_all(&bus3path).unwrap();
 
         let relpath = pcipath_to_sysfs(rootbuspath, &path2);
-        assert_eq!(relpath.unwrap(), "/0000:00:02.0");
+        assert_eq!(relpath.unwrap(), Path::new("/0000:00:02.0"));
 
         let relpath = pcipath_to_sysfs(rootbuspath, &path23);
-        assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0");
+        assert_eq!(relpath.unwrap(), Path::new("/0000:00:02.0/0000:01:03.0"));
 
         let relpath = pcipath_to_sysfs(rootbuspath, &path234);
-        assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0/0000:02:04.0");
+        assert_eq!(
+            relpath.unwrap(),
+            Path::new("/0000:00:02.0/0000:01:03.0/0000:02:04.0")
+        );
     }
 
     // We use device specific variants of this for real cases, but
@@ -1321,7 +1328,12 @@ mod tests {
         let devname = "vda";
         let root_bus = create_pci_root_bus_path();
         let relpath = "/0000:00:0a.0/0000:03:0b.0";
-        let devpath = format!("{}{}/virtio4/block/{}", root_bus, relpath, devname);
+        let devpath = format!(
+            "{}{}/virtio4/block/{}",
+            root_bus.display(),
+            relpath,
+            devname
+        );
 
         let mut uev = crate::uevent::Uevent::default();
         uev.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
@@ -1361,12 +1373,22 @@ mod tests {
         uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
         uev_a.subsystem = "block".to_string();
         uev_a.devname = devname.to_string();
-        uev_a.devpath = format!("{}{}/virtio4/block/{}", root_bus, relpath_a, devname);
+        uev_a.devpath = format!(
+            "{}{}/virtio4/block/{}",
+            root_bus.display(),
+            relpath_a,
+            devname
+        );
         let matcher_a = VirtioBlkPciMatcher::new(relpath_a);
 
         let mut uev_b = uev_a.clone();
         let relpath_b = "/0000:00:0a.0/0000:00:0b.0";
-        uev_b.devpath = format!("{}{}/virtio0/block/{}", root_bus, relpath_b, devname);
+        uev_b.devpath = format!(
+            "{}{}/virtio0/block/{}",
+            root_bus.display(),
+            relpath_b,
+            devname
+        );
         let matcher_b = VirtioBlkPciMatcher::new(relpath_b);
 
         assert!(matcher_a.is_match(&uev_a));
@@ -1447,7 +1469,8 @@ mod tests {
         uev_a.devname = devname.to_string();
         uev_a.devpath = format!(
             "{}/0000:00:00.0/virtio0/host0/target0:0:0/0:0:{}/block/sda",
-            root_bus, addr_a
+            root_bus.display(),
+            addr_a
         );
         let matcher_a = ScsiBlockMatcher::new(addr_a);
 
@@ -1455,7 +1478,8 @@ mod tests {
         let addr_b = "2:0";
         uev_b.devpath = format!(
             "{}/0000:00:00.0/virtio0/host0/target0:0:2/0:0:{}/block/sdb",
-            root_bus, addr_b
+            root_bus.display(),
+            addr_b
         );
         let matcher_b = ScsiBlockMatcher::new(addr_b);
 

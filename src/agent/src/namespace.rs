@@ -186,6 +186,8 @@ impl fmt::Debug for NamespaceType {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::{Namespace, NamespaceType};
     use crate::mount::remove_mounts;
     use nix::sched::CloneFlags;
@@ -206,7 +208,7 @@ mod tests {
             .await;
 
         assert!(ns_ipc.is_ok());
-        assert!(remove_mounts(&[ns_ipc.unwrap().path]).is_ok());
+        assert!(remove_mounts(&[&PathBuf::from(ns_ipc.unwrap().path)]).is_ok());
 
         let logger = slog::Logger::root(slog::Discard, o!());
         let tmpdir = Builder::new().prefix("uts").tempdir().unwrap();
@@ -218,7 +220,7 @@ mod tests {
             .await;
 
         assert!(ns_uts.is_ok());
-        assert!(remove_mounts(&[ns_uts.unwrap().path]).is_ok());
+        assert!(remove_mounts(&[&PathBuf::from(ns_uts.unwrap().path)]).is_ok());
 
         // Check it cannot persist pid namespaces.
         let logger = slog::Logger::root(slog::Discard, o!());

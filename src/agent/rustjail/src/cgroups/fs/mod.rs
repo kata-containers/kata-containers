@@ -34,7 +34,7 @@ use protocols::agent::{
 };
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 const GUEST_CPUS_PATH: &str = "/sys/devices/system/cpu/online";
 
@@ -58,7 +58,7 @@ macro_rules! get_controller_or_return_singular_none {
 pub struct Manager {
     pub paths: HashMap<String, String>,
     pub mounts: HashMap<String, String>,
-    pub cpath: String,
+    pub cpath: PathBuf,
     #[serde(skip)]
     cgroup: cgroups::Cgroup,
 }
@@ -940,13 +940,16 @@ pub fn get_mounts(paths: &HashMap<String, String>) -> Result<HashMap<String, Str
     Ok(m)
 }
 
-fn new_cgroup(h: Box<dyn cgroups::Hierarchy>, path: &str) -> Cgroup {
-    let valid_path = path.trim_start_matches('/').to_string();
-    cgroups::Cgroup::new(h, valid_path.as_str())
+fn new_cgroup(h: Box<dyn cgroups::Hierarchy>, path: &Path) -> Cgroup {
+    let valid_path = match path.starts_with("/") {
+        true => path.strip_prefix("/").unwrap().as_os_str(),
+        false => path.as_os_str(),
+    };
+    cgroups::Cgroup::new(h, valid_path)
 }
 
 impl Manager {
-    pub fn new(cpath: &str) -> Result<Self> {
+    pub fn new(cpath: &PathBuf) -> Result<Self> {
         let mut m = HashMap::new();
 
         let paths = get_paths()?;
@@ -959,7 +962,7 @@ impl Manager {
                 continue;
             }
 
-            let p = format!("{}/{}", mnt.unwrap(), cpath);
+            let p = format!("{}/{}", mnt.unwrap(), cpath.display());
 
             m.insert(key.to_string(), p);
         }
@@ -968,7 +971,7 @@ impl Manager {
             paths: m,
             mounts,
             // rels: paths,
-            cpath: cpath.to_string(),
+            cpath: cpath.to_path_buf(),
             cgroup: new_cgroup(cgroups::hierarchies::auto(), cpath),
         })
     }
@@ -1009,10 +1012,11 @@ impl Manager {
             i -= 1;
 
             // remove cgroup root from path
-            let r_path = &paths[i]
-                .to_str()
-                .unwrap()
-                .trim_start_matches(root_path.to_str().unwrap());
+            let r_path = match paths[i].starts_with(&root_path) {
+                true => paths[i].strip_prefix(&root_path).unwrap(),
+                false => paths[i],
+            };
+
             info!(sl!(), "updating cpuset for parent path {:?}", &r_path);
             let cg = new_cgroup(cgroups::hierarchies::auto(), r_path);
             let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
@@ -1034,7 +1038,7 @@ impl Manager {
 
     pub fn get_cg_path(&self, cg: &str) -> Option<String> {
         if cgroups::hierarchies::is_cgroup2_unified_mode() {
-            let cg_path = format!("/sys/fs/cgroup/{}", self.cpath);
+            let cg_path = format!("/sys/fs/cgroup/{}", self.cpath.display());
             return Some(cg_path);
         }
 

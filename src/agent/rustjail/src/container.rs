@@ -232,13 +232,13 @@ pub trait BaseContainer {
 #[derive(Debug)]
 pub struct LinuxContainer {
     pub id: String,
-    pub root: String,
+    pub root: PathBuf,
     pub config: Config,
     pub cgroup_manager: Option<FsManager>,
     pub init_process_pid: pid_t,
     pub init_process_start_time: u64,
-    pub uid_map_path: String,
-    pub gid_map_path: String,
+    pub uid_map_path: PathBuf,
+    pub gid_map_path: PathBuf,
     pub processes: HashMap<pid_t, Process>,
     pub status: ContainerStatus,
     pub created: SystemTime,
@@ -253,9 +253,9 @@ pub struct State {
     #[serde(default)]
     rootless: bool,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    cgroup_paths: HashMap<String, String>,
+    cgroup_paths: HashMap<String, PathBuf>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    namespace_paths: HashMap<NamespaceType, String>,
+    namespace_paths: HashMap<NamespaceType, PathBuf>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     external_descriptors: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -388,7 +388,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let cm: FsManager = serde_json::from_str(cm_str)?;
 
     #[cfg(feature = "standard-oci-runtime")]
-    let csocket_fd = console::setup_console_socket(&std::env::var(CONSOLE_SOCKET_FD)?)?;
+    let csocket_fd = console::setup_console_socket(Path::new(&std::env::var(CONSOLE_SOCKET_FD)?))?;
 
     let p = if spec.process.is_some() {
         spec.process.as_ref().unwrap()
@@ -539,7 +539,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let rootfs = spec.root.as_ref().unwrap().path.as_str();
     log_child!(cfd_log, "setup rootfs {}", rootfs);
     let root = fs::canonicalize(rootfs)?;
-    let rootfs = root.to_str().unwrap();
 
     if to_new.contains(CloneFlags::CLONE_NEWNS) {
         // setup rootfs
@@ -561,10 +560,10 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     if to_new.contains(CloneFlags::CLONE_NEWNS) {
         // unistd::chroot(rootfs)?;
         if no_pivot {
-            mount::ms_move_root(rootfs)?;
+            mount::ms_move_root(&root)?;
         } else {
             // pivot root
-            mount::pivot_rootfs(rootfs)?;
+            mount::pivot_rootfs(&root)?;
         }
 
         // setup sysctl
@@ -855,20 +854,16 @@ impl BaseContainer for LinuxContainer {
     async fn start(&mut self, mut p: Process) -> Result<()> {
         let logger = self.logger.new(o!("eid" => p.exec_id.clone()));
         let tty = p.tty;
-        let fifo_file = format!("{}/{}", &self.root, EXEC_FIFO_FILENAME);
+        let fifo_file = &self.root.join(EXEC_FIFO_FILENAME);
         info!(logger, "enter container.start!");
         let mut fifofd: RawFd = -1;
         if p.init {
-            if stat::stat(fifo_file.as_str()).is_ok() {
+            if stat::stat(fifo_file).is_ok() {
                 return Err(anyhow!("exec fifo exists"));
             }
-            unistd::mkfifo(fifo_file.as_str(), Mode::from_bits(0o644).unwrap())?;
+            unistd::mkfifo(fifo_file, Mode::from_bits(0o644).unwrap())?;
 
-            fifofd = fcntl::open(
-                fifo_file.as_str(),
-                OFlag::O_PATH,
-                Mode::from_bits(0).unwrap(),
-            )?;
+            fifofd = fcntl::open(fifo_file, OFlag::O_PATH, Mode::from_bits(0).unwrap())?;
         }
         info!(logger, "exec fifo opened!");
 
@@ -950,7 +945,7 @@ impl BaseContainer for LinuxContainer {
         let mut child = std::process::Command::new(exec_path);
 
         #[allow(unused_mut)]
-        let mut console_name = PathBuf::from("");
+        let mut console_name = PathBuf::new();
         #[cfg(feature = "standard-oci-runtime")]
         if !self.console_socket.as_os_str().is_empty() {
             console_name = self.console_socket.clone();
@@ -1108,8 +1103,8 @@ impl BaseContainer for LinuxContainer {
     }
 
     async fn exec(&mut self) -> Result<()> {
-        let fifo = format!("{}/{}", &self.root, EXEC_FIFO_FILENAME);
-        let fd = fcntl::open(fifo.as_str(), OFlag::O_WRONLY, Mode::from_bits_truncate(0))?;
+        let fifo = &self.root.join(EXEC_FIFO_FILENAME);
+        let fd = fcntl::open(fifo, OFlag::O_WRONLY, Mode::from_bits_truncate(0))?;
         let data: &[u8] = &[0];
         unistd::write(fd, data)?;
         info!(self.logger, "container started");
@@ -1318,12 +1313,12 @@ async fn join_namespaces(
         // setup uid/gid mappings
         write_mappings(
             &logger,
-            &format!("/proc/{}/uid_map", p.pid),
+            &Path::new(&format!("/proc/{}/uid_map", p.pid)),
             &linux.uid_mappings,
         )?;
         write_mappings(
             &logger,
-            &format!("/proc/{}/gid_map", p.pid),
+            &Path::new(&format!("/proc/{}/gid_map", p.pid)),
             &linux.gid_mappings,
         )?;
     }
@@ -1368,7 +1363,7 @@ async fn join_namespaces(
     Ok(())
 }
 
-fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIdMapping]) -> Result<()> {
+fn write_mappings(logger: &Logger, path: &Path, maps: &[LinuxIdMapping]) -> Result<()> {
     let data = maps
         .iter()
         .filter(|m| m.size != 0)
@@ -1419,25 +1414,21 @@ impl LinuxContainer {
     ) -> Result<Self> {
         let base = base.into();
         let id = id.into();
-        let root = format!("{}/{}", base.as_str(), id.as_str());
+        let root = Path::new(base.as_str()).join(id.as_str());
 
         // validate oci spec
         validator::validate(&config)?;
 
-        fs::create_dir_all(root.as_str()).map_err(|e| {
+        fs::create_dir_all(&root).map_err(|e| {
             if e.kind() == std::io::ErrorKind::AlreadyExists {
                 return anyhow!(e).context(format!("container {} already exists", id.as_str()));
             }
 
-            anyhow!(e).context(format!("fail to create container directory {}", root))
+            anyhow!(e).context(format!("fail to create container directory {:?}", root))
         })?;
 
-        unistd::chown(
-            root.as_str(),
-            Some(unistd::getuid()),
-            Some(unistd::getgid()),
-        )
-        .context(format!("cannot change onwer of container {} root", id))?;
+        unistd::chown(&root, Some(unistd::getuid()), Some(unistd::getgid()))
+            .context(format!("cannot change onwer of container {} root", id))?;
 
         if config.spec.is_none() {
             return Err(anyhow!(nix::Error::EINVAL));
@@ -1452,15 +1443,15 @@ impl LinuxContainer {
         let linux = spec.linux.as_ref().unwrap();
 
         let cpath = if linux.cgroups_path.is_empty() {
-            format!("/{}", id.as_str())
+            Path::new("/").join(&id)
         } else {
-            linux.cgroups_path.clone()
+            PathBuf::from(&linux.cgroups_path)
         };
 
-        let cgroup_manager = FsManager::new(cpath.as_str()).map_err(|e| {
+        let cgroup_manager = FsManager::new(&cpath).map_err(|e| {
             anyhow!(format!(
-                "fail to create cgroup manager with path {}: {:}",
-                cpath, e
+                "fail to create cgroup manager with path {:?}: {:}",
+                &cpath, e
             ))
         })?;
         info!(logger, "new cgroup_manager {:?}", &cgroup_manager);
@@ -1470,8 +1461,8 @@ impl LinuxContainer {
             root,
             cgroup_manager: Some(cgroup_manager),
             status: ContainerStatus::new(),
-            uid_map_path: String::from(""),
-            gid_map_path: "".to_string(),
+            uid_map_path: PathBuf::new(),
+            gid_map_path: PathBuf::new(),
             config,
             processes: HashMap::new(),
             created: SystemTime::now(),
@@ -1947,7 +1938,7 @@ mod tests {
     #[test]
     fn test_linuxcontainer_pause() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.cgroup_manager = FsManager::new("").ok();
+            c.cgroup_manager = FsManager::new(&PathBuf::new()).ok();
             c.pause().map_err(|e| anyhow!(e))
         });
 
@@ -1980,7 +1971,7 @@ mod tests {
     #[test]
     fn test_linuxcontainer_resume() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.cgroup_manager = FsManager::new("").ok();
+            c.cgroup_manager = FsManager::new(&PathBuf::new()).ok();
             // Change status to paused, this way we can resume it
             c.status.transition(ContainerState::Paused);
             c.resume().map_err(|e| anyhow!(e))

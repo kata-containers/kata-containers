@@ -11,7 +11,7 @@ use nix::unistd::{self, dup2};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::path::Path;
 
-pub fn setup_console_socket(csocket_path: &str) -> Result<Option<RawFd>> {
+pub fn setup_console_socket(csocket_path: &Path) -> Result<Option<RawFd>> {
     if csocket_path.is_empty() {
         return Ok(None);
     }
@@ -25,7 +25,7 @@ pub fn setup_console_socket(csocket_path: &str) -> Result<Option<RawFd>> {
 
     match socket::connect(
         socket_fd,
-        &socket::SockAddr::Unix(socket::UnixAddr::new(Path::new(csocket_path))?),
+        &socket::SockAddr::Unix(socket::UnixAddr::new(csocket_path)?),
     ) {
         Ok(()) => Ok(Some(socket_fd)),
         Err(errno) => Err(anyhow!("failed to open console fd: {}", errno)),
@@ -72,7 +72,7 @@ mod tests {
 
         let _listener = UnixListener::bind(&socket_path).unwrap();
 
-        let ret = setup_console_socket(socket_path.to_str().unwrap());
+        let ret = setup_console_socket(socket_path.as_os_str());
 
         assert!(ret.is_ok());
     }

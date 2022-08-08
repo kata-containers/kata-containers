@@ -14,6 +14,7 @@ use nix::unistd::{self, Gid, Uid};
 use nix::NixPath;
 use oci::{LinuxDevice, Mount, Process, Spec};
 use std::collections::{HashMap, HashSet};
+use std::ffi::OsStr;
 use std::fs::{self, OpenOptions};
 use std::mem::MaybeUninit;
 use std::os::unix;
@@ -34,7 +35,7 @@ use crate::log_child;
 // struct is populated from the content in the /proc/<pid>/mountinfo file.
 #[derive(std::fmt::Debug, PartialEq)]
 pub struct Info {
-    mount_point: String,
+    mount_point: PathBuf,
     optional: String,
     fstype: String,
 }
@@ -189,20 +190,16 @@ pub fn init_rootfs(
             fs::canonicalize(r.path.as_str()).context("Could not canonicalize rootfs path")
         })?;
 
-    let rootfs = (*root)
-        .to_str()
-        .ok_or_else(|| anyhow!("Could not convert rootfs path to string"))?;
+    mount(None::<&OsStr>, "/", None::<&OsStr>, flags, None::<&OsStr>)?;
 
-    mount(None::<&str>, "/", None::<&str>, flags, None::<&str>)?;
-
-    rootfs_parent_mount_private(rootfs)?;
+    rootfs_parent_mount_private(&root.to_path_buf())?;
 
     mount(
-        Some(rootfs),
-        rootfs,
-        None::<&str>,
+        Some(&root),
+        &root,
+        None::<&OsStr>,
         MsFlags::MS_BIND | MsFlags::MS_REC,
-        None::<&str>,
+        None::<&OsStr>,
     )?;
 
     let mut bind_mount_dev = false;
@@ -216,7 +213,7 @@ pub fn init_rootfs(
         }
 
         if m.r#type == "cgroup" {
-            mount_cgroups(cfd_log, m, rootfs, flags, &data, cpath, mounts)?;
+            mount_cgroups(cfd_log, m, &root.to_path_buf(), flags, &data, cpath, mounts)?;
         } else {
             if m.destination == "/dev" {
                 if m.r#type == "bind" {
@@ -244,26 +241,26 @@ pub fn init_rootfs(
                 }
             }
 
-            mount_from(cfd_log, m, rootfs, flags, &data, "")?;
+            mount_from(cfd_log, m, &root.to_path_buf(), flags, &data, "")?;
             // bind mount won't change mount options, we need remount to make mount options
             // effective.
             // first check that we have non-default options required before attempting a
             // remount
             if m.r#type == "bind" && !pgflags.is_empty() {
-                let dest = secure_join(rootfs, &m.destination);
+                let dest = secure_join(&root.to_path_buf(), &PathBuf::from(&m.destination));
                 mount(
-                    None::<&str>,
-                    dest.as_str(),
-                    None::<&str>,
+                    None::<&OsStr>,
+                    &dest,
+                    None::<&OsStr>,
                     pgflags,
-                    None::<&str>,
+                    None::<&OsStr>,
                 )?;
             }
         }
     }
 
     let olddir = unistd::getcwd()?;
-    unistd::chdir(rootfs)?;
+    unistd::chdir(&root)?;
 
     // in case the /dev directory was binded mount from guest,
     // then there's no need to create devices nodes and symlinks
@@ -332,7 +329,7 @@ fn check_proc_mount(m: &Mount) -> Result<()> {
     Ok(())
 }
 
-fn mount_cgroups_v2(cfd_log: RawFd, m: &Mount, rootfs: &str, flags: MsFlags) -> Result<()> {
+fn mount_cgroups_v2(cfd_log: RawFd, m: &Mount, rootfs: &PathBuf, flags: MsFlags) -> Result<()> {
     let olddir = unistd::getcwd()?;
     unistd::chdir(rootfs)?;
 
@@ -346,18 +343,18 @@ fn mount_cgroups_v2(cfd_log: RawFd, m: &Mount, rootfs: &str, flags: MsFlags) -> 
 
     let mount_flags: MsFlags = flags;
 
-    mount_from(cfd_log, &bm, rootfs, mount_flags, "", "")?;
+    mount_from(cfd_log, &bm, &PathBuf::from(&rootfs), mount_flags, "", "")?;
 
     unistd::chdir(&olddir)?;
 
     if flags.contains(MsFlags::MS_RDONLY) {
-        let dest = format!("{}{}", rootfs, m.destination.as_str());
+        let dest = format!("{:?}{}", rootfs, m.destination.as_str());
         mount(
             Some(dest.as_str()),
             dest.as_str(),
-            None::<&str>,
+            None::<&OsStr>,
             flags | MsFlags::MS_BIND | MsFlags::MS_REMOUNT,
-            None::<&str>,
+            None::<&OsStr>,
         )?;
     }
 
@@ -367,14 +364,14 @@ fn mount_cgroups_v2(cfd_log: RawFd, m: &Mount, rootfs: &str, flags: MsFlags) -> 
 fn mount_cgroups(
     cfd_log: RawFd,
     m: &Mount,
-    rootfs: &str,
+    rootfs: &PathBuf,
     flags: MsFlags,
     _data: &str,
     cpath: &HashMap<String, String>,
     mounts: &HashMap<String, String>,
 ) -> Result<()> {
     if cgroups::hierarchies::is_cgroup2_unified_mode() {
-        return mount_cgroups_v2(cfd_log, m, rootfs, flags);
+        return mount_cgroups_v2(cfd_log, m, &rootfs, flags);
     }
     // mount tmpfs
     let ctm = Mount {
@@ -385,7 +382,7 @@ fn mount_cgroups(
     };
 
     let cflags = MsFlags::MS_NOEXEC | MsFlags::MS_NOSUID | MsFlags::MS_NODEV;
-    mount_from(cfd_log, &ctm, rootfs, cflags, "", "")?;
+    mount_from(cfd_log, &ctm, &rootfs, cflags, "", "")?;
     let olddir = unistd::getcwd()?;
 
     unistd::chdir(rootfs)?;
@@ -455,13 +452,13 @@ fn mount_cgroups(
     unistd::chdir(&olddir)?;
 
     if flags.contains(MsFlags::MS_RDONLY) {
-        let dest = format!("{}{}", rootfs, m.destination.as_str());
+        let dest = format!("{:?}{}", rootfs, m.destination.as_str());
         mount(
             Some(dest.as_str()),
             dest.as_str(),
-            None::<&str>,
+            None::<&OsStr>,
             flags | MsFlags::MS_BIND | MsFlags::MS_REMOUNT,
-            None::<&str>,
+            None::<&OsStr>,
         )?;
     }
 
@@ -522,11 +519,11 @@ pub fn pivot_rootfs<P: ?Sized + NixPath + std::fmt::Debug>(path: &P) -> Result<(
     Ok(())
 }
 
-fn rootfs_parent_mount_private(path: &str) -> Result<()> {
-    let mount_infos = parse_mount_table(MOUNTINFO_PATH)?;
+fn rootfs_parent_mount_private(path: &PathBuf) -> Result<()> {
+    let mount_infos = parse_mount_table(PathBuf::from(MOUNTINFO_PATH))?;
 
     let mut max_len = 0;
-    let mut mount_point = String::from("");
+    let mut mount_point = PathBuf::new();
     let mut options = String::from("");
     for i in mount_infos {
         if path.starts_with(&i.mount_point) && i.mount_point.len() > max_len {
@@ -538,11 +535,11 @@ fn rootfs_parent_mount_private(path: &str) -> Result<()> {
 
     if options.contains("shared:") {
         mount(
-            None::<&str>,
-            mount_point.as_str(),
-            None::<&str>,
+            None::<&OsStr>,
+            &mount_point,
+            None::<&OsStr>,
             MsFlags::MS_PRIVATE,
-            None::<&str>,
+            None::<&OsStr>,
         )?;
     }
 
@@ -551,7 +548,7 @@ fn rootfs_parent_mount_private(path: &str) -> Result<()> {
 
 // Parse /proc/self/mountinfo because comparing Dev and ino does not work from
 // bind mounts
-fn parse_mount_table(mountinfo_path: &str) -> Result<Vec<Info>> {
+fn parse_mount_table(mountinfo_path: PathBuf) -> Result<Vec<Info>> {
     let file = File::open(mountinfo_path)?;
     let reader = BufReader::new(file);
     let mut infos = Vec::new();
@@ -580,7 +577,7 @@ fn parse_mount_table(mountinfo_path: &str) -> Result<Vec<Info>> {
             i32,
             i32,
             String,
-            String,
+            PathBuf,
             String,
             String
         )
@@ -627,22 +624,26 @@ fn chroot<P: ?Sized + NixPath>(_path: &P) -> Result<(), nix::Error> {
     Ok(())
 }
 
-pub fn ms_move_root(rootfs: &str) -> Result<bool> {
+pub fn ms_move_root(rootfs: &PathBuf) -> Result<bool> {
     unistd::chdir(rootfs)?;
-    let mount_infos = parse_mount_table(MOUNTINFO_PATH)?;
+    let mount_infos = parse_mount_table(PathBuf::from(MOUNTINFO_PATH))?;
 
-    let root_path = Path::new(rootfs);
-    let abs_root_buf = root_path.absolutize()?;
+    //let root_path = Path::new(rootfs);
+    //let abs_root_buf = root_path.absolutize()?;
+    let abs_root_buf = rootfs.absolutize()?;
     let abs_root = abs_root_buf
         .to_str()
-        .ok_or_else(|| anyhow!("failed to parse {} to absolute path", rootfs))?;
+        .ok_or_else(|| anyhow!("failed to parse {:?} to absolute path", rootfs))?;
 
     for info in mount_infos.iter() {
         let mount_point = Path::new(&info.mount_point);
         let abs_mount_buf = mount_point.absolutize()?;
-        let abs_mount_point = abs_mount_buf
-            .to_str()
-            .ok_or_else(|| anyhow!("failed to parse {} to absolute path", info.mount_point))?;
+        let abs_mount_point = abs_mount_buf.to_str().ok_or_else(|| {
+            anyhow!(
+                "failed to parse {} to absolute path",
+                info.mount_point.display()
+            )
+        })?;
         let abs_mount_point_string = String::from(abs_mount_point);
 
         // Umount every syfs and proc file systems, except those under the container rootfs
@@ -654,11 +655,11 @@ pub fn ms_move_root(rootfs: &str) -> Result<bool> {
 
         // Be sure umount events are not propagated to the host.
         mount(
-            None::<&str>,
+            None::<&OsStr>,
             abs_mount_point,
-            None::<&str>,
+            None::<&OsStr>,
             MsFlags::MS_SLAVE | MsFlags::MS_REC,
-            None::<&str>,
+            None::<&OsStr>,
         )?;
         umount2(abs_mount_point, MntFlags::MNT_DETACH).or_else(|e| {
             if e.ne(&nix::Error::EINVAL) && e.ne(&nix::Error::EPERM) {
@@ -672,7 +673,7 @@ pub fn ms_move_root(rootfs: &str) -> Result<bool> {
                 abs_mount_point,
                 Some("tmpfs"),
                 MsFlags::empty(),
-                None::<&str>,
+                None::<&OsStr>,
             )?;
 
             Ok(())
@@ -682,9 +683,9 @@ pub fn ms_move_root(rootfs: &str) -> Result<bool> {
     mount(
         Some(abs_root),
         "/",
-        None::<&str>,
+        None::<&OsStr>,
         MsFlags::MS_MOVE,
-        None::<&str>,
+        None::<&OsStr>,
     )?;
     chroot(".")?;
     unistd::chdir("/")?;
@@ -723,22 +724,22 @@ fn parse_mount(m: &Mount) -> (MsFlags, MsFlags, String) {
 // - `rootfs` is the absolute path to the root of the containers root filesystem directory.
 // - `unsafe_path` is path inside a container. It is unsafe since it may try to "escape" from the containers
 //    rootfs by using one or more "../" path elements or is its a symlink to path.
-fn secure_join(rootfs: &str, unsafe_path: &str) -> String {
-    let mut path = PathBuf::from(format!("{}/", rootfs));
-    let unsafe_p = Path::new(&unsafe_path);
+fn secure_join(rootfs: &PathBuf, unsafe_path: &PathBuf) -> PathBuf {
+    let mut path = PathBuf::from(format!("{}/", rootfs.display()));
 
-    for it in unsafe_p.iter() {
+    for it in unsafe_path.iter() {
         let it_p = Path::new(&it);
-
         // if it_p leads with "/", path.push(it) will be replace as it, so ignore "/"
         if it_p.has_root() {
             continue;
         };
 
         path.push(it);
+
         if let Ok(v) = path.read_link() {
             if v.is_absolute() {
-                path = PathBuf::from(format!("{}{}", rootfs, v.to_str().unwrap()));
+                // v will be an absolute path, so joining the paths would only return v instead of path/v
+                path = PathBuf::from(format!("{}{}", rootfs.display(), v.to_str().unwrap()));
             } else {
                 path.pop();
                 for it in v.iter() {
@@ -746,7 +747,7 @@ fn secure_join(rootfs: &str, unsafe_path: &str) -> String {
                     if path.exists() {
                         path = path.canonicalize().unwrap();
                         if !path.starts_with(rootfs) {
-                            path = PathBuf::from(rootfs.to_string());
+                            path = rootfs.clone();
                         }
                     }
                 }
@@ -757,20 +758,19 @@ fn secure_join(rootfs: &str, unsafe_path: &str) -> String {
             path.pop();
         }
     }
-
-    path.to_str().unwrap().to_string()
+    path
 }
 
 fn mount_from(
     cfd_log: RawFd,
     m: &Mount,
-    rootfs: &str,
+    rootfs: &PathBuf,
     flags: MsFlags,
     data: &str,
     _label: &str,
 ) -> Result<()> {
     let d = String::from(data);
-    let dest = secure_join(rootfs, &m.destination);
+    let dest = secure_join(rootfs, &PathBuf::from(&m.destination));
 
     let src = if m.r#type.as_str() == "bind" {
         let src = fs::canonicalize(m.source.as_str())?;
@@ -800,7 +800,7 @@ fn mount_from(
                     log_child!(
                         cfd_log,
                         "open/create dest error. {}: {:?}",
-                        dest.as_str(),
+                        &dest.display(),
                         e
                     );
                     e
@@ -817,14 +817,14 @@ fn mount_from(
         }
     };
 
-    let _ = stat::stat(dest.as_str()).map_err(|e| {
-        log_child!(cfd_log, "dest stat error. {}: {:?}", dest.as_str(), e);
+    let _ = stat::stat(&dest).map_err(|e| {
+        log_child!(cfd_log, "dest stat error. {}: {:?}", dest.display(), e);
         e
     })?;
 
     mount(
         Some(src.as_str()),
-        dest.as_str(),
+        &dest,
         Some(m.r#type.as_str()),
         flags,
         Some(d.as_str()),
@@ -845,14 +845,14 @@ fn mount_from(
         )
     {
         mount(
-            Some(dest.as_str()),
-            dest.as_str(),
-            None::<&str>,
+            Some(&dest),
+            &dest,
+            None::<&OsStr>,
             flags | MsFlags::MS_REMOUNT,
-            None::<&str>,
+            None::<&OsStr>,
         )
         .map_err(|e| {
-            log_child!(cfd_log, "remout {}: {:?}", dest.as_str(), e);
+            log_child!(cfd_log, "remout {}: {:?}", dest.display(), e);
             e
         })?;
     }
@@ -876,9 +876,7 @@ fn default_symlinks() -> Result<()> {
     Ok(())
 }
 
-fn dev_rel_path(path: &str) -> Option<&Path> {
-    let path = Path::new(path);
-
+fn dev_rel_path(path: &Path) -> Option<&Path> {
     if !path.starts_with("/dev")
         || path == Path::new("/dev")
         || path.components().any(|c| c == Component::ParentDir)
@@ -896,7 +894,7 @@ fn create_devices(devices: &[LinuxDevice], bind: bool) -> Result<()> {
         op(dev, path).context(format!("Creating container device {:?}", dev))?;
     }
     for dev in devices {
-        let path = dev_rel_path(&dev.path).ok_or_else(|| {
+        let path = dev_rel_path(&Path::new(&dev.path)).ok_or_else(|| {
             let msg = format!("{} is not a valid device path", dev.path);
             anyhow!(msg)
         })?;
@@ -1177,7 +1175,7 @@ mod tests {
             options: vec!["shared".to_string()],
         };
         let tempdir = tempdir().unwrap();
-        let rootfs = tempdir.path().to_str().unwrap().to_string();
+        let rootfs = tempdir.path().to_path_buf();
         let flags = MsFlags::MS_RDONLY;
         let mut cpath = HashMap::new();
         let mut cgroup_mounts = HashMap::new();
@@ -1218,14 +1216,14 @@ mod tests {
     #[test]
     #[serial(chdir)]
     fn test_ms_move_rootfs() {
-        let ret = ms_move_root("/abc");
+        let ret = ms_move_root(&PathBuf::from("/abc"));
         assert!(
             ret.is_err(),
             "Should fail. path doesn't exist. Got: {:?}",
             ret
         );
 
-        let ret = ms_move_root("/tmp");
+        let ret = ms_move_root(&PathBuf::from("/tmp"));
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
     }
 
@@ -1401,7 +1399,7 @@ mod tests {
             let result = mount_from(
                 wfd,
                 &mount,
-                tempdir.path().to_str().unwrap(),
+                &PathBuf::from(tempdir.path().to_str().unwrap()),
                 d.flags,
                 "",
                 "",
@@ -1455,8 +1453,8 @@ mod tests {
         #[derive(Debug)]
         struct TestData<'a> {
             name: &'a str,
-            rootfs: &'a str,
-            unsafe_path: &'a str,
+            rootfs: &'a PathBuf,
+            unsafe_path: &'a PathBuf,
             symlink_path: &'a str,
             result: &'a str,
         }
@@ -1468,50 +1466,50 @@ mod tests {
         let tests = &[
             TestData {
                 name: "rootfs_not_exist",
-                rootfs: "/home/rootfs",
-                unsafe_path: "a/b/c",
+                rootfs: &PathBuf::from("/home/rootfs"),
+                unsafe_path: &PathBuf::from("a/b/c"),
                 symlink_path: "",
                 result: "/home/rootfs/a/b/c",
             },
             TestData {
                 name: "relative_path",
-                rootfs: "/home/rootfs",
-                unsafe_path: "../../../a/b/c",
+                rootfs: &PathBuf::from("/home/rootfs"),
+                unsafe_path: &PathBuf::from("../../../a/b/c"),
                 symlink_path: "",
                 result: "/home/rootfs/a/b/c",
             },
             TestData {
                 name: "skip any ..",
-                rootfs: "/home/rootfs",
-                unsafe_path: "../../../a/../../b/../../c",
+                rootfs: &PathBuf::from("/home/rootfs"),
+                unsafe_path: &PathBuf::from("../../../a/../../b/../../c"),
                 symlink_path: "",
                 result: "/home/rootfs/a/b/c",
             },
             TestData {
                 name: "rootfs is null",
-                rootfs: "",
-                unsafe_path: "",
+                rootfs: &PathBuf::from(""),
+                unsafe_path: &PathBuf::from(""),
                 symlink_path: "",
                 result: "/",
             },
             TestData {
                 name: "relative softlink beyond container rootfs",
-                rootfs: rootfs_path,
-                unsafe_path: "1",
+                rootfs: &PathBuf::from(rootfs_path),
+                unsafe_path: &PathBuf::from("1"),
                 symlink_path: "../../../",
                 result: rootfs_path,
             },
             TestData {
                 name: "abs softlink points to the non-exist directory",
-                rootfs: rootfs_path,
-                unsafe_path: "2",
+                rootfs: &PathBuf::from(rootfs_path),
+                unsafe_path: &PathBuf::from("2"),
                 symlink_path: "/dddd",
                 result: &format!("{}/dddd", rootfs_path).as_str().to_owned(),
             },
             TestData {
                 name: "abs softlink points to the root",
-                rootfs: rootfs_path,
-                unsafe_path: "3",
+                rootfs: &PathBuf::from(rootfs_path),
+                unsafe_path: &PathBuf::from("3"),
                 symlink_path: "/",
                 result: &format!("{}/", rootfs_path).as_str().to_owned(),
             },
@@ -1523,15 +1521,19 @@ mod tests {
 
             // if is_symlink, then should be prepare the softlink environment
             if t.symlink_path != "" {
-                fs::symlink(t.symlink_path, format!("{}/{}", t.rootfs, t.unsafe_path)).unwrap();
+                fs::symlink(
+                    t.symlink_path,
+                    format!("{}/{}", t.rootfs.display(), t.unsafe_path.display()),
+                )
+                .unwrap();
             }
             let result = secure_join(t.rootfs, t.unsafe_path);
 
             // Update the test details string with the results of the call
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{}, result: {:?}", msg, result.display());
 
             // Perform the checks
-            assert!(result == t.result, "{}", msg);
+            assert!(result.to_str().unwrap() == t.result, "{}", msg);
         }
     }
 
@@ -1549,7 +1551,7 @@ mod tests {
                     "22 933 0:20 / /sys rw,nodev shared:2 - sysfs sysfs rw,noexec",
                 ),
                 result: Ok(vec![Info {
-                    mount_point: "/sys".to_string(),
+                    mount_point: PathBuf::from("/sys"),
                     optional: "shared:2".to_string(),
                     fstype: "sysfs".to_string(),
                 }]),
@@ -1561,12 +1563,12 @@ mod tests {
                 ),
                 result: Ok(vec![
                     Info {
-                        mount_point: "/sys".to_string(),
+                        mount_point: PathBuf::from("/sys"),
                         optional: "".to_string(),
                         fstype: "sysfs".to_string(),
                     },
                     Info {
-                        mount_point: "/tmp/dir".to_string(),
+                        mount_point: PathBuf::from("/tmp/dir"),
                         optional: "shared:2".to_string(),
                         fstype: "tmpfs".to_string(),
                     },
@@ -1577,7 +1579,7 @@ mod tests {
                     "22 933 0:20 /foo\040-\040bar /sys rw,nodev shared:2 - sysfs sysfs rw,noexec",
                 ),
                 result: Ok(vec![Info {
-                    mount_point: "/sys".to_string(),
+                    mount_point: PathBuf::from("/sys"),
                     optional: "shared:2".to_string(),
                     fstype: "sysfs".to_string(),
                 }]),
@@ -1642,7 +1644,7 @@ mod tests {
                 std::fs::write(&mountinfo_path, mountinfo_data).unwrap();
             }
 
-            let result = parse_mount_table(mountinfo_path.to_str().unwrap());
+            let result = parse_mount_table(PathBuf::from(mountinfo_path.to_str().unwrap()));
 
             let msg = format!("{}: result: {:?}", msg, result);
 
@@ -1653,22 +1655,37 @@ mod tests {
     #[test]
     fn test_dev_rel_path() {
         // Valid device paths
-        assert_eq!(dev_rel_path("/dev/sda").unwrap(), Path::new("dev/sda"));
-        assert_eq!(dev_rel_path("//dev/sda").unwrap(), Path::new("dev/sda"));
         assert_eq!(
-            dev_rel_path("/dev/vfio/99").unwrap(),
+            dev_rel_path(Path::new("/dev/sda")).unwrap(),
+            Path::new("dev/sda")
+        );
+        assert_eq!(
+            dev_rel_path(Path::new("//dev/sda")).unwrap(),
+            Path::new("dev/sda")
+        );
+        assert_eq!(
+            dev_rel_path(Path::new("/dev/vfio/99")).unwrap(),
             Path::new("dev/vfio/99")
         );
-        assert_eq!(dev_rel_path("/dev/...").unwrap(), Path::new("dev/..."));
-        assert_eq!(dev_rel_path("/dev/a..b").unwrap(), Path::new("dev/a..b"));
-        assert_eq!(dev_rel_path("/dev//foo").unwrap(), Path::new("dev/foo"));
+        assert_eq!(
+            dev_rel_path(Path::new("/dev/...")).unwrap(),
+            Path::new("dev/...")
+        );
+        assert_eq!(
+            dev_rel_path(Path::new("/dev/a..b")).unwrap(),
+            Path::new("dev/a..b")
+        );
+        assert_eq!(
+            dev_rel_path(Path::new("/dev//foo")).unwrap(),
+            Path::new("dev/foo")
+        );
 
         // Bad device paths
-        assert!(dev_rel_path("/devfoo").is_none());
-        assert!(dev_rel_path("/etc/passwd").is_none());
-        assert!(dev_rel_path("/dev/../etc/passwd").is_none());
-        assert!(dev_rel_path("dev/foo").is_none());
-        assert!(dev_rel_path("").is_none());
-        assert!(dev_rel_path("/dev").is_none());
+        assert!(dev_rel_path(Path::new("/devfoo")).is_none());
+        assert!(dev_rel_path(Path::new("/etc/passwd")).is_none());
+        assert!(dev_rel_path(Path::new("/dev/../etc/passwd")).is_none());
+        assert!(dev_rel_path(Path::new("dev/foo")).is_none());
+        assert!(dev_rel_path(Path::new("")).is_none());
+        assert!(dev_rel_path(Path::new("/dev")).is_none());
     }
 }

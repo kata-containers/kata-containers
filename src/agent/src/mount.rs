@@ -9,7 +9,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::iter;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -724,7 +724,7 @@ pub async fn add_storages(
     storages: Vec<Storage>,
     sandbox: Arc<Mutex<Sandbox>>,
     cid: Option<String>,
-) -> Result<Vec<String>> {
+) -> Result<Vec<PathBuf>> {
     let mut mount_list = Vec::new();
 
     for storage in storages {
@@ -735,7 +735,7 @@ pub async fn add_storages(
 
         {
             let mut sb = sandbox.lock().await;
-            let new_storage = sb.set_sandbox_storage(&storage.mount_point);
+            let new_storage = sb.set_sandbox_storage(&PathBuf::from(&storage.mount_point));
             if !new_storage {
                 continue;
             }
@@ -782,7 +782,7 @@ pub async fn add_storages(
         let mount_point = res?;
 
         if !mount_point.is_empty() {
-            mount_list.push(mount_point);
+            mount_list.push(PathBuf::from(mount_point));
         }
     }
 
@@ -968,14 +968,14 @@ pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<
 
     // Enable memory hierarchical account.
     // For more information see https://www.kernel.org/doc/Documentation/cgroup-v1/memory.txt
-    online_device("/sys/fs/cgroup/memory/memory.use_hierarchy")?;
+    online_device(&Path::new("/sys/fs/cgroup/memory/memory.use_hierarchy"))?;
     Ok(())
 }
 
 #[instrument]
-pub fn remove_mounts(mounts: &[String]) -> Result<()> {
+pub fn remove_mounts(mounts: &[&Path]) -> Result<()> {
     for m in mounts.iter() {
-        nix::mount::umount(m.as_str()).context(format!("failed to umount {:?}", m))?;
+        nix::mount::umount(m.as_os_str()).context(format!("failed to umount {:?}", m))?;
     }
     Ok(())
 }
@@ -1187,7 +1187,7 @@ mod tests {
 
         #[derive(Debug)]
         struct TestData<'a> {
-            mounts: Vec<String>,
+            mounts: Vec<&'a Path>,
 
             // If set, assume an error will be generated,
             // else assume no error.
@@ -1244,19 +1244,19 @@ mod tests {
                 error_contains: "",
             },
             TestData {
-                mounts: vec!["".to_string()],
+                mounts: vec![&Path::new("")],
                 error_contains: "ENOENT: No such file or directory",
             },
             TestData {
-                mounts: vec![test_file_filename.to_string()],
+                mounts: vec![&test_file_path],
                 error_contains: "EINVAL: Invalid argument",
             },
             TestData {
-                mounts: vec![test_dir_filename.to_string()],
+                mounts: vec![&test_dir_path],
                 error_contains: "EINVAL: Invalid argument",
             },
             TestData {
-                mounts: vec![mnt_dest_filename.to_string()],
+                mounts: vec![&mnt_dest],
                 error_contains: "",
             },
         ];
