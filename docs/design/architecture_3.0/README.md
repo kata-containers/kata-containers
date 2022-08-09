@@ -98,7 +98,6 @@ In our case, there will be a variety of resources, and every resource has severa
 |                            | MACVTAP Endpoint    | Stage 3               |
 |                            | `VhostUserEndpoint` | Stage 3               |
 | Network Interworking Model | Tc filter           | Stage 1               |
-|                            | Route               | Stage 1               |
 |                            | `MacVtap`           | Stage 3               |
 | Storage                    | Virtio-fs           | Stage 1               |
 |                            | `nydus`             | Stage 2               |
