@@ -102,6 +102,9 @@ func (m *mockHypervisor) ResizeVCPUs(ctx context.Context, cpus uint32) (uint32, 
 	return 0, 0, nil
 }
 
+func (m *mockHypervisor) GetTotalMemoryMB(ctx context.Context) uint32 {
+	return 0
+}
 func (m *mockHypervisor) Disconnect(ctx context.Context) {
 }
 
