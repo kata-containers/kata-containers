@@ -10,7 +10,6 @@ package resourcecontrol
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sync"
 
@@ -169,9 +168,9 @@ func NewSandboxResourceController(path string, resources *specs.LinuxResources, 
 	sandboxResources := *resources
 	sandboxResources.Devices = append(sandboxResources.Devices, sandboxDevices()...)
 
-	// Currently we know to handle systemd cgroup path only when it's the only cgroup (no overhead group), hence,
-	// if sandboxCgroupOnly is not true we treat it as cgroupfs path as it used to be, although it may be incorrect.
-	if !IsSystemdCgroup(path) || !sandboxCgroupOnly {
+	//Check whether it is a systemd cgroup path, if so, use the systemd cgroup driver
+	//to manage the cgroup, otherwise use the cgroupfs cgroup driver to manage the cgroup.
+	if !IsSystemdCgroup(path) {
 		return NewResourceController(path, &sandboxResources)
 	}
 
@@ -185,8 +184,11 @@ func NewSandboxResourceController(path string, resources *specs.LinuxResources, 
 	//github.com/containerd/cgroups doesn't support creating a scope unit with
 	//v1 and v2 cgroups against systemd, the following interacts directly with systemd
 	//to create the cgroup and then load it using containerd's api.
-	//adding runtime process, it makes calling setupCgroups redundant
-	if createCgroupsSystemd(slice, unit, os.Getpid()); err != nil {
+	pid, err := tempProc()
+	if err != nil {
+		return nil, err
+	}
+	if createCgroupsSystemd(slice, unit, pid); err != nil {
 		return nil, err
 	}
 

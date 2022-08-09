@@ -8,6 +8,7 @@ package resourcecontrol
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -140,4 +141,25 @@ func getSliceAndUnit(cgroupPath string) (string, string, error) {
 	}
 
 	return "", "", fmt.Errorf("Path: %s is not valid systemd's cgroups path", cgroupPath)
+}
+
+//Create a temporary process to add to the systemd cgroup scope unit
+//to prevent the scope unit from being automatically destroyed after
+//all processes are removed.
+//See https://github.com/kata-containers/kata-containers/issues/4852.
+func tempProc() (int, error) {
+	procAttr := &os.ProcAttr{
+		Env: os.Environ(),
+		Files: []*os.File{
+			os.Stdin,
+			os.Stdout,
+			os.Stderr,
+		},
+	}
+	proc, err := os.StartProcess("/bin/ps", []string{"-l"}, procAttr)
+	if err != nil {
+		return -1, err
+	}
+
+	return proc.Pid, nil
 }
