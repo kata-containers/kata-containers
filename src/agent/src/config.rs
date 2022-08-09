@@ -1393,7 +1393,7 @@ Caused by:
             vec!["CreateContainer".to_string(), "StartContainer".to_string()]
                 .iter()
                 .cloned()
-                .collect()
+                .collect::<HashSet<std::string::String>>()
         );
 
         // Verify that the default values are valid
