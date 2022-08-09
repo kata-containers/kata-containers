@@ -23,14 +23,24 @@ COMMIT_MSG = $(if $(COMMIT),$(COMMIT),unknown)
 # Exported to allow cargo to see it
 export VERSION_COMMIT := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
 
+include ../../utils.mk
+
 EXTRA_RUSTFEATURES :=
 
 ##VAR SECCOMP=yes|no define if agent enables seccomp feature
 SECCOMP := yes
 
+##VAR WASM=yes|no define if agent enables wasm feature
+WASM := yes
+
 # Enable seccomp feature of rust build
 ifeq ($(SECCOMP),yes)
     override EXTRA_RUSTFEATURES += seccomp
+endif
+
+# Enable wasm feature of rust build
+ifeq ($(WASM),yes)
+	override EXTRA_RUSTFEATURES += wasm
 endif
 
 ##VAR STANDARD_OCI_RUNTIME=yes|no define if agent enables standard oci runtime feature
@@ -44,8 +54,6 @@ endif
 ifneq ($(EXTRA_RUSTFEATURES),)
     override EXTRA_RUSTFEATURES := --features "$(EXTRA_RUSTFEATURES)"
 endif
-
-include ../../utils.mk
 
 TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
 
