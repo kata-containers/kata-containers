@@ -5,7 +5,6 @@
 //
 
 pub mod none_model;
-pub mod route_model;
 pub mod tc_filter_model;
 pub mod test_network_model;
 use std::sync::Arc;
@@ -16,12 +15,10 @@ use async_trait::async_trait;
 use super::NetworkPair;
 
 pub(crate) const TC_FILTER_NET_MODEL_STR: &str = "tcfilter";
-pub(crate) const ROUTE_NET_MODEL_STR: &str = "route";
 
 pub enum NetworkModelType {
     NoneModel,
     TcFilter,
-    Route,
 }
 
 #[async_trait]
@@ -35,9 +32,6 @@ pub fn new(model: &str) -> Result<Arc<dyn NetworkModel>> {
     match model {
         TC_FILTER_NET_MODEL_STR => Ok(Arc::new(
             tc_filter_model::TcFilterModel::new().context("new tc filter model")?,
-        )),
-        ROUTE_NET_MODEL_STR => Ok(Arc::new(
-            route_model::RouteModel::new().context("new route model")?,
         )),
         _ => Ok(Arc::new(
             none_model::NoneModel::new().context("new none model")?,
