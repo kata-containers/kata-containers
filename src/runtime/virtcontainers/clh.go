@@ -1598,6 +1598,16 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 	return nil
 }
 
+func (clh *cloudHypervisor) GetTotalMemoryMB(ctx context.Context) uint32 {
+	vminfo, err := clh.vmInfo()
+	if err != nil {
+		clh.Logger().WithError(err).Error("failed to get vminfo")
+		return 0
+	}
+
+	return uint32(vminfo.GetMemoryActualSize() >> utils.MibToBytesShift)
+}
+
 // vmInfo ask to hypervisor for current VM status
 func (clh *cloudHypervisor) vmInfo() (chclient.VmInfo, error) {
 	cl := clh.client()
