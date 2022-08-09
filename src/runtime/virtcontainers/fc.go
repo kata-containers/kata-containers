@@ -1165,6 +1165,10 @@ func (fc *firecracker) HypervisorConfig() HypervisorConfig {
 	return fc.config
 }
 
+func (fc *firecracker) GetTotalMemoryMB(ctx context.Context) uint32 {
+	return fc.config.MemorySize
+}
+
 func (fc *firecracker) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
 	return 0, MemoryDevice{}, nil
 }
