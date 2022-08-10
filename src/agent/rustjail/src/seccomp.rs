@@ -122,10 +122,10 @@ pub fn init_seccomp(scmp: &LinuxSeccomp) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::skip_if_not_root;
     use libc::{dup3, process_vm_readv, EPERM, O_CLOEXEC};
     use std::io::Error;
     use std::ptr::null;
+    use test_utils::skip_if_not_root;
 
     macro_rules! syscall_assert {
         ($e1: expr, $e2: expr) => {
