@@ -4,13 +4,10 @@
 //
 
 use anyhow::{anyhow, Result};
-use libcontainer::{
-    cgroup,
-    status::{get_current_container_state, Status},
-};
+use libcontainer::{container::Container, status::Status};
 use liboci_cli::Delete;
 use nix::{
-    errno::Errno,
+    sys::signal::SIGKILL,
     sys::signal::{kill, Signal},
     unistd::Pid,
 };
@@ -26,13 +23,14 @@ pub async fn run(opts: Delete, root: &Path, logger: &Logger) -> Result<()> {
         return Err(anyhow!("container {} does not exist", container_id));
     }
 
-    let status = if let Ok(value) = Status::load(root, container_id) {
+    let container = if let Ok(value) = Container::load(root, container_id) {
         value
     } else {
         fs::remove_dir_all(status_dir)?;
         return Ok(());
     };
 
+    let status = &container.status;
     let spec = status
         .config
         .spec
@@ -42,7 +40,7 @@ pub async fn run(opts: Delete, root: &Path, logger: &Logger) -> Result<()> {
     let oci_state = OCIState {
         version: status.oci_version.clone(),
         id: status.id.clone(),
-        status: get_current_container_state(&status)?,
+        status: container.state,
         pid: status.pid,
         bundle: status
             .bundle
@@ -64,20 +62,16 @@ pub async fn run(opts: Delete, root: &Path, logger: &Logger) -> Result<()> {
 
     match oci_state.status {
         ContainerState::Stopped => {
-            destroy_container(&status)?;
+            container.destroy()?;
         }
         ContainerState::Created => {
             kill(Pid::from_raw(status.pid), Some(Signal::SIGKILL))?;
-            destroy_container(&status)?;
+            container.destroy()?;
         }
         _ => {
             if opts.force {
-                if let Err(errno) = kill(Pid::from_raw(status.pid), Some(Signal::SIGKILL)) {
-                    if errno != Errno::ESRCH {
-                        return Err(anyhow!("{}", errno));
-                    }
-                }
-                destroy_container(&status)?;
+                container.kill(SIGKILL, true)?;
+                container.destroy()?;
             } else {
                 return Err(anyhow!(
                     "cannot delete container {} that is not stopped",
@@ -88,13 +82,6 @@ pub async fn run(opts: Delete, root: &Path, logger: &Logger) -> Result<()> {
     }
 
     info!(&logger, "delete command finished successfully");
-
-    Ok(())
-}
-
-fn destroy_container(status: &Status) -> Result<()> {
-    cgroup::destroy_cgroup(&status.cgroup_manager)?;
-    status.remove_dir()?;
 
     Ok(())
 }

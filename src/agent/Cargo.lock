@@ -1510,6 +1510,7 @@ dependencies = [
  "slog",
  "slog-scope",
  "tempfile",
+ "test-utils",
  "tokio",
 ]
 
