@@ -80,7 +80,10 @@ cc: cc-cloud-hypervisor-tarball \
 	cc-qemu-tarball \
 	cc-rootfs-image-tarball \
 	cc-shim-v2-tarball \
-	cc-virtiofsd-tarball
+	cc-virtiofsd-tarball \
+	cc-tdx-kernel-tarball \
+	cc-tdx-qemu-tarball \
+	cc-tdx-tdvf-tarball
 
 cc-cloud-hypervisor-tarball:
 	${MAKE} $@-build
