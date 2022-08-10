@@ -8,6 +8,7 @@ pub mod delete;
 pub mod exec;
 pub mod kill;
 pub mod list;
+pub mod ps;
 pub mod run;
 pub mod spec;
 pub mod start;

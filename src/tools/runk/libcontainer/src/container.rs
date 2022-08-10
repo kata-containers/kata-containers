@@ -3,9 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::status::Status;
+use crate::status::{self, get_all_pid, get_current_container_state, Status};
 use anyhow::{anyhow, Result};
-use nix::unistd::{chdir, unlink};
+use nix::sys::signal::kill;
+use nix::{
+    sys::signal::Signal,
+    unistd::{chdir, unlink, Pid},
+};
+use oci::ContainerState;
 use rustjail::{
     container::{BaseContainer, LinuxContainer, EXEC_FIFO_FILENAME},
     process::{Process, ProcessOperations},
@@ -24,6 +29,47 @@ pub const CONFIG_FILE_NAME: &str = "config.json";
 pub enum ContainerAction {
     Create,
     Run,
+}
+
+#[derive(Debug)]
+pub struct Container {
+    pub status: Status,
+    pub state: ContainerState,
+}
+
+impl Container {
+    pub fn load(state_root: &Path, id: &str) -> Result<Self> {
+        let status = Status::load(state_root, id)?;
+        let state = get_current_container_state(&status)?;
+        Ok(Self { status, state })
+    }
+
+    pub fn processes(&self) -> Result<Vec<Pid>> {
+        get_all_pid(&self.status.cgroup_manager)
+    }
+
+    pub fn kill(&self, signal: Signal, all: bool) -> Result<()> {
+        if all {
+            let pids = self.processes()?;
+            for pid in pids {
+                if !status::is_process_running(pid)? {
+                    continue;
+                }
+                kill(pid, signal)?;
+            }
+        } else {
+            if self.state == ContainerState::Stopped {
+                return Err(anyhow!("container {} not running", self.status.id));
+            }
+            let pid = Pid::from_raw(self.status.pid);
+            if status::is_process_running(pid)? {
+                kill(pid, signal)?;
+            }
+        }
+        Ok(())
+    }
+
+    // TODO: add pause and resume
 }
 
 /// Used to run a process. If init is set, it will create a container and run the process in it.
