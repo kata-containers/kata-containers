@@ -11,6 +11,23 @@ use std::process;
 use std::result;
 use std::sync::Mutex;
 
+mod file_rotate;
+mod log_writer;
+
+pub use file_rotate::FileRotator;
+pub use log_writer::LogWriter;
+
+#[macro_export]
+macro_rules! logger_with_subsystem {
+    ($name: ident, $subsystem: expr) => {
+        macro_rules! $name {
+                            () => {
+                                    slog_scope::logger().new(slog::o!("subsystem" => $subsystem))
+                            };
+                        }
+    };
+}
+
 const LOG_LEVELS: &[(&str, slog::Level)] = &[
     ("trace", slog::Level::Trace),
     ("debug", slog::Level::Debug),
@@ -528,8 +545,8 @@ mod tests {
             let msg = format!("test[{}]", i);
 
             // Create a writer for the logger drain to use
-            let writer =
-                NamedTempFile::new().unwrap_or_else(|_| panic!("{:}: failed to create tempfile", msg));
+            let writer = NamedTempFile::new()
+                .unwrap_or_else(|_| panic!("{:}: failed to create tempfile", msg));
 
             // Used to check file contents before the temp file is unlinked
             let mut writer_ref = writer

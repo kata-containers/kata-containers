@@ -22,7 +22,7 @@ extern crate slog;
 use anyhow::{anyhow, Context, Result};
 use clap::{AppSettings, Parser};
 use nix::fcntl::OFlag;
-use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
+use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
 use nix::unistd::{self, dup, Pid};
 use std::env;
 use std::ffi::OsStr;
@@ -128,7 +128,7 @@ async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool
             None,
         )?;
 
-        let addr = SockAddr::new_vsock(libc::VMADDR_CID_ANY, vsock_port);
+        let addr = VsockAddr::new(libc::VMADDR_CID_ANY, vsock_port);
         socket::bind(listenfd, &addr)?;
         socket::listen(listenfd, 1)?;
 

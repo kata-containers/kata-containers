@@ -1,0 +1,13 @@
+[package]
+name = "linux_container"
+version = "0.1.0"
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+edition = "2018"
+
+[dependencies]
+anyhow = "^1.0"
+async-trait = "0.1.48"
+tokio = { version = "1.8.0" }
+
+common = { path = "../common" }
+kata-types = { path = "../../../../libs/kata-types" }
