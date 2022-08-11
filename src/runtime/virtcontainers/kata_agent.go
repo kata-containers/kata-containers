@@ -2014,11 +2014,13 @@ func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (inter
 	k.Lock()
 
 	if k.reqHandlers == nil {
+		k.Unlock()
 		return nil, errors.New("Client has already disconnected")
 	}
 
 	handler := k.reqHandlers[msgName]
 	if msgName == "" || handler == nil {
+		k.Unlock()
 		return nil, errors.New("Invalid request type")
 	}
 

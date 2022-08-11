@@ -101,7 +101,7 @@ assets:
       tdx:
         description: "VMM that uses KVM and supports TDX"
         url: "https://github.com/intel/qemu-dcp"
-        tag: "SPR-BKC-QEMU-v2.2"
+        tag: "SPR-BKC-QEMU-v2.5"
 
     qemu-experimental:
       description: "QEMU with virtiofs support"
@@ -154,8 +154,8 @@ assets:
     version: "v5.15.48"
     tdx:
       description: "Linux kernel that supports TDX"
-      url: "https://github.com/intel/tdx/archive/refs/tags"
-      tag: "tdx-guest-v5.15-4"
+      url: "https://github.com/intel/linux-kernel-dcp/archive/refs/tags"
+      tag: "SPR-BKC-PC-v9.6"
     sev:
       description: "Linux kernel with efi_secret support"
       url: "https://github.com/confidential-containers-demo/\
@@ -284,8 +284,8 @@ externals:
   td-shim:
     description: "Confidential Containers Shim Firmware"
     url: "https://github.com/confidential-containers/td-shim"
-    version: "5f62a0e367b1845a54e534d103ed4a697a599ac3"
-    toolchain: "nightly-2022-04-07"
+    version: "cf9592ef70bd6ba4c7ab1330d278a743f5ba3133"
+    toolchain: "nightly-2022-05-15"
 
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
