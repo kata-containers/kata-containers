@@ -14,6 +14,8 @@ use std::collections::HashMap;
 mod serialize;
 pub use serialize::{to_string, to_writer, Error, Result};
 
+pub const OCI_SPEC_CONFIG_FILE_NAME: &str = "config.json";
+
 #[allow(dead_code)]
 fn is_false(b: bool) -> bool {
     !b

@@ -3,6 +3,23 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# Note:
+#
+# Since this file defines rules, it should be included
+# in other makefiles *after* their default rule has been defined.
+
+# Owner for installed files
+export KATA_INSTALL_OWNER     ?= root
+
+# Group for installed files
+export KATA_INSTALL_GROUP     ?= adm
+
+# Permissions for installed configuration files.
+#
+# XXX: Note that the permissions MUST be zero for "other"
+# XXX: in case the configuration file contains secrets.
+export KATA_INSTALL_CFG_PERMS ?= 0640
+
 # Create a set of standard rules for a project such that:
 #
 # - The component depends on its Makefile.
@@ -160,3 +177,28 @@ standard_rust_check:
 	cargo clippy --all-targets --all-features --release \
 		-- \
 		-D warnings
+
+# Install a file (full version).
+#
+# params:
+#
+# $1 : File to install.
+# $2 : Directory path where file will be installed.
+# $3 : Permissions to apply to the installed file.
+define INSTALL_FILE_FULL
+    sudo install \
+        --mode $3 \
+        --owner $(KATA_INSTALL_OWNER) \
+        --group $(KATA_INSTALL_GROUP) \
+        -D $1 $2/$(notdir $1) || exit 1;
+endef
+
+# Install a configuration file.
+#
+# params:
+#
+# $1 : File to install.
+# $2 : Directory path where file will be installed.
+define INSTALL_CONFIG
+    $(call INSTALL_FILE_FULL,$1,$2,$(KATA_INSTALL_CFG_PERMS))
+endef

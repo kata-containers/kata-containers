@@ -1,7 +1,10 @@
 [workspace]
 members = [
     "logging",
+    "kata-types",
+    "kata-sys-util",
     "safe-path",
     "protocols",
+    "oci",
 ]
 resolver = "2"

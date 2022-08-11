@@ -107,6 +107,8 @@ func setCPUtype(hypervisorType vc.HypervisorType) error {
 			fallthrough
 		case "clh":
 			fallthrough
+		case "dragonball":
+			fallthrough
 		case "qemu":
 			archRequiredCPUFlags = map[string]string{
 				cpuFlagVMX:    "Virtualization support",
