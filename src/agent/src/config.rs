@@ -27,6 +27,7 @@ const CONFIG_FILE: &str = "agent.config_file";
 const CONTAINER_POLICY_FILE: &str = "agent.container_policy_file";
 const HTTPS_PROXY: &str = "agent.https_proxy";
 const NO_PROXY: &str = "agent.no_proxy";
+const ENABLE_DATA_INTEGRITY: &str = "agent.data_integrity";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
@@ -89,6 +90,7 @@ pub struct AgentConfig {
     pub aa_kbc_params: String,
     pub https_proxy: String,
     pub no_proxy: String,
+    pub data_integrity: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -108,6 +110,7 @@ pub struct AgentConfigBuilder {
     pub aa_kbc_params: Option<String>,
     pub https_proxy: Option<String>,
     pub no_proxy: Option<String>,
+    pub data_integrity: Option<bool>,
 }
 
 macro_rules! config_override {
@@ -173,6 +176,7 @@ impl Default for AgentConfig {
             aa_kbc_params: String::from(""),
             https_proxy: String::from(""),
             no_proxy: String::from(""),
+            data_integrity: false,
         }
     }
 }
@@ -205,6 +209,7 @@ impl FromStr for AgentConfig {
         config_override!(agent_config_builder, agent_config, aa_kbc_params);
         config_override!(agent_config_builder, agent_config, https_proxy);
         config_override!(agent_config_builder, agent_config, no_proxy);
+        config_override!(agent_config_builder, agent_config, data_integrity);
 
         // Populate the allowed endpoints hash set, if we got any from the config file.
         if let Some(endpoints) = agent_config_builder.endpoints {
@@ -312,6 +317,12 @@ impl AgentConfig {
 
             parse_cmdline_param!(param, HTTPS_PROXY, config.https_proxy, get_url_value);
             parse_cmdline_param!(param, NO_PROXY, config.no_proxy, get_string_value);
+            parse_cmdline_param!(
+                param,
+                ENABLE_DATA_INTEGRITY,
+                config.data_integrity,
+                get_bool_value
+            );
         }
 
         if let Ok(addr) = env::var(SERVER_ADDR_ENV_VAR) {
@@ -534,6 +545,7 @@ mod tests {
             container_policy_path: &'a str,
             https_proxy: &'a str,
             no_proxy: &'a str,
+            data_integrity: bool,
         }
 
         impl Default for TestData<'_> {
@@ -552,6 +564,7 @@ mod tests {
                     container_policy_path: "",
                     https_proxy: "",
                     no_proxy: "",
+                    data_integrity: false,
                 }
             }
         }
@@ -946,6 +959,31 @@ mod tests {
                 no_proxy: "192.168.1.0/24,172.16.0.0/12",
                 ..Default::default()
             },
+            TestData {
+                contents: "",
+                data_integrity: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.data_integrity=true",
+                data_integrity: true,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.data_integrity=false",
+                data_integrity: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.data_integrity=1",
+                data_integrity: true,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.data_integrity=0",
+                data_integrity: false,
+                ..Default::default()
+            },
         ];
 
         let dir = tempdir().expect("failed to create tmpdir");
@@ -1000,6 +1038,7 @@ mod tests {
             );
             assert_eq!(d.https_proxy, config.https_proxy, "{}", msg);
             assert_eq!(d.no_proxy, config.no_proxy, "{}", msg);
+            assert_eq!(d.data_integrity, config.data_integrity, "{}", msg);
 
             for v in vars_to_unset {
                 env::remove_var(v);
