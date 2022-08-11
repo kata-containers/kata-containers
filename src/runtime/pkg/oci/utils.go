@@ -611,6 +611,16 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 		return err
 	}
 
+	// HugepageSize valid only HugePages is true
+	if value, ok := ocispec.Annotations[vcAnnotations.HugepageSize]; sbConfig.HypervisorConfig.HugePages && ok {
+		hugepageTypes := vc.GetHugepageTypes()
+		for _, t := range hugepageTypes {
+			if value == t {
+				sbConfig.HypervisorConfig.HugepageSize = value
+			}
+		}
+	}
+
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.IOMMU).setBool(func(iommu bool) {
 		sbConfig.HypervisorConfig.IOMMU = iommu
 	}); err != nil {

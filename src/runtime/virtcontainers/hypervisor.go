@@ -151,6 +151,18 @@ type MemoryDevice struct {
 	Probe  bool
 }
 
+const (
+	HugepageSize2M   = "2M"
+	HugepageSize512M = "512M"
+	HugepageSize1G   = "1G"
+)
+
+var HugePageMap = map[string]int64{
+	HugepageSize2M:   2 * (1 << 20),
+	HugepageSize512M: 512 * (1 << 20),
+	HugepageSize1G:   1 * (1 << 30),
+}
+
 // SetHypervisorLogger sets up a logger for the hypervisor part of this pkg
 func SetHypervisorLogger(logger *logrus.Entry) {
 	fields := hvLogger.Data
@@ -494,6 +506,9 @@ type HypervisorConfig struct {
 
 	// HugePages specifies if the memory should be pre-allocated from huge pages
 	HugePages bool
+
+	// HugepageSize specifies the huge memory type
+	HugepageSize string
 
 	// VirtioMem is used to enable/disable virtio-mem
 	VirtioMem bool
@@ -892,6 +907,16 @@ func (gp guestProtection) String() string {
 
 func genericAvailableGuestProtections() (protections []string) {
 	return
+}
+
+func GetHugepageTypes() []string {
+	arch := runtime.GOARCH
+	if arch == "amd64" {
+		return []string{HugepageSize2M, HugepageSize1G}
+	} else if arch == "arm64" {
+		return []string{HugepageSize2M, HugepageSize512M, HugepageSize1G}
+	}
+	return nil
 }
 
 func AvailableGuestProtections() (protections []string) {

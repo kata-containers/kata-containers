@@ -479,6 +479,19 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
 	// Enable hugepages if needed
 	clh.vmconfig.Memory.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
+
+	if *clh.vmconfig.Memory.Hugepages {
+		hugepageTypes := GetHugepageTypes()
+		for _, t := range hugepageTypes {
+			if t == clh.config.HugepageSize {
+				if v, ok := HugePageMap[t]; ok {
+					clh.vmconfig.Memory.HugepageSize = &v
+					break
+				}
+			}
+		}
+	}
+
 	if !clh.config.ConfidentialGuest {
 		hotplugSize := clh.config.DefaultMaxMemorySize
 		// OpenAPI only supports int64 values

@@ -137,6 +137,7 @@ type hypervisor struct {
 	DisableBlockDeviceUse          bool     `toml:"disable_block_device_use"`
 	MemPrealloc                    bool     `toml:"enable_mem_prealloc"`
 	HugePages                      bool     `toml:"enable_hugepages"`
+	HugepageSize                   string   `toml:"hugepage_size"`
 	VirtioMem                      bool     `toml:"enable_virtio_mem"`
 	IOMMU                          bool     `toml:"enable_iommu"`
 	IOMMUPlatform                  bool     `toml:"enable_iommu_platform"`
@@ -959,6 +960,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		VirtioFSCache:                  h.VirtioFSCache,
 		MemPrealloc:                    h.MemPrealloc,
 		HugePages:                      h.HugePages,
+		HugepageSize:                   h.HugepageSize,
 		FileBackedMemRootDir:           h.FileBackedMemRootDir,
 		FileBackedMemRootList:          h.FileBackedMemRootList,
 		Debug:                          h.Debug,

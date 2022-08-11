@@ -165,6 +165,9 @@ const (
 	// HugePages is a sandbox annotation to specify if the memory should be pre-allocated from huge pages
 	HugePages = kataAnnotHypervisorPrefix + "enable_hugepages"
 
+	// HugepageSize is Hypervisor to specify if the huge memory type used by Hypervisor
+	HugepageSize = kataAnnotHypervisorPrefix + "hugepage_size"
+
 	// Iommu is a sandbox annotation to specify if the VM should have a vIOMMU device
 	IOMMU = kataAnnotHypervisorPrefix + "enable_iommu"
 
