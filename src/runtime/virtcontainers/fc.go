@@ -889,6 +889,10 @@ func (fc *firecracker) PauseVM(ctx context.Context) error {
 	return nil
 }
 
+func (fc *firecracker) AttestVM(ctx context.Context) error {
+	return nil
+}
+
 func (fc *firecracker) SaveVM() error {
 	return nil
 }

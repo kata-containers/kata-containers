@@ -37,6 +37,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/sev"
 	pkgUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -84,32 +85,21 @@ type QemuState struct {
 // qemu is an Hypervisor interface implementation for the Linux qemu hypervisor.
 // nolint: govet
 type qemu struct {
-	arch qemuArch
-
+	arch           qemuArch
 	virtiofsDaemon VirtiofsDaemon
-
-	ctx context.Context
-
+	ctx            context.Context
+	id             string
+	qemuConfig     govmmQemu.Config
+	qmpMonitorCh   qmpChannel
 	// fds is a list of file descriptors inherited by QEMU process
 	// they'll be closed once QEMU process is running
-	fds []*os.File
-
-	id string
-
-	state QemuState
-
-	qmpMonitorCh qmpChannel
-
-	qemuConfig govmmQemu.Config
-
-	config HypervisorConfig
-
+	fds         []*os.File
+	state       QemuState
+	config      HypervisorConfig
+	nvdimmCount int
 	// if in memory dump progress
 	memoryDumpFlag sync.Mutex
-
-	nvdimmCount int
-
-	stopped bool
+	stopped        bool
 }
 
 const (
@@ -634,10 +624,39 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		PFlash:         pflash,
 		PidFile:        filepath.Join(q.config.VMStorePath, q.id, "pid"),
 	}
+	if q.arch.guestProtection() == sevProtection {
+		sevConfig := sev.GuestPreAttestationConfig{
+			Proxy:         q.config.GuestPreAttestationProxy,
+			Policy:        q.config.SEVGuestPolicy,
+			CertChainPath: q.config.SEVCertChainPath,
+		}
+		sevConfig.LaunchId = ""
 
-	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath)
-	if err != nil {
-		return err
+		if q.config.GuestPreAttestation {
+			sevConfig.LaunchId, err = q.arch.setupSEVGuestPreAttestation(ctx, sevConfig)
+			if err != nil {
+				q.Logger().Warning("SEV attestation setup failed.")
+				return err
+			}
+
+			// SEV(-ES) guest is started paused for launch secrets injection
+			qemuConfig.Knobs.Stopped = true
+			q.arch.setSEVPreAttestationId(sevConfig.LaunchId)
+		} else {
+			q.Logger().Infof("SEV guest attestation skipped")
+		}
+
+		qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendSEVObject(qemuConfig.Devices, firmwarePath, firmwareVolumePath, sevConfig)
+		if err != nil {
+			q.Logger().Warning("Unable to append SEV object to qemu command")
+			return err
+		}
+
+	} else {
+		qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath)
+		if err != nil {
+			return err
+		}
 	}
 
 	if ioThread != nil {
@@ -792,6 +811,56 @@ func (q *qemu) setupVirtioMem(ctx context.Context) error {
 	}
 
 	return err
+}
+
+func (q *qemu) AttestVM(ctx context.Context) error {
+	if q.arch.guestProtection() != sevProtection {
+		return nil
+	}
+
+	if err := q.qmpSetup(); err != nil {
+		return err
+	}
+	kernelPath, err := q.config.KernelAssetPath()
+	if err != nil {
+		return err
+	}
+
+	initrdPath, err := q.config.InitrdAssetPath()
+	if err != nil {
+		return err
+	}
+
+	firmwarePath, err := q.config.FirmwareAssetPath()
+	if err != nil {
+		return err
+	}
+
+	kernelParameters := q.kernelParameters()
+	launchId := q.arch.getSEVPreAttestationId()
+
+	// Guest must be paused so that secrets can be injected.
+	// Guest will be continued by the Attestation function
+	sevConfig := sev.GuestPreAttestationConfig{
+		Proxy:               q.config.GuestPreAttestationProxy,
+		Policy:              q.config.SEVGuestPolicy,
+		Keyset:              q.config.GuestPreAttestationKeyset,
+		KeyBrokerSecretGuid: q.config.GuestPreAttestationSecretGuid,
+		KeyBrokerSecretType: q.config.GuestPreAttestationSecretType,
+		LaunchId:            launchId,
+		KernelPath:          kernelPath,
+		InitrdPath:          initrdPath,
+		FwPath:              firmwarePath,
+		KernelParameters:    kernelParameters,
+	}
+	if err := q.arch.sevGuestPreAttestation(
+		q.qmpMonitorCh.ctx,
+		q.qmpMonitorCh.qmp,
+		sevConfig); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // StartVM will start the Sandbox's VM.

@@ -328,40 +328,32 @@ func bindMountContainerRootfs(ctx context.Context, shareDir, cid, cRootFs string
 // Mount describes a container mount.
 // nolint: govet
 type Mount struct {
+	// FSGroup a group ID that the group ownership of the files for the mounted volume
+	// will need to be changed when set.
+	FSGroup *int
 	// Source is the source of the mount.
 	Source string
 	// Destination is the destination of the mount (within the container).
 	Destination string
-
-	// Type specifies the type of filesystem to mount.
-	Type string
-
 	// HostPath used to store host side bind mount path
 	HostPath string
-
 	// GuestDeviceMount represents the path within the VM that the device
 	// is mounted. Only relevant for block devices. This is tracked in the event
 	// runtime wants to query the agent for mount stats.
 	GuestDeviceMount string
-
 	// BlockDeviceID represents block device that is attached to the
 	// VM in case this mount is a block device file or a directory
 	// backed by a block device.
 	BlockDeviceID string
-
-	// Options list all the mount options of the filesystem.
-	Options []string
-
-	// ReadOnly specifies if the mount should be read only or not
-	ReadOnly bool
-
-	// FSGroup a group ID that the group ownership of the files for the mounted volume
-	// will need to be changed when set.
-	FSGroup *int
-
+	// Type specifies the type of filesystem to mount.
+	Type string
 	// FSGroupChangePolicy specifies the policy that will be used when applying
 	// group id ownership change for a volume.
 	FSGroupChangePolicy volume.FSGroupChangePolicy
+	// Options list all the mount options of the filesystem.
+	Options []string
+	// ReadOnly specifies if the mount should be read only or not
+	ReadOnly bool
 }
 
 func isSymlink(path string) bool {

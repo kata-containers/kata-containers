@@ -242,15 +242,15 @@ func (s *CloudHypervisorState) reset() {
 }
 
 type cloudHypervisor struct {
+	vmconfig        chclient.VmConfig
 	console         console.Console
 	virtiofsDaemon  VirtiofsDaemon
-	APIClient       clhClient
 	ctx             context.Context
-	id              string
+	APIClient       clhClient
 	netDevices      *[]chclient.NetConfig
 	devicesIds      map[string]string
 	netDevicesFiles map[string][]*os.File
-	vmconfig        chclient.VmConfig
+	id              string
 	state           CloudHypervisorState
 	config          HypervisorConfig
 }
@@ -981,6 +981,11 @@ func (clh *cloudHypervisor) Cleanup(ctx context.Context) error {
 
 func (clh *cloudHypervisor) PauseVM(ctx context.Context) error {
 	clh.Logger().WithField("function", "PauseVM").Info("Pause Sandbox")
+	return nil
+}
+
+func (clh *cloudHypervisor) AttestVM(ctx context.Context) error {
+	clh.Logger().WithField("function", "AttestVM").Info("Attest Sandbox")
 	return nil
 }
 

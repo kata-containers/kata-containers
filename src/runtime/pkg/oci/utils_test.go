@@ -1205,8 +1205,8 @@ func TestNewMount(t *testing.T) {
 	assert := assert.New(t)
 
 	testCases := []struct {
-		out vc.Mount
 		in  specs.Mount
+		out vc.Mount
 	}{
 		{
 			in: specs.Mount{

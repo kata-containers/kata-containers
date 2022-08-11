@@ -283,6 +283,22 @@ type Object struct {
 
 	// Prealloc enables memory preallocation
 	Prealloc bool
+
+	// SevPolicy is the policy for the SEV instance. For more info, see AMD document 55766
+	// This is only relevant for sev-guest objects
+	SevPolicy uint32
+
+	// SevCertFilePath is the path to the guest Diffie–Hellman key
+	// This is only relevant for sev-guest objects
+	SevCertFilePath string
+
+	// SevSessionFilePath is the path to the launch blog
+	// This is only relevant for sev-guest objects
+	SevSessionFilePath string
+
+	// SevKernelHashes specifies whether the hashes of the kernel, initrd, & cmdline are included in the measurement
+	// This is only relevant for sev-guest objects
+	SevKernelHashes bool
 }
 
 // Valid returns true if the Object structure is valid and complete.
@@ -353,7 +369,17 @@ func (object Object) QemuParams(config *Config) []string {
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
 		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
 		objectParams = append(objectParams, fmt.Sprintf("reduced-phys-bits=%d", object.ReducedPhysBits))
-
+		objectParams = append(objectParams, fmt.Sprintf("policy=%d", object.SevPolicy))
+		if object.SevCertFilePath != "" {
+			objectParams = append(objectParams, fmt.Sprintf("dh-cert-file=%s", object.SevCertFilePath))
+		}
+		if object.SevSessionFilePath != "" {
+			objectParams = append(objectParams, fmt.Sprintf("session-file=%s", object.SevSessionFilePath))
+		}
+		if object.SevKernelHashes {
+			objectParams = append(objectParams, "kernel-hashes=on")
+		}
+		// Add OVMF firmware as pflash drive
 		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
 		driveParams = append(driveParams, fmt.Sprintf("file=%s", object.File))
 	case SecExecGuest:
