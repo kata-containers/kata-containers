@@ -68,7 +68,7 @@ architectures:
 
     Example for musl 1.2.3
     ```
-    $ wget https://git.musl-libc.org/cgit/musl/snapshot/musl-1.2.3.tar.gz
+    $ curl -O https://git.musl-libc.org/cgit/musl/snapshot/musl-1.2.3.tar.gz
     $ tar vxf musl-1.2.3.tar.gz
     $ cd musl-1.2.3/
     $ ./configure --prefix=/usr/local/
@@ -81,7 +81,7 @@ architectures:
 ```
 $ git clone https://github.com/kata-containers/kata-containers.git
 $ cd kata-containers/src/runtime-rs
-$ make && make install
+$ make && sudo make install
 ```
 After running the command above, the default config file `configuration.toml` will be installed under `/usr/share/defaults/kata-containers/`,  the binary file `containerd-shim-kata-v2` will be installed under `/user/local/bin` .
 
