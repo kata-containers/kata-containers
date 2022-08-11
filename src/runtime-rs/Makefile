@@ -133,7 +133,7 @@ MONITOR = kata-monitor
 MONITOR_OUTPUT = $(CURDIR)/$(MONITOR)
 MONITOR_DIR = $(CLI_DIR)/kata-monitor
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
-VERSION := ${shell cat ./VERSION}
+VERSION := ${shell grep -v ^\# ./VERSION}
 
 # List of configuration files to build and install
 CONFIGS =
@@ -374,7 +374,7 @@ vendor:
 ##TARGET check: run test
 check: $(GENERATED_FILES) standard_rust_check
 
-##TARGET run: build and run agent
+##TARGET run: build and run kata shim
 run:
 	@cargo run --target $(TRIPLE)
 
