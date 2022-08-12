@@ -228,6 +228,10 @@ MONITOR_DIR = $(CLI_DIR)/kata-monitor
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 VERSION := ${shell cat ./VERSION}
 
+VERSIONSFILEPATH = "${CURDIR}/../../versions.yaml"
+CONTAINERDRECVERSION = $(shell yq r $(VERSIONSFILEPATH) 'externals.containerd.version')
+CRIORECVERSION = $(shell yq r $(VERSIONSFILEPATH) 'externals.crio.branch' | cut -d "-" -f2)
+
 # List of configuration files to build and install
 CONFIGS =
 CONFIG_PATHS =
@@ -506,6 +510,8 @@ endif
 ifeq ($(ARCH),s390x)
     KATA_LDFLAGS += -extldflags=-Wl,--s390-pgste
 endif
+
+KATA_LDFLAGS += -X 'main.containerdRecVersion=$(CONTAINERDRECVERSION)' -X 'main.crioRecVersion=$(CRIORECVERSION)'
 
 # Return non-empty string if specified directory exists
 define DIR_EXISTS

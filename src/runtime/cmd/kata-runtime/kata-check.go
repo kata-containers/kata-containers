@@ -32,6 +32,11 @@ import (
 	"github.com/urfave/cli"
 )
 
+var (
+	containerdRecVersion string
+	crioRecVersion       string
+)
+
 type kernelModule struct {
 	// maps parameter names to values
 	parameters map[string]string
@@ -440,8 +445,8 @@ EXAMPLES:
 
 			fmt.Println(successMessageCreate)
 		}
-
-		return nil
+		err = checkVersions()
+		return err
 	},
 }
 
@@ -537,4 +542,41 @@ func genericCheckKVMExtensions(extensions map[string]kvmExtension) (map[string]i
 	}
 
 	return results, nil
+}
+
+func checkVersions() error {
+	// Extract version of Crio
+	crioVerCmd := exec.Command("crio", "--version")
+	crioVerArr, err := crioVerCmd.Output()
+
+	if err != nil {
+		fmt.Printf("Unable to determine cri-o version (you may not be using cri-o)%s\n", err)
+	} else {
+		crioVer := string(crioVerArr)
+		versionStart, versionEnd := "Version:          ", "\nGoVersion:"
+		versionIndex, endIndex := strings.Index(crioVer, versionStart), strings.Index(crioVer, versionEnd)
+		crioVer = crioVer[versionIndex+len(versionStart) : endIndex]
+
+		crioRelease := strings.Join(strings.Split(crioVer, ".")[0:2], ".")
+
+		if crioRelease != crioRecVersion {
+			fmt.Printf("You are using cri-o %s, but %s is recommended\n", crioRelease, crioRecVersion)
+		}
+
+	}
+
+	// Extract version of containerd
+	containerdVerCmd := exec.Command("containerd", "--version")
+	containerdVerArr, err := containerdVerCmd.Output()
+	if err != nil {
+		fmt.Printf("Unable to determine containerd version (you may not be using containerd) %s\n", err)
+	} else {
+		containerdVer := "v" + strings.Split(string(containerdVerArr[:]), " ")[2]
+
+		if "v"+containerdVer != containerdRecVersion {
+			fmt.Printf("You are using containerd %s, but %s is recommended\n", containerdVer, containerdRecVersion)
+		}
+
+	}
+	return nil
 }
