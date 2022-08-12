@@ -28,6 +28,7 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	otelTrace "go.opentelemetry.io/otel/trace"
 	"golang.org/x/sys/unix"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
@@ -122,8 +123,9 @@ type exit struct {
 type service struct {
 	sandbox vc.VCSandbox
 
-	ctx     context.Context
-	rootCtx context.Context // root context for tracing
+	ctx      context.Context
+	rootCtx  context.Context // root context for tracing
+	rootSpan otelTrace.Span
 
 	containers map[string]*container
 
@@ -946,6 +948,7 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 		s.mu.Unlock()
 
 		span.End()
+		s.rootSpan.End()
 		katatrace.StopTracing(s.rootCtx)
 
 		return empty, nil

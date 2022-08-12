@@ -97,9 +97,10 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		}
 
 		// create root span
+		// rootSpan will be ended when the entire trace is ended
 		rootSpan, newCtx := katatrace.Trace(s.ctx, shimLog, "rootSpan", shimTracingTags)
 		s.rootCtx = newCtx
-		defer rootSpan.End()
+		s.rootSpan = rootSpan
 
 		// create span
 		span, newCtx := katatrace.Trace(s.rootCtx, shimLog, "create", shimTracingTags)
