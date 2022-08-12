@@ -77,8 +77,8 @@ $ command -v containerd
 You can manually install CNI plugins as follows:
 
 ```bash
-$ go get github.com/containernetworking/plugins
-$ pushd $GOPATH/src/github.com/containernetworking/plugins
+$ git clone https://github.com/containernetworking/plugins.git
+$ pushd plugins
 $ ./build_linux.sh
 $ sudo mkdir /opt/cni
 $ sudo cp -r bin /opt/cni/
@@ -93,8 +93,8 @@ $ popd
 You can install the `cri-tools` from source code:
 
 ```bash
-$ go get github.com/kubernetes-sigs/cri-tools
-$ pushd $GOPATH/src/github.com/kubernetes-sigs/cri-tools
+$ git clone https://github.com/kubernetes-sigs/cri-tools.git
+$ pushd cri-tools
 $ make
 $ sudo -E make install
 $ popd
