@@ -15,6 +15,7 @@
 path = "@QEMUPATH@"
 kernel = "@KERNELPATH@"
 image = "@IMAGEPATH@"
+# initrd = "@INITRDPATH@"
 machine_type = "@MACHINETYPE@"
 
 # Enable confidential guest support.
