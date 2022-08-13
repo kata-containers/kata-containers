@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::convert::TryFrom;
+use std::{collections::HashSet, convert::TryFrom};
 
 use agent::{ARPNeighbor, IPAddress, IPFamily, Interface, Route};
 use anyhow::{Context, Result};
@@ -101,6 +101,7 @@ fn generate_neigh(name: &str, n: &NeighbourMessage) -> Result<ARPNeighbor> {
         state: n.header.state as i32,
         ..Default::default()
     };
+    let mut neigh_ips = HashSet::new();
     for nla in &n.nlas {
         match nla {
             Nla::Destination(addr) => {
@@ -114,7 +115,10 @@ fn generate_neigh(name: &str, n: &NeighbourMessage) -> Result<ARPNeighbor> {
                     address: dest.to_string(),
                     mask: "".to_string(),
                 });
-                neigh.to_ip_address = addr;
+                if !neigh_ips.contains(&dest) {
+                    neigh_ips.insert(dest);
+                    neigh.to_ip_address = addr;
+                }
             }
             Nla::LinkLocalAddress(addr) => {
                 if addr.len() < 6 {
