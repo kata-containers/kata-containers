@@ -99,7 +99,13 @@ pub fn init_seccomp(scmp: &LinuxSeccomp) -> Result<()> {
                 filter.add_rule(action, syscall_num, None)?;
             } else {
                 let conditions = get_rule_conditions(&syscall.args)?;
-                filter.add_rule(action, syscall_num, Some(&conditions))?;
+                // If two or more arguments have the same condition,
+                // adding each condition as a separate rule.
+                // Otherwise, the adding will return EINVAL on failure.
+                // Ref. https://man7.org/linux/man-pages/man3/seccomp_rule_add.3.html
+                for cond in conditions {
+                    filter.add_rule(action, syscall_num, Some(&[cond]))?;
+                }
             }
         }
     }
