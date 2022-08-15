@@ -909,7 +909,18 @@ func genericAvailableGuestProtections() (protections []string) {
 	return
 }
 
-func GetHugepageTypes() []string {
+func IsHugepageSizeValid(sz string) bool {
+	hugepageTypes := getHugepageTypes()
+
+	for _, t := range hugepageTypes {
+		if t == sz {
+			return true
+		}
+	}
+	return false
+}
+
+func getHugepageTypes() []string {
 	arch := runtime.GOARCH
 	if arch == "amd64" {
 		return []string{HugepageSize2M, HugepageSize1G}

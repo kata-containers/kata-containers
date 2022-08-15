@@ -163,6 +163,12 @@ block_device_driver = "virtio-blk"
 # being allocated using huge pages.
 #enable_hugepages = true
 
+# hugepage size for VM RAM. The size is arch related
+# For amd64: ["2M", "1G"]
+# For aarch64: 4KB PageSize ["2M", "1G"], 64KB PageSize ["512M"]
+# If no huge page size is supplied the system's default huge page size is used
+# hugepage_size = "2M"
+
 # Disable the 'seccomp' feature from Cloud Hypervisor, default false
 # disable_seccomp = true
 

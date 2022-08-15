@@ -613,11 +613,8 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 
 	// HugepageSize valid only HugePages is true
 	if value, ok := ocispec.Annotations[vcAnnotations.HugepageSize]; sbConfig.HypervisorConfig.HugePages && ok {
-		hugepageTypes := vc.GetHugepageTypes()
-		for _, t := range hugepageTypes {
-			if value == t {
-				sbConfig.HypervisorConfig.HugepageSize = value
-			}
+		if vc.IsHugepageSizeValid(value) {
+			sbConfig.HypervisorConfig.HugepageSize = value
 		}
 	}
 
