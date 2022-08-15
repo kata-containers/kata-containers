@@ -383,10 +383,7 @@ impl Annotation {
         let value = self
             .get_value::<u64>(SANDBOX_CPU_QUOTA_KEY)
             .unwrap_or(Some(0));
-        if let Some(q) = value {
-            return q;
-        }
-        0
+        value.unwrap_or(0)
     }
 
     /// Get the annotation of cpu period for sandbox
@@ -394,19 +391,13 @@ impl Annotation {
         let value = self
             .get_value::<i64>(SANDBOX_CPU_PERIOD_KEY)
             .unwrap_or(Some(0));
-        if let Some(p) = value {
-            return p;
-        }
-        0
+        value.unwrap_or(0)
     }
 
     /// Get the annotation of memory for sandbox
     pub fn get_sandbox_mem(&self) -> i64 {
         let value = self.get_value::<i64>(SANDBOX_MEM_KEY).unwrap_or(Some(0));
-        if let Some(m) = value {
-            return m;
-        }
-        0
+        value.unwrap_or(0)
     }
 
     /// Get the annotation to specify the Resources.Memory.Swappiness.
