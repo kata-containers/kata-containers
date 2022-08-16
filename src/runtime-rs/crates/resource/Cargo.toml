@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 
+[dev-dependencies]
+test-utils = { path = "../../../libs/test-utils" }
+
 [dependencies]
 anyhow = "^1.0"
 async-trait = "0.1.48"

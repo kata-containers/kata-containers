@@ -20,6 +20,7 @@ mod tests {
             NetworkModelType, TC_FILTER_NET_MODEL_STR,
         },
         network_pair::{NetworkInterface, NetworkPair, TapInterface},
+        utils::link::net_test_utils::delete_link,
     };
 
     // this unit test tests the integrity of MacVlanEndpoint::new()
@@ -124,14 +125,10 @@ mod tests {
                         }
                         assert_eq!(manual.net_pair.network_qos, result.net_pair.network_qos);
                     }
-                    let link_index = fetch_index(&handle, manual_vlan_iface_name.as_str())
+                    assert!(delete_link(&handle, manual_vlan_iface_name.as_str())
                         .await
-                        .expect("failed to fetch index");
-                    assert!(handle.link().del(link_index).execute().await.is_ok());
-                    let link_index = fetch_index(&handle, tap_iface_name.as_str())
-                        .await
-                        .expect("failed to fetch index");
-                    assert!(handle.link().del(link_index).execute().await.is_ok());
+                        .is_ok());
+                    assert!(delete_link(&handle, tap_iface_name.as_str()).await.is_ok());
                     assert!(handle.link().del(dummy_index).execute().await.is_ok());
                 }
             }
@@ -253,14 +250,10 @@ mod tests {
                         assert_eq!(manual.net_pair.network_qos, result.net_pair.network_qos);
                     }
                     // delete the manually created links
-                    let link_index = fetch_index(&handle, manual_macvlan_iface_name.as_str())
+                    assert!(delete_link(&handle, manual_macvlan_iface_name.as_str())
                         .await
-                        .expect("failed to fetch index");
-                    assert!(handle.link().del(link_index).execute().await.is_ok());
-                    let link_index = fetch_index(&handle, tap_iface_name.as_str())
-                        .await
-                        .expect("failed to fetch index");
-                    assert!(handle.link().del(link_index).execute().await.is_ok());
+                        .is_ok());
+                    assert!(delete_link(&handle, tap_iface_name.as_str()).await.is_ok());
                     assert!(handle.link().del(dummy_index).execute().await.is_ok());
                 }
             }
@@ -355,14 +348,10 @@ mod tests {
                     }
                     assert_eq!(manual.net_pair.network_qos, result.net_pair.network_qos);
                 }
-                let link_index = fetch_index(&handle, manual_virt_iface_name.as_str())
+                assert!(delete_link(&handle, manual_virt_iface_name.as_str())
                     .await
-                    .expect("failed to fetch index");
-                assert!(handle.link().del(link_index).execute().await.is_ok());
-                let link_index = fetch_index(&handle, tap_iface_name.as_str())
-                    .await
-                    .expect("failed to fetch index");
-                assert!(handle.link().del(link_index).execute().await.is_ok());
+                    .is_ok());
+                assert!(delete_link(&handle, tap_iface_name.as_str()).await.is_ok());
             }
         }
     }

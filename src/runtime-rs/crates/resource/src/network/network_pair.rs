@@ -177,3 +177,85 @@ pub async fn get_link_by_name(
 
     Ok(link::get_link_from_message(msg))
 }
+
+#[cfg(test)]
+mod tests {
+    use scopeguard::defer;
+
+    use super::*;
+    use crate::network::network_model::TC_FILTER_NET_MODEL_STR;
+    use test_utils::skip_if_not_root;
+    use utils::link::net_test_utils::delete_link;
+
+    // this ut tests create_link() and get_link_by_name()
+    #[actix_rt::test]
+    async fn test_utils() {
+        skip_if_not_root!();
+
+        if let Ok((conn, handle, _)) =
+            rtnetlink::new_connection().context("failed to create netlink connection")
+        {
+            let thread_handler = tokio::spawn(conn);
+            defer!({
+                thread_handler.abort();
+            });
+
+            assert!(create_link(&handle, "kata_test_1", 2).await.is_ok());
+            assert!(create_link(&handle, "kata_test_2", 3).await.is_ok());
+            assert!(create_link(&handle, "kata_test_3", 4).await.is_ok());
+
+            assert!(get_link_by_name(&handle, "kata_test_1").await.is_ok());
+            assert!(get_link_by_name(&handle, "kata_test_2").await.is_ok());
+            assert!(get_link_by_name(&handle, "kata_test_3").await.is_ok());
+
+            assert!(delete_link(&handle, "kata_test_1").await.is_ok());
+            assert!(delete_link(&handle, "kata_test_2").await.is_ok());
+            assert!(delete_link(&handle, "kata_test_3").await.is_ok());
+
+            assert!(get_link_by_name(&handle, "kata_test_1").await.is_err());
+            assert!(get_link_by_name(&handle, "kata_test_2").await.is_err());
+            assert!(get_link_by_name(&handle, "kata_test_3").await.is_err());
+        }
+    }
+
+    #[actix_rt::test]
+    async fn test_network_pair() {
+        let idx = 123456;
+        let virt_iface_name = format!("eth{}", idx);
+        let tap_name = format!("tap{}{}", idx, TAP_SUFFIX);
+        let queues = 2;
+        let model = TC_FILTER_NET_MODEL_STR;
+
+        skip_if_not_root!();
+
+        if let Ok((conn, handle, _)) =
+            rtnetlink::new_connection().context("failed to create netlink connection")
+        {
+            let thread_handler = tokio::spawn(conn);
+            defer!({
+                thread_handler.abort();
+            });
+            // the network pair has not been created
+            assert!(get_link_by_name(&handle, virt_iface_name.as_str())
+                .await
+                .is_err());
+
+            // mock containerd to create one end of the network pair
+            assert!(create_link(&handle, virt_iface_name.as_str(), queues)
+                .await
+                .is_ok());
+
+            if let Ok(_pair) = NetworkPair::new(&handle, idx, "", model, queues).await {
+                // the pair is created, we can find the two ends of network pair
+                assert!(get_link_by_name(&handle, virt_iface_name.as_str())
+                    .await
+                    .is_ok());
+                assert!(get_link_by_name(&handle, tap_name.as_str()).await.is_ok());
+
+                //delete the link created in test
+                assert!(delete_link(&handle, virt_iface_name.as_str()).await.is_ok());
+                assert!(delete_link(&handle, tap_name.as_str()).await.is_ok());
+            }
+        }
+    }
+}
