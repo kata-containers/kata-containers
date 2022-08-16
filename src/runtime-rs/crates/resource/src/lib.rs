@@ -16,6 +16,7 @@ pub mod cgroups;
 pub mod manager;
 mod manager_inner;
 pub mod network;
+pub mod resource_persist;
 use network::NetworkConfig;
 pub mod rootfs;
 pub mod share_fs;

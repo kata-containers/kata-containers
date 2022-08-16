@@ -6,12 +6,12 @@
 
 use std::io::{self, Error};
 
+use super::endpoint_persist::{EndpointState, MacvlanEndpointState};
+use super::Endpoint;
+use crate::network::{utils, NetworkPair};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use hypervisor::{device::NetworkConfig, Device, Hypervisor};
-
-use super::Endpoint;
-use crate::network::{utils, NetworkPair};
 
 #[derive(Debug)]
 pub struct MacVlanEndpoint {
@@ -80,5 +80,15 @@ impl Endpoint for MacVlanEndpoint {
             .await
             .context("remove device")?;
         Ok(())
+    }
+
+    async fn save(&self) -> Option<EndpointState> {
+        Some(EndpointState {
+            macvlan_endpoint: Some(MacvlanEndpointState {
+                if_name: self.net_pair.virt_iface.name.clone(),
+                network_qos: self.net_pair.network_qos,
+            }),
+            ..Default::default()
+        })
     }
 }
