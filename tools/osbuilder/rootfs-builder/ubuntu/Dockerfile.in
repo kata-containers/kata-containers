@@ -3,6 +3,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ARG IMAGE_REGISTRY=docker.io
+
+# Install skopeo which is not included in 20.04 release
+# This can be removed when we upgrade the base to 22.04 release
+FROM ${IMAGE_REGISTRY}/golang:1.18 AS skopeo
+@SET_PROXY@
+WORKDIR /skopeo
+ARG SKOPEO_VERSION="1.9.1"
+RUN curl -fsSL "https://github.com/containers/skopeo/archive/v${SKOPEO_VERSION}.tar.gz" \
+  | tar -xzf - --strip-components=1
+RUN CGO_ENABLED=0 DISABLE_DOCS=1 make BUILDTAGS=containers_image_openpgp GO_DYN_FLAGS=
+
 FROM ${IMAGE_REGISTRY}/ubuntu:@OS_VERSION@
 @SET_PROXY@
 
@@ -27,10 +38,14 @@ RUN apt-get update && \
     multistrap \
     musl-tools \
     pkg-config \
-    protobuf-compiler
+    protobuf-compiler \
+    umoci
 
 # aarch64 requires this name -- link for all
 RUN ln -s /usr/bin/musl-gcc "/usr/bin/$(uname -m)-linux-musl-gcc"
+
+COPY --from=skopeo /skopeo/bin/skopeo /usr/local/bin/
+COPY --from=skopeo /skopeo/default-policy.json /etc/containers/policy.json
 
 @INSTALL_RUST@
 @INSTALL_AA_KBC@

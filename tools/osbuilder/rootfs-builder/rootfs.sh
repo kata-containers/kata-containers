@@ -16,6 +16,7 @@ AGENT_VERSION=${AGENT_VERSION:-}
 RUST_VERSION="null"
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
+KATA_BUILD_CC=${KATA_BUILD_CC:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 OSBUILDER_VERSION="unknown"
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
@@ -437,6 +438,7 @@ build_rootfs_distro()
 			--env ROOTFS_DIR="/rootfs" \
 			--env AGENT_BIN="${AGENT_BIN}" \
 			--env AGENT_INIT="${AGENT_INIT}" \
+			--env KATA_BUILD_CC="${KATA_BUILD_CC}" \
 			--env ARCH="${ARCH}" \
 			--env CI="${CI}" \
 			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
@@ -690,6 +692,17 @@ EOF
 		make
 		install -o root -g root -m 0755 umoci "${ROOTFS_DIR}/usr/local/bin/"
 		popd
+	fi
+
+	if [ "${KATA_BUILD_CC}" == "yes" ]; then
+		info "Integrate pause image inside rootfs for CC"
+		pause_repo="$(get_package_version_from_kata_yaml externals.pause.repo)"
+		pause_version="$(get_package_version_from_kata_yaml externals.pause.version)"
+		[ -n "pause_repo" ] || die "failed to get pause image repo"
+		[ -n "pause_version" ] || die "failed to get pause image version"
+
+		skopeo copy "${pause_repo}":"${pause_version}" oci:pause:"${pause_version}"
+		umoci unpack --image pause:"${pause_version}"  "${ROOTFS_DIR}/pause_bundle"
 	fi
 
 	info "Creating summary file"
