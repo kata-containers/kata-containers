@@ -1,8 +1,9 @@
-name: Release Kata 2.x in snapcraft store
+name: Release Kata in snapcraft store
 on:
   push:
     tags:
-      - '2.*'
+      - '[0-9]+.[0-9]+.[0-9]+*'
+
 jobs:
   release-snap:
     runs-on: ubuntu-20.04
