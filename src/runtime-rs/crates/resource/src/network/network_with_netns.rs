@@ -9,6 +9,7 @@ use std::sync::{
     Arc,
 };
 
+use super::endpoint::endpoint_persist::EndpointState;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use futures::stream::TryStreamExt;
@@ -107,6 +108,17 @@ impl Network for NetworkWithNetns {
             neighs.append(&mut list);
         }
         Ok(neighs)
+    }
+
+    async fn save(&self) -> Option<Vec<EndpointState>> {
+        let inner = self.inner.read().await;
+        let mut endpoint = vec![];
+        for e in &inner.entity_list {
+            if let Some(state) = e.endpoint.save().await {
+                endpoint.push(state);
+            }
+        }
+        Some(endpoint)
     }
 }
 

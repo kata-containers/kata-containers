@@ -14,11 +14,14 @@ mod vlan_endpoint;
 pub use vlan_endpoint::VlanEndpoint;
 mod macvlan_endpoint;
 pub use macvlan_endpoint::MacVlanEndpoint;
+pub mod endpoint_persist;
 mod endpoints_test;
 
 use anyhow::Result;
 use async_trait::async_trait;
 use hypervisor::Hypervisor;
+
+use super::EndpointState;
 
 #[async_trait]
 pub trait Endpoint: std::fmt::Debug + Send + Sync {
@@ -26,4 +29,5 @@ pub trait Endpoint: std::fmt::Debug + Send + Sync {
     async fn hardware_addr(&self) -> String;
     async fn attach(&self, hypervisor: &dyn Hypervisor) -> Result<()>;
     async fn detach(&self, hypervisor: &dyn Hypervisor) -> Result<()>;
+    async fn save(&self) -> Option<EndpointState>;
 }

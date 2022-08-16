@@ -26,11 +26,9 @@ use tokio::{
 use ttrpc::asynchronous::Server;
 
 use crate::task_service::TaskService;
-
 /// message buffer size
 const MESSAGE_BUFFER_SIZE: usize = 8;
-
-pub const KATA_PATH: &str = "/run/kata";
+use persist::KATA_PATH;
 
 pub struct ServiceManager {
     receiver: Option<Receiver<Message>>,
@@ -152,7 +150,12 @@ impl ServiceManager {
         Ok(())
     }
 
-    pub fn cleanup(sid: &str) -> Result<()> {
+    pub async fn cleanup(sid: &str) -> Result<()> {
+        let (sender, _receiver) = channel::<Message>(MESSAGE_BUFFER_SIZE);
+        let handler = RuntimeHandlerManager::new(sid, sender)
+            .await
+            .context("new runtime handler")?;
+        handler.cleanup().await?;
         let temp_dir = [KATA_PATH, sid].join("/");
         if std::fs::metadata(temp_dir.as_str()).is_ok() {
             // try to remove dir and skip the result
