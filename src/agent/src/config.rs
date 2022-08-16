@@ -432,7 +432,7 @@ fn get_container_pipe_size(param: &str) -> Result<i32> {
 
 #[cfg(test)]
 mod tests {
-    use crate::assert_result;
+    use test_utils::assert_result;
 
     use super::*;
     use anyhow::anyhow;
