@@ -9,6 +9,8 @@ use std::process::exit;
 
 mod utils;
 mod version;
+mod arch;
+mod check;
 
 const DESCRIPTION_TEXT: &str = r#"DESCRIPTION:
     kata-ctl description placeholder."#;
@@ -16,6 +18,25 @@ const DESCRIPTION_TEXT: &str = r#"DESCRIPTION:
 const ABOUT_TEXT: &str = "Kata Containers control tool";
 
 const NAME: &str = "kata-ctl";
+
+fn run_checks(global_args: clap::ArgMatches) -> Result<()> {
+    let args = global_args
+        .subcommand_matches("check")
+        .ok_or_else(|| anyhow!("BUG: missing sub-command arguments"))?;
+
+    let no_network_check = args.is_present("no-network-checks");
+
+    // run architecture-agnostic tests
+    if !no_network_check {
+        // run code that uses network checks
+        let _network_checks = check::run_network_checks();
+    }
+
+    // run architecture-specific tests
+    let _all_checks = arch::check(global_args);
+
+    Ok(())
+}
 
 fn real_main() -> Result<()> {
     let name = crate_name!();
@@ -28,15 +49,11 @@ fn real_main() -> Result<()> {
         .subcommand(
             SubCommand::with_name("check")
             .about("tests if system can run Kata Containers")
-        )
-        .subcommand(
-            SubCommand::with_name("command-example")
-            .about("(remove when other subcommands have sufficient detail)")
             .arg(
-                Arg::with_name("arg-example-1")
-                .long("arg-example-1")
-                .help("arg example for command-example")
-                .takes_value(true)
+                Arg::with_name("no-network-checks")
+                .long("no-network-checks")
+                .help("run check with no network checks")
+                .takes_value(false)
                 )
         )
         .subcommand(
@@ -80,40 +97,39 @@ fn real_main() -> Result<()> {
         .ok_or_else(|| anyhow!("need sub-command"))?;
 
     match subcmd {
-        "command-example" => {
-            println!("{}", utils::command_example(args));
-            Ok(())
-        }
         "check" => {
-            println!("Not implemented");
+            match run_checks(args) {
+                Ok(_result) => println!("check may not be fully implemented"),
+                Err(err) => println!("{}", err),
+            }
             Ok(())
         }
         "direct-volume" => {
-            println!("Not implemented");
+            unimplemented!("Not implemented");
             Ok(())
         }
         "env" => {
-            println!("Not implemented");
+            unimplemented!("Not implemented");
             Ok(())
         }
         "exec" => {
-            println!("Not implemented");
+            unimplemented!("Not implemented");
             Ok(())
         }
         "factory" => {
-            println!("Not implemented");
+            unimplemented!("Not implemented");
             Ok(())
         }
         "help" => {
-            println!("Not implemented");
+            unimplemented!("Not implemented");
             Ok(())
         }
         "iptables" => {
-            println!("Not implemented");
+            unimplemented!("Not implemented");
             Ok(())
         }
         "metrics" => {
-            println!("Not implemented");
+            unimplemented!("Not implemented");
             Ok(())
         }
         "version" => {
