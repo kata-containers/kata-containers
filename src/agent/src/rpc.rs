@@ -1987,14 +1987,12 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        assert_result, namespace::Namespace, protocols::agent_ttrpc_async::AgentService as _,
-        skip_if_not_root,
-    };
+    use crate::{namespace::Namespace, protocols::agent_ttrpc_async::AgentService as _};
     use nix::mount;
     use nix::sched::{unshare, CloneFlags};
     use oci::{Hook, Hooks, Linux, LinuxNamespace};
     use tempfile::{tempdir, TempDir};
+    use test_utils::{assert_result, skip_if_not_root};
     use ttrpc::{r#async::TtrpcContext, MessageHeader};
 
     fn mk_ttrpc_context() -> TtrpcContext {

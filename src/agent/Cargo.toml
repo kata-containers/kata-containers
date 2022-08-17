@@ -66,6 +66,7 @@ clap = { version = "3.0.1", features = ["derive"] }
 
 [dev-dependencies]
 tempfile = "3.1.0"
+test-utils = { path = "../libs/test-utils" }
 
 [workspace]
 members = [

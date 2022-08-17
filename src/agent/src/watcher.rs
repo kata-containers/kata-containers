@@ -528,10 +528,10 @@ impl BindWatcher {
 mod tests {
     use super::*;
     use crate::mount::is_mounted;
-    use crate::skip_if_not_root;
     use nix::unistd::{Gid, Uid};
     use std::fs;
     use std::thread;
+    use test_utils::skip_if_not_root;
 
     async fn create_test_storage(dir: &Path, id: &str) -> Result<(protos::Storage, PathBuf)> {
         let src_path = dir.join(format!("src{}", id));

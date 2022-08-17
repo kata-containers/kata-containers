@@ -49,8 +49,6 @@ mod pci;
 pub mod random;
 mod sandbox;
 mod signal;
-#[cfg(test)]
-mod test_utils;
 mod uevent;
 mod util;
 mod version;
@@ -401,7 +399,8 @@ use std::os::unix::io::{FromRawFd, RawFd};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::test_utils::TestUserType;
+    use test_utils::TestUserType;
+    use test_utils::{assert_result, skip_if_not_root, skip_if_root};
 
     #[tokio::test]
     async fn test_create_logger_task() {

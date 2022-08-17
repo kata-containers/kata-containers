@@ -724,10 +724,10 @@ impl Address {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::skip_if_not_root;
     use rtnetlink::packet;
     use std::iter;
     use std::process::Command;
+    use test_utils::skip_if_not_root;
 
     #[tokio::test]
     async fn find_link_by_name() {
