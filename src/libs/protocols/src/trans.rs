@@ -105,7 +105,7 @@ impl From<oci::LinuxDeviceCgroup> for crate::oci::LinuxDeviceCgroup {
     fn from(from: oci::LinuxDeviceCgroup) -> Self {
         crate::oci::LinuxDeviceCgroup {
             Allow: from.allow,
-            Type: from.r#type,
+            Type: from.r#type.map_or("".to_string(), |t| t as String),
             Major: from.major.map_or(0, |t| t as i64),
             Minor: from.minor.map_or(0, |t| t as i64),
             Access: from.access,
@@ -478,7 +478,7 @@ impl From<crate::oci::LinuxDeviceCgroup> for oci::LinuxDeviceCgroup {
 
         oci::LinuxDeviceCgroup {
             allow: from.get_Allow(),
-            r#type: from.take_Type(),
+            r#type: Some(from.take_Type()),
             major,
             minor,
             access: from.take_Access(),

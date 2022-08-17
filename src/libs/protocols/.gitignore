@@ -7,5 +7,7 @@ src/empty.rs
 src/health.rs
 src/health_ttrpc.rs
 src/health_ttrpc_async.rs
+src/image.rs
+src/image_ttrpc.rs
 src/oci.rs
 src/types.rs
