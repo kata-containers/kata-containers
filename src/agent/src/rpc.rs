@@ -34,7 +34,10 @@ use protocols::health::{
     HealthCheckResponse, HealthCheckResponse_ServingStatus, VersionCheckResponse,
 };
 use protocols::types::Interface;
-use protocols::{agent_ttrpc_async as agent_ttrpc, health_ttrpc_async as health_ttrpc};
+use protocols::{
+    agent_ttrpc_async as agent_ttrpc, health_ttrpc_async as health_ttrpc,
+    image_ttrpc_async as image_ttrpc,
+};
 use rustjail::cgroups::notifier;
 use rustjail::container::{BaseContainer, Container, LinuxContainer};
 use rustjail::process::Process;
@@ -1744,27 +1747,26 @@ async fn read_stream(reader: Arc<Mutex<ReadHalf<PipeStream>>>, l: usize) -> Resu
 
 pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> Result<TtrpcServer> {
     let agent_service = Box::new(AgentService { sandbox: s.clone() })
-        as Box<dyn protocols::agent_ttrpc::AgentService + Send + Sync>;
-
+        as Box<dyn agent_ttrpc::AgentService + Send + Sync>;
     let agent_worker = Arc::new(agent_service);
 
     let health_service = Box::new(HealthService {}) as Box<dyn health_ttrpc::Health + Send + Sync>;
     let health_worker = Arc::new(health_service);
 
-    let image_service = Box::new(image_rpc::ImageService::new(s))
-        as Box<dyn protocols::image_ttrpc::Image + Send + Sync>;
+    let image_service =
+        Box::new(image_rpc::ImageService::new(s)) as Box<dyn image_ttrpc::Image + Send + Sync>;
 
-    let agent_service = protocols::agent_ttrpc::create_agent_service(agent_worker);
+    let aservice = agent_ttrpc::create_agent_service(agent_worker);
 
-    let health_service = protocols::health_ttrpc::create_health(health_worker);
+    let hservice = health_ttrpc::create_health(health_worker);
 
-    let image_service = protocols::image_ttrpc::create_image(Arc::new(image_service));
+    let iservice = image_ttrpc::create_image(Arc::new(image_service));
 
     let server = TtrpcServer::new()
         .bind(server_address)?
-        .register_service(agent_service)
-        .register_service(health_service)
-        .register_service(image_service);
+        .register_service(aservice)
+        .register_service(hservice)
+        .register_service(iservice);
 
     info!(sl!(), "ttRPC server started"; "address" => server_address);
 
