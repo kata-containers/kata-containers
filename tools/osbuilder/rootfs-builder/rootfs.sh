@@ -450,6 +450,7 @@ build_rootfs_distro()
 			--env SKOPEO="${SKOPEO}" \
 			--env UMOCI="${UMOCI}" \
 			--env AA_KBC="${AA_KBC}" \
+			--env KATA_BUILD_CC="${KATA_BUILD_CC}" \
 			--env SECCOMP="${SECCOMP}" \
 			--env DEBUG="${DEBUG}" \
 			--env HOME="/root" \

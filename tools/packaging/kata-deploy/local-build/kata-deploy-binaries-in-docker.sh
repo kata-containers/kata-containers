@@ -45,6 +45,7 @@ docker run \
 	--env SKOPEO="${SKOPEO:-}" \
 	--env UMOCI="${UMOCI:-}" \
 	--env AA_KBC="${AA_KBC:-}" \
+	--env KATA_BUILD_CC="${KATA_BUILD_CC:-}" \
 	--env INCLUDE_ROOTFS="$(realpath "${INCLUDE_ROOTFS:-}" 2> /dev/null || true)" \
 	-v "${kata_dir}:${kata_dir}" \
 	--rm \
