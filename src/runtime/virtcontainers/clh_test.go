@@ -557,7 +557,7 @@ func TestCloudHypervisorResizeMemory(t *testing.T) {
 			clh := cloudHypervisor{}
 
 			mockClient := &clhClientMock{}
-			mockClient.vmInfo.Config = *chclient.NewVmConfig(*chclient.NewKernelConfig(""))
+			mockClient.vmInfo.Config = *chclient.NewVmConfig(*chclient.NewPayloadConfig())
 			mockClient.vmInfo.Config.Memory = chclient.NewMemoryConfig(int64(utils.MemUnit(clhConfig.MemorySize) * utils.MiB))
 			mockClient.vmInfo.Config.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64(40 * utils.GiB.ToBytes()))
 
