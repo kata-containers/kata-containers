@@ -12,7 +12,6 @@ Name | Type | Description | Notes
 **QueueSize** | Pointer to **int32** |  | [optional] [default to 128]
 **VhostUser** | Pointer to **bool** |  | [optional] [default to false]
 **VhostSocket** | Pointer to **string** |  | [optional] 
-**PollQueue** | Pointer to **bool** |  | [optional] [default to true]
 **RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
 **PciSegment** | Pointer to **int32** |  | [optional] 
 **Id** | Pointer to **string** |  | [optional] 
@@ -230,31 +229,6 @@ SetVhostSocket sets VhostSocket field to given value.
 `func (o *DiskConfig) HasVhostSocket() bool`
 
 HasVhostSocket returns a boolean if a field has been set.
-
-### GetPollQueue
-
-`func (o *DiskConfig) GetPollQueue() bool`
-
-GetPollQueue returns the PollQueue field if non-nil, zero value otherwise.
-
-### GetPollQueueOk
-
-`func (o *DiskConfig) GetPollQueueOk() (*bool, bool)`
-
-GetPollQueueOk returns a tuple with the PollQueue field if it's non-nil, zero value otherwise
-and a boolean to check if the value has been set.
-
-### SetPollQueue
-
-`func (o *DiskConfig) SetPollQueue(v bool)`
-
-SetPollQueue sets PollQueue field to given value.
-
-### HasPollQueue
-
-`func (o *DiskConfig) HasPollQueue() bool`
-
-HasPollQueue returns a boolean if a field has been set.
 
 ### GetRateLimiterConfig
 
