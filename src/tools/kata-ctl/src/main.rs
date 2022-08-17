@@ -7,10 +7,10 @@ use anyhow::{anyhow, Result};
 use clap::{crate_name, App, Arg, SubCommand};
 use std::process::exit;
 
-mod utils;
-mod version;
 mod arch;
 mod check;
+mod utils;
+mod version;
 
 const DESCRIPTION_TEXT: &str = r#"DESCRIPTION:
     kata-ctl description placeholder."#;
@@ -48,47 +48,30 @@ fn real_main() -> Result<()> {
         .long_about(DESCRIPTION_TEXT)
         .subcommand(
             SubCommand::with_name("check")
-            .about("tests if system can run Kata Containers")
-            .arg(
-                Arg::with_name("no-network-checks")
-                .long("no-network-checks")
-                .help("run check with no network checks")
-                .takes_value(false)
-                )
+                .about("tests if system can run Kata Containers")
+                .arg(
+                    Arg::with_name("no-network-checks")
+                        .long("no-network-checks")
+                        .help("run check with no network checks")
+                        .takes_value(false),
+                ),
         )
         .subcommand(
             SubCommand::with_name("direct-volume")
-            .about("directly assign a volume to Kata Containers to manage")
+                .about("directly assign a volume to Kata Containers to manage"),
         )
+        .subcommand(SubCommand::with_name("env").about("display settings. Default to TOML"))
+        .subcommand(SubCommand::with_name("exec").about("enter into guest by debug console"))
+        .subcommand(SubCommand::with_name("factory").about("manage vm factory"))
         .subcommand(
-            SubCommand::with_name("env")
-            .about("display settings. Default to TOML")
+            SubCommand::with_name("help").about("shows a list of commands or help for one command"),
         )
-        .subcommand(
-            SubCommand::with_name("exec")
-            .about("enter into guest by debug console")
-        )
-        .subcommand(
-            SubCommand::with_name("factory")
-            .about("manage vm factory")
-        )
-        .subcommand(
-            SubCommand::with_name("help")
-            .about("shows a list of commands or help for one command")
-        )
-        .subcommand(
-            SubCommand::with_name("iptables")
-            .about("")
-        )
+        .subcommand(SubCommand::with_name("iptables").about(""))
         .subcommand(
             SubCommand::with_name("metrics")
-            .about("gather metrics associated with infrastructure used to run a sandbox")
+                .about("gather metrics associated with infrastructure used to run a sandbox"),
         )
-        .subcommand(
-            SubCommand::with_name("version")
-            .about("display version details")
-
-        );
+        .subcommand(SubCommand::with_name("version").about("display version details"));
 
     let args = app.get_matches();
 
@@ -131,7 +114,6 @@ fn real_main() -> Result<()> {
         }
         _ => return Err(anyhow!(format!("invalid sub-command: {:?}", subcmd))),
     }
-
 }
 
 fn main() {
