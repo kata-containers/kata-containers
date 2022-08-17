@@ -36,9 +36,6 @@ logging = { path = "../../../libs/logging"}
 oci = { path = "../../../libs/oci" }
 service = { path = "../service" }
 
-[build-dependencies]
-vergen = { version = "6", default-features = false, features = ["build", "git", "rustc"] }
-
 [dev-dependencies]
 tempfile = "3.2.0"
 rand = "0.8.4"
