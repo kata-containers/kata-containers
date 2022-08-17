@@ -479,7 +479,6 @@ components:
             vhost_socket: vhost_socket
             vhost_user: false
             direct: false
-            poll_queue: true
             rate_limiter_config:
               ops:
                 size: 0
@@ -499,7 +498,6 @@ components:
             vhost_socket: vhost_socket
             vhost_user: false
             direct: false
-            poll_queue: true
             rate_limiter_config:
               ops:
                 size: 0
@@ -540,8 +538,6 @@ components:
             path: path
             iommu: false
             id: id
-          kernel:
-            path: path
           vdpa:
           - pci_segment: 3
             path: path
@@ -620,7 +616,11 @@ components:
             - 3
             - 3
             num_pci_segments: 7
+            oem_strings:
+            - oem_strings
+            - oem_strings
             serial_number: serial_number
+            uuid: uuid
           pmem:
           - pci_segment: 5
             file: file
@@ -634,16 +634,16 @@ components:
             iommu: false
             id: id
             discard_writes: false
-          cmdline:
-            args: args
           watchdog: false
           iommu: false
+          payload:
+            cmdline: cmdline
+            kernel: kernel
+            initramfs: initramfs
           serial:
             mode: "false"
             file: file
             iommu: false
-          initramfs:
-            path: path
           net:
           - tap: tap
             num_queues: 9
@@ -763,6 +763,20 @@ components:
       - bdf
       - id
       type: object
+    PayloadConfig:
+      description: Payloads to boot in guest
+      example:
+        cmdline: cmdline
+        kernel: kernel
+        initramfs: initramfs
+      properties:
+        kernel:
+          type: string
+        cmdline:
+          type: string
+        initramfs:
+          type: string
+      type: object
     VmConfig:
       description: Virtual machine configuration
       example:
@@ -817,7 +831,6 @@ components:
           vhost_socket: vhost_socket
           vhost_user: false
           direct: false
-          poll_queue: true
           rate_limiter_config:
             ops:
               size: 0
@@ -837,7 +850,6 @@ components:
           vhost_socket: vhost_socket
           vhost_user: false
           direct: false
-          poll_queue: true
           rate_limiter_config:
             ops:
               size: 0
@@ -878,8 +890,6 @@ components:
           path: path
           iommu: false
           id: id
-        kernel:
-          path: path
         vdpa:
         - pci_segment: 3
           path: path
@@ -958,7 +968,11 @@ components:
           - 3
           - 3
           num_pci_segments: 7
+          oem_strings:
+          - oem_strings
+          - oem_strings
           serial_number: serial_number
+          uuid: uuid
         pmem:
         - pci_segment: 5
           file: file
@@ -972,16 +986,16 @@ components:
           iommu: false
           id: id
           discard_writes: false
-        cmdline:
-          args: args
         watchdog: false
         iommu: false
+        payload:
+          cmdline: cmdline
+          kernel: kernel
+          initramfs: initramfs
         serial:
           mode: "false"
           file: file
           iommu: false
-        initramfs:
-          path: path
         net:
         - tap: tap
           num_queues: 9
@@ -1030,12 +1044,8 @@ components:
           $ref: '#/components/schemas/CpusConfig'
         memory:
           $ref: '#/components/schemas/MemoryConfig'
-        kernel:
-          $ref: '#/components/schemas/KernelConfig'
-        initramfs:
-          $ref: '#/components/schemas/InitramfsConfig'
-        cmdline:
-          $ref: '#/components/schemas/CmdLineConfig'
+        payload:
+          $ref: '#/components/schemas/PayloadConfig'
         disks:
           items:
             $ref: '#/components/schemas/DiskConfig'
@@ -1089,7 +1099,7 @@ components:
         platform:
           $ref: '#/components/schemas/PlatformConfig'
       required:
-      - kernel
+      - payload
       type: object
     CpuAffinity:
       example:
@@ -1182,7 +1192,11 @@ components:
         - 3
         - 3
         num_pci_segments: 7
+        oem_strings:
+        - oem_strings
+        - oem_strings
         serial_number: serial_number
+        uuid: uuid
       properties:
         num_pci_segments:
           format: int16
@@ -1194,6 +1208,12 @@ components:
           type: array
         serial_number:
           type: string
+        uuid:
+          type: string
+        oem_strings:
+          items:
+            type: string
+          type: array
       type: object
     MemoryZoneConfig:
       example:
@@ -1313,34 +1333,6 @@ components:
       required:
       - size
       type: object
-    KernelConfig:
-      example:
-        path: path
-      properties:
-        path:
-          type: string
-      required:
-      - path
-      type: object
-    InitramfsConfig:
-      example:
-        path: path
-      nullable: true
-      properties:
-        path:
-          type: string
-      required:
-      - path
-      type: object
-    CmdLineConfig:
-      example:
-        args: args
-      properties:
-        args:
-          type: string
-      required:
-      - args
-      type: object
     TokenBucket:
       description: Defines a token bucket with a maximum capacity (_size_), an initial
         burst size (_one_time_burst_) and an interval for refilling purposes (_refill_time_).
@@ -1404,7 +1396,6 @@ components:
         vhost_socket: vhost_socket
         vhost_user: false
         direct: false
-        poll_queue: true
         rate_limiter_config:
           ops:
             size: 0
@@ -1438,9 +1429,6 @@ components:
           type: boolean
         vhost_socket:
           type: string
-        poll_queue:
-          default: true
-          type: boolean
         rate_limiter_config:
           $ref: '#/components/schemas/RateLimiterConfig'
         pci_segment:
