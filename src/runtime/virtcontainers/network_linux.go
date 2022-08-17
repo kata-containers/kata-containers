@@ -708,8 +708,8 @@ func tapNetworkPair(ctx context.Context, endpoint Endpoint, queues int, disableV
 	}
 
 	if err := netHandle.LinkSetHardwareAddr(tapLink, tapHardAddr); err != nil {
-		return fmt.Errorf("Could not set MAC address %s for veth interface %s: %s",
-			netPair.VirtIface.HardAddr, netPair.VirtIface.Name, err)
+		return fmt.Errorf("Could not set MAC address %s for TAP interface %s: %s",
+			netPair.TAPIface.HardAddr, netPair.TAPIface.Name, err)
 	}
 
 	if err := netHandle.LinkSetUp(tapLink); err != nil {
