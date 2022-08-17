@@ -568,6 +568,8 @@ EOF
 
 		if [ "${SECCOMP}" == "yes" ]; then
 			info "Set up libseccomp"
+			detect_libseccomp_info || \
+				die "Could not detect the required libseccomp version and url"
 			libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
 			gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
 			${script_dir}/../../../ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
