@@ -1,8 +1,8 @@
-name: Publish Kata 2.x release artifacts
+name: Publish Kata release artifacts
 on:
   push:
     tags:
-     - '2.*'
+      - '[0-9]+.[0-9]+.[0-9]+*'
 
 jobs:
   build-asset:

@@ -187,9 +187,10 @@ impl fmt::Debug for NamespaceType {
 #[cfg(test)]
 mod tests {
     use super::{Namespace, NamespaceType};
-    use crate::{mount::remove_mounts, skip_if_not_root};
+    use crate::mount::remove_mounts;
     use nix::sched::CloneFlags;
     use tempfile::Builder;
+    use test_utils::skip_if_not_root;
 
     #[tokio::test]
     async fn test_setup_persistent_ns() {

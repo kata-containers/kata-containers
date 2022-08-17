@@ -22,7 +22,7 @@ extern crate slog;
 use anyhow::{anyhow, Context, Result};
 use clap::{AppSettings, Parser};
 use nix::fcntl::OFlag;
-use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
+use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
 use nix::unistd::{self, dup, Pid};
 use std::env;
 use std::ffi::OsStr;
@@ -49,8 +49,6 @@ mod pci;
 pub mod random;
 mod sandbox;
 mod signal;
-#[cfg(test)]
-mod test_utils;
 mod uevent;
 mod util;
 mod version;
@@ -129,7 +127,7 @@ async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool
             None,
         )?;
 
-        let addr = SockAddr::new_vsock(libc::VMADDR_CID_ANY, vsock_port);
+        let addr = VsockAddr::new(libc::VMADDR_CID_ANY, vsock_port);
         socket::bind(listenfd, &addr)?;
         socket::listen(listenfd, 1)?;
 
@@ -402,7 +400,8 @@ use std::os::unix::io::{FromRawFd, RawFd};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::test_utils::TestUserType;
+    use test_utils::TestUserType;
+    use test_utils::{assert_result, skip_if_not_root, skip_if_root};
 
     #[tokio::test]
     async fn test_create_logger_task() {

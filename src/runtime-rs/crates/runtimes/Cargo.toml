@@ -1,0 +1,28 @@
+[package]
+name = "runtimes"
+version = "0.1.0"
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+edition = "2018"
+
+[dependencies]
+anyhow = "^1.0"
+lazy_static = "1.4.0"
+slog = "2.5.2"
+slog-scope = "4.4.0"
+tokio = { version = "1.8.0", features = ["rt-multi-thread"] }
+
+common = { path = "./common" }
+kata-types = { path = "../../../libs/kata-types" }
+logging = { path = "../../../libs/logging"}
+oci = { path = "../../../libs/oci" }
+persist = { path = "../persist" }
+# runtime handler
+linux_container = { path = "./linux_container", optional = true }
+virt_container = { path = "./virt_container", optional = true }
+wasm_container = { path = "./wasm_container", optional = true }
+
+[features]
+default = ["virt"]
+linux = ["linux_container"]
+virt = ["virt_container"]
+wasm = ["wasm_container"]

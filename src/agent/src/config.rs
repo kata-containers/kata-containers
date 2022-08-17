@@ -496,7 +496,7 @@ fn get_url_value(param: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::assert_result;
+    use test_utils::assert_result;
 
     use super::*;
     use anyhow::anyhow;

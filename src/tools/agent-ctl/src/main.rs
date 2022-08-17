@@ -181,11 +181,11 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
     let cfg = Config {
         server_address,
         bundle_dir,
-        interactive,
-        ignore_errors,
         timeout_nano,
         hybrid_vsock_port,
+        interactive,
         hybrid_vsock,
+        ignore_errors,
         no_auto_values,
     };
 

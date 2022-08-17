@@ -203,11 +203,7 @@ pub fn get_option(name: &str, options: &mut Options, args: &str) -> Result<Strin
         "exec_id" => {
             msg = "derived";
 
-            match options.get("cid") {
-                Some(value) => value,
-                None => "",
-            }
-            .into()
+            options.get("cid").unwrap_or(&"".to_string()).into()
         }
         _ => "".into(),
     };

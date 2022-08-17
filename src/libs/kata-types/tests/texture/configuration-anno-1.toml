@@ -1,0 +1,88 @@
+[hypervisor.qemu]
+path = "/usr/bin/lsns"
+valid_hypervisor_paths = ["/usr/bin/qemu*", "/opt/qemu?","/usr/bin/lsns","./hypervisor_path"]
+valid_jailer_paths = ["/usr/lib/rust"]
+ctlpath = "/usr/bin"
+disable_nesting_checks = true
+enable_iothreads = true
+jailer_path = "/usr/local"
+kernel = "/usr/bin/../bin/uptime"
+image = "/usr/bin/./lessecho"
+kernel_params = "ro"
+firmware = "/etc/hostname"
+
+cpu_features="pmu=off,vmx=off"
+default_vcpus = 2
+default_maxvcpus = 64
+
+machine_type = "q35"
+confidential_guest = true
+rootless = true
+enable_annotations = ["path", "ctlpath","jailer_path"] 
+machine_accelerators="noapic"
+default_bridges = 2
+default_memory = 128
+memory_slots = 128
+memory_offset = 0x100000
+enable_virtio_mem = true
+disable_block_device_use = false
+shared_fs = "virtio-fs"
+virtio_fs_daemon = "/usr/bin/uptime"
+valid_virtio_fs_daemon_paths = ["/usr/local/bin/virtiofsd*"]
+virtio_fs_cache_size = 512
+virtio_fs_extra_args = ["-o", "arg1=xxx,arg2", "-o", "hello world", "--arg3=yyy"]
+virtio_fs_cache = "always"
+block_device_driver = "virtio-blk"
+block_device_cache_set = true
+block_device_cache_direct = true
+block_device_cache_noflush = true
+enable_mem_prealloc = true
+enable_hugepages = true
+enable_vhost_user_store = true
+vhost_user_store_path = "/tmp"
+valid_vhost_user_store_paths = ["/var/kata/vhost-user-store*", "/tmp/kata?"]
+enable_iommu = true
+enable_iommu_platform = true
+file_mem_backend = "/dev/shm"
+valid_file_mem_backends = ["/dev/shm"]
+enable_swap = true
+pflashes = ["/proc/mounts"]
+enable_debug = true
+msize_9p = 16384
+disable_image_nvdimm = true
+hotplug_vfio_on_root_bus = true
+pcie_root_port = 2
+disable_vhost_net = true
+entropy_source= "/dev/urandom"
+valid_entropy_sources = ["/dev/urandom", "/dev/random"]
+guest_hook_path = "/usr/share/oci/hooks"
+rx_rate_limiter_max_rate = 10000
+tx_rate_limiter_max_rate = 10000
+guest_memory_dump_path="/var/crash/kata"
+guest_memory_dump_paging = true
+enable_guest_swap = true
+
+[agent.agent0]
+enable_tracing = true
+debug_console_enabled = true
+debug = true
+dial_timeout = 1
+kernel_modules = ["e1000e InterruptThrottleRate=3000,3000,3000 EEE=1","i915_enabled_ppgtt=0"]
+container_pipe_size = 2
+[runtime]
+enable_debug = true
+internetworking_model="macvtap"
+pdisable_guest_seccomp=true
+enable_tracing = true
+jaeger_endpoint = "localhost:1234"
+jaeger_user = "user"
+jaeger_password = "pw"
+disable_new_netns = true
+sandbox_cgroup_only=true
+sandbox_bind_mounts=["/proc/self"]
+vfio_mode="vfio"
+experimental=["a", "b"]
+enable_pprof = true
+hypervisor_name = "qemu"
+agent_name = "agent0"
+

@@ -76,11 +76,11 @@ fn do_setup_guest_dns(logger: Logger, dns_list: Vec<String>, src: &str, dst: &st
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::skip_if_not_root;
     use nix::mount;
     use std::fs::File;
     use std::io::Write;
     use tempfile::tempdir;
+    use test_utils::skip_if_not_root;
 
     #[test]
     fn test_setup_guest_dns() {
