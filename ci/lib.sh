@@ -54,3 +54,32 @@ run_docs_url_alive_check()
 	git fetch -a
 	bash "$tests_repo_dir/.ci/static-checks.sh" --docs --all "github.com/kata-containers/kata-containers"
 }
+
+run_ci_fast_return()
+{
+	clone_tests_repo
+	# Make sure we have the targeting branch
+	git remote set-branches --add origin "${branch}"
+	git fetch -a
+
+	# Check if we can fastpath return/skip the CI
+	# Work around the 'set -e' dying if the check fails by using a bash
+	# '{ group command }' to encapsulate.
+	{
+		if [ "${PR_NUMBER:-}"  != "" ]; then
+			echo "Testing a PR ${PR_NUMBER} check if can fastpath return/skip"
+			"${tests_repo_dir}/.ci/ci-fast-return.sh"
+			ret=$?
+		else
+			echo "not a PR will run all the CI"
+			ret=1
+		fi
+	} || true
+
+	if [ "$ret" -eq 0 ]; then
+		echo "Short circuit fast path skipping the rest of the CI."
+		exit 0
+	else
+		exit 1
+	fi
+}
