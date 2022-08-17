@@ -55,11 +55,11 @@ Here are the features to set up a CRI-O based Minikube, and why you need them:
 
 | what | why |
 | ---- | --- |
-| `--bootstrapper=kubeadm` | As recommended for [minikube CRI-o](https://kubernetes.io/docs/setup/minikube/#cri-o) |
+| `--bootstrapper=kubeadm` | As recommended for [minikube CRI-O](https://minikube.sigs.k8s.io/docs/handbook/config/#runtime-configuration) |
 | `--container-runtime=cri-o` | Using CRI-O for Kata |
-| `--enable-default-cni` | As recommended for [minikube CRI-o](https://kubernetes.io/docs/setup/minikube/#cri-o) |
+| `--enable-default-cni` | As recommended for [minikube CRI-O](https://minikube.sigs.k8s.io/docs/handbook/config/#runtime-configuration) |
 | `--memory 6144` | Allocate sufficient memory, as Kata Containers default to 1 or 2Gb |
-| `--network-plugin=cni` | As recommended for [minikube CRI-o](https://kubernetes.io/docs/setup/minikube/#cri-o) |
+| `--network-plugin=cni` | As recommended for [minikube CRI-O](https://minikube.sigs.k8s.io/docs/handbook/config/#runtime-configuration) |
 | `--vm-driver kvm2` | The host VM driver |
 
 To use containerd, modify the `--container-runtime` argument:
