@@ -106,31 +106,24 @@ fn real_main() -> Result<()> {
         }
         "direct-volume" => {
             unimplemented!("Not implemented");
-            Ok(())
         }
         "env" => {
             unimplemented!("Not implemented");
-            Ok(())
         }
         "exec" => {
             unimplemented!("Not implemented");
-            Ok(())
         }
         "factory" => {
             unimplemented!("Not implemented");
-            Ok(())
         }
         "help" => {
             unimplemented!("Not implemented");
-            Ok(())
         }
         "iptables" => {
             unimplemented!("Not implemented");
-            Ok(())
         }
         "metrics" => {
             unimplemented!("Not implemented");
-            Ok(())
         }
         "version" => {
             println!("{} version {} (type: rust)", NAME, version);
