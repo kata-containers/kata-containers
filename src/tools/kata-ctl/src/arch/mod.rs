@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{Result};
+use anyhow::Result;
 
 #[cfg(target_arch = "aarch64")]
 pub mod aarch64;
@@ -36,7 +36,7 @@ pub fn check(global_args: clap::ArgMatches) -> Result<()> {
         target_arch = "s390x",
         target_arch = "x86_64"
     )))]
-    panic!("unknown architecture");
+    compile_error!("unknown architecture");
 
     result
 }
