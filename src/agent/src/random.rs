@@ -53,9 +53,9 @@ pub fn reseed_rng(data: &[u8]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::skip_if_not_root;
     use std::fs::File;
     use std::io::prelude::*;
+    use test_utils::skip_if_not_root;
 
     #[test]
     fn test_reseed_rng() {

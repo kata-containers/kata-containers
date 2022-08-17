@@ -471,7 +471,7 @@ fn online_memory(logger: &Logger) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{mount::baremount, skip_if_not_root};
+    use crate::mount::baremount;
     use anyhow::{anyhow, Error};
     use nix::mount::MsFlags;
     use oci::{Linux, Root, Spec};
@@ -484,6 +484,7 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
     use tempfile::{tempdir, Builder, TempDir};
+    use test_utils::skip_if_not_root;
 
     fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), Error> {
         let src_path = Path::new(src);
