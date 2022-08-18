@@ -28,6 +28,7 @@ func TestNydusdStart(t *testing.T) {
 		debug           bool
 		extraArgs       []string
 		startFn         func(cmd *exec.Cmd) error
+		waitFn          func() error
 		setupShareDirFn func() error
 	}
 
@@ -44,6 +45,9 @@ func TestNydusdStart(t *testing.T) {
 		sourcePath:  sourcePath,
 		startFn: func(cmd *exec.Cmd) error {
 			cmd.Process = &os.Process{}
+			return nil
+		},
+		waitFn: func() error {
 			return nil
 		},
 		setupShareDirFn: func() error { return nil },
@@ -72,9 +76,11 @@ func TestNydusdStart(t *testing.T) {
 				debug:           tt.fields.debug,
 				pid:             tt.fields.pid,
 				startFn:         tt.fields.startFn,
+				waitFn:          tt.fields.waitFn,
 				setupShareDirFn: tt.fields.setupShareDirFn,
 			}
 			ctx := context.Background()
+
 			_, err := nd.Start(ctx, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("nydusd.Start() error = %v, wantErr %v", err, tt.wantErr)

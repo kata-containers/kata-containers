@@ -229,7 +229,7 @@ externals:
   libseccomp:
     description: "High level interface to Linux seccomp filter"
     url: "https://github.com/seccomp/libseccomp"
-    version: "2.5.1"
+    version: "2.5.4"
 
   pause:
     description: "Kubernetes pause container image"
@@ -330,6 +330,16 @@ languages:
         'newest-version' is the latest version known to work when
         building Kata
       newest-version: "1.62.0"
+
+  golangci-lint:
+    description: "golangci-lint"
+    notes: "'version' is the default minimum version used by this project."
+    version: "1.41.1"
+    meta:
+      description: |
+        'newest-version' is the latest version known to work when
+        building Kata
+      newest-version: "1.46.2"
 
 specs:
   description: "Details of important specifications"

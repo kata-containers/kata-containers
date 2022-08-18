@@ -34,6 +34,10 @@ use protocols::health::{
     HealthCheckResponse, HealthCheckResponse_ServingStatus, VersionCheckResponse,
 };
 use protocols::types::Interface;
+use protocols::{
+    agent_ttrpc_async as agent_ttrpc, health_ttrpc_async as health_ttrpc,
+    image_ttrpc_async as image_ttrpc,
+};
 use rustjail::cgroups::notifier;
 use rustjail::container::{BaseContainer, Container, LinuxContainer};
 use rustjail::process::Process;
@@ -181,7 +185,7 @@ impl AgentService {
     ) -> Result<()> {
         let cid = req.container_id.clone();
 
-        verify_cid(&cid)?;
+        kata_sys_util::validate::verify_id(&cid)?;
 
         let mut oci_spec = req.OCI.clone();
         let use_sandbox_pidns = req.get_sandbox_pidns();
@@ -717,7 +721,7 @@ impl AgentService {
 }
 
 #[async_trait]
-impl protocols::agent_ttrpc::AgentService for AgentService {
+impl agent_ttrpc::AgentService for AgentService {
     async fn create_container(
         &self,
         ctx: &TtrpcContext,
@@ -1603,7 +1607,7 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 struct HealthService;
 
 #[async_trait]
-impl protocols::health_ttrpc::Health for HealthService {
+impl health_ttrpc::Health for HealthService {
     async fn check(
         &self,
         _ctx: &TtrpcContext,
@@ -1743,28 +1747,26 @@ async fn read_stream(reader: Arc<Mutex<ReadHalf<PipeStream>>>, l: usize) -> Resu
 
 pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> Result<TtrpcServer> {
     let agent_service = Box::new(AgentService { sandbox: s.clone() })
-        as Box<dyn protocols::agent_ttrpc::AgentService + Send + Sync>;
-
+        as Box<dyn agent_ttrpc::AgentService + Send + Sync>;
     let agent_worker = Arc::new(agent_service);
 
-    let health_service =
-        Box::new(HealthService {}) as Box<dyn protocols::health_ttrpc::Health + Send + Sync>;
+    let health_service = Box::new(HealthService {}) as Box<dyn health_ttrpc::Health + Send + Sync>;
     let health_worker = Arc::new(health_service);
 
-    let image_service = Box::new(image_rpc::ImageService::new(s))
-        as Box<dyn protocols::image_ttrpc::Image + Send + Sync>;
+    let image_service =
+        Box::new(image_rpc::ImageService::new(s)) as Box<dyn image_ttrpc::Image + Send + Sync>;
 
-    let agent_service = protocols::agent_ttrpc::create_agent_service(agent_worker);
+    let aservice = agent_ttrpc::create_agent_service(agent_worker);
 
-    let health_service = protocols::health_ttrpc::create_health(health_worker);
+    let hservice = health_ttrpc::create_health(health_worker);
 
-    let image_service = protocols::image_ttrpc::create_image(Arc::new(image_service));
+    let iservice = image_ttrpc::create_image(Arc::new(image_service));
 
     let server = TtrpcServer::new()
         .bind(server_address)?
-        .register_service(agent_service)
-        .register_service(health_service)
-        .register_service(image_service);
+        .register_service(aservice)
+        .register_service(hservice)
+        .register_service(iservice);
 
     info!(sl!(), "ttRPC server started"; "address" => server_address);
 
@@ -2092,14 +2094,12 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        assert_result, namespace::Namespace, protocols::agent_ttrpc::AgentService as _,
-        skip_if_not_root,
-    };
+    use crate::{namespace::Namespace, protocols::agent_ttrpc_async::AgentService as _};
     use nix::mount;
     use nix::sched::{unshare, CloneFlags};
     use oci::{Hook, Hooks, Linux, LinuxNamespace};
     use tempfile::{tempdir, TempDir};
+    use test_utils::{assert_result, skip_if_not_root};
     use ttrpc::{r#async::TtrpcContext, MessageHeader};
 
     fn mk_ttrpc_context() -> TtrpcContext {
@@ -2750,233 +2750,6 @@ OtherField:other
             let msg = format!("{}, result: {:?}", msg, result);
 
             assert_eq!(d.result, result, "{}", msg);
-        }
-    }
-
-    #[tokio::test]
-    async fn test_verify_cid() {
-        #[derive(Debug)]
-        struct TestData<'a> {
-            id: &'a str,
-            expect_error: bool,
-        }
-
-        let tests = &[
-            TestData {
-                // Cannot be blank
-                id: "",
-                expect_error: true,
-            },
-            TestData {
-                // Cannot be a space
-                id: " ",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: ".",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: "-",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: "_",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: " a",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: ".a",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: "-a",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: "_a",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: "..",
-                expect_error: true,
-            },
-            TestData {
-                // Too short
-                id: "a",
-                expect_error: true,
-            },
-            TestData {
-                // Too short
-                id: "z",
-                expect_error: true,
-            },
-            TestData {
-                // Too short
-                id: "A",
-                expect_error: true,
-            },
-            TestData {
-                // Too short
-                id: "Z",
-                expect_error: true,
-            },
-            TestData {
-                // Too short
-                id: "0",
-                expect_error: true,
-            },
-            TestData {
-                // Too short
-                id: "9",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: "-1",
-                expect_error: true,
-            },
-            TestData {
-                id: "/",
-                expect_error: true,
-            },
-            TestData {
-                id: "a/",
-                expect_error: true,
-            },
-            TestData {
-                id: "a/../",
-                expect_error: true,
-            },
-            TestData {
-                id: "../a",
-                expect_error: true,
-            },
-            TestData {
-                id: "../../a",
-                expect_error: true,
-            },
-            TestData {
-                id: "../../../a",
-                expect_error: true,
-            },
-            TestData {
-                id: "foo/../bar",
-                expect_error: true,
-            },
-            TestData {
-                id: "foo bar",
-                expect_error: true,
-            },
-            TestData {
-                id: "a.",
-                expect_error: false,
-            },
-            TestData {
-                id: "a..",
-                expect_error: false,
-            },
-            TestData {
-                id: "aa",
-                expect_error: false,
-            },
-            TestData {
-                id: "aa.",
-                expect_error: false,
-            },
-            TestData {
-                id: "hello..world",
-                expect_error: false,
-            },
-            TestData {
-                id: "hello/../world",
-                expect_error: true,
-            },
-            TestData {
-                id: "aa1245124sadfasdfgasdga.",
-                expect_error: false,
-            },
-            TestData {
-                id: "aAzZ0123456789_.-",
-                expect_error: false,
-            },
-            TestData {
-                id: "abcdefghijklmnopqrstuvwxyz0123456789.-_",
-                expect_error: false,
-            },
-            TestData {
-                id: "0123456789abcdefghijklmnopqrstuvwxyz.-_",
-                expect_error: false,
-            },
-            TestData {
-                id: " abcdefghijklmnopqrstuvwxyz0123456789.-_",
-                expect_error: true,
-            },
-            TestData {
-                id: ".abcdefghijklmnopqrstuvwxyz0123456789.-_",
-                expect_error: true,
-            },
-            TestData {
-                id: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_",
-                expect_error: false,
-            },
-            TestData {
-                id: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ.-_",
-                expect_error: false,
-            },
-            TestData {
-                id: " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_",
-                expect_error: true,
-            },
-            TestData {
-                id: ".ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_",
-                expect_error: true,
-            },
-            TestData {
-                id: "/a/b/c",
-                expect_error: true,
-            },
-            TestData {
-                id: "a/b/c",
-                expect_error: true,
-            },
-            TestData {
-                id: "foo/../../../etc/passwd",
-                expect_error: true,
-            },
-            TestData {
-                id: "../../../../../../etc/motd",
-                expect_error: true,
-            },
-            TestData {
-                id: "/etc/passwd",
-                expect_error: true,
-            },
-        ];
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let result = verify_cid(d.id);
-
-            let msg = format!("{}, result: {:?}", msg, result);
-
-            if result.is_ok() {
-                assert!(!d.expect_error, "{}", msg);
-            } else {
-                assert!(d.expect_error, "{}", msg);
-            }
         }
     }
 

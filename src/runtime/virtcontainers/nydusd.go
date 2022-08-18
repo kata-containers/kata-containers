@@ -36,6 +36,8 @@ const (
 	infoEndpoint  = "http://unix/api/v1/daemon"
 	mountEndpoint = "http://unix/api/v1/mount"
 
+	nydusdDaemonStateRunning = "RUNNING"
+
 	nydusdStopTimeoutSecs = 5
 
 	defaultHttpClientTimeoutSecs = 30 * time.Second
@@ -73,6 +75,7 @@ var (
 
 type nydusd struct {
 	startFn         func(cmd *exec.Cmd) error // for mock testing
+	waitFn          func() error              // for mock
 	setupShareDirFn func() error              // for mock testing
 	path            string
 	sockPath        string
@@ -115,17 +118,19 @@ func (nd *nydusd) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
 		"path": nd.path,
 		"args": strings.Join(args, " "),
 	}
-	nd.Logger().WithFields(fields).Info()
+	nd.Logger().WithFields(fields).Info("starting nydusd")
 	if err := nd.startFn(cmd); err != nil {
-		return pid, err
+		return pid, errors.Wrap(err, "failed to start nydusd")
 	}
+	nd.Logger().WithFields(fields).Info("nydusd started")
+
 	// Monitor nydusd's stdout/stderr and stop sandbox if nydusd quits
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			nd.Logger().Info(scanner.Text())
 		}
-		nd.Logger().Info("nydusd quits")
+		nd.Logger().Warn("nydusd quits")
 		// Wait to release resources of nydusd process
 		_, err = cmd.Process.Wait()
 		if err != nil {
@@ -135,9 +140,24 @@ func (nd *nydusd) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
 			onQuit()
 		}
 	}()
-	if err := nd.setupShareDirFn(); err != nil {
-		return pid, err
+
+	nd.Logger().Info("waiting nydusd API server ready")
+	waitFn := nd.waitUntilNydusAPIServerReady
+	// waitFn may be set by a mock function for test
+	if nd.waitFn != nil {
+		waitFn = nd.waitFn
 	}
+	if err := waitFn(); err != nil {
+		return pid, errors.Wrap(err, "failed to wait nydusd API server ready")
+	}
+	nd.Logger().Info("nydusd API server ready, begin to setup share dir")
+
+	if err := nd.setupShareDirFn(); err != nil {
+		return pid, errors.Wrap(err, "failed to setup share dir for nydus")
+	}
+
+	nd.Logger().Info("nydusd setup share dir completed")
+
 	nd.pid = cmd.Process.Pid
 	return nd.pid, nil
 }
@@ -195,15 +215,37 @@ func (nd *nydusd) valid() error {
 }
 
 func (nd *nydusd) setupPassthroughFS() error {
+	nd.Logger().WithField("from", nd.sourcePath).
+		WithField("dest", sharedPathInGuest).Info("prepare mount passthroughfs")
+
 	nc, err := NewNydusClient(nd.apiSockPath)
 	if err != nil {
 		return err
 	}
-	nd.Logger().WithField("from", nd.sourcePath).
-		WithField("dest", sharedPathInGuest).Info("prepare mount passthroughfs")
 
 	mr := NewMountRequest(nydusPassthroughfs, nd.sourcePath, "")
 	return nc.Mount(sharedPathInGuest, mr)
+}
+
+func (nd *nydusd) waitUntilNydusAPIServerReady() error {
+	return retry.Do(func() error {
+		nc, err := NewNydusClient(nd.apiSockPath)
+		if err != nil {
+			return err
+		}
+
+		di, err := nc.CheckStatus()
+		if err != nil {
+			return err
+		}
+		if di.State == nydusdDaemonStateRunning {
+			return nil
+		}
+		return fmt.Errorf("Nydusd daemon is not running: %s", di.State)
+	},
+		retry.Attempts(20),
+		retry.LastErrorOnly(true),
+		retry.Delay(20*time.Millisecond))
 }
 
 func (nd *nydusd) Mount(opt MountOption) error {

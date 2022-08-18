@@ -257,7 +257,7 @@ impl ImageService {
 }
 
 #[async_trait]
-impl protocols::image_ttrpc::Image for ImageService {
+impl protocols::image_ttrpc_async::Image for ImageService {
     async fn pull_image(
         &self,
         _ctx: &ttrpc::r#async::TtrpcContext,

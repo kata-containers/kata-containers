@@ -1,0 +1,14 @@
+[workspace]
+members = [
+    "crates/shim",
+]
+
+[patch.'crates-io']
+dbs-device = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
+dbs-utils = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
+dbs-interrupt = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
+dbs-legacy-devices = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
+dbs-virtio-devices = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
+dbs-boot = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
+dbs-arch = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
+dbs-upcall = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
