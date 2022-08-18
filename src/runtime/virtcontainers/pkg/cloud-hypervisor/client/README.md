@@ -110,7 +110,6 @@ Class | Method | HTTP request | Description
 ## Documentation For Models
 
  - [BalloonConfig](docs/BalloonConfig.md)
- - [CmdLineConfig](docs/CmdLineConfig.md)
  - [ConsoleConfig](docs/ConsoleConfig.md)
  - [CpuAffinity](docs/CpuAffinity.md)
  - [CpuFeatures](docs/CpuFeatures.md)
@@ -120,13 +119,12 @@ Class | Method | HTTP request | Description
  - [DeviceNode](docs/DeviceNode.md)
  - [DiskConfig](docs/DiskConfig.md)
  - [FsConfig](docs/FsConfig.md)
- - [InitramfsConfig](docs/InitramfsConfig.md)
- - [KernelConfig](docs/KernelConfig.md)
  - [MemoryConfig](docs/MemoryConfig.md)
  - [MemoryZoneConfig](docs/MemoryZoneConfig.md)
  - [NetConfig](docs/NetConfig.md)
  - [NumaConfig](docs/NumaConfig.md)
  - [NumaDistance](docs/NumaDistance.md)
+ - [PayloadConfig](docs/PayloadConfig.md)
  - [PciDeviceInfo](docs/PciDeviceInfo.md)
  - [PlatformConfig](docs/PlatformConfig.md)
  - [PmemConfig](docs/PmemConfig.md)

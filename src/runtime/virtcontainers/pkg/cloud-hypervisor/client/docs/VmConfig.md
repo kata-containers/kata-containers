@@ -6,9 +6,7 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **Cpus** | Pointer to [**CpusConfig**](CpusConfig.md) |  | [optional] 
 **Memory** | Pointer to [**MemoryConfig**](MemoryConfig.md) |  | [optional] 
-**Kernel** | [**KernelConfig**](KernelConfig.md) |  | 
-**Initramfs** | Pointer to [**NullableInitramfsConfig**](InitramfsConfig.md) |  | [optional] 
-**Cmdline** | Pointer to [**CmdLineConfig**](CmdLineConfig.md) |  | [optional] 
+**Payload** | [**PayloadConfig**](PayloadConfig.md) |  | 
 **Disks** | Pointer to [**[]DiskConfig**](DiskConfig.md) |  | [optional] 
 **Net** | Pointer to [**[]NetConfig**](NetConfig.md) |  | [optional] 
 **Rng** | Pointer to [**RngConfig**](RngConfig.md) |  | [optional] 
@@ -31,7 +29,7 @@ Name | Type | Description | Notes
 
 ### NewVmConfig
 
-`func NewVmConfig(kernel KernelConfig, ) *VmConfig`
+`func NewVmConfig(payload PayloadConfig, ) *VmConfig`
 
 NewVmConfig instantiates a new VmConfig object
 This constructor will assign default values to properties that have it defined,
@@ -96,85 +94,25 @@ SetMemory sets Memory field to given value.
 
 HasMemory returns a boolean if a field has been set.
 
-### GetKernel
+### GetPayload
 
-`func (o *VmConfig) GetKernel() KernelConfig`
+`func (o *VmConfig) GetPayload() PayloadConfig`
 
-GetKernel returns the Kernel field if non-nil, zero value otherwise.
+GetPayload returns the Payload field if non-nil, zero value otherwise.
 
-### GetKernelOk
+### GetPayloadOk
 
-`func (o *VmConfig) GetKernelOk() (*KernelConfig, bool)`
+`func (o *VmConfig) GetPayloadOk() (*PayloadConfig, bool)`
 
-GetKernelOk returns a tuple with the Kernel field if it's non-nil, zero value otherwise
+GetPayloadOk returns a tuple with the Payload field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
-### SetKernel
+### SetPayload
 
-`func (o *VmConfig) SetKernel(v KernelConfig)`
+`func (o *VmConfig) SetPayload(v PayloadConfig)`
 
-SetKernel sets Kernel field to given value.
+SetPayload sets Payload field to given value.
 
-
-### GetInitramfs
-
-`func (o *VmConfig) GetInitramfs() InitramfsConfig`
-
-GetInitramfs returns the Initramfs field if non-nil, zero value otherwise.
-
-### GetInitramfsOk
-
-`func (o *VmConfig) GetInitramfsOk() (*InitramfsConfig, bool)`
-
-GetInitramfsOk returns a tuple with the Initramfs field if it's non-nil, zero value otherwise
-and a boolean to check if the value has been set.
-
-### SetInitramfs
-
-`func (o *VmConfig) SetInitramfs(v InitramfsConfig)`
-
-SetInitramfs sets Initramfs field to given value.
-
-### HasInitramfs
-
-`func (o *VmConfig) HasInitramfs() bool`
-
-HasInitramfs returns a boolean if a field has been set.
-
-### SetInitramfsNil
-
-`func (o *VmConfig) SetInitramfsNil(b bool)`
-
- SetInitramfsNil sets the value for Initramfs to be an explicit nil
-
-### UnsetInitramfs
-`func (o *VmConfig) UnsetInitramfs()`
-
-UnsetInitramfs ensures that no value is present for Initramfs, not even an explicit nil
-### GetCmdline
-
-`func (o *VmConfig) GetCmdline() CmdLineConfig`
-
-GetCmdline returns the Cmdline field if non-nil, zero value otherwise.
-
-### GetCmdlineOk
-
-`func (o *VmConfig) GetCmdlineOk() (*CmdLineConfig, bool)`
-
-GetCmdlineOk returns a tuple with the Cmdline field if it's non-nil, zero value otherwise
-and a boolean to check if the value has been set.
-
-### SetCmdline
-
-`func (o *VmConfig) SetCmdline(v CmdLineConfig)`
-
-SetCmdline sets Cmdline field to given value.
-
-### HasCmdline
-
-`func (o *VmConfig) HasCmdline() bool`
-
-HasCmdline returns a boolean if a field has been set.
 
 ### GetDisks
 

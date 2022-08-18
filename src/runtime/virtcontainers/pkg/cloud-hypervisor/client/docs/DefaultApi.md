@@ -110,7 +110,7 @@ import (
 )
 
 func main() {
-    vmConfig := *openapiclient.NewVmConfig(*openapiclient.NewKernelConfig("Path_example")) // VmConfig | The VM configuration
+    vmConfig := *openapiclient.NewVmConfig(*openapiclient.NewPayloadConfig()) // VmConfig | The VM configuration
 
     configuration := openapiclient.NewConfiguration()
     api_client := openapiclient.NewAPIClient(configuration)
