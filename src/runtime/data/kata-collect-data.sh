@@ -844,6 +844,49 @@ show_latest_kata_version()
 	fi
 }
 
+show_third_party_tools()
+{
+	not_found="Tool not found"
+	start_section "Third Party Tools"
+
+	conmon_version="$(conmon --version 2>/dev/null | awk -v FS="(^conmon version)|\n" '{print $2}' | xargs || true)"
+	[ -z $conmon_version ] && conmon_version=$not_found
+	msg "conmon version: $conmon_version"
+
+	crio_version="$(crio --version 2>/dev/null | awk -v FS="(^Version:)|\n" '{print $2}' | xargs || true)"
+	[ -z $crio_version ] && crio_version=$not_found
+	msg "cri-o version: $crio_version"
+
+	# Not in vagrant
+	containerd_version="$(containerd --version 2>/dev/null | awk -F ' ' 'NR==1{print $3}' | xargs || true)"
+	[ -z $containerd_version ] && $containerd_version=$not_found
+	msg "containerd version: $containerd_version"
+
+	critools_version="$(crictl --version 2>/dev/null | awk -v FS="(^crictl version)|\n" '{print $2}' | xargs || true)"
+	[ -z $critools_version ] && critools_version=$not_found
+	msg "critools version: $critools_version"
+
+	# Not in vagrant
+	gperf_version="$(gperf --version 2>/dev/null | awk -v FS="(GNU gperf)|\n" '{print $2}' | xargs || true)"
+	[ -z $gperf_version ] && gperf_version=$not_found
+	msg "gperf version: $gperf_version"
+
+	kubernetes_version="$(kubectl version --output=json 2>/dev/null | jq -r '.clientVersion.gitVersion' || true)"
+	[ -z $kubernetes_version ] && kubernetes_version=$not_found
+	msg "kubernetes version: $kubernetes_version"
+
+	libseccomp_version="$(runc --version 2>/dev/null | awk -v FS="(^libseccomp:)|\n" '{print $2}' | xargs || true)"
+	[ -z $libseccomp_version ] && libseccomp_version=$not_found
+	msg "libseccomp version: $libseccomp_version"
+
+	runc_version="$(runc --version 2>/dev/null | awk -v FS="(^runc version)|\n" '{print $2}' | xargs)"
+	[ -z $runc_version ] && runc_version=$not_found
+	msg "runc version: $runc_version"
+
+	end_section
+
+}
+
 show_details()
 {
 	show_header
@@ -858,6 +901,7 @@ show_details()
 	show_container_mgr_details
 	show_package_versions
 	show_kata_monitor_version
+	show_third_party_tools
 
 	show_footer
 }
