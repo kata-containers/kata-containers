@@ -375,7 +375,7 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 
 	// In the confidential computing, there is no Image information on the host,
 	// so there is no Rootfs.Target.
-	if f.sandbox.config.ServiceOffload && c.rootFs.Target == "" {
+	if f.sandbox.config.ServiceOffload && c.rootFs.Target == "" && c.state.BlockDeviceID == ""{
 		return &SharedFile{
 			storage:   nil,
 			guestPath: rootfsGuestPath,
