@@ -249,9 +249,7 @@ show_runtime_configs()
 	show_quoted_text "" "$configs"
 
 	# add in the standard defaults for good measure "just in case"
-	configs+=" /etc/kata-containers/configuration.toml"
-	configs+=" /usr/share/defaults/kata-containers/configuration.toml"
-	configs+=" /etc/kata-containers/configuration.toml"	
+	configs+=( "/etc/kata-containers/configuration.toml" "/usr/share/defaults/kata-containers/configuration.toml" )
 
 	# create a unique list of config files
 	configs=$(echo $configs|tr ' ' '\n'|sort -u)
