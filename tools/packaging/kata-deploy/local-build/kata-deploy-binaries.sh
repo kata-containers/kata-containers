@@ -112,11 +112,11 @@ install_cc_clh() {
 
 #Install cc capable guest image
 install_cc_image() {
-	info "Create CC image"
-	export SKOPEO=yes
+	export SKOPEO="${SKOPEO:-yes}"
 	export UMOCI=yes
 	export AA_KBC="offline_fs_kbc"
 
+	info "Create CC image configured with SKOPEO=${SKOPEO} UMOCI=${UMOCI} AA_KBC=${AA_KBC}"
 	"${rootfs_builder}" --imagetype=image --prefix="${cc_prefix}" --destdir="${destdir}"
 }
 
