@@ -459,13 +459,15 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	// to fetch if this is the first time the hypervisor is created.
 	clh.Logger().WithField("function", "CreateVM").Info("Sandbox not found creating")
 
+	// Create the VM config via the constructor to ensure default values are properly assigned
+	clh.vmconfig = *chclient.NewVmConfig(*chclient.NewPayloadConfig())
+
 	// Make sure the kernel path is valid
 	kernelPath, err := clh.config.KernelAssetPath()
 	if err != nil {
 		return err
 	}
-	// Create the VM config via the constructor to ensure default values are properly assigned
-	clh.vmconfig = *chclient.NewVmConfig(*chclient.NewKernelConfig(kernelPath))
+	clh.vmconfig.Payload.SetKernel(kernelPath)
 
 	if clh.config.ConfidentialGuest {
 		if err := clh.enableProtection(); err != nil {
@@ -505,7 +507,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	// Followed by extra kernel parameters defined in the configuration file
 	params = append(params, clh.config.KernelParams...)
 
-	clh.vmconfig.Cmdline = chclient.NewCmdLineConfig(kernelParamsToString(params))
+	clh.vmconfig.Payload.SetCmdline(kernelParamsToString(params))
 
 	// set random device generator to hypervisor
 	clh.vmconfig.Rng = chclient.NewRngConfig(clh.config.EntropySource)
@@ -547,9 +549,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 			return err
 		}
 
-		initrd := chclient.NewInitramfsConfig(initrdPath)
-
-		clh.vmconfig.SetInitramfs(*initrd)
+		clh.vmconfig.Payload.SetInitramfs(initrdPath)
 	}
 
 	// Use serial port as the guest console only in debug mode,
