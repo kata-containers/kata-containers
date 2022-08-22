@@ -127,7 +127,10 @@ get_tee_kernel() {
 	mkdir -p ${kernel_path}
 
 	[ -z "${kernel_url}" ] && kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
-	kernel_tarball="${version}.tar.gz"
+
+	kernel_tarball="linux-${version}.tar.gz"
+	tarball_name=$(get_from_kata_deps "assets.kernel.${tee}.tarball")
+	[ -z "$tarball_name" ] || kernel_tarball="$tarball_name"
 
 	if [ ! -f "${kernel_tarball}" ]; then
 	   curl --fail -OL "${kernel_url}/${kernel_tarball}"
@@ -456,7 +459,7 @@ install_kata() {
 	if [ "${arch_target}" = "arm64" ]; then
 		install --mode 0644 -D "arch/${arch_target}/boot/Image" "${install_path}/${vmlinux}"
 	elif [ "${arch_target}" = "s390" ]; then
-		install --mode 0644 -D "arch/${arch_target}/boot/compressed/vmlinux" "${install_path}/${vmlinux}"
+		install --mode 0644 -D "arch/${arch_target}/boot/vmlinux" "${install_path}/${vmlinux}"
 	else
 		install --mode 0644 -D "vmlinux" "${install_path}/${vmlinux}"
 	fi
@@ -553,7 +556,8 @@ main() {
 			esac
 		elif [[ "${conf_guest}" != "" ]]; then
 			#If specifying a tag for kernel_version, must be formatted version-like to avoid unintended parsing issues
-			kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.tag")
+			kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)
+			[ -n "${kernel_version}" ] || kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.tag")
 		else
 			kernel_version=$(get_from_kata_deps "assets.kernel.version")
 		fi
