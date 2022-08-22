@@ -15,6 +15,9 @@ clippy:
 		-- \
 		-D warnings
 
+vendor:
+	@echo "INFO: vendor do nothing.."
+
 format:
 	@echo "INFO: cargo fmt..."
 	cargo fmt -- --check

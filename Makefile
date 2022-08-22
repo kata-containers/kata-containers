@@ -8,6 +8,7 @@ COMPONENTS =
 
 COMPONENTS += libs
 COMPONENTS += agent
+COMPONENTS += dragonball
 COMPONENTS += runtime
 COMPONENTS += runtime-rs
 
