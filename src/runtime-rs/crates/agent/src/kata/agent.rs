@@ -8,6 +8,8 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use ttrpc::context as ttrpc_ctx;
 
+use kata_types::config::Agent as AgentConfig;
+
 use crate::{kata::KataAgent, Agent, AgentManager, HealthService};
 
 /// millisecond to nanosecond
@@ -36,6 +38,10 @@ impl AgentManager for KataAgent {
 
     async fn stop(&self) {
         self.stop_log_forwarder().await;
+    }
+
+    async fn agent_config(&self) -> AgentConfig {
+        self.agent_config().await
     }
 }
 

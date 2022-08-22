@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use agent::{self, kata::KataAgent, Agent};
+use agent::{self, kata::KataAgent, types::KernelModule, Agent};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use common::{
@@ -159,6 +159,8 @@ impl Sandbox for VirtSandbox {
             .context("setup device after start vm")?;
 
         // create sandbox in vm
+        let agent_config = self.agent.agent_config().await;
+        let kernel_modules = KernelModule::set_kernel_modules(agent_config.kernel_modules)?;
         let req = agent::CreateSandboxRequest {
             hostname: "".to_string(),
             dns: vec![],
@@ -175,7 +177,7 @@ impl Sandbox for VirtSandbox {
                 .await
                 .security_info
                 .guest_hook_path,
-            kernel_modules: vec![],
+            kernel_modules,
         };
 
         self.agent
