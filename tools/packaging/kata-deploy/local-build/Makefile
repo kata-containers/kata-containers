@@ -21,14 +21,18 @@ $(MK_DIR)/dockerbuild/install_yq.sh:
 all-parallel: $(MK_DIR)/dockerbuild/install_yq.sh
 	${MAKE} -f $(MK_PATH) all -j $(shell nproc ${CI:+--ignore 1}) V=
 
-all: cloud-hypervisor-tarball \
+all: serial-targets \
 	firecracker-tarball \
 	kernel-tarball \
 	qemu-tarball \
-	rootfs-image-tarball \
-	rootfs-initrd-tarball \
 	shim-v2-tarball \
 	virtiofsd-tarball
+
+serial-targets:
+	${MAKE} -f $(MK_PATH) -j 1 V= \
+	rootfs-image-tarball \
+	rootfs-initrd-tarball \
+	cloud-hypervisor-tarball
 
 %-tarball-build: $(MK_DIR)/dockerbuild/install_yq.sh
 	$(call BUILD,$*)
