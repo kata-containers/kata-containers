@@ -771,6 +771,7 @@ pub mod tests {
     use dbs_device::device_manager::IoManager;
     use kvm_ioctls::Kvm;
     use lazy_static::lazy_static;
+    use test_utils::skip_if_not_root;
 
     use super::*;
     use crate::kvm_context::KvmContext;
@@ -880,6 +881,8 @@ pub mod tests {
 
     #[test]
     fn test_vcpu_run_emulation() {
+        skip_if_not_root!();
+
         let (mut vcpu, _) = create_vcpu();
 
         #[cfg(target_arch = "x86_64")]
@@ -964,6 +967,8 @@ pub mod tests {
     #[cfg(target_arch = "x86_64")]
     #[test]
     fn test_vcpu_check_io_port_info() {
+        skip_if_not_root!();
+
         let (vcpu, _receiver) = create_vcpu();
 
         // debug info signal
