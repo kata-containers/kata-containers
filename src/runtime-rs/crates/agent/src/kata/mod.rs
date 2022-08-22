@@ -126,4 +126,9 @@ impl KataAgent {
         let mut inner = self.inner.lock().await;
         inner.log_forwarder.stop();
     }
+
+    pub(crate) async fn agent_config(&self) -> AgentConfig {
+        let inner = self.inner.lock().await;
+        inner.config.clone()
+    }
 }

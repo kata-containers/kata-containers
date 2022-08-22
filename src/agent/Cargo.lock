@@ -625,6 +625,7 @@ dependencies = [
  "futures",
  "ipnetwork",
  "kata-sys-util",
+ "kata-types",
  "lazy_static",
  "libc",
  "log",
