@@ -641,6 +641,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use dbs_utils::epoll_manager::EpollManager;
+    use test_utils::skip_if_not_root;
     use vmm_sys_util::tempfile::TempFile;
 
     use super::*;
@@ -686,6 +687,8 @@ mod tests {
 
     #[test]
     fn test_vmm_action_receive_unknown() {
+        skip_if_not_root!();
+
         let (_to_vmm, from_api) = channel();
         let (to_api, _from_vmm) = channel();
         let vmm = Arc::new(Mutex::new(create_vmm_instance()));
@@ -714,6 +717,8 @@ mod tests {
 
     #[test]
     fn test_vmm_action_config_boot_source() {
+        skip_if_not_root!();
+
         let kernel_file = TempFile::new().unwrap();
 
         let tests = &mut [
@@ -777,6 +782,8 @@ mod tests {
 
     #[test]
     fn test_vmm_action_set_vm_configuration() {
+        skip_if_not_root!();
+
         let tests = &mut [
             // invalid state
             TestData::new(
@@ -979,6 +986,8 @@ mod tests {
 
     #[test]
     fn test_vmm_action_start_microvm() {
+        skip_if_not_root!();
+
         let tests = &mut [
             // invalid state (running)
             TestData::new(VmmAction::StartMicroVm, InstanceState::Running, &|result| {
@@ -1023,6 +1032,8 @@ mod tests {
 
     #[test]
     fn test_vmm_action_shutdown_microvm() {
+        skip_if_not_root!();
+
         let tests = &mut [
             // success
             TestData::new(
@@ -1042,6 +1053,8 @@ mod tests {
     #[cfg(feature = "virtio-blk")]
     #[test]
     fn test_vmm_action_insert_block_device() {
+        skip_if_not_root!();
+
         let dummy_file = TempFile::new().unwrap();
         let dummy_path = dummy_file.as_path().to_owned();
 
@@ -1097,6 +1110,8 @@ mod tests {
     #[cfg(feature = "virtio-blk")]
     #[test]
     fn test_vmm_action_update_block_device() {
+        skip_if_not_root!();
+
         let tests = &mut [
             // invalid id
             TestData::new(
@@ -1128,6 +1143,8 @@ mod tests {
     #[cfg(feature = "virtio-blk")]
     #[test]
     fn test_vmm_action_remove_block_device() {
+        skip_if_not_root!();
+
         let tests = &mut [
             // invalid state
             TestData::new(
@@ -1175,6 +1192,8 @@ mod tests {
     #[cfg(feature = "virtio-fs")]
     #[test]
     fn test_vmm_action_insert_fs_device() {
+        skip_if_not_root!();
+
         let tests = &mut [
             // invalid state
             TestData::new(
@@ -1213,6 +1232,8 @@ mod tests {
     #[cfg(feature = "virtio-fs")]
     #[test]
     fn test_vmm_action_manipulate_fs_device() {
+        skip_if_not_root!();
+
         let tests = &mut [
             // invalid state
             TestData::new(
@@ -1260,6 +1281,8 @@ mod tests {
     #[cfg(feature = "virtio-net")]
     #[test]
     fn test_vmm_action_insert_network_device() {
+        skip_if_not_root!();
+
         let tests = &mut [
             // hotplug unready
             TestData::new(
@@ -1298,6 +1321,8 @@ mod tests {
     #[cfg(feature = "virtio-net")]
     #[test]
     fn test_vmm_action_update_network_interface() {
+        skip_if_not_root!();
+
         let tests = &mut [
             // invalid id
             TestData::new(
@@ -1332,6 +1357,8 @@ mod tests {
     #[cfg(feature = "virtio-vsock")]
     #[test]
     fn test_vmm_action_insert_vsock_device() {
+        skip_if_not_root!();
+
         let tests = &mut [
             // invalid state
             TestData::new(
