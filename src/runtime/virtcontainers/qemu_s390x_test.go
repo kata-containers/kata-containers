@@ -136,6 +136,12 @@ func TestQemuS390xAppendProtectionDevice(t *testing.T) {
 	assert.Error(err)
 	assert.Empty(bios)
 
+	// SNP protection
+	s390x.(*qemuS390x).protection = snpProtection
+	devices, bios, err = s390x.appendProtectionDevice(devices, firmware, "")
+	assert.Error(err)
+	assert.Empty(bios)
+
 	// Secure Execution protection
 	s390x.(*qemuS390x).protection = seProtection
 
