@@ -66,17 +66,19 @@ const (
 const (
 	// Values are mandatory by http API
 	// Values based on:
-	clhTimeout    = 10
-	clhAPITimeout = 1
+	clhTimeout                     = 10
+	clhAPITimeout                  = 1
+	clhAPITimeoutConfidentialGuest = 10
 	// Timeout for hot-plug - hotplug devices can take more time, than usual API calls
 	// Use longer time timeout for it.
-	clhHotPlugAPITimeout  = 5
-	clhStopSandboxTimeout = 3
-	clhSocket             = "clh.sock"
-	clhAPISocket          = "clh-api.sock"
-	virtioFsSocket        = "virtiofsd.sock"
-	defaultClhPath        = "/usr/local/bin/cloud-hypervisor"
-	virtioFsCacheAlways   = "always"
+	clhHotPlugAPITimeout                   = 5
+	clhStopSandboxTimeout                  = 3
+	clhStopSandboxTimeoutConfidentialGuest = 5
+	clhSocket                              = "clh.sock"
+	clhAPISocket                           = "clh-api.sock"
+	virtioFsSocket                         = "virtiofsd.sock"
+	defaultClhPath                         = "/usr/local/bin/cloud-hypervisor"
+	virtioFsCacheAlways                    = "always"
 )
 
 // Interface that hides the implementation of openAPI client
@@ -271,6 +273,28 @@ var clhDebugKernelParams = []Param{
 // hypervisor interface implementation for cloud-hypervisor
 //
 //###########################################################
+
+func (clh *cloudHypervisor) getClhAPITimeout() time.Duration {
+	// Increase the APITimeout when dealing with a Confidential Guest.
+	// The value has been chosen based on tests using `ctr`, and hopefully
+	// this change can be dropped in further steps of the development.
+	if clh.config.ConfidentialGuest {
+		return clhAPITimeoutConfidentialGuest
+	}
+
+	return clhAPITimeout
+}
+
+func (clh *cloudHypervisor) getClhStopSandboxTimeout() time.Duration {
+	// Increase the StopSandboxTimeout when dealing with a Confidential Guest.
+	// The value has been chosen based on tests using `ctr`, and hopefully
+	// this change can be dropped in further steps of the development.
+	if clh.config.ConfidentialGuest {
+		return clhStopSandboxTimeoutConfidentialGuest
+	}
+
+	return clhStopSandboxTimeout
+}
 
 func (clh *cloudHypervisor) setConfig(config *HypervisorConfig) error {
 	clh.config = *config
@@ -594,7 +618,7 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "StartVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
-	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
 	defer cancel()
 
 	clh.Logger().WithField("function", "StartVM").Info("starting Sandbox")
@@ -890,7 +914,7 @@ func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, m
 	}
 
 	cl := clh.client()
-	ctx, cancelResize := context.WithTimeout(ctx, clhAPITimeout*time.Second)
+	ctx, cancelResize := context.WithTimeout(ctx, clh.getClhAPITimeout()*time.Second)
 	defer cancelResize()
 
 	resize := *chclient.NewVmResize()
@@ -935,7 +959,7 @@ func (clh *cloudHypervisor) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (c
 	}
 
 	// Resize (hot-plug) vCPUs via HTTP API
-	ctx, cancel := context.WithTimeout(ctx, clhAPITimeout*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, clh.getClhAPITimeout()*time.Second)
 	defer cancel()
 	resize := *chclient.NewVmResize()
 	resize.DesiredVcpus = func(i int32) *int32 { return &i }(int32(reqVCPUs))
@@ -1091,9 +1115,9 @@ func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err e
 	clh.Logger().Debug("Stopping Cloud Hypervisor")
 
 	if pidRunning && !waitOnly {
-		clhRunning, _ := clh.isClhRunning(clhStopSandboxTimeout)
+		clhRunning, _ := clh.isClhRunning(uint(clh.getClhStopSandboxTimeout()))
 		if clhRunning {
-			ctx, cancel := context.WithTimeout(context.Background(), clhStopSandboxTimeout*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), clh.getClhStopSandboxTimeout()*time.Second)
 			defer cancel()
 			if _, err = clh.client().ShutdownVMM(ctx); err != nil {
 				return err
@@ -1101,7 +1125,7 @@ func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err e
 		}
 	}
 
-	if err = utils.WaitLocalProcess(pid, clhStopSandboxTimeout, syscall.Signal(0), clh.Logger()); err != nil {
+	if err = utils.WaitLocalProcess(pid, uint(clh.getClhStopSandboxTimeout()), syscall.Signal(0), clh.Logger()); err != nil {
 		return err
 	}
 
@@ -1286,7 +1310,7 @@ func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 	timeStart := time.Now()
 	cl := clh.client()
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
 		defer cancel()
 		_, _, err := cl.VmmPingGet(ctx)
 		if err == nil {
@@ -1552,7 +1576,7 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 // vmInfo ask to hypervisor for current VM status
 func (clh *cloudHypervisor) vmInfo() (chclient.VmInfo, error) {
 	cl := clh.client()
-	ctx, cancelInfo := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	ctx, cancelInfo := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
 	defer cancelInfo()
 
 	info, _, err := cl.VmInfoGet(ctx)
