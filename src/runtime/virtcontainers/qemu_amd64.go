@@ -210,7 +210,6 @@ func (q *qemuAmd64) enableProtection() error {
 			q.qemuMachine.Options += ","
 		}
 		q.qemuMachine.Options += "kvm-type=tdx,confidential-guest-support=tdx"
-		q.kernelParams = append(q.kernelParams, Param{"tdx_guest", ""})
 		logger.Info("Enabling TDX guest protection")
 		return nil
 	case sevProtection:
