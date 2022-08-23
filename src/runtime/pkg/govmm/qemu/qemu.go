@@ -231,6 +231,9 @@ const (
 	// SEVGuest represents an SEV guest object
 	SEVGuest ObjectType = "sev-guest"
 
+	// SNPGuest represents an SNP guest object
+	SNPGuest ObjectType = "sev-snp-guest"
+
 	// SecExecGuest represents an s390x Secure Execution (Protected Virtualization in QEMU) object
 	SecExecGuest ObjectType = "s390-pv-guest"
 	// PEFGuest represent ppc64le PEF(Protected Execution Facility) object.
@@ -295,6 +298,8 @@ func (object Object) Valid() bool {
 	case TDXGuest:
 		return object.ID != "" && object.File != "" && object.DeviceID != ""
 	case SEVGuest:
+		fallthrough
+	case SNPGuest:
 		return object.ID != "" && object.File != "" && object.CBitPos != 0 && object.ReducedPhysBits != 0
 	case SecExecGuest:
 		return object.ID != ""
@@ -349,6 +354,8 @@ func (object Object) QemuParams(config *Config) []string {
 			deviceParams = append(deviceParams, fmt.Sprintf("config-firmware-volume=%s", object.FirmwareVolume))
 		}
 	case SEVGuest:
+		fallthrough
+	case SNPGuest:
 		objectParams = append(objectParams, string(object.Type))
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
 		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))

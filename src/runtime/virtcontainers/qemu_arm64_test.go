@@ -209,6 +209,13 @@ func TestQemuArm64AppendProtectionDevice(t *testing.T) {
 	assert.Empty(bios)
 	assert.NoError(err)
 
+	// SNP protection
+	arm64.(*qemuArm64).protection = snpProtection
+	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "")
+	assert.Empty(devices)
+	assert.Empty(bios)
+	assert.NoError(err)
+
 	// TDX protection
 	arm64.(*qemuArm64).protection = tdxProtection
 	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "")
