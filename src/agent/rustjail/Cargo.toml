@@ -20,7 +20,7 @@ protobuf = "=2.14.0"
 slog = "2.5.2"
 slog-scope = "4.1.2"
 scan_fmt = "0.2.6"
-regex = "1.5.5"
+regex = "1.5.6"
 path-absolutize = "1.2.0"
 anyhow = "1.0.32"
 cgroups = { package = "cgroups-rs", version = "0.2.8" }
