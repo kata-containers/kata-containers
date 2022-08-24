@@ -877,7 +877,13 @@ func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, m
 		return 0, MemoryDevice{}, err
 	}
 
-	maxHotplugSize := utils.MemUnit(*info.Config.Memory.HotplugSize) * utils.Byte
+	// HotplugSize can be nil in cases where Hotplug is not supported, as Cloud Hypervisor API
+	// does *not* allow us to set 0 as the HotplugSize.
+	maxHotplugSize := 0 * utils.Byte
+	if info.Config.Memory.HotplugSize != nil {
+		maxHotplugSize = utils.MemUnit(*info.Config.Memory.HotplugSize) * utils.Byte
+	}
+
 	if reqMemMB > uint32(maxHotplugSize.ToMiB()) {
 		reqMemMB = uint32(maxHotplugSize.ToMiB())
 	}
