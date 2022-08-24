@@ -28,6 +28,7 @@ enum SubCommand {
     Common(CommonCmd),
     #[clap(flatten)]
     Custom(CustomCmd),
+    /// Launch an init process (do not call it outside of runk)
     Init {},
 }
 
