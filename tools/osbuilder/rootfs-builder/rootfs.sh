@@ -597,7 +597,13 @@ EOF
 	[ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
 	OK "Agent installed"
 
-	[ "${AGENT_INIT}" == "yes" ] && setup_agent_init "${AGENT_DEST}" "${init}"
+	if [ "${AGENT_INIT}" == "yes" ]; then
+		setup_agent_init "${AGENT_DEST}" "${init}"
+	else
+		# Setup systemd service for kata-agent
+		mkdir -p "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants"
+		ln -sf "/usr/lib/systemd/system/kata-containers.target" "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants/kata-containers.target"
+	fi
 
 	info "Check init is installed"
 	[ -x "${init}" ] || [ -L "${init}" ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
