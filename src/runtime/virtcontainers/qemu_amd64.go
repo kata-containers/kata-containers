@@ -38,13 +38,10 @@ const (
 
 	defaultQemuMachineOptions = "accel=kvm,kernel_irqchip=on"
 
+	splitIrqChipMachineOptions = "accel=kvm,kernel_irqchip=split"
+
 	qmpMigrationWaitTimeout = 5 * time.Second
 )
-
-var qemuPaths = map[string]string{
-	QemuQ35:     defaultQemuPath,
-	QemuMicrovm: defaultQemuPath,
-}
 
 var kernelParams = []Param{
 	{"tsc", "reliable"},
@@ -101,7 +98,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	// IOMMU and Guest Protection require a split IRQ controller for handling interrupts
 	// otherwise QEMU won't be able to create the kernel irqchip
 	if config.IOMMU || config.ConfidentialGuest {
-		mp.Options = "accel=kvm,kernel_irqchip=split"
+		mp.Options = splitIrqChipMachineOptions
 	}
 
 	if config.IOMMU {
@@ -114,7 +111,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	q := &qemuAmd64{
 		qemuArchBase: qemuArchBase{
 			qemuMachine:          *mp,
-			qemuExePath:          qemuPaths[machineType],
+			qemuExePath:          defaultQemuPath,
 			memoryOffset:         config.MemOffset,
 			kernelParamsNonDebug: kernelParamsNonDebug,
 			kernelParamsDebug:    kernelParamsDebug,
@@ -170,19 +167,6 @@ func (q *qemuAmd64) capabilities() types.Capabilities {
 
 func (q *qemuAmd64) bridges(number uint32) {
 	q.Bridges = genericBridges(number, q.qemuMachine.Type)
-}
-
-func (q *qemuAmd64) cpuModel() string {
-	cpuModel := defaultCPUModel
-
-	// VMX is not migratable yet.
-	// issue: https://github.com/kata-containers/runtime/issues/1750
-	if q.vmFactory {
-		hvLogger.WithField("subsystem", "qemuAmd64").Warn("VMX is not migratable yet: turning it off")
-		cpuModel += ",vmx=off"
-	}
-
-	return cpuModel
 }
 
 func (q *qemuAmd64) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {
