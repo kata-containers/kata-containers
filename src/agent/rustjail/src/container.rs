@@ -1457,7 +1457,12 @@ impl LinuxContainer {
             linux.cgroups_path.clone()
         };
 
-        let cgroup_manager = FsManager::new(cpath.as_str())?;
+        let cgroup_manager = FsManager::new(cpath.as_str()).map_err(|e| {
+            anyhow!(format!(
+                "fail to create cgroup manager with path {}: {:}",
+                cpath, e
+            ))
+        })?;
         info!(logger, "new cgroup_manager {:?}", &cgroup_manager);
 
         Ok(LinuxContainer {
