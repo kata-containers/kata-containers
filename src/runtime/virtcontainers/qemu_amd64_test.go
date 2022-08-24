@@ -87,7 +87,7 @@ func TestQemuAmd64CPUModel(t *testing.T) {
 	base, ok := amd64.(*qemuAmd64)
 	assert.True(ok)
 	base.vmFactory = true
-	expectedOut = defaultCPUModel + ",vmx=off"
+	expectedOut = defaultCPUModel
 	model = amd64.cpuModel()
 	assert.Equal(expectedOut, model)
 }
