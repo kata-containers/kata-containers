@@ -840,7 +840,8 @@ pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Resul
         return Err(anyhow!("Invalid mount point {}", mount_point));
     }
 
-    let content = fs::read_to_string(mount_file)?;
+    let content = fs::read_to_string(mount_file)
+        .map_err(|e| anyhow!("read mount file {}: {}", mount_file, e))?;
 
     let re = Regex::new(format!("device .+ mounted on {} with fstype (.+)", mount_point).as_str())?;
 
