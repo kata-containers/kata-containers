@@ -16,9 +16,11 @@ import (
 
 // PlatformConfig struct for PlatformConfig
 type PlatformConfig struct {
-	NumPciSegments *int32   `json:"num_pci_segments,omitempty"`
-	IommuSegments  *[]int32 `json:"iommu_segments,omitempty"`
-	SerialNumber   *string  `json:"serial_number,omitempty"`
+	NumPciSegments *int32    `json:"num_pci_segments,omitempty"`
+	IommuSegments  *[]int32  `json:"iommu_segments,omitempty"`
+	SerialNumber   *string   `json:"serial_number,omitempty"`
+	Uuid           *string   `json:"uuid,omitempty"`
+	OemStrings     *[]string `json:"oem_strings,omitempty"`
 }
 
 // NewPlatformConfig instantiates a new PlatformConfig object
@@ -134,6 +136,70 @@ func (o *PlatformConfig) SetSerialNumber(v string) {
 	o.SerialNumber = &v
 }
 
+// GetUuid returns the Uuid field value if set, zero value otherwise.
+func (o *PlatformConfig) GetUuid() string {
+	if o == nil || o.Uuid == nil {
+		var ret string
+		return ret
+	}
+	return *o.Uuid
+}
+
+// GetUuidOk returns a tuple with the Uuid field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetUuidOk() (*string, bool) {
+	if o == nil || o.Uuid == nil {
+		return nil, false
+	}
+	return o.Uuid, true
+}
+
+// HasUuid returns a boolean if a field has been set.
+func (o *PlatformConfig) HasUuid() bool {
+	if o != nil && o.Uuid != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetUuid gets a reference to the given string and assigns it to the Uuid field.
+func (o *PlatformConfig) SetUuid(v string) {
+	o.Uuid = &v
+}
+
+// GetOemStrings returns the OemStrings field value if set, zero value otherwise.
+func (o *PlatformConfig) GetOemStrings() []string {
+	if o == nil || o.OemStrings == nil {
+		var ret []string
+		return ret
+	}
+	return *o.OemStrings
+}
+
+// GetOemStringsOk returns a tuple with the OemStrings field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetOemStringsOk() (*[]string, bool) {
+	if o == nil || o.OemStrings == nil {
+		return nil, false
+	}
+	return o.OemStrings, true
+}
+
+// HasOemStrings returns a boolean if a field has been set.
+func (o *PlatformConfig) HasOemStrings() bool {
+	if o != nil && o.OemStrings != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetOemStrings gets a reference to the given []string and assigns it to the OemStrings field.
+func (o *PlatformConfig) SetOemStrings(v []string) {
+	o.OemStrings = &v
+}
+
 func (o PlatformConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.NumPciSegments != nil {
@@ -144,6 +210,12 @@ func (o PlatformConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.SerialNumber != nil {
 		toSerialize["serial_number"] = o.SerialNumber
+	}
+	if o.Uuid != nil {
+		toSerialize["uuid"] = o.Uuid
+	}
+	if o.OemStrings != nil {
+		toSerialize["oem_strings"] = o.OemStrings
 	}
 	return json.Marshal(toSerialize)
 }

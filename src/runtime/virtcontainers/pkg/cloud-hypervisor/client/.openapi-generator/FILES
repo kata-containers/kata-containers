@@ -7,7 +7,6 @@ api_default.go
 client.go
 configuration.go
 docs/BalloonConfig.md
-docs/CmdLineConfig.md
 docs/ConsoleConfig.md
 docs/CpuAffinity.md
 docs/CpuFeatures.md
@@ -18,13 +17,12 @@ docs/DeviceConfig.md
 docs/DeviceNode.md
 docs/DiskConfig.md
 docs/FsConfig.md
-docs/InitramfsConfig.md
-docs/KernelConfig.md
 docs/MemoryConfig.md
 docs/MemoryZoneConfig.md
 docs/NetConfig.md
 docs/NumaConfig.md
 docs/NumaDistance.md
+docs/PayloadConfig.md
 docs/PciDeviceInfo.md
 docs/PlatformConfig.md
 docs/PmemConfig.md
@@ -51,7 +49,6 @@ git_push.sh
 go.mod
 go.sum
 model_balloon_config.go
-model_cmd_line_config.go
 model_console_config.go
 model_cpu_affinity.go
 model_cpu_features.go
@@ -61,13 +58,12 @@ model_device_config.go
 model_device_node.go
 model_disk_config.go
 model_fs_config.go
-model_initramfs_config.go
-model_kernel_config.go
 model_memory_config.go
 model_memory_zone_config.go
 model_net_config.go
 model_numa_config.go
 model_numa_distance.go
+model_payload_config.go
 model_pci_device_info.go
 model_platform_config.go
 model_pmem_config.go

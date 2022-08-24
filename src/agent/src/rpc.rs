@@ -298,7 +298,20 @@ impl AgentService {
             info!(sl!(), "no process configurations!");
             return Err(anyhow!(nix::Error::EINVAL));
         };
-        ctr.start(p).await?;
+
+        // if starting container failed, we will do some rollback work
+        // to ensure no resources are leaked.
+        if let Err(err) = ctr.start(p).await {
+            error!(sl!(), "failed to start container: {:?}", err);
+            if let Err(e) = ctr.destroy().await {
+                error!(sl!(), "failed to destroy container: {:?}", e);
+            }
+            if let Err(e) = remove_container_resources(&mut s, &cid) {
+                error!(sl!(), "failed to remove container resources: {:?}", e);
+            }
+            return Err(err);
+        }
+
         s.update_shared_pidns(&ctr)?;
         s.add_container(ctr);
         info!(sl!(), "created container!");
@@ -344,27 +357,6 @@ impl AgentService {
         req: protocols::agent::RemoveContainerRequest,
     ) -> Result<()> {
         let cid = req.container_id.clone();
-        let mut cmounts: Vec<String> = vec![];
-
-        let mut remove_container_resources = |sandbox: &mut Sandbox| -> Result<()> {
-            // Find the sandbox storage used by this container
-            let mounts = sandbox.container_mounts.get(&cid);
-            if let Some(mounts) = mounts {
-                for m in mounts.iter() {
-                    if sandbox.storages.get(m).is_some() {
-                        cmounts.push(m.to_string());
-                    }
-                }
-            }
-
-            for m in cmounts.iter() {
-                sandbox.unset_and_remove_sandbox_storage(m)?;
-            }
-
-            sandbox.container_mounts.remove(cid.as_str());
-            sandbox.containers.remove(cid.as_str());
-            Ok(())
-        };
 
         if req.timeout == 0 {
             let s = Arc::clone(&self.sandbox);
@@ -378,7 +370,7 @@ impl AgentService {
                 .destroy()
                 .await?;
 
-            remove_container_resources(&mut sandbox)?;
+            remove_container_resources(&mut sandbox, &cid)?;
 
             return Ok(());
         }
@@ -410,8 +402,7 @@ impl AgentService {
 
         let s = self.sandbox.clone();
         let mut sandbox = s.lock().await;
-
-        remove_container_resources(&mut sandbox)?;
+        remove_container_resources(&mut sandbox, &cid)?;
 
         Ok(())
     }
@@ -1853,6 +1844,35 @@ fn update_container_namespaces(
     Ok(())
 }
 
+fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<()> {
+    let mut cmounts: Vec<String> = vec![];
+
+    // Find the sandbox storage used by this container
+    let mounts = sandbox.container_mounts.get(cid);
+    if let Some(mounts) = mounts {
+        for m in mounts.iter() {
+            if sandbox.storages.get(m).is_some() {
+                cmounts.push(m.to_string());
+            }
+        }
+    }
+
+    for m in cmounts.iter() {
+        if let Err(err) = sandbox.unset_and_remove_sandbox_storage(m) {
+            error!(
+                sl!(),
+                "failed to unset_and_remove_sandbox_storage for container {}, error: {:?}",
+                cid,
+                err
+            );
+        }
+    }
+
+    sandbox.container_mounts.remove(cid);
+    sandbox.containers.remove(cid);
+    Ok(())
+}
+
 fn append_guest_hooks(s: &Sandbox, oci: &mut Spec) -> Result<()> {
     if let Some(ref guest_hooks) = s.hooks {
         let mut hooks = oci.hooks.take().unwrap_or_default();
@@ -2191,6 +2211,7 @@ mod tests {
         let result = load_kernel_module(&m);
         assert!(result.is_err(), "load module should failed");
 
+        skip_if_not_root!();
         // case 3: normal module.
         // normally this module should eixsts...
         m.name = "bridge".to_string();

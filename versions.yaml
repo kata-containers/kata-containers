@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v25.0"
+      version: "v26.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -151,16 +151,16 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    version: "v5.15.48"
+    version: "v5.19.2"
     tdx:
       description: "Linux kernel that supports TDX"
       url: "https://github.com/intel/linux-kernel-dcp/archive/refs/tags"
       tag: "SPR-BKC-PC-v9.6"
+      tarball: "SPR-BKC-PC-v9.6.tar.gz"
     sev:
-      description: "Linux kernel with efi_secret support"
-      url: "https://github.com/confidential-containers-demo/\
-      linux/archive/refs/tags/"
-      tag: "efi-secret-v5.17-rc6"
+      description: "Linux kernel that supports SEV"
+      url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
+      version: "v5.19.2"
 
   kernel-experimental:
     description: "Linux kernel with virtio-fs support"

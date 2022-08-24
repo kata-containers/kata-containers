@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::cgroup::is_paused;
 use crate::container::get_fifo_path;
 use crate::utils::*;
 use anyhow::{anyhow, Result};
@@ -14,6 +15,7 @@ use nix::{
     unistd::Pid,
 };
 use oci::{ContainerState, State as OCIState};
+use procfs::process::ProcState;
 use rustjail::{cgroups::fs::Manager as CgroupManager, specconv::CreateOpts};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -35,6 +37,10 @@ pub struct Status {
     pub rootfs: String,
     pub process_start_time: u64,
     pub created: DateTime<Utc>,
+    // Methods of Manager traits in rustjail are invisible, and CgroupManager.cgroup can't be serialized.
+    // So it is cumbersome to manage cgroups by this field. Instead, we use cgroups-rs::cgroup directly in Container to manager cgroups.
+    // Another solution is making some methods public outside rustjail and adding getter/setter for CgroupManager.cgroup.
+    // Temporarily keep this field for compatibility.
     pub cgroup_manager: CgroupManager,
     pub config: CreateOpts,
 }
@@ -143,53 +149,34 @@ pub fn is_process_running(pid: Pid) -> Result<bool> {
     }
 }
 
-pub fn get_current_container_state(status: &Status) -> Result<ContainerState> {
-    let running = is_process_running(Pid::from_raw(status.pid))?;
-    let mut has_fifo = false;
-
-    if running {
-        let fifo = get_fifo_path(status);
-        if fifo.exists() {
-            has_fifo = true
-        }
+// Returns the current state of a container. It will read cgroupfs and procfs to determine the state.
+// https://github.com/opencontainers/runc/blob/86d6898f3052acba1ebcf83aa2eae3f6cc5fb471/libcontainer/container_linux.go#L1953
+pub fn get_current_container_state(
+    status: &Status,
+    cgroup: &cgroups::Cgroup,
+) -> Result<ContainerState> {
+    if is_paused(cgroup)? {
+        return Ok(ContainerState::Paused);
     }
-
-    if running && !has_fifo {
-        // TODO: Check paused status.
-        // runk does not support pause command currently.
+    let proc = procfs::process::Process::new(status.pid);
+    // if reading /proc/<pid> occurs error, then the process is not running
+    if proc.is_err() {
+        return Ok(ContainerState::Stopped);
     }
-
-    if !running {
-        Ok(ContainerState::Stopped)
-    } else if has_fifo {
-        Ok(ContainerState::Created)
-    } else {
-        Ok(ContainerState::Running)
+    let proc_stat = proc.unwrap().stat()?;
+    // if start time is not equal, then the pid is reused, and the process is not running
+    if proc_stat.starttime != status.process_start_time {
+        return Ok(ContainerState::Stopped);
     }
-}
-
-pub fn get_all_pid(cgm: &CgroupManager) -> Result<Vec<Pid>> {
-    let cgroup_path = cgm.paths.get("devices");
-    match cgroup_path {
-        Some(v) => {
-            let path = Path::new(v);
-            if !path.exists() {
-                return Err(anyhow!("cgroup devices file does not exist"));
+    match proc_stat.state()? {
+        ProcState::Zombie | ProcState::Dead => Ok(ContainerState::Stopped),
+        _ => {
+            let fifo = get_fifo_path(status);
+            if fifo.exists() {
+                return Ok(ContainerState::Created);
             }
-
-            let procs_path = path.join("cgroup.procs");
-            let pids: Vec<Pid> = lines_from_file(&procs_path)?
-                .into_iter()
-                .map(|v| {
-                    Pid::from_raw(
-                        v.parse::<pid_t>()
-                            .expect("failed to parse string into pid_t"),
-                    )
-                })
-                .collect();
-            Ok(pids)
+            Ok(ContainerState::Running)
         }
-        None => Err(anyhow!("cgroup devices file dose not exist")),
     }
 }
 
@@ -197,10 +184,12 @@ pub fn get_all_pid(cgm: &CgroupManager) -> Result<Vec<Pid>> {
 mod tests {
     use super::*;
     use crate::utils::test_utils::*;
+    use ::test_utils::skip_if_not_root;
     use chrono::{DateTime, Utc};
     use nix::unistd::getpid;
     use oci::ContainerState;
     use rustjail::cgroups::fs::Manager as CgroupManager;
+    use scopeguard::defer;
     use std::path::Path;
     use std::time::SystemTime;
 
@@ -235,14 +224,13 @@ mod tests {
 
     #[test]
     fn test_get_current_container_state() {
-        let status = create_dummy_status();
-        let state = get_current_container_state(&status).unwrap();
+        skip_if_not_root!();
+        let mut status = create_dummy_status();
+        status.id = "test_get_current_container_state".to_string();
+        // crete a dummy cgroup to make sure is_pause doesn't return error
+        let cgroup = create_dummy_cgroup(Path::new(&status.id));
+        defer!(cgroup.delete().unwrap());
+        let state = get_current_container_state(&status, &cgroup).unwrap();
         assert_eq!(state, ContainerState::Running);
-    }
-
-    #[test]
-    fn test_get_all_pid() {
-        let cgm: CgroupManager = serde_json::from_str(TEST_CGM_DATA).unwrap();
-        assert!(get_all_pid(&cgm).is_ok());
     }
 }

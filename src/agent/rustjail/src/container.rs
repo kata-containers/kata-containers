@@ -1457,7 +1457,12 @@ impl LinuxContainer {
             linux.cgroups_path.clone()
         };
 
-        let cgroup_manager = FsManager::new(cpath.as_str())?;
+        let cgroup_manager = FsManager::new(cpath.as_str()).map_err(|e| {
+            anyhow!(format!(
+                "fail to create cgroup manager with path {}: {:}",
+                cpath, e
+            ))
+        })?;
         info!(logger, "new cgroup_manager {:?}", &cgroup_manager);
 
         Ok(LinuxContainer {
@@ -1656,12 +1661,12 @@ fn valid_env(e: &str) -> Option<(&str, &str)> {
 mod tests {
     use super::*;
     use crate::process::Process;
-    use crate::skip_if_not_root;
     use nix::unistd::Uid;
     use std::fs;
     use std::os::unix::fs::MetadataExt;
     use std::os::unix::io::AsRawFd;
     use tempfile::tempdir;
+    use test_utils::skip_if_not_root;
     use tokio::process::Command;
 
     macro_rules! sl {

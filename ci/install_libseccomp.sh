@@ -28,7 +28,7 @@ workdir="$(mktemp -d --tmpdir build-libseccomp.XXXXX)"
 # After solving the issue, replace this code by using the `versions.yaml`.
 # libseccomp_version=$(get_version "externals.libseccomp.version")
 # libseccomp_url=$(get_version "externals.libseccomp.url")
-libseccomp_version="2.5.1"
+libseccomp_version="2.5.4"
 libseccomp_url="https://github.com/seccomp/libseccomp"
 libseccomp_tarball="libseccomp-${libseccomp_version}.tar.gz"
 libseccomp_tarball_url="${libseccomp_url}/releases/download/v${libseccomp_version}/${libseccomp_tarball}"

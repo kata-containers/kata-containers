@@ -114,10 +114,6 @@ func (q *qemuPPC64le) bridges(number uint32) {
 	q.Bridges = genericBridges(number, q.qemuMachine.Type)
 }
 
-func (q *qemuPPC64le) cpuModel() string {
-	return defaultCPUModel
-}
-
 func (q *qemuPPC64le) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {
 
 	q.Logger().Debug("Aligning maxmem to multiples of 256MB. Assumption: Kernel Version >= 4.11")
