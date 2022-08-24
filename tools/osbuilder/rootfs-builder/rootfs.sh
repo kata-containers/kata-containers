@@ -520,6 +520,11 @@ EOF
 			chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
 			chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chrony.service"
 			;;
+		"ubuntu")
+			# Fix for #4932 - Boot hang at: "A start job is running for /dev/ttyS0"
+			mkdir -p "${ROOTFS_DIR}/etc/systemd/system/getty.target.wants"
+			ln -sf "/lib/systemd/system/getty@.service" "${ROOTFS_DIR}/etc/systemd/system/getty.target.wants/getty@ttyS0.service"
+			;;
 		*)
 			chrony_conf_file="${ROOTFS_DIR}/etc/chrony.conf"
 			chrony_systemd_service="${ROOTFS_DIR}/usr/lib/systemd/system/chronyd.service"
