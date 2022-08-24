@@ -3,11 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::container::{get_config_path, ContainerLauncher};
-use crate::{
-    status::{get_current_container_state, Status},
-    utils::validate_process_spec,
-};
+use crate::container::{get_config_path, Container, ContainerLauncher};
+use crate::utils::validate_process_spec;
 use anyhow::{anyhow, Result};
 use derive_builder::Builder;
 use oci::{ContainerState, Process as OCIProcess, Spec};
@@ -138,32 +135,35 @@ impl ActivatedContainer {
             logger,
             "enter ActivatedContainer::create_launcher {:?}", self
         );
-        let status = Status::load(&self.root, &self.id)?;
-        let state = get_current_container_state(&status)?;
+        let container = Container::load(&self.root, &self.id)?;
 
         // If state is Created or Running, we can execute the process.
-        if state != ContainerState::Created && state != ContainerState::Running {
-            return Err(anyhow!("cannot exec in a stopped or paused container"));
+        if container.state != ContainerState::Created && container.state != ContainerState::Running
+        {
+            return Err(anyhow!(
+                "cannot exec in a stopped or paused container, state: {:?}",
+                container.state
+            ));
         }
 
-        let mut config = status.config;
+        let mut config = container.status.config;
         let spec = config.spec.as_mut().unwrap();
-        self.adapt_exec_spec(spec, status.pid, logger)?;
+        self.adapt_exec_spec(spec, container.status.pid, logger)?;
         debug!(logger, "adapted spec: {:?}", spec);
         validate_spec(spec, &self.console_socket)?;
 
         debug!(logger, "create LinuxContainer with config: {:?}", config);
         // Maybe we should move some properties from status into LinuxContainer,
         // like pid, process_start_time, created, cgroup_manager, etc. But it works now.
-        let container =
+        let runner =
             create_linux_container(&self.id, &self.root, config, self.console_socket, logger)?;
 
         Ok(ContainerLauncher::new(
             &self.id,
-            &status.bundle,
+            &container.status.bundle,
             &self.root,
             false,
-            container,
+            runner,
             self.pid_file,
         ))
     }
@@ -264,13 +264,14 @@ pub fn validate_spec(spec: &Spec, console_socket: &Option<PathBuf>) -> Result<()
 mod tests {
     use super::*;
     use crate::container::CONFIG_FILE_NAME;
-    use crate::utils::test_utils::TEST_ROOTFS_PATH;
+    use crate::status::Status;
+    use crate::utils::test_utils::*;
     use chrono::DateTime;
     use nix::unistd::getpid;
     use oci::{self, Root, Spec};
     use oci::{Linux, LinuxNamespace, User};
-    use rustjail::cgroups::fs::Manager;
     use rustjail::container::TYPETONAME;
+    use scopeguard::defer;
     use slog::o;
     use std::fs::create_dir;
     use std::time::SystemTime;
@@ -279,6 +280,7 @@ mod tests {
         path::PathBuf,
     };
     use tempfile::tempdir;
+    use test_utils::skip_if_not_root;
 
     #[derive(Debug)]
     struct TestData {
@@ -323,7 +325,9 @@ mod tests {
             .to_string_lossy()
             .to_string();
         let test_data = TestData {
-            id: String::from("test"),
+            // Since tests are executed concurrently, container_id must be unique in tests with cgroup.
+            // Or the cgroup directory may be removed by other tests in advance.
+            id: String::from("test_init_container_create_launcher"),
             bundle: bundle_dir.path().to_path_buf(),
             root: root_dir.into_path(),
             console_socket: Some(PathBuf::from("test")),
@@ -356,6 +360,10 @@ mod tests {
             Some(launcher.runner.console_socket),
             test_data.console_socket
         );
+        // If it is run by root, create_launcher will create cgroup dirs successfully. So we need to do some cleanup stuff.
+        if nix::unistd::Uid::effective().is_root() {
+            clean_up_cgroup(Path::new(&test_data.id));
+        }
     }
 
     #[test]
@@ -454,6 +462,11 @@ mod tests {
     }
 
     fn create_dummy_status(id: &str, pid: i32, root: &Path, spec: &Spec) -> Status {
+        let start_time = procfs::process::Process::new(pid)
+            .unwrap()
+            .stat()
+            .unwrap()
+            .starttime;
         Status {
             oci_version: spec.version.clone(),
             id: id.to_string(),
@@ -461,9 +474,9 @@ mod tests {
             root: root.to_path_buf(),
             bundle: PathBuf::from("/tmp"),
             rootfs: TEST_ROOTFS_PATH.to_string(),
-            process_start_time: 0,
+            process_start_time: start_time,
             created: DateTime::from(SystemTime::now()),
-            cgroup_manager: Manager::new("test").unwrap(),
+            cgroup_manager: serde_json::from_str(TEST_CGM_DATA).unwrap(),
             config: CreateOpts {
                 spec: Some(spec.clone()),
                 ..Default::default()
@@ -498,11 +511,14 @@ mod tests {
 
     #[test]
     fn test_activated_container_create() {
+        // create cgroup directory needs root permission
+        skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
         let bundle_dir = tempdir().unwrap();
         let root = tempdir().unwrap();
-        // let bundle = temp
-        let id = "test".to_string();
+        // Since tests are executed concurrently, container_id must be unique in tests with cgroup.
+        // Or the cgroup directory may be removed by other tests in advance.
+        let id = "test_activated_container_create".to_string();
         create_activated_dirs(root.path(), &id, bundle_dir.path());
         let pid = getpid().as_raw();
 
@@ -515,6 +531,10 @@ mod tests {
 
         let status = create_dummy_status(&id, pid, root.path(), &spec);
         status.save().unwrap();
+
+        // create empty cgroup directory to avoid is_pause failing
+        let cgroup = create_dummy_cgroup(Path::new(id.as_str()));
+        defer!(cgroup.delete().unwrap());
 
         let result = ActivatedContainerBuilder::default()
             .id(id)
@@ -575,6 +595,8 @@ mod tests {
 
     #[test]
     fn test_activated_container_create_with_process() {
+        // create cgroup directory needs root permission
+        skip_if_not_root!();
         const PROCESS_FILE_NAME: &str = "process.json";
         let bundle_dir = tempdir().unwrap();
         let process_file = bundle_dir.path().join(PROCESS_FILE_NAME);
@@ -588,7 +610,9 @@ mod tests {
 
         let logger = slog::Logger::root(slog::Discard, o!());
         let root = tempdir().unwrap();
-        let id = "test".to_string();
+        // Since tests are executed concurrently, container_id must be unique in tests with cgroup.
+        // Or the cgroup directory may be removed by other tests in advance.
+        let id = "test_activated_container_create_with_process".to_string();
         let pid = getpid().as_raw();
         let mut spec = create_dummy_spec();
         spec.root.as_mut().unwrap().path = bundle_dir
@@ -600,6 +624,10 @@ mod tests {
 
         let status = create_dummy_status(&id, pid, root.path(), &spec);
         status.save().unwrap();
+        // create empty cgroup directory to avoid is_pause failing
+        let cgroup = create_dummy_cgroup(Path::new(id.as_str()));
+        defer!(cgroup.delete().unwrap());
+
         let launcher = ActivatedContainerBuilder::default()
             .id(id)
             .root(root.into_path())

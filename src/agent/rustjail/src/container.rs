@@ -1656,12 +1656,12 @@ fn valid_env(e: &str) -> Option<(&str, &str)> {
 mod tests {
     use super::*;
     use crate::process::Process;
-    use crate::skip_if_not_root;
     use nix::unistd::Uid;
     use std::fs;
     use std::os::unix::fs::MetadataExt;
     use std::os::unix::io::AsRawFd;
     use tempfile::tempdir;
+    use test_utils::skip_if_not_root;
     use tokio::process::Command;
 
     macro_rules! sl {

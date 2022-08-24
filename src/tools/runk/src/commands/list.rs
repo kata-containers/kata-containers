@@ -5,7 +5,7 @@
 
 use super::state::get_container_state_name;
 use anyhow::Result;
-use libcontainer::status::{get_current_container_state, Status};
+use libcontainer::container::Container;
 use liboci_cli::List;
 use oci::ContainerState;
 use slog::{info, Logger};
@@ -19,7 +19,7 @@ pub fn run(_: List, root: &Path, logger: &Logger) -> Result<()> {
     let mut content = String::new();
     for entry in fs::read_dir(root)? {
         let entry = entry?;
-        // Possibly race with runk delete, so continue loop when any error occurs below
+        // Possibly race with other command of runk, so continue loop when any error occurs below
         let metadata = match entry.metadata() {
             Ok(metadata) => metadata,
             Err(_) => continue,
@@ -31,18 +31,15 @@ pub fn run(_: List, root: &Path, logger: &Logger) -> Result<()> {
             Ok(id) => id,
             Err(_) => continue,
         };
-        let status = match Status::load(root, &container_id) {
-            Ok(status) => status,
+        let container = match Container::load(root, &container_id) {
+            Ok(container) => container,
             Err(_) => continue,
         };
-        let state = match get_current_container_state(&status) {
-            Ok(state) => state,
-            Err(_) => continue,
-        };
+        let state = container.state;
         // Just like runc, pid of stopped container is 0
         let pid = match state {
             ContainerState::Stopped => 0,
-            _ => status.pid,
+            _ => container.status.pid,
         };
         // May replace get_user_by_uid with getpwuid(3)
         let owner = match get_user_by_uid(metadata.uid()) {
@@ -55,8 +52,8 @@ pub fn run(_: List, root: &Path, logger: &Logger) -> Result<()> {
             container_id,
             pid,
             get_container_state_name(state),
-            status.bundle.display(),
-            status.created,
+            container.status.bundle.display(),
+            container.status.created,
             owner
         );
     }

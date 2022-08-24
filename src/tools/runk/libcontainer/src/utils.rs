@@ -114,11 +114,16 @@ pub(crate) mod test_utils {
         let cgm: CgroupManager = serde_json::from_str(TEST_CGM_DATA).unwrap();
         let oci_state = create_dummy_oci_state();
         let created = SystemTime::now();
+        let start_time = procfs::process::Process::new(oci_state.pid)
+            .unwrap()
+            .stat()
+            .unwrap()
+            .starttime;
         let status = Status::new(
             Path::new(TEST_STATE_ROOT_PATH),
             Path::new(TEST_BUNDLE_PATH),
             oci_state,
-            1,
+            start_time,
             created,
             cgm,
             create_dummy_opts(),
@@ -126,6 +131,15 @@ pub(crate) mod test_utils {
         .unwrap();
 
         status
+    }
+
+    pub fn create_dummy_cgroup(cpath: &Path) -> cgroups::Cgroup {
+        cgroups::Cgroup::new(cgroups::hierarchies::auto(), cpath)
+    }
+
+    pub fn clean_up_cgroup(cpath: &Path) {
+        let cgroup = cgroups::Cgroup::load(cgroups::hierarchies::auto(), cpath);
+        cgroup.delete().unwrap();
     }
 
     #[test]

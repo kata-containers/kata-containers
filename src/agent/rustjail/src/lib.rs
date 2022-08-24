@@ -514,15 +514,6 @@ pub fn grpc_to_oci(grpc: &grpc::Spec) -> oci::Spec {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[macro_export]
-    macro_rules! skip_if_not_root {
-        () => {
-            if !nix::unistd::Uid::effective().is_root() {
-                println!("INFO: skipping {} which needs root", module_path!());
-                return;
-            }
-        };
-    }
 
     // Parameters:
     //
