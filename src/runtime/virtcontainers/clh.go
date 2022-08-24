@@ -264,7 +264,14 @@ var clhKernelParams = []Param{
 }
 
 var clhDebugKernelParams = []Param{
-	{"console", "ttyS0,115200n8"},     // enable serial console
+	{"console", "ttyS0,115200n8"}, // enable serial console
+}
+
+var clhDebugConfidentialGuestKernelParams = []Param{
+	{"console", "hvc0"}, // enable HVC console
+}
+
+var clhDebugKernelParamsCommon = []Param{
 	{"systemd.log_target", "console"}, // send loggng to the console
 }
 
@@ -496,7 +503,12 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 	// Followed by extra debug parameters if debug enabled in configuration file
 	if clh.config.Debug {
-		params = append(params, clhDebugKernelParams...)
+		if clh.config.ConfidentialGuest {
+			params = append(params, clhDebugConfidentialGuestKernelParams...)
+		} else {
+			params = append(params, clhDebugKernelParams...)
+		}
+		params = append(params, clhDebugKernelParamsCommon...)
 	} else {
 		// start the guest kernel with 'quiet' in non-debug mode
 		params = append(params, Param{"quiet", ""})
@@ -550,15 +562,27 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		clh.vmconfig.Payload.SetInitramfs(initrdPath)
 	}
 
-	// Use serial port as the guest console only in debug mode,
-	// so that we can gather early OS booting log
-	if clh.config.Debug {
-		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctTTY)
-	} else {
-		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctOFF)
-	}
+	if clh.config.ConfidentialGuest {
+		// Use HVC as the guest console only in debug mode, only
+		// for Confidential Guests
+		if clh.config.Debug {
+			clh.vmconfig.Console = chclient.NewConsoleConfig(cctTTY)
+		} else {
+			clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
+		}
 
-	clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
+		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctOFF)
+	} else {
+		// Use serial port as the guest console only in debug mode,
+		// so that we can gather early OS booting log
+		if clh.config.Debug {
+			clh.vmconfig.Serial = chclient.NewConsoleConfig(cctTTY)
+		} else {
+			clh.vmconfig.Serial = chclient.NewConsoleConfig(cctOFF)
+		}
+
+		clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
+	}
 
 	cpu_topology := chclient.NewCpuTopology()
 	cpu_topology.ThreadsPerCore = func(i int32) *int32 { return &i }(1)
