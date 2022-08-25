@@ -1140,8 +1140,11 @@ const (
 	// Threads is the pthread asynchronous I/O implementation.
 	Threads BlockDeviceAIO = "threads"
 
-	// Native is the pthread asynchronous I/O implementation.
+	// Native is the native Linux AIO implementation.
 	Native BlockDeviceAIO = "native"
+
+	// IOUring is the Linux io_uring I/O implementation.
+	IOUring BlockDeviceAIO = "io_uring"
 )
 
 const (
