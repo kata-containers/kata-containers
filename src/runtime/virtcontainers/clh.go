@@ -66,17 +66,19 @@ const (
 const (
 	// Values are mandatory by http API
 	// Values based on:
-	clhTimeout    = 10
-	clhAPITimeout = 1
+	clhTimeout                     = 10
+	clhAPITimeout                  = 1
+	clhAPITimeoutConfidentialGuest = 10
 	// Timeout for hot-plug - hotplug devices can take more time, than usual API calls
 	// Use longer time timeout for it.
-	clhHotPlugAPITimeout  = 5
-	clhStopSandboxTimeout = 3
-	clhSocket             = "clh.sock"
-	clhAPISocket          = "clh-api.sock"
-	virtioFsSocket        = "virtiofsd.sock"
-	defaultClhPath        = "/usr/local/bin/cloud-hypervisor"
-	virtioFsCacheAlways   = "always"
+	clhHotPlugAPITimeout                   = 5
+	clhStopSandboxTimeout                  = 3
+	clhStopSandboxTimeoutConfidentialGuest = 5
+	clhSocket                              = "clh.sock"
+	clhAPISocket                           = "clh-api.sock"
+	virtioFsSocket                         = "virtiofsd.sock"
+	defaultClhPath                         = "/usr/local/bin/cloud-hypervisor"
+	virtioFsCacheAlways                    = "always"
 )
 
 // Interface that hides the implementation of openAPI client
@@ -262,7 +264,14 @@ var clhKernelParams = []Param{
 }
 
 var clhDebugKernelParams = []Param{
-	{"console", "ttyS0,115200n8"},     // enable serial console
+	{"console", "ttyS0,115200n8"}, // enable serial console
+}
+
+var clhDebugConfidentialGuestKernelParams = []Param{
+	{"console", "hvc0"}, // enable HVC console
+}
+
+var clhDebugKernelParamsCommon = []Param{
 	{"systemd.log_target", "console"}, // send loggng to the console
 }
 
@@ -272,6 +281,28 @@ var clhDebugKernelParams = []Param{
 //
 //###########################################################
 
+func (clh *cloudHypervisor) getClhAPITimeout() time.Duration {
+	// Increase the APITimeout when dealing with a Confidential Guest.
+	// The value has been chosen based on tests using `ctr`, and hopefully
+	// this change can be dropped in further steps of the development.
+	if clh.config.ConfidentialGuest {
+		return clhAPITimeoutConfidentialGuest
+	}
+
+	return clhAPITimeout
+}
+
+func (clh *cloudHypervisor) getClhStopSandboxTimeout() time.Duration {
+	// Increase the StopSandboxTimeout when dealing with a Confidential Guest.
+	// The value has been chosen based on tests using `ctr`, and hopefully
+	// this change can be dropped in further steps of the development.
+	if clh.config.ConfidentialGuest {
+		return clhStopSandboxTimeoutConfidentialGuest
+	}
+
+	return clhStopSandboxTimeout
+}
+
 func (clh *cloudHypervisor) setConfig(config *HypervisorConfig) error {
 	clh.config = *config
 
@@ -279,11 +310,6 @@ func (clh *cloudHypervisor) setConfig(config *HypervisorConfig) error {
 }
 
 func (clh *cloudHypervisor) createVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
-	if !clh.supportsSharedFS() {
-		clh.Logger().Info("SharedFS is not supported")
-		return nil, nil
-	}
-
 	virtiofsdSocketPath, err := clh.virtioFsSocketPath(clh.id)
 	if err != nil {
 		return nil, err
@@ -319,11 +345,6 @@ func (clh *cloudHypervisor) createVirtiofsDaemon(sharedPath string) (VirtiofsDae
 }
 
 func (clh *cloudHypervisor) setupVirtiofsDaemon(ctx context.Context) error {
-	if !clh.supportsSharedFS() {
-		clh.Logger().Info("SharedFS is not supported")
-		return nil
-	}
-
 	if clh.config.SharedFS == config.Virtio9P {
 		return errors.New("cloud-hypervisor only supports virtio based file sharing")
 	}
@@ -347,11 +368,6 @@ func (clh *cloudHypervisor) setupVirtiofsDaemon(ctx context.Context) error {
 }
 
 func (clh *cloudHypervisor) stopVirtiofsDaemon(ctx context.Context) (err error) {
-	if !clh.supportsSharedFS() {
-		clh.Logger().Info("SharedFS is not supported")
-		return nil
-	}
-
 	if clh.state.VirtiofsDaemonPid == 0 {
 		clh.Logger().Warn("The virtiofsd had stopped")
 		return nil
@@ -368,11 +384,6 @@ func (clh *cloudHypervisor) stopVirtiofsDaemon(ctx context.Context) (err error) 
 }
 
 func (clh *cloudHypervisor) loadVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
-	if !clh.supportsSharedFS() {
-		clh.Logger().Info("SharedFS is not supported")
-		return nil, nil
-	}
-
 	virtiofsdSocketPath, err := clh.virtioFsSocketPath(clh.id)
 	if err != nil {
 		return nil, err
@@ -387,12 +398,6 @@ func (clh *cloudHypervisor) loadVirtiofsDaemon(sharedPath string) (VirtiofsDaemo
 
 func (clh *cloudHypervisor) nydusdAPISocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(clh.config.VMStorePath, id, nydusdAPISock)
-}
-
-func (clh *cloudHypervisor) supportsSharedFS() bool {
-	caps := clh.Capabilities(clh.ctx)
-
-	return caps.IsFsSharingSupported()
 }
 
 func (clh *cloudHypervisor) enableProtection() error {
@@ -498,7 +503,12 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 	// Followed by extra debug parameters if debug enabled in configuration file
 	if clh.config.Debug {
-		params = append(params, clhDebugKernelParams...)
+		if clh.config.ConfidentialGuest {
+			params = append(params, clhDebugConfidentialGuestKernelParams...)
+		} else {
+			params = append(params, clhDebugKernelParams...)
+		}
+		params = append(params, clhDebugKernelParamsCommon...)
 	} else {
 		// start the guest kernel with 'quiet' in non-debug mode
 		params = append(params, Param{"quiet", ""})
@@ -552,15 +562,27 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		clh.vmconfig.Payload.SetInitramfs(initrdPath)
 	}
 
-	// Use serial port as the guest console only in debug mode,
-	// so that we can gather early OS booting log
-	if clh.config.Debug {
-		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctTTY)
-	} else {
-		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctOFF)
-	}
+	if clh.config.ConfidentialGuest {
+		// Use HVC as the guest console only in debug mode, only
+		// for Confidential Guests
+		if clh.config.Debug {
+			clh.vmconfig.Console = chclient.NewConsoleConfig(cctTTY)
+		} else {
+			clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
+		}
 
-	clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
+		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctOFF)
+	} else {
+		// Use serial port as the guest console only in debug mode,
+		// so that we can gather early OS booting log
+		if clh.config.Debug {
+			clh.vmconfig.Serial = chclient.NewConsoleConfig(cctTTY)
+		} else {
+			clh.vmconfig.Serial = chclient.NewConsoleConfig(cctOFF)
+		}
+
+		clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
+	}
 
 	cpu_topology := chclient.NewCpuTopology()
 	cpu_topology.ThreadsPerCore = func(i int32) *int32 { return &i }(1)
@@ -620,7 +642,7 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "StartVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
-	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
 	defer cancel()
 
 	clh.Logger().WithField("function", "StartVM").Info("starting Sandbox")
@@ -879,7 +901,13 @@ func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, m
 		return 0, MemoryDevice{}, err
 	}
 
-	maxHotplugSize := utils.MemUnit(*info.Config.Memory.HotplugSize) * utils.Byte
+	// HotplugSize can be nil in cases where Hotplug is not supported, as Cloud Hypervisor API
+	// does *not* allow us to set 0 as the HotplugSize.
+	maxHotplugSize := 0 * utils.Byte
+	if info.Config.Memory.HotplugSize != nil {
+		maxHotplugSize = utils.MemUnit(*info.Config.Memory.HotplugSize) * utils.Byte
+	}
+
 	if reqMemMB > uint32(maxHotplugSize.ToMiB()) {
 		reqMemMB = uint32(maxHotplugSize.ToMiB())
 	}
@@ -916,7 +944,7 @@ func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, m
 	}
 
 	cl := clh.client()
-	ctx, cancelResize := context.WithTimeout(ctx, clhAPITimeout*time.Second)
+	ctx, cancelResize := context.WithTimeout(ctx, clh.getClhAPITimeout()*time.Second)
 	defer cancelResize()
 
 	resize := *chclient.NewVmResize()
@@ -961,7 +989,7 @@ func (clh *cloudHypervisor) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (c
 	}
 
 	// Resize (hot-plug) vCPUs via HTTP API
-	ctx, cancel := context.WithTimeout(ctx, clhAPITimeout*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, clh.getClhAPITimeout()*time.Second)
 	defer cancel()
 	resize := *chclient.NewVmResize()
 	resize.DesiredVcpus = func(i int32) *int32 { return &i }(int32(reqVCPUs))
@@ -1066,10 +1094,6 @@ func (clh *cloudHypervisor) AddDevice(ctx context.Context, devInfo interface{}, 
 	case types.HybridVSock:
 		clh.addVSock(defaultGuestVSockCID, v.UdsPath)
 	case types.Volume:
-		if !clh.supportsSharedFS() {
-			return fmt.Errorf("SharedFS is not supported")
-		}
-
 		err = clh.addVolume(v)
 	default:
 		clh.Logger().WithField("function", "AddDevice").Warnf("Add device of type %v is not supported.", v)
@@ -1096,9 +1120,7 @@ func (clh *cloudHypervisor) Capabilities(ctx context.Context) types.Capabilities
 
 	clh.Logger().WithField("function", "Capabilities").Info("get Capabilities")
 	var caps types.Capabilities
-	if !clh.config.ConfidentialGuest {
-		caps.SetFsSharingSupport()
-	}
+	caps.SetFsSharingSupport()
 	caps.SetBlockDeviceHotplugSupport()
 	return caps
 }
@@ -1123,9 +1145,9 @@ func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err e
 	clh.Logger().Debug("Stopping Cloud Hypervisor")
 
 	if pidRunning && !waitOnly {
-		clhRunning, _ := clh.isClhRunning(clhStopSandboxTimeout)
+		clhRunning, _ := clh.isClhRunning(uint(clh.getClhStopSandboxTimeout()))
 		if clhRunning {
-			ctx, cancel := context.WithTimeout(context.Background(), clhStopSandboxTimeout*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), clh.getClhStopSandboxTimeout()*time.Second)
 			defer cancel()
 			if _, err = clh.client().ShutdownVMM(ctx); err != nil {
 				return err
@@ -1133,7 +1155,7 @@ func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err e
 		}
 	}
 
-	if err = utils.WaitLocalProcess(pid, clhStopSandboxTimeout, syscall.Signal(0), clh.Logger()); err != nil {
+	if err = utils.WaitLocalProcess(pid, uint(clh.getClhStopSandboxTimeout()), syscall.Signal(0), clh.Logger()); err != nil {
 		return err
 	}
 
@@ -1318,7 +1340,7 @@ func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 	timeStart := time.Now()
 	cl := clh.client()
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
 		defer cancel()
 		_, _, err := cl.VmmPingGet(ctx)
 		if err == nil {
@@ -1584,7 +1606,7 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 // vmInfo ask to hypervisor for current VM status
 func (clh *cloudHypervisor) vmInfo() (chclient.VmInfo, error) {
 	cl := clh.client()
-	ctx, cancelInfo := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	ctx, cancelInfo := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
 	defer cancelInfo()
 
 	info, _, err := cl.VmInfoGet(ctx)
