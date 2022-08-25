@@ -115,7 +115,7 @@ FIRMWAREPATH :=
 FIRMWAREVOLUMEPATH :=
 TDVFFIRMWAREPATH := $(PREFIXDEPS)/share/tdvf/OVMF_CODE.fd
 TDVFFIRMWAREVOLUMEPATH := $(PREFIXDEPS)/share/tdvf/OVMF_VARS.fd
-TDXKERNELPARAMS := force_tdx_guest tdx_disable_filter
+TDXKERNELPARAMS := tdx_disable_filter
 
 # Name of default configuration file the runtime will use.
 CONFIG_FILE = configuration.toml
