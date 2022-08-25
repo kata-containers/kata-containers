@@ -19,7 +19,7 @@ import (
 	"syscall"
 
 	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
-	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
+	podmanAnnotations "github.com/containers/podman/v4/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -46,17 +46,17 @@ var (
 
 	// CRIContainerTypeKeyList lists all the CRI keys that could define
 	// the container type from annotations in the config.json.
-	CRIContainerTypeKeyList = []string{ctrAnnotations.ContainerType, crioAnnotations.ContainerType, dockershimAnnotations.ContainerTypeLabelKey}
+	CRIContainerTypeKeyList = []string{ctrAnnotations.ContainerType, podmanAnnotations.ContainerType, dockershimAnnotations.ContainerTypeLabelKey}
 
 	// CRISandboxNameKeyList lists all the CRI keys that could define
 	// the sandbox ID (sandbox ID) from annotations in the config.json.
-	CRISandboxNameKeyList = []string{ctrAnnotations.SandboxID, crioAnnotations.SandboxID, dockershimAnnotations.SandboxIDLabelKey}
+	CRISandboxNameKeyList = []string{ctrAnnotations.SandboxID, podmanAnnotations.SandboxID, dockershimAnnotations.SandboxIDLabelKey}
 
 	// CRIContainerTypeList lists all the maps from CRI ContainerTypes annotations
 	// to a virtcontainers ContainerType.
 	CRIContainerTypeList = []annotationContainerType{
-		{crioAnnotations.ContainerTypeSandbox, vc.PodSandbox},
-		{crioAnnotations.ContainerTypeContainer, vc.PodContainer},
+		{podmanAnnotations.ContainerTypeSandbox, vc.PodSandbox},
+		{podmanAnnotations.ContainerTypeContainer, vc.PodContainer},
 		{ctrAnnotations.ContainerTypeSandbox, vc.PodSandbox},
 		{ctrAnnotations.ContainerTypeContainer, vc.PodContainer},
 		{dockershimAnnotations.ContainerTypeLabelSandbox, vc.PodSandbox},
@@ -1047,8 +1047,8 @@ func getShmSize(c vc.ContainerConfig) (uint64, error) {
 
 // IsCRIOContainerManager check if a Pod is created from CRI-O
 func IsCRIOContainerManager(spec *specs.Spec) bool {
-	if val, ok := spec.Annotations[crioAnnotations.ContainerType]; ok {
-		if val == crioAnnotations.ContainerTypeSandbox || val == crioAnnotations.ContainerTypeContainer {
+	if val, ok := spec.Annotations[podmanAnnotations.ContainerType]; ok {
+		if val == podmanAnnotations.ContainerTypeSandbox || val == podmanAnnotations.ContainerTypeContainer {
 			return true
 		}
 	}
