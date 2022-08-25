@@ -348,7 +348,7 @@ impl AgentService {
         let mut process = req
             .process
             .into_option()
-            .ok_or_else(|| anyhow!(nix::Error::EINVAL))?;
+            .ok_or_else(|| anyhow!("Unable to parse process from ExecProcessRequest"))?;
 
         // Apply any necessary corrections for PCI addresses
         update_env_pci(&mut process.Env, &sandbox.pcimap)?;
@@ -597,7 +597,7 @@ impl AgentService {
         };
 
         if reader.is_none() {
-            return Err(anyhow!(nix::Error::EINVAL));
+            return Err(anyhow!("Unable to determine stream reader, is None"));
         }
 
         let reader = reader.ok_or_else(|| anyhow!("cannot get stream reader"))?;
@@ -1839,7 +1839,11 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
     let path = PathBuf::from(req.path.as_str());
 
     if !path.starts_with(CONTAINER_BASE) {
-        return Err(anyhow!(nix::Error::EINVAL));
+        return Err(anyhow!(
+            "Path {:?} does not start with {}",
+            path,
+            CONTAINER_BASE
+        ));
     }
 
     let parent = path.parent();
