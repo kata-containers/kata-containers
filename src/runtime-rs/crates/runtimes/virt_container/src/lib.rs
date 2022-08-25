@@ -16,7 +16,7 @@ pub mod sandbox_persist;
 
 use std::sync::Arc;
 
-use agent::kata::KataAgent;
+use agent::{kata::KataAgent, AGENT_KATA};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use common::{message::Message, RuntimeHandler, RuntimeInstance};
@@ -55,20 +55,7 @@ impl RuntimeHandler for VirtContainer {
         let hypervisor = new_hypervisor(&config).await.context("new hypervisor")?;
 
         // get uds from hypervisor and get config from toml_config
-        let agent = Arc::new(KataAgent::new(kata_types::config::Agent {
-            debug: true,
-            enable_tracing: false,
-            server_port: 1024,
-            log_port: 1025,
-            dial_timeout_ms: 10,
-            reconnect_timeout_ms: 3_000,
-            request_timeout_ms: 30_000,
-            health_check_request_timeout_ms: 90_000,
-            kernel_modules: Default::default(),
-            container_pipe_size: 0,
-            debug_console_enabled: false,
-        }));
-
+        let agent = new_agent(&config).context("new agent")?;
         let resource_manager = Arc::new(ResourceManager::new(
             sid,
             agent.clone(),
@@ -119,5 +106,46 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
             Ok(Arc::new(hypervisor))
         }
         _ => Err(anyhow!("Unsupported hypervisor {}", &hypervisor_name)),
+    }
+}
+
+fn new_agent(toml_config: &TomlConfig) -> Result<Arc<KataAgent>> {
+    let agent_name = &toml_config.runtime.agent_name;
+    let agent_config = toml_config
+        .agent
+        .get(agent_name)
+        .ok_or_else(|| anyhow!("failed to get agent for {}", &agent_name))
+        .context("get agent")?;
+    match agent_name.as_str() {
+        AGENT_KATA => {
+            let agent = KataAgent::new(agent_config.clone());
+            Ok(Arc::new(agent))
+        }
+        _ => Err(anyhow!("Unsupported agent {}", &agent_name)),
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+
+    fn default_toml_config_agent() -> Result<TomlConfig> {
+        let config_content = r#"
+[agent.kata]
+container_pipe_size=1
+
+[runtime]
+agent_name="kata"
+        "#;
+        TomlConfig::load(config_content).map_err(|e| anyhow!("can not load config toml: {}", e))
+    }
+
+    #[test]
+    fn test_new_agent() {
+        let toml_config = default_toml_config_agent().unwrap();
+
+        let res = new_agent(&toml_config);
+        assert!(res.is_ok());
     }
 }
