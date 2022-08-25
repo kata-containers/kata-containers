@@ -287,7 +287,7 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 			Debug:           false,
 			File:            firmware,
 			CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
-			ReducedPhysBits: cpuid.AMDMemEncrypt.PhysAddrReduction,
+			ReducedPhysBits: 1,
 		},
 	}
 
