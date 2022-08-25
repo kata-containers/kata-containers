@@ -400,8 +400,13 @@ func TestQMPBlockdevAdd(t *testing.T) {
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	q.version = checkVersion(t, connectedCh)
-	err := q.ExecuteBlockdevAdd(context.Background(), "/dev/rbd0",
-		fmt.Sprintf("drive_%s", volumeUUID), false)
+	dev := BlockDevice{
+		ID:       fmt.Sprintf("drive_%s", volumeUUID),
+		File:     "/dev/rbd0",
+		ReadOnly: false,
+		AIO:      Native,
+	}
+	err := q.ExecuteBlockdevAdd(context.Background(), &dev)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
@@ -424,8 +429,13 @@ func TestQMPBlockdevAddWithCache(t *testing.T) {
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	q.version = checkVersion(t, connectedCh)
-	err := q.ExecuteBlockdevAddWithCache(context.Background(), "/dev/rbd0",
-		fmt.Sprintf("drive_%s", volumeUUID), true, true, false)
+	dev := BlockDevice{
+		ID:       fmt.Sprintf("drive_%s", volumeUUID),
+		File:     "/dev/rbd0",
+		ReadOnly: false,
+		AIO:      Native,
+	}
+	err := q.ExecuteBlockdevAddWithCache(context.Background(), &dev, true, true)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}

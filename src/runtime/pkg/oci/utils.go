@@ -683,6 +683,22 @@ func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig)
 		}
 	}
 
+	if value, ok := ocispec.Annotations[vcAnnotations.BlockDeviceAIO]; ok {
+		supportedAIO := []string{config.AIONative, config.AIOThreads, config.AIOIOUring}
+
+		valid := false
+		for _, b := range supportedAIO {
+			if b == value {
+				sbConfig.HypervisorConfig.BlockDeviceAIO = value
+				valid = true
+			}
+		}
+
+		if !valid {
+			return fmt.Errorf("Invalid AIO mechanism  %v specified in annotation (supported IO mechanism : %v)", value, supportedAIO)
+		}
+	}
+
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DisableBlockDeviceUse).setBool(func(disableBlockDeviceUse bool) {
 		sbConfig.HypervisorConfig.DisableBlockDeviceUse = disableBlockDeviceUse
 	}); err != nil {
