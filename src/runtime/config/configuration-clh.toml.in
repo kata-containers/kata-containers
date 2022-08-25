@@ -28,10 +28,6 @@ image = "@IMAGEPATH@"
 #   - CPU Hotplug 
 #   - Memory Hotplug
 #   - NVDIMM devices
-#   - SharedFS, such as virtio-fs and virtio-fs-nydus
-#
-# Requirements:
-# * virtio-block used as rootfs, thus the usage of devmapper snapshotter.
 #
 # Supported TEEs:
 # * Intel TDX
