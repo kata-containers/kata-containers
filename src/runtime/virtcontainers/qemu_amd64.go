@@ -290,7 +290,7 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 				Debug:           false,
 				File:            firmware,
 				CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
-				ReducedPhysBits: cpuid.AMDMemEncrypt.PhysAddrReduction,
+				ReducedPhysBits: 1,
 			}), "", nil
 	case snpProtection:
 		return append(devices,
