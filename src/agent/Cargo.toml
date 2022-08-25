@@ -18,7 +18,7 @@ serde_json = "1.0.39"
 scan_fmt = "0.2.3"
 scopeguard = "1.0.0"
 thiserror = "1.0.26"
-regex = "1.5.5"
+regex = "1.5.6"
 serial_test = "0.5.1"
 kata-sys-util = { path = "../libs/kata-sys-util" }
 sysinfo = "0.23.0"
