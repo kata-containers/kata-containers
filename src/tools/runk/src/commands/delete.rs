@@ -6,13 +6,6 @@
 use anyhow::{anyhow, Result};
 use libcontainer::{container::Container, status::Status};
 use liboci_cli::Delete;
-use nix::{
-    sys::signal::SIGKILL,
-    sys::signal::{kill, Signal},
-    unistd::Pid,
-};
-use oci::{ContainerState, State as OCIState};
-use rustjail::container;
 use slog::{info, Logger};
 use std::{fs, path::Path};
 
@@ -29,57 +22,7 @@ pub async fn run(opts: Delete, root: &Path, logger: &Logger) -> Result<()> {
         fs::remove_dir_all(status_dir)?;
         return Ok(());
     };
-
-    let status = &container.status;
-    let spec = status
-        .config
-        .spec
-        .as_ref()
-        .ok_or_else(|| anyhow!("spec config was not present in the status"))?;
-
-    let oci_state = OCIState {
-        version: status.oci_version.clone(),
-        id: status.id.clone(),
-        status: container.state,
-        pid: status.pid,
-        bundle: status
-            .bundle
-            .to_str()
-            .ok_or_else(|| anyhow!("invalid bundle path"))?
-            .to_string(),
-        annotations: spec.annotations.clone(),
-    };
-
-    if spec.hooks.is_some() {
-        let hooks = spec
-            .hooks
-            .as_ref()
-            .ok_or_else(|| anyhow!("hooks config was not present"))?;
-        for h in hooks.poststop.iter() {
-            container::execute_hook(logger, h, &oci_state).await?;
-        }
-    }
-
-    match oci_state.status {
-        ContainerState::Stopped => {
-            container.destroy()?;
-        }
-        ContainerState::Created => {
-            kill(Pid::from_raw(status.pid), Some(Signal::SIGKILL))?;
-            container.destroy()?;
-        }
-        _ => {
-            if opts.force {
-                container.kill(SIGKILL, true)?;
-                container.destroy()?;
-            } else {
-                return Err(anyhow!(
-                    "cannot delete container {} that is not stopped",
-                    container_id
-                ));
-            }
-        }
-    }
+    container.delete(opts.force, logger).await?;
 
     info!(&logger, "delete command finished successfully");
 
