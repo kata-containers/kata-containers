@@ -470,6 +470,13 @@ install_kata() {
 	ln -sf "${vmlinux}" "${install_path}/vmlinux${suffix}.container"
 	ls -la "${install_path}/vmlinux${suffix}.container"
 	ls -la "${install_path}/vmlinuz${suffix}.container"
+
+	if [ -n "$suffix}" ]; then
+		ln -sf "vmlinux${suffix}.container" "${install_path}/vmlinux.container"
+		ln -sf "vmlinuz${suffix}.container" "${install_path}/vmlinuz.container"
+		ls -la "${install_path}/vmlinux.container"
+		ls -la "${install_path}/vmlinuz.container"
+	fi
 	popd >>/dev/null
 }
 
