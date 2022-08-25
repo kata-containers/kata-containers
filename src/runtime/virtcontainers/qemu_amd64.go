@@ -293,7 +293,7 @@ func (q *qemuAmd64) appendSEVObject(devices []govmmQemu.Device, firmware, firmwa
 				Debug:              false,
 				File:               firmware,
 				CBitPos:            cpuid.AMDMemEncrypt.CBitPosition,
-				ReducedPhysBits:    cpuid.AMDMemEncrypt.PhysAddrReduction,
+				ReducedPhysBits:    1,
 				SevPolicy:          config.Policy,
 				SevCertFilePath:    sevGodhPath,
 				SevSessionFilePath: sevSessionFilePath,
@@ -307,7 +307,7 @@ func (q *qemuAmd64) appendSEVObject(devices []govmmQemu.Device, firmware, firmwa
 				Debug:           false,
 				File:            firmware,
 				CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
-				ReducedPhysBits: cpuid.AMDMemEncrypt.PhysAddrReduction,
+				ReducedPhysBits: 1,
 				SevPolicy:       config.Policy,
 			}), "", nil
 	}
