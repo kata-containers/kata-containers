@@ -91,7 +91,7 @@ impl HealthCheck {
                                         ::std::process::exit(1);
                                     }
                                 } else {
-                                    info!(sl!(), "wait to exit exit {}", id);
+                                    info!(sl!(), "wait to exit {}", id);
                                     break;
                                 }
                             }

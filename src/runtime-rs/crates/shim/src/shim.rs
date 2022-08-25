@@ -68,7 +68,7 @@ impl ShimExecutor {
         let data = [&self.args.address, &self.args.namespace, id].join("/");
         let mut hasher = sha2::Sha256::new();
         hasher.update(data);
-        // https://github.com/containerd/containerd/blob/main/runtime/v2/shim/util_unix.go#L68 to
+        // https://github.com/containerd/containerd/blob/v1.6.8/runtime/v2/shim/util_unix.go#L68 to
         // generate a shim socket path.
         Ok(PathBuf::from(format!(
             "unix://{}/s/{:X}",
@@ -97,7 +97,6 @@ mod tests {
             namespace: "test_namespace".into(),
             address: "containerd_socket".into(),
             publish_binary: "containerd".into(),
-            socket: "socket".into(),
             bundle: bundle_path.to_str().unwrap().into(),
             debug: false,
         };

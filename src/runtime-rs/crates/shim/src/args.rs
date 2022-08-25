@@ -15,7 +15,7 @@ use crate::Error;
 /// from a shimv2 container manager such as containerd.
 ///
 /// For detailed information, please refer to the
-/// [shim spec](https://github.com/containerd/containerd/blob/main/runtime/v2/README.md).
+/// [shim spec](https://github.com/containerd/containerd/blob/v1.6.8/runtime/v2/README.md).
 #[derive(Debug, Default, Clone)]
 pub struct Args {
     /// the id of the container
@@ -26,8 +26,6 @@ pub struct Args {
     pub address: String,
     /// the binary path to publish events back to containerd
     pub publish_binary: String,
-    ///  Abstract socket path to serve.
-    pub socket: String,
     /// the path to the bundle to delete
     pub bundle: String,
     /// Whether or not to enable debug
@@ -123,7 +121,6 @@ mod tests {
         let default_namespace = "ns1".to_string();
         let default_address = bind_address.to_string();
         let default_publish_binary = "containerd".to_string();
-        let default_socket = "socket".to_string();
         let default_bundle = path.to_string();
         let default_debug = false;
 
@@ -132,7 +129,6 @@ mod tests {
             namespace: default_namespace.clone(),
             address: default_address.clone(),
             publish_binary: default_publish_binary.clone(),
-            socket: default_socket,
             bundle: default_bundle.clone(),
             debug: default_debug,
         };
