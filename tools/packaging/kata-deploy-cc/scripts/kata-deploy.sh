@@ -15,6 +15,7 @@ shims=(
 	"qemu"
 	"qemu-tdx"
 	"clh"
+	"clh-tdx"
 )
 
 default_shim="qemu"
@@ -189,6 +190,7 @@ function remove_artifacts() {
 		/opt/confidential-containers/share/kata-qemu/ \
 		/opt/confidential-containers/share/kata-qemu-tdx/ \
 		/opt/confidential-containers/share/kata-containers/ \
+		/opt/confidential-containers/share/td-shim/ \
 		/opt/confidential-containers/share/tdvf/ \
 		/opt/confidential-containers/bin/kata-monitor \
 		/opt/confidential-containers/bin/containerd-shim-kata-v2 \
