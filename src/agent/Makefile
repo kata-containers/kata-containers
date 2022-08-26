@@ -45,6 +45,12 @@ ifneq ($(EXTRA_RUSTFEATURES),)
     override EXTRA_RUSTFEATURES := --features "$(EXTRA_RUSTFEATURES)"
 endif
 
+OFF_LINE :=
+# Enable build offline
+ifeq ($(OFFLINE),yes)
+        OFF_LINE += --offline
+endif
+
 include ../../utils.mk
 
 TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
@@ -110,7 +116,7 @@ default: $(TARGET) show-header
 $(TARGET): $(GENERATED_CODE) $(TARGET_PATH)
 
 $(TARGET_PATH): show-summary
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build $(OFF_LINE) --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
 
 $(GENERATED_FILES): %: %.in
 	@sed $(foreach r,$(GENERATED_REPLACEMENTS),-e 's|@$r@|$($r)|g') "$<" > "$@"
@@ -132,6 +138,9 @@ clean:
 vendor:
 	@cargo vendor
 
+#TARGET fetch:run cargo fetch
+fetch:
+	@cargo fetch
 
 #TARGET test: run cargo tests
 test:
