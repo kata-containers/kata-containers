@@ -169,11 +169,12 @@ pub fn baremount(
 
     info!(
         logger,
-        "mount source={:?}, dest={:?}, fs_type={:?}, options={:?}",
+        "baremount source={:?}, dest={:?}, fs_type={:?}, options={:?}, flags={:?}",
         source,
         destination,
         fs_type,
-        options
+        options,
+        flags
     );
 
     nix::mount::mount(
@@ -779,6 +780,14 @@ pub async fn add_storages(
         };
 
         // Todo need to rollback the mounted storage if err met.
+
+        if res.is_err() {
+            error!(
+                logger,
+                "add_storages failed, storage: {:?}, error: {:?} ", storage, res
+            );
+        }
+
         let mount_point = res?;
 
         if !mount_point.is_empty() {
