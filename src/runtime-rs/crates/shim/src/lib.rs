@@ -17,6 +17,7 @@ mod logger;
 mod panic_hook;
 mod shim;
 pub use shim::ShimExecutor;
+mod core_sched;
 #[rustfmt::skip]
 pub mod config;
 mod shim_delete;
