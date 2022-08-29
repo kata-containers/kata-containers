@@ -35,6 +35,7 @@ pub const CONFIG_FILE_NAME: &str = "config.json";
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ContainerAction {
     Create,
+    Start,
     Run,
 }
 
@@ -236,12 +237,12 @@ impl ContainerLauncher {
         if self.init {
             self.spawn_container(action, logger).await?;
         } else {
-            if action != ContainerAction::Run {
+            if action == ContainerAction::Create {
                 return Err(anyhow!(
                     "ContainerAction::Create is used for init-container only"
                 ));
             }
-            self.spawn_process(ContainerAction::Run, logger).await?;
+            self.spawn_process(action, logger).await?;
         }
         if let Some(pid_file) = self.pid_file.as_ref() {
             fs::write(
@@ -257,13 +258,15 @@ impl ContainerLauncher {
         // State root path root/id has been created in LinuxContainer::new(),
         // so we don't have to create it again.
 
+        // Spawn a new process in the container by using the agent's codes.
         self.spawn_process(action, logger).await?;
+
         let status = self.get_status()?;
         status.save()?;
         debug!(logger, "saved status is {:?}", status);
 
         // Clean up the fifo file created by LinuxContainer, which is used for block the created process.
-        if action == ContainerAction::Run {
+        if action == ContainerAction::Run || action == ContainerAction::Start {
             let fifo_path = get_fifo_path(&status);
             if fifo_path.exists() {
                 unlink(&fifo_path)?;
@@ -307,6 +310,9 @@ impl ContainerLauncher {
         match action {
             ContainerAction::Create => {
                 self.runner.start(process).await?;
+            }
+            ContainerAction::Start => {
+                self.runner.exec().await?;
             }
             ContainerAction::Run => {
                 self.runner.run(process).await?;
@@ -355,6 +361,33 @@ pub fn create_linux_container(
     if let Some(socket_path) = console_socket.as_ref() {
         container.set_console_socket(socket_path)?;
     }
+    Ok(container)
+}
+
+// Load rustjail's Linux container.
+// "uid_map_path" and "gid_map_path" are always empty, so they are not set.
+pub fn load_linux_container(
+    status: &Status,
+    console_socket: Option<PathBuf>,
+    logger: &Logger,
+) -> Result<LinuxContainer> {
+    let mut container = LinuxContainer::new(
+        &status.id,
+        &status
+            .root
+            .to_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| anyhow!("failed to convert a root path"))?,
+        status.config.clone(),
+        logger,
+    )?;
+    if let Some(socket_path) = console_socket.as_ref() {
+        container.set_console_socket(socket_path)?;
+    }
+
+    container.init_process_pid = status.pid;
+    container.init_process_start_time = status.process_start_time;
+    container.created = status.created.into();
     Ok(container)
 }
 
