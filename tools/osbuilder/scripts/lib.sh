@@ -264,6 +264,25 @@ detect_rust_version()
 	[ -n "$RUST_VERSION" ]
 }
 
+detect_libseccomp_info()
+{
+	info "Detecting libseccomp version"
+
+	info "Get libseccomp version and url from ${kata_versions_file}"
+	local libseccomp_ver_yq_path="externals.libseccomp.version"
+	local libseccomp_url_yq_path="externals.libseccomp.url"
+	export LIBSECCOMP_VERSION="$(get_package_version_from_kata_yaml "$libseccomp_ver_yq_path")"
+	export LIBSECCOMP_URL="$(get_package_version_from_kata_yaml "$libseccomp_url_yq_path")"
+
+	info "Get gperf version and url from ${kata_versions_file}"
+	local gperf_ver_yq_path="externals.gperf.version"
+	local gperf_url_yq_path="externals.gperf.url"
+	export GPERF_VERSION="$(get_package_version_from_kata_yaml "$gperf_ver_yq_path")"
+	export GPERF_URL="$(get_package_version_from_kata_yaml "$gperf_url_yq_path")"
+
+	[ -n "$LIBSECCOMP_VERSION" ] && [ -n $GPERF_VERSION ] && [ -n "$LIBSECCOMP_URL" ] && [ -n $GPERF_URL ]
+}
+
 before_starting_container() {
 	return 0
 }
