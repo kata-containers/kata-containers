@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::container::{create_linux_container, Container, ContainerLauncher};
+use crate::container::{load_linux_container, Container, ContainerLauncher};
 use crate::status::Status;
 use crate::utils::validate_spec;
 use anyhow::{anyhow, Result};
@@ -63,7 +63,7 @@ impl ActivatedContainer {
             logger,
             "enter ActivatedContainer::create_launcher {:?}", self
         );
-        let container = Container::load(&self.root, &self.id)?;
+        let mut container = Container::load(&self.root, &self.id)?;
 
         // If state is Created or Running, we can execute the process.
         if container.state != ContainerState::Created && container.state != ContainerState::Running
@@ -74,17 +74,21 @@ impl ActivatedContainer {
             ));
         }
 
-        let mut config = container.status.config;
-        let spec = config.spec.as_mut().unwrap();
+        let spec = container
+            .status
+            .config
+            .spec
+            .as_mut()
+            .ok_or_else(|| anyhow!("spec config was not present"))?;
         self.adapt_exec_spec(spec, container.status.pid, logger)?;
         debug!(logger, "adapted spec: {:?}", spec);
         validate_spec(spec, &self.console_socket)?;
 
-        debug!(logger, "create LinuxContainer with config: {:?}", config);
-        // Maybe we should move some properties from status into LinuxContainer,
-        // like pid, process_start_time, created, cgroup_manager, etc. But it works now.
-        let runner =
-            create_linux_container(&self.id, &self.root, config, self.console_socket, logger)?;
+        debug!(
+            logger,
+            "load LinuxContainer with config: {:?}", &container.status.config
+        );
+        let runner = load_linux_container(&container.status, self.console_socket, logger)?;
 
         Ok(ContainerLauncher::new(
             &self.id,
