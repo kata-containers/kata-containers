@@ -186,6 +186,11 @@ impl ContainerInner {
         Ok(())
     }
 
+    pub async fn is_stopped(&self) -> bool {
+        let state = self.init_process.get_status().await;
+        state == ProcessStatus::Stopped
+    }
+
     pub(crate) async fn stop_process(
         &mut self,
         process: &ContainerProcess,
@@ -208,12 +213,12 @@ impl ContainerInner {
         // send kill signal to container
         // ignore the error of sending signal, since the process would
         // have been killed and exited yet.
-        self.signal_process(process, Signal::SIGKILL as u32, false)
+        if let Err(e) = self
+            .signal_process(process, Signal::SIGKILL as u32, false)
             .await
-            .map_err(|e| {
-                warn!(logger, "failed to signal kill. {:?}", e);
-            })
-            .ok();
+        {
+            warn!(logger, "failed to signal kill. {:?}", e);
+        }
 
         match process.process_type {
             ProcessType::Container => self

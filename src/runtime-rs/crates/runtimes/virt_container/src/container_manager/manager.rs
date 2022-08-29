@@ -136,16 +136,25 @@ impl ContainerManager for VirtContainerManager {
         let c = containers
             .get(container_id)
             .ok_or_else(|| Error::ContainerNotFound(container_id.clone()))?;
+
+        // skip stopped containers
+        if c.is_stopped().await {
+            return Ok(());
+        }
+
         c.kill_process(&req.process, req.signal, req.all)
             .await
             .map_err(|err| {
                 warn!(
                     sl!(),
-                    "failed to signal process {:?} {:?}", &req.process, err
+                    "failed to signal process: {:?}, signal: {:?}, all: {}, error: {:?}",
+                    &req.process,
+                    &req.signal,
+                    req.all,
+                    err
                 );
                 err
-            })
-            .ok();
+            })?;
         Ok(())
     }
 
@@ -253,7 +262,7 @@ impl ContainerManager for VirtContainerManager {
         let c = containers
             .get(container_id)
             .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
-        c.update(&resource).await.context("stats")
+        c.update(&resource).await.context("update_container")
     }
 
     async fn pid(&self) -> Result<PID> {

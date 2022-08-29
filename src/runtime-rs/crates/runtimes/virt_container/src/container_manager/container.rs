@@ -297,6 +297,11 @@ impl Container {
             .context("stop process")
     }
 
+    pub async fn is_stopped(&self) -> bool {
+        let inner = self.inner.write().await;
+        inner.is_stopped().await
+    }
+
     pub async fn pause(&self) -> Result<()> {
         let inner = self.inner.read().await;
         if inner.init_process.get_status().await == ProcessStatus::Paused {
