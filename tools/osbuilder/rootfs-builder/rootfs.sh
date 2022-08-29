@@ -654,7 +654,10 @@ EOF
           UMOCI="yes"
           warning "UMOCI wasn't set, but is required for attestation, so overridden"
         fi
-
+		if [ "${AA_KBC}" == "offline_sev_kbc" ]; then
+			info "Adding agent config for ${AA_KBC}"
+			AA_KBC_PARAMS="offline_sev_kbc::null" envsubst < "${script_dir}/agent-config.toml.in" | tee "${ROOTFS_DIR}/etc/agent-config.toml"
+		fi
 		attestation_agent_url="$(get_package_version_from_kata_yaml externals.attestation-agent.url)"
 		attestation_agent_branch="$(get_package_version_from_kata_yaml externals.attestation-agent.branch)"
 		info "Install attestation-agent with KBC ${AA_KBC}"
