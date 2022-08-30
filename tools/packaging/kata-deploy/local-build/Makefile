@@ -89,7 +89,8 @@ cc: cc-cloud-hypervisor-tarball \
 	cc-tdx-qemu-tarball \
 	cc-tdx-td-shim-tarball \
 	cc-tdx-tdvf-tarball \
-	cc-sev-ovmf-tarball
+	cc-sev-ovmf-tarball \
+	cc-sev-rootfs-initrd-tarball
 
 cc-cloud-hypervisor-tarball:
 	${MAKE} $@-build
@@ -101,6 +102,9 @@ cc-qemu-tarball:
 	${MAKE} $@-build
 
 cc-rootfs-image-tarball:
+	${MAKE} $@-build
+
+cc-sev-rootfs-initrd-tarball: cc-sev-kernel-tarball
 	${MAKE} $@-build
 
 cc-shim-v2-tarball:
