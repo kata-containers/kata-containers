@@ -87,6 +87,7 @@ cc: cc-cloud-hypervisor-tarball \
 	cc-virtiofsd-tarball \
 	cc-tdx-kernel-tarball \
 	cc-tdx-qemu-tarball \
+	cc-tdx-td-shim-tarball \
 	cc-tdx-tdvf-tarball
 
 cc-cloud-hypervisor-tarball:
