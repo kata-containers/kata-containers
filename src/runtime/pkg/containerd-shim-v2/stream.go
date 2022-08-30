@@ -103,6 +103,11 @@ func newTtyIO(ctx context.Context, ns, id, stdin, stdout, stderr string, console
 
 func ioCopy(shimLog *logrus.Entry, exitch, stdinCloser chan struct{}, tty *ttyIO, stdinPipe io.WriteCloser, stdoutPipe, stderrPipe io.Reader) {
 	var wg sync.WaitGroup
+	var closeOnce sync.Once
+	stdinCloseFunc := func() {
+		// notify that we can close process's io safely.
+		close(stdinCloser)
+	}
 
 	if tty.io.Stdin() != nil {
 		wg.Add(1)
@@ -111,8 +116,7 @@ func ioCopy(shimLog *logrus.Entry, exitch, stdinCloser chan struct{}, tty *ttyIO
 			p := bufPool.Get().(*[]byte)
 			defer bufPool.Put(p)
 			io.CopyBuffer(stdinPipe, tty.io.Stdin(), *p)
-			// notify that we can close process's io safely.
-			close(stdinCloser)
+			closeOnce.Do(stdinCloseFunc)
 			wg.Done()
 			shimLog.Debug("stdin io stream copy exited")
 		}()
@@ -126,11 +130,8 @@ func ioCopy(shimLog *logrus.Entry, exitch, stdinCloser chan struct{}, tty *ttyIO
 			p := bufPool.Get().(*[]byte)
 			defer bufPool.Put(p)
 			io.CopyBuffer(tty.io.Stdout(), stdoutPipe, *p)
+			closeOnce.Do(stdinCloseFunc)
 			wg.Done()
-			if tty.io.Stdin() != nil {
-				// close stdin to make the other routine stop
-				tty.io.Stdin().Close()
-			}
 			shimLog.Debug("stdout io stream copy exited")
 		}()
 	}
@@ -142,6 +143,7 @@ func ioCopy(shimLog *logrus.Entry, exitch, stdinCloser chan struct{}, tty *ttyIO
 			p := bufPool.Get().(*[]byte)
 			defer bufPool.Put(p)
 			io.CopyBuffer(tty.io.Stderr(), stderrPipe, *p)
+			closeOnce.Do(stdinCloseFunc)
 			wg.Done()
 			shimLog.Debug("stderr io stream copy exited")
 		}()
