@@ -20,6 +20,7 @@ use procfs;
 use rustjail::{
     container::{self, BaseContainer, LinuxContainer, EXEC_FIFO_FILENAME},
     process::{Process, ProcessOperations},
+    specconv::CreateOpts,
 };
 use scopeguard::defer;
 use slog::{debug, Logger};
@@ -331,6 +332,28 @@ impl ContainerLauncher {
             self.runner.config.clone(),
         )
     }
+}
+
+pub fn create_linux_container(
+    id: &str,
+    root: &Path,
+    config: CreateOpts,
+    console_socket: Option<PathBuf>,
+    logger: &Logger,
+) -> Result<LinuxContainer> {
+    let mut container = LinuxContainer::new(
+        id,
+        root.to_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| anyhow!("failed to convert bundle path"))?
+            .as_str(),
+        config,
+        logger,
+    )?;
+    if let Some(socket_path) = console_socket.as_ref() {
+        container.set_console_socket(socket_path)?;
+    }
+    Ok(container)
 }
 
 pub fn get_config_path<P: AsRef<Path>>(bundle: P) -> PathBuf {

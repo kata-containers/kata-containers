@@ -4,7 +4,8 @@
 //
 
 use anyhow::Result;
-use libcontainer::{builder::InitContainerBuilder, container::ContainerAction};
+use libcontainer::{container::ContainerAction, init_builder::InitContainerBuilder};
+
 use liboci_cli::Create;
 use slog::{info, Logger};
 use std::path::Path;
