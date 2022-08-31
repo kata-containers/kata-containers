@@ -41,6 +41,7 @@ docker build -q -t build-kata-deploy \
 docker run \
 	-v /var/run/docker.sock:/var/run/docker.sock \
 	--user ${uid}:${gid} \
+	--env CI="${CI:-}" \
 	--env USER=${USER} \
 	--env SKOPEO="${SKOPEO:-}" \
 	--env UMOCI="${UMOCI:-}" \

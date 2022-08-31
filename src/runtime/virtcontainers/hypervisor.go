@@ -278,6 +278,7 @@ type HypervisorConfig struct {
 	GuestPreAttestationSecretGuid  string
 	GuestPreAttestationSecretType  string
 	SEVCertChainPath               string
+	BlockDeviceAIO                 string
 	JailerPathList                 []string
 	EntropySourceList              []string
 	VirtioFSDaemonList             []string
@@ -291,6 +292,8 @@ type HypervisorConfig struct {
 	Groups                         []uint32
 	HypervisorPathList             []string
 	HypervisorParams               []Param
+	SGXEPCSize                     int64
+	DiskRateLimiterBwMaxRate       int64
 	DiskRateLimiterBwOneTimeBurst  int64
 	DiskRateLimiterOpsMaxRate      int64
 	DiskRateLimiterOpsOneTimeBurst int64

@@ -16,6 +16,8 @@ lazy_static! {
     ];
 }
 pub const DEFAULT_AGENT_NAME: &str = "kata-agent";
+pub const DEFAULT_AGENT_VSOCK_PORT: u32 = 1024;
+pub const DEFAULT_AGENT_LOG_PORT: u32 = 1025;
 
 pub const DEFAULT_INTERNETWORKING_MODEL: &str = "tcfilter";
 

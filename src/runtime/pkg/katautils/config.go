@@ -105,6 +105,7 @@ type hypervisor struct {
 	GuestPreAttestationSecretGuid  string   `toml:"guest_pre_attestation_secret_guid"`
 	GuestPreAttestationSecretType  string   `toml:"guest_pre_attestation_secret_type"`
 	SEVCertChainPath               string   `toml:"sev_cert_chain"`
+	BlockDeviceAIO                 string   `toml:"block_device_aio"`
 	HypervisorPathList             []string `toml:"valid_hypervisor_paths"`
 	JailerPathList                 []string `toml:"valid_jailer_paths"`
 	CtlPathList                    []string `toml:"valid_ctlpaths"`
@@ -477,6 +478,22 @@ func (h hypervisor) blockDeviceDriver() (string, error) {
 	return "", fmt.Errorf("Invalid hypervisor block storage driver %v specified (supported drivers: %v)", h.BlockDeviceDriver, supportedBlockDrivers)
 }
 
+func (h hypervisor) blockDeviceAIO() (string, error) {
+	supportedBlockAIO := []string{config.AIOIOUring, config.AIONative, config.AIOThreads}
+
+	if h.BlockDeviceAIO == "" {
+		return defaultBlockDeviceAIO, nil
+	}
+
+	for _, b := range supportedBlockAIO {
+		if b == h.BlockDeviceAIO {
+			return h.BlockDeviceAIO, nil
+		}
+	}
+
+	return "", fmt.Errorf("Invalid hypervisor block storage I/O mechanism  %v specified (supported AIO: %v)", h.BlockDeviceAIO, supportedBlockAIO)
+}
+
 func (h hypervisor) sharedFS() (string, error) {
 	supportedSharedFS := []string{config.Virtio9P, config.VirtioFS, config.VirtioFSNydus}
 
@@ -736,6 +753,11 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
+	blockAIO, err := h.blockDeviceAIO()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	sharedFS, err := h.sharedFS()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
@@ -792,6 +814,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		Debug:                         h.Debug,
 		DisableNestingChecks:          h.DisableNestingChecks,
 		BlockDeviceDriver:             blockDriver,
+		BlockDeviceAIO:                blockAIO,
 		BlockDeviceCacheSet:           h.BlockDeviceCacheSet,
 		BlockDeviceCacheDirect:        h.BlockDeviceCacheDirect,
 		BlockDeviceCacheNoflush:       h.BlockDeviceCacheNoflush,
@@ -1197,6 +1220,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		Debug:                         defaultEnableDebug,
 		DisableNestingChecks:          defaultDisableNestingChecks,
 		BlockDeviceDriver:             defaultBlockDeviceDriver,
+		BlockDeviceAIO:                defaultBlockDeviceAIO,
 		BlockDeviceCacheSet:           defaultBlockDeviceCacheSet,
 		BlockDeviceCacheDirect:        defaultBlockDeviceCacheDirect,
 		BlockDeviceCacheNoflush:       defaultBlockDeviceCacheNoflush,

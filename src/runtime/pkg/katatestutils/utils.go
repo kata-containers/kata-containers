@@ -216,6 +216,7 @@ type RuntimeConfigOptions struct {
 	ShimPath             string
 	LogPath              string
 	BlockDeviceDriver    string
+	BlockDeviceAIO       string
 	SharedFS             string
 	VirtioFSDaemon       string
 	JaegerEndpoint       string
@@ -305,6 +306,7 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	path = "` + config.HypervisorPath + `"
 	kernel = "` + config.KernelPath + `"
 	block_device_driver =  "` + config.BlockDeviceDriver + `"
+	block_device_aio =  "` + config.BlockDeviceAIO + `"
 	kernel_params = "` + config.KernelParams + `"
 	image = "` + config.ImagePath + `"
 	machine_type = "` + config.MachineType + `"

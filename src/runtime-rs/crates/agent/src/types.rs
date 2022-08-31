@@ -4,6 +4,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use anyhow::{anyhow, Result};
+use std::convert::TryFrom;
+
 use serde::Deserialize;
 
 #[derive(PartialEq, Clone, Default)]
@@ -390,6 +393,56 @@ pub struct KernelModule {
     pub parameters: Vec<String>,
 }
 
+impl KernelModule {
+    pub fn set_kernel_modules(modules: Vec<String>) -> Result<Vec<Self>> {
+        let mut kernel_modules = Vec::new();
+        for module_string in modules {
+            if module_string.is_empty() {
+                continue;
+            }
+            let kernel_module = Self::try_from(module_string)?;
+            kernel_modules.push(kernel_module);
+        }
+        Ok(kernel_modules)
+    }
+}
+
+impl TryFrom<String> for KernelModule {
+    type Error = anyhow::Error;
+    // input string: " ModuleName Param1 Param2 ... "
+    // NOTICE: " ModuleName Param1="spaces in here" " => KernelModule { name: ModuleName, parameters: Param1="spaces in here" }
+    fn try_from(str: String) -> Result<Self> {
+        let split: Vec<&str> = str.split(' ').collect();
+        let mut name = String::new();
+        let mut parameters = Vec::new();
+
+        let mut flag = false;
+        for (index, info) in split.iter().enumerate() {
+            if index == 0 {
+                name = info.to_string();
+            } else if flag {
+                // a former param's string contains \"
+                if let Some(former_param) = parameters.pop() {
+                    let cur_param = format!("{} {}", former_param, info);
+                    parameters.push(cur_param);
+                }
+            } else {
+                parameters.push(info.to_string());
+            }
+
+            if info.contains('\"') {
+                flag = !flag;
+            }
+        }
+
+        if flag {
+            return Err(anyhow!("\" not match"));
+        }
+
+        Ok(KernelModule { name, parameters })
+    }
+}
+
 #[derive(PartialEq, Clone, Default)]
 pub struct CreateSandboxRequest {
     pub hostname: String,
@@ -485,4 +538,45 @@ pub struct VersionCheckResponse {
 #[derive(PartialEq, Clone, Default, Debug)]
 pub struct OomEventResponse {
     pub container_id: String,
+}
+
+#[cfg(test)]
+mod test {
+    use std::convert::TryFrom;
+
+    use super::KernelModule;
+
+    #[test]
+    fn test_new_kernel_module() {
+        let kernel_module_str1 = "ModuleName Param1 Param2";
+        let kernel_module1 = KernelModule::try_from(kernel_module_str1.to_string()).unwrap();
+        assert!(kernel_module1.name == "ModuleName");
+        assert!(kernel_module1.parameters[0] == "Param1");
+        assert!(kernel_module1.parameters[1] == "Param2");
+
+        let kernel_module_str2 = "ModuleName Param1=\"spaces in here\"";
+        let kernel_module2 = KernelModule::try_from(kernel_module_str2.to_string()).unwrap();
+        assert!(kernel_module2.name == "ModuleName");
+        assert!(kernel_module2.parameters[0] == "Param1=\"spaces in here\"");
+
+        // exception case
+        let kernel_module_str3 = "ModuleName \"Param1";
+        let kernel_module3 = KernelModule::try_from(kernel_module_str3.to_string());
+        assert!(kernel_module3.is_err());
+    }
+
+    #[test]
+    fn test_kernel_modules() {
+        let kernel_module_str1 = "ModuleName1 Param1 Param2".to_string();
+        let kernel_module_str2 = "".to_string();
+        let kernel_module_str3 = "ModuleName2".to_string();
+        let kernel_modules_str = vec![kernel_module_str1, kernel_module_str2, kernel_module_str3];
+
+        let kernel_modules = KernelModule::set_kernel_modules(kernel_modules_str).unwrap();
+        assert!(kernel_modules.len() == 2);
+        assert!(kernel_modules[0].name == "ModuleName1");
+        assert!(kernel_modules[0].parameters.len() == 2);
+        assert!(kernel_modules[1].name == "ModuleName2");
+        assert!(kernel_modules[1].parameters.is_empty());
+    }
 }

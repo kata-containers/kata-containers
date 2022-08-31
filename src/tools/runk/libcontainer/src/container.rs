@@ -15,10 +15,10 @@ use nix::{
     sys::signal::SIGKILL,
     unistd::{chdir, unlink, Pid},
 };
-use oci::ContainerState;
+use oci::{ContainerState, State as OCIState};
 use procfs;
 use rustjail::{
-    container::{BaseContainer, LinuxContainer, EXEC_FIFO_FILENAME},
+    container::{self, BaseContainer, LinuxContainer, EXEC_FIFO_FILENAME},
     process::{Process, ProcessOperations},
 };
 use scopeguard::defer;
@@ -110,6 +110,62 @@ impl Container {
         if !is_cgroup2_unified_mode() && self.state == ContainerState::Paused && signal == SIGKILL {
             freeze(&self.cgroup, FreezerState::Thawed)?;
         }
+        Ok(())
+    }
+
+    pub async fn delete(&self, force: bool, logger: &Logger) -> Result<()> {
+        let status = &self.status;
+        let spec = status
+            .config
+            .spec
+            .as_ref()
+            .ok_or_else(|| anyhow!("spec config was not present in the status"))?;
+
+        let oci_state = OCIState {
+            version: status.oci_version.clone(),
+            id: status.id.clone(),
+            status: self.state,
+            pid: status.pid,
+            bundle: status
+                .bundle
+                .to_str()
+                .ok_or_else(|| anyhow!("invalid bundle path"))?
+                .to_string(),
+            annotations: spec.annotations.clone(),
+        };
+
+        if spec.hooks.is_some() {
+            let hooks = spec
+                .hooks
+                .as_ref()
+                .ok_or_else(|| anyhow!("hooks config was not present"))?;
+            for h in hooks.poststop.iter() {
+                container::execute_hook(logger, h, &oci_state).await?;
+            }
+        }
+
+        match oci_state.status {
+            ContainerState::Stopped => {
+                self.destroy()?;
+            }
+            ContainerState::Created => {
+                // Kill an init process
+                self.kill(SIGKILL, false)?;
+                self.destroy()?;
+            }
+            _ => {
+                if force {
+                    self.kill(SIGKILL, true)?;
+                    self.destroy()?;
+                } else {
+                    return Err(anyhow!(
+                        "cannot delete container {} that is not stopped",
+                        &status.id
+                    ));
+                }
+            }
+        }
+
         Ok(())
     }
 
