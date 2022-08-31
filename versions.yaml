@@ -158,7 +158,6 @@ assets:
       description: "Linux kernel that supports TDX"
       url: "https://github.com/intel/linux-kernel-dcp/archive/refs/tags"
       tag: "SPR-BKC-PC-v9.6"
-      tarball: "SPR-BKC-PC-v9.6.tar.gz"
     sev:
       description: "Linux kernel that supports SEV"
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
