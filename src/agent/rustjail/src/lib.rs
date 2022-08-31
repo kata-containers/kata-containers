@@ -351,13 +351,12 @@ fn seccomp_grpc_to_oci(sec: &grpc::LinuxSeccomp) -> oci::LinuxSeccomp {
 
         for sys in sec.Syscalls.iter() {
             let mut args = Vec::new();
-            let errno_ret: u32;
 
-            if sys.has_errnoret() {
-                errno_ret = sys.get_errnoret();
+            let errno_ret: u32 = if sys.has_errnoret() {
+                sys.get_errnoret()
             } else {
-                errno_ret = libc::EPERM as u32;
-            }
+                libc::EPERM as u32
+            };
 
             for arg in sys.Args.iter() {
                 args.push(oci::LinuxSeccompArg {

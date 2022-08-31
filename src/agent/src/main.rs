@@ -216,7 +216,7 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     if config.log_level == slog::Level::Trace {
         // Redirect ttrpc log calls to slog iff full debug requested
-        ttrpc_log_guard = Ok(slog_stdlog::init().map_err(|e| e)?);
+        ttrpc_log_guard = Ok(slog_stdlog::init()?);
     }
 
     if config.tracing {

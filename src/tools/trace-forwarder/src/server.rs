@@ -20,7 +20,7 @@ pub const NON_PRIV_USER: &str = "nobody";
 
 const ROOT_DIR: &str = "/";
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VsockType {
     Standard { port: u32, cid: u32 },
     Hybrid { socket_path: String },

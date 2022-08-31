@@ -11,7 +11,7 @@ use std::io::{BufRead, BufReader};
 const PASSWD_FILE: &str = "/etc/passwd";
 
 // An entry from /etc/passwd
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, Eq, PartialOrd)]
 pub struct PasswdEntry {
     // username
     pub name: String,

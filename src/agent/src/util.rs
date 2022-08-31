@@ -237,8 +237,6 @@ mod tests {
                 JoinError,
             >;
 
-            let result: std::result::Result<u64, std::io::Error>;
-
             select! {
                 res = handle => spawn_result = res,
                 _ = &mut timeout => panic!("timed out"),
@@ -246,7 +244,7 @@ mod tests {
 
             assert!(spawn_result.is_ok());
 
-            result = spawn_result.unwrap();
+            let result: std::result::Result<u64, std::io::Error> = spawn_result.unwrap();
 
             assert!(result.is_ok());
 
@@ -278,8 +276,6 @@ mod tests {
 
         let spawn_result: std::result::Result<std::result::Result<u64, std::io::Error>, JoinError>;
 
-        let result: std::result::Result<u64, std::io::Error>;
-
         select! {
             res = handle => spawn_result = res,
             _ = &mut timeout => panic!("timed out"),
@@ -287,7 +283,7 @@ mod tests {
 
         assert!(spawn_result.is_ok());
 
-        result = spawn_result.unwrap();
+        let result: std::result::Result<u64, std::io::Error> = spawn_result.unwrap();
 
         assert!(result.is_ok());
 
@@ -320,8 +316,6 @@ mod tests {
 
         let spawn_result: std::result::Result<std::result::Result<u64, std::io::Error>, JoinError>;
 
-        let result: std::result::Result<u64, std::io::Error>;
-
         select! {
             res = handle => spawn_result = res,
             _ = &mut timeout => panic!("timed out"),
@@ -329,7 +323,7 @@ mod tests {
 
         assert!(spawn_result.is_ok());
 
-        result = spawn_result.unwrap();
+        let result: std::result::Result<u64, std::io::Error> = spawn_result.unwrap();
 
         assert!(result.is_ok());
 

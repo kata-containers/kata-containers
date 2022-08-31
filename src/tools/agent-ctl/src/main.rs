@@ -163,7 +163,7 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
     let (logger, _guard) = logging::create_logger(name, crate_name!(), log_level, writer);
 
     let timeout_nano: i64 = match args.value_of("timeout") {
-        Some(t) => utils::human_time_to_ns(t).map_err(|e| e)?,
+        Some(t) => utils::human_time_to_ns(t)?,
         None => 0,
     };
 
@@ -314,7 +314,7 @@ fn real_main() -> Result<()> {
             Ok(())
         }
         "connect" => connect(name, args),
-        _ => return Err(anyhow!(format!("invalid sub-command: {:?}", subcmd))),
+        _ => Err(anyhow!(format!("invalid sub-command: {:?}", subcmd))),
     }
 }
 
