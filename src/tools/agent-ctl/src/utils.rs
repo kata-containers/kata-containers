@@ -98,13 +98,11 @@ pub fn signame_to_signum(name: &str) -> Result<u8> {
         return Ok(n);
     }
 
-    let mut search_term: String;
-
-    if name.starts_with("SIG") {
-        search_term = name.to_string();
+    let mut search_term: String = if name.starts_with("SIG") {
+        name.to_string()
     } else {
-        search_term = format!("SIG{}", name);
-    }
+        format!("SIG{}", name)
+    };
 
     search_term = search_term.to_uppercase();
 
