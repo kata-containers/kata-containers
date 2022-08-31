@@ -71,8 +71,8 @@ merge-builds:
 install-tarball:
 	tar -xvf ./kata-static.tar.xz -C /
 
-image: kata-tarball
-	$(MK_DIR)kata-deploy-build-and-upload-image.sh $(CURDIR)/kata-static.tar.xz
+cc-payload: cc-tarball
+	$(MK_DIR)kata-deploy-build-and-upload-payload.sh $(CURDIR)/kata-static.tar.xz
 
 cc-tarball: | cc-parallel merge-builds
 
