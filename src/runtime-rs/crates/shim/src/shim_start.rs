@@ -157,7 +157,6 @@ mod tests {
             namespace: "ns".into(),
             address: "address".into(),
             publish_binary: "containerd".into(),
-            socket: "socket".into(),
             bundle: bundle_path.to_str().unwrap().into(),
             debug: false,
         };
@@ -189,7 +188,6 @@ mod tests {
             namespace: "ns1".into(),
             address: "containerd_socket".into(),
             publish_binary: "containerd".into(),
-            socket: "socket".into(),
             bundle: bundle_path.to_str().unwrap().into(),
             debug: false,
         };
@@ -209,7 +207,6 @@ mod tests {
             namespace: "ns1".into(),
             address: "containerd_socket".into(),
             publish_binary: "containerd".into(),
-            socket: "socket".into(),
             bundle: bundle_path2.to_str().unwrap().into(),
             debug: false,
         };
