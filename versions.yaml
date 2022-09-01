@@ -228,10 +228,20 @@ externals:
     url: "https://github.com/kubernetes-sigs/cri-tools"
     version: "1.23.0"
 
+  cryptsetup:
+    description: "A utility used to setup disk encryption, integrity protection"
+    url: "https://gitlab.com/cryptsetup/cryptsetup"
+    version: "v2.5.0"
+
   gperf:
     description: "GNU gperf is a perfect hash function generator"
     url: "http://ftp.gnu.org/pub/gnu/gperf/"
     version: "3.1"
+
+  lvm2:
+    description: "LVM2 and device-mapper tools and libraries"
+    url: "https://github.com/lvmteam/lvm2"
+    version: "v2_03_16"
 
   kubernetes:
     description: "Kubernetes project container manager"
