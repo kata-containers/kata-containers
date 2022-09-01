@@ -522,7 +522,7 @@ bash-4.2# exit
 exit
 ```
 
-`kata-runtime exec` has a command-line option `runtime-namespace`, which is used to specify under which [runtime namespace](https://github.com/containerd/containerd/blob/master/docs/namespaces.md) the particular pod was created. By default, it is set to `k8s.io` and works for containerd when configured
+`kata-runtime exec` has a command-line option `runtime-namespace`, which is used to specify under which [runtime namespace](https://github.com/containerd/containerd/blob/main/docs/namespaces.md) the particular pod was created. By default, it is set to `k8s.io` and works for containerd when configured
  with Kubernetes. For CRI-O, the namespace should set to `default` explicitly. This should not be confused with [Kubernetes namespaces](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/).
 For other CRI-runtimes and configurations, you may need to set the namespace utilizing the `runtime-namespace` option.
 
