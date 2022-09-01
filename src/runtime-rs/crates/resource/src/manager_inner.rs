@@ -106,6 +106,7 @@ impl ResourceManagerInner {
 
     async fn handle_neighbours(&self, network: &dyn Network) -> Result<()> {
         let neighbors = network.neighs().await.context("neighs")?;
+        let neighbors_copy = neighbors.clone();
         if !neighbors.is_empty() {
             info!(sl!(), "update neighbors {:?}", neighbors);
             self.agent
@@ -113,7 +114,7 @@ impl ResourceManagerInner {
                     neighbors: Some(agent::ARPNeighbors { neighbors }),
                 })
                 .await
-                .context("update neighbors")?;
+                .with_context(|| format!("failed to update neighbors {:?}", neighbors_copy))?;
         }
         Ok(())
     }
