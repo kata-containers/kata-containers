@@ -1,0 +1,21 @@
+# Copyright (c) 2022 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# initramfs to setup verified boot for rootfs
+dir /dev 0755 0 0
+dir /root 0700 0 0
+dir /sbin 0755 0 0
+dir /bin 0755 0 0
+dir /run 0755 0 0
+dir /mnt 0755 0 0
+file /init /usr/sbin/init.sh 0755 0 0
+file /sbin/busybox /usr/bin/busybox 0755 0 0
+file /sbin/veritysetup /usr/sbin/veritysetup.static 0755 0 0
+slink /bin/sh /sbin/busybox 0755 0 0
+slink /sbin/mount /sbin/busybox 0755 0 0
+slink /bin/mkdir /sbin/busybox 0755 0 0
+slink /sbin/mdev /sbin/busybox 0755 0 0
+slink /sbin/switch_root /sbin/busybox 0755 0 0
+slink /sbin/umount /sbin/busybox 0755 0 0
+slink /sbin/cat /sbin/busybox 0755 0 0
