@@ -14,6 +14,7 @@ use common::{
     types::{Request, Response},
     RuntimeHandler, RuntimeInstance, Sandbox,
 };
+use hypervisor::Param;
 use kata_types::{annotations::Annotation, config::TomlConfig};
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
@@ -323,6 +324,7 @@ fn load_config(spec: &oci::Spec) -> Result<TomlConfig> {
     let (mut toml_config, _) =
         TomlConfig::load_from_file(&config_path).context("load toml config")?;
     annotation.update_config_by_annotation(&mut toml_config)?;
+    update_agent_kparams(&mut toml_config)?;
 
     // validate configuration and return the error
     toml_config.validate()?;
@@ -345,4 +347,21 @@ fn load_config(spec: &oci::Spec) -> Result<TomlConfig> {
     }
     info!(sl!(), "get config content {:?}", &toml_config);
     Ok(toml_config)
+}
+
+// this update the agent-specfic kernel parameters into hypervisor's bootinfo
+// the agent inside the VM will read from file cmdline to get the params and function
+fn update_agent_kparams(config: &mut TomlConfig) -> Result<()> {
+    let mut params = vec![];
+    if let Ok(kv) = config.get_agent_kparams() {
+        for (k, v) in kv.into_iter() {
+            if let Ok(s) = Param::new(k.as_str(), v.as_str()).to_string() {
+                params.push(s);
+            }
+        }
+        if let Some(h) = config.hypervisor.get_mut(&config.runtime.hypervisor_name) {
+            h.boot_info.add_kparams(params);
+        }
+    }
+    Ok(())
 }

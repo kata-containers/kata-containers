@@ -151,7 +151,29 @@ impl TomlConfig {
         Ok(())
     }
 
-    ///  Probe configuration file according to the default configuration file list.
+    /// Get agent-specfic kernel parameters for further Hypervisor config revision
+    pub fn get_agent_kparams(&self) -> Result<HashMap<String, String>> {
+        let mut kv = HashMap::new();
+        if let Some(cfg) = self.agent.get(&self.runtime.agent_name) {
+            if cfg.debug {
+                kv.insert("agent.log".to_string(), "debug".to_string());
+            }
+            if cfg.enable_tracing {
+                kv.insert("agent.trace".to_string(), "true".to_string());
+            }
+            if cfg.container_pipe_size > 0 {
+                let container_pipe_size = cfg.container_pipe_size.to_string();
+                kv.insert("agent.container_pipe_size".to_string(), container_pipe_size);
+            }
+            if cfg.debug_console_enabled {
+                kv.insert("agent.debug_console".to_string(), "".to_string());
+                kv.insert("agent.debug_console_vport".to_string(), "1026".to_string());
+            }
+        }
+        Ok(kv)
+    }
+
+    /// Probe configuration file according to the default configuration file list.
     fn get_default_config_file() -> Result<PathBuf> {
         for f in default::DEFAULT_RUNTIME_CONFIGURATIONS.iter() {
             if let Ok(path) = fs::canonicalize(f) {

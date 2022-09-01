@@ -28,6 +28,18 @@ impl Param {
             value: value.to_owned(),
         }
     }
+
+    pub fn to_string(&self) -> Result<String> {
+        if self.key.is_empty() && self.value.is_empty() {
+            Err(anyhow!("Empty key and value"))
+        } else if self.key.is_empty() {
+            Err(anyhow!("Empty key"))
+        } else if self.value.is_empty() {
+            Ok(self.key.to_string())
+        } else {
+            Ok(format!("{}{}{}", self.key, KERNEL_KV_DELIMITER, self.value))
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -129,18 +141,7 @@ impl KernelParams {
         let mut parameters: Vec<String> = Vec::new();
 
         for param in &self.params {
-            if param.key.is_empty() && param.value.is_empty() {
-                return Err(anyhow!("Empty key and value"));
-            } else if param.key.is_empty() {
-                return Err(anyhow!("Empty key"));
-            } else if param.value.is_empty() {
-                parameters.push(param.key.to_string());
-            } else {
-                parameters.push(format!(
-                    "{}{}{}",
-                    param.key, KERNEL_KV_DELIMITER, param.value
-                ));
-            }
+            parameters.push(param.to_string()?);
         }
 
         Ok(parameters.join(KERNEL_PARAM_DELIMITER))
@@ -152,6 +153,20 @@ mod tests {
     use anyhow::Result;
 
     use super::*;
+
+    #[test]
+    fn test_params() {
+        let param1 = Param::new("", "");
+        let param2 = Param::new("", "foo");
+        let param3 = Param::new("foo", "");
+
+        assert!(param1.to_string().is_err());
+        assert!(param2.to_string().is_err());
+        assert_eq!(param3.to_string().unwrap(), String::from("foo"));
+
+        let param4 = Param::new("foo", "bar");
+        assert_eq!(param4.to_string().unwrap(), String::from("foo=bar"));
+    }
 
     #[test]
     fn test_kernel_params() -> Result<()> {
