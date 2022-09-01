@@ -50,6 +50,8 @@ const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
 const MAX_BRIDGE_SIZE: u32 = 5;
 
+const KERNEL_PARAM_DELIMITER: &str = " ";
+
 lazy_static! {
     static ref HYPERVISOR_PLUGINS: Mutex<HashMap<String, Arc<dyn ConfigPlugin>>> =
         Mutex::new(HashMap::new());
@@ -235,6 +237,14 @@ impl BootInfo {
             return Err(eother!("Can not configure both initrd and image for boot"));
         }
         Ok(())
+    }
+
+    /// Add kernel parameters to bootinfo. It is always added before the original
+    /// to let the original one takes priority
+    pub fn add_kparams(&mut self, params: Vec<String>) {
+        let mut p = params;
+        p.push(self.kernel_params.clone()); // [new_params0, new_params1, ..., original_params]
+        self.kernel_params = p.join(KERNEL_PARAM_DELIMITER);
     }
 
     /// Validate guest kernel image annotaion

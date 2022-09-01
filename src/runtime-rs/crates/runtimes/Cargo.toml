@@ -19,6 +19,7 @@ kata-types = { path = "../../../libs/kata-types" }
 logging = { path = "../../../libs/logging"}
 oci = { path = "../../../libs/oci" }
 persist = { path = "../persist" }
+hypervisor = { path = "../hypervisor" }
 # runtime handler
 linux_container = { path = "./linux_container", optional = true }
 virt_container = { path = "./virt_container", optional = true }
