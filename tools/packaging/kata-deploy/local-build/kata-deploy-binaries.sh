@@ -23,6 +23,7 @@ readonly versions_yaml="${repo_root_dir}/versions.yaml"
 
 readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
 readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
+readonly initramfs_builder="${static_build_dir}/initramfs/build.sh"
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
 readonly ovmf_builder="${static_build_dir}/ovmf/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
@@ -133,6 +134,8 @@ install_cc_sev_image() {
 install_cc_kernel() {
 	export KATA_BUILD_CC=yes
 
+	info "build initramfs for cc kernel"
+	"${initramfs_builder}"
 	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -f -v "${kernel_version}"
 }
@@ -183,6 +186,8 @@ install_cc_tee_kernel() {
 
 	[[ "${tee}" != "tdx" && "${tee}" != "sev" ]] && die "Non supported TEE"
 
+	info "build initramfs for tee kernel"
+	"${initramfs_builder}"
 	kernel_url="$(yq r $versions_yaml assets.kernel.${tee}.url)"
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -x "${tee}" -v "${kernel_version}" -u "${kernel_url}"
 }
