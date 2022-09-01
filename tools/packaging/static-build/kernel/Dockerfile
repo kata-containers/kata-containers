@@ -4,6 +4,9 @@
 
 FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND=noninteractive
+ENV INSTALL_IN_GOPATH=false
+
+COPY install_yq.sh /usr/bin/install_yq.sh
 
 # kernel deps
 RUN apt-get update && \
@@ -19,4 +22,5 @@ RUN apt-get update && \
 	    libelf-dev \
 	    patch && \
     if [ "$(uname -m)" = "s390x" ]; then apt-get install -y --no-install-recommends libssl-dev; fi && \
-    apt-get clean && rm -rf /var/lib/lists/
+    apt-get clean && rm -rf /var/lib/lists/ && \
+    install_yq.sh
