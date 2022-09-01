@@ -24,6 +24,7 @@ readonly versions_yaml="${repo_root_dir}/versions.yaml"
 
 readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
 readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
+readonly initramfs_builder="${static_build_dir}/initramfs/build.sh"
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
 readonly ovmf_builder="${static_build_dir}/ovmf/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
@@ -38,6 +39,7 @@ readonly jenkins_url="http://jenkins.katacontainers.io"
 readonly cached_artifacts_path="lastSuccessfulBuild/artifact/artifacts"
 
 ARCH=$(uname -m)
+MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 
 workdir="${WORKDIR:-$PWD}"
 
@@ -240,6 +242,11 @@ install_kernel_helper() {
 	fi
 
 	install_cached_kernel_tarball_component ${kernel_name} ${module_dir} && return 0
+
+	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
+		info "build initramfs for cc kernel"
+		"${initramfs_builder}"
+	fi
 
 	info "build ${kernel_name}"
 	info "Kernel version ${kernel_version}"
