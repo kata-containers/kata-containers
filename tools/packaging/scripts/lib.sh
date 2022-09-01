@@ -97,3 +97,19 @@ get_kata_hash() {
 	ref=$2
 	git ls-remote --heads --tags "https://github.com/${project}/${repo}.git" | grep "${ref}" | awk '{print $1}'
 }
+
+get_config_and_patches() {
+	if [ -z "${patches_path}" ]; then
+		patches_path="${default_patches_dir}"
+	fi
+}
+
+get_config_version() {
+	get_config_and_patches
+	config_version_file="${default_patches_dir}/../kata_config_version"
+	if [ -f "${config_version_file}" ]; then
+		cat "${config_version_file}"
+	else
+		die "failed to find ${config_version_file}"
+	fi
+}
