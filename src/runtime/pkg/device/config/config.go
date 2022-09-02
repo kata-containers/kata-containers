@@ -62,6 +62,17 @@ const (
 )
 
 const (
+	// AIOThreads is the pthread asynchronous I/O implementation.
+	AIOThreads = "threads"
+
+	// AIONative is the native Linux AIO implementation
+	AIONative = "native"
+
+	// AIOUring is the Linux io_uring I/O implementation
+	AIOIOUring = "io_uring"
+)
+
+const (
 	// Virtio9P means use virtio-9p for the shared file system
 	Virtio9P = "virtio-9p"
 

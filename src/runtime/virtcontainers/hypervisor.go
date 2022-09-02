@@ -278,6 +278,7 @@ type HypervisorConfig struct {
 	GuestPreAttestationSecretGuid  string
 	GuestPreAttestationSecretType  string
 	SEVCertChainPath               string
+	BlockDeviceAIO                 string
 	JailerPathList                 []string
 	EntropySourceList              []string
 	VirtioFSDaemonList             []string

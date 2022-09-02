@@ -63,6 +63,7 @@ const defaultBridgesCount uint32 = 1
 const defaultInterNetworkingModel = "tcfilter"
 const defaultDisableBlockDeviceUse bool = false
 const defaultBlockDeviceDriver = "virtio-scsi"
+const defaultBlockDeviceAIO string = "io_uring"
 const defaultBlockDeviceCacheSet bool = false
 const defaultBlockDeviceCacheDirect bool = false
 const defaultBlockDeviceCacheNoflush bool = false

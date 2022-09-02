@@ -13,6 +13,8 @@ use std::time;
 use tracing::instrument;
 use url::Url;
 
+use kata_types::config::default::DEFAULT_AGENT_VSOCK_PORT;
+
 const DEBUG_CONSOLE_FLAG: &str = "agent.debug_console";
 const DEV_MODE_FLAG: &str = "agent.devmode";
 const TRACE_MODE_OPTION: &str = "agent.trace";
@@ -33,7 +35,6 @@ const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
 const DEFAULT_CONTAINER_PIPE_SIZE: i32 = 0;
 const VSOCK_ADDR: &str = "vsock://-1";
-const VSOCK_PORT: u16 = 1024;
 
 // Environment variables used for development and testing
 const SERVER_ADDR_ENV_VAR: &str = "KATA_AGENT_SERVER_ADDR";
@@ -167,7 +168,7 @@ impl Default for AgentConfig {
             debug_console_vport: 0,
             log_vport: 0,
             container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
-            server_addr: format!("{}:{}", VSOCK_ADDR, VSOCK_PORT),
+            server_addr: format!("{}:{}", VSOCK_ADDR, DEFAULT_AGENT_VSOCK_PORT),
             unified_cgroup_hierarchy: false,
             tracing: false,
             endpoints: Default::default(),

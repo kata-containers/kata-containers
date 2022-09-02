@@ -29,10 +29,16 @@ pub use types::{
 use anyhow::Result;
 use async_trait::async_trait;
 
+use kata_types::config::Agent as AgentConfig;
+
+pub const AGENT_KATA: &str = "kata";
+
 #[async_trait]
 pub trait AgentManager: Send + Sync {
     async fn start(&self, address: &str) -> Result<()>;
     async fn stop(&self);
+
+    async fn agent_config(&self) -> AgentConfig;
 }
 
 #[async_trait]

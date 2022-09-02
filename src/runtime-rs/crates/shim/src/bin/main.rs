@@ -43,7 +43,6 @@ fn parse_args(args: &[OsString]) -> Result<Action> {
         flags.add_flag("id", &mut shim_args.id);
         flags.add_flag("namespace", &mut shim_args.namespace);
         flags.add_flag("publish-binary", &mut shim_args.publish_binary);
-        flags.add_flag("socket", &mut shim_args.socket);
         flags.add_flag("help", &mut help);
         flags.add_flag("version", &mut version);
     })
@@ -87,8 +86,6 @@ fn show_help(cmd: &OsStr) {
         namespace that owns the shim
   -publish-binary string
         path to publish binary (used for publishing events) (default "containerd")
-  -socket string
-        socket path to serve
   --version
         show the runtime version detail and exit
 "#,

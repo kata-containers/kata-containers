@@ -106,6 +106,11 @@ impl Default for ContainerStatus {
     }
 }
 
+// We might want to change this to thiserror in the future
+const MissingCGroupManager: &str = "failed to get container's cgroup Manager";
+const MissingLinux: &str = "no linux config";
+const InvalidNamespace: &str = "invalid namespace type";
+
 pub type Config = CreateOpts;
 type NamespaceType = String;
 
@@ -292,7 +297,7 @@ impl Container for LinuxContainer {
             self.status.transition(ContainerState::Paused);
             return Ok(());
         }
-        Err(anyhow!("failed to get container's cgroup manager"))
+        Err(anyhow!(MissingCGroupManager))
     }
 
     fn resume(&mut self) -> Result<()> {
@@ -310,7 +315,7 @@ impl Container for LinuxContainer {
             self.status.transition(ContainerState::Running);
             return Ok(());
         }
-        Err(anyhow!("failed to get container's cgroup manager"))
+        Err(anyhow!(MissingCGroupManager))
     }
 }
 
@@ -397,7 +402,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     };
 
     if spec.linux.is_none() {
-        return Err(anyhow!("no linux config"));
+        return Err(anyhow!(MissingLinux));
     }
     let linux = spec.linux.as_ref().unwrap();
 
@@ -411,7 +416,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     for ns in &nses {
         let s = NAMESPACES.get(&ns.r#type.as_str());
         if s.is_none() {
-            return Err(anyhow!("invalid ns type"));
+            return Err(anyhow!(InvalidNamespace));
         }
         let s = s.unwrap();
 
@@ -1437,17 +1442,9 @@ impl LinuxContainer {
             Some(unistd::getuid()),
             Some(unistd::getgid()),
         )
-        .context(format!("cannot change onwer of container {} root", id))?;
-
-        if config.spec.is_none() {
-            return Err(anyhow!(nix::Error::EINVAL));
-        }
+        .context(format!("Cannot change owner of container {} root", id))?;
 
         let spec = config.spec.as_ref().unwrap();
-
-        if spec.linux.is_none() {
-            return Err(anyhow!(nix::Error::EINVAL));
-        }
 
         let linux = spec.linux.as_ref().unwrap();
 
@@ -1530,7 +1527,7 @@ pub async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()
     let binary = PathBuf::from(h.path.as_str());
     let path = binary.canonicalize()?;
     if !path.exists() {
-        return Err(anyhow!(nix::Error::EINVAL));
+        return Err(anyhow!("Path {:?} does not exist", path));
     }
 
     let mut args = h.args.clone();

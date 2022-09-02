@@ -22,7 +22,7 @@ slog-scope = "4.4.0"
 tokio = { version = "1.8.0" }
 toml = "0.4.2"
 url = "2.1.1"
-async-std = "0.99.5"
+async-std = "1.12.0"
 
 agent = { path = "../../agent" }
 common = { path = "../common" }

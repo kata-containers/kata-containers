@@ -203,6 +203,9 @@ const (
 	// BlockDeviceDriver specifies the driver to be used for block device either VirtioSCSI or VirtioBlock
 	BlockDeviceDriver = kataAnnotHypervisorPrefix + "block_device_driver"
 
+	// BlockDeviceAIO specifies I/O mechanism to be used with VirtioBlock for qemu
+	BlockDeviceAIO = kataAnnotHypervisorPrefix + "block_device_aio"
+
 	// DisableBlockDeviceUse  is a sandbox annotation that disallows a block device from being used.
 	DisableBlockDeviceUse = kataAnnotHypervisorPrefix + "disable_block_device_use"
 
