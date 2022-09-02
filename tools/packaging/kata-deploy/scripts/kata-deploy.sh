@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+set -x
 set -o errexit
 set -o pipefail
 set -o nounset
@@ -301,7 +302,9 @@ function main() {
 		install)
 			install_artifacts
 			configure_cri_runtime "$runtime"
+			echo "labeling $NODE_NAME with katacontainers.io/kata-runtime=true"
 			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
+			kubectl get nodes --show-labels
 			;;
 		cleanup)
 			cleanup_cri_runtime "$runtime"
