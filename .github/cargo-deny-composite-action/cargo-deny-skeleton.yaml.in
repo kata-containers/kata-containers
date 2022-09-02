@@ -1,0 +1,30 @@
+#
+# Copyright (c) 2022 Red Hat
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+name: 'Cargo Crates Check'
+description: 'Checks every Cargo.toml file using cargo-deny'
+
+env:
+  CARGO_TERM_COLOR: always
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly 
+        override: true
+
+    - name: Cache
+      uses: Swatinem/rust-cache@v2
+
+    - name: Install Cargo deny
+      shell: bash
+      run: |
+        which cargo
+        cargo install --locked cargo-deny || true
