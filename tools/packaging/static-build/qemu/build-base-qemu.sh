@@ -39,6 +39,7 @@ CACHE_TIMEOUT=$(date +"%Y-%m-%d")
 
 sudo "${container_engine}" build \
 	--build-arg CACHE_TIMEOUT="${CACHE_TIMEOUT}" \
+	--build-arg BUILD_SUFFIX=${build_suffix} \
 	--build-arg HYPERVISOR_NAME="${HYPERVISOR_NAME}" \
 	--build-arg PKGVERSION="${PKGVERSION}" \
 	--build-arg http_proxy="${http_proxy}" \
