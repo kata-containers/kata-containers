@@ -52,6 +52,22 @@ jobs:
       run: |
         echo "TRAVIS_BRANCH=${TRAVIS_BRANCH:-$(echo $GITHUB_REF | awk 'BEGIN { FS = \"/\" } ; { print $3 }')}"
         target_branch=${TRAVIS_BRANCH}
+    - name: CI Fast Return
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+      id: ci-fast-return
+      run: |
+        cd ${GOPATH}/src/github.com/${{ github.repository }}
+        fast_return_ret=1
+        {
+          ./ci/ci-fast-return.sh
+          fast_return_ret=$?
+        } || true
+        if [ "$fast_return_ret" -eq 0 ]; then
+          # return code 0 means a fast return CI.
+          echo "::set-output name=fast_return::true"
+        fi
+      env:
+        PR_NUMBER: ${{ github.event.pull_request.number }}
     - name: Setup
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
@@ -83,14 +99,14 @@ jobs:
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make static-checks
     - name: Run Compiler Checks
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && steps.ci-fast-return.outputs.fast_return != 'true' }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make check
     - name: Run Unit Tests
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && steps.ci-fast-return.outputs.fast_return != 'true' }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make test
     - name: Run Unit Tests As Root User
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && steps.ci-fast-return.outputs.fast_return != 'true' }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && sudo -E PATH="$PATH" make test
