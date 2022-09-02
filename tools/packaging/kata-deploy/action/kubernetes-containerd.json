@@ -3,7 +3,7 @@
   "properties": {
     "orchestratorProfile": {
       "orchestratorType": "Kubernetes",
-      "orchestratorVersion": "1.20.5",
+      "orchestratorVersion": "1.23.4",
       "kubernetesConfig": {
         "containerRuntime": "containerd",
         "useManagedIdentity": false

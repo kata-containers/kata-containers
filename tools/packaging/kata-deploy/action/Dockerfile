@@ -1,13 +1,13 @@
 # Copyright (c) 2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
-FROM mcr.microsoft.com/azure-cli:2.9.1
+FROM mcr.microsoft.com/azure-cli:2.39.0
 
 LABEL com.github.actions.name="Test kata-deploy in an AKS cluster"
 LABEL com.github.actions.description="Test kata-deploy in an AKS cluster"
 
 # Default to latest validated AKS-engine version
-ARG AKS_ENGINE_VER="v0.62.0"
+ARG AKS_ENGINE_VER="v0.70.1"
 ARG ARCH=amd64
 
 ENV GITHUB_ACTION_NAME="Test kata-deploy in an AKS cluster"
