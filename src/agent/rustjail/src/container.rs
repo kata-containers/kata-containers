@@ -59,6 +59,8 @@ use slog::{info, o, Logger};
 use crate::pipestream::PipeStream;
 use crate::sync::{read_sync, write_count, write_sync, SYNC_DATA, SYNC_FAILED, SYNC_SUCCESS};
 use crate::sync_with_async::{read_async, write_async};
+#[cfg(feature = "wasm")]
+use crate::wasm::arch_support_wasm;
 use async_trait::async_trait;
 use rlimit::{setrlimit, Resource, Rlim};
 use tokio::io::AsyncBufReadExt;
@@ -66,15 +68,19 @@ use tokio::sync::Mutex;
 
 pub const EXEC_FIFO_FILENAME: &str = "exec.fifo";
 
-const INIT: &str = "INIT";
-const NO_PIVOT: &str = "NO_PIVOT";
-const CRFD_FD: &str = "CRFD_FD";
-const CWFD_FD: &str = "CWFD_FD";
-const CLOG_FD: &str = "CLOG_FD";
-const FIFO_FD: &str = "FIFO_FD";
+pub const INIT: &str = "INIT";
+pub const NO_PIVOT: &str = "NO_PIVOT";
+#[cfg(feature = "wasm")]
+pub const WASM: &str = "WASM";
+pub const CRFD_FD: &str = "CRFD_FD";
+pub const CWFD_FD: &str = "CWFD_FD";
+pub const CLOG_FD: &str = "CLOG_FD";
+pub const FIFO_FD: &str = "FIFO_FD";
 const HOME_ENV_KEY: &str = "HOME";
 const PIDNS_FD: &str = "PIDNS_FD";
-const CONSOLE_SOCKET_FD: &str = "CONSOLE_SOCKET_FD";
+pub const CONSOLE_SOCKET_FD: &str = "CONSOLE_SOCKET_FD";
+#[cfg(feature = "wasm")]
+const ANNOTATIONS_WASM: &str = "io.katacontainers.container.config.wasm";
 
 #[derive(Debug)]
 pub struct ContainerStatus {
@@ -273,6 +279,15 @@ pub struct SyncPc {
     pid: pid_t,
 }
 
+pub struct ExecEnv {
+    init: bool,
+    no_pivot: bool,
+    crfd: RawFd,
+    cwfd: RawFd,
+    cfd_log: RawFd,
+    fifofd: RawFd,
+}
+
 pub trait Container: BaseContainer {
     fn pause(&mut self) -> Result<()>;
     fn resume(&mut self) -> Result<()>;
@@ -332,15 +347,73 @@ pub fn init_child() {
     }
 }
 
-fn do_init_child(cwfd: RawFd) -> Result<()> {
-    lazy_static::initialize(&NAMESPACES);
-    lazy_static::initialize(&DEFAULT_DEVICES);
+#[cfg(feature = "wasm")]
+fn do_wasm_exec(exec_env: &ExecEnv) -> Result<()> {
+    let mut envs = Vec::new();
+    envs.push(format!("{}={}", INIT, exec_env.init));
+    envs.push(format!("{}={}", NO_PIVOT, exec_env.no_pivot));
+    envs.push(format!("{}={}", CRFD_FD, exec_env.crfd));
+    envs.push(format!("{}={}", CWFD_FD, exec_env.cwfd));
+    envs.push(format!("{}={}", CLOG_FD, exec_env.cfd_log));
+    if exec_env.init {
+        envs.push(format!("{}={}", FIFO_FD, exec_env.fifofd));
+    }
+    #[cfg(feature = "standard-oci-runtime")]
+    envs.push(format!(
+        "{}={}",
+        CONSOLE_SOCKET_FD,
+        std::env::var(CONSOLE_SOCKET_FD)?
+    ));
 
+    let exec_path = std::env::current_exe()?;
+
+    do_exec_env(
+        &[
+            exec_path.as_path().display().to_string(),
+            "wasm".to_string(),
+        ],
+        &envs,
+    );
+}
+
+pub fn exec_env_build(
+    init: bool,
+    no_pivot: bool,
+    crfd: RawFd,
+    cwfd: RawFd,
+    cfd_log: RawFd,
+    fifofd: RawFd,
+) -> ExecEnv {
+    ExecEnv {
+        init,
+        no_pivot,
+        crfd,
+        cwfd,
+        cfd_log,
+        fifofd,
+    }
+}
+
+fn exec_env_out(exec_env: &ExecEnv) -> (bool, bool, RawFd, RawFd, RawFd, RawFd) {
+    (
+        exec_env.init,
+        exec_env.no_pivot,
+        exec_env.crfd,
+        exec_env.cwfd,
+        exec_env.cfd_log,
+        exec_env.fifofd,
+    )
+}
+
+fn do_init_child(cwfd: RawFd) -> Result<()> {
     let init = std::env::var(INIT)?.eq(format!("{}", true).as_str());
 
     let no_pivot = std::env::var(NO_PIVOT)?.eq(format!("{}", true).as_str());
     let crfd = std::env::var(CRFD_FD)?.parse::<i32>().unwrap();
     let cfd_log = std::env::var(CLOG_FD)?.parse::<i32>().unwrap();
+
+    #[cfg(feature = "wasm")]
+    let wasm = std::env::var(WASM)?.eq(format!("{}", true).as_str());
 
     // get the pidns fd from parent, if parent had passed the pidns fd,
     // then get it and join in this pidns; otherwise, create a new pidns
@@ -373,6 +446,46 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
             )));
         }
     }
+
+    let mut fifofd = -1;
+    if init {
+        fifofd = std::env::var(FIFO_FD)?.parse::<i32>().unwrap();
+    }
+
+    let exec_env = exec_env_build(init, no_pivot, crfd, cwfd, cfd_log, fifofd);
+
+    #[cfg(feature = "wasm")]
+    if wasm {
+        do_wasm_exec(&exec_env)?;
+    }
+
+    #[cfg(feature = "standard-oci-runtime")]
+    let csocket_fd = console::setup_console_socket(&std::env::var(CONSOLE_SOCKET_FD)?)?;
+    #[cfg(feature = "seccomp")]
+    let (args, oci_process, linux) = do_child_setup(&exec_env)?;
+    #[cfg(not(feature = "seccomp"))]
+    let (args, oci_process, _) = do_child_setup(&exec_env)?;
+
+    log_child!(cfd_log, "ready to run exec");
+
+    do_child_setup_release(
+        &exec_env,
+        oci_process,
+        #[cfg(feature = "seccomp")]
+        linux,
+        #[cfg(feature = "standard-oci-runtime")]
+        csocket_fd,
+    )?;
+
+    do_exec(&args);
+}
+
+pub fn do_child_setup(exec_env: &ExecEnv) -> Result<(Vec<String>, oci::Process, Linux)> {
+    let (init, no_pivot, crfd, cwfd, cfd_log, _) = exec_env_out(exec_env);
+
+    lazy_static::initialize(&NAMESPACES);
+    lazy_static::initialize(&DEFAULT_DEVICES);
+
     log_child!(cfd_log, "child process start run");
     let buf = read_sync(crfd)?;
     let spec_str = std::str::from_utf8(&buf)?;
@@ -391,9 +504,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let cm_str = std::str::from_utf8(&buf)?;
 
     let cm: FsManager = serde_json::from_str(cm_str)?;
-
-    #[cfg(feature = "standard-oci-runtime")]
-    let csocket_fd = console::setup_console_socket(&std::env::var(CONSOLE_SOCKET_FD)?)?;
 
     let p = if spec.process.is_some() {
         spec.process.as_ref().unwrap()
@@ -648,11 +758,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let args = oci_process.args.to_vec();
     let env = oci_process.env.to_vec();
 
-    let mut fifofd = -1;
-    if init {
-        fifofd = std::env::var(FIFO_FD)?.parse::<i32>().unwrap();
-    }
-
     // cleanup the env inherited from parent
     for (key, _) in env::vars() {
         env::remove_var(key);
@@ -687,7 +792,18 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     // notify parent that the child's ready to start
     write_sync(cwfd, SYNC_SUCCESS, "")?;
-    log_child!(cfd_log, "ready to run exec");
+
+    Ok((args, oci_process, (*linux).clone()))
+}
+
+pub fn do_child_setup_release(
+    exec_env: &ExecEnv,
+    oci_process: oci::Process,
+    #[cfg(feature = "seccomp")] linux: Linux,
+    #[cfg(feature = "standard-oci-runtime")] csocket_fd: Option<RawFd>,
+) -> Result<()> {
+    let (init, _, crfd, cwfd, cfd_log, fifofd) = exec_env_out(exec_env);
+
     let _ = unistd::close(cfd_log);
     let _ = unistd::close(crfd);
     let _ = unistd::close(cwfd);
@@ -729,7 +845,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         }
     }
 
-    do_exec(&args);
+    Ok(())
 }
 
 // set_stdio_permissions fixes the permissions of PID 1's STDIO
@@ -981,6 +1097,25 @@ impl BaseContainer for LinuxContainer {
             child = child.env(PIDNS_FD, format!("{}", pidns.unwrap()));
         }
 
+        #[cfg(feature = "wasm")]
+        {
+            let mut wasm = false;
+            if let Some(oci) = &self.config()?.spec {
+                if let Some(val) = oci.annotations.get(ANNOTATIONS_WASM) {
+                    if val.eq_ignore_ascii_case("yes") || val.eq_ignore_ascii_case("true") {
+                        wasm = true;
+                        info!(logger, "this is a wasm container");
+                    }
+                }
+            }
+
+            if wasm && !arch_support_wasm() {
+                return Err(anyhow!("wasm is not support by current architecture"));
+            }
+
+            child = child.env(WASM, format!("{}", wasm));
+        }
+
         child.spawn()?;
 
         unistd::close(crfd)?;
@@ -1171,17 +1306,31 @@ where
 }
 
 fn do_exec(args: &[String]) -> ! {
+    do_exec_env(args, &[])
+}
+
+fn do_exec_env(args: &[String], envs: &[String]) -> ! {
     let path = &args[0];
     let p = CString::new(path.to_string()).unwrap();
     let sa: Vec<CString> = args
         .iter()
         .map(|s| CString::new(s.to_string()).unwrap_or_default())
         .collect();
-
-    let _ = unistd::execvp(p.as_c_str(), &sa).map_err(|e| match e {
-        nix::Error::UnknownErrno => std::process::exit(-2),
-        _ => std::process::exit(e as i32),
-    });
+    if envs.is_empty() {
+        let _ = unistd::execvp(p.as_c_str(), &sa).map_err(|e| match e {
+            nix::Error::UnknownErrno => std::process::exit(-2),
+            _ => std::process::exit(e as i32),
+        });
+    } else {
+        let se: Vec<CString> = envs
+            .iter()
+            .map(|s| CString::new(s.to_string()).unwrap_or_default())
+            .collect();
+        let _ = unistd::execvpe(p.as_c_str(), &sa, &se).map_err(|e| match e {
+            nix::Error::UnknownErrno => std::process::exit(-2),
+            _ => std::process::exit(e as i32),
+        });
+    }
 
     unreachable!()
 }

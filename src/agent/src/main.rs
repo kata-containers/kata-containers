@@ -62,6 +62,8 @@ use uevent::watch_uevents;
 
 use futures::future::join_all;
 use rustjail::pipestream::PipeStream;
+#[cfg(feature = "wasm")]
+use rustjail::wasm::arch_support_wasm;
 use tokio::{
     io::AsyncWrite,
     sync::{
@@ -102,15 +104,23 @@ struct AgentOpts {
 #[derive(Parser)]
 enum SubCommand {
     Init {},
+    #[cfg(feature = "wasm")]
+    Wasm {},
 }
 
 #[instrument]
 fn announce(logger: &Logger, config: &AgentConfig) {
+    #[cfg(feature = "wasm")]
+    let support_wasm = arch_support_wasm();
+    #[cfg(not(feature = "wasm"))]
+    let support_wasm = false;
+
     info!(logger, "announce";
     "agent-commit" => version::VERSION_COMMIT,
     "agent-version" =>  version::AGENT_VERSION,
     "api-version" => version::API_VERSION,
     "config" => format!("{:?}", config),
+    "wasm_support" => support_wasm,
     );
 }
 
@@ -282,9 +292,13 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         exit(0);
     }
 
-    if let Some(SubCommand::Init {}) = args.subcmd {
+    if let Some(subcmd) = args.subcmd {
         reset_sigpipe();
-        rustjail::container::init_child();
+        match subcmd {
+            SubCommand::Init {} => rustjail::container::init_child(),
+            #[cfg(feature = "wasm")]
+            SubCommand::Wasm {} => rustjail::wasm::run_wasm()?,
+        }
         exit(0);
     }
 

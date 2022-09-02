@@ -33,6 +33,12 @@ async-trait = "0.1.31"
 inotify = "0.9.2"
 libseccomp = { version = "0.2.3", optional = true }
 
+[target.'cfg(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64", target_arch = "riscv32"))'.dependencies]
+wasmer = { version = "2.3.0", optional = true }
+wasmer-wasi = { version = "2.3.0", optional = true }
+wasmer-engine-universal = { version = "2.3.0", optional = true }
+wasmer-compiler-cranelift = { version = "2.3.0", optional = true }
+
 [dev-dependencies]
 serial_test = "0.5.0"
 tempfile = "3.1.0"
@@ -41,3 +47,4 @@ test-utils = { path = "../../libs/test-utils" }
 [features]
 seccomp = ["libseccomp"]
 standard-oci-runtime = []
+wasm = ["wasmer", "wasmer-wasi", "wasmer-engine-universal", "wasmer-compiler-cranelift"]
