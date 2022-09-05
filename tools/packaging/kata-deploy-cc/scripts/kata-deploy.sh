@@ -213,6 +213,11 @@ function remove_artifacts() {
 		/opt/confidential-containers/bin/qemu-system-x86_64 \
 		/opt/confidential-containers/bin/qemu-system-x86_64-tdx \
 		/opt/confidential-containers/bin/cloud-hypervisor
+
+	# Try to remove the /opt/confidential-containers directory.
+	# If it's not empty, don't bother force removing it, as the
+	# pre-install script also drops files here.
+	rmdir /opt/confidential-containers 2>/dev/null
 }
 
 function cleanup_cri_runtime() {
