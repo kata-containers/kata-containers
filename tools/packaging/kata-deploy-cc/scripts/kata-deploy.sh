@@ -94,10 +94,7 @@ function configure_different_shims_base() {
 			fi
 		fi
 
-		cat << EOF | tee "$shim_file"
-#!/usr/bin/env bash
-KATA_CONF_FILE=/opt/confidential-containers/share/defaults/kata-containers/configuration-${shim}.toml /opt/confidential-containers/bin/containerd-shim-kata-v2 "\$@"
-EOF
+		ln -sf /opt/kata/bin/containerd-shim-kata-v2 "${shim_file}"
 		chmod +x "$shim_file"
 
 		if [ "${shim}" == "${default_shim}" ]; then
