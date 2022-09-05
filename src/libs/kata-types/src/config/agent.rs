@@ -11,6 +11,9 @@ pub use vendor::AgentVendor;
 
 use super::default::{DEFAULT_AGENT_LOG_PORT, DEFAULT_AGENT_VSOCK_PORT};
 
+/// agent name of Kata agent.
+pub const AGENT_NAME_KATA: &str = "kata";
+
 /// Kata agent configuration information.
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct Agent {

@@ -29,7 +29,9 @@ pub use self::hypervisor::{
 };
 
 mod runtime;
-pub use self::runtime::{Runtime, RuntimeVendor};
+pub use self::runtime::{Runtime, RuntimeVendor, RUNTIME_NAME_VIRTCONTAINER};
+
+pub use self::agent::AGENT_NAME_KATA;
 
 /// Trait to manipulate global Kata configuration information.
 pub trait ConfigPlugin: Send + Sync {

@@ -10,6 +10,9 @@ use super::default;
 use crate::config::{ConfigOps, TomlConfig};
 use crate::{eother, resolve_path, validate_path};
 
+/// Type of runtime VirtContainer.
+pub const RUNTIME_NAME_VIRTCONTAINER: &str = "virt_container";
+
 /// Kata runtime configuration information.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Runtime {
