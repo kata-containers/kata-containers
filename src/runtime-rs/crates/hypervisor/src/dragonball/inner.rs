@@ -176,6 +176,7 @@ impl DragonballInner {
             serial_path: Some(serial_path),
             mem_size_mib: self.config.memory_info.default_memory as usize,
             vcpu_count: self.config.cpu_info.default_vcpus as u8,
+            max_vcpu_count: self.config.cpu_info.default_maxvcpus as u8,
             ..Default::default()
         };
         info!(sl!(), "vm config: {:?}", vm_config);

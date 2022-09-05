@@ -11,3 +11,4 @@ logging::logger_with_subsystem!(sl, "runtimes");
 
 pub mod manager;
 pub use manager::RuntimeHandlerManager;
+mod static_resource;
