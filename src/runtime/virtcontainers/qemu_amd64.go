@@ -38,7 +38,7 @@ const (
 
 	defaultQemuMachineType = QemuQ35
 
-	defaultQemuMachineOptions = "accel=kvm,kernel_irqchip=on"
+	defaultQemuMachineOptions = "accel=kvm"
 
 	splitIrqChipMachineOptions = "accel=kvm,kernel_irqchip=split"
 
