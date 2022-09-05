@@ -43,7 +43,7 @@ jobs:
         echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
     - name: Checkout code
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         fetch-depth: 0
         path: ./src/github.com/${{ github.repository }}

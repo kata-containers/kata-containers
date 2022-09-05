@@ -56,7 +56,7 @@ jobs:
             ref=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.pull_request.url' | sed  's#^.*\/pulls#refs\/pull#' | sed 's#$#\/merge#')
             echo "reference for PR: " ${ref}
             echo "##[set-output name=pr-ref;]${ref}"
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           ref: ${{ steps.get-PR-ref.outputs.pr-ref }}
 
@@ -92,7 +92,7 @@ jobs:
             ref=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.pull_request.url' | sed  's#^.*\/pulls#refs\/pull#' | sed 's#$#\/merge#')
             echo "reference for PR: " ${ref}
             echo "##[set-output name=pr-ref;]${ref}"
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           ref: ${{ steps.get-PR-ref.outputs.pr-ref }}
       - name: get-artifacts
@@ -119,7 +119,7 @@ jobs:
             ref=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.pull_request.url' | sed  's#^.*\/pulls#refs\/pull#' | sed 's#$#\/merge#')
             echo "reference for PR: " ${ref}
             echo "##[set-output name=pr-ref;]${ref}"
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           ref: ${{ steps.get-PR-ref.outputs.pr-ref }}
       - name: get-kata-tarball
