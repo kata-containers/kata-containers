@@ -204,11 +204,7 @@ function remove_artifacts() {
 function cleanup_cri_runtime() {
 	cleanup_different_shims_base
 
-	case $1 in
-	containerd | k3s | k3s-agent | rke2-agent | rke2-server)
-		cleanup_containerd
-		;;
-	esac
+	cleanup_containerd
 
 }
 
@@ -223,9 +219,7 @@ function reset_runtime() {
 	kubectl label node "$NODE_NAME" katacontainers.io/kata-runtime-
 	systemctl daemon-reload
 	systemctl restart "$1"
-	if [ "$1" == "containerd" ]; then
-		systemctl restart kubelet
-	fi
+	systemctl restart kubelet
 }
 
 function main() {
@@ -236,21 +230,13 @@ function main() {
 	fi
 
 	runtime=$(get_container_runtime)
+	if [ "$runtime" != "containerd" ]; then
+		die "$runtime is not supported for now"
+	fi
 
-	if [ "$runtime" == "k3s" ] || [ "$runtime" == "k3s-agent" ] || [ "$runtime" == "rke2-agent" ] || [ "$runtime" == "rke2-server" ]; then
-		containerd_conf_tmpl_file="${containerd_conf_file}.tmpl"
-		if [ ! -f "$containerd_conf_tmpl_file" ]; then
-			cp "$containerd_conf_file" "$containerd_conf_tmpl_file"
-		fi
-
-		containerd_conf_file="${containerd_conf_tmpl_file}"
-		containerd_conf_file_backup="${containerd_conf_file}.bak"
-	elif [ "$runtime" == "containerd" ]; then
-		# runtime == containerd
-		if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && \
-			[ -x $(command -v containerd) ]; then
-			containerd config default > "$containerd_conf_file"
-		fi
+	if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && \
+		[ -x $(command -v containerd) ]; then
+		containerd config default > "$containerd_conf_file"
 	fi
 
 	action=${1:-}
@@ -259,29 +245,25 @@ function main() {
 		die "invalid arguments"
 	fi
 
-	# only install / remove / update if we are dealing with containerd
-	if [[ "$runtime" =~ ^(containerd|k3s|k3s-agent|rke2-agent|rke2-server)$ ]]; then
-
-		case "$action" in
-		install)
-			install_artifacts
-			configure_cri_runtime "$runtime"
-			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
-			;;
-		cleanup)
-			cleanup_cri_runtime "$runtime"
-			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=cleanup
-			remove_artifacts
-			;;
-		reset)
-			reset_runtime $runtime
-			;;
-		*)
-			echo invalid arguments
-			print_usage
-			;;
-		esac
-	fi
+	case "$action" in
+	install)
+		install_artifacts
+		configure_cri_runtime "$runtime"
+		kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
+		;;
+	cleanup)
+		cleanup_cri_runtime "$runtime"
+		kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=cleanup
+		remove_artifacts
+		;;
+	reset)
+		reset_runtime $runtime
+		;;
+	*)
+		echo invalid arguments
+		print_usage
+		;;
+	esac
 
 	#It is assumed this script will be called as a daemonset. As a result, do
         # not return, otherwise the daemon will restart and rexecute the script
