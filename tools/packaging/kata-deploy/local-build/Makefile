@@ -74,7 +74,7 @@ install-tarball:
 cc-payload: cc-tarball
 	$(MK_DIR)kata-deploy-build-and-upload-payload.sh $(CURDIR)/kata-static.tar.xz
 
-cc-tarball: | cc-parallel merge-builds
+cc-tarball: | cc merge-builds
 
 cc-parallel: $(MK_DIR)/dockerbuild/install_yq.sh
 	${MAKE} -f $(MK_PATH) cc -j$$(( $$(nproc) - 1  )) V=
