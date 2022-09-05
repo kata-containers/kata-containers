@@ -818,11 +818,15 @@ impl SharedFsInfo {
         validate_path_pattern(&self.valid_virtio_fs_daemon_paths, path)
     }
 
-    fn adjust_virtio_fs(&mut self, _inline: bool) -> Result<()> {
-        resolve_path!(
-            self.virtio_fs_daemon,
-            "Virtio-fs daemon path {} is invalid: {}"
-        )?;
+    fn adjust_virtio_fs(&mut self, inline: bool) -> Result<()> {
+        // inline mode doesn't need external virtiofsd daemon
+        if !inline {
+            resolve_path!(
+                self.virtio_fs_daemon,
+                "Virtio-fs daemon path {} is invalid: {}"
+            )?;
+        }
+
         if self.virtio_fs_cache.is_empty() {
             self.virtio_fs_cache = default::DEFAULT_VIRTIO_FS_CACHE_MODE.to_string();
         }
@@ -836,16 +840,13 @@ impl SharedFsInfo {
     }
 
     fn validate_virtio_fs(&self, inline: bool) -> Result<()> {
-        if inline && !self.virtio_fs_daemon.is_empty() {
-            return Err(eother!(
-                "Executable path for inline-virtio-fs is not empty: {}",
-                &self.virtio_fs_daemon
-            ));
+        // inline mode doesn't need external virtiofsd daemon
+        if !inline {
+            validate_path!(
+                self.virtio_fs_daemon,
+                "Virtio-fs daemon path {} is invalid: {}"
+            )?;
         }
-        validate_path!(
-            self.virtio_fs_daemon,
-            "Virtio-fs daemon path {} is invalid: {}"
-        )?;
 
         let l = ["none", "auto", "always"];
 
