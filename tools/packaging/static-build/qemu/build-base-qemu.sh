@@ -34,9 +34,16 @@ prefix="${prefix:-"/opt/kata"}"
 
 CACHE_TIMEOUT=$(date +"%Y-%m-%d")
 
+[ -n "${build_suffix}" ] && HYPERVISOR_NAME="kata-qemu-${build_suffix}" || HYPERVISOR_NAME="kata-qemu"
+[ -n "${build_suffix}" ] && PKGVERSION="kata-static-${build_suffix}" || PKGVERSION="kata-static"
+
+container_image="qemu-static-${qemu_version,,}"
+
 sudo "${container_engine}" build \
 	--build-arg CACHE_TIMEOUT="${CACHE_TIMEOUT}" \
-	--build-arg BUILD_SUFFIX="${build_suffix}" \
+	--build-arg BUILD_SUFFIX=${build_suffix} \
+	--build-arg HYPERVISOR_NAME="${HYPERVISOR_NAME}" \
+	--build-arg PKGVERSION="${PKGVERSION}" \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
 	--build-arg QEMU_DESTDIR="${qemu_destdir}" \
@@ -46,12 +53,14 @@ sudo "${container_engine}" build \
 	--build-arg PREFIX="${prefix}" \
 	"${packaging_dir}" \
 	-f "${script_dir}/Dockerfile" \
-	-t qemu-static
+	-t "${container_image}"
 
 sudo "${container_engine}" run \
 	--rm \
 	-i \
-	-v "${PWD}":/share qemu-static \
+	-v "${PWD}":/share "${container_image}" \
 	mv "${qemu_destdir}/${qemu_tar}" /share/
+
+sudo docker image rm "${container_image}"
 
 sudo chown ${USER}:$(id -gn ${USER}) "${PWD}/${qemu_tar}"

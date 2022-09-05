@@ -71,10 +71,10 @@ merge-builds:
 install-tarball:
 	tar -xvf ./kata-static.tar.xz -C /
 
-image: kata-tarball
-	$(MK_DIR)kata-deploy-build-and-upload-image.sh $(CURDIR)/kata-static.tar.xz
+cc-payload: cc-tarball
+	$(MK_DIR)kata-deploy-build-and-upload-payload.sh $(CURDIR)/kata-static.tar.xz
 
-cc-tarball: | cc-parallel merge-builds
+cc-tarball: | cc merge-builds
 
 cc-parallel: $(MK_DIR)/dockerbuild/install_yq.sh
 	${MAKE} -f $(MK_PATH) cc -j$$(( $$(nproc) - 1  )) V=
@@ -87,6 +87,7 @@ cc: cc-cloud-hypervisor-tarball \
 	cc-virtiofsd-tarball \
 	cc-tdx-kernel-tarball \
 	cc-tdx-qemu-tarball \
+	cc-tdx-td-shim-tarball \
 	cc-tdx-tdvf-tarball
 
 cc-cloud-hypervisor-tarball:

@@ -70,6 +70,20 @@ function configure_cri_runtime() {
 	systemctl restart "$1"
 }
 
+function backup_shim() {
+	local shim_file="$1"
+	local shim_backup="${shim_file}.bak"
+
+	if [ -f "${shim_file}" ]; then
+		echo "warning: ${shim_file} already exists" >&2
+		if [ ! -f "${shim_backup}" ]; then
+			mv "${shim_file}" "${shim_backup}"
+		else
+			rm "${shim_file}"
+		fi
+	fi
+}
+
 function configure_different_shims_base() {
 	# Currently containerd has an assumption on the location of the shimv2 implementation
 	# This forces kata-deploy to create files in a well-defined location that's part of
@@ -78,49 +92,49 @@ function configure_different_shims_base() {
 	#   https://github.com/containerd/containerd/issues/3073
 	#   https://github.com/containerd/containerd/issues/5006
 
+	local default_shim_file="/usr/local/bin/containerd-shim-kata-v2"
+
 	mkdir -p /usr/local/bin
 
 	for shim in "${shims[@]}"; do
 		local shim_binary="containerd-shim-kata-${shim}-v2"
 		local shim_file="/usr/local/bin/${shim_binary}"
-		local shim_backup="/usr/local/bin/${shim_binary}.bak"
 
-		if [ -f "${shim_file}" ]; then
-			echo "warning: ${shim_binary} already exists" >&2
-			if [ ! -f "${shim_backup}" ]; then
-				mv "${shim_file}" "${shim_backup}"
-			else
-				rm "${shim_file}"
-			fi
-		fi
-
-		cat << EOF | tee "$shim_file"
-#!/usr/bin/env bash
-KATA_CONF_FILE=/opt/confidential-containers/share/defaults/kata-containers/configuration-${shim}.toml /opt/confidential-containers/bin/containerd-shim-kata-v2 "\$@"
-EOF
+		backup_shim "${shim_file}"
+		ln -sf /opt/kata/bin/containerd-shim-kata-v2 "${shim_file}"
 		chmod +x "$shim_file"
 
 		if [ "${shim}" == "${default_shim}" ]; then
+			backup_shim "${default_shim_file}"
+
 			echo "Creating the default shim-v2 binary"
-			ln -sf "${shim_file}" /usr/local/bin/containerd-shim-kata-v2
+			ln -sf "${shim_file}" "${default_shim_file}"
 		fi
 	done
 }
 
+function restore_shim() {
+	local shim_file="$1"
+	local shim_backup="${shim_file}.bak"
+
+	if [ -f "${shim_backup}" ]; then
+		mv "$shim_backup" "$shim_file"
+	fi
+}
+
 function cleanup_different_shims_base() {
+	local default_shim_file="/usr/local/bin/containerd-shim-kata-v2"
+
 	for shim in "${shims[@]}"; do
 		local shim_binary="containerd-shim-kata-${shim}-v2"
 		local shim_file="/usr/local/bin/${shim_binary}"
-		local shim_backup="/usr/local/bin/${shim_binary}.bak"
 
 		rm "${shim_file}" || true
-
-		if [ -f "${shim_backup}" ]; then
-			mv "$shim_backup" "$shim_file"
-		fi
+		restore_shim "${shim_file}"
 	done
 
-	rm /usr/local/bin/containerd-shim-kata-v2
+	rm "${default_shim_file}" || true
+	restore_shim "${default_shim_file}"
 }
 
 function configure_containerd_runtime() {
@@ -199,16 +213,17 @@ function remove_artifacts() {
 		/opt/confidential-containers/bin/qemu-system-x86_64 \
 		/opt/confidential-containers/bin/qemu-system-x86_64-tdx \
 		/opt/confidential-containers/bin/cloud-hypervisor
+
+	# Try to remove the /opt/confidential-containers directory.
+	# If it's not empty, don't bother force removing it, as the
+	# pre-install script also drops files here.
+	rmdir /opt/confidential-containers 2>/dev/null
 }
 
 function cleanup_cri_runtime() {
 	cleanup_different_shims_base
 
-	case $1 in
-	containerd | k3s | k3s-agent | rke2-agent | rke2-server)
-		cleanup_containerd
-		;;
-	esac
+	cleanup_containerd
 
 }
 
@@ -223,9 +238,7 @@ function reset_runtime() {
 	kubectl label node "$NODE_NAME" katacontainers.io/kata-runtime-
 	systemctl daemon-reload
 	systemctl restart "$1"
-	if [ "$1" == "containerd" ]; then
-		systemctl restart kubelet
-	fi
+	systemctl restart kubelet
 }
 
 function main() {
@@ -236,21 +249,13 @@ function main() {
 	fi
 
 	runtime=$(get_container_runtime)
+	if [ "$runtime" != "containerd" ]; then
+		die "$runtime is not supported for now"
+	fi
 
-	if [ "$runtime" == "k3s" ] || [ "$runtime" == "k3s-agent" ] || [ "$runtime" == "rke2-agent" ] || [ "$runtime" == "rke2-server" ]; then
-		containerd_conf_tmpl_file="${containerd_conf_file}.tmpl"
-		if [ ! -f "$containerd_conf_tmpl_file" ]; then
-			cp "$containerd_conf_file" "$containerd_conf_tmpl_file"
-		fi
-
-		containerd_conf_file="${containerd_conf_tmpl_file}"
-		containerd_conf_file_backup="${containerd_conf_file}.bak"
-	elif [ "$runtime" == "containerd" ]; then
-		# runtime == containerd
-		if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && \
-			[ -x $(command -v containerd) ]; then
-			containerd config default > "$containerd_conf_file"
-		fi
+	if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && \
+		[ -x $(command -v containerd) ]; then
+		containerd config default > "$containerd_conf_file"
 	fi
 
 	action=${1:-}
@@ -259,29 +264,25 @@ function main() {
 		die "invalid arguments"
 	fi
 
-	# only install / remove / update if we are dealing with containerd
-	if [[ "$runtime" =~ ^(containerd|k3s|k3s-agent|rke2-agent|rke2-server)$ ]]; then
-
-		case "$action" in
-		install)
-			install_artifacts
-			configure_cri_runtime "$runtime"
-			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
-			;;
-		cleanup)
-			cleanup_cri_runtime "$runtime"
-			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=cleanup
-			remove_artifacts
-			;;
-		reset)
-			reset_runtime $runtime
-			;;
-		*)
-			echo invalid arguments
-			print_usage
-			;;
-		esac
-	fi
+	case "$action" in
+	install)
+		install_artifacts
+		configure_cri_runtime "$runtime"
+		kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
+		;;
+	cleanup)
+		cleanup_cri_runtime "$runtime"
+		kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=cleanup
+		remove_artifacts
+		;;
+	reset)
+		reset_runtime $runtime
+		;;
+	*)
+		echo invalid arguments
+		print_usage
+		;;
+	esac
 
 	#It is assumed this script will be called as a daemonset. As a result, do
         # not return, otherwise the daemon will restart and rexecute the script
