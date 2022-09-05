@@ -123,6 +123,8 @@ install_cc_image() {
 
 #Install CC kernel asset
 install_cc_kernel() {
+	export KATA_BUILD_CC=yes
+
 	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -f -v "${kernel_version}"
 }

@@ -21,6 +21,7 @@ sudo docker build -t "${container_image}" "${script_dir}"
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
+	--env KATA_BUILD_CC="${KATA_BUILD_CC:-}" \
 	"${container_image}" \
 	bash -c "${kernel_builder} $* setup"
 
