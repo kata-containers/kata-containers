@@ -198,14 +198,8 @@ function configure_containerd() {
 function remove_artifacts() {
 	echo "deleting kata artifacts"
 	rm -rf \
-		/opt/confidential-containers/libexec/virtiofsd \
-		/opt/confidential-containers/share/defaults/kata-containers/ \
-		/opt/confidential-containers/share/bash-completion/completions/kata-runtime \
-		/opt/confidential-containers/share/kata-qemu/ \
-		/opt/confidential-containers/share/kata-qemu-tdx/ \
-		/opt/confidential-containers/share/kata-containers/ \
-		/opt/confidential-containers/share/td-shim/ \
-		/opt/confidential-containers/share/tdvf/ \
+		/opt/confidential-containers/libexec/ \
+		/opt/confidential-containers/share/ \
 		/opt/confidential-containers/bin/kata-monitor \
 		/opt/confidential-containers/bin/containerd-shim-kata-v2 \
 		/opt/confidential-containers/bin/kata-runtime \
@@ -217,7 +211,7 @@ function remove_artifacts() {
 	# Try to remove the /opt/confidential-containers directory.
 	# If it's not empty, don't bother force removing it, as the
 	# pre-install script also drops files here.
-	rmdir /opt/confidential-containers 2>/dev/null
+	rmdir --ignore-fail-on-non-empty -p /opt/confidential-containers/bin
 }
 
 function cleanup_cri_runtime() {
