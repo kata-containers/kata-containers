@@ -11,6 +11,7 @@ lazy_static = "1.4.0"
 slog = "2.5.2"
 slog-scope = "4.4.0"
 tokio = { version = "1.8.0", features = ["rt-multi-thread"] }
+hyper = { version = "0.14.20", features = ["stream", "server", "http1"] }
 
 common = { path = "./common" }
 kata-types = { path = "../../../libs/kata-types" }
