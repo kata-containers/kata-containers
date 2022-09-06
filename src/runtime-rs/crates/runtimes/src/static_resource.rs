@@ -128,8 +128,8 @@ fn get_sizing_info(annotation: Annotation) -> Result<(u64, i64, i64)> {
     // since we are *adding* our result to the config, a value of 0 will cause no change
     // and if the annotation is not assigned (but static resource management is), we will
     // log a *warning* to fill that with zero value
-    let period = annotation.get_sandbox_cpu_quota();
-    let quota = annotation.get_sandbox_cpu_period();
+    let period = annotation.get_sandbox_cpu_period();
+    let quota = annotation.get_sandbox_cpu_quota();
     let memory = annotation.get_sandbox_mem();
     Ok((period, quota, memory))
 }
