@@ -101,7 +101,7 @@ function configure_different_shims_base() {
 		local shim_file="/usr/local/bin/${shim_binary}"
 
 		backup_shim "${shim_file}"
-		ln -sf /opt/kata/bin/containerd-shim-kata-v2 "${shim_file}"
+		ln -sf /opt/confidential-containers/bin/containerd-shim-kata-v2 "${shim_file}"
 		chmod +x "$shim_file"
 
 		if [ "${shim}" == "${default_shim}" ]; then
