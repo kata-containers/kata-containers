@@ -8,7 +8,10 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 
-use crate::{shim_mgmt::server::MgmtServer, static_resource::StaticResourceManager};
+use crate::{
+    shim_mgmt::server::MgmtServer,
+    static_resource::StaticResourceManager,
+};
 use common::{
     message::Message,
     types::{Request, Response},
