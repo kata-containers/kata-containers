@@ -344,7 +344,7 @@ impl Handle {
                 // Build IP v6 request
                 let mut request = request
                     .v6()
-                    .destination_prefix(dest_addr.ip(), dest_addr.prefix())
+                    .destination_prefix(dest_addr.network(), dest_addr.prefix())
                     .output_interface(link.index());
 
                 if !route.source.is_empty() {
@@ -385,7 +385,7 @@ impl Handle {
                 // Build IP v4 request
                 let mut request = request
                     .v4()
-                    .destination_prefix(dest_addr.ip(), dest_addr.prefix())
+                    .destination_prefix(dest_addr.network(), dest_addr.prefix())
                     .output_interface(link.index());
 
                 if !route.source.is_empty() {
@@ -775,6 +775,7 @@ impl Address {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use protocols::types::Route;
     use rtnetlink::packet;
     use std::iter;
     use std::process::Command;
@@ -941,7 +942,7 @@ mod tests {
         assert_eq!(bytes, [0xAB, 0x0C, 0xDE, 0x12, 0x34, 0x56]);
     }
 
-    fn clean_env_for_test_add_one_arp_neighbor(dummy_name: &str, ip: &str) {
+    fn clean_env_for_test_network(dummy_name: &str, ip: &str) {
         // ip link delete dummy
         Command::new("ip")
             .args(&["link", "delete", dummy_name])
@@ -955,8 +956,8 @@ mod tests {
             .expect("prepare: failed to delete neigh");
     }
 
-    fn prepare_env_for_test_add_one_arp_neighbor(dummy_name: &str, ip: &str) {
-        clean_env_for_test_add_one_arp_neighbor(dummy_name, ip);
+    fn prepare_env_for_test_network(dummy_name: &str, ip: &str) {
+        clean_env_for_test_network(dummy_name, ip);
         // modprobe dummy
         Command::new("modprobe")
             .arg("dummy")
@@ -990,7 +991,7 @@ mod tests {
         let to_ip = "169.254.1.1";
         let dummy_name = "dummy_for_arp";
 
-        prepare_env_for_test_add_one_arp_neighbor(dummy_name, to_ip);
+        prepare_env_for_test_network(dummy_name, to_ip);
 
         let mut ip_address = IPAddress::new();
         ip_address.set_address(to_ip.to_string());
@@ -1017,6 +1018,45 @@ mod tests {
         let stdout = std::str::from_utf8(&stdout).expect("failed to conveert stdout");
         assert_eq!(stdout, format!("{} lladdr {} PERMANENT\n", to_ip, mac));
 
-        clean_env_for_test_add_one_arp_neighbor(dummy_name, to_ip);
+        clean_env_for_test_network(dummy_name, to_ip);
+    }
+    
+    #[tokio::test]
+    async fn test_add_one_route_with_special_network_prefix() {
+        skip_if_not_root!();
+
+        let dest_cidr = "192.168.157.204/20";
+        let dummy_name = "dummy_for_route";
+
+        prepare_env_for_test_network(dummy_name, "");
+
+        let mut route = Route::default();
+        route.set_device(dummy_name.to_string());
+        route.set_dest(dest_cidr.to_string());
+
+        Handle::new()
+            .unwrap()
+            .add_routes(vec![route])
+            .await
+            .expect("Failed to add Route");
+        
+        // ip route show dev dummy
+        let stdout = Command::new("ip")
+            .args(&["route", "show", "dev", dummy_name])
+            .output()
+            .expect("failed to show route")
+            .stdout;
+
+        clean_env_for_test_network(dummy_name, "");
+        
+        let stdout = std::str::from_utf8(&stdout).expect("failed to conveert stdout");
+        
+
+        let network_id = Ipv4Network::from_str(dest_cidr)
+            .expect("wrong dest cidr")
+            .network()
+            .to_string();
+
+        assert!(stdout.contains(&network_id));
     }
 }
