@@ -12,7 +12,11 @@ use std::u32;
 
 use serde::Deserialize;
 
+use crate::config::default::DEFAULT_AGENT_TYPE_NAME;
+use crate::config::default::DEFAULT_HYPERVISOR;
+use crate::config::default::DEFAULT_RUNTIME_NAME;
 use crate::config::hypervisor::get_hypervisor_plugin;
+
 use crate::config::TomlConfig;
 use crate::sl;
 
@@ -439,6 +443,18 @@ impl Annotation {
                 config.runtime.agent_name = ag.to_string();
             }
         }
+
+        // set default values for runtime.name, runtime.hypervisor_name and runtime.agent
+        if config.runtime.name.is_empty() {
+            config.runtime.name = DEFAULT_RUNTIME_NAME.to_string()
+        }
+        if config.runtime.hypervisor_name.is_empty() {
+            config.runtime.hypervisor_name = DEFAULT_HYPERVISOR.to_string()
+        }
+        if config.runtime.agent_name.is_empty() {
+            config.runtime.agent_name = DEFAULT_AGENT_TYPE_NAME.to_string()
+        }
+
         let hypervisor_name = &config.runtime.hypervisor_name;
         let agent_name = &config.runtime.agent_name;
 
