@@ -21,7 +21,7 @@ use tokio::net::UnixListener;
 use super::handlers::handler_mux;
 
 pub(crate) const DIRECT_VOLUMN_PATH_KEY: &str = "path";
-pub(crate) const DIRECT_VOLUMN_STAT_URL: &str = "/direct-volumn/stats";
+pub(crate) const DIRECT_VOLUMN_STATS_URL: &str = "/direct-volumn/stats";
 pub(crate) const DIRECT_VOLUMN_RESIZE_URL: &str = "/direct-volumn/resize";
 pub(crate) const AGENT_URL: &str = "/agent-url";
 pub(crate) const IP_TABLE_URL: &str = "/iptables";
@@ -53,10 +53,10 @@ impl MgmtServer {
     // TODO(when metrics is supported): register sandbox metrics
     // running management http server in an infinite loop, able to serve concurrent requests
     pub async fn run(self: Arc<Self>) {
-        let lsnr = lsnr_from_path(self.s_addr.clone()).await.unwrap();
-        // start an infinate loop, which serves the incomming uds stream
+        let listener = listener_from_path(self.s_addr.clone()).await.unwrap();
+        // start an infinite loop, which serves the incomming uds stream
         loop {
-            let (stream, _) = lsnr.accept().await.unwrap();
+            let (stream, _) = listener.accept().await.unwrap();
             let me = self.clone();
             // spawn a light weight thread to multiplex to the handler
             tokio::task::spawn(async move {
@@ -91,7 +91,7 @@ pub fn mgmt_socket_addr(sid: String) -> String {
 
 // from path, return a unix listener corresponding to that path,
 // if the path(socket file) is not created, we create that here
-async fn lsnr_from_path(path: String) -> Result<UnixListener> {
+async fn listener_from_path(path: String) -> Result<UnixListener> {
     // create the socket if not present
     let trim_path = path.strip_prefix("unix:").context("trim path")?;
     let file_path = Path::new("/").join(trim_path);
@@ -102,4 +102,16 @@ async fn lsnr_from_path(path: String) -> Result<UnixListener> {
     // bind the socket and return the listener
     info!(sl!(), "mgmt-svr: binding to path {}", path);
     UnixListener::bind(file_path).context("bind address")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mgmt_svr_test_sock_addr() {
+        let sid = String::from("414123");
+        let addr = mgmt_socket_addr(sid);
+        assert_eq!(addr, "unix:///run/kata/414123/shim-monitor.sock");
+    }
 }

@@ -4,6 +4,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+pub mod client;
 mod handlers;
 pub mod server;
-pub mod client;
