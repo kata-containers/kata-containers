@@ -209,7 +209,7 @@ externals:
 
   gperf:
     description: "GNU gperf is a perfect hash function generator"
-    url: "https://ftp.gnu.org/gnu/gperf"
+    url: "https://ftpmirror.gnu.org/gnu/gperf"
     version: "3.1"
 
   kubernetes:
