@@ -37,13 +37,6 @@ $ chmod u+x ccv0.sh
       $ export tests_branch=stevenh/add-ccv0-changes-to-build
       ```
       before running the script.
-    - By default `ccv0.sh` enables the agent to use the rust implementation to pull container images on the guest.
-      If you wish to instead build and include the `skopeo` package for this then run:
-      ```bash
-      $ export SKOPEO=yes
-      ```
-      `skopeo` is
-      required for passing source credentials and verifying container image signatures using the kata agent.
     - By default the build and configuration are using `QEMU` as the hypervisor. In order to use `Cloud Hypervisor` instead
       set:
       ```
@@ -256,9 +249,6 @@ the `ccv0.sh` script to automatically fill in the variables:
               proof of concept to allow more images to be pulled and tested. Once we have support for getting
               keys into the Kata guest image using the attestation-agent and/or KBS I'd expect container registry
               credentials to be looked up using that mechanism.
-            
-            > **Note**: the native rust implementation doesn't current flow credentials at the moment, so use
-            the `skopeo` based implementation if they are needed now.
     - Run the pull image agent endpoint with
       ```bash
       $ ~/ccv0.sh agent_pull_image
@@ -299,14 +289,13 @@ the `ccv0.sh` script to automatically fill in the variables:
 
 ## Verifying signed images
 
-> **Note**: the current proof of concept signature validation code involves hard-coding to protect a specific container 
-repository and is only a temporary to demonstrate the function. After the attestation agent is able to pass through
-trusted information and the [image management crate](https://github.com/confidential-containers/image-rs) is
-implemented and integrated this code will be replaced.
-
-For the proof of concept the ability to verify images is limited to a pre-created selection of test images in our test
+For this sample demo, we use local attestation to pass through the required
+configuration to do container image signature verification. Due to this, the ability to verify images is limited
+to a pre-created selection of test images in our test
 repository [`quay.io/kata-containers/confidential-containers`](https://quay.io/repository/kata-containers/confidential-containers?tab=tags).
-For pulling images not in this test repository (called an *unprotected* registry below), we can not currently get the GPG keys, or signatures used for signed images, so for compatibility we fall back to the behaviour of not enforcing signatures.
+For pulling images not in this test repository (called an *unprotected* registry below), we fall back to the behaviour
+of not enforcing signatures. More documentation on how to customise this to match your own containers through local,
+or remote attestation will be available in future.
 
 In our test repository there are three tagged images:
 
@@ -319,27 +308,20 @@ In our test repository there are three tagged images:
 Using a standard unsigned `busybox` image that can be pulled from another, *unprotected*, `quay.io` repository we can
 test a few scenarios.
 
-In this temporary proof of concept, along with the public GPG key and signature files, a container policy file is
-created in the rootfs which specifies that any container image from `quay.io/kata-containers`
-must be signed with the embedded GPG key. In order to enable this a new agent configuration parameter called
-`policy_path` must been provided to the agent which specifies the location of the policy file to use inside the image.
-The `ccv0.sh` script sets this up automatically by appending 
-`agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json`
-to the `kernel_params` entry in `/etc/kata-containers/configuration.toml`.
-
-With this policy parameter set a few tests of image verification can be done to test different scenarios by attempting
+In this sample, with local attestation, we pass in the the public GPG key and signature files, and the [`offline_fs_kbc`
+configuration](https://github.com/confidential-containers/attestation-agent/blob/main/src/kbc_modules/offline_fs_kbc/README.md)
+into the guest image which specifies that any container image from `quay.io/kata-containers`
+must be signed with the embedded GPG key and the agent configuration needs updating to enable this. 
+With this policy set a few tests of image verification can be done to test different scenarios by attempting
 to create containers from these images using `crictl`:
-> **Note** Until the [issue](https://github.com/kata-containers/kata-containers/issues/3970) to remove `skopeo` from 
-the guest agent code has been implemented, the Kata confidential-containers build needs to be run with 
-`export SKOPEO=yes` as documented [above](#basic-script-set-up-and-optional-environment-variables) in order to use the
-image signature verification function.
 
-- If you don't already have a Kata sandbox pod created with `crictl`, then follow the 
+- If you don't already have the Kata Containers CC code built and configured for `crictl`, then follow the 
 [instructions above](#using-crictl-for-end-to-end-provisioning-of-a-kata-confidential-containers-pod-with-an-unencrypted-image)
-up to, and including, the `~/ccv0.sh crictl_create_cc_pod` command.
+up to the `~/ccv0.sh crictl_create_cc_pod` command.
 
-- In order to enable the guest image, you will need to copy over the policy and signature files needed by running 
-`~/ccv0.sh copy_signature_files_to_guest`and then re-running `~/ccv0.sh crictl_create_cc_pod` which will delete and recreate 
+- In order to enable the guest image, you will need to setup the required configuration, policy and signature files
+needed by running 
+`~/ccv0.sh copy_signature_files_to_guest` and then run `~/ccv0.sh crictl_create_cc_pod` which will delete and recreate 
 your pod - adding in the new files.
  
 - To test the fallback behaviour works using an unsigned image from an *unprotected* registry we can pull the `busybox`
@@ -358,16 +340,8 @@ image by running:
   $ export CONTAINER_CONFIG_FILE=container-config_unsigned-protected.yaml
   $ ~/ccv0.sh crictl_create_cc_container
   ```
-  - This results in a 
-  `FATA[0001] creating container: rpc error: code = Internal desc = failed to pull image: ExitStatus(unix_wait_status(256))`
-  message from `crictl` and the Kata log shows that the signature we has was not valid for the unsigned image:
-  ```bash
-  $ sudo journalctl -xe -t kata --since "1 min ago" | grep "Source image rejected"
-  ```
-  contains:
-  ```text
-  Source image rejected: Signature for identity quay.io/kata-containers/confidential-containers:signed is not accepted
-  ```
+  - This correctly results in an error message from `crictl`:
+  `PullImage from image service failed" err="rpc error: code = Internal desc = Security validate failed: Validate image failed: The signatures do not satisfied! Reject reason: [Match reference failed.]" image="quay.io/kata-containers/confidential-containers:unsigned"`
 - To test that the signed image our *protected* test container registry is accepted we can run:
   ```bash
   $ export CONTAINER_CONFIG_FILE=container-config.yaml
@@ -385,17 +359,8 @@ want to protect with the attestation agent in future) fails we can run:
   $ export CONTAINER_CONFIG_FILE=container-config_signed-protected-other.yaml
   $ ~/ccv0.sh crictl_create_cc_container
   ```
-  - Again this results in a
-  `FATA[0001] creating container: rpc error: code = Internal desc = failed to pull image: ExitStatus(unix_wait_status(256))`
-  message from `crictl` and the Kata log shows a
-  slightly different error:
-  ```bash
-  $ sudo journalctl -xe -t kata --since "1 min ago" | grep "Source image rejected"
-  ```
-  contains:
-  ```text
-  Source image rejected: Invalid GPG signature
-  ```
+  - Again this results in an error message from `crictl`:
+  `"PullImage from image service failed" err="rpc error: code = Internal desc = Security validate failed: Validate image failed: The signatures do not satisfied! Reject reason: [signature verify failed! There is no pubkey can verify the signature!]" image="quay.io/kata-containers/confidential-containers:other_signed"`
 
 ### Using Kubernetes to create a Kata confidential containers pod from the encrypted ssh demo sample image
 

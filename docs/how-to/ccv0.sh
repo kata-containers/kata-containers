@@ -23,6 +23,7 @@ export CRIO=${CRIO:-"no"}
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 export KUBERNETES=${KUBERNETES:-"no"}
 export AGENT_INIT="${AGENT_INIT:-${TEST_INITRD:-no}}"
+export AA_KBC="${AA_KBC:-offline_fs_kbc}"
 
 # Allow the user to overwrite the default repo and branch names if they want to build from a fork
 export katacontainers_repo="${katacontainers_repo:-github.com/kata-containers/kata-containers}"
@@ -248,7 +249,7 @@ build_a_custom_kata_agent() {
     [ ${ARCH} == "ppc64le" ] && export ARCH=powerpc64le
 
     # Run a make install into the rootfs directory in order to create the kata-agent.service file which is required when we add to the rootfs
-    sudo -E PATH=$PATH make install DESTDIR="${ROOTFS}"
+    sudo -E PATH=$PATH make install DESTDIR="${ROOTFS_DIR}"
     popd
 }
 
@@ -501,15 +502,23 @@ shim_pull_image() {
 }
 
 call_copy_signature_files_to_guest() {
-    add_kernel_params "agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
-    copy_files_to_guest
+    # TODO #5173 - remove this once the kernel_params aren't ignored by the agent config
+    export DEBUG_CONSOLE="true"
+    
+    if [ "${SKOPEO:-}" = "yes" ]; then
+        add_kernel_params "agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
+        setup_skopeo_signature_files_in_guest
+    else
+        # TODO #4888 - set config to specifically enable signature verification to be on in ImageClient
+        setup_offline_fs_kbc_signature_files_in_guest
+    fi
 }
 
 main() {
     while getopts "dh" opt; do
         case "$opt" in
             d) 
-                DEBUG="-d"
+                export DEBUG="-d"
                 set -x
                 ;;
             h) 
