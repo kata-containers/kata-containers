@@ -9,6 +9,7 @@
 [ -z "${BATS_TEST_FILENAME:-}" ] && set -o errexit -o errtrace -o pipefail -o nounset
 
 source "${BATS_TEST_DIRNAME}/../../../lib/common.bash"
+#source "${BATS_TEST_DIRNAME}/../../../.ci/lib.sh"
 FIXTURES_DIR="${BATS_TEST_DIRNAME}/fixtures"
 SHARED_FIXTURES_DIR="${BATS_TEST_DIRNAME}/../../confidential/fixtures"
 
@@ -176,7 +177,13 @@ load_runtime_config_path() {
 	fi
 }
 
-copy_files_to_guest() {
+setup_skopeo_signature_files_in_guest() {
+	setup_common_signature_files_in_guest
+	cp_to_guest_img "${rootfs_directory}" "${SHARED_FIXTURES_DIR}/registries.d"
+}
+
+# TODO #3970 - when skopeo fully removed refactor this and delete policy.json in fixture
+setup_common_signature_files_in_guest() {
 	rootfs_directory="etc/containers/"
 	signatures_dir="${SHARED_FIXTURES_DIR}/quay_verification/signatures"
 
@@ -187,5 +194,29 @@ copy_files_to_guest() {
 	sudo tar -zvxf "${SHARED_FIXTURES_DIR}/quay_verification/signatures.tar" -C "${signatures_dir}"
 
 	cp_to_guest_img "${rootfs_directory}" "${SHARED_FIXTURES_DIR}/quay_verification"
-	cp_to_guest_img "${rootfs_directory}" "${SHARED_FIXTURES_DIR}/registries.d"
+}
+
+setup_offline_fs_kbc_signature_files_in_guest() {
+	setup_common_signature_files_in_guest
+	setup_offline_fs_kbc_agent_config_in_guest
+	cp_to_guest_img "etc" "${SHARED_FIXTURES_DIR}/offline-fs-kbc/aa-offline_fs_kbc-resources.json"
+}
+
+setup_offline_fs_kbc_agent_config_in_guest() {
+	local rootfs_agent_config="/etc/agent-config.toml"
+
+	#clone_katacontainers_repo
+	#sudo -E AA_KBC_PARAMS="offline_fs_kbc::null" HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}" envsubst < ${katacontainers_repo_dir}/docs/how-to/data/confidential-agent-config.toml.in | sudo tee ${rootfs_agent_config}
+	sudo -E AA_KBC_PARAMS="offline_fs_kbc::null" HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}" envsubst < "${SHARED_FIXTURES_DIR}/confidential-agent-config.toml.in" | sudo tee ${rootfs_agent_config}
+
+	# TODO #5173 - remove this once the kernel_params aren't ignored by the agent config
+	# Enable debug log_level and debug_console access based on env vars
+	[ -n "${DEBUG:-}" ] || echo "log_level = \"debug\"" | sudo tee -a "${rootfs_agent_config}"
+	[ "${DEBUG_CONSOLE:-}" = "true" ] || echo -e "debug_console = true\ndebug_console_vport = 1026" | sudo tee -a "${rootfs_agent_config}"
+
+	# Uncomment the 'ExecProcessRequest' endpoint as our test currently uses exec to check the container
+	sudo sed -i 's/#\("ExecProcessRequest"\)/\1/g' "${rootfs_agent_config}"
+
+	cp_to_guest_img "/tests/fixtures" "${rootfs_agent_config}"
+	add_kernel_params "agent.config_file=/tests/fixtures/$(basename ${rootfs_agent_config})"
 }

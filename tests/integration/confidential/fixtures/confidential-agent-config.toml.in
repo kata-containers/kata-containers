@@ -1,0 +1,45 @@
+# Copyright (c) 2021 IBM Corp.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+aa_kbc_params = "$AA_KBC_PARAMS"
+https_proxy = "$HTTPS_PROXY"
+[endpoints]
+allowed = [
+"AddARPNeighborsRequest",
+"AddSwapRequest",
+"CloseStdinRequest",
+"CopyFileRequest",
+"CreateContainerRequest",
+"CreateSandboxRequest",
+"DestroySandboxRequest",
+#"ExecProcessRequest",
+"GetMetricsRequest",
+"GetOOMEventRequest",
+"GuestDetailsRequest",
+"ListInterfacesRequest",
+"ListRoutesRequest",
+"MemHotplugByProbeRequest",
+"OnlineCPUMemRequest",
+"PauseContainerRequest",
+"PullImageRequest",
+"ReadStreamRequest",
+"RemoveContainerRequest",
+#"ReseedRandomDevRequest",
+"ResizeVolumeRequest",
+"ResumeContainerRequest",
+"SetGuestDateTimeRequest",
+"SignalProcessRequest",
+"StartContainerRequest",
+"StartTracingRequest",
+"StatsContainerRequest",
+"StopTracingRequest",
+"TtyWinResizeRequest",
+"UpdateContainerRequest",
+"UpdateInterfaceRequest",
+"UpdateRoutesRequest",
+"VolumeStatsRequest",
+"WaitProcessRequest",
+"WriteStreamRequest"
+]

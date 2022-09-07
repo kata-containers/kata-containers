@@ -26,7 +26,11 @@ skip_if_skopeo_not_present () {
 
 setup() {
 	setup_common
-	copy_files_to_guest
+	if [ "${SKOPEO:-}" == "yes" ]; then
+		setup_skopeo_signature_files_in_guest
+	else
+		setup_offline_fs_kbc_signature_files_in_guest
+	fi
 }
 
 @test "$test_tag Test can pull an unencrypted image inside the guest" {
