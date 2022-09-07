@@ -10,6 +10,9 @@ use super::default;
 use crate::config::{ConfigOps, TomlConfig};
 use crate::{eother, resolve_path, validate_path};
 
+/// Type of runtime VirtContainer.
+pub const RUNTIME_NAME_VIRTCONTAINER: &str = "virt_container";
+
 /// Kata runtime configuration information.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Runtime {
@@ -98,6 +101,10 @@ pub struct Runtime {
     /// If enabled, user can run pprof tools with shim v2 process through kata-monitor.
     #[serde(default)]
     pub enable_pprof: bool,
+
+    /// If enabled, static resource management will calculate the vcpu and memory for the sandbox/container
+    #[serde(default)]
+    pub static_resource_mgmt: bool,
 
     /// Determines whether container seccomp profiles are passed to the virtual machine and
     /// applied by the kata agent. If set to true, seccomp is not applied within the guest.

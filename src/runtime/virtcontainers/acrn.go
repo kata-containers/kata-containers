@@ -676,6 +676,10 @@ func (a *Acrn) GetThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
 	return VcpuThreadIDs{}, nil
 }
 
+func (a *Acrn) GetTotalMemoryMB(ctx context.Context) uint32 {
+	return a.config.MemorySize
+}
+
 func (a *Acrn) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
 	return 0, MemoryDevice{}, nil
 }

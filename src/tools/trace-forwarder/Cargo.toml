@@ -8,6 +8,7 @@ name = "kata-trace-forwarder"
 version = "0.0.1"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
+license = "Apache-2.0"
 
 [dependencies]
 futures = "0.3.15"

@@ -1,0 +1,19 @@
+name: Cargo Crates Check Runner
+on: [pull_request]
+jobs:
+  cargo-deny-runner:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+        uses: actions/checkout@v3
+      - name: Generate Action
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+        run: bash cargo-deny-generator.sh
+        working-directory: ./.github/cargo-deny-composite-action/
+        env:
+          GOPATH: ${{ runner.workspace }}/kata-containers
+      - name: Run Action
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+        uses: ./.github/cargo-deny-composite-action
