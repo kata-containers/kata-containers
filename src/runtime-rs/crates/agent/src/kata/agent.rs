@@ -40,6 +40,10 @@ impl AgentManager for KataAgent {
         self.stop_log_forwarder().await;
     }
 
+    async fn agent_sock(&self) -> Result<String> {
+        self.agent_sock().await
+    }
+
     async fn agent_config(&self) -> AgentConfig {
         self.agent_config().await
     }

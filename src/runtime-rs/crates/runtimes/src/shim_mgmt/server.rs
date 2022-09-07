@@ -11,9 +11,10 @@
 
 #![allow(dead_code)] // some url's handler are *to be* developed
 
-use std::{fs, path::Path};
+use std::{fs, path::Path, sync::Arc};
 
 use anyhow::{Context, Result};
+use common::Sandbox;
 use hyper::{server::conn::Http, service::service_fn};
 use tokio::net::UnixListener;
 
@@ -29,42 +30,47 @@ pub(crate) const METRICS_URL: &str = "/metrics";
 
 const SHIM_MGMT_SOCK_NAME: &str = "shim-monitor.sock";
 
-// The management server
-#[derive(Debug)]
+/// The shim management server instance
 pub struct MgmtServer {
-    // socket address
+    /// socket address(with prefix like hvsock://)
     pub s_addr: String,
+
+    /// The sandbox instance
+    pub sandbox: Arc<dyn Sandbox>,
 }
 
 impl MgmtServer {
-    pub fn new(sid: &str) -> Self {
+    /// construct a new management server
+    pub fn new(sid: &str, sandbox: Arc<dyn Sandbox>) -> Self {
         Self {
             s_addr: mgmt_socket_addr(sid.to_owned()),
+            sandbox,
         }
     }
 
     // TODO(when metrics is supported): write metric addresses to fs
     // TODO(when metrics is supported): register shim metrics
     // TODO(when metrics is supported): register sandbox metrics
-    // start a new thread, running management http server in a dead loop
-    pub async fn run(&self) {
+    // running management http server in an infinite loop, able to serve concurrent requests
+    pub async fn run(self: Arc<Self>) {
         let lsnr = lsnr_from_path(self.s_addr.clone()).await.unwrap();
-
         // start an infinate loop, which serves the incomming uds stream
-        tokio::task::spawn(async move {
-            loop {
-                let (stream, _) = lsnr.accept().await.unwrap();
-                // spawn a light weight thread to multiplex to the handler
-                tokio::task::spawn(async move {
-                    if let Err(err) = Http::new()
-                        .serve_connection(stream, service_fn(handler_mux))
-                        .await
-                    {
-                        warn!(sl!(), "Failed to serve connection: {:?}", err);
-                    }
-                });
-            }
-        });
+        loop {
+            let (stream, _) = lsnr.accept().await.unwrap();
+            let me = self.clone();
+            // spawn a light weight thread to multiplex to the handler
+            tokio::task::spawn(async move {
+                if let Err(err) = Http::new()
+                    .serve_connection(
+                        stream,
+                        service_fn(|request| handler_mux(me.sandbox.clone(), request)),
+                    )
+                    .await
+                {
+                    warn!(sl!(), "Failed to serve connection: {:?}", err);
+                }
+            });
+        }
     }
 }
 
@@ -86,12 +92,14 @@ pub fn mgmt_socket_addr(sid: String) -> String {
 // from path, return a unix listener corresponding to that path,
 // if the path(socket file) is not created, we create that here
 async fn lsnr_from_path(path: String) -> Result<UnixListener> {
+    // create the socket if not present
     let trim_path = path.strip_prefix("unix:").context("trim path")?;
     let file_path = Path::new("/").join(trim_path);
     let file_path = file_path.as_path();
     if let Some(parent_dir) = file_path.parent() {
         fs::create_dir_all(parent_dir).context("create parent dir")?;
     }
+    // bind the socket and return the listener
     info!(sl!(), "mgmt-svr: binding to path {}", path);
     UnixListener::bind(file_path).context("bind address")
 }
