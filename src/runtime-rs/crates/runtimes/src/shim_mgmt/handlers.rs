@@ -19,7 +19,12 @@ pub(crate) async fn handler_mux(
     sandbox: Arc<dyn Sandbox>,
     req: Request<Body>,
 ) -> Result<Response<Body>> {
-    info!(sl!(), "mgmt-svr(mux): recv req {:?}", req);
+    info!(
+        sl!(),
+        "mgmt-svr(mux): recv req, method: {}, uri: {}",
+        req.method(),
+        req.uri().path()
+    );
     match (req.method(), req.uri().path()) {
         (&Method::GET, AGENT_URL) => agent_url_handler(sandbox, req).await,
         _ => Ok(not_found(req).await),
