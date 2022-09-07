@@ -136,7 +136,9 @@ get_tee_kernel() {
 	curl --fail -OL "${kernel_url}/linux-${kernel_tarball}" || curl --fail -OL "${kernel_url}/${kernel_tarball}"
 	
 	mkdir -p ${kernel_path}
-	tar --strip-components=1 -xf ${kernel_tarball} -C ${kernel_path}
+
+	#try both tarball name options before failing
+	tar --strip-components=1 -xf ${kernel_tarball} -C ${kernel_path} || tar --strip-components=1 -xf "linux-${kernel_tarball}" -C ${kernel_path}
 }
 
 get_kernel() {
