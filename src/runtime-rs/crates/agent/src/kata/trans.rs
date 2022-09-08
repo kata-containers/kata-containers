@@ -16,14 +16,15 @@ use crate::{
         ARPNeighbor, ARPNeighbors, AddArpNeighborRequest, AgentDetails, BlkioStats,
         BlkioStatsEntry, CgroupStats, CheckRequest, CloseStdinRequest, ContainerID,
         CopyFileRequest, CpuStats, CpuUsage, CreateContainerRequest, CreateSandboxRequest, Device,
-        Empty, ExecProcessRequest, FSGroup, FSGroupChangePolicy, GuestDetailsResponse,
-        HealthCheckResponse, HugetlbStats, IPAddress, IPFamily, Interface, Interfaces,
-        KernelModule, MemHotplugByProbeRequest, MemoryData, MemoryStats, NetworkStats,
-        OnlineCPUMemRequest, PidsStats, ReadStreamRequest, ReadStreamResponse,
-        RemoveContainerRequest, ReseedRandomDevRequest, Route, Routes, SetGuestDateTimeRequest,
-        SignalProcessRequest, StatsContainerResponse, Storage, StringUser, ThrottlingData,
-        TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
-        VersionCheckResponse, WaitProcessRequest, WriteStreamRequest,
+        Empty, ExecProcessRequest, FSGroup, FSGroupChangePolicy, GetIPTablesRequest,
+        GetIPTablesResponse, GuestDetailsResponse, HealthCheckResponse, HugetlbStats, IPAddress,
+        IPFamily, Interface, Interfaces, KernelModule, MemHotplugByProbeRequest, MemoryData,
+        MemoryStats, NetworkStats, OnlineCPUMemRequest, PidsStats, ReadStreamRequest,
+        ReadStreamResponse, RemoveContainerRequest, ReseedRandomDevRequest, Route, Routes,
+        SetGuestDateTimeRequest, SetIPTablesRequest, SetIPTablesResponse, SignalProcessRequest,
+        StatsContainerResponse, Storage, StringUser, ThrottlingData, TtyWinResizeRequest,
+        UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest, VersionCheckResponse,
+        WaitProcessRequest, WriteStreamRequest,
     },
     OomEventResponse, WaitProcessResponse, WriteStreamResponse,
 };
@@ -385,6 +386,41 @@ impl From<WriteStreamRequest> for agent::WriteStreamRequest {
 impl From<agent::WriteStreamResponse> for WriteStreamResponse {
     fn from(from: agent::WriteStreamResponse) -> Self {
         Self { length: from.len }
+    }
+}
+
+impl From<GetIPTablesRequest> for agent::GetIPTablesRequest {
+    fn from(from: GetIPTablesRequest) -> Self {
+        Self {
+            is_ipv6: from.is_ipv6,
+            ..Default::default()
+        }
+    }
+}
+
+impl From<agent::GetIPTablesResponse> for GetIPTablesResponse {
+    fn from(from: agent::GetIPTablesResponse) -> Self {
+        Self {
+            data: from.get_data().to_vec(),
+        }
+    }
+}
+
+impl From<SetIPTablesRequest> for agent::SetIPTablesRequest {
+    fn from(from: SetIPTablesRequest) -> Self {
+        Self {
+            is_ipv6: from.is_ipv6,
+            data: from.data,
+            ..Default::default()
+        }
+    }
+}
+
+impl From<agent::SetIPTablesResponse> for SetIPTablesResponse {
+    fn from(from: agent::SetIPTablesResponse) -> Self {
+        Self {
+            data: from.get_data().to_vec(),
+        }
     }
 }
 
