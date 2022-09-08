@@ -121,7 +121,7 @@ fn is_host_device(dest: &str) -> bool {
         return true;
     }
 
-    if dest.starts_with("/dev") {
+    if dest.starts_with("/dev/") {
         let src = match std::fs::canonicalize(dest) {
             Err(_) => return false,
             Ok(src) => src,
