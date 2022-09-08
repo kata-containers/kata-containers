@@ -205,6 +205,27 @@ pub struct UpdateContainerRequest {
     pub mounts: Vec<oci::Mount>,
 }
 
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct GetIPTablesRequest {
+    pub is_ipv6: bool,
+}
+
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct GetIPTablesResponse {
+    pub data: Vec<u8>,
+}
+
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct SetIPTablesRequest {
+    pub is_ipv6: bool,
+    pub data: Vec<u8>,
+}
+
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct SetIPTablesResponse {
+    pub data: Vec<u8>,
+}
+
 #[derive(PartialEq, Clone, Default)]
 pub struct WriteStreamRequest {
     pub process_id: ContainerProcessID,
