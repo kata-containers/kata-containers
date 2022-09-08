@@ -44,7 +44,6 @@ use nix::errno::Errno;
 use nix::mount::MsFlags;
 use nix::sys::{stat, statfs};
 use nix::unistd::{self, Pid};
-use rustjail::cgroups::Manager;
 use rustjail::process::ProcessOperations;
 
 use crate::device::{
