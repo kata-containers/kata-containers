@@ -220,7 +220,7 @@ $ sudo install -o root -g root -m 0755 ~/.cargo/bin/kata-agent-ctl /usr/local/bi
 1. Start the agent, specifying a local socket for it to communicate on:
 
    ```sh
-   $ sudo KATA_AGENT_SERVER_ADDR=unix:///tmp/foo.socket target/x86_64-unknown-linux-musl/release/kata-agent
+   $ sudo KATA_AGENT_SERVER_ADDR=unix://@/tmp/foo.socket target/x86_64-unknown-linux-musl/release/kata-agent
    ```
 
    > **Note:** This example assumes an Intel x86-64 system.

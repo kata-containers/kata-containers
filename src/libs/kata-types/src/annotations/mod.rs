@@ -12,9 +12,15 @@ use std::u32;
 
 use serde::Deserialize;
 
+use crate::config::default::DEFAULT_AGENT_TYPE_NAME;
+use crate::config::default::DEFAULT_HYPERVISOR;
+use crate::config::default::DEFAULT_RUNTIME_NAME;
 use crate::config::hypervisor::get_hypervisor_plugin;
+
 use crate::config::TomlConfig;
 use crate::sl;
+
+use self::cri_containerd::{SANDBOX_CPU_PERIOD_KEY, SANDBOX_CPU_QUOTA_KEY, SANDBOX_MEM_KEY};
 
 /// CRI-containerd specific annotations.
 pub mod cri_containerd;
@@ -175,7 +181,7 @@ pub const KATA_ANNO_CFG_HYPERVISOR_FIRMWARE_HASH: &str =
 /// A sandbox annotation to specify cpu specific features.
 pub const KATA_ANNO_CFG_HYPERVISOR_CPU_FEATURES: &str =
     "io.katacontainers.config.hypervisor.cpu_features";
-/// A sandbox annotation for passing the default vcpus assigned for a VM by the hypervisor.
+/// A sandbox annotation for passing the default vCPUs assigned for a VM by the hypervisor.
 pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS: &str =
     "io.katacontainers.config.hypervisor.default_vcpus";
 /// A sandbox annotation that specifies the maximum number of vCPUs allocated for the VM by the hypervisor.
@@ -196,7 +202,7 @@ pub const KATA_ANNO_CFG_HYPERVISOR_IOMMU: &str = "io.katacontainers.config.hyper
 pub const KATA_ANNO_CFG_HYPERVISOR_IOMMU_PLATFORM: &str =
     "io.katacontainers.config.hypervisor.enable_iommu_platform";
 
-//	Hypervisor Machine related annotations
+// Hypervisor Machine related annotations
 /// A sandbox annotation to specify the type of machine being emulated by the hypervisor.
 pub const KATA_ANNO_CFG_HYPERVISOR_MACHINE_TYPE: &str =
     "io.katacontainers.config.hypervisor.machine_type";
@@ -254,7 +260,7 @@ pub const KATA_ANNO_CFG_HYPERVISOR_ENABLE_ROOTLESS_HYPERVISOR: &str =
     "io.katacontainers.config.hypervisor.rootless";
 
 // Hypervisor Shared File System related annotations
-/// A sandbox annotation to specify the shared file system type, either virtio-9p or virtio-fs.
+/// A sandbox annotation to specify the shared file system type, either inline-virtio-fs (default), virtio-9p, virtio-fs or virtio-fs-nydus.
 pub const KATA_ANNO_CFG_HYPERVISOR_SHARED_FS: &str =
     "io.katacontainers.config.hypervisor.shared_fs";
 /// A sandbox annotations to specify virtio-fs vhost-user daemon path.
@@ -376,6 +382,28 @@ impl Annotation {
         self.get(CONTAINER_TYPE_KEY)
     }
 
+    /// Get the annotation of cpu quota for sandbox
+    pub fn get_sandbox_cpu_quota(&self) -> u64 {
+        let value = self
+            .get_value::<u64>(SANDBOX_CPU_QUOTA_KEY)
+            .unwrap_or(Some(0));
+        value.unwrap_or(0)
+    }
+
+    /// Get the annotation of cpu period for sandbox
+    pub fn get_sandbox_cpu_period(&self) -> i64 {
+        let value = self
+            .get_value::<i64>(SANDBOX_CPU_PERIOD_KEY)
+            .unwrap_or(Some(0));
+        value.unwrap_or(0)
+    }
+
+    /// Get the annotation of memory for sandbox
+    pub fn get_sandbox_mem(&self) -> i64 {
+        let value = self.get_value::<i64>(SANDBOX_MEM_KEY).unwrap_or(Some(0));
+        value.unwrap_or(0)
+    }
+
     /// Get the annotation to specify the Resources.Memory.Swappiness.
     pub fn get_container_resource_swappiness(&self) -> Result<Option<u32>> {
         match self.get_value::<u32>(KATA_ANNO_CONTAINER_RES_SWAPPINESS) {
@@ -415,6 +443,18 @@ impl Annotation {
                 config.runtime.agent_name = ag.to_string();
             }
         }
+
+        // set default values for runtime.name, runtime.hypervisor_name and runtime.agent
+        if config.runtime.name.is_empty() {
+            config.runtime.name = DEFAULT_RUNTIME_NAME.to_string()
+        }
+        if config.runtime.hypervisor_name.is_empty() {
+            config.runtime.hypervisor_name = DEFAULT_HYPERVISOR.to_string()
+        }
+        if config.runtime.agent_name.is_empty() {
+            config.runtime.agent_name = DEFAULT_AGENT_TYPE_NAME.to_string()
+        }
+
         let hypervisor_name = &config.runtime.hypervisor_name;
         let agent_name = &config.runtime.agent_name;
 
@@ -428,7 +468,7 @@ impl Annotation {
             if hv.security_info.is_annotation_enabled(key) {
                 match key.as_str() {
                     // update hypervisor config
-                    //	Hypervisor related annotations
+                    // Hypervisor related annotations
                     KATA_ANNO_CFG_HYPERVISOR_PATH => {
                         hv.validate_hypervisor_path(value)?;
                         hv.path = value.to_string();
@@ -451,7 +491,7 @@ impl Annotation {
                             return Err(bool_err);
                         }
                     },
-                    //	Hypervisor Block Device related annotations
+                    // Hypervisor Block Device related annotations
                     KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_DRIVER => {
                         hv.blockdev_info.block_device_driver = value.to_string();
                     }
@@ -547,7 +587,7 @@ impl Annotation {
                         hv.boot_info.validate_boot_path(value)?;
                         hv.boot_info.firmware = value.to_string();
                     }
-                    //	Hypervisor CPU related annotations
+                    // Hypervisor CPU related annotations
                     KATA_ANNO_CFG_HYPERVISOR_CPU_FEATURES => {
                         hv.cpu_info.cpu_features = value.to_string();
                     }
@@ -587,7 +627,7 @@ impl Annotation {
                             }
                         }
                     }
-                    //	Hypervisor Device related annotations
+                    // Hypervisor Device related annotations
                     KATA_ANNO_CFG_HYPERVISOR_HOTPLUG_VFIO_ON_ROOT_BUS => {
                         match self.get_value::<bool>(key) {
                             Ok(r) => {
@@ -622,7 +662,7 @@ impl Annotation {
                             return Err(bool_err);
                         }
                     },
-                    //	Hypervisor Machine related annotations
+                    // Hypervisor Machine related annotations
                     KATA_ANNO_CFG_HYPERVISOR_MACHINE_TYPE => {
                         hv.machine_info.machine_type = value.to_string();
                     }
@@ -633,7 +673,7 @@ impl Annotation {
                         hv.machine_info.validate_entropy_source(value)?;
                         hv.machine_info.entropy_source = value.to_string();
                     }
-                    //	Hypervisor Memory related annotations
+                    // Hypervisor Memory related annotations
                     KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY => {
                         match byte_unit::Byte::from_str(value) {
                             Ok(mem_bytes) => {
@@ -722,7 +762,7 @@ impl Annotation {
                             return Err(bool_err);
                         }
                     },
-                    //	Hypervisor Network related annotations
+                    // Hypervisor Network related annotations
                     KATA_ANNO_CFG_HYPERVISOR_DISABLE_VHOST_NET => match self.get_value::<bool>(key)
                     {
                         Ok(r) => {
@@ -752,7 +792,7 @@ impl Annotation {
                             }
                         }
                     }
-                    //	Hypervisor Security related annotations
+                    // Hypervisor Security related annotations
                     KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH => {
                         hv.security_info.validate_path(value)?;
                         hv.security_info.guest_hook_path = value.to_string();
@@ -767,7 +807,7 @@ impl Annotation {
                             }
                         }
                     }
-                    //	Hypervisor Shared File System related annotations
+                    // Hypervisor Shared File System related annotations
                     KATA_ANNO_CFG_HYPERVISOR_SHARED_FS => {
                         hv.shared_fs.shared_fs = self.get(key);
                     }
@@ -815,7 +855,7 @@ impl Annotation {
                 }
             } else {
                 match key.as_str() {
-                    //update agent config
+                    // update agent config
                     KATA_ANNO_CFG_KERNEL_MODULES => {
                         let kernel_mod: Vec<String> =
                             value.to_string().split(';').map(str::to_string).collect();
@@ -839,7 +879,7 @@ impl Annotation {
                             return Err(u32_err);
                         }
                     },
-                    //update runtime config
+                    // update runtime config
                     KATA_ANNO_CFG_RUNTIME_NAME => {
                         let runtime = vec!["virt-container", "linux-container", "wasm-container"];
                         if runtime.contains(&value.as_str()) {
