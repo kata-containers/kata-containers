@@ -1,12 +1,10 @@
 # Systemd Cgroup for Agent
 
+As we know, we can interact with cgroups in two ways, **cgroupfs** and **systemd**. The former is achieved by reading and writing cgroup tmpfs' files under `/sys/fs/cgroup` while the latter is done by configuring a transient unit by requesting systemd. Kata agent uses **cgroupfs** by default, unless you pass the parameter `--systemd-cgroup`.
+
 ## usage
 
-As we know, we can interact with cgroups in two ways, **cgroupfs** and **systemd**. The former is achieved by reading and writing cgroup tmpfs' files under `/sys/fs/cgroup` while the latter is done by configuring a transient unit by requesting systemd. Here's an interesting fact that no matter which cgroup driver you want to take, the attribute `linux.cgroupsPath` in `bundle/config.json` with ***corresponding*** format should be specified at the same time. Therefore, which cgroup driver the kata agent uses depends on the `linux.cgroupsPath` you provide. 
-
-To be concrete, when you assign something like `/path_a/path_b` to  `linux.cgroupsPath`, the kata agent will use **cgroupfs** to configure. Instead, when you assign `[slice]:[prefix]:[name]` to ` linux.cgroupsPath`, the kata agent will use **systemd**. In particular, when `linux.cgroupsPath` is not specified or specified as an empty string, which is the default case after `runc spec`, kata agent will use **cgroupfs** to configure cgroups for you, which is also the default behavior.
-
-For systemd, we configure it according to the following `linux.cgroupsPath` format standard provided by runc (`[slice]:[prefix]:[name]`).
+For systemd, kata agent configures cgroups according to the following `linux.cgroupsPath` format standard provided by runc (`[slice]:[prefix]:[name]`). If you don't provide a valid `linux.cgroupsPath`, kata agent will treat it as `"system.slice:kata_agent:<container-id>"`. 
 
 > Here slice is a systemd slice under which the container is placed. If empty, it defaults to system.slice, except when cgroup v2 is used and rootless container is created, in which case it defaults to user.slice.
 >
@@ -15,8 +13,6 @@ For systemd, we configure it according to the following `linux.cgroupsPath` form
 > A slice of - represents a root slice.
 >
 > Next, prefix and name are used to compose the unit name, which is `<prefix>-<name>.scope`, unless name has .slice suffix, in which case prefix is ignored and the name is used as is.
-
-If you don't want to assign a specific name to `linux.cgroupsPath` and just want to use systemd cgroup driver, you just need to configure it as "::", which will be expand as `"system.slice:kata_agent:<container-id>"`. 
 
 ## supported properties
 

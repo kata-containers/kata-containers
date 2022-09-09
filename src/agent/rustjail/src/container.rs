@@ -50,6 +50,7 @@ use std::os::unix::io::AsRawFd;
 use protobuf::SingularPtrField;
 
 use oci::State as OCIState;
+use regex::Regex;
 use std::collections::HashMap;
 use std::os::unix::io::FromRawFd;
 use std::str::FromStr;
@@ -1449,7 +1450,6 @@ impl LinuxContainer {
         let base = base.into();
         let id = id.into();
         let root = format!("{}/{}", base.as_str(), id.as_str());
-        let mut config = config.clone();
 
         // validate oci spec
         validator::validate(&config)?;
@@ -1476,15 +1476,14 @@ impl LinuxContainer {
         // determine which cgroup driver to take and then assign to config.use_systemd_cgroup
         // systemd: "[slice]:[prefix]:[name]"
         // fs: "/path_a/path_b"
-        let cpath = if linux.cgroups_path.matches(':').count() == 2 {
-            config.use_systemd_cgroup = true;
-            if linux.cgroups_path.len() == 2 {
-                format!(":kata_agent:{}", id.as_str())
+        let cpath = if config.use_systemd_cgroup {
+            let re = Regex::new(r"^[\w\-.]*:[\w\-.]*:[\w\-.]+$").unwrap();
+            if !re.is_match(linux.cgroups_path.as_str()) {
+                format!("system.slice:kata_agent:{}", id.as_str())
             } else {
                 linux.cgroups_path.clone()
             }
         } else {
-            config.use_systemd_cgroup = false;
             if linux.cgroups_path.is_empty() {
                 format!("/{}", id.as_str())
             } else {
