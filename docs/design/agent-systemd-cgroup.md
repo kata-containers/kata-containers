@@ -4,7 +4,7 @@
 
 As we know, we can interact with cgroups in two ways, **cgroupfs** and **systemd**. The former is achieved by reading and writing cgroup tmpfs' files under `/sys/fs/cgroup` while the latter is done by configuring a transient unit by requesting systemd. Here's an interesting fact that no matter which cgroup driver you want to take, the attribute `linux.cgroupsPath` in `bundle/config.json` with ***corresponding*** format should be specified at the same time. Therefore, which cgroup driver the kata agent uses depends on the `linux.cgroupsPath` you provide. 
 
-To be concrete, when you assign something like `/path_a/path_b` to  `linux.cgroupsPath`, the kata agent will uses **cgroupfs** to configure. Instead, when you assign `[slice]:[prefix]:[name]` to ` linux.cgroupsPath`. In particular, when `linux.cgroupsPath` is not specified or specified as an empty string, which is the default case after `runc spec`, kata agent will use **cgroupfs** to configure cgroups for you, which is also the default behavior.
+To be concrete, when you assign something like `/path_a/path_b` to  `linux.cgroupsPath`, the kata agent will use **cgroupfs** to configure. Instead, when you assign `[slice]:[prefix]:[name]` to ` linux.cgroupsPath`, the kata agent will use **systemd**. In particular, when `linux.cgroupsPath` is not specified or specified as an empty string, which is the default case after `runc spec`, kata agent will use **cgroupfs** to configure cgroups for you, which is also the default behavior.
 
 For systemd, we configure it according to the following `linux.cgroupsPath` format standard provided by runc (`[slice]:[prefix]:[name]`).
 
