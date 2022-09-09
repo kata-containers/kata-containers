@@ -527,6 +527,9 @@ type HypervisorConfig struct {
 	// from memory encryption to both memory and CPU-state encryption and integrity.
 	ConfidentialGuest bool
 
+	// Enable SEV-SNP guests on AMD machines capable of both
+	SevSnpGuest bool
+
 	// BootToBeTemplate used to indicate if the VM is created to be a template VM
 	BootToBeTemplate bool
 

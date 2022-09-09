@@ -29,12 +29,12 @@ func availableGuestProtection() (guestProtection, error) {
 		return tdxProtection, nil
 	}
 	// SEV-SNP is supported and enabled when the kvm module `sev_snp` parameter is set to `Y`
+	// SEV-SNP support infers SEV (-ES) support
 	if _, err := os.Stat(snpKvmParameterPath); err == nil {
 		if c, err := os.ReadFile(snpKvmParameterPath); err == nil && len(c) > 0 && (c[0] == 'Y') {
 			return snpProtection, nil
 		}
 	}
-	// Only choose SEV if SEV-SNP unsupported
 	// SEV is supported and enabled when the kvm module `sev` parameter is set to `1` (or `Y` for linux >= 5.12)
 	if _, err := os.Stat(sevKvmParameterPath); err == nil {
 		if c, err := os.ReadFile(sevKvmParameterPath); err == nil && len(c) > 0 && (c[0] == '1' || c[0] == 'Y') {
