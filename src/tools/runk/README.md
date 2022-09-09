@@ -60,17 +60,43 @@ are welcome.
 Regarding features compared to `runc`, see the `Status of runk` section in the [issue](https://github.com/kata-containers/kata-containers/issues/2784).
 
 ## Building
-You can build `runk` as follows.
+
+In order to enable seccomp support, you need to install the `libseccomp` library on
+your platform.
+
+> e.g. `libseccomp-dev` for Ubuntu, or `libseccomp-devel` for CentOS
+
+You can build `runk`:
 
 ```bash
 $ cd runk
 $ make
 ```
 
-To install `runk` into default directory for install executable program (`/usr/local/bin`):
+If you want to build a statically linked binary of `runk`, set the environment
+variables for the [`libseccomp` crate](https://github.com/libseccomp-rs/libseccomp-rs) and
+set the `LIBC` to `musl`:
 
 ```bash
-$ sudo make install
+$ export LIBSECCOMP_LINK_TYPE=static
+$ export LIBSECCOMP_LIB_PATH="the path of the directory containing libseccomp.a"
+$ export LIBC=musl
+$ make
+```
+
+> **Note**:
+>
+> - If the compilation fails when `runk` tries to link the `libseccomp` library statically
+>   against `musl`, you will need to build the `libseccomp` manually with `-U_FORTIFY_SOURCE`.
+>   For the details, see [our script](https://github.com/kata-containers/kata-containers/blob/main/ci/install_libseccomp.sh)
+>   to install the `libseccomp` for the agent.
+> - On `ppc64le` and `s390x`, `glibc` should be used even if `LIBC=musl` is specified.
+> - If you do not want to enable seccomp support, run `make SECCOMP=no`.
+
+To install `runk` into default directory for executable program (`/usr/local/bin`):
+
+```bash
+$ sudo -E make install
 ```
 
 ## Using `runk` directly
