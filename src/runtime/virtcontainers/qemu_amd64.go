@@ -24,6 +24,8 @@ type qemuAmd64 struct {
 	// inherit from qemuArchBase, overwrite methods if needed
 	qemuArchBase
 
+	snpGuest bool
+
 	vmFactory bool
 
 	devLoadersCount uint32
@@ -122,6 +124,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			legacySerial:         config.LegacySerial,
 		},
 		vmFactory: factory,
+		snpGuest:  config.SevSnpGuest,
 	}
 
 	if config.ConfidentialGuest {
@@ -176,7 +179,7 @@ func (q *qemuAmd64) cpuModel() string {
 	// Temporary until QEMU cpu model 'host' supports AMD SEV-SNP
 	protection, err := availableGuestProtection()
 	if err == nil {
-		if protection == snpProtection {
+		if protection == snpProtection && q.snpGuest {
 			cpuModel = "EPYC-v4"
 		}
 	}
@@ -212,6 +215,11 @@ func (q *qemuAmd64) enableProtection() error {
 	if err != nil {
 		return err
 	}
+	// Configure SNP only if specified in config
+	if q.protection == snpProtection && !q.snpGuest {
+		q.protection = sevProtection
+	}
+
 	logger := hvLogger.WithFields(logrus.Fields{
 		"subsystem":               "qemuAmd64",
 		"machine":                 q.qemuMachine,
