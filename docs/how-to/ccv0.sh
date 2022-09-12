@@ -240,6 +240,11 @@ build_and_add_agent_to_rootfs() {
 }
 
 build_a_custom_kata_agent() {
+    # Install libseccomp for static linking
+    sudo -E PATH=$PATH GOPATH=$GOPATH ${katacontainers_repo_dir}/ci/install_libseccomp.sh /tmp/kata-libseccomp /tmp/kata-gperf
+    export LIBSECCOMP_LINK_TYPE=static
+    export LIBSECCOMP_LIB_PATH=/tmp/kata-libseccomp/lib
+
     . "$HOME/.cargo/env"
     pushd ${katacontainers_repo_dir}/src/agent
     sudo -E PATH=$PATH make
