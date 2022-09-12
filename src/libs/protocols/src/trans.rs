@@ -421,6 +421,7 @@ impl From<oci::Spec> for crate::oci::Spec {
             Process: from_option(from.process),
             Root: from_option(from.root),
             Hostname: from.hostname,
+            Domainname: from.domainname,
             Mounts: from_vec(from.mounts),
             Hooks: from_option(from.hooks),
             Annotations: from.annotations,
