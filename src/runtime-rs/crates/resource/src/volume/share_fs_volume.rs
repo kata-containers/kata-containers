@@ -138,7 +138,6 @@ fn is_host_device(dest: &str) -> bool {
 }
 
 // Note, don't generate random name, attaching rafs depends on the predictable name.
-// If template_mnt is passed, just use existed name in it
 pub fn generate_mount_path(id: &str, file_name: &str) -> String {
     let mut nid = String::from(id);
     if nid.len() > 10 {
