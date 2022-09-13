@@ -66,6 +66,16 @@ setup() {
 teardown() {
 	teardown_common
 
+	# Print the logs
+	echo "-- Kata, containerd, crio logs:"
+	# Note - with image-rs we can hit much more that the default 1000 lines of logs
+	local cmd="journalctl -x"
+	for syslog_id in kata containerd crio;do
+		cmd+=" -t \"$syslog_id\""
+	done
+	cmd+=" --since \"$test_start_time\" -n 100000"
+	eval ${cmd}
+
 	# Restore the original guest image file.
 	new_guest_img "$saved_img" || true
 	rm -f "$saved_img"

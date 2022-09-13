@@ -63,6 +63,6 @@ assert_logs_contain() {
 	for syslog_id in kata containerd crio;do
 		cmd+=" -t \"$syslog_id\""
 	done
-	cmd+=" --since \"$test_start_time\""
+	cmd+=" --since \"$test_start_time\" -n 100000"
 	eval $cmd | grep "$message"
 }

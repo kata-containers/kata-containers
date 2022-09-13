@@ -90,5 +90,6 @@ teardown() {
 
 	# Print the logs and cleanup resources.
 	echo "-- Kata logs:"
-	sudo journalctl -xe -t kata --since "$test_start_time"
+	# Note - with image-rs we hit more that the default 1000 lines of logs
+	sudo journalctl -xe -t kata --since "$test_start_time" -n 100000 
 }
