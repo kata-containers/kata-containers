@@ -304,6 +304,8 @@ func archHostCanCreateVMContainer(hypervisorType vc.HypervisorType) error {
 		return kvmIsUsable()
 	case "acrn":
 		return acrnIsUsable()
+	case "remote":
+		return nil
 	case "mock":
 		return nil
 	default:

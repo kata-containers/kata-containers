@@ -52,6 +52,7 @@ const (
 	qemuHypervisorTableType        = "qemu"
 	acrnHypervisorTableType        = "acrn"
 	dragonballHypervisorTableType  = "dragonball"
+	remoteHypervisorTableType      = "remote"
 
 	// the maximum amount of PCI bridges that can be cold plugged in a VM
 	maxPCIBridges uint32 = 5
@@ -106,6 +107,7 @@ type hypervisor struct {
 	GuestPreAttestationSecretType  string   `toml:"guest_pre_attestation_secret_type"`
 	SEVCertChainPath               string   `toml:"sev_cert_chain"`
 	BlockDeviceAIO                 string   `toml:"block_device_aio"`
+	RemoteHypervisorSocket         string   `toml:"remote_hypervisor_socket"`
 	HypervisorPathList             []string `toml:"valid_hypervisor_paths"`
 	JailerPathList                 []string `toml:"valid_jailer_paths"`
 	CtlPathList                    []string `toml:"valid_ctlpaths"`
@@ -137,6 +139,7 @@ type hypervisor struct {
 	PCIeRootPort                   uint32   `toml:"pcie_root_port"`
 	GuestPreAttestationGRPCTimeout uint32   `toml:"guest_pre_attestation_grpc_timeout"`
 	SEVGuestPolicy                 uint32   `toml:"sev_guest_policy"`
+	RemoteHypervisorTimeout        uint32   `toml:"remote_hypervisor_timeout"`
 	NumVCPUs                       int32    `toml:"default_vcpus"`
 	BlockDeviceCacheSet            bool     `toml:"block_device_cache_set"`
 	BlockDeviceCacheDirect         bool     `toml:"block_device_cache_direct"`
@@ -1052,6 +1055,17 @@ func newDragonballHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	}, nil
 }
 
+func newRemoteHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
+
+	return vc.HypervisorConfig{
+		RemoteHypervisorSocket:  h.RemoteHypervisorSocket,
+		RemoteHypervisorTimeout: h.RemoteHypervisorTimeout,
+
+		// No valid value so avoid to append block device to list in kata_agent.appendDevices
+		BlockDeviceDriver: "dummy",
+	}, nil
+}
+
 func newFactoryConfig(f factory) (oci.FactoryConfig, error) {
 	if f.TemplatePath == "" {
 		f.TemplatePath = defaultTemplatePath
@@ -1088,6 +1102,9 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 		case dragonballHypervisorTableType:
 			config.HypervisorType = vc.DragonballHypervisor
 			hConfig, err = newDragonballHypervisorConfig(hypervisor)
+		case remoteHypervisorTableType:
+			config.HypervisorType = vc.RemoteHypervisor
+			hConfig, err = newRemoteHypervisorConfig(hypervisor)
 		}
 
 		if err != nil {
@@ -1638,6 +1655,11 @@ func checkFactoryConfig(config oci.RuntimeConfig) error {
 // checkHypervisorConfig performs basic "sanity checks" on the hypervisor
 // config.
 func checkHypervisorConfig(config vc.HypervisorConfig) error {
+
+	if config.RemoteHypervisorSocket != "" {
+		return nil
+	}
+
 	type image struct {
 		path   string
 		initrd bool

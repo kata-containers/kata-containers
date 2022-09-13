@@ -11,6 +11,10 @@ import (
 
 func validateHypervisorConfig(conf *HypervisorConfig) error {
 
+	if conf.RemoteHypervisorSocket != "" {
+		return nil
+	}
+
 	if conf.KernelPath == "" {
 		return fmt.Errorf("Missing kernel path")
 	}
