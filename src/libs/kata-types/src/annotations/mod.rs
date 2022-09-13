@@ -383,17 +383,17 @@ impl Annotation {
     }
 
     /// Get the annotation of cpu quota for sandbox
-    pub fn get_sandbox_cpu_quota(&self) -> u64 {
+    pub fn get_sandbox_cpu_quota(&self) -> i64 {
         let value = self
-            .get_value::<u64>(SANDBOX_CPU_QUOTA_KEY)
+            .get_value::<i64>(SANDBOX_CPU_QUOTA_KEY)
             .unwrap_or(Some(0));
         value.unwrap_or(0)
     }
 
     /// Get the annotation of cpu period for sandbox
-    pub fn get_sandbox_cpu_period(&self) -> i64 {
+    pub fn get_sandbox_cpu_period(&self) -> u64 {
         let value = self
-            .get_value::<i64>(SANDBOX_CPU_PERIOD_KEY)
+            .get_value::<u64>(SANDBOX_CPU_PERIOD_KEY)
             .unwrap_or(Some(0));
         value.unwrap_or(0)
     }
