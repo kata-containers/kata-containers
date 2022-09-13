@@ -92,6 +92,7 @@ options:
 	cc-rootfs-image
 	cc-shimv2
 	cc-virtiofsd
+	cc-sev-ovmf
 EOF
 
 	exit "${return_code}"
@@ -205,6 +206,10 @@ install_cc_tee_ovmf() {
 
 install_cc_tdx_tdvf() {
 	install_cc_tee_ovmf "tdx" "edk2-staging-tdx.tar.gz"
+}
+
+install_cc_sev_ovmf(){
+ 	install_cc_tee_ovmf "sev" "edk2-sev.tar.gz"
 }
 
 #Install guest image
@@ -334,6 +339,8 @@ handle_build() {
 	cc-tdx-td-shim) install_cc_tdx_td_shim ;;
 
 	cc-tdx-tdvf) install_cc_tdx_tdvf ;;
+
+	cc-sev-ovmf) install_cc_sev_ovmf ;;
 
 	cloud-hypervisor) install_clh ;;
 
