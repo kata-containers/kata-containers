@@ -1061,13 +1061,26 @@ func (q *qemu) cleanupVM() error {
 	if rootless.IsRootless() {
 		u, err := user.LookupId(strconv.Itoa(int(q.config.Uid)))
 		if err != nil {
-			q.Logger().WithError(err).WithField("uid", q.config.Uid).Warn("failed to find the user")
+			q.Logger().WithError(err).WithFields(
+				logrus.Fields{
+					"user": u.Username,
+					"uid":  q.config.Uid,
+				}).Warn("failed to find the user")
 			return nil
 		}
 
 		if err := pkgUtils.RemoveVmmUser(u.Username); err != nil {
-			q.Logger().WithError(err).WithField("user", u.Username).Warn("failed to delete the user")
+			q.Logger().WithError(err).WithFields(
+				logrus.Fields{
+					"user": u.Username,
+					"uid":  q.config.Uid,
+				}).Warn("failed to delete the user")
 		}
+		q.Logger().WithFields(
+			logrus.Fields{
+				"user": u.Username,
+				"uid":  q.config.Uid,
+			}).Debug("successfully removed the non root user")
 	}
 
 	return nil
