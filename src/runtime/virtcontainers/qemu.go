@@ -110,6 +110,8 @@ type qemu struct {
 	nvdimmCount int
 
 	stopped bool
+
+	mu sync.Mutex
 }
 
 const (
@@ -968,6 +970,8 @@ func (q *qemu) waitVM(ctx context.Context, timeout int) error {
 
 // StopVM will stop the Sandbox's VM.
 func (q *qemu) StopVM(ctx context.Context, waitOnly bool) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
 	span, _ := katatrace.Trace(ctx, q.Logger(), "StopVM", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
