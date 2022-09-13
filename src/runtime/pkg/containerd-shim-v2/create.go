@@ -335,6 +335,7 @@ func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig, sandboxId stri
 		return err
 	}
 	runtimeConfig.HypervisorConfig.Uid = uint32(uid)
+	runtimeConfig.HypervisorConfig.User = userName
 	runtimeConfig.HypervisorConfig.Gid = uint32(gid)
 	shimLog.WithFields(logrus.Fields{
 		"user_name":  userName,
