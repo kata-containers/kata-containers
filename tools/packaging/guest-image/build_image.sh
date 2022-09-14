@@ -17,6 +17,9 @@ readonly packaging_root_dir="$(cd "${script_dir}/../" && pwd)"
 readonly repo_root_dir="$(cd "${script_dir}/../../../" && pwd)"
 readonly osbuilder_dir="$(cd "${repo_root_dir}/tools/osbuilder" && pwd)"
 
+patches_path=""
+readonly default_patches_dir="${packaging_root_dir}/kernel/patches"
+
 export GOPATH=${GOPATH:-${HOME}/go}
 source "${packaging_root_dir}/scripts/lib.sh"
 
@@ -32,7 +35,17 @@ build_initrd() {
 	export USE_DOCKER=1
 	export AGENT_INIT="yes"
 	# ROOTFS_BUILD_DEST is a Make variable
-	sudo -E PATH="$PATH" make rootfs ROOTFS_BUILD_DEST="${rootfs_build_dest}"
+
+	if [ -z "${AA_KBC}" == "offline_sev_kbc" ]; then
+		config_version=$(get_config_version)
+		kernel_version="$(get_from_kata_deps "assets.kernel.sev.version")"
+		kernel_version=${kernel_version#v}
+		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/cc-sev-kernel/builddir/kata-linux-${kernel_version}-${config_version}/lib/modules/${kernel_version}"
+		sudo -E PATH="$PATH" make rootfs ROOTFS_BUILD_DEST="${rootfs_build_dest}" KERNEL_MODULES_DIR="${module_dir}"
+	else
+		sudo -E PATH="$PATH" make rootfs ROOTFS_BUILD_DEST="${rootfs_build_dest}"
+	fi
+
 	if [ -n "${INCLUDE_ROOTFS:-}" ]; then
 		sudo cp -RL --preserve=mode "${INCLUDE_ROOTFS}/." "${rootfs_build_dest}/${initrd_distro}_rootfs/"
 	fi
