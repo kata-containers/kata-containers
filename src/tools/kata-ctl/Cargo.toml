@@ -11,7 +11,8 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.31"
-clap = "2.33.0"
+clap = { version = "3.2.20", features = ["derive", "cargo"] }
+thiserror = "1.0.35"
 
 [dev-dependencies]
 semver = "1.0.12"

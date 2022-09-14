@@ -17,7 +17,7 @@ pub mod s390x;
 #[cfg(target_arch = "x86_64")]
 pub mod x86_64;
 
-pub fn check(global_args: clap::ArgMatches) -> Result<()> {
+pub fn check() -> Result<()> {
     #[cfg(target_arch = "aarch64")]
     let result = aarch64::check();
 
@@ -28,7 +28,7 @@ pub fn check(global_args: clap::ArgMatches) -> Result<()> {
     let result = s390x::check();
 
     #[cfg(target_arch = "x86_64")]
-    let result = x86_64::check(global_args);
+    let result = x86_64::check();
 
     #[cfg(not(any(
         target_arch = "aarch64",
