@@ -90,7 +90,7 @@ options:
 	cc-qemu
 	cc-tdx-qemu
 	cc-rootfs-image
-	cc-sev-initrd-image
+	cc-sev-rootfs-initrd
 	cc-shimv2
 	cc-virtiofsd
 	cc-sev-ovmf
@@ -335,7 +335,7 @@ handle_build() {
 
 	cc-rootfs-image) install_cc_image ;;
 
-	cc-sev-initrd-image) install_cc_sev_image ;;
+	cc-sev-rootfs-initrd) install_cc_sev_image ;;
 
 	cc-shim-v2) install_cc_shimv2 ;;
 
