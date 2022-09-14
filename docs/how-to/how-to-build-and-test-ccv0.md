@@ -49,7 +49,7 @@ $ chmod u+x ccv0.sh
   or [Kubernetes](#using-kubernetes-for-end-to-end-provisioning-of-a-kata-confidential-containers-pod-with-an-unencrypted-image)
   and then test and use it. 
 
-### Using `crictl` for end-to-end provisioning of a Kata confidential containers pod with an unencrypted image
+### Using crictl for end-to-end provisioning of a Kata confidential containers pod with an unencrypted image
 
 - Run the full build process with Kubernetes turned off, so its configuration doesn't interfere with `crictl` using:
   ```bash
