@@ -20,7 +20,7 @@ COMMIT := $(if $(shell git status --porcelain --untracked-files=no 2>/dev/null |
 # Exported to allow cargo to see it
 export KATA_CTL_VERSION := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
 
-GENERATED_CODE = src/version.rs
+GENERATED_CODE = src/ops/version.rs
 
 GENERATED_REPLACEMENTS= \
     KATA_CTL_VERSION

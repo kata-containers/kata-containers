@@ -41,7 +41,7 @@ mod arch_specific {
     }
 
 
-    pub fn check(_global_args: clap::ArgMatches) -> Result<()> {
+    pub fn check() -> Result<()> {
         println!("INFO: check: x86_64");
 
         let _cpu_result = check_cpu();

@@ -86,7 +86,11 @@ pub fn check_cpu_attribs(cpu_info: &str, required_attribs: &'static [&'static st
 }
 
 pub fn run_network_checks() -> Result<()> {
-    unimplemented!("Tests using network checks not implemented");
+    Ok(())
+}
+
+pub fn check_version() -> Result<()> {
+    Ok(())
 }
 
 #[cfg(test)]
@@ -110,4 +114,3 @@ mod tests {
         assert_eq!(expected, actual);
     }
 }
-
