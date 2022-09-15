@@ -11,7 +11,6 @@ use std::{sync::Arc, vec::Vec};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::mount::Mount;
-use nix::sys::stat::{self, SFlag};
 use tokio::sync::RwLock;
 
 use crate::share_fs::ShareFs;
@@ -97,25 +96,4 @@ impl RootFsResource {
 
 fn is_single_layer_rootfs(rootfs_mounts: &[Mount]) -> bool {
     rootfs_mounts.len() == 1
-}
-
-#[allow(dead_code)]
-fn get_block_device(file_path: &str) -> Option<u64> {
-    if file_path.is_empty() {
-        return None;
-    }
-
-    match stat::stat(file_path) {
-        Ok(fstat) => {
-            if SFlag::from_bits_truncate(fstat.st_mode) == SFlag::S_IFBLK {
-                return Some(fstat.st_rdev);
-            }
-        }
-        Err(err) => {
-            error!(sl!(), "failed to stat for {} {:?}", file_path, err);
-            return None;
-        }
-    };
-
-    None
 }
