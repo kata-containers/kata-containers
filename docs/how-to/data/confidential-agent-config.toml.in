@@ -14,6 +14,7 @@ allowed = [
 "CreateContainerRequest",
 "CreateSandboxRequest",
 "DestroySandboxRequest",
+#"ExecProcessRequest",
 "GetMetricsRequest",
 "GetOOMEventRequest",
 "GuestDetailsRequest",
@@ -25,6 +26,8 @@ allowed = [
 "PullImageRequest",
 "ReadStreamRequest",
 "RemoveContainerRequest",
+#"ReseedRandomDevRequest",
+"ResizeVolumeRequest",
 "ResumeContainerRequest",
 "SetGuestDateTimeRequest",
 "SignalProcessRequest",
@@ -36,6 +39,7 @@ allowed = [
 "UpdateContainerRequest",
 "UpdateInterfaceRequest",
 "UpdateRoutesRequest",
+"VolumeStatsRequest",
 "WaitProcessRequest",
 "WriteStreamRequest"
 ]
