@@ -150,7 +150,15 @@ install_cc_shimv2() {
 	GO_VERSION="$(yq r ${versions_yaml} languages.golang.meta.newest-version)"
 	export GO_VERSION
 	export REMOVE_VMM_CONFIGS="acrn fc"
-	DESTDIR="${destdir}" PREFIX="${cc_prefix}" EXTRA_OPTS="DEFSERVICEOFFLOAD=true" "${shimv2_builder}"
+
+        extra_opts="DEFSERVICEOFFLOAD=true"
+	if [ -f "${repo_root_dir}/tools/osbuilder/root_hash.txt" ]; then
+		root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder//root_hash.txt")
+		root_measure_config="cc_rootfs_verity.scheme=dm-verity cc_rootfs_verity.hash=${root_hash}"
+		extra_opts+=" ROOTMEASURECONFIG=\"${root_measure_config}\""
+	fi
+
+	DESTDIR="${destdir}" PREFIX="${cc_prefix}" EXTRA_OPTS="${extra_opts}" "${shimv2_builder}"
 }
 
 # Install static CC virtiofsd asset
