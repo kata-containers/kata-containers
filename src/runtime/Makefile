@@ -133,6 +133,10 @@ FIRMWARETDVFVOLUMEPATH :=
 FIRMWARESEVPATH := $(PREFIXDEPS)/share/ovmf/OVMF.fd
 FIRMWARESNPPATH := $(PREFIXDEPS)/share/ovmf/OVMF.fd
 
+ROOTMEASURECONFIG ?= ""
+KERNELPARAMS += $(ROOTMEASURECONFIG)
+KERNELTDXPARAMS += $(ROOTMEASURECONFIG)
+
 # Name of default configuration file the runtime will use.
 CONFIG_FILE = configuration.toml
 

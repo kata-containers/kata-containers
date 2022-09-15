@@ -21,6 +21,8 @@ DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
 container_image="${SHIM_V2_CONTAINER_BUILDER:-$(get_shim_v2_image_name)}"
 
+EXTRA_OPTS="${EXTRA_OPTS:-""}"
+
 sudo docker pull ${container_image} || \
        	(sudo docker build  \
 		--build-arg GO_VERSION="${GO_VERSION}" \
@@ -47,12 +49,12 @@ sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${repo_root_dir}/src/runtime" \
 	"${container_image}" \
-	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch}"
+	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch} ${EXTRA_OPTS}"
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${repo_root_dir}/src/runtime" \
 	"${container_image}" \
-	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}" install"
+	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}" ${EXTRA_OPTS} install"
 
 for vmm in ${VMM_CONFIGS}; do
 	config_file="${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-${vmm}.toml"
