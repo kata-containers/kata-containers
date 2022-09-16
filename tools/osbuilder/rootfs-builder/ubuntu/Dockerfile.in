@@ -39,6 +39,7 @@ RUN apt-get update && \
     musl-tools \
     pkg-config \
     protobuf-compiler \
+    gettext-base \
     umoci
 
 # aarch64 requires this name -- link for all
