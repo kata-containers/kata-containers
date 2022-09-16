@@ -243,8 +243,12 @@ impl BootInfo {
     /// to let the original one takes priority
     pub fn add_kparams(&mut self, params: Vec<String>) {
         let mut p = params;
-        p.push(self.kernel_params.clone()); // [new_params0, new_params1, ..., original_params]
-        self.kernel_params = p.join(KERNEL_PARAM_DELIMITER);
+        if self.kernel_params.is_empty() {
+            self.kernel_params = p.join(KERNEL_PARAM_DELIMITER);
+        } else {
+            p.push(self.kernel_params.clone()); // [new_params0, new_params1, ..., original_params]
+            self.kernel_params = p.join(KERNEL_PARAM_DELIMITER);
+        }
     }
 
     /// Validate guest kernel image annotaion
@@ -1076,5 +1080,32 @@ mod tests {
 
         assert!(get_hypervisor_plugin("dragonball").is_some());
         assert!(get_hypervisor_plugin("dragonball2").is_none());
+    }
+
+    #[test]
+    fn test_add_kparams() {
+        let mut boot_info = BootInfo {
+            ..Default::default()
+        };
+        let params = vec![
+            String::from("foo"),
+            String::from("bar"),
+            String::from("baz=faz"),
+        ];
+        boot_info.add_kparams(params);
+
+        assert_eq!(boot_info.kernel_params, String::from("foo bar baz=faz"));
+
+        let new_params = vec![
+            String::from("boo=far"),
+            String::from("a"),
+            String::from("b=c"),
+        ];
+        boot_info.add_kparams(new_params);
+
+        assert_eq!(
+            boot_info.kernel_params,
+            String::from("boo=far a b=c foo bar baz=faz")
+        );
     }
 }
