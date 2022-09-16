@@ -7,6 +7,7 @@
 use anyhow::{anyhow, Result};
 
 use crate::{VM_ROOTFS_DRIVER_BLK, VM_ROOTFS_DRIVER_PMEM};
+use kata_types::config::LOG_VPORT_OPTION;
 
 // Port where the agent will send the logs. Logs are sent through the vsock in cases
 // where the hypervisor has no console.sock, i.e dragonball
@@ -60,7 +61,7 @@ impl KernelParams {
         ];
 
         if debug {
-            params.push(Param::new("agent.log_vport", VSOCK_LOGS_PORT));
+            params.push(Param::new(LOG_VPORT_OPTION, VSOCK_LOGS_PORT));
         }
 
         Self { params }

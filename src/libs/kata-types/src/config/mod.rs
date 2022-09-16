@@ -23,6 +23,7 @@ mod drop_in;
 pub mod hypervisor;
 
 pub use self::agent::Agent;
+use self::default::DEFAULT_AGENT_DBG_CONSOLE_PORT;
 pub use self::hypervisor::{
     BootInfo, DragonballConfig, Hypervisor, QemuConfig, HYPERVISOR_NAME_DRAGONBALL,
     HYPERVISOR_NAME_QEMU,
@@ -32,6 +33,24 @@ mod runtime;
 pub use self::runtime::{Runtime, RuntimeVendor, RUNTIME_NAME_VIRTCONTAINER};
 
 pub use self::agent::AGENT_NAME_KATA;
+
+// TODO: let agent use the constants here for consistency
+/// Debug console enabled flag for agent
+pub const DEBUG_CONSOLE_FLAG: &str = "agent.debug_console";
+/// Tracing enabled flag for agent
+pub const TRACE_MODE_OPTION: &str = "agent.trace";
+/// Tracing enabled
+pub const TRACE_MODE_ENABLE: &str = "true";
+/// Log level setting key for agent, if debugged mode on, set to debug
+pub const LOG_LEVEL_OPTION: &str = "agent.log";
+/// logging level: debug
+pub const LOG_LEVEL_DEBUG: &str = "debug";
+/// Option of which port will the debug console connect to
+pub const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
+/// Option of which port the agent's log will connect to
+pub const LOG_VPORT_OPTION: &str = "agent.log_vport";
+/// Option of setting the container's pipe size
+pub const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 
 /// Trait to manipulate global Kata configuration information.
 pub trait ConfigPlugin: Send + Sync {
@@ -156,18 +175,21 @@ impl TomlConfig {
         let mut kv = HashMap::new();
         if let Some(cfg) = self.agent.get(&self.runtime.agent_name) {
             if cfg.debug {
-                kv.insert("agent.log".to_string(), "debug".to_string());
+                kv.insert(LOG_LEVEL_OPTION.to_string(), LOG_LEVEL_DEBUG.to_string());
             }
             if cfg.enable_tracing {
-                kv.insert("agent.trace".to_string(), "true".to_string());
+                kv.insert(TRACE_MODE_OPTION.to_string(), TRACE_MODE_ENABLE.to_string());
             }
             if cfg.container_pipe_size > 0 {
                 let container_pipe_size = cfg.container_pipe_size.to_string();
-                kv.insert("agent.container_pipe_size".to_string(), container_pipe_size);
+                kv.insert(CONTAINER_PIPE_SIZE_OPTION.to_string(), container_pipe_size);
             }
             if cfg.debug_console_enabled {
-                kv.insert("agent.debug_console".to_string(), "".to_string());
-                kv.insert("agent.debug_console_vport".to_string(), "1026".to_string());
+                kv.insert(DEBUG_CONSOLE_FLAG.to_string(), "".to_string());
+                kv.insert(
+                    DEBUG_CONSOLE_VPORT_OPTION.to_string(),
+                    DEFAULT_AGENT_DBG_CONSOLE_PORT.to_string(),
+                );
             }
         }
         Ok(kv)
@@ -324,5 +346,29 @@ mod tests {
 
         let patterns = ["/usr/share".to_string(), "/bin/*".to_string()];
         validate_path_pattern(&patterns, "/bin/ls").unwrap();
+    }
+
+    #[test]
+    fn test_get_agent_kparams() {
+        let mut config = TomlConfig {
+            ..Default::default()
+        };
+        let agent_config = Agent {
+            debug: true,
+            enable_tracing: true,
+            container_pipe_size: 20,
+            debug_console_enabled: true,
+            ..Default::default()
+        };
+        let agent_name = "test_agent";
+        config.runtime.agent_name = agent_name.to_string();
+        config.agent.insert(agent_name.to_owned(), agent_config);
+
+        let kv = config.get_agent_kparams().unwrap();
+        assert_eq!(kv.get("agent.log").unwrap(), "debug");
+        assert_eq!(kv.get("agent.trace").unwrap(), "true");
+        assert_eq!(kv.get("agent.container_pipe_size").unwrap(), "20");
+        kv.get("agent.debug_console").unwrap();
+        assert_eq!(kv.get("agent.debug_console_vport").unwrap(), "1026"); // 1026 is the default port
     }
 }
