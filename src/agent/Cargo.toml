@@ -3,6 +3,7 @@ name = "kata-agent"
 version = "0.1.0"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
+license = "Apache-2.0"
 
 [dependencies]
 oci = { path = "../libs/oci" }
@@ -34,7 +35,7 @@ tokio = { version = "1.14.0", features = ["full"] }
 tokio-vsock = "0.3.1"
 
 netlink-sys = { version = "0.7.0", features = ["tokio_socket",]}
-rtnetlink = "0.11.0"
+rtnetlink = "0.8.0"
 netlink-packet-utils = "0.4.1"
 ipnetwork = "0.17.0"
 

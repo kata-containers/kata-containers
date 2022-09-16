@@ -128,13 +128,12 @@ get_tee_kernel() {
 
 	[ -z "${kernel_url}" ] && kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
 
-	kernel_tarball="linux-${version}.tar.gz"
-	tarball_name=$(get_from_kata_deps "assets.kernel.${tee}.tarball")
-	[ -z "$tarball_name" ] || kernel_tarball="$tarball_name"
+	local kernel_tarball="${version}.tar.gz"
 
-	if [ ! -f "${kernel_tarball}" ]; then
-	   curl --fail -OL "${kernel_url}/${kernel_tarball}"
-	fi
+	# Depending on where we're getting the terball from it may have a
+	# different name, such as linux-${version}.tar.gz or simply
+	# ${version}.tar.gz.  Let's try both before failing.
+	curl --fail -L "${kernel_url}/linux-${kernel_tarball}" -o ${kernel_tarball} || curl --fail -OL "${kernel_url}/${kernel_tarball}"
 	
 	mkdir -p ${kernel_path}
 	tar --strip-components=1 -xf ${kernel_tarball} -C ${kernel_path}

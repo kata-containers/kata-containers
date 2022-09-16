@@ -56,7 +56,11 @@ ARG QEMU_REPO
 # commit/tag/branch
 ARG QEMU_VERSION
 ARG PREFIX
+# BUILD_SUFFIX is used by the qemu-build-post.sh script to
+# properly rename non vanilla versions of the QEMU
 ARG BUILD_SUFFIX
+ARG HYPERVISOR_NAME
+ARG PKGVERSION
 ARG QEMU_DESTDIR
 ARG QEMU_TARBALL
 
@@ -78,8 +82,6 @@ RUN git clone --depth=1 "${QEMU_REPO}" qemu && \
     git fetch --depth=1 origin "${QEMU_VERSION}" && git checkout FETCH_HEAD && \
     scripts/git-submodule.sh update meson capstone && \
     /root/patch_qemu.sh "${QEMU_VERSION}" "/root/kata_qemu/patches" && \
-    [ -n "${BUILD_SUFFIX}" ] && HYPERVISOR_NAME="kata-qemu-${BUILD_SUFFIX}" || HYPERVISOR_NAME="kata-qemu" && \
-    [ -n "${BUILD_SUFFIX}" ] && PKGVERSION="kata-static-${BUILD_SUFFIX}" || PKGVERSION="kata-static" && \
     (PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s "${HYPERVISOR_NAME}" | xargs ./configure \
 	--with-pkgversion="${PKGVERSION}") && \
     make -j"$(nproc ${CI:+--ignore 1})" && \

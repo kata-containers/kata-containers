@@ -520,6 +520,11 @@ EOF
 			chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
 			chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chrony.service"
 			;;
+		"ubuntu")
+			# Fix for #4932 - Boot hang at: "A start job is running for /dev/ttyS0"
+			mkdir -p "${ROOTFS_DIR}/etc/systemd/system/getty.target.wants"
+			ln -sf "/lib/systemd/system/getty@.service" "${ROOTFS_DIR}/etc/systemd/system/getty.target.wants/getty@ttyS0.service"
+			;;
 		*)
 			chrony_conf_file="${ROOTFS_DIR}/etc/chrony.conf"
 			chrony_systemd_service="${ROOTFS_DIR}/usr/lib/systemd/system/chronyd.service"
@@ -568,6 +573,8 @@ EOF
 
 		if [ "${SECCOMP}" == "yes" ]; then
 			info "Set up libseccomp"
+			detect_libseccomp_info || \
+				die "Could not detect the required libseccomp version and url"
 			libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
 			gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
 			${script_dir}/../../../ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
@@ -597,7 +604,13 @@ EOF
 	[ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
 	OK "Agent installed"
 
-	[ "${AGENT_INIT}" == "yes" ] && setup_agent_init "${AGENT_DEST}" "${init}"
+	if [ "${AGENT_INIT}" == "yes" ]; then
+		setup_agent_init "${AGENT_DEST}" "${init}"
+	else
+		# Setup systemd service for kata-agent
+		mkdir -p "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants"
+		ln -sf "/usr/lib/systemd/system/kata-containers.target" "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants/kata-containers.target"
+	fi
 
 	info "Check init is installed"
 	[ -x "${init}" ] || [ -L "${init}" ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
