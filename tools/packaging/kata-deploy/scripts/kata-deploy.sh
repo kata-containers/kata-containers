@@ -17,6 +17,7 @@ shims=(
 	"fc"
 	"qemu"
 	"clh"
+	"dragonball"
 )
 
 default_shim="qemu"
@@ -57,6 +58,7 @@ function install_artifacts() {
 	echo "copying kata artifacts onto host"
 	cp -a /opt/kata-artifacts/opt/kata/* /opt/kata/
 	chmod +x /opt/kata/bin/*
+	chmod +x /opt/kata/runtime-rs/bin/*
 }
 
 function configure_cri_runtime() {
@@ -98,7 +100,11 @@ function configure_different_shims_base() {
 			fi
 		fi
 
-		ln -sf /opt/kata/bin/containerd-shim-kata-v2 "${shim_file}"
+		if [[ "${shim}" == "dragonball" ]]; then
+			ln -sf /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 "${shim_file}"
+		else
+			ln -sf /opt/kata/bin/containerd-shim-kata-v2 "${shim_file}"
+		fi
 		chmod +x "$shim_file"
 
 		if [ "${shim}" == "${default_shim}" ]; then
