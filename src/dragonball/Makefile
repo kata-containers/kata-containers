@@ -5,8 +5,6 @@
 default: build
 
 build:
-	# FIXME: This line will be removed when we solve the vm-memory dependency problem in Dragonball Sandbox
-	cargo update -p vm-memory:0.8.0 --precise 0.7.0
 	cargo build --all-features
 
 check: clippy format
