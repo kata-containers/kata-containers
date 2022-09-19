@@ -7,7 +7,6 @@
 use std::{path::Path, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
-use nix::sys::stat::{stat, SFlag};
 
 use super::Volume;
 use crate::share_fs::{ShareFs, ShareFsVolumeConfig};
@@ -34,44 +33,24 @@ impl ShareFsVolume {
         let mut volume = Self { mounts: vec![] };
         match share_fs {
             None => {
-                let mut need_copy = false;
-                match stat(Path::new(&m.source)) {
-                    Ok(stat) => {
-                        // Ignore the mount if this is not a regular file (excludes
-                        // directory, socket, device, ...) as it cannot be handled by
-                        // a simple copy. But this should not be treated as an error,
-                        // only as a limitation.
-                        // golang implement:
-                        // ModeType = ModeDir | ModeSymlink | ModeNamedPipe | ModeSocket |
-                        //            ModeDevice | ModeCharDevice | ModeIrregular
-                        let file_type = SFlag::S_IFDIR
-                            | SFlag::S_IFLNK
-                            | SFlag::S_IFIFO
-                            | SFlag::S_IFSOCK
-                            | SFlag::S_IFCHR
-                            | SFlag::S_IFREG;
-                        if !file_type.contains(SFlag::from_bits_truncate(stat.st_mode)) {
-                            debug!(
-                                sl!(),
-                            "Ignoring non-regular file as FS sharing not supported. mount: {:?}",
-                            m
-                        );
-                            return Ok(volume);
-                        }
-                        if SFlag::from_bits_truncate(stat.st_mode) != SFlag::S_IFDIR {
-                            need_copy = true;
-                        }
-                    }
+                let src = match std::fs::canonicalize(&m.source) {
                     Err(err) => {
                         return Err(anyhow!(format!(
-                            "failed to stat file {} {:?}",
+                            "failed to canonicalize file {} {:?}",
                             &m.source, err
-                        )));
+                        )))
                     }
+                    Ok(src) => src,
                 };
 
-                if need_copy {
+                if src.is_file() {
                     // TODO: copy file
+                    debug!(sl!(), "FIXME: copy file {}", &m.source);
+                } else {
+                    debug!(
+                        sl!(),
+                        "Ignoring non-regular file as FS sharing not supported. mount: {:?}", m
+                    );
                 }
             }
             Some(share_fs) => {
