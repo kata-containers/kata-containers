@@ -86,6 +86,7 @@ cc: cc-cloud-hypervisor-tarball \
 	cc-shim-v2-tarball \
 	cc-virtiofsd-tarball \
 	cc-tdx-kernel-tarball \
+	cc-sev-kernel-tarball \
 	cc-tdx-qemu-tarball \
 	cc-tdx-td-shim-tarball \
 	cc-tdx-tdvf-tarball \
@@ -117,6 +118,9 @@ cc-tdx-cloud-hypervisor-tarball:
 	${MAKE} $@-build
 
 cc-tdx-kernel-tarball:
+	${MAKE} $@-build
+
+cc-sev-kernel-tarball:
 	${MAKE} $@-build
 
 cc-tdx-qemu-tarball:
