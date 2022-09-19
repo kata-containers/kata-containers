@@ -40,7 +40,8 @@ RUN apt-get update && \
     pkg-config \
     protobuf-compiler \
     gettext-base \
-    umoci
+    umoci \ 
+    kmod
 
 # aarch64 requires this name -- link for all
 RUN ln -s /usr/bin/musl-gcc "/usr/bin/$(uname -m)-linux-musl-gcc"
