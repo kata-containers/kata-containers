@@ -252,19 +252,28 @@ fn set_devices_resources(
 }
 
 fn set_hugepages_resources(
-    _cg: &cgroups::Cgroup,
+    cg: &cgroups::Cgroup,
     hugepage_limits: &[LinuxHugepageLimit],
     res: &mut cgroups::Resources,
 ) {
     info!(sl!(), "cgroup manager set hugepage");
     let mut limits = vec![];
+    let hugetlb_controller = cg.controller_of::<HugeTlbController>();
 
     for l in hugepage_limits.iter() {
-        let hr = HugePageResource {
-            size: l.page_size.clone(),
-            limit: l.limit,
-        };
-        limits.push(hr);
+        if hugetlb_controller.is_some() && hugetlb_controller.unwrap().size_supported(&l.page_size)
+        {
+            let hr = HugePageResource {
+                size: l.page_size.clone(),
+                limit: l.limit,
+            };
+            limits.push(hr);
+        } else {
+            warn!(
+                sl!(),
+                "{} page size support cannot be verified, dropping requested limit", l.page_size
+            );
+        }
     }
     res.hugepages.limits = limits;
 }
