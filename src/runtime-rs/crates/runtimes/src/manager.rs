@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::sync::Arc;
+use std::{str::from_utf8, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 
@@ -74,7 +74,7 @@ impl RuntimeHandlerManagerInner {
         Ok(())
     }
 
-    async fn try_init(&mut self, spec: &oci::Spec) -> Result<()> {
+    async fn try_init(&mut self, spec: &oci::Spec, options: &Option<Vec<u8>>) -> Result<()> {
         // return if runtime instance has init
         if self.runtime_instance.is_some() {
             return Ok(());
@@ -104,7 +104,7 @@ impl RuntimeHandlerManagerInner {
             None
         };
 
-        let config = load_config(spec).context("load config")?;
+        let config = load_config(spec, options).context("load config")?;
         self.init_runtime_handler(netns, Arc::new(config))
             .await
             .context("init runtime handler")?;
@@ -172,9 +172,13 @@ impl RuntimeHandlerManager {
             .ok_or_else(|| anyhow!("runtime not ready"))
     }
 
-    async fn try_init_runtime_instance(&self, spec: &oci::Spec) -> Result<()> {
+    async fn try_init_runtime_instance(
+        &self,
+        spec: &oci::Spec,
+        options: &Option<Vec<u8>>,
+    ) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.try_init(spec).await
+        inner.try_init(spec, options).await
     }
 
     pub async fn handler_message(&self, req: Request) -> Result<Response> {
@@ -183,7 +187,7 @@ impl RuntimeHandlerManager {
             let bundler_path = format!("{}/{}", req.bundle, oci::OCI_SPEC_CONFIG_FILE_NAME);
             let spec = oci::Spec::load(&bundler_path).context("load spec")?;
 
-            self.try_init_runtime_instance(&spec)
+            self.try_init_runtime_instance(&spec, &req.options)
                 .await
                 .context("try init runtime instance")?;
             let instance = self
@@ -298,12 +302,20 @@ impl RuntimeHandlerManager {
 /// 2. shimv2 create task option
 /// TODO: https://github.com/kata-containers/kata-containers/issues/3961
 /// 3. environment
-fn load_config(spec: &oci::Spec) -> Result<TomlConfig> {
+fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig> {
     const KATA_CONF_FILE: &str = "KATA_CONF_FILE";
     let annotation = Annotation::new(spec.annotations.clone());
     let config_path = if let Some(path) = annotation.get_sandbox_config_path() {
         path
     } else if let Ok(path) = std::env::var(KATA_CONF_FILE) {
+        path
+    } else if let Some(option) = option {
+        // get rid of the special characters in options to get the config path
+        let path = if option.len() > 2 {
+            from_utf8(&option[2..])?.to_string()
+        } else {
+            String::from("")
+        };
         path
     } else {
         String::from("")
