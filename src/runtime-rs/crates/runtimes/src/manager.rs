@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 
-use crate::static_resource::StaticResourceManager;
+use crate::{shim_mgmt::server::MgmtServer, static_resource::StaticResourceManager};
 use common::{
     message::Message,
     types::{Request, Response},
@@ -109,6 +109,16 @@ impl RuntimeHandlerManagerInner {
             .await
             .context("init runtime handler")?;
 
+        // the sandbox creation can reach here only once and the sandbox is created
+        // so we can safely create the shim management socket right now
+        // the unwrap here is safe because the runtime handler is correctly created
+        let shim_mgmt_svr = MgmtServer::new(
+            &self.id,
+            self.runtime_instance.as_ref().unwrap().sandbox.clone(),
+        );
+        tokio::task::spawn(Arc::new(shim_mgmt_svr).run());
+        info!(sl!(), "shim management http server starts");
+
         Ok(())
     }
 
@@ -196,6 +206,7 @@ impl RuntimeHandlerManager {
                 .create_container(req, spec)
                 .await
                 .context("create container")?;
+
             Ok(Response::CreateContainer(shim_pid))
         } else {
             self.handler_request(req).await.context("handler request")

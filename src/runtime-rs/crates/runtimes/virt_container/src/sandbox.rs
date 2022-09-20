@@ -262,6 +262,10 @@ impl Sandbox for VirtSandbox {
         // TODO: cleanup other snadbox resource
         Ok(())
     }
+
+    async fn agent_sock(&self) -> Result<String> {
+        self.agent.agent_sock().await
+    }
 }
 
 #[async_trait]
