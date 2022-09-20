@@ -324,6 +324,9 @@ fn load_config(spec: &oci::Spec) -> Result<TomlConfig> {
         TomlConfig::load_from_file(&config_path).context("load toml config")?;
     annotation.update_config_by_annotation(&mut toml_config)?;
 
+    // validate configuration and return the error
+    toml_config.validate()?;
+
     // Sandbox sizing information *may* be provided in two scenarios:
     //   1. The upper layer runtime (ie, containerd or crio) provide sandbox sizing information as an annotation
     //	in the 'sandbox container's' spec. This would typically be a scenario where as part of a create sandbox
