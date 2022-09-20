@@ -127,6 +127,11 @@ impl KataAgent {
         inner.log_forwarder.stop();
     }
 
+    pub(crate) async fn agent_sock(&self) -> Result<String> {
+        let inner = self.inner.lock().await;
+        Ok(inner.socket_address.clone())
+    }
+
     pub(crate) async fn agent_config(&self) -> AgentConfig {
         let inner = self.inner.lock().await;
         inner.config.clone()
