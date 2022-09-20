@@ -117,11 +117,9 @@ install_cc_clh() {
 install_cc_image() {
 	export AA_KBC="${1:-offline_fs_kbc}"
 	image_type="${2:-image}"
-	export SKOPEO="${SKOPEO:-yes}"
-	export UMOCI=yes
 	export KATA_BUILD_CC=yes
 
-	info "Create CC image configured with SKOPEO=${SKOPEO} UMOCI=${UMOCI} AA_KBC=${AA_KBC}"
+	info "Create CC image configured with AA_KBC=${AA_KBC}"
 	"${rootfs_builder}" --imagetype="${image_type}" --prefix="${cc_prefix}" --destdir="${destdir}"
 }
 
