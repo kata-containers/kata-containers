@@ -171,7 +171,7 @@ impl TomlConfig {
     }
 
     /// Get agent-specfic kernel parameters for further Hypervisor config revision
-    pub fn get_agent_kparams(&self) -> Result<HashMap<String, String>> {
+    pub fn get_agent_kernel_params(&self) -> Result<HashMap<String, String>> {
         let mut kv = HashMap::new();
         if let Some(cfg) = self.agent.get(&self.runtime.agent_name) {
             if cfg.debug {
@@ -349,7 +349,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_agent_kparams() {
+    fn test_get_agent_kernel_params() {
         let mut config = TomlConfig {
             ..Default::default()
         };
@@ -364,7 +364,7 @@ mod tests {
         config.runtime.agent_name = agent_name.to_string();
         config.agent.insert(agent_name.to_owned(), agent_config);
 
-        let kv = config.get_agent_kparams().unwrap();
+        let kv = config.get_agent_kernel_params().unwrap();
         assert_eq!(kv.get("agent.log").unwrap(), "debug");
         assert_eq!(kv.get("agent.trace").unwrap(), "true");
         assert_eq!(kv.get("agent.container_pipe_size").unwrap(), "20");
