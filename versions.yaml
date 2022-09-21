@@ -295,12 +295,12 @@ languages:
     issue: "https://github.com/golang/go/issues/20676"
     uscan-url: >-
       https://github.com/golang/go/tags .*/go?([\d\.]+)\.tar\.gz
-    version: "1.16.10"
+    version: "1.18.6"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.17.3"
+      newest-version: "1.19.1"
 
   rust:
     description: "Rust language"
