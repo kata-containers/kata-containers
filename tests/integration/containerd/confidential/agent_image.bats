@@ -34,8 +34,10 @@ setup() {
 @test "$test_tag Test can pull a unencrypted signed image from a protected registry" {
 	local container_config="${FIXTURES_DIR}/container-config.yaml"
 
-	add_kernel_params \
-		"agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
+	if [ "${SKOPEO:-}" = "yes" ]; then
+		add_kernel_params \
+			"agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
+	fi
 
 	create_test_pod
 
@@ -45,8 +47,10 @@ setup() {
 @test "$test_tag Test cannot pull an unencrypted unsigned image from a protected registry" {
 	local container_config="${FIXTURES_DIR}/container-config_unsigned-protected.yaml"
 
-	add_kernel_params \
-		"agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
+	if [ "${SKOPEO:-}" = "yes" ]; then
+		add_kernel_params \
+			"agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
+	fi
 
 	create_test_pod
 
@@ -61,8 +65,10 @@ setup() {
 @test "$test_tag Test can pull an unencrypted unsigned image from an unprotected registry" {
 	local container_config="${FIXTURES_DIR}/container-config_unsigned-unprotected.yaml"
 
-	add_kernel_params \
-		"agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
+	if [ "${SKOPEO:-}" = "yes" ]; then
+		add_kernel_params \
+			"agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
+	fi
 
 	create_test_pod
 
@@ -72,8 +78,10 @@ setup() {
 @test "$test_tag Test unencrypted signed image with unknown signature is rejected" {
 	local container_config="${FIXTURES_DIR}/container-config_signed-protected-other.yaml"
 
-	add_kernel_params \
-		"agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
+	if [ "${SKOPEO:-}" = "yes" ]; then
+		add_kernel_params \
+			"agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
+	fi
 
 	create_test_pod
 
