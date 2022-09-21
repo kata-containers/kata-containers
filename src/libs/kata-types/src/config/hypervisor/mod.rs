@@ -241,14 +241,12 @@ impl BootInfo {
 
     /// Add kernel parameters to bootinfo. It is always added before the original
     /// to let the original one takes priority
-    pub fn add_kparams(&mut self, params: Vec<String>) {
+    pub fn add_kernel_params(&mut self, params: Vec<String>) {
         let mut p = params;
-        if self.kernel_params.is_empty() {
-            self.kernel_params = p.join(KERNEL_PARAM_DELIMITER);
-        } else {
+        if !self.kernel_params.is_empty() {
             p.push(self.kernel_params.clone()); // [new_params0, new_params1, ..., original_params]
-            self.kernel_params = p.join(KERNEL_PARAM_DELIMITER);
         }
+        self.kernel_params = p.join(KERNEL_PARAM_DELIMITER);
     }
 
     /// Validate guest kernel image annotaion
@@ -1083,7 +1081,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_kparams() {
+    fn test_add_kernel_params() {
         let mut boot_info = BootInfo {
             ..Default::default()
         };
@@ -1092,7 +1090,7 @@ mod tests {
             String::from("bar"),
             String::from("baz=faz"),
         ];
-        boot_info.add_kparams(params);
+        boot_info.add_kernel_params(params);
 
         assert_eq!(boot_info.kernel_params, String::from("foo bar baz=faz"));
 
@@ -1101,7 +1099,7 @@ mod tests {
             String::from("a"),
             String::from("b=c"),
         ];
-        boot_info.add_kparams(new_params);
+        boot_info.add_kernel_params(new_params);
 
         assert_eq!(
             boot_info.kernel_params,
