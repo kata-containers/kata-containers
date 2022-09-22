@@ -380,6 +380,9 @@ type HypervisorConfig struct {
 	// BlockiDeviceAIO specifies the I/O API to be used.
 	BlockDeviceAIO string
 
+	// The user maps to the uid.
+	User string
+
 	// KernelParams are additional guest kernel parameters.
 	KernelParams []Param
 
