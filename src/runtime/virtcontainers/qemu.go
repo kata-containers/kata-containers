@@ -1913,6 +1913,7 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 		}
 
 		if err := q.qmpMonitorCh.qmp.ExecuteCPUDeviceAdd(q.qmpMonitorCh.ctx, driver, cpuID, socketID, dieID, coreID, threadID, romFile); err != nil {
+			q.Logger().WithField("hotplug", "cpu").Warnf("qmp hotplug cpu, cpuID=%s socketID=%s, error: %v", cpuID, socketID, err)
 			// don't fail, let's try with other CPU
 			continue
 		}
