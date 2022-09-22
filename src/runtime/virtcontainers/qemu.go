@@ -110,6 +110,8 @@ type qemu struct {
 	nvdimmCount int
 
 	stopped bool
+
+	mu sync.Mutex
 }
 
 const (
@@ -678,7 +680,7 @@ func (q *qemu) checkBpfEnabled() {
 			q.Logger().WithError(err).Warningf("failed to get bpf_jit_enable status")
 			return
 		}
-		enabled, err := strconv.Atoi(string(out))
+		enabled, err := strconv.Atoi(strings.TrimSpace(string(out)))
 		if err != nil {
 			q.Logger().WithError(err).Warningf("failed to convert bpf_jit_enable status to integer")
 			return
@@ -968,6 +970,8 @@ func (q *qemu) waitVM(ctx context.Context, timeout int) error {
 
 // StopVM will stop the Sandbox's VM.
 func (q *qemu) StopVM(ctx context.Context, waitOnly bool) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
 	span, _ := katatrace.Trace(ctx, q.Logger(), "StopVM", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
@@ -1059,15 +1063,27 @@ func (q *qemu) cleanupVM() error {
 	}
 
 	if rootless.IsRootless() {
-		u, err := user.LookupId(strconv.Itoa(int(q.config.Uid)))
-		if err != nil {
-			q.Logger().WithError(err).WithField("uid", q.config.Uid).Warn("failed to find the user")
+		if _, err := user.Lookup(q.config.User); err != nil {
+			q.Logger().WithError(err).WithFields(
+				logrus.Fields{
+					"user": q.config.User,
+					"uid":  q.config.Uid,
+				}).Warn("failed to find the user, it might have been removed")
 			return nil
 		}
 
-		if err := pkgUtils.RemoveVmmUser(u.Username); err != nil {
-			q.Logger().WithError(err).WithField("user", u.Username).Warn("failed to delete the user")
+		if err := pkgUtils.RemoveVmmUser(q.config.User); err != nil {
+			q.Logger().WithError(err).WithFields(
+				logrus.Fields{
+					"user": q.config.User,
+					"uid":  q.config.Uid,
+				}).Warn("failed to delete the user")
 		}
+		q.Logger().WithFields(
+			logrus.Fields{
+				"user": q.config.User,
+				"uid":  q.config.Uid,
+			}).Debug("successfully removed the non root user")
 	}
 
 	return nil
