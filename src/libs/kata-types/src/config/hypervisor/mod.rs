@@ -320,7 +320,7 @@ impl CpuInfo {
     }
 }
 
-/// Configuration information for shared filesystem, such virtio-9p and virtio-fs.
+/// Configuration information for debug
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct DebugInfo {
     /// This option changes the default hypervisor and kernel parameters to enable debug output
@@ -596,7 +596,7 @@ impl MemoryInfo {
     }
 }
 
-/// Configuration information for virtual machine.
+/// Configuration information for network.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct NetworkInfo {
     /// If vhost-net backend for virtio-net is not desired, set to true.
@@ -638,7 +638,7 @@ impl NetworkInfo {
     }
 }
 
-/// Configuration information for virtual machine.
+/// Configuration information for security.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct SecurityInfo {
     /// Enable running QEMU VMM as a non-root user.
