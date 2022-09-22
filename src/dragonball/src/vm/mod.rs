@@ -67,7 +67,7 @@ pub enum VmError {
 }
 
 /// Configuration information for user defined NUMA nodes.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NumaRegionInfo {
     /// memory size for this region (unit: MiB)
     pub size: u64,
@@ -80,7 +80,7 @@ pub struct NumaRegionInfo {
 }
 
 /// Information for cpu topology to guide guest init
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CpuTopology {
     /// threads per core to indicate hyperthreading is enabled or not
     pub threads_per_core: u8,
@@ -104,7 +104,7 @@ impl Default for CpuTopology {
 }
 
 /// Configuration information for virtual machine instance.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VmConfigInfo {
     /// Number of vcpu to start.
     pub vcpu_count: u8,

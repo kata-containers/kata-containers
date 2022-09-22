@@ -46,7 +46,7 @@ pub trait ConfigItem {
 }
 
 /// Struct to manage a group of configuration items.
-#[derive(Debug, Default, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 pub struct ConfigInfos<T>
 where
     T: ConfigItem + Clone,
@@ -316,7 +316,7 @@ where
 }
 
 /// Configuration information for RateLimiter token bucket.
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 pub struct TokenBucketConfigInfo {
     /// The size for the token bucket. A TokenBucket of `size` total capacity will take `refill_time`
     /// milliseconds to go from zero tokens to total capacity.
@@ -349,7 +349,7 @@ impl From<&TokenBucketConfigInfo> for TokenBucket {
 }
 
 /// Configuration information for RateLimiter objects.
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 pub struct RateLimiterConfigInfo {
     /// Data used to initialize the RateLimiter::bandwidth bucket.
     pub bandwidth: TokenBucketConfigInfo,
