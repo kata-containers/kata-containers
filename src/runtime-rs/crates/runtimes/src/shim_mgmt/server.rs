@@ -16,6 +16,7 @@ use std::{fs, path::Path, sync::Arc};
 use anyhow::{Context, Result};
 use common::Sandbox;
 use hyper::{server::conn::Http, service::service_fn};
+use persist::KATA_PATH;
 use tokio::net::UnixListener;
 
 use super::handlers::handler_mux;
@@ -76,7 +77,7 @@ impl MgmtServer {
 
 // return sandbox's storage path
 pub fn sb_storage_path() -> String {
-    String::from("/run/kata")
+    String::from(KATA_PATH)
 }
 
 // returns the address of the unix domain socket(UDS) for communication with shim
