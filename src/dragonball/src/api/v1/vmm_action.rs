@@ -89,7 +89,7 @@ pub enum VmmActionError {
 
 /// This enum represents the public interface of the VMM. Each action contains various
 /// bits of information (ids, paths, etc.).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum VmmAction {
     /// Configure the boot source of the microVM using `BootSourceConfig`.
     /// This action can only be called before the microVM has booted.
@@ -298,7 +298,6 @@ impl VmmService {
         let mut cmdline = linux_loader::cmdline::Cmdline::new(dbs_boot::layout::CMDLINE_MAX_SIZE);
         let boot_args = boot_source_config
             .boot_args
-            .clone()
             .unwrap_or_else(|| String::from(DEFAULT_KERNEL_CMDLINE));
         cmdline
             .insert_str(boot_args)
@@ -681,7 +680,7 @@ mod tests {
 
             let response = from_vmm.try_recv();
             assert!(response.is_ok());
-            (&self.f)(*response.unwrap());
+            (self.f)(*response.unwrap());
         }
     }
 

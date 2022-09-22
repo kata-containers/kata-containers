@@ -93,7 +93,7 @@ pub enum VirtioNetDeviceError {
 }
 
 /// Configuration information for virtio net devices.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub struct VirtioNetDeviceConfigUpdateInfo {
     /// ID of the guest network interface.
     pub iface_id: String,
@@ -123,7 +123,7 @@ impl VirtioNetDeviceConfigUpdateInfo {
 }
 
 /// Configuration information for virtio net devices.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Default)]
 pub struct VirtioNetDeviceConfigInfo {
     /// ID of the guest network interface.
     pub iface_id: String,
@@ -264,7 +264,7 @@ impl VirtioNetDeviceMgr {
                         config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
                     )
                     .map_err(VirtioNetDeviceError::DeviceManager)?;
-                    ctx.insert_hotplug_mmio_device(&dev.clone(), None)
+                    ctx.insert_hotplug_mmio_device(&dev, None)
                         .map_err(VirtioNetDeviceError::DeviceManager)?;
                     // live-upgrade need save/restore device from info.device.
                     mgr.info_list[device_index].set_device(dev);

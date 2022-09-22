@@ -18,7 +18,7 @@ pub const DEFAULT_KERNEL_CMDLINE: &str = "reboot=k panic=1 pci=off nomodules 825
                                           i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd";
 
 /// Strongly typed data structure used to configure the boot source of the microvm.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct BootSourceConfig {
     /// Path of the kernel image.

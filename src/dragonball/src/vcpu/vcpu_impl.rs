@@ -533,16 +533,11 @@ impl Vcpu {
     fn check_io_port_info(&self, addr: u16, data: &[u8]) -> Result<bool> {
         let mut checked = false;
 
-        match addr {
-            // debug info signal
-            MAGIC_IOPORT_DEBUG_INFO => {
-                if data.len() == 4 {
-                    let data = unsafe { std::ptr::read(data.as_ptr() as *const u32) };
-                    log::warn!("KDBG: guest kernel debug info: 0x{:x}", data);
-                    checked = true;
-                }
-            }
-            _ => {}
+        // debug info signal
+        if addr == MAGIC_IOPORT_DEBUG_INFO && data.len() == 4 {
+            let data = unsafe { std::ptr::read(data.as_ptr() as *const u32) };
+            log::warn!("KDBG: guest kernel debug info: 0x{:x}", data);
+            checked = true;
         };
 
         Ok(checked)
