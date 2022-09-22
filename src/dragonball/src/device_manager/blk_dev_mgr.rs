@@ -106,7 +106,7 @@ pub enum BlockDeviceError {
 }
 
 /// Type of low level storage device/protocol for virtio-blk devices.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BlockDeviceType {
     /// Unknown low level device type.
     Unknown,
@@ -131,7 +131,7 @@ impl BlockDeviceType {
 }
 
 /// Configuration information for a block device.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub struct BlockDeviceConfigUpdateInfo {
     /// Unique identifier of the drive.
     pub drive_id: String,
@@ -151,7 +151,7 @@ impl BlockDeviceConfigUpdateInfo {
 }
 
 /// Configuration information for a block device.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub struct BlockDeviceConfigInfo {
     /// Unique identifier of the drive.
     pub drive_id: String,
@@ -625,7 +625,7 @@ impl BlockDeviceMgr {
         // we need to satisfy the condition by which a VMM can only have on root device
         if block_device_config.is_root_device {
             if self.has_root_block {
-                return Err(BlockDeviceError::RootBlockDeviceAlreadyAdded);
+                Err(BlockDeviceError::RootBlockDeviceAlreadyAdded)
             } else {
                 self.has_root_block = true;
                 self.read_only_root = block_device_config.is_read_only;
