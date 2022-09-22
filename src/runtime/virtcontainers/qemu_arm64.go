@@ -30,7 +30,7 @@ const defaultQemuMachineType = QemuVirt
 
 const qmpMigrationWaitTimeout = 10 * time.Second
 
-const defaultQemuMachineOptions = "usb=off,accel=kvm,gic-version=host"
+const defaultQemuMachineOptions = "usb=off,accel=kvm,gic-version=max"
 
 var kernelParams = []Param{
 	{"iommu.passthrough", "0"},
