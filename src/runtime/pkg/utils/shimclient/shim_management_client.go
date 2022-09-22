@@ -123,3 +123,35 @@ func DoPost(sandboxID string, timeoutInSeconds time.Duration, urlPath, contentTy
 
 	return nil
 }
+
+// DoDelete will make a DELETE request to the shim endpoint that handles the given sandbox ID
+func DoDelete(sandboxID string, timeoutInSeconds time.Duration, urlPath, contentType string, payload []byte) error {
+	client, err := BuildShimClient(sandboxID, timeoutInSeconds)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("http://shim%s", urlPath), bytes.NewBuffer(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", contentType)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		data, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("error sending post: url: %s, status code: %d, response data: %s", urlPath, resp.StatusCode, string(data))
+	}
+
+	return nil
+}

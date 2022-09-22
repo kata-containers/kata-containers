@@ -269,3 +269,15 @@ func (s *Sandbox) GetIPTables(ctx context.Context, isIPv6 bool) ([]byte, error) 
 func (s *Sandbox) SetIPTables(ctx context.Context, isIPv6 bool, data []byte) error {
 	return nil
 }
+
+func (s *Sandbox) ListDevice() []api.Device {
+	return nil
+}
+
+func (s *Sandbox) AttachDevice(ctx context.Context, devInfo config.DeviceInfo) error {
+	return nil
+}
+
+func (s *Sandbox) DetachDevice(ctx context.Context, devPath string) error {
+	return nil
+}

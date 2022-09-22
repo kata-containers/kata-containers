@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc/codes"
 
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	mutils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
@@ -39,6 +40,7 @@ const (
 	DirectVolumeResizeUrl = "/direct-volume/resize"
 	IPTablesUrl           = "/iptables"
 	IP6TablesUrl          = "/ip6tables"
+	DeviceUrl             = "/device"
 	MetricsUrl            = "/metrics"
 )
 
@@ -241,6 +243,82 @@ func (s *service) genericIPTablesHandler(w http.ResponseWriter, r *http.Request,
 	}
 }
 
+type DeviceRequest struct {
+	DevicePath string
+}
+
+func (s *service) deviceHandler(w http.ResponseWriter, r *http.Request) {
+	logger := shimMgtLog.WithFields(logrus.Fields{"handler": "device"})
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		logger.WithError(err).Error("failed to read request body")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		devices := s.sandbox.ListDevice()
+		desPaths := []string{}
+		for _, dev := range devices {
+			desPaths = append(desPaths, dev.GetHostPath())
+		}
+		res, err := json.Marshal(desPaths)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		w.Write(res)
+	case http.MethodPut:
+		var deviceReq DeviceRequest
+		err = json.Unmarshal(body, &deviceReq)
+		if err != nil {
+			logger.WithError(err).Error("Attach Device: failed to unmarshal the http request body")
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		devInfo, err := katautils.GetDeviceInfoByPath(deviceReq.DevicePath)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		err = s.sandbox.AttachDevice(context.Background(), devInfo)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		w.Write([]byte(""))
+
+	case http.MethodDelete:
+		var deviceReq DeviceRequest
+		err = json.Unmarshal(body, &deviceReq)
+		if err != nil {
+			logger.WithError(err).Error("Detach Device: failed to unmarshal the http request body")
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		err = s.sandbox.DetachDevice(context.Background(), deviceReq.DevicePath)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		w.Write([]byte(""))
+	default:
+		w.WriteHeader(http.StatusNotImplemented)
+		return
+	}
+}
+
 func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec) {
 	// metrics socket will under sandbox's bundle path
 	metricsAddress := SocketAddress(s.id)
@@ -267,6 +345,7 @@ func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec
 	m.Handle(DirectVolumeResizeUrl, http.HandlerFunc(s.serveVolumeResize))
 	m.Handle(IPTablesUrl, http.HandlerFunc(s.ipTablesHandler))
 	m.Handle(IP6TablesUrl, http.HandlerFunc(s.ip6TablesHandler))
+	m.Handle(DeviceUrl, http.HandlerFunc(s.deviceHandler))
 	s.mountPprofHandle(m, ociSpec)
 
 	// register shim metrics

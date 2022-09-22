@@ -2335,6 +2335,44 @@ func (s *Sandbox) SetIPTables(ctx context.Context, isIPv6 bool, data []byte) err
 	return s.agent.setIPTables(ctx, isIPv6, data)
 }
 
+func (s *Sandbox) ListDevice() []api.Device {
+	devices := s.devManager.GetAllDevices()
+	return devices
+}
+
+func (s *Sandbox) AttachDevice(ctx context.Context, devInfo config.DeviceInfo) error {
+	s.Logger().Infof("Attach Device %s", devInfo.HostPath)
+
+	dev, err := s.devManager.NewDevice(devInfo)
+	if err != nil {
+		return fmt.Errorf("device registration failed with device=%s: %s", devInfo.HostPath, err.Error())
+	}
+
+	return s.devManager.AttachDevice(ctx, dev.DeviceID(), s)
+}
+
+func (s *Sandbox) DetachDevice(ctx context.Context, devPath string) error {
+	s.Logger().Infof("Detach Device %s", devPath)
+	devices := s.devManager.GetAllDevices()
+	var deviceID string
+	for _, dev := range devices {
+		if dev.GetHostPath() == devPath {
+			deviceID = dev.DeviceID()
+			break
+		}
+	}
+	if deviceID == "" {
+		return fmt.Errorf("Device path=%s not attached", devPath)
+	}
+
+	err := s.devManager.DetachDevice(ctx, deviceID, s)
+	if err != nil {
+		return fmt.Errorf("detach Device path=%s, id=%s, error: %s", devPath, deviceID, err.Error())
+	}
+
+	return s.devManager.RemoveDevice(deviceID)
+}
+
 // GuestVolumeStats return the filesystem stat of a given volume in the guest.
 func (s *Sandbox) GuestVolumeStats(ctx context.Context, volumePath string) ([]byte, error) {
 	guestMountPath, err := s.guestMountPath(volumePath)
