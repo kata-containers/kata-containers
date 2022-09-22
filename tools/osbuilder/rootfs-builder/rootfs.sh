@@ -575,8 +575,8 @@ EOF
 			info "Set up libseccomp"
 			detect_libseccomp_info || \
 				die "Could not detect the required libseccomp version and url"
-			libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
-			gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
+			export libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
+			export gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
 			${script_dir}/../../../ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
 			echo "Set environment variables for the libseccomp crate to link the libseccomp library statically"
 			export LIBSECCOMP_LINK_TYPE=static
