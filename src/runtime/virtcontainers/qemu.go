@@ -2159,6 +2159,10 @@ func (q *qemu) Disconnect(ctx context.Context) {
 	q.qmpShutdown()
 }
 
+func (q *qemu) GetTotalMemoryMB(ctx context.Context) uint32 {
+	return q.config.MemorySize + uint32(q.state.HotpluggedMemory)
+}
+
 // ResizeMemory gets a request to update the VM memory to reqMemMB
 // Memory update is managed with two approaches
 // Add memory to VM:
@@ -2172,7 +2176,7 @@ func (q *qemu) Disconnect(ctx context.Context) {
 // A longer term solution is evaluate solutions like virtio-mem
 func (q *qemu) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
 
-	currentMemory := q.config.MemorySize + uint32(q.state.HotpluggedMemory)
+	currentMemory := q.GetTotalMemoryMB(ctx)
 	if err := q.qmpSetup(); err != nil {
 		return 0, MemoryDevice{}, err
 	}

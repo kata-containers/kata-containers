@@ -75,6 +75,14 @@ const (
 
 	// Restricted permission for shared directory managed by virtiofs
 	sharedDirMode = os.FileMode(0700) | os.ModeDir
+
+	// hotplug factor indicates how much memory can be hotplugged relative to the amount of
+	// RAM provided to the guest. This is a conservative heuristic based on needing 64 bytes per
+	// 4KiB page of hotplugged memory.
+	//
+	// As an example: 12 GiB hotplugged -> 3 Mi pages -> 192 MiBytes overhead (3Mi x 64B).
+	// This is approximately what should be free in a relatively unloaded 256 MiB guest (75% of available memory). So, 256 Mi x 48 => 12 Gi
+	acpiMemoryHotplugFactor = 48
 )
 
 var (
@@ -2003,9 +2011,60 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	}
 	s.Logger().Debugf("Sandbox CPUs: %d", newCPUs)
 
-	// Update Memory
-	s.Logger().WithField("memory-sandbox-size-byte", sandboxMemoryByte).Debugf("Request to hypervisor to update memory")
+	// Update Memory --
+	// If we're using ACPI hotplug for memory, there's a limitation on the amount of memory which can be hotplugged at a single time.
+	// We must have enough free memory in the guest kernel to cover 64bytes per (4KiB) page of memory added for mem_map.
+	// See https://github.com/kata-containers/kata-containers/issues/4847 for more details.
+	// For a typical pod lifecycle, we expect that each container is added when we start the workloads. Based on this, we'll "assume" that majority
+	// of the guest memory is readily available. From experimentation, we see that we can add approximately 48 times what is already provided to
+	// the guest workload. For example, a 256 MiB guest should be able to accommodate hotplugging 12 GiB of memory.
+	//
+	// If virtio-mem is being used, there isn't such a limitation - we can hotplug the maximum allowed memory at a single time.
+	//
 	newMemoryMB := uint32(sandboxMemoryByte >> utils.MibToBytesShift)
+	finalMemoryMB := newMemoryMB
+
+	hconfig := s.hypervisor.HypervisorConfig()
+
+	for {
+		currentMemoryMB := s.hypervisor.GetTotalMemoryMB(ctx)
+
+		maxhotPluggableMemoryMB := currentMemoryMB * acpiMemoryHotplugFactor
+
+		// In the case of virtio-mem, we don't have a restriction on how much can be hotplugged at
+		// a single time. As a result, the max hotpluggable is only limited by the maximum memory size
+		// of the guest.
+		if hconfig.VirtioMem {
+			maxhotPluggableMemoryMB = uint32(hconfig.DefaultMaxMemorySize) - currentMemoryMB
+		}
+
+		deltaMB := int32(finalMemoryMB - currentMemoryMB)
+
+		if deltaMB > int32(maxhotPluggableMemoryMB) {
+			s.Logger().Warnf("Large hotplug. Adding %d MB of %d total memory", maxhotPluggableMemoryMB, deltaMB)
+			newMemoryMB = currentMemoryMB + maxhotPluggableMemoryMB
+		} else {
+			newMemoryMB = finalMemoryMB
+		}
+
+		// Add the memory to the guest and online the memory:
+		if err := s.updateMemory(ctx, newMemoryMB); err != nil {
+			return err
+		}
+
+		if newMemoryMB == finalMemoryMB {
+			break
+		}
+
+	}
+
+	return nil
+
+}
+
+func (s *Sandbox) updateMemory(ctx context.Context, newMemoryMB uint32) error {
+	// online the memory:
+	s.Logger().WithField("memory-sandbox-size-mb", newMemoryMB).Debugf("Request to hypervisor to update memory")
 	newMemory, updatedMemoryDevice, err := s.hypervisor.ResizeMemory(ctx, newMemoryMB, s.state.GuestMemoryBlockSizeMB, s.state.GuestMemoryHotplugProbe)
 	if err != nil {
 		if err == noGuestMemHotplugErr {
@@ -2025,7 +2084,6 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	if err := s.agent.onlineCPUMem(ctx, 0, false); err != nil {
 		return err
 	}
-
 	return nil
 }
 

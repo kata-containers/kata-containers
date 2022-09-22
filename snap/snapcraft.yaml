@@ -206,7 +206,7 @@ parts:
 
       # Install raw kernel
       vmlinux_path="vmlinux"
-      [ "${arch}" = "s390x" ] && vmlinux_path="arch/s390/boot/compressed/vmlinux"
+      [ "${arch}" = "s390x" ] && vmlinux_path="arch/s390/boot/vmlinux"
       vmlinux_name="vmlinux-${kernel_suffix}"
       cp "${vmlinux_path}" "${kata_kernel_dir}/${vmlinux_name}"
       ln -sf "${vmlinux_name}" "${kata_kernel_dir}/vmlinux.container"
