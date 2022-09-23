@@ -27,6 +27,8 @@ oci = { path = "../oci" }
 
 [dev-dependencies]
 tempfile = "3"
+test-utils = { path = "../test-utils" }
+nix = "0.24.2"
 
 [features]
 default = []

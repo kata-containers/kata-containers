@@ -42,12 +42,12 @@ pub(crate) fn share_to_guest(
     Ok(do_get_guest_path(target, cid, is_volume))
 }
 
-pub(crate) fn get_host_ro_shared_path(id: &str) -> PathBuf {
-    Path::new(KATA_HOST_SHARED_DIR).join(id).join("ro")
+pub(crate) fn get_host_ro_shared_path(sid: &str) -> PathBuf {
+    Path::new(KATA_HOST_SHARED_DIR).join(sid).join("ro")
 }
 
-pub(crate) fn get_host_rw_shared_path(id: &str) -> PathBuf {
-    Path::new(KATA_HOST_SHARED_DIR).join(id).join("rw")
+pub(crate) fn get_host_rw_shared_path(sid: &str) -> PathBuf {
+    Path::new(KATA_HOST_SHARED_DIR).join(sid).join("rw")
 }
 
 fn do_get_guest_any_path(target: &str, cid: &str, is_volume: bool, is_virtiofs: bool) -> String {
@@ -66,11 +66,11 @@ fn do_get_guest_any_path(target: &str, cid: &str, is_volume: bool, is_virtiofs: 
     path.to_str().unwrap().to_string()
 }
 
-fn do_get_guest_path(target: &str, cid: &str, is_volume: bool) -> String {
+pub(crate) fn do_get_guest_path(target: &str, cid: &str, is_volume: bool) -> String {
     do_get_guest_any_path(target, cid, is_volume, false)
 }
 
-fn do_get_host_path(
+pub(crate) fn do_get_host_path(
     target: &str,
     sid: &str,
     cid: &str,
