@@ -85,3 +85,30 @@ pub(crate) fn parse_ip(ip: &[u8], family: u8) -> Result<IpAddr> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_ip() {
+        let test_ipv4 = [10, 25, 64, 128];
+        let ipv4 = parse_ip(test_ipv4.as_slice(), AF_INET as u8).unwrap();
+        let expected_ipv4 = IpAddr::V4(Ipv4Addr::new(10, 25, 64, 128));
+        assert_eq!(ipv4, expected_ipv4);
+
+        let test_ipv6 = [0, 2, 4, 0, 0, 2, 4, 0, 0, 2, 4, 0, 0, 2, 4, 0];
+        let ipv6 = parse_ip(test_ipv6.as_slice(), AF_INET6 as u8).unwrap();
+        // two u8 => one u16, (0u8, 2u8 => 0x0002), (4u8, 0u8 => 0x0400)
+        let expected_ipv6 = IpAddr::V6(Ipv6Addr::new(
+            0x0002, 0x0400, 0x0002, 0x0400, 0x0002, 0x0400, 0x0002, 0x0400,
+        ));
+        assert_eq!(ipv6, expected_ipv6);
+
+        let fail_ipv4 = [10, 22, 33, 44, 55];
+        assert!(parse_ip(fail_ipv4.as_slice(), AF_INET as u8).is_err());
+
+        let fail_ipv6 = [1, 2, 3, 4, 5, 6, 7, 8, 2, 3];
+        assert!(parse_ip(fail_ipv6.as_slice(), AF_INET6 as u8).is_err());
+    }
+}
