@@ -2309,6 +2309,7 @@ dependencies = [
  "serde",
  "slog",
  "slog-scope",
+ "test-utils",
  "tokio",
  "uuid",
 ]
@@ -2733,6 +2734,13 @@ dependencies = [
  "redox_syscall",
  "remove_dir_all",
  "winapi",
+]
+
+[[package]]
+name = "test-utils"
+version = "0.1.0"
+dependencies = [
+ "nix 0.24.2",
 ]
 
 [[package]]
