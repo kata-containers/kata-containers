@@ -24,6 +24,7 @@ use oci::Process as OCIProcess;
 use resource::network::NetnsGuard;
 use resource::ResourceManager;
 use tokio::sync::RwLock;
+use tracing::instrument;
 
 use kata_sys_util::hooks::HookStates;
 
@@ -36,6 +37,15 @@ pub struct VirtContainerManager {
     resource_manager: Arc<ResourceManager>,
     agent: Arc<dyn Agent>,
     hypervisor: Arc<dyn Hypervisor>,
+}
+
+impl std::fmt::Debug for VirtContainerManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VirtContainerManager")
+            .field("sid", &self.sid)
+            .field("pid", &self.pid)
+            .finish()
+    }
 }
 
 impl VirtContainerManager {
@@ -59,6 +69,7 @@ impl VirtContainerManager {
 
 #[async_trait]
 impl ContainerManager for VirtContainerManager {
+    #[instrument]
     async fn create_container(&self, config: ContainerConfig, spec: oci::Spec) -> Result<PID> {
         let container = Container::new(
             self.pid,
@@ -100,6 +111,7 @@ impl ContainerManager for VirtContainerManager {
         Ok(PID { pid: self.pid })
     }
 
+    #[instrument]
     async fn close_process_io(&self, process: &ContainerProcess) -> Result<()> {
         let containers = self.containers.read().await;
         let container_id = &process.container_id.to_string();
@@ -111,6 +123,7 @@ impl ContainerManager for VirtContainerManager {
         Ok(())
     }
 
+    #[instrument]
     async fn delete_process(&self, process: &ContainerProcess) -> Result<ProcessStateInfo> {
         let container_id = &process.container_id.container_id;
         match process.process_type {
@@ -155,6 +168,7 @@ impl ContainerManager for VirtContainerManager {
         }
     }
 
+    #[instrument]
     async fn exec_process(&self, req: ExecProcessRequest) -> Result<()> {
         if req.spec_type_url.is_empty() {
             return Err(anyhow!("invalid type url"));
@@ -180,6 +194,7 @@ impl ContainerManager for VirtContainerManager {
         Ok(())
     }
 
+    #[instrument]
     async fn kill_process(&self, req: &KillRequest) -> Result<()> {
         let containers = self.containers.read().await;
         let container_id = &req.process.container_id.container_id;
@@ -199,6 +214,7 @@ impl ContainerManager for VirtContainerManager {
         Ok(())
     }
 
+    #[instrument]
     async fn wait_process(&self, process: &ContainerProcess) -> Result<ProcessExitStatus> {
         let logger = logger_with_process(process);
 
@@ -235,6 +251,7 @@ impl ContainerManager for VirtContainerManager {
         Ok(status.clone())
     }
 
+    #[instrument]
     async fn start_process(&self, process: &ContainerProcess) -> Result<PID> {
         let containers = self.containers.read().await;
         let container_id = &process.container_id.container_id;
@@ -265,6 +282,7 @@ impl ContainerManager for VirtContainerManager {
         Ok(PID { pid: self.pid })
     }
 
+    #[instrument]
     async fn state_process(&self, process: &ContainerProcess) -> Result<ProcessStateInfo> {
         let containers = self.containers.read().await;
         let container_id = &process.container_id.container_id;
@@ -275,6 +293,7 @@ impl ContainerManager for VirtContainerManager {
         Ok(state)
     }
 
+    #[instrument]
     async fn pause_container(&self, id: &ContainerID) -> Result<()> {
         let containers = self.containers.read().await;
         let c = containers
@@ -284,6 +303,7 @@ impl ContainerManager for VirtContainerManager {
         Ok(())
     }
 
+    #[instrument]
     async fn resume_container(&self, id: &ContainerID) -> Result<()> {
         let containers = self.containers.read().await;
         let c = containers
@@ -293,6 +313,7 @@ impl ContainerManager for VirtContainerManager {
         Ok(())
     }
 
+    #[instrument]
     async fn resize_process_pty(&self, req: &ResizePTYRequest) -> Result<()> {
         let containers = self.containers.read().await;
         let c = containers
@@ -306,6 +327,7 @@ impl ContainerManager for VirtContainerManager {
         Ok(())
     }
 
+    #[instrument]
     async fn stats_container(&self, id: &ContainerID) -> Result<StatsInfo> {
         let containers = self.containers.read().await;
         let c = containers
@@ -315,6 +337,7 @@ impl ContainerManager for VirtContainerManager {
         Ok(StatsInfo::from(stats))
     }
 
+    #[instrument]
     async fn update_container(&self, req: UpdateRequest) -> Result<()> {
         let resource = serde_json::from_slice::<oci::LinuxResources>(&req.value)
             .context("deserialize LinuxResource")?;
@@ -326,18 +349,22 @@ impl ContainerManager for VirtContainerManager {
         c.update(&resource).await.context("update_container")
     }
 
+    #[instrument]
     async fn pid(&self) -> Result<PID> {
         Ok(PID { pid: self.pid })
     }
 
+    #[instrument]
     async fn connect_container(&self, _id: &ContainerID) -> Result<PID> {
         Ok(PID { pid: self.pid })
     }
 
+    #[instrument]
     async fn need_shutdown_sandbox(&self, req: &ShutdownRequest) -> bool {
         req.is_now || self.containers.read().await.is_empty() || self.sid == req.container_id
     }
 
+    #[instrument]
     async fn is_sandbox_container(&self, process: &ContainerProcess) -> bool {
         process.process_type == ProcessType::Container
             && process.container_id.container_id == self.sid
