@@ -28,6 +28,7 @@ vmm-sys-util = "0.11.0"
 rand = "0.8.4"
 path-clean = "1.0.1"
 lazy_static = "1.4"
+tracing = "0.1.36"
 
 kata-sys-util = { path = "../../../libs/kata-sys-util" }
 kata-types = { path = "../../../libs/kata-types" }
