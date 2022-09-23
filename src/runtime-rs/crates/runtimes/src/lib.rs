@@ -14,3 +14,4 @@ pub use manager::RuntimeHandlerManager;
 mod shim_mgmt;
 pub use shim_mgmt::{client::MgmtClient, server::sb_storage_path};
 mod static_resource;
+pub mod tracer;

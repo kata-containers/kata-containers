@@ -26,6 +26,7 @@ serde = { version = "1.0.138", features = ["derive"] }
 slog = "2.5.2"
 slog-scope = "4.4.0"
 tokio = { version = "1.8.0", features = ["process"] }
+tracing = "0.1.36"
 uuid = { version = "0.4", features = ["v4"] }
 
 agent = { path = "../agent" }

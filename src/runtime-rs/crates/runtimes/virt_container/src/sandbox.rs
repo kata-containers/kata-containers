@@ -22,6 +22,7 @@ use resource::{
     ResourceConfig, ResourceManager,
 };
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
+use tracing::instrument;
 
 use crate::{health_check::HealthCheck, sandbox_persist::SandboxTYPE};
 use persist::{self, sandbox_persist::Persist};
@@ -63,6 +64,15 @@ pub struct VirtSandbox {
     monitor: Arc<HealthCheck>,
 }
 
+impl std::fmt::Debug for VirtSandbox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VirtSandbox")
+            .field("sid", &self.sid)
+            .field("msg_sender", &self.msg_sender)
+            .finish()
+    }
+}
+
 impl VirtSandbox {
     pub async fn new(
         sid: &str,
@@ -82,6 +92,7 @@ impl VirtSandbox {
         })
     }
 
+    #[instrument]
     async fn prepare_for_start_sandbox(
         &self,
         _id: &str,
@@ -116,6 +127,7 @@ impl VirtSandbox {
 
 #[async_trait]
 impl Sandbox for VirtSandbox {
+    #[instrument(name = "sb: start")]
     async fn start(&self, netns: Option<String>) -> Result<()> {
         let id = &self.sid;
 

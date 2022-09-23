@@ -8,7 +8,11 @@ use std::{str::from_utf8, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 
-use crate::{shim_mgmt::server::MgmtServer, static_resource::StaticResourceManager};
+use crate::{
+    shim_mgmt::server::MgmtServer,
+    static_resource::StaticResourceManager,
+    tracer::{trace_enter_root, trace_exit_root, trace_setup, ROOTSPAN},
+};
 use common::{
     message::Message,
     types::{Request, Response},
@@ -20,6 +24,7 @@ use kata_types::{annotations::Annotation, config::TomlConfig};
 use linux_container::LinuxContainer;
 use persist::sandbox_persist::Persist;
 use tokio::sync::{mpsc::Sender, RwLock};
+use tracing::instrument;
 use virt_container::sandbox::SandboxRestoreArgs;
 use virt_container::sandbox::VirtSandbox;
 use virt_container::sandbox_persist::{SandboxState, SandboxTYPE};
@@ -34,6 +39,15 @@ struct RuntimeHandlerManagerInner {
     runtime_instance: Option<Arc<RuntimeInstance>>,
 }
 
+impl std::fmt::Debug for RuntimeHandlerManagerInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RuntimeHandlerManagerInner")
+            .field("id", &self.id)
+            .field("msg_sender", &self.msg_sender)
+            .finish()
+    }
+}
+
 impl RuntimeHandlerManagerInner {
     fn new(id: &str, msg_sender: Sender<Message>) -> Result<Self> {
         Ok(Self {
@@ -43,6 +57,7 @@ impl RuntimeHandlerManagerInner {
         })
     }
 
+    #[instrument]
     async fn init_runtime_handler(
         &mut self,
         netns: Option<String>,
@@ -75,6 +90,7 @@ impl RuntimeHandlerManagerInner {
         Ok(())
     }
 
+    #[instrument]
     async fn try_init(&mut self, spec: &oci::Spec, options: &Option<Vec<u8>>) -> Result<()> {
         // return if runtime instance has init
         if self.runtime_instance.is_some() {
@@ -106,6 +122,19 @@ impl RuntimeHandlerManagerInner {
         };
 
         let config = load_config(spec, options).context("load config")?;
+        // note that trace_setup() will only be called when enable_tracing is true
+        if config.runtime.enable_tracing
+            && trace_setup(
+                &self.id,
+                &config.runtime.jaeger_endpoint,
+                &config.runtime.jaeger_user,
+                &config.runtime.jaeger_password,
+            )
+            .is_ok()
+        {
+            trace_enter_root();
+        }
+
         self.init_runtime_handler(netns, Arc::new(config))
             .await
             .context("init runtime handler")?;
@@ -132,6 +161,13 @@ unsafe impl Send for RuntimeHandlerManager {}
 unsafe impl Sync for RuntimeHandlerManager {}
 pub struct RuntimeHandlerManager {
     inner: Arc<RwLock<RuntimeHandlerManagerInner>>,
+}
+
+// todo: a more detailed impl for fmt::Debug
+impl std::fmt::Debug for RuntimeHandlerManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RuntimeHandlerManager").finish()
+    }
 }
 
 impl RuntimeHandlerManager {
@@ -183,6 +219,7 @@ impl RuntimeHandlerManager {
             .ok_or_else(|| anyhow!("runtime not ready"))
     }
 
+    #[instrument]
     async fn try_init_runtime_instance(
         &self,
         spec: &oci::Spec,
@@ -192,7 +229,12 @@ impl RuntimeHandlerManager {
         inner.try_init(spec, options).await
     }
 
+    #[instrument(parent = &*(ROOTSPAN))]
     pub async fn handler_message(&self, req: Request) -> Result<Response> {
+        let span = span!(tracing::Level::TRACE, "handler_message");
+        span.set_parent(trace_extract_root_ctx(&span.context()));
+        let _span_guard = span.enter();
+
         if let Request::CreateContainer(req) = req {
             // get oci spec
             let bundler_path = format!("{}/{}", req.bundle, oci::OCI_SPEC_CONFIG_FILE_NAME);
@@ -218,6 +260,7 @@ impl RuntimeHandlerManager {
         }
     }
 
+    #[instrument(parent = &(*ROOTSPAN))]
     pub async fn handler_request(&self, req: Request) -> Result<Response> {
         let instance = self
             .get_runtime_instance()
@@ -245,8 +288,9 @@ impl RuntimeHandlerManager {
                 Ok(Response::KillProcess)
             }
             Request::ShutdownContainer(req) => {
-                if cm.need_shutdown_sandbox(&req).await {
+            if cm.need_shutdown_sandbox(&req).await {
                     sandbox.shutdown().await.context("do shutdown")?;
+                    trace_exit_root();
                 }
                 Ok(Response::ShutdownContainer)
             }

@@ -24,9 +24,11 @@ use hypervisor::{dragonball::Dragonball, Hypervisor, HYPERVISOR_DRAGONBALL};
 use kata_types::config::{hypervisor::register_hypervisor_plugin, DragonballConfig, TomlConfig};
 use resource::ResourceManager;
 use tokio::sync::mpsc::Sender;
+use tracing::instrument;
 
 unsafe impl Send for VirtContainer {}
 unsafe impl Sync for VirtContainer {}
+#[derive(Debug)]
 pub struct VirtContainer {}
 
 #[async_trait]
@@ -46,6 +48,7 @@ impl RuntimeHandler for VirtContainer {
         Arc::new(VirtContainer {})
     }
 
+    #[instrument]
     async fn new_instance(
         &self,
         sid: &str,
