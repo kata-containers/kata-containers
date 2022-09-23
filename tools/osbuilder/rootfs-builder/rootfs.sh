@@ -665,10 +665,6 @@ EOF
 	fi
 
     if [ -n "${AA_KBC}" ]; then
-        if [ "${UMOCI}" != "yes" ]; then
-          UMOCI="yes"
-          warning "UMOCI wasn't set, but is required for attestation, so overridden"
-        fi
 		if [ "${AA_KBC}" == "offline_sev_kbc" ]; then
 			info "Adding agent config for ${AA_KBC}"
 			AA_KBC_PARAMS="offline_sev_kbc::null" envsubst < "${script_dir}/agent-config.toml.in" | tee "${ROOTFS_DIR}/etc/agent-config.toml"
