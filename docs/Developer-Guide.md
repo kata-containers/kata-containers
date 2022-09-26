@@ -210,7 +210,8 @@ $ sudo systemctl restart systemd-journald
 
 > **Note:**
 >
-> - You should only do this step if you are testing with the latest version of the agent.
+> - You should only do this step if you are testing with the latest version of the agent or you want to build
+>   a custom agent without seccomp feature.
 
 The agent is built with a statically linked `musl.` The default `libc` used is `musl`, but on `ppc64le` and `s390x`, `gnu` should be used. To configure this:
 
@@ -228,16 +229,70 @@ $ go get -d -u github.com/kata-containers/kata-containers
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers/src/agent && make
 ```
 
-The agent is built with seccomp capability by default.
-If you want to build the agent without the seccomp capability, you need to run `make` with `SECCOMP=no` as follows.
+### Build the agent with seccomp
 
+The agent is built with seccomp feature by default.
+You **MUST** install the `libseccomp` library in your build environment and need to set the environment
+variables for the [`libseccomp` crate](https://github.com/libseccomp-rs/libseccomp-rs) as necessary to
+link the agent binary with a static `libseccomp` library.
+
+#### Link the `libseccomp` library statically against `musl`
+
+Install a static `libseccomp` library for `musl`:
+
+```sh
+$ sudo $GOPATH/src/github.com/kata-containers/kata-containers/ci/install_libseccomp.sh /usr/local/kata-libseccomp /usr/local/kata-gperf
 ```
+
+> **Note:**
+>
+> - If you want to build the agent linked with the `libseccomp` library statically against `musl`, you'll
+>   need to compile the `libseccomp` library using the above script to generate the static library for `musl`
+>   or use a `musl`-based distribution (e.g. `Alpine`) that provides a package for the static library for `musl`.
+
+Set the environment variables for the `libseccomp` crate:
+
+```sh
+$ export LIBSECCOMP_LINK_TYPE=static
+$ export LIBSECCOMP_LIB_PATH=/usr/local/kata-libseccomp/lib
+```
+
+> **Note:**
+>
+> - If you set `LIBSECCOMP_LINK_TYPE` to `static`, `LIBSECCOMP_LIB_PATH` **MUST** be set, or the build fails.
+
+Build the agent:
+
+```sh
+$ make -C $GOPATH/src/github.com/kata-containers/kata-containers/src/agent
+```
+
+#### Link the `libseccomp` library dynamically
+
+Install a shared `libseccomp` library:
+
+> e.g. `libseccomp-dev` for Ubuntu, or `libseccomp-devel` for CentOS
+
+If you set neither the environment variables for the `libseccomp` crate, the agent will assume the `libseccomp` library
+is available dynamically.
+
+Build the agent with `LIBC=gnu` for a `gnu`-based rootfs:
+
+```sh
+$ make -C $GOPATH/src/github.com/kata-containers/kata-containers/src/agent LIBC=gnu
+```
+
+### Build the agent without seccomp feature
+
+If you want to build the agent without seccomp feature, you need to run `make` with `SECCOMP=no` as follows.
+
+```sh
 $ make -C $GOPATH/src/github.com/kata-containers/kata-containers/src/agent SECCOMP=no
 ```
 
 > **Note:**
 >
-> - If you enable seccomp in the main configuration file but build the agent without seccomp capability,
+> - If you enable seccomp in the main configuration file but build the agent without seccomp feature,
 >   the runtime exits conservatively with an error message.
 
 ## Get the osbuilder
@@ -268,10 +323,10 @@ You can get a supported distributions list in the Kata Containers by running the
 $ ./rootfs.sh -l
 ```
 
-If you want to build the agent without seccomp capability, you need to run the `rootfs.sh` script with `SECCOMP=no` as follows.
+If you want to build the agent without seccomp feature, you need to run the `rootfs.sh` script with `SECCOMP=no` as follows.
 
 ```
-$ script -fec 'sudo -E GOPATH=$GOPATH AGENT_INIT=yes USE_DOCKER=true SECCOMP=no ./rootfs.sh ${distro}'
+$ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true SECCOMP=no ./rootfs.sh ${distro}'
 ```
 
 > **Note:**
@@ -285,12 +340,24 @@ $ script -fec 'sudo -E GOPATH=$GOPATH AGENT_INIT=yes USE_DOCKER=true SECCOMP=no 
 
 > **Note:**
 >
-> - You should only do this step if you are testing with the latest version of the agent.
+> - You should only do this step if you are testing with the latest version of the agent or you want to add
+>   a custom agent for seccomp to a rootfs.
 
 ```
 $ sudo install -o root -g root -m 0550 -t ${ROOTFS_DIR}/usr/bin ../../../src/agent/target/x86_64-unknown-linux-musl/release/kata-agent
 $ sudo install -o root -g root -m 0440 ../../../src/agent/kata-agent.service ${ROOTFS_DIR}/usr/lib/systemd/system/
 $ sudo install -o root -g root -m 0440 ../../../src/agent/kata-containers.target ${ROOTFS_DIR}/usr/lib/systemd/system/
+```
+
+The agent binary is linked with a static `libseccomp` library (`libseccomp.a`) by default.
+If you want to create a rootfs including the agent binary linked with a shared `libseccomp` library
+(`libseccomp.so`), see the [Link the `libseccomp` library dynamically](#link-the-libseccomp-library-dynamically)
+section to build a custom agent according to the `$distro` you chose and add the agent to the image as follows.
+
+```sh
+$ export DISTRO=${distro}
+$ [ ${DISTRO} = "alpine" ] && export LIBC=musl || export LIBC=gnu
+$ sudo install -o root -g root -m 0550 -t ${ROOTFS_DIR}/usr/bin ../../../src/agent/target/x86_64-unknown-linux-${LIBC}/release/kata-agent
 ```
 
 ### Build a rootfs image
@@ -339,7 +406,7 @@ You can get a supported distributions list in the Kata Containers by running the
 $ ./rootfs.sh -l
 ```
 
-If you want to build the agent without seccomp capability, you need to run the `rootfs.sh` script with `SECCOMP=no` as follows.
+If you want to build the agent without seccomp feature, you need to run the `rootfs.sh` script with `SECCOMP=no` as follows.
 
 ```
 $ script -fec 'sudo -E GOPATH=$GOPATH AGENT_INIT=yes USE_DOCKER=true SECCOMP=no ./rootfs.sh ${distro}'
