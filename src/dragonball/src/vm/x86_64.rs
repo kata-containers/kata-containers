@@ -217,11 +217,17 @@ impl Vm {
         linux_loader::loader::load_cmdline(vm_memory, cmdline_addr, cmdline)
             .map_err(StartMicroVmError::LoadCommandline)?;
 
+        let cmdline_size = cmdline
+            .as_cstring()
+            .map_err(StartMicroVmError::ProcessCommandlne)?
+            .as_bytes_with_nul()
+            .len();
+
         configure_system(
             vm_memory,
             self.address_space.address_space(),
             cmdline_addr,
-            cmdline.as_str().len() + 1,
+            cmdline_size,
             &initrd,
             self.vm_config.vcpu_count,
             self.vm_config.max_vcpu_count,
