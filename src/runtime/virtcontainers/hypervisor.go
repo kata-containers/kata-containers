@@ -530,6 +530,9 @@ type HypervisorConfig struct {
 	// from memory encryption to both memory and CPU-state encryption and integrity.
 	ConfidentialGuest bool
 
+	// Enable SEV-SNP guests on AMD machines capable of both
+	SevSnpGuest bool
+
 	// BootToBeTemplate used to indicate if the VM is created to be a template VM
 	BootToBeTemplate bool
 
@@ -873,6 +876,11 @@ const (
 	// Exclude from lint checking for it won't be used on arm64 code
 	sevProtection
 
+	// AMD Secure Encrypted Virtualization - Secure Nested Paging (SEV-SNP)
+	// https://developer.amd.com/sev/
+	// Exclude from lint checking for it won't be used on arm64 code
+	snpProtection
+
 	// IBM POWER 9 Protected Execution Facility
 	// https://www.kernel.org/doc/html/latest/powerpc/ultravisor.html
 	// Exclude from lint checking for it won't be used on arm64 code
@@ -889,6 +897,7 @@ var guestProtectionStr = [...]string{
 	pefProtection:  "pef",
 	seProtection:   "se",
 	sevProtection:  "sev",
+	snpProtection:  "snp",
 	tdxProtection:  "tdx",
 }
 

@@ -422,6 +422,8 @@ func (clh *cloudHypervisor) enableProtection() error {
 
 	case sevProtection:
 		return errors.New("SEV protection is not supported by Cloud Hypervisor")
+	case snpProtection:
+		return errors.New("SEV-SNP protection is not supported by Cloud Hypervisor")
 
 	default:
 		return errors.New("This system doesn't support Confidentian Computing (Guest Protection)")
