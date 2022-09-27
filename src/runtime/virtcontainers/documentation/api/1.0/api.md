@@ -348,6 +348,10 @@ type HypervisorConfig struct {
 	// Enable or disable different hardware features, ranging
 	// from memory encryption to both memory and CPU-state encryption and integrity.
 	ConfidentialGuest bool
+
+	// Enables SEV-SNP guests in case both AMD SEV and SNP are supported.
+	// SEV is default.
+	SevSnpGuest bool
 }
 ```
 

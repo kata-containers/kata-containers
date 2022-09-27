@@ -13,6 +13,8 @@ const (
 	tdxCPUFlag = "tdx"
 
 	sevKvmParameterPath = "/sys/module/kvm_amd/parameters/sev"
+
+	snpKvmParameterPath = "/sys/module/kvm_amd/parameters/sev_snp"
 )
 
 // Implementation of this function is architecture specific
@@ -25,6 +27,13 @@ func availableGuestProtection() (guestProtection, error) {
 	// TDX is supported and properly loaded when the firmware directory exists or `tdx` is part of the CPU flags
 	if d, err := os.Stat(tdxSysFirmwareDir); (err == nil && d.IsDir()) || flags[tdxCPUFlag] {
 		return tdxProtection, nil
+	}
+	// SEV-SNP is supported and enabled when the kvm module `sev_snp` parameter is set to `Y`
+	// SEV-SNP support infers SEV (-ES) support
+	if _, err := os.Stat(snpKvmParameterPath); err == nil {
+		if c, err := os.ReadFile(snpKvmParameterPath); err == nil && len(c) > 0 && (c[0] == 'Y') {
+			return snpProtection, nil
+		}
 	}
 	// SEV is supported and enabled when the kvm module `sev` parameter is set to `1` (or `Y` for linux >= 5.12)
 	if _, err := os.Stat(sevKvmParameterPath); err == nil {

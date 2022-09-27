@@ -15,6 +15,7 @@
 path = "@QEMUPATH@"
 kernel = "@KERNELPATH@"
 image = "@IMAGEPATH@"
+# initrd = "@INITRDPATH@"
 machine_type = "@MACHINETYPE@"
 
 # Enable confidential guest support.
@@ -32,6 +33,12 @@ machine_type = "@MACHINETYPE@"
 #
 # Default false
 # confidential_guest = true
+
+# Choose AMD SEV-SNP confidential guests
+# In case of using confidential guests on AMD hardware that supports both SEV
+# and SEV-SNP, the following enables SEV-SNP guests. SEV guests are default.
+# Default false
+# sev_snp_guest = true
 
 # Enable running QEMU VMM as a non-root user.
 # By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
