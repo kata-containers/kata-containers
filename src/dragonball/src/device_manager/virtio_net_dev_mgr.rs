@@ -320,7 +320,7 @@ impl VirtioNetDeviceMgr {
         }
     }
 
-    /// Attach all configured vsock device to the virtual machine instance.
+    /// Attach all configured net device to the virtual machine instance.
     pub fn attach_devices(
         &mut self,
         ctx: &mut DeviceOpContext,
