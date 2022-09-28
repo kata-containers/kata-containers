@@ -371,6 +371,9 @@ type HypervisorConfig struct {
 	// SeccompSandbox is the qemu function which enables the seccomp feature
 	SeccompSandbox string
 
+	// The user maps to the uid.
+	User string
+
 	// KernelParams are additional guest kernel parameters.
 	KernelParams []Param
 
