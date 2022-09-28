@@ -23,7 +23,7 @@ and processes running within those containers.
 In other words, the `kata-agent` is a kind of "low-level" container runtime inside VM because the agent
 spawns and runs containers according to the OCI runtime specs.
 However, the `kata-agent` does not have the OCI Command-Line Interface (CLI) that is defined in the
-[runtime spec](https://github.com/opencontainers/runtime-spec/blob/master/runtime.md).
+[runtime spec](https://github.com/opencontainers/runtime-spec/blob/main/runtime.md).
 The `kata-runtime` provides the CLI part of the Kata Containers runtime component,
 but the `kata-runtime` is a container runtime for creating hardware-virtualized containers running on the host.
 
@@ -41,7 +41,7 @@ Therefore, `runk` leverages the mechanism of the `kata-agent` to avoid reinventi
 
 This table shows the average of the elapsed time and the memory footprint (maximum resident set size)
 for running sequentially 100 containers, the containers run `/bin/true` using `run` command with
-[detached mode](https://github.com/opencontainers/runc/blob/master/docs/terminals.md#detached)
+[detached mode](https://github.com/opencontainers/runc/blob/main/docs/terminals.md#detached)
 on 12 CPU cores (`3.8 GHz AMD Ryzen 9 3900X`) and 32 GiB of RAM.
 `runk` always runs containers with detached mode currently.
 
@@ -151,7 +151,7 @@ Please refer to the [Using `runk` from containerd](#using-runk-from-containerd) 
 
 ### Running a container
 
-Now you can go through the [lifecycle operations](https://github.com/opencontainers/runtime-spec/blob/master/runtime.md)
+Now you can go through the [lifecycle operations](https://github.com/opencontainers/runtime-spec/blob/main/runtime.md)
 in your shell.
 You need to run `runk` as `root` because `runk` does not have the rootless feature which is the ability
 to run containers without root privileges.
