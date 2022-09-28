@@ -25,7 +25,10 @@ const VIRTIO_FS: &str = "virtio-fs";
 const INLINE_VIRTIO_FS: &str = "inline-virtio-fs";
 
 const KATA_HOST_SHARED_DIR: &str = "/run/kata-containers/shared/sandboxes/";
+
+/// share fs (for example virtio-fs) mount path in the guest
 const KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
+
 pub(crate) const DEFAULT_KATA_GUEST_SANDBOX_DIR: &str = "/run/kata-containers/sandbox/";
 
 const PASSTHROUGH_FS_DIR: &str = "passthrough";
@@ -51,10 +54,12 @@ pub struct ShareFsVolumeConfig {
     pub source: String,
     pub target: String,
     pub readonly: bool,
+    pub mount_options: Vec<String>,
 }
 
 pub struct ShareFsMountResult {
     pub guest_path: String,
+    pub storages: Vec<agent::Storage>,
 }
 
 #[async_trait]

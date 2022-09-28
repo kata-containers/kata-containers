@@ -19,6 +19,7 @@ use crate::share_fs::{ShareFs, ShareFsVolumeConfig};
 // skip the volumes whose source had already set to guest share dir.
 pub(crate) struct ShareFsVolume {
     mounts: Vec<oci::Mount>,
+    storages: Vec<agent::Storage>,
 }
 
 impl ShareFsVolume {
@@ -30,7 +31,10 @@ impl ShareFsVolume {
         let file_name = Path::new(&m.source).file_name().unwrap().to_str().unwrap();
         let file_name = generate_mount_path(cid, file_name);
 
-        let mut volume = Self { mounts: vec![] };
+        let mut volume = Self {
+            mounts: vec![],
+            storages: vec![],
+        };
         match share_fs {
             None => {
                 let src = match std::fs::canonicalize(&m.source) {
@@ -61,10 +65,15 @@ impl ShareFsVolume {
                         source: m.source.clone(),
                         target: file_name,
                         readonly: false,
+                        mount_options: m.options.clone(),
                     })
                     .await
                     .context("share fs volume")?;
 
+                // set storages for the volume
+                volume.storages = mount_result.storages;
+
+                // set mount for the volume
                 volume.mounts.push(oci::Mount {
                     destination: m.destination.clone(),
                     r#type: "bind".to_string(),
@@ -83,7 +92,7 @@ impl Volume for ShareFsVolume {
     }
 
     fn get_storage(&self) -> Result<Vec<agent::Storage>> {
-        Ok(vec![])
+        Ok(self.storages.clone())
     }
 
     fn cleanup(&self) -> Result<()> {

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use async_recursion::async_recursion;
 use nix::mount::{umount, MsFlags};
 use nix::unistd::{Gid, Uid};
@@ -34,8 +34,12 @@ const MAX_SIZE_PER_WATCHABLE_MOUNT: u64 = 1024 * 1024;
 /// How often to check for modified files.
 const WATCH_INTERVAL_SECS: u64 = 2;
 
-/// Destination path for tmpfs
+/// Destination path for tmpfs, which used by the golang runtime
 const WATCH_MOUNT_POINT_PATH: &str = "/run/kata-containers/shared/containers/watchable/";
+
+/// Destination path for tmpfs for runtime-rs passthrough file sharing
+const WATCH_MOUNT_POINT_PATH_PASSTHROUGH: &str =
+    "/run/kata-containers/shared/containers/passthrough/watchable/";
 
 /// Represents a single watched storage entry which may have multiple files to watch.
 #[derive(Default, Debug, Clone)]
@@ -451,7 +455,7 @@ impl BindWatcher {
     ) -> Result<()> {
         if self.watch_thread.is_none() {
             // Virtio-fs shared path is RO by default, so we back the target-mounts by tmpfs.
-            self.mount(logger).await?;
+            self.mount(logger).await.context("mount watch directory")?;
 
             // Spawn background thread to monitor changes
             self.watch_thread = Some(Self::spawn_watcher(
@@ -500,16 +504,28 @@ impl BindWatcher {
     }
 
     async fn mount(&self, logger: &Logger) -> Result<()> {
-        fs::create_dir_all(WATCH_MOUNT_POINT_PATH).await?;
+        // the watchable directory is created on the host side.
+        // here we can only check if it exist.
+        // first we will check the default WATCH_MOUNT_POINT_PATH,
+        // and then check WATCH_MOUNT_POINT_PATH_PASSTHROUGH
+        // in turn which are introduced by runtime-rs file sharing.
+        let watchable_dir = if Path::new(WATCH_MOUNT_POINT_PATH).is_dir() {
+            WATCH_MOUNT_POINT_PATH
+        } else if Path::new(WATCH_MOUNT_POINT_PATH_PASSTHROUGH).is_dir() {
+            WATCH_MOUNT_POINT_PATH_PASSTHROUGH
+        } else {
+            return Err(anyhow!("watchable mount source not found"));
+        };
 
         baremount(
             Path::new("tmpfs"),
-            Path::new(WATCH_MOUNT_POINT_PATH),
+            Path::new(watchable_dir),
             "tmpfs",
             MsFlags::empty(),
             "",
             logger,
-        )?;
+        )
+        .context("baremount watchable mount path")?;
 
         Ok(())
     }
@@ -520,7 +536,12 @@ impl BindWatcher {
             handle.abort();
         }
 
-        let _ = umount(WATCH_MOUNT_POINT_PATH);
+        // try umount watchable mount path in turn
+        if Path::new(WATCH_MOUNT_POINT_PATH).is_dir() {
+            let _ = umount(WATCH_MOUNT_POINT_PATH);
+        } else if Path::new(WATCH_MOUNT_POINT_PATH_PASSTHROUGH).is_dir() {
+            let _ = umount(WATCH_MOUNT_POINT_PATH_PASSTHROUGH);
+        }
     }
 }
 
@@ -529,6 +550,7 @@ mod tests {
     use super::*;
     use crate::mount::is_mounted;
     use nix::unistd::{Gid, Uid};
+    use scopeguard::defer;
     use std::fs;
     use std::thread;
     use test_utils::skip_if_not_root;
@@ -1275,19 +1297,29 @@ mod tests {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut watcher = BindWatcher::default();
 
-        watcher.mount(&logger).await.unwrap();
-        assert!(is_mounted(WATCH_MOUNT_POINT_PATH).unwrap());
+        for mount_point in [WATCH_MOUNT_POINT_PATH, WATCH_MOUNT_POINT_PATH_PASSTHROUGH] {
+            fs::create_dir_all(mount_point).unwrap();
+            // ensure the watchable directory is deleted.
+            defer!(fs::remove_dir_all(mount_point).unwrap());
 
-        thread::sleep(Duration::from_millis(20));
+            watcher.mount(&logger).await.unwrap();
+            assert!(is_mounted(mount_point).unwrap());
 
-        watcher.cleanup();
-        assert!(!is_mounted(WATCH_MOUNT_POINT_PATH).unwrap());
+            thread::sleep(Duration::from_millis(20));
+
+            watcher.cleanup();
+            assert!(!is_mounted(mount_point).unwrap());
+        }
     }
 
     #[tokio::test]
     #[serial]
     async fn spawn_thread() {
         skip_if_not_root!();
+
+        fs::create_dir_all(WATCH_MOUNT_POINT_PATH).unwrap();
+        // ensure the watchable directory is deleted.
+        defer!(fs::remove_dir_all(WATCH_MOUNT_POINT_PATH).unwrap());
 
         let source_dir = tempfile::tempdir().unwrap();
         fs::write(source_dir.path().join("1.txt"), "one").unwrap();
@@ -1318,6 +1350,10 @@ mod tests {
     #[serial]
     async fn verify_container_cleanup_watching() {
         skip_if_not_root!();
+
+        fs::create_dir_all(WATCH_MOUNT_POINT_PATH).unwrap();
+        // ensure the watchable directory is deleted.
+        defer!(fs::remove_dir_all(WATCH_MOUNT_POINT_PATH).unwrap());
 
         let source_dir = tempfile::tempdir().unwrap();
         fs::write(source_dir.path().join("1.txt"), "one").unwrap();
