@@ -66,7 +66,7 @@ function run_test() {
     cmd="kubectl get pods | grep $busybox_pod | grep Completed"
     wait_time=120
 
-    configurations=("nginx-deployment-qemu" "nginx-deployment-clh")
+    configurations=("nginx-deployment-qemu" "nginx-deployment-clh" "nginx-deployment-dragonball")
     for deployment in "${configurations[@]}"; do
         # start the kata pod:
         kubectl apply -f "$YAMLPATH/examples/${deployment}.yaml"
