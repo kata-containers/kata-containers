@@ -10,20 +10,39 @@ use crate::annotations;
 use crate::container::ContainerType;
 use std::str::FromStr;
 
-// K8S_EMPTY_DIR is the k8s specific path for `empty-dir` volumes
+// K8S_EMPTY_DIR is the K8s specific path for `empty-dir` volumes
 const K8S_EMPTY_DIR: &str = "kubernetes.io~empty-dir";
+// K8S_CONFIGMAP is the K8s specific path for `configmap` volumes
+const K8S_CONFIGMAP: &str = "kubernetes.io~configmap";
+// K8S_SECRET is the K8s specific path for `secret` volumes
+const K8S_SECRET: &str = "kubernetes.io~secret";
 
-/// Check whether the path is a K8S empty directory.
+/// Check whether the path is a K8s empty directory.
+pub fn is_empty_dir<P: AsRef<Path>>(path: P) -> bool {
+    is_special_dir(path, K8S_EMPTY_DIR)
+}
+
+/// Check whether the path is a K8s configmap.
+pub fn is_configmap<P: AsRef<Path>>(path: P) -> bool {
+    is_special_dir(path, K8S_CONFIGMAP)
+}
+
+/// Check whether the path is a K8s secret.
+pub fn is_secret<P: AsRef<Path>>(path: P) -> bool {
+    is_special_dir(path, K8S_SECRET)
+}
+
+/// Check whether the path is a K8s empty directory, configmap, or secret.
 ///
-/// For a K8S EmptyDir, Kubernetes mounts
+/// For example, given a K8s EmptyDir, Kubernetes mounts
 /// "/var/lib/kubelet/pods/<id>/volumes/kubernetes.io~empty-dir/<volumeMount name>"
 /// to "/<mount-point>".
-pub fn is_empty_dir<P: AsRef<Path>>(path: P) -> bool {
+pub fn is_special_dir<P: AsRef<Path>>(path: P, dir_type: &str) -> bool {
     let path = path.as_ref();
 
     if let Some(parent) = path.parent() {
         if let Some(pname) = parent.file_name() {
-            if pname == K8S_EMPTY_DIR && parent.parent().is_some() {
+            if pname == dir_type && parent.parent().is_some() {
                 return true;
             }
         }
@@ -77,10 +96,119 @@ pub fn container_type_with_id(spec: &oci::Spec) -> (ContainerType, Option<String
     (container_type, sid)
 }
 
+// count_files will return the number of files within a given path.
+// If the total number of
+// files observed is greater than limit, break and return -1
+fn count_files<P: AsRef<Path>>(path: P, limit: i32) -> std::io::Result<i32> {
+    // First, Check to see if the path exists
+    let src = std::fs::canonicalize(path)?;
+
+    // Special case if this is just a file, not a directory:
+    if !src.is_dir() {
+        return Ok(1);
+    }
+
+    let mut num_files = 0;
+
+    for entry in std::fs::read_dir(src)? {
+        let file = entry?;
+        let p = file.path();
+        if p.is_dir() {
+            num_files += count_files(&p, limit)?;
+        } else {
+            num_files += 1;
+        }
+
+        if num_files > limit {
+            return Ok(-1);
+        }
+    }
+
+    Ok(num_files)
+}
+
+/// Check if a volume should be processed as a watchable volume,
+/// which adds inotify-like function for virtio-fs.
+pub fn is_watchable_mount<P: AsRef<Path>>(path: P) -> bool {
+    if !is_secret(&path) && !is_configmap(&path) {
+        return false;
+    }
+
+    // we have a cap on number of FDs which can be present in mount
+    // to determine if watchable. A similar Check exists within the agent,
+    // which may or may not help handle case where extra files are added to
+    // a mount after the fact
+    let count = count_files(&path, 8).unwrap_or(0);
+    count > 0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{annotations, container};
+    use std::fs;
+    use test_utils::skip_if_not_root;
+
+    #[test]
+    fn test_is_watchable_mount() {
+        skip_if_not_root!();
+
+        let result = is_watchable_mount("");
+        assert!(!result);
+
+        // path does not exist, failure expected:
+        let result = is_watchable_mount("/var/lib/kubelet/pods/5f0861a0-a987-4a3a-bb0f-1058ddb9678f/volumes/kubernetes.io~empty-dir/foobar");
+        assert!(!result);
+
+        let test_tmp_dir = tempfile::tempdir().expect("failed to create tempdir");
+
+        // Verify secret is successful (single file mount):
+        //   /tmppath/kubernetes.io~secret/super-secret-thing
+        let secret_path = test_tmp_dir.path().join(K8S_SECRET);
+        let result = fs::create_dir_all(&secret_path);
+        assert!(result.is_ok());
+        let secret_file = &secret_path.join("super-secret-thing");
+        let result = fs::File::create(secret_file);
+        assert!(result.is_ok());
+
+        let result = is_watchable_mount(secret_file);
+        assert!(result);
+
+        // Verify that if we have too many files, it will no longer be watchable:
+        // /tmp/kubernetes.io~configmap/amazing-dir-of-configs/
+        //                                  | - c0
+        //                                  | - c1
+        //                                    ...
+        //                                  | - c7
+        // should be okay.
+        //
+        // 9 files should cause the mount to be deemed "not watchable"
+        let configmap_path = test_tmp_dir
+            .path()
+            .join(K8S_CONFIGMAP)
+            .join("amazing-dir-of-configs");
+        let result = fs::create_dir_all(&configmap_path);
+        assert!(result.is_ok());
+
+        // not a watchable mount if no files available.
+        let result = is_watchable_mount(&configmap_path);
+        assert!(!result);
+
+        for i in 0..8 {
+            let configmap_file = &configmap_path.join(format!("c{}", i));
+            let result = fs::File::create(configmap_file);
+            assert!(result.is_ok());
+
+            let result = is_watchable_mount(&configmap_path);
+            assert!(result);
+        }
+        let configmap_file = &configmap_path.join("too_much_files");
+        let result = fs::File::create(configmap_file);
+        assert!(result.is_ok());
+
+        let result = is_watchable_mount(&configmap_path);
+        assert!(!result);
+    }
 
     #[test]
     fn test_is_empty_dir() {
@@ -101,6 +229,36 @@ mod tests {
 
         let empty_dir = "/kubernetes.io~empty-dir/shm";
         assert!(is_empty_dir(empty_dir));
+    }
+
+    #[test]
+    fn test_is_configmap() {
+        let path = "/volumes/kubernetes.io~configmap/cm";
+        assert!(is_configmap(path));
+
+        let path = "/volumes/kubernetes.io~configmap//cm";
+        assert!(is_configmap(path));
+
+        let path = "/volumes/kubernetes.io~configmap-test/cm";
+        assert!(!is_configmap(path));
+
+        let path = "/volumes/kubernetes.io~configmap";
+        assert!(!is_configmap(path));
+    }
+
+    #[test]
+    fn test_is_secret() {
+        let path = "/volumes/kubernetes.io~secret/test-serect";
+        assert!(is_secret(path));
+
+        let path = "/volumes/kubernetes.io~secret//test-serect";
+        assert!(is_secret(path));
+
+        let path = "/volumes/kubernetes.io~secret-test/test-serect";
+        assert!(!is_secret(path));
+
+        let path = "/volumes/kubernetes.io~secret";
+        assert!(!is_secret(path));
     }
 
     #[test]
