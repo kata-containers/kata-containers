@@ -340,7 +340,7 @@ specs:
     uscan-url: >-
       https://github.com/opencontainers/runtime-spec/tags
       .*/v?(\d\S+)\.tar\.gz
-    version: "v1.0.0-rc5"
+    version: "v1.0.2"
 
 plugins:
   description: |
