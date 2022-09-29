@@ -256,13 +256,13 @@ impl ContainerInner {
 
     pub async fn close_io(&mut self, process: &ContainerProcess) -> Result<()> {
         match process.process_type {
-            ProcessType::Container => self.init_process.close_io().await,
+            ProcessType::Container => self.init_process.close_io(self.agent.clone()).await,
             ProcessType::Exec => {
                 let exec = self
                     .exec_processes
                     .get_mut(&process.exec_id)
                     .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
-                exec.process.close_io().await;
+                exec.process.close_io(self.agent.clone()).await;
             }
         };
 
