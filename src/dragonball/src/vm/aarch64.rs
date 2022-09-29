@@ -136,7 +136,7 @@ impl Vm {
 
         configure_system(
             guest_memory,
-            cmdline.as_str(),
+            cmdline.as_cstring().unwrap().to_str().unwrap(),
             vcpu_mpidr,
             self.device_manager.get_mmio_device_info(),
             self.get_irqchip(),
