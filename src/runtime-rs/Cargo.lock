@@ -1430,9 +1430,9 @@ checksum = "349d5a591cd28b49e1d1037471617a32ddcda5731b99419008085f72d5a53836"
 
 [[package]]
 name = "linux-loader"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85feaf25cc99be9662ab951bc68a10ae4436dbc9ba931b7fcb4e8fde67d9aa24"
+checksum = "62a2f912deca034ec34b0a43a390059ea98daac40e440ebe8bea88f3315fe168"
 dependencies = [
  "vm-memory",
 ]
@@ -2345,6 +2345,7 @@ dependencies = [
  "common",
  "hyper",
  "hyperlocal",
+ "hypervisor",
  "kata-types",
  "lazy_static",
  "linux_container",
