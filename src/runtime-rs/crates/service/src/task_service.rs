@@ -77,5 +77,6 @@ impl_service!(
     wait | api::WaitRequest | api::WaitResponse,
     stats | api::StatsRequest | api::StatsResponse,
     connect | api::ConnectRequest | api::ConnectResponse,
-    shutdown | api::ShutdownRequest | api::Empty
+    shutdown | api::ShutdownRequest | api::Empty,
+    close_io | api::CloseIORequest | api::Empty
 );
