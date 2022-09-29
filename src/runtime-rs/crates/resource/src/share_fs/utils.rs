@@ -41,9 +41,16 @@ pub(crate) fn share_to_guest(
 
     Ok(do_get_guest_path(target, cid, is_volume))
 }
-
-pub(crate) fn get_host_ro_shared_path(sid: &str) -> PathBuf {
-    Path::new(KATA_HOST_SHARED_DIR).join(sid).join("ro")
+// Shared path handling:
+// 1. create two directories for each sandbox:
+// -. /run/kata-containers/shared/sandboxes/$sbx_id/rw/, a host/guest shared directory which is rw
+// -. /run/kata-containers/shared/sandboxes/$sbx_id/ro/, a host/guest shared directory (virtiofs source dir) which is ro
+//
+// 2. /run/kata-containers/shared/sandboxes/$sbx_id/rw/ is bind mounted readonly to /run/kata-containers/shared/sandboxes/$sbx_id/ro/, so guest cannot modify it
+//
+// 3. host-guest shared files/directories are mounted one-level under /run/kata-containers/shared/sandboxes/$sbx_id/rw/passthrough and thus present to guest at one level under run/kata-containers/shared/containers/passthrough.
+pub(crate) fn get_host_ro_shared_path(id: &str) -> PathBuf {
+    Path::new(KATA_HOST_SHARED_DIR).join(id).join("ro")
 }
 
 pub(crate) fn get_host_rw_shared_path(sid: &str) -> PathBuf {
