@@ -288,7 +288,7 @@ impl RuntimeHandlerManager {
                 Ok(Response::KillProcess)
             }
             Request::ShutdownContainer(req) => {
-            if cm.need_shutdown_sandbox(&req).await {
+                if cm.need_shutdown_sandbox(&req).await {
                     sandbox.shutdown().await.context("do shutdown")?;
                     trace_exit_root();
                 }

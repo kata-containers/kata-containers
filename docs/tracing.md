@@ -89,6 +89,25 @@ Containers agent:
   The [Jaeger "all-in-one" Docker image][jaeger-all-in-one] method
   is the quickest and simplest way to run the collector for testing.
 
+  - It is worth noting that the **default collector endpoint** url 
+    is set to http://localhost:14268/api/traces
+    When custom endpoint url is used, make sure you are setting the correct
+    collector port
+
+  - Following is a example command to run all jaeger parts in a docker
+    container.
+    ```shell
+    docker run -d -e COLLECTOR_ZIPKIN_HTTP_PORT=9411 \
+    -p5775:5775/udp \
+    -p6831:6831/udp \
+    -p6832:6832/udp \
+    -p5778:5778 \
+    -p16686:16686 \
+    -p14268:14268 \
+    -p9411:9411 \
+    jaegertracing/all-in-one:latest
+    ```
+
 - If you wish to trace the agent, you must start the
   [trace forwarder][trace-forwarder].
 
