@@ -415,7 +415,13 @@ func (clh *cloudHypervisor) enableProtection() error {
 			return errors.New("Firmware path is not specified")
 		}
 
-		clh.vmconfig.Tdx = chclient.NewTdxConfig(firmwarePath)
+		clh.vmconfig.Payload.SetFirmware(firmwarePath)
+
+		if clh.vmconfig.Platform == nil {
+			clh.vmconfig.Platform = chclient.NewPlatformConfig()
+		}
+		clh.vmconfig.Platform.SetTdx(true)
+
 		return nil
 
 	case sevProtection:
