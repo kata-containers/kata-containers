@@ -16,9 +16,8 @@ use kata_types::config::hypervisor::SharedFsInfo;
 use super::{
     share_virtio_fs::{
         prepare_virtiofs, FS_TYPE_VIRTIO_FS, KATA_VIRTIO_FS_DEV_TYPE, MOUNT_GUEST_TAG,
-        PASSTHROUGH_FS_DIR,
     },
-    utils, ShareFs, *,
+    utils, ShareFs, PASSTHROUGH_FS_DIR, *,
 };
 
 lazy_static! {
