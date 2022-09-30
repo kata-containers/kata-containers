@@ -226,6 +226,10 @@ MONITOR = kata-monitor
 MONITOR_OUTPUT = $(CURDIR)/$(MONITOR)
 MONITOR_DIR = $(CLI_DIR)/kata-monitor
 
+CTR_MONITOR = container-monitor
+CTR_MONITOR_OUTPUT = $(CURDIR)/$(CTR_MONITOR)
+CTR_MONITOR_DIR = $(CLI_DIR)/kata-monitor
+
 
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 VERSION := ${shell cat ./VERSION}
@@ -539,6 +543,8 @@ containerd-shim-v2: $(SHIMV2_OUTPUT)
 
 monitor: $(MONITOR_OUTPUT)
 
+ctr-monitor: $(CTR_MONITOR_OUTPUT)
+
 runtime: $(RUNTIME_OUTPUT) $(CONFIGS)
 .DEFAULT: default
 
@@ -581,6 +587,11 @@ $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 $(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
 	$(QUIET_BUILD)(cd $(MONITOR_DIR)/ && go build \
 		--ldflags "-X main.GitCommit=$(shell cat .git-commit)" $(BUILDFLAGS) -o $@ .)
+
+$(CTR_MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
+	$(QUIET_BUILD)(cd $(CTR_MONITOR_DIR)/ && go build \
+		--ldflags "-X main.GitCommit=$(shell cat .git-commit)" $(BUILDFLAGS) -o $@ .)
+
 
 .PHONY: \
 	check \
@@ -656,6 +667,10 @@ install-containerd-shim-v2: $(SHIMV2)
 install-monitor: $(MONITOR)
 	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
 
+install-ctr-monitor: $(CTR_MONITOR)
+	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
+
+
 install-bin-libexec: $(BINLIBEXECLIST)
 	$(QUIET_INST)$(foreach f,$(BINLIBEXECLIST),$(call INSTALL_EXEC,$f,$(PKGLIBEXECDIR)))
 
@@ -682,6 +697,7 @@ clean:
 		$(CONFIGS) \
 		$(GENERATED_FILES) \
 		$(MONITOR) \
+		$(CTR_MONITOR) \
 		$(SHIMV2) \
 		$(TARGET) \
 		.git-commit .git-commit.tmp
@@ -769,6 +785,8 @@ endif
           "$(foreach b,$(sort $(SHIMV2)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
           "$(foreach b,$(sort $(MONITOR)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+	@printf \
+          "$(foreach b,$(sort $(CTR_MONITOR)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
           "$(foreach b,$(sort $(BINLIBEXECLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(PKGLIBEXECDIR)/$(b))\\\n"))"
 	@printf \
