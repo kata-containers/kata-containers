@@ -13,7 +13,6 @@ use kata_sys_util::mount;
 use super::utils;
 
 pub(crate) const MOUNT_GUEST_TAG: &str = "kataShared";
-pub(crate) const PASSTHROUGH_FS_DIR: &str = "passthrough";
 
 pub(crate) const FS_TYPE_VIRTIO_FS: &str = "virtiofs";
 pub(crate) const KATA_VIRTIO_FS_DEV_TYPE: &str = "virtio-fs";
