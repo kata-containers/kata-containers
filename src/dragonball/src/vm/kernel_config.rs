@@ -66,7 +66,7 @@ mod tests {
         cmdline.insert_str("ro").unwrap();
         let mut info = KernelConfigInfo::new(kernel.into_file(), Some(initrd.into_file()), cmdline);
 
-        assert_eq!(info.cmdline.as_str(), "ro");
+        assert_eq!(info.cmdline.as_cstring().unwrap().as_bytes(), b"ro");
         assert!(info.initrd_file_mut().is_some());
     }
 }
