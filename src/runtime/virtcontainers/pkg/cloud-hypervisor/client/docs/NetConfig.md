@@ -8,6 +8,8 @@ Name | Type | Description | Notes
 **Ip** | Pointer to **string** |  | [optional] [default to "192.168.249.1"]
 **Mask** | Pointer to **string** |  | [optional] [default to "255.255.255.0"]
 **Mac** | Pointer to **string** |  | [optional] 
+**HostMac** | Pointer to **string** |  | [optional] 
+**Mtu** | Pointer to **int32** |  | [optional] 
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
 **NumQueues** | Pointer to **int32** |  | [optional] [default to 2]
 **QueueSize** | Pointer to **int32** |  | [optional] [default to 256]
@@ -136,6 +138,56 @@ SetMac sets Mac field to given value.
 `func (o *NetConfig) HasMac() bool`
 
 HasMac returns a boolean if a field has been set.
+
+### GetHostMac
+
+`func (o *NetConfig) GetHostMac() string`
+
+GetHostMac returns the HostMac field if non-nil, zero value otherwise.
+
+### GetHostMacOk
+
+`func (o *NetConfig) GetHostMacOk() (*string, bool)`
+
+GetHostMacOk returns a tuple with the HostMac field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetHostMac
+
+`func (o *NetConfig) SetHostMac(v string)`
+
+SetHostMac sets HostMac field to given value.
+
+### HasHostMac
+
+`func (o *NetConfig) HasHostMac() bool`
+
+HasHostMac returns a boolean if a field has been set.
+
+### GetMtu
+
+`func (o *NetConfig) GetMtu() int32`
+
+GetMtu returns the Mtu field if non-nil, zero value otherwise.
+
+### GetMtuOk
+
+`func (o *NetConfig) GetMtuOk() (*int32, bool)`
+
+GetMtuOk returns a tuple with the Mtu field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetMtu
+
+`func (o *NetConfig) SetMtu(v int32)`
+
+SetMtu sets Mtu field to given value.
+
+### HasMtu
+
+`func (o *NetConfig) HasMtu() bool`
+
+HasMtu returns a boolean if a field has been set.
 
 ### GetIommu
 
