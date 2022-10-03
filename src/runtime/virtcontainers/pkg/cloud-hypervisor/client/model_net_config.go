@@ -20,6 +20,8 @@ type NetConfig struct {
 	Ip                *string            `json:"ip,omitempty"`
 	Mask              *string            `json:"mask,omitempty"`
 	Mac               *string            `json:"mac,omitempty"`
+	HostMac           *string            `json:"host_mac,omitempty"`
+	Mtu               *int32             `json:"mtu,omitempty"`
 	Iommu             *bool              `json:"iommu,omitempty"`
 	NumQueues         *int32             `json:"num_queues,omitempty"`
 	QueueSize         *int32             `json:"queue_size,omitempty"`
@@ -202,6 +204,70 @@ func (o *NetConfig) HasMac() bool {
 // SetMac gets a reference to the given string and assigns it to the Mac field.
 func (o *NetConfig) SetMac(v string) {
 	o.Mac = &v
+}
+
+// GetHostMac returns the HostMac field value if set, zero value otherwise.
+func (o *NetConfig) GetHostMac() string {
+	if o == nil || o.HostMac == nil {
+		var ret string
+		return ret
+	}
+	return *o.HostMac
+}
+
+// GetHostMacOk returns a tuple with the HostMac field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *NetConfig) GetHostMacOk() (*string, bool) {
+	if o == nil || o.HostMac == nil {
+		return nil, false
+	}
+	return o.HostMac, true
+}
+
+// HasHostMac returns a boolean if a field has been set.
+func (o *NetConfig) HasHostMac() bool {
+	if o != nil && o.HostMac != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetHostMac gets a reference to the given string and assigns it to the HostMac field.
+func (o *NetConfig) SetHostMac(v string) {
+	o.HostMac = &v
+}
+
+// GetMtu returns the Mtu field value if set, zero value otherwise.
+func (o *NetConfig) GetMtu() int32 {
+	if o == nil || o.Mtu == nil {
+		var ret int32
+		return ret
+	}
+	return *o.Mtu
+}
+
+// GetMtuOk returns a tuple with the Mtu field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *NetConfig) GetMtuOk() (*int32, bool) {
+	if o == nil || o.Mtu == nil {
+		return nil, false
+	}
+	return o.Mtu, true
+}
+
+// HasMtu returns a boolean if a field has been set.
+func (o *NetConfig) HasMtu() bool {
+	if o != nil && o.Mtu != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetMtu gets a reference to the given int32 and assigns it to the Mtu field.
+func (o *NetConfig) SetMtu(v int32) {
+	o.Mtu = &v
 }
 
 // GetIommu returns the Iommu field value if set, zero value otherwise.
@@ -505,6 +571,12 @@ func (o NetConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Mac != nil {
 		toSerialize["mac"] = o.Mac
+	}
+	if o.HostMac != nil {
+		toSerialize["host_mac"] = o.HostMac
+	}
+	if o.Mtu != nil {
+		toSerialize["mtu"] = o.Mtu
 	}
 	if o.Iommu != nil {
 		toSerialize["iommu"] = o.Iommu

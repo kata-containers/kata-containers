@@ -19,7 +19,6 @@ Name | Type | Description | Notes
 **Vdpa** | Pointer to [**[]VdpaConfig**](VdpaConfig.md) |  | [optional] 
 **Vsock** | Pointer to [**VsockConfig**](VsockConfig.md) |  | [optional] 
 **SgxEpc** | Pointer to [**[]SgxEpcConfig**](SgxEpcConfig.md) |  | [optional] 
-**Tdx** | Pointer to [**TdxConfig**](TdxConfig.md) |  | [optional] 
 **Numa** | Pointer to [**[]NumaConfig**](NumaConfig.md) |  | [optional] 
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
 **Watchdog** | Pointer to **bool** |  | [optional] [default to false]
@@ -413,31 +412,6 @@ SetSgxEpc sets SgxEpc field to given value.
 `func (o *VmConfig) HasSgxEpc() bool`
 
 HasSgxEpc returns a boolean if a field has been set.
-
-### GetTdx
-
-`func (o *VmConfig) GetTdx() TdxConfig`
-
-GetTdx returns the Tdx field if non-nil, zero value otherwise.
-
-### GetTdxOk
-
-`func (o *VmConfig) GetTdxOk() (*TdxConfig, bool)`
-
-GetTdxOk returns a tuple with the Tdx field if it's non-nil, zero value otherwise
-and a boolean to check if the value has been set.
-
-### SetTdx
-
-`func (o *VmConfig) SetTdx(v TdxConfig)`
-
-SetTdx sets Tdx field to given value.
-
-### HasTdx
-
-`func (o *VmConfig) HasTdx() bool`
-
-HasTdx returns a boolean if a field has been set.
 
 ### GetNuma
 
