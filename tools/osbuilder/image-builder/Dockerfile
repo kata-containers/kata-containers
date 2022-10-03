@@ -7,6 +7,8 @@ FROM ${IMAGE_REGISTRY}/fedora:35
 
 RUN ([ -n "$http_proxy" ] && \
     sed -i '$ a proxy='$http_proxy /etc/dnf/dnf.conf ; true) && \
+    echo "Printing dnf.conf" && \
+    cat /etc/dnf/dnf.conf && \
     dnf install -y \
         e2fsprogs \
         findutils \
