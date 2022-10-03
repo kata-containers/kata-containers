@@ -134,7 +134,6 @@ Class | Method | HTTP request | Description
  - [RngConfig](docs/RngConfig.md)
  - [SendMigrationData](docs/SendMigrationData.md)
  - [SgxEpcConfig](docs/SgxEpcConfig.md)
- - [TdxConfig](docs/TdxConfig.md)
  - [TokenBucket](docs/TokenBucket.md)
  - [VdpaConfig](docs/VdpaConfig.md)
  - [VmAddDevice](docs/VmAddDevice.md)
