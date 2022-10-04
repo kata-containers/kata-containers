@@ -16,6 +16,7 @@ import (
 
 // PayloadConfig Payloads to boot in guest
 type PayloadConfig struct {
+	Firmware  *string `json:"firmware,omitempty"`
 	Kernel    *string `json:"kernel,omitempty"`
 	Cmdline   *string `json:"cmdline,omitempty"`
 	Initramfs *string `json:"initramfs,omitempty"`
@@ -36,6 +37,38 @@ func NewPayloadConfig() *PayloadConfig {
 func NewPayloadConfigWithDefaults() *PayloadConfig {
 	this := PayloadConfig{}
 	return &this
+}
+
+// GetFirmware returns the Firmware field value if set, zero value otherwise.
+func (o *PayloadConfig) GetFirmware() string {
+	if o == nil || o.Firmware == nil {
+		var ret string
+		return ret
+	}
+	return *o.Firmware
+}
+
+// GetFirmwareOk returns a tuple with the Firmware field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PayloadConfig) GetFirmwareOk() (*string, bool) {
+	if o == nil || o.Firmware == nil {
+		return nil, false
+	}
+	return o.Firmware, true
+}
+
+// HasFirmware returns a boolean if a field has been set.
+func (o *PayloadConfig) HasFirmware() bool {
+	if o != nil && o.Firmware != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetFirmware gets a reference to the given string and assigns it to the Firmware field.
+func (o *PayloadConfig) SetFirmware(v string) {
+	o.Firmware = &v
 }
 
 // GetKernel returns the Kernel field value if set, zero value otherwise.
@@ -136,6 +169,9 @@ func (o *PayloadConfig) SetInitramfs(v string) {
 
 func (o PayloadConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
+	if o.Firmware != nil {
+		toSerialize["firmware"] = o.Firmware
+	}
 	if o.Kernel != nil {
 		toSerialize["kernel"] = o.Kernel
 	}
