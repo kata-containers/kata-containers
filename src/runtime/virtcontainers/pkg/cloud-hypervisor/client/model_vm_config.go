@@ -31,7 +31,6 @@ type VmConfig struct {
 	Vdpa     *[]VdpaConfig   `json:"vdpa,omitempty"`
 	Vsock    *VsockConfig    `json:"vsock,omitempty"`
 	SgxEpc   *[]SgxEpcConfig `json:"sgx_epc,omitempty"`
-	Tdx      *TdxConfig      `json:"tdx,omitempty"`
 	Numa     *[]NumaConfig   `json:"numa,omitempty"`
 	Iommu    *bool           `json:"iommu,omitempty"`
 	Watchdog *bool           `json:"watchdog,omitempty"`
@@ -536,38 +535,6 @@ func (o *VmConfig) SetSgxEpc(v []SgxEpcConfig) {
 	o.SgxEpc = &v
 }
 
-// GetTdx returns the Tdx field value if set, zero value otherwise.
-func (o *VmConfig) GetTdx() TdxConfig {
-	if o == nil || o.Tdx == nil {
-		var ret TdxConfig
-		return ret
-	}
-	return *o.Tdx
-}
-
-// GetTdxOk returns a tuple with the Tdx field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *VmConfig) GetTdxOk() (*TdxConfig, bool) {
-	if o == nil || o.Tdx == nil {
-		return nil, false
-	}
-	return o.Tdx, true
-}
-
-// HasTdx returns a boolean if a field has been set.
-func (o *VmConfig) HasTdx() bool {
-	if o != nil && o.Tdx != nil {
-		return true
-	}
-
-	return false
-}
-
-// SetTdx gets a reference to the given TdxConfig and assigns it to the Tdx field.
-func (o *VmConfig) SetTdx(v TdxConfig) {
-	o.Tdx = &v
-}
-
 // GetNuma returns the Numa field value if set, zero value otherwise.
 func (o *VmConfig) GetNuma() []NumaConfig {
 	if o == nil || o.Numa == nil {
@@ -742,9 +709,6 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.SgxEpc != nil {
 		toSerialize["sgx_epc"] = o.SgxEpc
-	}
-	if o.Tdx != nil {
-		toSerialize["tdx"] = o.Tdx
 	}
 	if o.Numa != nil {
 		toSerialize["numa"] = o.Numa
