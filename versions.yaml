@@ -100,8 +100,8 @@ assets:
         .*/v?(\d\S+)\.tar\.gz
       tdx:
         description: "VMM that uses KVM and supports TDX"
-        url: "https://github.com/intel/qemu-dcp"
-        tag: "SPR-BKC-QEMU-v2.5"
+        url: "https://github.com/intel/qemu-tdx"
+        tag: "tdx-upstream-wip-2022-08-02-v7.1"
 
     qemu-experimental:
       description: "QEMU with virtiofs support"
