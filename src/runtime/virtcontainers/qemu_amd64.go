@@ -314,6 +314,7 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 
 	default:
 		return devices, "", fmt.Errorf("Unsupported guest protection technology: %v", q.protection)
+	}
 }
 
 // Add the SEV Object qemu parameters for sev guest protection

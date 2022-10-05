@@ -100,7 +100,7 @@ type qemu struct {
 	// if in memory dump progress
 	memoryDumpFlag sync.Mutex
 	stopped        bool
-	mu sync.Mutex
+	mu             sync.Mutex
 }
 
 const (
