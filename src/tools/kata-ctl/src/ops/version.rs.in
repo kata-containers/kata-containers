@@ -28,7 +28,7 @@ mod tests {
 
     #[test]
     fn test_get() {
-        let version = get();
+        let version = get().unwrap();
 	    let v = Version::parse(&version).unwrap();
 
 	    assert!(!v.major.to_string().is_empty());

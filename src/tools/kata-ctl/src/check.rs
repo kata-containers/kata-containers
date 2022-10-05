@@ -5,8 +5,14 @@
 
 // Contains checks that are not architecture-specific
 
-use anyhow::{anyhow, Result};
+
 use std::fs;
+use serde_json::Value;
+use std::collections::HashMap;
+use anyhow::{anyhow, Result};
+use reqwest::header::{CONTENT_TYPE,USER_AGENT};
+
+const KATA_GITHUB_URL: &str = "https://api.github.com/repos/kata-containers/kata-containers/releases/latest";
 
 fn get_cpu_info(cpu_info_file: &str) -> Result<String> {
     let contents = fs::read_to_string(cpu_info_file)?;
@@ -89,13 +95,50 @@ pub fn run_network_checks() -> Result<()> {
     Ok(())
 }
 
+fn get_kata_version_by_url(url: &str) -> std::result::Result<String, reqwest::Error> {
+    let content = reqwest::blocking::Client::new()
+        .get(url)
+        .header(CONTENT_TYPE, "application/json")
+        .header(USER_AGENT, "kata")
+        .send()?
+        .json::<HashMap<String, Value>>()?;
+
+    let version = content["tag_name"].as_str().unwrap();
+    Ok(version.to_string())
+}
+
+fn handle_reqwest_error(e: reqwest::Error) -> anyhow::Error {
+    if e.is_connect() {
+        return anyhow!(e).context("http connection failure: connection refused");
+    }
+
+    if e.is_timeout() {
+        return anyhow!(e).context("http connection failure: connection timeout");
+    }
+
+    if e.is_builder() {
+        return anyhow!(e).context("http connection failure: url malformed");
+    }
+
+    if e.is_decode() {
+        return anyhow!(e).context("http connection failure: unable to decode response body");
+    }
+
+    anyhow!(e).context("unknown http connection failure: {:?}")
+}
+
 pub fn check_version() -> Result<()> {
+    let version = get_kata_version_by_url(KATA_GITHUB_URL).map_err(|e| handle_reqwest_error(e))?;
+
+    println!("Version: {}", version);
+
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use semver::Version;
 
     #[test]
     fn test_get_cpu_info_empty_input() {
@@ -112,5 +155,39 @@ mod tests {
         let expected = "cpu_info string is empty";
         let actual = get_cpu_flags("", "").err().unwrap().to_string();
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn check_version_by_empty_url() {
+        const TEST_URL: &str = "http:";
+        let expected = "builder error: empty host";
+        let actual = get_kata_version_by_url(TEST_URL).err().unwrap().to_string();
+         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn check_version_by_garbage_url() {
+        const TEST_URL: &str = "_localhost_";
+        let expected = "builder error: relative URL without a base";
+        let actual = get_kata_version_by_url(TEST_URL).err().unwrap().to_string();
+         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn check_version_by_invalid_url() {
+        const TEST_URL: &str = "http://localhost :80";
+        let expected = "builder error: invalid domain character";
+        let actual = get_kata_version_by_url(TEST_URL).err().unwrap().to_string();
+         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn check_latest_version() {
+        let version = get_kata_version_by_url(KATA_GITHUB_URL).unwrap();
+
+            let v = Version::parse(&version).unwrap();
+            assert!(!v.major.to_string().is_empty());
+            assert!(!v.minor.to_string().is_empty());
+            assert!(!v.patch.to_string().is_empty());
     }
 }
