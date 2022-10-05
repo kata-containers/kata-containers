@@ -32,7 +32,6 @@ docs/RestoreConfig.md
 docs/RngConfig.md
 docs/SendMigrationData.md
 docs/SgxEpcConfig.md
-docs/TdxConfig.md
 docs/TokenBucket.md
 docs/VdpaConfig.md
 docs/VmAddDevice.md
@@ -73,7 +72,6 @@ model_restore_config.go
 model_rng_config.go
 model_send_migration_data.go
 model_sgx_epc_config.go
-model_tdx_config.go
 model_token_bucket.go
 model_vdpa_config.go
 model_vm_add_device.go

@@ -21,6 +21,7 @@ fn override_driver(bdf: &str, driver: &str) -> Result<()> {
 const SYS_PCI_DEVICES_PATH: &str = "/sys/bus/pci/devices";
 const PCI_DRIVER_PROBE: &str = "/sys/bus/pci/drivers_probe";
 const VFIO_NEW_ID_PATH: &str = "/sys/bus/pci/drivers/vfio-pci/new_id";
+const VFIO_UNBIND_PATH: &str = "/sys/bus/pci/drivers/vfio-pci/unbind";
 
 pub const VFIO_PCI: &str = "vfio-pci";
 
@@ -132,11 +133,10 @@ pub fn bind_device_to_host(bdf: &str, host_driver: &str, _vendor_device_id: &str
 
     override_driver(bdf, host_driver).context("override driver")?;
 
-    let unbind_path = "/sys/bus/pci/drivers/vfio-pci/unbind";
-
     // echo bdf > /sys/bus/pci/drivers/vfio-pci/unbind"
-    std::fs::write(unbind_path, bdf).with_context(|| format!("echo {}> {}", bdf, unbind_path))?;
-    info!(sl!(), "echo {} > {}", bdf, unbind_path);
+    std::fs::write(VFIO_UNBIND_PATH, bdf)
+        .with_context(|| format!("echo {}> {}", bdf, VFIO_UNBIND_PATH))?;
+    info!(sl!(), "echo {} > {}", bdf, VFIO_UNBIND_PATH);
 
     // echo bdf > /sys/bus/pci/drivers_probe
     std::fs::write(PCI_DRIVER_PROBE, bdf)

@@ -4,6 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
+**Firmware** | Pointer to **string** |  | [optional] 
 **Kernel** | Pointer to **string** |  | [optional] 
 **Cmdline** | Pointer to **string** |  | [optional] 
 **Initramfs** | Pointer to **string** |  | [optional] 
@@ -26,6 +27,31 @@ will change when the set of required properties is changed
 NewPayloadConfigWithDefaults instantiates a new PayloadConfig object
 This constructor will only assign default values to properties that have it defined,
 but it doesn't guarantee that properties required by API are set
+
+### GetFirmware
+
+`func (o *PayloadConfig) GetFirmware() string`
+
+GetFirmware returns the Firmware field if non-nil, zero value otherwise.
+
+### GetFirmwareOk
+
+`func (o *PayloadConfig) GetFirmwareOk() (*string, bool)`
+
+GetFirmwareOk returns a tuple with the Firmware field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetFirmware
+
+`func (o *PayloadConfig) SetFirmware(v string)`
+
+SetFirmware sets Firmware field to given value.
+
+### HasFirmware
+
+`func (o *PayloadConfig) HasFirmware() bool`
+
+HasFirmware returns a boolean if a field has been set.
 
 ### GetKernel
 

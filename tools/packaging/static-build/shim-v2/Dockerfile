@@ -13,10 +13,13 @@ RUN apt-get update && \
         gcc \
         git \
         make \
+        musl-tools \
         sudo && \
     apt-get clean && rm -rf /var/lib/apt/lists/
 
-COPY install_go.sh /usr/bin/install_go.sh
+COPY install_go_rust.sh /usr/bin/install_go_rust.sh
 ARG GO_VERSION
-RUN install_go.sh "${GO_VERSION}"
+ARG RUST_VERSION
+RUN install_go_rust.sh "${GO_VERSION}" "${RUST_VERSION}"
 ENV PATH=/usr/local/go/bin:${PATH}
+ENV PATH=/root/.cargo/bin/:${PATH}

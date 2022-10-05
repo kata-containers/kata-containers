@@ -287,6 +287,7 @@ type HypervisorConfig struct {
 	GuestPreAttestationSecretType  string
 	SEVCertChainPath               string
 	BlockDeviceAIO                 string
+	User                           string
 	RemoteHypervisorSocket         string
 	SandboxName                    string
 	SandboxNamespace               string
@@ -341,6 +342,7 @@ type HypervisorConfig struct {
 	HotplugVFIOOnRootBus           bool
 	GuestMemoryDumpPaging          bool
 	ConfidentialGuest              bool
+	SevSnpGuest                    bool
 	GuestPreAttestation            bool
 	BlockDeviceCacheNoflush        bool
 	BlockDeviceCacheDirect         bool
@@ -671,6 +673,11 @@ const (
 	// Exclude from lint checking for it won't be used on arm64 code
 	sevProtection
 
+	// AMD Secure Encrypted Virtualization - Secure Nested Paging (SEV-SNP)
+	// https://developer.amd.com/sev/
+	// Exclude from lint checking for it won't be used on arm64 code
+	snpProtection
+
 	// IBM POWER 9 Protected Execution Facility
 	// https://www.kernel.org/doc/html/latest/powerpc/ultravisor.html
 	// Exclude from lint checking for it won't be used on arm64 code
@@ -687,6 +694,7 @@ var guestProtectionStr = [...]string{
 	pefProtection:  "pef",
 	seProtection:   "se",
 	sevProtection:  "sev",
+	snpProtection:  "snp",
 	tdxProtection:  "tdx",
 }
 

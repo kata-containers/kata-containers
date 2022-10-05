@@ -49,3 +49,22 @@ impl Drop for NetnsGuard {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test_utils::skip_if_not_root;
+
+    #[test]
+    fn test_new_netns_guard() {
+        // test run under root
+        skip_if_not_root!();
+
+        let new_netns_path = "/proc/1/task/1/ns/net"; // systemd, always exists
+        let netns_guard = NetnsGuard::new(new_netns_path).unwrap();
+        drop(netns_guard);
+
+        let empty_path = "";
+        assert!(NetnsGuard::new(empty_path).unwrap().old_netns.is_none());
+    }
+}

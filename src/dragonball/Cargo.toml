@@ -26,7 +26,7 @@ kvm-bindings = "0.5.0"
 kvm-ioctls = "0.11.0"
 lazy_static = "1.2"
 libc = "0.2.39"
-linux-loader = "0.4.0"
+linux-loader = "0.6.0"
 log = "0.4.14"
 nix = "0.24.2"
 seccompiler = "0.2.0"
@@ -36,9 +36,9 @@ serde_json = "1.0.9"
 slog = "2.5.2"
 slog-scope = "4.4.0"
 thiserror = "1"
-vmm-sys-util = "0.9.0"
-virtio-queue = { version = "0.1.0", optional = true }
-vm-memory = { version = "0.7.0", features = ["backend-mmap"] }
+vmm-sys-util = "0.10.0"
+virtio-queue = { version = "0.4.0", optional = true }
+vm-memory = { version = "0.9.0", features = ["backend-mmap"] }
 
 [dev-dependencies]
 slog-term = "2.9.0"
@@ -46,7 +46,7 @@ slog-async = "2.7.0"
 
 [features]
 acpi = []
-atomic-guest-memory = []
+atomic-guest-memory = [ "vm-memory/backend-atomic" ]
 hotplug = ["virtio-vsock"]
 virtio-vsock = ["dbs-virtio-devices/virtio-vsock", "virtio-queue"]
 virtio-blk = ["dbs-virtio-devices/virtio-blk", "virtio-queue"]
@@ -55,11 +55,12 @@ virtio-net = ["dbs-virtio-devices/virtio-net", "virtio-queue"]
 virtio-fs = ["dbs-virtio-devices/virtio-fs", "virtio-queue", "atomic-guest-memory"]
 
 [patch.'crates-io']
-dbs-device = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
-dbs-interrupt = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
-dbs-legacy-devices = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
-dbs-upcall = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
-dbs-utils = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
-dbs-virtio-devices = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
-dbs-boot = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
-dbs-arch = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "7a8e832b53d66994d6a16f0513d69f540583dcd0" }
+dbs-device = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }
+dbs-interrupt = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }
+dbs-legacy-devices = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }
+dbs-upcall = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }
+dbs-utils = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }
+dbs-virtio-devices = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }
+dbs-boot = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }
+dbs-arch = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }
+dbs-address-space = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }

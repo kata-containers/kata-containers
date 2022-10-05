@@ -50,6 +50,8 @@ const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
 const MAX_BRIDGE_SIZE: u32 = 5;
 
+const KERNEL_PARAM_DELIMITER: &str = " ";
+
 lazy_static! {
     static ref HYPERVISOR_PLUGINS: Mutex<HashMap<String, Arc<dyn ConfigPlugin>>> =
         Mutex::new(HashMap::new());
@@ -237,6 +239,16 @@ impl BootInfo {
         Ok(())
     }
 
+    /// Add kernel parameters to bootinfo. It is always added before the original
+    /// to let the original one takes priority
+    pub fn add_kernel_params(&mut self, params: Vec<String>) {
+        let mut p = params;
+        if !self.kernel_params.is_empty() {
+            p.push(self.kernel_params.clone()); // [new_params0, new_params1, ..., original_params]
+        }
+        self.kernel_params = p.join(KERNEL_PARAM_DELIMITER);
+    }
+
     /// Validate guest kernel image annotaion
     pub fn validate_boot_path(&self, path: &str) -> Result<()> {
         validate_path!(path, "path {} is invalid{}")?;
@@ -320,7 +332,7 @@ impl CpuInfo {
     }
 }
 
-/// Configuration information for shared filesystem, such virtio-9p and virtio-fs.
+/// Configuration information for debug
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct DebugInfo {
     /// This option changes the default hypervisor and kernel parameters to enable debug output
@@ -596,7 +608,7 @@ impl MemoryInfo {
     }
 }
 
-/// Configuration information for virtual machine.
+/// Configuration information for network.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct NetworkInfo {
     /// If vhost-net backend for virtio-net is not desired, set to true.
@@ -638,7 +650,7 @@ impl NetworkInfo {
     }
 }
 
-/// Configuration information for virtual machine.
+/// Configuration information for security.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct SecurityInfo {
     /// Enable running QEMU VMM as a non-root user.
@@ -818,11 +830,15 @@ impl SharedFsInfo {
         validate_path_pattern(&self.valid_virtio_fs_daemon_paths, path)
     }
 
-    fn adjust_virtio_fs(&mut self, _inline: bool) -> Result<()> {
-        resolve_path!(
-            self.virtio_fs_daemon,
-            "Virtio-fs daemon path {} is invalid: {}"
-        )?;
+    fn adjust_virtio_fs(&mut self, inline: bool) -> Result<()> {
+        // inline mode doesn't need external virtiofsd daemon
+        if !inline {
+            resolve_path!(
+                self.virtio_fs_daemon,
+                "Virtio-fs daemon path {} is invalid: {}"
+            )?;
+        }
+
         if self.virtio_fs_cache.is_empty() {
             self.virtio_fs_cache = default::DEFAULT_VIRTIO_FS_CACHE_MODE.to_string();
         }
@@ -836,16 +852,13 @@ impl SharedFsInfo {
     }
 
     fn validate_virtio_fs(&self, inline: bool) -> Result<()> {
-        if inline && !self.virtio_fs_daemon.is_empty() {
-            return Err(eother!(
-                "Executable path for inline-virtio-fs is not empty: {}",
-                &self.virtio_fs_daemon
-            ));
+        // inline mode doesn't need external virtiofsd daemon
+        if !inline {
+            validate_path!(
+                self.virtio_fs_daemon,
+                "Virtio-fs daemon path {} is invalid: {}"
+            )?;
         }
-        validate_path!(
-            self.virtio_fs_daemon,
-            "Virtio-fs daemon path {} is invalid: {}"
-        )?;
 
         let l = ["none", "auto", "always"];
 
@@ -1065,5 +1078,32 @@ mod tests {
 
         assert!(get_hypervisor_plugin("dragonball").is_some());
         assert!(get_hypervisor_plugin("dragonball2").is_none());
+    }
+
+    #[test]
+    fn test_add_kernel_params() {
+        let mut boot_info = BootInfo {
+            ..Default::default()
+        };
+        let params = vec![
+            String::from("foo"),
+            String::from("bar"),
+            String::from("baz=faz"),
+        ];
+        boot_info.add_kernel_params(params);
+
+        assert_eq!(boot_info.kernel_params, String::from("foo bar baz=faz"));
+
+        let new_params = vec![
+            String::from("boo=far"),
+            String::from("a"),
+            String::from("b=c"),
+        ];
+        boot_info.add_kernel_params(new_params);
+
+        assert_eq!(
+            boot_info.kernel_params,
+            String::from("boo=far a b=c foo bar baz=faz")
+        );
     }
 }

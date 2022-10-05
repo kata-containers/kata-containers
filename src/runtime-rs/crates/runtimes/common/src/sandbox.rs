@@ -13,4 +13,7 @@ pub trait Sandbox: Send + Sync {
     async fn stop(&self) -> Result<()>;
     async fn cleanup(&self, container_id: &str) -> Result<()>;
     async fn shutdown(&self) -> Result<()>;
+
+    // agent function
+    async fn agent_sock(&self) -> Result<String>;
 }

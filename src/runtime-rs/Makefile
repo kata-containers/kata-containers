@@ -44,29 +44,43 @@ else
 endif
 
 ifeq ($(PREFIX),)
-    PREFIX := /usr
+PREFIX := /usr
+EXEC_PREFIX := $(PREFIX)/local
+##VAR BINDIR=<path> is a directory for installing executable programs
+BINDIR := $(EXEC_PREFIX)/bin
+else
+EXEC_PREFIX := $(PREFIX)
+##VAR BINDIR=<path> is a directory for installing executable programs
+# when creating the kata-deploy image, the default installation path for go runtime is $(EXEC_PREFIX)/bin, so we put it here for multiple runtime
+BINDIR := $(EXEC_PREFIX)/runtime-rs/bin/
 endif
 
-PREFIXDEPS    := $(PREFIX)
+PREFIXDEPS := $(PREFIX)
 LIBEXECDIR := $(PREFIXDEPS)/libexec
 SHAREDIR := $(PREFIX)/share
 DEFAULTSDIR := $(SHAREDIR)/defaults
 PROJECT_DIR = $(PROJECT_TAG)
 IMAGENAME = $(PROJECT_TAG).img
 TARGET = $(PROJECT_COMPONENT)
-
+SYSCONFDIR := /etc
 CONFIG_FILE = configuration.toml
 HYPERVISOR_DB = dragonball
+HYPERVISOR_ACRN = acrn
+HYPERVISOR_FC = firecracker
+HYPERVISOR_QEMU = qemu
+HYPERVISOR_CLH = cloud-hypervisor
 
 
 DEFAULT_HYPERVISOR ?= $(HYPERVISOR_DB)
 
-HYPERVISORS := $(HYPERVISOR_DB)
+# List of hypervisors this build system can generate configuration for.
+HYPERVISORS := $(HYPERVISOR_DB) $(HYPERVISOR_ACRN) $(HYPERVISOR_FC) $(HYPERVISOR_QEMU) $(HYPERVISOR_CLH)
 
 DBVALIDHYPERVISORPATHS := []
 PKGDATADIR := $(PREFIXDEPS)/share/$(PROJECT_DIR)
 KERNELDIR := $(PKGDATADIR)
 IMAGEPATH := $(PKGDATADIR)/$(IMAGENAME)
+PKGLIBEXECDIR := $(LIBEXECDIR)/$(PROJECT_DIR)
 FIRMWAREPATH :=
 FIRMWAREVOLUMEPATH :=
 
@@ -84,7 +98,7 @@ DEFMEMSZ := 2048
 # - hugepage memory
 DEFMEMSLOTS := 10
 #Default number of bridges
-DEFBRIDGES := 1
+DEFBRIDGES := 0
 DEFENABLEANNOTATIONS := []
 DEFDISABLEGUESTSECCOMP := true
 DEFDISABLEGUESTEMPTYDIR := false
@@ -290,9 +304,7 @@ endif
 TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
 
 ##VAR DESTDIR=<path> is a directory prepended to each installed target file
-DESTDIR :=
-##VAR BINDIR=<path> is a directory for installing executable programs
-BINDIR := /usr/local/bin
+DESTDIR ?= /
 
 GENERATED_CODE = crates/shim/src/config.rs
 
@@ -330,8 +342,12 @@ define get_toolchain_version
 $(shell printf "%s: %s\\n" "toolchain" "$(or $(shell rustup show active-toolchain 2>/dev/null), (unknown))")
 endef
 
+# Install a configuration file
+# params:
+# $1 : file to install
+# $2 : directory path where file will be installed
 define INSTALL_FILE
-	install -D -m 644 $1 $(DESTDIR)$2/$1 || exit 1;
+	install --mode 0644 -D $1 $(DESTDIR)$2/$(notdir $1);
 endef
 
 # Returns the name of the kernel file to use based on the provided KERNELTYPE.
@@ -382,20 +398,62 @@ show-header:
 	@printf "%s - version %s (commit %s)\n\n" "$(TARGET)" "$(VERSION)" "$(COMMIT_MSG)"
 
 show-summary: show-header
-	@printf "project:\n"
+	@printf "• Project:\n"
 	@printf "  name: $(PROJECT_NAME)\n"
 	@printf "  url: $(PROJECT_URL)\n"
 	@printf "  component: $(PROJECT_COMPONENT)\n"
-	@printf "target: $(TARGET)\n"
-	@printf "architecture:\n"
-	@printf "  host: $(ARCH)\n"
-	@printf "rust:\n"
+	@printf "\n"
+	@printf "• Target: $(TARGET)\n"
+	@printf "\n"
+	@printf "• Architecture: $(ARCH)\n"
+	@printf "\n"
+	@printf "• Rust:\n"
 	@printf "  %s\n" "$(call get_command_version,cargo)"
 	@printf "  %s\n" "$(call get_command_version,rustc)"
 	@printf "  %s\n" "$(call get_command_version,rustup)"
 	@printf "  %s\n" "$(call get_toolchain_version)"
 	@printf "\n"
-
+	@printf "• Hypervisors:\n"
+	@printf "\tDefault: $(DEFAULT_HYPERVISOR)\n"
+	@printf "\tKnown: $(sort $(HYPERVISORS))\n"
+	@printf "\tAvailable for this architecture: $(sort $(KNOWN_HYPERVISORS))\n"
+	@printf "\n"
+	@printf "• Summary:\n"
+	@printf "\n"
+	@printf "\tdestination install path (DESTDIR) : %s\n" $(abspath $(DESTDIR))
+	@printf "\tbinary installation path (BINDIR) : %s\n" $(abspath $(BINDIR))
+	@printf "\tbinaries to install :\n"
+	@printf \
+          "$(foreach b,$(sort $(SHIMV2)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+	@printf "\tconfigs to install (CONFIGS) :\n"
+	@printf \
+	  "$(foreach c,$(sort $(CONFIGS)),$(shell printf "\\t - $(c)\\\n"))"
+	@printf "\tinstall paths (CONFIG_PATHS) :\n"
+	@printf \
+	  "$(foreach c,$(sort $(CONFIG_PATHS)),$(shell printf "\\t - $(c)\\\n"))"
+	@printf "\talternate config paths (SYSCONFIG_PATHS) : %s\n"
+	@printf \
+	  "$(foreach c,$(sort $(SYSCONFIG_PATHS)),$(shell printf "\\t - $(c)\\\n"))"
+	@printf "\tdefault install path for $(DEFAULT_HYPERVISOR) (CONFIG_PATH) : %s\n" $(abspath $(CONFIG_PATH))
+	@printf "\tdefault alternate config path (SYSCONFIG) : %s\n" $(abspath $(SYSCONFIG))
+ifneq (,$(findstring $(HYPERVISOR_QEMU),$(KNOWN_HYPERVISORS)))
+	@printf "\t$(HYPERVISOR_QEMU) hypervisor path (QEMUPATH) : %s\n" $(abspath $(QEMUPATH))
+endif
+ifneq (,$(findstring $(HYPERVISOR_QEMU_VIRTIOFS),$(KNOWN_HYPERVISORS)))
+	@printf "\t$(HYPERVISOR_QEMU_VIRTIOFS) hypervisor path (QEMUVIRTIOFSPATH) : %s\n" $(abspath $(QEMUVIRTIOFSPATH))
+endif
+ifneq (,$(findstring $(HYPERVISOR_CLH),$(KNOWN_HYPERVISORS)))
+	@printf "\t$(HYPERVISOR_CLH) hypervisor path (CLHPATH) : %s\n" $(abspath $(CLHPATH))
+endif
+ifneq (,$(findstring $(HYPERVISOR_FC),$(KNOWN_HYPERVISORS)))
+	@printf "\t$(HYPERVISOR_FC) hypervisor path (FCPATH) : %s\n" $(abspath $(FCPATH))
+endif
+ifneq (,$(findstring $(HYPERVISOR_ACRN),$(KNOWN_HYPERVISORS)))
+	@printf "\t$(HYPERVISOR_ACRN) hypervisor path (ACRNPATH) : %s\n" $(abspath $(ACRNPATH))
+endif
+	@printf "\tassets path (PKGDATADIR) : %s\n" $(abspath $(PKGDATADIR))
+	@printf "\tshim path (PKGLIBEXECDIR) : %s\n" $(abspath $(PKGLIBEXECDIR))
+	@printf "\n"
 ## help: Show help comments that start with `##VAR` and `##TARGET`
 help: Makefile show-summary
 	@echo "========================== Help ============================="
@@ -429,10 +487,10 @@ codecov-html: check_tarpaulin
 install: install-runtime install-configs
 
 install-runtime: runtime
-	install -D $(TARGET_PATH) $(BINDIR)
+	install -D $(TARGET_PATH) $(DESTDIR)$(BINDIR)/$(notdir $(TARGET_PATH))
 
 install-configs: $(CONFIGS)
-	$(foreach f,$(CONFIGS),$(call INSTALL_CONFIG,$f,$(dir $(CONFIG_PATH)))) \
+	$(foreach f,$(CONFIGS),$(call INSTALL_FILE,$f,$(dir $(CONFIG_PATH)))) \
     sudo ln -sf $(DEFAULT_HYPERVISOR_CONFIG) $(DESTDIR)/$(CONFIG_PATH)
 
 .PHONY: \

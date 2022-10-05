@@ -128,8 +128,8 @@ fn get_sizing_info(annotation: Annotation) -> Result<(u64, i64, i64)> {
     // since we are *adding* our result to the config, a value of 0 will cause no change
     // and if the annotation is not assigned (but static resource management is), we will
     // log a *warning* to fill that with zero value
-    let period = annotation.get_sandbox_cpu_quota();
-    let quota = annotation.get_sandbox_cpu_period();
+    let period = annotation.get_sandbox_cpu_period();
+    let quota = annotation.get_sandbox_cpu_quota();
     let memory = annotation.get_sandbox_mem();
     Ok((period, quota, memory))
 }
@@ -137,31 +137,149 @@ fn get_sizing_info(annotation: Annotation) -> Result<(u64, i64, i64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kata_types::annotations::cri_containerd;
+    use std::collections::HashMap;
+
+    #[derive(Clone)]
+    struct InputData {
+        period: Option<u64>,
+        quota: Option<i64>,
+        memory: Option<i64>,
+    }
+
+    #[derive(Clone)]
+    struct TestData<'a> {
+        desc: &'a str,
+        input: InputData,
+        result: StaticResource,
+    }
+
+    fn get_test_data() -> Vec<TestData<'static>> {
+        [
+            TestData {
+                desc: "no resource limit",
+                input: InputData {
+                    period: None,
+                    quota: None,
+                    memory: None,
+                },
+                result: StaticResource { vcpu: 0, mem_mb: 0 },
+            },
+            TestData {
+                desc: "normal resource limit",
+                // data below should result in 2200 mCPU(round up to 3 vcpus) and 512 MiB of memory
+                input: InputData {
+                    period: Some(100_000),
+                    quota: Some(220_000),
+                    memory: Some(1024 * 1024 * 512),
+                },
+                result: StaticResource {
+                    vcpu: 3,
+                    mem_mb: 512,
+                },
+            },
+        ]
+        .to_vec()
+    }
 
     #[test]
-    fn test_static_resource_mgmt() {
-        // data below should result in 2200 mCPU(round up to 3 vcpus) and 512 MiB of memory
-        let period: u64 = 100000;
-        let memory: i64 = 1048576 * 512; // 512 MiB
-        let quota: i64 = 220000;
+    fn test_static_resource_mgmt_sandbox() {
+        let tests = get_test_data();
 
-        let cpu = oci::LinuxCpu {
-            period: Some(period),
-            quota: Some(quota),
-            ..Default::default()
-        };
-        if let Ok(cpu_resource) = LinuxContainerCpuResources::try_from(&cpu) {
-            if let Some(v) = cpu_resource.get_vcpus() {
-                assert_eq!(v, 3);
-            }
+        // run tests
+        for (i, d) in tests.iter().enumerate() {
+            let spec = oci::Spec {
+                annotations: HashMap::from([
+                    (
+                        cri_containerd::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                        cri_containerd::SANDBOX.to_string(),
+                    ),
+                    (
+                        cri_containerd::SANDBOX_CPU_PERIOD_KEY.to_string(),
+                        d.input.period.map_or(String::new(), |v| format!("{}", v)),
+                    ), // CPU period
+                    (
+                        cri_containerd::SANDBOX_CPU_QUOTA_KEY.to_string(),
+                        d.input.quota.map_or(String::new(), |v| format!("{}", v)),
+                    ), // CPU quota
+                    (
+                        cri_containerd::SANDBOX_MEM_KEY.to_string(),
+                        d.input.memory.map_or(String::new(), |v| format!("{}", v)),
+                    ), // memory in bytes
+                ]),
+                ..Default::default()
+            };
+
+            let static_resource = StaticResource::try_from(&spec);
+            assert!(
+                static_resource.is_ok(),
+                "test[{}]: {:?} should be ok",
+                i,
+                d.desc
+            );
+
+            let static_resource = static_resource.unwrap();
+            assert_eq!(
+                static_resource.vcpu, d.result.vcpu,
+                "test[{}]: {:?} vcpu should be {}",
+                i, d.desc, d.result.vcpu,
+            );
+            assert_eq!(
+                static_resource.mem_mb, d.result.mem_mb,
+                "test[{}]: {:?} memory should be {}",
+                i, d.desc, d.result.mem_mb,
+            );
         }
+    }
 
-        let mem_mb = if memory < 0 {
-            0
-        } else {
-            (memory / 1024 / 1024) as u32
-        };
+    #[test]
+    fn test_static_resource_mgmt_container() {
+        let tests = get_test_data();
 
-        assert_eq!(mem_mb, 512);
+        // run tests
+        for (i, d) in tests.iter().enumerate() {
+            let spec = oci::Spec {
+                annotations: HashMap::from([(
+                    cri_containerd::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                    cri_containerd::CONTAINER.to_string(),
+                )]),
+                linux: Some(oci::Linux {
+                    resources: Some(oci::LinuxResources {
+                        cpu: Some(oci::LinuxCpu {
+                            period: d.input.period,
+                            quota: d.input.quota,
+                            ..Default::default()
+                        }),
+                        memory: Some(oci::LinuxMemory {
+                            limit: d.input.memory,
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+
+            let static_resource = StaticResource::try_from(&spec);
+            assert!(
+                static_resource.is_ok(),
+                "test[{}]: {:?} should be ok",
+                i,
+                d.desc
+            );
+
+            let static_resource = static_resource.unwrap();
+            assert_eq!(
+                static_resource.vcpu, d.result.vcpu,
+                "test[{}]: {:?} vcpu should be {}",
+                i, d.desc, d.result.vcpu,
+            );
+            assert_eq!(
+                static_resource.mem_mb, d.result.mem_mb,
+                "test[{}]: {:?} memory should be {}",
+                i, d.desc, d.result.mem_mb,
+            );
+        }
     }
 }

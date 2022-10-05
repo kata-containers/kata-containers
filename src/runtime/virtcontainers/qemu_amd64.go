@@ -32,6 +32,8 @@ type qemuAmd64 struct {
 	// inherit from qemuArchBase, overwrite methods if needed
 	qemuArchBase
 
+	snpGuest bool
+
 	vmFactory bool
 
 	devLoadersCount uint32
@@ -44,7 +46,7 @@ const (
 
 	defaultQemuMachineType = QemuQ35
 
-	defaultQemuMachineOptions = "accel=kvm,kernel_irqchip=on"
+	defaultQemuMachineOptions = "accel=kvm"
 
 	splitIrqChipMachineOptions = "accel=kvm,kernel_irqchip=split"
 
@@ -138,6 +140,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			legacySerial:         config.LegacySerial,
 		},
 		vmFactory: factory,
+		snpGuest:  config.SevSnpGuest,
 	}
 
 	if config.ConfidentialGuest {
@@ -185,6 +188,21 @@ func (q *qemuAmd64) bridges(number uint32) {
 	q.Bridges = genericBridges(number, q.qemuMachine.Type)
 }
 
+func (q *qemuAmd64) cpuModel() string {
+	var err error
+	cpuModel := defaultCPUModel
+
+	// Temporary until QEMU cpu model 'host' supports AMD SEV-SNP
+	protection, err := availableGuestProtection()
+	if err == nil {
+		if protection == snpProtection && q.snpGuest {
+			cpuModel = "EPYC-v4"
+		}
+	}
+
+	return cpuModel
+}
+
 func (q *qemuAmd64) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {
 	return genericMemoryTopology(memoryMb, hostMemoryMb, slots, q.memoryOffset)
 }
@@ -213,6 +231,11 @@ func (q *qemuAmd64) enableProtection() error {
 	if err != nil {
 		return err
 	}
+	// Configure SNP only if specified in config
+	if q.protection == snpProtection && !q.snpGuest {
+		q.protection = sevProtection
+	}
+
 	logger := hvLogger.WithFields(logrus.Fields{
 		"subsystem":               "qemuAmd64",
 		"machine":                 q.qemuMachine,
@@ -234,6 +257,13 @@ func (q *qemuAmd64) enableProtection() error {
 		}
 		q.qemuMachine.Options += "confidential-guest-support=sev"
 		logger.Info("Enabling SEV guest protection")
+		return nil
+	case snpProtection:
+		if q.qemuMachine.Options != "" {
+			q.qemuMachine.Options += ","
+		}
+		q.qemuMachine.Options += "confidential-guest-support=snp"
+		logger.Info("Enabling SNP guest protection")
 		return nil
 
 	// TODO: Add support for other x86_64 technologies
@@ -269,12 +299,21 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 				File:           firmware,
 				FirmwareVolume: firmwareVolume,
 			}), "", nil
+	case snpProtection:
+		return append(devices,
+			govmmQemu.Object{
+				Type:            govmmQemu.SNPGuest,
+				ID:              "snp",
+				Debug:           false,
+				File:            firmware,
+				CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
+				ReducedPhysBits: 1,
+			}), "", nil
 	case noneProtection:
 		return devices, firmware, nil
 
 	default:
 		return devices, "", fmt.Errorf("Unsupported guest protection technology: %v", q.protection)
-	}
 }
 
 // Add the SEV Object qemu parameters for sev guest protection

@@ -40,6 +40,10 @@ impl AgentManager for KataAgent {
         self.stop_log_forwarder().await;
     }
 
+    async fn agent_sock(&self) -> Result<String> {
+        self.agent_sock().await
+    }
+
     async fn agent_config(&self) -> AgentConfig {
         self.agent_config().await
     }
@@ -96,9 +100,9 @@ impl_agent!(
     stats_container | crate::ContainerID | crate::StatsContainerResponse | None,
     pause_container | crate::ContainerID | crate::Empty | None,
     resume_container | crate::ContainerID | crate::Empty | None,
-    write_stdin | crate::WriteStreamRequest | crate::WriteStreamResponse | None,
-    read_stdout | crate::ReadStreamRequest | crate::ReadStreamResponse | None,
-    read_stderr | crate::ReadStreamRequest | crate::ReadStreamResponse | None,
+    write_stdin | crate::WriteStreamRequest | crate::WriteStreamResponse | Some(0),
+    read_stdout | crate::ReadStreamRequest | crate::ReadStreamResponse | Some(0),
+    read_stderr | crate::ReadStreamRequest | crate::ReadStreamResponse | Some(0),
     close_stdin | crate::CloseStdinRequest | crate::Empty | None,
     tty_win_resize | crate::TtyWinResizeRequest | crate::Empty | None,
     update_interface | crate::UpdateInterfaceRequest | crate::Interface | None,

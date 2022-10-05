@@ -128,9 +128,12 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_DB@"
 #guest_hook_path = "/usr/share/oci/hooks"
 
 # Shared file system type:
-#   - virtio-fs (default)
+#   - inline-virtio-fs (default)
+#   - virtio-fs
 #   - virtio-9p
 #   - virtio-fs-nydus
+# "inline-virtio-fs" is the same as "virtio-fs", but it is running in the same process
+# of shim, does not need an external virtiofsd process.
 shared_fs = "@DBSHAREDFS@"
 
 [agent.@PROJECT_TYPE@]
