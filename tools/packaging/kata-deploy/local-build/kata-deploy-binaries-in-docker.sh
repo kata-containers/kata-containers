@@ -31,6 +31,12 @@ if [ ${docker_gid} == ${gid} ]; then
 	docker_gid=""
 fi
 
+remove_dot_docker_dir=false
+if [ ! -d "$HOME/.docker" ]; then
+	mkdir $HOME/.docker
+	remove_dot_docker_dir=true
+fi
+
 docker build -q -t build-kata-deploy \
 	--build-arg IMG_USER="${USER}" \
 	--build-arg UID=${uid} \
@@ -39,6 +45,7 @@ docker build -q -t build-kata-deploy \
 	"${script_dir}/dockerbuild/"
 
 docker run \
+	-v $HOME/.docker:/root/.docker \
 	-v /var/run/docker.sock:/var/run/docker.sock \
 	--user ${uid}:${gid} \
 	--env CI="${CI:-}" \
@@ -52,3 +59,7 @@ docker run \
 	--rm \
 	-w ${script_dir} \
 	build-kata-deploy "${kata_deploy_create}" $@
+
+if [ $remove_dot_docker_dir == true ]; then
+	rm -rf "$HOME/.docker"
+fi
