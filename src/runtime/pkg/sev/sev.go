@@ -152,11 +152,13 @@ func CalculateLaunchDigest(firmwarePath, kernelPath, initrdPath, cmdline string)
 		return res, err
 	}
 
-	ht, err := constructSevHashesTable(kernelPath, initrdPath, cmdline)
-	if err != nil {
-		return res, err
+	if kernelPath != "" {
+		ht, err := constructSevHashesTable(kernelPath, initrdPath, cmdline)
+		if err != nil {
+			return res, err
+		}
+		digest.Write(ht)
 	}
-	digest.Write(ht)
 
 	copy(res[:], digest.Sum(nil))
 	return res, nil
