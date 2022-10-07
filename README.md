@@ -34,6 +34,8 @@ technologies:
 | `ppc64le` | [IBM](https://www.ibm.com) Power |
 | `s390x` | [IBM](https://www.ibm.com) Z & LinuxONE SIE |
 
+DO not merge - intel link test
+
 ### Hardware requirements
 
 The [Kata Containers runtime](src/runtime) provides a command to
