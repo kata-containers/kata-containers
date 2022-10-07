@@ -6,8 +6,9 @@
 use anyhow::{anyhow, Result};
 use nix::errno::Errno;
 use nix::pty;
-use nix::sys::{socket, uio};
+use nix::sys::socket;
 use nix::unistd::{self, dup2};
+use std::io::IoSlice;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::path::Path;
 
@@ -23,10 +24,7 @@ pub fn setup_console_socket(csocket_path: &str) -> Result<Option<RawFd>> {
         None,
     )?;
 
-    match socket::connect(
-        socket_fd,
-        &socket::SockAddr::Unix(socket::UnixAddr::new(Path::new(csocket_path))?),
-    ) {
+    match socket::connect(socket_fd, &socket::UnixAddr::new(Path::new(csocket_path))?) {
         Ok(()) => Ok(Some(socket_fd)),
         Err(errno) => Err(anyhow!("failed to open console fd: {}", errno)),
     }
@@ -36,11 +34,11 @@ pub fn setup_master_console(socket_fd: RawFd) -> Result<()> {
     let pseudo = pty::openpty(None, None)?;
 
     let pty_name: &[u8] = b"/dev/ptmx";
-    let iov = [uio::IoVec::from_slice(pty_name)];
+    let iov = [IoSlice::new(pty_name)];
     let fds = [pseudo.master];
     let cmsg = socket::ControlMessage::ScmRights(&fds);
 
-    socket::sendmsg(socket_fd, &iov, &[cmsg], socket::MsgFlags::empty(), None)?;
+    socket::sendmsg::<()>(socket_fd, &iov, &[cmsg], socket::MsgFlags::empty(), None)?;
 
     unistd::setsid()?;
     let ret = unsafe { libc::ioctl(pseudo.slave, libc::TIOCSCTTY) };
