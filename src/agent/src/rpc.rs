@@ -390,8 +390,22 @@ impl AgentService {
             if p.init && sig == libc::SIGTERM && !is_signal_handled(&proc_status_file, sig as u32) {
                 sig = libc::SIGKILL;
             }
-            p.signal(sig)?;
-        }
+
+            match p.signal(sig) {
+                Err(Errno::ESRCH) => {
+                    info!(
+                        sl!(),
+                        "signal encounter ESRCH, continue";
+                        "container-id" => cid.clone(),
+                        "exec-id" => eid.clone(),
+                        "pid" => p.pid,
+                        "signal" => sig,
+                    );
+                }
+                Err(err) => return Err(anyhow!(err)),
+                Ok(()) => (),
+            }
+        };
 
         if eid.is_empty() {
             // eid is empty, signal all the remaining processes in the container cgroup
