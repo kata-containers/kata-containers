@@ -1507,7 +1507,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "libseccomp",
- "nix 0.23.1",
+ "nix 0.24.2",
  "oci",
  "path-absolutize",
  "protobuf",
