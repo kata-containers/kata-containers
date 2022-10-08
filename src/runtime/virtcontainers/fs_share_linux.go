@@ -405,7 +405,11 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 			rootfsStorage.Source = blockDrive.DevNo
 		case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock:
 			rootfsStorage.Driver = kataBlkDevType
-			rootfsStorage.Source = blockDrive.PCIPath.String()
+			if f.sandbox.config.HypervisorType == AcrnHypervisor {
+				rootfsStorage.Source = blockDrive.VirtPath
+			} else {
+				rootfsStorage.Source = blockDrive.PCIPath.String()
+			}
 		case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioSCSI:
 			rootfsStorage.Driver = kataSCSIDevType
 			rootfsStorage.Source = blockDrive.SCSIAddr
