@@ -10,6 +10,7 @@ COMPONENTS += libs
 COMPONENTS += agent
 COMPONENTS += runtime
 COMPONENTS += runtime-rs
+COMPONENTS += dragonball
 
 # List of available tools
 TOOLS =
