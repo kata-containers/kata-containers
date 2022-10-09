@@ -165,6 +165,8 @@ jobs:
           PR_SHA=$(git log --format=format:%H -n1)
           mv kata-static.tar.xz $GITHUB_WORKSPACE/tools/packaging/kata-deploy/kata-static.tar.xz
           docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t quay.io/kata-containers/kata-deploy-ci:$PR_SHA $GITHUB_WORKSPACE/tools/packaging/kata-deploy
+          echo ${{ secrets.QUAY_DEPLOYER_USERNAME }} | wc
+          echo ${{ secrets.QUAY_DEPLOYER_PASSWORD }} | wc
           docker login -u ${{ secrets.QUAY_DEPLOYER_USERNAME }} -p ${{ secrets.QUAY_DEPLOYER_PASSWORD }} quay.io
           docker push quay.io/kata-containers/kata-deploy-ci:$PR_SHA
           mkdir -p packaging/kata-deploy
