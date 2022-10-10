@@ -3,16 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use clap::{
-    Args, 
-    Parser, 
-    Subcommand
-};
+use clap::{Args, Parser, Subcommand};
 
 use thiserror::Error;
 
 #[derive(Parser, Debug)]
-#[clap(name = "kata-ctl", author, about="Kata Containers control tool")]
+#[clap(name = "kata-ctl", author, about = "Kata Containers control tool")]
 pub struct KataCtlCli {
     #[clap(subcommand)]
     pub command: Commands,
@@ -45,7 +41,7 @@ pub enum Commands {
     Version,
 }
 
-#[derive(Debug,Args,Error)]
+#[derive(Debug, Args, Error)]
 #[error("Argument is not valid")]
 pub struct CheckArgument {
     #[clap(subcommand)]
@@ -64,7 +60,7 @@ pub enum CheckSubCommand {
     CheckVersionOnly,
 }
 
-#[derive(Debug,Args)]
+#[derive(Debug, Args)]
 pub struct MetricsCommand {
     #[clap(subcommand)]
     pub metrics_cmd: MetricsSubCommand,
@@ -73,7 +69,7 @@ pub struct MetricsCommand {
 #[derive(Debug, Subcommand)]
 pub enum MetricsSubCommand {
     /// Arguments for metrics
-	MetricsArgs,
+    MetricsArgs,
 }
 
 // #[derive(Parser, Debug)]
