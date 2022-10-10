@@ -26,5 +26,4 @@ clean:
 	cargo clean
 
 test:
-	@echo "INFO: testing dragonball for development build"
-	cargo test --all-features -- --nocapture
+	@echo "INFO: skip testing dragonball"
