@@ -3,33 +3,23 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-mod args;
 mod arch;
+mod args;
 mod check;
 mod ops;
 
-use clap::Parser;
 use anyhow::Result;
+use clap::Parser;
 use std::process::exit;
 
-use args::{
-    KataCtlCli,
-    Commands
-};
+use args::{Commands, KataCtlCli};
 
 use ops::check_ops::{
-    handle_check,
-    handle_check_volume,
-    handle_env,
-    handle_exec,
-    handle_factory,
-    handle_iptables,
-    handle_metrics,
-    handle_version
+    handle_check, handle_check_volume, handle_env, handle_exec, handle_factory, handle_iptables,
+    handle_metrics, handle_version,
 };
 
 fn real_main() -> Result<()> {
-
     let args = KataCtlCli::parse();
 
     match args.command {

@@ -7,12 +7,7 @@ use crate::arch;
 use crate::check;
 use crate::ops::version;
 
-use crate::args::{
-    CheckArgument,
-    CheckSubCommand,
-    IptablesCommand,
-    MetricsCommand
-};
+use crate::args::{CheckArgument, CheckSubCommand, IptablesCommand, MetricsCommand};
 
 use anyhow::Result;
 
@@ -60,11 +55,11 @@ pub fn handle_factory() -> Result<()> {
     Ok(())
 }
 
-pub fn handle_iptables(args: IptablesCommand) -> Result<()> {
+pub fn handle_iptables(_args: IptablesCommand) -> Result<()> {
     Ok(())
 }
 
-pub fn handle_metrics(args: MetricsCommand) -> Result<()> {
+pub fn handle_metrics(_args: MetricsCommand) -> Result<()> {
     Ok(())
 }
 

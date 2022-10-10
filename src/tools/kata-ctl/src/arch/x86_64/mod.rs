@@ -7,8 +7,8 @@
 pub use arch_specific::*;
 
 mod arch_specific {
-    use anyhow::{anyhow, Result};
     use crate::check;
+    use anyhow::{anyhow, Result};
 
     const PROC_CPUINFO: &str = "/proc/cpuinfo";
     const CPUINFO_DELIMITER: &str = "\nprocessor";
@@ -30,7 +30,10 @@ mod arch_specific {
         // TODO: Add more information to output (see kata-check in go tool); adjust formatting
         let missing_cpu_attributes = check::check_cpu_attribs(&cpu_info, CPU_ATTRIBS_INTEL)?;
         if missing_cpu_attributes.len() > 0 {
-            eprintln!("WARNING: Missing CPU attributes {:?}", missing_cpu_attributes);
+            eprintln!(
+                "WARNING: Missing CPU attributes {:?}",
+                missing_cpu_attributes
+            );
         }
         let missing_cpu_flags = check::check_cpu_flags(&cpu_flags, CPU_FLAGS_INTEL)?;
         if missing_cpu_flags.len() > 0 {
@@ -39,7 +42,6 @@ mod arch_specific {
 
         Ok(())
     }
-
 
     pub fn check() -> Result<()> {
         println!("INFO: check: x86_64");
