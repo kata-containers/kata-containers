@@ -128,6 +128,7 @@ pub struct ContainerConfig {
     pub bundle: String,
     pub rootfs_mounts: Vec<Mount>,
     pub terminal: bool,
+    pub options: Option<Vec<u8>>,
     pub stdin: Option<String>,
     pub stdout: Option<String>,
     pub stderr: Option<String>,

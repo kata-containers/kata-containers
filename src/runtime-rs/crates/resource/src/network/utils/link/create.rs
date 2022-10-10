@@ -127,3 +127,63 @@ fn create_queue(name: &str, flags: libc::c_int) -> Result<(File, String)> {
     };
     Ok((file, req.get_name()?))
 }
+
+#[cfg(test)]
+pub mod net_test_utils {
+    use crate::network::network_model::tc_filter_model::fetch_index;
+
+    // remove a link by its name
+    #[allow(dead_code)]
+    pub async fn delete_link(
+        handle: &rtnetlink::Handle,
+        name: &str,
+    ) -> Result<(), rtnetlink::Error> {
+        let link_index = fetch_index(handle, name)
+            .await
+            .expect("failed to fetch index");
+        // the ifindex of a link will not change during its lifetime, so the index
+        // remains the same between the query above and the deletion below
+        handle.link().del(link_index).execute().await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use scopeguard::defer;
+    use test_utils::skip_if_not_root;
+
+    use crate::network::{
+        network_pair::get_link_by_name, utils::link::create::net_test_utils::delete_link,
+    };
+
+    use super::*;
+
+    #[actix_rt::test]
+    async fn test_create_link() {
+        let name_tun = "___test_tun";
+        let name_tap = "___test_tap";
+
+        // tests should be taken under root
+        skip_if_not_root!();
+
+        if let Ok((conn, handle, _)) =
+            rtnetlink::new_connection().context("failed to create netlink connection")
+        {
+            let thread_handler = tokio::spawn(conn);
+            defer!({
+                thread_handler.abort();
+            });
+
+            assert!(create_link(name_tun, LinkType::Tun, 2).is_ok());
+            assert!(create_link(name_tap, LinkType::Tap, 2).is_ok());
+            assert!(get_link_by_name(&handle, name_tap).await.is_ok());
+            assert!(get_link_by_name(&handle, name_tun).await.is_ok());
+            assert!(delete_link(&handle, name_tun).await.is_ok());
+            assert!(delete_link(&handle, name_tap).await.is_ok());
+
+            // link does not present
+            assert!(get_link_by_name(&handle, name_tun).await.is_err());
+            assert!(get_link_by_name(&handle, name_tap).await.is_err());
+        }
+    }
+}

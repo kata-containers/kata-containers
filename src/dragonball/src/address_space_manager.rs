@@ -33,9 +33,9 @@ use log::{debug, error, info, warn};
 use nix::sys::mman;
 use nix::unistd::dup;
 #[cfg(feature = "atomic-guest-memory")]
-use vm_memory::atomic::GuestMemoryAtomic;
+use vm_memory::GuestMemoryAtomic;
 use vm_memory::{
-    Address, FileOffset, GuestAddress, GuestAddressSpace, GuestMemoryMmap, GuestMemoryRegion,
+    address::Address, FileOffset, GuestAddress, GuestAddressSpace, GuestMemoryMmap, GuestMemoryRegion,
     GuestRegionMmap, GuestUsize, MemoryRegionAddress, MmapRegion,
 };
 

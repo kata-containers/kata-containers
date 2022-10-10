@@ -577,7 +577,13 @@ impl BlockDeviceMgr {
     ) -> std::result::Result<(), DeviceMgrError> {
         // Respect user configuration if kernel_cmdline contains "root=",
         // special attention for the case when kernel command line starting with "root=xxx"
-        let old_kernel_cmdline = format!(" {}", kernel_config.kernel_cmdline().as_str());
+        let old_kernel_cmdline = format!(
+            " {:?}",
+            kernel_config
+                .kernel_cmdline()
+                .as_cstring()
+                .map_err(DeviceMgrError::Cmdline)?
+        );
         if !old_kernel_cmdline.contains(" root=") && self.has_root_block {
             let cmdline = kernel_config.kernel_cmdline_mut();
             if let Some(ref uuid) = self.part_uuid {

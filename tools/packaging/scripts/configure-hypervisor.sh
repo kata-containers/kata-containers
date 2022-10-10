@@ -324,20 +324,20 @@ generate_qemu_options() {
 	# enabled.
 	#
 	# From Kata Containers 2.5.0-alpha2 all arches but powerpc have been
-        # using the new implementation of virtiofs daemon, which is not part
-       	# of QEMU.
-	# For the powwer, at least for now, keep building virtiofsd while
+	# using the new implementation of virtiofs daemon, which is not part
+	# of QEMU.
+	# For the power, at least for now, keep building virtiofsd while
 	# building QEMU.
 	case "$arch" in
 	aarch64)
-	        ;;
+		;;
 	x86_64)
-	        ;;
+		;;
 	ppc64le)
-	        qemu_options+=(functionality:--enable-virtiofsd)
-	        ;;
+		qemu_options+=(functionality:--enable-virtiofsd)
+		;;
 	s390x)
-	        ;;
+		;;
 	esac
 
 	qemu_options+=(functionality:--enable-virtfs)
@@ -417,15 +417,15 @@ generate_qemu_options() {
 	# AVX2 is enabled by default by x86_64, make sure it's enabled only
 	# for that architecture
 	if [ "$arch" == x86_64 ]; then
-	    qemu_options+=(speed:--enable-avx2)
-	    qemu_options+=(speed:--enable-avx512f)
-	    # According to QEMU's nvdimm documentation: When 'pmem' is 'on' and QEMU is
-	    # built with libpmem support, QEMU will take necessary operations to guarantee
-	    # the persistence of its own writes to the vNVDIMM backend.
-	    qemu_options+=(functionality:--enable-libpmem)
+		qemu_options+=(speed:--enable-avx2)
+		qemu_options+=(speed:--enable-avx512f)
+		# According to QEMU's nvdimm documentation: When 'pmem' is 'on' and QEMU is
+		# built with libpmem support, QEMU will take necessary operations to guarantee
+		# the persistence of its own writes to the vNVDIMM backend.
+		qemu_options+=(functionality:--enable-libpmem)
 	else
-	    qemu_options+=(speed:--disable-avx2)
-	    qemu_options+=(functionality:--disable-libpmem)
+		qemu_options+=(speed:--disable-avx2)
+		qemu_options+=(functionality:--disable-libpmem)
 	fi
 	# Enable libc malloc_trim() for memory optimization.
 	qemu_options+=(speed:--enable-malloc-trim)
@@ -541,7 +541,7 @@ main() {
 		die "cannot determine qemu version from file $qemu_version_file"
 
 	if ! gt_eq "${qemu_version}" "6.1.0" ; then
-	    die "Kata requires QEMU >= 6.1.0"
+		die "Kata requires QEMU >= 6.1.0"
 	fi
 
 	local gcc_version_major=$(gcc -dumpversion | cut -f1 -d.)

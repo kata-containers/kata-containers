@@ -296,7 +296,9 @@ install_virtiofsd() {
 #Install all components that are not assets
 install_shimv2() {
 	GO_VERSION="$(yq r ${versions_yaml} languages.golang.meta.newest-version)"
+	RUST_VERSION="$(yq r ${versions_yaml} languages.rust.meta.newest-version)"
 	export GO_VERSION
+	export RUST_VERSION
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }
 
@@ -378,6 +380,7 @@ handle_build() {
 
 	virtiofsd) install_virtiofsd ;;
 
+	
 	*)
 		die "Invalid build target ${build_target}"
 		;;

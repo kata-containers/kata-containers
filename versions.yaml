@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v26.0"
+      version: "2115a4156891804e5fc7bbd0d1831d2e92a0c50e"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -102,6 +102,11 @@ assets:
         description: "VMM that uses KVM and supports TDX"
         url: "https://github.com/intel/qemu-dcp"
         tag: "SPR-BKC-QEMU-v2.5"
+      snp:
+        description: "VMM that uses KVM and supports AMD SEV-SNP"
+        url: "https://github.com/AMDESE/qemu"
+        branch: "snp-v3"
+        commit: "ffa95097ee"
 
     qemu-experimental:
       description: "QEMU with virtiofs support"
@@ -160,6 +165,10 @@ assets:
       description: "Linux kernel that supports SEV"
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
       version: "v5.19.2"
+    snp:
+      description: "Linux kernel that supports AMD SEV-SNP for VMs"
+      url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
+      version: "v5.19.2"
 
   kernel-experimental:
     description: "Linux kernel with virtio-fs support"
@@ -212,7 +221,7 @@ externals:
 
   gperf:
     description: "GNU gperf is a perfect hash function generator"
-    url: "https://ftpmirror.gnu.org/gnu/gperf"
+    url: "http://ftp.gnu.org/pub/gnu/gperf/"
     version: "3.1"
 
   kubernetes:
@@ -349,7 +358,7 @@ specs:
     uscan-url: >-
       https://github.com/opencontainers/runtime-spec/tags
       .*/v?(\d\S+)\.tar\.gz
-    version: "v1.0.0-rc5"
+    version: "v1.0.2"
 
 plugins:
   description: |

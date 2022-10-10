@@ -14,18 +14,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/pkg/errors"
+	"github.com/prometheus/procfs"
 	"github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -39,56 +39,9 @@ var acrnTracingTags = map[string]string{
 	"type":      "acrn",
 }
 
-// Since ACRN is using the store in a quite abnormal way, let's first draw it back from store to here
-
-/*
-// UUIDPathSuffix is the suffix used for uuid storage
-const (
-	UUIDPathSuffix = "uuid"
-	uuidFile       = "uuid.json"
-)
-*/
-
-// ACRN currently supports only known UUIDs for security
-// reasons (FuSa). When launching VM, only these pre-defined
-// UUID should be used else VM launch will fail. The main
-// of purpose UUID is is not used for image identification
-// but generating vSeed (virtual seed which takes UUID
-// as one of the parameter) which is used during VM boot.
-
-// acrnUUIDsToIdx lists Idx corresponding to the UUID
-var acrnUUIDsToIdx = map[string]uint8{
-	"a7ada506-1ab0-4b6b-a0da-e513ca9b8c2f": 0,
-	"dbeae168-26e4-4084-9227-622193e56325": 1,
-	"18ed60cd-e9ea-4bf4-8f87-8523fc8347a3": 2,
-	"3f90b6f8-449a-4e72-b99c-063a889fc422": 3,
-	"1ae8587b-e599-4b59-8260-6d14ac166a55": 4,
-	"75f3b94b-49ed-48fc-b019-577ef45adf2b": 5,
-	"ca62cf3c-8359-47e8-a3f7-de2d682dfb02": 6,
-	"e3189497-c3f6-4b97-9e2c-18ac0ab9064d": 7,
-}
-
-// acrnIdxToUUIDs lists UUIDs corresponding to the Idx
-var acrnIdxToUUIDs = map[uint8]string{
-	0: "a7ada506-1ab0-4b6b-a0da-e513ca9b8c2f",
-	1: "dbeae168-26e4-4084-9227-622193e56325",
-	2: "18ed60cd-e9ea-4bf4-8f87-8523fc8347a3",
-	3: "3f90b6f8-449a-4e72-b99c-063a889fc422",
-	4: "1ae8587b-e599-4b59-8260-6d14ac166a55",
-	5: "75f3b94b-49ed-48fc-b019-577ef45adf2b",
-	6: "ca62cf3c-8359-47e8-a3f7-de2d682dfb02",
-	7: "e3189497-c3f6-4b97-9e2c-18ac0ab9064d",
-}
-
-// AcrnInfo keeps track of UUID availability
-type AcrnInfo struct {
-	UUIDAvailability [8]uint8
-}
-
 // AcrnState keeps track of VM UUID, PID.
 type AcrnState struct {
-	UUID string
-	PID  int
+	PID int
 }
 
 // Acrn is an Hypervisor interface implementation for the Linux acrn hypervisor.
@@ -98,40 +51,15 @@ type Acrn struct {
 	arch       acrnArch
 	store      persistapi.PersistDriver
 	id         string
-	state      AcrnState
 	acrnConfig Config
 	config     HypervisorConfig
-	info       AcrnInfo
+	state      AcrnState
 }
-
-type acrnPlatformInfo struct {
-	cpuNum            uint16     //nolint
-	reserved0         [126]uint8 //nolint
-	maxVCPUsPerVM     uint16     //nolint
-	maxKataContainers uint8
-	reserved1         [125]uint8 //nolint
-}
-
-const acrnDevice = "/dev/acrn_vhm"
-
-// ioctl_ACRN_CREATE_VM is the IOCTL to create VM in ACRN.
-// Current Linux mainstream kernel doesn't have support for ACRN.
-// Due to this several macros are not defined in Linux headers.
-// Until the support is available, directly use the value instead
-// of macros.
-//https://github.com/kata-containers/runtime/issues/1784
-const ioctl_ACRN_GET_PLATFORM_INFO = 0x43000003 //nolint
 
 const (
 	acrnConsoleSocket          = "console.sock"
 	acrnStopSandboxTimeoutSecs = 15
 )
-
-//UUIDBusy marks a particular UUID as busy
-const UUIDBusy = 1
-
-//UUIDFree marks a particular UUID as free
-const UUIDFree = 0
 
 // agnostic list of kernel parameters
 var acrnDefaultKernelParameters = []Param{
@@ -168,6 +96,49 @@ func (a *Acrn) Capabilities(ctx context.Context) types.Capabilities {
 
 func (a *Acrn) HypervisorConfig() HypervisorConfig {
 	return a.config
+}
+
+// Get cpu apicid to identify vCPU that will be assigned for a VM by reading `proc/cpuinfo`
+func (a *Acrn) getNextApicid() (string, error) {
+	fs, err := procfs.NewFS("/proc")
+	if err != nil {
+		return "", err
+	}
+
+	cpuinfo, err := fs.CPUInfo()
+	if err != nil {
+		return "", err
+	}
+
+	prevIdx := -1
+	fileName := filepath.Join(a.config.VMStorePath, "cpu_affinity_idx")
+	_, err = os.Stat(fileName)
+	if err == nil {
+		data, err := os.ReadFile(fileName)
+		if err != nil {
+			a.Logger().Error("Loading cpu affinity index from file failed!")
+			return "", err
+		}
+
+		prevIdx, err = strconv.Atoi(string(data))
+		if err != nil {
+			a.Logger().Error("CreateVM: Convert from []byte to integer failed!")
+			return "", err
+		}
+
+		if prevIdx >= (len(cpuinfo) - 1) {
+			prevIdx = -1
+		}
+	}
+
+	currentIdx := prevIdx + 1
+	err = os.WriteFile(fileName, []byte(strconv.Itoa(currentIdx)), defaultFilePerms)
+	if err != nil {
+		a.Logger().Error("Storing cpu affinity index from file failed!")
+		return "", err
+	}
+
+	return cpuinfo[currentIdx].APICID, nil
 }
 
 // get the acrn binary path
@@ -228,15 +199,7 @@ func (a *Acrn) appendImage(devices []Device, imagePath string) ([]Device, error)
 		return nil, fmt.Errorf("Image path is empty: %s", imagePath)
 	}
 
-	// Get sandbox and increment the globalIndex.
-	// This is to make sure the VM rootfs occupies
-	// the first Index which is /dev/vda.
 	var err error
-
-	if _, err = a.sandbox.GetAndSetSandboxBlockIndex(); err != nil {
-		return nil, err
-	}
-
 	devices, err = a.arch.appendImage(devices, imagePath)
 	if err != nil {
 		return nil, err
@@ -294,36 +257,6 @@ func (a *Acrn) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 
 	a.id = id
 	a.arch = newAcrnArch(a.config)
-
-	var create bool
-	var uuid string
-
-	if a.state.UUID == "" {
-		create = true
-	}
-
-	if create {
-		a.Logger().Debug("Setting UUID")
-
-		var err error
-
-		if uuid, err = a.GetNextAvailableUUID(); err != nil {
-			return err
-		}
-		a.state.UUID = uuid
-		Idx := acrnUUIDsToIdx[uuid]
-		a.info.UUIDAvailability[Idx] = UUIDBusy
-
-		// The path might already exist, but in case of VM templating,
-		// we have to create it since the sandbox has not created it yet.
-		if err = os.MkdirAll(filepath.Join(a.config.RunStorePath, id), DirMode); err != nil {
-			return err
-		}
-
-		if err = a.storeInfo(); err != nil {
-			return err
-		}
-	}
 
 	return nil
 }
@@ -386,10 +319,6 @@ func (a *Acrn) CreateVM(ctx context.Context, id string, network Network, hypervi
 		Params:    a.kernelParameters(),
 	}
 
-	if a.state.UUID == "" {
-		return fmt.Errorf("ACRN UUID should not be empty")
-	}
-
 	devices, err := a.buildDevices(ctx, imagePath)
 	if err != nil {
 		return err
@@ -405,15 +334,25 @@ func (a *Acrn) CreateVM(ctx context.Context, id string, network Network, hypervi
 		return err
 	}
 
+	vmName := fmt.Sprintf("sbx-%s", a.id)
+	if len(vmName) > 15 {
+		return fmt.Errorf("VM Name len is %d but ACRN supports max VM name len of 15.", len(vmName))
+	}
+
+	apicID, err := a.getNextApicid()
+	if err != nil {
+		return err
+	}
+
 	acrnConfig := Config{
-		UUID:     a.state.UUID,
 		ACPIVirt: true,
 		Path:     acrnPath,
 		CtlPath:  acrnctlPath,
 		Memory:   memory,
 		Devices:  devices,
 		Kernel:   kernel,
-		Name:     fmt.Sprintf("sandbox-%s", a.id),
+		Name:     vmName,
+		ApicID:   apicID,
 	}
 
 	a.acrnConfig = acrnConfig
@@ -453,6 +392,7 @@ func (a *Acrn) StartVM(ctx context.Context, timeoutSecs int) error {
 
 	var strErr string
 	var PID int
+	a.Logger().Error("StartVM: LaunchAcrn() function called")
 	PID, strErr, err = LaunchAcrn(a.acrnConfig, virtLog.WithField("subsystem", "acrn-dm"))
 	if err != nil {
 		return fmt.Errorf("%s", strErr)
@@ -496,19 +436,23 @@ func (a *Acrn) StopVM(ctx context.Context, waitOnly bool) (err error) {
 		}
 	}()
 
-	// Mark the UUID as free
-	uuid := a.state.UUID
-	Idx := acrnUUIDsToIdx[uuid]
-
-	if err = a.loadInfo(); err != nil {
-		a.Logger().Info("Failed to Load UUID availabiity info")
+	fileName := filepath.Join(a.config.VMStorePath, "cpu_affinity_idx")
+	data, err := os.ReadFile(fileName)
+	if err != nil {
+		a.Logger().Error("Loading cpu affinity index from file failed!")
 		return err
 	}
 
-	a.info.UUIDAvailability[Idx] = UUIDFree
+	currentIdx, err := strconv.Atoi(string(data))
+	if err != nil {
+		a.Logger().Error("Converting from []byte to integer failed!")
+		return err
+	}
 
-	if err = a.storeInfo(); err != nil {
-		a.Logger().Info("Failed to store UUID availabiity info")
+	currentIdx = currentIdx - 1
+	err = os.WriteFile(fileName, []byte(strconv.Itoa(currentIdx)), defaultFilePerms)
+	if err != nil {
+		a.Logger().Error("Storing cpu affinity index from file failed!")
 		return err
 	}
 
@@ -617,8 +561,7 @@ func (a *Acrn) AddDevice(ctx context.Context, devInfo interface{}, devType Devic
 	case types.Socket:
 		a.acrnConfig.Devices = a.arch.appendSocket(a.acrnConfig.Devices, v)
 	case types.VSock:
-		// Not supported. return success
-		err = nil
+		a.acrnConfig.Devices = a.arch.appendVSock(a.acrnConfig.Devices, v)
 	case Endpoint:
 		a.acrnConfig.Devices = a.arch.appendNetwork(a.acrnConfig.Devices, v)
 	case config.BlockDrive:
@@ -644,7 +587,9 @@ func (a *Acrn) GetVMConsole(ctx context.Context, id string) (string, string, err
 	defer span.End()
 
 	consoleURL, err := utils.BuildSocketPath(a.config.VMStorePath, id, acrnConsoleSocket)
+
 	if err != nil {
+		a.Logger().Error("GetVMConsole returned error")
 		return consoleProtoUnix, "", err
 	}
 
@@ -714,13 +659,11 @@ func (a *Acrn) toGrpc(ctx context.Context) ([]byte, error) {
 func (a *Acrn) Save() (s hv.HypervisorState) {
 	s.Pid = a.state.PID
 	s.Type = string(AcrnHypervisor)
-	s.UUID = a.state.UUID
 	return
 }
 
 func (a *Acrn) Load(s hv.HypervisorState) {
 	a.state.PID = s.Pid
-	a.state.UUID = s.UUID
 }
 
 func (a *Acrn) Check() error {
@@ -732,97 +675,14 @@ func (a *Acrn) Check() error {
 }
 
 func (a *Acrn) GenerateSocket(id string) (interface{}, error) {
-	return generateVMSocket(id, a.config.VMStorePath)
-}
-
-// GetACRNUUIDBytes returns UUID bytes that is used for VM creation
-func (a *Acrn) GetACRNUUIDBytes(uid string) (uuid.UUID, error) {
-	return uuid.Parse(uid)
-}
-
-// GetNextAvailableUUID returns next available UUID VM creation
-// If no valid UUIDs are available it returns err.
-func (a *Acrn) GetNextAvailableUUID() (string, error) {
-	var MaxVMSupported uint8
-	var Idx uint8
-	var uuidStr string
-	var err error
-
-	if err = a.loadInfo(); err != nil {
-		a.Logger().Infof("Load UUID store failed")
-	}
-
-	if MaxVMSupported, err = a.GetMaxSupportedACRNVM(); err != nil {
-		return "", fmt.Errorf("IOCTL GetMaxSupportedACRNVM failed")
-	}
-
-	for Idx = 0; Idx < MaxVMSupported; Idx++ {
-		if a.info.UUIDAvailability[Idx] == UUIDFree {
-			uuidStr = acrnIdxToUUIDs[Idx]
-			break
-		}
-	}
-
-	if uuidStr == "" {
-		return "", fmt.Errorf("Invalid UUID: Max VMs reached")
-	}
-
-	return uuidStr, nil
-}
-
-// GetMaxSupportedACRNVM checks the max number of VMs that can be
-// launched from kata-runtime.
-func (a *Acrn) GetMaxSupportedACRNVM() (uint8, error) {
-	flags := syscall.O_RDWR | syscall.O_CLOEXEC
-
-	f, err := syscall.Open(acrnDevice, flags, 0)
+	socket, err := generateVMSocket(id, a.config.VMStorePath)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
-	defer syscall.Close(f)
+	vsock, _ := socket.(types.VSock)
+	vsock.VhostFd.Close()
 
-	var platformInfo acrnPlatformInfo
-
-	ret, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(f),
-		uintptr(ioctl_ACRN_GET_PLATFORM_INFO),
-		uintptr(unsafe.Pointer(&platformInfo)))
-	if ret != 0 || errno != 0 {
-		return 0, errno
-	}
-
-	return platformInfo.maxKataContainers, nil
-}
-
-func (a *Acrn) storeInfo() error {
-	/*
-		relPath := filepath.Join(UUIDPathSuffix, uuidFile)
-
-		jsonOut, err := json.Marshal(a.info)
-		if err != nil {
-			return fmt.Errorf("Could not marshal data: %s", err)
-		}
-
-		if err := a.store.GlobalWrite(relPath, jsonOut); err != nil {
-			return fmt.Errorf("failed to write uuid to file: %v", err)
-		}*/
-
-	return nil
-}
-
-func (a *Acrn) loadInfo() error {
-	/*
-		relPath := filepath.Join(UUIDPathSuffix, uuidFile)
-			data, err := a.store.GlobalRead(relPath)
-			if err != nil {
-				return fmt.Errorf("failed to read uuid from file: %v", err)
-			}
-
-			if err := json.Unmarshal(data, &a.info); err != nil {
-				return fmt.Errorf("failed to unmarshal uuid info: %v", err)
-			}*/
-
-	return nil
+	return socket, err
 }
 
 func (a *Acrn) IsRateLimiterBuiltin() bool {

@@ -11,7 +11,6 @@ anyhow = "^1.0"
 kata-sys-util = { path = "../../../libs/kata-sys-util"}
 kata-types = { path = "../../../libs/kata-types" }
 libc = "0.2"
-rustc-serialize = "0.3.24"
 serde = { version = "1.0.138", features = ["derive"] }
 serde_json = "1.0.82"
 safe-path = { path = "../../../libs/safe-path"}

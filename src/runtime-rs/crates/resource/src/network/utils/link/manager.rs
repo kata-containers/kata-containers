@@ -181,119 +181,40 @@ fn parse_bridge(mut ibs: Vec<InfoBridge>) -> Bridge {
     }
     bridge
 }
-#[derive(Debug, PartialEq, Eq, Clone, Default)]
-pub struct Device {
-    attrs: Option<LinkAttrs>,
+
+macro_rules! impl_network_dev {
+    ($r_type: literal , $r_struct: ty) => {
+        impl Link for $r_struct {
+            fn attrs(&self) -> &LinkAttrs {
+                self.attrs.as_ref().unwrap()
+            }
+            fn set_attrs(&mut self, attr: LinkAttrs) {
+                self.attrs = Some(attr);
+            }
+            fn r#type(&self) -> &'static str {
+                $r_type
+            }
+        }
+    };
 }
 
-impl Link for Device {
-    fn attrs(&self) -> &LinkAttrs {
-        self.attrs.as_ref().unwrap()
-    }
-    fn set_attrs(&mut self, attr: LinkAttrs) {
-        self.attrs = Some(attr);
-    }
-    fn r#type(&self) -> &'static str {
-        "device"
-    }
+macro_rules! define_and_impl_network_dev {
+    ($r_type: literal , $r_struct: tt) => {
+        #[derive(Debug, PartialEq, Eq, Clone, Default)]
+        pub struct $r_struct {
+            attrs: Option<LinkAttrs>,
+        }
+
+        impl_network_dev!($r_type, $r_struct);
+    };
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Default)]
-pub struct Tuntap {
-    pub attrs: Option<LinkAttrs>,
-}
-
-impl Link for Tuntap {
-    fn attrs(&self) -> &LinkAttrs {
-        self.attrs.as_ref().unwrap()
-    }
-    fn set_attrs(&mut self, attr: LinkAttrs) {
-        self.attrs = Some(attr);
-    }
-    fn r#type(&self) -> &'static str {
-        "tuntap"
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Default)]
-pub struct Veth {
-    attrs: Option<LinkAttrs>,
-
-    /// on create only
-    pub peer_name: String,
-}
-
-impl Link for Veth {
-    fn attrs(&self) -> &LinkAttrs {
-        self.attrs.as_ref().unwrap()
-    }
-    fn set_attrs(&mut self, attr: LinkAttrs) {
-        self.attrs = Some(attr);
-    }
-    fn r#type(&self) -> &'static str {
-        "veth"
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Default)]
-pub struct IpVlan {
-    attrs: Option<LinkAttrs>,
-
-    /// on create only
-    pub peer_name: String,
-}
-
-impl Link for IpVlan {
-    fn attrs(&self) -> &LinkAttrs {
-        self.attrs.as_ref().unwrap()
-    }
-    fn set_attrs(&mut self, attr: LinkAttrs) {
-        self.attrs = Some(attr);
-    }
-    fn r#type(&self) -> &'static str {
-        "ipvlan"
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Default)]
-pub struct MacVlan {
-    attrs: Option<LinkAttrs>,
-
-    /// on create only
-    pub peer_name: String,
-}
-
-impl Link for MacVlan {
-    fn attrs(&self) -> &LinkAttrs {
-        self.attrs.as_ref().unwrap()
-    }
-    fn set_attrs(&mut self, attr: LinkAttrs) {
-        self.attrs = Some(attr)
-    }
-    fn r#type(&self) -> &'static str {
-        "macvlan"
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Default)]
-pub struct Vlan {
-    attrs: Option<LinkAttrs>,
-
-    /// on create only
-    pub peer_name: String,
-}
-
-impl Link for Vlan {
-    fn attrs(&self) -> &LinkAttrs {
-        self.attrs.as_ref().unwrap()
-    }
-    fn set_attrs(&mut self, attr: LinkAttrs) {
-        self.attrs = Some(attr);
-    }
-    fn r#type(&self) -> &'static str {
-        "vlan"
-    }
-}
+define_and_impl_network_dev!("device", Device);
+define_and_impl_network_dev!("tuntap", Tuntap);
+define_and_impl_network_dev!("veth", Veth);
+define_and_impl_network_dev!("ipvlan", IpVlan);
+define_and_impl_network_dev!("macvlan", MacVlan);
+define_and_impl_network_dev!("vlan", Vlan);
 
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub struct Bridge {
@@ -303,14 +224,4 @@ pub struct Bridge {
     pub vlan_filtering: bool,
 }
 
-impl Link for Bridge {
-    fn attrs(&self) -> &LinkAttrs {
-        self.attrs.as_ref().unwrap()
-    }
-    fn set_attrs(&mut self, attr: LinkAttrs) {
-        self.attrs = Some(attr);
-    }
-    fn r#type(&self) -> &'static str {
-        "bridge"
-    }
-}
+impl_network_dev!("bridge", Bridge);

@@ -79,6 +79,12 @@ func TestQemuPPC64leAppendProtectionDevice(t *testing.T) {
 	assert.Error(err)
 	assert.Empty(bios)
 
+	//SNP protection
+	ppc64le.(*qemuPPC64le).protection = snpProtection
+	devices, bios, err = ppc64le.appendProtectionDevice(devices, firmware, "")
+	assert.Error(err)
+	assert.Empty(bios)
+
 	//TDX protection
 	ppc64le.(*qemuPPC64le).protection = tdxProtection
 	devices, bios, err = ppc64le.appendProtectionDevice(devices, firmware, "")

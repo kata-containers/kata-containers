@@ -417,11 +417,19 @@ func (clh *cloudHypervisor) enableProtection() error {
 			return errors.New("Firmware path is not specified")
 		}
 
-		clh.vmconfig.Tdx = chclient.NewTdxConfig(firmwarePath)
+		clh.vmconfig.Payload.SetFirmware(firmwarePath)
+
+		if clh.vmconfig.Platform == nil {
+			clh.vmconfig.Platform = chclient.NewPlatformConfig()
+		}
+		clh.vmconfig.Platform.SetTdx(true)
+
 		return nil
 
 	case sevProtection:
 		return errors.New("SEV protection is not supported by Cloud Hypervisor")
+	case snpProtection:
+		return errors.New("SEV-SNP protection is not supported by Cloud Hypervisor")
 
 	default:
 		return errors.New("This system doesn't support Confidentian Computing (Guest Protection)")

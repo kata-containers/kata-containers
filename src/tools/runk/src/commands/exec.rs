@@ -4,7 +4,7 @@
 //
 
 use anyhow::Result;
-use libcontainer::builder::ActivatedContainerBuilder;
+use libcontainer::activated_builder::ActivatedContainerBuilder;
 use libcontainer::container::ContainerAction;
 use liboci_cli::Exec;
 use slog::{info, Logger};

@@ -147,13 +147,13 @@ pub type Result<T> = ::std::result::Result<T, DeviceMgrError>;
 /// Type of the dragonball virtio devices.
 #[cfg(feature = "dbs-virtio-devices")]
 pub type DbsVirtioDevice = Box<
-    dyn VirtioDevice<GuestAddressSpaceImpl, virtio_queue::QueueState, vm_memory::GuestRegionMmap>,
+    dyn VirtioDevice<GuestAddressSpaceImpl, virtio_queue::QueueStateSync, vm_memory::GuestRegionMmap>,
 >;
 
 /// Type of the dragonball virtio mmio devices.
 #[cfg(feature = "dbs-virtio-devices")]
 pub type DbsMmioV2Device =
-    MmioV2Device<GuestAddressSpaceImpl, virtio_queue::QueueState, vm_memory::GuestRegionMmap>;
+    MmioV2Device<GuestAddressSpaceImpl, virtio_queue::QueueStateSync, vm_memory::GuestRegionMmap>;
 
 /// Struct to support transactional operations for device management.
 pub struct DeviceManagerTx {
@@ -591,14 +591,19 @@ impl DeviceManager {
             .map_err(|_| StartMicroVmError::EventFd)?;
 
         info!(self.logger, "init console path: {:?}", com1_sock_path);
-        if let Some(path) = com1_sock_path {
-            if let Some(legacy_manager) = self.legacy_manager.as_ref() {
-                let com1 = legacy_manager.get_com1_serial();
-                self.con_manager
-                    .create_socket_console(com1, path)
-                    .map_err(StartMicroVmError::DeviceManager)?;
+
+        if let Some(legacy_manager) = self.legacy_manager.as_ref() {
+            if let Some(path) = com1_sock_path {
+                // Currently, the `com1_sock_path` "stdio" is only reserved for creating the stdio console
+                if path != "stdio" {
+                    let com1 = legacy_manager.get_com1_serial();
+                    self.con_manager
+                        .create_socket_console(com1, path)
+                        .map_err(StartMicroVmError::DeviceManager)?;
+                    return Ok(());
+                }
             }
-        } else if let Some(legacy_manager) = self.legacy_manager.as_ref() {
+
             let com1 = legacy_manager.get_com1_serial();
             self.con_manager
                 .create_stdio_console(com1)

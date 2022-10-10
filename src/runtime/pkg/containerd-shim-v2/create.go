@@ -26,6 +26,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 
 	// only register the proto type
 	crioption "github.com/containerd/containerd/pkg/runtimeoptions/v1"
@@ -136,7 +137,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		katautils.HandleFactory(ctx, vci, s.config)
 		rootless.SetRootless(s.config.HypervisorConfig.Rootless)
 		if rootless.IsRootless() {
-			if err := configureNonRootHypervisor(s.config); err != nil {
+			if err := configureNonRootHypervisor(s.config, r.ID); err != nil {
 				return nil, err
 			}
 		}
@@ -308,13 +309,17 @@ func doMount(mounts []*containerd_types.Mount, rootfs string) error {
 	return nil
 }
 
-func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig) error {
+func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig, sandboxId string) error {
 	userName, err := utils.CreateVmmUser()
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if err != nil {
+			shimLog.WithFields(logrus.Fields{
+				"user_name":  userName,
+				"sandbox_id": sandboxId,
+			}).WithError(err).Warn("configure non root hypervisor failed, delete the user")
 			if err2 := utils.RemoveVmmUser(userName); err2 != nil {
 				shimLog.WithField("userName", userName).WithError(err).Warn("failed to remove user")
 			}
@@ -335,7 +340,14 @@ func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig) error {
 		return err
 	}
 	runtimeConfig.HypervisorConfig.Uid = uint32(uid)
+	runtimeConfig.HypervisorConfig.User = userName
 	runtimeConfig.HypervisorConfig.Gid = uint32(gid)
+	shimLog.WithFields(logrus.Fields{
+		"user_name":  userName,
+		"uid":        uid,
+		"gid":        gid,
+		"sandbox_id": sandboxId,
+	}).Debug("successfully created a non root user for the hypervisor")
 
 	userTmpDir := path.Join("/run/user/", fmt.Sprint(uid))
 	_, err = os.Stat(userTmpDir)

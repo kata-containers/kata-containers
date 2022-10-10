@@ -14,6 +14,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/intel-go/cpuid"
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
@@ -272,6 +273,26 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 	assert.Error(err)
 	assert.Empty(bios)
 
+	// snp protection
+	amd64.(*qemuAmd64).protection = snpProtection
+
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
+	assert.NoError(err)
+	assert.Empty(bios)
+
+	expectedOut := []govmmQemu.Device{
+		govmmQemu.Object{
+			Type:            govmmQemu.SNPGuest,
+			ID:              "snp",
+			Debug:           false,
+			File:            firmware,
+			CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
+			ReducedPhysBits: 1,
+		},
+	}
+
+	assert.Equal(expectedOut, devices)
+
 	// tdxProtection
 	amd64.(*qemuAmd64).protection = tdxProtection
 
@@ -279,7 +300,7 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 	assert.NoError(err)
 	assert.Empty(bios)
 
-	expectedOut := []govmmQemu.Device{
+	expectedOut = append(expectedOut,
 		govmmQemu.Object{
 			Driver:   govmmQemu.Loader,
 			Type:     govmmQemu.TDXGuest,
@@ -288,7 +309,7 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 			Debug:    false,
 			File:     firmware,
 		},
-	}
+	)
 
 	assert.Equal(expectedOut, devices)
 }

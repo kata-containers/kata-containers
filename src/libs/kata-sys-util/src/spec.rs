@@ -10,9 +10,9 @@ use kata_types::container::ContainerType;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    /// unknow container type
-    #[error("unknow container type {0}")]
-    UnknowContainerType(String),
+    /// unknown container type
+    #[error("unknown container type {0}")]
+    UnknownContainerType(String),
     /// missing sandboxID
     #[error("missing sandboxID")]
     MissingSandboxID,
@@ -56,7 +56,7 @@ pub fn get_contaier_type(spec: &oci::Spec) -> Result<ContainerType, Error> {
                 "sandbox" => return Ok(ContainerType::PodSandbox),
                 "podsandbox" => return Ok(ContainerType::PodSandbox),
                 "container" => return Ok(ContainerType::PodContainer),
-                _ => return Err(Error::UnknowContainerType(type_value.clone())),
+                _ => return Err(Error::UnknownContainerType(type_value.clone())),
             }
         }
     }

@@ -413,6 +413,7 @@ dependencies = [
  "byte-unit",
  "glob",
  "lazy_static",
+ "nix 0.24.2",
  "num_cpus",
  "oci",
  "regex",
@@ -421,6 +422,7 @@ dependencies = [
  "slog",
  "slog-scope",
  "tempfile",
+ "test-utils",
  "thiserror",
  "toml",
 ]

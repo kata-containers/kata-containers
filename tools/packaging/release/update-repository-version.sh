@@ -191,7 +191,7 @@ bump_repo() {
 
 				need_commit=true
 			fi
-		elif [ "${new_version}" != *"rc"* ]; then
+		elif [[ ! "${new_version}" =~ "rc" ]]; then
 			## We are on a stable branch and creating new stable releases.
 			## Need to change kata-deploy / kata-cleanup to use the stable tags.
 			if [[ "${version_to_replace}" =~ "rc" ]]; then

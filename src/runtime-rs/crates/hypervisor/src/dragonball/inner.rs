@@ -91,6 +91,7 @@ impl DragonballInner {
         kernel_params.append(&mut KernelParams::from_string(
             &self.config.boot_info.kernel_params,
         ));
+        info!(sl!(), "prepared kernel_params={:?}", kernel_params);
 
         // set boot source
         let kernel_path = self.config.boot_info.kernel.clone();

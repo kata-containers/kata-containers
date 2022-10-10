@@ -50,6 +50,8 @@ const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
 const MAX_BRIDGE_SIZE: u32 = 5;
 
+const KERNEL_PARAM_DELIMITER: &str = " ";
+
 lazy_static! {
     static ref HYPERVISOR_PLUGINS: Mutex<HashMap<String, Arc<dyn ConfigPlugin>>> =
         Mutex::new(HashMap::new());
@@ -237,6 +239,16 @@ impl BootInfo {
         Ok(())
     }
 
+    /// Add kernel parameters to bootinfo. It is always added before the original
+    /// to let the original one takes priority
+    pub fn add_kernel_params(&mut self, params: Vec<String>) {
+        let mut p = params;
+        if !self.kernel_params.is_empty() {
+            p.push(self.kernel_params.clone()); // [new_params0, new_params1, ..., original_params]
+        }
+        self.kernel_params = p.join(KERNEL_PARAM_DELIMITER);
+    }
+
     /// Validate guest kernel image annotaion
     pub fn validate_boot_path(&self, path: &str) -> Result<()> {
         validate_path!(path, "path {} is invalid{}")?;
@@ -289,38 +301,42 @@ impl CpuInfo {
     pub fn adjust_config(&mut self) -> Result<()> {
         let features: Vec<&str> = self.cpu_features.split(',').map(|v| v.trim()).collect();
         self.cpu_features = features.join(",");
+
+        let cpus = num_cpus::get() as u32;
+
+        // adjust default_maxvcpus
+        if self.default_maxvcpus == 0 || self.default_maxvcpus > cpus {
+            self.default_maxvcpus = cpus;
+        }
+
+        // adjust default_vcpus
+        if self.default_vcpus < 0 || self.default_vcpus as u32 > cpus {
+            self.default_vcpus = cpus as i32;
+        } else if self.default_vcpus == 0 {
+            self.default_vcpus = default::DEFAULT_GUEST_VCPUS as i32;
+        }
+
+        if self.default_vcpus > self.default_maxvcpus as i32 {
+            self.default_vcpus = self.default_maxvcpus as i32;
+        }
+
         Ok(())
     }
 
     /// Validate the configuration information.
     pub fn validate(&self) -> Result<()> {
+        if self.default_vcpus > self.default_maxvcpus as i32 {
+            return Err(eother!(
+                "The default_vcpus({}) is greater than default_maxvcpus({})",
+                self.default_vcpus,
+                self.default_maxvcpus
+            ));
+        }
         Ok(())
-    }
-
-    /// Get default number of guest vCPUs.
-    pub fn get_default_vcpus(&self) -> u32 {
-        let cpus = num_cpus::get() as u32;
-        if self.default_vcpus < 0 || self.default_vcpus as u32 > cpus {
-            cpus
-        } else if self.default_vcpus == 0 {
-            default::DEFAULT_GUEST_VCPUS
-        } else {
-            self.default_vcpus as u32
-        }
-    }
-
-    /// Get default maximal number of guest vCPUs.
-    pub fn get_default_max_vcpus(&self) -> u32 {
-        let cpus = num_cpus::get() as u32;
-        if self.default_maxvcpus == 0 || self.default_maxvcpus > cpus {
-            cpus
-        } else {
-            self.default_maxvcpus
-        }
     }
 }
 
-/// Configuration information for shared filesystem, such virtio-9p and virtio-fs.
+/// Configuration information for debug
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct DebugInfo {
     /// This option changes the default hypervisor and kernel parameters to enable debug output
@@ -596,7 +612,7 @@ impl MemoryInfo {
     }
 }
 
-/// Configuration information for virtual machine.
+/// Configuration information for network.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct NetworkInfo {
     /// If vhost-net backend for virtio-net is not desired, set to true.
@@ -638,7 +654,7 @@ impl NetworkInfo {
     }
 }
 
-/// Configuration information for virtual machine.
+/// Configuration information for security.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct SecurityInfo {
     /// Enable running QEMU VMM as a non-root user.
@@ -818,11 +834,15 @@ impl SharedFsInfo {
         validate_path_pattern(&self.valid_virtio_fs_daemon_paths, path)
     }
 
-    fn adjust_virtio_fs(&mut self, _inline: bool) -> Result<()> {
-        resolve_path!(
-            self.virtio_fs_daemon,
-            "Virtio-fs daemon path {} is invalid: {}"
-        )?;
+    fn adjust_virtio_fs(&mut self, inline: bool) -> Result<()> {
+        // inline mode doesn't need external virtiofsd daemon
+        if !inline {
+            resolve_path!(
+                self.virtio_fs_daemon,
+                "Virtio-fs daemon path {} is invalid: {}"
+            )?;
+        }
+
         if self.virtio_fs_cache.is_empty() {
             self.virtio_fs_cache = default::DEFAULT_VIRTIO_FS_CACHE_MODE.to_string();
         }
@@ -836,16 +856,13 @@ impl SharedFsInfo {
     }
 
     fn validate_virtio_fs(&self, inline: bool) -> Result<()> {
-        if inline && !self.virtio_fs_daemon.is_empty() {
-            return Err(eother!(
-                "Executable path for inline-virtio-fs is not empty: {}",
-                &self.virtio_fs_daemon
-            ));
+        // inline mode doesn't need external virtiofsd daemon
+        if !inline {
+            validate_path!(
+                self.virtio_fs_daemon,
+                "Virtio-fs daemon path {} is invalid: {}"
+            )?;
         }
-        validate_path!(
-            self.virtio_fs_daemon,
-            "Virtio-fs daemon path {} is invalid: {}"
-        )?;
 
         let l = ["none", "auto", "always"];
 
@@ -1065,5 +1082,108 @@ mod tests {
 
         assert!(get_hypervisor_plugin("dragonball").is_some());
         assert!(get_hypervisor_plugin("dragonball2").is_none());
+    }
+
+    #[test]
+    fn test_add_kernel_params() {
+        let mut boot_info = BootInfo {
+            ..Default::default()
+        };
+        let params = vec![
+            String::from("foo"),
+            String::from("bar"),
+            String::from("baz=faz"),
+        ];
+        boot_info.add_kernel_params(params);
+
+        assert_eq!(boot_info.kernel_params, String::from("foo bar baz=faz"));
+
+        let new_params = vec![
+            String::from("boo=far"),
+            String::from("a"),
+            String::from("b=c"),
+        ];
+        boot_info.add_kernel_params(new_params);
+
+        assert_eq!(
+            boot_info.kernel_params,
+            String::from("boo=far a b=c foo bar baz=faz")
+        );
+    }
+
+    #[test]
+    fn test_cpu_info_adjust_config() {
+        // get CPU cores of the test node
+        let node_cpus = num_cpus::get() as u32;
+        let default_vcpus = default::DEFAULT_GUEST_VCPUS as i32;
+
+        struct TestData<'a> {
+            desc: &'a str,
+            input: &'a mut CpuInfo,
+            output: CpuInfo,
+        }
+
+        let tests = &mut [
+            TestData {
+                desc: "all with default values",
+                input: &mut CpuInfo {
+                    cpu_features: "".to_string(),
+                    default_vcpus: 0,
+                    default_maxvcpus: 0,
+                },
+                output: CpuInfo {
+                    cpu_features: "".to_string(),
+                    default_vcpus: default_vcpus as i32,
+                    default_maxvcpus: node_cpus,
+                },
+            },
+            TestData {
+                desc: "all with big values",
+                input: &mut CpuInfo {
+                    cpu_features: "a,b,c".to_string(),
+                    default_vcpus: 9999999,
+                    default_maxvcpus: 9999999,
+                },
+                output: CpuInfo {
+                    cpu_features: "a,b,c".to_string(),
+                    default_vcpus: node_cpus as i32,
+                    default_maxvcpus: node_cpus,
+                },
+            },
+            TestData {
+                desc: "default_vcpus lager than default_maxvcpus",
+                input: &mut CpuInfo {
+                    cpu_features: "a, b ,c".to_string(),
+                    default_vcpus: -1,
+                    default_maxvcpus: 1,
+                },
+                output: CpuInfo {
+                    cpu_features: "a,b,c".to_string(),
+                    default_vcpus: 1,
+                    default_maxvcpus: 1,
+                },
+            },
+        ];
+
+        for (_, tc) in tests.iter_mut().enumerate() {
+            // we can ensure that unwrap will not panic
+            tc.input.adjust_config().unwrap();
+
+            assert_eq!(
+                tc.input.cpu_features, tc.output.cpu_features,
+                "test[{}] cpu_features",
+                tc.desc
+            );
+            assert_eq!(
+                tc.input.default_vcpus, tc.output.default_vcpus,
+                "test[{}] default_vcpus",
+                tc.desc
+            );
+            assert_eq!(
+                tc.input.default_maxvcpus, tc.output.default_maxvcpus,
+                "test[{}] default_maxvcpus",
+                tc.desc
+            );
+        }
     }
 }

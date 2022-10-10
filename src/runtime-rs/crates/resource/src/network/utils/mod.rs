@@ -33,3 +33,34 @@ pub(crate) fn get_mac_addr(b: &[u8]) -> Result<String> {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_mac_addr() {
+        // length is not 6
+        let fail_slice = vec![1, 2, 3];
+        assert!(get_mac_addr(&fail_slice).is_err());
+
+        let expected_slice = vec![10, 11, 128, 3, 4, 5];
+        let expected_mac = String::from("0a:0b:80:03:04:05");
+        let res = get_mac_addr(&expected_slice);
+        assert!(res.is_ok());
+        assert_eq!(expected_mac, res.unwrap());
+    }
+
+    #[test]
+    fn test_parse_mac() {
+        // length is not 6
+        let fail = "1:2:3";
+        assert!(parse_mac(fail).is_none());
+
+        let v = [10, 11, 128, 3, 4, 5];
+        let expected_addr = hypervisor::Address(v);
+        let addr = parse_mac("0a:0b:80:03:04:05");
+        assert!(addr.is_some());
+        assert_eq!(expected_addr.0, addr.unwrap().0);
+    }
+}
