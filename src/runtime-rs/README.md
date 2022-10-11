@@ -97,6 +97,10 @@ Currently, only built-in `Dragonball` has been implemented.
 
 Persist defines traits and functions to help different components save state to disk and load state from disk.
 
+### helper libraries
+
+Some helper libraries are maintained in [the library directory](../libs) so that they can be shared with other rust components.
+
 ## Build and install
 
 ```bash
