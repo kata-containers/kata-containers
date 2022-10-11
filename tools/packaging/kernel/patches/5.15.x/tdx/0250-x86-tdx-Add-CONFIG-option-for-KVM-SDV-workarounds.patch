@@ -1,0 +1,87 @@
+From 7374ee2aca9b0d3ec206b513721ac34df1d8ae47 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Fri, 23 Apr 2021 20:34:54 -0700
+Subject: [PATCH 0250/1418] x86/tdx: Add CONFIG option for KVM SDV workarounds
+
+Shared memory seems to be broken in the KVM SDV, but since we
+don't need it there just don't set the attribute.
+
+Also the SDV injects #VE for MSR reads, which breaks the early
+boot that tries to read MISC_ENABLES. Skip that check because
+it's not needed.
+
+Also enable debug mode with SDV
+---
+ arch/x86/Kconfig             | 4 ++++
+ arch/x86/kernel/tdx.c        | 7 +++++++
+ arch/x86/kernel/verify_cpu.S | 8 ++++++++
+ 3 files changed, 19 insertions(+)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index ad0b7520860b..a078aa212476 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -897,6 +897,10 @@ config TDX_FUZZ
+ 	help
+ 	  Support fuzzing of TDX guests against attacks from hosts
+ 
++config INTEL_TDX_KVM_SDV
++	bool "Fixes specific to KVM SDV (incompatible to others)"
++	depends on INTEL_TDX_GUEST
++
+ config INTEL_TDX_ICL_FIXES
+ 	bool "Fixes specific for ICL chip"
+ 	depends on INTEL_TDX_GUEST
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index bad0fe891683..2be51c0cf509 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -147,11 +147,18 @@ static u64 __trace_tdx_module_call(u64 fn, u64 rcx, u64 rdx, u64 r8, u64 r9,
+ /* The highest bit of a guest physical address is the "sharing" bit */
+ phys_addr_t tdx_shared_mask(void)
+ {
++#ifdef CONFIG_INTEL_TDX_KVM_SDV
++	return 0;
++#else
+ 	return 1ULL << (td_info.gpa_width - 1);
++#endif
+ }
+ 
+ bool tdx_debug_enabled(void)
+ {
++#ifdef CONFIG_INTEL_TDX_KVM_SDV
++	return true;
++#endif
+ 	return td_info.attributes & BIT(0);
+ }
+ 
+diff --git a/arch/x86/kernel/verify_cpu.S b/arch/x86/kernel/verify_cpu.S
+index 641f0fe1e5b4..636ee67b23f6 100644
+--- a/arch/x86/kernel/verify_cpu.S
++++ b/arch/x86/kernel/verify_cpu.S
+@@ -62,7 +62,13 @@ SYM_FUNC_START_LOCAL(verify_cpu)
+ 	cmpl	$0x444d4163,%ecx
+ 	jnz	.Lverify_cpu_noamd
+ 	mov	$1,%di			# cpu is from AMD
++#ifdef CONFIG_INTEL_TDX_KVM_SDV
++	/* The KVM SDV currently injects a #VE on accessing
++	 * MISC_ENABLE, which we cannot handle here. Just
++	 * skip it, since XD_DISABLE is never set.
++	 */
+ 	jmp	.Lverify_cpu_check
++#endif
+ 
+ .Lverify_cpu_noamd:
+ 	cmpl	$0x756e6547,%ebx        # GenuineIntel?
+@@ -72,6 +78,8 @@ SYM_FUNC_START_LOCAL(verify_cpu)
+ 	cmpl	$0x6c65746e,%ecx
+ 	jnz	.Lverify_cpu_check
+ 
++	jmp	.Lverify_cpu_check
++
+ 	# only call IA32_MISC_ENABLE when:
+ 	# family > 6 || (family == 6 && model >= 0xd)
+ 	movl	$0x1, %eax		# check CPU family and model
+-- 
+2.31.1
+

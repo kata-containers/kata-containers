@@ -1,0 +1,30 @@
+From e7ff7673e38147721bfb24cbd41093e95162dcb5 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Mon, 1 Feb 2021 14:16:10 +0800
+Subject: [PATCH 0434/1418] *** HACK *** KVM: TDX: explicitly log triple fault
+ with guest rip
+
+To help trace the triple fault.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index f3cf28fef1fd..691ca26a427c 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -763,6 +763,8 @@ static int tdx_handle_external_interrupt(struct kvm_vcpu *vcpu)
+ 
+ static int tdx_handle_triple_fault(struct kvm_vcpu *vcpu)
+ {
++	if (to_kvm_tdx(vcpu->kvm)->attributes & TDX_TD_ATTRIBUTE_DEBUG)
++		pr_err("triple fault at 0x%lx\n", kvm_rip_read(vcpu));
+ 	vcpu->run->exit_reason = KVM_EXIT_SHUTDOWN;
+ 	vcpu->mmio_needed = 0;
+ 	return 0;
+-- 
+2.31.1
+

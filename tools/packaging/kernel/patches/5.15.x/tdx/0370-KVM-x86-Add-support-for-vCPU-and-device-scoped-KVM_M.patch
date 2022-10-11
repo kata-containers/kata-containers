@@ -1,0 +1,60 @@
+From 5c5692885fb926b584fc530c738a6122f883253e Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Fri, 18 Sep 2020 23:59:21 -0700
+Subject: [PATCH 0370/1418] KVM: x86: Add support for vCPU and device-scoped
+ KVM_MEMORY_ENCRYPT_OP
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h |  2 ++
+ arch/x86/kvm/x86.c              | 12 ++++++++++++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 7580bd31fb25..5cea7d117e4b 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1489,7 +1489,9 @@ struct kvm_x86_ops {
+ 	int (*leave_smm)(struct kvm_vcpu *vcpu, const char *smstate);
+ 	void (*enable_smi_window)(struct kvm_vcpu *vcpu);
+ 
++	int (*mem_enc_op_dev)(void __user *argp);
+ 	int (*mem_enc_op)(struct kvm *kvm, void __user *argp);
++	int (*mem_enc_op_vcpu)(struct kvm_vcpu *vcpu, void __user *argp);
+ 	int (*mem_enc_reg_region)(struct kvm *kvm, struct kvm_enc_region *argp);
+ 	int (*mem_enc_unreg_region)(struct kvm *kvm, struct kvm_enc_region *argp);
+ 	int (*vm_copy_enc_context_from)(struct kvm *kvm, unsigned int source_fd);
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 40bf042684b5..38afd6ef1727 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -4239,6 +4239,12 @@ long kvm_arch_dev_ioctl(struct file *filp,
+ 	case KVM_GET_SUPPORTED_HV_CPUID:
+ 		r = kvm_ioctl_get_supported_hv_cpuid(NULL, argp);
+ 		break;
++	case KVM_MEMORY_ENCRYPT_OP:
++		r = -EINVAL;
++		if (!kvm_x86_ops.mem_enc_op_dev)
++			goto out;
++		r = kvm_x86_ops.mem_enc_op_dev(argp);
++		break;
+ 	default:
+ 		r = -EINVAL;
+ 		break;
+@@ -5303,6 +5309,12 @@ long kvm_arch_vcpu_ioctl(struct file *filp,
+ 		r = __set_sregs2(vcpu, u.sregs2);
+ 		break;
+ 	}
++	case KVM_MEMORY_ENCRYPT_OP:
++		r = -EINVAL;
++		if (!kvm_x86_ops.mem_enc_op_vcpu)
++			goto out;
++		r = kvm_x86_ops.mem_enc_op_vcpu(vcpu, argp);
++		break;
+ 	default:
+ 		r = -EINVAL;
+ 	}
+-- 
+2.31.1
+

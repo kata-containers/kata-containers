@@ -1,0 +1,32 @@
+From f2c2d8edec01e2d7ab3b5067e40e26a12077c9dd Mon Sep 17 00:00:00 2001
+From: Jithu Joseph <jithu.joseph@intel.com>
+Date: Thu, 18 Nov 2021 22:57:33 -0800
+Subject: [PATCH 0682/1418] drivers/saf: Fix retry logic in scan test
+
+Scan test attempts to retry when SCAN_STATUS MSR doesnt
+report pass. Fix an oversight in the existing retry logic which
+meant that stale values are getting written into MSR_ACTIVATE_SCAN
+on retry.
+
+Signed-off-by: Jithu Joseph <jithu.joseph@intel.com>
+---
+ drivers/ift/saf.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/ift/saf.c b/drivers/ift/saf.c
+index 04083801e619..8f9d48df77ac 100644
+--- a/drivers/ift/saf.c
++++ b/drivers/ift/saf.c
+@@ -152,8 +152,8 @@ static int scan_test_worker(void *info)
+ 		start = per_cpu(saf_state, cpu).start_index;
+ 		last = per_cpu(saf_state, cpu).stop_index;
+ 		eax = last << 8 | start;
+-		edx = (trigger_mce << 31) | msec_to_tsc(thread_wait);
+ retry:
++		edx = (trigger_mce << 31) | msec_to_tsc(thread_wait);
+ 		per_cpu(saf_state, cpu).result = SCAN_TEST_BUSY;
+ 
+ 		/* scan start */
+-- 
+2.31.1
+

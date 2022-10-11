@@ -1,0 +1,173 @@
+From 46ab066a40e8c3f14ef3e3d1b585c36616b5bc33 Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Thu, 9 Jul 2020 09:17:57 -0700
+Subject: [PATCH 1167/1418] x86/pkeys: Make PKRU macros generic
+
+Protection Keys User (PKU) and Protection Keys Supervisor (PKS) work in
+similar fashions and can share common defines.  Specifically PKS and PKU
+each have:
+
+	1. A single control register
+	2. The same number of keys
+	3. The same number of bits in the register per key
+	4. Access and Write disable in the same bit locations
+
+Given the above, share all the macros that synthesize and manipulate
+register values between the two features.  Share these defines by moving
+them into a new header, change their names to reflect the common use,
+and include the header where needed.  This mostly takes the form of
+converting names from the PKU-specific "PKRU" to a user/supervisor
+agnostic "PKR".
+
+Also while editing the code remove the use of 'we' from comments being
+touched.
+
+NOTE the checkpatch errors are ignored for the init_pkru_value to
+align the values in the code.
+
+Acked-by: Dave Hansen <dave.hansen@linux.intel.com>
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ arch/x86/include/asm/pkeys_common.h | 11 +++++++++++
+ arch/x86/include/asm/pkru.h         | 21 +++++++++------------
+ arch/x86/kernel/fpu/xstate.c        | 10 +++++-----
+ arch/x86/mm/pkeys.c                 | 20 +++++++++-----------
+ 4 files changed, 34 insertions(+), 28 deletions(-)
+ create mode 100644 arch/x86/include/asm/pkeys_common.h
+
+diff --git a/arch/x86/include/asm/pkeys_common.h b/arch/x86/include/asm/pkeys_common.h
+new file mode 100644
+index 000000000000..359b94cdcc0c
+--- /dev/null
++++ b/arch/x86/include/asm/pkeys_common.h
+@@ -0,0 +1,11 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _ASM_X86_PKEYS_COMMON_H
++#define _ASM_X86_PKEYS_COMMON_H
++
++#define PKR_AD_BIT 0x1u
++#define PKR_WD_BIT 0x2u
++#define PKR_BITS_PER_PKEY 2
++
++#define PKR_AD_MASK(pkey)	(PKR_AD_BIT << ((pkey) * PKR_BITS_PER_PKEY))
++
++#endif /*_ASM_X86_PKEYS_COMMON_H */
+diff --git a/arch/x86/include/asm/pkru.h b/arch/x86/include/asm/pkru.h
+index 4cd49afa0ca4..77cca491dfce 100644
+--- a/arch/x86/include/asm/pkru.h
++++ b/arch/x86/include/asm/pkru.h
+@@ -3,10 +3,8 @@
+ #define _ASM_X86_PKRU_H
+ 
+ #include <asm/cpufeature.h>
+-
+-#define PKRU_AD_BIT 0x1
+-#define PKRU_WD_BIT 0x2
+-#define PKRU_BITS_PER_PKEY 2
++#include <asm/fpu/xstate.h>
++#include <asm/pkeys_common.h>
+ 
+ #ifdef CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS
+ extern u32 init_pkru_value;
+@@ -18,18 +16,17 @@ extern u32 init_pkru_value;
+ 
+ static inline bool __pkru_allows_read(u32 pkru, u16 pkey)
+ {
+-	int pkru_pkey_bits = pkey * PKRU_BITS_PER_PKEY;
+-	return !(pkru & (PKRU_AD_BIT << pkru_pkey_bits));
++	int pkru_pkey_bits = pkey * PKR_BITS_PER_PKEY;
++
++	return !(pkru & (PKR_AD_BIT << pkru_pkey_bits));
+ }
+ 
+ static inline bool __pkru_allows_write(u32 pkru, u16 pkey)
+ {
+-	int pkru_pkey_bits = pkey * PKRU_BITS_PER_PKEY;
+-	/*
+-	 * Access-disable disables writes too so we need to check
+-	 * both bits here.
+-	 */
+-	return !(pkru & ((PKRU_AD_BIT|PKRU_WD_BIT) << pkru_pkey_bits));
++	int pkru_pkey_bits = pkey * PKR_BITS_PER_PKEY;
++
++	/* Access-disable disables writes too so check both bits here. */
++	return !(pkru & ((PKR_AD_BIT|PKR_WD_BIT) << pkru_pkey_bits));
+ }
+ 
+ static inline u32 read_pkru(void)
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 040f78391bec..53d7f245787a 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -1100,19 +1100,19 @@ int arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
+ 	if (WARN_ON_ONCE(pkey >= arch_max_pkey()))
+ 		return -EINVAL;
+ 
+-	/* Set the bits we need in PKRU:  */
++	/* Set the bits needed in PKRU:  */
+ 	if (init_val & PKEY_DISABLE_ACCESS)
+-		new_pkru_bits |= PKRU_AD_BIT;
++		new_pkru_bits |= PKR_AD_BIT;
+ 	if (init_val & PKEY_DISABLE_WRITE)
+-		new_pkru_bits |= PKRU_WD_BIT;
++		new_pkru_bits |= PKR_WD_BIT;
+ 
+ 	/* Shift the bits in to the correct place in PKRU for pkey: */
+-	pkey_shift = pkey * PKRU_BITS_PER_PKEY;
++	pkey_shift = pkey * PKR_BITS_PER_PKEY;
+ 	new_pkru_bits <<= pkey_shift;
+ 
+ 	/* Get old PKRU and mask off any old bits in place: */
+ 	old_pkru = read_pkru();
+-	old_pkru &= ~((PKRU_AD_BIT|PKRU_WD_BIT) << pkey_shift);
++	old_pkru &= ~((PKR_AD_BIT|PKR_WD_BIT) << pkey_shift);
+ 
+ 	/* Write old part along with new part: */
+ 	write_pkru(old_pkru | new_pkru_bits);
+diff --git a/arch/x86/mm/pkeys.c b/arch/x86/mm/pkeys.c
+index 15c3c42b9a04..3c53f6c11829 100644
+--- a/arch/x86/mm/pkeys.c
++++ b/arch/x86/mm/pkeys.c
+@@ -110,22 +110,20 @@ int __arch_override_mprotect_pkey(struct vm_area_struct *vma, int prot, int pkey
+ 	return vma_pkey(vma);
+ }
+ 
+-#define PKRU_AD_MASK(pkey)	(PKRU_AD_BIT << ((pkey) * PKRU_BITS_PER_PKEY))
+-
+ /*
+  * Make the default PKRU value (at execve() time) as restrictive
+  * as possible.  This ensures that any threads clone()'d early
+  * in the process's lifetime will not accidentally get access
+  * to data which is pkey-protected later on.
+  */
+-u32 init_pkru_value = PKRU_AD_MASK( 1) | PKRU_AD_MASK( 2) |
+-		      PKRU_AD_MASK( 3) | PKRU_AD_MASK( 4) |
+-		      PKRU_AD_MASK( 5) | PKRU_AD_MASK( 6) |
+-		      PKRU_AD_MASK( 7) | PKRU_AD_MASK( 8) |
+-		      PKRU_AD_MASK( 9) | PKRU_AD_MASK(10) |
+-		      PKRU_AD_MASK(11) | PKRU_AD_MASK(12) |
+-		      PKRU_AD_MASK(13) | PKRU_AD_MASK(14) |
+-		      PKRU_AD_MASK(15);
++u32 init_pkru_value = PKR_AD_MASK( 1) | PKR_AD_MASK( 2) |
++		      PKR_AD_MASK( 3) | PKR_AD_MASK( 4) |
++		      PKR_AD_MASK( 5) | PKR_AD_MASK( 6) |
++		      PKR_AD_MASK( 7) | PKR_AD_MASK( 8) |
++		      PKR_AD_MASK( 9) | PKR_AD_MASK(10) |
++		      PKR_AD_MASK(11) | PKR_AD_MASK(12) |
++		      PKR_AD_MASK(13) | PKR_AD_MASK(14) |
++		      PKR_AD_MASK(15);
+ 
+ static ssize_t init_pkru_read_file(struct file *file, char __user *user_buf,
+ 			     size_t count, loff_t *ppos)
+@@ -158,7 +156,7 @@ static ssize_t init_pkru_write_file(struct file *file,
+ 	 * up immediately if someone attempts to disable access
+ 	 * or writes to pkey 0.
+ 	 */
+-	if (new_init_pkru & (PKRU_AD_BIT|PKRU_WD_BIT))
++	if (new_init_pkru & (PKR_AD_BIT|PKR_WD_BIT))
+ 		return -EINVAL;
+ 
+ 	WRITE_ONCE(init_pkru_value, new_init_pkru);
+-- 
+2.31.1
+

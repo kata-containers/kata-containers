@@ -1,0 +1,30 @@
+From 4e2ba782d225ff756e284fbe651147ef94011de2 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Thu, 24 Mar 2022 16:53:18 -0700
+Subject: [PATCH 1244/1418] vfio: mdev: idxd: fix potential null dereference
+
+Add check to data ptr for idxd_vdcm_set_ctx_trigger_single() before
+dereference the ptr.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/vfio/mdev/idxd/mdev.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/vfio/mdev/idxd/mdev.c b/drivers/vfio/mdev/idxd/mdev.c
+index 3bf46fef7c7f..8ed855188554 100644
+--- a/drivers/vfio/mdev/idxd/mdev.c
++++ b/drivers/vfio/mdev/idxd/mdev.c
+@@ -1787,6 +1787,9 @@ static int idxd_vdcm_set_ctx_trigger_single(struct eventfd_ctx **ctx,
+ 		if (!count)
+ 			return -EINVAL;
+ 
++		if (!data)
++			return -EINVAL;
++
+ 		trigger = *(u8 *)data;
+ 		if (trigger && *ctx)
+ 			eventfd_signal(*ctx, 1);
+-- 
+2.31.1
+

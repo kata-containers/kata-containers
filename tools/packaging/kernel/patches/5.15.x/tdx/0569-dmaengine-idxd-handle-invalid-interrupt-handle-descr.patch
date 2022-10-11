@@ -1,0 +1,135 @@
+From b9e0af5a737a94d128602c7ced6fec9125871e58 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Thu, 7 Oct 2021 16:00:29 -0700
+Subject: [PATCH 0569/1418] dmaengine: idxd: handle invalid interrupt handle
+ descriptors
+
+Handle a descriptor that has been marked with invalid interrupt handle
+error in status. Create a work item that will resubmit the descriptor. This
+typically happens when the driver has handled the revoke interrupt handle
+event and has a new interrupt handle.
+
+Reviewed-by: Kevin Tian <kevin.tian@intel.com>
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/dma.c  | 14 ++++++++----
+ drivers/dma/idxd/idxd.h |  1 +
+ drivers/dma/idxd/irq.c  | 50 +++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 61 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/dma/idxd/dma.c b/drivers/dma/idxd/dma.c
+index 375dbae18583..2ce873994e33 100644
+--- a/drivers/dma/idxd/dma.c
++++ b/drivers/dma/idxd/dma.c
+@@ -24,18 +24,24 @@ void idxd_dma_complete_txd(struct idxd_desc *desc,
+ 			   enum idxd_complete_type comp_type,
+ 			   bool free_desc)
+ {
++	struct idxd_device *idxd = desc->wq->idxd;
+ 	struct dma_async_tx_descriptor *tx;
+ 	struct dmaengine_result res;
+ 	int complete = 1;
+ 
+-	if (desc->completion->status == DSA_COMP_SUCCESS)
++	if (desc->completion->status == DSA_COMP_SUCCESS) {
+ 		res.result = DMA_TRANS_NOERROR;
+-	else if (desc->completion->status)
++	} else if (desc->completion->status) {
++		if (idxd->request_int_handles && comp_type != IDXD_COMPLETE_ABORT &&
++		    desc->completion->status == DSA_COMP_INT_HANDLE_INVAL &&
++		    idxd_queue_int_handle_resubmit(desc))
++			return;
+ 		res.result = DMA_TRANS_WRITE_FAILED;
+-	else if (comp_type == IDXD_COMPLETE_ABORT)
++	} else if (comp_type == IDXD_COMPLETE_ABORT) {
+ 		res.result = DMA_TRANS_ABORTED;
+-	else
++	} else {
+ 		complete = 0;
++	}
+ 
+ 	tx = &desc->txd;
+ 	if (complete && tx->cookie) {
+diff --git a/drivers/dma/idxd/idxd.h b/drivers/dma/idxd/idxd.h
+index 970701738c8a..82c4915f58a2 100644
+--- a/drivers/dma/idxd/idxd.h
++++ b/drivers/dma/idxd/idxd.h
+@@ -524,6 +524,7 @@ void idxd_unregister_devices(struct idxd_device *idxd);
+ int idxd_register_driver(void);
+ void idxd_unregister_driver(void);
+ void idxd_wqs_quiesce(struct idxd_device *idxd);
++bool idxd_queue_int_handle_resubmit(struct idxd_desc *desc);
+ 
+ /* device interrupt control */
+ void idxd_msix_perm_setup(struct idxd_device *idxd);
+diff --git a/drivers/dma/idxd/irq.c b/drivers/dma/idxd/irq.c
+index b8d0f1b7d576..84ef4bbc0cc5 100644
+--- a/drivers/dma/idxd/irq.c
++++ b/drivers/dma/idxd/irq.c
+@@ -22,6 +22,11 @@ struct idxd_fault {
+ 	struct idxd_device *idxd;
+ };
+ 
++struct idxd_resubmit {
++	struct work_struct work;
++	struct idxd_desc *desc;
++};
++
+ static void idxd_device_reinit(struct work_struct *work)
+ {
+ 	struct idxd_device *idxd = container_of(work, struct idxd_device, work);
+@@ -216,6 +221,51 @@ irqreturn_t idxd_misc_thread(int vec, void *data)
+ 	return IRQ_HANDLED;
+ }
+ 
++static void idxd_int_handle_resubmit_work(struct work_struct *work)
++{
++	struct idxd_resubmit *irw = container_of(work, struct idxd_resubmit, work);
++	struct idxd_desc *desc = irw->desc;
++	struct idxd_wq *wq = desc->wq;
++	int rc;
++
++	desc->completion->status = 0;
++	rc = idxd_submit_desc(wq, desc);
++	if (rc < 0) {
++		dev_dbg(&wq->idxd->pdev->dev, "Failed to resubmit desc %d to wq %d.\n",
++			desc->id, wq->id);
++		/*
++		 * If the error is not -EAGAIN, it means the submission failed due to wq
++		 * has been killed instead of ENQCMDS failure. Here the driver needs to
++		 * notify the submitter of the failure by reporting abort status.
++		 *
++		 * -EAGAIN comes from ENQCMDS failure. idxd_submit_desc() will handle the
++		 * abort.
++		 */
++		if (rc != -EAGAIN) {
++			desc->completion->status = IDXD_COMP_DESC_ABORT;
++			idxd_dma_complete_txd(desc, IDXD_COMPLETE_ABORT, false);
++		}
++		idxd_free_desc(wq, desc);
++	}
++	kfree(irw);
++}
++
++bool idxd_queue_int_handle_resubmit(struct idxd_desc *desc)
++{
++	struct idxd_wq *wq = desc->wq;
++	struct idxd_device *idxd = wq->idxd;
++	struct idxd_resubmit *irw;
++
++	irw = kzalloc(sizeof(*irw), GFP_KERNEL);
++	if (!irw)
++		return false;
++
++	irw->desc = desc;
++	INIT_WORK(&irw->work, idxd_int_handle_resubmit_work);
++	queue_work(idxd->wq, &irw->work);
++	return true;
++}
++
+ static void irq_process_pending_llist(struct idxd_irq_entry *irq_entry)
+ {
+ 	struct idxd_desc *desc, *t;
+-- 
+2.31.1
+

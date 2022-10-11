@@ -1,0 +1,166 @@
+From 1294db6ae2a344e65268385bbe2e3a1a03d01d26 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Tue, 31 Aug 2021 15:34:51 +0800
+Subject: [PATCH 0495/1418] KVM: MMU: Introduce level info in PFERR code
+
+For TDX, EPT violation can happen when TDG.MEM.PAGE.ACCEPT.
+And TDG.MEM.PAGE.ACCEPT contains the desired accept page level of TD guest.
+
+1. KVM can map it with 4KB page while TD guest wants to accept 2MB page.
+
+  TD geust will get TDX_PAGE_SIZE_MISMATCH and it should try to accept
+  4KB size.
+
+2. KVM can map it with 2MB page while TD guest wants to accept 4KB page.
+
+  KVM needs to honor it because
+  a) there is no way to tell guest KVM maps it as 2MB size. And
+  b) guest accepts it in 4KB size since guest knows some other 4KB page
+     in the same 2MB range will be used as shared page.
+
+For case 2, it need to pass desired page level to MMU's
+page_fault_handler. Use bit 29:31 of kvm PF error code for this purpose.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h |  3 +++
+ arch/x86/kvm/mmu/mmu.c          | 11 +++++++----
+ arch/x86/kvm/vmx/common.h       |  6 +++++-
+ arch/x86/kvm/vmx/tdx.c          | 14 +++++++++++++-
+ arch/x86/kvm/vmx/tdx.h          | 19 +++++++++++++++++++
+ 5 files changed, 47 insertions(+), 6 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 73a239e21c3b..71daf946fd3c 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -250,6 +250,8 @@ enum x86_intercept_stage;
+ #define PFERR_FETCH_BIT 4
+ #define PFERR_PK_BIT 5
+ #define PFERR_SGX_BIT 15
++#define PFERR_LEVEL_START_BIT 29
++#define PFERR_LEVEL_END_BIT 31
+ #define PFERR_GUEST_FINAL_BIT 32
+ #define PFERR_GUEST_PAGE_BIT 33
+ 
+@@ -260,6 +262,7 @@ enum x86_intercept_stage;
+ #define PFERR_FETCH_MASK (1U << PFERR_FETCH_BIT)
+ #define PFERR_PK_MASK (1U << PFERR_PK_BIT)
+ #define PFERR_SGX_MASK (1U << PFERR_SGX_BIT)
++#define PFERR_LEVEL_MASK GENMASK_ULL(PFERR_LEVEL_END_BIT, PFERR_LEVEL_START_BIT)
+ #define PFERR_GUEST_FINAL_MASK (1ULL << PFERR_GUEST_FINAL_BIT)
+ #define PFERR_GUEST_PAGE_MASK (1ULL << PFERR_GUEST_PAGE_BIT)
+ 
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 81984bc35a4b..17d23e9e3464 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -4698,11 +4698,14 @@ int kvm_tdp_page_fault(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code,
+ 		       bool prefault)
+ {
+ 	kvm_pfn_t pfn;
+-	int max_level;
++	int max_level, err_level;
+ 
+-	for (max_level = vcpu->kvm->arch.tdp_max_page_level;
+-	     max_level > PG_LEVEL_4K;
+-	     max_level--) {
++	max_level = vcpu->kvm->arch.tdp_max_page_level;
++	err_level = (error_code & PFERR_LEVEL_MASK) >> PFERR_LEVEL_START_BIT;
++	if (err_level)
++		max_level = min(max_level, err_level);
++
++	for (; max_level > PG_LEVEL_4K; max_level--) {
+ 		int page_num = KVM_PAGES_PER_HPAGE(max_level);
+ 		gfn_t base = vcpu_gpa_to_gfn_unalias(vcpu, gpa) & ~(page_num - 1);
+ 
+diff --git a/arch/x86/kvm/vmx/common.h b/arch/x86/kvm/vmx/common.h
+index 704c9a1317d2..1c158b30b977 100644
+--- a/arch/x86/kvm/vmx/common.h
++++ b/arch/x86/kvm/vmx/common.h
+@@ -143,7 +143,8 @@ static inline void vmx_handle_external_interrupt_irqoff(struct kvm_vcpu *vcpu,
+ }
+ 
+ static inline int __vmx_handle_ept_violation(struct kvm_vcpu *vcpu, gpa_t gpa,
+-					     unsigned long exit_qualification)
++					     unsigned long exit_qualification,
++					     int err_page_level)
+ {
+ 	u64 error_code;
+ 
+@@ -165,6 +166,9 @@ static inline int __vmx_handle_ept_violation(struct kvm_vcpu *vcpu, gpa_t gpa,
+ 	error_code |= (exit_qualification & EPT_VIOLATION_GVA_TRANSLATED) != 0 ?
+ 	       PFERR_GUEST_FINAL_MASK : PFERR_GUEST_PAGE_MASK;
+ 
++	if (err_page_level > 0)
++		error_code |= (err_page_level << PFERR_LEVEL_START_BIT) & PFERR_LEVEL_MASK;
++
+ 	return kvm_mmu_page_fault(vcpu, gpa, error_code, NULL, 0);
+ }
+ 
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index b0079031f606..850304e33309 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -1693,7 +1693,19 @@ static inline bool tdx_is_private_gpa(struct kvm *kvm, gpa_t gpa)
+ 
+ static int tdx_handle_ept_violation(struct kvm_vcpu *vcpu)
+ {
++	union tdx_ext_exit_qualification ext_exit_qual;
+ 	unsigned long exit_qual;
++	int err_page_level = 0;
++
++	ext_exit_qual.full = tdexit_ext_exit_qual(vcpu);
++
++	if (ext_exit_qual.type >= NUM_EXT_EXIT_QUAL) {
++		pr_err("EPT violation at gpa 0x%lx, with invalid ext exit qualification type 0x%x\n", tdexit_gpa(vcpu), ext_exit_qual.type);
++		kvm_vm_bugged(vcpu->kvm);
++		return 0;
++	} else if (ext_exit_qual.type == EXT_EXIT_QUAL_ACCEPT) {
++		err_page_level = ext_exit_qual.req_sept_level + 1;
++	}
+ 
+ 	if (tdx_is_private_gpa(vcpu->kvm, tdexit_gpa(vcpu))) {
+ 		exit_qual = TDX_SEPT_PFERR;
+@@ -1710,7 +1722,7 @@ static int tdx_handle_ept_violation(struct kvm_vcpu *vcpu)
+ 	}
+ 
+ 	trace_kvm_page_fault(tdexit_gpa(vcpu), exit_qual);
+-	return __vmx_handle_ept_violation(vcpu, tdexit_gpa(vcpu), exit_qual);
++	return __vmx_handle_ept_violation(vcpu, tdexit_gpa(vcpu), exit_qual, err_page_level);
+ }
+ 
+ static int tdx_handle_ept_misconfig(struct kvm_vcpu *vcpu)
+diff --git a/arch/x86/kvm/vmx/tdx.h b/arch/x86/kvm/vmx/tdx.h
+index b7643785def2..beba9344ece8 100644
+--- a/arch/x86/kvm/vmx/tdx.h
++++ b/arch/x86/kvm/vmx/tdx.h
+@@ -71,6 +71,25 @@ union tdx_exit_reason {
+ 	u64 full;
+ };
+ 
++union tdx_ext_exit_qualification {
++	struct {
++		u64 type		: 4;
++		u64 reserved0		: 28;
++		u64 req_sept_level	: 3;
++		u64 err_sept_level	: 3;
++		u64 err_sept_state	: 8;
++		u64 err_sept_is_leaf	: 1;
++		u64 reserved1		: 17;
++	};
++	u64 full;
++};
++
++enum tdx_ext_exit_qualification_type {
++	EXT_EXIT_QUAL_NONE,
++	EXT_EXIT_QUAL_ACCEPT,
++	NUM_EXT_EXIT_QUAL,
++};
++
+ struct vcpu_tdx {
+ 	struct kvm_vcpu	vcpu;
+ 
+-- 
+2.31.1
+

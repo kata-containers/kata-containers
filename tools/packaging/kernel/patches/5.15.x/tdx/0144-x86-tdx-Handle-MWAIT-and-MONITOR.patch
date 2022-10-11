@@ -1,0 +1,56 @@
+From 5da0b3ad399dd84d5155ac68811c52560913baee Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Mon, 6 Jan 2020 23:01:06 -0800
+Subject: [PATCH 0144/1418] x86/tdx: Handle MWAIT and MONITOR
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When running as a TDX guest, there are a number of existing, privileged
+instructions that do not work. If the guest kernel uses these
+instructions, the hardware generates a #VE.
+
+List of unsupported instructions can be found in Intel Trust Domain
+Extensions (Intel® TDX) Module specification, sec titled "Instructions
+that Cause a #VE Unconditionally" and in Guest-Host Communication
+Interface (GHCI) Specification for Intel TDX, sec titled "#VE Injected
+due to disallowed instructions".
+
+To prevent TD guests from using MWAIT/MONITOR instructions, the CPUID
+flags for these instructions are already disabled by the TDX module. 
+   
+After the above mentioned preventive measures, if TD guests still
+execute these instructions, add appropriate warning message
+(WARN_ONCE()) in #VE handler. This handling behavior is same as KVM
+(which also treats MWAIT/MONITOR as nops with warning once in
+unsupported platforms).
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Reviewed-by: Dan Williams <dan.j.williams@intel.com>
+---
+ arch/x86/kernel/tdx.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 3ac044c22c6c..27df0ae3deeb 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -370,6 +370,14 @@ bool tdx_handle_virtualization_exception(struct pt_regs *regs,
+ 			ret = false;
+ 		}
+ 		break;
++	case EXIT_REASON_MONITOR_INSTRUCTION:
++	case EXIT_REASON_MWAIT_INSTRUCTION:
++		/*
++		 * Something in the kernel used MONITOR or MWAIT despite
++		 * X86_FEATURE_MWAIT being cleared for TDX guests.
++		 */
++		WARN_ONCE(1, "TD Guest used unsupported MWAIT/MONITOR instruction\n");
++		break;
+ 	default:
+ 		pr_warn("Unexpected #VE: %lld\n", ve->exit_reason);
+ 		return false;
+-- 
+2.31.1
+

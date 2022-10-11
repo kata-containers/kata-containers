@@ -1,0 +1,47 @@
+From dfd9f2f326de3a0f40441eb8a60710f5ee98b8e6 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Wed, 11 Aug 2021 14:40:12 +0800
+Subject: [PATCH 0264/1418] x86/sgx: Rename cpumask function with a generic
+ name
+
+sgx_encl_ewb_cpumask() is currently used during SGX swap
+operations before enclave page contents are "Written Back"
+to non-enclave memory.
+
+However, the returned cpumask is not specific to "EWB"
+operations. At its core, it is an expression of where
+a given enclave *may* have run.
+
+Rename it to sgx_encl_cpumask(). The EUPDATESVN procedure
+will soon use it target IPIs to force enclaves to exit.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/kernel/cpu/sgx/main.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index c9d2aa87a1a9..cb9f14e5ebd8 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -194,7 +194,7 @@ static void sgx_ipi_cb(void *info)
+ {
+ }
+ 
+-static const cpumask_t *sgx_encl_ewb_cpumask(struct sgx_encl *encl)
++static const cpumask_t *sgx_encl_cpumask(struct sgx_encl *encl)
+ {
+ 	cpumask_t *cpumask = &encl->cpumask;
+ 	struct sgx_encl_mm *encl_mm;
+@@ -269,7 +269,7 @@ static void sgx_encl_ewb(struct sgx_epc_page *epc_page,
+ 			 * miss cpus that entered the enclave between
+ 			 * generating the mask and incrementing epoch.
+ 			 */
+-			on_each_cpu_mask(sgx_encl_ewb_cpumask(encl),
++			on_each_cpu_mask(sgx_encl_cpumask(encl),
+ 					 sgx_ipi_cb, NULL, 1);
+ 			ret = __sgx_encl_ewb(epc_page, va_slot, backing);
+ 		}
+-- 
+2.31.1
+

@@ -1,0 +1,39 @@
+From a2a0c7ab04a5b6d9a69666269e3c126d1f53a01b Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Fri, 1 Apr 2022 08:09:01 -0700
+Subject: [PATCH 1266/1418] iommu/vt-d: Allow disabling PRQ timeout
+
+For debug purpose, if user use cmdline iommu.prq_timeout=0, let's disable
+PRQ timeout tracking. The downside is that we will not limit mis-behaved
+guests.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/iommu.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
+index 944bd7cd9761..102f46265802 100644
+--- a/drivers/iommu/iommu.c
++++ b/drivers/iommu/iommu.c
+@@ -1410,7 +1410,7 @@ int iommu_report_device_fault(struct device *dev, struct iommu_fault_event *evt)
+ 		exp = get_jiffies_64() + prq_timeout;
+ 		evt_pending->expire = exp;
+ 		mutex_lock(&fparam->lock);
+-		if (list_empty(&fparam->faults)) {
++		if (list_empty(&fparam->faults) && prq_timeout) {
+ 			/* First pending event, start timer */
+ 			tmr = &dev->iommu->fault_param->timer;
+ 			WARN_ON(timer_pending(tmr));
+@@ -1563,7 +1563,7 @@ int iommu_page_response(struct iommu_domain *domain,
+ 	}
+ 
+ 	/* stop response timer if no more pending request */
+-	if (list_empty(&param->fault_param->faults) &&
++	if (prq_timeout && list_empty(&param->fault_param->faults) &&
+ 		timer_pending(&param->fault_param->timer)) {
+ 		pr_debug("no pending PRQ, stop timer\n");
+ 		del_timer(&param->fault_param->timer);
+-- 
+2.31.1
+

@@ -1,0 +1,32 @@
+From fac716d09c0273631591992785a8addce46cc7af Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Wed, 10 Nov 2021 16:42:58 +0800
+Subject: [PATCH 0875/1418] vfio: Add new IRQ for DMA fault reporting
+
+Add a new IRQ type/subtype to get notification on nested
+stage DMA faults.
+
+Signed-off-by: Eric Auger <eric.auger@redhat.com>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ include/uapi/linux/vfio.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/include/uapi/linux/vfio.h b/include/uapi/linux/vfio.h
+index 04fea424ac68..d89921f5a613 100644
+--- a/include/uapi/linux/vfio.h
++++ b/include/uapi/linux/vfio.h
+@@ -717,6 +717,9 @@ struct vfio_irq_info {
+ };
+ #define VFIO_DEVICE_GET_IRQ_INFO	_IO(VFIO_TYPE, VFIO_BASE + 9)
+ 
++#define VFIO_IRQ_TYPE_NESTED				(1)
++#define VFIO_IRQ_SUBTYPE_DMA_FAULT			(1)
++
+ /**
+  * VFIO_DEVICE_SET_IRQS - _IOW(VFIO_TYPE, VFIO_BASE + 10, struct vfio_irq_set)
+  *
+-- 
+2.31.1
+

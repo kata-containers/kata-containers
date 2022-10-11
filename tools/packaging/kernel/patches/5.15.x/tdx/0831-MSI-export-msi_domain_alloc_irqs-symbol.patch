@@ -1,0 +1,25 @@
+From cf882e7de10dc06f47ae008c9e798aa45f5aeb0c Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Wed, 1 Dec 2021 17:07:29 -0700
+Subject: [PATCH 0831/1418] MSI: export msi_domain_alloc_irqs() symbol
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ kernel/irq/msi.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/kernel/irq/msi.c b/kernel/irq/msi.c
+index 72a51b4776bb..535820841c1d 100644
+--- a/kernel/irq/msi.c
++++ b/kernel/irq/msi.c
+@@ -710,6 +710,7 @@ int msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
+ 
+ 	return ops->domain_alloc_irqs(domain, dev, nvec);
+ }
++EXPORT_SYMBOL_GPL(msi_domain_alloc_irqs);
+ 
+ void __msi_domain_free_irqs(struct irq_domain *domain, struct device *dev)
+ {
+-- 
+2.31.1
+

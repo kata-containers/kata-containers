@@ -1,0 +1,478 @@
+From 5caa68f76f3141afe69488d7d16d30e804773164 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Sat, 9 Jan 2021 03:10:36 -0800
+Subject: [PATCH 0433/1418] *** HACK *** KVM: TDX: support debug trace for tdx
+ seam module
+
+add kernel module parameter and export operation for debug trace of
+TDX seam module via debug fs to plug debugconfig seam call.
+The following tree files will be populated
+
+kernel module options:
+- kvm_intel.tdx_seam_print_severity
+  0: TRACE_ALL
+  1: TRACE_WARN
+  2: TRACE_ERROR
+  1000: TRACE_CUSTOM
+- kvm_intel.tdx_seam_trace_target
+  0: TRACE_BUFFER: output to buffer internal to TDX module
+  1: TRACE_SERIAL_PORT: output to serial port
+  2: TRACE_EXTERNAL_BUFFER: output to VMM buffer which is external
+                            to TDX module
+- kvm_intel.tdx_seam_emergency
+  set emergency buffer
+
+debug fs files
+- tdx_seam/dump
+  dump buffer from internal buffer of tdx seam module to VMM buffer
+  only when trace_target is TRACE_BUFFER
+- tdx_seam/buffer_trace
+  read the buffer for trace
+- tdx_seam/buffer_dump
+  read the buffer dumped from buffer internal to TDX module
+- tdx_seam/buffer_emergency
+  read the buffer for emergency dump
+
+Usage example:
+  # change print_severity
+  kvm_intel.tdx_seam_print_severity=0 # as module parameter or
+  echo 0 > /sys/module/kvm_intel/parameters/tdx_seam_print_severity
+
+  # set buffer in KVM and read the trace
+  kvm_intel.tdx_seam_trace_target=2 # as module parameter or
+  echo 2 > /sys/module/kvm_intel/parameters/tdx_seam_trace_target
+  # run time
+  cat /sys/kernel/debug/tdx_seam/buffer_trace
+
+  # make tdx module to record in its internal buffer
+  # and dump it into KVM buffer
+  kvm_intel.tdx_seam_trace_target=0 # as module parameter or
+  echo 0 > /sys/module/kvm_intel/parameters/tdx_seam_trace_target
+  # run time
+  echo 1 > /sys/kernel/debug/tdx_seam/dump
+  cat /sys/kernel/debug/tdx_seam/buffer_dump
+
+  # set emergency buffer
+  kvm_intel.tdx_seam_emergency=1 # as module parameter or
+  echo 1 > /sys/kernel/debug/tdx_seam/tdx_seam_emergency
+  # run time after tdx seam module panics
+  cat /sys/kernel/debug/tdx_seam/buffer_emergency
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+Co-developed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kvm/vmx/main.c      |   3 +-
+ arch/x86/kvm/vmx/tdx.c       | 317 ++++++++++++++++++++++++++++++++++-
+ arch/x86/kvm/vmx/tdx_stubs.c |   1 +
+ include/linux/kvm_host.h     |   2 +
+ virt/kvm/kvm_main.c          |  12 ++
+ 5 files changed, 333 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index 6f64a64942ed..7eda3ec9d52e 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -1154,8 +1154,9 @@ static int __init vt_init(void)
+ }
+ module_init(vt_init);
+ 
+-static void vt_exit(void)
++static void __exit vt_exit(void)
+ {
++	tdx_exit();
+ 	vmx_exit();
+ 	kvm_exit();
+ 	vmx_post_kvm_exit();
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 0d45fd2261bd..f3cf28fef1fd 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -5,6 +5,7 @@
+ #include <linux/trace_events.h>
+ #include <linux/pagemap.h>
+ #include <linux/perf_event.h>
++#include <linux/debugfs.h>
+ 
+ #include <asm/tdx_errno.h>
+ #include <asm/tdx_host.h>
+@@ -2089,9 +2090,17 @@ static void __init tdx_pre_kvm_init(unsigned int *vcpu_size,
+ 		*vm_size = sizeof(struct kvm_tdx);
+ }
+ 
++static int __init tdx_debugfs_init(void);
++static void __exit tdx_debugfs_exit(void);
++
+ static int __init tdx_init(void)
+ {
+-	return 0;
++	return tdx_debugfs_init();
++}
++
++static void __exit tdx_exit(void)
++{
++	tdx_debugfs_exit();
+ }
+ 
+ static int __init tdx_hardware_setup(struct kvm_x86_ops *x86_ops)
+@@ -2247,3 +2256,309 @@ static void tdx_do_tdenter(struct kvm_tdenter *tdenter)
+ 	preempt_enable();
+ }
+ #endif
++
++#ifdef CONFIG_DEBUG_FS
++static int print_severity_get(void *data, u64 *val)
++{
++	*val = trace_seamcalls;
++	return 0;
++}
++
++static int print_severity_set(void *data, u64 val)
++{
++	int ret = -EINVAL;
++
++	if (!boot_cpu_has(X86_FEATURE_TDX))
++		return -EOPNOTSUPP;
++	if (val == DEBUGCONFIG_TRACE_ALL ||
++	    val == DEBUGCONFIG_TRACE_WARN ||
++	    val == DEBUGCONFIG_TRACE_ERROR ||
++	    val == DEBUGCONFIG_TRACE_CUSTOM ||
++	    val == DEBUGCONFIG_TRACE_NONE) {
++		kvm_hardware_enable_all();
++		tdh_trace_seamcalls(val);
++		kvm_hardware_disable_all();
++		trace_seamcalls = val;
++		ret = 0;
++	}
++	return ret;
++}
++
++DEFINE_DEBUGFS_ATTRIBUTE(print_severity_fops,
++			 print_severity_get, print_severity_set, "%llu\n");
++
++static int trace_target = DEBUGCONFIG_TARGET_SERIAL_PORT;
++
++#define TRACE_BUFFER_SIZE	4096
++#define MAX_PRINT_LENGTH	256
++#define BUFFER_SIZE		(TRACE_BUFFER_SIZE * MAX_PRINT_LENGTH)
++static char *buffer_trace;
++
++static int trace_target_get(void *data, u64 *val)
++{
++	*val = trace_target;
++	return 0;
++}
++
++static int trace_target_set(void *data, u64 val)
++{
++	int ret = -EINVAL;
++	u64 err;
++	u64 paddr = 0;
++
++	if (!boot_cpu_has(X86_FEATURE_TDX))
++		return -EOPNOTSUPP;
++
++	switch (val) {
++	case DEBUGCONFIG_TARGET_EXTERNAL_BUFFER:
++		paddr = __pa(buffer_trace);
++		fallthrough;
++	case DEBUGCONFIG_TARGET_TRACE_BUFFER:
++	case DEBUGCONFIG_TARGET_SERIAL_PORT:
++		kvm_hardware_enable_all();
++		err = tddebugconfig(DEBUGCONFIG_SET_TARGET, val, paddr);
++		kvm_hardware_disable_all();
++		if (err)
++			pr_seamcall_error(TDDEBUGCONFIG, err, NULL);
++		else
++			trace_target = val;
++		ret = err;
++		break;
++	default:
++		/* nothing */
++		break;
++	}
++	return ret;
++}
++
++DEFINE_DEBUGFS_ATTRIBUTE(trace_target_fops,
++			 trace_target_get, trace_target_set, "%llu\n");
++
++static char *buffer_emergency;
++static bool emergency_configured;
++
++static int emergency_get(void *data, u64 *val)
++{
++	*val = emergency_configured;
++	return 0;
++}
++
++static int emergency_set(void *data, u64 val)
++{
++	int ret = 0;
++
++	if (!boot_cpu_has(X86_FEATURE_TDX))
++		return -EOPNOTSUPP;
++
++	/* emergency buffer can't be de-configured */
++	if (!val && emergency_configured)
++		return -EINVAL;
++
++	memset(buffer_emergency, 0, BUFFER_SIZE);
++	if (!emergency_configured) {
++		u64 err;
++
++		kvm_hardware_enable_all();
++		err = tddebugconfig(DEBUGCONFIG_SET_EMERGENCY_BUFFER,
++				    __pa(buffer_emergency),
++				    TRACE_BUFFER_SIZE);
++		kvm_hardware_disable_all();
++		if ((s64)err < 0) {
++			pr_seamcall_error(TDDEBUGCONFIG, err, NULL);
++			ret = (s64)err;
++		} else
++			ret = 0;
++
++		emergency_configured = true;
++	}
++	return ret;
++}
++
++DEFINE_DEBUGFS_ATTRIBUTE(emergency_fops,
++			 emergency_get, emergency_set, "%llu\n");
++
++static char *buffer_dump;
++static int dump_set(void *data, u64 val)
++{
++	int ret = -EINVAL;
++
++	if (trace_target == DEBUGCONFIG_TARGET_TRACE_BUFFER) {
++		u64 err;
++
++		memset(buffer_dump, 0, BUFFER_SIZE);
++		kvm_hardware_enable_all();
++		err = tddebugconfig(DEBUGCONFIG_DUMP_TRACE_BUFFER,
++				    __pa(buffer_dump), TRACE_BUFFER_SIZE);
++		kvm_hardware_disable_all();
++		if ((s64)err < 0) {
++			pr_seamcall_error(TDDEBUGCONFIG, err, NULL);
++			ret = (s64)err;
++		} else
++			ret = 0;
++	}
++	return ret;
++}
++
++DEFINE_DEBUGFS_ATTRIBUTE(dump_fops, NULL, dump_set, "%llu\n");
++
++static void *buffer_start(struct seq_file *sfile, loff_t *pos)
++{
++	if (*pos == 0)
++		return SEQ_START_TOKEN;
++	if (*pos > TRACE_BUFFER_SIZE)
++		return NULL;
++	return pos;
++}
++
++static void *buffer_next(struct seq_file *sfile, void *v, loff_t *pos)
++{
++	(*pos)++;
++	if (*pos > TRACE_BUFFER_SIZE)
++		return NULL;
++	return pos;
++}
++
++static void buffer_stop(struct seq_file *sfile, void *v)
++{
++}
++
++static int buffer_show(struct seq_file *sfile, void *v)
++{
++	char *buffer = sfile->private;
++
++	if (v == SEQ_START_TOKEN) {
++		if (buffer == buffer_trace)
++			seq_puts(sfile, "------- trace buffer ------\n");
++		else if (buffer == buffer_dump)
++			seq_puts(sfile, "------- dump  buffer ------\n");
++		else
++			seq_puts(sfile, "------- emerg buffer ------\n");
++	} else {
++		int index = *((loff_t *)v) - 1;
++		const char *buf = &buffer[MAX_PRINT_LENGTH * index];
++
++		seq_printf(sfile, "%."__stringify(MAX_PRINT_LENGTH)"s", buf);
++	}
++	return 0;
++}
++
++static const struct seq_operations buffer_sops = {
++	.start = buffer_start,
++	.next = buffer_next,
++	.stop = buffer_stop,
++	.show = buffer_show,
++};
++
++DEFINE_SEQ_ATTRIBUTE(buffer);
++
++static struct dentry *tdx_seam;
++#endif
++
++static int __init tdx_debugfs_init(void)
++{
++	int ret = 0;
++#ifdef CONFIG_DEBUG_FS
++	if (!boot_cpu_has(X86_FEATURE_TDX))
++		return 0;
++
++	ret = -ENOMEM;
++	buffer_trace = kcalloc(TRACE_BUFFER_SIZE, MAX_PRINT_LENGTH, GFP_KERNEL_ACCOUNT);
++	if (!buffer_trace)
++		goto err;
++
++	buffer_emergency = kcalloc(TRACE_BUFFER_SIZE, MAX_PRINT_LENGTH, GFP_KERNEL_ACCOUNT);
++	if (!buffer_emergency)
++		goto err;
++
++	buffer_dump = kcalloc(TRACE_BUFFER_SIZE, MAX_PRINT_LENGTH, GFP_KERNEL_ACCOUNT);
++	if (!buffer_dump)
++		goto err;
++
++	tdx_seam = debugfs_create_dir("tdx_seam", NULL);
++
++	debugfs_create_file("print_severity", 0600,
++			    tdx_seam, NULL, &print_severity_fops);
++	debugfs_create_file("trace_target", 0600,
++			    tdx_seam, NULL, &trace_target_fops);
++	debugfs_create_file("emergency", 0600,
++			    tdx_seam, NULL, &emergency_fops);
++
++	debugfs_create_file("dump", 0200,
++			    tdx_seam, NULL, &dump_fops);
++	debugfs_create_file("buffer_trace", 0400,
++			    tdx_seam, buffer_trace, &buffer_fops);
++	debugfs_create_file("buffer_dump", 0400,
++			    tdx_seam, buffer_dump, &buffer_fops);
++	debugfs_create_file("buffer_emergency", 0400,
++			    tdx_seam, buffer_emergency, &buffer_fops);
++
++	return 0;
++err:
++	kfree(buffer_trace);
++	kfree(buffer_emergency);
++	kfree(buffer_dump);
++#endif
++	return ret;
++}
++
++static void __exit tdx_debugfs_exit(void)
++{
++#ifdef CONFIG_DEBUG_FS
++	if (buffer_trace)
++		kvfree(buffer_trace);
++	if (buffer_emergency)
++		kvfree(buffer_emergency);
++	if (buffer_dump)
++		kvfree(buffer_dump);
++
++	debugfs_remove_recursive(tdx_seam);
++	tdx_seam = NULL;
++#endif
++}
++
++/*
++ * debug fs
++ * - tdx_seam/print_severity
++ *   0: TRACE_ALL
++ *   1: TRACE_WARN
++ *   2: TRACE_ERROR
++ *   1000: TRACE_CUSTOM
++ * - tdx_seam/trace_target
++ *   0: TRACE_BUFFER: output to buffer internal to TDX module
++ *   1: TRACE_SERIAL_PORT: output to serial port
++ *   2: TRACE_EXTERNAL_BUFFER: output to VMM buffer which is external
++ *                             to TDX module
++ * - tdx_seam/emergency
++ *   0: noop
++ *   1: set emergency buffer
++ *
++ * - tdx_seam/dump
++ *   dump buffer from internal buffer of tdx seam module to VMM buffer
++ *   only when trace_target is TRACE_BUFFER
++ *
++ * - tdx_seam/buffer_trace
++ *   read the buffer for trace
++ * - tdx_seam/buffer_dump
++ *   read the buffer dumped from buffer internal to TDX module
++ * - tdx_seam/buffer_emergency
++ *   read the buffer for emergency dump
++ *
++ * Usage example:
++ *   # change print_severity
++ *   echo 0 > /sys/kernel/debug/tdx_seam/print_severity
++ *
++ *   # set buffer in KVM and read the trace
++ *   echo 2 > /sys/kernel/debug/tdx_seam/trace_target
++ *   cat /sys/kernel/debug/tdx_seam/buffer_trace
++ *
++ *   # make tdx module to record in its internal buffer
++ *   # and dump it into KVM buffer
++ *   echo 0 > /sys/kernel/debug/tdx_seam/trace_target
++ *   echo 1 > /sys/kernel/debug/tdx_seam/dump
++ *   cat /sys/kernel/debug/tdx_seam/buffer_dump
++ *
++ *   # set emergency buffer
++ *   echo 1 > /sys/kernel/debug/tdx_seam/emergency
++ *   # after tdx seam module panics
++ *   cat /sys/kernel/debug/tdx_seam/buffer_emergency
++ */
+diff --git a/arch/x86/kvm/vmx/tdx_stubs.c b/arch/x86/kvm/vmx/tdx_stubs.c
+index 5b6b2ecb02ff..683f93522674 100644
+--- a/arch/x86/kvm/vmx/tdx_stubs.c
++++ b/arch/x86/kvm/vmx/tdx_stubs.c
+@@ -33,6 +33,7 @@ static void __init tdx_pre_kvm_init(unsigned int *vcpu_size,
+ 				    unsigned int *vcpu_align,
+ 				    unsigned int *vm_size) {}
+ static int __init tdx_init(void) { return 0; }
++static void __exit tdx_exit(void) {}
+ static void tdx_update_exception_bitmap(struct kvm_vcpu *vcpu) {}
+ static void tdx_set_dr7(struct kvm_vcpu *vcpu, unsigned long val) {}
+ static int tdx_get_cpl(struct kvm_vcpu *vcpu) { return 0; }
+diff --git a/include/linux/kvm_host.h b/include/linux/kvm_host.h
+index 3ec721719ad1..2f43215e3ff0 100644
+--- a/include/linux/kvm_host.h
++++ b/include/linux/kvm_host.h
+@@ -978,6 +978,8 @@ bool kvm_vcpu_wake_up(struct kvm_vcpu *vcpu);
+ void kvm_vcpu_kick(struct kvm_vcpu *vcpu);
+ int kvm_vcpu_yield_to(struct kvm_vcpu *target);
+ void kvm_vcpu_on_spin(struct kvm_vcpu *vcpu, bool usermode_vcpu_not_eligible);
++int kvm_hardware_enable_all(void);
++void kvm_hardware_disable_all(void);
+ 
+ void kvm_flush_remote_tlbs(struct kvm *kvm);
+ void kvm_reload_remote_mmus(struct kvm *kvm);
+diff --git a/virt/kvm/kvm_main.c b/virt/kvm/kvm_main.c
+index 74d05e51c42c..98c47866b158 100644
+--- a/virt/kvm/kvm_main.c
++++ b/virt/kvm/kvm_main.c
+@@ -4797,6 +4797,18 @@ static int hardware_enable_all(void)
+ 	return r;
+ }
+ 
++int kvm_hardware_enable_all(void)
++{
++	return hardware_enable_all();
++}
++EXPORT_SYMBOL_GPL(kvm_hardware_enable_all);
++
++void kvm_hardware_disable_all(void)
++{
++	hardware_disable_all();
++}
++EXPORT_SYMBOL_GPL(kvm_hardware_disable_all);
++
+ static int kvm_reboot(struct notifier_block *notifier, unsigned long val,
+ 		      void *v)
+ {
+-- 
+2.31.1
+

@@ -1,0 +1,41 @@
+From 1f373f66e4012f4f2c8ccccaace6af3a0275624b Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Tue, 21 Sep 2021 18:15:04 -0700
+Subject: [PATCH 0189/1418] x86/tdx: Set ioremap_host_shared for device filter
+ override
+
+In TDX kernel, since the memory is encrypted, for IO access in device
+drivers, memory had to be explicitly shared with the host using
+ioremap_host_shared() call. For cases with drivers that do not
+have this change, kernel provides a way to configure all IO remapped
+memory as shared using ioremap_force_shared option.
+
+Since authorize_allow_devs kernel command line option overrides the
+default list of allowed devices, in order to prevent possible memory
+access error in newly bind-ed drivers, set ioremap_force_shared to true.
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdx-filter.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/x86/kernel/tdx-filter.c b/arch/x86/kernel/tdx-filter.c
+index 76519d74609c..f3c076e25c10 100644
+--- a/arch/x86/kernel/tdx-filter.c
++++ b/arch/x86/kernel/tdx-filter.c
+@@ -199,6 +199,12 @@ void __init tdx_filter_init(void)
+ 	dev_default_authorization = false;
+ 
+ 	if (filter_overridden) {
++		/*
++		 * Since the default allow list is overridden to
++		 * make sure new drivers use ioremap_host_shared,
++		 * force it on all drivers.
++		 */
++		ioremap_force_shared = true;
+ 		add_taint(TAINT_CONF_NO_LOCKDOWN, LOCKDEP_STILL_OK);
+ 		pr_debug("Device filter is overridden\n");
+ 	}
+-- 
+2.31.1
+

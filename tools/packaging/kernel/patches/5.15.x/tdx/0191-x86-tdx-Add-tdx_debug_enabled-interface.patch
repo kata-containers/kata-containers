@@ -1,0 +1,66 @@
+From 3f5b5a9b83f64c1e20762bb723d9ba82d96c33f6 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Mon, 7 Dec 2020 14:18:48 +0000
+Subject: [PATCH 0191/1418] x86/tdx: Add tdx_debug_enabled() interface
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+A guest TD is defined as debuggable if its ATTRIBUTES.DEBUG bit is 1.
+In this mode, the host VMM can use Intel TDX functions to access
+secret TD state that is not accessible for non-debuggable TDs. A
+debuggable TD is, by nature, untrusted.
+
+Since the TD’s ATTRIBUTES are included in the TDG.MR.REPORT, the TD’s
+debuggability state can be known to any third party to which the TD
+attests. TD Attributes are initialized during TD INIT call. For
+more details about debug features, check Intel Trust Domain Extensions
+(Intel TDX) Module Architecture specification, sec 13.3.
+
+Add a new interface to detect the TDX debug mode. This will be used by
+follow-on patches. Examples of its usage are, when adding command line
+debug options to disable TDX features like driver or port filter,
+tdx_debug_enabled() is used to make sure it is used only in debug
+mode.
+
+https://software.intel.com/content/dam/develop/external/us/en/documents/tdx-module-1eas-v0.85.039.pdf
+
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/tdx.h | 1 +
+ arch/x86/kernel/tdx.c      | 5 +++++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/arch/x86/include/asm/tdx.h b/arch/x86/include/asm/tdx.h
+index 090675ee3ded..924735359f7b 100644
+--- a/arch/x86/include/asm/tdx.h
++++ b/arch/x86/include/asm/tdx.h
+@@ -69,6 +69,7 @@ enum tdx_map_type {
+ #ifdef CONFIG_INTEL_TDX_GUEST
+ 
+ bool is_tdx_guest(void);
++bool tdx_debug_enabled(void);
+ void __init tdx_early_init(void);
+ void __init tdx_filter_init(void);
+ 
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 366709d76437..50841fb25582 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -147,6 +147,11 @@ phys_addr_t tdx_shared_mask(void)
+ 	return 1ULL << (td_info.gpa_width - 1);
+ }
+ 
++bool tdx_debug_enabled(void)
++{
++	return td_info.attributes & BIT(0);
++}
++
+ /* TDX guest event notification handler */
+ DEFINE_IDTENTRY_SYSVEC(sysvec_tdx_event_notify)
+ {
+-- 
+2.31.1
+

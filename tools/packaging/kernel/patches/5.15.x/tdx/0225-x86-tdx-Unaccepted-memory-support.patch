@@ -1,0 +1,208 @@
+From 03fb94cc859b517487cbbbfdffe8c051ce51efee Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Wed, 25 Aug 2021 21:42:53 +0300
+Subject: [PATCH 0225/1418] x86/tdx: Unaccepted memory support
+
+All preparation is complete. Hookup TDX-specific code to accept memory.
+
+There are two tdx_accept_memory() implementations: one in main kernel
+and one in the decompressor.
+
+The implementation in core kernel uses tdx_hcall_gpa_intent(). The
+helper is not available in the decompressor, self-contained
+implementation added there instead.
+
+Note that tdx_hcall_gpa_intent() is going to be more complex once
+support for accepting 1G and 2M chunks are added.
+
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/Kconfig                             |  1 +
+ arch/x86/boot/compressed/tdx.c               | 67 ++++++++++++++++++++
+ arch/x86/boot/compressed/unaccepted_memory.c |  8 ++-
+ arch/x86/include/asm/tdx.h                   |  2 +
+ arch/x86/kernel/tdx.c                        |  8 +++
+ arch/x86/mm/unaccepted_memory.c              |  6 +-
+ 6 files changed, 90 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index de5985916899..b8cf3ecc7c72 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -880,6 +880,7 @@ config INTEL_TDX_GUEST
+ 	select X86_MEM_ENCRYPT_COMMON
+ 	select ARCH_HAS_RESTRICTED_VIRTIO_MEMORY_ACCESS
+ 	select IOMAP_IND_MMIO
++	select UNACCEPTED_MEMORY
+ 	help
+ 	  Provide support for running in a trusted domain on Intel processors
+ 	  equipped with Trusted Domain Extensions. TDX is a Intel technology
+diff --git a/arch/x86/boot/compressed/tdx.c b/arch/x86/boot/compressed/tdx.c
+index ecb3b42992e0..dd7f79655de6 100644
+--- a/arch/x86/boot/compressed/tdx.c
++++ b/arch/x86/boot/compressed/tdx.c
+@@ -5,11 +5,53 @@
+ 
+ #include "../cpuflags.h"
+ #include "../string.h"
++#include "error.h"
+ 
++#include <asm/page_types.h>
++
++#define TDX_HYPERCALL_STANDARD			0
+ #define TDX_CPUID_LEAF_ID                       0x21
+ 
++/*
++ * Used in __tdx_module_call() helper function to gather the
++ * output registers' values of TDCALL instruction when requesting
++ * services from the TDX module. This is software only structure
++ * and not related to TDX module/VMM.
++ */
++struct tdx_module_output {
++	u64 rcx;
++	u64 rdx;
++	u64 r8;
++	u64 r9;
++	u64 r10;
++	u64 r11;
++};
++
++/*
++ * Used in __tdx_hypercall() helper function to gather the
++ * output registers' values of TDCALL instruction when requesting
++ * services from the VMM. This is software only structure
++ * and not related to TDX module/VMM.
++ */
++struct tdx_hypercall_output {
++	u64 r10;
++	u64 r11;
++	u64 r12;
++	u64 r13;
++	u64 r14;
++	u64 r15;
++};
++
+ static int tdx_guest = -1;
+ 
++/* Helper function used to communicate with the TDX module */
++u64 __tdx_module_call(u64 fn, u64 rcx, u64 rdx, u64 r8, u64 r9,
++		      struct tdx_module_output *out);
++
++/* Helper function used to request services from VMM */
++u64 __tdx_hypercall(u64 type, u64 fn, u64 r12, u64 r13, u64 r14,
++		    u64 r15, struct tdx_hypercall_output *out);
++
+ static inline bool early_cpuid_has_tdx_guest(void)
+ {
+ 	u32 eax = TDX_CPUID_LEAF_ID, sig[3] = {0};
+@@ -29,3 +71,28 @@ bool early_is_tdx_guest(void)
+ 
+ 	return !!tdx_guest;
+ }
++
++#define TDACCEPTPAGE		6
++#define TDVMCALL_MAP_GPA	0x10001
++
++void tdx_accept_memory(phys_addr_t start, phys_addr_t end)
++{
++	struct tdx_hypercall_output outl = {0};
++	int i;
++
++	if (__tdx_hypercall(TDX_HYPERCALL_STANDARD, TDVMCALL_MAP_GPA,
++			    start, end, 0, 0, &outl)) {
++		error("Cannot accept memory: MapGPA failed\n");
++	}
++
++	/*
++	 * For shared->private conversion, accept the page using TDACCEPTPAGE
++	 * TDX module call.
++	 */
++	for (i = 0; i < (end - start) / PAGE_SIZE; i++) {
++		if (__tdx_module_call(TDACCEPTPAGE, start + i * PAGE_SIZE,
++				      0, 0, 0, NULL)) {
++			error("Cannot accept memory: page accept failed\n");
++		}
++	}
++}
+diff --git a/arch/x86/boot/compressed/unaccepted_memory.c b/arch/x86/boot/compressed/unaccepted_memory.c
+index b6caca4d3d22..42140bfd5eed 100644
+--- a/arch/x86/boot/compressed/unaccepted_memory.c
++++ b/arch/x86/boot/compressed/unaccepted_memory.c
+@@ -3,10 +3,16 @@
+ #include "error.h"
+ #include "misc.h"
+ 
++extern void tdx_accept_memory(phys_addr_t start, phys_addr_t end);
++extern bool early_is_tdx_guest(void);
++
+ static inline void __accept_memory(phys_addr_t start, phys_addr_t end)
+ {
+ 	/* Platform-specific memory-acceptance call goes here */
+-	error("Cannot accept memory");
++	if (early_is_tdx_guest())
++		tdx_accept_memory(start, end);
++	else
++		error("Cannot accept memory");
+ }
+ 
+ void mark_unaccepted(struct boot_params *params, u64 start, u64 end)
+diff --git a/arch/x86/include/asm/tdx.h b/arch/x86/include/asm/tdx.h
+index 376c18c45376..1def3a3a5582 100644
+--- a/arch/x86/include/asm/tdx.h
++++ b/arch/x86/include/asm/tdx.h
+@@ -95,6 +95,8 @@ extern phys_addr_t tdx_shared_mask(void);
+ extern int tdx_hcall_gpa_intent(phys_addr_t gpa, int numpages,
+ 				enum tdx_map_type map_type);
+ 
++extern void tdx_accept_memory(phys_addr_t start, phys_addr_t end);
++
+ int tdx_mcall_tdreport(u64 data, u64 reportdata);
+ 
+ int tdx_hcall_get_quote(u64 data);
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 835d774d113c..985c03ef844b 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -372,6 +372,14 @@ int tdx_hcall_gpa_intent(phys_addr_t gpa, int numpages,
+ 	return 0;
+ }
+ 
++void tdx_accept_memory(phys_addr_t start, phys_addr_t end)
++{
++	if (tdx_hcall_gpa_intent(start, (end - start) / PAGE_SIZE,
++				 TDX_MAP_PRIVATE)) {
++		panic("Accepting memory failed\n");
++	}
++}
++
+ static __cpuidle void _tdx_halt(const bool irq_disabled, const bool do_sti)
+ {
+ 	u64 ret;
+diff --git a/arch/x86/mm/unaccepted_memory.c b/arch/x86/mm/unaccepted_memory.c
+index 984eaead0b11..9f468d58d51f 100644
+--- a/arch/x86/mm/unaccepted_memory.c
++++ b/arch/x86/mm/unaccepted_memory.c
+@@ -5,6 +5,7 @@
+ 
+ #include <asm/io.h>
+ #include <asm/setup.h>
++#include <asm/tdx.h>
+ #include <asm/unaccepted_memory.h>
+ 
+ static DEFINE_SPINLOCK(unaccepted_memory_lock);
+@@ -21,7 +22,10 @@ static void __accept_memory(phys_addr_t start, phys_addr_t end)
+ 				   start / PMD_SIZE,
+ 				   DIV_ROUND_UP(end, PMD_SIZE)) {
+ 		/* Platform-specific memory-acceptance call goes here */
+-		panic("Cannot accept memory");
++		if (cc_platform_has(CC_ATTR_GUEST_TDX))
++			tdx_accept_memory(rs * PMD_SIZE, re * PMD_SIZE);
++		else
++			panic("Cannot accept memory");
+ 		bitmap_clear(unaccepted_memory, rs, re - rs);
+ 	}
+ }
+-- 
+2.31.1
+

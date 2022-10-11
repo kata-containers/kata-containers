@@ -1,0 +1,105 @@
+From eaea8e745b70c095cfa29235c9fdcdcbc073498f Mon Sep 17 00:00:00 2001
+From: ChenXiaoSong <chenxiaosong2@huawei.com>
+Date: Tue, 29 Mar 2022 19:32:08 +0800
+Subject: [PATCH 1341/1418] NFSv4: fix open failure with O_ACCMODE flag
+
+open() with O_ACCMODE|O_DIRECT flags secondly will fail.
+
+Reproducer:
+  1. mount -t nfs -o vers=4.2 $server_ip:/ /mnt/
+  2. fd = open("/mnt/file", O_ACCMODE|O_DIRECT|O_CREAT)
+  3. close(fd)
+  4. fd = open("/mnt/file", O_ACCMODE|O_DIRECT)
+
+Server nfsd4_decode_share_access() will fail with error nfserr_bad_xdr when
+client use incorrect share access mode of 0.
+
+Fix this by using NFS4_SHARE_ACCESS_BOTH share access mode in client,
+just like firstly opening.
+
+Fixes: ce4ef7c0a8a05 ("NFS: Split out NFS v4 file operations")
+Signed-off-by: ChenXiaoSong <chenxiaosong2@huawei.com>
+Signed-off-by: Trond Myklebust <trond.myklebust@hammerspace.com>
+---
+ fs/nfs/dir.c      | 10 ----------
+ fs/nfs/internal.h | 10 ++++++++++
+ fs/nfs/nfs4file.c |  6 ++++--
+ 3 files changed, 14 insertions(+), 12 deletions(-)
+
+diff --git a/fs/nfs/dir.c b/fs/nfs/dir.c
+index 1a6d2867fba4..74a688715c59 100644
+--- a/fs/nfs/dir.c
++++ b/fs/nfs/dir.c
+@@ -1834,16 +1834,6 @@ const struct dentry_operations nfs4_dentry_operations = {
+ };
+ EXPORT_SYMBOL_GPL(nfs4_dentry_operations);
+ 
+-static fmode_t flags_to_mode(int flags)
+-{
+-	fmode_t res = (__force fmode_t)flags & FMODE_EXEC;
+-	if ((flags & O_ACCMODE) != O_WRONLY)
+-		res |= FMODE_READ;
+-	if ((flags & O_ACCMODE) != O_RDONLY)
+-		res |= FMODE_WRITE;
+-	return res;
+-}
+-
+ static struct nfs_open_context *create_nfs_open_context(struct dentry *dentry, int open_flags, struct file *filp)
+ {
+ 	return alloc_nfs_open_context(dentry, flags_to_mode(open_flags), filp);
+diff --git a/fs/nfs/internal.h b/fs/nfs/internal.h
+index 66fc936834f2..abaf85a0bfff 100644
+--- a/fs/nfs/internal.h
++++ b/fs/nfs/internal.h
+@@ -42,6 +42,16 @@ static inline bool nfs_lookup_is_soft_revalidate(const struct dentry *dentry)
+ 	return true;
+ }
+ 
++static inline fmode_t flags_to_mode(int flags)
++{
++	fmode_t res = (__force fmode_t)flags & FMODE_EXEC;
++	if ((flags & O_ACCMODE) != O_WRONLY)
++		res |= FMODE_READ;
++	if ((flags & O_ACCMODE) != O_RDONLY)
++		res |= FMODE_WRITE;
++	return res;
++}
++
+ /*
+  * Note: RFC 1813 doesn't limit the number of auth flavors that
+  * a server can return, so make something up.
+diff --git a/fs/nfs/nfs4file.c b/fs/nfs/nfs4file.c
+index 8f35b5e13e93..4120e1cb3fee 100644
+--- a/fs/nfs/nfs4file.c
++++ b/fs/nfs/nfs4file.c
+@@ -32,6 +32,7 @@ nfs4_file_open(struct inode *inode, struct file *filp)
+ 	struct dentry *parent = NULL;
+ 	struct inode *dir;
+ 	unsigned openflags = filp->f_flags;
++	fmode_t f_mode;
+ 	struct iattr attr;
+ 	int err;
+ 
+@@ -50,8 +51,9 @@ nfs4_file_open(struct inode *inode, struct file *filp)
+ 	if (err)
+ 		return err;
+ 
++	f_mode = filp->f_mode;
+ 	if ((openflags & O_ACCMODE) == 3)
+-		openflags--;
++		f_mode |= flags_to_mode(openflags);
+ 
+ 	/* We can't create new files here */
+ 	openflags &= ~(O_CREAT|O_EXCL);
+@@ -59,7 +61,7 @@ nfs4_file_open(struct inode *inode, struct file *filp)
+ 	parent = dget_parent(dentry);
+ 	dir = d_inode(parent);
+ 
+-	ctx = alloc_nfs_open_context(file_dentry(filp), filp->f_mode, filp);
++	ctx = alloc_nfs_open_context(file_dentry(filp), f_mode, filp);
+ 	err = PTR_ERR(ctx);
+ 	if (IS_ERR(ctx))
+ 		goto out;
+-- 
+2.31.1
+

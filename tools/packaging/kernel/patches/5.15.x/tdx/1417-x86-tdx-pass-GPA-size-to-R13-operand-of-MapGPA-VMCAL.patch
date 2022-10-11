@@ -1,0 +1,34 @@
+From c88db36fec244501a2ceb7fe56c96e1b5b7510e3 Mon Sep 17 00:00:00 2001
+From: "Feng, Jialei" <jialei.feng@intel.com>
+Date: Thu, 22 Sep 2022 03:18:34 -0400
+Subject: [PATCH 1417/1418] x86/tdx: pass GPA size to R13 operand of MapGPA
+ VMCALL
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The GHCI spec defines R13 to be ‘size’ of the region, not the ‘end’ address of the region:
+https://software.intel.com/content/dam/develop/external/us/en/documents/intel-tdx-guest-hypervisor-communication-interface.pdf
+
+Suggested-by: Tseng, Kuo-Lang <kuo-lang.tseng@intel.com>
+Signed-off-by: Feng, Jialei <jialei.feng@intel.com>
+---
+ arch/x86/boot/compressed/tdx.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/boot/compressed/tdx.c b/arch/x86/boot/compressed/tdx.c
+index 0dd337ac2d2a..132f07bcae4d 100644
+--- a/arch/x86/boot/compressed/tdx.c
++++ b/arch/x86/boot/compressed/tdx.c
+@@ -84,7 +84,7 @@ void tdx_accept_memory(phys_addr_t start, phys_addr_t end)
+ 	int i;
+ 
+ 	if (__tdx_hypercall(TDX_HYPERCALL_STANDARD, TDVMCALL_MAP_GPA,
+-			    start, end, 0, 0, &outl)) {
++			    start, end - start, 0, 0, &outl)) {
+ 		error("Cannot accept memory: MapGPA failed\n");
+ 	}
+ 
+-- 
+2.31.1
+

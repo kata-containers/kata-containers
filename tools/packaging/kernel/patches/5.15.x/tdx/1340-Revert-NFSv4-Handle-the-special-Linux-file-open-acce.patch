@@ -1,0 +1,54 @@
+From 759f28942caa84659165b1cf3e34b61c4f0eb6a2 Mon Sep 17 00:00:00 2001
+From: ChenXiaoSong <chenxiaosong2@huawei.com>
+Date: Tue, 29 Mar 2022 19:32:07 +0800
+Subject: [PATCH 1340/1418] Revert "NFSv4: Handle the special Linux file open
+ access mode"
+
+This reverts commit 44942b4e457beda00981f616402a1a791e8c616e.
+
+After secondly opening a file with O_ACCMODE|O_DIRECT flags,
+nfs4_valid_open_stateid() will dereference NULL nfs4_state when lseek().
+
+Reproducer:
+  1. mount -t nfs -o vers=4.2 $server_ip:/ /mnt/
+  2. fd = open("/mnt/file", O_ACCMODE|O_DIRECT|O_CREAT)
+  3. close(fd)
+  4. fd = open("/mnt/file", O_ACCMODE|O_DIRECT)
+  5. lseek(fd)
+
+Reported-by: Lyu Tao <tao.lyu@epfl.ch>
+Signed-off-by: ChenXiaoSong <chenxiaosong2@huawei.com>
+Signed-off-by: Trond Myklebust <trond.myklebust@hammerspace.com>
+---
+ fs/nfs/inode.c    | 1 -
+ fs/nfs/nfs4file.c | 2 +-
+ 2 files changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/fs/nfs/inode.c b/fs/nfs/inode.c
+index 853213b3a209..4bc3ab5d3a1a 100644
+--- a/fs/nfs/inode.c
++++ b/fs/nfs/inode.c
+@@ -1165,7 +1165,6 @@ int nfs_open(struct inode *inode, struct file *filp)
+ 	nfs_fscache_open_file(inode, filp);
+ 	return 0;
+ }
+-EXPORT_SYMBOL_GPL(nfs_open);
+ 
+ /*
+  * This function is called whenever some part of NFS notices that
+diff --git a/fs/nfs/nfs4file.c b/fs/nfs/nfs4file.c
+index c91565227ea2..8f35b5e13e93 100644
+--- a/fs/nfs/nfs4file.c
++++ b/fs/nfs/nfs4file.c
+@@ -51,7 +51,7 @@ nfs4_file_open(struct inode *inode, struct file *filp)
+ 		return err;
+ 
+ 	if ((openflags & O_ACCMODE) == 3)
+-		return nfs_open(inode, filp);
++		openflags--;
+ 
+ 	/* We can't create new files here */
+ 	openflags &= ~(O_CREAT|O_EXCL);
+-- 
+2.31.1
+

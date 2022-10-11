@@ -1,0 +1,44 @@
+From 95c8fed6535edc7b006dea0dccf976cc3f1f7ee4 Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Tue, 16 Mar 2021 22:37:30 -0700
+Subject: [PATCH 1171/1418] x86/fault: Adjust WARN_ON for pkey fault
+
+Previously if a protection key fault occurred on a kernel address it
+indicated something wrong because user page mappings are not supposed to
+be in the kernel address space.
+
+With the addition of PKS, pkey faults may now happen on kernel mappings.
+
+If PKS is enabled, avoid the warning in the fault path.  Simplify the
+comment.
+
+Cc: Sean Christopherson <seanjc@google.com>
+Cc: Dan Williams <dan.j.williams@intel.com>
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ arch/x86/mm/fault.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/mm/fault.c b/arch/x86/mm/fault.c
+index 6c1e9a62985e..0374b17d01e1 100644
+--- a/arch/x86/mm/fault.c
++++ b/arch/x86/mm/fault.c
+@@ -1159,11 +1159,11 @@ do_kern_addr_fault(struct pt_regs *regs, unsigned long hw_error_code,
+ 		   unsigned long address)
+ {
+ 	/*
+-	 * Protection keys exceptions only happen on user pages.  We
+-	 * have no user pages in the kernel portion of the address
+-	 * space, so do not expect them here.
++	 * PF_PF faults should only occur on kernel
++	 * addresses when supervisor pkeys are enabled.
+ 	 */
+-	WARN_ON_ONCE(hw_error_code & X86_PF_PK);
++	WARN_ON_ONCE(!cpu_feature_enabled(X86_FEATURE_PKS) &&
++		     (hw_error_code & X86_PF_PK));
+ 
+ #ifdef CONFIG_X86_32
+ 	/*
+-- 
+2.31.1
+

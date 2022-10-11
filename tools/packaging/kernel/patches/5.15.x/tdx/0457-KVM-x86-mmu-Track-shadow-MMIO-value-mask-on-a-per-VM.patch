@@ -1,0 +1,280 @@
+From 7313ff76d6b8a984a0531b4456dc9fd5917d2bb3 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Wed, 10 Jun 2020 15:46:38 -0700
+Subject: [PATCH 0457/1418] KVM: x86/mmu: Track shadow MMIO value/mask on a
+ per-VM basis
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Co-developed-by: Isaku Yamahata <isaku.yamahata@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h |  3 +++
+ arch/x86/kvm/mmu.h              |  4 +++-
+ arch/x86/kvm/mmu/mmu.c          | 14 +++++++++-----
+ arch/x86/kvm/mmu/spte.c         | 33 +++++++++++++++------------------
+ arch/x86/kvm/mmu/spte.h         |  9 ++++-----
+ arch/x86/kvm/mmu/tdp_mmu.c      |  6 +++---
+ arch/x86/kvm/svm/svm.c          |  2 +-
+ arch/x86/kvm/vmx/tdx.c          |  5 +++++
+ 8 files changed, 43 insertions(+), 33 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 2c2685014c3d..245588c733b5 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1081,6 +1081,9 @@ struct kvm_arch {
+ 	 */
+ 	spinlock_t mmu_unsync_pages_lock;
+ 
++	u64 shadow_mmio_value;
++	u64 shadow_mmio_mask;
++
+ 	struct list_head assigned_dev_head;
+ 	struct iommu_domain *iommu_domain;
+ 	bool iommu_noncoherent;
+diff --git a/arch/x86/kvm/mmu.h b/arch/x86/kvm/mmu.h
+index 71007cde601a..870c99723188 100644
+--- a/arch/x86/kvm/mmu.h
++++ b/arch/x86/kvm/mmu.h
+@@ -65,7 +65,9 @@ static __always_inline u64 rsvd_bits(int s, int e)
+ 	return ((2ULL << (e - s)) - 1) << s;
+ }
+ 
+-void kvm_mmu_set_mmio_spte_mask(u64 mmio_value, u64 mmio_mask, u64 access_mask);
++void kvm_mmu_set_mmio_spte_mask(struct kvm *kvm, u64 mmio_value, u64 mmio_mask,
++				u64 access_mask);
++void kvm_mmu_set_default_mmio_spte_mask(u64 mask);
+ void kvm_mmu_set_ept_masks(bool has_ad_bits, bool has_exec_only, u64 init_value);
+ void kvm_mmu_set_spte_init_value(u64 init_value);
+ 
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 8537e3fa6b18..ad9d2a34aa27 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -2548,7 +2548,7 @@ static int mmu_page_zap_pte(struct kvm *kvm, struct kvm_mmu_page *sp,
+ 				return kvm_mmu_prepare_zap_page(kvm, child,
+ 								invalid_list);
+ 		}
+-	} else if (is_mmio_spte(pte)) {
++	} else if (is_mmio_spte(kvm, pte)) {
+ 		mmu_spte_clear_no_track(spte);
+ 	}
+ 	return 0;
+@@ -3429,7 +3429,7 @@ static bool handle_abnormal_pfn(struct kvm_vcpu *vcpu, gva_t gva, gfn_t gfn,
+ 		 * touching the shadow page tables as attempting to install an
+ 		 * MMIO SPTE will just be an expensive nop.
+ 		 */
+-		if (unlikely(!shadow_mmio_value)) {
++		if (unlikely(!vcpu->kvm->arch.shadow_mmio_value)) {
+ 			*ret_val = RET_PF_EMULATE;
+ 			return true;
+ 		}
+@@ -3576,7 +3576,8 @@ static int fast_page_fault(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code)
+ 			break;
+ 
+ 		sp = sptep_to_sp(sptep);
+-		if (!is_last_spte(spte, sp->role.level) || is_mmio_spte(spte))
++		if (!is_last_spte(spte, sp->role.level) ||
++			is_mmio_spte(vcpu->kvm, spte))
+ 			break;
+ 
+ 		/*
+@@ -4194,7 +4195,7 @@ static int handle_mmio_page_fault(struct kvm_vcpu *vcpu, u64 addr, bool direct)
+ 	if (WARN_ON(reserved))
+ 		return -EINVAL;
+ 
+-	if (is_mmio_spte(spte)) {
++	if (is_mmio_spte(vcpu->kvm, spte)) {
+ 		gfn_t gfn = get_mmio_spte_gfn(spte);
+ 		unsigned int access = get_mmio_spte_access(spte);
+ 
+@@ -4604,7 +4605,7 @@ static unsigned long get_cr3(struct kvm_vcpu *vcpu)
+ static bool sync_mmio_spte(struct kvm_vcpu *vcpu, u64 *sptep, gfn_t gfn,
+ 			   unsigned int access, int *nr_present)
+ {
+-	if (unlikely(is_mmio_spte(*sptep))) {
++	if (unlikely(is_mmio_spte(vcpu->kvm, *sptep))) {
+ 		if (gfn != get_mmio_spte_gfn(*sptep)) {
+ 			mmu_spte_clear_no_track(sptep);
+ 			return true;
+@@ -6145,6 +6146,9 @@ void kvm_mmu_init_vm(struct kvm *kvm)
+ 	kvm_page_track_register_notifier(kvm, node);
+ 
+ 	kvm->arch.tdp_max_page_level = KVM_MAX_HUGEPAGE_LEVEL;
++	kvm_mmu_set_mmio_spte_mask(kvm, shadow_default_mmio_mask,
++				   shadow_default_mmio_mask,
++				   ACC_WRITE_MASK | ACC_USER_MASK);
+ }
+ 
+ void kvm_mmu_uninit_vm(struct kvm *kvm)
+diff --git a/arch/x86/kvm/mmu/spte.c b/arch/x86/kvm/mmu/spte.c
+index 087fd172d0cd..03afd5e9b610 100644
+--- a/arch/x86/kvm/mmu/spte.c
++++ b/arch/x86/kvm/mmu/spte.c
+@@ -28,8 +28,7 @@ u64 __read_mostly shadow_x_mask; /* mutual exclusive with nx_mask */
+ u64 __read_mostly shadow_user_mask;
+ u64 __read_mostly shadow_accessed_mask;
+ u64 __read_mostly shadow_dirty_mask;
+-u64 __read_mostly shadow_mmio_value;
+-u64 __read_mostly shadow_mmio_mask;
++u64 __read_mostly shadow_default_mmio_mask;
+ u64 __read_mostly shadow_mmio_access_mask;
+ u64 __read_mostly shadow_present_mask;
+ u64 __read_mostly shadow_me_mask;
+@@ -58,10 +57,11 @@ u64 make_mmio_spte(struct kvm_vcpu *vcpu, u64 gfn, unsigned int access)
+ 	u64 spte = generation_mmio_spte_mask(gen);
+ 	u64 gpa = gfn << PAGE_SHIFT;
+ 
+-	WARN_ON_ONCE(!shadow_mmio_value);
++	WARN_ON_ONCE(!vcpu->kvm->arch.shadow_mmio_value &&
++		     !vcpu->kvm->arch.gfn_shared_mask);
+ 
+ 	access &= shadow_mmio_access_mask;
+-	spte |= shadow_mmio_value | access;
++	spte |= vcpu->kvm->arch.shadow_mmio_value | access;
+ 	spte |= gpa | shadow_nonpresent_or_rsvd_mask;
+ 	spte |= (gpa & shadow_nonpresent_or_rsvd_mask)
+ 		<< SHADOW_NONPRESENT_OR_RSVD_MASK_LEN;
+@@ -269,7 +269,8 @@ u64 mark_spte_for_access_track(u64 spte)
+ 	return spte;
+ }
+ 
+-void kvm_mmu_set_mmio_spte_mask(u64 mmio_value, u64 mmio_mask, u64 access_mask)
++void kvm_mmu_set_mmio_spte_mask(struct kvm *kvm, u64 mmio_value, u64 mmio_mask,
++				u64 access_mask)
+ {
+ 	BUG_ON((u64)(unsigned)access_mask != access_mask);
+ 	WARN_ON(mmio_value & shadow_nonpresent_or_rsvd_lower_gfn_mask);
+@@ -298,8 +299,8 @@ void kvm_mmu_set_mmio_spte_mask(u64 mmio_value, u64 mmio_mask, u64 access_mask)
+ 	    WARN_ON(mmio_value && (REMOVED_SPTE & mmio_mask) == mmio_value))
+ 		mmio_value = 0;
+ 
+-	shadow_mmio_value = mmio_value;
+-	shadow_mmio_mask  = mmio_mask;
++	kvm->arch.shadow_mmio_value = mmio_value;
++	kvm->arch.shadow_mmio_mask = mmio_mask;
+ 	shadow_mmio_access_mask = access_mask;
+ }
+ EXPORT_SYMBOL_GPL(kvm_mmu_set_mmio_spte_mask);
+@@ -318,20 +319,12 @@ void kvm_mmu_set_ept_masks(bool has_ad_bits, bool has_exec_only, u64 init_value)
+ 
+ 	shadow_host_writable_mask = EPT_SPTE_HOST_WRITABLE;
+ 	shadow_mmu_writable_mask  = EPT_SPTE_MMU_WRITABLE;
+-
+-	/*
+-	 * EPT Misconfigurations are generated if the value of bits 2:0
+-	 * of an EPT paging-structure entry is 110b (write/execute).
+-	 */
+-	kvm_mmu_set_mmio_spte_mask(VMX_EPT_MISCONFIG_WX_VALUE,
+-				   VMX_EPT_RWX_MASK, 0);
+ }
+ EXPORT_SYMBOL_GPL(kvm_mmu_set_ept_masks);
+ 
+ void kvm_mmu_reset_all_pte_masks(void)
+ {
+ 	u8 low_phys_bits;
+-	u64 mask;
+ 
+ 	shadow_phys_bits = kvm_get_shadow_phys_bits();
+ 
+@@ -380,9 +373,13 @@ void kvm_mmu_reset_all_pte_masks(void)
+ 	 * PTEs and so the reserved PA approach must be disabled.
+ 	 */
+ 	if (shadow_phys_bits < 52)
+-		mask = BIT_ULL(51) | PT_PRESENT_MASK;
++		shadow_default_mmio_mask = BIT_ULL(51) | PT_PRESENT_MASK;
+ 	else
+-		mask = 0;
++		shadow_default_mmio_mask = 0;
++}
+ 
+-	kvm_mmu_set_mmio_spte_mask(mask, mask, ACC_WRITE_MASK | ACC_USER_MASK);
++void kvm_mmu_set_default_mmio_spte_mask(u64 mask)
++{
++	shadow_default_mmio_mask = mask;
+ }
++EXPORT_SYMBOL_GPL(kvm_mmu_set_default_mmio_spte_mask);
+diff --git a/arch/x86/kvm/mmu/spte.h b/arch/x86/kvm/mmu/spte.h
+index c88f8da8e64b..0c1f8670e7c6 100644
+--- a/arch/x86/kvm/mmu/spte.h
++++ b/arch/x86/kvm/mmu/spte.h
+@@ -143,8 +143,7 @@ extern u64 __read_mostly shadow_x_mask; /* mutual exclusive with nx_mask */
+ extern u64 __read_mostly shadow_user_mask;
+ extern u64 __read_mostly shadow_accessed_mask;
+ extern u64 __read_mostly shadow_dirty_mask;
+-extern u64 __read_mostly shadow_mmio_value;
+-extern u64 __read_mostly shadow_mmio_mask;
++extern u64 __read_mostly shadow_default_mmio_mask;
+ extern u64 __read_mostly shadow_mmio_access_mask;
+ extern u64 __read_mostly shadow_present_mask;
+ extern u64 __read_mostly shadow_me_mask;
+@@ -207,10 +206,10 @@ extern u64 __read_mostly shadow_nonpresent_or_rsvd_lower_gfn_mask;
+  */
+ extern u8 __read_mostly shadow_phys_bits;
+ 
+-static inline bool is_mmio_spte(u64 spte)
++static inline bool is_mmio_spte(struct kvm *kvm, u64 spte)
+ {
+-	return (spte & shadow_mmio_mask) == shadow_mmio_value &&
+-	       likely(shadow_mmio_value);
++	return (spte & kvm->arch.shadow_mmio_mask) == kvm->arch.shadow_mmio_value &&
++		likely(kvm->arch.shadow_mmio_value || kvm->arch.gfn_shared_mask);
+ }
+ 
+ static inline bool __is_shadow_present_pte(u64 pte)
+diff --git a/arch/x86/kvm/mmu/tdp_mmu.c b/arch/x86/kvm/mmu/tdp_mmu.c
+index 64ccfc1fa553..a2bd16ee32bf 100644
+--- a/arch/x86/kvm/mmu/tdp_mmu.c
++++ b/arch/x86/kvm/mmu/tdp_mmu.c
+@@ -448,8 +448,8 @@ static void __handle_changed_spte(struct kvm *kvm, int as_id, gfn_t gfn,
+ 		 * impact the guest since both the former and current SPTEs
+ 		 * are nonpresent.
+ 		 */
+-		if (WARN_ON(!is_mmio_spte(old_spte) &&
+-			    !is_mmio_spte(new_spte) &&
++		if (WARN_ON(!is_mmio_spte(kvm, old_spte) &&
++			    !is_mmio_spte(kvm, new_spte) &&
+ 			    !is_removed_spte(new_spte)))
+ 			pr_err("Unexpected SPTE change! Nonpresent SPTEs\n"
+ 			       "should not be replaced with another,\n"
+@@ -963,7 +963,7 @@ static int tdp_mmu_map_handle_target_level(struct kvm_vcpu *vcpu, int write,
+ 	}
+ 
+ 	/* If a MMIO SPTE is installed, the MMIO will need to be emulated. */
+-	if (unlikely(is_mmio_spte(new_spte))) {
++	if (unlikely(is_mmio_spte(vcpu->kvm, new_spte))) {
+ 		trace_mark_mmio_spte(rcu_dereference(iter->sptep), iter->gfn,
+ 				     new_spte);
+ 		ret = RET_PF_EMULATE;
+diff --git a/arch/x86/kvm/svm/svm.c b/arch/x86/kvm/svm/svm.c
+index 1fdb89c527c4..96d33dcf4cc2 100644
+--- a/arch/x86/kvm/svm/svm.c
++++ b/arch/x86/kvm/svm/svm.c
+@@ -898,7 +898,7 @@ static __init void svm_adjust_mmio_mask(void)
+ 	 */
+ 	mask = (mask_bit < 52) ? rsvd_bits(mask_bit, 51) | PT_PRESENT_MASK : 0;
+ 
+-	kvm_mmu_set_mmio_spte_mask(mask, mask, PT_WRITABLE_MASK | PT_USER_MASK);
++	kvm_mmu_set_default_mmio_spte_mask(mask);
+ }
+ 
+ static void svm_hardware_teardown(void)
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index ef3bf182711f..58466929c19b 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -396,6 +396,11 @@ static int tdx_vm_init(struct kvm *kvm)
+ 	kvm->arch.init_sipi_unsupported = true;
+ 	kvm->arch.irq_injection_disallowed = true;
+ 	kvm->arch.mce_injection_disallowed = true;
++	/*
++	 * To generate EPT violation to inject #VE instead of EPT MISCONFIG,
++	 * set RWX=0.
++	 */
++	kvm_mmu_set_mmio_spte_mask(kvm, 0, VMX_EPT_RWX_MASK, 0);
+ 
+ 	/* TODO: Enable 2mb and 1gb large page support. */
+ 	kvm->arch.tdp_max_page_level = PG_LEVEL_4K;
+-- 
+2.31.1
+

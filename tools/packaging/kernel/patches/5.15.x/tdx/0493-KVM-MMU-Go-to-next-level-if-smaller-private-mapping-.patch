@@ -1,0 +1,47 @@
+From 3b1f7eaf1b6099fb6b05fa21bc6ad2548c7a5b22 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Tue, 31 Aug 2021 15:34:49 +0800
+Subject: [PATCH 0493/1418] KVM: MMU: Go to next level if smaller private
+ mapping exists
+
+Cannot map a private page as large page if any smaller page within it
+has already been mapped to smaller level.
+
+It has to wait for all the unmapped smaller page to be mapped, then
+promote it to larger mapping.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index ddb122f3b54b..9b272f1c8dd8 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -3554,6 +3554,22 @@ static int __direct_map(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code,
+ 	if (!is_private && vcpu->kvm->arch.gfn_shared_mask)
+ 		pte_access &= ~ACC_EXEC_MASK;
+ 
++	/*
++	 * Cannot map a private page to higher level if smaller level mapping
++	 * exists. It can be promoted to larger mapping later when all the
++	 * smaller mapping are there.
++	 */
++	if (is_private) {
++		for_each_shadow_entry(vcpu, gpa, it) {
++			if (is_shadow_present_pte(*it.sptep)) {
++				if (!is_last_spte(*it.sptep, it.level) && max_level >= it.level)
++					max_level = it.level - 1;
++			} else {
++				break;
++			}
++		}
++	}
++
+ 	level = kvm_mmu_hugepage_adjust(vcpu, gfn, max_level, &pfn,
+ 					huge_page_disallowed, &req_level);
+ 
+-- 
+2.31.1
+

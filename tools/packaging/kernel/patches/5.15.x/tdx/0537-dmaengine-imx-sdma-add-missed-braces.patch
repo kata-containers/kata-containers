@@ -1,0 +1,33 @@
+From af46c8727f25961a31c542a4f4a330e53ce929a6 Mon Sep 17 00:00:00 2001
+From: Flavio Suligoi <f.suligoi@asem.it>
+Date: Tue, 28 Sep 2021 17:18:31 +0200
+Subject: [PATCH 0537/1418] dmaengine: imx-sdma: add missed braces
+
+The "if" conditional statement is not a single statement,
+so both branches require braces.
+
+Signed-off-by: Flavio Suligoi <f.suligoi@asem.it>
+Link: https://lore.kernel.org/r/20210928151833.589843-2-f.suligoi@asem.it
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/imx-sdma.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/dma/imx-sdma.c b/drivers/dma/imx-sdma.c
+index a58798fc3ff8..726076683400 100644
+--- a/drivers/dma/imx-sdma.c
++++ b/drivers/dma/imx-sdma.c
+@@ -1226,8 +1226,9 @@ static int sdma_config_channel(struct dma_chan *chan)
+ 			if (sdmac->peripheral_type == IMX_DMATYPE_ASRC_SP ||
+ 			    sdmac->peripheral_type == IMX_DMATYPE_ASRC)
+ 				sdma_set_watermarklevel_for_p2p(sdmac);
+-		} else
++		} else {
+ 			__set_bit(sdmac->event_id0, sdmac->event_mask);
++		}
+ 
+ 		/* Address */
+ 		sdmac->shp_addr = sdmac->per_address;
+-- 
+2.31.1
+

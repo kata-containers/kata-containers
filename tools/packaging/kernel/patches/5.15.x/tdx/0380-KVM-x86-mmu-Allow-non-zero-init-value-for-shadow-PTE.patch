@@ -1,0 +1,179 @@
+From 73af7bfef2189511e774d1c891076a8db024aafa Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Mon, 29 Jul 2019 19:23:46 -0700
+Subject: [PATCH 0380/1418] KVM: x86/mmu: Allow non-zero init value for shadow
+ PTE
+
+TDX will run with EPT violation #VEs enabled, which means KVM needs to
+set the "suppress #VE" bit in unused PTEs to avoid unintentionally
+reflecting not-present EPT violations into the guest.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/mmu.h      |  1 +
+ arch/x86/kvm/mmu/mmu.c  | 50 +++++++++++++++++++++++++++++++++++------
+ arch/x86/kvm/mmu/spte.c | 10 +++++++++
+ arch/x86/kvm/mmu/spte.h |  2 ++
+ 4 files changed, 56 insertions(+), 7 deletions(-)
+
+diff --git a/arch/x86/kvm/mmu.h b/arch/x86/kvm/mmu.h
+index 03e301909fdb..b3e09d7f7b4f 100644
+--- a/arch/x86/kvm/mmu.h
++++ b/arch/x86/kvm/mmu.h
+@@ -67,6 +67,7 @@ static __always_inline u64 rsvd_bits(int s, int e)
+ 
+ void kvm_mmu_set_mmio_spte_mask(u64 mmio_value, u64 mmio_mask, u64 access_mask);
+ void kvm_mmu_set_ept_masks(bool has_ad_bits, bool has_exec_only);
++void kvm_mmu_set_spte_init_value(u64 init_value);
+ 
+ void kvm_init_mmu(struct kvm_vcpu *vcpu);
+ void kvm_init_shadow_npt_mmu(struct kvm_vcpu *vcpu, unsigned long cr0,
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 2104f5b369c8..afeaf86a8ef0 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -621,9 +621,9 @@ static int mmu_spte_clear_track_bits(struct kvm *kvm, u64 *sptep)
+ 	int level = sptep_to_sp(sptep)->role.level;
+ 
+ 	if (!spte_has_volatile_bits(old_spte))
+-		__update_clear_spte_fast(sptep, 0ull);
++		__update_clear_spte_fast(sptep, shadow_init_value);
+ 	else
+-		old_spte = __update_clear_spte_slow(sptep, 0ull);
++		old_spte = __update_clear_spte_slow(sptep, shadow_init_value);
+ 
+ 	if (!is_shadow_present_pte(old_spte))
+ 		return old_spte;
+@@ -655,7 +655,7 @@ static int mmu_spte_clear_track_bits(struct kvm *kvm, u64 *sptep)
+  */
+ static void mmu_spte_clear_no_track(u64 *sptep)
+ {
+-	__update_clear_spte_fast(sptep, 0ull);
++	__update_clear_spte_fast(sptep, shadow_init_value);
+ }
+ 
+ static u64 mmu_spte_get_lockless(u64 *sptep)
+@@ -741,6 +741,42 @@ static void walk_shadow_page_lockless_end(struct kvm_vcpu *vcpu)
+ 	}
+ }
+ 
++static inline void kvm_init_shadow_page(void *page)
++{
++#ifdef CONFIG_X86_64
++	int ign;
++
++	asm volatile (
++		"rep stosq\n\t"
++		: "=c"(ign), "=D"(page)
++		: "a"(shadow_init_value), "c"(4096/8), "D"(page)
++		: "memory"
++	);
++#else
++	BUG();
++#endif
++}
++
++static int mmu_topup_shadow_page_cache(struct kvm_vcpu *vcpu)
++{
++	struct kvm_mmu_memory_cache *mc = &vcpu->arch.mmu_shadow_page_cache;
++	int start, end, i, r;
++
++	if (shadow_init_value)
++		start = kvm_mmu_memory_cache_nr_free_objects(mc);
++
++	r = kvm_mmu_topup_memory_cache(mc, PT64_ROOT_MAX_LEVEL);
++	if (r)
++		return r;
++
++	if (shadow_init_value) {
++		end = kvm_mmu_memory_cache_nr_free_objects(mc);
++		for (i = start; i < end; i++)
++			kvm_init_shadow_page(mc->objects[i]);
++	}
++	return 0;
++}
++
+ static int mmu_topup_memory_caches(struct kvm_vcpu *vcpu, bool maybe_indirect)
+ {
+ 	int r;
+@@ -750,8 +786,7 @@ static int mmu_topup_memory_caches(struct kvm_vcpu *vcpu, bool maybe_indirect)
+ 				       1 + PT64_ROOT_MAX_LEVEL + PTE_PREFETCH_NUM);
+ 	if (r)
+ 		return r;
+-	r = kvm_mmu_topup_memory_cache(&vcpu->arch.mmu_shadow_page_cache,
+-				       PT64_ROOT_MAX_LEVEL);
++	r = mmu_topup_shadow_page_cache(vcpu);
+ 	if (r)
+ 		return r;
+ 	if (maybe_indirect) {
+@@ -3238,7 +3273,7 @@ static int fast_page_fault(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code)
+ {
+ 	struct kvm_mmu_page *sp;
+ 	int ret = RET_PF_INVALID;
+-	u64 spte = 0ull;
++	u64 spte = shadow_init_value;
+ 	u64 *sptep = NULL;
+ 	uint retry_count = 0;
+ 
+@@ -5596,7 +5631,8 @@ int kvm_mmu_create(struct kvm_vcpu *vcpu)
+ 	vcpu->arch.mmu_page_header_cache.kmem_cache = mmu_page_header_cache;
+ 	vcpu->arch.mmu_page_header_cache.gfp_zero = __GFP_ZERO;
+ 
+-	vcpu->arch.mmu_shadow_page_cache.gfp_zero = __GFP_ZERO;
++	if (!shadow_init_value)
++		vcpu->arch.mmu_shadow_page_cache.gfp_zero = __GFP_ZERO;
+ 
+ 	vcpu->arch.mmu = &vcpu->arch.root_mmu;
+ 	vcpu->arch.walk_mmu = &vcpu->arch.root_mmu;
+diff --git a/arch/x86/kvm/mmu/spte.c b/arch/x86/kvm/mmu/spte.c
+index 3e97cdb13eb7..c6b23afebf97 100644
+--- a/arch/x86/kvm/mmu/spte.c
++++ b/arch/x86/kvm/mmu/spte.c
+@@ -34,6 +34,7 @@ u64 __read_mostly shadow_mmio_access_mask;
+ u64 __read_mostly shadow_present_mask;
+ u64 __read_mostly shadow_me_mask;
+ u64 __read_mostly shadow_acc_track_mask;
++u64 __read_mostly shadow_init_value;
+ 
+ u64 __read_mostly shadow_nonpresent_or_rsvd_mask;
+ u64 __read_mostly shadow_nonpresent_or_rsvd_lower_gfn_mask;
+@@ -213,6 +214,14 @@ u64 kvm_mmu_changed_pte_notifier_make_spte(u64 old_spte, kvm_pfn_t new_pfn)
+ 	return new_spte;
+ }
+ 
++void kvm_mmu_set_spte_init_value(u64 init_value)
++{
++	if (WARN_ON(!IS_ENABLED(CONFIG_X86_64) && init_value))
++		init_value = 0;
++	shadow_init_value = init_value;
++}
++EXPORT_SYMBOL_GPL(kvm_mmu_set_spte_init_value);
++
+ static u8 kvm_get_shadow_phys_bits(void)
+ {
+ 	/*
+@@ -357,6 +366,7 @@ void kvm_mmu_reset_all_pte_masks(void)
+ 	shadow_present_mask	= PT_PRESENT_MASK;
+ 	shadow_acc_track_mask	= 0;
+ 	shadow_me_mask		= sme_me_mask;
++	shadow_init_value	= 0;
+ 
+ 	shadow_host_writable_mask = DEFAULT_SPTE_HOST_WRITEABLE;
+ 	shadow_mmu_writable_mask  = DEFAULT_SPTE_MMU_WRITEABLE;
+diff --git a/arch/x86/kvm/mmu/spte.h b/arch/x86/kvm/mmu/spte.h
+index bc4638c2c4bf..7623be86210b 100644
+--- a/arch/x86/kvm/mmu/spte.h
++++ b/arch/x86/kvm/mmu/spte.h
+@@ -146,6 +146,8 @@ extern u64 __read_mostly shadow_mmio_access_mask;
+ extern u64 __read_mostly shadow_present_mask;
+ extern u64 __read_mostly shadow_me_mask;
+ 
++extern u64 __read_mostly shadow_init_value;
++
+ /*
+  * SPTEs in MMUs without A/D bits are marked with SPTE_TDP_AD_DISABLED_MASK;
+  * shadow_acc_track_mask is the set of bits to be cleared in non-accessed
+-- 
+2.31.1
+

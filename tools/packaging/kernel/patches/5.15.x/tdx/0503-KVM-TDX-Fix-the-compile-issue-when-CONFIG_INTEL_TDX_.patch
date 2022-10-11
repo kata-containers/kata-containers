@@ -1,0 +1,79 @@
+From 00efde5dfdd6a72a6f1ecd50709fd54d3215316a Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Mon, 8 Nov 2021 11:36:50 +0800
+Subject: [PATCH 0503/1418] KVM: TDX: Fix the compile issue when
+ CONFIG_INTEL_TDX_HOST is disabled
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/vmx/main.c | 12 ------------
+ arch/x86/kvm/x86.c      |  9 ++++++---
+ 2 files changed, 6 insertions(+), 15 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index 0de0928fab2c..4ce4d753f6ca 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -480,10 +480,6 @@ static void vt_get_cs_db_l_bits(struct kvm_vcpu *vcpu, int *db, int *l)
+ 
+ static void vt_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
+ {
+-	if (is_td_vcpu(vcpu) && !to_tdx(vcpu)->initialized)
+-		/* ignore reset on vcpu creation. */
+-		return;
+-
+ 	if (KVM_BUG_ON(is_td_vcpu(vcpu), vcpu->kvm))
+ 		return;
+ 
+@@ -501,10 +497,6 @@ static void vt_load_mmu_pgd(struct kvm_vcpu *vcpu, hpa_t root_hpa,
+ 
+ static void vt_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
+ {
+-	if (is_td_vcpu(vcpu) && !to_tdx(vcpu)->initialized)
+-		/* ignore reset on vcpu creation. */
+-		return;
+-
+ 	if (KVM_BUG_ON(is_td_vcpu(vcpu), vcpu->kvm))
+ 		return;
+ 
+@@ -518,10 +510,6 @@ static bool vt_is_valid_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
+ 
+ static int vt_set_efer(struct kvm_vcpu *vcpu, u64 efer)
+ {
+-	if (is_td_vcpu(vcpu) && !to_tdx(vcpu)->initialized)
+-		/* ignore reset on vcpu creation. */
+-		return 0;
+-
+ 	if (KVM_BUG_ON(is_td_vcpu(vcpu), vcpu->kvm))
+ 		return -EIO;
+ 
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index b15ac4b61675..3d04038419e6 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -10936,6 +10936,7 @@ void kvm_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
+ 	unsigned long old_cr0 = kvm_read_cr0(vcpu);
+ 	unsigned long new_cr0;
+ 	u32 eax, dummy;
++	struct kvm *kvm = vcpu->kvm;
+ 
+ 	kvm_lapic_reset(vcpu, init_event);
+ 
+@@ -11031,9 +11032,11 @@ void kvm_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
+ 	else
+ 		new_cr0 |= X86_CR0_NW | X86_CR0_CD;
+ 
+-	static_call(kvm_x86_set_cr0)(vcpu, new_cr0);
+-	static_call(kvm_x86_set_cr4)(vcpu, 0);
+-	static_call(kvm_x86_set_efer)(vcpu, 0);
++	if (kvm->arch.vm_type != KVM_X86_TDX_VM) {
++		static_call(kvm_x86_set_cr0)(vcpu, new_cr0);
++		static_call(kvm_x86_set_cr4)(vcpu, 0);
++		static_call(kvm_x86_set_efer)(vcpu, 0);
++	}
+ 	static_call(kvm_x86_update_exception_bitmap)(vcpu);
+ 
+ 	/*
+-- 
+2.31.1
+

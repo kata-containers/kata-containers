@@ -1,0 +1,52 @@
+From 256aafc1060766c0df787de3724aa49afce5e855 Mon Sep 17 00:00:00 2001
+From: Peter Zijlstra <peterz@infradead.org>
+Date: Mon, 15 Jun 2020 21:09:28 +0200
+Subject: [PATCH 0110/1418] sched: Define and initialize a flag to identify
+ valid PASID in the task
+
+Add a new single bit field to the task structure to track whether this task
+has initialized the IA32_PASID MSR to the mm's PASID.
+
+Initialize the field to zero when creating a new task with fork/clone.
+
+Signed-off-by: Peter Zijlstra <peterz@infradead.org>
+Co-developed-by: Fenghua Yu <fenghua.yu@intel.com>
+Signed-off-by: Fenghua Yu <fenghua.yu@intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+---
+ include/linux/sched.h | 3 +++
+ kernel/fork.c         | 4 ++++
+ 2 files changed, 7 insertions(+)
+
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index c1a927ddec64..ec3f61b625ab 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -935,6 +935,9 @@ struct task_struct {
+ 	/* Recursion prevention for eventfd_signal() */
+ 	unsigned			in_eventfd_signal:1;
+ #endif
++#ifdef CONFIG_IOMMU_SUPPORT
++	unsigned			pasid_activated:1;
++#endif
+ 
+ 	unsigned long			atomic_flags; /* Flags requiring atomic access. */
+ 
+diff --git a/kernel/fork.c b/kernel/fork.c
+index 38681ad44c76..0029d7d4ee77 100644
+--- a/kernel/fork.c
++++ b/kernel/fork.c
+@@ -967,6 +967,10 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
+ 	tsk->use_memdelay = 0;
+ #endif
+ 
++#ifdef CONFIG_IOMMU_SUPPORT
++	tsk->pasid_activated = 0;
++#endif
++
+ #ifdef CONFIG_MEMCG
+ 	tsk->active_memcg = NULL;
+ #endif
+-- 
+2.31.1
+

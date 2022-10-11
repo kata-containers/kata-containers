@@ -1,0 +1,41 @@
+From 7f569745abec9b475523ada893521425428fc52a Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Thu, 2 Apr 2020 12:13:37 -0700
+Subject: [PATCH 0426/1418] *** HACK *** KVM: selftests: Add cpuid() helpers
+ for x86_64
+
+Add cpuid() and cpuid_eax() to processor.h, they will be used in future
+TDX tests.
+
+Suggested-by: Zhang Chen <chen.zhang@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ .../testing/selftests/kvm/include/x86_64/processor.h  | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/tools/testing/selftests/kvm/include/x86_64/processor.h b/tools/testing/selftests/kvm/include/x86_64/processor.h
+index 6b8da10055b1..d1541d47d64b 100644
+--- a/tools/testing/selftests/kvm/include/x86_64/processor.h
++++ b/tools/testing/selftests/kvm/include/x86_64/processor.h
+@@ -279,6 +279,17 @@ static inline void cpuid(uint32_t *eax, uint32_t *ebx,
+ 	    : "memory");
+ }
+ 
++static inline unsigned int cpuid_eax(unsigned int leaf)
++{
++	unsigned int eax, ebx, ecx, edx;
++
++	eax = leaf;
++	ecx = 0;
++	cpuid(&eax, &ebx, &ecx, &edx);
++
++	return eax;
++}
++
+ #define SET_XMM(__var, __xmm) \
+ 	asm volatile("movq %0, %%"#__xmm : : "r"(__var) : #__xmm)
+ 
+-- 
+2.31.1
+

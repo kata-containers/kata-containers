@@ -1,0 +1,58 @@
+From 2ca1962611f310e4b88ab4bc81295dfa741c5942 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Tue, 30 Jun 2020 09:43:27 -0700
+Subject: [PATCH 0379/1418] KVM: x86/mmu: Ignore bits 63 and 62 when checking
+ for "present" SPTEs
+
+Ignore bits 63 and 62 when checking for present SPTEs to allow setting
+said bits in not-present SPTEs.  TDX will set bit 63 in "zero" SPTEs to
+suppress #VEs (TDX-SEAM unconditionally enables EPT Violation #VE), and
+will use bit 62 to track zapped private SPTEs.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/mmu/paging_tmpl.h |  2 +-
+ arch/x86/kvm/mmu/spte.h        | 13 +++++++++++++
+ 2 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/mmu/paging_tmpl.h b/arch/x86/kvm/mmu/paging_tmpl.h
+index 5b12d61ce2f9..f600a389c6d4 100644
+--- a/arch/x86/kvm/mmu/paging_tmpl.h
++++ b/arch/x86/kvm/mmu/paging_tmpl.h
+@@ -1113,7 +1113,7 @@ static int FNAME(sync_page)(struct kvm_vcpu *vcpu, struct kvm_mmu_page *sp)
+ 		gpa_t pte_gpa;
+ 		gfn_t gfn;
+ 
+-		if (!sp->spt[i])
++		if (!__is_shadow_present_pte(sp->spt[i]))
+ 			continue;
+ 
+ 		pte_gpa = first_pte_gpa + i * sizeof(pt_element_t);
+diff --git a/arch/x86/kvm/mmu/spte.h b/arch/x86/kvm/mmu/spte.h
+index eb7b227fc6cf..bc4638c2c4bf 100644
+--- a/arch/x86/kvm/mmu/spte.h
++++ b/arch/x86/kvm/mmu/spte.h
+@@ -208,6 +208,19 @@ static inline bool is_mmio_spte(u64 spte)
+ 	       likely(shadow_mmio_value);
+ }
+ 
++static inline bool __is_shadow_present_pte(u64 pte)
++{
++	/*
++	 * Ignore bits 63 and 62 so that they can be set in SPTEs that are well
++	 * and truly not present.  We can't use the sane/obvious approach of
++	 * querying bits 2:0 (RWX or P) because EPT without A/D bits will clear
++	 * RWX of a "present" SPTE to do access tracking.  Tracking updates can
++	 * be done out of mmu_lock, so even the flushing logic needs to treat
++	 * such SPTEs as present.
++	 */
++	return !!(pte << 2);
++}
++
+ static inline bool is_shadow_present_pte(u64 pte)
+ {
+ 	return !!(pte & SPTE_MMU_PRESENT_MASK);
+-- 
+2.31.1
+

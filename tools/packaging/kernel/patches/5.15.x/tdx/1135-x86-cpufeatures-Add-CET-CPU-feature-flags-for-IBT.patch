@@ -1,0 +1,40 @@
+From 045218dce7a53e979f8be9add43dbfb9c03c0b86 Mon Sep 17 00:00:00 2001
+From: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Date: Thu, 17 Feb 2022 17:25:56 -0800
+Subject: [PATCH 1135/1418] x86/cpufeatures: Add CET CPU feature flags for IBT
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The branding “CET” actually contains two related features,
+“Shadow Stacks” and “Indirect Branch Tracking” (IBT). However,
+not all CPUs that have Shadow Stack also have IBT, and they are
+enumerated separately.
+
+While there is currently no usage of IBT in Linux, KVM uses the
+X86_FEATURE_FOO defines in logic to determine allowed guest CPUID
+values, what MSR’s should be exposed, etc. So define X86_FEATURE_IBT
+for KVM’s usage as part of exposing Shadow Stack to guests. Don’t
+bother adding a disable mask, because there are no checks anywhere for
+host support currently, so there should be no reason to disable it.
+
+Signed-off-by: Rick Edgecombe <rick.p.edgecombe@intel.com>
+---
+ arch/x86/include/asm/cpufeatures.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/x86/include/asm/cpufeatures.h b/arch/x86/include/asm/cpufeatures.h
+index 31144f94a292..5250207d76e4 100644
+--- a/arch/x86/include/asm/cpufeatures.h
++++ b/arch/x86/include/asm/cpufeatures.h
+@@ -394,6 +394,7 @@
+ #define X86_FEATURE_TSXLDTRK		(18*32+16) /* TSX Suspend Load Address Tracking */
+ #define X86_FEATURE_PCONFIG		(18*32+18) /* Intel PCONFIG */
+ #define X86_FEATURE_ARCH_LBR		(18*32+19) /* Intel ARCH LBR */
++#define X86_FEATURE_IBT			(18*32+20) /* Indirect Branch Tracking */
+ #define X86_FEATURE_AVX512_FP16		(18*32+23) /* AVX512 FP16 */
+ #define X86_FEATURE_SPEC_CTRL		(18*32+26) /* "" Speculation Control (IBRS + IBPB) */
+ #define X86_FEATURE_INTEL_STIBP		(18*32+27) /* "" Single Thread Indirect Branch Predictors */
+-- 
+2.31.1
+

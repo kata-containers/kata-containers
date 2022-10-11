@@ -1,0 +1,78 @@
+From f3df118129dec9a435a7c32c349be9c19f8182a9 Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Wed, 22 Jul 2020 10:46:15 -0700
+Subject: [PATCH 1126/1418] KVM: VMX: Add a synthetic MSR to allow userspace
+ VMM to access GUEST_SSP
+
+Introduce a host-only synthetic MSR, MSR_KVM_GUEST_SSP so that the VMM
+can read/write the guest's SSP, e.g. to migrate CET state.  Use a
+synthetic MSR, e.g. as opposed to a VCPU_REG_, as GUEST_SSP is subject
+to the same consistency checks as the PL*_SSP MSRs, i.e. can share code.
+
+Co-developed-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/include/uapi/asm/kvm_para.h |  1 +
+ arch/x86/kvm/vmx/vmx.c               | 14 ++++++++++++--
+ 2 files changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/uapi/asm/kvm_para.h b/arch/x86/include/uapi/asm/kvm_para.h
+index 426b60065466..9f9511fc5068 100644
+--- a/arch/x86/include/uapi/asm/kvm_para.h
++++ b/arch/x86/include/uapi/asm/kvm_para.h
+@@ -63,6 +63,7 @@
+ #define MSR_KVM_ASYNC_PF_INT	0x4b564d06
+ #define MSR_KVM_ASYNC_PF_ACK	0x4b564d07
+ #define MSR_KVM_MIGRATION_CONTROL	0x4b564d08
++#define MSR_KVM_GUEST_SSP	0x4b564d09
+ 
+ struct kvm_steal_time {
+ 	__u64 steal;
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index dc43d5355c6b..a7e2029a52d6 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -1838,7 +1838,8 @@ static bool cet_is_ssp_msr_accessible(struct kvm_vcpu *vcpu,
+ 	if (msr->host_initiated)
+ 		return true;
+ 
+-	if (!guest_cpuid_has(vcpu, X86_FEATURE_SHSTK))
++	if (!guest_cpuid_has(vcpu, X86_FEATURE_SHSTK) ||
++	    msr->index == MSR_KVM_GUEST_SSP)
+ 		return false;
+ 
+ 	if (msr->index == MSR_IA32_INT_SSP_TAB)
+@@ -2034,6 +2035,11 @@ static int vmx_get_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ 			return 1;
+ 		msr_info->data = vmcs_readl(GUEST_INTR_SSP_TABLE);
+ 		break;
++	case MSR_KVM_GUEST_SSP:
++		if (!cet_is_ssp_msr_accessible(vcpu, msr_info))
++			return 1;
++		msr_info->data = vmcs_readl(GUEST_SSP);
++		break;
+ 	case MSR_IA32_PL0_SSP ... MSR_IA32_PL3_SSP:
+ 		if (!cet_is_ssp_msr_accessible(vcpu, msr_info))
+ 			return 1;
+@@ -2424,12 +2430,16 @@ static int vmx_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ 			return 1;
+ 		vmcs_writel(GUEST_INTR_SSP_TABLE, data);
+ 		break;
++	case MSR_KVM_GUEST_SSP:
+ 	case MSR_IA32_PL0_SSP ... MSR_IA32_PL3_SSP:
+ 		if (!cet_is_ssp_msr_accessible(vcpu, msr_info))
+ 			return 1;
+ 		if ((data & GENMASK(2, 0)) || is_noncanonical_address(data, vcpu))
+ 			return 1;
+-		vmx_set_xsave_msr(msr_info);
++		if (msr_index == MSR_KVM_GUEST_SSP)
++			vmcs_writel(GUEST_SSP, data);
++		else
++			vmx_set_xsave_msr(msr_info);
+ 		break;
+ 	default:
+ 	find_uret_msr:
+-- 
+2.31.1
+

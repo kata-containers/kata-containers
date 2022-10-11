@@ -1,0 +1,68 @@
+From 34a1e40b1e07d240ab059963bc853baa6d17ec96 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Sun, 23 Aug 2020 19:06:40 +0200
+Subject: [PATCH 0576/1418] genirq/proc: Take buslock on affinity write
+
+Until now interrupt chips which support setting affinity are not locking
+the associated bus lock for two reasons:
+
+ - All chips which support affinity setting do not use buslock because they
+   just can operated directly on the hardware.
+
+ - All chips which use buslock do not support affinity setting because
+   their interrupt chips are not capable. These chips are usually connected
+   over a bus like I2C, SPI etc. and have an interrupt output which is
+   conneted to CPU interrupt of some sort. So there is no way to set the
+   affinity on the chip itself.
+
+Upcoming hardware which is PCIE based sports a non standard MSI(X) variant
+which stores the MSI message in RAM which is associated to e.g. a device
+queue. The device manages this RAM and writes have to be issued via command
+queues or similar mechanisms which is obviously not possible from interrupt
+disabled, raw spinlock held context.
+
+The buslock mechanism of irq chips can be utilized to support that. The
+affinity write to the chip writes to shadow state, marks it pending and the
+irq chip's irq_bus_sync_unlock() callback handles the command queue and
+wait for completion similar to the other chip operations on I2C or SPI
+buses.
+
+Change the locking in irq_set_affinity() to bus_lock/unlock to help with
+that. There are a few other callers than the proc interface, but none of
+them is affected by this change as none of them affects an irq chip with
+bus lock support.
+
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Megha Dey <megha.dey@intel.com>
+---
+ kernel/irq/manage.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/kernel/irq/manage.c b/kernel/irq/manage.c
+index 27667e82ecc9..dd434cee78c3 100644
+--- a/kernel/irq/manage.c
++++ b/kernel/irq/manage.c
+@@ -443,16 +443,16 @@ int irq_update_affinity_desc(unsigned int irq,
+ static int __irq_set_affinity(unsigned int irq, const struct cpumask *mask,
+ 			      bool force)
+ {
+-	struct irq_desc *desc = irq_to_desc(irq);
++	struct irq_desc *desc;
+ 	unsigned long flags;
+ 	int ret;
+ 
++	desc = irq_get_desc_buslock(irq, &flags, IRQ_GET_DESC_CHECK_GLOBAL);
+ 	if (!desc)
+ 		return -EINVAL;
+ 
+-	raw_spin_lock_irqsave(&desc->lock, flags);
+ 	ret = irq_set_affinity_locked(irq_desc_get_irq_data(desc), mask, force);
+-	raw_spin_unlock_irqrestore(&desc->lock, flags);
++	irq_put_desc_busunlock(desc, flags);
+ 	return ret;
+ }
+ 
+-- 
+2.31.1
+

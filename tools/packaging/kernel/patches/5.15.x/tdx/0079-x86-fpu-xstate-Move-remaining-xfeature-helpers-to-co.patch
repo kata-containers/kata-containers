@@ -1,0 +1,68 @@
+From 05a59985e703d16eaf87fab0b11c15f07d51062d Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 15 Oct 2021 01:09:40 +0200
+Subject: [PATCH 0079/1418] x86/fpu/xstate: Move remaining xfeature helpers to
+ core
+
+Now that everything is mopped up, move all the helpers and prototypes into
+the core header. They are not required by the outside.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211014230739.514095101@linutronix.de
+---
+ arch/x86/include/asm/fpu/xstate.h | 13 -------------
+ arch/x86/kernel/fpu/xstate.h      | 13 +++++++++++++
+ 2 files changed, 13 insertions(+), 13 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/xstate.h b/arch/x86/include/asm/fpu/xstate.h
+index 61ae396bc6e7..43ae89d4bcd2 100644
+--- a/arch/x86/include/asm/fpu/xstate.h
++++ b/arch/x86/include/asm/fpu/xstate.h
+@@ -86,19 +86,6 @@
+ #define XFEATURE_MASK_FPSTATE	(XFEATURE_MASK_USER_RESTORE | \
+ 				 XFEATURE_MASK_SUPERVISOR_SUPPORTED)
+ 
+-static inline u64 xfeatures_mask_supervisor(void)
+-{
+-	return fpu_kernel_cfg.max_features & XFEATURE_MASK_SUPERVISOR_SUPPORTED;
+-}
+-
+-static inline u64 xfeatures_mask_independent(void)
+-{
+-	if (!boot_cpu_has(X86_FEATURE_ARCH_LBR))
+-		return XFEATURE_MASK_INDEPENDENT & ~XFEATURE_MASK_LBR;
+-
+-	return XFEATURE_MASK_INDEPENDENT;
+-}
+-
+ extern u64 xstate_fx_sw_bytes[USER_XSTATE_FX_SW_WORDS];
+ 
+ extern void __init update_regset_xstate_info(unsigned int size,
+diff --git a/arch/x86/kernel/fpu/xstate.h b/arch/x86/kernel/fpu/xstate.h
+index 3d45eb04471b..a1aa0bad2c9c 100644
+--- a/arch/x86/kernel/fpu/xstate.h
++++ b/arch/x86/kernel/fpu/xstate.h
+@@ -35,6 +35,19 @@ extern void fpu__init_system_xstate(unsigned int legacy_size);
+ 
+ extern void *get_xsave_addr(struct xregs_state *xsave, int xfeature_nr);
+ 
++static inline u64 xfeatures_mask_supervisor(void)
++{
++	return fpu_kernel_cfg.max_features & XFEATURE_MASK_SUPERVISOR_SUPPORTED;
++}
++
++static inline u64 xfeatures_mask_independent(void)
++{
++	if (!cpu_feature_enabled(X86_FEATURE_ARCH_LBR))
++		return XFEATURE_MASK_INDEPENDENT & ~XFEATURE_MASK_LBR;
++
++	return XFEATURE_MASK_INDEPENDENT;
++}
++
+ /* XSAVE/XRSTOR wrapper functions */
+ 
+ #ifdef CONFIG_X86_64
+-- 
+2.31.1
+

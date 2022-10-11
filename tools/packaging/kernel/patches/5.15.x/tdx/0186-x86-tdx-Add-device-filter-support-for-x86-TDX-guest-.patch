@@ -1,0 +1,284 @@
+From d02e8739d035e75f573d3b6ab0990007a22b0545 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Tue, 21 Jul 2020 21:49:27 -0700
+Subject: [PATCH 0186/1418] x86/tdx: Add device filter support for x86 TDX
+ guest platform
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+For Confidential VM guests like TDX, the host is untrusted and hence
+the devices emulated by the host or any data coming from the host
+cannot be trusted. So the drivers that interact with the outside world
+have to be hardened and the allowed devices have to be filtered. More
+details about the need for device/driver filter in confidential guest
+can be found in article [1] titled "firewall for device drivers".
+
+So use the "authorized" device attribute to allow only the trusted list
+of the devices. Add support for cc_guest_dev_authorized() which can be
+used by BUS drivers to consult the arch specific device allow list and
+initialize the "authorized" attribute.  In order to deny probing for all
+but the allowed list of devices @dev_default_authorization is set to
+false.
+
+The default audited list of drivers that a protected guest may trust
+are:
+
+ * virtio-blk
+ * virtio-console
+ * virtio-net
+ * virtio-pci
+ * virtio_rproc_serial
+
+Add a new flag CC_ATTR_GUEST_DEVICE_FILTER to conditionally enable
+device filter related code in generic drivers (using cc_platform_has()
+API).
+
+[1] - https://lwn.net/Articles/865918/
+
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Reviewed-by: Dan Williams <dan.j.williams@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/tdx.h      |  9 ++++++
+ arch/x86/kernel/Makefile        |  2 +-
+ arch/x86/kernel/cc_platform.c   | 19 +++++++++++
+ arch/x86/kernel/tdx-filter.c    | 56 +++++++++++++++++++++++++++++++++
+ arch/x86/kernel/tdx.c           |  2 ++
+ include/linux/cc_platform.h     | 10 ++++++
+ include/linux/device.h          | 11 +++++++
+ include/uapi/linux/virtio_ids.h |  8 +++++
+ 8 files changed, 116 insertions(+), 1 deletion(-)
+ create mode 100644 arch/x86/kernel/tdx-filter.c
+
+diff --git a/arch/x86/include/asm/tdx.h b/arch/x86/include/asm/tdx.h
+index 08af2c397436..eda001358b25 100644
+--- a/arch/x86/include/asm/tdx.h
++++ b/arch/x86/include/asm/tdx.h
+@@ -5,6 +5,7 @@
+ 
+ #include <linux/cpufeature.h>
+ #include <linux/types.h>
++#include <linux/device.h>
+ #include <vdso/limits.h>
+ #include <asm/vmx.h>
+ 
+@@ -69,6 +70,7 @@ enum tdx_map_type {
+ 
+ bool is_tdx_guest(void);
+ void __init tdx_early_init(void);
++void __init tdx_filter_init(void);
+ 
+ /* Helper function used to communicate with the TDX module */
+ u64 __tdx_module_call(u64 fn, u64 rcx, u64 rdx, u64 r8, u64 r9,
+@@ -96,6 +98,8 @@ int tdx_hcall_get_quote(u64 data);
+ 
+ extern void (*tdx_event_notify_handler)(void);
+ 
++bool tdx_guest_dev_authorized(struct device *dev);
++
+ /*
+  * To support I/O port access in decompressor or early kernel init
+  * code, since #VE exception handler cannot be used, use paravirt
+@@ -169,6 +173,11 @@ static inline int tdx_hcall_gpa_intent(phys_addr_t gpa, int numpages,
+ 	return -ENODEV;
+ }
+ 
++static inline bool tdx_guest_dev_authorized(struct device *dev)
++{
++	return dev->authorized;
++}
++
+ #endif /* CONFIG_INTEL_TDX_GUEST */
+ 
+ #if defined(CONFIG_KVM_GUEST) && defined(CONFIG_INTEL_TDX_GUEST)
+diff --git a/arch/x86/kernel/Makefile b/arch/x86/kernel/Makefile
+index f6b4c55ef189..b5ac2c9daddb 100644
+--- a/arch/x86/kernel/Makefile
++++ b/arch/x86/kernel/Makefile
+@@ -141,7 +141,7 @@ obj-$(CONFIG_PARAVIRT_CLOCK)	+= pvclock.o
+ obj-$(CONFIG_X86_PMEM_LEGACY_DEVICE) += pmem.o
+ 
+ obj-$(CONFIG_JAILHOUSE_GUEST)	+= jailhouse.o
+-obj-$(CONFIG_INTEL_TDX_GUEST)	+= tdcall.o tdx.o
++obj-$(CONFIG_INTEL_TDX_GUEST)	+= tdcall.o tdx.o tdx-filter.o
+ 
+ obj-$(CONFIG_EISA)		+= eisa.o
+ obj-$(CONFIG_PCSPKR_PLATFORM)	+= pcspeaker.o
+diff --git a/arch/x86/kernel/cc_platform.c b/arch/x86/kernel/cc_platform.c
+index 3ac38f9dd33a..e53e059b5861 100644
+--- a/arch/x86/kernel/cc_platform.c
++++ b/arch/x86/kernel/cc_platform.c
+@@ -10,6 +10,7 @@
+ #include <linux/export.h>
+ #include <linux/cc_platform.h>
+ #include <linux/mem_encrypt.h>
++#include <linux/device.h>
+ 
+ #include <asm/tdx.h>
+ #include <asm/processor.h>
+@@ -40,6 +41,7 @@ static bool intel_cc_platform_has(enum cc_attr attr)
+ 	case CC_ATTR_GUEST_MEM_ENCRYPT:
+ 	case CC_ATTR_GUEST_SHARED_MAPPING_INIT:
+ 	case CC_ATTR_MEM_ENCRYPT:
++	case CC_ATTR_GUEST_DEVICE_FILTER:
+ 		return is_tdx_guest();
+ 	default:
+ 		return false;
+@@ -96,3 +98,20 @@ bool cc_platform_has(enum cc_attr attr)
+ 	return false;
+ }
+ EXPORT_SYMBOL_GPL(cc_platform_has);
++
++/*
++ * cc_guest_dev_authorized() - Used to get ARCH specific authorized status
++ *			       of the given device.
++ * @dev			     - device structure
++ *
++ * Return True to allow the device or False to deny it.
++ *
++ */
++bool cc_guest_dev_authorized(struct device *dev)
++{
++	if (cpu_feature_enabled(X86_FEATURE_TDX_GUEST))
++		return tdx_guest_dev_authorized(dev);
++
++	return dev->authorized;
++}
++EXPORT_SYMBOL_GPL(cc_guest_dev_authorized);
+diff --git a/arch/x86/kernel/tdx-filter.c b/arch/x86/kernel/tdx-filter.c
+new file mode 100644
+index 000000000000..534cc2cf5851
+--- /dev/null
++++ b/arch/x86/kernel/tdx-filter.c
+@@ -0,0 +1,56 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (c) 2020 Intel Corporation
++ */
++#define pr_fmt(fmt) "TDX: " fmt
++
++#include <linux/acpi.h>
++#include <linux/pci.h>
++#include <linux/device.h>
++#include <linux/cc_platform.h>
++#include <linux/export.h>
++#include <uapi/linux/virtio_ids.h>
++
++#include <asm/tdx.h>
++#include <asm/cmdline.h>
++
++/*
++ * Allow list for PCI bus
++ *
++ * NOTE: Device ID is duplicated here. But for small list
++ * of devices, it is easier to maintain the duplicated list
++ * here verses exporting the device ID table from the driver
++ * and use it.
++ */
++struct pci_device_id pci_allow_ids[] = {
++	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO_TRANS_ID_NET) },
++	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO_TRANS_ID_BLOCK) },
++	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO_TRANS_ID_CONSOLE) },
++	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO_TRANS_ID_9P) },
++	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO1_ID_NET) },
++	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO1_ID_BLOCK) },
++	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO1_ID_CONSOLE) },
++	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO1_ID_9P) },
++	{ 0, },
++};
++
++bool tdx_guest_dev_authorized(struct device *dev)
++{
++	if (!dev_is_pci(dev))
++		return dev->authorized;
++
++	if (pci_match_id(pci_allow_ids, to_pci_dev(dev)))
++		return true;
++
++	return dev_default_authorization;
++}
++
++void __init tdx_filter_init(void)
++{
++	if (!cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
++		return;
++
++	dev_default_authorization = false;
++
++	pr_info("Enabled TDX guest device filter\n");
++}
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 83da16d9c79e..366709d76437 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -780,6 +780,8 @@ void __init tdx_early_init(void)
+ 
+ 	tdx_get_info();
+ 
++	tdx_filter_init();
++
+ 	pv_ops.irq.safe_halt = tdx_safe_halt;
+ 	pv_ops.irq.halt = tdx_halt;
+ 
+diff --git a/include/linux/cc_platform.h b/include/linux/cc_platform.h
+index edb1d7a2f6af..b3bbc3fbfb93 100644
+--- a/include/linux/cc_platform.h
++++ b/include/linux/cc_platform.h
+@@ -94,6 +94,16 @@ enum cc_attr {
+ 	 */
+ 	CC_ATTR_GUEST_SHARED_MAPPING_INIT,
+ 
++	/**
++	 * @CC_ATTR_GUEST_DEVICE_FILTER: Filter device enumeration as per
++	 * platform specific allow list.
++	 *
++	 * The platform/OS is running as a guest/virtual machine and allows or
++	 * dis-allows device enumeration as per platform specific allow list.
++	 *
++	 * Examples include TDX guest.
++	 */
++	CC_ATTR_GUEST_DEVICE_FILTER,
+ };
+ 
+ #ifdef CONFIG_ARCH_HAS_CC_PLATFORM
+diff --git a/include/linux/device.h b/include/linux/device.h
+index c97b1e59d23a..125590e80c35 100644
+--- a/include/linux/device.h
++++ b/include/linux/device.h
+@@ -990,4 +990,15 @@ extern long sysfs_deprecated;
+ #define sysfs_deprecated 0
+ #endif
+ 
++#ifndef __ASSEMBLY__
++#ifdef CONFIG_ARCH_HAS_CC_PLATFORM
++bool cc_guest_dev_authorized(struct device *dev);
++#else
++static inline bool cc_guest_dev_authorized(struct device *dev)
++{
++	return dev->authorized;
++}
++#endif /* CONFIG_ARCH_HAS_CC_PLATFORM */
++#endif /* __ASSEMBLY__ */
++
+ #endif /* _DEVICE_H_ */
+diff --git a/include/uapi/linux/virtio_ids.h b/include/uapi/linux/virtio_ids.h
+index 7aa2eb766205..a2fcb4681028 100644
+--- a/include/uapi/linux/virtio_ids.h
++++ b/include/uapi/linux/virtio_ids.h
+@@ -81,4 +81,12 @@
+ #define VIRTIO_TRANS_ID_RNG		0x1005 /* transitional virtio rng */
+ #define VIRTIO_TRANS_ID_9P		0x1009 /* transitional virtio 9p console */
+ 
++/*
++ * Virtio IDS (for PCI rev ID > 1)
++ */
++#define VIRTIO1_ID_NET			0x1041 /* transitional virtio net */
++#define VIRTIO1_ID_BLOCK		0x1042 /* transitional virtio block */
++#define VIRTIO1_ID_CONSOLE		0x1043 /* transitional virtio console */
++#define VIRTIO1_ID_9P			0x1049 /* transitional virtio 9p console */
++
+ #endif /* _LINUX_VIRTIO_IDS_H */
+-- 
+2.31.1
+

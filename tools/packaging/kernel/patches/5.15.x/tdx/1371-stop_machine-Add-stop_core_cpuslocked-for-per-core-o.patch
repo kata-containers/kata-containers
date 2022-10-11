@@ -1,0 +1,85 @@
+From fe66f605cd448de28c0a3a1f537ec31d367c053f Mon Sep 17 00:00:00 2001
+From: Peter Zijlstra <peterz@infradead.org>
+Date: Fri, 6 May 2022 15:54:01 -0700
+Subject: [PATCH 1371/1418] stop_machine: Add stop_core_cpuslocked() for
+ per-core operations
+
+Hardware core level testing features require near simultaneous execution
+of WRMSR instructions on all threads of a core to initiate a test.
+
+Provide a customized cut down version of stop_machine_cpuslocked() that
+just operates on the threads of a single core.
+
+Suggested-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Peter Zijlstra (Intel) <peterz@infradead.org>
+Signed-off-by: Tony Luck <tony.luck@intel.com>
+Reviewed-by: Thomas Gleixner <tglx@linutronix.de>
+Link: https://lore.kernel.org/r/20220506225410.1652287-4-tony.luck@intel.com
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+---
+ include/linux/stop_machine.h | 16 ++++++++++++++++
+ kernel/stop_machine.c        | 21 +++++++++++++++++++++
+ 2 files changed, 37 insertions(+)
+
+diff --git a/include/linux/stop_machine.h b/include/linux/stop_machine.h
+index 46fb3ebdd16e..ea7a74ea7389 100644
+--- a/include/linux/stop_machine.h
++++ b/include/linux/stop_machine.h
+@@ -124,6 +124,22 @@ int stop_machine(cpu_stop_fn_t fn, void *data, const struct cpumask *cpus);
+  */
+ int stop_machine_cpuslocked(cpu_stop_fn_t fn, void *data, const struct cpumask *cpus);
+ 
++/**
++ * stop_core_cpuslocked: - stop all threads on just one core
++ * @cpu: any cpu in the targeted core
++ * @fn: the function to run
++ * @data: the data ptr for @fn()
++ *
++ * Same as above, but instead of every CPU, only the logical CPUs of a
++ * single core are affected.
++ *
++ * Context: Must be called from within a cpus_read_lock() protected region.
++ *
++ * Return: 0 if all executions of @fn returned 0, any non zero return
++ * value if any returned non zero.
++ */
++int stop_core_cpuslocked(unsigned int cpu, cpu_stop_fn_t fn, void *data);
++
+ int stop_machine_from_inactive_cpu(cpu_stop_fn_t fn, void *data,
+ 				   const struct cpumask *cpus);
+ #else	/* CONFIG_SMP || CONFIG_HOTPLUG_CPU */
+diff --git a/kernel/stop_machine.c b/kernel/stop_machine.c
+index cbc30271ea4d..0887b3af609e 100644
+--- a/kernel/stop_machine.c
++++ b/kernel/stop_machine.c
+@@ -633,6 +633,27 @@ int stop_machine(cpu_stop_fn_t fn, void *data, const struct cpumask *cpus)
+ }
+ EXPORT_SYMBOL_GPL(stop_machine);
+ 
++#ifdef CONFIG_SCHED_SMT
++int stop_core_cpuslocked(unsigned int cpu, cpu_stop_fn_t fn, void *data)
++{
++	const struct cpumask *smt_mask = cpu_smt_mask(cpu);
++
++	struct multi_stop_data msdata = {
++		.fn = fn,
++		.data = data,
++		.num_threads = cpumask_weight(smt_mask),
++		.active_cpus = smt_mask,
++	};
++
++	lockdep_assert_cpus_held();
++
++	/* Set the initial state and stop all online cpus. */
++	set_state(&msdata, MULTI_STOP_PREPARE);
++	return stop_cpus(smt_mask, multi_cpu_stop, &msdata);
++}
++EXPORT_SYMBOL_GPL(stop_core_cpuslocked);
++#endif
++
+ /**
+  * stop_machine_from_inactive_cpu - stop_machine() from inactive CPU
+  * @fn: the function to run
+-- 
+2.31.1
+

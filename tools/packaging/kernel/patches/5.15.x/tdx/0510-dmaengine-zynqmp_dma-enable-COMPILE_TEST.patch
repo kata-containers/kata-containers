@@ -1,0 +1,31 @@
+From db635f02c7ed38019665131ef843a07a55fbc4c0 Mon Sep 17 00:00:00 2001
+From: Michael Tretter <m.tretter@pengutronix.de>
+Date: Thu, 26 Aug 2021 11:47:38 +0200
+Subject: [PATCH 0510/1418] dmaengine: zynqmp_dma: enable COMPILE_TEST
+
+The driver doesn't use anything architecture specific. Allow the
+compilation on other architectures as well.
+
+Signed-off-by: Michael Tretter <m.tretter@pengutronix.de>
+Link: https://lore.kernel.org/r/20210826094742.1302009-4-m.tretter@pengutronix.de
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/Kconfig | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/dma/Kconfig b/drivers/dma/Kconfig
+index 80c2c03cb014..6bcdb4e6a0d1 100644
+--- a/drivers/dma/Kconfig
++++ b/drivers/dma/Kconfig
+@@ -717,7 +717,7 @@ config XILINX_DMA
+ 
+ config XILINX_ZYNQMP_DMA
+ 	tristate "Xilinx ZynqMP DMA Engine"
+-	depends on (ARCH_ZYNQ || MICROBLAZE || ARM64)
++	depends on ARCH_ZYNQ || MICROBLAZE || ARM64 || COMPILE_TEST
+ 	select DMA_ENGINE
+ 	help
+ 	  Enable support for Xilinx ZynqMP DMA controller.
+-- 
+2.31.1
+

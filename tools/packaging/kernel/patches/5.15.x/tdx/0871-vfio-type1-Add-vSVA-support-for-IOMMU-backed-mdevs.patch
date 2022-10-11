@@ -1,0 +1,121 @@
+From 30d5d25ef1339e4984040e631ca3214b6a96ca26 Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Tue, 14 Apr 2020 05:10:07 -0700
+Subject: [PATCH 0871/1418] vfio/type1: Add vSVA support for IOMMU-backed mdevs
+
+Recent years, mediated device pass-through framework (e.g. vfio-mdev)
+is used to achieve flexible device sharing across domains (e.g. VMs).
+Also there are hardware assisted mediated pass-through solutions from
+platform vendors. e.g. Intel VT-d scalable mode which supports Intel
+Scalable I/O Virtualization technology. Such mdevs are called IOMMU-
+backed mdevs as there are IOMMU enforced DMA isolation for such mdevs.
+In kernel, IOMMU-backed mdevs are exposed to IOMMU layer by aux-domain
+concept, which means mdevs are protected by an iommu domain which is
+auxiliary to the domain that the kernel driver primarily uses for DMA
+API. Details can be found in the KVM presentation as below:
+
+https://events19.linuxfoundation.org/wp-content/uploads/2017/12/Hardware-Assisted-Mediated-Pass-Through-with-VFIO-Kevin-Tian-Intel.pdf
+
+This patch extends NESTING_IOMMU ops to IOMMU-backed mdev devices. The
+main requirement is to use the auxiliary domain associated with mdev.
+
+v5 -> v6:
+*) add review-by from Eric Auger.
+
+v1 -> v2:
+*) check the iommu_device to ensure the handling mdev is IOMMU-backed
+
+Cc: Kevin Tian <kevin.tian@intel.com>
+CC: Jacob Pan <jacob.jun.pan@linux.intel.com>
+CC: Jun Tian <jun.j.tian@intel.com>
+Cc: Alex Williamson <alex.williamson@redhat.com>
+Cc: Eric Auger <eric.auger@redhat.com>
+Cc: Jean-Philippe Brucker <jean-philippe@linaro.org>
+Cc: Joerg Roedel <joro@8bytes.org>
+Cc: Lu Baolu <baolu.lu@linux.intel.com>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Reviewed-by: Eric Auger <eric.auger@redhat.com>
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ drivers/vfio/vfio_iommu_type1.c | 36 ++++++++++++++++++++++++++++-----
+ 1 file changed, 31 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/vfio/vfio_iommu_type1.c b/drivers/vfio/vfio_iommu_type1.c
+index e485da37103e..db8b2662ee18 100644
+--- a/drivers/vfio/vfio_iommu_type1.c
++++ b/drivers/vfio/vfio_iommu_type1.c
+@@ -2705,18 +2705,38 @@ static int vfio_iommu_resv_refresh(struct vfio_iommu *iommu,
+ 	return ret;
+ }
+ 
++static struct device *vfio_get_iommu_device(struct vfio_iommu_group *group,
++					    struct device *dev)
++{
++	struct mdev_device *mdev = to_mdev_device(dev);
++	if (group->mdev_group)
++		return mdev_get_iommu_device(mdev);
++	else
++		return dev;
++}
++
+ static int vfio_dev_bind_gpasid_fn(struct device *dev, void *data)
+ {
+ 	struct domain_capsule *dc = (struct domain_capsule *)data;
+ 	unsigned long arg = *(unsigned long *)dc->data;
++	struct device *iommu_device;
+ 
+-	return iommu_uapi_sva_bind_gpasid(dc->domain, dev,
++	iommu_device = vfio_get_iommu_device(dc->group, dev);
++	if (!iommu_device)
++		return -EINVAL;
++
++	return iommu_uapi_sva_bind_gpasid(dc->domain, iommu_device,
+ 					  (void __user *)arg);
+ }
+ 
+ static int vfio_dev_unbind_gpasid_fn(struct device *dev, void *data)
+ {
+ 	struct domain_capsule *dc = (struct domain_capsule *)data;
++	struct device *iommu_device;
++
++	iommu_device = vfio_get_iommu_device(dc->group, dev);
++	if (!iommu_device)
++		return -EINVAL;
+ 
+ 	/*
+ 	 * dc->user is a toggle for the unbind operation. When user
+@@ -2729,12 +2749,12 @@ static int vfio_dev_unbind_gpasid_fn(struct device *dev, void *data)
+ 	if (dc->user) {
+ 		unsigned long arg = *(unsigned long *)dc->data;
+ 
+-		iommu_uapi_sva_unbind_gpasid(dc->domain,
+-					     dev, (void __user *)arg);
++		iommu_uapi_sva_unbind_gpasid(dc->domain, iommu_device,
++					     (void __user *)arg);
+ 	} else {
+ 		ioasid_t pasid = *(ioasid_t *)dc->data;
+ 
+-		iommu_sva_unbind_gpasid(dc->domain, dev, pasid);
++		iommu_sva_unbind_gpasid(dc->domain, iommu_device, pasid);
+ 	}
+ 	return 0;
+ }
+@@ -3399,8 +3419,14 @@ static int vfio_dev_cache_invalidate_fn(struct device *dev, void *data)
+ {
+ 	struct domain_capsule *dc = (struct domain_capsule *)data;
+ 	unsigned long arg = *(unsigned long *)dc->data;
++	struct device *iommu_device;
++
++	iommu_device = vfio_get_iommu_device(dc->group, dev);
++	if (!iommu_device)
++		return -EINVAL;
+ 
+-	iommu_uapi_cache_invalidate(dc->domain, dev, (void __user *)arg);
++	iommu_uapi_cache_invalidate(dc->domain, iommu_device,
++				    (void __user *)arg);
+ 	return 0;
+ }
+ 
+-- 
+2.31.1
+

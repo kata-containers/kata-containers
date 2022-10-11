@@ -1,0 +1,66 @@
+From 9df07634504fc5c5dc5caebf37aa4673f4d17b3f Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Tue, 28 Sep 2021 19:04:59 -0700
+Subject: [PATCH 0234/1418] tdx: Document tdx failure_inject sysfs parameters
+
+Add documentation for the sysfs parameters for the TDX tdcall
+failure/random failure injection
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+---
+ .../fault-injection/fault-injection.rst       | 25 +++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/Documentation/fault-injection/fault-injection.rst b/Documentation/fault-injection/fault-injection.rst
+index 4a25c5eb6f07..a265414201a8 100644
+--- a/Documentation/fault-injection/fault-injection.rst
++++ b/Documentation/fault-injection/fault-injection.rst
+@@ -52,6 +52,10 @@ Available fault injection capabilities
+   status code is NVME_SC_INVALID_OPCODE with no retry. The status code and
+   retry flag can be set via the debugfs.
+ 
++- fail_tdx
++
++  inject errors and flipped bits into Intel TDX TDCALL responses.
++
+ 
+ Configure fault-injection capabilities behavior
+ -----------------------------------------------
+@@ -195,6 +199,25 @@ configuration of fault-injection capabilities.
+ 	use a negative errno, you better use 'printf' instead of 'echo', e.g.:
+ 	$ printf %#x -12 > retval
+ 
++- /sys/kernel/debug/fail_tdx/tdcall
++
++	enable flipping bits in TDX TDCALL responses
++
++- /sys/kernel/debug/fail_tdx/tderrors
++
++	enable injecting errors in TDX TDCALL responses
++
++- /sys/kernel/debug/fail_tdx/seed
++
++	set seed for random generator used for flipping bits in TDX TDCALL
++	responses. Note that each CPU has its own independent random generator.
++
++- /sys/kernel/debug/fail_tdx/num_change_bits
++
++	number of bits to change with tdcall=1 in TDX TDCALL responses.
++	when set to 64 the whole value is replaced with a randon number.
++	otherwise the number of bits specified are randomly flipped.
++
+ Boot option
+ ^^^^^^^^^^^
+ 
+@@ -208,6 +231,8 @@ use the boot option::
+ 	fail_futex=
+ 	mmc_core.fail_request=<interval>,<probability>,<space>,<times>
+ 
++        fail_tdx= [seed:N,][tdcall:1,][tderrors:1,][numbits:XX],<interval>,<probability>,<space>,<times>
++
+ proc entries
+ ^^^^^^^^^^^^
+ 
+-- 
+2.31.1
+

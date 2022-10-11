@@ -1,0 +1,79 @@
+From 11475997b01a997c70948f1ac7be0764349e696f Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Wed, 14 Jul 2021 22:37:30 -0700
+Subject: [PATCH 0172/1418] Add taint flag for TDX overrides
+
+Add a new taint flag TAINT_CONF_NO_LOCKDOWN that is set when the
+default hardening against untrusted hosts in TDX is overridden on the
+command line. The flag is set when the device or ACPI filters are
+disabled.
+
+The main use cases is for applications to detect that they might run in
+a potentially insecure configuration through /proc/sys/kernel/taint.
+
+The setting is not intended for attestation, which should attest the
+kernel command line anyways.
+
+Currently 'Y' is picked for the oops flag, although this type of taint
+is probably not too useful for crashes, since there weren't any other
+good letters left.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ Documentation/admin-guide/tainted-kernels.rst | 7 ++++++-
+ include/linux/panic.h                         | 3 ++-
+ kernel/panic.c                                | 1 +
+ 3 files changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/admin-guide/tainted-kernels.rst b/Documentation/admin-guide/tainted-kernels.rst
+index ceeed7b0798d..65c58092ec35 100644
+--- a/Documentation/admin-guide/tainted-kernels.rst
++++ b/Documentation/admin-guide/tainted-kernels.rst
+@@ -100,7 +100,8 @@ Bit  Log  Number  Reason that got the kernel tainted
+  15  _/K   32768  kernel has been live patched
+  16  _/X   65536  auxiliary taint, defined for and used by distros
+  17  _/T  131072  kernel was built with the struct randomization plugin
+-===  ===  ======  ========================================================
++ 18  _/Y  262144  confidential guest (like TDX guest) without full lockdown
++===  ===  ======  =========================================================
+ 
+ Note: The character ``_`` is representing a blank in this table to make reading
+ easier.
+@@ -175,3 +176,7 @@ More detailed explanation for tainting
+      produce extremely unusual kernel structure layouts (even performance
+      pathological ones), which is important to know when debugging. Set at
+      build time.
++
++ 18) ``Y`` Kernel is running as a confidential guest on a untrusted
++     hypervisor (e.g. TDX), but has disabled some lock down options that could
++     make the kernel attackable from the host.
+diff --git a/include/linux/panic.h b/include/linux/panic.h
+index f5844908a089..9ac10689a432 100644
+--- a/include/linux/panic.h
++++ b/include/linux/panic.h
+@@ -74,7 +74,8 @@ static inline void set_arch_panic_timeout(int timeout, int arch_default_timeout)
+ #define TAINT_LIVEPATCH			15
+ #define TAINT_AUX			16
+ #define TAINT_RANDSTRUCT		17
+-#define TAINT_FLAGS_COUNT		18
++#define TAINT_CONF_NO_LOCKDOWN		18
++#define TAINT_FLAGS_COUNT		19
+ #define TAINT_FLAGS_MAX			((1UL << TAINT_FLAGS_COUNT) - 1)
+ 
+ struct taint_flag {
+diff --git a/kernel/panic.c b/kernel/panic.c
+index cefd7d82366f..f9c06c72a126 100644
+--- a/kernel/panic.c
++++ b/kernel/panic.c
+@@ -384,6 +384,7 @@ const struct taint_flag taint_flags[TAINT_FLAGS_COUNT] = {
+ 	[ TAINT_LIVEPATCH ]		= { 'K', ' ', true },
+ 	[ TAINT_AUX ]			= { 'X', ' ', true },
+ 	[ TAINT_RANDSTRUCT ]		= { 'T', ' ', true },
++	[ TAINT_CONF_NO_LOCKDOWN ]	= { 'Y', ' ', true },
+ };
+ 
+ /**
+-- 
+2.31.1
+

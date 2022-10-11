@@ -1,0 +1,81 @@
+From dce8b1cfe7fb2afd904a336279dc41d8a7d0ae0c Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 22:40:06 -0800
+Subject: [PATCH 0974/1418] selftest: kvm: Move struct kvm_x86_state to header
+
+Those changes can avoid dereferencing pointer compile issue
+when amx_test.c reference state->xsave.
+
+Move struct kvm_x86_state definition to processor.h.
+
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Message-Id: <20211223145322.2914028-3-yang.zhong@intel.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ .../selftests/kvm/include/x86_64/processor.h     | 16 +++++++++++++++-
+ .../testing/selftests/kvm/lib/x86_64/processor.c | 15 ---------------
+ 2 files changed, 15 insertions(+), 16 deletions(-)
+
+diff --git a/tools/testing/selftests/kvm/include/x86_64/processor.h b/tools/testing/selftests/kvm/include/x86_64/processor.h
+index 18e2488197a9..9f67c05e0557 100644
+--- a/tools/testing/selftests/kvm/include/x86_64/processor.h
++++ b/tools/testing/selftests/kvm/include/x86_64/processor.h
+@@ -94,6 +94,21 @@ struct desc_ptr {
+ 	uint64_t address;
+ } __attribute__((packed));
+ 
++struct kvm_x86_state {
++	struct kvm_xsave *xsave;
++	struct kvm_vcpu_events events;
++	struct kvm_mp_state mp_state;
++	struct kvm_regs regs;
++	struct kvm_xcrs xcrs;
++	struct kvm_sregs sregs;
++	struct kvm_debugregs debugregs;
++	union {
++		struct kvm_nested_state nested;
++		char nested_[16384];
++	};
++	struct kvm_msrs msrs;
++};
++
+ static inline uint64_t get_desc64_base(const struct desc64 *desc)
+ {
+ 	return ((uint64_t)desc->base3 << 32) |
+@@ -362,7 +377,6 @@ static inline unsigned long get_xmm(int n)
+ bool is_intel_cpu(void);
+ 
+ struct kvm_vm;
+-struct kvm_x86_state;
+ struct kvm_x86_state *vcpu_save_state(struct kvm_vm *vm, uint32_t vcpuid);
+ void vcpu_load_state(struct kvm_vm *vm, uint32_t vcpuid,
+ 		     struct kvm_x86_state *state);
+diff --git a/tools/testing/selftests/kvm/lib/x86_64/processor.c b/tools/testing/selftests/kvm/lib/x86_64/processor.c
+index 44573d40cd6c..0d688f1eb2d8 100644
+--- a/tools/testing/selftests/kvm/lib/x86_64/processor.c
++++ b/tools/testing/selftests/kvm/lib/x86_64/processor.c
+@@ -1058,21 +1058,6 @@ void vcpu_dump(FILE *stream, struct kvm_vm *vm, uint32_t vcpuid, uint8_t indent)
+ 	sregs_dump(stream, &sregs, indent + 4);
+ }
+ 
+-struct kvm_x86_state {
+-	struct kvm_xsave *xsave;
+-	struct kvm_vcpu_events events;
+-	struct kvm_mp_state mp_state;
+-	struct kvm_regs regs;
+-	struct kvm_xcrs xcrs;
+-	struct kvm_sregs sregs;
+-	struct kvm_debugregs debugregs;
+-	union {
+-		struct kvm_nested_state nested;
+-		char nested_[16384];
+-	};
+-	struct kvm_msrs msrs;
+-};
+-
+ static int kvm_get_num_msrs_fd(int kvm_fd)
+ {
+ 	struct kvm_msr_list nmsrs;
+-- 
+2.31.1
+

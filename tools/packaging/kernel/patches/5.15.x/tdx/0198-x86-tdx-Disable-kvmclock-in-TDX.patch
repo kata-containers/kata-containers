@@ -1,0 +1,82 @@
+From f60adf9d03482bf2734bccdfa09cc06add871a9e Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Wed, 30 Jun 2021 17:57:17 -0700
+Subject: [PATCH 0198/1418] x86/tdx: Disable kvmclock in TDX
+
+TDX guests have a special secured TSC enforced by the TDX module to
+provide secure time to guests. This only works when only RDTSC is used
+to derive the time. So disable kvmclock in TDX because it uses host
+information too, which could be abused by a malicious hypervisor.
+
+Define a new SECURE_TIME prot flag for this.
+
+Note there are other time sources of course, but kvmclock has higher
+priority than TSC, so disabling it is most important.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/cc_platform.c |  1 +
+ arch/x86/kernel/kvmclock.c    |  4 +++-
+ include/linux/cc_platform.h   | 11 +++++++++++
+ 3 files changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cc_platform.c b/arch/x86/kernel/cc_platform.c
+index 9729955759d4..5191c7a05165 100644
+--- a/arch/x86/kernel/cc_platform.c
++++ b/arch/x86/kernel/cc_platform.c
+@@ -41,6 +41,7 @@ static bool intel_cc_platform_has(enum cc_attr attr)
+ 	case CC_ATTR_GUEST_MEM_ENCRYPT:
+ 	case CC_ATTR_GUEST_SHARED_MAPPING_INIT:
+ 	case CC_ATTR_MEM_ENCRYPT:
++	case CC_ATTR_GUEST_SECURE_TIME:
+ 		return is_tdx_guest();
+ 	case CC_ATTR_GUEST_DEVICE_FILTER:
+ 		return tdx_filter_enabled() && is_tdx_guest();
+diff --git a/arch/x86/kernel/kvmclock.c b/arch/x86/kernel/kvmclock.c
+index 462dd8e9b03d..b9e110b21336 100644
+--- a/arch/x86/kernel/kvmclock.c
++++ b/arch/x86/kernel/kvmclock.c
+@@ -3,6 +3,7 @@
+     Copyright (C) 2008 Glauber de Oliveira Costa, Red Hat Inc.
+ */
+ 
++#include <linux/cc_platform.h>
+ #include <linux/clocksource.h>
+ #include <linux/kvm_para.h>
+ #include <asm/pvclock.h>
+@@ -285,7 +286,8 @@ void __init kvmclock_init(void)
+ {
+ 	u8 flags;
+ 
+-	if (!kvm_para_available() || !kvmclock)
++	if (!kvm_para_available() || !kvmclock ||
++	    cc_platform_has(CC_ATTR_GUEST_SECURE_TIME))
+ 		return;
+ 
+ 	if (kvm_para_has_feature(KVM_FEATURE_CLOCKSOURCE2)) {
+diff --git a/include/linux/cc_platform.h b/include/linux/cc_platform.h
+index b3bbc3fbfb93..456cb553eb7c 100644
+--- a/include/linux/cc_platform.h
++++ b/include/linux/cc_platform.h
+@@ -104,6 +104,17 @@ enum cc_attr {
+ 	 * Examples include TDX guest.
+ 	 */
+ 	CC_ATTR_GUEST_DEVICE_FILTER,
++
++	/**
++	 * @CC_ATTR_GUEST_SECURE_TIME: Use secured TSC and disable kvmclock.
++	 *
++	 * The platform/OS is running as a guest/virtual machine and use
++	 * secured TSC and disable kvmclock.
++	 *
++	 * Examples include TDX guest.
++	 */
++	CC_ATTR_GUEST_SECURE_TIME,
++
+ };
+ 
+ #ifdef CONFIG_ARCH_HAS_CC_PLATFORM
+-- 
+2.31.1
+

@@ -1,0 +1,183 @@
+From 823cb67df74d53b12cca146a3d1e88fdc68a3d15 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Fri, 8 Oct 2021 16:03:03 -0700
+Subject: [PATCH 0126/1418] x86/cpufeatures: Add TDX Guest CPU feature
+
+Add CPU feature detection for Trusted Domain Extensions support. TDX
+feature adds capabilities to keep guest register state and memory
+isolated from hypervisor.
+
+For TDX guest platforms, executing CPUID(eax=0x21, ecx=0) will return
+following values in EAX, EBX, ECX and EDX.
+
+EAX:  Maximum sub-leaf number:  0
+EBX/EDX/ECX:  Vendor string:
+
+EBX =  "Inte"
+EDX =  "lTDX"
+ECX =  "    "
+
+So when above condition is true, set X86_FEATURE_TDX_GUEST feature cap
+bit.
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/cpufeatures.h |  1 +
+ arch/x86/include/asm/tdx.h         | 22 +++++++++++++++++
+ arch/x86/kernel/Makefile           |  4 ++++
+ arch/x86/kernel/head64.c           |  9 +++++++
+ arch/x86/kernel/tdx.c              | 38 ++++++++++++++++++++++++++++++
+ 5 files changed, 74 insertions(+)
+ create mode 100644 arch/x86/include/asm/tdx.h
+ create mode 100644 arch/x86/kernel/tdx.c
+
+diff --git a/arch/x86/include/asm/cpufeatures.h b/arch/x86/include/asm/cpufeatures.h
+index d5b5f2ab87a0..46ee646001cb 100644
+--- a/arch/x86/include/asm/cpufeatures.h
++++ b/arch/x86/include/asm/cpufeatures.h
+@@ -238,6 +238,7 @@
+ #define X86_FEATURE_VMW_VMMCALL		( 8*32+19) /* "" VMware prefers VMMCALL hypercall instruction */
+ #define X86_FEATURE_PVUNLOCK		( 8*32+20) /* "" PV unlock function */
+ #define X86_FEATURE_VCPUPREEMPT		( 8*32+21) /* "" PV vcpu_is_preempted function */
++#define X86_FEATURE_TDX_GUEST		( 8*32+22) /* Trusted Domain Extensions Guest */
+ 
+ /* Intel-defined CPU features, CPUID level 0x00000007:0 (EBX), word 9 */
+ #define X86_FEATURE_FSGSBASE		( 9*32+ 0) /* RDFSBASE, WRFSBASE, RDGSBASE, WRGSBASE instructions*/
+diff --git a/arch/x86/include/asm/tdx.h b/arch/x86/include/asm/tdx.h
+new file mode 100644
+index 000000000000..96ffce7bc530
+--- /dev/null
++++ b/arch/x86/include/asm/tdx.h
+@@ -0,0 +1,22 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (C) 2020 Intel Corporation */
++#ifndef _ASM_X86_TDX_H
++#define _ASM_X86_TDX_H
++
++#include <linux/cpufeature.h>
++
++#define TDX_CPUID_LEAF_ID	0x21
++
++#ifdef CONFIG_INTEL_TDX_GUEST
++
++bool is_tdx_guest(void);
++void __init tdx_early_init(void);
++
++#else
++
++static inline bool is_tdx_guest(void) { return false; }
++static inline void tdx_early_init(void) { };
++
++#endif /* CONFIG_INTEL_TDX_GUEST */
++
++#endif /* _ASM_X86_TDX_H */
+diff --git a/arch/x86/kernel/Makefile b/arch/x86/kernel/Makefile
+index 2ff3e600f426..8c9a9214dd34 100644
+--- a/arch/x86/kernel/Makefile
++++ b/arch/x86/kernel/Makefile
+@@ -22,6 +22,7 @@ CFLAGS_REMOVE_early_printk.o = -pg
+ CFLAGS_REMOVE_head64.o = -pg
+ CFLAGS_REMOVE_sev.o = -pg
+ CFLAGS_REMOVE_cc_platform.o = -pg
++CFLAGS_REMOVE_tdx.o = -pg
+ endif
+ 
+ KASAN_SANITIZE_head$(BITS).o				:= n
+@@ -31,6 +32,7 @@ KASAN_SANITIZE_stacktrace.o				:= n
+ KASAN_SANITIZE_paravirt.o				:= n
+ KASAN_SANITIZE_sev.o					:= n
+ KASAN_SANITIZE_cc_platform.o				:= n
++KASAN_SANITIZE_tdx.o					:= n
+ 
+ # With some compiler versions the generated code results in boot hangs, caused
+ # by several compilation units. To be safe, disable all instrumentation.
+@@ -50,6 +52,7 @@ KCOV_INSTRUMENT		:= n
+ 
+ CFLAGS_head$(BITS).o	+= -fno-stack-protector
+ CFLAGS_cc_platform.o	+= -fno-stack-protector
++CFLAGS_tdx.o		+= -fno-stack-protector
+ 
+ CFLAGS_irq.o := -I $(srctree)/$(src)/../include/asm/trace
+ 
+@@ -130,6 +133,7 @@ obj-$(CONFIG_PARAVIRT_CLOCK)	+= pvclock.o
+ obj-$(CONFIG_X86_PMEM_LEGACY_DEVICE) += pmem.o
+ 
+ obj-$(CONFIG_JAILHOUSE_GUEST)	+= jailhouse.o
++obj-$(CONFIG_INTEL_TDX_GUEST)	+= tdx.o
+ 
+ obj-$(CONFIG_EISA)		+= eisa.o
+ obj-$(CONFIG_PCSPKR_PLATFORM)	+= pcspeaker.o
+diff --git a/arch/x86/kernel/head64.c b/arch/x86/kernel/head64.c
+index fc5371a7e9d1..a5ee90df2aba 100644
+--- a/arch/x86/kernel/head64.c
++++ b/arch/x86/kernel/head64.c
+@@ -40,6 +40,7 @@
+ #include <asm/extable.h>
+ #include <asm/trapnr.h>
+ #include <asm/sev.h>
++#include <asm/tdx.h>
+ 
+ /*
+  * Manage page tables very early on.
+@@ -500,6 +501,14 @@ asmlinkage __visible void __init x86_64_start_kernel(char * real_mode_data)
+ 
+ 	copy_bootdata(__va(real_mode_data));
+ 
++	/*
++	 * A future dependency on cmdline parameters is expected (for
++	 * adding debug options). So the order of calling it should be
++	 * after copy_bootdata() (in which command line parameter is
++	 * initialized).
++	 */
++	tdx_early_init();
++
+ 	/*
+ 	 * Load microcode early on BSP.
+ 	 */
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+new file mode 100644
+index 000000000000..88bf12788684
+--- /dev/null
++++ b/arch/x86/kernel/tdx.c
+@@ -0,0 +1,38 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (C) 2020 Intel Corporation */
++
++#undef pr_fmt
++#define pr_fmt(fmt)     "tdx: " fmt
++
++#include <asm/tdx.h>
++
++bool is_tdx_guest(void)
++{
++	static int tdx_guest = -1;
++	u32 eax, sig[3];
++
++	if (tdx_guest >= 0)
++		goto done;
++
++	if (cpuid_eax(0) < TDX_CPUID_LEAF_ID) {
++		tdx_guest = 0;
++		goto done;
++	}
++
++	cpuid_count(TDX_CPUID_LEAF_ID, 0, &eax, &sig[0], &sig[2], &sig[1]);
++
++	tdx_guest = !memcmp("IntelTDX    ", sig, 12);
++
++done:
++	return !!tdx_guest;
++}
++
++void __init tdx_early_init(void)
++{
++	if (!is_tdx_guest())
++		return;
++
++	setup_force_cpu_cap(X86_FEATURE_TDX_GUEST);
++
++	pr_info("Guest initialized\n");
++}
+-- 
+2.31.1
+

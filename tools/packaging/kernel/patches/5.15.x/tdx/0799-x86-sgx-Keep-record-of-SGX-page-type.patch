@@ -1,0 +1,82 @@
+From ef06322ddfd2d81765cc53260b3615cc9bb4208c Mon Sep 17 00:00:00 2001
+From: Reinette Chatre <reinette.chatre@intel.com>
+Date: Wed, 9 Jun 2021 15:59:02 -0700
+Subject: [PATCH 0799/1418] x86/sgx: Keep record of SGX page type
+
+SGX2 functions are not allowed on all page types. For example,
+ENCLS[EMODPR] is only allowed on regular SGX enclave pages and
+ENCLS[EMODPT] is only allowed on TCS and regular pages. If these
+functions are attempted on another type of page the hardware would
+trigger a fault.
+
+Keep a record of the SGX page type so that there is more
+certainty whether an SGX2 instruction can succeed and faults
+can be treated as real failures.
+
+The page type is made to be a property of struct sgx_encl_page
+and thus does not cover the VA page type. VA pages are maintained
+in separate structures and thus their type can be determined in
+a different way. The SGX2 instructions being supported do not
+operate on VA pages and this is thus not a scenario needing to
+be covered at this time.
+
+With the protection bits consuming 16 bits of the unsigned long
+there is room available in the bitfield to include the page type
+information without increasing the space consumed by the struct.
+
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+---
+ arch/x86/include/asm/sgx.h      | 3 +++
+ arch/x86/kernel/cpu/sgx/encl.h  | 1 +
+ arch/x86/kernel/cpu/sgx/ioctl.c | 2 ++
+ 3 files changed, 6 insertions(+)
+
+diff --git a/arch/x86/include/asm/sgx.h b/arch/x86/include/asm/sgx.h
+index ebae2a153c66..8b6cbedada96 100644
+--- a/arch/x86/include/asm/sgx.h
++++ b/arch/x86/include/asm/sgx.h
+@@ -221,6 +221,9 @@ struct sgx_pageinfo {
+  * %SGX_PAGE_TYPE_REG:	a regular page
+  * %SGX_PAGE_TYPE_VA:	a VA page
+  * %SGX_PAGE_TYPE_TRIM:	a page in trimmed state
++ *
++ * Make sure when making changes to this enum that its values can still fit
++ * in the bitfield within &struct sgx_encl_page
+  */
+ enum sgx_page_type {
+ 	SGX_PAGE_TYPE_SECS,
+diff --git a/arch/x86/kernel/cpu/sgx/encl.h b/arch/x86/kernel/cpu/sgx/encl.h
+index 82e21088e68b..cb9f16d457ac 100644
+--- a/arch/x86/kernel/cpu/sgx/encl.h
++++ b/arch/x86/kernel/cpu/sgx/encl.h
+@@ -29,6 +29,7 @@ struct sgx_encl_page {
+ 	unsigned long desc;
+ 	unsigned long vm_max_prot_bits:8;
+ 	unsigned long vm_run_prot_bits:8;
++	enum sgx_page_type type:16;
+ 	struct sgx_epc_page *epc_page;
+ 	struct sgx_encl *encl;
+ 	struct sgx_va_page *va_page;
+diff --git a/arch/x86/kernel/cpu/sgx/ioctl.c b/arch/x86/kernel/cpu/sgx/ioctl.c
+index 7e0819a89532..491d2700a54d 100644
+--- a/arch/x86/kernel/cpu/sgx/ioctl.c
++++ b/arch/x86/kernel/cpu/sgx/ioctl.c
+@@ -107,6 +107,7 @@ static int sgx_encl_create(struct sgx_encl *encl, struct sgx_secs *secs)
+ 		set_bit(SGX_ENCL_DEBUG, &encl->flags);
+ 
+ 	encl->secs.encl = encl;
++	encl->secs.type = SGX_PAGE_TYPE_SECS;
+ 	encl->base = secs->base;
+ 	encl->size = secs->size;
+ 	encl->attributes = secs->attributes;
+@@ -350,6 +351,7 @@ static int sgx_encl_add_page(struct sgx_encl *encl, unsigned long src,
+ 	 */
+ 	encl_page->encl = encl;
+ 	encl_page->epc_page = epc_page;
++	encl_page->type = (secinfo->flags & SGX_SECINFO_PAGE_TYPE_MASK) >> 8;
+ 	encl->secs_child_cnt++;
+ 
+ 	if (flags & SGX_PAGE_MEASURE) {
+-- 
+2.31.1
+

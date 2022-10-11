@@ -1,0 +1,75 @@
+From 0d0e3d20377b42c98a64e2cef6868bfbfb702352 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 8 Sep 2021 15:29:12 +0200
+Subject: [PATCH 0001/1418] x86/extable: Tidy up redundant handler functions
+
+No need to have the same code all over the place.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20210908132524.963232825@linutronix.de
+---
+ arch/x86/mm/extable.c | 16 +++++-----------
+ 1 file changed, 5 insertions(+), 11 deletions(-)
+
+diff --git a/arch/x86/mm/extable.c b/arch/x86/mm/extable.c
+index e1664e9f969c..d9a1046f3a98 100644
+--- a/arch/x86/mm/extable.c
++++ b/arch/x86/mm/extable.c
+@@ -39,9 +39,8 @@ __visible bool ex_handler_fault(const struct exception_table_entry *fixup,
+ 				unsigned long error_code,
+ 				unsigned long fault_addr)
+ {
+-	regs->ip = ex_fixup_addr(fixup);
+ 	regs->ax = trapnr;
+-	return true;
++	return ex_handler_default(fixup, regs, trapnr, error_code, fault_addr);
+ }
+ EXPORT_SYMBOL_GPL(ex_handler_fault);
+ 
+@@ -76,8 +75,7 @@ __visible bool ex_handler_uaccess(const struct exception_table_entry *fixup,
+ 				  unsigned long fault_addr)
+ {
+ 	WARN_ONCE(trapnr == X86_TRAP_GP, "General protection fault in user access. Non-canonical address?");
+-	regs->ip = ex_fixup_addr(fixup);
+-	return true;
++	return ex_handler_default(fixup, regs, trapnr, error_code, fault_addr);
+ }
+ EXPORT_SYMBOL(ex_handler_uaccess);
+ 
+@@ -87,9 +85,7 @@ __visible bool ex_handler_copy(const struct exception_table_entry *fixup,
+ 			       unsigned long fault_addr)
+ {
+ 	WARN_ONCE(trapnr == X86_TRAP_GP, "General protection fault in user access. Non-canonical address?");
+-	regs->ip = ex_fixup_addr(fixup);
+-	regs->ax = trapnr;
+-	return true;
++	return ex_handler_fault(fixup, regs, trapnr, error_code, fault_addr);
+ }
+ EXPORT_SYMBOL(ex_handler_copy);
+ 
+@@ -103,10 +99,9 @@ __visible bool ex_handler_rdmsr_unsafe(const struct exception_table_entry *fixup
+ 		show_stack_regs(regs);
+ 
+ 	/* Pretend that the read succeeded and returned 0. */
+-	regs->ip = ex_fixup_addr(fixup);
+ 	regs->ax = 0;
+ 	regs->dx = 0;
+-	return true;
++	return ex_handler_default(fixup, regs, trapnr, error_code, fault_addr);
+ }
+ EXPORT_SYMBOL(ex_handler_rdmsr_unsafe);
+ 
+@@ -121,8 +116,7 @@ __visible bool ex_handler_wrmsr_unsafe(const struct exception_table_entry *fixup
+ 		show_stack_regs(regs);
+ 
+ 	/* Pretend that the write succeeded. */
+-	regs->ip = ex_fixup_addr(fixup);
+-	return true;
++	return ex_handler_default(fixup, regs, trapnr, error_code, fault_addr);
+ }
+ EXPORT_SYMBOL(ex_handler_wrmsr_unsafe);
+ 
+-- 
+2.31.1
+

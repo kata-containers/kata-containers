@@ -1,0 +1,46 @@
+From 236314135837376e6f704f2d5c479ce999f282a6 Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Thu, 13 Jan 2022 13:08:25 -0500
+Subject: [PATCH 0976/1418] x86/fpu: Fix inline prefix warnings
+
+Fix sparse warnings in xstate and remove inline prefix.
+
+Fixes: 980fe2fddcff ("x86/fpu: Extend fpu_xstate_prctl() with guest permissions")
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Reported-by: kernel test robot <lkp@intel.com>
+Message-Id: <20220113180825.322333-1-yang.zhong@intel.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/include/asm/fpu/api.h | 2 +-
+ arch/x86/kernel/fpu/xstate.c   | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/api.h b/arch/x86/include/asm/fpu/api.h
+index 6a4211686a6f..502dc764c86e 100644
+--- a/arch/x86/include/asm/fpu/api.h
++++ b/arch/x86/include/asm/fpu/api.h
+@@ -138,7 +138,7 @@ static inline void fpstate_free(struct fpu *fpu) { }
+ /* fpstate-related functions which are exported to KVM */
+ extern void fpstate_clear_xstate_component(struct fpstate *fps, unsigned int xfeature);
+ 
+-extern inline u64 xstate_get_guest_group_perm(void);
++extern u64 xstate_get_guest_group_perm(void);
+ 
+ /* KVM specific functions */
+ extern bool fpu_alloc_guest_fpstate(struct fpu_guest *gfpu);
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 10fe072f1c92..02b3ddaf4f75 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -1744,7 +1744,7 @@ static inline int xstate_request_perm(unsigned long idx, bool guest)
+ }
+ #endif  /* !CONFIG_X86_64 */
+ 
+-inline u64 xstate_get_guest_group_perm(void)
++u64 xstate_get_guest_group_perm(void)
+ {
+ 	return xstate_get_group_perm(true);
+ }
+-- 
+2.31.1
+

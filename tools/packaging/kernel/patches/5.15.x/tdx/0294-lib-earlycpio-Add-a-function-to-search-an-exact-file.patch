@@ -1,0 +1,90 @@
+From 5276ca00cc642af45af0195fab7ad558a9a8131a Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Thu, 2 Sep 2021 14:17:50 -0700
+Subject: [PATCH 0294/1418] lib/earlycpio: Add a function to search an exact
+ filename in cpio
+
+To prevent the TDX module from malicious tamperings, a signature structure
+is used to verify the TDX module's authenticity and integrity.  Typically,
+the TDX module and the signature structure are in two files, and the latter
+normally shares the same name as the former with a ".sigstruct" extension,
+e.g., "libtdx.so" and "libtdx.so.sigstruct".
+
+Add a function, find_cpio_file(), that returns a file with the exact match,
+so, for example, both "libtdx.so" and "libtdx.so.sigstruct" can be
+correctly found. This is used instead of the existing find_cpio_data(),
+which lists multiple files matching a leading path.
+
+Existing find_cpio_data() searches for files that matches leading path for
+a given path.  For example, find_cpio_data(path="a") finds "a", "a.bin",
+"a/b", or whatever path starting with "a".  If initrd doesn't include
+multiple files with same leading path, find_cpio_data() works fine.
+However, it is not sufficient for TDX, since the initrd could end up with
+having both "libtdx.so" and "libtdx.so.sigstruct", in which case
+find_cpio_data() could find the wrong file.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ include/linux/earlycpio.h |  1 +
+ lib/earlycpio.c           | 37 +++++++++++++++++++++++++++++++++++++
+ 2 files changed, 38 insertions(+)
+
+diff --git a/include/linux/earlycpio.h b/include/linux/earlycpio.h
+index c70519267c77..924bf9b34fa3 100644
+--- a/include/linux/earlycpio.h
++++ b/include/linux/earlycpio.h
+@@ -14,5 +14,6 @@ struct cpio_data {
+ 
+ struct cpio_data find_cpio_data(const char *path, void *data, size_t len,
+ 				long *offset);
++struct cpio_data find_cpio_file(const char *path, void *data, size_t len);
+ 
+ #endif /* _LINUX_EARLYCPIO_H */
+diff --git a/lib/earlycpio.c b/lib/earlycpio.c
+index 7921193f0424..f329dc6e88b9 100644
+--- a/lib/earlycpio.c
++++ b/lib/earlycpio.c
+@@ -139,3 +139,40 @@ struct cpio_data find_cpio_data(const char *path, void *data,
+ quit:
+ 	return cd;
+ }
++
++/**
++ * find_cpio_file - Search for a filename in an uncompressed cpio
++ * @path:       The filename to search for without a slash at the end.
++ * @data:       Pointer to the cpio archive or a header inside
++ * @len:        Remaining length of the cpio based on data pointer
++ *
++ * Return:      struct cpio_data containing the address, length. The filename
++ *              is set to empty filename string.
++ *              If the file is not found, set the address to NULL.
++ */
++struct cpio_data find_cpio_file(const char *path, void *data, size_t len)
++{
++	struct cpio_data blob;
++	long offset;
++
++	while (len > 0) {
++		blob = find_cpio_data(path, data, len, &offset);
++
++		/*
++		 * find the filename, the returned blob name is empty.  See the
++		 * comment of the return value of find_cpio_data().
++		 */
++		if (blob.data && blob.name[0] == '\0')
++			return blob;
++
++		if (!blob.data)
++			break;
++
++		/* match the item with the same path prefix, skip it */
++		data += offset;
++		len -= offset;
++	}
++
++	/* The file was not found. */
++	return (struct cpio_data) { .data = NULL, .size = 0, .name = "" };
++}
+-- 
+2.31.1
+

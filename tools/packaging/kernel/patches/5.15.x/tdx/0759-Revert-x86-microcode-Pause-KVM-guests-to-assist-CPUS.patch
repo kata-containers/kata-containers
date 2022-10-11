@@ -1,0 +1,30 @@
+From 4fdc2c3595b9fe4605509be33e6db13411e5a85e Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Fri, 17 Dec 2021 11:07:50 +0800
+Subject: [PATCH 0759/1418] Revert "x86/microcode: Pause KVM guests to assist
+ CPUSVN update"
+
+This reverts commit bfeb99c5a572a8af9a08c58a9c31f2c2c71a2962.
+---
+ arch/x86/kernel/cpu/microcode/intel.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/microcode/intel.c b/arch/x86/kernel/cpu/microcode/intel.c
+index c81304d7376b..917d5b5b4b8b 100644
+--- a/arch/x86/kernel/cpu/microcode/intel.c
++++ b/arch/x86/kernel/cpu/microcode/intel.c
+@@ -1011,11 +1011,9 @@ int update_cpusvn_intel(void)
+ 	int ret;
+ 
+ 	sgx_lock_epc();
+-	sgx_kvm_notifier_halt();
+ 	ret = sgx_zap_pages();
+ 	if (!ret)
+ 		ret = sgx_updatesvn();
+-	sgx_kvm_notifier_resume();
+ 	sgx_unlock_epc();
+ 
+ 	if (ret == SGX_NO_UPDATE)
+-- 
+2.31.1
+

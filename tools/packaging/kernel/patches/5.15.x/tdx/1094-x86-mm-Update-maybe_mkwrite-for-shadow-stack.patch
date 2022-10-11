@@ -1,0 +1,125 @@
+From 44028dc4987ecc6b764c825c5fc03d31b4e89573 Mon Sep 17 00:00:00 2001
+From: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Date: Mon, 30 Aug 2021 11:15:12 -0700
+Subject: [PATCH 1094/1418] x86/mm: Update maybe_mkwrite() for shadow stack
+
+When serving a page fault, maybe_mkwrite() makes a PTE writable if its vma
+has VM_WRITE.
+
+A shadow stack vma has VM_SHADOW_STACK.  Its PTEs have _PAGE_DIRTY, but not
+_PAGE_WRITE.  In fork(), _PAGE_DIRTY is cleared to cause copy-on-write,
+and in the page fault handler, _PAGE_DIRTY is restored and the shadow stack
+page is writable again.
+
+Introduce an x86 version of maybe_mkwrite(), which sets proper PTE bits
+according to VM flags.
+
+Apply the same changes to maybe_pmd_mkwrite().
+
+Signed-off-by: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Reviewed-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+Signed-off-by: Rick Edgecombe <rick.p.edgecombe@intel.com>
+Cc: Kees Cook <keescook@chromium.org>
+---
+ arch/x86/include/asm/pgtable.h |  6 ++++++
+ arch/x86/mm/pgtable.c          | 20 ++++++++++++++++++++
+ include/linux/mm.h             |  2 ++
+ mm/huge_memory.c               |  2 ++
+ 4 files changed, 30 insertions(+)
+
+diff --git a/arch/x86/include/asm/pgtable.h b/arch/x86/include/asm/pgtable.h
+index 8e16f89aae8d..6b6af4cce322 100644
+--- a/arch/x86/include/asm/pgtable.h
++++ b/arch/x86/include/asm/pgtable.h
+@@ -285,6 +285,9 @@ static inline int pmd_trans_huge(pmd_t pmd)
+ 	return (pmd_val(pmd) & (_PAGE_PSE|_PAGE_DEVMAP)) == _PAGE_PSE;
+ }
+ 
++#define maybe_pmd_mkwrite maybe_pmd_mkwrite
++extern pmd_t maybe_pmd_mkwrite(pmd_t pmd, struct vm_area_struct *vma);
++
+ #ifdef CONFIG_HAVE_ARCH_TRANSPARENT_HUGEPAGE_PUD
+ static inline int pud_trans_huge(pud_t pud)
+ {
+@@ -1639,6 +1642,9 @@ static inline bool arch_faults_on_old_pte(void)
+ 	return false;
+ }
+ 
++#define maybe_mkwrite maybe_mkwrite
++extern pte_t maybe_mkwrite(pte_t pte, struct vm_area_struct *vma);
++
+ #endif	/* __ASSEMBLY__ */
+ 
+ #endif /* _ASM_X86_PGTABLE_H */
+diff --git a/arch/x86/mm/pgtable.c b/arch/x86/mm/pgtable.c
+index 3481b35cb4ec..c22c8e9c37e8 100644
+--- a/arch/x86/mm/pgtable.c
++++ b/arch/x86/mm/pgtable.c
+@@ -610,6 +610,26 @@ int pmdp_clear_flush_young(struct vm_area_struct *vma,
+ }
+ #endif
+ 
++pte_t maybe_mkwrite(pte_t pte, struct vm_area_struct *vma)
++{
++	if (vma->vm_flags & VM_WRITE)
++		pte = pte_mkwrite(pte);
++	else if (vma->vm_flags & VM_SHADOW_STACK)
++		pte = pte_mkwrite_shstk(pte);
++	return pte;
++}
++
++#ifdef CONFIG_TRANSPARENT_HUGEPAGE
++pmd_t maybe_pmd_mkwrite(pmd_t pmd, struct vm_area_struct *vma)
++{
++	if (vma->vm_flags & VM_WRITE)
++		pmd = pmd_mkwrite(pmd);
++	else if (vma->vm_flags & VM_SHADOW_STACK)
++		pmd = pmd_mkwrite_shstk(pmd);
++	return pmd;
++}
++#endif /* CONFIG_TRANSPARENT_HUGEPAGE */
++
+ /**
+  * reserve_top_address - reserves a hole in the top of kernel address space
+  * @reserve - size of hole to reserve
+diff --git a/include/linux/mm.h b/include/linux/mm.h
+index e629032f2967..2bf642cde2f7 100644
+--- a/include/linux/mm.h
++++ b/include/linux/mm.h
+@@ -1016,12 +1016,14 @@ void free_compound_page(struct page *page);
+  * pte_mkwrite.  But get_user_pages can cause write faults for mappings
+  * that do not have writing enabled, when used by access_process_vm.
+  */
++#ifndef maybe_mkwrite
+ static inline pte_t maybe_mkwrite(pte_t pte, struct vm_area_struct *vma)
+ {
+ 	if (likely(vma->vm_flags & VM_WRITE))
+ 		pte = pte_mkwrite(pte);
+ 	return pte;
+ }
++#endif
+ 
+ vm_fault_t do_set_pmd(struct vm_fault *vmf, struct page *page);
+ void do_set_pte(struct vm_fault *vmf, struct page *page, unsigned long addr);
+diff --git a/mm/huge_memory.c b/mm/huge_memory.c
+index c5142d237e48..1852e16a8f90 100644
+--- a/mm/huge_memory.c
++++ b/mm/huge_memory.c
+@@ -491,12 +491,14 @@ static int __init setup_transparent_hugepage(char *str)
+ }
+ __setup("transparent_hugepage=", setup_transparent_hugepage);
+ 
++#ifndef maybe_pmd_mkwrite
+ pmd_t maybe_pmd_mkwrite(pmd_t pmd, struct vm_area_struct *vma)
+ {
+ 	if (likely(vma->vm_flags & VM_WRITE))
+ 		pmd = pmd_mkwrite(pmd);
+ 	return pmd;
+ }
++#endif
+ 
+ #ifdef CONFIG_MEMCG
+ static inline struct deferred_split *get_deferred_split_queue(struct page *page)
+-- 
+2.31.1
+

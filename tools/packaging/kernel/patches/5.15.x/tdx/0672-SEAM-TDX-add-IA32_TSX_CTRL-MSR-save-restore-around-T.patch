@@ -1,0 +1,178 @@
+From b591cb77f6f37054d679bd1ff7f832a223d8d60b Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Mon, 18 Oct 2021 17:11:03 +0800
+Subject: [PATCH 0672/1418] SEAM: TDX: add IA32_TSX_CTRL MSR save/restore
+ around TDH.SYS.INIT, TDH.SYS.LP.INIT and TDH.VP.ENTER
+
+TDH.SYS.INIT, TDH.SYS.LP.INIT and TDH.VP.ENTER require the RTM_DISALBE (bit
+0) and TSX_CPUID_CLEAR (bit 1) to be 0 if IA32_TSX_CRTL MSR is supported by
+CPU (enumerated by IA32_ARCH_CAPABILITIES.TSX_CTRL).
+
+Do the save and restore work around these three seamcalls.
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/cpu.h        |  9 +++++++++
+ arch/x86/kernel/cpu/tdx/tdx-ops.h | 27 +++++++++++++++++++++++++--
+ arch/x86/kernel/cpu/tsx.c         | 30 +++++++++++++++++++++++++++++-
+ arch/x86/kvm/vmx/tdx.c            |  9 +++++++++
+ 4 files changed, 72 insertions(+), 3 deletions(-)
+
+diff --git a/arch/x86/include/asm/cpu.h b/arch/x86/include/asm/cpu.h
+index cf937d487625..07f24823be6c 100644
+--- a/arch/x86/include/asm/cpu.h
++++ b/arch/x86/include/asm/cpu.h
+@@ -52,6 +52,8 @@ extern bool handle_user_split_lock(struct pt_regs *regs, long error_code);
+ extern bool handle_guest_split_lock(unsigned long ip);
+ extern void handle_bus_lock(struct pt_regs *regs);
+ u8 get_this_hybrid_cpu_type(void);
++extern u64 tsx_ctrl_clear(void);
++extern void tsx_ctrl_restore(u64 tsx_ctrl);
+ #else
+ static inline void __init sld_setup(struct cpuinfo_x86 *c) {}
+ static inline void switch_to_sld(unsigned long tifn) {}
+@@ -71,6 +73,13 @@ static inline u8 get_this_hybrid_cpu_type(void)
+ {
+ 	return 0;
+ }
++
++static inline  u64 tsx_ctrl_clear(void)
++{
++	return 0;
++}
++
++static inline void tsx_ctrl_restore(u64 tsx_ctrl) {}
+ #endif
+ #ifdef CONFIG_IA32_FEAT_CTL
+ void init_ia32_feat_ctl(struct cpuinfo_x86 *c);
+diff --git a/arch/x86/kernel/cpu/tdx/tdx-ops.h b/arch/x86/kernel/cpu/tdx/tdx-ops.h
+index e09cb98de19c..d01341c2a6ae 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx-ops.h
++++ b/arch/x86/kernel/cpu/tdx/tdx-ops.h
+@@ -3,6 +3,8 @@
+ #ifndef __TDX_OPS_H
+ #define __TDX_OPS_H
+ 
++#include <asm/cpu.h>
++
+ static inline u64 tdh_sys_key_config(void)
+ {
+ 	return seamcall(SEAMCALL_TDH_SYS_KEY_CONFIG, 0, 0, 0, 0, NULL);
+@@ -17,12 +19,33 @@ static inline u64 tdh_sys_info(u64 tdsysinfo, int nr_bytes, u64 cmr_info,
+ 
+ static inline u64 tdh_sys_init(u64 attributes, struct tdx_ex_ret *ex)
+ {
+-	return seamcall(SEAMCALL_TDH_SYS_INIT, attributes, 0, 0, 0, ex);
++	u64 tsx_ctrl, ret;
++
++	/*
++	 * TDH.SYS.INIT has special environment requirements that
++	 * RTM_DISABLE(bit 0) and TSX_CPUID_CLEAR(bit 1) of IA32_TSX_CTRL must
++	 * be 0 if it's supported.
++	 */
++	tsx_ctrl = tsx_ctrl_clear();
++	ret = seamcall(SEAMCALL_TDH_SYS_INIT, attributes, 0, 0, 0, ex);
++	tsx_ctrl_restore(tsx_ctrl);
++	return ret;
+ }
+ 
+ static inline u64 tdh_sys_lp_init(struct tdx_ex_ret *ex)
+ {
+-	return seamcall(SEAMCALL_TDH_SYS_LP_INIT, 0, 0, 0, 0, ex);
++	u64 tsx_ctrl, ret;
++
++	/*
++	 * TDH.SYS.LP.INIT has special environment requirements that
++	 * RTM_DISABLE(bit 0) and TSX_CPUID_CLEAR(bit 1) of IA32_TSX_CTRL must
++	 * be 0 if it's supported.
++	 */
++	tsx_ctrl = tsx_ctrl_clear();
++	ret = seamcall(SEAMCALL_TDH_SYS_LP_INIT, 0, 0, 0, 0, ex);
++	tsx_ctrl_restore(tsx_ctrl);
++
++	return ret;
+ }
+ 
+ static inline u64 tdh_sys_tdmr_init(u64 tdmr, struct tdx_ex_ret *ex)
+diff --git a/arch/x86/kernel/cpu/tsx.c b/arch/x86/kernel/cpu/tsx.c
+index 9c7a5f049292..273cd49d84f4 100644
+--- a/arch/x86/kernel/cpu/tsx.c
++++ b/arch/x86/kernel/cpu/tsx.c
+@@ -19,6 +19,8 @@
+ 
+ enum tsx_ctrl_states tsx_ctrl_state __ro_after_init = TSX_CTRL_NOT_SUPPORTED;
+ 
++static bool ia32_tsx_ctrl_supported __ro_after_init;
++
+ void tsx_disable(void)
+ {
+ 	u64 tsx;
+@@ -73,7 +75,9 @@ static bool __init tsx_ctrl_is_supported(void)
+ 	 * tsx= cmdline requests will do nothing on CPUs without
+ 	 * MSR_IA32_TSX_CTRL support.
+ 	 */
+-	return !!(ia32_cap & ARCH_CAP_TSX_CTRL_MSR);
++	ia32_tsx_ctrl_supported = !!(ia32_cap & ARCH_CAP_TSX_CTRL_MSR);
++
++	return ia32_tsx_ctrl_supported;
+ }
+ 
+ static enum tsx_ctrl_states x86_get_tsx_auto_mode(void)
+@@ -175,3 +179,27 @@ void __init tsx_init(void)
+ 		setup_force_cpu_cap(X86_FEATURE_HLE);
+ 	}
+ }
++
++#define MSR_TSX_CTRL_MASK	(TSX_CTRL_RTM_DISABLE | TSX_CTRL_CPUID_CLEAR)
++
++/* Clear the MSR_TSX_CTRL and return the old value if supported */
++u64 tsx_ctrl_clear(void)
++{
++	u64 tsx_ctrl = 0;
++
++	if (ia32_tsx_ctrl_supported) {
++		rdmsrl(MSR_IA32_TSX_CTRL, tsx_ctrl);
++		if (tsx_ctrl & MSR_TSX_CTRL_MASK)
++			wrmsrl(MSR_IA32_TSX_CTRL, tsx_ctrl & ~MSR_TSX_CTRL_MASK);
++	}
++	return tsx_ctrl;
++}
++EXPORT_SYMBOL_GPL(tsx_ctrl_clear);
++
++void tsx_ctrl_restore(u64 tsx_ctrl)
++{
++	if (ia32_tsx_ctrl_supported &&
++	    tsx_ctrl & MSR_TSX_CTRL_MASK)
++		wrmsrl(MSR_IA32_TSX_CTRL, tsx_ctrl);
++}
++EXPORT_SYMBOL_GPL(tsx_ctrl_restore);
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index fd809e851df9..b28f91910aac 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -782,12 +782,21 @@ static void tdx_flush_gprs_dirty(struct kvm_vcpu *vcpu, bool force);
+ static noinstr void tdx_vcpu_enter_exit(struct kvm_vcpu *vcpu,
+ 					struct vcpu_tdx *tdx)
+ {
++	u64 tsx_ctrl;
++
++	/*
++	 * TDH.VP.ENTER has special environment requirements that
++	 * RTM_DISABLE(bit 0) and TSX_CPUID_CLEAR(bit 1) of IA32_TSX_CTRL must
++	 * be 0 if it's supported.
++	 */
++	tsx_ctrl = tsx_ctrl_clear();
+ 	kvm_guest_enter_irqoff();
+ 
+ 	tdx->exit_reason.full = __tdx_vcpu_run(tdx->tdvpr.pa, vcpu->arch.regs,
+ 					       tdx->tdvmcall.regs_mask);
+ 
+ 	kvm_guest_exit_irqoff();
++	tsx_ctrl_restore(tsx_ctrl);
+ }
+ 
+ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+-- 
+2.31.1
+

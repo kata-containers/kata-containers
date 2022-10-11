@@ -1,0 +1,57 @@
+From 820d7b12cd50620bb7b80dc2a2fb4909f7284fd2 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Thu, 7 Apr 2022 10:29:12 -0700
+Subject: [PATCH 1281/1418] dmaengine: idxd: set priv bit to 0 when wq is not
+ kernel type
+
+Set priv bit to 0 for read-only WQ setup when the WQ type is not kernel.
+Current code does not touch the priv bit when the WQ is not kernel type.
+This non-action causes problem wq reconfiguration where the WQ is
+configured as a kernel type, gets disabled, and then reconfigured to be a
+user WQ. The priv bit that was set by the kernel type config remains.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/device.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index 1b7b04ed7614..ffa16557e178 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -433,7 +433,7 @@ int idxd_wq_abort(struct idxd_wq *wq, u32 *status)
+ }
+ EXPORT_SYMBOL_GPL(idxd_wq_abort);
+ 
+-static void __idxd_wq_set_priv_locked(struct idxd_wq *wq)
++static void __idxd_wq_set_priv_locked(struct idxd_wq *wq, int priv)
+ {
+ 	struct idxd_device *idxd = wq->idxd;
+ 	union wqcfg wqcfg;
+@@ -442,7 +442,7 @@ static void __idxd_wq_set_priv_locked(struct idxd_wq *wq)
+ 	offset = WQCFG_OFFSET(idxd, wq->id, WQCFG_PRIV_IDX);
+ 	spin_lock(&idxd->dev_lock);
+ 	wqcfg.bits[WQCFG_PRIV_IDX] = ioread32(idxd->reg_base + offset);
+-	wqcfg.priv = 1;
++	wqcfg.priv = priv;
+ 	wq->wqcfg->bits[WQCFG_PRIV_IDX] = wqcfg.bits[WQCFG_PRIV_IDX];
+ 	iowrite32(wqcfg.bits[WQCFG_PRIV_IDX], idxd->reg_base + offset);
+ 	spin_unlock(&idxd->dev_lock);
+@@ -1447,12 +1447,12 @@ int __drv_enable_wq(struct idxd_wq *wq)
+ 
+ 				__idxd_wq_set_pasid_locked(wq, pasid);
+ 			}
+-			__idxd_wq_set_priv_locked(wq);
++			__idxd_wq_set_priv_locked(wq, 1);
+ 		} else {
+ 			if (device_user_pasid_enabled(idxd) && wq_shared(wq))
+ 				__idxd_wq_set_pasid_locked(wq, 0);
++			__idxd_wq_set_priv_locked(wq, 0);
+ 		}
+-
+ 	}
+ 
+ 	rc = 0;
+-- 
+2.31.1
+

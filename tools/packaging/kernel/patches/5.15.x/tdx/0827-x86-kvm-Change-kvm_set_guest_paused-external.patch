@@ -1,0 +1,54 @@
+From f7bbc5a3e6d897a49d495ae355fa671da7cf4346 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Thu, 14 Oct 2021 14:19:28 +0800
+Subject: [PATCH 0827/1418] x86/kvm: Change kvm_set_guest_paused external
+
+For SGX CPUSVN update is a slow operation, it might cause soft lockup
+happens in KVM guest which is paused when update is running. It
+requires to leverage kvm_set_guest_paused() to avoid such situation.
+
+Make kvm_set_guest_paused external to allow it be used by more
+procedures, like SGX CPUSVN update.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h | 1 +
+ arch/x86/kvm/x86.c              | 3 ++-
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 750d5b0c23c4..fbbf66d3cefe 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -2024,6 +2024,7 @@ static inline int kvm_cpu_get_apicid(int mps_cpu)
+ 	(*(type *)((buf) + (offset) - 0x7e00))
+ 
+ int kvm_cpu_dirty_log_size(void);
++extern int kvm_set_guest_paused(struct kvm_vcpu *vcpu);
+ 
+ int alloc_all_memslots_rmaps(struct kvm *kvm);
+ 
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 9d0b36293d09..29cafe0e3bd0 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -5036,7 +5036,7 @@ static int kvm_vcpu_ioctl_x86_set_xcrs(struct kvm_vcpu *vcpu,
+  * EINVAL is returned when the host attempts to set the flag for a guest that
+  * does not support pv clocks.
+  */
+-static int kvm_set_guest_paused(struct kvm_vcpu *vcpu)
++int kvm_set_guest_paused(struct kvm_vcpu *vcpu)
+ {
+ 	if (!vcpu->arch.pv_time_enabled)
+ 		return -EINVAL;
+@@ -5044,6 +5044,7 @@ static int kvm_set_guest_paused(struct kvm_vcpu *vcpu)
+ 	kvm_make_request(KVM_REQ_CLOCK_UPDATE, vcpu);
+ 	return 0;
+ }
++EXPORT_SYMBOL(kvm_set_guest_paused);
+ 
+ static int kvm_vcpu_ioctl_enable_cap(struct kvm_vcpu *vcpu,
+ 				     struct kvm_enable_cap *cap)
+-- 
+2.31.1
+

@@ -1,0 +1,55 @@
+From 56aea7762382a427b06fbc7d01eaa9432ca7f753 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Wed, 10 Jun 2020 09:43:45 -0700
+Subject: [PATCH 0386/1418] KVM: x86/mmu: Allow per-VM override of the TDP max
+ page level
+
+TODO: This is tentative patch.  Support large page and delete this patch.
+
+Allow TDX to effectively disable large pages, as SEPT will initially
+support only 4k pages.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h | 1 +
+ arch/x86/kvm/mmu/mmu.c          | 4 +++-
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 030586544573..766a76f0b132 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1064,6 +1064,7 @@ struct kvm_arch {
+ 	unsigned long n_requested_mmu_pages;
+ 	unsigned long n_max_mmu_pages;
+ 	unsigned int indirect_shadow_pages;
++	int tdp_max_page_level;
+ 	u8 mmu_valid_gen;
+ 	struct hlist_head mmu_page_hash[KVM_NUM_MMU_PAGES];
+ 	struct list_head active_mmu_pages;
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 74cda4df4078..1638f66ccd2c 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -4402,7 +4402,7 @@ int kvm_tdp_page_fault(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code,
+ 	kvm_pfn_t pfn;
+ 	int max_level;
+ 
+-	for (max_level = KVM_MAX_HUGEPAGE_LEVEL;
++	for (max_level = vcpu->kvm->arch.tdp_max_page_level;
+ 	     max_level > PG_LEVEL_4K;
+ 	     max_level--) {
+ 		int page_num = KVM_PAGES_PER_HPAGE(max_level);
+@@ -6093,6 +6093,8 @@ void kvm_mmu_init_vm(struct kvm *kvm)
+ 	node->track_write = kvm_mmu_pte_write;
+ 	node->track_flush_slot = kvm_mmu_invalidate_zap_pages_in_memslot;
+ 	kvm_page_track_register_notifier(kvm, node);
++
++	kvm->arch.tdp_max_page_level = KVM_MAX_HUGEPAGE_LEVEL;
+ }
+ 
+ void kvm_mmu_uninit_vm(struct kvm *kvm)
+-- 
+2.31.1
+

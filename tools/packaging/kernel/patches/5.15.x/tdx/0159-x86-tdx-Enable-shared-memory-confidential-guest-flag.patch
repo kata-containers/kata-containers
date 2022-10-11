@@ -1,0 +1,35 @@
+From b011436e9f8c1940a72d362e84fbdbfc4fbedc87 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Tue, 3 Aug 2021 15:04:05 -0700
+Subject: [PATCH 0159/1418] x86/tdx: Enable shared memory confidential guest
+ flags for TDX guest
+
+In TDX guest, since the memory is private to guest, it needs some
+extra configuration before sharing any data with VMM. AMD SEV also
+implements similar features and hence code can be shared. Currently
+memory sharing related code in the kernel is protected by
+CC_ATTR_GUEST_MEM_ENCRYPT and CC_ATTR_GUEST_SHARED_MAPPING_INIT flags.
+So enable them for TDX guest as well.
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/cc_platform.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/x86/kernel/cc_platform.c b/arch/x86/kernel/cc_platform.c
+index d13188e8eb2c..deac0a7d7d37 100644
+--- a/arch/x86/kernel/cc_platform.c
++++ b/arch/x86/kernel/cc_platform.c
+@@ -20,6 +20,9 @@ static bool intel_cc_platform_has(enum cc_attr attr)
+ 	switch (attr) {
+ 	case CC_ATTR_GUEST_TDX:
+ 	case CC_ATTR_GUEST_UNROLL_STRING_IO:
++	case CC_ATTR_GUEST_MEM_ENCRYPT:
++	case CC_ATTR_GUEST_SHARED_MAPPING_INIT:
++	case CC_ATTR_MEM_ENCRYPT:
+ 		return is_tdx_guest();
+ 	default:
+ 		return false;
+-- 
+2.31.1
+

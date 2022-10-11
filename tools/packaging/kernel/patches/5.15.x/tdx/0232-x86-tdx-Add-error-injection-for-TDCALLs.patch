@@ -1,0 +1,141 @@
+From 2439793d14b5d7307a762feef40c860ecf196371 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Tue, 28 Sep 2021 19:04:57 -0700
+Subject: [PATCH 0232/1418] x86/tdx: Add error injection for TDCALLs
+
+In addition to fuzzing the TDCALL values add fault injection
+support for returning errors with TDCALLs. That's also useful
+for testing and hardening. The error injection is off by default,
+but can be enabled with the /sys/kernel/debug/tdx_fault/tderrors
+file, in addition to the normal fault injection tunables.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+---
+ arch/x86/include/asm/tdx.h |  6 ++++++
+ arch/x86/kernel/tdx-fuzz.c | 16 ++++++++++++++++
+ arch/x86/kernel/tdx.c      | 10 ++++++----
+ 3 files changed, 28 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/include/asm/tdx.h b/arch/x86/include/asm/tdx.h
+index 98831cccad11..72637d8f1e9c 100644
+--- a/arch/x86/include/asm/tdx.h
++++ b/arch/x86/include/asm/tdx.h
+@@ -116,13 +116,19 @@ enum tdx_fuzz_loc {
+ 	TDX_FUZZ_CPUID2,
+ 	TDX_FUZZ_CPUID3,
+ 	TDX_FUZZ_CPUID4,
++	TDX_FUZZ_MSR_READ_ERR,
++	TDX_FUZZ_MSR_WRITE_ERR,
++	TDX_FUZZ_MAP_ERR,
++	TDX_FUZZ_PORT_IN_ERR,
+ 	TDX_FUZZ_MAX
+ };
+ 
+ #ifdef CONFIG_TDX_FUZZ
+ u64 tdx_fuzz(u64 var, enum tdx_fuzz_loc loc);
++bool tdx_fuzz_err(enum tdx_fuzz_loc loc);
+ #else
+ static inline u64 tdx_fuzz(u64 var, enum tdx_fuzz_loc loc) { return var; }
++static inline bool tdx_fuzz_err(enum tdx_fuzz_loc loc) { return false; }
+ #endif
+ 
+ /*
+diff --git a/arch/x86/kernel/tdx-fuzz.c b/arch/x86/kernel/tdx-fuzz.c
+index c314e19e9b18..66dde3d4c4c0 100644
+--- a/arch/x86/kernel/tdx-fuzz.c
++++ b/arch/x86/kernel/tdx-fuzz.c
+@@ -17,6 +17,7 @@
+ static DEFINE_PER_CPU(struct rnd_state, fuzz_rndstate);
+ static DECLARE_FAULT_ATTR(tdx_fault);
+ static bool fuzz_tdcall;
++static bool fuzz_errors;
+ static u16 fuzz_num_bits = 2;
+ static bool fuzz_early_seed;
+ 
+@@ -50,6 +51,14 @@ u64 tdx_fuzz(u64 var, enum tdx_fuzz_loc loc)
+ 	return __tdx_fuzz(var, BITS_PER_LONG, loc);
+ }
+ 
++bool tdx_fuzz_err(enum tdx_fuzz_loc loc)
++{
++	if (!fuzz_errors || !should_fail(&tdx_fault, 1))
++		return false;
++
++	return true;
++}
++
+ static void fuzz_init_seed(unsigned long seed)
+ {
+ 	int cpu;
+@@ -84,6 +93,12 @@ static int __init tdx_fuzz_setup(char *str)
+ 		if (*str == ',')
+ 			str++;
+ 	}
++	if (sscanf(str, "tderrors%n", &off) == 1) {
++		fuzz_errors = true;
++		str += off;
++		if (*str == ',')
++			str++;
++	}
+ 	if (sscanf(str, "numbits:%hu", &fuzz_num_bits) == 1) {
+ 		str += off;
+ 		if (*str == ',')
+@@ -106,6 +121,7 @@ static int __init tdx_fuzz_init(void)
+ 	debugfs_remove(debugfs_lookup("verbose", dbp));
+ 
+ 	debugfs_create_bool("tdcall", 0600, dbp, &fuzz_tdcall);
++	debugfs_create_bool("tderrors", 0600, dbp, &fuzz_errors);
+ 	debugfs_create_u16("num_change_bits", 0600, dbp, &fuzz_num_bits);
+ 	debugfs_create_file("seed", 0200, dbp, NULL, &fuzz_seed_fops);
+ 
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 04f147f68ca5..4e52c78949ed 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -354,7 +354,7 @@ int tdx_hcall_gpa_intent(phys_addr_t start, phys_addr_t end,
+ 	 */
+ 	ret = _tdx_hypercall(TDVMCALL_MAP_GPA, start, end - start, 0, 0,
+ 			     NULL);
+-	if (ret)
++	if (ret || tdx_fuzz_err(TDX_FUZZ_MAP_ERR))
+ 		ret = -EIO;
+ 
+ 	if (ret || map_type == TDX_MAP_SHARED)
+@@ -446,13 +446,15 @@ static __cpuidle void tdx_safe_halt(void)
+ static bool tdx_read_msr_safe(unsigned int msr, u64 *val)
+ {
+ 	struct tdx_hypercall_output out;
++	u64 ret;
+ 
+ 	/*
+ 	 * Emulate the MSR read via hypercall. More info about ABI
+ 	 * can be found in TDX Guest-Host-Communication Interface
+ 	 * (GHCI), sec titled "TDG.VP.VMCALL<Instruction.RDMSR>".
+ 	 */
+-	if (_trace_tdx_hypercall(EXIT_REASON_MSR_READ, msr, 0, 0, 0, &out))
++	ret = _trace_tdx_hypercall(EXIT_REASON_MSR_READ, msr, 0, 0, 0, &out);
++	if (ret || tdx_fuzz_err(TDX_FUZZ_MSR_READ_ERR))
+ 		return false;
+ 
+ 	/* Should filter the MSRs to only fuzz host controlled */
+@@ -499,7 +501,7 @@ static bool tdx_write_msr_safe(unsigned int msr, unsigned int low,
+ 	ret = _trace_tdx_hypercall(EXIT_REASON_MSR_WRITE, msr,
+ 				   (u64)high << 32 | low, 0, 0, NULL);
+ 
+-	return ret ? false : true;
++	return ret || tdx_fuzz_err(TDX_FUZZ_MSR_WRITE_ERR) ? false : true;
+ }
+ 
+ void notrace tdx_write_msr(unsigned int msr, u32 low, u32 high)
+@@ -573,7 +575,7 @@ static bool tdx_handle_io(struct pt_regs *regs, u32 exit_qual)
+ 					   size, out, port, regs->ax,
+ 					   &outh);
+ 		regs->ax &= ~mask;
+-		regs->ax |= tdx_fuzz(ret ?
++		regs->ax |= tdx_fuzz(ret || tdx_fuzz_err(TDX_FUZZ_PORT_IN_ERR) ?
+ 				UINT_MAX : outh.r11, TDX_FUZZ_PORT_IN)
+ 			& mask;
+ 	} else {
+-- 
+2.31.1
+

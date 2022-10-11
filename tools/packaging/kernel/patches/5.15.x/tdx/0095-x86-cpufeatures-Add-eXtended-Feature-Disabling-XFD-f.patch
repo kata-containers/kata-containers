@@ -1,0 +1,58 @@
+From 8fcfff5e260b37dc14fe883439f8d5b271fd7e33 Mon Sep 17 00:00:00 2001
+From: "Chang S. Bae" <chang.seok.bae@intel.com>
+Date: Thu, 21 Oct 2021 15:55:16 -0700
+Subject: [PATCH 0095/1418] x86/cpufeatures: Add eXtended Feature Disabling
+ (XFD) feature bit
+
+Intel's eXtended Feature Disable (XFD) feature is an extension of the XSAVE
+architecture. XFD allows the kernel to enable a feature state in XCR0 and
+to receive a #NM trap when a task uses instructions accessing that state.
+
+This is going to be used to postpone the allocation of a larger XSTATE
+buffer for a task to the point where it is actually using a related
+instruction after the permission to use that facility has been granted.
+
+XFD is not used by the kernel, but only applied to userspace. This is a
+matter of policy as the kernel knows how a fpstate is reallocated and the
+XFD state.
+
+The compacted XSAVE format is adjustable for dynamic features. Make XFD
+depend on XSAVES.
+
+Signed-off-by: Chang S. Bae <chang.seok.bae@intel.com>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Chang S. Bae <chang.seok.bae@intel.com>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211021225527.10184-13-chang.seok.bae@intel.com
+---
+ arch/x86/include/asm/cpufeatures.h | 1 +
+ arch/x86/kernel/cpu/cpuid-deps.c   | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/arch/x86/include/asm/cpufeatures.h b/arch/x86/include/asm/cpufeatures.h
+index d0ce5cfd3ac1..ab7b3a2de85d 100644
+--- a/arch/x86/include/asm/cpufeatures.h
++++ b/arch/x86/include/asm/cpufeatures.h
+@@ -277,6 +277,7 @@
+ #define X86_FEATURE_XSAVEC		(10*32+ 1) /* XSAVEC instruction */
+ #define X86_FEATURE_XGETBV1		(10*32+ 2) /* XGETBV with ECX = 1 instruction */
+ #define X86_FEATURE_XSAVES		(10*32+ 3) /* XSAVES/XRSTORS instructions */
++#define X86_FEATURE_XFD			(10*32+ 4) /* "" eXtended Feature Disabling */
+ 
+ /*
+  * Extended auxiliary flags: Linux defined - for features scattered in various
+diff --git a/arch/x86/kernel/cpu/cpuid-deps.c b/arch/x86/kernel/cpu/cpuid-deps.c
+index defda61f372d..d9ead9c20408 100644
+--- a/arch/x86/kernel/cpu/cpuid-deps.c
++++ b/arch/x86/kernel/cpu/cpuid-deps.c
+@@ -75,6 +75,7 @@ static const struct cpuid_dep cpuid_deps[] = {
+ 	{ X86_FEATURE_SGX_LC,			X86_FEATURE_SGX	      },
+ 	{ X86_FEATURE_SGX1,			X86_FEATURE_SGX       },
+ 	{ X86_FEATURE_SGX2,			X86_FEATURE_SGX1      },
++	{ X86_FEATURE_XFD,			X86_FEATURE_XSAVES    },
+ 	{}
+ };
+ 
+-- 
+2.31.1
+

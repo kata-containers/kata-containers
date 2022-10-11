@@ -1,0 +1,33 @@
+From e25ad3b42d70ec9c8e9ca7ee23efbc7ebf5efcac Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Mon, 2 Aug 2021 16:57:22 +0800
+Subject: [PATCH 0452/1418] perf/x86/intel: fix unused functions error
+
+Reported-by: kernel test robot <lkp@intel.com>
+Fixes: 351a8d9726e4 ("KVM: TDX: Add perfmon support for TD")
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/include/asm/perf_event.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/perf_event.h b/arch/x86/include/asm/perf_event.h
+index 160352f59b28..f153f307e772 100644
+--- a/arch/x86/include/asm/perf_event.h
++++ b/arch/x86/include/asm/perf_event.h
+@@ -512,11 +512,11 @@ static inline void intel_pt_handle_vmx(int on)
+ 
+ }
+ 
+-static void intel_pmu_save(void)
++static inline void intel_pmu_save(void)
+ {
+ }
+ 
+-static void intel_pmu_restore(void)
++static inline void intel_pmu_restore(void)
+ {
+ }
+ #endif
+-- 
+2.31.1
+

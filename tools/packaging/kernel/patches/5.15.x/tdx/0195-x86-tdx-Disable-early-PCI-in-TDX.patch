@@ -1,0 +1,60 @@
+From 9db8a4d3cff2a093c6709f7a89dd742d70b036b8 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Wed, 30 Jun 2021 17:57:14 -0700
+Subject: [PATCH 0195/1418] x86/tdx: Disable early PCI in TDX
+
+There are various bug workarounds that scan the PCI bus early.
+These are not really needed in a VM and it would be a lot of work to
+properly audit and harden them for a confidential guest.
+There is already a flag to disable them using pci=noearly, just make
+that default when running TDX.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/pci.h   | 1 +
+ arch/x86/kernel/tdx-filter.c | 2 ++
+ arch/x86/pci/common.c        | 5 +++++
+ 3 files changed, 8 insertions(+)
+
+diff --git a/arch/x86/include/asm/pci.h b/arch/x86/include/asm/pci.h
+index d2c76c8d8cfd..708168f798d1 100644
+--- a/arch/x86/include/asm/pci.h
++++ b/arch/x86/include/asm/pci.h
+@@ -92,6 +92,7 @@ void pcibios_scan_root(int bus);
+ struct irq_routing_table *pcibios_get_irq_routing_table(void);
+ int pcibios_set_irq_routing(struct pci_dev *dev, int pin, int irq);
+ 
++void pci_disable_early(void);
+ 
+ #define HAVE_PCI_MMAP
+ #define arch_can_pci_mmap_wc()	pat_enabled()
+diff --git a/arch/x86/kernel/tdx-filter.c b/arch/x86/kernel/tdx-filter.c
+index a7d379c48beb..4a021fa2c518 100644
+--- a/arch/x86/kernel/tdx-filter.c
++++ b/arch/x86/kernel/tdx-filter.c
+@@ -246,6 +246,8 @@ void __init tdx_filter_init(void)
+ 
+ 	dev_default_authorization = false;
+ 
++	pci_disable_early();
++
+ 	if (filter_overridden) {
+ 		/*
+ 		 * Since the default allow list is overridden to
+diff --git a/arch/x86/pci/common.c b/arch/x86/pci/common.c
+index 3507f456fcd0..828d6a68c4d1 100644
+--- a/arch/x86/pci/common.c
++++ b/arch/x86/pci/common.c
+@@ -724,3 +724,8 @@ struct pci_dev *pci_real_dma_dev(struct pci_dev *dev)
+ 	return dev;
+ }
+ #endif
++
++void pci_disable_early(void)
++{
++	pci_probe |= PCI_PROBE_NOEARLY;
++}
+-- 
+2.31.1
+

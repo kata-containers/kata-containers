@@ -1,0 +1,158 @@
+From 03250a44000a5dd41518ede77f6c6c3f7cc7563e Mon Sep 17 00:00:00 2001
+From: Ben Walker <benjamin.walker@intel.com>
+Date: Thu, 25 Nov 2021 14:53:39 -0500
+Subject: [PATCH 1150/1418] dmaengine: idxd: Support device_tx_status
+
+This can now be supported even for devices that complete operations out
+of order. Add support for directly polling transactions.
+
+Signed-off-by: Ben Walker <benjamin.walker@intel.com>
+---
+ drivers/dma/idxd/device.c |  1 +
+ drivers/dma/idxd/dma.c    | 85 ++++++++++++++++++++++++++++++++++++++-
+ drivers/dma/idxd/idxd.h   |  1 +
+ 3 files changed, 85 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index 9f089702fea3..e06c8b05c04d 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -148,6 +148,7 @@ int idxd_wq_alloc_resources(struct idxd_wq *wq)
+ 			desc->iax_completion = &wq->iax_compls[i];
+ 		desc->compl_dma = wq->compls_addr + idxd->data->compl_size * i;
+ 		desc->id = i;
++		desc->gen = 1;
+ 		desc->wq = wq;
+ 		desc->cpu = -1;
+ 	}
+diff --git a/drivers/dma/idxd/dma.c b/drivers/dma/idxd/dma.c
+index 96560ef95f21..a8afe78ed5f1 100644
+--- a/drivers/dma/idxd/dma.c
++++ b/drivers/dma/idxd/dma.c
+@@ -12,6 +12,23 @@
+ #include "registers.h"
+ #include "idxd.h"
+ 
++
++#define DMA_COOKIE_BITS (sizeof(dma_cookie_t) * 8)
++/*
++ * The descriptor id takes the lower 16 bits of the cookie.
++ */
++#define DESC_ID_BITS 16
++#define DESC_ID_MASK ((1 << DESC_ID_BITS) - 1)
++/*
++ * The 'generation' is in the upper half of the cookie. But dma_cookie_t
++ * is signed, so we leave the upper-most bit for the sign. Further, we
++ * need to flag whether a cookie corresponds to an operation that is
++ * being completed via interrupt to avoid polling it, which takes
++ * the second most upper bit. So we subtract two bits from the upper half.
++ */
++#define DESC_GEN_MAX ((1 << (DMA_COOKIE_BITS - DESC_ID_BITS - 2)) - 1)
++#define DESC_INTERRUPT_FLAG (1 << (DMA_COOKIE_BITS - 2))
++
+ static inline struct idxd_wq *to_idxd_wq(struct dma_chan *c)
+ {
+ 	struct idxd_dma_chan *idxd_chan;
+@@ -137,13 +154,67 @@ static void idxd_dma_free_chan_resources(struct dma_chan *chan)
+ 		idxd_wq_refcount(wq));
+ }
+ 
++
+ static enum dma_status idxd_dma_tx_status(struct dma_chan *dma_chan,
+ 					  dma_cookie_t cookie,
+ 					  struct dma_tx_state *txstate)
+ {
+-	return DMA_OUT_OF_ORDER;
++	u8 status;
++	struct idxd_wq *wq;
++	struct idxd_desc *desc;
++	u32 idx;
++
++	memset(txstate, 0, sizeof(*txstate));
++
++	if (dma_submit_error(cookie))
++		return DMA_ERROR;
++
++	wq = to_idxd_wq(dma_chan);
++
++	idx = cookie & DESC_ID_MASK;
++	if (idx >= wq->num_descs)
++		return DMA_ERROR;
++
++	desc = wq->descs[idx];
++
++	if (desc->txd.cookie != cookie) {
++		/*
++		 * The user asked about an old transaction
++		 */
++		return DMA_COMPLETE;
++	}
++
++	/*
++	 * For descriptors completed via interrupt, we can't go
++	 * look at the completion status directly because it races
++	 * with the IRQ handler recyling the descriptor. However,
++	 * since in this case we can rely on the interrupt handler
++	 * to invalidate the cookie when the command completes we
++	 * know that if we get here, the command is still in
++	 * progress.
++	 */
++	if ((cookie & DESC_INTERRUPT_FLAG) != 0)
++		return DMA_IN_PROGRESS;
++
++	status = desc->completion->status & DSA_COMP_STATUS_MASK;
++
++	if (status) {
++		/*
++		 * Check against the original status as ABORT is software defined
++		 * and 0xff, which DSA_COMP_STATUS_MASK can mask out.
++		 */
++		if (unlikely(desc->completion->status == IDXD_COMP_DESC_ABORT))
++			idxd_dma_complete_txd(desc, IDXD_COMPLETE_ABORT, true);
++		else
++			idxd_dma_complete_txd(desc, IDXD_COMPLETE_NORMAL, true);
++
++		return DMA_COMPLETE;
++	}
++
++	return DMA_IN_PROGRESS;
+ }
+ 
++
+ /*
+  * issue_pending() does not need to do anything since tx_submit() does the job
+  * already.
+@@ -160,7 +231,17 @@ static dma_cookie_t idxd_dma_tx_submit(struct dma_async_tx_descriptor *tx)
+ 	int rc;
+ 	struct idxd_desc *desc = container_of(tx, struct idxd_desc, txd);
+ 
+-	cookie = dma_cookie_assign(tx);
++	cookie = (desc->gen << DESC_ID_BITS) | (desc->id & DESC_ID_MASK);
++
++	if ((desc->hw->flags & IDXD_OP_FLAG_RCI) != 0)
++		cookie |= DESC_INTERRUPT_FLAG;
++
++	if (desc->gen == DESC_GEN_MAX)
++		desc->gen = 1;
++	else
++		desc->gen++;
++
++	tx->cookie = cookie;
+ 
+ 	rc = idxd_submit_desc(wq, desc);
+ 	if (rc < 0) {
+diff --git a/drivers/dma/idxd/idxd.h b/drivers/dma/idxd/idxd.h
+index ac6b7b8d2660..f807d7621755 100644
+--- a/drivers/dma/idxd/idxd.h
++++ b/drivers/dma/idxd/idxd.h
+@@ -351,6 +351,7 @@ struct idxd_desc {
+ 	struct llist_node llnode;
+ 	struct list_head list;
+ 	u16 id;
++	u16 gen;
+ 	int cpu;
+ 	struct idxd_wq *wq;
+ };
+-- 
+2.31.1
+

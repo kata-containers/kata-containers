@@ -1,0 +1,102 @@
+From 84e07dc871650eee67471e7f02fecb827d61b1ed Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Tue, 28 Sep 2021 19:04:58 -0700
+Subject: [PATCH 0233/1418] x86/tdx: Add trace point for tdx fuzzer
+
+This will allow generating coverage using the ftrace hist triggers,
+and also in general is useful for understanding what happened
+on a failure.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+---
+ arch/x86/include/asm/trace/tdx.h | 45 ++++++++++++++++++++++++++++++++
+ arch/x86/kernel/tdx-fuzz.c       |  3 +++
+ 2 files changed, 48 insertions(+)
+
+diff --git a/arch/x86/include/asm/trace/tdx.h b/arch/x86/include/asm/trace/tdx.h
+index 240cff27c758..f1061ad20415 100644
+--- a/arch/x86/include/asm/trace/tdx.h
++++ b/arch/x86/include/asm/trace/tdx.h
+@@ -148,6 +148,51 @@ TRACE_EVENT(tdx_hypercall_exit,
+ 
+ #endif // CONFIG_INTEL_TDX_GUEST
+ 
++#ifdef CONFIG_TDX_FUZZ
++
++TRACE_EVENT(tdx_fuzz,
++
++	TP_PROTO(u64 rip, unsigned bits, u64 oldval, u64 newval, int loc),
++
++	TP_ARGS(rip, bits, oldval, newval, loc),
++
++	TP_STRUCT__entry(
++		__field(u64, rip)
++		__field(unsigned, bits)
++		__field(u64, oldval)
++		__field(u64, newval)
++		__field(int, loc)
++	),
++
++	TP_fast_assign(
++		__entry->rip = rip;
++		__entry->bits = bits;
++		__entry->oldval = oldval;
++		__entry->newval = newval;
++		__entry->loc = loc;
++	),
++
++	TP_printk("rip %pF bits %u oldval %llx newval %llx loc %s",
++		(void *)__entry->rip,
++		__entry->bits,
++		__entry->oldval,
++		__entry->newval,
++		__print_symbolic(__entry->loc,
++				   { TDX_FUZZ_MSR_READ, "msr_read" },
++				   { TDX_FUZZ_MMIO_READ, "mmio_read" },
++				   { TDX_FUZZ_MSR_READ_ERR, "msr_read_err" },
++				   { TDX_FUZZ_MSR_WRITE_ERR, "msr_write_err" },
++				   { TDX_FUZZ_PORT_IN, "port_in" },
++				   { TDX_FUZZ_PORT_IN_ERR, "port_in_err" },
++				   { TDX_FUZZ_CPUID1, "cpuid1" },
++				   { TDX_FUZZ_CPUID2, "cpuid2" },
++				   { TDX_FUZZ_CPUID3, "cpuid3" },
++				   { TDX_FUZZ_CPUID4, "cpuid4" })
++	)
++);
++
++#endif
++
+ #undef TRACE_INCLUDE_PATH
+ #define TRACE_INCLUDE_PATH asm/trace/
+ #undef TRACE_INCLUDE_FILE
+diff --git a/arch/x86/kernel/tdx-fuzz.c b/arch/x86/kernel/tdx-fuzz.c
+index 66dde3d4c4c0..e021c88dcc19 100644
+--- a/arch/x86/kernel/tdx-fuzz.c
++++ b/arch/x86/kernel/tdx-fuzz.c
+@@ -13,6 +13,7 @@
+ #include <linux/percpu.h>
+ #include <linux/smp.h>
+ #include <asm/tdx.h>
++#include <asm/trace/tdx.h>
+ 
+ static DEFINE_PER_CPU(struct rnd_state, fuzz_rndstate);
+ static DECLARE_FAULT_ATTR(tdx_fault);
+@@ -39,6 +40,7 @@ static u64 __tdx_fuzz(u64 var, int bits, enum tdx_fuzz_loc loc)
+ 		for (i = 0; i < num_bits; i++)
+ 			var ^= 1ULL << (rnd[i] & (bits-1));
+ 	}
++	trace_tdx_fuzz((u64)__builtin_return_address(0), bits, oldvar, var, loc);
+ 	put_cpu();
+ 	return var;
+ }
+@@ -56,6 +58,7 @@ bool tdx_fuzz_err(enum tdx_fuzz_loc loc)
+ 	if (!fuzz_errors || !should_fail(&tdx_fault, 1))
+ 		return false;
+ 
++	trace_tdx_fuzz((u64)__builtin_return_address(0), 1, 0, 1, loc);
+ 	return true;
+ }
+ 
+-- 
+2.31.1
+

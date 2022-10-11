@@ -1,0 +1,154 @@
+From 95e58892a46cde0c62b31dff4cf05b23e8e6f308 Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Tue, 26 Nov 2019 21:20:13 +0300
+Subject: [PATCH 0139/1418] x86/tdx: Handle port I/O
+
+TDX hypervisors cannot emulate instructions directly. This includes
+port IO which is normally emulated in the hypervisor. All port IO
+instructions inside TDX trigger the #VE exception in the guest and
+would be normally emulated there.
+
+Also string I/O is not supported in TDX guest. So, unroll the string
+I/O operation into a loop operating on one element at a time. This
+method is similar to AMD SEV, so just extend the support for TDX guest
+platform.
+
+Add a new confidential guest flag CC_ATTR_GUEST_UNROLL_STRING_IO to
+add string unroll support in asm/io.h
+
+Co-developed-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Reviewed-by: Dan Williams <dan.j.williams@intel.com>
+---
+ arch/x86/include/asm/io.h     |  7 +++++--
+ arch/x86/kernel/cc_platform.c |  1 +
+ arch/x86/kernel/tdx.c         | 37 +++++++++++++++++++++++++++++++++++
+ include/linux/cc_platform.h   | 11 +++++++++++
+ 4 files changed, 54 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/io.h b/arch/x86/include/asm/io.h
+index fa6aa43e5dc3..67e0c4a0a0f4 100644
+--- a/arch/x86/include/asm/io.h
++++ b/arch/x86/include/asm/io.h
+@@ -40,6 +40,7 @@
+ 
+ #include <linux/string.h>
+ #include <linux/compiler.h>
++#include <linux/cc_platform.h>
+ #include <asm/page.h>
+ #include <asm/tdx.h>
+ #include <asm/early_ioremap.h>
+@@ -310,7 +311,8 @@ static inline unsigned type in##bwl##_p(int port)			\
+ 									\
+ static inline void outs##bwl(int port, const void *addr, unsigned long count) \
+ {									\
+-	if (sev_key_active()) {						\
++	if (sev_key_active() ||						\
++	    cc_platform_has(CC_ATTR_GUEST_UNROLL_STRING_IO)) {		\
+ 		unsigned type *value = (unsigned type *)addr;		\
+ 		while (count) {						\
+ 			out##bwl(*value, port);				\
+@@ -326,7 +328,8 @@ static inline void outs##bwl(int port, const void *addr, unsigned long count) \
+ 									\
+ static inline void ins##bwl(int port, void *addr, unsigned long count)	\
+ {									\
+-	if (sev_key_active()) {						\
++	if (sev_key_active() ||						\
++	    cc_platform_has(CC_ATTR_GUEST_UNROLL_STRING_IO)) {		\
+ 		unsigned type *value = (unsigned type *)addr;		\
+ 		while (count) {						\
+ 			*value = in##bwl(port);				\
+diff --git a/arch/x86/kernel/cc_platform.c b/arch/x86/kernel/cc_platform.c
+index 589c003d8954..d13188e8eb2c 100644
+--- a/arch/x86/kernel/cc_platform.c
++++ b/arch/x86/kernel/cc_platform.c
+@@ -19,6 +19,7 @@ static bool intel_cc_platform_has(enum cc_attr attr)
+ #ifdef CONFIG_INTEL_TDX_GUEST
+ 	switch (attr) {
+ 	case CC_ATTR_GUEST_TDX:
++	case CC_ATTR_GUEST_UNROLL_STRING_IO:
+ 		return is_tdx_guest();
+ 	default:
+ 		return false;
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 7a2ac2d7b24c..136c64679da2 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -173,6 +173,40 @@ static bool tdx_handle_cpuid(struct pt_regs *regs)
+ 	return true;
+ }
+ 
++/*
++ * tdx_handle_early_io() cannot be re-used in #VE handler for handling
++ * I/O because the way of handling string I/O is different between
++ * normal and early I/O case. Also, once trace support is enabled,
++ * tdx_handle_io() will be extended to use trace calls which is also
++ * not valid for early I/O cases.
++ */
++static bool tdx_handle_io(struct pt_regs *regs, u32 exit_qual)
++{
++	struct tdx_hypercall_output outh;
++	int out, size, port, ret;
++	bool string;
++	u64 mask;
++
++	string = VE_IS_IO_STRING(exit_qual);
++
++	/* I/O strings ops are unrolled at build time. */
++	BUG_ON(string);
++
++	out = VE_IS_IO_OUT(exit_qual);
++	size = VE_GET_IO_SIZE(exit_qual);
++	port = VE_GET_PORT_NUM(exit_qual);
++	mask = GENMASK(8 * size, 0);
++
++	ret = _tdx_hypercall(EXIT_REASON_IO_INSTRUCTION, size, out, port,
++			     regs->ax, &outh);
++	if (!out) {
++		regs->ax &= ~mask;
++		regs->ax |= (ret ? UINT_MAX : outh.r11) & mask;
++	}
++
++	return ret ? false : true;
++}
++
+ bool tdx_get_ve_info(struct ve_info *ve)
+ {
+ 	struct tdx_module_output out;
+@@ -224,6 +258,9 @@ bool tdx_handle_virtualization_exception(struct pt_regs *regs,
+ 	case EXIT_REASON_CPUID:
+ 		ret = tdx_handle_cpuid(regs);
+ 		break;
++	case EXIT_REASON_IO_INSTRUCTION:
++		ret = tdx_handle_io(regs, ve->exit_qual);
++		break;
+ 	default:
+ 		pr_warn("Unexpected #VE: %lld\n", ve->exit_reason);
+ 		return false;
+diff --git a/include/linux/cc_platform.h b/include/linux/cc_platform.h
+index 6124527a0423..7728574d7783 100644
+--- a/include/linux/cc_platform.h
++++ b/include/linux/cc_platform.h
+@@ -70,6 +70,17 @@ enum cc_attr {
+ 	 * Examples include Intel TDX.
+ 	 */
+ 	CC_ATTR_GUEST_TDX,
++
++	/**
++	 * @CC_ATTR_GUEST_UNROLL_STRING_IO: String I/O is implemented with
++	 *                                  IN/OUT instructions
++	 *
++	 * The platform/OS is running as a guest/virtual machine and uses
++	 * IN/OUT instructions in place of string I/O.
++	 *
++	 * Examples include TDX Guest.
++	 */
++	CC_ATTR_GUEST_UNROLL_STRING_IO,
+ };
+ 
+ #ifdef CONFIG_ARCH_HAS_CC_PLATFORM
+-- 
+2.31.1
+

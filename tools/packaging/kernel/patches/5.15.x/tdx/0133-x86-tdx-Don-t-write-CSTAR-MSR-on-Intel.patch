@@ -1,0 +1,52 @@
+From bb3a657edba318978e0eec1250e0bfcb2ee42aff Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Wed, 21 Jul 2021 17:57:21 -0700
+Subject: [PATCH 0133/1418] x86/tdx: Don't write CSTAR MSR on Intel
+
+On Intel CPUs writing the CSTAR MSR is not really needed. Syscalls
+from 32bit work using SYSENTER and 32bit SYSCALL is an illegal opcode.
+But the kernel did write it anyways even though it was ignored by
+the CPU. Inside a TDX guest this actually leads to a #VE which in
+turn will trigger ve_raise_fault() due to failed MSR write. Inside
+ve_raise_fault() before it recovers from this error, it prints an
+ugly message at boot. Since such warning message is pointless for
+CSTAR MSR write failure, add exception to skip CSTAR msr write on
+Intel CPUs.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+---
+ arch/x86/kernel/cpu/common.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/common.c b/arch/x86/kernel/cpu/common.c
+index 486dc8c1d388..6d7e07f601a3 100644
+--- a/arch/x86/kernel/cpu/common.c
++++ b/arch/x86/kernel/cpu/common.c
+@@ -1759,7 +1759,13 @@ void syscall_init(void)
+ 	wrmsrl(MSR_LSTAR, (unsigned long)entry_SYSCALL_64);
+ 
+ #ifdef CONFIG_IA32_EMULATION
+-	wrmsrl(MSR_CSTAR, (unsigned long)entry_SYSCALL_compat);
++	/*
++	 * CSTAR is not needed on Intel because it doesn't support
++	 * 32bit SYSCALL, but only SYSENTER. On a TDX guest
++	 * it leads to a #GP.
++	 */
++	if (boot_cpu_data.x86_vendor != X86_VENDOR_INTEL)
++		wrmsrl(MSR_CSTAR, (unsigned long)entry_SYSCALL_compat);
+ 	/*
+ 	 * This only works on Intel CPUs.
+ 	 * On AMD CPUs these MSRs are 32-bit, CPU truncates MSR_IA32_SYSENTER_EIP.
+@@ -1771,7 +1777,8 @@ void syscall_init(void)
+ 		    (unsigned long)(cpu_entry_stack(smp_processor_id()) + 1));
+ 	wrmsrl_safe(MSR_IA32_SYSENTER_EIP, (u64)entry_SYSENTER_compat);
+ #else
+-	wrmsrl(MSR_CSTAR, (unsigned long)ignore_sysret);
++	if (boot_cpu_data.x86_vendor != X86_VENDOR_INTEL)
++		wrmsrl(MSR_CSTAR, (unsigned long)ignore_sysret);
+ 	wrmsrl_safe(MSR_IA32_SYSENTER_CS, (u64)GDT_ENTRY_INVALID_SEG);
+ 	wrmsrl_safe(MSR_IA32_SYSENTER_ESP, 0ULL);
+ 	wrmsrl_safe(MSR_IA32_SYSENTER_EIP, 0ULL);
+-- 
+2.31.1
+

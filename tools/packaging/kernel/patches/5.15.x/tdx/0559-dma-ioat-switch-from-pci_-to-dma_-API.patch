@@ -1,0 +1,43 @@
+From 44b3a71d4d37c5594c2919d7fbeafe6bdf03ab59 Mon Sep 17 00:00:00 2001
+From: Qing Wang <wangqing@vivo.com>
+Date: Thu, 7 Oct 2021 20:28:28 -0700
+Subject: [PATCH 0559/1418] dma: ioat: switch from 'pci_' to 'dma_' API
+
+The wrappers in include/linux/pci-dma-compat.h should go away.
+
+pci_set_dma_mask()/pci_set_consistent_dma_mask() should be
+replaced with dma_set_mask()/dma_set_coherent_mask(),
+and use dma_set_mask_and_coherent() for both.
+
+Signed-off-by: Qing Wang <wangqing@vivo.com>
+Link: https://lore.kernel.org/r/1633663733-47199-3-git-send-email-wangqing@vivo.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/ioat/init.c | 10 ++--------
+ 1 file changed, 2 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/dma/ioat/init.c b/drivers/dma/ioat/init.c
+index 191b59279007..373b8dac6c9b 100644
+--- a/drivers/dma/ioat/init.c
++++ b/drivers/dma/ioat/init.c
+@@ -1363,15 +1363,9 @@ static int ioat_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+ 	if (!iomap)
+ 		return -ENOMEM;
+ 
+-	err = pci_set_dma_mask(pdev, DMA_BIT_MASK(64));
++	err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+ 	if (err)
+-		err = pci_set_dma_mask(pdev, DMA_BIT_MASK(32));
+-	if (err)
+-		return err;
+-
+-	err = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(64));
+-	if (err)
+-		err = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32));
++		err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
+ 	if (err)
+ 		return err;
+ 
+-- 
+2.31.1
+

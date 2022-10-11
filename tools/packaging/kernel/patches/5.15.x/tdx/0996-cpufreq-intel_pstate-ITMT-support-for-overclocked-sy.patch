@@ -1,0 +1,57 @@
+From 18c0270f85478274f0929079e0c48308316696c2 Mon Sep 17 00:00:00 2001
+From: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Date: Thu, 18 Nov 2021 21:18:01 -0800
+Subject: [PATCH 0996/1418] cpufreq: intel_pstate: ITMT support for overclocked
+ system
+
+On systems with overclocking enabled, CPPC Highest Performance can be
+hard coded to 0xff. In this case even if we have cores with different
+highest performance, ITMT can't be enabled as the current implementation
+depends on CPPC Highest Performance.
+
+On such systems we can use MSR_HWP_CAPABILITIES maximum performance field
+when CPPC.Highest Performance is 0xff.
+
+Due to legacy reasons, we can't solely depend on MSR_HWP_CAPABILITIES as
+in some older systems CPPC Highest Performance is the only way to identify
+different performing cores.
+
+Reported-by: Michael Larabel <Michael@MichaelLarabel.com>
+Signed-off-by: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Tested-by: Michael Larabel <Michael@MichaelLarabel.com>
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ drivers/cpufreq/intel_pstate.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/drivers/cpufreq/intel_pstate.c b/drivers/cpufreq/intel_pstate.c
+index 1bc00645b656..dec2a5649ac1 100644
+--- a/drivers/cpufreq/intel_pstate.c
++++ b/drivers/cpufreq/intel_pstate.c
+@@ -338,6 +338,8 @@ static void intel_pstste_sched_itmt_work_fn(struct work_struct *work)
+ 
+ static DECLARE_WORK(sched_itmt_work, intel_pstste_sched_itmt_work_fn);
+ 
++#define CPPC_MAX_PERF	U8_MAX
++
+ static void intel_pstate_set_itmt_prio(int cpu)
+ {
+ 	struct cppc_perf_caps cppc_perf;
+@@ -348,6 +350,14 @@ static void intel_pstate_set_itmt_prio(int cpu)
+ 	if (ret)
+ 		return;
+ 
++	/*
++	 * On some systems with overclocking enabled, CPPC.highest_perf is hardcoded to 0xff.
++	 * In this case we can't use CPPC.highest_perf to enable ITMT.
++	 * In this case we can look at MSR_HWP_CAPABILITIES bits [8:0] to decide.
++	 */
++	if (cppc_perf.highest_perf == CPPC_MAX_PERF)
++		cppc_perf.highest_perf = HWP_HIGHEST_PERF(READ_ONCE(all_cpu_data[cpu]->hwp_cap_cached));
++
+ 	/*
+ 	 * The priorities can be set regardless of whether or not
+ 	 * sched_set_itmt_support(true) has been called and it is valid to
+-- 
+2.31.1
+

@@ -1,0 +1,186 @@
+From 87c0fe6c7c7f5933248de92335cb16e8ca22cd03 Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Wed, 25 Aug 2021 21:42:51 +0300
+Subject: [PATCH 0222/1418] x86/boot/compressed: Handle unaccepted memory
+
+Firmware is responsible for accepting memory where compressed kernel
+image and initrd land. But kernel has to accept memory for decompression
+buffer: accept memory just before decompression starts
+
+KASLR allowed to use unaccepted memory for output buffer.
+
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+---
+ arch/x86/boot/compressed/bitmap.c            | 62 ++++++++++++++++++++
+ arch/x86/boot/compressed/kaslr.c             | 14 ++++-
+ arch/x86/boot/compressed/misc.c              |  9 +++
+ arch/x86/boot/compressed/unaccepted_memory.c | 13 ++++
+ arch/x86/include/asm/unaccepted_memory.h     |  2 +
+ 5 files changed, 98 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/boot/compressed/bitmap.c b/arch/x86/boot/compressed/bitmap.c
+index bf58b259380a..ba2de61c0823 100644
+--- a/arch/x86/boot/compressed/bitmap.c
++++ b/arch/x86/boot/compressed/bitmap.c
+@@ -2,6 +2,48 @@
+ /* Taken from lib/string.c */
+ 
+ #include <linux/bitmap.h>
++#include <linux/math.h>
++#include <linux/minmax.h>
++
++unsigned long _find_next_bit(const unsigned long *addr1,
++		const unsigned long *addr2, unsigned long nbits,
++		unsigned long start, unsigned long invert, unsigned long le)
++{
++	unsigned long tmp, mask;
++
++	if (unlikely(start >= nbits))
++		return nbits;
++
++	tmp = addr1[start / BITS_PER_LONG];
++	if (addr2)
++		tmp &= addr2[start / BITS_PER_LONG];
++	tmp ^= invert;
++
++	/* Handle 1st word. */
++	mask = BITMAP_FIRST_WORD_MASK(start);
++	if (le)
++		mask = swab(mask);
++
++	tmp &= mask;
++
++	start = round_down(start, BITS_PER_LONG);
++
++	while (!tmp) {
++		start += BITS_PER_LONG;
++		if (start >= nbits)
++			return nbits;
++
++		tmp = addr1[start / BITS_PER_LONG];
++		if (addr2)
++			tmp &= addr2[start / BITS_PER_LONG];
++		tmp ^= invert;
++	}
++
++	if (le)
++		tmp = swab(tmp);
++
++	return min(start + __ffs(tmp), nbits);
++}
+ 
+ void __bitmap_set(unsigned long *map, unsigned int start, int len)
+ {
+@@ -22,3 +64,23 @@ void __bitmap_set(unsigned long *map, unsigned int start, int len)
+ 		*p |= mask_to_set;
+ 	}
+ }
++
++void __bitmap_clear(unsigned long *map, unsigned int start, int len)
++{
++	unsigned long *p = map + BIT_WORD(start);
++	const unsigned int size = start + len;
++	int bits_to_clear = BITS_PER_LONG - (start % BITS_PER_LONG);
++	unsigned long mask_to_clear = BITMAP_FIRST_WORD_MASK(start);
++
++	while (len - bits_to_clear >= 0) {
++		*p &= ~mask_to_clear;
++		len -= bits_to_clear;
++		bits_to_clear = BITS_PER_LONG;
++		mask_to_clear = ~0UL;
++		p++;
++	}
++	if (len) {
++		mask_to_clear &= BITMAP_LAST_WORD_MASK(size);
++		*p &= ~mask_to_clear;
++	}
++}
+diff --git a/arch/x86/boot/compressed/kaslr.c b/arch/x86/boot/compressed/kaslr.c
+index 67c3208b668a..36dec593d782 100644
+--- a/arch/x86/boot/compressed/kaslr.c
++++ b/arch/x86/boot/compressed/kaslr.c
+@@ -729,10 +729,20 @@ process_efi_entries(unsigned long minimum, unsigned long image_size)
+ 		 * but in practice there's firmware where using that memory leads
+ 		 * to crashes.
+ 		 *
+-		 * Only EFI_CONVENTIONAL_MEMORY is guaranteed to be free.
++		 * Only EFI_CONVENTIONAL_MEMORY and EFI_UNACCEPTED_MEMORY (if
++		 * supported) are guaranteed to be free.
+ 		 */
+-		if (md->type != EFI_CONVENTIONAL_MEMORY)
++
++		switch (md->type) {
++		case EFI_CONVENTIONAL_MEMORY:
++			break;
++		case EFI_UNACCEPTED_MEMORY:
++			if (IS_ENABLED(CONFIG_UNACCEPTED_MEMORY))
++				break;
+ 			continue;
++		default:
++			continue;
++		}
+ 
+ 		if (efi_soft_reserve_enabled() &&
+ 		    (md->attribute & EFI_MEMORY_SP))
+diff --git a/arch/x86/boot/compressed/misc.c b/arch/x86/boot/compressed/misc.c
+index 743f13ea25c1..eeefcde8394d 100644
+--- a/arch/x86/boot/compressed/misc.c
++++ b/arch/x86/boot/compressed/misc.c
+@@ -18,6 +18,7 @@
+ #include "../string.h"
+ #include "../voffset.h"
+ #include <asm/bootparam_utils.h>
++#include <asm/unaccepted_memory.h>
+ 
+ /*
+  * WARNING!!
+@@ -435,6 +436,14 @@ asmlinkage __visible void *extract_kernel(void *rmode, memptr heap,
+ #endif
+ 
+ 	debug_putstr("\nDecompressing Linux... ");
++
++	if (IS_ENABLED(CONFIG_UNACCEPTED_MEMORY) &&
++	    boot_params->unaccepted_memory) {
++		debug_putstr("Accepting memory... ");
++		accept_memory((phys_addr_t)output,
++			      (phys_addr_t)output + needed_size);
++	}
++
+ 	__decompress(input_data, input_len, NULL, NULL, output, output_len,
+ 			NULL, error);
+ 	parse_elf(output);
+diff --git a/arch/x86/boot/compressed/unaccepted_memory.c b/arch/x86/boot/compressed/unaccepted_memory.c
+index d8081cde0eed..91db800d5f5e 100644
+--- a/arch/x86/boot/compressed/unaccepted_memory.c
++++ b/arch/x86/boot/compressed/unaccepted_memory.c
+@@ -43,3 +43,16 @@ void mark_unaccepted(struct boot_params *params, u64 start, u64 end)
+ 	bitmap_set((unsigned long *)params->unaccepted_memory,
+ 		   start / PMD_SIZE, (end - start) / PMD_SIZE);
+ }
++
++void accept_memory(phys_addr_t start, phys_addr_t end)
++{
++	unsigned long *unaccepted_memory;
++	unsigned int rs, re;
++
++	unaccepted_memory = (unsigned long *)boot_params->unaccepted_memory;
++	bitmap_for_each_set_region(unaccepted_memory, rs, re,
++				   start / PMD_SIZE, end / PMD_SIZE) {
++		__accept_memory(rs * PMD_SIZE, re * PMD_SIZE);
++		bitmap_clear(unaccepted_memory, rs, re - rs);
++	}
++}
+diff --git a/arch/x86/include/asm/unaccepted_memory.h b/arch/x86/include/asm/unaccepted_memory.h
+index cbc24040b853..f1f835d3cd78 100644
+--- a/arch/x86/include/asm/unaccepted_memory.h
++++ b/arch/x86/include/asm/unaccepted_memory.h
+@@ -9,4 +9,6 @@ struct boot_params;
+ 
+ void mark_unaccepted(struct boot_params *params, u64 start, u64 num);
+ 
++void accept_memory(phys_addr_t start, phys_addr_t end);
++
+ #endif
+-- 
+2.31.1
+

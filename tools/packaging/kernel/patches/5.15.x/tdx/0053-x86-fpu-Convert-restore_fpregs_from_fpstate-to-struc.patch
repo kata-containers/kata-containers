@@ -1,0 +1,94 @@
+From 712ee3787b33f176769d1b5d3a60ae46b451b265 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 13 Oct 2021 16:55:30 +0200
+Subject: [PATCH 0053/1418] x86/fpu: Convert restore_fpregs_from_fpstate() to
+ struct fpstate
+
+Convert restore_fpregs_from_fpstate() and related code to the new
+register storage mechanism in preparation for dynamically sized buffers.
+
+No functional change.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211013145322.347395546@linutronix.de
+---
+ arch/x86/include/asm/fpu/signal.h |  2 +-
+ arch/x86/kernel/fpu/context.h     |  2 +-
+ arch/x86/kernel/fpu/core.c        | 12 ++++++------
+ 3 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/signal.h b/arch/x86/include/asm/fpu/signal.h
+index 9a63a21c219d..22b0273a8bf1 100644
+--- a/arch/x86/include/asm/fpu/signal.h
++++ b/arch/x86/include/asm/fpu/signal.h
+@@ -40,7 +40,7 @@ extern bool copy_fpstate_to_sigframe(void __user *buf, void __user *fp, int size
+ extern void fpu__clear_user_states(struct fpu *fpu);
+ extern bool fpu__restore_sig(void __user *buf, int ia32_frame);
+ 
+-extern void restore_fpregs_from_fpstate(union fpregs_state *fpstate, u64 mask);
++extern void restore_fpregs_from_fpstate(struct fpstate *fpstate, u64 mask);
+ 
+ extern bool copy_fpstate_to_sigframe(void __user *buf, void __user *fp, int size);
+ 
+diff --git a/arch/x86/kernel/fpu/context.h b/arch/x86/kernel/fpu/context.h
+index e652282842c8..f8f510519688 100644
+--- a/arch/x86/kernel/fpu/context.h
++++ b/arch/x86/kernel/fpu/context.h
+@@ -74,7 +74,7 @@ static inline void fpregs_restore_userregs(void)
+ 		 */
+ 		mask = xfeatures_mask_restore_user() |
+ 			xfeatures_mask_supervisor();
+-		restore_fpregs_from_fpstate(&fpu->state, mask);
++		restore_fpregs_from_fpstate(fpu->fpstate, mask);
+ 
+ 		fpregs_activate(fpu);
+ 		fpu->last_cpu = cpu;
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 19e14b5c519d..03926bf00971 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -129,7 +129,7 @@ void save_fpregs_to_fpstate(struct fpu *fpu)
+ 	frstor(&fpu->state.fsave);
+ }
+ 
+-void restore_fpregs_from_fpstate(union fpregs_state *fpstate, u64 mask)
++void restore_fpregs_from_fpstate(struct fpstate *fpstate, u64 mask)
+ {
+ 	/*
+ 	 * AMD K7/K8 and later CPUs up to Zen don't save/restore
+@@ -146,18 +146,18 @@ void restore_fpregs_from_fpstate(union fpregs_state *fpstate, u64 mask)
+ 	}
+ 
+ 	if (use_xsave()) {
+-		os_xrstor(&fpstate->xsave, mask);
++		os_xrstor(&fpstate->regs.xsave, mask);
+ 	} else {
+ 		if (use_fxsr())
+-			fxrstor(&fpstate->fxsave);
++			fxrstor(&fpstate->regs.fxsave);
+ 		else
+-			frstor(&fpstate->fsave);
++			frstor(&fpstate->regs.fsave);
+ 	}
+ }
+ 
+ void fpu_reset_from_exception_fixup(void)
+ {
+-	restore_fpregs_from_fpstate(&init_fpstate.regs, xfeatures_mask_fpstate());
++	restore_fpregs_from_fpstate(&init_fpstate, xfeatures_mask_fpstate());
+ }
+ 
+ #if IS_ENABLED(CONFIG_KVM)
+@@ -176,7 +176,7 @@ void fpu_swap_kvm_fpu(struct fpu *save, struct fpu *rstor, u64 restore_mask)
+ 
+ 	if (rstor) {
+ 		restore_mask &= xfeatures_mask_fpstate();
+-		restore_fpregs_from_fpstate(&rstor->state, restore_mask);
++		restore_fpregs_from_fpstate(rstor->fpstate, restore_mask);
+ 	}
+ 
+ 	fpregs_mark_activate();
+-- 
+2.31.1
+

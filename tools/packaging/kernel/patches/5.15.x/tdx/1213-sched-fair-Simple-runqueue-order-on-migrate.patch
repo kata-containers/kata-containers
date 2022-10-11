@@ -1,0 +1,117 @@
+From 303d6b73037e981d02602aef711071156ffa504a Mon Sep 17 00:00:00 2001
+From: "Peter Zijlstra (Intel)" <peterz@infradead.org>
+Date: Fri, 25 Feb 2022 12:52:33 +0800
+Subject: [PATCH 1213/1418] sched/fair: Simple runqueue order on migrate
+
+There's a number of problems with SMP migration of fair tasks, but
+basically it boils down to a task not receiving equal service on each
+runqueue (consider the trivial 3 tasks 2 cpus infeasible weight
+scenario).
+
+Fully solving that with vruntime placement is 'hard', not least
+because a task might be very under-services on a busy runqueue and
+would need to be placed so far left on the new runqueue that it would
+significantly impact latency on the existing tasks.
+
+Instead do minimal / basic placement instead; when moving to a less
+busy queue place at the front of the queue to receive time sooner.
+When moving to a busier queue, place at the end of the queue to
+receive time later.
+
+Signed-off-by: Peter Zijlstra (Intel) <peterz@infradead.org>
+Signed-off-by: Chen Yu <yu.c.chen@intel.com>
+---
+ kernel/sched/fair.c     | 33 +++++++++++++++++++++++++++++----
+ kernel/sched/features.h |  2 ++
+ 2 files changed, 31 insertions(+), 4 deletions(-)
+
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index 4a49187cebae..9dc170cea8be 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -4224,6 +4224,27 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
+ 	se->vruntime = max_vruntime(se->vruntime, vruntime);
+ }
+ 
++static void place_entity_migrate(struct cfs_rq *cfs_rq, struct sched_entity *se)
++{
++	if (!sched_feat(PLACE_MIGRATE))
++		return;
++
++	if (cfs_rq->nr_running < se->migrated) {
++		/*
++		 * Migrated to a shorter runqueue, go first because
++		 * we were under-served on the old runqueue.
++		 */
++		se->vruntime = cfs_rq->min_vruntime;
++		return;
++	}
++
++	/*
++	 * Migrated to a longer runqueue, go last because
++	 * we got over-served on the old runqueue.
++	 */
++	se->vruntime = cfs_rq->min_vruntime + sched_vslice(cfs_rq, se);
++}
++
+ static void check_enqueue_throttle(struct cfs_rq *cfs_rq);
+ 
+ static inline void check_schedstat_required(void)
+@@ -4317,6 +4338,8 @@ enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
+ 
+ 	if (flags & ENQUEUE_WAKEUP)
+ 		place_entity(cfs_rq, se, 0);
++	else if (se->migrated)
++		place_entity_migrate(cfs_rq, se);
+ 
+ 	check_schedstat_required();
+ 	update_stats_enqueue(cfs_rq, se, flags);
+@@ -6979,6 +7002,7 @@ static void detach_entity_cfs_rq(struct sched_entity *se);
+  */
+ static void migrate_task_rq_fair(struct task_struct *p, int new_cpu)
+ {
++	struct sched_entity *se = &p->se;
+ 	/*
+ 	 * As blocked tasks retain absolute vruntime the migration needs to
+ 	 * deal with this by subtracting the old and adding the new
+@@ -7011,7 +7035,7 @@ static void migrate_task_rq_fair(struct task_struct *p, int new_cpu)
+ 		 * rq->lock and can modify state directly.
+ 		 */
+ 		lockdep_assert_rq_held(task_rq(p));
+-		detach_entity_cfs_rq(&p->se);
++		detach_entity_cfs_rq(se);
+ 
+ 	} else {
+ 		/*
+@@ -7022,14 +7046,15 @@ static void migrate_task_rq_fair(struct task_struct *p, int new_cpu)
+ 		 * wakee task is less decayed, but giving the wakee more load
+ 		 * sounds not bad.
+ 		 */
+-		remove_entity_load_avg(&p->se);
++		remove_entity_load_avg(se);
+ 	}
+ 
+ 	/* Tell new CPU we are migrated */
+-	p->se.avg.last_update_time = 0;
++	se->avg.last_update_time = 0;
+ 
+ 	/* We have migrated, no longer consider this task hot */
+-	p->se.migrated = 1;
++	for_each_sched_entity(se)
++		se->migrated = READ_ONCE(cfs_rq_of(se)->nr_running) + !se->on_rq;
+ 
+ 	update_scan_period(p, new_cpu);
+ }
+diff --git a/kernel/sched/features.h b/kernel/sched/features.h
+index 7f8dace0964c..82cf067adbe9 100644
+--- a/kernel/sched/features.h
++++ b/kernel/sched/features.h
+@@ -95,3 +95,5 @@ SCHED_FEAT(LATENCY_WARN, false)
+ 
+ SCHED_FEAT(ALT_PERIOD, true)
+ SCHED_FEAT(BASE_SLICE, true)
++
++SCHED_FEAT(PLACE_MIGRATE, true)
+-- 
+2.31.1
+

@@ -1,0 +1,94 @@
+From 70537f6261846184c59498551ac0b6cfe4619278 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Fri, 7 Jan 2022 15:25:11 +0800
+Subject: [PATCH 0859/1418] x86/sgx: Prevent SGX reclaimer from running during
+ SGX SVN update
+
+SGX SVN update process will mark all EPC pages as "unused" in
+hardware meta data (EPCM). If SGX reclaimer is running concurrently,
+the related SGX instructions, such as EBLOCK, may fail with error
+indicating that the EPC page is invalid. That's right, for the
+page is indeed made "unused" by the update process.
+
+Prevent SGX reclaimer from running if SGX SVN update process is
+executing, it can help avoid receiving the error.
+
+Meanwhile, add lockdep_assert_held() checking for the SGX instructions
+which should have but missed the checking previously.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/kernel/cpu/sgx/encls.h | 8 ++++++++
+ arch/x86/kernel/cpu/sgx/main.c  | 8 ++++++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/sgx/encls.h b/arch/x86/kernel/cpu/sgx/encls.h
+index 889279c9b4d8..e8a0b52706ec 100644
+--- a/arch/x86/kernel/cpu/sgx/encls.h
++++ b/arch/x86/kernel/cpu/sgx/encls.h
+@@ -226,6 +226,8 @@ static inline int __eldu(struct sgx_pageinfo *pginfo, void *addr,
+ /* Mark an Enclave Page Cache (EPC) page as blocked */
+ static inline int __eblock(void *addr)
+ {
++	lockdep_assert_held(&sgx_lock_epc_srcu);
++
+ 	return __encls_ret_1(EBLOCK, addr);
+ }
+ 
+@@ -243,18 +245,24 @@ static inline int __epa(void *addr)
+ static inline int __ewb(struct sgx_pageinfo *pginfo, void *addr,
+ 			void *va)
+ {
++	lockdep_assert_held(&sgx_lock_epc_srcu);
++
+ 	return __encls_ret_3(EWB, pginfo, addr, va);
+ }
+ 
+ /* Restrict the permissions of an Enclave Page Cache (EPC) page */
+ static inline int __emodpr(struct sgx_secinfo *secinfo, void *addr)
+ {
++	lockdep_assert_held(&sgx_lock_epc_srcu);
++
+ 	return __encls_ret_2(EMODPR, secinfo, addr);
+ }
+ 
+ /* Change the type of an Enclave Page Cache (EPC) page */
+ static inline int __emodt(struct sgx_secinfo *secinfo, void *addr)
+ {
++	lockdep_assert_held(&sgx_lock_epc_srcu);
++
+ 	return __encls_ret_2(EMODT, secinfo, addr);
+ }
+ 
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index 040eacb935aa..097edb8e413a 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -391,6 +391,8 @@ void sgx_direct_reclaim(void)
+ 
+ static int ksgxd(void *p)
+ {
++	int srcu_idx;
++
+ 	set_freezable();
+ 
+ 	/*
+@@ -411,9 +413,15 @@ static int ksgxd(void *p)
+ 				     kthread_should_stop() ||
+ 				     sgx_should_reclaim(SGX_NR_HIGH_PAGES));
+ 
++		srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
++		if (sgx_epc_is_locked())
++			goto maybe_resched;
++
+ 		if (sgx_should_reclaim(SGX_NR_HIGH_PAGES))
+ 			sgx_reclaim_pages();
+ 
++maybe_resched:
++		srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ 		cond_resched();
+ 	}
+ 
+-- 
+2.31.1
+

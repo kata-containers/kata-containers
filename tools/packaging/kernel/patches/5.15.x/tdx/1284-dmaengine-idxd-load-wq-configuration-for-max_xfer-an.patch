@@ -1,0 +1,31 @@
+From dd167c7ac0870262ff7d1e36a44cbb7520370f0d Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Fri, 8 Apr 2022 13:17:11 -0700
+Subject: [PATCH 1284/1418] dmaengine: idxd: load wq configuration for max_xfer
+ and max_batch
+
+Make sure the internal wq variables for max_xfer_size and max_batch_size
+are updated from the WQCFG when loading a read-only device configuration.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/device.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index 1272ae89bb91..8e2c79329a20 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -1207,6 +1207,9 @@ static int idxd_wq_load_config(struct idxd_wq *wq)
+ 	if (wq->wqcfg->mode_support)
+ 		set_bit(WQ_FLAG_MODE_1, &wq->flags);
+ 
++	wq->max_xfer_bytes = 1ULL << wq->wqcfg->max_xfer_shift;
++	wq->max_batch_size = 1ULL << wq->wqcfg->max_batch_shift;
++
+ 	for (i = 0; i < WQCFG_STRIDES(idxd); i++) {
+ 		wqcfg_offset = WQCFG_OFFSET(idxd, wq->id, i);
+ 		dev_dbg(dev, "WQ[%d][%d][%#x]: %#x\n", wq->id, i, wqcfg_offset, wq->wqcfg->bits[i]);
+-- 
+2.31.1
+

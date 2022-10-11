@@ -1,0 +1,239 @@
+From 9b0fb645bb8602d66fd394762d5fb583c973e9bc Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Tue, 21 Sep 2021 17:59:56 -0700
+Subject: [PATCH 0188/1418] x86/tdx: Add command line option to override device
+ allow list
+
+Currently, adding new device ID to TDX device allow list needs code
+changes and kernel update. For users with less requirements on security,
+such processes are unnecessary and complex. So, add support to extend the
+allow list via command line option.
+
+Since such an override is a security hole use kernel taint to notify
+users about it.
+
+Since the memory will not be initialized before command line parser,
+use static memory allocation for storing the command line allow list
+(cmd_allowed_nodes). Since the total memory required is small, static
+allocation is a simpler design.
+
+Current device filter design allows only the PCI device filter. Since
+command line override supports multiple bus types, extend the device
+filter design to support multiple bus types.
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ .../admin-guide/kernel-parameters.txt         |  11 ++
+ arch/x86/kernel/tdx-filter.c                  | 157 +++++++++++++++++-
+ 2 files changed, 165 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index 5906f1d33a19..8a047e86a72b 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -367,6 +367,17 @@
+ 	autoconf=	[IPV6]
+ 			See Documentation/networking/ipv6.rst.
+ 
++	authorize_allow_devs= [KNL]
++			Format: bus_name:dev_name
++			Override default authorization of given device.
++			Multiple devices can be specified in comma
++			separated list. Multiple bus/devices combinations
++			can be specified separated by semicolon. For example,
++			to allow vritio device and PCI device (Virtio NET),
++			use virtio:virtio0;pci:0x1af4:0x1000;. To allow all
++			devices in PCI bus use pci:ALL or to allow all bus
++			and devices use ALL:ALL.
++
+ 	show_lapic=	[APIC,X86] Advanced Programmable Interrupt Controller
+ 			Limit apic dumping. The parameter defines the maximal
+ 			number of local apics being dumped. Also it is possible
+diff --git a/arch/x86/kernel/tdx-filter.c b/arch/x86/kernel/tdx-filter.c
+index 534cc2cf5851..76519d74609c 100644
+--- a/arch/x86/kernel/tdx-filter.c
++++ b/arch/x86/kernel/tdx-filter.c
+@@ -14,6 +14,35 @@
+ #include <asm/tdx.h>
+ #include <asm/cmdline.h>
+ 
++#define CMDLINE_MAX_NODES		100
++#define CMDLINE_MAX_LEN			1000
++
++/*
++ * struct authorize_node - Device authorization node
++ *
++ * @bus: Name of the bus
++ * @dev_list: device allow list per bus device type (eg:
++ *            struct pci_device_id). If NULL, allow all
++ *            devices.
++ */
++struct authorize_node {
++	const char *bus;
++	void *dev_list;
++};
++
++/*
++ * Memory to store data passed via command line options
++ * authorize_allow_devs.
++ */
++static char cmd_authorized_devices[CMDLINE_MAX_LEN];
++static struct authorize_node cmd_allowed_nodes[CMDLINE_MAX_NODES];
++static struct pci_device_id cmd_pci_ids[CMDLINE_MAX_NODES];
++static int cmd_pci_nodes_len;
++static int cmd_allowed_nodes_len;
++
++/* Set true if authorize_allow_devs is used */
++static bool filter_overridden;
++
+ /*
+  * Allow list for PCI bus
+  *
+@@ -34,13 +63,130 @@ struct pci_device_id pci_allow_ids[] = {
+ 	{ 0, },
+ };
+ 
++static struct authorize_node allow_list[] = {
++	/* Allow devices in pci_allow_list in "pci" bus */
++	{ "pci", pci_allow_ids },
++};
++
++static bool authorized_node_match(struct device *dev,
++				  struct authorize_node *node)
++{
++	/* If bus matches "ALL" and dev_list is NULL, return true */
++	if (!strcmp(node->bus, "ALL") && !node->dev_list)
++		return true;
++
++	/*
++	 * Since next step involves bus specific comparison, make
++	 * sure the bus name matches with filter node. If not
++	 * return false.
++	 */
++	if (strcmp(node->bus, dev->bus->name))
++		return false;
++
++	/* If dev_list is NULL, allow all and return true */
++	if (!node->dev_list)
++		return true;
++
++	/*
++	 * Do bus specific device ID match. Currently only PCI
++	 * bus is supported.
++	 */
++	if (dev_is_pci(dev)) {
++		if (pci_match_id((struct pci_device_id *)node->dev_list,
++				 to_pci_dev(dev)))
++			return true;
++	}
++
++	return false;
++}
++
++static struct pci_device_id *parse_pci_id(char *ids)
++{
++	unsigned int subdevice = PCI_ANY_ID, class = 0, class_mask = 0;
++	unsigned int vendor, device, subvendor = PCI_ANY_ID;
++	char *p, *id;
++	int fields;
++
++	p = ids;
++	while ((id = strsep(&p, ","))) {
++		if (!strlen(id))
++			continue;
++		fields = sscanf(id, "%x:%x:%x:%x:%x:%x", &vendor, &device,
++				&subvendor, &subdevice, &class, &class_mask);
++		if (fields < 2)
++			continue;
++		cmd_pci_ids[cmd_pci_nodes_len].vendor = vendor;
++		cmd_pci_ids[cmd_pci_nodes_len++].device = device;
++	}
++
++	return cmd_pci_ids;
++}
++
++static void *parse_device_id(const char *bus, char *ids)
++{
++	if (!strcmp(ids, "ALL"))
++		return NULL;
++
++	if (!strcmp(bus, "pci"))
++		return parse_pci_id(ids);
++	else
++		return ids;
++}
++
++static __init void add_authorize_nodes(char *p)
++{
++	struct authorize_node *n;
++	int j = 0;
++	char *k;
++
++	while ((k = strsep(&p, ";")) != NULL) {
++		if (j >= CMDLINE_MAX_NODES) {
++			pr_err("Authorize nodes exceeds MAX allowed\n");
++			break;
++		}
++		n = &cmd_allowed_nodes[j++];
++		n->bus = strsep(&k, ":");
++		n->dev_list = parse_device_id(n->bus, k);
++	}
++
++	if (j)
++		cmd_allowed_nodes_len = j;
++}
++
++static __init int allowed_cmdline_setup(char *buf)
++{
++	if (strlen(buf) >= CMDLINE_MAX_LEN)
++		pr_warn("Authorized allowed devices list exceed %d chars\n",
++			CMDLINE_MAX_LEN);
++
++	strscpy(cmd_authorized_devices, buf, CMDLINE_MAX_LEN);
++
++	add_authorize_nodes(cmd_authorized_devices);
++
++	filter_overridden = true;
++
++	return 0;
++}
++__setup("authorize_allow_devs=", allowed_cmdline_setup);
++
+ bool tdx_guest_dev_authorized(struct device *dev)
+ {
+-	if (!dev_is_pci(dev))
++	int i;
++
++	if (!dev->bus)
+ 		return dev->authorized;
+ 
+-	if (pci_match_id(pci_allow_ids, to_pci_dev(dev)))
+-		return true;
++	/* Lookup arch allow list */
++	for (i = 0;  i < ARRAY_SIZE(allow_list); i++) {
++		if (authorized_node_match(dev, &allow_list[i]))
++			return true;
++	}
++
++	/* Lookup command line allow list */
++	for (i = 0; i < cmd_allowed_nodes_len; i++) {
++		if (authorized_node_match(dev, &cmd_allowed_nodes[i]))
++			return true;
++	}
+ 
+ 	return dev_default_authorization;
+ }
+@@ -52,5 +198,10 @@ void __init tdx_filter_init(void)
+ 
+ 	dev_default_authorization = false;
+ 
++	if (filter_overridden) {
++		add_taint(TAINT_CONF_NO_LOCKDOWN, LOCKDEP_STILL_OK);
++		pr_debug("Device filter is overridden\n");
++	}
++
+ 	pr_info("Enabled TDX guest device filter\n");
+ }
+-- 
+2.31.1
+

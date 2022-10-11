@@ -1,0 +1,47 @@
+From bd639b5624983b8a3588b0234b3ab8fa28cdda57 Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Sat, 27 Jun 2020 23:20:17 -0700
+Subject: [PATCH 0886/1418] vfio/type1: Get per-mdev fault_handler_data for
+ IOMMU-capable mdevs
+
+With the introduction of mdev, fault reporting is done at per PASID-dev
+granularity. This requires VFIO to get fault_handler_data from parent
+device and pass it to IOMMU driver, thus IOMMU driver could bind PASID
+with the fault_hanlder_data to fulfill the per PASID-dev granularity
+fault reporting rule.
+
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ drivers/vfio/vfio_iommu_type1.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/vfio/vfio_iommu_type1.c b/drivers/vfio/vfio_iommu_type1.c
+index 7f3e0948cf86..d4cd542a1f72 100644
+--- a/drivers/vfio/vfio_iommu_type1.c
++++ b/drivers/vfio/vfio_iommu_type1.c
+@@ -2731,14 +2731,20 @@ static int vfio_dev_bind_gpasid_fn(struct device *dev, void *data)
+ {
+ 	struct domain_capsule *dc = (struct domain_capsule *)data;
+ 	unsigned long arg = *(unsigned long *)dc->data;
++	struct mdev_device *mdev = to_mdev_device(dev);
+ 	struct device *iommu_device;
++	void *iommu_fault_data = NULL;
+ 
+ 	iommu_device = vfio_get_iommu_device(dc->group, dev);
+ 	if (!iommu_device)
+ 		return -EINVAL;
+ 
++	if (iommu_device != dev)
++		iommu_fault_data = mdev_get_iommu_fault_data(mdev);
++
+ 	return iommu_uapi_sva_bind_gpasid(dc->domain, iommu_device,
+-					  (void __user *)arg);
++					  (void __user *)arg,
++					  iommu_fault_data);
+ }
+ 
+ static int vfio_dev_unbind_gpasid_fn(struct device *dev, void *data)
+-- 
+2.31.1
+

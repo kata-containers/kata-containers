@@ -1,0 +1,61 @@
+From e30cff5bf71ff5a84cc2394b991c2d673fb758c3 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Wed, 15 Dec 2021 10:08:54 +0800
+Subject: [PATCH 0726/1418] *** HACK *** kvm/tdx: Load guest DR6 only when #DB
+ is intercepted by KVM
+
+KVM can get correct guest DR6 only when guest's #DB is
+intercepted, because some hardware feature modifies DR6
+when #DB is triggered. Unconditionally load DR6 for TD
+guest breaks some features in TD guest based on bits in
+DR6.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 10 +++++++++-
+ arch/x86/kvm/vmx/tdx.h |  1 +
+ 2 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 522f60e97db4..6841cdc75285 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -2455,6 +2455,12 @@ static void tdx_update_exception_bitmap(struct kvm_vcpu *vcpu)
+ 		verify_eb = td_vmcs_read32(tdx, EXCEPTION_BITMAP);
+ 		KVM_BUG_ON(verify_eb != new_eb, vcpu->kvm);
+ 	}
++
++	/*
++	 * We can only get correct guest DR6 when #DB is intercepted,
++	 * so set the the load_guest_dr6 falg to true here.
++	 */
++	tdx->load_guest_dr6 = true;
+ }
+ 
+ static void tdx_set_dr7(struct kvm_vcpu *vcpu, unsigned long val)
+@@ -2505,7 +2511,9 @@ static void tdx_load_guest_debug_regs(struct kvm_vcpu *vcpu)
+ 	td_dr_write64(tdx_vcpu, 1, vcpu->arch.eff_db[1]);
+ 	td_dr_write64(tdx_vcpu, 2, vcpu->arch.eff_db[2]);
+ 	td_dr_write64(tdx_vcpu, 3, vcpu->arch.eff_db[3]);
+-	td_dr_write64(tdx_vcpu, 6, vcpu->arch.dr6);
++
++	if (tdx_vcpu->load_guest_dr6)
++		td_dr_write64(tdx_vcpu, 6, vcpu->arch.dr6);
+ 
+ 	/*
+ 	 * Optimization:
+diff --git a/arch/x86/kvm/vmx/tdx.h b/arch/x86/kvm/vmx/tdx.h
+index 3fbe3e7b60e8..7897115f4156 100644
+--- a/arch/x86/kvm/vmx/tdx.h
++++ b/arch/x86/kvm/vmx/tdx.h
+@@ -124,6 +124,7 @@ struct vcpu_tdx {
+ 	bool guest_pmi_exit;
+ 	u64 msr_host_kernel_gs_base;
+ 	u64 guest_perf_global_ctrl;
++	bool load_guest_dr6;
+ };
+ 
+ struct tdx_capabilities {
+-- 
+2.31.1
+

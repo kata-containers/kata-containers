@@ -1,0 +1,124 @@
+From bacafe77ca586135f096099dff38d452c3080132 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 13 Oct 2021 16:55:31 +0200
+Subject: [PATCH 0054/1418] x86/fpu: Replace KVMs xstate component clearing
+
+In order to prepare for the support of dynamically enabled FPU features,
+move the clearing of xstate components to the FPU core code.
+
+No functional change.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Cc: kvm@vger.kernel.org
+Link: https://lkml.kernel.org/r/20211013145322.399567049@linutronix.de
+---
+ arch/x86/include/asm/fpu/api.h    |  1 +
+ arch/x86/include/asm/fpu/xstate.h |  1 -
+ arch/x86/kernel/fpu/xstate.c      | 12 +++++++++++-
+ arch/x86/kernel/fpu/xstate.h      |  2 ++
+ arch/x86/kvm/x86.c                | 14 +++++---------
+ 5 files changed, 19 insertions(+), 11 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/api.h b/arch/x86/include/asm/fpu/api.h
+index 5ac5e4596b53..a97cf3e5887b 100644
+--- a/arch/x86/include/asm/fpu/api.h
++++ b/arch/x86/include/asm/fpu/api.h
+@@ -132,6 +132,7 @@ DECLARE_PER_CPU(struct fpu *, fpu_fpregs_owner_ctx);
+ 
+ /* fpstate-related functions which are exported to KVM */
+ extern void fpu_init_fpstate_user(struct fpu *fpu);
++extern void fpstate_clear_xstate_component(struct fpstate *fps, unsigned int xfeature);
+ 
+ /* KVM specific functions */
+ extern void fpu_swap_kvm_fpu(struct fpu *save, struct fpu *rstor, u64 restore_mask);
+diff --git a/arch/x86/include/asm/fpu/xstate.h b/arch/x86/include/asm/fpu/xstate.h
+index b8cebc0ee420..fb329bbfe89f 100644
+--- a/arch/x86/include/asm/fpu/xstate.h
++++ b/arch/x86/include/asm/fpu/xstate.h
+@@ -128,7 +128,6 @@ extern u64 xstate_fx_sw_bytes[USER_XSTATE_FX_SW_WORDS];
+ extern void __init update_regset_xstate_info(unsigned int size,
+ 					     u64 xstate_mask);
+ 
+-void *get_xsave_addr(struct xregs_state *xsave, int xfeature_nr);
+ int xfeature_size(int xfeature_nr);
+ int copy_uabi_from_kernel_to_xstate(struct xregs_state *xsave, const void *kbuf);
+ int copy_sigframe_from_user_to_xstate(struct xregs_state *xsave, const void __user *ubuf);
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 937ad5b394ca..b1409a769ba5 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -908,7 +908,6 @@ void *get_xsave_addr(struct xregs_state *xsave, int xfeature_nr)
+ 
+ 	return __raw_xsave_addr(xsave, xfeature_nr);
+ }
+-EXPORT_SYMBOL_GPL(get_xsave_addr);
+ 
+ #ifdef CONFIG_ARCH_HAS_PKEYS
+ 
+@@ -1257,6 +1256,17 @@ void xrstors(struct xregs_state *xstate, u64 mask)
+ 	WARN_ON_ONCE(err);
+ }
+ 
++#if IS_ENABLED(CONFIG_KVM)
++void fpstate_clear_xstate_component(struct fpstate *fps, unsigned int xfeature)
++{
++	void *addr = get_xsave_addr(&fps->regs.xsave, xfeature);
++
++	if (addr)
++		memset(addr, 0, xstate_sizes[xfeature]);
++}
++EXPORT_SYMBOL_GPL(fpstate_clear_xstate_component);
++#endif
++
+ #ifdef CONFIG_PROC_PID_ARCH_STATUS
+ /*
+  * Report the amount of time elapsed in millisecond since last AVX512
+diff --git a/arch/x86/kernel/fpu/xstate.h b/arch/x86/kernel/fpu/xstate.h
+index bb6d7d298d2a..99f8cfec719d 100644
+--- a/arch/x86/kernel/fpu/xstate.h
++++ b/arch/x86/kernel/fpu/xstate.h
+@@ -21,6 +21,8 @@ extern void __copy_xstate_to_uabi_buf(struct membuf to, struct xregs_state *xsav
+ extern void fpu__init_cpu_xstate(void);
+ extern void fpu__init_system_xstate(void);
+ 
++extern void *get_xsave_addr(struct xregs_state *xsave, int xfeature_nr);
++
+ /* XSAVE/XRSTOR wrapper functions */
+ 
+ #ifdef CONFIG_X86_64
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index dfd5e198d2a1..07ce4c11f3fc 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -10730,7 +10730,7 @@ void kvm_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
+ 	vcpu->arch.apf.halted = false;
+ 
+ 	if (vcpu->arch.guest_fpu && kvm_mpx_supported()) {
+-		void *mpx_state_buffer;
++		struct fpstate *fpstate = vcpu->arch.guest_fpu->fpstate;
+ 
+ 		/*
+ 		 * To avoid have the INIT path from kvm_apic_has_events() that be
+@@ -10738,14 +10738,10 @@ void kvm_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
+ 		 */
+ 		if (init_event)
+ 			kvm_put_guest_fpu(vcpu);
+-		mpx_state_buffer = get_xsave_addr(&vcpu->arch.guest_fpu->state.xsave,
+-					XFEATURE_BNDREGS);
+-		if (mpx_state_buffer)
+-			memset(mpx_state_buffer, 0, sizeof(struct mpx_bndreg_state));
+-		mpx_state_buffer = get_xsave_addr(&vcpu->arch.guest_fpu->state.xsave,
+-					XFEATURE_BNDCSR);
+-		if (mpx_state_buffer)
+-			memset(mpx_state_buffer, 0, sizeof(struct mpx_bndcsr));
++
++		fpstate_clear_xstate_component(fpstate, XFEATURE_BNDREGS);
++		fpstate_clear_xstate_component(fpstate, XFEATURE_BNDCSR);
++
+ 		if (init_event)
+ 			kvm_load_guest_fpu(vcpu);
+ 	}
+-- 
+2.31.1
+

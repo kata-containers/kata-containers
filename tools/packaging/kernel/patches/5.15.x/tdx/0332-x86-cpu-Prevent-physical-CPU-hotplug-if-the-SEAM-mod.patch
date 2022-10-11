@@ -1,0 +1,84 @@
+From 78b4b287e9b4e51520af7b6c7ded9ceb34343ee7 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Wed, 29 Sep 2021 16:10:36 -0700
+Subject: [PATCH 0332/1418] x86/cpu: Prevent physical CPU hotplug if the SEAM
+ module has been loaded
+
+TDX (based on TDX module specification 344425-002US) doesn't support CPU
+hotplug.  If the SEAM module has been loaded, prohibit physical CPU
+hotplug.  Note that you can still logically online/offline CPUs.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/acpi/boot.c | 15 +++++++++++++++
+ arch/x86/kernel/apic/apic.c | 14 ++++++++++++++
+ 2 files changed, 29 insertions(+)
+
+diff --git a/arch/x86/kernel/acpi/boot.c b/arch/x86/kernel/acpi/boot.c
+index fa9178a6c588..4103397fc426 100644
+--- a/arch/x86/kernel/acpi/boot.c
++++ b/arch/x86/kernel/acpi/boot.c
+@@ -26,6 +26,7 @@
+ 
+ #include <asm/e820/api.h>
+ #include <asm/irqdomain.h>
++#include <asm/tdx_host.h>
+ #include <asm/pci_x86.h>
+ #include <asm/io_apic.h>
+ #include <asm/apic.h>
+@@ -844,6 +845,20 @@ int acpi_unmap_cpu(int cpu)
+ 	return (0);
+ }
+ EXPORT_SYMBOL(acpi_unmap_cpu);
++
++bool acpi_unmap_cpu_allowed(int cpu)
++{
++	/*
++	 * TDX (TDX module specification 344425-002US) doesn't support CPU
++	 * hotplug.
++	 */
++	if (boot_cpu_has(X86_FEATURE_TDX)) {
++		pr_info("trying to physically hot unplug CPU %d\n", cpu);
++		return false;
++	}
++	return true;
++}
++EXPORT_SYMBOL(acpi_unmap_cpu_allowed);
+ #endif				/* CONFIG_ACPI_HOTPLUG_CPU */
+ 
+ int acpi_register_ioapic(acpi_handle handle, u64 phys_addr, u32 gsi_base)
+diff --git a/arch/x86/kernel/apic/apic.c b/arch/x86/kernel/apic/apic.c
+index 42270c0638ad..8544e2d2b00e 100644
+--- a/arch/x86/kernel/apic/apic.c
++++ b/arch/x86/kernel/apic/apic.c
+@@ -42,6 +42,7 @@
+ #include <asm/perf_event.h>
+ #include <asm/x86_init.h>
+ #include <linux/atomic.h>
++#include <asm/tdx_host.h>
+ #include <asm/barrier.h>
+ #include <asm/mpspec.h>
+ #include <asm/i8259.h>
+@@ -2427,6 +2428,19 @@ int generic_processor_info(int apicid, int version)
+ 		return -ENODEV;
+ 	}
+ 
++	/*
++	 * TDX (TDX module specification 344425-002US) doesn't support CPU
++	 * hotplug.  Prevent physical CPU hotplug if SEAM module has been
++	 * loaded.  Because TDX module loading happens after CPU bitmap
++	 * initialization, it's guaranteed that in CPU bitmap initialization at
++	 * early boot phase, this is always false.
++	 */
++	if (boot_cpu_has(X86_FEATURE_TDX)) {
++		pr_warn("APIC: TDX doesn't support physical CPU hotplug. apicid 0x%x\n",
++			apicid);
++		return -EIO;
++	}
++
+ 	/*
+ 	 * If boot cpu has not been detected yet, then only allow upto
+ 	 * nr_cpu_ids - 1 processors and keep one slot free for boot cpu
+-- 
+2.31.1
+

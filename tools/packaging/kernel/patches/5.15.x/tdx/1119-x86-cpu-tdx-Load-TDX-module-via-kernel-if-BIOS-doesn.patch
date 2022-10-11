@@ -1,0 +1,71 @@
+From 04dc152200fcfacb95175fb839d6caa3970b31be Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Thu, 17 Feb 2022 15:29:23 +0800
+Subject: [PATCH 1119/1418] x86/cpu/tdx: Load TDX module via kernel if BIOS
+ doesn't
+
+Check if TDX module is already loaded and load it via kernel if not.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/p-seamldr.c |  5 +++++
+ arch/x86/kernel/cpu/tdx/p-seamldr.h |  1 +
+ arch/x86/kernel/cpu/tdx/tdx.c       | 14 +++++++++-----
+ 3 files changed, 15 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.c b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+index 6fae4f5e9858..5391e3e6e9af 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.c
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+@@ -484,6 +484,11 @@ int __init load_p_seamldr(void)
+ 	return 0;
+ }
+ 
++bool __init tdx_module_loaded(void)
++{
++	return !!p_seamldr_info->seam_ready;
++}
++
+ #ifdef CONFIG_SYSFS
+ 
+ static struct kobject *p_seamldr_kobj;
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.h b/arch/x86/kernel/cpu/tdx/p-seamldr.h
+index ba92b0565a26..303af3edaa5f 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.h
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.h
+@@ -120,5 +120,6 @@ int seamldr_install(phys_addr_t seamldr_params);
+ 
+ int __init p_seamldr_get_info(void);
+ int __init load_p_seamldr(void);
++bool __init tdx_module_loaded(void);
+ 
+ #endif /* _X86_TDX_P_SEAMLOADER_H */
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index cbba7b1f98b2..1dfcf516ade0 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -978,12 +978,16 @@ static int __init tdx_arch_init(void)
+ 	if (ret)
+ 		goto out;
+ 
+-	ret = tdx_load_module_boot();
+-	if (ret) {
+-		pr_info("Failed to load TDX module.\n");
+-		goto out;
++	if (!tdx_module_loaded()) {
++		pr_err("No TDX module loaded by BIOS.\n");
++
++		ret = tdx_load_module_boot();
++		if (ret) {
++			pr_info("Failed to load TDX module.\n");
++			goto out;
++		}
++		pr_info("Loaded TDX module via P-SEAMLDR.\n");
+ 	}
+-	pr_info("Loaded TDX module via P-SEAMLDR.\n");
+ 	set_tdx_module_state(TDX_MODULE_LOADED);
+ 
+ 	ret = tdx_init_system();
+-- 
+2.31.1
+

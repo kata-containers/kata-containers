@@ -1,0 +1,115 @@
+From 78bae389534f216d9bd23cc9fa1a60c38f8a9331 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Wed, 12 May 2021 11:35:13 -0700
+Subject: [PATCH 0127/1418] x86/tdx: Add TDX support to intel_cc_platform_has()
+
+cc_platform_has() can be used to check for specific active confidential
+computing attributes, like memory encryption. For Intel platform like
+Trusted Domain Extensions (TDX) guest has need for using this function
+to protect the TDX specific changes made in generic drivers.
+
+So add TDX guest support to intel_cc_platform_has().
+
+Also, since cc_platform_has() will be called from __startup64 before
+the kernel runs on its final text mapping. The compiler might decide to
+generate jump tables for the switch statement which doesn't work
+because the target addresses of the jumps are not mapped yet.
+
+Disable jump tables for cc_platform.o to avoid this.
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/Kconfig              |  1 +
+ arch/x86/kernel/Makefile      |  8 ++++++++
+ arch/x86/kernel/cc_platform.c | 12 ++++++++++--
+ include/linux/cc_platform.h   |  9 +++++++++
+ 4 files changed, 28 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index 7b3ca7df66ba..bd30b62dd44e 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -876,6 +876,7 @@ config INTEL_TDX_GUEST
+ 	depends on X86_64 && CPU_SUP_INTEL && PARAVIRT
+ 	depends on SECURITY
+ 	depends on X86_X2APIC
++	select ARCH_HAS_CC_PLATFORM
+ 	help
+ 	  Provide support for running in a trusted domain on Intel processors
+ 	  equipped with Trusted Domain Extensions. TDX is a Intel technology
+diff --git a/arch/x86/kernel/Makefile b/arch/x86/kernel/Makefile
+index 8c9a9214dd34..1c4effb23ffa 100644
+--- a/arch/x86/kernel/Makefile
++++ b/arch/x86/kernel/Makefile
+@@ -34,6 +34,14 @@ KASAN_SANITIZE_sev.o					:= n
+ KASAN_SANITIZE_cc_platform.o				:= n
+ KASAN_SANITIZE_tdx.o					:= n
+ 
++# cc_platform_has cannot be instrumented because it can be called
++# with invalid %gs. It also cannot use switch statements with jump
++# table because __startup64 can call it before running on the final
++# mapping
++#
++KCOV_INSTRUMENT_cc_platform.o := n
++CFLAGS_cc_platform.o += -fno-jump-tables
++
+ # With some compiler versions the generated code results in boot hangs, caused
+ # by several compilation units. To be safe, disable all instrumentation.
+ KCSAN_SANITIZE := n
+diff --git a/arch/x86/kernel/cc_platform.c b/arch/x86/kernel/cc_platform.c
+index 03bb2f343ddb..589c003d8954 100644
+--- a/arch/x86/kernel/cc_platform.c
++++ b/arch/x86/kernel/cc_platform.c
+@@ -11,12 +11,18 @@
+ #include <linux/cc_platform.h>
+ #include <linux/mem_encrypt.h>
+ 
++#include <asm/tdx.h>
+ #include <asm/processor.h>
+ 
+-static bool __maybe_unused intel_cc_platform_has(enum cc_attr attr)
++static bool intel_cc_platform_has(enum cc_attr attr)
+ {
+ #ifdef CONFIG_INTEL_TDX_GUEST
+-	return false;
++	switch (attr) {
++	case CC_ATTR_GUEST_TDX:
++		return is_tdx_guest();
++	default:
++		return false;
++	}
+ #else
+ 	return false;
+ #endif
+@@ -63,6 +69,8 @@ bool cc_platform_has(enum cc_attr attr)
+ {
+ 	if (sme_me_mask)
+ 		return amd_cc_platform_has(attr);
++	else if (is_tdx_guest())
++		return intel_cc_platform_has(attr);
+ 
+ 	return false;
+ }
+diff --git a/include/linux/cc_platform.h b/include/linux/cc_platform.h
+index a075b70b9a70..6124527a0423 100644
+--- a/include/linux/cc_platform.h
++++ b/include/linux/cc_platform.h
+@@ -61,6 +61,15 @@ enum cc_attr {
+ 	 * Examples include SEV-ES.
+ 	 */
+ 	CC_ATTR_GUEST_STATE_ENCRYPT,
++
++	/**
++	 * @CC_ATTR_GUEST_TDX: Trusted Domain Extension Support
++	 *
++	 * The platform/OS is running as a TDX guest/virtual machine.
++	 *
++	 * Examples include Intel TDX.
++	 */
++	CC_ATTR_GUEST_TDX,
+ };
+ 
+ #ifdef CONFIG_ARCH_HAS_CC_PLATFORM
+-- 
+2.31.1
+

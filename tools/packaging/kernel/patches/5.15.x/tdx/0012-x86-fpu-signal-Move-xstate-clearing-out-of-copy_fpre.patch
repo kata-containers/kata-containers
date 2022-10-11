@@ -1,0 +1,68 @@
+From d354b3f1fc18a0735374d5adb130c3230fd4c71d Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 8 Sep 2021 15:29:30 +0200
+Subject: [PATCH 0012/1418] x86/fpu/signal: Move xstate clearing out of
+ copy_fpregs_to_sigframe()
+
+When the direct saving of the FPU registers to the user space sigframe
+fails, copy_fpregs_to_sigframe() attempts to clear the user buffer.
+
+The most likely reason for such a fail is a page fault. As
+copy_fpregs_to_sigframe() is invoked with pagefaults disabled the chance
+that __clear_user() succeeds is minuscule.
+
+Move the clearing out into the caller which replaces the
+fault_in_pages_writeable() in that error handling path.
+
+The return value confusion will be cleaned up separately.
+
+Suggested-by: Al Viro <viro@zeniv.linux.org.uk>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20210908132525.679356300@linutronix.de
+---
+ arch/x86/kernel/fpu/signal.c | 18 ++++++------------
+ 1 file changed, 6 insertions(+), 12 deletions(-)
+
+diff --git a/arch/x86/kernel/fpu/signal.c b/arch/x86/kernel/fpu/signal.c
+index 91c1e68e5fca..d5d610ab7739 100644
+--- a/arch/x86/kernel/fpu/signal.c
++++ b/arch/x86/kernel/fpu/signal.c
+@@ -136,18 +136,12 @@ static inline int save_xstate_epilog(void __user *buf, int ia32_frame)
+ 
+ static inline int copy_fpregs_to_sigframe(struct xregs_state __user *buf)
+ {
+-	int err;
+-
+ 	if (use_xsave())
+-		err = xsave_to_user_sigframe(buf);
+-	else if (use_fxsr())
+-		err = fxsave_to_user_sigframe((struct fxregs_state __user *) buf);
++		return xsave_to_user_sigframe(buf);
++	if (use_fxsr())
++		return fxsave_to_user_sigframe((struct fxregs_state __user *) buf);
+ 	else
+-		err = fnsave_to_user_sigframe((struct fregs_state __user *) buf);
+-
+-	if (unlikely(err) && __clear_user(buf, fpu_user_xstate_size))
+-		err = -EFAULT;
+-	return err;
++		return fnsave_to_user_sigframe((struct fregs_state __user *) buf);
+ }
+ 
+ /*
+@@ -218,9 +212,9 @@ int copy_fpstate_to_sigframe(void __user *buf, void __user *buf_fx, int size)
+ 	fpregs_unlock();
+ 
+ 	if (ret) {
+-		if (!fault_in_pages_writeable(buf_fx, fpu_user_xstate_size))
++		if (!__clear_user(buf_fx, fpu_user_xstate_size))
+ 			goto retry;
+-		return -EFAULT;
++		return -1;
+ 	}
+ 
+ 	/* Save the fsave header for the 32-bit frames. */
+-- 
+2.31.1
+

@@ -1,0 +1,84 @@
+From 5286eabdc16d02f619134474afdbcd9ef6cd5dca Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Thu, 21 Oct 2021 15:55:11 -0700
+Subject: [PATCH 0090/1418] x86/fpu: Add basic helpers for dynamically enabled
+ features
+
+To allow building up the infrastructure required to support dynamically
+enabled FPU features, add:
+
+ - XFEATURES_MASK_DYNAMIC
+
+   This constant will hold xfeatures which can be dynamically enabled.
+
+ - fpu_state_size_dynamic()
+
+   A static branch for 64-bit and a simple 'return false' for 32-bit.
+
+   This helper allows to add dynamic-feature-specific changes to common
+   code which is shared between 32-bit and 64-bit without #ifdeffery.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Chang S. Bae <chang.seok.bae@intel.com>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211021225527.10184-8-chang.seok.bae@intel.com
+---
+ arch/x86/include/asm/fpu/xstate.h | 21 +++++++++++++++++++++
+ arch/x86/kernel/fpu/core.c        |  4 ++++
+ 2 files changed, 25 insertions(+)
+
+diff --git a/arch/x86/include/asm/fpu/xstate.h b/arch/x86/include/asm/fpu/xstate.h
+index 43ae89d4bcd2..cf285464eabe 100644
+--- a/arch/x86/include/asm/fpu/xstate.h
++++ b/arch/x86/include/asm/fpu/xstate.h
+@@ -43,6 +43,9 @@
+ #define XFEATURE_MASK_USER_RESTORE	\
+ 	(XFEATURE_MASK_USER_SUPPORTED & ~XFEATURE_MASK_PKRU)
+ 
++/* Features which are dynamically enabled for a process on request */
++#define XFEATURE_MASK_USER_DYNAMIC	0ULL
++
+ /* All currently supported supervisor features */
+ #define XFEATURE_MASK_SUPERVISOR_SUPPORTED (XFEATURE_MASK_PASID)
+ 
+@@ -96,4 +99,22 @@ int xfeature_size(int xfeature_nr);
+ void xsaves(struct xregs_state *xsave, u64 mask);
+ void xrstors(struct xregs_state *xsave, u64 mask);
+ 
++#ifdef CONFIG_X86_64
++DECLARE_STATIC_KEY_FALSE(__fpu_state_size_dynamic);
++#endif
++
++#ifdef CONFIG_X86_64
++DECLARE_STATIC_KEY_FALSE(__fpu_state_size_dynamic);
++
++static __always_inline __pure bool fpu_state_size_dynamic(void)
++{
++	return static_branch_unlikely(&__fpu_state_size_dynamic);
++}
++#else
++static __always_inline __pure bool fpu_state_size_dynamic(void)
++{
++	return false;
++}
++#endif
++
+ #endif
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index b05f6a3b2057..4018083c5b36 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -25,6 +25,10 @@
+ #define CREATE_TRACE_POINTS
+ #include <asm/trace/fpu.h>
+ 
++#ifdef CONFIG_X86_64
++DEFINE_STATIC_KEY_FALSE(__fpu_state_size_dynamic);
++#endif
++
+ /* The FPU state configuration data for kernel and user space */
+ struct fpu_state_config	fpu_kernel_cfg __ro_after_init;
+ struct fpu_state_config fpu_user_cfg __ro_after_init;
+-- 
+2.31.1
+

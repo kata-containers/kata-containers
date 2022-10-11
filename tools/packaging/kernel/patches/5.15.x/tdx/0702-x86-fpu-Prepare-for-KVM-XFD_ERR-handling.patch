@@ -1,0 +1,52 @@
+From c710c7840692767dd6c7a7af0a0125d96f52cb44 Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Thu, 4 Nov 2021 23:33:13 -0700
+Subject: [PATCH 0702/1418] x86/fpu: Prepare for KVM XFD_ERR handling
+
+Kernel doesn't need handle XFD_ERR switching because once #NM fault
+generates, the #NM handler clears it. While for KVM, it need switch
+XFD_ERR correctly because guest is possible to have a non-zero XFD_ERR
+at vmexit. When KVM swaps fpu between userspace VMM and guest, XFD_ERR
+need be switched accordingly. When KVM is preempted, XFD_ERR is possible
+to be changed by other thread, thus it need save guest XFD_ERR value when
+preemption and accordingly after back to KVM, it need restore guest
+non-zero XFD_ERR value before entering guest.
+
+Add xfd_err in fpu_guest structure to store guest value. Add xfd_err_dirty
+to indicate guest XFD_ERR was already saved and might be dirty now. This
+avoids fetching a dirty MSR next time. Use fpu_guest::xfd_err if
+fpu_guest::xfd_err_dirty is true.
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+---
+ arch/x86/include/asm/fpu/types.h | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/arch/x86/include/asm/fpu/types.h b/arch/x86/include/asm/fpu/types.h
+index 861cffca3209..dd20cabe8faf 100644
+--- a/arch/x86/include/asm/fpu/types.h
++++ b/arch/x86/include/asm/fpu/types.h
+@@ -527,6 +527,20 @@ struct fpu_guest {
+ 	 */
+ 	u64				realloc_request;
+ 
++	/*
++	 * @xfd_err:			Guest XFD_ERR used by KVM
++	 */
++	u64				xfd_err;
++
++	/*
++	 * @xfd_err_dirty:		Indicator for XFD_ERR is dirty
++	 *
++	 *				Set by KVM when it's preempted if
++	 *				guest XFD_ERR is non-zero. After
++	 *				that, XFD_ERR is dirty for KVM.
++	 */
++	bool				xfd_err_dirty;
++
+ 	/*
+ 	 * @fpstate:			Pointer to the allocated guest fpstate
+ 	 */
+-- 
+2.31.1
+

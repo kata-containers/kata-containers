@@ -1,0 +1,50 @@
+From a49adeb0f20651f7ab06c895cdffee040216bb62 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Wed, 22 Sep 2021 13:38:57 +0800
+Subject: [PATCH 0477/1418] KVM: TDX: Handle non machine check initiated SMI
+
+Unlike VMX, all the SMI in SEAM non-root mode causes TD exit to TDX
+module, and #SMI keeps pending and blocked. TDX module then checks the
+exit qualification. It's an MSMI (machine check initiated SMI) if bit 0
+is set, and TDX module will set non-recoverable bit in EXIT REASON.
+For non MSMI, the non-recoverable bit won't be set.
+
+Once it returns from TDX module via SEAMRET, #SMI is unblocked and
+delivered right away. It will be handled by SMM handlder transparently.
+
+For MSMI it's already hanlded in the case when non-recoverable bit is
+set.
+
+For non-MSMI SMIs, nothing needs to be done in KVM.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 010d0634c41f..ecbd47f1db4b 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -1728,6 +1728,18 @@ static int tdx_handle_exit(struct kvm_vcpu *vcpu,
+ 		return tdx_handle_dr(vcpu);
+ 	case EXIT_REASON_TRIPLE_FAULT:
+ 		return tdx_handle_triple_fault(vcpu);
++	case EXIT_REASON_OTHER_SMI:
++		/*
++		 * Unlike VMX, all the SMI in SEAM non-root mode (i.e. when
++		 * TD guest vcpu is running) will cause TD exit to TDX module,
++		 * then SEAMRET to KVM. Once it exits to KVM, SMI is delivered
++		 * and handled right away.
++		 *
++		 * - If it's an MSMI, it's handled above due to non_recoverable
++		 *   bit set.
++		 * - If it's not an MSMI, don't need to do anything here.
++		 */
++		return 1;
+ 	default:
+ 		break;
+ 	}
+-- 
+2.31.1
+

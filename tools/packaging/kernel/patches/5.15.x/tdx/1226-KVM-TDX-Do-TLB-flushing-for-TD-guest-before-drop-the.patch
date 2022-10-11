@@ -1,0 +1,43 @@
+From c765a92abd1ba849686ce66ac56f9fd082d24f5e Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Tue, 22 Mar 2022 17:42:44 +0800
+Subject: [PATCH 1226/1418] KVM: TDX: Do TLB flushing for TD guest before drop
+ the private page
+
+commit 92fbabbc7580 ("KVM: x86/mmu: Do TLB flushing when
+zap only leaf SPTEs") Fixed TLB flushing issue for legacy
+VM but missed TD guest, the forgot TLB flushing causes
+failed to remove the page in TDX module, even the ratio is
+small.
+
+Fixes: 92fbabbc7580 ("KVM: x86/mmu: Do TLB flushing when zap only leaf SPTEs")
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index ae709af87b36..db38b2ae27ea 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -6371,8 +6371,14 @@ static void kvm_mmu_zap_memslot(struct kvm *kvm, struct kvm_memory_slot *slot)
+ 	flush = slot_handle_level(kvm, slot, kvm_zap_rmapp, PG_LEVEL_4K,
+ 			  KVM_MAX_HUGEPAGE_LEVEL, true);
+ 	if (kvm->arch.gfn_shared_mask) {
+-		slot_handle_level(kvm, slot, kvm_drop_zapped_private_rmapp,
+-				  PG_LEVEL_4K, KVM_MAX_HUGEPAGE_LEVEL, false);
++		/*
++		 * TLB flushing is necessary before drop the private
++		 * pages
++		 */
++		if (flush)
++			kvm_flush_remote_tlbs(kvm);
++		flush = slot_handle_level(kvm, slot, kvm_drop_zapped_private_rmapp,
++					  PG_LEVEL_4K, KVM_MAX_HUGEPAGE_LEVEL, false);
+ 	}
+ 	write_unlock(&kvm->mmu_lock);
+ 
+-- 
+2.31.1
+

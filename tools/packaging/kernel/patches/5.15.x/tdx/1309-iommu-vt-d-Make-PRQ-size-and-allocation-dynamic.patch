@@ -1,0 +1,165 @@
+From 0af4e8ade8c2ba73720c6f55294e758119d2a5e5 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Tue, 19 Apr 2022 10:42:53 -0700
+Subject: [PATCH 1309/1418] iommu/vt-d: Make PRQ size and allocation dynamic
+
+To avoid the complexity of dealing with PRQ full, increase the
+size of PRQ queue and make the per device PRQ allocation adjustable
+for performance tuning.
+
+The current default PRQ allocation is 32 per dev, 128 per IOMMU.
+Each IOMMU could have IAX, DSA, and QAT, the total could exceed
+half of the IOMMU PRQ queue and causes queue full.
+
+This patch makes the default size never overflow and adjustable
+via cmdline options: intel_iommu=prq_size_32kb,
+intel_iommu=prs_allocation_64
+Or prs_allocation= for non power of 2 values.
+
+Signed-off-by: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/intel/iommu.c | 48 ++++++++++++++++++++++++++++++++++++-
+ drivers/iommu/intel/svm.c   | 12 +++++-----
+ 2 files changed, 53 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 981e53982b3d..58aaca25a849 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -52,6 +52,17 @@
+ 
+ #define ROOT_SIZE		VTD_PAGE_SIZE
+ #define CONTEXT_SIZE		VTD_PAGE_SIZE
++/* PRS_Allocation */
++static int prs_allocation = 32;
++
++/* PRQ_Size, use large enough size to avoid PRQ overflow, on SPR the sum of
++ * DSA, IAX/A, QAT = 512 + 256 + 64, round up to power of 2 is 1024.
++ * Since we process the PRQ once then move QH, we need to double that
++ * to 2048 entries. Each 4K page can hold 128 entries. So we need 64KB
++ * in total to prevent PRQ overflow in the worst case.
++ * For default 32 entries per dev,8 KB should be enough.
++ */
++int prq_size_page_order = 1;
+ 
+ #define IS_GFX_DEVICE(pdev) ((pdev->class >> 16) == PCI_BASE_CLASS_DISPLAY)
+ #define IS_USB_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_SERIAL_USB)
+@@ -476,6 +487,26 @@ static int __init intel_iommu_setup(char *str)
+ 		} else if  (!strncmp(str, "sm_off", 6)) {
+ 			pr_info("Intel-IOMMU: scalable mode disabled\n");
+ 			intel_iommu_sm = 0;
++		} else if (!strncmp(str, "prq_size_4kb", 12)) {
++			prq_size_page_order = 0;
++		} else if (!strncmp(str, "prq_size_8kb", 12)) {
++			prq_size_page_order = 1;
++		} else if (!strncmp(str, "prq_size_16kb", 13)) {
++			prq_size_page_order = 2;
++		} else if (!strncmp(str, "prq_size_32kb", 13)) {
++			prq_size_page_order = 3;
++		} else if (!strncmp(str, "prq_size_64kb", 13)) {
++			prq_size_page_order = 4;
++		} else if (!strncmp(str, "prs_allocation_32", 17)) {
++			prs_allocation = 32;
++		} else if (!strncmp(str, "prs_allocation_64", 17)) {
++			prs_allocation = 64;
++		} else if (!strncmp(str, "prs_allocation_128", 18)) {
++			prs_allocation = 128;
++		} else if (!strncmp(str, "prs_allocation_256", 18)) {
++			prs_allocation = 256;
++		} else if (!strncmp(str, "prs_allocation_512", 18)) {
++			prs_allocation = 512;
+ 		} else if (!strncmp(str, "tboot_noforce", 13)) {
+ 			pr_info("Intel-IOMMU: not forcing on after tboot. This could expose security risk for tboot\n");
+ 			intel_iommu_tboot_noforce = 1;
+@@ -495,6 +526,21 @@ static int __init intel_iommu_setup(char *str)
+ }
+ __setup("intel_iommu=", intel_iommu_setup);
+ 
++static int __init intel_prs_allocation_setup(char *str)
++{
++	if (!str)
++		return -EINVAL;
++
++	if (kstrtoint(str, 10, &prs_allocation) < 0)
++		pr_info("prs_allocation: wrong parameter %s %d\n", str, prs_allocation);
++
++
++	pr_info("prs_allocation set to %d\n", prs_allocation);
++
++	return 1;
++}
++__setup("prs_allocation=", intel_prs_allocation_setup);
++
+ static struct kmem_cache *iommu_domain_cache;
+ static struct kmem_cache *iommu_devinfo_cache;
+ 
+@@ -1573,7 +1619,7 @@ static void iommu_enable_dev_iotlb(struct device_domain_info *info)
+ 
+ 	if (info->pri_supported &&
+ 	    (info->pasid_enabled ? pci_prg_resp_pasid_required(pdev) : 1)  &&
+-	    !pci_reset_pri(pdev) && !pci_enable_pri(pdev, 32))
++	    !pci_reset_pri(pdev) && !pci_enable_pri(pdev, prs_allocation))
+ 		info->pri_enabled = 1;
+ #endif
+ 	if (info->ats_supported && pci_ats_page_aligned(pdev) &&
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index edafcc89e492..ba63f7c7b44f 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -27,14 +27,14 @@
+ static irqreturn_t prq_event_thread(int irq, void *d);
+ static void intel_svm_drain_prq(struct device *dev, u32 pasid);
+ 
+-#define PRQ_ORDER 0
++extern int prq_size_page_order;
+ 
+ int intel_svm_enable_prq(struct intel_iommu *iommu)
+ {
+ 	struct page *pages;
+ 	int irq, ret;
+ 
+-	pages = alloc_pages(GFP_KERNEL | __GFP_ZERO, PRQ_ORDER);
++	pages = alloc_pages(GFP_KERNEL | __GFP_ZERO, prq_size_page_order);
+ 	if (!pages) {
+ 		pr_warn("IOMMU: %s: Failed to allocate page request queue\n",
+ 			iommu->name);
+@@ -48,7 +48,7 @@ int intel_svm_enable_prq(struct intel_iommu *iommu)
+ 		       iommu->name);
+ 		ret = -EINVAL;
+ 	err:
+-		free_pages((unsigned long)iommu->prq, PRQ_ORDER);
++		free_pages((unsigned long)iommu->prq, prq_size_page_order);
+ 		iommu->prq = NULL;
+ 		return ret;
+ 	}
+@@ -67,7 +67,7 @@ int intel_svm_enable_prq(struct intel_iommu *iommu)
+ 	}
+ 	dmar_writeq(iommu->reg + DMAR_PQH_REG, 0ULL);
+ 	dmar_writeq(iommu->reg + DMAR_PQT_REG, 0ULL);
+-	dmar_writeq(iommu->reg + DMAR_PQA_REG, virt_to_phys(iommu->prq) | PRQ_ORDER);
++	dmar_writeq(iommu->reg + DMAR_PQA_REG, virt_to_phys(iommu->prq) | prq_size_page_order);
+ 
+ 	init_completion(&iommu->prq_complete);
+ 
+@@ -86,7 +86,7 @@ int intel_svm_finish_prq(struct intel_iommu *iommu)
+ 		iommu->pr_irq = 0;
+ 	}
+ 
+-	free_pages((unsigned long)iommu->prq, PRQ_ORDER);
++	free_pages((unsigned long)iommu->prq, prq_size_page_order);
+ 	iommu->prq = NULL;
+ 
+ 	return 0;
+@@ -876,7 +876,7 @@ struct page_req_dsc {
+ 	u64 priv_data[2];
+ };
+ 
+-#define PRQ_RING_MASK	((0x1000 << PRQ_ORDER) - 0x20)
++#define PRQ_RING_MASK	((0x1000 << prq_size_page_order) - 0x20)
+ 
+ static bool access_error(struct vm_area_struct *vma, struct page_req_dsc *req)
+ {
+-- 
+2.31.1
+

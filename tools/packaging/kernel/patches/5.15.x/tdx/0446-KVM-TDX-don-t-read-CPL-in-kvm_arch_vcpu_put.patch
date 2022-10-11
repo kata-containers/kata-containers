@@ -1,0 +1,30 @@
+From 4bfc838b6b03f7a620f6a758eda2feb5e7c11705 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Fri, 23 Jul 2021 01:28:26 -0700
+Subject: [PATCH 0446/1418] KVM: TDX: don't read CPL in kvm_arch_vcpu_put()
+
+guest_state_protected is in TDX case with debug enabled.  So add check VM
+type and if it's TDX, don't read CPL.  Otherwise it fails to retrieve CPL.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/x86.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index d1a3ddfde0e5..2f23b2366b14 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -4431,7 +4431,8 @@ void kvm_arch_vcpu_put(struct kvm_vcpu *vcpu)
+ {
+ 	int idx;
+ 
+-	if (vcpu->preempted && !vcpu->arch.guest_state_protected)
++	if (vcpu->preempted && !vcpu->arch.guest_state_protected &&
++	    vcpu->kvm->arch.vm_type != KVM_X86_TDX_VM)
+ 		vcpu->arch.preempted_in_kernel = !static_call(kvm_x86_get_cpl)(vcpu);
+ 
+ 	/*
+-- 
+2.31.1
+

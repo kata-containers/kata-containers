@@ -1,0 +1,40 @@
+From 9cc79188c9270ffc40d8ba9d781e52bfd199e834 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Wed, 30 Jun 2021 17:57:15 -0700
+Subject: [PATCH 0193/1418] x86/tdx: Disable AMD northbridges
+
+The AMD northbridges are detected by PCI-ID, which could be in theory
+faked by a malicious hypervisor. So, disable the northbridge scan for
+TDX guest. This code should never be needed in a VM guest anyways.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/amd_nb.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/x86/kernel/amd_nb.c b/arch/x86/kernel/amd_nb.c
+index c92c9c774c0e..4dd7f4eac40c 100644
+--- a/arch/x86/kernel/amd_nb.c
++++ b/arch/x86/kernel/amd_nb.c
+@@ -13,6 +13,7 @@
+ #include <linux/export.h>
+ #include <linux/spinlock.h>
+ #include <linux/pci_ids.h>
++#include <linux/cc_platform.h>
+ #include <asm/amd_nb.h>
+ 
+ #define PCI_DEVICE_ID_AMD_17H_ROOT	0x1450
+@@ -245,6 +246,9 @@ int amd_cache_northbridges(void)
+ 	if (amd_northbridges.num)
+ 		return 0;
+ 
++	if (cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
++		return 0;
++
+ 	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
+ 		root_ids = hygon_root_ids;
+ 		misc_ids = hygon_nb_misc_ids;
+-- 
+2.31.1
+

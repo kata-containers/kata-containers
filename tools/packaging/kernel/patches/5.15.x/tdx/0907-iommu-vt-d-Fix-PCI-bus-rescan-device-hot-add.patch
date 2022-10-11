@@ -1,0 +1,42 @@
+From 057172ad1db98248ce20d95df8536df254d93381 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Thu, 13 Jan 2022 09:41:14 -0800
+Subject: [PATCH 0907/1418] iommu/vt-d: Fix PCI bus rescan device hot add
+
+During PCI bus rescan, adding new devices involve two notifiers.
+1. dmar_pci_bus_notifier()
+2. iommu_bus_notifier()
+The current code sets #1 as low priority (INT_MIN) which resulted in #2
+being invoked first. The result is that struct device pointer cannot be
+found in DRHD search for the new device's DMAR/IOMMU. Subsequently, the
+device is put under the "catch-all" IOMMU instead of the correct one.
+
+This could cause system hang when device TLB invalidation is sent to the
+wrong IOMMU. Invalidation timeout error or hard lockup can be observed.
+
+This patch fixes the issue by setting a higher priority for
+dmar_pci_bus_notifier. DRHD search for a new device will find the
+correct IOMMU.
+
+Reported-by: Zhang, Bernice <bernice.zhang@intel.com>
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/intel/dmar.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/intel/dmar.c b/drivers/iommu/intel/dmar.c
+index 750389b66268..6f0d53fd3a4a 100644
+--- a/drivers/iommu/intel/dmar.c
++++ b/drivers/iommu/intel/dmar.c
+@@ -388,7 +388,7 @@ static int dmar_pci_bus_notifier(struct notifier_block *nb,
+ 
+ static struct notifier_block dmar_pci_bus_nb = {
+ 	.notifier_call = dmar_pci_bus_notifier,
+-	.priority = INT_MIN,
++	.priority = INT_MAX,
+ };
+ 
+ static struct dmar_drhd_unit *
+-- 
+2.31.1
+

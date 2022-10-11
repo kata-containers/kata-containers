@@ -1,0 +1,26 @@
+From a4f2dc9737a44b7630fbc16f82960b91bcbd6291 Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Thu, 24 Mar 2022 15:31:38 +0800
+Subject: [PATCH 1261/1418] x86/cpu/tdx: fix the uninit var in do_tddebugconfig
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/debugfs.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/debugfs.c b/arch/x86/kernel/cpu/tdx/debugfs.c
+index 3c5fbb69824c..f16f87ffd8ed 100644
+--- a/arch/x86/kernel/cpu/tdx/debugfs.c
++++ b/arch/x86/kernel/cpu/tdx/debugfs.c
+@@ -68,7 +68,7 @@
+ static inline int do_tddebugconfig(u64 subleaf, u64 param1, u64 param2)
+ {
+ 	u64 err;
+-	int ret;
++	int ret = -EOPNOTSUPP;
+ 
+ 	if (is_debug_seamcall_available) {
+ 		preempt_disable();
+-- 
+2.31.1
+

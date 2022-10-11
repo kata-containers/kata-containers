@@ -1,0 +1,33 @@
+From d0831607c863d0f29336bea302a524e0aa612140 Mon Sep 17 00:00:00 2001
+From: Trond Myklebust <trond.myklebust@hammerspace.com>
+Date: Thu, 7 Apr 2022 14:10:23 -0400
+Subject: [PATCH 1350/1418] SUNRPC: svc_tcp_sendmsg() should handle errors from
+ xdr_alloc_bvec()
+
+The allocation is done with GFP_KERNEL, but it could still fail in a low
+memory situation.
+
+Fixes: 4a85a6a3320b ("SUNRPC: Handle TCP socket sends with kernel_sendpage() again")
+Signed-off-by: Trond Myklebust <trond.myklebust@hammerspace.com>
+---
+ net/sunrpc/svcsock.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/net/sunrpc/svcsock.c b/net/sunrpc/svcsock.c
+index 478f857cdaed..6ea3d87e1147 100644
+--- a/net/sunrpc/svcsock.c
++++ b/net/sunrpc/svcsock.c
+@@ -1096,7 +1096,9 @@ static int svc_tcp_sendmsg(struct socket *sock, struct xdr_buf *xdr,
+ 	int ret;
+ 
+ 	*sentp = 0;
+-	xdr_alloc_bvec(xdr, GFP_KERNEL);
++	ret = xdr_alloc_bvec(xdr, GFP_KERNEL);
++	if (ret < 0)
++		return ret;
+ 
+ 	ret = kernel_sendmsg(sock, &msg, &rm, 1, rm.iov_len);
+ 	if (ret < 0)
+-- 
+2.31.1
+

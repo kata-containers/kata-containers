@@ -1,0 +1,94 @@
+From 1c819ec12bba9f189c1eb8bd661639ff68024737 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 15 Oct 2021 03:16:38 +0200
+Subject: [PATCH 0047/1418] x86/fpu: Mop up the internal.h leftovers
+
+Move the global interfaces to api.h and the rest into the core.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211015011539.948837194@linutronix.de
+---
+ arch/x86/include/asm/fpu/api.h      | 10 ++++++++++
+ arch/x86/include/asm/fpu/internal.h | 18 ------------------
+ arch/x86/kernel/fpu/init.c          |  1 +
+ arch/x86/kernel/fpu/xstate.h        |  3 +++
+ 4 files changed, 14 insertions(+), 18 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/api.h b/arch/x86/include/asm/fpu/api.h
+index 17893af0880c..c691f079a56e 100644
+--- a/arch/x86/include/asm/fpu/api.h
++++ b/arch/x86/include/asm/fpu/api.h
+@@ -110,6 +110,16 @@ extern int cpu_has_xfeatures(u64 xfeatures_mask, const char **feature_name);
+ 
+ static inline void update_pasid(void) { }
+ 
++/* Trap handling */
++extern int  fpu__exception_code(struct fpu *fpu, int trap_nr);
++extern void fpu_sync_fpstate(struct fpu *fpu);
++
++/* Boot, hotplug and resume */
++extern void fpu__init_cpu(void);
++extern void fpu__init_system(struct cpuinfo_x86 *c);
++extern void fpu__init_check_bugs(void);
++extern void fpu__resume_cpu(void);
++
+ #ifdef CONFIG_MATH_EMULATION
+ extern void fpstate_init_soft(struct swregs_state *soft);
+ #else
+diff --git a/arch/x86/include/asm/fpu/internal.h b/arch/x86/include/asm/fpu/internal.h
+index 8f97d3e375de..8df83e887ff6 100644
+--- a/arch/x86/include/asm/fpu/internal.h
++++ b/arch/x86/include/asm/fpu/internal.h
+@@ -23,22 +23,4 @@
+ #include <asm/cpufeature.h>
+ #include <asm/trace/fpu.h>
+ 
+-/*
+- * High level FPU state handling functions:
+- */
+-extern void fpu__clear_user_states(struct fpu *fpu);
+-extern int  fpu__exception_code(struct fpu *fpu, int trap_nr);
+-
+-extern void fpu_sync_fpstate(struct fpu *fpu);
+-
+-/*
+- * Boot time FPU initialization functions:
+- */
+-extern void fpu__init_cpu(void);
+-extern void fpu__init_system_xstate(void);
+-extern void fpu__init_cpu_xstate(void);
+-extern void fpu__init_system(struct cpuinfo_x86 *c);
+-extern void fpu__init_check_bugs(void);
+-extern void fpu__resume_cpu(void);
+-
+ #endif /* _ASM_X86_FPU_INTERNAL_H */
+diff --git a/arch/x86/kernel/fpu/init.c b/arch/x86/kernel/fpu/init.c
+index e77084a6ae7c..d420d29e58be 100644
+--- a/arch/x86/kernel/fpu/init.c
++++ b/arch/x86/kernel/fpu/init.c
+@@ -12,6 +12,7 @@
+ 
+ #include "internal.h"
+ #include "legacy.h"
++#include "xstate.h"
+ 
+ /*
+  * Initialize the registers found in all CPUs, CR0 and CR4:
+diff --git a/arch/x86/kernel/fpu/xstate.h b/arch/x86/kernel/fpu/xstate.h
+index ae61baa97682..bb6d7d298d2a 100644
+--- a/arch/x86/kernel/fpu/xstate.h
++++ b/arch/x86/kernel/fpu/xstate.h
+@@ -18,6 +18,9 @@ static inline void xstate_init_xcomp_bv(struct xregs_state *xsave, u64 mask)
+ extern void __copy_xstate_to_uabi_buf(struct membuf to, struct xregs_state *xsave,
+ 				      u32 pkru_val, enum xstate_copy_mode copy_mode);
+ 
++extern void fpu__init_cpu_xstate(void);
++extern void fpu__init_system_xstate(void);
++
+ /* XSAVE/XRSTOR wrapper functions */
+ 
+ #ifdef CONFIG_X86_64
+-- 
+2.31.1
+

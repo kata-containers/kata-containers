@@ -1,0 +1,52 @@
+From 352bc818952e164bd0d063a9b9de0aa68c7ad575 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Thu, 17 Sep 2020 23:50:13 -0700
+Subject: [PATCH 0361/1418] KVM: x86: Add per-VM flag to disable direct IRQ
+ injection
+
+Add a flag to disable IRQ injection, which is not supported by TDX.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h | 1 +
+ arch/x86/kvm/x86.c              | 4 +++-
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 9cdf0f965f8c..fe9da11f4a03 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1146,6 +1146,7 @@ struct kvm_arch {
+ 	bool exception_payload_enabled;
+ 
+ 	bool bus_lock_detection_enabled;
++	bool irq_injection_disallowed;
+ 	/*
+ 	 * If exit_on_emulation_error is set, and the in-kernel instruction
+ 	 * emulator fails to emulate an instruction, allow userspace
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 3226e071c190..eedd8a79734c 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -4397,7 +4397,8 @@ static int kvm_vcpu_ready_for_interrupt_injection(struct kvm_vcpu *vcpu)
+ static int kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu,
+ 				    struct kvm_interrupt *irq)
+ {
+-	if (irq->irq >= KVM_NR_INTERRUPTS)
++	if (irq->irq >= KVM_NR_INTERRUPTS ||
++	    vcpu->kvm->arch.irq_injection_disallowed)
+ 		return -EINVAL;
+ 
+ 	if (!irqchip_in_kernel(vcpu->kvm)) {
+@@ -8730,6 +8731,7 @@ static int emulator_fix_hypercall(struct x86_emulate_ctxt *ctxt)
+ static int dm_request_for_irq_injection(struct kvm_vcpu *vcpu)
+ {
+ 	return vcpu->run->request_interrupt_window &&
++	       !vcpu->kvm->arch.irq_injection_disallowed &&
+ 		likely(!pic_in_kernel(vcpu->kvm));
+ }
+ 
+-- 
+2.31.1
+

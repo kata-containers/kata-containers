@@ -1,0 +1,45 @@
+From fa4b60c09e8a6d980fdde2117c797aaec87368cc Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Fri, 13 Mar 2020 12:03:26 -0700
+Subject: [PATCH 0425/1418] *** HACK *** KVM: selftests: Move KVM_DEV_PATH
+ define to public kvm_util.h
+
+Move KVM_DEV_PATH to the public kvm_util.h so that it can be used by
+tests.  The default KVM device path isn't exactly a secret.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ tools/testing/selftests/kvm/include/kvm_util.h         | 2 ++
+ tools/testing/selftests/kvm/x86_64/mmio_warning_test.c | 2 +-
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/tools/testing/selftests/kvm/include/kvm_util.h b/tools/testing/selftests/kvm/include/kvm_util.h
+index 010b59b13917..b49bf53cdacc 100644
+--- a/tools/testing/selftests/kvm/include/kvm_util.h
++++ b/tools/testing/selftests/kvm/include/kvm_util.h
+@@ -28,6 +28,8 @@ struct kvm_vm;
+ typedef uint64_t vm_paddr_t; /* Virtual Machine (Guest) physical address */
+ typedef uint64_t vm_vaddr_t; /* Virtual Machine (Guest) virtual address */
+ 
++#define KVM_DEV_PATH		"/dev/kvm"
++
+ /* Minimum allocated guest virtual and physical addresses */
+ #define KVM_UTIL_MIN_VADDR		0x2000
+ #define KVM_GUEST_PAGE_TABLE_MIN_PADDR	0x180000
+diff --git a/tools/testing/selftests/kvm/x86_64/mmio_warning_test.c b/tools/testing/selftests/kvm/x86_64/mmio_warning_test.c
+index 8039e1eff938..09807ddad343 100644
+--- a/tools/testing/selftests/kvm/x86_64/mmio_warning_test.c
++++ b/tools/testing/selftests/kvm/x86_64/mmio_warning_test.c
+@@ -57,7 +57,7 @@ void test(void)
+ 	struct kvm_run *run;
+ 	struct thread_context tc;
+ 
+-	kvm = open("/dev/kvm", O_RDWR);
++	kvm = open(KVM_DEV_PATH, O_RDWR);
+ 	TEST_ASSERT(kvm != -1, "failed to open /dev/kvm");
+ 	kvmvm = ioctl(kvm, KVM_CREATE_VM, 0);
+ 	TEST_ASSERT(kvmvm != -1, "KVM_CREATE_VM failed");
+-- 
+2.31.1
+

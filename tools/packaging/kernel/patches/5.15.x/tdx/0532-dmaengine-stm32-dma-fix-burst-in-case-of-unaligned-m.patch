@@ -1,0 +1,62 @@
+From fa0a79e9477a2e105adf9a20f8abad7477225b3d Mon Sep 17 00:00:00 2001
+From: Amelie Delaunay <amelie.delaunay@foss.st.com>
+Date: Mon, 11 Oct 2021 11:42:59 +0200
+Subject: [PATCH 0532/1418] dmaengine: stm32-dma: fix burst in case of
+ unaligned memory address
+
+Theorically, address pointers used by STM32 DMA must be chosen so as to
+ensure that all transfers within a burst block are aligned on the address
+boundary equal to the size of the transfer.
+If this is always the case for peripheral addresses on STM32, it is not for
+memory addresses if the user doesn't respect this alignment constraint.
+To avoid a weird behavior of the DMA controller in this case (no error
+triggered but data are not transferred as expected), force no burst.
+
+Signed-off-by: Amelie Delaunay <amelie.delaunay@foss.st.com>
+Link: https://lore.kernel.org/r/20211011094259.315023-4-amelie.delaunay@foss.st.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/stm32-dma.c | 20 ++++++++++++++++----
+ 1 file changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/dma/stm32-dma.c b/drivers/dma/stm32-dma.c
+index 6e4ef44941ef..2283c500f4ce 100644
+--- a/drivers/dma/stm32-dma.c
++++ b/drivers/dma/stm32-dma.c
+@@ -753,8 +753,14 @@ static int stm32_dma_set_xfer_param(struct stm32_dma_chan *chan,
+ 		if (src_bus_width < 0)
+ 			return src_bus_width;
+ 
+-		/* Set memory burst size */
+-		src_maxburst = STM32_DMA_MAX_BURST;
++		/*
++		 * Set memory burst size - burst not possible if address is not aligned on
++		 * the address boundary equal to the size of the transfer
++		 */
++		if (buf_addr % buf_len)
++			src_maxburst = 1;
++		else
++			src_maxburst = STM32_DMA_MAX_BURST;
+ 		src_best_burst = stm32_dma_get_best_burst(buf_len,
+ 							  src_maxburst,
+ 							  fifoth,
+@@ -803,8 +809,14 @@ static int stm32_dma_set_xfer_param(struct stm32_dma_chan *chan,
+ 		if (dst_bus_width < 0)
+ 			return dst_bus_width;
+ 
+-		/* Set memory burst size */
+-		dst_maxburst = STM32_DMA_MAX_BURST;
++		/*
++		 * Set memory burst size - burst not possible if address is not aligned on
++		 * the address boundary equal to the size of the transfer
++		 */
++		if (buf_addr % buf_len)
++			dst_maxburst = 1;
++		else
++			dst_maxburst = STM32_DMA_MAX_BURST;
+ 		dst_best_burst = stm32_dma_get_best_burst(buf_len,
+ 							  dst_maxburst,
+ 							  fifoth,
+-- 
+2.31.1
+

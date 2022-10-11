@@ -1,0 +1,91 @@
+From eea47e003422e269fd97a20ca928ef63786739e0 Mon Sep 17 00:00:00 2001
+From: Robert Hoo <robert.hu@linux.intel.com>
+Date: Tue, 23 Mar 2021 08:48:19 +0800
+Subject: [PATCH 0254/1418] x86/cpu: Add new VMX feature, Tertiary VM-Execution
+ control
+
+New VMX capability MSR IA32_VMX_PROCBASED_CTLS3 conresponse to this new
+VM-Execution control field. And it is 64bit allow-1 semantics, not like
+previous capability MSRs 32bit allow-0 and 32bit allow-1. So with Tertiary
+VM-Execution control field introduced, 2 vmx_feature leaves are introduced,
+TERTIARY_CTLS_LOW and TERTIARY_CTLS_HIGH.
+
+Signed-off-by: Robert Hoo <robert.hu@linux.intel.com>
+Signed-off-by: Zeng Guang <guang.zeng@intel.com>
+Reviewed-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/include/asm/msr-index.h   | 1 +
+ arch/x86/include/asm/vmxfeatures.h | 3 ++-
+ arch/x86/kernel/cpu/feat_ctl.c     | 9 ++++++++-
+ 3 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/msr-index.h b/arch/x86/include/asm/msr-index.h
+index 01e2650b9585..4914de76ea51 100644
+--- a/arch/x86/include/asm/msr-index.h
++++ b/arch/x86/include/asm/msr-index.h
+@@ -921,6 +921,7 @@
+ #define MSR_IA32_VMX_TRUE_EXIT_CTLS      0x0000048f
+ #define MSR_IA32_VMX_TRUE_ENTRY_CTLS     0x00000490
+ #define MSR_IA32_VMX_VMFUNC             0x00000491
++#define MSR_IA32_VMX_PROCBASED_CTLS3	0x00000492
+ 
+ /* VMX_BASIC bits and bitmasks */
+ #define VMX_BASIC_VMCS_SIZE_SHIFT	32
+diff --git a/arch/x86/include/asm/vmxfeatures.h b/arch/x86/include/asm/vmxfeatures.h
+index d9a74681a77d..ff20776dc83b 100644
+--- a/arch/x86/include/asm/vmxfeatures.h
++++ b/arch/x86/include/asm/vmxfeatures.h
+@@ -5,7 +5,7 @@
+ /*
+  * Defines VMX CPU feature bits
+  */
+-#define NVMXINTS			3 /* N 32-bit words worth of info */
++#define NVMXINTS			5 /* N 32-bit words worth of info */
+ 
+ /*
+  * Note: If the comment begins with a quoted string, that string is used
+@@ -43,6 +43,7 @@
+ #define VMX_FEATURE_RDTSC_EXITING	( 1*32+ 12) /* "" VM-Exit on RDTSC */
+ #define VMX_FEATURE_CR3_LOAD_EXITING	( 1*32+ 15) /* "" VM-Exit on writes to CR3 */
+ #define VMX_FEATURE_CR3_STORE_EXITING	( 1*32+ 16) /* "" VM-Exit on reads from CR3 */
++#define VMX_FEATURE_TERTIARY_CONTROLS	( 1*32+ 17) /* "" Enable Tertiary VM-Execution Controls */
+ #define VMX_FEATURE_CR8_LOAD_EXITING	( 1*32+ 19) /* "" VM-Exit on writes to CR8 */
+ #define VMX_FEATURE_CR8_STORE_EXITING	( 1*32+ 20) /* "" VM-Exit on reads from CR8 */
+ #define VMX_FEATURE_VIRTUAL_TPR		( 1*32+ 21) /* "vtpr" TPR virtualization, a.k.a. TPR shadow */
+diff --git a/arch/x86/kernel/cpu/feat_ctl.c b/arch/x86/kernel/cpu/feat_ctl.c
+index da696eb4821a..993697e71854 100644
+--- a/arch/x86/kernel/cpu/feat_ctl.c
++++ b/arch/x86/kernel/cpu/feat_ctl.c
+@@ -15,6 +15,8 @@ enum vmx_feature_leafs {
+ 	MISC_FEATURES = 0,
+ 	PRIMARY_CTLS,
+ 	SECONDARY_CTLS,
++	TERTIARY_CTLS_LOW,
++	TERTIARY_CTLS_HIGH,
+ 	NR_VMX_FEATURE_WORDS,
+ };
+ 
+@@ -22,7 +24,7 @@ enum vmx_feature_leafs {
+ 
+ static void init_vmx_capabilities(struct cpuinfo_x86 *c)
+ {
+-	u32 supported, funcs, ept, vpid, ign;
++	u32 supported, funcs, ept, vpid, ign, low, high;
+ 
+ 	BUILD_BUG_ON(NVMXINTS != NR_VMX_FEATURE_WORDS);
+ 
+@@ -42,6 +44,11 @@ static void init_vmx_capabilities(struct cpuinfo_x86 *c)
+ 	rdmsr_safe(MSR_IA32_VMX_PROCBASED_CTLS2, &ign, &supported);
+ 	c->vmx_capability[SECONDARY_CTLS] = supported;
+ 
++	/* All 64 bits of tertiary controls MSR are allowed-1 settings. */
++	rdmsr_safe(MSR_IA32_VMX_PROCBASED_CTLS3, &low, &high);
++	c->vmx_capability[TERTIARY_CTLS_LOW] = low;
++	c->vmx_capability[TERTIARY_CTLS_HIGH] = high;
++
+ 	rdmsr(MSR_IA32_VMX_PINBASED_CTLS, ign, supported);
+ 	rdmsr_safe(MSR_IA32_VMX_VMFUNC, &ign, &funcs);
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,90 @@
+From ba00a40f978d531ed6a3b9bbe0bf407048e8167b Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Wed, 30 Jun 2021 13:30:06 +0800
+Subject: [PATCH 0448/1418] *** HACK *** KVM: TDX: Check if DEBUG_TRACE and
+ NON_ARCH SEAMCALL available
+
+DEBUG_TRACE related SEAMCALL and NON-ARCH SEAMCALL are Intel internal
+debugging purpose SEAMCALLs. They are supported only with specific TDX
+module builds.
+
+Since there is no (architectural) way to determine if they are available or
+not, try them unconditionally to detect the availability.
+
+If DEBUG TRACE related SEAMCALL is not available, there's no need to
+expose debug fs entries for configuring debug trace stuffs.
+
+Originally-from: Isaku Yamahata <isaku.yamahata@intel.com>
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c     |  2 +-
+ arch/x86/kvm/vmx/tdx_ops.h | 30 ++++++++++++++++++++++++------
+ 2 files changed, 25 insertions(+), 7 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index ff077193c033..5789196c31a0 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -2526,7 +2526,7 @@ static int __init tdx_debugfs_init(void)
+ {
+ 	int ret = 0;
+ #ifdef CONFIG_DEBUG_FS
+-	if (!boot_cpu_has(X86_FEATURE_TDX))
++	if (!boot_cpu_has(X86_FEATURE_TDX) || !is_debug_seamcall_available)
+ 		return 0;
+ 
+ 	ret = -ENOMEM;
+diff --git a/arch/x86/kvm/vmx/tdx_ops.h b/arch/x86/kvm/vmx/tdx_ops.h
+index b72e2a4b7c68..fe60a8f2fc16 100644
+--- a/arch/x86/kvm/vmx/tdx_ops.h
++++ b/arch/x86/kvm/vmx/tdx_ops.h
+@@ -7,6 +7,8 @@
+ #include <asm/asm.h>
+ #include <asm/kvm_host.h>
+ #include <asm/cacheflush.h>
++#include <asm/tdx_errno.h>
++#include <asm/tdx_host.h>
+ 
+ #include "seamcall.h"
+ 
+@@ -224,15 +226,31 @@ static inline void tdh_trace_seamcalls(u64 level)
+ {
+ 	u64 err;
+ 
+-	err = tddebugconfig(DEBUGCONFIG_SET_TRACE_LEVEL, level, 0);
+-	if (err)
+-		pr_seamcall_error(TDDEBUGCONFIG, err, NULL);
++	if (is_debug_seamcall_available) {
++		err = tddebugconfig(DEBUGCONFIG_SET_TRACE_LEVEL, level, 0);
++		if (err == TDX_OPERAND_INVALID) {
++			pr_warn("TDX module doesn't support DEBUG TRACE SEAMCALL API\n");
++			is_debug_seamcall_available = false;
++		} else if (err) {
++			pr_seamcall_error(TDDEBUGCONFIG, err, NULL);
++		}
++	}
+ }
+ 
+-static inline u64 tdxmode(bool intercept_vmexits, u64 intercept_bitmap)
++static inline void tdxmode(bool intercept_vmexits, u64 intercept_bitmap)
+ {
+-	return seamcall(TDXMODE, intercept_vmexits, intercept_bitmap,
+-			0, 0, 0, NULL);
++	u64 err;
++
++	if (is_nonarch_seamcall_available) {
++		err = seamcall(TDXMODE, intercept_vmexits, intercept_bitmap,
++			       0, 0, 0, NULL);
++		if (err == TDX_OPERAND_INVALID) {
++			pr_warn("TDX module doesn't support NON-ARCH SEAMCALL API\n");
++			is_nonarch_seamcall_available = false;
++		} else if (err) {
++			pr_seamcall_error(TDXMODE, err, NULL);
++		}
++	}
+ }
+ 
+ #endif /* __KVM_X86_TDX_OPS_H */
+-- 
+2.31.1
+

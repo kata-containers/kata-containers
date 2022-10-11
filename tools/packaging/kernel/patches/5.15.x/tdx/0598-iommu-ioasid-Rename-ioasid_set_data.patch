@@ -1,0 +1,103 @@
+From cd4bb960d2a46ea07e85eec58ebc9662a4655252 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Wed, 19 Aug 2020 11:18:37 -0700
+Subject: [PATCH 0598/1418] iommu/ioasid: Rename ioasid_set_data()
+
+Rename ioasid_set_data() to ioasid_attach_data() to avoid confusion with
+struct ioasid_set. ioasid_set is a group of IOASIDs that share a common
+token.
+
+Reviewed-by: Jean-Philippe Brucker <jean-philippe@linaro.org>
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/intel/svm.c | 6 +++---
+ drivers/iommu/ioasid.c    | 6 +++---
+ include/linux/ioasid.h    | 4 ++--
+ 3 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index 5b5d69b04fcc..1f7488c73b7f 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -398,7 +398,7 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain, struct device *dev,
+ 			svm->gpasid = data->gpasid;
+ 			svm->flags |= SVM_FLAG_GUEST_PASID;
+ 		}
+-		pasid_private_add(data->hpasid, svm);
++		ioasid_attach_data(data->hpasid, svm);
+ 		INIT_LIST_HEAD_RCU(&svm->devs);
+ 		mmput(svm->mm);
+ 	}
+@@ -452,7 +452,7 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain, struct device *dev,
+ 	list_add_rcu(&sdev->list, &svm->devs);
+  out:
+ 	if (!IS_ERR_OR_NULL(svm) && list_empty(&svm->devs)) {
+-		pasid_private_remove(data->hpasid);
++		ioasid_attach_data(data->hpasid, NULL);
+ 		kfree(svm);
+ 	}
+ 
+@@ -495,7 +495,7 @@ int intel_svm_unbind_gpasid(struct device *dev, u32 pasid)
+ 				 * the unbind, IOMMU driver will get notified
+ 				 * and perform cleanup.
+ 				 */
+-				pasid_private_remove(pasid);
++				ioasid_attach_data(pasid, NULL);
+ 				kfree(svm);
+ 			}
+ 		}
+diff --git a/drivers/iommu/ioasid.c b/drivers/iommu/ioasid.c
+index 50ee27bbd04e..eeadf4586e0a 100644
+--- a/drivers/iommu/ioasid.c
++++ b/drivers/iommu/ioasid.c
+@@ -259,14 +259,14 @@ void ioasid_unregister_allocator(struct ioasid_allocator_ops *ops)
+ EXPORT_SYMBOL_GPL(ioasid_unregister_allocator);
+ 
+ /**
+- * ioasid_set_data - Set private data for an allocated ioasid
++ * ioasid_attach_data - Set private data for an allocated ioasid
+  * @ioasid: the ID to set data
+  * @data:   the private data
+  *
+  * For IOASID that is already allocated, private data can be set
+  * via this API. Future lookup can be done via ioasid_find.
+  */
+-int ioasid_set_data(ioasid_t ioasid, void *data)
++int ioasid_attach_data(ioasid_t ioasid, void *data)
+ {
+ 	struct ioasid_data *ioasid_data;
+ 	int ret = 0;
+@@ -288,7 +288,7 @@ int ioasid_set_data(ioasid_t ioasid, void *data)
+ 
+ 	return ret;
+ }
+-EXPORT_SYMBOL_GPL(ioasid_set_data);
++EXPORT_SYMBOL_GPL(ioasid_attach_data);
+ 
+ /**
+  * ioasid_alloc - Allocate an IOASID
+diff --git a/include/linux/ioasid.h b/include/linux/ioasid.h
+index e9dacd4b9f6b..60ea279802b8 100644
+--- a/include/linux/ioasid.h
++++ b/include/linux/ioasid.h
+@@ -40,7 +40,7 @@ void *ioasid_find(struct ioasid_set *set, ioasid_t ioasid,
+ 		  bool (*getter)(void *));
+ int ioasid_register_allocator(struct ioasid_allocator_ops *allocator);
+ void ioasid_unregister_allocator(struct ioasid_allocator_ops *allocator);
+-int ioasid_set_data(ioasid_t ioasid, void *data);
++int ioasid_attach_data(ioasid_t ioasid, void *data);
+ 
+ #else /* !CONFIG_IOASID */
+ static inline ioasid_t ioasid_alloc(struct ioasid_set *set, ioasid_t min,
+@@ -73,7 +73,7 @@ static inline void ioasid_unregister_allocator(struct ioasid_allocator_ops *allo
+ {
+ }
+ 
+-static inline int ioasid_set_data(ioasid_t ioasid, void *data)
++static inline int ioasid_attach_data(ioasid_t ioasid, void *data)
+ {
+ 	return -ENOTSUPP;
+ }
+-- 
+2.31.1
+

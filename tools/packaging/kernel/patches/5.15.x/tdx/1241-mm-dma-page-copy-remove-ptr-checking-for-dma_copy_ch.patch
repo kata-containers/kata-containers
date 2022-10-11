@@ -1,0 +1,32 @@
+From 2ea302f56580fc9de55b6738df52b0f8069c8efe Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Thu, 24 Mar 2022 15:54:31 -0700
+Subject: [PATCH 1241/1418] mm: dma page copy: remove ptr checking for
+ dma_copy_chan
+
+Given that dma_copy_chan ptr has already been verified and used, there's no
+need to check if it is valid in error exit path.
+
+Cc: Jiangbo Wu <jiangbo.wu@intel.com>
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ mm/dma_page_copy.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/mm/dma_page_copy.c b/mm/dma_page_copy.c
+index 31a335634782..a3740e2b362d 100644
+--- a/mm/dma_page_copy.c
++++ b/mm/dma_page_copy.c
+@@ -66,8 +66,7 @@ static int __dma_page_copy_sg(struct scatterlist *src, struct scatterlist *dst,
+ 		dma_unmap_sg(dev, src, nr_sgs, DMA_TO_DEVICE);
+ 	if (nr_sgd)
+ 		dma_unmap_sg(dev, dst, nr_sgd, DMA_FROM_DEVICE);
+-	if (dma_copy_chan)
+-		dma_release_channel(dma_copy_chan);
++	dma_release_channel(dma_copy_chan);
+ 	return err;
+ }
+ 
+-- 
+2.31.1
+

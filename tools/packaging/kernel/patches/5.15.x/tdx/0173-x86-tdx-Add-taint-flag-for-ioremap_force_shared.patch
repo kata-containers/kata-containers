@@ -1,0 +1,33 @@
+From f031d1488db85ba791472c4e0c69c53adf445808 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Mon, 30 Aug 2021 17:07:28 -0700
+Subject: [PATCH 0173/1418] x86/tdx: Add taint flag for ioremap_force_shared
+
+If user forces all drivers to use ioremap_host_shared (including unhardened
+drivers), it will make the platform less secure. So use kernel taint to
+notify about it.
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/mm/ioremap.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/mm/ioremap.c b/arch/x86/mm/ioremap.c
+index d0d2bf5116bc..e017ac6a5e31 100644
+--- a/arch/x86/mm/ioremap.c
++++ b/arch/x86/mm/ioremap.c
+@@ -861,8 +861,10 @@ void __init early_ioremap_init(void)
+ 
+ 	/* Parse cmdline params for ioremap_force_shared */
+ 	if (cmdline_find_option_bool(boot_command_line,
+-				     "ioremap_force_shared"))
++				     "ioremap_force_shared")) {
+ 		ioremap_force_shared = 1;
++		add_taint(TAINT_CONF_NO_LOCKDOWN, LOCKDEP_STILL_OK);
++	}
+ 
+ 	early_ioremap_setup();
+ 
+-- 
+2.31.1
+

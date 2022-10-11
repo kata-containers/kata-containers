@@ -1,0 +1,187 @@
+From 980dba081dd1451aaceb86d21ffd4a9eaa7956f7 Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Tue, 20 Jul 2021 14:14:27 -0700
+Subject: [PATCH 1205/1418] memremap_pages: Add memremap.pks_fault_mode
+
+When PKS protections for PMEM are enabled the kernel may capture stray
+writes, or it may capture false positive access violations. An example
+of a false positive access violation is a code path that neglects to
+call kmap_{atomic,local_page}, but is otherwise a valid access. In the
+false positive scenario there is no actual risk to data integrity, but
+the kernel still needs to make a decision as to whether to report the
+access violation and continue, or treat the violation as fatal. That
+policy decision is captured in a new pks_fault_mode kernel parameter.
+
+2 modes are available:
+
+	'relaxed' (default) -- WARN_ONCE, removed the protections, and
+	continuing to operate.
+
+	'strict' -- Stop kernel execution via fault.  This is the most
+	protective of the PMEM memory but may be undesirable in some
+	configurations.
+
+NOTE: There was some debate about if a 3rd mode called 'silent' should
+be available.  'silent' would be the same as 'relaxed' but not print any
+output.  While 'silent' is nice for admins to reduce console/log output
+it would result in less motivation to fix invalid access to the
+protected pmem pages.  Therefore, 'silent' is left out.
+
+NOTE: The __param_check macro requires a type to correctly verify the
+values passed as the module parameter.  Therefore a typedef is made of
+the pks_fault_modes and the checkpatch warning regarding new typedefs is
+ignored.
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ .../admin-guide/kernel-parameters.txt         | 12 ++++
+ arch/x86/mm/pkeys.c                           |  4 ++
+ include/linux/mm.h                            |  3 +
+ mm/memremap.c                                 | 65 +++++++++++++++++++
+ 4 files changed, 84 insertions(+)
+
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index 83cf6c1b77f8..07b233c62877 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -4145,6 +4145,18 @@
+ 	pirq=		[SMP,APIC] Manual mp-table setup
+ 			See Documentation/x86/i386/IO-APIC.rst.
+ 
++	memremap.pks_fault_mode=	[X86] Control the behavior of page map
++			protection violations.
++			(depends on CONFIG_DEVMAP_ACCESS_PROTECTION)
++
++			Format: { relaxed | strict }
++
++			relaxed - Print a warning, disable the protection and
++				  continue execution.
++			strict - Stop kernel execution via fault
++
++			default: relaxed
++
+ 	plip=		[PPT,NET] Parallel port network link
+ 			Format: { parport<nr> | timid | 0 }
+ 			See also Documentation/admin-guide/parport.rst.
+diff --git a/arch/x86/mm/pkeys.c b/arch/x86/mm/pkeys.c
+index 8dfe3be563d8..21c4707ddee4 100644
+--- a/arch/x86/mm/pkeys.c
++++ b/arch/x86/mm/pkeys.c
+@@ -8,6 +8,7 @@
+ #include <linux/pkeys.h>                /* PKEY_*                       */
+ #include <linux/pks.h>
+ #include <linux/pks-keys.h>
++#include <linux/mm.h>                   /* fault callback               */
+ #include <uapi/asm-generic/mman-common.h>
+ 
+ #include <asm/cpufeature.h>             /* boot_cpu_has, ...            */
+@@ -249,6 +250,9 @@ static const pks_key_callback pks_key_callbacks[PKS_KEY_MAX] = {
+ #ifdef CONFIG_PKS_TEST
+ 	[PKS_KEY_TEST]		= pks_test_fault_callback,
+ #endif
++#ifdef CONFIG_DEVMAP_ACCESS_PROTECTION
++	[PKS_KEY_PGMAP_PROTECTION]   = pgmap_pks_fault_callback,
++#endif
+ };
+ 
+ #else /* CONFIG_PKS_TEST_ALL_KEYS */
+diff --git a/include/linux/mm.h b/include/linux/mm.h
+index acdfdb459ed1..95306a7d54de 100644
+--- a/include/linux/mm.h
++++ b/include/linux/mm.h
+@@ -1264,6 +1264,9 @@ static inline void pgmap_set_noaccess(struct page *page)
+ 	__pgmap_set_noaccess(page->pgmap);
+ }
+ 
++bool pgmap_pks_fault_callback(struct pt_regs *regs, unsigned long address,
++			      bool write);
++
+ #else
+ 
+ static inline void __pgmap_set_readwrite(struct dev_pagemap *pgmap) { }
+diff --git a/mm/memremap.c b/mm/memremap.c
+index 2aba447c0ad8..6b34394319fc 100644
+--- a/mm/memremap.c
++++ b/mm/memremap.c
+@@ -13,6 +13,8 @@
+ #include <linux/wait_bit.h>
+ #include <linux/xarray.h>
+ 
++#include <uapi/asm-generic/mman-common.h>
++
+ static DEFINE_XARRAY(pgmap_array);
+ 
+ /*
+@@ -95,6 +97,69 @@ static void devmap_protection_disable(void)
+ 	static_branch_dec(&dev_pgmap_protection_static_key);
+ }
+ 
++typedef enum {
++	PKS_MODE_STRICT  = 0,
++	PKS_MODE_RELAXED = 1,
++} pks_fault_modes;
++
++pks_fault_modes pks_fault_mode = PKS_MODE_RELAXED;
++
++static int param_set_pks_fault_mode(const char *val, const struct kernel_param *kp)
++{
++	int ret = -EINVAL;
++
++	if (sysfs_streq(val, "relaxed")) {
++		pks_fault_mode = PKS_MODE_RELAXED;
++		ret = 0;
++	} else if (sysfs_streq(val, "strict")) {
++		pks_fault_mode = PKS_MODE_STRICT;
++		ret = 0;
++	}
++
++	return ret;
++}
++
++static int param_get_pks_fault_mode(char *buffer, const struct kernel_param *kp)
++{
++	int ret;
++
++	switch (pks_fault_mode) {
++	case PKS_MODE_STRICT:
++		ret = sysfs_emit(buffer, "strict\n");
++		break;
++	case PKS_MODE_RELAXED:
++		ret = sysfs_emit(buffer, "relaxed\n");
++		break;
++	default:
++		ret = sysfs_emit(buffer, "<unknown>\n");
++		break;
++	}
++
++	return ret;
++}
++
++static const struct kernel_param_ops param_ops_pks_fault_modes = {
++	.set = param_set_pks_fault_mode,
++	.get = param_get_pks_fault_mode,
++};
++
++#define param_check_pks_fault_modes(name, p) \
++	__param_check(name, p, pks_fault_modes)
++module_param(pks_fault_mode, pks_fault_modes, 0644);
++
++bool pgmap_pks_fault_callback(struct pt_regs *regs, unsigned long address,
++			      bool write)
++{
++	/* In strict mode just let the fault handler oops */
++	if (pks_fault_mode == PKS_MODE_STRICT)
++		return false;
++
++	WARN_ONCE(1, "Page map protection being disabled");
++	pks_update_exception(regs, PKS_KEY_PGMAP_PROTECTION, PKEY_READ_WRITE);
++	return true;
++}
++EXPORT_SYMBOL_GPL(pgmap_pks_fault_callback);
++
+ void __pgmap_set_readwrite(struct dev_pagemap *pgmap)
+ {
+ 	if (!current->pgmap_prot_count++)
+-- 
+2.31.1
+

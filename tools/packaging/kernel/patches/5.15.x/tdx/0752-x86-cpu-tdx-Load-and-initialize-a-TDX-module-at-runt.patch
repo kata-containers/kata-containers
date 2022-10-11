@@ -1,0 +1,72 @@
+From defaa17007bdec4e3ea4062577f3bb1372d1849d Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Tue, 16 Nov 2021 15:05:38 +0800
+Subject: [PATCH 0752/1418] x86/cpu/tdx: Load and initialize a TDX module at
+ runtime
+
+Reuse existing functions to load a TDX module, do system-wise and
+per-cpu initialization, print TDX module information and configure
+TDMRs/PAMTs.
+
+Compared with loading and initialization at boot time, configuring leaders
+in packages are skipped as CPU topology doesn't change so no need to
+re-configure them. TDMRs/PAMTs are not re-computed because they can
+be reused in most cases. Even in rare cases, kernel can get a pre-defined
+error on configuring TDMRs and aborts TDX module update.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx.c | 37 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 37 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 71063ec2a1ac..ed95ee8e9cdb 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -1473,6 +1473,43 @@ int tdx_load_module_late(void)
+ 	return ret;
+ }
+ 
++int tdx_module_reload(void)
++{
++	int ret, cpu;
++
++	cpus_read_lock();
++	ret = tdx_load_module_late();
++	if (ret)
++		goto unlock;
++
++	ret = tdx_init_system();
++	if (ret)
++		goto unlock;
++
++	ret = tdx_get_system_info();
++	if (ret)
++		goto unlock;
++
++	ret = __tdx_init_module();
++	if (ret)
++		goto unlock;
++
++	/* Reset to default values so that their support will be re-probed */
++	is_nonarch_seamcall_available = true;
++	is_debug_seamcall_available = true;
++
++	pr_info("Successfully initialized TDX module\n");
++	set_tdx_module_state(TDX_MODULE_INITIALIZED);
++
++	setup_force_cpu_cap(X86_FEATURE_TDX);
++	for_each_online_cpu(cpu)
++		set_cpu_cap(&cpu_data(cpu), X86_FEATURE_TDX);
++
++unlock:
++	cpus_read_unlock();
++	return ret;
++}
++
+ static int __init tdx_module_sysfs_init(void)
+ {
+ 	int ret = 0;
+-- 
+2.31.1
+

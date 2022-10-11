@@ -1,0 +1,85 @@
+From 804747f352a048d375aea404f3a46c993f15d3e5 Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Thu, 11 Nov 2021 21:46:48 -0800
+Subject: [PATCH 0701/1418] kvm: x86: Add reallocate handling at XSETBV
+ interception
+
+KVM detects the dynamic feature request by intercepting XFD and XCR0,
+and uses the reallocation mechanism to dynamically reallocate fpstate
+for vcpu. When guest XCR0[i]=1 and XFD[i]=0, guest is possible to use
+the dynamic features in next vmenter, so KVM need reallocate
+guest_fpu::fpstate to enable the features. In such case, KVM bounces
+to userspace an to do reallocate in kvm_put_guest_fpu(). If the
+reallocation failed, KVM relies on the userspace for handling error
+cases. Once the vcpu comes back to KVM, it's assumed that the
+reallocation request was successfully handled, and KVM continues to
+run guest.
+
+Meanwhile, KVM sets passthrough for XFD. With lazy passthrough of XFD
+MSR, we can avoid unnecessary save/restore of the MSR until the guest
+really requires and is allowed to use.
+
+Add the reallocation handling at XSETBV interception handler. Define a
+new exit reason for XSETBV to let userspace handle XCR0-caused
+reallocation case.
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+---
+ arch/x86/kvm/x86.c       | 21 +++++++++++++++++++++
+ include/uapi/linux/kvm.h |  1 +
+ 2 files changed, 22 insertions(+)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 8293d13f558d..b13f5ef395ad 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -1033,6 +1033,18 @@ void kvm_set_xfd_passthrough(struct kvm_vcpu *vcpu)
+ 		static_call(kvm_x86_set_xfd_passthrough)(vcpu);
+ }
+ 
++static int complete_emulated_xsetbv(struct kvm_vcpu *vcpu)
++{
++	return kvm_skip_emulated_instruction(vcpu);
++}
++
++static void kvm_xsetbv_user_space(struct kvm_vcpu *vcpu, u32 exit_reason,
++				  int (*completion)(struct kvm_vcpu *vcpu))
++{
++	vcpu->run->exit_reason = exit_reason;
++	vcpu->arch.complete_userspace_io = completion;
++}
++
+ static int __kvm_set_xcr(struct kvm_vcpu *vcpu, u32 index, u64 xcr)
+ {
+ 	u64 xcr0 = xcr;
+@@ -1080,6 +1092,15 @@ int kvm_emulate_xsetbv(struct kvm_vcpu *vcpu)
+ 		kvm_inject_gp(vcpu, 0);
+ 		return 1;
+ 	}
++	if (guest_cpuid_has(vcpu, X86_FEATURE_XFD)) {
++		if (kvm_guest_realloc_fpstate(vcpu, vcpu->arch.guest_fpu.fpstate->xfd)) {
++			kvm_set_xfd_passthrough(vcpu);
++			/* Bounce to user space */
++			kvm_xsetbv_user_space(vcpu, KVM_EXIT_X86_XSETBV,
++					      complete_emulated_xsetbv);
++			return 0;
++		}
++	}
+ 
+ 	return kvm_skip_emulated_instruction(vcpu);
+ }
+diff --git a/include/uapi/linux/kvm.h b/include/uapi/linux/kvm.h
+index 65bb9d1c513b..0eba5167f1fd 100644
+--- a/include/uapi/linux/kvm.h
++++ b/include/uapi/linux/kvm.h
+@@ -324,6 +324,7 @@ struct kvm_tdx_exit {
+ #define KVM_EXIT_X86_BUS_LOCK     33
+ #define KVM_EXIT_XEN              34
+ #define KVM_EXIT_TDX              35
++#define KVM_EXIT_X86_XSETBV       36
+ 
+ /* For KVM_EXIT_INTERNAL_ERROR */
+ /* Emulate instruction failed. */
+-- 
+2.31.1
+

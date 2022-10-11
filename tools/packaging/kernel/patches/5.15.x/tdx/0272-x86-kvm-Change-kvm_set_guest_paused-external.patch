@@ -1,0 +1,60 @@
+From c20963b39e9b443662e463371ba6a104576015dc Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Thu, 14 Oct 2021 14:19:28 +0800
+Subject: [PATCH 0272/1418] x86/kvm: Change kvm_set_guest_paused external
+
+kvm_set_guest_paused will prevent soft lockup in guest when guest is
+resumed after paused by hyperviosr.
+
+KVM guest with SGX enabled will be paused by KVM when SGX CPUSVN
+update process is executing. Since guest is paused by KVM, rather
+than userspace, QEMU's QEMU_CLOCK_VIRTUAL is not stopped. Then,
+if CPUSVN update takes too long, there might be soft lockup after
+guest is resumed.
+
+To avoid soft lockup aforementioned, it requires to call
+kvm_set_guest_paused before resume vcpus. So, make it external
+to allow more flows can make use of it, such as SGX CPUSVN update.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h | 1 +
+ arch/x86/kvm/x86.c              | 3 ++-
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 32f300dade5e..6fa974dee55d 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1932,6 +1932,7 @@ static inline int kvm_cpu_get_apicid(int mps_cpu)
+ 	(*(type *)((buf) + (offset) - 0x7e00))
+ 
+ int kvm_cpu_dirty_log_size(void);
++extern int kvm_set_guest_paused(struct kvm_vcpu *vcpu);
+ 
+ int alloc_all_memslots_rmaps(struct kvm *kvm);
+ 
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 2686f2edb47c..f0314e056510 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -4766,7 +4766,7 @@ static int kvm_vcpu_ioctl_x86_set_xcrs(struct kvm_vcpu *vcpu,
+  * EINVAL is returned when the host attempts to set the flag for a guest that
+  * does not support pv clocks.
+  */
+-static int kvm_set_guest_paused(struct kvm_vcpu *vcpu)
++int kvm_set_guest_paused(struct kvm_vcpu *vcpu)
+ {
+ 	if (!vcpu->arch.pv_time_enabled)
+ 		return -EINVAL;
+@@ -4774,6 +4774,7 @@ static int kvm_set_guest_paused(struct kvm_vcpu *vcpu)
+ 	kvm_make_request(KVM_REQ_CLOCK_UPDATE, vcpu);
+ 	return 0;
+ }
++EXPORT_SYMBOL(kvm_set_guest_paused);
+ 
+ static int kvm_vcpu_ioctl_enable_cap(struct kvm_vcpu *vcpu,
+ 				     struct kvm_enable_cap *cap)
+-- 
+2.31.1
+

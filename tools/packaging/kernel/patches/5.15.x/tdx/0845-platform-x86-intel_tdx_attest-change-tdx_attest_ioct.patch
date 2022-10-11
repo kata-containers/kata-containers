@@ -1,0 +1,113 @@
+From dee69d6a12392db0c6883a0d700f582b4ebf8c07 Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Tue, 23 Nov 2021 04:16:27 -0500
+Subject: [PATCH 0845/1418] platform/x86: intel_tdx_attest: change
+ tdx_attest_ioctl TDX_CMD_GEN_QUOTE ioctl interface
+
+The input parameter of TDX_CMD_GEN_QUOTE ioctl is changed to the struct
+tdx_gen_quote, which contains the user pointer of a message buffer and its
+buffer size. Copy the message buffer as the parameter of
+tdvmcall[GetQuote] to host VMM.
+
+Upon receiving the notify event, the overridden data is already saved in
+shared message buffer. Copy it back to userspace.
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ .../platform/x86/intel/tdx/intel_tdx_attest.c | 30 +++++++++++++++----
+ 1 file changed, 24 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+index 7a697ab1390f..116d48344def 100644
+--- a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
++++ b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+@@ -30,6 +30,8 @@
+ 
+ /* Used in Quote memory allocation */
+ #define QUOTE_SIZE			(2 * PAGE_SIZE)
++/* Used in Get Quote request memory allocation */
++#define GET_QUOTE_MAX_SIZE		(4 * PAGE_SIZE)
+ /* Get Quote timeout in msec */
+ #define GET_QUOTE_TIMEOUT		(5000)
+ 
+@@ -46,6 +48,11 @@ static void *tdreport_data;
+ /* DMA handle used to allocate and free tdquote DMA buffer */
+ dma_addr_t tdquote_dma_handle;
+ 
++struct tdx_gen_quote {
++	void *buf __user;
++	size_t len;
++};
++
+ static void attestation_callback_handler(void)
+ {
+ 	complete(&attestation_done);
+@@ -57,6 +64,7 @@ static long tdx_attest_ioctl(struct file *file, unsigned int cmd,
+ 	void __user *argp = (void __user *)arg;
+ 	long ret = 0;
+ 	u64 rtmr;
++	struct tdx_gen_quote tdquote_req;
+ 
+ 	mutex_lock(&attestation_lock);
+ 
+@@ -78,8 +86,20 @@ static long tdx_attest_ioctl(struct file *file, unsigned int cmd,
+ 			ret = -EFAULT;
+ 		break;
+ 	case TDX_CMD_GEN_QUOTE:
++		reinit_completion(&attestation_done);
++
+ 		/* Copy TDREPORT data from user buffer */
+-		if (copy_from_user(tdquote_data, argp, TDX_TDREPORT_LEN)) {
++		if (copy_from_user(&tdquote_req, argp, sizeof(struct tdx_gen_quote))) {
++			ret = -EFAULT;
++			break;
++		}
++
++		if (tdquote_req.len <= 0 || tdquote_req.len > GET_QUOTE_MAX_SIZE) {
++			ret = -EINVAL;
++			break;
++		}
++
++		if (copy_from_user(tdquote_data, tdquote_req.buf, tdquote_req.len)) {
+ 			ret = -EFAULT;
+ 			break;
+ 		}
+@@ -90,8 +110,6 @@ static long tdx_attest_ioctl(struct file *file, unsigned int cmd,
+ 			break;
+ 		}
+ 
+-		apic->send_IPI_all(HYPERVISOR_CALLBACK_VECTOR);
+-
+ 		/* Wait for attestation completion */
+ 		ret = wait_for_completion_interruptible_timeout(
+ 				&attestation_done,
+@@ -104,7 +122,7 @@ static long tdx_attest_ioctl(struct file *file, unsigned int cmd,
+ 		/* ret will be positive if completed. */
+ 		ret = 0;
+ 
+-		if (copy_to_user(argp, tdquote_data, QUOTE_SIZE))
++		if (copy_to_user(tdquote_req.buf, tdquote_data, tdquote_req.len))
+ 			ret = -EFAULT;
+ 
+ 		break;
+@@ -187,7 +205,7 @@ static int __init tdx_attest_init(void)
+ 
+ 	/* Allocate DMA buffer to get TDQUOTE data from the VMM */
+ 	tdquote_data = dma_alloc_coherent(tdx_attest_device.this_device,
+-					  QUOTE_SIZE, &handle,
++					  GET_QUOTE_MAX_SIZE, &handle,
+ 					  GFP_KERNEL | __GFP_ZERO);
+ 	if (!tdquote_data) {
+ 		ret = -ENOMEM;
+@@ -221,7 +239,7 @@ static void __exit tdx_attest_exit(void)
+ {
+ 	mutex_lock(&attestation_lock);
+ 
+-	dma_free_coherent(tdx_attest_device.this_device, QUOTE_SIZE,
++	dma_free_coherent(tdx_attest_device.this_device, GET_QUOTE_MAX_SIZE,
+ 			  tdquote_data, tdquote_dma_handle);
+ 	free_pages((unsigned long)tdreport_data, 0);
+ 	misc_deregister(&tdx_attest_device);
+-- 
+2.31.1
+

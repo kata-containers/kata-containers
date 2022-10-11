@@ -1,0 +1,51 @@
+From d5a96c4356c2c345df0663f895c747a5e814a70c Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Fri, 21 Jan 2022 10:18:12 -0700
+Subject: [PATCH 0926/1418] dmaengine: idxd: remove shared wq restriction on
+ config load
+
+Shared WQ restriction accidentally left in idxd_wq_load_config(). Not
+needed when we support swq in VDCM.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/device.c | 20 +++++++++++++++-----
+ 1 file changed, 15 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index b381e7b7de1f..94169c280930 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -1104,14 +1104,24 @@ static int idxd_wq_load_config(struct idxd_wq *wq)
+ 	wq->size = wq->wqcfg->wq_size;
+ 	wq->threshold = wq->wqcfg->wq_thresh;
+ 
+-	/* The driver does not support shared WQ mode in read-only config yet */
+-	if (wq->wqcfg->mode == 0 || wq->wqcfg->pasid_en)
+-		return -EOPNOTSUPP;
+-
+-	set_bit(WQ_FLAG_DEDICATED, &wq->flags);
++	if (wq->wqcfg->mode)
++		set_bit(WQ_FLAG_DEDICATED, &wq->flags);
+ 
+ 	wq->priority = wq->wqcfg->priority;
+ 
++	if (wq->wqcfg->bof)
++		set_bit(WQ_FLAG_BLOCK_ON_FAULT, &wq->flags);
++
++	if (device_pasid_enabled(idxd) && wq->wqcfg->mode == 1) {
++		wq->wqcfg->pasid_en = 1;
++		wq->wqcfg->pasid = idxd->pasid;
++		wqcfg_offset = WQCFG_OFFSET(idxd, wq->id, WQCFG_PASID_IDX);
++		iowrite32(wq->wqcfg->bits[WQCFG_PASID_IDX], idxd->reg_base + wqcfg_offset);
++	}
++
++	if (wq->wqcfg->mode_support)
++		set_bit(WQ_FLAG_MODE_1, &wq->flags);
++
+ 	for (i = 0; i < WQCFG_STRIDES(idxd); i++) {
+ 		wqcfg_offset = WQCFG_OFFSET(idxd, wq->id, i);
+ 		dev_dbg(dev, "WQ[%d][%d][%#x]: %#x\n", wq->id, i, wqcfg_offset, wq->wqcfg->bits[i]);
+-- 
+2.31.1
+

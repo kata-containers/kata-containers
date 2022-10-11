@@ -1,0 +1,125 @@
+From ed782431a5a8859dc0d2d12e861732cfb1b4c888 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Sun, 25 Jul 2021 13:25:20 -0700
+Subject: [PATCH 1027/1418] ioasid: Reserve a global PASID for in-kernel DMA
+
+In-kernel DMA is managed by DMA mapping APIs, which supports per device
+addressing mode for legacy DMA requests. With the introduction of
+Process Address Space ID (PASID), device DMA can now target at a finer
+granularity per PASID + Requester ID (RID).
+
+However, for in-kernel DMA there is no need to differentiate between
+legacy DMA and DMA with PASID in terms of mapping. DMA address mapping
+for RID+PASID can be made identical to the RID. The benefit for the
+drivers is the continuation of DMA mapping APIs without change.
+
+This patch reserves a special IOASID for devices that perform in-kernel
+DMA requests with PASID. This global IOASID is excluded from the
+IOASID allocator. The analogous case is PASID #0, a special PASID
+reserved for DMA requests without PASID (legacy). We could have different
+kernel PASIDs for individual devices, but for simplicity reasons, a
+globally reserved one will fit the bill.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3-sva.c | 2 +-
+ drivers/iommu/intel/iommu.c                     | 4 ++--
+ drivers/iommu/intel/pasid.h                     | 3 +--
+ drivers/iommu/intel/svm.c                       | 2 +-
+ drivers/iommu/ioasid.c                          | 2 ++
+ include/linux/ioasid.h                          | 4 ++++
+ 6 files changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3-sva.c b/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3-sva.c
+index d94d90c40d2c..436239595f06 100644
+--- a/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3-sva.c
++++ b/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3-sva.c
+@@ -329,7 +329,7 @@ __arm_smmu_sva_bind(struct device *dev, struct mm_struct *mm)
+ 		return ERR_PTR(-ENOMEM);
+ 
+ 	/* Allocate a PASID for this mm if necessary */
+-	ret = iommu_sva_alloc_pasid(mm, 1, (1U << master->ssid_bits) - 1);
++	ret = iommu_sva_alloc_pasid(mm, IOASID_ALLOC_BASE, (1U << master->ssid_bits) - 1);
+ 	if (ret)
+ 		goto err_free_bond;
+ 
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 10258cd19867..d9a92d9d616f 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -3150,7 +3150,7 @@ static ioasid_t intel_vcmd_ioasid_alloc(ioasid_t min, ioasid_t max, void *data)
+ 	 * PASID range. Host can partition guest PASID range based on
+ 	 * policies but it is out of guest's control.
+ 	 */
+-	if (min < PASID_MIN || max > intel_pasid_max_id)
++	if (min < IOASID_ALLOC_BASE || max > intel_pasid_max_id)
+ 		return INVALID_IOASID;
+ 
+ 	if (vcmd_alloc_pasid(iommu, &ioasid))
+@@ -4777,7 +4777,7 @@ static int aux_domain_add_dev(struct dmar_domain *domain,
+ 		u32 pasid;
+ 
+ 		/* No private data needed for the default pasid */
+-		pasid = ioasid_alloc(host_pasid_set, PASID_MIN,
++		pasid = ioasid_alloc(host_pasid_set, IOASID_ALLOC_BASE,
+ 				     pci_max_pasids(to_pci_dev(dev)) - 1,
+ 				     NULL);
+ 		if (pasid == INVALID_IOASID) {
+diff --git a/drivers/iommu/intel/pasid.h b/drivers/iommu/intel/pasid.h
+index 6a7474288224..78de28658315 100644
+--- a/drivers/iommu/intel/pasid.h
++++ b/drivers/iommu/intel/pasid.h
+@@ -10,8 +10,7 @@
+ #ifndef __INTEL_PASID_H
+ #define __INTEL_PASID_H
+ 
+-#define PASID_RID2PASID			0x0
+-#define PASID_MIN			0x1
++#define PASID_RID2PASID			IOASID_DMA_NO_PASID
+ #define PASID_MAX			0x100000
+ #define PASID_PTE_MASK			0x3F
+ #define PASID_PTE_PRESENT		1
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index c9ee3fa19bd4..322246d00217 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -718,7 +718,7 @@ intel_svm_bind_mm(struct device *dev, unsigned int flags,
+ 			pasid_max = intel_pasid_max_id;
+ 
+ 		/* Do not use PASID 0, reserved for RID to PASID */
+-		svm->pasid = ioasid_alloc(host_pasid_set, PASID_MIN,
++		svm->pasid = ioasid_alloc(host_pasid_set, IOASID_ALLOC_BASE,
+ 					  pasid_max - 1, svm);
+ 		if (svm->pasid == INVALID_IOASID) {
+ 			kfree(svm);
+diff --git a/drivers/iommu/ioasid.c b/drivers/iommu/ioasid.c
+index 585bd8839c3f..37c60ffe374b 100644
+--- a/drivers/iommu/ioasid.c
++++ b/drivers/iommu/ioasid.c
+@@ -804,6 +804,8 @@ ioasid_t ioasid_alloc(struct ioasid_set *set, ioasid_t min, ioasid_t max,
+ 	data->private = private;
+ 	refcount_set(&data->refs, 1);
+ 
++	if (min < IOASID_ALLOC_BASE)
++		min = IOASID_ALLOC_BASE;
+ 	/*
+ 	 * Custom allocator needs allocator data to perform platform specific
+ 	 * operations.
+diff --git a/include/linux/ioasid.h b/include/linux/ioasid.h
+index cd1bccdb1733..d69b285ec94e 100644
+--- a/include/linux/ioasid.h
++++ b/include/linux/ioasid.h
+@@ -9,6 +9,10 @@
+ #include <uapi/linux/ioasid.h>
+ 
+ #define INVALID_IOASID ((ioasid_t)-1)
++#define IOASID_DMA_NO_PASID	0 /* For DMA request w/o PASID */
++#define IOASID_DMA_PASID	1 /* For in-kernel DMA w/ PASID */
++#define IOASID_ALLOC_BASE	2 /* Start of the allocation */
++
+ typedef unsigned int ioasid_t;
+ typedef ioasid_t (*ioasid_alloc_fn_t)(ioasid_t min, ioasid_t max, void *data);
+ typedef void (*ioasid_free_fn_t)(ioasid_t ioasid, void *data);
+-- 
+2.31.1
+

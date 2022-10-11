@@ -1,0 +1,37 @@
+From eaa601f80d518e1354708ab9749c85a722c35366 Mon Sep 17 00:00:00 2001
+From: Anders Roxell <anders.roxell@linaro.org>
+Date: Wed, 22 Sep 2021 22:09:01 +0200
+Subject: [PATCH 0020/1418] x86/fpu/signal: Fix missed conversion to correct
+ boolean retval in save_xstate_epilog()
+
+Fix the missing return code polarity in save_xstate_epilog().
+
+ [ bp: Massage, use the right commit in the Fixes: tag ]
+
+Fixes: 2af07f3a6e9f ("x86/fpu/signal: Change return type of copy_fpregs_to_sigframe() helpers to boolean")
+Reported-by: Remi Duraffort <remi.duraffort@linaro.org>
+Signed-off-by: Anders Roxell <anders.roxell@linaro.org>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Tested-by: Nick Desaulniers <ndesaulniers@google.com>
+Link: https://github.com/ClangBuiltLinux/linux/issues/1461
+Link: https://lkml.kernel.org/r/20210922200901.1823741-1-anders.roxell@linaro.org
+---
+ arch/x86/kernel/fpu/signal.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/fpu/signal.c b/arch/x86/kernel/fpu/signal.c
+index 693321ebdc3c..51c4915a35f0 100644
+--- a/arch/x86/kernel/fpu/signal.c
++++ b/arch/x86/kernel/fpu/signal.c
+@@ -106,7 +106,7 @@ static inline bool save_xstate_epilog(void __user *buf, int ia32_frame)
+ 	err = __copy_to_user(&x->i387.sw_reserved, sw_bytes, sizeof(*sw_bytes));
+ 
+ 	if (!use_xsave())
+-		return err;
++		return !err;
+ 
+ 	err |= __put_user(FP_XSTATE_MAGIC2,
+ 			  (__u32 __user *)(buf + fpu_user_xstate_size));
+-- 
+2.31.1
+

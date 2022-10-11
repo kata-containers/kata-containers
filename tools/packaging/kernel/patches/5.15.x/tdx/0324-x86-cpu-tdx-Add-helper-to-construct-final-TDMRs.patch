@@ -1,0 +1,85 @@
+From eb5b9ab03524f87ce8719db9a3f25b5cf1340424 Mon Sep 17 00:00:00 2001
+From: Kai Huang <kai.huang@intel.com>
+Date: Tue, 28 Sep 2021 09:55:50 +1300
+Subject: [PATCH 0324/1418] x86/cpu/tdx: Add helper to construct final TDMRs
+
+Add a helper to construct final TDMRs, using the final TDX memory instance
+built from system memory and legacy PMEMs.  A later patch will use it.
+
+Signed-off-by: Kai Huang <kai.huang@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx-tdmr.c | 42 ++++++++++++++++++++++++++++++
+ arch/x86/kernel/cpu/tdx/tdx-tdmr.h |  8 ++++++
+ 2 files changed, 50 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx-tdmr.c b/arch/x86/kernel/cpu/tdx/tdx-tdmr.c
+index f77f3bee6e0d..434974aa70b3 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx-tdmr.c
++++ b/arch/x86/kernel/cpu/tdx/tdx-tdmr.c
+@@ -77,3 +77,45 @@ void __init cleanup_subtype_tdx_memory(void)
+ 	tdx_legacy_pmem_cleanup();
+ #endif
+ }
++
++/**
++ * construct_tdx_tdmrs:	Construct final TDMRs to cover all TDX memory
++ *
++ * @cmr_array:		Arrry of CMR entries
++ * @cmr_num:		Number of CMR entries
++ * @desc:		TDX module descriptor for constructing final TMDRs
++ * @tdmr_info_array:	Array of final TDMRs
++ * @tdmr_num:		Number of final TDMRs
++ *
++ * Construct final TDMRs to cover all TDX memory blocks in @tmem_all.
++ * Caller needs to allocate enough storage for @tdmr_info_array, i.e. by
++ * allocating enough entries indicated by desc->max_tdmr_num.
++ *
++ * Upon success, all TDMRs are stored in @tdmr_info_array, with @tdmr_num
++ * indicting the actual TDMR number.
++ */
++int __init construct_tdx_tdmrs(struct cmr_info *cmr_array, int cmr_num,
++		struct tdx_module_descriptor *desc,
++		struct tdmr_info *tdmr_info_array, int *tdmr_num)
++{
++	int ret = 0;
++
++	/* No TDX memory available */
++	if (list_empty(&tmem_all.tmb_list))
++		return -EFAULT;
++
++	ret = tdx_memory_construct_tdmrs(&tmem_all, cmr_array, cmr_num,
++			desc, tdmr_info_array, tdmr_num);
++	if (ret) {
++		pr_err("Failed to construct TDMRs\n");
++		goto out;
++	}
++
++out:
++	/*
++	 * Always discard @tmem_all no matter whether constructing TDMRs
++	 * was successful or not, since it is not needed anymore.
++	 */
++	tdx_memory_destroy(&tmem_all);
++	return ret;
++}
+diff --git a/arch/x86/kernel/cpu/tdx/tdx-tdmr.h b/arch/x86/kernel/cpu/tdx/tdx-tdmr.h
+index 86de1a5de021..5beafe7d60b6 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx-tdmr.h
++++ b/arch/x86/kernel/cpu/tdx/tdx-tdmr.h
+@@ -13,4 +13,12 @@ int __init build_final_tdx_memory(void);
+ /* Clean up TDX memory in case of any error before build_final_tdx_memory(). */
+ void __init cleanup_subtype_tdx_memory(void);
+ 
++/*
++ * Construct final TDMRs based on CMR info and TDX module info, to cover
++ * final TDX memory @tmem_all (built by build_final_tdx_memory()).
++ */
++int __init construct_tdx_tdmrs(struct cmr_info *cmr_array, int cmr_num,
++		struct tdx_module_descriptor *desc,
++		struct tdmr_info *tdmr_info_array, int *tdmr_num);
++
+ #endif
+-- 
+2.31.1
+

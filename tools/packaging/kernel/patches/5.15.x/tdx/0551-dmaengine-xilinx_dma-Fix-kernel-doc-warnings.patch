@@ -1,0 +1,51 @@
+From bb364815cb496f184ea56a5bb93f5cf973b1bfe2 Mon Sep 17 00:00:00 2001
+From: Shravya Kumbham <shravya.kumbham@xilinx.com>
+Date: Mon, 13 Sep 2021 14:58:36 +0530
+Subject: [PATCH 0551/1418] dmaengine: xilinx_dma: Fix kernel-doc warnings
+
+Modify the prototype from xilinx_dma_tx_descriptor to
+xilinx_dma_alloc_tx_descriptor and xilinx_dma_channel_set_config
+to xilinx_vdma_channel_set_config in API description to
+fix below linux kernel-doc warnings.
+
+drivers/dma/xilinx/xilinx_dma.c:800: warning: expecting
+prototype for xilinx_dma_tx_descriptor(). Prototype was
+for xilinx_dma_alloc_tx_descriptor() instead.
+
+drivers/dma/xilinx/xilinx_dma.c:2471: warning: expecting
+prototype for xilinx_dma_channel_set_config(). Prototype
+was for xilinx_vdma_channel_set_config() instead.
+
+Signed-off-by: Shravya Kumbham <shravya.kumbham@xilinx.com>
+Signed-off-by: Radhey Shyam Pandey <radhey.shyam.pandey@xilinx.com>
+Link: https://lore.kernel.org/r/1631525316-2323-1-git-send-email-radhey.shyam.pandey@xilinx.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/xilinx/xilinx_dma.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/dma/xilinx/xilinx_dma.c b/drivers/dma/xilinx/xilinx_dma.c
+index a4450bc95466..60cea7d997ee 100644
+--- a/drivers/dma/xilinx/xilinx_dma.c
++++ b/drivers/dma/xilinx/xilinx_dma.c
+@@ -792,7 +792,7 @@ static void xilinx_vdma_free_tx_segment(struct xilinx_dma_chan *chan,
+ }
+ 
+ /**
+- * xilinx_dma_tx_descriptor - Allocate transaction descriptor
++ * xilinx_dma_alloc_tx_descriptor - Allocate transaction descriptor
+  * @chan: Driver specific DMA channel
+  *
+  * Return: The allocated descriptor on success and NULL on failure.
+@@ -2483,7 +2483,7 @@ static void xilinx_dma_synchronize(struct dma_chan *dchan)
+ }
+ 
+ /**
+- * xilinx_dma_channel_set_config - Configure VDMA channel
++ * xilinx_vdma_channel_set_config - Configure VDMA channel
+  * Run-time configuration for Axi VDMA, supports:
+  * . halt the channel
+  * . configure interrupt coalescing and inter-packet delay threshold
+-- 
+2.31.1
+

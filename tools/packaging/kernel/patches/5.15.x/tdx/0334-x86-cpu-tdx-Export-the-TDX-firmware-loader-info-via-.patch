@@ -1,0 +1,233 @@
+From 09fb11eebc6dbcd34d6a10f31fae806b544b663f Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Tue, 21 Sep 2021 16:17:59 -0700
+Subject: [PATCH 0334/1418] x86/cpu/tdx: Export the TDX firmware loader info
+ via sysfs
+
+The second TDX firmware loader (a.k.a. P-SEAMLDR) comes with its
+attributes, vendor id, build date, build number, minor version, major
+version to identify itself.  Export that info as read-only files via sysfs
+for administrator or VM management software.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ Documentation/ABI/testing/sysfs-firmware-tdx | 54 +++++++++++++++
+ arch/x86/kernel/cpu/tdx/p-seamldr.c          | 71 ++++++++++++++++++++
+ arch/x86/kernel/cpu/tdx/tdx.c                | 23 +++++++
+ arch/x86/kernel/cpu/tdx/tdx.h                | 11 +++
+ 4 files changed, 159 insertions(+)
+ create mode 100644 Documentation/ABI/testing/sysfs-firmware-tdx
+ create mode 100644 arch/x86/kernel/cpu/tdx/tdx.h
+
+diff --git a/Documentation/ABI/testing/sysfs-firmware-tdx b/Documentation/ABI/testing/sysfs-firmware-tdx
+new file mode 100644
+index 000000000000..1e096189660d
+--- /dev/null
++++ b/Documentation/ABI/testing/sysfs-firmware-tdx
+@@ -0,0 +1,54 @@
++What:           /sys/firmware/tdx/
++Date:           September 2021
++KernelVersion:  5.15
++Contact:        Isaku Yamahata <isaku.yamahata@intel.com>, kvm@vger.kernel.org
++Description:
++                Intel's Trust Domain Extensions (TDX) protect guest VMs from
++                malicious hosts and some physical attacks.  This directory
++                represents the entry point directory for the TDX.
++
++                the TDX requires the TDX firmware to load into an isolated
++                memory region.  It requires a two-step loading process.  It uses
++                the first phase firmware loader (a.k.a NP-SEAMLDR) that loads
++                the next loader and the second phase firmware loader(a.k.a
++                P-SEAMLDR) that loads the TDX firmware(a.k.a the "TDX module").
++Users:          libvirt
++
++What:           /sys/firmware/tdx/p_seamldr/
++Date:           September 2021
++KernelVersion:  5.15
++Contact:        Isaku Yamahata <isaku.yamahata@intel.com>, kvm@vger.kernel.org
++Description:
++                The P-SEAMLDR is the TDX firmware loader. The P-SEAMLDR comes
++                with its attributes, vendor_id, build_date, build_num, minor
++                version, major version to identify itself.
++
++                Provides the information about the P-SEAMLDR loaded on the
++                platform.  This directory exists if the P-SEAMLDR is
++                successfully loaded.  It contains the following read-only files.
++                The information corresponds to the data structure, SEAMLDR_INFO.
++                The admins or VMM management software like libvirt can refer to
++                that information, determine if P-SEAMLDR is supported, and
++                identify the loaded P-SEAMLDR.
++
++                =============== ================================================
++                version         structure version of SEAMLDR_INFO as an
++                                hexadecimal number with the "0x" prefix
++                                "0x0".
++                attributes      32bit flags as a hexadecimal number with the
++                                "0x" prefix.
++                                Bit 31 - Production-worthy (0) or
++                                         debug (1).
++                                Bits 30:0 - Reserved 0.
++                vendor_id       Vendor ID as a hexadecimal number with the "0x"
++                                prefix.
++                                "0x0806" (Intel P-SEAMLDR module).
++                build_date      Build date in yyyy.mm.dd BCD format.
++                build_num       Build number as a hexadecimal number with the
++                                "0x" prefix.
++                minor           Minor version number as a hexadecimal number
++                                with the "0x" prefix.
++                major           Major version number as a hexadecimal number
++                                with the "0x" prefix.
++                =============== ================================================
++Users:          libvirt
+\ No newline at end of file
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.c b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+index 3b47fda86442..f6447b3978b8 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.c
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+@@ -5,6 +5,7 @@
+ 
+ #include <linux/earlycpio.h>
+ #include <linux/memblock.h>
++#include <linux/kobject.h>
+ #include <linux/slab.h>
+ 
+ #include <asm/debugreg.h>
+@@ -20,6 +21,7 @@
+ #include "p-seamldr.h"
+ #include "seamcall.h"
+ #include "seam.h"
++#include "tdx.h"
+ 
+ static char *np_seamldr_name __initdata = "intel-seam/np-seamldr.acm";
+ static size_t np_seamldr_len __initdata;
+@@ -450,3 +452,72 @@ int __init load_p_seamldr(void)
+ 	pr_info("Successfully loaded TDX P-SEAMLDR.\n");
+ 	return 0;
+ }
++
++#ifdef CONFIG_SYSFS
++
++static struct kobject *p_seamldr_kobj;
++
++#define P_SEAMLDR_ATTR_SHOW_FMT(name, fmt)				\
++static ssize_t name ## _show(						\
++	struct kobject *kobj, struct kobj_attribute *attr, char *buf)	\
++{									\
++	return sprintf(buf, fmt, p_seamldr_info->name);			\
++}									\
++static struct kobj_attribute p_seamldr_##name = __ATTR_RO(name)
++
++#define P_SEAMLDR_ATTR_SHOW_DEC(name)	P_SEAMLDR_ATTR_SHOW_FMT(name, "%d\n")
++#define P_SEAMLDR_ATTR_SHOW_HEX(name)	P_SEAMLDR_ATTR_SHOW_FMT(name, "0x%x\n")
++
++P_SEAMLDR_ATTR_SHOW_HEX(version);
++P_SEAMLDR_ATTR_SHOW_FMT(attributes, "0x08%x\n");
++P_SEAMLDR_ATTR_SHOW_HEX(vendor_id);
++P_SEAMLDR_ATTR_SHOW_DEC(build_date);
++P_SEAMLDR_ATTR_SHOW_HEX(build_num);
++P_SEAMLDR_ATTR_SHOW_HEX(minor);
++P_SEAMLDR_ATTR_SHOW_HEX(major);
++
++static struct attribute *p_seamldr_attrs[] = {
++	&p_seamldr_version.attr,
++	&p_seamldr_attributes.attr,
++	&p_seamldr_vendor_id.attr,
++	&p_seamldr_build_date.attr,
++	&p_seamldr_build_num.attr,
++	&p_seamldr_minor.attr,
++	&p_seamldr_major.attr,
++	NULL,
++};
++
++static const struct attribute_group p_seamldr_attr_group = {
++	.attrs = p_seamldr_attrs,
++};
++
++static int __init p_seamldr_sysfs_init(void)
++{
++	int ret = 0;
++
++	ret = tdx_sysfs_init();
++	if (ret)
++		goto out;
++
++	if (!p_seamldr_info)
++		goto out;
++
++	p_seamldr_kobj = kobject_create_and_add("p_seamldr", tdx_kobj);
++	if (!p_seamldr_kobj) {
++		pr_err("kobject_create_and_add p_seamldr failed\n");
++		ret = -EINVAL;
++		goto out;
++	}
++
++	ret = sysfs_create_group(p_seamldr_kobj, &p_seamldr_attr_group);
++	if (ret) {
++		pr_err("Sysfs exporting attribute failed with error %d", ret);
++		kobject_put(p_seamldr_kobj);
++		p_seamldr_kobj = NULL;
++	}
++
++out:
++	return ret;
++}
++device_initcall(p_seamldr_sysfs_init);
++#endif
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 19b3172a4b74..276e7e6f8b8b 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -25,6 +25,7 @@
+ #include "tdx-ops.h"
+ #include "p-seamldr.h"
+ #include "seam.h"
++#include "tdx.h"
+ 
+ enum TDX_HOST_OPTION {
+ 	TDX_HOST_OFF,
+@@ -1120,3 +1121,25 @@ static int __init tdx_late_init(void)
+  *   it's built into the kernel.
+  */
+ subsys_initcall_sync(tdx_late_init);
++
++#ifdef CONFIG_SYSFS
++
++struct kobject *tdx_kobj;
++
++int __init tdx_sysfs_init(void)
++{
++	if (!boot_cpu_has(X86_FEATURE_SEAM))
++		return 0;
++
++	if (tdx_kobj)
++		return 0;
++
++	tdx_kobj = kobject_create_and_add("tdx", firmware_kobj);
++	if (!tdx_kobj) {
++		pr_err("kobject_create_and_add tdx failed\n");
++		return -EINVAL;
++	}
++
++	return 0;
++}
++#endif
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.h b/arch/x86/kernel/cpu/tdx/tdx.h
+new file mode 100644
+index 000000000000..f2ad0b182286
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/tdx.h
+@@ -0,0 +1,11 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++
++#ifndef _X86_TDX_H
++#define _X86_TDX_H
++
++#ifdef CONFIG_SYSFS
++extern struct kobject *tdx_kobj;
++int __init tdx_sysfs_init(void);
++#endif
++
++#endif /* _X86_TDX_H */
+-- 
+2.31.1
+

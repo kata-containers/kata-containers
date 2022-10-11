@@ -1,0 +1,33 @@
+From a9e1378bc09d76c3d4969f5eaa286e0b7dc9dcdb Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Tue, 15 Feb 2022 14:13:22 -0700
+Subject: [PATCH 1040/1418] ioasid: Revert range adjustment
+
+Reserving IOASID 0 and 1 for RID2PASID and kernel DMA PASID moves
+allocation base to 2 (IOASID_ALLOC_BASE). However, callers still
+expect to use ioasid refcount for reserved PASID such as the default
+RID2PASID for each domain.
+Revert this range adjustment such that ioasid refcount still works as
+is. Future fix should be avoid allocating reserved PASIDs.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/ioasid.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/drivers/iommu/ioasid.c b/drivers/iommu/ioasid.c
+index 37c60ffe374b..585bd8839c3f 100644
+--- a/drivers/iommu/ioasid.c
++++ b/drivers/iommu/ioasid.c
+@@ -804,8 +804,6 @@ ioasid_t ioasid_alloc(struct ioasid_set *set, ioasid_t min, ioasid_t max,
+ 	data->private = private;
+ 	refcount_set(&data->refs, 1);
+ 
+-	if (min < IOASID_ALLOC_BASE)
+-		min = IOASID_ALLOC_BASE;
+ 	/*
+ 	 * Custom allocator needs allocator data to perform platform specific
+ 	 * operations.
+-- 
+2.31.1
+

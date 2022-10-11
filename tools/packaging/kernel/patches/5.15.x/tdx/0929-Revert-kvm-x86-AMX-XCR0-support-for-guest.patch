@@ -1,0 +1,43 @@
+From df621d2de5e4ee1861b6f10b6be7ea2fb71fc7c0 Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 17:51:45 -0800
+Subject: [PATCH 0929/1418] Revert "kvm: x86: AMX XCR0 support for guest"
+
+This reverts commit 3e7b27aab4c6e79a24951b589cac322e2f7f5ae3.
+---
+ arch/x86/kvm/x86.c | 12 +-----------
+ 1 file changed, 1 insertion(+), 11 deletions(-)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 95b09edaee06..9cf2828a3d3e 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -213,7 +213,7 @@ static struct kvm_user_return_msrs __percpu *user_return_msrs;
+ #define KVM_SUPPORTED_XCR0     (XFEATURE_MASK_FP | XFEATURE_MASK_SSE \
+ 				| XFEATURE_MASK_YMM | XFEATURE_MASK_BNDREGS \
+ 				| XFEATURE_MASK_BNDCSR | XFEATURE_MASK_AVX512 \
+-				| XFEATURE_MASK_PKRU | XFEATURE_MASK_XTILE)
++				| XFEATURE_MASK_PKRU)
+ 
+ #define KVM_SUPPORTED_XSS     XFEATURE_MASK_LBR
+ 
+@@ -1097,16 +1097,6 @@ static int __kvm_set_xcr(struct kvm_vcpu *vcpu, u32 index, u64 xcr)
+ 		if ((xcr0 & XFEATURE_MASK_AVX512) != XFEATURE_MASK_AVX512)
+ 			return 1;
+ 	}
+-
+-	if (xcr0 & XFEATURE_MASK_XTILE) {
+-#ifdef CONFIG_X86_64
+-		if ((xcr0 & XFEATURE_MASK_XTILE) != XFEATURE_MASK_XTILE)
+-			return 1;
+-#else
+-		/* Only 64-bit OS enable AMX by setting XCR0[18:17] */
+-		xcr0 &= ~XFEATURE_MASK_XTILE;
+-#endif
+-	}
+ 	vcpu->arch.xcr0 = xcr0;
+ 
+ 	if ((xcr0 ^ old_xcr0) & XFEATURE_MASK_EXTEND)
+-- 
+2.31.1
+

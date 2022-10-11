@@ -1,0 +1,36 @@
+From b82deff35f0746c7d1e3c119704f163c87feed35 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Thu, 12 Aug 2021 15:18:22 -0700
+Subject: [PATCH 0454/1418] KVM: TDX: fix section mismatch of tdx_seamkey_id
+ and so on.
+
+Fix section mismatch of variables, is_debug_seamcall_available,
+is_nonarch_seamcall_available and, tdx_seam_keyid.  They should have
+__read_mostly. not __ro_after_init because it can be changed after
+initialization and TDX module can be updated after init.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 1d3a86f12383..606ecea7d2fa 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -135,10 +135,10 @@ enum TDX_MODULE_STATE {
+ /* TODO: export the state via sysfs. */
+ static enum TDX_MODULE_STATE tdx_module_state __ro_after_init;
+ 
+-bool is_debug_seamcall_available __ro_after_init = true;
++bool is_debug_seamcall_available __read_mostly = true;
+ EXPORT_SYMBOL_GPL(is_debug_seamcall_available);
+ 
+-bool is_nonarch_seamcall_available __ro_after_init = true;
++bool is_nonarch_seamcall_available __read_mostly = true;
+ EXPORT_SYMBOL_GPL(is_nonarch_seamcall_available);
+ 
+ /* TDX system information returned by TDH_SYS_INFO. */
+-- 
+2.31.1
+

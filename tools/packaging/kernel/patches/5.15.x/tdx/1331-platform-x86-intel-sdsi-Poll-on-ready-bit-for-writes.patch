@@ -1,0 +1,33 @@
+From 89c0da227144e2cc21d28218ab860c2dfa3a0356 Mon Sep 17 00:00:00 2001
+From: "David E. Box" <david.e.box@linux.intel.com>
+Date: Fri, 8 Apr 2022 19:39:02 -0700
+Subject: [PATCH 1331/1418] platform/x86/intel/sdsi: Poll on ready bit for
+ writes
+
+Though polling on run_busy will work, firmware flows were updated to
+officially use the ready bit polling for mailbox write transactions,
+making it the same as reads.
+
+Signed-off-by: David E. Box <david.e.box@linux.intel.com>
+---
+ drivers/platform/x86/intel/sdsi.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/platform/x86/intel/sdsi.c b/drivers/platform/x86/intel/sdsi.c
+index c8d04b66b711..5205c4691aec 100644
+--- a/drivers/platform/x86/intel/sdsi.c
++++ b/drivers/platform/x86/intel/sdsi.c
+@@ -247,8 +247,8 @@ static int sdsi_mbox_cmd_write(struct sdsi_priv *priv, struct sdsi_mbox_info *in
+ 		  FIELD_PREP(CTRL_PACKET_SIZE, info->size);
+ 	writeq(control, priv->control_addr);
+ 
+-	/* Poll on run_busy bit */
+-	ret = readq_poll_timeout(priv->control_addr, control, !(control & CTRL_RUN_BUSY),
++	/* Poll on ready bit */
++	ret = readq_poll_timeout(priv->control_addr, control, control & CTRL_READY,
+ 				 MBOX_POLLING_PERIOD_US, MBOX_TIMEOUT_US);
+ 
+ 	if (ret)
+-- 
+2.31.1
+

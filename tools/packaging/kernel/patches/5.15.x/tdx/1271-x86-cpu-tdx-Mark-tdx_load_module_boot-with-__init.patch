@@ -1,0 +1,29 @@
+From 11832171580ed54701de317a5014abfb3ea6bb1a Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Fri, 1 Apr 2022 10:12:29 +0800
+Subject: [PATCH 1271/1418] x86/cpu/tdx: Mark tdx_load_module_boot() with
+ __init
+
+To avoid the WARNING of Section mismatch.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index a151cb81065d..c08aec04372a 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -921,7 +921,7 @@ static int tdx_load_module(
+ 	return ret;
+ }
+ 
+-static int tdx_load_module_boot(void)
++static int __init tdx_load_module_boot(void)
+ {
+ 	struct cpio_data module, sigstruct;
+ 
+-- 
+2.31.1
+

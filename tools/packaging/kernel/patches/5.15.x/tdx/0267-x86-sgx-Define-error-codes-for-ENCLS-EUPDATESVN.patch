@@ -1,0 +1,49 @@
+From 0750d180b8cae393ddffdadda8e4b9384987e2ae Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Thu, 25 Feb 2021 13:55:57 +0800
+Subject: [PATCH 0267/1418] x86/sgx: Define error codes for ENCLS[EUPDATESVN]
+
+Add error codes for ENCLS[EUPDATESVN], then SGX CPUSVN update
+process can know the execution state of EUPDATESVN and notify
+userspace.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/include/asm/sgx.h | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/arch/x86/include/asm/sgx.h b/arch/x86/include/asm/sgx.h
+index 5a861c7d5550..4e1bd4c880d5 100644
+--- a/arch/x86/include/asm/sgx.h
++++ b/arch/x86/include/asm/sgx.h
+@@ -47,17 +47,27 @@ enum sgx_encls_function {
+ 
+ /**
+  * enum sgx_return_code - The return code type for ENCLS, ENCLU and ENCLV
++ * %SGX_LOCKFAIL:		An instruction concurrency rule was violated.
+  * %SGX_NOT_TRACKED:		Previous ETRACK's shootdown sequence has not
+  *				been completed yet.
+  * %SGX_CHILD_PRESENT		SECS has child pages present in the EPC.
+  * %SGX_INVALID_EINITTOKEN:	EINITTOKEN is invalid and enclave signer's
+  *				public key does not match IA32_SGXLEPUBKEYHASH.
++ * %SGX_INSUFFICIENT_ENTROPY:	Insufficient entropy in RNG.
++ * %SGX_EPC_NOT_READY:		EPC is not ready for SVN update.
++ * %SGX_NO_UPDATE:		EUPDATESVN was successful, but CPUSVN was not
++ *				updated because current SVN was not newer than
++ *				CPUSVN.
+  * %SGX_UNMASKED_EVENT:		An unmasked event, e.g. INTR, was received
+  */
+ enum sgx_return_code {
++	SGX_LOCKFAIL			= 7,
+ 	SGX_NOT_TRACKED			= 11,
+ 	SGX_CHILD_PRESENT		= 13,
+ 	SGX_INVALID_EINITTOKEN		= 16,
++	SGX_INSUFFICIENT_ENTROPY	= 29,
++	SGX_EPC_NOT_READY		= 30,
++	SGX_NO_UPDATE			= 31,
+ 	SGX_UNMASKED_EVENT		= 128,
+ };
+ 
+-- 
+2.31.1
+

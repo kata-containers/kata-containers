@@ -1,0 +1,35 @@
+From 753a6649eb125464b6799d37132c936c396c2dac Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Tue, 7 Dec 2021 16:21:16 +0300
+Subject: [PATCH 1054/1418] Revert "clocksource/acpi_pm: Disable in TDX"
+
+This reverts commit 32e841769a5226cdd99b915afd05159d7bc465e2.
+---
+ drivers/clocksource/acpi_pm.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/drivers/clocksource/acpi_pm.c b/drivers/clocksource/acpi_pm.c
+index 9db5b73733d9..eb596ff9e7bb 100644
+--- a/drivers/clocksource/acpi_pm.c
++++ b/drivers/clocksource/acpi_pm.c
+@@ -22,7 +22,6 @@
+ #include <linux/init.h>
+ #include <linux/pci.h>
+ #include <linux/delay.h>
+-#include <linux/cc_platform.h>
+ #include <asm/io.h>
+ 
+ /*
+@@ -181,9 +180,6 @@ static int __init init_acpi_pm_clocksource(void)
+ 	if (!pmtmr_ioport)
+ 		return -ENODEV;
+ 
+-	if (cc_platform_has(CC_ATTR_GUEST_SECURE_TIME))
+-		return -ENODEV;
+-
+ 	/* "verify" this timing source: */
+ 	for (j = 0; j < ACPI_PM_MONOTONICITY_CHECKS; j++) {
+ 		udelay(100 * j);
+-- 
+2.31.1
+

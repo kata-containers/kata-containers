@@ -1,0 +1,35 @@
+From aaa9ad9dec6b9ae98cf6d58d00fcc86ef5b1fe38 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Wed, 30 Jun 2021 17:57:16 -0700
+Subject: [PATCH 0194/1418] x86/tdx: Avoid early broadcom workaround when early
+ PCI is disabled
+
+Make the early broadcom PCI workaround check that early PCI access
+and CONF1 access is actually enabled before accessing the PCI bus.
+
+This helps for TDX who doesn't want to harden this code, but also
+is a generic bug fix.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/pci/broadcom_bus.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/x86/pci/broadcom_bus.c b/arch/x86/pci/broadcom_bus.c
+index 2db73613cada..0d38ab7c5886 100644
+--- a/arch/x86/pci/broadcom_bus.c
++++ b/arch/x86/pci/broadcom_bus.c
+@@ -97,6 +97,9 @@ static int __init broadcom_postcore_init(void)
+ 		return 0;
+ #endif
+ 
++	if (!early_pci_allowed())
++		return 0;
++
+ 	id = read_pci_config(bus, slot, 0, PCI_VENDOR_ID);
+ 	vendor = id & 0xffff;
+ 	device = (id >> 16) & 0xffff;
+-- 
+2.31.1
+

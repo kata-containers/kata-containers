@@ -1,0 +1,86 @@
+From a0ae8b312664da184a9e0bce6954fa2d5b98d906 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 15 Oct 2021 03:16:33 +0200
+Subject: [PATCH 0044/1418] x86/fpu: Move fpstate functions to api.h
+
+Move function declarations which need to be globally available to api.h
+where they belong.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211015011539.792363754@linutronix.de
+---
+ arch/x86/include/asm/fpu/api.h      | 9 +++++++++
+ arch/x86/include/asm/fpu/internal.h | 9 ---------
+ arch/x86/kernel/fpu/internal.h      | 3 +++
+ arch/x86/math-emu/fpu_entry.c       | 2 +-
+ 4 files changed, 13 insertions(+), 10 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/api.h b/arch/x86/include/asm/fpu/api.h
+index 77a732ea4cda..56cf884ecdae 100644
+--- a/arch/x86/include/asm/fpu/api.h
++++ b/arch/x86/include/asm/fpu/api.h
+@@ -110,6 +110,15 @@ extern int cpu_has_xfeatures(u64 xfeatures_mask, const char **feature_name);
+ 
+ static inline void update_pasid(void) { }
+ 
++#ifdef CONFIG_MATH_EMULATION
++extern void fpstate_init_soft(struct swregs_state *soft);
++#else
++static inline void fpstate_init_soft(struct swregs_state *soft) {}
++#endif
++
++/* fpstate */
++extern union fpregs_state init_fpstate;
++
+ /* fpstate-related functions which are exported to KVM */
+ extern void fpu_init_fpstate_user(struct fpu *fpu);
+ 
+diff --git a/arch/x86/include/asm/fpu/internal.h b/arch/x86/include/asm/fpu/internal.h
+index 74b7cc3d2e77..d8bb49134ebb 100644
+--- a/arch/x86/include/asm/fpu/internal.h
++++ b/arch/x86/include/asm/fpu/internal.h
+@@ -42,15 +42,6 @@ extern void fpu__init_system(struct cpuinfo_x86 *c);
+ extern void fpu__init_check_bugs(void);
+ extern void fpu__resume_cpu(void);
+ 
+-extern union fpregs_state init_fpstate;
+-extern void fpstate_init_user(union fpregs_state *state);
+-
+-#ifdef CONFIG_MATH_EMULATION
+-extern void fpstate_init_soft(struct swregs_state *soft);
+-#else
+-static inline void fpstate_init_soft(struct swregs_state *soft) {}
+-#endif
+-
+ extern void restore_fpregs_from_fpstate(union fpregs_state *fpstate, u64 mask);
+ 
+ extern bool copy_fpstate_to_sigframe(void __user *buf, void __user *fp, int size);
+diff --git a/arch/x86/kernel/fpu/internal.h b/arch/x86/kernel/fpu/internal.h
+index 5ddc09e03c2a..bd7f813242dd 100644
+--- a/arch/x86/kernel/fpu/internal.h
++++ b/arch/x86/kernel/fpu/internal.h
+@@ -22,4 +22,7 @@ static __always_inline __pure bool use_fxsr(void)
+ /* Init functions */
+ extern void fpu__init_prepare_fx_sw_frame(void);
+ 
++/* Used in init.c */
++extern void fpstate_init_user(union fpregs_state *state);
++
+ #endif
+diff --git a/arch/x86/math-emu/fpu_entry.c b/arch/x86/math-emu/fpu_entry.c
+index 8679a9d6c47f..50195e249753 100644
+--- a/arch/x86/math-emu/fpu_entry.c
++++ b/arch/x86/math-emu/fpu_entry.c
+@@ -31,7 +31,7 @@
+ #include <linux/uaccess.h>
+ #include <asm/traps.h>
+ #include <asm/user.h>
+-#include <asm/fpu/internal.h>
++#include <asm/fpu/api.h>
+ 
+ #include "fpu_system.h"
+ #include "fpu_emu.h"
+-- 
+2.31.1
+

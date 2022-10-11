@@ -1,0 +1,73 @@
+From aed2ec755ffc654a986e3854b311e94620679c08 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Thu, 28 Apr 2022 15:50:13 -0700
+Subject: [PATCH 1339/1418] ioasid: Reject null notifier call registration
+
+Booting multiple VMs causes Invalid notifier called! call trace.
+
+Error message below observed during boot:
+[  638.774647] Invalid notifier called!
+[  638.774669] WARNING: CPU: 319 PID: 46882 at kernel/notifier.c:78 notifier_call_chain+0x79/0xb0
+[  638.870074] RIP: 0010:notifier_call_chain+0x79/0xb0
+[  638.972742]  atomic_notifier_call_chain+0x17/0x30
+[  638.989967]  ioasid_notify+0x77/0xe0
+[  638.989987]  ioasid_alloc+0x19e/0x230
+[  639.003162]  ioasid_fops_unl_ioctl+0xb4/0x1b0
+This is due to early registration of NULL callback function pointer.
+[  613.023815] ioasid_add_pending_nb: nh ff37c3c3913de380 b call ffffffffc115a770, nr_ioasids 0
+[  613.023883] ioasid_add_pending_nb: nh ff37c3c3913de380 b call 0,
+
+It is unclear who registered the invalid callback, this patch fixes
+the issue by rejecting the registration. Dump stack should show the
+culprit. It is also possible that nb got cleared somehow outside
+ioasid core.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/ioasid.c | 10 ++++++++++
+ kernel/notifier.c      |  1 +
+ 2 files changed, 11 insertions(+)
+
+diff --git a/drivers/iommu/ioasid.c b/drivers/iommu/ioasid.c
+index 684116419300..da16f4638ce7 100644
+--- a/drivers/iommu/ioasid.c
++++ b/drivers/iommu/ioasid.c
+@@ -594,6 +594,10 @@ static void ioasid_add_pending_nb(struct ioasid_set *set)
+ 	 */
+ 	list_for_each_entry(curr, &ioasid_nb_pending_list, list) {
+ 		if (curr->token == set->token && !curr->active) {
++			if (unlikely(!func_ptr_is_kernel_text(curr->nb->notifier_call))) {
++				pr_warn("Invalid notifier callback");
++				continue;
++			}
+ 			atomic_notifier_chain_register(&set->nh, curr->nb);
+ 			curr->set = set;
+ 			curr->active = true;
+@@ -1294,6 +1298,12 @@ int ioasid_register_notifier_mm(struct mm_struct *mm, struct notifier_block *nb)
+ 		}
+ 	}
+ 
++	if (unlikely(!func_ptr_is_kernel_text(nb->notifier_call))) {
++		pr_warn("Registering invalid callback!");
++		dump_stack();
++		ret = -EINVAL;
++		goto exit_unlock;
++	}
+ 	curr = kzalloc(sizeof(*curr), GFP_ATOMIC);
+ 	if (!curr) {
+ 		ret = -ENOMEM;
+diff --git a/kernel/notifier.c b/kernel/notifier.c
+index b8251dc0bc0f..eabeddffdfa9 100644
+--- a/kernel/notifier.c
++++ b/kernel/notifier.c
+@@ -76,6 +76,7 @@ static int notifier_call_chain(struct notifier_block **nl,
+ #ifdef CONFIG_DEBUG_NOTIFIERS
+ 		if (unlikely(!func_ptr_is_kernel_text(nb->notifier_call))) {
+ 			WARN(1, "Invalid notifier called!");
++			pr_alert("%s: nb call %llx", __func__, (u64)nb->notifier_call);
+ 			nb = next_nb;
+ 			continue;
+ 		}
+-- 
+2.31.1
+

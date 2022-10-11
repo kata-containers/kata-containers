@@ -1,0 +1,92 @@
+From 1cf4f1236bb2ee232cd97bc5bfdbdf78bc56842c Mon Sep 17 00:00:00 2001
+From: Kai Huang <kai.huang@intel.com>
+Date: Tue, 28 Sep 2021 09:55:51 +1300
+Subject: [PATCH 0329/1418] mm: memory-hotplug: Introduce
+ arch_check_hotplug_memory_range()
+
+TDX provides increased levels of memory confidentiality and integrity.
+This requires special hardware support for features like memory encryption
+and storage of memory integrity checksums.  Not all memory satisfies these
+requirements.
+
+As a result, TDX introduced the concept of a "Convertible Memory Region"
+(CMR).  During boot, the firmware builds a list of all the memory ranges
+which can provide the TDX security guarantees.  This list of convertible
+memory regions won't change after machine boot, which means TDX
+architecturally doesn't support memory hotplug.
+
+Therefore, the ACPI memory hotplug needs to be disabled.  Also, the kernel
+converts all convertible memory to TDX memory to avoid having to modify
+page allocator to distinguish TDX and non-TDX memory allocation.  This
+means driver managed memory hotplug (i.e. kmem-hot-added PMEM) needs to be
+disabled too, otherwise, non-convertible memory would end up on page
+allocator, violating the "all memory in page allocator must be TDX memory"
+rule.  One exception is, for x86 legacy PMEMs reserved by 'memmap=nn!ss'
+kernel parameter, if they were converted to TDX memory during boot, it
+could be kmem-added to the page allocator again as the system memory.
+
+What's more, memremap_pages() should continue to work.  Although it extends
+NUMA node's spanned pages, the newly added memory region will end up in
+ZONE_DEVICE, whose pages won't be managed by the page allocator.
+
+To cover all above cases, introduce arch_check_hotplug_memory_range(), and
+make it as __weak, to allow x86 to provide a replacement version to do TDX
+specific check, and in meantime, avoid functional change for other
+architectures.  Call arch_check_hotplug_memory_range() in
+check_hotplug_memory_range() so memory hot-add code path can be checked by
+TDX but memremap_pages() won't be impacted.
+
+Signed-off-by: Kai Huang <kai.huang@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ include/linux/memory_hotplug.h |  1 +
+ mm/memory_hotplug.c            | 12 ++++++++++++
+ 2 files changed, 13 insertions(+)
+
+diff --git a/include/linux/memory_hotplug.h b/include/linux/memory_hotplug.h
+index e5a867c950b2..8da4cef6e802 100644
+--- a/include/linux/memory_hotplug.h
++++ b/include/linux/memory_hotplug.h
+@@ -327,6 +327,7 @@ extern void clear_zone_contiguous(struct zone *zone);
+ 
+ #ifdef CONFIG_MEMORY_HOTPLUG
+ extern void __ref free_area_init_core_hotplug(int nid);
++extern int arch_check_hotplug_memory_range(u64 start, u64 size);
+ extern int __add_memory(int nid, u64 start, u64 size, mhp_t mhp_flags);
+ extern int add_memory(int nid, u64 start, u64 size, mhp_t mhp_flags);
+ extern int add_memory_resource(int nid, struct resource *resource,
+diff --git a/mm/memory_hotplug.c b/mm/memory_hotplug.c
+index 9fd0be32a281..b6fb981a4ef8 100644
+--- a/mm/memory_hotplug.c
++++ b/mm/memory_hotplug.c
+@@ -1289,8 +1289,16 @@ int try_online_node(int nid)
+ 	return ret;
+ }
+ 
++/* Architecture to provide replacement version if required */
++int __weak arch_check_hotplug_memory_range(u64 start, u64 size)
++{
++	return 0;
++}
++
+ static int check_hotplug_memory_range(u64 start, u64 size)
+ {
++	int ret;
++
+ 	/* memory range must be block size aligned */
+ 	if (!size || !IS_ALIGNED(start, memory_block_size_bytes()) ||
+ 	    !IS_ALIGNED(size, memory_block_size_bytes())) {
+@@ -1299,6 +1307,10 @@ static int check_hotplug_memory_range(u64 start, u64 size)
+ 		return -EINVAL;
+ 	}
+ 
++	ret = arch_check_hotplug_memory_range(start, size);
++	if (ret)
++		return ret;
++
+ 	return 0;
+ }
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,96 @@
+From 8cc867c58297cdf81b67688ead06df82181d1f06 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Fri, 23 Jul 2021 11:14:03 +0800
+Subject: [PATCH 0450/1418] KVM: TDX: Disassociate vcpu from per-cpu tdxvcpu
+ list when freeing vcpu
+
+Otherwise the freed VCPU data will be accessed when other
+vcpus are added to/delete from the per cpu associated_tdvcpu
+list, which cause randomly kernel panic.
+
+BUG: kernel NULL pointer dereference, address: 0000000000000030
+PGD 0
+Oops: 0000 [#1] SMP NOPTI
+CPU: 39 PID: 0 Comm: swapper/39 Tainted: G S          E     5.12.0-rc2-yy-tdx-host-spr-blr-512+ #35
+Hardware name: Intel Corporation ArcherCity/ArcherCity, BIOS EGSDCRB1.86B.0057.D03.2104150329 04/15/2021
+RIP: 0010:__list_del_entry_valid+0x31/0x60
+Code: 00 ad de 55 48 8b 07 48 8b 57 08 48 89 e5 48 39 c8 0f 84 1d 50 80 00 48 b9 22 01 00
+00 00 00 ad de 48 39 ca 0f 84 40 50 80 00 <48> 8b 32 48 39 fe 0f 85 20 50 80 00 48 8b 50 08
+48 39 f2 0f 85 05
+RSP: 0018:ff23b13500cf0f30 EFLAGS: 00010013
+RAX: 0000000000000000 RBX: ff21403ff74a0000 RCX: dead000000000122
+RDX: 0000000000000030 RSI: 0000000000000000 RDI: ff21403ff74a1eb8
+RBP: ff23b13500cf0f30 R08: 0000000000000000 R09: 0000000000000000
+R10: 0000000000000000 R11: ff23b13500cf0ff8 R12: ff214057bd2ef020
+R13: 0000000000000000 R14: 0000000000000000 R15: 0000000000000000
+FS:  0000000000000000(0000) GS:ff214057bd2c0000(0000) knlGS:0000000000000000
+CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+CR2: 0000000000000030 CR3: 0000001d5900c005 CR4: 0000000000773ee0
+DR0: 0000000000000000 DR1: 0000000000000000 DR2: 0000000000000000
+DR3: 0000000000000000 DR6: 00000000fffe07f0 DR7: 0000000000000400
+PKRU: 55555554
+Call Trace:
+ <IRQ>
+ tdx_disassociate_vp+0x19/0x60 [kvm_intel]
+ vt_hardware_disable+0xe9/0x170 [kvm_intel]
+ kvm_arch_hardware_disable+0xe/0x40 [kvm]
+ hardware_disable_nolock+0x32/0x40 [kvm]
+ flush_smp_call_function_queue+0x125/0x1b0
+ generic_smp_call_function_single_interrupt+0x13/0x20
+ __sysvec_call_function+0x30/0xa0
+ sysvec_call_function+0x73/0xa0
+ </IRQ>
+ asm_sysvec_call_function+0x12/0x20
+RIP: 0010:native_safe_halt+0x12/0x20
+Code: 48 02 20 48 8b 00 a8 08 75 c3 e9 7c ff ff ff cc cc cc cc cc cc cc cc cc 55 48 89 e5 e9
+07 00 00 00 0f 00 2d b2 ec 41 00 fb f4 <5d> c3 66 66 2e 0f 1f 84 00 00 00 00 00 90 55 48 89
+e5 e9 07 00 00
+RSP: 0018:ff23b135005bbe20 EFLAGS: 00000246
+RAX: 0000000000004000 RBX: ff21403907ab2864 RCX: ff214057bd2c0000
+RDX: 0000000000000001 RSI: ffffffff9a855680 RDI: ff21403907ab2864
+RBP: ff23b135005bbe20 R08: ff21403907ab2800 R09: 000000000002bb00
+R10: 000039777ca40bc3 R11: ff214057bd2eafa4 R12: 0000000000000001
+R13: ffffffff9a855700 R14: ffffffff9a855680 R15: 0000000000000001
+ acpi_idle_do_entry+0x4d/0x60
+ acpi_idle_enter+0x5b/0xc0
+ cpuidle_enter_state+0x8d/0x360
+ cpuidle_enter+0x2e/0x40
+ do_idle+0x258/0x2b0
+ cpu_startup_entry+0x1d/0x20
+ start_secondary+0x11f/0x160
+ secondary_startup_64_no_verify+0xc2/0xcb
+Modules linked in: kvm_intel(E) kvm(E) nfsv3 nfs_acl rpcsec_gss_krb5 auth_rpcgss
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+Co-developed-by: Xioyao Li<xioyao.li@intel.com>
+Signed-off-by: Xioyao Li<xioyao.li@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 13bbf5cb2341..3c4969c1d0b2 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -585,7 +585,16 @@ static void tdx_vcpu_free(struct kvm_vcpu *vcpu)
+ 
+ 	tdx_reclaim_td_page(&tdx->tdvpr);
+ 
+-	/* kvm_unload_vcpu_mmu() in kvm_free_vcpus() reloads vcpu. */
++	/*
++	 * kvm_free_vcpus()
++	 *   -> kvm_unload_vcpu_mmu()
++	 *
++	 * does vcpu_load() for every vcpu after they already disassociated
++	 * from the per cpu list when tdx_vm_teardown(). So we need to
++	 * disassociate them again, otherwise the freed vcpu data will be
++	 * accessed when do list_{del,add}() on associated_tdvcpus list
++	 * later.
++	 */
+ 	tdx_flush_vp_on_cpu(vcpu);
+ }
+ 
+-- 
+2.31.1
+

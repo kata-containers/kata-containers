@@ -1,0 +1,32 @@
+From 5dc20db57546b01487c2f5a565cd7606ebf9b63f Mon Sep 17 00:00:00 2001
+From: Sameer Pujar <spujar@nvidia.com>
+Date: Wed, 15 Sep 2021 21:37:04 +0530
+Subject: [PATCH 0517/1418] dmaengine: tegra210-adma: Add description for
+ 'adma_get_burst_config'
+
+Trivial change to add description for 'adma_get_burst_config' in chip
+data structure.
+
+Signed-off-by: Sameer Pujar <spujar@nvidia.com>
+Reviewed-by: Jon Hunter <jonathanh@nvidia.com>
+Link: https://lore.kernel.org/r/1631722025-19873-3-git-send-email-spujar@nvidia.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/tegra210-adma.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/dma/tegra210-adma.c b/drivers/dma/tegra210-adma.c
+index caf200e53a6b..03f9776896fa 100644
+--- a/drivers/dma/tegra210-adma.c
++++ b/drivers/dma/tegra210-adma.c
+@@ -73,6 +73,7 @@ struct tegra_adma;
+ 
+ /*
+  * struct tegra_adma_chip_data - Tegra chip specific data
++ * @adma_get_burst_config: Function callback used to set DMA burst size.
+  * @global_reg_offset: Register offset of DMA global register.
+  * @global_int_clear: Register offset of DMA global interrupt clear.
+  * @ch_req_tx_shift: Register offset for AHUB transmit channel select.
+-- 
+2.31.1
+

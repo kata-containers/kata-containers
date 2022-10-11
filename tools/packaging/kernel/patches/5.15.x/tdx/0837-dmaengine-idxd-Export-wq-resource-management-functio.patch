@@ -1,0 +1,61 @@
+From bc19281e13dd42652caad742548cdee0eeeb685d Mon Sep 17 00:00:00 2001
+From: Tom Zanussi <tom.zanussi@intel.com>
+Date: Fri, 1 Oct 2021 13:49:54 -0700
+Subject: [PATCH 0837/1418] dmaengine: idxd: Export wq resource management
+ functions
+
+To allow idxd sub-drivers to access the wq resource management
+functions, export them.
+
+Signed-off-by: Tom Zanussi <tom.zanussi@linux.intel.com>
+---
+ drivers/dma/idxd/device.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index 9a8bc0be40cf..e10d276f28fe 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -162,6 +162,7 @@ int idxd_wq_alloc_resources(struct idxd_wq *wq)
+ 	free_hw_descs(wq);
+ 	return rc;
+ }
++EXPORT_SYMBOL_GPL(idxd_wq_alloc_resources);
+ 
+ void idxd_wq_free_resources(struct idxd_wq *wq)
+ {
+@@ -175,6 +176,7 @@ void idxd_wq_free_resources(struct idxd_wq *wq)
+ 	dma_free_coherent(dev, wq->compls_size, wq->compls, wq->compls_addr);
+ 	sbitmap_queue_free(&wq->sbq);
+ }
++EXPORT_SYMBOL_GPL(idxd_wq_free_resources);
+ 
+ int idxd_wq_enable(struct idxd_wq *wq)
+ {
+@@ -391,6 +393,7 @@ int idxd_wq_init_percpu_ref(struct idxd_wq *wq)
+ 	reinit_completion(&wq->wq_resurrect);
+ 	return 0;
+ }
++EXPORT_SYMBOL_GPL(idxd_wq_init_percpu_ref);
+ 
+ void __idxd_wq_quiesce(struct idxd_wq *wq)
+ {
+@@ -400,6 +403,7 @@ void __idxd_wq_quiesce(struct idxd_wq *wq)
+ 	complete_all(&wq->wq_resurrect);
+ 	wait_for_completion(&wq->wq_dead);
+ }
++EXPORT_SYMBOL_GPL(__idxd_wq_quiesce);
+ 
+ void idxd_wq_quiesce(struct idxd_wq *wq)
+ {
+@@ -407,6 +411,7 @@ void idxd_wq_quiesce(struct idxd_wq *wq)
+ 	__idxd_wq_quiesce(wq);
+ 	mutex_unlock(&wq->wq_lock);
+ }
++EXPORT_SYMBOL_GPL(idxd_wq_quiesce);
+ 
+ /* Device control bits */
+ static inline bool idxd_is_enabled(struct idxd_device *idxd)
+-- 
+2.31.1
+

@@ -1,0 +1,93 @@
+From 13e92de517334b0597e0f5e72bf7cc1531ebfbc5 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Wed, 16 Feb 2022 15:59:10 +0800
+Subject: [PATCH 1117/1418] x86/cpu/tdx: Handle SEAMCALL failure of
+ VMFailInvalid
+
+If P-SEAMLDR or TDX module is not loaded, the SEAMCALL to them returns
+VMFailInvalid.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/include/asm/tdx_errno.h    | 5 ++++-
+ arch/x86/kernel/cpu/tdx/p-seamldr.h | 4 +++-
+ arch/x86/kernel/cpu/tdx/seamcall.S  | 6 +++++-
+ 3 files changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/arch/x86/include/asm/tdx_errno.h b/arch/x86/include/asm/tdx_errno.h
+index 75420415188e..dffa814e7029 100644
+--- a/arch/x86/include/asm/tdx_errno.h
++++ b/arch/x86/include/asm/tdx_errno.h
+@@ -100,6 +100,8 @@
+ #define TDX_PAGE_ALREADY_ACCEPTED		0x00000B0A00000000ULL
+ #define TDX_PAGE_SIZE_MISMATCH			0xC0000B0B00000000ULL
+ 
++#define TDX_SEAMCALL_VMFAILINVALID		0xFFFFFFFFFFFFFFFFULL
++
+ #define TDX_STATUS_CODE(name)	{ name, #name }
+ 
+ #define TDX_STATUS_CODES					\
+@@ -192,7 +194,8 @@
+ 	TDX_STATUS_CODE(TDX_TLB_TRACKING_NOT_DONE),		\
+ 	TDX_STATUS_CODE(TDX_EPT_INVALID_PROMOTE_CONDITIONS),	\
+ 	TDX_STATUS_CODE(TDX_PAGE_ALREADY_ACCEPTED),		\
+-	TDX_STATUS_CODE(TDX_PAGE_SIZE_MISMATCH)
++	TDX_STATUS_CODE(TDX_PAGE_SIZE_MISMATCH),		\
++	TDX_STATUS_CODE(TDX_SEAMCALL_VMFAILINVALID)
+ 
+ /*
+  * TDG.VP.VMCALL Status Codes (returned in R10)
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.h b/arch/x86/kernel/cpu/tdx/p-seamldr.h
+index a9abe2ad24fc..67fba721cd66 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.h
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.h
+@@ -6,6 +6,7 @@
+ 
+ #include <linux/types.h>
+ #include <asm/page.h>
++#include <asm/tdx_errno.h>
+ 
+ /*
+  * NP-SEAMLDR error codes
+@@ -41,7 +42,8 @@
+ 	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_EBADSIG),	\
+ 	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_EBADHASH),	\
+ 	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_EINTERRUPT),	\
+-	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_ENOENTROPY)
++	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_ENOENTROPY),	\
++	P_SEAMLDR_ERROR_CODE(TDX_SEAMCALL_VMFAILINVALID)
+ 
+ const char *p_seamldr_error_name(u64 error_code);
+ 
+diff --git a/arch/x86/kernel/cpu/tdx/seamcall.S b/arch/x86/kernel/cpu/tdx/seamcall.S
+index a79aff5d86fe..25ac2d89a584 100644
+--- a/arch/x86/kernel/cpu/tdx/seamcall.S
++++ b/arch/x86/kernel/cpu/tdx/seamcall.S
+@@ -4,6 +4,7 @@
+ #include <linux/linkage.h>
+ 
+ #include <asm/asm-offsets.h>
++#include <asm/tdx_errno.h>
+ #include <asm/frame.h>
+ #include <asm/asm.h>
+ 
+@@ -44,12 +45,15 @@ SYM_FUNC_START(__seamcall)
+ 	movq	%rdi, %rax
+ 
+ 	seamcall
++	/* CF=1, means SEAMCALL hits VMFailInvalid */
++	jnc     1f
++	mov     $TDX_SEAMCALL_VMFAILINVALID, %rax
+ 
+ 	/*
+ 	 * Store extra returned values into ex.  Some registers
+ 	 * may be unused depending on SEAMCALL functions.
+ 	 */
+-	popq	%rdi
++1:	popq	%rdi
+ 	movq	%rcx, TDX_SEAM_rcx(%rdi)
+ 	movq	%rdx, TDX_SEAM_rdx(%rdi)
+ 	movq	%r8,  TDX_SEAM_r8(%rdi)
+-- 
+2.31.1
+

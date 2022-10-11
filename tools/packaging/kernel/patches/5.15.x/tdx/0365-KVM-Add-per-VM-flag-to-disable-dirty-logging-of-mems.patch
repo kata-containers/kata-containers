@@ -1,0 +1,47 @@
+From 50dcc63b8b07cef5131552661fc98dbc73ab06cc Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Tue, 30 Jun 2020 12:02:02 -0700
+Subject: [PATCH 0365/1418] KVM: Add per-VM flag to disable dirty logging of
+ memslots for TDs
+
+Add a flag for TDX to mark dirty logging as unsupported.
+
+Suggested-by: Kai Huang <kai.huang@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ include/linux/kvm_host.h | 1 +
+ virt/kvm/kvm_main.c      | 5 ++++-
+ 2 files changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/kvm_host.h b/include/linux/kvm_host.h
+index 95176800b857..3ec721719ad1 100644
+--- a/include/linux/kvm_host.h
++++ b/include/linux/kvm_host.h
+@@ -624,6 +624,7 @@ struct kvm {
+ 	struct notifier_block pm_notifier;
+ #endif
+ 	char stats_id[KVM_STATS_NAME_SIZE];
++	bool dirty_log_unsupported;
+ #ifdef __KVM_HAVE_READONLY_MEM
+ 	bool readonly_mem_unsupported;
+ #endif
+diff --git a/virt/kvm/kvm_main.c b/virt/kvm/kvm_main.c
+index 3911d9b5c170..28fd54f551d3 100644
+--- a/virt/kvm/kvm_main.c
++++ b/virt/kvm/kvm_main.c
+@@ -1417,7 +1417,10 @@ static void update_memslots(struct kvm_memslots *slots,
+ static int check_memory_region_flags(struct kvm *kvm,
+ 				     const struct kvm_userspace_memory_region *mem)
+ {
+-	u32 valid_flags = KVM_MEM_LOG_DIRTY_PAGES;
++	u32 valid_flags = 0;
++
++	if (!kvm->dirty_log_unsupported)
++		valid_flags |= KVM_MEM_LOG_DIRTY_PAGES;
+ 
+ #ifdef __KVM_HAVE_READONLY_MEM
+ 	if (!kvm->readonly_mem_unsupported)
+-- 
+2.31.1
+

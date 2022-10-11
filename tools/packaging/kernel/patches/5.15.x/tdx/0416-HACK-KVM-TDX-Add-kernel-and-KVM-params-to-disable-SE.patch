@@ -1,0 +1,69 @@
+From e45b5e75420ae5c36a2aebb6717f6f3601a9aadc Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Fri, 17 Jul 2020 22:27:16 -0700
+Subject: [PATCH 0416/1418] *** HACK *** KVM: TDX: Add kernel and KVM params to
+ disable SEAM tracing
+
+Add a kernel command line option, no_seamcall_tracing, as well as a
+kvm_intel param, trace_seamcall, to allow disabling TDX-SEAM's tracing.
+
+Default the KVM params to "custom", which is effectively "off", under
+the expectation that most debug will happen in a VM, in which case the
+L0 emulator provides far better debug capabilities than spamming the
+screen.
+
+Only the trace of TDSYSINITTDMR is annoying, while the trace of other
+SEAMCALLs during SEAM module initialization phase is useful and not too
+much.
+
+Make trace_boot_seamcalls only take effect on TDSYSINITTDMR.
+
+Co-developed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c     |  3 +++
+ arch/x86/kvm/vmx/tdx_ops.h | 14 ++++++++++++++
+ 2 files changed, 17 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index a63c1e0746e6..ae716e10288c 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -23,6 +23,9 @@
+ #undef pr_fmt
+ #define pr_fmt(fmt) "tdx: " fmt
+ 
++static int trace_seamcalls __read_mostly = DEBUGCONFIG_TRACE_CUSTOM;
++module_param(trace_seamcalls, int, 0444);
++
+ /* TDX KeyID pool */
+ static DEFINE_IDA(tdx_keyid_pool);
+ 
+diff --git a/arch/x86/kvm/vmx/tdx_ops.h b/arch/x86/kvm/vmx/tdx_ops.h
+index 219473235c97..8046ebde37f8 100644
+--- a/arch/x86/kvm/vmx/tdx_ops.h
++++ b/arch/x86/kvm/vmx/tdx_ops.h
+@@ -215,4 +215,18 @@ static inline u64 tdh_vp_wr(hpa_t tdvpr, u64 field, u64 val, u64 mask,
+ 	return seamcall(TDH_VP_WR, tdvpr, field, val, mask, 0, ex);
+ }
+ 
++static inline u64 tddebugconfig(u64 subleaf, u64 param1, u64 param2)
++{
++	return seamcall(TDDEBUGCONFIG, subleaf, param1, param2, 0, 0, NULL);
++}
++
++static inline void tdh_trace_seamcalls(u64 level)
++{
++	u64 err;
++
++	err = tddebugconfig(DEBUGCONFIG_SET_TRACE_LEVEL, level, 0);
++	if (err)
++		pr_seamcall_error(TDDEBUGCONFIG, err, NULL);
++}
++
+ #endif /* __KVM_X86_TDX_OPS_H */
+-- 
+2.31.1
+

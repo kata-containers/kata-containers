@@ -1,0 +1,31 @@
+From 92119e18e9f1915cc9d440079d91f13e7f4dc34e Mon Sep 17 00:00:00 2001
+From: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Date: Mon, 25 Jul 2022 10:47:46 -0700
+Subject: [PATCH 1413/1418] intel_th: pci: Add Sapphire Rapids PCH support
+
+Add support for Trace Hub in Sapphire Rapids PCH.
+
+Signed-off-by: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+---
+ drivers/hwtracing/intel_th/pci.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/hwtracing/intel_th/pci.c b/drivers/hwtracing/intel_th/pci.c
+index 7da4f298ed01..f35ea718c1cf 100644
+--- a/drivers/hwtracing/intel_th/pci.c
++++ b/drivers/hwtracing/intel_th/pci.c
+@@ -278,6 +278,11 @@ static const struct pci_device_id intel_th_pci_id_table[] = {
+ 		PCI_DEVICE(PCI_VENDOR_ID_INTEL, 0x54a6),
+ 		.driver_data = (kernel_ulong_t)&intel_th_2x,
+ 	},
++	{
++		/* Sapphire Rapids PCH */
++		PCI_DEVICE(PCI_VENDOR_ID_INTEL, 0x3456),
++		.driver_data = (kernel_ulong_t)&intel_th_2x,
++	},
+ 	{
+ 		/* Alder Lake CPU */
+ 		PCI_DEVICE(PCI_VENDOR_ID_INTEL, 0x466f),
+-- 
+2.31.1
+

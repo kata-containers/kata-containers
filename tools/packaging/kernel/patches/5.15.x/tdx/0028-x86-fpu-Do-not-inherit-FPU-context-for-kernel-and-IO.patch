@@ -1,0 +1,90 @@
+From 42aa72cf671955333341e0946fc027023dd3e915 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 15 Oct 2021 03:16:06 +0200
+Subject: [PATCH 0028/1418] x86/fpu: Do not inherit FPU context for kernel and
+ IO worker threads
+
+There is no reason why kernel and IO worker threads need a full clone of
+the parent's FPU state. Both are kernel threads which are not supposed to
+use FPU. So copying a large state or doing XSAVE() is pointless. Just clean
+out the minimally required state for those tasks.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211015011538.839822981@linutronix.de
+---
+ arch/x86/kernel/fpu/core.c | 37 ++++++++++++++++++++++++++-----------
+ 1 file changed, 26 insertions(+), 11 deletions(-)
+
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 191269edac97..9a6b195a8a00 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -212,6 +212,15 @@ static inline void fpstate_init_xstate(struct xregs_state *xsave)
+ 	xsave->header.xcomp_bv = XCOMP_BV_COMPACTED_FORMAT | xfeatures_mask_all;
+ }
+ 
++static inline unsigned int init_fpstate_copy_size(void)
++{
++	if (!use_xsave())
++		return fpu_kernel_xstate_size;
++
++	/* XSAVE(S) just needs the legacy and the xstate header part */
++	return sizeof(init_fpstate.xsave);
++}
++
+ static inline void fpstate_init_fxstate(struct fxregs_state *fx)
+ {
+ 	fx->cwd = 0x37f;
+@@ -259,6 +268,23 @@ int fpu_clone(struct task_struct *dst)
+ 	if (!cpu_feature_enabled(X86_FEATURE_FPU))
+ 		return 0;
+ 
++	/*
++	 * Enforce reload for user space tasks and prevent kernel threads
++	 * from trying to save the FPU registers on context switch.
++	 */
++	set_tsk_thread_flag(dst, TIF_NEED_FPU_LOAD);
++
++	/*
++	 * No FPU state inheritance for kernel threads and IO
++	 * worker threads.
++	 */
++	if (dst->flags & (PF_KTHREAD | PF_IO_WORKER)) {
++		/* Clear out the minimal state */
++		memcpy(&dst_fpu->state, &init_fpstate,
++		       init_fpstate_copy_size());
++		return 0;
++	}
++
+ 	/*
+ 	 * If the FPU registers are not owned by current just memcpy() the
+ 	 * state.  Otherwise save the FPU registers directly into the
+@@ -272,8 +298,6 @@ int fpu_clone(struct task_struct *dst)
+ 		save_fpregs_to_fpstate(dst_fpu);
+ 	fpregs_unlock();
+ 
+-	set_tsk_thread_flag(dst, TIF_NEED_FPU_LOAD);
+-
+ 	trace_x86_fpu_copy_src(src_fpu);
+ 	trace_x86_fpu_copy_dst(dst_fpu);
+ 
+@@ -322,15 +346,6 @@ static inline void restore_fpregs_from_init_fpstate(u64 features_mask)
+ 	pkru_write_default();
+ }
+ 
+-static inline unsigned int init_fpstate_copy_size(void)
+-{
+-	if (!use_xsave())
+-		return fpu_kernel_xstate_size;
+-
+-	/* XSAVE(S) just needs the legacy and the xstate header part */
+-	return sizeof(init_fpstate.xsave);
+-}
+-
+ /*
+  * Reset current->fpu memory state to the init values.
+  */
+-- 
+2.31.1
+

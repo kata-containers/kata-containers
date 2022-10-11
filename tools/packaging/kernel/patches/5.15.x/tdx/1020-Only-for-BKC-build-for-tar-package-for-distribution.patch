@@ -1,0 +1,91 @@
+From 2098b621f00ef9831dbd9afd349cef346b0d3790 Mon Sep 17 00:00:00 2001
+From: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Date: Wed, 26 Jan 2022 14:06:06 -0800
+Subject: [PATCH 1020/1418] Only for BKC build for tar package for distribution
+
+Signed-off-by: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+---
+ .../x86/intel-speed-select/make-isst-pkg.sh   | 71 +++++++++++++++++++
+ 1 file changed, 71 insertions(+)
+ create mode 100755 tools/power/x86/intel-speed-select/make-isst-pkg.sh
+
+diff --git a/tools/power/x86/intel-speed-select/make-isst-pkg.sh b/tools/power/x86/intel-speed-select/make-isst-pkg.sh
+new file mode 100755
+index 000000000000..cdd05b1f0164
+--- /dev/null
++++ b/tools/power/x86/intel-speed-select/make-isst-pkg.sh
+@@ -0,0 +1,71 @@
++#!/usr/bin/bash -e
++
++# usage: <script> <kernel dir> <version string>
++SELF="make-isst-pkg.sh"
++KERNEL_DIR=$1
++VERSION=$2
++
++usage() {
++	echo "Usage:"
++	echo "  ${SELF} KERNEL_SRC_DIR VERSION_NUMBER"
++	echo "    KERNEL_SRC_DIR must point to kernel source root directory"
++	echo "    VERSION_NUMBER is an arbitrary string (e.g. v1.4)"
++	exit 1
++}
++
++# check parameters
++if [ "$KERNEL_DIR" = "" ]; then
++	echo "Please specify kernel source directory"
++	usage
++fi
++
++# we have to be inside kernel tree
++if [ ! -f $KERNEL_DIR/include/uapi/linux/isst_if.h ]; then
++	echo "$KERNEL_DIR is not a valid kernel source code directory"
++	usage
++fi
++
++if [ "${2}" == ""]; then
++if [ "$version" = "" ]; then
++	echo "Please specify version string"
++	usage
++else
++	VERSION=$version
++fi
++fi
++
++# locate isst dir
++ISST_DIR=$KERNEL_DIR/tools/power/x86/intel-speed-select
++PKGNAME="intel-speed-select-${VERSION}"
++
++echo $ISST_DIR
++echo $PKGNAME
++
++# create temporary directory
++TMPDIR=$(mktemp -d)
++
++# copy headers to isst dir
++make -C $ISST_DIR prepare
++
++# copy source code
++cp $ISST_DIR/*.c $TMPDIR
++cp $ISST_DIR/*.h $TMPDIR
++cp -r $ISST_DIR/include $TMPDIR
++
++# create custom Makefile
++cat > $TMPDIR/Makefile << EOF
++all:
++	gcc *.c -D_GNU_SOURCE -I include -I/usr/include/libnl3 -o intel-speed-select -lnl-genl-3 -lnl-3
++clean:
++	rm intel-speed-select
++install:
++	cp intel-speed-select /usr/local/bin
++uninstall:
++	rm /usr/local/bin/intel-speed-select
++EOF
++
++# create a tarball with self-contained package
++tar --transform="s|${TMPDIR}|${PKGNAME}|" -czvhPf $PKGNAME.tar.gz $TMPDIR/*
++
++# cleanup
++rm -rf $TMPDIR
+-- 
+2.31.1
+

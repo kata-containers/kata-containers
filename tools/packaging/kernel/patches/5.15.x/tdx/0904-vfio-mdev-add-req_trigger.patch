@@ -1,0 +1,25 @@
+From a1118853cd7ee926bb74d7adf023806bf36ed453 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Tue, 30 Nov 2021 17:11:39 -0700
+Subject: [PATCH 0904/1418] vfio/mdev: add req_trigger
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ include/linux/mdev.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/include/linux/mdev.h b/include/linux/mdev.h
+index 98b70318782b..a09ff7720974 100644
+--- a/include/linux/mdev.h
++++ b/include/linux/mdev.h
+@@ -22,6 +22,7 @@ struct mdev_device {
+ 	void *iommu_domain;
+ 	void *iommu_fault_data;
+ 	bool active;
++	struct eventfd_ctx *req_trigger;
+ };
+ 
+ static inline struct mdev_device *to_mdev_device(struct device *dev)
+-- 
+2.31.1
+

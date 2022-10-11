@@ -1,0 +1,30 @@
+From 4ebf0e6f30749b4d2be3c824d942b30239439faf Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Wed, 10 Jun 2020 09:11:37 -0700
+Subject: [PATCH 0376/1418] KVM: Export kvm_is_reserved_pfn() for use by TDX
+
+TDX will use kvm_is_reserved_pfn() to prevent installing a reserved PFN
+int SEPT.  Or rather, to prevent such an attempt, as reserved PFNs are
+not covered by TDMRs.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ virt/kvm/kvm_main.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/virt/kvm/kvm_main.c b/virt/kvm/kvm_main.c
+index 28fd54f551d3..74d05e51c42c 100644
+--- a/virt/kvm/kvm_main.c
++++ b/virt/kvm/kvm_main.c
+@@ -188,6 +188,7 @@ bool kvm_is_reserved_pfn(kvm_pfn_t pfn)
+ 
+ 	return true;
+ }
++EXPORT_SYMBOL_GPL(kvm_is_reserved_pfn);
+ 
+ /*
+  * Switches to specified vcpu, until a matching vcpu_put()
+-- 
+2.31.1
+

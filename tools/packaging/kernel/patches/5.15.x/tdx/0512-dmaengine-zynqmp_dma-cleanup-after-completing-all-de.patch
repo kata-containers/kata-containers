@@ -1,0 +1,40 @@
+From 4286c41e1f88a64c6da5ca914981cb1ec00054c7 Mon Sep 17 00:00:00 2001
+From: Michael Tretter <m.tretter@pengutronix.de>
+Date: Thu, 26 Aug 2021 11:47:40 +0200
+Subject: [PATCH 0512/1418] dmaengine: zynqmp_dma: cleanup after completing all
+ descriptors
+
+The current implementation iterates the entire done list for each
+completed dma descriptor even if there are multiple completed
+descriptors.
+
+Avoid this by first moving all completed descriptors to the done list
+and afterwards iterating the done list and finishing the descriptors.
+
+Signed-off-by: Michael Tretter <m.tretter@pengutronix.de>
+Link: https://lore.kernel.org/r/20210826094742.1302009-6-m.tretter@pengutronix.de
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/xilinx/zynqmp_dma.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/dma/xilinx/zynqmp_dma.c b/drivers/dma/xilinx/zynqmp_dma.c
+index 2a57d7c38d35..aa1374c24498 100644
+--- a/drivers/dma/xilinx/zynqmp_dma.c
++++ b/drivers/dma/xilinx/zynqmp_dma.c
+@@ -758,10 +758,11 @@ static void zynqmp_dma_do_tasklet(struct tasklet_struct *t)
+ 
+ 	while (count) {
+ 		zynqmp_dma_complete_descriptor(chan);
+-		zynqmp_dma_chan_desc_cleanup(chan);
+ 		count--;
+ 	}
+ 
++	zynqmp_dma_chan_desc_cleanup(chan);
++
+ 	if (chan->idle)
+ 		zynqmp_dma_start_transfer(chan);
+ 
+-- 
+2.31.1
+

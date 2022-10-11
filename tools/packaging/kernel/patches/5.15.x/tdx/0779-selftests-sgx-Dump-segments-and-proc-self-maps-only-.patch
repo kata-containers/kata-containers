@@ -1,0 +1,74 @@
+From 998a5d13694b09b18980b1051ff85f035bb26d45 Mon Sep 17 00:00:00 2001
+From: Jarkko Sakkinen <jarkko@kernel.org>
+Date: Mon, 15 Nov 2021 10:35:18 -0800
+Subject: [PATCH 0779/1418] selftests/sgx: Dump segments and /proc/self/maps
+ only on failure
+
+Logging is always a compromise between clarity and detail. The main use
+case for dumping VMA's is when FIXTURE_SETUP() fails, and is less important
+for enclaves that do initialize correctly. Therefore, print the segments
+and /proc/self/maps only in the error case.
+
+Finally, if a single test ever creates multiple enclaves, the amount of
+log lines would become enormous.
+
+Signed-off-by: Jarkko Sakkinen <jarkko@kernel.org>
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+Signed-off-by: Dave Hansen <dave.hansen@linux.intel.com>
+Acked-by: Dave Hansen <dave.hansen@linux.intel.com>
+Link: https://lkml.kernel.org/r/23cef0ae1de3a8a74cbfbbe74eca48ca3f300fde.1636997631.git.reinette.chatre@intel.com
+---
+ tools/testing/selftests/sgx/main.c | 23 ++++++++++++-----------
+ 1 file changed, 12 insertions(+), 11 deletions(-)
+
+diff --git a/tools/testing/selftests/sgx/main.c b/tools/testing/selftests/sgx/main.c
+index 6858a35fed20..deab02f2f3ce 100644
+--- a/tools/testing/selftests/sgx/main.c
++++ b/tools/testing/selftests/sgx/main.c
+@@ -127,12 +127,6 @@ FIXTURE_SETUP(enclave)
+ 		ksft_exit_skip("cannot load enclaves\n");
+ 	}
+ 
+-	for (i = 0; i < self->encl.nr_segments; i++) {
+-		seg = &self->encl.segment_tbl[i];
+-
+-		TH_LOG("0x%016lx 0x%016lx 0x%02x", seg->offset, seg->size, seg->prot);
+-	}
+-
+ 	if (!encl_measure(&self->encl))
+ 		goto err;
+ 
+@@ -169,6 +163,17 @@ FIXTURE_SETUP(enclave)
+ 	memset(&self->run, 0, sizeof(self->run));
+ 	self->run.tcs = self->encl.encl_base;
+ 
++	return;
++
++err:
++	encl_delete(&self->encl);
++
++	for (i = 0; i < self->encl.nr_segments; i++) {
++		seg = &self->encl.segment_tbl[i];
++
++		TH_LOG("0x%016lx 0x%016lx 0x%02x", seg->offset, seg->size, seg->prot);
++	}
++
+ 	maps_file = fopen("/proc/self/maps", "r");
+ 	if (maps_file != NULL)  {
+ 		while (fgets(maps_line, sizeof(maps_line), maps_file) != NULL) {
+@@ -181,11 +186,7 @@ FIXTURE_SETUP(enclave)
+ 		fclose(maps_file);
+ 	}
+ 
+-err:
+-	if (!sgx_enter_enclave_sym)
+-		encl_delete(&self->encl);
+-
+-	ASSERT_NE(sgx_enter_enclave_sym, NULL);
++	ASSERT_TRUE(false);
+ }
+ 
+ FIXTURE_TEARDOWN(enclave)
+-- 
+2.31.1
+

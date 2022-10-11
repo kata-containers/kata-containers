@@ -1,0 +1,45 @@
+From e7767f502cd91f045afbc718d9e6bbb0b4438d7c Mon Sep 17 00:00:00 2001
+From: Fenghua Yu <fenghua.yu@intel.com>
+Date: Mon, 24 Feb 2020 20:32:55 +0000
+Subject: [PATCH 0109/1418] x86/process: Clear PASID state for a newly
+ forked/cloned thread
+
+The PASID state has to be cleared on forks, since the child has a
+different address space. The PASID is also cleared for thread clone. While
+it would be correct to inherit the PASID in this case, it is unknown
+whether the new task will use ENQCMD. Giving it the PASID "just in case"
+would have the downside of increased context switch overhead to setting
+the PASID MSR and losing init optimization.
+
+Since #GP faults have to be handled on any threads that were created before
+the PASID was assigned to the mm of the process, newly created threads
+might as well be treated in a consistent way.
+
+Signed-off-by: Fenghua Yu <fenghua.yu@intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+---
+ arch/x86/kernel/process.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/arch/x86/kernel/process.c b/arch/x86/kernel/process.c
+index f3f251787b99..0ac691b996cd 100644
+--- a/arch/x86/kernel/process.c
++++ b/arch/x86/kernel/process.c
+@@ -169,6 +169,14 @@ int copy_thread(unsigned long clone_flags, unsigned long sp, unsigned long arg,
+ 
+ 	fpu_clone(p, clone_flags);
+ 
++	if (static_cpu_has(X86_FEATURE_ENQCMD)) {
++		/*
++		 * Clear the PASID bit in xfeatures so that the PASID MSR
++		 * will be initialized as init state (0).
++		 */
++		p->thread.fpu.fpstate->regs.xsave.header.xfeatures &= ~XFEATURE_MASK_PASID;
++	}
++
+ 	/* Kernel thread ? */
+ 	if (unlikely(p->flags & PF_KTHREAD)) {
+ 		p->thread.pkru = pkru_get_init_value();
+-- 
+2.31.1
+

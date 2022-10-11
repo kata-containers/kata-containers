@@ -1,0 +1,119 @@
+From b7290e34882d9b6bfd4225980ad859c5dce5ecdb Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 15 Oct 2021 01:09:37 +0200
+Subject: [PATCH 0077/1418] x86/fpu: Mop up xfeatures_mask_uabi()
+
+Use the new fpu_user_cfg to retrieve the information instead of
+xfeatures_mask_uabi() which will be no longer correct when dynamically
+enabled features become available.
+
+Using fpu_user_cfg is appropriate when setting XCOMP_BV in the
+init_fpstate since it has space allocated for "max_features". But,
+normal fpstates might only have space for default xfeatures. Since
+XRSTOR* derives the format of the XSAVE buffer from XCOMP_BV, this can
+lead to XRSTOR reading out of bounds.
+
+So when copying actively used fpstate, simply read the XCOMP_BV features
+bits directly out of the fpstate instead.
+
+This correction courtesy of Dave Hansen <dave.hansen@linux.intel.com>
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211014230739.408879849@linutronix.de
+---
+ arch/x86/include/asm/fpu/xstate.h | 9 ---------
+ arch/x86/kernel/fpu/core.c        | 4 ++--
+ arch/x86/kernel/fpu/signal.c      | 2 +-
+ arch/x86/kernel/fpu/xstate.c      | 6 +++---
+ 4 files changed, 6 insertions(+), 15 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/xstate.h b/arch/x86/include/asm/fpu/xstate.h
+index fe7c9af9ea42..3c890b97f195 100644
+--- a/arch/x86/include/asm/fpu/xstate.h
++++ b/arch/x86/include/asm/fpu/xstate.h
+@@ -83,15 +83,6 @@ static inline u64 xfeatures_mask_supervisor(void)
+ 	return fpu_kernel_cfg.max_features & XFEATURE_MASK_SUPERVISOR_SUPPORTED;
+ }
+ 
+-/*
+- * The xfeatures which are enabled in XCR0 and expected to be in ptrace
+- * buffers and signal frames.
+- */
+-static inline u64 xfeatures_mask_uabi(void)
+-{
+-	return fpu_kernel_cfg.max_features & XFEATURE_MASK_USER_SUPPORTED;
+-}
+-
+ /*
+  * The xfeatures which are restored by the kernel when returning to user
+  * mode. This is not necessarily the same as xfeatures_mask_uabi() as the
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 501e21c341f1..5acc077cb9f1 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -237,7 +237,7 @@ int fpu_copy_kvm_uabi_to_fpstate(struct fpu *fpu, const void *buf, u64 xcr0,
+ 	}
+ 
+ 	/* Ensure that XCOMP_BV is set up for XSAVES */
+-	xstate_init_xcomp_bv(&kstate->regs.xsave, xfeatures_mask_uabi());
++	xstate_init_xcomp_bv(&kstate->regs.xsave, kstate->xfeatures);
+ 	return 0;
+ }
+ EXPORT_SYMBOL_GPL(fpu_copy_kvm_uabi_to_fpstate);
+@@ -333,7 +333,7 @@ void fpstate_init_user(struct fpstate *fpstate)
+ 		return;
+ 	}
+ 
+-	xstate_init_xcomp_bv(&fpstate->regs.xsave, xfeatures_mask_uabi());
++	xstate_init_xcomp_bv(&fpstate->regs.xsave, fpstate->xfeatures);
+ 
+ 	if (cpu_feature_enabled(X86_FEATURE_FXSR))
+ 		fpstate_init_fxstate(fpstate);
+diff --git a/arch/x86/kernel/fpu/signal.c b/arch/x86/kernel/fpu/signal.c
+index c14f477f5651..3e42e6e8b56c 100644
+--- a/arch/x86/kernel/fpu/signal.c
++++ b/arch/x86/kernel/fpu/signal.c
+@@ -536,7 +536,7 @@ void __init fpu__init_prepare_fx_sw_frame(void)
+ 
+ 	fx_sw_reserved.magic1 = FP_XSTATE_MAGIC1;
+ 	fx_sw_reserved.extended_size = size;
+-	fx_sw_reserved.xfeatures = xfeatures_mask_uabi();
++	fx_sw_reserved.xfeatures = fpu_user_cfg.default_features;
+ 	fx_sw_reserved.xstate_size = fpu_user_cfg.default_size;
+ 
+ 	if (IS_ENABLED(CONFIG_IA32_EMULATION) ||
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 8b496c0eb1a5..9f92abd230db 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -770,7 +770,7 @@ void __init fpu__init_system_xstate(unsigned int legacy_size)
+ 	cpuid_count(XSTATE_CPUID, 1, &eax, &ebx, &ecx, &edx);
+ 	fpu_kernel_cfg.max_features |= ecx + ((u64)edx << 32);
+ 
+-	if ((xfeatures_mask_uabi() & XFEATURE_MASK_FPSSE) != XFEATURE_MASK_FPSSE) {
++	if ((fpu_kernel_cfg.max_features & XFEATURE_MASK_FPSSE) != XFEATURE_MASK_FPSSE) {
+ 		/*
+ 		 * This indicates that something really unexpected happened
+ 		 * with the enumeration.  Disable XSAVE and try to continue
+@@ -815,7 +815,7 @@ void __init fpu__init_system_xstate(unsigned int legacy_size)
+ 	 * supervisor xstates:
+ 	 */
+ 	update_regset_xstate_info(fpu_user_cfg.max_size,
+-				  xfeatures_mask_uabi());
++				  fpu_user_cfg.max_features);
+ 
+ 	fpu__init_prepare_fx_sw_frame();
+ 	setup_init_fpu_buf();
+@@ -853,7 +853,7 @@ void fpu__resume_cpu(void)
+ 	 * Restore XCR0 on xsave capable CPUs:
+ 	 */
+ 	if (cpu_feature_enabled(X86_FEATURE_XSAVE))
+-		xsetbv(XCR_XFEATURE_ENABLED_MASK, xfeatures_mask_uabi());
++		xsetbv(XCR_XFEATURE_ENABLED_MASK, fpu_user_cfg.max_features);
+ 
+ 	/*
+ 	 * Restore IA32_XSS. The same CPUID bit enumerates support
+-- 
+2.31.1
+

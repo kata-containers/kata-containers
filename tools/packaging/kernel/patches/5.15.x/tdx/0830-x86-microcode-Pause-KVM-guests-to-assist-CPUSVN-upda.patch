@@ -1,0 +1,41 @@
+From dd901518a5139910e869fe17751a14977df6c1b2 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Thu, 16 Dec 2021 15:48:21 +0800
+Subject: [PATCH 0830/1418] x86/microcode: Pause KVM guests to assist CPUSVN
+ update
+
+To increase the chance of a successful EUPDATESVN, pause the KVM
+guests which have SGX enabled to prevent them from using EPC pages
+during the update.
+
+Once the update complete, resume the KVM guests to allow them to
+access EPC pages again.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/kernel/cpu/microcode/intel.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/microcode/intel.c b/arch/x86/kernel/cpu/microcode/intel.c
+index feeb2eabee03..16d794ee2c60 100644
+--- a/arch/x86/kernel/cpu/microcode/intel.c
++++ b/arch/x86/kernel/cpu/microcode/intel.c
+@@ -1010,6 +1010,7 @@ int update_cpusvn_intel(void)
+ 	int ret;
+ 
+ 	sgx_lock_epc();
++	sgx_kvm_notifier_halt();
+ 	ret = sgx_zap_pages();
+ 	if (ret)
+ 		goto out;
+@@ -1031,6 +1032,7 @@ int update_cpusvn_intel(void)
+ 	}
+ 
+ out:
++	sgx_kvm_notifier_resume();
+ 	sgx_unlock_epc();
+ 
+ 	return ret;
+-- 
+2.31.1
+

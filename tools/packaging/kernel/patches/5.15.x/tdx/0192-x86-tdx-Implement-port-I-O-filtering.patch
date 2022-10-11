@@ -1,0 +1,108 @@
+From 58488ae7dc348d211197477e77d6fb0a0d897302 Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Fri, 17 Jul 2020 11:12:09 +0300
+Subject: [PATCH 0192/1418] x86/tdx: Implement port I/O filtering
+
+In TDX guest, since host is an untrusted entity, interactions via
+IO ports had to be hardened to keep the VM guest secure. So by
+default block all IO ports and add support for allowlist of IO
+ports that can be used for communication with the host. Only RTC
+and PCI ranges are essential.
+
+There are a lot of other IO port interactions that are difficult to
+harden. So let's just block them by default to avoid any security
+risks from unsafe drivers. Except for the listed blocks a modern
+virtualized system shouldn't really need any IO ports.
+
+This is an extra safety net against drivers that don't use the normal
+driver registration infrastructure to make sure they cannot be loaded
+by a malicious hypervisor.
+
+The filtering is disabled for decompression code. It doesn't have
+significant attack surface to care about.
+
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/tdx.h   |  2 ++
+ arch/x86/kernel/tdx-filter.c | 30 ++++++++++++++++++++++++++++++
+ arch/x86/kernel/tdx.c        |  8 ++++++++
+ 3 files changed, 40 insertions(+)
+
+diff --git a/arch/x86/include/asm/tdx.h b/arch/x86/include/asm/tdx.h
+index 924735359f7b..376c18c45376 100644
+--- a/arch/x86/include/asm/tdx.h
++++ b/arch/x86/include/asm/tdx.h
+@@ -88,6 +88,8 @@ bool tdx_handle_virtualization_exception(struct pt_regs *regs,
+ 
+ bool tdx_early_handle_ve(struct pt_regs *regs);
+ 
++bool tdx_allowed_port(short int port);
++
+ extern phys_addr_t tdx_shared_mask(void);
+ 
+ extern int tdx_hcall_gpa_intent(phys_addr_t gpa, int numpages,
+diff --git a/arch/x86/kernel/tdx-filter.c b/arch/x86/kernel/tdx-filter.c
+index fc564e8c75a4..a7d379c48beb 100644
+--- a/arch/x86/kernel/tdx-filter.c
++++ b/arch/x86/kernel/tdx-filter.c
+@@ -199,6 +199,36 @@ bool tdx_filter_enabled(void)
+ 	return tdx_filter_status;
+ }
+ 
++bool tdx_allowed_port(short int port)
++{
++	if (tdx_debug_enabled() && tdx_filter_enabled())
++		return true;
++
++	switch (port) {
++	/* MC146818 RTC */
++	case 0x70 ... 0x71:
++	/* PCI */
++	case 0xcf8 ... 0xcff:
++		return true;
++	/* ACPI ports list:
++	 * 0600-0603 : ACPI PM1a_EVT_BLK
++	 * 0604-0605 : ACPI PM1a_CNT_BLK
++	 * 0608-060b : ACPI PM_TMR
++	 * 0620-062f : ACPI GPE0_BLK
++	 */
++	case 0x600 ... 0x62f:
++		return true;
++	/* COM1 */
++	case 0x3f8:
++	case 0x3f9:
++	case 0x3fa:
++	case 0x3fd:
++		return tdx_debug_enabled();
++	default:
++		return false;
++	}
++}
++
+ void __init tdx_filter_init(void)
+ {
+ 	if (!cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 50841fb25582..f3794ce4bc7f 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -510,6 +510,14 @@ static bool tdx_handle_io(struct pt_regs *regs, u32 exit_qual)
+ 	port = VE_GET_PORT_NUM(exit_qual);
+ 	mask = GENMASK(8 * size, 0);
+ 
++	if (!tdx_allowed_port(port)) {
++		if (!out) {
++			regs->ax &= ~mask;
++			regs->ax |= (UINT_MAX & mask);
++		}
++		return false;
++	}
++
+ 	if (!out) {
+ 		ret = _trace_tdx_hypercall(EXIT_REASON_IO_INSTRUCTION,
+ 					   size, out, port, regs->ax,
+-- 
+2.31.1
+

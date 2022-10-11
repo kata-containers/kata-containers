@@ -1,0 +1,107 @@
+From d83e4df9ec52a657ca87203f86503e95793b1f60 Mon Sep 17 00:00:00 2001
+From: Zhang Chen <chen.zhang@intel.com>
+Date: Mon, 30 Mar 2020 18:04:06 +0800
+Subject: [PATCH 0423/1418] *** HACK *** KVM: TDX: Add an ioctl() to translate
+ VA to PA for selftests
+
+Add an ioctl(), KVM_TRANSLATE_VA_TO_PA, to get the PA associated with a
+userspace VA.  Pinning and error handling is the callers responsibility.
+
+Signed-off-by: Zhang Chen <chen.zhang@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/uapi/asm/kvm.h       |  5 +++++
+ arch/x86/kvm/x86.c                    | 22 ++++++++++++++++++++++
+ include/uapi/linux/kvm.h              |  1 +
+ tools/arch/x86/include/uapi/asm/kvm.h |  5 +++++
+ tools/include/uapi/linux/kvm.h        |  1 +
+ 5 files changed, 34 insertions(+)
+
+diff --git a/arch/x86/include/uapi/asm/kvm.h b/arch/x86/include/uapi/asm/kvm.h
+index 76fe06cabf4d..1f74d02b9925 100644
+--- a/arch/x86/include/uapi/asm/kvm.h
++++ b/arch/x86/include/uapi/asm/kvm.h
+@@ -583,4 +583,9 @@ struct kvm_tdenter {
+ 	__u64 regs[16];
+ };
+ 
++struct kvm_va_to_pa {
++	__u64 va;
++	__u64 pa;
++};
++
+ #endif /* _ASM_X86_KVM_H */
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index baab8d2a686b..d8c2b15f3c70 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -4303,6 +4303,28 @@ long kvm_arch_dev_ioctl(struct file *filp,
+ 		break;
+ 	}
+ #endif
++	case KVM_TRANSLATE_VA_TO_PA: {
++		struct kvm_va_to_pa __user *user_addr = argp;
++		struct kvm_va_to_pa addr;
++		struct page *page[1];
++
++		r = -EFAULT;
++		if (copy_from_user(&addr, user_addr, sizeof(addr)))
++			goto out;
++
++		if (get_user_pages_fast(addr.va, 1, 0, page) != 1)
++			goto out;
++
++		addr.pa = (page_to_pfn(page[0]) << PAGE_SHIFT) |
++			  (addr.va & ~PAGE_MASK);
++		put_page(page[0]);
++
++		if (copy_to_user(user_addr, &addr, sizeof(addr)))
++			goto out;
++
++		r = 0;
++		break;
++	}
+ 	default:
+ 		r = -EINVAL;
+ 		break;
+diff --git a/include/uapi/linux/kvm.h b/include/uapi/linux/kvm.h
+index 33d1e0f9a8c5..ea6612f62487 100644
+--- a/include/uapi/linux/kvm.h
++++ b/include/uapi/linux/kvm.h
+@@ -876,6 +876,7 @@ struct kvm_ppc_resize_hpt {
+ 
+ #define KVM_SEAMCALL              _IOWR(KVMIO, 0x31, struct kvm_seamcall)
+ #define KVM_TDENTER		  _IOWR(KVMIO, 0x32, struct kvm_tdenter)
++#define KVM_TRANSLATE_VA_TO_PA	  _IOWR(KVMIO, 0x33, struct kvm_va_to_pa)
+ 
+ /*
+  * Check if a kvm extension is available.  Argument is extension number,
+diff --git a/tools/arch/x86/include/uapi/asm/kvm.h b/tools/arch/x86/include/uapi/asm/kvm.h
+index fdf6b4787878..c18436c77812 100644
+--- a/tools/arch/x86/include/uapi/asm/kvm.h
++++ b/tools/arch/x86/include/uapi/asm/kvm.h
+@@ -578,4 +578,9 @@ struct kvm_tdenter {
+ 	__u64 regs[16];
+ };
+ 
++struct kvm_va_to_pa {
++	__u64 va;
++	__u64 pa;
++};
++
+ #endif /* _ASM_X86_KVM_H */
+diff --git a/tools/include/uapi/linux/kvm.h b/tools/include/uapi/linux/kvm.h
+index d07398057110..3063b7910a36 100644
+--- a/tools/include/uapi/linux/kvm.h
++++ b/tools/include/uapi/linux/kvm.h
+@@ -874,6 +874,7 @@ struct kvm_ppc_resize_hpt {
+ 
+ #define KVM_SEAMCALL              _IOWR(KVMIO, 0x31, struct kvm_seamcall)
+ #define KVM_TDENTER		  _IOWR(KVMIO, 0x32, struct kvm_tdenter)
++#define KVM_TRANSLATE_VA_TO_PA	  _IOWR(KVMIO, 0x33, struct kvm_va_to_pa)
+ 
+ /*
+  * Check if a kvm extension is available.  Argument is extension number,
+-- 
+2.31.1
+

@@ -1,0 +1,71 @@
+From ed44c8673bf6b830909c2d2c0421d043bd8ca825 Mon Sep 17 00:00:00 2001
+From: Mika Westerberg <mika.westerberg@linux.intel.com>
+Date: Fri, 17 Sep 2021 18:33:57 +0300
+Subject: [PATCH 0713/1418] Documentation / MTD: Rename the intel-spi driver
+
+Since the driver is renamed (and moved) update the BIOS upgrade guide
+accordingly from intel-spi to spi-intel. Keep the guide under MTD
+documentation because this is pretty much still about MTD and SPI-NOR.
+
+Signed-off-by: Mika Westerberg <mika.westerberg@linux.intel.com>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Reviewed-by: Mauro Lima <mauro.lima@eclypsium.com>
+---
+ Documentation/driver-api/mtd/index.rst                    | 2 +-
+ .../driver-api/mtd/{intel-spi.rst => spi-intel.rst}       | 8 ++++----
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+ rename Documentation/driver-api/mtd/{intel-spi.rst => spi-intel.rst} (94%)
+
+diff --git a/Documentation/driver-api/mtd/index.rst b/Documentation/driver-api/mtd/index.rst
+index 436ba5a851d7..6a4278f409d7 100644
+--- a/Documentation/driver-api/mtd/index.rst
++++ b/Documentation/driver-api/mtd/index.rst
+@@ -7,6 +7,6 @@ Memory Technology Device (MTD)
+ .. toctree::
+    :maxdepth: 1
+ 
+-   intel-spi
++   spi-intel
+    nand_ecc
+    spi-nor
+diff --git a/Documentation/driver-api/mtd/intel-spi.rst b/Documentation/driver-api/mtd/spi-intel.rst
+similarity index 94%
+rename from Documentation/driver-api/mtd/intel-spi.rst
+rename to Documentation/driver-api/mtd/spi-intel.rst
+index 0465f6879262..df854f20ead1 100644
+--- a/Documentation/driver-api/mtd/intel-spi.rst
++++ b/Documentation/driver-api/mtd/spi-intel.rst
+@@ -1,5 +1,5 @@
+ ==============================
+-Upgrading BIOS using intel-spi
++Upgrading BIOS using spi-intel
+ ==============================
+ 
+ Many Intel CPUs like Baytrail and Braswell include SPI serial flash host
+@@ -11,12 +11,12 @@ avoid accidental (or on purpose) overwrite of the content.
+ Not all manufacturers protect the SPI serial flash, mainly because it
+ allows upgrading the BIOS image directly from an OS.
+ 
+-The intel-spi driver makes it possible to read and write the SPI serial
++The spi-intel driver makes it possible to read and write the SPI serial
+ flash, if certain protection bits are not set and locked. If it finds
+ any of them set, the whole MTD device is made read-only to prevent
+ partial overwrites. By default the driver exposes SPI serial flash
+ contents as read-only but it can be changed from kernel command line,
+-passing "intel-spi.writeable=1".
++passing "spi_intel.writeable=1".
+ 
+ Please keep in mind that overwriting the BIOS image on SPI serial flash
+ might render the machine unbootable and requires special equipment like
+@@ -32,7 +32,7 @@ Linux.
+     serial flash. Distros like Debian and Fedora have this prepackaged with
+     name "mtd-utils".
+ 
+- 3) Add "intel-spi.writeable=1" to the kernel command line and reboot
++ 3) Add "spi_intel.writeable=1" to the kernel command line and reboot
+     the board (you can also reload the driver passing "writeable=1" as
+     module parameter to modprobe).
+ 
+-- 
+2.31.1
+

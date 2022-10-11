@@ -1,0 +1,47 @@
+From 928f3ed70549ec53925f18c4a7b5108cf61ed662 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Thu, 24 Mar 2022 15:38:39 -0700
+Subject: [PATCH 1240/1418] mm: dma page copy: check return state for
+ page_hstate()
+
+page_hstate() can return NULL. Check return value before attempting to
+derefence the pointer.
+
+Cc: Jiangbo Wu <jiangbo.wu@intel.com>
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ mm/dma_page_copy.c | 16 ++++++++++++----
+ 1 file changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/mm/dma_page_copy.c b/mm/dma_page_copy.c
+index faf0bb6dd712..31a335634782 100644
+--- a/mm/dma_page_copy.c
++++ b/mm/dma_page_copy.c
+@@ -188,12 +188,20 @@ int dma_migrate_pages_copy(const struct list_head *pages,
+ 	/* segment */
+ 	newpage = list_first_entry(new_pages, struct page, lru);
+ 	list_for_each_entry(page, pages, lru) {
+-		if (PageHuge(page))
+-			order = huge_page_order(page_hstate(page));
+-		else if (PageTransHuge(page))
++		if (PageHuge(page)) {
++			struct hstate *hs;
++
++			hs = page_hstate(page);
++			if (!hs) {
++				err = -ENOENT;
++				goto done;
++			}
++			order = huge_page_order(hs);
++		} else if (PageTransHuge(page)) {
+ 			order = thp_order(page);
+-		else
++		} else {
+ 			order = 0;
++		}
+ 		memset(src_ptr, 0, sizeof(*src_ptr));
+ 		memset(dst_ptr, 0, sizeof(*dst_ptr));
+ 		sg_set_page(src_ptr++, page, PAGE_SIZE << order, 0);
+-- 
+2.31.1
+

@@ -1,0 +1,179 @@
+From 81f2d4933fed25d1292aadd5e013ecdab41e4d8f Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Wed, 25 Nov 2020 05:17:40 +0000
+Subject: [PATCH 0178/1418] x86/tdx: Add TDX Guest event notify interrupt
+ vector support
+
+Allocate 0xec IRQ vector address for TDX guest to receive the event
+completion notification from VMM. Since this vector address will be
+sent to VMM via hypercall, allocate a fixed address and move
+LOCAL_TIMER_VECTOR vector address by 1 byte. Also add related IDT
+handler to process the notification event.
+
+It will be mainly used by attestation driver to receive Quote event
+completion notification from host.
+
+Add support to track the notification event status via /proc/interrupts.
+
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/hardirq.h     |  1 +
+ arch/x86/include/asm/idtentry.h    |  4 +++
+ arch/x86/include/asm/irq_vectors.h |  7 ++++-
+ arch/x86/include/asm/tdx.h         |  2 ++
+ arch/x86/kernel/irq.c              |  6 +++++
+ arch/x86/kernel/tdx.c              | 41 ++++++++++++++++++++++++++++++
+ 6 files changed, 60 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/hardirq.h b/arch/x86/include/asm/hardirq.h
+index 0143cb1f0f1c..3955b81f9241 100644
+--- a/arch/x86/include/asm/hardirq.h
++++ b/arch/x86/include/asm/hardirq.h
+@@ -46,6 +46,7 @@ typedef struct {
+ #endif
+ #if IS_ENABLED(CONFIG_INTEL_TDX_GUEST)
+ 	unsigned int tdx_ve_count;
++	unsigned int irq_tdx_event_notify_count;
+ #endif
+ } ____cacheline_aligned irq_cpustat_t;
+ 
+diff --git a/arch/x86/include/asm/idtentry.h b/arch/x86/include/asm/idtentry.h
+index 8ccc81d653b3..8ca55780df20 100644
+--- a/arch/x86/include/asm/idtentry.h
++++ b/arch/x86/include/asm/idtentry.h
+@@ -693,6 +693,10 @@ DECLARE_IDTENTRY_SYSVEC(HYPERVISOR_CALLBACK_VECTOR,	sysvec_xen_hvm_callback);
+ DECLARE_IDTENTRY_SYSVEC(HYPERVISOR_CALLBACK_VECTOR,	sysvec_kvm_asyncpf_interrupt);
+ #endif
+ 
++#ifdef CONFIG_INTEL_TDX_GUEST
++DECLARE_IDTENTRY_SYSVEC(TDX_GUEST_EVENT_NOTIFY_VECTOR,	sysvec_tdx_event_notify);
++#endif
++
+ #undef X86_TRAP_OTHER
+ 
+ #endif
+diff --git a/arch/x86/include/asm/irq_vectors.h b/arch/x86/include/asm/irq_vectors.h
+index 43dcb9284208..82ac0c0a34b1 100644
+--- a/arch/x86/include/asm/irq_vectors.h
++++ b/arch/x86/include/asm/irq_vectors.h
+@@ -104,7 +104,12 @@
+ #define HYPERV_STIMER0_VECTOR		0xed
+ #endif
+ 
+-#define LOCAL_TIMER_VECTOR		0xec
++#if IS_ENABLED(CONFIG_INTEL_TDX_GUEST)
++/* Vector on which TDX Guest event notification is delivered */
++#define TDX_GUEST_EVENT_NOTIFY_VECTOR	0xec
++#endif
++
++#define LOCAL_TIMER_VECTOR		0xeb
+ 
+ #define NR_VECTORS			 256
+ 
+diff --git a/arch/x86/include/asm/tdx.h b/arch/x86/include/asm/tdx.h
+index 6a5ebea9bbfa..08af2c397436 100644
+--- a/arch/x86/include/asm/tdx.h
++++ b/arch/x86/include/asm/tdx.h
+@@ -94,6 +94,8 @@ int tdx_mcall_tdreport(u64 data, u64 reportdata);
+ 
+ int tdx_hcall_get_quote(u64 data);
+ 
++extern void (*tdx_event_notify_handler)(void);
++
+ /*
+  * To support I/O port access in decompressor or early kernel init
+  * code, since #VE exception handler cannot be used, use paravirt
+diff --git a/arch/x86/kernel/irq.c b/arch/x86/kernel/irq.c
+index f5b5a5aecf5d..c8cc2af7de6e 100644
+--- a/arch/x86/kernel/irq.c
++++ b/arch/x86/kernel/irq.c
+@@ -187,6 +187,12 @@ int arch_show_interrupts(struct seq_file *p, int prec)
+ 	for_each_online_cpu(j)
+ 		seq_printf(p, "%10u ", irq_stats(j)->tdx_ve_count);
+ 	seq_puts(p, "  TDX Guest VE event\n");
++
++	seq_printf(p, "%*s: ", prec, "TGN");
++	for_each_online_cpu(j)
++		seq_printf(p, "%10u ",
++			   irq_stats(j)->irq_tdx_event_notify_count);
++	seq_puts(p, "  TDX Guest event notification\n");
+ #endif
+ 	return 0;
+ }
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index bd931bf8c15d..83da16d9c79e 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -8,6 +8,11 @@
+ 
+ #include <asm/tdx.h>
+ #include <asm/i8259.h>
++#include <asm/apic.h>
++#include <asm/idtentry.h>
++#include <asm/irq_regs.h>
++#include <asm/desc.h>
++#include <asm/idtentry.h>
+ #include <asm/vmx.h>
+ #include <asm/insn.h>
+ #include <asm/insn-eval.h>
+@@ -51,6 +56,14 @@ static struct {
+ 	unsigned long attributes;
+ } td_info __ro_after_init;
+ 
++/*
++ * Currently it will be used only by the attestation
++ * driver. So, race condition with read/write operation
++ * is not considered.
++ */
++void (*tdx_event_notify_handler)(void);
++EXPORT_SYMBOL_GPL(tdx_event_notify_handler);
++
+ bool is_tdx_guest(void)
+ {
+ 	static int tdx_guest = -1;
+@@ -134,6 +147,28 @@ phys_addr_t tdx_shared_mask(void)
+ 	return 1ULL << (td_info.gpa_width - 1);
+ }
+ 
++/* TDX guest event notification handler */
++DEFINE_IDTENTRY_SYSVEC(sysvec_tdx_event_notify)
++{
++	struct pt_regs *old_regs = set_irq_regs(regs);
++
++	inc_irq_stat(irq_tdx_event_notify_count);
++
++	if (tdx_event_notify_handler)
++		tdx_event_notify_handler();
++
++	/*
++	 * The hypervisor requires that the APIC EOI should be acked.
++	 * If the APIC EOI is not acked, the APIC ISR bit for the
++	 * TDX_GUEST_EVENT_NOTIFY_VECTOR will not be cleared and then it
++	 * will block the interrupt whose vector is lower than
++	 * TDX_GUEST_EVENT_NOTIFY_VECTOR.
++	 */
++	ack_APIC_irq();
++
++	set_irq_regs(old_regs);
++}
++
+ /*
+  * tdx_mcall_tdreport() - Generate TDREPORT_STRUCT using TDCALL.
+  *
+@@ -754,5 +789,11 @@ void __init tdx_early_init(void)
+ 	cpuhp_setup_state(CPUHP_AP_ONLINE_DYN, "tdx:cpu_hotplug",
+ 			  NULL, tdx_cpu_offline_prepare);
+ 
++	alloc_intr_gate(TDX_GUEST_EVENT_NOTIFY_VECTOR,
++			asm_sysvec_tdx_event_notify);
++
++	if (tdx_hcall_set_notify_intr(TDX_GUEST_EVENT_NOTIFY_VECTOR))
++		pr_warn("Setting event notification interrupt failed\n");
++
+ 	pr_info("Guest initialized\n");
+ }
+-- 
+2.31.1
+

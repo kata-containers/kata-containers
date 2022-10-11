@@ -1,0 +1,57 @@
+From 9477e725efc2c5cf17a26c7fb43fec47d73986cc Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 18:04:09 -0800
+Subject: [PATCH 0938/1418] Revert "x86/fpu: Prepare KVM for updating XFD
+ state"
+
+This reverts commit 86d19ae5538f6815f5b3ea843364ccd4510cdbd3.
+---
+ arch/x86/include/asm/fpu/xstate.h |  2 --
+ arch/x86/kernel/fpu/core.c        | 20 --------------------
+ 2 files changed, 22 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/xstate.h b/arch/x86/include/asm/fpu/xstate.h
+index b93d44940ec3..cd3dd170e23a 100644
+--- a/arch/x86/include/asm/fpu/xstate.h
++++ b/arch/x86/include/asm/fpu/xstate.h
+@@ -129,6 +129,4 @@ static __always_inline __pure bool fpu_state_size_dynamic(void)
+ }
+ #endif
+ 
+-extern inline void kvm_update_guest_xfd_state(void);
+-
+ #endif
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 99442f606f2c..a8f787a62248 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -200,26 +200,6 @@ void fpu_reset_from_exception_fixup(void)
+ #if IS_ENABLED(CONFIG_KVM)
+ static void __fpstate_reset(struct fpstate *fpstate);
+ 
+-#ifdef CONFIG_X86_64
+-static void fpu_update_guest_xfd_state(void)
+-{
+-	u64 xfd;
+-
+-	rdmsrl(MSR_IA32_XFD, xfd);
+-	current->thread.fpu.fpstate->xfd = xfd;
+-	__this_cpu_write(xfd_state, xfd);
+-}
+-#else
+-static void fpu_update_guest_xfd_state(void) { }
+-#endif
+-
+-inline void kvm_update_guest_xfd_state(void)
+-{
+-	if (fpu_state_size_dynamic())
+-		fpu_update_guest_xfd_state();
+-}
+-EXPORT_SYMBOL_GPL(kvm_update_guest_xfd_state);
+-
+ static void fpu_init_guest_permissions(struct fpu_guest *gfpu)
+ {
+ 	struct fpu_state_perm *fpuperm;
+-- 
+2.31.1
+

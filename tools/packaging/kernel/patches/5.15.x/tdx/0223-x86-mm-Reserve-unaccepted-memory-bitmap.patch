@@ -1,0 +1,41 @@
+From d556d6a278cd9633c9f7054e3076a89470e9df0d Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Wed, 15 Sep 2021 13:19:26 +0300
+Subject: [PATCH 0223/1418] x86/mm: Reserve unaccepted memory bitmap
+
+Unaccepted memory bitmap is allocated during decompression stage and
+handed over to main kernel image via boot_params. The bitmap is going
+to be used to track if memory has been accepted.
+
+Reserve unaccepted memory bitmap has to prevent reallocating memory for
+other means.
+
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+---
+ arch/x86/kernel/setup.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/arch/x86/kernel/setup.c b/arch/x86/kernel/setup.c
+index 40ed44ead063..76702f7c20c9 100644
+--- a/arch/x86/kernel/setup.c
++++ b/arch/x86/kernel/setup.c
+@@ -713,6 +713,16 @@ static void __init early_reserve_memory(void)
+ 
+ 	early_reserve_initrd();
+ 
++	/* Mark unaccepted memory bitmap reserved */
++	if (boot_params.unaccepted_memory) {
++		unsigned long size;
++
++		/* One bit per 2MB */
++		size = DIV_ROUND_UP(e820__end_of_ram_pfn() * PAGE_SIZE,
++				    PMD_SIZE * BITS_PER_BYTE);
++		memblock_reserve(boot_params.unaccepted_memory, size);
++	}
++
+ 	if (efi_enabled(EFI_BOOT))
+ 		efi_memblock_x86_reserve_range();
+ 
+-- 
+2.31.1
+

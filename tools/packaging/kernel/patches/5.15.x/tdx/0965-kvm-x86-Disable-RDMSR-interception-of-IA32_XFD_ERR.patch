@@ -1,0 +1,59 @@
+From b2a4b4d30aee3f0f8c2da613f2de7a22bc8f4d1c Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Mon, 24 Jan 2022 21:52:16 -0800
+Subject: [PATCH 0965/1418] kvm: x86: Disable RDMSR interception of
+ IA32_XFD_ERR
+
+This saves one unnecessary VM-exit in guest #NM handler, given that the
+MSR is already restored with the guest value before the guest is resumed.
+
+Suggested-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Message-Id: <20220105123532.12586-15-yang.zhong@intel.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/kvm/vmx/vmx.c | 6 ++++++
+ arch/x86/kvm/vmx/vmx.h | 2 +-
+ 2 files changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index adf6648aad46..4f6b6a837d62 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -170,6 +170,7 @@ static u32 vmx_possible_passthrough_msrs[MAX_POSSIBLE_PASSTHROUGH_MSRS] = {
+ 	MSR_FS_BASE,
+ 	MSR_GS_BASE,
+ 	MSR_KERNEL_GS_BASE,
++	MSR_IA32_XFD_ERR,
+ #endif
+ 	MSR_IA32_SYSENTER_CS,
+ 	MSR_IA32_SYSENTER_ESP,
+@@ -7540,6 +7541,11 @@ static void vmx_vcpu_after_set_cpuid(struct kvm_vcpu *vcpu)
+ 		}
+ 	}
+ 
++	if (kvm_cpu_cap_has(X86_FEATURE_XFD))
++		vmx_set_intercept_for_msr(vcpu, MSR_IA32_XFD_ERR, MSR_TYPE_R,
++					  !guest_cpuid_has(vcpu, X86_FEATURE_XFD));
++
++
+ 	set_cr4_guest_host_mask(vmx);
+ 
+ 	vmx_write_encls_bitmap(vcpu, NULL);
+diff --git a/arch/x86/kvm/vmx/vmx.h b/arch/x86/kvm/vmx/vmx.h
+index 3fbdfc810059..11d3b10e7168 100644
+--- a/arch/x86/kvm/vmx/vmx.h
++++ b/arch/x86/kvm/vmx/vmx.h
+@@ -332,7 +332,7 @@ struct vcpu_vmx {
+ 	struct lbr_desc lbr_desc;
+ 
+ 	/* Save desired MSR intercept (read: pass-through) state */
+-#define MAX_POSSIBLE_PASSTHROUGH_MSRS	15
++#define MAX_POSSIBLE_PASSTHROUGH_MSRS	16
+ 	struct {
+ 		DECLARE_BITMAP(read, MAX_POSSIBLE_PASSTHROUGH_MSRS);
+ 		DECLARE_BITMAP(write, MAX_POSSIBLE_PASSTHROUGH_MSRS);
+-- 
+2.31.1
+

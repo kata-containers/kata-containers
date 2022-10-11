@@ -1,0 +1,152 @@
+From 9693373e25eb4727393c498abb39bf52522d179e Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Sat, 27 Jun 2020 20:45:18 -0700
+Subject: [PATCH 0627/1418] iommu: Pass user pointer to iommu_page_response()
+
+This is aligned with latest IOMMU UAPI data passing design. Refer to iommu.rst
+under Doc.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/iommu.c | 64 +++++++++++++++++++++++++++++++++----------
+ include/linux/iommu.h |  6 ++--
+ 2 files changed, 52 insertions(+), 18 deletions(-)
+
+diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
+index 4fbb07eba5fd..4901e9e58790 100644
+--- a/drivers/iommu/iommu.c
++++ b/drivers/iommu/iommu.c
+@@ -1317,16 +1317,52 @@ int iommu_report_device_fault(struct device *dev, struct iommu_fault_event *evt)
+ }
+ EXPORT_SYMBOL_GPL(iommu_report_device_fault);
+ 
++static int iommu_page_response_prepare_msg(void __user *udata,
++					   struct iommu_page_response *msg)
++{
++	unsigned long minsz, maxsz;
++
++	/* Current kernel data size is the max to be copied from user */
++	maxsz = sizeof(struct iommu_page_response);
++	memset((void *)msg, 0, maxsz);
++	minsz = offsetofend(struct iommu_page_response, code);
++
++	if (copy_from_user(msg, udata, minsz))
++		return -EFAULT;
++
++	if (msg->argsz < minsz)
++		return -EINVAL;
++
++	if (msg->argsz > maxsz)
++		msg->argsz = maxsz;
++
++	if (msg->version != IOMMU_PAGE_RESP_VERSION_1 ||
++		!(msg->flags & IOMMU_PAGE_RESP_PASID_VALID)) {
++		pr_debug("%s:Invalid ver %x: flags %x\n",
++			__func__, msg->version, msg->flags);
++		return -EINVAL;
++	}
++
++	/* Copy the remaining user data _after_ minsz if there is */
++	if ((msg->argsz - minsz) &&
++	    copy_from_user((void *)msg + minsz, udata + minsz,
++				msg->argsz - minsz))
++		return -EFAULT;
++
++	return 0;
++}
++
+ int iommu_page_response(struct device *dev,
+-			struct iommu_page_response *msg)
++			void __user *uinfo)
+ {
+ 	bool needs_pasid;
+ 	int ret = -EINVAL;
++	struct iommu_page_response msg;
+ 	struct iommu_fault_event *evt;
+ 	struct iommu_fault_page_request *prm;
+ 	struct dev_iommu *param = dev->iommu;
+-	bool has_pasid = msg->flags & IOMMU_PAGE_RESP_PASID_VALID;
+ 	struct iommu_domain *domain = iommu_get_domain_for_dev(dev);
++	bool has_pasid;
+ 
+ 	if (!domain || !domain->ops->page_response)
+ 		return -ENODEV;
+@@ -1334,12 +1370,12 @@ int iommu_page_response(struct device *dev,
+ 	if (!param || !param->fault_param)
+ 		return -EINVAL;
+ 
+-	if (msg->version != IOMMU_PAGE_RESP_VERSION_1 ||
+-		!(msg->flags & IOMMU_PAGE_RESP_PASID_VALID)) {
+-		dev_dbg(dev, "%s:Invalid ver %x: flags %x\n",
+-			__func__, msg->version, msg->flags);
+-		return -EINVAL;
+-	}
++	ret = iommu_page_response_prepare_msg(uinfo, &msg);
++	if (ret)
++		return ret;
++
++	has_pasid = msg.flags & IOMMU_PAGE_RESP_PASID_VALID;
++
+ 	/* Only send response if there is a fault report pending */
+ 	mutex_lock(&param->fault_param->lock);
+ 	if (list_empty(&param->fault_param->faults)) {
+@@ -1352,7 +1388,7 @@ int iommu_page_response(struct device *dev,
+ 	 */
+ 	list_for_each_entry(evt, &param->fault_param->faults, list) {
+ 		prm = &evt->fault.prm;
+-		if (prm->grpid != msg->grpid)
++		if (prm->grpid != msg.grpid)
+ 			continue;
+ 
+ 		/*
+@@ -1362,17 +1398,17 @@ int iommu_page_response(struct device *dev,
+ 		 * response.
+ 		 */
+ 		needs_pasid = prm->flags & IOMMU_FAULT_PAGE_RESPONSE_NEEDS_PASID;
+-		if (needs_pasid && (!has_pasid || msg->pasid != prm->pasid))
++		if (needs_pasid && (!has_pasid || msg.pasid != prm->pasid))
+ 			continue;
+ 
+ 		if (!needs_pasid && has_pasid) {
+ 			/* No big deal, just clear it. */
+-			msg->flags &= ~IOMMU_PAGE_RESP_PASID_VALID;
+-			msg->pasid = 0;
++			msg.flags &= ~IOMMU_PAGE_RESP_PASID_VALID;
++			msg.pasid = 0;
+ 		}
+ 
+-		ret = domain->ops->page_response(dev, evt, msg);
+-		trace_dev_page_response(dev, msg);
++		ret = domain->ops->page_response(dev, evt, &msg);
++		trace_dev_page_response(dev, &msg);
+ 		list_del(&evt->list);
+ 		kfree(evt);
+ 		break;
+diff --git a/include/linux/iommu.h b/include/linux/iommu.h
+index f4a5b4b84813..0e5a65bb82ef 100644
+--- a/include/linux/iommu.h
++++ b/include/linux/iommu.h
+@@ -499,8 +499,7 @@ extern int iommu_unregister_device_fault_handler(struct device *dev);
+ 
+ extern int iommu_report_device_fault(struct device *dev,
+ 				     struct iommu_fault_event *evt);
+-extern int iommu_page_response(struct device *dev,
+-			       struct iommu_page_response *msg);
++extern int iommu_page_response(struct device *dev, void __user *uinfo);
+ 
+ extern int iommu_group_id(struct iommu_group *group);
+ extern struct iommu_domain *iommu_group_default_domain(struct iommu_group *);
+@@ -914,8 +913,7 @@ int iommu_report_device_fault(struct device *dev, struct iommu_fault_event *evt)
+ 	return -ENODEV;
+ }
+ 
+-static inline int iommu_page_response(struct device *dev,
+-				      struct iommu_page_response *msg)
++static inline int iommu_page_response(struct device *dev, void __user *uinfo)
+ {
+ 	return -ENODEV;
+ }
+-- 
+2.31.1
+

@@ -1,0 +1,109 @@
+From fca6a063e2837479e39b66d4f661e7ab4aafc686 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Sat, 7 May 2022 18:02:39 +0800
+Subject: [PATCH 1386/1418] x86/cpu/tdx: Disable CPU hotplug before enabling
+ VMX on all CPUs
+
+Currently, CPU hotplug is disabled after enabling VMX on all CPUs.
+Offline/online a CPU after enabling VMX would effectively disable VMX. Then
+a following seamcall on that CPU would get #UD.
+
+We can re-enable VMX during CPU online in TDX CPU hotplug callback. But it
+needs a variable to track if VMX has been enabled system-wide. So, for
+simplicity, reverse the order of enabling VMX and disabling CPU hotplug.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx.c | 31 ++++++++++++++++---------------
+ 1 file changed, 16 insertions(+), 15 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index bf4049cb8538..82f9f5657a37 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -1550,6 +1550,7 @@ int tdx_load_module_late(void)
+ int tdx_module_reload(void)
+ {
+ 	int ret, cpu;
++	int vmxoff_err;
+ 
+ 	cpus_read_lock();
+ 	/*
+@@ -1562,21 +1563,25 @@ int tdx_module_reload(void)
+ 		goto unlock;
+ 	}
+ 
+-	ret = tdx_load_module_late();
++	ret = seam_vmxon_on_each_cpu();
+ 	if (ret)
+ 		goto unlock;
+ 
++	ret = tdx_load_module_late();
++	if (ret)
++		goto vmxoff;
++
+ 	ret = tdx_init_system();
+ 	if (ret)
+-		goto unlock;
++		goto vmxoff;
+ 
+ 	ret = tdx_get_system_info();
+ 	if (ret)
+-		goto unlock;
++		goto vmxoff;
+ 
+ 	ret = __tdx_init_module();
+ 	if (ret)
+-		goto unlock;
++		goto vmxoff;
+ 
+ 	/* Reset to default values so that their support will be re-probed */
+ 	is_nonarch_seamcall_available = true;
+@@ -1589,6 +1594,13 @@ int tdx_module_reload(void)
+ 	for_each_online_cpu(cpu)
+ 		set_cpu_cap(&cpu_data(cpu), X86_FEATURE_TDX);
+ 
++vmxoff:
++	vmxoff_err = seam_vmxoff_on_each_cpu();
++	if (vmxoff_err) {
++		pr_info("Failed to VMXOFF.\n");
++		if (!ret)
++			ret = vmxoff_err;
++	}
+ unlock:
+ 	cpus_read_unlock();
+ 	return ret;
+@@ -1602,16 +1614,12 @@ static ssize_t tdx_module_reload_store(struct kobject *kobj,
+ {
+ 	unsigned long val;
+ 	ssize_t ret;
+-	int vmxoff_err;
+ 
+ 	ret = kstrtoul(buf, 0, &val);
+ 	if (ret)
+ 		return ret;
+ 
+ 	mutex_lock(&tdx_mutex);
+-	ret = seam_vmxon_on_each_cpu();
+-	if (ret)
+-		goto unlock;
+ 
+ 	switch (val) {
+ 	case TDX_MODULE_RELOAD:
+@@ -1621,13 +1629,6 @@ static ssize_t tdx_module_reload_store(struct kobject *kobj,
+ 	default:
+ 		ret = -EINVAL;
+ 	}
+-	vmxoff_err = seam_vmxoff_on_each_cpu();
+-	if (vmxoff_err) {
+-		pr_info("Failed to VMXOFF.\n");
+-		if (!ret)
+-			ret = vmxoff_err;
+-	}
+-unlock:
+ 	mutex_unlock(&tdx_mutex);
+ 
+ 	if (!ret)
+-- 
+2.31.1
+

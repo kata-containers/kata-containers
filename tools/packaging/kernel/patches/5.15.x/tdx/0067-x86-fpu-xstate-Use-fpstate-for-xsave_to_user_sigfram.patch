@@ -1,0 +1,32 @@
+From 42500eb57ed7d2971a5a49e9748750b0c300b536 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 13 Oct 2021 16:55:51 +0200
+Subject: [PATCH 0067/1418] x86/fpu/xstate: Use fpstate for
+ xsave_to_user_sigframe()
+
+With dynamically enabled features the sigframe code must know the features
+which are enabled for the task. Get them from fpstate.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211013145323.077781448@linutronix.de
+---
+ arch/x86/kernel/fpu/xstate.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/fpu/xstate.h b/arch/x86/kernel/fpu/xstate.h
+index 24a1479caea2..3e9eaf9f7cf3 100644
+--- a/arch/x86/kernel/fpu/xstate.h
++++ b/arch/x86/kernel/fpu/xstate.h
+@@ -149,7 +149,7 @@ static inline int xsave_to_user_sigframe(struct xregs_state __user *buf)
+ 	 * internally, e.g. PKRU. That's user space ABI and also required
+ 	 * to allow the signal handler to modify PKRU.
+ 	 */
+-	u64 mask = xfeatures_mask_uabi();
++	u64 mask = current->thread.fpu.fpstate->user_xfeatures;
+ 	u32 lmask = mask;
+ 	u32 hmask = mask >> 32;
+ 	int err;
+-- 
+2.31.1
+

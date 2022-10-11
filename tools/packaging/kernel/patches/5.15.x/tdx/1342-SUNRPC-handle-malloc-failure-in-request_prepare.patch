@@ -1,0 +1,165 @@
+From 3fbbf6e9637392e2483b30e78efe29fbe0902fa2 Mon Sep 17 00:00:00 2001
+From: NeilBrown <neilb@suse.de>
+Date: Wed, 30 Mar 2022 11:48:37 +1100
+Subject: [PATCH 1342/1418] SUNRPC: handle malloc failure in ->request_prepare
+
+If ->request_prepare() detects an error, it sets ->rq_task->tk_status.
+This is easy for callers to ignore.
+The only caller is xprt_request_enqueue_receive() and it does ignore the
+error, as does call_encode() which calls it.  This can result in a
+request being queued to receive a reply without an allocated receive buffer.
+
+So instead of setting rq_task->tk_status, return an error, and store in
+->tk_status only in call_encode();
+
+The call to xprt_request_enqueue_receive() is now earlier in
+call_encode(), where the error can still be handled.
+
+Signed-off-by: NeilBrown <neilb@suse.de>
+Signed-off-by: Trond Myklebust <trond.myklebust@hammerspace.com>
+---
+ include/linux/sunrpc/xprt.h |  5 ++---
+ net/sunrpc/clnt.c           |  6 +++---
+ net/sunrpc/xprt.c           | 23 +++++++++++++++--------
+ net/sunrpc/xprtsock.c       |  4 ++--
+ 4 files changed, 22 insertions(+), 16 deletions(-)
+
+diff --git a/include/linux/sunrpc/xprt.h b/include/linux/sunrpc/xprt.h
+index 955ea4d7af0b..400750505222 100644
+--- a/include/linux/sunrpc/xprt.h
++++ b/include/linux/sunrpc/xprt.h
+@@ -141,7 +141,7 @@ struct rpc_xprt_ops {
+ 	void		(*connect)(struct rpc_xprt *xprt, struct rpc_task *task);
+ 	int		(*buf_alloc)(struct rpc_task *task);
+ 	void		(*buf_free)(struct rpc_task *task);
+-	void		(*prepare_request)(struct rpc_rqst *req);
++	int		(*prepare_request)(struct rpc_rqst *req);
+ 	int		(*send_request)(struct rpc_rqst *req);
+ 	void		(*wait_for_reply_request)(struct rpc_task *task);
+ 	void		(*timer)(struct rpc_xprt *xprt, struct rpc_task *task);
+@@ -354,10 +354,9 @@ int			xprt_reserve_xprt_cong(struct rpc_xprt *xprt, struct rpc_task *task);
+ void			xprt_alloc_slot(struct rpc_xprt *xprt, struct rpc_task *task);
+ void			xprt_free_slot(struct rpc_xprt *xprt,
+ 				       struct rpc_rqst *req);
+-void			xprt_request_prepare(struct rpc_rqst *req);
+ bool			xprt_prepare_transmit(struct rpc_task *task);
+ void			xprt_request_enqueue_transmit(struct rpc_task *task);
+-void			xprt_request_enqueue_receive(struct rpc_task *task);
++int			xprt_request_enqueue_receive(struct rpc_task *task);
+ void			xprt_request_wait_receive(struct rpc_task *task);
+ void			xprt_request_dequeue_xprt(struct rpc_task *task);
+ bool			xprt_request_need_retransmit(struct rpc_task *task);
+diff --git a/net/sunrpc/clnt.c b/net/sunrpc/clnt.c
+index f056ff931444..1b23a20b838c 100644
+--- a/net/sunrpc/clnt.c
++++ b/net/sunrpc/clnt.c
+@@ -1858,6 +1858,9 @@ call_encode(struct rpc_task *task)
+ 	xprt_request_dequeue_xprt(task);
+ 	/* Encode here so that rpcsec_gss can use correct sequence number. */
+ 	rpc_xdr_encode(task);
++	/* Add task to reply queue before transmission to avoid races */
++	if (task->tk_status == 0 && rpc_reply_expected(task))
++		task->tk_status = xprt_request_enqueue_receive(task);
+ 	/* Did the encode result in an error condition? */
+ 	if (task->tk_status != 0) {
+ 		/* Was the error nonfatal? */
+@@ -1881,9 +1884,6 @@ call_encode(struct rpc_task *task)
+ 		return;
+ 	}
+ 
+-	/* Add task to reply queue before transmission to avoid races */
+-	if (rpc_reply_expected(task))
+-		xprt_request_enqueue_receive(task);
+ 	xprt_request_enqueue_transmit(task);
+ out:
+ 	task->tk_action = call_transmit;
+diff --git a/net/sunrpc/xprt.c b/net/sunrpc/xprt.c
+index cfd681700d1a..9ea363c2c594 100644
+--- a/net/sunrpc/xprt.c
++++ b/net/sunrpc/xprt.c
+@@ -69,10 +69,11 @@
+ /*
+  * Local functions
+  */
+-static void	 xprt_init(struct rpc_xprt *xprt, struct net *net);
++static void	xprt_init(struct rpc_xprt *xprt, struct net *net);
+ static __be32	xprt_alloc_xid(struct rpc_xprt *xprt);
+-static void	 xprt_destroy(struct rpc_xprt *xprt);
+-static void	 xprt_request_init(struct rpc_task *task);
++static void	xprt_destroy(struct rpc_xprt *xprt);
++static void	xprt_request_init(struct rpc_task *task);
++static int	xprt_request_prepare(struct rpc_rqst *req);
+ 
+ static DEFINE_SPINLOCK(xprt_list_lock);
+ static LIST_HEAD(xprt_list);
+@@ -1142,16 +1143,19 @@ xprt_request_need_enqueue_receive(struct rpc_task *task, struct rpc_rqst *req)
+  * @task: RPC task
+  *
+  */
+-void
++int
+ xprt_request_enqueue_receive(struct rpc_task *task)
+ {
+ 	struct rpc_rqst *req = task->tk_rqstp;
+ 	struct rpc_xprt *xprt = req->rq_xprt;
++	int ret;
+ 
+ 	if (!xprt_request_need_enqueue_receive(task, req))
+-		return;
++		return 0;
+ 
+-	xprt_request_prepare(task->tk_rqstp);
++	ret = xprt_request_prepare(task->tk_rqstp);
++	if (ret)
++		return ret;
+ 	spin_lock(&xprt->queue_lock);
+ 
+ 	/* Update the softirq receive buffer */
+@@ -1165,6 +1169,7 @@ xprt_request_enqueue_receive(struct rpc_task *task)
+ 
+ 	/* Turn off autodisconnect */
+ 	del_singleshot_timer_sync(&xprt->timer);
++	return 0;
+ }
+ 
+ /**
+@@ -1462,14 +1467,16 @@ xprt_request_dequeue_xprt(struct rpc_task *task)
+  *
+  * Calls into the transport layer to do whatever is needed to prepare
+  * the request for transmission or receive.
++ * Returns error, or zero.
+  */
+-void
++static int
+ xprt_request_prepare(struct rpc_rqst *req)
+ {
+ 	struct rpc_xprt *xprt = req->rq_xprt;
+ 
+ 	if (xprt->ops->prepare_request)
+-		xprt->ops->prepare_request(req);
++		return xprt->ops->prepare_request(req);
++	return 0;
+ }
+ 
+ /**
+diff --git a/net/sunrpc/xprtsock.c b/net/sunrpc/xprtsock.c
+index 04f1b78bcbca..d72bfff26c78 100644
+--- a/net/sunrpc/xprtsock.c
++++ b/net/sunrpc/xprtsock.c
+@@ -801,11 +801,11 @@ static int xs_nospace(struct rpc_rqst *req)
+ 	return ret;
+ }
+ 
+-static void
++static int
+ xs_stream_prepare_request(struct rpc_rqst *req)
+ {
+ 	xdr_free_bvec(&req->rq_rcv_buf);
+-	req->rq_task->tk_status = xdr_alloc_bvec(&req->rq_rcv_buf, GFP_KERNEL);
++	return xdr_alloc_bvec(&req->rq_rcv_buf, GFP_KERNEL);
+ }
+ 
+ /*
+-- 
+2.31.1
+

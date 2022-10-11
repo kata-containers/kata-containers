@@ -1,0 +1,106 @@
+From 9c32aa927e3ea5c06daf131abfaa53f8b0ba8c83 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Wed, 16 Feb 2022 22:22:21 -0800
+Subject: [PATCH 1047/1418] iommu/vtd: Fix vIOMMU GIOVA by avoiding reserved
+ IOASIDs
+
+Globally reserved PASIDs are used for in-kernel DMA request.  This
+method works on the host and conserve PASID resources.
+
+However, under guest environment all guest PASIDs should be allocated
+via the virtual command interface.  Otherwise, the reserved PASID's in
+the guest has no host PASID's backing.
+
+This patch forces all DMA API PASIDs to be allocated via IOASID
+allocator.  Additional PASIDs are consumed in that each device with
+PASID DMA will allocate its own PASID.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/dma-iommu.c | 16 +++++++++++-----
+ include/linux/ioasid.h    |  4 ++--
+ 2 files changed, 13 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/iommu/dma-iommu.c b/drivers/iommu/dma-iommu.c
+index d0850a922683..a1cd5ebaca07 100644
+--- a/drivers/iommu/dma-iommu.c
++++ b/drivers/iommu/dma-iommu.c
+@@ -172,6 +172,7 @@ void iommu_put_dma_cookie(struct iommu_domain *domain)
+ }
+ EXPORT_SYMBOL(iommu_put_dma_cookie);
+ 
++#define PCI_PASID_MAX 0x100000 /* TODO: Use per dev limits */
+ /**
+  * iommu_enable_pasid_dma --Enable in-kernel DMA request with PASID
+  * @dev:	Device to be enabled
+@@ -186,25 +187,28 @@ EXPORT_SYMBOL(iommu_put_dma_cookie);
+ ioasid_t iommu_enable_pasid_dma(struct device *dev)
+ {
+ 	struct iommu_domain *dom;
++	u32 pasid;
+ 
+ 	if (dev->pasid) {
+ 		dev_err(dev, "PASID DMA already enabled\n");
+-		return IOASID_DMA_PASID;
++		return dev->pasid;
+ 	}
+ 	dom = iommu_get_domain_for_dev(dev);
+ 	if (!dom || !dom->ops)
+ 		return INVALID_IOASID;
+ 
++	pasid = ioasid_alloc(host_pasid_set, IOASID_ALLOC_BASE, PCI_PASID_MAX, dev);
++	dev_alert(dev, "%s: PASID %u\n", __func__, pasid);
+ 	/*
+ 	 * Use the reserved kernel PASID for all devices. For now,
+ 	 * there is no need to have different PASIDs for in-kernel use.
+ 	 */
+-	if (!dom->ops->enable_pasid_dma || dom->ops->enable_pasid_dma(dev, IOASID_DMA_PASID))
++	if (!dom->ops->enable_pasid_dma || dom->ops->enable_pasid_dma(dev, pasid))
+ 		return INVALID_IOASID;
+ 	/* Used for device IOTLB flush */
+-	dev->pasid = IOASID_DMA_PASID;
++	dev->pasid = pasid;
+ 
+-	return IOASID_DMA_PASID;
++	return pasid;
+ }
+ EXPORT_SYMBOL(iommu_enable_pasid_dma);
+ 
+@@ -232,9 +236,11 @@ int iommu_disable_pasid_dma(struct device *dev)
+ 	if (!dom->ops->disable_pasid_dma)
+ 		return -ENOTSUPP;
+ 
++	dev_alert(dev, "%s: PASID %u\n", __func__, dev->pasid);
+ 	ret = dom->ops->disable_pasid_dma(dev);
+ 	if (!ret)
+-		dev->pasid = 0;
++		ioasid_free(host_pasid_set, dev->pasid);
++	dev->pasid = 0;
+ 
+ 	return ret;
+ }
+diff --git a/include/linux/ioasid.h b/include/linux/ioasid.h
+index d69b285ec94e..65deca7fde20 100644
+--- a/include/linux/ioasid.h
++++ b/include/linux/ioasid.h
+@@ -10,8 +10,7 @@
+ 
+ #define INVALID_IOASID ((ioasid_t)-1)
+ #define IOASID_DMA_NO_PASID	0 /* For DMA request w/o PASID */
+-#define IOASID_DMA_PASID	1 /* For in-kernel DMA w/ PASID */
+-#define IOASID_ALLOC_BASE	2 /* Start of the allocation */
++#define IOASID_ALLOC_BASE	1 /* Start of the allocation */
+ 
+ typedef unsigned int ioasid_t;
+ typedef ioasid_t (*ioasid_alloc_fn_t)(ioasid_t min, ioasid_t max, void *data);
+@@ -165,6 +164,7 @@ extern struct ioasid_user *ioasid_user_get_from_task(struct task_struct *task);
+ extern void ioasid_user_put(struct ioasid_user *iuser);
+ extern void ioasid_user_for_each_id(struct ioasid_user *iuser, void *data,
+ 				   void (*fn)(ioasid_t id, void *data));
++extern struct ioasid_set *host_pasid_set;
+ 
+ #else /* CONFIG_IOASID_USER */
+ static inline struct ioasid_user *
+-- 
+2.31.1
+

@@ -1,0 +1,111 @@
+From 1523d2d0750627dbcdd9d4fce9babab387fa4fe5 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Sat, 21 Nov 2020 04:52:59 +0000
+Subject: [PATCH 0175/1418] x86/tdx: Add TDREPORT TDX Module call support
+
+The TDX Guest-Host Communication Interface (GHCI) includes a module
+call (TDREPORT TDCALL) that a guest can make to acquire a copy of the
+attestation data that it needs to verify its trustworthiness.
+
+Add a wrapper function tdx_mcall_tdreport() that makes the module
+call to get this data.
+
+See GHCI section 2.4.5 "TDCALL [MR.REPORT] leaf" for additional
+details.
+
+[Xiaoyao: Proposed error code fix]
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/tdx.h |  2 ++
+ arch/x86/kernel/tdx.c      | 46 ++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 48 insertions(+)
+
+diff --git a/arch/x86/include/asm/tdx.h b/arch/x86/include/asm/tdx.h
+index aa7910321979..0969b719eb8d 100644
+--- a/arch/x86/include/asm/tdx.h
++++ b/arch/x86/include/asm/tdx.h
+@@ -90,6 +90,8 @@ extern phys_addr_t tdx_shared_mask(void);
+ extern int tdx_hcall_gpa_intent(phys_addr_t gpa, int numpages,
+ 				enum tdx_map_type map_type);
+ 
++int tdx_mcall_tdreport(u64 data, u64 reportdata);
++
+ /*
+  * To support I/O port access in decompressor or early kernel init
+  * code, since #VE exception handler cannot be used, use paravirt
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 3f49c32c25b5..7eb93af7d7dc 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -20,6 +20,7 @@
+ /* TDX Module call Leaf IDs */
+ #define TDX_GET_INFO			1
+ #define TDX_GET_VEINFO			3
++#define TDX_GET_REPORT			4
+ #define TDX_ACCEPT_PAGE			6
+ 
+ /* TDX hypercall Leaf IDs */
+@@ -28,6 +29,9 @@
+ /* TDX Module call error codes */
+ #define TDX_PAGE_ALREADY_ACCEPTED	0x00000b0a00000000
+ #define TDCALL_RETURN_CODE_MASK		0xFFFFFFFF00000000
++#define TDCALL_OPERAND_BUSY		0x8000020000000000
++#define TDCALL_INVALID_OPERAND		0x8000000000000000
++#define TDCALL_SUCCESS			0x0
+ #define TDCALL_RETURN_CODE(a)		((a) & TDCALL_RETURN_CODE_MASK)
+ 
+ #define VE_IS_IO_OUT(exit_qual)		(((exit_qual) & 8) ? 0 : 1)
+@@ -123,6 +127,48 @@ phys_addr_t tdx_shared_mask(void)
+ 	return 1ULL << (td_info.gpa_width - 1);
+ }
+ 
++/*
++ * tdx_mcall_tdreport() - Generate TDREPORT_STRUCT using TDCALL.
++ *
++ * @data        : Physical address of 1024B aligned data to store
++ *                TDREPORT_STRUCT.
++ * @reportdata  : Physical address of 64B aligned report data
++ *
++ * return 0 on success or failure error number.
++ */
++int tdx_mcall_tdreport(u64 data, u64 reportdata)
++{
++	u64 ret;
++
++	/*
++	 * Use confidential guest TDX check to ensure this API is only
++	 * used by TDX guest platforms.
++	 */
++	if (!data || !reportdata || !cc_platform_has(CC_ATTR_GUEST_TDX))
++		return -EINVAL;
++
++	/*
++	 * Pass the physical address of user generated reportdata
++	 * and the physical address of out pointer to store the
++	 * tdreport data to the TDX module to generate the
++	 * TD report. Generated data contains measurements/configuration
++	 * data of the TD guest. More info about ABI can be found in TDX
++	 * Guest-Host-Communication Interface (GHCI), sec 2.4.5.
++	 */
++	ret = __trace_tdx_module_call(TDX_GET_REPORT, data, reportdata, 0, 0,
++				      NULL);
++
++	if (ret == TDCALL_SUCCESS)
++		return 0;
++	else if (TDCALL_RETURN_CODE(ret) == TDCALL_INVALID_OPERAND)
++		return -EINVAL;
++	else if (TDCALL_RETURN_CODE(ret) == TDCALL_OPERAND_BUSY)
++		return -EBUSY;
++
++	return -EIO;
++}
++EXPORT_SYMBOL_GPL(tdx_mcall_tdreport);
++
+ static void tdx_get_info(void)
+ {
+ 	struct tdx_module_output out;
+-- 
+2.31.1
+

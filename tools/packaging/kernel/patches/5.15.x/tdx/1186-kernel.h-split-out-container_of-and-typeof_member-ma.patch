@@ -1,0 +1,148 @@
+From a1c86f0ba476cbb0c7d399eed1e5005a6011563f Mon Sep 17 00:00:00 2001
+From: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Date: Mon, 8 Nov 2021 18:32:12 -0800
+Subject: [PATCH 1186/1418] kernel.h: split out container_of() and
+ typeof_member() macros
+
+kernel.h is being used as a dump for all kinds of stuff for a long time.
+Here is the attempt cleaning it up by splitting out container_of() and
+typeof_member() macros.
+
+For time being include new header back to kernel.h to avoid twisted
+indirected includes for existing users.
+
+Note, there are _a lot_ of headers and modules that include kernel.h
+solely for one of these macros and this allows to unburden compiler for
+the twisted inclusion paths and to make new code cleaner in the future.
+
+Link: https://lkml.kernel.org/r/20211013170417.87909-3-andriy.shevchenko@linux.intel.com
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Cc: Boqun Feng <boqun.feng@gmail.com>
+Cc: Brendan Higgins <brendanhiggins@google.com>
+Cc: Ingo Molnar <mingo@redhat.com>
+Cc: Jonathan Cameron <jic23@kernel.org>
+Cc: Laurent Pinchart <laurent.pinchart@ideasonboard.com>
+Cc: Mauro Carvalho Chehab <mchehab@kernel.org>
+Cc: Miguel Ojeda <miguel.ojeda.sandonis@gmail.com>
+Cc: Peter Zijlstra <peterz@infradead.org>
+Cc: Rasmus Villemoes <linux@rasmusvillemoes.dk>
+Cc: Sakari Ailus <sakari.ailus@linux.intel.com>
+Cc: Thomas Gleixner <tglx@linutronix.de>
+Cc: Thorsten Leemhuis <regressions@leemhuis.info>
+Cc: Waiman Long <longman@redhat.com>
+Cc: Will Deacon <will@kernel.org>
+Signed-off-by: Andrew Morton <akpm@linux-foundation.org>
+Signed-off-by: Linus Torvalds <torvalds@linux-foundation.org>
+---
+ include/linux/container_of.h | 40 ++++++++++++++++++++++++++++++++++++
+ include/linux/kernel.h       | 33 +----------------------------
+ 2 files changed, 41 insertions(+), 32 deletions(-)
+ create mode 100644 include/linux/container_of.h
+
+diff --git a/include/linux/container_of.h b/include/linux/container_of.h
+new file mode 100644
+index 000000000000..dd56019838c6
+--- /dev/null
++++ b/include/linux/container_of.h
+@@ -0,0 +1,40 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _LINUX_CONTAINER_OF_H
++#define _LINUX_CONTAINER_OF_H
++
++#include <linux/build_bug.h>
++#include <linux/err.h>
++
++#define typeof_member(T, m)	typeof(((T*)0)->m)
++
++/**
++ * container_of - cast a member of a structure out to the containing structure
++ * @ptr:	the pointer to the member.
++ * @type:	the type of the container struct this is embedded in.
++ * @member:	the name of the member within the struct.
++ *
++ */
++#define container_of(ptr, type, member) ({				\
++	void *__mptr = (void *)(ptr);					\
++	BUILD_BUG_ON_MSG(!__same_type(*(ptr), ((type *)0)->member) &&	\
++			 !__same_type(*(ptr), void),			\
++			 "pointer type mismatch in container_of()");	\
++	((type *)(__mptr - offsetof(type, member))); })
++
++/**
++ * container_of_safe - cast a member of a structure out to the containing structure
++ * @ptr:	the pointer to the member.
++ * @type:	the type of the container struct this is embedded in.
++ * @member:	the name of the member within the struct.
++ *
++ * If IS_ERR_OR_NULL(ptr), ptr is returned unchanged.
++ */
++#define container_of_safe(ptr, type, member) ({				\
++	void *__mptr = (void *)(ptr);					\
++	BUILD_BUG_ON_MSG(!__same_type(*(ptr), ((type *)0)->member) &&	\
++			 !__same_type(*(ptr), void),			\
++			 "pointer type mismatch in container_of()");	\
++	IS_ERR_OR_NULL(__mptr) ? ERR_CAST(__mptr) :			\
++		((type *)(__mptr - offsetof(type, member))); })
++
++#endif	/* _LINUX_CONTAINER_OF_H */
+diff --git a/include/linux/kernel.h b/include/linux/kernel.h
+index 2776423a587e..2a8449431efe 100644
+--- a/include/linux/kernel.h
++++ b/include/linux/kernel.h
+@@ -9,6 +9,7 @@
+ #include <linux/stddef.h>
+ #include <linux/types.h>
+ #include <linux/compiler.h>
++#include <linux/container_of.h>
+ #include <linux/bitops.h>
+ #include <linux/kstrtox.h>
+ #include <linux/log2.h>
+@@ -52,8 +53,6 @@
+ }					\
+ )
+ 
+-#define typeof_member(T, m)	typeof(((T*)0)->m)
+-
+ #define _RET_IP_		(unsigned long)__builtin_return_address(0)
+ #define _THIS_IP_  ({ __label__ __here; __here: (unsigned long)&&__here; })
+ 
+@@ -483,36 +482,6 @@ static inline void ftrace_dump(enum ftrace_dump_mode oops_dump_mode) { }
+ #define __CONCAT(a, b) a ## b
+ #define CONCATENATE(a, b) __CONCAT(a, b)
+ 
+-/**
+- * container_of - cast a member of a structure out to the containing structure
+- * @ptr:	the pointer to the member.
+- * @type:	the type of the container struct this is embedded in.
+- * @member:	the name of the member within the struct.
+- *
+- */
+-#define container_of(ptr, type, member) ({				\
+-	void *__mptr = (void *)(ptr);					\
+-	BUILD_BUG_ON_MSG(!__same_type(*(ptr), ((type *)0)->member) &&	\
+-			 !__same_type(*(ptr), void),			\
+-			 "pointer type mismatch in container_of()");	\
+-	((type *)(__mptr - offsetof(type, member))); })
+-
+-/**
+- * container_of_safe - cast a member of a structure out to the containing structure
+- * @ptr:	the pointer to the member.
+- * @type:	the type of the container struct this is embedded in.
+- * @member:	the name of the member within the struct.
+- *
+- * If IS_ERR_OR_NULL(ptr), ptr is returned unchanged.
+- */
+-#define container_of_safe(ptr, type, member) ({				\
+-	void *__mptr = (void *)(ptr);					\
+-	BUILD_BUG_ON_MSG(!__same_type(*(ptr), ((type *)0)->member) &&	\
+-			 !__same_type(*(ptr), void),			\
+-			 "pointer type mismatch in container_of()");	\
+-	IS_ERR_OR_NULL(__mptr) ? ERR_CAST(__mptr) :			\
+-		((type *)(__mptr - offsetof(type, member))); })
+-
+ /* Rebuild everything on CONFIG_FTRACE_MCOUNT_RECORD */
+ #ifdef CONFIG_FTRACE_MCOUNT_RECORD
+ # define REBUILD_DUE_TO_FTRACE_MCOUNT_RECORD
+-- 
+2.31.1
+

@@ -1,0 +1,37 @@
+From 2acc3239eac3bb899612ba2321b488f9a4575f7e Mon Sep 17 00:00:00 2001
+From: "Gustavo A. R. Silva" <gustavoars@kernel.org>
+Date: Wed, 29 Sep 2021 17:29:22 -0500
+Subject: [PATCH 0515/1418] dmaengine: stm32-mdma: Use struct_size() helper in
+ devm_kzalloc()
+
+Make use of the struct_size() helper instead of an open-coded version,
+in order to avoid any potential type mistakes or integer overflows that,
+in the worse scenario, could lead to heap overflows.
+
+Link: https://github.com/KSPP/linux/issues/160
+Signed-off-by: Gustavo A. R. Silva <gustavoars@kernel.org>
+Reviewed-by: Amelie Delaunay <amelie.delaunay@foss.st.com>
+Reviewed-by: Kees Cook <keescook@chromium.org>
+Link: https://lore.kernel.org/r/20210929222922.GA357509@embeddedor
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/stm32-mdma.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/dma/stm32-mdma.c b/drivers/dma/stm32-mdma.c
+index 18cbd1e43c2e..d30a4a28d3bf 100644
+--- a/drivers/dma/stm32-mdma.c
++++ b/drivers/dma/stm32-mdma.c
+@@ -1566,7 +1566,8 @@ static int stm32_mdma_probe(struct platform_device *pdev)
+ 	if (count < 0)
+ 		count = 0;
+ 
+-	dmadev = devm_kzalloc(&pdev->dev, sizeof(*dmadev) + sizeof(u32) * count,
++	dmadev = devm_kzalloc(&pdev->dev,
++			      struct_size(dmadev, ahb_addr_masks, count),
+ 			      GFP_KERNEL);
+ 	if (!dmadev)
+ 		return -ENOMEM;
+-- 
+2.31.1
+

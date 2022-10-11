@@ -1,0 +1,111 @@
+From 744accce456416a24fea9520000c5b36a256d5a8 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Tue, 3 Aug 2021 16:11:56 -0700
+Subject: [PATCH 1217/1418] x86/tdx: Add cmdline option to force use of
+ ioremap_shared
+
+Add a command line option to force all the enabled drivers to use
+shared memory mappings. This will be useful when enabling new drivers
+in the protected guest without making all the required changes to use
+shared mappings in it.
+
+Note that this might also allow other non explicitly enabled drivers
+to interact with the host, which could cause other security risks.
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ .../admin-guide/kernel-parameters.txt         | 12 ++++++++++++
+ arch/x86/include/asm/io.h                     |  2 ++
+ arch/x86/mm/ioremap.c                         | 19 ++++++++++++++++++-
+ 3 files changed, 32 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index 07b233c62877..a1364d0e26c7 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -2098,6 +2098,18 @@
+ 			0 - no timeout tracking
+ 			1 to 100 - allowed range
+ 
++	ioremap_force_shared= [X86_64]
++			Force the kernel to use shared memory mappings which do
++			not use ioremap_driver_hardened() to opt-in to shared
++			mappings with the host. This feature is mainly used by
++			a confidential guest when enabling new drivers without
++			proper shared memory related changes. Please note that
++			this option might also allow other non explicitly enabled
++			drivers to interact with the host in protected guest,
++			which could cause other security risks. This option will
++			also cause BIOS data structures to be shared with the host,
++			which might open security holes.
++
+ 	io7=		[HW] IO7 for Marvel-based Alpha systems
+ 			See comment before marvel_specify_io7 in
+ 			arch/alpha/kernel/core_marvel.c.
+diff --git a/arch/x86/include/asm/io.h b/arch/x86/include/asm/io.h
+index dd2c8737c1ed..89f48a9c1350 100644
+--- a/arch/x86/include/asm/io.h
++++ b/arch/x86/include/asm/io.h
+@@ -423,6 +423,8 @@ static inline bool phys_mem_access_encrypted(unsigned long phys_addr,
+ }
+ #endif
+ 
++extern bool ioremap_force_shared;
++
+ /**
+  * iosubmit_cmds512 - copy data to single MMIO location, in 512-bit units
+  * @dst: destination, in MMIO space (must be 512-bit aligned)
+diff --git a/arch/x86/mm/ioremap.c b/arch/x86/mm/ioremap.c
+index 35c5d65b1dc0..b22acd03f7db 100644
+--- a/arch/x86/mm/ioremap.c
++++ b/arch/x86/mm/ioremap.c
+@@ -28,6 +28,7 @@
+ #include <asm/memtype.h>
+ #include <asm/setup.h>
+ #include <asm/tdx.h>
++#include <asm/cmdline.h>
+ 
+ #include "physaddr.h"
+ 
+@@ -162,6 +163,17 @@ static void __ioremap_check_mem(resource_size_t addr, unsigned long size,
+ 	__ioremap_check_other(addr, desc);
+ }
+ 
++/*
++ * Normally only drivers that are hardened for use in confidential guests
++ * force shared mappings. But if device filtering is disabled other
++ * devices can be loaded, and these need shared mappings too. This
++ * variable is set to true if these filters are disabled.
++ *
++ * Note this has some side effects, e.g. various BIOS tables
++ * get shared too which is risky.
++ */
++bool ioremap_force_shared;
++
+ /*
+  * Remap an arbitrary physical address space into the kernel virtual
+  * address space. It transparently creates kernel huge I/O mapping when
+@@ -249,7 +261,7 @@ __ioremap_caller(resource_size_t phys_addr, unsigned long size,
+ 	prot = PAGE_KERNEL_IO;
+ 	if ((io_desc.flags & IORES_MAP_ENCRYPTED) || encrypted)
+ 		prot = pgprot_encrypted(prot);
+-	else if (shared || !cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
++	else if (shared || ioremap_force_shared || !cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
+ 		prot = pgprot_cc_guest(prot);
+ 
+ 	switch (pcm) {
+@@ -851,6 +863,11 @@ void __init early_ioremap_init(void)
+ 	WARN_ON((fix_to_virt(0) + PAGE_SIZE) & ((1 << PMD_SHIFT) - 1));
+ #endif
+ 
++	/* Parse cmdline params for ioremap_force_shared */
++	if (cmdline_find_option_bool(boot_command_line,
++				     "ioremap_force_shared"))
++		ioremap_force_shared = 1;
++
+ 	early_ioremap_setup();
+ 
+ 	pmd = early_ioremap_pmd(fix_to_virt(FIX_BTMAP_BEGIN));
+-- 
+2.31.1
+

@@ -1,0 +1,109 @@
+From 70704d52ccbf65f47ad27ebb7a68115ff731a5c3 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Tue, 13 Jul 2021 17:48:29 -0700
+Subject: [PATCH 0161/1418] asm/io.h: Add ioremap_host_shared fallback
+
+This function is for declaring memory that should be shared with
+a hypervisor in a confidential guest. If the architecture doesn't
+implement it it's just ioremap.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ Documentation/driver-api/device-io.rst | 7 +++++++
+ arch/alpha/include/asm/io.h            | 2 ++
+ arch/mips/include/asm/io.h             | 2 ++
+ arch/parisc/include/asm/io.h           | 2 ++
+ arch/sparc/include/asm/io_64.h         | 2 ++
+ include/asm-generic/io.h               | 5 +++++
+ 6 files changed, 20 insertions(+)
+
+diff --git a/Documentation/driver-api/device-io.rst b/Documentation/driver-api/device-io.rst
+index e9f04b1815d1..9f77a036fc2f 100644
+--- a/Documentation/driver-api/device-io.rst
++++ b/Documentation/driver-api/device-io.rst
+@@ -429,6 +429,13 @@ of the linear kernel memory area to a regular pointer.
+ 
+ Portable drivers should avoid the use of ioremap_cache().
+ 
++ioremap_host_shared()
++---------------------
++
++ioremap_host_shared() maps I/O memory so that it can be shared with the host
++in a confidential guest platform. It is mainly used in platforms like
++Trusted Domain Extensions (TDX).
++
+ Architecture example
+ --------------------
+ 
+diff --git a/arch/alpha/include/asm/io.h b/arch/alpha/include/asm/io.h
+index c9cb554fbe54..8a2e19868975 100644
+--- a/arch/alpha/include/asm/io.h
++++ b/arch/alpha/include/asm/io.h
+@@ -283,6 +283,8 @@ static inline void __iomem *ioremap(unsigned long port, unsigned long size)
+ }
+ 
+ #define ioremap_wc ioremap
++/* Share memory with host in confidential guest platforms */
++#define ioremap_host_shared ioremap
+ #define ioremap_uc ioremap
+ 
+ static inline void iounmap(volatile void __iomem *addr)
+diff --git a/arch/mips/include/asm/io.h b/arch/mips/include/asm/io.h
+index 6f5c86d2bab4..83f638fb48c5 100644
+--- a/arch/mips/include/asm/io.h
++++ b/arch/mips/include/asm/io.h
+@@ -179,6 +179,8 @@ void iounmap(const volatile void __iomem *addr);
+ #define ioremap(offset, size)						\
+ 	ioremap_prot((offset), (size), _CACHE_UNCACHED)
+ #define ioremap_uc		ioremap
++/* Share memory with host in confidential guest platforms */
++#define ioremap_host_shared	ioremap
+ 
+ /*
+  * ioremap_cache -	map bus memory into CPU space
+diff --git a/arch/parisc/include/asm/io.h b/arch/parisc/include/asm/io.h
+index 0b5259102319..ef516ee06238 100644
+--- a/arch/parisc/include/asm/io.h
++++ b/arch/parisc/include/asm/io.h
+@@ -129,6 +129,8 @@ static inline void gsc_writeq(unsigned long long val, unsigned long addr)
+  */
+ void __iomem *ioremap(unsigned long offset, unsigned long size);
+ #define ioremap_wc			ioremap
++/* Share memory with host in confidential guest platforms */
++#define ioremap_host_shared		ioremap
+ #define ioremap_uc			ioremap
+ 
+ extern void iounmap(const volatile void __iomem *addr);
+diff --git a/arch/sparc/include/asm/io_64.h b/arch/sparc/include/asm/io_64.h
+index 5ffa820dcd4d..5b73b877f832 100644
+--- a/arch/sparc/include/asm/io_64.h
++++ b/arch/sparc/include/asm/io_64.h
+@@ -409,6 +409,8 @@ static inline void __iomem *ioremap(unsigned long offset, unsigned long size)
+ #define ioremap_uc(X,Y)			ioremap((X),(Y))
+ #define ioremap_wc(X,Y)			ioremap((X),(Y))
+ #define ioremap_wt(X,Y)			ioremap((X),(Y))
++/* Share memory with host in confidential guest platforms */
++#define ioremap_host_shared(X, Y)	ioremap((X), (Y))
+ static inline void __iomem *ioremap_np(unsigned long offset, unsigned long size)
+ {
+ 	return NULL;
+diff --git a/include/asm-generic/io.h b/include/asm-generic/io.h
+index 7ce93aaf69f8..f0e2ff8775c1 100644
+--- a/include/asm-generic/io.h
++++ b/include/asm-generic/io.h
+@@ -982,6 +982,11 @@ static inline void __iomem *ioremap(phys_addr_t addr, size_t size)
+ #define ioremap_wt ioremap
+ #endif
+ 
++/* Share memory with host in confidential guest platforms */
++#ifndef ioremap_host_shared
++#define ioremap_host_shared ioremap
++#endif
++
+ /*
+  * ioremap_uc is special in that we do require an explicit architecture
+  * implementation.  In general you do not want to use this function in a
+-- 
+2.31.1
+

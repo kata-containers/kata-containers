@@ -1,0 +1,97 @@
+From d9d16acd8793b56be104c66d7e8528ccd3848f58 Mon Sep 17 00:00:00 2001
+From: Eric Auger <eric.auger@redhat.com>
+Date: Tue, 9 Nov 2021 15:46:41 +0800
+Subject: [PATCH 0877/1418] vfio/pci: Register an iommu fault handler
+
+Register an IOMMU fault handler which records faults in
+the DMA FAULT region ring buffer. In a subsequent patch, we
+will add the signaling of a specific eventfd to allow the
+userspace to be notified whenever a new fault as shown up.
+
+Signed-off-by: Eric Auger <eric.auger@redhat.com>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ drivers/vfio/pci/vfio_pci_core.c | 45 ++++++++++++++++++++++++++++++++
+ 1 file changed, 45 insertions(+)
+
+diff --git a/drivers/vfio/pci/vfio_pci_core.c b/drivers/vfio/pci/vfio_pci_core.c
+index e23b29172961..74c68d834390 100644
+--- a/drivers/vfio/pci/vfio_pci_core.c
++++ b/drivers/vfio/pci/vfio_pci_core.c
+@@ -26,6 +26,7 @@
+ #include <linux/vgaarb.h>
+ #include <linux/nospec.h>
+ #include <linux/sched/mm.h>
++#include <linux/circ_buf.h>
+ 
+ #include <linux/vfio_pci_core.h>
+ 
+@@ -262,6 +263,42 @@ static const struct vfio_pci_regops vfio_pci_dma_fault_regops = {
+ 	.add_capability = vfio_pci_dma_fault_add_capability,
+ };
+ 
++int vfio_pci_iommu_dev_fault_handler(struct iommu_fault *fault, void *data)
++{
++	struct vfio_pci_core_device *vdev = (struct vfio_pci_core_device *)data;
++	struct vfio_region_dma_fault *reg =
++		(struct vfio_region_dma_fault *)vdev->fault_pages;
++	struct iommu_fault *new;
++	int head, tail, size;
++	int ret = 0;
++
++	if (WARN_ON(!reg))
++		return -ENOENT;
++
++	new = (struct iommu_fault *)(vdev->fault_pages + reg->offset +
++				     reg->head * reg->entry_size);
++
++	if (fault->type != IOMMU_FAULT_DMA_UNRECOV)
++		return -ENOENT;
++
++	mutex_lock(&vdev->fault_queue_lock);
++
++	head = reg->head;
++	tail = reg->tail;
++	size = reg->nb_entries;
++
++	if (CIRC_SPACE(head, tail, size) < 1) {
++		ret = -ENOSPC;
++		goto unlock;
++	}
++
++	*new = *fault;
++	reg->head = (head + 1) % size;
++unlock:
++	mutex_unlock(&vdev->fault_queue_lock);
++	return ret;
++}
++
+ #define DMA_FAULT_RING_LENGTH 512
+ 
+ static int vfio_pci_dma_fault_init(struct vfio_pci_core_device *vdev)
+@@ -307,6 +344,13 @@ static int vfio_pci_dma_fault_init(struct vfio_pci_core_device *vdev)
+ 	header->entry_size = sizeof(struct iommu_fault);
+ 	header->nb_entries = DMA_FAULT_RING_LENGTH;
+ 	header->offset = sizeof(struct vfio_region_dma_fault);
++
++	ret = iommu_register_device_fault_handler(&vdev->pdev->dev,
++					vfio_pci_iommu_dev_fault_handler,
++					vdev);
++	if (ret) /* the dma fault region is freed in vfio_pci_disable() */
++		goto out;
++
+ 	return 0;
+ out:
+ 	kfree(vdev->fault_pages);
+@@ -408,6 +452,7 @@ void vfio_pci_core_disable(struct vfio_pci_core_device *vdev)
+ 	vfio_pci_set_irqs_ioctl(vdev, VFIO_IRQ_SET_DATA_NONE |
+ 				VFIO_IRQ_SET_ACTION_TRIGGER,
+ 				vdev->irq_type, 0, 0, NULL);
++	WARN_ON(iommu_unregister_device_fault_handler(&vdev->pdev->dev));
+ 
+ 	/* Device closed, don't need mutex here */
+ 	list_for_each_entry_safe(ioeventfd, ioeventfd_tmp,
+-- 
+2.31.1
+

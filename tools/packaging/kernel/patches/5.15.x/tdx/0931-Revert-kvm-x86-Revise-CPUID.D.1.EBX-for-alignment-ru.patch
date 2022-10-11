@@ -1,0 +1,28 @@
+From db60fa81c7e70615d66c696ea00e7b7874f1da26 Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 17:58:44 -0800
+Subject: [PATCH 0931/1418] Revert "kvm: x86: Revise CPUID.D.1.EBX for
+ alignment rule"
+
+This reverts commit 6233d76cc5c5af4104d2c179ba95b70847aacbf9.
+---
+ arch/x86/kvm/cpuid.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c
+index ddabd812ef37..95260cd1e711 100644
+--- a/arch/x86/kvm/cpuid.c
++++ b/arch/x86/kvm/cpuid.c
+@@ -43,8 +43,7 @@ static u32 xstate_required_size(u64 xstate_bv, bool compacted)
+ 		if (xstate_bv & 0x1) {
+ 		        u32 eax, ebx, ecx, edx, offset;
+ 		        cpuid_count(0xD, feature_bit, &eax, &ebx, &ecx, &edx);
+-			/* ECX[2]: 64B alignment in compacted form */
+-			offset = compacted ? ((ecx & 0x2) ? ALIGN(ret, 64) : ret) : ebx;
++			offset = compacted ? ret : ebx;
+ 			ret = max(ret, offset + eax);
+ 		}
+ 
+-- 
+2.31.1
+

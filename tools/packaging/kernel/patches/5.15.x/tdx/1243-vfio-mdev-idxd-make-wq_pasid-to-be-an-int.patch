@@ -1,0 +1,29 @@
+From f689de670de66d64337a6ccbe19d8084c2e42033 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Thu, 24 Mar 2022 16:49:07 -0700
+Subject: [PATCH 1243/1418] vfio: mdev: idxd: make wq_pasid to be an int
+
+wq_pasid is set to u32 and a compare later compares against >= 0, which
+always evaluate to true. Make wq_pasid an int and set default value to -1.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/vfio/mdev/idxd/vdev.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/vfio/mdev/idxd/vdev.c b/drivers/vfio/mdev/idxd/vdev.c
+index 39ed9939a190..075ef915e208 100644
+--- a/drivers/vfio/mdev/idxd/vdev.c
++++ b/drivers/vfio/mdev/idxd/vdev.c
+@@ -1188,7 +1188,7 @@ static void vidxd_wq_enable(struct vdcm_idxd *vidxd, int wq_id)
+ 	wq_pasid_enable = vwqcfg->pasid_en;
+ 
+ 	if (wq_dedicated(wq)) {
+-		u32 wq_pasid = ~0U;
++		int wq_pasid = -1;
+ 		bool priv;
+ 
+ 		if (wq_pasid_enable) {
+-- 
+2.31.1
+

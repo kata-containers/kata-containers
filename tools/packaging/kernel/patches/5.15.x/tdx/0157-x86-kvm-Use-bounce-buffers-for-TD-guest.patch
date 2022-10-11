@@ -1,0 +1,119 @@
+From 451f77af0a7fcd7c01ad2f776ab2563cda0aebd4 Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Mon, 20 Apr 2020 19:10:19 +0300
+Subject: [PATCH 0157/1418] x86/kvm: Use bounce buffers for TD guest
+
+Intel TDX doesn't allow VMM to directly access guest private memory.
+Any memory that is required for communication with VMM must be shared
+explicitly. The same rule applies for any DMA to and from TDX guest.
+All DMA pages had to marked as shared pages. A generic way to achieve
+this without any changes to device drivers is to use the SWIOTLB
+framework.
+
+This method of handling is similar to AMD SEV. So extend this support
+for TDX guest as well. Also since there are some common code between
+AMD SEV and TDX guest in mem_encrypt_init(), move it to
+mem_encrypt_common.c and call AMD specific init function from it
+
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/mem_encrypt_common.h |  3 +++
+ arch/x86/kernel/tdx.c                     |  2 ++
+ arch/x86/mm/mem_encrypt.c                 |  5 +----
+ arch/x86/mm/mem_encrypt_common.c          | 14 ++++++++++++++
+ 4 files changed, 20 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/include/asm/mem_encrypt_common.h b/arch/x86/include/asm/mem_encrypt_common.h
+index 697bc40a4e3d..bc90e565bce4 100644
+--- a/arch/x86/include/asm/mem_encrypt_common.h
++++ b/arch/x86/include/asm/mem_encrypt_common.h
+@@ -8,11 +8,14 @@
+ 
+ #ifdef CONFIG_AMD_MEM_ENCRYPT
+ bool amd_force_dma_unencrypted(struct device *dev);
++void __init amd_mem_encrypt_init(void);
+ #else /* CONFIG_AMD_MEM_ENCRYPT */
+ static inline bool amd_force_dma_unencrypted(struct device *dev)
+ {
+ 	return false;
+ }
++
++static inline void amd_mem_encrypt_init(void) {}
+ #endif /* CONFIG_AMD_MEM_ENCRYPT */
+ 
+ #endif
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 433f366ca25c..ce8e3019b812 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -12,6 +12,7 @@
+ #include <asm/insn.h>
+ #include <asm/insn-eval.h>
+ #include <linux/sched/signal.h> /* force_sig_fault() */
++#include <linux/swiotlb.h>
+ 
+ /* TDX Module call Leaf IDs */
+ #define TDX_GET_INFO			1
+@@ -577,6 +578,7 @@ void __init tdx_early_init(void)
+ 	pv_ops.irq.halt = tdx_halt;
+ 
+ 	legacy_pic = &null_legacy_pic;
++	swiotlb_force = SWIOTLB_FORCE;
+ 
+ 	cpuhp_setup_state(CPUHP_AP_ONLINE_DYN, "tdx:cpu_hotplug",
+ 			  NULL, tdx_cpu_offline_prepare);
+diff --git a/arch/x86/mm/mem_encrypt.c b/arch/x86/mm/mem_encrypt.c
+index 5d7fbed73949..8385bc4565e9 100644
+--- a/arch/x86/mm/mem_encrypt.c
++++ b/arch/x86/mm/mem_encrypt.c
+@@ -438,14 +438,11 @@ static void print_mem_encrypt_feature_info(void)
+ }
+ 
+ /* Architecture __weak replacement functions */
+-void __init mem_encrypt_init(void)
++void __init amd_mem_encrypt_init(void)
+ {
+ 	if (!sme_me_mask)
+ 		return;
+ 
+-	/* Call into SWIOTLB to update the SWIOTLB DMA buffers */
+-	swiotlb_update_mem_attributes();
+-
+ 	/*
+ 	 * With SEV, we need to unroll the rep string I/O instructions,
+ 	 * but SEV-ES supports them through the #VC handler.
+diff --git a/arch/x86/mm/mem_encrypt_common.c b/arch/x86/mm/mem_encrypt_common.c
+index 119a9056efbb..6fe44c6cb753 100644
+--- a/arch/x86/mm/mem_encrypt_common.c
++++ b/arch/x86/mm/mem_encrypt_common.c
+@@ -10,6 +10,7 @@
+ #include <asm/mem_encrypt_common.h>
+ #include <linux/dma-mapping.h>
+ #include <linux/cc_platform.h>
++#include <linux/swiotlb.h>
+ 
+ /* Override for DMA direct allocation check - ARCH_HAS_FORCE_DMA_UNENCRYPTED */
+ bool force_dma_unencrypted(struct device *dev)
+@@ -24,3 +25,16 @@ bool force_dma_unencrypted(struct device *dev)
+ 
+ 	return false;
+ }
++
++/* Architecture __weak replacement functions */
++void __init mem_encrypt_init(void)
++{
++	/*
++	 * For TDX guest or SEV/SME, call into SWIOTLB to update
++	 * the SWIOTLB DMA buffers
++	 */
++	if (sme_me_mask || cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT))
++		swiotlb_update_mem_attributes();
++
++	amd_mem_encrypt_init();
++}
+-- 
+2.31.1
+

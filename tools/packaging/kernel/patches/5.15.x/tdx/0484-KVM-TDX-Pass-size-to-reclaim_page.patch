@@ -1,0 +1,119 @@
+From 105234a5d931446fcf69b5e70af3f4e1ca8486ac Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Tue, 31 Aug 2021 15:34:40 +0800
+Subject: [PATCH 0484/1418] KVM: TDX: Pass size to reclaim_page()
+
+A 2MB large page can be tdh_mem_page_aug()'ed to TD directly. In this case,
+it needs to reclaim and clear the page as 2MB size.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 35 ++++++++++++++++++++++++-----------
+ 1 file changed, 24 insertions(+), 11 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 374a0eb4d76b..b5f8267cc86e 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -196,22 +196,25 @@ static inline bool is_td_finalized(struct kvm_tdx *kvm_tdx)
+ 	return kvm_tdx->finalized;
+ }
+ 
+-static void tdx_clear_page(unsigned long page)
++static void tdx_clear_page(unsigned long page, int size)
+ {
+ 	const void *zero_page = (const void *) __va(page_to_phys(ZERO_PAGE(0)));
+ 	unsigned long i;
+ 
++	WARN_ON_ONCE(size % 64);
++
+ 	/* Zeroing the page is only necessary for systems with MKTME-i. */
+ 	if (!static_cpu_has(X86_FEATURE_MOVDIR64B))
+ 		return;
+ 
+-	for (i = 0; i < 4096; i += 64)
++	for (i = 0; i < size; i += 64)
+ 		/* MOVDIR64B [rdx], es:rdi */
+ 		asm (".byte 0x66, 0x0f, 0x38, 0xf8, 0x3a"
+ 		     : : "d" (zero_page), "D" (page + i) : "memory");
+ }
+ 
+-static int __tdx_reclaim_page(unsigned long va, hpa_t pa, bool do_wb, u16 hkid)
++static int __tdx_reclaim_page(unsigned long va, hpa_t pa, enum pg_level level,
++			      bool do_wb, u16 hkid)
+ {
+ 	struct tdx_ex_ret ex_ret;
+ 	u64 err;
+@@ -220,19 +223,28 @@ static int __tdx_reclaim_page(unsigned long va, hpa_t pa, bool do_wb, u16 hkid)
+ 	if (TDX_ERR(err, TDH_PHYMEM_PAGE_RECLAIM, &ex_ret))
+ 		return -EIO;
+ 
+-	if (do_wb) {
++	WARN_ON_ONCE(ex_ret.phymem_page_md.page_size !=
++		     pg_level_to_tdx_sept_level(level));
++
++	/* only TDR page gets into this path */
++	if (do_wb &&
++	    level == PG_LEVEL_4K) {
+ 		err = tdh_phymem_page_wbinvd(set_hkid_to_hpa(pa, hkid));
+ 		if (TDX_ERR(err, TDH_PHYMEM_PAGE_WBINVD, NULL))
+ 			return -EIO;
+ 	}
+ 
+-	tdx_clear_page(va);
++	tdx_clear_page(va, KVM_HPAGE_SIZE(level));
+ 	return 0;
+ }
+ 
+-static int tdx_reclaim_page(unsigned long va, hpa_t pa)
++/*
++ * It's for the page already writeback'd. Thus cannot be used for TDR.
++ * @level is one of enum pg_level
++ */
++static int tdx_reclaim_page(unsigned long va, hpa_t pa, enum pg_level level)
+ {
+-	return __tdx_reclaim_page(va, pa, false, 0);
++	return __tdx_reclaim_page(va, pa, level, false, 0);
+ }
+ 
+ static int tdx_alloc_td_page(struct tdx_td_page *page)
+@@ -254,7 +266,7 @@ static void tdx_add_td_page(struct tdx_td_page *page)
+ static void tdx_reclaim_td_page(struct tdx_td_page *page)
+ {
+ 	if (page->added) {
+-		if (tdx_reclaim_page(page->va, page->pa))
++		if (tdx_reclaim_page(page->va, page->pa, PG_LEVEL_4K))
+ 			return;
+ 
+ 		page->added = false;
+@@ -382,7 +394,8 @@ static void tdx_vm_destroy(struct kvm *kvm)
+ 		tdx_reclaim_td_page(&kvm_tdx->tdcs[i]);
+ 
+ 	if (kvm_tdx->tdr.added &&
+-	    __tdx_reclaim_page(kvm_tdx->tdr.va, kvm_tdx->tdr.pa, true, tdx_seam_keyid))
++	    __tdx_reclaim_page(kvm_tdx->tdr.va, kvm_tdx->tdr.pa, PG_LEVEL_4K,
++			       true, tdx_seam_keyid))
+ 		return;
+ 
+ 	free_page(kvm_tdx->tdr.va);
+@@ -1540,7 +1553,7 @@ static void tdx_sept_drop_private_spte(struct kvm *kvm, gfn_t gfn, enum pg_level
+ 		err = tdh_phymem_page_wbinvd(hpa_with_hkid);
+ 		if (TDX_ERR(err, TDH_PHYMEM_PAGE_WBINVD, NULL))
+ 			return;
+-	} else if (tdx_reclaim_page((unsigned long)__va(hpa), hpa)) {
++	} else if (tdx_reclaim_page((unsigned long)__va(hpa), hpa, level)) {
+ 		return;
+ 	}
+ 
+@@ -1604,7 +1617,7 @@ static int tdx_sept_free_private_sp(struct kvm *kvm, gfn_t gfn, enum pg_level le
+ 	if (KVM_BUG_ON(is_hkid_assigned(to_kvm_tdx(kvm)), kvm))
+ 		return -EINVAL;
+ 
+-	return tdx_reclaim_page((unsigned long)sept_page, __pa(sept_page));
++	return tdx_reclaim_page((unsigned long)sept_page, __pa(sept_page), PG_LEVEL_4K);
+ }
+ 
+ static int tdx_sept_tlb_remote_flush(struct kvm *kvm)
+-- 
+2.31.1
+

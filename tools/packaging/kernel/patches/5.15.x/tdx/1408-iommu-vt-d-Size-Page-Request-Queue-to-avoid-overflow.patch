@@ -1,0 +1,49 @@
+From 9ce155cfeeb83891ac9e3e75350310a09423d808 Mon Sep 17 00:00:00 2001
+From: Lu Baolu <baolu.lu@linux.intel.com>
+Date: Wed, 15 Jun 2022 09:01:07 +0800
+Subject: [PATCH 1408/1418] iommu/vt-d: Size Page Request Queue to avoid
+ overflow condition
+
+Upstream commit: 48811c44349ffbb778d3e36b53beb03ad43a979c
+
+PRQ overflow may cause I/O throughput congestion, resulting in unnecessary
+degradation of I/O performance. Appropriately increasing the length of PRQ
+can greatly reduce the occurrence of PRQ overflow. The count of maximum
+page requests that can be generated in parallel by a PCIe device is
+statically defined in the Outstanding Page Request Capacity field of the
+PCIe ATS configure space.
+
+The new length of PRQ is calculated by summing up the value of Outstanding
+Page Request Capacity register across all devices where Page Requests are
+supported on the real PR-capable platform (Intel Sapphire Rapids). The
+result is round to the nearest higher power of 2.
+
+The PRQ length is also double sized as the VT-d IOMMU driver only updates
+the Page Request Queue Head Register (PQH_REG) after processing the entire
+queue.
+
+Signed-off-by: Lu Baolu <baolu.lu@linux.intel.com>
+Reviewed-by: Kevin Tian <kevin.tian@intel.com>
+Link: https://lore.kernel.org/r/20220421113558.3504874-1-baolu.lu@linux.intel.com
+Link: https://lore.kernel.org/r/20220510023407.2759143-5-baolu.lu@linux.intel.com
+Signed-off-by: Joerg Roedel <jroedel@suse.de>
+---
+ drivers/iommu/intel/iommu.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 58aaca25a849..ae3413662604 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -62,7 +62,7 @@ static int prs_allocation = 32;
+  * in total to prevent PRQ overflow in the worst case.
+  * For default 32 entries per dev,8 KB should be enough.
+  */
+-int prq_size_page_order = 1;
++int prq_size_page_order = 4;
+ 
+ #define IS_GFX_DEVICE(pdev) ((pdev->class >> 16) == PCI_BASE_CLASS_DISPLAY)
+ #define IS_USB_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_SERIAL_USB)
+-- 
+2.31.1
+

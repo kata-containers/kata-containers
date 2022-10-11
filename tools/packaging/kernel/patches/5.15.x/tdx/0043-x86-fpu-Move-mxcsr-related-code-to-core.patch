@@ -1,0 +1,117 @@
+From 441c33b873426033e83608c0d07a72c9df11acc5 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 15 Oct 2021 03:16:31 +0200
+Subject: [PATCH 0043/1418] x86/fpu: Move mxcsr related code to core
+
+No need to expose that to code which only needs the XCR0 accessors.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211015011539.740012411@linutronix.de
+---
+ arch/x86/include/asm/fpu/xcr.h | 11 -----------
+ arch/x86/kernel/fpu/init.c     |  1 +
+ arch/x86/kernel/fpu/legacy.h   |  7 +++++++
+ arch/x86/kernel/fpu/regset.c   |  1 +
+ arch/x86/kernel/fpu/xstate.c   |  3 ++-
+ arch/x86/kvm/svm/sev.c         |  2 +-
+ 6 files changed, 12 insertions(+), 13 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/xcr.h b/arch/x86/include/asm/fpu/xcr.h
+index 1c7ab8d95da5..79f95d3787e2 100644
+--- a/arch/x86/include/asm/fpu/xcr.h
++++ b/arch/x86/include/asm/fpu/xcr.h
+@@ -2,17 +2,6 @@
+ #ifndef _ASM_X86_FPU_XCR_H
+ #define _ASM_X86_FPU_XCR_H
+ 
+-/*
+- * MXCSR and XCR definitions:
+- */
+-
+-static inline void ldmxcsr(u32 mxcsr)
+-{
+-	asm volatile("ldmxcsr %0" :: "m" (mxcsr));
+-}
+-
+-extern unsigned int mxcsr_feature_mask;
+-
+ #define XCR_XFEATURE_ENABLED_MASK	0x00000000
+ 
+ static inline u64 xgetbv(u32 index)
+diff --git a/arch/x86/kernel/fpu/init.c b/arch/x86/kernel/fpu/init.c
+index 24873dfe2dba..e77084a6ae7c 100644
+--- a/arch/x86/kernel/fpu/init.c
++++ b/arch/x86/kernel/fpu/init.c
+@@ -11,6 +11,7 @@
+ #include <linux/init.h>
+ 
+ #include "internal.h"
++#include "legacy.h"
+ 
+ /*
+  * Initialize the registers found in all CPUs, CR0 and CR4:
+diff --git a/arch/x86/kernel/fpu/legacy.h b/arch/x86/kernel/fpu/legacy.h
+index 2ff36b0f79e9..17c26b164c63 100644
+--- a/arch/x86/kernel/fpu/legacy.h
++++ b/arch/x86/kernel/fpu/legacy.h
+@@ -4,6 +4,13 @@
+ 
+ #include <asm/fpu/types.h>
+ 
++extern unsigned int mxcsr_feature_mask;
++
++static inline void ldmxcsr(u32 mxcsr)
++{
++	asm volatile("ldmxcsr %0" :: "m" (mxcsr));
++}
++
+ /*
+  * Returns 0 on success or the trap number when the operation raises an
+  * exception.
+diff --git a/arch/x86/kernel/fpu/regset.c b/arch/x86/kernel/fpu/regset.c
+index a40150e350b6..3d8ed45da166 100644
+--- a/arch/x86/kernel/fpu/regset.c
++++ b/arch/x86/kernel/fpu/regset.c
+@@ -12,6 +12,7 @@
+ 
+ #include "context.h"
+ #include "internal.h"
++#include "legacy.h"
+ 
+ /*
+  * The xstateregs_active() routine is the same as the regset_fpregs_active() routine,
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 246a7fea06b1..f0305b2b227f 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -14,8 +14,9 @@
+ 
+ #include <asm/fpu/api.h>
+ #include <asm/fpu/internal.h>
+-#include <asm/fpu/signal.h>
+ #include <asm/fpu/regset.h>
++#include <asm/fpu/signal.h>
++#include <asm/fpu/xcr.h>
+ 
+ #include <asm/tlbflush.h>
+ 
+diff --git a/arch/x86/kvm/svm/sev.c b/arch/x86/kvm/svm/sev.c
+index 7e34d7163ada..5847b05d29da 100644
+--- a/arch/x86/kvm/svm/sev.c
++++ b/arch/x86/kvm/svm/sev.c
+@@ -17,10 +17,10 @@
+ #include <linux/misc_cgroup.h>
+ #include <linux/processor.h>
+ #include <linux/trace_events.h>
+-#include <asm/fpu/internal.h>
+ 
+ #include <asm/pkru.h>
+ #include <asm/trapnr.h>
++#include <asm/fpu/xcr.h>
+ 
+ #include "x86.h"
+ #include "svm.h"
+-- 
+2.31.1
+

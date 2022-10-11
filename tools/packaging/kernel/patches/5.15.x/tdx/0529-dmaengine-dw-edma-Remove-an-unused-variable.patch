@@ -1,0 +1,29 @@
+From f76e1ba34243d46a60a1d7296a9e60c3592d7d78 Mon Sep 17 00:00:00 2001
+From: Christophe JAILLET <christophe.jaillet@wanadoo.fr>
+Date: Sun, 10 Oct 2021 08:29:29 +0200
+Subject: [PATCH 0529/1418] dmaengine: dw-edma: Remove an unused variable
+
+'head' is unused, remove it.
+
+Signed-off-by: Christophe JAILLET <christophe.jaillet@wanadoo.fr>
+Link: https://lore.kernel.org/r/46e071be21fbc5ac5c35d4796a7e4249e94c3a77.1633847306.git.christophe.jaillet@wanadoo.fr
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/dw-edma/dw-edma-core.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/drivers/dma/dw-edma/dw-edma-core.c b/drivers/dma/dw-edma/dw-edma-core.c
+index 53289927dd0d..468d1097a1ec 100644
+--- a/drivers/dma/dw-edma/dw-edma-core.c
++++ b/drivers/dma/dw-edma/dw-edma-core.c
+@@ -249,7 +249,6 @@ static int dw_edma_device_terminate_all(struct dma_chan *dchan)
+ {
+ 	struct dw_edma_chan *chan = dchan2dw_edma_chan(dchan);
+ 	int err = 0;
+-	LIST_HEAD(head);
+ 
+ 	if (!chan->configured) {
+ 		/* Do nothing */
+-- 
+2.31.1
+

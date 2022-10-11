@@ -1,0 +1,33 @@
+From 50d950e10d08b459e99884f72b2c9710145565c7 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Wed, 10 Jun 2020 09:16:24 -0700
+Subject: [PATCH 0382/1418] KVM: x86/mmu: Return old SPTE from
+ mmu_spte_clear_track_bits()
+
+Return the old SPTE when clearing a SPTE and push the "old SPTE present"
+check to the caller.  Private shadow page support will use the old SPTE
+in rmap_remove() to determine whether or not there is a linked private
+shadow page.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 8cc6be64bfdb..32e0d7d11bbf 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -614,7 +614,7 @@ static bool mmu_spte_update(u64 *sptep, u64 new_spte)
+  * state bits, it is used to clear the last level sptep.
+  * Returns the old PTE.
+  */
+-static int mmu_spte_clear_track_bits(struct kvm *kvm, u64 *sptep)
++static u64 mmu_spte_clear_track_bits(struct kvm *kvm, u64 *sptep)
+ {
+ 	kvm_pfn_t pfn;
+ 	u64 old_spte = *sptep;
+-- 
+2.31.1
+

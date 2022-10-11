@@ -1,0 +1,57 @@
+From 20f160a626fca97260a87768080520c476de1a48 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Fri, 5 Mar 2021 10:30:11 +0800
+Subject: [PATCH 0408/1418] *** HACK *** KVM: TDX: Fixup fatal #MC happens in
+ TD guest that delivered as SMI
+
+When BIOS eMCA MCE-SMI morphing is enabled, the #MC happens in TD
+guest is morphed to SMI. Then the SMI causes TD exit reason (6) to KVM.
+
+Once SEAMCALL(TDENTER) returns from SEAM module, the SMI is delivered
+and bios SMI handler is called. After some handling, the SMI handler
+delivers #MC to OS and returns back to OS. In this case, host kernel #MC
+handler has no idea of whether the #MC is caused by a TD guest. So if
+the #MC is fatal type, it will panic the kernel. We really don't want
+this.
+
+Note, it's different from the case that TD exit due to #MC. In that case,
+KVM calls kvm_machine_check(), which fakes a ring 3 pt_regs so that
+fatal machine just causes user space VMM to be killed.
+
+To survive from the fatal #MC deliverd as MSMI->MCE, that happens in TD
+guest. Put a fixup entry after SEAMCALL(TDENTER) and also expand the
+condition to set MCE_IN_KERNEL_RECOV to make this hack work.
+
+TODO: make this patch upstreamable
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/vmenter.S | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/vmx/vmenter.S b/arch/x86/kvm/vmx/vmenter.S
+index 79fa88b30f4d..ef97f05b2ac8 100644
+--- a/arch/x86/kvm/vmx/vmenter.S
++++ b/arch/x86/kvm/vmx/vmenter.S
+@@ -397,7 +397,8 @@ SYM_FUNC_START(__tdx_vcpu_run)
+ 2:	seamcall
+ 
+ 	/* Skip to the exit path if TDENTER failed. */
+-	bt $TDENTER_ERROR_BIT, %rax
++7:	nop
++8:	bt $TDENTER_ERROR_BIT, %rax
+ 	jc 4f
+ 
+ 	/* Temporarily save the TD-Exit reason. */
+@@ -468,6 +469,7 @@ SYM_FUNC_START(__tdx_vcpu_run)
+ 	jmp 4b
+ 6:	ud2
+ 	_ASM_EXTABLE(2b, 5b)
++	_ASM_EXTABLE_FIX_MC(7b, 8b)
+ 
+ SYM_FUNC_END(__tdx_vcpu_run)
+ 
+-- 
+2.31.1
+

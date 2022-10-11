@@ -1,0 +1,43 @@
+From 84147979636cdb7dc7bf9046d2129d49cb64fc9b Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Wed, 30 Jun 2021 17:57:18 -0700
+Subject: [PATCH 0199/1418] clocksource/acpi_pm: Disable in TDX
+
+TDX guests are only supposed to use TSC for time because it is
+secured by the TDX module. Disable acpi_pm as a potential fallback,
+otherwise an malicious host could potentially provoke a fallback.
+acpi_pm is not secure because it's controlled by the host.
+
+Note: this still leaves the jiffies clock source
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ drivers/clocksource/acpi_pm.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/clocksource/acpi_pm.c b/drivers/clocksource/acpi_pm.c
+index eb596ff9e7bb..9db5b73733d9 100644
+--- a/drivers/clocksource/acpi_pm.c
++++ b/drivers/clocksource/acpi_pm.c
+@@ -22,6 +22,7 @@
+ #include <linux/init.h>
+ #include <linux/pci.h>
+ #include <linux/delay.h>
++#include <linux/cc_platform.h>
+ #include <asm/io.h>
+ 
+ /*
+@@ -180,6 +181,9 @@ static int __init init_acpi_pm_clocksource(void)
+ 	if (!pmtmr_ioport)
+ 		return -ENODEV;
+ 
++	if (cc_platform_has(CC_ATTR_GUEST_SECURE_TIME))
++		return -ENODEV;
++
+ 	/* "verify" this timing source: */
+ 	for (j = 0; j < ACPI_PM_MONOTONICITY_CHECKS; j++) {
+ 		udelay(100 * j);
+-- 
+2.31.1
+

@@ -1,0 +1,159 @@
+From 6b827a2d74b36b24ef6232de0166a1657601a347 Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Tue, 8 Mar 2022 16:57:56 -0800
+Subject: [PATCH 1180/1418] mm/pkeys: Introduce pks_set_readwrite()
+
+When kernel code needs access to a PKS protected page they will need to
+change the protections for the pkey to Read/Write.
+
+Define pks_set_readwrite() to update the specified pkey.  Define
+pks_update_protection() as a helper to do the heavy lifting and allow
+for subsequent pks_set_*() calls.
+
+Define PKEY_READ_WRITE rather than use a magic value of '0' in
+pks_update_protection().
+
+Finally, ensure preemption is disabled for pks_write_pkrs() because the
+context of this call can not generally be predicted.
+
+pks.h is created to avoid conflicts and header dependencies with the
+user space pkey code.
+
+Add documentation.
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ Documentation/core-api/protection-keys.rst | 15 +++++++++++
+ arch/x86/mm/pkeys.c                        | 31 ++++++++++++++++++++++
+ include/linux/pks.h                        | 31 ++++++++++++++++++++++
+ include/uapi/asm-generic/mman-common.h     |  1 +
+ 4 files changed, 78 insertions(+)
+ create mode 100644 include/linux/pks.h
+
+diff --git a/Documentation/core-api/protection-keys.rst b/Documentation/core-api/protection-keys.rst
+index 23330a7d53eb..e6564f5336b7 100644
+--- a/Documentation/core-api/protection-keys.rst
++++ b/Documentation/core-api/protection-keys.rst
+@@ -143,6 +143,21 @@ Adding pages to a pkey protected domain
+ .. kernel-doc:: arch/x86/include/asm/pgtable_types.h
+         :doc: PKS_KEY_ASSIGNMENT
+ 
++Changing permissions of individual keys
++---------------------------------------
++
++.. kernel-doc:: include/linux/pks.h
++        :identifiers: pks_set_readwrite
++
++MSR details
++~~~~~~~~~~~
++
++WRMSR is typically an architecturally serializing instruction.  However,
++WRMSR(MSR_IA32_PKRS) is an exception.  It is not a serializing instruction and
++instead maintains ordering properties similar to WRPKRU.  Thus it is safe to
++immediately use a mapping when the pks_set*() functions returns.  Check the
++latest SDM for details.
++
+ Testing
+ -------
+ 
+diff --git a/arch/x86/mm/pkeys.c b/arch/x86/mm/pkeys.c
+index d4fae6903ed8..ba00c1b30d47 100644
+--- a/arch/x86/mm/pkeys.c
++++ b/arch/x86/mm/pkeys.c
+@@ -6,6 +6,7 @@
+ #include <linux/debugfs.h>		/* debugfs_create_u32()		*/
+ #include <linux/mm_types.h>             /* mm_struct, vma, etc...       */
+ #include <linux/pkeys.h>                /* PKEY_*                       */
++#include <linux/pks.h>
+ #include <linux/pks-keys.h>
+ #include <uapi/asm-generic/mman-common.h>
+ 
+@@ -275,6 +276,36 @@ void pks_setup(void)
+ 	cr4_set_bits(X86_CR4_PKS);
+ }
+ 
++/*
++ * Do not call this directly, see pks_set*().
++ *
++ * @pkey: Key for the domain to change
++ * @protection: protection bits to be used
++ *
++ * Protection utilizes the same protection bits specified for User pkeys
++ *     PKEY_DISABLE_ACCESS
++ *     PKEY_DISABLE_WRITE
++ *
++ */
++void pks_update_protection(u8 pkey, u8 protection)
++{
++	u32 pkrs;
++
++	if (!cpu_feature_enabled(X86_FEATURE_PKS))
++		return;
++
++	if (WARN_ON_ONCE(pkey >= PKS_KEY_MAX))
++		return;
++
++	pkrs = current->thread.pkrs;
++	current->thread.pkrs = pkey_update_pkval(pkrs, pkey,
++						 protection);
++	preempt_disable();
++	pks_write_pkrs(current->thread.pkrs);
++	preempt_enable();
++}
++EXPORT_SYMBOL_GPL(pks_update_protection);
++
+ u32 get_current_pkrs(void)
+ {
+ 	return 0;
+diff --git a/include/linux/pks.h b/include/linux/pks.h
+new file mode 100644
+index 000000000000..8b705a937b19
+--- /dev/null
++++ b/include/linux/pks.h
+@@ -0,0 +1,31 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _LINUX_PKS_H
++#define _LINUX_PKS_H
++
++#ifdef CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS
++
++#include <linux/types.h>
++
++#include <uapi/asm-generic/mman-common.h>
++
++void pks_update_protection(u8 pkey, u8 protection);
++
++/**
++ * pks_set_readwrite() - Make the domain Read/Write
++ * @pkey: the pkey for which the access should change.
++ *
++ * Allow all access, read and write, to the domain specified by pkey.  This is
++ * not a global update and only affects the current running thread.
++ */
++static inline void pks_set_readwrite(u8 pkey)
++{
++	pks_update_protection(pkey, PKEY_READ_WRITE);
++}
++
++#else /* !CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
++
++static inline void pks_set_readwrite(u8 pkey) {}
++
++#endif /* CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
++
++#endif /* _LINUX_PKS_H */
+diff --git a/include/uapi/asm-generic/mman-common.h b/include/uapi/asm-generic/mman-common.h
+index 1567a3294c3d..3da6ac9e5ded 100644
+--- a/include/uapi/asm-generic/mman-common.h
++++ b/include/uapi/asm-generic/mman-common.h
+@@ -78,6 +78,7 @@
+ /* compatibility flags */
+ #define MAP_FILE	0
+ 
++#define PKEY_READ_WRITE		0x0
+ #define PKEY_DISABLE_ACCESS	0x1
+ #define PKEY_DISABLE_WRITE	0x2
+ #define PKEY_ACCESS_MASK	(PKEY_DISABLE_ACCESS |\
+-- 
+2.31.1
+

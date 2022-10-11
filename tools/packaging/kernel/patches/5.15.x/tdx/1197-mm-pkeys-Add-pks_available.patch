@@ -1,0 +1,92 @@
+From 44ee6ce5543eeb816ed159fbe3d8d3b03b6eadfd Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Mon, 15 Nov 2021 12:40:58 -0800
+Subject: [PATCH 1197/1418] mm/pkeys: Add pks_available()
+
+If PKS is configured within the kernel but the CPU does not support PKS,
+the PKS calls remain safe to execute even without protection.  However,
+adding the overhead of these calls on CPUs which don't support PKS is
+inefficient and best avoided.
+
+Define pks_available() to allow users to check if PKS is enabled on the
+current system.
+
+The implementation of pks_available() is placed in the asm headers while
+being directly exported via linux/pks.h to allow for the inline calling
+of cpu_feature_enabled() by consumers outside of the architecture.
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ Documentation/core-api/protection-keys.rst |  3 +++
+ arch/x86/include/asm/pks.h                 | 12 ++++++++++++
+ include/linux/pks.h                        |  8 ++++++++
+ 3 files changed, 23 insertions(+)
+
+diff --git a/Documentation/core-api/protection-keys.rst b/Documentation/core-api/protection-keys.rst
+index 68fe7a92cc98..36621cbc2cc6 100644
+--- a/Documentation/core-api/protection-keys.rst
++++ b/Documentation/core-api/protection-keys.rst
+@@ -152,6 +152,9 @@ Changing permissions of individual keys
+ .. kernel-doc:: arch/x86/mm/pkeys.c
+         :identifiers: pks_update_exception
+ 
++.. kernel-doc:: arch/x86/include/asm/pks.h
++        :identifiers: pks_available
++
+ Overriding Default Fault Behavior
+ ---------------------------------
+ 
+diff --git a/arch/x86/include/asm/pks.h b/arch/x86/include/asm/pks.h
+index de67d5b5a2af..cab42aadea07 100644
+--- a/arch/x86/include/asm/pks.h
++++ b/arch/x86/include/asm/pks.h
+@@ -2,8 +2,20 @@
+ #ifndef _ASM_X86_PKS_H
+ #define _ASM_X86_PKS_H
+ 
++#include <asm/cpufeature.h>
++
+ #ifdef CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS
+ 
++/**
++ * pks_available() - Is PKS available on this system
++ *
++ * Return if PKS is currently supported and enabled on this system.
++ */
++static inline bool pks_available(void)
++{
++	return cpu_feature_enabled(X86_FEATURE_PKS);
++}
++
+ void pks_setup(void);
+ void x86_pkrs_load(struct thread_struct *thread);
+ void pks_save_pt_regs(struct pt_regs *regs);
+diff --git a/include/linux/pks.h b/include/linux/pks.h
+index 45156f358776..163c75992a8a 100644
+--- a/include/linux/pks.h
++++ b/include/linux/pks.h
+@@ -8,6 +8,9 @@
+ 
+ #include <uapi/asm-generic/mman-common.h>
+ 
++#include <asm/pks.h>
++
++bool pks_available(void);
+ void pks_update_protection(u8 pkey, u8 protection);
+ void pks_update_exception(struct pt_regs *regs, u8 pkey, u8 protection);
+ 
+@@ -40,6 +43,11 @@ typedef bool (*pks_key_callback)(struct pt_regs *regs, unsigned long address,
+ 
+ #else /* !CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
+ 
++static inline bool pks_available(void)
++{
++	return false;
++}
++
+ static inline void pks_set_noaccess(u8 pkey) {}
+ static inline void pks_set_readwrite(u8 pkey) {}
+ static inline void pks_update_exception(struct pt_regs *regs,
+-- 
+2.31.1
+

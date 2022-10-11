@@ -1,0 +1,51 @@
+From 3c02965edb0795b821afe5950ed7bf169b14642e Mon Sep 17 00:00:00 2001
+From: Artem Bityutskiy <artem.bityutskiy@linux.intel.com>
+Date: Wed, 2 Mar 2022 10:16:00 +0200
+Subject: [PATCH 1321/1418] intel_idle: add core C6 optimization for SPR
+
+Add a Sapphire Rapids Xeon C6 optimization, similar to what we have for Sky Lake
+Xeon: if package C6 is disabled, adjust C6 exit latency and target residency to
+match core C6 values, instead of using the default package C6 values.
+
+Signed-off-by: Artem Bityutskiy <artem.bityutskiy@linux.intel.com>
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ drivers/idle/intel_idle.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/drivers/idle/intel_idle.c b/drivers/idle/intel_idle.c
+index 27e7a2900745..b63b36a05c42 100644
+--- a/drivers/idle/intel_idle.c
++++ b/drivers/idle/intel_idle.c
+@@ -1569,6 +1569,8 @@ static void __init skx_idle_state_table_update(void)
+  */
+ static void __init spr_idle_state_table_update(void)
+ {
++	unsigned long long msr;
++
+ 	/* Check if user prefers C1E over C1. */
+ 	if (preferred_states_mask & BIT(2)) {
+ 		if (preferred_states_mask & BIT(1))
+@@ -1582,6 +1584,19 @@ static void __init spr_idle_state_table_update(void)
+ 		c1e_promotion_enable();
+ 		disable_promotion_to_c1e = false;
+ 	}
++
++	/*
++	 * By default, the C6 state assumes the worst-case scenario of package
++	 * C6. However, if PC6 is disabled, we update the numbers to match
++	 * core C6.
++	 */
++	rdmsrl(MSR_PKG_CST_CONFIG_CONTROL, msr);
++
++	/* Limit value 2 and above allow for PC6. */
++	if ((msr & 0x7) < 2) {
++		spr_cstates[2].exit_latency = 190;
++		spr_cstates[2].target_residency = 600;
++	}
+ }
+ 
+ static bool __init intel_idle_verify_cstate(unsigned int mwait_hint)
+-- 
+2.31.1
+

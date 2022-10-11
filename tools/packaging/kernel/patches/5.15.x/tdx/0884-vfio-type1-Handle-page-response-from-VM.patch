@@ -1,0 +1,90 @@
+From 4d4cef59a1e3d491aca5d1562314b375f38276aa Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Sat, 27 Jun 2020 20:45:50 -0700
+Subject: [PATCH 0884/1418] vfio/type1: Handle page response from VM
+
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/vfio/vfio_iommu_type1.c | 37 +++++++++++++++++++++++++++++++++
+ include/uapi/linux/vfio.h       |  3 +++
+ 2 files changed, 40 insertions(+)
+
+diff --git a/drivers/vfio/vfio_iommu_type1.c b/drivers/vfio/vfio_iommu_type1.c
+index 093b5973b959..7f3e0948cf86 100644
+--- a/drivers/vfio/vfio_iommu_type1.c
++++ b/drivers/vfio/vfio_iommu_type1.c
+@@ -3468,6 +3468,40 @@ static long vfio_iommu_invalidate_cache(struct vfio_iommu *iommu,
+ 	return ret;
+ }
+ 
++static int vfio_dev_page_resp_fn(struct device *dev, void *data)
++{
++	struct domain_capsule *dc = (struct domain_capsule *)data;
++	unsigned long arg = *(unsigned long *) dc->data;
++
++	return iommu_page_response(dc->domain, dev, (void __user *) arg);
++}
++
++static long vfio_iommu_page_response(struct vfio_iommu *iommu,
++				     unsigned long arg)
++{
++	struct domain_capsule dc = { .data = &arg };
++	struct iommu_nesting_info *info;
++	int ret;
++
++	mutex_lock(&iommu->lock);
++	info = iommu->nesting_info;
++	if (!info || !(info->features & IOMMU_NESTING_FEAT_PAGE_RESP)) {
++		ret = -EOPNOTSUPP;
++		goto out_unlock;
++	}
++
++	ret = vfio_prepare_nesting_domain_capsule(iommu, &dc);
++	if (ret)
++		goto out_unlock;
++
++	ret = iommu_group_for_each_dev(dc.group->iommu_group, &dc,
++				       vfio_dev_page_resp_fn);
++
++out_unlock:
++	mutex_unlock(&iommu->lock);
++	return ret;
++}
++
+ static long vfio_iommu_type1_nesting_op(struct vfio_iommu *iommu,
+ 					unsigned long arg)
+ {
+@@ -3493,6 +3527,9 @@ static long vfio_iommu_type1_nesting_op(struct vfio_iommu *iommu,
+ 	case VFIO_IOMMU_NESTING_OP_CACHE_INVLD:
+ 		ret = vfio_iommu_invalidate_cache(iommu, arg + minsz);
+ 		break;
++	case VFIO_IOMMU_NESTING_OP_PAGE_RESP:
++		ret = vfio_iommu_page_response(iommu, arg + minsz);
++		break;
+ 	default:
+ 		ret = -EINVAL;
+ 	}
+diff --git a/include/uapi/linux/vfio.h b/include/uapi/linux/vfio.h
+index 80c12bfcbe18..901bddea4f7e 100644
+--- a/include/uapi/linux/vfio.h
++++ b/include/uapi/linux/vfio.h
+@@ -1310,6 +1310,8 @@ struct vfio_iommu_type1_dirty_bitmap_get {
+  * +-----------------+-----------------------------------------------+
+  * | CACHE_INVLD     |      struct iommu_cache_invalidate_info       |
+  * +-----------------+-----------------------------------------------+
++ * | PAGE_RESP       |      struct iommu_page_response               |
++ * +-----------------+-----------------------------------------------+
+  *
+  * returns: 0 on success, -errno on failure.
+  */
+@@ -1324,6 +1326,7 @@ enum {
+ 	VFIO_IOMMU_NESTING_OP_BIND_PGTBL,
+ 	VFIO_IOMMU_NESTING_OP_UNBIND_PGTBL,
+ 	VFIO_IOMMU_NESTING_OP_CACHE_INVLD,
++	VFIO_IOMMU_NESTING_OP_PAGE_RESP,
+ };
+ 
+ #define VFIO_IOMMU_NESTING_OP		_IO(VFIO_TYPE, VFIO_BASE + 18)
+-- 
+2.31.1
+

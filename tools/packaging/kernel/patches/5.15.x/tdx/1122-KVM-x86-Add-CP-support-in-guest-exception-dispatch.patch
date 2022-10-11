@@ -1,0 +1,57 @@
+From 5c7a325bac6a3c0937b91003a55cdddd2f32946d Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Thu, 16 Jul 2020 11:16:26 +0800
+Subject: [PATCH 1122/1418] KVM: x86: Add #CP support in guest exception
+ dispatch
+
+Add handling for Control Protection (#CP) exceptions, vector 21, used
+and introduced by Intel's Control-Flow Enforcement Technology (CET).
+relevant CET violation case.  See Intel's SDM for details.
+
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/include/uapi/asm/kvm.h | 1 +
+ arch/x86/kvm/x86.c              | 1 +
+ arch/x86/kvm/x86.h              | 2 +-
+ 3 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/uapi/asm/kvm.h b/arch/x86/include/uapi/asm/kvm.h
+index fc602fd6797e..02b314afd2d8 100644
+--- a/arch/x86/include/uapi/asm/kvm.h
++++ b/arch/x86/include/uapi/asm/kvm.h
+@@ -32,6 +32,7 @@
+ #define MC_VECTOR 18
+ #define XM_VECTOR 19
+ #define VE_VECTOR 20
++#define CP_VECTOR 21
+ 
+ /* Select x86 specific features in <linux/kvm.h> */
+ #define __KVM_HAVE_PIT
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index e28491d5ec3d..d1c255e51460 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -525,6 +525,7 @@ static int exception_class(int vector)
+ 	case NP_VECTOR:
+ 	case SS_VECTOR:
+ 	case GP_VECTOR:
++	case CP_VECTOR:
+ 		return EXCPT_CONTRIBUTORY;
+ 	default:
+ 		break;
+diff --git a/arch/x86/kvm/x86.h b/arch/x86/kvm/x86.h
+index 2c65179bb594..279be92353b2 100644
+--- a/arch/x86/kvm/x86.h
++++ b/arch/x86/kvm/x86.h
+@@ -162,7 +162,7 @@ static inline bool x86_exception_has_error_code(unsigned int vector)
+ {
+ 	static u32 exception_has_error_code = BIT(DF_VECTOR) | BIT(TS_VECTOR) |
+ 			BIT(NP_VECTOR) | BIT(SS_VECTOR) | BIT(GP_VECTOR) |
+-			BIT(PF_VECTOR) | BIT(AC_VECTOR);
++			BIT(PF_VECTOR) | BIT(AC_VECTOR) | BIT(CP_VECTOR);
+ 
+ 	return (1U << vector) & exception_has_error_code;
+ }
+-- 
+2.31.1
+

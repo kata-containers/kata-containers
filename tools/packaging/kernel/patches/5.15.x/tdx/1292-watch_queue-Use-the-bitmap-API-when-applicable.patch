@@ -1,0 +1,49 @@
+From 2877193e55296e72f55a96e082a430c11f40aa7e Mon Sep 17 00:00:00 2001
+From: Christophe JAILLET <christophe.jaillet@wanadoo.fr>
+Date: Fri, 11 Mar 2022 13:24:15 +0000
+Subject: [PATCH 1292/1418] watch_queue: Use the bitmap API when applicable
+
+Use bitmap_alloc() to simplify code, improve the semantic and reduce
+some open-coded arithmetic in allocator arguments.
+
+Also change a memset(0xff) into an equivalent bitmap_fill() to keep
+consistency.
+
+Signed-off-by: Christophe JAILLET <christophe.jaillet@wanadoo.fr>
+Signed-off-by: David Howells <dhowells@redhat.com>
+Signed-off-by: Linus Torvalds <torvalds@linux-foundation.org>
+---
+ kernel/watch_queue.c | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/kernel/watch_queue.c b/kernel/watch_queue.c
+index 4bcd400984a7..5b516eb2c7cc 100644
+--- a/kernel/watch_queue.c
++++ b/kernel/watch_queue.c
+@@ -220,7 +220,6 @@ long watch_queue_set_size(struct pipe_inode_info *pipe, unsigned int nr_notes)
+ 	struct page **pages;
+ 	unsigned long *bitmap;
+ 	unsigned long user_bufs;
+-	unsigned int bmsize;
+ 	int ret, i, nr_pages;
+ 
+ 	if (!wqueue)
+@@ -259,13 +258,11 @@ long watch_queue_set_size(struct pipe_inode_info *pipe, unsigned int nr_notes)
+ 		pages[i]->index = i * WATCH_QUEUE_NOTES_PER_PAGE;
+ 	}
+ 
+-	bmsize = (nr_notes + BITS_PER_LONG - 1) / BITS_PER_LONG;
+-	bmsize *= sizeof(unsigned long);
+-	bitmap = kmalloc(bmsize, GFP_KERNEL);
++	bitmap = bitmap_alloc(nr_notes, GFP_KERNEL);
+ 	if (!bitmap)
+ 		goto error_p;
+ 
+-	memset(bitmap, 0xff, bmsize);
++	bitmap_fill(bitmap, nr_notes);
+ 	wqueue->notes = pages;
+ 	wqueue->notes_bitmap = bitmap;
+ 	wqueue->nr_pages = nr_pages;
+-- 
+2.31.1
+

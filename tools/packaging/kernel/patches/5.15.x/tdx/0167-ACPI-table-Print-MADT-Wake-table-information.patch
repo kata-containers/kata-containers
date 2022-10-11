@@ -1,0 +1,40 @@
+From 40cf91ecb419e1caf40ea01f309626509cd3259a Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Thu, 15 Apr 2021 10:31:37 -0700
+Subject: [PATCH 0167/1418] ACPI/table: Print MADT Wake table information
+
+When MADT is parsed, print MADT Wake table information as debug
+message. It will be useful to debug CPU boot issues related to MADT
+wake table.
+
+Acked-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ drivers/acpi/tables.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/drivers/acpi/tables.c b/drivers/acpi/tables.c
+index 71419eb16e09..eb988dfb943c 100644
+--- a/drivers/acpi/tables.c
++++ b/drivers/acpi/tables.c
+@@ -209,6 +209,17 @@ void acpi_table_print_madt_entry(struct acpi_subtable_header *header)
+ 		}
+ 		break;
+ 
++	case ACPI_MADT_TYPE_MULTIPROC_WAKEUP:
++		{
++			struct acpi_madt_multiproc_wakeup *p;
++
++			p = (struct acpi_madt_multiproc_wakeup *)header;
++
++			pr_debug("MP Wake (Mailbox version[%d] base_address[%llx])\n",
++				 p->mailbox_version, p->base_address);
++		}
++		break;
++
+ 	default:
+ 		pr_warn("Found unsupported MADT entry (type = 0x%x)\n",
+ 			header->type);
+-- 
+2.31.1
+

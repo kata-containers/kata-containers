@@ -1,0 +1,34 @@
+From 4240eb79d52ca0e7a43ce229b8cc00450da4f3c9 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Wed, 23 Mar 2022 17:18:06 -0700
+Subject: [PATCH 1234/1418] crypto: iax: remove double free on iax_device
+
+In add_iax_devices(), when iax_aecs_alloc() fails, it already calls
+iax_device_free() internally. So there's no need to call iax_device_free()
+in the failure path.
+
+Cc: Tom Zanussi <tom.zanussi@intel.com>
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/crypto/iax/iax_crypto_main.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/drivers/crypto/iax/iax_crypto_main.c b/drivers/crypto/iax/iax_crypto_main.c
+index f0790bb40958..5adf73fb7797 100644
+--- a/drivers/crypto/iax/iax_crypto_main.c
++++ b/drivers/crypto/iax/iax_crypto_main.c
+@@ -360,10 +360,8 @@ static struct iax_device *add_iax_device(struct idxd_device *idxd)
+ 
+ 	iax_device->idxd = idxd;
+ 
+-	if (iax_aecs_alloc(iax_device) < 0) {
+-		iax_device_free(iax_device);
++	if (iax_aecs_alloc(iax_device) < 0)
+ 		return NULL;
+-	}
+ 
+ 	list_add_tail(&iax_device->list, &iax_devices);
+ 
+-- 
+2.31.1
+

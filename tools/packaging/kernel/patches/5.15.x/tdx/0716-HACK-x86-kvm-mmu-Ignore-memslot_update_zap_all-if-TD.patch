@@ -1,0 +1,37 @@
+From 9d57a7d439db909339e2c15ea2470f33bf092fff Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Tue, 7 Dec 2021 22:22:46 +0800
+Subject: [PATCH 0716/1418] *** HACK *** x86/kvm/mmu: Ignore
+ memslot_update_zap_all if TDP MMU is in use
+
+Need to check if zapping leaf entries is possible when TDP MMU is in
+use. If it is feasible, add additional logics into kvm_mmu_zap_memslot
+to handle TDP MMU.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index a67c2e575a34..15e4c1aeceb6 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -6380,7 +6380,13 @@ static void kvm_mmu_invalidate_zap_pages_in_memslot(struct kvm *kvm,
+ 			struct kvm_memory_slot *slot,
+ 			struct kvm_page_track_notifier_node *node)
+ {
+-	if (memslot_update_zap_all &&
++	/*
++	 * FIXME: seems kvm_mmu_zap_memslot doesn't take TDP MMU into consideration.
++	 * Without proper zapping pages, TDP MMU would cause the BUG() in
++	 * __handle_changed_spte. As a workaround, Zap pages in all levels if TDP
++	 * MMU is enabled.
++	 */
++	if ((memslot_update_zap_all || is_tdp_mmu_enabled(kvm)) &&
+ 	    !kvm->arch.gfn_shared_mask)
+ 		kvm_mmu_zap_all_fast(kvm);
+ 	else
+-- 
+2.31.1
+

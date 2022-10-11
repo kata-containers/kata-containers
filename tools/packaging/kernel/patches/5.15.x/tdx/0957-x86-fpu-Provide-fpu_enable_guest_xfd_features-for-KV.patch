@@ -1,0 +1,71 @@
+From 7ffbbfe4cfc0efdb2edffabe0351fb7b7cf939b9 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Wed, 5 Jan 2022 04:35:18 -0800
+Subject: [PATCH 0957/1418] x86/fpu: Provide fpu_enable_guest_xfd_features()
+ for KVM
+
+Provide a wrapper for expanding the guest fpstate buffer according
+to requested xfeatures. KVM wants to call this wrapper to manage
+any dynamic xstate used by the guest.
+
+Suggested-by: Sean Christopherson <seanjc@google.com>
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+Signed-off-by: Kevin Tian <kevin.tian@intel.com>
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Reviewed-by: Paolo Bonzini <pbonzini@redhat.com>
+Message-Id: <20220105123532.12586-8-yang.zhong@intel.com>
+[Remove unnecessary 32-bit check. - Paolo]
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/include/asm/fpu/api.h |  1 +
+ arch/x86/kernel/fpu/core.c     | 22 ++++++++++++++++++++++
+ 2 files changed, 23 insertions(+)
+
+diff --git a/arch/x86/include/asm/fpu/api.h b/arch/x86/include/asm/fpu/api.h
+index 7532f73c82a6..2c1a19a36b94 100644
+--- a/arch/x86/include/asm/fpu/api.h
++++ b/arch/x86/include/asm/fpu/api.h
+@@ -144,6 +144,7 @@ extern inline u64 xstate_get_guest_group_perm(void);
+ extern bool fpu_alloc_guest_fpstate(struct fpu_guest *gfpu);
+ extern void fpu_free_guest_fpstate(struct fpu_guest *gfpu);
+ extern int fpu_swap_kvm_fpstate(struct fpu_guest *gfpu, bool enter_guest);
++extern int fpu_enable_guest_xfd_features(struct fpu_guest *guest_fpu, u64 xfeatures);
+ 
+ extern void fpu_copy_guest_fpstate_to_uabi(struct fpu_guest *gfpu, void *buf, unsigned int size, u32 pkru);
+ extern int fpu_copy_uabi_to_guest_fpstate(struct fpu_guest *gfpu, const void *buf, u64 xcr0, u32 *vpkru);
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 1b6123124063..284de4aa20c1 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -260,6 +260,28 @@ void fpu_free_guest_fpstate(struct fpu_guest *gfpu)
+ }
+ EXPORT_SYMBOL_GPL(fpu_free_guest_fpstate);
+ 
++/*
++  * fpu_enable_guest_xfd_features - Check xfeatures against guest perm and enable
++  * @guest_fpu:         Pointer to the guest FPU container
++  * @xfeatures:         Features requested by guest CPUID
++  *
++  * Enable all dynamic xfeatures according to guest perm and requested CPUID.
++  *
++  * Return: 0 on success, error code otherwise
++  */
++int fpu_enable_guest_xfd_features(struct fpu_guest *guest_fpu, u64 xfeatures)
++{
++	lockdep_assert_preemption_enabled();
++
++	/* Nothing to do if all requested features are already enabled. */
++	xfeatures &= ~guest_fpu->xfeatures;
++	if (!xfeatures)
++		return 0;
++
++	return __xfd_enable_feature(xfeatures, guest_fpu);
++}
++EXPORT_SYMBOL_GPL(fpu_enable_guest_xfd_features);
++
+ int fpu_swap_kvm_fpstate(struct fpu_guest *guest_fpu, bool enter_guest)
+ {
+ 	struct fpstate *guest_fps = guest_fpu->fpstate;
+-- 
+2.31.1
+

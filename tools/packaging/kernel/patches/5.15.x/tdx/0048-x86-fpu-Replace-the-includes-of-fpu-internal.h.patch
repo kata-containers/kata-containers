@@ -1,0 +1,202 @@
+From f8d8699beec478fd1106221b4d2693281f1ef154 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 15 Oct 2021 03:16:39 +0200
+Subject: [PATCH 0048/1418] x86/fpu: Replace the includes of fpu/internal.h
+
+Now that the file is empty, fixup all references with the proper includes
+and delete the former kitchen sink.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211015011540.001197214@linutronix.de
+---
+ arch/x86/include/asm/fpu/internal.h | 26 --------------------------
+ arch/x86/kernel/cpu/bugs.c          |  2 +-
+ arch/x86/kernel/cpu/common.c        |  2 +-
+ arch/x86/kernel/fpu/bugs.c          |  2 +-
+ arch/x86/kernel/fpu/core.c          |  2 +-
+ arch/x86/kernel/fpu/init.c          |  2 +-
+ arch/x86/kernel/fpu/regset.c        |  2 +-
+ arch/x86/kernel/fpu/xstate.c        |  1 -
+ arch/x86/kernel/smpboot.c           |  2 +-
+ arch/x86/kernel/traps.c             |  2 +-
+ arch/x86/kvm/vmx/vmx.c              |  2 +-
+ arch/x86/power/cpu.c                |  2 +-
+ 12 files changed, 10 insertions(+), 37 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/internal.h b/arch/x86/include/asm/fpu/internal.h
+index 8df83e887ff6..e69de29bb2d1 100644
+--- a/arch/x86/include/asm/fpu/internal.h
++++ b/arch/x86/include/asm/fpu/internal.h
+@@ -1,26 +0,0 @@
+-/* SPDX-License-Identifier: GPL-2.0 */
+-/*
+- * Copyright (C) 1994 Linus Torvalds
+- *
+- * Pentium III FXSR, SSE support
+- * General FPU state handling cleanups
+- *	Gareth Hughes <gareth@valinux.com>, May 2000
+- * x86-64 work by Andi Kleen 2002
+- */
+-
+-#ifndef _ASM_X86_FPU_INTERNAL_H
+-#define _ASM_X86_FPU_INTERNAL_H
+-
+-#include <linux/compat.h>
+-#include <linux/sched.h>
+-#include <linux/slab.h>
+-#include <linux/mm.h>
+-
+-#include <asm/user.h>
+-#include <asm/fpu/api.h>
+-#include <asm/fpu/xstate.h>
+-#include <asm/fpu/xcr.h>
+-#include <asm/cpufeature.h>
+-#include <asm/trace/fpu.h>
+-
+-#endif /* _ASM_X86_FPU_INTERNAL_H */
+diff --git a/arch/x86/kernel/cpu/bugs.c b/arch/x86/kernel/cpu/bugs.c
+index ecfca3bbcd96..6c8a86b58020 100644
+--- a/arch/x86/kernel/cpu/bugs.c
++++ b/arch/x86/kernel/cpu/bugs.c
+@@ -22,7 +22,7 @@
+ #include <asm/bugs.h>
+ #include <asm/processor.h>
+ #include <asm/processor-flags.h>
+-#include <asm/fpu/internal.h>
++#include <asm/fpu/api.h>
+ #include <asm/msr.h>
+ #include <asm/vmx.h>
+ #include <asm/paravirt.h>
+diff --git a/arch/x86/kernel/cpu/common.c b/arch/x86/kernel/cpu/common.c
+index b3410f1ac217..486dc8c1d388 100644
+--- a/arch/x86/kernel/cpu/common.c
++++ b/arch/x86/kernel/cpu/common.c
+@@ -42,7 +42,7 @@
+ #include <asm/setup.h>
+ #include <asm/apic.h>
+ #include <asm/desc.h>
+-#include <asm/fpu/internal.h>
++#include <asm/fpu/api.h>
+ #include <asm/mtrr.h>
+ #include <asm/hwcap2.h>
+ #include <linux/numa.h>
+diff --git a/arch/x86/kernel/fpu/bugs.c b/arch/x86/kernel/fpu/bugs.c
+index 2954fab15e51..794e70151203 100644
+--- a/arch/x86/kernel/fpu/bugs.c
++++ b/arch/x86/kernel/fpu/bugs.c
+@@ -2,7 +2,7 @@
+ /*
+  * x86 FPU bug checks:
+  */
+-#include <asm/fpu/internal.h>
++#include <asm/fpu/api.h>
+ 
+ /*
+  * Boot time CPU/FPU FDIV bug detection code:
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 739728889b54..9bb0c1c45e27 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -6,7 +6,7 @@
+  *  General FPU state handling cleanups
+  *	Gareth Hughes <gareth@valinux.com>, May 2000
+  */
+-#include <asm/fpu/internal.h>
++#include <asm/fpu/api.h>
+ #include <asm/fpu/regset.h>
+ #include <asm/fpu/sched.h>
+ #include <asm/fpu/signal.h>
+diff --git a/arch/x86/kernel/fpu/init.c b/arch/x86/kernel/fpu/init.c
+index d420d29e58be..23791355ca67 100644
+--- a/arch/x86/kernel/fpu/init.c
++++ b/arch/x86/kernel/fpu/init.c
+@@ -2,7 +2,7 @@
+ /*
+  * x86 FPU boot time init code:
+  */
+-#include <asm/fpu/internal.h>
++#include <asm/fpu/api.h>
+ #include <asm/tlbflush.h>
+ #include <asm/setup.h>
+ 
+diff --git a/arch/x86/kernel/fpu/regset.c b/arch/x86/kernel/fpu/regset.c
+index 3d8ed45da166..01a1d97c3cb6 100644
+--- a/arch/x86/kernel/fpu/regset.c
++++ b/arch/x86/kernel/fpu/regset.c
+@@ -5,7 +5,7 @@
+ #include <linux/sched/task_stack.h>
+ #include <linux/vmalloc.h>
+ 
+-#include <asm/fpu/internal.h>
++#include <asm/fpu/api.h>
+ #include <asm/fpu/signal.h>
+ #include <asm/fpu/regset.h>
+ #include <asm/fpu/xstate.h>
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index f0305b2b227f..b022df95a302 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -13,7 +13,6 @@
+ #include <linux/proc_fs.h>
+ 
+ #include <asm/fpu/api.h>
+-#include <asm/fpu/internal.h>
+ #include <asm/fpu/regset.h>
+ #include <asm/fpu/signal.h>
+ #include <asm/fpu/xcr.h>
+diff --git a/arch/x86/kernel/smpboot.c b/arch/x86/kernel/smpboot.c
+index 85f6e242b6b4..2577ed3b5e6b 100644
+--- a/arch/x86/kernel/smpboot.c
++++ b/arch/x86/kernel/smpboot.c
+@@ -70,7 +70,7 @@
+ #include <asm/mwait.h>
+ #include <asm/apic.h>
+ #include <asm/io_apic.h>
+-#include <asm/fpu/internal.h>
++#include <asm/fpu/api.h>
+ #include <asm/setup.h>
+ #include <asm/uv/uv.h>
+ #include <linux/mc146818rtc.h>
+diff --git a/arch/x86/kernel/traps.c b/arch/x86/kernel/traps.c
+index a58800973aed..bae7582c58f5 100644
+--- a/arch/x86/kernel/traps.c
++++ b/arch/x86/kernel/traps.c
+@@ -48,7 +48,7 @@
+ #include <asm/ftrace.h>
+ #include <asm/traps.h>
+ #include <asm/desc.h>
+-#include <asm/fpu/internal.h>
++#include <asm/fpu/api.h>
+ #include <asm/cpu.h>
+ #include <asm/cpu_entry_area.h>
+ #include <asm/mce.h>
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 7d595effb66f..fb9e4ac3df22 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -35,7 +35,7 @@
+ #include <asm/cpu_device_id.h>
+ #include <asm/debugreg.h>
+ #include <asm/desc.h>
+-#include <asm/fpu/internal.h>
++#include <asm/fpu/api.h>
+ #include <asm/idtentry.h>
+ #include <asm/io.h>
+ #include <asm/irq_remapping.h>
+diff --git a/arch/x86/power/cpu.c b/arch/x86/power/cpu.c
+index 6665f8802098..9f2b251e83c5 100644
+--- a/arch/x86/power/cpu.c
++++ b/arch/x86/power/cpu.c
+@@ -20,7 +20,7 @@
+ #include <asm/page.h>
+ #include <asm/mce.h>
+ #include <asm/suspend.h>
+-#include <asm/fpu/internal.h>
++#include <asm/fpu/api.h>
+ #include <asm/debugreg.h>
+ #include <asm/cpu.h>
+ #include <asm/mmu_context.h>
+-- 
+2.31.1
+

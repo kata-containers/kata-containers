@@ -1,0 +1,144 @@
+From 4e99efc95934c28d0bb7d96f5de09f97eb0eb15e Mon Sep 17 00:00:00 2001
+From: Jithu Joseph <jithu.joseph@intel.com>
+Date: Tue, 15 Feb 2022 10:54:37 -0800
+Subject: [PATCH 1066/1418] Revert "drivers/saf: Add driver for Scan At Field"
+
+This reverts commit a0b559ea9d8c6393f16aeeb61726abcc5812327e.
+---
+ drivers/Kconfig      |  2 --
+ drivers/Makefile     |  1 -
+ drivers/ift/Kconfig  | 10 ----------
+ drivers/ift/Makefile |  7 -------
+ drivers/ift/saf.c    | 47 --------------------------------------------
+ drivers/ift/saf.h    | 14 -------------
+ 6 files changed, 81 deletions(-)
+ delete mode 100644 drivers/ift/Kconfig
+ delete mode 100644 drivers/ift/Makefile
+ delete mode 100644 drivers/ift/saf.c
+ delete mode 100644 drivers/ift/saf.h
+
+diff --git a/drivers/Kconfig b/drivers/Kconfig
+index 7dc1442ea74d..0d399ddaa185 100644
+--- a/drivers/Kconfig
++++ b/drivers/Kconfig
+@@ -236,6 +236,4 @@ source "drivers/interconnect/Kconfig"
+ source "drivers/counter/Kconfig"
+ 
+ source "drivers/most/Kconfig"
+-
+-source "drivers/ift/Kconfig"
+ endmenu
+diff --git a/drivers/Makefile b/drivers/Makefile
+index 71c804cc02b6..be5d40ae1488 100644
+--- a/drivers/Makefile
++++ b/drivers/Makefile
+@@ -188,4 +188,3 @@ obj-$(CONFIG_GNSS)		+= gnss/
+ obj-$(CONFIG_INTERCONNECT)	+= interconnect/
+ obj-$(CONFIG_COUNTER)		+= counter/
+ obj-$(CONFIG_MOST)		+= most/
+-obj-$(CONFIG_IFT)		+= ift/
+diff --git a/drivers/ift/Kconfig b/drivers/ift/Kconfig
+deleted file mode 100644
+index 269fd4cf1235..000000000000
+--- a/drivers/ift/Kconfig
++++ /dev/null
+@@ -1,10 +0,0 @@
+-config IFT
+-	tristate "IFT"
+-	depends on X86 && 64BIT && SMP
+-	default	n
+-	help
+-	  Enable support for Scan At Field in Intel Xeon CPU to perform core
+-	  logic test in the field. To compile this driver as a module, choose
+-	  M here. The module will be called saf.
+-
+-	  If unsure, say N.
+diff --git a/drivers/ift/Makefile b/drivers/ift/Makefile
+deleted file mode 100644
+index e36d070a6502..000000000000
+--- a/drivers/ift/Makefile
++++ /dev/null
+@@ -1,7 +0,0 @@
+-#
+-# Makefile for the in-field test driver
+-#
+-
+-obj-$(CONFIG_IFT)			+= ift.o
+-
+-ift-objs				:= saf.o
+diff --git a/drivers/ift/saf.c b/drivers/ift/saf.c
+deleted file mode 100644
+index 95bc4deac3e4..000000000000
+--- a/drivers/ift/saf.c
++++ /dev/null
+@@ -1,47 +0,0 @@
+-// SPDX-License-Identifier: GPL-2.0-only
+-/* Copyright(c) 2021 Intel Corporation.
+- *
+- * Author: Kyung Min Park <kyung.min.park@intel.com>
+- */
+-
+-#include <linux/init.h>
+-#include <linux/kernel.h>
+-#include <linux/module.h>
+-#include <asm/cpu_device_id.h>
+-
+-#include "saf.h"
+-
+-static const struct x86_cpu_id saf_cpu_ids[] __initconst = {
+-	X86_MATCH_INTEL_FAM6_MODEL(SAPPHIRERAPIDS_X,	1),
+-	{}
+-};
+-
+-static int __init saf_init(void)
+-{
+-	const struct x86_cpu_id *m;
+-	u64 ia32_core_caps;
+-	int ret = -ENODEV;
+-
+-	/* saf capability check */
+-	m = x86_match_cpu(saf_cpu_ids);
+-	if (!m)
+-		return ret;
+-	if (!boot_cpu_has(X86_FEATURE_CORE_CAPABILITIES))
+-		return ret;
+-	rdmsrl(MSR_IA32_CORE_CAPS, ia32_core_caps);
+-	if (!(ia32_core_caps & MSR_IA32_CORE_CAPS_INTEGRITY))
+-		return ret;
+-
+-	return 0;
+-}
+-
+-static void __exit saf_exit(void)
+-{
+-	pr_info("saf: unloaded 'Scan At Field' module\n");
+-}
+-
+-MODULE_LICENSE("GPL");
+-MODULE_INFO(name, "saf");
+-MODULE_DESCRIPTION("saf");
+-module_init(saf_init);
+-module_exit(saf_exit);
+diff --git a/drivers/ift/saf.h b/drivers/ift/saf.h
+deleted file mode 100644
+index 19cab5b3dbd0..000000000000
+--- a/drivers/ift/saf.h
++++ /dev/null
+@@ -1,14 +0,0 @@
+-/* SPDX-License-Identifier: GPL-2.0-only */
+-/* Copyright(c) 2021 Intel Corporation.
+- *
+- * Author: Kyung Min Park <kyung.min.park@intel.com>
+- */
+-
+-#ifndef _SAF_H_
+-#define _SAF_H_
+-
+-/* These bits are in the IA32_CORE_CAPABILITIES MSR */
+-#define MSR_IA32_CORE_CAPS_INTEGRITY_BIT	2
+-#define MSR_IA32_CORE_CAPS_INTEGRITY		BIT(MSR_IA32_CORE_CAPS_INTEGRITY_BIT)
+-
+-#endif
+-- 
+2.31.1
+

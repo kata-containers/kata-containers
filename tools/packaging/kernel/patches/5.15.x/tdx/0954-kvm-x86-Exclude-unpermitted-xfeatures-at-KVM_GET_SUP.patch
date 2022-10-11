@@ -1,0 +1,71 @@
+From 93a96f16b4dac858fc3c4962484949298c8f9a08 Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Wed, 5 Jan 2022 04:35:15 -0800
+Subject: [PATCH 0954/1418] kvm: x86: Exclude unpermitted xfeatures at
+ KVM_GET_SUPPORTED_CPUID
+
+KVM_GET_SUPPORTED_CPUID should not include any dynamic xstates in
+CPUID[0xD] if they have not been requested with prctl. Otherwise
+a process which directly passes KVM_GET_SUPPORTED_CPUID to
+KVM_SET_CPUID2 would now fail even if it doesn't intend to use a
+dynamically enabled feature. Userspace must know that prctl is
+required and allocate >4K xstate buffer before setting any dynamic
+bit.
+
+Suggested-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Message-Id: <20220105123532.12586-5-yang.zhong@intel.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ Documentation/virt/kvm/api.rst | 4 ++++
+ arch/x86/kvm/cpuid.c           | 9 ++++++---
+ 2 files changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/virt/kvm/api.rst b/Documentation/virt/kvm/api.rst
+index d4525d277c41..936978435c6d 100644
+--- a/Documentation/virt/kvm/api.rst
++++ b/Documentation/virt/kvm/api.rst
+@@ -1639,6 +1639,10 @@ userspace capabilities, and with user requirements (for example, the
+ user may wish to constrain cpuid to emulate older hardware, or for
+ feature consistency across a cluster).
+ 
++Dynamically-enabled feature bits need to be requested with
++``arch_prctl()`` before calling this ioctl. Feature bits that have not
++been requested are excluded from the result.
++
+ Note that certain capabilities, such as KVM_CAP_X86_DISABLE_EXITS, may
+ expose cpuid features (e.g. MONITOR) which are not supported by kvm in
+ its default configuration. If userspace enables such capabilities, it
+diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c
+index 4126b41a4b77..27c52453c6a6 100644
+--- a/arch/x86/kvm/cpuid.c
++++ b/arch/x86/kvm/cpuid.c
+@@ -797,11 +797,13 @@ static inline int __do_cpuid_func(struct kvm_cpuid_array *array, u32 function)
+ 				goto out;
+ 		}
+ 		break;
+-	case 0xd:
+-		entry->eax &= supported_xcr0;
++	case 0xd: {
++		u64 guest_perm = xstate_get_guest_group_perm();
++
++		entry->eax &= supported_xcr0 & guest_perm;
+ 		entry->ebx = xstate_required_size(supported_xcr0, false);
+ 		entry->ecx = entry->ebx;
+-		entry->edx &= supported_xcr0 >> 32;
++		entry->edx &= (supported_xcr0 & guest_perm) >> 32;
+ 		if (!supported_xcr0)
+ 			break;
+ 
+@@ -848,6 +850,7 @@ static inline int __do_cpuid_func(struct kvm_cpuid_array *array, u32 function)
+ 			entry->edx = 0;
+ 		}
+ 		break;
++	}
+ 	case 0x12:
+ 		/* Intel SGX */
+ 		if (!kvm_cpu_cap_has(X86_FEATURE_SGX)) {
+-- 
+2.31.1
+

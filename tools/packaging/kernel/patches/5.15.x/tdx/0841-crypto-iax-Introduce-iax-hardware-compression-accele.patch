@@ -1,0 +1,1072 @@
+From e5a732f1f03c5e7871f3813715539593f68eec66 Mon Sep 17 00:00:00 2001
+From: Tom Zanussi <tom.zanussi@linux.intel.com>
+Date: Tue, 21 Sep 2021 14:52:44 -0700
+Subject: [PATCH 0841/1418] crypto: iax - Introduce iax hardware compression
+ accelerator
+
+The Intel Analytics Accelerator (IAX) is a hardware accelerator that
+provides very high thoughput compression/decompression combined with
+analytic primitive functions. The primitive functions are commonly
+used for filtering data during analytic query processing. The IAX
+primarily targets applications such as big data and in-memory analytics
+databases as well as application-transparent usages such as memory page
+compression (e.g. zswap compression/decompression).
+
+The IAX supports compression/decompression compatible with the DEFLATE
+compression standard described in RFC 1951, which is the
+compression/decompression algorithm exported by this module.  Users
+can select IAX compress/decompress acceleration by specifying
+'iax_crypto' as the compression algorithm to use by whatever facility
+allows compression algorithms to be selected.
+
+For example, a zram drive can select iax_crypto via:
+
+  # echo iax_crypto > /sys/block/zram1/comp_algorithm
+
+Similarly for zswap:
+
+  # echo iax_crypto > /sys/module/zswap/parameters/compressor
+
+In order for the iax_crypto module to actually do any
+compression/decompression work on behalf of a facility, one or more
+IAX workqueues need to be bound to the iax_crypto driver.
+
+For instance, here's an example of configuring an IAX workqueue
+and binding it to the iax_crypto driver:
+
+  # configure wq1.0
+  #
+  # echo shared > /sys/bus/dsa/devices/iax1/wq1.0/mode
+  # echo "kernel" > /sys/bus/dsa/devices/iax1/wq1.0/type
+  # echo "iax_crypto" > /sys/bus/dsa/devices/iax1/wq1.0/name
+  # echo 0 > /sys/bus/dsa/devices/iax1/engine1.0/group_id
+
+  # enable IAX device iax1
+  #
+  # echo iax1 > /sys/bus/dsa/drivers/idxd/bind
+
+  # enable wq1.0 on IAX device iax1
+
+  # echo wq1.0 > /sys/bus/dsa/drivers/crypto/bind
+
+Whenever a new workqueue is bound to or unbound from the iax_crypto
+driver, the available workqueues are 'rebalanced' such that work
+submitted from a particular CPU is given to the most appropriate
+workqueue available.  There currently isn't any way for the user to
+tweak the way this is done internally - if necessary, knobs can be
+added later for that purpose.  Current best practice is to configure
+and bind at least one workqueue for each IAX device, but as long as
+there is at least one workqueue configured and bound to any IAX device
+in the system, the iax_crypto driver will work, albeit most likely not
+as efficiently.
+
+[ Based on work originally by George Powley and Jing Lin. ]
+
+Co-developed-by: Kyung Min Park <kyung.min.park@intel.com>
+Signed-off-by: Kyung Min Park <kyung.min.park@intel.com>
+Signed-off-by: Tom Zanussi <tom.zanussi@linux.intel.com>
+---
+ drivers/crypto/Kconfig               |   1 +
+ drivers/crypto/Makefile              |   1 +
+ drivers/crypto/iax/Kconfig           |   8 +
+ drivers/crypto/iax/Makefile          |   9 +
+ drivers/crypto/iax/iax_crypto.h      |  56 ++
+ drivers/crypto/iax/iax_crypto_main.c | 868 +++++++++++++++++++++++++++
+ 6 files changed, 943 insertions(+)
+ create mode 100644 drivers/crypto/iax/Kconfig
+ create mode 100644 drivers/crypto/iax/Makefile
+ create mode 100644 drivers/crypto/iax/iax_crypto.h
+ create mode 100644 drivers/crypto/iax/iax_crypto_main.c
+
+diff --git a/drivers/crypto/Kconfig b/drivers/crypto/Kconfig
+index 51690e73153a..5b43ec847b42 100644
+--- a/drivers/crypto/Kconfig
++++ b/drivers/crypto/Kconfig
+@@ -619,6 +619,7 @@ source "drivers/crypto/qat/Kconfig"
+ source "drivers/crypto/cavium/cpt/Kconfig"
+ source "drivers/crypto/cavium/nitrox/Kconfig"
+ source "drivers/crypto/marvell/Kconfig"
++source "drivers/crypto/iax/Kconfig"
+ 
+ config CRYPTO_DEV_CAVIUM_ZIP
+ 	tristate "Cavium ZIP driver"
+diff --git a/drivers/crypto/Makefile b/drivers/crypto/Makefile
+index 1fe5120eb966..5bf2fa7649bd 100644
+--- a/drivers/crypto/Makefile
++++ b/drivers/crypto/Makefile
+@@ -7,6 +7,7 @@ obj-$(CONFIG_CRYPTO_DEV_ATMEL_I2C) += atmel-i2c.o
+ obj-$(CONFIG_CRYPTO_DEV_ATMEL_ECC) += atmel-ecc.o
+ obj-$(CONFIG_CRYPTO_DEV_ATMEL_SHA204A) += atmel-sha204a.o
+ obj-$(CONFIG_CRYPTO_DEV_CAVIUM_ZIP) += cavium/
++obj-$(CONFIG_CRYPTO_DEV_IAX_CRYPTO) += iax/
+ obj-$(CONFIG_CRYPTO_DEV_CCP) += ccp/
+ obj-$(CONFIG_CRYPTO_DEV_CCREE) += ccree/
+ obj-$(CONFIG_CRYPTO_DEV_CHELSIO) += chelsio/
+diff --git a/drivers/crypto/iax/Kconfig b/drivers/crypto/iax/Kconfig
+new file mode 100644
+index 000000000000..e546d5952486
+--- /dev/null
++++ b/drivers/crypto/iax/Kconfig
+@@ -0,0 +1,8 @@
++config CRYPTO_DEV_IAX_CRYPTO
++	tristate "IAX Crypto Driver"
++	depends on CRYPTO_DEFLATE
++	depends on INTEL_IDXD
++	default n
++	help
++	  This driver supports Intel analytics accelerator hardware.
++	  The module will be called iax_crypto.
+diff --git a/drivers/crypto/iax/Makefile b/drivers/crypto/iax/Makefile
+new file mode 100644
+index 000000000000..d0f3c1af8c73
+--- /dev/null
++++ b/drivers/crypto/iax/Makefile
+@@ -0,0 +1,9 @@
++# SPDX-License-Identifier: GPL-2.0
++#
++# Makefile for IAX crypto device drivers
++#
++
++ccflags-y += -I $(srctree)/drivers/dma/idxd -DDEFAULT_SYMBOL_NAMESPACE=IDXD
++
++obj-$(CONFIG_CRYPTO_DEV_IAX_CRYPTO) := iax_crypto.o
++iax_crypto-y := iax_crypto_main.o
+diff --git a/drivers/crypto/iax/iax_crypto.h b/drivers/crypto/iax/iax_crypto.h
+new file mode 100644
+index 000000000000..30771be44a0b
+--- /dev/null
++++ b/drivers/crypto/iax/iax_crypto.h
+@@ -0,0 +1,56 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright(c) 2021 Intel Corporation. All rights rsvd. */
++
++#ifndef __IAX_CRYPTO_H__
++#define __IAX_CRYPTO_H__
++
++#include <linux/crypto.h>
++#include <linux/idxd.h>
++#include <uapi/linux/idxd.h>
++
++#undef pr_fmt
++#define	pr_fmt(fmt)	KBUILD_MODNAME ": " fmt
++
++#define IAX_DECOMP_ENABLE		BIT(0)
++#define IAX_DECOMP_FLUSH_OUTPUT		BIT(1)
++#define IAX_DECOMP_CHECK_FOR_EOB	BIT(2)
++#define IAX_DECOMP_STOP_ON_EOB		BIT(3)
++#define IAX_DECOMP_SUPPRESS_OUTPUT	BIT(9)
++
++#define IAX_COMP_FLUSH_OUTPUT		BIT(1)
++#define IAX_COMP_APPEND_EOB		BIT(2)
++
++#define IAX_COMPLETION_TIMEOUT		1000000
++
++#define IAX_ANALYTICS_ERROR		0x0a
++#define IAX_ERROR_COMP_BUF_OVERFLOW	0x19
++#define IAX_ERROR_WATCHDOG_EXPIRED	0x24
++
++#define DYNAMIC_HDR			0x2
++#define DYNAMIC_HDR_SIZE		3
++
++#define IAX_COMP_FLAGS			(IAX_COMP_FLUSH_OUTPUT | \
++					 IAX_COMP_APPEND_EOB)
++
++#define IAX_DECOMP_FLAGS		(IAX_DECOMP_ENABLE |	   \
++					 IAX_DECOMP_FLUSH_OUTPUT | \
++					 IAX_DECOMP_CHECK_FOR_EOB | \
++					 IAX_DECOMP_STOP_ON_EOB)
++
++/*
++ * Analytics Engine Configuration and State (AECS) contains parameters and
++ * internal state of the analytics engine.
++ */
++struct aecs_table_record {
++	u32 crc;
++	u32 xor_checksum;
++	u32 reserved0[5];
++	u32 num_output_accum_bits;
++	u8 output_accum[256];
++	u32 ll_sym[286];
++	u32 reserved1;
++	u32 reserved2;
++	u32 d_sym[30];
++	u32 reserved_padding[2];
++};
++#endif
+diff --git a/drivers/crypto/iax/iax_crypto_main.c b/drivers/crypto/iax/iax_crypto_main.c
+new file mode 100644
+index 000000000000..1dc57e8c981a
+--- /dev/null
++++ b/drivers/crypto/iax/iax_crypto_main.c
+@@ -0,0 +1,868 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright(c) 2021 Intel Corporation. All rights rsvd. */
++
++#include <linux/init.h>
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/pci.h>
++#include <linux/device.h>
++#include <linux/iommu.h>
++#include <linux/auxiliary_bus.h>
++#include <linux/uacce.h>
++#include <uapi/linux/idxd.h>
++#include <linux/highmem.h>
++
++#include "registers.h"
++#include "idxd.h"
++#include "iax_crypto.h"
++
++#define IAX_CRYPTO_VER			"1.0"
++
++#define IAX_CRYPTO_WQ_NAME		"iax_crypto"
++#define IAX_ALG_PRIORITY		300
++#define IAX_AECS_ALIGN			32
++
++/* IAX completion timeout value in tsc units */
++static unsigned int iax_completion_timeout = IAX_COMPLETION_TIMEOUT;
++
++module_param_named(iax_completion_timeout, iax_completion_timeout, uint, 0644);
++MODULE_PARM_DESC(iax_completion_timeout, "IAX completion timeout (1000000 cycles default)");
++
++/* Verify results of IAX compress or not */
++static bool iax_verify_compress = 1;
++
++module_param_named(iax_verify_compress, iax_verify_compress, bool, 0644);
++MODULE_PARM_DESC(iax_verify_compress,
++		 "Verify IAX compression (value = 1) or not (value = 0)");
++
++struct iax_wq {
++	struct list_head	list;
++	struct idxd_wq		*wq;
++
++	struct iax_device	*iax_device;
++};
++
++/* Representation of IAX device with wqs, populated by probe */
++struct iax_device {
++	struct list_head		list;
++	struct idxd_device		*idxd;
++
++	int				n_wq;
++	struct list_head		wqs;
++};
++
++static LIST_HEAD(iax_devices);
++static DEFINE_SPINLOCK(iax_devices_lock);
++
++static struct iax_device *iax_device_alloc(void)
++{
++	struct iax_device *iax_device;
++
++	iax_device = kzalloc(sizeof(*iax_device), GFP_KERNEL);
++	if (!iax_device)
++		return NULL;
++
++	INIT_LIST_HEAD(&iax_device->wqs);
++
++	return iax_device;
++}
++
++static void iax_device_free(struct iax_device *iax_device)
++{
++	struct iax_wq *iax_wq, *next;
++
++	list_for_each_entry_safe(iax_wq, next, &iax_device->wqs, list)
++		list_del(&iax_wq->list);
++
++	kfree(iax_device);
++}
++
++static void free_iax_devices(void)
++{
++	struct iax_device *iax_device, *next;
++
++	spin_lock(&iax_devices_lock);
++	list_for_each_entry_safe(iax_device, next, &iax_devices, list) {
++		list_del(&iax_device->list);
++		iax_device_free(iax_device);
++	}
++	spin_unlock(&iax_devices_lock);
++}
++
++/* IAX number of iax instances found */
++static unsigned int nr_iax;
++static unsigned int nr_cpus;
++static unsigned int nr_nodes;
++
++/* Number of physical cpus sharing each iax instance */
++static unsigned int cpus_per_iax;
++
++/* Per-cpu lookup table for balanced wqs */
++static struct idxd_wq * __percpu *wq_table;
++
++static struct aecs_table_record aecs_table __aligned(IAX_AECS_ALIGN);
++
++/*
++ * Given a cpu, find the closest IAX instance.  The idea is to try to
++ * choose the most appropriate IAX instance for a caller and spread
++ * available workqueues around to clients.
++ */
++static inline int cpu_to_iax(int cpu)
++{
++	const struct cpumask *node_cpus;
++	int node, n_cpus = 0, test_cpu, iax;
++	int nr_iax_per_node;
++
++	nr_iax_per_node = nr_iax / nr_nodes;
++
++	for_each_online_node(node) {
++		node_cpus = cpumask_of_node(node);
++		if (!cpumask_test_cpu(cpu, node_cpus))
++			continue;
++
++		iax = node * nr_iax_per_node;
++
++		for_each_cpu(test_cpu, node_cpus) {
++			if (test_cpu == cpu)
++				return iax;
++
++			n_cpus++;
++			if ((n_cpus % cpus_per_iax) == 0)
++				iax++;
++		}
++	}
++
++	return -1;
++}
++
++static bool iax_has_wq(struct iax_device *iax_device, struct idxd_wq *wq)
++{
++	struct iax_wq *iax_wq;
++
++	list_for_each_entry(iax_wq, &iax_device->wqs, list) {
++		if (iax_wq->wq == wq)
++			return true;
++	}
++
++	return false;
++}
++
++const u32 fixed_ll_sym[286] = {
++	0x40030, 0x40031, 0x40032, 0x40033, 0x40034, 0x40035, 0x40036, 0x40037,
++	0x40038, 0x40039, 0x4003A, 0x4003B, 0x4003C, 0x4003D, 0x4003E, 0x4003F,
++	0x40040, 0x40041, 0x40042, 0x40043, 0x40044, 0x40045, 0x40046, 0x40047,
++	0x40048, 0x40049, 0x4004A, 0x4004B, 0x4004C, 0x4004D, 0x4004E, 0x4004F,
++	0x40050, 0x40051, 0x40052, 0x40053, 0x40054, 0x40055, 0x40056, 0x40057,
++	0x40058, 0x40059, 0x4005A, 0x4005B, 0x4005C, 0x4005D, 0x4005E, 0x4005F,
++	0x40060, 0x40061, 0x40062, 0x40063, 0x40064, 0x40065, 0x40066, 0x40067,
++	0x40068, 0x40069, 0x4006A, 0x4006B, 0x4006C, 0x4006D, 0x4006E, 0x4006F,
++	0x40070, 0x40071, 0x40072, 0x40073, 0x40074, 0x40075, 0x40076, 0x40077,
++	0x40078, 0x40079, 0x4007A, 0x4007B, 0x4007C, 0x4007D, 0x4007E, 0x4007F,
++	0x40080, 0x40081, 0x40082, 0x40083, 0x40084, 0x40085, 0x40086, 0x40087,
++	0x40088, 0x40089, 0x4008A, 0x4008B, 0x4008C, 0x4008D, 0x4008E, 0x4008F,
++	0x40090, 0x40091, 0x40092, 0x40093, 0x40094, 0x40095, 0x40096, 0x40097,
++	0x40098, 0x40099, 0x4009A, 0x4009B, 0x4009C, 0x4009D, 0x4009E, 0x4009F,
++	0x400A0, 0x400A1, 0x400A2, 0x400A3, 0x400A4, 0x400A5, 0x400A6, 0x400A7,
++	0x400A8, 0x400A9, 0x400AA, 0x400AB, 0x400AC, 0x400AD, 0x400AE, 0x400AF,
++	0x400B0, 0x400B1, 0x400B2, 0x400B3, 0x400B4, 0x400B5, 0x400B6, 0x400B7,
++	0x400B8, 0x400B9, 0x400BA, 0x400BB, 0x400BC, 0x400BD, 0x400BE, 0x400BF,
++	0x48190, 0x48191, 0x48192, 0x48193, 0x48194, 0x48195, 0x48196, 0x48197,
++	0x48198, 0x48199, 0x4819A, 0x4819B, 0x4819C, 0x4819D, 0x4819E, 0x4819F,
++	0x481A0, 0x481A1, 0x481A2, 0x481A3, 0x481A4, 0x481A5, 0x481A6, 0x481A7,
++	0x481A8, 0x481A9, 0x481AA, 0x481AB, 0x481AC, 0x481AD, 0x481AE, 0x481AF,
++	0x481B0, 0x481B1, 0x481B2, 0x481B3, 0x481B4, 0x481B5, 0x481B6, 0x481B7,
++	0x481B8, 0x481B9, 0x481BA, 0x481BB, 0x481BC, 0x481BD, 0x481BE, 0x481BF,
++	0x481C0, 0x481C1, 0x481C2, 0x481C3, 0x481C4, 0x481C5, 0x481C6, 0x481C7,
++	0x481C8, 0x481C9, 0x481CA, 0x481CB, 0x481CC, 0x481CD, 0x481CE, 0x481CF,
++	0x481D0, 0x481D1, 0x481D2, 0x481D3, 0x481D4, 0x481D5, 0x481D6, 0x481D7,
++	0x481D8, 0x481D9, 0x481DA, 0x481DB, 0x481DC, 0x481DD, 0x481DE, 0x481DF,
++	0x481E0, 0x481E1, 0x481E2, 0x481E3, 0x481E4, 0x481E5, 0x481E6, 0x481E7,
++	0x481E8, 0x481E9, 0x481EA, 0x481EB, 0x481EC, 0x481ED, 0x481EE, 0x481EF,
++	0x481F0, 0x481F1, 0x481F2, 0x481F3, 0x481F4, 0x481F5, 0x481F6, 0x481F7,
++	0x481F8, 0x481F9, 0x481FA, 0x481FB, 0x481FC, 0x481FD, 0x481FE, 0x481FF,
++	0x38000, 0x38001, 0x38002, 0x38003, 0x38004, 0x38005, 0x38006, 0x38007,
++	0x38008, 0x38009, 0x3800A, 0x3800B, 0x3800C, 0x3800D, 0x3800E, 0x3800F,
++	0x38010, 0x38011, 0x38012, 0x38013, 0x38014, 0x38015, 0x38016, 0x38017,
++	0x400C0, 0x400C1, 0x400C2, 0x400C3, 0x400C4, 0x400C5
++};
++
++const u32 fixed_d_sym[30] = {
++	0x28000, 0x28001, 0x28002, 0x28003, 0x28004, 0x28005, 0x28006, 0x28007,
++	0x28008, 0x28009, 0x2800A, 0x2800B, 0x2800C, 0x2800D, 0x2800E, 0x2800F,
++	0x28010, 0x28011, 0x28012, 0x28013, 0x28014, 0x28015, 0x28016, 0x28017,
++	0x28018, 0x28019, 0x2801A, 0x2801B, 0x2801C, 0x2801D
++};
++
++static struct iax_device *add_iax_device(struct idxd_device *idxd)
++{
++	struct iax_device *iax_device;
++
++	iax_device = iax_device_alloc();
++	if (!iax_device)
++		return NULL;
++
++	iax_device->idxd = idxd;
++
++	list_add_tail(&iax_device->list, &iax_devices);
++
++	nr_iax++;
++
++	return iax_device;
++}
++
++static void del_iax_device(struct iax_device *iax_device)
++{
++	list_del(&iax_device->list);
++
++	iax_device_free(iax_device);
++
++	nr_iax--;
++}
++
++static int add_iax_wq(struct iax_device *iax_device, struct idxd_wq *wq)
++{
++	struct iax_wq *iax_wq;
++
++	iax_wq = kzalloc(sizeof(*iax_wq), GFP_KERNEL);
++	if (!iax_wq)
++		return -ENOMEM;
++
++	iax_wq->wq = wq;
++	iax_wq->iax_device = iax_device;
++	wq->private_data = iax_wq;
++
++	list_add_tail(&iax_wq->list, &iax_device->wqs);
++
++	iax_device->n_wq++;
++
++	pr_debug("%s: added wq %p to iax %p, n_wq %d\n", __func__, wq, iax_device, iax_device->n_wq);
++
++	return 0;
++}
++
++static void del_iax_wq(struct iax_device *iax_device, struct idxd_wq *wq)
++{
++	struct iax_wq *iax_wq;
++
++	list_for_each_entry(iax_wq, &iax_device->wqs, list) {
++		if (iax_wq->wq == wq) {
++			list_del(&iax_wq->list);
++			iax_device->n_wq--;
++
++			pr_debug("%s: removed wq %p from iax_device %p, n_wq %d, nr_iax %d\n", __func__, wq, iax_device, iax_device->n_wq, nr_iax);
++
++			if (iax_device->n_wq == 0) {
++				del_iax_device(iax_device);
++				break;
++			}
++		}
++	}
++}
++
++static int save_iax_wq(struct idxd_wq *wq)
++{
++	struct iax_device *iax_device, *found = NULL;
++	int ret = 0;
++
++	spin_lock(&iax_devices_lock);
++	list_for_each_entry(iax_device, &iax_devices, list) {
++		if (iax_device->idxd == wq->idxd) {
++			/*
++			 * Check to see that we don't already have this wq.
++			 * Shouldn't happen but we don't control probing.
++			 */
++			if (iax_has_wq(iax_device, wq)) {
++				pr_warn("%s: same wq probed multiple times for iax_device %p\n", __func__, iax_device);
++				goto out;
++			}
++
++			found = iax_device;
++
++			ret = add_iax_wq(iax_device, wq);
++			if (ret)
++				goto out;
++
++			break;
++		}
++	}
++
++	if (!found) {
++		struct iax_device *new;
++
++		new = add_iax_device(wq->idxd);
++		if (!new) {
++			ret = -ENOMEM;
++			goto out;
++		}
++
++		ret = add_iax_wq(new, wq);
++		if (ret) {
++			del_iax_device(new);
++			goto out;
++		}
++	}
++
++	BUG_ON(nr_iax == 0);
++
++	cpus_per_iax = nr_cpus / nr_iax;
++out:
++	spin_unlock(&iax_devices_lock);
++
++	return 0;
++}
++
++static void clear_wq_table(void)
++{
++	int cpu;
++
++	for (cpu = 0; cpu < nr_cpus; cpu++)
++		*per_cpu_ptr(wq_table, cpu) = NULL;
++
++	pr_debug("%s: cleared wq table\n", __func__);
++}
++
++static void remove_iax_wq(struct idxd_wq *wq)
++{
++	struct iax_device *iax_device;
++
++	spin_lock(&iax_devices_lock);
++	list_for_each_entry(iax_device, &iax_devices, list) {
++		if (iax_has_wq(iax_device, wq)) {
++			del_iax_wq(iax_device, wq);
++			if (nr_iax == 0)
++				clear_wq_table();
++			break;
++		}
++	}
++	spin_unlock(&iax_devices_lock);
++
++	if (nr_iax)
++		cpus_per_iax = nr_cpus / nr_iax;
++	else
++		cpus_per_iax = 0;
++
++	idxd_wq_put(wq);
++}
++
++static struct idxd_wq *request_iax_wq(int iax)
++{
++	struct iax_device *iax_device, *found_device = NULL;
++	struct idxd_wq *bkup_wq = NULL, *found_wq = NULL;
++	int cur_iax = 0, cur_wq = 0, cur_bkup;
++	struct iax_wq *iax_wq;
++
++	spin_lock(&iax_devices_lock);
++	list_for_each_entry(iax_device, &iax_devices, list) {
++		if (cur_iax != iax) {
++			cur_iax++;
++			continue;
++		}
++
++		found_device = iax_device;
++		pr_debug("%s: getting wq from iax_device %p (%d)\n", __func__, found_device, cur_iax);
++		break;
++	}
++
++	if (!found_device) {
++		found_device = list_first_entry_or_null(&iax_devices,
++							struct iax_device, list);
++		if (!found_device) {
++			pr_warn("%s: couldn't find any iax devices with wqs!\n", __func__);
++			goto out;
++		}
++		cur_iax = 0;
++		pr_debug("%s: getting wq from only iax_device %p (%d)\n", __func__, found_device, cur_iax);
++	}
++
++	list_for_each_entry(iax_wq, &found_device->wqs, list) {
++		/* Prefer unused wq but use if we can't find one */
++		if (idxd_wq_refcount(iax_wq->wq) > 0) {
++			idxd_wq_get(iax_wq->wq);
++			bkup_wq = iax_wq->wq;
++			cur_bkup = cur_wq;
++		} else {
++			pr_debug("%s: returning unused wq %p (%d) from iax device %p (%d)\n", __func__, iax_wq->wq, cur_wq, found_device, cur_iax);
++			found_wq = iax_wq->wq;
++			goto out;
++		}
++		cur_wq++;
++	}
++
++	if (bkup_wq) {
++		pr_debug("%s: returning used wq %p (%d) from iax device %p (%d)\n", __func__, bkup_wq, cur_bkup, found_device, cur_iax);
++		idxd_wq_get(bkup_wq);
++		found_wq = bkup_wq;
++		goto out;
++	}
++
++out:
++	spin_unlock(&iax_devices_lock);
++
++	return found_wq;
++}
++
++static inline int check_completion(struct iax_completion_record *comp,
++				   bool compress)
++{
++	char *op_str = compress ? "compress" : "decompress";
++	int ret = 0;
++
++	while (!comp->status)
++		cpu_relax();
++
++	if (comp->status != IAX_COMP_SUCCESS) {
++		if (comp->status == IAX_ERROR_WATCHDOG_EXPIRED) {
++			ret = -ETIMEDOUT;
++			pr_warn("%s: %s timed out, size=0x%x\n",
++				__func__, op_str, comp->output_size);
++			goto out;
++		}
++
++		if (comp->status == IAX_ANALYTICS_ERROR &&
++		    comp->error_code == IAX_ERROR_COMP_BUF_OVERFLOW &&
++		    compress == true) {
++			ret = -E2BIG;
++			pr_debug("%s: compressed size > uncompressed size, not compressing, size=0x%x\n", __func__, comp->output_size);
++			goto out;
++		}
++
++		ret = -EINVAL;
++		pr_err("%s: iax %s status=0x%x, error=0x%x, size=0x%x\n",
++		       __func__, op_str, ret, comp->error_code, comp->output_size);
++		print_hex_dump(KERN_INFO, "cmp-rec: ", DUMP_PREFIX_OFFSET, 8, 1, comp, 64, 0);
++		goto out;
++	}
++out:
++	return ret;
++}
++
++static int iax_compress(struct crypto_tfm *tfm,
++			const u8 *src, unsigned int slen,
++			u8 *dst, unsigned int *dlen)
++{
++	struct idxd_desc *idxd_desc;
++	struct iax_hw_desc *desc;
++	u32 compression_crc;
++	struct idxd_wq *wq;
++	int ret = 0;
++
++	wq = *per_cpu_ptr(wq_table, smp_processor_id());
++	if (!wq) {
++		pr_err("%s: no wq configured for cpu=%d\n", __func__, smp_processor_id());
++		return -ENODEV;
++	}
++
++	pr_debug("%s: using wq for cpu=%d = wq %p\n", __func__, smp_processor_id(), wq);
++
++	idxd_desc = idxd_alloc_desc(wq, IDXD_OP_BLOCK);
++	if (IS_ERR(idxd_desc)) {
++		pr_err("%s: idxd descriptor allocation failed\n", __func__);
++		pr_warn("%s: iax compress failed: ret=%ld\n", __func__, PTR_ERR(desc));
++
++		return PTR_ERR(idxd_desc);
++	}
++	desc = idxd_desc->iax_hw;
++
++	desc->flags = IDXD_OP_FLAG_CRAV | IDXD_OP_FLAG_RCR |
++		IDXD_OP_FLAG_RD_SRC2_AECS | IDXD_OP_FLAG_CC;
++	desc->opcode = IAX_OPCODE_COMPRESS;
++	desc->src2_addr = (u64)(u64 *)&aecs_table;
++	desc->src2_size = sizeof(struct aecs_table_record);
++	desc->compr_flags = IAX_COMP_FLAGS;
++	desc->priv = 1;
++
++	desc->src1_addr = (u64)src;
++	desc->src1_size = slen;
++	desc->src2_addr = (u64)(u64 *)&aecs_table;
++	desc->dst_addr = (u64)dst;
++	desc->max_dst_size = *dlen;
++	desc->completion_addr = (u64)idxd_desc->iax_completion;
++
++	ret = idxd_submit_desc(wq, idxd_desc);
++	if (ret) {
++		pr_warn("%s: submit_desc failed ret=%d\n", __func__, ret);
++		goto err;
++	}
++
++	ret = check_completion(idxd_desc->iax_completion, true);
++	if (ret) {
++		pr_warn("%s: check_completion failed ret=%d\n", __func__, ret);
++		goto err;
++	}
++
++	*dlen = idxd_desc->iax_completion->output_size;
++
++	idxd_free_desc(wq, idxd_desc);
++
++	if (!iax_verify_compress)
++		goto out;
++
++	compression_crc = idxd_desc->iax_completion->crc;
++
++	idxd_desc = idxd_alloc_desc(wq, IDXD_OP_BLOCK);
++	if (IS_ERR(idxd_desc)) {
++		pr_err("%s: idxd descriptor allocation failed\n", __func__);
++		pr_warn("%s: iax compress (verify) failed: ret=%ld\n", __func__, PTR_ERR(desc));
++
++		return PTR_ERR(desc);
++	}
++	desc = idxd_desc->iax_hw;
++
++	/* Verify (optional) - decompress and check crc, suppress dest write */
++
++	desc->flags = IDXD_OP_FLAG_CRAV | IDXD_OP_FLAG_RCR | IDXD_OP_FLAG_CC;
++	desc->opcode = IAX_OPCODE_DECOMPRESS;
++	desc->max_dst_size = PAGE_SIZE;
++	desc->decompr_flags = IAX_DECOMP_FLAGS | IAX_DECOMP_SUPPRESS_OUTPUT;
++	desc->priv = 1;
++
++	desc->src1_addr = (u64)dst;
++	desc->src1_size = *dlen;
++	desc->dst_addr = (u64)src;
++	desc->max_dst_size = slen;
++	desc->completion_addr = (u64)idxd_desc->iax_completion;
++
++	ret = idxd_submit_desc(wq, idxd_desc);
++	if (ret) {
++		pr_warn("%s: submit_desc (verify) failed ret=%d\n", __func__, ret);
++		goto err;
++	}
++
++	ret = check_completion(idxd_desc->iax_completion, true);
++	if (ret) {
++		pr_warn("%s: check_completion (verify) failed ret=%d\n", __func__, ret);
++		goto err;
++	}
++
++	if (compression_crc != idxd_desc->iax_completion->crc) {
++		ret = -EINVAL;
++		pr_err("%s: iax comp/decomp crc mismatch: comp=0x%x, decomp=0x%x\n", __func__,
++		       compression_crc, idxd_desc->iax_completion->crc);
++		print_hex_dump(KERN_INFO, "cmp-rec: ", DUMP_PREFIX_OFFSET, 8, 1, idxd_desc->iax_completion, 64, 0);
++		goto err;
++	}
++
++	idxd_free_desc(wq, idxd_desc);
++out:
++	return ret;
++err:
++	idxd_free_desc(wq, idxd_desc);
++	pr_warn("iax compress failed: ret=%d\n", ret);
++
++	goto out;
++}
++
++static int iax_decompress(struct crypto_tfm *tfm,
++			  const u8 *src, unsigned int slen,
++			  u8 *dst, unsigned int *dlen)
++{
++	struct idxd_desc *idxd_desc;
++	struct iax_hw_desc *desc;
++	struct idxd_wq *wq;
++	int ret = 0;
++
++	wq = *per_cpu_ptr(wq_table, smp_processor_id());
++	if (!wq) {
++		pr_err("%s: no wq configured for cpu=%d\n", __func__, smp_processor_id());
++		return -ENODEV;
++	}
++
++	pr_debug("%s: using wq for cpu=%d = wq %p\n", __func__, smp_processor_id(), wq);
++
++	idxd_desc = idxd_alloc_desc(wq, IDXD_OP_BLOCK);
++	if (IS_ERR(idxd_desc)) {
++		pr_err("%s: idxd descriptor allocation failed\n", __func__);
++		pr_warn("%s: iax decompress failed: ret=%ld\n", __func__, PTR_ERR(desc));
++
++		return PTR_ERR(desc);
++	}
++	desc = idxd_desc->iax_hw;
++
++	desc->flags = IDXD_OP_FLAG_CRAV | IDXD_OP_FLAG_RCR | IDXD_OP_FLAG_CC;
++	desc->opcode = IAX_OPCODE_DECOMPRESS;
++	desc->max_dst_size = PAGE_SIZE;
++	desc->decompr_flags = IAX_DECOMP_FLAGS;
++	desc->priv = 1;
++
++	desc->src1_addr = (u64)src;
++	desc->dst_addr = (u64)dst;
++	desc->max_dst_size = *dlen;
++	desc->src1_size = slen;
++	desc->completion_addr = (u64)idxd_desc->iax_completion;
++
++	ret = idxd_submit_desc(wq, idxd_desc);
++	if (ret) {
++		pr_warn("%s: submit_desc failed ret=%d\n", __func__, ret);
++		goto err;
++	}
++
++	ret = check_completion(idxd_desc->iax_completion, true);
++	if (ret) {
++		pr_warn("%s: check_completion failed ret=%d\n", __func__, ret);
++		goto err;
++	}
++
++	*dlen = idxd_desc->iax_completion->output_size;
++
++	idxd_free_desc(wq, idxd_desc);
++out:
++	return ret;
++err:
++	idxd_free_desc(wq, idxd_desc);
++	pr_warn("iax decompress failed: ret=%d\n", ret);
++
++	goto out;
++}
++
++static int iax_comp_compress(struct crypto_tfm *tfm,
++			     const u8 *src, unsigned int slen,
++			     u8 *dst, unsigned int *dlen)
++{
++	int ret;
++
++	pr_debug("%s: src %p, slen %d, dst %p, dlen %u\n",
++		 __func__, src, slen, dst, *dlen);
++
++	ret = iax_compress(tfm, src, slen, dst, dlen);
++	if (ret != 0)
++		pr_warn("synchronous compress failed ret=%d\n", ret);
++
++	return ret;
++}
++
++static int iax_comp_decompress(struct crypto_tfm *tfm,
++			       const u8 *src, unsigned int slen,
++			       u8 *dst, unsigned int *dlen)
++{
++	int ret;
++
++	pr_debug("%s: src %p, slen %d, dst %p, dlen %u\n",
++		 __func__, src, slen, dst, *dlen);
++
++	ret = iax_decompress(tfm, src, slen, dst, dlen);
++	if (ret != 0)
++		pr_warn("synchronous decompress failed ret=%d\n", ret);
++
++	return ret;
++}
++
++static struct crypto_alg iax_comp_deflate = {
++	.cra_name		= "deflate",
++	.cra_driver_name	= "iax_crypto",
++	.cra_flags		= CRYPTO_ALG_TYPE_COMPRESS,
++	.cra_priority		= IAX_ALG_PRIORITY,
++	.cra_module		= THIS_MODULE,
++	.cra_u			= {
++		.compress = {
++			.coa_compress	= iax_comp_compress,
++			.coa_decompress	= iax_comp_decompress
++		}
++	}
++};
++
++static int iax_register_compression_device(void)
++{
++	int ret;
++
++	ret = crypto_register_alg(&iax_comp_deflate);
++	if (ret < 0) {
++		pr_err("deflate algorithm registration failed\n");
++		return ret;
++	}
++
++	return ret;
++}
++
++static void iax_unregister_compression_device(void)
++{
++	crypto_unregister_alg(&iax_comp_deflate);
++}
++
++static void iax_set_aecs(void)
++{
++	u32 offset;
++	u32 bfinal = 1;
++
++	/* Configure aecs table using fixed Huffman table */
++	aecs_table.crc = 0;
++	aecs_table.xor_checksum = 0;
++	offset = aecs_table.num_output_accum_bits / 8;
++	aecs_table.output_accum[offset] = DYNAMIC_HDR | bfinal;
++	aecs_table.num_output_accum_bits = DYNAMIC_HDR_SIZE;
++
++	/* Add Huffman table to aecs */
++	memcpy(aecs_table.ll_sym, fixed_ll_sym, sizeof(fixed_ll_sym));
++	memcpy(aecs_table.d_sym, fixed_d_sym, sizeof(fixed_d_sym));
++}
++
++static void rebalance_wq_table(void)
++{
++	int node, cpu, iax;
++	struct idxd_wq *wq;
++
++	if (nr_iax == 0)
++		return;
++
++	pr_debug("%s: nr_nodes=%d, nr_cpus %d, nr_iax %d, cpus_per_iax %d\n",
++		 __func__, nr_nodes, nr_cpus, nr_iax, cpus_per_iax);
++
++	for (cpu = 0; cpu < nr_cpus; cpu++) {
++		iax = cpu_to_iax(cpu);
++		pr_debug("%s: iax=%d\n", __func__, iax);
++
++		BUG_ON(iax == -1);
++
++		wq = request_iax_wq(iax);
++		if (!wq) {
++			pr_err("could not get wq for iax %d!\n", iax);
++			return;
++		}
++
++		*per_cpu_ptr(wq_table, cpu) = wq;
++		pr_debug("%s: assigned wq for cpu=%d, node=%d = wq %p\n", __func__, cpu, node, wq);
++	}
++}
++
++static int iax_crypto_probe(struct idxd_dev *idxd_dev)
++{
++	struct idxd_wq *wq = idxd_dev_to_wq(idxd_dev);
++	struct idxd_device *idxd = wq->idxd;
++	struct idxd_driver_data *data = idxd->data;
++	int ret = 0;
++
++	if (idxd->state != IDXD_DEV_ENABLED)
++		return -ENXIO;
++
++	if (data->type != IDXD_TYPE_IAX)
++		return -ENODEV;
++
++	mutex_lock(&wq->wq_lock);
++
++	wq->type = IDXD_WQT_KERNEL;
++
++	ret = __drv_enable_wq(wq);
++	if (ret < 0) {
++		pr_warn("%s: enable wq %d failed: %d\n", __func__, wq->id, ret);
++		ret = -ENXIO;
++		goto err;
++	}
++
++	ret = idxd_wq_alloc_resources(wq);
++	if (ret < 0) {
++		idxd->cmd_status = IDXD_SCMD_WQ_RES_ALLOC_ERR;
++		pr_warn("%s: WQ resource alloc failed: ret=%d\n", __func__, ret);
++		goto err_alloc;
++	}
++
++	ret = idxd_wq_init_percpu_ref(wq);
++	if (ret < 0) {
++		idxd->cmd_status = IDXD_SCMD_PERCPU_ERR;
++		pr_warn("%s: WQ percpu_ref setup failed: ret=%d\n", __func__, ret);
++		goto err_ref;
++	}
++
++	ret = save_iax_wq(wq);
++	if (ret)
++		goto err_save;
++
++	rebalance_wq_table();
++out:
++	mutex_unlock(&wq->wq_lock);
++
++	return ret;
++
++err_save:
++	__idxd_wq_quiesce(wq);
++err_ref:
++	idxd_wq_free_resources(wq);
++err_alloc:
++	__drv_disable_wq(wq);
++err:
++	wq->type = IDXD_WQT_NONE;
++
++	goto out;
++}
++
++static void iax_crypto_remove(struct idxd_dev *idxd_dev)
++{
++	struct idxd_wq *wq = idxd_dev_to_wq(idxd_dev);
++
++	mutex_lock(&wq->wq_lock);
++
++	__idxd_wq_quiesce(wq);
++	remove_iax_wq(wq);
++	__drv_disable_wq(wq);
++	idxd_wq_free_resources(wq);
++	wq->type = IDXD_WQT_NONE;
++	rebalance_wq_table();
++
++	mutex_unlock(&wq->wq_lock);
++}
++
++static enum idxd_dev_type dev_types[] = {
++	IDXD_DEV_WQ,
++	IDXD_DEV_NONE,
++};
++
++static struct idxd_device_driver iax_crypto_driver = {
++	.probe = iax_crypto_probe,
++	.remove = iax_crypto_remove,
++	.name = "crypto",
++	.type = dev_types,
++};
++
++static int __init iax_crypto_init_module(void)
++{
++	int ret = 0;
++
++	nr_cpus = num_online_cpus();
++	nr_nodes = num_online_nodes();
++
++	iax_set_aecs();
++
++	wq_table = alloc_percpu(struct idxd_wq *);
++	if (!wq_table)
++		return -ENOMEM;
++
++	ret = __idxd_driver_register(&iax_crypto_driver, THIS_MODULE,
++				     KBUILD_MODNAME);
++	if (ret) {
++		pr_err("IAX wq sub-driver registration failed\n");
++		goto err_driver_register;
++	}
++
++	ret = iax_register_compression_device();
++	if (ret < 0) {
++		pr_err("IAX compression device registration failed\n");
++		goto err_crypto_register;
++	}
++
++	pr_info("%s: initialized\n", __func__);
++out:
++	return ret;
++
++err_crypto_register:
++	idxd_driver_unregister(&iax_crypto_driver);
++err_driver_register:
++	free_percpu(wq_table);
++
++	goto out;
++}
++
++static void __exit iax_crypto_cleanup_module(void)
++{
++	idxd_driver_unregister(&iax_crypto_driver);
++	iax_unregister_compression_device();
++	free_percpu(wq_table);
++	free_iax_devices();
++	pr_info("%s: cleaned up\n", __func__);
++}
++
++MODULE_IMPORT_NS(IDXD);
++MODULE_LICENSE("GPL v2");
++MODULE_ALIAS_IDXD_DEVICE(0);
++MODULE_AUTHOR("Intel Corporation");
++MODULE_DESCRIPTION("IAX Crypto Driver");
++
++module_init(iax_crypto_init_module);
++module_exit(iax_crypto_cleanup_module);
+-- 
+2.31.1
+

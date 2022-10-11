@@ -1,0 +1,69 @@
+From 8578e8f3ef15713c3eb5166c1fd9cf7ac834c4c6 Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Thu, 5 Aug 2021 23:22:06 +0800
+Subject: [PATCH 0919/1418] KVM: x86/vmx: Clear Arch LBREn bit before inject
+ #DB to guest
+
+On a debug breakpoint event (#DB), IA32_LBR_CTL.LBREn is cleared.
+So need to clear the bit manually before inject #DB.
+
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/vmx/vmx.c | 27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 629b5ed8994a..04ab1f391db9 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -1622,6 +1622,27 @@ static void vmx_clear_hlt(struct kvm_vcpu *vcpu)
+ 		vmcs_write32(GUEST_ACTIVITY_STATE, GUEST_ACTIVITY_ACTIVE);
+ }
+ 
++static void flip_arch_lbr_ctl(struct kvm_vcpu *vcpu, bool on)
++{
++	struct lbr_desc *lbr_desc = vcpu_to_lbr_desc(vcpu);
++	struct kvm_pmu *pmu = vcpu_to_pmu(vcpu);
++
++	if (kvm_cpu_cap_has(X86_FEATURE_ARCH_LBR) &&
++	    test_bit(INTEL_PMC_IDX_FIXED_VLBR, pmu->pmc_in_use) &&
++	    lbr_desc->event) {
++		u64 old = vmcs_read64(GUEST_IA32_LBR_CTL);
++		u64 new;
++
++		if (on)
++			new = old | ARCH_LBR_CTL_LBREN;
++		else
++			new = old & ~ARCH_LBR_CTL_LBREN;
++
++		if (old != new)
++			vmcs_write64(GUEST_IA32_LBR_CTL, new);
++	}
++}
++
+ static void vmx_queue_exception(struct kvm_vcpu *vcpu)
+ {
+ 	struct vcpu_vmx *vmx = to_vmx(vcpu);
+@@ -1657,6 +1678,9 @@ static void vmx_queue_exception(struct kvm_vcpu *vcpu)
+ 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, intr_info);
+ 
+ 	vmx_clear_hlt(vcpu);
++
++	if (nr == DB_VECTOR)
++		flip_arch_lbr_ctl(vcpu, false);
+ }
+ 
+ static void vmx_setup_uret_msr(struct vcpu_vmx *vmx, unsigned int msr,
+@@ -4575,6 +4599,9 @@ static void vmx_inject_nmi(struct kvm_vcpu *vcpu)
+ 			INTR_TYPE_NMI_INTR | INTR_INFO_VALID_MASK | NMI_VECTOR);
+ 
+ 	vmx_clear_hlt(vcpu);
++
++	if (vcpu->arch.exception.nr == DB_VECTOR)
++		flip_arch_lbr_ctl(vcpu, false);
+ }
+ 
+ bool vmx_get_nmi_mask(struct kvm_vcpu *vcpu)
+-- 
+2.31.1
+

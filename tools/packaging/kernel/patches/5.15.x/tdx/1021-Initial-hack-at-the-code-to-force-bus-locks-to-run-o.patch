@@ -1,0 +1,172 @@
+From 8a7f85e6e0d773df354b538c281e0291c4895ba5 Mon Sep 17 00:00:00 2001
+From: Tony Luck <tony.luck@intel.com>
+Date: Fri, 14 Jan 2022 12:02:28 -0800
+Subject: [PATCH 1021/1418] Initial hack at the code to force bus locks to run
+ one at a time
+
+Add a new choice to the existing "split_lock_detect" boot parameter
+"sequential". In this mode split lock detection is enabled. When an
+application tries to execute a bus lock the #AC handler.
+
+1) Blocks (interruptibly) until it can get the semaphore
+	If interrupted, just return. Assume the signal will either
+	kill the task, or direct execution away from the instruction
+	that is trying to get the bus lock.
+2) Disables split lock detection for the current core
+3) Schedules a work queue to re-enable split lock detect in 2 jiffies
+4) Returns
+
+The work queue that re-enables split lock detection also releases the
+semaphore.
+
+There is a corner case where a CPU may be taken offline while
+split lock detection is disabled. A CPU hotplug handler handles
+this case.
+
+Very lightly tested on ICX.
+
+There's a handle_guest_split_lock() function right after the
+split_lock_warn() function that I messed with that looks like
+it needs similar treatment for KVM case. Likely some merging
+and sharing of code with the bare metal version will be possible.
+
+Signed-off-by: "Luck, Tony" <tony.luck@intel.com>
+---
+ arch/x86/kernel/cpu/intel.c | 65 +++++++++++++++++++++++++++++++++----
+ 1 file changed, 58 insertions(+), 7 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/intel.c b/arch/x86/kernel/cpu/intel.c
+index 0b382036132f..160924631219 100644
+--- a/arch/x86/kernel/cpu/intel.c
++++ b/arch/x86/kernel/cpu/intel.c
+@@ -7,10 +7,13 @@
+ #include <linux/smp.h>
+ #include <linux/sched.h>
+ #include <linux/sched/clock.h>
++#include <linux/semaphore.h>
+ #include <linux/thread_info.h>
+ #include <linux/init.h>
+ #include <linux/uaccess.h>
++#include <linux/workqueue.h>
+ #include <linux/delay.h>
++#include <linux/cpuhotplug.h>
+ 
+ #include <asm/cpufeature.h>
+ #include <asm/msr.h>
+@@ -43,6 +46,7 @@ enum split_lock_detect_state {
+ 	sld_warn,
+ 	sld_fatal,
+ 	sld_ratelimit,
++	sld_sequential,
+ };
+ 
+ /*
+@@ -988,10 +992,13 @@ static const struct {
+ 	{ "warn",	sld_warn  },
+ 	{ "fatal",	sld_fatal },
+ 	{ "ratelimit:", sld_ratelimit },
++	{ "sequential", sld_sequential },
+ };
+ 
+ static struct ratelimit_state bld_ratelimit;
+ 
++static DEFINE_SEMAPHORE(buslock_sem);
++
+ static inline bool match_option(const char *arg, int arglen, const char *opt)
+ {
+ 	int len = strlen(opt), ratelimit;
+@@ -1031,7 +1038,7 @@ static bool split_lock_verify_msr(bool on)
+ 
+ static void __init sld_state_setup(void)
+ {
+-	enum split_lock_detect_state state = sld_warn;
++	enum split_lock_detect_state state = sld_sequential;
+ 	char arg[20];
+ 	int i, ret;
+ 
+@@ -1102,18 +1109,55 @@ static void split_lock_init(void)
+ 		split_lock_verify_msr(sld_state != sld_off);
+ }
+ 
++static void __split_lock_reenable(struct work_struct *work)
++{
++	sld_update_msr(true);
++	up(&buslock_sem);
++}
++
++/*
++ * If a CPU goes offline with pending delayed work to
++ * re-enable split lock detection then the delayed work
++ * will be executed on some other CPU. That handles releasing
++ * the buslock_sem, but because it executes on a different
++ * CPU probably won't re-enable split lock detection. This
++ * is a problem on HT systems since the sibling CPU on the
++ * same core may then be left running with split lock
++ * detection disabled.
++ *
++ * Unconditionally re-enable detection here.
++ */
++static int splitlock_cpu_offline(unsigned int cpu)
++{
++	sld_update_msr(true);
++
++	return 0;
++}
++
++static DECLARE_DELAYED_WORK(split_lock_reenable, __split_lock_reenable);
++
+ static void split_lock_warn(unsigned long ip)
+ {
+ 	pr_warn_ratelimited("#AC: %s/%d took a split_lock trap at address: 0x%lx\n",
+ 			    current->comm, current->pid, ip);
+ 
+-	/*
+-	 * Disable the split lock detection for this task so it can make
+-	 * progress and set TIF_SLD so the detection is re-enabled via
+-	 * switch_to_sld() when the task is scheduled out.
+-	 */
++	switch (sld_state) {
++	case sld_warn:
++		/* This task will keep running with split lock disabled */
++		set_tsk_thread_flag(current, TIF_SLD);
++		break;
++	case sld_sequential:
++		/* Only allow one buslocked disabled core at a time */
++		if (down_interruptible(&buslock_sem) == -EINTR)
++			return;
++		schedule_delayed_work(&split_lock_reenable, 2);
++		break;
++	default:
++		break;
++	}
++
++	/* Disable split lock detection to make progress */
+ 	sld_update_msr(false);
+-	set_tsk_thread_flag(current, TIF_SLD);
+ }
+ 
+ bool handle_guest_split_lock(unsigned long ip)
+@@ -1183,6 +1227,7 @@ void handle_bus_lock(struct pt_regs *regs)
+ 		/* Warn on the bus lock. */
+ 		fallthrough;
+ 	case sld_warn:
++	case sld_sequential:
+ 		pr_warn_ratelimited("#DB: %s/%d took a bus_lock trap at address: 0x%lx\n",
+ 				    current->comm, current->pid, regs->ip);
+ 		break;
+@@ -1290,6 +1335,12 @@ static void sld_state_show(void)
+ 		if (boot_cpu_has(X86_FEATURE_BUS_LOCK_DETECT))
+ 			pr_info("#DB: setting system wide bus lock rate limit to %u/sec\n", bld_ratelimit.burst);
+ 		break;
++	case sld_sequential:
++		pr_info("#AC: crashing the kernel on kernel split_locks and forcing sequential access for user-space split locks\n");
++		if (cpuhp_setup_state(CPUHP_AP_ONLINE_DYN,
++				      "x86/splitlock", NULL, splitlock_cpu_offline) < 0)
++			pr_warn("No splitlock CPU offline handler\n");
++		break;
+ 	}
+ }
+ 
+-- 
+2.31.1
+

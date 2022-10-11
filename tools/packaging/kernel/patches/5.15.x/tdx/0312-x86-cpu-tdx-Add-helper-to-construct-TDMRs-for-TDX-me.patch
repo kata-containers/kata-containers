@@ -1,0 +1,232 @@
+From 5b6f4c0a0152758013fe1647884f3c94a8949f8e Mon Sep 17 00:00:00 2001
+From: Kai Huang <kai.huang@intel.com>
+Date: Tue, 28 Sep 2021 09:55:38 +1300
+Subject: [PATCH 0312/1418] x86/cpu/tdx: Add helper to construct TDMRs for TDX
+ memory
+
+To use convertible memory as TDX memory, the kernel needs to construct an
+array of "TD Memory Region" (TDMR) to cover all convertible memory ranges
+kernel wants to convert, and use the TDMRs to configure the TDX module.
+Constructing TDMRs also requires the kernel to allocate part of the
+convertible memory as TDX metadata, a.k.a PAMT.
+
+Constructing TDMRs requires information such as BIOS provided Convertible
+Memory Regions (CMRs), and some TDX module metadata, such as maximum number
+of TDMRs, PAMT entry size, etc.  Such information is only available after
+the TDX module is loaded.
+
+Add a helper to construct final TDMRs after gathering all convertible
+memory regions, or TDX memory blocks, as final TDX memory.  A later patch
+will call it to construct TDMRs after the TDX module is loaded.
+
+For now, it only does sanity checks on CMRs and TDX module descriptor to
+see whether they are consistent with TDX specification, and checks whether
+all TDX memory blocks are fully covered by CMRs.
+
+Signed-off-by: Kai Huang <kai.huang@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/tdx_arch.h       |  19 +++++
+ arch/x86/kernel/cpu/tdx/tdmr-common.c | 112 ++++++++++++++++++++++++++
+ arch/x86/kernel/cpu/tdx/tdmr-common.h |  23 ++++++
+ 3 files changed, 154 insertions(+)
+
+diff --git a/arch/x86/include/asm/tdx_arch.h b/arch/x86/include/asm/tdx_arch.h
+index a8c9b1195be3..07408b724540 100644
+--- a/arch/x86/include/asm/tdx_arch.h
++++ b/arch/x86/include/asm/tdx_arch.h
+@@ -33,6 +33,25 @@ struct cmr_info {
+ 	u64 size;
+ } __packed;
+ 
++struct tdmr_reserved_area {
++	u64 offset;
++	u64 size;
++} __packed;
++
++#define TDX_TDMR_ADDR_ALIGNMENT	512
++#define TDX_TDMR_INFO_ALIGNMENT	512
++struct tdmr_info {
++	u64 base;
++	u64 size;
++	u64 pamt_1g_base;
++	u64 pamt_1g_size;
++	u64 pamt_2m_base;
++	u64 pamt_2m_size;
++	u64 pamt_4k_base;
++	u64 pamt_4k_size;
++	struct tdmr_reserved_area reserved_areas[TDX_MAX_NR_RSVD_AREAS];
++} __packed __aligned(TDX_TDMR_INFO_ALIGNMENT);
++
+ #define TDX_TDSYSINFO_STRUCT_ALIGNEMNT	1024
+ struct tdsysinfo_struct {
+ 	/* TDX-SEAM Module Info */
+diff --git a/arch/x86/kernel/cpu/tdx/tdmr-common.c b/arch/x86/kernel/cpu/tdx/tdmr-common.c
+index f39ac52d454b..3362803862a5 100644
+--- a/arch/x86/kernel/cpu/tdx/tdmr-common.c
++++ b/arch/x86/kernel/cpu/tdx/tdmr-common.c
+@@ -10,6 +10,66 @@
+ #include <linux/gfp.h>
+ #include "tdmr-common.h"
+ 
++/* Check whether first range is fully covered by second */
++static bool __init is_range_fully_covered(u64 r1_start, u64 r1_end,
++		u64 r2_start, u64 r2_end)
++{
++	return (r1_start >= r2_start && r1_end <= r2_end) ? true : false;
++}
++
++/* Check whether physical address range is covered by CMR or not. */
++static bool __init phys_range_covered_by_cmrs(struct cmr_info *cmr_array,
++		int cmr_num, phys_addr_t start, phys_addr_t end)
++{
++	int i;
++
++	for (i = 0; i < cmr_num; i++) {
++		struct cmr_info *cmr = &cmr_array[i];
++
++		if (is_range_fully_covered((u64)start, (u64)end,
++					cmr->base, cmr->base + cmr->size))
++			return true;
++	}
++
++	return false;
++}
++
++/*
++ * Sanity check whether all TDX memory blocks are fully covered by CMRs.
++ * Only convertible memory can truly be used by TDX.
++ */
++static int __init sanity_check_cmrs(struct tdx_memory *tmem,
++		struct cmr_info *cmr_array, int cmr_num)
++{
++	struct tdx_memblock *tmb;
++
++	/*
++	 * Check CMRs against entire TDX memory, rather than against individual
++	 * TDX memory block to allow more flexibility, i.e. to allow adding TDX
++	 * memory block before CMR info is available.
++	 */
++	list_for_each_entry(tmb, &tmem->tmb_list, list)
++		if (!phys_range_covered_by_cmrs(cmr_array, cmr_num,
++				tmb->start_pfn << PAGE_SHIFT,
++				tmb->end_pfn << PAGE_SHIFT))
++			break;
++
++	/* Return success if all blocks have passed CMR check */
++	if (list_entry_is_head(tmb, &tmem->tmb_list, list))
++		return 0;
++
++	/*
++	 * TDX cannot be enabled in this case.  Explicitly give a message
++	 * so user can know the reason of failure.
++	 */
++	pr_info("Memory [0x%lx, 0x%lx] not fully covered by CMR\n",
++				tmb->start_pfn << PAGE_SHIFT,
++				tmb->end_pfn << PAGE_SHIFT);
++	return -EFAULT;
++}
++
++/******************************* External APIs *****************************/
++
+ /**
+  * tdx_memblock_create:	Create one TDX memory block
+  *
+@@ -157,3 +217,55 @@ int __init tdx_memory_merge(struct tdx_memory *tmem_dst,
+ 
+ 	return 0;
+ }
++
++/**
++ * tdx_memory_construct_tdmrs:	Construct final TDMRs to cover all TDX memory
++ *				blocks in final TDX memory
++ *
++ * @tmem:		The final TDX memory
++ * @cmr_array:		Array of CMR entries
++ * @cmr_num:		Number of CMR entries
++ * @desc:		TDX module descriptor for constructing final TMDRs
++ * @tdmr_info_array:	Array of constructed final TDMRs
++ * @tdmr_num:		Number of final TDMRs
++ *
++ * Construct final TDMRs to cover all TDX memory blocks in final TDX memory,
++ * based on CMR info and TDX module descriptor.  Caller is responsible for
++ * allocating enough space for array of final TDMRs @tdmr_info_array (i.e. by
++ * allocating enough space based on @desc.max_tdmr_num).
++ *
++ * Upon success, all final TDMRs will be stored in @tdmr_info_array, and
++ * @tdmr_num will have the actual number of TDMRs.  On failure, @tmem internal
++ * state is cleared, and caller is responsible for destroying it.
++ */
++int __init tdx_memory_construct_tdmrs(struct tdx_memory *tmem,
++		struct cmr_info *cmr_array, int cmr_num,
++		struct tdx_module_descriptor *desc,
++		struct tdmr_info *tdmr_info_array, int *tdmr_num)
++{
++	int ret;
++
++	BUILD_BUG_ON(sizeof(struct tdmr_info) != 512);
++
++	/*
++	 * Sanity check TDX module descriptor.  TDX module should have the
++	 * architectural values in TDX spec.
++	 */
++	if (WARN_ON_ONCE((desc->max_tdmr_num != TDX_MAX_NR_TDMRS) ||
++		(desc->max_tdmr_rsvd_area_num != TDX_MAX_NR_RSVD_AREAS) ||
++		(desc->pamt_entry_size[TDX_PG_4K] != TDX_PAMT_ENTRY_SIZE) ||
++		(desc->pamt_entry_size[TDX_PG_2M] != TDX_PAMT_ENTRY_SIZE) ||
++		(desc->pamt_entry_size[TDX_PG_1G] != TDX_PAMT_ENTRY_SIZE)))
++		return -EINVAL;
++
++	/*
++	 * Sanity check number of CMR entries.  It should not exceed maximum
++	 * value defined by TDX spec.
++	 */
++	if (WARN_ON_ONCE((cmr_num > TDX_MAX_NR_CMRS) || (cmr_num <= 0)))
++		return -EINVAL;
++
++	ret = sanity_check_cmrs(tmem, cmr_array, cmr_num);
++
++	return ret;
++}
+diff --git a/arch/x86/kernel/cpu/tdx/tdmr-common.h b/arch/x86/kernel/cpu/tdx/tdmr-common.h
+index 570f805e9f3c..f2e52f06c643 100644
+--- a/arch/x86/kernel/cpu/tdx/tdmr-common.h
++++ b/arch/x86/kernel/cpu/tdx/tdmr-common.h
+@@ -6,6 +6,24 @@
+ #include <linux/list.h>
+ #include <asm/tdx_arch.h>
+ 
++/* Page sizes supported by TDX */
++enum tdx_page_sz {
++	TDX_PG_4K = 0,
++	TDX_PG_2M,
++	TDX_PG_1G,
++	TDX_PG_MAX,
++};
++
++/*
++ * TDX module descriptor.  Those are TDX module's TDMR related global
++ * characteristics, which impact constructing TDMRs.
++ */
++struct tdx_module_descriptor {
++	int max_tdmr_num;
++	int pamt_entry_size[TDX_PG_MAX];
++	int max_tdmr_rsvd_area_num;
++};
++
+ struct tdx_memblock;
+ struct tdx_memory;
+ 
+@@ -50,4 +68,9 @@ int __init tdx_memory_add_block(struct tdx_memory *tmem,
+ int __init tdx_memory_merge(struct tdx_memory *tmem_dst,
+ 		struct tdx_memory *tmem_src);
+ 
++int __init tdx_memory_construct_tdmrs(struct tdx_memory *tmem,
++		struct cmr_info *cmr_array, int cmr_num,
++		struct tdx_module_descriptor *desc,
++		struct tdmr_info *tdmr_info_array, int *tdmr_num);
++
+ #endif
+-- 
+2.31.1
+

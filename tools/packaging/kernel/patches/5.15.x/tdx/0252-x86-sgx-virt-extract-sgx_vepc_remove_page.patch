@@ -1,0 +1,75 @@
+From a404cadff8a1d027b40bd576c76127e71e3952db Mon Sep 17 00:00:00 2001
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Thu, 21 Oct 2021 16:11:54 -0400
+Subject: [PATCH 0252/1418] x86/sgx/virt: extract sgx_vepc_remove_page
+
+For bare-metal SGX on real hardware, the hardware provides guarantees
+SGX state at reboot.  For instance, all pages start out uninitialized.
+The vepc driver provides a similar guarantee today for freshly-opened
+vepc instances, but guests such as Windows expect all pages to be in
+uninitialized state on startup, including after every guest reboot.
+
+One way to do this is to simply close and reopen the /dev/sgx_vepc file
+descriptor and re-mmap the virtual EPC.  However, this is problematic
+because it prevents sandboxing the userspace (for example forbidding
+open() after the guest starts; this is doable with heavy use of SCM_RIGHTS
+file descriptor passing).
+
+In order to implement this, we will need a ioctl that performs
+EREMOVE on all pages mapped by a /dev/sgx_vepc file descriptor:
+other possibilities, such as closing and reopening the device,
+are racy.
+
+Start the implementation by creating a separate function with just
+the __eremove wrapper.
+
+Reviewed-by: Jarkko Sakkinen <jarkko@kernel.org>
+Reviewed-by: Dave Hansen <dave.hansen@linux.intel.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Dave Hansen <dave.hansen@linux.intel.com>
+Link: https://lkml.kernel.org/r/20211021201155.1523989-2-pbonzini@redhat.com
+---
+ arch/x86/kernel/cpu/sgx/virt.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/sgx/virt.c b/arch/x86/kernel/cpu/sgx/virt.c
+index 64511c4a5200..59cdf3f742ac 100644
+--- a/arch/x86/kernel/cpu/sgx/virt.c
++++ b/arch/x86/kernel/cpu/sgx/virt.c
+@@ -111,10 +111,8 @@ static int sgx_vepc_mmap(struct file *file, struct vm_area_struct *vma)
+ 	return 0;
+ }
+ 
+-static int sgx_vepc_free_page(struct sgx_epc_page *epc_page)
++static int sgx_vepc_remove_page(struct sgx_epc_page *epc_page)
+ {
+-	int ret;
+-
+ 	/*
+ 	 * Take a previously guest-owned EPC page and return it to the
+ 	 * general EPC page pool.
+@@ -124,7 +122,12 @@ static int sgx_vepc_free_page(struct sgx_epc_page *epc_page)
+ 	 * case that a guest properly EREMOVE'd this page, a superfluous
+ 	 * EREMOVE is harmless.
+ 	 */
+-	ret = __eremove(sgx_get_epc_virt_addr(epc_page));
++	return __eremove(sgx_get_epc_virt_addr(epc_page));
++}
++
++static int sgx_vepc_free_page(struct sgx_epc_page *epc_page)
++{
++	int ret = sgx_vepc_remove_page(epc_page);
+ 	if (ret) {
+ 		/*
+ 		 * Only SGX_CHILD_PRESENT is expected, which is because of
+@@ -144,7 +147,6 @@ static int sgx_vepc_free_page(struct sgx_epc_page *epc_page)
+ 	}
+ 
+ 	sgx_free_epc_page(epc_page);
+-
+ 	return 0;
+ }
+ 
+-- 
+2.31.1
+

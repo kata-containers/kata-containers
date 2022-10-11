@@ -1,0 +1,122 @@
+From 6fe399a5ee4cfc980e02b3abf7e37a911f47192a Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Mon, 15 Nov 2021 12:33:59 +0800
+Subject: [PATCH 0745/1418] x86/cpu/tdx: Add a function to shut down TDX module
+
+Before loading a new TDX module, the old TDX module is supposed
+to be shut down, which needs to invoke TDH.SYS.LP.SHUTDOWN on all
+CPUs.
+
+TDX module state is set to TDX_MODULE_SHUTDOWN in advance to give
+notifier a chance to prevent this state change.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx-ops.h |  5 +++
+ arch/x86/kernel/cpu/tdx/tdx.c     | 53 +++++++++++++++++++++++++++++++
+ 2 files changed, 58 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx-ops.h b/arch/x86/kernel/cpu/tdx/tdx-ops.h
+index 8cb1e31cd509..348cb45eb204 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx-ops.h
++++ b/arch/x86/kernel/cpu/tdx/tdx-ops.h
+@@ -48,6 +48,11 @@ static inline u64 tdh_sys_lp_init(struct tdx_ex_ret *ex)
+ 	return ret;
+ }
+ 
++static inline u64 tdh_sys_lp_shutdown(void)
++{
++	return seamcall(SEAMCALL_TDH_SYS_LP_SHUTDOWN, 0, 0, 0, 0, NULL);
++}
++
+ static inline u64 tdh_sys_tdmr_init(u64 tdmr, struct tdx_ex_ret *ex)
+ {
+ 	return seamcall(SEAMCALL_TDH_SYS_TDMR_INIT, tdmr, 0, 0, 0, ex);
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 41eaafd4c31e..880d4506dbf0 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -108,6 +108,8 @@ enum TDX_MODULE_STATE {
+ 	TDX_MODULE_LOADED,
+ 	/* Initialization is done so that the TDX module is functional. */
+ 	TDX_MODULE_INITIALIZED,
++	/* TDX module is already shut down. Futher SEAMCALLs are prevented */
++	TDX_MODULE_SHUTDOWN,
+ 	/*
+ 	 * No SEAMCALLs are allowed so that the TDX module is not functional.
+ 	 * It's ready for P-SEAMLDR to update the TDX module.  As something went
+@@ -762,6 +764,52 @@ static int __init tdx_get_system_info(void)
+ 	return err;
+ }
+ 
++static void tdx_shutdown_cpu(void *data)
++{
++	u64 err;
++	int ret = 0;
++
++	WARN_ON_ONCE(!irqs_disabled());
++
++	err = tdh_sys_lp_shutdown();
++	if (WARN_ON_ONCE(err)) {
++		pr_seamcall_error(SEAMCALL_TDH_SYS_LP_SHUTDOWN,
++				  "TDH_SYS_LP_SHUTDOWN", err, NULL);
++		ret = -EIO;
++	}
++
++	/* Don't care what exact errors occurred on which cpus. */
++	if (ret)
++		atomic_set((atomic_t *)data, ret);
++}
++
++static int tdx_module_shutdown(void)
++{
++	atomic_t error;
++	int ret, state;
++
++	state = get_tdx_module_state();
++	if (state != TDX_MODULE_INITIALIZED && state != TDX_MODULE_LOADED)
++		return 0;
++
++	/*
++	 * TDX module cannot function after entering to shutdown state. Set
++	 * tdx_module_state first which may inform registered notifiers. It
++	 * gives notifiers a chance to block this action.
++	 */
++	ret = set_tdx_module_state(TDX_MODULE_SHUTDOWN);
++	if (ret)
++		return ret;
++
++	atomic_set(&error, 0);
++	on_each_cpu(tdx_shutdown_cpu, &error, 1);
++	ret = atomic_read(&error);
++	if (ret)
++		set_tdx_module_state(TDX_MODULE_ERROR);
++
++	return ret;
++}
++
+ /*
+  * tdx_load_module - load TDX module by P-SEAMLDR seam_install call.
+  * @module: virtual address of TDX module.
+@@ -788,6 +836,10 @@ static int tdx_load_module(
+ 	if (IS_ERR(params))
+ 		return -ENOMEM;
+ 
++	ret = tdx_module_shutdown();
++	if (ret)
++		goto out;
++
+ 	install_module.params = params;
+ 	atomic_set(&install_module.error, 0);
+ 	/*
+@@ -803,6 +855,7 @@ static int tdx_load_module(
+ 		if (ret)
+ 			break;
+ 	}
++out:
+ 	free_seamldr_params(params);
+ 	return ret;
+ }
+-- 
+2.31.1
+

@@ -1,0 +1,31 @@
+From 71a55e7384c6d3499d2bd78124bdae398842e774 Mon Sep 17 00:00:00 2001
+From: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Date: Fri, 17 Dec 2021 15:48:24 +0200
+Subject: [PATCH 1390/1418] virtio-mmio: Disable in TDX guest
+
+For virtualized guests with PCI support, the MMIO method is not needed.
+Disable it when the device filter is enabled to avoid having to harden
+it for TDX.
+
+Signed-off-by: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+---
+ drivers/virtio/virtio_mmio.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/virtio/virtio_mmio.c b/drivers/virtio/virtio_mmio.c
+index 56128b9c46eb..e281cce65a46 100644
+--- a/drivers/virtio/virtio_mmio.c
++++ b/drivers/virtio/virtio_mmio.c
+@@ -562,6 +562,9 @@ static int virtio_mmio_probe(struct platform_device *pdev)
+ 	unsigned long magic;
+ 	int rc;
+ 
++	if (cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
++		return -ENODEV;
++
+ 	vm_dev = devm_kzalloc(&pdev->dev, sizeof(*vm_dev), GFP_KERNEL);
+ 	if (!vm_dev)
+ 		return -ENOMEM;
+-- 
+2.31.1
+

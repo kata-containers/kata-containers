@@ -1,0 +1,353 @@
+From 2d614fc9860ce03d737b3778e62266c175a1716f Mon Sep 17 00:00:00 2001
+From: Kan Liang <kan.liang@linux.intel.com>
+Date: Thu, 7 Apr 2022 03:26:21 -0700
+Subject: [PATCH 1273/1418] perf/x86/intel: Read call chain from CET shadow
+ stack
+
+(Remove the dependency of __cet_get_shstk_addr().
+ The original one can be found in tgl_release branch)
+
+Current call chain in PERF_SAMPLE_CALLCHAIN data format is read from
+frame pointer. However, the frame pointers are off by default on 64bit
+code (and on modern 32bit gccs), so there are many binaries around that
+do not use frame pointers.
+There could be other ways to retrieve the call chain as well, e.g
+dwarf unwinding. But it also only works when the applications are
+correctly annotated everywhere, including any hand written assembler
+code, and it is expensive because it needs to copy the whole stack.
+
+With Control-flow Enforcement Technology, shadow stack can be used as
+another option for accurate call chain.
+
+To apply shadow stack from CET, applications have to be compiled for
+CET, e.g. with gcc option -fcf-protection -mshstk.
+Currently, the Shadow Stack is only enabled for user-mode applications.
+
+Add a knob, cet_shadow_stack_call_chain in sysfs, to enable CET perf
+support. The default value is true. Using the shadow stack to replace
+frame pointer for user-mode applications, if CET is enabled. Otherwise,
+fall back to frame pointer mode.
+
+Optimize for 64 bit process by copying the whole shadow stack in one
+__copy_from_user_nmi() operation.
+
+Current implement is on top of full CET support in binaries for now.
+In theory it might be able to only enable shadow stack. That can be
+done later separately.
+
+Here is an example.
+
+ #gcc -o test_cet test_cet.c -fcf-protection -mshstk
+  -fomit-frame-pointer
+
+Without CET,
+ #echo 0 > /sys/devices/cpu/cet_shadow_stack_call_chain
+ #perf record -e cycles:up -g ./test_cet
+ #perf report --stdio
+ # Samples: 19K of event 'cycles:up'
+ # Event count (approx.): 19093119326
+ #
+ # Children      Self  Command          Shared Object      Symbol
+ # ........  ........  ...............  .................
+ # ......................
+ #
+   100.00%     0.00%  test_cet         [unknown]          [.]
+ 0x49564100002be33d
+            |
+            ---0x49564100002be33d
+               |
+                --99.84%--f3
+
+    99.84%    99.84%  test_cet         test_cet           [.] f3
+            |
+            ---0x49564100002be33d
+               f3
+
+With CET,
+ #echo 1 > /sys/devices/cpu/cet_shadow_stack_call_chain
+ #perf record -e cycles:up -g ./test_cet
+ #perf report --stdio
+ # Children      Self  Command          Shared Object     Symbol
+ # ........  ........  ...............  ................
+ # ......................
+ #
+   100.00%     0.00%  test_cet          test_cet      [.] _start
+            |
+            ---_start
+               __libc_start_main
+               main
+               f1
+               f2
+               |
+                --99.81%--f3
+
+Here is the performance result for 64 bit process.
+
+  #gcc -o test_cet_67 test_cet_67.c -fcf-protection -mshstk -m64
+  #perf record -e instructions:u --call-graph fp -c10000 ./test_cet_67.c
+  (The depth of call chain is 67 for almost all samples.)
+
+FP:               echo 0 > /sys/devices/cpu/cet_shadow_stack_call_chain
+CET shadow stack: echo 1 > /sys/devices/cpu/cet_shadow_stack_call_chain
+
+The latency of perf_callchain_user()(Calculated by ftrace)
+                               Latency (us)
+FP:                            1.84
+CET shadow stack:              0.17
+
+The elapsed time of test_cet_67.
+                               Elapsed time (us)    Overhead
+Baseline (without perf):       26380272
+FP:                            27790702             5.53%
+CET shadow stack:              26967926             2.23%
+
+For 32 bit process, there are no big differences. The performance of CET
+shadow stack is a little bit better than FP.
+
+Signed-off-by: Kan Liang <kan.liang@linux.intel.com>
+---
+ arch/x86/events/core.c       |  10 +++
+ arch/x86/events/intel/core.c | 133 +++++++++++++++++++++++++++++++++++
+ arch/x86/events/perf_event.h |   5 ++
+ 3 files changed, 148 insertions(+)
+
+diff --git a/arch/x86/events/core.c b/arch/x86/events/core.c
+index 6dfa8ddaa60f..7c9fffd50d39 100644
+--- a/arch/x86/events/core.c
++++ b/arch/x86/events/core.c
+@@ -2839,6 +2839,10 @@ perf_callchain_user32(struct pt_regs *regs, struct perf_callchain_entry_ctx *ent
+ 
+ 	fp = compat_ptr(ss_base + regs->bp);
+ 	pagefault_disable();
++
++	if (x86_pmu.store_shadow_stack_user && x86_pmu.store_shadow_stack_user(entry))
++		goto out;
++
+ 	while (entry->nr < entry->max_stack) {
+ 		if (!valid_user_frame(fp, sizeof(frame)))
+ 			break;
+@@ -2851,6 +2855,7 @@ perf_callchain_user32(struct pt_regs *regs, struct perf_callchain_entry_ctx *ent
+ 		perf_callchain_store(entry, cs_base + frame.return_address);
+ 		fp = compat_ptr(ss_base + frame.next_frame);
+ 	}
++out:
+ 	pagefault_enable();
+ 	return 1;
+ }
+@@ -2890,6 +2895,10 @@ perf_callchain_user(struct perf_callchain_entry_ctx *entry, struct pt_regs *regs
+ 		return;
+ 
+ 	pagefault_disable();
++
++	if (x86_pmu.store_shadow_stack_user && x86_pmu.store_shadow_stack_user(entry))
++		goto out;
++
+ 	while (entry->nr < entry->max_stack) {
+ 		if (!valid_user_frame(fp, sizeof(frame)))
+ 			break;
+@@ -2902,6 +2911,7 @@ perf_callchain_user(struct perf_callchain_entry_ctx *entry, struct pt_regs *regs
+ 		perf_callchain_store(entry, frame.return_address);
+ 		fp = (void __user *)frame.next_frame;
+ 	}
++out:
+ 	pagefault_enable();
+ }
+ 
+diff --git a/arch/x86/events/intel/core.c b/arch/x86/events/intel/core.c
+index 1e7bd3677fb6..bf3522587bf3 100644
+--- a/arch/x86/events/intel/core.c
++++ b/arch/x86/events/intel/core.c
+@@ -4578,6 +4578,118 @@ static int intel_pmu_filter_match(struct perf_event *event)
+ 	return cpumask_test_cpu(cpu, &pmu->supported_cpus);
+ }
+ 
++#ifdef CONFIG_X86_SHADOW_STACK
++
++static int
++intel_pmu_store_shadow_stack_user(struct perf_callchain_entry_ctx *ctx_entry)
++{
++	unsigned long left, stack_base, stack_top, return_addr = 0;
++	struct thread_shstk *shstk = &current->thread.shstk;
++	int step = sizeof(unsigned long);
++	int nr = 0;
++
++	/* The callchain space is full */
++	if (ctx_entry->contexts_maxed)
++		return 0;
++
++	/* The shadow stack is not available. */
++	if (!shstk->base || !shstk->size)
++		return 0;
++
++	stack_base = shstk->base + shstk->size;
++	/* TODO: special edition */
++//	stack_top = __cet_get_shstk_addr();
++	rdmsrl(MSR_IA32_PL3_SSP, stack_top);
++
++	if ((stack_base <= stack_top) || ((stack_base - stack_top) > shstk->size))
++		return 0;
++
++#ifdef CONFIG_X86_64
++	if (!any_64bit_mode(current_pt_regs()))
++		step = sizeof(u32);
++#endif
++
++	/*
++	 * Optimization for 64 bit process.
++	 * Copy the whole stack in one operation
++	 */
++	if (step == sizeof(u64)) {
++		struct perf_callchain_entry *entry = ctx_entry->entry;
++		u64 max_nr = (stack_base - stack_top) / sizeof(u64);
++		u64 max_size;
++
++		max_nr = min(max_nr, (u64)(ctx_entry->max_stack - ctx_entry->nr));
++		max_size = max_nr * sizeof(u64);
++
++		if (!access_ok((void __user *)stack_top, max_size))
++			return 0;
++
++		left = __copy_from_user_inatomic(&entry->ip[entry->nr],
++						 (void __user *)stack_top, max_size);
++		max_size -= left;
++		nr = max_size / sizeof(u64);
++		entry->nr += nr;
++		ctx_entry->nr += nr;
++	} else {
++		while ((ctx_entry->nr < ctx_entry->max_stack) && (stack_top < stack_base)) {
++
++			if (!access_ok((void __user *)stack_top, step))
++				break;
++
++			left = __copy_from_user_inatomic(&return_addr, (void __user *)stack_top, step);
++			stack_top += step;
++			if (left != 0)
++				break;
++
++			if (perf_callchain_store(ctx_entry, return_addr))
++				break;
++			nr++;
++		}
++	}
++
++	return nr;
++}
++
++#else
++
++static int
++intel_pmu_store_shadow_stack_user(struct perf_callchain_entry_ctx *ctx_entry)
++{
++	return 0;
++}
++
++#endif
++
++static ssize_t cet_shadow_stack_call_chain_show(struct device *cdev,
++						struct device_attribute *attr,
++						char *buf)
++{
++	return sprintf(buf, "%d\n", x86_pmu.store_shadow_stack_user ? 1 : 0);
++}
++
++static ssize_t cet_shadow_stack_call_chain_store(struct device *cdev,
++						 struct device_attribute *attr,
++						 const char *buf, size_t count)
++{
++	void *fun = NULL;
++	ssize_t ret;
++	bool val;
++
++
++	ret = kstrtobool(buf, &val);
++	if (ret)
++		return ret;
++
++	if (val)
++		fun = intel_pmu_store_shadow_stack_user;
++
++	xchg(&x86_pmu.store_shadow_stack_user, fun);
++
++	return count;
++}
++
++static DEVICE_ATTR_RW(cet_shadow_stack_call_chain);
++
+ PMU_FORMAT_ATTR(offcore_rsp, "config1:0-63");
+ 
+ PMU_FORMAT_ATTR(ldlat, "config1:0-15");
+@@ -5192,6 +5304,7 @@ static DEVICE_ATTR(allow_tsx_force_abort, 0644,
+ static struct attribute *intel_pmu_attrs[] = {
+ 	&dev_attr_freeze_on_smi.attr,
+ 	&dev_attr_allow_tsx_force_abort.attr,
++	&dev_attr_cet_shadow_stack_call_chain.attr,
+ 	NULL,
+ };
+ 
+@@ -5225,6 +5338,14 @@ default_is_visible(struct kobject *kobj, struct attribute *attr, int i)
+ 	if (attr == &dev_attr_allow_tsx_force_abort.attr)
+ 		return x86_pmu.flags & PMU_FL_TFA ? attr->mode : 0;
+ 
++#ifdef CONFIG_X86_SHADOW_STACK
++	if (attr == &dev_attr_cet_shadow_stack_call_chain.attr)
++		return boot_cpu_has(X86_FEATURE_SHSTK) ? attr->mode : 0;
++#else
++	if (attr == &dev_attr_cet_shadow_stack_call_chain.attr)
++		return 0;
++#endif
++
+ 	return attr->mode;
+ }
+ 
+@@ -6147,6 +6268,10 @@ __init int intel_pmu_init(void)
+ 		x86_pmu.num_topdown_events = 4;
+ 		x86_pmu.update_topdown_event = icl_update_topdown_event;
+ 		x86_pmu.set_topdown_event_period = icl_set_topdown_event_period;
++#ifdef CONFIG_X86_SHADOW_STACK
++		if (boot_cpu_has(X86_FEATURE_SHSTK))
++			x86_pmu.store_shadow_stack_user = intel_pmu_store_shadow_stack_user;
++#endif
+ 		pr_cont("Icelake events, ");
+ 		name = "icelake";
+ 		break;
+@@ -6184,6 +6309,10 @@ __init int intel_pmu_init(void)
+ 		x86_pmu.num_topdown_events = 8;
+ 		x86_pmu.update_topdown_event = icl_update_topdown_event;
+ 		x86_pmu.set_topdown_event_period = icl_set_topdown_event_period;
++#ifdef CONFIG_X86_SHADOW_STACK
++		if (boot_cpu_has(X86_FEATURE_SHSTK))
++			x86_pmu.store_shadow_stack_user = intel_pmu_store_shadow_stack_user;
++#endif
+ 		pr_cont("Sapphire Rapids events, ");
+ 		name = "sapphire_rapids";
+ 		break;
+@@ -6229,6 +6358,10 @@ __init int intel_pmu_init(void)
+ 		 * x86_pmu.rtm_abort_event.
+ 		 */
+ 		x86_pmu.rtm_abort_event = X86_CONFIG(.event=0xc9, .umask=0x04);
++#ifdef CONFIG_X86_SHADOW_STACK
++		if (boot_cpu_has(X86_FEATURE_SHSTK))
++			x86_pmu.store_shadow_stack_user = intel_pmu_store_shadow_stack_user;
++#endif
+ 
+ 		td_attr = adl_hybrid_events_attrs;
+ 		mem_attr = adl_hybrid_mem_attrs;
+diff --git a/arch/x86/events/perf_event.h b/arch/x86/events/perf_event.h
+index f549dbd8f20f..06fcc1c1817a 100644
+--- a/arch/x86/events/perf_event.h
++++ b/arch/x86/events/perf_event.h
+@@ -904,6 +904,11 @@ struct x86_pmu {
+ 	int (*aux_output_match) (struct perf_event *event);
+ 
+ 	int (*filter_match)(struct perf_event *event);
++	/*
++	 * Intel CET Shadow Stack
++	 */
++	 int (*store_shadow_stack_user) (struct perf_callchain_entry_ctx *entry);
++
+ 	/*
+ 	 * Hybrid support
+ 	 *
+-- 
+2.31.1
+

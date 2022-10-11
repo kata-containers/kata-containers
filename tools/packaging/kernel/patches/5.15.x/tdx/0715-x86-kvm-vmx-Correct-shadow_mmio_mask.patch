@@ -1,0 +1,27 @@
+From 5232b2200324a631fb9addf5de8fe92a07629fb9 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Tue, 7 Dec 2021 20:47:52 +0800
+Subject: [PATCH 0715/1418] x86/kvm/vmx: Correct shadow_mmio_mask
+
+Fixes: 2b2cf1d7ccb2 ("KVM: x86/mmu: Track shadow MMIO value/mask on a per-VM basis")
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kvm/vmx/vmx.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 39efe7649dc4..3e32ccda893d 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -6976,7 +6976,7 @@ static int vmx_vm_init(struct kvm *kvm)
+ 	 */
+ 	if (enable_ept)
+ 		kvm_mmu_set_mmio_spte_mask(kvm, VMX_EPT_MISCONFIG_WX_VALUE,
+-					   VMX_EPT_MISCONFIG_WX_VALUE, 0);
++					   VMX_EPT_RWX_MASK, 0);
+ 
+ 	if (boot_cpu_has(X86_BUG_L1TF) && enable_ept) {
+ 		switch (l1tf_mitigation) {
+-- 
+2.31.1
+

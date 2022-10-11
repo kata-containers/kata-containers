@@ -1,0 +1,33 @@
+From 1296e8fe6842db443f2ce5c16d2800502fa28e01 Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Thu, 16 Dec 2021 13:39:41 +0800
+Subject: [PATCH 0728/1418] KVM: TDX: add a check in debug TD to avoid the
+ regression in legacy VM
+
+When launching a legacy VM with ept=N, KVM intercepts guest #PF and
+walks the guest page table. Due to current is_debug_td() only checks the
+guest_state_protected flag, KVM will obtain the guest CR3 from VMCS
+in vt_cache_reg(), which is the KVM's CR3, not the guest's CR3. Add a TD
+vcpu check to fix this regression.
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.h b/arch/x86/kvm/vmx/tdx.h
+index 7897115f4156..8648764cfa9c 100644
+--- a/arch/x86/kvm/vmx/tdx.h
++++ b/arch/x86/kvm/vmx/tdx.h
+@@ -152,7 +152,7 @@ static inline bool is_td_vcpu(struct kvm_vcpu *vcpu)
+ 
+ static inline bool is_debug_td(struct kvm_vcpu *vcpu)
+ {
+-	return !vcpu->arch.guest_state_protected;
++	return !vcpu->arch.guest_state_protected && is_td_vcpu(vcpu);
+ }
+ 
+ static inline struct kvm_tdx *to_kvm_tdx(struct kvm *kvm)
+-- 
+2.31.1
+

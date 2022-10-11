@@ -1,0 +1,49 @@
+From c2b724b1394ad8641ae00878c2e6b6df25a99e08 Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Thu, 5 Aug 2021 20:48:39 +0800
+Subject: [PATCH 0920/1418] KVM: x86/vmx: Flip Arch LBREn bit on guest state
+ change
+
+Per spec:"IA32_LBR_CTL.LBREn is saved and cleared on #SMI, and restored
+on RSM. On a warm reset, all LBR MSRs, including IA32_LBR_DEPTH, have their
+values preserved. However, IA32_LBR_CTL.LBREn is cleared to 0, disabling LBRs."
+So clear Arch LBREn bit on #SMI and restore it on RSM manully, also clear the
+bit when guest does warm reset.
+
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/vmx/vmx.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 04ab1f391db9..06ffa942c3f6 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -4523,6 +4523,8 @@ static void vmx_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
+ 	if (!init_event) {
+ 		if (static_cpu_has(X86_FEATURE_ARCH_LBR))
+ 			vmcs_write64(GUEST_IA32_LBR_CTL, 0);
++	} else {
++		flip_arch_lbr_ctl(vcpu, false);
+ 	}
+ }
+ 
+@@ -7879,6 +7881,7 @@ static int vmx_enter_smm(struct kvm_vcpu *vcpu, char *smstate)
+ 	vmx->nested.smm.vmxon = vmx->nested.vmxon;
+ 	vmx->nested.vmxon = false;
+ 	vmx_clear_hlt(vcpu);
++	flip_arch_lbr_ctl(vcpu, false);
+ 	return 0;
+ }
+ 
+@@ -7899,6 +7902,7 @@ static int vmx_leave_smm(struct kvm_vcpu *vcpu, const char *smstate)
+ 
+ 		vmx->nested.smm.guest_mode = false;
+ 	}
++	flip_arch_lbr_ctl(vcpu, true);
+ 	return 0;
+ }
+ 
+-- 
+2.31.1
+

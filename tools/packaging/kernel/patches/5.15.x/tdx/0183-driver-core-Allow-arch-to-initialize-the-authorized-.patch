@@ -1,0 +1,76 @@
+From 665756ca2b440692fac4df7b4df897ad9fda2e80 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Sat, 21 Aug 2021 14:53:50 -0700
+Subject: [PATCH 0183/1418] driver core: Allow arch to initialize the
+ authorized attribute
+
+Authorized device attribute is used to authorize or deauthorize
+the driver probe of the given device. Currently this attribute
+is initialized to "true" (allow all) by default.
+
+But for platforms like TDX guest, in which the host is an untrusted
+entity, it has a requirement to disable all devices by default and
+allow only a trusted list of devices with hardened drivers. So
+define a variable "dev_default_authorization" which is used to
+initialize the "authorized" attribute in device_initialize(). Also
+allow arch code to override the default value by updating
+dev_default_authorization value.
+
+More discussion about the need for device/driver filter and the use
+of allow list can be found in article [1] titled "firewall for
+device drivers".
+
+Also note that USB and Thunderbolt both override this initial value
+in their respective device initializations so this is not a regression
+for those buses.
+
+[1] - https://lwn.net/Articles/865918/
+
+Reviewed-by: Dan Williams <dan.j.williams@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ drivers/base/core.c    | 7 +++++++
+ include/linux/device.h | 2 ++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/drivers/base/core.c b/drivers/base/core.c
+index 249da496581a..2c282b6ada39 100644
+--- a/drivers/base/core.c
++++ b/drivers/base/core.c
+@@ -47,6 +47,12 @@ static int __init sysfs_deprecated_setup(char *arg)
+ early_param("sysfs.deprecated", sysfs_deprecated_setup);
+ #endif
+ 
++/*
++ * Default authorization status set as allow all. It can be
++ * overridden by arch code.
++ */
++bool __ro_after_init dev_default_authorization = true;
++
+ /* Device links support. */
+ static LIST_HEAD(deferred_sync);
+ static unsigned int defer_sync_state_count = 1;
+@@ -2892,6 +2898,7 @@ void device_initialize(struct device *dev)
+ #ifdef CONFIG_SWIOTLB
+ 	dev->dma_io_tlb_mem = &io_tlb_default_mem;
+ #endif
++	dev->authorized = dev_default_authorization;
+ }
+ EXPORT_SYMBOL_GPL(device_initialize);
+ 
+diff --git a/include/linux/device.h b/include/linux/device.h
+index 899be9a2c0cb..c97b1e59d23a 100644
+--- a/include/linux/device.h
++++ b/include/linux/device.h
+@@ -959,6 +959,8 @@ int devtmpfs_mount(void);
+ static inline int devtmpfs_mount(void) { return 0; }
+ #endif
+ 
++extern bool dev_default_authorization;
++
+ /* drivers/base/power/shutdown.c */
+ void device_shutdown(void);
+ 
+-- 
+2.31.1
+

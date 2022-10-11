@@ -1,0 +1,40 @@
+From 8cd257c3152c1713fe6cee16b5a735ff083e1bd7 Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Thu, 24 Mar 2022 15:53:13 +0800
+Subject: [PATCH 1264/1418] x86/cpu/tdx: Check the return value of
+ seam_vmxoff_on_each_cpu
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 1dfcf516ade0..a151cb81065d 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -1593,6 +1593,7 @@ static ssize_t tdx_module_reload_store(struct kobject *kobj,
+ {
+ 	unsigned long val;
+ 	ssize_t ret;
++	int vmxoff_err;
+ 
+ 	ret = kstrtoul(buf, 0, &val);
+ 	if (ret)
+@@ -1611,7 +1612,12 @@ static ssize_t tdx_module_reload_store(struct kobject *kobj,
+ 	default:
+ 		ret = -EINVAL;
+ 	}
+-	seam_vmxoff_on_each_cpu();
++	vmxoff_err = seam_vmxoff_on_each_cpu();
++	if (vmxoff_err) {
++		pr_info("Failed to VMXOFF.\n");
++		if (!ret)
++			ret = vmxoff_err;
++	}
+ unlock:
+ 	mutex_unlock(&tdx_mutex);
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,40 @@
+From baa9aa9b7d9edf6d613000dd545ed68218fab20d Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Wed, 19 Jan 2022 14:30:10 -0700
+Subject: [PATCH 1023/1418] dmaengine: idxd: restore traffic class defaults
+ after wq reset
+
+When clearing the group configurations, the driver fails to restore the
+default setting for DSA 1.x based devices. Add defaults in
+idxd_groups_clear_state() for traffic class configuration.
+
+Fixes: ade8a86b512c ("dmaengine: idxd: Set defaults for GRPCFG traffic class")
+Reported-by: Binuraj Ravindran <binuraj.ravindran@intel.com>
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/device.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index 0854309f1695..f68d7f5f4113 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -783,8 +783,13 @@ static void idxd_groups_clear_state(struct idxd_device *idxd)
+ 		group->use_token_limit = false;
+ 		group->tokens_allowed = 0;
+ 		group->tokens_reserved = 0;
+-		group->tc_a = -1;
+-		group->tc_b = -1;
++		if (idxd->hw.version < DEVICE_VERSION_2 && !tc_override) {
++			group->tc_a = 1;
++			group->tc_b = 1;
++		} else {
++			group->tc_a = -1;
++			group->tc_b = -1;
++		}
+ 	}
+ }
+ 
+-- 
+2.31.1
+

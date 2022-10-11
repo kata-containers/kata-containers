@@ -1,0 +1,29 @@
+From 8562169f502ca8bbd5d6595901f9616723b274e3 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Wed, 26 Jan 2022 14:39:43 -0800
+Subject: [PATCH 1031/1418] dmaengine/idxd: Enable SVA feature by default
+
+User SVA is the essential feature of IDXD, enable it by default.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/dma/idxd/init.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/dma/idxd/init.c b/drivers/dma/idxd/init.c
+index ebf4ef9fdeb6..23cbd7f21201 100644
+--- a/drivers/dma/idxd/init.c
++++ b/drivers/dma/idxd/init.c
+@@ -520,6 +520,9 @@ static int idxd_probe(struct idxd_device *idxd)
+ 		return rc;
+ 
+ 	dev_dbg(dev, "IDXD reset complete\n");
++	rc = iommu_dev_enable_feature(dev, IOMMU_DEV_FEAT_SVA);
++	if (rc)
++		dev_warn(dev, "Unable to turn on SVA feature.\n");
+ 
+ 	if (IS_ENABLED(CONFIG_INTEL_IDXD_SVM) && sva) {
+ 		rc = idxd_enable_system_pasid(idxd);
+-- 
+2.31.1
+

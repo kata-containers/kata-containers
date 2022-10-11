@@ -1,0 +1,40 @@
+From c49e981bc2a5350ad9a48bc0fc6e686f5fc87614 Mon Sep 17 00:00:00 2001
+From: Colin Ian King <colin.king@canonical.com>
+Date: Fri, 15 Oct 2021 13:34:47 +0100
+Subject: [PATCH 0519/1418] dmaengine: Remove redundant initialization of
+ variable err
+
+The variable err is being initialized with a value that is never read, it
+is being updated later on. The assignment is redundant and can be removed
+and move the declaration into the local scope.
+
+Addresses-Coverity: ("Unused value")
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+Link: https://lore.kernel.org/r/20211015123447.27560-1-colin.king@canonical.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/dmaengine.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/dma/dmaengine.c b/drivers/dma/dmaengine.c
+index af3ee288bc11..d9f7c097cfd6 100644
+--- a/drivers/dma/dmaengine.c
++++ b/drivers/dma/dmaengine.c
+@@ -695,13 +695,12 @@ static struct dma_chan *find_candidate(struct dma_device *device,
+  */
+ struct dma_chan *dma_get_slave_channel(struct dma_chan *chan)
+ {
+-	int err = -EBUSY;
+-
+ 	/* lock against __dma_request_channel */
+ 	mutex_lock(&dma_list_mutex);
+ 
+ 	if (chan->client_count == 0) {
+ 		struct dma_device *device = chan->device;
++		int err;
+ 
+ 		dma_cap_set(DMA_PRIVATE, device->cap_mask);
+ 		device->privatecnt++;
+-- 
+2.31.1
+

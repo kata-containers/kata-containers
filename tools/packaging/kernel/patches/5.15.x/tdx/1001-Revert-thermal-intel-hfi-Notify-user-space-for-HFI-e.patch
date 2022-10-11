@@ -1,0 +1,101 @@
+From f0ee57e40364b0654b690028c206be9dec3e03c7 Mon Sep 17 00:00:00 2001
+From: Ricardo Neri <ricardo.neri-calderon@linux.intel.com>
+Date: Fri, 21 Jan 2022 14:09:33 -0800
+Subject: [PATCH 1001/1418] Revert "thermal: intel: hfi: Notify user space for
+ HFI events"
+
+This reverts commit 3dbab40da4094387996e0ec3add52a25d5e723a4.
+---
+ drivers/thermal/intel/Kconfig     |  1 -
+ drivers/thermal/intel/intel_hfi.c | 49 +------------------------------
+ 2 files changed, 1 insertion(+), 49 deletions(-)
+
+diff --git a/drivers/thermal/intel/Kconfig b/drivers/thermal/intel/Kconfig
+index b6a1f777b8e7..d4c6bdcacddb 100644
+--- a/drivers/thermal/intel/Kconfig
++++ b/drivers/thermal/intel/Kconfig
+@@ -104,7 +104,6 @@ config INTEL_HFI
+ 	bool "Intel Hardware Feedback Interface"
+ 	depends on CPU_SUP_INTEL
+ 	depends on SCHED_MC && X86_THERMAL_VECTOR
+-	select THERMAL_NETLINK
+ 	help
+ 	  Select this option to enable the Hardware Feedback Interface. If
+ 	  selected, hardware provides guidance to the operating system on
+diff --git a/drivers/thermal/intel/intel_hfi.c b/drivers/thermal/intel/intel_hfi.c
+index b38d95968fc3..1df24b39f2e6 100644
+--- a/drivers/thermal/intel/intel_hfi.c
++++ b/drivers/thermal/intel/intel_hfi.c
+@@ -24,7 +24,6 @@
+ #include <linux/io.h>
+ #include <linux/slab.h>
+ 
+-#include "../thermal_core.h"
+ #include "intel_hfi.h"
+ 
+ #define THERM_STATUS_CLEAR_PKG_MASK (BIT(1) | BIT(3) | BIT(5) | BIT(7) | \
+@@ -125,52 +124,6 @@ static struct hfi_features hfi_features;
+ static DEFINE_MUTEX(hfi_lock);
+ 
+ #define HFI_UPDATE_INTERVAL	HZ
+-#define HFI_MAX_THERM_NOTIFY_COUNT	16
+-
+-static void get_one_hfi_cap(struct hfi_instance *hfi_instance, int cpu,
+-			    struct hfi_cpu_data *hfi_caps)
+-{
+-	struct hfi_cpu_data *caps;
+-	unsigned long flags;
+-	s16 index;
+-
+-	index = per_cpu(hfi_cpu_info, cpu).index;
+-	if (index < 0)
+-		return;
+-
+-	/* Find the capabilities of @cpu */
+-	raw_spin_lock_irqsave(&hfi_instance->event_lock, flags);
+-	caps = hfi_instance->data + index * hfi_features.cpu_stride;
+-	memcpy(hfi_caps, caps, sizeof(*hfi_caps));
+-	raw_spin_unlock_irqrestore(&hfi_instance->event_lock, flags);
+-}
+-
+-/*
+- * Call update_capabilities() when there are changes in the HFI table.
+- */
+-static void update_capabilities(struct hfi_instance *hfi_instance)
+-{
+-	struct cpu_capacity cpu_caps[HFI_MAX_THERM_NOTIFY_COUNT];
+-	int i = 0, cpu;
+-
+-	for_each_cpu(cpu, hfi_instance->cpus) {
+-		struct hfi_cpu_data caps;
+-
+-		get_one_hfi_cap(hfi_instance, cpu, &caps);
+-		cpu_caps[i].cpu = cpu;
+-		cpu_caps[i].perf = caps.perf_cap;
+-		cpu_caps[i].eff = caps.ee_cap;
+-		++i;
+-		if (i >= HFI_MAX_THERM_NOTIFY_COUNT) {
+-			thermal_genl_capacity_event(HFI_MAX_THERM_NOTIFY_COUNT,
+-						    cpu_caps);
+-			i = 0;
+-		}
+-	}
+-
+-	if (i)
+-		thermal_genl_capacity_event(i, cpu_caps);
+-}
+ 
+ static void hfi_update_work_fn(struct work_struct *work)
+ {
+@@ -181,7 +134,7 @@ static void hfi_update_work_fn(struct work_struct *work)
+ 	if (!hfi_instance)
+ 		return;
+ 
+-	update_capabilities(hfi_instance);
++	/* TODO: Consume update here. */
+ }
+ 
+ void intel_hfi_process_event(__u64 pkg_therm_status_msr_val)
+-- 
+2.31.1
+

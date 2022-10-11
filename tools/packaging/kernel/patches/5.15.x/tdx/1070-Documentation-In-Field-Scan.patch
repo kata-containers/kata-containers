@@ -1,0 +1,150 @@
+From 3455b94c82eb80d208815524d6fc9b57566d6690 Mon Sep 17 00:00:00 2001
+From: Jithu Joseph <jithu.joseph@intel.com>
+Date: Fri, 15 Oct 2021 13:21:52 -0700
+Subject: [PATCH 1070/1418] Documentation: In-Field Scan
+
+Add documentation for In-Field Scan (IFS). This documentation
+describes the basics of IFS, the loading IFS image, chunk
+authentication, running scan and how to check result via sysfs
+as well as tunable parameters.
+
+The CORE_CAPABILITIES MSR enumerates whether IFS is supported.
+
+Originally-by: Kyung Min Park <kyung.min.park@intel.com>
+Signed-off-by: Jithu Joseph <jithu.joseph@intel.com>
+Reviewed-by: Ashok Raj <ashok.raj@intel.com>
+---
+ Documentation/x86/ifs.rst   | 108 ++++++++++++++++++++++++++++++++++++
+ Documentation/x86/index.rst |   1 +
+ 2 files changed, 109 insertions(+)
+ create mode 100644 Documentation/x86/ifs.rst
+
+diff --git a/Documentation/x86/ifs.rst b/Documentation/x86/ifs.rst
+new file mode 100644
+index 000000000000..fa77639f52dd
+--- /dev/null
++++ b/Documentation/x86/ifs.rst
+@@ -0,0 +1,108 @@
++.. SPDX-License-Identifier: GPL-2.0
++
++=============
++In-Field Scan
++=============
++
++Introduction
++------------
++
++In Field Scan (IFS) is a hardware feature to run circuit level tests on
++a CPU core to detect problems that are not caught by parity or ECC checks.
++
++IFS Image
++---------
++
++Intel will provide a firmware file containing the scan tests via
++github [#f1]_.  Similar to microcode there is a separate file for each
++family-model-stepping. The tests in the file are divided into some number
++of "chunks" that can be run individually.
++
++IFS Image Loading
++-----------------
++
++The driver loads the tests into memory reserved BIOS local to each CPU
++socket in a two step process using writes to MSRs to first load the
++SHA hashes for the test. Then the tests themselves. Status MSRs provide
++feedback on the success/failure of these steps. When a new test file
++is installed it can be loaded with::
++
++  # echo 1 > /sys/devices/system/cpu/ifs/reload
++
++Triggering tests
++----------------
++
++Tests are run by synchronizing execution of all threads on a core and then
++writing to the ACTIVATE_SCAN MSR on all threads. Instruction execution
++continues when:
++
++1) All tests have completed.
++2) Execution was interrupted.
++3) A test detected a problem.
++
++In all cases reading the SCAN_STATUS MSR provides details on what
++happened. Interrupted tests may be restarted.
++
++The IFS driver provides interfaces from /sys to control execution:
++
++Run tests on all cores::
++
++  # echo 1 > /sys/devices/system/cpu/ifs/run_test
++
++Scans run on each core sequentially by logical CPU number (when HT is
++enabled this only runs the tests once for each core).
++
++Test a single core::
++
++  # echo 1 > /sys/devices/system/cpu/cpu#/ifs/run_test
++
++Results of the tests are also provided in /sys::
++
++  $ cat /sys/devices/system/cpu/ifs/status
++  pass
++
++global status. Shows the most serious status across
++all cores (fail > untested > pass)
++
++There are files showing which CPUs are in each of the
++pass/untested/fail states::
++
++  $ cat /sys/devices/system/cpu/ifs/cpu_fail_list
++  $ cat /sys/devices/system/cpu/ifs/cpu_untested_list
++  $ cat /sys/devices/system/cpu/ifs/cpu_pass_list
++  0-127
++
++Also files in the per-CPU directories showing the status
++of the most recent test on that core::
++
++  $ cat /sys/devices/system/cpu/cpu#/ifs/status
++  pass
++  $ cat /sys/devices/system/cpu/cpu#/ifs/details
++  8081
++
++The details file reports the hex value of the SCAN_STATUS MSR.  Note that
++the error_code field may contain driver defined software code not defined
++in the Intel SDM.
++
++Current driver limitations
++--------------------------
++
++1) The ACTIVATE_SCAN MSR allows for running any consecutive subrange or
++available tests. But the driver always tries to run all tests and only
++uses the subrange feature to restart an interrupted test.
++
++2) Hardware allows for some number of cores to be tested in parallel.
++The driver does not make use of this, it only tests one core at a time.
++
++Tunable Parameters
++------------------
++
++This module accepts two tunable parameters. These could be provided at
++load time or can be modified at runtime through module parameter.
++(/sys/module/ifs/parameters/<parameter_name>). The parameters are as
++described below.
++
++1. noint: When set, system interrupts are not allowed to interrupt an ifs.
++2. retry: Maximum retry counter when the test is not executed due to an event such as interrupt.
++
++.. [#f1] https://github.com/intel
+diff --git a/Documentation/x86/index.rst b/Documentation/x86/index.rst
+index 982c8af853b9..48a65ec15d5b 100644
+--- a/Documentation/x86/index.rst
++++ b/Documentation/x86/index.rst
+@@ -34,6 +34,7 @@ x86-specific Documentation
+    usb-legacy-support
+    i386/index
+    x86_64/index
++   ifs
+    sva
+    sgx
+    features
+-- 
+2.31.1
+

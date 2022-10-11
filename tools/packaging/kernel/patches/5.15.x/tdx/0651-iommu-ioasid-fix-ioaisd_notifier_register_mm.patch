@@ -1,0 +1,45 @@
+From a898fdc74232f42d7be08224c67c241536f944b0 Mon Sep 17 00:00:00 2001
+From: Wu Hao <hao.wu@intel.com>
+Date: Wed, 31 Mar 2021 12:40:32 +0800
+Subject: [PATCH 0651/1418] iommu/ioasid: fix ioaisd_notifier_register_mm
+
+still set token and nb for pending registration.
+
+Signed-off-by: Wu Hao <hao.wu@intel.com>
+---
+ drivers/iommu/ioasid.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/iommu/ioasid.c b/drivers/iommu/ioasid.c
+index fd3f5729c71d..8b66ca689308 100644
+--- a/drivers/iommu/ioasid.c
++++ b/drivers/iommu/ioasid.c
+@@ -1250,11 +1250,16 @@ int ioasid_register_notifier_mm(struct mm_struct *mm, struct notifier_block *nb)
+ 			goto exit_unlock;
+ 		}
+ 	}
++
+ 	curr = kzalloc(sizeof(*curr), GFP_ATOMIC);
+ 	if (!curr) {
+ 		ret = -ENOMEM;
+ 		goto exit_unlock;
+ 	}
++
++	curr->token = mm;
++	curr->nb = nb;
++
+ 	/* Check if the token has an existing set */
+ 	set = ioasid_find_mm_set(mm);
+ 	if (!set) {
+@@ -1270,8 +1275,6 @@ int ioasid_register_notifier_mm(struct mm_struct *mm, struct notifier_block *nb)
+ 			ret = -EBUSY;
+ 			goto exit_free;
+ 		}
+-		curr->token = mm;
+-		curr->nb = nb;
+ 		curr->active = true;
+ 		curr->set = set;
+ 
+-- 
+2.31.1
+

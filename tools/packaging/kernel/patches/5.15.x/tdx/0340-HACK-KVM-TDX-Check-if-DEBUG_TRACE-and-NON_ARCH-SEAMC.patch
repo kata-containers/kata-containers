@@ -1,0 +1,137 @@
+From 132992807c22427e0dbcbe1888e138031ea19d04 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Wed, 30 Jun 2021 13:30:06 +0800
+Subject: [PATCH 0340/1418] *** HACK *** KVM: TDX: Check if DEBUG_TRACE and
+ NON_ARCH SEAMCALL available
+
+DEBUG_TRACE related SEAMCALL and NON-ARCH SEAMCALL are Intel internal
+debugging purpose SEAMCALLs. They are supported only with specific TDX
+module builds.
+
+Since there is no (architectural) way to determine if they are available or
+not, try them unconditionally to detect the availability.
+
+If DEBUG TRACE related SEAMCALL is not available, there's no need to
+expose debug fs entries for configuring debug trace stuffs.
+
+Originally-from: Isaku Yamahata <isaku.yamahata@intel.com>
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/tdx_host.h   |  7 +++++++
+ arch/x86/kernel/cpu/tdx/tdx-ops.h | 34 ++++++++++++++++++++++++++++++-
+ arch/x86/kernel/cpu/tdx/tdx.c     | 26 ++++++++++++++++-------
+ 3 files changed, 59 insertions(+), 8 deletions(-)
+
+diff --git a/arch/x86/include/asm/tdx_host.h b/arch/x86/include/asm/tdx_host.h
+index b37705b1bdb9..797b2629e403 100644
+--- a/arch/x86/include/asm/tdx_host.h
++++ b/arch/x86/include/asm/tdx_host.h
+@@ -55,6 +55,13 @@ extern u32 tdx_nr_keyids __read_mostly;
+ extern u32 tdx_seam_keyid __read_mostly;
+ 
+ bool range_is_tdx_memory(phys_addr_t start, phys_addr_t end);
++
++/* Debug configuration SEAMCALLs */
++extern bool is_debug_seamcall_available __read_mostly;
++
++/* Non-architectural configuration SEAMCALLs */
++extern bool is_nonarch_seamcall_available __read_mostly;
++
+ #else
+ static inline const char *tdx_seamcall_error_name(u64 error_code)
+ {
+diff --git a/arch/x86/kernel/cpu/tdx/tdx-ops.h b/arch/x86/kernel/cpu/tdx/tdx-ops.h
+index 22f5ff3d32fa..79adfe6e0519 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx-ops.h
++++ b/arch/x86/kernel/cpu/tdx/tdx-ops.h
+@@ -43,8 +43,40 @@ static inline u64 tdh_sys_tdmr_config(u64 tdmr, int nr_entries, int hkid)
+ 
+ static inline u64 tdh_trace_seamcalls(u64 level)
+ {
+-	return seamcall(SEAMCALL_TDDEBUGCONFIG,
++	u64 err;
++
++	if (is_debug_seamcall_available) {
++		err = seamcall(SEAMCALL_TDDEBUGCONFIG,
+ 			DEBUGCONFIG_SET_TRACE_LEVEL, level, 0, 0, NULL);
++		if (err == TDX_OPERAND_INVALID) {
++			pr_warn("TDX module doesn't support DEBUG TRACE SEAMCALL API\n");
++			is_debug_seamcall_available = false;
++		} else if (err) {
++			pr_err_ratelimited("SEAMCALL[TDDBUTCONFIG] failed on cpu %d: %s (0x%llx)\n",
++					smp_processor_id(),
++					tdx_seamcall_error_name(err), err);
++		}
++	}
++
++	return err;
++}
++
++static inline void tdxmode(bool intercept_vmexits, u64 intercept_bitmap)
++{
++	u64 err;
++
++	if (is_nonarch_seamcall_available) {
++		err = seamcall(SEAMCALL_TDXMODE, intercept_vmexits,
++			intercept_bitmap, 0, 0, NULL);
++		if (err == TDX_OPERAND_INVALID) {
++			pr_warn("TDX module doesn't support NON-ARCH SEAMCALL API\n");
++			is_nonarch_seamcall_available = false;
++		} else if (err) {
++			pr_err_ratelimited("SEAMCALL[TDXMODE] failed on cpu %d: %s (0x%llx)\n",
++					smp_processor_id(),
++					tdx_seamcall_error_name(err), err);
++		}
++	}
+ }
+ 
+ #endif /* __TDX_OPS_H */
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index eeebb3230958..0baa8eec5b78 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -134,6 +134,12 @@ enum TDX_MODULE_STATE {
+ /* TODO: export the state via sysfs. */
+ static enum TDX_MODULE_STATE tdx_module_state __ro_after_init;
+ 
++bool is_debug_seamcall_available __ro_after_init = true;
++EXPORT_SYMBOL_GPL(is_debug_seamcall_available);
++
++bool is_nonarch_seamcall_available __ro_after_init = true;
++EXPORT_SYMBOL_GPL(is_nonarch_seamcall_available);
++
+ /* TDX system information returned by TDH_SYS_INFO. */
+ static struct tdsysinfo_struct *tdx_tdsysinfo;
+ 
+@@ -983,14 +989,20 @@ static int __init __tdx_init_module(void)
+ 		goto out;
+ 
+ 	/*
+-	 * Tracing is on by default, disable it before INITTDMR which causes
+-	 * too many debug messages to take long time.
++	 * Detect if debug and non-arch seamcall available.
++	 *
++	 * Even though tracing level is ALL level by default, it needs to set
++	 * it explicitly to check if debug seamcall available.
+ 	 */
+-	if (!trace_boot_seamcalls) {
+-		ret = tdh_trace_seamcalls(DEBUGCONFIG_TRACE_CUSTOM);
+-		if (ret)
+-			pr_err("failed to set trace level to DEBUGCONFIG_TRACE_CUSTOM.\n");
+-	}
++	if (trace_boot_seamcalls)
++		tdh_trace_seamcalls(DEBUGCONFIG_TRACE_ALL);
++	else
++		/*
++		 * Tracing is on by default, disable it before INITTDMR which
++		 * causes too many debug messages to take long time.
++		 */
++		tdh_trace_seamcalls(DEBUGCONFIG_TRACE_CUSTOM);
++	tdxmode(false, 0);
+ 
+ 	ret = tdx_init_tdmrs();
+ out:
+-- 
+2.31.1
+

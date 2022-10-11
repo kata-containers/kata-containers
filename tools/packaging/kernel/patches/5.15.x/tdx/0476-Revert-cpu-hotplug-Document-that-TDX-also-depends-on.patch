@@ -1,0 +1,43 @@
+From fbd350dbef6fae76b6524134c366a317aa194008 Mon Sep 17 00:00:00 2001
+From: Kai Huang <kai.huang@intel.com>
+Date: Mon, 13 Sep 2021 18:41:48 +1200
+Subject: [PATCH 0476/1418] Revert "cpu/hotplug: Document that TDX also depends
+ on booting CPUs once"
+
+This reverts commit 6d4d5c6c9e6d4ae6b6f64b48dc82523832de7abd.
+
+Before new P-SEAMLDR, TDH.SYS.INITLP was done for each cpu when APs are
+brought up in smp_init(), therefore the logic, which allows to bring up
+slibling cpu temporarily even when 'nosmp' is true to set CR4.MCE to all
+cpus, can also be used to call TDH.SYS.INITLP for all cpus, allowing
+being able to use TDX when 'nosmt' is true.
+
+This cannot work anymore with new P-SEAMLDR, because with P-SEAMLDR,
+TDH.SYS.INIT is done via IPI call, and in case of 'nosmt', slibling
+cpus are not online therefore unable to receive IPI.
+
+Revert the original patch to remove the incorrect comment.
+
+Signed-off-by: Kai Huang <kai.huang@intel.com>
+---
+ kernel/cpu.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/kernel/cpu.c b/kernel/cpu.c
+index b99ed76a0261..192e43a87407 100644
+--- a/kernel/cpu.c
++++ b/kernel/cpu.c
+@@ -457,10 +457,6 @@ static inline bool cpu_smt_allowed(unsigned int cpu)
+ 	 * that the init code can get a chance to set CR4.MCE on each
+ 	 * CPU. Otherwise, a broadcasted MCE observing CR4.MCE=0b on any
+ 	 * core will shutdown the machine.
+-	 *
+-	 * Intel TDX also requires running TDH_SYS_LP_INIT on all logical CPUs
+-	 * during boot, booting all CPUs once allows TDX to play nice with
+-	 * 'nosmt'.
+ 	 */
+ 	return !cpumask_test_cpu(cpu, &cpus_booted_once_mask);
+ }
+-- 
+2.31.1
+

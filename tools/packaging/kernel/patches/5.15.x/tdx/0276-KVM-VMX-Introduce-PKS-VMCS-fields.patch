@@ -1,0 +1,67 @@
+From c381771a5c13a65b36013fca4387a5e3dc916154 Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Mon, 10 Feb 2020 16:44:56 +0800
+Subject: [PATCH 0276/1418] KVM: VMX: Introduce PKS VMCS fields
+
+PKS(Protection Keys for Supervisor Pages) is a feature that extends the
+Protection Key architecture to support thread-specific permission
+restrictions on supervisor pages.
+
+A new PKS MSR(PKRS) is defined in kernel to support PKS, which holds a
+set of permissions associated with each protection domain.
+
+Two VMCS fields {HOST,GUEST}_IA32_PKRS are introduced in
+{host,guest}-state area to store the respective values of PKRS.
+
+Every VM exit saves PKRS into guest-state area.
+If VM_EXIT_LOAD_IA32_PKRS = 1, VM exit loads PKRS from the host-state
+area.
+If VM_ENTRY_LOAD_IA32_PKRS = 1, VM entry loads PKRS from the guest-state
+area.
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+Reviewed-by: Jim Mattson <jmattson@google.com>
+---
+ arch/x86/include/asm/vmx.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/x86/include/asm/vmx.h b/arch/x86/include/asm/vmx.h
+index b79b6438acaa..0416ee6a15ba 100644
+--- a/arch/x86/include/asm/vmx.h
++++ b/arch/x86/include/asm/vmx.h
+@@ -101,6 +101,7 @@
+ #define VM_EXIT_CLEAR_BNDCFGS                   0x00800000
+ #define VM_EXIT_PT_CONCEAL_PIP			0x01000000
+ #define VM_EXIT_CLEAR_IA32_RTIT_CTL		0x02000000
++#define VM_EXIT_LOAD_IA32_PKRS			0x20000000
+ 
+ #define VM_EXIT_ALWAYSON_WITHOUT_TRUE_MSR	0x00036dff
+ 
+@@ -114,6 +115,7 @@
+ #define VM_ENTRY_LOAD_BNDCFGS                   0x00010000
+ #define VM_ENTRY_PT_CONCEAL_PIP			0x00020000
+ #define VM_ENTRY_LOAD_IA32_RTIT_CTL		0x00040000
++#define VM_ENTRY_LOAD_IA32_PKRS			0x00400000
+ 
+ #define VM_ENTRY_ALWAYSON_WITHOUT_TRUE_MSR	0x000011ff
+ 
+@@ -256,12 +258,16 @@ enum vmcs_field {
+ 	GUEST_BNDCFGS_HIGH              = 0x00002813,
+ 	GUEST_IA32_RTIT_CTL		= 0x00002814,
+ 	GUEST_IA32_RTIT_CTL_HIGH	= 0x00002815,
++	GUEST_IA32_PKRS			= 0x00002818,
++	GUEST_IA32_PKRS_HIGH		= 0x00002819,
+ 	HOST_IA32_PAT			= 0x00002c00,
+ 	HOST_IA32_PAT_HIGH		= 0x00002c01,
+ 	HOST_IA32_EFER			= 0x00002c02,
+ 	HOST_IA32_EFER_HIGH		= 0x00002c03,
+ 	HOST_IA32_PERF_GLOBAL_CTRL	= 0x00002c04,
+ 	HOST_IA32_PERF_GLOBAL_CTRL_HIGH	= 0x00002c05,
++	HOST_IA32_PKRS			= 0x00002c06,
++	HOST_IA32_PKRS_HIGH		= 0x00002c07,
+ 	PIN_BASED_VM_EXEC_CONTROL       = 0x00004000,
+ 	CPU_BASED_VM_EXEC_CONTROL       = 0x00004002,
+ 	EXCEPTION_BITMAP                = 0x00004004,
+-- 
+2.31.1
+

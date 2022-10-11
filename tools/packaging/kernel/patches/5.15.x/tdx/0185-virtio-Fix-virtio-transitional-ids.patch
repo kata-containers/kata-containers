@@ -1,0 +1,47 @@
+From 8aa96964095fac6ee6bfe77dbfde40bca318227f Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Wed, 29 Sep 2021 21:31:25 -0700
+Subject: [PATCH 0185/1418] virtio: Fix virtio transitional ids
+
+Commit d61914ea6ada ("virtio: update virtio id table, add
+transitional ids") adds transitional virtio PCI IDs. But it uses the ID
+range (1000-1009). But as per virtio spec [1], transitional PCI ID
+range is (0x1000-0x1009).
+
+So modify the IDs to use hex values (0x1000-0x1009).
+
+[1] - https://docs.oasis-open.org/virtio/virtio/v1.1/virtio-v1.1.html
+
+Fixes: d61914ea6ada ("virtio: update virtio id table, add transitional ids")
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ include/uapi/linux/virtio_ids.h | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/include/uapi/linux/virtio_ids.h b/include/uapi/linux/virtio_ids.h
+index 80d76b75bccd..7aa2eb766205 100644
+--- a/include/uapi/linux/virtio_ids.h
++++ b/include/uapi/linux/virtio_ids.h
+@@ -73,12 +73,12 @@
+  * Virtio Transitional IDs
+  */
+ 
+-#define VIRTIO_TRANS_ID_NET		1000 /* transitional virtio net */
+-#define VIRTIO_TRANS_ID_BLOCK		1001 /* transitional virtio block */
+-#define VIRTIO_TRANS_ID_BALLOON		1002 /* transitional virtio balloon */
+-#define VIRTIO_TRANS_ID_CONSOLE		1003 /* transitional virtio console */
+-#define VIRTIO_TRANS_ID_SCSI		1004 /* transitional virtio SCSI */
+-#define VIRTIO_TRANS_ID_RNG		1005 /* transitional virtio rng */
+-#define VIRTIO_TRANS_ID_9P		1009 /* transitional virtio 9p console */
++#define VIRTIO_TRANS_ID_NET		0x1000 /* transitional virtio net */
++#define VIRTIO_TRANS_ID_BLOCK		0x1001 /* transitional virtio block */
++#define VIRTIO_TRANS_ID_BALLOON		0x1002 /* transitional virtio balloon */
++#define VIRTIO_TRANS_ID_CONSOLE		0x1003 /* transitional virtio console */
++#define VIRTIO_TRANS_ID_SCSI		0x1004 /* transitional virtio SCSI */
++#define VIRTIO_TRANS_ID_RNG		0x1005 /* transitional virtio rng */
++#define VIRTIO_TRANS_ID_9P		0x1009 /* transitional virtio 9p console */
+ 
+ #endif /* _LINUX_VIRTIO_IDS_H */
+-- 
+2.31.1
+

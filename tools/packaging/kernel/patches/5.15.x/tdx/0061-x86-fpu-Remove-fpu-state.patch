@@ -1,0 +1,65 @@
+From 0eb22dca5a664bc6ebc3f27de624f42d3b132faf Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 13 Oct 2021 16:55:42 +0200
+Subject: [PATCH 0061/1418] x86/fpu: Remove fpu::state
+
+All users converted. Remove it along with the sanity checks.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211013145322.765063318@linutronix.de
+---
+ arch/x86/include/asm/fpu/types.h | 18 +++++++-----------
+ arch/x86/kernel/fpu/init.c       |  4 ----
+ 2 files changed, 7 insertions(+), 15 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/types.h b/arch/x86/include/asm/fpu/types.h
+index 3bb6277efbb5..297e3b4920cb 100644
+--- a/arch/x86/include/asm/fpu/types.h
++++ b/arch/x86/include/asm/fpu/types.h
+@@ -352,20 +352,16 @@ struct fpu {
+ 	struct fpstate			*fpstate;
+ 
+ 	/*
+-	 * @state:
++	 * @__fpstate:
+ 	 *
+-	 * In-memory copy of all FPU registers that we save/restore
+-	 * over context switches. If the task is using the FPU then
+-	 * the registers in the FPU are more recent than this state
+-	 * copy. If the task context-switches away then they get
+-	 * saved here and represent the FPU state.
++	 * Initial in-memory storage for FPU registers which are saved in
++	 * context switch and when the kernel uses the FPU. The registers
++	 * are restored from this storage on return to user space if they
++	 * are not longer containing the tasks FPU register state.
+ 	 */
+-	union {
+-		struct fpstate			__fpstate;
+-		union fpregs_state		state;
+-	};
++	struct fpstate			__fpstate;
+ 	/*
+-	 * WARNING: 'state' is dynamically-sized.  Do not put
++	 * WARNING: '__fpstate' is dynamically-sized.  Do not put
+ 	 * anything after it here.
+ 	 */
+ };
+diff --git a/arch/x86/kernel/fpu/init.c b/arch/x86/kernel/fpu/init.c
+index b524cd053114..cffbaf491886 100644
+--- a/arch/x86/kernel/fpu/init.c
++++ b/arch/x86/kernel/fpu/init.c
+@@ -184,10 +184,6 @@ static void __init fpu__init_task_struct_size(void)
+ 	CHECK_MEMBER_AT_END_OF(struct thread_struct, fpu);
+ 	CHECK_MEMBER_AT_END_OF(struct task_struct, thread);
+ 
+-	BUILD_BUG_ON(sizeof(struct fpstate) != sizeof(union fpregs_state));
+-	BUILD_BUG_ON(offsetof(struct thread_struct, fpu.state) !=
+-		     offsetof(struct thread_struct, fpu.__fpstate));
+-
+ 	arch_task_struct_size = task_size;
+ }
+ 
+-- 
+2.31.1
+

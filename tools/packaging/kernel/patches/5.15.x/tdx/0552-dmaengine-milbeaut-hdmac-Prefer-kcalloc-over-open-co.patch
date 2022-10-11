@@ -1,0 +1,42 @@
+From 9f1067eb6e3db92f7c45acdf5cc829f7d8e65312 Mon Sep 17 00:00:00 2001
+From: Len Baker <len.baker@gmx.com>
+Date: Sat, 4 Sep 2021 16:58:13 +0200
+Subject: [PATCH 0552/1418] dmaengine: milbeaut-hdmac: Prefer kcalloc over open
+ coded arithmetic
+
+As noted in the "Deprecated Interfaces, Language Features, Attributes,
+and Conventions" documentation [1], size calculations (especially
+multiplication) should not be performed in memory allocator (or similar)
+function arguments due to the risk of them overflowing. This could lead
+to values wrapping around and a smaller allocation being made than the
+caller was expecting. Using those allocations could lead to linear
+overflows of heap memory and other misbehaviors.
+
+So, use the purpose specific kcalloc() function instead of the argument
+size * count in the kzalloc() function.
+
+[1] https://www.kernel.org/doc/html/v5.14/process/deprecated.html#open-coded-arithmetic-in-allocator-arguments
+
+Signed-off-by: Len Baker <len.baker@gmx.com>
+Link: https://lore.kernel.org/r/20210904145813.5161-1-len.baker@gmx.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/milbeaut-hdmac.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/dma/milbeaut-hdmac.c b/drivers/dma/milbeaut-hdmac.c
+index a8cfb59f6efe..1b0a95892627 100644
+--- a/drivers/dma/milbeaut-hdmac.c
++++ b/drivers/dma/milbeaut-hdmac.c
+@@ -269,7 +269,7 @@ milbeaut_hdmac_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
+ 	if (!md)
+ 		return NULL;
+ 
+-	md->sgl = kzalloc(sizeof(*sgl) * sg_len, GFP_NOWAIT);
++	md->sgl = kcalloc(sg_len, sizeof(*sgl), GFP_NOWAIT);
+ 	if (!md->sgl) {
+ 		kfree(md);
+ 		return NULL;
+-- 
+2.31.1
+

@@ -1,0 +1,34 @@
+From be1a98a61e668b43a53a952e7961ccb6e96cef74 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Wed, 8 Dec 2021 10:27:01 +0800
+Subject: [PATCH 0717/1418] *** HACK *** x86/kvm/tdp_mmu: Only disable TDP mmu
+ for TD guest
+
+leave it's default state to normal x86 guest.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/mmu/tdp_mmu.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/mmu/tdp_mmu.c b/arch/x86/kvm/mmu/tdp_mmu.c
+index a2bd16ee32bf..117214a80a2a 100644
+--- a/arch/x86/kvm/mmu/tdp_mmu.c
++++ b/arch/x86/kvm/mmu/tdp_mmu.c
+@@ -16,7 +16,12 @@ module_param_named(tdp_mmu, tdp_mmu_enabled, bool, 0644);
+ /* Initializes the TDP MMU for the VM, if enabled. */
+ bool kvm_mmu_init_tdp_mmu(struct kvm *kvm)
+ {
+-	if (!tdp_enabled || !READ_ONCE(tdp_mmu_enabled))
++	/*
++	 * FIXME: At this time point TD guest doesn't support TDP MMU
++	 * Remove this check later when it's supproted.
++	 */
++	if (!tdp_enabled || !READ_ONCE(tdp_mmu_enabled) ||
++	    kvm->arch.vm_type == KVM_X86_TDX_VM)
+ 		return false;
+ 
+ 	/* This should not be changed for the lifetime of the VM. */
+-- 
+2.31.1
+

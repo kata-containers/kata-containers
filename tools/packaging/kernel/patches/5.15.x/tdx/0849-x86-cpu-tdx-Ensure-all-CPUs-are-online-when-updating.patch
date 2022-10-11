@@ -1,0 +1,38 @@
+From 96cec0c21577714a87968bbb96b4651c372df0b6 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Tue, 21 Dec 2021 15:29:27 +0800
+Subject: [PATCH 0849/1418] x86/cpu/tdx: Ensure all CPUs are online when
+ updating TDX module
+
+SEAMLDR.INSTALL and other SEAMCALLs are expected to be invoked on
+all CPUs to load and initialize a TDX module.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index d351ace13772..5d169b6dd71c 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -1479,6 +1479,16 @@ int tdx_module_reload(void)
+ 	int ret, cpu;
+ 
+ 	cpus_read_lock();
++	/*
++	 * Initialization of TDX module needs to involve all CPUs.  Ensure all
++	 * CPUs are online.  All CPUs are required to be initialized by
++	 * TDH.SYS.LP.INIT otherwise TDH.SYS.CONFIG fails.
++	 */
++	if (!cpumask_equal(cpu_present_mask, cpu_online_mask)) {
++		ret = -EINVAL;
++		goto unlock;
++	}
++
+ 	ret = tdx_load_module_late();
+ 	if (ret)
+ 		goto unlock;
+-- 
+2.31.1
+

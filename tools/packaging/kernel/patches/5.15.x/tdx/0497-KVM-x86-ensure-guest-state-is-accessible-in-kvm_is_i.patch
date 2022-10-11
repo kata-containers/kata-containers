@@ -1,0 +1,43 @@
+From 6f0ba9ec5afe537b60e2d2148e19180576e167f5 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Wed, 27 Oct 2021 16:55:19 +0800
+Subject: [PATCH 0497/1418] KVM: x86: ensure guest state is accessible in
+ kvm_is_in_guest()
+
+perf subsystem relies on kvm_is_in_guest() to decide which IP
+(guest's or host's) to record. For guest with protected state,
+no way to retrieve guest IP. Attempting to do so causes guest
+being destroyed.
+
+Return false from kvm_is_in_guest() if guest state is protected.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kvm/x86.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index b443d5c6651e..b15ac4b61675 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -8399,7 +8399,16 @@ EXPORT_PER_CPU_SYMBOL_GPL(current_vcpu);
+ 
+ int kvm_is_in_guest(void)
+ {
+-	return __this_cpu_read(current_vcpu) != NULL;
++	struct kvm_vcpu *vcpu = __this_cpu_read(current_vcpu);
++
++	/*
++	 * If kvm is in guest, perf subsystem records guest IP. Ensure
++	 * guest state is accessible.
++	 */
++	if (vcpu && !vcpu->arch.guest_state_protected)
++		return true;
++
++	return false;
+ }
+ 
+ static int kvm_is_user_mode(void)
+-- 
+2.31.1
+

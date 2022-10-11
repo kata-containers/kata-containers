@@ -1,0 +1,47 @@
+From 73d94fef1a3476a4c13b971a0a1ca106c8a96edf Mon Sep 17 00:00:00 2001
+From: Michael Tretter <m.tretter@pengutronix.de>
+Date: Thu, 26 Aug 2021 11:47:42 +0200
+Subject: [PATCH 0514/1418] dmaengine: zynqmp_dma: fix lockdep warning in
+ tasklet
+
+The tasklet that handles the completed dma transfers uses spin_unlock
+for unlocking a spin lock that was previously locked with
+spin_lock_irqsave.
+
+This caused the following lockdep warning about an inconsistent lock
+state:
+
+	inconsistent {HARDIRQ-ON-W} -> {IN-HARDIRQ-W} usage.
+
+We must use spin_lock_irqsave, because it is possible to queue DMA
+transfers from an irq handler.
+
+Replace the spin_unlock and spin_lock by spin_unlock_irqrestore and
+spin_lock_irqsave.
+
+Signed-off-by: Michael Tretter <m.tretter@pengutronix.de>
+Link: https://lore.kernel.org/r/20210826094742.1302009-8-m.tretter@pengutronix.de
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/xilinx/zynqmp_dma.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/dma/xilinx/zynqmp_dma.c b/drivers/dma/xilinx/zynqmp_dma.c
+index b4220cb88da6..54adac6391ef 100644
+--- a/drivers/dma/xilinx/zynqmp_dma.c
++++ b/drivers/dma/xilinx/zynqmp_dma.c
+@@ -611,9 +611,9 @@ static void zynqmp_dma_chan_desc_cleanup(struct zynqmp_dma_chan *chan)
+ 		callback = desc->async_tx.callback;
+ 		callback_param = desc->async_tx.callback_param;
+ 		if (callback) {
+-			spin_unlock(&chan->lock);
++			spin_unlock_irqrestore(&chan->lock, irqflags);
+ 			callback(callback_param);
+-			spin_lock(&chan->lock);
++			spin_lock_irqsave(&chan->lock, irqflags);
+ 		}
+ 
+ 		/* Run any dependencies, then free the descriptor */
+-- 
+2.31.1
+

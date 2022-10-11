@@ -1,0 +1,79 @@
+From 29c3f74857c342a11a4f7ff6f924cededbc0ce44 Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Tue, 16 Nov 2021 02:18:33 -0800
+Subject: [PATCH 0698/1418] kvm: x86: Check guest permission when
+ KVM_SET_CPUID2
+
+Guest permission should be set by userspace VMM before vcpu creation. To
+avoid permission failure at guest runtime, KVM checks the permissions of
+the vcpu for the dynamic extend features at kvm_vcpu_ioctl_set_cpuid2()
+time, when QEMU wants to advertise the feature. If
+kvm_vcpu_ioctl_set_cpuid2() succeeds, then there is no need to further
+check permission in reallocation path at runtime.
+
+If guest has no permission, propagate the failure to userspace VMM and
+reply on userspace handling for the error.
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+---
+ arch/x86/kvm/cpuid.c | 30 ++++++++++++++++++++++++++++++
+ 1 file changed, 30 insertions(+)
+
+diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c
+index 1f65bcfcbfbb..110eb0f58239 100644
+--- a/arch/x86/kvm/cpuid.c
++++ b/arch/x86/kvm/cpuid.c
+@@ -18,6 +18,7 @@
+ #include <asm/processor.h>
+ #include <asm/user.h>
+ #include <asm/fpu/xstate.h>
++#include <asm/fpu/api.h>
+ #include <asm/sgx.h>
+ #include "cpuid.h"
+ #include "lapic.h"
+@@ -106,6 +107,29 @@ void kvm_update_pv_runtime(struct kvm_vcpu *vcpu)
+ 		vcpu->arch.pv_cpuid.features = best->eax;
+ }
+ 
++static int kvm_check_dyn_feature_perm(struct kvm_vcpu *vcpu)
++{
++	struct kvm_cpuid_entry2 *best;
++	unsigned long mask = XFEATURE_MASK_USER_DYNAMIC;
++	int bit = 0;
++
++	for_each_set_bit_from(bit, &mask, 8 * sizeof(mask)) {
++		switch (bit) {
++		case XFEATURE_XTILE_DATA:
++			best = kvm_find_cpuid_entry(vcpu, 7, 0);
++			if (best && cpuid_entry_has(best, X86_FEATURE_AMX_TILE)) {
++				if (!(xstate_get_guest_group_perm() &
++					 XFEATURE_MASK_XTILE_DATA))
++					return -EINVAL;
++			}
++			break;
++		default:
++			break;
++		}
++	}
++	return 0;
++}
++
+ void kvm_update_cpuid_runtime(struct kvm_vcpu *vcpu)
+ {
+ 	struct kvm_cpuid_entry2 *best;
+@@ -313,6 +337,12 @@ int kvm_vcpu_ioctl_set_cpuid2(struct kvm_vcpu *vcpu,
+ 	vcpu->arch.cpuid_entries = e2;
+ 	vcpu->arch.cpuid_nent = cpuid->nent;
+ 
++	/* Report failure if dynamic feature has no permission */
++	r = kvm_check_dyn_feature_perm(vcpu);
++	if (r) {
++		kvfree(e2);
++		return r;
++	}
+ 	kvm_update_cpuid_runtime(vcpu);
+ 	kvm_vcpu_after_set_cpuid(vcpu);
+ 
+-- 
+2.31.1
+

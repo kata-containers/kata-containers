@@ -1,0 +1,30 @@
+From 1cf75f3e15b695cb00a1f664d4ea657e5bba1534 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Wed, 23 Mar 2022 16:13:23 -0700
+Subject: [PATCH 1231/1418] mm: dma page copy: fix uninit pointer read
+
+When if (!src_sg) fails and the code jumps to done lable, it checks dst_sg
+to see if free is needed. But at this point dst_sg is unitialized.
+
+Cc: Jiangbo Wu <jiangbo.wu@intel.com>
+Signed-off-by: Dave Jiang <dave.jiang>
+---
+ mm/dma_page_copy.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/mm/dma_page_copy.c b/mm/dma_page_copy.c
+index 478ae0a578aa..084fbcf3bc60 100644
+--- a/mm/dma_page_copy.c
++++ b/mm/dma_page_copy.c
+@@ -163,7 +163,7 @@ int dma_migrate_pages_copy(const struct list_head *pages,
+ 			  const struct list_head *new_pages)
+ {
+ 	struct page *page, *newpage;
+-	struct scatterlist *src_sg, *dst_sg;
++	struct scatterlist *src_sg, *dst_sg = NULL;
+ 	struct scatterlist *src_ptr, *dst_ptr;
+ 	unsigned int order, nents = 0;
+ 	int err = 0;
+-- 
+2.31.1
+

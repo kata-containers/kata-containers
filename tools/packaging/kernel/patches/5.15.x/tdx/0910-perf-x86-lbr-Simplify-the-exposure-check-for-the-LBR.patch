@@ -1,0 +1,39 @@
+From c87e6954eabae03efc80068d06631c5e3be87c25 Mon Sep 17 00:00:00 2001
+From: Like Xu <like.xu@linux.intel.com>
+Date: Fri, 26 Mar 2021 09:19:15 +0800
+Subject: [PATCH 0910/1418] perf/x86/lbr: Simplify the exposure check for the
+ LBR_INFO registers
+
+The x86_pmu.lbr_info is 0 unless explicitly initialized, so there's
+no point checking x86_pmu.intel_cap.lbr_format.
+
+Cc: Peter Zijlstra <peterz@infradead.org>
+Reviewed-by: Kan Liang <kan.liang@linux.intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Like Xu <like.xu@linux.intel.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/events/intel/lbr.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/arch/x86/events/intel/lbr.c b/arch/x86/events/intel/lbr.c
+index 9e6d6eaeb4cb..ceff16eb4bcb 100644
+--- a/arch/x86/events/intel/lbr.c
++++ b/arch/x86/events/intel/lbr.c
+@@ -1848,12 +1848,10 @@ void __init intel_pmu_arch_lbr_init(void)
+  */
+ int x86_perf_get_lbr(struct x86_pmu_lbr *lbr)
+ {
+-	int lbr_fmt = x86_pmu.intel_cap.lbr_format;
+-
+ 	lbr->nr = x86_pmu.lbr_nr;
+ 	lbr->from = x86_pmu.lbr_from;
+ 	lbr->to = x86_pmu.lbr_to;
+-	lbr->info = (lbr_fmt == LBR_FORMAT_INFO) ? x86_pmu.lbr_info : 0;
++	lbr->info = x86_pmu.lbr_info;
+ 
+ 	return 0;
+ }
+-- 
+2.31.1
+

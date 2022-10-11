@@ -1,0 +1,56 @@
+From 9d837c0881ef02430d1f933744684a4dcf416912 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Fri, 7 May 2021 23:24:01 -0700
+Subject: [PATCH 0336/1418] x86/cpu/tdx: Introduce config option for Intel TDX
+
+Intel's Trust Domain Extensions (TDX) protect guest VMs from malicious
+hosts and some physical attacks.  Introduce CONFIG_INTEL_TDX_HOST build
+configuration option to enable TDX host support with default n.
+
+This patch enables codes by this patch series only for TDX host
+initialization.  Other patch series will enable TDX KVM support with
+CONFIG_INTEL_TDX_HOST.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/Kconfig | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index a731a2b8320d..9b6243709967 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -45,7 +45,7 @@ config FORCE_DYNAMIC_FTRACE
+ 	 in order to test the non static function tracing in the
+ 	 generic code, as other architectures still use it. But we
+ 	 only need to keep it around for x86_64. No need to keep it
+-	 for x86_32. For x86_32, force DYNAMIC_FTRACE. 
++	 for x86_32. For x86_32, force DYNAMIC_FTRACE.
+ #
+ # Arch settings
+ #
+@@ -1378,6 +1378,21 @@ config MICROCODE_OLD_INTERFACE
+ 	  should've switched to the early loading method with the initrd or
+ 	  builtin microcode by now: Documentation/x86/microcode.rst
+ 
++config INTEL_TDX_HOST
++	bool "Intel Trust Domain eXtensions(TDX) host support"
++	default n
++	depends on CPU_SUP_INTEL
++	depends on X86_64
++	select CONTIG_ALLOC
++	select MEMORY_ISOLATION
++	help
++	  Intel's Trust Domain Extensions (TDX) protect guest VMs from malicious
++	  hosts and some physical attacks.  This option enables initialization
++	  necessary for TDX host support.  For details see
++	  <file:Documentations/x86/tdx-module.rst>.
++
++	  If unsure, say N.
++
+ config X86_MSR
+ 	tristate "/dev/cpu/*/msr - Model-specific register support"
+ 	help
+-- 
+2.31.1
+

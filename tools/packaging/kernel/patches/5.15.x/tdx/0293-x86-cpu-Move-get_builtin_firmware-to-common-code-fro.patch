@@ -1,0 +1,157 @@
+From 5f3082f9ff1dbf6e0bbe542ffce241307554aa3e Mon Sep 17 00:00:00 2001
+From: Zhang Chen <chen.zhang@intel.com>
+Date: Sat, 11 Jan 2020 22:44:13 +1300
+Subject: [PATCH 0293/1418] x86/cpu: Move get_builtin_firmware() to common code
+ (from microcode only)
+
+Move get_builtin_firmware() to common.c so that it can be used to get
+non-ucode firmware, e.g. Intel's TDX firmware modules, even if MICROCODE=n.
+Require the consumers to select FW_LOADER, which is already true for
+MICROCODE, instead of having dead code that returns false at runtime.
+
+The functions of FW_LOADER don't work for this case because FW_LOADER
+requires a corresponding struct device.  However, in this case, there is no
+corresponding struct device.  A simple lookup for the firmware is needed.
+
+Signed-off-by: Zhang Chen <chen.zhang@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/cpu.h            |  5 +++++
+ arch/x86/include/asm/microcode.h      |  3 ---
+ arch/x86/kernel/cpu/common.c          | 20 ++++++++++++++++++++
+ arch/x86/kernel/cpu/microcode/core.c  | 18 ------------------
+ arch/x86/kernel/cpu/microcode/intel.c |  2 ++
+ 5 files changed, 27 insertions(+), 21 deletions(-)
+
+diff --git a/arch/x86/include/asm/cpu.h b/arch/x86/include/asm/cpu.h
+index 33d41e350c79..cf937d487625 100644
+--- a/arch/x86/include/asm/cpu.h
++++ b/arch/x86/include/asm/cpu.h
+@@ -7,6 +7,7 @@
+ #include <linux/topology.h>
+ #include <linux/nodemask.h>
+ #include <linux/percpu.h>
++#include <linux/earlycpio.h>
+ 
+ #ifdef CONFIG_SMP
+ 
+@@ -37,6 +38,10 @@ extern int _debug_hotplug_cpu(int cpu, int action);
+ 
+ int mwait_usable(const struct cpuinfo_x86 *);
+ 
++#if defined(CONFIG_MICROCODE) || defined(CONFIG_KVM_INTEL_TDX)
++bool get_builtin_firmware(struct cpio_data *cd, const char *name);
++#endif
++
+ unsigned int x86_family(unsigned int sig);
+ unsigned int x86_model(unsigned int sig);
+ unsigned int x86_stepping(unsigned int sig);
+diff --git a/arch/x86/include/asm/microcode.h b/arch/x86/include/asm/microcode.h
+index ab45a220fac4..d6bfdfb0f0af 100644
+--- a/arch/x86/include/asm/microcode.h
++++ b/arch/x86/include/asm/microcode.h
+@@ -130,14 +130,11 @@ static inline unsigned int x86_cpuid_family(void)
+ extern void __init load_ucode_bsp(void);
+ extern void load_ucode_ap(void);
+ void reload_early_microcode(void);
+-extern bool get_builtin_firmware(struct cpio_data *cd, const char *name);
+ extern bool initrd_gone;
+ #else
+ static inline void __init load_ucode_bsp(void)			{ }
+ static inline void load_ucode_ap(void)				{ }
+ static inline void reload_early_microcode(void)			{ }
+-static inline bool
+-get_builtin_firmware(struct cpio_data *cd, const char *name)	{ return false; }
+ #endif
+ 
+ #endif /* _ASM_X86_MICROCODE_H */
+diff --git a/arch/x86/kernel/cpu/common.c b/arch/x86/kernel/cpu/common.c
+index 6d7e07f601a3..05614e79eb14 100644
+--- a/arch/x86/kernel/cpu/common.c
++++ b/arch/x86/kernel/cpu/common.c
+@@ -22,6 +22,7 @@
+ #include <linux/io.h>
+ #include <linux/syscore_ops.h>
+ #include <linux/pgtable.h>
++#include <linux/firmware.h>
+ 
+ #include <asm/cmdline.h>
+ #include <asm/stackprotector.h>
+@@ -94,6 +95,25 @@ void __init setup_cpu_local_masks(void)
+ 	alloc_bootmem_cpumask_var(&cpu_sibling_setup_mask);
+ }
+ 
++#if defined(CONFIG_MICROCODE) || defined(CONFIG_KVM_INTEL_TDX)
++extern struct builtin_fw __start_builtin_fw[];
++extern struct builtin_fw __end_builtin_fw[];
++
++bool get_builtin_firmware(struct cpio_data *cd, const char *name)
++{
++	struct builtin_fw *b_fw;
++
++	for (b_fw = __start_builtin_fw; b_fw != __end_builtin_fw; b_fw++) {
++		if (!strcmp(name, b_fw->name)) {
++			cd->size = b_fw->size;
++			cd->data = b_fw->data;
++			return true;
++		}
++	}
++	return false;
++}
++#endif
++
+ static void default_init(struct cpuinfo_x86 *c)
+ {
+ #ifdef CONFIG_X86_64
+diff --git a/arch/x86/kernel/cpu/microcode/core.c b/arch/x86/kernel/cpu/microcode/core.c
+index 7efc2b58e5c3..08cda08a9bff 100644
+--- a/arch/x86/kernel/cpu/microcode/core.c
++++ b/arch/x86/kernel/cpu/microcode/core.c
+@@ -22,7 +22,6 @@
+ #include <linux/syscore_ops.h>
+ #include <linux/miscdevice.h>
+ #include <linux/capability.h>
+-#include <linux/firmware.h>
+ #include <linux/kernel.h>
+ #include <linux/delay.h>
+ #include <linux/mutex.h>
+@@ -143,23 +142,6 @@ static bool __init check_loader_disabled_bsp(void)
+ 	return *res;
+ }
+ 
+-extern struct builtin_fw __start_builtin_fw[];
+-extern struct builtin_fw __end_builtin_fw[];
+-
+-bool get_builtin_firmware(struct cpio_data *cd, const char *name)
+-{
+-	struct builtin_fw *b_fw;
+-
+-	for (b_fw = __start_builtin_fw; b_fw != __end_builtin_fw; b_fw++) {
+-		if (!strcmp(name, b_fw->name)) {
+-			cd->size = b_fw->size;
+-			cd->data = b_fw->data;
+-			return true;
+-		}
+-	}
+-	return false;
+-}
+-
+ void __init load_ucode_bsp(void)
+ {
+ 	unsigned int cpuid_1_eax;
+diff --git a/arch/x86/kernel/cpu/microcode/intel.c b/arch/x86/kernel/cpu/microcode/intel.c
+index f8649bd2ab52..6453ac8ba9f6 100644
+--- a/arch/x86/kernel/cpu/microcode/intel.c
++++ b/arch/x86/kernel/cpu/microcode/intel.c
+@@ -37,6 +37,8 @@
+ #include <asm/setup.h>
+ #include <asm/msr.h>
+ #include <asm/sgx.h>
++#include <asm/cpu.h>
++
+ 
+ static const char ucode_path[] = "kernel/x86/microcode/GenuineIntel.bin";
+ 
+-- 
+2.31.1
+

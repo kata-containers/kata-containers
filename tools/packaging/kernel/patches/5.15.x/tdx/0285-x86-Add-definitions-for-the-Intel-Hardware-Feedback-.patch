@@ -1,0 +1,64 @@
+From eebe87224d963c0dbf9008aa217a61796089b94f Mon Sep 17 00:00:00 2001
+From: Ricardo Neri <ricardo.neri-calderon@linux.intel.com>
+Date: Thu, 21 Oct 2021 09:28:40 -0700
+Subject: [PATCH 0285/1418] x86: Add definitions for the Intel Hardware
+ Feedback Interface
+
+Add the CPUID feature bit and the model-specific registers needed to
+identify and configure the Intel Hardware Feedback Interface.
+
+Cc: Andi Kleen <ak@linux.intel.com>
+Cc: Aubrey Li <aubrey.li@linux.intel.com>
+Cc: Len Brown <len.brown@intel.com>
+Cc: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Cc: Tim Chen <tim.c.chen@linux.intel.com>
+Cc: "Ravi V. Shankar" <ravi.v.shankar@intel.com>
+Signed-off-by: Ricardo Neri <ricardo.neri-calderon@linux.intel.com>
+---
+ arch/x86/include/asm/cpufeatures.h | 1 +
+ arch/x86/include/asm/msr-index.h   | 6 ++++++
+ 2 files changed, 7 insertions(+)
+
+diff --git a/arch/x86/include/asm/cpufeatures.h b/arch/x86/include/asm/cpufeatures.h
+index 46ee646001cb..12f90867725c 100644
+--- a/arch/x86/include/asm/cpufeatures.h
++++ b/arch/x86/include/asm/cpufeatures.h
+@@ -328,6 +328,7 @@
+ #define X86_FEATURE_HWP_ACT_WINDOW	(14*32+ 9) /* HWP Activity Window */
+ #define X86_FEATURE_HWP_EPP		(14*32+10) /* HWP Energy Perf. Preference */
+ #define X86_FEATURE_HWP_PKG_REQ		(14*32+11) /* HWP Package Level Request */
++#define X86_FEATURE_INTEL_HFI		(14*32+19) /* Hardware Feedback Interface */
+ 
+ /* AMD SVM Feature Identification, CPUID level 0x8000000a (EDX), word 15 */
+ #define X86_FEATURE_NPT			(15*32+ 0) /* Nested Page Table support */
+diff --git a/arch/x86/include/asm/msr-index.h b/arch/x86/include/asm/msr-index.h
+index 4914de76ea51..c9ef02e8cd01 100644
+--- a/arch/x86/include/asm/msr-index.h
++++ b/arch/x86/include/asm/msr-index.h
+@@ -687,12 +687,14 @@
+ 
+ #define PACKAGE_THERM_STATUS_PROCHOT		(1 << 0)
+ #define PACKAGE_THERM_STATUS_POWER_LIMIT	(1 << 10)
++#define PACKAGE_THERM_STATUS_HFI_UPDATED	(1 << 26)
+ 
+ #define MSR_IA32_PACKAGE_THERM_INTERRUPT	0x000001b2
+ 
+ #define PACKAGE_THERM_INT_HIGH_ENABLE		(1 << 0)
+ #define PACKAGE_THERM_INT_LOW_ENABLE		(1 << 1)
+ #define PACKAGE_THERM_INT_PLN_ENABLE		(1 << 24)
++#define PACKAGE_THERM_INT_HFI_ENABLE		(1 << 25)
+ 
+ /* Thermal Thresholds Support */
+ #define THERM_INT_THRESHOLD0_ENABLE    (1 << 15)
+@@ -942,4 +944,8 @@
+ #define MSR_VM_IGNNE                    0xc0010115
+ #define MSR_VM_HSAVE_PA                 0xc0010117
+ 
++/* Hardware Feedback Interface */
++#define MSR_IA32_HW_FEEDBACK_PTR        0x17d0
++#define MSR_IA32_HW_FEEDBACK_CONFIG     0x17d1
++
+ #endif /* _ASM_X86_MSR_INDEX_H */
+-- 
+2.31.1
+

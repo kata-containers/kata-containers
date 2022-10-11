@@ -1,0 +1,108 @@
+From 79234a0d00b45425057986cf663d44f4784c2319 Mon Sep 17 00:00:00 2001
+From: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Date: Mon, 14 Mar 2022 22:29:08 +0800
+Subject: [PATCH 1220/1418] kvm/x86: Emulate the MOVDIR64B instruction on an
+ EPT VMexit
+
+Signed-off-by: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+---
+ arch/x86/kvm/emulate.c     | 39 +++++++++++++++++++++++++++++++++++++-
+ arch/x86/kvm/kvm_emulate.h |  3 +++
+ 2 files changed, 41 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/emulate.c b/arch/x86/kvm/emulate.c
+index 35035958b30c..d76c85d94912 100644
+--- a/arch/x86/kvm/emulate.c
++++ b/arch/x86/kvm/emulate.c
+@@ -3554,6 +3554,34 @@ static int em_mov(struct x86_emulate_ctxt *ctxt)
+ 	return X86EMUL_CONTINUE;
+ }
+ 
++static int em_movdir64b(struct x86_emulate_ctxt *ctxt)
++{
++	u64 dest_va = ctxt->dst.val;
++	int rc = X86EMUL_CONTINUE;
++
++	if (dest_va & 0x3f) {
++		printk("dest va is not 64 byte aligned\n");
++	}
++	ctxt->op_bytes = 64;
++	ctxt->src.bytes = 64;
++	ctxt->dst.bytes = 64;
++
++	ctxt->dst.type = OP_MEM;
++	ctxt->dst.addr.mem.ea = dest_va;
++	ctxt->dst.addr.mem.seg = ctxt->src.addr.mem.seg;
++
++	rc = segmented_read(ctxt, ctxt->src.addr.mem,
++		ctxt->src.valptr512, ctxt->src.bytes);
++	if (rc != X86EMUL_CONTINUE) {
++		printk("MOVDIR64B: read src data failed rc %d\n", rc);
++		goto done;
++	}
++
++	memcpy(ctxt->dst.valptr512, ctxt->src.valptr512, sizeof(ctxt->src.valptr512));
++done:
++	return rc;
++}
++
+ static int em_movbe(struct x86_emulate_ctxt *ctxt)
+ {
+ 	u16 tmp;
+@@ -4777,6 +4805,13 @@ static const struct gprefix three_byte_0f_38_f1 = {
+ 	ID(0, &instr_dual_0f_38_f1), N, N, N
+ };
+ 
++/* MOVDIR64B has alignment requirement on dest but not on source.
++ * Not sure how to specify Unaligned only on the source addr
++ */
++static const struct gprefix three_byte_0f_38_f8 = {
++	N, I(DstReg | SrcMem | Mov | NoAccess | TwoMemOp | Unaligned, em_movdir64b), N, N
++};
++
+ /*
+  * Insns below are selected by the prefix which indexed by the third opcode
+  * byte.
+@@ -4790,7 +4825,7 @@ static const struct opcode opcode_map_0f_38[256] = {
+ 	GP(EmulateOnUD | ModRM, &three_byte_0f_38_f0),
+ 	GP(EmulateOnUD | ModRM, &three_byte_0f_38_f1),
+ 	/* 0xf2 - 0xff */
+-	N, N, X4(N), X8(N)
++	N, N, X4(N), GP(ModRM, &three_byte_0f_38_f8), N, N, N, X4(N)
+ };
+ 
+ #undef D
+@@ -5158,6 +5193,8 @@ int x86_decode_insn(struct x86_emulate_ctxt *ctxt, void *insn, int insn_len, int
+ 			ctxt->opcode_len = 3;
+ 			ctxt->b = insn_fetch(u8, ctxt);
+ 			opcode = opcode_map_0f_38[ctxt->b];
++			if (ctxt->b == 0xf8)
++				ctxt->op_bytes = 8;
+ 		}
+ 	}
+ 	ctxt->d = opcode.flags;
+diff --git a/arch/x86/kvm/kvm_emulate.h b/arch/x86/kvm/kvm_emulate.h
+index 68b420289d7e..52a3e106f8b8 100644
+--- a/arch/x86/kvm/kvm_emulate.h
++++ b/arch/x86/kvm/kvm_emulate.h
+@@ -236,6 +236,8 @@ struct x86_emulate_ops {
+ 	int (*set_xcr)(struct x86_emulate_ctxt *ctxt, u32 index, u64 xcr);
+ };
+ 
++typedef u32 __attribute__((vector_size(64))) sz512_t;
++
+ /* Type, address-of, and value of an instruction's operand. */
+ struct operand {
+ 	enum { OP_REG, OP_MEM, OP_MEM_STR, OP_IMM, OP_XMM, OP_MM, OP_NONE } type;
+@@ -259,6 +261,7 @@ struct operand {
+ 		u64 val64;
+ 		char valptr[sizeof(sse128_t)];
+ 		sse128_t vec_val;
++		char valptr512[sizeof(sz512_t)];
+ 		u64 mm_val;
+ 		void *data;
+ 	};
+-- 
+2.31.1
+

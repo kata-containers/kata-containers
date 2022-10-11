@@ -1,0 +1,26 @@
+From f3bed1dabb0de5cde4ebaf55f59d7c4d71758d3d Mon Sep 17 00:00:00 2001
+From: "Liu, Yi L" <yi.l.liu@intel.com>
+Date: Sun, 4 Oct 2020 00:07:46 -0700
+Subject: [PATCH 0637/1418] iommu: Add debug log in
+ iommu_unregister_device_fault_handler()
+
+Signed-off-by: Liu, Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/iommu.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
+index bc41e2c615ee..5575efa07fd6 100644
+--- a/drivers/iommu/iommu.c
++++ b/drivers/iommu/iommu.c
+@@ -1365,6 +1365,7 @@ int iommu_unregister_device_fault_handler(struct device *dev)
+ 		 * 2. unbind, free, flush and drain
+ 		 * 3. unregister fault handler.
+ 		 */
++		printk("%s, there is pending faults on dev: %s, here we force to free the fault events and unregister the fault handler, but this changes should be reverted when page response path is ready\n", __func__, dev_name(dev));
+ 		mutex_lock(&param->fault_param->lock);
+ 		list_for_each_entry_safe(evt, next, &param->fault_param->faults, list) {
+ 			dev_dbg(dev, "%s, free fault event: 0x%lx\n", __func__, (unsigned long) evt);
+-- 
+2.31.1
+

@@ -1,0 +1,39 @@
+From 5041865d37f2c947df3b76f32dc482728395319e Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Thu, 19 Aug 2021 14:12:38 -0700
+Subject: [PATCH 0474/1418] KVM: TDX: warn if hpa == souurce ps for
+ tdh_mem_page_add()
+
+hpa and source_pa for TDH.MEM.PAGE.ADD shouldn't be same host physical
+address because page contents is copied from source page to target page.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index a244147d343d..0f1cce0eba1a 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -1488,12 +1488,16 @@ static void tdx_sept_set_private_spte(struct kvm_vcpu *vcpu, gfn_t gfn,
+ 
+ 	trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_PAGE_ADD, gpa, hpa, level);
+ 
++	WARN_ON(kvm_tdx->source_pa == INVALID_PAGE);
+ 	source_pa = kvm_tdx->source_pa & ~KVM_TDX_MEASURE_MEMORY_REGION;
+ 
+-	err = tdh_mem_page_add(kvm_tdx->tdr.pa,  gpa, hpa, source_pa, &ex_ret);
++	WARN_ON(hpa == source_pa);
++	err = tdh_mem_page_add(kvm_tdx->tdr.pa, gpa, hpa, source_pa, &ex_ret);
+ 	if (!SEPT_ERR(err, &ex_ret, TDH_MEM_PAGE_ADD, vcpu->kvm) &&
+ 	    (kvm_tdx->source_pa & KVM_TDX_MEASURE_MEMORY_REGION))
+ 		tdx_measure_page(kvm_tdx, gpa);
++
++	kvm_tdx->source_pa = INVALID_PAGE;
+ }
+ 
+ static void tdx_sept_drop_private_spte(struct kvm *kvm, gfn_t gfn, int level,
+-- 
+2.31.1
+

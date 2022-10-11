@@ -1,0 +1,35 @@
+From b058f5f405c65fdc53e10e0a26826cd7f60e5c35 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Fri, 8 Nov 2019 07:05:42 -0800
+Subject: [PATCH 0345/1418] x86/cpu/tdx: Add TDX "architectural" error codes
+
+Add more TDX completion status codes of SEAMCALL for human-readable output
+of ftrace.
+
+TDX module uses bits 31:0 to return more information, so these error codes
+for SEAMCALL will only exactly match RAX[63:32].  The TDX module
+specification and the guest-hypervisor communication interface
+specification define them.
+
+Co-developed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Co-developed-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/tdx_errno.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/x86/include/asm/tdx_errno.h b/arch/x86/include/asm/tdx_errno.h
+index 376b8091160a..5eb94150e3d1 100644
+--- a/arch/x86/include/asm/tdx_errno.h
++++ b/arch/x86/include/asm/tdx_errno.h
+@@ -194,4 +194,5 @@
+ 	TDX_STATUS_CODE(TDX_PAGE_ALREADY_ACCEPTED),		\
+ 	TDX_STATUS_CODE(TDX_PAGE_SIZE_MISMATCH)
+ 
++
+ #endif /* __ASM_X86_TDX_ERRNO_H */
+-- 
+2.31.1
+

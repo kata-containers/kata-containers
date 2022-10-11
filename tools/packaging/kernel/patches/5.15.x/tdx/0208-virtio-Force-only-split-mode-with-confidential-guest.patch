@@ -1,0 +1,74 @@
+From 9ef6ee8a9ec1d291d8d06b8873feb2d7ad47610a Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Fri, 11 Jun 2021 17:12:03 -0700
+Subject: [PATCH 0208/1418] virtio: Force only split mode with confidential
+ guest
+
+When running under TDX the virtio host is untrusted. The bulk
+of the kernel memory is encrypted and protected, but the virtio
+ring is in special shared memory that is shared with the
+untrusted host.
+
+This means virtio needs to be hardened against any attacks from
+the host through the ring. Of course it's impossible to prevent DOS
+(the host can chose at any time to stop doing IO), but there
+should be no buffer overruns or similar that might give access to
+any private memory in the guest.
+
+virtio has a lot of modes, most are difficult to harden.
+
+Jason's patches hardening split mode by keeping the metadata
+separate. We did some testing on split mode (without indirect)
+and it seems to tolerate corruption.
+
+Disable all the other code paths when running in TDX.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+---
+ drivers/virtio/virtio_ring.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/drivers/virtio/virtio_ring.c b/drivers/virtio/virtio_ring.c
+index 3035bb6f5458..cde98a27fc00 100644
+--- a/drivers/virtio/virtio_ring.c
++++ b/drivers/virtio/virtio_ring.c
+@@ -12,6 +12,7 @@
+ #include <linux/hrtimer.h>
+ #include <linux/dma-mapping.h>
+ #include <linux/spinlock.h>
++#include <linux/cc_platform.h>
+ #include <xen/xen.h>
+ 
+ #ifdef DEBUG
+@@ -2340,8 +2341,15 @@ void vring_transport_features(struct virtio_device *vdev)
+ 	unsigned int i;
+ 
+ 	for (i = VIRTIO_TRANSPORT_F_START; i < VIRTIO_TRANSPORT_F_END; i++) {
++		/*
++		 * In confidential guest mode disallow packed or indirect
++		 * because they ain't hardened.
++		 */
++
+ 		switch (i) {
+ 		case VIRTIO_RING_F_INDIRECT_DESC:
++			if (cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT))
++				goto clear;
+ 			break;
+ 		case VIRTIO_RING_F_EVENT_IDX:
+ 			break;
+@@ -2350,9 +2358,12 @@ void vring_transport_features(struct virtio_device *vdev)
+ 		case VIRTIO_F_ACCESS_PLATFORM:
+ 			break;
+ 		case VIRTIO_F_RING_PACKED:
++			if (cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT))
++				goto clear;
+ 			break;
+ 		case VIRTIO_F_ORDER_PLATFORM:
+ 			break;
++clear:
+ 		default:
+ 			/* We don't understand this bit. */
+ 			__virtio_clear_bit(vdev, i);
+-- 
+2.31.1
+

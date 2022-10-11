@@ -1,0 +1,390 @@
+From c0a01df223dd2dea7fef6fa74e87f79213b134a6 Mon Sep 17 00:00:00 2001
+From: Huang Ying <ying.huang@intel.com>
+Date: Tue, 17 Aug 2021 08:08:36 +0800
+Subject: [PATCH 1156/1418] mm/migrate_pages: share more code between _unmap
+ and _move
+
+This is a code cleanup patch to reduce the duplicated code between the
+_unmap and _move stages of migrate_pages().  No functionality change
+is expected.
+
+Signed-off-by: "Huang, Ying" <ying.huang@intel.com>
+---
+ mm/migrate.c | 270 ++++++++++++++++++++++-----------------------------
+ 1 file changed, 114 insertions(+), 156 deletions(-)
+
+diff --git a/mm/migrate.c b/mm/migrate.c
+index e85fb8d00127..98c7b9aac2c9 100644
+--- a/mm/migrate.c
++++ b/mm/migrate.c
+@@ -979,35 +979,90 @@ static void __migrate_page_extract(struct page *newpage,
+ static void migrate_page_undo_page(struct page *page,
+ 				   int page_was_mapped,
+ 				   struct anon_vma *anon_vma,
++				   bool locked,
+ 				   struct list_head *ret)
+ {
+ 	if (page_was_mapped)
+ 		remove_migration_ptes(page, page, false);
+ 	if (anon_vma)
+ 		put_anon_vma(anon_vma);
+-	unlock_page(page);
+-	list_move_tail(&page->lru, ret);
++	if (locked)
++		unlock_page(page);
++	if (ret)
++		list_move_tail(&page->lru, ret);
+ }
+ 
+ static void migrate_page_undo_newpage(struct page *newpage,
++				      bool locked,
+ 				      free_page_t put_new_page,
+ 				      unsigned long private)
+ {
+-	unlock_page(newpage);
++	if (locked)
++		unlock_page(newpage);
+ 	if (put_new_page)
+ 		put_new_page(newpage, private);
+ 	else
+ 		put_page(newpage);
+ }
+ 
+-static int __migrate_page_unmap(struct page *page, struct page *newpage,
+-				int force, enum migrate_mode mode)
++static void migrate_page_done(struct page *page,
++			      enum migrate_reason reason)
+ {
+-	int rc = -EAGAIN;
++	/*
++	 * Compaction can migrate also non-LRU pages which are
++	 * not accounted to NR_ISOLATED_*. They can be recognized
++	 * as __PageMovable
++	 */
++	if (likely(!__PageMovable(page)))
++		mod_node_page_state(page_pgdat(page), NR_ISOLATED_ANON +
++				    page_is_file_lru(page), -thp_nr_pages(page));
++
++	if (reason != MR_MEMORY_FAILURE)
++		/*
++		 * We release the page in page_handle_poison.
++		 */
++		put_page(page);
++}
++
++/* Obtain the lock on page, remove all ptes. */
++static int migrate_page_unmap(new_page_t get_new_page, free_page_t put_new_page,
++			      unsigned long private, struct page *page,
++			      struct page **newpagep, int force,
++			      enum migrate_mode mode, enum migrate_reason reason,
++			      struct list_head *ret)
++{
++	int rc = MIGRATEPAGE_UNMAP;
++	struct page *newpage = NULL;
+ 	int page_was_mapped = 0;
+ 	struct anon_vma *anon_vma = NULL;
+ 	bool is_lru = !__PageMovable(page);
++	bool locked = false;
++	bool newpage_locked = false;
++
++	if (!thp_migration_supported() && PageTransHuge(page))
++		return -ENOSYS;
+ 
++	if (page_count(page) == 1) {
++		/* page was freed from under us. So we are done. */
++		ClearPageActive(page);
++		ClearPageUnevictable(page);
++		if (unlikely(__PageMovable(page))) {
++			lock_page(page);
++			if (!PageMovable(page))
++				__ClearPageIsolated(page);
++			unlock_page(page);
++		}
++		list_del(&page->lru);
++		migrate_page_done(page, reason);
++		return MIGRATEPAGE_SUCCESS;
++	}
++
++	newpage = get_new_page(page, private);
++	if (!newpage)
++		return -ENOMEM;
++	*newpagep = newpage;
++
++	rc = -EAGAIN;
+ 	if (!trylock_page(page)) {
+ 		if (!force || mode == MIGRATE_ASYNC)
+ 			goto out;
+@@ -1030,6 +1085,7 @@ static int __migrate_page_unmap(struct page *page, struct page *newpage,
+ 
+ 		lock_page(page);
+ 	}
++	locked = true;
+ 
+ 	if (PageWriteback(page)) {
+ 		/*
+@@ -1044,10 +1100,10 @@ static int __migrate_page_unmap(struct page *page, struct page *newpage,
+ 			break;
+ 		default:
+ 			rc = -EBUSY;
+-			goto out_unlock;
++			goto out;
+ 		}
+ 		if (!force)
+-			goto out_unlock;
++			goto out;
+ 		wait_on_page_writeback(page);
+ 	}
+ 
+@@ -1077,7 +1133,8 @@ static int __migrate_page_unmap(struct page *page, struct page *newpage,
+ 	 * This is much like races on refcount of oldpage: just don't BUG().
+ 	 */
+ 	if (unlikely(!trylock_page(newpage)))
+-		goto out_unlock;
++		goto out;
++	newpage_locked = true;
+ 
+ 	if (unlikely(!is_lru)) {
+ 		__migrate_page_record(newpage, page_was_mapped, anon_vma);
+@@ -1100,7 +1157,7 @@ static int __migrate_page_unmap(struct page *page, struct page *newpage,
+ 		VM_BUG_ON_PAGE(PageAnon(page), page);
+ 		if (page_has_private(page)) {
+ 			try_to_free_buffers(page);
+-			goto out_unlock_both;
++			goto out;
+ 		}
+ 	} else if (page_mapped(page)) {
+ 		/* Establish migration ptes */
+@@ -1115,23 +1172,26 @@ static int __migrate_page_unmap(struct page *page, struct page *newpage,
+ 		return MIGRATEPAGE_UNMAP;
+ 	}
+ 
+-	if (page_was_mapped)
+-		remove_migration_ptes(page, page, false);
+-
+-out_unlock_both:
+-	unlock_page(newpage);
+-out_unlock:
+-	/* Drop an anon_vma reference if we took one */
+-	if (anon_vma)
+-		put_anon_vma(anon_vma);
+-	unlock_page(page);
+ out:
++	/*
++	 * A page that has not been migrated will have kept its
++	 * references and be restored.
++	 */
++	if (rc == -EAGAIN)
++		ret = NULL;
++	migrate_page_undo_page(page, page_was_mapped, anon_vma, locked, ret);
++	if (newpage)
++		migrate_page_undo_newpage(newpage, newpage_locked,
++					  put_new_page, private);
+ 
+ 	return rc;
+ }
+ 
+-static int __migrate_page_move(struct page *page, struct page *newpage,
+-			       enum migrate_mode mode)
++/* Migrate the page to the newly allocated page in newpage. */
++static int migrate_page_move(free_page_t put_new_page, unsigned long private,
++			     struct page *page, struct page *newpage,
++			     enum migrate_mode mode, enum migrate_reason reason,
++			     struct list_head *ret)
+ {
+ 	int rc;
+ 	int page_was_mapped = 0;
+@@ -1141,149 +1201,47 @@ static int __migrate_page_move(struct page *page, struct page *newpage,
+ 	__migrate_page_extract(newpage, &page_was_mapped, &anon_vma);
+ 
+ 	rc = move_to_new_page(newpage, page, mode);
++	if (rc)
++		goto out;
+ 
+-	if (page_was_mapped)
+-		remove_migration_ptes(page,
+-			rc == MIGRATEPAGE_SUCCESS ? newpage : page, false);
+-
+-	if (rc == -EAGAIN) {
+-		__migrate_page_record(newpage, page_was_mapped, anon_vma);
+-		return rc;
+-	}
+-
+-	list_del(&newpage->lru);
+-	unlock_page(newpage);
+-	/* Drop an anon_vma reference if we took one */
+-	if (anon_vma)
+-		put_anon_vma(anon_vma);
+-	unlock_page(page);
+ 	/*
+-	 * If migration is successful, decrease refcount of the newpage
+-	 * which will not free the page because new page owner increased
+-	 * refcounter. As well, if it is LRU page, add the page to LRU
+-	 * list in here. Use the old state of the isolated source page to
+-	 * determine if we migrated a LRU page. newpage was already unlocked
+-	 * and possibly modified by its owner - don't rely on the page
++	 * Decrease refcount of the newpage which will not free the
++	 * page because new page owner increased refcounter. As well,
++	 * if it is LRU page, add the page to LRU list in here. Use
++	 * the old state of the isolated source page to determine if
++	 * we migrated a LRU page. newpage already unlocked and
++	 * possibly modified by its owner - don't rely on the page
+ 	 * state.
+ 	 */
+-	if (rc == MIGRATEPAGE_SUCCESS) {
+-		if (unlikely(!is_lru))
+-			put_page(newpage);
+-		else
+-			putback_lru_page(newpage);
+-	}
+-
+-	return rc;
+-}
+-
+-static void migrate_page_done(struct page *page,
+-			      enum migrate_reason reason)
+-{
+-	/*
+-	 * Compaction can migrate also non-LRU pages which are
+-	 * not accounted to NR_ISOLATED_*. They can be recognized
+-	 * as __PageMovable
+-	 */
+-	if (likely(!__PageMovable(page)))
+-		mod_node_page_state(page_pgdat(page), NR_ISOLATED_ANON +
+-				    page_is_file_lru(page), -thp_nr_pages(page));
+-
+-	if (reason != MR_MEMORY_FAILURE)
+-		/*
+-		 * We release the page in page_handle_poison.
+-		 */
+-		put_page(page);
+-}
+-
+-/* Obtain the lock on page, remove all ptes. */
+-static int migrate_page_unmap(new_page_t get_new_page, free_page_t put_new_page,
+-			      unsigned long private, struct page *page,
+-			      struct page **newpagep, int force,
+-			      enum migrate_mode mode, enum migrate_reason reason,
+-			      struct list_head *ret)
+-{
+-	int rc = MIGRATEPAGE_UNMAP;
+-	struct page *newpage = NULL;
+-
+-	if (!thp_migration_supported() && PageTransHuge(page))
+-		return -ENOSYS;
+-
+-	if (page_count(page) == 1) {
+-		/* page was freed from under us. So we are done. */
+-		ClearPageActive(page);
+-		ClearPageUnevictable(page);
+-		if (unlikely(__PageMovable(page))) {
+-			lock_page(page);
+-			if (!PageMovable(page))
+-				__ClearPageIsolated(page);
+-			unlock_page(page);
+-		}
+-		list_del(&page->lru);
+-		migrate_page_done(page, reason);
+-		return MIGRATEPAGE_SUCCESS;
+-	}
+-
+-	newpage = get_new_page(page, private);
+-	if (!newpage)
+-		return -ENOMEM;
+-	*newpagep = newpage;
+-
+-	rc = __migrate_page_unmap(page, newpage, force, mode);
+-	if (rc == MIGRATEPAGE_UNMAP)
+-		return rc;
++	if (page_was_mapped)
++		remove_migration_ptes(page, newpage, false);
++	list_del(&newpage->lru);
++	unlock_page(newpage);
++	if (unlikely(!is_lru))
++		put_page(newpage);
++	else
++		putback_lru_page(newpage);
++	set_page_owner_migrate_reason(newpage, reason);
+ 
+ 	/*
+-	 * A page that has not been migrated will have kept its
+-	 * references and be restored.
+-	 */
+-	/* restore the page to right list. */
+-	if (rc != -EAGAIN)
+-		list_move_tail(&page->lru, ret);
+-
+-	if (put_new_page)
+-		put_new_page(newpage, private);
+-	else
+-		put_page(newpage);
++	 * A page that has been migrated has all references removed
++	 * and will be freed.
++	*/
++	list_del(&page->lru);
++	migrate_page_undo_page(page, 0, anon_vma, true, NULL);
++	migrate_page_done(page, reason);
+ 
+ 	return rc;
+-}
+-
+-/* Migrate the page to the newly allocated page in newpage. */
+-static int migrate_page_move(free_page_t put_new_page, unsigned long private,
+-			     struct page *page, struct page *newpage,
+-			     enum migrate_mode mode, enum migrate_reason reason,
+-			     struct list_head *ret)
+-{
+-	int rc;
+-
+-	rc = __migrate_page_move(page, newpage, mode);
+-	if (rc == MIGRATEPAGE_SUCCESS)
+-		set_page_owner_migrate_reason(newpage, reason);
+ 
+-	if (rc != -EAGAIN) {
+-		/*
+-		 * A page that has been migrated has all references
+-		 * removed and will be freed. A page that has not been
+-		 * migrated will have kept its references and be restored.
+-		 */
+-		list_del(&page->lru);
++out:
++	if (rc == -EAGAIN) {
++		__migrate_page_record(newpage, page_was_mapped, anon_vma);
++		return rc;
+ 	}
+ 
+-	/*
+-	 * If migration is successful, releases reference grabbed during
+-	 * isolation. Otherwise, restore the page to right list unless
+-	 * we want to retry.
+-	 */
+-	if (rc == MIGRATEPAGE_SUCCESS) {
+-		migrate_page_done(page, reason);
+-	} else if (rc != -EAGAIN) {
+-		list_add_tail(&page->lru, ret);
+-
+-		if (put_new_page)
+-			put_new_page(newpage, private);
+-		else
+-			put_page(newpage);
+-	}
++	migrate_page_undo_page(page, page_was_mapped, anon_vma, true, ret);
++	list_del(&newpage->lru);
++	migrate_page_undo_newpage(newpage, true, put_new_page, private);
+ 
+ 	return rc;
+ }
+@@ -1744,9 +1702,9 @@ int migrate_pages(struct list_head *from, new_page_t get_new_page,
+ 
+ 		__migrate_page_extract(newpage, &page_was_mapped, &anon_vma);
+ 		migrate_page_undo_page(page, page_was_mapped, anon_vma,
+-				       &ret_pages);
++				       true, &ret_pages);
+ 		list_del(&newpage->lru);
+-		migrate_page_undo_newpage(newpage, put_new_page, private);
++		migrate_page_undo_newpage(newpage, true, put_new_page, private);
+ 		newpage = newpage2;
+ 		newpage2 = list_next_entry(newpage, lru);
+ 	}
+-- 
+2.31.1
+

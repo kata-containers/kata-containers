@@ -1,0 +1,43 @@
+From b67c60d818b1ec14f3d60aba4507608254726743 Mon Sep 17 00:00:00 2001
+From: Trond Myklebust <trond.myklebust@hammerspace.com>
+Date: Wed, 6 Apr 2022 22:34:35 -0400
+Subject: [PATCH 1348/1418] NFS: Ensure rpc_run_task() cannot fail in
+ nfs_async_rename()
+
+Ensure the call to rpc_run_task() cannot fail by preallocating the
+rpc_task.
+
+Fixes: 910ad38697d9 ("NFS: Fix memory allocation in rpc_alloc_task()")
+Signed-off-by: Trond Myklebust <trond.myklebust@hammerspace.com>
+---
+ fs/nfs/unlink.c         | 1 +
+ include/linux/nfs_xdr.h | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/fs/nfs/unlink.c b/fs/nfs/unlink.c
+index 5fa11e1aca4c..6f325e10056c 100644
+--- a/fs/nfs/unlink.c
++++ b/fs/nfs/unlink.c
+@@ -347,6 +347,7 @@ nfs_async_rename(struct inode *old_dir, struct inode *new_dir,
+ 	data = kzalloc(sizeof(*data), GFP_KERNEL);
+ 	if (data == NULL)
+ 		return ERR_PTR(-ENOMEM);
++	task_setup_data.task = &data->task;
+ 	task_setup_data.callback_data = data;
+ 
+ 	data->cred = get_current_cred();
+diff --git a/include/linux/nfs_xdr.h b/include/linux/nfs_xdr.h
+index e9698b6278a5..cb5c6f093cd9 100644
+--- a/include/linux/nfs_xdr.h
++++ b/include/linux/nfs_xdr.h
+@@ -1701,6 +1701,7 @@ struct nfs_unlinkdata {
+ struct nfs_renamedata {
+ 	struct nfs_renameargs	args;
+ 	struct nfs_renameres	res;
++	struct rpc_task		task;
+ 	const struct cred	*cred;
+ 	struct inode		*old_dir;
+ 	struct dentry		*old_dentry;
+-- 
+2.31.1
+

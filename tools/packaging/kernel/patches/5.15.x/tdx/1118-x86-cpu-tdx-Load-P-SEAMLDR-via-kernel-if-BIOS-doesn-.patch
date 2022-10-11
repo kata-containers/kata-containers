@@ -1,0 +1,109 @@
+From 3b95a8798d1757508d8b14667bc533cc2237d759 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Wed, 16 Feb 2022 16:19:46 +0800
+Subject: [PATCH 1118/1418] x86/cpu/tdx: Load P-SEAMLDR via kernel if BIOS
+ doesn't load it
+
+If P-SEAMLDR is already loaded and fuctional, SEAMCALL[SEAMLDR_INFO]
+will execute successfully and return P-SEAMLDR info. Otherwise, SEAMCALL
+instruction returns with VMFailInvalid
+
+In case BIOS doesn't load P-SEAMLDR as expected, kernel does it itself.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/p-seamldr.c | 14 +-------------
+ arch/x86/kernel/cpu/tdx/p-seamldr.h |  1 +
+ arch/x86/kernel/cpu/tdx/tdx.c       | 22 +++++++++++++++++++++-
+ 3 files changed, 23 insertions(+), 14 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.c b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+index 4c44c6a51320..6fae4f5e9858 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.c
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+@@ -395,7 +395,7 @@ p_seamldr_load(struct cpio_data *cpio_np_seamldr)
+ 
+ static struct p_seamldr_info *p_seamldr_info;
+ 
+-static int __init p_seamldr_get_info(void)
++int __init p_seamldr_get_info(void)
+ {
+ 	struct vmcs *vmcs = NULL;
+ 	int vmxoff_err = 0;
+@@ -468,11 +468,6 @@ int __init load_p_seamldr(void)
+ 	struct cpio_data np_seamldr;
+ 	int err;
+ 
+-	/* TDX requires VMX. */
+-	err = seam_init_vmx_early();
+-	if (err)
+-		return err;
+-
+ 	if (!seam_get_firmware(&np_seamldr, np_seamldr_name)) {
+ 		pr_err("no NP-SEAMLDR found %s\n", np_seamldr_name);
+ 		return -ENOENT;
+@@ -485,13 +480,6 @@ int __init load_p_seamldr(void)
+ 		return err;
+ 	}
+ 
+-	err = p_seamldr_get_info();
+-	if (err) {
+-		pr_err("failed to get TDX P-SEAMLDR info\n");
+-		return err;
+-	}
+-
+-	setup_force_cpu_cap(X86_FEATURE_SEAM);
+ 	pr_info("Successfully loaded TDX P-SEAMLDR.\n");
+ 	return 0;
+ }
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.h b/arch/x86/kernel/cpu/tdx/p-seamldr.h
+index 67fba721cd66..ba92b0565a26 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.h
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.h
+@@ -118,6 +118,7 @@ struct seamldr_params {
+ int seamldr_info(phys_addr_t seamldr_info);
+ int seamldr_install(phys_addr_t seamldr_params);
+ 
++int __init p_seamldr_get_info(void);
+ int __init load_p_seamldr(void);
+ 
+ #endif /* _X86_TDX_P_SEAMLOADER_H */
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 67b17316ec6c..cbba7b1f98b2 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -91,10 +91,30 @@ static int __init tdx_host_early_init(void)
+ 	if (!is_seamrr_enabled())
+ 		return -EOPNOTSUPP;
+ 
+-	ret = load_p_seamldr();
++	/* TDX(SEAMCALL) requires VMX. */
++	ret = seam_init_vmx_early();
+ 	if (ret)
+ 		return ret;
+ 
++	ret = p_seamldr_get_info();
++	if (ret == -EIO) {
++		pr_err("No P-SEAMLDR loaded by BIOS.\n");
++
++		ret = load_p_seamldr();
++		if (ret)
++			return ret;
++
++		ret = p_seamldr_get_info();
++		if (ret) {
++			pr_err("Get P-SEAMLDR failed with %d\n", ret);
++			return ret;
++		}
++	} else if (ret) {
++		pr_err("Get P-SEAMLDR failed with %d\n", ret);
++		return ret;
++	}
++
++	setup_force_cpu_cap(X86_FEATURE_SEAM);
+ 	return tdx_sysmem_build();
+ }
+ early_initcall(tdx_host_early_init);
+-- 
+2.31.1
+

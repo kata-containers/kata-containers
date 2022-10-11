@@ -1,0 +1,57 @@
+From 1d32882ee5bd04c8cbff2a2613a592aff232c844 Mon Sep 17 00:00:00 2001
+From: Yi Sun <yi.y.sun@linux.intel.com>
+Date: Sat, 23 Oct 2021 07:12:51 +0800
+Subject: [PATCH 0668/1418] iommu/vtd: Fix some gpasid related issues
+
+During tests, we found the NIC pf/vf (SRIOV) passthrough
+cannot work correctly. The NIC cannot get IP in VM. One
+reason is the iommu driver returns error when binding
+gpasid. There are some unnecessary check for such devices.
+
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+---
+ drivers/iommu/intel/svm.c | 21 +++++++++++++--------
+ 1 file changed, 13 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index aa81452b7042..f5b0062aaf40 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -464,8 +464,9 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain,
+ 	if (!dev_is_pci(dev))
+ 		return -ENOTSUPP;
+ 
+-	/* VT-d supports devices with full 20 bit PASIDs only */
+-	if (pci_max_pasids(to_pci_dev(dev)) != PASID_MAX)
++	/* Except gIOVA binding, VT-d supports devices with full 20 bit PASIDs only */
++	if ((data->flags & IOMMU_SVA_HPASID_DEF) == 0 &&
++	    pci_max_pasids(to_pci_dev(dev)) != PASID_MAX)
+ 		return -EINVAL;
+ 
+ 	dmar_domain = to_dmar_domain(domain);
+@@ -551,12 +552,16 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain,
+ 	if (iommu_dev_feature_enabled(dev, IOMMU_DEV_FEAT_AUX))
+ 		sdev->users = 1;
+ 
+-	/* Set up device context entry for PASID if not enabled already */
+-	ret = intel_iommu_enable_pasid(iommu, sdev->dev);
+-	if (ret) {
+-		dev_err_ratelimited(dev, "Failed to enable PASID capability\n");
+-		kfree(sdev);
+-		goto out;
++	/* For legacy device passthr giova usage, do not enable pasid */
++	if ((data->flags & IOMMU_SVA_HPASID_DEF) == 0 &&
++	    pci_max_pasids(to_pci_dev(dev)) == PASID_MAX) {
++		/* Set up device context entry for PASID if not enabled already */
++		ret = intel_iommu_enable_pasid(iommu, sdev->dev);
++		if (ret) {
++			dev_err_ratelimited(dev, "Failed to enable PASID capability\n");
++			kfree(sdev);
++			goto out;
++		}
+ 	}
+ 
+ 	/*
+-- 
+2.31.1
+

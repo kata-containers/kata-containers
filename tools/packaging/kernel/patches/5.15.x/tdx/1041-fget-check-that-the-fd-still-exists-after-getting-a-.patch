@@ -1,0 +1,64 @@
+From 609ba47bdbbe6efb05eb0f8eaa3629fee43c919b Mon Sep 17 00:00:00 2001
+From: Linus Torvalds <torvalds@linux-foundation.org>
+Date: Wed, 1 Dec 2021 10:06:14 -0800
+Subject: [PATCH 1041/1418] fget: check that the fd still exists after getting
+ a ref to it
+
+Jann Horn points out that there is another possible race wrt Unix domain
+socket garbage collection, somewhat reminiscent of the one fixed in
+commit cbcf01128d0a ("af_unix: fix garbage collect vs MSG_PEEK").
+
+See the extended comment about the garbage collection requirements added
+to unix_peek_fds() by that commit for details.
+
+The race comes from how we can locklessly look up a file descriptor just
+as it is in the process of being closed, and with the right artificial
+timing (Jann added a few strategic 'mdelay(500)' calls to do that), the
+Unix domain socket garbage collector could see the reference count
+decrement of the close() happen before fget() took its reference to the
+file and the file was attached onto a new file descriptor.
+
+This is all (intentionally) correct on the 'struct file *' side, with
+RCU lookups and lockless reference counting very much part of the
+design.  Getting that reference count out of order isn't a problem per
+se.
+
+But the garbage collector can get confused by seeing this situation of
+having seen a file not having any remaining external references and then
+seeing it being attached to an fd.
+
+In commit cbcf01128d0a ("af_unix: fix garbage collect vs MSG_PEEK") the
+fix was to serialize the file descriptor install with the garbage
+collector by taking and releasing the unix_gc_lock.
+
+That's not really an option here, but since this all happens when we are
+in the process of looking up a file descriptor, we can instead simply
+just re-check that the file hasn't been closed in the meantime, and just
+re-do the lookup if we raced with a concurrent close() of the same file
+descriptor.
+
+Reported-and-tested-by: Jann Horn <jannh@google.com>
+Acked-by: Miklos Szeredi <mszeredi@redhat.com>
+Signed-off-by: Linus Torvalds <torvalds@linux-foundation.org>
+---
+ fs/file.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/fs/file.c b/fs/file.c
+index 8627dacfc424..ad4a8bf3cf10 100644
+--- a/fs/file.c
++++ b/fs/file.c
+@@ -858,6 +858,10 @@ static struct file *__fget_files(struct files_struct *files, unsigned int fd,
+ 			file = NULL;
+ 		else if (!get_file_rcu_many(file, refs))
+ 			goto loop;
++		else if (files_lookup_fd_raw(files, fd) != file) {
++			fput_many(file, refs);
++			goto loop;
++		}
+ 	}
+ 	rcu_read_unlock();
+ 
+-- 
+2.31.1
+

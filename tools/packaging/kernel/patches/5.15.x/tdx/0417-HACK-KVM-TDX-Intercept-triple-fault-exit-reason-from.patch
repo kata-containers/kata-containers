@@ -1,0 +1,73 @@
+From e2f5b65614f8f0fc068729158d51085541aa3ff8 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Mon, 26 Oct 2020 16:36:29 +0800
+Subject: [PATCH 0417/1418] *** HACK *** KVM: TDX: Intercept triple fault exit
+ reason from SEAM module
+
+When triple fault happens in TD vcpu, SEAM module sets vcpu to teardown
+state and disallow the TD vcpu to be associated anymore. This makes KVM
+hard to know the vcpu state for debugging purpose.
+
+Enable tdexit redirection on triple fault, which makes SEAM module
+redirect the triple fault to KVM without turning vcpu to teardown state.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c     | 10 ++++++++++
+ arch/x86/kvm/vmx/tdx_ops.h |  6 ++++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index ae716e10288c..48584a9c0b8c 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -25,6 +25,7 @@
+ 
+ static int trace_seamcalls __read_mostly = DEBUGCONFIG_TRACE_CUSTOM;
+ module_param(trace_seamcalls, int, 0444);
++static int trace_seamcalls_initialized;
+ 
+ /* TDX KeyID pool */
+ static DEFINE_IDA(tdx_keyid_pool);
+@@ -711,6 +712,13 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ static void tdx_hardware_enable(void)
+ {
+ 	INIT_LIST_HEAD(&per_cpu(associated_tdvcpus, raw_smp_processor_id()));
++
++	if (!cmpxchg(&trace_seamcalls_initialized, 0, 1)) {
++		tdh_trace_seamcalls(trace_seamcalls);
++
++		/* Unconditionally intercept triple faults to aid debug. */
++		tdxmode(true, BIT_ULL(EXIT_REASON_TRIPLE_FAULT));
++	}
+ }
+ 
+ static void tdx_hardware_disable(void)
+@@ -1390,6 +1398,8 @@ static int tdx_handle_exit(struct kvm_vcpu *vcpu,
+ 		return tdx_handle_ept_violation(vcpu);
+ 	case EXIT_REASON_EPT_MISCONFIG:
+ 		return tdx_handle_ept_misconfig(vcpu);
++	case EXIT_REASON_TRIPLE_FAULT:
++		return tdx_handle_triple_fault(vcpu);
+ 	default:
+ 		break;
+ 	}
+diff --git a/arch/x86/kvm/vmx/tdx_ops.h b/arch/x86/kvm/vmx/tdx_ops.h
+index 8046ebde37f8..b72e2a4b7c68 100644
+--- a/arch/x86/kvm/vmx/tdx_ops.h
++++ b/arch/x86/kvm/vmx/tdx_ops.h
+@@ -229,4 +229,10 @@ static inline void tdh_trace_seamcalls(u64 level)
+ 		pr_seamcall_error(TDDEBUGCONFIG, err, NULL);
+ }
+ 
++static inline u64 tdxmode(bool intercept_vmexits, u64 intercept_bitmap)
++{
++	return seamcall(TDXMODE, intercept_vmexits, intercept_bitmap,
++			0, 0, 0, NULL);
++}
++
+ #endif /* __KVM_X86_TDX_OPS_H */
+-- 
+2.31.1
+

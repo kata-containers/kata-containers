@@ -1,0 +1,90 @@
+From 62666b53c4b41e3c58df4c54dc580cec4e45a0c0 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 15 Oct 2021 01:09:29 +0200
+Subject: [PATCH 0072/1418] x86/fpu: Provide struct fpu_config
+
+Provide a struct to store information about the maximum supported and the
+default feature set and buffer sizes for both user and kernel space.
+
+This allows quick retrieval of this information for the upcoming support
+for dynamically enabled features.
+
+ [ bp: Add vertical spacing between the struct members. ]
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211014230739.126107370@linutronix.de
+---
+ arch/x86/include/asm/fpu/types.h | 42 ++++++++++++++++++++++++++++++++
+ arch/x86/kernel/fpu/core.c       |  4 +++
+ 2 files changed, 46 insertions(+)
+
+diff --git a/arch/x86/include/asm/fpu/types.h b/arch/x86/include/asm/fpu/types.h
+index 3a12e97e475d..a32be07f1418 100644
+--- a/arch/x86/include/asm/fpu/types.h
++++ b/arch/x86/include/asm/fpu/types.h
+@@ -378,4 +378,46 @@ struct fpu {
+ 	 */
+ };
+ 
++/*
++ * FPU state configuration data. Initialized at boot time. Read only after init.
++ */
++struct fpu_state_config {
++	/*
++	 * @max_size:
++	 *
++	 * The maximum size of the register state buffer. Includes all
++	 * supported features except independent managed features.
++	 */
++	unsigned int		max_size;
++
++	/*
++	 * @default_size:
++	 *
++	 * The default size of the register state buffer. Includes all
++	 * supported features except independent managed features and
++	 * features which have to be requested by user space before usage.
++	 */
++	unsigned int		default_size;
++
++	/*
++	 * @max_features:
++	 *
++	 * The maximum supported features bitmap. Does not include
++	 * independent managed features.
++	 */
++	u64 max_features;
++
++	/*
++	 * @default_features:
++	 *
++	 * The default supported features bitmap. Does not include
++	 * independent managed features and features which have to
++	 * be requested by user space before usage.
++	 */
++	u64 default_features;
++};
++
++/* FPU state configuration information */
++extern struct fpu_state_config fpu_kernel_cfg, fpu_user_cfg;
++
+ #endif /* _ASM_X86_FPU_H */
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index b497ecae9270..3512bb241d95 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -25,6 +25,10 @@
+ #define CREATE_TRACE_POINTS
+ #include <asm/trace/fpu.h>
+ 
++/* The FPU state configuration data for kernel and user space */
++struct fpu_state_config	fpu_kernel_cfg __ro_after_init;
++struct fpu_state_config fpu_user_cfg __ro_after_init;
++
+ /*
+  * Represents the initial FPU state. It's mostly (but not completely) zeroes,
+  * depending on the FPU hardware format:
+-- 
+2.31.1
+

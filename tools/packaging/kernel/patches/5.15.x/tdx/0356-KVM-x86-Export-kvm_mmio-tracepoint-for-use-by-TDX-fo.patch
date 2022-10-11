@@ -1,0 +1,29 @@
+From e711d6d02d82f4e3818423eda3f3b5fb5953ce69 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Tue, 21 May 2019 15:07:09 -0700
+Subject: [PATCH 0356/1418] KVM: x86: Export kvm_mmio tracepoint for use by TDX
+ for PV MMIO
+
+Later kvm_intel.ko will use it.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/x86.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 355ecc1c34c0..2703591432aa 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -12324,6 +12324,7 @@ EXPORT_SYMBOL_GPL(kvm_sev_es_string_io);
+ 
+ EXPORT_TRACEPOINT_SYMBOL_GPL(kvm_entry);
+ EXPORT_TRACEPOINT_SYMBOL_GPL(kvm_exit);
++EXPORT_TRACEPOINT_SYMBOL_GPL(kvm_mmio);
+ EXPORT_TRACEPOINT_SYMBOL_GPL(kvm_fast_mmio);
+ EXPORT_TRACEPOINT_SYMBOL_GPL(kvm_inj_virq);
+ EXPORT_TRACEPOINT_SYMBOL_GPL(kvm_page_fault);
+-- 
+2.31.1
+

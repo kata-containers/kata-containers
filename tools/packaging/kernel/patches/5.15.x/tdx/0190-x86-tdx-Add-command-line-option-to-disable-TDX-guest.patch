@@ -1,0 +1,127 @@
+From 6c1ad27bd13515b889e44708d1d32165297356ce Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Tue, 21 Jul 2020 21:49:30 -0700
+Subject: [PATCH 0190/1418] x86/tdx: Add command line option to disable TDX
+ guest filter support
+
+Add a kernel command line option to disable device filter support for
+TDX guest platform. It is a debug feature.
+
+When the device filer is disabled it's possible to load all kinds of
+drivers. These drivers don't know how to use ioremap_host_shared to get
+a shared mapping for MMIO. When trying to do MMIO on a non shared
+mapping KVM gets an error, but it cannot inject an exception so it ends
+up with a cryptic and hard to debug KVM error on the host with the
+guest being killed.
+
+Instead if the device filter is overridden, force all ioremaps to
+shared. This works because the command line parsing is before any
+ioremaps.
+
+The drawback is that some structures that shouldn't really be shared
+will be made shared too, mainly BIOS data structures that get mapped.
+
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ .../admin-guide/kernel-parameters.txt          |  3 +++
+ arch/x86/include/asm/tdx.h                     |  4 ++++
+ arch/x86/kernel/cc_platform.c                  |  3 ++-
+ arch/x86/kernel/tdx-filter.c                   | 18 ++++++++++++++++++
+ 4 files changed, 27 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index 8a047e86a72b..7044b66e0024 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -5631,6 +5631,9 @@
+ 
+ 	tdfx=		[HW,DRM]
+ 
++	tdx_disable_filter [x86]
++			Disable TDX guest filter support.
++
+ 	test_suspend=	[SUSPEND][,N]
+ 			Specify "mem" (for Suspend-to-RAM) or "standby" (for
+ 			standby suspend) or "freeze" (for suspend type freeze)
+diff --git a/arch/x86/include/asm/tdx.h b/arch/x86/include/asm/tdx.h
+index eda001358b25..090675ee3ded 100644
+--- a/arch/x86/include/asm/tdx.h
++++ b/arch/x86/include/asm/tdx.h
+@@ -100,6 +100,8 @@ extern void (*tdx_event_notify_handler)(void);
+ 
+ bool tdx_guest_dev_authorized(struct device *dev);
+ 
++bool tdx_filter_enabled(void);
++
+ /*
+  * To support I/O port access in decompressor or early kernel init
+  * code, since #VE exception handler cannot be used, use paravirt
+@@ -178,6 +180,8 @@ static inline bool tdx_guest_dev_authorized(struct device *dev)
+ 	return dev->authorized;
+ }
+ 
++static inline bool tdx_filter_enabled(void) { return true; }
++
+ #endif /* CONFIG_INTEL_TDX_GUEST */
+ 
+ #if defined(CONFIG_KVM_GUEST) && defined(CONFIG_INTEL_TDX_GUEST)
+diff --git a/arch/x86/kernel/cc_platform.c b/arch/x86/kernel/cc_platform.c
+index e53e059b5861..9729955759d4 100644
+--- a/arch/x86/kernel/cc_platform.c
++++ b/arch/x86/kernel/cc_platform.c
+@@ -41,8 +41,9 @@ static bool intel_cc_platform_has(enum cc_attr attr)
+ 	case CC_ATTR_GUEST_MEM_ENCRYPT:
+ 	case CC_ATTR_GUEST_SHARED_MAPPING_INIT:
+ 	case CC_ATTR_MEM_ENCRYPT:
+-	case CC_ATTR_GUEST_DEVICE_FILTER:
+ 		return is_tdx_guest();
++	case CC_ATTR_GUEST_DEVICE_FILTER:
++		return tdx_filter_enabled() && is_tdx_guest();
+ 	default:
+ 		return false;
+ 	}
+diff --git a/arch/x86/kernel/tdx-filter.c b/arch/x86/kernel/tdx-filter.c
+index f3c076e25c10..fc564e8c75a4 100644
+--- a/arch/x86/kernel/tdx-filter.c
++++ b/arch/x86/kernel/tdx-filter.c
+@@ -40,6 +40,9 @@ static struct pci_device_id cmd_pci_ids[CMDLINE_MAX_NODES];
+ static int cmd_pci_nodes_len;
+ static int cmd_allowed_nodes_len;
+ 
++/* Status of TDX filter */
++static bool tdx_filter_status = 1;
++
+ /* Set true if authorize_allow_devs is used */
+ static bool filter_overridden;
+ 
+@@ -191,11 +194,26 @@ bool tdx_guest_dev_authorized(struct device *dev)
+ 	return dev_default_authorization;
+ }
+ 
++bool tdx_filter_enabled(void)
++{
++	return tdx_filter_status;
++}
++
+ void __init tdx_filter_init(void)
+ {
+ 	if (!cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
+ 		return;
+ 
++	if (cmdline_find_option_bool(boot_command_line, "tdx_disable_filter"))
++		tdx_filter_status = 0;
++
++	if (!tdx_filter_enabled()) {
++		pr_info("Disabled TDX guest filter support\n");
++		ioremap_force_shared = true;
++		add_taint(TAINT_CONF_NO_LOCKDOWN, LOCKDEP_STILL_OK);
++		return;
++	}
++
+ 	dev_default_authorization = false;
+ 
+ 	if (filter_overridden) {
+-- 
+2.31.1
+

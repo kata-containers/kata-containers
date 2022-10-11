@@ -1,0 +1,96 @@
+From f8d01c44e53e6c51bff8727dfb5753766e8410b4 Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Mon, 27 Dec 2021 13:38:16 -0800
+Subject: [PATCH 1188/1418] entry: Split up irqentry_exit_cond_resched()
+
+Auxiliary pt_regs space needs to be manipulated by the generic
+entry/exit code.
+
+Normally irqentry_exit() would take care of handling any auxiliary
+pt_regs on exit.  Unfortunately, the call to
+irqentry_exit_cond_resched() from xen_pv_evtchn_do_upcall() bypasses the
+normal irqentry_exit() call.  Because of this bypass
+irqentry_exit_cond_resched() will be required to handle any auxiliary
+pt_regs exit handling.  However, this prevents irqentry_exit() from
+being able to call irqentry_exit_cond_resched() and while maintaining
+control of the auxiliary pt_regs.
+
+Separate out the common functionality of irqentry_exit_cond_resched() so
+that functionality can be used by irqentry_exit().  Add a pt_regs
+parameter in anticipation of having irqentry_exit_cond_resched() handle
+the auxiliary pt_regs separately from irqentry_exit().
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ arch/x86/entry/common.c      | 2 +-
+ include/linux/entry-common.h | 3 ++-
+ kernel/entry/common.c        | 9 +++++++--
+ 3 files changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/entry/common.c b/arch/x86/entry/common.c
+index 6c2826417b33..f1ba770d035d 100644
+--- a/arch/x86/entry/common.c
++++ b/arch/x86/entry/common.c
+@@ -309,7 +309,7 @@ __visible noinstr void xen_pv_evtchn_do_upcall(struct pt_regs *regs)
+ 
+ 	inhcall = get_and_clear_inhcall();
+ 	if (inhcall && !WARN_ON_ONCE(state.exit_rcu)) {
+-		irqentry_exit_cond_resched();
++		irqentry_exit_cond_resched(regs);
+ 		instrumentation_end();
+ 		restore_inhcall(inhcall);
+ 	} else {
+diff --git a/include/linux/entry-common.h b/include/linux/entry-common.h
+index ddaffc983e62..14fd329847e7 100644
+--- a/include/linux/entry-common.h
++++ b/include/linux/entry-common.h
+@@ -451,10 +451,11 @@ irqentry_state_t noinstr irqentry_enter(struct pt_regs *regs);
+ 
+ /**
+  * irqentry_exit_cond_resched - Conditionally reschedule on return from interrupt
++ * @regs:	Pointer to pt_regs of interrupted context
+  *
+  * Conditional reschedule with additional sanity checks.
+  */
+-void irqentry_exit_cond_resched(void);
++void irqentry_exit_cond_resched(struct pt_regs *regs);
+ 
+ void __irqentry_exit_cond_resched(void);
+ #ifdef CONFIG_PREEMPT_DYNAMIC
+diff --git a/kernel/entry/common.c b/kernel/entry/common.c
+index 2246c3660412..2bbad7af15be 100644
+--- a/kernel/entry/common.c
++++ b/kernel/entry/common.c
+@@ -395,7 +395,7 @@ void __irqentry_exit_cond_resched(void)
+ DEFINE_STATIC_CALL(__irqentry_exit_cond_resched, __irqentry_exit_cond_resched);
+ #endif
+ 
+-void irqentry_exit_cond_resched(void)
++static void exit_cond_resched(void)
+ {
+ 	if (IS_ENABLED(CONFIG_PREEMPTION)) {
+ #ifdef CONFIG_PREEMPT_DYNAMIC
+@@ -406,6 +406,11 @@ void irqentry_exit_cond_resched(void)
+ 	}
+ }
+ 
++void irqentry_exit_cond_resched(struct pt_regs *regs)
++{
++	exit_cond_resched();
++}
++
+ noinstr void irqentry_exit(struct pt_regs *regs, irqentry_state_t state)
+ {
+ 	lockdep_assert_irqs_disabled();
+@@ -431,7 +436,7 @@ noinstr void irqentry_exit(struct pt_regs *regs, irqentry_state_t state)
+ 		}
+ 
+ 		instrumentation_begin();
+-		irqentry_exit_cond_resched();
++		exit_cond_resched();
+ 		/* Covers both tracing and lockdep */
+ 		trace_hardirqs_on();
+ 		instrumentation_end();
+-- 
+2.31.1
+

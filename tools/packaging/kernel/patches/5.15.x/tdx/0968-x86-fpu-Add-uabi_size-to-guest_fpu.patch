@@ -1,0 +1,64 @@
+From 0181f9381658de9605ef7feade52454ccab90f82 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 5 Jan 2022 04:35:28 -0800
+Subject: [PATCH 0968/1418] x86/fpu: Add uabi_size to guest_fpu
+
+Userspace needs to inquire KVM about the buffer size to work
+with the new KVM_SET_XSAVE and KVM_GET_XSAVE2. Add the size info
+to guest_fpu for KVM to access.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Wei Wang <wei.w.wang@intel.com>
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Message-Id: <20220105123532.12586-18-yang.zhong@intel.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/include/asm/fpu/types.h | 5 +++++
+ arch/x86/kernel/fpu/core.c       | 1 +
+ arch/x86/kernel/fpu/xstate.c     | 1 +
+ 3 files changed, 7 insertions(+)
+
+diff --git a/arch/x86/include/asm/fpu/types.h b/arch/x86/include/asm/fpu/types.h
+index 3795d0573773..eb7cd1139d97 100644
+--- a/arch/x86/include/asm/fpu/types.h
++++ b/arch/x86/include/asm/fpu/types.h
+@@ -522,6 +522,11 @@ struct fpu_guest {
+ 	 */
+ 	u64				xfd_err;
+ 
++	/*
++	 * @uabi_size:			Size required for save/restore
++	 */
++	unsigned int			uabi_size;
++
+ 	/*
+ 	 * @fpstate:			Pointer to the allocated guest fpstate
+ 	 */
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 856c2a8238ef..8dcdc7f0a264 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -239,6 +239,7 @@ bool fpu_alloc_guest_fpstate(struct fpu_guest *gfpu)
+ 	gfpu->fpstate		= fpstate;
+ 	gfpu->xfeatures		= fpu_user_cfg.default_features;
+ 	gfpu->perm		= fpu_user_cfg.default_features;
++	gfpu->uabi_size		= fpu_user_cfg.default_size;
+ 	fpu_init_guest_permissions(gfpu);
+ 
+ 	return true;
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 0c0b2323cdec..10fe072f1c92 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -1545,6 +1545,7 @@ static int fpstate_realloc(u64 xfeatures, unsigned int ksize,
+ 		newfps->is_confidential = curfps->is_confidential;
+ 		newfps->in_use = curfps->in_use;
+ 		guest_fpu->xfeatures |= xfeatures;
++		guest_fpu->uabi_size = usize;
+ 	}
+ 
+ 	fpregs_lock();
+-- 
+2.31.1
+

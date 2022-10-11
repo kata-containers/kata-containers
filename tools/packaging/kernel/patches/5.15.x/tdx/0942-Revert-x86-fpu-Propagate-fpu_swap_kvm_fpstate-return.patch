@@ -1,0 +1,90 @@
+From 024819627bd0b7887fb825429479acf91306ffc4 Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 18:05:20 -0800
+Subject: [PATCH 0942/1418] Revert "x86/fpu: Propagate fpu_swap_kvm_fpstate()
+ return value for KVM"
+
+This reverts commit 585526214fea37f1431a3baaab15a6d285350073.
+---
+ arch/x86/kernel/fpu/core.c |  4 ++--
+ arch/x86/kvm/x86.c         | 27 +++++----------------------
+ 2 files changed, 7 insertions(+), 24 deletions(-)
+
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index a8f787a62248..cb2eb2089300 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -278,7 +278,7 @@ int fpu_swap_kvm_fpstate(struct fpu_guest *guest_fpu, bool enter_guest)
+ {
+ 	struct fpstate *guest_fps, *cur_fps;
+ 	struct fpu *fpu = &current->thread.fpu;
+-	int ret = 0;
++	int ret;
+ 
+ 	if (unlikely(guest_fpu->realloc_request))
+ 		ret = fpu_guest_realloc_fpstate(guest_fpu, enter_guest);
+@@ -317,7 +317,7 @@ int fpu_swap_kvm_fpstate(struct fpu_guest *guest_fpu, bool enter_guest)
+ 
+ 	fpregs_mark_activate();
+ 	fpregs_unlock();
+-	return ret;
++	return 0;
+ }
+ EXPORT_SYMBOL_GPL(fpu_swap_kvm_fpstate);
+ 
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index e593d67aa17a..8bf8ef011c25 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -10107,26 +10107,18 @@ static void kvm_load_guest_fpu(struct kvm_vcpu *vcpu)
+ 	trace_kvm_fpu(1);
+ }
+ 
+-/*
+- * When vcpu_run ends, restore user space FPU context.
+- * Propagate error to userspace.
+- */
+-static int kvm_put_guest_fpu(struct kvm_vcpu *vcpu)
++/* When vcpu_run ends, restore user space FPU context. */
++static void kvm_put_guest_fpu(struct kvm_vcpu *vcpu)
+ {
+-	int ret;
+-
+-	ret = fpu_swap_kvm_fpstate(&vcpu->arch.guest_fpu, false);
+-
++	fpu_swap_kvm_fpstate(&vcpu->arch.guest_fpu, false);
+ 	++vcpu->stat.fpu_reload;
+ 	trace_kvm_fpu(0);
+-
+-	return ret;
+ }
+ 
+ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
+ {
+ 	struct kvm_run *kvm_run = vcpu->run;
+-	int r, put_ret;
++	int r;
+ 
+ 	vcpu_load(vcpu);
+ 	kvm_sigset_activate(vcpu);
+@@ -10194,16 +10186,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
+ 		r = vcpu_run(vcpu);
+ 
+ out:
+-	put_ret = kvm_put_guest_fpu(vcpu);
+-	/*
+-	 * kvm_put_guest_fpu() only returns negative error when there was
+-	 * realloction request but failed to reallocate. And in such case,
+-	 * vcpu_run() should return zero.
+-	 */
+-	WARN_ON_ONCE(r && put_ret);
+-	/* Propagate reallocation error to userspace */
+-	if (put_ret)
+-		r = put_ret;
++	kvm_put_guest_fpu(vcpu);
+ 	if (kvm_run->kvm_valid_regs && !vcpu->arch.guest_state_protected)
+ 		store_regs(vcpu);
+ 	post_kvm_run_save(vcpu);
+-- 
+2.31.1
+

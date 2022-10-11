@@ -1,0 +1,155 @@
+From 5d116c47d94f2a2a91458305495c098c64002b14 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Fri, 9 Jul 2021 21:30:48 -0700
+Subject: [PATCH 0251/1418] platform/x86: Add RTMR update interface
+
+Add an experimental interface to update the RTMR measurement registers
+in the TDX module from ring 3. Simply allow to pass in a update hash
+and pass it on to a TDCALL. The interface has the same rights
+as any other operation on the tdx-attest device node, so becomes
+controllable by udev rules.
+
+This is currently not for upstream, but mainly for internal
+testing.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/tdx.h                    |  2 ++
+ arch/x86/kernel/tdx.c                         | 29 +++++++++++++++++++
+ .../platform/x86/intel/tdx/intel_tdx_attest.c | 22 ++++++++++++++
+ include/uapi/misc/tdx.h                       | 13 +++++++++
+ 4 files changed, 66 insertions(+)
+
+diff --git a/arch/x86/include/asm/tdx.h b/arch/x86/include/asm/tdx.h
+index 72637d8f1e9c..cff0c27230aa 100644
+--- a/arch/x86/include/asm/tdx.h
++++ b/arch/x86/include/asm/tdx.h
+@@ -99,6 +99,8 @@ extern void tdx_accept_memory(phys_addr_t start, phys_addr_t end);
+ 
+ int tdx_mcall_tdreport(u64 data, u64 reportdata);
+ 
++int tdx_mcall_rtmr_extend(u64 data, u64 rmtr);
++
+ int tdx_hcall_get_quote(u64 data);
+ 
+ extern void (*tdx_event_notify_handler)(void);
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 2be51c0cf509..82672db87c5d 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -27,6 +27,7 @@
+ 
+ /* TDX Module call Leaf IDs */
+ #define TDX_GET_INFO			1
++#define TDX_RMTR_EXTEND			2
+ #define TDX_GET_VEINFO			3
+ #define TDX_GET_REPORT			4
+ #define TDX_ACCEPT_PAGE			6
+@@ -226,6 +227,34 @@ int tdx_mcall_tdreport(u64 data, u64 reportdata)
+ }
+ EXPORT_SYMBOL_GPL(tdx_mcall_tdreport);
+ 
++/*
++ * tdx_mcall_rtmr_extend() - Extend a TDX measurement register
++ *
++ * @data	: Physical address of 96B aligned data.
++ * @rtmr	: RTMR number
++ *
++ * return 0 on success or failure error number.
++ */
++int tdx_mcall_rtmr_extend(u64 data, u64 rtmr)
++{
++	u64 ret;
++
++	if (!data || !cc_platform_has(CC_ATTR_GUEST_TDX))
++		return -EINVAL;
++
++	ret = __trace_tdx_module_call(TDX_RMTR_EXTEND, data, rtmr, 0, 0, NULL);
++
++	if (ret == TDCALL_SUCCESS)
++		return 0;
++	else if (TDCALL_RETURN_CODE(ret) == TDCALL_INVALID_OPERAND)
++		return -EINVAL;
++	else if (TDCALL_RETURN_CODE(ret) == TDCALL_OPERAND_BUSY)
++		return -EBUSY;
++
++	return -EIO;
++}
++EXPORT_SYMBOL_GPL(tdx_mcall_rtmr_extend);
++
+ /*
+  * tdx_hcall_get_quote() - Generate TDQUOTE using TDREPORT_STRUCT.
+  *
+diff --git a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+index 985bb8251266..e1bb5355b68a 100644
+--- a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
++++ b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+@@ -56,6 +56,7 @@ static long tdx_attest_ioctl(struct file *file, unsigned int cmd,
+ {
+ 	void __user *argp = (void __user *)arg;
+ 	long ret = 0;
++	u64 rtmr;
+ 
+ 	mutex_lock(&attestation_lock);
+ 
+@@ -107,6 +108,27 @@ static long tdx_attest_ioctl(struct file *file, unsigned int cmd,
+ 	case TDX_CMD_GET_QUOTE_SIZE:
+ 		ret = put_user(QUOTE_SIZE, (u64 __user *)argp);
+ 		break;
++
++	case TDX_CMD_EXTEND_RTMR:
++		BUILD_BUG_ON(TDX_TDREPORT_LEN < TDX_EXTEND_LEN);
++
++		ret = -EFAULT;
++
++		if (get_user(rtmr, (u64 __user *)argp))
++			break;
++		if (copy_from_user(report_data, argp + 8, TDX_EXTEND_LEN))
++			break;
++
++		ret = 0;
++		if (tdx_mcall_rtmr_extend(virt_to_phys(report_data), rtmr))
++			ret = -EIO;
++
++		break;
++
++	case TDX_CMD_GET_EXTEND_SIZE:
++		ret = put_user(TDX_EXTEND_LEN, (u64 __user *)argp);
++		break;
++
+ 	default:
+ 		pr_err("cmd %d not supported\n", cmd);
+ 		break;
+diff --git a/include/uapi/misc/tdx.h b/include/uapi/misc/tdx.h
+index da4b3866ea1b..28cc274fddcb 100644
+--- a/include/uapi/misc/tdx.h
++++ b/include/uapi/misc/tdx.h
+@@ -11,6 +11,9 @@
+ /* Output TD report data length after TDX_CMD_GET_TDREPORT IOCTL execution */
+ #define TDX_TDREPORT_LEN		1024
+ 
++/* Input data length for EXTEND_RTMR (not including index) */
++#define TDX_EXTEND_LEN			48
++
+ /*
+  * TDX_CMD_GET_TDREPORT IOCTL is used to get TDREPORT data from the TDX
+  * Module. Users should pass report data of size TDX_REPORT_DATA_LEN bytes
+@@ -34,4 +37,14 @@
+  */
+ #define TDX_CMD_GET_QUOTE_SIZE		_IOR('T', 0x03, __u64)
+ 
++/*
++ * Extend a TDX measurement register (RTMR) by input data.
++ * The first u64 of the buffer is the RTMR index, then the remaining
++ * is a hash value of the length returned by TDX_CMD_GET_EXTEND_SIZE
++ */
++#define TDX_CMD_EXTEND_RTMR		_IOR('T', 0x04, __u64)
++
++/* Report input buffer size for TDX_CMD_EXTEND_RTMR */
++#define TDX_CMD_GET_EXTEND_SIZE		_IOR('T', 0x05, __u64)
++
+ #endif /* _UAPI_MISC_TDX_H */
+-- 
+2.31.1
+

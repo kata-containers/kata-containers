@@ -1,0 +1,30 @@
+From 3a7bbad0d128b2888b91c750bc79cb67a390e788 Mon Sep 17 00:00:00 2001
+From: Trond Myklebust <trond.myklebust@hammerspace.com>
+Date: Wed, 6 Apr 2022 22:33:19 -0400
+Subject: [PATCH 1347/1418] NFSv4/pnfs: Handle RPC allocation errors in
+ nfs4_proc_layoutget
+
+If rpc_run_task() fails due to an allocation error, then bail out early.
+
+Fixes: 910ad38697d9 ("NFS: Fix memory allocation in rpc_alloc_task()")
+Signed-off-by: Trond Myklebust <trond.myklebust@hammerspace.com>
+---
+ fs/nfs/nfs4proc.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/fs/nfs/nfs4proc.c b/fs/nfs/nfs4proc.c
+index e1214bb6b7ee..4369a6dcc9c9 100644
+--- a/fs/nfs/nfs4proc.c
++++ b/fs/nfs/nfs4proc.c
+@@ -9582,6 +9582,8 @@ nfs4_proc_layoutget(struct nfs4_layoutget *lgp, long *timeout)
+ 	nfs4_init_sequence(&lgp->args.seq_args, &lgp->res.seq_res, 0, 0);
+ 
+ 	task = rpc_run_task(&task_setup_data);
++	if (IS_ERR(task))
++		return ERR_CAST(task);
+ 
+ 	status = rpc_wait_for_completion_task(task);
+ 	if (status != 0)
+-- 
+2.31.1
+

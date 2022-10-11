@@ -1,0 +1,84 @@
+From 5614f3df3f21ff82cfce8c5f9d5b9a50cd863907 Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Fri, 17 Dec 2021 20:06:08 +0100
+Subject: [PATCH 0999/1418] cpufreq: intel_pstate: Update cpuinfo.max_freq on
+ HWP_CAP changes
+
+With HWP enabled, when the turbo range of performance levels is
+disabled by the platform firmware, the CPU capacity is given by
+the "guaranteed performance" field in MSR_HWP_CAPABILITIES which
+is generally dynamic.  When it changes, the kernel receives an HWP
+notification interrupt handled by notify_hwp_interrupt().
+
+When the "guaranteed performance" value changes in the above
+configuration, the CPU performance scaling needs to be adjusted so
+as to use the new CPU capacity in computations, which means that
+the cpuinfo.max_freq value needs to be updated for that CPU.
+
+Accordingly, modify intel_pstate_notify_work() to read
+MSR_HWP_CAPABILITIES and update cpuinfo.max_freq to reflect the
+new configuration (this update can be carried out even if the
+configuration doesn't actually change, because it simply doesn't
+matter then and it takes less time to update it than to do extra
+checks to decide whether or not a change has really occurred).
+
+Reported-by: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Tested-by: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ drivers/cpufreq/intel_pstate.c | 24 +++++++++++++++++-------
+ 1 file changed, 17 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/cpufreq/intel_pstate.c b/drivers/cpufreq/intel_pstate.c
+index 38cabc38261a..bc7f7e6759bd 100644
+--- a/drivers/cpufreq/intel_pstate.c
++++ b/drivers/cpufreq/intel_pstate.c
+@@ -1134,19 +1134,22 @@ static void intel_pstate_update_policies(void)
+ 		cpufreq_update_policy(cpu);
+ }
+ 
++static void __intel_pstate_update_max_freq(struct cpudata *cpudata,
++					   struct cpufreq_policy *policy)
++{
++	policy->cpuinfo.max_freq = global.turbo_disabled_mf ?
++			cpudata->pstate.max_freq : cpudata->pstate.turbo_freq;
++	refresh_frequency_limits(policy);
++}
++
+ static void intel_pstate_update_max_freq(unsigned int cpu)
+ {
+ 	struct cpufreq_policy *policy = cpufreq_cpu_acquire(cpu);
+-	struct cpudata *cpudata;
+ 
+ 	if (!policy)
+ 		return;
+ 
+-	cpudata = all_cpu_data[cpu];
+-	policy->cpuinfo.max_freq = global.turbo_disabled_mf ?
+-			cpudata->pstate.max_freq : cpudata->pstate.turbo_freq;
+-
+-	refresh_frequency_limits(policy);
++	__intel_pstate_update_max_freq(all_cpu_data[cpu], policy);
+ 
+ 	cpufreq_cpu_release(policy);
+ }
+@@ -1594,8 +1597,15 @@ static void intel_pstate_notify_work(struct work_struct *work)
+ {
+ 	struct cpudata *cpudata =
+ 		container_of(to_delayed_work(work), struct cpudata, hwp_notify_work);
++	struct cpufreq_policy *policy = cpufreq_cpu_acquire(cpudata->cpu);
++
++	if (policy) {
++		intel_pstate_get_hwp_cap(cpudata);
++		__intel_pstate_update_max_freq(cpudata, policy);
++
++		cpufreq_cpu_release(policy);
++	}
+ 
+-	cpufreq_update_policy(cpudata->cpu);
+ 	wrmsrl_on_cpu(cpudata->cpu, MSR_HWP_STATUS, 0);
+ }
+ 
+-- 
+2.31.1
+

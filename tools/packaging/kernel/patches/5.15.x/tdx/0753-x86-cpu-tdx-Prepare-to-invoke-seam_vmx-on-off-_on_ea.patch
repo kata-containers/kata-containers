@@ -1,0 +1,69 @@
+From e16520717783e91cfafd4f593b2304ced1f27c06 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Sun, 12 Dec 2021 16:29:44 +0800
+Subject: [PATCH 0753/1418] x86/cpu/tdx: Prepare to invoke
+ seam_vmx{on,off}_on_each_cpu at runtime
+
+SEAMCALLs must be invoked from VMX operation. seam_vmx{on,off}_on_each_cpu
+can be reused to enter/exit VMX operation before/after TDX module update.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/seam.c | 8 ++++----
+ arch/x86/kernel/cpu/tdx/seam.h | 4 ++--
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/seam.c b/arch/x86/kernel/cpu/tdx/seam.c
+index f88f61850f0b..18df27f6bebb 100644
+--- a/arch/x86/kernel/cpu/tdx/seam.c
++++ b/arch/x86/kernel/cpu/tdx/seam.c
+@@ -89,7 +89,7 @@ void __init seam_init_vmxon_vmcs(struct vmcs *vmcs)
+ 	vmcs->hdr.revision_id = seam_vmxon_version_id;
+ }
+ 
+-static void __init seam_vmxon(void *data)
++static void seam_vmxon(void *data)
+ {
+ 	atomic_t *error = data;
+ 	int r;
+@@ -99,7 +99,7 @@ static void __init seam_vmxon(void *data)
+ 		atomic_set(error, r);
+ }
+ 
+-int __init seam_vmxon_on_each_cpu(void)
++int seam_vmxon_on_each_cpu(void)
+ {
+ 	atomic_t error;
+ 
+@@ -113,12 +113,12 @@ int __init seam_vmxon_on_each_cpu(void)
+ 	return atomic_read(&error);
+ }
+ 
+-static void __init seam_vmxoff(void *data)
++static void seam_vmxoff(void *data)
+ {
+ 	cpu_vmx_put();
+ }
+ 
+-int __init seam_vmxoff_on_each_cpu(void)
++int seam_vmxoff_on_each_cpu(void)
+ {
+ 	atomic_t error;
+ 
+diff --git a/arch/x86/kernel/cpu/tdx/seam.h b/arch/x86/kernel/cpu/tdx/seam.h
+index b8a083a495f6..19711ae8579e 100644
+--- a/arch/x86/kernel/cpu/tdx/seam.h
++++ b/arch/x86/kernel/cpu/tdx/seam.h
+@@ -13,7 +13,7 @@ bool __init seam_get_firmware(struct cpio_data *blob, const char *name);
+ int __init seam_init_vmx_early(void);
+ void __init seam_init_vmxon_vmcs(struct vmcs *vmcs);
+ 
+-int __init seam_vmxon_on_each_cpu(void);
+-int __init seam_vmxoff_on_each_cpu(void);
++int seam_vmxon_on_each_cpu(void);
++int seam_vmxoff_on_each_cpu(void);
+ 
+ #endif /* _X86_TDX_SEAM_H */
+-- 
+2.31.1
+

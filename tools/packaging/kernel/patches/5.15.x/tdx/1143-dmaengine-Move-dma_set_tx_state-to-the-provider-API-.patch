@@ -1,0 +1,62 @@
+From 2bec4897925517a500f4768585660ae4de3ccfaf Mon Sep 17 00:00:00 2001
+From: Ben Walker <benjamin.walker@intel.com>
+Date: Wed, 1 Dec 2021 11:03:06 -0700
+Subject: [PATCH 1143/1418] dmaengine: Move dma_set_tx_state to the provider
+ API header
+
+This is only used by DMA providers, not DMA clients. Move it next
+to the other cookie utility functions.
+
+Signed-off-by: Ben Walker <benjamin.walker@intel.com>
+---
+ drivers/dma/dmaengine.h   | 11 +++++++++++
+ include/linux/dmaengine.h | 11 -----------
+ 2 files changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/drivers/dma/dmaengine.h b/drivers/dma/dmaengine.h
+index a2ce377e9ed0..e72876a512a3 100644
+--- a/drivers/dma/dmaengine.h
++++ b/drivers/dma/dmaengine.h
+@@ -90,6 +90,17 @@ static inline enum dma_status dma_cookie_status(struct dma_chan *chan,
+ 	return DMA_IN_PROGRESS;
+ }
+ 
++static inline void dma_set_tx_state(struct dma_tx_state *st,
++	dma_cookie_t last, dma_cookie_t used, u32 residue)
++{
++	if (!st)
++		return;
++
++	st->last = last;
++	st->used = used;
++	st->residue = residue;
++}
++
+ static inline void dma_set_residue(struct dma_tx_state *state, u32 residue)
+ {
+ 	if (state)
+diff --git a/include/linux/dmaengine.h b/include/linux/dmaengine.h
+index 46214ae1137b..95e694d7292c 100644
+--- a/include/linux/dmaengine.h
++++ b/include/linux/dmaengine.h
+@@ -1441,17 +1441,6 @@ static inline enum dma_status dma_async_is_tx_complete(struct dma_chan *chan,
+ 	return status;
+ }
+ 
+-static inline void
+-dma_set_tx_state(struct dma_tx_state *st, dma_cookie_t last, dma_cookie_t used, u32 residue)
+-{
+-	if (!st)
+-		return;
+-
+-	st->last = last;
+-	st->used = used;
+-	st->residue = residue;
+-}
+-
+ #ifdef CONFIG_DMA_ENGINE
+ struct dma_chan *dma_find_channel(enum dma_transaction_type tx_type);
+ enum dma_status dma_sync_wait(struct dma_chan *chan, dma_cookie_t cookie);
+-- 
+2.31.1
+

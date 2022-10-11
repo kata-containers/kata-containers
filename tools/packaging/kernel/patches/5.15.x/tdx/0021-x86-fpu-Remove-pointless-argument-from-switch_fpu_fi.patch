@@ -1,0 +1,75 @@
+From 608c523f0bde9c1fdd96fde1336dbb92da7eb61e Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 15 Oct 2021 03:15:54 +0200
+Subject: [PATCH 0021/1418] x86/fpu: Remove pointless argument from
+ switch_fpu_finish()
+
+Unused since the FPU switching rework.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211015011538.433135710@linutronix.de
+---
+ arch/x86/include/asm/fpu/internal.h | 2 +-
+ arch/x86/kernel/process_32.c        | 3 +--
+ arch/x86/kernel/process_64.c        | 3 +--
+ 3 files changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/internal.h b/arch/x86/include/asm/fpu/internal.h
+index 89960e479f87..1503750534f7 100644
+--- a/arch/x86/include/asm/fpu/internal.h
++++ b/arch/x86/include/asm/fpu/internal.h
+@@ -521,7 +521,7 @@ static inline void switch_fpu_prepare(struct fpu *old_fpu, int cpu)
+  * Delay loading of the complete FPU state until the return to userland.
+  * PKRU is handled separately.
+  */
+-static inline void switch_fpu_finish(struct fpu *new_fpu)
++static inline void switch_fpu_finish(void)
+ {
+ 	if (cpu_feature_enabled(X86_FEATURE_FPU))
+ 		set_thread_flag(TIF_NEED_FPU_LOAD);
+diff --git a/arch/x86/kernel/process_32.c b/arch/x86/kernel/process_32.c
+index 4f2f54e1281c..d008e222a302 100644
+--- a/arch/x86/kernel/process_32.c
++++ b/arch/x86/kernel/process_32.c
+@@ -160,7 +160,6 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
+ 	struct thread_struct *prev = &prev_p->thread,
+ 			     *next = &next_p->thread;
+ 	struct fpu *prev_fpu = &prev->fpu;
+-	struct fpu *next_fpu = &next->fpu;
+ 	int cpu = smp_processor_id();
+ 
+ 	/* never put a printk in __switch_to... printk() calls wake_up*() indirectly */
+@@ -213,7 +212,7 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
+ 
+ 	this_cpu_write(current_task, next_p);
+ 
+-	switch_fpu_finish(next_fpu);
++	switch_fpu_finish();
+ 
+ 	/* Load the Intel cache allocation PQR MSR. */
+ 	resctrl_sched_in();
+diff --git a/arch/x86/kernel/process_64.c b/arch/x86/kernel/process_64.c
+index ec0d836a13b1..39f12ef1c85c 100644
+--- a/arch/x86/kernel/process_64.c
++++ b/arch/x86/kernel/process_64.c
+@@ -559,7 +559,6 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
+ 	struct thread_struct *prev = &prev_p->thread;
+ 	struct thread_struct *next = &next_p->thread;
+ 	struct fpu *prev_fpu = &prev->fpu;
+-	struct fpu *next_fpu = &next->fpu;
+ 	int cpu = smp_processor_id();
+ 
+ 	WARN_ON_ONCE(IS_ENABLED(CONFIG_DEBUG_ENTRY) &&
+@@ -620,7 +619,7 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
+ 	this_cpu_write(current_task, next_p);
+ 	this_cpu_write(cpu_current_top_of_stack, task_top_of_stack(next_p));
+ 
+-	switch_fpu_finish(next_fpu);
++	switch_fpu_finish();
+ 
+ 	/* Reload sp0. */
+ 	update_task_stack(next_p);
+-- 
+2.31.1
+

@@ -1,0 +1,57 @@
+From 6aa3bc77b428e8872d3a239ebfbfc62c996398fd Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Fri, 20 May 2022 16:01:38 +0000
+Subject: [PATCH 1384/1418] x86/tdx: Fix issues in tdx_handle_mmio()
+
+tdx_handle_mmio() will return standard error number on failure and
+length on success. So don't use unsigned variable to check the return
+value.
+
+Check for insn_get_length() return value in tdx_handle_mmio().
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdx.c | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index d926065718ae..74225713ae90 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -678,7 +678,8 @@ static int tdx_handle_mmio(struct pt_regs *regs, struct ve_info *ve)
+ 		if (ret)
+ 			return -EFAULT;
+ 		insn_init(&insn, buffer, MAX_INSN_SIZE, 1);
+-		insn_get_length(&insn);
++		if (insn_get_length(&insn) < 0)
++			return -EINVAL;
+ 	}
+ 
+ 	mmio = insn_decode_mmio(&insn, &size);
+@@ -877,6 +878,7 @@ bool tdx_handle_virtualization_exception(struct pt_regs *regs,
+ 					 struct ve_info *ve)
+ {
+ 	bool ret = true;
++	int instr_len;
+ 	u64 val;
+ 
+ 	trace_tdx_virtualization_exception_rcuidle(regs->ip, ve->exit_reason,
+@@ -913,11 +915,13 @@ bool tdx_handle_virtualization_exception(struct pt_regs *regs,
+ 		}
+ 
+ 		/* Currently only MMIO triggers EPT violation */
+-		ve->instr_len = tdx_handle_mmio(regs, ve);
+-		if (ve->instr_len < 0) {
++		instr_len = tdx_handle_mmio(regs, ve);
++		if (instr_len < 0) {
+ 			pr_warn_once("MMIO failed\n");
+ 			ret = false;
++			break;
+ 		}
++		ve->instr_len = instr_len;
+ 		break;
+ 	case EXIT_REASON_MONITOR_INSTRUCTION:
+ 	case EXIT_REASON_MWAIT_INSTRUCTION:
+-- 
+2.31.1
+

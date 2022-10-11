@@ -1,0 +1,62 @@
+From 81e9e165d63912d2e1c002698bea92df140e53db Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 13 Oct 2021 16:55:52 +0200
+Subject: [PATCH 0068/1418] x86/fpu: Use fpstate in
+ fpu_copy_kvm_uabi_to_fpstate()
+
+Straight forward conversion. No functional change.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211013145323.129699950@linutronix.de
+---
+ arch/x86/kernel/fpu/core.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index f4db70b64e2e..052e5efbf9f4 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -205,7 +205,7 @@ EXPORT_SYMBOL_GPL(fpu_copy_fpstate_to_kvm_uabi);
+ int fpu_copy_kvm_uabi_to_fpstate(struct fpu *fpu, const void *buf, u64 xcr0,
+ 				 u32 *vpkru)
+ {
+-	union fpregs_state *kstate = &fpu->fpstate->regs;
++	struct fpstate *kstate = fpu->fpstate;
+ 	const union fpregs_state *ustate = buf;
+ 	struct pkru_state *xpkru;
+ 	int ret;
+@@ -215,25 +215,25 @@ int fpu_copy_kvm_uabi_to_fpstate(struct fpu *fpu, const void *buf, u64 xcr0,
+ 			return -EINVAL;
+ 		if (ustate->fxsave.mxcsr & ~mxcsr_feature_mask)
+ 			return -EINVAL;
+-		memcpy(&kstate->fxsave, &ustate->fxsave, sizeof(ustate->fxsave));
++		memcpy(&kstate->regs.fxsave, &ustate->fxsave, sizeof(ustate->fxsave));
+ 		return 0;
+ 	}
+ 
+ 	if (ustate->xsave.header.xfeatures & ~xcr0)
+ 		return -EINVAL;
+ 
+-	ret = copy_uabi_from_kernel_to_xstate(&kstate->xsave, ustate);
++	ret = copy_uabi_from_kernel_to_xstate(&kstate->regs.xsave, ustate);
+ 	if (ret)
+ 		return ret;
+ 
+ 	/* Retrieve PKRU if not in init state */
+-	if (kstate->xsave.header.xfeatures & XFEATURE_MASK_PKRU) {
+-		xpkru = get_xsave_addr(&kstate->xsave, XFEATURE_PKRU);
++	if (kstate->regs.xsave.header.xfeatures & XFEATURE_MASK_PKRU) {
++		xpkru = get_xsave_addr(&kstate->regs.xsave, XFEATURE_PKRU);
+ 		*vpkru = xpkru->pkru;
+ 	}
+ 
+ 	/* Ensure that XCOMP_BV is set up for XSAVES */
+-	xstate_init_xcomp_bv(&kstate->xsave, xfeatures_mask_uabi());
++	xstate_init_xcomp_bv(&kstate->regs.xsave, xfeatures_mask_uabi());
+ 	return 0;
+ }
+ EXPORT_SYMBOL_GPL(fpu_copy_kvm_uabi_to_fpstate);
+-- 
+2.31.1
+

@@ -1,0 +1,164 @@
+From b0824d0f9359e8a0c4f82965772ef2594dfd374d Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Sat, 27 Jun 2020 23:17:26 -0700
+Subject: [PATCH 0635/1418] iommu/vt-d: Bind PASID with per-mdev
+ fault_handler_data
+
+For mdevs (a.k.a sub-devices), iommu driver should bind PASID with the
+fault_hanlder_data as PRQ reporting is done per PASID-dev granularity.
+
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/intel/iommu.c |  4 ++--
+ drivers/iommu/intel/svm.c   | 17 +++++++++++++++--
+ drivers/iommu/iommu.c       | 11 +++++++++--
+ include/linux/intel-iommu.h |  8 ++++++--
+ include/linux/iommu.h       | 11 ++++++++---
+ 5 files changed, 40 insertions(+), 11 deletions(-)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index d26700161307..1af7cfb518e0 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -4595,8 +4595,8 @@ static void intel_iommu_domain_free(struct iommu_domain *domain)
+  * Check whether a @domain could be attached to the @dev through the
+  * aux-domain attach/detach APIs.
+  */
+-static inline bool
+-is_aux_domain(struct device *dev, struct iommu_domain *domain)
++inline bool is_aux_domain(struct device *dev,
++			  struct iommu_domain *domain)
+ {
+ 	struct device_domain_info *info = get_domain_info(dev);
+ 
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index 434fd204a28d..94e691cbfbc3 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -422,8 +422,10 @@ static int pasid_to_svm_sdev(struct device *dev,
+ 	return 0;
+ }
+ 
+-int intel_svm_bind_gpasid(struct iommu_domain *domain, struct device *dev,
+-			  struct iommu_gpasid_bind_data *data)
++int intel_svm_bind_gpasid(struct iommu_domain *domain,
++			  struct device *dev,
++			  struct iommu_gpasid_bind_data *data,
++			  void *fault_data)
+ {
+ 	struct intel_iommu *iommu = device_to_iommu(dev, NULL, NULL);
+ 	struct intel_svm_dev *sdev = NULL;
+@@ -497,6 +499,12 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain, struct device *dev,
+ 			svm->gpasid = data->gpasid;
+ 			svm->flags |= SVM_FLAG_GUEST_PASID;
+ 			ioasid_attach_spid(data->hpasid, data->gpasid);
++			/*
++			 * Partial assignment needs to add fault data per-pasid
++			 */
++			if (is_aux_domain(dev, domain) && fault_data)
++				iommu_add_device_fault_data(dev, data->hpasid,
++							    fault_data);
+ 		}
+ 		ioasid_attach_data(data->hpasid, svm);
+ 		ioasid_get(NULL, svm->pasid);
+@@ -588,6 +596,11 @@ int intel_svm_unbind_gpasid(struct device *dev, u32 pasid)
+ 			intel_pasid_tear_down_entry(iommu, dev,
+ 						    svm->pasid, false);
+ 			intel_svm_drain_prq(dev, svm->pasid);
++			/*
++			 * Partial assignment needs to delete fault data
++			 */
++			if (is_aux_domain(dev, domain))
++				iommu_delete_device_fault_data(dev, pasid);
+ 			kfree_rcu(sdev, rcu);
+ 
+ 			if (list_empty(&svm->devs)) {
+diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
+index 70dd68700e60..bc41e2c615ee 100644
+--- a/drivers/iommu/iommu.c
++++ b/drivers/iommu/iommu.c
+@@ -2493,8 +2493,15 @@ static int iommu_sva_prepare_bind_data(void __user *udata,
+ 	return iommu_check_bind_data(data);
+ }
+ 
++
++/*
++ * Caller could provide fault_data to differentiate future page
++ * requests from the device. This is helpful for page request
++ * handling for partial assignments of physical devices. e.g.
++ * mediated device assingment or other sub-device solution.
++ */
+ int iommu_uapi_sva_bind_gpasid(struct iommu_domain *domain, struct device *dev,
+-			       void __user *udata)
++			       void __user *udata, void *fault_data)
+ {
+ 	struct iommu_gpasid_bind_data data = { 0 };
+ 	int ret;
+@@ -2509,7 +2516,7 @@ int iommu_uapi_sva_bind_gpasid(struct iommu_domain *domain, struct device *dev,
+ 	ret = ioasid_get_if_owned(data.hpasid);
+ 	if (ret)
+ 		return ret;
+-	ret = domain->ops->sva_bind_gpasid(domain, dev, &data);
++	ret = domain->ops->sva_bind_gpasid(domain, dev, &data, fault_data);
+ 	ioasid_put(NULL, data.hpasid);
+ 
+ 	return ret;
+diff --git a/include/linux/intel-iommu.h b/include/linux/intel-iommu.h
+index 556a2edeb719..d534b266ae20 100644
+--- a/include/linux/intel-iommu.h
++++ b/include/linux/intel-iommu.h
+@@ -763,9 +763,13 @@ struct intel_iommu *device_to_iommu(struct device *dev, u8 *bus, u8 *devfn);
+ extern void intel_svm_check(struct intel_iommu *iommu);
+ extern int intel_svm_enable_prq(struct intel_iommu *iommu);
+ extern int intel_svm_finish_prq(struct intel_iommu *iommu);
++inline bool is_aux_domain(struct device *dev,
++			  struct iommu_domain *domain);
+ int intel_svm_bind_gpasid(struct iommu_domain *domain, struct device *dev,
+-			  struct iommu_gpasid_bind_data *data);
+-int intel_svm_unbind_gpasid(struct device *dev, u32 pasid);
++			  struct iommu_gpasid_bind_data *data,
++			  void *fault_data);
++int intel_svm_unbind_gpasid(struct iommu_domain *domain,
++			    struct device *dev, u32 pasid);
+ struct iommu_sva *intel_svm_bind(struct device *dev, struct mm_struct *mm,
+ 				 void *drvdata);
+ void intel_svm_unbind(struct iommu_sva *handle);
+diff --git a/include/linux/iommu.h b/include/linux/iommu.h
+index 48e68989b1c0..e333c4d39800 100644
+--- a/include/linux/iommu.h
++++ b/include/linux/iommu.h
+@@ -311,7 +311,9 @@ struct iommu_ops {
+ 	int (*cache_invalidate)(struct iommu_domain *domain, struct device *dev,
+ 				struct iommu_cache_invalidate_info *inv_info);
+ 	int (*sva_bind_gpasid)(struct iommu_domain *domain,
+-			struct device *dev, struct iommu_gpasid_bind_data *data);
++				struct device *dev,
++				struct iommu_gpasid_bind_data *data,
++				void *fault_data);
+ 
+ 	int (*sva_unbind_gpasid)(struct device *dev, u32 pasid);
+ 
+@@ -447,7 +449,9 @@ extern int iommu_uapi_cache_invalidate(struct iommu_domain *domain,
+ 				       void __user *uinfo);
+ 
+ extern int iommu_uapi_sva_bind_gpasid(struct iommu_domain *domain,
+-				      struct device *dev, void __user *udata);
++				      struct device *dev,
++				      void __user *udata,
++				      void *fault_data);
+ extern int iommu_uapi_sva_unbind_gpasid(struct iommu_domain *domain,
+ 					struct device *dev, void __user *udata);
+ extern int iommu_sva_unbind_gpasid(struct iommu_domain *domain,
+@@ -1097,7 +1101,8 @@ iommu_uapi_cache_invalidate(struct iommu_domain *domain,
+ }
+ 
+ static inline int iommu_uapi_sva_bind_gpasid(struct iommu_domain *domain,
+-					     struct device *dev, void __user *udata)
++					     struct device *dev, void __user *udata,
++					     void *fault_data)
+ {
+ 	return -ENODEV;
+ }
+-- 
+2.31.1
+

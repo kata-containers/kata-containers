@@ -1,0 +1,58 @@
+From d8f0e4a896e210a910482d4722082d4fc9508d49 Mon Sep 17 00:00:00 2001
+From: David Howells <dhowells@redhat.com>
+Date: Fri, 11 Mar 2022 13:24:36 +0000
+Subject: [PATCH 1295/1418] watch_queue: Fix lack of barrier/sync/lock between
+ post and read
+
+There's nothing to synchronise post_one_notification() versus
+pipe_read().  Whilst posting is done under pipe->rd_wait.lock, the
+reader only takes pipe->mutex which cannot bar notification posting as
+that may need to be made from contexts that cannot sleep.
+
+Fix this by setting pipe->head with a barrier in post_one_notification()
+and reading pipe->head with a barrier in pipe_read().
+
+If that's not sufficient, the rd_wait.lock will need to be taken,
+possibly in a ->confirm() op so that it only applies to notifications.
+The lock would, however, have to be dropped before copy_page_to_iter()
+is invoked.
+
+Fixes: c73be61cede5 ("pipe: Add general notification queue support")
+Reported-by: Jann Horn <jannh@google.com>
+Signed-off-by: David Howells <dhowells@redhat.com>
+Signed-off-by: Linus Torvalds <torvalds@linux-foundation.org>
+---
+ fs/pipe.c            | 3 ++-
+ kernel/watch_queue.c | 2 +-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/fs/pipe.c b/fs/pipe.c
+index 8b0f6979fb49..751d5b36c84b 100644
+--- a/fs/pipe.c
++++ b/fs/pipe.c
+@@ -252,7 +252,8 @@ pipe_read(struct kiocb *iocb, struct iov_iter *to)
+ 	 */
+ 	was_full = pipe_full(pipe->head, pipe->tail, pipe->max_usage);
+ 	for (;;) {
+-		unsigned int head = pipe->head;
++		/* Read ->head with a barrier vs post_one_notification() */
++		unsigned int head = smp_load_acquire(&pipe->head);
+ 		unsigned int tail = pipe->tail;
+ 		unsigned int mask = pipe->ring_size - 1;
+ 
+diff --git a/kernel/watch_queue.c b/kernel/watch_queue.c
+index c12267ccc70e..37bcd900fd77 100644
+--- a/kernel/watch_queue.c
++++ b/kernel/watch_queue.c
+@@ -113,7 +113,7 @@ static bool post_one_notification(struct watch_queue *wqueue,
+ 	buf->offset = offset;
+ 	buf->len = len;
+ 	buf->flags = PIPE_BUF_FLAG_WHOLE;
+-	pipe->head = head + 1;
++	smp_store_release(&pipe->head, head + 1); /* vs pipe_read() */
+ 
+ 	if (!test_and_clear_bit(note, wqueue->notes_bitmap)) {
+ 		spin_unlock_irq(&pipe->rd_wait.lock);
+-- 
+2.31.1
+

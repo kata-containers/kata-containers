@@ -1,0 +1,266 @@
+From 5c9809c91b67ee733bae8bc675bcdc2edb518a90 Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Tue, 9 Nov 2021 15:30:10 +0800
+Subject: [PATCH 0876/1418] vfio/pci: Add VFIO_REGION_TYPE_NESTED region type
+
+Add a new specific DMA_FAULT region aiming to exposed nested mode
+translation faults. This region only is exposed if the device
+is attached to a nested domain.
+
+The region has a ring buffer that contains the actual fault
+records plus a header allowing to handle it (tail/head indices,
+max capacity, entry size). At the moment the region is dimensionned
+for 512 fault records.
+
+Changes from Eric's original version:
+*) check iommu_nesting_info instead of bool
+Signed-off-by: Eric Auger <eric.auger@redhat.com>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ drivers/vfio/pci/vfio_pci_core.c | 80 ++++++++++++++++++++++++++++++++
+ drivers/vfio/pci/vfio_pci_rdwr.c | 44 ++++++++++++++++++
+ include/linux/vfio_pci_core.h    |  6 +++
+ include/uapi/linux/vfio.h        | 35 ++++++++++++++
+ 4 files changed, 165 insertions(+)
+
+diff --git a/drivers/vfio/pci/vfio_pci_core.c b/drivers/vfio/pci/vfio_pci_core.c
+index a03b5a99c2da..e23b29172961 100644
+--- a/drivers/vfio/pci/vfio_pci_core.c
++++ b/drivers/vfio/pci/vfio_pci_core.c
+@@ -238,6 +238,81 @@ int vfio_pci_set_power_state(struct vfio_pci_core_device *vdev, pci_power_t stat
+ 	return ret;
+ }
+ 
++static void vfio_pci_dma_fault_release(struct vfio_pci_core_device *vdev,
++				       struct vfio_pci_region *region)
++{
++	kfree(vdev->fault_pages);
++}
++
++static int vfio_pci_dma_fault_add_capability(struct vfio_pci_core_device *vdev,
++					     struct vfio_pci_region *region,
++					     struct vfio_info_cap *caps)
++{
++	struct vfio_region_info_cap_fault cap = {
++		.header.id = VFIO_REGION_INFO_CAP_DMA_FAULT,
++		.header.version = 1,
++		.version = 1,
++	};
++	return vfio_info_add_capability(caps, &cap.header, sizeof(cap));
++}
++
++static const struct vfio_pci_regops vfio_pci_dma_fault_regops = {
++	.rw		= vfio_pci_dma_fault_rw,
++	.release	= vfio_pci_dma_fault_release,
++	.add_capability = vfio_pci_dma_fault_add_capability,
++};
++
++#define DMA_FAULT_RING_LENGTH 512
++
++static int vfio_pci_dma_fault_init(struct vfio_pci_core_device *vdev)
++{
++	struct vfio_region_dma_fault *header;
++	struct iommu_domain *domain;
++	struct iommu_nesting_info info;
++	size_t size;
++	int ret;
++
++	domain = iommu_get_domain_for_dev(&vdev->pdev->dev);
++	ret = iommu_domain_get_attr(domain, DOMAIN_ATTR_NESTING, &info);
++	if (ret || !(info.features & IOMMU_NESTING_FEAT_PAGE_RESP)) {
++		/*
++		 * No need go futher as no page request service support.
++		 */
++		return 0;
++	}
++
++	mutex_init(&vdev->fault_queue_lock);
++
++	/*
++	 * We provision 1 page for the header and space for
++	 * DMA_FAULT_RING_LENGTH fault records in the ring buffer.
++	 */
++	size = ALIGN(sizeof(struct iommu_fault) *
++		     DMA_FAULT_RING_LENGTH, PAGE_SIZE) + PAGE_SIZE;
++
++	vdev->fault_pages = kzalloc(size, GFP_KERNEL);
++	if (!vdev->fault_pages)
++		return -ENOMEM;
++
++	ret = vfio_pci_register_dev_region(vdev,
++		VFIO_REGION_TYPE_NESTED,
++		VFIO_REGION_SUBTYPE_NESTED_DMA_FAULT,
++		&vfio_pci_dma_fault_regops, size,
++		VFIO_REGION_INFO_FLAG_READ | VFIO_REGION_INFO_FLAG_WRITE,
++		vdev->fault_pages);
++	if (ret)
++		goto out;
++
++	header = (struct vfio_region_dma_fault *)vdev->fault_pages;
++	header->entry_size = sizeof(struct iommu_fault);
++	header->nb_entries = DMA_FAULT_RING_LENGTH;
++	header->offset = sizeof(struct vfio_region_dma_fault);
++	return 0;
++out:
++	kfree(vdev->fault_pages);
++	return ret;
++}
++
+ int vfio_pci_core_enable(struct vfio_pci_core_device *vdev)
+ {
+ 	struct pci_dev *pdev = vdev->pdev;
+@@ -307,6 +382,11 @@ int vfio_pci_core_enable(struct vfio_pci_core_device *vdev)
+ 	if (!vfio_vga_disabled() && vfio_pci_is_vga(pdev))
+ 		vdev->has_vga = true;
+ 
++	ret = vfio_pci_dma_fault_init(vdev);
++	if (ret) {
++		pci_disable_device(pdev);
++		return ret;
++	}
+ 
+ 	return 0;
+ }
+diff --git a/drivers/vfio/pci/vfio_pci_rdwr.c b/drivers/vfio/pci/vfio_pci_rdwr.c
+index 57d3b2cbbd8e..e3ff97613827 100644
+--- a/drivers/vfio/pci/vfio_pci_rdwr.c
++++ b/drivers/vfio/pci/vfio_pci_rdwr.c
+@@ -381,6 +381,50 @@ static void vfio_pci_ioeventfd_do_write(struct vfio_pci_ioeventfd *ioeventfd,
+ 	}
+ }
+ 
++ssize_t vfio_pci_dma_fault_rw(struct vfio_pci_core_device *vdev, char __user *buf,
++			     size_t count, loff_t *ppos, bool iswrite)
++{
++	unsigned int i = VFIO_PCI_OFFSET_TO_INDEX(*ppos) - VFIO_PCI_NUM_REGIONS;
++	loff_t pos = *ppos & VFIO_PCI_OFFSET_MASK;
++	void *base = vdev->region[i].data;
++	int ret = -EFAULT;
++
++	if (pos >= vdev->region[i].size)
++		return -EINVAL;
++
++	count = min(count, (size_t)(vdev->region[i].size - pos));
++
++	mutex_lock(&vdev->fault_queue_lock);
++
++	if (iswrite) {
++		struct vfio_region_dma_fault *header =
++			(struct vfio_region_dma_fault *)base;
++		u32 new_tail;
++
++		if (pos != 0 || count != 4) {
++			ret = -EINVAL;
++			goto unlock;
++		}
++
++		if (copy_from_user((void *)&new_tail, buf, count))
++			goto unlock;
++
++		if (new_tail > header->nb_entries) {
++			ret = -EINVAL;
++			goto unlock;
++		}
++		header->tail = new_tail;
++	} else {
++		if (copy_to_user(buf, base + pos, count))
++			goto unlock;
++	}
++	*ppos += count;
++	ret = count;
++unlock:
++	mutex_unlock(&vdev->fault_queue_lock);
++	return ret;
++}
++
+ static int vfio_pci_ioeventfd_handler(void *opaque, void *unused)
+ {
+ 	struct vfio_pci_ioeventfd *ioeventfd = opaque;
+diff --git a/include/linux/vfio_pci_core.h b/include/linux/vfio_pci_core.h
+index ef9a44b6cf5d..1d8c6badec0c 100644
+--- a/include/linux/vfio_pci_core.h
++++ b/include/linux/vfio_pci_core.h
+@@ -129,6 +129,8 @@ struct vfio_pci_core_device {
+ 	int			ioeventfds_nr;
+ 	struct eventfd_ctx	*err_trigger;
+ 	struct eventfd_ctx	*req_trigger;
++	u8			*fault_pages;
++	struct mutex		fault_queue_lock;
+ 	struct list_head	dummy_resources_list;
+ 	struct mutex		ioeventfds_lock;
+ 	struct list_head	ioeventfds_list;
+@@ -165,6 +167,10 @@ extern ssize_t vfio_pci_vga_rw(struct vfio_pci_core_device *vdev, char __user *b
+ extern long vfio_pci_ioeventfd(struct vfio_pci_core_device *vdev, loff_t offset,
+ 			       uint64_t data, int count, int fd);
+ 
++extern ssize_t vfio_pci_dma_fault_rw(struct vfio_pci_core_device *vdev,
++				    char __user *buf, size_t count,
++				    loff_t *ppos, bool iswrite);
++
+ extern int vfio_pci_init_perm_bits(void);
+ extern void vfio_pci_uninit_perm_bits(void);
+ 
+diff --git a/include/uapi/linux/vfio.h b/include/uapi/linux/vfio.h
+index d89921f5a613..aaac0acb1d22 100644
+--- a/include/uapi/linux/vfio.h
++++ b/include/uapi/linux/vfio.h
+@@ -325,6 +325,7 @@ struct vfio_region_info_cap_type {
+ #define VFIO_REGION_TYPE_GFX                    (1)
+ #define VFIO_REGION_TYPE_CCW			(2)
+ #define VFIO_REGION_TYPE_MIGRATION              (3)
++#define VFIO_REGION_TYPE_NESTED			(4)
+ 
+ /* sub-types for VFIO_REGION_TYPE_PCI_* */
+ 
+@@ -632,6 +633,9 @@ struct vfio_device_migration_info {
+ 	__u64 data_size;
+ };
+ 
++/* sub-types for VFIO_REGION_TYPE_NESTED */
++#define VFIO_REGION_SUBTYPE_NESTED_DMA_FAULT	(1)
++
+ /*
+  * The MSIX mappable capability informs that MSIX data of a BAR can be mmapped
+  * which allows direct access to non-MSIX registers which happened to be within
+@@ -673,6 +677,37 @@ struct vfio_region_info_cap_nvlink2_lnkspd {
+ 	__u32 __pad;
+ };
+ 
++/*
++ * Capability exposed by the DMA fault region
++ * @version: ABI version
++ */
++#define VFIO_REGION_INFO_CAP_DMA_FAULT	6
++
++struct vfio_region_info_cap_fault {
++	struct vfio_info_cap_header header;
++	__u32 version;
++};
++
++/*
++ * DMA Fault Region Layout
++ * @tail: index relative to the start of the ring buffer at which the
++ *        consumer finds the next item in the buffer
++ * @entry_size: fault ring buffer entry size in bytes
++ * @nb_entries: max capacity of the fault ring buffer
++ * @offset: ring buffer offset relative to the start of the region
++ * @head: index relative to the start of the ring buffer at which the
++ *        producer (kernel) inserts items into the buffers
++ */
++struct vfio_region_dma_fault {
++	/* Write-Only */
++	__u32   tail;
++	/* Read-Only */
++	__u32   entry_size;
++	__u32	nb_entries;
++	__u32	offset;
++	__u32   head;
++};
++
+ /**
+  * VFIO_DEVICE_GET_IRQ_INFO - _IOWR(VFIO_TYPE, VFIO_BASE + 9,
+  *				    struct vfio_irq_info)
+-- 
+2.31.1
+

@@ -1,0 +1,49 @@
+From d0df785af08e280db47a7b349329eb366aab7026 Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Tue, 11 Jan 2022 15:44:15 -0800
+Subject: [PATCH 1201/1418] memremap_pages: Introduce devmap_protected()
+
+Consumers of protected dev_pagemaps can check the PGMAP_PROTECTION flag to
+see if the devmap is protected.  However, most contexts will have a struct
+page not the pagemap structure directly.
+
+Define devmap_protected() to determine if a page is part of a
+dev_pagemap mapping and if the page is protected by additional
+protections.
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ include/linux/mm.h | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/include/linux/mm.h b/include/linux/mm.h
+index 40c42ede0546..c644f00bc5e8 100644
+--- a/include/linux/mm.h
++++ b/include/linux/mm.h
+@@ -1217,6 +1217,23 @@ static inline bool pgmap_protection_available(void)
+ 	return pks_available();
+ }
+ 
++DECLARE_STATIC_KEY_FALSE(dev_pgmap_protection_static_key);
++
++/*
++ * devmap_protected() requires a reference on the page to ensure there is no
++ * races with dev_pagemap tear down.
++ */
++static inline bool devmap_protected(struct page *page)
++{
++	if (!static_branch_unlikely(&dev_pgmap_protection_static_key))
++		return false;
++	if (!is_zone_device_page(page))
++		return false;
++	if (page->pgmap->flags & PGMAP_PROTECTION)
++		return true;
++	return false;
++}
++
+ #else
+ 
+ static inline bool pgmap_protection_available(void)
+-- 
+2.31.1
+

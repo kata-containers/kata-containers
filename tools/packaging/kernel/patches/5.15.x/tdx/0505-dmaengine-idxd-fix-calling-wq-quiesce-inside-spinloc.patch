@@ -1,0 +1,34 @@
+From 543b5e7ca4ae8f562a3d075cc5464b3597cabd4d Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Tue, 24 Aug 2021 09:43:58 -0700
+Subject: [PATCH 0505/1418] dmaengine: idxd: fix calling wq quiesce inside
+ spinlock
+
+Dan reports that smatch has found idxd_wq_quiesce() is being called inside
+the idxd->dev_lock. idxd_wq_quiesce() calls wait_for_completion() and
+therefore it can sleep. Move the call outside of the spinlock.
+
+Fixes: 5b0c68c473a1 ("dmaengine: idxd: support reporting of halt interrupt")
+Reported-by: Dan Carpenter <dan.carpenter@oracle.com>
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/irq.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/dma/idxd/irq.c b/drivers/dma/idxd/irq.c
+index ca88fa7a328e..1fe24b1b24be 100644
+--- a/drivers/dma/idxd/irq.c
++++ b/drivers/dma/idxd/irq.c
+@@ -133,8 +133,8 @@ static int process_misc_interrupts(struct idxd_device *idxd, u32 cause)
+ 			INIT_WORK(&idxd->work, idxd_device_reinit);
+ 			queue_work(idxd->wq, &idxd->work);
+ 		} else {
+-			spin_lock(&idxd->dev_lock);
+ 			idxd_wqs_quiesce(idxd);
++			spin_lock(&idxd->dev_lock);
+ 			idxd_wqs_unmap_portal(idxd);
+ 			idxd_device_clear_state(idxd);
+ 			dev_err(&idxd->pdev->dev,
+-- 
+2.31.1
+

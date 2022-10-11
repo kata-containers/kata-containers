@@ -1,0 +1,85 @@
+From 4831636338a0f1dd195522d4ad9093451be970df Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Sun, 1 Aug 2021 22:56:52 +0800
+Subject: [PATCH 0736/1418] x86/cpu/tdx: Save/restore current-VMCS before/after
+ P-SEAMLDR APIs
+
+According to Section 2.3 INSTRUCTION SET REFERENCE, in Intel Trust Domain
+CPU Architectural Extensions[1]:
+SEAMRET from the P-SEAMLDR clears the current VMCS structure pointed to by
+the current-VMCS pointer. A VMM that invokes the P-SEAMLDR using SEAMCALL
+must reload the current-VMCS, if required, using the VMPTRLD instruction.
+
+Without a valid current-VMCS, VMX instructions (like VMREAD, VMWRITE) fail
+due to VMfailInvalid. KVM assumes that current-vmcs once loaded, is changed
+in centain places (on execution of vmclear, vmxoff). KVM has properly
+handled them as they are done by KVM (except host panic case).
+
+The P-SEAMLDR case here is a little different. It is out of KVM and so
+potentially it can interact with KVM in any way. To avoid VMfailInvalid,
+P-SEAMLDR APIs are invoked with interrupt disabled and save/restore
+current-VMCS, so that KVM cannot interrupt P-SEAMLDR APIs or see an
+invalid current-VMCS.
+
+[1]:https://www.intel.com/content/dam/develop/external/us/en/documents-tps/intel-tdx-cpu-architectural-specification.pdf
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/p-seamldr.c | 30 +++++++++++++++++++++++++++--
+ 1 file changed, 28 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.c b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+index 889c453fcc3a..37f9e003e332 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.c
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+@@ -33,11 +33,36 @@ static int __init seamldr_param(char *str)
+ }
+ early_param("np_seamldr", seamldr_param);
+ 
++#define INVALID_VMCS	0xffffffffffffffffULL
++
++static u64 pseamldr_seamcall(u64 op, u64 rcx, u64 rdx, u64 r8, u64 r9,
++			     struct tdx_ex_ret *ex)
++{
++	u64 vmcs_pa, err;
++	int ret;
++	unsigned long flags;
++
++	local_irq_save(flags);
++	ret = raw_vmcs_store(&vmcs_pa);
++	if (ret) {
++		local_irq_restore(flags);
++		return (u64)-EIO;
++	}
++
++	err = seamcall(op, rcx, rdx, r8, r9, ex);
++	if (vmcs_pa != INVALID_VMCS)
++		raw_vmcs_load(__va(vmcs_pa));
++	local_irq_restore(flags);
++
++	return err;
++}
++
+ int seamldr_info(phys_addr_t seamldr_info)
+ {
+ 	u64 ret;
+ 
+-	ret = seamcall(SEAMCALL_SEAMLDR_INFO, seamldr_info, 0, 0, 0, NULL);
++	ret = pseamldr_seamcall(SEAMCALL_SEAMLDR_INFO, seamldr_info, 0,
++				0, 0, NULL);
+ 	if (ret) {
+ 		pr_err("SEAMCALL[SEAMLDR_INFO] failed %s (0x%llx)\n",
+ 		       p_seamldr_error_name(ret), ret);
+@@ -50,7 +75,8 @@ int seamldr_install(phys_addr_t seamldr_params)
+ {
+ 	u64 ret;
+ 
+-	ret = seamcall(SEAMCALL_SEAMLDR_INSTALL, seamldr_params, 0, 0, 0, NULL);
++	ret = pseamldr_seamcall(SEAMCALL_SEAMLDR_INSTALL,
++				seamldr_params, 0, 0, 0, NULL);
+ 	if (ret) {
+ 		pr_err_ratelimited(
+ 			"SEAMCALL[SEAMLDR_INSTALL] failed %s (0x%llx)\n",
+-- 
+2.31.1
+

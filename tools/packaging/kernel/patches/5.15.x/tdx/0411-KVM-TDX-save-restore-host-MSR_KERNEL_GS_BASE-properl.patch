@@ -1,0 +1,130 @@
+From 81a249228b336daf9d05882c0787203f6587332d Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Mon, 15 Mar 2021 01:47:30 -0400
+Subject: [PATCH 0411/1418] KVM: TDX: save/restore host MSR_KERNEL_GS_BASE
+ properly
+
+Mirror VMX's treatment to MSR_KERNEL_GS_BASE: switch host value
+to guest value in vmx_prepare_switch_to_guest() and switch in the
+other direction in vmx_prepare_switch_to_host(). For TDX, one
+difference is guest value can't/needn't be saved/restored.
+
+For best performance, introduce two flags to avoid redundant saving
+(the msr is already saved in previous TD enter) and restoring (no
+actual TD enter happened, thus the MSR wasn't reset to INIT state).
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/main.c      |  4 +++-
+ arch/x86/kvm/vmx/tdx.c       | 32 ++++++++++++++++++++++++++++++++
+ arch/x86/kvm/vmx/tdx.h       |  4 ++++
+ arch/x86/kvm/vmx/tdx_stubs.c |  1 +
+ 4 files changed, 40 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index 382a7210f57a..c873abb03136 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -389,8 +389,10 @@ static void vt_prepare_switch_to_guest(struct kvm_vcpu *vcpu)
+ 	 * is pointless because TDX-SEAM needs to load *something* so as not to
+ 	 * expose guest state.
+ 	 */
+-	if (is_td_vcpu(vcpu))
++	if (is_td_vcpu(vcpu)) {
++		tdx_prepare_switch_to_guest(vcpu);
+ 		return;
++	}
+ 
+ 	vmx_prepare_switch_to_guest(vcpu);
+ }
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 279ee180b3c6..bced17b1feca 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -474,6 +474,8 @@ static int tdx_vcpu_create(struct kvm_vcpu *vcpu)
+ 
+ 	tdx->pi_desc.nv = POSTED_INTR_VECTOR;
+ 	tdx->pi_desc.sn = 1;
++	tdx->host_state_need_save = true;
++	tdx->host_state_need_restore = false;
+ 
+ 	cpu = get_cpu();
+ 	list_add(&tdx->cpu_list, &per_cpu(associated_tdvcpus, cpu));
+@@ -511,9 +513,38 @@ static void tdx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
+ 	vmx_vcpu_pi_load(vcpu, cpu);
+ }
+ 
++static void tdx_prepare_switch_to_guest(struct kvm_vcpu *vcpu)
++{
++	struct vcpu_tdx *tdx = to_tdx(vcpu);
++
++	if (!tdx->host_state_need_save)
++		return;
++
++	if (likely(is_64bit_mm(current->mm)))
++		tdx->msr_host_kernel_gs_base = current->thread.gsbase;
++	else
++		tdx->msr_host_kernel_gs_base = read_msr(MSR_KERNEL_GS_BASE);
++
++	tdx->host_state_need_save = false;
++}
++
++static void tdx_prepare_switch_to_host(struct kvm_vcpu *vcpu)
++{
++	struct vcpu_tdx *tdx = to_tdx(vcpu);
++
++	tdx->host_state_need_save = true;
++	if (!tdx->host_state_need_restore)
++		return;
++
++	wrmsrl(MSR_KERNEL_GS_BASE, tdx->msr_host_kernel_gs_base);
++	tdx->host_state_need_restore = false;
++}
++
+ static void tdx_vcpu_put(struct kvm_vcpu *vcpu)
+ {
+ 	vmx_vcpu_pi_put(vcpu);
++
++	tdx_prepare_switch_to_host(vcpu);
+ }
+ 
+ static void tdx_vcpu_free(struct kvm_vcpu *vcpu)
+@@ -623,6 +654,7 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ 
+ 	perf_restore_debug_store();
+ 	tdx_restore_host_xsave_state(vcpu);
++	tdx->host_state_need_restore = true;
+ 
+ 	vmx_register_cache_reset(vcpu);
+ 
+diff --git a/arch/x86/kvm/vmx/tdx.h b/arch/x86/kvm/vmx/tdx.h
+index 45cdcff9403b..b4f51b878508 100644
+--- a/arch/x86/kvm/vmx/tdx.h
++++ b/arch/x86/kvm/vmx/tdx.h
+@@ -99,6 +99,10 @@ struct vcpu_tdx {
+ 	union tdx_exit_reason exit_reason;
+ 
+ 	bool initialized;
++
++	bool host_state_need_save;
++	bool host_state_need_restore;
++	u64 msr_host_kernel_gs_base;
+ };
+ 
+ struct tdx_capabilities {
+diff --git a/arch/x86/kvm/vmx/tdx_stubs.c b/arch/x86/kvm/vmx/tdx_stubs.c
+index b666a92f6041..5b6b2ecb02ff 100644
+--- a/arch/x86/kvm/vmx/tdx_stubs.c
++++ b/arch/x86/kvm/vmx/tdx_stubs.c
+@@ -27,6 +27,7 @@ static void tdx_apicv_post_state_restore(struct kvm_vcpu *vcpu) {}
+ static int tdx_deliver_posted_interrupt(struct kvm_vcpu *vcpu, int vector) { return -1; }
+ static void tdx_get_exit_info(struct kvm_vcpu *vcpu, u64 *info1, u64 *info2,
+ 			      u32 *intr_info, u32 *error_code) {}
++static void tdx_prepare_switch_to_guest(struct kvm_vcpu *vcpu) {}
+ static int __init tdx_check_processor_compatibility(void) { return 0; }
+ static void __init tdx_pre_kvm_init(unsigned int *vcpu_size,
+ 				    unsigned int *vcpu_align,
+-- 
+2.31.1
+

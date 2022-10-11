@@ -1,0 +1,38 @@
+From ef35790cd8641931a9f18b64733a54645dd1a38f Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Fri, 17 Dec 2021 19:04:24 +0800
+Subject: [PATCH 0867/1418] vfio/type1: Add back iommu_domain_set_attr(,
+ DOMAIN_ATTR_NESTING, );
+
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/vfio/vfio_iommu_type1.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/vfio/vfio_iommu_type1.c b/drivers/vfio/vfio_iommu_type1.c
+index 1c6cb1485ee9..0e6692d81948 100644
+--- a/drivers/vfio/vfio_iommu_type1.c
++++ b/drivers/vfio/vfio_iommu_type1.c
+@@ -2385,13 +2385,16 @@ static int vfio_iommu_type1_attach_group(void *iommu_data,
+ 		ret = -EIO;
+ 		goto out_free;
+ 	}
+-#if 0 
++
+ 	if (iommu->nesting) {
+-		ret = iommu_enable_nesting(domain->domain);
++		int attr = 1;
++
++		ret = iommu_domain_set_attr(domain->domain, DOMAIN_ATTR_NESTING,
++					    &attr);
+ 		if (ret)
+ 			goto out_domain;
+ 	}
+-#endif
++
+ 	ret = vfio_iommu_attach_group(domain, group);
+ 	if (ret)
+ 		goto out_domain;
+-- 
+2.31.1
+

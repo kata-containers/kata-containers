@@ -1,0 +1,90 @@
+From ef729a41be3e34c0dd2c70a551f8eed13d14b95f Mon Sep 17 00:00:00 2001
+From: Jarkko Sakkinen <jarkko@kernel.org>
+Date: Mon, 15 Nov 2021 10:35:16 -0800
+Subject: [PATCH 0777/1418] selftests/sgx: Make data measurement for an enclave
+ segment optional
+
+For a heap makes sense to leave its contents "unmeasured" in the SGX
+enclave build process, meaning that they won't contribute to the
+cryptographic signature (a RSA-3072 signed SHA56 hash) of the enclave.
+
+Enclaves are signed blobs where the signature is calculated both from
+page data and also from "structural properties" of the pages.  For
+instance a page offset of *every* page added to the enclave is hashed.
+
+For data, this is optional, not least because hashing a page has a
+significant contribution to the enclave load time. Thus, where there is
+no reason to hash, do not. The SGX ioctl interface supports this with
+SGX_PAGE_MEASURE flag. Only when the flag is *set*, data is measured.
+
+Add seg->measure boolean flag to struct encl_segment. Only when the
+flag is set, include the segment data to the signature (represented
+by SIGSTRUCT architectural structure).
+
+Signed-off-by: Jarkko Sakkinen <jarkko@kernel.org>
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+Signed-off-by: Dave Hansen <dave.hansen@linux.intel.com>
+Acked-by: Dave Hansen <dave.hansen@linux.intel.com>
+Link: https://lkml.kernel.org/r/625b6fe28fed76275e9238ec4e15ec3c0d87de81.1636997631.git.reinette.chatre@intel.com
+---
+ tools/testing/selftests/sgx/load.c      | 6 +++++-
+ tools/testing/selftests/sgx/main.h      | 1 +
+ tools/testing/selftests/sgx/sigstruct.c | 6 ++++--
+ 3 files changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/tools/testing/selftests/sgx/load.c b/tools/testing/selftests/sgx/load.c
+index 5605474aab73..f1be78984c50 100644
+--- a/tools/testing/selftests/sgx/load.c
++++ b/tools/testing/selftests/sgx/load.c
+@@ -111,7 +111,10 @@ static bool encl_ioc_add_pages(struct encl *encl, struct encl_segment *seg)
+ 	ioc.offset = seg->offset;
+ 	ioc.length = seg->size;
+ 	ioc.secinfo = (unsigned long)&secinfo;
+-	ioc.flags = SGX_PAGE_MEASURE;
++	if (seg->measure)
++		ioc.flags = SGX_PAGE_MEASURE;
++	else
++		ioc.flags = 0;
+ 
+ 	rc = ioctl(encl->fd, SGX_IOC_ENCLAVE_ADD_PAGES, &ioc);
+ 	if (rc < 0) {
+@@ -230,6 +233,7 @@ bool encl_load(const char *path, struct encl *encl)
+ 		seg->offset = (phdr->p_offset & PAGE_MASK) - src_offset;
+ 		seg->size = (phdr->p_filesz + PAGE_SIZE - 1) & PAGE_MASK;
+ 		seg->src = encl->src + seg->offset;
++		seg->measure = true;
+ 
+ 		j++;
+ 	}
+diff --git a/tools/testing/selftests/sgx/main.h b/tools/testing/selftests/sgx/main.h
+index 452d11dc4889..aebc69e7cdc8 100644
+--- a/tools/testing/selftests/sgx/main.h
++++ b/tools/testing/selftests/sgx/main.h
+@@ -12,6 +12,7 @@ struct encl_segment {
+ 	size_t size;
+ 	unsigned int prot;
+ 	unsigned int flags;
++	bool measure;
+ };
+ 
+ struct encl {
+diff --git a/tools/testing/selftests/sgx/sigstruct.c b/tools/testing/selftests/sgx/sigstruct.c
+index 202a96fd81bf..50c5ab1aa6fa 100644
+--- a/tools/testing/selftests/sgx/sigstruct.c
++++ b/tools/testing/selftests/sgx/sigstruct.c
+@@ -296,8 +296,10 @@ static bool mrenclave_segment(EVP_MD_CTX *ctx, struct encl *encl,
+ 		if (!mrenclave_eadd(ctx, seg->offset + offset, seg->flags))
+ 			return false;
+ 
+-		if (!mrenclave_eextend(ctx, seg->offset + offset, seg->src + offset))
+-			return false;
++		if (seg->measure) {
++			if (!mrenclave_eextend(ctx, seg->offset + offset, seg->src + offset))
++				return false;
++		}
+ 	}
+ 
+ 	return true;
+-- 
+2.31.1
+

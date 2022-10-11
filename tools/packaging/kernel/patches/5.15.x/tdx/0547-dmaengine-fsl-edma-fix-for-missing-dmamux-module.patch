@@ -1,0 +1,49 @@
+From 14380810dc0ff5f866eb9c518b06c88e5b6cf7f0 Mon Sep 17 00:00:00 2001
+From: Angelo Dureghello <angelo.dureghello@timesys.com>
+Date: Wed, 1 Sep 2021 23:16:10 +0200
+Subject: [PATCH 0547/1418] dmaengine: fsl-edma: fix for missing dmamux module
+
+Fix following panic on system halt:
+
+Requesting system halt
+[   10.600000] spi spi0.1: spi_device 0.1 cleanup
+[   10.630000] fsl_edma_chan_mux() fsl_chan->edma->n_chans 64 dmamux_nr 0
+[   10.630000] *** ZERO DIVIDE ***   FORMAT=4
+[   10.630000] Current process id is 38
+[   10.630000] BAD KERNEL TRAP: 00000000
+[   10.630000] PC: [<402f09ba>] fsl_edma_chan_mux+0x7c/0x12e
+...
+
+Some architecture as mcf5441x (ColdFire) may not have
+a dmamux, so dmamux_nr is set to 0. This patch considers this case.
+
+Signed-off-by: Angelo Dureghello <angelo.dureghello@timesys.com>
+Link: https://lore.kernel.org/r/20210901211610.662077-1-angelo.dureghello@timesys.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/fsl-edma-common.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/dma/fsl-edma-common.c b/drivers/dma/fsl-edma-common.c
+index 930ae268c497..009c75ff1320 100644
+--- a/drivers/dma/fsl-edma-common.c
++++ b/drivers/dma/fsl-edma-common.c
+@@ -638,12 +638,14 @@ EXPORT_SYMBOL_GPL(fsl_edma_alloc_chan_resources);
+ void fsl_edma_free_chan_resources(struct dma_chan *chan)
+ {
+ 	struct fsl_edma_chan *fsl_chan = to_fsl_edma_chan(chan);
++	struct fsl_edma_engine *edma = fsl_chan->edma;
+ 	unsigned long flags;
+ 	LIST_HEAD(head);
+ 
+ 	spin_lock_irqsave(&fsl_chan->vchan.lock, flags);
+ 	fsl_edma_disable_request(fsl_chan);
+-	fsl_edma_chan_mux(fsl_chan, 0, false);
++	if (edma->drvdata->dmamuxs)
++		fsl_edma_chan_mux(fsl_chan, 0, false);
+ 	fsl_chan->edesc = NULL;
+ 	vchan_get_all_descriptors(&fsl_chan->vchan, &head);
+ 	fsl_edma_unprep_slave_dma(fsl_chan);
+-- 
+2.31.1
+

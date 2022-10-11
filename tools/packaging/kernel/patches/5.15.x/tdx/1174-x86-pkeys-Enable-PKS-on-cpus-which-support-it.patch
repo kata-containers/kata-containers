@@ -1,0 +1,128 @@
+From b5ac5136fb0e587e86dc60a74bd2955088c1870a Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Wed, 8 Dec 2021 12:20:09 -0800
+Subject: [PATCH 1174/1418] x86/pkeys: Enable PKS on cpus which support it
+
+Protection Keys for Supervisor pages (PKS) enables fast, hardware thread
+specific, manipulation of permission restrictions on supervisor page
+mappings.  It uses a supervisor specific MSR to assign permissions to
+the pkeys.
+
+When PKS is configured and the cpu supports PKS, initialize the MSR, and
+enable the hardware.
+
+Add asm/pks.h to store new internal functions and structures such as
+pks_setup().
+
+Co-developed-by: Fenghua Yu <fenghua.yu@intel.com>
+Signed-off-by: Fenghua Yu <fenghua.yu@intel.com>
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ arch/x86/include/asm/msr-index.h            |  1 +
+ arch/x86/include/asm/pks.h                  | 15 +++++++++++++++
+ arch/x86/include/uapi/asm/processor-flags.h |  2 ++
+ arch/x86/kernel/cpu/common.c                |  2 ++
+ arch/x86/mm/pkeys.c                         | 13 +++++++++++++
+ 5 files changed, 33 insertions(+)
+ create mode 100644 arch/x86/include/asm/pks.h
+
+diff --git a/arch/x86/include/asm/msr-index.h b/arch/x86/include/asm/msr-index.h
+index 5cafe624e7e6..552909d6f742 100644
+--- a/arch/x86/include/asm/msr-index.h
++++ b/arch/x86/include/asm/msr-index.h
+@@ -795,6 +795,7 @@
+ 
+ #define MSR_IA32_TSC_DEADLINE		0x000006E0
+ 
++#define MSR_IA32_PKRS			0x000006E1
+ 
+ #define MSR_TSX_FORCE_ABORT		0x0000010F
+ 
+diff --git a/arch/x86/include/asm/pks.h b/arch/x86/include/asm/pks.h
+new file mode 100644
+index 000000000000..8180fc59790b
+--- /dev/null
++++ b/arch/x86/include/asm/pks.h
+@@ -0,0 +1,15 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _ASM_X86_PKS_H
++#define _ASM_X86_PKS_H
++
++#ifdef CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS
++
++void pks_setup(void);
++
++#else /* !CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
++
++static inline void pks_setup(void) { }
++
++#endif /* CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
++
++#endif /* _ASM_X86_PKS_H */
+diff --git a/arch/x86/include/uapi/asm/processor-flags.h b/arch/x86/include/uapi/asm/processor-flags.h
+index a8df907e8017..b81b7647c836 100644
+--- a/arch/x86/include/uapi/asm/processor-flags.h
++++ b/arch/x86/include/uapi/asm/processor-flags.h
+@@ -132,6 +132,8 @@
+ #define X86_CR4_PKE		_BITUL(X86_CR4_PKE_BIT)
+ #define X86_CR4_CET_BIT		23 /* enable Control-flow Enforcement */
+ #define X86_CR4_CET		_BITUL(X86_CR4_CET_BIT)
++#define X86_CR4_PKS_BIT		24 /* enable Protection Keys for Supervisor */
++#define X86_CR4_PKS		_BITUL(X86_CR4_PKS_BIT)
+ 
+ /*
+  * x86-64 Task Priority Register, CR8
+diff --git a/arch/x86/kernel/cpu/common.c b/arch/x86/kernel/cpu/common.c
+index b184f4912e33..e988b7732545 100644
+--- a/arch/x86/kernel/cpu/common.c
++++ b/arch/x86/kernel/cpu/common.c
+@@ -60,6 +60,7 @@
+ #include <asm/cpu_device_id.h>
+ #include <asm/uv/uv.h>
+ #include <asm/sigframe.h>
++#include <asm/pks.h>
+ 
+ #include "cpu.h"
+ 
+@@ -1628,6 +1629,7 @@ static void identify_cpu(struct cpuinfo_x86 *c)
+ 
+ 	x86_init_rdrand(c);
+ 	setup_pku(c);
++	pks_setup();
+ 	setup_cet(c);
+ 
+ 	/*
+diff --git a/arch/x86/mm/pkeys.c b/arch/x86/mm/pkeys.c
+index 1708d1a8f39d..17d4b4dad4ab 100644
+--- a/arch/x86/mm/pkeys.c
++++ b/arch/x86/mm/pkeys.c
+@@ -6,6 +6,7 @@
+ #include <linux/debugfs.h>		/* debugfs_create_u32()		*/
+ #include <linux/mm_types.h>             /* mm_struct, vma, etc...       */
+ #include <linux/pkeys.h>                /* PKEY_*                       */
++#include <linux/pks-keys.h>
+ #include <uapi/asm-generic/mman-common.h>
+ 
+ #include <asm/cpufeature.h>             /* boot_cpu_has, ...            */
+@@ -212,6 +213,18 @@ u32 pkey_update_pkval(u32 pkval, u8 pkey, u32 accessbits)
+ 
+ #ifdef CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS
+ 
++/*
++ * PKS is independent of PKU and either or both may be supported on a CPU.
++ */
++void pks_setup(void)
++{
++	if (!cpu_feature_enabled(X86_FEATURE_PKS))
++		return;
++
++	wrmsrl(MSR_IA32_PKRS, PKS_INIT_VALUE);
++	cr4_set_bits(X86_CR4_PKS);
++}
++
+ u32 get_current_pkrs(void)
+ {
+ 	return 0;
+-- 
+2.31.1
+

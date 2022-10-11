@@ -1,0 +1,118 @@
+From bd02d1fc2e36ce1dc45fcc9c82b16034a5ef29a1 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Mon, 12 Jul 2021 21:12:52 +0800
+Subject: [PATCH 0441/1418] KVM: TDX: Disable interrupt when adding a vcpu to
+ associated_tdvcpus
+
+Otherwise another CPU's flushing vp request may intervene the
+list_add(). It leads to following kernel oops during guest destruction.
+
+general protection fault, probably for non-canonical address 0xdeacffffffffe248: 0000 [#1] SMP NOPTI
+CPU: 36 PID: 0 Comm: swapper/36 Tainted: G S      W         5.12.0-rc2-chao+ #24
+Hardware name: Intel Corporation ArcherCity/ArcherCity, BIOS EGSDCRB1.86B.0057.D03.2104150329 04/15/2021
+RIP: 0010:vt_hardware_disable+0x132/0x1a0 [kvm_intel]
+Code: 48 8b 93 b8 1e 00 00 48 8b 83 c0 1e 00 00 48 89 42 08 48 89 10 4c 89 b3 b8 1e 00 00 4c 89 ab c0 1e 00 00 c7 43 20 ff ff ff 0
+RSP: 0018:ff7c1d9340c6cf50 EFLAGS: 00010046
+RAX: 0000000000000000 RBX: ff314db1480d2780 RCX: 0000000000000027
+RDX: 0000000000000027 RSI: ff314dcfbd2183b0 RDI: ff314dcfbd2183b8
+RBP: ff7c1d9340c6cf78 R08: 0000000000000000 R09: c0000000ffffbfff
+R10: 0000000000000001 R11: ff7c1d9340c6ccf8 R12: deacffffffffe248
+R13: dead000000000122 R14: dead000000000100 R15: ff314dcfbd22f020
+FS:  0000000000000000(0000) GS:ff314dcfbd200000(0000) knlGS:0000000000000000
+CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+CR2: 000055d086915f44 CR3: 000000015ea28006 CR4: 0000000000773ee0
+DR0: 0000000000000000 DR1: 0000000000000000 DR2: 0000000000000000
+DR3: 0000000000000000 DR6: 00000000fffe07f0 DR7: 0000000000000400
+PKRU: 55555554
+Call Trace:
+ <IRQ>
+ kvm_arch_hardware_disable+0xe/0x40 [kvm]
+ hardware_disable_nolock+0x32/0x40 [kvm]
+ flush_smp_call_function_queue+0x125/0x1b0
+ generic_smp_call_function_single_interrupt+0x13/0x20
+ __sysvec_call_function+0x30/0xa0
+ sysvec_call_function+0x73/0xa0
+ </IRQ>
+ asm_sysvec_call_function+0x12/0x20
+
+Fixes: e68c216b9069 ("KVM: TDX: Add "basic" support for building and running Trust Domains")
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 18 +++++++++++-------
+ 1 file changed, 11 insertions(+), 7 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 928b27e71a37..91652bf9e215 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -62,6 +62,8 @@ static struct mutex *tdx_mng_key_config_lock;
+ /*
+  * A per-CPU list of TD vCPUs associated with a given CPU.  Used when a CPU
+  * is brought down to invoke TDH_VP_FLUSH on the approapriate TD vCPUS.
++ * Protected by interrupt mask.  This list is manipulated in process context
++ * of vcpu and IPI callback.  See tdx_flush_vp_on_cpu().
+  */
+ static DEFINE_PER_CPU(struct list_head, associated_tdvcpus);
+ 
+@@ -264,6 +266,8 @@ static void tdx_flush_vp(void *arg)
+ 
+ static void tdx_flush_vp_on_cpu(struct kvm_vcpu *vcpu)
+ {
++	unsigned long flags;
++
+ 	if (vcpu->cpu == -1)
+ 		return;
+ 
+@@ -274,8 +278,11 @@ static void tdx_flush_vp_on_cpu(struct kvm_vcpu *vcpu)
+ 	 */
+ 	if (is_td_vcpu_created(to_tdx(vcpu)))
+ 		smp_call_function_single(vcpu->cpu, tdx_flush_vp, vcpu, 1);
+-	else
++	else {
++		local_irq_save(flags);
+ 		tdx_disassociate_vp(vcpu);
++		local_irq_restore(flags);
++	}
+ }
+ 
+ static int tdx_do_tdh_phymem_cache_wb(void *param)
+@@ -466,7 +473,7 @@ static int tdx_vm_init(struct kvm *kvm)
+ static int tdx_vcpu_create(struct kvm_vcpu *vcpu)
+ {
+ 	struct vcpu_tdx *tdx = to_tdx(vcpu);
+-	int cpu, ret, i;
++	int ret, i;
+ 
+ 	ret = tdx_alloc_td_page(&tdx->tdvpr);
+ 	if (ret)
+@@ -495,11 +502,6 @@ static int tdx_vcpu_create(struct kvm_vcpu *vcpu)
+ 	tdx->host_state_need_save = true;
+ 	tdx->host_state_need_restore = false;
+ 
+-	cpu = get_cpu();
+-	list_add(&tdx->cpu_list, &per_cpu(associated_tdvcpus, cpu));
+-	vcpu->cpu = cpu;
+-	put_cpu();
+-
+ 	return 0;
+ 
+ free_tdvpx:
+@@ -519,6 +521,7 @@ static void tdx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
+ 	if (vcpu->cpu != cpu) {
+ 		tdx_flush_vp_on_cpu(vcpu);
+ 
++		local_irq_disable();
+ 		/*
+ 		 * Pairs with the smp_wmb() in tdx_disassociate_vp() to ensure
+ 		 * vcpu->cpu is read before tdx->cpu_list.
+@@ -526,6 +529,7 @@ static void tdx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
+ 		smp_rmb();
+ 
+ 		list_add(&tdx->cpu_list, &per_cpu(associated_tdvcpus, cpu));
++		local_irq_enable();
+ 	}
+ 
+ 	vmx_vcpu_pi_load(vcpu, cpu);
+-- 
+2.31.1
+

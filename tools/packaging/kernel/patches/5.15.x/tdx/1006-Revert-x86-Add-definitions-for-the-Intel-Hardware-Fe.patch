@@ -1,0 +1,56 @@
+From 578cac95e241f48efc7f1bb862b0a141a9606ae2 Mon Sep 17 00:00:00 2001
+From: Ricardo Neri <ricardo.neri-calderon@linux.intel.com>
+Date: Fri, 21 Jan 2022 14:10:47 -0800
+Subject: [PATCH 1006/1418] Revert "x86: Add definitions for the Intel Hardware
+ Feedback Interface"
+
+This reverts commit 20212635bdaaaae320309b809a1f9cc224214d19.
+---
+ arch/x86/include/asm/cpufeatures.h | 1 -
+ arch/x86/include/asm/msr-index.h   | 5 -----
+ 2 files changed, 6 deletions(-)
+
+diff --git a/arch/x86/include/asm/cpufeatures.h b/arch/x86/include/asm/cpufeatures.h
+index 1452d6460a45..a68893d0e067 100644
+--- a/arch/x86/include/asm/cpufeatures.h
++++ b/arch/x86/include/asm/cpufeatures.h
+@@ -332,7 +332,6 @@
+ #define X86_FEATURE_HWP_ACT_WINDOW	(14*32+ 9) /* HWP Activity Window */
+ #define X86_FEATURE_HWP_EPP		(14*32+10) /* HWP Energy Perf. Preference */
+ #define X86_FEATURE_HWP_PKG_REQ		(14*32+11) /* HWP Package Level Request */
+-#define X86_FEATURE_INTEL_HFI		(14*32+19) /* Hardware Feedback Interface */
+ 
+ /* AMD SVM Feature Identification, CPUID level 0x8000000a (EDX), word 15 */
+ #define X86_FEATURE_NPT			(15*32+ 0) /* Nested Page Table support */
+diff --git a/arch/x86/include/asm/msr-index.h b/arch/x86/include/asm/msr-index.h
+index e95bd6d5bd2a..60a50e4b0f87 100644
+--- a/arch/x86/include/asm/msr-index.h
++++ b/arch/x86/include/asm/msr-index.h
+@@ -691,14 +691,12 @@
+ 
+ #define PACKAGE_THERM_STATUS_PROCHOT		(1 << 0)
+ #define PACKAGE_THERM_STATUS_POWER_LIMIT	(1 << 10)
+-#define PACKAGE_THERM_STATUS_HFI_UPDATED	(1 << 26)
+ 
+ #define MSR_IA32_PACKAGE_THERM_INTERRUPT	0x000001b2
+ 
+ #define PACKAGE_THERM_INT_HIGH_ENABLE		(1 << 0)
+ #define PACKAGE_THERM_INT_LOW_ENABLE		(1 << 1)
+ #define PACKAGE_THERM_INT_PLN_ENABLE		(1 << 24)
+-#define PACKAGE_THERM_INT_HFI_ENABLE		(1 << 25)
+ 
+ /* Thermal Thresholds Support */
+ #define THERM_INT_THRESHOLD0_ENABLE    (1 << 15)
+@@ -964,9 +962,6 @@
+ #define MSR_VM_IGNNE                    0xc0010115
+ #define MSR_VM_HSAVE_PA                 0xc0010117
+ 
+-/* Hardware Feedback Interface */
+-#define MSR_IA32_HW_FEEDBACK_PTR        0x17d0
+-#define MSR_IA32_HW_FEEDBACK_CONFIG     0x17d1
+ /* Intel SEAMRR */
+ #define MSR_IA32_SEAMRR_PHYS_BASE	0x00001400
+ #define MSR_IA32_SEAMRR_PHYS_MASK	0x00001401
+-- 
+2.31.1
+

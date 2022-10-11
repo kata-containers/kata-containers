@@ -1,0 +1,31 @@
+From 5794c553e34d5ef4038a06b0b7f8856b7d9c4079 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Fri, 23 Jul 2021 01:25:12 -0700
+Subject: [PATCH 0445/1418] KVM: TDX: bugs if vcpu is reset after vcpu is
+ initialized
+
+TDX vcpu can't be reset because its content is protected from VMM.  mark vm
+bugged if vcpu is reset after vcpu is initialized.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 9480e13cea73..3f33ba29f71e 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -602,6 +602,9 @@ static void tdx_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
+ 	if (WARN_ON(init_event) || !vcpu->arch.apic)
+ 		goto td_bugged;
+ 
++	if (WARN_ON(is_td_vcpu_created(tdx)))
++		goto td_bugged;
++
+ 	err = tdh_vp_create(kvm_tdx->tdr.pa, tdx->tdvpr.pa);
+ 	if (TDX_ERR(err, TDH_VP_CREATE, NULL))
+ 		goto td_bugged;
+-- 
+2.31.1
+

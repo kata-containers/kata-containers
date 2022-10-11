@@ -1,0 +1,169 @@
+From eafcefa1b8a2b08799c89b0cd86dc5048ce821ce Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Wed, 23 Sep 2020 13:24:24 -0700
+Subject: [PATCH 0600/1418] iommu/ioasid: Support setting system-wide capacity
+
+IOASID is a system-wide resource that could vary on different systems.
+The default capacity is 20 bits as defined in the PCI-E specifications.
+This patch adds a function to allow adjusting system IOASID capacity.
+For VT-d this is set during boot as part of the Intel IOMMU
+initialization. APIs also added to support runtime capacity reservation,
+potentially by cgroups.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/intel/iommu.c |  5 +++
+ drivers/iommu/ioasid.c      | 70 +++++++++++++++++++++++++++++++++++++
+ include/linux/ioasid.h      | 18 ++++++++++
+ 3 files changed, 93 insertions(+)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 6fb75fb02461..764ac9fa46ff 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -42,6 +42,7 @@
+ #include <linux/dma-direct.h>
+ #include <linux/crash_dump.h>
+ #include <linux/numa.h>
++#include <linux/ioasid.h>
+ #include <asm/irq_remapping.h>
+ #include <asm/cacheflush.h>
+ #include <asm/iommu.h>
+@@ -3322,6 +3323,10 @@ static int __init init_dmars(void)
+ 	if (ret)
+ 		goto free_iommu;
+ 
++	/* PASID is needed for scalable mode irrespective to SVM */
++	if (intel_iommu_sm)
++		ioasid_install_capacity(intel_pasid_max_id);
++
+ 	/*
+ 	 * for each drhd
+ 	 *   enable fault log
+diff --git a/drivers/iommu/ioasid.c b/drivers/iommu/ioasid.c
+index 4eb9b3dd1b85..28681b99340b 100644
+--- a/drivers/iommu/ioasid.c
++++ b/drivers/iommu/ioasid.c
+@@ -10,6 +10,10 @@
+ #include <linux/spinlock.h>
+ #include <linux/xarray.h>
+ 
++/* Default to PCIe standard 20 bit PASID */
++#define PCI_PASID_MAX 0x100000
++static ioasid_t ioasid_capacity = PCI_PASID_MAX;
++static ioasid_t ioasid_capacity_avail = PCI_PASID_MAX;
+ struct ioasid_data {
+ 	ioasid_t id;
+ 	struct ioasid_set *set;
+@@ -258,6 +262,72 @@ void ioasid_unregister_allocator(struct ioasid_allocator_ops *ops)
+ }
+ EXPORT_SYMBOL_GPL(ioasid_unregister_allocator);
+ 
++void ioasid_install_capacity(ioasid_t total)
++{
++	spin_lock(&ioasid_allocator_lock);
++	if (ioasid_capacity && ioasid_capacity != PCI_PASID_MAX) {
++		pr_warn("IOASID capacity is already set.\n");
++		goto done_unlock;
++	}
++	ioasid_capacity = ioasid_capacity_avail = total;
++done_unlock:
++	spin_unlock(&ioasid_allocator_lock);
++}
++EXPORT_SYMBOL_GPL(ioasid_install_capacity);
++
++/**
++ * @brief Reserve capacity from the system pool
++ *
++ * @param nr_ioasid Number of IOASIDs requested to be reserved, 0 means
++ *	reserve all remaining IDs.
++ *
++ * @return the remaining capacity on success, or errno
++ */
++int ioasid_reserve_capacity(ioasid_t nr_ioasid)
++{
++	int ret = 0;
++
++	spin_lock(&ioasid_allocator_lock);
++	if (nr_ioasid > ioasid_capacity_avail) {
++		ret = -ENOSPC;
++		goto done_unlock;
++	}
++	if (!nr_ioasid)
++		nr_ioasid = ioasid_capacity_avail;
++	ioasid_capacity_avail -= nr_ioasid;
++	ret = nr_ioasid;
++done_unlock:
++	spin_unlock(&ioasid_allocator_lock);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(ioasid_reserve_capacity);
++
++/**
++ * @brief Return capacity to the system pool
++ * 	We trust the caller not to return more than it has reserved, we could
++ * 	also track reservation if needed.
++ *
++ * @param nr_ioasid Number of IOASIDs requested to be returned
++ *
++ * @return the remaining capacity on success, or errno
++ */
++int ioasid_cancel_capacity(ioasid_t nr_ioasid)
++{
++	int ret = 0;
++
++	spin_lock(&ioasid_allocator_lock);
++	if (nr_ioasid + ioasid_capacity_avail > ioasid_capacity) {
++		ret = -EINVAL;
++		goto done_unlock;
++	}
++	ioasid_capacity_avail += nr_ioasid;
++	ret = ioasid_capacity_avail;
++done_unlock:
++	spin_unlock(&ioasid_allocator_lock);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(ioasid_cancel_capacity);
++
+ /**
+  * ioasid_attach_data - Set private data for an allocated ioasid
+  * @ioasid: the ID to set data
+diff --git a/include/linux/ioasid.h b/include/linux/ioasid.h
+index f6e705f832f0..2780bdc84b94 100644
+--- a/include/linux/ioasid.h
++++ b/include/linux/ioasid.h
+@@ -32,6 +32,10 @@ struct ioasid_allocator_ops {
+ #define DECLARE_IOASID_SET(name) struct ioasid_set name = { 0 }
+ 
+ #if IS_ENABLED(CONFIG_IOASID)
++void ioasid_install_capacity(ioasid_t total);
++int ioasid_reserve_capacity(ioasid_t nr_ioasid);
++int ioasid_cancel_capacity(ioasid_t nr_ioasid);
++
+ ioasid_t ioasid_alloc(struct ioasid_set *set, ioasid_t min, ioasid_t max,
+ 		      void *private);
+ void ioasid_get(ioasid_t ioasid);
+@@ -43,6 +47,20 @@ void ioasid_unregister_allocator(struct ioasid_allocator_ops *allocator);
+ int ioasid_attach_data(ioasid_t ioasid, void *data);
+ void ioasid_detach_data(ioasid_t ioasid);
+ #else /* !CONFIG_IOASID */
++static inline void ioasid_install_capacity(ioasid_t total)
++{
++}
++
++static inline int ioasid_reserve_capacity(ioasid_t nr_ioasid)
++{
++	return -ENOSPC;
++}
++
++static inline int ioasid_cancel_capacity(ioasid_t nr_ioasid)
++{
++	return -EINVAL;
++}
++
+ static inline ioasid_t ioasid_alloc(struct ioasid_set *set, ioasid_t min,
+ 				    ioasid_t max, void *private)
+ {
+-- 
+2.31.1
+

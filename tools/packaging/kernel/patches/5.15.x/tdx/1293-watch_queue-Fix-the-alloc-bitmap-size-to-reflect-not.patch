@@ -1,0 +1,46 @@
+From 4dc74b737d5b4f2954f5c7ab528ae47309d52162 Mon Sep 17 00:00:00 2001
+From: David Howells <dhowells@redhat.com>
+Date: Fri, 11 Mar 2022 13:24:22 +0000
+Subject: [PATCH 1293/1418] watch_queue: Fix the alloc bitmap size to reflect
+ notes allocated
+
+Currently, watch_queue_set_size() sets the number of notes available in
+wqueue->nr_notes according to the number of notes allocated, but sets
+the size of the bitmap to the unrounded number of notes originally asked
+for.
+
+Fix this by setting the bitmap size to the number of notes we're
+actually going to make available (ie. the number allocated).
+
+Fixes: c73be61cede5 ("pipe: Add general notification queue support")
+Reported-by: Jann Horn <jannh@google.com>
+Signed-off-by: David Howells <dhowells@redhat.com>
+Signed-off-by: Linus Torvalds <torvalds@linux-foundation.org>
+---
+ kernel/watch_queue.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/kernel/watch_queue.c b/kernel/watch_queue.c
+index 5b516eb2c7cc..9c476d2cbac0 100644
+--- a/kernel/watch_queue.c
++++ b/kernel/watch_queue.c
+@@ -243,6 +243,7 @@ long watch_queue_set_size(struct pipe_inode_info *pipe, unsigned int nr_notes)
+ 		goto error;
+ 	}
+ 
++	nr_notes = nr_pages * WATCH_QUEUE_NOTES_PER_PAGE;
+ 	ret = pipe_resize_ring(pipe, roundup_pow_of_two(nr_notes));
+ 	if (ret < 0)
+ 		goto error;
+@@ -266,7 +267,7 @@ long watch_queue_set_size(struct pipe_inode_info *pipe, unsigned int nr_notes)
+ 	wqueue->notes = pages;
+ 	wqueue->notes_bitmap = bitmap;
+ 	wqueue->nr_pages = nr_pages;
+-	wqueue->nr_notes = nr_pages * WATCH_QUEUE_NOTES_PER_PAGE;
++	wqueue->nr_notes = nr_notes;
+ 	return 0;
+ 
+ error_p:
+-- 
+2.31.1
+

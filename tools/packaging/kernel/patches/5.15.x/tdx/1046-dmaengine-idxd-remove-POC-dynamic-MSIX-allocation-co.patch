@@ -1,0 +1,104 @@
+From e9c65fe2cb6e08421e19eefa994fbefde2712883 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Wed, 16 Feb 2022 10:09:19 -0700
+Subject: [PATCH 1046/1418] dmaengine: idxd: remove POC dynamic MSIX allocation
+ code
+
+Dynamic MSIX code was introduced as PoC and may contain
+bugs. Given that is not the direction the upstream driver is going and the
+actual change is upstream where only thing is dynamic is
+request_irq()/free_irq(), make the change to do what upstream does and
+bypass the dynamic MSIX add/free.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/device.c | 16 ++++------------
+ drivers/dma/idxd/init.c   |  8 ++++----
+ 2 files changed, 8 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index f68d7f5f4113..fdaef67eb08a 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -1251,7 +1251,6 @@ void idxd_wq_free_irq(struct idxd_wq *wq)
+ 	if (idxd->request_int_handles)
+ 		idxd_device_release_int_handle(idxd, ie->int_handle, IDXD_IRQ_MSIX);
+ 	idxd_device_clear_perm_entry(idxd, msix_idx);
+-	pci_free_msix_irq_vector(idxd->pdev, ie->vector);
+ 	ie->int_handle = INVALID_INT_HANDLE;
+ 	ie->pasid = INVALID_IOASID;
+ 	ie->wq = NULL;
+@@ -1264,17 +1263,11 @@ int idxd_wq_enable_irq(struct idxd_wq *wq)
+ 	struct pci_dev *pdev = idxd->pdev;
+ 	struct device *dev = &pdev->dev;
+ 	struct idxd_irq_entry *ie;
+-	int msix_idx;
+ 	int rc;
+ 
+-	msix_idx = pci_add_msix_irq_vector(pdev);
+-	if (msix_idx < 0)
+-		return msix_idx;
++	ie = &idxd->irq_entries[wq->id + 1];
+ 
+-	ie = &idxd->irq_entries[msix_idx];
+-	ie->vector = pci_irq_vector(pdev, msix_idx);
+-
+-	idxd_device_set_perm_entry(idxd, msix_idx);
++	idxd_device_set_perm_entry(idxd, ie->id);
+ 	rc = request_threaded_irq(ie->vector, NULL, idxd_wq_thread, 0, "idxd-portal", ie);
+ 	if (rc < 0) {
+ 		dev_err(dev, "Failed to request irq %d.\n", ie->vector);
+@@ -1282,7 +1275,7 @@ int idxd_wq_enable_irq(struct idxd_wq *wq)
+ 	}
+ 
+ 	if (idxd->request_int_handles) {
+-		rc = idxd_device_request_int_handle(idxd, msix_idx, &ie->int_handle,
++		rc = idxd_device_request_int_handle(idxd, ie->id, &ie->int_handle,
+ 						    IDXD_IRQ_MSIX);
+ 		if (rc < 0)
+ 			goto err_int_handle;
+@@ -1300,8 +1293,7 @@ int idxd_wq_enable_irq(struct idxd_wq *wq)
+ 	ie->int_handle = INVALID_INT_HANDLE;
+ 	free_irq(ie->vector, ie);
+ err_irq:
+-	idxd_device_clear_perm_entry(idxd, msix_idx);
+-	pci_free_msix_irq_vector(pdev, ie->vector);
++	idxd_device_clear_perm_entry(idxd, ie->id);
+ 	return rc;
+ }
+ 
+diff --git a/drivers/dma/idxd/init.c b/drivers/dma/idxd/init.c
+index 6d1c0d05e576..4dbcdfd65b4d 100644
+--- a/drivers/dma/idxd/init.c
++++ b/drivers/dma/idxd/init.c
+@@ -84,9 +84,9 @@ static int idxd_setup_interrupts(struct idxd_device *idxd)
+ 	}
+ 	idxd->irq_cnt = msixcnt;
+ 
+-	/* Allocate first irq vector for device management */
+-	rc = pci_alloc_irq_vectors(pdev, 1, 1, PCI_IRQ_MSIX);
+-	if (rc != 1)
++	/* Allocate all irq vectors for device management */
++	rc = pci_alloc_irq_vectors(pdev, msixcnt, msixcnt, PCI_IRQ_MSIX);
++	if (rc != msixcnt)
+ 		return -ENOSPC;
+ 
+ 	idxd->irq_entries = kcalloc_node(msixcnt, sizeof(struct idxd_irq_entry),
+@@ -100,13 +100,13 @@ static int idxd_setup_interrupts(struct idxd_device *idxd)
+ 		ie = &idxd->irq_entries[i];
+ 		ie->id = i;
+ 		ie->idxd = idxd;
++		ie->vector = pci_irq_vector(pdev, i);
+ 		init_llist_head(&ie->pending_llist);
+ 		INIT_LIST_HEAD(&ie->work_list);
+ 		spin_lock_init(&ie->list_lock);
+ 	}
+ 
+ 	ie = &idxd->irq_entries[0];
+-	ie->vector = pci_irq_vector(pdev, 0);
+ 	rc = request_threaded_irq(ie->vector, NULL, idxd_misc_thread,
+ 				  0, "idxd-misc", ie);
+ 	if (rc < 0) {
+-- 
+2.31.1
+

@@ -1,0 +1,59 @@
+From a2f53b464ffa2c3a323808b57654e5a0285bf000 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Wed, 18 Nov 2020 03:36:54 -0800
+Subject: [PATCH 0346/1418] x86/mtrr: mask out keyid bits from variable mtrr
+ mask register
+
+This is a preparation for TDX support. TDX repurposes high bits of physcial
+address to private key ID similarly to MKTME.
+IA32_TME_ACTIVATE.MK_TME_KEYID_BITS has same meaning for both TDX
+disabled/enable for compatibility.[1]
+
+MTRR calculates mask based on available physical address bits.
+MKTME repurpose high bit of physical address to key id for key id.
+CPUID MAX_PA remains same and the bits stolen for key id is controlled
+IA32_TME_ACTIVATE MSR bit 35:32.
+Because Key ID bits shouldn't affects memory cachability, MTRR mask should
+exclude bits repourposed for Key ID.
+Based on [2] "7.2 Restriction and Cache Management", it's OS
+responsibility to maintain cache coherency.
+detect_tme @ arch/x86/kernel/cpu/intel.c detects tme and destract
+it from total usable physical bits. This patch adds same logic needed
+for MTRR.
+
+[1] Intel Trust Domain CPU Architecture Extensions
+https://software.intel.com/content/dam/develop/external/us/en/documents/tdx-module-1eas-v0.85.039.pdf
+    Chapter 1.3.1 TDX Private Key
+[2] Intel architecture memory encryption technologies specification
+    Rev: 1.2 April 2019
+
+Co-developed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/mtrr/mtrr.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/mtrr/mtrr.c b/arch/x86/kernel/cpu/mtrr/mtrr.c
+index 2746cac9d8a9..79eaf6ed20a6 100644
+--- a/arch/x86/kernel/cpu/mtrr/mtrr.c
++++ b/arch/x86/kernel/cpu/mtrr/mtrr.c
+@@ -713,6 +713,15 @@ void __init mtrr_bp_init(void)
+ 			     boot_cpu_data.x86_stepping == 0x4))
+ 				phys_addr = 36;
+ 
++			if (boot_cpu_has(X86_FEATURE_TME)) {
++				u64 tme_activate;
++
++				rdmsrl(MSR_IA32_TME_ACTIVATE, tme_activate);
++				if (TME_ACTIVATE_LOCKED(tme_activate) &&
++				    TME_ACTIVATE_ENABLED(tme_activate)) {
++					phys_addr -= TME_ACTIVATE_KEYID_BITS(tme_activate);
++				}
++			}
+ 			size_or_mask = SIZE_OR_MASK_BITS(phys_addr);
+ 			size_and_mask = ~size_or_mask & 0xfffff00000ULL;
+ 		} else if (boot_cpu_data.x86_vendor == X86_VENDOR_CENTAUR &&
+-- 
+2.31.1
+

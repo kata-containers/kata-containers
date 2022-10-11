@@ -1,0 +1,221 @@
+From 21c1f0f8e0ebab1f5c32731e54f925c1621358ad Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Thu, 1 Jul 2021 09:12:08 +0800
+Subject: [PATCH 0464/1418] KVM: TDX: Implements the
+ KVM_MEMORY_ENCRYPT_WRITE_MEMORY for INTEL TD guest
+
+This patch implemented kvm_x86_ops.mem_enc_write_memory to provide
+private/shared memory writing for INTEL TD guest, to support the guest
+debugging features in QEMU.
+
+The private memory writing is handled in 8 bytes chunk to follow
+the requirement of INTEL TDX specification, the kvm mmu lock is
+also hold in the same granularity to help reducing the lock collision
+while call SEAMCALL many times for large memory writing.
+The shared memory writing is handles in 4KB granularity.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c     | 155 +++++++++++++++++++++++++++++++++++++
+ arch/x86/kvm/vmx/tdx_ops.h |   4 +-
+ 2 files changed, 157 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 9f274d2e7e83..ca44670d8984 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -2406,6 +2406,139 @@ static int do_tdx_td_read_memory(struct kvm *kvm,
+ 	return ret;
+ }
+ 
++static int do_write_private_memory(struct kvm *kvm, gpa_t addr, u64 *val)
++{
++	u64 err;
++	struct tdx_ex_ret td_ret;
++
++	err = tdh_mem_wr(to_kvm_tdx(kvm)->tdr.pa, addr, *val, &td_ret);
++	if (TDX_ERR(err, TDH_MEM_WR, &td_ret))
++		return -EIO;
++
++	return 0;
++}
++
++static int write_private_memory(struct kvm *kvm, gpa_t addr,
++			       u32 max_allow_len,
++			       u32 *copy_len, void *in_buf)
++{
++	gpa_t chunk_addr;
++	u32 in_chunk_offset;
++	u32 len;
++	void *ptr;
++	int ret;
++	union {
++		u64 u64;
++		u8 u8[TDX_MEMORY_RW_CHUNK];
++	} l_buf;
++
++	tdx_get_memory_chunk_and_offset(addr, &chunk_addr, &in_chunk_offset);
++	len = min(max_allow_len, TDX_MEMORY_RW_CHUNK - in_chunk_offset);
++
++	if (len < TDX_MEMORY_RW_CHUNK) {
++		ret = do_read_private_memory(kvm,
++					     chunk_addr,
++					     &l_buf.u64);
++		if (!ret)
++			memcpy(l_buf.u8 + in_chunk_offset, in_buf, len);
++		ptr = l_buf.u8;
++	} else {
++		ret = 0;
++		ptr = in_buf;
++	}
++
++	if (!ret)
++		ret = do_write_private_memory(kvm, chunk_addr, ptr);
++
++	if (copy_len && !ret)
++		*copy_len = len;
++
++	return ret;
++}
++
++static int do_tdx_td_write_memory(struct kvm *kvm,
++				  gpa_t addr, u64 len, void __user *buf)
++{
++	u32 in_page_offset;
++	u32 copy_len;
++	u32 round_len;
++	gfn_t gfn;
++	int ret = 0;
++	int idx;
++	void *page_buf;
++	void *from_buf;
++	bool is_private;
++	struct kvm_memory_slot *memslot;
++
++	page_buf = (void *)__get_free_page(GFP_KERNEL);
++	if (!page_buf)
++		return -ENOMEM;
++
++	while (len > 0) {
++		round_len = min(len,
++				(u64)(PAGE_SIZE - offset_in_page(addr)));
++		if (copy_from_user(page_buf, buf, round_len)) {
++			ret = -EFAULT;
++			goto fail_free_mem;
++		}
++
++		idx = srcu_read_lock(&kvm->srcu);
++
++		gfn = gpa_to_gfn(addr);
++		memslot = gfn_to_memslot(kvm, gfn);
++		if (!kvm_is_visible_memslot(memslot)) {
++			ret = -EINVAL;
++			goto fail_unlock_srcu;
++		}
++
++		from_buf = page_buf;
++		len -= round_len;
++		buf += round_len;
++		while (round_len > 0) {
++			read_lock(&kvm->mmu_lock);
++
++			ret = kvm_mmu_is_page_private(kvm, memslot, gfn, &is_private);
++			if (ret)
++				goto fail_unlock;
++
++			if (is_private) {
++				ret = write_private_memory(kvm, addr,
++							   round_len,
++							   &copy_len,
++							   from_buf);
++			} else {
++				in_page_offset = offset_in_page(addr);
++				copy_len = min(round_len,
++					       (u32)
++					       (PAGE_SIZE - in_page_offset));
++				ret = kvm_write_guest_page(kvm, gfn,
++							   from_buf,
++							   in_page_offset,
++							   copy_len);
++			}
++			if (ret)
++				goto fail_unlock;
++
++			read_unlock(&kvm->mmu_lock);
++			addr += copy_len;
++			from_buf += copy_len;
++			round_len -= copy_len;
++		}
++		srcu_read_unlock(&kvm->srcu, idx);
++	}
++
++	free_page((u64)page_buf);
++	return ret;
++
++fail_unlock:
++	read_unlock(&kvm->mmu_lock);
++fail_unlock_srcu:
++	srcu_read_unlock(&kvm->srcu, idx);
++fail_free_mem:
++	free_page((u64)page_buf);
++	return ret;
++}
++
+ static int tdx_read_guest_memory(struct kvm *kvm, struct kvm_rw_memory *rw_memory)
+ {
+ 	if (!is_td(kvm))
+@@ -2427,6 +2560,27 @@ static int tdx_read_guest_memory(struct kvm *kvm, struct kvm_rw_memory *rw_memor
+ 				     (void __user *)rw_memory->ubuf);
+ }
+ 
++static int tdx_write_guest_memory(struct kvm *kvm, struct kvm_rw_memory *rw_memory)
++{
++	if (!is_td(kvm))
++		return -EINVAL;
++
++	if (!(to_kvm_tdx(kvm)->attributes & TDX_TD_ATTRIBUTE_DEBUG))
++		return -EINVAL;
++
++	if (!is_td_initialized(kvm))
++		return -EINVAL;
++
++	if (rw_memory->len == 0 || !rw_memory->ubuf)
++		return -EINVAL;
++
++	if (rw_memory->addr + rw_memory->len < rw_memory->addr)
++		return -EINVAL;
++
++	return do_tdx_td_write_memory(kvm, rw_memory->addr, rw_memory->len,
++				      (void __user *)rw_memory->ubuf);
++}
++
+ static int __init tdx_debugfs_init(void);
+ static void __exit tdx_debugfs_exit(void);
+ 
+@@ -2491,6 +2645,7 @@ static int __init tdx_hardware_setup(struct kvm_x86_ops *x86_ops)
+ 	x86_ops->link_private_sp = tdx_sept_link_private_sp;
+ 	x86_ops->free_private_sp = tdx_sept_free_private_sp;
+ 	x86_ops->mem_enc_read_memory = tdx_read_guest_memory;
++	x86_ops->mem_enc_write_memory = tdx_write_guest_memory;
+ 
+ 	max_pkgs = topology_max_packages();
+ 
+diff --git a/arch/x86/kvm/vmx/tdx_ops.h b/arch/x86/kvm/vmx/tdx_ops.h
+index c539764605d5..42af0926454f 100644
+--- a/arch/x86/kvm/vmx/tdx_ops.h
++++ b/arch/x86/kvm/vmx/tdx_ops.h
+@@ -90,9 +90,9 @@ static inline u64 tdh_mem_rd(hpa_t tdr, gpa_t addr, struct tdx_ex_ret *ex)
+ 	return seamcall(TDH_MEM_RD, addr, tdr, 0, 0, 0, ex);
+ }
+ 
+-static inline u64 tdh_mem_wr(hpa_t addr, u64 val, struct tdx_ex_ret *ex)
++static inline u64 tdh_mem_wr(hpa_t tdr, hpa_t addr, u64 val, struct tdx_ex_ret *ex)
+ {
+-	return seamcall(TDH_MEM_WR, addr, val, 0, 0, 0, ex);
++	return seamcall(TDH_MEM_WR, addr, tdr, val, 0, 0, ex);
+ }
+ 
+ static inline u64 tdh_mem_page_demote(hpa_t tdr, gpa_t gpa, int level, hpa_t page,
+-- 
+2.31.1
+

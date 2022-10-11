@@ -1,0 +1,38 @@
+From f8c13ee0493f76f5c36afda955b0ee6d662a4e80 Mon Sep 17 00:00:00 2001
+From: Trond Myklebust <trond.myklebust@hammerspace.com>
+Date: Thu, 7 Apr 2022 09:50:19 -0400
+Subject: [PATCH 1346/1418] SUNRPC: Handle low memory situations in
+ call_status()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+We need to handle ENFILE, ENOBUFS, and ENOMEM, because
+xprt_wake_pending_tasks() can be called with any one of these due to
+socket creation failures.
+
+Fixes: b61d59fffd3e ("SUNRPC: xs_tcp_connect_worker{4,6}: merge common code")
+Signed-off-by: Trond Myklebust <trond.myklebust@hammerspace.com>
+---
+ net/sunrpc/clnt.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/net/sunrpc/clnt.c b/net/sunrpc/clnt.c
+index 68950b1e37a3..5221d4b2994c 100644
+--- a/net/sunrpc/clnt.c
++++ b/net/sunrpc/clnt.c
+@@ -2367,6 +2367,11 @@ call_status(struct rpc_task *task)
+ 	case -EPIPE:
+ 	case -EAGAIN:
+ 		break;
++	case -ENFILE:
++	case -ENOBUFS:
++	case -ENOMEM:
++		rpc_delay(task, HZ>>2);
++		break;
+ 	case -EIO:
+ 		/* shutdown or soft timeout */
+ 		goto out_exit;
+-- 
+2.31.1
+

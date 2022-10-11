@@ -1,0 +1,187 @@
+From bc0eb9edb6851208b2f0fe62d9249d8815dfa299 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Thu, 12 Aug 2021 14:35:52 -0700
+Subject: [PATCH 0453/1418] KVM: TDX: fix compile warning found by lkp
+
+Without CONFIG_KVM_INTEL_TDX and with CONFIG_KVM_INTEL, the following
+compile warnings happen.  This patch fixes those warnings.
+
+arch/x86/kvm/vmx/main.c:7:27: warning: tentative definition of variable with internal linkage has incomplete non-array type 'struct kvm_x86_ops' [-Wtentative-definition-incomplete-type]
+   static struct kvm_x86_ops vt_x86_ops __initdata;
+                             ^
+   arch/x86/kvm/vmx/main.c:7:15: note: forward declaration of 'struct kvm_x86_ops'
+   static struct kvm_x86_ops vt_x86_ops __initdata;
+                 ^
+   In file included from arch/x86/kvm/vmx/main.c:18:
+   In file included from arch/x86/kvm/vmx/vmx.c:52:
+   In file included from arch/x86/kvm/vmx/common.h:12:
+   In file included from arch/x86/kvm/vmx/tdx.h:11:
+   In file included from arch/x86/kvm/vmx/tdx_ops.h:13:
+   arch/x86/kvm/vmx/seamcall.h:28:2: error: implicit declaration of function 'trace_seamcall_enter' [-Werror,-Wimplicit-function-declaration]
+           trace_seamcall_enter(smp_processor_id(), op, rcx, rdx, r8, r9, r10, 0);
+           ^
+   arch/x86/kvm/vmx/seamcall.h:30:2: error: implicit declaration of function 'trace_seamcall_exit' [-Werror,-Wimplicit-function-declaration]
+           trace_seamcall_exit(smp_processor_id(), op, err, ex);
+           ^
+   arch/x86/kvm/vmx/seamcall.h:30:2: note: did you mean 'trace_seamcall_enter'?
+   arch/x86/kvm/vmx/seamcall.h:28:2: note: 'trace_seamcall_enter' declared here
+           trace_seamcall_enter(smp_processor_id(), op, rcx, rdx, r8, r9, r10, 0);
+           ^
+   arch/x86/kvm/vmx/seamcall.h:43:7: error: implicit declaration of function 'tdx_seamcall_error_name' [-Werror,-Wimplicit-function-declaration]
+                              tdx_seamcall_error_name(err), err);
+                              ^
+   arch/x86/kvm/vmx/seamcall.h:43:7: warning: format specifies type 'char *' but the argument has type 'int' [-Wformat]
+                              tdx_seamcall_error_name(err), err);
+                              ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   include/linux/printk.h:555:45: note: expanded from macro 'pr_err_ratelimited'
+           printk_ratelimited(KERN_ERR pr_fmt(fmt), ##__VA_ARGS__)
+                                              ~~~     ^~~~~~~~~~~
+   include/linux/printk.h:541:17: note: expanded from macro 'printk_ratelimited'
+                   printk(fmt, ##__VA_ARGS__);                             \
+                          ~~~    ^~~~~~~~~~~
+   In file included from arch/x86/kvm/vmx/main.c:18:
+   In file included from arch/x86/kvm/vmx/vmx.c:52:
+   In file included from arch/x86/kvm/vmx/common.h:12:
+   In file included from arch/x86/kvm/vmx/tdx.h:11:
+   In file included from arch/x86/kvm/vmx/tdx_ops.h:13:
+   arch/x86/kvm/vmx/seamcall.h:45:3: error: implicit declaration of function 'pr_seamcall_ex_ret_info' [-Werror,-Wimplicit-function-declaration]
+                   pr_seamcall_ex_ret_info(op, err, ex);
+                   ^
+   In file included from arch/x86/kvm/vmx/main.c:18:
+   In file included from arch/x86/kvm/vmx/vmx.c:52:
+   In file included from arch/x86/kvm/vmx/common.h:12:
+   In file included from arch/x86/kvm/vmx/tdx.h:11:
+>> arch/x86/kvm/vmx/tdx_ops.h:229:6: error: use of undeclared identifier 'is_debug_seamcall_available'
+           if (is_debug_seamcall_available) {
+               ^
+   arch/x86/kvm/vmx/tdx_ops.h:233:4: error: use of undeclared identifier 'is_debug_seamcall_available'
+                           is_debug_seamcall_available = false;
+                           ^
+>> arch/x86/kvm/vmx/tdx_ops.h:244:6: error: use of undeclared identifier 'is_nonarch_seamcall_available'
+           if (is_nonarch_seamcall_available) {
+               ^
+   arch/x86/kvm/vmx/tdx_ops.h:249:4: error: use of undeclared identifier 'is_nonarch_seamcall_available'
+                           is_nonarch_seamcall_available = false;
+                           ^
+   2 warnings and 8 errors generated.
+--
+   In file included from arch/x86/kvm/vmx/pmu_intel.c:20:
+   In file included from arch/x86/kvm/vmx/tdx.h:11:
+   In file included from arch/x86/kvm/vmx/tdx_ops.h:13:
+   arch/x86/kvm/vmx/seamcall.h:28:2: error: implicit declaration of function 'trace_seamcall_enter' [-Werror,-Wimplicit-function-declaration]
+           trace_seamcall_enter(smp_processor_id(), op, rcx, rdx, r8, r9, r10, 0);
+           ^
+   arch/x86/kvm/vmx/seamcall.h:30:2: error: implicit declaration of function 'trace_seamcall_exit' [-Werror,-Wimplicit-function-declaration]
+           trace_seamcall_exit(smp_processor_id(), op, err, ex);
+           ^
+   arch/x86/kvm/vmx/seamcall.h:30:2: note: did you mean 'trace_seamcall_enter'?
+   arch/x86/kvm/vmx/seamcall.h:28:2: note: 'trace_seamcall_enter' declared here
+           trace_seamcall_enter(smp_processor_id(), op, rcx, rdx, r8, r9, r10, 0);
+           ^
+   arch/x86/kvm/vmx/seamcall.h:43:7: error: implicit declaration of function 'tdx_seamcall_error_name' [-Werror,-Wimplicit-function-declaration]
+                              tdx_seamcall_error_name(err), err);
+                              ^
+   arch/x86/kvm/vmx/seamcall.h:43:7: warning: format specifies type 'char *' but the argument has type 'int' [-Wformat]
+                              tdx_seamcall_error_name(err), err);
+                              ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   include/linux/printk.h:555:45: note: expanded from macro 'pr_err_ratelimited'
+           printk_ratelimited(KERN_ERR pr_fmt(fmt), ##__VA_ARGS__)
+                                              ~~~     ^~~~~~~~~~~
+   include/linux/printk.h:541:17: note: expanded from macro 'printk_ratelimited'
+                   printk(fmt, ##__VA_ARGS__);                             \
+                          ~~~    ^~~~~~~~~~~
+   In file included from arch/x86/kvm/vmx/pmu_intel.c:20:
+   In file included from arch/x86/kvm/vmx/tdx.h:11:
+   In file included from arch/x86/kvm/vmx/tdx_ops.h:13:
+   arch/x86/kvm/vmx/seamcall.h:45:3: error: implicit declaration of function 'pr_seamcall_ex_ret_info' [-Werror,-Wimplicit-function-declaration]
+                   pr_seamcall_ex_ret_info(op, err, ex);
+                   ^
+   In file included from arch/x86/kvm/vmx/pmu_intel.c:20:
+   In file included from arch/x86/kvm/vmx/tdx.h:11:
+>> arch/x86/kvm/vmx/tdx_ops.h:229:6: error: use of undeclared identifier 'is_debug_seamcall_available'
+           if (is_debug_seamcall_available) {
+               ^
+   arch/x86/kvm/vmx/tdx_ops.h:233:4: error: use of undeclared identifier 'is_debug_seamcall_available'
+                           is_debug_seamcall_available = false;
+                           ^
+>> arch/x86/kvm/vmx/tdx_ops.h:244:6: error: use of undeclared identifier 'is_nonarch_seamcall_available'
+           if (is_nonarch_seamcall_available) {
+               ^
+   arch/x86/kvm/vmx/tdx_ops.h:249:4: error: use of undeclared identifier 'is_nonarch_seamcall_available'
+                           is_nonarch_seamcall_available = false;
+                           ^
+   1 warning and 8 errors generated.
+
+Reported-by: kernel test robot <lkp@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/trace/seam.h | 7 +++----
+ arch/x86/kvm/vmx/main.c           | 1 +
+ arch/x86/kvm/vmx/tdx_ops.h        | 2 ++
+ 3 files changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/include/asm/trace/seam.h b/arch/x86/include/asm/trace/seam.h
+index 8aacbc8bb4ba..02a80cb0447b 100644
+--- a/arch/x86/include/asm/trace/seam.h
++++ b/arch/x86/include/asm/trace/seam.h
+@@ -7,15 +7,15 @@
+ 
+ #include <linux/tracepoint.h>
+ 
+-#if IS_ENABLED(CONFIG_INTEL_TDX_HOST)
+-
+ #ifdef SEAMLDR_SEAMCALLS
+ #define SEAMCALLS		\
+ 	SEAMLDR_SEAMCALLS,	\
+ 	TDX_SEAMCALLS
+-#else
++#elif defined(TDX_SEAMCALLS)
+ #define SEAMCALLS		\
+ 	TDX_SEAMCALLS
++#else
++#define SEAMCALLS {}
+ #endif
+ 
+ TRACE_EVENT(seamcall_enter,
+@@ -100,7 +100,6 @@ TRACE_EVENT(seamcall_exit,
+ 		__entry->r11
+ 	    )
+ );
+-#endif /* CONFIG_INTEL_TDX_HOST */
+ 
+ #undef TRACE_INCLUDE_PATH
+ #define TRACE_INCLUDE_PATH ../../arch/x86/include/asm/trace/
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index 5091ee99f4c0..332f51ff4595 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -2,6 +2,7 @@
+ #include <linux/moduleparam.h>
+ #include <linux/errno.h>
+ 
++#include <asm/kvm_host.h>
+ #include <asm/tdx_host.h>
+ 
+ static struct kvm_x86_ops vt_x86_ops __initdata;
+diff --git a/arch/x86/kvm/vmx/tdx_ops.h b/arch/x86/kvm/vmx/tdx_ops.h
+index 09986a19c555..800acde10702 100644
+--- a/arch/x86/kvm/vmx/tdx_ops.h
++++ b/arch/x86/kvm/vmx/tdx_ops.h
+@@ -12,6 +12,7 @@
+ 
+ #include "seamcall.h"
+ 
++#ifdef CONFIG_INTEL_TDX_HOST
+ static inline void tdx_clflush_page(hpa_t addr)
+ {
+ 	clflush_cache_range(__va(addr), PAGE_SIZE);
+@@ -252,5 +253,6 @@ static inline void tdxmode(bool intercept_vmexits, u64 intercept_bitmap)
+ 		}
+ 	}
+ }
++#endif /* CONFIG_INTEL_TDX_HOST */
+ 
+ #endif /* __KVM_X86_TDX_OPS_H */
+-- 
+2.31.1
+

@@ -1,0 +1,96 @@
+From ca1ee710b68c902140ef94881a78ec40932b1787 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Fri, 30 Jul 2021 20:45:22 -0700
+Subject: [PATCH 0213/1418] x86/tdx: Use direct paravirt call for wrmsrl
+
+TDX normally handles MSR writes using the #VE exception, or directly
+for some special MSRs. But there is at least one performance critical
+MSR which triggers #VE, which is the TSC deadline MSR.  It gets
+reprogrammed every timer interrupt, and also every idle exit. There
+are noticeable slow downs by relying on #VE for this, since a #VE
+requires at least 3 exits to the TDX module, which adds up in overhead.
+
+Use a direct paravirt call for MSR writes. This will only be used for
+wrmsrl(), some of the other MSR write paths still use #VE (but these
+don't seem to be performance critical, so it shouldn't matter)
+
+There is one complication that TDX has both context switched MSRs
+(which always need to use WRMSR) and host supported MSRs (which need to
+use TDCALL). Unfortunately the list of both is quite long and it would
+be difficult to maintain a switch statement to distinguish them. For
+most MSRs it doesn't really matter if there is an extra VE exception or
+not because they are not performance critical. But it's important for a
+few critical ones like TSC_DEADLINE, which needs to use TDCALL. So
+enable the TDCALL fast path only for TSC_DEADLINE and keep using WRMSR
+for all the others, which may or may not result in an extra VE
+exception. If there are other performance critical host controlled MSRs
+it can be added to the switch statement here later.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdx.c | 34 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 900ed3b1e36f..768ada1362de 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -445,6 +445,31 @@ static bool tdx_read_msr_safe(unsigned int msr, u64 *val)
+ 	return true;
+ }
+ 
++/*
++ * TDX has context switched MSRs and emulated MSRs. The emulated MSRs
++ * normally trigger a #VE, but that is expensive, which can be avoided
++ * by doing a direct TDCALL. Unfortunately, this cannot be done for all
++ * because some MSRs are "context switched" and need WRMSR.
++ *
++ * The list for this is unfortunately quite long. To avoid maintaining
++ * very long switch statements just do a fast path for the few critical
++ * MSRs that need TDCALL, currently only TSC_DEADLINE.
++ *
++ * More can be added as needed.
++ *
++ * The others will be handled by the #VE handler as needed.
++ * See 18.1 "MSR virtualization" in the TDX Module EAS
++ */
++static bool tdx_fast_tdcall_path_msr(unsigned int msr)
++{
++	switch (msr) {
++	case MSR_IA32_TSC_DEADLINE:
++		return true;
++	default:
++		return false;
++	}
++}
++
+ static bool tdx_write_msr_safe(unsigned int msr, unsigned int low,
+ 			       unsigned int high)
+ {
+@@ -461,6 +486,14 @@ static bool tdx_write_msr_safe(unsigned int msr, unsigned int low,
+ 	return ret ? false : true;
+ }
+ 
++void notrace tdx_write_msr(unsigned int msr, u32 low, u32 high)
++{
++	if (tdx_fast_tdcall_path_msr(msr))
++		tdx_write_msr_safe(msr, low, high);
++	else
++		native_write_msr(msr, low, high);
++}
++
+ static bool tdx_handle_cpuid(struct pt_regs *regs)
+ {
+ 	struct tdx_hypercall_output out;
+@@ -810,6 +843,7 @@ void __init tdx_early_init(void)
+ 
+ 	pv_ops.irq.safe_halt = tdx_safe_halt;
+ 	pv_ops.irq.halt = tdx_halt;
++	pv_ops.cpu.write_msr = tdx_write_msr;
+ 
+ 	legacy_pic = &null_legacy_pic;
+ 	swiotlb_force = SWIOTLB_FORCE;
+-- 
+2.31.1
+

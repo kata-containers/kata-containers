@@ -1,0 +1,57 @@
+From 9a7294b103840512fe45336638342de3ac8e23a4 Mon Sep 17 00:00:00 2001
+From: Yi Sun <yi.y.sun@linux.intel.com>
+Date: Mon, 22 Nov 2021 18:56:12 +0800
+Subject: [PATCH 0897/1418] vfio: Support bind/unbind guest page table to
+ default PASID
+
+For guest IOVA support under nesting IOMMU, hypervisor needs to bind/
+unbind guest's IOVA page table to host. For such bind/unbind request
+from user space, host should figure out a target PASID (host default
+PASID) to be bound. This patch adds a flag to indicate host IOMMU
+driver if it needs to use default PASID in host.
+
+FIXME: pasid_set = NULL; // dmar_domain->pasid_set;
+
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+---
+ drivers/vfio/vfio_iommu_type1.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/drivers/vfio/vfio_iommu_type1.c b/drivers/vfio/vfio_iommu_type1.c
+index 94ff94cf09db..094bfc87f20c 100644
+--- a/drivers/vfio/vfio_iommu_type1.c
++++ b/drivers/vfio/vfio_iommu_type1.c
+@@ -2803,6 +2803,18 @@ static void vfio_group_unbind_gpasid_fn(ioasid_t pasid, void *data)
+ 				 dc, vfio_dev_unbind_gpasid_fn);
+ }
+ 
++static void vfio_group_unbind_default_gpasid(ioasid_t pasid, void *data)
++{
++	struct domain_capsule *dc = (struct domain_capsule *)data;
++
++	dc->user = false;
++	dc->data = &pasid;
++	dc->flags = IOMMU_SVA_HPASID_DEF;
++
++	iommu_group_for_each_dev(dc->group->iommu_group,
++				 dc, vfio_dev_unbind_gpasid_fn);
++}
++
+ static void vfio_iommu_type1_detach_group(void *iommu_data,
+ 					  struct iommu_group *iommu_group)
+ {
+@@ -2866,6 +2878,11 @@ static void vfio_iommu_type1_detach_group(void *iommu_data,
+ 					       vfio_group_unbind_gpasid_fn);
+ 				ioasid_user_put(iuser);
+ 			}
++			/*
++			 * We should explicitly call interface to unbind default pasid gIOVA
++			 * page table here.
++			 */
++			vfio_group_unbind_default_gpasid(0, &dc);
+ 		}
+ 
+ 		vfio_iommu_detach_group(domain, group);
+-- 
+2.31.1
+

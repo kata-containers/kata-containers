@@ -1,0 +1,38 @@
+From c6de05c1d6f857ba2f67d8cff4d345b60c0f54f3 Mon Sep 17 00:00:00 2001
+From: Haimin Zhang <tcs_kernel@tencent.com>
+Date: Tue, 8 Mar 2022 11:20:28 +0800
+Subject: [PATCH 1383/1418] af_key: add __GFP_ZERO flag for
+ compose_sadb_supported in function pfkey_register
+
+Add __GFP_ZERO flag for compose_sadb_supported in function pfkey_register
+to initialize the buffer of supp_skb to fix a kernel-info-leak issue.
+1) Function pfkey_register calls compose_sadb_supported to request
+a sk_buff. 2) compose_sadb_supported calls alloc_sbk to allocate
+a sk_buff, but it doesn't zero it. 3) If auth_len is greater 0, then
+compose_sadb_supported treats the memory as a struct sadb_supported and
+begins to initialize. But it just initializes the field sadb_supported_len
+and field sadb_supported_exttype without field sadb_supported_reserved.
+
+Reported-by: TCS Robot <tcs_robot@tencent.com>
+Signed-off-by: Haimin Zhang <tcs_kernel@tencent.com>
+Signed-off-by: Steffen Klassert <steffen.klassert@secunet.com>
+---
+ net/key/af_key.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/net/key/af_key.c b/net/key/af_key.c
+index de24a7d474df..cf5433a2e31a 100644
+--- a/net/key/af_key.c
++++ b/net/key/af_key.c
+@@ -1699,7 +1699,7 @@ static int pfkey_register(struct sock *sk, struct sk_buff *skb, const struct sad
+ 
+ 	xfrm_probe_algs();
+ 
+-	supp_skb = compose_sadb_supported(hdr, GFP_KERNEL);
++	supp_skb = compose_sadb_supported(hdr, GFP_KERNEL | __GFP_ZERO);
+ 	if (!supp_skb) {
+ 		if (hdr->sadb_msg_satype != SADB_SATYPE_UNSPEC)
+ 			pfk->registered &= ~(1<<hdr->sadb_msg_satype);
+-- 
+2.31.1
+

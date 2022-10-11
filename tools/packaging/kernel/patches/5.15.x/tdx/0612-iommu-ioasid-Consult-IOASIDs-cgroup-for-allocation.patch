@@ -1,0 +1,49 @@
+From 1bac918888b50b11117ef56e9d4bf4fd5d6d589b Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Thu, 18 Feb 2021 09:10:00 -0800
+Subject: [PATCH 0612/1418] iommu/ioasid: Consult IOASIDs cgroup for allocation
+
+Once IOASIDs cgroup is active, we must consult the limitation set up
+by the cgroups during allocation. Freeing IOASIDs also need to return
+the quota back to the cgroup.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/ioasid.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/ioasid.c b/drivers/iommu/ioasid.c
+index d42b39ca2c8b..fd3f5729c71d 100644
+--- a/drivers/iommu/ioasid.c
++++ b/drivers/iommu/ioasid.c
+@@ -782,7 +782,10 @@ ioasid_t ioasid_alloc(struct ioasid_set *set, ioasid_t min, ioasid_t max,
+ 
+ 	spin_lock(&ioasid_allocator_lock);
+ 	/* Check if the IOASID set has been allocated and initialized */
+-	if (!ioasid_set_is_valid(set))
++	if (!set || !ioasid_set_is_valid(set))
++		goto done_unlock;
++
++	if (set->type == IOASID_SET_TYPE_MM && ioasid_cg_charge(set))
+ 		goto done_unlock;
+ 
+ 	if (set->quota <= atomic_read(&set->nr_ioasids)) {
+@@ -832,6 +835,7 @@ ioasid_t ioasid_alloc(struct ioasid_set *set, ioasid_t min, ioasid_t max,
+ 	goto done_unlock;
+ exit_free:
+ 	kfree(data);
++	ioasid_cg_uncharge(set);
+ done_unlock:
+ 	spin_unlock(&ioasid_allocator_lock);
+ 	return id;
+@@ -849,6 +853,7 @@ static void ioasid_do_free_locked(struct ioasid_data *data)
+ 		kfree_rcu(ioasid_data, rcu);
+ 	}
+ 	atomic_dec(&data->set->nr_ioasids);
++	ioasid_cg_uncharge(data->set);
+ 	xa_erase(&data->set->xa, data->id);
+ 	/* Destroy the set if empty */
+ 	if (!atomic_read(&data->set->nr_ioasids))
+-- 
+2.31.1
+

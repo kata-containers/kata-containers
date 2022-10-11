@@ -1,0 +1,78 @@
+From 627bb7478aece8c8b6e689c3f3ae2deaffca0f89 Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Mon, 24 Jan 2022 21:40:53 -0800
+Subject: [PATCH 0964/1418] kvm: x86: Emulate IA32_XFD_ERR for guest
+
+Emulate read/write to IA32_XFD_ERR MSR.
+
+Only the saved value in the guest_fpu container is touched in the
+emulation handler. Actual MSR update is handled right before entering
+the guest (with preemption disabled)
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+Signed-off-by: Zeng Guang <guang.zeng@intel.com>
+Signed-off-by: Wei Wang <wei.w.wang@intel.com>
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Message-Id: <20220105123532.12586-14-yang.zhong@intel.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/kvm/x86.c | 21 ++++++++++++++++++++-
+ 1 file changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index c5105d06c65c..045ba99c5c83 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -1354,7 +1354,7 @@ static const u32 msrs_to_save_all[] = {
+ 	MSR_F15H_PERF_CTR3, MSR_F15H_PERF_CTR4, MSR_F15H_PERF_CTR5,
+ 	MSR_IA32_XSS,
+ 	MSR_ARCH_LBR_CTL, MSR_ARCH_LBR_DEPTH,
+-	MSR_IA32_XFD,
++	MSR_IA32_XFD, MSR_IA32_XFD_ERR,
+ };
+ 
+ static u32 msrs_to_save[ARRAY_SIZE(msrs_to_save_all)];
+@@ -3593,6 +3593,17 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ 
+ 		fpu_update_guest_xfd(&vcpu->arch.guest_fpu, data);
+ 		break;
++	case MSR_IA32_XFD_ERR:
++		if (!msr_info->host_initiated &&
++		    !guest_cpuid_has(vcpu, X86_FEATURE_XFD))
++			return 1;
++
++		if (data & ~(XFEATURE_MASK_USER_DYNAMIC &
++			     vcpu->arch.guest_supported_xcr0))
++			return 1;
++
++		vcpu->arch.guest_fpu.xfd_err = data;
++		break;
+ #endif
+ 	default:
+ 		if (kvm_pmu_is_valid_msr(vcpu, msr))
+@@ -3922,6 +3933,13 @@ int kvm_get_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ 
+ 		msr_info->data = vcpu->arch.guest_fpu.fpstate->xfd;
+ 		break;
++	case MSR_IA32_XFD_ERR:
++		if (!msr_info->host_initiated &&
++		    !guest_cpuid_has(vcpu, X86_FEATURE_XFD))
++			return 1;
++
++		msr_info->data = vcpu->arch.guest_fpu.xfd_err;
++		break;
+ #endif
+ 	default:
+ 		if (kvm_pmu_is_valid_msr(vcpu, msr_info->index))
+@@ -6407,6 +6425,7 @@ static void kvm_init_msr_list(void)
+ 				continue;
+ 			break;
+ 		case MSR_IA32_XFD:
++		case MSR_IA32_XFD_ERR:
+ 			if (!kvm_cpu_cap_has(X86_FEATURE_XFD))
+ 				continue;
+ 			break;
+-- 
+2.31.1
+

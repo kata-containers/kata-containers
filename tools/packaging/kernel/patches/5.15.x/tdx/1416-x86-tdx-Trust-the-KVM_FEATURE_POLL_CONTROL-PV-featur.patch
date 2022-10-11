@@ -1,0 +1,37 @@
+From c78673329728ee75de002a409f1db46e789f10ba Mon Sep 17 00:00:00 2001
+From: Haibo Xu <haibo1.xu@intel.com>
+Date: Thu, 25 Aug 2022 02:16:20 -0400
+Subject: [PATCH 1416/1418] x86/tdx: Trust the KVM_FEATURE_POLL_CONTROL PV
+ feature
+
+The cpuidle_haltpoll driver allows the vcpus to poll for a specified
+amount of time before halting, which can avoid potential VM-exit as
+well as IPI cost[1].
+
+This feature is very helpful to alleviate some benchmark performance
+issues in TD which were mainly caused by high TD-exit and IPI cost.
+
+[1] https://www.kernel.org/doc/html/latest/virt/guest-halt-polling.html
+
+Signed-off-by: Haibo Xu <haibo1.xu@intel.com>
+---
+ arch/x86/include/uapi/asm/kvm_para.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/uapi/asm/kvm_para.h b/arch/x86/include/uapi/asm/kvm_para.h
+index 9f9511fc5068..6e0c5d73b3ac 100644
+--- a/arch/x86/include/uapi/asm/kvm_para.h
++++ b/arch/x86/include/uapi/asm/kvm_para.h
+@@ -40,7 +40,8 @@
+ /* Add more as needed */
+ #define KVM_FEATURES_TRUSTED		 \
+ 	(BIT(KVM_FEATURE_NOP_IO_DELAY) | \
+-	 BIT(KVM_FEATURE_PV_SEND_IPI))
++	 BIT(KVM_FEATURE_PV_SEND_IPI)  | \
++	 BIT(KVM_FEATURE_POLL_CONTROL))
+ 
+ #define KVM_HINTS_REALTIME      0
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,41 @@
+From d12c5313c095ceea1b37a5fd2817f742da929481 Mon Sep 17 00:00:00 2001
+From: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Date: Fri, 15 Apr 2022 01:05:35 +0300
+Subject: [PATCH 1397/1418] tdx: Prevent non-expected CPUIDs from propagating
+ to VMM
+
+Instead of forwarding all #VE CPUIDs to VMM, only do this for the CPUIDs
+that are expected to trigger #VE in the first place. Otherwise, emulate
+the behavior of a non-supported leaf.
+
+Signed-off-by: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+---
+ arch/x86/kernel/tdx.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index e3c58f4454e3..4e1755aa746a 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -572,6 +572,18 @@ static bool tdx_handle_cpuid(struct pt_regs *regs)
+ {
+ 	struct tdx_hypercall_output out;
+ 
++        /*
++         * Only allow VMM to control range reserved for hypervisor
++         * communication.
++         *
++         * Return all-zeros for any CPUID outside the range. It matches CPU
++         * behaviour for non-supported leaf.
++         */
++        if (regs->ax < 0x40000000 || regs->ax > 0x4fffffff) {
++                regs->ax = regs->bx = regs->cx = regs->dx = 0;
++                return true;
++        }
++
+ 	/*
+ 	 * Emulate CPUID instruction via hypercall. More info about
+ 	 * ABI can be found in TDX Guest-Host-Communication Interface
+-- 
+2.31.1
+

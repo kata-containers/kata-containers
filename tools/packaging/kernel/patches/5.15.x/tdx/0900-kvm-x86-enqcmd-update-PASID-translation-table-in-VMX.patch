@@ -1,0 +1,60 @@
+From 587f5132f8417f2fa5fef5ad4f1d0cd028ba603f Mon Sep 17 00:00:00 2001
+From: Wu Hao <hao.wu@intel.com>
+Date: Sat, 19 Sep 2020 23:07:25 +0800
+Subject: [PATCH 0900/1418] kvm: x86: enqcmd: update PASID translation table in
+ VMX root mode only.
+
+PASID Translation Table for ENQCMD/ENQCMDS is a per-VM table shared by
+all vcpus/VMCS, it's not part of the VMCS, but linked by a pointer in
+the VMCS. Per SDM 24.11.4, "Software should ensure that each such data
+structure is modified only when no logical processor with a current VMCS
+that references it is in VMX non-root mode.".
+
+This patch uses kvm_make_block_vmentry_request to make sure all
+vcpus are in VMX root mode when modify the PASID Translation Table.
+
+v2: switch to use common BLOCK_VMENTRY request.
+v3: rebased
+
+Signed-off-by: Wu Hao <hao.wu@intel.com>
+---
+ arch/x86/kvm/vmx/vmx.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index b457a6e140c7..d8b5caddc45e 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -7023,6 +7023,7 @@ static int vmx_set_pasid_trans(struct kvm_vmx *kvm_vmx, ioasid_t gpasid,
+ 	*pte = hpasid | PASID_TE_VALID;
+ 
+ done:
++	kvm_clear_block_vmentry_request(&kvm_vmx->kvm);
+ 	spin_unlock(&kvm_vmx->pasid_lock);
+ 	return ret;
+ }
+@@ -7036,6 +7037,8 @@ static int vmx_clear_pasid_trans(struct kvm_vmx *kvm_vmx, ioasid_t gpasid,
+ 
+ 	spin_lock(&kvm_vmx->pasid_lock);
+ 
++	kvm_make_block_vmentry_request(&kvm_vmx->kvm);
++
+ 	pte = vmx_find_pasid_table_entry(kvm_vmx, gpasid);
+ 	if (IS_ERR(pte)) {
+ 		ret = PTR_ERR(pte);
+@@ -7048,9 +7051,12 @@ static int vmx_clear_pasid_trans(struct kvm_vmx *kvm_vmx, ioasid_t gpasid,
+ 	old_hpasid = pasid_te_hpasid(pte);
+ 	WARN_ON(old_hpasid != hpasid);
+ 
++	kvm_make_block_vmentry_request(&kvm_vmx->kvm);
++
+ 	*pte = 0;
+ 	ioasid_put_locked(NULL, old_hpasid);
+ 
++	kvm_clear_block_vmentry_request(&kvm_vmx->kvm);
+ done:
+ 	spin_unlock(&kvm_vmx->pasid_lock);
+ 	return ret;
+-- 
+2.31.1
+

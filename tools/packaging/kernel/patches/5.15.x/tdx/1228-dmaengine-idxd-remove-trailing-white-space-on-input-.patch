@@ -1,0 +1,46 @@
+From cf5feadb7af28463a36d089c1e58da118e66fdf4 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Mon, 21 Mar 2022 09:07:59 -0700
+Subject: [PATCH 1228/1418] dmaengine: idxd: remove trailing white space on
+ input str for wq name
+
+Add string processing with strim() in order to remove trailing white spaces
+that may be input by user.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/sysfs.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/dma/idxd/sysfs.c b/drivers/dma/idxd/sysfs.c
+index 5d1e7fcc91cd..70243157ed6f 100644
+--- a/drivers/dma/idxd/sysfs.c
++++ b/drivers/dma/idxd/sysfs.c
+@@ -776,6 +776,7 @@ static ssize_t wq_name_store(struct device *dev,
+ 			     size_t count)
+ {
+ 	struct idxd_wq *wq = confdev_to_wq(dev);
++	char *input, *pos;
+ 
+ 	if (wq->state != IDXD_WQ_DISABLED)
+ 		return -EPERM;
+@@ -783,9 +784,14 @@ static ssize_t wq_name_store(struct device *dev,
+ 	if (strlen(buf) > WQ_NAME_SIZE || strlen(buf) == 0)
+ 		return -EINVAL;
+ 
++	input = kstrndup(buf, count, GFP_KERNEL);
++	if (!input)
++		return -ENOMEM;
++
++	pos = strim(input);
+ 	memset(wq->name, 0, WQ_NAME_SIZE + 1);
+-	strncpy(wq->name, buf, WQ_NAME_SIZE);
+-	strreplace(wq->name, '\n', '\0');
++	sprintf(wq->name, "%s", pos);
++	kfree(input);
+ 	return count;
+ }
+ 
+-- 
+2.31.1
+

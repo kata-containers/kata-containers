@@ -1,0 +1,31 @@
+From 6267f50c2a20cf5a2accc1fba57360a02dbb0ab0 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Tue, 22 Mar 2022 17:09:19 -0700
+Subject: [PATCH 1230/1418] dmanegine: idxd: check batch before init in
+ __get_desc
+
+IAX does not have batch support. So don't attempt to init the batch
+structure during descriptor allocation.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/submit.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/dma/idxd/submit.c b/drivers/dma/idxd/submit.c
+index 78d40c67c932..d85e75c288fc 100644
+--- a/drivers/dma/idxd/submit.c
++++ b/drivers/dma/idxd/submit.c
+@@ -16,7 +16,8 @@ static struct idxd_desc *__get_desc(struct idxd_wq *wq, int idx, int cpu)
+ 	desc = wq->descs[idx];
+ 	memset(desc->hw, 0, sizeof(struct dsa_hw_desc));
+ 	memset(desc->completion, 0, idxd->data->compl_size);
+-	desc->batch->num = 0;
++	if (desc->batch)
++		desc->batch->num = 0;
+ 	desc->cpu = cpu;
+ 
+ 	if (device_pasid_enabled(idxd))
+-- 
+2.31.1
+

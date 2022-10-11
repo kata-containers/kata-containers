@@ -1,0 +1,49 @@
+From eade302d03fb2a70ba7dc2e2ff2fe24d0de4af2c Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Tue, 24 Aug 2021 17:01:45 -0700
+Subject: [PATCH 0187/1418] PCI: Initialize authorized attribute for
+ confidential guest
+
+Confidential guest platforms like TDX have a requirement to allow
+only trusted devices. So initialize the "authorized" attribute
+using cc_guest_dev_authorized().
+
+By default the confidential-guest core arranges for all devices to
+default to unauthorized (via dev_default_authorization) in
+device_initialize(). So, consult a core list of allowed devices to
+override that default.
+
+ARCH code will use its device allow list in cc_guest_dev_authorized()
+to determine the status of the authorized attribute.
+
+Reviewed-by: Dan Williams <dan.j.williams@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ drivers/pci/probe.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/pci/probe.c b/drivers/pci/probe.c
+index d9fc02a71baa..aab9d1917d52 100644
+--- a/drivers/pci/probe.c
++++ b/drivers/pci/probe.c
+@@ -20,6 +20,8 @@
+ #include <linux/irqdomain.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/bitfield.h>
++#include <linux/cc_platform.h>
++#include <linux/device.h>
+ #include "pci.h"
+ 
+ #define CARDBUS_LATENCY_TIMER	176	/* secondary latency timer */
+@@ -2491,6 +2493,8 @@ void pci_device_add(struct pci_dev *dev, struct pci_bus *bus)
+ 	pci_configure_device(dev);
+ 
+ 	device_initialize(&dev->dev);
++	if (cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
++		dev->dev.authorized = cc_guest_dev_authorized(&dev->dev);
+ 	dev->dev.release = pci_release_dev;
+ 
+ 	set_dev_node(&dev->dev, pcibus_to_node(bus));
+-- 
+2.31.1
+

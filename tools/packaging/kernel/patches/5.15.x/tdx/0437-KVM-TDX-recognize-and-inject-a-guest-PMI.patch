@@ -1,0 +1,103 @@
+From 6cd5e6cc708bb0f32ad4331bd08dee05d44adf59 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Thu, 20 May 2021 11:42:09 +0800
+Subject: [PATCH 0437/1418] KVM: TDX: recognize and inject a guest PMI
+
+When a guest TD is allowed to use perfmon, it can configure the
+counters to raise PMI on overflow. This is done by write to
+APIC_LVTPC. TDX module injects #VE to guest TD to respond to this
+write. Guest TD then uses TDCALL to invoke KVM's function.
+
+When a TD counter overflows, the physical interrupt or an NMI
+configurated by the host into the local APIC (i.e. a host PMI) is
+delivered. This PMI causes a VMexit, and it is delivered as a TD exit
+to the host. The host is then expected to inject a PMI into the
+guest TD.
+
+Since PMI sources, like counters/pebs/pt are supposed to be disabled
+in TDX module, a pending PMI (by checking the mask bit of APIC_LVTPC)
+must be induced by TD counters/pebs overflow. In this case, a PMI of
+TD is recognized and KVM needs to inject a PMI to TD.
+
+A special case here is we need to unmask APIC_LVTPC before restoring
+host PMU registers in case a subsequent host PMI is masked. To guide
+NMI's handling, we stash the mask bit into a per-vcpu variable before
+clearing it.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 35 ++++++++++++++++++++++++++++++-----
+ arch/x86/kvm/vmx/tdx.h |  1 +
+ 2 files changed, 31 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 8f807753126b..0772a36e6b31 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -686,8 +686,27 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ 		kvm_wait_lapic_expire(vcpu, true);
+ 	}
+ 
+-	if (kvm_tdx->attributes & TDX_TD_ATTRIBUTE_PERFMON)
++	if (kvm_tdx->attributes & TDX_TD_ATTRIBUTE_PERFMON) {
++		/*
++		 * Guest perf counters overflow leads to a PMI configured by
++		 * host VMM into APIC_LVTPC being delivered.  This PMI causes a
++		 * VM exit.  And as host counters are disabled before TDENTER, a
++		 * PMI pending (if mask is set) always means a guest counter
++		 * overflew.
++		 *
++		 * Simply set a flag to guide following NMI handling and unmask
++		 * APIC_LVTPC here as host counters are to be enabled.
++		 * Otherwise, a subsequent host PMI may be masked.
++		 */
++		if (tdx->exit_reason.basic == EXIT_REASON_EXCEPTION_NMI) {
++			if (apic_read(APIC_LVTPC) & APIC_LVT_MASKED) {
++				tdx->guest_pmi_exit = true;
++				apic_write(APIC_LVTPC, APIC_DM_NMI);
++			}
++		}
++
+ 		intel_pmu_save();
++	}
+ 
+ 	tdx_vcpu_enter_exit(vcpu, tdx);
+ 
+@@ -745,11 +764,17 @@ static void tdx_hardware_disable(void)
+ 
+ static void tdx_handle_exit_irqoff(struct kvm_vcpu *vcpu)
+ {
+-	u16 exit_reason = to_tdx(vcpu)->exit_reason.basic;
++	struct vcpu_tdx *tdx = to_tdx(vcpu);
++	u16 exit_reason = tdx->exit_reason.basic;
+ 
+-	if (exit_reason == EXIT_REASON_EXCEPTION_NMI)
+-		vmx_handle_exception_nmi_irqoff(vcpu, tdexit_intr_info(vcpu));
+-	else if (exit_reason == EXIT_REASON_EXTERNAL_INTERRUPT)
++	if (exit_reason == EXIT_REASON_EXCEPTION_NMI) {
++		if (tdx->guest_pmi_exit) {
++			kvm_make_request(KVM_REQ_PMI, vcpu);
++			tdx->guest_pmi_exit = false;
++		} else
++			vmx_handle_exception_nmi_irqoff(vcpu,
++							tdexit_intr_info(vcpu));
++	} else if (exit_reason == EXIT_REASON_EXTERNAL_INTERRUPT)
+ 		vmx_handle_external_interrupt_irqoff(vcpu,
+ 						     tdexit_intr_info(vcpu));
+ }
+diff --git a/arch/x86/kvm/vmx/tdx.h b/arch/x86/kvm/vmx/tdx.h
+index b4f51b878508..314264cc4667 100644
+--- a/arch/x86/kvm/vmx/tdx.h
++++ b/arch/x86/kvm/vmx/tdx.h
+@@ -102,6 +102,7 @@ struct vcpu_tdx {
+ 
+ 	bool host_state_need_save;
+ 	bool host_state_need_restore;
++	bool guest_pmi_exit;
+ 	u64 msr_host_kernel_gs_base;
+ };
+ 
+-- 
+2.31.1
+

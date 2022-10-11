@@ -1,0 +1,102 @@
+From 4842cbfaf312ab84f62b0ce146852d69ee67aac6 Mon Sep 17 00:00:00 2001
+From: Artem Bityutskiy <artem.bityutskiy@linux.intel.com>
+Date: Tue, 26 Apr 2022 10:09:47 +0300
+Subject: [PATCH 1323/1418] intel_idle: fix the 'preferred_cstates' module
+ parameter
+
+This patch is a fix for the following 5.18-rc1 commit:
+   da0e58c038e6 intel_idle: add 'preferred_cstates' module argument
+
+Problem description.
+
+When user boots kernel up with the 'intel_idle.preferred_cstates=4' option,
+we enable C1E and disable C1 states on Sapphire Rapids Xeon (SPR). In order
+for C1E to work on SPR, we have to enable the C1E promotion bit on all
+CPUs.  However, we enable it only on one CPU.
+
+Fix description.
+
+The 'intel_idle' driver already has the infrastructure for disabling C1E
+promotion on every CPU. This patch uses the same infrastructure for
+enabling C1E promotion on every CPU. It changes the boolean
+'disable_promotion_to_c1e' variable to a tri-state 'c1e_promotion'
+variable.
+
+Tested on a 2-socket SPR system. I verified the following combinations:
+* C1E promotion enabled and disabled in BIOS.
+* Booted with and without the 'intel_idle.preferred_cstates=4' kernel
+  argument.
+
+In all 4 cases C1E promotion was correctly set on all CPUs.
+
+Also tested on an old Broadwell system, just to make sure it does not cause
+a regression. C1E promotion was correctly disabled on that system, both C1
+and C1E were exposed (as expected).
+
+Reported-by: Jan Beulich <jbeulich@suse.com>
+Signed-off-by: Artem Bityutskiy <artem.bityutskiy@linux.intel.com>
+---
+ drivers/idle/intel_idle.c | 19 ++++++++++++-------
+ 1 file changed, 12 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/idle/intel_idle.c b/drivers/idle/intel_idle.c
+index c6132f55cc76..738726065981 100644
+--- a/drivers/idle/intel_idle.c
++++ b/drivers/idle/intel_idle.c
+@@ -69,7 +69,12 @@ static unsigned int preferred_states_mask;
+ static struct cpuidle_device __percpu *intel_idle_cpuidle_devices;
+ 
+ static unsigned long auto_demotion_disable_flags;
+-static bool disable_promotion_to_c1e;
++
++static enum {
++	C1E_PROMOTION_PRESERVE,
++	C1E_PROMOTION_ENABLE,
++	C1E_PROMOTION_DISABLE
++} c1e_promotion = C1E_PROMOTION_PRESERVE;
+ 
+ struct idle_cpu {
+ 	struct cpuidle_state *state_table;
+@@ -1392,8 +1397,6 @@ static inline void intel_idle_init_cstates_acpi(struct cpuidle_driver *drv) { }
+ static inline bool intel_idle_off_by_default(u32 mwait_hint) { return false; }
+ #endif /* !CONFIG_ACPI_PROCESSOR_CSTATE */
+ 
+-static void c1e_promotion_enable(void);
+-
+ /**
+  * ivt_idle_state_table_update - Tune the idle states table for Ivy Town.
+  *
+@@ -1581,8 +1584,7 @@ static void __init spr_idle_state_table_update(void)
+ 		spr_cstates[1].flags &= ~CPUIDLE_FLAG_UNUSABLE;
+ 
+ 		/* Enable C1E using the "C1E promotion" bit. */
+-		c1e_promotion_enable();
+-		disable_promotion_to_c1e = false;
++		c1e_promotion = C1E_PROMOTION_ENABLE;
+ 	}
+ 
+ 	/*
+@@ -1748,7 +1750,9 @@ static int intel_idle_cpu_init(unsigned int cpu)
+ 	if (auto_demotion_disable_flags)
+ 		auto_demotion_disable();
+ 
+-	if (disable_promotion_to_c1e)
++	if (c1e_promotion == C1E_PROMOTION_ENABLE)
++		c1e_promotion_enable();
++	else if (c1e_promotion == C1E_PROMOTION_DISABLE)
+ 		c1e_promotion_disable();
+ 
+ 	return 0;
+@@ -1827,7 +1831,8 @@ static int __init intel_idle_init(void)
+ 	if (icpu) {
+ 		cpuidle_state_table = icpu->state_table;
+ 		auto_demotion_disable_flags = icpu->auto_demotion_disable_flags;
+-		disable_promotion_to_c1e = icpu->disable_promotion_to_c1e;
++		if (icpu->disable_promotion_to_c1e)
++			c1e_promotion = C1E_PROMOTION_DISABLE;
+ 		if (icpu->use_acpi || force_use_acpi)
+ 			intel_idle_acpi_cst_extract();
+ 	} else if (!intel_idle_acpi_cst_extract()) {
+-- 
+2.31.1
+

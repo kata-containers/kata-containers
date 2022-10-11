@@ -1,0 +1,198 @@
+From b216326fee93269091846a0b9b9507cec42e6226 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Sun, 28 Mar 2021 15:18:49 -0400
+Subject: [PATCH 0413/1418] KVM: TDX: Add perfmon support for TD
+
+Perfmon support is controlled by PERFMON bit in TD attributes.
+With this bit set, SEAM module exposes perfmon to guest and
+loads/saves guest PMU state during TD transition. But according
+to TDX spec, if guest is allowed to use perfmon, following MSRs
+are reset to INIT state on TD exit; otherwise, they retains old
+values. So, KVM needs to save/load host state properly if TD
+supports perfmon.
+
+Most affected config MSRs have shadow values in memory. We don't
+need to save them before TD entry, but restore them by re-enabling
+perf events. Fixed counter control is an exception; it doesn't
+have a shadow value, so a new field is introduced to save it.
+For PMCs, we read PMCs and record elapsed events before TD entry
+and program new values to PMCs after TD exit.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/events/intel/core.c      | 67 +++++++++++++++++++++++++++++++
+ arch/x86/events/perf_event.h      |  2 +
+ arch/x86/include/asm/perf_event.h | 11 +++++
+ arch/x86/kvm/vmx/tdx.c            | 17 +++++---
+ 4 files changed, 91 insertions(+), 6 deletions(-)
+
+diff --git a/arch/x86/events/intel/core.c b/arch/x86/events/intel/core.c
+index 9a044438072b..05c92cc86080 100644
+--- a/arch/x86/events/intel/core.c
++++ b/arch/x86/events/intel/core.c
+@@ -3923,6 +3923,73 @@ static struct perf_guest_switch_msr *core_guest_get_msrs(int *nr)
+ 	return arr;
+ }
+ 
++/* Disable host PMU and update all active perf events
++ *
++ * This is particularly for TDX. Following MSRs are reset to initial values
++ * across TD entry/exit if guest is allowed to use perfmon. Host needs to
++ * save them before TD entry and restore them after TD exit.
++ *
++ * MSR_CORE_PERF_GLOBAL_CTRL
++ * MSR_ARCH_PERFMON_FIXED_CTR[0-3]
++ * MSR_ARCH_PERFMON_EVENTSEL[0-7]
++ * MSR_ARCH_PERFMON_PERFCTR[0-7]
++ * MSR_ARCH_PERFMON_FIXED_CTR_CTRL
++ * MSR_OFFCORE_RSP_[0-1]
++ * MSR_PEBS_LD_LAT_THRESHOLD
++ * MSR_PEBS_FRONTEND
++ * MSR_PEBS_DATA_CFG
++ * MSR_IA32_PEBS_ENABLE
++ * MSR_PERF_METRICS
++ *
++ * Three different ways to handle these MSRs:
++ *   1. Most control MSRs are not saved as they have shadow values in memory.
++ *   2. MSR_ARCH_PERFMON_FIXED_CTR_CTRL is saved into/restored from a dedicated
++ *	field.
++ *   3. Read PMCs and record delta events elapsed.
++ */
++void intel_pmu_save(void)
++{
++	struct cpu_hw_events *cpuc = this_cpu_ptr(&cpu_hw_events);
++	int idx;
++
++	perf_pmu_disable(x86_get_pmu(smp_processor_id()));
++
++	for (idx = 0; idx < X86_PMC_IDX_MAX; idx++) {
++		if (test_bit(idx, cpuc->active_mask))
++			x86_perf_event_update(cpuc->events[idx]);
++		else
++			/*
++			 * Increase unused counters' tags to avoid reusing
++			 * previous config, see match_prev_assignment().
++			 */
++			++cpuc->tags[idx];
++	}
++
++	rdmsrl(MSR_ARCH_PERFMON_FIXED_CTR_CTRL, cpuc->saved_fixed_ctr_ctrl);
++}
++EXPORT_SYMBOL_GPL(intel_pmu_save);
++
++/* Restore counters' config MSRs and PMCs, and enable host PMU */
++void intel_pmu_restore(void)
++{
++	struct cpu_hw_events *cpuc = this_cpu_ptr(&cpu_hw_events);
++	int idx;
++
++	for_each_set_bit(idx, (unsigned long *)&cpuc->active_mask, X86_PMC_IDX_MAX) {
++		struct perf_event *event = cpuc->events[idx];
++
++		x86_perf_event_set_period(event);
++		if (idx < INTEL_PMC_IDX_FIXED)
++			__x86_pmu_enable_event(&event->hw,
++					       ARCH_PERFMON_EVENTSEL_ENABLE);
++	}
++
++	wrmsrl(MSR_ARCH_PERFMON_FIXED_CTR_CTRL, cpuc->saved_fixed_ctr_ctrl);
++
++	perf_pmu_enable(x86_get_pmu(smp_processor_id()));
++}
++EXPORT_SYMBOL_GPL(intel_pmu_restore);
++
+ static void core_pmu_enable_event(struct perf_event *event)
+ {
+ 	if (!event->attr.exclude_host)
+diff --git a/arch/x86/events/perf_event.h b/arch/x86/events/perf_event.h
+index 134c08df7340..f549dbd8f20f 100644
+--- a/arch/x86/events/perf_event.h
++++ b/arch/x86/events/perf_event.h
+@@ -331,6 +331,8 @@ struct cpu_hw_events {
+ 	void				*kfree_on_online[X86_PERF_KFREE_MAX];
+ 
+ 	struct pmu			*pmu;
++
++	u64				saved_fixed_ctr_ctrl;
+ };
+ 
+ #define __EVENT_CONSTRAINT_RANGE(c, e, n, m, w, o, f) {	\
+diff --git a/arch/x86/include/asm/perf_event.h b/arch/x86/include/asm/perf_event.h
+index 8fc1b5003713..160352f59b28 100644
+--- a/arch/x86/include/asm/perf_event.h
++++ b/arch/x86/include/asm/perf_event.h
+@@ -503,10 +503,21 @@ static inline int x86_perf_get_lbr(struct x86_pmu_lbr *lbr)
+ 
+ #ifdef CONFIG_CPU_SUP_INTEL
+  extern void intel_pt_handle_vmx(int on);
++ extern void intel_pmu_save(void);
++ extern void intel_pmu_restore(void);
++
+ #else
+ static inline void intel_pt_handle_vmx(int on)
+ {
+ 
++}
++
++static void intel_pmu_save(void)
++{
++}
++
++static void intel_pmu_restore(void)
++{
+ }
+ #endif
+ 
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index e6f9bb41200c..192ec508333c 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -658,6 +658,7 @@ static noinstr void tdx_vcpu_enter_exit(struct kvm_vcpu *vcpu,
+ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ {
+ 	struct vcpu_tdx *tdx = to_tdx(vcpu);
++	struct kvm_tdx *kvm_tdx = to_kvm_tdx(vcpu->kvm);
+ 
+ 	if (unlikely(vcpu->kvm->vm_bugged)) {
+ 		tdx->exit_reason.full = TDX_NON_RECOVERABLE_VCPU;
+@@ -672,6 +673,9 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ 		kvm_wait_lapic_expire(vcpu, true);
+ 	}
+ 
++	if (kvm_tdx->attributes & TDX_TD_ATTRIBUTE_PERFMON)
++		intel_pmu_save();
++
+ 	tdx_vcpu_enter_exit(vcpu, tdx);
+ 
+ 	tdx_user_return_update_cache();
+@@ -679,6 +683,13 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ 	tdx_restore_host_xsave_state(vcpu);
+ 	tdx->host_state_need_restore = true;
+ 
++	/*
++	 * Restoring PMU must be after DS area because PMU may start to log
++	 * records in DS area.
++	 */
++	if (kvm_tdx->attributes & TDX_TD_ATTRIBUTE_PERFMON)
++		intel_pmu_restore();
++
+ 	vmx_register_cache_reset(vcpu);
+ 
+ 	trace_kvm_exit((unsigned int)tdx->exit_reason.full, vcpu, KVM_ISA_VMX);
+@@ -1517,12 +1528,6 @@ static int setup_tdparams(struct kvm *kvm, struct td_params *td_params,
+ 				  tdx_caps.attrs_fixed1))
+ 		return -EINVAL;
+ 
+-	if (td_params->attributes & TDX_TD_ATTRIBUTE_PERFMON) {
+-		pr_warn("TD doesn't support perfmon. KVM needs to save/restore "
+-			"host perf registers properly.\n");
+-		return -EOPNOTSUPP;
+-	}
+-
+ 	/* Setup td_params.xfam */
+ 	td_params->xfam = guest_supported_xcr0 | guest_supported_xss;
+ 	if (!tdx_fixed_bits_valid(td_params->xfam,
+-- 
+2.31.1
+

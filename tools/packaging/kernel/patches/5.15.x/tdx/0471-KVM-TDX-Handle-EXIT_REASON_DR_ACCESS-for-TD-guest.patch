@@ -1,0 +1,281 @@
+From 3e901df05adee708d427a5f946dec3fab5fb7c87 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Thu, 1 Jul 2021 16:22:33 +0800
+Subject: [PATCH 0471/1418] KVM: TDX: Handle EXIT_REASON_DR_ACCESS for TD guest
+
+The legacy guest's handle_dr() is reused to handle
+the EXIT_REASON_DR_ACCESS for td guest.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/vmx/common.h    | 33 ++++++++++++++
+ arch/x86/kvm/vmx/main.c      | 14 +++---
+ arch/x86/kvm/vmx/tdx.c       | 84 +++++++++++++++++++++++++++++++++---
+ arch/x86/kvm/vmx/tdx.h       |  3 ++
+ arch/x86/kvm/vmx/tdx_stubs.c |  2 +
+ arch/x86/kvm/x86.c           |  1 -
+ 6 files changed, 122 insertions(+), 15 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/common.h b/arch/x86/kvm/vmx/common.h
+index 6d96f4661c94..704c9a1317d2 100644
+--- a/arch/x86/kvm/vmx/common.h
++++ b/arch/x86/kvm/vmx/common.h
+@@ -49,6 +49,24 @@ static __always_inline u64 vmread_gprs(struct kvm_vcpu *vcpu,
+ 
+ 	return td_gpr_read64(to_tdx(vcpu), field);
+ }
++
++static inline unsigned long vm_get_exit_qual(struct kvm_vcpu *vcpu)
++{
++	if (is_td_vcpu(vcpu))
++		return tdexit_exit_qual(vcpu);
++	return vmx_get_exit_qual(vcpu);
++}
++
++static inline void vm_exec_controls_clearbit(struct kvm_vcpu *vcpu,
++					     u32 bit)
++{
++	if (is_td_vcpu(vcpu))
++		td_vmcs_clearbit32(to_tdx(vcpu),
++				   CPU_BASED_VM_EXEC_CONTROL,
++				   bit);
++	else
++		exec_controls_clearbit(to_vmx(vcpu), bit);
++}
+ #else
+ #define VT_BUILD_VMCS_HELPERS(type, bits, tdbits)			   \
+ static __always_inline type vmread##bits(struct kvm_vcpu *vcpu,		   \
+@@ -67,6 +85,17 @@ static __always_inline u64 vmread_gprs(struct kvm_vcpu *vcpu,
+ {
+ 	return vcpu->arch.regs[field];
+ }
++
++static inline unsigned long vm_get_exit_qual(struct kvm_vcpu *vcpu)
++{
++	return vmx_get_exit_qual(vcpu);
++}
++
++static inline void vm_exec_controls_clearbit(struct kvm_vcpu *vcpu,
++					     u32 bit)
++{
++	exec_controls_clearbit(to_vmx(vcpu), bit);
++}
+ #endif /* CONFIG_INTEL_TDX_HOST */
+ VT_BUILD_VMCS_HELPERS(u16, 16, 16);
+ VT_BUILD_VMCS_HELPERS(u32, 32, 32);
+@@ -207,4 +236,8 @@ static inline unsigned long vmx_mask_out_guest_rip(struct kvm_vcpu *vcpu,
+ 		return (u32)new_rip;
+ 	return new_rip;
+ }
++
++/* For share the handler between legacy guest and TD guest */
++int vmx_handle_dr(struct kvm_vcpu *vcpu);
++
+ #endif /* __KVM_X86_VMX_COMMON_H */
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index a7e50da043eb..0de0928fab2c 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -472,8 +472,8 @@ static int vt_get_cpl(struct kvm_vcpu *vcpu)
+ 
+ static void vt_get_cs_db_l_bits(struct kvm_vcpu *vcpu, int *db, int *l)
+ {
+-	if (KVM_BUG_ON(is_td_vcpu(vcpu) && !is_debug_td(vcpu), vcpu->kvm))
+-		return;
++	if (is_td_vcpu(vcpu))
++		return tdx_get_cs_db_l_bits(vcpu, db, l);
+ 
+ 	vmx_get_cs_db_l_bits(vcpu, db, l);
+ }
+@@ -566,13 +566,9 @@ static void vt_set_dr7(struct kvm_vcpu *vcpu, unsigned long val)
+ 
+ static void vt_sync_dirty_debug_regs(struct kvm_vcpu *vcpu)
+ {
+-	/*
+-	 * MOV-DR exiting is always cleared for TD guest, even in debug mode.
+-	 * Thus KVM_DEBUGREG_WONT_EXIT can never be set and it should never
+-	 * reach here for TD vcpu.
+-	 */
+-	if (KVM_BUG_ON(is_td_vcpu(vcpu), vcpu->kvm))
+-		return;
++	/* MOV-DR exiting enabled in SEAM v0.8 for debug guest */
++	if (is_td_vcpu(vcpu))
++		return tdx_sync_dirty_debug_regs(vcpu);
+ 
+ 	vmx_sync_dirty_debug_regs(vcpu);
+ }
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index cfce3ec67c79..74efdeb9a2f1 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -113,7 +113,7 @@ static __always_inline hpa_t set_hkid_to_hpa(hpa_t pa, u16 hkid)
+ 	return pa;
+ }
+ 
+-static __always_inline unsigned long tdexit_exit_qual(struct kvm_vcpu *vcpu)
++__always_inline unsigned long tdexit_exit_qual(struct kvm_vcpu *vcpu)
+ {
+ 	return kvm_rcx_read(vcpu);
+ }
+@@ -1550,6 +1550,11 @@ static int tdx_handle_ept_misconfig(struct kvm_vcpu *vcpu)
+ 	return 0;
+ }
+ 
++static int tdx_handle_dr(struct kvm_vcpu *vcpu)
++{
++	return vmx_handle_dr(vcpu);
++}
++
+ static int tdx_handle_exit(struct kvm_vcpu *vcpu,
+ 			   enum exit_fastpath_completion fastpath)
+ {
+@@ -1593,6 +1598,8 @@ static int tdx_handle_exit(struct kvm_vcpu *vcpu,
+ 		return tdx_handle_ept_violation(vcpu);
+ 	case EXIT_REASON_EPT_MISCONFIG:
+ 		return tdx_handle_ept_misconfig(vcpu);
++	case EXIT_REASON_DR_ACCESS:
++		return tdx_handle_dr(vcpu);
+ 	case EXIT_REASON_TRIPLE_FAULT:
+ 		return tdx_handle_triple_fault(vcpu);
+ 	default:
+@@ -2114,6 +2121,13 @@ static int tdx_vcpu_ioctl(struct kvm_vcpu *vcpu, void __user *argp)
+ 		}
+ 	}
+ 
++	if (is_debug_td(vcpu)) {
++		td_vmcs_setbit32(tdx,
++				 CPU_BASED_VM_EXEC_CONTROL,
++				 CPU_BASED_MOV_DR_EXITING);
++		pr_info("Set DR access VMExit for debug enabled TD guest\n");
++	}
++
+ 	return 0;
+ }
+ 
+@@ -2124,16 +2138,61 @@ static void tdx_update_exception_bitmap(struct kvm_vcpu *vcpu)
+ 
+ static void tdx_set_dr7(struct kvm_vcpu *vcpu, unsigned long val)
+ {
+-	/* TODO: Add TDH_VP_WR(GUEST_DR7) for debug TDs. */
+-	if (is_debug_td(vcpu))
++	struct vcpu_tdx *tdx = to_tdx(vcpu);
++
++	if (!is_debug_td(vcpu) || !tdx->initialized)
+ 		return;
+ 
+-	KVM_BUG_ON(val != DR7_FIXED_1, vcpu->kvm);
++	// KVM_BUG_ON(val != DR7_FIXED_1, vcpu->kvm);
++	td_vmcs_write64(tdx, GUEST_DR7, val);
++}
++
++static void tdx_sync_dirty_debug_regs(struct kvm_vcpu *vcpu)
++{
++	struct vcpu_tdx *tdx_vcpu = to_tdx(vcpu);
++
++	if (!is_debug_td(vcpu))
++		return;
++
++	/*
++	 * Even auto switch guest need save the debug register for visting
++	 * from userspace when KVM/QEMU doesn't using the DR registers.
++	 */
++	// WARN_ON(vcpu->arch.switch_db_regs & KVM_DEBUGREG_AUTO_SWITCH_GUEST);
++
++	vcpu->arch.db[0] = td_dr_read64(tdx_vcpu, 0);
++	vcpu->arch.db[1] = td_dr_read64(tdx_vcpu, 1);
++	vcpu->arch.db[2] = td_dr_read64(tdx_vcpu, 2);
++	vcpu->arch.db[3] = td_dr_read64(tdx_vcpu, 3);
++	vcpu->arch.dr6 = td_dr_read64(tdx_vcpu, 6);
++	vcpu->arch.dr7 = td_vmcs_read64(to_tdx(vcpu), GUEST_DR7);
++
++	vcpu->arch.switch_db_regs &= ~KVM_DEBUGREG_WONT_EXIT;
++	td_vmcs_setbit32(tdx_vcpu,
++			 CPU_BASED_VM_EXEC_CONTROL,
++			 CPU_BASED_MOV_DR_EXITING);
+ }
+ 
+ static void tdx_load_guest_debug_regs(struct kvm_vcpu *vcpu)
+ {
+-	kvm_pr_unimpl("unexpected %s\n", __func__);
++	struct vcpu_tdx *tdx_vcpu = to_tdx(vcpu);
++
++	if (!is_debug_td(vcpu))
++		return;
++
++	td_dr_write64(tdx_vcpu, 0, vcpu->arch.eff_db[0]);
++	td_dr_write64(tdx_vcpu, 1, vcpu->arch.eff_db[1]);
++	td_dr_write64(tdx_vcpu, 2, vcpu->arch.eff_db[2]);
++	td_dr_write64(tdx_vcpu, 3, vcpu->arch.eff_db[3]);
++	td_dr_write64(tdx_vcpu, 6, vcpu->arch.dr6);
++
++	/*
++	 * Optimization:
++	 * tdx auto switch the guest debug regs, so we clear
++	 * KVM_DEBUGREG_BP_ENABLED to avoid  update
++	 * guest debug regs every time.
++	 */
++	vcpu->arch.switch_db_regs &= ~KVM_DEBUGREG_BP_ENABLED;
+ }
+ 
+ static int tdx_get_cpl(struct kvm_vcpu *vcpu)
+@@ -2253,6 +2312,21 @@ static void tdx_get_segment(struct kvm_vcpu *vcpu, struct kvm_segment *var,
+ 	vmx_decode_ar_bytes(td_vmcs_read32(tdx, GUEST_ES_AR_BYTES + seg), var);
+ }
+ 
++static void tdx_get_cs_db_l_bits(struct kvm_vcpu *vcpu, int *db, int *l)
++{
++	u32 ar;
++	struct vcpu_tdx *tdx = to_tdx(vcpu);
++
++	if (KVM_BUG_ON(!is_debug_td(vcpu), vcpu->kvm))
++		return;
++
++	ar = td_vmcs_read32(tdx,
++			    kvm_vmx_segment_fields[VCPU_SREG_CS].ar_bytes);
++
++	*db = (ar >> 14) & 1;
++	*l = (ar >> 13) & 1;
++}
++
+ static void tdx_cache_gprs(struct kvm_vcpu *vcpu)
+ {
+ 	struct vcpu_tdx *tdx = to_tdx(vcpu);
+diff --git a/arch/x86/kvm/vmx/tdx.h b/arch/x86/kvm/vmx/tdx.h
+index 3984ae5b716b..7dfd0c922a1c 100644
+--- a/arch/x86/kvm/vmx/tdx.h
++++ b/arch/x86/kvm/vmx/tdx.h
+@@ -258,6 +258,9 @@ static __always_inline u64 td_tdcs_exec_read64(struct kvm_tdx *kvm_tdx, u32 fiel
+ 	return ex_ret.regs.r8;
+ }
+ 
++/* Export for caller in common.h */
++__always_inline unsigned long tdexit_exit_qual(struct kvm_vcpu *vcpu);
++
+ #else
+ 
+ struct kvm_tdx;
+diff --git a/arch/x86/kvm/vmx/tdx_stubs.c b/arch/x86/kvm/vmx/tdx_stubs.c
+index b2b65d29e199..9c6023d18afd 100644
+--- a/arch/x86/kvm/vmx/tdx_stubs.c
++++ b/arch/x86/kvm/vmx/tdx_stubs.c
+@@ -53,3 +53,5 @@ static void tdx_get_segment(struct kvm_vcpu *vcpu, struct kvm_segment *var,
+ static void tdx_set_interrupt_shadow(struct kvm_vcpu *vcpu, int mask) {}
+ static int tdx_skip_emulated_instruction(struct kvm_vcpu *vcpu) { return 0; }
+ static void tdx_queue_exception(struct kvm_vcpu *vcpu) {}
++static void tdx_get_cs_db_l_bits(struct kvm_vcpu *vcpu, int *db, int *l) {}
++static void tdx_sync_dirty_debug_regs(struct kvm_vcpu *vcpu) {}
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 2e0dcf109731..ed4c6b3f82a9 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -9794,7 +9794,6 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
+ 	 */
+ 	if (unlikely(vcpu->arch.switch_db_regs & KVM_DEBUGREG_WONT_EXIT)) {
+ 		WARN_ON(vcpu->guest_debug & KVM_GUESTDBG_USE_HW_BP);
+-		WARN_ON(vcpu->arch.switch_db_regs & KVM_DEBUGREG_AUTO_SWITCH_GUEST);
+ 		static_call(kvm_x86_sync_dirty_debug_regs)(vcpu);
+ 		kvm_update_dr0123(vcpu);
+ 		kvm_update_dr7(vcpu);
+-- 
+2.31.1
+

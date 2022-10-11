@@ -1,0 +1,30 @@
+From 8ed697a297a17973c9e5bf2780f359628a8450bb Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Tue, 25 Jan 2022 01:08:23 -0800
+Subject: [PATCH 0979/1418] tools: Sync AMX MSRS to tools
+
+There are not AMX MSRS definitions in include/asm/msr-index.h,
+we need sync this for tools test.
+
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+---
+ tools/arch/x86/include/asm/msr-index.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/tools/arch/x86/include/asm/msr-index.h b/tools/arch/x86/include/asm/msr-index.h
+index a7c413432b33..1ae1368aeb23 100644
+--- a/tools/arch/x86/include/asm/msr-index.h
++++ b/tools/arch/x86/include/asm/msr-index.h
+@@ -148,6 +148,9 @@
+ #define MSR_TURBO_RATIO_LIMIT1		0x000001ae
+ #define MSR_TURBO_RATIO_LIMIT2		0x000001af
+ 
++#define MSR_IA32_XFD                    0x000001c4
++#define MSR_IA32_XFD_ERR                0x000001c5
++
+ #define MSR_LBR_SELECT			0x000001c8
+ #define MSR_LBR_TOS			0x000001c9
+ 
+-- 
+2.31.1
+

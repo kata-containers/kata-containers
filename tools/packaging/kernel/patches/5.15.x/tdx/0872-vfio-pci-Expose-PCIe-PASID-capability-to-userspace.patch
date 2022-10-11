@@ -1,0 +1,54 @@
+From 8ce961297137f4ed347296f0d78cb04fdcc9dda8 Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Mon, 14 Jan 2019 15:59:02 +0800
+Subject: [PATCH 0872/1418] vfio/pci: Expose PCIe PASID capability to userspace
+
+This patch exposes PCIe PASID capability to userspace and where to
+emulate this capability if wants to further expose it to VM.
+
+And this patch only exposes PASID capability for devices which has PCIe
+PASID extended struture in its configuration space. While for VFs, user
+space still unable to see this capability as SR-IOV spec forbides VF to
+implement PASID capability extended structure. It is a TODO in future.
+Related discussion can be found in below link:
+
+https://lore.kernel.org/kvm/20200407095801.648b1371@w520.home/
+
+v7 -> v8:
+*) refine the commit message and the subject.
+
+v5 -> v6:
+*) add review-by from Eric Auger.
+
+v1 -> v2:
+*) added in v2, but it was sent in a separate patchseries before
+
+Cc: Kevin Tian <kevin.tian@intel.com>
+CC: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Cc: Alex Williamson <alex.williamson@redhat.com>
+Cc: Eric Auger <eric.auger@redhat.com>
+Cc: Jean-Philippe Brucker <jean-philippe@linaro.org>
+Cc: Joerg Roedel <joro@8bytes.org>
+Cc: Lu Baolu <baolu.lu@linux.intel.com>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Reviewed-by: Eric Auger <eric.auger@redhat.com>
+---
+ drivers/vfio/pci/vfio_pci_config.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/vfio/pci/vfio_pci_config.c b/drivers/vfio/pci/vfio_pci_config.c
+index 6e58b4bf7a60..a128ea115630 100644
+--- a/drivers/vfio/pci/vfio_pci_config.c
++++ b/drivers/vfio/pci/vfio_pci_config.c
+@@ -95,7 +95,7 @@ static const u16 pci_ext_cap_length[PCI_EXT_CAP_ID_MAX + 1] = {
+ 	[PCI_EXT_CAP_ID_LTR]	=	PCI_EXT_CAP_LTR_SIZEOF,
+ 	[PCI_EXT_CAP_ID_SECPCI]	=	0,	/* not yet */
+ 	[PCI_EXT_CAP_ID_PMUX]	=	0,	/* not yet */
+-	[PCI_EXT_CAP_ID_PASID]	=	0,	/* not yet */
++	[PCI_EXT_CAP_ID_PASID]	=	PCI_EXT_CAP_PASID_SIZEOF,
+ };
+ 
+ /*
+-- 
+2.31.1
+

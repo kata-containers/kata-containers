@@ -1,0 +1,120 @@
+From 394b8cf3f89893f58190e6995530958b86785954 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Wed, 26 May 2021 14:24:55 +0800
+Subject: [PATCH 0826/1418] x86/sgx: Introduce SGX notifier
+
+KVM guest with SGX enabled should be paused to prevent from using
+SGX memory while SGX CPUSVN update procedure is running, for any
+active enclave in guest might fail the update process.
+
+However, the CPUSVN update process is only running on host, which
+guest is not aware of. It requires to provide a way to let host
+notify KVM to pause guest. That is why SGX notifier is introduced.
+
+SGX notifier is defined on host side and a notifier list is
+maintained. Once SGX CPUSVN happens, host can tell all the
+registered notifiers to take behavior.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/include/asm/sgx.h     | 18 +++++++++++++
+ arch/x86/kernel/cpu/sgx/main.c | 46 ++++++++++++++++++++++++++++++++++
+ 2 files changed, 64 insertions(+)
+
+diff --git a/arch/x86/include/asm/sgx.h b/arch/x86/include/asm/sgx.h
+index 4d714b83dadb..f6740d174b52 100644
+--- a/arch/x86/include/asm/sgx.h
++++ b/arch/x86/include/asm/sgx.h
+@@ -383,6 +383,20 @@ struct sgx_sigstruct {
+  * Do not put any hardware-defined SGX structure representations below this
+  * comment!
+  */
++struct sgx_kvm_notifier;
++
++struct sgx_kvm_notifier_ops {
++	void (*halt)(struct sgx_kvm_notifier *notifier);
++	void (*resume)(struct sgx_kvm_notifier *notifier);
++};
++
++struct sgx_kvm_notifier {
++	struct list_head list;
++	const struct sgx_kvm_notifier_ops *ops;
++};
++
++extern void sgx_kvm_notifier_register(struct sgx_kvm_notifier *notifier);
++extern void sgx_kvm_notifier_unregister(struct sgx_kvm_notifier *notifier);
+ 
+ #ifdef CONFIG_X86_SGX_KVM
+ int sgx_virt_ecreate(struct sgx_pageinfo *pageinfo, void __user *secs,
+@@ -433,10 +447,14 @@ static inline int sgx_updatesvn(void)
+ void sgx_lock_epc(void);
+ void sgx_unlock_epc(void);
+ int sgx_zap_pages(void);
++void sgx_kvm_notifier_halt(void);
++void sgx_kvm_notifier_resume(void);
+ #else
+ static inline void sgx_lock_epc(void) { }
+ static inline void sgx_unlock_epc(void) { }
+ static inline int sgx_zap_pages(void) { return 0; }
++static inline void sgx_kvm_notifier_halt(void) { }
++static inline void sgx_kvm_notifier_resume(void) { }
+ #endif
+ 
+ #endif /* _ASM_X86_SGX_H */
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index a9b4f6255eff..92638c2ad705 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -1183,3 +1183,49 @@ void sgx_zap_abort(void)
+ 
+ 	mutex_unlock(&sgx_zap_abort_lock);
+ }
++
++static LIST_HEAD(sgx_kvm_notifier_list);
++static bool sgx_kvm_paused;
++static DEFINE_MUTEX(sgx_kvm_notifier_lock);
++
++void sgx_kvm_notifier_register(struct sgx_kvm_notifier *notifier)
++{
++	mutex_lock(&sgx_kvm_notifier_lock);
++	list_add_tail(&notifier->list, &sgx_kvm_notifier_list);
++	if (sgx_kvm_paused)
++		notifier->ops->halt(notifier);
++	mutex_unlock(&sgx_kvm_notifier_lock);
++}
++EXPORT_SYMBOL(sgx_kvm_notifier_register);
++
++void sgx_kvm_notifier_unregister(struct sgx_kvm_notifier *notifier)
++{
++	mutex_lock(&sgx_kvm_notifier_lock);
++	list_del(&notifier->list);
++	mutex_unlock(&sgx_kvm_notifier_lock);
++}
++EXPORT_SYMBOL(sgx_kvm_notifier_unregister);
++
++void sgx_kvm_notifier_halt(void)
++{
++	struct sgx_kvm_notifier *notifier;
++
++	mutex_lock(&sgx_kvm_notifier_lock);
++	list_for_each_entry(notifier, &sgx_kvm_notifier_list, list) {
++		notifier->ops->halt(notifier);
++	}
++	sgx_kvm_paused = true;
++	mutex_unlock(&sgx_kvm_notifier_lock);
++}
++
++void sgx_kvm_notifier_resume(void)
++{
++	struct sgx_kvm_notifier *notifier;
++
++	mutex_lock(&sgx_kvm_notifier_lock);
++	list_for_each_entry(notifier, &sgx_kvm_notifier_list, list) {
++		notifier->ops->resume(notifier);
++	}
++	sgx_kvm_paused = false;
++	mutex_unlock(&sgx_kvm_notifier_lock);
++}
+-- 
+2.31.1
+

@@ -1,0 +1,54 @@
+From 92d63ad63308ecd066754774a31533f472d24002 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Tue, 14 Jun 2022 15:15:57 +0800
+Subject: [PATCH 1404/1418] KVM: X86/MMU: Fix incorrect page level while split
+ large private page.
+
+Use sp->role.level with kvm_page_type_valid_on_level() while zap
+aliase spte.
+
+for_each_shadow_entry() sets it.level = 0 when walking end at valid
+last level entry(includes huge page case), it's incorrect to check the
+desired page type with it. It leads to negative shifting catched by
+UBSAN yet:
+
+==========================================================
+UBSAN: shift-out-of-bounds in ./arch/x86/kvm/mmu.h:255:14
+shift exponent -9 is negative
+==========================================================
+Call Trace:
+ dump_stack_lvl+0x33/0x42
+UBSAN: shift-out-of-bounds in ./arch/x86/kvm/mmu.h:256:13
+ ubsan_epilogue+0x5/0x40
+ __ubsan_handle_shift_out_of_bounds.cold.14+0x14/0x98
+ __direct_map.cold.197+0x4f/0x104 [kvm]
+ direct_page_fault+0x68a/0x6e0 [kvm]
+ kvm_tdp_page_fault+0xda/0x100 [kvm]
+ kvm_mmu_page_fault+0x77/0x560 [kvm]
+ vt_handle_exit+0x62d/0x14d0 [kvm_intel]
+ vcpu_enter_guest+0xa23/0x1610 [kvm]
+ kvm_arch_vcpu_ioctl_run+0x11b/0x650 [kvm]
+ kvm_vcpu_ioctl+0x2cb/0x630 [kvm]
+
+Fixes: a0256ee05070 ("KVM: TDX: Split a large page when 4KB page within it converted to shared")
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index bd3ec6266445..ae9818e140eb 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -3523,7 +3523,7 @@ static void kvm_mmu_zap_alias_spte(struct kvm_vcpu *vcpu, gfn_t gfn,
+ 		return;
+ 
+ 	if (is_large_pte(spte) &&
+-	    !kvm_page_type_valid_on_level(gfn, slot, it.level)) {
++	    !kvm_page_type_valid_on_level(gfn, slot, sp->role.level)) {
+ 		split_private_spte(vcpu, it.sptep, spte);
+ 		goto re_start;
+ 	}
+-- 
+2.31.1
+

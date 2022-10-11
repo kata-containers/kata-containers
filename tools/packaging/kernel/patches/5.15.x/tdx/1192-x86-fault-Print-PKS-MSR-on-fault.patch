@@ -1,0 +1,143 @@
+From cb6e82fb765bc31b0e4fffab066af558ce3a32ba Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Tue, 21 Dec 2021 08:09:20 -0800
+Subject: [PATCH 1192/1418] x86/fault: Print PKS MSR on fault
+
+If a PKS fault occurs it will be easier to debug if the PKS MSR value at
+the time of the fault is known.
+
+Add pks_show_regs() to __show_regs() to show the PKRS MSR on fault if
+enabled.
+
+An 'executive summary' of the pt_regs are saved in __die_header() which
+ensures that the first registers are saved in the event of multiple
+faults.  Teach this code about the extended pt_registers such that the
+PKS code can get to the original pkrs value as well.
+
+Suggested-by: Andy Lutomirski <luto@kernel.org>
+Suggested-by: Dave Hansen <dave.hansen@linux.intel.com>
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ arch/x86/include/asm/pks.h   |  3 +++
+ arch/x86/kernel/dumpstack.c  | 32 ++++++++++++++++++++++++++++++--
+ arch/x86/kernel/process_64.c |  1 +
+ arch/x86/mm/pkeys.c          | 11 +++++++++++
+ 4 files changed, 45 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/pks.h b/arch/x86/include/asm/pks.h
+index b69e03a141fe..de67d5b5a2af 100644
+--- a/arch/x86/include/asm/pks.h
++++ b/arch/x86/include/asm/pks.h
+@@ -8,6 +8,7 @@ void pks_setup(void);
+ void x86_pkrs_load(struct thread_struct *thread);
+ void pks_save_pt_regs(struct pt_regs *regs);
+ void pks_restore_pt_regs(struct pt_regs *regs);
++void pks_show_regs(struct pt_regs *regs, const char *log_lvl);
+ 
+ bool pks_handle_key_fault(struct pt_regs *regs, unsigned long hw_error_code,
+ 			  unsigned long address);
+@@ -18,6 +19,8 @@ static inline void pks_setup(void) { }
+ static inline void x86_pkrs_load(struct thread_struct *thread) { }
+ static inline void pks_save_pt_regs(struct pt_regs *regs) { }
+ static inline void pks_restore_pt_regs(struct pt_regs *regs) { }
++static inline void pks_show_regs(struct pt_regs *regs,
++				 const char *log_lvl) { }
+ 
+ static inline bool pks_handle_key_fault(struct pt_regs *regs,
+ 					unsigned long hw_error_code,
+diff --git a/arch/x86/kernel/dumpstack.c b/arch/x86/kernel/dumpstack.c
+index ea4fe192189d..606486174786 100644
+--- a/arch/x86/kernel/dumpstack.c
++++ b/arch/x86/kernel/dumpstack.c
+@@ -27,8 +27,36 @@ int panic_on_unrecovered_nmi;
+ int panic_on_io_nmi;
+ static int die_counter;
+ 
++#ifdef CONFIG_ARCH_HAS_PTREGS_AUXILIARY
++
++static struct pt_regs_extended exec_summary_regs;
++
++static void save_exec_summary(struct pt_regs *regs)
++{
++	exec_summary_regs = *(to_extended_pt_regs(regs));
++}
++
++static struct pt_regs *retrieve_exec_summary(void)
++{
++	return &exec_summary_regs.pt_regs;
++}
++
++#else /* !CONFIG_ARCH_HAS_PTREGS_AUXILIARY */
++
+ static struct pt_regs exec_summary_regs;
+ 
++static void save_exec_summary(struct pt_regs *regs)
++{
++	exec_summary_regs = *regs;
++}
++
++static struct pt_regs *retrieve_exec_summary(void)
++{
++	return &exec_summary_regs;
++}
++
++#endif /* CONFIG_ARCH_HAS_PTREGS_AUXILIARY */
++
+ bool noinstr in_task_stack(unsigned long *stack, struct task_struct *task,
+ 			   struct stack_info *info)
+ {
+@@ -369,7 +397,7 @@ void oops_end(unsigned long flags, struct pt_regs *regs, int signr)
+ 	oops_exit();
+ 
+ 	/* Executive summary in case the oops scrolled away */
+-	__show_regs(&exec_summary_regs, SHOW_REGS_ALL, KERN_DEFAULT);
++	__show_regs(retrieve_exec_summary(), SHOW_REGS_ALL, KERN_DEFAULT);
+ 
+ 	if (!signr)
+ 		return;
+@@ -396,7 +424,7 @@ static void __die_header(const char *str, struct pt_regs *regs, long err)
+ 
+ 	/* Save the regs of the first oops for the executive summary later. */
+ 	if (!die_counter)
+-		exec_summary_regs = *regs;
++		save_exec_summary(regs);
+ 
+ 	if (IS_ENABLED(CONFIG_PREEMPTION))
+ 		pr = IS_ENABLED(CONFIG_PREEMPT_RT) ? " PREEMPT_RT" : " PREEMPT";
+diff --git a/arch/x86/kernel/process_64.c b/arch/x86/kernel/process_64.c
+index d5ac78fae921..1f1511336aff 100644
+--- a/arch/x86/kernel/process_64.c
++++ b/arch/x86/kernel/process_64.c
+@@ -140,6 +140,7 @@ void __show_regs(struct pt_regs *regs, enum show_regs_mode mode,
+ 
+ 	if (cpu_feature_enabled(X86_FEATURE_OSPKE))
+ 		printk("%sPKRU: %08x\n", log_lvl, read_pkru());
++	pks_show_regs(regs, log_lvl);
+ }
+ 
+ void release_thread(struct task_struct *dead_task)
+diff --git a/arch/x86/mm/pkeys.c b/arch/x86/mm/pkeys.c
+index 085f6a3f1071..15c4a59e7a85 100644
+--- a/arch/x86/mm/pkeys.c
++++ b/arch/x86/mm/pkeys.c
+@@ -378,6 +378,17 @@ void pks_restore_pt_regs(struct pt_regs *regs)
+ 	pks_write_pkrs(current->thread.pkrs);
+ }
+ 
++void pks_show_regs(struct pt_regs *regs, const char *log_lvl)
++{
++	struct pt_regs_auxiliary *aux_pt_regs;
++
++	if (!cpu_feature_enabled(X86_FEATURE_PKS))
++		return;
++
++	aux_pt_regs = &to_extended_pt_regs(regs)->aux;
++	printk("%sPKRS: 0x%x\n", log_lvl, aux_pt_regs->pkrs);
++}
++
+ /*
+  * PKS is independent of PKU and either or both may be supported on a CPU.
+  *
+-- 
+2.31.1
+

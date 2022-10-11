@@ -1,0 +1,33 @@
+From e938fea3122c8212b4493f75ad85d5d2837cc958 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Wed, 20 Oct 2021 09:27:25 -0700
+Subject: [PATCH 0544/1418] dmaengine: idxd: remove kernel wq type set when
+ load configuration
+
+Remove setting of wq type on guest kernel during configuration load on RO
+device config. The user will set the kernel wq type and this setting based
+on config is not necessary.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+Link: https://lore.kernel.org/r/163474724511.2607444.1876715711451990426.stgit@djiang5-desk3.ch.intel.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/idxd/device.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index 27612329f510..ef3281fc3f8b 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -1050,8 +1050,6 @@ static int idxd_wq_load_config(struct idxd_wq *wq)
+ 
+ 	wq->size = wq->wqcfg->wq_size;
+ 	wq->threshold = wq->wqcfg->wq_thresh;
+-	if (wq->wqcfg->priv)
+-		wq->type = IDXD_WQT_KERNEL;
+ 
+ 	/* The driver does not support shared WQ mode in read-only config yet */
+ 	if (wq->wqcfg->mode == 0 || wq->wqcfg->pasid_en)
+-- 
+2.31.1
+

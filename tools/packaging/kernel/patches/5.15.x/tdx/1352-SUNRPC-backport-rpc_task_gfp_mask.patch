@@ -1,0 +1,47 @@
+From de485630d2e12f7bdb86a21a88393aaf317c2b90 Mon Sep 17 00:00:00 2001
+From: Fenghua Yu <fenghua.yu@intel.com>
+Date: Wed, 11 May 2022 16:25:27 -0700
+Subject: [PATCH 1352/1418] SUNRPC: backport rpc_task_gfp_mask()
+
+Backport rpc_task_gfp_mask() to compile the kernel.
+
+Signed-off-by: Fenghua Yu <fenghua.yu@intel.com>
+---
+ include/linux/sunrpc/sched.h | 1 +
+ net/sunrpc/sched.c           | 8 ++++++++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/include/linux/sunrpc/sched.h b/include/linux/sunrpc/sched.h
+index a237b8dbf608..db95e236e1a2 100644
+--- a/include/linux/sunrpc/sched.h
++++ b/include/linux/sunrpc/sched.h
+@@ -275,6 +275,7 @@ void		rpc_destroy_mempool(void);
+ extern struct workqueue_struct *rpciod_workqueue;
+ extern struct workqueue_struct *xprtiod_workqueue;
+ void		rpc_prepare_task(struct rpc_task *task);
++gfp_t           rpc_task_gfp_mask(void);
+ 
+ static inline int rpc_wait_for_completion_task(struct rpc_task *task)
+ {
+diff --git a/net/sunrpc/sched.c b/net/sunrpc/sched.c
+index 2283016fae40..59900c2173ca 100644
+--- a/net/sunrpc/sched.c
++++ b/net/sunrpc/sched.c
+@@ -57,6 +57,14 @@ struct workqueue_struct *rpciod_workqueue __read_mostly;
+ struct workqueue_struct *xprtiod_workqueue __read_mostly;
+ EXPORT_SYMBOL_GPL(xprtiod_workqueue);
+ 
++
++gfp_t rpc_task_gfp_mask(void)
++{
++	if (current->flags & PF_WQ_WORKER)
++		return GFP_KERNEL | __GFP_NORETRY | __GFP_NOWARN;
++	return GFP_KERNEL;
++}
++
+ unsigned long
+ rpc_task_timeout(const struct rpc_task *task)
+ {
+-- 
+2.31.1
+

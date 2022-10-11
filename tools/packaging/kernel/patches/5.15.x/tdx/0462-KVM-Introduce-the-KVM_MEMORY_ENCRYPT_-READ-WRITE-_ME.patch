@@ -1,0 +1,142 @@
+From ab2f16bd9ff73020e391077d45a81cce3aa96cc4 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Thu, 1 Jul 2021 09:12:06 +0800
+Subject: [PATCH 0462/1418] KVM: Introduce the
+ KVM_MEMORY_ENCRYPT_{READ,WRITE}_MEMORY VM ioctl
+
+Also introduced 2 new interfaces in kvm_x86_ops to handle these 2
+new vm level ioctl:
+
+int (*mem_enc_read_memory)(struct kvm *kvm,
+                           struct kvm_rw_memory *argp);
+int (*mem_enc_write_memory)(struct kvm *kvm,
+                            struct kvm_rw_memory *argp);
+
+Vendors who implemented encrypted guest in KVM can override these
+intefaces to provide the guest memory reading/writing support for
+userspace, like QEMU.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/include/asm/kvm-x86-ops.h |  2 ++
+ arch/x86/include/asm/kvm_host.h    |  2 ++
+ arch/x86/include/uapi/asm/kvm.h    |  7 +++++++
+ arch/x86/kvm/x86.c                 | 29 +++++++++++++++++++++++++++++
+ include/uapi/linux/kvm.h           |  5 +++++
+ 5 files changed, 45 insertions(+)
+
+diff --git a/arch/x86/include/asm/kvm-x86-ops.h b/arch/x86/include/asm/kvm-x86-ops.h
+index c1d9f3bbd349..37529bd5d57b 100644
+--- a/arch/x86/include/asm/kvm-x86-ops.h
++++ b/arch/x86/include/asm/kvm-x86-ops.h
+@@ -122,6 +122,8 @@ KVM_X86_OP(enable_smi_window)
+ KVM_X86_OP_NULL(mem_enc_op)
+ KVM_X86_OP_NULL(mem_enc_reg_region)
+ KVM_X86_OP_NULL(mem_enc_unreg_region)
++KVM_X86_OP_NULL(mem_enc_read_memory)
++KVM_X86_OP_NULL(mem_enc_write_memory)
+ KVM_X86_OP(get_msr_feature)
+ KVM_X86_OP(can_emulate_instruction)
+ KVM_X86_OP(apic_init_signal_blocked)
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 245588c733b5..08b362d245d1 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1526,6 +1526,8 @@ struct kvm_x86_ops {
+ 	int (*mem_enc_reg_region)(struct kvm *kvm, struct kvm_enc_region *argp);
+ 	int (*mem_enc_unreg_region)(struct kvm *kvm, struct kvm_enc_region *argp);
+ 	int (*vm_copy_enc_context_from)(struct kvm *kvm, unsigned int source_fd);
++	int (*mem_enc_read_memory)(struct kvm *kvm, struct kvm_rw_memory *argp);
++	int (*mem_enc_write_memory)(struct kvm *kvm, struct kvm_rw_memory *argp);
+ 
+ 	int (*get_msr_feature)(struct kvm_msr_entry *entry);
+ 
+diff --git a/arch/x86/include/uapi/asm/kvm.h b/arch/x86/include/uapi/asm/kvm.h
+index 1f74d02b9925..b2e9c94a4eb3 100644
+--- a/arch/x86/include/uapi/asm/kvm.h
++++ b/arch/x86/include/uapi/asm/kvm.h
+@@ -588,4 +588,11 @@ struct kvm_va_to_pa {
+ 	__u64 pa;
+ };
+ 
++struct kvm_rw_memory {
++	/* This can be GPA or HVA */
++	__u64 addr;
++	__u64 len;
++	__u64 ubuf;
++};
++
+ #endif /* _ASM_X86_KVM_H */
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 2f23b2366b14..d4af4692478b 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -4166,6 +4166,11 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
+ 		if (kvm && kvm->arch.vm_type == KVM_X86_TDX_VM)
+ 			r = 1;
+ 		break;
++	case KVM_CAP_ENCRYPT_MEMORY_DEBUG:
++		if (kvm_x86_ops.mem_enc_read_memory &&
++		    kvm_x86_ops.mem_enc_write_memory)
++			r = 1;
++		break;
+ 	default:
+ 		break;
+ 	}
+@@ -6218,6 +6223,30 @@ long kvm_arch_vm_ioctl(struct file *filp,
+ 			r = static_call(kvm_x86_mem_enc_unreg_region)(kvm, &region);
+ 		break;
+ 	}
++	case KVM_MEMORY_ENCRYPT_READ_MEMORY: {
++		struct kvm_rw_memory rw;
++
++		r = -EFAULT;
++		if (copy_from_user(&rw, argp, sizeof(rw)))
++			goto out;
++
++		r = -EOPNOTSUPP;
++		if (kvm_x86_ops.mem_enc_read_memory)
++			r = static_call(kvm_x86_mem_enc_read_memory)(kvm, &rw);
++		break;
++	}
++	case KVM_MEMORY_ENCRYPT_WRITE_MEMORY: {
++		struct kvm_rw_memory rw;
++
++		r = -EFAULT;
++		if (copy_from_user(&rw, argp, sizeof(rw)))
++			goto out;
++
++		r = -EOPNOTSUPP;
++		if (kvm_x86_ops.mem_enc_write_memory)
++			r = static_call(kvm_x86_mem_enc_write_memory)(kvm, &rw);
++		break;
++	}
+ 	case KVM_HYPERV_EVENTFD: {
+ 		struct kvm_hyperv_eventfd hvevfd;
+ 
+diff --git a/include/uapi/linux/kvm.h b/include/uapi/linux/kvm.h
+index ea6612f62487..c3aa07fe3d43 100644
+--- a/include/uapi/linux/kvm.h
++++ b/include/uapi/linux/kvm.h
+@@ -1119,6 +1119,7 @@ struct kvm_ppc_resize_hpt {
+ #define KVM_CAP_BINARY_STATS_FD 203
+ #define KVM_CAP_EXIT_ON_EMULATION_FAILURE 204
+ #define KVM_CAP_ARM_MTE 205
++#define KVM_CAP_ENCRYPT_MEMORY_DEBUG 206
+ 
+ #define KVM_CAP_VM_TYPES 1000
+ 
+@@ -1688,6 +1689,10 @@ struct kvm_xen_vcpu_attr {
+ #define KVM_XEN_VCPU_ATTR_TYPE_RUNSTATE_DATA	0x4
+ #define KVM_XEN_VCPU_ATTR_TYPE_RUNSTATE_ADJUST	0x5
+ 
++/* Read/write encrypted guest memory, for guest debugging support in QEMU*/
++#define KVM_MEMORY_ENCRYPT_READ_MEMORY   _IOW(KVMIO, 0xcc, struct kvm_rw_memory)
++#define KVM_MEMORY_ENCRYPT_WRITE_MEMORY  _IOW(KVMIO, 0xcd, struct kvm_rw_memory)
++
+ /* Secure Encrypted Virtualization command */
+ enum sev_cmd_id {
+ 	/* Guest initialization commands */
+-- 
+2.31.1
+

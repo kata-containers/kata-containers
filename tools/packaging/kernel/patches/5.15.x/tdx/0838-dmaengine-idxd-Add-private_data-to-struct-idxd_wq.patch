@@ -1,0 +1,28 @@
+From cda3b7b92b3511eec161375357ac95f863361a9a Mon Sep 17 00:00:00 2001
+From: Tom Zanussi <tom.zanussi@intel.com>
+Date: Wed, 1 Dec 2021 12:52:15 -0800
+Subject: [PATCH 0838/1418] dmaengine: idxd: Add private_data to struct idxd_wq
+
+Add a void * to idxd_wqs for user-defined context data.
+
+Signed-off-by: Tom Zanussi <tom.zanussi@intel.com>
+---
+ drivers/dma/idxd/idxd.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/dma/idxd/idxd.h b/drivers/dma/idxd/idxd.h
+index 15f38adab4fa..207283b074c3 100644
+--- a/drivers/dma/idxd/idxd.h
++++ b/drivers/dma/idxd/idxd.h
+@@ -210,6 +210,8 @@ struct idxd_wq {
+ 	u64 max_xfer_bytes;
+ 	u32 max_batch_size;
+ 	bool ats_dis;
++
++	void *private_data;
+ };
+ 
+ struct idxd_engine {
+-- 
+2.31.1
+

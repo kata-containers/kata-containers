@@ -1,0 +1,55 @@
+From 971d302b9e1123dfda8ac2208b72b171a2b1fd0b Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Mon, 28 Feb 2022 10:15:28 +0800
+Subject: [PATCH 1121/1418] KVM: x86/mmu: Do TLB flushing when zap only leaf
+ SPTEs
+
+Commit 0ca522d3("KVM: x86/mmu: Zap only leaf SPTEs for deleted/moved memslot by default")
+and commit 987b5e67("KVM: TDX: drop unzapped private spte when flushing memslot")
+introduced new function kvm_mmu_zap_memslot() to do memslot level
+SPTEs invalidation, but slot_handle_level(..., kvm_zap_rmapp, ...)
+returns true sometimes to inidcate that caller should do TLB flushing.
+
+Do necessary TLB flushing rely on above return value to cover both
+legacy VM and TDX guest, but not rely on VM type which forgot legacy
+VM.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 15e4c1aeceb6..ae709af87b36 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -6360,20 +6360,24 @@ static bool kvm_has_zapped_obsolete_pages(struct kvm *kvm)
+ 
+ static void kvm_mmu_zap_memslot(struct kvm *kvm, struct kvm_memory_slot *slot)
+ {
++	bool flush;
++
+ 	/*
+ 	 * Zapping non-leaf SPTEs, a.k.a. not-last SPTEs, isn't required, worst
+ 	 * case scenario we'll have unused shadow pages lying around until they
+ 	 * are recycled due to age or when the VM is destroyed.
+ 	 */
+ 	write_lock(&kvm->mmu_lock);
+-	slot_handle_level(kvm, slot, kvm_zap_rmapp, PG_LEVEL_4K,
++	flush = slot_handle_level(kvm, slot, kvm_zap_rmapp, PG_LEVEL_4K,
+ 			  KVM_MAX_HUGEPAGE_LEVEL, true);
+ 	if (kvm->arch.gfn_shared_mask) {
+-		kvm_flush_remote_tlbs(kvm);
+ 		slot_handle_level(kvm, slot, kvm_drop_zapped_private_rmapp,
+ 				  PG_LEVEL_4K, KVM_MAX_HUGEPAGE_LEVEL, false);
+ 	}
+ 	write_unlock(&kvm->mmu_lock);
++
++	if (flush)
++		kvm_flush_remote_tlbs(kvm);
+ }
+ 
+ static void kvm_mmu_invalidate_zap_pages_in_memslot(struct kvm *kvm,
+-- 
+2.31.1
+

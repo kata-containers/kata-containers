@@ -1,0 +1,60 @@
+From ab4d211f724664f004e24a10e5fcb84d29ee8d4e Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Thu, 22 Jul 2021 19:42:44 +0800
+Subject: [PATCH 0894/1418] vfio/type1: Fix a bug for getting dirty page
+
+Current migration is based on mdev framework, so the devices with migration
+capability is mdev. Hence the vfio_dev_has_feature() check should check
+the feature on its parent device. Without this fix, userspace always see
+all pages are dirty and hence no converge in pre-copy phase.
+
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ drivers/vfio/vfio_iommu_type1.c | 18 ++++++++++++++----
+ 1 file changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/vfio/vfio_iommu_type1.c b/drivers/vfio/vfio_iommu_type1.c
+index f2c5ac904ced..89cad3a42155 100644
+--- a/drivers/vfio/vfio_iommu_type1.c
++++ b/drivers/vfio/vfio_iommu_type1.c
+@@ -1233,21 +1233,31 @@ static void vfio_update_pgsize_bitmap(struct vfio_iommu *iommu)
+ 	}
+ }
+ 
++static struct device *vfio_get_iommu_device(struct vfio_iommu_group *group,
++					    struct device *dev);
++
+ static int vfio_dev_enable_feature(struct device *dev, void *data)
+ {
+-	enum iommu_dev_features *feat = data;
++	struct domain_capsule *dc = data;
++	enum iommu_dev_features *feat = dc->data;
++	struct device *iommu_device;
++
++	iommu_device = vfio_get_iommu_device(dc->group, dev);
++	if (!iommu_device)
++		return -EINVAL;
+ 
+-	if (iommu_dev_feature_enabled(dev, *feat))
++	if (iommu_dev_feature_enabled(iommu_device, *feat))
+ 		return 0;
+ 
+-	return iommu_dev_enable_feature(dev, *feat);
++	return iommu_dev_enable_feature(iommu_device, *feat);
+ }
+ 
+ static bool vfio_group_supports_hwdbm(struct vfio_iommu_group *group)
+ {
+ 	enum iommu_dev_features feat = IOMMU_DEV_FEAT_HWDBM;
++	struct domain_capsule dc = { .group = group, .data = &feat, };
+ 
+-	if (iommu_group_for_each_dev(group->iommu_group, &feat,
++	if (iommu_group_for_each_dev(group->iommu_group, &dc,
+ 				     vfio_dev_enable_feature))
+ 		return false;
+ 
+-- 
+2.31.1
+

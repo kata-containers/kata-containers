@@ -1,0 +1,30 @@
+From e1b55a3526710ea9d9c78837ee2b1c8360a931c0 Mon Sep 17 00:00:00 2001
+From: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Date: Tue, 15 Mar 2022 17:26:58 +0200
+Subject: [PATCH 1279/1418] x86/tdx: Add vsock to TDX device filter's allow
+ list
+
+Vsock driver has been audited, add it to the allow list in the TDX device
+filter.
+
+Signed-off-by: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@intel.com>
+---
+ arch/x86/kernel/tdx-filter.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/x86/kernel/tdx-filter.c b/arch/x86/kernel/tdx-filter.c
+index 50ecf161eb6a..56243636870a 100644
+--- a/arch/x86/kernel/tdx-filter.c
++++ b/arch/x86/kernel/tdx-filter.c
+@@ -64,6 +64,7 @@ struct pci_device_id pci_allow_ids[] = {
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO1_ID_BLOCK) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO1_ID_CONSOLE) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO1_ID_9P) },
++	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO_ID_VSOCK) },
+ 	{ 0, },
+ };
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,148 @@
+From ec270b3247cca063aa4f7201de1ed85b98c3f6c2 Mon Sep 17 00:00:00 2001
+From: Reinette Chatre <reinette.chatre@intel.com>
+Date: Thu, 20 May 2021 14:23:58 -0700
+Subject: [PATCH 0797/1418] x86/sgx: Move PTE zap code to separate function
+
+The SGX reclaimer removes page table entries pointing to pages that are
+moved to swap. SGX2 enables changes to pages belonging to an initialized
+enclave, for example changing page permissions. Supporting SGX2 requires
+this ability to remove page table entries that is available in the
+SGX reclaimer code.
+
+Factor out the code removing page table entries to a separate function,
+fixing accuracy of comments in the process, and make it available to other
+areas within the SGX code.
+
+Since the code will no longer be unique to the reclaimer it is relocated
+to be with the rest of the enclave code in encl.c interacting with the
+page table.
+
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+---
+ arch/x86/kernel/cpu/sgx/encl.c | 45 +++++++++++++++++++++++++++++++++-
+ arch/x86/kernel/cpu/sgx/encl.h |  2 +-
+ arch/x86/kernel/cpu/sgx/main.c | 31 ++---------------------
+ 3 files changed, 47 insertions(+), 31 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/sgx/encl.c b/arch/x86/kernel/cpu/sgx/encl.c
+index c29e10541d12..ba39186d5a28 100644
+--- a/arch/x86/kernel/cpu/sgx/encl.c
++++ b/arch/x86/kernel/cpu/sgx/encl.c
+@@ -587,7 +587,7 @@ int sgx_encl_mm_add(struct sgx_encl *encl, struct mm_struct *mm)
+ 
+ 	spin_lock(&encl->mm_lock);
+ 	list_add_rcu(&encl_mm->list, &encl->mm_list);
+-	/* Pairs with smp_rmb() in sgx_reclaimer_block(). */
++	/* Pairs with smp_rmb() in sgx_zap_enclave_ptes(). */
+ 	smp_wmb();
+ 	encl->mm_list_version++;
+ 	spin_unlock(&encl->mm_lock);
+@@ -776,6 +776,49 @@ int sgx_encl_test_and_clear_young(struct mm_struct *mm,
+ 	return ret;
+ }
+ 
++/**
++ * sgx_zap_enclave_ptes - remove PTEs mapping the address from enclave
++ * @encl: the enclave
++ * @addr: page aligned pointer to single page for which PTEs will be removed
++ *
++ * Multiple VMAs may have an enclave page mapped. Remove the PTE mapping
++ * @addr from each VMA. Ensure that page fault handler is ready to handle
++ * new mappings of @addr before calling this function.
++ */
++void sgx_zap_enclave_ptes(struct sgx_encl *encl, unsigned long addr)
++{
++	unsigned long mm_list_version;
++	struct sgx_encl_mm *encl_mm;
++	struct vm_area_struct *vma;
++	int idx, ret;
++
++	do {
++		mm_list_version = encl->mm_list_version;
++
++		/* Pairs with smp_wmb() in sgx_encl_mm_add(). */
++		smp_rmb();
++
++		idx = srcu_read_lock(&encl->srcu);
++
++		list_for_each_entry_rcu(encl_mm, &encl->mm_list, list) {
++			if (!mmget_not_zero(encl_mm->mm))
++				continue;
++
++			mmap_read_lock(encl_mm->mm);
++
++			ret = sgx_encl_find(encl_mm->mm, addr, &vma);
++			if (!ret && encl == vma->vm_private_data)
++				zap_vma_ptes(vma, addr, PAGE_SIZE);
++
++			mmap_read_unlock(encl_mm->mm);
++
++			mmput_async(encl_mm->mm);
++		}
++
++		srcu_read_unlock(&encl->srcu, idx);
++	} while (unlikely(encl->mm_list_version != mm_list_version));
++}
++
+ /**
+  * sgx_alloc_va_page() - Allocate a Version Array (VA) page
+  *
+diff --git a/arch/x86/kernel/cpu/sgx/encl.h b/arch/x86/kernel/cpu/sgx/encl.h
+index becb68503baa..82e21088e68b 100644
+--- a/arch/x86/kernel/cpu/sgx/encl.h
++++ b/arch/x86/kernel/cpu/sgx/encl.h
+@@ -112,7 +112,7 @@ int sgx_encl_get_backing(struct sgx_encl *encl, unsigned long page_index,
+ void sgx_encl_put_backing(struct sgx_backing *backing, bool do_write);
+ int sgx_encl_test_and_clear_young(struct mm_struct *mm,
+ 				  struct sgx_encl_page *page);
+-
++void sgx_zap_enclave_ptes(struct sgx_encl *encl, unsigned long addr);
+ struct sgx_epc_page *sgx_alloc_va_page(void);
+ unsigned int sgx_alloc_va_slot(struct sgx_va_page *va_page);
+ void sgx_free_va_slot(struct sgx_va_page *va_page, unsigned int offset);
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index be68a1c3fb9c..6b2f4c27e001 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -116,36 +116,9 @@ static void sgx_reclaimer_block(struct sgx_epc_page *epc_page)
+ 	struct sgx_encl_page *page = epc_page->owner;
+ 	unsigned long addr = page->desc & PAGE_MASK;
+ 	struct sgx_encl *encl = page->encl;
+-	unsigned long mm_list_version;
+-	struct sgx_encl_mm *encl_mm;
+-	struct vm_area_struct *vma;
+-	int idx, ret;
+-
+-	do {
+-		mm_list_version = encl->mm_list_version;
+-
+-		/* Pairs with smp_rmb() in sgx_encl_mm_add(). */
+-		smp_rmb();
+-
+-		idx = srcu_read_lock(&encl->srcu);
+-
+-		list_for_each_entry_rcu(encl_mm, &encl->mm_list, list) {
+-			if (!mmget_not_zero(encl_mm->mm))
+-				continue;
+-
+-			mmap_read_lock(encl_mm->mm);
+-
+-			ret = sgx_encl_find(encl_mm->mm, addr, &vma);
+-			if (!ret && encl == vma->vm_private_data)
+-				zap_vma_ptes(vma, addr, PAGE_SIZE);
+-
+-			mmap_read_unlock(encl_mm->mm);
+-
+-			mmput_async(encl_mm->mm);
+-		}
++	int ret;
+ 
+-		srcu_read_unlock(&encl->srcu, idx);
+-	} while (unlikely(encl->mm_list_version != mm_list_version));
++	sgx_zap_enclave_ptes(encl, addr);
+ 
+ 	mutex_lock(&encl->lock);
+ 
+-- 
+2.31.1
+

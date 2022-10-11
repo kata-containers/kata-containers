@@ -1,0 +1,87 @@
+From be7c076b662911e5a69d0f34232fff281ce42c8e Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Mon, 2 Aug 2021 20:54:55 -0700
+Subject: [PATCH 0710/1418] docs: virt: api.rst: Document the new KVM_{G,
+ S}ET_XSAVE2 ioctls
+
+Document the detailed information of the new KVM_{G, S}ET_XSAVE2 ioctls.
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+---
+ Documentation/virt/kvm/api.rst | 49 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 49 insertions(+)
+
+diff --git a/Documentation/virt/kvm/api.rst b/Documentation/virt/kvm/api.rst
+index d4525d277c41..14183222d628 100644
+--- a/Documentation/virt/kvm/api.rst
++++ b/Documentation/virt/kvm/api.rst
+@@ -1524,6 +1524,8 @@ otherwise it will return EBUSY error.
+   };
+ 
+ This ioctl would copy current vcpu's xsave struct to the userspace.
++Application should use KVM_GET_XSAVE2 if xsave states are larger than
++4KB.
+ 
+ 
+ 4.43 KVM_SET_XSAVE
+@@ -1543,6 +1545,8 @@ This ioctl would copy current vcpu's xsave struct to the userspace.
+   };
+ 
+ This ioctl would copy userspace's xsave struct to the kernel.
++Application should use KVM_SET_XSAVE2 if xsave states are larger than
++4KB.
+ 
+ 
+ 4.44 KVM_GET_XCRS
+@@ -7310,3 +7314,48 @@ The argument to KVM_ENABLE_CAP is also a bitmask, and must be a subset
+ of the result of KVM_CHECK_EXTENSION.  KVM will forward to userspace
+ the hypercalls whose corresponding bit is in the argument, and return
+ ENOSYS for the others.
++
++8.35 KVM_GET_XSAVE2
++-------------------
++
++:Capability: KVM_CAP_XSAVE
++:Architectures: x86
++:Type: vcpu ioctl
++:Parameters: struct kvm_xsave2 (in)
++:Returns: 0 on success, -1 on error
++
++
++::
++
++  struct kvm_xsave2 {
++	__u32 flag;
++	__u32 size;
++	__u8 state[0];
++  };
++
++This ioctl is used for copying current vcpu's xsave struct to the
++userspace when xsave state size larger than 4KB. Application code should
++set the 'size' member which indicates the size of xsave state and KVM
++provide the state into 'state'.
++
++8.36 KVM_SET_XSAVE2
++-------------------
++
++:Capability: KVM_CAP_XSAVE
++:Architectures: x86
++:Type: vcpu ioctl
++:Parameters: struct kvm_xsave2 (out)
++:Returns: 0 on success, -1 on error
++
++
++::
++
++  struct kvm_xsave2 {
++	__u32 flag;
++	__u32 size;
++	__u8 state[0];
++  };
++
++This ioctl is used for copying userspace's xsave struct to the kernel
++when xsave size is larger than 4KB. Application code should set the
++'size' member which indicates the size of xsave state.
+-- 
+2.31.1
+

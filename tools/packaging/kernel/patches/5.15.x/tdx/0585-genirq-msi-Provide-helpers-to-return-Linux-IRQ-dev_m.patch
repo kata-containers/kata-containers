@@ -1,0 +1,92 @@
+From 6b253cd49b24cee313ec636fb5b6c959c865dca2 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Fri, 19 Feb 2021 14:36:44 -0700
+Subject: [PATCH 0585/1418] genirq/msi: Provide helpers to return Linux
+ IRQ/dev_msi hw IRQ number
+
+Add new helpers to get the Linux IRQ number and device specific index
+for given device-relative vector so that the drivers don't need to
+allocate their own arrays to keep track of the vectors and hwirq for
+the multi vector device MSI case.
+
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+Signed-off-by: Megha Dey <megha.dey@intel.com>
+---
+ include/linux/msi.h |  2 ++
+ kernel/irq/msi.c    | 48 +++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 50 insertions(+)
+
+diff --git a/include/linux/msi.h b/include/linux/msi.h
+index 57d69df6fd81..ba6162f8f5fc 100644
+--- a/include/linux/msi.h
++++ b/include/linux/msi.h
+@@ -442,6 +442,8 @@ struct irq_domain *platform_msi_create_irq_domain(struct fwnode_handle *fwnode,
+ int platform_msi_domain_alloc_irqs(struct device *dev, unsigned int nvec,
+ 				   irq_write_msi_msg_t write_msi_msg);
+ void platform_msi_domain_free_irqs(struct device *dev);
++int dev_msi_irq_vector(struct device *dev, unsigned int nr);
++int dev_msi_hwirq(struct device *dev, unsigned int nr);
+ 
+ /* When an MSI domain is used as an intermediate domain */
+ int msi_domain_prepare_irqs(struct irq_domain *domain, struct device *dev,
+diff --git a/kernel/irq/msi.c b/kernel/irq/msi.c
+index 3414083b1d93..f8c478c9b59b 100644
+--- a/kernel/irq/msi.c
++++ b/kernel/irq/msi.c
+@@ -723,4 +723,52 @@ struct msi_domain_info *msi_get_domain_info(struct irq_domain *domain)
+ 	return (struct msi_domain_info *)domain->host_data;
+ }
+ 
++/**
++ * get_dev_msi_entry - Get the nth device MSI entry
++ * @dev: device to operate on
++ * @nr: device-relative interrupt vector index (0-based).
++ *
++ * Return the nth dev_msi entry
++ */
++static struct msi_desc *get_dev_msi_entry(struct device *dev, unsigned int nr)
++{
++	struct msi_desc *entry;
++	int i = 0;
++
++	for_each_msi_entry(entry, dev) {
++		if (i == nr)
++			return entry;
++		i++;
++	}
++
++	WARN_ON_ONCE(!entry);
++	return entry;
++}
++
++/**
++ * dev_msi_irq_vector - Get the Linux IRQ number of a device vector
++ * @dev: device to operate on
++ * @nr: device-relative interrupt vector index (0-based).
++ *
++ * Returns the Linux IRQ number of a device vector.
++ */
++int dev_msi_irq_vector(struct device *dev, unsigned int nr)
++{
++	return get_dev_msi_entry(dev, nr)->irq;
++}
++EXPORT_SYMBOL_GPL(dev_msi_irq_vector);
++
++/**
++ * dev_msi_hwirq - Get the device MSI hw IRQ number of a device vector
++ * @dev: device to operate on
++ * @nr: device-relative interrupt vector index (0-based).
++ *
++ * Return the dev_msi hw IRQ number of a device vector.
++ */
++int dev_msi_hwirq(struct device *dev, unsigned int nr)
++{
++	return get_dev_msi_entry(dev, nr)->device_msi.hwirq;
++}
++EXPORT_SYMBOL_GPL(dev_msi_hwirq);
++
+ #endif /* CONFIG_GENERIC_MSI_IRQ_DOMAIN */
+-- 
+2.31.1
+

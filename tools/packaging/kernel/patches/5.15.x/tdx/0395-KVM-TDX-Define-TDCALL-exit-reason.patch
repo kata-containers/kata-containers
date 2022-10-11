@@ -1,0 +1,42 @@
+From f04be6c6ed59deb54c5c2135d76956fd44933f17 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Tue, 5 May 2020 11:37:52 -0700
+Subject: [PATCH 0395/1418] KVM: TDX: Define TDCALL exit reason
+
+Define the TDCALL exit reason, which is carved out from the VMX exit
+reason namespace as the TDCALL exit from TDX guest to TDX-SEAM is really
+just a VM-Exit.
+
+Co-developed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/uapi/asm/vmx.h | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/uapi/asm/vmx.h b/arch/x86/include/uapi/asm/vmx.h
+index ef4c80f6553e..7f50d02902ca 100644
+--- a/arch/x86/include/uapi/asm/vmx.h
++++ b/arch/x86/include/uapi/asm/vmx.h
+@@ -92,6 +92,7 @@
+ #define EXIT_REASON_TPAUSE              68
+ #define EXIT_REASON_BUS_LOCK            74
+ #define EXIT_REASON_NOTIFY              75
++#define EXIT_REASON_TDCALL              77
+ 
+ #define VMX_EXIT_REASONS \
+ 	{ EXIT_REASON_EXCEPTION_NMI,         "EXCEPTION_NMI" }, \
+@@ -155,7 +156,8 @@
+ 	{ EXIT_REASON_UMWAIT,                "UMWAIT" }, \
+ 	{ EXIT_REASON_TPAUSE,                "TPAUSE" }, \
+ 	{ EXIT_REASON_BUS_LOCK,              "BUS_LOCK" }, \
+-	{ EXIT_REASON_NOTIFY,                "NOTIFY"}
++	{ EXIT_REASON_NOTIFY,                "NOTIFY"}, \
++	{ EXIT_REASON_TDCALL,                "TDCALL" }
+ 
+ #define VMX_EXIT_REASON_FLAGS \
+ 	{ VMX_EXIT_REASONS_FAILED_VMENTRY,	"FAILED_VMENTRY" }
+-- 
+2.31.1
+

@@ -1,0 +1,29 @@
+From 5e168e0e654cfdfe8102fb855be2d12b412c8f58 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Mon, 23 Nov 2020 06:37:48 +0000
+Subject: [PATCH 1051/1418] x86/tdx: Simulate TDX guest attestation event
+ completion
+
+Send IPI to simulate the TDX guest attestation event completion.
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ drivers/platform/x86/intel/tdx/intel_tdx_attest.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+index 116d48344def..b34261b7fb87 100644
+--- a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
++++ b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+@@ -110,6 +110,8 @@ static long tdx_attest_ioctl(struct file *file, unsigned int cmd,
+ 			break;
+ 		}
+ 
++		apic->send_IPI_all(HYPERVISOR_CALLBACK_VECTOR);
++
+ 		/* Wait for attestation completion */
+ 		ret = wait_for_completion_interruptible_timeout(
+ 				&attestation_done,
+-- 
+2.31.1
+

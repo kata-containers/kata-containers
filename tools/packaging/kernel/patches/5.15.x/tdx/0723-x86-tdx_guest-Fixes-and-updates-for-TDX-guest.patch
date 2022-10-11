@@ -1,0 +1,1117 @@
+From e80cb69e6a0b723e9b12abddf685a9a93228aadc Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Wed, 8 Dec 2021 15:46:06 -0800
+Subject: [PATCH 0723/1418] x86/tdx_guest: Fixes and updates for TDX guest
+
+From Kirill:
+
+"> Hi, Kirill,
+>
+> Or if you can point to me the specific fix patches in your repo for the
+> QA filed sightings, I can pick them up individually. Hopefully there is no
+> conflict if applying those patches.
+
+I looked at the tree. You merged in guest/rebased from older Sathya's tree.
+
+I'm not sure how you are going to maintain your tree if trees under you
+get rebased, as TDX guest tree does.
+
+I attach an incremental patch between these two trees, but this is not
+sustainable.
+
+Maybe you should adopt the way -next kernel get constructed: start from
+scratch on every new release and merge-in all required tree at the spot."
+---
+ .../admin-guide/kernel-parameters.rst         |   1 -
+ Documentation/driver-api/device-io.rst        |  10 +-
+ arch/alpha/include/asm/io.h                   |   2 +-
+ arch/mips/include/asm/io.h                    |   2 +-
+ arch/parisc/include/asm/io.h                  |   2 +-
+ arch/sparc/include/asm/io_64.h                |   2 +-
+ arch/x86/boot/compressed/tdx.c                |   4 +-
+ arch/x86/include/asm/io.h                     |   6 +-
+ arch/x86/include/asm/mem_encrypt.h            |   2 -
+ arch/x86/include/asm/mem_encrypt_common.h     |   2 +
+ arch/x86/include/asm/pci.h                    |   6 +
+ arch/x86/kernel/e820.c                        |  11 ++
+ arch/x86/kernel/setup.c                       |   8 +-
+ arch/x86/kernel/tdx-filter.c                  |  33 ++---
+ arch/x86/kernel/tdx.c                         |  40 +++++-
+ arch/x86/kernel/tsc.c                         |  11 ++
+ arch/x86/mm/ioremap.c                         |  33 ++---
+ arch/x86/mm/mem_encrypt.c                     |  31 ----
+ arch/x86/mm/mem_encrypt_common.c              |  27 ++++
+ arch/x86/pci/common.c                         |   5 +
+ drivers/char/virtio_console.c                 |  19 ++-
+ drivers/pci/iov.c                             |   4 +
+ drivers/pci/msi.c                             |   6 +-
+ drivers/pci/pcie/portdrv_pci.c                |   4 +
+ drivers/pci/probe.c                           |   3 +-
+ .../platform/x86/intel/tdx/intel_tdx_attest.c |   3 +
+ drivers/virtio/virtio_pci_common.c            |   3 +-
+ drivers/virtio/virtio_pci_modern_dev.c        |   2 +-
+ drivers/virtio/virtio_ring.c                  |   4 +-
+ include/asm-generic/io.h                      |   4 +-
+ include/asm-generic/pci_iomap.h               |   6 -
+ lib/pci_iomap.c                               | 134 +++++-------------
+ net/9p/trans_virtio.c                         |   2 +-
+ 33 files changed, 215 insertions(+), 217 deletions(-)
+
+diff --git a/Documentation/admin-guide/kernel-parameters.rst b/Documentation/admin-guide/kernel-parameters.rst
+index 02e6aae1ad68..01ba293a2d70 100644
+--- a/Documentation/admin-guide/kernel-parameters.rst
++++ b/Documentation/admin-guide/kernel-parameters.rst
+@@ -102,7 +102,6 @@ parameter is applicable::
+ 	ARM	ARM architecture is enabled.
+ 	ARM64	ARM64 architecture is enabled.
+ 	AX25	Appropriate AX.25 support is enabled.
+-	CCG	Confidential Computing guest is enabled.
+ 	CLK	Common clock infrastructure is enabled.
+ 	CMA	Contiguous Memory Area support is enabled.
+ 	DRM	Direct Rendering Management support is enabled.
+diff --git a/Documentation/driver-api/device-io.rst b/Documentation/driver-api/device-io.rst
+index 9f77a036fc2f..6a740e4bac04 100644
+--- a/Documentation/driver-api/device-io.rst
++++ b/Documentation/driver-api/device-io.rst
+@@ -429,13 +429,17 @@ of the linear kernel memory area to a regular pointer.
+ 
+ Portable drivers should avoid the use of ioremap_cache().
+ 
+-ioremap_host_shared()
+----------------------
++ioremap_driver_hardened()
++-------------------------
+ 
+-ioremap_host_shared() maps I/O memory so that it can be shared with the host
++ioremap_driver_hardened() maps I/O memory so that it can be shared with the host
+ in a confidential guest platform. It is mainly used in platforms like
+ Trusted Domain Extensions (TDX).
+ 
++Drivers should not need to use this function directly, but instead use
++functions like pci_iomap_range(), which use it implicitly based on driver
++authorization.
++
+ Architecture example
+ --------------------
+ 
+diff --git a/arch/alpha/include/asm/io.h b/arch/alpha/include/asm/io.h
+index 8a2e19868975..5ad0bde58abc 100644
+--- a/arch/alpha/include/asm/io.h
++++ b/arch/alpha/include/asm/io.h
+@@ -284,7 +284,7 @@ static inline void __iomem *ioremap(unsigned long port, unsigned long size)
+ 
+ #define ioremap_wc ioremap
+ /* Share memory with host in confidential guest platforms */
+-#define ioremap_host_shared ioremap
++#define ioremap_driver_hardened ioremap
+ #define ioremap_uc ioremap
+ 
+ static inline void iounmap(volatile void __iomem *addr)
+diff --git a/arch/mips/include/asm/io.h b/arch/mips/include/asm/io.h
+index 83f638fb48c5..6dfaed964031 100644
+--- a/arch/mips/include/asm/io.h
++++ b/arch/mips/include/asm/io.h
+@@ -180,7 +180,7 @@ void iounmap(const volatile void __iomem *addr);
+ 	ioremap_prot((offset), (size), _CACHE_UNCACHED)
+ #define ioremap_uc		ioremap
+ /* Share memory with host in confidential guest platforms */
+-#define ioremap_host_shared	ioremap
++#define ioremap_driver_hardened	ioremap
+ 
+ /*
+  * ioremap_cache -	map bus memory into CPU space
+diff --git a/arch/parisc/include/asm/io.h b/arch/parisc/include/asm/io.h
+index ef516ee06238..f25dfaeb90e4 100644
+--- a/arch/parisc/include/asm/io.h
++++ b/arch/parisc/include/asm/io.h
+@@ -130,7 +130,7 @@ static inline void gsc_writeq(unsigned long long val, unsigned long addr)
+ void __iomem *ioremap(unsigned long offset, unsigned long size);
+ #define ioremap_wc			ioremap
+ /* Share memory with host in confidential guest platforms */
+-#define ioremap_host_shared		ioremap
++#define ioremap_driver_hardened		ioremap
+ #define ioremap_uc			ioremap
+ 
+ extern void iounmap(const volatile void __iomem *addr);
+diff --git a/arch/sparc/include/asm/io_64.h b/arch/sparc/include/asm/io_64.h
+index 5b73b877f832..b2b8854798c3 100644
+--- a/arch/sparc/include/asm/io_64.h
++++ b/arch/sparc/include/asm/io_64.h
+@@ -410,7 +410,7 @@ static inline void __iomem *ioremap(unsigned long offset, unsigned long size)
+ #define ioremap_wc(X,Y)			ioremap((X),(Y))
+ #define ioremap_wt(X,Y)			ioremap((X),(Y))
+ /* Share memory with host in confidential guest platforms */
+-#define ioremap_host_shared(X, Y)	ioremap((X), (Y))
++#define ioremap_driver_hardened(X, Y)	ioremap((X), (Y))
+ static inline void __iomem *ioremap_np(unsigned long offset, unsigned long size)
+ {
+ 	return NULL;
+diff --git a/arch/x86/boot/compressed/tdx.c b/arch/x86/boot/compressed/tdx.c
+index d62db309004a..0dd337ac2d2a 100644
+--- a/arch/x86/boot/compressed/tdx.c
++++ b/arch/x86/boot/compressed/tdx.c
+@@ -69,8 +69,8 @@ static inline bool early_cpuid_has_tdx_guest(void)
+ bool early_is_tdx_guest(void)
+ {
+ 	if (tdx_guest < 0)
+-		tdx_guest = early_cpuid_has_tdx_guest() ||
+-			cmdline_find_option_bool("force_tdx_guest");
++		tdx_guest = cmdline_find_option_bool("force_tdx_guest") ||
++			    early_cpuid_has_tdx_guest();
+ 
+ 	return !!tdx_guest;
+ }
+diff --git a/arch/x86/include/asm/io.h b/arch/x86/include/asm/io.h
+index 98836c2833e4..dd2c8737c1ed 100644
+--- a/arch/x86/include/asm/io.h
++++ b/arch/x86/include/asm/io.h
+@@ -380,9 +380,9 @@ extern void __iomem *ioremap_wc(resource_size_t offset, unsigned long size);
+ extern void __iomem *ioremap_wt(resource_size_t offset, unsigned long size);
+ #define ioremap_wt ioremap_wt
+ 
+-extern void __iomem *ioremap_host_shared(resource_size_t offset,
++extern void __iomem *ioremap_driver_hardened(resource_size_t offset,
+ 					 unsigned long size);
+-#define ioremap_host_shared ioremap_host_shared
++#define ioremap_driver_hardened ioremap_driver_hardened
+ 
+ extern bool is_early_ioremap_ptep(pte_t *ptep);
+ 
+@@ -423,8 +423,6 @@ static inline bool phys_mem_access_encrypted(unsigned long phys_addr,
+ }
+ #endif
+ 
+-extern bool ioremap_force_shared;
+-
+ /**
+  * iosubmit_cmds512 - copy data to single MMIO location, in 512-bit units
+  * @dst: destination, in MMIO space (must be 512-bit aligned)
+diff --git a/arch/x86/include/asm/mem_encrypt.h b/arch/x86/include/asm/mem_encrypt.h
+index 2d4f5c17d79c..ed488fa0a1d7 100644
+--- a/arch/x86/include/asm/mem_encrypt.h
++++ b/arch/x86/include/asm/mem_encrypt.h
+@@ -37,7 +37,6 @@ void __init sme_map_bootdata(char *real_mode_data);
+ void __init sme_unmap_bootdata(char *real_mode_data);
+ 
+ void __init sme_early_init(void);
+-void __init sev_setup_arch(void);
+ 
+ void __init sme_encrypt_kernel(struct boot_params *bp);
+ void __init sme_enable(struct boot_params *bp);
+@@ -67,7 +66,6 @@ static inline void __init sme_map_bootdata(char *real_mode_data) { }
+ static inline void __init sme_unmap_bootdata(char *real_mode_data) { }
+ 
+ static inline void __init sme_early_init(void) { }
+-static inline void __init sev_setup_arch(void) { }
+ 
+ static inline void __init sme_encrypt_kernel(struct boot_params *bp) { }
+ static inline void __init sme_enable(struct boot_params *bp) { }
+diff --git a/arch/x86/include/asm/mem_encrypt_common.h b/arch/x86/include/asm/mem_encrypt_common.h
+index bc90e565bce4..9632083c47a3 100644
+--- a/arch/x86/include/asm/mem_encrypt_common.h
++++ b/arch/x86/include/asm/mem_encrypt_common.h
+@@ -18,4 +18,6 @@ static inline bool amd_force_dma_unencrypted(struct device *dev)
+ static inline void amd_mem_encrypt_init(void) {}
+ #endif /* CONFIG_AMD_MEM_ENCRYPT */
+ 
++void mem_encrypt_init_swiotlb_size(void);
++
+ #endif
+diff --git a/arch/x86/include/asm/pci.h b/arch/x86/include/asm/pci.h
+index 708168f798d1..1820612ce945 100644
+--- a/arch/x86/include/asm/pci.h
++++ b/arch/x86/include/asm/pci.h
+@@ -92,7 +92,13 @@ void pcibios_scan_root(int bus);
+ struct irq_routing_table *pcibios_get_irq_routing_table(void);
+ int pcibios_set_irq_routing(struct pci_dev *dev, int pin, int irq);
+ 
++#ifdef CONFIG_PCI
+ void pci_disable_early(void);
++void pci_disable_mmconf(void);
++#else
++static inline void pci_disable_early(void) { }
++static inline void pci_disable_mmconf(void) { }
++#endif
+ 
+ #define HAVE_PCI_MMAP
+ #define arch_can_pci_mmap_wc()	pat_enabled()
+diff --git a/arch/x86/kernel/e820.c b/arch/x86/kernel/e820.c
+index bc0657f0deed..e72919431e6b 100644
+--- a/arch/x86/kernel/e820.c
++++ b/arch/x86/kernel/e820.c
+@@ -1290,6 +1290,17 @@ void __init e820__memory_setup(void)
+ 
+ 	pr_info("BIOS-provided physical RAM map:\n");
+ 	e820__print_table(who);
++
++	/* Mark unaccepted memory bitmap reserved */
++	if (boot_params.unaccepted_memory) {
++		unsigned long size;
++
++		/* One bit per 2MB */
++		size = DIV_ROUND_UP(e820__end_of_ram_pfn() * PAGE_SIZE,
++				    PMD_SIZE * BITS_PER_BYTE);
++		memblock_reserve(boot_params.unaccepted_memory, size);
++	}
++
+ }
+ 
+ void __init e820__memblock_setup(void)
+diff --git a/arch/x86/kernel/setup.c b/arch/x86/kernel/setup.c
+index 76702f7c20c9..58f5d88c6b9e 100644
+--- a/arch/x86/kernel/setup.c
++++ b/arch/x86/kernel/setup.c
+@@ -49,6 +49,7 @@
+ #include <asm/thermal.h>
+ #include <asm/unwind.h>
+ #include <asm/vsyscall.h>
++#include <asm/mem_encrypt_common.h>
+ #include <linux/vmalloc.h>
+ 
+ /*
+@@ -1031,11 +1032,8 @@ void __init setup_arch(char **cmdline_p)
+ 	memblock_set_current_limit(ISA_END_ADDRESS);
+ 	e820__memblock_setup();
+ 
+-	/*
+-	 * Needs to run after memblock setup because it needs the physical
+-	 * memory size.
+-	 */
+-	sev_setup_arch();
++	if (cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT))
++		mem_encrypt_init_swiotlb_size();
+ 
+ 	efi_fake_memmap();
+ 	efi_find_mirror();
+diff --git a/arch/x86/kernel/tdx-filter.c b/arch/x86/kernel/tdx-filter.c
+index bf50e067efcb..5f37f1bcd1ab 100644
+--- a/arch/x86/kernel/tdx-filter.c
++++ b/arch/x86/kernel/tdx-filter.c
+@@ -202,15 +202,22 @@ bool tdx_filter_enabled(void)
+ 
+ bool tdx_allowed_port(short int port)
+ {
+-	if (tdx_debug_enabled() && tdx_filter_enabled())
++	if (tdx_debug_enabled() && !tdx_filter_enabled())
+ 		return true;
+ 
+ 	switch (port) {
+ 	/* MC146818 RTC */
+ 	case 0x70 ... 0x71:
++	/* i8237A DMA controller */
++	case 0x80 ... 0x8f:
+ 	/* PCI */
++	case 0xcd8 ... 0xcdf:
+ 	case 0xcf8 ... 0xcff:
+ 		return true;
++	/* PCIE hotplug device state for Q35 machine type */
++	case 0xcc4:
++	case 0xcc8:
++		return true;
+ 	/* ACPI ports list:
+ 	 * 0600-0603 : ACPI PM1a_EVT_BLK
+ 	 * 0604-0605 : ACPI PM1a_CNT_BLK
+@@ -219,11 +226,11 @@ bool tdx_allowed_port(short int port)
+ 	 */
+ 	case 0x600 ... 0x62f:
+ 		return true;
+-	/* COM1 */
+-	case 0x3f8:
+-	case 0x3f9:
+-	case 0x3fa:
+-	case 0x3fd:
++	/* serial */
++	case 0x2e8 ... 0x2ef:
++	case 0x2f8 ... 0x2ff:
++	case 0x3e8 ... 0x3ef:
++	case 0x3f8 ... 0x3ff:
+ 		return tdx_debug_enabled();
+ 	default:
+ 		return false;
+@@ -243,22 +250,13 @@ void __init tdx_filter_init(void)
+ 
+ 	if (!tdx_filter_enabled()) {
+ 		pr_info("Disabled TDX guest filter support\n");
+-		ioremap_force_shared = true;
+ 		add_taint(TAINT_CONF_NO_LOCKDOWN, LOCKDEP_STILL_OK);
+ 		return;
+ 	}
+ 
+ 	dev_default_authorization = false;
+ 
+-	pci_disable_early();
+-
+ 	if (filter_overridden) {
+-		/*
+-		 * Since the default allow list is overridden to
+-		 * make sure new drivers use ioremap_host_shared,
+-		 * force it on all drivers.
+-		 */
+-		ioremap_force_shared = true;
+ 		add_taint(TAINT_CONF_NO_LOCKDOWN, LOCKDEP_STILL_OK);
+ 		pr_debug("Device filter is overridden\n");
+ 	}
+@@ -270,11 +268,6 @@ void __init tdx_filter_init(void)
+ 		snprintf(acpi_allowed, sizeof(acpi_allowed), "%s,%s", allowed,
+ 			 a_allowed);
+ 		allowed = acpi_allowed;
+-		/*
+-		 * Similar to previous overrides, ACPI table override also
+-		 * requires ioremap as shared. So force enable it.
+-		 */
+-		ioremap_force_shared = true;
+ 	}
+ 	acpi_tbl_allow_setup(allowed);
+ 
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 82672db87c5d..05146f41249f 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -20,6 +20,8 @@
+ #include <asm/insn-eval.h>
+ #include <linux/sched/signal.h> /* force_sig_fault() */
+ #include <linux/swiotlb.h>
++#include <linux/pci.h>
++#include <linux/nmi.h>
+ #include <linux/random.h>
+ 
+ #define CREATE_TRACE_POINTS
+@@ -68,9 +70,10 @@ static struct {
+ void (*tdx_event_notify_handler)(void);
+ EXPORT_SYMBOL_GPL(tdx_event_notify_handler);
+ 
++static int tdx_guest = -1;
++
+ bool is_tdx_guest(void)
+ {
+-	static int tdx_guest = -1;
+ 	u32 eax, sig[3];
+ 
+ 	if (tdx_guest >= 0)
+@@ -604,7 +607,7 @@ static bool tdx_handle_io(struct pt_regs *regs, u32 exit_qual)
+ 			regs->ax &= ~mask;
+ 			regs->ax |= (UINT_MAX & mask);
+ 		}
+-		return false;
++		return true;
+ 	}
+ 
+ 	if (!out) {
+@@ -886,6 +889,11 @@ bool tdx_handle_virtualization_exception(struct pt_regs *regs,
+ 		ret = tdx_handle_io(regs, ve->exit_qual);
+ 		break;
+ 	case EXIT_REASON_EPT_VIOLATION:
++		if (!(ve->gpa & tdx_shared_mask())) {
++			panic("#VE due to access to unaccepted memory. "
++			      "GPA: %#llx\n", ve->gpa);
++		}
++
+ 		/* Currently only MMIO triggers EPT violation */
+ 		ve->instr_len = tdx_handle_mmio(regs, ve);
+ 		if (ve->instr_len < 0) {
+@@ -958,12 +966,17 @@ static __init bool tdx_early_io(struct pt_regs *regs, u32 exit_qual)
+ __init bool tdx_early_handle_ve(struct pt_regs *regs)
+ {
+ 	struct ve_info ve;
++	int ret;
+ 
+ 	if (tdx_get_ve_info(&ve))
+ 		return false;
+ 
+-	if (ve.exit_reason == EXIT_REASON_IO_INSTRUCTION)
+-		return tdx_early_io(regs, ve.exit_qual);
++	if (ve.exit_reason == EXIT_REASON_IO_INSTRUCTION) {
++		ret = tdx_early_io(regs, ve.exit_qual);
++		if (!ret)
++			regs->ip += ve.instr_len;
++		return ret;
++	}
+ 
+ 	return false;
+ }
+@@ -974,10 +987,11 @@ void __init tdx_early_init(void)
+ 
+ 	tdx_guest_forced = cmdline_find_option_bool(boot_command_line,
+ 						    "force_tdx_guest");
+-	if (tdx_guest_forced)
++	if (tdx_guest_forced) {
++		tdx_guest = 1;
+ 		pr_info("Force enabling TDX Guest feature\n");
+-
+-	if (!is_tdx_guest() && !tdx_guest_forced)
++	}
++	if (!is_tdx_guest())
+ 		return;
+ 
+ 	setup_force_cpu_cap(X86_FEATURE_TDX_GUEST);
+@@ -985,6 +999,7 @@ void __init tdx_early_init(void)
+ 	setup_clear_cpu_cap(X86_FEATURE_MTRR);
+ 	setup_clear_cpu_cap(X86_FEATURE_APERFMPERF);
+ 	setup_clear_cpu_cap(X86_FEATURE_TME);
++	setup_clear_cpu_cap(X86_FEATURE_CQM_LLC);
+ 
+ 	/*
+ 	 * The only secure (mononotonous) timer inside a TD guest
+@@ -1005,6 +1020,14 @@ void __init tdx_early_init(void)
+ 	legacy_pic = &null_legacy_pic;
+ 	swiotlb_force = SWIOTLB_FORCE;
+ 
++	/*
++	 * Disable NMI watchdog because of the risk of false positives
++	 * and also can increase overhead in the TDX module.
++	 * This is already done for KVM, but covers other hypervisors
++	 * here.
++	 */
++	hardlockup_detector_disable();
++
+ 	/*
+ 	 * In TDX relying on environmental noise like interrupt
+ 	 * timing alone is dubious, because it can be directly
+@@ -1030,5 +1053,8 @@ void __init tdx_early_init(void)
+ 	if (tdx_hcall_set_notify_intr(TDX_GUEST_EVENT_NOTIFY_VECTOR))
+ 		pr_warn("Setting event notification interrupt failed\n");
+ 
++	pci_disable_early();
++	pci_disable_mmconf();
++
+ 	pr_info("Guest initialized\n");
+ }
+diff --git a/arch/x86/kernel/tsc.c b/arch/x86/kernel/tsc.c
+index 2e076a459a0c..412d82c1c9e9 100644
+--- a/arch/x86/kernel/tsc.c
++++ b/arch/x86/kernel/tsc.c
+@@ -696,10 +696,21 @@ unsigned long native_calibrate_tsc(void)
+ static unsigned long cpu_khz_from_cpuid(void)
+ {
+ 	unsigned int eax_base_mhz, ebx_max_mhz, ecx_bus_mhz, edx;
++	unsigned eax_denominator, ebx_numerator, ecx_hz;
+ 
+ 	if (boot_cpu_data.x86_vendor != X86_VENDOR_INTEL)
+ 		return 0;
+ 
++	if (boot_cpu_data.cpuid_level < 0x15)
++		return 0;
++
++	eax_denominator = ebx_numerator = ecx_hz = edx = 0;
++
++	cpuid(0x15, &eax_denominator, &ebx_numerator, &ecx_hz, &edx);
++
++	if (ebx_numerator && eax_denominator)
++		return ecx_hz;
++
+ 	if (boot_cpu_data.cpuid_level < 0x16)
+ 		return 0;
+ 
+diff --git a/arch/x86/mm/ioremap.c b/arch/x86/mm/ioremap.c
+index e017ac6a5e31..35c5d65b1dc0 100644
+--- a/arch/x86/mm/ioremap.c
++++ b/arch/x86/mm/ioremap.c
+@@ -28,7 +28,6 @@
+ #include <asm/memtype.h>
+ #include <asm/setup.h>
+ #include <asm/tdx.h>
+-#include <asm/cmdline.h>
+ 
+ #include "physaddr.h"
+ 
+@@ -163,17 +162,6 @@ static void __ioremap_check_mem(resource_size_t addr, unsigned long size,
+ 	__ioremap_check_other(addr, desc);
+ }
+ 
+-/*
+- * Normally only drivers that are hardened for use in confidential guests
+- * force shared mappings. But if device filtering is disabled other
+- * devices can be loaded, and these need shared mappings too. This
+- * variable is set to true if these filters are disabled.
+- *
+- * Note this has some side effects, e.g. various BIOS tables
+- * get shared too which is risky.
+- */
+-bool ioremap_force_shared;
+-
+ /*
+  * Remap an arbitrary physical address space into the kernel virtual
+  * address space. It transparently creates kernel huge I/O mapping when
+@@ -261,7 +249,7 @@ __ioremap_caller(resource_size_t phys_addr, unsigned long size,
+ 	prot = PAGE_KERNEL_IO;
+ 	if ((io_desc.flags & IORES_MAP_ENCRYPTED) || encrypted)
+ 		prot = pgprot_encrypted(prot);
+-	else if (shared || ioremap_force_shared)
++	else if (shared || !cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
+ 		prot = pgprot_cc_guest(prot);
+ 
+ 	switch (pcm) {
+@@ -411,22 +399,26 @@ void __iomem *ioremap_wc(resource_size_t phys_addr, unsigned long size)
+ EXPORT_SYMBOL(ioremap_wc);
+ 
+ /**
+- * ioremap_host_shared - map memory into CPU space shared with host
++ * ioremap_driver_hardened - map memory into CPU space shared with host
+  * @phys_addr:	bus address of the memory
+  * @size:	size of the resource to map
+  *
+  * This version of ioremap ensures that the memory is marked shared
+- * with the host. This is useful for confidential guests.
++ * with the host when it used by a hardened driver.
++ * This is useful for confidential guests.
++ *
++ * Note that drivers should not use this function directly, but use
++ * pci_iomap_range() et.al.
+  *
+  * Must be freed with iounmap.
+  */
+-void __iomem *ioremap_host_shared(resource_size_t phys_addr, unsigned long size)
++void __iomem *ioremap_driver_hardened(resource_size_t phys_addr, unsigned long size)
+ {
+ 	return __ioremap_caller(phys_addr, size, _PAGE_CACHE_MODE_UC,
+ 			__builtin_return_address(0), false,
+ 			cc_platform_has(CC_ATTR_GUEST_SHARED_MAPPING_INIT));
+ }
+-EXPORT_SYMBOL(ioremap_host_shared);
++EXPORT_SYMBOL(ioremap_driver_hardened);
+ 
+ /**
+  * ioremap_wt	-	map memory into CPU space write through
+@@ -859,13 +851,6 @@ void __init early_ioremap_init(void)
+ 	WARN_ON((fix_to_virt(0) + PAGE_SIZE) & ((1 << PMD_SHIFT) - 1));
+ #endif
+ 
+-	/* Parse cmdline params for ioremap_force_shared */
+-	if (cmdline_find_option_bool(boot_command_line,
+-				     "ioremap_force_shared")) {
+-		ioremap_force_shared = 1;
+-		add_taint(TAINT_CONF_NO_LOCKDOWN, LOCKDEP_STILL_OK);
+-	}
+-
+ 	early_ioremap_setup();
+ 
+ 	pmd = early_ioremap_pmd(fix_to_virt(FIX_BTMAP_BEGIN));
+diff --git a/arch/x86/mm/mem_encrypt.c b/arch/x86/mm/mem_encrypt.c
+index a6bfcf0def42..68ca75c2d186 100644
+--- a/arch/x86/mm/mem_encrypt.c
++++ b/arch/x86/mm/mem_encrypt.c
+@@ -199,37 +199,6 @@ void __init sme_early_init(void)
+ 		swiotlb_force = SWIOTLB_FORCE;
+ }
+ 
+-void __init sev_setup_arch(void)
+-{
+-	phys_addr_t total_mem = memblock_phys_mem_size();
+-	unsigned long size;
+-
+-	if (!cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT))
+-		return;
+-
+-	/*
+-	 * For SEV, all DMA has to occur via shared/unencrypted pages.
+-	 * SEV uses SWIOTLB to make this happen without changing device
+-	 * drivers. However, depending on the workload being run, the
+-	 * default 64MB of SWIOTLB may not be enough and SWIOTLB may
+-	 * run out of buffers for DMA, resulting in I/O errors and/or
+-	 * performance degradation especially with high I/O workloads.
+-	 *
+-	 * Adjust the default size of SWIOTLB for SEV guests using
+-	 * a percentage of guest memory for SWIOTLB buffers.
+-	 * Also, as the SWIOTLB bounce buffer memory is allocated
+-	 * from low memory, ensure that the adjusted size is within
+-	 * the limits of low available memory.
+-	 *
+-	 * The percentage of guest memory used here for SWIOTLB buffers
+-	 * is more of an approximation of the static adjustment which
+-	 * 64MB for <1G, and ~128M to 256M for 1G-to-4G, i.e., the 6%
+-	 */
+-	size = total_mem * 6 / 100;
+-	size = clamp_val(size, IO_TLB_DEFAULT_SIZE, SZ_1G);
+-	swiotlb_adjust_size(size);
+-}
+-
+ static void __init __set_clr_pte_enc(pte_t *kpte, int level, bool enc)
+ {
+ 	pgprot_t old_prot, new_prot;
+diff --git a/arch/x86/mm/mem_encrypt_common.c b/arch/x86/mm/mem_encrypt_common.c
+index afbf8079526b..3cedc8ddc749 100644
+--- a/arch/x86/mm/mem_encrypt_common.c
++++ b/arch/x86/mm/mem_encrypt_common.c
+@@ -12,6 +12,7 @@
+ #include <linux/cc_platform.h>
+ #include <linux/virtio_config.h>
+ #include <linux/swiotlb.h>
++#include <linux/memblock.h>
+ 
+ /* Override for DMA direct allocation check - ARCH_HAS_FORCE_DMA_UNENCRYPTED */
+ bool force_dma_unencrypted(struct device *dev)
+@@ -40,6 +41,32 @@ void __init mem_encrypt_init(void)
+ 	amd_mem_encrypt_init();
+ }
+ 
++void __init mem_encrypt_init_swiotlb_size(void)
++{
++	unsigned long size;
++
++	/*
++	 * For SEV and TDX, all DMA has to occur via shared/unencrypted pages.
++	 * Kernel uses SWIOTLB to make this happen without changing device
++	 * drivers. However, depending on the workload being run, the
++	 * default 64MB of SWIOTLB may not be enough and SWIOTLB may
++	 * run out of buffers for DMA, resulting in I/O errors and/or
++	 * performance degradation especially with high I/O workloads.
++	 *
++	 * Adjust the default size of SWIOTLB using a percentage of guest
++	 * memory for SWIOTLB buffers. Also, as the SWIOTLB bounce buffer
++	 * memory is allocated from low memory, ensure that the adjusted size
++	 * is within the limits of low available memory.
++	 *
++	 * The percentage of guest memory used here for SWIOTLB buffers
++	 * is more of an approximation of the static adjustment which
++	 * 64MB for <1G, and ~128M to 256M for 1G-to-4G, i.e., the 6%
++	 */
++	size = memblock_phys_mem_size() * 6 / 100;
++	size = clamp_val(size, IO_TLB_DEFAULT_SIZE, SZ_1G);
++	swiotlb_adjust_size(size);
++}
++
+ int arch_has_restricted_virtio_memory_access(void)
+ {
+ 	return (cc_platform_has(CC_ATTR_GUEST_TDX) ||
+diff --git a/arch/x86/pci/common.c b/arch/x86/pci/common.c
+index bb2c4064046b..85ffe24fcca5 100644
+--- a/arch/x86/pci/common.c
++++ b/arch/x86/pci/common.c
+@@ -801,3 +801,8 @@ bool arch_support_pci_device_msi(struct pci_dev *pdev)
+ 	 */
+ 	return on_bare_metal(&pdev->dev);
+ }
++
++void pci_disable_mmconf(void)
++{
++	pci_probe &= ~PCI_PROBE_MMCONF;
++}
+diff --git a/drivers/char/virtio_console.c b/drivers/char/virtio_console.c
+index 7eaf303a7a86..c62b755d7b46 100644
+--- a/drivers/char/virtio_console.c
++++ b/drivers/char/virtio_console.c
+@@ -1566,10 +1566,13 @@ static void handle_control_message(struct virtio_device *vdev,
+ 	struct port *port;
+ 	size_t name_size;
+ 	int err;
++	unsigned id;
+ 
+ 	cpkt = (struct virtio_console_control *)(buf->buf + buf->offset);
+ 
+-	port = find_port_by_id(portdev, virtio32_to_cpu(vdev, cpkt->id));
++	/* Make sure the host cannot change id under us */
++	id = virtio32_to_cpu(vdev, READ_ONCE(cpkt->id));
++	port = find_port_by_id(portdev, id);
+ 	if (!port &&
+ 	    cpkt->event != cpu_to_virtio16(vdev, VIRTIO_CONSOLE_PORT_ADD)) {
+ 		/* No valid header at start of buffer.  Drop it. */
+@@ -1586,15 +1589,14 @@ static void handle_control_message(struct virtio_device *vdev,
+ 			send_control_msg(port, VIRTIO_CONSOLE_PORT_READY, 1);
+ 			break;
+ 		}
+-		if (virtio32_to_cpu(vdev, cpkt->id) >=
+-		    portdev->max_nr_ports) {
++		if (id >= portdev->max_nr_ports) {
+ 			dev_warn(&portdev->vdev->dev,
+ 				"Request for adding port with "
+ 				"out-of-bound id %u, max. supported id: %u\n",
+ 				cpkt->id, portdev->max_nr_ports - 1);
+ 			break;
+ 		}
+-		add_port(portdev, virtio32_to_cpu(vdev, cpkt->id));
++		add_port(portdev, id);
+ 		break;
+ 	case VIRTIO_CONSOLE_PORT_REMOVE:
+ 		unplug_port(port);
+@@ -1846,6 +1848,9 @@ static int init_vqs(struct ports_device *portdev)
+ 	int err;
+ 
+ 	nr_ports = portdev->max_nr_ports;
++	if (use_multiport(portdev) && nr_ports < 1)
++		return -EINVAL;
++
+ 	nr_queues = use_multiport(portdev) ? (nr_ports + 1) * 2 : 2;
+ 
+ 	vqs = kmalloc_array(nr_queues, sizeof(struct virtqueue *), GFP_KERNEL);
+@@ -1981,6 +1986,8 @@ static void virtcons_remove(struct virtio_device *vdev)
+ 	kfree(portdev);
+ }
+ 
++#define MAX_VIRTIO_PORTS 64
++
+ /*
+  * Once we're further in boot, we get probed like any other virtio
+  * device.
+@@ -2036,6 +2043,10 @@ static int virtcons_probe(struct virtio_device *vdev)
+ 	    virtio_cread_feature(vdev, VIRTIO_CONSOLE_F_MULTIPORT,
+ 				 struct virtio_console_config, max_nr_ports,
+ 				 &portdev->max_nr_ports) == 0) {
++		if (portdev->max_nr_ports >= MAX_VIRTIO_PORTS) {
++			err = -EINVAL;
++			goto free;
++		}
+ 		multiport = true;
+ 	}
+ 
+diff --git a/drivers/pci/iov.c b/drivers/pci/iov.c
+index dafdc652fcd0..4f6c3d6441a3 100644
+--- a/drivers/pci/iov.c
++++ b/drivers/pci/iov.c
+@@ -12,6 +12,7 @@
+ #include <linux/export.h>
+ #include <linux/string.h>
+ #include <linux/delay.h>
++#include <linux/cc_platform.h>
+ #include "pci.h"
+ 
+ #define VIRTFN_ID_LEN	16
+@@ -569,6 +570,9 @@ static int sriov_enable(struct pci_dev *dev, int nr_virtfn)
+ 	if (!nr_virtfn)
+ 		return 0;
+ 
++	if (cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
++		return -EINVAL;
++
+ 	if (iov->num_VFs)
+ 		return -EINVAL;
+ 
+diff --git a/drivers/pci/msi.c b/drivers/pci/msi.c
+index 9e216231a2d7..a49d64999e70 100644
+--- a/drivers/pci/msi.c
++++ b/drivers/pci/msi.c
+@@ -642,7 +642,11 @@ static void __iomem *msix_map_region(struct pci_dev *dev, unsigned nr_entries)
+ 	table_offset &= PCI_MSIX_TABLE_OFFSET;
+ 	phys_addr = pci_resource_start(dev, bir) + table_offset;
+ 
+-	return ioremap_host_shared(phys_addr, nr_entries * PCI_MSIX_ENTRY_SIZE);
++	if (dev->dev.authorized)
++		return ioremap_driver_hardened(phys_addr,
++				nr_entries * PCI_MSIX_ENTRY_SIZE);
++
++	return ioremap(phys_addr, nr_entries * PCI_MSIX_ENTRY_SIZE);
+ }
+ 
+ static int msix_setup_entries(struct pci_dev *dev,
+diff --git a/drivers/pci/pcie/portdrv_pci.c b/drivers/pci/pcie/portdrv_pci.c
+index c7ff1eea225a..70309c7d7195 100644
+--- a/drivers/pci/pcie/portdrv_pci.c
++++ b/drivers/pci/pcie/portdrv_pci.c
+@@ -15,6 +15,7 @@
+ #include <linux/init.h>
+ #include <linux/aer.h>
+ #include <linux/dmi.h>
++#include <linux/cc_platform.h>
+ 
+ #include "../pci.h"
+ #include "portdrv.h"
+@@ -263,6 +264,9 @@ static int __init pcie_portdrv_init(void)
+ 	if (pcie_ports_disabled)
+ 		return -EACCES;
+ 
++	if (cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
++		return -EINVAL;
++
+ 	pcie_init_services();
+ 	dmi_check_system(pcie_portdrv_dmi_table);
+ 
+diff --git a/drivers/pci/probe.c b/drivers/pci/probe.c
+index cf7e9dc8813e..ef1577666ab3 100644
+--- a/drivers/pci/probe.c
++++ b/drivers/pci/probe.c
+@@ -22,6 +22,7 @@
+ #include <linux/bitfield.h>
+ #include <linux/cc_platform.h>
+ #include <linux/device.h>
++#include <linux/cc_platform.h>
+ #include "pci.h"
+ 
+ #define CARDBUS_LATENCY_TIMER	176	/* secondary latency timer */
+@@ -2647,7 +2648,7 @@ int pci_scan_slot(struct pci_bus *bus, int devfn)
+ 	}
+ 
+ 	/* Only one slot has PCIe device */
+-	if (bus->self && nr)
++	if (bus->self && nr && !cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
+ 		pcie_aspm_init_link_state(bus->self);
+ 
+ 	return nr;
+diff --git a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+index e1bb5355b68a..a3e19af69c69 100644
+--- a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
++++ b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+@@ -116,6 +116,9 @@ static long tdx_attest_ioctl(struct file *file, unsigned int cmd,
+ 
+ 		if (get_user(rtmr, (u64 __user *)argp))
+ 			break;
++		/* Don't allow to extend BIOS/kernel RTMRs */
++		if (rtmr == 0 || rtmr == 1)
++			return -EINVAL;
+ 		if (copy_from_user(report_data, argp + 8, TDX_EXTEND_LEN))
+ 			break;
+ 
+diff --git a/drivers/virtio/virtio_pci_common.c b/drivers/virtio/virtio_pci_common.c
+index b35bb2d57f62..df0978582f16 100644
+--- a/drivers/virtio/virtio_pci_common.c
++++ b/drivers/virtio/virtio_pci_common.c
+@@ -14,6 +14,7 @@
+  *  Michael S. Tsirkin <mst@redhat.com>
+  */
+ 
++#include <linux/cc_platform.h>
+ #include "virtio_pci_common.h"
+ 
+ static bool force_legacy = false;
+@@ -541,7 +542,7 @@ static int virtio_pci_probe(struct pci_dev *pci_dev,
+ 			goto err_probe;
+ 	} else {
+ 		rc = virtio_pci_modern_probe(vp_dev);
+-		if (rc == -ENODEV)
++		if (rc == -ENODEV && !cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
+ 			rc = virtio_pci_legacy_probe(vp_dev);
+ 		if (rc)
+ 			goto err_probe;
+diff --git a/drivers/virtio/virtio_pci_modern_dev.c b/drivers/virtio/virtio_pci_modern_dev.c
+index f29bf45a4642..e11ed748e661 100644
+--- a/drivers/virtio/virtio_pci_modern_dev.c
++++ b/drivers/virtio/virtio_pci_modern_dev.c
+@@ -83,7 +83,7 @@ vp_modern_map_capability(struct virtio_pci_modern_device *mdev, int off,
+ 		return NULL;
+ 	}
+ 
+-	p = pci_iomap_host_shared_range(dev, bar, offset, length);
++	p = pci_iomap_range(dev, bar, offset, length);
+ 	if (!p)
+ 		dev_err(&dev->dev,
+ 			"virtio_pci: unable to map virtio %u@%u on bar %i\n",
+diff --git a/drivers/virtio/virtio_ring.c b/drivers/virtio/virtio_ring.c
+index 2faaefefe29b..2705e7c123ed 100644
+--- a/drivers/virtio/virtio_ring.c
++++ b/drivers/virtio/virtio_ring.c
+@@ -2348,7 +2348,7 @@ void vring_transport_features(struct virtio_device *vdev)
+ 
+ 		switch (i) {
+ 		case VIRTIO_RING_F_INDIRECT_DESC:
+-			if (cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT))
++			if (cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
+ 				goto clear;
+ 			break;
+ 		case VIRTIO_RING_F_EVENT_IDX:
+@@ -2358,7 +2358,7 @@ void vring_transport_features(struct virtio_device *vdev)
+ 		case VIRTIO_F_ACCESS_PLATFORM:
+ 			break;
+ 		case VIRTIO_F_RING_PACKED:
+-			if (cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT))
++			if (cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
+ 				goto clear;
+ 			break;
+ 		case VIRTIO_F_ORDER_PLATFORM:
+diff --git a/include/asm-generic/io.h b/include/asm-generic/io.h
+index f0e2ff8775c1..8baa141ad427 100644
+--- a/include/asm-generic/io.h
++++ b/include/asm-generic/io.h
+@@ -983,8 +983,8 @@ static inline void __iomem *ioremap(phys_addr_t addr, size_t size)
+ #endif
+ 
+ /* Share memory with host in confidential guest platforms */
+-#ifndef ioremap_host_shared
+-#define ioremap_host_shared ioremap
++#ifndef ioremap_driver_hardened
++#define ioremap_driver_hardened ioremap
+ #endif
+ 
+ /*
+diff --git a/include/asm-generic/pci_iomap.h b/include/asm-generic/pci_iomap.h
+index 09a7a1e2151d..5a2f9bf53384 100644
+--- a/include/asm-generic/pci_iomap.h
++++ b/include/asm-generic/pci_iomap.h
+@@ -19,12 +19,6 @@ extern void __iomem *pci_iomap_wc_range(struct pci_dev *dev, int bar,
+ 					unsigned long offset,
+ 					unsigned long maxlen);
+ extern void pci_iounmap(struct pci_dev *dev, void __iomem *);
+-extern void __iomem *pci_iomap_host_shared(struct pci_dev *dev, int bar,
+-					   unsigned long max);
+-extern void __iomem *pci_iomap_host_shared_range(struct pci_dev *dev, int bar,
+-						 unsigned long offset,
+-						 unsigned long maxlen);
+-
+ /* Create a virtual mapping cookie for a port on a given PCI device.
+  * Do not call this directly, it exists to make it easier for architectures
+  * to override */
+diff --git a/lib/pci_iomap.c b/lib/pci_iomap.c
+index 71f43b578a44..e1ab29be20f1 100644
+--- a/lib/pci_iomap.c
++++ b/lib/pci_iomap.c
+@@ -10,56 +10,6 @@
+ #include <linux/export.h>
+ 
+ #ifdef CONFIG_PCI
+-
+-/*
+- * Callback wrappers because some architectures define ioremap et.al.
+- * as macros.
+- */
+-static void __iomem *map_ioremap(phys_addr_t addr, size_t size)
+-{
+-	return ioremap(addr, size);
+-}
+-
+-static void __iomem *map_ioremap_wc(phys_addr_t addr, size_t size)
+-{
+-	return ioremap_wc(addr, size);
+-}
+-
+-static void __iomem *map_ioremap_host_shared(phys_addr_t addr, size_t size)
+-{
+-	return ioremap_host_shared(addr, size);
+-}
+-
+-static void __iomem *pci_iomap_range_map(struct pci_dev *dev,
+-					 int bar,
+-					 unsigned long offset,
+-					 unsigned long maxlen,
+-					 void __iomem *(*mapm)(phys_addr_t,
+-							       size_t),
+-					 bool support_io)
+-{
+-	resource_size_t start = pci_resource_start(dev, bar);
+-	resource_size_t len = pci_resource_len(dev, bar);
+-	unsigned long flags = pci_resource_flags(dev, bar);
+-
+-	if (len <= offset || !start)
+-		return NULL;
+-	len -= offset;
+-	start += offset;
+-	if (maxlen && len > maxlen)
+-		len = maxlen;
+-	if (flags & IORESOURCE_IO) {
+-		if (support_io)
+-			return __pci_ioport_map(dev, start, len);
+-
+-		return NULL;
+-	}
+-	if (flags & IORESOURCE_MEM)
+-		return mapm(start, len);
+-	/* What? */
+-	return NULL;
+-}
+-
+ /**
+  * pci_iomap_range - create a virtual mapping cookie for a PCI BAR
+  * @dev: PCI device that owns the BAR
+@@ -80,8 +30,25 @@ void __iomem *pci_iomap_range(struct pci_dev *dev,
+ 			      unsigned long offset,
+ 			      unsigned long maxlen)
+ {
+-	return pci_iomap_range_map(dev, bar, offset, maxlen,
+-				   map_ioremap, true);
++	resource_size_t start = pci_resource_start(dev, bar);
++	resource_size_t len = pci_resource_len(dev, bar);
++	unsigned long flags = pci_resource_flags(dev, bar);
++
++	if (len <= offset || !start)
++		return NULL;
++	len -= offset;
++	start += offset;
++	if (maxlen && len > maxlen)
++		len = maxlen;
++	if (flags & IORESOURCE_IO)
++		return __pci_ioport_map(dev, start, len);
++	if (flags & IORESOURCE_MEM) {
++		if (dev->dev.authorized)
++			return ioremap_driver_hardened(start, len);
++		return ioremap(start, len);
++	}
++	/* What? */
++	return NULL;
+ }
+ EXPORT_SYMBOL(pci_iomap_range);
+ 
+@@ -106,52 +73,29 @@ void __iomem *pci_iomap_wc_range(struct pci_dev *dev,
+ 				 unsigned long offset,
+ 				 unsigned long maxlen)
+ {
+-	return pci_iomap_range_map(dev, bar, offset, maxlen,
+-				   map_ioremap_wc, false);
+-}
+-EXPORT_SYMBOL_GPL(pci_iomap_wc_range);
++	resource_size_t start = pci_resource_start(dev, bar);
++	resource_size_t len = pci_resource_len(dev, bar);
++	unsigned long flags = pci_resource_flags(dev, bar);
+ 
+-/**
+- * pci_iomap_host_shared_range - create a virtual shared mapping cookie
+- *				 for a PCI BAR
+- * @dev: PCI device that owns the BAR
+- * @bar: BAR number
+- * @offset: map memory at the given offset in BAR
+- * @maxlen: max length of the memory to map
+- *
+- * Remap a pci device's resources shared in a confidential guest.
+- * For more details see pci_iomap_range's documentation.
+- *
+- * @maxlen specifies the maximum length to map. To get access to
+- * the complete BAR from offset to the end, pass %0 here.
+- */
+-void __iomem *pci_iomap_host_shared_range(struct pci_dev *dev, int bar,
+-					  unsigned long offset,
+-					  unsigned long maxlen)
+-{
+-	return pci_iomap_range_map(dev, bar, offset, maxlen,
+-				   map_ioremap_host_shared, true);
+-}
+-EXPORT_SYMBOL_GPL(pci_iomap_host_shared_range);
+ 
+-/**
+- * pci_iomap_host_shared - create a virtual shared mapping cookie for a PCI BAR
+- * @dev: PCI device that owns the BAR
+- * @bar: BAR number
+- * @maxlen: length of the memory to map
+- *
+- * See pci_iomap for details. This function creates a shared mapping
+- * with the host for confidential hosts.
+- *
+- * @maxlen specifies the maximum length to map. To get access to the
+- * complete BAR without checking for its length first, pass %0 here.
+- */
+-void __iomem *pci_iomap_host_shared(struct pci_dev *dev, int bar,
+-			       unsigned long maxlen)
+-{
+-	return pci_iomap_host_shared_range(dev, bar, 0, maxlen);
++	if (flags & IORESOURCE_IO)
++		return NULL;
++
++	if (len <= offset || !start)
++		return NULL;
++
++	len -= offset;
++	start += offset;
++	if (maxlen && len > maxlen)
++		len = maxlen;
++
++	if (flags & IORESOURCE_MEM)
++		return ioremap_wc(start, len);
++
++	/* What? */
++	return NULL;
+ }
+-EXPORT_SYMBOL_GPL(pci_iomap_host_shared);
++EXPORT_SYMBOL_GPL(pci_iomap_wc_range);
+ 
+ /**
+  * pci_iomap - create a virtual mapping cookie for a PCI BAR
+diff --git a/net/9p/trans_virtio.c b/net/9p/trans_virtio.c
+index 490a4c900339..89fe8b08d803 100644
+--- a/net/9p/trans_virtio.c
++++ b/net/9p/trans_virtio.c
+@@ -594,7 +594,7 @@ static int p9_virtio_probe(struct virtio_device *vdev)
+ 		err = -EINVAL;
+ 		goto out_free_vq;
+ 	}
+-	tag = kzalloc(tag_len + 1, GFP_KERNEL);
++	tag = kzalloc((u32)tag_len + 1, GFP_KERNEL);
+ 	if (!tag) {
+ 		err = -ENOMEM;
+ 		goto out_free_vq;
+-- 
+2.31.1
+

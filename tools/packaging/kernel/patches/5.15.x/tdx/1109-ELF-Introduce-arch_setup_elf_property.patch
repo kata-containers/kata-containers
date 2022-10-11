@@ -1,0 +1,187 @@
+From b19f3a64a20c6635b9f4993d773d1bd10c2efcb5 Mon Sep 17 00:00:00 2001
+From: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Date: Mon, 30 Aug 2021 11:15:24 -0700
+Subject: [PATCH 1109/1418] ELF: Introduce arch_setup_elf_property()
+
+An ELF file's .note.gnu.property indicates arch features supported by the
+file.  These features are extracted by arch_parse_elf_property() and stored
+in 'arch_elf_state'.
+
+Introduce x86 feature definitions and arch_setup_elf_property(), which
+enables such features.  The first use-case of this function is Shadow
+Stack.
+
+ARM64 is the other arch that has ARCH_USE_GNU_PROPERTY and arch_parse_elf_
+property().  Add arch_setup_elf_property() for it.
+
+Signed-off-by: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Signed-off-by: Rick Edgecombe <rick.p.edgecombe@intel.com>
+Acked-by: Catalin Marinas <catalin.marinas@arm.com>
+Cc: Dave Martin <Dave.Martin@arm.com>
+Cc: Kees Cook <keescook@chromium.org>
+Cc: Mark Brown <broonie@kernel.org>
+---
+ arch/arm64/include/asm/elf.h |  5 +++++
+ arch/x86/Kconfig             |  2 ++
+ arch/x86/include/asm/elf.h   | 11 +++++++++++
+ arch/x86/kernel/process_64.c | 28 ++++++++++++++++++++++++++++
+ fs/binfmt_elf.c              |  4 ++++
+ include/linux/elf.h          |  6 ++++++
+ include/uapi/linux/elf.h     | 14 ++++++++++++++
+ 7 files changed, 70 insertions(+)
+
+diff --git a/arch/arm64/include/asm/elf.h b/arch/arm64/include/asm/elf.h
+index 97932fbf973d..2825f9ccc16b 100644
+--- a/arch/arm64/include/asm/elf.h
++++ b/arch/arm64/include/asm/elf.h
+@@ -279,6 +279,11 @@ static inline int arch_parse_elf_property(u32 type, const void *data,
+ 	return 0;
+ }
+ 
++static inline int arch_setup_elf_property(struct arch_elf_state *arch)
++{
++	return 0;
++}
++
+ static inline int arch_elf_pt_proc(void *ehdr, void *phdr,
+ 				   struct file *f, bool is_interp,
+ 				   struct arch_elf_state *state)
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index ef7791d0e9e9..e6cd9892c80d 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -29,6 +29,7 @@ config X86_64
+ 	select ARCH_HAS_SHADOW_STACK
+ 	select ARCH_SUPPORTS_INT128 if CC_HAS_INT128
+ 	select ARCH_USE_CMPXCHG_LOCKREF
++	select ARCH_USE_GNU_PROPERTY
+ 	select HAVE_ARCH_SOFT_DIRTY
+ 	select MODULES_USE_ELF_RELA
+ 	select NEED_DMA_MAP_STATE
+@@ -61,6 +62,7 @@ config X86
+ 	select ACPI_LEGACY_TABLES_LOOKUP	if ACPI
+ 	select ACPI_SYSTEM_POWER_STATES_SUPPORT	if ACPI
+ 	select ARCH_32BIT_OFF_T			if X86_32
++	select ARCH_BINFMT_ELF_STATE
+ 	select ARCH_CLOCKSOURCE_INIT
+ 	select ARCH_ENABLE_HUGEPAGE_MIGRATION if X86_64 && HUGETLB_PAGE && MIGRATION
+ 	select ARCH_ENABLE_MEMORY_HOTPLUG if X86_64 || (X86_32 && HIGHMEM)
+diff --git a/arch/x86/include/asm/elf.h b/arch/x86/include/asm/elf.h
+index 29fea180a665..3281a3d01bd2 100644
+--- a/arch/x86/include/asm/elf.h
++++ b/arch/x86/include/asm/elf.h
+@@ -394,6 +394,17 @@ extern int compat_arch_setup_additional_pages(struct linux_binprm *bprm,
+ 
+ extern bool arch_syscall_is_vdso_sigreturn(struct pt_regs *regs);
+ 
++struct arch_elf_state {
++	unsigned int gnu_property;
++};
++
++#define INIT_ARCH_ELF_STATE {	\
++	.gnu_property = 0,	\
++}
++
++#define arch_elf_pt_proc(ehdr, phdr, elf, interp, state) (0)
++#define arch_check_elf(ehdr, interp, interp_ehdr, state) (0)
++
+ /* Do not change the values. See get_align_mask() */
+ enum align_flags {
+ 	ALIGN_VA_32	= BIT(0),
+diff --git a/arch/x86/kernel/process_64.c b/arch/x86/kernel/process_64.c
+index 3402edec236c..0e0ed3f61bbe 100644
+--- a/arch/x86/kernel/process_64.c
++++ b/arch/x86/kernel/process_64.c
+@@ -860,3 +860,31 @@ unsigned long KSTK_ESP(struct task_struct *task)
+ {
+ 	return task_pt_regs(task)->sp;
+ }
++
++int arch_parse_elf_property(u32 type, const void *data, size_t datasz,
++			    bool compat, struct arch_elf_state *state)
++{
++	if (type != GNU_PROPERTY_X86_FEATURE_1_AND)
++		return 0;
++
++	if (datasz != sizeof(unsigned int))
++		return -ENOEXEC;
++
++	state->gnu_property = *(unsigned int *)data;
++	return 0;
++}
++
++int arch_setup_elf_property(struct arch_elf_state *state)
++{
++	int r = 0;
++
++#ifdef CONFIG_X86_SHADOW_STACK
++	memset(&current->thread.shstk, 0, sizeof(struct thread_shstk));
++	current->thread.feat_prctl_locked = 0;
++
++	if (state->gnu_property & GNU_PROPERTY_X86_FEATURE_1_SHSTK)
++		r = shstk_setup();
++#endif
++
++	return r;
++}
+diff --git a/fs/binfmt_elf.c b/fs/binfmt_elf.c
+index a813b70f594e..31995857e690 100644
+--- a/fs/binfmt_elf.c
++++ b/fs/binfmt_elf.c
+@@ -1248,6 +1248,10 @@ static int load_elf_binary(struct linux_binprm *bprm)
+ 
+ 	set_binfmt(&elf_format);
+ 
++	retval = arch_setup_elf_property(&arch_state);
++	if (retval < 0)
++		goto out;
++
+ #ifdef ARCH_HAS_SETUP_ADDITIONAL_PAGES
+ 	retval = ARCH_SETUP_ADDITIONAL_PAGES(bprm, elf_ex, !!interpreter);
+ 	if (retval < 0)
+diff --git a/include/linux/elf.h b/include/linux/elf.h
+index c9a46c4e183b..be04d15e937f 100644
+--- a/include/linux/elf.h
++++ b/include/linux/elf.h
+@@ -92,9 +92,15 @@ static inline int arch_parse_elf_property(u32 type, const void *data,
+ {
+ 	return 0;
+ }
++
++static inline int arch_setup_elf_property(struct arch_elf_state *arch)
++{
++	return 0;
++}
+ #else
+ extern int arch_parse_elf_property(u32 type, const void *data, size_t datasz,
+ 				   bool compat, struct arch_elf_state *arch);
++extern int arch_setup_elf_property(struct arch_elf_state *arch);
+ #endif
+ 
+ #ifdef CONFIG_ARCH_HAVE_ELF_PROT
+diff --git a/include/uapi/linux/elf.h b/include/uapi/linux/elf.h
+index 61bf4774b8f2..f50b3ce7bb75 100644
+--- a/include/uapi/linux/elf.h
++++ b/include/uapi/linux/elf.h
+@@ -456,4 +456,18 @@ typedef struct elf64_note {
+ /* Bits for GNU_PROPERTY_AARCH64_FEATURE_1_BTI */
+ #define GNU_PROPERTY_AARCH64_FEATURE_1_BTI	(1U << 0)
+ 
++/*
++ * See the x86 64 psABI at:
++ * https://gitlab.com/x86-psABIs/x86-64-ABI/-/wikis/x86-64-psABI
++ * .note.gnu.property types for x86:
++ */
++/* 0xc0000000 and 0xc0000001 are reserved */
++#define GNU_PROPERTY_X86_FEATURE_1_AND		0xc0000002
++
++/* Bits for GNU_PROPERTY_X86_FEATURE_1_AND */
++#define GNU_PROPERTY_X86_FEATURE_1_IBT		0x00000001
++#define GNU_PROPERTY_X86_FEATURE_1_SHSTK	0x00000002
++#define GNU_PROPERTY_X86_FEATURE_1_VALID (GNU_PROPERTY_X86_FEATURE_1_IBT | \
++					   GNU_PROPERTY_X86_FEATURE_1_SHSTK)
++
+ #endif /* _UAPI_LINUX_ELF_H */
+-- 
+2.31.1
+

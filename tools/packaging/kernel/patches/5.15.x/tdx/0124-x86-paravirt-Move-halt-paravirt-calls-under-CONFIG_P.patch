@@ -1,0 +1,172 @@
+From 520b7014bb8383b41168cffcd9f721e1111529e8 Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Tue, 19 Nov 2019 14:56:03 +0300
+Subject: [PATCH 0124/1418] x86/paravirt: Move halt paravirt calls under
+ CONFIG_PARAVIRT
+
+CONFIG_PARAVIRT_XXL is mainly defined/used by XEN PV guests. For
+other VM guest types, features supported under CONFIG_PARAVIRT
+are self sufficient. CONFIG_PARAVIRT mainly provides support for
+TLB flush operations and time related operations.
+
+For TDX guest as well, paravirt calls under CONFIG_PARVIRT meets
+most of its requirement except the need of HLT and SAFE_HLT
+paravirt calls, which is currently defined under
+COFNIG_PARAVIRT_XXL.
+
+Since enabling CONFIG_PARAVIRT_XXL is too bloated for TDX guest
+like platforms, move HLT and SAFE_HLT paravirt calls under
+CONFIG_PARAVIRT.
+
+Moving HLT and SAFE_HLT paravirt calls are not fatal and should not
+break any functionality for current users of CONFIG_PARAVIRT.
+
+Co-developed-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+---
+ arch/x86/include/asm/irqflags.h       | 44 +++++++++++++++------------
+ arch/x86/include/asm/paravirt.h       | 20 ++++++------
+ arch/x86/include/asm/paravirt_types.h |  3 +-
+ arch/x86/kernel/paravirt.c            |  3 +-
+ 4 files changed, 37 insertions(+), 33 deletions(-)
+
+diff --git a/arch/x86/include/asm/irqflags.h b/arch/x86/include/asm/irqflags.h
+index c5ce9845c999..b794b6da3214 100644
+--- a/arch/x86/include/asm/irqflags.h
++++ b/arch/x86/include/asm/irqflags.h
+@@ -57,28 +57,11 @@ static inline __cpuidle void native_halt(void)
+ 	asm volatile("hlt": : :"memory");
+ }
+ 
+-#endif
+-
+-#ifdef CONFIG_PARAVIRT_XXL
+-#include <asm/paravirt.h>
+-#else
+-#ifndef __ASSEMBLY__
+-#include <linux/types.h>
+-
+-static __always_inline unsigned long arch_local_save_flags(void)
+-{
+-	return native_save_fl();
+-}
++# ifdef CONFIG_PARAVIRT
+ 
+-static __always_inline void arch_local_irq_disable(void)
+-{
+-	native_irq_disable();
+-}
++#  include <asm/paravirt.h>
+ 
+-static __always_inline void arch_local_irq_enable(void)
+-{
+-	native_irq_enable();
+-}
++# else /* ! CONFIG_PARAVIRT */
+ 
+ /*
+  * Used in the idle loop; sti takes one instruction cycle
+@@ -97,6 +80,27 @@ static inline __cpuidle void halt(void)
+ {
+ 	native_halt();
+ }
++#endif /* CONFIG_PARAVIRT */
++# endif /* __ASSEMBLY__ */
++
++#ifndef CONFIG_PARAVIRT_XXL
++#ifndef __ASSEMBLY__
++#include <linux/types.h>
++
++static __always_inline unsigned long arch_local_save_flags(void)
++{
++	return native_save_fl();
++}
++
++static __always_inline void arch_local_irq_disable(void)
++{
++	native_irq_disable();
++}
++
++static __always_inline void arch_local_irq_enable(void)
++{
++	native_irq_enable();
++}
+ 
+ /*
+  * For spinlocks, etc:
+diff --git a/arch/x86/include/asm/paravirt.h b/arch/x86/include/asm/paravirt.h
+index da3a1ac82be5..d323a626c7a8 100644
+--- a/arch/x86/include/asm/paravirt.h
++++ b/arch/x86/include/asm/paravirt.h
+@@ -97,6 +97,16 @@ static inline void paravirt_arch_exit_mmap(struct mm_struct *mm)
+ 	PVOP_VCALL1(mmu.exit_mmap, mm);
+ }
+ 
++static inline void arch_safe_halt(void)
++{
++	PVOP_VCALL0(irq.safe_halt);
++}
++
++static inline void halt(void)
++{
++	PVOP_VCALL0(irq.halt);
++}
++
+ #ifdef CONFIG_PARAVIRT_XXL
+ static inline void load_sp0(unsigned long sp0)
+ {
+@@ -162,16 +172,6 @@ static inline void __write_cr4(unsigned long x)
+ 	PVOP_VCALL1(cpu.write_cr4, x);
+ }
+ 
+-static inline void arch_safe_halt(void)
+-{
+-	PVOP_VCALL0(irq.safe_halt);
+-}
+-
+-static inline void halt(void)
+-{
+-	PVOP_VCALL0(irq.halt);
+-}
+-
+ static inline void wbinvd(void)
+ {
+ 	PVOP_ALT_VCALL0(cpu.wbinvd, "wbinvd", ALT_NOT(X86_FEATURE_XENPV));
+diff --git a/arch/x86/include/asm/paravirt_types.h b/arch/x86/include/asm/paravirt_types.h
+index d9d6b0203ec4..40082847f314 100644
+--- a/arch/x86/include/asm/paravirt_types.h
++++ b/arch/x86/include/asm/paravirt_types.h
+@@ -150,10 +150,9 @@ struct pv_irq_ops {
+ 	struct paravirt_callee_save save_fl;
+ 	struct paravirt_callee_save irq_disable;
+ 	struct paravirt_callee_save irq_enable;
+-
++#endif
+ 	void (*safe_halt)(void);
+ 	void (*halt)(void);
+-#endif
+ } __no_randomize_layout;
+ 
+ struct pv_mmu_ops {
+diff --git a/arch/x86/kernel/paravirt.c b/arch/x86/kernel/paravirt.c
+index 04cafc057bed..8cea6e75ba29 100644
+--- a/arch/x86/kernel/paravirt.c
++++ b/arch/x86/kernel/paravirt.c
+@@ -283,9 +283,10 @@ struct paravirt_patch_template pv_ops = {
+ 	.irq.save_fl		= __PV_IS_CALLEE_SAVE(native_save_fl),
+ 	.irq.irq_disable	= __PV_IS_CALLEE_SAVE(native_irq_disable),
+ 	.irq.irq_enable		= __PV_IS_CALLEE_SAVE(native_irq_enable),
++#endif /* CONFIG_PARAVIRT_XXL */
++
+ 	.irq.safe_halt		= native_safe_halt,
+ 	.irq.halt		= native_halt,
+-#endif /* CONFIG_PARAVIRT_XXL */
+ 
+ 	/* Mmu ops. */
+ 	.mmu.flush_tlb_user	= native_flush_tlb_local,
+-- 
+2.31.1
+

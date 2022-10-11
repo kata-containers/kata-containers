@@ -1,0 +1,36 @@
+From 846936f3a5512d5a42597b893f81e835453648d8 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Fri, 17 Dec 2021 11:15:27 +0800
+Subject: [PATCH 0770/1418] Revert "x86/sgx: Rename cpumask function with a
+ generic name"
+
+This reverts commit 950c1c3a154520d2b6d83b674d17fb1cc894a006.
+---
+ arch/x86/kernel/cpu/sgx/main.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index cb9f14e5ebd8..c9d2aa87a1a9 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -194,7 +194,7 @@ static void sgx_ipi_cb(void *info)
+ {
+ }
+ 
+-static const cpumask_t *sgx_encl_cpumask(struct sgx_encl *encl)
++static const cpumask_t *sgx_encl_ewb_cpumask(struct sgx_encl *encl)
+ {
+ 	cpumask_t *cpumask = &encl->cpumask;
+ 	struct sgx_encl_mm *encl_mm;
+@@ -269,7 +269,7 @@ static void sgx_encl_ewb(struct sgx_epc_page *epc_page,
+ 			 * miss cpus that entered the enclave between
+ 			 * generating the mask and incrementing epoch.
+ 			 */
+-			on_each_cpu_mask(sgx_encl_cpumask(encl),
++			on_each_cpu_mask(sgx_encl_ewb_cpumask(encl),
+ 					 sgx_ipi_cb, NULL, 1);
+ 			ret = __sgx_encl_ewb(epc_page, va_slot, backing);
+ 		}
+-- 
+2.31.1
+

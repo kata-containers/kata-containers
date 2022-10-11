@@ -1,0 +1,39 @@
+From 94ddeda53ac6765f47762e676a7f8b39b0a287b6 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Fri, 6 Aug 2021 11:23:42 -0700
+Subject: [PATCH 0451/1418] KVM: TDX: catch up TDX module API rename
+
+TDH.PHYMEM.PAGE.{RD, RW} were rename to TDH.MEM.{RD, WR}. catch up the
+rename.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/tdx_ops.h | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx_ops.h b/arch/x86/kvm/vmx/tdx_ops.h
+index fe60a8f2fc16..09986a19c555 100644
+--- a/arch/x86/kvm/vmx/tdx_ops.h
++++ b/arch/x86/kvm/vmx/tdx_ops.h
+@@ -84,14 +84,14 @@ static inline u64 tdh_mng_wr(hpa_t tdr, u64 field, u64 val, u64 mask,
+ 	return seamcall(TDH_MNG_WR, tdr, field, val, mask, 0, ex);
+ }
+ 
+-static inline u64 tdh_phymem_page_rd(hpa_t addr, struct tdx_ex_ret *ex)
++static inline u64 tdh_mem_rd(hpa_t addr, struct tdx_ex_ret *ex)
+ {
+-	return seamcall(TDH_PHYMEM_PAGE_RD, addr, 0, 0, 0, 0, ex);
++	return seamcall(TDH_MEM_RD, addr, 0, 0, 0, 0, ex);
+ }
+ 
+-static inline u64 tdh_phymem_page_wr(hpa_t addr, u64 val, struct tdx_ex_ret *ex)
++static inline u64 tdh_mem_wr(hpa_t addr, u64 val, struct tdx_ex_ret *ex)
+ {
+-	return seamcall(TDH_PHYMEM_PAGE_WR, addr, val, 0, 0, 0, ex);
++	return seamcall(TDH_MEM_WR, addr, val, 0, 0, 0, ex);
+ }
+ 
+ static inline u64 tdh_mem_page_demote(hpa_t tdr, gpa_t gpa, int level, hpa_t page,
+-- 
+2.31.1
+

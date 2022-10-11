@@ -1,0 +1,58 @@
+From 9e2ff4e8a126de573f74d6b54259d7578f92fff2 Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Wed, 12 Jan 2022 13:33:48 -0800
+Subject: [PATCH 1199/1418] memremap_pages: Introduce
+ pgmap_protection_available()
+
+PMEM will flag additional dev_pagemap protection through (struct
+dev_pagemap)->flags.  However, it is more efficient to know if that
+protection is available prior to requesting it and failing the mapping.
+
+Define pgmap_protection_available() to check if protection is available
+prior to being requested.  The name of pgmap_protection_available() was
+specifically chosen to isolate the implementation of the protection from
+higher level users.
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ include/linux/mm.h | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/include/linux/mm.h b/include/linux/mm.h
+index 30a11c4db9d6..40c42ede0546 100644
+--- a/include/linux/mm.h
++++ b/include/linux/mm.h
+@@ -31,6 +31,7 @@
+ #include <linux/sizes.h>
+ #include <linux/sched.h>
+ #include <linux/pgtable.h>
++#include <linux/pks.h>
+ #include <linux/kasan.h>
+ 
+ struct mempolicy;
+@@ -1209,6 +1210,22 @@ static inline bool is_pci_p2pdma_page(const struct page *page)
+ 		page->pgmap->type == MEMORY_DEVICE_PCI_P2PDMA;
+ }
+ 
++#ifdef CONFIG_DEVMAP_ACCESS_PROTECTION
++
++static inline bool pgmap_protection_available(void)
++{
++	return pks_available();
++}
++
++#else
++
++static inline bool pgmap_protection_available(void)
++{
++	return false;
++}
++
++#endif /* CONFIG_DEVMAP_ACCESS_PROTECTION */
++
+ /* 127: arbitrary random number, small enough to assemble well */
+ #define page_ref_zero_or_close_to_overflow(page) \
+ 	((unsigned int) page_ref_count(page) + 127u <= 127u)
+-- 
+2.31.1
+

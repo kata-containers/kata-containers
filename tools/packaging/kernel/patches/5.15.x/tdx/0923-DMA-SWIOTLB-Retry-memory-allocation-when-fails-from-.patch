@@ -1,0 +1,82 @@
+From 8994e062c6f234a54d341b4444e36aa7a776f6bb Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Tue, 18 Jan 2022 10:15:32 +0800
+Subject: [PATCH 0923/1418] DMA: SWIOTLB: Retry memory allocation when fails
+ from low memory
+
+The SWIO TLB memory size can be maximum 1G now for AMD SEV and INTEL
+TDX from "e998879d4fb799 (x86,swiotlb: Adjust SWIOTLB bounce buffer
+size for SEV guests)", this change increases failure ratio of SWIO
+TLB memory allocation much when the required size is huge (e.g.1G)
+due to combined result of all below reasons, the actual ratio
+depends on (3):
+
+(1). The SWIO TLB memory is allocated from <4G range.
+(2). User space VMM (e.g. QEMU) only installs 2G physical memory
+     in <4G address space.
+(3). Physical KASLR may relocate kernel to physical address <4G
+     address space.
+
+This patch retry the SWIO TLB memory allocation from all available
+memory range for SEV and TDX, becuase DMA can actual work properly
+on GPA above 4G in such guests, limited the SWIO TLB memory to low
+memory is not real necessary.
+
+Also changes the handle policy of failure of memory allocation and
+tbl initialization from pr_warn() to panic(), aligns with policy
+in swiotlb_init_with_tbl(), however, excepts the double
+initialization case.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ kernel/dma/swiotlb.c | 31 ++++++++++++++++++++++---------
+ 1 file changed, 22 insertions(+), 9 deletions(-)
+
+diff --git a/kernel/dma/swiotlb.c b/kernel/dma/swiotlb.c
+index 429ee78bf600..9804ea9f8748 100644
+--- a/kernel/dma/swiotlb.c
++++ b/kernel/dma/swiotlb.c
+@@ -301,18 +301,31 @@ swiotlb_init(int verbose)
+ 	if (swiotlb_force == SWIOTLB_NO_FORCE)
+ 		return;
+ 
+-	/* Get IO TLB memory from the low pages */
++	/* Double initialization case */
++	if (io_tlb_default_mem.nslabs)
++		return;
++
++	/* Get IO TLB memory from the low pages, but AMD SEV and
++	 * INTEL TDX increases the IO TLB memory size to maximum 1G
++	 * which may lead to allocation failure from low memory.
++	 * Retry allocation from whole available memory range for SEV/TDX:
++	 * 1. DMA in SEV/TDX guest can work properly on PA above 4G.
++	 * 2. Only retry for SWIOTLB_FORCE because in future SEV and TDX
++	 *    may remove the dependency to SWIOTLB, now they set SWIOTLB_FORCE
++	 *    to force this dependency.
++	 */
+ 	tlb = memblock_alloc_low(bytes, PAGE_SIZE);
++	if (!tlb && swiotlb_force == SWIOTLB_FORCE &&
++	    cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT)) {
++		pr_info("Retry tlb memory allocation from all available memory\n");
++		tlb = memblock_alloc(bytes, PAGE_SIZE);
++	}
++
+ 	if (!tlb)
+-		goto fail;
+-	if (swiotlb_init_with_tbl(tlb, default_nslabs, verbose))
+-		goto fail_free_mem;
+-	return;
++		panic("Cannot allocate buffer");
+ 
+-fail_free_mem:
+-	memblock_free_early(__pa(tlb), bytes);
+-fail:
+-	pr_warn("Cannot allocate buffer");
++	if (swiotlb_init_with_tbl(tlb, default_nslabs, verbose))
++		panic("Cannot initialize tbl");
+ }
+ 
+ /*
+-- 
+2.31.1
+

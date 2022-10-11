@@ -1,0 +1,82 @@
+From b29e5d450815a80213edb00cf8926e67c5657d43 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 5 Jan 2022 04:35:31 -0800
+Subject: [PATCH 0971/1418] x86/fpu: Provide fpu_sync_guest_vmexit_xfd_state()
+
+KVM can disable the write emulation for the XFD MSR when the vCPU's fpstate
+is already correctly sized to reduce the overhead.
+
+When write emulation is disabled the XFD MSR state after a VMEXIT is
+unknown and therefore not in sync with the software states in fpstate and
+the per CPU XFD cache.
+
+Provide fpu_sync_guest_vmexit_xfd_state() which has to be invoked after a
+VMEXIT before enabling interrupts when write emulation is disabled for the
+XFD MSR.
+
+It could be invoked unconditionally even when write emulation is enabled
+for the price of a pointless MSR read.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Message-Id: <20220105123532.12586-21-yang.zhong@intel.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/include/asm/fpu/api.h |  2 ++
+ arch/x86/kernel/fpu/core.c     | 24 ++++++++++++++++++++++++
+ 2 files changed, 26 insertions(+)
+
+diff --git a/arch/x86/include/asm/fpu/api.h b/arch/x86/include/asm/fpu/api.h
+index 97f037232230..6a4211686a6f 100644
+--- a/arch/x86/include/asm/fpu/api.h
++++ b/arch/x86/include/asm/fpu/api.h
+@@ -148,8 +148,10 @@ extern int fpu_enable_guest_xfd_features(struct fpu_guest *guest_fpu, u64 xfeatu
+ 
+ #ifdef CONFIG_X86_64
+ extern void fpu_update_guest_xfd(struct fpu_guest *guest_fpu, u64 xfd);
++extern void fpu_sync_guest_vmexit_xfd_state(void);
+ #else
+ static inline void fpu_update_guest_xfd(struct fpu_guest *guest_fpu, u64 xfd) { }
++static inline void fpu_sync_guest_vmexit_xfd_state(void) { }
+ #endif
+ 
+ extern void fpu_copy_guest_fpstate_to_uabi(struct fpu_guest *gfpu, void *buf, unsigned int size, u32 pkru);
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 8dcdc7f0a264..de7c9a47af4a 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -293,6 +293,30 @@ void fpu_update_guest_xfd(struct fpu_guest *guest_fpu, u64 xfd)
+ 	fpregs_unlock();
+ }
+ EXPORT_SYMBOL_GPL(fpu_update_guest_xfd);
++
++/**
++ * fpu_sync_guest_vmexit_xfd_state - Synchronize XFD MSR and software state
++ *
++ * Must be invoked from KVM after a VMEXIT before enabling interrupts when
++ * XFD write emulation is disabled. This is required because the guest can
++ * freely modify XFD and the state at VMEXIT is not guaranteed to be the
++ * same as the state on VMENTER. So software state has to be udpated before
++ * any operation which depends on it can take place.
++ *
++ * Note: It can be invoked unconditionally even when write emulation is
++ * enabled for the price of a then pointless MSR read.
++ */
++void fpu_sync_guest_vmexit_xfd_state(void)
++{
++	struct fpstate *fps = current->thread.fpu.fpstate;
++
++	lockdep_assert_irqs_disabled();
++	if (fpu_state_size_dynamic()) {
++		rdmsrl(MSR_IA32_XFD, fps->xfd);
++		__this_cpu_write(xfd_state, fps->xfd);
++	}
++}
++EXPORT_SYMBOL_GPL(fpu_sync_guest_vmexit_xfd_state);
+ #endif /* CONFIG_X86_64 */
+ 
+ int fpu_swap_kvm_fpstate(struct fpu_guest *guest_fpu, bool enter_guest)
+-- 
+2.31.1
+

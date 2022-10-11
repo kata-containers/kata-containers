@@ -1,0 +1,58 @@
+From bc20b7154a63768295ce6d2a96441d66aa51217b Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Fri, 17 Jul 2020 19:49:33 -0700
+Subject: [PATCH 0369/1418] KVM: x86: Add kvm_x86_ops .cache_gprs() and
+ .flush_gprs()
+
+Add hooks to cache and flush GPRs and invoke them from KVM_GET_REGS and
+KVM_SET_REGS respecitively.  TDX will use the hooks to read/write GPRs
+from TDX-SEAM on-demand (for debug TDs).
+
+Cc: Tom Lendacky <thomas.lendacky@amd.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h | 2 ++
+ arch/x86/kvm/x86.c              | 6 ++++++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 5df37e64effd..7580bd31fb25 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1359,6 +1359,8 @@ struct kvm_x86_ops {
+ 	void (*set_gdt)(struct kvm_vcpu *vcpu, struct desc_ptr *dt);
+ 	void (*sync_dirty_debug_regs)(struct kvm_vcpu *vcpu);
+ 	void (*set_dr7)(struct kvm_vcpu *vcpu, unsigned long value);
++	void (*cache_gprs)(struct kvm_vcpu *vcpu);
++	void (*flush_gprs)(struct kvm_vcpu *vcpu);
+ 	void (*cache_reg)(struct kvm_vcpu *vcpu, enum kvm_reg reg);
+ 	unsigned long (*get_rflags)(struct kvm_vcpu *vcpu);
+ 	void (*set_rflags)(struct kvm_vcpu *vcpu, unsigned long rflags);
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 03deaab0f977..40bf042684b5 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -10013,6 +10013,9 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
+ 
+ static void __get_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
+ {
++	if (kvm_x86_ops.cache_gprs)
++		kvm_x86_ops.cache_gprs(vcpu);
++
+ 	if (vcpu->arch.emulate_regs_need_sync_to_vcpu) {
+ 		/*
+ 		 * We are here if userspace calls get_regs() in the middle of
+@@ -10087,6 +10090,9 @@ static void __set_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
+ 
+ 	vcpu->arch.exception.pending = false;
+ 
++	if (kvm_x86_ops.flush_gprs)
++		kvm_x86_ops.flush_gprs(vcpu);
++
+ 	kvm_make_request(KVM_REQ_EVENT, vcpu);
+ }
+ 
+-- 
+2.31.1
+

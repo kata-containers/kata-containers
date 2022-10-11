@@ -1,0 +1,305 @@
+From a26c3bab2f8f2eae2d064604c1e977a0b4769c71 Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Fri, 20 Mar 2020 13:25:48 +0800
+Subject: [PATCH 0278/1418] KVM: X86: Expose IA32_PKRS MSR
+
+Protection Key for Superviosr Pages (PKS) uses IA32_PKRS MSR (PKRS) at
+index 0x6E1 to allow software to manage superviosr key rights, i.e. it
+can enforce additional permissions checks besides normal paging
+protections via a MSR update without TLB flushes when permissions
+change.
+
+For performance consideration, PKRS intercept in KVM will be disabled
+when PKS is supported in guest so that PKRS can be accessed without VM
+exit.
+
+PKS introduces dedicated control fields in VMCS to switch PKRS, which
+only does the retore part. In addition, every VM exit saves PKRS into
+the guest-state area in VMCS, while VM enter won't save the host value
+due to the expectation that the host won't change the MSR often. Update
+the host's value in VMCS manually if the MSR has been changed by the
+kernel since the last time the VMCS was run.
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ arch/x86/kvm/vmx/vmcs.h |  1 +
+ arch/x86/kvm/vmx/vmx.c  | 68 +++++++++++++++++++++++++++++++++++++++--
+ arch/x86/kvm/vmx/vmx.h  |  2 +-
+ arch/x86/kvm/x86.c      |  6 +++-
+ arch/x86/kvm/x86.h      |  6 ++++
+ arch/x86/mm/pkeys.c     | 10 ++++++
+ include/linux/pkeys.h   | 13 ++++++++
+ 7 files changed, 101 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/vmcs.h b/arch/x86/kvm/vmx/vmcs.h
+index b9d18cfcf837..5f515e0ad379 100644
+--- a/arch/x86/kvm/vmx/vmcs.h
++++ b/arch/x86/kvm/vmx/vmcs.h
+@@ -42,6 +42,7 @@ struct vmcs_host_state {
+ #ifdef CONFIG_X86_64
+ 	u16           ds_sel, es_sel;
+ #endif
++	u32           pkrs;
+ };
+ 
+ struct vmcs_controls_shadow {
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index c308a24b725d..0427403c4c24 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -28,6 +28,7 @@
+ #include <linux/tboot.h>
+ #include <linux/trace_events.h>
+ #include <linux/entry-kvm.h>
++#include <linux/pkeys.h>
+ 
+ #include <asm/apic.h>
+ #include <asm/asm.h>
+@@ -173,6 +174,7 @@ static u32 vmx_possible_passthrough_msrs[MAX_POSSIBLE_PASSTHROUGH_MSRS] = {
+ 	MSR_CORE_C3_RESIDENCY,
+ 	MSR_CORE_C6_RESIDENCY,
+ 	MSR_CORE_C7_RESIDENCY,
++	MSR_IA32_PKRS,
+ };
+ 
+ /*
+@@ -1123,6 +1125,7 @@ void vmx_prepare_switch_to_guest(struct kvm_vcpu *vcpu)
+ #endif
+ 	unsigned long fs_base, gs_base;
+ 	u16 fs_sel, gs_sel;
++	u32 host_pkrs;
+ 	int i;
+ 
+ 	vmx->req_immediate_exit = false;
+@@ -1158,6 +1161,20 @@ void vmx_prepare_switch_to_guest(struct kvm_vcpu *vcpu)
+ 	 */
+ 	host_state->ldt_sel = kvm_read_ldt();
+ 
++	/*
++	 * Update the host pkrs vmcs field before vcpu runs.
++	 * The setting of VM_EXIT_LOAD_IA32_PKRS can ensure
++	 * kvm_cpu_cap_has(X86_FEATURE_PKS) &&
++	 * guest_cpuid_has(vcpu, X86_FEATURE_PKS)
++	 */
++	if (vm_exit_controls_get(vmx) & VM_EXIT_LOAD_IA32_PKRS) {
++		host_pkrs = get_current_pkrs();
++		if (unlikely(host_pkrs != host_state->pkrs)) {
++			vmcs_write64(HOST_IA32_PKRS, host_pkrs);
++			host_state->pkrs = host_pkrs;
++		}
++	}
++
+ #ifdef CONFIG_X86_64
+ 	savesegment(ds, host_state->ds_sel);
+ 	savesegment(es, host_state->es_sel);
+@@ -1379,6 +1396,15 @@ void vmx_set_rflags(struct kvm_vcpu *vcpu, unsigned long rflags)
+ 		vmx->emulation_required = vmx_emulation_required(vcpu);
+ }
+ 
++static void vmx_set_pkrs(struct kvm_vcpu *vcpu, u64 pkrs)
++{
++	if (kvm_cpu_cap_has(X86_FEATURE_PKS)) {
++		vcpu->arch.pkrs = pkrs;
++		kvm_register_mark_available(vcpu, VCPU_EXREG_PKRS);
++		vmcs_write64(GUEST_IA32_PKRS, pkrs);
++	}
++}
++
+ u32 vmx_get_interrupt_shadow(struct kvm_vcpu *vcpu)
+ {
+ 	u32 interruptibility = vmcs_read32(GUEST_INTERRUPTIBILITY_INFO);
+@@ -1906,6 +1932,13 @@ static int vmx_get_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ 	case MSR_IA32_DEBUGCTLMSR:
+ 		msr_info->data = vmcs_read64(GUEST_IA32_DEBUGCTL);
+ 		break;
++	case MSR_IA32_PKRS:
++		if (!kvm_cpu_cap_has(X86_FEATURE_PKS) ||
++		    (!msr_info->host_initiated &&
++		    !guest_cpuid_has(vcpu, X86_FEATURE_PKS)))
++			return 1;
++		msr_info->data = kvm_read_pkrs(vcpu);
++		break;
+ 	default:
+ 	find_uret_msr:
+ 		msr = vmx_find_uret_msr(vmx, msr_info->index);
+@@ -2239,7 +2272,15 @@ static int vmx_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ 		}
+ 		ret = kvm_set_msr_common(vcpu, msr_info);
+ 		break;
+-
++	case MSR_IA32_PKRS:
++		if (!kvm_pkrs_valid(data))
++			return 1;
++		if (!kvm_cpu_cap_has(X86_FEATURE_PKS) ||
++		    (!msr_info->host_initiated &&
++		    !guest_cpuid_has(vcpu, X86_FEATURE_PKS)))
++			return 1;
++		vmx_set_pkrs(vcpu, data);
++		break;
+ 	default:
+ 	find_uret_msr:
+ 		msr = vmx_find_uret_msr(vmx, msr_index);
+@@ -2550,7 +2591,8 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf,
+ 	      VM_EXIT_LOAD_IA32_EFER |
+ 	      VM_EXIT_CLEAR_BNDCFGS |
+ 	      VM_EXIT_PT_CONCEAL_PIP |
+-	      VM_EXIT_CLEAR_IA32_RTIT_CTL;
++	      VM_EXIT_CLEAR_IA32_RTIT_CTL |
++	      VM_EXIT_LOAD_IA32_PKRS;
+ 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_EXIT_CTLS,
+ 				&_vmexit_control) < 0)
+ 		return -EIO;
+@@ -2574,7 +2616,8 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf,
+ 	      VM_ENTRY_LOAD_IA32_EFER |
+ 	      VM_ENTRY_LOAD_BNDCFGS |
+ 	      VM_ENTRY_PT_CONCEAL_PIP |
+-	      VM_ENTRY_LOAD_IA32_RTIT_CTL;
++	      VM_ENTRY_LOAD_IA32_RTIT_CTL |
++	      VM_ENTRY_LOAD_IA32_PKRS;
+ 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_ENTRY_CTLS,
+ 				&_vmentry_control) < 0)
+ 		return -EIO;
+@@ -4562,6 +4605,8 @@ static void vmx_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
+ 	if (kvm_mpx_supported())
+ 		vmcs_write64(GUEST_BNDCFGS, 0);
+ 
++	vmx_set_pkrs(vcpu, 0);
++
+ 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 0);  /* 22.2.1 */
+ 
+ 	kvm_make_request(KVM_REQ_APIC_PAGE_RELOAD, vcpu);
+@@ -5879,6 +5924,8 @@ void dump_vmcs(struct kvm_vcpu *vcpu)
+ 		       vmcs_read64(GUEST_IA32_PERF_GLOBAL_CTRL));
+ 	if (vmentry_ctl & VM_ENTRY_LOAD_BNDCFGS)
+ 		pr_err("BndCfgS = 0x%016llx\n", vmcs_read64(GUEST_BNDCFGS));
++	if (vmentry_ctl & VM_ENTRY_LOAD_IA32_PKRS)
++		pr_err("PKRS = 0x%016llx\n", vmcs_read64(GUEST_IA32_PKRS));
+ 	pr_err("Interruptibility = %08x  ActivityState = %08x\n",
+ 	       vmcs_read32(GUEST_INTERRUPTIBILITY_INFO),
+ 	       vmcs_read32(GUEST_ACTIVITY_STATE));
+@@ -5920,6 +5967,8 @@ void dump_vmcs(struct kvm_vcpu *vcpu)
+ 		       vmcs_read64(HOST_IA32_PERF_GLOBAL_CTRL));
+ 	if (vmcs_read32(VM_EXIT_MSR_LOAD_COUNT) > 0)
+ 		vmx_dump_msrs("host autoload", &vmx->msr_autoload.host);
++	if (vmexit_ctl & VM_EXIT_LOAD_IA32_PKRS)
++		pr_err("PKRS = 0x%016llx\n", vmcs_read64(HOST_IA32_PKRS));
+ 
+ 	pr_err("*** Control State ***\n");
+ 	pr_err("PinBased=0x%08x CPUBased=0x%08x SecondaryExec=0x%08x TertiaryExec=0x%016llx\n",
+@@ -7333,6 +7382,19 @@ static void vmx_vcpu_after_set_cpuid(struct kvm_vcpu *vcpu)
+ 
+ 	/* Refresh #PF interception to account for MAXPHYADDR changes. */
+ 	vmx_update_exception_bitmap(vcpu);
++
++	if (kvm_cpu_cap_has(X86_FEATURE_PKS) &&
++	    guest_cpuid_has(vcpu, X86_FEATURE_PKS)) {
++		vmx_disable_intercept_for_msr(vcpu, MSR_IA32_PKRS, MSR_TYPE_RW);
++	} else {
++		/*
++		 * Remove VM control in case guest VM doesn't support PKS to mitigate
++		 * overhead during VM-{exit,entry}. They are present by default
++		 * if supported.
++		 */
++		vm_entry_controls_clearbit(vmx, VM_ENTRY_LOAD_IA32_PKRS);
++		vm_exit_controls_clearbit(vmx, VM_EXIT_LOAD_IA32_PKRS);
++	}
+ }
+ 
+ static __init void vmx_set_cpu_caps(void)
+diff --git a/arch/x86/kvm/vmx/vmx.h b/arch/x86/kvm/vmx/vmx.h
+index 9f2164556aa5..71792db2fae9 100644
+--- a/arch/x86/kvm/vmx/vmx.h
++++ b/arch/x86/kvm/vmx/vmx.h
+@@ -330,7 +330,7 @@ struct vcpu_vmx {
+ 	struct lbr_desc lbr_desc;
+ 
+ 	/* Save desired MSR intercept (read: pass-through) state */
+-#define MAX_POSSIBLE_PASSTHROUGH_MSRS	13
++#define MAX_POSSIBLE_PASSTHROUGH_MSRS	14
+ 	struct {
+ 		DECLARE_BITMAP(read, MAX_POSSIBLE_PASSTHROUGH_MSRS);
+ 		DECLARE_BITMAP(write, MAX_POSSIBLE_PASSTHROUGH_MSRS);
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 4be17187913b..2ce5d972fa7e 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -1308,7 +1308,7 @@ static const u32 msrs_to_save_all[] = {
+ 	MSR_IA32_RTIT_ADDR1_A, MSR_IA32_RTIT_ADDR1_B,
+ 	MSR_IA32_RTIT_ADDR2_A, MSR_IA32_RTIT_ADDR2_B,
+ 	MSR_IA32_RTIT_ADDR3_A, MSR_IA32_RTIT_ADDR3_B,
+-	MSR_IA32_UMWAIT_CONTROL,
++	MSR_IA32_UMWAIT_CONTROL, MSR_IA32_PKRS,
+ 
+ 	MSR_ARCH_PERFMON_FIXED_CTR0, MSR_ARCH_PERFMON_FIXED_CTR1,
+ 	MSR_ARCH_PERFMON_FIXED_CTR0 + 2, MSR_ARCH_PERFMON_FIXED_CTR0 + 3,
+@@ -6129,6 +6129,10 @@ static void kvm_init_msr_list(void)
+ 				intel_pt_validate_hw_cap(PT_CAP_num_address_ranges) * 2)
+ 				continue;
+ 			break;
++		case MSR_IA32_PKRS:
++			if (!kvm_cpu_cap_has(X86_FEATURE_PKS))
++				continue;
++			break;
+ 		case MSR_ARCH_PERFMON_PERFCTR0 ... MSR_ARCH_PERFMON_PERFCTR0 + 17:
+ 			if (msrs_to_save_all[i] - MSR_ARCH_PERFMON_PERFCTR0 >=
+ 			    min(INTEL_PMC_MAX_GENERIC, x86_pmu.num_counters_gp))
+diff --git a/arch/x86/kvm/x86.h b/arch/x86/kvm/x86.h
+index 7d66d63dc55a..7fede6769f03 100644
+--- a/arch/x86/kvm/x86.h
++++ b/arch/x86/kvm/x86.h
+@@ -438,6 +438,12 @@ static inline void kvm_machine_check(void)
+ #endif
+ }
+ 
++static inline bool kvm_pkrs_valid(u64 data)
++{
++	/* bit[63,32] must be zero */
++	return !(data >> 32);
++}
++
+ void kvm_load_guest_xsave_state(struct kvm_vcpu *vcpu);
+ void kvm_load_host_xsave_state(struct kvm_vcpu *vcpu);
+ int kvm_spec_ctrl_test_value(u64 value);
+diff --git a/arch/x86/mm/pkeys.c b/arch/x86/mm/pkeys.c
+index e44e938885b7..d6c02e45c7f1 100644
+--- a/arch/x86/mm/pkeys.c
++++ b/arch/x86/mm/pkeys.c
+@@ -192,3 +192,13 @@ static __init int setup_init_pkru(char *opt)
+ 	return 1;
+ }
+ __setup("init_pkru=", setup_init_pkru);
++
++#ifdef CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS
++
++u32 get_current_pkrs(void)
++{
++	return 0;
++}
++EXPORT_SYMBOL_GPL(get_current_pkrs);
++
++#endif /* CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
+diff --git a/include/linux/pkeys.h b/include/linux/pkeys.h
+index 86be8bf27b41..5e78095c956e 100644
+--- a/include/linux/pkeys.h
++++ b/include/linux/pkeys.h
+@@ -48,4 +48,17 @@ static inline bool arch_pkeys_enabled(void)
+ 
+ #endif /* ! CONFIG_ARCH_HAS_PKEYS */
+ 
++#ifdef CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS
++
++u32 get_current_pkrs(void);
++
++#else /* !CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
++
++static inline u32 get_current_pkrs(void)
++{
++	return 0;
++}
++
++#endif /* CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
++
+ #endif /* _LINUX_PKEYS_H */
+-- 
+2.31.1
+

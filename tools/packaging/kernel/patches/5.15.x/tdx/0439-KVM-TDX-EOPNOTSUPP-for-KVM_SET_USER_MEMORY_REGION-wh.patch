@@ -1,0 +1,160 @@
+From 603cfe7e9c4f1a6ec0ce2a39da47223fa09e70c4 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Mon, 12 Jul 2021 17:42:09 -0700
+Subject: [PATCH 0439/1418] KVM: TDX: EOPNOTSUPP for KVM_SET_USER_MEMORY_REGION
+ when tdx doesn't support
+
+For KVM_SET_USER_MEMORY_REGION, TDX doesn't support multiple as-id (only
+as-id 0 is allowed) and read only region.  Return EOPNOTSUPP when such
+region is requested.  Make KVM_CAP_MULTI_ADDRESS_SPACE return 0 for TDX VM
+for consistency.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ Documentation/virt/kvm/api.rst  |  3 ++-
+ arch/x86/include/asm/kvm_host.h |  5 +++++
+ arch/x86/kvm/vmx/main.c         | 13 +++++++++++++
+ arch/x86/kvm/vmx/tdx.c          | 16 ++++++++++++++++
+ arch/x86/kvm/vmx/tdx_stubs.c    |  4 ++++
+ arch/x86/kvm/x86.c              | 15 +++++++++++++++
+ 6 files changed, 55 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/virt/kvm/api.rst b/Documentation/virt/kvm/api.rst
+index b5929596d199..ad22f452d23b 100644
+--- a/Documentation/virt/kvm/api.rst
++++ b/Documentation/virt/kvm/api.rst
+@@ -1319,7 +1319,8 @@ It is recommended to use this API instead of the KVM_SET_MEMORY_REGION ioctl.
+ The KVM_SET_MEMORY_REGION does not allow fine grained control over memory
+ allocation and is deprecated.
+ 
+-For TDX guest, deleting/moving memory slot loses guest memory contents.
++For TDX guest, deleting/moving memory region loses guest memory contents.
++Read only region isn't supported.  Only as-id 0 is supported.
+ 
+ 
+ 4.36 KVM_SET_TSS_ADDR
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index a8f5da6ac04b..2c2685014c3d 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1537,6 +1537,11 @@ struct kvm_x86_ops {
+ 
+ 	void (*vcpu_deliver_sipi_vector)(struct kvm_vcpu *vcpu, u8 vector);
+ 
++	int (*prepare_memory_region)(struct kvm *kvm,
++				     struct kvm_memory_slot *memslot,
++				     const struct kvm_userspace_memory_region *mem,
++				     enum kvm_mr_change change);
++
+ #ifdef CONFIG_KVM_TDX_SEAM_BACKDOOR
+ 	void (*do_seamcall)(struct kvm_seamcall *call);
+ 	void (*do_tdenter)(struct kvm_tdenter *tdenter);
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index 7eda3ec9d52e..5091ee99f4c0 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -969,6 +969,17 @@ static void vt_setup_mce(struct kvm_vcpu *vcpu)
+ 	vmx_setup_mce(vcpu);
+ }
+ 
++static int vt_prepare_memory_region(struct kvm *kvm,
++				    struct kvm_memory_slot *memslot,
++				    const struct kvm_userspace_memory_region *mem,
++				    enum kvm_mr_change change)
++{
++	if (is_td(kvm))
++		tdx_prepare_memory_region(kvm, memslot, mem, change);
++
++	return 0;
++}
++
+ static struct kvm_x86_ops vt_x86_ops __initdata = {
+ 	.hardware_unsetup = hardware_unsetup,
+ 
+@@ -1109,6 +1120,8 @@ static struct kvm_x86_ops vt_x86_ops __initdata = {
+ 	.mem_enc_op_dev = vt_mem_enc_op_dev,
+ 	.mem_enc_op = vt_mem_enc_op,
+ 	.mem_enc_op_vcpu = vt_mem_enc_op_vcpu,
++
++	.prepare_memory_region = vt_prepare_memory_region,
+ };
+ 
+ static struct kvm_x86_init_ops vt_init_ops __initdata = {
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 0772a36e6b31..928b27e71a37 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -2116,6 +2116,22 @@ static void tdx_flush_gprs(struct kvm_vcpu *vcpu)
+ 		td_gpr_write64(tdx, i, vcpu->arch.regs[i]);
+ }
+ 
++static int tdx_prepare_memory_region(struct kvm *kvm,
++				     struct kvm_memory_slot *memslot,
++				     const struct kvm_userspace_memory_region *mem,
++				     enum kvm_mr_change change)
++{
++	/* TDX Secure-EPT allows only RWX. */
++	if (mem->flags & KVM_MEM_READONLY)
++		return -EOPNOTSUPP;
++
++	/* TDX supports only single as-id. */
++	if (mem->slot >> 16)
++		return -EOPNOTSUPP;
++
++	return 0;
++}
++
+ static void __init tdx_pre_kvm_init(unsigned int *vcpu_size,
+ 				    unsigned int *vcpu_align,
+ 				    unsigned int *vm_size)
+diff --git a/arch/x86/kvm/vmx/tdx_stubs.c b/arch/x86/kvm/vmx/tdx_stubs.c
+index 683f93522674..d78314090d01 100644
+--- a/arch/x86/kvm/vmx/tdx_stubs.c
++++ b/arch/x86/kvm/vmx/tdx_stubs.c
+@@ -27,6 +27,10 @@ static void tdx_apicv_post_state_restore(struct kvm_vcpu *vcpu) {}
+ static int tdx_deliver_posted_interrupt(struct kvm_vcpu *vcpu, int vector) { return -1; }
+ static void tdx_get_exit_info(struct kvm_vcpu *vcpu, u64 *info1, u64 *info2,
+ 			      u32 *intr_info, u32 *error_code) {}
++static int tdx_prepare_memory_region(struct kvm *kvm,
++				     struct kvm_memory_slot *memslot,
++				     const struct kvm_userspace_memory_region *mem,
++				     enum kvm_mr_change change) { return 0; }
+ static void tdx_prepare_switch_to_guest(struct kvm_vcpu *vcpu) {}
+ static int __init tdx_check_processor_compatibility(void) { return 0; }
+ static void __init tdx_pre_kvm_init(unsigned int *vcpu_size,
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index d8c2b15f3c70..d1a3ddfde0e5 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -4160,6 +4160,12 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
+ 	case KVM_CAP_READONLY_MEM:
+ 		r = kvm && kvm->readonly_mem_unsupported ? 0 : 1;
+ 		break;
++	case KVM_CAP_MULTI_ADDRESS_SPACE:
++		r = KVM_ADDRESS_SPACE_NUM;
++		/* TDX supports only single as id */
++		if (kvm && kvm->arch.vm_type == KVM_X86_TDX_VM)
++			r = 1;
++		break;
+ 	default:
+ 		break;
+ 	}
+@@ -11608,6 +11614,15 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
+ 				const struct kvm_userspace_memory_region *mem,
+ 				enum kvm_mr_change change)
+ {
++	int err;
++
++	if (kvm_x86_ops.prepare_memory_region) {
++		err = kvm_x86_ops.prepare_memory_region(kvm, memslot, mem,
++							change);
++		if (err)
++			return err;
++	}
++
+ 	if (change == KVM_MR_CREATE || change == KVM_MR_MOVE)
+ 		return kvm_alloc_memslot_metadata(kvm, memslot,
+ 						  mem->memory_size >> PAGE_SHIFT);
+-- 
+2.31.1
+

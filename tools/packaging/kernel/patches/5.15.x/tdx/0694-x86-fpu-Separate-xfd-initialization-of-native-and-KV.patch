@@ -1,0 +1,53 @@
+From 289dfb0c3201ed0ac2a1e661601f1166b4f2ccf7 Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Sun, 31 Oct 2021 23:02:12 -0700
+Subject: [PATCH 0694/1418] x86/fpu: Separate xfd initialization of native and
+ KVM
+
+The native thread and KVM vcpu thread need different xfd initialization
+values. For native thread, the xfd initialization should be initialized
+by init_fpstate::xfd, while for KVM vcpu thread, it should be emulated
+as a reset value and let KVM guest decides the initialization at boot
+time.
+
+Leave the common initialiazation part in __fpstate_reset() and separate
+the xfd initialization of native and KVM.
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+---
+ arch/x86/kernel/fpu/core.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index f60c9dea3dba..cb2eb2089300 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -230,6 +230,7 @@ bool fpu_alloc_guest_fpstate(struct fpu_guest *gfpu)
+ 	if (!fpstate)
+ 		return false;
+ 
++	/* Initialize guest fpstate xfd as zero and let guest initialize XFD */
+ 	__fpstate_reset(fpstate);
+ 	fpstate_init_user(fpstate);
+ 	fpstate->is_valloc	= true;
+@@ -480,7 +481,6 @@ static void __fpstate_reset(struct fpstate *fpstate)
+ 	fpstate->user_size	= fpu_user_cfg.default_size;
+ 	fpstate->xfeatures	= fpu_kernel_cfg.default_features;
+ 	fpstate->user_xfeatures	= fpu_user_cfg.default_features;
+-	fpstate->xfd		= init_fpstate.xfd;
+ }
+ 
+ void fpstate_reset(struct fpu *fpu)
+@@ -489,6 +489,9 @@ void fpstate_reset(struct fpu *fpu)
+ 	fpu->fpstate = &fpu->__fpstate;
+ 	__fpstate_reset(fpu->fpstate);
+ 
++	/* Initialize the xfd */
++	fpu->fpstate->xfd		= init_fpstate.xfd;
++
+ 	/* Initialize the permission related info in fpu */
+ 	fpu->perm.__state_perm		= fpu_kernel_cfg.default_features;
+ 	fpu->perm.__state_size		= fpu_kernel_cfg.default_size;
+-- 
+2.31.1
+

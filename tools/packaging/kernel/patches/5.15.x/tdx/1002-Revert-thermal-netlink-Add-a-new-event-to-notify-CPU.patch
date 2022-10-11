@@ -1,0 +1,167 @@
+From 8116018f3c534b6c810390195b5716adc8f99c4b Mon Sep 17 00:00:00 2001
+From: Ricardo Neri <ricardo.neri-calderon@linux.intel.com>
+Date: Fri, 21 Jan 2022 14:09:36 -0800
+Subject: [PATCH 1002/1418] Revert "thermal: netlink: Add a new event to notify
+ CPU capacity change"
+
+This reverts commit fe78c0e3881688f676b5dedfafecead039b2243d.
+---
+ drivers/thermal/thermal_netlink.c | 52 -------------------------------
+ drivers/thermal/thermal_netlink.h | 13 --------
+ include/uapi/linux/thermal.h      |  6 +---
+ 3 files changed, 1 insertion(+), 70 deletions(-)
+
+diff --git a/drivers/thermal/thermal_netlink.c b/drivers/thermal/thermal_netlink.c
+index 80d53e4b5bde..1234dbe95895 100644
+--- a/drivers/thermal/thermal_netlink.c
++++ b/drivers/thermal/thermal_netlink.c
+@@ -43,11 +43,6 @@ static const struct nla_policy thermal_genl_policy[THERMAL_GENL_ATTR_MAX + 1] =
+ 	[THERMAL_GENL_ATTR_CDEV_MAX_STATE]	= { .type = NLA_U32 },
+ 	[THERMAL_GENL_ATTR_CDEV_NAME]		= { .type = NLA_STRING,
+ 						    .len = THERMAL_NAME_LENGTH },
+-	/* CPU Capacity */
+-	[THERMAL_GENL_ATTR_CAPACITY]		= { .type = NLA_NESTED },
+-	[THERMAL_GENL_ATTR_CAPACITY_CPU_ID]	= { .type = NLA_U32 },
+-	[THERMAL_GENL_ATTR_CAPACITY_CPU_PERF]	= { .type = NLA_U32 },
+-	[THERMAL_GENL_ATTR_CAPACITY_CPU_EFF]	= { .type = NLA_U32 },
+ };
+ 
+ struct param {
+@@ -63,8 +58,6 @@ struct param {
+ 	int temp;
+ 	int cdev_state;
+ 	int cdev_max_state;
+-	struct cpu_capacity *cpu_capacities;
+-	int cpu_capacities_count;
+ };
+ 
+ typedef int (*cb_t)(struct param *);
+@@ -196,42 +189,6 @@ static int thermal_genl_event_gov_change(struct param *p)
+ 	return 0;
+ }
+ 
+-static int thermal_genl_event_capacity_change(struct param *p)
+-{
+-	struct cpu_capacity *cpu_cap = p->cpu_capacities;
+-	struct sk_buff *msg = p->msg;
+-	struct nlattr *start_cap;
+-	int i, ret;
+-
+-	start_cap = nla_nest_start(msg, THERMAL_GENL_ATTR_CAPACITY);
+-	if (!start_cap)
+-		return -EMSGSIZE;
+-
+-	for (i = 0; i < p->cpu_capacities_count; ++i) {
+-		if (nla_put_u32(msg, THERMAL_GENL_ATTR_CAPACITY_CPU_ID, cpu_cap->cpu)) {
+-			ret = -EMSGSIZE;
+-			goto out_cancel_nest;
+-		}
+-		if (nla_put_u32(msg, THERMAL_GENL_ATTR_CAPACITY_CPU_PERF, cpu_cap->perf)) {
+-			ret = -EMSGSIZE;
+-			goto out_cancel_nest;
+-		}
+-		if (nla_put_u32(msg, THERMAL_GENL_ATTR_CAPACITY_CPU_EFF, cpu_cap->eff)) {
+-			ret = -EMSGSIZE;
+-			goto out_cancel_nest;
+-		}
+-		++cpu_cap;
+-	}
+-
+-	nla_nest_end(msg, start_cap);
+-
+-	return 0;
+-out_cancel_nest:
+-	nla_nest_cancel(msg, start_cap);
+-
+-	return ret;
+-}
+-
+ int thermal_genl_event_tz_delete(struct param *p)
+ 	__attribute__((alias("thermal_genl_event_tz")));
+ 
+@@ -261,7 +218,6 @@ static cb_t event_cb[] = {
+ 	[THERMAL_GENL_EVENT_CDEV_DELETE]	= thermal_genl_event_cdev_delete,
+ 	[THERMAL_GENL_EVENT_CDEV_STATE_UPDATE]	= thermal_genl_event_cdev_state_update,
+ 	[THERMAL_GENL_EVENT_TZ_GOV_CHANGE]	= thermal_genl_event_gov_change,
+-	[THERMAL_GENL_EVENT_CAPACITY_CHANGE]	= thermal_genl_event_capacity_change,
+ };
+ 
+ /*
+@@ -399,14 +355,6 @@ int thermal_notify_tz_gov_change(int tz_id, const char *name)
+ 	return thermal_genl_send_event(THERMAL_GENL_EVENT_TZ_GOV_CHANGE, &p);
+ }
+ 
+-int thermal_genl_capacity_event(int count, struct cpu_capacity *caps)
+-{
+-	struct param p = { .cpu_capacities_count = count, .cpu_capacities = caps };
+-
+-	return thermal_genl_send_event(THERMAL_GENL_EVENT_CAPACITY_CHANGE, &p);
+-}
+-EXPORT_SYMBOL_GPL(thermal_genl_capacity_event);
+-
+ /*************************** Command encoding ********************************/
+ 
+ static int __thermal_genl_cmd_tz_get_id(struct thermal_zone_device *tz,
+diff --git a/drivers/thermal/thermal_netlink.h b/drivers/thermal/thermal_netlink.h
+index 2ba0445c9dc5..828d1dddfa98 100644
+--- a/drivers/thermal/thermal_netlink.h
++++ b/drivers/thermal/thermal_netlink.h
+@@ -4,12 +4,6 @@
+  *  Author: Daniel Lezcano <daniel.lezcano@linaro.org>
+  */
+ 
+-struct cpu_capacity {
+-	int cpu;
+-	int perf;
+-	int eff;
+-};
+-
+ /* Netlink notification function */
+ #ifdef CONFIG_THERMAL_NETLINK
+ int __init thermal_netlink_init(void);
+@@ -29,7 +23,6 @@ int thermal_notify_cdev_add(int cdev_id, const char *name, int max_state);
+ int thermal_notify_cdev_delete(int cdev_id);
+ int thermal_notify_tz_gov_change(int tz_id, const char *name);
+ int thermal_genl_sampling_temp(int id, int temp);
+-int thermal_genl_capacity_event(int count, struct cpu_capacity *caps);
+ #else
+ static inline int thermal_netlink_init(void)
+ {
+@@ -108,10 +101,4 @@ static inline int thermal_genl_sampling_temp(int id, int temp)
+ {
+ 	return 0;
+ }
+-
+-static inline int thermal_genl_capacity_event(int count, struct cpu_capacity *caps)
+-{
+-	return 0;
+-}
+-
+ #endif /* CONFIG_THERMAL_NETLINK */
+diff --git a/include/uapi/linux/thermal.h b/include/uapi/linux/thermal.h
+index 71c36f5ef01f..9aa2fedfa309 100644
+--- a/include/uapi/linux/thermal.h
++++ b/include/uapi/linux/thermal.h
+@@ -44,10 +44,7 @@ enum thermal_genl_attr {
+ 	THERMAL_GENL_ATTR_CDEV_MAX_STATE,
+ 	THERMAL_GENL_ATTR_CDEV_NAME,
+ 	THERMAL_GENL_ATTR_GOV_NAME,
+-	THERMAL_GENL_ATTR_CAPACITY,
+-	THERMAL_GENL_ATTR_CAPACITY_CPU_ID,
+-	THERMAL_GENL_ATTR_CAPACITY_CPU_PERF,
+-	THERMAL_GENL_ATTR_CAPACITY_CPU_EFF,
++
+ 	__THERMAL_GENL_ATTR_MAX,
+ };
+ #define THERMAL_GENL_ATTR_MAX (__THERMAL_GENL_ATTR_MAX - 1)
+@@ -74,7 +71,6 @@ enum thermal_genl_event {
+ 	THERMAL_GENL_EVENT_CDEV_DELETE,		/* Cdev unbound */
+ 	THERMAL_GENL_EVENT_CDEV_STATE_UPDATE,	/* Cdev state updated */
+ 	THERMAL_GENL_EVENT_TZ_GOV_CHANGE,	/* Governor policy changed  */
+-	THERMAL_GENL_EVENT_CAPACITY_CHANGE,	/* CPU capacity changed */
+ 	__THERMAL_GENL_EVENT_MAX,
+ };
+ #define THERMAL_GENL_EVENT_MAX (__THERMAL_GENL_EVENT_MAX - 1)
+-- 
+2.31.1
+

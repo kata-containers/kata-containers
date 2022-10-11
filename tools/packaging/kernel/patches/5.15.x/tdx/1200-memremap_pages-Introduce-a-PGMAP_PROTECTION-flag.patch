@@ -1,0 +1,120 @@
+From 7a86c4d1711d14a4e28d9ea58631e2cfdaeb82d4 Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Wed, 12 Jan 2022 14:08:25 -0800
+Subject: [PATCH 1200/1418] memremap_pages: Introduce a PGMAP_PROTECTION flag
+
+The persistent memory (PMEM) driver uses the memremap_pages facility to
+provide 'struct page' metadata (vmemmap) for PMEM.  Given that PMEM
+capacity maybe orders of magnitude higher capacity than System RAM it
+presents a large vulnerability surface to stray writes.  Unlike stray
+writes to System RAM, which may result in a crash or other undesirable
+behavior, stray writes to PMEM additionally are more likely to result in
+permanent data loss. Reboot is not a remediation for PMEM corruption
+like it is for System RAM.
+
+Given that PMEM access from the kernel is limited to a constrained set
+of locations (PMEM driver, Filesystem-DAX, and direct-I/O to a DAX
+page), it is amenable to supervisor pkey protection.
+
+Some systems which have configured DEVMAP_ACCESS_PROTECTION may not have
+PMEM installed.  Or the PMEM may not be mapped into the direct map.  In
+addition, some callers of memremap_pages() will not want the mapped
+pages protected.
+
+Define a new PGMAP flag to distinguish page maps which are protected.
+Use this flag to enable runtime protection support.  A static key is
+used to optimize the runtime support.
+
+Specifying this flag on a system which can't support protections will
+fail.  Callers are expected to check if protections are supported via
+pgmap_protection_available().  It was considered to have callers specify
+the flag and check if the dev_pagemap object returned was protected or
+not.  But this was considered less efficient than a direct check
+beforehand.
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ include/linux/memremap.h |  1 +
+ mm/memremap.c            | 40 ++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 41 insertions(+)
+
+diff --git a/include/linux/memremap.h b/include/linux/memremap.h
+index c0e9d35889e8..53dc97823418 100644
+--- a/include/linux/memremap.h
++++ b/include/linux/memremap.h
+@@ -90,6 +90,7 @@ struct dev_pagemap_ops {
+ };
+ 
+ #define PGMAP_ALTMAP_VALID	(1 << 0)
++#define PGMAP_PROTECTION	(1 << 1)
+ 
+ /**
+  * struct dev_pagemap - metadata for ZONE_DEVICE mappings
+diff --git a/mm/memremap.c b/mm/memremap.c
+index ed593bf87109..dd81628810bc 100644
+--- a/mm/memremap.c
++++ b/mm/memremap.c
+@@ -63,6 +63,37 @@ static void devmap_managed_enable_put(struct dev_pagemap *pgmap)
+ }
+ #endif /* CONFIG_DEV_PAGEMAP_OPS */
+ 
++#ifdef CONFIG_DEVMAP_ACCESS_PROTECTION
++
++/*
++ * Note; all devices which have asked for protections share the same key.  The
++ * key may, or may not, have been provided by the core.  If not, protection
++ * will be disabled.  The key acquisition is attempted when the first ZONE
++ * DEVICE requests it and freed when all zones have been unmapped.
++ *
++ * Also this must be EXPORT_SYMBOL rather than EXPORT_SYMBOL_GPL because it is
++ * intended to be used in the kmap API.
++ */
++DEFINE_STATIC_KEY_FALSE(dev_pgmap_protection_static_key);
++EXPORT_SYMBOL(dev_pgmap_protection_static_key);
++
++static void devmap_protection_enable(void)
++{
++	static_branch_inc(&dev_pgmap_protection_static_key);
++}
++
++static void devmap_protection_disable(void)
++{
++	static_branch_dec(&dev_pgmap_protection_static_key);
++}
++
++#else /* !CONFIG_DEVMAP_ACCESS_PROTECTION */
++
++static void devmap_protection_enable(void) { }
++static void devmap_protection_disable(void) { }
++
++#endif /* CONFIG_DEVMAP_ACCESS_PROTECTION */
++
+ static void pgmap_array_delete(struct range *range)
+ {
+ 	xa_store_range(&pgmap_array, PHYS_PFN(range->start), PHYS_PFN(range->end),
+@@ -178,6 +209,9 @@ void memunmap_pages(struct dev_pagemap *pgmap)
+ 
+ 	WARN_ONCE(pgmap->altmap.alloc, "failed to free all reserved pages\n");
+ 	devmap_managed_enable_put(pgmap);
++
++	if (pgmap->flags & PGMAP_PROTECTION)
++		devmap_protection_disable();
+ }
+ EXPORT_SYMBOL_GPL(memunmap_pages);
+ 
+@@ -326,6 +360,12 @@ void *memremap_pages(struct dev_pagemap *pgmap, int nid)
+ 	if (WARN_ONCE(!nr_range, "nr_range must be specified\n"))
+ 		return ERR_PTR(-EINVAL);
+ 
++	if (pgmap->flags & PGMAP_PROTECTION) {
++		if (!pgmap_protection_available())
++			return ERR_PTR(-EINVAL);
++		devmap_protection_enable();
++	}
++
+ 	switch (pgmap->type) {
+ 	case MEMORY_DEVICE_PRIVATE:
+ 		if (!IS_ENABLED(CONFIG_DEVICE_PRIVATE)) {
+-- 
+2.31.1
+

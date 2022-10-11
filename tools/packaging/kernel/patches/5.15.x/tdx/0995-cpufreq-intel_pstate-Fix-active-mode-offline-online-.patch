@@ -1,0 +1,44 @@
+From 16009b8854fcb15a6050e2f894463e1c4a866173 Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Wed, 17 Nov 2021 14:57:31 +0100
+Subject: [PATCH 0995/1418] cpufreq: intel_pstate: Fix active mode
+ offline/online EPP handling
+
+After commit 4adcf2e5829f ("cpufreq: intel_pstate: Add ->offline and
+->online callbacks") the EPP value set by the "performance" scaling
+algorithm in the active mode is not restored after an offline/online
+cycle which replaces it with the saved EPP value coming from user
+space.
+
+Address this issue by forcing intel_pstate_hwp_set() to set a new
+EPP value when it runs first time after online.
+
+Fixes: 4adcf2e5829f ("cpufreq: intel_pstate: Add ->offline and ->online callbacks")
+Link: https://lore.kernel.org/linux-pm/adc7132c8655bd4d1c8b6129578e931a14fe1db2.camel@linux.intel.com/
+Reported-by: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Cc: 5.9+ <stable@vger.kernel.org> # 5.9+
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ drivers/cpufreq/intel_pstate.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/cpufreq/intel_pstate.c b/drivers/cpufreq/intel_pstate.c
+index 1088ff350159..1bc00645b656 100644
+--- a/drivers/cpufreq/intel_pstate.c
++++ b/drivers/cpufreq/intel_pstate.c
+@@ -1006,6 +1006,12 @@ static void intel_pstate_hwp_offline(struct cpudata *cpu)
+ 		 */
+ 		value &= ~GENMASK_ULL(31, 24);
+ 		value |= HWP_ENERGY_PERF_PREFERENCE(cpu->epp_cached);
++		/*
++		 * However, make sure that EPP will be set to "performance" when
++		 * the CPU is brought back online again and the "performance"
++		 * scaling algorithm is still in effect.
++		 */
++		cpu->epp_policy = CPUFREQ_POLICY_UNKNOWN;
+ 	}
+ 
+ 	/*
+-- 
+2.31.1
+

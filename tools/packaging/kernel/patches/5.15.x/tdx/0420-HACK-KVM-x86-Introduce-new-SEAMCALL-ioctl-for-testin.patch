@@ -1,0 +1,189 @@
+From 798d7b5dd3662d8248a31305758176efa2f0689a Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Wed, 6 May 2020 16:08:15 -0700
+Subject: [PATCH 0420/1418] *** HACK *** KVM: x86: Introduce new SEAMCALL ioctl
+ for testing
+
+Add a KVM_SEAMCALL ioctl() to allow userspace to direct SEAMCALLs for
+testing.  To allow negative testing, KVM_SEAMCALL takes the exact
+input registers for SEAMCALL and returns the exact output registers.
+
+Signed-off-by: Zhang Chen <chen.zhang@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h       |  2 ++
+ arch/x86/include/uapi/asm/kvm.h       | 15 +++++++++++++++
+ arch/x86/kvm/vmx/main.c               |  7 +++++++
+ arch/x86/kvm/vmx/tdx.c                | 16 ++++++++++++++++
+ arch/x86/kvm/x86.c                    | 20 ++++++++++++++++++++
+ include/uapi/linux/kvm.h              |  3 +++
+ tools/arch/x86/include/uapi/asm/kvm.h | 15 +++++++++++++++
+ tools/include/uapi/linux/kvm.h        |  3 +++
+ 8 files changed, 81 insertions(+)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 21d5d910d7bf..a1a1d3f1b9af 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1536,6 +1536,8 @@ struct kvm_x86_ops {
+ 	int (*complete_emulated_msr)(struct kvm_vcpu *vcpu, int err);
+ 
+ 	void (*vcpu_deliver_sipi_vector)(struct kvm_vcpu *vcpu, u8 vector);
++
++	void (*do_seamcall)(struct kvm_seamcall *call);
+ };
+ 
+ struct kvm_x86_nested_ops {
+diff --git a/arch/x86/include/uapi/asm/kvm.h b/arch/x86/include/uapi/asm/kvm.h
+index 2425d3772728..6fea5494a197 100644
+--- a/arch/x86/include/uapi/asm/kvm.h
++++ b/arch/x86/include/uapi/asm/kvm.h
+@@ -564,4 +564,19 @@ struct kvm_tdx_init_mem_region {
+ 	__u64 nr_pages;
+ };
+ 
++/* For KVM SEAMCALL */
++struct kvm_seamcall_regs {
++	__u64 rax;
++	__u64 rcx;
++	__u64 rdx;
++	__u64 r8;
++	__u64 r9;
++	__u64 r10;
++};
++
++struct kvm_seamcall {
++	struct kvm_seamcall_regs in;
++	struct kvm_seamcall_regs out;
++};
++
+ #endif /* _ASM_X86_KVM_H */
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index c873abb03136..1cd15e5182c5 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -60,6 +60,13 @@ static __init int vt_hardware_setup(void)
+ #ifdef CONFIG_INTEL_TDX_HOST
+ 	if (enable_tdx && tdx_hardware_setup(&vt_x86_ops))
+ 		enable_tdx = false;
++
++	/*
++	 * Not a typo, direct SEAMCALL is only allowed when it won't interfere
++	 * with TDs created and managed by KVM.
++	 */
++	if (!enable_tdx && !tdx_hardware_setup(&vt_x86_ops))
++		vt_x86_ops.do_seamcall = tdx_do_seamcall;
+ #endif
+ 
+ 	if (enable_ept) {
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 442b42af0e8b..f78459ca5eda 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -2166,3 +2166,19 @@ static int __init tdx_hardware_setup(struct kvm_x86_ops *x86_ops)
+ 
+ 	return 0;
+ }
++
++static void tdx_do_seamcall(struct kvm_seamcall *call)
++{
++	struct kvm_seamcall_regs *out = &call->out;
++	struct kvm_seamcall_regs *in = &call->in;
++	struct tdx_ex_ret ex;
++
++	memset(&ex, 0, sizeof(ex));
++	out->rax = kvm_seamcall(in->rax, in->rcx, in->rdx, in->r8, in->r9,
++				in->r10, &ex);
++	out->rcx = ex.rcx;
++	out->rdx = ex.rdx;
++	out->r8 = ex.r8;
++	out->r9 = ex.r9;
++	out->r10 = ex.r10;
++}
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index aa02d8ea9e60..22bf1e5da458 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -4261,6 +4261,26 @@ long kvm_arch_dev_ioctl(struct file *filp,
+ 			goto out;
+ 		r = kvm_x86_ops.mem_enc_op_dev(argp);
+ 		break;
++	case KVM_SEAMCALL: {
++		struct kvm_seamcall __user *user_seamcall = argp;
++		struct kvm_seamcall seamcall;
++
++		r = -EINVAL;
++		if (!kvm_x86_ops.do_seamcall)
++			goto out;
++
++		r = -EFAULT;
++		if (copy_from_user(&seamcall, user_seamcall, sizeof(seamcall)))
++			goto out;
++
++		kvm_x86_ops.do_seamcall(&seamcall);
++
++		if (copy_to_user(user_seamcall, &seamcall, sizeof(seamcall)))
++			goto out;
++
++		r = 0;
++		break;
++	}
+ 	default:
+ 		r = -EINVAL;
+ 		break;
+diff --git a/include/uapi/linux/kvm.h b/include/uapi/linux/kvm.h
+index 2e49dc925cab..dc1fb91fa924 100644
+--- a/include/uapi/linux/kvm.h
++++ b/include/uapi/linux/kvm.h
+@@ -873,6 +873,9 @@ struct kvm_ppc_resize_hpt {
+ #define KVM_GET_MSR_INDEX_LIST    _IOWR(KVMIO, 0x02, struct kvm_msr_list)
+ 
+ #define KVM_S390_ENABLE_SIE       _IO(KVMIO,   0x06)
++
++#define KVM_SEAMCALL              _IOWR(KVMIO, 0x31, struct kvm_seamcall)
++
+ /*
+  * Check if a kvm extension is available.  Argument is extension number,
+  * return is 1 (yes) or 0 (no, sorry).
+diff --git a/tools/arch/x86/include/uapi/asm/kvm.h b/tools/arch/x86/include/uapi/asm/kvm.h
+index 16dd7bf57ac9..c5d20cefe767 100644
+--- a/tools/arch/x86/include/uapi/asm/kvm.h
++++ b/tools/arch/x86/include/uapi/asm/kvm.h
+@@ -559,4 +559,19 @@ struct kvm_tdx_init_mem_region {
+ 	__u64 nr_pages;
+ };
+ 
++/* For KVM SEAMCALL */
++struct kvm_seamcall_regs {
++	__u64 rax;
++	__u64 rcx;
++	__u64 rdx;
++	__u64 r8;
++	__u64 r9;
++	__u64 r10;
++};
++
++struct kvm_seamcall {
++	struct kvm_seamcall_regs in;
++	struct kvm_seamcall_regs out;
++};
++
+ #endif /* _ASM_X86_KVM_H */
+diff --git a/tools/include/uapi/linux/kvm.h b/tools/include/uapi/linux/kvm.h
+index e5aadad54ced..97229ae0c282 100644
+--- a/tools/include/uapi/linux/kvm.h
++++ b/tools/include/uapi/linux/kvm.h
+@@ -871,6 +871,9 @@ struct kvm_ppc_resize_hpt {
+ #define KVM_GET_MSR_INDEX_LIST    _IOWR(KVMIO, 0x02, struct kvm_msr_list)
+ 
+ #define KVM_S390_ENABLE_SIE       _IO(KVMIO,   0x06)
++
++#define KVM_SEAMCALL              _IOWR(KVMIO, 0x31, struct kvm_seamcall)
++
+ /*
+  * Check if a kvm extension is available.  Argument is extension number,
+  * return is 1 (yes) or 0 (no, sorry).
+-- 
+2.31.1
+

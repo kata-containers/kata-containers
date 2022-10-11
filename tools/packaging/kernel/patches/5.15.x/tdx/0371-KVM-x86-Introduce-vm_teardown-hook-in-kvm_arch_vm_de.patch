@@ -1,0 +1,133 @@
+From 9cbc6fe306eff310fe555a3d90816e3bb9144c0b Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Tue, 31 Mar 2020 08:38:13 -0700
+Subject: [PATCH 0371/1418] KVM: x86: Introduce vm_teardown() hook in
+ kvm_arch_vm_destroy()
+
+Add a second kvm_x86_ops hook in kvm_arch_vm_destroy() to support TDX's
+destruction path, which needs to first put the VM into a teardown state,
+then free per-vCPU resource, and finally free per-VM resources.
+
+Note, this knowingly creates a discrepancy in nomenclature for SVM as
+svm_vm_teardown() invokes avic_vm_destroy() and sev_vm_destroy().
+Moving the now-misnamed functions or renaming them is left to a future
+patch so as not to introduce a functional change for SVM.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/kvm-x86-ops.h |  1 +
+ arch/x86/include/asm/kvm_host.h    |  1 +
+ arch/x86/kvm/svm/svm.c             |  8 +++++++-
+ arch/x86/kvm/vmx/vmx.c             | 11 +++++++++++
+ arch/x86/kvm/x86.c                 |  3 ++-
+ 5 files changed, 22 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm-x86-ops.h b/arch/x86/include/asm/kvm-x86-ops.h
+index 4aa0a1c10b84..cbabd9ca7968 100644
+--- a/arch/x86/include/asm/kvm-x86-ops.h
++++ b/arch/x86/include/asm/kvm-x86-ops.h
+@@ -20,6 +20,7 @@ KVM_X86_OP(has_emulated_msr)
+ KVM_X86_OP(vcpu_after_set_cpuid)
+ KVM_X86_OP(is_vm_type_supported)
+ KVM_X86_OP(vm_init)
++KVM_X86_OP(vm_teardown)
+ KVM_X86_OP_NULL(vm_destroy)
+ KVM_X86_OP(vcpu_create)
+ KVM_X86_OP(vcpu_free)
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 5cea7d117e4b..7e08ae27d7f7 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1328,6 +1328,7 @@ struct kvm_x86_ops {
+ 	bool (*is_vm_type_supported)(unsigned long vm_type);
+ 	unsigned int vm_size;
+ 	int (*vm_init)(struct kvm *kvm);
++	void (*vm_teardown)(struct kvm *kvm);
+ 	void (*vm_destroy)(struct kvm *kvm);
+ 
+ 	/* Create, but do not attach this VCPU */
+diff --git a/arch/x86/kvm/svm/svm.c b/arch/x86/kvm/svm/svm.c
+index dc55aa669437..0581fd6aed98 100644
+--- a/arch/x86/kvm/svm/svm.c
++++ b/arch/x86/kvm/svm/svm.c
+@@ -4501,12 +4501,17 @@ static void svm_vcpu_deliver_sipi_vector(struct kvm_vcpu *vcpu, u8 vector)
+ 	sev_vcpu_deliver_sipi_vector(vcpu, vector);
+ }
+ 
+-static void svm_vm_destroy(struct kvm *kvm)
++static void svm_vm_teardown(struct kvm *kvm)
+ {
+ 	avic_vm_destroy(kvm);
+ 	sev_vm_destroy(kvm);
+ }
+ 
++static void svm_vm_destroy(struct kvm *kvm)
++{
++
++}
++
+ static bool svm_is_vm_type_supported(unsigned long type)
+ {
+ 	return type == KVM_X86_LEGACY_VM;
+@@ -4540,6 +4545,7 @@ static struct kvm_x86_ops svm_x86_ops __initdata = {
+ 	.is_vm_type_supported = svm_is_vm_type_supported,
+ 	.vm_size = sizeof(struct kvm_svm),
+ 	.vm_init = svm_vm_init,
++	.vm_teardown = svm_vm_teardown,
+ 	.vm_destroy = svm_vm_destroy,
+ 
+ 	.prepare_guest_switch = svm_prepare_guest_switch,
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 4464399ce457..9b8b85e68603 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -7138,6 +7138,16 @@ static int vmx_vm_init(struct kvm *kvm)
+ 	return 0;
+ }
+ 
++static void vmx_vm_teardown(struct kvm *kvm)
++{
++
++}
++
++static void vmx_vm_destroy(struct kvm *kvm)
++{
++
++}
++
+ static int __init vmx_check_processor_compat(void)
+ {
+ 	struct vmcs_config vmcs_conf;
+@@ -7786,6 +7796,7 @@ static struct kvm_x86_ops vmx_x86_ops __initdata = {
+ 	.is_vm_type_supported = vmx_is_vm_type_supported,
+ 	.vm_size = sizeof(struct kvm_vmx),
+ 	.vm_init = vmx_vm_init,
++	.vm_teardown = vmx_vm_teardown,
+ 	.vm_destroy = vmx_vm_destroy,
+ 
+ 	.vcpu_create = vmx_create_vcpu,
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 38afd6ef1727..b9e227e59831 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -11329,7 +11329,7 @@ void kvm_arch_destroy_vm(struct kvm *kvm)
+ 		__x86_set_memory_region(kvm, TSS_PRIVATE_MEMSLOT, 0, 0);
+ 		mutex_unlock(&kvm->slots_lock);
+ 	}
+-	static_call_cond(kvm_x86_vm_destroy)(kvm);
++	static_call(kvm_x86_vm_teardown)(kvm);
+ 	kvm_free_msr_filter(srcu_dereference_check(kvm->arch.msr_filter, &kvm->srcu, 1));
+ 	kvm_pic_destroy(kvm);
+ 	kvm_ioapic_destroy(kvm);
+@@ -11344,6 +11344,7 @@ void kvm_arch_destroy_vm(struct kvm *kvm)
+ 	kvm_page_track_cleanup(kvm);
+ 	kvm_xen_destroy_vm(kvm);
+ 	kvm_hv_destroy_vm(kvm);
++	static_call_cond(kvm_x86_vm_destroy)(kvm);
+ }
+ 
+ static void memslot_rmap_free(struct kvm_memory_slot *slot)
+-- 
+2.31.1
+

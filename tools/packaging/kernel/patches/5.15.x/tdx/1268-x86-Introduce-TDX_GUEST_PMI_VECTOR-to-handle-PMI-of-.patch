@@ -1,0 +1,189 @@
+From d4a26eaebddd5e5f27bdcecb2b3e494b97538147 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Wed, 16 Mar 2022 11:30:26 +0800
+Subject: [PATCH 1268/1418] x86: Introduce TDX_GUEST_PMI_VECTOR to handle PMI
+ of TDX guest
+
+Unlike legacy VM guest, INTEL TDX guest can use PMU hardware
+but not rely on software emulation, except we need do guest
+PMI injection in EXIT_REASON_EXCEPTION_NMI(NMI).
+
+But there's another case which we also need to do guest
+PMI injection:
+
+TDX module has security feature called 0/1 stepping defense,
+any NMI happened during the feature is active will be delay
+delivered at end phase of this feature, by injecting NMI to
+CPU from loacl APIC directly. This means it's very possible
+that A NMI happened immediately after TDENER is PMI for TDX
+guest.
+
+We need installing a new NMI handler for this, but meanwhile
+we still need to handle normal EXIT_REASON_EXCEPTION_NMI(NMI)
+to inject PMI to TDX guest, we don't do this all in the new
+installed NMI handler because it's too late to restore host
+PMU context there, we want to restore host PMU context as
+early as possible to not reduce the accuracy.
+
+We also need to call host's NMI handler from KVM in
+EXIT_REASON_EXCEPTION_NMI(NMI) no matter we injected PMI
+to TDX guest or not, because we can't assume that it's
+the only reason of the NMI. Let's call this "case VMEXIT NMI".
+
+The host's LOCAL_NMI handlers are chained so every handler
+is called unconditionally. So our new installed handler need
+to distinguish the caller:
+
+if caller is from "case VMEXIT NMI" && we already injected PMI
+  return NMI_HANDLED
+
+We meet "unknown NMI" issue if we don't return NMI_HANDLED here,
+because no one handle this Guest PMI.
+
+but it's hard to indentify the caller, the only workable way is
+return RIP checking but that's still not 100% safe.
+
+We decide to introduce a new dedicate vector as TDX guest PMI,
+this decouples Guest PMI from Host NMI, which eliminates the
+issue above.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/include/asm/hardirq.h     |  3 +++
+ arch/x86/include/asm/idtentry.h    |  3 +++
+ arch/x86/include/asm/irq.h         |  5 +++++
+ arch/x86/include/asm/irq_vectors.h |  6 +++++-
+ arch/x86/kernel/idt.c              |  3 +++
+ arch/x86/kernel/irq.c              | 27 +++++++++++++++++++++++++++
+ 6 files changed, 46 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/hardirq.h b/arch/x86/include/asm/hardirq.h
+index 3955b81f9241..8b19b69cd693 100644
+--- a/arch/x86/include/asm/hardirq.h
++++ b/arch/x86/include/asm/hardirq.h
+@@ -19,6 +19,9 @@ typedef struct {
+ 	unsigned int kvm_posted_intr_ipis;
+ 	unsigned int kvm_posted_intr_wakeup_ipis;
+ 	unsigned int kvm_posted_intr_nested_ipis;
++#ifdef CONFIG_INTEL_TDX_HOST
++	unsigned int kvm_tdx_guest_pmis;
++#endif
+ #endif
+ 	unsigned int x86_platform_ipis;	/* arch dependent */
+ 	unsigned int apic_perf_irqs;
+diff --git a/arch/x86/include/asm/idtentry.h b/arch/x86/include/asm/idtentry.h
+index 4a289aa37047..9b2e0f4bf80b 100644
+--- a/arch/x86/include/asm/idtentry.h
++++ b/arch/x86/include/asm/idtentry.h
+@@ -677,6 +677,9 @@ DECLARE_IDTENTRY_SYSVEC(IRQ_WORK_VECTOR,		sysvec_irq_work);
+ DECLARE_IDTENTRY_SYSVEC(POSTED_INTR_VECTOR,		sysvec_kvm_posted_intr_ipi);
+ DECLARE_IDTENTRY_SYSVEC(POSTED_INTR_WAKEUP_VECTOR,	sysvec_kvm_posted_intr_wakeup_ipi);
+ DECLARE_IDTENTRY_SYSVEC(POSTED_INTR_NESTED_VECTOR,	sysvec_kvm_posted_intr_nested_ipi);
++#ifdef CONFIG_INTEL_TDX_HOST
++DECLARE_IDTENTRY_SYSVEC(TDX_GUEST_PMI_VECTOR,		sysvec_kvm_tdx_guest_pmi);
++#endif
+ #endif
+ 
+ #if IS_ENABLED(CONFIG_HYPERV)
+diff --git a/arch/x86/include/asm/irq.h b/arch/x86/include/asm/irq.h
+index 768aa234cbb4..50dfad391e33 100644
+--- a/arch/x86/include/asm/irq.h
++++ b/arch/x86/include/asm/irq.h
+@@ -31,6 +31,11 @@ extern void fixup_irqs(void);
+ 
+ #ifdef CONFIG_HAVE_KVM
+ extern void kvm_set_posted_intr_wakeup_handler(void (*handler)(void));
++
++#ifdef CONFIG_INTEL_TDX_HOST
++extern void kvm_set_tdx_guest_pmi_handler(void (*handler)(void));
++#endif
++
+ #endif
+ 
+ extern void (*x86_platform_ipi_callback)(void);
+diff --git a/arch/x86/include/asm/irq_vectors.h b/arch/x86/include/asm/irq_vectors.h
+index 82ac0c0a34b1..96f7f6366367 100644
+--- a/arch/x86/include/asm/irq_vectors.h
++++ b/arch/x86/include/asm/irq_vectors.h
+@@ -109,7 +109,11 @@
+ #define TDX_GUEST_EVENT_NOTIFY_VECTOR	0xec
+ #endif
+ 
+-#define LOCAL_TIMER_VECTOR		0xeb
++#if defined(CONFIG_HAVE_KVM) && defined(CONFIG_INTEL_TDX_HOST)
++#define TDX_GUEST_PMI_VECTOR		0xeb
++#endif
++
++#define LOCAL_TIMER_VECTOR		0xea
+ 
+ #define NR_VECTORS			 256
+ 
+diff --git a/arch/x86/kernel/idt.c b/arch/x86/kernel/idt.c
+index c1a5d2e17d2e..1b72ac87f8de 100644
+--- a/arch/x86/kernel/idt.c
++++ b/arch/x86/kernel/idt.c
+@@ -153,6 +153,9 @@ static const __initconst struct idt_data apic_idts[] = {
+ 	INTG(POSTED_INTR_VECTOR,		asm_sysvec_kvm_posted_intr_ipi),
+ 	INTG(POSTED_INTR_WAKEUP_VECTOR,		asm_sysvec_kvm_posted_intr_wakeup_ipi),
+ 	INTG(POSTED_INTR_NESTED_VECTOR,		asm_sysvec_kvm_posted_intr_nested_ipi),
++#ifdef CONFIG_INTEL_TDX_HOST
++	INTG(TDX_GUEST_PMI_VECTOR,		asm_sysvec_kvm_tdx_guest_pmi),
++#endif
+ # endif
+ # ifdef CONFIG_IRQ_WORK
+ 	INTG(IRQ_WORK_VECTOR,			asm_sysvec_irq_work),
+diff --git a/arch/x86/kernel/irq.c b/arch/x86/kernel/irq.c
+index c8cc2af7de6e..6a7cef4a6720 100644
+--- a/arch/x86/kernel/irq.c
++++ b/arch/x86/kernel/irq.c
+@@ -193,6 +193,12 @@ int arch_show_interrupts(struct seq_file *p, int prec)
+ 		seq_printf(p, "%10u ",
+ 			   irq_stats(j)->irq_tdx_event_notify_count);
+ 	seq_puts(p, "  TDX Guest event notification\n");
++#endif
++#if defined(CONFIG_HAVE_KVM) && defined(CONFIG_INTEL_TDX_HOST)
++	seq_printf(p, "%*s", prec, "TGP");
++	for_each_online_cpu(j)
++		seq_printf(p, "%10u ", irq_stats(j)->kvm_tdx_guest_pmis);
++	seq_puts(p, "  TDX Guest performance monitoring interrupts\n");
+ #endif
+ 	return 0;
+ }
+@@ -308,6 +314,18 @@ void kvm_set_posted_intr_wakeup_handler(void (*handler)(void))
+ }
+ EXPORT_SYMBOL_GPL(kvm_set_posted_intr_wakeup_handler);
+ 
++#ifdef CONFIG_INTEL_TDX_HOST
++static void (*kvm_tdx_guest_pmi_handler)(void) = dummy_handler;
++
++void kvm_set_tdx_guest_pmi_handler(void (*handler)(void))
++{
++	if (handler)
++		kvm_tdx_guest_pmi_handler = handler;
++	else
++		kvm_tdx_guest_pmi_handler = dummy_handler;
++}
++EXPORT_SYMBOL_GPL(kvm_set_tdx_guest_pmi_handler);
++#endif
+ /*
+  * Handler for POSTED_INTERRUPT_VECTOR.
+  */
+@@ -335,6 +353,15 @@ DEFINE_IDTENTRY_SYSVEC_SIMPLE(sysvec_kvm_posted_intr_nested_ipi)
+ 	ack_APIC_irq();
+ 	inc_irq_stat(kvm_posted_intr_nested_ipis);
+ }
++
++#ifdef CONFIG_INTEL_TDX_HOST
++DEFINE_IDTENTRY_SYSVEC(sysvec_kvm_tdx_guest_pmi)
++{
++	ack_APIC_irq();
++	inc_irq_stat(kvm_tdx_guest_pmis);
++	kvm_tdx_guest_pmi_handler();
++}
++#endif
+ #endif
+ 
+ 
+-- 
+2.31.1
+

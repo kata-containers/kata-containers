@@ -1,0 +1,149 @@
+From 968f05261a09173de83d0ecb7cfd22a2f0c725a8 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Mon, 15 Mar 2021 01:47:31 -0400
+Subject: [PATCH 0412/1418] KVM: TDX: Restore 4 host MSRs on exit to userspace
+
+They are reset to architectural INIT state during TD exit unconditionally.
+KVM needs to save their values before TD enter and restore them on exit
+to userspace.
+
+Reuse current kvm_user_return mechanism. As SEAM module will change these
+MSRs behind KVM, we introduce a function to update cached values and
+register the user return notifier in this new function.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h |  1 +
+ arch/x86/kvm/vmx/tdx.c          | 33 +++++++++++++++++++++++++++++++++
+ arch/x86/kvm/x86.c              | 27 ++++++++++++++++++++++-----
+ 3 files changed, 56 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index fdda6f2c7b8b..21d5d910d7bf 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1912,6 +1912,7 @@ int kvm_pv_send_ipi(struct kvm *kvm, unsigned long ipi_bitmap_low,
+ int kvm_add_user_return_msr(u32 msr);
+ int kvm_find_user_return_msr(u32 msr);
+ int kvm_set_user_return_msr(unsigned index, u64 val, u64 mask);
++void kvm_user_return_update_cache(unsigned int index, u64 val);
+ 
+ static inline bool kvm_is_supported_user_return_msr(u32 msr)
+ {
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index bced17b1feca..e6f9bb41200c 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -63,6 +63,19 @@ static DEFINE_PER_CPU(struct list_head, associated_tdvcpus);
+ static u64 hkid_mask __ro_after_init;
+ static u8 hkid_start_pos __ro_after_init;
+ 
++struct tdx_uret_msr {
++	u32 msr;
++	unsigned int slot;
++	u64 defval;
++};
++
++static struct tdx_uret_msr tdx_uret_msrs[] = {
++	{.msr = MSR_SYSCALL_MASK,},
++	{.msr = MSR_STAR,},
++	{.msr = MSR_LSTAR,},
++	{.msr = MSR_TSC_AUX,},
++};
++
+ static __always_inline hpa_t set_hkid_to_hpa(hpa_t pa, u16 hkid)
+ {
+ 	pa &= ~hkid_mask;
+@@ -605,6 +618,15 @@ static void tdx_inject_nmi(struct kvm_vcpu *vcpu)
+ 	td_management_write8(to_tdx(vcpu), TD_VCPU_PEND_NMI, 1);
+ }
+ 
++static void tdx_user_return_update_cache(void)
++{
++	int i;
++
++	for (i = 0; i < ARRAY_SIZE(tdx_uret_msrs); i++)
++		kvm_user_return_update_cache(tdx_uret_msrs[i].slot,
++					     tdx_uret_msrs[i].defval);
++}
++
+ static void tdx_restore_host_xsave_state(struct kvm_vcpu *vcpu)
+ {
+ 	struct kvm_tdx *kvm_tdx = to_kvm_tdx(vcpu->kvm);
+@@ -652,6 +674,7 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ 
+ 	tdx_vcpu_enter_exit(vcpu, tdx);
+ 
++	tdx_user_return_update_cache();
+ 	perf_restore_debug_store();
+ 	tdx_restore_host_xsave_state(vcpu);
+ 	tdx->host_state_need_restore = true;
+@@ -2037,5 +2060,15 @@ static int __init tdx_hardware_setup(struct kvm_x86_ops *x86_ops)
+ 	hkid_start_pos = boot_cpu_data.x86_phys_bits;
+ 	hkid_mask = GENMASK_ULL(max_pa - 1, hkid_start_pos);
+ 
++	for (i = 0; i < ARRAY_SIZE(tdx_uret_msrs); i++) {
++		tdx_uret_msrs[i].slot = kvm_find_user_return_msr(tdx_uret_msrs[i].msr);
++		if (tdx_uret_msrs[i].slot == -1) {
++			/* If any MSR isn't supported, it is a KVM bug */
++			pr_err("MSR %x isn't included by kvm_find_user_return_msr\n",
++				tdx_uret_msrs[i].msr);
++			return -EIO;
++		}
++	}
++
+ 	return 0;
+ }
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index b0c10dd0e52c..5144acb00d94 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -420,6 +420,17 @@ static void kvm_user_return_msr_cpu_online(void)
+ 	}
+ }
+ 
++static void kvm_user_return_register_notifier(void)
++{
++	struct kvm_user_return_msrs *msrs = this_cpu_ptr(user_return_msrs);
++
++	if (!msrs->registered) {
++		msrs->urn.on_user_return = kvm_on_user_return;
++		user_return_notifier_register(&msrs->urn);
++		msrs->registered = true;
++	}
++}
++
+ int kvm_set_user_return_msr(unsigned slot, u64 value, u64 mask)
+ {
+ 	unsigned int cpu = smp_processor_id();
+@@ -434,15 +445,21 @@ int kvm_set_user_return_msr(unsigned slot, u64 value, u64 mask)
+ 		return 1;
+ 
+ 	msrs->values[slot].curr = value;
+-	if (!msrs->registered) {
+-		msrs->urn.on_user_return = kvm_on_user_return;
+-		user_return_notifier_register(&msrs->urn);
+-		msrs->registered = true;
+-	}
++	kvm_user_return_register_notifier();
+ 	return 0;
+ }
+ EXPORT_SYMBOL_GPL(kvm_set_user_return_msr);
+ 
++/* Update the cache, "curr", and register the notifier */
++void kvm_user_return_update_cache(unsigned int slot, u64 value)
++{
++	struct kvm_user_return_msrs *msrs = this_cpu_ptr(user_return_msrs);
++
++	msrs->values[slot].curr = value;
++	kvm_user_return_register_notifier();
++}
++EXPORT_SYMBOL_GPL(kvm_user_return_update_cache);
++
+ static void drop_user_return_notifiers(void)
+ {
+ 	unsigned int cpu = smp_processor_id();
+-- 
+2.31.1
+

@@ -1,0 +1,53 @@
+From 792d94503ab708f94dce59e542d02abb29e3864b Mon Sep 17 00:00:00 2001
+From: Jithu Joseph <jithu.joseph@intel.com>
+Date: Thu, 12 May 2022 17:07:59 -0700
+Subject: [PATCH 1358/1418] Revert "platform/x86/intel/ifs: Remove version
+ check during IFS binary load"
+
+This reverts commit 9802773a8ec834ec7c082cdd047c5177c48b6326.
+---
+ drivers/platform/x86/intel/ifs/load.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/drivers/platform/x86/intel/ifs/load.c b/drivers/platform/x86/intel/ifs/load.c
+index 238e372f6763..e65f4fdf5940 100644
+--- a/drivers/platform/x86/intel/ifs/load.c
++++ b/drivers/platform/x86/intel/ifs/load.c
+@@ -260,6 +260,15 @@ static const struct firmware *load_binary(const char *path)
+ 	return fw;
+ }
+ 
++/*
++ * Compare the image version whenever loading a new image.
++ * Load the new image only if it is later or equal than the current version.
++ */
++static bool is_newer_binary(int current_loaded_version, struct ifs_header *new_image_ptr)
++{
++	return current_loaded_version <= new_image_ptr->blob_revision;
++}
++
+ /*
+  * Load ifs image. Before loading ifs module, the ifs image must be located
+  * in /lib/firmware/intel/ifs and named as {family/model/stepping}.{testname}.
+@@ -277,10 +286,18 @@ int load_ifs_binary(void)
+ 	if (!scan_fw)
+ 		return -ENOENT;
+ 
++	/* only reload new scan image for later version than currently loaded */
++	if (!is_newer_binary(ifs_params.loaded_version, (struct ifs_header *)scan_fw->data)) {
++		pr_warn("Refusing to load older binary");
++		ret = -EINVAL;
++		goto out;
++	}
++
+ 	ifs_header_ptr = (struct ifs_header *)scan_fw->data;
+ 	ifs_hash_ptr = (u64)(ifs_header_ptr + 1);
+ 
+ 	ret = scan_chunks_sanity_check();
++out:
+ 	release_firmware(scan_fw);
+ 
+ 	return ret;
+-- 
+2.31.1
+

@@ -1,0 +1,111 @@
+From e1643a29bb8631d3cfe4d64c831e85793688e2e8 Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Mon, 8 Jun 2020 10:12:43 -0700
+Subject: [PATCH 1208/1418] nvdimm/pmem: Enable stray access protection
+
+The persistent memory (PMEM) driver uses the memremap_pages facility to
+provide 'struct page' metadata (vmemmap) for PMEM.  Given that PMEM
+capacity maybe orders of magnitude higher capacity than System RAM it
+presents a large vulnerability surface to stray writes.  Unlike stray
+writes to System RAM, which may result in a crash or other undesirable
+behavior, stray writes to PMEM additionally are more likely to result in
+permanent data loss. Reboot is not a remediation for PMEM corruption
+like it is for System RAM.
+
+Now that all valid kernel access' to PMEM have been annotated with
+{__}pgmap_set_{readwrite,noaccess}() PGMAP_PROTECTION is safe to enable
+in the pmem layer.
+
+Set PGMAP_PROTECTION if pgmap protections are available and set the
+pgmap property of the dax device for it's use.
+
+Internally, the pmem driver uses a cached virtual address,
+pmem->virt_addr (pmem_addr).  Call __pgmap_set_{readwrite,noaccess}()
+directly when PGMAP_PROTECTION is active on those mappings.
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ drivers/nvdimm/pmem.c | 26 ++++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/drivers/nvdimm/pmem.c b/drivers/nvdimm/pmem.c
+index 054154c22899..1c2d47d63228 100644
+--- a/drivers/nvdimm/pmem.c
++++ b/drivers/nvdimm/pmem.c
+@@ -138,6 +138,18 @@ static blk_status_t read_pmem(struct page *page, unsigned int off,
+ 	return BLK_STS_OK;
+ }
+ 
++static void pmem_set_readwrite(struct pmem_device *pmem)
++{
++	if (pmem->pgmap.flags & PGMAP_PROTECTION)
++		__pgmap_set_readwrite(&pmem->pgmap);
++}
++
++static void pmem_set_noaccess(struct pmem_device *pmem)
++{
++	if (pmem->pgmap.flags & PGMAP_PROTECTION)
++		__pgmap_set_noaccess(&pmem->pgmap);
++}
++
+ static blk_status_t pmem_do_read(struct pmem_device *pmem,
+ 			struct page *page, unsigned int page_off,
+ 			sector_t sector, unsigned int len)
+@@ -149,7 +161,11 @@ static blk_status_t pmem_do_read(struct pmem_device *pmem,
+ 	if (unlikely(is_bad_pmem(&pmem->bb, sector, len)))
+ 		return BLK_STS_IOERR;
+ 
++	/* Enable direct use of pmem->virt_addr */
++	pmem_set_readwrite(pmem);
+ 	rc = read_pmem(page, page_off, pmem_addr, len);
++	pmem_set_noaccess(pmem);
++
+ 	flush_dcache_page(page);
+ 	return rc;
+ }
+@@ -181,11 +197,15 @@ static blk_status_t pmem_do_write(struct pmem_device *pmem,
+ 	 * after clear poison.
+ 	 */
+ 	flush_dcache_page(page);
++
++	/* Enable direct use of pmem->virt_addr */
++	pmem_set_readwrite(pmem);
+ 	write_pmem(pmem_addr, page, page_off, len);
+ 	if (unlikely(bad_pmem)) {
+ 		rc = pmem_clear_poison(pmem, pmem_off, len);
+ 		write_pmem(pmem_addr, page, page_off, len);
+ 	}
++	pmem_set_noaccess(pmem);
+ 
+ 	return rc;
+ }
+@@ -406,6 +426,8 @@ static int pmem_attach_disk(struct device *dev,
+ 	pmem->pfn_flags = PFN_DEV;
+ 	if (is_nd_pfn(dev)) {
+ 		pmem->pgmap.type = MEMORY_DEVICE_FS_DAX;
++		if (pgmap_protection_available())
++			pmem->pgmap.flags |= PGMAP_PROTECTION;
+ 		addr = devm_memremap_pages(dev, &pmem->pgmap);
+ 		pfn_sb = nd_pfn->pfn_sb;
+ 		pmem->data_offset = le64_to_cpu(pfn_sb->dataoff);
+@@ -419,6 +441,8 @@ static int pmem_attach_disk(struct device *dev,
+ 		pmem->pgmap.range.end = res->end;
+ 		pmem->pgmap.nr_range = 1;
+ 		pmem->pgmap.type = MEMORY_DEVICE_FS_DAX;
++		if (pgmap_protection_available())
++			pmem->pgmap.flags |= PGMAP_PROTECTION;
+ 		addr = devm_memremap_pages(dev, &pmem->pgmap);
+ 		pmem->pfn_flags |= PFN_MAP;
+ 		bb_range = pmem->pgmap.range;
+@@ -458,6 +482,8 @@ static int pmem_attach_disk(struct device *dev,
+ 		return PTR_ERR(dax_dev);
+ 	}
+ 	dax_write_cache(dax_dev, nvdimm_has_cache(nd_region));
++	if (pmem->pgmap.flags & PGMAP_PROTECTION)
++		set_dax_pgmap(dax_dev, &pmem->pgmap);
+ 	pmem->dax_dev = dax_dev;
+ 
+ 	device_add_disk(dev, disk, pmem_attribute_groups);
+-- 
+2.31.1
+

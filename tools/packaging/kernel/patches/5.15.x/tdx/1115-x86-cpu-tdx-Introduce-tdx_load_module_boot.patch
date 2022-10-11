@@ -1,0 +1,80 @@
+From aceccdabe1e82f82acf3333487b9ab8970e1b088 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Thu, 17 Feb 2022 14:20:58 +0800
+Subject: [PATCH 1115/1418] x86/cpu/tdx: Introduce tdx_load_module_boot()
+
+... and put all the stuff related to load TDX module into it, since it
+will be dropped if TDX module is loaded by BIOS.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx.c | 34 +++++++++++++++++++---------------
+ 1 file changed, 19 insertions(+), 15 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index ce3222a734dd..67b17316ec6c 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -901,31 +901,36 @@ static int tdx_load_module(
+ 	return ret;
+ }
+ 
++static int tdx_load_module_boot(void)
++{
++	struct cpio_data module, sigstruct;
++
++	pr_info("Loading TDX module via P-SEAMLDR with %s and %s\n",
++		tdx_module_name, tdx_sigstruct_name);
++
++	if (!seam_get_firmware(&module, tdx_module_name) ||
++	    !seam_get_firmware(&sigstruct, tdx_sigstruct_name)) {
++		pr_err("no TDX module or sigstruct found %s/%s\n",
++		       tdx_module_name, tdx_sigstruct_name);
++		return -ENOENT;
++	}
++
++	return tdx_load_module(module.data, module.size, sigstruct.data,
++			       sigstruct.size, SEAMLDR_SCENARIO_LOAD);
++}
++
+ /*
+  * Look for seam module binary in built-in firmware and initrd, and load it on
+  * all CPUs through P-SEAMLDR.
+  */
+ static int __init tdx_arch_init(void)
+ {
+-	struct cpio_data module, sigstruct;
+ 	int vmxoff_err;
+ 	int ret = 0;
+ 
+ 	if (!boot_cpu_has(X86_FEATURE_SEAM))
+ 		goto out_free;
+ 
+-	pr_info("Loading TDX module via P-SEAMLDR with %s and %s\n",
+-		tdx_module_name, tdx_sigstruct_name);
+-
+-	ret = -EINVAL;
+-	if (!seam_get_firmware(&module, tdx_module_name) ||
+-	    !seam_get_firmware(&sigstruct, tdx_sigstruct_name)) {
+-		pr_err("no TDX module or sigstruct found %s/%s\n",
+-				tdx_module_name, tdx_sigstruct_name);
+-		ret = -ENOENT;
+-		goto out_free;
+-	}
+-
+ 	ret = tdx_sys_info_alloc(&tdx_tdsysinfo, &tdx_cmrs);
+ 	if (ret)
+ 		return -ENOMEM;
+@@ -953,8 +958,7 @@ static int __init tdx_arch_init(void)
+ 	if (ret)
+ 		goto out;
+ 
+-	ret = tdx_load_module(module.data, module.size,
+-			sigstruct.data, sigstruct.size, SEAMLDR_SCENARIO_LOAD);
++	ret = tdx_load_module_boot();
+ 	if (ret) {
+ 		pr_info("Failed to load TDX module.\n");
+ 		goto out;
+-- 
+2.31.1
+

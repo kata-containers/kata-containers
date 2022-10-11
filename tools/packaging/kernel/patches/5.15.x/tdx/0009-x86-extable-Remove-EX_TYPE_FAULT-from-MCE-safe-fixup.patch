@@ -1,0 +1,42 @@
+From d313225ae139bc94fe68dcfc5c5abb98c31d5e5a Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 8 Sep 2021 15:29:24 +0200
+Subject: [PATCH 0009/1418] x86/extable: Remove EX_TYPE_FAULT from MCE safe
+ fixups
+
+Now that the MC safe copy and FPU have been converted to use the MCE safe
+fixup types remove EX_TYPE_FAULT from the list of types which MCE considers
+to be safe to be recovered in kernel.
+
+This removes the SGX exception handling of ENCLS from the #MC safe
+handling, but according to the SGX wizards the current SGX implementations
+cannot survive #MC on ENCLS:
+
+  https://lore.kernel.org/r/YS+upEmTfpZub3s9@google.com
+
+The code relies on the trap number being stored if ENCLS raised an
+exception. That's still working, but it does no longer trick the MCE code
+into assuming that #MC is handled correctly for ENCLS.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20210908132525.445255957@linutronix.de
+---
+ arch/x86/kernel/cpu/mce/severity.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/mce/severity.c b/arch/x86/kernel/cpu/mce/severity.c
+index d9b77a74f8d2..f60bbaff9f65 100644
+--- a/arch/x86/kernel/cpu/mce/severity.c
++++ b/arch/x86/kernel/cpu/mce/severity.c
+@@ -277,7 +277,6 @@ static int error_context(struct mce *m, struct pt_regs *regs)
+ 			return IN_KERNEL;
+ 		m->kflags |= MCE_IN_KERNEL_COPYIN;
+ 		fallthrough;
+-	case EX_TYPE_FAULT:
+ 	case EX_TYPE_FAULT_MCE_SAFE:
+ 	case EX_TYPE_DEFAULT_MCE_SAFE:
+ 		m->kflags |= MCE_IN_KERNEL_RECOV;
+-- 
+2.31.1
+

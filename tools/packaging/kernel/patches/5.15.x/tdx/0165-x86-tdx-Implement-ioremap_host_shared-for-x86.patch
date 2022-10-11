@@ -1,0 +1,149 @@
+From 7f87e9d0adffbe6a78082db96448084fb1c00258 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Tue, 13 Jul 2021 17:48:33 -0700
+Subject: [PATCH 0165/1418] x86/tdx: Implement ioremap_host_shared for x86
+
+Implement ioremap_host_shared for x86. In TDX most memory is encrypted,
+but some memory that is used to communicate with the host must
+be declared shared with special page table attributes and a
+special hypercall. Previously all ioremaped memory was declared
+shared, but this leads to various BIOS tables and other private
+state being shared, which is a security risk.
+
+This patch replaces the unconditional ioremap sharing with an explicit
+ioremap_host_shared that enables sharing.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/io.h |  4 ++++
+ arch/x86/mm/ioremap.c     | 41 ++++++++++++++++++++++++++++++---------
+ 2 files changed, 36 insertions(+), 9 deletions(-)
+
+diff --git a/arch/x86/include/asm/io.h b/arch/x86/include/asm/io.h
+index 67e0c4a0a0f4..521b239c013f 100644
+--- a/arch/x86/include/asm/io.h
++++ b/arch/x86/include/asm/io.h
+@@ -380,6 +380,10 @@ extern void __iomem *ioremap_wc(resource_size_t offset, unsigned long size);
+ extern void __iomem *ioremap_wt(resource_size_t offset, unsigned long size);
+ #define ioremap_wt ioremap_wt
+ 
++extern void __iomem *ioremap_host_shared(resource_size_t offset,
++					 unsigned long size);
++#define ioremap_host_shared ioremap_host_shared
++
+ extern bool is_early_ioremap_ptep(pte_t *ptep);
+ 
+ #define IO_SPACE_LIMIT 0xffff
+diff --git a/arch/x86/mm/ioremap.c b/arch/x86/mm/ioremap.c
+index 83daa3f8f39c..a83a69045f61 100644
+--- a/arch/x86/mm/ioremap.c
++++ b/arch/x86/mm/ioremap.c
+@@ -178,7 +178,8 @@ static void __ioremap_check_mem(resource_size_t addr, unsigned long size,
+  */
+ static void __iomem *
+ __ioremap_caller(resource_size_t phys_addr, unsigned long size,
+-		 enum page_cache_mode pcm, void *caller, bool encrypted)
++		 enum page_cache_mode pcm, void *caller, bool encrypted,
++		 bool shared)
+ {
+ 	unsigned long offset, vaddr;
+ 	resource_size_t last_addr;
+@@ -248,7 +249,7 @@ __ioremap_caller(resource_size_t phys_addr, unsigned long size,
+ 	prot = PAGE_KERNEL_IO;
+ 	if ((io_desc.flags & IORES_MAP_ENCRYPTED) || encrypted)
+ 		prot = pgprot_encrypted(prot);
+-	else if (cc_platform_has(CC_ATTR_GUEST_SHARED_MAPPING_INIT))
++	else if (shared)
+ 		prot = pgprot_cc_guest(prot);
+ 
+ 	switch (pcm) {
+@@ -340,7 +341,8 @@ void __iomem *ioremap(resource_size_t phys_addr, unsigned long size)
+ 	enum page_cache_mode pcm = _PAGE_CACHE_MODE_UC_MINUS;
+ 
+ 	return __ioremap_caller(phys_addr, size, pcm,
+-				__builtin_return_address(0), false);
++				__builtin_return_address(0), false,
++				false);
+ }
+ EXPORT_SYMBOL(ioremap);
+ 
+@@ -373,7 +375,8 @@ void __iomem *ioremap_uc(resource_size_t phys_addr, unsigned long size)
+ 	enum page_cache_mode pcm = _PAGE_CACHE_MODE_UC;
+ 
+ 	return __ioremap_caller(phys_addr, size, pcm,
+-				__builtin_return_address(0), false);
++				__builtin_return_address(0), false,
++				false);
+ }
+ EXPORT_SYMBOL_GPL(ioremap_uc);
+ 
+@@ -390,10 +393,29 @@ EXPORT_SYMBOL_GPL(ioremap_uc);
+ void __iomem *ioremap_wc(resource_size_t phys_addr, unsigned long size)
+ {
+ 	return __ioremap_caller(phys_addr, size, _PAGE_CACHE_MODE_WC,
+-					__builtin_return_address(0), false);
++					__builtin_return_address(0), false,
++					false);
+ }
+ EXPORT_SYMBOL(ioremap_wc);
+ 
++/**
++ * ioremap_host_shared - map memory into CPU space shared with host
++ * @phys_addr:	bus address of the memory
++ * @size:	size of the resource to map
++ *
++ * This version of ioremap ensures that the memory is marked shared
++ * with the host. This is useful for confidential guests.
++ *
++ * Must be freed with iounmap.
++ */
++void __iomem *ioremap_host_shared(resource_size_t phys_addr, unsigned long size)
++{
++	return __ioremap_caller(phys_addr, size, _PAGE_CACHE_MODE_UC,
++			__builtin_return_address(0), false,
++			cc_platform_has(CC_ATTR_GUEST_SHARED_MAPPING_INIT));
++}
++EXPORT_SYMBOL(ioremap_host_shared);
++
+ /**
+  * ioremap_wt	-	map memory into CPU space write through
+  * @phys_addr:	bus address of the memory
+@@ -407,21 +429,22 @@ EXPORT_SYMBOL(ioremap_wc);
+ void __iomem *ioremap_wt(resource_size_t phys_addr, unsigned long size)
+ {
+ 	return __ioremap_caller(phys_addr, size, _PAGE_CACHE_MODE_WT,
+-					__builtin_return_address(0), false);
++					__builtin_return_address(0), false,
++					false);
+ }
+ EXPORT_SYMBOL(ioremap_wt);
+ 
+ void __iomem *ioremap_encrypted(resource_size_t phys_addr, unsigned long size)
+ {
+ 	return __ioremap_caller(phys_addr, size, _PAGE_CACHE_MODE_WB,
+-				__builtin_return_address(0), true);
++				__builtin_return_address(0), true, false);
+ }
+ EXPORT_SYMBOL(ioremap_encrypted);
+ 
+ void __iomem *ioremap_cache(resource_size_t phys_addr, unsigned long size)
+ {
+ 	return __ioremap_caller(phys_addr, size, _PAGE_CACHE_MODE_WB,
+-				__builtin_return_address(0), false);
++				__builtin_return_address(0), false, false);
+ }
+ EXPORT_SYMBOL(ioremap_cache);
+ 
+@@ -430,7 +453,7 @@ void __iomem *ioremap_prot(resource_size_t phys_addr, unsigned long size,
+ {
+ 	return __ioremap_caller(phys_addr, size,
+ 				pgprot2cachemode(__pgprot(prot_val)),
+-				__builtin_return_address(0), false);
++				__builtin_return_address(0), false, false);
+ }
+ EXPORT_SYMBOL(ioremap_prot);
+ 
+-- 
+2.31.1
+

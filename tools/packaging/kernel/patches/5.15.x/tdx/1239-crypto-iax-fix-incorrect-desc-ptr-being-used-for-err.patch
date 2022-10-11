@@ -1,0 +1,34 @@
+From cf1f46490ccddd9729ac868a025c6aae41166ba5 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Wed, 23 Mar 2022 17:48:10 -0700
+Subject: [PATCH 1239/1418] crypto: iax: fix incorrect desc ptr being used for
+ error out
+
+Error output using the wrong ptr for error status. Change to idxd_desc
+which is the ptr should be checked.
+
+Cc: Tom Zanussi <tom.zanussi@intel.com>
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/crypto/iax/iax_crypto_main.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/crypto/iax/iax_crypto_main.c b/drivers/crypto/iax/iax_crypto_main.c
+index aa2c4bb6c4c0..02e2e88adb3a 100644
+--- a/drivers/crypto/iax/iax_crypto_main.c
++++ b/drivers/crypto/iax/iax_crypto_main.c
+@@ -798,9 +798,9 @@ static int iax_decompress(struct crypto_tfm *tfm,
+ 	idxd_desc = idxd_alloc_desc(wq, IDXD_OP_BLOCK);
+ 	if (IS_ERR(idxd_desc)) {
+ 		pr_err("%s: idxd descriptor allocation failed\n", __func__);
+-		pr_warn("%s: iax decompress failed: ret=%ld\n", __func__, PTR_ERR(desc));
++		pr_warn("%s: iax decompress failed: ret=%ld\n", __func__, PTR_ERR(idxd_desc));
+ 
+-		return PTR_ERR(desc);
++		return PTR_ERR(idxd_desc);
+ 	}
+ 	desc = idxd_desc->iax_hw;
+ 
+-- 
+2.31.1
+

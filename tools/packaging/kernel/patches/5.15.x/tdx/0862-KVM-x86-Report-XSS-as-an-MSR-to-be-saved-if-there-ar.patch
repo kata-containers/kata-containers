@@ -1,0 +1,53 @@
+From 003f94019bead0c8d254312d813e3ad49e6f4406 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Wed, 22 Jul 2020 09:03:44 -0700
+Subject: [PATCH 0862/1418] KVM: x86: Report XSS as an MSR to be saved if there
+ are supported features
+
+Add MSR_IA32_XSS to the list of MSRs reported to userspace if
+supported_xss is non-zero, i.e. KVM supports at least one XSS based
+feature.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Co-developed-by: Yang Weijiang <weijiang.yang@intel.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/x86.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index cefd0797843f..c9303e152477 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -1441,6 +1441,8 @@ static const u32 msrs_to_save_all[] = {
+ 	MSR_F15H_PERF_CTL3, MSR_F15H_PERF_CTL4, MSR_F15H_PERF_CTL5,
+ 	MSR_F15H_PERF_CTR0, MSR_F15H_PERF_CTR1, MSR_F15H_PERF_CTR2,
+ 	MSR_F15H_PERF_CTR3, MSR_F15H_PERF_CTR4, MSR_F15H_PERF_CTR5,
++
++	MSR_IA32_XSS,
+ };
+ 
+ static u32 msrs_to_save[ARRAY_SIZE(msrs_to_save_all)];
+@@ -6501,6 +6503,10 @@ static void kvm_init_msr_list(void)
+ 			    min(INTEL_PMC_MAX_GENERIC, x86_pmu.num_counters_gp))
+ 				continue;
+ 			break;
++		case MSR_IA32_XSS:
++			if (!supported_xss)
++				continue;
++			break;
+ 		default:
+ 			break;
+ 		}
+@@ -11376,6 +11382,8 @@ int kvm_arch_hardware_setup(void *opaque)
+ 
+ 	if (!kvm_cpu_cap_has(X86_FEATURE_XSAVES))
+ 		supported_xss = 0;
++	else
++		supported_xss &= host_xss;
+ 
+ #define __kvm_cpu_cap_has(UNUSED_, f) kvm_cpu_cap_has(f)
+ 	cr4_reserved_bits = __cr4_reserved_bits(__kvm_cpu_cap_has, UNUSED_);
+-- 
+2.31.1
+

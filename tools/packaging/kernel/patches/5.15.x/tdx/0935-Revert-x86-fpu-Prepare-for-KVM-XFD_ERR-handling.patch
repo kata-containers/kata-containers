@@ -1,0 +1,38 @@
+From 97af8ac42872e56d9973448f5622dfd682c7f1fe Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 18:03:11 -0800
+Subject: [PATCH 0935/1418] Revert "x86/fpu: Prepare for KVM XFD_ERR handling"
+
+This reverts commit 26dbe7d0708462240b3e901ddd66ed6434681566.
+---
+ arch/x86/include/asm/fpu/types.h | 14 --------------
+ 1 file changed, 14 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/types.h b/arch/x86/include/asm/fpu/types.h
+index dd20cabe8faf..861cffca3209 100644
+--- a/arch/x86/include/asm/fpu/types.h
++++ b/arch/x86/include/asm/fpu/types.h
+@@ -527,20 +527,6 @@ struct fpu_guest {
+ 	 */
+ 	u64				realloc_request;
+ 
+-	/*
+-	 * @xfd_err:			Guest XFD_ERR used by KVM
+-	 */
+-	u64				xfd_err;
+-
+-	/*
+-	 * @xfd_err_dirty:		Indicator for XFD_ERR is dirty
+-	 *
+-	 *				Set by KVM when it's preempted if
+-	 *				guest XFD_ERR is non-zero. After
+-	 *				that, XFD_ERR is dirty for KVM.
+-	 */
+-	bool				xfd_err_dirty;
+-
+ 	/*
+ 	 * @fpstate:			Pointer to the allocated guest fpstate
+ 	 */
+-- 
+2.31.1
+

@@ -1,0 +1,41 @@
+From 3e4b8d649e69e5ca8c3e9e8fb51ff0b74b8afbbe Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 15 Oct 2021 03:16:02 +0200
+Subject: [PATCH 0026/1418] x86/fpu: Remove pointless memset in fpu_clone()
+
+Zeroing the forked task's FPU registers buffer to avoid leaking init
+optimized stale data into the clone is a pointless exercise for the case
+where the current task has TIF_NEED_FPU_LOAD set. In that case, the FPU
+registers state is copied from current's FPU register buffer which can
+contain stale init optimized data as well.
+
+The alledged information leak is non-existant because this stale init
+optimized data is used nowhere and cannot leak anywhere.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211015011538.722854569@linutronix.de
+---
+ arch/x86/kernel/fpu/core.c | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 7ada7bd03a32..191269edac97 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -259,12 +259,6 @@ int fpu_clone(struct task_struct *dst)
+ 	if (!cpu_feature_enabled(X86_FEATURE_FPU))
+ 		return 0;
+ 
+-	/*
+-	 * Don't let 'init optimized' areas of the XSAVE area
+-	 * leak into the child task:
+-	 */
+-	memset(&dst_fpu->state.xsave, 0, fpu_kernel_xstate_size);
+-
+ 	/*
+ 	 * If the FPU registers are not owned by current just memcpy() the
+ 	 * state.  Otherwise save the FPU registers directly into the
+-- 
+2.31.1
+

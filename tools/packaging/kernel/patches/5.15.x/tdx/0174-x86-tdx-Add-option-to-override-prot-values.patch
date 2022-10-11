@@ -1,0 +1,71 @@
+From 164f9d33f2de82268853f362dffeecca18cf43ec Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Wed, 14 Jul 2021 22:37:34 -0700
+Subject: [PATCH 0174/1418] x86/tdx: Add option to override prot values
+
+The kernel internally uses cc_platform_has to configure various behavior
+specific to confidential guests. Allow to clear a single value. This is
+mainly useful for debugging and not very user friendly because the hex
+values from the include file have to be used. But for debugging it's
+good enough and it matches the existing clear_cpuid option.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ Documentation/admin-guide/kernel-parameters.txt |  8 ++++++++
+ arch/x86/kernel/cc_platform.c                   | 17 +++++++++++++++++
+ 2 files changed, 25 insertions(+)
+
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index a2a3e3fc7e7f..5906f1d33a19 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -6319,6 +6319,14 @@
+ 			default x2apic cluster mode on platforms
+ 			supporting x2apic.
+ 
++	x86_cc_clear=val [X86-64]
++			Clear a Confidential Computing (CC) setting for x86
++			platforms. See include/linux/cc_platform.h for the
++			allowed values. Only a single value can be overridden.
++			Note that invalid values here may break the kernel,
++			this is mainly for debugging. Clearing protections
++			may cause security holes.
++
+ 	xen_512gb_limit		[KNL,X86-64,XEN]
+ 			Restricts the kernel running paravirtualized under Xen
+ 			to use only up to 512 GB of RAM. The reason to do so is
+diff --git a/arch/x86/kernel/cc_platform.c b/arch/x86/kernel/cc_platform.c
+index deac0a7d7d37..3ac38f9dd33a 100644
+--- a/arch/x86/kernel/cc_platform.c
++++ b/arch/x86/kernel/cc_platform.c
+@@ -14,9 +14,26 @@
+ #include <asm/tdx.h>
+ #include <asm/processor.h>
+ 
++#ifdef CONFIG_INTEL_TDX_GUEST
++
++unsigned int x86_disable_cc = -1;
++
++static int __init x86_cc_clear_setup(char *arg)
++{
++	get_option(&arg, &x86_disable_cc);
++
++	return 1;
++}
++__setup("x86_cc_clear=", x86_cc_clear_setup);
++
++#endif
++
+ static bool intel_cc_platform_has(enum cc_attr attr)
+ {
+ #ifdef CONFIG_INTEL_TDX_GUEST
++	if (attr == x86_disable_cc)
++		return false;
++
+ 	switch (attr) {
+ 	case CC_ATTR_GUEST_TDX:
+ 	case CC_ATTR_GUEST_UNROLL_STRING_IO:
+-- 
+2.31.1
+

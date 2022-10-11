@@ -1,0 +1,79 @@
+From 9188bb3226b64eacae0b2ec873ad410fc8d6c755 Mon Sep 17 00:00:00 2001
+From: Tom Lendacky <thomas.lendacky@amd.com>
+Date: Wed, 8 Sep 2021 17:58:35 -0500
+Subject: [PATCH 0119/1418] powerpc/pseries/svm: Add a powerpc version of
+ cc_platform_has()
+
+Introduce a powerpc version of the cc_platform_has() function. This will
+be used to replace the powerpc mem_encrypt_active() implementation, so
+the implementation will initially only support the CC_ATTR_MEM_ENCRYPT
+attribute.
+
+Signed-off-by: Tom Lendacky <thomas.lendacky@amd.com>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Acked-by: Michael Ellerman <mpe@ellerman.id.au>
+Link: https://lkml.kernel.org/r/20210928191009.32551-5-bp@alien8.de
+---
+ arch/powerpc/platforms/pseries/Kconfig       |  1 +
+ arch/powerpc/platforms/pseries/Makefile      |  2 ++
+ arch/powerpc/platforms/pseries/cc_platform.c | 26 ++++++++++++++++++++
+ 3 files changed, 29 insertions(+)
+ create mode 100644 arch/powerpc/platforms/pseries/cc_platform.c
+
+diff --git a/arch/powerpc/platforms/pseries/Kconfig b/arch/powerpc/platforms/pseries/Kconfig
+index 5e037df2a3a1..2e57391e0778 100644
+--- a/arch/powerpc/platforms/pseries/Kconfig
++++ b/arch/powerpc/platforms/pseries/Kconfig
+@@ -159,6 +159,7 @@ config PPC_SVM
+ 	select SWIOTLB
+ 	select ARCH_HAS_MEM_ENCRYPT
+ 	select ARCH_HAS_FORCE_DMA_UNENCRYPTED
++	select ARCH_HAS_CC_PLATFORM
+ 	help
+ 	 There are certain POWER platforms which support secure guests using
+ 	 the Protected Execution Facility, with the help of an Ultravisor
+diff --git a/arch/powerpc/platforms/pseries/Makefile b/arch/powerpc/platforms/pseries/Makefile
+index 4cda0ef87be0..41d8aee98da4 100644
+--- a/arch/powerpc/platforms/pseries/Makefile
++++ b/arch/powerpc/platforms/pseries/Makefile
+@@ -31,3 +31,5 @@ obj-$(CONFIG_FA_DUMP)		+= rtas-fadump.o
+ 
+ obj-$(CONFIG_SUSPEND)		+= suspend.o
+ obj-$(CONFIG_PPC_VAS)		+= vas.o
++
++obj-$(CONFIG_ARCH_HAS_CC_PLATFORM)	+= cc_platform.o
+diff --git a/arch/powerpc/platforms/pseries/cc_platform.c b/arch/powerpc/platforms/pseries/cc_platform.c
+new file mode 100644
+index 000000000000..e8021af83a19
+--- /dev/null
++++ b/arch/powerpc/platforms/pseries/cc_platform.c
+@@ -0,0 +1,26 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Confidential Computing Platform Capability checks
++ *
++ * Copyright (C) 2021 Advanced Micro Devices, Inc.
++ *
++ * Author: Tom Lendacky <thomas.lendacky@amd.com>
++ */
++
++#include <linux/export.h>
++#include <linux/cc_platform.h>
++
++#include <asm/machdep.h>
++#include <asm/svm.h>
++
++bool cc_platform_has(enum cc_attr attr)
++{
++	switch (attr) {
++	case CC_ATTR_MEM_ENCRYPT:
++		return is_secure_guest();
++
++	default:
++		return false;
++	}
++}
++EXPORT_SYMBOL_GPL(cc_platform_has);
+-- 
+2.31.1
+

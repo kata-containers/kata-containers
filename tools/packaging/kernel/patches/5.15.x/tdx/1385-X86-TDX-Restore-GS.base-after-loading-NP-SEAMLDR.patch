@@ -1,0 +1,117 @@
+From aecd44a53307db27107a7c5bd9af8bb2c7486716 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Tue, 10 May 2022 16:13:07 +0800
+Subject: [PATCH 1385/1418] X86: TDX: Restore GS.base after loading NP-SEAMLDR
+
+NP-SEAMLDR spec v0.97 changed segment restoring behavior as
+below:
+
+Segment selectors are reloaded to recovery them before EXIT
+from the NP-SEAMLDR ACM to kernel.
+
+Above behavior also reset GS/FS base to 0 when return to
+kernel, this breaks kernel's NMI and interrupt handler which
+rely on gs to access the PER_CPU data.
+
+The common way that do GS.base restoring covers normal
+interrupt case but can NOT save NMIs, because NMI handler is
+called after return to kernel immediately if a NMI is
+pending there, before the code of restoring GS.base getting
+chance to run.
+
+Restore the GS.base in NMI handler to fix this issue, no
+additional stack space is consumed so the nested NMI
+handling code should still working as well.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/entry/entry_64.S            | 14 ++++++++++++++
+ arch/x86/kernel/cpu/tdx/np-seamldr.S | 11 +++++++++++
+ arch/x86/kernel/cpu/tdx/p-seamldr.c  |  6 ++++++
+ 3 files changed, 31 insertions(+)
+
+diff --git a/arch/x86/entry/entry_64.S b/arch/x86/entry/entry_64.S
+index 8c14760e8a04..d7ed014d29e0 100644
+--- a/arch/x86/entry/entry_64.S
++++ b/arch/x86/entry/entry_64.S
+@@ -1361,6 +1361,20 @@ repeat_nmi:
+ 	subq	$(5*8), %rsp
+ end_repeat_nmi:
+ 
++#ifdef CONFIG_INTEL_TDX_HOST
++	cmpq	$0, np_seamldr_saved_gs_base(%rip)
++	jz      .Lnmi_skip_npseamldr_gsbase_fixup
++
++	/* CR4.FSGSBASE is cleared after return from NP-SEAMLDR */
++	movq    %cr4, %rax
++	orq     $X86_CR4_FSGSBASE, %rax
++	movq    %rax, %cr4
++
++	movq	np_seamldr_saved_gs_base(%rip), %rax
++	wrgsbase %rax
++.Lnmi_skip_npseamldr_gsbase_fixup:
++#endif
++
+ 	/*
+ 	 * Everything below this point can be preempted by a nested NMI.
+ 	 * If this happens, then the inner NMI will change the "iret"
+diff --git a/arch/x86/kernel/cpu/tdx/np-seamldr.S b/arch/x86/kernel/cpu/tdx/np-seamldr.S
+index af12694c1611..e7f860ad242d 100644
+--- a/arch/x86/kernel/cpu/tdx/np-seamldr.S
++++ b/arch/x86/kernel/cpu/tdx/np-seamldr.S
+@@ -10,6 +10,7 @@
+ #include <asm/unwind_hints.h>
+ #include <asm/segment.h>
+ #include <asm/errno.h>
++#include <asm/msr-index.h>
+ 
+ /*
+  * u64 np_seamldr_launch(unsigned long seamldr_pa, unsigned long seamldr_size)
+@@ -79,6 +80,9 @@ SYM_FUNC_START(np_seamldr_launch)
+ 	 */
+ 	pushfq
+ 
++	rdgsbase %rax
++	movq	%rax, np_seamldr_saved_gs_base(%rip)
++
+ 	/*
+ 	 * The NP-SEAMLDR unconditionally sets CR4.PCIDE = 0 and restores CR3
+ 	 * from %r11.  If CR4.PCIDE = 0, CR3 bit 3 and bit 4 are interpreted as
+@@ -223,6 +227,10 @@ SYM_FUNC_START(np_seamldr_launch)
+ 	popq	%rax
+ 	movq	%rax, %cr3	/* Restore CR3.PCID */
+ 
++	movq	np_seamldr_saved_gs_base(%rip), %rax
++	wrgsbase %rax
++	movq	$0, np_seamldr_saved_gs_base(%rip)
++
+ 	popfq	/* Restore system/control flags and unmask interrupts. */
+ 
+ 	movq	%r9, %rax	/* Return value from NP-SEAMLDR is in %r9 */
+@@ -281,3 +289,6 @@ saved_rbp:
+ 
+ SYM_DATA(np_seamldr_saved_cr4, .quad 0)
+ SYM_DATA(np_seamldr_saved_cr0, .quad 0)
++
++.data
++SYM_DATA(np_seamldr_saved_gs_base, .quad 0)
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.c b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+index 35ff2627ed02..027222e11f79 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.c
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+@@ -173,6 +173,12 @@ static int __init np_seamldr_die_notify(struct notifier_block *nb,
+ 		pr_err("ip 0x%lx %pS cs 0x%lx ss 0x%lx\n",
+ 			iret->ip, (void *)iret->ip, iret->cs, iret->ss);
+ 		regs->cs = __KERNEL_CS;
++
++		/*
++		 * Fix the ss due to the same reason as "rdfsbase" case above
++		 * because the rdfsbase is fixed in NMI ASM handler ASM already.
++		 */
++		regs->ss = __KERNEL_DS;
+ 		iret->cs = __KERNEL_CS;
+ 		iret->ss = __KERNEL_DS;
+ 		return NOTIFY_STOP;
+-- 
+2.31.1
+

@@ -1,0 +1,42 @@
+From d116b98cb38cfbbcef6caff5899ba75b9f69f35c Mon Sep 17 00:00:00 2001
+From: David Howells <dhowells@redhat.com>
+Date: Fri, 11 Mar 2022 13:24:08 +0000
+Subject: [PATCH 1291/1418] watch_queue: Fix to always request a pow-of-2 pipe
+ ring size
+
+The pipe ring size must always be a power of 2 as the head and tail
+pointers are masked off by AND'ing with the size of the ring - 1.
+watch_queue_set_size(), however, lets you specify any number of notes
+between 1 and 511.  This number is passed through to pipe_resize_ring()
+without checking/forcing its alignment.
+
+Fix this by rounding the number of slots required up to the nearest
+power of two.  The request is meant to guarantee that at least that many
+notifications can be generated before the queue is full, so rounding
+down isn't an option, but, alternatively, it may be better to give an
+error if we aren't allowed to allocate that much ring space.
+
+Fixes: c73be61cede5 ("pipe: Add general notification queue support")
+Reported-by: Jann Horn <jannh@google.com>
+Signed-off-by: David Howells <dhowells@redhat.com>
+Signed-off-by: Linus Torvalds <torvalds@linux-foundation.org>
+---
+ kernel/watch_queue.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kernel/watch_queue.c b/kernel/watch_queue.c
+index dfb3a7e28280..4bcd400984a7 100644
+--- a/kernel/watch_queue.c
++++ b/kernel/watch_queue.c
+@@ -244,7 +244,7 @@ long watch_queue_set_size(struct pipe_inode_info *pipe, unsigned int nr_notes)
+ 		goto error;
+ 	}
+ 
+-	ret = pipe_resize_ring(pipe, nr_notes);
++	ret = pipe_resize_ring(pipe, roundup_pow_of_two(nr_notes));
+ 	if (ret < 0)
+ 		goto error;
+ 
+-- 
+2.31.1
+

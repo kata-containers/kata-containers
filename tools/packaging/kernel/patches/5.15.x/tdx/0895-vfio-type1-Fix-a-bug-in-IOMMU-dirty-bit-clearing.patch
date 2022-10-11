@@ -1,0 +1,52 @@
+From d67ae90f35774a82da7fc7aca5ca88b87007763b Mon Sep 17 00:00:00 2001
+From: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Date: Tue, 13 Jul 2021 15:09:50 -0700
+Subject: [PATCH 0895/1418] vfio/type1: Fix a bug in IOMMU dirty bit clearing
+
+Because of this bug, the IOMMU dirty bit was not getting cleared and
+IOMMU driver reports a lot of dirty pages and VM migration doesn't
+converge.
+
+Signed-off-by: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+---
+ drivers/vfio/vfio_iommu_type1.c | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/vfio/vfio_iommu_type1.c b/drivers/vfio/vfio_iommu_type1.c
+index 89cad3a42155..24346b8bbd58 100644
+--- a/drivers/vfio/vfio_iommu_type1.c
++++ b/drivers/vfio/vfio_iommu_type1.c
+@@ -1370,14 +1370,6 @@ static int vfio_iova_dirty_bitmap(u64 __user *bitmap, struct vfio_iommu *iommu,
+ 		if (ret)
+ 			return ret;
+ 
+-		/*
+-		 * Re-populate bitmap to include all pinned pages which are
+-		 * considered as dirty but exclude pages which are unpinned and
+-		 * pages which are marked dirty by vfio_dma_rw()
+-		 */
+-		bitmap_clear(dma->bitmap, 0, dma->size >> pgshift);
+-		vfio_dma_populate_bitmap(dma, pgsize);
+-
+ 		/* Clear iommu dirty log to re-enable dirty log tracking */
+ 		if (iommu->num_non_pinned_groups &&
+ 		    dma->iommu_mapped && !iommu->num_non_hwdbm_groups) {
+@@ -1389,6 +1381,14 @@ static int vfio_iova_dirty_bitmap(u64 __user *bitmap, struct vfio_iommu *iommu,
+ 				return ret;
+ 			}
+ 		}
++		/*
++		 * Re-populate bitmap to include all pinned pages which are
++		 * considered as dirty but exclude pages which are unpinned and
++		 * pages which are marked dirty by vfio_dma_rw()
++		 */
++		bitmap_clear(dma->bitmap, 0, dma->size >> pgshift);
++		vfio_dma_populate_bitmap(dma, pgsize);
++
+ 	}
+ 	return 0;
+ }
+-- 
+2.31.1
+

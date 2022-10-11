@@ -1,0 +1,55 @@
+From 45f56c790c17807ee4fb0e297f921264270478e3 Mon Sep 17 00:00:00 2001
+From: Jean-Philippe Brucker <jean-philippe.brucker@arm.com>
+Date: Wed, 5 Jun 2019 19:13:56 +0100
+Subject: [PATCH 0624/1418] iommu: Use device fault trace event
+
+For performance and debugging purposes, these trace events help
+analyzing device faults that interact with IOMMU subsystem.
+E.g.
+IOMMU:0000:00:0a.0 type=2 reason=0 addr=0x00000000007ff000 pasid=1
+group=1 last=0 prot=1
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+[JPB: removed invalidate event, that will be added later]
+Signed-off-by: Jean-Philippe Brucker <jean-philippe.brucker@arm.com>
+---
+ drivers/iommu/iommu.c        | 2 ++
+ include/trace/events/iommu.h | 2 +-
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
+index 210f541e30ec..aafd9ed96644 100644
+--- a/drivers/iommu/iommu.c
++++ b/drivers/iommu/iommu.c
+@@ -1284,6 +1284,7 @@ int iommu_report_device_fault(struct device *dev, struct iommu_fault_event *evt)
+ 		mutex_unlock(&fparam->lock);
+ 		kfree(evt_pending);
+ 	}
++	trace_dev_fault(dev, &evt->fault);
+ done_unlock:
+ 	mutex_unlock(&param->lock);
+ 	return ret;
+@@ -1345,6 +1346,7 @@ int iommu_page_response(struct device *dev,
+ 		}
+ 
+ 		ret = domain->ops->page_response(dev, evt, msg);
++		trace_dev_page_response(dev, msg);
+ 		list_del(&evt->list);
+ 		kfree(evt);
+ 		break;
+diff --git a/include/trace/events/iommu.h b/include/trace/events/iommu.h
+index 767b92c03f19..7a7801bc0562 100644
+--- a/include/trace/events/iommu.h
++++ b/include/trace/events/iommu.h
+@@ -219,7 +219,7 @@ TRACE_EVENT(dev_fault,
+ 
+ TRACE_EVENT(dev_page_response,
+ 
+-	TP_PROTO(struct device *dev,  struct iommu_fault_page_response *msg),
++	TP_PROTO(struct device *dev,  struct iommu_page_response *msg),
+ 
+ 	TP_ARGS(dev, msg),
+ 
+-- 
+2.31.1
+

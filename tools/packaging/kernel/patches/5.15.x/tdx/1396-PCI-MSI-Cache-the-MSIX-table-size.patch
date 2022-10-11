@@ -1,0 +1,100 @@
+From b0eb331e92a6041800a2c92bf4cfd10f7f695246 Mon Sep 17 00:00:00 2001
+From: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Date: Tue, 12 Apr 2022 04:27:26 +0300
+Subject: [PATCH 1396/1418] PCI/MSI: Cache the MSIX table size
+
+A malicious device can change its MSIX table size between the table
+ioremap() and subsequent accesses, resulting in a page fault:
+
+> BUG: unable to handle page fault for address: ffffc9000005a00c
+> #PF: supervisor write access in kernel mode
+> #PF: error_code(0x0002) - not-present page
+> PGD 5800067 P4D 5800067 PUD 645c067 PMD 645d067 PTE 0
+> Oops: 0002 [#1] PREEMPT SMP KASAN
+> CPU: 2 PID: 1 Comm: swapper/0 Not tainted 5.17.0-rc1-00148-g16fc64ddb0ef-dirty #249
+> RIP: 0010:__pci_write_msi_msg+0x3d9/0x3f0
+> Call Trace:
+>  <TASK>
+>  pci_msi_domain_write_msg+0x61/0x70
+>  msi_domain_activate+0xe0/0x110
+>  __irq_domain_activate_irq+0x87/0xc0
+>  irq_domain_activate_irq+0x69/0x90
+>  __msi_domain_alloc_irqs+0x31a/0x5e0
+>  msi_domain_alloc_irqs_descs_locked+0x7b/0x110
+>  pci_msi_setup_msi_irqs+0x55/0x70
+>  __pci_enable_msix_range+0x57a/0x78f
+>  pci_alloc_irq_vectors_affinity.cold+0x1a/0x2e
+>  vp_find_vqs_msix+0x17e/0x790
+>  vp_find_vqs+0x3e/0x270
+>  virtnet_find_vqs+0x2b4/0x560
+>  virtnet_probe+0x734/0x1030
+>  virtio_dev_probe+0x25c/0x3c0
+>  really_probe+0x37d/0x660
+>  __driver_probe_device+0x19e/0x230
+>  driver_probe_device+0x4e/0xf0
+>  __driver_attach+0xfe/0x270
+>  bus_for_each_dev+0xff/0x150
+>  driver_attach+0x2d/0x40
+>  bus_add_driver+0x242/0x300
+>  driver_register+0x119/0x1a0
+>  register_virtio_driver+0x41/0x70
+>  virtio_net_driver_init+0x74/0x9b
+>  do_one_initcall+0xcc/0x400
+>  kernel_init_freeable+0x3db/0x468
+>  kernel_init+0x1e/0x150
+>  ret_from_fork+0x22/0x30
+>  </TASK>
+
+To avoid this, cache the table size observed at the moment of table
+ioremap() and use the cache value. This, however, does not help drivers
+that peek at the PCIE_MSIX_FLAGS register directly.
+
+Signed-off-by: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+---
+ drivers/pci/msi.c   | 9 +++++++--
+ include/linux/pci.h | 1 +
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/pci/msi.c b/drivers/pci/msi.c
+index a49d64999e70..6c6f1787fb01 100644
+--- a/drivers/pci/msi.c
++++ b/drivers/pci/msi.c
+@@ -779,7 +779,7 @@ static int msix_capability_init(struct pci_dev *dev)
+ 
+ 	pci_read_config_word(dev, dev->msix_cap + PCI_MSIX_FLAGS, &control);
+ 	/* Request & Map MSI-X table region */
+-	tsize = msix_table_size(control);
++	tsize = pci_msix_vec_count(dev);
+ 	dev->msix_table_base = msix_map_region(dev, tsize);
+ 	if (!dev->msix_table_base) {
+ 		pci_msix_clear_and_set_ctrl(dev, PCI_MSIX_FLAGS_ENABLE, 0);
+@@ -1050,8 +1050,13 @@ int pci_msix_vec_count(struct pci_dev *dev)
+ 	if (!dev->msix_cap)
+ 		return -EINVAL;
+ 
++	if (dev->flags_qsize)
++		return dev->flags_qsize;
++
+ 	pci_read_config_word(dev, dev->msix_cap + PCI_MSIX_FLAGS, &control);
+-	return msix_table_size(control);
++	dev->flags_qsize = msix_table_size(control);
++
++	return dev->flags_qsize;
+ }
+ EXPORT_SYMBOL(pci_msix_vec_count);
+ 
+diff --git a/include/linux/pci.h b/include/linux/pci.h
+index 32a3b7609770..f1cd8f790420 100644
+--- a/include/linux/pci.h
++++ b/include/linux/pci.h
+@@ -340,6 +340,7 @@ struct pci_dev {
+ 	u8		rom_base_reg;	/* Config register controlling ROM */
+ 	u8		pin;		/* Interrupt pin this device uses */
+ 	u16		pcie_flags_reg;	/* Cached PCIe Capabilities Register */
++	u16		flags_qsize;	/* Cached MSIX table size */
+ 	unsigned long	*dma_alias_mask;/* Mask of enabled devfn aliases */
+ 
+ 	struct pci_driver *driver;	/* Driver bound to this device */
+-- 
+2.31.1
+

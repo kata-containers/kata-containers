@@ -1,0 +1,55 @@
+From be31a393d714e4026deca02b563ffaadd9ee1f4e Mon Sep 17 00:00:00 2001
+From: Wei Wang <wei.w.wang@intel.com>
+Date: Thu, 25 Nov 2021 20:18:23 -0500
+Subject: [PATCH 0847/1418] virtio/vsock: fix the transport to work with
+ VMADDR_CID_ANY
+
+The VMADDR_CID_ANY flag used by a socket means that the socket isn't bound
+to any specific CID. For example, a host vsock server may want to be bound
+with VMADDR_CID_ANY, so that a guest vsock client can connect to the host
+server with CID=VMADDR_CID_HOST (i.e. 2), and meanwhile, a host vsock
+client can connect to the same local server with CID=VMADDR_CID_LOCAL
+(i.e. 1).
+
+The current implementation sets the destination socket's svm_cid to a
+fixed CID value after the first client's connection, which isn't an
+expected operation. For example, if the guest client first connects to the
+host server, the server's svm_cid gets set to VMADDR_CID_HOST, then other
+host clients won't be able to connect to the server anymore.
+
+Reproduce steps:
+1. Run the host server:
+   socat VSOCK-LISTEN:1234,fork -
+2. Run a guest client to connect to the host server:
+   socat - VSOCK-CONNECT:2:1234
+3. Run a host client to connect to the host server:
+   socat - VSOCK-CONNECT:1:1234
+
+Without this patch, step 3. above fails to connect, and socat complains
+"socat[1720] E connect(5, AF=40 cid:1 port:1234, 16): Connection
+reset by peer".
+With this patch, the above works well.
+
+Fixes: c0cfa2d8a788 ("vsock: add multi-transports support")
+Signed-off-by: Wei Wang <wei.w.wang@intel.com>
+---
+ net/vmw_vsock/virtio_transport_common.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/net/vmw_vsock/virtio_transport_common.c b/net/vmw_vsock/virtio_transport_common.c
+index 59ee1be5a6dd..ec2c2afbf0d0 100644
+--- a/net/vmw_vsock/virtio_transport_common.c
++++ b/net/vmw_vsock/virtio_transport_common.c
+@@ -1299,7 +1299,8 @@ void virtio_transport_recv_pkt(struct virtio_transport *t,
+ 	space_available = virtio_transport_space_update(sk, pkt);
+ 
+ 	/* Update CID in case it has changed after a transport reset event */
+-	vsk->local_addr.svm_cid = dst.svm_cid;
++	if (vsk->local_addr.svm_cid != VMADDR_CID_ANY)
++		vsk->local_addr.svm_cid = dst.svm_cid;
+ 
+ 	if (space_available)
+ 		sk->sk_write_space(sk);
+-- 
+2.31.1
+

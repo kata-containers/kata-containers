@@ -1,0 +1,155 @@
+From c4000f3d3ed8246649f91e33ece9c028326b9759 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Wed, 17 Feb 2021 13:42:05 -0800
+Subject: [PATCH 0602/1418] iommu/ioasid: Add free function and states
+
+When an actively used IOASID is freed due to exceptions, users must be
+notified to perform the cleanup. The IOASID shall be put in a pending
+state until all users completed their cleanup work.
+
+This patch adds ioasid_free() function to let the caller initiate the
+freeing process. Both ioasid_free() and ioasid_put() decrements
+reference counts. Unlike ioasid_put(), the ioasid_free() function also
+transition the IOASID to the free pending state where further
+ioasid_get() is prohibited. This paves the way for FREE event
+notifications that will be introduced next.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/ioasid.c | 73 ++++++++++++++++++++++++++++++++++++++++++
+ include/linux/ioasid.h |  5 +++
+ 2 files changed, 78 insertions(+)
+
+diff --git a/drivers/iommu/ioasid.c b/drivers/iommu/ioasid.c
+index d7b476651027..a10f8154c680 100644
+--- a/drivers/iommu/ioasid.c
++++ b/drivers/iommu/ioasid.c
+@@ -15,8 +15,26 @@
+ static ioasid_t ioasid_capacity = PCI_PASID_MAX;
+ static ioasid_t ioasid_capacity_avail = PCI_PASID_MAX;
+ static DEFINE_XARRAY_ALLOC(ioasid_sets);
++
++enum ioasid_state {
++	IOASID_STATE_IDLE,
++	IOASID_STATE_ACTIVE,
++	IOASID_STATE_FREE_PENDING,
++};
++
++/**
++ * struct ioasid_data - Meta data about ioasid
++ *
++ * @id:		Unique ID
++ * @refs:	Number of active users
++ * @state:	Track state of the IOASID
++ * @set:	ioasid_set of the IOASID belongs to
++ * @private:	Private data associated with the IOASID
++ * @rcu:	For free after RCU grace period
++ */
+ struct ioasid_data {
+ 	ioasid_t id;
++	enum ioasid_state state;
+ 	struct ioasid_set *set;
+ 	void *private;
+ 	struct rcu_head rcu;
+@@ -597,6 +615,7 @@ ioasid_t ioasid_alloc(struct ioasid_set *set, ioasid_t min, ioasid_t max,
+ 		goto exit_free;
+ 	}
+ 	data->id = id;
++	data->state = IOASID_STATE_IDLE;
+ 
+ 	/* Store IOASID in the per set data */
+ 	if (xa_err(xa_store(&set->xa, id, data, GFP_ATOMIC))) {
+@@ -631,6 +650,56 @@ static void ioasid_do_free_locked(struct ioasid_data *data)
+ 		ioasid_set_free_locked(data->set);
+ }
+ 
++static void ioasid_free_locked(struct ioasid_set *set, ioasid_t ioasid)
++{
++	struct ioasid_data *data;
++
++	data = xa_load(&active_allocator->xa, ioasid);
++	if (!data) {
++		pr_err_ratelimited("Trying to free unknown IOASID %u\n", ioasid);
++		return;
++	}
++	if (data->set != set) {
++		pr_warn("Cannot free IOASID %u due to set ownership\n", ioasid);
++		return;
++	}
++	/* Check if the set exists */
++	if (WARN_ON(!xa_load(&ioasid_sets, data->set->id)))
++		return;
++
++	/* Free is already in progress */
++	if (data->state == IOASID_STATE_FREE_PENDING)
++		return;
++
++	data->state = IOASID_STATE_FREE_PENDING;
++	/*
++	 * If the refcount is 1, it means there is no other users of the IOASID
++	 * other than IOASID core itself. There is no need to notify anyone.
++	 */
++	if (!refcount_dec_and_test(&data->refs))
++		return;
++
++	ioasid_do_free_locked(data);
++}
++
++/**
++ * ioasid_free - Drop reference on an IOASID. Free if refcount drops to 0,
++ *               including free from its set and system-wide list.
++ * @set:	The ioasid_set to check permission with. If not NULL, IOASID
++ *		free will fail if the set does not match.
++ * @ioasid:	The IOASID to remove
++ *
++ * TODO: return true if all references dropped, false if async work is in
++ * progress, IOASID is in FREE_PENDING state. wait queue to be used for blocking
++ * free task.
++ */
++void ioasid_free(struct ioasid_set *set, ioasid_t ioasid)
++{
++	spin_lock(&ioasid_allocator_lock);
++	ioasid_free_locked(set, ioasid);
++	spin_unlock(&ioasid_allocator_lock);
++}
++EXPORT_SYMBOL_GPL(ioasid_free);
+ int ioasid_get_locked(struct ioasid_set *set, ioasid_t ioasid)
+ {
+ 	struct ioasid_data *data;
+@@ -640,6 +709,10 @@ int ioasid_get_locked(struct ioasid_set *set, ioasid_t ioasid)
+ 		pr_err("Trying to get unknown IOASID %u\n", ioasid);
+ 		return -EINVAL;
+ 	}
++	if (data->state == IOASID_STATE_FREE_PENDING) {
++		pr_err("Trying to get IOASID being freed%u\n", ioasid);
++		return -EBUSY;
++	}
+ 
+ 	/* Check set ownership if the set is non-null */
+ 	if (set && data->set != set) {
+diff --git a/include/linux/ioasid.h b/include/linux/ioasid.h
+index 095f4e50dc58..cabaf0b0348f 100644
+--- a/include/linux/ioasid.h
++++ b/include/linux/ioasid.h
+@@ -72,6 +72,7 @@ int ioasid_get(struct ioasid_set *set, ioasid_t ioasid);
+ int ioasid_get_locked(struct ioasid_set *set, ioasid_t ioasid);
+ bool ioasid_put(struct ioasid_set *set, ioasid_t ioasid);
+ bool ioasid_put_locked(struct ioasid_set *set, ioasid_t ioasid);
++void ioasid_free(struct ioasid_set *set, ioasid_t ioasid);
+ void *ioasid_find(struct ioasid_set *set, ioasid_t ioasid,
+ 		  bool (*getter)(void *));
+ int ioasid_register_allocator(struct ioasid_allocator_ops *allocator);
+@@ -105,6 +106,10 @@ static inline struct ioasid_set *ioasid_set_alloc(void *token, ioasid_t quota,
+ 	return ERR_PTR(-ENOTSUPP);
+ }
+ 
++static inline void ioasid_free(struct ioasid_set *set, ioasid_t ioasid)
++{
++}
++
+ static inline struct ioasid_set *ioasid_find_mm_set(struct mm_struct *token)
+ {
+ 	return NULL;
+-- 
+2.31.1
+

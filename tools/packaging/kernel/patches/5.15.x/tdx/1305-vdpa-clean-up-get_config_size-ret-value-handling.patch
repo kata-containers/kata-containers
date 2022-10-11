@@ -1,0 +1,45 @@
+From 21f4b541ac974d29f5e56c59e7b8d4bf512c73c4 Mon Sep 17 00:00:00 2001
+From: Laura Abbott <labbott@kernel.org>
+Date: Thu, 6 Jan 2022 08:09:25 -0500
+Subject: [PATCH 1305/1418] vdpa: clean up get_config_size ret value handling
+
+The return type of get_config_size is size_t so it makes
+sense to change the type of the variable holding its result.
+
+That said, this already got taken care of (differently, and arguably
+not as well) by commit 3ed21c1451a1 ("vdpa: check that offsets are
+within bounds").
+
+The added 'c->off > size' test in that commit will be done as an
+unsigned comparison on 32-bit (safe due to not being signed).
+
+On a 64-bit platform, it will be done as a signed comparison, but in
+that case the comparison will be done in 64-bit, and 'c->off' being an
+u32 it will be valid thanks to the extended range (ie both values will
+be positive in 64 bits).
+
+So this was a real bug, but it was already addressed and marked for stable.
+
+Signed-off-by: Laura Abbott <labbott@kernel.org>
+Reported-by: Luo Likang <luolikang@nsfocus.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+---
+ drivers/vhost/vdpa.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/vhost/vdpa.c b/drivers/vhost/vdpa.c
+index 39039e046117..c549d994481d 100644
+--- a/drivers/vhost/vdpa.c
++++ b/drivers/vhost/vdpa.c
+@@ -195,7 +195,7 @@ static int vhost_vdpa_config_validate(struct vhost_vdpa *v,
+ 				      struct vhost_vdpa_config *c)
+ {
+ 	struct vdpa_device *vdpa = v->vdpa;
+-	long size = vdpa->config->get_config_size(vdpa);
++	size_t size = vdpa->config->get_config_size(vdpa);
+ 
+ 	if (c->len == 0)
+ 		return -EINVAL;
+-- 
+2.31.1
+

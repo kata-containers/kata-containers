@@ -1,0 +1,240 @@
+From bf07abb58b364f0f344dc45059960c36ceb2bebe Mon Sep 17 00:00:00 2001
+From: Jithu Joseph <jithu.joseph@intel.com>
+Date: Fri, 6 May 2022 15:53:59 -0700
+Subject: [PATCH 1369/1418] x86/microcode/intel: Expose
+ collect_cpu_info_early() for IFS
+
+IFS is a CPU feature that allows a binary blob, similar to microcode,
+to be loaded and consumed to perform low level validation of CPU
+circuitry. In fact, it carries the same Processor Signature
+(family/model/stepping) details that are contained in Intel microcode
+blobs.
+
+In support of an IFS driver to trigger loading, validation, and running
+of these tests blobs, make the functionality of cpu_signatures_match()
+and collect_cpu_info_early() available outside of the microcode driver.
+
+Add an "intel_" prefix and drop the "_early" suffix from
+collect_cpu_info_early() and EXPORT_SYMBOL_GPL() it. Add
+declaration to x86 <asm/cpu.h>
+
+Make cpu_signatures_match() an inline function in x86 <asm/cpu.h>,
+and also give it an "intel_" prefix.
+
+No functional change intended.
+
+Reviewed-by: Dan Williams <dan.j.williams@intel.com>
+Signed-off-by: Jithu Joseph <jithu.joseph@intel.com>
+Co-developed-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Tony Luck <tony.luck@intel.com>
+Reviewed-by: Thomas Gleixner <tglx@linutronix.de>
+Acked-by: Borislav Petkov <bp@suse.de>
+Reviewed-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Link: https://lore.kernel.org/r/20220506225410.1652287-2-tony.luck@intel.com
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+---
+ arch/x86/include/asm/cpu.h            | 19 +++++++++
+ arch/x86/kernel/cpu/intel.c           | 32 +++++++++++++++
+ arch/x86/kernel/cpu/microcode/intel.c | 59 ++++-----------------------
+ 3 files changed, 58 insertions(+), 52 deletions(-)
+
+diff --git a/arch/x86/include/asm/cpu.h b/arch/x86/include/asm/cpu.h
+index 46339bda0cf0..6647c017bc42 100644
+--- a/arch/x86/include/asm/cpu.h
++++ b/arch/x86/include/asm/cpu.h
+@@ -84,4 +84,23 @@ void init_ia32_feat_ctl(struct cpuinfo_x86 *c);
+ #else
+ static inline void init_ia32_feat_ctl(struct cpuinfo_x86 *c) {}
+ #endif
++
++struct ucode_cpu_info;
++
++int intel_cpu_collect_info(struct ucode_cpu_info *uci);
++
++static inline bool intel_cpu_signatures_match(unsigned int s1, unsigned int p1,
++					      unsigned int s2, unsigned int p2)
++{
++	if (s1 != s2)
++		return false;
++
++	/* Processor flags are either both 0 ... */
++	if (!p1 && !p2)
++		return true;
++
++	/* ... or they intersect. */
++	return p1 & p2;
++}
++
+ #endif /* _ASM_X86_CPU_H */
+diff --git a/arch/x86/kernel/cpu/intel.c b/arch/x86/kernel/cpu/intel.c
+index 001b3d475557..5bae38b9c8d8 100644
+--- a/arch/x86/kernel/cpu/intel.c
++++ b/arch/x86/kernel/cpu/intel.c
+@@ -184,6 +184,38 @@ static bool bad_spectre_microcode(struct cpuinfo_x86 *c)
+ 	return false;
+ }
+ 
++int intel_cpu_collect_info(struct ucode_cpu_info *uci)
++{
++	unsigned int val[2];
++	unsigned int family, model;
++	struct cpu_signature csig = { 0 };
++	unsigned int eax, ebx, ecx, edx;
++
++	memset(uci, 0, sizeof(*uci));
++
++	eax = 0x00000001;
++	ecx = 0;
++	native_cpuid(&eax, &ebx, &ecx, &edx);
++	csig.sig = eax;
++
++	family = x86_family(eax);
++	model  = x86_model(eax);
++
++	if (model >= 5 || family > 6) {
++		/* get processor flags from MSR 0x17 */
++		native_rdmsr(MSR_IA32_PLATFORM_ID, val[0], val[1]);
++		csig.pf = 1 << ((val[1] >> 18) & 7);
++	}
++
++	csig.rev = intel_get_microcode_revision();
++
++	uci->cpu_sig = csig;
++	uci->valid = 1;
++
++	return 0;
++}
++EXPORT_SYMBOL_GPL(intel_cpu_collect_info);
++
+ static void early_init_intel(struct cpuinfo_x86 *c)
+ {
+ 	u64 misc_enable;
+diff --git a/arch/x86/kernel/cpu/microcode/intel.c b/arch/x86/kernel/cpu/microcode/intel.c
+index 5e9dcd645913..f8a71cc60941 100644
+--- a/arch/x86/kernel/cpu/microcode/intel.c
++++ b/arch/x86/kernel/cpu/microcode/intel.c
+@@ -48,20 +48,6 @@ static struct microcode_intel *intel_ucode_patch;
+ static int llc_size_per_core;
+ extern bool ucode_rollback;
+ 
+-static inline bool cpu_signatures_match(unsigned int s1, unsigned int p1,
+-					unsigned int s2, unsigned int p2)
+-{
+-	if (s1 != s2)
+-		return false;
+-
+-	/* Processor flags are either both 0 ... */
+-	if (!p1 && !p2)
+-		return true;
+-
+-	/* ... or they intersect. */
+-	return p1 & p2;
+-}
+-
+ /*
+  * Returns 1 if update has been found, 0 otherwise.
+  */
+@@ -72,7 +58,7 @@ static int find_matching_signature(void *mc, unsigned int csig, int cpf)
+ 	struct extended_signature *ext_sig;
+ 	int i;
+ 
+-	if (cpu_signatures_match(csig, cpf, mc_hdr->sig, mc_hdr->pf))
++	if (intel_cpu_signatures_match(csig, cpf, mc_hdr->sig, mc_hdr->pf))
+ 		return 1;
+ 
+ 	/* Look for ext. headers: */
+@@ -83,7 +69,7 @@ static int find_matching_signature(void *mc, unsigned int csig, int cpf)
+ 	ext_sig = (void *)ext_hdr + EXT_HEADER_SIZE;
+ 
+ 	for (i = 0; i < ext_hdr->count; i++) {
+-		if (cpu_signatures_match(csig, cpf, ext_sig->sig, ext_sig->pf))
++		if (intel_cpu_signatures_match(csig, cpf, ext_sig->sig, ext_sig->pf))
+ 			return 1;
+ 		ext_sig++;
+ 	}
+@@ -345,37 +331,6 @@ scan_microcode(void *data, size_t size, struct ucode_cpu_info *uci, bool save)
+ 	return patch;
+ }
+ 
+-static int collect_cpu_info_early(struct ucode_cpu_info *uci)
+-{
+-	unsigned int val[2];
+-	unsigned int family, model;
+-	struct cpu_signature csig = { 0 };
+-	unsigned int eax, ebx, ecx, edx;
+-
+-	memset(uci, 0, sizeof(*uci));
+-
+-	eax = 0x00000001;
+-	ecx = 0;
+-	native_cpuid(&eax, &ebx, &ecx, &edx);
+-	csig.sig = eax;
+-
+-	family = x86_family(eax);
+-	model  = x86_model(eax);
+-
+-	if ((model >= 5) || (family > 6)) {
+-		/* get processor flags from MSR 0x17 */
+-		native_rdmsr(MSR_IA32_PLATFORM_ID, val[0], val[1]);
+-		csig.pf = 1 << ((val[1] >> 18) & 7);
+-	}
+-
+-	csig.rev = intel_get_microcode_revision();
+-
+-	uci->cpu_sig = csig;
+-	uci->valid = 1;
+-
+-	return 0;
+-}
+-
+ static void show_saved_mc(void)
+ {
+ #ifdef DEBUG
+@@ -389,7 +344,7 @@ static void show_saved_mc(void)
+ 		return;
+ 	}
+ 
+-	collect_cpu_info_early(&uci);
++	intel_cpu_collect_info(&uci);
+ 
+ 	sig	= uci.cpu_sig.sig;
+ 	pf	= uci.cpu_sig.pf;
+@@ -498,7 +453,7 @@ void show_ucode_info_early(void)
+ 	struct ucode_cpu_info uci;
+ 
+ 	if (delay_ucode_info) {
+-		collect_cpu_info_early(&uci);
++		intel_cpu_collect_info(&uci);
+ 		print_ucode_info(&uci, current_mc_date);
+ 		delay_ucode_info = 0;
+ 	}
+@@ -600,7 +555,7 @@ int __init save_microcode_in_initrd_intel(void)
+ 	if (!(cp.data && cp.size))
+ 		return 0;
+ 
+-	collect_cpu_info_early(&uci);
++	intel_cpu_collect_info(&uci);
+ 
+ 	scan_microcode(cp.data, cp.size, &uci, true);
+ 
+@@ -633,7 +588,7 @@ static struct microcode_intel *__load_ucode_intel(struct ucode_cpu_info *uci)
+ 	if (!(cp.data && cp.size))
+ 		return NULL;
+ 
+-	collect_cpu_info_early(uci);
++	intel_cpu_collect_info(uci);
+ 
+ 	return scan_microcode(cp.data, cp.size, uci, false);
+ }
+@@ -708,7 +663,7 @@ void reload_ucode_intel(void)
+ 	struct microcode_intel *p;
+ 	struct ucode_cpu_info uci;
+ 
+-	collect_cpu_info_early(&uci);
++	intel_cpu_collect_info(&uci);
+ 
+ 	p = find_patch(&uci);
+ 	if (!p)
+-- 
+2.31.1
+

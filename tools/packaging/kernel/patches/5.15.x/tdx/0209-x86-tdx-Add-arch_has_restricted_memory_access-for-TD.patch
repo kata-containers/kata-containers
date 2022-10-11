@@ -1,0 +1,81 @@
+From 6f76ce4c7b27f065e5a78ffedb756f9590880e53 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Tue, 1 Jun 2021 23:21:09 -0700
+Subject: [PATCH 0209/1418] x86/tdx: Add arch_has_restricted_memory_access for
+ TDX
+
+In virtio the host decides whether the guest uses the DMA
+API or not using the strangely named VIRTIO_F_ACCESS_PLATFORM
+bit (which really indicates whether the DMA API is used or not)
+
+For hardened virtio on TDX, it is expected that swiotlb is
+always used, which requires using the DMA API.  While IO wouldn't
+really work without the swiotlb, it might be possible that an
+attacker forces swiotlbless IO to manipulate memory in the guest.
+
+So TDX has requirement to force the DMA API (which then forces
+swiotlb), but without relying on the host.
+
+There is already an arch_has_restricted_memory_acces hook for
+this, which is currently used only by s390. Enable
+the config option for the hook for x86 and enable it for TDX.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+---
+ arch/x86/Kconfig                 | 1 +
+ arch/x86/mm/mem_encrypt.c        | 6 ------
+ arch/x86/mm/mem_encrypt_common.c | 8 ++++++++
+ 3 files changed, 9 insertions(+), 6 deletions(-)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index c3486e818a6a..c9a8ce41fa65 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -878,6 +878,7 @@ config INTEL_TDX_GUEST
+ 	depends on X86_X2APIC
+ 	select ARCH_HAS_CC_PLATFORM
+ 	select X86_MEM_ENCRYPT_COMMON
++	select ARCH_HAS_RESTRICTED_VIRTIO_MEMORY_ACCESS
+ 	help
+ 	  Provide support for running in a trusted domain on Intel processors
+ 	  equipped with Trusted Domain Extensions. TDX is a Intel technology
+diff --git a/arch/x86/mm/mem_encrypt.c b/arch/x86/mm/mem_encrypt.c
+index 8385bc4565e9..a6bfcf0def42 100644
+--- a/arch/x86/mm/mem_encrypt.c
++++ b/arch/x86/mm/mem_encrypt.c
+@@ -453,9 +453,3 @@ void __init amd_mem_encrypt_init(void)
+ 
+ 	print_mem_encrypt_feature_info();
+ }
+-
+-int arch_has_restricted_virtio_memory_access(void)
+-{
+-	return cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT);
+-}
+-EXPORT_SYMBOL_GPL(arch_has_restricted_virtio_memory_access);
+diff --git a/arch/x86/mm/mem_encrypt_common.c b/arch/x86/mm/mem_encrypt_common.c
+index 6fe44c6cb753..afbf8079526b 100644
+--- a/arch/x86/mm/mem_encrypt_common.c
++++ b/arch/x86/mm/mem_encrypt_common.c
+@@ -10,6 +10,7 @@
+ #include <asm/mem_encrypt_common.h>
+ #include <linux/dma-mapping.h>
+ #include <linux/cc_platform.h>
++#include <linux/virtio_config.h>
+ #include <linux/swiotlb.h>
+ 
+ /* Override for DMA direct allocation check - ARCH_HAS_FORCE_DMA_UNENCRYPTED */
+@@ -38,3 +39,10 @@ void __init mem_encrypt_init(void)
+ 
+ 	amd_mem_encrypt_init();
+ }
++
++int arch_has_restricted_virtio_memory_access(void)
++{
++	return (cc_platform_has(CC_ATTR_GUEST_TDX) ||
++		cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT));
++}
++EXPORT_SYMBOL_GPL(arch_has_restricted_virtio_memory_access);
+-- 
+2.31.1
+

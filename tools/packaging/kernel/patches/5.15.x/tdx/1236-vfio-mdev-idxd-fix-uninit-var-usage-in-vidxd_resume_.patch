@@ -1,0 +1,30 @@
+From 781a8dc46c5fa2bab5e6783c4575e91165187f98 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Wed, 23 Mar 2022 17:39:43 -0700
+Subject: [PATCH 1236/1418] vfio: mdev: idxd: fix uninit var usage in
+ vidxd_resume_wq_state()
+
+wq_pasid should be filled out when passed by reference to called functions.
+However, to be extra paranoid, set it to -1 as init value.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/vfio/mdev/idxd/mdev.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/vfio/mdev/idxd/mdev.c b/drivers/vfio/mdev/idxd/mdev.c
+index 67f2d5bf9959..3bf46fef7c7f 100644
+--- a/drivers/vfio/mdev/idxd/mdev.c
++++ b/drivers/vfio/mdev/idxd/mdev.c
+@@ -420,7 +420,7 @@ static int vidxd_resume_wq_state(struct vdcm_idxd *vidxd)
+ 			/* If dedicated WQ and PASID is not enabled, program
+ 			 * the default PASID in the WQ PASID register */
+ 			if (wq_dedicated(wq) && vwqcfg->mode_support) {
+-				int wq_pasid, gpasid = -1;
++				int wq_pasid = -1, gpasid = -1;
+ 
+ 				if (vwqcfg->pasid_en) {
+ 					gpasid = vwqcfg->pasid;
+-- 
+2.31.1
+

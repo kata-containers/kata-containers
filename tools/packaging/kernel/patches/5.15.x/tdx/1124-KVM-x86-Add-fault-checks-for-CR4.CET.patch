@@ -1,0 +1,59 @@
+From 857c2988b9ed7be2b8d76026256904139225705e Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Wed, 22 Jul 2020 09:33:33 -0700
+Subject: [PATCH 1124/1418] KVM: x86: Add fault checks for CR4.CET
+
+Add the fault checks for CR4.CET, which is the master control for all
+CET features (SHSTK and IBT).  In addition to basic support checks, CET
+can be enabled if and only if CR0.WP==1, i.e. setting CR4.CET=1 faults
+if CR0.WP==0 and setting CR0.WP=0 fails if CR4.CET==1.
+
+Co-developed-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/x86.c | 6 ++++++
+ arch/x86/kvm/x86.h | 3 +++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index d1c255e51460..5ceb06316b53 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -927,6 +927,9 @@ int kvm_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
+ 	if (!(cr0 & X86_CR0_PG) && kvm_read_cr4_bits(vcpu, X86_CR4_PCIDE))
+ 		return 1;
+ 
++	if (!(cr0 & X86_CR0_WP) && kvm_read_cr4_bits(vcpu, X86_CR4_CET))
++		return 1;
++
+ 	static_call(kvm_x86_set_cr0)(vcpu, cr0);
+ 
+ 	kvm_post_set_cr0(vcpu, old_cr0, cr0);
+@@ -1096,6 +1099,9 @@ int kvm_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
+ 			return 1;
+ 	}
+ 
++	if ((cr4 & X86_CR4_CET) && !(kvm_read_cr0(vcpu) & X86_CR0_WP))
++		return 1;
++
+ 	static_call(kvm_x86_set_cr4)(vcpu, cr4);
+ 
+ 	kvm_post_set_cr4(vcpu, old_cr4, cr4);
+diff --git a/arch/x86/kvm/x86.h b/arch/x86/kvm/x86.h
+index 279be92353b2..5f808094c717 100644
+--- a/arch/x86/kvm/x86.h
++++ b/arch/x86/kvm/x86.h
+@@ -489,6 +489,9 @@ bool kvm_msr_allowed(struct kvm_vcpu *vcpu, u32 index, u32 type);
+ 		__reserved_bits |= X86_CR4_PCIDE;       \
+ 	if (!__cpu_has(__c, X86_FEATURE_PKS))		\
+ 		__reserved_bits |= X86_CR4_PKS;		\
++	if (!__cpu_has(__c, X86_FEATURE_SHSTK) &&	\
++	    !__cpu_has(__c, X86_FEATURE_IBT))		\
++		__reserved_bits |= X86_CR4_CET;		\
+ 	__reserved_bits;                                \
+ })
+ 
+-- 
+2.31.1
+

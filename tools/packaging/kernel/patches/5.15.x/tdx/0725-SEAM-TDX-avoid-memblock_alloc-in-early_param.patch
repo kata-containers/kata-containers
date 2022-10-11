@@ -1,0 +1,119 @@
+From f3a64677db593f746835d00e57af4e3ab2e503af Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Wed, 15 Dec 2021 13:51:47 +0800
+Subject: [PATCH 0725/1418] SEAM: TDX: avoid memblock_alloc in early_param
+
+memblock_alloc() is not available when parsing early_param, which will
+cause the memory allocation failure. Use a static array to hold the
+input string.
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/p-seamldr.c | 16 +++------------
+ arch/x86/kernel/cpu/tdx/tdx.c       | 30 ++++++-----------------------
+ 2 files changed, 9 insertions(+), 37 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.c b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+index dbb330237791..889c453fcc3a 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.c
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+@@ -23,20 +23,12 @@
+ #include "seam.h"
+ #include "tdx.h"
+ 
+-static char *np_seamldr_name __initdata = "intel-seam/np-seamldr.acm";
+-static size_t np_seamldr_len __initdata;
++static char np_seamldr_name[128] __initdata = "intel-seam/np-seamldr.acm";
+ 
+ static int __init seamldr_param(char *str)
+ {
+-	np_seamldr_len = strlen(str) + 1;
+-
+-	np_seamldr_name = memblock_alloc(np_seamldr_len, 0);
+-	if (!np_seamldr_name) {
+-		np_seamldr_len = 0;
+-		return -ENOMEM;
+-	}
+-
+-	strscpy(np_seamldr_name, str, np_seamldr_len);
++	pr_err("early_param phase");
++	strscpy(np_seamldr_name, str, sizeof(np_seamldr_name));
+ 	return 0;
+ }
+ early_param("np_seamldr", seamldr_param);
+@@ -490,8 +482,6 @@ int __init load_p_seamldr(void)
+ 
+ 	pr_info("Loading TDX P-SEAMLDR %s.\n", np_seamldr_name);
+ 	err = p_seamldr_load(&np_seamldr);
+-	if (np_seamldr_len)
+-		memblock_free_late(__pa(np_seamldr_name), np_seamldr_len);
+ 	if (err) {
+ 		pr_err("failed to load TDX P-SEAMLDR\n");
+ 		return err;
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 606ecea7d2fa..4d8d9beb7cec 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -69,35 +69,19 @@ static void pr_seamcall_error(u64 op, const char *op_str,
+ 		pr_seamcall_ex_ret_info(op, err, ex);
+ }
+ 
+-static char *tdx_module_name __initdata = "intel-seam/libtdx.so";
+-static size_t tdx_module_len __initdata;
+-static char *tdx_sigstruct_name __initdata = "intel-seam/libtdx.so.sigstruct";
+-static size_t tdx_sigstruct_len;
++static char tdx_module_name[128] __initdata = "intel-seam/libtdx.so";
++static char tdx_sigstruct_name[128] __initdata = "intel-seam/libtdx.so.sigstruct";
+ 
+ static int __init setup_tdx_module(char *str)
+ {
+-	tdx_module_len = strlen(str) + 1;
+-	tdx_module_name = memblock_alloc(tdx_module_len, 0);
+-	if (!tdx_module_name) {
+-		tdx_module_len = 0;
+-		return -ENOMEM;
+-	}
+-
+-	strscpy(tdx_module_name, str, tdx_module_len);
++	strscpy(tdx_module_name, str, sizeof(tdx_module_name));
+ 	return 1;
+ }
+ __setup("tdx_module=", setup_tdx_module);
+ 
+ static int __init setup_tdx_sigstruct(char *str)
+ {
+-	tdx_sigstruct_len = strlen(str) + 1;
+-	tdx_sigstruct_name = memblock_alloc(tdx_sigstruct_len, 0);
+-	if (!tdx_sigstruct_name) {
+-		tdx_sigstruct_len = 0;
+-		return -ENOMEM;
+-	}
+-
+-	strscpy(tdx_sigstruct_name, str, tdx_sigstruct_len);
++	strscpy(tdx_sigstruct_name, str, sizeof(tdx_sigstruct_name));
+ 	return 1;
+ }
+ __setup("tdx_sigstruct=", setup_tdx_sigstruct);
+@@ -766,6 +750,8 @@ static int __init tdx_arch_init(void)
+ 	ret = -EINVAL;
+ 	if (!seam_get_firmware(&module, tdx_module_name) ||
+ 	    !seam_get_firmware(&sigstruct, tdx_sigstruct_name)) {
++		pr_err("no TDX module or sigstruct found %s/%s\n",
++				tdx_module_name, tdx_sigstruct_name);
+ 		ret = -ENOENT;
+ 		goto out_free;
+ 	}
+@@ -829,10 +815,6 @@ static int __init tdx_arch_init(void)
+ 		cpuhp_state = CPUHP_INVALID;
+ 	}
+ out_free:
+-	if (tdx_module_len)
+-		memblock_free_late(__pa(tdx_module_name), tdx_module_len);
+-	if (tdx_sigstruct_len)
+-		memblock_free_late(__pa(tdx_sigstruct_name), tdx_sigstruct_len);
+ 	return ret;
+ }
+ /*
+-- 
+2.31.1
+

@@ -1,0 +1,31 @@
+From 8994cceb8c9c2bf8c19c792d71fe9bb3a9a533d0 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 15 Oct 2021 03:16:36 +0200
+Subject: [PATCH 0046/1418] x86/sev: Include fpu/xcr.h
+
+Include the header which only provides the XCR accessors. That's all what
+is needed here.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211015011539.896573039@linutronix.de
+---
+ arch/x86/kernel/sev.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/sev.c b/arch/x86/kernel/sev.c
+index a6895e440bc3..50c773c3384c 100644
+--- a/arch/x86/kernel/sev.c
++++ b/arch/x86/kernel/sev.c
+@@ -23,7 +23,7 @@
+ #include <asm/stacktrace.h>
+ #include <asm/sev.h>
+ #include <asm/insn-eval.h>
+-#include <asm/fpu/internal.h>
++#include <asm/fpu/xcr.h>
+ #include <asm/processor.h>
+ #include <asm/realmode.h>
+ #include <asm/traps.h>
+-- 
+2.31.1
+

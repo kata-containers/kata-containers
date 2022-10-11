@@ -1,0 +1,33 @@
+From e89d21fd6401bcb777dd142561727cea31595e73 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Tue, 12 Oct 2021 11:01:59 -0700
+Subject: [PATCH 0525/1418] dmaengine: idxd: check GENCAP config support for
+ gencfg register
+
+DSA spec 1.2 has moved the GENCFG register under the GENCAP configuration
+support with respect to writability. Add check in driver before writing to
+GENCFG register.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+Link: https://lore.kernel.org/r/163406171896.1303830.11217958011385656998.stgit@djiang5-desk3.ch.intel.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/idxd/device.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index cbbfa17d8d11..27612329f510 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -791,7 +791,7 @@ static int idxd_groups_config_write(struct idxd_device *idxd)
+ 	struct device *dev = &idxd->pdev->dev;
+ 
+ 	/* Setup bandwidth token limit */
+-	if (idxd->token_limit) {
++	if (idxd->hw.gen_cap.config_en && idxd->token_limit) {
+ 		reg.bits = ioread32(idxd->reg_base + IDXD_GENCFG_OFFSET);
+ 		reg.token_limit = idxd->token_limit;
+ 		iowrite32(reg.bits, idxd->reg_base + IDXD_GENCFG_OFFSET);
+-- 
+2.31.1
+

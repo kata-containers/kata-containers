@@ -1,0 +1,51 @@
+From f30d35a2965c8ead3b5b64951301f71c86381e12 Mon Sep 17 00:00:00 2001
+From: Trond Myklebust <trond.myklebust@hammerspace.com>
+Date: Thu, 28 Apr 2022 11:08:13 -0400
+Subject: [PATCH 1353/1418] SUNRPC: Don't leak sockets in xs_local_connect()
+
+If there is still a closed socket associated with the transport, then we
+need to trigger an autoclose before we can set up a new connection.
+
+Reported-by: wanghai (M) <wanghai38@huawei.com>
+Fixes: f00432063db1 ("SUNRPC: Ensure we flush any closed sockets before xs_xprt_free()")
+Signed-off-by: Trond Myklebust <trond.myklebust@hammerspace.com>
+---
+ net/sunrpc/xprtsock.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/net/sunrpc/xprtsock.c b/net/sunrpc/xprtsock.c
+index 235eb063ce9b..3c324faf38c8 100644
+--- a/net/sunrpc/xprtsock.c
++++ b/net/sunrpc/xprtsock.c
+@@ -1944,6 +1944,9 @@ static void xs_local_connect(struct rpc_xprt *xprt, struct rpc_task *task)
+ 	struct sock_xprt *transport = container_of(xprt, struct sock_xprt, xprt);
+ 	int ret;
+ 
++	if (transport->file)
++		goto force_disconnect;
++
+ 	 if (RPC_IS_ASYNC(task)) {
+ 		/*
+ 		 * We want the AF_LOCAL connect to be resolved in the
+@@ -1956,11 +1959,17 @@ static void xs_local_connect(struct rpc_xprt *xprt, struct rpc_task *task)
+ 		 */
+ 		task->tk_rpc_status = -ENOTCONN;
+ 		rpc_exit(task, -ENOTCONN);
+-		return;
++		goto out_wake;
+ 	}
+ 	ret = xs_local_setup_socket(transport);
+ 	if (ret && !RPC_IS_SOFTCONN(task))
+ 		msleep_interruptible(15000);
++	return;
++force_disconnect:
++	xprt_force_disconnect(xprt);
++out_wake:
++	xprt_clear_connecting(xprt);
++	xprt_wake_pending_tasks(xprt, -ENOTCONN);
+ }
+ 
+ #if IS_ENABLED(CONFIG_SUNRPC_SWAP)
+-- 
+2.31.1
+

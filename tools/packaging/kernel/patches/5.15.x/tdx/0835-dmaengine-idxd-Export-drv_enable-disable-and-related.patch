@@ -1,0 +1,37 @@
+From 0e1e81704ee4653d1387d5b13c611eb002cddceb Mon Sep 17 00:00:00 2001
+From: Tom Zanussi <tom.zanussi@intel.com>
+Date: Fri, 1 Oct 2021 14:05:27 -0700
+Subject: [PATCH 0835/1418] dmaengine: idxd: Export drv_enable/disable and
+ related functions
+
+To allow idxd sub-drivers to enable and disable wqs, both with and
+without the wq mutex held, export them.
+
+Signed-off-by: Tom Zanussi <tom.zanussi@linux.intel.com>
+---
+ drivers/dma/idxd/device.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index bc73c0625cbb..9a8bc0be40cf 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -1275,6 +1275,7 @@ int __drv_enable_wq(struct idxd_wq *wq)
+ err:
+ 	return rc;
+ }
++EXPORT_SYMBOL_GPL(__drv_enable_wq);
+ 
+ int drv_enable_wq(struct idxd_wq *wq)
+ {
+@@ -1304,6 +1305,7 @@ void __drv_disable_wq(struct idxd_wq *wq)
+ 
+ 	wq->client_count = 0;
+ }
++EXPORT_SYMBOL_GPL(__drv_disable_wq);
+ 
+ void drv_disable_wq(struct idxd_wq *wq)
+ {
+-- 
+2.31.1
+

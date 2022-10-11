@@ -1,0 +1,108 @@
+From f1b85d227094a565f17cd98deab26e98d8157216 Mon Sep 17 00:00:00 2001
+From: Tony Luck <tony.luck@intel.com>
+Date: Fri, 6 May 2022 15:54:08 -0700
+Subject: [PATCH 1378/1418] trace: platform/x86/intel/ifs: Add trace point to
+ track Intel IFS operations
+
+Add tracing support which may be useful for debugging systems that fail to complete
+In Field Scan tests.
+
+Acked-by: Steven Rostedt (Google) <rostedt@goodmis.org>
+Reviewed-by: Dan Williams <dan.j.williams@intel.com>
+Signed-off-by: Tony Luck <tony.luck@intel.com>
+Acked-by: Hans de Goede <hdegoede@redhat.com>
+Reviewed-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Link: https://lore.kernel.org/r/20220506225410.1652287-11-tony.luck@intel.com
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+---
+ MAINTAINERS                              |  1 +
+ drivers/platform/x86/intel/ifs/runtest.c |  5 +++
+ include/trace/events/intel_ifs.h         | 41 ++++++++++++++++++++++++
+ 3 files changed, 47 insertions(+)
+ create mode 100644 include/trace/events/intel_ifs.h
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index adb99a07cc3c..1338e1ddf67b 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -9452,6 +9452,7 @@ R:	Ashok Raj <ashok.raj@intel.com>
+ R:	Tony Luck <tony.luck@intel.com>
+ S:	Maintained
+ F:	drivers/platform/x86/intel/ifs
++F:	include/trace/events/intel_ifs.h
+ 
+ INTEL INTEGRATED SENSOR HUB DRIVER
+ M:	Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+diff --git a/drivers/platform/x86/intel/ifs/runtest.c b/drivers/platform/x86/intel/ifs/runtest.c
+index 7efcce35e0e9..b2ca2bb4501f 100644
+--- a/drivers/platform/x86/intel/ifs/runtest.c
++++ b/drivers/platform/x86/intel/ifs/runtest.c
+@@ -17,6 +17,9 @@
+  * core will update results of the test.
+  */
+ 
++#define CREATE_TRACE_POINTS
++#include <trace/events/intel_ifs.h>
++
+ /* Max retries on the same chunk */
+ #define MAX_IFS_RETRIES  5
+ 
+@@ -191,6 +194,8 @@ static void ifs_test_core(int cpu, struct device *dev)
+ 
+ 		status.data = msrvals[1];
+ 
++		trace_ifs_status(cpu, activate, status);
++
+ 		/* Some cases can be retried, give up for others */
+ 		if (!can_restart(status))
+ 			break;
+diff --git a/include/trace/events/intel_ifs.h b/include/trace/events/intel_ifs.h
+new file mode 100644
+index 000000000000..d7353024016c
+--- /dev/null
++++ b/include/trace/events/intel_ifs.h
+@@ -0,0 +1,41 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#undef TRACE_SYSTEM
++#define TRACE_SYSTEM intel_ifs
++
++#if !defined(_TRACE_IFS_H) || defined(TRACE_HEADER_MULTI_READ)
++#define _TRACE_IFS_H
++
++#include <linux/ktime.h>
++#include <linux/tracepoint.h>
++
++TRACE_EVENT(ifs_status,
++
++	TP_PROTO(int cpu, union ifs_scan activate, union ifs_status status),
++
++	TP_ARGS(cpu, activate, status),
++
++	TP_STRUCT__entry(
++		__field(	u64,	status	)
++		__field(	int,	cpu	)
++		__field(	u8,	start	)
++		__field(	u8,	stop	)
++	),
++
++	TP_fast_assign(
++		__entry->cpu	= cpu;
++		__entry->start	= activate.start;
++		__entry->stop	= activate.stop;
++		__entry->status	= status.data;
++	),
++
++	TP_printk("cpu: %d, start: %.2x, stop: %.2x, status: %llx",
++		__entry->cpu,
++		__entry->start,
++		__entry->stop,
++		__entry->status)
++);
++
++#endif /* _TRACE_IFS_H */
++
++/* This part must be outside protection */
++#include <trace/define_trace.h>
+-- 
+2.31.1
+

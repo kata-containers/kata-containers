@@ -1,0 +1,126 @@
+From 5c10152eb94241e559e0a3e5b95299f969196a64 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Thu, 16 Jul 2020 11:16:22 +0800
+Subject: [PATCH 0864/1418] KVM: x86: Load guest fpu state when accessing MSRs
+ managed by XSAVES
+
+If new feature MSRs are supported in XSS and passed through to the guest
+they are saved and restored by XSAVES/XRSTORS, i.e. in the guest's FPU
+state.
+
+Load the guest's FPU state if userspace is accessing MSRs whose values are
+managed by XSAVES so that the MSR helper, e.g. vmx_{get,set}_xsave_msr(),
+can simply do {RD,WR}MSR to access the guest's value.
+
+Because is also used for the KVM_GET_MSRS device ioctl(), explicitly
+check that @vcpu is non-null before attempting to load guest state.  The
+XSS supporting MSRs cannot be retrieved via the device ioctl() without
+loading guest FPU state (which doesn't exist).
+
+MSRs that are switched through XSAVES are especially annoying due to the
+possibility of the kernel's FPU being used in IRQ context.  Disable IRQs
+and ensure the guest's FPU state is loaded when accessing such MSRs.
+
+Note that guest_cpuid_has() is not queried as host userspace is allowed
+to access MSRs that have not been exposed to the guest, e.g. it might do
+KVM_SET_MSRS prior to KVM_SET_CPUID2.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Co-developed-by: Yang Weijiang <weijiang.yang@intel.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/vmx/vmx.c | 18 ++++++++++++++++++
+ arch/x86/kvm/x86.c     | 30 +++++++++++++++++++++++++++++-
+ 2 files changed, 47 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index fec33d9d8360..abe100a3a4b1 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -1758,6 +1758,24 @@ static inline bool vmx_feature_control_msr_valid(struct kvm_vcpu *vcpu,
+ 	return !(val & ~valid_bits);
+ }
+ 
++static void __maybe_unused vmx_get_xsave_msr(struct msr_data *msr_info)
++{
++	local_irq_disable();
++	if (test_thread_flag(TIF_NEED_FPU_LOAD))
++	      switch_fpu_return();
++	rdmsrl(msr_info->index, msr_info->data);
++	local_irq_enable();
++}
++
++static void __maybe_unused vmx_set_xsave_msr(struct msr_data *msr_info)
++{
++	local_irq_disable();
++	if (test_thread_flag(TIF_NEED_FPU_LOAD))
++	      switch_fpu_return();
++	wrmsrl(msr_info->index, msr_info->data);
++	local_irq_enable();
++}
++
+ static int vmx_get_msr_feature(struct kvm_msr_entry *msr)
+ {
+ 	switch (msr->index) {
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index ecb2cd52697b..07f6e48b5548 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -122,6 +122,9 @@ static int sync_regs(struct kvm_vcpu *vcpu);
+ static int __set_sregs2(struct kvm_vcpu *vcpu, struct kvm_sregs2 *sregs2);
+ static void __get_sregs2(struct kvm_vcpu *vcpu, struct kvm_sregs2 *sregs2);
+ 
++static void kvm_load_guest_fpu(struct kvm_vcpu *vcpu);
++static int kvm_put_guest_fpu(struct kvm_vcpu *vcpu);
++
+ struct kvm_x86_ops kvm_x86_ops __read_mostly;
+ EXPORT_SYMBOL_GPL(kvm_x86_ops);
+ 
+@@ -4001,6 +4004,22 @@ int kvm_get_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ }
+ EXPORT_SYMBOL_GPL(kvm_get_msr_common);
+ 
++/*
++ * If new features passthrough XSS managed MSRs to guest, it's required to
++ * add separate checks here so as to load feature dependent guest MSRs before
++ * access them.
++ */
++static bool is_xsaves_msr(u32 index)
++{
++
++	/*
++	 * Add the check for your feature like this:
++	 * return index == MSR_IA32_U_CET;
++	 */
++
++	return false;
++}
++
+ /*
+  * Read or write a bunch of msrs. All parameters are kernel addresses.
+  *
+@@ -4011,11 +4030,20 @@ static int __msr_io(struct kvm_vcpu *vcpu, struct kvm_msrs *msrs,
+ 		    int (*do_msr)(struct kvm_vcpu *vcpu,
+ 				  unsigned index, u64 *data))
+ {
++	bool fpu_loaded = false;
+ 	int i;
+ 
+-	for (i = 0; i < msrs->nmsrs; ++i)
++	for (i = 0; i < msrs->nmsrs; ++i) {
++		if (vcpu && !fpu_loaded && supported_xss &&
++		    is_xsaves_msr(entries[i].index)) {
++			kvm_load_guest_fpu(vcpu);
++			fpu_loaded = true;
++		}
+ 		if (do_msr(vcpu, entries[i].index, &entries[i].data))
+ 			break;
++	}
++	if (fpu_loaded)
++		kvm_put_guest_fpu(vcpu);
+ 
+ 	return i;
+ }
+-- 
+2.31.1
+

@@ -1,0 +1,379 @@
+From 2aef4e20a045528ce4deb5e6dcfe3b12ccc6b266 Mon Sep 17 00:00:00 2001
+From: Jithu Joseph <jithu.joseph@intel.com>
+Date: Tue, 15 Feb 2022 10:54:18 -0800
+Subject: [PATCH 1062/1418] Revert "drivers/saf: Create kthreads for online
+ cpus for scan test"
+
+This reverts commit 8948003512619252aa1f6bbeee8ca4fee736ae35.
+---
+ drivers/ift/saf.c | 224 +---------------------------------------------
+ drivers/ift/saf.h |  65 --------------
+ 2 files changed, 1 insertion(+), 288 deletions(-)
+
+diff --git a/drivers/ift/saf.c b/drivers/ift/saf.c
+index ffc55f58ce21..7ad19f106305 100644
+--- a/drivers/ift/saf.c
++++ b/drivers/ift/saf.c
+@@ -4,13 +4,10 @@
+  * Author: Kyung Min Park <kyung.min.park@intel.com>
+  */
+ 
+-#include <linux/delay.h>
+ #include <linux/firmware.h>
+ #include <linux/init.h>
+ #include <linux/kernel.h>
+-#include <linux/kthread.h>
+ #include <linux/module.h>
+-#include <linux/nmi.h>
+ #include <linux/platform_device.h>
+ #include <linux/slab.h>
+ #include <linux/vmalloc.h>
+@@ -21,17 +18,8 @@
+ #include "saf.h"
+ 
+ static const char *saf_path = "intel/ift/saf/";
+-static enum cpuhp_state cpuhp_scan_state;
+ static struct platform_device *saf_pdev;
+ struct saf_params saf_params;
+-int saf_threads_per_core;
+-
+-DEFINE_PER_CPU(struct saf_state, saf_state);
+-
+-int thread_wait = 0xFFFFFFF;
+-int trigger_mce;
+-bool quiet;
+-bool noint;
+ 
+ static const struct x86_cpu_id saf_cpu_ids[] __initconst = {
+ 	X86_MATCH_INTEL_FAM6_MODEL(SAPPHIRERAPIDS_X,	1),
+@@ -54,151 +42,6 @@ static const char * const scan_authentication_status[] = {
+ 	"Chunk authentication error. The hash of chunk did not match expected value"
+ };
+ 
+-static const char * const scan_test_status[] = {
+-	"SCAN pass",
+-	"Other thread could not join.",
+-	"Interrupt occurred prior to SCAN coordination.",
+-	"Core Abort SCAN Response due to power management condition.",
+-	"Non valid chunks in the range",
+-	"Mismatch in arguments between threads T0/T1.",
+-	"Core not capable of performing SCAN currently",
+-	"Debug Mode. ScanAt-Field results not to be trusted",
+-	"Exceeded number of Logical Processors (LP) allowed to run Scan-At-Field concurrently",
+-	"Interrupt occurred prior to SCAN start",
+-};
+-
+-static inline unsigned long msec_to_tsc(unsigned long msec)
+-{
+-	return tsc_khz * 1000 * msec / MSEC_PER_SEC;
+-}
+-
+-static void print_scan_test_status(int eax, int edx, int cpu)
+-{
+-	if (edx == 0)
+-		pr_info("cpu%d: %s", cpu, scan_test_status[edx]);
+-	else if (edx == SCAN_CONTROLL_ERROR)
+-		pr_info("cpu%d: %s", cpu,
+-			"The Installed SCAN program is not valid and must be reinstalled");
+-	else if (edx == SCAN_SIGNATURE_ERROR)
+-		pr_info("cpu%d: %s", cpu,
+-			"SCAN failed. The SCAN signature did not match expected value");
+-	else if (edx < ARRAY_SIZE(scan_test_status))
+-		pr_info("cpu%d: SCAN operation did not start. %s", cpu, scan_test_status[edx]);
+-}
+-
+-static int wait_for_siblings(atomic_t *t, long long timeout)
+-{
+-	atomic_inc(t);
+-	while (atomic_read(t) < saf_threads_per_core) {
+-		if (timeout < SPINUNIT) {
+-			pr_err("Timeout while waiting for CPUs rendezvous, remaining: %d\n",
+-			       saf_threads_per_core - atomic_read(t));
+-			return 1;
+-		}
+-
+-		ndelay(SPINUNIT);
+-		timeout -= SPINUNIT;
+-
+-		touch_nmi_watchdog();
+-	}
+-
+-	return 0;
+-}
+-
+-/*
+- * Initiating scan can be aborted under some conditions.
+- * Check the retry SAF is needed from the error code.
+- */
+-static inline bool saf_retry_needed(u32 edx)
+-{
+-	switch (edx) {
+-	case NOT_ENOUGH_THREADS_JOINED:
+-	case INTERRUPTED_DURING_COORDINATION:
+-	case POWER_MANAGEMENT_INADEQUATE_FOR_SCAN:
+-	case EXCEED_NUMBER_OF_THREADS_CONCURRENT:
+-	case INTERRUPTED_BEFORE_EXECUTION:
+-		return true;
+-	default:
+-		return false;
+-	}
+-}
+-
+-/*
+- * Scan test kthreads bound with each logical cpu.
+- * Wait for the sibling thread to join before the execution.
+- * Execute the scan test by running wrmsr(MSR_ACTIVATE_SCAN).
+- */
+-static int scan_test_worker(void *info)
+-{
+-	u32 eax, edx, start, last, first;
+-	int cpu = smp_processor_id();
+-
+-	while (1) {
+-		/* wait event until cpumask set from user */
+-		wait_event_interruptible(per_cpu(saf_state, cpu).scan_wq,
+-					 (cpumask_test_cpu(cpu, &per_cpu(saf_state, cpu).mask) ||
+-					 kthread_should_stop()));
+-
+-		if (kthread_should_stop())
+-			break;
+-
+-		/* wait for the sibling threads to join */
+-		first = cpumask_first(topology_sibling_cpumask(cpu));
+-		if (wait_for_siblings(&per_cpu(saf_state, first).siblings_in, NSEC_PER_SEC))
+-			return -1;
+-
+-		/* disable interrupt during scan if noint set */
+-		if (noint)
+-			local_irq_disable();
+-		start = per_cpu(saf_state, cpu).start_index;
+-		last = per_cpu(saf_state, cpu).stop_index;
+-		eax = last << 8 | start;
+-retry:
+-		edx = (trigger_mce << 31) | msec_to_tsc(thread_wait);
+-		per_cpu(saf_state, cpu).result = SCAN_TEST_BUSY;
+-
+-		/* scan start */
+-		wrmsr(MSR_ACTIVATE_SCAN, eax, edx);
+-
+-		/*
+-		 * All logical CPUs on this core are now running SAF test. When it completes
+-		 * execution or is interrupted, the following RDMSR gets the scan status.
+-		 */
+-
+-		rdmsr(MSR_SCAN_STATUS, eax, edx);
+-
+-		/* retry when scan is aborted by interrupt or cpu power budget limitation */
+-		if (saf_retry_needed(edx) && per_cpu(saf_state, cpu).retry_count) {
+-			if (GET_BITFIELD(eax, 0, 7) == start)
+-				per_cpu(saf_state, cpu).retry_count -= 1;
+-			else
+-				per_cpu(saf_state, cpu).retry_count = MAX_RETRY;
+-			goto retry;
+-		}
+-
+-		/* keep tracking the latest executed chunk */
+-		per_cpu(saf_state, cpu).start_index = GET_BITFIELD(eax, 0, 7);
+-		per_cpu(saf_state, cpu).result = ((u64)edx << 32) | eax;
+-
+-		if (!quiet)
+-			print_scan_test_status(eax, edx, cpu);
+-		if (noint)
+-			local_irq_enable();
+-
+-		/* log the last executed time */
+-		per_cpu(saf_state, cpu).last_executed = ktime_get_real_seconds();
+-
+-		cpumask_clear_cpu(cpu, &per_cpu(saf_state, cpu).mask);
+-		if (atomic_dec_and_test(&per_cpu(saf_state, first).test_remain))
+-			complete(&per_cpu(saf_state, first).test_thread_done);
+-
+-		if (wait_for_siblings(&per_cpu(saf_state, first).siblings_out, NSEC_PER_SEC))
+-			return -1;
+-	}
+-
+-	return 0;
+-}
+-
+ /*
+  * To copy scan hashes and authenticate test chunks, the initiating cpu must point
+  * to the EDX:EAX to the test image in linear address.
+@@ -460,39 +303,11 @@ int load_scan_binary(void)
+ 	return ret;
+ }
+ 
+-static int saf_online_cpu(unsigned int cpu)
+-{
+-	per_cpu(saf_state, cpu).scan_task = kthread_create_on_node(scan_test_worker, (void *)&cpu,
+-								   cpu_to_node(cpu), "safCpu/%u",
+-								   cpu);
+-	if (IS_ERR(per_cpu(saf_state, cpu).scan_task)) {
+-		pr_err("saf: scan_test_worker task create failed");
+-		return PTR_ERR(per_cpu(saf_state, cpu).scan_task);
+-	}
+-	kthread_bind(per_cpu(saf_state, cpu).scan_task, cpu);
+-	wake_up_process(per_cpu(saf_state, cpu).scan_task);
+-
+-	return 0;
+-}
+-
+-static int saf_offline_cpu(unsigned int cpu)
+-{
+-	struct task_struct *thread;
+-
+-	thread = per_cpu(saf_state, cpu).scan_task;
+-	per_cpu(saf_state, cpu).scan_task = NULL;
+-
+-	if (thread)
+-		kthread_stop(thread);
+-
+-	return 0;
+-}
+-
+ static int __init saf_init(void)
+ {
+ 	const struct x86_cpu_id *m;
+ 	u64 ia32_core_caps;
+-	int cpu, ret = -ENODEV;
++	int ret = -ENODEV;
+ 
+ 	/* saf capability check */
+ 	m = x86_match_cpu(saf_cpu_ids);
+@@ -510,48 +325,11 @@ static int __init saf_init(void)
+ 		return ret;
+ 	}
+ 
+-	saf_threads_per_core = cpumask_weight(topology_sibling_cpumask(0));
+-
+-	cpus_read_lock();
+-	for_each_online_cpu(cpu) {
+-		/* initialize per-cpu variables */
+-		init_waitqueue_head(&(per_cpu(saf_state, cpu).scan_wq));
+-		cpumask_clear_cpu(cpu, &(per_cpu(saf_state, cpu).mask));
+-		init_completion(&per_cpu(saf_state, cpu).test_thread_done);
+-
+-		/* set default start/stop chunk */
+-		per_cpu(saf_state, cpu).start_index = 0;
+-		per_cpu(saf_state, cpu).stop_index = saf_params.num_chunks - 1;
+-		per_cpu(saf_state, cpu).retry_count = MAX_RETRY;
+-	}
+-	cpus_read_unlock();
+-	ret = cpuhp_setup_state(CPUHP_AP_ONLINE_DYN, "x86/saf:online",
+-				saf_online_cpu, saf_offline_cpu);
+-
+-	if (ret < 0) {
+-		pr_err("saf: cpuhp_setup_failed");
+-		return ret;
+-	}
+-	cpuhp_scan_state = ret;
+-
+ 	return 0;
+ }
+ 
+ static void __exit saf_exit(void)
+ {
+-	struct task_struct *thread;
+-	int cpu;
+-
+-	cpus_read_lock();
+-	for_each_online_cpu(cpu) {
+-		thread = per_cpu(saf_state, cpu).scan_task;
+-		per_cpu(saf_state, cpu).scan_task = NULL;
+-		if (thread)
+-			kthread_stop(thread);
+-	}
+-	cpus_read_unlock();
+-	cpuhp_remove_state(cpuhp_scan_state);
+-
+ 	pr_info("saf: unloaded 'Scan At Field' module\n");
+ }
+ 
+diff --git a/drivers/ift/saf.h b/drivers/ift/saf.h
+index 6fb7786befc6..3be25170f956 100644
+--- a/drivers/ift/saf.h
++++ b/drivers/ift/saf.h
+@@ -21,44 +21,11 @@
+ #define MSR_SCAN_HASHES_STATUS			0x000002c3
+ #define MSR_AUTHENTICATE_AND_COPY_CHUNK		0x000002c4
+ #define MSR_CHUNKS_AUTHENTICATION_STATUS	0x000002c5
+-#define MSR_ACTIVATE_SCAN			0x000002c6
+-#define MSR_SCAN_STATUS				0x000002c7
+-#define SCAN_TEST_BUSY				-1
+-#define SPINUNIT				100
+ #define HEADER_OFFSET_IMAGE_REVISION		4
+ #define HEADER_OFFSET_METADATA_SIZE		28
+ #define HEADER_OFFSET_TOTAL_SIZE		32
+ #define HEADER_SIZE				48
+ #define TEST_SIZE_LIMIT				BIT(27)
+-#define MAX_RETRY				5
+-
+-/*
+- * scan execution error code (edx stores error code after rdmsr(SCAN_STATUS))
+- * 0x0: no error.
+- * 0x1: scan did not start because all sibling threads did not join.
+- * 0x2: scan did not start because interrupt occurred prior to scan coordination.
+- * 0x3: scan did not start because power management conditions are inadequate.
+- * 0x4: scan did not start because chunk range is set invalid
+- * 0x5: scan did not start because of mismatches in arguments between sibling threads.
+- * 0x6: scan did not start because core is not capable of performing scan currently.
+- * 0x7: scan debug mode.
+- * 0x8: scan did not start because of exceed number of cpus attempt to run scan.
+- * 0x9: scan did not start because interrupt occurred prior to scan execution.
+- * bit 30: scan controller error. the installed SAF image is not valid.
+- * bit 31: scan signature error. the scan signature did not match expected value.
+- */
+-#define SCAN_PASS				0x0
+-#define NOT_ENOUGH_THREADS_JOINED		0x1
+-#define INTERRUPTED_DURING_COORDINATION		0x2
+-#define POWER_MANAGEMENT_INADEQUATE_FOR_SCAN	0x3
+-#define INVALID_CHUNK_RANGE			0x4
+-#define MISMATCH_ARGUMENTS_BETWEEN_THREADS	0x5
+-#define CORE_NOT_CAPABLE_CURRENTLY		0x6
+-#define SAF_DEBUG_MODE				0x7
+-#define EXCEED_NUMBER_OF_THREADS_CONCURRENT	0x8
+-#define INTERRUPTED_BEFORE_EXECUTION		0x9
+-#define SCAN_CONTROLL_ERROR			BIT(30)
+-#define SCAN_SIGNATURE_ERROR			BIT(31)
+ 
+ /**
+  * struct saf_params - global saf parameter for all cpus.
+@@ -86,36 +53,4 @@ struct saf_params {
+ 	int valid_chunks;
+ };
+ 
+-/**
+- * struct saf_state - per-cpu saf parameter.
+- * @scan_task: scan_task for kthread to run scan test on each cpu.
+- * @start_index: scan test start chunk.
+- * @stop_index: scan test stop chunk.
+- * @retry_count: it holds the retry count remaining.
+- * @last_executed: it holds the last time scan was executed.
+- * @result: it holds 64bit raw result after each scan test.
+- * @siblings_in: sibling count for joining rendesvous.
+- * @siblings_out: sibling count for exiting rendesvous.
+- * @test_remain: number of tests to be finished per core.
+- * @scan_wq: kthread task wait queue.
+- * @mask: triggering the test by setting the mask.
+- * @test_thread_done: set when scan are done for all siblings threads.
+- */
+-struct saf_state {
+-	struct task_struct *scan_task;
+-	int start_index;
+-	int stop_index;
+-	int retry_count;
+-	int last_executed;
+-	u64 result;
+-	atomic_t siblings_in;
+-	atomic_t siblings_out;
+-	atomic_t test_remain;
+-	wait_queue_head_t scan_wq;
+-	struct cpumask mask;
+-	struct completion test_thread_done;
+-};
+-
+-DECLARE_PER_CPU(struct saf_state, saf_state);
+-
+ #endif
+-- 
+2.31.1
+

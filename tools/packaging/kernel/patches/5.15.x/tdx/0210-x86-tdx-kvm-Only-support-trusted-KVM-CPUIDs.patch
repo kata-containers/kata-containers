@@ -1,0 +1,65 @@
+From 89a6788f9c7d43533afebcf5c319c4b1db3cb8c5 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Tue, 13 Jul 2021 21:35:10 -0700
+Subject: [PATCH 0210/1418] x86/tdx/kvm: Only support trusted KVM CPUIDs
+
+Many of the KVM paravirt operations are not safe to use in a
+confidential guest because they require trusting the guest. For example
+the para virtual page fault could be misused to attack the guest. Or
+the kvmclock could be used to inject a non monotonic time into the
+guest.
+
+Disable all KVM paravirtual operations inside a TDX guest for now,
+except for two which are trivially safe. More could be re-enabled later
+as they are audited.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/uapi/asm/kvm_para.h |  6 ++++++
+ arch/x86/kernel/kvm.c                | 10 +++++++++-
+ 2 files changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/uapi/asm/kvm_para.h b/arch/x86/include/uapi/asm/kvm_para.h
+index 5146bbab84d4..426b60065466 100644
+--- a/arch/x86/include/uapi/asm/kvm_para.h
++++ b/arch/x86/include/uapi/asm/kvm_para.h
+@@ -36,6 +36,12 @@
+ #define KVM_FEATURE_HC_MAP_GPA_RANGE	16
+ #define KVM_FEATURE_MIGRATION_CONTROL	17
+ 
++/* Trusted features that are allowed in a confidential guest */
++/* Add more as needed */
++#define KVM_FEATURES_TRUSTED		 \
++	(BIT(KVM_FEATURE_NOP_IO_DELAY) | \
++	 BIT(KVM_FEATURE_PV_SEND_IPI))
++
+ #define KVM_HINTS_REALTIME      0
+ 
+ /* The last 8 bits are used to indicate how to interpret the flags field
+diff --git a/arch/x86/kernel/kvm.c b/arch/x86/kernel/kvm.c
+index 8863d1941f1b..b1ad52d73e7b 100644
+--- a/arch/x86/kernel/kvm.c
++++ b/arch/x86/kernel/kvm.c
+@@ -777,9 +777,17 @@ bool kvm_para_available(void)
+ }
+ EXPORT_SYMBOL_GPL(kvm_para_available);
+ 
++static unsigned int kvm_trusted_features(void)
++{
++	if (cc_platform_has(CC_ATTR_GUEST_CPUID_FILTER))
++		return KVM_FEATURES_TRUSTED;
++	return -1;
++}
++
+ unsigned int kvm_arch_para_features(void)
+ {
+-	return cpuid_eax(kvm_cpuid_base() | KVM_CPUID_FEATURES);
++	return cpuid_eax(kvm_cpuid_base() | KVM_CPUID_FEATURES) &
++		kvm_trusted_features();
+ }
+ 
+ unsigned int kvm_arch_para_hints(void)
+-- 
+2.31.1
+

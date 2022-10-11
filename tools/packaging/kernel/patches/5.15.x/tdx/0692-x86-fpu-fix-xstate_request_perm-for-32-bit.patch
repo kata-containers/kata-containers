@@ -1,0 +1,28 @@
+From 9ea7259fda88b3adaf83f63fd1748c2de8cc60ed Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Tue, 23 Nov 2021 19:18:30 -0800
+Subject: [PATCH 0692/1418] x86/fpu: fix xstate_request_perm() for 32-bit
+
+Add the same parameter as 64-bit for xstate_request_perm() in 32-bit.
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+---
+ arch/x86/kernel/fpu/xstate.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 3b1a12109b9b..3e9709969e61 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -1751,7 +1751,7 @@ int xfd_enable_guest_features(struct fpu_guest *guest_fpu)
+ }
+ 
+ #else /* CONFIG_X86_64 */
+-static inline int xstate_request_perm(unsigned long idx)
++static inline int xstate_request_perm(unsigned long idx, bool guest)
+ {
+ 	return -EPERM;
+ }
+-- 
+2.31.1
+

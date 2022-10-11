@@ -1,0 +1,189 @@
+From d923b5b76551060be25836a0996d8c2793d0009d Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Wed, 25 Aug 2021 21:42:48 +0300
+Subject: [PATCH 0219/1418] mm: Add support for unaccepted memory
+
+UEFI Specification version 2.9 introduces concept of memory acceptance:
+Some Virtual Machine platforms, such as Intel TDX or AMD SEV-SNP,
+requiring memory to be accepted before it can be used by the guest.
+Accepting happens via a protocol specific for the Virtual Machine
+platform.
+
+Accepting memory is costly and it makes VMM allocate memory for the
+accepted guest physical address range. It's better to postpone memory
+acceptation until memory is needed. It lowers boot time and reduces
+memory overhead.
+
+Support of such memory requires few changes in core-mm code:
+
+  - memblock has to accept memory on allocation;
+
+  - page allocator has to accept memory on the first allocation of the
+    page;
+
+Memblock change is trivial.
+
+Page allocator is modified to accept pages on the first allocation.
+PageOffline() is used to indicate that the page requires acceptance.
+The flag currently used by hotplug and balloon. Such pages are not
+available to page allocator.
+
+An architecture has to provide three helpers if it wants to support
+unaccepted memory:
+
+ - accept_memory() makes a range of physical addresses accepted.
+
+ - maybe_set_page_offline() marks a page PageOffline() if it requires
+   acceptance. Used during boot to put pages on free lists.
+
+ - accept_and_clear_page_offline() makes a page accepted and clears
+   PageOffline().
+
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ include/linux/page-flags.h |  4 ++++
+ mm/internal.h              | 15 +++++++++++++++
+ mm/memblock.c              |  1 +
+ mm/page_alloc.c            | 21 ++++++++++++++++++++-
+ 4 files changed, 40 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/page-flags.h b/include/linux/page-flags.h
+index fbfd3fad48f2..ff013b73b4f9 100644
+--- a/include/linux/page-flags.h
++++ b/include/linux/page-flags.h
+@@ -771,6 +771,10 @@ PAGE_TYPE_OPS(Buddy, buddy)
+  * any further access to page content. PFN walkers that read content of random
+  * pages should check PageOffline() and synchronize with such drivers using
+  * page_offline_freeze()/page_offline_thaw().
++ *
++ * If a PageOffline() page encountered on a buddy allocator's free list it has
++ * to be "accepted" before it can be used.
++ * See accept_and_clear_page_offline() and CONFIG_UNACCEPTED_MEMORY.
+  */
+ PAGE_TYPE_OPS(Offline, offline)
+ 
+diff --git a/mm/internal.h b/mm/internal.h
+index cf3cb933eba3..2a043a99e76b 100644
+--- a/mm/internal.h
++++ b/mm/internal.h
+@@ -671,4 +671,19 @@ void vunmap_range_noflush(unsigned long start, unsigned long end);
+ int numa_migrate_prep(struct page *page, struct vm_area_struct *vma,
+ 		      unsigned long addr, int page_nid, int *flags);
+ 
++#ifndef CONFIG_UNACCEPTED_MEMORY
++static inline void maybe_set_page_offline(struct page *page, unsigned int order)
++{
++}
++
++static inline void accept_and_clear_page_offline(struct page *page,
++						 unsigned int order)
++{
++}
++
++static inline void accept_memory(phys_addr_t start, phys_addr_t end)
++{
++}
++#endif
++
+ #endif	/* __MM_INTERNAL_H */
+diff --git a/mm/memblock.c b/mm/memblock.c
+index 5096500b2647..bb17f40eac6f 100644
+--- a/mm/memblock.c
++++ b/mm/memblock.c
+@@ -1392,6 +1392,7 @@ phys_addr_t __init memblock_alloc_range_nid(phys_addr_t size,
+ 		 */
+ 		kmemleak_alloc_phys(found, size, 0, 0);
+ 
++	accept_memory(found, found + size);
+ 	return found;
+ }
+ 
+diff --git a/mm/page_alloc.c b/mm/page_alloc.c
+index 23d3339ac4e8..5a3bb941e3e1 100644
+--- a/mm/page_alloc.c
++++ b/mm/page_alloc.c
+@@ -1066,6 +1066,7 @@ static inline void __free_one_page(struct page *page,
+ 	unsigned int max_order;
+ 	struct page *buddy;
+ 	bool to_tail;
++	bool offline = PageOffline(page);
+ 
+ 	max_order = min_t(unsigned int, MAX_ORDER - 1, pageblock_order);
+ 
+@@ -1099,6 +1100,10 @@ static inline void __free_one_page(struct page *page,
+ 			clear_page_guard(zone, buddy, order, migratetype);
+ 		else
+ 			del_page_from_free_list(buddy, zone, order);
++
++		if (PageOffline(buddy))
++			offline = true;
++
+ 		combined_pfn = buddy_pfn & pfn;
+ 		page = page + (combined_pfn - pfn);
+ 		pfn = combined_pfn;
+@@ -1132,6 +1137,9 @@ static inline void __free_one_page(struct page *page,
+ done_merging:
+ 	set_buddy_order(page, order);
+ 
++	if (offline)
++		__SetPageOffline(page);
++
+ 	if (fpi_flags & FPI_TO_TAIL)
+ 		to_tail = true;
+ 	else if (is_shuffle_order(order))
+@@ -1157,7 +1165,8 @@ static inline void __free_one_page(struct page *page,
+ static inline bool page_expected_state(struct page *page,
+ 					unsigned long check_flags)
+ {
+-	if (unlikely(atomic_read(&page->_mapcount) != -1))
++	if (unlikely(atomic_read(&page->_mapcount) != -1) &&
++	    !PageOffline(page))
+ 		return false;
+ 
+ 	if (unlikely((unsigned long)page->mapping |
+@@ -1742,6 +1751,8 @@ void __init memblock_free_pages(struct page *page, unsigned long pfn,
+ {
+ 	if (early_page_uninitialised(pfn))
+ 		return;
++
++	maybe_set_page_offline(page, order);
+ 	__free_pages_core(page, order);
+ }
+ 
+@@ -1831,10 +1842,12 @@ static void __init deferred_free_range(unsigned long pfn,
+ 	if (nr_pages == pageblock_nr_pages &&
+ 	    (pfn & (pageblock_nr_pages - 1)) == 0) {
+ 		set_pageblock_migratetype(page, MIGRATE_MOVABLE);
++		maybe_set_page_offline(page, pageblock_order);
+ 		__free_pages_core(page, pageblock_order);
+ 		return;
+ 	}
+ 
++	accept_memory(pfn << PAGE_SHIFT, (pfn + nr_pages) << PAGE_SHIFT);
+ 	for (i = 0; i < nr_pages; i++, page++, pfn++) {
+ 		if ((pfn & (pageblock_nr_pages - 1)) == 0)
+ 			set_pageblock_migratetype(page, MIGRATE_MOVABLE);
+@@ -2305,6 +2318,9 @@ static inline void expand(struct zone *zone, struct page *page,
+ 		if (set_page_guard(zone, &page[size], high, migratetype))
+ 			continue;
+ 
++		if (PageOffline(page))
++			__SetPageOffline(&page[size]);
++
+ 		add_to_free_list(&page[size], zone, high, migratetype);
+ 		set_buddy_order(&page[size], high);
+ 	}
+@@ -2401,6 +2417,9 @@ inline void post_alloc_hook(struct page *page, unsigned int order,
+ 	 */
+ 	kernel_unpoison_pages(page, 1 << order);
+ 
++	if (PageOffline(page))
++		accept_and_clear_page_offline(page, order);
++
+ 	/*
+ 	 * As memory initialization might be integrated into KASAN,
+ 	 * kasan_alloc_pages and kernel_init_free_pages must be
+-- 
+2.31.1
+

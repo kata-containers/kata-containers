@@ -1,0 +1,49 @@
+From 6906c54da7f6a2b6939e71d17cf6e11dee61b4e5 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Fri, 17 Dec 2021 11:06:35 +0800
+Subject: [PATCH 0758/1418] Revert "x86/sgx: Add a flag to track VM state
+ during SGX SVN update"
+
+This reverts commit 5f9046e251ea206eb60c1b76fec715d562d6a5f0.
+---
+ arch/x86/kernel/cpu/sgx/main.c | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index 5e74bf166d1f..1ac63bfa4f81 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -1258,15 +1258,12 @@ void sgx_zap_abort(void)
+ }
+ 
+ static LIST_HEAD(sgx_kvm_notifier_list);
+-static bool sgx_kvm_paused;
+ static DEFINE_MUTEX(sgx_kvm_notifier_lock);
+ 
+ void sgx_kvm_notifier_register(struct sgx_kvm_notifier *notifier)
+ {
+ 	mutex_lock(&sgx_kvm_notifier_lock);
+ 	list_add_tail(&notifier->list, &sgx_kvm_notifier_list);
+-	if (sgx_kvm_paused)
+-		notifier->ops->halt(notifier);
+ 	mutex_unlock(&sgx_kvm_notifier_lock);
+ }
+ EXPORT_SYMBOL(sgx_kvm_notifier_register);
+@@ -1287,7 +1284,6 @@ void sgx_kvm_notifier_halt(void)
+ 	list_for_each_entry(notifier, &sgx_kvm_notifier_list, list) {
+ 		notifier->ops->halt(notifier);
+ 	}
+-	sgx_kvm_paused = true;
+ 	mutex_unlock(&sgx_kvm_notifier_lock);
+ }
+ 
+@@ -1299,6 +1295,5 @@ void sgx_kvm_notifier_resume(void)
+ 	list_for_each_entry(notifier, &sgx_kvm_notifier_list, list) {
+ 		notifier->ops->resume(notifier);
+ 	}
+-	sgx_kvm_paused = false;
+ 	mutex_unlock(&sgx_kvm_notifier_lock);
+ }
+-- 
+2.31.1
+

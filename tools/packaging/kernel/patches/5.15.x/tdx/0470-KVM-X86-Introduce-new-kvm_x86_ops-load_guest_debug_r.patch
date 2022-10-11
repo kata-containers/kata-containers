@@ -1,0 +1,160 @@
+From 6936e323dea825b3c18621ecdd2c351e2edbcb22 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Thu, 1 Jul 2021 16:22:32 +0800
+Subject: [PATCH 0470/1418] KVM: X86: Introduce new
+ kvm_x86_ops::load_guest_debug_regs interface
+
+This new interface focus on loading debug registers for
+normal/encrypted guests when before vmentry, because
+the encrypted guests (e.g INTEL TDX and AMD SEV) have their own
+interfaces to do such things from the normal legacy x86 guest.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/include/asm/kvm-x86-ops.h |  1 +
+ arch/x86/include/asm/kvm_host.h    |  4 ++++
+ arch/x86/kvm/svm/svm.c             |  1 +
+ arch/x86/kvm/vmx/main.c            |  9 +++++++++
+ arch/x86/kvm/vmx/tdx.c             |  5 +++++
+ arch/x86/kvm/vmx/tdx_stubs.c       |  1 +
+ arch/x86/kvm/x86.c                 | 18 +++++++++++++-----
+ 7 files changed, 34 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm-x86-ops.h b/arch/x86/include/asm/kvm-x86-ops.h
+index 37529bd5d57b..856008188d81 100644
+--- a/arch/x86/include/asm/kvm-x86-ops.h
++++ b/arch/x86/include/asm/kvm-x86-ops.h
+@@ -46,6 +46,7 @@ KVM_X86_OP(get_gdt)
+ KVM_X86_OP(set_gdt)
+ KVM_X86_OP(sync_dirty_debug_regs)
+ KVM_X86_OP(set_dr7)
++KVM_X86_OP(load_guest_debug_regs)
+ KVM_X86_OP(cache_reg)
+ KVM_X86_OP(get_rflags)
+ KVM_X86_OP(set_rflags)
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 54edf1872cd4..01985aa2a059 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1379,6 +1379,7 @@ struct kvm_x86_ops {
+ 	void (*set_gdt)(struct kvm_vcpu *vcpu, struct desc_ptr *dt);
+ 	void (*sync_dirty_debug_regs)(struct kvm_vcpu *vcpu);
+ 	void (*set_dr7)(struct kvm_vcpu *vcpu, unsigned long value);
++	void (*load_guest_debug_regs)(struct kvm_vcpu *vcpu);
+ 	void (*cache_gprs)(struct kvm_vcpu *vcpu);
+ 	void (*flush_gprs)(struct kvm_vcpu *vcpu);
+ 	void (*cache_reg)(struct kvm_vcpu *vcpu, enum kvm_reg reg);
+@@ -2016,4 +2017,7 @@ extern int kvm_set_guest_paused(struct kvm_vcpu *vcpu);
+ 
+ int alloc_all_memslots_rmaps(struct kvm *kvm);
+ 
++/* The common function for normal x86 guest */
++void load_guest_debug_regs(struct kvm_vcpu *vcpu);
++
+ #endif /* _ASM_X86_KVM_HOST_H */
+diff --git a/arch/x86/kvm/svm/svm.c b/arch/x86/kvm/svm/svm.c
+index 96d33dcf4cc2..9eab27b95805 100644
+--- a/arch/x86/kvm/svm/svm.c
++++ b/arch/x86/kvm/svm/svm.c
+@@ -4573,6 +4573,7 @@ static struct kvm_x86_ops svm_x86_ops __initdata = {
+ 	.set_gdt = svm_set_gdt,
+ 	.set_dr7 = svm_set_dr7,
+ 	.sync_dirty_debug_regs = svm_sync_dirty_debug_regs,
++	.load_guest_debug_regs = load_guest_debug_regs,
+ 	.cache_reg = svm_cache_reg,
+ 	.get_rflags = svm_get_rflags,
+ 	.set_rflags = svm_set_rflags,
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index fb4cee3d329d..a7e50da043eb 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -577,6 +577,14 @@ static void vt_sync_dirty_debug_regs(struct kvm_vcpu *vcpu)
+ 	vmx_sync_dirty_debug_regs(vcpu);
+ }
+ 
++static void vt_load_guest_debug_regs(struct kvm_vcpu *vcpu)
++{
++	if (is_td_vcpu(vcpu))
++		return tdx_load_guest_debug_regs(vcpu);
++
++	return load_guest_debug_regs(vcpu);
++}
++
+ static void vt_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg)
+ {
+ 	unsigned long guest_owned_bits;
+@@ -1037,6 +1045,7 @@ static struct kvm_x86_ops vt_x86_ops __initdata = {
+ 	.set_gdt = vt_set_gdt,
+ 	.set_dr7 = vt_set_dr7,
+ 	.sync_dirty_debug_regs = vt_sync_dirty_debug_regs,
++	.load_guest_debug_regs = vt_load_guest_debug_regs,
+ 	.cache_reg = vt_cache_reg,
+ 	.get_rflags = vt_get_rflags,
+ 	.set_rflags = vt_set_rflags,
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 07bf4c4d7c40..cfce3ec67c79 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -2131,6 +2131,11 @@ static void tdx_set_dr7(struct kvm_vcpu *vcpu, unsigned long val)
+ 	KVM_BUG_ON(val != DR7_FIXED_1, vcpu->kvm);
+ }
+ 
++static void tdx_load_guest_debug_regs(struct kvm_vcpu *vcpu)
++{
++	kvm_pr_unimpl("unexpected %s\n", __func__);
++}
++
+ static int tdx_get_cpl(struct kvm_vcpu *vcpu)
+ {
+ 	if (KVM_BUG_ON(!is_debug_td(vcpu), vcpu->kvm))
+diff --git a/arch/x86/kvm/vmx/tdx_stubs.c b/arch/x86/kvm/vmx/tdx_stubs.c
+index f6921325a21b..b2b65d29e199 100644
+--- a/arch/x86/kvm/vmx/tdx_stubs.c
++++ b/arch/x86/kvm/vmx/tdx_stubs.c
+@@ -40,6 +40,7 @@ static int __init tdx_init(void) { return 0; }
+ static void __exit tdx_exit(void) {}
+ static void tdx_update_exception_bitmap(struct kvm_vcpu *vcpu) {}
+ static void tdx_set_dr7(struct kvm_vcpu *vcpu, unsigned long val) {}
++static void tdx_load_guest_debug_regs(struct kvm_vcpu *vcpu) {}
+ static int tdx_get_cpl(struct kvm_vcpu *vcpu) { return 0; }
+ static unsigned long tdx_get_rflags(struct kvm_vcpu *vcpu) { return 0; }
+ static void tdx_set_rflags(struct kvm_vcpu *vcpu, unsigned long rflags) {}
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index d4af4692478b..2e0dcf109731 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -9516,6 +9516,18 @@ void __kvm_request_immediate_exit(struct kvm_vcpu *vcpu)
+ }
+ EXPORT_SYMBOL_GPL(__kvm_request_immediate_exit);
+ 
++// Exported for all x86 normal guests
++void load_guest_debug_regs(struct kvm_vcpu *vcpu)
++{
++	set_debugreg(0, 7);
++	set_debugreg(vcpu->arch.eff_db[0], 0);
++	set_debugreg(vcpu->arch.eff_db[1], 1);
++	set_debugreg(vcpu->arch.eff_db[2], 2);
++	set_debugreg(vcpu->arch.eff_db[3], 3);
++	set_debugreg(vcpu->arch.dr6, 6);
++}
++EXPORT_SYMBOL_GPL(load_guest_debug_regs);
++
+ /*
+  * Returns 1 to let vcpu_run() continue the guest execution loop without
+  * exiting to the userspace.  Otherwise, the value will be returned to the
+@@ -9755,11 +9767,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
+ 		switch_fpu_return();
+ 
+ 	if (unlikely(vcpu->arch.switch_db_regs & ~KVM_DEBUGREG_AUTO_SWITCH_GUEST)) {
+-		set_debugreg(0, 7);
+-		set_debugreg(vcpu->arch.eff_db[0], 0);
+-		set_debugreg(vcpu->arch.eff_db[1], 1);
+-		set_debugreg(vcpu->arch.eff_db[2], 2);
+-		set_debugreg(vcpu->arch.eff_db[3], 3);
++		static_call(kvm_x86_load_guest_debug_regs)(vcpu);
+ 	} else if (unlikely(hw_breakpoint_active())) {
+ 		set_debugreg(0, 7);
+ 	}
+-- 
+2.31.1
+

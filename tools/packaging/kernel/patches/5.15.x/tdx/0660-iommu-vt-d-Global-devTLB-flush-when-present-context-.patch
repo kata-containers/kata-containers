@@ -1,0 +1,37 @@
+From 5bc0f32227fda50768198752407336d3734ce6cd Mon Sep 17 00:00:00 2001
+From: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Date: Mon, 12 Jul 2021 15:13:15 +0800
+Subject: [PATCH 0660/1418] iommu/vt-d: Global devTLB flush when present
+ context entry changed
+
+This fixes a bug in context cache clear operation. The code was not
+following the correct invalidation flow. A global device TLB invalidation
+should be added after the IOTLB invalidation. At the same time, it
+uses the domain ID from the context entry. But in scalable mode, the
+domain ID is in PASID table entry, not context entry.
+
+Fixes: 7373a8cc38197 ("iommu/vt-d: Setup context and enable RID2PASID support")
+Cc: stable@vger.kernel.org # v5.0+
+Signed-off-by: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Signed-off-by: Lu Baolu <baolu.lu@linux.intel.com>
+---
+ drivers/iommu/intel/iommu.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index b0a233e9d73a..aba52dc81178 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -4513,7 +4513,8 @@ static void __dmar_remove_one_dev_info(struct device_domain_info *info)
+ 					PASID_RID2PASID, false);
+ 
+ 		iommu_disable_dev_iotlb(info);
+-		domain_context_clear(info);
++		if (!dev_is_real_dma_subdevice(info->dev))
++			domain_context_clear(info);
+ 		intel_pasid_free_table(info->dev);
+ 	}
+ 
+-- 
+2.31.1
+

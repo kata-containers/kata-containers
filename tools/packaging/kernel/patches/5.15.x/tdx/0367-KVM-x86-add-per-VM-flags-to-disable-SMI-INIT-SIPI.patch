@@ -1,0 +1,61 @@
+From a7428d27f26d9ac563c858dce2177502099f9140 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Sat, 16 Jan 2021 00:58:39 -0800
+Subject: [PATCH 0367/1418] KVM: x86: add per-VM flags to disable SMI/INIT/SIPI
+
+Add a flag to let TDX disallow to inject interrupt with delivery
+mode of SMI/INIT/SIPI. add a check to reject SMI/INIT interrupt
+delivery mode.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h | 2 ++
+ arch/x86/kvm/irq_comm.c         | 4 ++++
+ arch/x86/kvm/x86.c              | 3 +--
+ 3 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 4fb97ac748ad..5df37e64effd 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1138,6 +1138,8 @@ struct kvm_arch {
+ 	enum kvm_irqchip_mode irqchip_mode;
+ 	u8 nr_reserved_ioapic_pins;
+ 	bool eoi_intercept_unsupported;
++	bool smm_unsupported;
++	bool init_sipi_unsupported;
+ 
+ 	bool disabled_lapic_found;
+ 
+diff --git a/arch/x86/kvm/irq_comm.c b/arch/x86/kvm/irq_comm.c
+index bcfac99db579..396ccf086bdd 100644
+--- a/arch/x86/kvm/irq_comm.c
++++ b/arch/x86/kvm/irq_comm.c
+@@ -128,6 +128,10 @@ static inline bool kvm_msi_route_invalid(struct kvm *kvm,
+ 			       .data = e->msi.data };
+ 	return  (kvm->arch.eoi_intercept_unsupported &&
+ 		 msg.arch_data.is_level) ||
++		(kvm->arch.smm_unsupported &&
++		 msg.arch_data.delivery_mode == APIC_DELIVERY_MODE_SMI) ||
++		(kvm->arch.init_sipi_unsupported &&
++		 msg.arch_data.delivery_mode == APIC_DELIVERY_MODE_INIT) ||
+ 		(kvm->arch.x2apic_format && (msg.address_hi & 0xff));
+ }
+ 
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 116523efbd3c..67980aa74bd7 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -4444,8 +4444,7 @@ static int kvm_vcpu_ioctl_nmi(struct kvm_vcpu *vcpu)
+ 
+ static int kvm_vcpu_ioctl_smi(struct kvm_vcpu *vcpu)
+ {
+-	/* TODO: use more precise flag */
+-	if (vcpu->arch.guest_state_protected)
++	if (vcpu->kvm->arch.smm_unsupported)
+ 		return -EINVAL;
+ 
+ 	kvm_make_request(KVM_REQ_SMI, vcpu);
+-- 
+2.31.1
+

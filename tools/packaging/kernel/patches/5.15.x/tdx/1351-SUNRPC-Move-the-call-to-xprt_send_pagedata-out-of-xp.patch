@@ -1,0 +1,105 @@
+From ec008f18059bf54970c99e5a18f087253f3c012f Mon Sep 17 00:00:00 2001
+From: Trond Myklebust <trond.myklebust@hammerspace.com>
+Date: Wed, 6 Apr 2022 22:51:58 -0400
+Subject: [PATCH 1351/1418] SUNRPC: Move the call to xprt_send_pagedata() out
+ of xprt_sock_sendmsg()
+
+The client and server have different requirements for their memory
+allocation, so move the allocation of the send buffer out of the socket
+send code that is common to both.
+
+Reported-by: NeilBrown <neilb@suse.de>
+Fixes: b2648015d452 ("SUNRPC: Make the rpciod and xprtiod slab allocation modes consistent")
+Signed-off-by: Trond Myklebust <trond.myklebust@hammerspace.com>
+---
+ net/sunrpc/socklib.c  |  6 ------
+ net/sunrpc/svcsock.c  |  9 ++++++---
+ net/sunrpc/xprtsock.c | 14 +++++++++++++-
+ 3 files changed, 19 insertions(+), 10 deletions(-)
+
+diff --git a/net/sunrpc/socklib.c b/net/sunrpc/socklib.c
+index d52313af82bc..c6d045830fa2 100644
+--- a/net/sunrpc/socklib.c
++++ b/net/sunrpc/socklib.c
+@@ -220,12 +220,6 @@ static int xprt_send_kvec(struct socket *sock, struct msghdr *msg,
+ static int xprt_send_pagedata(struct socket *sock, struct msghdr *msg,
+ 			      struct xdr_buf *xdr, size_t base)
+ {
+-	int err;
+-
+-	err = xdr_alloc_bvec(xdr, GFP_KERNEL);
+-	if (err < 0)
+-		return err;
+-
+ 	iov_iter_bvec(&msg->msg_iter, WRITE, xdr->bvec, xdr_buf_pagecount(xdr),
+ 		      xdr->page_len + xdr->page_base);
+ 	return xprt_sendmsg(sock, msg, base + xdr->page_base);
+diff --git a/net/sunrpc/svcsock.c b/net/sunrpc/svcsock.c
+index 6ea3d87e1147..cc35ec433400 100644
+--- a/net/sunrpc/svcsock.c
++++ b/net/sunrpc/svcsock.c
+@@ -579,15 +579,18 @@ static int svc_udp_sendto(struct svc_rqst *rqstp)
+ 	if (svc_xprt_is_dead(xprt))
+ 		goto out_notconn;
+ 
++	err = xdr_alloc_bvec(xdr, GFP_KERNEL);
++	if (err < 0)
++		goto out_unlock;
++
+ 	err = xprt_sock_sendmsg(svsk->sk_sock, &msg, xdr, 0, 0, &sent);
+-	xdr_free_bvec(xdr);
+ 	if (err == -ECONNREFUSED) {
+ 		/* ICMP error on earlier request. */
+ 		err = xprt_sock_sendmsg(svsk->sk_sock, &msg, xdr, 0, 0, &sent);
+-		xdr_free_bvec(xdr);
+ 	}
++	xdr_free_bvec(xdr);
+ 	trace_svcsock_udp_send(xprt, err);
+-
++out_unlock:
+ 	mutex_unlock(&xprt->xpt_mutex);
+ 	if (err < 0)
+ 		return err;
+diff --git a/net/sunrpc/xprtsock.c b/net/sunrpc/xprtsock.c
+index 9ded314b97a4..235eb063ce9b 100644
+--- a/net/sunrpc/xprtsock.c
++++ b/net/sunrpc/xprtsock.c
+@@ -804,8 +804,14 @@ static int xs_nospace(struct rpc_rqst *req)
+ static int
+ xs_stream_prepare_request(struct rpc_rqst *req)
+ {
++	gfp_t gfp = rpc_task_gfp_mask();
++	int ret;
++
++	ret = xdr_alloc_bvec(&req->rq_snd_buf, gfp);
++	if (ret < 0)
++		return ret;
+ 	xdr_free_bvec(&req->rq_rcv_buf);
+-	return xdr_alloc_bvec(&req->rq_rcv_buf, GFP_KERNEL);
++	return xdr_alloc_bvec(&req->rq_rcv_buf, gfp);
+ }
+ 
+ /*
+@@ -935,6 +941,9 @@ static int xs_udp_send_request(struct rpc_rqst *req)
+ 	if (!xprt_request_get_cong(xprt, req))
+ 		return -EBADSLT;
+ 
++	status = xdr_alloc_bvec(xdr, rpc_task_gfp_mask());
++	if (status < 0)
++		return status;
+ 	req->rq_xtime = ktime_get();
+ 	status = xprt_sock_sendmsg(transport->sock, &msg, xdr, 0, 0, &sent);
+ 
+@@ -2557,6 +2566,9 @@ static int bc_sendto(struct rpc_rqst *req)
+ 	int err;
+ 
+ 	req->rq_xtime = ktime_get();
++	err = xdr_alloc_bvec(xdr, rpc_task_gfp_mask());
++	if (err < 0)
++		return err;
+ 	err = xprt_sock_sendmsg(transport->sock, &msg, xdr, 0, marker, &sent);
+ 	xdr_free_bvec(xdr);
+ 	if (err < 0 || sent != (xdr->len + sizeof(marker)))
+-- 
+2.31.1
+

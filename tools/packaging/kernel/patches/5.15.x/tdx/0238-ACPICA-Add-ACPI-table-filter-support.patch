@@ -1,0 +1,137 @@
+From 01d6ee4b05e993375c1f2e39e28612d06650cae2 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Thu, 3 Sep 2020 16:21:34 -0700
+Subject: [PATCH 0238/1418] ACPICA: Add ACPI table filter support
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+TDX architecture provides a way for VM guests to be highly secure
+and isolated (from un-trusted VMM). To achieve this requirement,
+any data coming from VMM or TDVF cannot be completely trusted
+(including the ACPI tables). But, the dependency between TDVF/VMM
+and VM guest cannot be completely removed, TDX Guest specification
+provides a set of ways to make it trustable (like attestation,
+using TDX Module as intermediary between VMM/Guest, etc).  After
+attestation, in theory ACPI tables can be trusted. But it's
+difficult for the person doing the attestation to figure out what
+ACPI tables will open the attack surface in the kernel. So even
+though they are trusted in theory, they are still a bit risky. To
+minimize any problems limit supported ACPI tables to the minimum.
+TDX functionality is rather restricted anyways, so most things in
+ACPI are not needed. However more work is needed to completely
+harden ACPI.   
+
+So add ACPI table filter support to limit the list of ACPI tables
+installed in OS.
+
+Following API will be used by OS to register the list of ACPI tables
+allowed by a given platform.
+
+int acpi_tbl_allow_setup(char *s)
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+---
+ drivers/acpi/acpica/tbinstal.c | 23 +++++++++++++++++++++++
+ drivers/acpi/osl.c             | 21 +++++++++++++++++++++
+ include/acpi/acpixf.h          |  5 +++++
+ 3 files changed, 49 insertions(+)
+
+diff --git a/drivers/acpi/acpica/tbinstal.c b/drivers/acpi/acpica/tbinstal.c
+index 8d1e5b572493..9970823e54b7 100644
+--- a/drivers/acpi/acpica/tbinstal.c
++++ b/drivers/acpi/acpica/tbinstal.c
+@@ -14,6 +14,22 @@
+ #define _COMPONENT          ACPI_TABLES
+ ACPI_MODULE_NAME("tbinstal")
+ 
++static bool acpi_tb_install_allowed(struct acpi_table_desc *desc)
++{
++	int index;
++
++	/* If filter is not enabled, allow all tables */
++	if (acpi_tbl_allow_len <= 0)
++		return true;
++
++	for (index = 0; index < acpi_tbl_allow_len; index++)
++		if (ACPI_COMPARE_NAMESEG(&desc->signature,
++					 acpi_tbl_allow_list[index]))
++			return true;
++
++	return false;
++}
++
+ /*******************************************************************************
+  *
+  * FUNCTION:    acpi_tb_install_table_with_override
+@@ -42,6 +58,13 @@ acpi_tb_install_table_with_override(struct acpi_table_desc *new_table_desc,
+ 		return;
+ 	}
+ 
++	if (!acpi_tb_install_allowed(new_table_desc)) {
++		ACPI_INFO(("Ignoring installation of %4.4s",
++			   new_table_desc->signature.ascii));
++		*table_index = i;
++		return;
++	}
++
+ 	/*
+ 	 * ACPI Table Override:
+ 	 *
+diff --git a/drivers/acpi/osl.c b/drivers/acpi/osl.c
+index 45c5c0e45e33..151af05915a0 100644
+--- a/drivers/acpi/osl.c
++++ b/drivers/acpi/osl.c
+@@ -1714,6 +1714,27 @@ static int __init acpi_no_static_ssdt_setup(char *s)
+ 
+ early_param("acpi_no_static_ssdt", acpi_no_static_ssdt_setup);
+ 
++/*******************************************************************************
++ *
++ * FUNCTION:    acpi_tbl_allow_setup
++ *
++ * PARAMETERS:  S           - Comma separated list of ACPI tables
++ *
++ * DESCRIPTION: Update the acpi_tbl_allow_list with list of platform
++ *		specific ACPI tables allow-list. Call it in early init
++ *		code (acpi_tbl_allow_list need to be updated before
++ *		ACPI tables are installed by OS).
++ *
++ ******************************************************************************/
++void acpi_tbl_allow_setup(char *s)
++{
++	char *name;
++
++	while ((name = strsep(&s, ",")))
++		acpi_tbl_allow_list[acpi_tbl_allow_len++] = name;
++}
++EXPORT_SYMBOL_GPL(acpi_tbl_allow_setup);
++
+ static int __init acpi_disable_return_repair(char *s)
+ {
+ 	pr_notice("Predefined validation mechanism disabled\n");
+diff --git a/include/acpi/acpixf.h b/include/acpi/acpixf.h
+index fa02e3ff0faf..70946a86a3d9 100644
+--- a/include/acpi/acpixf.h
++++ b/include/acpi/acpixf.h
+@@ -266,6 +266,9 @@ ACPI_GLOBAL(char, acpi_gbl_db_line_buf[ACPI_DB_LINE_BUFFER_SIZE]);
+ ACPI_GLOBAL(struct acpi_table_fadt, acpi_gbl_FADT);
+ ACPI_GLOBAL(u32, acpi_current_gpe_count);
+ ACPI_GLOBAL(u8, acpi_gbl_system_awake_and_running);
++#define MAX_ALLOW_TBL_LEN 100
++ACPI_GLOBAL(char*, acpi_tbl_allow_list[MAX_ALLOW_TBL_LEN]);
++ACPI_INIT_GLOBAL(u8, acpi_tbl_allow_len, 0);
+ 
+ /*****************************************************************************
+  *
+@@ -961,4 +964,6 @@ void acpi_run_debugger(char *batch_buffer);
+ 
+ void acpi_set_debugger_thread_id(acpi_thread_id thread_id);
+ 
++void __init acpi_tbl_allow_setup(char *s);
++
+ #endif				/* __ACXFACE_H__ */
+-- 
+2.31.1
+

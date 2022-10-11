@@ -1,0 +1,161 @@
+From 77f8fe8dcd1206566e46accd6cc2acadd2d774a9 Mon Sep 17 00:00:00 2001
+From: Jiangbo Wu <jiangbo.wu@intel.com>
+Date: Wed, 19 Jan 2022 16:29:58 -0700
+Subject: [PATCH 1160/1418] dmaengine: idxd: Add batch descriptor support
+
+The DSA device can support a group of descriptors for submission at once.
+The DSA spec calls this operation a 'batch' operation. The batch descriptor
+points to an array of descriptors where the beginning of the address list
+is 64-byte aligned.
+
+Co-developed-by: Konstantin Ananyev <konstantin.ananyev@intel.com>
+Signed-off-by: Jiangbo Wu <jiangbo.wu@intel.com>
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/device.c | 64 +++++++++++++++++++++++++++++++++++++--
+ drivers/dma/idxd/idxd.h   | 18 +++++++++++
+ drivers/dma/idxd/submit.c |  1 +
+ 3 files changed, 80 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index e06c8b05c04d..348eb1bad46a 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -39,6 +39,59 @@ void idxd_mask_error_interrupts(struct idxd_device *idxd)
+ 	iowrite32(genctrl.bits, idxd->reg_base + IDXD_GENCTRL_OFFSET);
+ }
+ 
++static int alloc_desc_batch(struct idxd_wq *wq, struct idxd_desc *desc)
++{
++	struct idxd_device *idxd = wq->idxd;
++	struct device *dev = &idxd->pdev->dev;
++	struct idxd_batch *batch;
++	unsigned int size, cr_size, num;
++
++	batch = kzalloc_node(sizeof(*batch), GFP_KERNEL, dev_to_node(dev));
++	if (!batch)
++		return -ENOMEM;
++
++	num = wq->max_batch_size;
++	size = num * sizeof(struct dsa_hw_desc);
++	batch->descs = dma_alloc_coherent(dev, size, &batch->dma_descs, GFP_KERNEL);
++	if (!batch->descs)
++		goto descs_err;
++
++	cr_size = num * idxd->data->compl_size;
++	batch->crs = dma_alloc_coherent(dev, cr_size, &batch->dma_crs, GFP_KERNEL);
++	if (!batch->crs)
++		goto crs_err;
++
++	desc->batch = batch;
++
++	return 0;
++
++crs_err:
++	dma_free_coherent(dev, size, batch->descs, batch->dma_descs);
++descs_err:
++	kfree(batch);
++	dev_warn(dev, "Unable to allocate memory, consider lowering max batch size.\n");
++	return -ENOMEM;
++}
++
++static void free_desc_batch(struct idxd_wq *wq, struct idxd_desc *desc)
++{
++	struct idxd_device *idxd = wq->idxd;
++	struct device *dev = &idxd->pdev->dev;
++	unsigned int size, cr_size, num;
++	struct idxd_batch *batch;
++
++	batch = desc->batch;
++	if (!batch)
++		return;
++
++	num = wq->max_batch_size;
++	size = num * sizeof(struct dsa_hw_desc);
++	cr_size = num * idxd->data->compl_size;
++	dma_free_coherent(dev, size, batch->descs, batch->dma_descs);
++	dma_free_coherent(dev, cr_size, batch->crs, batch->dma_crs);
++	kfree(batch);
++}
++
+ static void free_hw_descs(struct idxd_wq *wq)
+ {
+ 	int i;
+@@ -76,8 +129,10 @@ static void free_descs(struct idxd_wq *wq)
+ {
+ 	int i;
+ 
+-	for (i = 0; i < wq->num_descs; i++)
++	for (i = 0; i < wq->num_descs; i++) {
++		free_desc_batch(wq, wq->descs[i]);
+ 		kfree(wq->descs[i]);
++	}
+ 
+ 	kfree(wq->descs);
+ }
+@@ -142,9 +197,12 @@ int idxd_wq_alloc_resources(struct idxd_wq *wq)
+ 		struct idxd_desc *desc = wq->descs[i];
+ 
+ 		desc->hw = wq->hw_descs[i];
+-		if (idxd->data->type == IDXD_TYPE_DSA)
++		if (idxd->data->type == IDXD_TYPE_DSA) {
+ 			desc->completion = &wq->compls[i];
+-		else if (idxd->data->type == IDXD_TYPE_IAX)
++			/* pre-allocate batch for descriptor */
++			if (alloc_desc_batch(wq, desc))
++				goto fail_sbitmap_init;
++		} else if (idxd->data->type == IDXD_TYPE_IAX)
+ 			desc->iax_completion = &wq->iax_compls[i];
+ 		desc->compl_dma = wq->compls_addr + idxd->data->compl_size * i;
+ 		desc->id = i;
+diff --git a/drivers/dma/idxd/idxd.h b/drivers/dma/idxd/idxd.h
+index f807d7621755..af16e91e07e3 100644
+--- a/drivers/dma/idxd/idxd.h
++++ b/drivers/dma/idxd/idxd.h
+@@ -335,6 +335,22 @@ struct idxd_device {
+ 	struct idxd_pmu *idxd_pmu;
+ };
+ 
++/**
++ * IDXD batch field for SW Batch descriptor
++ * @descs: Descriptor list address
++ * @dma_descs: DMA address for descs
++ * @crs: completion record list address
++ * @dma_crs: DMA address for completion records
++ * @num: Number of descs in batch
++ */
++struct idxd_batch {
++	struct dsa_hw_desc *descs;
++	dma_addr_t dma_descs;
++	struct dsa_completion_record *crs;
++	dma_addr_t dma_crs;
++	u32 num;
++};
++
+ /* IDXD software descriptor */
+ struct idxd_desc {
+ 	union {
+@@ -354,6 +370,8 @@ struct idxd_desc {
+ 	u16 gen;
+ 	int cpu;
+ 	struct idxd_wq *wq;
++
++	struct idxd_batch *batch;
+ };
+ 
+ /*
+diff --git a/drivers/dma/idxd/submit.c b/drivers/dma/idxd/submit.c
+index c278cc47fc01..78d40c67c932 100644
+--- a/drivers/dma/idxd/submit.c
++++ b/drivers/dma/idxd/submit.c
+@@ -16,6 +16,7 @@ static struct idxd_desc *__get_desc(struct idxd_wq *wq, int idx, int cpu)
+ 	desc = wq->descs[idx];
+ 	memset(desc->hw, 0, sizeof(struct dsa_hw_desc));
+ 	memset(desc->completion, 0, idxd->data->compl_size);
++	desc->batch->num = 0;
+ 	desc->cpu = cpu;
+ 
+ 	if (device_pasid_enabled(idxd))
+-- 
+2.31.1
+

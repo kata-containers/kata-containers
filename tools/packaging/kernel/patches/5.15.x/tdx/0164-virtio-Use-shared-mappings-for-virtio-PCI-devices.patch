@@ -1,0 +1,30 @@
+From 2ce498021eaeb5f7d7f02e2e8763874a2e96bbf3 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Tue, 13 Jul 2021 17:48:32 -0700
+Subject: [PATCH 0164/1418] virtio: Use shared mappings for virtio PCI devices
+
+In a TDX guest the pci device mappings of virtio must be shared
+with the host, so use explicit shared mappings.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ drivers/virtio/virtio_pci_modern_dev.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/virtio/virtio_pci_modern_dev.c b/drivers/virtio/virtio_pci_modern_dev.c
+index e11ed748e661..f29bf45a4642 100644
+--- a/drivers/virtio/virtio_pci_modern_dev.c
++++ b/drivers/virtio/virtio_pci_modern_dev.c
+@@ -83,7 +83,7 @@ vp_modern_map_capability(struct virtio_pci_modern_device *mdev, int off,
+ 		return NULL;
+ 	}
+ 
+-	p = pci_iomap_range(dev, bar, offset, length);
++	p = pci_iomap_host_shared_range(dev, bar, offset, length);
+ 	if (!p)
+ 		dev_err(&dev->dev,
+ 			"virtio_pci: unable to map virtio %u@%u on bar %i\n",
+-- 
+2.31.1
+

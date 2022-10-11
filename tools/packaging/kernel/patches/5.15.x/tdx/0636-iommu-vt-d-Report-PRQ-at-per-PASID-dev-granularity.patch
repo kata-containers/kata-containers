@@ -1,0 +1,51 @@
+From 36880cb2373c54d53169a9b324d336b308067fe4 Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Wed, 30 Sep 2020 06:46:41 -0700
+Subject: [PATCH 0636/1418] iommu/vt-d: Report PRQ at per PASID-dev granularity
+
+For mdev, iommu driver should pass the PASID info to iommu PRQ reportiing
+framework, thus can get the corresponding fault_hanlder_data and trigger
+fault hanlder.
+
+Say a page request received in iommu driver. It will get the BDF and PASID
+info from the request. Then PRQ reporting framework gets the corresponding
+fault_hanlder_data with BDF+PASID and then trigger the fault handler.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/intel/svm.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index 94e691cbfbc3..e01444f53dde 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -995,6 +995,7 @@ static int prq_to_iommu_prot(struct page_req_dsc *req)
+ static int intel_svm_prq_report(struct intel_iommu *iommu, struct device *dev,
+ 				struct page_req_dsc *desc)
+ {
++	struct device_domain_info *info;
+ 	struct iommu_fault_event event;
+ 
+ 	if (!dev || !dev_is_pci(dev))
+@@ -1033,6 +1034,16 @@ static int intel_svm_prq_report(struct intel_iommu *iommu, struct device *dev,
+ 		event.fault.prm.private_data[0] = ktime_to_ns(ktime_get());
+ 	}
+ 
++	/*
++	 * If the device supports PASID granu scalable mode, reports the
++	 * PASID as vector such that handlers can be dispatched with per
++	 * vector data.
++	 */
++	info = get_domain_info(dev);
++	if (!list_empty(&info->subdevices)) {
++		dev_dbg(dev, "Aux domain present, assign vector %d\n", desc->pasid);
++		event.vector = desc->pasid;
++	}
+ 	return iommu_report_device_fault(dev, &event);
+ }
+ 
+-- 
+2.31.1
+

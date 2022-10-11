@@ -1,0 +1,50 @@
+From fe41a6a2b45abc36d5dfcf24061c3ac92d9f85b5 Mon Sep 17 00:00:00 2001
+From: Yi Sun <yi.y.sun@linux.intel.com>
+Date: Mon, 21 Mar 2022 23:30:03 +0800
+Subject: [PATCH 1225/1418] idxd: Work around SWQ retry issue
+
+SWQ may be shared to multiple uses so that the queue may be full
+quickly. This will block other requests. To avoid this, we design
+to send retry back to guest when migrating the mdev. But something
+wrong in the retry flow so that guest cannot correctly send retry
+out.
+
+To unblock the test, make this work around to queue the desc as
+DWQ. When final solution found, may revert this patch.
+
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+---
+ drivers/vfio/mdev/idxd/vdev.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/vfio/mdev/idxd/vdev.c b/drivers/vfio/mdev/idxd/vdev.c
+index a89ebe9ae4ee..df9ca074cfb4 100644
+--- a/drivers/vfio/mdev/idxd/vdev.c
++++ b/drivers/vfio/mdev/idxd/vdev.c
+@@ -301,7 +301,9 @@ int vidxd_portal_mmio_write(struct vdcm_idxd *vidxd, u64 pos, void *buf,
+ 
+ 		mutex_lock(&vidxd->mig_submit_lock);
+ 		if (vidxd->paused) {
++#if 0
+ 			if (wq_dedicated(wq)) {
++#endif
+ 				/* Queue the descriptor if submitted to DWQ */
+ 				if (vwq->ndescs == wq->size) {
+ 					printk("can't submit more descriptors than WQ size. Dropping.\n");
+@@ -323,11 +325,13 @@ int vidxd_portal_mmio_write(struct vdcm_idxd *vidxd, u64 pos, void *buf,
+ 
+ 				list_add_tail(&elem->link, &vwq->head);
+ 				vwq->ndescs++;
++#if 0
+ 			} else {
+ 				/* Return retry if submitted to SWQ */
+ 				rc = -EAGAIN;
+ 				goto out_unlock;
+ 			}
++#endif
+                } else {
+ 			void __iomem *wq_portal;
+ 			wq_portal = vidxd->idxd->portal_base +
+-- 
+2.31.1
+

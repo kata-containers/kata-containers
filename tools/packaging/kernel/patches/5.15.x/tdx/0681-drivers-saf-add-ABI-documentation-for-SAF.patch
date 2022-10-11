@@ -1,0 +1,116 @@
+From 846e9b2ff568a8e913539f7bd8704492ccb3b80f Mon Sep 17 00:00:00 2001
+From: Kyung Min Park <kyung.min.park@intel.com>
+Date: Mon, 30 Aug 2021 22:21:51 -0700
+Subject: [PATCH 0681/1418] drivers/saf: add ABI documentation for SAF
+
+Add the sysfs attributes in ABI/stable for Scan At Field.
+
+Signed-off-by: Kyung Min Park <kyung.min.park@intel.com>
+Reviewed-by: Ashok Raj <ashok.raj@intel.com>
+---
+ Documentation/ABI/stable/sysfs-driver-saf | 93 +++++++++++++++++++++++
+ 1 file changed, 93 insertions(+)
+ create mode 100644 Documentation/ABI/stable/sysfs-driver-saf
+
+diff --git a/Documentation/ABI/stable/sysfs-driver-saf b/Documentation/ABI/stable/sysfs-driver-saf
+new file mode 100644
+index 000000000000..35214a1daa46
+--- /dev/null
++++ b/Documentation/ABI/stable/sysfs-driver-saf
+@@ -0,0 +1,93 @@
++What:		/sys/devices/system/cpu/scan/run_test_all
++Date:		Oct 04, 2021
++KernelVersion:	5.16.0
++Contact:	linux-kernel@vger.kernel.org
++Description:	echo 1 to trigger scan test for all online cores.
++
++What:		/sys/devices/system/cpu/scan/reload
++Date:		Oct 04, 2021
++KernelVersion:	5.16.0
++Contact:	linux-kernel@vger.kernel.org
++Description:	echo 1 to reload SAF image.
++
++What:		/sys/devices/system/cpu/scan/core_delay
++		/sys/devices/system/cpu/scan/noint
++		/sys/devices/system/cpu/scan/trigger_mce
++		/sys/devices/system/cpu/scan/thread_wait
++Date:		Oct 04, 2021
++KernelVersion:	5.16.0
++Contact:	linux-kernel@vger.kernel.org
++Description:	SAF tunable parameters that user can modify before
++		the scan run.
++
++		Briefly, the files above are:
++
++		core_delay: Minimum delay between core scans when
++		running all core tests.
++
++		noint: When set, no interrupt allowed when running
++		scan. When unset, it allows interrupt.
++
++		trigger_mce: When set, trigger a MCE when the test fails.
++
++		thread_wait: The maximum time to allow microcode to wait
++		for a core and its sibling joining for synchronization.
++
++What:		/sys/devices/system/cpu/scan/num_chunks
++		/sys/devices/system/cpu/scan/max_cores
++		/sys/devices/system/cpu/scan/chunk_size
++		/sys/devices/system/cpu/scan/image_version
++Date:		Oct 04, 2021
++KernelVersion:	5.16.0
++Contact:	linux-kernel@vger.kernel.org
++Description:	SAF test content enumeration when SAF module is installed.
++		These are read only parameters that reflect the details
++		of the SAF image.
++
++		Briefly, the files above are:
++
++		num_chunks: The number of chunks in the SAF image.
++
++		chunk_size: Chunk size of test in Byte.
++
++		max_cores: Maximum number of cores that can run scan
++		simultaneously.
++
++		image_version: The SAF image revision.
++
++What:		/sys/devices/system/cpu/scan/hash_valid
++		/sys/devices/system/cpu/scan/valid_chunks
++Date:		Oct 04, 2021
++KernelVersion:	5.16.0
++Contact:	linux-kernel@vger.kernel.org
++Description:	SAF image loading status files.
++
++		Briefly, the files above are:
++
++		hash_valid: The hash_valid is set when the hash is successfully
++		copied.
++
++		valid_chunks: The number of valid (authenticated) chunks.
++
++What:		/sys/devices/system/cpu/cpu#/scan/start_chunk
++		/sys/devices/system/cpu/cpu#/scan/stop_chunk
++		/sys/devices/system/cpu/cpu#/scan/scan_start
++		/sys/devices/system/cpu/cpu#/scan/scan_result
++		/sys/devices/system/cpu/cpu#/scan/current_chunk
++Date:		Oct 04, 2021
++KernelVersion:	5.16.0
++Contact:	linux-kernel@vger.kernel.org
++Description:	SAF target core testing parameters.
++
++		Briefly, the files above are:
++
++		start_chunk: The beginning chunk the scan test starts from.
++
++		stop_chunk: The last chunk the scan test stops at.
++
++		scan_start: echo 1 to trigger scan test on cpu#.
++
++		scan_result: It holds 64bit raw error code after scan.
++
++		current_chunk: It shows the last chunk that was executed scan
++		successfully.
+-- 
+2.31.1
+

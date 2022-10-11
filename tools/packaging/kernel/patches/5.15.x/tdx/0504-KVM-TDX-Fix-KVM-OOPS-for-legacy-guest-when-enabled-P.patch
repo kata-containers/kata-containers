@@ -1,0 +1,28 @@
+From 744c35d7bbc2e987eb272e99c6ae9cb793f255a5 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Mon, 8 Nov 2021 12:57:21 +0800
+Subject: [PATCH 0504/1418] KVM: TDX: Fix KVM OOPS for legacy guest when
+ enabled PKRS and TDX
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/vmx/main.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index 4ce4d753f6ca..a4ee266a1cde 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -631,6 +631,9 @@ static void vt_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg)
+ #endif
+ 		vcpu->arch.regs[reg] = vmread_gprs(vcpu, reg);
+ 		break;
++	case VCPU_EXREG_PKRS:
++		vcpu->arch.pkrs = vmcs_read64(GUEST_IA32_PKRS);
++		break;
+ 	default:
+ 		KVM_BUG_ON(1, vcpu->kvm);
+ 		break;
+-- 
+2.31.1
+

@@ -1,0 +1,34 @@
+From a6717331a448890c1267bd1dec78d846334b8663 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Mon, 29 Nov 2021 15:30:08 +0800
+Subject: [PATCH 0730/1418] KVM: VMX: Don't request VMX is disabled on enabling
+ VMX
+
+VMX is now managed by a common code instead of inside kvm-intel.
+kvm-intel will be just one of VMX users. Don't assume VMX is
+disabled because VMX can be already enabled by others via APIs
+exposed by the common code. And the common code has the same
+check and raises an error if someone else enabled VMX.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kvm/vmx/vmx.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index cecfce3339d8..ae6edb585d77 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -2334,9 +2334,6 @@ static int hardware_enable(void)
+ 	int cpu = raw_smp_processor_id();
+ 	int r;
+ 
+-	if (cr4_read_shadow() & X86_CR4_VMXE)
+-		return -EBUSY;
+-
+ 	/*
+ 	 * This can happen if we hot-added a CPU but failed to allocate
+ 	 * VP assist page for it.
+-- 
+2.31.1
+

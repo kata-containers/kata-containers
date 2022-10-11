@@ -1,0 +1,46 @@
+From 3f768c68b792ddf87e61058f3f8e55d9b96664fa Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Wed, 18 Aug 2021 21:17:29 -0700
+Subject: [PATCH 0228/1418] x86/tdx: Disable hyperv paravirtualization until
+ properly enabled
+
+HyperV needs significant extra enabling to work under TDX, and
+the current Hyper PV code is likely attackable by a malicious host.
+
+Disable HyperV specific PV support for now when running under TDX.
+
+This will be replaced with full HyperV enabling later.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+---
+ arch/x86/kernel/cpu/mshyperv.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/mshyperv.c b/arch/x86/kernel/cpu/mshyperv.c
+index e095c28d27ae..b9907f2ab217 100644
+--- a/arch/x86/kernel/cpu/mshyperv.c
++++ b/arch/x86/kernel/cpu/mshyperv.c
+@@ -32,6 +32,7 @@
+ #include <asm/nmi.h>
+ #include <clocksource/hyperv_timer.h>
+ #include <asm/numa.h>
++#include <linux/cc_platform.h>
+ 
+ /* Is Linux running as the root partition? */
+ bool hv_root_partition;
+@@ -160,6 +161,12 @@ static uint32_t  __init ms_hyperv_platform(void)
+ 	if (!boot_cpu_has(X86_FEATURE_HYPERVISOR))
+ 		return 0;
+ 
++	/*
++	 * Temporary until the HyperV code is properly hardened and enabled.
++	 */
++	if (cc_platform_has(CC_ATTR_GUEST_CPUID_FILTER))
++		return 0;
++
+ 	cpuid(HYPERV_CPUID_VENDOR_AND_MAX_FUNCTIONS,
+ 	      &eax, &hyp_signature[0], &hyp_signature[1], &hyp_signature[2]);
+ 
+-- 
+2.31.1
+

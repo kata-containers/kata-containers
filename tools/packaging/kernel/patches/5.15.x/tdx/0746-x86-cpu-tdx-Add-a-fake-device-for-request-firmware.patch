@@ -1,0 +1,52 @@
+From 7c5322e77c5ff2a9cab068aa34a1c9bf3f8a9fc8 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Wed, 20 Oct 2021 14:23:55 +0800
+Subject: [PATCH 0746/1418] x86/cpu/tdx: Add a fake device for request firmware
+
+TDX module driver will search for new TDX module binary and sigstruct
+under /lib/firmware. request_firmware_direct() requests a platform device.
+
+Co-developed-by: Isaku Yamahata <isaku.yamahata@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 880d4506dbf0..e6182fa77bdf 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -9,6 +9,8 @@
+ #include <linux/init.h>
+ #include <linux/slab.h>
+ #include <linux/cpu.h>
++#include <linux/platform_device.h>
++#include <linux/firmware.h>
+ 
+ #include <asm/irq_vectors.h>
+ #include <asm/trace/seam.h>
+@@ -33,6 +35,9 @@ enum TDX_HOST_OPTION {
+ 	TDX_HOST_ON,
+ };
+ 
++/* Fake device for request_firmware_direct */
++static struct platform_device *tdx_module_dev;
++
+ static enum TDX_HOST_OPTION tdx_host __initdata;
+ 
+ static int __init tdx_host_param(char *str)
+@@ -1438,6 +1443,10 @@ static int __init tdx_module_sysfs_init(void)
+ 	if (ret)
+ 		return ret;
+ 
++	tdx_module_dev = platform_device_register_simple("tdx_module", -1, NULL, 0);
++	if (IS_ERR(tdx_module_dev))
++		return PTR_ERR(tdx_module_dev);
++
+ 	tdx_module_kobj = kobject_create_and_add("tdx_module", tdx_kobj);
+ 	if (!tdx_module_kobj) {
+ 		pr_err("kobject_create_and_add tdx_module failed\n");
+-- 
+2.31.1
+

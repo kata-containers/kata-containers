@@ -1,0 +1,39 @@
+From 3ee137eb82abe6fb15f16ad7d560c5862290b9fb Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Fri, 17 Dec 2021 11:15:59 +0800
+Subject: [PATCH 0772/1418] Revert "x86/sgx: Save enclave pointer for VA page"
+
+This reverts commit 799650bde8fa77006adeed6c7fcec528ef96af2f.
+---
+ arch/x86/kernel/cpu/sgx/encl.h  | 1 -
+ arch/x86/kernel/cpu/sgx/ioctl.c | 2 --
+ 2 files changed, 3 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/sgx/encl.h b/arch/x86/kernel/cpu/sgx/encl.h
+index 94c94a2f5294..3d12dbeae14a 100644
+--- a/arch/x86/kernel/cpu/sgx/encl.h
++++ b/arch/x86/kernel/cpu/sgx/encl.h
+@@ -75,7 +75,6 @@ struct sgx_va_page {
+ 	struct sgx_epc_page *epc_page;
+ 	DECLARE_BITMAP(slots, SGX_VA_SLOT_COUNT);
+ 	struct list_head list;
+-	struct sgx_encl *encl;
+ };
+ 
+ struct sgx_backing {
+diff --git a/arch/x86/kernel/cpu/sgx/ioctl.c b/arch/x86/kernel/cpu/sgx/ioctl.c
+index bcabe7eae1ea..b3c9dfbf0132 100644
+--- a/arch/x86/kernel/cpu/sgx/ioctl.c
++++ b/arch/x86/kernel/cpu/sgx/ioctl.c
+@@ -31,8 +31,6 @@ static struct sgx_va_page *sgx_encl_grow(struct sgx_encl *encl)
+ 			return ERR_PTR(-ENOMEM);
+ 
+ 		INIT_LIST_HEAD(&va_page->list);
+-		va_page->encl = encl;
+-
+ 		va_page->epc_page = sgx_alloc_va_page(va_page);
+ 		if (IS_ERR(va_page->epc_page)) {
+ 			err = ERR_CAST(va_page->epc_page);
+-- 
+2.31.1
+

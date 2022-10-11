@@ -1,0 +1,199 @@
+From 85ecca1271f86f015966631d5c758fd3a1eccce4 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Fri, 23 Jul 2021 10:30:27 +0800
+Subject: [PATCH 0461/1418] KVM: TDX: Monitor debuggable and non-perfmon TDs
+ with PMU events
+
+If TD is allowed to use perfmon, TD's PMU MSRs are maintained
+by TDX module and loaded into hardware on TD entry. It is hard
+to share the same set of hardware between VMM and TDs and ensure
+both can get accurate profiles in all cases.
+
+But if TD isn't allowed to use perfmon, TD vCPU gets #GP if it tries
+to access any PMU MSRs. So, when TD is running, only
+IA32_PERF_GLOBAL_CTRL is set 0 to stop all PMU counters while other
+PMU MSRs are VMM's values. For debuggable TDs, VMM can control the
+value loaded to IA32_PERF_GLOBAL_CTRL by programming
+GUEST_IA32_PERF_GLOBAL_CTRL field in TD VMCS. So, VMM is able to keep
+some PMU counters running as it wishes when a TD is running. Then, VMM
+can monitor TDs with PMU events.
+
+The last value written to GUEST_IA32_PERF_GLOBAL_CTRL field in TD
+VMCS is cached to save unnecessary SEAMCALLs.
+
+Also add some checks to ensure that
+VM_{ENTRY, EXIT}_LOAD_IA32_PERF_GLOBAL_CTRL are set by TDX module.
+Otherwise, VMM cannot control the value of IA32_PERF_GLOBAL_CTRL
+when a TD is running.
+
+Surround handling NMI-induced TD exit with kvm_{before, after}_interrupt()
+to tell perf subsystem that this NMI arrives when a guest is running.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 88 +++++++++++++++++++++++++++++++++++++++++-
+ arch/x86/kvm/vmx/tdx.h |  1 +
+ arch/x86/kvm/vmx/vmx.c |  6 ---
+ 3 files changed, 88 insertions(+), 7 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 686f758a3687..267dee87c60f 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -83,6 +83,28 @@ static struct tdx_uret_msr tdx_uret_msrs[] = {
+ 	{.msr = MSR_TSC_AUX,},
+ };
+ 
++static enum {
++	TD_PROFILE_NONE = 0,
++	TD_PROFILE_ENABLE,
++	TD_PROFILE_DISABLE,
++} td_profile_state;
++
++/*
++ * Currently, host is allowed to get TD's profile only if this TD is debuggable
++ * and cannot use PMU.
++ */
++static inline bool td_profile_allowed(struct kvm_tdx *kvm_tdx)
++{
++	u64 attributes = kvm_tdx->attributes;
++
++	if ((td_profile_state == TD_PROFILE_ENABLE) &&
++	    (attributes & TDX_TD_ATTRIBUTE_DEBUG) &&
++	    !(attributes & TDX_TD_ATTRIBUTE_PERFMON))
++		return true;
++
++	return false;
++}
++
+ static __always_inline hpa_t set_hkid_to_hpa(hpa_t pa, u16 hkid)
+ {
+ 	pa &= ~hkid_mask;
+@@ -682,6 +704,42 @@ static void tdx_restore_host_xsave_state(struct kvm_vcpu *vcpu)
+ 		write_pkru(vcpu->arch.host_pkru);
+ }
+ 
++static inline void tdx_register_cache_reset(struct kvm_vcpu *vcpu)
++{
++	vcpu->arch.regs_avail = 0;
++	vcpu->arch.regs_dirty = 0;
++}
++
++/*
++ * Update TD VMCS to enable PMU counters when this TD vCPU is running.
++ */
++static void tdx_switch_perf_msrs(struct kvm_vcpu *vcpu)
++{
++	int i, nr_msrs;
++	struct perf_guest_switch_msr *msrs;
++	struct vcpu_tdx *tdx = to_tdx(vcpu);
++
++	msrs = perf_guest_get_msrs(&nr_msrs);
++	if (!msrs)
++		return;
++
++	for (i = 0; i < nr_msrs; i++) {
++		switch (msrs[i].msr) {
++		case MSR_CORE_PERF_GLOBAL_CTRL:
++			if (tdx->guest_perf_global_ctrl != msrs[i].guest) {
++				td_vmcs_write64(tdx,
++						GUEST_IA32_PERF_GLOBAL_CTRL,
++						msrs[i].guest);
++				tdx->guest_perf_global_ctrl = msrs[i].guest;
++			}
++			break;
++
++		default:
++			WARN_ONCE(1, "Cannot switch msrs other than IA32_PERF_GLOBAL_CTRL");
++		}
++	}
++}
++
+ u64 __tdx_vcpu_run(hpa_t tdvpr, void *regs, u32 regs_mask);
+ 
+ static noinstr void tdx_vcpu_enter_exit(struct kvm_vcpu *vcpu,
+@@ -715,6 +773,8 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ 
+ 	if (kvm_tdx->attributes & TDX_TD_ATTRIBUTE_PERFMON)
+ 		intel_pmu_save();
++	else if (td_profile_allowed(kvm_tdx))
++		tdx_switch_perf_msrs(vcpu);
+ 
+ 	tdx_vcpu_enter_exit(vcpu, tdx);
+ 
+@@ -798,9 +858,12 @@ static void tdx_handle_exit_irqoff(struct kvm_vcpu *vcpu)
+ 		if (tdx->guest_pmi_exit) {
+ 			kvm_make_request(KVM_REQ_PMI, vcpu);
+ 			tdx->guest_pmi_exit = false;
+-		} else
++		} else {
++			kvm_before_interrupt(vcpu);
+ 			vmx_handle_exception_nmi_irqoff(vcpu,
+ 							tdexit_intr_info(vcpu));
++			kvm_after_interrupt(vcpu);
++		}
+ 	} else if (exit_reason == EXIT_REASON_EXTERNAL_INTERRUPT)
+ 		vmx_handle_external_interrupt_irqoff(vcpu,
+ 						     tdexit_intr_info(vcpu));
+@@ -1981,6 +2044,29 @@ static int tdx_vcpu_ioctl(struct kvm_vcpu *vcpu, void __user *argp)
+ 	td_vmcs_write16(tdx, POSTED_INTR_NV, POSTED_INTR_VECTOR);
+ 	td_vmcs_write64(tdx, POSTED_INTR_DESC_ADDR, __pa(&tdx->pi_desc));
+ 	td_vmcs_setbit32(tdx, PIN_BASED_VM_EXEC_CONTROL, PIN_BASED_POSTED_INTR);
++
++	/*
++	 * Check if VM_{ENTRY, EXIT}_LOAD_IA32_PERF_GLOBAL_CTRL are set in case
++	 * of a TDX module bug. It is required to monitor TD with PMU events.
++	 * Note that these two bits are read-only even for debug TD.
++	 */
++	if ((td_profile_state == TD_PROFILE_NONE) &&
++	    (kvm_tdx->attributes & TDX_TD_ATTRIBUTE_DEBUG) &&
++	    !(kvm_tdx->attributes & TDX_TD_ATTRIBUTE_PERFMON))	{
++		u32 exit, entry;
++
++		exit = td_vmcs_read32(tdx, VM_EXIT_CONTROLS);
++		entry = td_vmcs_read32(tdx, VM_ENTRY_CONTROLS);
++
++		if ((exit & VM_EXIT_LOAD_IA32_PERF_GLOBAL_CTRL) &&
++		    (entry & VM_ENTRY_LOAD_IA32_PERF_GLOBAL_CTRL))
++			td_profile_state = TD_PROFILE_ENABLE;
++		else {
++			pr_warn_once("Cannot monitor TD with PMU events\n");
++			td_profile_state = TD_PROFILE_DISABLE;
++		}
++	}
++
+ 	return 0;
+ }
+ 
+diff --git a/arch/x86/kvm/vmx/tdx.h b/arch/x86/kvm/vmx/tdx.h
+index 314264cc4667..3984ae5b716b 100644
+--- a/arch/x86/kvm/vmx/tdx.h
++++ b/arch/x86/kvm/vmx/tdx.h
+@@ -104,6 +104,7 @@ struct vcpu_tdx {
+ 	bool host_state_need_restore;
+ 	bool guest_pmi_exit;
+ 	u64 msr_host_kernel_gs_base;
++	u64 guest_perf_global_ctrl;
+ };
+ 
+ struct tdx_capabilities {
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 0ddff41062b3..0e001c141121 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -6522,12 +6522,6 @@ static void vmx_cancel_injection(struct kvm_vcpu *vcpu)
+ 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 0);
+ }
+ 
+-/*
+- * TODO: TDX: if td.attribute.{debug = 1, perfmon = 0} and guest profiling
+- * is requested, * update GUEST_IA32_PERF_GLBOAL_CTRL,
+- * VM_ENTRY_LOAD_IA32_PERF_GLOBAL_CTRL, and
+- * VM_EXIT_LOAD_IA32_PERF_GLOBAL_CTRL properly.
+- */
+ static void atomic_switch_perf_msrs(struct vcpu_vmx *vmx)
+ {
+ 	int i, nr_msrs;
+-- 
+2.31.1
+

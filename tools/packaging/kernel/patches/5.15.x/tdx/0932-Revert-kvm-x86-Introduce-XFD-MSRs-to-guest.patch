@@ -1,0 +1,65 @@
+From 44ec3e139a9c1afc4e48317c6a041732a2c56984 Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 18:01:43 -0800
+Subject: [PATCH 0932/1418] Revert "kvm: x86: Introduce XFD MSRs to guest"
+
+This reverts commit 75c7b531a73dd5afabb30c684715675ff3ddee1f.
+
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+---
+ arch/x86/kvm/vmx/vmx.c | 11 -----------
+ arch/x86/kvm/vmx/vmx.h |  2 +-
+ 2 files changed, 1 insertion(+), 12 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 06ffa942c3f6..ae7223efdc68 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -169,8 +169,6 @@ static u32 vmx_possible_passthrough_msrs[MAX_POSSIBLE_PASSTHROUGH_MSRS] = {
+ 	MSR_FS_BASE,
+ 	MSR_GS_BASE,
+ 	MSR_KERNEL_GS_BASE,
+-	MSR_IA32_XFD,
+-	MSR_IA32_XFD_ERR,
+ #endif
+ 	MSR_IA32_SYSENTER_CS,
+ 	MSR_IA32_SYSENTER_ESP,
+@@ -7515,12 +7513,6 @@ static void update_intel_pt_cfg(struct kvm_vcpu *vcpu)
+ 		vmx->pt_desc.ctl_bitmask &= ~(0xfULL << (32 + i * 4));
+ }
+ 
+-static void vmx_update_intercept_xfd(struct kvm_vcpu *vcpu)
+-{
+-	vmx_set_intercept_for_msr(vcpu, MSR_IA32_XFD, MSR_TYPE_R, false);
+-	vmx_set_intercept_for_msr(vcpu, MSR_IA32_XFD_ERR, MSR_TYPE_RW, false);
+-}
+-
+ static void vmx_vcpu_after_set_cpuid(struct kvm_vcpu *vcpu)
+ {
+ 	struct vcpu_vmx *vmx = to_vmx(vcpu);
+@@ -7561,9 +7553,6 @@ static void vmx_vcpu_after_set_cpuid(struct kvm_vcpu *vcpu)
+ 		}
+ 	}
+ 
+-	if (boot_cpu_has(X86_FEATURE_XFD) && guest_cpuid_has(vcpu, X86_FEATURE_XFD))
+-		vmx_update_intercept_xfd(vcpu);
+-
+ 	set_cr4_guest_host_mask(vmx);
+ 
+ 	vmx_write_encls_bitmap(vcpu, NULL);
+diff --git a/arch/x86/kvm/vmx/vmx.h b/arch/x86/kvm/vmx/vmx.h
+index cbaf985dd5f3..3fbdfc810059 100644
+--- a/arch/x86/kvm/vmx/vmx.h
++++ b/arch/x86/kvm/vmx/vmx.h
+@@ -332,7 +332,7 @@ struct vcpu_vmx {
+ 	struct lbr_desc lbr_desc;
+ 
+ 	/* Save desired MSR intercept (read: pass-through) state */
+-#define MAX_POSSIBLE_PASSTHROUGH_MSRS	17
++#define MAX_POSSIBLE_PASSTHROUGH_MSRS	15
+ 	struct {
+ 		DECLARE_BITMAP(read, MAX_POSSIBLE_PASSTHROUGH_MSRS);
+ 		DECLARE_BITMAP(write, MAX_POSSIBLE_PASSTHROUGH_MSRS);
+-- 
+2.31.1
+

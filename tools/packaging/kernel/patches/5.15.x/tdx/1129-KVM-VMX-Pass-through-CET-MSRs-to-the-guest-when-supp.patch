@@ -1,0 +1,80 @@
+From b45f84b329c4c19ca368edaaf690c3d60cd26888 Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Thu, 16 Jul 2020 11:16:19 +0800
+Subject: [PATCH 1129/1418] KVM: VMX: Pass through CET MSRs to the guest when
+ supported
+
+Pass through all CET MSRs when the associated CET component (kernel vs.
+user) is enabled to improve guest performance.  All CET MSRs are context
+switched, either via dedicated VMCS fields or XSAVES.
+
+Co-developed-by: Zhang Yi Z <yi.z.zhang@linux.intel.com>
+Signed-off-by: Zhang Yi Z <yi.z.zhang@linux.intel.com>
+Co-developed-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/vmx/vmx.c | 33 +++++++++++++++++++++++++++++++++
+ 1 file changed, 33 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 5077ece0388c..2deeb7736d20 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -588,6 +588,10 @@ static bool is_valid_passthrough_msr(u32 msr)
+ 	case MSR_ARCH_LBR_INFO_0 ... MSR_ARCH_LBR_INFO_0 + 31:
+ 		/* LBR MSRs. These are handled in vmx_update_intercept_for_lbr_msrs() */
+ 		return true;
++	case MSR_IA32_U_CET:
++	case MSR_IA32_S_CET:
++	case MSR_IA32_PL0_SSP ... MSR_IA32_INT_SSP_TAB:
++		return true;
+ 	}
+ 
+ 	r = possible_passthrough_msr_slot(msr) != -ENOENT;
+@@ -7635,6 +7639,32 @@ static void update_intel_pt_cfg(struct kvm_vcpu *vcpu)
+ 		vmx->pt_desc.ctl_bitmask &= ~(0xfULL << (32 + i * 4));
+ }
+ 
++static bool is_cet_state_supported(struct kvm_vcpu *vcpu, u32 xss_state)
++{
++	return (vcpu->arch.guest_supported_xss & xss_state) &&
++	       (guest_cpuid_has(vcpu, X86_FEATURE_SHSTK) ||
++		guest_cpuid_has(vcpu, X86_FEATURE_IBT));
++}
++
++static void vmx_update_intercept_for_cet_msr(struct kvm_vcpu *vcpu)
++{
++	bool incpt = !is_cet_state_supported(vcpu, XFEATURE_MASK_CET_USER);
++
++	vmx_set_intercept_for_msr(vcpu, MSR_IA32_U_CET, MSR_TYPE_RW, incpt);
++
++	incpt |= !guest_cpuid_has(vcpu, X86_FEATURE_SHSTK);
++	vmx_set_intercept_for_msr(vcpu, MSR_IA32_PL3_SSP, MSR_TYPE_RW, incpt);
++
++	incpt = !is_cet_state_supported(vcpu, XFEATURE_MASK_CET_KERNEL);
++	vmx_set_intercept_for_msr(vcpu, MSR_IA32_S_CET, MSR_TYPE_RW, incpt);
++
++	incpt |= !guest_cpuid_has(vcpu, X86_FEATURE_SHSTK);
++	vmx_set_intercept_for_msr(vcpu, MSR_IA32_INT_SSP_TAB, MSR_TYPE_RW, incpt);
++	vmx_set_intercept_for_msr(vcpu, MSR_IA32_PL0_SSP, MSR_TYPE_RW, incpt);
++	vmx_set_intercept_for_msr(vcpu, MSR_IA32_PL1_SSP, MSR_TYPE_RW, incpt);
++	vmx_set_intercept_for_msr(vcpu, MSR_IA32_PL2_SSP, MSR_TYPE_RW, incpt);
++}
++
+ static void vmx_vcpu_after_set_cpuid(struct kvm_vcpu *vcpu)
+ {
+ 	struct vcpu_vmx *vmx = to_vmx(vcpu);
+@@ -7714,6 +7744,9 @@ static void vmx_vcpu_after_set_cpuid(struct kvm_vcpu *vcpu)
+ 	if (cpu_has_vmx_pasid_trans() &&
+ 		guest_cpuid_has(vcpu, X86_FEATURE_ENQCMD))
+ 		vmx_vcpu_pasid_trans_init(vcpu);
++
++	if (kvm_cet_supported())
++		vmx_update_intercept_for_cet_msr(vcpu);
+ }
+ 
+ static __init void vmx_set_cpu_caps(void)
+-- 
+2.31.1
+

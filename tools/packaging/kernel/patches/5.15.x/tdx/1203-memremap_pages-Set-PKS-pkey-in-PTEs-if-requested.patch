@@ -1,0 +1,57 @@
+From ba72b5a5f3900647f97c2eaf8721810c784b3c9c Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Wed, 12 Jan 2022 13:37:25 -0800
+Subject: [PATCH 1203/1418] memremap_pages: Set PKS pkey in PTEs if requested
+
+When a devmap caller requests protections, the dev_pagemap PTE's need to
+have a PKEY set.
+
+When PGMAP_PROTECTIONS is requested add the pkey to the page
+protections.
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ mm/memremap.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/mm/memremap.c b/mm/memremap.c
+index dd81628810bc..ac841dec1420 100644
+--- a/mm/memremap.c
++++ b/mm/memremap.c
+@@ -82,6 +82,14 @@ static void devmap_protection_enable(void)
+ 	static_branch_inc(&dev_pgmap_protection_static_key);
+ }
+ 
++static pgprot_t devmap_protection_adjust_pgprot(pgprot_t prot)
++{
++	pgprotval_t val;
++
++	val = pgprot_val(prot);
++	return __pgprot(val | _PAGE_PKEY(PKS_KEY_PGMAP_PROTECTION));
++}
++
+ static void devmap_protection_disable(void)
+ {
+ 	static_branch_dec(&dev_pgmap_protection_static_key);
+@@ -92,6 +100,10 @@ static void devmap_protection_disable(void)
+ static void devmap_protection_enable(void) { }
+ static void devmap_protection_disable(void) { }
+ 
++static pgprot_t devmap_protection_adjust_pgprot(pgprot_t prot)
++{
++	return prot;
++}
+ #endif /* CONFIG_DEVMAP_ACCESS_PROTECTION */
+ 
+ static void pgmap_array_delete(struct range *range)
+@@ -364,6 +376,7 @@ void *memremap_pages(struct dev_pagemap *pgmap, int nid)
+ 		if (!pgmap_protection_available())
+ 			return ERR_PTR(-EINVAL);
+ 		devmap_protection_enable();
++		params.pgprot = devmap_protection_adjust_pgprot(params.pgprot);
+ 	}
+ 
+ 	switch (pgmap->type) {
+-- 
+2.31.1
+

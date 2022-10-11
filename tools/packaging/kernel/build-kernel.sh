@@ -362,11 +362,16 @@ setup_kernel() {
 	major_kernel=$(get_major_kernel_version "${kernel_version}")
 	local patches_dir_for_version="${patches_path}/${major_kernel}.x"
 	local build_type_patches_dir="${patches_path}/${major_kernel}.x/${build_type}"
+	local conf_guest_patches_dir="${patches_path}/${major_kernel}.x/${conf_guest}"
 
 	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
 	arch_target=$(arch_to_kernel "${arch_target}")
 	(
 	cd "${kernel_path}" || exit 1
+
+	git init
+	git add .
+	git commit -s -m "Initial commut"
 
 	# Apply version specific patches
 	${packaging_scripts_dir}/apply_patches.sh "${patches_dir_for_version}"
@@ -375,6 +380,12 @@ setup_kernel() {
 	if [ "${build_type}" != "" ] ;then
 		info "Apply build_type patches from ${build_type_patches_dir}"
 		${packaging_scripts_dir}/apply_patches.sh "${build_type_patches_dir}"
+	fi
+
+	# Apply version specific patches for conf_guest build
+	if [ "${conf_guest}" != "" ] ;then
+		info "Apply conf_guest patches from ${conf_guest_patches_dir}"
+		${packaging_scripts_dir}/apply_patches.sh "${conf_guest_patches_dir}"
 	fi
 
 	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"

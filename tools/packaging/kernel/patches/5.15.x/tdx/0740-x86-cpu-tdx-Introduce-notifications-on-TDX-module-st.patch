@@ -1,0 +1,199 @@
+From a391941607318b157224fc4b572e74f63fb3cc38 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Mon, 22 Nov 2021 15:19:48 +0800
+Subject: [PATCH 0740/1418] x86/cpu/tdx: Introduce notifications on TDX module
+ state changes
+
+Managing TDX module and using TDX module are not in the same kernel
+component. To support TDX module update, proper synchronization
+between them is needed to avoid updating TDX module when someone is
+using it.
+
+To this end, TDX module driver maintains a notifier chain. Users of
+TDX module (e.g, KVM) can register a callback for TDX module state
+changes; TDX module driver who performs updates invokes registered
+callbacks before and after an update.
+
+Define two events about TDX module and stipulate what subscribers
+should do on receiving them:
+1) TDX_MODULE_LOAD_BEGIN: TDX module is about to go down.
+It is sent when TDX module transits from TDX_MODULE_INITIALIZED to
+other states. A user of TDX module should either stop using TDX
+module or return an error in callbacks if they cannot stop. Errors
+returned by callbacks abort the attempt to change TDX module state.
+
+2) TDX_MODULE_LOAD_DONE: TDX module is ready to function.
+It is sent when TDX module transits from other states to
+TDX_MODULE_INITIALIZED. On receiving this event, users can start to
+interact with TDX module.
+
+Open: Is it worth a notifier chain? Probably KVM is the only user.
+And This will be true in the near future. Then, a function pointer
+looks more suitable.
+
+Co-developed-by: Isaku Yamahata <isaku.yamahata@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/include/asm/tdx_host.h | 27 ++++++++++++
+ arch/x86/kernel/cpu/tdx/tdx.c   | 76 ++++++++++++++++++++++++++++++++-
+ 2 files changed, 102 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/tdx_host.h b/arch/x86/include/asm/tdx_host.h
+index cfb6b225ad65..8f33e98f0fea 100644
+--- a/arch/x86/include/asm/tdx_host.h
++++ b/arch/x86/include/asm/tdx_host.h
+@@ -4,6 +4,22 @@
+ #ifndef __ASM_X86_TDX_HOST_H
+ #define __ASM_X86_TDX_HOST_H
+ 
++#include <linux/notifier.h>
++
++/*
++ * Events that may happen to TDX module
++ *
++ * TDX_MODULE_LOAD_DONE event is sent to notifiers when TDX module becomes
++ * ready to function. After receiving this event, users of TDX module can
++ * start to interact with TDX module.
++ * TDX_MODULE_LOAD_BEGIN event is sent to notifiers when TDX module driver
++ * attempts to update TDX module. Users of TDX module can either return an
++ * error in notifier callbacks to indicate that TDX module is in use, or
++ * stop using TDX module until next TDX_MODULE_LOAD_DONE event.
++ */
++#define TDX_MODULE_LOAD_BEGIN	0 /* TDX module is about to go down */
++#define TDX_MODULE_LOAD_DONE	1 /* TDX module is ready */
++
+ #ifdef CONFIG_INTEL_TDX_HOST
+ /*
+  * TDX extended return:
+@@ -106,6 +122,8 @@ extern bool is_debug_seamcall_available __read_mostly;
+ /* Non-architectural configuration SEAMCALLs */
+ extern bool is_nonarch_seamcall_available __read_mostly;
+ 
++int register_tdx_notifier(struct notifier_block *n);
++int unregister_tdx_notifier(struct notifier_block *n);
+ #else
+ static inline const char *tdx_seamcall_error_name(u64 error_code)
+ {
+@@ -133,6 +151,15 @@ static inline bool range_is_tdx_memory(phys_addr_t start, phys_addr_t end)
+ {
+ 	return false;
+ }
++
++static inline int register_tdx_notifier(struct notifier_block *n)
++{
++	return -EOPNOTSUPP;
++}
++static inline int unregister_tdx_notifier(struct notifier_block *n)
++{
++	return -EOPNOTSUPP;
++}
+ #endif
+ 
+ #endif /* __ASM_X86_TDX_HOST_H */
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index ff63b3e1b94a..8cd79a9ba2e8 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -117,7 +117,7 @@ enum TDX_MODULE_STATE {
+ };
+ 
+ /* TODO: export the state via sysfs. */
+-static enum TDX_MODULE_STATE tdx_module_state __ro_after_init;
++static enum TDX_MODULE_STATE tdx_module_state;
+ 
+ bool is_debug_seamcall_available __read_mostly = true;
+ 
+@@ -126,8 +126,49 @@ bool is_nonarch_seamcall_available __read_mostly = true;
+ /* TDX system information returned by TDH_SYS_INFO. */
+ static struct tdsysinfo_struct *tdx_tdsysinfo;
+ 
++static BLOCKING_NOTIFIER_HEAD(tdx_notify_list);
++
++/* Inform notifiers about an event, expecting no error from notifiers. */
++static void tdx_notify(unsigned long val)
++{
++	int ret;
++
++	ret = blocking_notifier_call_chain(&tdx_notify_list, val, NULL);
++	WARN_ON_ONCE(notifier_to_errno(ret));
++}
++
++/* Inform notifiers about an event and rollback on error */
++static int tdx_notify_rollback(unsigned long val, unsigned long val_rollback)
++{
++	int ret;
++
++	ret = blocking_notifier_call_chain_robust(&tdx_notify_list, val,
++						  val_rollback, NULL);
++	return notifier_to_errno(ret);
++}
++
+ static int set_tdx_module_state(int state)
+ {
++	int ret;
++
++	if (state == tdx_module_state)
++		return 0;
++
++	/*
++	 * Send notifications when TDX module state changes between
++	 * TDX_MODULE_INITIALIZED and other states. When TDX module
++	 * is about to go down, notifiers are allowed to return errors
++	 * to abort this attempt in case that shutting down a busy TDX
++	 * module leads to data loss.
++	 */
++	if (tdx_module_state == TDX_MODULE_INITIALIZED) {
++		ret = tdx_notify_rollback(TDX_MODULE_LOAD_BEGIN,
++					  TDX_MODULE_LOAD_DONE);
++		if (ret)
++			return ret;
++	} else if (state == TDX_MODULE_INITIALIZED)
++		tdx_notify(TDX_MODULE_LOAD_DONE);
++
+ 	tdx_module_state = state;
+ 	return 0;
+ }
+@@ -137,6 +178,39 @@ static int get_tdx_module_state(void)
+ 	return tdx_module_state;
+ }
+ 
++/**
++ * register_tdx_notifier - subscribe to state change of TDX module
++ * @nb: new entry to subscribe in notifier chain
++ *
++ * Note that the nb::notifier_call is invoked during registration
++ * if TDX module is already available.
++ */
++int register_tdx_notifier(struct notifier_block *nb)
++{
++	int ret;
++
++	ret = blocking_notifier_chain_register(&tdx_notify_list, nb);
++	/*
++	 * Registering a notifier may happen after TDX module is ready to
++	 * function. If that's the case, send a notification now.
++	 */
++	if (!ret && (get_tdx_module_state() == TDX_MODULE_INITIALIZED))
++		nb->notifier_call(nb, TDX_MODULE_LOAD_DONE, NULL);
++
++	return ret;
++}
++EXPORT_SYMBOL_GPL(register_tdx_notifier);
++
++/**
++ * unregister_tdx_notifier - unsubscribe to state change of TDX module
++ * @nb: entry to unsbuscribe from notifier chain
++ */
++int unregister_tdx_notifier(struct notifier_block *nb)
++{
++	return blocking_notifier_chain_unregister(&tdx_notify_list, nb);
++}
++EXPORT_SYMBOL_GPL(unregister_tdx_notifier);
++
+ /*
+  * Return pointer to TDX system info (TDSYSINFO_STRUCT) if TDX has been
+  * successfully initialized, or NULL.
+-- 
+2.31.1
+

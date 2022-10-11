@@ -1,0 +1,79 @@
+From 95358b10c3ff588ed9dbd2af814948d1ebd848f2 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 8 Sep 2021 15:29:13 +0200
+Subject: [PATCH 0002/1418] x86/extable: Get rid of redundant macros
+
+No point in defining the identical macros twice depending on C or assembly
+mode. They are still identical.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20210908132525.023659534@linutronix.de
+---
+ arch/x86/include/asm/asm.h | 36 ++++++++++++------------------------
+ 1 file changed, 12 insertions(+), 24 deletions(-)
+
+diff --git a/arch/x86/include/asm/asm.h b/arch/x86/include/asm/asm.h
+index 3ad3da9a7d97..719955e658a2 100644
+--- a/arch/x86/include/asm/asm.h
++++ b/arch/x86/include/asm/asm.h
+@@ -132,18 +132,6 @@
+ 	.long (handler) - . ;					\
+ 	.popsection
+ 
+-# define _ASM_EXTABLE(from, to)					\
+-	_ASM_EXTABLE_HANDLE(from, to, ex_handler_default)
+-
+-# define _ASM_EXTABLE_UA(from, to)				\
+-	_ASM_EXTABLE_HANDLE(from, to, ex_handler_uaccess)
+-
+-# define _ASM_EXTABLE_CPY(from, to)				\
+-	_ASM_EXTABLE_HANDLE(from, to, ex_handler_copy)
+-
+-# define _ASM_EXTABLE_FAULT(from, to)				\
+-	_ASM_EXTABLE_HANDLE(from, to, ex_handler_fault)
+-
+ # ifdef CONFIG_KPROBES
+ #  define _ASM_NOKPROBE(entry)					\
+ 	.pushsection "_kprobe_blacklist","aw" ;			\
+@@ -164,18 +152,6 @@
+ 	" .long (" _EXPAND_EXTABLE_HANDLE(handler) ") - .\n"	\
+ 	" .popsection\n"
+ 
+-# define _ASM_EXTABLE(from, to)					\
+-	_ASM_EXTABLE_HANDLE(from, to, ex_handler_default)
+-
+-# define _ASM_EXTABLE_UA(from, to)				\
+-	_ASM_EXTABLE_HANDLE(from, to, ex_handler_uaccess)
+-
+-# define _ASM_EXTABLE_CPY(from, to)				\
+-	_ASM_EXTABLE_HANDLE(from, to, ex_handler_copy)
+-
+-# define _ASM_EXTABLE_FAULT(from, to)				\
+-	_ASM_EXTABLE_HANDLE(from, to, ex_handler_fault)
+-
+ /* For C file, we already have NOKPROBE_SYMBOL macro */
+ 
+ /*
+@@ -188,6 +164,18 @@ register unsigned long current_stack_pointer asm(_ASM_SP);
+ #define ASM_CALL_CONSTRAINT "+r" (current_stack_pointer)
+ #endif /* __ASSEMBLY__ */
+ 
++#define _ASM_EXTABLE(from, to)					\
++	_ASM_EXTABLE_HANDLE(from, to, ex_handler_default)
++
++#define _ASM_EXTABLE_UA(from, to)				\
++	_ASM_EXTABLE_HANDLE(from, to, ex_handler_uaccess)
++
++#define _ASM_EXTABLE_CPY(from, to)				\
++	_ASM_EXTABLE_HANDLE(from, to, ex_handler_copy)
++
++#define _ASM_EXTABLE_FAULT(from, to)				\
++	_ASM_EXTABLE_HANDLE(from, to, ex_handler_fault)
++
+ #endif /* __KERNEL__ */
+ 
+ #endif /* _ASM_X86_ASM_H */
+-- 
+2.31.1
+

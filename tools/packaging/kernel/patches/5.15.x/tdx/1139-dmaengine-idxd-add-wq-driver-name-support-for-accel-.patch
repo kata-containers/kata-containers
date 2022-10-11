@@ -1,0 +1,186 @@
+From 1243fe43b6534529c0e974ba1ab1aa4ca4aa30dd Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Mon, 24 Jan 2022 16:10:05 -0700
+Subject: [PATCH 1139/1418] dmaengine: idxd: add wq driver name support for
+ accel-config user tool
+
+With the possibility of multiple wq drivers that can be bound to the wq,
+the user config tool accel-config needs a way to know which wq driver to
+bind to the wq. Introduce per wq driver_name sysfs attribute where the user
+can indicate the driver to be bound to the wq. This allows accel-config to
+just bind to the driver using wq->driver_name.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+
+ Conflicts:
+	drivers/dma/idxd/dma.c
+	include/uapi/linux/idxd.h
+---
+ .../ABI/stable/sysfs-driver-dma-idxd          |  6 ++++
+ drivers/dma/idxd/cdev.c                       |  8 ++++++
+ drivers/dma/idxd/dma.c                        |  7 +++++
+ drivers/dma/idxd/idxd.h                       |  6 ++++
+ drivers/dma/idxd/sysfs.c                      | 28 +++++++++++++++++++
+ include/uapi/linux/idxd.h                     |  1 +
+ 6 files changed, 56 insertions(+)
+
+diff --git a/Documentation/ABI/stable/sysfs-driver-dma-idxd b/Documentation/ABI/stable/sysfs-driver-dma-idxd
+index 4d3a23eb05b9..873177c6e05e 100644
+--- a/Documentation/ABI/stable/sysfs-driver-dma-idxd
++++ b/Documentation/ABI/stable/sysfs-driver-dma-idxd
+@@ -227,6 +227,12 @@ Contact:	dmaengine@vger.kernel.org
+ Description:	Indicate the number of retires for an enqcmds submission on a shared wq.
+ 		A max value to set attribute is capped at 64.
+ 
++What:		/sys/bus/dsa/devices/wq<m>.<n>/driver_name
++Date:		Jan 21, 2022
++KernelVersion:	5.18.0
++Contact:	dmaengine@vger.kernel.org
++Description:	Name of driver to be bounded to the wq.
++
+ What:           /sys/bus/dsa/devices/engine<m>.<n>/group_id
+ Date:           Oct 25, 2019
+ KernelVersion:  5.6.0
+diff --git a/drivers/dma/idxd/cdev.c b/drivers/dma/idxd/cdev.c
+index b54c953f5c1b..202ee1e95464 100644
+--- a/drivers/dma/idxd/cdev.c
++++ b/drivers/dma/idxd/cdev.c
+@@ -305,6 +305,7 @@ void idxd_wq_del_cdev(struct idxd_wq *wq)
+ 
+ static int idxd_user_drv_probe(struct idxd_dev *idxd_dev)
+ {
++	struct device *dev = &idxd_dev->conf_dev;
+ 	struct idxd_wq *wq = idxd_dev_to_wq(idxd_dev);
+ 	struct idxd_device *idxd = wq->idxd;
+ 	int rc;
+@@ -313,6 +314,12 @@ static int idxd_user_drv_probe(struct idxd_dev *idxd_dev)
+ 		return -ENXIO;
+ 
+ 	mutex_lock(&wq->wq_lock);
++	if (!idxd_wq_driver_name_match(wq, dev)) {
++		idxd->cmd_status = IDXD_SCMD_WQ_NO_DRV_NAME;
++		rc = -ENODEV;
++		goto err_drv_name;
++	}
++
+ 	wq->type = IDXD_WQT_USER;
+ 	rc = __drv_enable_wq(wq);
+ 	if (rc < 0)
+@@ -331,6 +338,7 @@ static int idxd_user_drv_probe(struct idxd_dev *idxd_dev)
+ err_cdev:
+ 	__drv_disable_wq(wq);
+ err:
++err_drv_name:
+ 	wq->type = IDXD_WQT_NONE;
+ 	mutex_unlock(&wq->wq_lock);
+ 	return rc;
+diff --git a/drivers/dma/idxd/dma.c b/drivers/dma/idxd/dma.c
+index 5f5928c5883b..96560ef95f21 100644
+--- a/drivers/dma/idxd/dma.c
++++ b/drivers/dma/idxd/dma.c
+@@ -288,6 +288,12 @@ static int idxd_dmaengine_drv_probe(struct idxd_dev *idxd_dev)
+ 		return -ENXIO;
+ 
+ 	mutex_lock(&wq->wq_lock);
++	if (!idxd_wq_driver_name_match(wq, dev)) {
++		idxd->cmd_status = IDXD_SCMD_WQ_NO_DRV_NAME;
++		rc = -ENODEV;
++		goto err_drv_name;
++	}
++
+ 	wq->type = IDXD_WQT_KERNEL;
+ 
+ 	rc = __drv_enable_wq(wq);
+@@ -339,6 +345,7 @@ static int idxd_dmaengine_drv_probe(struct idxd_dev *idxd_dev)
+ err_irq:
+ 	__drv_disable_wq(wq);
+ err:
++err_drv_name:
+ 	wq->type = IDXD_WQT_NONE;
+ 	mutex_unlock(&wq->wq_lock);
+ 	return rc;
+diff --git a/drivers/dma/idxd/idxd.h b/drivers/dma/idxd/idxd.h
+index 8f8b77555e52..37236e55a376 100644
+--- a/drivers/dma/idxd/idxd.h
++++ b/drivers/dma/idxd/idxd.h
+@@ -220,6 +220,7 @@ struct idxd_wq {
+ 	u64 max_xfer_bytes;
+ 	u32 max_batch_size;
+ 	bool ats_dis;
++	char driver_name[WQ_NAME_SIZE + 1];
+ 
+ 	void *private_data;
+ 	struct list_head vdcm_list;
+@@ -553,6 +554,11 @@ static inline int idxd_wq_refcount(struct idxd_wq *wq)
+ #define MODULE_ALIAS_IDXD_DEVICE(type) MODULE_ALIAS("idxd:t" __stringify(type) "*")
+ #define IDXD_DEVICES_MODALIAS_FMT "idxd:t%d"
+ 
++static inline int idxd_wq_driver_name_match(struct idxd_wq *wq, struct device *dev)
++{
++	return (strncmp(wq->driver_name, dev->driver->name, strlen(dev->driver->name)) == 0);
++}
++
+ int __must_check __idxd_driver_register(struct idxd_device_driver *idxd_drv,
+ 					struct module *module, const char *mod_name);
+ #define idxd_driver_register(driver) \
+diff --git a/drivers/dma/idxd/sysfs.c b/drivers/dma/idxd/sysfs.c
+index edd8ba6b6f30..c632bb8c1e3c 100644
+--- a/drivers/dma/idxd/sysfs.c
++++ b/drivers/dma/idxd/sysfs.c
+@@ -980,6 +980,33 @@ static ssize_t wq_enqcmds_retries_store(struct device *dev, struct device_attrib
+ static struct device_attribute dev_attr_wq_enqcmds_retries =
+ 		__ATTR(enqcmds_retries, 0644, wq_enqcmds_retries_show, wq_enqcmds_retries_store);
+ 
++static ssize_t wq_driver_name_show(struct device *dev, struct device_attribute *attr, char *buf)
++{
++	struct idxd_wq *wq = confdev_to_wq(dev);
++
++	return sysfs_emit(buf, "%s\n", wq->driver_name);
++}
++
++static ssize_t wq_driver_name_store(struct device *dev, struct device_attribute *attr,
++				    const char *buf, size_t count)
++{
++	struct idxd_wq *wq = confdev_to_wq(dev);
++
++	if (wq->state != IDXD_WQ_DISABLED)
++		return -EPERM;
++
++	if (strlen(buf) > WQ_NAME_SIZE || strlen(buf) == 0)
++		return -EINVAL;
++
++	memset(wq->driver_name, 0, WQ_NAME_SIZE + 1);
++	strncpy(wq->driver_name, buf, WQ_NAME_SIZE);
++	strreplace(wq->name, '\n', '\0');
++	return count;
++}
++
++static struct device_attribute dev_attr_wq_driver_name =
++		__ATTR(driver_name, 0644, wq_driver_name_show, wq_driver_name_store);
++
+ static struct attribute *idxd_wq_attributes[] = {
+ 	&dev_attr_wq_clients.attr,
+ 	&dev_attr_wq_state.attr,
+@@ -997,6 +1024,7 @@ static struct attribute *idxd_wq_attributes[] = {
+ 	&dev_attr_wq_ats_disable.attr,
+ 	&dev_attr_wq_occupancy.attr,
+ 	&dev_attr_wq_enqcmds_retries.attr,
++	&dev_attr_wq_driver_name.attr,
+ 	NULL,
+ };
+ 
+diff --git a/include/uapi/linux/idxd.h b/include/uapi/linux/idxd.h
+index cc311a917b9f..55837fa9c7ce 100644
+--- a/include/uapi/linux/idxd.h
++++ b/include/uapi/linux/idxd.h
+@@ -30,6 +30,7 @@ enum idxd_scmd_stat {
+ 	IDXD_SCMD_WQ_NO_PRIV = 0x800f0000,
+ 	IDXD_SCMD_WQ_IRQ_ERR = 0x80100000,
+ 	IDXD_SCMD_WQ_PASID_ERR = 0x80200000,
++	IDXD_SCMD_WQ_NO_DRV_NAME = 0x80300000,
+ };
+ 
+ #define IDXD_SCMD_SOFTERR_MASK	0x80000000
+-- 
+2.31.1
+

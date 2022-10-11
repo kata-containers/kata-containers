@@ -1,0 +1,38 @@
+From 33930a577d9c35958a09c652ced7d9bf0ee19f25 Mon Sep 17 00:00:00 2001
+From: David Howells <dhowells@redhat.com>
+Date: Fri, 11 Mar 2022 13:24:47 +0000
+Subject: [PATCH 1296/1418] watch_queue: Make comment about setting ->defunct
+ more accurate
+
+watch_queue_clear() has a comment stating that setting ->defunct to true
+preventing new additions as well as preventing notifications.  Whilst
+the latter is true, the first bit is superfluous since at the time this
+function is called, the pipe cannot be accessed to add new event
+sources.
+
+Remove the "new additions" bit from the comment.
+
+Fixes: c73be61cede5 ("pipe: Add general notification queue support")
+Reported-by: Jann Horn <jannh@google.com>
+Signed-off-by: David Howells <dhowells@redhat.com>
+Signed-off-by: Linus Torvalds <torvalds@linux-foundation.org>
+---
+ kernel/watch_queue.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kernel/watch_queue.c b/kernel/watch_queue.c
+index 37bcd900fd77..00703444a219 100644
+--- a/kernel/watch_queue.c
++++ b/kernel/watch_queue.c
+@@ -566,7 +566,7 @@ void watch_queue_clear(struct watch_queue *wqueue)
+ 	rcu_read_lock();
+ 	spin_lock_bh(&wqueue->lock);
+ 
+-	/* Prevent new additions and prevent notifications from happening */
++	/* Prevent new notifications from being stored. */
+ 	wqueue->defunct = true;
+ 
+ 	while (!hlist_empty(&wqueue->watches)) {
+-- 
+2.31.1
+

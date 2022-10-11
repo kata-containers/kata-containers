@@ -1,0 +1,35 @@
+From eb15466c82a1cb4f448ef8e3d5b255a2b777a057 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Tue, 12 Oct 2021 11:01:19 -0700
+Subject: [PATCH 0526/1418] dmaengine: idxd: remove gen cap field per spec 1.2
+ update
+
+Remove max_descs_per_engine field. The recently released DSA spec 1.2 [1]
+has removed this field and made it reserved.
+
+[1]: https://software.intel.com/content/dam/develop/external/us/en/documents-tps/341204-intel-data-streaming-accelerator-spec.pdf
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+Link: https://lore.kernel.org/r/163406167978.1303649.1798682437841822837.stgit@djiang5-desk3.ch.intel.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/idxd/registers.h | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/dma/idxd/registers.h b/drivers/dma/idxd/registers.h
+index ffc7550a77ee..eeb11e6eb25b 100644
+--- a/drivers/dma/idxd/registers.h
++++ b/drivers/dma/idxd/registers.h
+@@ -36,8 +36,7 @@ union gen_cap_reg {
+ 		u64 max_batch_shift:4;
+ 		u64 max_ims_mult:6;
+ 		u64 config_en:1;
+-		u64 max_descs_per_engine:8;
+-		u64 rsvd3:24;
++		u64 rsvd3:32;
+ 	};
+ 	u64 bits;
+ } __packed;
+-- 
+2.31.1
+

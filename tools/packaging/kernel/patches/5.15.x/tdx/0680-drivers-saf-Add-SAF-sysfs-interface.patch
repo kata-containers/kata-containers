@@ -1,0 +1,775 @@
+From c08bc38f53638fe38d904b7f91df9fddb906b435 Mon Sep 17 00:00:00 2001
+From: Kyung Min Park <kyung.min.park@intel.com>
+Date: Fri, 10 Sep 2021 12:08:54 -0700
+Subject: [PATCH 0680/1418] drivers/saf: Add SAF sysfs interface
+
+Implement sysfs interface to trigger scan test for a targeted core or
+all cores. For all core testing, the kernel will start testing from core 0
+and proceed to the next core one after another. After the scan test on the
+last core, the test stops until the administrator starts another round of
+tests. A "targeted core" test runs a single scan on a single core. The
+kernel will only test the target core starting from start_chunk to
+stop_chunk specified in the sysfs.
+
+The basic usage is as below.
+
+1. For all cores testing:
+   echo 1 > /sys/devices/system/cpu/scan/run_test_all
+
+2. For "targeted core" testing:
+   To start test, for example, cpu0:
+   echo "<start_chunk>" > /sys/devices/system/cpu/cpu0/scan/start_chunk
+   echo "<stop_chunk>" > /sys/devices/system/cpu/cpu0/scan/stop_chunk
+   echo 1 > /sys/devices/system/cpu/cpu0/scan/scan_start
+
+3. For checking the result:
+   cat /sys/devices/system/cpu/cpu#/scan/scan_result
+
+4. For reloading SAF image: (e.g, when new SAF image is released)
+   - copy the new image to /lib/firmware/intel/ift/saf/
+   - rename it as {family/model/stepping}.scan
+   - echo 1 > /sys/devices/system/cpu/scan/reload
+
+This module accepts four tunable parameters. These could be provided at
+load time or can be modified at runtime through sysfs.
+(/sys/devices/system/cpu/scan/<parameter_name>). The parameters are as
+described below.
+
+1. core_delay: How many milliseconds should the kernel wait after a test
+               is done before triggering another core test.
+2. noint: When set, system interrupts are not allowed to interrupt a scan.
+3. trigger_mce: It tells SAF to trigger a MCE when the test fails.
+4. thread_wait: The maximum time to allow microcode to wait for a core
+                and its sibling join for synchronization.
+
+Signed-off-by: Kyung Min Park <kyung.min.park@intel.com>
+Reviewed-by: Ashok Raj <ashok.raj@intel.com>
+---
+ drivers/ift/Makefile    |   2 +-
+ drivers/ift/saf.c       |  33 ++-
+ drivers/ift/saf.h       |  10 +-
+ drivers/ift/saf_sysfs.c | 522 ++++++++++++++++++++++++++++++++++++++++
+ drivers/ift/saf_sysfs.h |  19 ++
+ 5 files changed, 577 insertions(+), 9 deletions(-)
+ create mode 100644 drivers/ift/saf_sysfs.c
+ create mode 100644 drivers/ift/saf_sysfs.h
+
+diff --git a/drivers/ift/Makefile b/drivers/ift/Makefile
+index e36d070a6502..2aa76d4a1e30 100644
+--- a/drivers/ift/Makefile
++++ b/drivers/ift/Makefile
+@@ -4,4 +4,4 @@
+ 
+ obj-$(CONFIG_IFT)			+= ift.o
+ 
+-ift-objs				:= saf.o
++ift-objs				:= saf.o saf_sysfs.o
+diff --git a/drivers/ift/saf.c b/drivers/ift/saf.c
+index c818d63bf407..04083801e619 100644
+--- a/drivers/ift/saf.c
++++ b/drivers/ift/saf.c
+@@ -12,6 +12,7 @@
+ #include <linux/module.h>
+ #include <linux/nmi.h>
+ #include <linux/platform_device.h>
++#include <linux/semaphore.h>
+ #include <linux/slab.h>
+ #include <linux/vmalloc.h>
+ #include <linux/topology.h>
+@@ -19,20 +20,18 @@
+ #include <asm/microcode_intel.h>
+ 
+ #include "saf.h"
++#include "saf_sysfs.h"
+ 
+ static const char *saf_path = "intel/ift/saf/";
+ static enum cpuhp_state cpuhp_scan_state;
+ static struct platform_device *saf_pdev;
++static struct device *cpu_scan_device;
+ struct saf_params saf_params;
+ int saf_threads_per_core;
++struct semaphore *sems;
+ 
+ DEFINE_PER_CPU(struct saf_state, saf_state);
+ 
+-int thread_wait = 0xFFFFFFF;
+-int trigger_mce;
+-bool quiet;
+-bool noint;
+-
+ static const struct x86_cpu_id saf_cpu_ids[] __initconst = {
+ 	X86_MATCH_INTEL_FAM6_MODEL(SAPPHIRERAPIDS_X,	1),
+ 	{}
+@@ -219,7 +218,7 @@ static int copy_hashes_authenticate_chunks(void *arg)
+ 	rdmsr(MSR_SCAN_HASHES_STATUS, eax, edx);
+ 
+ 	/* enumerate the scan image information */
+-	saf_params.max_cores = GET_BITFIELD(edx, 19, 30) + 1;
++	saf_params.max_parallel_tests = GET_BITFIELD(edx, 19, 30) + 1;
+ 	saf_params.num_chunks = GET_BITFIELD(eax, 16, 23);
+ 	saf_params.chunk_size = GET_BITFIELD(eax, 0, 15) * 1024;
+ 	saf_params.hash_valid = GET_BITFIELD(edx, 31, 31);
+@@ -300,6 +299,10 @@ static int scan_chunks_sanity_check(void)
+ 	saf_params.loaded_version = *((unsigned int *)(saf_params.header_ptr
+ 						       + HEADER_OFFSET_IMAGE_REVISION));
+ 
++	sems = vmalloc(sizeof(*sems) * topology_max_packages());
++	if (!sems)
++		goto out;
++
+ 	/* copy the scan hash and authenticate per package */
+ 	cpus_read_lock();
+ 	for_each_online_cpu(cpu) {
+@@ -314,6 +317,7 @@ static int scan_chunks_sanity_check(void)
+ 			vfree(aligned_buf);
+ 			goto out;
+ 		}
++		sema_init(&sems[curr_pkg], saf_params.max_parallel_tests);
+ 	}
+ 	cpus_read_unlock();
+ 	vfree(aligned_buf);
+@@ -491,6 +495,7 @@ static int saf_offline_cpu(unsigned int cpu)
+ static int __init saf_init(void)
+ {
+ 	const struct x86_cpu_id *m;
++	struct device *root, *dev;
+ 	u64 ia32_core_caps;
+ 	int cpu, ret = -ENODEV;
+ 
+@@ -512,8 +517,18 @@ static int __init saf_init(void)
+ 
+ 	saf_threads_per_core = cpumask_weight(topology_sibling_cpumask(0));
+ 
++	root = cpu_subsys.dev_root;
++	cpu_scan_device = cpu_device_create(root, NULL, cpu_scan_attr_groups, "scan");
++
+ 	cpus_read_lock();
+ 	for_each_online_cpu(cpu) {
++		/* create per-cpu sysfs */
++		dev = get_cpu_device(cpu);
++		ret = sysfs_create_group(&dev->kobj, &scan_attr_group);
++		if (ret) {
++			pr_err("saf: failed to create sysfs group");
++			return ret;
++		}
+ 		/* initialize per-cpu variables */
+ 		init_waitqueue_head(&(per_cpu(saf_state, cpu).scan_wq));
+ 		cpumask_clear_cpu(cpu, &(per_cpu(saf_state, cpu).mask));
+@@ -540,15 +555,21 @@ static int __init saf_init(void)
+ static void __exit saf_exit(void)
+ {
+ 	struct task_struct *thread;
++	struct device *dev;
+ 	int cpu;
+ 
++	vfree(sems);
++
+ 	cpus_read_lock();
+ 	for_each_online_cpu(cpu) {
++		dev = get_cpu_device(cpu);
++		sysfs_remove_group(&dev->kobj, &scan_attr_group);
+ 		thread = per_cpu(saf_state, cpu).scan_task;
+ 		per_cpu(saf_state, cpu).scan_task = NULL;
+ 		if (thread)
+ 			kthread_stop(thread);
+ 	}
++	device_unregister(cpu_scan_device);
+ 	cpus_read_unlock();
+ 	cpuhp_remove_state(cpuhp_scan_state);
+ 
+diff --git a/drivers/ift/saf.h b/drivers/ift/saf.h
+index 6fb7786befc6..6dc02aef0876 100644
+--- a/drivers/ift/saf.h
++++ b/drivers/ift/saf.h
+@@ -31,6 +31,7 @@
+ #define HEADER_SIZE				48
+ #define TEST_SIZE_LIMIT				BIT(27)
+ #define MAX_RETRY				5
++#define MINIMUM_SAF_INTERVAL			60
+ 
+ /*
+  * scan execution error code (edx stores error code after rdmsr(SCAN_STATUS))
+@@ -68,7 +69,7 @@
+  * @test_image_ptr: the 512B aligned linear address that points to scan test chunk loaded.
+  * @num_chunks: the number of chunks in scan binary.
+  * @chunk_size: shows the chunk size.
+- * @max_cores: the maximum numbers of cores that scan test can run simultaneously.
++ * @max_parallel_tests: the maximum numbers of cores that scan test can run simultaneously.
+  * @loading_error: set if error occurred during scan hashes or chunk authentication.
+  * @hash_valid: set when scan hash copy completed.
+  * @valid_chunks: the number of authenticated chunks.
+@@ -80,7 +81,7 @@ struct saf_params {
+ 	u64 test_image_ptr;
+ 	int num_chunks;
+ 	int chunk_size;
+-	int max_cores;
++	int max_parallel_tests;
+ 	bool loading_error;
+ 	bool hash_valid;
+ 	int valid_chunks;
+@@ -118,4 +119,9 @@ struct saf_state {
+ 
+ DECLARE_PER_CPU(struct saf_state, saf_state);
+ 
++int load_scan_binary(void);
++extern struct saf_params saf_params;
++extern struct semaphore *sems;
++extern int saf_threads_per_core;
++
+ #endif
+diff --git a/drivers/ift/saf_sysfs.c b/drivers/ift/saf_sysfs.c
+new file mode 100644
+index 000000000000..0529d10b475a
+--- /dev/null
++++ b/drivers/ift/saf_sysfs.c
+@@ -0,0 +1,522 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* Copyright(c) 2021 Intel Corporation.
++ *
++ * Author: Kyung Min Park <kyung.min.park@intel.com>
++ */
++
++#include <linux/delay.h>
++#include <linux/cpu.h>
++#include <linux/fs.h>
++
++#include "saf_sysfs.h"
++#include "saf.h"
++
++static int core_delay = 1;
++int trigger_mce;
++int thread_wait = 0xFFFFFFF;
++bool all_cores_busy;
++bool quiet;
++bool noint;
++
++/*
++ * Initiate per core test. It wakes up all sibling threads that belongs to the
++ * target cpu. Once all sibling threads wake up, the scan test gets executed and
++ * wait for all sibling threads to finish the scan test.
++ */
++static void do_core_test(int cpu)
++{
++	int sibling, first;
++
++	/* all siblings update only first cpu completion variables */
++	first = cpumask_first(topology_sibling_cpumask(cpu));
++	reinit_completion(&per_cpu(saf_state, first).test_thread_done);
++	atomic_set(&(per_cpu(saf_state, first).siblings_in), 0);
++	atomic_set(&(per_cpu(saf_state, first).siblings_out), 0);
++	atomic_set(&(per_cpu(saf_state, first).test_remain), 0);
++
++	if (cpumask_weight(topology_sibling_cpumask(cpu)) != saf_threads_per_core) {
++		pr_warn("saf: cpu%d not have enough siblings, skipping it\n", cpu);
++		return;
++	}
++	for_each_cpu(sibling, topology_sibling_cpumask(cpu)) {
++		cpumask_set_cpu(sibling, &per_cpu(saf_state, sibling).mask);
++		atomic_inc(&per_cpu(saf_state, first).test_remain);
++	}
++	for_each_cpu(sibling, topology_sibling_cpumask(cpu))
++		wake_up_interruptible(&per_cpu(saf_state, sibling).scan_wq);
++
++	wait_for_completion_interruptible_timeout(&per_cpu(saf_state, first).test_thread_done, HZ);
++}
++
++/*
++ * The sysfs interface to check the scan test result:
++ * To check the result, for example, cpu0
++ * cat /sys/devices/system/cpu/cpu0/scan/scan_result
++ */
++static ssize_t scan_result_show(struct device *dev,
++				struct device_attribute *attr,
++				char *buf)
++{
++	unsigned int cpu = dev->id;
++
++	return sprintf(buf, "%llx\n", per_cpu(saf_state, cpu).result);
++}
++
++static DEVICE_ATTR_RO(scan_result);
++
++/*
++ * The sysfs interface for single core testing
++ * To start test, for example, cpu0
++ * echo 1 > /sys/devices/system/cpu/cpu0/scan/scan_start
++ * To check the result:
++ * cat /sys/devices/system/cpu/cpu0/scan/scan_result
++ * The sibling core gets tested at the same time.
++ */
++static ssize_t scan_start_store(struct device *dev,
++				struct device_attribute *attr,
++				const char *buf, size_t count)
++{
++	unsigned int cpu = dev->id;
++	u64 last_execution;
++	int sibling, rc;
++	bool var;
++
++	rc = kstrtobool(buf, &var);
++	if (rc || var != 1)
++		return rc;
++
++	if (all_cores_busy) {
++		pr_warn("saf: All core test running, wait until it finishes");
++		return -EINVAL;
++	}
++	for_each_cpu(sibling, topology_sibling_cpumask(cpu)) {
++		if (per_cpu(saf_state, sibling).result == SCAN_TEST_BUSY) {
++			pr_warn("saf: Test running in this core, wait until it finishes");
++			return -EINVAL;
++		}
++	}
++	/* the minimum wait time is to ensure that scan execution is not overlapped */
++	last_execution = per_cpu(saf_state, cpu).last_executed;
++	if ((ktime_get_real_seconds() - last_execution) < MINIMUM_SAF_INTERVAL) {
++		pr_info("saf: the minimum saf interval is 1 min.");
++		return count;
++	}
++	cpu_hotplug_disable();
++	down(&sems[topology_physical_package_id(cpu)]);
++	do_core_test(cpu);
++	up(&sems[topology_physical_package_id(cpu)]);
++	cpu_hotplug_enable();
++
++	return count;
++}
++
++static DEVICE_ATTR_WO(scan_start);
++
++/*
++ * The current_chunk shows the last executed chunk before the
++ * interrupt. If the scan test finishes gracefully, it shows the last chunk.
++ */
++static ssize_t current_chunk_show(struct device *dev,
++				  struct device_attribute *attr,
++				  char *buf)
++{
++	unsigned int cpu = dev->id;
++
++	return sprintf(buf, "%u\n", per_cpu(saf_state, cpu).start_index - 1);
++}
++
++static DEVICE_ATTR_RO(current_chunk);
++
++/*
++ * User can specify the start chunk of the scan test via sysfs.
++ * The start chunk should be set before the test execution.
++ */
++static ssize_t start_chunk_store(struct device *dev,
++				 struct device_attribute *attr,
++				 const char *buf, size_t count)
++{
++	unsigned int cpu = dev->id;
++	int var, rc, sibling;
++
++	rc = kstrtoint(buf, 10, &var);
++	if (rc)
++		return rc;
++
++	if (var < 0 || var >= saf_params.num_chunks) {
++		pr_err("saf: invalid start_chunk range");
++		return -EINVAL;
++	}
++	for_each_cpu(sibling, topology_sibling_cpumask(cpu))
++		per_cpu(saf_state, sibling).start_index = var;
++
++	return count;
++}
++
++static ssize_t start_chunk_show(struct device *dev,
++				struct device_attribute *attr,
++				char *buf)
++{
++	unsigned int cpu = dev->id;
++
++	return sprintf(buf, "%u\n", per_cpu(saf_state, cpu).start_index);
++}
++
++static DEVICE_ATTR_RW(start_chunk);
++
++/*
++ * User can specify the stop chunk of the scan test via sysfs.
++ * The stop chunk should be set before the test execution.
++ */
++static ssize_t stop_chunk_store(struct device *dev,
++				struct device_attribute *attr,
++				const char *buf, size_t count)
++{
++	unsigned int cpu = dev->id;
++	int var, rc, sibling;
++
++	rc = kstrtoint(buf, 10, &var);
++	if (rc)
++		return rc;
++
++	if (var < 0 || var >= saf_params.num_chunks) {
++		pr_err("saf: invalid stop_chunk range");
++		return -EINVAL;
++	}
++	for_each_cpu(sibling, topology_sibling_cpumask(cpu))
++		per_cpu(saf_state, sibling).stop_index = var;
++
++	return count;
++}
++
++static ssize_t stop_chunk_show(struct device *dev,
++			       struct device_attribute *attr,
++			       char *buf)
++{
++	unsigned int cpu = dev->id;
++
++	return sprintf(buf, "%u\n", per_cpu(saf_state, cpu).stop_index);
++}
++
++static DEVICE_ATTR_RW(stop_chunk);
++
++/* per-cpu scan sysfs attributes */
++static struct attribute *scan_attrs[] = {
++	&dev_attr_scan_start.attr,
++	&dev_attr_scan_result.attr,
++	&dev_attr_current_chunk.attr,
++	&dev_attr_start_chunk.attr,
++	&dev_attr_stop_chunk.attr,
++	NULL
++};
++
++const struct attribute_group scan_attr_group = {
++	.attrs	= scan_attrs,
++	.name = "scan",
++};
++
++/*
++ * Reload the SAF image. When user wants to install new SAF image
++ * image, reloading must be done.
++ */
++static ssize_t reload_store(struct device *dev,
++			    struct device_attribute *attr,
++			    const char *buf, size_t count)
++{
++	bool var;
++	int rc;
++
++	rc = kstrtobool(buf, &var);
++	if (rc < 0)
++		return -EINVAL;
++
++	rc = load_scan_binary();
++	if (rc < 0) {
++		pr_info("saf: error, failed to load scan hash and test");
++		return -EINVAL;
++	}
++
++	return count;
++}
++
++static DEVICE_ATTR_WO(reload);
++
++/*
++ * The sysfs interface to execute scan test for all online cpus.
++ * The test can be triggered as below:
++ * echo 1 > /sys/devices/system/cpu/scan/run_test_all
++ */
++static ssize_t run_test_all_store(struct device *dev,
++				  struct device_attribute *attr,
++				  const char *buf, size_t count)
++{
++	struct cpumask snapshot_mask;
++	int rc, sibling, cpu = 0;
++	u64 last_execution;
++	bool var;
++
++	rc = kstrtobool(buf, &var);
++	if (rc < 0)
++		return -EINVAL;
++
++	/* the minimum wait time is to ensure that scan execution is not overlapped */
++	last_execution = per_cpu(saf_state, cpu).last_executed;
++	if ((ktime_get_real_seconds() - last_execution) < MINIMUM_SAF_INTERVAL) {
++		pr_info("saf: the minimum saf interval is 1 min.");
++		return count;
++	}
++	cpu_hotplug_disable();
++	all_cores_busy = 1;
++
++	/* since one test run for all sibling threads, snapshot_mask clears bits accordingly */
++	cpumask_copy(&snapshot_mask, cpu_online_mask);
++	for_each_cpu(cpu, &snapshot_mask) {
++		/* the sibling thread should have the same test chunks setting */
++		for_each_cpu(sibling, topology_sibling_cpumask(cpu)) {
++			per_cpu(saf_state, sibling).start_index = 0;
++			per_cpu(saf_state, sibling).stop_index = saf_params.num_chunks - 1;
++		}
++		do_core_test(cpu);
++		for_each_cpu(sibling, topology_sibling_cpumask(cpu))
++			cpumask_clear_cpu(sibling, &snapshot_mask);
++		mdelay(core_delay);
++	}
++	all_cores_busy = 0;
++	cpu_hotplug_enable();
++
++	return count;
++}
++
++static DEVICE_ATTR_WO(run_test_all);
++
++/*
++ * The driver enumerates how many chunks the SAF image has.
++ * User can decide to either test all chunks or partial chunks.
++ */
++static ssize_t num_chunks_show(struct device *dev,
++			       struct device_attribute *attr,
++			       char *buf)
++{
++	return sprintf(buf, "%u\n", saf_params.num_chunks);
++}
++
++static DEVICE_ATTR_RO(num_chunks);
++
++/*
++ * The driver enumerates how big each chunk size is in KBs.
++ */
++static ssize_t chunk_size_show(struct device *dev,
++			       struct device_attribute *attr,
++			       char *buf)
++{
++	return sprintf(buf, "%u\n", saf_params.chunk_size);
++}
++
++static DEVICE_ATTR_RO(chunk_size);
++
++/*
++ * The delay(ms) between each core test when all core tests are
++ * running.
++ */
++static ssize_t core_delay_show(struct device *dev,
++			       struct device_attribute *attr,
++			       char *buf)
++{
++	return sprintf(buf, "%u\n", core_delay);
++}
++
++static ssize_t core_delay_store(struct device *dev,
++				struct device_attribute *attr,
++				const char *buf, size_t count)
++{
++	int var, rc;
++
++	rc = kstrtoint(buf, 10, &var);
++	if (rc < 0)
++		return -EINVAL;
++
++	core_delay = var;
++
++	return count;
++}
++static DEVICE_ATTR_RW(core_delay);
++
++/*
++ * If set, the interrupt is disabled during scan test.
++ */
++static ssize_t noint_show(struct device *dev,
++			  struct device_attribute *attr,
++			  char *buf)
++{
++	return sprintf(buf, "%u\n", noint);
++}
++
++static ssize_t noint_store(struct device *dev,
++			   struct device_attribute *attr,
++			   const char *buf, size_t count)
++{
++	int var, rc;
++
++	rc = kstrtoint(buf, 10, &var);
++	if (rc < 0)
++		return -EINVAL;
++
++	noint = var;
++
++	return count;
++}
++static DEVICE_ATTR_RW(noint);
++
++/*
++ * If set, it goes to non-verbose mode and it does not show logs.
++ * User can still check the scan result via sysfs such as scan_result.
++ */
++static ssize_t quiet_show(struct device *dev,
++			  struct device_attribute *attr,
++			  char *buf)
++{
++	return sprintf(buf, "%u\n", quiet);
++}
++
++static ssize_t quiet_store(struct device *dev,
++			   struct device_attribute *attr,
++			   const char *buf, size_t count)
++{
++	int var, rc;
++
++	rc = kstrtoint(buf, 10, &var);
++	if (rc < 0)
++		return -EINVAL;
++
++	quiet = var;
++
++	return count;
++}
++static DEVICE_ATTR_RW(quiet);
++
++/*
++ * If set, on scan test error, it signals Machine Check Error.
++ */
++static ssize_t trigger_mce_show(struct device *dev,
++				struct device_attribute *attr,
++				char *buf)
++{
++	return sprintf(buf, "%u\n", trigger_mce);
++}
++
++static ssize_t trigger_mce_store(struct device *dev,
++				 struct device_attribute *attr,
++				 const char *buf, size_t count)
++{
++	int var, rc;
++
++	rc = kstrtoint(buf, 10, &var);
++	if (rc < 0)
++		return -EINVAL;
++
++	trigger_mce = var;
++
++	return count;
++}
++static DEVICE_ATTR_RW(trigger_mce);
++
++/*
++ * The maximum wait time (ms) for all sibling threads to join before running
++ * scan test.
++ */
++static ssize_t thread_wait_show(struct device *dev,
++				struct device_attribute *attr,
++				char *buf)
++{
++	return sprintf(buf, "%u\n", thread_wait);
++}
++
++static ssize_t thread_wait_store(struct device *dev,
++				 struct device_attribute *attr,
++				 const char *buf, size_t count)
++{
++	int var, rc;
++
++	rc = kstrtoint(buf, 10, &var);
++	if (rc < 0)
++		return -EINVAL;
++
++	thread_wait = var;
++
++	return count;
++}
++static DEVICE_ATTR_RW(thread_wait);
++
++/*
++ * The maximum number of cores that can run scan test simultaneously.
++ */
++static ssize_t max_parallel_tests_show(struct device *dev,
++			      struct device_attribute *attr,
++			      char *buf)
++{
++	return sprintf(buf, "%u\n", saf_params.max_parallel_tests);
++}
++
++static DEVICE_ATTR_RO(max_parallel_tests);
++
++/*
++ * The hash_valid is set when scan hash is successfully copied.
++ */
++static ssize_t hash_valid_show(struct device *dev,
++			       struct device_attribute *attr,
++			       char *buf)
++{
++	return sprintf(buf, "%u\n", saf_params.hash_valid);
++}
++
++static DEVICE_ATTR_RO(hash_valid);
++
++/*
++ * Total number of authenticated chunks.
++ */
++static ssize_t valid_chunks_show(struct device *dev,
++				 struct device_attribute *attr,
++				 char *buf)
++{
++	return sprintf(buf, "%u\n", saf_params.valid_chunks);
++}
++
++static DEVICE_ATTR_RO(valid_chunks);
++
++/*
++ * Currently loaded SAF image version.
++ */
++static ssize_t image_version_show(struct device *dev,
++				  struct device_attribute *attr,
++				  char *buf)
++{
++	return sprintf(buf, "%x\n", saf_params.loaded_version);
++}
++
++static DEVICE_ATTR_RO(image_version);
++
++/* global scan sysfs attributes */
++static struct attribute *cpu_scan_attrs[] = {
++	&dev_attr_reload.attr,
++	&dev_attr_run_test_all.attr,
++	&dev_attr_num_chunks.attr,
++	&dev_attr_chunk_size.attr,
++	&dev_attr_core_delay.attr,
++	&dev_attr_noint.attr,
++	&dev_attr_quiet.attr,
++	&dev_attr_trigger_mce.attr,
++	&dev_attr_thread_wait.attr,
++	&dev_attr_max_parallel_tests.attr,
++	&dev_attr_hash_valid.attr,
++	&dev_attr_valid_chunks.attr,
++	&dev_attr_image_version.attr,
++	NULL
++};
++
++const struct attribute_group cpu_scan_attr_group = {
++	.attrs = cpu_scan_attrs,
++};
++
++const struct attribute_group *cpu_scan_attr_groups[] = {
++	&cpu_scan_attr_group,
++	NULL,
++};
+diff --git a/drivers/ift/saf_sysfs.h b/drivers/ift/saf_sysfs.h
+new file mode 100644
+index 000000000000..d637e128246e
+--- /dev/null
++++ b/drivers/ift/saf_sysfs.h
+@@ -0,0 +1,19 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Copyright(c) 2021 Intel Corporation.
++ *
++ * Author: Kyung Min Park <kyung.min.park@intel.com>
++ */
++
++#ifndef _SAF_SYSFS_H_
++#define _SAF_SYSFS_H_
++
++extern int trigger_mce;
++extern int thread_wait;
++extern bool quiet;
++extern bool noint;
++
++extern const struct attribute_group scan_attr_group;
++extern const struct attribute_group cpu_scan_attr_group;
++extern const struct attribute_group *cpu_scan_attr_groups[];
++
++#endif
+-- 
+2.31.1
+

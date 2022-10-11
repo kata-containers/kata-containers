@@ -1,0 +1,88 @@
+From fdb7496f29b83d1380b3c17b5b2d5dc81d9ba1e0 Mon Sep 17 00:00:00 2001
+From: Steffen Klassert <steffen.klassert@secunet.com>
+Date: Mon, 7 Mar 2022 13:11:39 +0100
+Subject: [PATCH 1297/1418] esp: Fix possible buffer overflow in ESP
+ transformation
+
+The maximum message size that can be send is bigger than
+the  maximum site that skb_page_frag_refill can allocate.
+So it is possible to write beyond the allocated buffer.
+
+Fix this by doing a fallback to COW in that case.
+
+v2:
+
+Avoid get get_order() costs as suggested by Linus Torvalds.
+
+Fixes: cac2661c53f3 ("esp4: Avoid skb_cow_data whenever possible")
+Fixes: 03e2a30f6a27 ("esp6: Avoid skb_cow_data whenever possible")
+Reported-by: valis <sec@valis.email>
+Signed-off-by: Steffen Klassert <steffen.klassert@secunet.com>
+---
+ include/net/esp.h | 2 ++
+ net/ipv4/esp4.c   | 5 +++++
+ net/ipv6/esp6.c   | 5 +++++
+ 3 files changed, 12 insertions(+)
+
+diff --git a/include/net/esp.h b/include/net/esp.h
+index 9c5637d41d95..90cd02ff77ef 100644
+--- a/include/net/esp.h
++++ b/include/net/esp.h
+@@ -4,6 +4,8 @@
+ 
+ #include <linux/skbuff.h>
+ 
++#define ESP_SKB_FRAG_MAXSIZE (PAGE_SIZE << SKB_FRAG_PAGE_ORDER)
++
+ struct ip_esp_hdr;
+ 
+ static inline struct ip_esp_hdr *ip_esp_hdr(const struct sk_buff *skb)
+diff --git a/net/ipv4/esp4.c b/net/ipv4/esp4.c
+index 851f542928a3..d34c5767917b 100644
+--- a/net/ipv4/esp4.c
++++ b/net/ipv4/esp4.c
+@@ -446,6 +446,7 @@ int esp_output_head(struct xfrm_state *x, struct sk_buff *skb, struct esp_info *
+ 	struct page *page;
+ 	struct sk_buff *trailer;
+ 	int tailen = esp->tailen;
++	unsigned int allocsz;
+ 
+ 	/* this is non-NULL only with TCP/UDP Encapsulation */
+ 	if (x->encap) {
+@@ -455,6 +456,10 @@ int esp_output_head(struct xfrm_state *x, struct sk_buff *skb, struct esp_info *
+ 			return err;
+ 	}
+ 
++	allocsz = ALIGN(skb->data_len + tailen, L1_CACHE_BYTES);
++	if (allocsz > ESP_SKB_FRAG_MAXSIZE)
++		goto cow;
++
+ 	if (!skb_cloned(skb)) {
+ 		if (tailen <= skb_tailroom(skb)) {
+ 			nfrags = 1;
+diff --git a/net/ipv6/esp6.c b/net/ipv6/esp6.c
+index ed2f061b8768..54a9bbeb1072 100644
+--- a/net/ipv6/esp6.c
++++ b/net/ipv6/esp6.c
+@@ -483,6 +483,7 @@ int esp6_output_head(struct xfrm_state *x, struct sk_buff *skb, struct esp_info
+ 	struct page *page;
+ 	struct sk_buff *trailer;
+ 	int tailen = esp->tailen;
++	unsigned int allocsz;
+ 
+ 	if (x->encap) {
+ 		int err = esp6_output_encap(x, skb, esp);
+@@ -491,6 +492,10 @@ int esp6_output_head(struct xfrm_state *x, struct sk_buff *skb, struct esp_info
+ 			return err;
+ 	}
+ 
++	allocsz = ALIGN(skb->data_len + tailen, L1_CACHE_BYTES);
++	if (allocsz > ESP_SKB_FRAG_MAXSIZE)
++		goto cow;
++
+ 	if (!skb_cloned(skb)) {
+ 		if (tailen <= skb_tailroom(skb)) {
+ 			nfrags = 1;
+-- 
+2.31.1
+

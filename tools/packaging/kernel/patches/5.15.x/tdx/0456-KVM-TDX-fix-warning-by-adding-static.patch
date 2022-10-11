@@ -1,0 +1,46 @@
+From 3b02a23f61c5b250caa2ba43e606876c41b0a7d4 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Thu, 12 Aug 2021 15:33:53 -0700
+Subject: [PATCH 0456/1418] KVM: TDX: fix warning by adding static
+
+This patch fixes the following warnings by adding static.
+
+In file included from /linux/arch/x86/kvm/vmx/main.c:22:
+/linux/arch/x86/kvm/vmx/tdx.c:33:5: error: no previous prototype for 'tdx_keyid_alloc' [-Werror=missing-prototypes]
+   33 | int tdx_keyid_alloc(void)
+      |     ^~~~~~~~~~~~~~~
+/linux/arch/x86/kvm/vmx/tdx.c:47:6: error: no previous prototype for 'tdx_keyid_free' [-Werror=missing-prototypes]
+   47 | void tdx_keyid_free(int keyid)
+      |      ^~~~~~~~~~~~~~
+cc1: all warnings being treated as errors
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 3c4969c1d0b2..ef3bf182711f 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -31,7 +31,7 @@ static int trace_seamcalls_initialized;
+ /* TDX KeyID pool */
+ static DEFINE_IDA(tdx_keyid_pool);
+ 
+-int tdx_keyid_alloc(void)
++static int tdx_keyid_alloc(void)
+ {
+ 	if (!boot_cpu_has(X86_FEATURE_TDX))
+ 		return -EINVAL;
+@@ -45,7 +45,7 @@ int tdx_keyid_alloc(void)
+ 			       GFP_KERNEL);
+ }
+ 
+-void tdx_keyid_free(int keyid)
++static void tdx_keyid_free(int keyid)
+ {
+ 	if (!keyid || keyid < 0)
+ 		return;
+-- 
+2.31.1
+

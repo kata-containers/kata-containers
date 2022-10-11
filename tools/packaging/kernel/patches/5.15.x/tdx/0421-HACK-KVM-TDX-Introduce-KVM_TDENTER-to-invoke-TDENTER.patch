@@ -1,0 +1,181 @@
+From 1ad71fc6d9b866f6929e61d2323fc07722a14a1b Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Tue, 24 Mar 2020 19:07:38 -0700
+Subject: [PATCH 0421/1418] *** HACK *** KVM: TDX: Introduce KVM_TDENTER to
+ invoke TDENTER from userspace test
+
+Add what is effectively a direct SEAMCALL(TDENTER) so that the KVM TDX
+selftests can exercise TDENTER.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Co-developed-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h       |  1 +
+ arch/x86/include/uapi/asm/kvm.h       |  4 ++++
+ arch/x86/kvm/vmx/main.c               |  7 ++++++-
+ arch/x86/kvm/vmx/tdx.c                | 28 +++++++++++++++++++++++++++
+ arch/x86/kvm/x86.c                    | 20 +++++++++++++++++++
+ include/uapi/linux/kvm.h              |  1 +
+ tools/arch/x86/include/uapi/asm/kvm.h |  4 ++++
+ tools/include/uapi/linux/kvm.h        |  1 +
+ 8 files changed, 65 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index a1a1d3f1b9af..8549a3ab313f 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1538,6 +1538,7 @@ struct kvm_x86_ops {
+ 	void (*vcpu_deliver_sipi_vector)(struct kvm_vcpu *vcpu, u8 vector);
+ 
+ 	void (*do_seamcall)(struct kvm_seamcall *call);
++	void (*do_tdenter)(struct kvm_tdenter *tdenter);
+ };
+ 
+ struct kvm_x86_nested_ops {
+diff --git a/arch/x86/include/uapi/asm/kvm.h b/arch/x86/include/uapi/asm/kvm.h
+index 6fea5494a197..76fe06cabf4d 100644
+--- a/arch/x86/include/uapi/asm/kvm.h
++++ b/arch/x86/include/uapi/asm/kvm.h
+@@ -579,4 +579,8 @@ struct kvm_seamcall {
+ 	struct kvm_seamcall_regs out;
+ };
+ 
++struct kvm_tdenter {
++	__u64 regs[16];
++};
++
+ #endif /* _ASM_X86_KVM_H */
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index 1cd15e5182c5..684b003c1498 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -1,5 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0
+ #include <linux/moduleparam.h>
++#include <linux/errno.h>
++
++#include <asm/tdx_host.h>
+ 
+ static struct kvm_x86_ops vt_x86_ops __initdata;
+ 
+@@ -65,8 +68,10 @@ static __init int vt_hardware_setup(void)
+ 	 * Not a typo, direct SEAMCALL is only allowed when it won't interfere
+ 	 * with TDs created and managed by KVM.
+ 	 */
+-	if (!enable_tdx && !tdx_hardware_setup(&vt_x86_ops))
++	if (!enable_tdx && !tdx_hardware_setup(&vt_x86_ops)) {
+ 		vt_x86_ops.do_seamcall = tdx_do_seamcall;
++		vt_x86_ops.do_tdenter = tdx_do_tdenter;
++	}
+ #endif
+ 
+ 	if (enable_ept) {
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index f78459ca5eda..3a4cb147689f 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -2182,3 +2182,31 @@ static void tdx_do_seamcall(struct kvm_seamcall *call)
+ 	out->r9 = ex.r9;
+ 	out->r10 = ex.r10;
+ }
++
++static void tdx_do_tdenter(struct kvm_tdenter *tdenter)
++{
++	union tdx_exit_reason exit_reason;
++	u64 *regs = tdenter->regs;
++
++	preempt_disable();
++	local_irq_disable();
++
++	exit_reason.full = __tdx_vcpu_run(regs[VCPU_REGS_RAX], regs,
++					  regs[VCPU_REGS_RCX]);
++
++	/* __tdx_vcpu_run() doesn't bother saving RAX. */
++	regs[VCPU_REGS_RAX] = exit_reason.full;
++	if (exit_reason.error || exit_reason.non_recoverable)
++		goto out;
++
++	if (exit_reason.basic == EXIT_REASON_EXCEPTION_NMI &&
++	    is_nmi(regs[VCPU_REGS_R9])) {
++		asm("int $2");
++	} else if (exit_reason.basic == EXIT_REASON_EXTERNAL_INTERRUPT)
++		vmx_handle_external_interrupt_irqoff(NULL,
++						     regs[VCPU_REGS_R9]);
++
++out:
++	local_irq_enable();
++	preempt_enable();
++}
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 22bf1e5da458..b9a8f5b7c88a 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -4281,6 +4281,26 @@ long kvm_arch_dev_ioctl(struct file *filp,
+ 		r = 0;
+ 		break;
+ 	}
++	case KVM_TDENTER: {
++		struct kvm_tdenter __user *user_tdenter = argp;
++		struct kvm_tdenter tdenter;
++
++		r = -EINVAL;
++		if (!kvm_x86_ops.do_tdenter)
++			goto out;
++
++		r = -EFAULT;
++		if (copy_from_user(&tdenter, user_tdenter, sizeof(tdenter)))
++			goto out;
++
++		kvm_x86_ops.do_tdenter(&tdenter);
++
++		if (copy_to_user(user_tdenter, &tdenter, sizeof(tdenter)))
++			goto out;
++
++		r = 0;
++		break;
++	}
+ 	default:
+ 		r = -EINVAL;
+ 		break;
+diff --git a/include/uapi/linux/kvm.h b/include/uapi/linux/kvm.h
+index dc1fb91fa924..33d1e0f9a8c5 100644
+--- a/include/uapi/linux/kvm.h
++++ b/include/uapi/linux/kvm.h
+@@ -875,6 +875,7 @@ struct kvm_ppc_resize_hpt {
+ #define KVM_S390_ENABLE_SIE       _IO(KVMIO,   0x06)
+ 
+ #define KVM_SEAMCALL              _IOWR(KVMIO, 0x31, struct kvm_seamcall)
++#define KVM_TDENTER		  _IOWR(KVMIO, 0x32, struct kvm_tdenter)
+ 
+ /*
+  * Check if a kvm extension is available.  Argument is extension number,
+diff --git a/tools/arch/x86/include/uapi/asm/kvm.h b/tools/arch/x86/include/uapi/asm/kvm.h
+index c5d20cefe767..fdf6b4787878 100644
+--- a/tools/arch/x86/include/uapi/asm/kvm.h
++++ b/tools/arch/x86/include/uapi/asm/kvm.h
+@@ -574,4 +574,8 @@ struct kvm_seamcall {
+ 	struct kvm_seamcall_regs out;
+ };
+ 
++struct kvm_tdenter {
++	__u64 regs[16];
++};
++
+ #endif /* _ASM_X86_KVM_H */
+diff --git a/tools/include/uapi/linux/kvm.h b/tools/include/uapi/linux/kvm.h
+index 97229ae0c282..d07398057110 100644
+--- a/tools/include/uapi/linux/kvm.h
++++ b/tools/include/uapi/linux/kvm.h
+@@ -873,6 +873,7 @@ struct kvm_ppc_resize_hpt {
+ #define KVM_S390_ENABLE_SIE       _IO(KVMIO,   0x06)
+ 
+ #define KVM_SEAMCALL              _IOWR(KVMIO, 0x31, struct kvm_seamcall)
++#define KVM_TDENTER		  _IOWR(KVMIO, 0x32, struct kvm_tdenter)
+ 
+ /*
+  * Check if a kvm extension is available.  Argument is extension number,
+-- 
+2.31.1
+

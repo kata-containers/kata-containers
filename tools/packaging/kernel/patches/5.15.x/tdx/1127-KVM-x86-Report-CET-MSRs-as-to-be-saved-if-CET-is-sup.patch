@@ -1,0 +1,47 @@
+From 3e06c6834e4cbce16a04f2f742cb0b8f1a6a1c92 Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Wed, 22 Jul 2020 09:11:33 -0700
+Subject: [PATCH 1127/1418] KVM: x86: Report CET MSRs as to-be-saved if CET is
+ supported
+
+Report all CET MSRs, including the synthetic GUEST_SSP MSR, as
+to-be-saved, e.g. for migration, if CET is supported by KVM.
+
+Co-developed-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/x86.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 5ceb06316b53..f01c01795c12 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -1367,6 +1367,8 @@ static const u32 msrs_to_save_all[] = {
+ 	MSR_IA32_XSS,
+ 	MSR_ARCH_LBR_CTL, MSR_ARCH_LBR_DEPTH,
+ 	MSR_IA32_XFD, MSR_IA32_XFD_ERR,
++	MSR_IA32_U_CET, MSR_IA32_S_CET, MSR_IA32_INT_SSP_TAB, MSR_KVM_GUEST_SSP,
++	MSR_IA32_PL0_SSP, MSR_IA32_PL1_SSP, MSR_IA32_PL2_SSP, MSR_IA32_PL3_SSP,
+ };
+ 
+ static u32 msrs_to_save[ARRAY_SIZE(msrs_to_save_all)];
+@@ -6484,6 +6486,14 @@ static void kvm_init_msr_list(void)
+ 			if (!kvm_cpu_cap_has(X86_FEATURE_XFD))
+ 				continue;
+ 			break;
++		case MSR_KVM_GUEST_SSP:
++		case MSR_IA32_U_CET:
++		case MSR_IA32_S_CET:
++		case MSR_IA32_INT_SSP_TAB:
++		case MSR_IA32_PL0_SSP ... MSR_IA32_PL3_SSP:
++			if (!kvm_cet_supported())
++				continue;
++			break;
+ 		default:
+ 			break;
+ 		}
+-- 
+2.31.1
+

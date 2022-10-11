@@ -1,0 +1,81 @@
+From 9c4356595d7eff8dd0eb475207d01b0d2c82b5f6 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Wed, 14 Jul 2021 22:37:33 -0700
+Subject: [PATCH 0240/1418] x86/tdx: Add a command line option to add new ACPI
+ tables to the filter
+
+This is mainly useful for debugging and possibly as a more fine grained
+alternative to disabling the filter completely.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ .../admin-guide/kernel-parameters.txt         |  7 +++++++
+ arch/x86/kernel/tdx-filter.c                  | 19 ++++++++++++++++++-
+ 2 files changed, 25 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index 27559546a0ae..c28951301bb0 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -5633,6 +5633,13 @@
+ 
+ 	tdfx=		[HW,DRM]
+ 
++	tdx_allow_acpi=table
++			Override the TDX ACPI filter allowing ACPI tables
++			table. Multiple tables can be separated by comma.
++			For example tdx_allow_acpi=HPET to allow HPET.
++			Note that allowing unhardened drivers is likely
++			a security hole
++
+ 	tdx_disable_filter [x86]
+ 			Disable TDX guest filter support.
+ 
+diff --git a/arch/x86/kernel/tdx-filter.c b/arch/x86/kernel/tdx-filter.c
+index 1cd3cee78c42..7c7c3a396601 100644
+--- a/arch/x86/kernel/tdx-filter.c
++++ b/arch/x86/kernel/tdx-filter.c
+@@ -42,6 +42,7 @@ static int cmd_allowed_nodes_len;
+ 
+ /* Status of TDX filter */
+ static bool tdx_filter_status = 1;
++static char acpi_allowed[CMDLINE_MAX_LEN];
+ 
+ /* Set true if authorize_allow_devs is used */
+ static bool filter_overridden;
+@@ -231,6 +232,9 @@ bool tdx_allowed_port(short int port)
+ 
+ void __init tdx_filter_init(void)
+ {
++	char a_allowed[60];
++	char *allowed;
++
+ 	if (!cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
+ 		return;
+ 
+@@ -259,7 +263,20 @@ void __init tdx_filter_init(void)
+ 		pr_debug("Device filter is overridden\n");
+ 	}
+ 
+-	acpi_tbl_allow_setup("XSDT,FACP,DSDT,FACS,APIC");
++	allowed = "XSDT,FACP,DSDT,FACS,APIC";
++	if (cmdline_find_option(boot_command_line, "tdx_allow_acpi",
++				a_allowed, sizeof(a_allowed)) >= 0) {
++		add_taint(TAINT_CONF_NO_LOCKDOWN, LOCKDEP_STILL_OK);
++		snprintf(acpi_allowed, sizeof(acpi_allowed), "%s,%s", allowed,
++			 a_allowed);
++		allowed = acpi_allowed;
++		/*
++		 * Similar to previous overrides, ACPI table override also
++		 * requires ioremap as shared. So force enable it.
++		 */
++		ioremap_force_shared = true;
++	}
++	acpi_tbl_allow_setup(allowed);
+ 
+ 	pr_info("Enabled TDX guest device filter\n");
+ }
+-- 
+2.31.1
+

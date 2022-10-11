@@ -1,0 +1,577 @@
+From c5be5191e601f1f03188f1b651ec9d54491ebebc Mon Sep 17 00:00:00 2001
+From: Wu Hao <hao.wu@intel.com>
+Date: Fri, 9 Oct 2020 17:57:00 +0800
+Subject: [PATCH 0898/1418] kvm: x86: add ENQCMD/ENQCMDS support
+
+ENQCMD (Enqueue Command) and ENQCMDS (Enqueue Command Supervisor)
+instructions allow software to write command data to device's enqueue
+registers together with PASID for workload submission. (ENQCMD obtains
+the PASID from the IA32_PASID MSR, ENQCMDS obtains the PASID from
+command data). When ENQCMD/ENQCMDS are used in guest (non-root mode),
+the guest-programmed PASID must be translated to host PASID before the
+command data store to the device. In order to support ENQCMD/ENQCMDS
+virtualization, a hardware assisted Guest to Host PASID Translation
+feature is added to VMX.
+
+To enable this new VMX PASID Translation feature for ENQCMD/ENQCMDS
+virtualization, this patch introduces a new PASID translation table in
+KVM. It's a per-vm table which is shared by all vcpus and used by
+hardwaware for Guest to Host PASID translation. Kvm manages this PASID
+translation table according to Guest to Host PASID mapping information
+from IOASID notification events. These events are from IOASID core
+which manages Host PASID and its association with guest PASID, including
+
+ IOASID_NOTIFY_BIND - capture Guest PASID to Host PASID mapping into the
+		      translation table.
+ IOASID_NOTIFY_UNBIND - clear Guest PASID to Host PASID mapping into the
+		      translation table.
+
+VM Exit is triggered by ENQCMD/ENQCMDS in guest (non-root mode) when
+PASID translation failure happends. So this patch adds related VM Exit
+handling too. It reports this failure to user by setting status flag of
+the ENQCMD/ENQCMDS instruction.
+
+This patch also adds a new vmx_vm_destroy function which is used to
+destroy PASID translation table when vm ends.
+
+v2: remove IOASID_FREE event handling.
+    add more comments and descriptions, cleanup duplicated code.
+    defer PASID translaiton table initialization to cpuid update.
+v3: fix naming in macro and functions.
+    rebased against IOASID notification patchset v3.
+v4: resolve conflicts on PASID_MAX macro.
+
+Signed-off-by: Wu Hao <hao.wu@intel.com>
+---
+ arch/x86/include/asm/vmx.h         |  43 +++++
+ arch/x86/include/asm/vmxfeatures.h |   1 +
+ arch/x86/include/uapi/asm/vmx.h    |   4 +
+ arch/x86/kvm/cpuid.c               |   2 +-
+ arch/x86/kvm/vmx/capabilities.h    |   6 +
+ arch/x86/kvm/vmx/main.c            |   2 +
+ arch/x86/kvm/vmx/vmx.c             | 284 +++++++++++++++++++++++++++++
+ arch/x86/kvm/vmx/vmx.h             |   5 +
+ 8 files changed, 346 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/vmx.h b/arch/x86/include/asm/vmx.h
+index 50937a1d2cd6..e0dbd89ca6fa 100644
+--- a/arch/x86/include/asm/vmx.h
++++ b/arch/x86/include/asm/vmx.h
+@@ -105,6 +105,7 @@ struct vmx_basic_info {
+ #define SECONDARY_EXEC_EPT_VIOLATION_VE		VMCS_CONTROL_BIT(EPT_VIOLATION_VE)
+ #define SECONDARY_EXEC_PT_CONCEAL_VMX		VMCS_CONTROL_BIT(PT_CONCEAL_VMX)
+ #define SECONDARY_EXEC_XSAVES			VMCS_CONTROL_BIT(XSAVES)
++#define SECONDARY_EXEC_PASID_TRANSLATION	VMCS_CONTROL_BIT(PASID_TRANSLATION)
+ #define SECONDARY_EXEC_MODE_BASED_EPT_EXEC	VMCS_CONTROL_BIT(MODE_BASED_EPT_EXEC)
+ #define SECONDARY_EXEC_PT_USE_GPA		VMCS_CONTROL_BIT(PT_USE_GPA)
+ #define SECONDARY_EXEC_TSC_SCALING              VMCS_CONTROL_BIT(TSC_SCALING)
+@@ -270,6 +271,10 @@ enum vmcs_field {
+ 	TSC_MULTIPLIER_HIGH             = 0x00002033,
+ 	TERTIARY_VM_EXEC_CONTROL	= 0x00002034,
+ 	TERTIARY_VM_EXEC_CONTROL_HIGH	= 0x00002035,
++	PASID_DIR0                      = 0x00002038,
++	PASID_DIR0_HIGH                 = 0x00002039,
++	PASID_DIR1                      = 0x0000203a,
++	PASID_DIR1_HIGH                 = 0x0000203b,
+ 	PID_POINTER_TABLE		= 0x00002042,
+ 	PID_POINTER_TABLE_HIGH		= 0x00002043,
+ 	SHARED_EPT_POINTER		= 0x0000203C,
+@@ -675,4 +680,42 @@ enum vmx_l1d_flush_state {
+ 
+ extern enum vmx_l1d_flush_state l1tf_vmx_mitigation;
+ 
++/*
++ * The VMCS PASID Translation Table is a two-level data structure, including
++ * High/Low PASID Directory and PASID Table. Different fields of the Guest
++ * PASID are used to locate the PASID Table Entry which has the Host PASID.
++ *
++ * High PASID Directory Select - Guest PASID Bit19
++ * PASID Directory Entry Index - Guest PASID Bit18-10
++ * PASID Table Entry Index     - Guest PASID Bit9-0
++ */
++#define pasid_high_dir_select(gpasid)	(((gpasid) >> 19) & 0x1)
++#define pasid_de_idx(gpasid)		(((gpasid) >> 10) & 0x1ff)
++#define pasid_te_idx(gpasid)		((gpasid) & 0x3ff)
++
++#define MAX_PASID			(0Xfffff)
++/*
++ * PASID Directory Entry
++ *
++ * PAISD Table Pointer - PASID Directory Entry BitM-1
++ * PASID Table Present - PASID Directory Entry Bit0
++ */
++#define PASID_DE_TAB_PTR		(((u64)-1) << 12)
++#define PASID_DE_TAB_PRESENT		(1ULL << 0)
++#define PASID_DE_NUM			512
++#define pasid_de_table_ptr(pde)		(*(pde) & PASID_DE_TAB_PTR)
++#define pasid_de_table_present(pde)	(*(pde) & PASID_DE_TAB_PRESENT)
++
++/*
++ * PASID Table Entry
++ *
++ * Host PASID Valid - PASID Table Entry Bit31
++ * Host PASID       - PASID Table Entry Bit19-0
++ */
++#define PASID_TE_VALID			(1 << 31)
++#define PASID_TE_HOST_PASID		(0xfffff)
++#define PASID_TE_NUM			1024
++#define pasid_te_hpasid_valid(pte)	(*(pte) & PASID_TE_VALID)
++#define pasid_te_hpasid(pte)		(*(pte) & PASID_TE_HOST_PASID)
++
+ #endif
+diff --git a/arch/x86/include/asm/vmxfeatures.h b/arch/x86/include/asm/vmxfeatures.h
+index 95fffa7bac67..e3d6a9656d0c 100644
+--- a/arch/x86/include/asm/vmxfeatures.h
++++ b/arch/x86/include/asm/vmxfeatures.h
+@@ -79,6 +79,7 @@
+ #define VMX_FEATURE_EPT_VIOLATION_VE	( 2*32+ 18) /* "" Conditionally reflect EPT violations as #VE exceptions */
+ #define VMX_FEATURE_PT_CONCEAL_VMX	( 2*32+ 19) /* "" Suppress VMX indicators in Processor Trace */
+ #define VMX_FEATURE_XSAVES		( 2*32+ 20) /* "" Enable XSAVES and XRSTORS in guest */
++#define VMX_FEATURE_PASID_TRANSLATION	( 2*32+ 21) /* PASID Translation */
+ #define VMX_FEATURE_MODE_BASED_EPT_EXEC	( 2*32+ 22) /* "ept_mode_based_exec" Enable separate EPT EXEC bits for supervisor vs. user */
+ #define VMX_FEATURE_PT_USE_GPA		( 2*32+ 24) /* "" Processor Trace logs GPAs */
+ #define VMX_FEATURE_TSC_SCALING		( 2*32+ 25) /* Scale hardware TSC when read in guest */
+diff --git a/arch/x86/include/uapi/asm/vmx.h b/arch/x86/include/uapi/asm/vmx.h
+index c0f68f4a10e0..ed3c7346f750 100644
+--- a/arch/x86/include/uapi/asm/vmx.h
++++ b/arch/x86/include/uapi/asm/vmx.h
+@@ -91,6 +91,8 @@
+ #define EXIT_REASON_XRSTORS             64
+ #define EXIT_REASON_UMWAIT              67
+ #define EXIT_REASON_TPAUSE              68
++#define EXIT_REASON_ENQCMD_PASID        72
++#define EXIT_REASON_ENQCMDS_PASID       73
+ #define EXIT_REASON_BUS_LOCK            74
+ #define EXIT_REASON_NOTIFY              75
+ #define EXIT_REASON_TDCALL              77
+@@ -156,6 +158,8 @@
+ 	{ EXIT_REASON_XRSTORS,               "XRSTORS" }, \
+ 	{ EXIT_REASON_UMWAIT,                "UMWAIT" }, \
+ 	{ EXIT_REASON_TPAUSE,                "TPAUSE" }, \
++	{ EXIT_REASON_ENQCMD_PASID,          "ENQCMD_PASID" }, \
++	{ EXIT_REASON_ENQCMDS_PASID,         "ENQCMDS_PASID" }, \
+ 	{ EXIT_REASON_BUS_LOCK,              "BUS_LOCK" }, \
+ 	{ EXIT_REASON_NOTIFY,                "NOTIFY"}, \
+ 	{ EXIT_REASON_TDCALL,                "TDCALL" }
+diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c
+index c01a4f37ace9..26d2d1c5bf8b 100644
+--- a/arch/x86/kvm/cpuid.c
++++ b/arch/x86/kvm/cpuid.c
+@@ -477,7 +477,7 @@ void kvm_set_cpu_caps(void)
+ 		F(AVX512VBMI) | F(LA57) | F(PKU) | 0 /*OSPKE*/ | F(RDPID) |
+ 		F(AVX512_VPOPCNTDQ) | F(UMIP) | F(AVX512_VBMI2) | F(GFNI) |
+ 		F(VAES) | F(VPCLMULQDQ) | F(AVX512_VNNI) | F(AVX512_BITALG) |
+-		F(CLDEMOTE) | F(MOVDIRI) | F(MOVDIR64B) | 0 /*WAITPKG*/ |
++		F(CLDEMOTE) | F(MOVDIRI) | F(MOVDIR64B) | F(ENQCMD) |
+ 		F(SGX_LC) | F(BUS_LOCK_DETECT) | 0 /*PKS*/
+ 	);
+ 	/* Set LA57 based on hardware capability. */
+diff --git a/arch/x86/kvm/vmx/capabilities.h b/arch/x86/kvm/vmx/capabilities.h
+index 8db9360aad6c..5512ab400120 100644
+--- a/arch/x86/kvm/vmx/capabilities.h
++++ b/arch/x86/kvm/vmx/capabilities.h
+@@ -266,6 +266,12 @@ static inline bool cpu_has_vmx_xsaves(void)
+ 		SECONDARY_EXEC_XSAVES;
+ }
+ 
++static inline bool cpu_has_vmx_pasid_trans(void)
++{
++	return vmcs_config.cpu_based_2nd_exec_ctrl &
++		SECONDARY_EXEC_PASID_TRANSLATION;
++}
++
+ static inline bool cpu_has_vmx_waitpkg(void)
+ {
+ 	return vmcs_config.cpu_based_2nd_exec_ctrl &
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index d5a6098fb5ed..513c25bf5b9a 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -138,6 +138,8 @@ static void vt_vm_destroy(struct kvm *kvm)
+ {
+ 	if (is_td(kvm))
+ 		return tdx_vm_destroy(kvm);
++
++	return vmx_vm_destroy(kvm);
+ }
+ 
+ static int vt_vcpu_create(struct kvm_vcpu *vcpu)
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index abe100a3a4b1..b457a6e140c7 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -15,6 +15,7 @@
+ 
+ #include <linux/highmem.h>
+ #include <linux/hrtimer.h>
++#include <linux/ioasid.h>
+ #include <linux/kernel.h>
+ #include <linux/kvm_host.h>
+ #include <linux/module.h>
+@@ -23,6 +24,7 @@
+ #include <linux/mm.h>
+ #include <linux/objtool.h>
+ #include <linux/sched.h>
++#include <linux/sched/mm.h>
+ #include <linux/sched/smt.h>
+ #include <linux/slab.h>
+ #include <linux/tboot.h>
+@@ -2489,6 +2491,8 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf,
+ 			SECONDARY_EXEC_NOTIFY_VM_EXITING;
+ 		if (cpu_has_sgx())
+ 			opt2 |= SECONDARY_EXEC_ENCLS_EXITING;
++		if (boot_cpu_has(X86_FEATURE_ENQCMD))
++			opt2 |= SECONDARY_EXEC_PASID_TRANSLATION;
+ 		if (adjust_vmx_controls(min2, opt2,
+ 					MSR_IA32_VMX_PROCBASED_CTLS2,
+ 					&_cpu_based_2nd_exec_control) < 0)
+@@ -4291,6 +4295,11 @@ static u32 vmx_secondary_exec_control(struct vcpu_vmx *vmx)
+ 	if (cpu_has_notify_vm_exiting() && notify_window < 0)
+ 		exec_control &= ~SECONDARY_EXEC_NOTIFY_VM_EXITING;
+ 
++	if (cpu_has_vmx_pasid_trans()) {
++		if (!guest_cpuid_has(vcpu, X86_FEATURE_ENQCMD))
++			exec_control &= ~SECONDARY_EXEC_PASID_TRANSLATION;
++	}
++
+ 	return exec_control;
+ }
+ 
+@@ -5577,6 +5586,27 @@ static int handle_notify(struct kvm_vcpu *vcpu)
+ 	return 0;
+ }
+ 
++static int handle_enqcmd_pasid(struct kvm_vcpu *vcpu)
++{
++	unsigned long flags;
++
++	kvm_debug_ratelimited("[%s] VM exit_qualification=0x%lx\n", __func__,
++			      vmcs_readl(EXIT_QUALIFICATION));
++
++	/*
++	 * Valid PASID translation should exist before the guest attempts to do
++	 * ENQCMD/ENQCMDS. Otherwise, VM exit is triggered if CPU executes
++	 * ENQCMD/ENQCMDS in non-root mode but fails to translate the guest
++	 * PASID latched in IA32_PASID MSR. In such case, set the EFLAGS.ZF to
++	 * indicate the failure to the guest and skip the instruction.
++	 */
++	flags = vmx_get_rflags(vcpu);
++	flags |= X86_EFLAGS_ZF;
++	vmx_set_rflags(vcpu, flags);
++
++	return kvm_skip_emulated_instruction(vcpu);
++}
++
+ /*
+  * The exit handlers return 1 if the exit was handled fully and guest execution
+  * may resume.  Otherwise they set the kvm_run parameter to indicate what needs
+@@ -5633,6 +5663,8 @@ static int (*kvm_vmx_exit_handlers[])(struct kvm_vcpu *vcpu) = {
+ 	[EXIT_REASON_VMFUNC]		      = handle_vmx_instruction,
+ 	[EXIT_REASON_PREEMPTION_TIMER]	      = handle_preemption_timer,
+ 	[EXIT_REASON_ENCLS]		      = handle_encls,
++	[EXIT_REASON_ENQCMD_PASID]            = handle_enqcmd_pasid,
++	[EXIT_REASON_ENQCMDS_PASID]           = handle_enqcmd_pasid,
+ 	[EXIT_REASON_BUS_LOCK]                = handle_bus_lock_vmexit,
+ 	[EXIT_REASON_NOTIFY]		      = handle_notify,
+ };
+@@ -6906,8 +6938,247 @@ static int vmx_create_vcpu(struct kvm_vcpu *vcpu)
+ #define L1TF_MSG_SMT "L1TF CPU bug present and SMT on, data leak possible. See CVE-2018-3646 and https://www.kernel.org/doc/html/latest/admin-guide/hw-vuln/l1tf.html for details.\n"
+ #define L1TF_MSG_L1D "L1TF CPU bug present and virtualization mitigation disabled, data leak possible. See CVE-2018-3646 and https://www.kernel.org/doc/html/latest/admin-guide/hw-vuln/l1tf.html for details.\n"
+ 
++static inline struct page *vmx_pasid_dir_page(struct kvm_vmx *kvm_vmx,
++					      ioasid_t gpasid)
++{
++	if (!kvm_vmx->pasid_dirs)
++		return NULL;
++
++	return pasid_high_dir_select(gpasid) ?
++			&kvm_vmx->pasid_dirs[1] : &kvm_vmx->pasid_dirs[0];
++}
++
++/* hold pasid_lock when invoke this function */
++static u32 *vmx_find_pasid_table_entry(struct kvm_vmx *kvm_vmx, ioasid_t gpasid)
++{
++	struct page *pd_page = vmx_pasid_dir_page(kvm_vmx, gpasid);
++	u64 *pd_base, *pde;
++	u32 *pt_base;
++
++	if (!pd_page) {
++		kvm_err("%s: PASID directory not found\n", __func__);
++		return ERR_PTR(-ENOENT);
++	}
++
++	pd_base = page_address(pd_page);
++	pde = pd_base + pasid_de_idx(gpasid);
++
++	if (!pasid_de_table_present(pde))
++		return NULL;
++
++	pt_base = __va(pasid_de_table_ptr(pde));
++	return pt_base + pasid_te_idx(gpasid);
++}
++
++/* hold pasid_lock when invoke this function */
++static u32 *vmx_alloc_pasid_table_entry(struct kvm_vmx *kvm_vmx,
++					ioasid_t gpasid)
++{
++	struct page *pt_page, *pd_page = vmx_pasid_dir_page(kvm_vmx, gpasid);
++	u64 *pd_base, *pde;
++	u32 *pt_base;
++
++	if (!pd_page) {
++		kvm_err("%s: PASID directory not found\n", __func__);
++		return ERR_PTR(-ENOENT);
++	}
++
++	pd_base = page_address(pd_page);
++	pde = pd_base + pasid_de_idx(gpasid);
++
++	pt_page = alloc_page(GFP_ATOMIC | __GFP_ZERO);
++	if (!pt_page) {
++		kvm_err("%s: fail to allocate PASID table entry\n", __func__);
++		return ERR_PTR(-ENOMEM);
++	}
++
++	pt_base = page_address(pt_page);
++	*pde = (u64)page_to_phys(pt_page) | PASID_DE_TAB_PRESENT;
++	return pt_base + pasid_te_idx(gpasid);
++}
++
++static int vmx_set_pasid_trans(struct kvm_vmx *kvm_vmx, ioasid_t gpasid,
++			       ioasid_t hpasid)
++{
++	int ret = 0;
++	u32 *pte;
++
++	spin_lock(&kvm_vmx->pasid_lock);
++
++	pte = vmx_find_pasid_table_entry(kvm_vmx, gpasid);
++	if (IS_ERR(pte)) {
++		ret = PTR_ERR(pte);
++		goto done;
++	} else if (!pte) {
++		pte = vmx_alloc_pasid_table_entry(kvm_vmx, gpasid);
++		if (IS_ERR(pte)) {
++			ret = PTR_ERR(pte);
++			goto done;
++		}
++	}
++
++	WARN_ON(pasid_te_hpasid_valid(pte));
++
++	ioasid_get_locked(NULL, hpasid);
++	*pte = hpasid | PASID_TE_VALID;
++
++done:
++	spin_unlock(&kvm_vmx->pasid_lock);
++	return ret;
++}
++
++static int vmx_clear_pasid_trans(struct kvm_vmx *kvm_vmx, ioasid_t gpasid,
++				 ioasid_t hpasid)
++{
++	ioasid_t old_hpasid;
++	int ret = 0;
++	u32 *pte;
++
++	spin_lock(&kvm_vmx->pasid_lock);
++
++	pte = vmx_find_pasid_table_entry(kvm_vmx, gpasid);
++	if (IS_ERR(pte)) {
++		ret = PTR_ERR(pte);
++		goto done;
++	} else if (!pte || !pasid_te_hpasid_valid(pte)) {
++		WARN_ON(1);
++		goto done;
++	}
++
++	old_hpasid = pasid_te_hpasid(pte);
++	WARN_ON(old_hpasid != hpasid);
++
++	*pte = 0;
++	ioasid_put_locked(NULL, old_hpasid);
++
++done:
++	spin_unlock(&kvm_vmx->pasid_lock);
++	return ret;
++}
++
++static int vmx_handle_ioasid_event(struct notifier_block *nb,
++				   unsigned long event, void *data)
++{
++	struct ioasid_nb_args *args = (struct ioasid_nb_args *)data;
++	struct kvm_vmx *kvm_vmx = container_of(nb, struct kvm_vmx, pasid_nb);
++	ioasid_t gpasid = args->spid;
++	ioasid_t hpasid = args->id;
++	int r = -1;
++
++	kvm_debug("%s: event %lu hpasid %u gpasid %u\n", __func__,
++		  event, hpasid, gpasid);
++
++	if (hpasid > MAX_PASID || gpasid > MAX_PASID)
++		return NOTIFY_DONE;
++
++	switch (event) {
++	case IOASID_NOTIFY_BIND:
++		r = vmx_set_pasid_trans(kvm_vmx, gpasid, hpasid);
++		break;
++	case IOASID_NOTIFY_UNBIND:
++		r = vmx_clear_pasid_trans(kvm_vmx, gpasid, hpasid);
++		break;
++	}
++
++	return r ? NOTIFY_DONE : NOTIFY_OK;
++}
++
++#define PASID_DIRS_ORDER 1
++
++static void vmx_vcpu_pasid_trans_init(struct kvm_vcpu *vcpu)
++{
++	struct kvm_vmx *kvm_vmx = to_kvm_vmx(vcpu->kvm);
++	struct mm_struct *mm = get_task_mm(current);
++	int ret = 0;
++
++	/*
++	 * initialize a per-vm PASID translation table and start monitoring
++	 * IOASID events.
++	 */
++	spin_lock(&kvm_vmx->pasid_lock);
++	if (kvm_vmx->pasid_dirs) {
++		/* skip this as table has already been initialized */
++		goto done;
++	}
++
++	kvm_vmx->pasid_dirs = alloc_pages(GFP_ATOMIC | __GFP_ZERO,
++					  PASID_DIRS_ORDER);
++	if (!kvm_vmx->pasid_dirs) {
++		kvm_err("%s: fail to alloc PASID Directory\n", __func__);
++		ret = -ENOMEM;
++		goto done;
++	}
++
++	kvm_vmx->pasid_nb.notifier_call = vmx_handle_ioasid_event;
++	kvm_vmx->pasid_nb.priority = IOASID_PRIO_CPU;
++	kvm_vmx->mm = mm;
++
++	ret = ioasid_register_notifier_mm(kvm_vmx->mm, &kvm_vmx->pasid_nb);
++	if (ret) {
++		__free_pages(kvm_vmx->pasid_dirs, PASID_DIRS_ORDER);
++		kvm_vmx->pasid_dirs = NULL;
++	}
++
++done:
++	spin_unlock(&kvm_vmx->pasid_lock);
++	mmput(mm);
++
++	if (!ret) {
++		vmcs_write64(PASID_DIR0, page_to_phys(&kvm_vmx->pasid_dirs[0]));
++		vmcs_write64(PASID_DIR1, page_to_phys(&kvm_vmx->pasid_dirs[1]));
++	}
++}
++
++static void vmx_vm_pasid_tables_free(struct page *pd_page)
++{
++	u64 *pde, *pd_base = page_address(pd_page);
++	u32 *pte, *pt_base;
++	ioasid_t hpasid;
++
++	/*
++	 * before free the PASID translation table, traverse all table entries
++	 * to make sure that kvm doesn't hold reference count of any hpasid.
++	 */
++	for (pde = pd_base; pde < pd_base + PASID_DE_NUM; pde++) {
++		if (!pasid_de_table_present(pde))
++			continue;
++
++		pt_base = __va(pasid_de_table_ptr(pde));
++
++		for (pte = pt_base; pte < pt_base + PASID_TE_NUM; pte++) {
++			if (pasid_te_hpasid_valid(pte)) {
++				hpasid = pasid_te_hpasid(pte);
++
++				/*
++				 * decrease the reference of this hpasid, and
++				 * remove it from the PASID translation table.
++				 */
++				*pte = 0;
++				ioasid_put(NULL, hpasid);
++			}
++		}
++
++		*pde = 0;
++		free_page((unsigned long)pt_base);
++	}
++}
++
++static void vmx_vm_pasid_trans_destroy(struct kvm_vmx *kvm_vmx)
++{
++	if (!kvm_vmx->pasid_dirs)
++		return;
++
++	ioasid_unregister_notifier_mm(kvm_vmx->mm, &kvm_vmx->pasid_nb);
++
++	vmx_vm_pasid_tables_free(&kvm_vmx->pasid_dirs[0]);
++	vmx_vm_pasid_tables_free(&kvm_vmx->pasid_dirs[1]);
++	__free_pages(kvm_vmx->pasid_dirs, PASID_DIRS_ORDER);
++}
++
+ static int vmx_vm_init(struct kvm *kvm)
+ {
++	spin_lock_init(&to_kvm_vmx(kvm)->pasid_lock);
++
+ 	if (!ple_gap)
+ 		kvm->arch.pause_in_guest = true;
+ 
+@@ -6957,6 +7228,12 @@ static int vmx_vm_init(struct kvm *kvm)
+ 	return 0;
+ }
+ 
++static void vmx_vm_destroy(struct kvm *kvm)
++{
++	if (cpu_has_vmx_pasid_trans())
++		vmx_vm_pasid_trans_destroy(to_kvm_vmx(kvm));
++}
++
+ static int __init vmx_check_processor_compat(void)
+ {
+ 	struct vmcs_config vmcs_conf;
+@@ -7258,6 +7535,10 @@ static void vmx_vcpu_after_set_cpuid(struct kvm_vcpu *vcpu)
+ 		vm_entry_controls_clearbit(vmx, VM_ENTRY_LOAD_IA32_PKRS);
+ 		vm_exit_controls_clearbit(vmx, VM_EXIT_LOAD_IA32_PKRS);
+ 	}
++
++	if (cpu_has_vmx_pasid_trans() &&
++		guest_cpuid_has(vcpu, X86_FEATURE_ENQCMD))
++		vmx_vcpu_pasid_trans_init(vcpu);
+ }
+ 
+ static __init void vmx_set_cpu_caps(void)
+@@ -7307,6 +7588,9 @@ static __init void vmx_set_cpu_caps(void)
+ 	 */
+ 	if (enable_ept && cpu_has_load_ia32_pkrs())
+ 		kvm_cpu_cap_check_and_set(X86_FEATURE_PKS);
++
++	if (!cpu_has_vmx_pasid_trans())
++		kvm_cpu_cap_clear(X86_FEATURE_ENQCMD);
+ }
+ 
+ static void vmx_request_immediate_exit(struct kvm_vcpu *vcpu)
+diff --git a/arch/x86/kvm/vmx/vmx.h b/arch/x86/kvm/vmx/vmx.h
+index b9cbeeacc405..11d3b10e7168 100644
+--- a/arch/x86/kvm/vmx/vmx.h
++++ b/arch/x86/kvm/vmx/vmx.h
+@@ -348,6 +348,11 @@ struct kvm_vmx {
+ 	/* PID table for IPI virtualization */
+ 	u64 *pid_table;
+ 	u16 pid_last_index;
++
++	struct page *pasid_dirs;
++	spinlock_t pasid_lock;
++	struct notifier_block pasid_nb;
++	struct mm_struct *mm;
+ };
+ 
+ bool nested_vmx_allowed(struct kvm_vcpu *vcpu);
+-- 
+2.31.1
+

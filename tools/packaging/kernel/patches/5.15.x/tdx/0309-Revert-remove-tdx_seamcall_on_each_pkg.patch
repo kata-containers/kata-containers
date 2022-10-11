@@ -1,0 +1,38 @@
+From c538936160ffc5374c3fc6174f8ea837c8298d53 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Fri, 22 Oct 2021 10:17:33 -0700
+Subject: [PATCH 0309/1418] Revert "remove tdx_seamcall_on_each_pkg"
+
+This reverts commit d49f3eb9470dc145a976366bef81c8ee5e67c2db.
+---
+ arch/x86/include/asm/tdx_host.h | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/arch/x86/include/asm/tdx_host.h b/arch/x86/include/asm/tdx_host.h
+index b68959d7fa26..0dc05b050de4 100644
+--- a/arch/x86/include/asm/tdx_host.h
++++ b/arch/x86/include/asm/tdx_host.h
+@@ -43,6 +43,8 @@ void pr_seamcall_ex_ret_info(u64 op, u64 error_code,
+ struct tdsysinfo_struct;
+ const struct tdsysinfo_struct *tdx_get_sysinfo(void);
+ 
++int tdx_seamcall_on_each_pkg(int (*fn)(void *), void *param);
++
+ extern u32 tdx_keyids_start __read_mostly;
+ extern u32 tdx_nr_keyids __read_mostly;
+ #else
+@@ -62,6 +64,11 @@ static inline const struct tdsysinfo_struct *tdx_get_sysinfo(void)
+ {
+ 	return NULL;
+ }
++
++static inline int tdx_seamcall_on_each_pkg(int (*fn)(void *), void *param)
++{
++	return 0;
++}
+ #endif
+ 
+ #endif /* __ASM_X86_TDX_HOST_H */
+-- 
+2.31.1
+

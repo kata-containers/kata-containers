@@ -1,0 +1,69 @@
+From 36ac6c7d32c4ded248b386e4f2dd637dfc2242c2 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Sun, 12 Dec 2021 09:30:18 +0800
+Subject: [PATCH 0734/1418] x86/cpu/virtext: Extract raw_vmcs_load() from
+ vmcs_load()
+
+so that TDX module driver can use it to load a VMCS. The extracted
+function doesn't handle eVMCS, which is a software-defined variation
+of VMCS for efficient nested virtualization. And that's also why it
+is named as raw_vmcs_load().
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/include/asm/virtext.h | 12 ++++++++++++
+ arch/x86/kvm/vmx/vmx_ops.h     |  6 ++----
+ 2 files changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/include/asm/virtext.h b/arch/x86/include/asm/virtext.h
+index 0db3139bd712..8935aa413d82 100644
+--- a/arch/x86/include/asm/virtext.h
++++ b/arch/x86/include/asm/virtext.h
+@@ -114,6 +114,14 @@ do {					\
+ 	WARN_ONCE(1, fmt);		\
+ 	pr_warn_ratelimited(fmt);	\
+ } while (0)
++
++static inline void raw_vmcs_load(struct vmcs *vmcs)
++{
++	u64 phys_addr = __pa(vmcs);
++
++	vmx_asm1(vmptrld, "m"(phys_addr), virt_spurious_fault,
++		 vmptrld_error, vmcs, phys_addr);
++}
+ #else
+ static inline int cpu_vmx_get(void)
+ {
+@@ -134,6 +142,10 @@ static inline void vmptrld_err(struct vmcs *vmcs, u64 phys_addr)
+ }
+ 
+ #define vmx_insn_failed(fmt...) do {} while (0)
++
++static inline void raw_vmcs_load(struct vmcs *vmcs)
++{
++}
+ #endif
+ 
+ 
+diff --git a/arch/x86/kvm/vmx/vmx_ops.h b/arch/x86/kvm/vmx/vmx_ops.h
+index 206dc5982c10..60c25b006805 100644
+--- a/arch/x86/kvm/vmx/vmx_ops.h
++++ b/arch/x86/kvm/vmx/vmx_ops.h
+@@ -232,12 +232,10 @@ static inline void vmcs_clear(struct vmcs *vmcs)
+ 
+ static inline void vmcs_load(struct vmcs *vmcs)
+ {
+-	u64 phys_addr = __pa(vmcs);
+-
+ 	if (static_branch_unlikely(&enable_evmcs))
+-		return evmcs_load(phys_addr);
++		return evmcs_load(__pa(vmcs));
+ 
+-	vmx_asm1_kvm(vmptrld, "m"(phys_addr), vmcs, phys_addr);
++	raw_vmcs_load(vmcs);
+ }
+ 
+ static inline void __invvpid(unsigned long ext, u16 vpid, gva_t gva)
+-- 
+2.31.1
+

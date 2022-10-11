@@ -1,0 +1,37 @@
+From 5d2ec251c0f9878165daec0e4cc42fb3b25d2e5d Mon Sep 17 00:00:00 2001
+From: "David E. Box" <david.e.box@linux.intel.com>
+Date: Sat, 20 Nov 2021 15:17:03 -0800
+Subject: [PATCH 0685/1418] driver core: auxiliary bus: Add driver data helpers
+
+Adds get/set driver data helpers for auxiliary devices.
+
+Signed-off-by: David E. Box <david.e.box@linux.intel.com>
+Reviewed-by: Mark Gross <markgross@kernel.org>
+---
+ include/linux/auxiliary_bus.h | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/include/linux/auxiliary_bus.h b/include/linux/auxiliary_bus.h
+index fc51d45f106b..a8338d456e81 100644
+--- a/include/linux/auxiliary_bus.h
++++ b/include/linux/auxiliary_bus.h
+@@ -28,6 +28,16 @@ struct auxiliary_driver {
+ 	const struct auxiliary_device_id *id_table;
+ };
+ 
++static inline void *auxiliary_get_drvdata(struct auxiliary_device *auxdev)
++{
++	return dev_get_drvdata(&auxdev->dev);
++}
++
++static inline void auxiliary_set_drvdata(struct auxiliary_device *auxdev, void *data)
++{
++	dev_set_drvdata(&auxdev->dev, data);
++}
++
+ static inline struct auxiliary_device *to_auxiliary_dev(struct device *dev)
+ {
+ 	return container_of(dev, struct auxiliary_device, dev);
+-- 
+2.31.1
+

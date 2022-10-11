@@ -1,0 +1,39 @@
+From 981578830413652c0fe1cdf3627ef4e1ca069911 Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Sat, 27 Jun 2020 20:49:02 -0700
+Subject: [PATCH 0887/1418] vfio/type1: Support page response for IOMMU-capable
+ Mdev
+
+VFIO should pass the physical device info for IOMMU-capable mdev.
+
+Details can refer to below commit:
+"vfio/type1: Add vSVA support for IOMMU-backed mdevs"
+
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/vfio/vfio_iommu_type1.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/vfio/vfio_iommu_type1.c b/drivers/vfio/vfio_iommu_type1.c
+index d4cd542a1f72..9c72c3b1df97 100644
+--- a/drivers/vfio/vfio_iommu_type1.c
++++ b/drivers/vfio/vfio_iommu_type1.c
+@@ -3478,8 +3478,14 @@ static int vfio_dev_page_resp_fn(struct device *dev, void *data)
+ {
+ 	struct domain_capsule *dc = (struct domain_capsule *)data;
+ 	unsigned long arg = *(unsigned long *) dc->data;
++	struct device *iommu_device;
++
++	iommu_device = vfio_get_iommu_device(dc->group, dev);
++	if (!iommu_device)
++		return -EINVAL;
+ 
+-	return iommu_page_response(dc->domain, dev, (void __user *) arg);
++	return iommu_page_response(dc->domain, iommu_device,
++				   (void __user *) arg);
+ }
+ 
+ static long vfio_iommu_page_response(struct vfio_iommu *iommu,
+-- 
+2.31.1
+

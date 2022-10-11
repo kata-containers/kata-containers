@@ -1,0 +1,79 @@
+From 022a64310418800dbfff9412122e9245f46eff8a Mon Sep 17 00:00:00 2001
+From: Dongliang Mu <mudongliangabcd@gmail.com>
+Date: Wed, 20 Oct 2021 22:35:33 +0800
+Subject: [PATCH 0541/1418] dmaengine: rcar-dmac: refactor the error handling
+ code of rcar_dmac_probe
+
+In rcar_dmac_probe, if pm_runtime_resume_and_get fails, it forgets to
+disable runtime PM. And of_dma_controller_free should only be invoked
+after the success of of_dma_controller_register.
+
+Fix this by refactoring the error handling code.
+
+Signed-off-by: Dongliang Mu <mudongliangabcd@gmail.com>
+Reviewed-by: Laurent Pinchart <laurent.pinchart@ideasonboard.com>
+Reviewed-by: Geert Uytterhoeven <geert+renesas@glider.be>
+Link: https://lore.kernel.org/r/20211020143546.3436205-1-mudongliangabcd@gmail.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/sh/rcar-dmac.c | 13 +++++++------
+ 1 file changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/dma/sh/rcar-dmac.c b/drivers/dma/sh/rcar-dmac.c
+index 6885b3dcd7a9..5c7716fd6bc5 100644
+--- a/drivers/dma/sh/rcar-dmac.c
++++ b/drivers/dma/sh/rcar-dmac.c
+@@ -1916,7 +1916,7 @@ static int rcar_dmac_probe(struct platform_device *pdev)
+ 	ret = pm_runtime_resume_and_get(&pdev->dev);
+ 	if (ret < 0) {
+ 		dev_err(&pdev->dev, "runtime PM get sync failed (%d)\n", ret);
+-		return ret;
++		goto err_pm_disable;
+ 	}
+ 
+ 	ret = rcar_dmac_init(dmac);
+@@ -1924,7 +1924,7 @@ static int rcar_dmac_probe(struct platform_device *pdev)
+ 
+ 	if (ret) {
+ 		dev_err(&pdev->dev, "failed to reset device\n");
+-		goto error;
++		goto err_pm_disable;
+ 	}
+ 
+ 	/* Initialize engine */
+@@ -1958,14 +1958,14 @@ static int rcar_dmac_probe(struct platform_device *pdev)
+ 	for_each_rcar_dmac_chan(i, dmac, chan) {
+ 		ret = rcar_dmac_chan_probe(dmac, chan);
+ 		if (ret < 0)
+-			goto error;
++			goto err_pm_disable;
+ 	}
+ 
+ 	/* Register the DMAC as a DMA provider for DT. */
+ 	ret = of_dma_controller_register(pdev->dev.of_node, rcar_dmac_of_xlate,
+ 					 NULL);
+ 	if (ret < 0)
+-		goto error;
++		goto err_pm_disable;
+ 
+ 	/*
+ 	 * Register the DMA engine device.
+@@ -1974,12 +1974,13 @@ static int rcar_dmac_probe(struct platform_device *pdev)
+ 	 */
+ 	ret = dma_async_device_register(engine);
+ 	if (ret < 0)
+-		goto error;
++		goto err_dma_free;
+ 
+ 	return 0;
+ 
+-error:
++err_dma_free:
+ 	of_dma_controller_free(pdev->dev.of_node);
++err_pm_disable:
+ 	pm_runtime_disable(&pdev->dev);
+ 	return ret;
+ }
+-- 
+2.31.1
+

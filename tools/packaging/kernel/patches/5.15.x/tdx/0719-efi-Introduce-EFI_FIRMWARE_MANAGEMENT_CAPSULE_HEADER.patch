@@ -1,0 +1,105 @@
+From 507fdadf0d17e2fc5017b1ff75e1875c885ca2e4 Mon Sep 17 00:00:00 2001
+From: Chen Yu <yu.c.chen@intel.com>
+Date: Thu, 16 Dec 2021 23:44:53 +0800
+Subject: [PATCH 0719/1418] efi: Introduce
+ EFI_FIRMWARE_MANAGEMENT_CAPSULE_HEADER and corresponding structures
+
+Platform Firmware Runtime Update image starts with UEFI headers, and the
+headers are defined in UEFI specification, but some of them have not been
+defined in the kernel yet.
+
+For example, the header layout of a capsule file looks like this:
+
+EFI_CAPSULE_HEADER
+EFI_FIRMWARE_MANAGEMENT_CAPSULE_HEADER
+EFI_FIRMWARE_MANAGEMENT_CAPSULE_IMAGE_HEADER
+EFI_FIRMWARE_IMAGE_AUTHENTICATION
+
+These structures would be used by the Platform Firmware Runtime Update
+driver to parse the format of capsule file to verify if the corresponding
+version number is valid. In this way, if the user provides an invalid
+capsule image, the kernel could be used as a guard to reject it, without
+switching to the Management Mode (which might be costly).
+
+EFI_CAPSULE_HEADER has been defined in the kernel, but the other
+structures have not been defined yet, so do that. Besides,
+EFI_FIRMWARE_MANAGEMENT_CAPSULE_HEADER and
+EFI_FIRMWARE_MANAGEMENT_CAPSULE_IMAGE_HEADER are required to be packed
+in the uefi specification. For this reason, use the __packed attribute
+to indicate to the compiler that the entire structure can appear
+misaligned in memory (as suggested by Ard) in case one of them follows
+the other directly in a capsule header.
+
+Cc: Andy Shevchenko <andriy.shevchenko@intel.com>
+Cc: Ard Biesheuvel <ardb@kernel.org>
+Cc: Ashok Raj <ashok.raj@intel.com>
+Cc: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Cc: Len Brown <lenb@kernel.org>
+Cc: Mike Rapoport <rppt@kernel.org>
+Cc: "Rafael J. Wysocki" <rafael@kernel.org>
+Acked-by: Ard Biesheuvel <ardb@kernel.org>
+Signed-off-by: Chen Yu <yu.c.chen@intel.com>
+---
+ include/linux/efi.h | 46 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 46 insertions(+)
+
+diff --git a/include/linux/efi.h b/include/linux/efi.h
+index d43cc872b582..431ef7e14ab6 100644
+--- a/include/linux/efi.h
++++ b/include/linux/efi.h
+@@ -149,6 +149,52 @@ typedef struct {
+ 	u32 imagesize;
+ } efi_capsule_header_t;
+ 
++/* EFI_FIRMWARE_MANAGEMENT_CAPSULE_HEADER */
++struct efi_manage_capsule_header {
++	u32 ver;
++	u16 emb_drv_cnt;
++	u16 payload_cnt;
++	/*
++	 * Variable-size array of the size given by the sum of
++	 * emb_drv_cnt and payload_cnt.
++	 */
++	u64 offset_list[];
++} __packed;
++
++/* EFI_FIRMWARE_MANAGEMENT_CAPSULE_IMAGE_HEADER */
++struct efi_manage_capsule_image_header {
++	u32 ver;
++	efi_guid_t image_type_id;
++	u8 image_index;
++	u8 reserved_bytes[3];
++	u32 image_size;
++	u32 vendor_code_size;
++	/* hw_ins was introduced in version 2 */
++	u64 hw_ins;
++	/* capsule_support was introduced in version 3 */
++	u64 capsule_support;
++} __packed;
++
++/* WIN_CERTIFICATE */
++struct win_cert {
++	u32 len;
++	u16 rev;
++	u16 cert_type;
++};
++
++/* WIN_CERTIFICATE_UEFI_GUID */
++struct win_cert_uefi_guid {
++	struct win_cert	hdr;
++	efi_guid_t cert_type;
++	u8 cert_data[];
++};
++
++/* EFI_FIRMWARE_IMAGE_AUTHENTICATION */
++struct efi_image_auth {
++	u64 mon_count;
++	struct win_cert_uefi_guid auth_info;
++};
++
+ /*
+  * EFI capsule flags
+  */
+-- 
+2.31.1
+

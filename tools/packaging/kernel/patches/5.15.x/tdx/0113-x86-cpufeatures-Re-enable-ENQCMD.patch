@@ -1,0 +1,38 @@
+From c1a5fa248bf6eaf1f45fe51a54ad4ca4b133147c Mon Sep 17 00:00:00 2001
+From: Fenghua Yu <fenghua.yu@intel.com>
+Date: Thu, 1 Jul 2021 21:34:10 +0000
+Subject: [PATCH 0113/1418] x86/cpufeatures: Re-enable ENQCMD
+
+Since ENQCMD is handled by #GP fix up, it can be re-enabled.
+
+The ENQCMD feature can only be used if CONFIG_INTEL_IOMMU_SVM
+is set. Add X86_FEATURE_ENQCMD to the disabled features mask as
+appropriate and use cpu_feature_enabled() to check the feature.
+
+Signed-off-by: Fenghua Yu <fenghua.yu@intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+---
+ arch/x86/include/asm/disabled-features.h | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/disabled-features.h b/arch/x86/include/asm/disabled-features.h
+index 8f28fafa98b3..1231d63f836d 100644
+--- a/arch/x86/include/asm/disabled-features.h
++++ b/arch/x86/include/asm/disabled-features.h
+@@ -56,8 +56,11 @@
+ # define DISABLE_PTI		(1 << (X86_FEATURE_PTI & 31))
+ #endif
+ 
+-/* Force disable because it's broken beyond repair */
+-#define DISABLE_ENQCMD		(1 << (X86_FEATURE_ENQCMD & 31))
++#ifdef CONFIG_INTEL_IOMMU_SVM
++# define DISABLE_ENQCMD		0
++#else
++# define DISABLE_ENQCMD		(1 << (X86_FEATURE_ENQCMD & 31))
++#endif
+ 
+ #ifdef CONFIG_X86_SGX
+ # define DISABLE_SGX	0
+-- 
+2.31.1
+

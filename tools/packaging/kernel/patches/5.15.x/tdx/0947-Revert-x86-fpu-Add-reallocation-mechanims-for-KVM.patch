@@ -1,0 +1,178 @@
+From c1fa92649cee86dc35e69c5979efaac92d520855 Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 18:06:40 -0800
+Subject: [PATCH 0947/1418] Revert "x86/fpu: Add reallocation mechanims for
+ KVM"
+
+This reverts commit 3f594d79358f3551aa98c277d4087e378aeee433.
+---
+ arch/x86/kernel/fpu/core.c   | 24 ++------------------
+ arch/x86/kernel/fpu/xstate.c | 43 ++++++------------------------------
+ arch/x86/kernel/fpu/xstate.h |  2 --
+ 3 files changed, 9 insertions(+), 60 deletions(-)
+
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index f60c9dea3dba..a5e42d32e601 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -259,31 +259,11 @@ void fpu_free_guest_fpstate(struct fpu_guest *gfpu)
+ }
+ EXPORT_SYMBOL_GPL(fpu_free_guest_fpstate);
+ 
+-static int fpu_guest_realloc_fpstate(struct fpu_guest *guest_fpu,
+-				     bool enter_guest)
+-{
+-	/*
+-	 * Reallocation requests can only be handled when
+-	 * switching from guest to host mode.
+-	 */
+-	if (WARN_ON_ONCE(enter_guest || !IS_ENABLED(CONFIG_X86_64))) {
+-		guest_fpu->realloc_request = 0;
+-		return -EUNATCH;
+-	}
+-	return xfd_enable_guest_features(guest_fpu);
+-}
+-
+ int fpu_swap_kvm_fpstate(struct fpu_guest *guest_fpu, bool enter_guest)
+ {
+-	struct fpstate *guest_fps, *cur_fps;
++	struct fpstate *guest_fps = guest_fpu->fpstate;
+ 	struct fpu *fpu = &current->thread.fpu;
+-	int ret;
+-
+-	if (unlikely(guest_fpu->realloc_request))
+-		ret = fpu_guest_realloc_fpstate(guest_fpu, enter_guest);
+-
+-	guest_fps = guest_fpu->fpstate;
+-	cur_fps = fpu->fpstate;
++	struct fpstate *cur_fps = fpu->fpstate;
+ 
+ 	fpregs_lock();
+ 	if (!cur_fps->is_confidential && !test_thread_flag(TIF_NEED_FPU_LOAD))
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index a701a000c338..e5019974767d 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -1529,7 +1529,6 @@ static struct fpstate *fpu_install_fpstate(struct fpu *fpu,
+  *		of that task
+  * @ksize:	The required size for the kernel buffer
+  * @usize:	The required size for user space buffers
+- * @guest_fpu:	Pointer to a guest FPU container. NULL for host allocations
+  *
+  * Note vs. vmalloc(): If the task with a vzalloc()-allocated buffer
+  * terminates quickly, vfree()-induced IPIs may be a concern, but tasks
+@@ -1538,7 +1537,7 @@ static struct fpstate *fpu_install_fpstate(struct fpu *fpu,
+  * Returns: 0 on success, -ENOMEM on allocation error.
+  */
+ static int fpstate_realloc(u64 xfeatures, unsigned int ksize,
+-			   unsigned int usize, struct fpu_guest *guest_fpu)
++			   unsigned int usize)
+ {
+ 	struct fpu *fpu = &current->thread.fpu;
+ 	struct fpstate *curfps, *newfps = NULL;
+@@ -1554,12 +1553,6 @@ static int fpstate_realloc(u64 xfeatures, unsigned int ksize,
+ 	newfps->user_size = usize;
+ 	newfps->is_valloc = true;
+ 
+-	if (guest_fpu) {
+-		newfps->is_guest = true;
+-		newfps->is_confidential = curfps->is_confidential;
+-		guest_fpu->user_xfeatures |= xfeatures;
+-	}
+-
+ 	fpregs_lock();
+ 	/*
+ 	 * Ensure that the current state is in the registers before
+@@ -1573,14 +1566,12 @@ static int fpstate_realloc(u64 xfeatures, unsigned int ksize,
+ 	newfps->user_xfeatures = curfps->user_xfeatures | xfeatures;
+ 	newfps->xfd = curfps->xfd & ~xfeatures;
+ 
+-	if (guest_fpu)
+-		guest_fpu->fpstate = newfps;
+-
+ 	curfps = fpu_install_fpstate(fpu, newfps);
+ 
+ 	/* Do the final updates within the locked region */
+ 	xstate_init_xcomp_bv(&newfps->regs.xsave, newfps->xfeatures);
+ 	xfd_update_state(newfps);
++
+ 	fpregs_unlock();
+ 
+ 	vfree(curfps);
+@@ -1691,10 +1682,9 @@ static int xstate_request_perm(unsigned long idx, bool guest)
+ 	return ret;
+ }
+ 
+-static int __xfd_enable_feature(u64 xfd_err, struct fpu_guest *guest_fpu)
++int xfd_enable_feature(u64 xfd_err)
+ {
+ 	u64 xfd_event = xfd_err & XFEATURE_MASK_USER_DYNAMIC;
+-	struct fpu_state_perm *perm;
+ 	unsigned int ksize, usize;
+ 	struct fpu *fpu;
+ 
+@@ -1707,16 +1697,14 @@ static int __xfd_enable_feature(u64 xfd_err, struct fpu_guest *guest_fpu)
+ 	spin_lock_irq(&current->sighand->siglock);
+ 
+ 	/* If not permitted let it die */
+-	if ((xstate_get_group_perm(!!guest_fpu) & xfd_event) != xfd_event) {
++	if ((xstate_get_host_group_perm() & xfd_event) != xfd_event) {
+ 		spin_unlock_irq(&current->sighand->siglock);
+ 		return -EPERM;
+ 	}
+ 
+ 	fpu = &current->group_leader->thread.fpu;
+-	perm = guest_fpu ? &fpu->guest_perm : &fpu->perm;
+-	ksize = perm->__state_size;
+-	usize = perm->__user_state_size;
+-
++	ksize = fpu->perm.__state_size;
++	usize = fpu->perm.__user_state_size;
+ 	/*
+ 	 * The feature is permitted. State size is sufficient.  Dropping
+ 	 * the lock is safe here even if more features are added from
+@@ -1729,27 +1717,10 @@ static int __xfd_enable_feature(u64 xfd_err, struct fpu_guest *guest_fpu)
+ 	 * Try to allocate a new fpstate. If that fails there is no way
+ 	 * out.
+ 	 */
+-	if (fpstate_realloc(xfd_event, ksize, usize, guest_fpu))
++	if (fpstate_realloc(xfd_event, ksize, usize))
+ 		return -EFAULT;
+ 	return 0;
+ }
+-
+-int xfd_enable_feature(u64 xfd_err)
+-{
+-	return __xfd_enable_feature(xfd_err, NULL);
+-}
+-
+-int xfd_enable_guest_features(struct fpu_guest *guest_fpu)
+-{
+-	u64 xfd_err = guest_fpu->realloc_request & XFEATURE_MASK_USER_SUPPORTED;
+-
+-	guest_fpu->realloc_request = 0;
+-
+-	if (!xfd_err)
+-		return 0;
+-	return __xfd_enable_feature(xfd_err, guest_fpu);
+-}
+-
+ #else /* CONFIG_X86_64 */
+ static inline int xstate_request_perm(unsigned long idx)
+ {
+diff --git a/arch/x86/kernel/fpu/xstate.h b/arch/x86/kernel/fpu/xstate.h
+index 4a68d27b61de..896032e0438c 100644
+--- a/arch/x86/kernel/fpu/xstate.h
++++ b/arch/x86/kernel/fpu/xstate.h
+@@ -60,8 +60,6 @@ extern void fpu__init_system_xstate(unsigned int legacy_size);
+ 
+ extern void *get_xsave_addr(struct xregs_state *xsave, int xfeature_nr);
+ 
+-extern int xfd_enable_guest_features(struct fpu_guest *guest_fpu);
+-
+ static inline u64 xfeatures_mask_supervisor(void)
+ {
+ 	return fpu_kernel_cfg.max_features & XFEATURE_MASK_SUPERVISOR_SUPPORTED;
+-- 
+2.31.1
+

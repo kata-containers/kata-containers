@@ -1,0 +1,87 @@
+From ee6e63592b5edf4ff01b10255225be00c4ecdb9e Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Wed, 17 Feb 2021 17:25:53 -0800
+Subject: [PATCH 0609/1418] iommu/ioasid: Add a workqueue for cleanup work
+
+An IOASID can have multiple users, such as IOMMU driver, KVM, and device
+drivers.   The atomic IOASID notifier is used to inform users of IOASID
+state change. For example, the IOASID_NOTIFY_UNBIND event is issued when
+the IOASID is no longer bound to an address space. This requires ordered
+actions among users to tear down their contexts.
+
+Not all work can be handled in the atomic notifier handler. This patch
+introduces a shared, ordered workqueue for all IOASID users who wish to
+perform work asynchronously upon notification.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/ioasid.c | 25 +++++++++++++++++++++++++
+ include/linux/ioasid.h |  1 +
+ 2 files changed, 26 insertions(+)
+
+diff --git a/drivers/iommu/ioasid.c b/drivers/iommu/ioasid.c
+index 28a2e9b6594d..d42b39ca2c8b 100644
+--- a/drivers/iommu/ioasid.c
++++ b/drivers/iommu/ioasid.c
+@@ -32,6 +32,9 @@ static ioasid_t ioasid_capacity = PCI_PASID_MAX;
+ static ioasid_t ioasid_capacity_avail = PCI_PASID_MAX;
+ static DEFINE_XARRAY_ALLOC(ioasid_sets);
+ 
++/* Workqueue for IOASID users to do cleanup upon notification */
++static struct workqueue_struct *ioasid_wq;
++
+ struct ioasid_set_nb {
+ 	struct list_head	list;
+ 	struct notifier_block	*nb;
+@@ -1281,6 +1284,12 @@ int ioasid_register_notifier_mm(struct mm_struct *mm, struct notifier_block *nb)
+ }
+ EXPORT_SYMBOL_GPL(ioasid_register_notifier_mm);
+ 
++bool ioasid_queue_work(struct work_struct *work)
++{
++	return queue_work(ioasid_wq, work);
++}
++EXPORT_SYMBOL_GPL(ioasid_queue_work);
++
+ void ioasid_unregister_notifier_mm(struct mm_struct *mm, struct notifier_block *nb)
+ {
+ 	struct ioasid_set_nb *curr;
+@@ -1303,7 +1312,23 @@ void ioasid_unregister_notifier_mm(struct mm_struct *mm, struct notifier_block *
+ }
+ EXPORT_SYMBOL_GPL(ioasid_unregister_notifier_mm);
+ 
++static int __init ioasid_init(void)
++{
++	ioasid_wq = alloc_ordered_workqueue("ioasid_wq", 0);
++	if (!ioasid_wq)
++		return -ENOMEM;
++
++	return 0;
++}
++
++static void __exit ioasid_cleanup(void)
++{
++	destroy_workqueue(ioasid_wq);
++}
++
+ MODULE_AUTHOR("Jean-Philippe Brucker <jean-philippe.brucker@arm.com>");
+ MODULE_AUTHOR("Jacob Pan <jacob.jun.pan@linux.intel.com>");
+ MODULE_DESCRIPTION("IO Address Space ID (IOASID) allocator");
+ MODULE_LICENSE("GPL");
++module_init(ioasid_init);
++module_exit(ioasid_cleanup);
+diff --git a/include/linux/ioasid.h b/include/linux/ioasid.h
+index 9624b665f810..4547086797df 100644
+--- a/include/linux/ioasid.h
++++ b/include/linux/ioasid.h
+@@ -135,6 +135,7 @@ void ioasid_set_for_each_ioasid(struct ioasid_set *sdata,
+ 				void *data);
+ int ioasid_register_notifier_mm(struct mm_struct *mm, struct notifier_block *nb);
+ void ioasid_unregister_notifier_mm(struct mm_struct *mm, struct notifier_block *nb);
++bool ioasid_queue_work(struct work_struct *work);
+ #else /* !CONFIG_IOASID */
+ static inline void ioasid_install_capacity(ioasid_t total)
+ {
+-- 
+2.31.1
+

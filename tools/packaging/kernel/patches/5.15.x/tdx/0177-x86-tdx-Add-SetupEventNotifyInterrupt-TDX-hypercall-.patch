@@ -1,0 +1,80 @@
+From 24a04b40b314cd64eb57c70cb2a951b7f7a8fe11 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Sat, 21 Nov 2020 05:24:39 +0000
+Subject: [PATCH 0177/1418] x86/tdx: Add SetupEventNotifyInterrupt TDX
+ hypercall support
+
+SetupEventNotifyInterrupt TDX hypercall is used by guest TD to specify
+which interrupt vector to use as an event-notify vector to the VMM.
+Such registered vector is also used by Host VMM to notify about
+completion of GetQuote requests to the Guest TD.
+
+Add tdx_hcall_set_notify_intr() helper function to implement the
+SetupEventNotifyInterrupt hypercall.
+
+This will be used by the TD quote driver.
+
+Details about the SetupEventNotifyInterrupt TDVMCALL can be found in
+TDX Guest-Host Communication Interface (GHCI) Specification, sec 3.5
+"VP.VMCALL<SetupEventNotifyInterrupt>".
+
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdx.c | 32 ++++++++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 04fd1c1d4032..bd931bf8c15d 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -26,6 +26,7 @@
+ /* TDX hypercall Leaf IDs */
+ #define TDVMCALL_MAP_GPA		0x10001
+ #define TDVMCALL_GET_QUOTE		0x10002
++#define TDVMCALL_SETUP_NOTIFY_INTR	0x10004
+ 
+ /* TDX Module call error codes */
+ #define TDX_PAGE_ALREADY_ACCEPTED	0x00000b0a00000000
+@@ -214,6 +215,37 @@ int tdx_hcall_get_quote(u64 data)
+ }
+ EXPORT_SYMBOL_GPL(tdx_hcall_get_quote);
+ 
++/*
++ * tdx_hcall_set_notify_intr() - Setup Event Notify Interrupt Vector.
++ *
++ * @vector        : Vector address to be used for notification.
++ *
++ * return 0 on success or failure error number.
++ */
++int tdx_hcall_set_notify_intr(u8 vector)
++{
++	u64 ret;
++
++	/* Minimum vector value allowed is 32 */
++	if (vector < 32)
++		return -EINVAL;
++
++	/*
++	 * Register callback vector address with VMM. More details
++	 * about the ABI can be found in TDX Guest-Host-Communication
++	 * Interface (GHCI), sec 3.5.
++	 */
++	ret = _trace_tdx_hypercall(TDVMCALL_SETUP_NOTIFY_INTR, vector, 0, 0, 0,
++				   NULL);
++
++	if (ret == TDVMCALL_SUCCESS)
++		return 0;
++	else if (ret == TDCALL_INVALID_OPERAND)
++		return -EINVAL;
++
++	return -EIO;
++}
++
+ static void tdx_get_info(void)
+ {
+ 	struct tdx_module_output out;
+-- 
+2.31.1
+

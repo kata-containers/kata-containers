@@ -1,0 +1,40 @@
+From 386230fa42861675f71636f05abc7503837d41bb Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Fri, 10 Sep 2021 00:27:53 -0700
+Subject: [PATCH 0295/1418] x86/cpu/microcode: fix the potential issue to pick
+ the wrong file
+
+Replace calls to find_cpio_data() that lists multiple files matching with a
+leading path with find_cpio_file() that find a file with exact match(or
+not-found).
+
+The existing x86 microcode update code searches for the hard-coded path of
+"kernel/x86/microcode/GenuineIntel.bin".  Because the initrd image doesn't
+include another file with the same leading path by the distro default
+setting, it works as expected.  If, however, the admin who manages the
+machine environment adds, say,
+"kernel/x86/microcode/GenuineIntel.bin.another-file" to the initrd before
+the file, the kernel incorrectly picks up another file.  Fix this potential
+issue by replacing calls to find_cpio_data() with find_cpio_file().
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/microcode/core.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/microcode/core.c b/arch/x86/kernel/cpu/microcode/core.c
+index 08cda08a9bff..e80261fc014a 100644
+--- a/arch/x86/kernel/cpu/microcode/core.c
++++ b/arch/x86/kernel/cpu/microcode/core.c
+@@ -294,7 +294,7 @@ struct cpio_data find_microcode_in_initrd(const char *path, bool use_pa)
+ 			start = *rr;
+ 	}
+ 
+-	return find_cpio_data(path, (void *)start, size, NULL);
++	return find_cpio_file(path, (void *)start, size);
+ #else /* !CONFIG_BLK_DEV_INITRD */
+ 	return (struct cpio_data){ NULL, 0, "" };
+ #endif
+-- 
+2.31.1
+

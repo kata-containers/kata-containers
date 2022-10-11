@@ -1,0 +1,36 @@
+From a7ede2ec45ba3021da0a311af7dd93bbf5ce1dab Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Tue, 30 Jun 2020 13:14:34 -0700
+Subject: [PATCH 0419/1418] *** HACK *** KVM: TDX: Workaround suspected
+ TDX-SEAM TLB tracking bug
+
+Blindly do TDH_MEM_TRACK after finalizing the measurement to handle the
+case where SEPT entries were zapped/blocked, e.g. from failed NUMA
+balancing, after they were added to the TD via tdx_init_mem_region().
+TDX-SEAM doesn't allow TDH_MEM_TRACK prior to TDH_MR_FINALIZE, and
+conversely requires TDH_MEM_TRACK for entries that were
+TDH_MEM_RANGE_BLOCK'd prior to TDH_MR_FINALIZE, i.e. one of the
+restrictions is wrong.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 39ca88fc375c..442b42af0e8b 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -1839,6 +1839,8 @@ static int tdx_td_finalizemr(struct kvm *kvm)
+ 	if (TDX_ERR(err, TDH_MR_FINALIZE, NULL))
+ 		return -EIO;
+ 
++	(void)tdh_mem_track(to_kvm_tdx(kvm)->tdr.pa);
++
+ 	kvm_tdx->finalized = true;
+ 	return 0;
+ }
+-- 
+2.31.1
+

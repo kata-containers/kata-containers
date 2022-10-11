@@ -1,0 +1,83 @@
+From 69edabcd7e46a64ab62ea1e60c7bd1cb45cebce6 Mon Sep 17 00:00:00 2001
+From: Miklos Szeredi <mszeredi@redhat.com>
+Date: Mon, 7 Mar 2022 16:30:44 +0100
+Subject: [PATCH 1298/1418] fuse: fix pipe buffer lifetime for direct_io
+
+In FOPEN_DIRECT_IO mode, fuse_file_write_iter() calls
+fuse_direct_write_iter(), which normally calls fuse_direct_io(), which then
+imports the write buffer with fuse_get_user_pages(), which uses
+iov_iter_get_pages() to grab references to userspace pages instead of
+actually copying memory.
+
+On the filesystem device side, these pages can then either be read to
+userspace (via fuse_dev_read()), or splice()d over into a pipe using
+fuse_dev_splice_read() as pipe buffers with &nosteal_pipe_buf_ops.
+
+This is wrong because after fuse_dev_do_read() unlocks the FUSE request,
+the userspace filesystem can mark the request as completed, causing write()
+to return. At that point, the userspace filesystem should no longer have
+access to the pipe buffer.
+
+Fix by copying pages coming from the user address space to new pipe
+buffers.
+
+Reported-by: Jann Horn <jannh@google.com>
+Fixes: c3021629a0d8 ("fuse: support splice() reading from fuse device")
+Cc: <stable@vger.kernel.org>
+Signed-off-by: Miklos Szeredi <mszeredi@redhat.com>
+---
+ fs/fuse/dev.c    | 12 +++++++++++-
+ fs/fuse/file.c   |  1 +
+ fs/fuse/fuse_i.h |  1 +
+ 3 files changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/fs/fuse/dev.c b/fs/fuse/dev.c
+index dde341a6388a..91b7faf7c72a 100644
+--- a/fs/fuse/dev.c
++++ b/fs/fuse/dev.c
+@@ -935,7 +935,17 @@ static int fuse_copy_page(struct fuse_copy_state *cs, struct page **pagep,
+ 
+ 	while (count) {
+ 		if (cs->write && cs->pipebufs && page) {
+-			return fuse_ref_page(cs, page, offset, count);
++			/*
++			 * Can't control lifetime of pipe buffers, so always
++			 * copy user pages.
++			 */
++			if (cs->req->args->user_pages) {
++				err = fuse_copy_fill(cs);
++				if (err)
++					return err;
++			} else {
++				return fuse_ref_page(cs, page, offset, count);
++			}
+ 		} else if (!cs->len) {
+ 			if (cs->move_pages && page &&
+ 			    offset == 0 && count == PAGE_SIZE) {
+diff --git a/fs/fuse/file.c b/fs/fuse/file.c
+index 11404f8c21c7..2dc871dfcd6a 100644
+--- a/fs/fuse/file.c
++++ b/fs/fuse/file.c
+@@ -1417,6 +1417,7 @@ static int fuse_get_user_pages(struct fuse_args_pages *ap, struct iov_iter *ii,
+ 			(PAGE_SIZE - ret) & (PAGE_SIZE - 1);
+ 	}
+ 
++	ap->args.user_pages = true;
+ 	if (write)
+ 		ap->args.in_pages = true;
+ 	else
+diff --git a/fs/fuse/fuse_i.h b/fs/fuse/fuse_i.h
+index f55f9f94b1a4..0e0aff4e9b56 100644
+--- a/fs/fuse/fuse_i.h
++++ b/fs/fuse/fuse_i.h
+@@ -256,6 +256,7 @@ struct fuse_args {
+ 	bool nocreds:1;
+ 	bool in_pages:1;
+ 	bool out_pages:1;
++	bool user_pages:1;
+ 	bool out_argvar:1;
+ 	bool page_zeroing:1;
+ 	bool page_replace:1;
+-- 
+2.31.1
+

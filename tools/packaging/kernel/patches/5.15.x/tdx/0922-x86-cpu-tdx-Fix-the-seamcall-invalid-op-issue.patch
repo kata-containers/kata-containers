@@ -1,0 +1,30 @@
+From 1a07c85716d7271c3b403d6d5616c278c8f18880 Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Wed, 19 Jan 2022 16:36:53 +0800
+Subject: [PATCH 0922/1418] x86/cpu/tdx: Fix the seamcall invalid op issue
+
+tdh_trace_seamcalls() is not wrapped with vmx enabled, which causes
+seamcall invalid op when modify the print_severity debugfs.
+
+Fixes: e614276a114f ("x86/cpu/tdx: Move debugfs tunables to TDX module driver")
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/debugfs.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/debugfs.c b/arch/x86/kernel/cpu/tdx/debugfs.c
+index 72c62d085d62..3c5fbb69824c 100644
+--- a/arch/x86/kernel/cpu/tdx/debugfs.c
++++ b/arch/x86/kernel/cpu/tdx/debugfs.c
+@@ -114,7 +114,7 @@ static int print_severity_set(void *data, u64 val)
+ 	    val == DEBUGCONFIG_TRACE_ERROR ||
+ 	    val == DEBUGCONFIG_TRACE_CUSTOM ||
+ 	    val == DEBUGCONFIG_TRACE_NONE) {
+-		tdh_trace_seamcalls(val);
++		do_tddebugconfig(DEBUGCONFIG_SET_TRACE_LEVEL, val, 0);
+ 		trace_seamcalls = val;
+ 		ret = 0;
+ 	}
+-- 
+2.31.1
+

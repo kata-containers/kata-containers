@@ -1,0 +1,214 @@
+From 0402bab30173a72cd37223974a9e7769eaaffdbd Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Wed, 9 Mar 2022 20:26:52 +0800
+Subject: [PATCH 1141/1418] X86: TDX: Fix hang/panic when loading np_seamldr
+ with shadow stack (CET) enabled
+
+INTEL's CET feature request CR0.WP = 1 before set CR4.CET,
+the CR0.WP is set to 0 in NP SEAMLDR ACM and rely on kernel
+to restore it, but we restores CR4  firstly then CR0 after
+return from NP SEAMLDR ACM, #GP generated when we restore
+CR4 with CR4.CET = 1 but CR0.WP = 0, our die notify handler
+np_seamldr_die_notify() only restore CR4 which then cause
+infinity nested exceptions which lead to hang/panic finally.
+
+Change to restore CR0 firstly then CR4 in np_seamldr_launch()
+and np_seamldr_die_notify().
+
+...
+[    3.886629] ... version:                5
+[    3.887628] ... bit width:              48
+[    3.888628] ... generic registers:      8
+[    3.889628] ... value mask:             0000ffffffffffff
+[    3.890628] ... max period:             00007fffffffffff
+[    3.891628] ... fixed-purpose events:   4
+[    3.892628] ... event mask:             0001000f000000ff
+[    3.894414] seam: Loading TDX P-SEAMLDR intel-seam/np-seamldr.acm.
+[    3.894677] seam: ds 0x0 es 0x0 fs 0x0 gs 0x0 ss 0x0 cs 0x10
+[    3.895628] seam: fsbase 0x0 gsbase 0xff1100084c800000
+OriginalIDTR Limit: 0x0FFF
+SeamldrAcm
+BIOS done - 0000000000000003
+Writing seamrr mask - 000FFFFFFE000400
+SeamldrData.SysInfoTable->PSeamldrRange.Size: 0x0000000000080000
+SeamldrData.PSeamldrConsts->CCodeRgnSize: 0x0000000000019000
+SeamldrData.PSeamldrConsts->CDataStackSize: 0x0000000000003000
+SeamldrData.PSeamldrConsts->CDataRgnSize: 0x000000000000E000
+Acquiring SEAMRR lock
+SeamRR VA: 0x0000000080000000
+SeamRR Size: 0x0000000002000000
+Load module code
+InitSeamrrPtCtx
+SeamRrBase: 0x000000086E000000
+SeamRrSize: 0x0000000002000000
+SeamrrPtCtx->PtBaseAddrLa: 0x0000000081F82000
+SeamrrPtCtx->PtBaseAddrPa: 0x000000086FF82000
+SeamrrPtCtx->PtAllocatorPa: 0x000000086FF83000
+SeamrrPtCtx->PagingStructSize: 0x0000000000019000
+Setup stacks
+Setup keyhole
+Setup Data Region
+Map SysInfoTable
+Setup Module Region
+Setup PSysinfo table
+Setup VMCS
+Record Seam identity
+Exitingseamldr
+Status: 0x0000000000000000
+[    3.897627] seam: np_seamldr_die_notify:136 FSGSBASE cmd 9 trapnr 13 err 0x0
+[    3.897627] seam: np_seamldr_die_notify:138 FSGSBASE 0xffffffff875a64fa np_seamldr_launch+0x9a/0xbf
+[    3.897627] seam: np_seamldr_die_notify:146 ds 0x18 es 0x18 fs 0x10 gs 0x0 ss 0x18 cs 0x10
+[    3.897627] seam: die_notifier:cs 0x10 ss 0x18 KERNEL_CS 0x10 KERNEL_DS 0x18
+[    3.897627] seam: np_seamldr_saved_cr4 0x1f71ef0
+[    3.897627] seam: GFP iret
+[    3.897627] seam: ip 0x80050033 0x80050033 cs 0x340c001 ss 0x0
+[    3.897627] seam: np_seamldr_die_notify:136 FSGSBASE cmd 9 trapnr 13 err 0x0
+[    3.897627] seam: np_seamldr_die_notify:138 FSGSBASE 0xffffffff875a64fa np_seamldr_launch+0x9a/0xbf
+[    3.897627] seam: np_seamldr_die_notify:146 ds 0x18 es 0x18 fs 0x10 gs 0x0 ss 0x18 cs 0x10
+[    3.897627] seam: die_notifier:cs 0x10 ss 0x18 KERNEL_CS 0x10 KERNEL_DS 0x18
+[    3.897627] seam: np_seamldr_saved_cr4 0x1f71ef0
+[    3.897627] seam: GFP iret
+[    3.897627] seam: ip 0x80050033 0x80050033 cs 0x10 ss 0x18
+[    3.897627] seam: np_seamldr_die_notify:136 FSGSBASE cmd 9 trapnr 13 err 0x0
+[    3.897627] seam: np_seamldr_die_notify:138 FSGSBASE 0xffffffff875a64fa np_seamldr_launch+0x9a/0xbf
+[    3.897627] seam: np_seamldr_die_notify:146 ds 0x18 es 0x18 fs 0x10 gs 0x0 ss 0x18 cs 0x10
+[    3.897627] seam: die_notifier:cs 0x10 ss 0x18 KERNEL_CS 0x10 KERNEL_DS 0x18
+[    3.897627] seam: np_seamldr_saved_cr4 0x1f71ef0
+[    3.897627] seam: GFP iret
+[    3.897627] seam: ip 0x80050033 0x80050033 cs 0x10 ss 0x18
+[    3.897627] seam: np_seamldr_die_notify:136 FSGSBASE cmd 9 trapnr 13 err 0x0
+[    3.897627] seam: np_seamldr_die_notify:138 FSGSBASE 0xffffffff875a64fa np_seamldr_launch+0x9a/0xbf
+[    3.897627] seam: np_seamldr_die_notify:146 ds 0x18 es 0x18 fs 0x10 gs 0x0 ss 0x18 cs 0x10
+[    3.897627] seam: die_notifier:cs 0x10 ss 0x18 KERNEL_CS 0x10 KERNEL_DS 0x18
+[    3.897627] seam: np_seamldr_saved_cr4 0x1f71ef0
+[    3.897627] seam: GFP iret
+[    3.897627] seam: ip 0x80050033 0x80050033 cs 0x10 ss 0x18
+[    3.897627] seam: np_seamldr_die_notify:136 FSGSBASE cmd 9 trapnr 13 err 0x0
+[    3.897627] seam: np_seamldr_die_notify:138 FSGSBASE 0xffffffff875a64fa np_seamldr_launch+0x9a/0xbf
+[    3.897627] seam: np_seamldr_die_notify:146 ds 0x18 es 0x18 fs 0x10 gs 0x0 ss 0x18 cs 0x10
+[    3.897627] seam: die_notifier:cs 0x10 ss 0x18 KERNEL_CS 0x10 KERNEL_DS 0x18
+[    3.897627] seam: np_seamldr_saved_cr4 0x1f71ef0
+[    3.897627] seam: GFP iret
+[    3.897627] seam: ip 0x80050033 0x80050033 cs 0x10 ss 0x18
+[    3.897627] seam: np_seamldr_die_notify:136 FSGSBASE cmd 9 trapnr 13 err 0x0
+[    3.897627] seam: np_seamldr_die_notify:138 FSGSBASE 0xffffffff875a64fa np_seamldr_launch+0x9a/0xbf
+[    3.897627] seam: np_seamldr_die_notify:146 ds 0x18 es 0x18 fs 0x10 gs 0x0 ss 0x18 cs 0x10
+[    3.897627] seam: die_notifier:cs 0x10 ss 0x18 KERNEL_CS 0x10 KERNEL_DS 0x18
+[    3.897627] seam: np_seamldr_saved_cr4 0x1f71ef0
+[    3.897627] seam: GFP iret
+...
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/np-seamldr.S | 20 +++++++++++++-------
+ arch/x86/kernel/cpu/tdx/p-seamldr.c  | 12 +++++++++---
+ 2 files changed, 22 insertions(+), 10 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/np-seamldr.S b/arch/x86/kernel/cpu/tdx/np-seamldr.S
+index aa2a2e3a9172..af12694c1611 100644
+--- a/arch/x86/kernel/cpu/tdx/np-seamldr.S
++++ b/arch/x86/kernel/cpu/tdx/np-seamldr.S
+@@ -56,6 +56,8 @@
+  *   rflags,
+  * Restore segment registers. don't save them because they have known values.
+  *   DS, ES, CS, SS
++ * Note that the CR4.CET depends on CR0.WP, so we need restore CR0 then CR4,
++ * otherwise #GP when we restore CR4.CET if CR0.WP = 0
+  */
+ 	.text
+ 	__INIT
+@@ -90,18 +92,19 @@ SYM_FUNC_START(np_seamldr_launch)
+ 	pushq	%r11
+ 	andq	$~X86_CR3_PCID_MASK, %r11
+ 
+-	/* EnterACCS and the NP-SEAMLDR modify CR0 and CR4. */
+-	movq	%cr0, %rax
+-	pushq	%rax
++	/* EnterACCS and the NP-SEAMLDR modify CR4 and CR0. */
+ 	movq	%cr4, %rax
+ 	/*
+-	 * If exception or interrupt happens before restoring CR4, fsgsbase
+-	 * feature is disabled.  The handler needs to restore CR4 from the
++	 * If exception or interrupt happens before restoring CR0/CR4, fsgsbase
++	 * feature is disabled.  The handler needs to restore CR0/CR4 from the
+ 	 * global variable.
+ 	 */
+ 	movq	%rax, np_seamldr_saved_cr4(%rip)
++	movq	%cr0, %rax
++	movq	%rax, np_seamldr_saved_cr0(%rip)
+ 
+ 	/* Enable CR4.SMXE for GETSEC. */
++	movq	%cr4, %rax
+ 	orq	$X86_CR4_SMXE, %rax
+ 	movq	%rax, %cr4
+ 
+@@ -208,13 +211,15 @@ SYM_FUNC_START(np_seamldr_launch)
+ 	UNWIND_HINT sp_reg=ORC_REG_SP sp_offset=8*9 type=UNWIND_HINT_TYPE_CALL
+ 
+ 	/* Restore CPU status, in reverse order of saving. */
++	movq	np_seamldr_saved_cr0(%rip), %rax
++	movq	%rax, %cr0
++	movq	$0, np_seamldr_saved_cr0(%rip)
+ 
+ 	movq	np_seamldr_saved_cr4(%rip), %rax
+ 	/* This changes CR4.PCIDE from 0 to 1, CR3.PCID must be 0.  Or #GP. */
+ 	movq	%rax, %cr4
+ 	movq	$0, np_seamldr_saved_cr4(%rip)
+-	popq	%rax
+-	movq	%rax, %cr0
++
+ 	popq	%rax
+ 	movq	%rax, %cr3	/* Restore CR3.PCID */
+ 
+@@ -275,3 +280,4 @@ saved_rbp:
+ 	.quad	0
+ 
+ SYM_DATA(np_seamldr_saved_cr4, .quad 0)
++SYM_DATA(np_seamldr_saved_cr0, .quad 0)
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.c b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+index 5391e3e6e9af..35ff2627ed02 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.c
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+@@ -94,6 +94,7 @@ int seamldr_install(phys_addr_t seamldr_params)
+  * that iret loads the intended segment selectors.
+  */
+ extern unsigned long np_seamldr_saved_cr4 __initdata;
++extern unsigned long np_seamldr_saved_cr0 __initdata;
+ 
+ static int __init np_seamldr_die_notify(struct notifier_block *nb,
+ 					unsigned long cmd, void *args)
+@@ -119,15 +120,20 @@ static int __init np_seamldr_die_notify(struct notifier_block *nb,
+ 	pr_err("np_seamldr_saved_cr4 0x%lx\n", np_seamldr_saved_cr4);
+ 
+ 	if (cmd == DIE_TRAP && die_args->trapnr == X86_TRAP_UD &&
+-	    np_seamldr_saved_cr4) {
++	    (np_seamldr_saved_cr4 || np_seamldr_saved_cr0)) {
+ 		pr_err("rdfsbase\n");
+ 		/*
+ 		 * #UD on rdfsbase/wrfsbase due to CR4.FSGSBASE = 0. Forcibly
+ 		 * restore CR4 to the saved one.
+ 		 * cr4_set_bits() doesn't work as it checks shadowed CR4 because
+ 		 * The NP-SEAMLDR clobbers CR4 outside of shadowed CR4.
++		 * We restore CR0 then CR4 to cover CET feature, which request
++		 * CR0.WP = 1 before setting CR4.CET = 1
+ 		 */
+-		__write_cr4(np_seamldr_saved_cr4);
++		if (np_seamldr_saved_cr0)
++			write_cr0(np_seamldr_saved_cr0);
++		if (np_seamldr_saved_cr4)
++			__write_cr4(np_seamldr_saved_cr4);
+ 		/*
+ 		 * Saved CS is clobbered value by NP-SEAMLDR.  Store correct
+ 		 * value.
+@@ -149,7 +155,7 @@ static int __init np_seamldr_die_notify(struct notifier_block *nb,
+ 	}
+ 
+ 	if (cmd == DIE_GPF && die_args->trapnr == X86_TRAP_GP &&
+-	    np_seamldr_saved_cr4) {
++	    (np_seamldr_saved_cr4 || np_seamldr_saved_cr0)) {
+ 		/*
+ 		 * iretq in nmi_restore causes #GP due to clobbered %CS/%SS.
+ 		 * Correct them.
+-- 
+2.31.1
+

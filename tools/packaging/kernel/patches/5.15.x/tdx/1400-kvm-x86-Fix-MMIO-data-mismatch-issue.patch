@@ -1,0 +1,55 @@
+From bceb949f97c988f8f01e855a9066fb549932bc48 Mon Sep 17 00:00:00 2001
+From: Dong Xiaocheng <xiaocheng.dong@intel.com>
+Date: Tue, 31 May 2022 05:33:07 -0400
+Subject: [PATCH 1400/1418] kvm/x86: Fix MMIO data mismatch issue
+
+The commit `b2e2b01ca3e9` introduced mmio.np_data for the data
+length > 8 and covered write operations. There are some non write
+operations should also be covered, otherwise,
+`Unhandled exception 13 #GP` will be thrown when some SIMD
+instructions try to access MMIO
+
+Signed-off-by: Dong Xiaocheng <xiaocheng.dong@intel.com>
+---
+ arch/x86/kvm/x86.c | 18 ++++++++++++++----
+ 1 file changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index b8fa6fb13803..f2fd89999aab 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -10222,8 +10222,13 @@ static int complete_emulated_mmio(struct kvm_vcpu *vcpu)
+ 	/* Complete previous fragment */
+ 	frag = &vcpu->mmio_fragments[vcpu->mmio_cur_fragment];
+ 	len = min(64u, frag->len);
+-	if (!vcpu->mmio_is_write)
+-		memcpy(frag->data, run->mmio.data, len);
++	if (!vcpu->mmio_is_write) {
++                if (len > 8) {
++                        memcpy(frag->data, run->mmio.np_data, len);
++                } else {
++                        memcpy(frag->data, run->mmio.data, len);
++                }
++        }
+ 
+ 	if (frag->len <= 8) {
+ 		/* Switch to the next fragment. */
+@@ -12643,8 +12648,13 @@ static int complete_sev_es_emulated_mmio(struct kvm_vcpu *vcpu)
+ 	/* Complete previous fragment */
+ 	frag = &vcpu->mmio_fragments[vcpu->mmio_cur_fragment];
+ 	len = min(64u, frag->len);
+-	if (!vcpu->mmio_is_write)
+-		memcpy(frag->data, run->mmio.data, len);
++	if (!vcpu->mmio_is_write) {
++                if (len > 8) {
++                        memcpy(frag->data, run->mmio.np_data, len);
++                } else {
++                        memcpy(frag->data, run->mmio.data, len);
++                }
++        }
+ 
+ 	if (frag->len <= 8) {
+ 		/* Switch to the next fragment. */
+-- 
+2.31.1
+

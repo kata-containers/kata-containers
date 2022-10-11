@@ -1,0 +1,92 @@
+From b7280cd8a649f0befd6081bea2eeea3383312947 Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Wed, 8 Dec 2021 16:32:35 -0800
+Subject: [PATCH 1178/1418] x86/pkeys: Introduce pks_write_pkrs()
+
+Writing to MSR's is inefficient.  Even though the underlying PKS
+register, MSR_IA32_PKRS, is not serializing; writing to the MSR should
+be avoided if possible.  Especially when updates are made in critical
+paths such as the scheduler or the entry code.
+
+Introduce pks_write_pkrs().  pks_write_pkrs() avoids writing
+MSR_IA32_PKRS if the pkrs value has not changed for the current CPU.
+Most of the callers are in a non-preemptable code path.  Therefore,
+avoid calling preempt_{disable,enable}() to protect the per-cpu cache
+and instead rely on outer calls for this protection.  Do the same with
+checks to X86_FEATURE_PKS.
+
+On startup, while unlikely, the PKS_INIT_VALUE may be 0.  This would
+prevent pks_write_pkrs() from updating the MSR because of the initial
+value of the per-cpu cache.  Therefore, keep the MSR write in
+pks_setup() to ensure the MSR is initialized at least one time.
+
+Suggested-by: Dave Hansen <dave.hansen@intel.com>
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ arch/x86/mm/pkeys.c | 41 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 41 insertions(+)
+
+diff --git a/arch/x86/mm/pkeys.c b/arch/x86/mm/pkeys.c
+index 17d4b4dad4ab..cf2b5716893e 100644
+--- a/arch/x86/mm/pkeys.c
++++ b/arch/x86/mm/pkeys.c
+@@ -213,15 +213,56 @@ u32 pkey_update_pkval(u32 pkval, u8 pkey, u32 accessbits)
+ 
+ #ifdef CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS
+ 
++static DEFINE_PER_CPU(u32, pkrs_cache);
++
++/*
++ * pks_write_pkrs() - Write the pkrs of the current CPU
++ * @new_pkrs: New value to write to the current CPU register
++ *
++ * Optimizes the MSR writes by maintaining a per cpu cache.
++ *
++ * Context: must be called with preemption disabled
++ * Context: must only be called if PKS is enabled
++ *
++ * It should also be noted that the underlying WRMSR(MSR_IA32_PKRS) is not
++ * serializing but still maintains ordering properties similar to WRPKRU.
++ * The current SDM section on PKRS needs updating but should be the same as
++ * that of WRPKRU.  Quote from the WRPKRU text:
++ *
++ *     WRPKRU will never execute transiently. Memory accesses
++ *     affected by PKRU register will not execute (even transiently)
++ *     until all prior executions of WRPKRU have completed execution
++ *     and updated the PKRU register.
++ */
++static inline void pks_write_pkrs(u32 new_pkrs)
++{
++	u32 pkrs = __this_cpu_read(pkrs_cache);
++
++	lockdep_assert_preemption_disabled();
++
++	if (pkrs != new_pkrs) {
++		__this_cpu_write(pkrs_cache, new_pkrs);
++		wrmsrl(MSR_IA32_PKRS, new_pkrs);
++	}
++}
++
+ /*
+  * PKS is independent of PKU and either or both may be supported on a CPU.
++ *
++ * Context: must be called with preemption disabled
+  */
+ void pks_setup(void)
+ {
+ 	if (!cpu_feature_enabled(X86_FEATURE_PKS))
+ 		return;
+ 
++	/*
++	 * If the PKS_INIT_VALUE is 0 then pks_write_pkrs() will fail to
++	 * initialize the MSR.  Do a single write here to ensure the MSR is
++	 * written at least one time.
++	 */
+ 	wrmsrl(MSR_IA32_PKRS, PKS_INIT_VALUE);
++	pks_write_pkrs(PKS_INIT_VALUE);
+ 	cr4_set_bits(X86_CR4_PKS);
+ }
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,54 @@
+From fb99032c1593662181397cfc2dec319d7cc0163e Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 18:02:19 -0800
+Subject: [PATCH 0933/1418] Revert "x86/fpu: Swap XFD_ERR in
+ fpu_swap_kvm_fpstate() for KVM"
+
+This reverts commit 0b357ddfbf5df36b04794fe91713827a7f38bfa8.
+---
+ arch/x86/kernel/fpu/core.c | 22 ----------------------
+ 1 file changed, 22 deletions(-)
+
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 4f33c82f6fc4..99442f606f2c 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -294,25 +294,6 @@ static int fpu_guest_realloc_fpstate(struct fpu_guest *guest_fpu,
+ 	return xfd_enable_guest_features(guest_fpu);
+ }
+ 
+-static void fpu_guest_swap_xfd_err(struct fpu_guest *guest_fpu, bool enter_guest)
+-{
+-	if (!fpu_state_size_dynamic())
+-		return;
+-
+-	if (enter_guest) {
+-		if (guest_fpu->xfd_err) {
+-			wrmsrl(MSR_IA32_XFD_ERR, guest_fpu->xfd_err);
+-			if (guest_fpu->xfd_err_dirty)
+-				guest_fpu->xfd_err_dirty = false;
+-		}
+-	} else {
+-		if (!guest_fpu->xfd_err_dirty)
+-			rdmsrl(MSR_IA32_XFD_ERR, guest_fpu->xfd_err);
+-		if (guest_fpu->xfd_err)
+-			wrmsrl(MSR_IA32_XFD_ERR, 0);
+-	}
+-}
+-
+ int fpu_swap_kvm_fpstate(struct fpu_guest *guest_fpu, bool enter_guest)
+ {
+ 	struct fpstate *guest_fps, *cur_fps;
+@@ -354,9 +335,6 @@ int fpu_swap_kvm_fpstate(struct fpu_guest *guest_fpu, bool enter_guest)
+ 		xfd_update_state(cur_fps);
+ 	}
+ 
+-	/* Swap XFD_ERR */
+-	fpu_guest_swap_xfd_err(guest_fpu, enter_guest);
+-
+ 	fpregs_mark_activate();
+ 	fpregs_unlock();
+ 	return ret;
+-- 
+2.31.1
+

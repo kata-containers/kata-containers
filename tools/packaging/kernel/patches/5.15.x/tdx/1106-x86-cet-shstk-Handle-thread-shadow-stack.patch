@@ -1,0 +1,209 @@
+From ce5788af97fc8f408e1b10a2c5838c03eb8758c9 Mon Sep 17 00:00:00 2001
+From: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Date: Mon, 30 Aug 2021 11:15:21 -0700
+Subject: [PATCH 1106/1418] x86/cet/shstk: Handle thread shadow stack
+
+When a process is duplicated, but the child shares the address space with
+the parent, there is potential for the threads sharing a single stack to
+cause conflicts for each other. In the normal non-cet case this is handled
+in two ways.
+
+With regular CLONE_VM a new stack is provided by userspace such that the
+parent and child have different stacks.
+
+For vfork, the parent is suspended until the child exits. So as long as
+the child doesn't return from the vfork()/CLONE_VFORK calling function and
+sticks to a limited set of operations, the parent and child can share the
+same stack.
+
+For shadow stack, these scenarios present similar sharing problems. For the
+CLONE_VM case, the child and the parent must have separate shadow stacks.
+Instead of changing clone to take a shadow stack, have the kernel just
+allocate one and switch to it.
+
+Use stack_size passed from clone3() syscall for thread shadow stack size. A
+compat-mode thread shadow stack size is further reduced to 1/4. This
+allows more threads to run in a 32-bit address space. The clone() does not
+pass stack_size, which was added to clone3(). In that case, use
+RLIMIT_STACK size and cap to 4 GB.
+
+For shadow stack enabled vfork(), the parent and child can share the same
+shadow stack, like they can share a normal stack. Since the parent is
+suspended until the child terminates, the child will not interfere with
+the parent while executing as long as it doesn't return from the vfork()
+and overwrite up the shadow stack. The child can safely overwrite down
+the shadow stack, as the parent can just overwrite this later. So CET does
+not add any additional limitations for vfork().
+
+Userspace implementing posix vfork() can actually prevent the child from
+returning from the vfork() calling function, using CET. Glibc does this
+by adjusting the shadow stack pointer in the child, so that the child
+receives a #CP if it tries to return from vfork() calling function.
+
+Free the shadow stack on thread exit by doing it in mm_release(). Skip
+this when exiting a vfork() child since the stack is shared in the
+parent.
+
+Signed-off-by: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Signed-off-by: Rick Edgecombe <rick.p.edgecombe@intel.com>
+---
+ arch/x86/include/asm/cet.h         |  5 +++
+ arch/x86/include/asm/mmu_context.h |  2 +
+ arch/x86/kernel/process.c          |  7 +++
+ arch/x86/kernel/shstk.c            | 68 +++++++++++++++++++++++++++++-
+ 4 files changed, 81 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/cet.h b/arch/x86/include/asm/cet.h
+index 79c393435302..6ab197b4450a 100644
+--- a/arch/x86/include/asm/cet.h
++++ b/arch/x86/include/asm/cet.h
+@@ -14,10 +14,15 @@ struct thread_shstk {
+ 
+ #ifdef CONFIG_X86_SHADOW_STACK
+ int shstk_setup(void);
++int shstk_alloc_thread_stack(struct task_struct *p, unsigned long clone_flags,
++			     unsigned long stack_size);
+ void shstk_free(struct task_struct *p);
+ int shstk_disable(void);
+ #else
+ static inline void shstk_setup(void) {}
++static inline int shstk_alloc_thread_stack(struct task_struct *p,
++					   unsigned long clone_flags,
++					   unsigned long stack_size) { return 0; }
+ static inline void shstk_free(struct task_struct *p) {}
+ static inline void shstk_disable(void) {}
+ #endif /* CONFIG_X86_SHADOW_STACK */
+diff --git a/arch/x86/include/asm/mmu_context.h b/arch/x86/include/asm/mmu_context.h
+index adac23b4bfac..4bba2dc99c56 100644
+--- a/arch/x86/include/asm/mmu_context.h
++++ b/arch/x86/include/asm/mmu_context.h
+@@ -161,6 +161,8 @@ do {						\
+ #else
+ #define deactivate_mm(tsk, mm)			\
+ do {						\
++	if (!tsk->vfork_done)			\
++		shstk_free(tsk);		\
+ 	load_gs_index(0);			\
+ 	loadsegment(fs, 0);			\
+ } while (0)
+diff --git a/arch/x86/kernel/process.c b/arch/x86/kernel/process.c
+index fff1b495fe50..26d26b43a351 100644
+--- a/arch/x86/kernel/process.c
++++ b/arch/x86/kernel/process.c
+@@ -45,6 +45,8 @@
+ #include <asm/io_bitmap.h>
+ #include <asm/proto.h>
+ #include <asm/frame.h>
++#include <asm/unwind.h>
++#include <asm/cet.h>
+ 
+ #include "process.h"
+ 
+@@ -116,6 +118,7 @@ void exit_thread(struct task_struct *tsk)
+ 
+ 	free_vm86(t);
+ 
++	shstk_free(tsk);
+ 	fpu__drop(fpu);
+ }
+ 
+@@ -223,6 +226,10 @@ int copy_thread(unsigned long clone_flags, unsigned long sp,
+ 	if (clone_flags & CLONE_SETTLS)
+ 		ret = set_new_tls(p, tls);
+ 
++	/* Allocate a new shadow stack for pthread */
++	if (!ret)
++		ret = shstk_alloc_thread_stack(p, clone_flags, stack_size);
++
+ 	if (!ret && unlikely(test_tsk_thread_flag(current, TIF_IO_BITMAP)))
+ 		io_bitmap_share(p);
+ 
+diff --git a/arch/x86/kernel/shstk.c b/arch/x86/kernel/shstk.c
+index f26ad7a9dc4b..7bc42faba806 100644
+--- a/arch/x86/kernel/shstk.c
++++ b/arch/x86/kernel/shstk.c
+@@ -101,6 +101,66 @@ int shstk_setup(void)
+ 	return 0;
+ }
+ 
++int shstk_alloc_thread_stack(struct task_struct *tsk, unsigned long clone_flags,
++			     unsigned long stack_size)
++{
++	struct thread_shstk *shstk = &tsk->thread.shstk;
++	unsigned long addr;
++	void *xstate;
++
++	/*
++	 * If shadow stack is not enabled on the new thread, skip any
++	 * switch to a new shadow stack.
++	 */
++	if (!shstk->size)
++		return 0;
++
++	/*
++	 * clone() does not pass stack_size, which was added to clone3().
++	 * Use RLIMIT_STACK and cap to 4 GB.
++	 */
++	if (!stack_size)
++		stack_size = min_t(unsigned long long, rlimit(RLIMIT_STACK), SZ_4G);
++
++	/*
++	 * For CLONE_VM, except vfork, the child needs a separate shadow
++	 * stack.
++	 */
++	if ((clone_flags & (CLONE_VFORK | CLONE_VM)) != CLONE_VM)
++		return 0;
++
++
++	/*
++	 * Compat-mode pthreads share a limited address space.
++	 * If each function call takes an average of four slots
++	 * stack space, allocate 1/4 of stack size for shadow stack.
++	 */
++	if (in_compat_syscall())
++		stack_size /= 4;
++
++	/*
++	 * 'tsk' is configured with a shadow stack and the fpu.state is
++	 * up to date since it was just copied from the parent.  There
++	 * must be a valid non-init CET state location in the buffer.
++	 */
++	xstate = get_xsave_buffer_unsafe(&tsk->thread.fpu, XFEATURE_CET_USER);
++	if (WARN_ON_ONCE(!xstate))
++		return -EINVAL;
++
++	stack_size = PAGE_ALIGN(stack_size);
++	addr = alloc_shstk(stack_size);
++	if (IS_ERR_VALUE(addr)) {
++		shstk->base = 0;
++		shstk->size = 0;
++		return PTR_ERR((void *)addr);
++	}
++
++	xsave_wrmsrl_unsafe(xstate, MSR_IA32_PL3_SSP, (u64)(addr + stack_size));
++	shstk->base = addr;
++	shstk->size = stack_size;
++	return 0;
++}
++
+ void shstk_free(struct task_struct *tsk)
+ {
+ 	struct thread_shstk *shstk = &tsk->thread.shstk;
+@@ -110,7 +170,13 @@ void shstk_free(struct task_struct *tsk)
+ 	    !shstk->base)
+ 		return;
+ 
+-	if (!tsk->mm)
++	/*
++	 * When fork() with CLONE_VM fails, the child (tsk) already has a
++	 * shadow stack allocated, and exit_thread() calls this function to
++	 * free it.  In this case the parent (current) and the child share
++	 * the same mm struct.
++	 */
++	if (!tsk->mm || tsk->mm != current->mm)
+ 		return;
+ 
+ 	unmap_shadow_stack(shstk->base, shstk->size);
+-- 
+2.31.1
+

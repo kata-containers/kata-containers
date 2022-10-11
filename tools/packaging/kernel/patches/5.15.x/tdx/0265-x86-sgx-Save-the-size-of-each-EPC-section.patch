@@ -1,0 +1,42 @@
+From 75a668310f257a01f88b73cc2e9ab4f789179d37 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Mon, 11 Oct 2021 10:13:14 +0800
+Subject: [PATCH 0265/1418] x86/sgx: Save the size of each EPC section
+
+For SGX CPUSVN update process will check all EPC pages in each
+section to ensure they will be marked as unused, it requires to
+know the size of each EPC section to end the loop.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/kernel/cpu/sgx/main.c | 1 +
+ arch/x86/kernel/cpu/sgx/sgx.h  | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index cb9f14e5ebd8..9798268f50d8 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -662,6 +662,7 @@ static bool __init sgx_setup_epc_section(u64 phys_addr, u64 size,
+ 	}
+ 
+ 	section->phys_addr = phys_addr;
++	section->size = size;
+ 
+ 	for (i = 0; i < nr_pages; i++) {
+ 		section->pages[i].section = index;
+diff --git a/arch/x86/kernel/cpu/sgx/sgx.h b/arch/x86/kernel/cpu/sgx/sgx.h
+index 1cfda5ede517..8f42cea69acd 100644
+--- a/arch/x86/kernel/cpu/sgx/sgx.h
++++ b/arch/x86/kernel/cpu/sgx/sgx.h
+@@ -65,6 +65,7 @@ struct sgx_epc_section {
+ 	void *virt_addr;
+ 	struct sgx_epc_page *pages;
+ 	struct sgx_numa_node *node;
++	u64 size;
+ };
+ 
+ extern struct sgx_epc_section sgx_epc_sections[SGX_MAX_EPC_SECTIONS];
+-- 
+2.31.1
+

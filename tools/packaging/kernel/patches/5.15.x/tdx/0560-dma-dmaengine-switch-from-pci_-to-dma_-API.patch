@@ -1,0 +1,44 @@
+From 69f1fb888f4c66ef18c40d349ee1f946d719004a Mon Sep 17 00:00:00 2001
+From: Qing Wang <wangqing@vivo.com>
+Date: Thu, 7 Oct 2021 20:28:32 -0700
+Subject: [PATCH 0560/1418] dma: dmaengine: switch from 'pci_' to 'dma_' API
+
+The wrappers in include/linux/pci-dma-compat.h should go away.
+
+pci_set_dma_mask()/pci_set_consistent_dma_mask() should be
+replaced with dma_set_mask()/dma_set_coherent_mask(),
+and use dma_set_mask_and_coherent() for both.
+
+Signed-off-by: Qing Wang <wangqing@vivo.com>
+Reviewed-by: Logan Gunthorpe <logang@deltatee.com>
+Link: https://lore.kernel.org/r/1633663733-47199-7-git-send-email-wangqing@vivo.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/plx_dma.c | 10 ++--------
+ 1 file changed, 2 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/dma/plx_dma.c b/drivers/dma/plx_dma.c
+index 166934544161..1ffcb5ca9788 100644
+--- a/drivers/dma/plx_dma.c
++++ b/drivers/dma/plx_dma.c
+@@ -563,15 +563,9 @@ static int plx_dma_probe(struct pci_dev *pdev,
+ 	if (rc)
+ 		return rc;
+ 
+-	rc = pci_set_dma_mask(pdev, DMA_BIT_MASK(48));
++	rc = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(48));
+ 	if (rc)
+-		rc = pci_set_dma_mask(pdev, DMA_BIT_MASK(32));
+-	if (rc)
+-		return rc;
+-
+-	rc = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(48));
+-	if (rc)
+-		rc = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32));
++		rc = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
+ 	if (rc)
+ 		return rc;
+ 
+-- 
+2.31.1
+

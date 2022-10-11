@@ -1,0 +1,184 @@
+From 5ae70e65f29502fdd473c6feb1659c9d428b0af0 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 13 Oct 2021 16:55:27 +0200
+Subject: [PATCH 0051/1418] x86/fpu: Provide struct fpstate
+
+New xfeatures will not longer be automatically stored in the regular XSAVE
+buffer in thread_struct::fpu.
+
+The kernel will provide the default sized buffer for storing the regular
+features up to AVX512 in thread_struct::fpu and if a task requests to use
+one of the new features then the register storage has to be extended.
+
+The state will be accessed via a pointer in thread_struct::fpu which
+defaults to the builtin storage and can be switched when extended storage
+is required.
+
+To avoid conditionals all over the code, create a new container for the
+register storage which will gain other information, e.g. size, feature
+masks etc., later. For now it just contains the register storage, which
+gives it exactly the same layout as the exiting fpu::state.
+
+Stick fpu::state and the new fpu::__fpstate into an anonymous union and
+initialize the pointer. Add build time checks to validate that both are
+at the same place and have the same size.
+
+This allows step by step conversion of all users.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211013145322.234458659@linutronix.de
+---
+ arch/x86/include/asm/fpu/types.h | 20 +++++++++++++++++++-
+ arch/x86/include/asm/processor.h |  4 ++--
+ arch/x86/kernel/fpu/core.c       | 11 ++++++++++-
+ arch/x86/kernel/fpu/init.c       |  9 +++++++--
+ arch/x86/kernel/fpu/internal.h   |  1 +
+ 5 files changed, 39 insertions(+), 6 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/types.h b/arch/x86/include/asm/fpu/types.h
+index f5a38a5f3ae1..3bb6277efbb5 100644
+--- a/arch/x86/include/asm/fpu/types.h
++++ b/arch/x86/include/asm/fpu/types.h
+@@ -309,6 +309,13 @@ union fpregs_state {
+ 	u8 __padding[PAGE_SIZE];
+ };
+ 
++struct fpstate {
++	/* @regs: The register state union for all supported formats */
++	union fpregs_state		regs;
++
++	/* @regs is dynamically sized! Don't add anything after @regs! */
++} __aligned(64);
++
+ /*
+  * Highest level per task FPU state data structure that
+  * contains the FPU register state plus various FPU
+@@ -336,6 +343,14 @@ struct fpu {
+ 	 */
+ 	unsigned long			avx512_timestamp;
+ 
++	/*
++	 * @fpstate:
++	 *
++	 * Pointer to the active struct fpstate. Initialized to
++	 * point at @__fpstate below.
++	 */
++	struct fpstate			*fpstate;
++
+ 	/*
+ 	 * @state:
+ 	 *
+@@ -345,7 +360,10 @@ struct fpu {
+ 	 * copy. If the task context-switches away then they get
+ 	 * saved here and represent the FPU state.
+ 	 */
+-	union fpregs_state		state;
++	union {
++		struct fpstate			__fpstate;
++		union fpregs_state		state;
++	};
+ 	/*
+ 	 * WARNING: 'state' is dynamically-sized.  Do not put
+ 	 * anything after it here.
+diff --git a/arch/x86/include/asm/processor.h b/arch/x86/include/asm/processor.h
+index 9ad2acaaae9b..4519d334bbdb 100644
+--- a/arch/x86/include/asm/processor.h
++++ b/arch/x86/include/asm/processor.h
+@@ -537,11 +537,11 @@ struct thread_struct {
+ 	 */
+ };
+ 
+-/* Whitelist the FPU state from the task_struct for hardened usercopy. */
++/* Whitelist the FPU register state from the task_struct for hardened usercopy. */
+ static inline void arch_thread_struct_whitelist(unsigned long *offset,
+ 						unsigned long *size)
+ {
+-	*offset = offsetof(struct thread_struct, fpu.state);
++	*offset = offsetof(struct thread_struct, fpu.__fpstate.regs);
+ 	*size = fpu_kernel_xstate_size;
+ }
+ 
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index ac540a7d410e..d7643115a7ee 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -337,10 +337,17 @@ void fpstate_init_user(union fpregs_state *state)
+ 		fpstate_init_fstate(&state->fsave);
+ }
+ 
++void fpstate_reset(struct fpu *fpu)
++{
++	/* Set the fpstate pointer to the default fpstate */
++	fpu->fpstate = &fpu->__fpstate;
++}
++
+ #if IS_ENABLED(CONFIG_KVM)
+ void fpu_init_fpstate_user(struct fpu *fpu)
+ {
+-	fpstate_init_user(&fpu->state);
++	fpstate_reset(fpu);
++	fpstate_init_user(&fpu->fpstate->regs);
+ }
+ EXPORT_SYMBOL_GPL(fpu_init_fpstate_user);
+ #endif
+@@ -354,6 +361,8 @@ int fpu_clone(struct task_struct *dst)
+ 	/* The new task's FPU state cannot be valid in the hardware. */
+ 	dst_fpu->last_cpu = -1;
+ 
++	fpstate_reset(dst_fpu);
++
+ 	if (!cpu_feature_enabled(X86_FEATURE_FPU))
+ 		return 0;
+ 
+diff --git a/arch/x86/kernel/fpu/init.c b/arch/x86/kernel/fpu/init.c
+index 23791355ca67..31ecbfba9ff7 100644
+--- a/arch/x86/kernel/fpu/init.c
++++ b/arch/x86/kernel/fpu/init.c
+@@ -165,7 +165,7 @@ static void __init fpu__init_task_struct_size(void)
+ 	 * Subtract off the static size of the register state.
+ 	 * It potentially has a bunch of padding.
+ 	 */
+-	task_size -= sizeof(((struct task_struct *)0)->thread.fpu.state);
++	task_size -= sizeof(current->thread.fpu.__fpstate.regs);
+ 
+ 	/*
+ 	 * Add back the dynamically-calculated register state
+@@ -180,10 +180,14 @@ static void __init fpu__init_task_struct_size(void)
+ 	 * you hit a compile error here, check the structure to
+ 	 * see if something got added to the end.
+ 	 */
+-	CHECK_MEMBER_AT_END_OF(struct fpu, state);
++	CHECK_MEMBER_AT_END_OF(struct fpu, __fpstate);
+ 	CHECK_MEMBER_AT_END_OF(struct thread_struct, fpu);
+ 	CHECK_MEMBER_AT_END_OF(struct task_struct, thread);
+ 
++	BUILD_BUG_ON(sizeof(struct fpstate) != sizeof(union fpregs_state));
++	BUILD_BUG_ON(offsetof(struct thread_struct, fpu.state) !=
++		     offsetof(struct thread_struct, fpu.__fpstate));
++
+ 	arch_task_struct_size = task_size;
+ }
+ 
+@@ -220,6 +224,7 @@ static void __init fpu__init_system_xstate_size_legacy(void)
+  */
+ void __init fpu__init_system(struct cpuinfo_x86 *c)
+ {
++	fpstate_reset(&current->thread.fpu);
+ 	fpu__init_system_early_generic(c);
+ 
+ 	/*
+diff --git a/arch/x86/kernel/fpu/internal.h b/arch/x86/kernel/fpu/internal.h
+index 479f2db6e160..63bd75fe95a8 100644
+--- a/arch/x86/kernel/fpu/internal.h
++++ b/arch/x86/kernel/fpu/internal.h
+@@ -26,5 +26,6 @@ extern void fpu__init_prepare_fx_sw_frame(void);
+ 
+ /* Used in init.c */
+ extern void fpstate_init_user(union fpregs_state *state);
++extern void fpstate_reset(struct fpu *fpu);
+ 
+ #endif
+-- 
+2.31.1
+

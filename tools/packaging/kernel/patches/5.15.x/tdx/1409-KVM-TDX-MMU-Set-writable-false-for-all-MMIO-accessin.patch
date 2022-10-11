@@ -1,0 +1,54 @@
+From 2d17e8563a6f401bdf7b299575cf25e37aa9b8aa Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Mon, 27 Jun 2022 20:55:55 +0800
+Subject: [PATCH 1409/1418] KVM: TDX: MMU: Set writable = false for all MMIO
+ accessing EPT violation
+
+The EPT's pte for MMIO accessing doesn't care the writable variable
+when they are made, but leaves it uninitialized triggeres UBSAN
+warnings due to other functions use this uninitialized bool variable
+as parameter:
+
+UBSAN: invalid-load in arch/x86/kvm/mmu/mmu.c:4648:7
+load of value 142 is not a valid value for type '_Bool'
+Call Trace:
+ show_stack+0x52/0x58
+ dump_stack_lvl+0x4a/0x5f
+ dump_stack+0x10/0x12
+ ubsan_epilogue+0x9/0x45
+ __ubsan_handle_load_invalid_value.cold+0x44/0x49
+ direct_page_fault.cold+0x31/0x55 [kvm]
+ kvm_tdp_page_fault+0xd6/0x100 [kvm]
+ kvm_mmu_page_fault+0x73/0x1c0 [kvm]
+ tdx_handle_ept_violation+0xd9/0x180 [kvm_intel]
+ __tdx_handle_exit+0x102/0x1f0 [kvm_intel]
+ vt_handle_exit+0x33/0x70 [kvm_intel]
+ vcpu_enter_guest+0x96c/0xfa0 [kvm]
+ vcpu_run+0x65/0x260 [kvm]
+ kvm_arch_vcpu_ioctl_run+0xfc/0x4c0 [kvm]
+ kvm_vcpu_ioctl+0x29a/0x6d0 [kvm]
+ __x64_sys_ioctl+0x91/0xc0
+ do_syscall_64+0x59/0xc0
+ entry_SYSCALL_64_after_hwframe+0x44/0xae
+
+Fixes: a7f28aa04131 ("KVM: x86: Add infrastructure for stolen GPA bits")
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index ae9818e140eb..1629122b8ee2 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -4538,6 +4538,7 @@ static bool kvm_faultin_pfn(struct kvm_vcpu *vcpu, bool prefault, gfn_t gfn,
+ 	if ((cr2_or_gpa & vcpu_gpa_stolen_mask(vcpu)) &&
+ 	    !kvm_is_visible_memslot(slot)) {
+ 		*pfn = KVM_PFN_NOSLOT;
++		*writable = false;
+ 		return false;
+ 	}
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,81 @@
+From 90cc437a8dc925ae2349e4ecf3a32d8234577232 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Tue, 10 Aug 2021 15:38:24 +0800
+Subject: [PATCH 0819/1418] x86/sgx: Keep record of SGX VA and Guest page type
+
+Regular enclave EPC pages have sgx_encl_page as their owner, but
+SGX VA page and KVM guest EPC page are maintained by different
+owner structures.
+
+SGX CPUSVN update requires to know the EPC page owner's status
+and then decide how to handle the page.
+
+Keep a record of page type for SGX VA and KVM guest page while
+the other EPC pages already have their type tracked, so that
+CPUSVN update can get EPC page's owner by type and handle it then.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/kernel/cpu/sgx/encl.c | 2 ++
+ arch/x86/kernel/cpu/sgx/main.c | 1 +
+ arch/x86/kernel/cpu/sgx/sgx.h  | 5 +++++
+ arch/x86/kernel/cpu/sgx/virt.c | 2 ++
+ 4 files changed, 10 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/sgx/encl.c b/arch/x86/kernel/cpu/sgx/encl.c
+index 23d712b044d7..ee310db3c2c1 100644
+--- a/arch/x86/kernel/cpu/sgx/encl.c
++++ b/arch/x86/kernel/cpu/sgx/encl.c
+@@ -1003,6 +1003,8 @@ struct sgx_epc_page *sgx_alloc_va_page(struct sgx_va_page *va_page)
+ 		return ERR_PTR(-EFAULT);
+ 	}
+ 
++	epc_page->flags |= SGX_EPC_PAGE_VA;
++
+ 	return epc_page;
+ }
+ 
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index 1f606a24bfde..640037b67800 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -585,6 +585,7 @@ void sgx_free_epc_page(struct sgx_epc_page *page)
+ 
+ 	spin_lock(&node->lock);
+ 
++	page->flags = 0;
+ 	page->owner = NULL;
+ 	list_add_tail(&page->list, &node->free_page_list);
+ 
+diff --git a/arch/x86/kernel/cpu/sgx/sgx.h b/arch/x86/kernel/cpu/sgx/sgx.h
+index 542a2617c9d4..bc34ebe206d7 100644
+--- a/arch/x86/kernel/cpu/sgx/sgx.h
++++ b/arch/x86/kernel/cpu/sgx/sgx.h
+@@ -26,6 +26,11 @@
+ /* Pages, which are being tracked by the page reclaimer. */
+ #define SGX_EPC_PAGE_RECLAIMER_TRACKED	BIT(0)
+ 
++/* VA page */
++#define SGX_EPC_PAGE_VA			BIT(2)
++/* Pages allocated for KVM guest */
++#define SGX_EPC_PAGE_GUEST		BIT(3)
++
+ struct sgx_epc_page {
+ 	unsigned int section;
+ 	unsigned int flags;
+diff --git a/arch/x86/kernel/cpu/sgx/virt.c b/arch/x86/kernel/cpu/sgx/virt.c
+index d6ae86a98743..b5ad82e4a393 100644
+--- a/arch/x86/kernel/cpu/sgx/virt.c
++++ b/arch/x86/kernel/cpu/sgx/virt.c
+@@ -50,6 +50,8 @@ static int __sgx_vepc_fault(struct sgx_vepc *vepc,
+ 	if (IS_ERR(epc_page))
+ 		return PTR_ERR(epc_page);
+ 
++	epc_page->flags |= SGX_EPC_PAGE_GUEST;
++
+ 	ret = xa_err(xa_store(&vepc->page_array, index, epc_page, GFP_KERNEL));
+ 	if (ret)
+ 		goto err_free;
+-- 
+2.31.1
+

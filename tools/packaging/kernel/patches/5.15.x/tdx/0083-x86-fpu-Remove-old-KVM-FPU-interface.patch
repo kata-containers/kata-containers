@@ -1,0 +1,87 @@
+From f9efe3be32ece114fcb22b678c0612458f5336f9 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 22 Oct 2021 20:55:54 +0200
+Subject: [PATCH 0083/1418] x86/fpu: Remove old KVM FPU interface
+
+No more users.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211022185313.074853631@linutronix.de
+---
+ arch/x86/include/asm/fpu/api.h |  2 --
+ arch/x86/kernel/fpu/core.c     | 32 --------------------------------
+ 2 files changed, 34 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/api.h b/arch/x86/include/asm/fpu/api.h
+index 5e5f172c1a9d..e9379d7e7743 100644
+--- a/arch/x86/include/asm/fpu/api.h
++++ b/arch/x86/include/asm/fpu/api.h
+@@ -131,14 +131,12 @@ static inline void fpstate_init_soft(struct swregs_state *soft) {}
+ DECLARE_PER_CPU(struct fpu *, fpu_fpregs_owner_ctx);
+ 
+ /* fpstate-related functions which are exported to KVM */
+-extern void fpu_init_fpstate_user(struct fpu *fpu);
+ extern void fpstate_clear_xstate_component(struct fpstate *fps, unsigned int xfeature);
+ 
+ /* KVM specific functions */
+ extern bool fpu_alloc_guest_fpstate(struct fpu_guest *gfpu);
+ extern void fpu_free_guest_fpstate(struct fpu_guest *gfpu);
+ extern int fpu_swap_kvm_fpstate(struct fpu_guest *gfpu, bool enter_guest);
+-extern void fpu_swap_kvm_fpu(struct fpu *save, struct fpu *rstor, u64 restore_mask);
+ 
+ extern void fpu_copy_guest_fpstate_to_uabi(struct fpu_guest *gfpu, void *buf, unsigned int size, u32 pkru);
+ extern int fpu_copy_uabi_to_guest_fpstate(struct fpu_guest *gfpu, const void *buf, u64 xcr0, u32 *vpkru);
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 01fbf7c3e799..9c475e2efd4d 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -245,29 +245,6 @@ int fpu_swap_kvm_fpstate(struct fpu_guest *guest_fpu, bool enter_guest)
+ }
+ EXPORT_SYMBOL_GPL(fpu_swap_kvm_fpstate);
+ 
+-void fpu_swap_kvm_fpu(struct fpu *save, struct fpu *rstor, u64 restore_mask)
+-{
+-	fpregs_lock();
+-
+-	if (save) {
+-		struct fpstate *fpcur = current->thread.fpu.fpstate;
+-
+-		if (test_thread_flag(TIF_NEED_FPU_LOAD))
+-			memcpy(&save->fpstate->regs, &fpcur->regs, fpcur->size);
+-		else
+-			save_fpregs_to_fpstate(save);
+-	}
+-
+-	if (rstor) {
+-		restore_mask &= XFEATURE_MASK_FPSTATE;
+-		restore_fpregs_from_fpstate(rstor->fpstate, restore_mask);
+-	}
+-
+-	fpregs_mark_activate();
+-	fpregs_unlock();
+-}
+-EXPORT_SYMBOL_GPL(fpu_swap_kvm_fpu);
+-
+ void fpu_copy_guest_fpstate_to_uabi(struct fpu_guest *gfpu, void *buf,
+ 				    unsigned int size, u32 pkru)
+ {
+@@ -437,15 +414,6 @@ void fpstate_reset(struct fpu *fpu)
+ 	__fpstate_reset(fpu->fpstate);
+ }
+ 
+-#if IS_ENABLED(CONFIG_KVM)
+-void fpu_init_fpstate_user(struct fpu *fpu)
+-{
+-	fpstate_reset(fpu);
+-	fpstate_init_user(fpu->fpstate);
+-}
+-EXPORT_SYMBOL_GPL(fpu_init_fpstate_user);
+-#endif
+-
+ /* Clone current's FPU state on fork */
+ int fpu_clone(struct task_struct *dst)
+ {
+-- 
+2.31.1
+

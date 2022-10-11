@@ -1,0 +1,104 @@
+From 74bc352c64e72573ea91101c7589d323d6cac04c Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Thu, 1 Jul 2021 16:22:28 +0800
+Subject: [PATCH 0466/1418] KVM: TDX: Supporting GPRs in vt_cache_reg()
+
+Add GPRs support in vt_cache_reg(), this is mainly for supporting the
+kvm_register_read() function with GPRs for TD guest.
+
+Currently the kvm_register_read() will always read the GPRs from
+vcpu->arch.regs[reg] because vmx_register_cache_reset() doesn't
+clear the bits for all GPRs after vmexit to KVM, that's make sense
+to legacy guest because their GPRs are saved into vcpu->arch.regs[reg]
+by vmexit code path. But this won't happen for TD guest, all GPRs are
+save/restore by TDX module and TD vmexit code path doesn't load any GPR
+into vcpu->arch.regs[reg] after back to KVM. Now clear all GPRs
+bits in vcpu->arch.regs_avail to fix this issue in new introduced
+tdx_register_cache_reset().
+
+This is the 1/2 preparation for supporting instruction emulation/skip
+for TD guest, later the DR accessing VMEXIT will rely on the
+kvm_register_read() to do instruction emulation for TD guest.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/vmx/common.h | 18 ++++++++++++++++++
+ arch/x86/kvm/vmx/main.c   | 12 ++++++++++++
+ arch/x86/kvm/vmx/tdx.c    |  2 +-
+ 3 files changed, 31 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/vmx/common.h b/arch/x86/kvm/vmx/common.h
+index 18b939e363e2..6d4d40e2ee18 100644
+--- a/arch/x86/kvm/vmx/common.h
++++ b/arch/x86/kvm/vmx/common.h
+@@ -37,6 +37,18 @@ static __always_inline void vmwrite##bits(struct kvm_vcpu *vcpu,	   \
+ 	}								   \
+ 	vmcs_write##bits(field, value);					   \
+ }
++
++static __always_inline u64 vmread_gprs(struct kvm_vcpu *vcpu,
++				       u64 field)
++{
++	if (!is_td_vcpu(vcpu))
++		return vcpu->arch.regs[field];
++
++	if (KVM_BUG_ON(!is_debug_td(vcpu), vcpu->kvm))
++		return 0UL;
++
++	return td_gpr_read64(to_tdx(vcpu), field);
++}
+ #else
+ #define VT_BUILD_VMCS_HELPERS(type, bits, tdbits)			   \
+ static __always_inline type vmread##bits(struct kvm_vcpu *vcpu,		   \
+@@ -49,6 +61,12 @@ static __always_inline void vmwrite##bits(struct kvm_vcpu *vcpu,	   \
+ {									   \
+ 	vmcs_write##bits(field, value);					   \
+ }
++
++static __always_inline u64 vmread_gprs(struct kvm_vcpu *vcpu,
++				       u64 field)
++{
++	return vcpu->arch.regs[field];
++}
+ #endif /* CONFIG_INTEL_TDX_HOST */
+ VT_BUILD_VMCS_HELPERS(u16, 16, 16);
+ VT_BUILD_VMCS_HELPERS(u32, 32, 32);
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index 332f51ff4595..9b8bfc2b8525 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -624,6 +624,18 @@ static void vt_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg)
+ 		vcpu->arch.cr4 &= ~guest_owned_bits;
+ 		vcpu->arch.cr4 |= vmreadl(vcpu, GUEST_CR4) & guest_owned_bits;
+ 		break;
++	case VCPU_REGS_RAX:
++	case VCPU_REGS_RCX:
++	case VCPU_REGS_RDX:
++	case VCPU_REGS_RBX:
++	case VCPU_REGS_RBP:
++	case VCPU_REGS_RSI:
++	case VCPU_REGS_RDI:
++#ifdef CONFIG_X86_64
++	case VCPU_REGS_R8 ... VCPU_REGS_R15:
++#endif
++		vcpu->arch.regs[reg] = vmread_gprs(vcpu, reg);
++		break;
+ 	default:
+ 		KVM_BUG_ON(1, vcpu->kvm);
+ 		break;
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index ca44670d8984..745119dea60d 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -809,7 +809,7 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ 		intel_pmu_restore();
+ 	}
+ 
+-	vmx_register_cache_reset(vcpu);
++	tdx_register_cache_reset(vcpu);
+ 
+ 	trace_kvm_exit((unsigned int)tdx->exit_reason.full, vcpu, KVM_ISA_VMX);
+ 
+-- 
+2.31.1
+

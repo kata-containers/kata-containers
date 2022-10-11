@@ -1,0 +1,107 @@
+From bdfa689677bca155a2dc1b33e94ddb044bc64281 Mon Sep 17 00:00:00 2001
+From: jiangkunkun <jiangkunkun@huawei.com>
+Date: Thu, 11 Mar 2021 16:29:19 +0800
+Subject: [PATCH 0865/1418] vfio/iommu_type1: Add HWDBM status maintanance
+
+We are going to optimize dirty log tracking based on iommu
+HWDBM feature, but the dirty log from iommu is useful only
+when all iommu backed groups are connected to iommu with
+HWDBM feature. This maintains a counter for this feature.
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Kunkun Jiang <jiangkunkun@huawei.com>
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+Signed-off-by: Cathy Zhang <cathy.zhang@linux.intel.com>
+---
+ drivers/vfio/vfio_iommu_type1.c | 33 +++++++++++++++++++++++++++++++++
+ 1 file changed, 33 insertions(+)
+
+diff --git a/drivers/vfio/vfio_iommu_type1.c b/drivers/vfio/vfio_iommu_type1.c
+index c8c902386acc..b202190791b5 100644
+--- a/drivers/vfio/vfio_iommu_type1.c
++++ b/drivers/vfio/vfio_iommu_type1.c
+@@ -78,6 +78,7 @@ struct vfio_iommu {
+ 	bool			nesting;
+ 	bool			dirty_page_tracking;
+ 	bool			container_open;
++	uint64_t		num_non_hwdbm_groups;
+ };
+ 
+ struct vfio_domain {
+@@ -115,6 +116,7 @@ struct vfio_iommu_group {
+ 	struct list_head	next;
+ 	bool			mdev_group;	/* An mdev group */
+ 	bool			pinned_page_dirty_scope;
++	bool			iommu_hwdbm;	/* Valid for non-mdev group */
+ };
+ 
+ struct vfio_iova {
+@@ -1199,6 +1201,27 @@ static void vfio_update_pgsize_bitmap(struct vfio_iommu *iommu)
+ 	}
+ }
+ 
++static int vfio_dev_enable_feature(struct device *dev, void *data)
++{
++	enum iommu_dev_features *feat = data;
++
++	if (iommu_dev_feature_enabled(dev, *feat))
++		return 0;
++
++	return iommu_dev_enable_feature(dev, *feat);
++}
++
++static bool vfio_group_supports_hwdbm(struct vfio_iommu_group *group)
++{
++	enum iommu_dev_features feat = IOMMU_DEV_FEAT_HWDBM;
++
++	if (iommu_group_for_each_dev(group->iommu_group, &feat,
++				     vfio_dev_enable_feature))
++		return false;
++
++	return true;
++}
++
+ static int update_user_bitmap(u64 __user *bitmap, struct vfio_iommu *iommu,
+ 			      struct vfio_dma *dma, dma_addr_t base_iova,
+ 			      size_t pgsize)
+@@ -2429,6 +2452,12 @@ static int vfio_iommu_type1_attach_group(void *iommu_data,
+ 	 * capable via the page pinning interface.
+ 	 */
+ 	iommu->num_non_pinned_groups++;
++
++	/* Update the hwdbm status of group and iommu */
++	group->iommu_hwdbm = vfio_group_supports_hwdbm(group);
++	if (!group->iommu_hwdbm)
++		iommu->num_non_hwdbm_groups++;
++
+ 	mutex_unlock(&iommu->lock);
+ 	vfio_iommu_resv_free(&group_resv_regions);
+ 
+@@ -2564,6 +2593,7 @@ static void vfio_iommu_type1_detach_group(void *iommu_data,
+ 	struct vfio_domain *domain;
+ 	struct vfio_iommu_group *group;
+ 	bool update_dirty_scope = false;
++	bool update_iommu_hwdbm = false;
+ 	LIST_HEAD(iova_copy);
+ 
+ 	mutex_lock(&iommu->lock);
+@@ -2602,6 +2632,7 @@ static void vfio_iommu_type1_detach_group(void *iommu_data,
+ 
+ 		vfio_iommu_detach_group(domain, group);
+ 		update_dirty_scope = !group->pinned_page_dirty_scope;
++		update_iommu_hwdbm = !group->iommu_hwdbm;
+ 		list_del(&group->next);
+ 		kfree(group);
+ 		/*
+@@ -2644,6 +2675,8 @@ static void vfio_iommu_type1_detach_group(void *iommu_data,
+ 		if (iommu->dirty_page_tracking)
+ 			vfio_iommu_populate_bitmap_full(iommu);
+ 	}
++	if (update_iommu_hwdbm)
++		iommu->num_non_hwdbm_groups--;
+ 	mutex_unlock(&iommu->lock);
+ }
+ 
+-- 
+2.31.1
+

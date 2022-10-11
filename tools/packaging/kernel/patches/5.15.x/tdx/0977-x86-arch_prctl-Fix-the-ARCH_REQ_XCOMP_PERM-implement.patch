@@ -1,0 +1,38 @@
+From b13b4c0f8386fc8a05e387228534d706411de94c Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 22:59:44 -0800
+Subject: [PATCH 0977/1418] x86/arch_prctl: Fix the ARCH_REQ_XCOMP_PERM
+ implementation
+
+ARCH_REQ_XCOMP_PERM is supposed to add the requested feature to the
+permission bitmap of thread_group_leader()->fpu. But the code overwrites
+the bitmap with the requested feature bit only rather than adding it.
+
+Fix the code to add the request feature bit to the master bitmask.
+
+Fixes: db8268df0983 ("x86/arch_prctl: Add controls for dynamic XSTATE components")
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Signed-off-by: Chang S. Bae <chang.seok.bae@intel.com>
+Cc: Thomas Gleixner <tglx@linutronix.de>
+Cc: x86@kernel.org
+Cc: linux-kernel@vger.kernel.org
+---
+ arch/x86/kernel/fpu/xstate.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 02b3ddaf4f75..2d4363e32517 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -1636,7 +1636,7 @@ static int __xstate_request_perm(u64 permitted, u64 requested, bool guest)
+ 
+ 	perm = guest ? &fpu->guest_perm : &fpu->perm;
+ 	/* Pairs with the READ_ONCE() in xstate_get_group_perm() */
+-	WRITE_ONCE(perm->__state_perm, requested);
++	WRITE_ONCE(perm->__state_perm, mask);
+ 	/* Protected by sighand lock */
+ 	perm->__state_size = ksize;
+ 	perm->__user_state_size = usize;
+-- 
+2.31.1
+

@@ -1,0 +1,61 @@
+From 3e329273144060a827fcc4712a25d72dceaa5439 Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 18:04:58 -0800
+Subject: [PATCH 0941/1418] Revert "x86/fpu: Change
+ xstate_get_guest_group_perm() to external"
+
+This reverts commit 09b5b5f349d43ba3d23df121dd333c46f6905bd8.
+---
+ arch/x86/include/asm/fpu/api.h | 2 --
+ arch/x86/kernel/fpu/xstate.c   | 5 -----
+ arch/x86/kernel/fpu/xstate.h   | 5 +++++
+ 3 files changed, 5 insertions(+), 7 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/api.h b/arch/x86/include/asm/fpu/api.h
+index 7532f73c82a6..6053674f9132 100644
+--- a/arch/x86/include/asm/fpu/api.h
++++ b/arch/x86/include/asm/fpu/api.h
+@@ -138,8 +138,6 @@ static inline void fpstate_free(struct fpu *fpu) { }
+ /* fpstate-related functions which are exported to KVM */
+ extern void fpstate_clear_xstate_component(struct fpstate *fps, unsigned int xfeature);
+ 
+-extern inline u64 xstate_get_guest_group_perm(void);
+-
+ /* KVM specific functions */
+ extern bool fpu_alloc_guest_fpstate(struct fpu_guest *gfpu);
+ extern void fpu_free_guest_fpstate(struct fpu_guest *gfpu);
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 6bbfb311f9c8..3e9709969e61 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -1757,11 +1757,6 @@ static inline int xstate_request_perm(unsigned long idx, bool guest)
+ }
+ #endif  /* !CONFIG_X86_64 */
+ 
+-inline u64 xstate_get_guest_group_perm(void)
+-{
+-	return xstate_get_group_perm(true);
+-}
+-EXPORT_SYMBOL_GPL(xstate_get_guest_group_perm);
+ /**
+  * fpu_xstate_prctl - xstate permission operations
+  * @tsk:	Redundant pointer to current
+diff --git a/arch/x86/kernel/fpu/xstate.h b/arch/x86/kernel/fpu/xstate.h
+index 3254e2b5f17f..4a68d27b61de 100644
+--- a/arch/x86/kernel/fpu/xstate.h
++++ b/arch/x86/kernel/fpu/xstate.h
+@@ -35,6 +35,11 @@ static inline u64 xstate_get_host_group_perm(void)
+ 	return xstate_get_group_perm(false);
+ }
+ 
++static inline u64 xstate_get_guest_group_perm(void)
++{
++	return xstate_get_group_perm(true);
++}
++
+ enum xstate_copy_mode {
+ 	XSTATE_COPY_FP,
+ 	XSTATE_COPY_FX,
+-- 
+2.31.1
+

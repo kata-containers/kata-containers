@@ -1,0 +1,47 @@
+From 531bcdad19d2ffdb9b35bf5ec0f13a2c655a745d Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Wed, 30 Sep 2020 06:46:41 -0700
+Subject: [PATCH 0621/1418] iommu/vt-d: Loop subdevices in
+ iommu_domain_get_attr
+
+This was found by the failure of iommu_domain_get_attr() when passthru mdev
+to guest. There is no device in domain->devices, thus unable to get the cap
+and ecap of iommu unit. But this domain actually has one sub-device which is
+attached via aux-manner. This patch fixes the issue.
+
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/intel/iommu.c | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index cd32dc14deed..9c1856cb809b 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -5632,8 +5632,21 @@ static int intel_iommu_get_nesting_info(struct iommu_domain *domain,
+ 	 * related capabilities should be consistent across iommu
+ 	 * units.
+ 	 */
+-	domain_info = list_first_entry(&dmar_domain->devices,
+-				       struct device_domain_info, link);
++	/*
++	 * Check full-device list first, and then sub-device list
++	 */
++	if (!list_empty(&dmar_domain->devices))
++		domain_info = list_first_entry(&dmar_domain->devices,
++					struct device_domain_info, link);
++	else if (!list_empty(&dmar_domain->subdevices)) {
++		struct subdev_domain_info *sinfo;
++
++		sinfo = list_first_entry(&dmar_domain->subdevices,
++					struct subdev_domain_info, link_domain);
++		domain_info = get_domain_info(sinfo->pdev);
++	} else
++		return -ENODEV;
++
+ 	cap &= domain_info->iommu->cap;
+ 	ecap &= domain_info->iommu->ecap;
+ 
+-- 
+2.31.1
+

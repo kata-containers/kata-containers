@@ -1,0 +1,30 @@
+From 30af57cbaa8dfd95947bad0e62798a6c51db9063 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Wed, 23 Mar 2022 17:46:18 -0700
+Subject: [PATCH 1238/1418] vfio: mdev: idxd: fix uninit var usage in
+ vidxd_wq_abort()
+
+Init status variable in case the called functions that passes it by
+reference does not set it.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/vfio/mdev/idxd/vdev.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/vfio/mdev/idxd/vdev.c b/drivers/vfio/mdev/idxd/vdev.c
+index 0f593a3f2c0c..39ed9939a190 100644
+--- a/drivers/vfio/mdev/idxd/vdev.c
++++ b/drivers/vfio/mdev/idxd/vdev.c
+@@ -953,7 +953,7 @@ static void vidxd_wq_abort(struct vdcm_idxd *vidxd, int val)
+ 	u8 *bar0 = vidxd->bar0;
+ 	union wqcfg *wqcfg = (union wqcfg *)(bar0 + VIDXD_WQCFG_OFFSET);
+ 	struct idxd_wq *wq = vidxd->wq;
+-	u32 status;
++	u32 status = 0;
+ 
+ 	dev_dbg(dev, "%s\n", __func__);
+ 	if (wqcfg->wq_state != IDXD_WQ_DEV_ENABLED) {
+-- 
+2.31.1
+

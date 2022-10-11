@@ -1,0 +1,137 @@
+From b1727d70b8ca0e08afcbc13829013e5837143ec8 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Mon, 22 Feb 2021 16:43:57 -0800
+Subject: [PATCH 0607/1418] iommu/ioasid: Add ownership check in guest bind
+
+Bind guest page table call comes with an IOASID provided by the
+userspace.  To prevent attacks by malicious users, we must ensure the
+IOASID was allocated under the same process.
+
+This patch adds a new API that will perform an ownership check that is
+based on whether the IOASID belongs to the ioasid_set allocated with the
+mm_struct pointer as a token.
+
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/ioasid.c | 37 +++++++++++++++++++++++++++++++++++++
+ drivers/iommu/iommu.c  | 16 ++++++++++++++--
+ include/linux/ioasid.h |  6 ++++++
+ 3 files changed, 57 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/iommu/ioasid.c b/drivers/iommu/ioasid.c
+index 96e941dfada7..28a2e9b6594d 100644
+--- a/drivers/iommu/ioasid.c
++++ b/drivers/iommu/ioasid.c
+@@ -9,6 +9,7 @@
+ #include <linux/slab.h>
+ #include <linux/spinlock.h>
+ #include <linux/xarray.h>
++#include <linux/sched/mm.h>
+ 
+ /*
+  * An IOASID can have multiple consumers where each consumer may have
+@@ -1028,6 +1029,42 @@ int ioasid_get(struct ioasid_set *set, ioasid_t ioasid)
+ }
+ EXPORT_SYMBOL_GPL(ioasid_get);
+ 
++/**
++ * ioasid_get_if_owned - obtain a reference to the IOASID if the IOASID belongs
++ * 		to the ioasid_set with the current mm as token
++ * @ioasid:	the IOASID to get reference
++ *
++ *
++ * Return: 0 on success, error if failed.
++ */
++int ioasid_get_if_owned(ioasid_t ioasid)
++{
++	struct ioasid_set *set;
++	int ret;
++
++	spin_lock(&ioasid_allocator_lock);
++	set = ioasid_find_set(ioasid);
++	if (IS_ERR_OR_NULL(set)) {
++		ret = -ENOENT;
++		goto done_unlock;
++	}
++	if (set->type != IOASID_SET_TYPE_MM) {
++		ret = -EINVAL;
++		goto done_unlock;
++	}
++	if (current->mm != set->token) {
++		ret = -EPERM;
++		goto done_unlock;
++	}
++
++	ret = ioasid_get_locked(set, ioasid);
++done_unlock:
++	spin_unlock(&ioasid_allocator_lock);
++
++	return ret;
++}
++EXPORT_SYMBOL_GPL(ioasid_get_if_owned);
++
+ bool ioasid_put_locked(struct ioasid_set *set, ioasid_t ioasid)
+ {
+ 	struct ioasid_data *data;
+diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
+index e80261d17a49..747101eedcc8 100644
+--- a/drivers/iommu/iommu.c
++++ b/drivers/iommu/iommu.c
+@@ -2206,7 +2206,13 @@ int iommu_uapi_sva_bind_gpasid(struct iommu_domain *domain, struct device *dev,
+ 	if (ret)
+ 		return ret;
+ 
+-	return domain->ops->sva_bind_gpasid(domain, dev, &data);
++	ret = ioasid_get_if_owned(data.hpasid);
++	if (ret)
++		return ret;
++	ret = domain->ops->sva_bind_gpasid(domain, dev, &data);
++	ioasid_put(NULL, data.hpasid);
++
++	return ret;
+ }
+ EXPORT_SYMBOL_GPL(iommu_uapi_sva_bind_gpasid);
+ 
+@@ -2233,7 +2239,13 @@ int iommu_uapi_sva_unbind_gpasid(struct iommu_domain *domain, struct device *dev
+ 	if (ret)
+ 		return ret;
+ 
+-	return iommu_sva_unbind_gpasid(domain, dev, data.hpasid);
++	ret = ioasid_get_if_owned(data.hpasid);
++	if (ret)
++		return ret;
++	ret = iommu_sva_unbind_gpasid(domain, dev, data.hpasid);
++	ioasid_put(NULL, data.hpasid);
++
++	return ret;
+ }
+ EXPORT_SYMBOL_GPL(iommu_uapi_sva_unbind_gpasid);
+ 
+diff --git a/include/linux/ioasid.h b/include/linux/ioasid.h
+index c97e80ff65cc..9624b665f810 100644
+--- a/include/linux/ioasid.h
++++ b/include/linux/ioasid.h
+@@ -111,6 +111,7 @@ ioasid_t ioasid_alloc(struct ioasid_set *set, ioasid_t min, ioasid_t max,
+ 		      void *private);
+ int ioasid_get(struct ioasid_set *set, ioasid_t ioasid);
+ int ioasid_get_locked(struct ioasid_set *set, ioasid_t ioasid);
++int ioasid_get_if_owned(ioasid_t ioasid);
+ bool ioasid_put(struct ioasid_set *set, ioasid_t ioasid);
+ bool ioasid_put_locked(struct ioasid_set *set, ioasid_t ioasid);
+ void ioasid_free(struct ioasid_set *set, ioasid_t ioasid);
+@@ -180,6 +181,11 @@ static inline int ioasid_get_locked(struct ioasid_set *set, ioasid_t ioasid)
+ 	return -ENOTSUPP;
+ }
+ 
++static inline int ioasid_get_if_owned(ioasid_t ioasid)
++{
++	return -ENOTSUPP;
++}
++
+ static inline bool ioasid_put(struct ioasid_set *set, ioasid_t ioasid)
+ {
+ 	return false;
+-- 
+2.31.1
+

@@ -1,0 +1,31 @@
+From e69754c4062bbd6b7516378263a58bfd876987e0 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Thu, 27 Jan 2022 19:11:14 -0800
+Subject: [PATCH 1032/1418] iommu/vt-d: Always signal completion for PRQ drain
+
+Paste change alleviates potential race condition between prq event thread and prq drain.
+Not for upstream, there will be a proper fix for PRQ drain.
+
+Signed-off-by: Lu Baolu <baolu.lu@linux.intel.com>
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/intel/svm.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index 322246d00217..edafcc89e492 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -1230,8 +1230,7 @@ static irqreturn_t prq_event_thread(int irq, void *d)
+ 		}
+ 	}
+ 
+-	if (!completion_done(&iommu->prq_complete))
+-		complete(&iommu->prq_complete);
++	complete(&iommu->prq_complete);
+ 
+ 	return IRQ_RETVAL(handled);
+ }
+-- 
+2.31.1
+

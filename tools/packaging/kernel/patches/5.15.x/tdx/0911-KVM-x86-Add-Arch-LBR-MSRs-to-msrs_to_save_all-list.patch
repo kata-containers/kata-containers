@@ -1,0 +1,43 @@
+From 2bcee0901ea83c63a5c8e75fc6c3e29f7209151d Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Mon, 5 Jul 2021 23:48:54 +0800
+Subject: [PATCH 0911/1418] KVM: x86: Add Arch LBR MSRs to msrs_to_save_all
+ list
+
+Arch LBR MSR_ARCH_LBR_DEPTH and MSR_ARCH_LBR_CTL are {saved|restored}
+by userspace application if they're available.
+
+Suggested-by: Jim Mattson <jmattson@google.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+Reviewed-by: Jim Mattson <jmattson@google.com>
+---
+ arch/x86/kvm/x86.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 581706324216..341c86767a6f 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -1446,6 +1446,7 @@ static const u32 msrs_to_save_all[] = {
+ 	MSR_F15H_PERF_CTR3, MSR_F15H_PERF_CTR4, MSR_F15H_PERF_CTR5,
+ 
+ 	MSR_IA32_XSS,
++	MSR_ARCH_LBR_CTL, MSR_ARCH_LBR_DEPTH,
+ };
+ 
+ static u32 msrs_to_save[ARRAY_SIZE(msrs_to_save_all)];
+@@ -6548,6 +6549,11 @@ static void kvm_init_msr_list(void)
+ 			if (!supported_xss)
+ 				continue;
+ 			break;
++		case MSR_ARCH_LBR_DEPTH:
++		case MSR_ARCH_LBR_CTL:
++			if (!kvm_cpu_cap_has(X86_FEATURE_ARCH_LBR))
++				continue;
++			break;
+ 		default:
+ 			break;
+ 		}
+-- 
+2.31.1
+

@@ -1,0 +1,113 @@
+From 708ed60e0684ec58e433bc81a2be134698f7c8ee Mon Sep 17 00:00:00 2001
+From: Kyung Min Park <kyung.min.park@intel.com>
+Date: Wed, 8 Sep 2021 21:50:36 -0700
+Subject: [PATCH 0677/1418] drivers/saf: Check SAF Image sanity
+
+SAF image is designed specifically for a given family, model and
+stepping of the processor. Like Intel microcode header, the SAF image
+has the Processor Signature, Checksum and Processor Flags that must be
+matched with the information returned by the CPUID.
+
+Signed-off-by: Kyung Min Park <kyung.min.park@intel.com>
+Reviewed-by: Ashok Raj <ashok.raj@intel.com>
+---
+ drivers/ift/saf.c | 69 +++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 69 insertions(+)
+
+diff --git a/drivers/ift/saf.c b/drivers/ift/saf.c
+index c636bc7c5090..81817f26a824 100644
+--- a/drivers/ift/saf.c
++++ b/drivers/ift/saf.c
+@@ -10,6 +10,7 @@
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
+ #include <asm/cpu_device_id.h>
++#include <asm/microcode_intel.h>
+ 
+ #include "saf.h"
+ 
+@@ -22,6 +23,68 @@ static const struct x86_cpu_id saf_cpu_ids[] __initconst = {
+ 	{}
+ };
+ 
++static int scan_sanity_check(void *mc)
++{
++	struct microcode_header_intel *mc_header = mc;
++	unsigned long total_size, data_size;
++	u32 sum, i;
++
++	total_size = get_totalsize(mc_header);
++	data_size = get_datasize(mc_header);
++
++	if (data_size + MC_HEADER_SIZE > total_size) {
++		pr_err("saf: bad scan data file size.\n");
++		return -EINVAL;
++	}
++
++	if (mc_header->ldrver != 1 || mc_header->hdrver != 1) {
++		pr_err("saf: invalid/unknown scan update format.\n");
++		return -EINVAL;
++	}
++
++	sum = 0;
++	i = total_size / sizeof(u32);
++	while (i--)
++		sum += ((u32 *)mc)[i];
++
++	if (sum) {
++		pr_err("saf: bad scan data checksum, aborting.\n");
++		return -EINVAL;
++	}
++
++	return 0;
++}
++
++static bool find_scan_matching_signature(struct ucode_cpu_info *uci, void *mc)
++{
++	struct microcode_header_intel *shdr;
++	unsigned int mc_size;
++
++	shdr = (struct microcode_header_intel *)mc;
++	mc_size = get_totalsize(shdr);
++
++	if (!mc_size || scan_sanity_check(shdr) < 0) {
++		pr_err("saf: scan sanity check failure");
++		return false;
++	}
++
++	if (!cpu_signatures_match(uci->cpu_sig.sig, uci->cpu_sig.pf, shdr->sig, shdr->pf)) {
++		pr_err("saf: scan signature, pf not matching");
++		return false;
++	}
++
++	return true;
++}
++
++static bool scan_image_sanity_check(void *data)
++{
++	struct ucode_cpu_info uci;
++
++	collect_cpu_info_early(&uci);
++
++	return find_scan_matching_signature(&uci, data);
++}
++
+ static const struct firmware *load_binary(const char *path)
+ {
+ 	const struct firmware *fw;
+@@ -37,6 +100,12 @@ static const struct firmware *load_binary(const char *path)
+ 		pr_err("saf: scan file %s load failed", path);
+ 		goto out;
+ 	}
++
++	if (!scan_image_sanity_check((void *)fw->data)) {
++		pr_err("saf: scan header sanity check failed");
++		release_firmware(fw);
++		fw = NULL;
++	}
+ out:
+ 	platform_device_unregister(saf_pdev);
+ 
+-- 
+2.31.1
+

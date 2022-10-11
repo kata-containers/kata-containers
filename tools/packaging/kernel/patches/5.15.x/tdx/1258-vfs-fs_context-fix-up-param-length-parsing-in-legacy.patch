@@ -1,0 +1,39 @@
+From 1a6c1460080f4c851bc59b634db8ec31474f664f Mon Sep 17 00:00:00 2001
+From: Jamie Hill-Daniel <jamie@hill-daniel.co.uk>
+Date: Tue, 18 Jan 2022 08:06:04 +0100
+Subject: [PATCH 1258/1418] vfs: fs_context: fix up param length parsing in
+ legacy_parse_param
+
+The "PAGE_SIZE - 2 - size" calculation in legacy_parse_param() is an
+unsigned type so a large value of "size" results in a high positive
+value instead of a negative value as expected.  Fix this by getting rid
+of the subtraction.
+
+Signed-off-by: Jamie Hill-Daniel <jamie@hill-daniel.co.uk>
+Signed-off-by: William Liu <willsroot@protonmail.com>
+Tested-by: Salvatore Bonaccorso <carnil@debian.org>
+Tested-by: Thadeu Lima de Souza Cascardo <cascardo@canonical.com>
+Acked-by: Dan Carpenter <dan.carpenter@oracle.com>
+Acked-by: Al Viro <viro@zeniv.linux.org.uk>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Signed-off-by: Linus Torvalds <torvalds@linux-foundation.org>
+---
+ fs/fs_context.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/fs_context.c b/fs/fs_context.c
+index b7e43a780a62..24ce12f0db32 100644
+--- a/fs/fs_context.c
++++ b/fs/fs_context.c
+@@ -548,7 +548,7 @@ static int legacy_parse_param(struct fs_context *fc, struct fs_parameter *param)
+ 			      param->key);
+ 	}
+ 
+-	if (len > PAGE_SIZE - 2 - size)
++	if (size + len + 2 > PAGE_SIZE)
+ 		return invalf(fc, "VFS: Legacy: Cumulative options too large");
+ 	if (strchr(param->key, ',') ||
+ 	    (param->type == fs_value_is_string &&
+-- 
+2.31.1
+

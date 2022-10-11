@@ -1,0 +1,59 @@
+From a7abe34b1c504636e11c32158bad8cde386c935e Mon Sep 17 00:00:00 2001
+From: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Date: Wed, 1 Dec 2021 21:32:25 +0200
+Subject: [PATCH 1388/1418] virtio: Guard against non-standard BAR values in
+ virtio caps
+
+A malicious host can supply invalid BAR values via device's capabilities
+to cause an overflow in resource dereference. Guard against this by
+checking the incoming BAR numbers against the possible maximum.
+
+Signed-off-by: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+---
+ drivers/virtio/virtio_pci_modern.c     | 4 ++++
+ drivers/virtio/virtio_pci_modern_dev.c | 7 ++++++-
+ 2 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/virtio/virtio_pci_modern.c b/drivers/virtio/virtio_pci_modern.c
+index 30654d3a0b41..d400cc37eb90 100644
+--- a/drivers/virtio/virtio_pci_modern.c
++++ b/drivers/virtio/virtio_pci_modern.c
+@@ -318,6 +318,10 @@ static int virtio_pci_find_shm_cap(struct pci_dev *dev, u8 required_id,
+ 		/* Type, and ID match, looks good */
+ 		pci_read_config_byte(dev, pos + offsetof(struct virtio_pci_cap,
+ 							 bar), bar);
++		if (*bar > PCI_STD_RESOURCE_END) {
++			dev_err(&dev->dev, "shm cap with bad BAR %d\n", *bar);
++			continue;
++		}
+ 
+ 		/* Read the lower 32bit of length and offset */
+ 		pci_read_config_dword(dev, pos + offsetof(struct virtio_pci_cap,
+diff --git a/drivers/virtio/virtio_pci_modern_dev.c b/drivers/virtio/virtio_pci_modern_dev.c
+index e11ed748e661..a1f5649cc867 100644
+--- a/drivers/virtio/virtio_pci_modern_dev.c
++++ b/drivers/virtio/virtio_pci_modern_dev.c
+@@ -35,6 +35,11 @@ vp_modern_map_capability(struct virtio_pci_modern_device *mdev, int off,
+ 	pci_read_config_dword(dev, off + offsetof(struct virtio_pci_cap, length),
+ 			      &length);
+ 
++	if (bar > PCI_STD_RESOURCE_END) {
++		dev_err(&dev->dev, "virtio_pci: bad capability BAR %u\n", bar);
++		return NULL;
++	}
++
+ 	if (length <= start) {
+ 		dev_err(&dev->dev,
+ 			"virtio_pci: bad capability len %u (>%u expected)\n",
+@@ -120,7 +125,7 @@ static inline int virtio_pci_find_capability(struct pci_dev *dev, u8 cfg_type,
+ 				     &bar);
+ 
+ 		/* Ignore structures with reserved BAR values */
+-		if (bar > 0x5)
++		if (bar > PCI_STD_RESOURCE_END)
+ 			continue;
+ 
+ 		if (type == cfg_type) {
+-- 
+2.31.1
+

@@ -1,0 +1,154 @@
+From 97bc44dc8f6814389e6c8c93ec5391db3efface5 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Fri, 5 Mar 2021 10:30:12 +0800
+Subject: [PATCH 0407/1418] KVM: TDX: Skip #MSMI induced #MC handling and
+ handle it as a user #MC
+
+When eMCA MCE-MSI morphing is enabled, TD guest triggered #MC will be
+morphed to an MSMI, then causing EXIT REASON 6 to SEAM module. But the exit
+qualification[0] isn't set to indicate an MSMI and SEAM module won't set
+the non_recoverable bit. Finally, KVM will try to re-enter the TD guest,
+which is wrong.  Treat it as a user machine check, not as a recoverable
+kernel machine check.
+
+Fixup #MC right after TD exit to other SMI TD exit with non-recoverable
+error and treat the fixed-up TD exit as a user machine check.  It's the
+same as what KVM does for #MC in legacy VM that calling kvm_machine_check()
+with a fake ring 3 context.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/asm.h                 |  2 ++
+ arch/x86/include/asm/extable_fixup_types.h |  2 ++
+ arch/x86/kernel/cpu/mce/core.c             | 11 +++++++++++
+ arch/x86/kvm/vmx/tdx.c                     | 22 +++++++++++++++-------
+ arch/x86/mm/extable.c                      | 20 ++++++++++++++++++++
+ 5 files changed, 50 insertions(+), 7 deletions(-)
+
+diff --git a/arch/x86/include/asm/asm.h b/arch/x86/include/asm/asm.h
+index 6aadb9a620ee..a460f21a96a5 100644
+--- a/arch/x86/include/asm/asm.h
++++ b/arch/x86/include/asm/asm.h
+@@ -179,5 +179,7 @@ register unsigned long current_stack_pointer asm(_ASM_SP);
+ #define _ASM_EXTABLE_FAULT(from, to)				\
+ 	_ASM_EXTABLE_TYPE(from, to, EX_TYPE_FAULT)
+ 
++#define _ASM_EXTABLE_FIX_MC(from, to)				\
++	_ASM_EXTABLE_TYPE(from, to, EX_TYPE_FIX_MC)
+ #endif /* __KERNEL__ */
+ #endif /* _ASM_X86_ASM_H */
+diff --git a/arch/x86/include/asm/extable_fixup_types.h b/arch/x86/include/asm/extable_fixup_types.h
+index 409524d5d2eb..0785f26dba43 100644
+--- a/arch/x86/include/asm/extable_fixup_types.h
++++ b/arch/x86/include/asm/extable_fixup_types.h
+@@ -19,4 +19,6 @@
+ #define	EX_TYPE_DEFAULT_MCE_SAFE	12
+ #define	EX_TYPE_FAULT_MCE_SAFE		13
+ 
++#define	EX_TYPE_FIX_MC			16
++
+ #endif
+diff --git a/arch/x86/kernel/cpu/mce/core.c b/arch/x86/kernel/cpu/mce/core.c
+index 2af4b420172e..218c87fc8e59 100644
+--- a/arch/x86/kernel/cpu/mce/core.c
++++ b/arch/x86/kernel/cpu/mce/core.c
+@@ -1359,6 +1359,17 @@ noinstr void do_machine_check(struct pt_regs *regs)
+ 	 */
+ 	int lmce = 1;
+ 
++	/*
++	 * If the machine check location has EX_HANDLER_FIX_MC type fixup
++	 * handler, it's a #MC from TD guest. Skip handling here because the
++	 * context is not correct.
++	 *
++	 * KVM will call to here from tdx_handle_exit().
++	 */
++	if (ex_get_fixup_type(regs->ip) == EX_TYPE_FIX_MC &&
++	    fixup_exception(regs, X86_TRAP_MC, 0, 0))
++		return;
++
+ 	this_cpu_inc(mce_exception_count);
+ 
+ 	mce_gather_info(&m, regs);
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 0bcb51d23657..5ffa6c5bb6fe 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -1224,6 +1224,21 @@ static int tdx_handle_exit(struct kvm_vcpu *vcpu,
+ 		if (exit_reason.basic == EXIT_REASON_TRIPLE_FAULT)
+ 			return tdx_handle_triple_fault(vcpu);
+ 
++		/*
++		 * The only reason it gets EXIT_REASON_OTHER_SMI is there is
++		 * an #MSMI in TD guest. The #MSMI is delivered right after
++		 * SEAMCALL returns, and an #MC is delivered to host kernel
++		 * after SMI handler returns.
++		 *
++		 * The #MC right after SEAMCALL is fixed up and skipped in #MC
++		 * handler because it's an #MC happens in TD guest we cannot
++		 * handle it with host's context.
++		 *
++		 * Call KVM's machine check handler explicitly here.
++		 */
++		if (exit_reason.basic == EXIT_REASON_OTHER_SMI)
++			kvm_machine_check();
++
+ 		goto unhandled_exit;
+ 	}
+ 
+@@ -1240,13 +1255,6 @@ static int tdx_handle_exit(struct kvm_vcpu *vcpu,
+ 		return tdx_handle_ept_violation(vcpu);
+ 	case EXIT_REASON_EPT_MISCONFIG:
+ 		return tdx_handle_ept_misconfig(vcpu);
+-	case EXIT_REASON_OTHER_SMI:
+-		/*
+-		 * If reach here, it's not a MSMI.
+-		 * #SMI is delivered and handled right after SEAMRET, nothing
+-		 * needs to be done in KVM.
+-		 */
+-		return 1;
+ 	default:
+ 		break;
+ 	}
+diff --git a/arch/x86/mm/extable.c b/arch/x86/mm/extable.c
+index 5cd2a88930a9..c819310b1eb6 100644
+--- a/arch/x86/mm/extable.c
++++ b/arch/x86/mm/extable.c
+@@ -99,6 +99,23 @@ static bool ex_handler_clear_fs(const struct exception_table_entry *fixup,
+ 	return ex_handler_default(fixup, regs);
+ }
+ 
++__visible bool ex_handler_fix_msmi(const struct exception_table_entry *fixup,
++				   struct pt_regs *regs, int trapnr,
++				   unsigned long error_code,
++				   unsigned long fault_addr)
++{
++	/*
++	 * Still doesn't set bit 0 of exit qualification correctly for MSMI,
++	 * therefore in no case will SEAM module set non_recoverable bit for
++	 * EXIT_REASON_OTHER_SMI.
++	 *
++	 * So fix it here to set non_recoverable bit (62).
++	 */
++	regs->ax |= BIT_ULL(62);
++	return ex_handler_default(fixup, regs);
++}
++EXPORT_SYMBOL(ex_handler_fix_msmi);
++
+ int ex_get_fixup_type(unsigned long ip)
+ {
+ 	const struct exception_table_entry *e = search_exception_tables(ip);
+@@ -156,6 +173,9 @@ int fixup_exception(struct pt_regs *regs, int trapnr, unsigned long error_code,
+ 	case EX_TYPE_WRMSR_IN_MCE:
+ 		ex_handler_msr_mce(regs, true);
+ 		break;
++	case EX_TYPE_FIX_MC:
++		return ex_handler_fix_msmi(e, regs, trapnr,
++					   error_code, fault_addr);
+ 	}
+ 	BUG();
+ }
+-- 
+2.31.1
+

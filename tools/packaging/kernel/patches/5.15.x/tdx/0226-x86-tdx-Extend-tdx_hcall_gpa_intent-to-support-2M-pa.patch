@@ -1,0 +1,147 @@
+From e37c099fc21deceb4e20800732599be3501f6e61 Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Fri, 27 Aug 2021 14:48:56 +0300
+Subject: [PATCH 0226/1418] x86/tdx: Extend tdx_hcall_gpa_intent() to support
+ 2M page accept
+
+Make tdx_hcall_gpa_intent() take 'stard' and 'end' of the range as
+arguments, not 'start' and 'numpages'. tdx_accept_page() now returns
+error code of the TDX module call.
+
+This is a preparation patch to introduce 2M TDACCPETPAGE.
+
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+---
+ arch/x86/include/asm/tdx.h   |  6 +++---
+ arch/x86/kernel/tdx.c        | 34 ++++++++++++++--------------------
+ arch/x86/mm/pat/set_memory.c |  7 +++++--
+ 3 files changed, 22 insertions(+), 25 deletions(-)
+
+diff --git a/arch/x86/include/asm/tdx.h b/arch/x86/include/asm/tdx.h
+index 1def3a3a5582..442c8b6068d4 100644
+--- a/arch/x86/include/asm/tdx.h
++++ b/arch/x86/include/asm/tdx.h
+@@ -92,7 +92,7 @@ bool tdx_allowed_port(short int port);
+ 
+ extern phys_addr_t tdx_shared_mask(void);
+ 
+-extern int tdx_hcall_gpa_intent(phys_addr_t gpa, int numpages,
++extern int tdx_hcall_gpa_intent(phys_addr_t start, phys_addr_t end,
+ 				enum tdx_map_type map_type);
+ 
+ extern void tdx_accept_memory(phys_addr_t start, phys_addr_t end);
+@@ -174,8 +174,8 @@ static inline bool tdx_early_handle_ve(struct pt_regs *regs) { return false; }
+ 
+ static inline phys_addr_t tdx_shared_mask(void) { return 0; }
+ 
+-static inline int tdx_hcall_gpa_intent(phys_addr_t gpa, int numpages,
+-				       enum tdx_map_type map_type)
++static inline int tdx_hcall_gpa_intent(phys_addr_t start, phys_addr_t end,
++				enum tdx_map_type map_type)
+ {
+ 	return -ENODEV;
+ }
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 985c03ef844b..0e0c3c40cdcc 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -316,23 +316,15 @@ static void tdx_get_info(void)
+ 	physical_mask &= ~tdx_shared_mask();
+ }
+ 
+-static void tdx_accept_page(phys_addr_t gpa)
++static u64 tdx_accept_page(phys_addr_t gpa)
+ {
+-	u64 ret;
+-
+ 	/*
+ 	 * Pass the page physical address and size (0-4KB) to the
+ 	 * TDX module to accept the pending, private page. More info
+ 	 * about ABI can be found in TDX Guest-Host-Communication
+ 	 * Interface (GHCI), sec 2.4.7.
+ 	 */
+-	ret = __trace_tdx_module_call(TDX_ACCEPT_PAGE, gpa, 0, 0, 0, NULL);
+-
+-	/*
+-	 * Non zero return value means buggy TDX module (which is
+-	 * fatal for TDX guest). So panic here.
+-	 */
+-	BUG_ON(ret && TDCALL_RETURN_CODE(ret) != TDX_PAGE_ALREADY_ACCEPTED);
++	return __trace_tdx_module_call(TDX_ACCEPT_PAGE, gpa, 0, 0, 0, NULL);
+ }
+ 
+ /*
+@@ -340,21 +332,22 @@ static void tdx_accept_page(phys_addr_t gpa)
+  * shared with the VMM or private to the guest.  The VMM is
+  * expected to change its mapping of the page in response.
+  */
+-int tdx_hcall_gpa_intent(phys_addr_t gpa, int numpages,
++int tdx_hcall_gpa_intent(phys_addr_t start, phys_addr_t end,
+ 			 enum tdx_map_type map_type)
+ {
+ 	u64 ret = 0;
+-	int i;
+ 
+-	if (map_type == TDX_MAP_SHARED)
+-		gpa |= tdx_shared_mask();
++	if (map_type == TDX_MAP_SHARED) {
++		start |= tdx_shared_mask();
++		end |= tdx_shared_mask();
++	}
+ 
+ 	/*
+ 	 * Notify VMM about page mapping conversion. More info
+ 	 * about ABI can be found in TDX Guest-Host-Communication
+ 	 * Interface (GHCI), sec 3.2.
+ 	 */
+-	ret = _tdx_hypercall(TDVMCALL_MAP_GPA, gpa, PAGE_SIZE * numpages, 0, 0,
++	ret = _tdx_hypercall(TDVMCALL_MAP_GPA, start, end - start, 0, 0,
+ 			     NULL);
+ 	if (ret)
+ 		ret = -EIO;
+@@ -366,18 +359,19 @@ int tdx_hcall_gpa_intent(phys_addr_t gpa, int numpages,
+ 	 * For shared->private conversion, accept the page using
+ 	 * TDX_ACCEPT_PAGE TDX module call.
+ 	 */
+-	for (i = 0; i < numpages; i++)
+-		tdx_accept_page(gpa + i * PAGE_SIZE);
++	while (start < end) {
++		if (tdx_accept_page(start))
++			return -EIO;
++		start += PAGE_SIZE;
++	}
+ 
+ 	return 0;
+ }
+ 
+ void tdx_accept_memory(phys_addr_t start, phys_addr_t end)
+ {
+-	if (tdx_hcall_gpa_intent(start, (end - start) / PAGE_SIZE,
+-				 TDX_MAP_PRIVATE)) {
++	if (tdx_hcall_gpa_intent(start, end, TDX_MAP_PRIVATE))
+ 		panic("Accepting memory failed\n");
+-	}
+ }
+ 
+ static __cpuidle void _tdx_halt(const bool irq_disabled, const bool do_sti)
+diff --git a/arch/x86/mm/pat/set_memory.c b/arch/x86/mm/pat/set_memory.c
+index 6c531d5cb5fd..657fa359689d 100644
+--- a/arch/x86/mm/pat/set_memory.c
++++ b/arch/x86/mm/pat/set_memory.c
+@@ -2049,8 +2049,11 @@ static int __set_memory_protect(unsigned long addr, int numpages, bool protect)
+ 	 */
+ 	cpa_flush(&cpa, 0);
+ 
+-	if (!ret && cc_platform_has(CC_ATTR_GUEST_SHARED_MAPPING_INIT))
+-		ret = tdx_hcall_gpa_intent(__pa(addr), numpages, map_type);
++	if (!ret && cc_platform_has(CC_ATTR_GUEST_SHARED_MAPPING_INIT)) {
++		ret = tdx_hcall_gpa_intent(__pa(addr),
++					   __pa(addr) + PAGE_SIZE * numpages,
++					   map_type);
++	}
+ 
+ 	return ret;
+ }
+-- 
+2.31.1
+

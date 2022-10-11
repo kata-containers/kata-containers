@@ -1,0 +1,106 @@
+From 036e51c30badaa57f52319b20f93ed856fea31d9 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Sat, 11 Dec 2021 16:34:35 +0800
+Subject: [PATCH 0733/1418] x86/cpu/virtext: move vmptrld_error to virtext.c
+
+It is a preparation for moving vmcs_load out of KVM.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/include/asm/virtext.h | 12 ++++++++++++
+ arch/x86/kernel/cpu/virtext.c  |  6 ++++++
+ arch/x86/kvm/vmx/vmx.c         | 11 -----------
+ arch/x86/kvm/vmx/vmx_ops.h     |  1 -
+ 4 files changed, 18 insertions(+), 12 deletions(-)
+
+diff --git a/arch/x86/include/asm/virtext.h b/arch/x86/include/asm/virtext.h
+index d739abe8a4ba..0db3139bd712 100644
+--- a/arch/x86/include/asm/virtext.h
++++ b/arch/x86/include/asm/virtext.h
+@@ -107,6 +107,13 @@ extern int cpu_vmx_get(void);
+ extern void cpu_vmx_put(void);
+ extern int cpu_vmx_get_basic_info(struct vmx_basic_info *info);
+ extern void virt_spurious_fault(void);
++extern noinline void vmptrld_error(struct vmcs *vmcs, u64 phys_addr);
++
++#define vmx_insn_failed(fmt...)		\
++do {					\
++	WARN_ONCE(1, fmt);		\
++	pr_warn_ratelimited(fmt);	\
++} while (0)
+ #else
+ static inline int cpu_vmx_get(void)
+ {
+@@ -122,6 +129,11 @@ static inline int cpu_vmx_get_basic_info(struct vmx_basic_info *info)
+ static inline void virt_spurious_fault(void)
+ {
+ }
++static inline void vmptrld_err(struct vmcs *vmcs, u64 phys_addr)
++{
++}
++
++#define vmx_insn_failed(fmt...) do {} while (0)
+ #endif
+ 
+ 
+diff --git a/arch/x86/kernel/cpu/virtext.c b/arch/x86/kernel/cpu/virtext.c
+index 2b6486afbdaf..2198ff7efd5e 100644
+--- a/arch/x86/kernel/cpu/virtext.c
++++ b/arch/x86/kernel/cpu/virtext.c
+@@ -55,6 +55,12 @@ static struct notifier_block virt_reboot_notifier = {
+ 	.priority = 0,
+ };
+ 
++noinline void vmptrld_error(struct vmcs *vmcs, u64 phys_addr)
++{
++	vmx_insn_failed("vmptrld failed: %p/%llx\n", vmcs, phys_addr);
++}
++EXPORT_SYMBOL_GPL(vmptrld_error);
++
+ static void free_vmxon_vmcs(int size)
+ {
+ 	int cpu = raw_smp_processor_id();
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index ae6edb585d77..fec33d9d8360 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -383,12 +383,6 @@ module_param_cb(vmentry_l1d_flush, &vmentry_l1d_flush_ops, NULL, 0644);
+ 
+ void vmx_vmexit(void);
+ 
+-#define vmx_insn_failed(fmt...)		\
+-do {					\
+-	WARN_ONCE(1, fmt);		\
+-	pr_warn_ratelimited(fmt);	\
+-} while (0)
+-
+ asmlinkage void vmread_error(unsigned long field, bool fault)
+ {
+ 	if (fault)
+@@ -408,11 +402,6 @@ noinline void vmclear_error(struct vmcs *vmcs, u64 phys_addr)
+ 	vmx_insn_failed("kvm: vmclear failed: %p/%llx\n", vmcs, phys_addr);
+ }
+ 
+-noinline void vmptrld_error(struct vmcs *vmcs, u64 phys_addr)
+-{
+-	vmx_insn_failed("kvm: vmptrld failed: %p/%llx\n", vmcs, phys_addr);
+-}
+-
+ noinline void invvpid_error(unsigned long ext, u16 vpid, gva_t gva)
+ {
+ 	vmx_insn_failed("kvm: invvpid failed: ext=0x%lx vpid=%u gva=0x%lx\n",
+diff --git a/arch/x86/kvm/vmx/vmx_ops.h b/arch/x86/kvm/vmx/vmx_ops.h
+index 112efb4f354b..206dc5982c10 100644
+--- a/arch/x86/kvm/vmx/vmx_ops.h
++++ b/arch/x86/kvm/vmx/vmx_ops.h
+@@ -16,7 +16,6 @@ __attribute__((regparm(0))) void vmread_error_trampoline(unsigned long field,
+ 							 bool fault);
+ void vmwrite_error(unsigned long field, unsigned long value);
+ void vmclear_error(struct vmcs *vmcs, u64 phys_addr);
+-void vmptrld_error(struct vmcs *vmcs, u64 phys_addr);
+ void invvpid_error(unsigned long ext, u16 vpid, gva_t gva);
+ void invept_error(unsigned long ext, u64 eptp, gpa_t gpa);
+ 
+-- 
+2.31.1
+

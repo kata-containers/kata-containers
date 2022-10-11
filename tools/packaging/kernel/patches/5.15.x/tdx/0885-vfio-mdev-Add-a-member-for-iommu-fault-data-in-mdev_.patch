@@ -1,0 +1,72 @@
+From a3248bc6889eaa74d202a0c937fb795650eabab8 Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Tue, 9 Nov 2021 23:50:51 +0800
+Subject: [PATCH 0885/1418] vfio/mdev: Add a member for iommu fault data in
+ mdev_device
+
+This patch adds a member to save iommu fault data in mdev_device structure.
+VDCM (Virtual Device Control Module) saves IOMMU-capable mdev's iommu fault
+data here in the mdev open or creation. vfio iommu modules may retrive the
+fault data after binding IOMMU-capale mdev with a PASID.
+
+Below member is added in struct mdev_device:
+* iommu_fault_data
+  - A place to save the iommu fault data which is passed to fault handler
+    to differentiate mdevs
+
+Below helpers are added to set and get iommu fault data in struct mdev_device.
+* mdev_set/get_iommu_fault_data()
+  - per IOMMU-capable mdev fault data will be kept in the mdev data structure
+    and be retrived later.
+
+As fault injection (includes PRQ) to VM is done per device (PF or sub-device),
+so the fault_handler_data is usually per-mdev (a.k.a. sub-device).
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ include/linux/mdev.h | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/include/linux/mdev.h b/include/linux/mdev.h
+index 12e4d3938ee5..98b70318782b 100644
+--- a/include/linux/mdev.h
++++ b/include/linux/mdev.h
+@@ -20,6 +20,7 @@ struct mdev_device {
+ 	struct mdev_type *type;
+ 	struct device *iommu_device;
+ 	void *iommu_domain;
++	void *iommu_fault_data;
+ 	bool active;
+ };
+ 
+@@ -67,6 +68,27 @@ static inline void *mdev_get_iommu_domain(struct mdev_device *mdev)
+ 	return mdev->iommu_domain;
+ }
+ 
++/*
++ * Called by the parent device driver to set the iommu fault data which
++ * is used for iommu fault reporting on the mdev. The vfio iommu modules
++ * could call mdev_get_iommu_fault_data() to retrieve fault data and add
++ * it to physical device's fault data list.
++ *
++ * @dev: the mediated device that iommu will report fault.
++ * @fault_data: the iommu fault data for @dev.
++ *
++ * Return 0 for success, otherwise negative error value.
++ */
++static inline void mdev_set_iommu_fault_data(struct mdev_device *mdev, void *fault_data)
++{
++	mdev->iommu_fault_data = fault_data;
++}
++
++static inline void *mdev_get_iommu_fault_data(struct mdev_device *mdev)
++{
++	return mdev->iommu_fault_data;
++}
++
+ /**
+  * struct mdev_parent_ops - Structure to be registered for each parent device to
+  * register the device to mdev module.
+-- 
+2.31.1
+

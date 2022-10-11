@@ -1,0 +1,84 @@
+From e75e4e89ed71c9c77c3b6a147611be7966db1965 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Fri, 18 Jun 2021 19:11:08 -0700
+Subject: [PATCH 0201/1418] x86/tdx: Block Xen initialization in TDX
+
+Xen has a lot of complicated code that would be a lot of work to audit
+and harden. Right now nobody is planning to enable TDX on Xen, so it
+seems safer to just disable it. In principle a malicious hypervisor
+could fake being Xen and then use a potential hole in the Xen drivers
+to attack the guest.
+
+If Xen ever gets enabled for TDX this can be removed, but of course in
+this case the drivers and other Xen code would need to be audited and
+hardened first.
+
+Add a CPUID cc_platform_has filter and use that to disallow Xen HVM
+initialization. For Xen PVH it's impossible anyways because that
+requires a special entry point that even a malicious hypervisor
+couldn't call.
+
+Cc: jgross@suse.com
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/cc_platform.c |  1 +
+ arch/x86/xen/enlighten_hvm.c  |  8 ++++++++
+ include/linux/cc_platform.h   | 10 ++++++++++
+ 3 files changed, 19 insertions(+)
+
+diff --git a/arch/x86/kernel/cc_platform.c b/arch/x86/kernel/cc_platform.c
+index 5191c7a05165..30cd0d16b2ce 100644
+--- a/arch/x86/kernel/cc_platform.c
++++ b/arch/x86/kernel/cc_platform.c
+@@ -42,6 +42,7 @@ static bool intel_cc_platform_has(enum cc_attr attr)
+ 	case CC_ATTR_GUEST_SHARED_MAPPING_INIT:
+ 	case CC_ATTR_MEM_ENCRYPT:
+ 	case CC_ATTR_GUEST_SECURE_TIME:
++	case CC_ATTR_GUEST_CPUID_FILTER:
+ 		return is_tdx_guest();
+ 	case CC_ATTR_GUEST_DEVICE_FILTER:
+ 		return tdx_filter_enabled() && is_tdx_guest();
+diff --git a/arch/x86/xen/enlighten_hvm.c b/arch/x86/xen/enlighten_hvm.c
+index e68ea5f4ad1c..169029b71031 100644
+--- a/arch/x86/xen/enlighten_hvm.c
++++ b/arch/x86/xen/enlighten_hvm.c
+@@ -281,6 +281,14 @@ static uint32_t __init xen_platform_hvm(void)
+ 	uint32_t xen_domain = xen_cpuid_base();
+ 	struct x86_hyper_init *h = &x86_hyper_xen_hvm.init;
+ 
++	/*
++	 * Make sure a malicious hypervisor cannot fake being Xen through CPUID.
++	 * It cannot fake being Xen-PV because that would need a special entry
++	 * point.
++	 */
++	if (cc_platform_has(CC_ATTR_GUEST_CPUID_FILTER))
++		return 0;
++
+ 	if (xen_pv_domain())
+ 		return 0;
+ 
+diff --git a/include/linux/cc_platform.h b/include/linux/cc_platform.h
+index 456cb553eb7c..272396148061 100644
+--- a/include/linux/cc_platform.h
++++ b/include/linux/cc_platform.h
+@@ -115,6 +115,16 @@ enum cc_attr {
+ 	 */
+ 	CC_ATTR_GUEST_SECURE_TIME,
+ 
++	/**
++	 * @CC_ATTR_GUEST_CPUID_FILTER: Enable CPUID based XEN/KVM filter
++	 *
++	 * The platform/OS is running as a guest/virtual machine and uses
++	 * CPUID to disable XEN and other KVM features.
++	 *
++	 * Examples include TDX guest.
++	 */
++	CC_ATTR_GUEST_CPUID_FILTER,
++
+ };
+ 
+ #ifdef CONFIG_ARCH_HAS_CC_PLATFORM
+-- 
+2.31.1
+

@@ -1,0 +1,85 @@
+From 77b00f92966ea52dfa5255193e60d9ee1a5b1f8e Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Sun, 12 Dec 2021 10:20:23 +0800
+Subject: [PATCH 0735/1418] x86/cpu/virtext: Introduce raw_vmcs_store
+
+TDX module driver needs to save/restore current-VMCS before/after
+invoking P-SEAMLDR's seamcalls. Introduce a raw_vmcs_store() to
+retrieve the current-VMCS from CPU.
+
+raw_vmcs_store() uses a simplified implementation compared to
+__vmcs_readl(). The latter is complex due to it tries to avoid
+the overhead of checking errors/faults on normal cases. But,
+raw_vmcs_store() is expected to be called rarely.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/include/asm/virtext.h |  7 +++++++
+ arch/x86/kernel/cpu/virtext.c  | 26 ++++++++++++++++++++++++++
+ 2 files changed, 33 insertions(+)
+
+diff --git a/arch/x86/include/asm/virtext.h b/arch/x86/include/asm/virtext.h
+index 8935aa413d82..b99bb0bdb1be 100644
+--- a/arch/x86/include/asm/virtext.h
++++ b/arch/x86/include/asm/virtext.h
+@@ -122,6 +122,8 @@ static inline void raw_vmcs_load(struct vmcs *vmcs)
+ 	vmx_asm1(vmptrld, "m"(phys_addr), virt_spurious_fault,
+ 		 vmptrld_error, vmcs, phys_addr);
+ }
++
++int raw_vmcs_store(u64 *vmcs_pa);
+ #else
+ static inline int cpu_vmx_get(void)
+ {
+@@ -146,6 +148,11 @@ static inline void vmptrld_err(struct vmcs *vmcs, u64 phys_addr)
+ static inline void raw_vmcs_load(struct vmcs *vmcs)
+ {
+ }
++
++static inline int raw_vmcs_store(u64 *vmcs_pa)
++{
++	return -EIO;
++}
+ #endif
+ 
+ 
+diff --git a/arch/x86/kernel/cpu/virtext.c b/arch/x86/kernel/cpu/virtext.c
+index 2198ff7efd5e..0cb6c039f1b4 100644
+--- a/arch/x86/kernel/cpu/virtext.c
++++ b/arch/x86/kernel/cpu/virtext.c
+@@ -61,6 +61,32 @@ noinline void vmptrld_error(struct vmcs *vmcs, u64 phys_addr)
+ }
+ EXPORT_SYMBOL_GPL(vmptrld_error);
+ 
++int raw_vmcs_store(u64 *vmcs_pa)
++{
++	bool ret;
++	bool fault = 0;
++
++	asm volatile("1: vmptrst %1\n\t"
++		     "2:\n\t"
++		     ".pushsection .fixup, \"ax\"\n\t"
++		     "3: mov $1, %2\n\t"
++		     "jmp 2b\n\t"
++		     ".popsection\n\t"
++		     _ASM_EXTABLE(1b, 3b)
++		     CC_SET(na)
++		     : CC_OUT(na) (ret), "=m" (*vmcs_pa), "=r" (fault) : :);
++
++	if (fault) {
++		virt_spurious_fault();
++		return -EIO;
++	} else if (ret) {
++		vmx_insn_failed("vmptrst failed: %p\n", vmcs_pa);
++		return -EIO;
++	}
++
++	return 0;
++}
++
+ static void free_vmxon_vmcs(int size)
+ {
+ 	int cpu = raw_smp_processor_id();
+-- 
+2.31.1
+

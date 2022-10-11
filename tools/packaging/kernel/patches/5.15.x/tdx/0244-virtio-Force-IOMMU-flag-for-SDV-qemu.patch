@@ -1,0 +1,33 @@
+From 54c413d8635c923ee830b6102e501ba56e460654 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Tue, 1 Jun 2021 23:21:14 -0700
+Subject: [PATCH 0244/1418] virtio: Force IOMMU flag for SDV qemu
+
+On a real TDX system the qemu forces the IOMMU flag, but not
+necessarily on the vanilla qemu used on the SDV. Force it in
+the guest.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+---
+ drivers/virtio/virtio_ring.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/virtio/virtio_ring.c b/drivers/virtio/virtio_ring.c
+index cde98a27fc00..2faaefefe29b 100644
+--- a/drivers/virtio/virtio_ring.c
++++ b/drivers/virtio/virtio_ring.c
+@@ -2369,6 +2369,11 @@ void vring_transport_features(struct virtio_device *vdev)
+ 			__virtio_clear_bit(vdev, i);
+ 		}
+ 	}
++#ifdef CONFIG_INTEL_TDX_KVM_SDV
++	/* For now until all qemus are fixed */
++	if (cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT))
++		__virtio_set_bit(vdev, VIRTIO_F_ACCESS_PLATFORM);
++#endif
+ }
+ EXPORT_SYMBOL_GPL(vring_transport_features);
+ 
+-- 
+2.31.1
+

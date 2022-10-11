@@ -1,0 +1,61 @@
+From 5b3d0dd4422337fd63f9a65dcb55b4ca2d9edf0e Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Wed, 1 Sep 2021 16:40:04 +0800
+Subject: [PATCH 0724/1418] x86/bus_lock: Don't assume the init value of
+ DEBUGCTLMSR.BUS_LOCK_DETECT to be zero
+
+It's possible that BIOS/firmware has set DEBUGCTLMSR_BUS_LOCK_DETECT, or
+this kernel has been kexec'd from a kernel that enabled bus lock
+detection.
+
+Disable bus lock detection explicitly if not wanted.
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ arch/x86/kernel/cpu/intel.c | 27 ++++++++++++++-------------
+ 1 file changed, 14 insertions(+), 13 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/intel.c b/arch/x86/kernel/cpu/intel.c
+index d67062920e3e..0b382036132f 100644
+--- a/arch/x86/kernel/cpu/intel.c
++++ b/arch/x86/kernel/cpu/intel.c
+@@ -1138,22 +1138,23 @@ static void bus_lock_init(void)
+ {
+ 	u64 val;
+ 
+-	/*
+-	 * Warn and fatal are handled by #AC for split lock if #AC for
+-	 * split lock is supported.
+-	 */
+-	if (!boot_cpu_has(X86_FEATURE_BUS_LOCK_DETECT) ||
+-	    (boot_cpu_has(X86_FEATURE_SPLIT_LOCK_DETECT) &&
+-	    (sld_state == sld_warn || sld_state == sld_fatal)) ||
+-	    sld_state == sld_off)
++	if (!boot_cpu_has(X86_FEATURE_BUS_LOCK_DETECT))
+ 		return;
+ 
+-	/*
+-	 * Enable #DB for bus lock. All bus locks are handled in #DB except
+-	 * split locks are handled in #AC in the fatal case.
+-	 */
+ 	rdmsrl(MSR_IA32_DEBUGCTLMSR, val);
+-	val |= DEBUGCTLMSR_BUS_LOCK_DETECT;
++
++	if ((boot_cpu_has(X86_FEATURE_SPLIT_LOCK_DETECT) &&
++	    (sld_state == sld_warn || sld_state == sld_fatal)) ||
++	    sld_state == sld_off) {
++		/*
++		 * Warn and fatal are handled by #AC for split lock if #AC for
++		 * split lock is supported.
++		 */
++		val &= ~DEBUGCTLMSR_BUS_LOCK_DETECT;
++	} else {
++		val |= DEBUGCTLMSR_BUS_LOCK_DETECT;
++	}
++
+ 	wrmsrl(MSR_IA32_DEBUGCTLMSR, val);
+ }
+ 
+-- 
+2.31.1
+

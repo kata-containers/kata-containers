@@ -1,0 +1,57 @@
+From 9e09ee4fc9162f0c51e00423e079d9dfbcbff668 Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Fri, 27 Aug 2021 14:48:57 +0300
+Subject: [PATCH 0227/1418] x86/tdx: Implement support of 2M page accept
+
+2M page accept cuts number of TDX module call dramatically and speeds up
+the performance.
+
+It fallbacks to 4k accept if 2M accept fails.
+
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+---
+ arch/x86/kernel/tdx.c | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 0e0c3c40cdcc..29737385f79f 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -316,7 +316,7 @@ static void tdx_get_info(void)
+ 	physical_mask &= ~tdx_shared_mask();
+ }
+ 
+-static u64 tdx_accept_page(phys_addr_t gpa)
++static u64 tdx_accept_page(phys_addr_t gpa, bool page_2mb)
+ {
+ 	/*
+ 	 * Pass the page physical address and size (0-4KB) to the
+@@ -324,6 +324,9 @@ static u64 tdx_accept_page(phys_addr_t gpa)
+ 	 * about ABI can be found in TDX Guest-Host-Communication
+ 	 * Interface (GHCI), sec 2.4.7.
+ 	 */
++	if (page_2mb)
++		gpa |= 1;
++
+ 	return __trace_tdx_module_call(TDX_ACCEPT_PAGE, gpa, 0, 0, 0, NULL);
+ }
+ 
+@@ -360,7 +363,14 @@ int tdx_hcall_gpa_intent(phys_addr_t start, phys_addr_t end,
+ 	 * TDX_ACCEPT_PAGE TDX module call.
+ 	 */
+ 	while (start < end) {
+-		if (tdx_accept_page(start))
++		/* Try 2M page accept first if possible */
++		if (!(start & ~PMD_MASK) && end - start >= PMD_SIZE &&
++		    !tdx_accept_page(start, true)) {
++			start += PMD_SIZE;
++			continue;
++		}
++
++		if (tdx_accept_page(start, false))
+ 			return -EIO;
+ 		start += PAGE_SIZE;
+ 	}
+-- 
+2.31.1
+

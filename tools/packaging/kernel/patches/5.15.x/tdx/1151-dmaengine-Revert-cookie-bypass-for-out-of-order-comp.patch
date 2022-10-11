@@ -1,0 +1,120 @@
+From fad47d6c3e5258be80338b8529334e316e878314 Mon Sep 17 00:00:00 2001
+From: Ben Walker <benjamin.walker@intel.com>
+Date: Thu, 2 Dec 2021 13:47:16 -0700
+Subject: [PATCH 1151/1418] dmaengine: Revert "cookie bypass for out of order
+ completion"
+
+This reverts commit 47ec7f09bc107720905c96bc37771e4ed1ff0aed.
+
+This is no longer necessary now that all assumptions about the order of
+completions have been removed from the dmaengine client API.
+
+Signed-off-by: Ben Walker <benjamin.walker@intel.com>
+---
+ .../driver-api/dmaengine/provider.rst         | 19 -------------------
+ drivers/dma/dmatest.c                         | 11 +----------
+ drivers/dma/idxd/dma.c                        |  1 -
+ include/linux/dmaengine.h                     |  2 --
+ 4 files changed, 1 insertion(+), 32 deletions(-)
+
+diff --git a/Documentation/driver-api/dmaengine/provider.rst b/Documentation/driver-api/dmaengine/provider.rst
+index c31ff54f3746..d410b874e9d0 100644
+--- a/Documentation/driver-api/dmaengine/provider.rst
++++ b/Documentation/driver-api/dmaengine/provider.rst
+@@ -239,22 +239,6 @@ Currently, the types available are:
+     want to transfer a portion of uncompressed data directly to the
+     display to print it
+ 
+-- DMA_COMPLETION_NO_ORDER
+-
+-  - The device does not support in order completion.
+-
+-  - The driver should return DMA_OUT_OF_ORDER for device_tx_status if
+-    the device is setting this capability.
+-
+-  - All cookie tracking and checking API should be treated as invalid if
+-    the device exports this capability.
+-
+-  - At this point, this is incompatible with polling option for dmatest.
+-
+-  - If this cap is set, the user is recommended to provide an unique
+-    identifier for each descriptor sent to the DMA device in order to
+-    properly track the completion.
+-
+ - DMA_REPEAT
+ 
+   - The device supports repeated transfers. A repeated transfer, indicated by
+@@ -438,9 +422,6 @@ supported.
+   - In the case of a cyclic transfer, it should only take into
+     account the current period.
+ 
+-  - Should return DMA_OUT_OF_ORDER if the device does not support in order
+-    completion and is completing the operation out of order.
+-
+   - This function can be called in an interrupt context.
+ 
+ - device_config
+diff --git a/drivers/dma/dmatest.c b/drivers/dma/dmatest.c
+index 0574090a80c8..f8cbeeaf8ed0 100644
+--- a/drivers/dma/dmatest.c
++++ b/drivers/dma/dmatest.c
+@@ -839,10 +839,7 @@ static int dmatest_func(void *data)
+ 			result("test timed out", total_tests, src->off, dst->off,
+ 			       len, 0);
+ 			goto error_unmap_continue;
+-		} else if (status != DMA_COMPLETE &&
+-			   !(dma_has_cap(DMA_COMPLETION_NO_ORDER,
+-					 dev->cap_mask) &&
+-			     status == DMA_OUT_OF_ORDER)) {
++		} else if (status != DMA_COMPLETE) {
+ 			result(status == DMA_ERROR ?
+ 			       "completion error status" :
+ 			       "completion busy status", total_tests, src->off,
+@@ -1020,12 +1017,6 @@ static int dmatest_add_channel(struct dmatest_info *info,
+ 	dtc->chan = chan;
+ 	INIT_LIST_HEAD(&dtc->threads);
+ 
+-	if (dma_has_cap(DMA_COMPLETION_NO_ORDER, dma_dev->cap_mask) &&
+-	    info->params.polled) {
+-		info->params.polled = false;
+-		pr_warn("DMA_COMPLETION_NO_ORDER, polled disabled\n");
+-	}
+-
+ 	if (dma_has_cap(DMA_MEMCPY, dma_dev->cap_mask)) {
+ 		if (dmatest == 0) {
+ 			cnt = dmatest_add_threads(info, dtc, DMA_MEMCPY);
+diff --git a/drivers/dma/idxd/dma.c b/drivers/dma/idxd/dma.c
+index a8afe78ed5f1..f79632884929 100644
+--- a/drivers/dma/idxd/dma.c
++++ b/drivers/dma/idxd/dma.c
+@@ -275,7 +275,6 @@ int idxd_register_dma_device(struct idxd_device *idxd)
+ 	dma->dev = dev;
+ 
+ 	dma_cap_set(DMA_PRIVATE, dma->cap_mask);
+-	dma_cap_set(DMA_COMPLETION_NO_ORDER, dma->cap_mask);
+ 	dma->device_release = idxd_dma_release;
+ 
+ 	if (idxd->hw.opcap.bits[0] & IDXD_OPCAP_MEMMOVE) {
+diff --git a/include/linux/dmaengine.h b/include/linux/dmaengine.h
+index 72fa90c25994..dddca57c7e4b 100644
+--- a/include/linux/dmaengine.h
++++ b/include/linux/dmaengine.h
+@@ -39,7 +39,6 @@ enum dma_status {
+ 	DMA_IN_PROGRESS,
+ 	DMA_PAUSED,
+ 	DMA_ERROR,
+-	DMA_OUT_OF_ORDER,
+ };
+ 
+ /**
+@@ -62,7 +61,6 @@ enum dma_transaction_type {
+ 	DMA_SLAVE,
+ 	DMA_CYCLIC,
+ 	DMA_INTERLEAVE,
+-	DMA_COMPLETION_NO_ORDER,
+ 	DMA_REPEAT,
+ 	DMA_LOAD_EOT,
+ /* last transaction type for creation of the capabilities mask */
+-- 
+2.31.1
+

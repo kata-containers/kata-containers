@@ -1,0 +1,39 @@
+From bf58f1e1a23f5225c5c85058aafa832e165f8f92 Mon Sep 17 00:00:00 2001
+From: Xin Xiong <xiongx18@fudan.edu.cn>
+Date: Sat, 11 Sep 2021 15:05:33 +0800
+Subject: [PATCH 0553/1418] dmaengine: mmp_pdma: fix reference count leaks in
+ mmp_pdma_probe
+
+The issue happens in an error handling path. If
+of_dma_controller_register() fails, the function simply prints error
+messages and returns error code, without decrementing the reference
+count of pdev->device incremented earlier by
+dma_async_device_register(), which may result in refcount leaks.
+
+Fix it by invoking dma_async_device_unregister() before returning the
+error code.
+
+Signed-off-by: Xin Xiong <xiongx18@fudan.edu.cn>
+Signed-off-by: Xiyu Yang <xiyuyang19@fudan.edu.cn>
+Signed-off-by: Xin Tan <tanxin.ctf@gmail.com>
+Link: https://lore.kernel.org/r/20210911070533.3114-1-xiongx18@fudan.edu.cn
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/mmp_pdma.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/dma/mmp_pdma.c b/drivers/dma/mmp_pdma.c
+index 89f1814ff27a..a23563cd118b 100644
+--- a/drivers/dma/mmp_pdma.c
++++ b/drivers/dma/mmp_pdma.c
+@@ -1123,6 +1123,7 @@ static int mmp_pdma_probe(struct platform_device *op)
+ 						 mmp_pdma_dma_xlate, pdev);
+ 		if (ret < 0) {
+ 			dev_err(&op->dev, "of_dma_controller_register failed\n");
++			dma_async_device_unregister(&pdev->device);
+ 			return ret;
+ 		}
+ 	}
+-- 
+2.31.1
+

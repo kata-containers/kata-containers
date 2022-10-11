@@ -1,0 +1,59 @@
+From cac7f48ffe6b93665b06e12cec231798aa951fea Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Wed, 24 Nov 2021 10:06:25 +0800
+Subject: [PATCH 0683/1418] x86/sgx: Add a flag to track VM state during SGX
+ SVN update
+
+VM with SGX enabled should be paused during SGX SVN update. There
+is a time window that VM boots up and registers SGX notifier after
+the SVN update process has notified KVM to pause VMs, but before
+SVN update is complete. In that case, the VM is not paused and might
+touch EPC pages which may cause update failure.
+
+Define a new flag indicating VMs are already paused by SGX SVN
+update, then when KVM registers SGX notifier to SGX, it will know
+the status and pause the VM directly.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/kernel/cpu/sgx/main.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index 1ac63bfa4f81..5e74bf166d1f 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -1258,12 +1258,15 @@ void sgx_zap_abort(void)
+ }
+ 
+ static LIST_HEAD(sgx_kvm_notifier_list);
++static bool sgx_kvm_paused;
+ static DEFINE_MUTEX(sgx_kvm_notifier_lock);
+ 
+ void sgx_kvm_notifier_register(struct sgx_kvm_notifier *notifier)
+ {
+ 	mutex_lock(&sgx_kvm_notifier_lock);
+ 	list_add_tail(&notifier->list, &sgx_kvm_notifier_list);
++	if (sgx_kvm_paused)
++		notifier->ops->halt(notifier);
+ 	mutex_unlock(&sgx_kvm_notifier_lock);
+ }
+ EXPORT_SYMBOL(sgx_kvm_notifier_register);
+@@ -1284,6 +1287,7 @@ void sgx_kvm_notifier_halt(void)
+ 	list_for_each_entry(notifier, &sgx_kvm_notifier_list, list) {
+ 		notifier->ops->halt(notifier);
+ 	}
++	sgx_kvm_paused = true;
+ 	mutex_unlock(&sgx_kvm_notifier_lock);
+ }
+ 
+@@ -1295,5 +1299,6 @@ void sgx_kvm_notifier_resume(void)
+ 	list_for_each_entry(notifier, &sgx_kvm_notifier_list, list) {
+ 		notifier->ops->resume(notifier);
+ 	}
++	sgx_kvm_paused = false;
+ 	mutex_unlock(&sgx_kvm_notifier_lock);
+ }
+-- 
+2.31.1
+

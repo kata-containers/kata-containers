@@ -1,0 +1,33 @@
+From b2a04f725ea69edb8505713a180181f50793c111 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Tue, 28 Sep 2021 19:04:55 -0700
+Subject: [PATCH 0230/1418] random: Add prandom_u32_max_state
+
+Similar to the existing prandom_u32_max, but allow passing in your
+own random state. This allows optional seeding of the random generator
+for better reproducibility for the TDX failure injection.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+---
+ include/linux/prandom.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/include/linux/prandom.h b/include/linux/prandom.h
+index 056d31317e49..d6fd34e1cb2d 100644
+--- a/include/linux/prandom.h
++++ b/include/linux/prandom.h
+@@ -96,6 +96,11 @@ static inline u32 prandom_u32_max(u32 ep_ro)
+ 	return (u32)(((u64) prandom_u32() * ep_ro) >> 32);
+ }
+ 
++static inline u32 prandom_u32_max_state(struct rnd_state *state, u32 ep_ro)
++{
++	return (u32)(((u64) prandom_u32_state(state) * ep_ro) >> 32);
++}
++
+ /*
+  * Handle minimum values for seeds
+  */
+-- 
+2.31.1
+

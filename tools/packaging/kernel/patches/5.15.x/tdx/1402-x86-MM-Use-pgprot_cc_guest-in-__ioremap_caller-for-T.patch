@@ -1,0 +1,60 @@
+From 803e112f9612d9481e90378d097953bddfddeddb Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Mon, 13 Jun 2022 13:24:13 +0800
+Subject: [PATCH 1402/1418] x86: MM: Use pgprot_cc_guest() in
+ __ioremap_caller() for TDX guest only
+
+Guard pgprot_cc_guest() in __ioremap_caller() by
+cc_platform_has(CC_ATTR_GUEST_TDX).
+
+Otherwise the td_info.gpa_width it based on is not initialized
+correctly, which lead to at least UBSAN checking failure:
+
+UBSAN: shift-out-of-bounds in arch/x86/kernel/tdx.c:170:14
+shift exponent 4294967295 is too large for 64-bit type
+'long long unsigned int'
+CPU: 0 PID: 0 Comm: swapper/0 Not tainted 5.15.0-mvp3v8-5-generic
+ show_stack+0x52/0x58
+ dump_stack_lvl+0x4a/0x5f
+ dump_stack+0x10/0x12
+ ubsan_epilogue+0x9/0x45
+ __ubsan_handle_shift_out_of_bounds.cold+0x61/0xe9
+ tdx_shared_mask.cold+0x1b/0x28
+ __ioremap_caller+0x317/0x380
+ ioremap_cache+0x1a/0x20
+ acpi_os_map_iomem+0x1d1/0x200
+ acpi_os_map_memory+0xe/0x10
+ acpi_tb_acquire_table+0x42/0x6d
+ acpi_tb_validate_table+0x4a/0x82
+ acpi_tb_validate_temp_table+0x25/0x27
+ acpi_tb_verify_temp_table+0x42/0x1ce
+ acpi_reallocate_root_table+0x144/0x172
+ acpi_early_init+0x4f/0xdf
+ start_kernel+0x411/0x4d3
+ x86_64_start_reservations+0x24/0x26
+ x86_64_start_kernel+0xe9/0xf0
+ secondary_startup_64_no_verify+0xd1/0xdb
+
+Fixes: 16981b887d28 ("x86/tdx: Add cmdline option to force use of ioremap_shared")
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/mm/ioremap.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/mm/ioremap.c b/arch/x86/mm/ioremap.c
+index b22acd03f7db..96aae17b4aad 100644
+--- a/arch/x86/mm/ioremap.c
++++ b/arch/x86/mm/ioremap.c
+@@ -261,7 +261,8 @@ __ioremap_caller(resource_size_t phys_addr, unsigned long size,
+ 	prot = PAGE_KERNEL_IO;
+ 	if ((io_desc.flags & IORES_MAP_ENCRYPTED) || encrypted)
+ 		prot = pgprot_encrypted(prot);
+-	else if (shared || ioremap_force_shared || !cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
++	else if (cc_platform_has(CC_ATTR_GUEST_TDX) &&
++		 (shared || ioremap_force_shared || !cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER)))
+ 		prot = pgprot_cc_guest(prot);
+ 
+ 	switch (pcm) {
+-- 
+2.31.1
+

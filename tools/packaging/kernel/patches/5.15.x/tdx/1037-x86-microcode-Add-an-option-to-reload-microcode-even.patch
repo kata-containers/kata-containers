@@ -1,0 +1,173 @@
+From a1df84d53a216c14c3e61743f05589af9baf06df Mon Sep 17 00:00:00 2001
+From: Ashok Raj <ashok.raj@intel.com>
+Date: Thu, 19 Aug 2021 14:49:47 -0700
+Subject: [PATCH 1037/1418] x86/microcode: Add an option to reload microcode
+ even if revision is
+
+This is POC to support rollback. This is a simple version, admin uses
+echo 2 instead of echo 1 to reload. We don't do the version checks.
+
+#echo 1 > /sys/devices/system/cpu/microcode/reload
+
+The following usage, writing 2 to reload file is helpful to reload
+the microcode again even if the revision is less than what is loaded.
+
+#echo 2 > /sys/devices/system/cpu/microcode/reload
+
+Signed-off-by: Ashok Raj <ashok.raj@intel.com>
+---
+ arch/x86/kernel/cpu/microcode/core.c  | 40 ++++++++++++++++++++++++++-
+ arch/x86/kernel/cpu/microcode/intel.c | 14 ++++++----
+ 2 files changed, 47 insertions(+), 7 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/microcode/core.c b/arch/x86/kernel/cpu/microcode/core.c
+index e80261fc014a..68813bc7f8b6 100644
+--- a/arch/x86/kernel/cpu/microcode/core.c
++++ b/arch/x86/kernel/cpu/microcode/core.c
+@@ -46,6 +46,8 @@
+ 
+ static struct microcode_ops	*microcode_ops;
+ static bool dis_ucode_ldr = true;
++bool ucode_rollback = false;
++int enable_rollback = 0;
+ 
+ bool initrd_gone;
+ 
+@@ -82,6 +84,26 @@ static u32 final_levels[] = {
+ 	0, /* T-101 terminator */
+ };
+ 
++static int __init ucode_setup(char *str)
++{
++	if (!str)
++		return -EINVAL;
++
++	while (*str) {
++		if (!strncmp(str, "rollback", 8)) {
++			enable_rollback = 1;
++			pr_info("Microcode Rollback Enabled\n");
++		}
++		str += strcspn(str, ",");
++		while (*str == ',')
++			str++;
++	}
++	return 0;
++}
++
++__setup("ucode=", ucode_setup);
++
++
+ /*
+  * Check the current patch level on this CPU.
+  *
+@@ -602,6 +624,7 @@ static ssize_t reload_store(struct device *dev,
+ 			    struct device_attribute *attr,
+ 			    const char *buf, size_t size)
+ {
++	struct cpuinfo_x86 *c = &boot_cpu_data;
+ 	enum ucode_state tmp_ret = UCODE_OK;
+ 	int bsp = boot_cpu_data.cpu_index;
+ 	unsigned long val;
+@@ -611,7 +634,7 @@ static ssize_t reload_store(struct device *dev,
+ 	if (ret)
+ 		return ret;
+ 
+-	if (val != 1)
++	if (!val || val > 2)
+ 		return size;
+ 
+ 	cpus_read_lock();
+@@ -619,6 +642,20 @@ static ssize_t reload_store(struct device *dev,
+ 	ret = check_online_cpus();
+ 	if (ret)
+ 		goto put;
++	/*
++	 * Check if the vendor is Intel to permit reloading
++	 * microcode even if the revision is unchanged.
++	 * This is typically used during development of microcode
++	 * and changing rev is a pain.
++	 */
++	if ((val == 2) && ((c->x86_vendor != X86_VENDOR_INTEL) ||
++	     !enable_rollback))
++		return size;
++	else if (val == 2) {
++		mutex_lock(&microcode_mutex);
++		ucode_rollback = true;
++		mutex_unlock(&microcode_mutex);
++	}
+ 
+ 	tmp_ret = microcode_ops->request_microcode_fw(bsp, &microcode_pdev->dev, true);
+ 	if (tmp_ret != UCODE_NEW)
+@@ -629,6 +666,7 @@ static ssize_t reload_store(struct device *dev,
+ 	mutex_unlock(&microcode_mutex);
+ 
+ put:
++	ucode_rollback = false;
+ 	cpus_read_unlock();
+ 
+ 	if (ret == 0)
+diff --git a/arch/x86/kernel/cpu/microcode/intel.c b/arch/x86/kernel/cpu/microcode/intel.c
+index 59133a58205c..b2982c1b0b84 100644
+--- a/arch/x86/kernel/cpu/microcode/intel.c
++++ b/arch/x86/kernel/cpu/microcode/intel.c
+@@ -46,6 +46,7 @@ static struct microcode_intel *intel_ucode_patch;
+ 
+ /* last level cache size per core */
+ static int llc_size_per_core;
++extern bool ucode_rollback;
+ 
+ bool cpu_signatures_match(unsigned int s1, unsigned int p1,
+ 			  unsigned int s2, unsigned int p2)
+@@ -97,7 +98,7 @@ static int has_newer_microcode(void *mc, unsigned int csig, int cpf, int new_rev
+ {
+ 	struct microcode_header_intel *mc_hdr = mc;
+ 
+-	if (mc_hdr->rev <= new_rev)
++	if (!ucode_rollback && mc_hdr->rev <= new_rev)
+ 		return 0;
+ 
+ 	return find_matching_signature(mc, csig, cpf);
+@@ -137,7 +138,7 @@ static void save_microcode_patch(struct ucode_cpu_info *uci, void *data, unsigne
+ 		if (find_matching_signature(data, sig, pf)) {
+ 			prev_found = true;
+ 
+-			if (mc_hdr->rev <= mc_saved_hdr->rev)
++			if (!ucode_rollback && mc_hdr->rev <= mc_saved_hdr->rev)
+ 				continue;
+ 
+ 			p = memdup_patch(data, size);
+@@ -691,7 +692,7 @@ static struct microcode_intel *find_patch(struct ucode_cpu_info *uci)
+ 
+ 		phdr = (struct microcode_header_intel *)iter->data;
+ 
+-		if (phdr->rev <= uci->cpu_sig.rev)
++		if (!ucode_rollback && phdr->rev <= uci->cpu_sig.rev)
+ 			continue;
+ 
+ 		if (!find_matching_signature(phdr,
+@@ -776,10 +777,11 @@ static enum ucode_state apply_microcode_intel(int cpu)
+ 	 * already.
+ 	 */
+ 	rev = intel_get_microcode_revision();
+-	if (rev >= mc->hdr.rev) {
++	if (!ucode_rollback && rev >= mc->hdr.rev) {
+ 		ret = UCODE_OK;
+ 		goto out;
+-	}
++	} else if (ucode_rollback)
++		ret = UCODE_OK;
+ 
+ 	/*
+ 	 * Writeback and invalidate caches before updating microcode to avoid
+@@ -798,7 +800,7 @@ static enum ucode_state apply_microcode_intel(int cpu)
+ 		return UCODE_ERROR;
+ 	}
+ 
+-	if (bsp && rev != prev_rev) {
++	if (bsp && ((rev != prev_rev) || ucode_rollback)) {
+ 		pr_info("updated to revision 0x%x, date = %04x-%02x-%02x\n",
+ 			rev,
+ 			mc->hdr.date & 0xffff,
+-- 
+2.31.1
+

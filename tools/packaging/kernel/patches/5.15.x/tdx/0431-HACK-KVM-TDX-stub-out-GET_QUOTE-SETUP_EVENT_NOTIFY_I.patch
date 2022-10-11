@@ -1,0 +1,62 @@
+From 399d0b316d909074aea9e5f640d7efee65781ed0 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Fri, 20 Nov 2020 16:10:11 -0800
+Subject: [PATCH 0431/1418] *** HACK *** KVM: TDX: stub out GET_QUOTE,
+ SETUP_EVENT_NOTIFY_INTERRUPT
+
+Revert me when user space is ready.
+
+Until user space supports, stub out get-quote and
+setup-event-notify-interrupt so that tdx guest can continue to
+execute instead of waiting for user space to process.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 933622ae5904..0d45fd2261bd 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -1018,6 +1018,10 @@ static int tdx_map_gpa(struct kvm_vcpu *vcpu)
+ 
+ static int tdx_get_quote(struct kvm_vcpu *vcpu)
+ {
++#if 1
++	tdvmcall_set_return_code(vcpu, TDG_VP_VMCALL_SUCCESS);
++	return 1;
++#else
+ 	gpa_t gpa = tdvmcall_p1_read(vcpu);
+ 
+ 	if (!IS_ALIGNED(gpa, PAGE_SIZE)) {
+@@ -1044,6 +1048,7 @@ static int tdx_get_quote(struct kvm_vcpu *vcpu)
+ 
+ 	/* notify userspace to handle the request */
+ 	return 0;
++#endif
+ }
+ 
+ static int tdx_report_fatal_error(struct kvm_vcpu *vcpu)
+@@ -1056,6 +1061,10 @@ static int tdx_report_fatal_error(struct kvm_vcpu *vcpu)
+ 
+ static int tdx_setup_event_notify_interrupt(struct kvm_vcpu *vcpu)
+ {
++#if 1
++	tdvmcall_set_return_code(vcpu, TDG_VP_VMCALL_SUCCESS);
++	return 1;
++#else
+ 	u64 vector = tdvmcall_p1_read(vcpu);
+ 
+ 	if (!(vector >= 32 && vector <= 255)) {
+@@ -1082,6 +1091,7 @@ static int tdx_setup_event_notify_interrupt(struct kvm_vcpu *vcpu)
+ 
+ 	/* notify userspace to handle the request */
+ 	return 0;
++#endif
+ }
+ 
+ static int handle_tdvmcall(struct kvm_vcpu *vcpu)
+-- 
+2.31.1
+

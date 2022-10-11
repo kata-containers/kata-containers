@@ -1,0 +1,68 @@
+From b9db8f9c17cd29d182124dde1d235dc0da539da2 Mon Sep 17 00:00:00 2001
+From: Lu Baolu <baolu.lu@linux.intel.com>
+Date: Mon, 8 Nov 2021 19:25:19 +0800
+Subject: [PATCH 0874/1418] vfio/type1: Save domain when attach domain to mdev
+
+This saves the iommu domain in mdev on attaching a domain
+to it and clear it on detaching.
+
+Cc: Ashok Raj <ashok.raj@intel.com>
+Cc: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Cc: Kevin Tian <kevin.tian@intel.com>
+Cc: Liu Yi L <yi.l.liu@intel.com>
+
+Signed-off-by: Lu Baolu <baolu.lu@linux.intel.com>
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ drivers/vfio/vfio_iommu_type1.c | 20 ++++++++++++++++----
+ 1 file changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/vfio/vfio_iommu_type1.c b/drivers/vfio/vfio_iommu_type1.c
+index db8b2662ee18..093b5973b959 100644
+--- a/drivers/vfio/vfio_iommu_type1.c
++++ b/drivers/vfio/vfio_iommu_type1.c
+@@ -2038,18 +2038,28 @@ static bool vfio_iommu_has_sw_msi(struct list_head *group_resv_regions,
+ static int vfio_mdev_attach_domain(struct device *dev, void *data)
+ {
+ 	struct mdev_device *mdev = to_mdev_device(dev);
+-	struct iommu_domain *domain = data;
++	struct iommu_domain *domain;
+ 	struct device *iommu_device;
++	int ret = -ENODEV;
++
++	/* Only single domain is allowed to attach to an mdev. */
++	domain = mdev_get_iommu_domain(mdev);
++	if (domain)
++		return -EINVAL;
++	domain = data;
+ 
+ 	iommu_device = mdev_get_iommu_device(mdev);
+ 	if (iommu_device) {
+ 		if (iommu_dev_feature_enabled(iommu_device, IOMMU_DEV_FEAT_AUX))
+-			return iommu_aux_attach_device(domain, iommu_device);
++			ret = iommu_aux_attach_device(domain, iommu_device);
+ 		else
+-			return iommu_attach_device(domain, iommu_device);
++			ret = iommu_attach_device(domain, iommu_device);
+ 	}
+ 
+-	return -EINVAL;
++	if (!ret)
++		mdev_set_iommu_domain(mdev, domain);
++
++	return ret;
+ }
+ 
+ static int vfio_mdev_detach_domain(struct device *dev, void *data)
+@@ -2066,6 +2076,8 @@ static int vfio_mdev_detach_domain(struct device *dev, void *data)
+ 			iommu_detach_device(domain, iommu_device);
+ 	}
+ 
++	mdev_set_iommu_domain(mdev, NULL);
++
+ 	return 0;
+ }
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,65 @@
+From d2a9b7b505dbaf1aae632386019faaefe34f304c Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Mon, 15 Nov 2021 12:38:24 -0800
+Subject: [PATCH 1181/1418] mm/pkeys: Introduce pks_set_noaccess()
+
+After a valid access consumers will want to change PKS protections back
+to No Access for their pkey.
+
+Define pks_set_noaccess() to update the specified pkey.
+
+Add documentation.
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ Documentation/core-api/protection-keys.rst |  2 +-
+ include/linux/pks.h                        | 13 +++++++++++++
+ 2 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/core-api/protection-keys.rst b/Documentation/core-api/protection-keys.rst
+index e6564f5336b7..2ec35349ecfd 100644
+--- a/Documentation/core-api/protection-keys.rst
++++ b/Documentation/core-api/protection-keys.rst
+@@ -147,7 +147,7 @@ Changing permissions of individual keys
+ ---------------------------------------
+ 
+ .. kernel-doc:: include/linux/pks.h
+-        :identifiers: pks_set_readwrite
++        :identifiers: pks_set_readwrite pks_set_noaccess
+ 
+ MSR details
+ ~~~~~~~~~~~
+diff --git a/include/linux/pks.h b/include/linux/pks.h
+index 8b705a937b19..9f18f8b4cbb1 100644
+--- a/include/linux/pks.h
++++ b/include/linux/pks.h
+@@ -10,6 +10,18 @@
+ 
+ void pks_update_protection(u8 pkey, u8 protection);
+ 
++/**
++ * pks_set_noaccess() - Disable all access to the domain
++ * @pkey: the pkey for which the access should change.
++ *
++ * Disable all access to the domain specified by pkey.  This is not a global
++ * update and only affects the current running thread.
++ */
++static inline void pks_set_noaccess(u8 pkey)
++{
++	pks_update_protection(pkey, PKEY_DISABLE_ACCESS);
++}
++
+ /**
+  * pks_set_readwrite() - Make the domain Read/Write
+  * @pkey: the pkey for which the access should change.
+@@ -24,6 +36,7 @@ static inline void pks_set_readwrite(u8 pkey)
+ 
+ #else /* !CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
+ 
++static inline void pks_set_noaccess(u8 pkey) {}
+ static inline void pks_set_readwrite(u8 pkey) {}
+ 
+ #endif /* CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
+-- 
+2.31.1
+

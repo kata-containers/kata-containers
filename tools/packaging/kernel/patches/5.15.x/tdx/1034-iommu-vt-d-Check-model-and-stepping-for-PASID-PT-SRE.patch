@@ -1,0 +1,54 @@
+From b19881a056dcf640b02833820d654c6545f96b03 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Fri, 4 Feb 2022 07:27:46 -0800
+Subject: [PATCH 1034/1418] iommu/vt-d: Check model and stepping for PASID PT
+ SRE support
+
+Before SPR E stepping, PASID pass-through with supervisor request is not
+supported. Warn if used on the wrong CPUs.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/intel/iommu.c | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index ce26a49601dc..f4612fc619ca 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -5914,6 +5914,19 @@ static int intel_iommu_set_hwdbm(struct iommu_domain *domain, bool enable,
+ 	return ret;
+ }
+ 
++/* Temporary check */
++static inline bool check_pasid_pt_sre(void)                                   
++{                                                                              
++	struct cpuinfo_x86 *c = &cpu_data(0);                                   
++                                                                               
++	if (c->x86_model == 0x8f && c->x86_stepping >= 4) {                     
++               pr_debug("SPR E0+, PASID PT SRE enabled");                
++               return true;                                                   
++	}
++	pr_alert("No PASID PT SRE, in-kernel PASID DMA not supported!!!");
++	return false;
++}
++
+ static int intel_enable_pasid_dma(struct device *dev, u32 pasid)
+ {
+ 	struct intel_iommu *iommu = device_to_iommu(dev, NULL, NULL);
+@@ -5921,6 +5934,12 @@ static int intel_enable_pasid_dma(struct device *dev, u32 pasid)
+ 	unsigned long flags;
+ 	int ret = 0;
+ 
++	/*
++	 * We don't bail here in that some drivers tie user SVM with
++	 * kernel PASID support.
++	 */
++	check_pasid_pt_sre();
++
+ 	info = get_domain_info(dev);
+ 	if (!info)
+ 		return -ENODEV;
+-- 
+2.31.1
+

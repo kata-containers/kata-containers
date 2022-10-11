@@ -1,0 +1,37 @@
+From cd432685bce710c7f8d28550a94017a99a0a71e4 Mon Sep 17 00:00:00 2001
+From: Zhang Rui <rui.zhang@intel.com>
+Date: Tue, 26 Oct 2021 16:32:42 +0800
+Subject: [PATCH 0990/1418] cpufreq: intel_pstate: Fix cpu->pstate.turbo_freq
+ initialization
+
+Fix a problem in active mode that cpu->pstate.turbo_freq is initialized
+only if HWP-to-frequency scaling factor is refined.
+
+In passive mode, this problem is not exposed, because
+cpu->pstate.turbo_freq is set again, later in
+intel_cpufreq_cpu_init()->intel_pstate_get_hwp_cap().
+
+Fixes: eb3693f0521e ("cpufreq: intel_pstate: hybrid: CPU-specific scaling factor")
+Signed-off-by: Zhang Rui <rui.zhang@intel.com>
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ drivers/cpufreq/intel_pstate.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/cpufreq/intel_pstate.c b/drivers/cpufreq/intel_pstate.c
+index facc56dd58dd..349ddbaef796 100644
+--- a/drivers/cpufreq/intel_pstate.c
++++ b/drivers/cpufreq/intel_pstate.c
+@@ -540,7 +540,8 @@ static void intel_pstate_hybrid_hwp_adjust(struct cpudata *cpu)
+ 	 * scaling factor is too high, so recompute it to make the HWP_CAP
+ 	 * highest performance correspond to the maximum turbo frequency.
+ 	 */
+-	if (turbo_freq < cpu->pstate.turbo_pstate * scaling) {
++	cpu->pstate.turbo_freq = cpu->pstate.turbo_pstate * scaling;
++	if (turbo_freq < cpu->pstate.turbo_freq) {
+ 		cpu->pstate.turbo_freq = turbo_freq;
+ 		scaling = DIV_ROUND_UP(turbo_freq, cpu->pstate.turbo_pstate);
+ 		cpu->pstate.scaling = scaling;
+-- 
+2.31.1
+

@@ -1,0 +1,38 @@
+From 9c1f683e0f62e8b4669b041a0fae5cf042f2f70d Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Tue, 21 Dec 2021 15:10:39 +0800
+Subject: [PATCH 0848/1418] x86/cpu/tdx: Correct the error handling when not
+ all CPUs are online
+
+Checking CPU maps is done before acquiring tdx_mutex and enabling VMX.
+Don't release tdx_mutex or disable VMX on error.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index b0ca8d7b3b9b..d351ace13772 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -907,7 +907,7 @@ static int __init tdx_arch_init(void)
+ 	 */
+ 	if (!cpumask_equal(cpu_present_mask, cpu_online_mask)) {
+ 		ret = -EINVAL;
+-		goto out;
++		goto out_unlock;
+ 	}
+ 
+ 	mutex_lock(&tdx_mutex);
+@@ -954,6 +954,7 @@ static int __init tdx_arch_init(void)
+ 	if (ret)
+ 		set_tdx_module_state(TDX_MODULE_ERROR);
+ 	mutex_unlock(&tdx_mutex);
++out_unlock:
+ 	cpus_read_unlock();
+ 
+ 	if (ret && cpuhp_state != CPUHP_INVALID) {
+-- 
+2.31.1
+

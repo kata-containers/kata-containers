@@ -1,0 +1,35 @@
+From 39ce921a36fdf28522ea360b46564d96f9f05962 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Tue, 11 Jan 2022 14:00:04 +0800
+Subject: [PATCH 0861/1418] efi/x86-stub: force boot_params->unaccepted_memory
+ to 0 when no unaccepted memory
+
+boot_params is passed from firmware, but the unaccepted_memory field
+is filled by kernel, no one can guarantee that firmware will set this
+field to 0 for no unaccepted memory case. Set it to 0 to avoid kernel
+crash due to accept memory in no such memory case.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ drivers/firmware/efi/libstub/x86-stub.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/firmware/efi/libstub/x86-stub.c b/drivers/firmware/efi/libstub/x86-stub.c
+index 346b12d6f1b2..66bab6e49d0d 100644
+--- a/drivers/firmware/efi/libstub/x86-stub.c
++++ b/drivers/firmware/efi/libstub/x86-stub.c
+@@ -644,8 +644,11 @@ static efi_status_t allocate_e820(struct boot_params *params,
+ 			goto out;
+ 		memset(unaccepted_memory, 0, size);
+ 		params->unaccepted_memory = (u64)unaccepted_memory;
++	} else {
++		params->unaccepted_memory = 0;
+ 	}
+ 
++
+ out:
+ 	efi_bs_call(free_pool, *map->map);
+ 	return status;
+-- 
+2.31.1
+

@@ -1,0 +1,40 @@
+From 0895ba9af1275c726a7dacb2aaccd76c20a0c9c6 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Fri, 12 Jun 2020 10:27:31 -0700
+Subject: [PATCH 0400/1418] KVM: VMX: Move .get_interrupt_shadow()
+ implementation to common VMX code
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/common.h | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/common.h b/arch/x86/kvm/vmx/common.h
+index e45d2d222168..684cd3add46b 100644
+--- a/arch/x86/kvm/vmx/common.h
++++ b/arch/x86/kvm/vmx/common.h
+@@ -120,6 +120,20 @@ static inline int __vmx_handle_ept_violation(struct kvm_vcpu *vcpu, gpa_t gpa,
+ 	return kvm_mmu_page_fault(vcpu, gpa, error_code, NULL, 0);
+ }
+ 
++static inline u32 __vmx_get_interrupt_shadow(struct kvm_vcpu *vcpu)
++{
++	u32 interruptibility;
++	int ret = 0;
++
++	interruptibility = vmread32(vcpu, GUEST_INTERRUPTIBILITY_INFO);
++	if (interruptibility & GUEST_INTR_STATE_STI)
++		ret |= KVM_X86_SHADOW_INT_STI;
++	if (interruptibility & GUEST_INTR_STATE_MOV_SS)
++		ret |= KVM_X86_SHADOW_INT_MOV_SS;
++
++	return ret;
++}
++
+ static inline u32 vmx_encode_ar_bytes(struct kvm_segment *var)
+ {
+ 	u32 ar;
+-- 
+2.31.1
+

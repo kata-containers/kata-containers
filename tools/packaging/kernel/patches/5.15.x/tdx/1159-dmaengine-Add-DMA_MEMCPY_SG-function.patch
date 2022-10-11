@@ -1,0 +1,87 @@
+From b2ba8f364445f546e28f8da06e36d5550d501eb9 Mon Sep 17 00:00:00 2001
+From: Jiangbo Wu <jiangbo.wu@intel.com>
+Date: Thu, 6 Jan 2022 12:19:47 -0500
+Subject: [PATCH 1159/1418] dmaengine: Add DMA_MEMCPY_SG function
+
+Bring back memcopy_sg for mem2mem. This was removed in commit
+c678fa66341c
+
+Signed-off-by: Jiangbo Wu <jiangbo.wu@intel.com>
+---
+ drivers/dma/dmaengine.c   |  7 +++++++
+ include/linux/dmaengine.h | 20 ++++++++++++++++++++
+ 2 files changed, 27 insertions(+)
+
+diff --git a/drivers/dma/dmaengine.c b/drivers/dma/dmaengine.c
+index e312fc243ebd..590f238a0671 100644
+--- a/drivers/dma/dmaengine.c
++++ b/drivers/dma/dmaengine.c
+@@ -1159,6 +1159,13 @@ int dma_async_device_register(struct dma_device *device)
+ 		return -EIO;
+ 	}
+ 
++	if (dma_has_cap(DMA_MEMCPY_SG, device->cap_mask) && !device->device_prep_dma_memcpy_sg) {
++		dev_err(device->dev,
++			"Device claims capability %s, but op is not defined\n",
++			"DMA_MEMCPY_SG");
++		return -EIO;
++	}
++
+ 	if (dma_has_cap(DMA_XOR, device->cap_mask) && !device->device_prep_dma_xor) {
+ 		dev_err(device->dev,
+ 			"Device claims capability %s, but op is not defined\n",
+diff --git a/include/linux/dmaengine.h b/include/linux/dmaengine.h
+index dddca57c7e4b..bb5baf3197d2 100644
+--- a/include/linux/dmaengine.h
++++ b/include/linux/dmaengine.h
+@@ -49,6 +49,7 @@ enum dma_status {
+  */
+ enum dma_transaction_type {
+ 	DMA_MEMCPY,
++	DMA_MEMCPY_SG,
+ 	DMA_XOR,
+ 	DMA_PQ,
+ 	DMA_XOR_VAL,
+@@ -807,6 +808,7 @@ struct dma_filter {
+  * @device_router_config: optional callback for DMA router configuration
+  * @device_free_chan_resources: release DMA channel's resources
+  * @device_prep_dma_memcpy: prepares a memcpy operation
++ * @device_prep_dma_memcpy_sg: prepares a memcpy_sg operation
+  * @device_prep_dma_xor: prepares a xor operation
+  * @device_prep_dma_xor_val: prepares a xor validation operation
+  * @device_prep_dma_pq: prepares a pq operation
+@@ -885,6 +887,11 @@ struct dma_device {
+ 	struct dma_async_tx_descriptor *(*device_prep_dma_memcpy)(
+ 		struct dma_chan *chan, dma_addr_t dst, dma_addr_t src,
+ 		size_t len, unsigned long flags);
++	struct dma_async_tx_descriptor *(*device_prep_dma_memcpy_sg)(
++		struct dma_chan *chan,
++		struct scatterlist *dst_sg, unsigned int dst_nents,
++		struct scatterlist *src_sg, unsigned int src_nents,
++		unsigned long flags);
+ 	struct dma_async_tx_descriptor *(*device_prep_dma_xor)(
+ 		struct dma_chan *chan, dma_addr_t dst, dma_addr_t *src,
+ 		unsigned int src_cnt, size_t len, unsigned long flags);
+@@ -1045,6 +1052,19 @@ static inline struct dma_async_tx_descriptor *dmaengine_prep_dma_memcpy(
+ 						    len, flags);
+ }
+ 
++static inline struct dma_async_tx_descriptor *dmaengine_prep_dma_memcpy_sg(
++		struct dma_chan *chan,
++		struct scatterlist *dst_sg, unsigned int dst_nents,
++		struct scatterlist *src_sg, unsigned int src_nents,
++		unsigned long flags)
++{
++	if (!chan || !chan->device || !chan->device->device_prep_dma_memcpy_sg)
++		return NULL;
++
++	return chan->device->device_prep_dma_memcpy_sg(chan, dst_sg, dst_nents,
++						       src_sg, src_nents, flags);
++}
++
+ static inline bool dmaengine_is_metadata_mode_supported(struct dma_chan *chan,
+ 		enum dma_desc_metadata_mode mode)
+ {
+-- 
+2.31.1
+

@@ -1,0 +1,93 @@
+From 435062bcb213d9f76c4d4c696179b97c5c6c39c9 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 21 Aug 2020 02:25:01 +0200
+Subject: [PATCH 0579/1418] irqdomain/msi: Provide msi_alloc/free_store()
+ callbacks
+
+For devices which don't have a standard storage for MSI messages like the
+upcoming IMS (Interrupt Message Store) it's required to allocate storage
+space before allocating interrupts and after freeing them.
+
+This could be achieved with the existing callbacks, but that would be
+awkward because they operate on msi_alloc_info_t which is not uniform
+across architectures. Also these callbacks are invoked per interrupt but
+the allocation might have bulk requirements depending on the device.
+
+As such devices can operate on different architectures it is simpler to
+have separate callbacks which operate on struct device. The resulting
+storage information has to be stored in struct msi_desc so the underlying
+irq chip implementation can retrieve it for the relevant operations.
+
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Megha Dey <megha.dey@intel.com>
+---
+ include/linux/msi.h |  8 ++++++++
+ kernel/irq/msi.c    | 11 +++++++++++
+ 2 files changed, 19 insertions(+)
+
+diff --git a/include/linux/msi.h b/include/linux/msi.h
+index b14ccd943216..6cc50e4d7f1c 100644
+--- a/include/linux/msi.h
++++ b/include/linux/msi.h
+@@ -314,6 +314,10 @@ struct msi_domain_info;
+  *			function.
+  * @domain_free_irqs:	Optional function to override the default free
+  *			function.
++ * @msi_alloc_store:	Optional callback to allocate storage in a device
++ *			specific non-standard MSI store
++ * @msi_alloc_free:	Optional callback to free storage in a device
++ *			specific non-standard MSI store
+  *
+  * @get_hwirq, @msi_init and @msi_free are callbacks used by
+  * msi_create_irq_domain() and related interfaces
+@@ -363,6 +367,10 @@ struct msi_domain_ops {
+ 					     struct device *dev, int nvec);
+ 	void		(*domain_free_irqs)(struct irq_domain *domain,
+ 					    struct device *dev);
++	int		(*msi_alloc_store)(struct irq_domain *domain,
++					   struct device *dev, int nvec);
++	void		(*msi_free_store)(struct irq_domain *domain,
++					  struct device *dev);
+ };
+ 
+ /**
+diff --git a/kernel/irq/msi.c b/kernel/irq/msi.c
+index 7f86887002cb..3414083b1d93 100644
+--- a/kernel/irq/msi.c
++++ b/kernel/irq/msi.c
+@@ -574,6 +574,12 @@ int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
+ 	if (ret)
+ 		return ret;
+ 
++	if (ops->msi_alloc_store) {
++		ret = ops->msi_alloc_store(domain, dev, nvec);
++		if (ret)
++			return ret;
++	}
++
+ 	for_each_msi_entry(desc, dev) {
+ 		ops->set_desc(&arg, desc);
+ 
+@@ -665,6 +671,8 @@ int msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
+ void __msi_domain_free_irqs(struct irq_domain *domain, struct device *dev)
+ {
+ 	struct irq_data *irq_data;
++	struct msi_domain_info *info = domain->host_data;
++	struct msi_domain_ops *ops = info->ops;
+ 	struct msi_desc *desc;
+ 	int i;
+ 
+@@ -685,6 +693,9 @@ void __msi_domain_free_irqs(struct irq_domain *domain, struct device *dev)
+ 			desc->irq = 0;
+ 		}
+ 	}
++
++	if (ops->msi_free_store)
++		ops->msi_free_store(domain, dev);
+ }
+ 
+ /**
+-- 
+2.31.1
+

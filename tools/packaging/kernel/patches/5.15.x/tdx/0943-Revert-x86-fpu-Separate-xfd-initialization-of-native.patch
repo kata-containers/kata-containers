@@ -1,0 +1,44 @@
+From 95d3c4c749e8ba33af2c73b746ab0a5310fcffdd Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 18:05:36 -0800
+Subject: [PATCH 0943/1418] Revert "x86/fpu: Separate xfd initialization of
+ native and KVM"
+
+This reverts commit 3c2ffb34d19b36b82e450b78ceaaa36f4890a592.
+---
+ arch/x86/kernel/fpu/core.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index cb2eb2089300..f60c9dea3dba 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -230,7 +230,6 @@ bool fpu_alloc_guest_fpstate(struct fpu_guest *gfpu)
+ 	if (!fpstate)
+ 		return false;
+ 
+-	/* Initialize guest fpstate xfd as zero and let guest initialize XFD */
+ 	__fpstate_reset(fpstate);
+ 	fpstate_init_user(fpstate);
+ 	fpstate->is_valloc	= true;
+@@ -481,6 +480,7 @@ static void __fpstate_reset(struct fpstate *fpstate)
+ 	fpstate->user_size	= fpu_user_cfg.default_size;
+ 	fpstate->xfeatures	= fpu_kernel_cfg.default_features;
+ 	fpstate->user_xfeatures	= fpu_user_cfg.default_features;
++	fpstate->xfd		= init_fpstate.xfd;
+ }
+ 
+ void fpstate_reset(struct fpu *fpu)
+@@ -489,9 +489,6 @@ void fpstate_reset(struct fpu *fpu)
+ 	fpu->fpstate = &fpu->__fpstate;
+ 	__fpstate_reset(fpu->fpstate);
+ 
+-	/* Initialize the xfd */
+-	fpu->fpstate->xfd		= init_fpstate.xfd;
+-
+ 	/* Initialize the permission related info in fpu */
+ 	fpu->perm.__state_perm		= fpu_kernel_cfg.default_features;
+ 	fpu->perm.__state_size		= fpu_kernel_cfg.default_size;
+-- 
+2.31.1
+

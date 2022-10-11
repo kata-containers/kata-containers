@@ -1,0 +1,230 @@
+From 443ba925eac6860bb11059a536a47641574ff66d Mon Sep 17 00:00:00 2001
+From: Yi Sun <yi.y.sun@linux.intel.com>
+Date: Tue, 21 Dec 2021 00:03:12 +0800
+Subject: [PATCH 0988/1418] iommu/vtd: Merge small pages back to big page
+
+After dirty log tracking, we should merge small pages back
+to big page.
+
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+---
+ drivers/iommu/intel/iommu.c | 87 +++++++++++++++++++++++++++++++++++++
+ drivers/iommu/iommu.c       | 76 ++++++++++++++++++++++++++++++++
+ include/linux/iommu.h       |  2 +
+ 3 files changed, 165 insertions(+)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index e230eff09e05..47d31feaa800 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -6174,6 +6174,92 @@ static int intel_iommu_split_block(struct iommu_domain *domain,
+ 	return ret;
+ }
+ 
++static int
++__domain_merge_pages(struct dmar_domain *domain, struct intel_iommu *iommu,
++		     unsigned long iova, phys_addr_t paddr, size_t size)
++{
++	struct dma_pte *pte = NULL;
++	unsigned int largepage_lvl = 0;
++	unsigned long iov_pfn = iova >> VTD_PAGE_SHIFT;
++	unsigned long start_pfn = iov_pfn;
++	unsigned long end_pfn = (iova + size - 1) >> VTD_PAGE_SHIFT;
++	struct page *freelist;
++	int prot = 0;
++	int ret = 0;
++
++	/* Construct the big page again */
++	largepage_lvl = 1;
++	pte = pfn_to_dma_pte(domain, iov_pfn, &largepage_lvl);
++	if (!pte || !dma_pte_present(pte))
++		return -EINVAL;
++
++	if (pte->val & DMA_PTE_READ)
++		prot |= DMA_PTE_READ;
++	if (pte->val & DMA_PTE_WRITE)
++		prot |= DMA_PTE_WRITE;
++	if (pte->val & DMA_PTE_SNP)
++		prot |= DMA_PTE_SNP;
++
++	pr_debug("%s: start_pfn=0x%lx, end_pfn=0x%lx, prot=0x%x, size=0x%zx, paddr=0x%llx\n",
++		__func__, start_pfn, end_pfn, prot, size, paddr);
++
++	/* Free the splitted 4KB pages */
++	freelist = domain_unmap(domain, start_pfn, end_pfn, NULL);
++	dma_free_pagelist(freelist);
++
++	ret = __domain_mapping(domain, start_pfn, paddr >> VTD_PAGE_SHIFT,
++				size >> VTD_PAGE_SHIFT, prot);
++
++	return ret;
++}
++
++static int intel_iommu_merge_pages(struct iommu_domain *domain, unsigned long iova,
++				   phys_addr_t phys, size_t size)
++{
++	struct dmar_domain *dmar_domain = to_dmar_domain(domain);
++	struct device_domain_info *info;
++	struct subdev_domain_info *sinfo;
++	int ret = 0;
++	unsigned long flags;
++
++	if (!domain_use_first_level(dmar_domain) && !slad_support()) {
++		pr_err("Don't support SLAD\n");
++		return -EINVAL;
++	}
++
++	/* Return if size is less than 2MB */
++	if (size < 0x200000)
++		return 0;
++
++	spin_lock_irqsave(&device_domain_lock, flags);
++
++	list_for_each_entry(info, &dmar_domain->devices, link) {
++		pr_debug("%s: merge for %02x:%02x.%d, iova=0x%lx, phys=0x%llx, size=0x%zx\n",
++			__func__, info->bus, PCI_SLOT(info->devfn), PCI_FUNC(info->devfn),
++			iova, phys, size);
++
++		ret = __domain_merge_pages(dmar_domain, info->iommu, iova, phys, size);
++		if (ret)
++			goto out;
++	}
++
++	list_for_each_entry(sinfo, &dmar_domain->subdevices, link_domain) {
++		info = get_domain_info(sinfo->pdev);
++		pr_debug("%s: merge for subdev %02x:%02x.%d, iova=0x%lx, phys=0x%llx, size=0x%zx\n",
++			__func__, info->bus, PCI_SLOT(info->devfn), PCI_FUNC(info->devfn),
++			iova, phys, size);
++
++		ret = __domain_merge_pages(dmar_domain, info->iommu, iova, phys, size);
++		if (ret)
++			break;
++	}
++
++out:
++	spin_unlock_irqrestore(&device_domain_lock, flags);
++
++	return ret;
++}
++
+ const struct iommu_ops intel_iommu_ops = {
+ 	.capable		= intel_iommu_capable,
+ 	.domain_alloc		= intel_iommu_domain_alloc,
+@@ -6213,6 +6299,7 @@ const struct iommu_ops intel_iommu_ops = {
+ 	.sva_get_pasid		= intel_svm_get_pasid,
+ 	.page_response		= intel_svm_page_response,
+ #endif
++	.merge_pages		= intel_iommu_merge_pages,
+ 	.split_block		= intel_iommu_split_block,
+ 	.set_hwdbm		= intel_iommu_set_hwdbm,
+ 	.sync_dirty_log		= intel_iommu_sync_dirty_log,
+diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
+index d00e949a8ce6..944bd7cd9761 100644
+--- a/drivers/iommu/iommu.c
++++ b/drivers/iommu/iommu.c
+@@ -3094,6 +3094,80 @@ int iommu_domain_set_attr(struct iommu_domain *domain,
+ }
+ EXPORT_SYMBOL_GPL(iommu_domain_set_attr);
+ 
++static int __iommu_merge_pages(struct iommu_domain *domain,
++			       unsigned long iova, phys_addr_t paddr,
++			       size_t size)
++{
++	const struct iommu_ops *ops = domain->ops;
++	unsigned int min_pagesz;
++	size_t pgsize;
++	int ret = 0;
++
++	if (unlikely(!ops))
++		return -ENODEV;
++
++	if (unlikely(!ops->merge_pages)) {
++		pr_warn("don't support merge_pages\n");
++		return ret;
++	}
++
++	min_pagesz = 1 << __ffs(domain->pgsize_bitmap);
++	if (!IS_ALIGNED(iova | paddr | size, min_pagesz)) {
++		pr_err("unaligned: iova 0x%lx pa %pa size 0x%zx min_pagesz 0x%x\n",
++			iova, &paddr, size, min_pagesz);
++		return -EINVAL;
++	}
++
++	while (size) {
++		pgsize = iommu_pgsize(domain, iova | paddr, size);
++
++		ret = ops->merge_pages(domain, iova, paddr, pgsize);
++		if (ret)
++			break;
++
++		pr_debug("merge handled: iova 0x%lx pa %pa size 0x%zx\n",
++			 iova, &paddr, pgsize);
++
++		iova += pgsize;
++		paddr += pgsize;
++		size -= pgsize;
++	}
++
++	return ret;
++}
++
++static int iommu_merge_pages(struct iommu_domain *domain, unsigned long iova,
++			     size_t size)
++{
++	phys_addr_t phys;
++	dma_addr_t p, i;
++	size_t cont_size;
++	int ret = 0;
++
++	while (size) {
++		phys = iommu_iova_to_phys(domain, iova);
++		cont_size = PAGE_SIZE;
++		p = phys + cont_size;
++		i = iova + cont_size;
++
++		while (cont_size < size && p == iommu_iova_to_phys(domain, i)) {
++			p += PAGE_SIZE;
++			i += PAGE_SIZE;
++			cont_size += PAGE_SIZE;
++		}
++
++		ret = __iommu_merge_pages(domain, iova, phys, cont_size);
++		if (ret)
++			break;
++
++		iova += cont_size;
++		size -= cont_size;
++	}
++	iommu_flush_iotlb_all(domain);
++
++	return ret;
++}
++
+ static int iommu_split_block(struct iommu_domain *domain, unsigned long iova,
+ 			     size_t size)
+ {
+@@ -3151,6 +3225,8 @@ int iommu_domain_set_hwdbm(struct iommu_domain *domain, bool enable,
+ 
+ 	if (enable)
+ 		ret = iommu_split_block(domain, iova, size);
++	else
++		ret = iommu_merge_pages(domain, iova, size);
+ 
+ 	return ret;
+ }
+diff --git a/include/linux/iommu.h b/include/linux/iommu.h
+index 695ee2da3e7e..fb2c665fe6c0 100644
+--- a/include/linux/iommu.h
++++ b/include/linux/iommu.h
+@@ -318,6 +318,8 @@ struct iommu_ops {
+ 
+ 	int (*def_domain_type)(struct device *dev);
+ 
++	int (*merge_pages)(struct iommu_domain *domain, unsigned long iova,
++			   phys_addr_t phys, size_t size);
+ 	int (*split_block)(struct iommu_domain *domain, unsigned long iova,
+ 			   size_t size);
+ 	int (*set_hwdbm)(struct iommu_domain *domain, bool enable,
+-- 
+2.31.1
+

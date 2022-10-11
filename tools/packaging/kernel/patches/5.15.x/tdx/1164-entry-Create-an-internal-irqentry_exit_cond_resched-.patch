@@ -1,0 +1,178 @@
+From 19a91817609d5db78ba229a9936eb01687a724aa Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Mon, 10 Jan 2022 10:42:54 -0800
+Subject: [PATCH 1164/1418] entry: Create an internal
+ irqentry_exit_cond_resched() call
+
+The static call to irqentry_exit_cond_resched() was not properly being
+overridden when called from xen_pv_evtchn_do_upcall().
+
+Define __irqentry_exit_cond_resched() as the static call and place the
+override logic in irqentry_exit_cond_resched().
+
+Cc: Peter Zijlstra (Intel) <peterz@infradead.org>
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ include/linux/entry-common.h |  5 ++++-
+ kernel/entry/common.c        | 23 +++++++++++++--------
+ kernel/sched/core.c          | 40 ++++++++++++++++++------------------
+ 3 files changed, 38 insertions(+), 30 deletions(-)
+
+diff --git a/include/linux/entry-common.h b/include/linux/entry-common.h
+index 2e2b8d6140ed..ddaffc983e62 100644
+--- a/include/linux/entry-common.h
++++ b/include/linux/entry-common.h
+@@ -455,10 +455,13 @@ irqentry_state_t noinstr irqentry_enter(struct pt_regs *regs);
+  * Conditional reschedule with additional sanity checks.
+  */
+ void irqentry_exit_cond_resched(void);
++
++void __irqentry_exit_cond_resched(void);
+ #ifdef CONFIG_PREEMPT_DYNAMIC
+-DECLARE_STATIC_CALL(irqentry_exit_cond_resched, irqentry_exit_cond_resched);
++DECLARE_STATIC_CALL(__irqentry_exit_cond_resched, __irqentry_exit_cond_resched);
+ #endif
+ 
++
+ /**
+  * irqentry_exit - Handle return from exception that used irqentry_enter()
+  * @regs:	Pointer to pt_regs (exception entry regs)
+diff --git a/kernel/entry/common.c b/kernel/entry/common.c
+index d5a61d565ad5..2246c3660412 100644
+--- a/kernel/entry/common.c
++++ b/kernel/entry/common.c
+@@ -380,7 +380,7 @@ noinstr irqentry_state_t irqentry_enter(struct pt_regs *regs)
+ 	return ret;
+ }
+ 
+-void irqentry_exit_cond_resched(void)
++void __irqentry_exit_cond_resched(void)
+ {
+ 	if (!preempt_count()) {
+ 		/* Sanity check RCU and thread stack */
+@@ -392,9 +392,20 @@ void irqentry_exit_cond_resched(void)
+ 	}
+ }
+ #ifdef CONFIG_PREEMPT_DYNAMIC
+-DEFINE_STATIC_CALL(irqentry_exit_cond_resched, irqentry_exit_cond_resched);
++DEFINE_STATIC_CALL(__irqentry_exit_cond_resched, __irqentry_exit_cond_resched);
+ #endif
+ 
++void irqentry_exit_cond_resched(void)
++{
++	if (IS_ENABLED(CONFIG_PREEMPTION)) {
++#ifdef CONFIG_PREEMPT_DYNAMIC
++		static_call(__irqentry_exit_cond_resched)();
++#else
++		__irqentry_exit_cond_resched();
++#endif
++	}
++}
++
+ noinstr void irqentry_exit(struct pt_regs *regs, irqentry_state_t state)
+ {
+ 	lockdep_assert_irqs_disabled();
+@@ -420,13 +431,7 @@ noinstr void irqentry_exit(struct pt_regs *regs, irqentry_state_t state)
+ 		}
+ 
+ 		instrumentation_begin();
+-		if (IS_ENABLED(CONFIG_PREEMPTION)) {
+-#ifdef CONFIG_PREEMPT_DYNAMIC
+-			static_call(irqentry_exit_cond_resched)();
+-#else
+-			irqentry_exit_cond_resched();
+-#endif
+-		}
++		irqentry_exit_cond_resched();
+ 		/* Covers both tracing and lockdep */
+ 		trace_hardirqs_on();
+ 		instrumentation_end();
+diff --git a/kernel/sched/core.c b/kernel/sched/core.c
+index f21714ea3db8..722f4fa1728d 100644
+--- a/kernel/sched/core.c
++++ b/kernel/sched/core.c
+@@ -6560,29 +6560,29 @@ EXPORT_STATIC_CALL_TRAMP(preempt_schedule_notrace);
+  * SC:might_resched
+  * SC:preempt_schedule
+  * SC:preempt_schedule_notrace
+- * SC:irqentry_exit_cond_resched
++ * SC:__irqentry_exit_cond_resched
+  *
+  *
+  * NONE:
+- *   cond_resched               <- __cond_resched
+- *   might_resched              <- RET0
+- *   preempt_schedule           <- NOP
+- *   preempt_schedule_notrace   <- NOP
+- *   irqentry_exit_cond_resched <- NOP
++ *   cond_resched                 <- __cond_resched
++ *   might_resched                <- RET0
++ *   preempt_schedule             <- NOP
++ *   preempt_schedule_notrace     <- NOP
++ *   __irqentry_exit_cond_resched <- NOP
+  *
+  * VOLUNTARY:
+- *   cond_resched               <- __cond_resched
+- *   might_resched              <- __cond_resched
+- *   preempt_schedule           <- NOP
+- *   preempt_schedule_notrace   <- NOP
+- *   irqentry_exit_cond_resched <- NOP
++ *   cond_resched                 <- __cond_resched
++ *   might_resched                <- __cond_resched
++ *   preempt_schedule             <- NOP
++ *   preempt_schedule_notrace     <- NOP
++ *   __irqentry_exit_cond_resched <- NOP
+  *
+  * FULL:
+- *   cond_resched               <- RET0
+- *   might_resched              <- RET0
+- *   preempt_schedule           <- preempt_schedule
+- *   preempt_schedule_notrace   <- preempt_schedule_notrace
+- *   irqentry_exit_cond_resched <- irqentry_exit_cond_resched
++ *   cond_resched                 <- RET0
++ *   might_resched                <- RET0
++ *   preempt_schedule             <- preempt_schedule
++ *   preempt_schedule_notrace     <- preempt_schedule_notrace
++ *   __irqentry_exit_cond_resched <- __irqentry_exit_cond_resched
+  */
+ 
+ enum {
+@@ -6617,7 +6617,7 @@ void sched_dynamic_update(int mode)
+ 	static_call_update(might_resched, __cond_resched);
+ 	static_call_update(preempt_schedule, __preempt_schedule_func);
+ 	static_call_update(preempt_schedule_notrace, __preempt_schedule_notrace_func);
+-	static_call_update(irqentry_exit_cond_resched, irqentry_exit_cond_resched);
++	static_call_update(__irqentry_exit_cond_resched, __irqentry_exit_cond_resched);
+ 
+ 	switch (mode) {
+ 	case preempt_dynamic_none:
+@@ -6625,7 +6625,7 @@ void sched_dynamic_update(int mode)
+ 		static_call_update(might_resched, (void *)&__static_call_return0);
+ 		static_call_update(preempt_schedule, NULL);
+ 		static_call_update(preempt_schedule_notrace, NULL);
+-		static_call_update(irqentry_exit_cond_resched, NULL);
++		static_call_update(__irqentry_exit_cond_resched, NULL);
+ 		pr_info("Dynamic Preempt: none\n");
+ 		break;
+ 
+@@ -6634,7 +6634,7 @@ void sched_dynamic_update(int mode)
+ 		static_call_update(might_resched, __cond_resched);
+ 		static_call_update(preempt_schedule, NULL);
+ 		static_call_update(preempt_schedule_notrace, NULL);
+-		static_call_update(irqentry_exit_cond_resched, NULL);
++		static_call_update(__irqentry_exit_cond_resched, NULL);
+ 		pr_info("Dynamic Preempt: voluntary\n");
+ 		break;
+ 
+@@ -6643,7 +6643,7 @@ void sched_dynamic_update(int mode)
+ 		static_call_update(might_resched, (void *)&__static_call_return0);
+ 		static_call_update(preempt_schedule, __preempt_schedule_func);
+ 		static_call_update(preempt_schedule_notrace, __preempt_schedule_notrace_func);
+-		static_call_update(irqentry_exit_cond_resched, irqentry_exit_cond_resched);
++		static_call_update(__irqentry_exit_cond_resched, __irqentry_exit_cond_resched);
+ 		pr_info("Dynamic Preempt: full\n");
+ 		break;
+ 	}
+-- 
+2.31.1
+

@@ -1,0 +1,54 @@
+From d164a04c3dc23180d704eff4187ed136973bddd3 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Mon, 15 Mar 2021 01:47:28 -0400
+Subject: [PATCH 0409/1418] KVM: TDX: Restore MSR_IA32_DS_AREA after TD exit
+
+MSR_IA32_DS_AREA is set to architectural INIT state after TD exit.
+KVM needs to restore host value if this MSR is in use by host.
+
+perf_restore_debug_store() is used to restore MSR_IA32_DS_AREA for
+other cases. KVM can reuse it for TDX. So, expose it for loadable
+modules.
+
+Note that perf_restore_debug_store() writes to MSR_IA32_DS_AREA
+only when necessary.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/events/intel/ds.c | 1 +
+ arch/x86/kvm/vmx/tdx.c     | 2 ++
+ 2 files changed, 3 insertions(+)
+
+diff --git a/arch/x86/events/intel/ds.c b/arch/x86/events/intel/ds.c
+index 8647713276a7..ba080df0739d 100644
+--- a/arch/x86/events/intel/ds.c
++++ b/arch/x86/events/intel/ds.c
+@@ -2247,3 +2247,4 @@ void perf_restore_debug_store(void)
+ 
+ 	wrmsrl(MSR_IA32_DS_AREA, (unsigned long)ds);
+ }
++EXPORT_SYMBOL_GPL(perf_restore_debug_store);
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 5ffa6c5bb6fe..10ed44adaade 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -4,6 +4,7 @@
+ #include <linux/jump_label.h>
+ #include <linux/trace_events.h>
+ #include <linux/pagemap.h>
++#include <linux/perf_event.h>
+ 
+ #include <asm/tdx_errno.h>
+ #include <asm/tdx_host.h>
+@@ -620,6 +621,7 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ 
+ 	tdx_vcpu_enter_exit(vcpu, tdx);
+ 
++	perf_restore_debug_store();
+ 	tdx_restore_host_xsave_state(vcpu);
+ 
+ 	vmx_register_cache_reset(vcpu);
+-- 
+2.31.1
+

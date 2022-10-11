@@ -1,0 +1,331 @@
+From ea4c66c45dc2a326c04462cb87e83cdfed191cee Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Fri, 25 Jun 2021 20:53:09 +0800
+Subject: [PATCH 0658/1418] vSVA: Refine the logs to be debug devel
+
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/iommu.c           |   2 +-
+ drivers/vfio/pci/vfio_pci.c     |  31 +++-
+ drivers/vfio/vfio_iommu_type1.c | 243 ++++++++++++++++++++++++++++++++
+ 3 files changed, 274 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
+index 11083aa0fa39..9e2022f58595 100644
+--- a/drivers/iommu/iommu.c
++++ b/drivers/iommu/iommu.c
+@@ -1365,7 +1365,7 @@ int iommu_unregister_device_fault_handler(struct device *dev)
+ 		 * 2. unbind, free, flush and drain
+ 		 * 3. unregister fault handler.
+ 		 */
+-		printk("%s, there is pending faults on dev: %s, here we force to free the fault events and unregister the fault handler, but this changes should be reverted when page response path is ready\n", __func__, dev_name(dev));
++		dev_dbg(dev, "%s, there is pending faults on dev: %s, here we force to free the fault events and unregister the fault handler, but this changes should be reverted when page response path is ready\n", __func__, dev_name(dev));
+ 		mutex_lock(&param->fault_param->lock);
+ 		list_for_each_entry_safe(evt, next, &param->fault_param->faults, list) {
+ 			dev_dbg(dev, "%s, free fault event: 0x%lx\n", __func__, (unsigned long) evt);
+diff --git a/drivers/vfio/pci/vfio_pci.c b/drivers/vfio/pci/vfio_pci.c
+index a5ce92beb655..81aed7970fb7 100644
+--- a/drivers/vfio/pci/vfio_pci.c
++++ b/drivers/vfio/pci/vfio_pci.c
+@@ -176,7 +176,36 @@ static int vfio_pci_sriov_configure(struct pci_dev *pdev, int nr_virtfn)
+ 	if (!enable_sriov)
+ 		return -ENOENT;
+ 
+-	return vfio_pci_core_sriov_configure(pdev, nr_virtfn);
++	mutex_lock(&vdev->fault_queue_lock);
++
++	dev_dbg(&vdev->pdev->dev, "%s, enque fault event\n", __func__);
++	head = reg->head;
++	tail = reg->tail;
++	size = reg->nb_entries;
++
++	if (CIRC_SPACE(head, tail, size) < 1) {
++		ret = -ENOSPC;
++		goto unlock;
++	}
++
++	*new = *fault;
++	reg->head = (head + 1) % size;
++unlock:
++	mutex_unlock(&vdev->fault_queue_lock);
++	if (ret)
++		return ret;
++
++	ext_irq_index = vfio_pci_get_ext_irq_index(vdev, VFIO_IRQ_TYPE_NESTED,
++						   VFIO_IRQ_SUBTYPE_DMA_FAULT);
++	if (ext_irq_index < 0)
++		return -EINVAL;
++
++	mutex_lock(&vdev->igate);
++	dev_dbg(&vdev->pdev->dev, "%s, signal userspace!\n", __func__);
++	if (vdev->ext_irqs[ext_irq_index].trigger)
++		eventfd_signal(vdev->ext_irqs[ext_irq_index].trigger, 1);
++	mutex_unlock(&vdev->igate);
++	return 0;
+ }
+ 
+ static const struct pci_device_id vfio_pci_table[] = {
+diff --git a/drivers/vfio/vfio_iommu_type1.c b/drivers/vfio/vfio_iommu_type1.c
+index 0e9217687f5c..b3449330a4d4 100644
+--- a/drivers/vfio/vfio_iommu_type1.c
++++ b/drivers/vfio/vfio_iommu_type1.c
+@@ -2557,6 +2557,92 @@ static int vfio_iommu_resv_refresh(struct vfio_iommu *iommu,
+ 	return ret;
+ }
+ 
++static struct device *vfio_get_iommu_device(struct vfio_group *group,
++					    struct device *dev)
++{
++	if (group->mdev_group)
++		return vfio_mdev_get_iommu_device(dev);
++	else
++		return dev;
++}
++
++static int vfio_dev_bind_gpasid_fn(struct device *dev, void *data)
++{
++	struct domain_capsule *dc = (struct domain_capsule *)data;
++	unsigned long arg = *(unsigned long *)dc->data;
++	struct device *iommu_device;
++	void *iommu_fault_data = NULL;
++
++	pr_debug("%s, - arg: 0x%lx\n", __func__, arg);
++	iommu_device = vfio_get_iommu_device(dc->group, dev);
++	if (!iommu_device)
++		return -EINVAL;
++
++	if (iommu_device != dev)
++		iommu_fault_data = vfio_mdev_get_iommu_fault_data(dev);
++
++	pr_debug("%s: iommu_fault_data: %llx\n", __func__, (unsigned long long) iommu_fault_data);
++
++	return iommu_uapi_sva_bind_gpasid(dc->domain, iommu_device,
++					  (void __user *)arg,
++					  iommu_fault_data);
++}
++
++static int vfio_dev_unbind_gpasid_fn(struct device *dev, void *data)
++{
++	struct domain_capsule *dc = (struct domain_capsule *)data;
++	struct device *iommu_device;
++
++	iommu_device = vfio_get_iommu_device(dc->group, dev);
++	if (!iommu_device)
++		return -EINVAL;
++
++	/*
++	 * dc->user is a toggle for the unbind operation. When user
++	 * set, the dc->data passes in a __user pointer and requires
++	 * to use iommu_uapi_sva_unbind_gpasid(), in which it will
++	 * copy the unbind data from the user buffer. When user is
++	 * clear, the dc->data passes in a pasid which is going to
++	 * be unbind no need to copy data from userspace.
++	 */
++	if (dc->user) {
++		unsigned long arg = *(unsigned long *)dc->data;
++
++		pr_debug("%s, - arg: 0x%lx\n", __func__, arg);
++		iommu_uapi_sva_unbind_gpasid(dc->domain, iommu_device,
++					     (void __user *)arg);
++	} else {
++		ioasid_t pasid = *(ioasid_t *)dc->data;
++
++		iommu_sva_unbind_gpasid(dc->domain, iommu_device, pasid, dc->flags);
++	}
++	return 0;
++}
++
++static void vfio_group_unbind_gpasid_fn(ioasid_t pasid, void *data)
++{
++	struct domain_capsule *dc = (struct domain_capsule *)data;
++
++	dc->user = false;
++	dc->data = &pasid;
++	dc->flags = 0;
++
++	iommu_group_for_each_dev(dc->group->iommu_group,
++				 dc, vfio_dev_unbind_gpasid_fn);
++}
++
++static void vfio_group_unbind_default_gpasid(ioasid_t pasid, void *data)
++{
++	struct domain_capsule *dc = (struct domain_capsule *)data;
++
++	dc->user = false;
++	dc->data = &pasid;
++	dc->flags = IOMMU_SVA_HPASID_DEF;
++
++	iommu_group_for_each_dev(dc->group->iommu_group,
++				 dc, vfio_dev_unbind_gpasid_fn);
++}
++
+ static void vfio_iommu_type1_detach_group(void *iommu_data,
+ 					  struct iommu_group *iommu_group)
+ {
+@@ -3089,6 +3175,163 @@ static int vfio_iommu_type1_dirty_pages(struct vfio_iommu *iommu,
+ 	return -EINVAL;
+ }
+ 
++static long vfio_iommu_handle_pgtbl_op(struct vfio_iommu *iommu,
++				       bool is_bind, unsigned long arg)
++{
++	struct domain_capsule dc = { .data = &arg, .user = true };
++	struct iommu_nesting_info *info;
++	int ret;
++
++	mutex_lock(&iommu->lock);
++
++	info = iommu->nesting_info;
++	if (!info || !(info->features & IOMMU_NESTING_FEAT_BIND_PGTBL)) {
++		ret = -EOPNOTSUPP;
++		goto out_unlock;
++	}
++
++	ret = vfio_prepare_nesting_domain_capsule(iommu, &dc);
++	if (ret)
++		goto out_unlock;
++
++	if (is_bind)
++		ret = iommu_group_for_each_dev(dc.group->iommu_group, &dc,
++					       vfio_dev_bind_gpasid_fn);
++	if (ret || !is_bind)
++		iommu_group_for_each_dev(dc.group->iommu_group,
++					 &dc, vfio_dev_unbind_gpasid_fn);
++
++out_unlock:
++	mutex_unlock(&iommu->lock);
++	return ret;
++}
++
++static int vfio_dev_cache_invalidate_fn(struct device *dev, void *data)
++{
++	struct domain_capsule *dc = (struct domain_capsule *)data;
++	unsigned long arg = *(unsigned long *)dc->data;
++	struct device *iommu_device;
++
++	pr_debug("%s, - arg: 0x%lx\n", __func__, arg);
++	iommu_device = vfio_get_iommu_device(dc->group, dev);
++	if (!iommu_device)
++		return -EINVAL;
++
++	iommu_uapi_cache_invalidate(dc->domain, iommu_device,
++				    (void __user *)arg);
++	return 0;
++}
++
++static long vfio_iommu_invalidate_cache(struct vfio_iommu *iommu,
++					unsigned long arg)
++{
++	struct domain_capsule dc = { .data = &arg };
++	struct iommu_nesting_info *info;
++	int ret;
++
++	mutex_lock(&iommu->lock);
++	info = iommu->nesting_info;
++	if (!info || !(info->features & IOMMU_NESTING_FEAT_CACHE_INVLD)) {
++		ret = -EOPNOTSUPP;
++		goto out_unlock;
++	}
++
++	ret = vfio_prepare_nesting_domain_capsule(iommu, &dc);
++	if (ret)
++		goto out_unlock;
++
++	iommu_group_for_each_dev(dc.group->iommu_group, &dc,
++				 vfio_dev_cache_invalidate_fn);
++
++out_unlock:
++	mutex_unlock(&iommu->lock);
++	return ret;
++}
++
++static int vfio_dev_page_resp_fn(struct device *dev, void *data)
++{
++	struct domain_capsule *dc = (struct domain_capsule *)data;
++	unsigned long arg = *(unsigned long *) dc->data;
++	struct device *iommu_device;
++
++	pr_debug("%s, - arg: 0x%lx\n", __func__, arg);
++	iommu_device = vfio_get_iommu_device(dc->group, dev);
++	if (!iommu_device)
++		return -EINVAL;
++
++	return iommu_page_response(dc->domain, iommu_device,
++				   (void __user *) arg);
++}
++
++static long vfio_iommu_page_response(struct vfio_iommu *iommu,
++				     unsigned long arg)
++{
++	struct domain_capsule dc = { .data = &arg };
++	struct iommu_nesting_info *info;
++	int ret;
++
++	mutex_lock(&iommu->lock);
++	info = iommu->nesting_info;
++	if (!info || !(info->features & IOMMU_NESTING_FEAT_PAGE_RESP)) {
++		ret = -EOPNOTSUPP;
++		goto out_unlock;
++	}
++
++	ret = vfio_prepare_nesting_domain_capsule(iommu, &dc);
++	if (ret)
++		goto out_unlock;
++
++	ret = iommu_group_for_each_dev(dc.group->iommu_group, &dc,
++				       vfio_dev_page_resp_fn);
++
++out_unlock:
++	mutex_unlock(&iommu->lock);
++	return ret;
++}
++
++static long vfio_iommu_type1_nesting_op(struct vfio_iommu *iommu,
++					unsigned long arg)
++{
++	struct vfio_iommu_type1_nesting_op hdr;
++	unsigned int minsz;
++	int ret;
++
++	minsz = offsetofend(struct vfio_iommu_type1_nesting_op, flags);
++
++	pr_debug("%s, - 1, arg: 0x%lx, minsz: %u\n", __func__, arg, minsz);
++	if (copy_from_user(&hdr, (void __user *)arg, minsz))
++		return -EFAULT;
++
++	if (hdr.argsz < minsz || hdr.flags & ~VFIO_NESTING_OP_MASK)
++		return -EINVAL;
++
++	pr_debug("%s, - 2\n", __func__);
++	switch (hdr.flags & VFIO_NESTING_OP_MASK) {
++	case VFIO_IOMMU_NESTING_OP_BIND_PGTBL:
++	pr_debug("%s, bind - 1\n", __func__);
++		ret = vfio_iommu_handle_pgtbl_op(iommu, true, arg + minsz);
++	pr_debug("%s, bind - 2, ret: %d\n", __func__, ret);
++		break;
++	case VFIO_IOMMU_NESTING_OP_UNBIND_PGTBL:
++	pr_debug("%s, unbind - 1\n", __func__);
++		ret = vfio_iommu_handle_pgtbl_op(iommu, false, arg + minsz);
++	pr_debug("%s, unbind - 2, ret: %d\n", __func__, ret);
++		break;
++	case VFIO_IOMMU_NESTING_OP_CACHE_INVLD:
++	pr_debug("%s, cache_inv - 1\n", __func__);
++		ret = vfio_iommu_invalidate_cache(iommu, arg + minsz);
++	pr_debug("%s, cache_inv - 2, ret: %d\n", __func__, ret);
++		break;
++	case VFIO_IOMMU_NESTING_OP_PAGE_RESP:
++		ret = vfio_iommu_page_response(iommu, arg + minsz);
++		break;
++	default:
++		ret = -EINVAL;
++	}
++
++	return ret;
++}
++
+ static long vfio_iommu_type1_ioctl(void *iommu_data,
+ 				   unsigned int cmd, unsigned long arg)
+ {
+-- 
+2.31.1
+

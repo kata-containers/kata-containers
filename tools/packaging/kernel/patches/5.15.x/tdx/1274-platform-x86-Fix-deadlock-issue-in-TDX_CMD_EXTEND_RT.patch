@@ -1,0 +1,41 @@
+From 96d715c99b7c5a017875c425247fd367dd6ad347 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Fri, 25 Mar 2022 19:33:33 +0000
+Subject: [PATCH 1274/1418] platform/x86: Fix deadlock issue in
+ TDX_CMD_EXTEND_RTMR IOCTL
+
+Currently for invalid rtmr values (0 or 1), we return -EINVAL
+directly without unlocking the &attestation_lock. This will
+lead to deadlock and prevent any further attestation IOCTLs to
+work.
+
+So instead of returning directly, use a break statement to exit
+the switch case with proper unlock logic.
+
+Fixes: 41fe88a1b3c2 ("[REVERTME] platform/x86: Add RTMR update interface")
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ drivers/platform/x86/intel/tdx/intel_tdx_attest.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+index 116d48344def..4ec06f5dfff1 100644
+--- a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
++++ b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+@@ -138,8 +138,10 @@ static long tdx_attest_ioctl(struct file *file, unsigned int cmd,
+ 		if (get_user(rtmr, (u64 __user *)argp))
+ 			break;
+ 		/* Don't allow to extend BIOS/kernel RTMRs */
+-		if (rtmr == 0 || rtmr == 1)
+-			return -EINVAL;
++		if (rtmr == 0 || rtmr == 1) {
++			ret = -EINVAL;
++			break;
++		}
+ 		if (copy_from_user(report_data, argp + 8, TDX_EXTEND_LEN))
+ 			break;
+ 
+-- 
+2.31.1
+

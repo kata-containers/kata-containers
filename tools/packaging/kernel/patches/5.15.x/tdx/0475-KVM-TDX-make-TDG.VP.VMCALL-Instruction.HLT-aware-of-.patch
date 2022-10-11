@@ -1,0 +1,114 @@
+From f602266e40c417440a9891fe54874cbca2fbca7e Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Tue, 23 Mar 2021 01:51:30 -0700
+Subject: [PATCH 0475/1418] KVM: TDX: make TDG.VP.VMCALL<Instruction.HLT> aware
+ of interrupt disabled
+
+When the interrupt is enabled and interrupt arrived during emulating HLT
+instruction, KVM must enter to td immediately.  This condition can happen
+with TDG.VP.VMCALL right after sti and other vcpu posted an interrupt at
+the same time.  Without this patch, KVM misses an interrupt to fail to wake
+up the vcpu.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/tdx_arch.h | 24 ++++++++++++++++++++++--
+ arch/x86/kvm/vmx/tdx.c          | 10 ++++++++++
+ arch/x86/kvm/vmx/tdx.h          |  2 ++
+ 3 files changed, 34 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/tdx_arch.h b/arch/x86/include/asm/tdx_arch.h
+index 93d516695ba5..af9127e63242 100644
+--- a/arch/x86/include/asm/tdx_arch.h
++++ b/arch/x86/include/asm/tdx_arch.h
+@@ -138,11 +138,21 @@
+ 	VMX_EXIT_REASONS
+ 
+ /* TDX control structure (TDR/TDCS/TDVPS) field access codes */
++#define TDX_NON_ARCH		BIT_ULL(63)
+ #define TDX_CLASS_SHIFT		56
+ #define TDX_FIELD_MASK		GENMASK_ULL(31, 0)
+ 
+-#define BUILD_TDX_FIELD(class, field)	\
+-	(((u64)(class) << TDX_CLASS_SHIFT) | ((u64)(field) & TDX_FIELD_MASK))
++#define __BUILD_TDX_FIELD(non_arch, class, field)	\
++	(((non_arch) ? TDX_NON_ARCH : 0) |		\
++	 ((u64)(class) << TDX_CLASS_SHIFT) |		\
++	 ((u64)(field) & TDX_FIELD_MASK))
++
++#define BUILD_TDX_FIELD(class, field)			\
++	__BUILD_TDX_FIELD(false, (class), (field))
++
++#define BUILD_TDX_FIELD_NON_ARCH(class, field)		\
++	__BUILD_TDX_FIELD(true, (class), (field))
++
+ 
+ /* @field is the VMCS field encoding */
+ #define TDVPS_VMCS(field)	BUILD_TDX_FIELD(0, (field))
+@@ -167,10 +177,20 @@ enum tdx_guest_other_state {
+ 	TD_VCPU_IWK_INTKEY0 = 68,
+ 	TD_VCPU_IWK_INTKEY1,
+ 	TD_VCPU_IWK_FLAGS = 70,
++	TD_VCPU_STATE_DETAILS_NON_ARCH = 0x100,
++};
++
++union tdx_vcpu_state_details {
++	struct {
++		u64 vmxip	: 1;
++		u64 reserved	: 63;
++	};
++	u64 full;
+ };
+ 
+ /* @field is any of enum tdx_guest_other_state */
+ #define TDVPS_STATE(field)	BUILD_TDX_FIELD(17, (field))
++#define TDVPS_STATE_NON_ARCH(field)	BUILD_TDX_FIELD_NON_ARCH(17, field)
+ 
+ /* @msr is the MSR index */
+ #define TDVPS_MSR(msr)		BUILD_TDX_FIELD(19, (msr))
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 0f1cce0eba1a..010d0634c41f 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -1075,8 +1075,18 @@ static int tdx_emulate_cpuid(struct kvm_vcpu *vcpu)
+ 
+ static int tdx_emulate_hlt(struct kvm_vcpu *vcpu)
+ {
++	bool interrupt_disabled = tdvmcall_p1_read(vcpu);
++	union tdx_vcpu_state_details details;
++
+ 	tdvmcall_set_return_code(vcpu, TDG_VP_VMCALL_SUCCESS);
+ 
++	if (!interrupt_disabled) {
++		details.full = td_state_non_arch_read64(
++			to_tdx(vcpu), TD_VCPU_STATE_DETAILS_NON_ARCH);
++		if (details.vmxip)
++			return 1;
++	}
++
+ 	return kvm_vcpu_halt(vcpu);
+ }
+ 
+diff --git a/arch/x86/kvm/vmx/tdx.h b/arch/x86/kvm/vmx/tdx.h
+index 7dfd0c922a1c..29a168b0c2de 100644
+--- a/arch/x86/kvm/vmx/tdx.h
++++ b/arch/x86/kvm/vmx/tdx.h
+@@ -173,6 +173,7 @@ static __always_inline void tdvps_gpr_check(u64 field, u8 bits)
+ static __always_inline void tdvps_apic_check(u64 field, u8 bits) {}
+ static __always_inline void tdvps_dr_check(u64 field, u8 bits) {}
+ static __always_inline void tdvps_state_check(u64 field, u8 bits) {}
++static __always_inline void tdvps_state_non_arch_check(u64 field, u8 bits) {}
+ static __always_inline void tdvps_msr_check(u64 field, u8 bits) {}
+ static __always_inline void tdvps_management_check(u64 field, u8 bits) {}
+ 
+@@ -240,6 +241,7 @@ TDX_BUILD_TDVPS_ACCESSORS(64, APIC, apic);
+ TDX_BUILD_TDVPS_ACCESSORS(64, GPR, gpr);
+ TDX_BUILD_TDVPS_ACCESSORS(64, DR, dr);
+ TDX_BUILD_TDVPS_ACCESSORS(64, STATE, state);
++TDX_BUILD_TDVPS_ACCESSORS(64, STATE_NON_ARCH, state_non_arch);
+ TDX_BUILD_TDVPS_ACCESSORS(64, MSR, msr);
+ TDX_BUILD_TDVPS_ACCESSORS(8, MANAGEMENT, management);
+ 
+-- 
+2.31.1
+

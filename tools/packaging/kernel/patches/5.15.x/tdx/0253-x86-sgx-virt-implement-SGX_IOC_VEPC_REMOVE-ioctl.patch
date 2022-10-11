@@ -1,0 +1,171 @@
+From a5f0fd264cde117efc410608d0beabb951f4e445 Mon Sep 17 00:00:00 2001
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Thu, 21 Oct 2021 16:11:55 -0400
+Subject: [PATCH 0253/1418] x86/sgx/virt: implement SGX_IOC_VEPC_REMOVE ioctl
+
+For bare-metal SGX on real hardware, the hardware provides guarantees
+SGX state at reboot.  For instance, all pages start out uninitialized.
+The vepc driver provides a similar guarantee today for freshly-opened
+vepc instances, but guests such as Windows expect all pages to be in
+uninitialized state on startup, including after every guest reboot.
+
+Some userspace implementations of virtual SGX would rather avoid having
+to close and reopen the /dev/sgx_vepc file descriptor and re-mmap the
+virtual EPC.  For example, they could sandbox themselves after the guest
+starts and forbid further calls to open(), in order to mitigate exploits
+from untrusted guests.
+
+Therefore, add a ioctl that does this with EREMOVE.  Userspace can
+invoke the ioctl to bring its vEPC pages back to uninitialized state.
+There is a possibility that some pages fail to be removed if they are
+SECS pages, and the child and SECS pages could be in separate vEPC
+regions.  Therefore, the ioctl returns the number of EREMOVE failures,
+telling userspace to try the ioctl again after it's done with all
+vEPC regions.  A more verbose description of the correct usage and
+the possible error conditions is documented in sgx.rst.
+
+Reviewed-by: Jarkko Sakkinen <jarkko@kernel.org>
+Reviewed-by: Dave Hansen <dave.hansen@linux.intel.com>
+Reviewed-by: Sean Christopherson <seanjc@google.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Dave Hansen <dave.hansen@linux.intel.com>
+Link: https://lkml.kernel.org/r/20211021201155.1523989-3-pbonzini@redhat.com
+---
+ Documentation/x86/sgx.rst       | 35 ++++++++++++++++++++++
+ arch/x86/include/uapi/asm/sgx.h |  2 ++
+ arch/x86/kernel/cpu/sgx/virt.c  | 53 +++++++++++++++++++++++++++++++++
+ 3 files changed, 90 insertions(+)
+
+diff --git a/Documentation/x86/sgx.rst b/Documentation/x86/sgx.rst
+index dd0ac96ff9ef..a608f667fb95 100644
+--- a/Documentation/x86/sgx.rst
++++ b/Documentation/x86/sgx.rst
+@@ -250,3 +250,38 @@ user wants to deploy SGX applications both on the host and in guests
+ on the same machine, the user should reserve enough EPC (by taking out
+ total virtual EPC size of all SGX VMs from the physical EPC size) for
+ host SGX applications so they can run with acceptable performance.
++
++Architectural behavior is to restore all EPC pages to an uninitialized
++state also after a guest reboot.  Because this state can be reached only
++through the privileged ``ENCLS[EREMOVE]`` instruction, ``/dev/sgx_vepc``
++provides the ``SGX_IOC_VEPC_REMOVE_ALL`` ioctl to execute the instruction
++on all pages in the virtual EPC.
++
++``EREMOVE`` can fail for three reasons.  Userspace must pay attention
++to expected failures and handle them as follows:
++
++1. Page removal will always fail when any thread is running in the
++   enclave to which the page belongs.  In this case the ioctl will
++   return ``EBUSY`` independent of whether it has successfully removed
++   some pages; userspace can avoid these failures by preventing execution
++   of any vcpu which maps the virtual EPC.
++
++2. Page removal will cause a general protection fault if two calls to
++   ``EREMOVE`` happen concurrently for pages that refer to the same
++   "SECS" metadata pages.  This can happen if there are concurrent
++   invocations to ``SGX_IOC_VEPC_REMOVE_ALL``, or if a ``/dev/sgx_vepc``
++   file descriptor in the guest is closed at the same time as
++   ``SGX_IOC_VEPC_REMOVE_ALL``; it will also be reported as ``EBUSY``.
++   This can be avoided in userspace by serializing calls to the ioctl()
++   and to close(), but in general it should not be a problem.
++
++3. Finally, page removal will fail for SECS metadata pages which still
++   have child pages.  Child pages can be removed by executing
++   ``SGX_IOC_VEPC_REMOVE_ALL`` on all ``/dev/sgx_vepc`` file descriptors
++   mapped into the guest.  This means that the ioctl() must be called
++   twice: an initial set of calls to remove child pages and a subsequent
++   set of calls to remove SECS pages.  The second set of calls is only
++   required for those mappings that returned a nonzero value from the
++   first call.  It indicates a bug in the kernel or the userspace client
++   if any of the second round of ``SGX_IOC_VEPC_REMOVE_ALL`` calls has
++   a return code other than 0.
+diff --git a/arch/x86/include/uapi/asm/sgx.h b/arch/x86/include/uapi/asm/sgx.h
+index 9690d6899ad9..f4b81587e90b 100644
+--- a/arch/x86/include/uapi/asm/sgx.h
++++ b/arch/x86/include/uapi/asm/sgx.h
+@@ -27,6 +27,8 @@ enum sgx_page_flags {
+ 	_IOW(SGX_MAGIC, 0x02, struct sgx_enclave_init)
+ #define SGX_IOC_ENCLAVE_PROVISION \
+ 	_IOW(SGX_MAGIC, 0x03, struct sgx_enclave_provision)
++#define SGX_IOC_VEPC_REMOVE_ALL \
++	_IO(SGX_MAGIC, 0x04)
+ 
+ /**
+  * struct sgx_enclave_create - parameter structure for the
+diff --git a/arch/x86/kernel/cpu/sgx/virt.c b/arch/x86/kernel/cpu/sgx/virt.c
+index 59cdf3f742ac..6a77a14eee38 100644
+--- a/arch/x86/kernel/cpu/sgx/virt.c
++++ b/arch/x86/kernel/cpu/sgx/virt.c
+@@ -150,6 +150,41 @@ static int sgx_vepc_free_page(struct sgx_epc_page *epc_page)
+ 	return 0;
+ }
+ 
++static long sgx_vepc_remove_all(struct sgx_vepc *vepc)
++{
++	struct sgx_epc_page *entry;
++	unsigned long index;
++	long failures = 0;
++
++	xa_for_each(&vepc->page_array, index, entry) {
++		int ret = sgx_vepc_remove_page(entry);
++		if (ret) {
++			if (ret == SGX_CHILD_PRESENT) {
++				/* The page is a SECS, userspace will retry.  */
++				failures++;
++			} else {
++				/*
++				 * Report errors due to #GP or SGX_ENCLAVE_ACT; do not
++				 * WARN, as userspace can induce said failures by
++				 * calling the ioctl concurrently on multiple vEPCs or
++				 * while one or more CPUs is running the enclave.  Only
++				 * a #PF on EREMOVE indicates a kernel/hardware issue.
++				 */
++				WARN_ON_ONCE(encls_faulted(ret) &&
++					     ENCLS_TRAPNR(ret) != X86_TRAP_GP);
++				return -EBUSY;
++			}
++		}
++		cond_resched();
++	}
++
++	/*
++	 * Return the number of SECS pages that failed to be removed, so
++	 * userspace knows that it has to retry.
++	 */
++	return failures;
++}
++
+ static int sgx_vepc_release(struct inode *inode, struct file *file)
+ {
+ 	struct sgx_vepc *vepc = file->private_data;
+@@ -235,9 +270,27 @@ static int sgx_vepc_open(struct inode *inode, struct file *file)
+ 	return 0;
+ }
+ 
++static long sgx_vepc_ioctl(struct file *file,
++			   unsigned int cmd, unsigned long arg)
++{
++	struct sgx_vepc *vepc = file->private_data;
++
++	switch (cmd) {
++	case SGX_IOC_VEPC_REMOVE_ALL:
++		if (arg)
++			return -EINVAL;
++		return sgx_vepc_remove_all(vepc);
++
++	default:
++		return -ENOTTY;
++	}
++}
++
+ static const struct file_operations sgx_vepc_fops = {
+ 	.owner		= THIS_MODULE,
+ 	.open		= sgx_vepc_open,
++	.unlocked_ioctl	= sgx_vepc_ioctl,
++	.compat_ioctl	= sgx_vepc_ioctl,
+ 	.release	= sgx_vepc_release,
+ 	.mmap		= sgx_vepc_mmap,
+ };
+-- 
+2.31.1
+

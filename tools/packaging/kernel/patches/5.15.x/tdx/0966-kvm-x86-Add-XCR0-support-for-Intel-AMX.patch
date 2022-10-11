@@ -1,0 +1,50 @@
+From 3a534abb3c45e9b80d4d491cd72e6da1eee75f4f Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Mon, 24 Jan 2022 21:55:02 -0800
+Subject: [PATCH 0966/1418] kvm: x86: Add XCR0 support for Intel AMX
+
+Two XCR0 bits are defined for AMX to support XSAVE mechanism. Bit 17
+is for tilecfg and bit 18 is for tiledata.
+
+The value of XCR0[17:18] is always either 00b or 11b. Also, SDM
+recommends that only 64-bit operating systems enable Intel AMX by
+setting XCR0[18:17]. 32-bit host kernel never sets the tile bits in
+vcpu->arch.guest_supported_xcr0.
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+Signed-off-by: Kevin Tian <kevin.tian@intel.com>
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Message-Id: <20220105123532.12586-16-yang.zhong@intel.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/kvm/x86.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 045ba99c5c83..8af443b832f1 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -213,7 +213,7 @@ static struct kvm_user_return_msrs __percpu *user_return_msrs;
+ #define KVM_SUPPORTED_XCR0     (XFEATURE_MASK_FP | XFEATURE_MASK_SSE \
+ 				| XFEATURE_MASK_YMM | XFEATURE_MASK_BNDREGS \
+ 				| XFEATURE_MASK_BNDCSR | XFEATURE_MASK_AVX512 \
+-				| XFEATURE_MASK_PKRU)
++				| XFEATURE_MASK_PKRU | XFEATURE_MASK_XTILE)
+ 
+ #define KVM_SUPPORTED_XSS     XFEATURE_MASK_LBR
+ 
+@@ -1022,6 +1022,11 @@ static int __kvm_set_xcr(struct kvm_vcpu *vcpu, u32 index, u64 xcr)
+ 		if ((xcr0 & XFEATURE_MASK_AVX512) != XFEATURE_MASK_AVX512)
+ 			return 1;
+ 	}
++
++	if ((xcr0 & XFEATURE_MASK_XTILE) &&
++	    ((xcr0 & XFEATURE_MASK_XTILE) != XFEATURE_MASK_XTILE))
++		return 1;
++
+ 	vcpu->arch.xcr0 = xcr0;
+ 
+ 	if ((xcr0 ^ old_xcr0) & XFEATURE_MASK_EXTEND)
+-- 
+2.31.1
+

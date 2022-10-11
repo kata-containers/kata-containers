@@ -1,0 +1,91 @@
+From 509f4cbdcbf88032c1d1f400f5cf621fdb2e7865 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Mon, 12 Jul 2021 13:46:39 -0700
+Subject: [PATCH 0438/1418] KVM: TDX: drop unzapped private spte when flushing
+ memslot
+
+This patch fixes BUG() in __pte_list_remove() when destroy TD.
+
+memslot can be updated to emulate x86 PAM area.  When memslot is updated,
+memslot is deleted and new memslot is created.  As result rmap information
+in memslot is lost.  It means that there is no rmap existing after zapping
+rmap when deleting memslot.
+
+kvm_zap_rmap() satisfies the assumption so far, but kvm_zap_rmap() can keep
+rmap for unzapped private spte.  The assumption for flushing memslot
+doesn't hold.  It results in BUG in __pte_list_remove() when destroying TD
+guest.  To fix BUG() by making the assumption for updating memslot true,
+drop unzapped private spte when deleting/updating memslot.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ Documentation/virt/kvm/api.rst |  2 ++
+ arch/x86/kvm/mmu/mmu.c         | 25 ++++++++++++++++++++++++-
+ 2 files changed, 26 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/virt/kvm/api.rst b/Documentation/virt/kvm/api.rst
+index b8e34ad84440..b5929596d199 100644
+--- a/Documentation/virt/kvm/api.rst
++++ b/Documentation/virt/kvm/api.rst
+@@ -1319,6 +1319,8 @@ It is recommended to use this API instead of the KVM_SET_MEMORY_REGION ioctl.
+ The KVM_SET_MEMORY_REGION does not allow fine grained control over memory
+ allocation and is deprecated.
+ 
++For TDX guest, deleting/moving memory slot loses guest memory contents.
++
+ 
+ 4.36 KVM_SET_TSS_ADDR
+ ---------------------
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 83fc820c80db..328dde0ab1a8 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -1651,6 +1651,23 @@ static bool kvm_unmap_rmapp(struct kvm *kvm, struct kvm_rmap_head *rmap_head,
+ 	return __kvm_zap_rmapp(kvm, rmap_head);
+ }
+ 
++static bool kvm_drop_zapped_private_rmapp(
++	struct kvm *kvm, struct kvm_rmap_head *rmap_head,
++	const struct kvm_memory_slot *slot)
++{
++	u64 *sptep;
++	struct rmap_iterator iter;
++
++	for_each_rmap_spte(rmap_head, &iter, sptep) {
++		if (!is_zapped_private_pte(*sptep))
++			continue;
++
++		drop_spte(kvm, sptep);
++	}
++
++	return false;
++}
++
+ static bool kvm_set_pte_rmapp(struct kvm *kvm, struct kvm_rmap_head *rmap_head,
+ 			      struct kvm_memory_slot *slot, gfn_t gfn, int level,
+ 			      pte_t pte)
+@@ -6069,6 +6086,11 @@ static void kvm_mmu_zap_memslot(struct kvm *kvm, struct kvm_memory_slot *slot)
+ 	write_lock(&kvm->mmu_lock);
+ 	slot_handle_level(kvm, slot, kvm_zap_rmapp, PG_LEVEL_4K,
+ 			  KVM_MAX_HUGEPAGE_LEVEL, true);
++	if (kvm->arch.gfn_shared_mask) {
++		kvm_flush_remote_tlbs(kvm);
++		slot_handle_level(kvm, slot, kvm_drop_zapped_private_rmapp,
++				  PG_LEVEL_4K, KVM_MAX_HUGEPAGE_LEVEL, false);
++	}
+ 	write_unlock(&kvm->mmu_lock);
+ }
+ 
+@@ -6076,7 +6098,8 @@ static void kvm_mmu_invalidate_zap_pages_in_memslot(struct kvm *kvm,
+ 			struct kvm_memory_slot *slot,
+ 			struct kvm_page_track_notifier_node *node)
+ {
+-	if (memslot_update_zap_all)
++	if (memslot_update_zap_all &&
++	    !kvm->arch.gfn_shared_mask)
+ 		kvm_mmu_zap_all_fast(kvm);
+ 	else
+ 		kvm_mmu_zap_memslot(kvm, slot);
+-- 
+2.31.1
+

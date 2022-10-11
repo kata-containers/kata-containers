@@ -1,0 +1,31 @@
+From 64a266f9619c313eced0fa0c117040a5c3cefea4 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Thu, 26 Aug 2021 18:56:42 -0700
+Subject: [PATCH 0204/1418] x86/tdx: Disable
+ X86_FEATURE_TME,X86_FEATURE_APERFMPERF Capability
+
+Features like TME and APERFMPERF are not supported in TDX platform.
+So, disable them in TDX guest by clearing the feature bits.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdx.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index f8003c4536a0..a4254798da22 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -792,6 +792,8 @@ void __init tdx_early_init(void)
+ 	setup_force_cpu_cap(X86_FEATURE_TDX_GUEST);
+ 	setup_clear_cpu_cap(X86_FEATURE_MCE);
+ 	setup_clear_cpu_cap(X86_FEATURE_MTRR);
++	setup_clear_cpu_cap(X86_FEATURE_APERFMPERF);
++	setup_clear_cpu_cap(X86_FEATURE_TME);
+ 
+ 	/*
+ 	 * The only secure (mononotonous) timer inside a TD guest
+-- 
+2.31.1
+

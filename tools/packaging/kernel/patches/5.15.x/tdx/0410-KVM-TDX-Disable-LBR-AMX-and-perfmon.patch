@@ -1,0 +1,53 @@
+From 1f56bcf01d60755c8b931bc29e93dec219f317f4 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Mon, 15 Mar 2021 01:47:29 -0400
+Subject: [PATCH 0410/1418] KVM: TDX: Disable LBR, AMX and perfmon
+
+To enable them for TD, KVM needs to save/restore related MSRs.
+Disable them until related MSR saving/restoring logic is added.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 10ed44adaade..279ee180b3c6 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -1462,6 +1462,12 @@ static int setup_tdparams(struct kvm *kvm, struct td_params *td_params,
+ 				  tdx_caps.attrs_fixed1))
+ 		return -EINVAL;
+ 
++	if (td_params->attributes & TDX_TD_ATTRIBUTE_PERFMON) {
++		pr_warn("TD doesn't support perfmon. KVM needs to save/restore "
++			"host perf registers properly.\n");
++		return -EOPNOTSUPP;
++	}
++
+ 	/* Setup td_params.xfam */
+ 	td_params->xfam = guest_supported_xcr0 | guest_supported_xss;
+ 	if (!tdx_fixed_bits_valid(td_params->xfam,
+@@ -1469,6 +1475,18 @@ static int setup_tdparams(struct kvm *kvm, struct td_params *td_params,
+ 				  tdx_caps.xfam_fixed1))
+ 		return -EINVAL;
+ 
++	if (td_params->xfam & TDX_TD_XFAM_LBR) {
++		pr_warn("TD doesn't support LBR. KVM needs to save/restore "
++			"IA32_LBR_DEPTH properly.\n");
++		return -EOPNOTSUPP;
++	}
++
++	if (td_params->xfam & TDX_TD_XFAM_AMX) {
++		pr_warn("TD doesn't support AMX. KVM needs to save/restore "
++			"IA32_XFD, IA32_XFD_ERR properly.\n");
++		return -EOPNOTSUPP;
++	}
++
+ 	if (init_vm->tsc_khz)
+ 		guest_tsc_khz = init_vm->tsc_khz;
+ 	else
+-- 
+2.31.1
+

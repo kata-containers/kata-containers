@@ -1,0 +1,35 @@
+From ac4b9eeb37b47dd35594f330c2f1e7bc7608d58d Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Fri, 4 Oct 2019 04:51:29 -0700
+Subject: [PATCH 0619/1418] iommu: Fix an issue in iommu_page_response() flags
+ check
+
+original code fails when LAST_PAGE is set in flags.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/iommu.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
+index 747101eedcc8..54ebdaf34600 100644
+--- a/drivers/iommu/iommu.c
++++ b/drivers/iommu/iommu.c
+@@ -1260,9 +1260,11 @@ int iommu_page_response(struct device *dev,
+ 		return -EINVAL;
+ 
+ 	if (msg->version != IOMMU_PAGE_RESP_VERSION_1 ||
+-	    msg->flags & ~IOMMU_PAGE_RESP_PASID_VALID)
++		!(msg->flags & IOMMU_PAGE_RESP_PASID_VALID)) {
++		dev_dbg(dev, "%s:Invalid ver %x: flags %x\n",
++			__func__, msg->version, msg->flags);
+ 		return -EINVAL;
+-
++	}
+ 	/* Only send response if there is a fault report pending */
+ 	mutex_lock(&param->fault_param->lock);
+ 	if (list_empty(&param->fault_param->faults)) {
+-- 
+2.31.1
+

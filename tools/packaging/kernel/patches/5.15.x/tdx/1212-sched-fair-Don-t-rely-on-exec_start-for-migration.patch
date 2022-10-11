@@ -1,0 +1,62 @@
+From 0203e303c6dc1058650b0e467ee8ad3a170c9363 Mon Sep 17 00:00:00 2001
+From: Peter Zijlstra <peterz@infradead.org>
+Date: Thu, 23 Dec 2021 13:13:39 +0100
+Subject: [PATCH 1212/1418] sched/fair: Don't rely on ->exec_start for
+ migration
+
+Currently migrate_task_rq_fair() (ab)uses se->exec_start to make
+task_hot() fail. In order to preserve ->exec_start, add a ->migrated
+flag to sched_entity.
+
+Signed-off-by: Peter Zijlstra (Intel) <peterz@infradead.org>
+---
+ include/linux/sched.h | 1 +
+ kernel/sched/fair.c   | 6 +++++-
+ 2 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index d87f322247b5..eda7bbb08ca2 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -530,6 +530,7 @@ struct sched_entity {
+ 	struct rb_node			run_node;
+ 	struct list_head		group_node;
+ 	unsigned int			on_rq;
++	unsigned int			migrated;
+ 
+ 	u64				exec_start;
+ 	u64				sum_exec_runtime;
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index f6a05d9b5443..4a49187cebae 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -1047,6 +1047,7 @@ update_stats_curr_start(struct cfs_rq *cfs_rq, struct sched_entity *se)
+ 	/*
+ 	 * We are starting a new run period:
+ 	 */
++	se->migrated = 0;
+ 	se->exec_start = rq_clock_task(rq_of(cfs_rq));
+ }
+ 
+@@ -7028,7 +7029,7 @@ static void migrate_task_rq_fair(struct task_struct *p, int new_cpu)
+ 	p->se.avg.last_update_time = 0;
+ 
+ 	/* We have migrated, no longer consider this task hot */
+-	p->se.exec_start = 0;
++	p->se.migrated = 1;
+ 
+ 	update_scan_period(p, new_cpu);
+ }
+@@ -7714,6 +7715,9 @@ static int task_hot(struct task_struct *p, struct lb_env *env)
+ 	if (sysctl_sched_migration_cost == 0)
+ 		return 0;
+ 
++	if (p->se.migrated)
++		return 0;
++
+ 	delta = rq_clock_task(env->src_rq) - p->se.exec_start;
+ 
+ 	return delta < (s64)sysctl_sched_migration_cost;
+-- 
+2.31.1
+

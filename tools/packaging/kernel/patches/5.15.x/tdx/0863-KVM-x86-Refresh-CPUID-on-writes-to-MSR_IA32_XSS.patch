@@ -1,0 +1,73 @@
+From 0f126c972961cc72b14cf7a530bfa68fd362f484 Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Thu, 16 Jul 2020 11:16:21 +0800
+Subject: [PATCH 0863/1418] KVM: x86: Refresh CPUID on writes to MSR_IA32_XSS
+
+Updated CPUID.0xD.0x1, which reports the current required storage size
+of all features enabled via XCR0 | XSS, when the guest's XSS is modified.
+
+Note, KVM does not yet support any XSS based features, i.e. supported_xss
+is guaranteed to be zero at this time.
+
+Co-developed-by: Zhang Yi Z <yi.z.zhang@linux.intel.com>
+Signed-off-by: Zhang Yi Z <yi.z.zhang@linux.intel.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/cpuid.c | 21 ++++++++++++++++++---
+ arch/x86/kvm/x86.c   |  7 +++++--
+ 2 files changed, 23 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c
+index 463a498193b1..c01a4f37ace9 100644
+--- a/arch/x86/kvm/cpuid.c
++++ b/arch/x86/kvm/cpuid.c
+@@ -156,9 +156,24 @@ void kvm_update_cpuid_runtime(struct kvm_vcpu *vcpu)
+ 		best->ebx = xstate_required_size(vcpu->arch.xcr0, false);
+ 
+ 	best = kvm_find_cpuid_entry(vcpu, 0xD, 1);
+-	if (best && (cpuid_entry_has(best, X86_FEATURE_XSAVES) ||
+-		     cpuid_entry_has(best, X86_FEATURE_XSAVEC)))
+-		best->ebx = xstate_required_size(vcpu->arch.xcr0, true);
++	if (best) {
++		if (cpuid_entry_has(best, X86_FEATURE_XSAVES) ||
++		    cpuid_entry_has(best, X86_FEATURE_XSAVEC))  {
++			u64 xstate = vcpu->arch.xcr0 | vcpu->arch.ia32_xss;
++
++			best->ebx = xstate_required_size(xstate, true);
++		}
++
++		if (!cpuid_entry_has(best, X86_FEATURE_XSAVES)) {
++			best->ecx = 0;
++			best->edx = 0;
++		}
++		vcpu->arch.guest_supported_xss =
++			(((u64)best->edx << 32) | best->ecx) & supported_xss;
++
++	} else {
++		vcpu->arch.guest_supported_xss = 0;
++	}
+ 
+ 	best = kvm_find_cpuid_entry(vcpu, KVM_CPUID_FEATURES, 0);
+ 	if (kvm_hlt_in_guest(vcpu->kvm) && best &&
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index c9303e152477..ecb2cd52697b 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -3493,9 +3493,12 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ 		 * IA32_XSS[bit 8]. Guests have to use RDMSR/WRMSR rather than
+ 		 * XSAVES/XRSTORS to save/restore PT MSRs.
+ 		 */
+-		if (data & ~supported_xss)
++		if (data & ~vcpu->arch.guest_supported_xss)
+ 			return 1;
+-		vcpu->arch.ia32_xss = data;
++		if (vcpu->arch.ia32_xss != data) {
++			vcpu->arch.ia32_xss = data;
++			kvm_update_cpuid_runtime(vcpu);
++		}
+ 		break;
+ 	case MSR_SMI_COUNT:
+ 		if (!msr_info->host_initiated)
+-- 
+2.31.1
+

@@ -1,0 +1,386 @@
+From 2429551db3b3aa85b8d94e1dbb4698500bca64c9 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Fri, 17 Dec 2021 11:16:35 +0800
+Subject: [PATCH 0774/1418] Revert "x86/sgx: Introduce mechanism to prevent new
+ initializations of EPC pages"
+
+This reverts commit f5cad16c3604844e3d39bc32556b28d1fa4bbf41.
+---
+ arch/x86/include/asm/sgx.h      |  8 ------
+ arch/x86/kernel/cpu/sgx/encl.c  | 28 +++----------------
+ arch/x86/kernel/cpu/sgx/encls.h |  8 ------
+ arch/x86/kernel/cpu/sgx/ioctl.c | 48 +++++++++------------------------
+ arch/x86/kernel/cpu/sgx/main.c  | 28 -------------------
+ arch/x86/kernel/cpu/sgx/sgx.h   |  3 ---
+ arch/x86/kernel/cpu/sgx/virt.c  | 20 --------------
+ 7 files changed, 16 insertions(+), 127 deletions(-)
+
+diff --git a/arch/x86/include/asm/sgx.h b/arch/x86/include/asm/sgx.h
+index 13a142b9bcde..05f3e21f01a7 100644
+--- a/arch/x86/include/asm/sgx.h
++++ b/arch/x86/include/asm/sgx.h
+@@ -375,12 +375,4 @@ int sgx_virt_einit(void __user *sigstruct, void __user *token,
+ int sgx_set_attribute(unsigned long *allowed_attributes,
+ 		      unsigned int attribute_fd);
+ 
+-#ifdef CONFIG_X86_SGX
+-void sgx_lock_epc(void);
+-void sgx_unlock_epc(void);
+-#else
+-static inline void sgx_lock_epc(void) { }
+-static inline void sgx_unlock_epc(void) { }
+-#endif
+-
+ #endif /* _ASM_X86_SGX_H */
+diff --git a/arch/x86/kernel/cpu/sgx/encl.c b/arch/x86/kernel/cpu/sgx/encl.c
+index 9cc6dc2e67c3..001808e3901c 100644
+--- a/arch/x86/kernel/cpu/sgx/encl.c
++++ b/arch/x86/kernel/cpu/sgx/encl.c
+@@ -70,24 +70,16 @@ static struct sgx_epc_page *sgx_encl_eldu(struct sgx_encl_page *encl_page,
+ 	unsigned long va_offset = encl_page->desc & SGX_ENCL_PAGE_VA_OFFSET_MASK;
+ 	struct sgx_encl *encl = encl_page->encl;
+ 	struct sgx_epc_page *epc_page;
+-	int srcu_idx;
+ 	int ret;
+ 
+-	srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
+-	if (sgx_epc_is_locked()) {
+-		epc_page = ERR_PTR(-EBUSY);
+-		goto out;
+-	}
+-
+ 	epc_page = sgx_alloc_epc_page(encl_page, false);
+ 	if (IS_ERR(epc_page))
+-		goto out;
++		return epc_page;
+ 
+ 	ret = __sgx_encl_eldu(encl_page, epc_page, secs_page);
+ 	if (ret) {
+ 		sgx_encl_free_epc_page(epc_page);
+-		epc_page = ERR_PTR(ret);
+-		goto out;
++		return ERR_PTR(ret);
+ 	}
+ 
+ 	sgx_free_va_slot(encl_page->va_page, va_offset);
+@@ -95,8 +87,6 @@ static struct sgx_epc_page *sgx_encl_eldu(struct sgx_encl_page *encl_page,
+ 	encl_page->desc &= ~SGX_ENCL_PAGE_VA_OFFSET_MASK;
+ 	encl_page->epc_page = epc_page;
+ 
+-out:
+-	srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ 	return epc_page;
+ }
+ 
+@@ -687,29 +677,19 @@ int sgx_encl_test_and_clear_young(struct mm_struct *mm,
+ struct sgx_epc_page *sgx_alloc_va_page(void)
+ {
+ 	struct sgx_epc_page *epc_page;
+-	int srcu_idx;
+ 	int ret;
+ 
+-	srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
+-	if (sgx_epc_is_locked()) {
+-		epc_page = ERR_PTR(-EBUSY);
+-		goto out;
+-	}
+-
+ 	epc_page = sgx_alloc_epc_page(NULL, true);
+ 	if (IS_ERR(epc_page))
+-		goto out;
++		return ERR_CAST(epc_page);
+ 
+ 	ret = __epa(sgx_get_epc_virt_addr(epc_page));
+ 	if (ret) {
+ 		WARN_ONCE(1, "EPA returned %d (0x%x)", ret, ret);
+ 		sgx_encl_free_epc_page(epc_page);
+-		epc_page = ERR_PTR(-EFAULT);
+-		goto out;
++		return ERR_PTR(-EFAULT);
+ 	}
+ 
+-out:
+-	srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ 	return epc_page;
+ }
+ 
+diff --git a/arch/x86/kernel/cpu/sgx/encls.h b/arch/x86/kernel/cpu/sgx/encls.h
+index 0f37e7617a57..9b204843b78d 100644
+--- a/arch/x86/kernel/cpu/sgx/encls.h
++++ b/arch/x86/kernel/cpu/sgx/encls.h
+@@ -164,8 +164,6 @@ static inline bool encls_failed(int ret)
+ 
+ static inline int __ecreate(struct sgx_pageinfo *pginfo, void *secs)
+ {
+-	lockdep_assert_held(&sgx_lock_epc_srcu);
+-
+ 	return __encls_2(ECREATE, pginfo, secs);
+ }
+ 
+@@ -176,8 +174,6 @@ static inline int __eextend(void *secs, void *addr)
+ 
+ static inline int __eadd(struct sgx_pageinfo *pginfo, void *addr)
+ {
+-	lockdep_assert_held(&sgx_lock_epc_srcu);
+-
+ 	return __encls_2(EADD, pginfo, addr);
+ }
+ 
+@@ -209,8 +205,6 @@ static inline int __etrack(void *addr)
+ static inline int __eldu(struct sgx_pageinfo *pginfo, void *addr,
+ 			 void *va)
+ {
+-	lockdep_assert_held(&sgx_lock_epc_srcu);
+-
+ 	return __encls_ret_3(ELDU, pginfo, addr, va);
+ }
+ 
+@@ -223,8 +217,6 @@ static inline int __epa(void *addr)
+ {
+ 	unsigned long rbx = SGX_PAGE_TYPE_VA;
+ 
+-	lockdep_assert_held(&sgx_lock_epc_srcu);
+-
+ 	return __encls_2(EPA, rbx, addr);
+ }
+ 
+diff --git a/arch/x86/kernel/cpu/sgx/ioctl.c b/arch/x86/kernel/cpu/sgx/ioctl.c
+index 3289e07f86cc..83df20e3e633 100644
+--- a/arch/x86/kernel/cpu/sgx/ioctl.c
++++ b/arch/x86/kernel/cpu/sgx/ioctl.c
+@@ -30,7 +30,6 @@ static struct sgx_va_page *sgx_encl_grow(struct sgx_encl *encl)
+ 		if (!va_page)
+ 			return ERR_PTR(-ENOMEM);
+ 
+-		INIT_LIST_HEAD(&va_page->list);
+ 		va_page->epc_page = sgx_alloc_va_page();
+ 		if (IS_ERR(va_page->epc_page)) {
+ 			err = ERR_CAST(va_page->epc_page);
+@@ -50,8 +49,7 @@ static void sgx_encl_shrink(struct sgx_encl *encl, struct sgx_va_page *va_page)
+ 
+ 	if (va_page) {
+ 		sgx_encl_free_epc_page(va_page->epc_page);
+-		if (!list_empty(&va_page->list))
+-			list_del(&va_page->list);
++		list_del(&va_page->list);
+ 		kfree(va_page);
+ 	}
+ }
+@@ -65,7 +63,6 @@ static int sgx_encl_create(struct sgx_encl *encl, struct sgx_secs *secs)
+ 	unsigned long encl_size;
+ 	struct file *backing;
+ 	long ret;
+-	int srcu_idx;
+ 
+ 	va_page = sgx_encl_grow(encl);
+ 	if (IS_ERR(va_page))
+@@ -86,12 +83,6 @@ static int sgx_encl_create(struct sgx_encl *encl, struct sgx_secs *secs)
+ 
+ 	encl->backing = backing;
+ 
+-	srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
+-	if (sgx_epc_is_locked()) {
+-		ret = -EBUSY;
+-		goto err_out_backing;
+-	}
+-
+ 	secs_epc = sgx_alloc_epc_page(&encl->secs, true);
+ 	if (IS_ERR(secs_epc)) {
+ 		ret = PTR_ERR(secs_epc);
+@@ -124,8 +115,6 @@ static int sgx_encl_create(struct sgx_encl *encl, struct sgx_secs *secs)
+ 	/* Set only after completion, as encl->lock has not been taken. */
+ 	set_bit(SGX_ENCL_CREATED, &encl->flags);
+ 
+-	srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+-
+ 	return 0;
+ 
+ err_out:
+@@ -133,7 +122,6 @@ static int sgx_encl_create(struct sgx_encl *encl, struct sgx_secs *secs)
+ 	encl->secs.epc_page = NULL;
+ 
+ err_out_backing:
+-	srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ 	fput(encl->backing);
+ 	encl->backing = NULL;
+ 
+@@ -307,27 +295,20 @@ static int sgx_encl_add_page(struct sgx_encl *encl, unsigned long src,
+ 	struct sgx_epc_page *epc_page;
+ 	struct sgx_va_page *va_page;
+ 	int ret;
+-	int srcu_idx;
+-
+-	va_page = sgx_encl_grow(encl);
+-	if (IS_ERR(va_page))
+-		return PTR_ERR(va_page);
+ 
+ 	encl_page = sgx_encl_page_alloc(encl, offset, secinfo->flags);
+-	if (IS_ERR(encl_page)) {
+-		ret = PTR_ERR(encl_page);
+-		goto err_out_shrink;
+-	}
+-
+-	srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
+-	if (sgx_epc_is_locked()) {
+-		ret = -EBUSY;
+-		goto err_out_free;
+-	}
++	if (IS_ERR(encl_page))
++		return PTR_ERR(encl_page);
+ 
+ 	epc_page = sgx_alloc_epc_page(encl_page, true);
+ 	if (IS_ERR(epc_page)) {
+-		ret = PTR_ERR(epc_page);
++		kfree(encl_page);
++		return PTR_ERR(epc_page);
++	}
++
++	va_page = sgx_encl_grow(encl);
++	if (IS_ERR(va_page)) {
++		ret = PTR_ERR(va_page);
+ 		goto err_out_free;
+ 	}
+ 
+@@ -372,27 +353,22 @@ static int sgx_encl_add_page(struct sgx_encl *encl, unsigned long src,
+ 	}
+ 
+ 	sgx_mark_page_reclaimable(encl_page->epc_page);
+-
+ 	mutex_unlock(&encl->lock);
+ 	mmap_read_unlock(current->mm);
+-	srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ 	return ret;
+ 
+ err_out:
+ 	xa_erase(&encl->page_array, PFN_DOWN(encl_page->desc));
+ 
+ err_out_unlock:
++	sgx_encl_shrink(encl, va_page);
+ 	mutex_unlock(&encl->lock);
+ 	mmap_read_unlock(current->mm);
+-	sgx_encl_free_epc_page(epc_page);
+ 
+ err_out_free:
+-	srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
++	sgx_encl_free_epc_page(epc_page);
+ 	kfree(encl_page);
+ 
+-err_out_shrink:
+-	sgx_encl_shrink(encl, va_page);
+-
+ 	return ret;
+ }
+ 
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index 16e4e557355e..63d3de02bbcc 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -20,17 +20,6 @@ struct sgx_epc_section sgx_epc_sections[SGX_MAX_EPC_SECTIONS];
+ static int sgx_nr_epc_sections;
+ static struct task_struct *ksgxd_tsk;
+ static DECLARE_WAIT_QUEUE_HEAD(ksgxd_waitq);
+-/*
+- * The flags prevents new from using SGX for
+- * things like EADD.
+- */
+-static bool __rcu sgx_epc_locked;
+-/*
+- * SRCU ensures that old users that might not
+- * have noticed the flag have gone away before
+- * proceeding with an SVN update.
+- */
+-DEFINE_SRCU(sgx_lock_epc_srcu);
+ 
+ /*
+  * These variables are part of the state of the reclaimer, and must be accessed
+@@ -852,20 +841,3 @@ static int __init sgx_init(void)
+ }
+ 
+ device_initcall(sgx_init);
+-
+-void sgx_lock_epc(void)
+-{
+-	sgx_epc_locked = true;
+-	synchronize_srcu(&sgx_lock_epc_srcu);
+-}
+-
+-void sgx_unlock_epc(void)
+-{
+-	sgx_epc_locked = false;
+-	synchronize_srcu(&sgx_lock_epc_srcu);
+-}
+-
+-bool sgx_epc_is_locked(void)
+-{
+-	return sgx_epc_locked;
+-}
+diff --git a/arch/x86/kernel/cpu/sgx/sgx.h b/arch/x86/kernel/cpu/sgx/sgx.h
+index 76064254a35b..4628acec0009 100644
+--- a/arch/x86/kernel/cpu/sgx/sgx.h
++++ b/arch/x86/kernel/cpu/sgx/sgx.h
+@@ -95,7 +95,4 @@ static inline int __init sgx_vepc_init(void)
+ 
+ void sgx_update_lepubkeyhash(u64 *lepubkeyhash);
+ 
+-extern struct srcu_struct sgx_lock_epc_srcu;
+-bool sgx_epc_is_locked(void);
+-
+ #endif /* _X86_SGX_H */
+diff --git a/arch/x86/kernel/cpu/sgx/virt.c b/arch/x86/kernel/cpu/sgx/virt.c
+index d6ae86a98743..6a77a14eee38 100644
+--- a/arch/x86/kernel/cpu/sgx/virt.c
++++ b/arch/x86/kernel/cpu/sgx/virt.c
+@@ -76,20 +76,9 @@ static vm_fault_t sgx_vepc_fault(struct vm_fault *vmf)
+ 	struct vm_area_struct *vma = vmf->vma;
+ 	struct sgx_vepc *vepc = vma->vm_private_data;
+ 	int ret;
+-	int srcu_idx;
+ 
+ 	mutex_lock(&vepc->lock);
+-	srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
+-
+-	if (sgx_epc_is_locked()) {
+-		ret = -EBUSY;
+-		goto out_unlock;
+-	}
+-
+ 	ret = __sgx_vepc_fault(vepc, vma, vmf->address);
+-
+-out_unlock:
+-	srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ 	mutex_unlock(&vepc->lock);
+ 
+ 	if (!ret)
+@@ -343,7 +332,6 @@ int sgx_virt_ecreate(struct sgx_pageinfo *pageinfo, void __user *secs,
+ 		     int *trapnr)
+ {
+ 	int ret;
+-	int srcu_idx;
+ 
+ 	/*
+ 	 * @secs is an untrusted, userspace-provided address.  It comes from
+@@ -359,12 +347,6 @@ int sgx_virt_ecreate(struct sgx_pageinfo *pageinfo, void __user *secs,
+ 	if (WARN_ON_ONCE(!access_ok(secs, PAGE_SIZE)))
+ 		return -EINVAL;
+ 
+-	srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
+-	if (sgx_epc_is_locked()) {
+-		srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+-		return -EBUSY;
+-	}
+-
+ 	__uaccess_begin();
+ 	ret = __ecreate(pageinfo, (void *)secs);
+ 	__uaccess_end();
+@@ -374,8 +356,6 @@ int sgx_virt_ecreate(struct sgx_pageinfo *pageinfo, void __user *secs,
+ 		return -EFAULT;
+ 	}
+ 
+-	srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+-
+ 	/* ECREATE doesn't return an error code, it faults or succeeds. */
+ 	WARN_ON_ONCE(ret);
+ 	return 0;
+-- 
+2.31.1
+

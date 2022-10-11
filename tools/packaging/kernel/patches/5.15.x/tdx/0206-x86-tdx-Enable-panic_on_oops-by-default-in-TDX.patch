@@ -1,0 +1,38 @@
+From f0fc618fcc1d8dd05000596c3dcee3f5daa5a554 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Fri, 18 Jun 2021 19:11:11 -0700
+Subject: [PATCH 0206/1418] x86/tdx: Enable panic_on_oops by default in TDX
+
+For a confidential guest it seems safer to always panic on oopses.
+Some kind of attack from the host might result in a oops, and
+the oops recovery path can leave kernel subsystems in various
+undefined states, which could be used by the attacker.
+
+This can be still overridden after boot using the sysctl.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdx.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index a4254798da22..eef7242649cb 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -813,6 +813,12 @@ void __init tdx_early_init(void)
+ 	legacy_pic = &null_legacy_pic;
+ 	swiotlb_force = SWIOTLB_FORCE;
+ 
++	/*
++	 * Make sure there is a panic if something goes wrong,
++	 * just in case it's some kind of host attack.
++	 */
++	panic_on_oops = 1;
++
+ 	cpuhp_setup_state(CPUHP_AP_ONLINE_DYN, "tdx:cpu_hotplug",
+ 			  NULL, tdx_cpu_offline_prepare);
+ 
+-- 
+2.31.1
+

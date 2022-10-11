@@ -1,0 +1,109 @@
+From f6c40475bd23a43c948c950023f4b1e617b94a03 Mon Sep 17 00:00:00 2001
+From: Tony Luck <tony.luck@intel.com>
+Date: Thu, 10 Mar 2022 12:48:54 -0800
+Subject: [PATCH 1328/1418] x86/split-lock: Remove unused TIF_SLD bit
+
+Changes to the "warn" mode of split lock handling mean that TIF_SLD is
+never set.
+
+Remove the bit, and the functions that use it.
+
+Signed-off-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Link: https://lore.kernel.org/r/20220310204854.31752-3-tony.luck@intel.com
+---
+ arch/x86/include/asm/cpu.h         |  2 --
+ arch/x86/include/asm/thread_info.h |  4 +---
+ arch/x86/kernel/cpu/intel.c        | 12 ------------
+ arch/x86/kernel/process.c          |  3 ---
+ 4 files changed, 1 insertion(+), 20 deletions(-)
+
+diff --git a/arch/x86/include/asm/cpu.h b/arch/x86/include/asm/cpu.h
+index 07f24823be6c..46339bda0cf0 100644
+--- a/arch/x86/include/asm/cpu.h
++++ b/arch/x86/include/asm/cpu.h
+@@ -47,7 +47,6 @@ unsigned int x86_model(unsigned int sig);
+ unsigned int x86_stepping(unsigned int sig);
+ #ifdef CONFIG_CPU_SUP_INTEL
+ extern void __init sld_setup(struct cpuinfo_x86 *c);
+-extern void switch_to_sld(unsigned long tifn);
+ extern bool handle_user_split_lock(struct pt_regs *regs, long error_code);
+ extern bool handle_guest_split_lock(unsigned long ip);
+ extern void handle_bus_lock(struct pt_regs *regs);
+@@ -56,7 +55,6 @@ extern u64 tsx_ctrl_clear(void);
+ extern void tsx_ctrl_restore(u64 tsx_ctrl);
+ #else
+ static inline void __init sld_setup(struct cpuinfo_x86 *c) {}
+-static inline void switch_to_sld(unsigned long tifn) {}
+ static inline bool handle_user_split_lock(struct pt_regs *regs, long error_code)
+ {
+ 	return false;
+diff --git a/arch/x86/include/asm/thread_info.h b/arch/x86/include/asm/thread_info.h
+index cf132663c219..63587fc76bfc 100644
+--- a/arch/x86/include/asm/thread_info.h
++++ b/arch/x86/include/asm/thread_info.h
+@@ -89,7 +89,6 @@ struct thread_info {
+ #define TIF_NOCPUID		15	/* CPUID is not accessible in userland */
+ #define TIF_NOTSC		16	/* TSC is not accessible in userland */
+ #define TIF_NOTIFY_SIGNAL	17	/* signal notifications exist */
+-#define TIF_SLD			18	/* Restore split lock detection on context switch */
+ #define TIF_MEMDIE		20	/* is terminating due to OOM killer */
+ #define TIF_POLLING_NRFLAG	21	/* idle is polling for TIF_NEED_RESCHED */
+ #define TIF_IO_BITMAP		22	/* uses I/O bitmap */
+@@ -113,7 +112,6 @@ struct thread_info {
+ #define _TIF_NOCPUID		(1 << TIF_NOCPUID)
+ #define _TIF_NOTSC		(1 << TIF_NOTSC)
+ #define _TIF_NOTIFY_SIGNAL	(1 << TIF_NOTIFY_SIGNAL)
+-#define _TIF_SLD		(1 << TIF_SLD)
+ #define _TIF_POLLING_NRFLAG	(1 << TIF_POLLING_NRFLAG)
+ #define _TIF_IO_BITMAP		(1 << TIF_IO_BITMAP)
+ #define _TIF_SPEC_FORCE_UPDATE	(1 << TIF_SPEC_FORCE_UPDATE)
+@@ -125,7 +123,7 @@ struct thread_info {
+ /* flags to check in __switch_to() */
+ #define _TIF_WORK_CTXSW_BASE					\
+ 	(_TIF_NOCPUID | _TIF_NOTSC | _TIF_BLOCKSTEP |		\
+-	 _TIF_SSBD | _TIF_SPEC_FORCE_UPDATE | _TIF_SLD)
++	 _TIF_SSBD | _TIF_SPEC_FORCE_UPDATE)
+ 
+ /*
+  * Avoid calls to __switch_to_xtra() on UP as STIBP is not evaluated.
+diff --git a/arch/x86/kernel/cpu/intel.c b/arch/x86/kernel/cpu/intel.c
+index 955173b6377c..001b3d475557 100644
+--- a/arch/x86/kernel/cpu/intel.c
++++ b/arch/x86/kernel/cpu/intel.c
+@@ -1231,18 +1231,6 @@ void handle_bus_lock(struct pt_regs *regs)
+ 	}
+ }
+ 
+-/*
+- * This function is called only when switching between tasks with
+- * different split-lock detection modes. It sets the MSR for the
+- * mode of the new task. This is right most of the time, but since
+- * the MSR is shared by hyperthreads on a physical core there can
+- * be glitches when the two threads need different modes.
+- */
+-void switch_to_sld(unsigned long tifn)
+-{
+-	sld_update_msr(!(tifn & _TIF_SLD));
+-}
+-
+ /*
+  * Bits in the IA32_CORE_CAPABILITIES are not architectural, so they should
+  * only be trusted if it is confirmed that a CPU model implements a
+diff --git a/arch/x86/kernel/process.c b/arch/x86/kernel/process.c
+index eed4061caf5e..96e3cf85cb68 100644
+--- a/arch/x86/kernel/process.c
++++ b/arch/x86/kernel/process.c
+@@ -700,9 +700,6 @@ void __switch_to_xtra(struct task_struct *prev_p, struct task_struct *next_p)
+ 		/* Enforce MSR update to ensure consistent state */
+ 		__speculation_ctrl_update(~tifn, tifn);
+ 	}
+-
+-	if ((tifp ^ tifn) & _TIF_SLD)
+-		switch_to_sld(tifn);
+ }
+ 
+ /*
+-- 
+2.31.1
+

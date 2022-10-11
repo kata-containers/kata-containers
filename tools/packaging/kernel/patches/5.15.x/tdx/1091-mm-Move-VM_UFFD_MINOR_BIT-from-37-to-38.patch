@@ -1,0 +1,33 @@
+From e4677a62dbd0a1c35963ce540ebf6a8c5b406016 Mon Sep 17 00:00:00 2001
+From: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Date: Mon, 30 Aug 2021 11:15:09 -0700
+Subject: [PATCH 1091/1418] mm: Move VM_UFFD_MINOR_BIT from 37 to 38
+
+To introduce VM_SHADOW_STACK as VM_HIGH_ARCH_BIT (37), and make all
+VM_HIGH_ARCH_BITs stay together, move VM_UFFD_MINOR_BIT from 37 to 38.
+
+Signed-off-by: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Reviewed-by: Axel Rasmussen <axelrasmussen@google.com>
+Signed-off-by: Rick Edgecombe <rick.p.edgecombe@intel.com>
+Cc: Peter Xu <peterx@redhat.com>
+Cc: Mike Kravetz <mike.kravetz@oracle.com>
+---
+ include/linux/mm.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/linux/mm.h b/include/linux/mm.h
+index 73a52aba448f..c97988676470 100644
+--- a/include/linux/mm.h
++++ b/include/linux/mm.h
+@@ -369,7 +369,7 @@ extern unsigned int kobjsize(const void *objp);
+ #endif
+ 
+ #ifdef CONFIG_HAVE_ARCH_USERFAULTFD_MINOR
+-# define VM_UFFD_MINOR_BIT	37
++# define VM_UFFD_MINOR_BIT	38
+ # define VM_UFFD_MINOR		BIT(VM_UFFD_MINOR_BIT)	/* UFFD minor faults */
+ #else /* !CONFIG_HAVE_ARCH_USERFAULTFD_MINOR */
+ # define VM_UFFD_MINOR		VM_NONE
+-- 
+2.31.1
+

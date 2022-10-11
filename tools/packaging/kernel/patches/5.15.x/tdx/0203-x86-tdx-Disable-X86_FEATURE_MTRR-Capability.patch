@@ -1,0 +1,30 @@
+From eb14bef0052c660f66411d338bdfcc94b8edb975 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Fri, 18 Jun 2021 19:11:09 -0700
+Subject: [PATCH 0203/1418] x86/tdx: Disable X86_FEATURE_MTRR Capability
+
+MTRRs are fairly complicated and have a high attack surface from
+an untrusted host. There is no need for them in a virtual guest,
+so just disable them when running in TDX.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdx.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index b965cdad9294..f8003c4536a0 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -791,6 +791,7 @@ void __init tdx_early_init(void)
+ 
+ 	setup_force_cpu_cap(X86_FEATURE_TDX_GUEST);
+ 	setup_clear_cpu_cap(X86_FEATURE_MCE);
++	setup_clear_cpu_cap(X86_FEATURE_MTRR);
+ 
+ 	/*
+ 	 * The only secure (mononotonous) timer inside a TD guest
+-- 
+2.31.1
+

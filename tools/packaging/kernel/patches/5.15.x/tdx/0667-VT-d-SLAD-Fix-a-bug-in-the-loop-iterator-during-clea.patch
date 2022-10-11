@@ -1,0 +1,51 @@
+From 24fbbcd1617704e719f0ca0ac2cecf72ed056861 Mon Sep 17 00:00:00 2001
+From: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Date: Tue, 27 Jul 2021 15:09:43 -0700
+Subject: [PATCH 0667/1418] VT-d/SLAD: Fix a bug in the loop iterator during
+ clearing the SL A/D bits. Also move the invalidation call out of the loop to
+ reduce number of IOTLB invalidations.
+
+---
+ drivers/iommu/intel/iommu.c | 14 +++++++++-----
+ 1 file changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 98c6b0c5d787..71fe774bfae7 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -5943,6 +5943,8 @@ __domain_clear_dirty_log(struct dmar_domain *domain,
+ 	unsigned int largepage_lvl = 0;
+ 	unsigned int nbits;
+ 	int iommu_id, i;
++	unsigned long start_pfn = iov_pfn;
++	bool cleared = false;
+ 
+ 	if (bitmap_pgshift != VTD_PAGE_SHIFT)
+ 		return -EINVAL;
+@@ -5978,16 +5980,18 @@ __domain_clear_dirty_log(struct dmar_domain *domain,
+ 		else
+ 			test_and_clear_bit(6, (unsigned long *)&pte->val);
+ 
+-		for_each_domain_iommu(iommu_id, domain)
+-			iommu_flush_iotlb_psi(g_iommus[iommu_id], domain,
+-					iov_pfn, lvl_pages, 1, 0);
+-
++		cleared = true;
+ skip:
+ 		nr_pages -= lvl_pages;
+ 		iov_pfn += lvl_pages;
+-		iova += lvl_pages * VTD_PAGE_SHIFT;
++		iova += lvl_pages * VTD_PAGE_SIZE;
+ 	}
+ 
++	if (cleared)
++		for_each_domain_iommu(iommu_id, domain)
++			iommu_flush_iotlb_psi(g_iommus[iommu_id], domain,
++				start_pfn, size >> VTD_PAGE_SHIFT, 1, 0);
++
+ 	return 0;
+ }
+ 
+-- 
+2.31.1
+

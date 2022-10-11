@@ -1,0 +1,234 @@
+From bf05fac04aab892fe090e8af4771a5130c36cccd Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Fri, 20 Aug 2021 14:21:49 -0700
+Subject: [PATCH 0216/1418] iomap: Add support for indirect MMIO
+
+In TDX MMIO is normally done by catching a #VE exception and then
+emulating the MMIO. This needs at least two VM exits and entries, which
+can slow them down significantly. For near all it doesn't matter
+because they are not performance critical, but it can hurt for the
+virtio mailbox write that is in the critical path of most IO
+operations.
+
+It is possible to avoid the extra exit by calling the MMIO TDCALL
+directly, but that would need hooking into every writel() at least.
+Currently writel is just a single mov instruction, changing it to a
+function call would affect code size in all drivers. It would be quite
+wasteful because TDX only needs it for very few drivers (only virtio
+currently, and possibly a small number later)
+
+Luckily virtio is using iomap to access its MMIO and the iomap iowrite*
+functions are already out of line. So it's possible to add hooks into
+them without impacting any code size.
+
+MMIO is already quite slow, since it's uncached, so adding an extra if
+to it is not a big deal.
+
+This patch adds the infrastructure that an architecture can hook into
+mmio accesses using an indirect call vector for iomap only. This is
+only enabled if the architecture opts in and actually fills out the
+indirect call vector.
+
+This will be used in a followon patch to let TDX hook in optimized
+functions for iommap MMIO. When the indirect pointer is not filled
+in the MMIO accesses still go direct.
+
+The implementation is for all read/write[bwlq]. The TDX virtio
+optimization currently only really needs it for writel, but with the
+infrastructure it's simple and cheap to do it for all.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ include/linux/io.h | 16 ++++++++
+ lib/Kconfig        |  3 ++
+ lib/iomap.c        | 93 ++++++++++++++++++++++++++++++++++++++++++----
+ 3 files changed, 104 insertions(+), 8 deletions(-)
+
+diff --git a/include/linux/io.h b/include/linux/io.h
+index 9595151d800d..8cd4a0a5cc88 100644
+--- a/include/linux/io.h
++++ b/include/linux/io.h
+@@ -16,6 +16,22 @@
+ struct device;
+ struct resource;
+ 
++#ifdef CONFIG_IOMAP_IND_MMIO
++
++struct iomap_mmio {
++	unsigned char	(*ireadb)(void __iomem *addr);
++	unsigned short	(*ireadw)(void __iomem *addr);
++	unsigned int	(*ireadl)(void __iomem *addr);
++	unsigned long	(*ireadq)(void __iomem *addr);
++	void		(*iwriteb)(unsigned char val,  void __iomem *addr);
++	void		(*iwritew)(unsigned short val, void __iomem *addr);
++	void		(*iwritel)(unsigned int val,   void __iomem *addr);
++	void		(*iwriteq)(unsigned long val,  void __iomem *addr);
++};
++
++extern const struct iomap_mmio *iomap_mmio;
++#endif
++
+ __visible void __iowrite32_copy(void __iomem *to, const void *from, size_t count);
+ void __ioread32_copy(void *to, const void __iomem *from, size_t count);
+ void __iowrite64_copy(void __iomem *to, const void *from, size_t count);
+diff --git a/lib/Kconfig b/lib/Kconfig
+index 5e7165e6a346..4fbacdce2c5b 100644
+--- a/lib/Kconfig
++++ b/lib/Kconfig
+@@ -694,6 +694,9 @@ endmenu
+ config GENERIC_IOREMAP
+ 	bool
+ 
++config IOMAP_IND_MMIO
++       bool
++
+ config GENERIC_LIB_ASHLDI3
+ 	bool
+ 
+diff --git a/lib/iomap.c b/lib/iomap.c
+index fbaa3e8f19d6..bdd673db1e81 100644
+--- a/lib/iomap.c
++++ b/lib/iomap.c
+@@ -36,6 +36,76 @@
+ #define PIO_RESERVED	0x40000UL
+ #endif
+ 
++#ifdef CONFIG_IOMAP_IND_MMIO
++
++/*
++ * Out of line optimized access functions for iomap.  These might be
++ * faster for specific cases, like running in a guest that needs
++ * hypercalls for MMIO, which can save a round trip through an
++ * exception handler.  But it's not worth bloating all drivers' inline
++ * mmio everywhere, which will never run in those guests. But iomap is
++ * out of line and can be larger, and actually critical (e.g. used by
++ * virtio), and can afford an extra check in code size. For normal
++ * MMIO the extra pointer check is in the noise compared to the cost
++ * of an uncached access.
++ */
++
++__read_mostly const struct iomap_mmio *iomap_mmio;
++
++#define COND_MMIO_READ(func, addr)			\
++	(iomap_mmio ? iomap_mmio->i ## func(addr) : func(addr))
++
++#define COND_MMIO_WRITE(func, val, addr)		\
++	(iomap_mmio ? iomap_mmio->i ## func(val, addr) : func(val, addr))
++
++static inline unsigned char iomap_readb(void __iomem *addr)
++{
++	return COND_MMIO_READ(readb, addr);
++}
++
++static inline unsigned short iomap_readw(void __iomem *addr)
++{
++	return COND_MMIO_READ(readw, addr);
++}
++
++static inline unsigned int iomap_readl(void __iomem *addr)
++{
++	return COND_MMIO_READ(readl, addr);
++}
++
++static inline unsigned long iomap_readq(void __iomem *addr)
++{
++	return COND_MMIO_READ(readq, addr);
++}
++
++static inline void iomap_writeb(unsigned char val, void __iomem *addr)
++{
++	COND_MMIO_WRITE(writeb, val, addr);
++}
++
++static inline void iomap_writew(unsigned short val, void __iomem *addr)
++{
++	COND_MMIO_WRITE(writew, val, addr);
++}
++
++static inline void iomap_writel(unsigned int val, void __iomem *addr)
++{
++	COND_MMIO_WRITE(writel, val, addr);
++}
++
++static inline void iomap_writeq(unsigned long val, void __iomem *addr)
++{
++	COND_MMIO_WRITE(writeq, val, addr);
++}
++#endif
++
++#ifndef CONFIG_IOMAP_IND_MMIO
++#define iomap_readb(addr) readb(addr)
++#define iomap_readw(addr) readw(addr)
++#define iomap_readl(addr) readl(addr)
++#define iomap_readq(addr) readq(addr)
++#endif
++
+ static void bad_io_access(unsigned long port, const char *access)
+ {
+ 	static int count = 10;
+@@ -175,24 +245,31 @@ EXPORT_SYMBOL(ioread64be_hi_lo);
+ 
+ #endif /* readq */
+ 
++#ifndef CONFIG_IOMAP_IND_MMIO
++#define iomap_writeb(val, addr) writeb(val, addr)
++#define iomap_writew(val, addr) writew(val, addr)
++#define iomap_writel(val, addr) writel(val, addr)
++#define iomap_writeq(val, addr) writeq(val, addr)
++#endif
++
+ #ifndef pio_write16be
+ #define pio_write16be(val,port) outw(swab16(val),port)
+ #define pio_write32be(val,port) outl(swab32(val),port)
+ #endif
+ 
+ #ifndef mmio_write16be
+-#define mmio_write16be(val,port) writew(swab16(val),port)
+-#define mmio_write32be(val,port) writel(swab32(val),port)
+-#define mmio_write64be(val,port) writeq(swab64(val),port)
++#define mmio_write16be(val,port) iomap_writew(swab16(val),port)
++#define mmio_write32be(val,port) iomap_writel(swab32(val),port)
++#define mmio_write64be(val,port) iomap_writeq(swab64(val),port)
+ #endif
+ 
+ void iowrite8(u8 val, void __iomem *addr)
+ {
+-	IO_COND(addr, outb(val,port), writeb(val, addr));
++	IO_COND(addr, outb(val,port), iomap_writeb(val, addr));
+ }
+ void iowrite16(u16 val, void __iomem *addr)
+ {
+-	IO_COND(addr, outw(val,port), writew(val, addr));
++	IO_COND(addr, outw(val,port), iomap_writew(val, addr));
+ }
+ void iowrite16be(u16 val, void __iomem *addr)
+ {
+@@ -200,7 +277,7 @@ void iowrite16be(u16 val, void __iomem *addr)
+ }
+ void iowrite32(u32 val, void __iomem *addr)
+ {
+-	IO_COND(addr, outl(val,port), writel(val, addr));
++	IO_COND(addr, outl(val,port), iomap_writel(val, addr));
+ }
+ void iowrite32be(u32 val, void __iomem *addr)
+ {
+@@ -240,13 +317,13 @@ static void pio_write64be_hi_lo(u64 val, unsigned long port)
+ void iowrite64_lo_hi(u64 val, void __iomem *addr)
+ {
+ 	IO_COND(addr, pio_write64_lo_hi(val, port),
+-		writeq(val, addr));
++		iomap_writeq(val, addr));
+ }
+ 
+ void iowrite64_hi_lo(u64 val, void __iomem *addr)
+ {
+ 	IO_COND(addr, pio_write64_hi_lo(val, port),
+-		writeq(val, addr));
++		iomap_writeq(val, addr));
+ }
+ 
+ void iowrite64be_lo_hi(u64 val, void __iomem *addr)
+-- 
+2.31.1
+

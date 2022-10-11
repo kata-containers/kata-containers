@@ -1,0 +1,98 @@
+From 40aaa723c3761e0ebc7eac5f6bea8b58372c65dc Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Fri, 17 Dec 2021 11:16:17 +0800
+Subject: [PATCH 0773/1418] Revert "x86/sgx: Provide VA page non-NULL owner"
+
+This reverts commit 80c8c2a7ce247b4fe96ec718819c379757255a35.
+---
+ arch/x86/kernel/cpu/sgx/encl.c  | 5 ++---
+ arch/x86/kernel/cpu/sgx/encl.h  | 2 +-
+ arch/x86/kernel/cpu/sgx/ioctl.c | 2 +-
+ arch/x86/kernel/cpu/sgx/main.c  | 1 -
+ arch/x86/kernel/cpu/sgx/sgx.h   | 2 +-
+ 5 files changed, 5 insertions(+), 7 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/sgx/encl.c b/arch/x86/kernel/cpu/sgx/encl.c
+index a93abd6b44f7..9cc6dc2e67c3 100644
+--- a/arch/x86/kernel/cpu/sgx/encl.c
++++ b/arch/x86/kernel/cpu/sgx/encl.c
+@@ -677,7 +677,6 @@ int sgx_encl_test_and_clear_young(struct mm_struct *mm,
+ 
+ /**
+  * sgx_alloc_va_page() - Allocate a Version Array (VA) page
+- * @va_page:	struct sgx_va_page connected to this VA page
+  *
+  * Allocate a free EPC page and convert it to a Version Array (VA) page.
+  *
+@@ -685,7 +684,7 @@ int sgx_encl_test_and_clear_young(struct mm_struct *mm,
+  *   a VA page,
+  *   -errno otherwise
+  */
+-struct sgx_epc_page *sgx_alloc_va_page(struct sgx_va_page *va_page)
++struct sgx_epc_page *sgx_alloc_va_page(void)
+ {
+ 	struct sgx_epc_page *epc_page;
+ 	int srcu_idx;
+@@ -697,7 +696,7 @@ struct sgx_epc_page *sgx_alloc_va_page(struct sgx_va_page *va_page)
+ 		goto out;
+ 	}
+ 
+-	epc_page = sgx_alloc_epc_page(va_page, true);
++	epc_page = sgx_alloc_epc_page(NULL, true);
+ 	if (IS_ERR(epc_page))
+ 		goto out;
+ 
+diff --git a/arch/x86/kernel/cpu/sgx/encl.h b/arch/x86/kernel/cpu/sgx/encl.h
+index 3d12dbeae14a..fec43ca65065 100644
+--- a/arch/x86/kernel/cpu/sgx/encl.h
++++ b/arch/x86/kernel/cpu/sgx/encl.h
+@@ -111,7 +111,7 @@ void sgx_encl_put_backing(struct sgx_backing *backing, bool do_write);
+ int sgx_encl_test_and_clear_young(struct mm_struct *mm,
+ 				  struct sgx_encl_page *page);
+ 
+-struct sgx_epc_page *sgx_alloc_va_page(struct sgx_va_page *va_page);
++struct sgx_epc_page *sgx_alloc_va_page(void);
+ unsigned int sgx_alloc_va_slot(struct sgx_va_page *va_page);
+ void sgx_free_va_slot(struct sgx_va_page *va_page, unsigned int offset);
+ bool sgx_va_page_full(struct sgx_va_page *va_page);
+diff --git a/arch/x86/kernel/cpu/sgx/ioctl.c b/arch/x86/kernel/cpu/sgx/ioctl.c
+index b3c9dfbf0132..3289e07f86cc 100644
+--- a/arch/x86/kernel/cpu/sgx/ioctl.c
++++ b/arch/x86/kernel/cpu/sgx/ioctl.c
+@@ -31,7 +31,7 @@ static struct sgx_va_page *sgx_encl_grow(struct sgx_encl *encl)
+ 			return ERR_PTR(-ENOMEM);
+ 
+ 		INIT_LIST_HEAD(&va_page->list);
+-		va_page->epc_page = sgx_alloc_va_page(va_page);
++		va_page->epc_page = sgx_alloc_va_page();
+ 		if (IS_ERR(va_page->epc_page)) {
+ 			err = ERR_CAST(va_page->epc_page);
+ 			kfree(va_page);
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index f07ae4b199cf..16e4e557355e 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -635,7 +635,6 @@ void sgx_free_epc_page(struct sgx_epc_page *page)
+ 
+ 	spin_lock(&node->lock);
+ 
+-	page->owner = NULL;
+ 	list_add_tail(&page->list, &node->free_page_list);
+ 	sgx_nr_free_pages++;
+ 
+diff --git a/arch/x86/kernel/cpu/sgx/sgx.h b/arch/x86/kernel/cpu/sgx/sgx.h
+index fb9ac38ffc50..76064254a35b 100644
+--- a/arch/x86/kernel/cpu/sgx/sgx.h
++++ b/arch/x86/kernel/cpu/sgx/sgx.h
+@@ -29,7 +29,7 @@
+ struct sgx_epc_page {
+ 	unsigned int section;
+ 	unsigned int flags;
+-	void *owner;
++	struct sgx_encl_page *owner;
+ 	struct list_head list;
+ };
+ 
+-- 
+2.31.1
+

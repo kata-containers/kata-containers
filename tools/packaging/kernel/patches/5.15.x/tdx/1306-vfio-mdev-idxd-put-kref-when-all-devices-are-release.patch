@@ -1,0 +1,36 @@
+From e10f543d7b39a9ffceea953dbb2bc8fd0f773854 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Tue, 12 Apr 2022 11:18:34 -0700
+Subject: [PATCH 1306/1418] vfio: mdev: idxd: put kref when all devices are
+ released
+
+kref is init at value of 1. So when it reaches value of 1 on remove,
+call the extra put and release everything.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/vfio/mdev/idxd/mdev.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/vfio/mdev/idxd/mdev.c b/drivers/vfio/mdev/idxd/mdev.c
+index 8ed855188554..4d32ad10fa93 100644
+--- a/drivers/vfio/mdev/idxd/mdev.c
++++ b/drivers/vfio/mdev/idxd/mdev.c
+@@ -2427,8 +2427,13 @@ static void idxd_mdev_drv_remove(struct idxd_dev *idxd_dev)
+ 	mutex_unlock(&wq->wq_lock);
+ 
+ 	mutex_lock(&idxd->kref_lock);
+-	if (idxd->mdev_host_init)
++	if (idxd->mdev_host_init) {
+ 		kref_put(&idxd->mdev_kref, idxd_mdev_host_release);
++
++		/* kref init at 1, when it hits 1, no more devices and we can release */
++		if (kref_read(&idxd->mdev_kref) == 1)
++			kref_put(&idxd->mdev_kref, idxd_mdev_host_release);
++	}
+ 	mutex_unlock(&idxd->kref_lock);
+ 	put_device(dev);
+ 	dev_info(dev, "wq %s disabled\n", dev_name(dev));
+-- 
+2.31.1
+

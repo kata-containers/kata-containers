@@ -1,0 +1,137 @@
+From 30e153c05929e0aafe27275baf16e228c86e361c Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 8 Sep 2021 15:29:32 +0200
+Subject: [PATCH 0013/1418] x86/fpu/signal: Change return type of
+ copy_fpstate_to_sigframe() to boolean
+
+None of the call sites cares about the actual return code. Change the
+return type to boolean and return 'true' on success.
+
+Suggested-by: Al Viro <viro@zeniv.linux.org.uk>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20210908132525.736773588@linutronix.de
+---
+ arch/x86/ia32/ia32_signal.c         |  4 ++--
+ arch/x86/include/asm/fpu/internal.h |  2 +-
+ arch/x86/kernel/fpu/signal.c        | 20 ++++++++++----------
+ arch/x86/kernel/signal.c            |  4 +---
+ 4 files changed, 14 insertions(+), 16 deletions(-)
+
+diff --git a/arch/x86/ia32/ia32_signal.c b/arch/x86/ia32/ia32_signal.c
+index 5e3d9b7fd5fb..023198edf863 100644
+--- a/arch/x86/ia32/ia32_signal.c
++++ b/arch/x86/ia32/ia32_signal.c
+@@ -220,8 +220,8 @@ static void __user *get_sigframe(struct ksignal *ksig, struct pt_regs *regs,
+ 
+ 	sp = fpu__alloc_mathframe(sp, 1, &fx_aligned, &math_size);
+ 	*fpstate = (struct _fpstate_32 __user *) sp;
+-	if (copy_fpstate_to_sigframe(*fpstate, (void __user *)fx_aligned,
+-				     math_size) < 0)
++	if (!copy_fpstate_to_sigframe(*fpstate, (void __user *)fx_aligned,
++				      math_size))
+ 		return (void __user *) -1L;
+ 
+ 	sp -= frame_size;
+diff --git a/arch/x86/include/asm/fpu/internal.h b/arch/x86/include/asm/fpu/internal.h
+index c856ca481546..74aa53eeedf5 100644
+--- a/arch/x86/include/asm/fpu/internal.h
++++ b/arch/x86/include/asm/fpu/internal.h
+@@ -386,7 +386,7 @@ static inline void restore_fpregs_from_fpstate(union fpregs_state *fpstate)
+ 	__restore_fpregs_from_fpstate(fpstate, xfeatures_mask_fpstate());
+ }
+ 
+-extern int copy_fpstate_to_sigframe(void __user *buf, void __user *fp, int size);
++extern bool copy_fpstate_to_sigframe(void __user *buf, void __user *fp, int size);
+ 
+ /*
+  * FPU context switch related helper methods:
+diff --git a/arch/x86/kernel/fpu/signal.c b/arch/x86/kernel/fpu/signal.c
+index d5d610ab7739..db5681339cd9 100644
+--- a/arch/x86/kernel/fpu/signal.c
++++ b/arch/x86/kernel/fpu/signal.c
+@@ -165,7 +165,7 @@ static inline int copy_fpregs_to_sigframe(struct xregs_state __user *buf)
+  * For [f]xsave state, update the SW reserved fields in the [f]xsave frame
+  * indicating the absence/presence of the extended state to the user.
+  */
+-int copy_fpstate_to_sigframe(void __user *buf, void __user *buf_fx, int size)
++bool copy_fpstate_to_sigframe(void __user *buf, void __user *buf_fx, int size)
+ {
+ 	struct task_struct *tsk = current;
+ 	int ia32_fxstate = (buf != buf_fx);
+@@ -176,13 +176,14 @@ int copy_fpstate_to_sigframe(void __user *buf, void __user *buf_fx, int size)
+ 
+ 	if (!static_cpu_has(X86_FEATURE_FPU)) {
+ 		struct user_i387_ia32_struct fp;
++
+ 		fpregs_soft_get(current, NULL, (struct membuf){.p = &fp,
+ 						.left = sizeof(fp)});
+-		return copy_to_user(buf, &fp, sizeof(fp)) ? -EFAULT : 0;
++		return !copy_to_user(buf, &fp, sizeof(fp));
+ 	}
+ 
+ 	if (!access_ok(buf, size))
+-		return -EACCES;
++		return false;
+ 
+ 	if (use_xsave()) {
+ 		struct xregs_state __user *xbuf = buf_fx;
+@@ -191,9 +192,8 @@ int copy_fpstate_to_sigframe(void __user *buf, void __user *buf_fx, int size)
+ 		 * Clear the xsave header first, so that reserved fields are
+ 		 * initialized to zero.
+ 		 */
+-		ret = __clear_user(&xbuf->header, sizeof(xbuf->header));
+-		if (unlikely(ret))
+-			return ret;
++		if (__clear_user(&xbuf->header, sizeof(xbuf->header)))
++			return false;
+ 	}
+ retry:
+ 	/*
+@@ -214,17 +214,17 @@ int copy_fpstate_to_sigframe(void __user *buf, void __user *buf_fx, int size)
+ 	if (ret) {
+ 		if (!__clear_user(buf_fx, fpu_user_xstate_size))
+ 			goto retry;
+-		return -1;
++		return false;
+ 	}
+ 
+ 	/* Save the fsave header for the 32-bit frames. */
+ 	if ((ia32_fxstate || !use_fxsr()) && save_fsave_header(tsk, buf))
+-		return -1;
++		return false;
+ 
+ 	if (use_fxsr() && save_xstate_epilog(buf_fx, ia32_fxstate))
+-		return -1;
++		return false;
+ 
+-	return 0;
++	return true;
+ }
+ 
+ static int __restore_fpregs_from_user(void __user *buf, u64 xrestore,
+diff --git a/arch/x86/kernel/signal.c b/arch/x86/kernel/signal.c
+index f4d21e470083..5f623a1c8075 100644
+--- a/arch/x86/kernel/signal.c
++++ b/arch/x86/kernel/signal.c
+@@ -244,7 +244,6 @@ get_sigframe(struct k_sigaction *ka, struct pt_regs *regs, size_t frame_size,
+ 	unsigned long math_size = 0;
+ 	unsigned long sp = regs->sp;
+ 	unsigned long buf_fx = 0;
+-	int ret;
+ 
+ 	/* redzone */
+ 	if (IS_ENABLED(CONFIG_X86_64))
+@@ -292,8 +291,7 @@ get_sigframe(struct k_sigaction *ka, struct pt_regs *regs, size_t frame_size,
+ 	}
+ 
+ 	/* save i387 and extended state */
+-	ret = copy_fpstate_to_sigframe(*fpstate, (void __user *)buf_fx, math_size);
+-	if (ret < 0)
++	if (!copy_fpstate_to_sigframe(*fpstate, (void __user *)buf_fx, math_size))
+ 		return (void __user *)-1L;
+ 
+ 	return (void __user *)sp;
+-- 
+2.31.1
+

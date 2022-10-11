@@ -1,0 +1,74 @@
+From 4d0cba7fb47a936237c7af545dbdc3f43dd30b02 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Mon, 30 Mar 2020 12:39:51 -0700
+Subject: [PATCH 0354/1418] KVM: Enable hardware before doing arch VM
+ initialization
+
+Swap the order of hardware_enable_all() and kvm_arch_init_vm() to
+accommodate Intel's TDX, which needs VMX to be enabled during VM init in
+order to make SEAMCALLs.
+
+This also provides consistent ordering between kvm_create_vm() and
+kvm_destroy_vm() with respect to calling kvm_arch_destroy_vm() and
+hardware_disable_all().
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ virt/kvm/kvm_main.c | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/virt/kvm/kvm_main.c b/virt/kvm/kvm_main.c
+index 0b8a863e40ee..9763f508503a 100644
+--- a/virt/kvm/kvm_main.c
++++ b/virt/kvm/kvm_main.c
+@@ -1057,7 +1057,7 @@ static struct kvm *kvm_create_vm(unsigned long type)
+ 		struct kvm_memslots *slots = kvm_alloc_memslots();
+ 
+ 		if (!slots)
+-			goto out_err_no_arch_destroy_vm;
++			goto out_err_no_disable;
+ 		/* Generations must be different for each address space. */
+ 		slots->generation = i;
+ 		rcu_assign_pointer(kvm->memslots[i], slots);
+@@ -1067,19 +1067,19 @@ static struct kvm *kvm_create_vm(unsigned long type)
+ 		rcu_assign_pointer(kvm->buses[i],
+ 			kzalloc(sizeof(struct kvm_io_bus), GFP_KERNEL_ACCOUNT));
+ 		if (!kvm->buses[i])
+-			goto out_err_no_arch_destroy_vm;
++			goto out_err_no_disable;
+ 	}
+ 
+ 	kvm->max_halt_poll_ns = halt_poll_ns;
+ 
+-	r = kvm_arch_init_vm(kvm, type);
+-	if (r)
+-		goto out_err_no_arch_destroy_vm;
+-
+ 	r = hardware_enable_all();
+ 	if (r)
+ 		goto out_err_no_disable;
+ 
++	r = kvm_arch_init_vm(kvm, type);
++	if (r)
++		goto out_err_no_arch_destroy_vm;
++
+ #ifdef CONFIG_HAVE_KVM_IRQFD
+ 	INIT_HLIST_HEAD(&kvm->irq_ack_notifier_list);
+ #endif
+@@ -1107,10 +1107,10 @@ static struct kvm *kvm_create_vm(unsigned long type)
+ 		mmu_notifier_unregister(&kvm->mmu_notifier, current->mm);
+ #endif
+ out_err_no_mmu_notifier:
+-	hardware_disable_all();
+-out_err_no_disable:
+ 	kvm_arch_destroy_vm(kvm);
+ out_err_no_arch_destroy_vm:
++	hardware_disable_all();
++out_err_no_disable:
+ 	WARN_ON_ONCE(!refcount_dec_and_test(&kvm->users_count));
+ 	for (i = 0; i < KVM_NR_BUSES; i++)
+ 		kfree(kvm_get_bus(kvm, i));
+-- 
+2.31.1
+

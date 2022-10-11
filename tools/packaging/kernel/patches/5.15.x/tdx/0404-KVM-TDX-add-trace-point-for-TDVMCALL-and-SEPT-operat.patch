@@ -1,0 +1,166 @@
+From 6e4bbd9a7338f3105b4240b8e00740bf422c4c73 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Wed, 30 Jun 2021 17:49:22 -0700
+Subject: [PATCH 0404/1418] KVM: TDX: add trace point for TDVMCALL and SEPT
+ operation
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/trace.h   | 58 ++++++++++++++++++++++++++++++++++++++++++
+ arch/x86/kvm/vmx/tdx.c | 16 ++++++++++++
+ arch/x86/kvm/x86.c     |  2 ++
+ 3 files changed, 76 insertions(+)
+
+diff --git a/arch/x86/kvm/trace.h b/arch/x86/kvm/trace.h
+index f9f1663bbaad..9be69581510e 100644
+--- a/arch/x86/kvm/trace.h
++++ b/arch/x86/kvm/trace.h
+@@ -675,6 +675,64 @@ TRACE_EVENT(kvm_nested_vmexit_inject,
+ 		  __entry->exit_int_info, __entry->exit_int_info_err)
+ );
+ 
++/*
++ * Tracepoint for TDVMCALL from a TDX guest
++ */
++TRACE_EVENT(kvm_tdvmcall,
++	TP_PROTO(struct kvm_vcpu *vcpu, __u32 exit_reason,
++		 __u64 p1, __u64 p2, __u64 p3, __u64 p4),
++	TP_ARGS(vcpu, exit_reason, p1, p2, p3, p4),
++
++	TP_STRUCT__entry(
++		__field(	__u64,		rip		)
++		__field(	__u32,		exit_reason	)
++		__field(	__u64,		p1		)
++		__field(	__u64,		p2		)
++		__field(	__u64,		p3		)
++		__field(	__u64,		p4		)
++	),
++
++	TP_fast_assign(
++		__entry->rip			= kvm_rip_read(vcpu);
++		__entry->exit_reason		= exit_reason;
++		__entry->p1			= p1;
++		__entry->p2			= p2;
++		__entry->p3			= p3;
++		__entry->p4			= p4;
++	),
++
++	TP_printk("rip: %llx reason: %s p1: %llx p2: %llx p3: %llx p4: %llx",
++		  __entry->rip,
++		  __print_symbolic(__entry->exit_reason,
++				   TDG_VP_VMCALL_EXIT_REASONS),
++		  __entry->p1, __entry->p2, __entry->p3, __entry->p4)
++);
++
++/*
++ * Tracepoint for SEPT related SEAMCALLs.
++ */
++TRACE_EVENT(kvm_sept_seamcall,
++	TP_PROTO(__u64 op, __u64 gpa, __u64 hpa, int level),
++	TP_ARGS(op, gpa, hpa, level),
++
++	TP_STRUCT__entry(
++		__field(	__u64,		op	)
++		__field(	__u64,		gpa	)
++		__field(	__u64,		hpa	)
++		__field(	int,		level	)
++	),
++
++	TP_fast_assign(
++		__entry->op			= op;
++		__entry->gpa			= gpa;
++		__entry->hpa			= hpa;
++		__entry->level			= level;
++	),
++
++	TP_printk("op: %llu gpa: 0x%llx hpa: 0x%llx level: %u",
++		  __entry->op, __entry->gpa, __entry->hpa, __entry->level)
++);
++
+ /*
+  * Tracepoint for nested #vmexit because of interrupt pending
+  */
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index e076538bf6b4..0bcb51d23657 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -958,6 +958,10 @@ static int handle_tdvmcall(struct kvm_vcpu *vcpu)
+ 
+ 	exit_reason = tdvmcall_exit_reason(vcpu);
+ 
++	trace_kvm_tdvmcall(vcpu, exit_reason,
++			   tdvmcall_p1_read(vcpu), tdvmcall_p2_read(vcpu),
++			   tdvmcall_p3_read(vcpu), tdvmcall_p4_read(vcpu));
++
+ 	switch (exit_reason) {
+ 	case EXIT_REASON_CPUID:
+ 		return tdx_emulate_cpuid(vcpu);
+@@ -1035,11 +1039,15 @@ static void tdx_sept_set_private_spte(struct kvm_vcpu *vcpu, gfn_t gfn,
+ 
+ 	/* Build-time faults are induced and handled via TDH_MEM_PAGE_ADD. */
+ 	if (is_td_finalized(kvm_tdx)) {
++		trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_PAGE_AUG, gpa, hpa, level);
++
+ 		err = tdh_mem_page_aug(kvm_tdx->tdr.pa, gpa, hpa, &ex_ret);
+ 		SEPT_ERR(err, &ex_ret, TDH_MEM_PAGE_AUG, vcpu->kvm);
+ 		return;
+ 	}
+ 
++	trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_PAGE_ADD, gpa, hpa, level);
++
+ 	source_pa = kvm_tdx->source_pa & ~KVM_TDX_MEASURE_MEMORY_REGION;
+ 
+ 	err = tdh_mem_page_add(kvm_tdx->tdr.pa,  gpa, hpa, source_pa, &ex_ret);
+@@ -1063,6 +1071,8 @@ static void tdx_sept_drop_private_spte(struct kvm *kvm, gfn_t gfn, int level,
+ 		return;
+ 
+ 	if (is_hkid_assigned(kvm_tdx)) {
++		trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_PAGE_REMOVE, gpa, hpa, level);
++
+ 		err = tdh_mem_page_remove(kvm_tdx->tdr.pa, gpa, level, &ex_ret);
+ 		if (SEPT_ERR(err, &ex_ret, TDH_MEM_PAGE_REMOVE, kvm))
+ 			return;
+@@ -1087,6 +1097,8 @@ static int tdx_sept_link_private_sp(struct kvm_vcpu *vcpu, gfn_t gfn,
+ 	struct tdx_ex_ret ex_ret;
+ 	u64 err;
+ 
++	trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_SEPT_ADD, gpa, hpa, level);
++
+ 	err = tdh_mem_spet_add(kvm_tdx->tdr.pa, gpa, level, hpa, &ex_ret);
+ 	if (SEPT_ERR(err, &ex_ret, TDH_MEM_SEPT_ADD, vcpu->kvm))
+ 		return -EIO;
+@@ -1101,6 +1113,8 @@ static void tdx_sept_zap_private_spte(struct kvm *kvm, gfn_t gfn, int level)
+ 	struct tdx_ex_ret ex_ret;
+ 	u64 err;
+ 
++	trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_RANGE_BLOCK, gpa, -1ull, level);
++
+ 	err = tdh_mem_range_block(kvm_tdx->tdr.pa, gpa, level, &ex_ret);
+ 	SEPT_ERR(err, &ex_ret, TDH_MEM_RANGE_BLOCK, kvm);
+ }
+@@ -1112,6 +1126,8 @@ static void tdx_sept_unzap_private_spte(struct kvm *kvm, gfn_t gfn, int level)
+ 	struct tdx_ex_ret ex_ret;
+ 	u64 err;
+ 
++	trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_RANGE_UNBLOCK, gpa, -1ull, level);
++
+ 	err = tdh_mem_range_unblock(kvm_tdx->tdr.pa, gpa, level, &ex_ret);
+ 	SEPT_ERR(err, &ex_ret, TDH_MEM_RANGE_UNBLOCK, kvm);
+ }
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 8357b0065d7c..b0c10dd0e52c 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -12463,6 +12463,8 @@ EXPORT_TRACEPOINT_SYMBOL_GPL(kvm_cr);
+ EXPORT_TRACEPOINT_SYMBOL_GPL(kvm_nested_vmrun);
+ EXPORT_TRACEPOINT_SYMBOL_GPL(kvm_nested_vmexit);
+ EXPORT_TRACEPOINT_SYMBOL_GPL(kvm_nested_vmexit_inject);
++EXPORT_TRACEPOINT_SYMBOL_GPL(kvm_tdvmcall);
++EXPORT_TRACEPOINT_SYMBOL_GPL(kvm_sept_seamcall);
+ EXPORT_TRACEPOINT_SYMBOL_GPL(kvm_nested_intr_vmexit);
+ EXPORT_TRACEPOINT_SYMBOL_GPL(kvm_nested_vmenter_failed);
+ EXPORT_TRACEPOINT_SYMBOL_GPL(kvm_invlpga);
+-- 
+2.31.1
+

@@ -1,0 +1,29 @@
+From c67b2a9923217e5a760f51f88fd0fd0ad7d8bf92 Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 18:33:26 -0800
+Subject: [PATCH 0950/1418] x86: kvm: Replace int with void
+
+The kvm_put_guest_fpu need change to void, otherwise the
+kernel can't pass build.
+
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+---
+ arch/x86/kvm/x86.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 8bf8ef011c25..209c8760243a 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -123,7 +123,7 @@ static int __set_sregs2(struct kvm_vcpu *vcpu, struct kvm_sregs2 *sregs2);
+ static void __get_sregs2(struct kvm_vcpu *vcpu, struct kvm_sregs2 *sregs2);
+ 
+ static void kvm_load_guest_fpu(struct kvm_vcpu *vcpu);
+-static int kvm_put_guest_fpu(struct kvm_vcpu *vcpu);
++static void kvm_put_guest_fpu(struct kvm_vcpu *vcpu);
+ 
+ struct kvm_x86_ops kvm_x86_ops __read_mostly;
+ EXPORT_SYMBOL_GPL(kvm_x86_ops);
+-- 
+2.31.1
+

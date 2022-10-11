@@ -1,0 +1,25 @@
+From 0a1dbeb743037a7926a1b4394f269a9d5fea1076 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Wed, 10 Nov 2021 16:06:05 -0800
+Subject: [PATCH 0671/1418] iommu/vtd: temp fix sm cap audit
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/intel/cap_audit.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/iommu/intel/cap_audit.h b/drivers/iommu/intel/cap_audit.h
+index 183e7dfda8ba..f5bcce472690 100644
+--- a/drivers/iommu/intel/cap_audit.h
++++ b/drivers/iommu/intel/cap_audit.h
+@@ -122,6 +122,7 @@ bool intel_cap_slad_sanity(void);
+ 
+ static inline bool scalable_mode_support(void)
+ {
++	return true;
+ 	return (intel_iommu_sm && intel_cap_smts_sanity());
+ }
+ 
+-- 
+2.31.1
+

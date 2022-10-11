@@ -1,0 +1,87 @@
+From e4e27f02418ca4b037fff0e2b6d58092c2070d57 Mon Sep 17 00:00:00 2001
+From: Jon Maloy <jmaloy@redhat.com>
+Date: Sat, 5 Feb 2022 14:11:18 -0500
+Subject: [PATCH 1299/1418] tipc: improve size validations for received domain
+ records
+
+The function tipc_mon_rcv() allows a node to receive and process
+domain_record structs from peer nodes to track their views of the
+network topology.
+
+This patch verifies that the number of members in a received domain
+record does not exceed the limit defined by MAX_MON_DOMAIN, something
+that may otherwise lead to a stack overflow.
+
+tipc_mon_rcv() is called from the function tipc_link_proto_rcv(), where
+we are reading a 32 bit message data length field into a uint16.  To
+avert any risk of bit overflow, we add an extra sanity check for this in
+that function.  We cannot see that happen with the current code, but
+future designers being unaware of this risk, may introduce it by
+allowing delivery of very large (> 64k) sk buffers from the bearer
+layer.  This potential problem was identified by Eric Dumazet.
+
+This fixes CVE-2022-0435
+
+Reported-by: Samuel Page <samuel.page@appgate.com>
+Reported-by: Eric Dumazet <edumazet@google.com>
+Fixes: 35c55c9877f8 ("tipc: add neighbor monitoring framework")
+Signed-off-by: Jon Maloy <jmaloy@redhat.com>
+Reviewed-by: Xin Long <lucien.xin@gmail.com>
+Reviewed-by: Samuel Page <samuel.page@appgate.com>
+Reviewed-by: Eric Dumazet <edumazet@google.com>
+Signed-off-by: Linus Torvalds <torvalds@linux-foundation.org>
+---
+ net/tipc/link.c    | 9 +++++++--
+ net/tipc/monitor.c | 2 ++
+ 2 files changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/net/tipc/link.c b/net/tipc/link.c
+index 1b7a487c8841..107babfa02bd 100644
+--- a/net/tipc/link.c
++++ b/net/tipc/link.c
+@@ -2196,7 +2196,7 @@ static int tipc_link_proto_rcv(struct tipc_link *l, struct sk_buff *skb,
+ 	struct tipc_msg *hdr = buf_msg(skb);
+ 	struct tipc_gap_ack_blks *ga = NULL;
+ 	bool reply = msg_probe(hdr), retransmitted = false;
+-	u16 dlen = msg_data_sz(hdr), glen = 0;
++	u32 dlen = msg_data_sz(hdr), glen = 0;
+ 	u16 peers_snd_nxt =  msg_next_sent(hdr);
+ 	u16 peers_tol = msg_link_tolerance(hdr);
+ 	u16 peers_prio = msg_linkprio(hdr);
+@@ -2210,6 +2210,10 @@ static int tipc_link_proto_rcv(struct tipc_link *l, struct sk_buff *skb,
+ 	void *data;
+ 
+ 	trace_tipc_proto_rcv(skb, false, l->name);
++
++	if (dlen > U16_MAX)
++		goto exit;
++
+ 	if (tipc_link_is_blocked(l) || !xmitq)
+ 		goto exit;
+ 
+@@ -2305,7 +2309,8 @@ static int tipc_link_proto_rcv(struct tipc_link *l, struct sk_buff *skb,
+ 
+ 		/* Receive Gap ACK blocks from peer if any */
+ 		glen = tipc_get_gap_ack_blks(&ga, l, hdr, true);
+-
++		if(glen > dlen)
++			break;
+ 		tipc_mon_rcv(l->net, data + glen, dlen - glen, l->addr,
+ 			     &l->mon_state, l->bearer_id);
+ 
+diff --git a/net/tipc/monitor.c b/net/tipc/monitor.c
+index 407619697292..2f4d23238a7e 100644
+--- a/net/tipc/monitor.c
++++ b/net/tipc/monitor.c
+@@ -496,6 +496,8 @@ void tipc_mon_rcv(struct net *net, void *data, u16 dlen, u32 addr,
+ 	state->probing = false;
+ 
+ 	/* Sanity check received domain record */
++	if (new_member_cnt > MAX_MON_DOMAIN)
++		return;
+ 	if (dlen < dom_rec_len(arrv_dom, 0))
+ 		return;
+ 	if (dlen != dom_rec_len(arrv_dom, new_member_cnt))
+-- 
+2.31.1
+

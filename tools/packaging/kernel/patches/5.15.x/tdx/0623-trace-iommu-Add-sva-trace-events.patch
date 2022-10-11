@@ -1,0 +1,119 @@
+From 20f1c020940925aa1b94bfd329bd78966432aefb Mon Sep 17 00:00:00 2001
+From: Jean-Philippe Brucker <jean-philippe.brucker@arm.com>
+Date: Wed, 5 Jun 2019 19:13:55 +0100
+Subject: [PATCH 0623/1418] trace/iommu: Add sva trace events
+
+For development only, trace I/O page faults and responses.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+[JPB: removed the invalidate trace event, that will be added later]
+Signed-off-by: Jean-Philippe Brucker <jean-philippe.brucker@arm.com>
+---
+ include/trace/events/iommu.h | 84 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 84 insertions(+)
+
+diff --git a/include/trace/events/iommu.h b/include/trace/events/iommu.h
+index 72b4582322ff..767b92c03f19 100644
+--- a/include/trace/events/iommu.h
++++ b/include/trace/events/iommu.h
+@@ -12,6 +12,8 @@
+ #define _TRACE_IOMMU_H
+ 
+ #include <linux/tracepoint.h>
++#include <linux/iommu.h>
++#include <uapi/linux/iommu.h>
+ 
+ struct device;
+ 
+@@ -161,6 +163,88 @@ DEFINE_EVENT(iommu_error, io_page_fault,
+ 
+ 	TP_ARGS(dev, iova, flags)
+ );
++
++TRACE_EVENT(dev_fault,
++
++	TP_PROTO(struct device *dev,  struct iommu_fault *evt),
++
++	TP_ARGS(dev, evt),
++
++	TP_STRUCT__entry(
++		__string(device, dev_name(dev))
++		__field(int, type)
++		__field(int, reason)
++		__field(u64, addr)
++		__field(u64, fetch_addr)
++		__field(u32, pasid)
++		__field(u32, grpid)
++		__field(u32, flags)
++		__field(u32, prot)
++	),
++
++	TP_fast_assign(
++		__assign_str(device, dev_name(dev));
++		__entry->type = evt->type;
++		if (evt->type == IOMMU_FAULT_DMA_UNRECOV) {
++			__entry->reason		= evt->event.reason;
++			__entry->flags		= evt->event.flags;
++			__entry->pasid		= evt->event.pasid;
++			__entry->grpid		= 0;
++			__entry->prot		= evt->event.perm;
++			__entry->addr		= evt->event.addr;
++			__entry->fetch_addr	= evt->event.fetch_addr;
++		} else {
++			__entry->reason		= 0;
++			__entry->flags		= evt->prm.flags;
++			__entry->pasid		= evt->prm.pasid;
++			__entry->grpid		= evt->prm.grpid;
++			__entry->prot		= evt->prm.perm;
++			__entry->addr		= evt->prm.addr;
++			__entry->fetch_addr	= 0;
++		}
++	),
++
++	TP_printk("IOMMU:%s type=%d reason=%d addr=0x%016llx fetch=0x%016llx pasid=%d group=%d flags=%x prot=%d",
++		__get_str(device),
++		__entry->type,
++		__entry->reason,
++		__entry->addr,
++		__entry->fetch_addr,
++		__entry->pasid,
++		__entry->grpid,
++		__entry->flags,
++		__entry->prot
++	)
++);
++
++TRACE_EVENT(dev_page_response,
++
++	TP_PROTO(struct device *dev,  struct iommu_fault_page_response *msg),
++
++	TP_ARGS(dev, msg),
++
++	TP_STRUCT__entry(
++		__string(device, dev_name(dev))
++		__field(int, code)
++		__field(u32, pasid)
++		__field(u32, grpid)
++	),
++
++	TP_fast_assign(
++		__assign_str(device, dev_name(dev));
++		__entry->code = msg->code;
++		__entry->pasid = msg->pasid;
++		__entry->grpid = msg->grpid;
++	),
++
++	TP_printk("IOMMU:%s code=%d pasid=%d group=%d",
++		__get_str(device),
++		__entry->code,
++		__entry->pasid,
++		__entry->grpid
++	)
++);
++
+ #endif /* _TRACE_IOMMU_H */
+ 
+ /* This part must be outside protection */
+-- 
+2.31.1
+

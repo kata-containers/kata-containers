@@ -1,0 +1,31 @@
+From dbc61eea5ad6e95c0e5b20f1aa62675f2c4f4478 Mon Sep 17 00:00:00 2001
+From: Tom Zanussi <tom.zanussi@intel.com>
+Date: Wed, 1 Dec 2021 12:55:40 -0800
+Subject: [PATCH 0839/1418] lib/hexdump: Allow print_hexdump() to print rowsize
+ of 8
+
+Sometimes it's useful to be able to print hexdumps with widths of 8
+e.g. when structures in manuals are printed that way, it's easier to
+do the mapping directly when looking at data.
+
+Signed-off-by: Tom Zanussi <tom.zanussi@intel.com>
+---
+ lib/hexdump.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/hexdump.c b/lib/hexdump.c
+index 9301578f98e8..c46e913dbd9b 100644
+--- a/lib/hexdump.c
++++ b/lib/hexdump.c
+@@ -245,7 +245,7 @@ void print_hex_dump(const char *level, const char *prefix_str, int prefix_type,
+ 	int i, linelen, remaining = len;
+ 	unsigned char linebuf[32 * 3 + 2 + 32 + 1];
+ 
+-	if (rowsize != 16 && rowsize != 32)
++	if (rowsize != 8 && rowsize != 16 && rowsize != 32)
+ 		rowsize = 16;
+ 
+ 	for (i = 0; i < len; i += rowsize) {
+-- 
+2.31.1
+

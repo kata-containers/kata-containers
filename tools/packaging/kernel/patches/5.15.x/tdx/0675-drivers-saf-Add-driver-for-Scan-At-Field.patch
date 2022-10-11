@@ -1,0 +1,164 @@
+From 0ed669103f1efa67dcc708083001b48a746ce408 Mon Sep 17 00:00:00 2001
+From: Kyung Min Park <kyung.min.park@intel.com>
+Date: Fri, 15 Oct 2021 14:32:51 -0700
+Subject: [PATCH 0675/1418] drivers/saf: Add driver for Scan At Field
+
+Scan At Field (SAF) provides hardware hooks to perform core logic tests
+and report failures for portions of silicon that lack error detection
+capabilities, which will be available in some server SKUs starting with
+Sapphire Rapids. It offers infrastructure to specific users such as cloud
+providers or OEMs to schedule tests and find in-field failures due to aging
+in silicon that might not necessarily be reported with normal machine
+checks.
+
+Add basic parts of the SAF module (initialization and check SAF capability
+support in a processor).
+
+MSR IA32_CORE_CAPABILITY is a feature-enumerating MSR, bit 2 of which
+reports MSR_INTEGRITY_CAPABILITIES. Processor that supports SAF
+should reports the MSR_INTEGRITY_CAPABILITIES enabled.
+
+Please check the latest Intel 64 and IA-32 Architectures Software
+Developer's Manual for more detailed information on the MSR and the
+MSR_INTEGRITY_CAPABILITIES.
+
+Signed-off-by: Kyung Min Park <kyung.min.park@intel.com>
+Reviewed-by: Ashok Raj <ashok.raj@intel.com>
+---
+ drivers/Kconfig      |  2 ++
+ drivers/Makefile     |  1 +
+ drivers/ift/Kconfig  | 10 ++++++++++
+ drivers/ift/Makefile |  7 +++++++
+ drivers/ift/saf.c    | 47 ++++++++++++++++++++++++++++++++++++++++++++
+ drivers/ift/saf.h    | 14 +++++++++++++
+ 6 files changed, 81 insertions(+)
+ create mode 100644 drivers/ift/Kconfig
+ create mode 100644 drivers/ift/Makefile
+ create mode 100644 drivers/ift/saf.c
+ create mode 100644 drivers/ift/saf.h
+
+diff --git a/drivers/Kconfig b/drivers/Kconfig
+index 0d399ddaa185..7dc1442ea74d 100644
+--- a/drivers/Kconfig
++++ b/drivers/Kconfig
+@@ -236,4 +236,6 @@ source "drivers/interconnect/Kconfig"
+ source "drivers/counter/Kconfig"
+ 
+ source "drivers/most/Kconfig"
++
++source "drivers/ift/Kconfig"
+ endmenu
+diff --git a/drivers/Makefile b/drivers/Makefile
+index be5d40ae1488..71c804cc02b6 100644
+--- a/drivers/Makefile
++++ b/drivers/Makefile
+@@ -188,3 +188,4 @@ obj-$(CONFIG_GNSS)		+= gnss/
+ obj-$(CONFIG_INTERCONNECT)	+= interconnect/
+ obj-$(CONFIG_COUNTER)		+= counter/
+ obj-$(CONFIG_MOST)		+= most/
++obj-$(CONFIG_IFT)		+= ift/
+diff --git a/drivers/ift/Kconfig b/drivers/ift/Kconfig
+new file mode 100644
+index 000000000000..269fd4cf1235
+--- /dev/null
++++ b/drivers/ift/Kconfig
+@@ -0,0 +1,10 @@
++config IFT
++	tristate "IFT"
++	depends on X86 && 64BIT && SMP
++	default	n
++	help
++	  Enable support for Scan At Field in Intel Xeon CPU to perform core
++	  logic test in the field. To compile this driver as a module, choose
++	  M here. The module will be called saf.
++
++	  If unsure, say N.
+diff --git a/drivers/ift/Makefile b/drivers/ift/Makefile
+new file mode 100644
+index 000000000000..e36d070a6502
+--- /dev/null
++++ b/drivers/ift/Makefile
+@@ -0,0 +1,7 @@
++#
++# Makefile for the in-field test driver
++#
++
++obj-$(CONFIG_IFT)			+= ift.o
++
++ift-objs				:= saf.o
+diff --git a/drivers/ift/saf.c b/drivers/ift/saf.c
+new file mode 100644
+index 000000000000..95bc4deac3e4
+--- /dev/null
++++ b/drivers/ift/saf.c
+@@ -0,0 +1,47 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* Copyright(c) 2021 Intel Corporation.
++ *
++ * Author: Kyung Min Park <kyung.min.park@intel.com>
++ */
++
++#include <linux/init.h>
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <asm/cpu_device_id.h>
++
++#include "saf.h"
++
++static const struct x86_cpu_id saf_cpu_ids[] __initconst = {
++	X86_MATCH_INTEL_FAM6_MODEL(SAPPHIRERAPIDS_X,	1),
++	{}
++};
++
++static int __init saf_init(void)
++{
++	const struct x86_cpu_id *m;
++	u64 ia32_core_caps;
++	int ret = -ENODEV;
++
++	/* saf capability check */
++	m = x86_match_cpu(saf_cpu_ids);
++	if (!m)
++		return ret;
++	if (!boot_cpu_has(X86_FEATURE_CORE_CAPABILITIES))
++		return ret;
++	rdmsrl(MSR_IA32_CORE_CAPS, ia32_core_caps);
++	if (!(ia32_core_caps & MSR_IA32_CORE_CAPS_INTEGRITY))
++		return ret;
++
++	return 0;
++}
++
++static void __exit saf_exit(void)
++{
++	pr_info("saf: unloaded 'Scan At Field' module\n");
++}
++
++MODULE_LICENSE("GPL");
++MODULE_INFO(name, "saf");
++MODULE_DESCRIPTION("saf");
++module_init(saf_init);
++module_exit(saf_exit);
+diff --git a/drivers/ift/saf.h b/drivers/ift/saf.h
+new file mode 100644
+index 000000000000..19cab5b3dbd0
+--- /dev/null
++++ b/drivers/ift/saf.h
+@@ -0,0 +1,14 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Copyright(c) 2021 Intel Corporation.
++ *
++ * Author: Kyung Min Park <kyung.min.park@intel.com>
++ */
++
++#ifndef _SAF_H_
++#define _SAF_H_
++
++/* These bits are in the IA32_CORE_CAPABILITIES MSR */
++#define MSR_IA32_CORE_CAPS_INTEGRITY_BIT	2
++#define MSR_IA32_CORE_CAPS_INTEGRITY		BIT(MSR_IA32_CORE_CAPS_INTEGRITY_BIT)
++
++#endif
+-- 
+2.31.1
+

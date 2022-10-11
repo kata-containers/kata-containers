@@ -1,0 +1,106 @@
+From 36a84de3f36c5a31357fd557aff4b37d5ed27b3b Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Tue, 21 Sep 2021 15:49:23 -0700
+Subject: [PATCH 0300/1418] x86/cpu/tdx: Check if TDX CPU feature is available
+
+To ensure TDX's security property, Intel introduced a new Secure
+Arbitration Mode (SEAM) in recent CPUs.  SEAM is an extension to Virtual
+Machines Extension (VMX) architecture to define a new VMX-root operation
+called SEAM VMX-root and a new VMX non-root operation called SEAM VMX
+non-root.  The SEAM VMX root and SEAM VMX non-root execution modes are
+called operation in SEAM.
+
+Check if the SEAM is available and enable VMX for SEAM operation.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/msr-index.h    |  8 ++++++
+ arch/x86/kernel/cpu/tdx/p-seamldr.c | 40 +++++++++++++++++++++++++++++
+ 2 files changed, 48 insertions(+)
+
+diff --git a/arch/x86/include/asm/msr-index.h b/arch/x86/include/asm/msr-index.h
+index c9ef02e8cd01..7ca120d66993 100644
+--- a/arch/x86/include/asm/msr-index.h
++++ b/arch/x86/include/asm/msr-index.h
+@@ -87,6 +87,7 @@
+ #define SNB_C1_AUTO_UNDEMOTE		(1UL << 28)
+ 
+ #define MSR_MTRRcap			0x000000fe
++#define MTRRCAP_SEAMRR			BIT(15)
+ 
+ #define MSR_IA32_ARCH_CAPABILITIES	0x0000010a
+ #define ARCH_CAP_RDCL_NO		BIT(0)	/* Not susceptible to Meltdown */
+@@ -947,5 +948,12 @@
+ /* Hardware Feedback Interface */
+ #define MSR_IA32_HW_FEEDBACK_PTR        0x17d0
+ #define MSR_IA32_HW_FEEDBACK_CONFIG     0x17d1
++/* Intel SEAMRR */
++#define MSR_IA32_SEAMRR_PHYS_BASE	0x00001400
++#define MSR_IA32_SEAMRR_PHYS_MASK	0x00001401
++
++#define MSR_IA32_SEAMRR_PHYS_BASE_CONFIGURED	BIT_ULL(3)
++#define MSR_IA32_SEAMRR_PHYS_MASK_ENABLED	BIT_ULL(11)
++#define MSR_IA32_SEAMRR_PHYS_MASK_LOCKED	BIT_ULL(10)
+ 
+ #endif /* _ASM_X86_MSR_INDEX_H */
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.c b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+index 39085ed78113..7e97ecd492e2 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.c
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+@@ -32,6 +32,36 @@ static int __init seamldr_param(char *str)
+ }
+ early_param("np_seamldr", seamldr_param);
+ 
++/*
++ * is_seamrr_enabled - check if seamrr is supported.
++ */
++static bool __init is_seamrr_enabled(void)
++{
++	u64 mtrrcap, seamrr_base, seamrr_mask;
++
++	if (!boot_cpu_has(X86_FEATURE_MTRR))
++		return false;
++
++	/* MTRRcap.SEAMRR indicates the support of SEAMRR_PHYS_{BASE, MASK} */
++	rdmsrl(MSR_MTRRcap, mtrrcap);
++	if (!(mtrrcap & MTRRCAP_SEAMRR))
++		return false;
++
++	rdmsrl(MSR_IA32_SEAMRR_PHYS_BASE, seamrr_base);
++	if (!(seamrr_base & MSR_IA32_SEAMRR_PHYS_BASE_CONFIGURED)) {
++		pr_info("SEAMRR base is not configured by BIOS\n");
++		return false;
++	}
++
++	rdmsrl(MSR_IA32_SEAMRR_PHYS_MASK, seamrr_mask);
++	if (!(seamrr_mask & MSR_IA32_SEAMRR_PHYS_MASK_ENABLED)) {
++		pr_info("SEAMRR is not enabled by BIOS\n");
++		return false;
++	}
++
++	return true;
++}
++
+ /*
+  * load_p_seamldr() - load P-SEAMLDR
+  *
+@@ -43,6 +73,16 @@ early_param("np_seamldr", seamldr_param);
+ int __init load_p_seamldr(void)
+ {
+ 	struct cpio_data np_seamldr;
++	int err;
++
++	/* TDX requires SEAM mode. */
++	if (!is_seamrr_enabled())
++		return -EOPNOTSUPP;
++
++	/* TDX requires VMX. */
++	err = seam_init_vmx_early();
++	if (err)
++		return err;
+ 
+ 	if (!seam_get_firmware(&np_seamldr, np_seamldr_name)) {
+ 		pr_err("no NP-SEAMLDR found %s\n", np_seamldr_name);
+-- 
+2.31.1
+

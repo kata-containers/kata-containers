@@ -1,0 +1,85 @@
+From 5dd1e5d270a45583a2554ef9443291d5c0c1fecc Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Fri, 5 Nov 2021 00:15:55 -0700
+Subject: [PATCH 0697/1418] x86/fpu: Change xfd_update_fpstate() to external
+
+When KVM supports the dynamic extended feature (e.g., AMX), KVM
+intercepts the WRMSR of XFD at beginning. During the interception,
+KVM need update XFD and cache accordingly.
+
+Thus, both Kernel and KVM need this API to update XFD. Move it from
+fpu/xstate.h to fpu/xstate.c and make it external for KVM usage.
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+---
+ arch/x86/include/asm/fpu/api.h |  2 ++
+ arch/x86/kernel/fpu/xstate.c   | 12 ++++++++++++
+ arch/x86/kernel/fpu/xstate.h   | 14 +-------------
+ 3 files changed, 15 insertions(+), 13 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/api.h b/arch/x86/include/asm/fpu/api.h
+index 7532f73c82a6..67fb1433a406 100644
+--- a/arch/x86/include/asm/fpu/api.h
++++ b/arch/x86/include/asm/fpu/api.h
+@@ -131,8 +131,10 @@ DECLARE_PER_CPU(struct fpu *, fpu_fpregs_owner_ctx);
+ /* Process cleanup */
+ #ifdef CONFIG_X86_64
+ extern void fpstate_free(struct fpu *fpu);
++extern inline void xfd_update_state(struct fpstate *fpstate);
+ #else
+ static inline void fpstate_free(struct fpu *fpu) { }
++static inline void xfd_update_state(struct fpstate *fpstate) { }
+ #endif
+ 
+ /* fpstate-related functions which are exported to KVM */
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 6bbfb311f9c8..57881710f84d 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -1750,6 +1750,18 @@ int xfd_enable_guest_features(struct fpu_guest *guest_fpu)
+ 	return __xfd_enable_feature(xfd_err, guest_fpu);
+ }
+ 
++inline void xfd_update_state(struct fpstate *fpstate)
++{
++	if (fpu_state_size_dynamic()) {
++		u64 xfd = fpstate->xfd;
++
++		if (__this_cpu_read(xfd_state) != xfd) {
++			wrmsrl(MSR_IA32_XFD, xfd);
++			__this_cpu_write(xfd_state, xfd);
++		}
++	}
++}
++EXPORT_SYMBOL_GPL(xfd_update_state);
+ #else /* CONFIG_X86_64 */
+ static inline int xstate_request_perm(unsigned long idx, bool guest)
+ {
+diff --git a/arch/x86/kernel/fpu/xstate.h b/arch/x86/kernel/fpu/xstate.h
+index 7ccc63a68847..6a2fe3696ae6 100644
+--- a/arch/x86/kernel/fpu/xstate.h
++++ b/arch/x86/kernel/fpu/xstate.h
+@@ -148,19 +148,7 @@ static inline void xfd_validate_state(struct fpstate *fpstate, u64 mask, bool rs
+ #endif
+ 
+ #ifdef CONFIG_X86_64
+-static inline void xfd_update_state(struct fpstate *fpstate)
+-{
+-	if (fpu_state_size_dynamic()) {
+-		u64 xfd = fpstate->xfd;
+-
+-		if (__this_cpu_read(xfd_state) != xfd) {
+-			wrmsrl(MSR_IA32_XFD, xfd);
+-			__this_cpu_write(xfd_state, xfd);
+-		}
+-	}
+-}
+-#else
+-static inline void xfd_update_state(struct fpstate *fpstate) { }
++extern inline void xfd_update_state(struct fpstate *fpstate);
+ #endif
+ 
+ /*
+-- 
+2.31.1
+

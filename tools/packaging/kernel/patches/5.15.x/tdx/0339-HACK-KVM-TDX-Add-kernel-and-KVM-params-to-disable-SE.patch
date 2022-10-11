@@ -1,0 +1,88 @@
+From 01d8fef8bf534803c92ad537634c01beb10e3c28 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Fri, 17 Jul 2020 22:27:16 -0700
+Subject: [PATCH 0339/1418] *** HACK *** KVM: TDX: Add kernel and KVM params to
+ disable SEAM tracing
+
+Add a kernel command line option, no_seamcall_tracing, as well as a
+kvm_intel param, trace_seamcall, to allow disabling TDX-SEAM's tracing.
+
+Default the KVM params to "custom", which is effectively "off", under
+the expectation that most debug will happen in a VM, in which case the
+L0 emulator provides far better debug capabilities than spamming the
+screen.
+
+Only the trace of TDSYSINITTDMR is annoying, while the trace of other
+SEAMCALLs during SEAM module initialization phase is useful and not too
+much.
+
+Make trace_boot_seamcalls only take effect on TDSYSINITTDMR.
+
+Co-developed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx-ops.h |  8 +++++++-
+ arch/x86/kernel/cpu/tdx/tdx.c     | 19 +++++++++++++++++++
+ 2 files changed, 26 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx-ops.h b/arch/x86/kernel/cpu/tdx/tdx-ops.h
+index 1efca41a7c1f..22f5ff3d32fa 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx-ops.h
++++ b/arch/x86/kernel/cpu/tdx/tdx-ops.h
+@@ -38,7 +38,13 @@ static inline u64 tdh_sys_tdmr_init(u64 tdmr, struct tdx_ex_ret *ex)
+ static inline u64 tdh_sys_tdmr_config(u64 tdmr, int nr_entries, int hkid)
+ {
+ 	return seamcall(SEAMCALL_TDH_SYS_CONFIG, tdmr, nr_entries, hkid, 0,
+-			     NULL);
++			NULL);
++}
++
++static inline u64 tdh_trace_seamcalls(u64 level)
++{
++	return seamcall(SEAMCALL_TDDEBUGCONFIG,
++			DEBUGCONFIG_SET_TRACE_LEVEL, level, 0, 0, NULL);
+ }
+ 
+ #endif /* __TDX_OPS_H */
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 4a4de5b7bbd3..eeebb3230958 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -101,6 +101,15 @@ static int __init setup_tdx_sigstruct(char *str)
+ }
+ __setup("tdx_sigstruct=", setup_tdx_sigstruct);
+ 
++static bool trace_boot_seamcalls;
++
++static int __init trace_seamcalls(char *s)
++{
++	trace_boot_seamcalls = true;
++	return 1;
++}
++__setup("trace_boot_seamcalls", trace_seamcalls);
++
+ /*
+  * runtime update of TDX module is future task.  Track state of TDX module as
+  * preliminary and export the state via sysfs for admin.
+@@ -973,6 +982,16 @@ static int __init __tdx_init_module(void)
+ 	if (ret)
+ 		goto out;
+ 
++	/*
++	 * Tracing is on by default, disable it before INITTDMR which causes
++	 * too many debug messages to take long time.
++	 */
++	if (!trace_boot_seamcalls) {
++		ret = tdh_trace_seamcalls(DEBUGCONFIG_TRACE_CUSTOM);
++		if (ret)
++			pr_err("failed to set trace level to DEBUGCONFIG_TRACE_CUSTOM.\n");
++	}
++
+ 	ret = tdx_init_tdmrs();
+ out:
+ 	kfree(tdmr_addrs);
+-- 
+2.31.1
+

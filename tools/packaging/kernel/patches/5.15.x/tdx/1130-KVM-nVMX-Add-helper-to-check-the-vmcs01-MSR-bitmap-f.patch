@@ -1,0 +1,67 @@
+From 679512cba90e505e44a50772d1c0ab7116f24f4f Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Wed, 22 Jul 2020 14:10:56 -0700
+Subject: [PATCH 1130/1418] KVM: nVMX: Add helper to check the vmcs01 MSR
+ bitmap for MSR pass-through
+
+Add a helper to perform the check on the vmcs01/l01 MSR bitmap when
+disabling interception of an MSR for L2.  This reduces the boilerplate
+for the existing cases, and will be used heavily in a future patch for
+CET MSRs.
+
+Co-developed-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/vmx/nested.c | 27 +++++++++++++++++----------
+ 1 file changed, 17 insertions(+), 10 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/nested.c b/arch/x86/kvm/vmx/nested.c
+index 64b2147cc3d3..217495747626 100644
+--- a/arch/x86/kvm/vmx/nested.c
++++ b/arch/x86/kvm/vmx/nested.c
+@@ -591,6 +591,17 @@ static void nested_vmx_disable_intercept_for_msr(unsigned long *msr_bitmap_l1,
+ 	}
+ }
+ 
++static void nested_vmx_cond_disable_intercept_for_msr(struct kvm_vcpu *vcpu, u32 msr,
++						      unsigned long *bitmap_12,
++						      unsigned long *bitmap_02,
++						      int type)
++{
++	if (msr_write_intercepted_l01(vcpu, msr))
++		return;
++
++	nested_vmx_disable_intercept_for_msr(bitmap_12, bitmap_02, msr, type);
++}
++
+ static inline void enable_x2apic_msr_intercepts(unsigned long *msr_bitmap)
+ {
+ 	int msr;
+@@ -689,17 +700,13 @@ static inline bool nested_vmx_prepare_msr_bitmap(struct kvm_vcpu *vcpu,
+ 	 *    updated to reflect this when L1 (or its L2s) actually write to
+ 	 *    the MSR.
+ 	 */
+-	if (!msr_write_intercepted_l01(vcpu, MSR_IA32_SPEC_CTRL))
+-		nested_vmx_disable_intercept_for_msr(
+-					msr_bitmap_l1, msr_bitmap_l0,
+-					MSR_IA32_SPEC_CTRL,
+-					MSR_TYPE_R | MSR_TYPE_W);
++	nested_vmx_cond_disable_intercept_for_msr(vcpu, MSR_IA32_SPEC_CTRL,
++						  msr_bitmap_l1, msr_bitmap_l0,
++						  MSR_TYPE_R | MSR_TYPE_W);
+ 
+-	if (!msr_write_intercepted_l01(vcpu, MSR_IA32_PRED_CMD))
+-		nested_vmx_disable_intercept_for_msr(
+-					msr_bitmap_l1, msr_bitmap_l0,
+-					MSR_IA32_PRED_CMD,
+-					MSR_TYPE_W);
++	nested_vmx_cond_disable_intercept_for_msr(vcpu, MSR_IA32_PRED_CMD,
++						  msr_bitmap_l1, msr_bitmap_l0,
++						  MSR_TYPE_W);
+ 
+ 	if (!msr_write_intercepted_l01(vcpu, MSR_IA32_PKRS))
+ 		nested_vmx_disable_intercept_for_msr(
+-- 
+2.31.1
+

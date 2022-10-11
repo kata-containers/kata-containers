@@ -1,0 +1,34 @@
+From 07788ef56746aaf73f3a673143919663a19885b8 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Wed, 1 Sep 2021 17:18:05 -0700
+Subject: [PATCH 0549/1418] dmaengine: idxd: reconfig device after device reset
+ command
+
+Device reset clears the MSIXPERM table and the device registers. Re-program
+the MSIXPERM table and re-enable the error interrupts post reset.
+
+Fixes: 745e92a6d816 ("dmaengine: idxd: idxd: move remove() bits for idxd 'struct device' to device.c")
+Reported-by: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+Link: https://lore.kernel.org/r/163054188513.2853562.12077053294595278181.stgit@djiang5-desk3.ch.intel.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/idxd/device.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index ef3281fc3f8b..b1407465d5c4 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -583,6 +583,8 @@ void idxd_device_reset(struct idxd_device *idxd)
+ 	spin_lock(&idxd->dev_lock);
+ 	idxd_device_clear_state(idxd);
+ 	idxd->state = IDXD_DEV_DISABLED;
++	idxd_unmask_error_interrupts(idxd);
++	idxd_msix_perm_setup(idxd);
+ 	spin_unlock(&idxd->dev_lock);
+ }
+ 
+-- 
+2.31.1
+

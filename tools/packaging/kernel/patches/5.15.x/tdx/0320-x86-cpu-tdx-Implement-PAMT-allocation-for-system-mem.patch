@@ -1,0 +1,55 @@
+From 8ff7911fcef2de6b9f52fe99b0744b16d6605a59 Mon Sep 17 00:00:00 2001
+From: Kai Huang <kai.huang@intel.com>
+Date: Tue, 28 Sep 2021 09:55:46 +1300
+Subject: [PATCH 0320/1418] x86/cpu/tdx: Implement PAMT allocation for system
+ memory
+
+Use alloc_contig_pages(), instead of memblock API to allocate PAMT, since
+PAMT can only be allocated after distributing final TDMRs (finalizing
+address ranges of TDMRs).  Distributing TDMRs happens at the post
+smp_init() stage, at which point the memblock layer is already down.
+
+Signed-off-by: Kai Huang <kai.huang@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdmr-sysmem.c | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdmr-sysmem.c b/arch/x86/kernel/cpu/tdx/tdmr-sysmem.c
+index 8c8042e1e6ba..5f0a0f55924d 100644
+--- a/arch/x86/kernel/cpu/tdx/tdmr-sysmem.c
++++ b/arch/x86/kernel/cpu/tdx/tdmr-sysmem.c
+@@ -13,8 +13,30 @@ struct tdx_memory tmem_sysmem __initdata;
+ 
+ static void __init sysmem_tmb_free(struct tdx_memblock *tmb) { }
+ 
++static unsigned long __init sysmem_pamt_alloc(struct tdx_memblock *tmb,
++		unsigned long nr_pages)
++{
++	struct page *page;
++
++	page = alloc_contig_pages(nr_pages, GFP_KERNEL, tmb->nid,
++			NULL);
++	if (!page)
++		page = alloc_contig_pages(nr_pages, GFP_KERNEL, tmb->nid,
++				&node_online_map);
++
++	return page ? page_to_pfn(page) : 0;
++}
++
++static void __init sysmem_pamt_free(struct tdx_memblock *tmb,
++		unsigned long pamt_pfn, unsigned long nr_pages)
++{
++	free_contig_range(pamt_pfn, nr_pages);
++}
++
+ static struct tdx_memblock_ops sysmem_ops = {
+ 	.tmb_free = sysmem_tmb_free,
++	.pamt_alloc = sysmem_pamt_alloc,
++	.pamt_free = sysmem_pamt_free,
+ };
+ 
+ static int __init tdx_sysmem_add_block(struct tdx_memory *tmem,
+-- 
+2.31.1
+

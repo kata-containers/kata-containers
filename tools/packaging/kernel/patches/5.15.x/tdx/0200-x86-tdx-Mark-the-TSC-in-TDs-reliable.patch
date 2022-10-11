@@ -1,0 +1,47 @@
+From de8f49756e58da772eacdd93062d64943e6ae837 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Fri, 16 Jul 2021 16:48:48 -0700
+Subject: [PATCH 0200/1418] x86/tdx: Mark the TSC in TDs reliable
+
+Inside a TDX guest the only time source that is available is TSC or
+jiffies. The others are blocked or not enabled for security reasons.
+This means TSC is really the only alternative. The TDX module takes
+some effort to verify the TSC and guarantees it is monotononous on
+all CPUs.
+
+Unfortunately even with recent fixes it is still not reliable to use
+jiffies as clock source watchdog. There are reports of regular fallbacks
+to jiffies, which makes the guest nearly unusable.
+
+Thus mark the TSC reliable to avoid checking against jiffies. This is
+similar to what some other hypervisors like HyperV are doing. The
+hardware TSC is generally reliable.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdx.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index f3794ce4bc7f..26edbb84c745 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -791,6 +791,14 @@ void __init tdx_early_init(void)
+ 
+ 	setup_force_cpu_cap(X86_FEATURE_TDX_GUEST);
+ 
++	/*
++	 * The only secure (mononotonous) timer inside a TD guest
++	 * is the TSC. The TDX module does various checks on the TSC.
++	 * There are no other reliable fall back options. Also checking
++	 * against jiffies is very unreliable. So force the TSC reliable.
++	 */
++	setup_force_cpu_cap(X86_FEATURE_TSC_RELIABLE);
++
+ 	tdx_get_info();
+ 
+ 	tdx_filter_init();
+-- 
+2.31.1
+

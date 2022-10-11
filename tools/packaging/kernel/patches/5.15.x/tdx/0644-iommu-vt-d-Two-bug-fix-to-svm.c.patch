@@ -1,0 +1,78 @@
+From 9ffbd2bde25563af6b7e20bea0c3ba5cd000b7ca Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Thu, 18 Feb 2021 20:32:36 +0800
+Subject: [PATCH 0644/1418] iommu/vt-d: Two bug fix to svm.c
+
+One happened in bind_gpasid() path,
+    another happened when handling prq.
+
+Change-Id: I533a8155662da7896e3bdd073e8cad7c5efa5f16
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/intel/svm.c | 45 ++++++++++++++++++++-------------------
+ 1 file changed, 23 insertions(+), 22 deletions(-)
+
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index f6de5027f50a..c62516400fa9 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -1155,33 +1155,34 @@ static irqreturn_t prq_event_thread(int irq, void *d)
+ 			goto bad_req;
+ 		}
+ 
+-		if (unlikely(req->pm_req && (req->rd_req | req->wr_req))) {
+-			pr_err("IOMMU: %s: Page request in Privilege Mode\n",
+-			       iommu->name);
+-			goto bad_req;
++		/*
++		 * If prq is to be handled outside iommu driver via receiver of
++		 * the fault notifiers, we skip the page response here.
++		 */
++		if (svm->flags & SVM_FLAG_GUEST_MODE) {
++			if (sdev && !intel_svm_prq_report(sdev->dev, req))
++				goto prq_advance;
++			else
++				goto bad_req;
+ 		}
+ 
+-		if (unlikely(req->exe_req && req->rd_req)) {
+-			pr_err("IOMMU: %s: Execution request not supported\n",
+-			       iommu->name);
++		/* Since we're using init_mm.pgd directly, we should never take
++		 * any faults on kernel addresses. */
++		if (!svm->mm)
+ 			goto bad_req;
+-		}
+ 
+-		if (!svm || svm->pasid != req->pasid) {
+-			/*
+-			 * It can't go away, because the driver is not permitted
+-			 * to unbind the mm while any page faults are outstanding.
+-			 */
+-			svm = pasid_private_find(req->pasid);
+-			if (IS_ERR_OR_NULL(svm) || (svm->flags & SVM_FLAG_SUPERVISOR_MODE))
+-				goto bad_req;
+-		}
++		/* If address is not canonical, return invalid response */
++		if (!is_canonical_address(address))
++			goto bad_req;
+ 
+-		if (!sdev || sdev->sid != req->rid) {
+-			sdev = svm_lookup_device_by_sid(svm, req->rid);
+-			if (!sdev)
+-				goto bad_req;
+-		}
++		/* If the mm is already defunct, don't handle faults. */
++		if (!mmget_not_zero(svm->mm))
++			goto bad_req;
++
++		mmap_read_lock(svm->mm);
++		vma = find_extend_vma(svm->mm, address);
++		if (!vma || address < vma->vm_start)
++			goto invalid;
+ 
+ 		sdev->prq_seq_number++;
+ 
+-- 
+2.31.1
+

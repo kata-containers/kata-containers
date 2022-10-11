@@ -1,0 +1,154 @@
+From 7bc85d2b67f8b48ce6839af22994173c3f8db4c6 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Mon, 26 Jul 2021 11:52:16 -0700
+Subject: [PATCH 0211/1418] x86/tdx: Make RDRAND/RDSEED loop forever
+
+The hardware random generator behind RDRAND/RDSEED has limited
+bandwidth and can be in theory starved for some time by other cores.
+That's an potential attack against a TDX guest's random number
+generation. The RDRAND/RDSEED users generally fall back to some other
+method if the default retry loop (10 retries) fails, but these other
+methods are usually guessable by a malicious host (like RDTSC or
+interrupt timing or some other methods), which might help the host with
+guessing
+
+Just make them loop forever inside TDX until a valid random number
+is retrieved.
+
+While that's a potential DOS, a malicious host has already other
+ways to DOS. It cannot be used for a DOS from other guests, because
+those will be eventually interrupted, which allows this guest to make
+progress.
+
+Note this only affects the kernel users.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/archrandom.h | 43 ++++++++++++++++++++++++-------
+ arch/x86/kernel/cc_platform.c     |  1 +
+ include/linux/cc_platform.h       | 10 +++++++
+ 3 files changed, 44 insertions(+), 10 deletions(-)
+
+diff --git a/arch/x86/include/asm/archrandom.h b/arch/x86/include/asm/archrandom.h
+index ebc248e49549..347bbffe2dd2 100644
+--- a/arch/x86/include/asm/archrandom.h
++++ b/arch/x86/include/asm/archrandom.h
+@@ -10,13 +10,28 @@
+ #ifndef ASM_X86_ARCHRANDOM_H
+ #define ASM_X86_ARCHRANDOM_H
+ 
++#include <linux/cc_platform.h>
+ #include <asm/processor.h>
+ #include <asm/cpufeature.h>
+ 
+ #define RDRAND_RETRY_LOOPS	10
+ 
++#if defined(BOOT_COMPRESSED_MISC_H) && defined(CONFIG_INTEL_TDX_GUEST)
++extern bool early_is_tdx_guest(void);
++#endif
++
+ /* Unconditional execution of RDRAND and RDSEED */
+ 
++static inline bool rd_loop(void)
++{
++#if defined(BOOT_COMPRESSED_MISC_H) && defined(CONFIG_INTEL_TDX_GUEST)
++	/* In decompression code */
++	return early_is_tdx_guest();
++#else
++	return cc_platform_has(CC_ATTR_GUEST_RAND_LOOP);
++#endif
++}
++
+ static inline bool __must_check rdrand_long(unsigned long *v)
+ {
+ 	bool ok;
+@@ -27,7 +42,7 @@ static inline bool __must_check rdrand_long(unsigned long *v)
+ 			     : CC_OUT(c) (ok), [out] "=r" (*v));
+ 		if (ok)
+ 			return true;
+-	} while (--retry);
++	} while (--retry || rd_loop());
+ 	return false;
+ }
+ 
+@@ -41,26 +56,34 @@ static inline bool __must_check rdrand_int(unsigned int *v)
+ 			     : CC_OUT(c) (ok), [out] "=r" (*v));
+ 		if (ok)
+ 			return true;
+-	} while (--retry);
++	} while (--retry || rd_loop());
+ 	return false;
+ }
+ 
+ static inline bool __must_check rdseed_long(unsigned long *v)
+ {
+ 	bool ok;
+-	asm volatile("rdseed %[out]"
+-		     CC_SET(c)
+-		     : CC_OUT(c) (ok), [out] "=r" (*v));
+-	return ok;
++	do {
++		asm volatile("rdseed %[out]"
++			     CC_SET(c)
++			     : CC_OUT(c) (ok), [out] "=r" (*v));
++		if (ok)
++			return ok;
++	} while (rd_loop());
++	return false;
+ }
+ 
+ static inline bool __must_check rdseed_int(unsigned int *v)
+ {
+ 	bool ok;
+-	asm volatile("rdseed %[out]"
+-		     CC_SET(c)
+-		     : CC_OUT(c) (ok), [out] "=r" (*v));
+-	return ok;
++	do {
++		asm volatile("rdseed %[out]"
++			     CC_SET(c)
++			     : CC_OUT(c) (ok), [out] "=r" (*v));
++		if (ok)
++			return ok;
++	} while (rd_loop());
++	return false;
+ }
+ 
+ /*
+diff --git a/arch/x86/kernel/cc_platform.c b/arch/x86/kernel/cc_platform.c
+index 30cd0d16b2ce..4d1d5c4cf8f5 100644
+--- a/arch/x86/kernel/cc_platform.c
++++ b/arch/x86/kernel/cc_platform.c
+@@ -43,6 +43,7 @@ static bool intel_cc_platform_has(enum cc_attr attr)
+ 	case CC_ATTR_MEM_ENCRYPT:
+ 	case CC_ATTR_GUEST_SECURE_TIME:
+ 	case CC_ATTR_GUEST_CPUID_FILTER:
++	case CC_ATTR_GUEST_RAND_LOOP:
+ 		return is_tdx_guest();
+ 	case CC_ATTR_GUEST_DEVICE_FILTER:
+ 		return tdx_filter_enabled() && is_tdx_guest();
+diff --git a/include/linux/cc_platform.h b/include/linux/cc_platform.h
+index 272396148061..f527ff56dc06 100644
+--- a/include/linux/cc_platform.h
++++ b/include/linux/cc_platform.h
+@@ -125,6 +125,16 @@ enum cc_attr {
+ 	 */
+ 	CC_ATTR_GUEST_CPUID_FILTER,
+ 
++	/**
++	 * @CC_ATTR_GUEST_RAND_LOOP: Make RDRAND/RDSEED loop forever to
++	 * harden the random number generation.
++	 *
++	 * The platform/OS is running as a guest/virtual machine and
++	 * harden the random number generation.
++	 *
++	 * Examples include TDX guest.
++	 */
++	CC_ATTR_GUEST_RAND_LOOP,
+ };
+ 
+ #ifdef CONFIG_ARCH_HAS_CC_PLATFORM
+-- 
+2.31.1
+

@@ -1,0 +1,41 @@
+From 4d0f2390ec6499132f5752536c8915195d209316 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Tue, 31 Aug 2021 15:34:35 +0800
+Subject: [PATCH 0479/1418] KVM: TDX: Correct the name of tdh_mem_sept_add()
+
+Fixes: c2551b2a26e9 ("KVM: TDX: Add C wrapper functions for TDX SEAMCALLs")
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c     | 2 +-
+ arch/x86/kvm/vmx/tdx_ops.h | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 267c9285b15f..bc989f4bccc1 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -1554,7 +1554,7 @@ static int tdx_sept_link_private_sp(struct kvm_vcpu *vcpu, gfn_t gfn,
+ 
+ 	trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_SEPT_ADD, gpa, hpa, level);
+ 
+-	err = tdh_mem_spet_add(kvm_tdx->tdr.pa, gpa, level, hpa, &ex_ret);
++	err = tdh_mem_sept_add(kvm_tdx->tdr.pa, gpa, level, hpa, &ex_ret);
+ 	if (SEPT_ERR(err, &ex_ret, TDH_MEM_SEPT_ADD, vcpu->kvm))
+ 		return -EIO;
+ 
+diff --git a/arch/x86/kvm/vmx/tdx_ops.h b/arch/x86/kvm/vmx/tdx_ops.h
+index 42af0926454f..6bbd5e1fc9bf 100644
+--- a/arch/x86/kvm/vmx/tdx_ops.h
++++ b/arch/x86/kvm/vmx/tdx_ops.h
+@@ -31,7 +31,7 @@ static inline u64 tdh_mem_page_add(hpa_t tdr, gpa_t gpa, hpa_t hpa, hpa_t source
+ 	return seamcall(TDH_MEM_PAGE_ADD, gpa, tdr, hpa, source, 0, ex);
+ }
+ 
+-static inline u64 tdh_mem_spet_add(hpa_t tdr, gpa_t gpa, int level, hpa_t page,
++static inline u64 tdh_mem_sept_add(hpa_t tdr, gpa_t gpa, int level, hpa_t page,
+ 			    struct tdx_ex_ret *ex)
+ {
+ 	tdx_clflush_page(page);
+-- 
+2.31.1
+

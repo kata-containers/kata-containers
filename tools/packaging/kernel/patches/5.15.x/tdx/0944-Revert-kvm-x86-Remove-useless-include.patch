@@ -1,0 +1,25 @@
+From ebee16ce0a388fd1292aac4195d3be35ed21ee37 Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 18:05:53 -0800
+Subject: [PATCH 0944/1418] Revert "kvm: x86: Remove useless include"
+
+This reverts commit 48b322a6b3a8c05036e57aff8ebd7c6d1af5556c.
+---
+ arch/x86/kvm/vmx/vmx.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index d69d1af738a7..abd49d12b55f 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -38,6 +38,7 @@
+ #include <asm/cpu_device_id.h>
+ #include <asm/debugreg.h>
+ #include <asm/desc.h>
++#include <asm/fpu/api.h>
+ #include <asm/idtentry.h>
+ #include <asm/io.h>
+ #include <asm/irq_remapping.h>
+-- 
+2.31.1
+

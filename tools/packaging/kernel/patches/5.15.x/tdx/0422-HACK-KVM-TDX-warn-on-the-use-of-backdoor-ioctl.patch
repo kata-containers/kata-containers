@@ -1,0 +1,159 @@
+From 4edc6fced07bb579f97d59fe770f4f5cfad9d165 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Wed, 16 Dec 2020 16:10:05 -0800
+Subject: [PATCH 0422/1418] *** HACK *** KVM: TDX: warn on the use of backdoor
+ ioctl
+
+Warn loudly on the use of KVM_SEAMCALL, KVM_TDENTER.
+They are backdoor api only for development purpose.
+To guard unintentional usage, introduce
+- CONFIG_KVM_TDX_SEAM_BACKDOOR with default n, and
+- tdx_seam_backdoor command line option with default off
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h |  2 ++
+ arch/x86/kvm/Kconfig            | 14 ++++++++++++++
+ arch/x86/kvm/vmx/main.c         |  2 ++
+ arch/x86/kvm/vmx/tdx.c          | 27 +++++++++++++++++++++++++++
+ arch/x86/kvm/x86.c              |  2 ++
+ 5 files changed, 47 insertions(+)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 8549a3ab313f..a8f5da6ac04b 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1537,8 +1537,10 @@ struct kvm_x86_ops {
+ 
+ 	void (*vcpu_deliver_sipi_vector)(struct kvm_vcpu *vcpu, u8 vector);
+ 
++#ifdef CONFIG_KVM_TDX_SEAM_BACKDOOR
+ 	void (*do_seamcall)(struct kvm_seamcall *call);
+ 	void (*do_tdenter)(struct kvm_tdenter *tdenter);
++#endif
+ };
+ 
+ struct kvm_x86_nested_ops {
+diff --git a/arch/x86/kvm/Kconfig b/arch/x86/kvm/Kconfig
+index ac69894eab88..01372d0e74b4 100644
+--- a/arch/x86/kvm/Kconfig
++++ b/arch/x86/kvm/Kconfig
+@@ -94,6 +94,20 @@ config X86_SGX_KVM
+ 
+ 	  If unsure, say N.
+ 
++config KVM_INTEL_TDX_SEAM_BACKDOOR
++	bool "Trusted Domain Extensions backdoor interface for development"
++	default n
++	depends on KVM_INTEL && INTEL_TDX_HOST
++
++	help
++	  Backdoor interface to provide raw interface to call TDX SEAM module
++	  for user land
++	  This is only for development so that KVM doesn't guarantee any
++	  integrity like cache coherency.
++	  To enable this feature, also pass tdx_seam_backdoor to the command
++	  line.
++	  If unsure, say N.
++
+ config KVM_AMD
+ 	tristate "KVM for AMD processors support"
+ 	depends on KVM
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index 684b003c1498..6f64a64942ed 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -64,6 +64,7 @@ static __init int vt_hardware_setup(void)
+ 	if (enable_tdx && tdx_hardware_setup(&vt_x86_ops))
+ 		enable_tdx = false;
+ 
++#ifdef CONFIG_KVM_TDX_SEAM_BACKDOOR
+ 	/*
+ 	 * Not a typo, direct SEAMCALL is only allowed when it won't interfere
+ 	 * with TDs created and managed by KVM.
+@@ -72,6 +73,7 @@ static __init int vt_hardware_setup(void)
+ 		vt_x86_ops.do_seamcall = tdx_do_seamcall;
+ 		vt_x86_ops.do_tdenter = tdx_do_tdenter;
+ 	}
++#endif
+ #endif
+ 
+ 	if (enable_ept) {
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 3a4cb147689f..933622ae5904 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -2167,12 +2167,27 @@ static int __init tdx_hardware_setup(struct kvm_x86_ops *x86_ops)
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_KVM_TDX_SEAM_BACKDOOR
++static int enable_tdx_seam_backdoor __read_mostly;
++module_param_named(tdx_seam_backdoor, enable_tdx_seam_backdoor, bool, 0444);
++
+ static void tdx_do_seamcall(struct kvm_seamcall *call)
+ {
+ 	struct kvm_seamcall_regs *out = &call->out;
+ 	struct kvm_seamcall_regs *in = &call->in;
+ 	struct tdx_ex_ret ex;
+ 
++	if (!enable_tdx_seam_backdoor) {
++		WARN("KVM_SEAMCALL backdoor is not enabled. "
++		     "ignoring the request");
++		return;
++	}
++
++	WARN_ONCE(1, "KVM_SEAMCALL is an unsupported backdoor "
++		  "only for development purpose."
++		  "which can be eliminated anytime.");
++	WARN_ON_ONCE(1);
++
+ 	memset(&ex, 0, sizeof(ex));
+ 	out->rax = kvm_seamcall(in->rax, in->rcx, in->rdx, in->r8, in->r9,
+ 				in->r10, &ex);
+@@ -2188,6 +2203,17 @@ static void tdx_do_tdenter(struct kvm_tdenter *tdenter)
+ 	union tdx_exit_reason exit_reason;
+ 	u64 *regs = tdenter->regs;
+ 
++	if (!enable_tdx_seam_backdoor) {
++		WARN("KVM_TDH_VP_ENTER backdoor is not enabled. "
++		     "ignoring the request");
++		return;
++	}
++
++	WARN_ONCE(1, "KVM_TDH_VP_ENTER is an unsupported backdoor "
++		  "only for development purpose."
++		  "which can be eliminated anytime.");
++	WARN_ON_ONCE(1);
++
+ 	preempt_disable();
+ 	local_irq_disable();
+ 
+@@ -2210,3 +2236,4 @@ static void tdx_do_tdenter(struct kvm_tdenter *tdenter)
+ 	local_irq_enable();
+ 	preempt_enable();
+ }
++#endif
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index b9a8f5b7c88a..baab8d2a686b 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -4261,6 +4261,7 @@ long kvm_arch_dev_ioctl(struct file *filp,
+ 			goto out;
+ 		r = kvm_x86_ops.mem_enc_op_dev(argp);
+ 		break;
++#ifdef CONFIG_KVM_TDX_SEAM_BACKDOOR
+ 	case KVM_SEAMCALL: {
+ 		struct kvm_seamcall __user *user_seamcall = argp;
+ 		struct kvm_seamcall seamcall;
+@@ -4301,6 +4302,7 @@ long kvm_arch_dev_ioctl(struct file *filp,
+ 		r = 0;
+ 		break;
+ 	}
++#endif
+ 	default:
+ 		r = -EINVAL;
+ 		break;
+-- 
+2.31.1
+

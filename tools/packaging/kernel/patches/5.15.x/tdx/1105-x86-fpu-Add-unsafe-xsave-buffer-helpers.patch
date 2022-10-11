@@ -1,0 +1,96 @@
+From b59367703afb5e43c643f658b4a1ed7491a72452 Mon Sep 17 00:00:00 2001
+From: Rick Edgecombe <rick.p.edgecombe@intel.com>
+Date: Fri, 3 Dec 2021 10:30:38 -0800
+Subject: [PATCH 1105/1418] x86/fpu: Add unsafe xsave buffer helpers
+
+CET will need to modify the xsave buffer of a new FPU that was just
+created in the process of copying a thread. In this case the normal
+helpers will not work, because they operate on the current thread's FPU.
+
+So add unsafe helpers to allow for this kind of modification. Make the
+unsafe helpers operate on the MSR like the safe helpers for symmetry and
+to avoid exposing the underling xsave structures. Don't add a read
+helper because it is not needed at this time.
+
+Signed-off-by: Rick Edgecombe <rick.p.edgecombe@intel.com>
+---
+ arch/x86/include/asm/fpu/api.h |  9 ++++++---
+ arch/x86/kernel/fpu/xstate.c   | 27 ++++++++++++++++++++++-----
+ 2 files changed, 28 insertions(+), 8 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/api.h b/arch/x86/include/asm/fpu/api.h
+index fe6383d3c3fa..2ed8c521e814 100644
+--- a/arch/x86/include/asm/fpu/api.h
++++ b/arch/x86/include/asm/fpu/api.h
+@@ -173,7 +173,10 @@ extern long fpu_xstate_prctl(struct task_struct *tsk, int option, unsigned long
+ 
+ void *start_update_xsave_msrs(int xfeature_nr);
+ void end_update_xsave_msrs(void);
+-int xsave_rdmsrl(void *state, unsigned int msr, unsigned long long *p);
+-int xsave_wrmsrl(void *state, u32 msr, u64 val);
+-int xsave_set_clear_bits_msrl(void *state, u32 msr, u64 set, u64 clear);
++int xsave_rdmsrl(void *xstate, unsigned int msr, unsigned long long *p);
++int xsave_wrmsrl(void *xstate, u32 msr, u64 val);
++int xsave_set_clear_bits_msrl(void *xstate, u32 msr, u64 set, u64 clear);
++
++void *get_xsave_buffer_unsafe(struct fpu *fpu, int xfeature_nr);
++int xsave_wrmsrl_unsafe(void *xstate, u32 msr, u64 val);
+ #endif /* _ASM_X86_FPU_API_H */
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index a15ea9347f62..040f78391bec 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -1881,6 +1881,17 @@ static u64 *__get_xsave_member(void *xstate, u32 msr)
+ 	}
+ }
+ 
++/*
++ * Operate on the xsave buffer directly. It makes no gaurantees that the
++ * buffer will stay valid now or in the futre. This function is pretty
++ * much only useful when the caller knows the fpu's thread can't be
++ * scheduled or otherwise operated on concurrently.
++ */
++void *get_xsave_buffer_unsafe(struct fpu *fpu, int xfeature_nr)
++{
++	return get_xsave_addr(&fpu->fpstate->regs.xsave, xfeature_nr);
++}
++
+ /*
+  * Return a pointer to the xstate for the feature if it should be used, or NULL
+  * if the MSRs should be written to directly. To do this safely, using the
+@@ -1971,14 +1982,11 @@ int xsave_rdmsrl(void *xstate, unsigned int msr, unsigned long long *p)
+ 	return 0;
+ }
+ 
+-int xsave_wrmsrl(void *xstate, u32 msr, u64 val)
++
++int xsave_wrmsrl_unsafe(void *xstate, u32 msr, u64 val)
+ {
+ 	u64 *member_ptr;
+ 
+-	__xsave_msrl_prepare_write();
+-	if (!xstate)
+-		return wrmsrl_safe(msr, val);
+-
+ 	member_ptr = __get_xsave_member(xstate, msr);
+ 	if (!member_ptr)
+ 		return 1;
+@@ -1988,6 +1996,15 @@ int xsave_wrmsrl(void *xstate, u32 msr, u64 val)
+ 	return 0;
+ }
+ 
++int xsave_wrmsrl(void *xstate, u32 msr, u64 val)
++{
++	__xsave_msrl_prepare_write();
++	if (!xstate)
++		return wrmsrl_safe(msr, val);
++
++	return xsave_wrmsrl_unsafe(xstate, msr, val);
++}
++
+ int xsave_set_clear_bits_msrl(void *xstate, u32 msr, u64 set, u64 clear)
+ {
+ 	u64 val, new_val;
+-- 
+2.31.1
+

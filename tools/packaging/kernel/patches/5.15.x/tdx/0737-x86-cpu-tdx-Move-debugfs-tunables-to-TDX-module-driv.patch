@@ -1,0 +1,859 @@
+From c02e2a18d7782ad8a77e12ff8103f89c7c78926a Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Thu, 11 Nov 2021 11:01:37 +0800
+Subject: [PATCH 0737/1418] x86/cpu/tdx: Move debugfs tunables to TDX module
+ driver
+
+Several debugfs tunables are exposed to configure TDX module's
+debug capabilities.
+
+Logically, they should be part of TDX module driver rather than
+KVM because they don't need to be reconfigured along with KVM
+reloading.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/Makefile  |   1 +
+ arch/x86/kernel/cpu/tdx/debugfs.c | 313 +++++++++++++++++++++++++++++
+ arch/x86/kernel/cpu/tdx/seam.h    |   4 +
+ arch/x86/kernel/cpu/tdx/tdx-ops.h |  23 +--
+ arch/x86/kernel/cpu/tdx/tdx.c     |   7 +-
+ arch/x86/kernel/cpu/tdx/tdx.h     |   1 +
+ arch/x86/kvm/vmx/tdx.c            | 323 +-----------------------------
+ arch/x86/kvm/vmx/tdx_ops.h        |  36 ----
+ 8 files changed, 331 insertions(+), 377 deletions(-)
+ create mode 100644 arch/x86/kernel/cpu/tdx/debugfs.c
+
+diff --git a/arch/x86/kernel/cpu/tdx/Makefile b/arch/x86/kernel/cpu/tdx/Makefile
+index cbf1a6eb04e4..49ed9f3ca761 100644
+--- a/arch/x86/kernel/cpu/tdx/Makefile
++++ b/arch/x86/kernel/cpu/tdx/Makefile
+@@ -5,3 +5,4 @@ obj-y	+= seam.o seamcall.o p-seamldr.o np-seamldr.o
+ obj-y	+= tdx-error.o tdx.o tdmr-common.o tdmr-sysmem.o
+ obj-$(CONFIG_ENABLE_TDX_FOR_X86_PMEM_LEGACY)	+= tdmr-legacy-pmem.o
+ obj-y	+= tdx-tdmr.o
++obj-$(CONFIG_DEBUG_FS)	+= debugfs.o
+diff --git a/arch/x86/kernel/cpu/tdx/debugfs.c b/arch/x86/kernel/cpu/tdx/debugfs.c
+new file mode 100644
+index 000000000000..72c62d085d62
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/debugfs.c
+@@ -0,0 +1,313 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * TDX-module debugfs
++ * - tdx_seam/print_severity
++ *   0: TRACE_ALL
++ *   1: TRACE_WARN
++ *   2: TRACE_ERROR
++ *   1000: TRACE_CUSTOM
++ * - tdx_seam/trace_target
++ *   0: TRACE_BUFFER: output to buffer internal to TDX module
++ *   1: TRACE_SERIAL_PORT: output to serial port
++ *   2: TRACE_EXTERNAL_BUFFER: output to VMM buffer which is external
++ *                             to TDX module
++ * - tdx_seam/emergency
++ *   0: noop
++ *   1: set emergency buffer
++ *
++ * - tdx_seam/dump
++ *   buffer from internal buffer of tdx seam module to VMM buffer
++ *   only when trace_target is TRACE_BUFFER
++ *
++ * - tdx_seam/buffer_trace
++ *   read the buffer for trace
++ * - tdx_seam/buffer_dump
++ *   read the buffer dumped from buffer internal to TDX module
++ * - tdx_seam/buffer_emergency
++ *   read the buffer for emergency dump
++ *
++ * Usage example:
++ *   # change print_severity
++ *   echo 0 > /sys/kernel/debug/tdx_seam/print_severity
++ *
++ *   # set buffer in KVM and read the trace
++ *   echo 2 > /sys/kernel/debug/tdx_seam/trace_target
++ *   cat /sys/kernel/debug/tdx_seam/buffer_trace
++ *
++ *   # make tdx module to record in its internal buffer
++ *   # and dump it into KVM buffer
++ *   echo 0 > /sys/kernel/debug/tdx_seam/trace_target
++ *   echo 1 > /sys/kernel/debug/tdx_seam/dump
++ *   cat /sys/kernel/debug/tdx_seam/buffer_dump
++ *
++ *   # set emergency buffer
++ *   echo 1 > /sys/kernel/debug/tdx_seam/emergency
++ *   # after tdx seam module panics
++ *   cat /sys/kernel/debug/tdx_seam/buffer_emergency
++ */
++
++#include <linux/debugfs.h>
++#include <linux/irqflags.h>
++#include <linux/slab.h>
++
++#include <asm/cpufeature.h>
++#include <asm/trace/seam.h>
++#include <asm/tdx_arch.h>
++#include <asm/tdx_errno.h>
++#include <asm/tdx_host.h>
++#include <asm/virtext.h>
++
++#include "seam.h"
++#include "seamcall.h"
++#include "tdx-ops.h"
++
++/*
++ * Enter VMX operation on current cpu (if not) and configure TDX module debug
++ * sub-system via a seamcall and exit VMX operation (if vmxon was executed).
++ */
++static inline int do_tddebugconfig(u64 subleaf, u64 param1, u64 param2)
++{
++	u64 err;
++	int ret;
++
++	if (is_debug_seamcall_available) {
++		preempt_disable();
++		ret = cpu_vmx_get();
++		if (ret) {
++			preempt_enable();
++			return ret;
++		}
++		err = tddebugconfig(subleaf, param1, param2);
++		cpu_vmx_put();
++		preempt_enable();
++		if (err == TDX_OPERAND_INVALID) {
++			pr_warn("TDX module doesn't support DEBUG TRACE SEAMCALL API\n");
++			is_debug_seamcall_available = false;
++			ret = -EOPNOTSUPP;
++		} else if (err) {
++			pr_err_ratelimited("SEAMCALL[TDDBUTCONFIG] failed on cpu %d: %s (0x%llx)\n",
++					smp_processor_id(),
++					tdx_seamcall_error_name(err), err);
++			ret = -EIO;
++		}
++	}
++
++	return ret;
++}
++
++static u64 trace_seamcalls;
++
++static int print_severity_get(void *data, u64 *val)
++{
++	*val = trace_seamcalls;
++	return 0;
++}
++
++static int print_severity_set(void *data, u64 val)
++{
++	int ret = -EINVAL;
++
++	if (!boot_cpu_has(X86_FEATURE_TDX))
++		return -EOPNOTSUPP;
++	if (val == DEBUGCONFIG_TRACE_ALL ||
++	    val == DEBUGCONFIG_TRACE_WARN ||
++	    val == DEBUGCONFIG_TRACE_ERROR ||
++	    val == DEBUGCONFIG_TRACE_CUSTOM ||
++	    val == DEBUGCONFIG_TRACE_NONE) {
++		tdh_trace_seamcalls(val);
++		trace_seamcalls = val;
++		ret = 0;
++	}
++	return ret;
++}
++
++DEFINE_DEBUGFS_ATTRIBUTE(print_severity_fops,
++			 print_severity_get, print_severity_set, "%llu\n");
++
++static int trace_target = DEBUGCONFIG_TARGET_SERIAL_PORT;
++
++#define TRACE_BUFFER_SIZE	4096
++#define MAX_PRINT_LENGTH	256
++#define BUFFER_SIZE		(TRACE_BUFFER_SIZE * MAX_PRINT_LENGTH)
++static char *buffer_trace;
++
++static int trace_target_get(void *data, u64 *val)
++{
++	*val = trace_target;
++	return 0;
++}
++
++static int trace_target_set(void *data, u64 val)
++{
++	int ret = -EINVAL;
++	u64 paddr = 0;
++
++	if (!boot_cpu_has(X86_FEATURE_TDX))
++		return -EOPNOTSUPP;
++
++	switch (val) {
++	case DEBUGCONFIG_TARGET_EXTERNAL_BUFFER:
++		paddr = __pa(buffer_trace);
++		fallthrough;
++	case DEBUGCONFIG_TARGET_TRACE_BUFFER:
++	case DEBUGCONFIG_TARGET_SERIAL_PORT:
++		ret = do_tddebugconfig(DEBUGCONFIG_SET_TARGET, val, paddr);
++		if (!ret)
++			trace_target = val;
++		break;
++	default:
++		/* nothing */
++		break;
++	}
++	return ret;
++}
++
++DEFINE_DEBUGFS_ATTRIBUTE(trace_target_fops,
++			 trace_target_get, trace_target_set, "%llu\n");
++
++static char *buffer_emergency;
++static bool emergency_configured;
++
++static int emergency_get(void *data, u64 *val)
++{
++	*val = emergency_configured;
++	return 0;
++}
++
++static int emergency_set(void *data, u64 val)
++{
++	int ret = 0;
++
++	if (!boot_cpu_has(X86_FEATURE_TDX))
++		return -EOPNOTSUPP;
++
++	/* emergency buffer can't be de-configured */
++	if (!val && emergency_configured)
++		return -EINVAL;
++
++	memset(buffer_emergency, 0, BUFFER_SIZE);
++	if (!emergency_configured) {
++		ret = do_tddebugconfig(DEBUGCONFIG_SET_EMERGENCY_BUFFER,
++				    __pa(buffer_emergency),
++				    TRACE_BUFFER_SIZE);
++		if (!ret)
++			emergency_configured = true;
++	}
++	return ret;
++}
++
++DEFINE_DEBUGFS_ATTRIBUTE(emergency_fops,
++			 emergency_get, emergency_set, "%llu\n");
++
++static char *buffer_dump;
++static int dump_set(void *data, u64 val)
++{
++	int ret = -EINVAL;
++
++	if (trace_target == DEBUGCONFIG_TARGET_TRACE_BUFFER) {
++		memset(buffer_dump, 0, BUFFER_SIZE);
++		ret = do_tddebugconfig(DEBUGCONFIG_DUMP_TRACE_BUFFER,
++				    __pa(buffer_dump), TRACE_BUFFER_SIZE);
++	}
++	return ret;
++}
++
++DEFINE_DEBUGFS_ATTRIBUTE(dump_fops, NULL, dump_set, "%llu\n");
++
++static void *buffer_start(struct seq_file *sfile, loff_t *pos)
++{
++	if (*pos == 0)
++		return SEQ_START_TOKEN;
++	if (*pos > TRACE_BUFFER_SIZE)
++		return NULL;
++	return pos;
++}
++
++static void *buffer_next(struct seq_file *sfile, void *v, loff_t *pos)
++{
++	(*pos)++;
++	if (*pos > TRACE_BUFFER_SIZE)
++		return NULL;
++	return pos;
++}
++
++static void buffer_stop(struct seq_file *sfile, void *v)
++{
++}
++
++static int buffer_show(struct seq_file *sfile, void *v)
++{
++	char *buffer = sfile->private;
++
++	if (v == SEQ_START_TOKEN) {
++		if (buffer == buffer_trace)
++			seq_puts(sfile, "------- trace buffer ------\n");
++		else if (buffer == buffer_dump)
++			seq_puts(sfile, "------- dump  buffer ------\n");
++		else
++			seq_puts(sfile, "------- emerg buffer ------\n");
++	} else {
++		int index = *((loff_t *)v) - 1;
++		const char *buf = &buffer[MAX_PRINT_LENGTH * index];
++
++		seq_printf(sfile, "%."__stringify(MAX_PRINT_LENGTH)"s", buf);
++	}
++	return 0;
++}
++
++static const struct seq_operations buffer_sops = {
++	.start = buffer_start,
++	.next = buffer_next,
++	.stop = buffer_stop,
++	.show = buffer_show,
++};
++
++DEFINE_SEQ_ATTRIBUTE(buffer);
++
++static struct dentry *tdx_seam;
++
++int __init tdx_debugfs_init(void)
++{
++	int ret = 0;
++
++	if (!boot_cpu_has(X86_FEATURE_TDX) || !is_debug_seamcall_available)
++		return 0;
++
++	ret = -ENOMEM;
++	buffer_trace = kcalloc(TRACE_BUFFER_SIZE, MAX_PRINT_LENGTH, GFP_KERNEL_ACCOUNT);
++	if (!buffer_trace)
++		goto err;
++
++	buffer_emergency = kcalloc(TRACE_BUFFER_SIZE, MAX_PRINT_LENGTH, GFP_KERNEL_ACCOUNT);
++	if (!buffer_emergency)
++		goto err;
++
++	buffer_dump = kcalloc(TRACE_BUFFER_SIZE, MAX_PRINT_LENGTH, GFP_KERNEL_ACCOUNT);
++	if (!buffer_dump)
++		goto err;
++
++	tdx_seam = debugfs_create_dir("tdx_seam", NULL);
++
++	debugfs_create_file("print_severity", 0600,
++			    tdx_seam, NULL, &print_severity_fops);
++	debugfs_create_file("trace_target", 0600,
++			    tdx_seam, NULL, &trace_target_fops);
++	debugfs_create_file("emergency", 0600,
++			    tdx_seam, NULL, &emergency_fops);
++
++	debugfs_create_file("dump", 0200,
++			    tdx_seam, NULL, &dump_fops);
++	debugfs_create_file("buffer_trace", 0400,
++			    tdx_seam, buffer_trace, &buffer_fops);
++	debugfs_create_file("buffer_dump", 0400,
++			    tdx_seam, buffer_dump, &buffer_fops);
++	debugfs_create_file("buffer_emergency", 0400,
++			    tdx_seam, buffer_emergency, &buffer_fops);
++
++	return 0;
++err:
++	kfree(buffer_trace);
++	kfree(buffer_emergency);
++	kfree(buffer_dump);
++	return ret;
++}
+diff --git a/arch/x86/kernel/cpu/tdx/seam.h b/arch/x86/kernel/cpu/tdx/seam.h
+index 196ed7574dd5..b8a083a495f6 100644
+--- a/arch/x86/kernel/cpu/tdx/seam.h
++++ b/arch/x86/kernel/cpu/tdx/seam.h
+@@ -4,6 +4,10 @@
+ #ifndef _X86_TDX_SEAM_H
+ #define _X86_TDX_SEAM_H
+ 
++#include <linux/earlycpio.h>
++
++#include <asm/vmx.h>
++
+ bool __init seam_get_firmware(struct cpio_data *blob, const char *name);
+ 
+ int __init seam_init_vmx_early(void);
+diff --git a/arch/x86/kernel/cpu/tdx/tdx-ops.h b/arch/x86/kernel/cpu/tdx/tdx-ops.h
+index d01341c2a6ae..8cb1e31cd509 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx-ops.h
++++ b/arch/x86/kernel/cpu/tdx/tdx-ops.h
+@@ -64,24 +64,15 @@ static inline u64 tdh_sys_tdmr_config(u64 tdmr, int nr_entries, int hkid)
+ 			NULL);
+ }
+ 
+-static inline u64 tdh_trace_seamcalls(u64 level)
++static inline u64 tddebugconfig(u64 subleaf, u64 param1, u64 param2)
+ {
+-	u64 err = 0;
+-
+-	if (is_debug_seamcall_available) {
+-		err = seamcall(SEAMCALL_TDDEBUGCONFIG,
+-			DEBUGCONFIG_SET_TRACE_LEVEL, level, 0, 0, NULL);
+-		if (err == TDX_OPERAND_INVALID) {
+-			pr_warn("TDX module doesn't support DEBUG TRACE SEAMCALL API\n");
+-			is_debug_seamcall_available = false;
+-		} else if (err) {
+-			pr_err_ratelimited("SEAMCALL[TDDBUTCONFIG] failed on cpu %d: %s (0x%llx)\n",
+-					smp_processor_id(),
+-					tdx_seamcall_error_name(err), err);
+-		}
+-	}
++	return seamcall(SEAMCALL_TDDEBUGCONFIG, subleaf, param1, param2,
++			0, NULL);
++}
+ 
+-	return err;
++static inline void tdh_trace_seamcalls(u64 level)
++{
++	tddebugconfig(DEBUGCONFIG_SET_TRACE_LEVEL, level, 0);
+ }
+ 
+ static inline void tdxmode(bool intercept_vmexits, u64 intercept_bitmap)
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 014200ab481d..72f034db9557 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -120,10 +120,8 @@ enum TDX_MODULE_STATE {
+ static enum TDX_MODULE_STATE tdx_module_state __ro_after_init;
+ 
+ bool is_debug_seamcall_available __read_mostly = true;
+-EXPORT_SYMBOL_GPL(is_debug_seamcall_available);
+ 
+ bool is_nonarch_seamcall_available __read_mostly = true;
+-EXPORT_SYMBOL_GPL(is_nonarch_seamcall_available);
+ 
+ /* TDX system information returned by TDH_SYS_INFO. */
+ static struct tdsysinfo_struct *tdx_tdsysinfo;
+@@ -1034,7 +1032,8 @@ static int __init __tdx_init_module(void)
+ 		 * causes too many debug messages to take long time.
+ 		 */
+ 		tdh_trace_seamcalls(DEBUGCONFIG_TRACE_CUSTOM);
+-	tdxmode(false, 0);
++	/* Unconditionally intercept triple faults to aid debug. */
++	tdxmode(true, BIT_ULL(EXIT_REASON_TRIPLE_FAULT));
+ 
+ 	ret = tdx_init_tdmrs();
+ out:
+@@ -1153,6 +1152,8 @@ static int __init tdx_late_init(void)
+ 		setup_force_cpu_cap(X86_FEATURE_TDX);
+ 		for_each_online_cpu(cpu)
+ 			set_cpu_cap(&cpu_data(cpu), X86_FEATURE_TDX);
++
++		tdx_debugfs_init();
+ 	}
+ 	cpus_read_unlock();
+ 
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.h b/arch/x86/kernel/cpu/tdx/tdx.h
+index f2ad0b182286..c72904fa323f 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.h
++++ b/arch/x86/kernel/cpu/tdx/tdx.h
+@@ -6,6 +6,7 @@
+ #ifdef CONFIG_SYSFS
+ extern struct kobject *tdx_kobj;
+ int __init tdx_sysfs_init(void);
++int __init tdx_debugfs_init(void);
+ #endif
+ 
+ #endif /* _X86_TDX_H */
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 6841cdc75285..0c55036093b5 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -24,10 +24,6 @@
+ #undef pr_fmt
+ #define pr_fmt(fmt) "tdx: " fmt
+ 
+-static int trace_seamcalls __read_mostly = DEBUGCONFIG_TRACE_CUSTOM;
+-module_param(trace_seamcalls, int, 0444);
+-static int trace_seamcalls_initialized;
+-
+ /* TDX KeyID pool */
+ static DEFINE_IDA(tdx_keyid_pool);
+ 
+@@ -902,13 +898,6 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ static void tdx_hardware_enable(void)
+ {
+ 	INIT_LIST_HEAD(&per_cpu(associated_tdvcpus, raw_smp_processor_id()));
+-
+-	if (!cmpxchg(&trace_seamcalls_initialized, 0, 1)) {
+-		tdh_trace_seamcalls(trace_seamcalls);
+-
+-		/* Unconditionally intercept triple faults to aid debug. */
+-		tdxmode(true, BIT_ULL(EXIT_REASON_TRIPLE_FAULT));
+-	}
+ }
+ 
+ static void tdx_hardware_disable(void)
+@@ -3115,17 +3104,13 @@ static int tdx_skip_emulated_instruction(struct kvm_vcpu *vcpu)
+ 	return 1;
+ }
+ 
+-static int __init tdx_debugfs_init(void);
+-static void __exit tdx_debugfs_exit(void);
+-
+ static int __init tdx_init(void)
+ {
+-	return tdx_debugfs_init();
++	return 0;
+ }
+ 
+ static void __exit tdx_exit(void)
+ {
+-	tdx_debugfs_exit();
+ }
+ 
+ static int __init tdx_hardware_setup(struct kvm_x86_ops *x86_ops)
+@@ -3280,309 +3265,3 @@ static void tdx_do_tdenter(struct kvm_tdenter *tdenter)
+ 	preempt_enable();
+ }
+ #endif
+-
+-#ifdef CONFIG_DEBUG_FS
+-static int print_severity_get(void *data, u64 *val)
+-{
+-	*val = trace_seamcalls;
+-	return 0;
+-}
+-
+-static int print_severity_set(void *data, u64 val)
+-{
+-	int ret = -EINVAL;
+-
+-	if (!boot_cpu_has(X86_FEATURE_TDX))
+-		return -EOPNOTSUPP;
+-	if (val == DEBUGCONFIG_TRACE_ALL ||
+-	    val == DEBUGCONFIG_TRACE_WARN ||
+-	    val == DEBUGCONFIG_TRACE_ERROR ||
+-	    val == DEBUGCONFIG_TRACE_CUSTOM ||
+-	    val == DEBUGCONFIG_TRACE_NONE) {
+-		kvm_hardware_enable_all();
+-		tdh_trace_seamcalls(val);
+-		kvm_hardware_disable_all();
+-		trace_seamcalls = val;
+-		ret = 0;
+-	}
+-	return ret;
+-}
+-
+-DEFINE_DEBUGFS_ATTRIBUTE(print_severity_fops,
+-			 print_severity_get, print_severity_set, "%llu\n");
+-
+-static int trace_target = DEBUGCONFIG_TARGET_SERIAL_PORT;
+-
+-#define TRACE_BUFFER_SIZE	4096
+-#define MAX_PRINT_LENGTH	256
+-#define BUFFER_SIZE		(TRACE_BUFFER_SIZE * MAX_PRINT_LENGTH)
+-static char *buffer_trace;
+-
+-static int trace_target_get(void *data, u64 *val)
+-{
+-	*val = trace_target;
+-	return 0;
+-}
+-
+-static int trace_target_set(void *data, u64 val)
+-{
+-	int ret = -EINVAL;
+-	u64 err;
+-	u64 paddr = 0;
+-
+-	if (!boot_cpu_has(X86_FEATURE_TDX))
+-		return -EOPNOTSUPP;
+-
+-	switch (val) {
+-	case DEBUGCONFIG_TARGET_EXTERNAL_BUFFER:
+-		paddr = __pa(buffer_trace);
+-		fallthrough;
+-	case DEBUGCONFIG_TARGET_TRACE_BUFFER:
+-	case DEBUGCONFIG_TARGET_SERIAL_PORT:
+-		kvm_hardware_enable_all();
+-		err = tddebugconfig(DEBUGCONFIG_SET_TARGET, val, paddr);
+-		kvm_hardware_disable_all();
+-		if (err)
+-			pr_seamcall_error(TDDEBUGCONFIG, err, NULL);
+-		else
+-			trace_target = val;
+-		ret = err;
+-		break;
+-	default:
+-		/* nothing */
+-		break;
+-	}
+-	return ret;
+-}
+-
+-DEFINE_DEBUGFS_ATTRIBUTE(trace_target_fops,
+-			 trace_target_get, trace_target_set, "%llu\n");
+-
+-static char *buffer_emergency;
+-static bool emergency_configured;
+-
+-static int emergency_get(void *data, u64 *val)
+-{
+-	*val = emergency_configured;
+-	return 0;
+-}
+-
+-static int emergency_set(void *data, u64 val)
+-{
+-	int ret = 0;
+-
+-	if (!boot_cpu_has(X86_FEATURE_TDX))
+-		return -EOPNOTSUPP;
+-
+-	/* emergency buffer can't be de-configured */
+-	if (!val && emergency_configured)
+-		return -EINVAL;
+-
+-	memset(buffer_emergency, 0, BUFFER_SIZE);
+-	if (!emergency_configured) {
+-		u64 err;
+-
+-		kvm_hardware_enable_all();
+-		err = tddebugconfig(DEBUGCONFIG_SET_EMERGENCY_BUFFER,
+-				    __pa(buffer_emergency),
+-				    TRACE_BUFFER_SIZE);
+-		kvm_hardware_disable_all();
+-		if ((s64)err < 0) {
+-			pr_seamcall_error(TDDEBUGCONFIG, err, NULL);
+-			ret = (s64)err;
+-		} else
+-			ret = 0;
+-
+-		emergency_configured = true;
+-	}
+-	return ret;
+-}
+-
+-DEFINE_DEBUGFS_ATTRIBUTE(emergency_fops,
+-			 emergency_get, emergency_set, "%llu\n");
+-
+-static char *buffer_dump;
+-static int dump_set(void *data, u64 val)
+-{
+-	int ret = -EINVAL;
+-
+-	if (trace_target == DEBUGCONFIG_TARGET_TRACE_BUFFER) {
+-		u64 err;
+-
+-		memset(buffer_dump, 0, BUFFER_SIZE);
+-		kvm_hardware_enable_all();
+-		err = tddebugconfig(DEBUGCONFIG_DUMP_TRACE_BUFFER,
+-				    __pa(buffer_dump), TRACE_BUFFER_SIZE);
+-		kvm_hardware_disable_all();
+-		if ((s64)err < 0) {
+-			pr_seamcall_error(TDDEBUGCONFIG, err, NULL);
+-			ret = (s64)err;
+-		} else
+-			ret = 0;
+-	}
+-	return ret;
+-}
+-
+-DEFINE_DEBUGFS_ATTRIBUTE(dump_fops, NULL, dump_set, "%llu\n");
+-
+-static void *buffer_start(struct seq_file *sfile, loff_t *pos)
+-{
+-	if (*pos == 0)
+-		return SEQ_START_TOKEN;
+-	if (*pos > TRACE_BUFFER_SIZE)
+-		return NULL;
+-	return pos;
+-}
+-
+-static void *buffer_next(struct seq_file *sfile, void *v, loff_t *pos)
+-{
+-	(*pos)++;
+-	if (*pos > TRACE_BUFFER_SIZE)
+-		return NULL;
+-	return pos;
+-}
+-
+-static void buffer_stop(struct seq_file *sfile, void *v)
+-{
+-}
+-
+-static int buffer_show(struct seq_file *sfile, void *v)
+-{
+-	char *buffer = sfile->private;
+-
+-	if (v == SEQ_START_TOKEN) {
+-		if (buffer == buffer_trace)
+-			seq_puts(sfile, "------- trace buffer ------\n");
+-		else if (buffer == buffer_dump)
+-			seq_puts(sfile, "------- dump  buffer ------\n");
+-		else
+-			seq_puts(sfile, "------- emerg buffer ------\n");
+-	} else {
+-		int index = *((loff_t *)v) - 1;
+-		const char *buf = &buffer[MAX_PRINT_LENGTH * index];
+-
+-		seq_printf(sfile, "%."__stringify(MAX_PRINT_LENGTH)"s", buf);
+-	}
+-	return 0;
+-}
+-
+-static const struct seq_operations buffer_sops = {
+-	.start = buffer_start,
+-	.next = buffer_next,
+-	.stop = buffer_stop,
+-	.show = buffer_show,
+-};
+-
+-DEFINE_SEQ_ATTRIBUTE(buffer);
+-
+-static struct dentry *tdx_seam;
+-#endif
+-
+-static int __init tdx_debugfs_init(void)
+-{
+-	int ret = 0;
+-#ifdef CONFIG_DEBUG_FS
+-	if (!boot_cpu_has(X86_FEATURE_TDX) || !is_debug_seamcall_available)
+-		return 0;
+-
+-	ret = -ENOMEM;
+-	buffer_trace = kcalloc(TRACE_BUFFER_SIZE, MAX_PRINT_LENGTH, GFP_KERNEL_ACCOUNT);
+-	if (!buffer_trace)
+-		goto err;
+-
+-	buffer_emergency = kcalloc(TRACE_BUFFER_SIZE, MAX_PRINT_LENGTH, GFP_KERNEL_ACCOUNT);
+-	if (!buffer_emergency)
+-		goto err;
+-
+-	buffer_dump = kcalloc(TRACE_BUFFER_SIZE, MAX_PRINT_LENGTH, GFP_KERNEL_ACCOUNT);
+-	if (!buffer_dump)
+-		goto err;
+-
+-	tdx_seam = debugfs_create_dir("tdx_seam", NULL);
+-
+-	debugfs_create_file("print_severity", 0600,
+-			    tdx_seam, NULL, &print_severity_fops);
+-	debugfs_create_file("trace_target", 0600,
+-			    tdx_seam, NULL, &trace_target_fops);
+-	debugfs_create_file("emergency", 0600,
+-			    tdx_seam, NULL, &emergency_fops);
+-
+-	debugfs_create_file("dump", 0200,
+-			    tdx_seam, NULL, &dump_fops);
+-	debugfs_create_file("buffer_trace", 0400,
+-			    tdx_seam, buffer_trace, &buffer_fops);
+-	debugfs_create_file("buffer_dump", 0400,
+-			    tdx_seam, buffer_dump, &buffer_fops);
+-	debugfs_create_file("buffer_emergency", 0400,
+-			    tdx_seam, buffer_emergency, &buffer_fops);
+-
+-	return 0;
+-err:
+-	kfree(buffer_trace);
+-	kfree(buffer_emergency);
+-	kfree(buffer_dump);
+-#endif
+-	return ret;
+-}
+-
+-static void __exit tdx_debugfs_exit(void)
+-{
+-#ifdef CONFIG_DEBUG_FS
+-	if (buffer_trace)
+-		kvfree(buffer_trace);
+-	if (buffer_emergency)
+-		kvfree(buffer_emergency);
+-	if (buffer_dump)
+-		kvfree(buffer_dump);
+-
+-	debugfs_remove_recursive(tdx_seam);
+-	tdx_seam = NULL;
+-#endif
+-}
+-
+-/*
+- * debug fs
+- * - tdx_seam/print_severity
+- *   0: TRACE_ALL
+- *   1: TRACE_WARN
+- *   2: TRACE_ERROR
+- *   1000: TRACE_CUSTOM
+- * - tdx_seam/trace_target
+- *   0: TRACE_BUFFER: output to buffer internal to TDX module
+- *   1: TRACE_SERIAL_PORT: output to serial port
+- *   2: TRACE_EXTERNAL_BUFFER: output to VMM buffer which is external
+- *                             to TDX module
+- * - tdx_seam/emergency
+- *   0: noop
+- *   1: set emergency buffer
+- *
+- * - tdx_seam/dump
+- *   dump buffer from internal buffer of tdx seam module to VMM buffer
+- *   only when trace_target is TRACE_BUFFER
+- *
+- * - tdx_seam/buffer_trace
+- *   read the buffer for trace
+- * - tdx_seam/buffer_dump
+- *   read the buffer dumped from buffer internal to TDX module
+- * - tdx_seam/buffer_emergency
+- *   read the buffer for emergency dump
+- *
+- * Usage example:
+- *   # change print_severity
+- *   echo 0 > /sys/kernel/debug/tdx_seam/print_severity
+- *
+- *   # set buffer in KVM and read the trace
+- *   echo 2 > /sys/kernel/debug/tdx_seam/trace_target
+- *   cat /sys/kernel/debug/tdx_seam/buffer_trace
+- *
+- *   # make tdx module to record in its internal buffer
+- *   # and dump it into KVM buffer
+- *   echo 0 > /sys/kernel/debug/tdx_seam/trace_target
+- *   echo 1 > /sys/kernel/debug/tdx_seam/dump
+- *   cat /sys/kernel/debug/tdx_seam/buffer_dump
+- *
+- *   # set emergency buffer
+- *   echo 1 > /sys/kernel/debug/tdx_seam/emergency
+- *   # after tdx seam module panics
+- *   cat /sys/kernel/debug/tdx_seam/buffer_emergency
+- */
+diff --git a/arch/x86/kvm/vmx/tdx_ops.h b/arch/x86/kvm/vmx/tdx_ops.h
+index df171f0fe7d3..738d03c04335 100644
+--- a/arch/x86/kvm/vmx/tdx_ops.h
++++ b/arch/x86/kvm/vmx/tdx_ops.h
+@@ -223,42 +223,6 @@ static inline u64 tdh_vp_wr(hpa_t tdvpr, u64 field, u64 val, u64 mask,
+ {
+ 	return seamcall(TDH_VP_WR, tdvpr, field, val, mask, 0, ex);
+ }
+-
+-static inline u64 tddebugconfig(u64 subleaf, u64 param1, u64 param2)
+-{
+-	return seamcall(TDDEBUGCONFIG, subleaf, param1, param2, 0, 0, NULL);
+-}
+-
+-static inline void tdh_trace_seamcalls(u64 level)
+-{
+-	u64 err;
+-
+-	if (is_debug_seamcall_available) {
+-		err = tddebugconfig(DEBUGCONFIG_SET_TRACE_LEVEL, level, 0);
+-		if (err == TDX_OPERAND_INVALID) {
+-			pr_warn("TDX module doesn't support DEBUG TRACE SEAMCALL API\n");
+-			is_debug_seamcall_available = false;
+-		} else if (err) {
+-			pr_seamcall_error(TDDEBUGCONFIG, err, NULL);
+-		}
+-	}
+-}
+-
+-static inline void tdxmode(bool intercept_vmexits, u64 intercept_bitmap)
+-{
+-	u64 err;
+-
+-	if (is_nonarch_seamcall_available) {
+-		err = seamcall(TDXMODE, intercept_vmexits, intercept_bitmap,
+-			       0, 0, 0, NULL);
+-		if (err == TDX_OPERAND_INVALID) {
+-			pr_warn("TDX module doesn't support NON-ARCH SEAMCALL API\n");
+-			is_nonarch_seamcall_available = false;
+-		} else if (err) {
+-			pr_seamcall_error(TDXMODE, err, NULL);
+-		}
+-	}
+-}
+ #endif /* CONFIG_INTEL_TDX_HOST */
+ 
+ #endif /* __KVM_X86_TDX_OPS_H */
+-- 
+2.31.1
+

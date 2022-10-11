@@ -1,0 +1,42 @@
+From eb6b20a748860e8c98a1b5e1ac4d4495673454a0 Mon Sep 17 00:00:00 2001
+From: Tom Zanussi <tom.zanussi@intel.com>
+Date: Fri, 1 Oct 2021 11:49:57 -0700
+Subject: [PATCH 0836/1418] dmaengine: idxd: Export descriptor management
+ functions
+
+To allow idxd sub-drivers to access the descriptor management
+functions, export them.
+
+Signed-off-by: Tom Zanussi <tom.zanussi@linux.intel.com>
+---
+ drivers/dma/idxd/submit.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/dma/idxd/submit.c b/drivers/dma/idxd/submit.c
+index dd897accb9fb..17102fc0d028 100644
+--- a/drivers/dma/idxd/submit.c
++++ b/drivers/dma/idxd/submit.c
+@@ -61,6 +61,7 @@ struct idxd_desc *idxd_alloc_desc(struct idxd_wq *wq, enum idxd_op_type optype)
+ 
+ 	return __get_desc(wq, idx, cpu);
+ }
++EXPORT_SYMBOL_GPL(idxd_alloc_desc);
+ 
+ void idxd_free_desc(struct idxd_wq *wq, struct idxd_desc *desc)
+ {
+@@ -69,6 +70,7 @@ void idxd_free_desc(struct idxd_wq *wq, struct idxd_desc *desc)
+ 	desc->cpu = -1;
+ 	sbitmap_queue_clear(&wq->sbq, desc->id, cpu);
+ }
++EXPORT_SYMBOL_GPL(idxd_free_desc);
+ 
+ static struct idxd_desc *list_abort_desc(struct idxd_wq *wq, struct idxd_irq_entry *ie,
+ 					 struct idxd_desc *desc)
+@@ -203,3 +205,4 @@ int idxd_submit_desc(struct idxd_wq *wq, struct idxd_desc *desc)
+ 	percpu_ref_put(&wq->wq_active);
+ 	return 0;
+ }
++EXPORT_SYMBOL_GPL(idxd_submit_desc);
+-- 
+2.31.1
+

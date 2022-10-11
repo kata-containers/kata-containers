@@ -1,0 +1,31 @@
+From fb4baa4cb563662d2263f9ac1a80ac1f06a8fdbf Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Wed, 10 Jun 2020 09:11:03 -0700
+Subject: [PATCH 0414/1418] KVM: x86: Mark the VM (TD) as bugged if
+ non-coherent DMA is detected
+
+TDX is not supported on platforms with non-coherent IOMMUs, freak out if
+one is encountered, and because SEPT doesn't allow the memtype control
+that's needed to support non-coherent DMA.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/x86.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 5144acb00d94..aa02d8ea9e60 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -12040,6 +12040,7 @@ EXPORT_SYMBOL_GPL(kvm_arch_has_assigned_device);
+ 
+ void kvm_arch_register_noncoherent_dma(struct kvm *kvm)
+ {
++	KVM_BUG_ON(kvm->arch.vm_type == KVM_X86_TDX_VM, kvm);
+ 	atomic_inc(&kvm->arch.noncoherent_dma_count);
+ }
+ EXPORT_SYMBOL_GPL(kvm_arch_register_noncoherent_dma);
+-- 
+2.31.1
+

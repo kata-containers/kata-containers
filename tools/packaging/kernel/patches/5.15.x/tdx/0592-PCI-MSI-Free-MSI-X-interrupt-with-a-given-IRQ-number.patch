@@ -1,0 +1,253 @@
+From 3006b2b6a03a371ba75bfe2e321ea39bb8316418 Mon Sep 17 00:00:00 2001
+From: Megha Dey <megha.dey@intel.com>
+Date: Wed, 8 Sep 2021 13:13:36 -0700
+Subject: [PATCH 0592/1418] PCI/MSI: Free MSI-X interrupt with a given IRQ
+ number
+
+Currently, the pci_msix_disable() frees all the allocated resources
+associated with a PCIe device when the device is being shut down. With
+the introduction of dynamic allocation of MSI-X vectors, there may be
+cases where drivers want to free only a particular interrupt, even
+when the device is not being shut down.
+
+A new API, pci_free_msix_irq_vector() provides this type of interface.
+
+Signed-off-by: Megha Dey <megha.dey@intel.com>
+---
+ Documentation/PCI/msi-howto.rst |  7 ++++
+ drivers/pci/msi.c               | 68 +++++++++++++++++++++++++++++++--
+ include/linux/msi.h             |  1 +
+ include/linux/pci.h             |  5 +++
+ kernel/irq/msi.c                | 50 +++++++++++++++++++++---
+ 5 files changed, 121 insertions(+), 10 deletions(-)
+
+diff --git a/Documentation/PCI/msi-howto.rst b/Documentation/PCI/msi-howto.rst
+index f5cff8ae9296..4c80c99ac3ce 100644
+--- a/Documentation/PCI/msi-howto.rst
++++ b/Documentation/PCI/msi-howto.rst
+@@ -177,6 +177,13 @@ API should be called after pci_alloc_irq_vectors has been called by the driver.
+ This API returns the device-relative interrupt vector index (0-based) which can
+ be passed to pci_irq_vector() to retrieve the corresponding Linux IRQ number.
+ 
++To free the allocated resources associated with a particular MSI-X vector, the
++pci_free_msix_irq_vector() API can be used::
++
++        void pci_free_msix_irq_vector(struct pci_dev *dev, unsigned int irq)
++
++Here, 'irq' refers to the Linux IRQ number.
++
+ Legacy APIs
+ -----------
+ 
+diff --git a/drivers/pci/msi.c b/drivers/pci/msi.c
+index 0905df8f2c87..49a05b8a684c 100644
+--- a/drivers/pci/msi.c
++++ b/drivers/pci/msi.c
+@@ -372,6 +372,11 @@ static void free_msi_irqs(struct pci_dev *dev)
+ 
+ 	pci_msi_teardown_msi_irqs(dev);
+ 
++	if (dev->msi_irq_groups) {
++		msi_destroy_sysfs(&dev->dev, dev->msi_irq_groups);
++		dev->msi_irq_groups = NULL;
++	}
++
+ 	list_for_each_entry_safe(entry, tmp, msi_list, list) {
+ 		if (entry->msi_attrib.is_msix) {
+ 			if (list_is_last(&entry->list, msi_list))
+@@ -381,13 +386,51 @@ static void free_msi_irqs(struct pci_dev *dev)
+ 		list_del(&entry->list);
+ 		free_msi_entry(entry);
+ 	}
++}
+ 
+-	if (dev->msi_irq_groups) {
+-		msi_destroy_sysfs(&dev->dev, dev->msi_irq_groups);
+-		dev->msi_irq_groups = NULL;
+-	}
++static void pci_msix_teardown_irq(struct pci_dev *dev, unsigned int irq)
++{
++	struct irq_domain *domain;
++
++	domain = dev_get_msi_domain(&dev->dev);
++	if (domain && irq_domain_is_hierarchy(domain))
++		msi_domain_free_irq(domain, &dev->dev, irq);
+ }
+ 
++static void free_msix_irq(struct pci_dev *dev, unsigned int irq)
++{
++	struct list_head *msi_list = dev_to_msi_list(&dev->dev);
++	struct device_attribute *dev_attr;
++	struct msi_desc *entry, *tmp;
++	struct attribute **msi_attrs;
++	int count;
++
++	list_for_each_entry_safe(entry, tmp, msi_list, list) {
++		if (entry->irq == irq) {
++			if (entry->irq) {
++				BUG_ON(irq_has_action(entry->irq));
++				pci_msix_teardown_irq(dev, irq);
++			}
++			if (dev->msi_irq_groups) {
++				msi_attrs = dev->msi_irq_groups[0]->attrs;
++				count = entry->msi_attrib.entry_nr;
++				if (msi_attrs[count]) {
++					dev_attr = container_of(msi_attrs[count],
++								struct device_attribute, attr);
++					sysfs_remove_file_from_group(&dev->dev.kobj,
++								     &dev_attr->attr,
++								     "msi_irqs");
++					kfree(dev_attr->attr.name);
++					kfree(dev_attr);
++					msi_attrs[count] = NULL;
++				}
++			}
++			__clear_bit(entry->msi_attrib.entry_nr, dev->msix_map);
++			list_del(&entry->list);
++			free_msi_entry(entry);
++		}
++	}
++}
+ static void pci_intx_for_msi(struct pci_dev *dev, int enable)
+ {
+ 	if (!(dev->dev_flags & PCI_DEV_FLAGS_MSI_INTX_DISABLE_BUG))
+@@ -1052,6 +1095,23 @@ void pci_disable_msix(struct pci_dev *dev)
+ }
+ EXPORT_SYMBOL(pci_disable_msix);
+ 
++/**
++ * pci_free_msix_irq_vector - free previously allocated IRQ for a device
++ * @dev:		PCI device to operate on
++ * @irq:		Linux IRQ number
++ **/
++void pci_free_msix_irq_vector(struct pci_dev *dev, unsigned int irq)
++{
++	if (!pci_msi_enable || !dev || !dev->msix_enabled)
++		return;
++
++	mutex_lock(&dev->msix_mutex);
++	free_msix_irq(dev, irq);
++	dev->msix_alloc_count -= 1;
++	mutex_unlock(&dev->msix_mutex);
++}
++EXPORT_SYMBOL(pci_free_msix_irq_vector);
++
+ void pci_no_msi(void)
+ {
+ 	pci_msi_enable = 0;
+diff --git a/include/linux/msi.h b/include/linux/msi.h
+index 495bdb76388f..ba4c32744d46 100644
+--- a/include/linux/msi.h
++++ b/include/linux/msi.h
+@@ -446,6 +446,7 @@ int msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
+ 			  int nvec);
+ void __msi_domain_free_irqs(struct irq_domain *domain, struct device *dev);
+ void msi_domain_free_irqs(struct irq_domain *domain, struct device *dev);
++void msi_domain_free_irq(struct irq_domain *domain, struct device *dev, unsigned int irq);
+ struct msi_domain_info *msi_get_domain_info(struct irq_domain *domain);
+ 
+ struct irq_domain *platform_msi_create_irq_domain(struct fwnode_handle *fwnode,
+diff --git a/include/linux/pci.h b/include/linux/pci.h
+index a5b500cb71fb..32a3b7609770 100644
+--- a/include/linux/pci.h
++++ b/include/linux/pci.h
+@@ -1544,6 +1544,7 @@ int pci_alloc_irq_vectors_affinity(struct pci_dev *dev, unsigned int min_vecs,
+ int pci_add_msix_irq_vector(struct pci_dev *dev);
+ 
+ void pci_free_irq_vectors(struct pci_dev *dev);
++void pci_free_msix_irq_vector(struct pci_dev *dev, unsigned int irq);
+ int pci_irq_vector(struct pci_dev *dev, unsigned int nr);
+ const struct cpumask *pci_irq_get_affinity(struct pci_dev *pdev, int vec);
+ 
+@@ -1580,6 +1581,10 @@ static inline void pci_free_irq_vectors(struct pci_dev *dev)
+ {
+ }
+ 
++static inline void pci_free_msix_irq_vector(struct pci_dev *dev, unsigned int irq)
++{
++}
++
+ static inline int pci_irq_vector(struct pci_dev *dev, unsigned int nr)
+ {
+ 	if (WARN_ON_ONCE(nr > 0))
+diff --git a/kernel/irq/msi.c b/kernel/irq/msi.c
+index 75a23cc2367b..b757df97dd14 100644
+--- a/kernel/irq/msi.c
++++ b/kernel/irq/msi.c
+@@ -200,11 +200,27 @@ void msi_destroy_sysfs(struct device *dev, const struct attribute_group **msi_ir
+ {
+ 	struct device_attribute *dev_attr;
+ 	struct attribute **msi_attrs;
++	struct msi_desc *entry;
+ 	int count = 0;
+ 
+-	if (msi_irq_groups) {
+-		sysfs_remove_groups(&dev->kobj, msi_irq_groups);
+-		msi_attrs = msi_irq_groups[0]->attrs;
++	if (!msi_irq_groups)
++		return;
++
++	sysfs_remove_groups(&dev->kobj, msi_irq_groups);
++	msi_attrs = msi_irq_groups[0]->attrs;
++
++	entry = first_msi_entry(dev);
++	if (entry->msi_attrib.is_msix) {
++		for_each_msi_entry(entry, dev) {
++			if (msi_attrs[entry->msi_attrib.entry_nr]) {
++				dev_attr = container_of(msi_attrs[entry->msi_attrib.entry_nr],
++							struct device_attribute, attr);
++				kfree(dev_attr->attr.name);
++				kfree(dev_attr);
++				msi_attrs[entry->msi_attrib.entry_nr] = NULL;
++			}
++		}
++	} else {
+ 		while (msi_attrs[count]) {
+ 			dev_attr = container_of(msi_attrs[count],
+ 					struct device_attribute, attr);
+@@ -212,10 +228,11 @@ void msi_destroy_sysfs(struct device *dev, const struct attribute_group **msi_ir
+ 			kfree(dev_attr);
+ 			++count;
+ 		}
+-		kfree(msi_attrs);
+-		kfree(msi_irq_groups[0]);
+-		kfree(msi_irq_groups);
+ 	}
++
++	kfree(msi_attrs);
++	kfree(msi_irq_groups[0]);
++	kfree(msi_irq_groups);
+ }
+ 
+ #ifdef CONFIG_GENERIC_MSI_IRQ_DOMAIN
+@@ -725,6 +742,27 @@ void msi_domain_free_irqs(struct irq_domain *domain, struct device *dev)
+ 	return ops->domain_free_irqs(domain, dev);
+ }
+ 
++/**
++ * msi_domain_free_irq - Free interrupt from a MSI interrupt @domain associated to @dev
++ * @domain:	The domain to managing the interrupts
++ * @dev:	Pointer to device struct for which the interrupt needs to be freed
++ * @irq:	Interrupt to be freed
++ */
++void msi_domain_free_irq(struct irq_domain *domain, struct device *dev, unsigned int irq)
++{
++	struct msi_desc *desc = irq_get_msi_desc(irq);
++	struct irq_data *irq_data;
++
++	if (irq) {
++		irq_data = irq_domain_get_irq_data(domain, irq);
++		if (irqd_is_activated(irq_data))
++			irq_domain_deactivate_irq(irq_data);
++
++		irq_domain_free_irqs(desc->irq, 1);
++		desc->irq = 0;
++	}
++}
++
+ /**
+  * msi_get_domain_info - Get the MSI interrupt domain info for @domain
+  * @domain:	The interrupt domain to retrieve data from
+-- 
+2.31.1
+

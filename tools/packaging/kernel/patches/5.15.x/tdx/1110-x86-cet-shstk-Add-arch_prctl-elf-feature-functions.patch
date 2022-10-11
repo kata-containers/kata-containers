@@ -1,0 +1,198 @@
+From 731560af3ee28ab067f42cdfc4c1445796ddae9f Mon Sep 17 00:00:00 2001
+From: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Date: Mon, 30 Aug 2021 11:15:25 -0700
+Subject: [PATCH 1110/1418] x86/cet/shstk: Add arch_prctl elf feature functions
+
+Some CPU features that adjust the behavior of existing instructions
+should be enabled only if the application supports these modifications.
+
+Provide a per-thread arch_prctl interface for modifying, checking and
+locking the enablement status of features like these. This interface
+operates on the per-thread state which is copied for new threads. It is
+intended to be mostly used early in an application (i.e. a dynamic loader)
+such that the behavior will be inherited for new threads created by the
+application.
+
+Today the only user is shadow stack, but keep the names generic because
+other features like LAM can use it as well.
+
+The interface is as below:
+arch_prctl(ARCH_X86_FEATURE_STATUS, u64 *args)
+    Get feature status.
+
+    The parameter 'args' is a pointer to a user buffer. The kernel returns
+    the following information:
+
+    *args = shadow stack/IBT status
+    *(args + 1) = shadow stack base address
+    *(args + 2) = shadow stack size
+
+    32-bit binaries use the same interface, but only lower 32-bits of each
+    item.
+
+arch_prctl(ARCH_X86_FEATURE_DISABLE, unsigned int features)
+    Disable features specified in 'features'. Return -EPERM if any of the
+    passed feature are locked. Return -ECANCELED if any of the features
+    failed to disable. In this case call ARCH_X86_FEATURE_STATUS to find
+    out which features are still enabled.
+
+arch_prctl(ARCH_X86_FEATURE_ENABLE, unsigned int features)
+    Enable feature specified in 'features'. Return -EPERM if any of the
+    passed feature are locked. Return -ECANCELED if any of the features
+    failed to enable. In this case call ARCH_X86_FEATURE_STATUS to find
+    out which features were enabled.
+
+arch_prctl(ARCH_X86_FEATURE_LOCK, unsigned int features)
+    Lock in all features at their current enabled or disabled status.
+
+Signed-off-by: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Signed-off-by: Rick Edgecombe <rick.p.edgecombe@intel.com>
+---
+ arch/x86/include/asm/cet.h          |  6 +++
+ arch/x86/include/asm/processor.h    |  1 +
+ arch/x86/include/uapi/asm/prctl.h   | 10 +++++
+ arch/x86/kernel/Makefile            |  2 +-
+ arch/x86/kernel/elf_feature_prctl.c | 58 +++++++++++++++++++++++++++++
+ arch/x86/kernel/process.c           |  2 +-
+ 6 files changed, 77 insertions(+), 2 deletions(-)
+ create mode 100644 arch/x86/kernel/elf_feature_prctl.c
+
+diff --git a/arch/x86/include/asm/cet.h b/arch/x86/include/asm/cet.h
+index 64bd5e3ccb07..796b489334fb 100644
+--- a/arch/x86/include/asm/cet.h
++++ b/arch/x86/include/asm/cet.h
+@@ -39,6 +39,12 @@ static inline int setup_signal_shadow_stack(int proc32, void __user *restorer) {
+ static inline int restore_signal_shadow_stack(void) { return 0; }
+ #endif /* CONFIG_X86_SHADOW_STACK */
+ 
++#ifdef CONFIG_X86_SHADOW_STACK
++int prctl_elf_feature(int option, u64 arg2);
++#else
++static inline int prctl_elf_feature(int option, u64 arg2) { return -EINVAL; }
++#endif
++
+ #endif /* __ASSEMBLY__ */
+ 
+ #endif /* _ASM_X86_CET_H */
+diff --git a/arch/x86/include/asm/processor.h b/arch/x86/include/asm/processor.h
+index b0523cac8d32..df48ebc5e207 100644
+--- a/arch/x86/include/asm/processor.h
++++ b/arch/x86/include/asm/processor.h
+@@ -529,6 +529,7 @@ struct thread_struct {
+ 
+ #ifdef CONFIG_X86_SHADOW_STACK
+ 	struct thread_shstk	shstk;
++	u64			feat_prctl_locked;
+ #endif
+ 
+ 	/* Floating point and extended processor state */
+diff --git a/arch/x86/include/uapi/asm/prctl.h b/arch/x86/include/uapi/asm/prctl.h
+index 500b96e71f18..124c15fe95b5 100644
+--- a/arch/x86/include/uapi/asm/prctl.h
++++ b/arch/x86/include/uapi/asm/prctl.h
+@@ -20,4 +20,14 @@
+ #define ARCH_MAP_VDSO_32		0x2002
+ #define ARCH_MAP_VDSO_64		0x2003
+ 
++#define ARCH_X86_FEATURE_STATUS		0x3001
++#define ARCH_X86_FEATURE_DISABLE	0x3002
++#define ARCH_X86_FEATURE_LOCK		0x3003
++#define ARCH_X86_FEATURE_ENABLE		0x3005
++
++/* x86 feature bits to be used with ARCH_X86_FEATURE arch_prctl()s */
++#define LINUX_X86_FEATURE_IBT		0x00000001
++#define LINUX_X86_FEATURE_SHSTK		0x00000002
++
++
+ #endif /* _ASM_X86_PRCTL_H */
+diff --git a/arch/x86/kernel/Makefile b/arch/x86/kernel/Makefile
+index 5ecf3ae47bc4..d2f16083bdd6 100644
+--- a/arch/x86/kernel/Makefile
++++ b/arch/x86/kernel/Makefile
+@@ -169,7 +169,7 @@ obj-$(CONFIG_AMD_MEM_ENCRYPT)		+= sev.o
+ 
+ obj-$(CONFIG_ARCH_HAS_CC_PLATFORM)	+= cc_platform.o
+ 
+-obj-$(CONFIG_X86_SHADOW_STACK)		+= shstk.o
++obj-$(CONFIG_X86_SHADOW_STACK)		+= shstk.o elf_feature_prctl.o
+ ###
+ # 64 bit specific files
+ ifeq ($(CONFIG_X86_64),y)
+diff --git a/arch/x86/kernel/elf_feature_prctl.c b/arch/x86/kernel/elf_feature_prctl.c
+new file mode 100644
+index 000000000000..55222f48fbff
+--- /dev/null
++++ b/arch/x86/kernel/elf_feature_prctl.c
+@@ -0,0 +1,58 @@
++// SPDX-License-Identifier: GPL-2.0
++
++#include <linux/errno.h>
++#include <linux/uaccess.h>
++#include <linux/prctl.h>
++#include <linux/compat.h>
++#include <linux/mman.h>
++#include <linux/elfcore.h>
++#include <linux/processor.h>
++#include <asm/prctl.h>
++#include <asm/cet.h>
++
++/* See Documentation/x86/intel_cet.rst. */
++
++static int elf_feat_copy_status_to_user(struct thread_shstk *shstk, u64 __user *ubuf)
++{
++	u64 buf[3] = {};
++
++	if (shstk->size) {
++		buf[0] = LINUX_X86_FEATURE_SHSTK;
++		buf[1] = shstk->base;
++		buf[2] = shstk->size;
++	}
++
++	return copy_to_user(ubuf, buf, sizeof(buf));
++}
++
++int prctl_elf_feature(int option, u64 arg2)
++{
++	struct thread_struct *thread = &current->thread;
++
++	if (!cpu_feature_enabled(X86_FEATURE_SHSTK))
++		return -EOPNOTSUPP;
++
++	switch (option) {
++	case ARCH_X86_FEATURE_STATUS:
++		return elf_feat_copy_status_to_user(&thread->shstk, (u64 __user *)arg2);
++	case ARCH_X86_FEATURE_DISABLE:
++		if (arg2 & thread->feat_prctl_locked)
++			return -EPERM;
++
++		if (arg2 & LINUX_X86_FEATURE_SHSTK)
++			shstk_disable()
++
++		return 0;
++	case ARCH_X86_FEATURE_ENABLE:
++		if (arg2 & thread->feat_prctl_locked)
++			return -EPERM;
++
++		return 0;
++	case ARCH_X86_FEATURE_LOCK:
++		thread->feat_prctl_locked |= arg2;
++		return 0;
++
++	default:
++		return -EINVAL;
++	}
++}
+diff --git a/arch/x86/kernel/process.c b/arch/x86/kernel/process.c
+index 26d26b43a351..eed4061caf5e 100644
+--- a/arch/x86/kernel/process.c
++++ b/arch/x86/kernel/process.c
+@@ -1045,5 +1045,5 @@ long do_arch_prctl_common(struct task_struct *task, int option,
+ 		return fpu_xstate_prctl(task, option, arg2);
+ 	}
+ 
+-	return -EINVAL;
++	return prctl_elf_feature(option, arg2);
+ }
+-- 
+2.31.1
+

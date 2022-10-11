@@ -1,0 +1,26 @@
+From 8c64cbbee8c2e552280b3acec9da16e28cc8c07e Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Tue, 9 Nov 2021 22:55:09 -0800
+Subject: [PATCH 0691/1418] Fix the ARCH_REQ_XCOMP_PERM implementation
+
+Patch in community review now.
+---
+ arch/x86/kernel/fpu/xstate.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index a701a000c338..3b1a12109b9b 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -1639,7 +1639,7 @@ static int __xstate_request_perm(u64 permitted, u64 requested, bool guest)
+ 
+ 	perm = guest ? &fpu->guest_perm : &fpu->perm;
+ 	/* Pairs with the READ_ONCE() in xstate_get_group_perm() */
+-	WRITE_ONCE(perm->__state_perm, requested);
++	WRITE_ONCE(perm->__state_perm, mask);
+ 	/* Protected by sighand lock */
+ 	perm->__state_size = ksize;
+ 	perm->__user_state_size = usize;
+-- 
+2.31.1
+

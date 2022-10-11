@@ -1,0 +1,34 @@
+From 596401cf0cc30e6ae4c6f20f274f82b4cce64c44 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Thu, 12 Aug 2021 15:24:10 -0700
+Subject: [PATCH 0455/1418] x86/cpu/tdx: fix uninitialized variable in
+ tdx-ops-boot.h
+
+This patch fixes the following warnings.
+
+linux/arch/x86/kernel/cpu/tdx/tdx-ops-boot.h:46:9: note: initialize the variable 'err' to silence this warning
+        u64 err;
+               ^
+                = 0
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx-ops.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx-ops.h b/arch/x86/kernel/cpu/tdx/tdx-ops.h
+index 79adfe6e0519..e09cb98de19c 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx-ops.h
++++ b/arch/x86/kernel/cpu/tdx/tdx-ops.h
+@@ -43,7 +43,7 @@ static inline u64 tdh_sys_tdmr_config(u64 tdmr, int nr_entries, int hkid)
+ 
+ static inline u64 tdh_trace_seamcalls(u64 level)
+ {
+-	u64 err;
++	u64 err = 0;
+ 
+ 	if (is_debug_seamcall_available) {
+ 		err = seamcall(SEAMCALL_TDDEBUGCONFIG,
+-- 
+2.31.1
+

@@ -1,0 +1,85 @@
+From 2601a8637387b23dad07c2125c58a3f05488c0c6 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Sat, 21 Aug 2021 14:58:36 -0700
+Subject: [PATCH 0182/1418] driver core: Add common support to skip probe for
+ un-authorized devices
+
+While the common case for device-authorization is to skip probe of
+unauthorized devices, some buses may still want to emit a message on
+probe failure (Thunderbolt), or base probe failures on the
+authorization status of a related device like a parent (USB). So add
+an option (has_probe_authorization) in struct bus_type for the bus
+driver to own probe authorization policy.
+
+Reviewed-by: Dan Williams <dan.j.williams@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ drivers/base/dd.c            | 5 +++++
+ drivers/thunderbolt/domain.c | 1 +
+ drivers/usb/core/driver.c    | 1 +
+ include/linux/device/bus.h   | 4 ++++
+ 4 files changed, 11 insertions(+)
+
+diff --git a/drivers/base/dd.c b/drivers/base/dd.c
+index 68ea1f949daa..0cd03ac7d3b1 100644
+--- a/drivers/base/dd.c
++++ b/drivers/base/dd.c
+@@ -544,6 +544,11 @@ static int really_probe(struct device *dev, struct device_driver *drv)
+ 			   !drv->suppress_bind_attrs;
+ 	int ret;
+ 
++	if (!dev->authorized && !dev->bus->has_probe_authorization) {
++		dev_dbg(dev, "Device is not authorized\n");
++		return -ENODEV;
++	}
++
+ 	if (defer_all_probes) {
+ 		/*
+ 		 * Value of defer_all_probes can be set only by
+diff --git a/drivers/thunderbolt/domain.c b/drivers/thunderbolt/domain.c
+index 3e39686eff14..6de8a366b796 100644
+--- a/drivers/thunderbolt/domain.c
++++ b/drivers/thunderbolt/domain.c
+@@ -321,6 +321,7 @@ struct bus_type tb_bus_type = {
+ 	.probe = tb_service_probe,
+ 	.remove = tb_service_remove,
+ 	.shutdown = tb_service_shutdown,
++	.has_probe_authorization = true,
+ };
+ 
+ static void tb_domain_release(struct device *dev)
+diff --git a/drivers/usb/core/driver.c b/drivers/usb/core/driver.c
+index 0284990bbd5d..e4b980c8eb45 100644
+--- a/drivers/usb/core/driver.c
++++ b/drivers/usb/core/driver.c
+@@ -2028,4 +2028,5 @@ struct bus_type usb_bus_type = {
+ 	.match =	usb_device_match,
+ 	.uevent =	usb_uevent,
+ 	.need_parent_lock =	true,
++	.has_probe_authorization = true,
+ };
+diff --git a/include/linux/device/bus.h b/include/linux/device/bus.h
+index 062777a45a74..571a2f6e7c1d 100644
+--- a/include/linux/device/bus.h
++++ b/include/linux/device/bus.h
+@@ -69,6 +69,9 @@ struct fwnode_handle;
+  * @lock_key:	Lock class key for use by the lock validator
+  * @need_parent_lock:	When probing or removing a device on this bus, the
+  *			device core should lock the device's parent.
++ * @has_probe_authorization: Set true to indicate to the driver-core to skip
++ *			     the authorization checks and let bus drivers
++ *			     handle it locally.
+  *
+  * A bus is a channel between the processor and one or more devices. For the
+  * purposes of the device model, all devices are connected via a bus, even if
+@@ -112,6 +115,7 @@ struct bus_type {
+ 	struct lock_class_key lock_key;
+ 
+ 	bool need_parent_lock;
++	bool has_probe_authorization;
+ };
+ 
+ extern int __must_check bus_register(struct bus_type *bus);
+-- 
+2.31.1
+

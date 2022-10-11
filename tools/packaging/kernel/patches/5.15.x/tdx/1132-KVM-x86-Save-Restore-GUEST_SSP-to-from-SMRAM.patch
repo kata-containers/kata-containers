@@ -1,0 +1,60 @@
+From d0c143c880c6056b346bb0d52a06a3e087f27c5e Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Tue, 2 Feb 2021 23:50:58 +0800
+Subject: [PATCH 1132/1418] KVM: x86: Save/Restore GUEST_SSP to/from SMRAM
+
+Save GUEST_SSP to SMRAM when guest exits to SMM due to SMI and restore it
+when guest exits SMM to interrupted normal non-root mode.
+
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/emulate.c | 11 +++++++++++
+ arch/x86/kvm/x86.c     | 10 ++++++++++
+ 2 files changed, 21 insertions(+)
+
+diff --git a/arch/x86/kvm/emulate.c b/arch/x86/kvm/emulate.c
+index 9a144ca8e146..35035958b30c 100644
+--- a/arch/x86/kvm/emulate.c
++++ b/arch/x86/kvm/emulate.c
+@@ -2511,6 +2511,17 @@ static int rsm_load_state_64(struct x86_emulate_ctxt *ctxt,
+ 			return r;
+ 	}
+ 
++	if (kvm_cet_supported()) {
++		struct msr_data msr;
++
++		val = GET_SMSTATE(u64, smstate, 0x7ec8);
++		msr.index = MSR_KVM_GUEST_SSP;
++		msr.host_initiated = true;
++		msr.data = val;
++		/* Mimic host_initiated access to bypass ssp access check. */
++		kvm_x86_ops.set_msr(ctxt->vcpu, &msr);
++	}
++
+ 	return X86EMUL_CONTINUE;
+ }
+ #endif
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index dc5a1c0370f8..2cfd21e4d8b3 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -9434,6 +9434,16 @@ static void enter_smm_save_state_64(struct kvm_vcpu *vcpu, char *buf)
+ 
+ 	for (i = 0; i < 6; i++)
+ 		enter_smm_save_seg_64(vcpu, buf, i);
++
++	if (kvm_cet_supported()) {
++		struct msr_data msr;
++
++		msr.index = MSR_KVM_GUEST_SSP;
++		msr.host_initiated = true;
++		/* GUEST_SSP is stored in VMCS at vm-exit. */
++		kvm_x86_ops.get_msr(vcpu, &msr);
++		put_smstate(u64, buf, 0x7ec8, msr.data);
++	}
+ }
+ #endif
+ 
+-- 
+2.31.1
+

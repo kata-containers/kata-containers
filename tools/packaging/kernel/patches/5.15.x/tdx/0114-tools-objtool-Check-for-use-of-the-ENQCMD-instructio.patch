@@ -1,0 +1,65 @@
+From 5f3c202961dbddac9fcd5581877b01106a085e1b Mon Sep 17 00:00:00 2001
+From: Fenghua Yu <fenghua.yu@intel.com>
+Date: Fri, 9 Jul 2021 01:04:23 +0000
+Subject: [PATCH 0114/1418] tools/objtool: Check for use of the ENQCMD
+ instruction in the kernel
+
+The ENQCMD implicitly accesses the PASID_MSR to fill in the pasid field
+of the descriptor being submitted to an accelerator. But there is no
+precise (and stable across kernel changes) point at which the PASID_MSR
+is updated from the value for one task to the next.
+
+Kernel code that uses accelerators must always use the ENQCMDS instruction
+which does not access the PASID_MSR.
+
+Check for use of the ENQCMD instruction in the kernel and warn on its
+usage.
+
+v2:
+- Simplify handling ENQCMD (PeterZ and Josh)
+
+Signed-off-by: Fenghua Yu <fenghua.yu@intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+---
+ tools/objtool/arch/x86/decode.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/tools/objtool/arch/x86/decode.c b/tools/objtool/arch/x86/decode.c
+index 0893436cc09f..301e2ea78d6f 100644
+--- a/tools/objtool/arch/x86/decode.c
++++ b/tools/objtool/arch/x86/decode.c
+@@ -110,7 +110,7 @@ int arch_decode_instruction(const struct elf *elf, const struct section *sec,
+ {
+ 	struct insn insn;
+ 	int x86_64, ret;
+-	unsigned char op1, op2,
++	unsigned char op1, op2, op3,
+ 		      rex = 0, rex_b = 0, rex_r = 0, rex_w = 0, rex_x = 0,
+ 		      modrm = 0, modrm_mod = 0, modrm_rm = 0, modrm_reg = 0,
+ 		      sib = 0, /* sib_scale = 0, */ sib_index = 0, sib_base = 0;
+@@ -137,6 +137,7 @@ int arch_decode_instruction(const struct elf *elf, const struct section *sec,
+ 
+ 	op1 = insn.opcode.bytes[0];
+ 	op2 = insn.opcode.bytes[1];
++	op3 = insn.opcode.bytes[2];
+ 
+ 	if (insn.rex_prefix.nbytes) {
+ 		rex = insn.rex_prefix.bytes[0];
+@@ -489,6 +490,14 @@ int arch_decode_instruction(const struct elf *elf, const struct section *sec,
+ 			/* nopl/nopw */
+ 			*type = INSN_NOP;
+ 
++		} else if (op2 == 0x38 && op3 == 0xf8) {
++			if (insn.prefixes.nbytes == 1 &&
++			    insn.prefixes.bytes[0] == 0xf2) {
++				/* ENQCMD cannot be used in the kernel. */
++				WARN("ENQCMD instruction at %s:%lx", sec->name,
++				     offset);
++			}
++
+ 		} else if (op2 == 0xa0 || op2 == 0xa8) {
+ 
+ 			/* push fs/gs */
+-- 
+2.31.1
+

@@ -1,0 +1,107 @@
+From ebf4d5f47b6cb00d58177ce60a1e0afe45e2faaa Mon Sep 17 00:00:00 2001
+From: Jithu Joseph <jithu.joseph@intel.com>
+Date: Tue, 15 Feb 2022 10:54:28 -0800
+Subject: [PATCH 1064/1418] Revert "drivers/saf: Check SAF Image sanity"
+
+This reverts commit 8af63693b3f6098ba1dbef360c43a47ebfb1f4bf.
+---
+ drivers/ift/saf.c | 69 -----------------------------------------------
+ 1 file changed, 69 deletions(-)
+
+diff --git a/drivers/ift/saf.c b/drivers/ift/saf.c
+index 81817f26a824..c636bc7c5090 100644
+--- a/drivers/ift/saf.c
++++ b/drivers/ift/saf.c
+@@ -10,7 +10,6 @@
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
+ #include <asm/cpu_device_id.h>
+-#include <asm/microcode_intel.h>
+ 
+ #include "saf.h"
+ 
+@@ -23,68 +22,6 @@ static const struct x86_cpu_id saf_cpu_ids[] __initconst = {
+ 	{}
+ };
+ 
+-static int scan_sanity_check(void *mc)
+-{
+-	struct microcode_header_intel *mc_header = mc;
+-	unsigned long total_size, data_size;
+-	u32 sum, i;
+-
+-	total_size = get_totalsize(mc_header);
+-	data_size = get_datasize(mc_header);
+-
+-	if (data_size + MC_HEADER_SIZE > total_size) {
+-		pr_err("saf: bad scan data file size.\n");
+-		return -EINVAL;
+-	}
+-
+-	if (mc_header->ldrver != 1 || mc_header->hdrver != 1) {
+-		pr_err("saf: invalid/unknown scan update format.\n");
+-		return -EINVAL;
+-	}
+-
+-	sum = 0;
+-	i = total_size / sizeof(u32);
+-	while (i--)
+-		sum += ((u32 *)mc)[i];
+-
+-	if (sum) {
+-		pr_err("saf: bad scan data checksum, aborting.\n");
+-		return -EINVAL;
+-	}
+-
+-	return 0;
+-}
+-
+-static bool find_scan_matching_signature(struct ucode_cpu_info *uci, void *mc)
+-{
+-	struct microcode_header_intel *shdr;
+-	unsigned int mc_size;
+-
+-	shdr = (struct microcode_header_intel *)mc;
+-	mc_size = get_totalsize(shdr);
+-
+-	if (!mc_size || scan_sanity_check(shdr) < 0) {
+-		pr_err("saf: scan sanity check failure");
+-		return false;
+-	}
+-
+-	if (!cpu_signatures_match(uci->cpu_sig.sig, uci->cpu_sig.pf, shdr->sig, shdr->pf)) {
+-		pr_err("saf: scan signature, pf not matching");
+-		return false;
+-	}
+-
+-	return true;
+-}
+-
+-static bool scan_image_sanity_check(void *data)
+-{
+-	struct ucode_cpu_info uci;
+-
+-	collect_cpu_info_early(&uci);
+-
+-	return find_scan_matching_signature(&uci, data);
+-}
+-
+ static const struct firmware *load_binary(const char *path)
+ {
+ 	const struct firmware *fw;
+@@ -100,12 +37,6 @@ static const struct firmware *load_binary(const char *path)
+ 		pr_err("saf: scan file %s load failed", path);
+ 		goto out;
+ 	}
+-
+-	if (!scan_image_sanity_check((void *)fw->data)) {
+-		pr_err("saf: scan header sanity check failed");
+-		release_firmware(fw);
+-		fw = NULL;
+-	}
+ out:
+ 	platform_device_unregister(saf_pdev);
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,75 @@
+From c5faf3451385a501f99a9a54cb6c5d70e4f8d871 Mon Sep 17 00:00:00 2001
+From: "Chang S. Bae" <chang.seok.bae@intel.com>
+Date: Thu, 21 Oct 2021 15:55:18 -0700
+Subject: [PATCH 0097/1418] x86/fpu: Add XFD state to fpstate
+
+Add storage for XFD register state to struct fpstate. This will be used to
+store the XFD MSR state. This will be used for switching the XFD MSR when
+FPU content is restored.
+
+Add a per-CPU variable to cache the current MSR value so the MSR has only
+to be written when the values are different.
+
+Signed-off-by: Chang S. Bae <chang.seok.bae@intel.com>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Chang S. Bae <chang.seok.bae@intel.com>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211021225527.10184-15-chang.seok.bae@intel.com
+---
+ arch/x86/include/asm/fpu/types.h | 3 +++
+ arch/x86/kernel/fpu/core.c       | 2 ++
+ arch/x86/kernel/fpu/xstate.h     | 4 ++++
+ 3 files changed, 9 insertions(+)
+
+diff --git a/arch/x86/include/asm/fpu/types.h b/arch/x86/include/asm/fpu/types.h
+index 595122fcaf51..b1897638d68d 100644
+--- a/arch/x86/include/asm/fpu/types.h
++++ b/arch/x86/include/asm/fpu/types.h
+@@ -322,6 +322,9 @@ struct fpstate {
+ 	/* @user_xfeatures:	xfeatures valid in UABI buffers */
+ 	u64			user_xfeatures;
+ 
++	/* @xfd:		xfeatures disabled to trap userspace use. */
++	u64			xfd;
++
+ 	/* @is_valloc:		Indicator for dynamically allocated state */
+ 	unsigned int		is_valloc	: 1;
+ 
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 3349068cef7d..3b72cddf990d 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -27,6 +27,7 @@
+ 
+ #ifdef CONFIG_X86_64
+ DEFINE_STATIC_KEY_FALSE(__fpu_state_size_dynamic);
++DEFINE_PER_CPU(u64, xfd_state);
+ #endif
+ 
+ /* The FPU state configuration data for kernel and user space */
+@@ -409,6 +410,7 @@ static void __fpstate_reset(struct fpstate *fpstate)
+ 	fpstate->user_size	= fpu_user_cfg.default_size;
+ 	fpstate->xfeatures	= fpu_kernel_cfg.default_features;
+ 	fpstate->user_xfeatures	= fpu_user_cfg.default_features;
++	fpstate->xfd		= init_fpstate.xfd;
+ }
+ 
+ void fpstate_reset(struct fpu *fpu)
+diff --git a/arch/x86/kernel/fpu/xstate.h b/arch/x86/kernel/fpu/xstate.h
+index 4ce1dc030f38..32a4dee4de3b 100644
+--- a/arch/x86/kernel/fpu/xstate.h
++++ b/arch/x86/kernel/fpu/xstate.h
+@@ -5,6 +5,10 @@
+ #include <asm/cpufeature.h>
+ #include <asm/fpu/xstate.h>
+ 
++#ifdef CONFIG_X86_64
++DECLARE_PER_CPU(u64, xfd_state);
++#endif
++
+ static inline void xstate_init_xcomp_bv(struct xregs_state *xsave, u64 mask)
+ {
+ 	/*
+-- 
+2.31.1
+

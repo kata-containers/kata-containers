@@ -1,0 +1,414 @@
+From 27b92b46126129a198e6247a00d43c7d4df63b8f Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Fri, 17 Jul 2020 19:17:41 -0700
+Subject: [PATCH 0394/1418] KVM: VMX: Move register caching logic to common
+ code
+
+Move the guts of vmx_cache_reg() to vt_cache_reg() in preparation for
+reusing the bulk of the code for TDX, which can access guest state for
+debug TDs.
+
+Use kvm_x86_ops.cache_reg() in ept_update_paging_mode_cr0() rather than
+trying to expose vt_cache_reg() to vmx.c, even though it means taking a
+retpoline.  The code runs if and only if EPT is enabled but unrestricted
+guest.  Only one generation of CPU, Nehalem, supports EPT but not
+unrestricted guest, and disabling unrestricted guest without also
+disabling EPT is, to put it bluntly, dumb.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/main.c |  40 +++++++++-
+ arch/x86/kvm/vmx/vmx.c  | 164 +++++++++-------------------------------
+ 2 files changed, 75 insertions(+), 129 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index 9b2ca2756eb8..9154971bbde1 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -341,7 +341,45 @@ static void vt_sync_dirty_debug_regs(struct kvm_vcpu *vcpu)
+ 
+ static void vt_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg)
+ {
+-	vmx_cache_reg(vcpu, reg);
++	unsigned long guest_owned_bits;
++
++	kvm_register_mark_available(vcpu, reg);
++
++	switch (reg) {
++	case VCPU_REGS_RSP:
++		vcpu->arch.regs[VCPU_REGS_RSP] = vmcs_readl(GUEST_RSP);
++		break;
++	case VCPU_REGS_RIP:
++		vcpu->arch.regs[VCPU_REGS_RIP] = vmcs_readl(GUEST_RIP);
++		break;
++	case VCPU_EXREG_PDPTR:
++		if (enable_ept)
++			ept_save_pdptrs(vcpu);
++		break;
++	case VCPU_EXREG_CR0:
++		guest_owned_bits = vcpu->arch.cr0_guest_owned_bits;
++
++		vcpu->arch.cr0 &= ~guest_owned_bits;
++		vcpu->arch.cr0 |= vmcs_readl(GUEST_CR0) & guest_owned_bits;
++		break;
++	case VCPU_EXREG_CR3:
++		/*
++		 * When intercepting CR3 loads, e.g. for shadowing paging, KVM's
++		 * CR3 is loaded into hardware, not the guest's CR3.
++		 */
++		if (!(exec_controls_get(to_vmx(vcpu)) & CPU_BASED_CR3_LOAD_EXITING))
++			vcpu->arch.cr3 = vmcs_readl(GUEST_CR3);
++		break;
++	case VCPU_EXREG_CR4:
++		guest_owned_bits = vcpu->arch.cr4_guest_owned_bits;
++
++		vcpu->arch.cr4 &= ~guest_owned_bits;
++		vcpu->arch.cr4 |= vmcs_readl(GUEST_CR4) & guest_owned_bits;
++		break;
++	default:
++		KVM_BUG_ON(1, vcpu->kvm);
++		break;
++	}
+ }
+ 
+ static unsigned long vt_get_rflags(struct kvm_vcpu *vcpu)
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 70959b21d821..0e001c141121 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -379,8 +379,6 @@ static const struct kernel_param_ops vmentry_l1d_flush_ops = {
+ };
+ module_param_cb(vmentry_l1d_flush, &vmentry_l1d_flush_ops, NULL, 0644);
+ 
+-static u32 vmx_segment_access_rights(struct kvm_segment *var);
+-
+ void vmx_vmexit(void);
+ 
+ #define vmx_insn_failed(fmt...)		\
+@@ -1412,20 +1410,13 @@ static void vmx_set_pkrs(struct kvm_vcpu *vcpu, u64 pkrs)
+ 
+ u32 vmx_get_interrupt_shadow(struct kvm_vcpu *vcpu)
+ {
+-	u32 interruptibility = vmcs_read32(GUEST_INTERRUPTIBILITY_INFO);
+-	int ret = 0;
+-
+-	if (interruptibility & GUEST_INTR_STATE_STI)
+-		ret |= KVM_X86_SHADOW_INT_STI;
+-	if (interruptibility & GUEST_INTR_STATE_MOV_SS)
+-		ret |= KVM_X86_SHADOW_INT_MOV_SS;
+-
+-	return ret;
++	return __vmx_get_interrupt_shadow(vcpu);
+ }
+ 
+ void vmx_set_interrupt_shadow(struct kvm_vcpu *vcpu, int mask)
+ {
+-	u32 interruptibility_old = vmcs_read32(GUEST_INTERRUPTIBILITY_INFO);
++	u32 interruptibility_old = vmread32(vcpu,
++					    GUEST_INTERRUPTIBILITY_INFO);
+ 	u32 interruptibility = interruptibility_old;
+ 
+ 	interruptibility &= ~(GUEST_INTR_STATE_STI | GUEST_INTR_STATE_MOV_SS);
+@@ -1436,7 +1427,8 @@ void vmx_set_interrupt_shadow(struct kvm_vcpu *vcpu, int mask)
+ 		interruptibility |= GUEST_INTR_STATE_STI;
+ 
+ 	if ((interruptibility != interruptibility_old))
+-		vmcs_write32(GUEST_INTERRUPTIBILITY_INFO, interruptibility);
++		vmwrite32(vcpu, GUEST_INTERRUPTIBILITY_INFO,
++			  interruptibility);
+ }
+ 
+ static int vmx_rtit_ctl_check(struct kvm_vcpu *vcpu, u64 data)
+@@ -1570,13 +1562,7 @@ static int skip_emulated_instruction(struct kvm_vcpu *vcpu)
+ 		orig_rip = kvm_rip_read(vcpu);
+ 		rip = orig_rip + instr_len;
+ #ifdef CONFIG_X86_64
+-		/*
+-		 * We need to mask out the high 32 bits of RIP if not in 64-bit
+-		 * mode, but just finding out that we are in 64-bit mode is
+-		 * quite expensive.  Only do it if there was a carry.
+-		 */
+-		if (unlikely(((rip ^ orig_rip) >> 31) == 3) && !is_64_bit_mode(vcpu))
+-			rip = (u32)rip;
++		rip = vmx_mask_out_guest_rip(vcpu, orig_rip, rip);
+ #endif
+ 		kvm_rip_write(vcpu, rip);
+ 	} else {
+@@ -2298,53 +2284,6 @@ static int vmx_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ 	return ret;
+ }
+ 
+-static void vmx_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg)
+-{
+-	unsigned long guest_owned_bits;
+-
+-	kvm_register_mark_available(vcpu, reg);
+-
+-	switch (reg) {
+-	case VCPU_REGS_RSP:
+-		vcpu->arch.regs[VCPU_REGS_RSP] = vmcs_readl(GUEST_RSP);
+-		break;
+-	case VCPU_REGS_RIP:
+-		vcpu->arch.regs[VCPU_REGS_RIP] = vmcs_readl(GUEST_RIP);
+-		break;
+-	case VCPU_EXREG_PDPTR:
+-		if (enable_ept)
+-			ept_save_pdptrs(vcpu);
+-		break;
+-	case VCPU_EXREG_CR0:
+-		guest_owned_bits = vcpu->arch.cr0_guest_owned_bits;
+-
+-		vcpu->arch.cr0 &= ~guest_owned_bits;
+-		vcpu->arch.cr0 |= vmcs_readl(GUEST_CR0) & guest_owned_bits;
+-		break;
+-	case VCPU_EXREG_CR3:
+-		/*
+-		 * When intercepting CR3 loads, e.g. for shadowing paging, KVM's
+-		 * CR3 is loaded into hardware, not the guest's CR3.
+-		 */
+-		if (!(exec_controls_get(to_vmx(vcpu)) & CPU_BASED_CR3_LOAD_EXITING))
+-			vcpu->arch.cr3 = vmcs_readl(GUEST_CR3);
+-		break;
+-	case VCPU_EXREG_CR4:
+-		guest_owned_bits = vcpu->arch.cr4_guest_owned_bits;
+-
+-		vcpu->arch.cr4 &= ~guest_owned_bits;
+-		vcpu->arch.cr4 |= vmcs_readl(GUEST_CR4) & guest_owned_bits;
+-		break;
+-	case VCPU_EXREG_PKRS:
+-		if (kvm_cpu_cap_has(X86_FEATURE_PKS))
+-			vcpu->arch.pkrs = vmcs_read64(GUEST_IA32_PKRS);
+-		break;
+-	default:
+-		KVM_BUG_ON(1, vcpu->kvm);
+-		break;
+-	}
+-}
+-
+ static __init int vmx_disabled_by_bios(void)
+ {
+ 	return !boot_cpu_has(X86_FEATURE_MSR_IA32_FEAT_CTL) ||
+@@ -2876,7 +2815,7 @@ static void fix_rmode_seg(int seg, struct kvm_segment *save)
+ 	vmcs_write16(sf->selector, var.selector);
+ 	vmcs_writel(sf->base, var.base);
+ 	vmcs_write32(sf->limit, var.limit);
+-	vmcs_write32(sf->ar_bytes, vmx_segment_access_rights(&var));
++	vmcs_write32(sf->ar_bytes, vmx_encode_ar_bytes(&var));
+ }
+ 
+ static void enter_rmode(struct kvm_vcpu *vcpu)
+@@ -3070,6 +3009,8 @@ void ept_save_pdptrs(struct kvm_vcpu *vcpu)
+ #define CR3_EXITING_BITS (CPU_BASED_CR3_LOAD_EXITING | \
+ 			  CPU_BASED_CR3_STORE_EXITING)
+ 
++static void vt_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg);
++
+ void vmx_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
+ {
+ 	struct vcpu_vmx *vmx = to_vmx(vcpu);
+@@ -3115,7 +3056,7 @@ void vmx_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
+ 		 * KVM's CR3 is installed.
+ 		 */
+ 		if (!kvm_register_is_available(vcpu, VCPU_EXREG_CR3))
+-			vmx_cache_reg(vcpu, VCPU_EXREG_CR3);
++			vt_cache_reg(vcpu, VCPU_EXREG_CR3);
+ 
+ 		/*
+ 		 * When running with EPT but not unrestricted guest, KVM must
+@@ -3286,7 +3227,6 @@ void vmx_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
+ void vmx_get_segment(struct kvm_vcpu *vcpu, struct kvm_segment *var, int seg)
+ {
+ 	struct vcpu_vmx *vmx = to_vmx(vcpu);
+-	u32 ar;
+ 
+ 	if (vmx->rmode.vm86_active && seg != VCPU_SREG_LDTR) {
+ 		*var = vmx->rmode.segs[seg];
+@@ -3300,23 +3240,7 @@ void vmx_get_segment(struct kvm_vcpu *vcpu, struct kvm_segment *var, int seg)
+ 	var->base = vmx_read_guest_seg_base(vmx, seg);
+ 	var->limit = vmx_read_guest_seg_limit(vmx, seg);
+ 	var->selector = vmx_read_guest_seg_selector(vmx, seg);
+-	ar = vmx_read_guest_seg_ar(vmx, seg);
+-	var->unusable = (ar >> 16) & 1;
+-	var->type = ar & 15;
+-	var->s = (ar >> 4) & 1;
+-	var->dpl = (ar >> 5) & 3;
+-	/*
+-	 * Some userspaces do not preserve unusable property. Since usable
+-	 * segment has to be present according to VMX spec we can use present
+-	 * property to amend userspace bug by making unusable segment always
+-	 * nonpresent. vmx_segment_access_rights() already marks nonpresent
+-	 * segment as unusable.
+-	 */
+-	var->present = !var->unusable;
+-	var->avl = (ar >> 12) & 1;
+-	var->l = (ar >> 13) & 1;
+-	var->db = (ar >> 14) & 1;
+-	var->g = (ar >> 15) & 1;
++	vmx_decode_ar_bytes(vmx_read_guest_seg_ar(vmx, seg), var);
+ }
+ 
+ static u64 vmx_get_segment_base(struct kvm_vcpu *vcpu, int seg)
+@@ -3342,26 +3266,6 @@ int vmx_get_cpl(struct kvm_vcpu *vcpu)
+ 	}
+ }
+ 
+-static u32 vmx_segment_access_rights(struct kvm_segment *var)
+-{
+-	u32 ar;
+-
+-	if (var->unusable || !var->present)
+-		ar = 1 << 16;
+-	else {
+-		ar = var->type & 15;
+-		ar |= (var->s & 1) << 4;
+-		ar |= (var->dpl & 3) << 5;
+-		ar |= (var->present & 1) << 7;
+-		ar |= (var->avl & 1) << 12;
+-		ar |= (var->l & 1) << 13;
+-		ar |= (var->db & 1) << 14;
+-		ar |= (var->g & 1) << 15;
+-	}
+-
+-	return ar;
+-}
+-
+ void __vmx_set_segment(struct kvm_vcpu *vcpu, struct kvm_segment *var, int seg)
+ {
+ 	struct vcpu_vmx *vmx = to_vmx(vcpu);
+@@ -3396,7 +3300,7 @@ void __vmx_set_segment(struct kvm_vcpu *vcpu, struct kvm_segment *var, int seg)
+ 	if (is_unrestricted_guest(vcpu) && (seg != VCPU_SREG_LDTR))
+ 		var->type |= 0x1; /* Accessed */
+ 
+-	vmcs_write32(sf->ar_bytes, vmx_segment_access_rights(var));
++	vmcs_write32(sf->ar_bytes, vmx_encode_ar_bytes(var));
+ }
+ 
+ static void vmx_set_segment(struct kvm_vcpu *vcpu, struct kvm_segment *var, int seg)
+@@ -3414,24 +3318,12 @@ static void vmx_get_cs_db_l_bits(struct kvm_vcpu *vcpu, int *db, int *l)
+ 	*l = (ar >> 13) & 1;
+ }
+ 
+-static void vmx_get_idt(struct kvm_vcpu *vcpu, struct desc_ptr *dt)
+-{
+-	dt->size = vmcs_read32(GUEST_IDTR_LIMIT);
+-	dt->address = vmcs_readl(GUEST_IDTR_BASE);
+-}
+-
+ static void vmx_set_idt(struct kvm_vcpu *vcpu, struct desc_ptr *dt)
+ {
+ 	vmcs_write32(GUEST_IDTR_LIMIT, dt->size);
+ 	vmcs_writel(GUEST_IDTR_BASE, dt->address);
+ }
+ 
+-static void vmx_get_gdt(struct kvm_vcpu *vcpu, struct desc_ptr *dt)
+-{
+-	dt->size = vmcs_read32(GUEST_GDTR_LIMIT);
+-	dt->address = vmcs_readl(GUEST_GDTR_BASE);
+-}
+-
+ static void vmx_set_gdt(struct kvm_vcpu *vcpu, struct desc_ptr *dt)
+ {
+ 	vmcs_write32(GUEST_GDTR_LIMIT, dt->size);
+@@ -3447,7 +3339,7 @@ static bool rmode_segment_valid(struct kvm_vcpu *vcpu, int seg)
+ 	var.dpl = 0x3;
+ 	if (seg == VCPU_SREG_CS)
+ 		var.type = 0x3;
+-	ar = vmx_segment_access_rights(&var);
++	ar = vmx_encode_ar_bytes(&var);
+ 
+ 	if (var.base != (var.selector << 4))
+ 		return false;
+@@ -5172,13 +5064,18 @@ static int handle_cr(struct kvm_vcpu *vcpu)
+ 	return 0;
+ }
+ 
+-static int handle_dr(struct kvm_vcpu *vcpu)
++/*
++ * This function is sharing between VMX and TDX to handle
++ * the EXIT_REASON_DR_ACCESS for both legacy guest and INTEL
++ * TD guest
++ */
++int vmx_handle_dr(struct kvm_vcpu *vcpu)
+ {
+ 	unsigned long exit_qualification;
+ 	int dr, dr7, reg;
+ 	int err = 1;
+ 
+-	exit_qualification = vmx_get_exit_qual(vcpu);
++	exit_qualification = vm_get_exit_qual(vcpu);
+ 	dr = exit_qualification & DEBUG_REG_ACCESS_NUM;
+ 
+ 	/* First, if DR does not exist, trigger UD */
+@@ -5188,7 +5085,8 @@ static int handle_dr(struct kvm_vcpu *vcpu)
+ 	if (kvm_x86_ops.get_cpl(vcpu) > 0)
+ 		goto out;
+ 
+-	dr7 = vmcs_readl(GUEST_DR7);
++	dr7 = vmreadl(vcpu, GUEST_DR7);
++
+ 	if (dr7 & DR7_GD) {
+ 		/*
+ 		 * As the vm-exit takes precedence over the debug trap, we
+@@ -5209,7 +5107,7 @@ static int handle_dr(struct kvm_vcpu *vcpu)
+ 	}
+ 
+ 	if (vcpu->guest_debug == 0) {
+-		exec_controls_clearbit(to_vmx(vcpu), CPU_BASED_MOV_DR_EXITING);
++		vm_exec_controls_clearbit(vcpu, CPU_BASED_MOV_DR_EXITING);
+ 
+ 		/*
+ 		 * No more DR vmexits; force a reload of the debug registers
+@@ -5230,13 +5128,15 @@ static int handle_dr(struct kvm_vcpu *vcpu)
+ 	} else {
+ 		err = kvm_set_dr(vcpu, dr, kvm_register_read(vcpu, reg));
+ 	}
+-
+ out:
+ 	return kvm_complete_insn_gp(vcpu, err);
+ }
+ 
+ static void vmx_sync_dirty_debug_regs(struct kvm_vcpu *vcpu)
+ {
++	/* Keep the original checking for legacy x86 guests */
++	WARN_ON(vcpu->arch.switch_db_regs & KVM_DEBUGREG_AUTO_SWITCH_GUEST);
++
+ 	get_debugreg(vcpu->arch.db[0], 0);
+ 	get_debugreg(vcpu->arch.db[1], 1);
+ 	get_debugreg(vcpu->arch.db[2], 2);
+@@ -5412,7 +5312,7 @@ static int handle_ept_violation(struct kvm_vcpu *vcpu)
+ 	if (unlikely(allow_smaller_maxphyaddr && kvm_vcpu_is_illegal_gpa(vcpu, gpa)))
+ 		return kvm_emulate_instruction(vcpu, 0);
+ 
+-	return __vmx_handle_ept_violation(vcpu, gpa, exit_qualification);
++	return __vmx_handle_ept_violation(vcpu, gpa, exit_qualification, 0);
+ }
+ 
+ static int handle_ept_misconfig(struct kvm_vcpu *vcpu)
+@@ -5708,7 +5608,7 @@ static int (*kvm_vmx_exit_handlers[])(struct kvm_vcpu *vcpu) = {
+ 	[EXIT_REASON_NMI_WINDOW]	      = handle_nmi_window,
+ 	[EXIT_REASON_IO_INSTRUCTION]          = handle_io,
+ 	[EXIT_REASON_CR_ACCESS]               = handle_cr,
+-	[EXIT_REASON_DR_ACCESS]               = handle_dr,
++	[EXIT_REASON_DR_ACCESS]               = vmx_handle_dr,
+ 	[EXIT_REASON_CPUID]                   = kvm_emulate_cpuid,
+ 	[EXIT_REASON_MSR_READ]                = kvm_emulate_rdmsr,
+ 	[EXIT_REASON_MSR_WRITE]               = kvm_emulate_wrmsr,
+@@ -7030,6 +6930,14 @@ static int vmx_vm_init(struct kvm *kvm)
+ 	if (!ple_gap)
+ 		kvm->arch.pause_in_guest = true;
+ 
++	/*
++	 * EPT Misconfigurations can be generated if the value of bits 2:0
++	 * of an EPT paging-structure entry is 110b (write/execute).
++	 */
++	if (enable_ept)
++		kvm_mmu_set_mmio_spte_mask(kvm, VMX_EPT_MISCONFIG_WX_VALUE,
++					   VMX_EPT_MISCONFIG_WX_VALUE, 0);
++
+ 	if (boot_cpu_has(X86_BUG_L1TF) && enable_ept) {
+ 		switch (l1tf_mitigation) {
+ 		case L1TF_MITIGATION_OFF:
+-- 
+2.31.1
+

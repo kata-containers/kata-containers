@@ -1,0 +1,46 @@
+From 18b7c62c48d8ee64ab5172fd827deec80fe576bb Mon Sep 17 00:00:00 2001
+From: Reinette Chatre <reinette.chatre@intel.com>
+Date: Thu, 3 Jun 2021 16:56:53 -0700
+Subject: [PATCH 0798/1418] x86/sgx: Make SGX IPI callback available internally
+
+The ETRACK instruction followed by an IPI to all CPUs within an enclave
+is a common pattern with more frequent use in support of SGX2.
+
+Make the (empty) IPI callback function available internally in
+preparation for more usages.
+
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+---
+ arch/x86/kernel/cpu/sgx/main.c | 2 +-
+ arch/x86/kernel/cpu/sgx/sgx.h  | 2 ++
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index 6b2f4c27e001..3239c7a8cebd 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -151,7 +151,7 @@ static int __sgx_encl_ewb(struct sgx_epc_page *epc_page, void *va_slot,
+ 	return ret;
+ }
+ 
+-static void sgx_ipi_cb(void *info)
++void sgx_ipi_cb(void *info)
+ {
+ }
+ 
+diff --git a/arch/x86/kernel/cpu/sgx/sgx.h b/arch/x86/kernel/cpu/sgx/sgx.h
+index 4628acec0009..b8aade6752ad 100644
+--- a/arch/x86/kernel/cpu/sgx/sgx.h
++++ b/arch/x86/kernel/cpu/sgx/sgx.h
+@@ -84,6 +84,8 @@ void sgx_mark_page_reclaimable(struct sgx_epc_page *page);
+ int sgx_unmark_page_reclaimable(struct sgx_epc_page *page);
+ struct sgx_epc_page *sgx_alloc_epc_page(void *owner, bool reclaim);
+ 
++void sgx_ipi_cb(void *info);
++
+ #ifdef CONFIG_X86_SGX_KVM
+ int __init sgx_vepc_init(void);
+ #else
+-- 
+2.31.1
+

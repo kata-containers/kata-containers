@@ -1,0 +1,38 @@
+From 27a939b6acbf418749109c668bb54fa9d86e3759 Mon Sep 17 00:00:00 2001
+From: Adamos Ttofari <attofari@amazon.de>
+Date: Fri, 12 Nov 2021 09:16:57 +0000
+Subject: [PATCH 0994/1418] cpufreq: intel_pstate: Add Ice Lake server to
+ out-of-band IDs
+
+Commit fbdc21e9b038 ("cpufreq: intel_pstate: Add Icelake servers
+support in no-HWP mode") enabled the use of Intel P-State driver
+for Ice Lake servers.
+
+But it doesn't cover the case when OS can't control P-States.
+
+Therefore, for Ice Lake server, if MSR_MISC_PWR_MGMT bits 8 or 18
+are enabled, then the Intel P-State driver should exit as OS can't
+control P-States.
+
+Fixes: fbdc21e9b038 ("cpufreq: intel_pstate: Add Icelake servers support in no-HWP mode")
+Signed-off-by: Adamos Ttofari <attofari@amazon.de>
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ drivers/cpufreq/intel_pstate.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/cpufreq/intel_pstate.c b/drivers/cpufreq/intel_pstate.c
+index 815df3daae9d..1088ff350159 100644
+--- a/drivers/cpufreq/intel_pstate.c
++++ b/drivers/cpufreq/intel_pstate.c
+@@ -2353,6 +2353,7 @@ static const struct x86_cpu_id intel_pstate_cpu_oob_ids[] __initconst = {
+ 	X86_MATCH(BROADWELL_D,		core_funcs),
+ 	X86_MATCH(BROADWELL_X,		core_funcs),
+ 	X86_MATCH(SKYLAKE_X,		core_funcs),
++	X86_MATCH(ICELAKE_X,		core_funcs),
+ 	{}
+ };
+ 
+-- 
+2.31.1
+

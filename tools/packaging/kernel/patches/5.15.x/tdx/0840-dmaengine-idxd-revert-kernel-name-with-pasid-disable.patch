@@ -1,0 +1,34 @@
+From f9818fef4c662b520fbf28a1d5367a776845e4c1 Mon Sep 17 00:00:00 2001
+From: Tom Zanussi <tom.zanussi@intel.com>
+Date: Fri, 30 Jul 2021 07:00:18 -0700
+Subject: [PATCH 0840/1418] dmaengine: idxd: revert kernel name with pasid
+ disable
+
+NOT FOR UPSTREAM
+
+Signed-off-by: Tom Zanussi <tom.zanussi@intel.com>
+---
+ drivers/dma/idxd/sysfs.c | 7 -------
+ 1 file changed, 7 deletions(-)
+
+diff --git a/drivers/dma/idxd/sysfs.c b/drivers/dma/idxd/sysfs.c
+index 7620cf00dabc..1af8bf5c9b18 100644
+--- a/drivers/dma/idxd/sysfs.c
++++ b/drivers/dma/idxd/sysfs.c
+@@ -776,13 +776,6 @@ static ssize_t wq_name_store(struct device *dev,
+ 	if (strlen(buf) > WQ_NAME_SIZE || strlen(buf) == 0)
+ 		return -EINVAL;
+ 
+-	/*
+-	 * This is temporarily placed here until we have SVM support for
+-	 * dmaengine.
+-	 */
+-	if (wq->type == IDXD_WQT_KERNEL && device_pasid_enabled(wq->idxd))
+-		return -EOPNOTSUPP;
+-
+ 	memset(wq->name, 0, WQ_NAME_SIZE + 1);
+ 	strncpy(wq->name, buf, WQ_NAME_SIZE);
+ 	strreplace(wq->name, '\n', '\0');
+-- 
+2.31.1
+

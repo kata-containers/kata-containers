@@ -1,0 +1,70 @@
+From 25be01db4fe567cca5ab2490245217395ad8c066 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Thu, 17 Sep 2020 23:54:17 -0700
+Subject: [PATCH 0362/1418] KVM: x86: Add flag to disallow #MC injection /
+ KVM_X86_SETUP_MCE
+
+Add a flag to disallow MCE injection and reject KVM_X86_SETUP_MCE with
+-EINVAL when set.  TDX doesn't support injecting exceptions, including
+(virtual) #MCs.
+
+Co-developed-by: Kai Huang <kai.huang@linux.intel.com>
+Signed-off-by: Kai Huang <kai.huang@linux.intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h |  1 +
+ arch/x86/kvm/x86.c              | 14 +++++++-------
+ 2 files changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index fe9da11f4a03..f97d1d65bc38 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1147,6 +1147,7 @@ struct kvm_arch {
+ 
+ 	bool bus_lock_detection_enabled;
+ 	bool irq_injection_disallowed;
++	bool mce_injection_disallowed;
+ 	/*
+ 	 * If exit_on_emulation_error is set, and the in-kernel instruction
+ 	 * emulator fails to emulate an instruction, allow userspace
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index eedd8a79734c..65f5f0b08aa8 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -4452,15 +4452,16 @@ static int vcpu_ioctl_tpr_access_reporting(struct kvm_vcpu *vcpu,
+ static int kvm_vcpu_ioctl_x86_setup_mce(struct kvm_vcpu *vcpu,
+ 					u64 mcg_cap)
+ {
+-	int r;
+ 	unsigned bank_num = mcg_cap & 0xff, bank;
+ 
+-	r = -EINVAL;
++	if (vcpu->kvm->arch.mce_injection_disallowed)
++		return -EINVAL;
++
+ 	if (!bank_num || bank_num > KVM_MAX_MCE_BANKS)
+-		goto out;
++		return -EINVAL;
+ 	if (mcg_cap & ~(kvm_mce_cap_supported | 0xff | 0xff0000))
+-		goto out;
+-	r = 0;
++		return -EINVAL;
++
+ 	vcpu->arch.mcg_cap = mcg_cap;
+ 	/* Init IA32_MCG_CTL to all 1s */
+ 	if (mcg_cap & MCG_CTL_P)
+@@ -4470,8 +4471,7 @@ static int kvm_vcpu_ioctl_x86_setup_mce(struct kvm_vcpu *vcpu,
+ 		vcpu->arch.mce_banks[bank*4] = ~(u64)0;
+ 
+ 	static_call(kvm_x86_setup_mce)(vcpu);
+-out:
+-	return r;
++	return 0;
+ }
+ 
+ static int kvm_vcpu_ioctl_x86_set_mce(struct kvm_vcpu *vcpu,
+-- 
+2.31.1
+

@@ -1,0 +1,85 @@
+From d5e49a1dbda0e5c0c7cfbb04788bffadde74962c Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 17:58:02 -0800
+Subject: [PATCH 0930/1418] Revert "kvm: x86: Add XFD, AMX_TILE, AMX_INT8 and
+ AMX_BF16 support"
+
+This reverts commit 4661eddc98697a0a6baad4d9d3dc2d75da8c5b7c.
+
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+---
+ arch/x86/include/asm/cpufeatures.h |  2 --
+ arch/x86/kvm/cpuid.c               | 13 +++----------
+ 2 files changed, 3 insertions(+), 12 deletions(-)
+
+diff --git a/arch/x86/include/asm/cpufeatures.h b/arch/x86/include/asm/cpufeatures.h
+index 1452d6460a45..a799d70c8909 100644
+--- a/arch/x86/include/asm/cpufeatures.h
++++ b/arch/x86/include/asm/cpufeatures.h
+@@ -302,9 +302,7 @@
+ /* Intel-defined CPU features, CPUID level 0x00000007:1 (EAX), word 12 */
+ #define X86_FEATURE_AVX_VNNI		(12*32+ 4) /* AVX VNNI instructions */
+ #define X86_FEATURE_AVX512_BF16		(12*32+ 5) /* AVX512 BFLOAT16 instructions */
+-#define X86_FEATURE_AMX_BF16		(18*32+22) /* AMX bf16 Support */
+ #define X86_FEATURE_AMX_TILE		(18*32+24) /* AMX tile Support */
+-#define X86_FEATURE_AMX_INT8		(18*32+25) /* AMX int8 Support */
+ 
+ /* AMD-defined CPU features, CPUID level 0x80000008 (EBX), word 13 */
+ #define X86_FEATURE_CLZERO		(13*32+ 0) /* CLZERO instruction */
+diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c
+index a7b5427d903f..ddabd812ef37 100644
+--- a/arch/x86/kvm/cpuid.c
++++ b/arch/x86/kvm/cpuid.c
+@@ -506,7 +506,7 @@ void kvm_set_cpu_caps(void)
+ 		F(SPEC_CTRL_SSBD) | F(ARCH_CAPABILITIES) | F(INTEL_STIBP) |
+ 		F(MD_CLEAR) | F(AVX512_VP2INTERSECT) | F(FSRM) |
+ 		F(SERIALIZE) | F(TSXLDTRK) | F(AVX512_FP16) |
+-		F(AMX_TILE) | F(AMX_INT8) | F(AMX_BF16) | F(ARCH_LBR)
++		0 /*AMX_TILE*/ | 0 /*AMX_INT8*/ | 0 /*AMX_BF16*/ | F(ARCH_LBR)
+ 	);
+ 
+ 	/* TSC_ADJUST and ARCH_CAPABILITIES are emulated in software. */
+@@ -525,7 +525,7 @@ void kvm_set_cpu_caps(void)
+ 	);
+ 
+ 	kvm_cpu_cap_mask(CPUID_D_1_EAX,
+-		F(XSAVEOPT) | F(XSAVEC) | F(XGETBV1) | F(XSAVES) | F(XFD)
++		F(XSAVEOPT) | F(XSAVEC) | F(XGETBV1) | F(XSAVES)
+ 	);
+ 
+ 	kvm_cpu_cap_init_scattered(CPUID_12_EAX,
+@@ -650,8 +650,6 @@ static struct kvm_cpuid_entry2 *do_host_cpuid(struct kvm_cpuid_array *array,
+ 	case 0x14:
+ 	case 0x17:
+ 	case 0x18:
+-	case 0x1d:
+-	case 0x1e:
+ 	case 0x1f:
+ 	case 0x8000001d:
+ 		entry->flags |= KVM_CPUID_FLAG_SIGNIFCANT_INDEX;
+@@ -777,8 +775,6 @@ static inline int __do_cpuid_func(struct kvm_cpuid_array *array, u32 function)
+ 		break;
+ 	case 9:
+ 		break;
+-	case 0x1e:
+-		break;
+ 	case 0xa: { /* Architectural Performance Monitoring */
+ 		struct x86_pmu_capability cap;
+ 		union cpuid10_eax eax;
+@@ -911,12 +907,9 @@ static inline int __do_cpuid_func(struct kvm_cpuid_array *array, u32 function)
+ 			      SGX_ATTR_KSS;
+ 		entry->ebx &= 0;
+ 		break;
+-	/* Intel AMX TILE */
+-	case 0x1d:
+ 	/* Intel PT */
+ 	case 0x14:
+-		if ((function == 0x14 && !kvm_cpu_cap_has(X86_FEATURE_INTEL_PT)) ||
+-		    (function == 0x1d && !kvm_cpu_cap_has(X86_FEATURE_AMX_TILE))) {
++		if (!kvm_cpu_cap_has(X86_FEATURE_INTEL_PT)) {
+ 			entry->eax = entry->ebx = entry->ecx = entry->edx = 0;
+ 			break;
+ 		}
+-- 
+2.31.1
+

@@ -1,0 +1,90 @@
+From a4dcfcf20955f944c14c599db77f9b8c8c6ae4c7 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Fri, 11 Feb 2022 11:06:21 -0800
+Subject: [PATCH 1036/1418] KVM: TDX: Retry seamcall when TDX_OPERAND_BUSY with
+ operand SEPT
+
+TODO:
+This is a quick fix for unblocking guys who have to use the TDX module 1.0,
+the platform with production signed firmware can only load the TDX module
+1.0, which is also production signed.  This should be replaced by a better
+solution in future.
+
+TDX module 0.16 and 1.0 release added some internal changes which makes
+some seamcall(e.g. tdh_vp_enter) return TDX_OPERAND_BUSY with operand id
+SEPT(0x92), this break TD guest running because KVM never retry on this
+before, to reduce the influence sufrace retry the seamcall only in this
+case.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/tdx_errno.h |  6 ++++++
+ arch/x86/kvm/vmx/seamcall.h      | 14 +++++++++++++-
+ arch/x86/kvm/vmx/tdx.c           |  3 +++
+ 3 files changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/tdx_errno.h b/arch/x86/include/asm/tdx_errno.h
+index 98d6f59ff7ad..75420415188e 100644
+--- a/arch/x86/include/asm/tdx_errno.h
++++ b/arch/x86/include/asm/tdx_errno.h
+@@ -201,4 +201,10 @@
+ #define TDG_VP_VMCALL_INVALID_OPERAND		0x8000000000000000ULL
+ #define TDG_VP_VMCALL_TDREPORT_FAILED		0x8000000000000001ULL
+ 
++/*
++ * TDX module operand ID, appears in 31:0 part of error code as
++ * detail information
++ */
++#define TDX_OPERAND_ID_SEPT			0x92
++
+ #endif /* __ASM_X86_TDX_ERRNO_H */
+diff --git a/arch/x86/kvm/vmx/seamcall.h b/arch/x86/kvm/vmx/seamcall.h
+index 1c35f01ca2bc..816aafcba2f5 100644
+--- a/arch/x86/kvm/vmx/seamcall.h
++++ b/arch/x86/kvm/vmx/seamcall.h
+@@ -18,7 +18,7 @@
+ asmlinkage u64 kvm_seamcall(u64 op, u64 rcx, u64 rdx, u64 r8, u64 r9, u64 r10,
+ 			struct tdx_ex_ret *ex);
+ 
+-static inline u64 _seamcall(u64 op, u64 rcx, u64 rdx, u64 r8, u64 r9, u64 r10,
++static inline u64 __seamcall(u64 op, u64 rcx, u64 rdx, u64 r8, u64 r9, u64 r10,
+ 			struct tdx_ex_ret *ex)
+ {
+ 	u64 err;
+@@ -33,6 +33,18 @@ static inline u64 _seamcall(u64 op, u64 rcx, u64 rdx, u64 r8, u64 r9, u64 r10,
+ 	return err;
+ }
+ 
++static inline u64 _seamcall(u64 op, u64 rcx, u64 rdx, u64 r8, u64 r9, u64 r10,
++			struct tdx_ex_ret *ex)
++{
++	u64 ret;
++
++	do {
++		ret = __seamcall(op, rcx, rdx, r8, r9, r10, ex);
++	} while (ret == (TDX_OPERAND_BUSY | TDX_OPERAND_ID_SEPT));
++
++	return ret;
++}
++
+ #define seamcall(op, rcx, rdx, r8, r9, r10, ex)				\
+ 	_seamcall(SEAMCALL_##op, (rcx), (rdx), (r8), (r9), (r10), (ex))
+ 
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 034ddb9b9b68..8c985097ddb0 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -1912,6 +1912,9 @@ static int __tdx_handle_exit(struct kvm_vcpu *vcpu,
+ {
+ 	union tdx_exit_reason exit_reason = to_tdx(vcpu)->exit_reason;
+ 
++	if (exit_reason.full == (TDX_OPERAND_BUSY | TDX_OPERAND_ID_SEPT))
++		return 1;
++
+ 	if (unlikely(exit_reason.non_recoverable || exit_reason.error)) {
+ 		kvm_pr_unimpl("TD exit due to %s, Exit Reason %d\n",
+ 			      tdx_seamcall_error_name(exit_reason.full),
+-- 
+2.31.1
+

@@ -1,0 +1,31 @@
+From 5604ccdecd6caddd2b5fed624325830d4d2b212f Mon Sep 17 00:00:00 2001
+From: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Date: Fri, 3 Dec 2021 00:22:54 -0800
+Subject: [PATCH 0986/1418] IDXD_MDEV: Reset the vDEV paused state when the
+ vDEV again switches to RUNNING state.
+
+---
+ drivers/vfio/mdev/idxd/mdev.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/drivers/vfio/mdev/idxd/mdev.c b/drivers/vfio/mdev/idxd/mdev.c
+index 3a267908d74d..7ff1c87cecae 100644
+--- a/drivers/vfio/mdev/idxd/mdev.c
++++ b/drivers/vfio/mdev/idxd/mdev.c
+@@ -677,6 +677,13 @@ static int vidxd_migration_state_change(struct vfio_pci_core_device *vfio_vdev,
+ 			__func__, mig_info->device_state);
+ 		if (mig_info->device_state & VFIO_DEVICE_STATE_RESUMING)
+ 			vidxd_dest_complete_migration(vidxd);
++
++		mutex_lock(&vidxd->mig_submit_lock);
++		/* The VMM may continue the VM after pausing it. So get ready
++		* for normal operation */
++		vidxd->paused = false;
++		mutex_unlock(&vidxd->mig_submit_lock);
++
+ 		break;
+ 	case VFIO_DEVICE_STATE_SAVING | VFIO_DEVICE_STATE_RUNNING:
+ 		pr_info("%s, VFIO_DEVICE_STATE_SAVING | VFIO_DEVICE_STATE_RUNNING!!\n", __func__);
+-- 
+2.31.1
+

@@ -1,0 +1,89 @@
+From 0dafe6e79d9fb23147cc60ee374e1028391534ed Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Fri, 19 Jun 2020 13:52:39 -0700
+Subject: [PATCH 0364/1418] KVM: Add per-VM flag to mark read-only memory as
+ unsupported
+
+Add a flag for TDX to flag RO memory as unsupported and propagate it to
+KVM_MEM_READONLY to allow reporting RO memory as unsupported on a per-VM
+basis.  TDX1 doesn't expose permission bits to the VMM in the SEPT
+tables, i.e. doesn't support read-only private memory.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+Co-developed-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+---
+ arch/x86/kvm/x86.c       | 4 +++-
+ include/linux/kvm_host.h | 3 +++
+ virt/kvm/kvm_main.c      | 8 +++++---
+ 3 files changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 4cafcdfffa9f..02e436ec21db 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -4022,7 +4022,6 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
+ 	case KVM_CAP_ASYNC_PF_INT:
+ 	case KVM_CAP_GET_TSC_KHZ:
+ 	case KVM_CAP_KVMCLOCK_CTRL:
+-	case KVM_CAP_READONLY_MEM:
+ 	case KVM_CAP_HYPERV_TIME:
+ 	case KVM_CAP_IOAPIC_POLARITY_IGNORED:
+ 	case KVM_CAP_TSC_DEADLINE_TIMER:
+@@ -4139,6 +4138,9 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
+ 		if (static_call(kvm_x86_is_vm_type_supported)(KVM_X86_TDX_VM))
+ 			r |= BIT(KVM_X86_TDX_VM);
+ 		break;
++	case KVM_CAP_READONLY_MEM:
++		r = kvm && kvm->readonly_mem_unsupported ? 0 : 1;
++		break;
+ 	default:
+ 		break;
+ 	}
+diff --git a/include/linux/kvm_host.h b/include/linux/kvm_host.h
+index cf27608f7e93..95176800b857 100644
+--- a/include/linux/kvm_host.h
++++ b/include/linux/kvm_host.h
+@@ -624,6 +624,9 @@ struct kvm {
+ 	struct notifier_block pm_notifier;
+ #endif
+ 	char stats_id[KVM_STATS_NAME_SIZE];
++#ifdef __KVM_HAVE_READONLY_MEM
++	bool readonly_mem_unsupported;
++#endif
+ };
+ 
+ #define kvm_err(fmt, ...) \
+diff --git a/virt/kvm/kvm_main.c b/virt/kvm/kvm_main.c
+index 571d053667bc..3911d9b5c170 100644
+--- a/virt/kvm/kvm_main.c
++++ b/virt/kvm/kvm_main.c
+@@ -1414,12 +1414,14 @@ static void update_memslots(struct kvm_memslots *slots,
+ 	}
+ }
+ 
+-static int check_memory_region_flags(const struct kvm_userspace_memory_region *mem)
++static int check_memory_region_flags(struct kvm *kvm,
++				     const struct kvm_userspace_memory_region *mem)
+ {
+ 	u32 valid_flags = KVM_MEM_LOG_DIRTY_PAGES;
+ 
+ #ifdef __KVM_HAVE_READONLY_MEM
+-	valid_flags |= KVM_MEM_READONLY;
++	if (!kvm->readonly_mem_unsupported)
++		valid_flags |= KVM_MEM_READONLY;
+ #endif
+ 
+ 	if (mem->flags & ~valid_flags)
+@@ -1657,7 +1659,7 @@ int __kvm_set_memory_region(struct kvm *kvm,
+ 	int as_id, id;
+ 	int r;
+ 
+-	r = check_memory_region_flags(mem);
++	r = check_memory_region_flags(kvm, mem);
+ 	if (r)
+ 		return r;
+ 
+-- 
+2.31.1
+

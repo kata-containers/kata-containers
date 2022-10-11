@@ -1,0 +1,72 @@
+From 9fe784d9c6737ffd98856368c5b792959dc29c1a Mon Sep 17 00:00:00 2001
+From: Jarkko Sakkinen <jarkko@kernel.org>
+Date: Mon, 15 Nov 2021 10:35:20 -0800
+Subject: [PATCH 0781/1418] selftests/sgx: Move setup_test_encl() to each
+ TEST_F()
+
+Create the test enclave inside each TEST_F(), instead of FIXTURE_SETUP(),
+so that the heap size can be defined per test.
+
+Signed-off-by: Jarkko Sakkinen <jarkko@kernel.org>
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+Signed-off-by: Dave Hansen <dave.hansen@linux.intel.com>
+Acked-by: Dave Hansen <dave.hansen@linux.intel.com>
+Link: https://lkml.kernel.org/r/70ca264535d2ca0dc8dcaf2281e7d6965f8d4a24.1636997631.git.reinette.chatre@intel.com
+---
+ tools/testing/selftests/sgx/main.c | 19 +++++++++++++++----
+ 1 file changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/tools/testing/selftests/sgx/main.c b/tools/testing/selftests/sgx/main.c
+index 5b3e49a36344..f41fba919d06 100644
+--- a/tools/testing/selftests/sgx/main.c
++++ b/tools/testing/selftests/sgx/main.c
+@@ -191,10 +191,6 @@ static bool setup_test_encl(unsigned long heap_size, struct encl *encl,
+ 
+ FIXTURE_SETUP(enclave)
+ {
+-	ASSERT_TRUE(setup_test_encl(ENCL_HEAP_SIZE_DEFAULT, &self->encl, _metadata));
+-
+-	memset(&self->run, 0, sizeof(self->run));
+-	self->run.tcs = self->encl.encl_base;
+ }
+ 
+ FIXTURE_TEARDOWN(enclave)
+@@ -226,6 +222,11 @@ TEST_F(enclave, unclobbered_vdso)
+ {
+ 	struct encl_op op;
+ 
++	ASSERT_TRUE(setup_test_encl(ENCL_HEAP_SIZE_DEFAULT, &self->encl, _metadata));
++
++	memset(&self->run, 0, sizeof(self->run));
++	self->run.tcs = self->encl.encl_base;
++
+ 	op.type = ENCL_OP_PUT;
+ 	op.buffer = MAGIC;
+ 
+@@ -248,6 +249,11 @@ TEST_F(enclave, clobbered_vdso)
+ {
+ 	struct encl_op op;
+ 
++	ASSERT_TRUE(setup_test_encl(ENCL_HEAP_SIZE_DEFAULT, &self->encl, _metadata));
++
++	memset(&self->run, 0, sizeof(self->run));
++	self->run.tcs = self->encl.encl_base;
++
+ 	op.type = ENCL_OP_PUT;
+ 	op.buffer = MAGIC;
+ 
+@@ -278,6 +284,11 @@ TEST_F(enclave, clobbered_vdso_and_user_function)
+ {
+ 	struct encl_op op;
+ 
++	ASSERT_TRUE(setup_test_encl(ENCL_HEAP_SIZE_DEFAULT, &self->encl, _metadata));
++
++	memset(&self->run, 0, sizeof(self->run));
++	self->run.tcs = self->encl.encl_base;
++
+ 	self->run.user_handler = (__u64)test_handler;
+ 	self->run.user_data = 0xdeadbeef;
+ 
+-- 
+2.31.1
+

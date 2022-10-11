@@ -1,0 +1,60 @@
+From 50435cadd75f28459004beda3f1d4db740d0030d Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Fri, 4 Feb 2022 15:09:51 -0800
+Subject: [PATCH 1166/1418] x86/pkeys: Clarify PKRU_AD_KEY macro
+
+When changing the PKRU_AD_KEY macro to be used for PKS the name came
+into question.[1]
+
+The intent of PKRU_AD_KEY is to set an initial value for the PKRU
+register but that is just a mask value.
+
+Clarify this by changing the name to PKRU_AD_MASK().
+
+NOTE the checkpatch errors are ignored for the init_pkru_value to align
+the values in the code.
+
+[1] https://lore.kernel.org/lkml/eff862e2-bfaa-9e12-42b5-a12467d72a22@intel.com/
+
+Suggested-by: Dave Hansen <dave.hansen@linux.intel.com>
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ arch/x86/mm/pkeys.c | 15 +++++++++------
+ 1 file changed, 9 insertions(+), 6 deletions(-)
+
+diff --git a/arch/x86/mm/pkeys.c b/arch/x86/mm/pkeys.c
+index d6c02e45c7f1..15c3c42b9a04 100644
+--- a/arch/x86/mm/pkeys.c
++++ b/arch/x86/mm/pkeys.c
+@@ -110,7 +110,7 @@ int __arch_override_mprotect_pkey(struct vm_area_struct *vma, int prot, int pkey
+ 	return vma_pkey(vma);
+ }
+ 
+-#define PKRU_AD_KEY(pkey)	(PKRU_AD_BIT << ((pkey) * PKRU_BITS_PER_PKEY))
++#define PKRU_AD_MASK(pkey)	(PKRU_AD_BIT << ((pkey) * PKRU_BITS_PER_PKEY))
+ 
+ /*
+  * Make the default PKRU value (at execve() time) as restrictive
+@@ -118,11 +118,14 @@ int __arch_override_mprotect_pkey(struct vm_area_struct *vma, int prot, int pkey
+  * in the process's lifetime will not accidentally get access
+  * to data which is pkey-protected later on.
+  */
+-u32 init_pkru_value = PKRU_AD_KEY( 1) | PKRU_AD_KEY( 2) | PKRU_AD_KEY( 3) |
+-		      PKRU_AD_KEY( 4) | PKRU_AD_KEY( 5) | PKRU_AD_KEY( 6) |
+-		      PKRU_AD_KEY( 7) | PKRU_AD_KEY( 8) | PKRU_AD_KEY( 9) |
+-		      PKRU_AD_KEY(10) | PKRU_AD_KEY(11) | PKRU_AD_KEY(12) |
+-		      PKRU_AD_KEY(13) | PKRU_AD_KEY(14) | PKRU_AD_KEY(15);
++u32 init_pkru_value = PKRU_AD_MASK( 1) | PKRU_AD_MASK( 2) |
++		      PKRU_AD_MASK( 3) | PKRU_AD_MASK( 4) |
++		      PKRU_AD_MASK( 5) | PKRU_AD_MASK( 6) |
++		      PKRU_AD_MASK( 7) | PKRU_AD_MASK( 8) |
++		      PKRU_AD_MASK( 9) | PKRU_AD_MASK(10) |
++		      PKRU_AD_MASK(11) | PKRU_AD_MASK(12) |
++		      PKRU_AD_MASK(13) | PKRU_AD_MASK(14) |
++		      PKRU_AD_MASK(15);
+ 
+ static ssize_t init_pkru_read_file(struct file *file, char __user *user_buf,
+ 			     size_t count, loff_t *ppos)
+-- 
+2.31.1
+

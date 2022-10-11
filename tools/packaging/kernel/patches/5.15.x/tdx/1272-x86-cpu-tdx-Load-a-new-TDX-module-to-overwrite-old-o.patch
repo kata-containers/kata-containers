@@ -1,0 +1,41 @@
+From a3877fe8b9f8f223ab13d892ecb42c1461f86305 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Tue, 22 Mar 2022 14:21:49 +0800
+Subject: [PATCH 1272/1418] x86/cpu/tdx: Load a new TDX module to overwrite old
+ one
+
+For kexec case, if the old kernel has initialized TDX module, it will
+get error when kexec'ed new kernel tries to initialize TDX module on its
+own.
+
+For simplicity, just reload a frank new TDX module for kexec'ed new
+kernel.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index c08aec04372a..bf4049cb8538 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -981,6 +981,15 @@ static int __init tdx_arch_init(void)
+ 	if (!tdx_module_loaded()) {
+ 		pr_err("No TDX module loaded by BIOS.\n");
+ 
++		ret = tdx_load_module_boot();
++		if (ret) {
++			pr_info("Failed to load TDX module.\n");
++			goto out;
++		}
++		pr_info("Loaded TDX module via P-SEAMLDR.\n");
++	} else if ((bootloader_type >> 4) == 0xd){
++		pr_info("It's a kexec'ed kernel, loading new TDX module kernel itself to overwrite old one\n");
++
+ 		ret = tdx_load_module_boot();
+ 		if (ret) {
+ 			pr_info("Failed to load TDX module.\n");
+-- 
+2.31.1
+

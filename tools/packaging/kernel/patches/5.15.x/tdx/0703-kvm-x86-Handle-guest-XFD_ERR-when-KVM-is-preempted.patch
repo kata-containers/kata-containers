@@ -1,0 +1,103 @@
+From a078c711f598a149f0f5e9f2cf285fb320938179 Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Thu, 11 Nov 2021 02:32:11 -0800
+Subject: [PATCH 0703/1418] kvm: x86: Handle guest XFD_ERR when KVM is
+ preempted
+
+KVM need switch XFD_ERR correctly because guest is possible to have a
+non-zero XFD_ERR at vmexit. When KVM is preempted, it need save guest
+XFD_ERR since XFD_ERR might be changed by other thread. When back to
+KVM, guest XFD_ERR should be restored accordingly before entering guest.
+When swapping between guest and userspace, XFD_ERR also need be
+switched.
+
+Use the fpu_guest::xfd_err to store the guest XFD_ERR value when KVM is
+preempted. Mark fpu_guest::xfd_err_dirty as true, indicating that guest
+XFD_ERR was stored and the MSR might be dirty, to avoid fetching a
+wrong XFD_ERR next time. Restore guest non-zero XFD_ERR value before
+entering guest after preemption and interrupt disabled.
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+---
+ arch/x86/kvm/vmx/vmx.c |  3 +++
+ arch/x86/kvm/x86.c     | 30 ++++++++++++++++++++++++++++++
+ arch/x86/kvm/x86.h     |  1 +
+ 3 files changed, 34 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index b832f66246f2..2e2ac0179711 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -1241,6 +1241,9 @@ static void vmx_prepare_switch_to_host(struct vcpu_vmx *vmx)
+ 	invalidate_tss_limit();
+ #ifdef CONFIG_X86_64
+ 	wrmsrl(MSR_KERNEL_GS_BASE, vmx->msr_host_kernel_gs_base);
++
++	if (vmx->vcpu.preempted)
++		kvm_save_guest_xfd_err(&vmx->vcpu);
+ #endif
+ 	load_fixmap_gdt(raw_smp_processor_id());
+ 	vmx->guest_state_loaded = false;
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index b13f5ef395ad..05a3c4dd1856 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -998,6 +998,34 @@ void kvm_load_host_xsave_state(struct kvm_vcpu *vcpu)
+ }
+ EXPORT_SYMBOL_GPL(kvm_load_host_xsave_state);
+ 
++void kvm_save_guest_xfd_err(struct kvm_vcpu *vcpu)
++{
++	struct fpu_guest *guest_fpu = &vcpu->arch.guest_fpu;
++
++	if (guest_cpuid_has(vcpu, X86_FEATURE_XFD)) {
++		/* Only guest XFD_ERR need be saved. */
++		if (!current->thread.fpu.fpstate->is_guest)
++			return;
++		/* Already saved before. */
++		if (guest_fpu->xfd_err_dirty)
++			return;
++
++		rdmsrl(MSR_IA32_XFD_ERR, guest_fpu->xfd_err);
++		if (guest_fpu->xfd_err)
++			guest_fpu->xfd_err_dirty = true;
++	}
++}
++EXPORT_SYMBOL_GPL(kvm_save_guest_xfd_err);
++
++static void kvm_restore_xfd_err(struct kvm_vcpu *vcpu)
++{
++	if (vcpu->arch.guest_fpu.xfd_err_dirty && vcpu->arch.guest_fpu.xfd_err) {
++		wrmsrl(MSR_IA32_XFD_ERR, vcpu->arch.guest_fpu.xfd_err);
++		vcpu->arch.guest_fpu.xfd_err_dirty = false;
++		vcpu->arch.guest_fpu.xfd_err = 0;
++	}
++}
++
+ /*
+  * Return dynamic feature bitmap that xcr0[i]=1 && xfd[i]=0
+  */
+@@ -9850,6 +9878,8 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
+ 		set_debugreg(0, 7);
+ 	}
+ 
++	kvm_restore_xfd_err(vcpu);
++
+ 	for (;;) {
+ 		exit_fastpath = static_call(kvm_x86_run)(vcpu);
+ 		if (likely(exit_fastpath != EXIT_FASTPATH_REENTER_GUEST))
+diff --git a/arch/x86/kvm/x86.h b/arch/x86/kvm/x86.h
+index e1626d925a7b..ed5db82477ea 100644
+--- a/arch/x86/kvm/x86.h
++++ b/arch/x86/kvm/x86.h
+@@ -447,6 +447,7 @@ static inline bool kvm_pkrs_valid(u64 data)
+ void kvm_load_guest_xsave_state(struct kvm_vcpu *vcpu);
+ void kvm_load_host_xsave_state(struct kvm_vcpu *vcpu);
+ bool kvm_guest_realloc_fpstate(struct kvm_vcpu *vcpu, u64 new_xfd);
++void kvm_save_guest_xfd_err(struct kvm_vcpu *vcpu);
+ int kvm_spec_ctrl_test_value(u64 value);
+ bool kvm_is_valid_cr4(struct kvm_vcpu *vcpu, unsigned long cr4);
+ int kvm_handle_memory_failure(struct kvm_vcpu *vcpu, int r,
+-- 
+2.31.1
+

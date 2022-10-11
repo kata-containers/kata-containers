@@ -1,0 +1,91 @@
+From 05a65538dec10e4ee955066b9a1dd621439032d6 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Wed, 30 Jun 2021 17:03:39 -0700
+Subject: [PATCH 0351/1418] KVM: TDX: add trace point before/after TDX
+ SEAMCALLs
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/trace/seam.h | 11 +++++++++++
+ arch/x86/kvm/trace.h              |  1 +
+ arch/x86/kvm/vmx/seamcall.h       |  5 +++--
+ 3 files changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/trace/seam.h b/arch/x86/include/asm/trace/seam.h
+index d217bb7ea90a..8aacbc8bb4ba 100644
+--- a/arch/x86/include/asm/trace/seam.h
++++ b/arch/x86/include/asm/trace/seam.h
+@@ -9,9 +9,14 @@
+ 
+ #if IS_ENABLED(CONFIG_INTEL_TDX_HOST)
+ 
++#ifdef SEAMLDR_SEAMCALLS
+ #define SEAMCALLS		\
+ 	SEAMLDR_SEAMCALLS,	\
+ 	TDX_SEAMCALLS
++#else
++#define SEAMCALLS		\
++	TDX_SEAMCALLS
++#endif
+ 
+ TRACE_EVENT(seamcall_enter,
+ 	    TP_PROTO(u64 fn, u64 rcx, u64 rdx,
+@@ -73,6 +78,7 @@ TRACE_EVENT(seamcall_exit,
+ 	    ),
+ 	    TP_printk("op: %s err: %s(%llx) %llx %llx %llx %llx %llx %llx",
+ 		__print_symbolic_u64(__entry->fn, SEAMCALLS),
++#ifdef SEAMLDR_ERROR_CODES
+ 		({ ((__entry->err & TDX_SEAMCALL_STATUS_MASK) ==
+ 			  P_SEAMLDR_SEAMCALL_ERROR_CODE) ?
+ 				__print_symbolic_u64(__entry->err,
+@@ -80,6 +86,11 @@ TRACE_EVENT(seamcall_exit,
+ 				__print_symbolic_u64(__entry->err &
+ 						     TDX_SEAMCALL_STATUS_MASK,
+ 						     TDX_STATUS_CODES); }),
++#else
++				__print_symbolic_u64(__entry->err &
++						     TDX_SEAMCALL_STATUS_MASK,
++						     TDX_STATUS_CODES),
++#endif
+ 		__entry->err,
+ 		__entry->rcx,
+ 		__entry->rdx,
+diff --git a/arch/x86/kvm/trace.h b/arch/x86/kvm/trace.h
+index 03ebe368333e..f9f1663bbaad 100644
+--- a/arch/x86/kvm/trace.h
++++ b/arch/x86/kvm/trace.h
+@@ -7,6 +7,7 @@
+ #include <asm/svm.h>
+ #include <asm/clocksource.h>
+ #include <asm/pvclock-abi.h>
++#include <asm/tdx_arch.h>
+ 
+ #undef TRACE_SYSTEM
+ #define TRACE_SYSTEM kvm
+diff --git a/arch/x86/kvm/vmx/seamcall.h b/arch/x86/kvm/vmx/seamcall.h
+index c42e4ffc1d18..1c35f01ca2bc 100644
+--- a/arch/x86/kvm/vmx/seamcall.h
++++ b/arch/x86/kvm/vmx/seamcall.h
+@@ -12,6 +12,7 @@
+ 
+ #else
+ 
++#include <asm/trace/seam.h>
+ #include <asm/tdx_host.h>
+ 
+ asmlinkage u64 kvm_seamcall(u64 op, u64 rcx, u64 rdx, u64 r8, u64 r9, u64 r10,
+@@ -26,9 +27,9 @@ static inline u64 _seamcall(u64 op, u64 rcx, u64 rdx, u64 r8, u64 r9, u64 r10,
+ 		/* kvm_seamcall requires non-NULL ex. */
+ 		ex = &dummy;
+ 
+-	/* TODO add trace point */
++	trace_seamcall_enter(op, rcx, rdx, r8, r9, r10, 0);
+ 	err = kvm_seamcall(op, rcx, rdx, r8, r9, r10, ex);
+-	/* TODO add trace point */
++	trace_seamcall_exit(op, err, ex);
+ 	return err;
+ }
+ 
+-- 
+2.31.1
+

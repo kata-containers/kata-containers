@@ -1,0 +1,93 @@
+From 475fc3e427f35854f5fb13019b1dfe284af29d78 Mon Sep 17 00:00:00 2001
+From: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Date: Wed, 1 Dec 2021 19:34:20 +0200
+Subject: [PATCH 1052/1418] x86/tdx: Fix single-stepping through emulated
+ instructions
+
+At the moment, instructions that are emulated via #VE don't raise the
+single-step debug exception when they are expected to. The #DB needs to
+be taken after the corresponding instruction has been executed.
+
+Make #VE handler raise #DB if single stepping is detected via EFLAGS.TF,
+so that interested debuggers can do their thing.
+
+Signed-off-by: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+---
+ arch/x86/kernel/tdx.c   | 14 +++++++++++++-
+ arch/x86/kernel/traps.c | 25 ++++++++++++++++++++++---
+ 2 files changed, 35 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 05146f41249f..7f8c187dc406 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -915,8 +915,20 @@ bool tdx_handle_virtualization_exception(struct pt_regs *regs,
+ 	}
+ 
+ 	/* After successful #VE handling, move the IP */
+-	if (ret)
++	if (ret) {
++		if (regs->flags & X86_EFLAGS_TF) {
++			/*
++			 * Single-stepping through an emulated instruction is
++			 * two-fold: handling the #VE and raising a #DB. The
++			 * former is taken care of above; this tells the #VE
++			 * trap handler to do the latter. #DB is raised after
++			 * the instruction has been executed; the IP also needs
++			 * to be advanced in this case.
++			 */
++			ret = false;
++		}
+ 		regs->ip += ve->instr_len;
++	}
+ 
+ 	return ret;
+ }
+diff --git a/arch/x86/kernel/traps.c b/arch/x86/kernel/traps.c
+index 4739cf01a205..c8ab7fa3c04a 100644
+--- a/arch/x86/kernel/traps.c
++++ b/arch/x86/kernel/traps.c
+@@ -1258,6 +1258,21 @@ static void ve_raise_fault(struct pt_regs *regs, long error_code)
+ 	die_addr(VE_FAULT_STR, regs, error_code, 0);
+ }
+ 
++static void ve_raise_debug(struct pt_regs *regs)
++{
++	unsigned long dr6 = debug_read_clear_dr6();
++
++	dr6 |= DR_STEP;
++	cond_local_irq_disable(regs);
++
++	if (user_mode(regs))
++		exc_debug_user(regs, dr6);
++	else
++		exc_debug_kernel(regs, dr6);
++
++	cond_local_irq_enable(regs);
++}
++
+ DEFINE_IDTENTRY(exc_virtualization_exception)
+ {
+ 	struct ve_info ve;
+@@ -1280,10 +1295,14 @@ DEFINE_IDTENTRY(exc_virtualization_exception)
+ 		ret = tdx_handle_virtualization_exception(regs, &ve);
+ 	/*
+ 	 * If tdx_handle_virtualization_exception() could not process
+-	 * it successfully, treat it as #GP(0) and handle it.
++	 * it successfully, treat it as #GP(0) or #DB and handle it.
+ 	 */
+-	if (!ret)
+-		ve_raise_fault(regs, 0);
++	if (!ret) {
++		if (regs->flags & X86_EFLAGS_TF)
++			ve_raise_debug(regs);
++		else
++			ve_raise_fault(regs, 0);
++	}
+ 
+ 	cond_local_irq_disable(regs);
+ }
+-- 
+2.31.1
+

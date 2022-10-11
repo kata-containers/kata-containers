@@ -1,0 +1,64 @@
+From e070f3a24a8106587f1870107bae716bae4e116e Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 8 Sep 2021 15:29:19 +0200
+Subject: [PATCH 0006/1418] x86/extable: Provide EX_TYPE_DEFAULT_MCE_SAFE and
+ EX_TYPE_FAULT_MCE_SAFE
+
+Provide exception fixup types which can be used to identify fixups which
+allow in kernel #MC recovery and make them invoke the existing handlers.
+
+These will be used at places where #MC recovery is handled correctly by the
+caller.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20210908132525.269689153@linutronix.de
+---
+ arch/x86/include/asm/extable_fixup_types.h | 3 +++
+ arch/x86/kernel/cpu/mce/severity.c         | 2 ++
+ arch/x86/mm/extable.c                      | 2 ++
+ 3 files changed, 7 insertions(+)
+
+diff --git a/arch/x86/include/asm/extable_fixup_types.h b/arch/x86/include/asm/extable_fixup_types.h
+index 0adc117618e6..409524d5d2eb 100644
+--- a/arch/x86/include/asm/extable_fixup_types.h
++++ b/arch/x86/include/asm/extable_fixup_types.h
+@@ -16,4 +16,7 @@
+ #define	EX_TYPE_WRMSR_IN_MCE		10
+ #define	EX_TYPE_RDMSR_IN_MCE		11
+ 
++#define	EX_TYPE_DEFAULT_MCE_SAFE	12
++#define	EX_TYPE_FAULT_MCE_SAFE		13
++
+ #endif
+diff --git a/arch/x86/kernel/cpu/mce/severity.c b/arch/x86/kernel/cpu/mce/severity.c
+index 74fe763bffda..d9b77a74f8d2 100644
+--- a/arch/x86/kernel/cpu/mce/severity.c
++++ b/arch/x86/kernel/cpu/mce/severity.c
+@@ -278,6 +278,8 @@ static int error_context(struct mce *m, struct pt_regs *regs)
+ 		m->kflags |= MCE_IN_KERNEL_COPYIN;
+ 		fallthrough;
+ 	case EX_TYPE_FAULT:
++	case EX_TYPE_FAULT_MCE_SAFE:
++	case EX_TYPE_DEFAULT_MCE_SAFE:
+ 		m->kflags |= MCE_IN_KERNEL_RECOV;
+ 		return IN_KERNEL_RECOV;
+ 	default:
+diff --git a/arch/x86/mm/extable.c b/arch/x86/mm/extable.c
+index 5db46df409b5..f37e290e6d0a 100644
+--- a/arch/x86/mm/extable.c
++++ b/arch/x86/mm/extable.c
+@@ -131,8 +131,10 @@ int fixup_exception(struct pt_regs *regs, int trapnr, unsigned long error_code,
+ 
+ 	switch (e->type) {
+ 	case EX_TYPE_DEFAULT:
++	case EX_TYPE_DEFAULT_MCE_SAFE:
+ 		return ex_handler_default(e, regs);
+ 	case EX_TYPE_FAULT:
++	case EX_TYPE_FAULT_MCE_SAFE:
+ 		return ex_handler_fault(e, regs, trapnr);
+ 	case EX_TYPE_UACCESS:
+ 		return ex_handler_uaccess(e, regs, trapnr);
+-- 
+2.31.1
+

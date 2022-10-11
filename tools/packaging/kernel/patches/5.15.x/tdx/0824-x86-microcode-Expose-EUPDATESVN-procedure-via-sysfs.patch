@@ -1,0 +1,196 @@
+From 04ecb960b2436b0d68a54bd2a2e8bce06a29ad2f Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Wed, 28 Apr 2021 02:42:39 +0800
+Subject: [PATCH 0824/1418] x86/microcode: Expose EUPDATESVN procedure via
+ sysfs
+
+EUPDATESVN is the SGX instruction which allows enclave attestation
+to include information about updated microcode without a reboot.
+
+Microcode updates which affect SGX require two phases:
+
+1. Do the main microcode update
+2. Make the new CPUSVN available for enclave attestation via
+   EUPDATESVN.
+
+Before a EUPDATESVN can succeed, all enclave pages (EPC) must be
+marked as unused in the SGX metadata (EPCM). This operation destroys
+all preexisting SGX enclave data and metadata. This is by design and
+mitigates the impact of vulnerabilities that may have compromised
+enclaves or the SGX hardware itself prior to the update.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/include/asm/microcode_intel.h |  2 +
+ arch/x86/include/asm/sgx.h             |  2 +
+ arch/x86/kernel/cpu/microcode/core.c   | 52 ++++++++++++++++++++++++++
+ arch/x86/kernel/cpu/microcode/intel.c  | 32 ++++++++++++++++
+ 4 files changed, 88 insertions(+)
+
+diff --git a/arch/x86/include/asm/microcode_intel.h b/arch/x86/include/asm/microcode_intel.h
+index ec19eeac535b..f6beb5edce8c 100644
+--- a/arch/x86/include/asm/microcode_intel.h
++++ b/arch/x86/include/asm/microcode_intel.h
+@@ -77,6 +77,7 @@ void reload_ucode_intel(void);
+ int collect_cpu_info_early(struct ucode_cpu_info *uci);
+ bool cpu_signatures_match(unsigned int s1, unsigned int p1,
+ 			  unsigned int s2, unsigned int p2);
++int update_cpusvn_intel(void);
+ #else
+ static inline __init void load_ucode_intel_bsp(void) {}
+ static inline void load_ucode_intel_ap(void) {}
+@@ -86,6 +87,7 @@ static inline void reload_ucode_intel(void) {}
+ static inline void collect_cpu_info_early(struct ucode_cpu_info *uci) {}
+ static inline void cpu_signatures_match(unsigned int s1, unsigned int p1,
+ 					unsigned int s2, unsigned int p2) {}
++static inline int update_cpusvn_intel(void) { return -1; }
+ #endif
+ 
+ #endif /* _ASM_X86_MICROCODE_INTEL_H */
+diff --git a/arch/x86/include/asm/sgx.h b/arch/x86/include/asm/sgx.h
+index 14a4ceb4075c..4d714b83dadb 100644
+--- a/arch/x86/include/asm/sgx.h
++++ b/arch/x86/include/asm/sgx.h
+@@ -26,6 +26,8 @@
+ #define SGX_CPUID_EPC_SECTION	0x1
+ /* The bitmask for the EPC section type. */
+ #define SGX_CPUID_EPC_MASK	GENMASK(3, 0)
++/* EUPDATESVN presence indication */
++#define SGX_CPUID_EUPDATESVN	BIT(10)
+ 
+ enum sgx_encls_function {
+ 	ECREATE		= 0x00,
+diff --git a/arch/x86/kernel/cpu/microcode/core.c b/arch/x86/kernel/cpu/microcode/core.c
+index d891a75115c1..e80261fc014a 100644
+--- a/arch/x86/kernel/cpu/microcode/core.c
++++ b/arch/x86/kernel/cpu/microcode/core.c
+@@ -38,6 +38,9 @@
+ #include <asm/processor.h>
+ #include <asm/cmdline.h>
+ #include <asm/setup.h>
++#include <asm/sgx.h>
++#include <asm/cpu.h>
++#include <asm/cpufeature.h>
+ 
+ #define DRIVER_VERSION	"2.2"
+ 
+@@ -802,6 +805,33 @@ static int mc_cpu_down_prep(unsigned int cpu)
+ 	return 0;
+ }
+ 
++static ssize_t svnupdate_store(struct device *dev,
++			    struct device_attribute *attr,
++			    const char *buf, size_t size)
++{
++	unsigned long val;
++	ssize_t ret = 0;
++
++	ret = kstrtoul(buf, 0, &val);
++	if (ret)
++		return ret;
++
++	if (val != 1)
++		return size;
++
++	mutex_lock(&microcode_mutex);
++
++	ret = update_cpusvn_intel();
++
++	mutex_unlock(&microcode_mutex);
++
++	if (ret == 0)
++		ret = size;
++
++	return ret;
++}
++static DEVICE_ATTR_WO(svnupdate);
++
+ static struct attribute *cpu_root_microcode_attrs[] = {
+ 	&dev_attr_reload.attr,
+ 	NULL
+@@ -815,6 +845,7 @@ static const struct attribute_group cpu_root_microcode_group = {
+ static int __init microcode_init(void)
+ {
+ 	struct cpuinfo_x86 *c = &boot_cpu_data;
++	unsigned int cpuid_level;
+ 	int error;
+ 
+ 	if (dis_ucode_ldr)
+@@ -855,6 +886,27 @@ static int __init microcode_init(void)
+ 		goto out_driver;
+ 	}
+ 
++	/*
++	 * Check CPUID directly. If SGX support bit is on
++	 * in CPUID level 0x00000007:0 (EBX), and EUPDAESVN
++	 * is enabled, allow svnupdate to occur even if
++	 * X86/FEATURE_SGX is clear. Future kexec()'s kernels
++	 * may want to use SGX.
++	 */
++	cpuid_level = cpuid_eax(0);
++	if ((cpuid_level >= 7) &&
++	    (cpuid_ebx(7) & (X86_FEATURE_SGX % 32)) &&
++	    (cpuid_eax(SGX_CPUID) & SGX_CPUID_EUPDATESVN)) {
++		error = sysfs_add_file_to_group(&cpu_subsys.dev_root->kobj,
++						&dev_attr_svnupdate.attr,
++						"microcode");
++
++		if (error) {
++			pr_err("Error creating microcode svnupdate file!\n");
++			goto out_ucode_group;
++		}
++	}
++
+ 	error = microcode_dev_init();
+ 	if (error)
+ 		goto out_ucode_group;
+diff --git a/arch/x86/kernel/cpu/microcode/intel.c b/arch/x86/kernel/cpu/microcode/intel.c
+index d47ad82d6e79..feeb2eabee03 100644
+--- a/arch/x86/kernel/cpu/microcode/intel.c
++++ b/arch/x86/kernel/cpu/microcode/intel.c
+@@ -37,6 +37,7 @@
+ #include <asm/setup.h>
+ #include <asm/msr.h>
+ #include <asm/cpu.h>
++#include <asm/sgx.h>
+ 
+ static const char ucode_path[] = "kernel/x86/microcode/GenuineIntel.bin";
+ 
+@@ -1003,3 +1004,34 @@ struct microcode_ops * __init init_intel_microcode(void)
+ 
+ 	return &microcode_intel_ops;
+ }
++
++int update_cpusvn_intel(void)
++{
++	int ret;
++
++	sgx_lock_epc();
++	ret = sgx_zap_pages();
++	if (ret)
++		goto out;
++
++	ret = sgx_updatesvn();
++	pr_info("SGX EUPDATESVN is complete with %d\n", ret);
++
++	switch (ret) {
++	case 0:
++	case SGX_NO_UPDATE:
++		ret = 0;
++		break;
++	case SGX_EPC_NOT_READY:
++		ret = -EBUSY;
++		break;
++	default:
++		ret = -1;
++		break;
++	}
++
++out:
++	sgx_unlock_epc();
++
++	return ret;
++}
+-- 
+2.31.1
+

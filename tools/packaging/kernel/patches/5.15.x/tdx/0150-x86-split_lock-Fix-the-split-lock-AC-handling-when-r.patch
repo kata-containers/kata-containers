@@ -1,0 +1,43 @@
+From 3627f885373d91f8075978fd045ecb25066327f4 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Sat, 19 Jun 2021 12:58:20 +0800
+Subject: [PATCH 0150/1418] x86/split_lock: Fix the split lock #AC handling
+ when running as guest
+
+If running as guest and hypervisor enables
+MSR_TEST_CTRL.SPLIT_LOCK_DETECT during its running, it can get split
+lock #AC even though sld_state is sld_off.
+
+For kernel mode #AC, it always dies("split lock"), no more action
+needed.
+
+For user mode #AC, it should treat sld_off (default state when feature
+is not available) as fatal as well.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/cpu/intel.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/intel.c b/arch/x86/kernel/cpu/intel.c
+index 8321c43554a1..d6c7ca93e388 100644
+--- a/arch/x86/kernel/cpu/intel.c
++++ b/arch/x86/kernel/cpu/intel.c
+@@ -1173,7 +1173,12 @@ static void bus_lock_init(void)
+ 
+ bool handle_user_split_lock(struct pt_regs *regs, long error_code)
+ {
+-	if ((regs->flags & X86_EFLAGS_AC) || sld_state == sld_fatal)
++	/*
++	 * In virtualization environment, it can get split lock #AC even when
++	 * sld_off but hypervisor enables it.
++	 * Thus only handles when sld_warn explicitly.
++	 */
++	if ((regs->flags & X86_EFLAGS_AC) || sld_state != sld_warn)
+ 		return false;
+ 	split_lock_warn(regs->ip);
+ 	return true;
+-- 
+2.31.1
+

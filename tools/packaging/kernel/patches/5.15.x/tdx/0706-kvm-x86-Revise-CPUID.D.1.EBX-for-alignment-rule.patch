@@ -1,0 +1,35 @@
+From 080e3d152364fedb3af17b474e5237e0f081de80 Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Thu, 21 Jan 2021 11:14:16 -0500
+Subject: [PATCH 0706/1418] kvm: x86: Revise CPUID.D.1.EBX for alignment rule
+
+CPUID.0xD.1.EBX[1] is set if, when the compacted format of an XSAVE
+area is used, this extended state component located on the next
+64-byte boundary following the preceding state component (otherwise,
+it is located immediately following the preceding state component).
+
+AMX tileconfig and tiledata are the first to use 64B alignment.
+Revise the runtime cpuid modification for this rule.
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+---
+ arch/x86/kvm/cpuid.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c
+index 110eb0f58239..5254c8f7b7bd 100644
+--- a/arch/x86/kvm/cpuid.c
++++ b/arch/x86/kvm/cpuid.c
+@@ -43,7 +43,8 @@ static u32 xstate_required_size(u64 xstate_bv, bool compacted)
+ 		if (xstate_bv & 0x1) {
+ 		        u32 eax, ebx, ecx, edx, offset;
+ 		        cpuid_count(0xD, feature_bit, &eax, &ebx, &ecx, &edx);
+-			offset = compacted ? ret : ebx;
++			/* ECX[2]: 64B alignment in compacted form */
++			offset = compacted ? ((ecx & 0x2) ? ALIGN(ret, 64) : ret) : ebx;
+ 			ret = max(ret, offset + eax);
+ 		}
+ 
+-- 
+2.31.1
+

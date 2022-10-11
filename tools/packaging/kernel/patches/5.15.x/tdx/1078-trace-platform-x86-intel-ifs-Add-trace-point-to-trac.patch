@@ -1,0 +1,86 @@
+From 8e10554f91d2e1d45bd262eb56aef4682b75c281 Mon Sep 17 00:00:00 2001
+From: Jithu Joseph <jithu.joseph@intel.com>
+Date: Thu, 24 Feb 2022 10:59:05 -0800
+Subject: [PATCH 1078/1418] trace: platform/x86/intel/ifs: Add trace point to
+ track Intel IFS operations
+
+Add tracing support which may be useful for debugging systems that fail to complete
+In Field Scan tests.
+
+Signed-off-by: Jithu Joseph <jithu.joseph@intel.com>
+---
+ drivers/platform/x86/intel/ifs/core.c |  5 ++++
+ include/trace/events/ifs.h            | 38 +++++++++++++++++++++++++++
+ 2 files changed, 43 insertions(+)
+ create mode 100644 include/trace/events/ifs.h
+
+diff --git a/drivers/platform/x86/intel/ifs/core.c b/drivers/platform/x86/intel/ifs/core.c
+index 5facc935ec91..a1c81a9ef062 100644
+--- a/drivers/platform/x86/intel/ifs/core.c
++++ b/drivers/platform/x86/intel/ifs/core.c
+@@ -13,6 +13,9 @@
+ 
+ #include "ifs.h"
+ 
++#define CREATE_TRACE_POINTS
++#include <trace/events/ifs.h>
++
+ static enum cpuhp_state cpuhp_scan_state;
+ struct ifs_params ifs_params;
+ int cpu_sibl_ct;
+@@ -207,6 +210,8 @@ static int scan_test_worker(void *info)
+ 
+ 			rdmsrl(MSR_SCAN_STATUS, status.data);
+ 
++			trace_ifs_status(activate, status);
++
+ 			/* Some cases can be retried, give up for others */
+ 			if (!can_restart(status))
+ 				break;
+diff --git a/include/trace/events/ifs.h b/include/trace/events/ifs.h
+new file mode 100644
+index 000000000000..3c6ef33c7b3b
+--- /dev/null
++++ b/include/trace/events/ifs.h
+@@ -0,0 +1,38 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#undef TRACE_SYSTEM
++#define TRACE_SYSTEM ifs
++
++#if !defined(_TRACE_IFS_H) || defined(TRACE_HEADER_MULTI_READ)
++#define _TRACE_IFS_H
++
++#include <linux/ktime.h>
++#include <linux/tracepoint.h>
++
++TRACE_EVENT(ifs_status,
++
++	TP_PROTO(union ifs_scan activate, union ifs_status status),
++
++	TP_ARGS(activate, status),
++
++	TP_STRUCT__entry(
++		__field(	u8,	start	)
++		__field(	u8,	stop	)
++		__field(	u64,	status	)
++	),
++
++	TP_fast_assign(
++		__entry->start	= activate.start;
++		__entry->stop	= activate.stop;
++		__entry->status	= status.data;
++	),
++
++	TP_printk("start: %.2x, stop: %.2x, status: %llx",
++		__entry->start,
++		__entry->stop,
++		__entry->status)
++);
++
++#endif /* _TRACE_IFS_H */
++
++/* This part must be outside protection */
++#include <trace/define_trace.h>
+-- 
+2.31.1
+

@@ -1,0 +1,118 @@
+From 2461cd6060c36b8be72a709c17bddfb0345403fc Mon Sep 17 00:00:00 2001
+From: Lin Ma <linma@zju.edu.cn>
+Date: Tue, 16 Nov 2021 23:27:32 +0800
+Subject: [PATCH 1301/1418] NFC: add NCI_UNREG flag to eliminate the race
+
+There are two sites that calls queue_work() after the
+destroy_workqueue() and lead to possible UAF.
+
+The first site is nci_send_cmd(), which can happen after the
+nci_close_device as below
+
+nfcmrvl_nci_unregister_dev   |  nfc_genl_dev_up
+  nci_close_device           |
+    flush_workqueue          |
+    del_timer_sync           |
+  nci_unregister_device      |    nfc_get_device
+    destroy_workqueue        |    nfc_dev_up
+    nfc_unregister_device    |      nci_dev_up
+      device_del             |        nci_open_device
+                             |          __nci_request
+                             |            nci_send_cmd
+                             |              queue_work !!!
+
+Another site is nci_cmd_timer, awaked by the nci_cmd_work from the
+nci_send_cmd.
+
+  ...                        |  ...
+  nci_unregister_device      |  queue_work
+    destroy_workqueue        |
+    nfc_unregister_device    |  ...
+      device_del             |  nci_cmd_work
+                             |  mod_timer
+                             |  ...
+                             |  nci_cmd_timer
+                             |    queue_work !!!
+
+For the above two UAF, the root cause is that the nfc_dev_up can race
+between the nci_unregister_device routine. Therefore, this patch
+introduce NCI_UNREG flag to easily eliminate the possible race. In
+addition, the mutex_lock in nci_close_device can act as a barrier.
+
+Signed-off-by: Lin Ma <linma@zju.edu.cn>
+Fixes: 6a2968aaf50c ("NFC: basic NCI protocol implementation")
+Reviewed-by: Jakub Kicinski <kuba@kernel.org>
+Reviewed-by: Krzysztof Kozlowski <krzysztof.kozlowski@canonical.com>
+Link: https://lore.kernel.org/r/20211116152732.19238-1-linma@zju.edu.cn
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ include/net/nfc/nci_core.h |  1 +
+ net/nfc/nci/core.c         | 19 +++++++++++++++++--
+ 2 files changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/include/net/nfc/nci_core.h b/include/net/nfc/nci_core.h
+index a964daedc17b..ea8595651c38 100644
+--- a/include/net/nfc/nci_core.h
++++ b/include/net/nfc/nci_core.h
+@@ -30,6 +30,7 @@ enum nci_flag {
+ 	NCI_UP,
+ 	NCI_DATA_EXCHANGE,
+ 	NCI_DATA_EXCHANGE_TO,
++	NCI_UNREG,
+ };
+ 
+ /* NCI device states */
+diff --git a/net/nfc/nci/core.c b/net/nfc/nci/core.c
+index 39994dbb6a55..e41e2e9e5498 100644
+--- a/net/nfc/nci/core.c
++++ b/net/nfc/nci/core.c
+@@ -476,6 +476,11 @@ static int nci_open_device(struct nci_dev *ndev)
+ 
+ 	mutex_lock(&ndev->req_lock);
+ 
++	if (test_bit(NCI_UNREG, &ndev->flags)) {
++		rc = -ENODEV;
++		goto done;
++	}
++
+ 	if (test_bit(NCI_UP, &ndev->flags)) {
+ 		rc = -EALREADY;
+ 		goto done;
+@@ -548,6 +553,10 @@ static int nci_open_device(struct nci_dev *ndev)
+ static int nci_close_device(struct nci_dev *ndev)
+ {
+ 	nci_req_cancel(ndev, ENODEV);
++
++	/* This mutex needs to be held as a barrier for
++	 * caller nci_unregister_device
++	 */
+ 	mutex_lock(&ndev->req_lock);
+ 
+ 	if (!test_and_clear_bit(NCI_UP, &ndev->flags)) {
+@@ -585,8 +594,8 @@ static int nci_close_device(struct nci_dev *ndev)
+ 
+ 	del_timer_sync(&ndev->cmd_timer);
+ 
+-	/* Clear flags */
+-	ndev->flags = 0;
++	/* Clear flags except NCI_UNREG */
++	ndev->flags &= BIT(NCI_UNREG);
+ 
+ 	mutex_unlock(&ndev->req_lock);
+ 
+@@ -1273,6 +1282,12 @@ void nci_unregister_device(struct nci_dev *ndev)
+ {
+ 	struct nci_conn_info *conn_info, *n;
+ 
++	/* This set_bit is not protected with specialized barrier,
++	 * However, it is fine because the mutex_lock(&ndev->req_lock);
++	 * in nci_close_device() will help to emit one.
++	 */
++	set_bit(NCI_UNREG, &ndev->flags);
++
+ 	nci_close_device(ndev);
+ 
+ 	destroy_workqueue(ndev->cmd_wq);
+-- 
+2.31.1
+

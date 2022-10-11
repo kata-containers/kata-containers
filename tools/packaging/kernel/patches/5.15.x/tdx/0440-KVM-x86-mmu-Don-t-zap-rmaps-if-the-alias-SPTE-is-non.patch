@@ -1,0 +1,96 @@
+From 0a37e95540c1ccf881a336ef200179c16abbb3b8 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Mon, 12 Jul 2021 20:54:00 +0800
+Subject: [PATCH 0440/1418] KVM: x86/mmu: Don't zap rmaps if the alias SPTE is
+ non-present
+
+In current design, to set up a private/shared mapping for a gfn, the
+alias SPTE is zapped first. Current code skips zapping rmaps in some
+cases but doesn't do it for the case where a private SPTE is to be set
+up while the shared alias SPTE is non-present. This leads to unnecessary
+rmap zapping and tlb flushing and severe performance drop.
+
+A problematic call trace in TDX's case is:
+CPU 5/KVM 170597.159307: kvm:kvm_sept_seamcall: op: 39 gpa: 0x1a484000
+CPU 1/KVM 170597.159313: kvm:kvm_sept_seamcall: op: 7 gpa: 0x1a484000
+CPU 1/KVM 170597.159352: kvm:kvm_sept_seamcall: op: 39 gpa: 0x1a484000
+CPU 4/KVM 170597.159361: kvm:kvm_sept_seamcall: op: 7 gpa: 0x1a484000
+CPU 4/KVM 170597.159399: kvm:kvm_sept_seamcall: op: 39 gpa: 0x1a484000
+CPU 0/KVM 170597.159405: kvm:kvm_sept_seamcall: op: 7 gpa: 0x1a484000
+CPU 0/KVM 170597.159444: kvm:kvm_sept_seamcall: op: 39 gpa: 0x1a484000
+CPU 2/KVM 170597.159450: kvm:kvm_sept_seamcall: op: 7 gpa: 0x1a484000
+CPU 2/KVM 170597.159490: kvm:kvm_sept_seamcall: op: 39 gpa: 0x1a484000
+CPU 7/KVM 170597.159496: kvm:kvm_sept_seamcall: op: 7 gpa: 0x1a484000
+CPU 7/KVM 170597.159535: kvm:kvm_sept_seamcall: op: 39 gpa: 0x1a484000
+CPU 3/KVM 170597.159541: kvm:kvm_sept_seamcall: op: 7 gpa: 0x1a484000
+CPU 3/KVM 170597.159580: kvm:kvm_sept_seamcall: op: 39 gpa: 0x1a484000
+CPU 5/KVM 170597.159586: kvm:kvm_sept_seamcall: op: 7 gpa: 0x1a484000
+CPU 5/KVM 170597.159625: kvm:kvm_sept_seamcall: op: 39 gpa: 0x1a484000
+...
+
+Multiple vCPUs tried to fix an EPT violation with the same gpa
+simultaneously. The first vCPU fixed the EPT violation by unblocking the
+mapping of a gfn. Following vCPUs didn't check if alias SPTE was
+non-present (i.e. already removed by previous CPUs); it called
+__kvm_zap_rmapp() to block the established mapping and unblocked it later
+in __direct_map(). It made the gpa unaccessible again for a while.
+If it was coincident with previous vCPUs's re-execution of the
+instruction that caused the last EPT violation, the same EPT violation
+happened again. In an extreme case, no vCPU could make any progress.
+Sometimes, I saw this situation lasted for 8 seconds.
+
+Fix this issue by skipping unnecessary rmap zapping if the alias SPTE is
+non-present. Note that zapped private SPTEs are allowed to proceed as
+they need to be removed by the following drop_spte() before creating a
+shared SPTE.
+
+Fixes: 7759f168c426 ("KVM: x86/mmu: Frame in support for private/inaccessible shadow pages")
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 23 ++++++++++++++++++++++-
+ 1 file changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 328dde0ab1a8..8537e3fa6b18 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -3255,14 +3255,35 @@ static void kvm_mmu_zap_alias_spte(struct kvm_vcpu *vcpu, gfn_t gfn,
+ 	struct rmap_iterator iter;
+ 	struct kvm_mmu_page *sp;
+ 	u64 *sptep;
++	u64 spte;
+ 
+ 	for_each_shadow_entry(vcpu, gpa_alias, it) {
+ 		if (!is_shadow_present_pte(*it.sptep))
+ 			break;
+ 	}
+ 
++	spte = *it.sptep;
+ 	sp = sptep_to_sp(it.sptep);
+-	if (!is_last_spte(*it.sptep, sp->role.level))
++
++	if (!is_last_spte(spte, sp->role.level))
++		return;
++
++	/*
++	 * multiple vcpus can race to zap same alias spte when vcpus caused EPT
++	 * violation on same gpa and come to __direct_map() at the same time.
++	 * In such case, __direct_map() handles it as spurious.
++	 *
++	 * rmap (or __kvm_zap_rmapp()) doesn't distinguish private/shared gpa.
++	 * And rmap is not supposed to co-exit with both shared and private
++	 * spte.  Check if other vcpu already zapped alias and established rmap
++	 * for same gpa to avoid zapping faulting gpa.
++	 *
++	 * shared  gpa_alias: !is_shadow_present_pte(spte)
++	 *                    is_zapped_private_pte(spte) is always false
++	 * private gpa_alias: !is_shadow_present_pte(spte) &&
++	 *                    !is_zapped_private_pte(spte)
++	 */
++	if (!is_shadow_present_pte(spte) && !is_zapped_private_pte(spte))
+ 		return;
+ 
+ 	slots = kvm_memslots_for_spte_role(kvm, sp->role);
+-- 
+2.31.1
+

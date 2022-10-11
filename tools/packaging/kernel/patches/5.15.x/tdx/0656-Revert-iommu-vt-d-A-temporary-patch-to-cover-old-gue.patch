@@ -1,0 +1,30 @@
+From 5ecde1946583a31480afd9e2881a0ed9f2649001 Mon Sep 17 00:00:00 2001
+From: Fenghua Yu <fenghua.yu@intel.com>
+Date: Thu, 20 May 2021 23:46:44 +0000
+Subject: [PATCH 0656/1418] Revert "iommu/vt-d: A temporary patch to cover old
+ guest"
+
+This reverts commit 5968d1cb2e4716e1d0056cc7a161407e44a77420.
+---
+ drivers/iommu/intel/iommu.c | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index eb8f15f68e95..d799f156ee64 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -2032,11 +2032,6 @@ static inline void
+ context_set_sm_rid2pasid(struct context_entry *context, unsigned long pasid)
+ {
+ 	context->hi |= pasid & ((1 << 20) - 1);
+-	/* TODO: rid_priv should be 1. Otherwise the PRQ w/o pasid generated.
+-	 * The root cause is that the guest PTE U/S bit is not set to 1. Ideally,
+-	 * the guest kernel should set it.
+-	 */
+-	context->hi |= (1 << 20);
+ }
+ 
+ /*
+-- 
+2.31.1
+

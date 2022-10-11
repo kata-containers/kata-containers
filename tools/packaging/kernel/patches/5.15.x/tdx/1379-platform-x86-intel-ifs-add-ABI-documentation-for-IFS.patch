@@ -1,0 +1,69 @@
+From 2fc6bffd185109008bc38bc0115fd4b8f7c77678 Mon Sep 17 00:00:00 2001
+From: Jithu Joseph <jithu.joseph@intel.com>
+Date: Fri, 6 May 2022 15:54:09 -0700
+Subject: [PATCH 1379/1418] platform/x86/intel/ifs: add ABI documentation for
+ IFS
+
+Add the sysfs attributes in ABI/testing for In-Field Scan.
+
+Reviewed-by: Dan Williams <dan.j.williams@intel.com>
+Signed-off-by: Jithu Joseph <jithu.joseph@intel.com>
+Co-developed-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Tony Luck <tony.luck@intel.com>
+Acked-by: Hans de Goede <hdegoede@redhat.com>
+Reviewed-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Link: https://lore.kernel.org/r/20220506225410.1652287-12-tony.luck@intel.com
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+---
+ .../ABI/testing/sysfs-platform-intel-ifs      | 39 +++++++++++++++++++
+ 1 file changed, 39 insertions(+)
+ create mode 100644 Documentation/ABI/testing/sysfs-platform-intel-ifs
+
+diff --git a/Documentation/ABI/testing/sysfs-platform-intel-ifs b/Documentation/ABI/testing/sysfs-platform-intel-ifs
+new file mode 100644
+index 000000000000..486d6d2ff8a0
+--- /dev/null
++++ b/Documentation/ABI/testing/sysfs-platform-intel-ifs
+@@ -0,0 +1,39 @@
++What:		/sys/devices/virtual/misc/intel_ifs_<N>/run_test
++Date:		April 21 2022
++KernelVersion:	5.19
++Contact:	"Jithu Joseph" <jithu.joseph@intel.com>
++Description:	Write <cpu#> to trigger IFS test for one online core.
++		Note that the test is per core. The cpu# can be
++		for any thread on the core. Running on one thread
++		completes the test for the core containing that thread.
++		Example: to test the core containing cpu5: echo 5 >
++		/sys/devices/platform/intel_ifs.<N>/run_test
++
++What:		/sys/devices/virtual/misc/intel_ifs_<N>/status
++Date:		April 21 2022
++KernelVersion:	5.19
++Contact:	"Jithu Joseph" <jithu.joseph@intel.com>
++Description:	The status of the last test. It can be one of "pass", "fail"
++		or "untested".
++
++What:		/sys/devices/virtual/misc/intel_ifs_<N>/details
++Date:		April 21 2022
++KernelVersion:	5.19
++Contact:	"Jithu Joseph" <jithu.joseph@intel.com>
++Description:	Additional information regarding the last test. The details file reports
++		the hex value of the SCAN_STATUS MSR. Note that the error_code field
++		may contain driver defined software code not defined in the Intel SDM.
++
++What:		/sys/devices/virtual/misc/intel_ifs_<N>/image_version
++Date:		April 21 2022
++KernelVersion:	5.19
++Contact:	"Jithu Joseph" <jithu.joseph@intel.com>
++Description:	Version (hexadecimal) of loaded IFS binary image. If no scan image
++		is loaded reports "none".
++
++What:		/sys/devices/virtual/misc/intel_ifs_<N>/reload
++Date:		April 21 2022
++KernelVersion:	5.19
++Contact:	"Jithu Joseph" <jithu.joseph@intel.com>
++Description:	Write "1" (or "y" or "Y") to reload the IFS image from
++		/lib/firmware/intel/ifs/ff-mm-ss.scan.
+-- 
+2.31.1
+

@@ -1,0 +1,139 @@
+From 22b3e95d0f810863dad41b4f72f06e078de31c1d Mon Sep 17 00:00:00 2001
+From: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Date: Thu, 2 Dec 2021 05:02:26 -0800
+Subject: [PATCH 0985/1418] IDXD_MDEV: Fix the order of resuming IMS entries
+ and resubmitting the queued descriptors. Before this fix, we were submitting
+ the descriptors before setting up the IMS entries which could cause
+ descriptor failures at DSA.
+
+---
+ drivers/vfio/mdev/idxd/mdev.c | 52 +++++++++++++++++------------------
+ 1 file changed, 26 insertions(+), 26 deletions(-)
+
+diff --git a/drivers/vfio/mdev/idxd/mdev.c b/drivers/vfio/mdev/idxd/mdev.c
+index 1bfae9377c7f..3a267908d74d 100644
+--- a/drivers/vfio/mdev/idxd/mdev.c
++++ b/drivers/vfio/mdev/idxd/mdev.c
+@@ -347,30 +347,30 @@ static void vidxd_source_prepare_for_migration(struct vdcm_idxd *vidxd)
+ 	memcpy(data_ptr + offset, (u8 *)&vidxd->bar0, sizeof(vidxd->bar0));
+ 	offset += sizeof(vidxd->bar0);
+ 
+-	/* Save the queued descriptors */
+-	for (i = 0; i < vidxd->num_wqs; i++) {
+-		struct idxd_wq_desc_elem *el;
+-
+-		vwq = &vidxd->vwq;
+-		memcpy(data_ptr + offset, (u8 *)&vwq->ndescs, sizeof(vwq->ndescs));
+-		offset += sizeof(vwq->ndescs);
+-		list_for_each_entry(el, &vwq->head, link) {
+-			dev_dbg(dev, "Saving descriptor at offset %x\n", offset);
+-			memcpy(data_ptr + offset, (u8 *)el, sizeof(*el));
+-			offset += sizeof(*el);
+-		}
+-	}
+-
+ 	/* Save int handle info */
+ 	for (i = 1; i < VIDXD_MAX_MSIX_VECS; i++) {
+ 		u32 ims_idx = dev_msi_hwirq(dev, i - 1);
+ 
+ 		/* Save the current handle in use */
+-		dev_dbg(dev, "Saving handle %d at offset %x\n", ims_idx, offset);
++		pr_info("Saving handle %d at offset %x\n", ims_idx, offset);
+ 		memcpy(data_ptr + offset, (u8 *)&ims_idx, sizeof(ims_idx));
+ 		offset += sizeof(ims_idx);
+ 	}
+ 
++        /* Save the queued descriptors */
++        for (i = 0; i < vidxd->num_wqs; i++) {
++                struct idxd_wq_desc_elem *el;
++                vwq = &vidxd->vwq;
++
++                memcpy(data_ptr + offset, (u8 *)&vwq->ndescs, sizeof(vwq->ndescs));
++                offset += sizeof(vwq->ndescs);
++                list_for_each_entry(el, &vwq->head, link) {
++                        printk("Saving descriptor at offset %x\n", offset);
++                        memcpy(data_ptr + offset, (u8 *)el, sizeof(*el));
++                        offset += sizeof(*el);
++                }
++        }
++
+ 	mig_info->data_size = offset - mig_info->data_offset;
+ 	mig_info->pending_bytes = offset - mig_info->data_offset;
+ 
+@@ -497,8 +497,8 @@ static unsigned int vidxd_dest_load_state(struct vdcm_idxd *vidxd)
+ 	return offset;
+ }
+ 
+-static int vidxd_dest_int_handle_revocation (struct vdcm_idxd *vidxd,
+-		unsigned int *offset)
++static int vidxd_resume_ims_state (struct vdcm_idxd *vidxd,
++		unsigned int *offset, bool *int_handle_revoked)
+ {
+ 	struct vfio_pci_core_device *vdev = &vidxd->vfio_pdev;
+ 	u8 *data_ptr = (u8 *)vdev->mig_pages;
+@@ -507,7 +507,6 @@ static int vidxd_dest_int_handle_revocation (struct vdcm_idxd *vidxd,
+ 	int rc = 0;
+ 	struct mdev_device *mdev = vidxd->ivdev.mdev;
+ 	struct device *dev = mdev_dev(mdev);
+-	bool int_handle_revoked = false;
+ 
+ 	/* Restore int handle info */
+ 	for (i = 1; i < VIDXD_MAX_MSIX_VECS; i++) {
+@@ -527,7 +526,7 @@ static int vidxd_dest_int_handle_revocation (struct vdcm_idxd *vidxd,
+ 
+ 		if (revoked_handle != ims_idx) {
+ 			/* Int Handle Revoked */
+-			int_handle_revoked = true;
++			*int_handle_revoked = true;
+ 		}
+ 
+ 		perm_val = *(u32 *)(bar0 + VIDXD_MSIX_PERM_OFFSET + i * 8);
+@@ -552,9 +551,6 @@ static int vidxd_dest_int_handle_revocation (struct vdcm_idxd *vidxd,
+ 		}
+ 	}
+ 
+-	if (int_handle_revoked)
+-                vidxd_notify_revoked_handles(vidxd);
+-
+ 	return rc;
+ }
+ 
+@@ -625,6 +621,7 @@ static int vidxd_dest_complete_migration(struct vdcm_idxd *vidxd)
+ {
+ 	int rc = 0;
+ 	unsigned int offset;
++	bool int_handle_revoked = false;
+ 
+ 	offset = vidxd_dest_load_state(vidxd);
+ 
+@@ -635,20 +632,23 @@ static int vidxd_dest_complete_migration(struct vdcm_idxd *vidxd)
+ 		return rc;
+ 	}
+ 
+-	rc = vidxd_resubmit_pending_descs(vidxd, &offset);
++	rc = vidxd_resume_ims_state(vidxd, &offset, &int_handle_revoked);
+ 
+ 	if (rc) {
+-		pr_info("vidxd pending descs handling failed %d\n", rc);
++		pr_info("vidxd int handle revocation handling failed %d\n", rc);
+ 		return rc;
+ 	}
+ 
+-	rc = vidxd_dest_int_handle_revocation(vidxd, &offset);
++	rc = vidxd_resubmit_pending_descs(vidxd, &offset);
+ 
+ 	if (rc) {
+-		pr_info("vidxd int handle revocation handling failed %d\n", rc);
++		pr_info("vidxd pending descs handling failed %d\n", rc);
+ 		return rc;
+ 	}
+ 
++	if (int_handle_revoked)
++                vidxd_notify_revoked_handles(vidxd);
++
+ 	return rc;
+ }
+ 
+-- 
+2.31.1
+

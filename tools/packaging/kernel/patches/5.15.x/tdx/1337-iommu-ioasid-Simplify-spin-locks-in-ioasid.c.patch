@@ -1,0 +1,175 @@
+From 874a50e6f0dc050a778c1b460167903015cf3587 Mon Sep 17 00:00:00 2001
+From: Lu Baolu <baolu.lu@linux.intel.com>
+Date: Thu, 21 Apr 2022 16:47:11 +0800
+Subject: [PATCH 1337/1418] iommu/ioasid: Simplify spin locks in ioasid.c
+
+Two spin locks are usded in ioasid.c. As all paths are slow ones, use a
+global one to make things simple. Make sure that the spin lock is held
+when a notifier is registered/unregistered/notified.
+
+Signed-off-by: Lu Baolu <baolu.lu@linux.intel.com>
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/ioasid.c | 38 ++++++++++++++++++--------------------
+ 1 file changed, 18 insertions(+), 20 deletions(-)
+
+diff --git a/drivers/iommu/ioasid.c b/drivers/iommu/ioasid.c
+index d6698c7bad6c..33ed0967018c 100644
+--- a/drivers/iommu/ioasid.c
++++ b/drivers/iommu/ioasid.c
+@@ -24,7 +24,6 @@
+ static ATOMIC_NOTIFIER_HEAD(ioasid_notifier);
+ /* List to hold pending notification block registrations */
+ static LIST_HEAD(ioasid_nb_pending_list);
+-static DEFINE_SPINLOCK(ioasid_nb_lock);
+ 
+ /* Default to PCIe standard 20 bit PASID */
+ #define PCI_PASID_MAX 0x100000
+@@ -459,6 +458,7 @@ static int ioasid_notify(struct ioasid_data *data,
+ 	struct ioasid_nb_args args = { 0 };
+ 	int ret = 0;
+ 
++	assert_spin_locked(&ioasid_allocator_lock);
+ 	if (flags & ~(IOASID_NOTIFY_FLAG_ALL | IOASID_NOTIFY_FLAG_SET))
+ 		return -EINVAL;
+ 
+@@ -584,13 +584,14 @@ static void ioasid_add_pending_nb(struct ioasid_set *set)
+ {
+ 	struct ioasid_set_nb *curr;
+ 
++	assert_spin_locked(&ioasid_allocator_lock);
++
+ 	if (set->type != IOASID_SET_TYPE_MM)
+ 		return;
+ 	/*
+ 	 * Check if there are any pending nb requests for the given token, if so
+ 	 * add them to the notifier chain.
+ 	 */
+-	spin_lock(&ioasid_nb_lock);
+ 	list_for_each_entry(curr, &ioasid_nb_pending_list, list) {
+ 		if (curr->token == set->token && !curr->active) {
+ 			atomic_notifier_chain_register(&set->nh, curr->nb);
+@@ -598,7 +599,6 @@ static void ioasid_add_pending_nb(struct ioasid_set *set)
+ 			curr->active = true;
+ 		}
+ 	}
+-	spin_unlock(&ioasid_nb_lock);
+ }
+ 
+ /**
+@@ -755,9 +755,7 @@ int ioasid_set_free(struct ioasid_set *set)
+ 	int ret = 0;
+ 
+ 	spin_lock(&ioasid_allocator_lock);
+-	spin_lock(&ioasid_nb_lock);
+ 	ret = ioasid_set_free_locked(set);
+-	spin_unlock(&ioasid_nb_lock);
+ 	spin_unlock(&ioasid_allocator_lock);
+ 	return ret;
+ }
+@@ -945,13 +943,11 @@ void ioasid_free_all_in_set(struct ioasid_set *set)
+ 	if (!atomic_read(&set->nr_ioasids))
+ 		return;
+ 	spin_lock(&ioasid_allocator_lock);
+-	spin_lock(&ioasid_nb_lock);
+ 	xa_for_each(&set->xa, index, entry) {
+ 		ioasid_free_locked(set, index);
+ 		/* Free from per set private pool */
+ 		xa_erase(&set->xa, index);
+ 	}
+-	spin_unlock(&ioasid_nb_lock);
+ 	spin_unlock(&ioasid_allocator_lock);
+ }
+ EXPORT_SYMBOL_GPL(ioasid_free_all_in_set);
+@@ -1202,10 +1198,16 @@ EXPORT_SYMBOL_GPL(ioasid_find);
+ 
+ int ioasid_register_notifier(struct ioasid_set *set, struct notifier_block *nb)
+ {
++	int ret;
++
++	spin_lock(&ioasid_allocator_lock);
+ 	if (set)
+-		return atomic_notifier_chain_register(&set->nh, nb);
++		ret = atomic_notifier_chain_register(&set->nh, nb);
+ 	else
+-		return atomic_notifier_chain_register(&ioasid_notifier, nb);
++		ret = atomic_notifier_chain_register(&ioasid_notifier, nb);
++	spin_unlock(&ioasid_allocator_lock);
++
++	return ret;
+ }
+ EXPORT_SYMBOL_GPL(ioasid_register_notifier);
+ 
+@@ -1214,7 +1216,7 @@ void ioasid_unregister_notifier(struct ioasid_set *set,
+ {
+ 	struct ioasid_set_nb *curr;
+ 
+-	spin_lock(&ioasid_nb_lock);
++	spin_lock(&ioasid_allocator_lock);
+ 	/*
+ 	 * Pending list is registered with a token without an ioasid_set,
+ 	 * therefore should not be unregistered directly.
+@@ -1222,16 +1224,16 @@ void ioasid_unregister_notifier(struct ioasid_set *set,
+ 	list_for_each_entry(curr, &ioasid_nb_pending_list, list) {
+ 		if (curr->nb == nb) {
+ 			pr_warn("Cannot unregister NB from pending list\n");
+-			spin_unlock(&ioasid_nb_lock);
+-			return;
++			goto out_unlock;
+ 		}
+ 	}
+-	spin_unlock(&ioasid_nb_lock);
+ 
+ 	if (set)
+ 		atomic_notifier_chain_unregister(&set->nh, nb);
+ 	else
+ 		atomic_notifier_chain_unregister(&ioasid_notifier, nb);
++out_unlock:
++	spin_unlock(&ioasid_allocator_lock);
+ }
+ EXPORT_SYMBOL_GPL(ioasid_unregister_notifier);
+ 
+@@ -1254,7 +1256,6 @@ int ioasid_register_notifier_mm(struct mm_struct *mm, struct notifier_block *nb)
+ 	int ret = 0;
+ 
+ 	spin_lock(&ioasid_allocator_lock);
+-	spin_lock(&ioasid_nb_lock);
+ 	/* Check for duplicates, nb is unique per set */
+ 	list_for_each_entry(curr, &ioasid_nb_pending_list, list) {
+ 		if (curr->token == mm && curr->nb == nb) {
+@@ -1299,7 +1300,6 @@ int ioasid_register_notifier_mm(struct mm_struct *mm, struct notifier_block *nb)
+ exit_free:
+ 	kfree(curr);
+ exit_unlock:
+-	spin_unlock(&ioasid_nb_lock);
+ 	spin_unlock(&ioasid_allocator_lock);
+ 	return ret;
+ }
+@@ -1315,21 +1315,19 @@ void ioasid_unregister_notifier_mm(struct mm_struct *mm, struct notifier_block *
+ {
+ 	struct ioasid_set_nb *curr;
+ 
+-	spin_lock(&ioasid_nb_lock);
++	spin_lock(&ioasid_allocator_lock);
+ 	list_for_each_entry(curr, &ioasid_nb_pending_list, list) {
+ 		if (curr->token == mm && curr->nb == nb) {
+ 			list_del(&curr->list);
+-			spin_unlock(&ioasid_nb_lock);
+ 			if (curr->active) {
+ 				atomic_notifier_chain_unregister(&curr->set->nh,
+ 								 nb);
+ 			}
+ 			kfree(curr);
+-			return;
++			break;
+ 		}
+ 	}
+-	pr_warn("No ioasid set found for mm token %llx\n",  (u64)mm);
+-	spin_unlock(&ioasid_nb_lock);
++	spin_unlock(&ioasid_allocator_lock);
+ }
+ EXPORT_SYMBOL_GPL(ioasid_unregister_notifier_mm);
+ 
+-- 
+2.31.1
+

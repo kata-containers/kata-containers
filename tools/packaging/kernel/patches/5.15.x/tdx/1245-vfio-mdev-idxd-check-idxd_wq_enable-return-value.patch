@@ -1,0 +1,31 @@
+From a7c09529bec0da7725b63999501a58ec150dfdc6 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Thu, 24 Mar 2022 17:18:40 -0700
+Subject: [PATCH 1245/1418] vfio: mdev: idxd: check idxd_wq_enable() return
+ value
+
+Check the return value of idxd_wq_enable() in vidxd_wq_enable().
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/vfio/mdev/idxd/vdev.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/vfio/mdev/idxd/vdev.c b/drivers/vfio/mdev/idxd/vdev.c
+index 075ef915e208..760bdc38b307 100644
+--- a/drivers/vfio/mdev/idxd/vdev.c
++++ b/drivers/vfio/mdev/idxd/vdev.c
+@@ -1230,8 +1230,8 @@ static void vidxd_wq_enable(struct vdcm_idxd *vidxd, int wq_id)
+ 			idxd_wq_setup_pasid(wq, wq_pasid);
+ 			idxd_wq_setup_priv(wq, priv);
+ 			spin_unlock_irqrestore(&idxd->dev_lock, flags);
+-			idxd_wq_enable(wq, &status);
+-			if (status) {
++			rc = idxd_wq_enable(wq, &status);
++			if (rc < 0 || status) {
+ 				dev_err(dev, "vidxd enable wq %d failed\n", wq->id);
+ 				idxd_complete_command(vidxd, status);
+ 				return;
+-- 
+2.31.1
+

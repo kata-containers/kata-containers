@@ -1,0 +1,70 @@
+From bf5bf3fe06954dd5cbfa66df6ca2175024a0e76a Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 13 Oct 2021 16:55:40 +0200
+Subject: [PATCH 0060/1418] x86/math-emu: Convert to fpstate
+
+Convert math emulation code to the new register storage
+mechanism in preparation for dynamically sized buffers.
+
+No functional change.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211013145322.711347464@linutronix.de
+---
+ arch/x86/math-emu/fpu_aux.c    | 2 +-
+ arch/x86/math-emu/fpu_entry.c  | 4 ++--
+ arch/x86/math-emu/fpu_system.h | 2 +-
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/math-emu/fpu_aux.c b/arch/x86/math-emu/fpu_aux.c
+index 034748459482..d62662bdd460 100644
+--- a/arch/x86/math-emu/fpu_aux.c
++++ b/arch/x86/math-emu/fpu_aux.c
+@@ -53,7 +53,7 @@ void fpstate_init_soft(struct swregs_state *soft)
+ 
+ void finit(void)
+ {
+-	fpstate_init_soft(&current->thread.fpu.state.soft);
++	fpstate_init_soft(&current->thread.fpu.fpstate->regs.soft);
+ }
+ 
+ /*
+diff --git a/arch/x86/math-emu/fpu_entry.c b/arch/x86/math-emu/fpu_entry.c
+index 50195e249753..7fe56c594aa6 100644
+--- a/arch/x86/math-emu/fpu_entry.c
++++ b/arch/x86/math-emu/fpu_entry.c
+@@ -640,7 +640,7 @@ int fpregs_soft_set(struct task_struct *target,
+ 		    unsigned int pos, unsigned int count,
+ 		    const void *kbuf, const void __user *ubuf)
+ {
+-	struct swregs_state *s387 = &target->thread.fpu.state.soft;
++	struct swregs_state *s387 = &target->thread.fpu.fpstate->regs.soft;
+ 	void *space = s387->st_space;
+ 	int ret;
+ 	int offset, other, i, tags, regnr, tag, newtop;
+@@ -691,7 +691,7 @@ int fpregs_soft_get(struct task_struct *target,
+ 		    const struct user_regset *regset,
+ 		    struct membuf to)
+ {
+-	struct swregs_state *s387 = &target->thread.fpu.state.soft;
++	struct swregs_state *s387 = &target->thread.fpu.fpstate->regs.soft;
+ 	const void *space = s387->st_space;
+ 	int offset = (S387->ftop & 7) * 10, other = 80 - offset;
+ 
+diff --git a/arch/x86/math-emu/fpu_system.h b/arch/x86/math-emu/fpu_system.h
+index 9b41391867dc..eec3e4805c75 100644
+--- a/arch/x86/math-emu/fpu_system.h
++++ b/arch/x86/math-emu/fpu_system.h
+@@ -73,7 +73,7 @@ static inline bool seg_writable(struct desc_struct *d)
+ 	return (d->type & SEG_TYPE_EXECUTE_MASK) == SEG_TYPE_WRITABLE;
+ }
+ 
+-#define I387			(&current->thread.fpu.state)
++#define I387			(&current->thread.fpu.fpstate->regs)
+ #define FPU_info		(I387->soft.info)
+ 
+ #define FPU_CS			(*(unsigned short *) &(FPU_info->regs->cs))
+-- 
+2.31.1
+

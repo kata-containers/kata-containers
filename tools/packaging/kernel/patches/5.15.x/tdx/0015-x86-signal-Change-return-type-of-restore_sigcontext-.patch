@@ -1,0 +1,136 @@
+From 2fc6716b7fa4178f8be7a2f80e20d937cde738a8 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 8 Sep 2021 15:29:35 +0200
+Subject: [PATCH 0015/1418] x86/signal: Change return type of
+ restore_sigcontext() to boolean
+
+None of the call sites cares about the return code. All they are interested
+in is success or fail.
+
+Suggested-by: Al Viro <viro@zeniv.linux.org.uk>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20210908132525.851280949@linutronix.de
+---
+ arch/x86/ia32/ia32_signal.c | 12 ++++++------
+ arch/x86/kernel/signal.c    | 18 +++++++++---------
+ 2 files changed, 15 insertions(+), 15 deletions(-)
+
+diff --git a/arch/x86/ia32/ia32_signal.c b/arch/x86/ia32/ia32_signal.c
+index 023198edf863..0d6789b6e5ca 100644
+--- a/arch/x86/ia32/ia32_signal.c
++++ b/arch/x86/ia32/ia32_signal.c
+@@ -57,8 +57,8 @@ static inline void reload_segments(struct sigcontext_32 *sc)
+ /*
+  * Do a signal return; undo the signal stack.
+  */
+-static int ia32_restore_sigcontext(struct pt_regs *regs,
+-				   struct sigcontext_32 __user *usc)
++static bool ia32_restore_sigcontext(struct pt_regs *regs,
++				    struct sigcontext_32 __user *usc)
+ {
+ 	struct sigcontext_32 sc;
+ 
+@@ -66,7 +66,7 @@ static int ia32_restore_sigcontext(struct pt_regs *regs,
+ 	current->restart_block.fn = do_no_restart_syscall;
+ 
+ 	if (unlikely(copy_from_user(&sc, usc, sizeof(sc))))
+-		return -EFAULT;
++		return false;
+ 
+ 	/* Get only the ia32 registers. */
+ 	regs->bx = sc.bx;
+@@ -94,7 +94,7 @@ static int ia32_restore_sigcontext(struct pt_regs *regs,
+ 	 * normal case.
+ 	 */
+ 	reload_segments(&sc);
+-	return fpu__restore_sig(compat_ptr(sc.fpstate), 1);
++	return !fpu__restore_sig(compat_ptr(sc.fpstate), 1);
+ }
+ 
+ COMPAT_SYSCALL_DEFINE0(sigreturn)
+@@ -111,7 +111,7 @@ COMPAT_SYSCALL_DEFINE0(sigreturn)
+ 
+ 	set_current_blocked(&set);
+ 
+-	if (ia32_restore_sigcontext(regs, &frame->sc))
++	if (!ia32_restore_sigcontext(regs, &frame->sc))
+ 		goto badframe;
+ 	return regs->ax;
+ 
+@@ -135,7 +135,7 @@ COMPAT_SYSCALL_DEFINE0(rt_sigreturn)
+ 
+ 	set_current_blocked(&set);
+ 
+-	if (ia32_restore_sigcontext(regs, &frame->uc.uc_mcontext))
++	if (!ia32_restore_sigcontext(regs, &frame->uc.uc_mcontext))
+ 		goto badframe;
+ 
+ 	if (compat_restore_altstack(&frame->uc.uc_stack))
+diff --git a/arch/x86/kernel/signal.c b/arch/x86/kernel/signal.c
+index 5f623a1c8075..140b7b2dbafe 100644
+--- a/arch/x86/kernel/signal.c
++++ b/arch/x86/kernel/signal.c
+@@ -79,9 +79,9 @@ static void force_valid_ss(struct pt_regs *regs)
+ # define CONTEXT_COPY_SIZE	sizeof(struct sigcontext)
+ #endif
+ 
+-static int restore_sigcontext(struct pt_regs *regs,
+-			      struct sigcontext __user *usc,
+-			      unsigned long uc_flags)
++static bool restore_sigcontext(struct pt_regs *regs,
++			       struct sigcontext __user *usc,
++			       unsigned long uc_flags)
+ {
+ 	struct sigcontext sc;
+ 
+@@ -89,7 +89,7 @@ static int restore_sigcontext(struct pt_regs *regs,
+ 	current->restart_block.fn = do_no_restart_syscall;
+ 
+ 	if (copy_from_user(&sc, usc, CONTEXT_COPY_SIZE))
+-		return -EFAULT;
++		return false;
+ 
+ #ifdef CONFIG_X86_32
+ 	set_user_gs(regs, sc.gs);
+@@ -136,8 +136,8 @@ static int restore_sigcontext(struct pt_regs *regs,
+ 		force_valid_ss(regs);
+ #endif
+ 
+-	return fpu__restore_sig((void __user *)sc.fpstate,
+-			       IS_ENABLED(CONFIG_X86_32));
++	return !fpu__restore_sig((void __user *)sc.fpstate,
++				 IS_ENABLED(CONFIG_X86_32));
+ }
+ 
+ static __always_inline int
+@@ -641,7 +641,7 @@ SYSCALL_DEFINE0(sigreturn)
+ 	 * x86_32 has no uc_flags bits relevant to restore_sigcontext.
+ 	 * Save a few cycles by skipping the __get_user.
+ 	 */
+-	if (restore_sigcontext(regs, &frame->sc, 0))
++	if (!restore_sigcontext(regs, &frame->sc, 0))
+ 		goto badframe;
+ 	return regs->ax;
+ 
+@@ -669,7 +669,7 @@ SYSCALL_DEFINE0(rt_sigreturn)
+ 
+ 	set_current_blocked(&set);
+ 
+-	if (restore_sigcontext(regs, &frame->uc.uc_mcontext, uc_flags))
++	if (!restore_sigcontext(regs, &frame->uc.uc_mcontext, uc_flags))
+ 		goto badframe;
+ 
+ 	if (restore_altstack(&frame->uc.uc_stack))
+@@ -927,7 +927,7 @@ COMPAT_SYSCALL_DEFINE0(x32_rt_sigreturn)
+ 
+ 	set_current_blocked(&set);
+ 
+-	if (restore_sigcontext(regs, &frame->uc.uc_mcontext, uc_flags))
++	if (!restore_sigcontext(regs, &frame->uc.uc_mcontext, uc_flags))
+ 		goto badframe;
+ 
+ 	if (compat_restore_altstack(&frame->uc.uc_stack))
+-- 
+2.31.1
+

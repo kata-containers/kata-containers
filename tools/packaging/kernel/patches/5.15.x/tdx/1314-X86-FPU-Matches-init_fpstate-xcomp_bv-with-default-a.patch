@@ -1,0 +1,62 @@
+From 4055c7e94e9bd88d9eb14c2da5aa6d48e68c1ef0 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Thu, 14 Apr 2022 09:12:38 +0800
+Subject: [PATCH 1314/1418] X86: FPU: Matches init_fpstate::xcomp_bv with
+ default allocated xsave components.
+
+xcomp_bv in init_fpstate.regs.xsave is set to
+fpu_kernel_cfg.max_features now, it's the xsave area
+initialization template for new created process (fork()
++ exec()), but there's an imply memory reading overflow
+there:
+
+xrstors instruction does memory reading to last byte of
+compacted format component memory when it's doing HW component
+initialization, such component initialization happens when
+xsave state is loaded first time for a new created(fork() +
+exec()) process, it causes reading overflow because
+fpu_kernel_cfg.max_features includes AMX TILE data bit but
+the AMX TILE data component is not allocated by default(it's
+allocated on demand).
+
+xrstors instruction doesn't do above memory reading for
+components not in compacted format(component bit is 0 in
+xcomp_bv), so fix this by using fpu_kernel_cfg.default_features
+to initialize xcomp_bv in init_fpstate.regs.xsave, this
+makes sure the not allocated component bits are 0 in
+the init_fpstate.regs.xsave's xcomp_bv bitmap.
+
+Suggested-by: Dave Hansen <dave.hansen@intel.com>
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kernel/fpu/xstate.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 503dedab7350..a9c73787f4b8 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -429,7 +429,19 @@ static void __init setup_init_fpu_buf(void)
+ 	setup_xstate_features();
+ 	print_xstate_features();
+ 
+-	xstate_init_xcomp_bv(&init_fpstate.regs.xsave, fpu_kernel_cfg.max_features);
++	/*
++	 * We can't use fpu_kernel_cfg.max_features here because
++	 * we need to make sure xcomp_bv matches the default allocated
++	 * componets by fpu_kernel_cfg.default_size for each new process.
++	 * xstros instruction does memory reading to last byte of compacted
++	 * format component memory when it's doing component initialization,
++	 * such component initialization happens when FPU state is loaded
++	 * first time for a new created(fork() then exec()) process, which
++	 * causes memory reading overflow, it's hard to catch but happens
++	 * actually there.
++	 */
++	xstate_init_xcomp_bv(&init_fpstate.regs.xsave,
++			     fpu_kernel_cfg.default_features);
+ 
+ 	/*
+ 	 * Init all the features state with header.xfeatures being 0x0
+-- 
+2.31.1
+

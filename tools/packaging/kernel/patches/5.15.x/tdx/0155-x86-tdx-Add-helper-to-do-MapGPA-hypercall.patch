@@ -1,0 +1,113 @@
+From af16b892bc5cf3977790053b6909a94b11917399 Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Mon, 30 Mar 2020 18:42:55 +0300
+Subject: [PATCH 0155/1418] x86/tdx: Add helper to do MapGPA hypercall
+
+MapGPA hypercall is used by TDX guests to request VMM convert the
+existing mapping of given GPA address range between private/shared.
+
+tdx_hcall_gpa_intent() is the wrapper used for making MapGPA hypercall.
+
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/tdx.h | 18 ++++++++++++++++++
+ arch/x86/kernel/tdx.c      | 30 ++++++++++++++++++++++++++++++
+ 2 files changed, 48 insertions(+)
+
+diff --git a/arch/x86/include/asm/tdx.h b/arch/x86/include/asm/tdx.h
+index 676d0bde9ebe..aa7910321979 100644
+--- a/arch/x86/include/asm/tdx.h
++++ b/arch/x86/include/asm/tdx.h
+@@ -56,6 +56,15 @@ struct ve_info {
+ 	u32 instr_info;
+ };
+ 
++/*
++ * Page mapping type enum. This is software construct not
++ * part of any hardware or VMM ABI.
++ */
++enum tdx_map_type {
++	TDX_MAP_PRIVATE,
++	TDX_MAP_SHARED,
++};
++
+ #ifdef CONFIG_INTEL_TDX_GUEST
+ 
+ bool is_tdx_guest(void);
+@@ -78,6 +87,9 @@ bool tdx_early_handle_ve(struct pt_regs *regs);
+ 
+ extern phys_addr_t tdx_shared_mask(void);
+ 
++extern int tdx_hcall_gpa_intent(phys_addr_t gpa, int numpages,
++				enum tdx_map_type map_type);
++
+ /*
+  * To support I/O port access in decompressor or early kernel init
+  * code, since #VE exception handler cannot be used, use paravirt
+@@ -145,6 +157,12 @@ static inline bool tdx_early_handle_ve(struct pt_regs *regs) { return false; }
+ 
+ static inline phys_addr_t tdx_shared_mask(void) { return 0; }
+ 
++static inline int tdx_hcall_gpa_intent(phys_addr_t gpa, int numpages,
++				       enum tdx_map_type map_type)
++{
++	return -ENODEV;
++}
++
+ #endif /* CONFIG_INTEL_TDX_GUEST */
+ 
+ #if defined(CONFIG_KVM_GUEST) && defined(CONFIG_INTEL_TDX_GUEST)
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 8a37ab0c6cbf..c3e4cc5d631b 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -17,6 +17,9 @@
+ #define TDX_GET_INFO			1
+ #define TDX_GET_VEINFO			3
+ 
++/* TDX hypercall Leaf IDs */
++#define TDVMCALL_MAP_GPA		0x10001
++
+ #define VE_IS_IO_OUT(exit_qual)		(((exit_qual) & 8) ? 0 : 1)
+ #define VE_GET_IO_SIZE(exit_qual)	(((exit_qual) & 7) + 1)
+ #define VE_GET_PORT_NUM(exit_qual)	((exit_qual) >> 16)
+@@ -105,6 +108,33 @@ static void tdx_get_info(void)
+ 	physical_mask &= ~tdx_shared_mask();
+ }
+ 
++/*
++ * Inform the VMM of the guest's intent for this physical page:
++ * shared with the VMM or private to the guest.  The VMM is
++ * expected to change its mapping of the page in response.
++ *
++ * Note: shared->private conversions require further guest
++ * action to accept the page.
++ */
++int tdx_hcall_gpa_intent(phys_addr_t gpa, int numpages,
++			 enum tdx_map_type map_type)
++{
++	u64 ret;
++
++	if (map_type == TDX_MAP_SHARED)
++		gpa |= tdx_shared_mask();
++
++	/*
++	 * Notify VMM about page mapping conversion. More info
++	 * about ABI can be found in TDX Guest-Host-Communication
++	 * Interface (GHCI), sec 3.2.
++	 */
++	ret = _tdx_hypercall(TDVMCALL_MAP_GPA, gpa, PAGE_SIZE * numpages, 0, 0,
++			     NULL);
++
++	return ret ? -EIO : 0;
++}
++
+ static __cpuidle void _tdx_halt(const bool irq_disabled, const bool do_sti)
+ {
+ 	u64 ret;
+-- 
+2.31.1
+

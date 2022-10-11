@@ -1,0 +1,71 @@
+From e8be9400296d7bed5ff504733824b469e850185d Mon Sep 17 00:00:00 2001
+From: Yi Liu <yi.l.liu@intel.com>
+Date: Tue, 26 Apr 2022 06:40:46 -0700
+Subject: [PATCH 1318/1418] iommu/vt-d: Fruther fix PASID race
+
+When the intel_svm_free_async_fn() is triggerd, it will call the
+iommu_delete_device_fault_data() to delete the fault data for
+the pasid. However, sync_fn() put the pasid reference before calling
+iommu_delete_device_fault_data(). This is bad if the reference is
+the last one. the pasid may be allocated to other usage, race will
+come.
+
+This patch just hold an extra reference on the pasid in the
+iommu_add_device_fault_data(), and release when the iommu_del_device_fault_data()
+is called.
+
+Signed-off-by: Yi Liu <yi.l.liu@intel.com>
+---
+ drivers/iommu/intel/svm.c | 10 +++++++---
+ drivers/iommu/iommu.c     |  7 +++++++
+ 2 files changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index a3fb6d7db955..ef7cc863d9bc 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -441,9 +441,13 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain,
+ 	 * be able to handle prq. And this should be outside of pasid_mutex
+ 	 * to avoid race with page response and prq reporting.
+ 	 */
+-	if (is_aux_domain(dev, domain) && fault_data)
+-		iommu_add_device_fault_data(dev, data->hpasid,
+-					    fault_data);
++	if (is_aux_domain(dev, domain) && fault_data) {
++		ret = iommu_add_device_fault_data(dev, data->hpasid,
++						  fault_data);
++		if (ret)
++			return ret;
++	}
++
+ 	mutex_lock(&pasid_mutex);
+ 	ret = pasid_to_svm_sdev(dev, pasid_set,
+ 				data->hpasid, &svm, &sdev);
+diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
+index 102f46265802..7a5815f9b02c 100644
+--- a/drivers/iommu/iommu.c
++++ b/drivers/iommu/iommu.c
+@@ -1231,6 +1231,12 @@ int iommu_add_device_fault_data(struct device *dev,
+ 
+ 	mutex_lock(&param->lock);
+ 
++	ret = ioasid_get(NULL, vector);
++	if (ret) {
++		dev_err(dev, "Failed to get vector %d\n", vector);
++		goto unlock;
++	}
++
+ 	/* vector must be unique, check if we have the same vector already */
+ 	list_for_each_entry(hdata, &param->fault_param->data, list) {
+ 		if (hdata->vector == vector) {
+@@ -1291,6 +1297,7 @@ void iommu_delete_device_fault_data(struct device *dev, int vector)
+ 			list_del(&hdata->list);
+ 			kfree(hdata);
+ 			dev_dbg(dev, "Deleted IOMMU fault handler data for vector %d\n", vector);
++			ioasid_put(NULL, vector);//vector == pasid
+ 			goto unlock;
+ 		}
+ 	}
+-- 
+2.31.1
+

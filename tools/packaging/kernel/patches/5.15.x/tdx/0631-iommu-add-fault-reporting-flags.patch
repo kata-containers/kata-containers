@@ -1,0 +1,30 @@
+From e943ec59c3760cfb877c0d7551f7c89fcc02e291 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Fri, 4 Oct 2019 05:26:09 -0700
+Subject: [PATCH 0631/1418] iommu: add fault reporting flags
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ include/linux/iommu.h | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/include/linux/iommu.h b/include/linux/iommu.h
+index e00942b499d5..a7b379f8a10c 100644
+--- a/include/linux/iommu.h
++++ b/include/linux/iommu.h
+@@ -43,8 +43,10 @@ struct iommu_fault_event;
+ struct iommu_dma_cookie;
+ 
+ /* iommu fault flags */
+-#define IOMMU_FAULT_READ	0x0
+-#define IOMMU_FAULT_WRITE	0x1
++#define IOMMU_FAULT_READ		(1 << 0)
++#define IOMMU_FAULT_WRITE		(1 << 1)
++#define IOMMU_FAULT_EXEC		(1 << 2)
++#define IOMMU_FAULT_PRIV		(1 << 3)
+ 
+ typedef int (*iommu_fault_handler_t)(struct iommu_domain *,
+ 			struct device *, unsigned long, int, void *);
+-- 
+2.31.1
+

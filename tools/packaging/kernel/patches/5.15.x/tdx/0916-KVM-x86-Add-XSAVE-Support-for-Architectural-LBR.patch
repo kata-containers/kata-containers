@@ -1,0 +1,51 @@
+From e39d04ec5e3f3fbe6a6279125946840016c1cbe8 Mon Sep 17 00:00:00 2001
+From: Like Xu <like.xu@linux.intel.com>
+Date: Sun, 14 Mar 2021 23:52:24 +0800
+Subject: [PATCH 0916/1418] KVM: x86: Add XSAVE Support for Architectural LBR
+
+On processors supporting XSAVES and XRSTORS, Architectural LBR XSAVE
+support is enumerated from CPUID.(EAX=0DH, ECX=1):ECX[bit 15].
+The detailed sub-leaf for Arch LBR is enumerated in CPUID.(0DH, 0FH).
+
+XSAVES provides a faster means than RDMSR for guest to read all LBRs.
+When guest IA32_XSS[bit 15] is set, the Arch LBR state can be saved using
+XSAVES and restored by XRSTORS with the appropriate RFBM.
+
+Signed-off-by: Like Xu <like.xu@linux.intel.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/vmx/vmx.c | 4 ++++
+ arch/x86/kvm/x86.c     | 2 +-
+ 2 files changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 8389a4d81b91..2d7de5ab2ae9 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -7580,6 +7580,10 @@ static __init void vmx_set_cpu_caps(void)
+ 		kvm_cpu_cap_clear(X86_FEATURE_INVPCID);
+ 	if (vmx_pt_mode_is_host_guest())
+ 		kvm_cpu_cap_check_and_set(X86_FEATURE_INTEL_PT);
++	if (!cpu_has_vmx_arch_lbr()) {
++		kvm_cpu_cap_clear(X86_FEATURE_ARCH_LBR);
++		supported_xss &= ~XFEATURE_MASK_LBR;
++	}
+ 
+ 	if (!enable_sgx) {
+ 		kvm_cpu_cap_clear(X86_FEATURE_SGX);
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index d06902caa7be..871fafa78d89 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -215,7 +215,7 @@ static struct kvm_user_return_msrs __percpu *user_return_msrs;
+ 				| XFEATURE_MASK_BNDCSR | XFEATURE_MASK_AVX512 \
+ 				| XFEATURE_MASK_PKRU | XFEATURE_MASK_XTILE)
+ 
+-#define KVM_SUPPORTED_XSS     0
++#define KVM_SUPPORTED_XSS     XFEATURE_MASK_LBR
+ 
+ u64 __read_mostly host_efer;
+ EXPORT_SYMBOL_GPL(host_efer);
+-- 
+2.31.1
+

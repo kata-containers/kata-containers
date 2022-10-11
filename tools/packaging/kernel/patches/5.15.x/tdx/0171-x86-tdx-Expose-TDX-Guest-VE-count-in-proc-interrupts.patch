@@ -1,0 +1,65 @@
+From 76d0ef096482e2dde88bdae5ee4f1c8b8c592f74 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Sun, 4 Apr 2021 20:06:56 -0700
+Subject: [PATCH 0171/1418] x86/tdx: Expose TDX Guest #VE count in
+ /proc/interrupts
+
+Add support to expose TD Guest Virtualization Exception (#VE) count
+in /proc/interrupts. It is useful in performance analysis of TD Guest.
+
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/hardirq.h | 3 +++
+ arch/x86/kernel/irq.c          | 6 ++++++
+ arch/x86/kernel/traps.c        | 2 ++
+ 3 files changed, 11 insertions(+)
+
+diff --git a/arch/x86/include/asm/hardirq.h b/arch/x86/include/asm/hardirq.h
+index 275e7fd20310..0143cb1f0f1c 100644
+--- a/arch/x86/include/asm/hardirq.h
++++ b/arch/x86/include/asm/hardirq.h
+@@ -44,6 +44,9 @@ typedef struct {
+ 	unsigned int irq_hv_reenlightenment_count;
+ 	unsigned int hyperv_stimer0_count;
+ #endif
++#if IS_ENABLED(CONFIG_INTEL_TDX_GUEST)
++	unsigned int tdx_ve_count;
++#endif
+ } ____cacheline_aligned irq_cpustat_t;
+ 
+ DECLARE_PER_CPU_SHARED_ALIGNED(irq_cpustat_t, irq_stat);
+diff --git a/arch/x86/kernel/irq.c b/arch/x86/kernel/irq.c
+index e28f6a5d14f1..f5b5a5aecf5d 100644
+--- a/arch/x86/kernel/irq.c
++++ b/arch/x86/kernel/irq.c
+@@ -181,6 +181,12 @@ int arch_show_interrupts(struct seq_file *p, int prec)
+ 		seq_printf(p, "%10u ",
+ 			   irq_stats(j)->kvm_posted_intr_wakeup_ipis);
+ 	seq_puts(p, "  Posted-interrupt wakeup event\n");
++#endif
++#if IS_ENABLED(CONFIG_INTEL_TDX_GUEST)
++	seq_printf(p, "%*s: ", prec, "TGV");
++	for_each_online_cpu(j)
++		seq_printf(p, "%10u ", irq_stats(j)->tdx_ve_count);
++	seq_puts(p, "  TDX Guest VE event\n");
+ #endif
+ 	return 0;
+ }
+diff --git a/arch/x86/kernel/traps.c b/arch/x86/kernel/traps.c
+index f5fbe4d689da..4739cf01a205 100644
+--- a/arch/x86/kernel/traps.c
++++ b/arch/x86/kernel/traps.c
+@@ -1265,6 +1265,8 @@ DEFINE_IDTENTRY(exc_virtualization_exception)
+ 
+ 	RCU_LOCKDEP_WARN(!rcu_is_watching(), "entry code didn't wake RCU");
+ 
++	inc_irq_stat(tdx_ve_count);
++
+ 	/*
+ 	 * NMIs/Machine-checks/Interrupts will be in a disabled state
+ 	 * till TDGETVEINFO TDCALL is executed. This prevents #VE
+-- 
+2.31.1
+

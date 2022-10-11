@@ -1,0 +1,35 @@
+From 303134d1441ea0e216b7de7ca50e8d44eee18635 Mon Sep 17 00:00:00 2001
+From: Ben Walker <benjamin.walker@intel.com>
+Date: Thu, 2 Dec 2021 10:50:38 -0700
+Subject: [PATCH 1147/1418] dmaengine: Remove dma_set_tx_state
+
+Nothing calls this anymore.
+
+Signed-off-by: Ben Walker <benjamin.walker@intel.com>
+---
+ drivers/dma/dmaengine.h | 9 ---------
+ 1 file changed, 9 deletions(-)
+
+diff --git a/drivers/dma/dmaengine.h b/drivers/dma/dmaengine.h
+index 08c7bd7cfc22..7a5203175e6a 100644
+--- a/drivers/dma/dmaengine.h
++++ b/drivers/dma/dmaengine.h
+@@ -88,15 +88,6 @@ static inline enum dma_status dma_cookie_status(struct dma_chan *chan,
+ 	return DMA_IN_PROGRESS;
+ }
+ 
+-static inline void dma_set_tx_state(struct dma_tx_state *st,
+-	dma_cookie_t last, dma_cookie_t used, u32 residue)
+-{
+-	if (!st)
+-		return;
+-
+-	st->residue = residue;
+-}
+-
+ static inline void dma_set_residue(struct dma_tx_state *state, u32 residue)
+ {
+ 	if (state)
+-- 
+2.31.1
+

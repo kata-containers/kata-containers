@@ -1,0 +1,31 @@
+From 4746154c02c74a0dcf51aedd404be4cd5776b186 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Tue, 25 Jan 2022 16:40:49 -0700
+Subject: [PATCH 0980/1418] dmaengine: idxd: fix wq reset on RO config
+
+WQ reset clears all configuration. However, for devices that are RO, the
+internal data structure should not be cleared. Skip when device is not
+configurable (RO).
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/device.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index 94169c280930..0854309f1695 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -301,7 +301,8 @@ void idxd_wq_reset(struct idxd_wq *wq)
+ 
+ 	operand = BIT(wq->id % 16) | ((wq->id / 16) << 16);
+ 	idxd_cmd_exec(idxd, IDXD_CMD_RESET_WQ, operand, NULL);
+-	idxd_wq_disable_cleanup(wq);
++	if (test_bit(IDXD_FLAG_CONFIGURABLE, &idxd->flags))
++		idxd_wq_disable_cleanup(wq);
+ 	wq->state = IDXD_WQ_DISABLED;
+ }
+ EXPORT_SYMBOL_GPL(idxd_wq_reset);
+-- 
+2.31.1
+

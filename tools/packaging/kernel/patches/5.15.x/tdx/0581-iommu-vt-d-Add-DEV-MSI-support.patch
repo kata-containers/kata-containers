@@ -1,0 +1,42 @@
+From 59683604799e2f7ccc394ce588121129c6618b83 Mon Sep 17 00:00:00 2001
+From: Megha Dey <megha.dey@intel.com>
+Date: Tue, 29 Jun 2021 05:52:05 -0700
+Subject: [PATCH 0581/1418] iommu/vt-d: Add DEV-MSI support
+
+Add required support in the interrupt remapping driver for devices
+which generate dev-msi interrupts and use the intel remapping
+domain as the parent domain. Set the source-id of all dev-msi
+interrupt requests to the parent PCI device associated with it.
+
+Signed-off-by: Megha Dey <megha.dey@intel.com>
+---
+ drivers/iommu/intel/irq_remapping.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/intel/irq_remapping.c b/drivers/iommu/intel/irq_remapping.c
+index f912fe45bea2..f969570fb0a9 100644
+--- a/drivers/iommu/intel/irq_remapping.c
++++ b/drivers/iommu/intel/irq_remapping.c
+@@ -1283,6 +1283,9 @@ static void intel_irq_remapping_prepare_irte(struct intel_ir_data *data,
+ 		set_msi_sid(irte,
+ 			    pci_real_dma_dev(msi_desc_to_pci_dev(info->desc)));
+ 		break;
++	case X86_IRQ_ALLOC_TYPE_DEV_MSI:
++		set_msi_sid(irte, to_pci_dev(info->desc->dev->parent));
++		break;
+ 	default:
+ 		BUG_ON(1);
+ 		break;
+@@ -1326,7 +1329,8 @@ static int intel_irq_remapping_alloc(struct irq_domain *domain,
+ 	if (!info || !iommu)
+ 		return -EINVAL;
+ 	if (nr_irqs > 1 && info->type != X86_IRQ_ALLOC_TYPE_PCI_MSI &&
+-	    info->type != X86_IRQ_ALLOC_TYPE_PCI_MSIX)
++	    info->type != X86_IRQ_ALLOC_TYPE_PCI_MSIX &&
++	    info->type != X86_IRQ_ALLOC_TYPE_DEV_MSI)
+ 		return -EINVAL;
+ 
+ 	/*
+-- 
+2.31.1
+

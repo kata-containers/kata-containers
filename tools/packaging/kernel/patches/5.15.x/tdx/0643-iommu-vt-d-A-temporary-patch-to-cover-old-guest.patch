@@ -1,0 +1,34 @@
+From 7b659f8ba71acabf66c33b2bdf78deb5a0ec21a1 Mon Sep 17 00:00:00 2001
+From: "Sun, Yi Y" <yi.y.sun@intel.com>
+Date: Sat, 28 Nov 2020 14:21:26 +0800
+Subject: [PATCH 0643/1418] iommu/vt-d: A temporary patch to cover old guest
+
+We should set rid_priv to 1. Otherwise the PRQ w/o pasid generated.
+The root cause is that the old guest PTE U/S bit is not set to 1.
+Ideally, the guest kernel should set it.
+
+Change-Id: I4067aed15cc78a314853596240c580f30968430c
+Signed-off-by: Sun, Yi Y <yi.y.sun@intel.com>
+---
+ drivers/iommu/intel/iommu.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 8533fe1123e6..cbd4d65c4999 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -2032,6 +2032,11 @@ static inline void
+ context_set_sm_rid2pasid(struct context_entry *context, unsigned long pasid)
+ {
+ 	context->hi |= pasid & ((1 << 20) - 1);
++	/* TODO: rid_priv should be 1. Otherwise the PRQ w/o pasid generated.
++	 * The root cause is that the guest PTE U/S bit is not set to 1. Ideally,
++	 * the guest kernel should set it.
++	 */
++	context->hi |= (1 << 20);
+ }
+ 
+ /*
+-- 
+2.31.1
+

@@ -1,0 +1,267 @@
+From 99ec9253c0fb50be2841ab63741927d782f64d48 Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Thu, 11 Nov 2021 21:39:24 -0800
+Subject: [PATCH 0700/1418] kvm: x86: Add XFD WRMSR handling for dynamic
+ reallocation
+
+KVM detects the dynamic feature request by intercepting XFD and XCR0,
+and uses the reallocation mechanism to dynamically reallocate fpstate
+for vcpu. When guest XCR0[i]=1 and XFD[i]=0, guest is possible to use
+the dynamic features in next vmenter, so KVM need reallocate
+guest_fpu::fpstate to enable the features. If the reallocation failed,
+KVM relies on the userspace for handling error cases.
+
+Meanwhile, KVM sets up passthrough for XFD. With lazy passthrough of XFD
+MSR, we can avoid unnecessary save/restore of the MSR until the guest
+really requires and is allowed to use. After XFD passthrough, KVM should
+ensure XFD and guest_fpu::xfd are consistent.
+
+The reallocation mechanism works both for XCR0 and XFD WRMSR emulations.
+When KVM need reallocate, it sets a reallocation request and bounce to
+userspace VMM so that kvm_put_guest_fpu() can use fpu core doing
+reallocation. Add the XFD WRMSR handling for dynamic reallocation. Define
+a new MSR userspace handling return type so that userspace can use to set
+user_space_msr_mask by KVM_CAP_X86_USER_SPACE_MSR to indicate the case.
+
+After XFD passthrough, guest is enabled to WRMSR of XFD privately. Thus
+before KVM enables interrupt and preemption, at exit of fastpath loop,
+update the xfd state and shadow memory accordingly to make them
+consistent.
+
+If there's no reallocation request, just emulate the WRMSR handling for
+XFD as normal.
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+---
+ arch/x86/include/asm/kvm-x86-ops.h |  1 +
+ arch/x86/include/asm/kvm_host.h    |  2 ++
+ arch/x86/kvm/vmx/main.c            |  1 +
+ arch/x86/kvm/vmx/vmx.c             | 36 +++++++++++++++++++++
+ arch/x86/kvm/x86.c                 | 51 ++++++++++++++++++++++++++++++
+ arch/x86/kvm/x86.h                 |  2 ++
+ include/uapi/linux/kvm.h           |  1 +
+ 7 files changed, 94 insertions(+)
+
+diff --git a/arch/x86/include/asm/kvm-x86-ops.h b/arch/x86/include/asm/kvm-x86-ops.h
+index 29178f45bd1c..73939c029e41 100644
+--- a/arch/x86/include/asm/kvm-x86-ops.h
++++ b/arch/x86/include/asm/kvm-x86-ops.h
+@@ -31,6 +31,7 @@ KVM_X86_OP(vcpu_put)
+ KVM_X86_OP(update_exception_bitmap)
+ KVM_X86_OP(get_msr)
+ KVM_X86_OP(set_msr)
++KVM_X86_OP_NULL(set_xfd_passthrough)
+ KVM_X86_OP(get_segment_base)
+ KVM_X86_OP(get_segment)
+ KVM_X86_OP(get_cpl)
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 71daf946fd3c..764610edc0aa 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -662,6 +662,7 @@ struct kvm_vcpu_arch {
+ 	u64 smi_count;
+ 	bool tpr_access_reporting;
+ 	bool xsaves_enabled;
++	bool dyn_feature_enabled;
+ 	u64 ia32_xss;
+ 	u64 microcode_version;
+ 	u64 arch_capabilities;
+@@ -1378,6 +1379,7 @@ struct kvm_x86_ops {
+ 	void (*update_exception_bitmap)(struct kvm_vcpu *vcpu);
+ 	int (*get_msr)(struct kvm_vcpu *vcpu, struct msr_data *msr);
+ 	int (*set_msr)(struct kvm_vcpu *vcpu, struct msr_data *msr);
++	void (*set_xfd_passthrough)(struct kvm_vcpu *vcpu);
+ 	u64 (*get_segment_base)(struct kvm_vcpu *vcpu, int seg);
+ 	void (*get_segment)(struct kvm_vcpu *vcpu,
+ 			    struct kvm_segment *var, int seg);
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index a4ee266a1cde..8034bf25f86a 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -1111,6 +1111,7 @@ static struct kvm_x86_ops vt_x86_ops __initdata = {
+ #ifdef CONFIG_X86_64
+ 	.set_hv_timer = vt_set_hv_timer,
+ 	.cancel_hv_timer = vt_cancel_hv_timer,
++	.set_xfd_passthrough = vmx_set_xfd_passthrough,
+ #endif
+ 
+ 	.setup_mce = vt_setup_mce,
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index cc67d112bcf5..b832f66246f2 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -36,6 +36,7 @@
+ #include <asm/cpu_device_id.h>
+ #include <asm/debugreg.h>
+ #include <asm/desc.h>
++#include <asm/fpu/xstate.h>
+ #include <asm/idtentry.h>
+ #include <asm/io.h>
+ #include <asm/irq_remapping.h>
+@@ -1965,6 +1966,14 @@ static u64 vcpu_supported_debugctl(struct kvm_vcpu *vcpu)
+ 	return debugctl;
+ }
+ 
++#ifdef CONFIG_X86_64
++static void vmx_set_xfd_passthrough(struct kvm_vcpu *vcpu)
++{
++	vmx_disable_intercept_for_msr(vcpu, MSR_IA32_XFD, MSR_TYPE_RW);
++	vcpu->arch.dyn_feature_enabled = true;
++}
++#endif
++
+ /*
+  * Writes msr value into the appropriate "register".
+  * Returns 0 on success, non-0 otherwise.
+@@ -1995,6 +2004,33 @@ static int vmx_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ 	case MSR_KERNEL_GS_BASE:
+ 		vmx_write_guest_kernel_gs_base(vmx, data);
+ 		break;
++	case MSR_IA32_XFD:
++		if (!guest_cpuid_has(vcpu, X86_FEATURE_XFD))
++			return 1;
++
++		/* Setting unsupported bits causes #GP */
++		if (~XFEATURE_MASK_USER_DYNAMIC & data) {
++			kvm_inject_gp(vcpu, 0);
++			break;
++		}
++
++		/*
++		 * First check if need reallocate. If yes, then
++		 * let the fpu core do reallocation and update xfd;
++		 * otherwise, update xfd here.
++		 */
++		if (kvm_guest_realloc_fpstate(vcpu, data)) {
++			vmx_set_xfd_passthrough(vcpu);
++			/*
++			 * Go back to userspace and let fpu core reallocate.
++			 * In kvm_put_guest_fpu(), guest_fpu::fpstate::xfd
++			 * will be updated, and will be loaded into MSR in
++			 * next kvm_load_guest_fpu().
++			 */
++			return KVM_MSR_RET_USERSPACE;
++		}
++		ret = kvm_set_msr_common(vcpu, msr_info);
++		break;
+ #endif
+ 	case MSR_IA32_SYSENTER_CS:
+ 		if (is_guest_mode(vcpu))
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index f8b78f65d761..8293d13f558d 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -998,6 +998,41 @@ void kvm_load_host_xsave_state(struct kvm_vcpu *vcpu)
+ }
+ EXPORT_SYMBOL_GPL(kvm_load_host_xsave_state);
+ 
++/*
++ * Return dynamic feature bitmap that xcr0[i]=1 && xfd[i]=0
++ */
++static u64 check_realloc_request(u64 new_xfd, u64 new_xcr0)
++{
++	new_xcr0 &= XFEATURE_MASK_USER_DYNAMIC;
++
++	if ((new_xfd & new_xcr0) != new_xcr0)
++		return (new_xcr0 ^ new_xfd) & new_xcr0;
++
++	return 0;
++}
++
++bool kvm_guest_realloc_fpstate(struct kvm_vcpu *vcpu, u64 new_xfd)
++{
++	u64 request = 0;
++	u64 new_xcr0 = vcpu->arch.xcr0;
++
++	request = check_realloc_request(new_xfd, new_xcr0);
++	if (request) {
++		vcpu->arch.guest_fpu.realloc_request = request;
++
++		return true;
++	}
++
++	return false;
++}
++EXPORT_SYMBOL_GPL(kvm_guest_realloc_fpstate);
++
++void kvm_set_xfd_passthrough(struct kvm_vcpu *vcpu)
++{
++	if (kvm_x86_ops.set_xfd_passthrough)
++		static_call(kvm_x86_set_xfd_passthrough)(vcpu);
++}
++
+ static int __kvm_set_xcr(struct kvm_vcpu *vcpu, u32 index, u64 xcr)
+ {
+ 	u64 xcr0 = xcr;
+@@ -1839,6 +1874,8 @@ static u64 kvm_msr_reason(int r)
+ 		return KVM_MSR_EXIT_REASON_UNKNOWN;
+ 	case KVM_MSR_RET_FILTERED:
+ 		return KVM_MSR_EXIT_REASON_FILTER;
++	case KVM_MSR_RET_USERSPACE:
++		return KVM_MSR_EXIT_REASON_USERSPACE;
+ 	default:
+ 		return KVM_MSR_EXIT_REASON_INVAL;
+ 	}
+@@ -3574,6 +3611,17 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ 			return 1;
+ 		vcpu->arch.msr_misc_features_enables = data;
+ 		break;
++#ifdef CONFIG_X86_64
++	case MSR_IA32_XFD:
++		WARN_ON_ONCE(current->thread.fpu.fpstate !=
++			     vcpu->arch.guest_fpu.fpstate);
++		fpregs_lock();
++		/* current XFD must be the same with hardware */
++		current->thread.fpu.fpstate->xfd = data;
++		xfd_update_state(current->thread.fpu.fpstate);
++		fpregs_unlock();
++		break;
++#endif
+ 	default:
+ 		if (kvm_pmu_is_valid_msr(vcpu, msr))
+ 			return kvm_pmu_set_msr(vcpu, msr_info);
+@@ -9821,6 +9869,9 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
+ 	vcpu->arch.last_vmentry_cpu = vcpu->cpu;
+ 	vcpu->arch.last_guest_tsc = kvm_read_l1_tsc(vcpu, rdtsc());
+ 
++	if (vcpu->arch.dyn_feature_enabled)
++		kvm_update_guest_xfd_state();
++
+ 	vcpu->mode = OUTSIDE_GUEST_MODE;
+ 	smp_wmb();
+ 
+diff --git a/arch/x86/kvm/x86.h b/arch/x86/kvm/x86.h
+index 4ce3bc8c1dc9..e1626d925a7b 100644
+--- a/arch/x86/kvm/x86.h
++++ b/arch/x86/kvm/x86.h
+@@ -446,6 +446,7 @@ static inline bool kvm_pkrs_valid(u64 data)
+ 
+ void kvm_load_guest_xsave_state(struct kvm_vcpu *vcpu);
+ void kvm_load_host_xsave_state(struct kvm_vcpu *vcpu);
++bool kvm_guest_realloc_fpstate(struct kvm_vcpu *vcpu, u64 new_xfd);
+ int kvm_spec_ctrl_test_value(u64 value);
+ bool kvm_is_valid_cr4(struct kvm_vcpu *vcpu, unsigned long cr4);
+ int kvm_handle_memory_failure(struct kvm_vcpu *vcpu, int r,
+@@ -460,6 +461,7 @@ bool kvm_msr_allowed(struct kvm_vcpu *vcpu, u32 index, u32 type);
+  */
+ #define  KVM_MSR_RET_INVALID	2	/* in-kernel MSR emulation #GP condition */
+ #define  KVM_MSR_RET_FILTERED	3	/* #GP due to userspace MSR filter */
++#define  KVM_MSR_RET_USERSPACE	4	/* Userspace handling */
+ 
+ #define __cr4_reserved_bits(__cpu_has, __c)             \
+ ({                                                      \
+diff --git a/include/uapi/linux/kvm.h b/include/uapi/linux/kvm.h
+index 97716b49bcda..65bb9d1c513b 100644
+--- a/include/uapi/linux/kvm.h
++++ b/include/uapi/linux/kvm.h
+@@ -520,6 +520,7 @@ struct kvm_run {
+ #define KVM_MSR_EXIT_REASON_INVAL	(1 << 0)
+ #define KVM_MSR_EXIT_REASON_UNKNOWN	(1 << 1)
+ #define KVM_MSR_EXIT_REASON_FILTER	(1 << 2)
++#define KVM_MSR_EXIT_REASON_USERSPACE	(1 << 3)
+ 			__u32 reason; /* kernel -> user */
+ 			__u32 index; /* kernel -> user */
+ 			__u64 data; /* kernel <-> user */
+-- 
+2.31.1
+

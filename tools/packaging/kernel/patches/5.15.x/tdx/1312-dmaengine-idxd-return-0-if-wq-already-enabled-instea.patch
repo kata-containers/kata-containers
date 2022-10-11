@@ -1,0 +1,30 @@
+From caebb9efc030adf3911690a4e9a3ab89df3a788c Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Thu, 21 Apr 2022 10:16:24 -0700
+Subject: [PATCH 1312/1418] dmaengine: idxd: return 0 if wq already enabled
+ instead of error
+
+If wq is already enabled and idxd_wq_enable() is called, return 0 instead
+of error since it's not a real error.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/device.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index 72be06c0eb6e..683355b5a7d9 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -248,7 +248,7 @@ int idxd_wq_enable(struct idxd_wq *wq, u32 *status)
+ 
+ 	if (wq->state == IDXD_WQ_ENABLED) {
+ 		dev_dbg(dev, "WQ %d already enabled\n", wq->id);
+-		return -ENXIO;
++		return 0;
+ 	}
+ 
+ 	idxd_cmd_exec(idxd, IDXD_CMD_ENABLE_WQ, wq->id, &stat);
+-- 
+2.31.1
+

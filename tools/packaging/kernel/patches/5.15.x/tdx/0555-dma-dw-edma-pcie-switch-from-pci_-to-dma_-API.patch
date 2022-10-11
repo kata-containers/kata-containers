@@ -1,0 +1,57 @@
+From 014c5b5364315fdde7dd84fcacba701de6cdc0fb Mon Sep 17 00:00:00 2001
+From: Wang Qing <wangqing@vivo.com>
+Date: Thu, 7 Oct 2021 20:28:27 -0700
+Subject: [PATCH 0555/1418] dma: dw-edma-pcie: switch from 'pci_' to 'dma_' API
+
+The wrappers in include/linux/pci-dma-compat.h should go away.
+
+pci_set_dma_mask()/pci_set_consistent_dma_mask() should be
+replaced with dma_set_mask()/dma_set_coherent_mask(),
+and use dma_set_mask_and_coherent() for both.
+
+Signed-off-by: Wang Qing <wangqing@vivo.com>
+Link: https://lore.kernel.org/r/1633663733-47199-2-git-send-email-wangqing@vivo.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/dw-edma/dw-edma-pcie.c | 17 ++++-------------
+ 1 file changed, 4 insertions(+), 13 deletions(-)
+
+diff --git a/drivers/dma/dw-edma/dw-edma-pcie.c b/drivers/dma/dw-edma/dw-edma-pcie.c
+index 44f6e09bdb53..198f6cd8ac1b 100644
+--- a/drivers/dma/dw-edma/dw-edma-pcie.c
++++ b/drivers/dma/dw-edma/dw-edma-pcie.c
+@@ -186,27 +186,18 @@ static int dw_edma_pcie_probe(struct pci_dev *pdev,
+ 	pci_set_master(pdev);
+ 
+ 	/* DMA configuration */
+-	err = pci_set_dma_mask(pdev, DMA_BIT_MASK(64));
++	err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+ 	if (!err) {
+-		err = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(64));
+-		if (err) {
+-			pci_err(pdev, "consistent DMA mask 64 set failed\n");
+-			return err;
+-		}
++		pci_err(pdev, "DMA mask 64 set failed\n");
++		return err;
+ 	} else {
+ 		pci_err(pdev, "DMA mask 64 set failed\n");
+ 
+-		err = pci_set_dma_mask(pdev, DMA_BIT_MASK(32));
++		err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
+ 		if (err) {
+ 			pci_err(pdev, "DMA mask 32 set failed\n");
+ 			return err;
+ 		}
+-
+-		err = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32));
+-		if (err) {
+-			pci_err(pdev, "consistent DMA mask 32 set failed\n");
+-			return err;
+-		}
+ 	}
+ 
+ 	/* Data structure allocation */
+-- 
+2.31.1
+

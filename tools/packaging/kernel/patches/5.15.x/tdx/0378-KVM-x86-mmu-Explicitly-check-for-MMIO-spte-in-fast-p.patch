@@ -1,0 +1,32 @@
+From aae19df0fb94188147b0dc80e976dceb6e87110d Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Fri, 9 Aug 2019 09:25:05 -0700
+Subject: [PATCH 0378/1418] KVM: x86/mmu: Explicitly check for MMIO spte in
+ fast page fault
+
+Explicity check for an MMIO spte in the fast page fault flow.  TDX will
+use a not-present entry for MMIO sptes, which can be mistaken for an
+access-tracked spte since both have SPTE_SPECIAL_MASK set.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index e7a6ccf7c7f5..2104f5b369c8 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -3259,7 +3259,7 @@ static int fast_page_fault(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code)
+ 			break;
+ 
+ 		sp = sptep_to_sp(sptep);
+-		if (!is_last_spte(spte, sp->role.level))
++		if (!is_last_spte(spte, sp->role.level) || is_mmio_spte(spte))
+ 			break;
+ 
+ 		/*
+-- 
+2.31.1
+

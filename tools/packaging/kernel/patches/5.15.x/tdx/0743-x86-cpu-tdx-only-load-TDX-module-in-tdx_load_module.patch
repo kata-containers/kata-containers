@@ -1,0 +1,70 @@
+From 35b4f6375dc0338a67ae63da051fdde05f52e942 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Fri, 10 Dec 2021 22:37:06 +0800
+Subject: [PATCH 0743/1418] x86/cpu/tdx: only load TDX module in
+ tdx_load_module()
+
+Move other stuffs not related to loading TDX module to the sole
+caller. Then what tdx_load_module() does matches its name better
+and it can be reused for TDX module update.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx.c | 33 ++++++++++++++-------------------
+ 1 file changed, 14 insertions(+), 19 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 75f68a33400c..13623e2378ea 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -801,26 +801,8 @@ static int __init tdx_load_module(
+ 		/* don't care what exact error occurred on which cpus. */
+ 		ret = atomic_read(&install_module.error);
+ 		if (ret)
+-			goto out;
++			break;
+ 	}
+-
+-	ret = tdx_init_system();
+-	if (ret)
+-		goto out;
+-
+-	ret = tdx_get_system_info();
+-	if (ret)
+-		goto out;
+-
+-	ret = init_package_leaders();
+-	if (ret)
+-		goto out;
+-
+-	ret = tdx_init_cpuhp();
+-	if (ret)
+-		goto out;
+-
+-out:
+ 	free_seamldr_params(params);
+ 	return ret;
+ }
+@@ -886,6 +868,19 @@ static int __init tdx_arch_init(void)
+ 	pr_info("Loaded TDX module via P-SEAMLDR.\n");
+ 	set_tdx_module_state(TDX_MODULE_LOADED);
+ 
++	ret = tdx_init_system();
++	if (ret)
++		goto out;
++
++	ret = tdx_get_system_info();
++	if (ret)
++		goto out;
++
++	ret = init_package_leaders();
++	if (ret)
++		goto out;
++
++	ret = tdx_init_cpuhp();
+ out:
+ 	/*
+ 	 * Other codes (Especially kvm_intel) expect that they're the first to
+-- 
+2.31.1
+

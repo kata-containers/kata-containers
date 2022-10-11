@@ -1,0 +1,98 @@
+From 0aa5d2efb0de2737609fbaae4835dcb42ce945ed Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 15 Oct 2021 03:16:21 +0200
+Subject: [PATCH 0037/1418] x86/fpu: Clean up CPU feature tests
+
+Further disintegration of internal.h:
+
+Move the CPU feature tests to a core header and remove the unused one.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211015011539.401510559@linutronix.de
+---
+ arch/x86/include/asm/fpu/internal.h | 18 ------------------
+ arch/x86/kernel/fpu/core.c          |  1 +
+ arch/x86/kernel/fpu/internal.h      | 11 +++++++++++
+ arch/x86/kernel/fpu/regset.c        |  2 ++
+ 4 files changed, 14 insertions(+), 18 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/internal.h b/arch/x86/include/asm/fpu/internal.h
+index 398c87c8e199..5da7528b3b2f 100644
+--- a/arch/x86/include/asm/fpu/internal.h
++++ b/arch/x86/include/asm/fpu/internal.h
+@@ -51,24 +51,6 @@ extern void fpu__resume_cpu(void);
+ # define WARN_ON_FPU(x) ({ (void)(x); 0; })
+ #endif
+ 
+-/*
+- * FPU related CPU feature flag helper routines:
+- */
+-static __always_inline __pure bool use_xsaveopt(void)
+-{
+-	return static_cpu_has(X86_FEATURE_XSAVEOPT);
+-}
+-
+-static __always_inline __pure bool use_xsave(void)
+-{
+-	return static_cpu_has(X86_FEATURE_XSAVE);
+-}
+-
+-static __always_inline __pure bool use_fxsr(void)
+-{
+-	return static_cpu_has(X86_FEATURE_FXSR);
+-}
+-
+ extern union fpregs_state init_fpstate;
+ extern void fpstate_init_user(union fpregs_state *state);
+ 
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index e6087a61a844..e9b51c75e2c9 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -17,6 +17,7 @@
+ #include <linux/hardirq.h>
+ #include <linux/pkeys.h>
+ 
++#include "internal.h"
+ #include "xstate.h"
+ 
+ #define CREATE_TRACE_POINTS
+diff --git a/arch/x86/kernel/fpu/internal.h b/arch/x86/kernel/fpu/internal.h
+index 036f84c236dd..a8aac21ba364 100644
+--- a/arch/x86/kernel/fpu/internal.h
++++ b/arch/x86/kernel/fpu/internal.h
+@@ -2,6 +2,17 @@
+ #ifndef __X86_KERNEL_FPU_INTERNAL_H
+ #define __X86_KERNEL_FPU_INTERNAL_H
+ 
++/* CPU feature check wrappers */
++static __always_inline __pure bool use_xsave(void)
++{
++	return cpu_feature_enabled(X86_FEATURE_XSAVE);
++}
++
++static __always_inline __pure bool use_fxsr(void)
++{
++	return cpu_feature_enabled(X86_FEATURE_FXSR);
++}
++
+ /* Init functions */
+ extern void fpu__init_prepare_fx_sw_frame(void);
+ 
+diff --git a/arch/x86/kernel/fpu/regset.c b/arch/x86/kernel/fpu/regset.c
+index 66ed317ebc0d..ccf0c59955f1 100644
+--- a/arch/x86/kernel/fpu/regset.c
++++ b/arch/x86/kernel/fpu/regset.c
+@@ -10,6 +10,8 @@
+ #include <asm/fpu/regset.h>
+ #include <asm/fpu/xstate.h>
+ 
++#include "internal.h"
++
+ /*
+  * The xstateregs_active() routine is the same as the regset_fpregs_active() routine,
+  * as the "regset->n" for the xstate regset will be updated based on the feature
+-- 
+2.31.1
+

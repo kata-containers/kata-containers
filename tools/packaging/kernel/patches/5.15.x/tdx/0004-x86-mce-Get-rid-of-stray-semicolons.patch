@@ -1,0 +1,39 @@
+From 4c3a9cc8ccdd7e630af8bd39a6900329d8e83ddc Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 8 Sep 2021 15:29:16 +0200
+Subject: [PATCH 0004/1418] x86/mce: Get rid of stray semicolons
+
+and the random number of tabs.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20210908132525.154428878@linutronix.de
+---
+ arch/x86/kernel/cpu/mce/internal.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/mce/internal.h b/arch/x86/kernel/cpu/mce/internal.h
+index 88dcc79cfb07..95099225defc 100644
+--- a/arch/x86/kernel/cpu/mce/internal.h
++++ b/arch/x86/kernel/cpu/mce/internal.h
+@@ -61,7 +61,7 @@ static inline void cmci_disable_bank(int bank) { }
+ static inline void intel_init_cmci(void) { }
+ static inline void intel_init_lmce(void) { }
+ static inline void intel_clear_lmce(void) { }
+-static inline bool intel_filter_mce(struct mce *m) { return false; };
++static inline bool intel_filter_mce(struct mce *m) { return false; }
+ #endif
+ 
+ void mce_timer_kick(unsigned long interval);
+@@ -183,7 +183,7 @@ extern bool filter_mce(struct mce *m);
+ #ifdef CONFIG_X86_MCE_AMD
+ extern bool amd_filter_mce(struct mce *m);
+ #else
+-static inline bool amd_filter_mce(struct mce *m)			{ return false; };
++static inline bool amd_filter_mce(struct mce *m) { return false; }
+ #endif
+ 
+ __visible bool ex_handler_rdmsr_fault(const struct exception_table_entry *fixup,
+-- 
+2.31.1
+

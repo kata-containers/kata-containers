@@ -1,0 +1,82 @@
+From eff2f1d79d4650ccd43370fc8385f6b4ad1a2ae4 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Thu, 27 Aug 2020 10:22:30 -0700
+Subject: [PATCH 0374/1418] KVM: x86: Add option to force LAPIC expiration wait
+
+Add an option to skip the IRR check in kvm_wait_lapic_expire().  This
+will be used by TDX to wait if there is an outstanding notification for
+a TD, i.e. a virtual interrupt is being triggered via posted interrupt
+processing.  KVM TDX doesn't emulate PI processing, i.e. there will
+never be a bit set in IRR/ISR, so the default behavior for APICv of
+querying the IRR doesn't work as intended.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/lapic.c   | 4 ++--
+ arch/x86/kvm/lapic.h   | 2 +-
+ arch/x86/kvm/svm/svm.c | 2 +-
+ arch/x86/kvm/vmx/vmx.c | 2 +-
+ 4 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/kvm/lapic.c b/arch/x86/kvm/lapic.c
+index ada5861fdd59..64f08c2007e7 100644
+--- a/arch/x86/kvm/lapic.c
++++ b/arch/x86/kvm/lapic.c
+@@ -1625,12 +1625,12 @@ static void __kvm_wait_lapic_expire(struct kvm_vcpu *vcpu)
+ 		__wait_lapic_expire(vcpu, tsc_deadline - guest_tsc);
+ }
+ 
+-void kvm_wait_lapic_expire(struct kvm_vcpu *vcpu)
++void kvm_wait_lapic_expire(struct kvm_vcpu *vcpu, bool force_wait)
+ {
+ 	if (lapic_in_kernel(vcpu) &&
+ 	    vcpu->arch.apic->lapic_timer.expired_tscdeadline &&
+ 	    vcpu->arch.apic->lapic_timer.timer_advance_ns &&
+-	    lapic_timer_int_injected(vcpu))
++	    (force_wait || lapic_timer_int_injected(vcpu)))
+ 		__kvm_wait_lapic_expire(vcpu);
+ }
+ EXPORT_SYMBOL_GPL(kvm_wait_lapic_expire);
+diff --git a/arch/x86/kvm/lapic.h b/arch/x86/kvm/lapic.h
+index d7c25d0c1354..938fc528e2e0 100644
+--- a/arch/x86/kvm/lapic.h
++++ b/arch/x86/kvm/lapic.h
+@@ -233,7 +233,7 @@ static inline int kvm_lapic_latched_init(struct kvm_vcpu *vcpu)
+ 
+ bool kvm_apic_pending_eoi(struct kvm_vcpu *vcpu, int vector);
+ 
+-void kvm_wait_lapic_expire(struct kvm_vcpu *vcpu);
++void kvm_wait_lapic_expire(struct kvm_vcpu *vcpu, bool force_wait);
+ 
+ void kvm_bitmap_or_dest_vcpus(struct kvm *kvm, struct kvm_lapic_irq *irq,
+ 			      unsigned long *vcpu_bitmap);
+diff --git a/arch/x86/kvm/svm/svm.c b/arch/x86/kvm/svm/svm.c
+index 0581fd6aed98..1fdb89c527c4 100644
+--- a/arch/x86/kvm/svm/svm.c
++++ b/arch/x86/kvm/svm/svm.c
+@@ -3806,7 +3806,7 @@ static __no_kcsan fastpath_t svm_vcpu_run(struct kvm_vcpu *vcpu)
+ 	clgi();
+ 	kvm_load_guest_xsave_state(vcpu);
+ 
+-	kvm_wait_lapic_expire(vcpu);
++	kvm_wait_lapic_expire(vcpu, false);
+ 
+ 	/*
+ 	 * If this vCPU has touched SPEC_CTRL, restore the guest's value if
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 9b8b85e68603..8d399eb62301 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -6855,7 +6855,7 @@ static fastpath_t vmx_vcpu_run(struct kvm_vcpu *vcpu)
+ 	if (enable_preemption_timer)
+ 		vmx_update_hv_timer(vcpu);
+ 
+-	kvm_wait_lapic_expire(vcpu);
++	kvm_wait_lapic_expire(vcpu, false);
+ 
+ 	/*
+ 	 * If this vCPU has touched SPEC_CTRL, restore the guest's value if
+-- 
+2.31.1
+

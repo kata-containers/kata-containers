@@ -1,0 +1,55 @@
+From 64b4b6264b3b99242d3f7369db7393e0ef1793ae Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Thu, 12 Nov 2020 11:01:20 -0800
+Subject: [PATCH 0249/1418] x86/tdx: go directly to 64bit mode on APs
+
+When the kernel is built for 4 levels only, don't disable paging
+on the APs.
+---
+ arch/x86/realmode/rm/trampoline_64.S | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/arch/x86/realmode/rm/trampoline_64.S b/arch/x86/realmode/rm/trampoline_64.S
+index 0fdd74054044..2b6ef50fd6e4 100644
+--- a/arch/x86/realmode/rm/trampoline_64.S
++++ b/arch/x86/realmode/rm/trampoline_64.S
+@@ -208,6 +208,22 @@ SYM_CODE_START(trampoline_start64)
+ 	lidt	tr_idt(%rip)
+ 	lgdt	tr_gdt64(%rip)
+ 
++#if defined(CONFIG_INTEL_TDX_FIXES)
++	/* Go directly to 4 level if 5 level is not needed */
++	lea	rm_stack_end(%rip),%rsp
++	movl	$__KERNEL_DS, %edx
++	movl	%edx, %ss
++	movl	%edx, %ds
++	movl	%edx, %es
++	movl	%edx, %fs
++	movl	%edx, %gs
++
++	# Setup trampoline 4 level pagetables
++	movl	$pa_trampoline_pgd, %eax
++	mov	%rax, %cr3
++
++	ljmpl	*tr_startup64(%rip)
++#endif
+ 	ljmpl	*tr_compat(%rip)
+ SYM_CODE_END(trampoline_start64)
+ 
+@@ -235,6 +251,13 @@ SYM_DATA_START(tr_compat)
+ 	.short	__KERNEL32_CS
+ SYM_DATA_END(tr_compat)
+ 
++#if defined(CONFIG_INTEL_TDX_FIXES)
++SYM_DATA_START(tr_startup64)
++	.long	pa_startup_64
++	.short	__KERNEL_CS
++SYM_DATA_END(tr_startup64)
++#endif
++
+ 	.bss
+ 	.balign	PAGE_SIZE
+ SYM_DATA(trampoline_pgd, .space PAGE_SIZE)
+-- 
+2.31.1
+

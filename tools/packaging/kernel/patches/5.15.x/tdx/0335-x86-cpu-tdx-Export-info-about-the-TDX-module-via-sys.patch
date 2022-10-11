@@ -1,0 +1,204 @@
+From 320da218a5ab44e90c200e6743a3b4e8202e2767 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Thu, 23 Sep 2021 15:07:42 -0700
+Subject: [PATCH 0335/1418] x86/cpu/tdx: Export info about the TDX module via
+ sysfs
+
+TDX requires the TDX module firmware to load into an isolated memory
+region.  The TDX module comes with its attributes, vendor id, build date,
+build number, minor version, major version, etc.  Export that information
+via sysfs for admin or VM management software like libvirt.
+
+Co-developed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ Documentation/ABI/testing/sysfs-firmware-tdx |  46 ++++++++
+ arch/x86/kernel/cpu/tdx/tdx.c                | 117 +++++++++++++++++++
+ 2 files changed, 163 insertions(+)
+
+diff --git a/Documentation/ABI/testing/sysfs-firmware-tdx b/Documentation/ABI/testing/sysfs-firmware-tdx
+index 1e096189660d..c6653080204c 100644
+--- a/Documentation/ABI/testing/sysfs-firmware-tdx
++++ b/Documentation/ABI/testing/sysfs-firmware-tdx
+@@ -51,4 +51,50 @@ Description:
+                 major           Major version number as a hexadecimal number
+                                 with the "0x" prefix.
+                 =============== ================================================
++Users:          libvirt
++
++What:           /sys/firmware/tdx_module/
++Date:           September 2021
++KernelVersion:  5.15
++Contact:        Isaku Yamahata <isaku.yamahata@intel.com>, kvm@vger.kernel.org
++Description:
++                The TDX requires firmware as known as the TDX module.  It comes
++                with its attributes, vendor_id, build_data, build_num,
++                minor_version, major_version, etc.
++
++                Provides the information about the TDX module loaded on the
++                platform.  It contains the following read-only files.  The
++                information corresponds to the data structure, TDSYSINFO_STRUCT.
++                The admins or VMM management software like libvirt can refer to
++                that information, determine if TDX is supported, and identify
++                the loaded the TDX module.
++
++                ================== ============================================
++                attributes         32bit flags of the TDX module attributes as
++                                   a hexadecimal number with the "0x" prefix.
++                                   Bits 31 - a production module(0) or
++                                             a debug module(1).
++                                   Bits 30:0 Reserved - set to 0.
++                vendor_id          vendor ID as a hexadecimal number with the
++                                   "0x" prefix.
++                build_date         build date in yyyymmdd BCD format.
++                build_num          build number as a hexadecimal number with
++                                   the "0x" prefix.
++                minor_version      minor version as a hexadecimal number with
++                                   the "0x" prefix.
++                major_version      major versionas a hexadecimal number with
++                                   the "0x" prefix.
++                attributes_fixed0  fixed-0 value for TD's attributes as a
++                                   hexadecimal number with the "0x" prefix.
++                attributes_fixed1  fixed-1 value for TD's attributes as a
++                                   hexadecimal number with the "0x" prefix.
++                xfam_fixed0        fixed-0 value for TD xfam value as a
++                                   hexadecimal number with the "0x" prefix.
++                xfam_fixed1        fixed-1 value for TD xfam value as a
++                                   hexadecimal number with the "0x" prefix.
++                tdx_module_status  the status of the TDX module.  one of the
++                                   following strings.
++                                   "not-loaded", "loaded", "initialized",
++                                   "error", and "unknown".
++                ================== ============================================
+ Users:          libvirt
+\ No newline at end of file
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 276e7e6f8b8b..4a4de5b7bbd3 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -1142,4 +1142,121 @@ int __init tdx_sysfs_init(void)
+ 
+ 	return 0;
+ }
++
++static struct kobject *tdx_module_kobj;
++
++static ssize_t state_show(
++	struct kobject *kobj, struct kobj_attribute *attr, char *buf)
++{
++	static const char * const names[] = {
++		[TDX_MODULE_NOT_LOADED] = "not-loaded",
++		[TDX_MODULE_LOADED] = "loaded",
++		[TDX_MODULE_INITIALIZED] = "initialized",
++		[TDX_MODULE_ERROR] = "error"
++	};
++	const char *state = "unknown";
++
++	if (tdx_module_state < ARRAY_SIZE(names))
++		state = names[tdx_module_state];
++
++	return sprintf(buf, "%s\n", state);
++}
++
++static struct kobj_attribute tdx_module_state_attr = __ATTR_RO(state);
++
++static struct attribute *tdx_module_states[] = {
++	&tdx_module_state_attr.attr,
++	NULL,
++};
++
++static const struct attribute_group tdx_module_state_group = {
++	.attrs = tdx_module_states,
++};
++
++#define TDX_MODULE_ATTR_SHOW_FMT(name, fmt)				\
++static ssize_t name ## _show(						\
++	struct kobject *kobj, struct kobj_attribute *attr, char *buf)	\
++{									\
++	if (!tdx_tdsysinfo)						\
++		return 0;						\
++	return sprintf(buf, fmt, tdx_tdsysinfo->name);			\
++}									\
++static struct kobj_attribute tdx_module_##name = __ATTR_RO(name)
++
++#define TDX_MODULE_ATTR_SHOW_DEC(name)	TDX_MODULE_ATTR_SHOW_FMT(name, "%d\n")
++#define TDX_MODULE_ATTR_SHOW_HEX(name)	TDX_MODULE_ATTR_SHOW_FMT(name, "0x%x\n")
++#define TDX_MODULE_ATTR_SHOW_U64(name)	TDX_MODULE_ATTR_SHOW_FMT(name, "0x%016llx\n")
++
++TDX_MODULE_ATTR_SHOW_FMT(attributes, "0x%08x\n");
++TDX_MODULE_ATTR_SHOW_HEX(vendor_id);
++TDX_MODULE_ATTR_SHOW_DEC(build_date);
++TDX_MODULE_ATTR_SHOW_HEX(build_num);
++TDX_MODULE_ATTR_SHOW_HEX(minor_version);
++TDX_MODULE_ATTR_SHOW_HEX(major_version);
++TDX_MODULE_ATTR_SHOW_U64(attributes_fixed0);
++TDX_MODULE_ATTR_SHOW_U64(attributes_fixed1);
++TDX_MODULE_ATTR_SHOW_U64(xfam_fixed0);
++TDX_MODULE_ATTR_SHOW_U64(xfam_fixed1);
++
++static struct attribute *tdx_module_attrs[] = {
++	&tdx_module_attributes.attr,
++	&tdx_module_vendor_id.attr,
++	&tdx_module_build_date.attr,
++	&tdx_module_build_num.attr,
++	&tdx_module_minor_version.attr,
++	&tdx_module_major_version.attr,
++	&tdx_module_attributes_fixed0.attr,
++	&tdx_module_attributes_fixed1.attr,
++	&tdx_module_xfam_fixed0.attr,
++	&tdx_module_xfam_fixed1.attr,
++	NULL,
++};
++
++static const struct attribute_group tdx_module_attr_group = {
++	.attrs = tdx_module_attrs,
++};
++
++static int __init tdx_module_sysfs_init(void)
++{
++	int ret = 0;
++
++	if (!boot_cpu_has(X86_FEATURE_SEAM))
++		return 0;
++
++	ret = tdx_sysfs_init();
++	if (ret)
++		return ret;
++
++	tdx_module_kobj = kobject_create_and_add("tdx_module", tdx_kobj);
++	if (!tdx_module_kobj) {
++		pr_err("kobject_create_and_add tdx_module failed\n");
++		return -EINVAL;
++	}
++
++	ret = sysfs_create_group(tdx_module_kobj, &tdx_module_state_group);
++	if (ret) {
++		pr_err("Sysfs exporting tdx module state failed %d\n", ret);
++		goto err_kobj;
++	}
++
++	if (tdx_tdsysinfo) {
++		ret = sysfs_create_group(tdx_module_kobj,
++					 &tdx_module_attr_group);
++		if (ret) {
++			pr_err("Sysfs exporting tdx module attributes failed %d\n",
++			       ret);
++			goto err;
++		}
++	}
++
++	return 0;
++
++err:
++	sysfs_remove_group(tdx_module_kobj, &tdx_module_state_group);
++err_kobj:
++	kobject_put(tdx_module_kobj);
++	tdx_module_kobj = NULL;
++	return ret;
++}
++device_initcall(tdx_module_sysfs_init);
+ #endif
+-- 
+2.31.1
+

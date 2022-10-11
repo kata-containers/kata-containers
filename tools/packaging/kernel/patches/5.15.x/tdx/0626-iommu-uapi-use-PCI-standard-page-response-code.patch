@@ -1,0 +1,26 @@
+From b73be70470b4ead5fd4f0a411df7e3936597405e Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Thu, 3 Oct 2019 14:05:06 -0700
+Subject: [PATCH 0626/1418] iommu/uapi: use PCI standard page response code
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ include/uapi/linux/iommu.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/uapi/linux/iommu.h b/include/uapi/linux/iommu.h
+index e333b7224436..1566dfe83f6f 100644
+--- a/include/uapi/linux/iommu.h
++++ b/include/uapi/linux/iommu.h
+@@ -134,7 +134,7 @@ struct iommu_fault {
+ enum iommu_page_response_code {
+ 	IOMMU_PAGE_RESP_SUCCESS = 0,
+ 	IOMMU_PAGE_RESP_INVALID,
+-	IOMMU_PAGE_RESP_FAILURE,
++	IOMMU_PAGE_RESP_FAILURE = 0xf,
+ };
+ 
+ /**
+-- 
+2.31.1
+

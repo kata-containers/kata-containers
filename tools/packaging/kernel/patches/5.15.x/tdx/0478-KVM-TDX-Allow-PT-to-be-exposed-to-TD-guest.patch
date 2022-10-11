@@ -1,0 +1,43 @@
+From a7ed26ac46551b7d8f2c390c0caaa4558eb11f40 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Tue, 31 Aug 2021 22:33:44 +0800
+Subject: [PATCH 0478/1418] KVM: TDX: Allow PT to be exposed to TD guest
+
+For TD guest, PT is not restricted by pt_mode. Instead, it's always
+PT_MODE_HOST_GUEST mode.
+
+Allow PT to be exposed to TD guest even though KVM doesn't support PT
+in XSAVES, since TDX module does the XSAVE context for KVM.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index ecbd47f1db4b..267c9285b15f 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -707,7 +707,8 @@ static void tdx_restore_host_xsave_state(struct kvm_vcpu *vcpu)
+ 	    host_xcr0 != (kvm_tdx->xfam & supported_xcr0))
+ 		xsetbv(XCR_XFEATURE_ENABLED_MASK, host_xcr0);
+ 	if (static_cpu_has(X86_FEATURE_XSAVES) &&
+-	    host_xss != (kvm_tdx->xfam & supported_xss))
++	    /* PT can be exposed to TD guest regardless of KVM's XSS support */
++	    host_xss != (kvm_tdx->xfam & (supported_xss | XFEATURE_MASK_PT)))
+ 		wrmsrl(MSR_IA32_XSS, host_xss);
+ 	if (static_cpu_has(X86_FEATURE_PKU) &&
+ 	    (kvm_tdx->xfam & XFEATURE_MASK_PKRU))
+@@ -1924,7 +1925,8 @@ static int setup_tdparams(struct kvm *kvm, struct td_params *td_params,
+ 		guest_supported_xss = (entry->ecx | ((u64)entry->edx << 32));
+ 	else
+ 		guest_supported_xss = 0;
+-	guest_supported_xss &= supported_xss;
++	/* PT can be exposed to TD guest regardless of KVM's XSS support */
++	guest_supported_xss &= (supported_xss | XFEATURE_MASK_PT);
+ 
+ 	max_pa = 36;
+ 	entry = tdx_find_cpuid_entry(kvm_tdx, 0x80000008, 0);
+-- 
+2.31.1
+

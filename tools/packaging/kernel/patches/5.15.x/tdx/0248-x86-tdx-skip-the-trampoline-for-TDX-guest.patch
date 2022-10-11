@@ -1,0 +1,33 @@
+From c9bc469755b82735997bf4930630db6305ea9544 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Wed, 4 Nov 2020 05:06:13 +0000
+Subject: [PATCH 0248/1418] x86: tdx: skip the trampoline for TDX guest
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/boot/compressed/head_64.S | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/arch/x86/boot/compressed/head_64.S b/arch/x86/boot/compressed/head_64.S
+index e71001b380fe..be67f1fb85ca 100644
+--- a/arch/x86/boot/compressed/head_64.S
++++ b/arch/x86/boot/compressed/head_64.S
+@@ -468,6 +468,14 @@ SYM_CODE_START(startup_64)
+ 	/* Save the trampoline address in RCX */
+ 	movq	%rax, %rcx
+ 
++#if defined(CONFIG_INTEL_TDX_FIXES)
++	/*
++	 * Skip the trampoline for TDX guests, it's not needed if TDVF and the
++	 * guest use the same paging configuration (4 vs. 5 level). Disabling
++	 * paging appears to trigger issues on some platforms.
++	 */
++	jmp	trampoline_return
++#endif
+ 	/*
+ 	 * Load the address of trampoline_return() into RDI.
+ 	 * It will be used by the trampoline to return to the main code.
+-- 
+2.31.1
+

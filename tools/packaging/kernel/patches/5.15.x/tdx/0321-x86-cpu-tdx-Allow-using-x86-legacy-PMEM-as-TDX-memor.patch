@@ -1,0 +1,291 @@
+From de7a9e96f6a57d2b80c6e4ffecb3b5b770fd7617 Mon Sep 17 00:00:00 2001
+From: Kai Huang <kai.huang@intel.com>
+Date: Tue, 28 Sep 2021 09:55:47 +1300
+Subject: [PATCH 0321/1418] x86/cpu/tdx: Allow using x86 legacy PMEM as TDX
+ memory
+
+Users may want to use 'memmap=nn[KMG]!ss[KMG]' kernel parameter to reserve
+memory as legacy PMEM, and use /dev/pmem* as KVM guest memory backend.
+Since those legacy PMEMs are still normal memory underneath, they are
+potentially TDX capable as well.
+
+Introduce a dedicated Kconfig option to enable TDX for legacy PMEM, to
+allow the user to create TDX guests using legacy PMEM as backend.  Given
+that such a case may not be typical, use a dedicated Kconfig option, rather
+than unconditionally enable TDX for legacy PMEM.  This avoids allocating
+unnecessary TDMRs and PAMTs for legacy PMEMs.
+
+Use walk_iomem_res_desc() to discover all legacy PMEMs, instead of looking
+at 'e820_res' at an early stage, to avoid any resource conflict the issue,
+which may impact the legacy PMEM in 'iomem_resource'.
+
+Introduce subsys_initcall_sync(tdx_late_init) to build legacy PMEMs as TDX
+memory, since using walk_iomem_res_desc() to find legacy PMEMs must be done
+after e820__reserve_resources_late(), which is done in
+subsys_initcall(pci_subsys_init).  And finding legacy PMEMs must be done
+before device_initcall(register_e820_pmem), which triggers legacy PMEM
+driver being loaded, because PAMT to cover legacy PMEM must be taken out
+before driver detects the legacy PMEM.
+
+Signed-off-by: Kai Huang <kai.huang@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/Kconfig                           |  11 ++
+ arch/x86/kernel/cpu/tdx/Makefile           |   1 +
+ arch/x86/kernel/cpu/tdx/tdmr-legacy-pmem.c | 157 +++++++++++++++++++++
+ arch/x86/kernel/cpu/tdx/tdmr-legacy-pmem.h |  17 +++
+ arch/x86/kernel/cpu/tdx/tdx.c              |  15 ++
+ 5 files changed, 201 insertions(+)
+ create mode 100644 arch/x86/kernel/cpu/tdx/tdmr-legacy-pmem.c
+ create mode 100644 arch/x86/kernel/cpu/tdx/tdmr-legacy-pmem.h
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index a078aa212476..a731a2b8320d 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -1691,6 +1691,17 @@ config X86_PMEM_LEGACY
+ 
+ 	  Say Y if unsure.
+ 
++config ENABLE_TDX_FOR_X86_PMEM_LEGACY
++	bool "Enable TDX support for non-standard NVDIMMs and ADR protected memory"
++	depends on X86_PMEM_LEGACY
++	depends on INTEL_TDX_HOST
++	select NUMA_KEEP_MEMINFO if NUMA
++	help
++	  Convert non-standard NVDIMMs and ADR protected memory to TDX memory.
++	  This allows using non-standard NVDIMMs as TD guest memory.
++
++	  Say N if unsure.
++
+ config HIGHPTE
+ 	bool "Allocate 3rd-level pagetables from highmem"
+ 	depends on HIGHMEM
+diff --git a/arch/x86/kernel/cpu/tdx/Makefile b/arch/x86/kernel/cpu/tdx/Makefile
+index 7e1c222da3e6..7a57bf88489f 100644
+--- a/arch/x86/kernel/cpu/tdx/Makefile
++++ b/arch/x86/kernel/cpu/tdx/Makefile
+@@ -3,3 +3,4 @@
+ 
+ obj-y	+= seam.o seamcall.o p-seamldr.o np-seamldr.o
+ obj-y	+= tdx-error.o tdx.o tdmr-common.o tdmr-sysmem.o
++obj-$(CONFIG_ENABLE_TDX_FOR_X86_PMEM_LEGACY)	+= tdmr-legacy-pmem.o
+diff --git a/arch/x86/kernel/cpu/tdx/tdmr-legacy-pmem.c b/arch/x86/kernel/cpu/tdx/tdmr-legacy-pmem.c
+new file mode 100644
+index 000000000000..cbe422cb5ae3
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/tdmr-legacy-pmem.c
+@@ -0,0 +1,157 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Convert x86 legacy PMEM to TDX memory.
++ */
++#define pr_fmt(fmt) "tdx: " fmt
++
++#include <linux/ioport.h>
++#include <linux/slab.h>
++#include <linux/memremap.h>
++#include "tdmr-legacy-pmem.h"
++
++/* TDX memory instance which contains all x86 legacy PMEMs */
++struct tdx_memory tmem_legacy_pmem __initdata;
++
++struct tdx_memblock_legacy_pmem {
++	struct resource res;
++	phys_addr_t end;
++};
++
++static void __init legacy_pmem_tmb_free(struct tdx_memblock *tmb)
++{
++	struct tdx_memblock_legacy_pmem *legacy_pmem =
++		(struct tdx_memblock_legacy_pmem *)tmb->data;
++
++	kfree(legacy_pmem);
++}
++
++static struct tdx_memblock_ops legacy_pmem_ops = {
++	.tmb_free = legacy_pmem_tmb_free,
++};
++
++static bool x86_legacy_pmem_found __initdata;
++
++static int __init add_legacy_pmem_memblock(struct resource *res, void *data)
++{
++	struct tdx_memory *tmem = (struct tdx_memory *)data;
++	struct tdx_memblock_legacy_pmem *legacy_pmem;
++	struct tdx_memblock *tmb;
++	int nid, ret;
++
++	/*
++	 * walk_iomem_res_desc() returns -EINVAL if there's no resource found.
++	 * This confuses caller with the actual error when handling the resource
++	 * that has been found.  Use static variable x86_legacy_pmem_found to
++	 * indicate whether the error was due to no resource being found, or
++	 * actual error when handling resource.
++	 */
++	x86_legacy_pmem_found = true;
++
++	/*
++	 * Legacy PMEM has alignment requirement.  Just reject if alignment
++	 * does not meet.
++	 */
++	if (!IS_ALIGNED(res->start | (res->end + 1),
++			memremap_compat_align())) {
++		pr_err("legacy PMEM resource [0x%llx, 0x%llx] misaligned.\n",
++				res->start, res->end);
++		return -EFAULT;
++	}
++
++	nid = phys_to_target_node(res->start);
++	/* Legacy PMEM must belong to some NUMA node, otherwise there's bug. */
++	if (WARN_ON_ONCE(nid == NUMA_NO_NODE))
++		return -EFAULT;
++
++	legacy_pmem = kzalloc(sizeof(*legacy_pmem), GFP_KERNEL);
++	if (!legacy_pmem)
++		return -ENOMEM;
++
++	legacy_pmem->res = (struct resource) {
++		.name = "TDMR (x86 legacy PMEM)",
++		.start = res->start,
++		.end = res->end,
++		.flags = res->flags,
++		.desc = res->desc,
++	};
++
++	/*
++	 * For simplicity round up end to PAGE_SIZE aligned, unlike resource.
++	 * Note memremap_compat_align() alignment check above already guarantees
++	 * (res->end + 1) is at least PAGE_SIZE aligned.
++	 */
++	legacy_pmem->end = res->end + 1;
++	WARN_ON_ONCE(!IS_ALIGNED(legacy_pmem->end, PAGE_SIZE));
++
++	tmb = tdx_memblock_create(res->start >> PAGE_SHIFT,
++			legacy_pmem->end >> PAGE_SHIFT, nid,
++			(void *)legacy_pmem, &legacy_pmem_ops);
++	if (!tmb) {
++		kfree(legacy_pmem);
++		return -ENOMEM;
++	}
++
++	ret = tdx_memory_add_block(tmem, tmb);
++	if (ret) {
++		tdx_memblock_free(tmb);
++		return ret;
++	}
++
++	return 0;
++}
++
++static int __init __tdx_legacy_pmem_build(void)
++{
++	int ret;
++
++	pr_info("Build all x86 legacy PMEMs as TDX memory.\n");
++
++	tdx_memory_init(&tmem_legacy_pmem);
++
++	/*
++	 * Scan all legacy PMEMs, and save the TDMR ranges for them to
++	 * xarray.  Note the TDMR ranges in the xarray will be in
++	 * ascending order, since walk_iomem_res_desc() guarantees that.
++	 */
++	ret = walk_iomem_res_desc(IORES_DESC_PERSISTENT_MEMORY_LEGACY,
++			IORESOURCE_MEM, 0, -1, &tmem_legacy_pmem,
++			add_legacy_pmem_memblock);
++
++	if (!x86_legacy_pmem_found)
++		ret = 0;
++
++	if (ret)
++		goto err;
++
++	return 0;
++
++err:
++	pr_err("Fail to build x86 legacy PMEMs as TDX memory.\n");
++	tdx_legacy_pmem_cleanup();
++	return ret;
++}
++
++/**
++ * tdx_legacy_pmem_build:	Build all x86 legacy PMEM as TDX memory
++ *
++ * Build TDX memory @tmem_legacy_pmem for all x86 legacy PMEMs reserved by
++ * 'memmap=nn!ss' kernel parameter.
++ */
++int __init tdx_legacy_pmem_build(void)
++{
++	if (!boot_cpu_has(X86_FEATURE_SEAM))
++		return 0;
++
++	return __tdx_legacy_pmem_build();
++}
++
++/**
++ * tdx_legacy_pmem_cleanup:	Clean up legacy PMEM TDX memory
++ *
++ * Clean up TDX memory instances built from all x86 legacy PMEMs for all NUMA
++ * nodes.
++ */
++void __init tdx_legacy_pmem_cleanup(void)
++{
++	tdx_memory_destroy(&tmem_legacy_pmem);
++}
+diff --git a/arch/x86/kernel/cpu/tdx/tdmr-legacy-pmem.h b/arch/x86/kernel/cpu/tdx/tdmr-legacy-pmem.h
+new file mode 100644
+index 000000000000..49aa8b72088d
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/tdmr-legacy-pmem.h
+@@ -0,0 +1,17 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _X86_TDMR_LEGACY_PMEM_H
++#define _X86_TDMR_LEGACY_PMEM_H
++
++#include "tdmr-common.h"
++
++extern struct tdx_memory tmem_legacy_pmem __initdata;
++
++#ifdef CONFIG_ENABLE_TDX_FOR_X86_PMEM_LEGACY
++int __init tdx_legacy_pmem_build(void);
++void __init tdx_legacy_pmem_cleanup(void);
++#else
++static inline int tdx_legacy_pmem_build(void) { return 0; }
++static inline void tdx_legacy_pmem_cleanup(void) { }
++#endif
++
++#endif
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index f96b0a01be28..37b62b026d76 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -16,6 +16,7 @@
+ #include <asm/apic.h>
+ 
+ #include "tdmr-sysmem.h"
++#include "tdmr-legacy-pmem.h"
+ #include "seamcall.h"
+ #include "tdx-ops.h"
+ #include "p-seamldr.h"
+@@ -764,3 +765,17 @@ static int __init tdx_arch_init(void)
+  * - After SMP initialization.
+  */
+ arch_initcall(tdx_arch_init);
++
++static int __init tdx_late_init(void)
++{
++	if (tdx_module_state != TDX_MODULE_LOADED)
++		return -ENODEV;
++
++	/*
++	 * Build legacy PMEMs as TDX memory in subsys_initcall_sync() here,
++	 * after e820__reserve_resources_late() is done, since it uses
++	 * walk_iomem_res_desc() to find legacy PMEMs
++	 */
++	return tdx_legacy_pmem_build();
++}
++subsys_initcall_sync(tdx_late_init);
+-- 
+2.31.1
+

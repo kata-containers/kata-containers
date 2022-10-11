@@ -1,0 +1,316 @@
+From 8215a94be24d47fa99fa2d7227a48ca2b7fdc88f Mon Sep 17 00:00:00 2001
+From: Tao Xu <tao3.xu@intel.com>
+Date: Wed, 10 Jun 2020 10:56:12 +0800
+Subject: [PATCH 0283/1418] KVM: VMX: Enable Notify VM exit
+
+There are some cases that malicious virtual machines can cause CPU stuck
+(event windows don't open up), e.g., infinite loop in microcode when
+nested #AC (CVE-2015-5307). No event window obviously means no events,
+e.g. NMIs, SMIs, and IRQs will all be blocked, may cause the related
+hardware CPU can't be used by host or other VM.
+
+To resolve those cases, it can enable a notify VM exit if no event
+window occur in VMX non-root mode for a specified amount of time
+(notify window). Since CPU is first observed the risk of not causing
+forward progress, after notify window time in a units of crystal clock,
+Notify VM exit will happen. Notify VM exit can happen incident to delivery
+of a vectored event.
+
+Expose a module param to configure notify window, which is in unit of
+crystal clock cycle.
+- A negative value (e.g. -1) is to disable this feature.
+- After enabling this feature, there's a possibility, however small, that
+  a notify exit happened with VM_CONTEXT_INVALID set. In this case, the
+  vcpu can no longer run. To avoid killing a well-behaved guest, set
+  notify window as -1 to disable this feature by default.
+- User can set notify window to a non-negative value to enable this
+  feature. The hardware has an internal threshold which will be added to the
+  notify window to ensure all the normal instructions being covered.
+- It is not allowed to be modified at runtime and can only be set during
+  loading module.
+
+Introduce a vcpu state notify_window_exits to records the count of
+notify VM exits. Expose it through the debugfs and pr_warn the current
+guest rip, which is helpful in triaging the suspicious VM.
+
+In addtion, nested notify window exits are not supported yet. Keep the
+same notify window control in vmcs02 as vmcs01, so that L1 can't escape
+the restriction of notify window exits through launching L2 VM. Besides,
+when the L2 VM is context invalid, synthesize a nested
+EXIT_REASON_TRIPLE_FAULT to L1 so that L1 won't be killed due to L2's
+VM_CONTEXT_INVALID happens.
+
+Notify VM exit is defined in latest Intel Architecture Instruction Set
+Extensions Programming Reference, chapter 9.2.
+---
+ arch/x86/include/asm/kvm_host.h    |  1 +
+ arch/x86/include/asm/vmx.h         |  7 ++++
+ arch/x86/include/asm/vmxfeatures.h |  1 +
+ arch/x86/include/uapi/asm/vmx.h    |  4 ++-
+ arch/x86/kvm/vmx/capabilities.h    |  7 ++++
+ arch/x86/kvm/vmx/nested.c          |  6 ++++
+ arch/x86/kvm/vmx/vmx.c             | 52 ++++++++++++++++++++++++++++--
+ arch/x86/kvm/x86.c                 |  3 +-
+ include/uapi/linux/kvm.h           |  2 ++
+ 9 files changed, 79 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 8a94896b0575..b8b509155d76 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1283,6 +1283,7 @@ struct kvm_vcpu_stat {
+ 	u64 directed_yield_attempted;
+ 	u64 directed_yield_successful;
+ 	u64 guest_mode;
++	u64 notify_window_exits;
+ };
+ 
+ struct x86_instruction_info;
+diff --git a/arch/x86/include/asm/vmx.h b/arch/x86/include/asm/vmx.h
+index 0416ee6a15ba..e576b3f39049 100644
+--- a/arch/x86/include/asm/vmx.h
++++ b/arch/x86/include/asm/vmx.h
+@@ -75,6 +75,7 @@
+ #define SECONDARY_EXEC_TSC_SCALING              VMCS_CONTROL_BIT(TSC_SCALING)
+ #define SECONDARY_EXEC_ENABLE_USR_WAIT_PAUSE	VMCS_CONTROL_BIT(USR_WAIT_PAUSE)
+ #define SECONDARY_EXEC_BUS_LOCK_DETECTION	VMCS_CONTROL_BIT(BUS_LOCK_DETECTION)
++#define SECONDARY_EXEC_NOTIFY_VM_EXITING	VMCS_CONTROL_BIT(NOTIFY_VM_EXITING)
+ 
+ /*
+  * Definitions of Tertiary Processor-Based VM-Execution Controls.
+@@ -286,6 +287,7 @@ enum vmcs_field {
+ 	SECONDARY_VM_EXEC_CONTROL       = 0x0000401e,
+ 	PLE_GAP                         = 0x00004020,
+ 	PLE_WINDOW                      = 0x00004022,
++	NOTIFY_WINDOW                   = 0x00004024,
+ 	VM_INSTRUCTION_ERROR            = 0x00004400,
+ 	VM_EXIT_REASON                  = 0x00004402,
+ 	VM_EXIT_INTR_INFO               = 0x00004404,
+@@ -572,6 +574,11 @@ enum vm_entry_failure_code {
+ #define EPT_VIOLATION_EXECUTABLE	(1 << EPT_VIOLATION_EXECUTABLE_BIT)
+ #define EPT_VIOLATION_GVA_TRANSLATED	(1 << EPT_VIOLATION_GVA_TRANSLATED_BIT)
+ 
++/*
++ * Exit Qualifications for NOTIFY VM EXIT
++ */
++#define NOTIFY_VM_CONTEXT_INVALID     BIT(0)
++
+ /*
+  * VM-instruction error numbers
+  */
+diff --git a/arch/x86/include/asm/vmxfeatures.h b/arch/x86/include/asm/vmxfeatures.h
+index da1762d9d199..95fffa7bac67 100644
+--- a/arch/x86/include/asm/vmxfeatures.h
++++ b/arch/x86/include/asm/vmxfeatures.h
+@@ -85,6 +85,7 @@
+ #define VMX_FEATURE_USR_WAIT_PAUSE	( 2*32+ 26) /* Enable TPAUSE, UMONITOR, UMWAIT in guest */
+ #define VMX_FEATURE_ENCLV_EXITING	( 2*32+ 28) /* "" VM-Exit on ENCLV (leaf dependent) */
+ #define VMX_FEATURE_BUS_LOCK_DETECTION	( 2*32+ 30) /* "" VM-Exit when bus lock caused */
++#define VMX_FEATURE_NOTIFY_VM_EXITING	( 2*32+ 31) /* VM-Exit when no event windows after notify window */
+ 
+ /* Tertiary Processor-Based VM-Execution Controls, word 3 */
+ #define VMX_FEATURE_IPI_VIRT		( 3*32 + 4) /* "" Enable IPI virtualization */
+diff --git a/arch/x86/include/uapi/asm/vmx.h b/arch/x86/include/uapi/asm/vmx.h
+index 946d761adbd3..ef4c80f6553e 100644
+--- a/arch/x86/include/uapi/asm/vmx.h
++++ b/arch/x86/include/uapi/asm/vmx.h
+@@ -91,6 +91,7 @@
+ #define EXIT_REASON_UMWAIT              67
+ #define EXIT_REASON_TPAUSE              68
+ #define EXIT_REASON_BUS_LOCK            74
++#define EXIT_REASON_NOTIFY              75
+ 
+ #define VMX_EXIT_REASONS \
+ 	{ EXIT_REASON_EXCEPTION_NMI,         "EXCEPTION_NMI" }, \
+@@ -153,7 +154,8 @@
+ 	{ EXIT_REASON_XRSTORS,               "XRSTORS" }, \
+ 	{ EXIT_REASON_UMWAIT,                "UMWAIT" }, \
+ 	{ EXIT_REASON_TPAUSE,                "TPAUSE" }, \
+-	{ EXIT_REASON_BUS_LOCK,              "BUS_LOCK" }
++	{ EXIT_REASON_BUS_LOCK,              "BUS_LOCK" }, \
++	{ EXIT_REASON_NOTIFY,                "NOTIFY"}
+ 
+ #define VMX_EXIT_REASON_FLAGS \
+ 	{ VMX_EXIT_REASONS_FAILED_VMENTRY,	"FAILED_VMENTRY" }
+diff --git a/arch/x86/kvm/vmx/capabilities.h b/arch/x86/kvm/vmx/capabilities.h
+index 3f113db23277..8db9360aad6c 100644
+--- a/arch/x86/kvm/vmx/capabilities.h
++++ b/arch/x86/kvm/vmx/capabilities.h
+@@ -14,6 +14,7 @@ extern bool __read_mostly enable_ept_ad_bits;
+ extern bool __read_mostly enable_pml;
+ extern bool __read_mostly enable_ipiv;
+ extern int __read_mostly pt_mode;
++extern int __read_mostly notify_window;
+ 
+ #define PT_MODE_SYSTEM		0
+ #define PT_MODE_HOST_GUEST	1
+@@ -425,4 +426,10 @@ static inline u64 vmx_supported_debugctl(void)
+ 	return debugctl;
+ }
+ 
++static inline bool cpu_has_notify_vm_exiting(void)
++{
++	return vmcs_config.cpu_based_2nd_exec_ctrl &
++		SECONDARY_EXEC_NOTIFY_VM_EXITING;
++}
++
+ #endif /* __KVM_X86_VMX_CAPS_H */
+diff --git a/arch/x86/kvm/vmx/nested.c b/arch/x86/kvm/vmx/nested.c
+index 1c100b00f722..a6a0c540cff9 100644
+--- a/arch/x86/kvm/vmx/nested.c
++++ b/arch/x86/kvm/vmx/nested.c
+@@ -2190,6 +2190,9 @@ static void prepare_vmcs02_constant_state(struct vcpu_vmx *vmx)
+ 	if (cpu_has_vmx_encls_vmexit())
+ 		vmcs_write64(ENCLS_EXITING_BITMAP, -1ull);
+ 
++	if (cpu_has_notify_vm_exiting() && notify_window >= 0)
++		vmcs_write32(NOTIFY_WINDOW, notify_window);
++
+ 	/*
+ 	 * Set the MSR load/store lists to match L0's settings.  Only the
+ 	 * addresses are constant (for vmcs02), the counts can change based
+@@ -6070,6 +6073,9 @@ static bool nested_vmx_l1_wants_exit(struct kvm_vcpu *vcpu,
+ 			SECONDARY_EXEC_ENABLE_USR_WAIT_PAUSE);
+ 	case EXIT_REASON_ENCLS:
+ 		return nested_vmx_exit_handled_encls(vcpu, vmcs12);
++	case EXIT_REASON_NOTIFY:
++		return nested_cpu_has2(vmcs12,
++			SECONDARY_EXEC_NOTIFY_VM_EXITING);
+ 	default:
+ 		return true;
+ 	}
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 48853a7e70f0..6b6d2aafaf7c 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -210,6 +210,10 @@ module_param(ple_window_max, uint, 0444);
+ int __read_mostly pt_mode = PT_MODE_SYSTEM;
+ module_param(pt_mode, int, S_IRUGO);
+ 
++/* Set default as -1 to disable notify window */
++int __read_mostly notify_window = -1;
++module_param(notify_window, int, 0444);
++
+ static DEFINE_STATIC_KEY_FALSE(vmx_l1d_should_flush);
+ static DEFINE_STATIC_KEY_FALSE(vmx_l1d_flush_cond);
+ static DEFINE_MUTEX(vmx_l1d_flush_mutex);
+@@ -2531,7 +2535,8 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf,
+ 			SECONDARY_EXEC_PT_USE_GPA |
+ 			SECONDARY_EXEC_PT_CONCEAL_VMX |
+ 			SECONDARY_EXEC_ENABLE_VMFUNC |
+-			SECONDARY_EXEC_BUS_LOCK_DETECTION;
++			SECONDARY_EXEC_BUS_LOCK_DETECTION |
++			SECONDARY_EXEC_NOTIFY_VM_EXITING;
+ 		if (cpu_has_sgx())
+ 			opt2 |= SECONDARY_EXEC_ENCLS_EXITING;
+ 		if (adjust_vmx_controls(min2, opt2,
+@@ -4434,6 +4439,9 @@ static u32 vmx_secondary_exec_control(struct vcpu_vmx *vmx)
+ 	if (!vcpu->kvm->arch.bus_lock_detection_enabled)
+ 		exec_control &= ~SECONDARY_EXEC_BUS_LOCK_DETECTION;
+ 
++	if (cpu_has_notify_vm_exiting() && notify_window < 0)
++		exec_control &= ~SECONDARY_EXEC_NOTIFY_VM_EXITING;
++
+ 	return exec_control;
+ }
+ 
+@@ -4492,6 +4500,9 @@ static void init_vmcs(struct vcpu_vmx *vmx)
+ 		vmx->ple_window_dirty = true;
+ 	}
+ 
++	if (cpu_has_notify_vm_exiting() && notify_window >= 0)
++		vmcs_write32(NOTIFY_WINDOW, notify_window);
++
+ 	vmcs_write32(PAGE_FAULT_ERROR_CODE_MASK, 0);
+ 	vmcs_write32(PAGE_FAULT_ERROR_CODE_MATCH, 0);
+ 	vmcs_write32(CR3_TARGET_COUNT, 0);           /* 22.2.1 */
+@@ -5697,6 +5708,41 @@ static int handle_bus_lock_vmexit(struct kvm_vcpu *vcpu)
+ 	return 1;
+ }
+ 
++static int handle_notify(struct kvm_vcpu *vcpu)
++{
++	unsigned long exit_qual = vmx_get_exit_qual(vcpu);
++
++	++vcpu->stat.notify_window_exits;
++	pr_warn_ratelimited("Notify window exits at address: 0x%lx\n",
++			    kvm_rip_read(vcpu));
++
++	if (!(exit_qual & NOTIFY_VM_CONTEXT_INVALID)) {
++		/*
++		 * Notify VM exit happened while executing iret from NMI,
++		 * "blocked by NMI" bit has to be set before next VM entry.
++		 */
++
++		if (enable_vnmi &&
++		    (exit_qual & INTR_INFO_UNBLOCK_NMI))
++			vmcs_set_bits(GUEST_INTERRUPTIBILITY_INFO,
++				      GUEST_INTR_STATE_NMI);
++
++		return 1;
++	}
++
++	if (is_guest_mode(vcpu)) {
++		kvm_make_request(KVM_REQ_TRIPLE_FAULT, vcpu);
++		return 1;
++	}
++
++	vcpu->run->exit_reason = KVM_EXIT_INTERNAL_ERROR;
++	vcpu->run->internal.suberror = KVM_INTERNAL_ERROR_NO_EVENT_WINDOW;
++	vcpu->run->internal.ndata = 1;
++	vcpu->run->internal.data[0] = exit_qual;
++
++	return 0;
++}
++
+ /*
+  * The exit handlers return 1 if the exit was handled fully and guest execution
+  * may resume.  Otherwise they set the kvm_run parameter to indicate what needs
+@@ -5754,6 +5800,7 @@ static int (*kvm_vmx_exit_handlers[])(struct kvm_vcpu *vcpu) = {
+ 	[EXIT_REASON_PREEMPTION_TIMER]	      = handle_preemption_timer,
+ 	[EXIT_REASON_ENCLS]		      = handle_encls,
+ 	[EXIT_REASON_BUS_LOCK]                = handle_bus_lock_vmexit,
++	[EXIT_REASON_NOTIFY]		      = handle_notify,
+ };
+ 
+ static const int kvm_vmx_max_exit_handlers =
+@@ -6109,7 +6156,8 @@ static int __vmx_handle_exit(struct kvm_vcpu *vcpu, fastpath_t exit_fastpath)
+ 	     exit_reason.basic != EXIT_REASON_EPT_VIOLATION &&
+ 	     exit_reason.basic != EXIT_REASON_PML_FULL &&
+ 	     exit_reason.basic != EXIT_REASON_APIC_ACCESS &&
+-	     exit_reason.basic != EXIT_REASON_TASK_SWITCH)) {
++	     exit_reason.basic != EXIT_REASON_TASK_SWITCH &&
++	     exit_reason.basic != EXIT_REASON_NOTIFY)) {
+ 		int ndata = 3;
+ 
+ 		vcpu->run->exit_reason = KVM_EXIT_INTERNAL_ERROR;
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 2ce5d972fa7e..c1bb5f9fc3b6 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -279,7 +279,8 @@ const struct _kvm_stats_desc kvm_vcpu_stats_desc[] = {
+ 	STATS_DESC_COUNTER(VCPU, nested_run),
+ 	STATS_DESC_COUNTER(VCPU, directed_yield_attempted),
+ 	STATS_DESC_COUNTER(VCPU, directed_yield_successful),
+-	STATS_DESC_ICOUNTER(VCPU, guest_mode)
++	STATS_DESC_ICOUNTER(VCPU, guest_mode),
++	STATS_DESC_COUNTER(VCPU, notify_window_exits),
+ };
+ 
+ const struct kvm_stats_header kvm_vcpu_stats_header = {
+diff --git a/include/uapi/linux/kvm.h b/include/uapi/linux/kvm.h
+index a067410ebea5..4ccbff0c447c 100644
+--- a/include/uapi/linux/kvm.h
++++ b/include/uapi/linux/kvm.h
+@@ -279,6 +279,8 @@ struct kvm_xen_exit {
+ #define KVM_INTERNAL_ERROR_DELIVERY_EV	3
+ /* Encounter unexpected vm-exit reason */
+ #define KVM_INTERNAL_ERROR_UNEXPECTED_EXIT_REASON	4
++/* Encounter notify vm-exit */
++#define KVM_INTERNAL_ERROR_NO_EVENT_WINDOW   5
+ 
+ /* Flags that describe what fields in emulation_failure hold valid data. */
+ #define KVM_INTERNAL_ERROR_EMULATION_FLAG_INSTRUCTION_BYTES (1ULL << 0)
+-- 
+2.31.1
+

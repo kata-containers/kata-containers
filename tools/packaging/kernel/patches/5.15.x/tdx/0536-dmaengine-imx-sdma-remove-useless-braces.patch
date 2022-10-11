@@ -1,0 +1,32 @@
+From 18e75cb3c0aaf29300ec25e65440797d6e14aac8 Mon Sep 17 00:00:00 2001
+From: Flavio Suligoi <f.suligoi@asem.it>
+Date: Tue, 28 Sep 2021 17:18:30 +0200
+Subject: [PATCH 0536/1418] dmaengine: imx-sdma: remove useless braces
+
+Braces {} are not necessary for single statement blocks.
+
+Signed-off-by: Flavio Suligoi <f.suligoi@asem.it>
+Link: https://lore.kernel.org/r/20210928151833.589843-1-f.suligoi@asem.it
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/imx-sdma.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/dma/imx-sdma.c b/drivers/dma/imx-sdma.c
+index cacc725ca545..a58798fc3ff8 100644
+--- a/drivers/dma/imx-sdma.c
++++ b/drivers/dma/imx-sdma.c
+@@ -741,9 +741,8 @@ static int sdma_load_script(struct sdma_engine *sdma, void *buf, int size,
+ 	unsigned long flags;
+ 
+ 	buf_virt = dma_alloc_coherent(sdma->dev, size, &buf_phys, GFP_KERNEL);
+-	if (!buf_virt) {
++	if (!buf_virt)
+ 		return -ENOMEM;
+-	}
+ 
+ 	spin_lock_irqsave(&sdma->channel_0_lock, flags);
+ 
+-- 
+2.31.1
+

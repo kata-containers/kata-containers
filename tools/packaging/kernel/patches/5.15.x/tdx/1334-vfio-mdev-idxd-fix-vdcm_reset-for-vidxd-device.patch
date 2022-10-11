@@ -1,0 +1,29 @@
+From 0c05931989bcc3039297ebd2053244d9a30ed66d Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Fri, 29 Apr 2022 12:27:48 -0700
+Subject: [PATCH 1334/1418] vfio: mdev: idxd: fix vdcm_reset() for vidxd device
+
+Make vdcm_reset() to do full vidxd re-initialization in order for the ADI
+to load in guest after soft reset.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/vfio/mdev/idxd/mdev.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/vfio/mdev/idxd/mdev.c b/drivers/vfio/mdev/idxd/mdev.c
+index b071521d2158..4aeaf7689385 100644
+--- a/drivers/vfio/mdev/idxd/mdev.c
++++ b/drivers/vfio/mdev/idxd/mdev.c
+@@ -1453,7 +1453,7 @@ static int idxd_vdcm_mmap(struct vfio_device *vdev, struct vm_area_struct *vma)
+ 
+ static void vidxd_vdcm_reset(struct vdcm_idxd *vidxd)
+ {
+-	vidxd_reset(vidxd);
++	idxd_vdcm_init(vidxd);
+ }
+ 
+ static irqreturn_t idxd_vdcm_msix_handler(int irq, void *arg)
+-- 
+2.31.1
+

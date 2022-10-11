@@ -1,0 +1,117 @@
+From 2046d8824e55cfbd5c9e87927d008494a0d37057 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Thu, 21 Oct 2021 15:55:08 -0700
+Subject: [PATCH 0087/1418] x86/fpu: Add members to struct fpu to cache
+ permission information
+
+Dynamically enabled features can be requested by any thread of a running
+process at any time. The request does neither enable the feature nor
+allocate larger buffers. It just stores the permission to use the feature
+by adding the features to the permission bitmap and by calculating the
+required sizes for kernel and user space.
+
+The reallocation of the kernel buffer happens when the feature is used
+for the first time which is caught by an exception. The permission
+bitmap is then checked and if the feature is permitted, then it becomes
+fully enabled. If not, the task dies similarly to a task which uses an
+undefined instruction.
+
+The size information is precomputed to allow proper sigaltstack size checks
+once the feature is permitted, but not yet in use because otherwise this
+would open race windows where too small stacks could be installed causing
+a later fail on signal delivery.
+
+Initialize them to the default feature set and sizes.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Chang S. Bae <chang.seok.bae@intel.com>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211021225527.10184-5-chang.seok.bae@intel.com
+---
+ arch/x86/include/asm/fpu/types.h | 46 ++++++++++++++++++++++++++++++++
+ arch/x86/kernel/fpu/core.c       |  5 ++++
+ 2 files changed, 51 insertions(+)
+
+diff --git a/arch/x86/include/asm/fpu/types.h b/arch/x86/include/asm/fpu/types.h
+index c72cb2269adc..c3ec56279767 100644
+--- a/arch/x86/include/asm/fpu/types.h
++++ b/arch/x86/include/asm/fpu/types.h
+@@ -352,6 +352,45 @@ struct fpstate {
+ 	/* @regs is dynamically sized! Don't add anything after @regs! */
+ } __aligned(64);
+ 
++struct fpu_state_perm {
++	/*
++	 * @__state_perm:
++	 *
++	 * This bitmap indicates the permission for state components, which
++	 * are available to a thread group. The permission prctl() sets the
++	 * enabled state bits in thread_group_leader()->thread.fpu.
++	 *
++	 * All run time operations use the per thread information in the
++	 * currently active fpu.fpstate which contains the xfeature masks
++	 * and sizes for kernel and user space.
++	 *
++	 * This master permission field is only to be used when
++	 * task.fpu.fpstate based checks fail to validate whether the task
++	 * is allowed to expand it's xfeatures set which requires to
++	 * allocate a larger sized fpstate buffer.
++	 *
++	 * Do not access this field directly.  Use the provided helper
++	 * function. Unlocked access is possible for quick checks.
++	 */
++	u64				__state_perm;
++
++	/*
++	 * @__state_size:
++	 *
++	 * The size required for @__state_perm. Only valid to access
++	 * with sighand locked.
++	 */
++	unsigned int			__state_size;
++
++	/*
++	 * @__user_state_size:
++	 *
++	 * The size required for @__state_perm user part. Only valid to
++	 * access with sighand locked.
++	 */
++	unsigned int			__user_state_size;
++};
++
+ /*
+  * Highest level per task FPU state data structure that
+  * contains the FPU register state plus various FPU
+@@ -395,6 +434,13 @@ struct fpu {
+ 	 */
+ 	struct fpstate			*__task_fpstate;
+ 
++	/*
++	 * @perm:
++	 *
++	 * Permission related information
++	 */
++	struct fpu_state_perm		perm;
++
+ 	/*
+ 	 * @__fpstate:
+ 	 *
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 9c475e2efd4d..b05f6a3b2057 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -412,6 +412,11 @@ void fpstate_reset(struct fpu *fpu)
+ 	/* Set the fpstate pointer to the default fpstate */
+ 	fpu->fpstate = &fpu->__fpstate;
+ 	__fpstate_reset(fpu->fpstate);
++
++	/* Initialize the permission related info in fpu */
++	fpu->perm.__state_perm		= fpu_kernel_cfg.default_features;
++	fpu->perm.__state_size		= fpu_kernel_cfg.default_size;
++	fpu->perm.__user_state_size	= fpu_user_cfg.default_size;
+ }
+ 
+ /* Clone current's FPU state on fork */
+-- 
+2.31.1
+

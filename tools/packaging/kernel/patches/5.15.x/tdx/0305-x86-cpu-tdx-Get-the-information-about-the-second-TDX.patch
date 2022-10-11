@@ -1,0 +1,186 @@
+From d9dce4afab69d148674dbf624d2f2abf242f69fd Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Tue, 21 Sep 2021 16:17:15 -0700
+Subject: [PATCH 0305/1418] x86/cpu/tdx: Get the information about the second
+ TDX firmware loader
+
+After loading the second phase firmware loader(a.k.a. P-SEAMLDR), get the
+information about it and log it for the administrator of the machine or VM
+management software.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/p-seamldr.c | 75 +++++++++++++++++++++++++++++
+ arch/x86/kernel/cpu/tdx/p-seamldr.h | 49 +++++++++++++++++++
+ 2 files changed, 124 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.c b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+index 66335ff47a1a..0352861b24dd 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.c
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+@@ -38,6 +38,19 @@ static int __init seamldr_param(char *str)
+ }
+ early_param("np_seamldr", seamldr_param);
+ 
++int seamldr_info(phys_addr_t seamldr_info)
++{
++	u64 ret;
++
++	ret = seamcall(SEAMCALL_SEAMLDR_INFO, seamldr_info, 0, 0, 0, NULL);
++	if (ret) {
++		pr_err("SEAMCALL[SEAMLDR_INFO] failed %s (0x%llx)\n",
++		       p_seamldr_error_name(ret), ret);
++		return -EIO;
++	}
++	return 0;
++}
++
+ /*
+  * is_seamrr_enabled - check if seamrr is supported.
+  */
+@@ -320,6 +333,62 @@ p_seamldr_load(struct cpio_data *cpio_np_seamldr)
+ 	return ret;
+ }
+ 
++static struct p_seamldr_info *p_seamldr_info;
++
++static int __init p_seamldr_get_info(void)
++{
++	struct vmcs *vmcs = NULL;
++	int vmxoff_err = 0;
++	int err = 0;
++
++	BUILD_BUG_ON((sizeof(*p_seamldr_info) % P_SEAMLDR_INFO_ALIGNMENT) != 0);
++	p_seamldr_info = kmalloc(sizeof(*p_seamldr_info), GFP_KERNEL);
++	if (!p_seamldr_info)
++		return -ENOMEM;
++
++	/* P-SEAMLDR executes in SEAM VMX-root that requires VMXON. */
++	vmcs = (struct vmcs *)get_zeroed_page(GFP_KERNEL);
++	if (!vmcs) {
++		err = -ENOMEM;
++		goto out;
++	}
++	seam_init_vmxon_vmcs(vmcs);
++
++	/* Because it's before kvm_init, VMX shouldn't be enabled. */
++	WARN_ON(__read_cr4() & X86_CR4_VMXE);
++	err = cpu_vmxon(__pa(vmcs));
++	if (err)
++		goto out;
++
++	err = seamldr_info(__pa(p_seamldr_info));
++
++	/*
++	 * Other initialization codes expect that no one else uses VMX and that
++	 * VMX is off.  Disable VMX to keep such assumptions.
++	 */
++	vmxoff_err = cpu_vmxoff();
++	if (!err && vmxoff_err)
++		err = vmxoff_err;
++	if (err)
++		goto out;
++
++	pr_info("TDX P-SEAMLDR: version 0x%0x attributes 0x%0x vendor_id 0x%x "
++		"build_date %d build_num 0x%x minor 0x%x major 0x%x.\n",
++		p_seamldr_info->version, p_seamldr_info->attributes,
++		p_seamldr_info->vendor_id, p_seamldr_info->build_date,
++		p_seamldr_info->build_num,
++		p_seamldr_info->minor, p_seamldr_info->major);
++out:
++	free_page((unsigned long)vmcs);	/* free_page() ignores NULL */
++
++	/* On success, keep p_seamldr_info to export the info via sysfs. */
++	if (err) {
++		kfree(p_seamldr_info);
++		p_seamldr_info = NULL;
++	}
++	return err;
++}
++
+ /*
+  * load_p_seamldr() - load P-SEAMLDR
+  *
+@@ -356,6 +425,12 @@ int __init load_p_seamldr(void)
+ 		return err;
+ 	}
+ 
++	err = p_seamldr_get_info();
++	if (err) {
++		pr_err("failed to get TDX P-SEAMLDR info\n");
++		return err;
++	}
++
+ 	pr_info("Successfully loaded TDX P-SEAMLDR.\n");
+ 	return 0;
+ }
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.h b/arch/x86/kernel/cpu/tdx/p-seamldr.h
+index f2bb8eb99858..8e212618fd3d 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.h
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.h
+@@ -4,6 +4,9 @@
+ #ifndef _X86_TDX_P_SEAMLOADER_H
+ #define _X86_TDX_P_SEAMLOADER_H
+ 
++#include <linux/types.h>
++#include <asm/page.h>
++
+ /*
+  * NP-SEAMLDR error codes
+  */
+@@ -24,6 +27,52 @@
+ 
+ const char *p_seamldr_error_name(u64 error_code);
+ 
++/*
++ * P-SEAMLDR function leaves
++ */
++#define SEAMCALL_SEAMLDR_BASE		BIT_ULL(63)
++#define SEAMCALL_SEAMLDR_INFO		SEAMCALL_SEAMLDR_BASE
++
++struct tee_tcb_svn {
++	u16 seam;
++	u8 reserved[14];
++} __packed;
++
++struct __tee_tcb_info {
++	u64 valid;
++	struct tee_tcb_svn tee_tcb_svn;
++	u64 mrseam[6];		/* SHA-384 */
++	u64 mrsignerseam[6];	/* SHA-384 */
++	u64 attributes;
++} __packed;
++
++struct tee_tcb_info {
++	struct __tee_tcb_info info;
++	u8 reserved[111];
++} __packed;
++
++#define P_SEAMLDR_INFO_ALIGNMENT	256
++struct p_seamldr_info {
++	u32 version;
++	u32 attributes;
++	u32 vendor_id;
++	u32 build_date;
++	u16 build_num;
++	u16 minor;
++	u16 major;
++	u8 reserved0[2];
++	u32 acm_x2apicid;
++	u8 reserved1[4];
++	struct __tee_tcb_info seaminfo;
++	u8 seam_ready;
++	u8 seam_debug;
++	u8 p_seamldr_ready;
++	u8 reserved2[88];
++} __packed __aligned(P_SEAMLDR_INFO_ALIGNMENT);
++
++
++int seamldr_info(phys_addr_t seamldr_info);
++
+ int __init load_p_seamldr(void);
+ 
+ #endif /* _X86_TDX_P_SEAMLOADER_H */
+-- 
+2.31.1
+

@@ -1,0 +1,153 @@
+From 340b8d95e843e7442c69a768917c0d347fe3ac48 Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Fri, 12 Feb 2021 12:19:49 -0800
+Subject: [PATCH 1173/1418] mm/pkeys: Provide for PKS key allocation
+
+Kernel consumers of PKS need a way to allocate a PKS pkey and assign the
+initial permissions for that key.  It is desirable to not allocate keys
+for consumers which are not configured.
+
+Introduce a macro to allocate keys sequentially based on which consumers
+are configured.  In addition define a macro to set the proper permission
+bits based on the actual pkey value allocated.
+
+pks-keys.h is added as a new header with minimal header dependencies.
+This allows the use of PKS_INIT_VALUE within other headers where the
+additional includes from other pkey headers caused major conflicts.  The
+main conflict was using PKS_INIT_VALUE for INIT_TRHEAD in
+asm/processor.h
+
+Add documentation.
+
+Suggested-by: Dan Williams <dan.j.williams@intel.com>
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ Documentation/core-api/protection-keys.rst |  5 ++
+ arch/x86/include/asm/pkeys_common.h        |  9 ++-
+ include/linux/pks-keys.h                   | 78 ++++++++++++++++++++++
+ 3 files changed, 91 insertions(+), 1 deletion(-)
+ create mode 100644 include/linux/pks-keys.h
+
+diff --git a/Documentation/core-api/protection-keys.rst b/Documentation/core-api/protection-keys.rst
+index 13eedb0119e1..d501bd27ee29 100644
+--- a/Documentation/core-api/protection-keys.rst
++++ b/Documentation/core-api/protection-keys.rst
+@@ -131,3 +131,8 @@ ARCH_HAS_SUPERVISOR_PKEYS.  It also makes it possible for multiple independent
+ features to "select ARCH_ENABLE_SUPERVISOR_PKEYS".  If no features enable PKS
+ by selecting ARCH_ENABLE_SUPERVISOR_PKEYS, PKS support will not be compiled
+ into the kernel.
++
++PKS Key Allocation
++------------------
++.. kernel-doc:: include/linux/pks-keys.h
++        :doc: PKS_KEY_ALLOCATION
+diff --git a/arch/x86/include/asm/pkeys_common.h b/arch/x86/include/asm/pkeys_common.h
+index 359b94cdcc0c..b28a72dea22b 100644
+--- a/arch/x86/include/asm/pkeys_common.h
++++ b/arch/x86/include/asm/pkeys_common.h
+@@ -2,10 +2,17 @@
+ #ifndef _ASM_X86_PKEYS_COMMON_H
+ #define _ASM_X86_PKEYS_COMMON_H
+ 
++#define PKS_NUM_PKEYS 16
++#define PKS_ALL_AD (0x55555555UL)
++
+ #define PKR_AD_BIT 0x1u
+ #define PKR_WD_BIT 0x2u
+ #define PKR_BITS_PER_PKEY 2
+ 
+-#define PKR_AD_MASK(pkey)	(PKR_AD_BIT << ((pkey) * PKR_BITS_PER_PKEY))
++#define PKR_PKEY_SHIFT(pkey)	(pkey * PKR_BITS_PER_PKEY)
++
++#define PKR_RW_MASK(pkey)	(0          << PKR_PKEY_SHIFT(pkey))
++#define PKR_AD_MASK(pkey)	(PKR_AD_BIT << PKR_PKEY_SHIFT(pkey))
++#define PKR_WD_MASK(pkey)	(PKR_WD_BIT << PKR_PKEY_SHIFT(pkey))
+ 
+ #endif /*_ASM_X86_PKEYS_COMMON_H */
+diff --git a/include/linux/pks-keys.h b/include/linux/pks-keys.h
+new file mode 100644
+index 000000000000..c914afecb2d3
+--- /dev/null
++++ b/include/linux/pks-keys.h
+@@ -0,0 +1,78 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _LINUX_PKS_KEYS_H
++#define _LINUX_PKS_KEYS_H
++
++/*
++ * The contents of this header should be limited to assigning PKS keys and
++ * default values to avoid intricate header dependencies.
++ */
++
++#ifdef CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS
++
++#include <asm/pkeys_common.h>
++
++#define PKS_NEW_KEY(prev, config) \
++	(prev + __is_defined(config))
++#define PKS_DECLARE_INIT_VALUE(pkey, value, config) \
++	(PKR_##value##_MASK(pkey) * __is_defined(config))
++
++/**
++ * DOC: PKS_KEY_ALLOCATION
++ *
++ * Users reserve a key value in 5 steps.
++ *	1) Use PKS_NEW_KEY to create a new key
++ *	2) Ensure that the last key value is specified in the PKS_NEW_KEY macro
++ *	3) Adjust PKS_KEY_MAX to use the newly defined key value
++ *	4) Use PKS_DECLARE_INIT_VALUE to define an initial value
++ *	5) Add the new PKS default value to PKS_INIT_VALUE
++ *
++ * The PKS_NEW_KEY and PKS_DECLARE_INIT_VALUE macros require the Kconfig
++ * option to be specified to automatically adjust the number of keys used.
++ *
++ * PKS_KEY_DEFAULT must remain 0 with a default of PKS_DECLARE_INIT_VALUE(...,
++ * RW, ...) to support non-pks protected pages.
++ *
++ * Example: to configure a key for 'MY_FEATURE' with a default of Write
++ * Disabled.
++ *
++ * .. code-block:: c
++ *
++ *	#define PKS_KEY_DEFAULT		0
++ *
++ *	// 1) Use PKS_NEW_KEY to create a new key
++ *	// 2) Ensure that the last key value is specified (eg PKS_KEY_DEFAULT)
++ *	#define PKS_KEY_MY_FEATURE PKS_NEW_KEY(PKS_KEY_DEFAULT, CONFIG_MY_FEATURE)
++ *
++ *	// 3) Adjust PKS_KEY_MAX
++ *	#define PKS_KEY_MAX	   PKS_NEW_KEY(PKS_KEY_MY_FEATURE, 1)
++ *
++ *	// 4) Define initial value
++ *	#define PKS_KEY_MY_FEATURE_INIT PKS_DECLARE_INIT_VALUE(PKS_KEY_MY_FEATURE, \
++ *								WD, CONFIG_MY_FEATURE)
++ *
++ *
++ *	// 5) Add initial value to PKS_INIT_VALUE
++ *	#define PKS_INIT_VALUE ((PKS_ALL_AD & PKS_ALL_AD_MASK) | \
++ *				PKS_KEY_DEFAULT_INIT | \
++ *				PKS_KEY_MY_FEATURE_INIT \
++ *				)
++ */
++
++/* PKS_KEY_DEFAULT must be 0 */
++#define PKS_KEY_DEFAULT		0
++#define PKS_KEY_MAX		PKS_NEW_KEY(PKS_KEY_DEFAULT, 1)
++
++/* PKS_KEY_DEFAULT_INIT must be RW */
++#define PKS_KEY_DEFAULT_INIT	PKS_DECLARE_INIT_VALUE(PKS_KEY_DEFAULT, RW, 1)
++
++#define PKS_ALL_AD_MASK \
++	GENMASK(PKS_NUM_PKEYS * PKR_BITS_PER_PKEY, \
++		PKS_KEY_MAX * PKR_BITS_PER_PKEY)
++
++#define PKS_INIT_VALUE ((PKS_ALL_AD & PKS_ALL_AD_MASK) | \
++			PKS_KEY_DEFAULT_INIT \
++			)
++
++#endif /* CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
++
++#endif /* _LINUX_PKS_KEYS_H */
+-- 
+2.31.1
+

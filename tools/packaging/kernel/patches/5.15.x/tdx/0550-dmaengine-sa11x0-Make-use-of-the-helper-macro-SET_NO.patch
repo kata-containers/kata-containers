@@ -1,0 +1,40 @@
+From 4ebf5fb5f08479c2a71ede751c4ab620c5ed3771 Mon Sep 17 00:00:00 2001
+From: Cai Huoqing <caihuoqing@baidu.com>
+Date: Sat, 28 Aug 2021 17:01:17 +0800
+Subject: [PATCH 0550/1418] dmaengine: sa11x0: Make use of the helper macro
+ SET_NOIRQ_SYSTEM_SLEEP_PM_OPS()
+
+Use the helper macro SET_NOIRQ_SYSTEM_SLEEP_PM_OPS() instead of the
+verbose operators ".suspend_noirq /.resume_noirq/.freeze_noirq/
+.thaw_noirq/.poweroff_noirq/.restore_noirq", because the
+SET_NOIRQ_SYSTEM_SLEEP_PM_OPS() is a nice helper macro that could
+be brought in to make code a little clearer, a little more concise.
+
+Signed-off-by: Cai Huoqing <caihuoqing@baidu.com>
+Link: https://lore.kernel.org/r/20210828090117.1814-1-caihuoqing@baidu.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/sa11x0-dma.c | 7 +------
+ 1 file changed, 1 insertion(+), 6 deletions(-)
+
+diff --git a/drivers/dma/sa11x0-dma.c b/drivers/dma/sa11x0-dma.c
+index 1e918e284fc0..38f318b2f80d 100644
+--- a/drivers/dma/sa11x0-dma.c
++++ b/drivers/dma/sa11x0-dma.c
+@@ -1072,12 +1072,7 @@ static int sa11x0_dma_resume(struct device *dev)
+ }
+ 
+ static const struct dev_pm_ops sa11x0_dma_pm_ops = {
+-	.suspend_noirq = sa11x0_dma_suspend,
+-	.resume_noirq = sa11x0_dma_resume,
+-	.freeze_noirq = sa11x0_dma_suspend,
+-	.thaw_noirq = sa11x0_dma_resume,
+-	.poweroff_noirq = sa11x0_dma_suspend,
+-	.restore_noirq = sa11x0_dma_resume,
++	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(sa11x0_dma_suspend, sa11x0_dma_resume)
+ };
+ 
+ static struct platform_driver sa11x0_dma_driver = {
+-- 
+2.31.1
+

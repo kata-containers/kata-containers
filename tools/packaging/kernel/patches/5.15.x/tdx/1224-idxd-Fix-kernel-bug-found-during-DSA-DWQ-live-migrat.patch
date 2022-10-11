@@ -1,0 +1,82 @@
+From 3a4d0259f124883eada64c0463961e9b819036d2 Mon Sep 17 00:00:00 2001
+From: Yi Sun <yi.y.sun@linux.intel.com>
+Date: Mon, 21 Mar 2022 22:25:34 +0800
+Subject: [PATCH 1224/1418] idxd: Fix kernel bug found during DSA DWQ live
+ migration
+
+Found below kernel bug when doing DSA DWQ live migration
+[  940.265678] BUG: kernel NULL pointer dereference, address: 0000000000000000
+...
+[  940.319892] RIP: 0010:vidxd_portal_mmio_write.cold.12+0x53/0x216 [idxd_mdev]
+
+The reason is that some critical codes missed during porting
+codes from 5.12 to 5.15. Fix it.
+
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+---
+ drivers/dma/idxd/idxd.h       | 1 +
+ drivers/dma/idxd/init.c       | 4 ++++
+ drivers/vfio/mdev/idxd/mdev.c | 4 +++-
+ drivers/vfio/mdev/idxd/vdev.c | 4 +++-
+ 4 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/dma/idxd/idxd.h b/drivers/dma/idxd/idxd.h
+index af16e91e07e3..0ef632284a8b 100644
+--- a/drivers/dma/idxd/idxd.h
++++ b/drivers/dma/idxd/idxd.h
+@@ -284,6 +284,7 @@ struct idxd_device {
+ 
+ 	struct pci_dev *pdev;
+ 	void __iomem *reg_base;
++	void __iomem *portal_base;
+ 
+ 	spinlock_t dev_lock;	/* spinlock for device */
+ 	spinlock_t cmd_lock;	/* spinlock for device commands */
+diff --git a/drivers/dma/idxd/init.c b/drivers/dma/idxd/init.c
+index 3a9293cec28f..ff6aced60244 100644
+--- a/drivers/dma/idxd/init.c
++++ b/drivers/dma/idxd/init.c
+@@ -612,6 +612,10 @@ static int idxd_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+ 		goto err_iomap;
+ 	}
+ 
++	idxd->portal_base = pcim_iomap(pdev, IDXD_WQ_BAR, 0);
++	if (!idxd->portal_base)
++		return -ENOMEM;
++
+ 	dev_dbg(dev, "Set DMA masks\n");
+ 	rc = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+ 	if (rc)
+diff --git a/drivers/vfio/mdev/idxd/mdev.c b/drivers/vfio/mdev/idxd/mdev.c
+index 39ffca5c4a38..380925905809 100644
+--- a/drivers/vfio/mdev/idxd/mdev.c
++++ b/drivers/vfio/mdev/idxd/mdev.c
+@@ -587,7 +587,9 @@ static int vidxd_resubmit_pending_descs (struct vdcm_idxd *vidxd,
+ 			memcpy((u8 *)&el, data_ptr + *offset, sizeof(el));
+ 			*offset += sizeof(el);
+ 
+-			portal = wq->portal;
++			portal = vidxd->idxd->portal_base +
++				idxd_get_wq_portal_full_offset(wq->id,
++						el.portal_prot, IDXD_IRQ_IMS);
+ 			portal += (el.portal_id << 6);
+ 
+ 			pr_info("submitting a desc to WQ %d:%d ded %d\n",
+diff --git a/drivers/vfio/mdev/idxd/vdev.c b/drivers/vfio/mdev/idxd/vdev.c
+index 9e4972466f27..a89ebe9ae4ee 100644
+--- a/drivers/vfio/mdev/idxd/vdev.c
++++ b/drivers/vfio/mdev/idxd/vdev.c
+@@ -330,7 +330,9 @@ int vidxd_portal_mmio_write(struct vdcm_idxd *vidxd, u64 pos, void *buf,
+ 			}
+                } else {
+ 			void __iomem *wq_portal;
+-			portal = wq->portal;
++			wq_portal = vidxd->idxd->portal_base +
++				idxd_get_wq_portal_full_offset(wq->id,
++						portal_prot, IDXD_IRQ_IMS);
+ 			wq_portal += (portal_id << 6);
+ 			printk("submitting a desc to WQ %d ded %d\n", wq->id,
+ 					wq_dedicated(wq));
+-- 
+2.31.1
+

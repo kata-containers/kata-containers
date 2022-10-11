@@ -1,0 +1,46 @@
+From ea61b6fc8ff52a9ffbcf44ca598c8ff0ba96fbc0 Mon Sep 17 00:00:00 2001
+From: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Date: Wed, 15 Dec 2021 17:28:02 -0800
+Subject: [PATCH 1015/1418] tools/power/x86/intel-speed-select: Update max
+ frequency
+
+When BIOS disables turbo, the cpuinfo_max_freq will also be same as the
+power up base frequency. When SST-PP causes increase in base frequency
+the performance will be still limited to the old base frequency as the
+cpuinfo_max_freq will not be updated.
+
+In this case we need to update scaling_max frequency to the new
+base_frequency. This will result in setting updated max performance
+limit in the Pstate driver. So performance will not be limited to the
+old base frequency.
+
+Signed-off-by: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Reviewed-by: Hans de Goede <hdegoede@redhat.com>
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+---
+ tools/power/x86/intel-speed-select/isst-config.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/tools/power/x86/intel-speed-select/isst-config.c b/tools/power/x86/intel-speed-select/isst-config.c
+index bf9fd3549a1d..7967a04559e1 100644
+--- a/tools/power/x86/intel-speed-select/isst-config.c
++++ b/tools/power/x86/intel-speed-select/isst-config.c
+@@ -1599,6 +1599,7 @@ static void set_scaling_min_to_cpuinfo_max(int cpu)
+ 		    die_id != get_physical_die_id(i))
+ 			continue;
+ 
++		adjust_scaling_max_from_base_freq(i);
+ 		set_cpufreq_scaling_min_max_from_cpuinfo(i, 1, 0);
+ 		adjust_scaling_min_from_base_freq(i);
+ 	}
+@@ -1615,6 +1616,7 @@ static void set_scaling_min_to_cpuinfo_min(int cpu)
+ 		    die_id != get_physical_die_id(i))
+ 			continue;
+ 
++		adjust_scaling_max_from_base_freq(i);
+ 		set_cpufreq_scaling_min_max_from_cpuinfo(i, 0, 0);
+ 	}
+ }
+-- 
+2.31.1
+

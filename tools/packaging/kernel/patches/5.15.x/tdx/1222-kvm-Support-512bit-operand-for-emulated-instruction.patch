@@ -1,0 +1,140 @@
+From a6387e41b1c0f7ced8a2f1b7d58aaa0cc390e35c Mon Sep 17 00:00:00 2001
+From: Yi Sun <yi.y.sun@linux.intel.com>
+Date: Thu, 17 Feb 2022 18:27:40 +0800
+Subject: [PATCH 1222/1418] kvm: Support 512bit operand for emulated
+ instruction
+
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+---
+ arch/x86/kvm/x86.c       | 26 +++++++++++++-------------
+ include/uapi/linux/kvm.h |  4 ++--
+ 2 files changed, 15 insertions(+), 15 deletions(-)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index fd01fa0f6b6d..74ca68f94bf7 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -6526,7 +6526,7 @@ static int vcpu_mmio_write(struct kvm_vcpu *vcpu, gpa_t addr, int len,
+ 	int n;
+ 
+ 	do {
+-		n = min(len, 8);
++		n = min(len, 64);
+ 		if (!(lapic_in_kernel(vcpu) &&
+ 		      !kvm_iodevice_write(vcpu, &vcpu->arch.apic->dev, addr, n, v))
+ 		    && kvm_io_bus_write(vcpu, KVM_MMIO_BUS, addr, n, v))
+@@ -6546,7 +6546,7 @@ static int vcpu_mmio_read(struct kvm_vcpu *vcpu, gpa_t addr, int len, void *v)
+ 	int n;
+ 
+ 	do {
+-		n = min(len, 8);
++		n = min(len, 64);
+ 		if (!(lapic_in_kernel(vcpu) &&
+ 		      !kvm_iodevice_read(vcpu, &vcpu->arch.apic->dev,
+ 					 addr, n, v))
+@@ -6906,7 +6906,7 @@ static int write_exit_mmio(struct kvm_vcpu *vcpu, gpa_t gpa,
+ {
+ 	struct kvm_mmio_fragment *frag = &vcpu->mmio_fragments[0];
+ 
+-	memcpy(vcpu->run->mmio.data, frag->data, min(8u, frag->len));
++	memcpy(vcpu->run->mmio.data, frag->data, min(64u, frag->len));
+ 	return X86EMUL_CONTINUE;
+ }
+ 
+@@ -7022,7 +7022,7 @@ static int emulator_read_write(struct x86_emulate_ctxt *ctxt,
+ 	vcpu->mmio_needed = 1;
+ 	vcpu->mmio_cur_fragment = 0;
+ 
+-	vcpu->run->mmio.len = min(8u, vcpu->mmio_fragments[0].len);
++	vcpu->run->mmio.len = min(64u, vcpu->mmio_fragments[0].len);
+ 	vcpu->run->mmio.is_write = vcpu->mmio_is_write = ops->write;
+ 
+ 	if (non_posted && ops->write) {
+@@ -10217,7 +10217,7 @@ static int complete_emulated_mmio(struct kvm_vcpu *vcpu)
+ 
+ 	/* Complete previous fragment */
+ 	frag = &vcpu->mmio_fragments[vcpu->mmio_cur_fragment];
+-	len = min(8u, frag->len);
++	len = min(64u, frag->len);
+ 	if (!vcpu->mmio_is_write)
+ 		memcpy(frag->data, run->mmio.data, len);
+ 
+@@ -10249,8 +10249,8 @@ static int complete_emulated_mmio(struct kvm_vcpu *vcpu)
+ 	run->exit_reason = KVM_EXIT_MMIO;
+ 	run->mmio.phys_addr = frag->gpa;
+ 	if (vcpu->mmio_is_write)
+-		memcpy(run->mmio.data, frag->data, min(8u, frag->len));
+-	run->mmio.len = min(8u, frag->len);
++		memcpy(run->mmio.data, frag->data, min(64u, frag->len));
++	run->mmio.len = min(64u, frag->len);
+ 	run->mmio.is_write = vcpu->mmio_is_write;
+ 	vcpu->arch.complete_userspace_io = complete_emulated_mmio;
+ 	return 0;
+@@ -12633,7 +12633,7 @@ static int complete_sev_es_emulated_mmio(struct kvm_vcpu *vcpu)
+ 
+ 	/* Complete previous fragment */
+ 	frag = &vcpu->mmio_fragments[vcpu->mmio_cur_fragment];
+-	len = min(8u, frag->len);
++	len = min(64u, frag->len);
+ 	if (!vcpu->mmio_is_write)
+ 		memcpy(frag->data, run->mmio.data, len);
+ 
+@@ -12658,10 +12658,10 @@ static int complete_sev_es_emulated_mmio(struct kvm_vcpu *vcpu)
+ 
+ 	// More MMIO is needed
+ 	run->mmio.phys_addr = frag->gpa;
+-	run->mmio.len = min(8u, frag->len);
++	run->mmio.len = min(64u, frag->len);
+ 	run->mmio.is_write = vcpu->mmio_is_write;
+ 	if (run->mmio.is_write)
+-		memcpy(run->mmio.data, frag->data, min(8u, frag->len));
++		memcpy(run->mmio.data, frag->data, min(64u, frag->len));
+ 	run->exit_reason = KVM_EXIT_MMIO;
+ 
+ 	vcpu->arch.complete_userspace_io = complete_sev_es_emulated_mmio;
+@@ -12697,9 +12697,9 @@ int kvm_sev_es_mmio_write(struct kvm_vcpu *vcpu, gpa_t gpa, unsigned int bytes,
+ 	vcpu->mmio_cur_fragment = 0;
+ 
+ 	vcpu->run->mmio.phys_addr = gpa;
+-	vcpu->run->mmio.len = min(8u, frag->len);
++	vcpu->run->mmio.len = min(64u, frag->len);
+ 	vcpu->run->mmio.is_write = 1;
+-	memcpy(vcpu->run->mmio.data, frag->data, min(8u, frag->len));
++	memcpy(vcpu->run->mmio.data, frag->data, min(64u, frag->len));
+ 	vcpu->run->exit_reason = KVM_EXIT_MMIO;
+ 
+ 	vcpu->arch.complete_userspace_io = complete_sev_es_emulated_mmio;
+@@ -12736,7 +12736,7 @@ int kvm_sev_es_mmio_read(struct kvm_vcpu *vcpu, gpa_t gpa, unsigned int bytes,
+ 	vcpu->mmio_cur_fragment = 0;
+ 
+ 	vcpu->run->mmio.phys_addr = gpa;
+-	vcpu->run->mmio.len = min(8u, frag->len);
++	vcpu->run->mmio.len = min(64u, frag->len);
+ 	vcpu->run->mmio.is_write = 0;
+ 	vcpu->run->exit_reason = KVM_EXIT_MMIO;
+ 
+diff --git a/include/uapi/linux/kvm.h b/include/uapi/linux/kvm.h
+index ff82c35a1aee..d5e52d37f8a8 100644
+--- a/include/uapi/linux/kvm.h
++++ b/include/uapi/linux/kvm.h
+@@ -394,7 +394,7 @@ struct kvm_run {
+ 		/* KVM_EXIT_MMIO */
+ 		struct {
+ 			__u64 phys_addr;
+-			__u8  data[8];
++			__u8  data[64];
+ 			__u32 len;
+ 			__u8  is_write;
+ 		} mmio;
+@@ -569,7 +569,7 @@ struct kvm_coalesced_mmio {
+ 		__u32 pad;
+ 		__u32 pio;
+ 	};
+-	__u8  data[8];
++	__u8  data[64];
+ };
+ 
+ struct kvm_coalesced_mmio_ring {
+-- 
+2.31.1
+

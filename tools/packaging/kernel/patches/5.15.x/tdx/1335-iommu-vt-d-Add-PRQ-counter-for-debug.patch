@@ -1,0 +1,108 @@
+From 44268228edcfe9137668bee39da836037b918064 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Tue, 26 Apr 2022 16:27:12 -0700
+Subject: [PATCH 1335/1418] iommu/vt-d: Add PRQ counter for debug
+
+To debug possible lost page requests or page responses, this patch adds
+three counters to be used as follows:
+- clear counter:
+echo 0 >  /sys/kernel/debug/iommu/intel/dmar_perf_latency
+- read the counters
+root@kbl:~# cat /sys/kernel/debug/iommu/intel/invalidation_queue  | grep -e PR -e dma
+Invalidation queue on IOMMU: dmar1
+No. of received PRQs: 0
+No. of PRR SUCCESS sent: 0
+No. of PRR INVALID sent: 0
+Invalidation queue on IOMMU: dmar0
+No. of received PRQs: 0
+No. of PRR SUCCESS sent: 0
+No. of PRR INVALID sent: 0
+Invalidation queue on IOMMU: dmar2
+No. of received PRQs: 0
+No. of PRR SUCCESS sent: 0
+No. of PRR INVALID sent: 0
+
+The above counter need to be used with idxd perfmon.
+perf stat -a -e
+dsa0/event=0x10,event_category=0x2/,dsa0/event=0x20,event_category=0x2/,dsa0/event=0x2,event_category=0x2/,dsa0/event=0x8000,event_category=0x2/
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/intel/debugfs.c | 6 ++++++
+ drivers/iommu/intel/dmar.c    | 7 +++++++
+ drivers/iommu/intel/svm.c     | 1 +
+ include/linux/intel-iommu.h   | 4 ++++
+ 4 files changed, 18 insertions(+)
+
+diff --git a/drivers/iommu/intel/debugfs.c b/drivers/iommu/intel/debugfs.c
+index 80bb4d56f429..b9ccd3ae5e65 100644
+--- a/drivers/iommu/intel/debugfs.c
++++ b/drivers/iommu/intel/debugfs.c
+@@ -426,6 +426,9 @@ static int invalidation_queue_show(struct seq_file *m, void *unused)
+ 			   (u64)virt_to_phys(qi->desc),
+ 			   dmar_readq(iommu->reg + DMAR_IQH_REG) >> shift,
+ 			   dmar_readq(iommu->reg + DMAR_IQT_REG) >> shift);
++		seq_printf(m, "No. of received PRQs: %ld\n", iommu->num_prqs);
++		seq_printf(m, "No. of PRR SUCCESS sent: %ld\n", iommu->num_prrs);
++		seq_printf(m, "No. of PRR INVALID sent: %ld\n", iommu->num_prri);
+ 		invalidation_queue_entry_show(m, iommu);
+ 		raw_spin_unlock_irqrestore(&qi->q_lock, flags);
+ 		seq_putc(m, '\n');
+@@ -776,6 +779,9 @@ static ssize_t dmar_perf_latency_write(struct file *filp,
+ 			dmar_latency_disable(iommu, DMAR_LATENCY_INV_DEVTLB);
+ 			dmar_latency_disable(iommu, DMAR_LATENCY_INV_IEC);
+ 			dmar_latency_disable(iommu, DMAR_LATENCY_PRQ);
++			iommu->num_prqs = 0;
++			iommu->num_prrs = 0;
++			iommu->num_prri = 0;
+ 		}
+ 		rcu_read_unlock();
+ 		break;
+diff --git a/drivers/iommu/intel/dmar.c b/drivers/iommu/intel/dmar.c
+index 6f0d53fd3a4a..522f6ed1cbfc 100644
+--- a/drivers/iommu/intel/dmar.c
++++ b/drivers/iommu/intel/dmar.c
+@@ -1414,6 +1414,13 @@ int qi_submit_sync(struct intel_iommu *iommu, struct qi_desc *desc,
+ 	wait_desc.qw2 = 0;
+ 	wait_desc.qw3 = 0;
+ 
++	if ((desc[count - 1].qw0 & 0xF) == 9) {
++		if ((desc[count - 1].qw0 & 0xF000) == 0)
++			iommu->num_prrs++;
++		else if ((desc[count - 1].qw0 & 0xF000) == 0x1000)
++			iommu->num_prri++;
++	}
++
+ 	offset = wait_index << shift;
+ 	memcpy(qi->desc + offset, &wait_desc, 1 << shift);
+ 
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index 6baf7c37435b..56de08851cfb 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -1116,6 +1116,7 @@ static irqreturn_t prq_event_thread(int irq, void *d)
+ 		vm_fault_t ret;
+ 		u64 address;
+ 
++		iommu->num_prqs++;
+ 		handled = 1;
+ 		req = &iommu->prq[head / sizeof(*req)];
+ 		result = QI_RESP_INVALID;
+diff --git a/include/linux/intel-iommu.h b/include/linux/intel-iommu.h
+index 4a42c016de11..7b76692508ac 100644
+--- a/include/linux/intel-iommu.h
++++ b/include/linux/intel-iommu.h
+@@ -625,6 +625,10 @@ struct intel_iommu {
+ 	unsigned char prq_name[16];    /* Name for PRQ interrupt */
+ 	struct completion prq_complete;
+ 	struct ioasid_allocator_ops pasid_allocator; /* Custom allocator for PASIDs */
++	unsigned long num_prqs; /* Page Req */
++	unsigned long num_prrs; /* Page Resp SUCCESS */
++	unsigned long num_prri; /* Page Resp INVALID */
++
+ #endif
+ 	struct q_inval  *qi;            /* Queued invalidation info */
+ 	u32 *iommu_state; /* Store iommu states between suspend and resume.*/
+-- 
+2.31.1
+

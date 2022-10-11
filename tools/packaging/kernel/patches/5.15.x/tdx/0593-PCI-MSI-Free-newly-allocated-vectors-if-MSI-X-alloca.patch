@@ -1,0 +1,111 @@
+From 1e1b5c02972878b4b2157c4c4a652f4d3cd48456 Mon Sep 17 00:00:00 2001
+From: Megha Dey <megha.dey@intel.com>
+Date: Wed, 8 Sep 2021 13:42:55 -0700
+Subject: [PATCH 0593/1418] PCI/MSI: Free newly allocated vectors if MSI-X
+ allocation fails
+
+If an MSI-X vector allocation fails (first or subsequent allocation),
+all the vectors allocated thus far to the device are freed.
+
+Ensure that only the vectors allocated as part of the current allocation
+are freed, if that allocation fails.
+
+Signed-off-by: Megha Dey <megha.dey@intel.com>
+---
+ drivers/pci/msi.c   | 37 +++++++++++++++++++++++++++++++------
+ include/linux/msi.h |  5 +++++
+ 2 files changed, 36 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/pci/msi.c b/drivers/pci/msi.c
+index 49a05b8a684c..9e216231a2d7 100644
+--- a/drivers/pci/msi.c
++++ b/drivers/pci/msi.c
+@@ -650,7 +650,7 @@ static int msix_setup_entries(struct pci_dev *dev,
+ 			      struct irq_affinity *affd)
+ {
+ 	struct irq_affinity_desc *curmsk, *masks = NULL;
+-	struct msi_desc *entry;
++	struct msi_desc *entry, *tmp;
+ 	void __iomem *addr;
+ 	int ret, i, idx;
+ 	int vec_count = pci_msix_vec_count(dev);
+@@ -711,10 +711,21 @@ static int msix_setup_entries(struct pci_dev *dev,
+ 	}
+ 	return 0;
+ out:
+-	if (!i && !dev->msix_enabled)
+-		iounmap(dev->msix_table_base);
+-	else
+-		free_msi_irqs(dev);
++	if (!dev->msix_enabled) {
++		if (!i)
++			iounmap(dev->msix_table_base);
++		else
++			free_msi_irqs(dev);
++	} else {
++		while (i-- > 0) {
++			list_for_each_entry_safe_reverse(entry, tmp, dev_to_msi_list(&dev->dev),
++							 list) {
++				__clear_bit(entry->msi_attrib.entry_nr, dev->msix_map);
++				list_del(&entry->list);
++				free_msi_entry(entry);
++			}
++		}
++	}
+ 
+ 	kfree(masks);
+ 	return ret;
+@@ -889,12 +900,26 @@ static int msix_setup_irqs(struct pci_dev *dev, struct msix_entry *entries,
+ 	}
+ 
+ out_free:
+-	free_msi_irqs(dev);
++	if (ret) {
++		struct msi_desc *desc, *tmp;
++
++		for_each_new_pci_msi_entry_safe(desc, tmp, dev) {
++			if (desc->irq) {
++				BUG_ON(irq_has_action(desc->irq));
++				pci_msix_teardown_irq(dev, desc->irq);
++			}
++
++			__clear_bit(desc->msi_attrib.entry_nr, dev->msix_map);
++			list_del(&desc->list);
++			free_msi_entry(desc);
++		}
++	}
+ 
+ out_disable:
+ 	if (!dev->msix_enabled) {
+ 		pci_msix_clear_and_set_ctrl(dev, PCI_MSIX_FLAGS_ENABLE, 0);
+ 		kfree(dev->msix_map);
++		iounmap(dev->msix_table_base);
+ 	}
+ 
+ 	return ret;
+diff --git a/include/linux/msi.h b/include/linux/msi.h
+index ba4c32744d46..63506b3a3b9c 100644
+--- a/include/linux/msi.h
++++ b/include/linux/msi.h
+@@ -211,6 +211,9 @@ struct msi_desc {
+ 			for ((__irq) = (desc)->irq;                     \
+ 			     (__irq) < ((desc)->irq + (desc)->nvec_used);       \
+ 			     (__irq)++)
++#define for_each_new_msi_entry_safe(desc, tmp, dev)				\
++        (desc) = list_entry((dev)->msi_last_list->next, struct msi_desc, list);	\
++        list_for_each_entry_safe_from((desc), (tmp), dev_to_msi_list((dev)), list)
+ 
+ #ifdef CONFIG_IRQ_MSI_IOMMU
+ static inline const void *msi_desc_get_iommu_cookie(struct msi_desc *desc)
+@@ -241,6 +244,8 @@ static inline void msi_desc_set_iommu_cookie(struct msi_desc *desc,
+ 	for_each_msi_entry((desc), &(pdev)->dev)
+ #define for_each_new_pci_msi_entry(desc, pdev)        \
+ 	for_each_new_msi_entry((desc), &(pdev)->dev)
++#define for_each_new_pci_msi_entry_safe(desc, tmp, pdev)	\
++	for_each_new_msi_entry_safe((desc), (tmp), &(pdev)->dev)
+ 
+ struct pci_dev *msi_desc_to_pci_dev(struct msi_desc *desc);
+ void *msi_desc_to_pci_sysdata(struct msi_desc *desc);
+-- 
+2.31.1
+

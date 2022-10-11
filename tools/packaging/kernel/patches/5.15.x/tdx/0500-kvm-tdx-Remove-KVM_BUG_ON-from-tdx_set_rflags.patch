@@ -1,0 +1,36 @@
+From 9aab59116bdc774dd37178fbcad0d30c62efeb1c Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Thu, 28 Oct 2021 22:08:03 +0800
+Subject: [PATCH 0500/1418] kvm/tdx: Remove KVM_BUG_ON() from tdx_set_rflags()
+
+5.15 kernel introduces more cpu state initialization in
+kvm_vcpu_reset() which is common x86 code path for VCPU
+reset, but TDX generates the initial VCPU state of
+TD guest and protects most of register. Just remove
+the KVM_BUG_ON() to avoid change the x86 common code path.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 69e931b7886e..eaca07f94a3a 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -2466,10 +2466,10 @@ static void tdx_set_rflags(struct kvm_vcpu *vcpu, unsigned long rflags)
+ 	struct vcpu_tdx *tdx = to_tdx(vcpu);
+ 	u64 val;
+ 
+-	if (KVM_BUG_ON(!is_debug_td(vcpu), vcpu->kvm))
++	if (!tdx->initialized)
+ 		return;
+ 
+-	if (!tdx->initialized)
++	if (KVM_BUG_ON(!is_debug_td(vcpu), vcpu->kvm))
+ 		return;
+ 
+ 	/*
+-- 
+2.31.1
+

@@ -1,0 +1,37 @@
+From 2b79b695aa157d7c43e8b2157760f5e6fa7733d3 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 13 Oct 2021 16:55:43 +0200
+Subject: [PATCH 0062/1418] x86/fpu: Do not leak fpstate pointer on fork
+
+If fork fails early then the copied task struct would carry the fpstate
+pointer of the parent task.
+
+Not a problem right now, but later when dynamically allocated buffers
+are available, keeping the pointer might result in freeing the
+parent's buffer. Set it to NULL which prevents that. If fork reaches
+clone_thread(), the pointer will be correctly set to the new task
+context.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211013145322.817101108@linutronix.de
+---
+ arch/x86/kernel/process.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/x86/kernel/process.c b/arch/x86/kernel/process.c
+index 5cd82082353e..c74c7e889e9d 100644
+--- a/arch/x86/kernel/process.c
++++ b/arch/x86/kernel/process.c
+@@ -87,6 +87,8 @@ int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+ #ifdef CONFIG_VM86
+ 	dst->thread.vm86 = NULL;
+ #endif
++	/* Drop the copied pointer to current's fpstate */
++	dst->thread.fpu.fpstate = NULL;
+ 	return 0;
+ }
+ 
+-- 
+2.31.1
+

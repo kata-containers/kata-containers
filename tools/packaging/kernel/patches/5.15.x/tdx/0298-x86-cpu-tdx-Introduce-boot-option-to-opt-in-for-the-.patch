@@ -1,0 +1,94 @@
+From ed670f4a180342fb0efd6ff059b3fe2bf250c1a5 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Thu, 23 Jan 2020 14:02:57 -0800
+Subject: [PATCH 0298/1418] x86/cpu/tdx: Introduce boot option to opt-in for
+ the TDX host feature
+
+Introduce an opt-in boot parameter to enable the TDX host feature.
+
+TDX requires the TDX firmware to load and initialize and has a memory
+overhead.  The TDX hardware uses 0.39% of system RAM for its metadata the
+TDX protects, about 4MB overhead per 1GB. Linux makes all RAM available to
+TDX guests.  Because the memory usage is non-negligible, introduce an
+opt-in kernel command option.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ .../admin-guide/kernel-parameters.txt         |  7 ++++
+ arch/x86/kernel/cpu/tdx/Makefile              |  2 +-
+ arch/x86/kernel/cpu/tdx/tdx.c                 | 35 +++++++++++++++++++
+ 3 files changed, 43 insertions(+), 1 deletion(-)
+ create mode 100644 arch/x86/kernel/cpu/tdx/tdx.c
+
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index eca655843d84..ccc1960cb258 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -5646,6 +5646,13 @@
+ 	tdx_disable_filter [x86]
+ 			Disable TDX guest filter support.
+ 
++	tdx_host=	[X86-64, TDX]
++			Format: {on, off}
++			on: enable TDX host feature
++			off: disable TDX host feature
++			Default value is "off".  Unknown value is treated
++			as "off".
++
+ 	test_suspend=	[SUSPEND][,N]
+ 			Specify "mem" (for Suspend-to-RAM) or "standby" (for
+ 			standby suspend) or "freeze" (for suspend type freeze)
+diff --git a/arch/x86/kernel/cpu/tdx/Makefile b/arch/x86/kernel/cpu/tdx/Makefile
+index 9e3739336c28..9cbba9b2f867 100644
+--- a/arch/x86/kernel/cpu/tdx/Makefile
++++ b/arch/x86/kernel/cpu/tdx/Makefile
+@@ -2,4 +2,4 @@
+ # Makefile for seamldr and tdx module
+ 
+ obj-y	+= seam.o seamcall.o
+-obj-y	+= tdx-error.o
++obj-y	+= tdx-error.o tdx.o
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+new file mode 100644
+index 000000000000..e795f275c577
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -0,0 +1,35 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Load and initialize TDX-module. */
++
++#define pr_fmt(fmt) "tdx: " fmt
++
++#include <linux/init.h>
++
++#include "p-seamldr.h"
++
++enum TDX_HOST_OPTION {
++	TDX_HOST_OFF,
++	TDX_HOST_ON,
++};
++
++static enum TDX_HOST_OPTION tdx_host __initdata;
++
++static int __init tdx_host_param(char *str)
++{
++	if (!strcmp(str, "on"))
++		tdx_host = TDX_HOST_ON;
++
++	return 0;
++}
++early_param("tdx_host", tdx_host_param);
++
++static int __init tdx_host_early_init(void)
++{
++	/* Avoid TDX overhead when opt-in is not present. */
++	if (tdx_host != TDX_HOST_ON)
++		return 0;
++
++	/* TODO: Launch NP-SEAMLDR. */
++	return 0;
++}
++early_initcall(tdx_host_early_init);
+-- 
+2.31.1
+

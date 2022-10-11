@@ -1,0 +1,90 @@
+From 6c184f9665a293ca17d96382757085c5cdeb865e Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Thu, 5 Aug 2021 14:09:29 +0800
+Subject: [PATCH 0277/1418] KVM: VMX: Add proper cache tracking for PKRS
+
+Add PKRS caching into the standard register caching mechanism in order
+to take advantage of the availability checks provided by regs_avail.
+
+This is because vcpu->arch.pkrs will be rarely acceesed by KVM, only in
+the case of host userspace MSR reads and GVA->GPA translation in
+following patches. It is unnecessary to keep it up-to-date at all times.
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h | 2 ++
+ arch/x86/kvm/kvm_cache_regs.h   | 7 +++++++
+ arch/x86/kvm/vmx/vmx.c          | 4 ++++
+ arch/x86/kvm/vmx/vmx.h          | 3 ++-
+ 4 files changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index ad0d01e3eccf..50c678cc5af9 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -181,6 +181,7 @@ enum kvm_reg {
+ 	VCPU_EXREG_SEGMENTS,
+ 	VCPU_EXREG_EXIT_INFO_1,
+ 	VCPU_EXREG_EXIT_INFO_2,
++	VCPU_EXREG_PKRS,
+ };
+ 
+ enum {
+@@ -630,6 +631,7 @@ struct kvm_vcpu_arch {
+ 	unsigned long cr8;
+ 	u32 host_pkru;
+ 	u32 pkru;
++	u32 pkrs;
+ 	u32 hflags;
+ 	u64 efer;
+ 	u64 apic_base;
+diff --git a/arch/x86/kvm/kvm_cache_regs.h b/arch/x86/kvm/kvm_cache_regs.h
+index 90e1ffdc05b7..da014b1be874 100644
+--- a/arch/x86/kvm/kvm_cache_regs.h
++++ b/arch/x86/kvm/kvm_cache_regs.h
+@@ -171,6 +171,13 @@ static inline u64 kvm_read_edx_eax(struct kvm_vcpu *vcpu)
+ 		| ((u64)(kvm_rdx_read(vcpu) & -1u) << 32);
+ }
+ 
++static inline ulong kvm_read_pkrs(struct kvm_vcpu *vcpu)
++{
++	if (!kvm_register_is_available(vcpu, VCPU_EXREG_PKRS))
++		static_call(kvm_x86_cache_reg)(vcpu, VCPU_EXREG_PKRS);
++	return vcpu->arch.pkrs;
++}
++
+ static inline void enter_guest_mode(struct kvm_vcpu *vcpu)
+ {
+ 	vcpu->arch.hflags |= HF_GUEST_MASK;
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index d5c4a41e0eb0..c308a24b725d 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -2289,6 +2289,10 @@ static void vmx_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg)
+ 		vcpu->arch.cr4 &= ~guest_owned_bits;
+ 		vcpu->arch.cr4 |= vmcs_readl(GUEST_CR4) & guest_owned_bits;
+ 		break;
++	case VCPU_EXREG_PKRS:
++		if (kvm_cpu_cap_has(X86_FEATURE_PKS))
++			vcpu->arch.pkrs = vmcs_read64(GUEST_IA32_PKRS);
++		break;
+ 	default:
+ 		KVM_BUG_ON(1, vcpu->kvm);
+ 		break;
+diff --git a/arch/x86/kvm/vmx/vmx.h b/arch/x86/kvm/vmx/vmx.h
+index 7b035f0bf1b1..9f2164556aa5 100644
+--- a/arch/x86/kvm/vmx/vmx.h
++++ b/arch/x86/kvm/vmx/vmx.h
+@@ -452,7 +452,8 @@ static inline void vmx_register_cache_reset(struct kvm_vcpu *vcpu)
+ 				  | (1 << VCPU_EXREG_CR3)
+ 				  | (1 << VCPU_EXREG_CR4)
+ 				  | (1 << VCPU_EXREG_EXIT_INFO_1)
+-				  | (1 << VCPU_EXREG_EXIT_INFO_2));
++				  | (1 << VCPU_EXREG_EXIT_INFO_2)
++				  | (1 << VCPU_EXREG_PKRS));
+ 	vcpu->arch.regs_dirty = 0;
+ }
+ 
+-- 
+2.31.1
+

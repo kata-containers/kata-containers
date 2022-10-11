@@ -1,0 +1,70 @@
+From 5d52dbe06dafe9691ef6c0d25c1d0751f9472830 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Thu, 11 Feb 2021 15:18:52 -0800
+Subject: [PATCH 0647/1418] iommu/vt-d: Reject unsupported page request modes
+
+When supervisor/privilige mode SVM is used, we bind init_mm.pgd with
+a supervisor PASID. There should not be any page fault for init_mm.
+Execution request with DMA read is also not supported.
+
+This patch checks PRQ descriptor for both unsupported configurations,
+reject them both with invalid responses.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/intel/svm.c | 39 ++++++++++++++++++++++++++++++---------
+ 1 file changed, 30 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index c62516400fa9..eb512978e3bc 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -1138,15 +1138,36 @@ static irqreturn_t prq_event_thread(int irq, void *d)
+ 	while (head != tail) {
+ 		req = &iommu->prq[head / sizeof(*req)];
+ 		address = (u64)req->addr << VTD_PAGE_SHIFT;
+-
+-		if (unlikely(!req->pasid_present)) {
+-			pr_err("IOMMU: %s: Page request without PASID\n",
+-			       iommu->name);
+-bad_req:
+-			svm = NULL;
+-			sdev = NULL;
+-			handle_bad_prq_event(iommu, req, QI_RESP_INVALID);
+-			goto prq_advance;
++		if (!req->pasid_present) {
++			pr_err("%s: Page request without PASID: %08llx %08llx\n",
++			       iommu->name, ((unsigned long long *)req)[0],
++			       ((unsigned long long *)req)[1]);
++			goto no_pasid;
++		}
++		/* We shall not receive page request for supervisor SVM */
++		if (req->pm_req && (req->rd_req | req->wr_req)) {
++			pr_err("Unexpected page request in Privilege Mode");
++			/* No need to find the matching sdev as for bad_req */
++			goto no_pasid;
++		}
++		/* DMA read with exec requeset is not supported. */
++		if (req->exe_req && req->rd_req) {
++			pr_err("Execution request not supported\n");
++			goto no_pasid;
++		}
++		if (!svm || svm->pasid != req->pasid) {
++			rcu_read_lock();
++			svm = ioasid_find(NULL, req->pasid, NULL);
++			/* It *can't* go away, because the driver is not permitted
++			 * to unbind the mm while any page faults are outstanding.
++			 * So we only need RCU to protect the internal idr code. */
++			rcu_read_unlock();
++			if (IS_ERR_OR_NULL(svm)) {
++				pr_err("%s: Page request for invalid PASID %d: %08llx %08llx\n",
++				       iommu->name, req->pasid, ((unsigned long long *)req)[0],
++				       ((unsigned long long *)req)[1]);
++				goto no_pasid;
++			}
+ 		}
+ 
+ 		if (unlikely(!is_canonical_address(address))) {
+-- 
+2.31.1
+

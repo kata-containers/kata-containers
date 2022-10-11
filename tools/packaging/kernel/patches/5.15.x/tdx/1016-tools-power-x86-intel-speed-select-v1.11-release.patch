@@ -1,0 +1,31 @@
+From be7b10bdbacc896abb2bae77eb1ca76d3ad1235e Mon Sep 17 00:00:00 2001
+From: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Date: Wed, 15 Dec 2021 17:46:56 -0800
+Subject: [PATCH 1016/1418] tools/power/x86/intel-speed-select: v1.11 release
+
+This release adds following change:
+- Update max performance when BIOS disabled turbo
+
+Signed-off-by: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Reviewed-by: Hans de Goede <hdegoede@redhat.com>
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+---
+ tools/power/x86/intel-speed-select/isst-config.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/power/x86/intel-speed-select/isst-config.c b/tools/power/x86/intel-speed-select/isst-config.c
+index 7967a04559e1..efe72fa48224 100644
+--- a/tools/power/x86/intel-speed-select/isst-config.c
++++ b/tools/power/x86/intel-speed-select/isst-config.c
+@@ -15,7 +15,7 @@ struct process_cmd_struct {
+ 	int arg;
+ };
+ 
+-static const char *version_str = "v1.10";
++static const char *version_str = "v1.11";
+ static const int supported_api_ver = 1;
+ static struct isst_if_platform_info isst_platform_info;
+ static char *progname;
+-- 
+2.31.1
+

@@ -1,0 +1,331 @@
+From 9db09fa5f504163a6d8a2e980400e6c3d61a124b Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Thu, 1 Jul 2021 09:12:07 +0800
+Subject: [PATCH 0463/1418] KVM: TDX: Implements the
+ KVM_MEMORY_ENCRYPT_READ_MEMORY for INTEL TD guest
+
+This patch implemented kvm_x86_ops.mem_enc_read_memory to provide
+private/shared memory reading for INTEL TD guest, to support guest
+debugging features in QEMU.
+
+We now using rmap to check the page is private or shared, this is
+a discussion result with Gao Chao <chao.gao@intel.com> and
+Li Xiaoyao <Xiaoyao.Li@intel.com>.
+
+The private memory reading is handled in 8 bytes chunk to follow
+the requirement of INTEL TDX specification, the kvm mmu lock is
+also hold in the same granularity to help reducing the lock
+collisionwhile call SEAMCALL many times for large memory reading.
+The shared memory reading is handles in 4KB granularity.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h |   2 +
+ arch/x86/include/asm/tdx_host.h |   6 ++
+ arch/x86/kvm/mmu/mmu.c          |  55 ++++++++++
+ arch/x86/kvm/vmx/tdx.c          | 172 ++++++++++++++++++++++++++++++++
+ arch/x86/kvm/vmx/tdx_ops.h      |   4 +-
+ 5 files changed, 237 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 08b362d245d1..54edf1872cd4 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1645,6 +1645,8 @@ void kvm_mmu_zap_all_private(struct kvm *kvm);
+ void kvm_mmu_invalidate_mmio_sptes(struct kvm *kvm, u64 gen);
+ unsigned long kvm_mmu_calculate_default_mmu_pages(struct kvm *kvm);
+ void kvm_mmu_change_mmu_pages(struct kvm *kvm, unsigned long kvm_nr_mmu_pages);
++int kvm_mmu_is_page_private(struct kvm *kvm, struct kvm_memory_slot *memslot,
++			    gfn_t gfn, bool *is_private);
+ 
+ int load_pdptrs(struct kvm_vcpu *vcpu, struct kvm_mmu *mmu, unsigned long cr3);
+ 
+diff --git a/arch/x86/include/asm/tdx_host.h b/arch/x86/include/asm/tdx_host.h
+index 7fa91125c6c8..cfb6b225ad65 100644
+--- a/arch/x86/include/asm/tdx_host.h
++++ b/arch/x86/include/asm/tdx_host.h
+@@ -70,6 +70,12 @@ struct tdx_ex_ret {
+ 		struct {
+ 			u64 field_val;
+ 		} mng_rdwr;
++		/* TDH_MEM_{RD,WR} return the error info and value. */
++		struct {
++			u64 ext_err_info_1;
++			u64 ext_err_info_2;
++			u64 mem_val;
++		} mem_rdwr;
+ 		/* TDH_PHYMEM_PAGE_RDMD and TDH_PHYMEM_PAGE_RECLAIM return page metadata. */
+ 		struct {
+ 			u64 page_type;
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index ad9d2a34aa27..4083a986e6d6 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -6755,3 +6755,58 @@ void kvm_mmu_pre_destroy_vm(struct kvm *kvm)
+ 	if (kvm->arch.nx_lpage_recovery_thread)
+ 		kthread_stop(kvm->arch.nx_lpage_recovery_thread);
+ }
++
++/* Caller should hold the kvm srcu and kvm mmu lock */
++int kvm_mmu_is_page_private(struct kvm *kvm,
++			    struct kvm_memory_slot *memslot,
++			    gfn_t gfn, bool *is_private)
++{
++	struct slot_rmap_walk_iterator s_iter;
++	struct rmap_iterator r_iter;
++	u64 *sptep;
++	int ret = -EINVAL;
++
++	if (!kvm->arch.gfn_shared_mask) {
++		*is_private = false;
++		return 0;
++	}
++
++	for_each_slot_rmap_range(memslot, PG_LEVEL_4K,
++				 KVM_MAX_HUGEPAGE_LEVEL,
++				 gfn, gfn, &s_iter) {
++		sptep = rmap_get_first(s_iter.rmap, &r_iter);
++
++		/*
++		 * sptep = NULL may happen when:
++		 * 1. mm subsystem doing some memory clean up/optimization
++		 *    task for shared pages, e.g numa balancing or defrag for
++		 *    THP and guest hasn't access/write the page again. This
++		 *    should only happen for shared page because:
++		 *
++		 *    The private pages now are pinned, in future they
++		 *    will be removed from direct mapping and task's cr3
++		 *    mapping, so they won't be influenced by such mm
++		 *    clean up/optimization tasks now and future.
++		 *
++		 * 2. The guest never access this page before so NO EPT
++		 *    violation in KVM to fill the rmap. In this case
++		 *    treat the memory type as shared at least won't break
++		 *    the guest, reading and writing actual has no effect.
++		 *    This can be optimized if we can distinguish these 2
++		 *    cases.
++		 */
++		if (sptep && KVM_BUG_ON(!!rmap_get_next(&r_iter), kvm))
++			return -EFAULT;
++
++		if (sptep) {
++			*is_private = is_private_spte(kvm, sptep);
++			return 0;
++		}
++
++		*is_private = false;
++		ret = 0;
++	}
++
++	return ret;
++}
++EXPORT_SYMBOL(kvm_mmu_is_page_private);
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 267dee87c60f..9f274d2e7e83 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -2256,6 +2256,177 @@ static void __init tdx_pre_kvm_init(unsigned int *vcpu_size,
+ 		*vm_size = sizeof(struct kvm_tdx);
+ }
+ 
++#define TDX_MEMORY_RW_CHUNK 8
++#define TDX_MEMORY_RW_CHUNK_OFFSET_MASK (TDX_MEMORY_RW_CHUNK - 1)
++#define TDX_MEMORY_RW_CHUNK_MASK (~TDX_MEMORY_RW_CHUNK_OFFSET_MASK)
++static inline void tdx_get_memory_chunk_and_offset(gpa_t addr, u64 *chunk, u32 *offset)
++{
++	*chunk = addr & TDX_MEMORY_RW_CHUNK_MASK;
++	*offset = addr & TDX_MEMORY_RW_CHUNK_OFFSET_MASK;
++}
++
++static int do_read_private_memory(struct kvm *kvm, gpa_t addr, u64 *val)
++{
++	u64 err;
++	struct tdx_ex_ret td_ret;
++
++	err = tdh_mem_rd(to_kvm_tdx(kvm)->tdr.pa, addr, &td_ret);
++	if (TDX_ERR(err, TDH_MEM_RD, &td_ret))
++		return -EIO;
++
++	*val = td_ret.mem_rdwr.mem_val;
++	return 0;
++}
++
++static int read_private_memory(struct kvm *kvm, gpa_t addr,
++			       u32 max_allow_len,
++			       u32 *copy_len, void *out_buf)
++{
++	gpa_t chunk_addr;
++	u32 in_chunk_offset;
++	u32 len;
++	int ret;
++	union {
++		u64 u64;
++		u8 u8[TDX_MEMORY_RW_CHUNK];
++	} l_buf;
++
++	tdx_get_memory_chunk_and_offset(addr, &chunk_addr,
++					&in_chunk_offset);
++	len = min(max_allow_len,
++		  TDX_MEMORY_RW_CHUNK - in_chunk_offset);
++
++	if (len < TDX_MEMORY_RW_CHUNK) {
++		/* unaligned GPA head/tail */
++		ret = do_read_private_memory(kvm,
++					     chunk_addr,
++					     &l_buf.u64);
++		if (!ret)
++			memcpy(out_buf,
++			       l_buf.u8 + in_chunk_offset,
++			       len);
++	} else {
++		ret = do_read_private_memory(kvm,
++					     chunk_addr,
++					     out_buf);
++	}
++
++	if (copy_len && !ret)
++		*copy_len = len;
++	return ret;
++}
++
++static int do_tdx_td_read_memory(struct kvm *kvm,
++				 gpa_t addr, u64 len, void __user *buf)
++{
++	u32 in_page_offset;
++	u32 copy_len;
++	u32 round_len;
++	u32 saved_round_len;
++	gfn_t gfn;
++	void *page_buf;
++	void *to_buf;
++	bool is_private;
++	int ret = -EINVAL;
++	int idx;
++	struct kvm_memory_slot *memslot;
++
++	page_buf = (void *)__get_free_page(GFP_KERNEL);
++	if (!page_buf)
++		return -ENOMEM;
++
++	while (len > 0) {
++		round_len = min(len,
++				(u64)(PAGE_SIZE - offset_in_page(addr)));
++		saved_round_len = round_len;
++
++		idx = srcu_read_lock(&kvm->srcu);
++
++		gfn = gpa_to_gfn(addr);
++		memslot = gfn_to_memslot(kvm, gfn);
++		if (!kvm_is_visible_memslot(memslot)) {
++			ret = -EINVAL;
++			goto fail_unlock_srcu;
++		}
++
++		to_buf = page_buf;
++		while (round_len > 0) {
++			read_lock(&kvm->mmu_lock);
++
++			ret = kvm_mmu_is_page_private(kvm, memslot,
++						      gfn, &is_private);
++			if (ret)
++				goto fail_unlock;
++
++			if (is_private) {
++				ret = read_private_memory(kvm, addr,
++							  round_len,
++							  &copy_len,
++							  to_buf);
++			} else {
++				in_page_offset = offset_in_page(addr);
++				copy_len = min(round_len,
++					       (u32)
++					       (PAGE_SIZE - in_page_offset));
++				ret = kvm_read_guest_page(kvm, gfn, to_buf,
++							  in_page_offset,
++							  copy_len);
++			}
++			if (ret)
++				goto fail_unlock;
++
++			read_unlock(&kvm->mmu_lock);
++			addr += copy_len;
++			to_buf += copy_len;
++			round_len -= copy_len;
++		}
++
++		srcu_read_unlock(&kvm->srcu, idx);
++
++		if (copy_to_user(buf,
++				 page_buf, saved_round_len)) {
++			ret = -EFAULT;
++			goto fail_free_mem;
++		}
++
++		len -= saved_round_len;
++		buf += saved_round_len;
++	}
++
++	free_page((u64)page_buf);
++
++	return ret;
++
++fail_unlock:
++	read_unlock(&kvm->mmu_lock);
++fail_unlock_srcu:
++	srcu_read_unlock(&kvm->srcu, idx);
++fail_free_mem:
++	free_page((u64)page_buf);
++	return ret;
++}
++
++static int tdx_read_guest_memory(struct kvm *kvm, struct kvm_rw_memory *rw_memory)
++{
++	if (!is_td(kvm))
++		return -EINVAL;
++
++	if (!(to_kvm_tdx(kvm)->attributes & TDX_TD_ATTRIBUTE_DEBUG))
++		return -EINVAL;
++
++	if (!is_td_initialized(kvm))
++		return -EINVAL;
++
++	if (rw_memory->len == 0 || !rw_memory->ubuf)
++		return -EINVAL;
++
++	if (rw_memory->addr + rw_memory->len < rw_memory->addr)
++		return -EINVAL;
++
++	return do_tdx_td_read_memory(kvm, rw_memory->addr, rw_memory->len,
++				     (void __user *)rw_memory->ubuf);
++}
++
+ static int __init tdx_debugfs_init(void);
+ static void __exit tdx_debugfs_exit(void);
+ 
+@@ -2319,6 +2490,7 @@ static int __init tdx_hardware_setup(struct kvm_x86_ops *x86_ops)
+ 	x86_ops->unzap_private_spte = tdx_sept_unzap_private_spte;
+ 	x86_ops->link_private_sp = tdx_sept_link_private_sp;
+ 	x86_ops->free_private_sp = tdx_sept_free_private_sp;
++	x86_ops->mem_enc_read_memory = tdx_read_guest_memory;
+ 
+ 	max_pkgs = topology_max_packages();
+ 
+diff --git a/arch/x86/kvm/vmx/tdx_ops.h b/arch/x86/kvm/vmx/tdx_ops.h
+index 800acde10702..c539764605d5 100644
+--- a/arch/x86/kvm/vmx/tdx_ops.h
++++ b/arch/x86/kvm/vmx/tdx_ops.h
+@@ -85,9 +85,9 @@ static inline u64 tdh_mng_wr(hpa_t tdr, u64 field, u64 val, u64 mask,
+ 	return seamcall(TDH_MNG_WR, tdr, field, val, mask, 0, ex);
+ }
+ 
+-static inline u64 tdh_mem_rd(hpa_t addr, struct tdx_ex_ret *ex)
++static inline u64 tdh_mem_rd(hpa_t tdr, gpa_t addr, struct tdx_ex_ret *ex)
+ {
+-	return seamcall(TDH_MEM_RD, addr, 0, 0, 0, 0, ex);
++	return seamcall(TDH_MEM_RD, addr, tdr, 0, 0, 0, ex);
+ }
+ 
+ static inline u64 tdh_mem_wr(hpa_t addr, u64 val, struct tdx_ex_ret *ex)
+-- 
+2.31.1
+

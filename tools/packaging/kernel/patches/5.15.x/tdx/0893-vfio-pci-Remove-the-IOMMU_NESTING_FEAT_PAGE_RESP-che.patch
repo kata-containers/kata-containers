@@ -1,0 +1,40 @@
+From ac9251c6f45a9dcab1cac0d16c67a7fccbdda069 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Wed, 10 Nov 2021 13:52:19 +0800
+Subject: [PATCH 0893/1418] vfio/pci: Remove the IOMMU_NESTING_FEAT_PAGE_RESP
+ check in vfio_pci_dma_fault_init()
+
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ drivers/vfio/pci/vfio_pci_core.c | 11 -----------
+ 1 file changed, 11 deletions(-)
+
+diff --git a/drivers/vfio/pci/vfio_pci_core.c b/drivers/vfio/pci/vfio_pci_core.c
+index 505fa632c280..e4ffcdbdf203 100644
+--- a/drivers/vfio/pci/vfio_pci_core.c
++++ b/drivers/vfio/pci/vfio_pci_core.c
+@@ -375,20 +375,9 @@ int vfio_pci_iommu_dev_fault_handler(struct iommu_fault *fault, void *data)
+ static int vfio_pci_dma_fault_init(struct vfio_pci_core_device *vdev)
+ {
+ 	struct vfio_region_dma_fault *header;
+-	struct iommu_domain *domain;
+-	struct iommu_nesting_info info;
+ 	size_t size;
+ 	int ret;
+ 
+-	domain = iommu_get_domain_for_dev(&vdev->pdev->dev);
+-	ret = iommu_domain_get_attr(domain, DOMAIN_ATTR_NESTING, &info);
+-	if (ret || !(info.features & IOMMU_NESTING_FEAT_PAGE_RESP)) {
+-		/*
+-		 * No need go futher as no page request service support.
+-		 */
+-		return 0;
+-	}
+-
+ 	mutex_init(&vdev->fault_queue_lock);
+ 
+ 	/*
+-- 
+2.31.1
+

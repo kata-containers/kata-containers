@@ -1,0 +1,64 @@
+From 5873b39894995d0c4d38ed8d4f22f77e996b791b Mon Sep 17 00:00:00 2001
+From: "Chang S. Bae" <chang.seok.bae@intel.com>
+Date: Fri, 10 Dec 2021 14:55:03 -0800
+Subject: [PATCH 0755/1418] signal: Skip the altstack update when not needed
+
+== Background ==
+
+Support for large, "dynamic" fpstates was recently merged.  This
+included code to ensure that sigaltstacks are sufficiently sized for
+these large states.  A new lock was added to remove races between
+enabling large features and setting up sigaltstacks.
+
+== Problem ==
+
+The new lock (sigaltstack_lock()) is acquired in the sigreturn path
+before restoring the old sigaltstack.  Unfortunately, contention on the
+new lock causes a measurable signal handling performance regression [1].
+However, the common case is that no *changes* are made to the
+sigaltstack state at sigreturn.
+
+== Solution ==
+
+do_sigaltstack() acquires sigaltstack_lock() and is used for both
+sys_sigaltstack() and restoring the sigaltstack in sys_sigreturn().
+Check for changes to the sigaltstack before taking the lock.  If no
+changes were made, return before acquiring the lock.
+
+This removes lock contention from the common-case sigreturn path.
+
+[1] https://lore.kernel.org/lkml/20211207012128.GA16074@xsang-OptiPlex-9020/
+
+Fixes: 3aac3ebea08f ("x86/signal: Implement sigaltstack size validation")
+Reported-by: kernel test robot <oliver.sang@intel.com>
+Signed-off-by: Chang S. Bae <chang.seok.bae@intel.com>
+Signed-off-by: Dave Hansen <dave.hansen@linux.intel.com>
+Reviewed-by: Thomas Gleixner <tglx@linutronix.de>
+Link: https://lkml.kernel.org/r/20211210225503.12734-1-chang.seok.bae@intel.com
+---
+ kernel/signal.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/kernel/signal.c b/kernel/signal.c
+index e99aff33ff14..6b279b9b6a0c 100644
+--- a/kernel/signal.c
++++ b/kernel/signal.c
+@@ -4184,6 +4184,15 @@ do_sigaltstack (const stack_t *ss, stack_t *oss, unsigned long sp,
+ 				ss_mode != 0))
+ 			return -EINVAL;
+ 
++		/*
++		 * Return before taking any locks if no actual
++		 * sigaltstack changes were requested.
++		 */
++		if (t->sas_ss_sp == (unsigned long)ss_sp &&
++		    t->sas_ss_size == ss_size &&
++		    t->sas_ss_flags == ss_flags)
++			return 0;
++
+ 		sigaltstack_lock();
+ 		if (ss_mode == SS_DISABLE) {
+ 			ss_size = 0;
+-- 
+2.31.1
+

@@ -1,0 +1,38 @@
+From 14f2f4637dec63f9e53c3286910c22456bd0f955 Mon Sep 17 00:00:00 2001
+From: "Liu, Yi L" <yi.l.liu@intel.com>
+Date: Thu, 1 Oct 2020 07:55:50 -0700
+Subject: [PATCH 0629/1418] iommu/vt-d: Check pasid ownership in
+ intel_svm_page_response
+
+This patch needs to wait for DOMAIN_ATTR_IOASID_SET is ready.
+
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/intel/svm.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index 97cd046408df..434fd204a28d 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -1238,6 +1238,7 @@ int intel_svm_page_response(struct iommu_domain *domain,
+ 			    struct iommu_page_response *msg)
+ {
+ 	struct iommu_fault_page_request *prm;
++	struct dmar_domain *dmar_domain;
+ 	struct intel_svm_dev *sdev = NULL;
+ 	struct intel_svm *svm = NULL;
+ 	struct intel_iommu *iommu;
+@@ -1276,7 +1277,8 @@ int intel_svm_page_response(struct iommu_domain *domain,
+ 		goto out;
+ 	}
+ 
+-	ret = pasid_to_svm_sdev(dev, NULL,
++	dmar_domain = to_dmar_domain(domain);
++	ret = pasid_to_svm_sdev(dev, NULL, // dmar_domain->pasid_set,
+ 				prm->pasid, &svm, &sdev);
+ 	if (ret || !sdev) {
+ 		ret = -ENODEV;
+-- 
+2.31.1
+

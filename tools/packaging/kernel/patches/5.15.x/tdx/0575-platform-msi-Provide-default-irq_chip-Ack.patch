@@ -1,0 +1,32 @@
+From c5b1bd6685f92457d2c6f6f1481cfb673ff3cc83 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 21 Aug 2020 02:24:59 +0200
+Subject: [PATCH 0575/1418] platform-msi: Provide default irq_chip:: Ack
+
+For the upcoming device MSI support it's required to have a default
+irq_chip::ack implementation (irq_chip_ack_parent) so the drivers do not
+need to care.
+
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Megha Dey <megha.dey@intel.com>
+---
+ drivers/base/platform-msi.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/base/platform-msi.c b/drivers/base/platform-msi.c
+index 3d6c8f9caf43..571025b51752 100644
+--- a/drivers/base/platform-msi.c
++++ b/drivers/base/platform-msi.c
+@@ -102,6 +102,8 @@ static void platform_msi_update_chip_ops(struct msi_domain_info *info)
+ 		chip->irq_mask = irq_chip_mask_parent;
+ 	if (!chip->irq_unmask)
+ 		chip->irq_unmask = irq_chip_unmask_parent;
++	if (!chip->irq_ack)
++		chip->irq_ack = irq_chip_ack_parent;
+ 	if (!chip->irq_eoi)
+ 		chip->irq_eoi = irq_chip_eoi_parent;
+ 	if (!chip->irq_set_affinity)
+-- 
+2.31.1
+

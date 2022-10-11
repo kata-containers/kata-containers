@@ -1,0 +1,246 @@
+From d8c6f2a69f2622e9ffdb6e55f7f01b5aba2dea06 Mon Sep 17 00:00:00 2001
+From: Megha Dey <megha.dey@intel.com>
+Date: Mon, 18 Oct 2021 13:01:47 -0700
+Subject: [PATCH 0591/1418] PCI/MSI: Enable dynamic allocation of MSI-X vectors
+
+Introduce a new API pci_add_msix_irq_vector(), which can be called
+multiple times by a driver to add a new MSI-X vector to the device
+after some number of interrupts have already been allocated using
+the existing pci_alloc_irq_vectors API.
+
+If successful, the API returns the device-relative interrupt vector
+index (0-based) which can be passed to pci_irq_vector() to retrieve
+the Linux IRQ number of that device vector. It should be called only
+after the pci_alloc_irq_vectors().
+
+Add a new member msix_alloc_count to keep track of the number of the
+MSI-X vectors currently allocated to the device.
+
+Signed-off-by: Megha Dey <megha.dey@intel.com>
+---
+ Documentation/PCI/msi-howto.rst | 13 +++++
+ drivers/pci/msi.c               | 85 +++++++++++++++++++++++++++++++--
+ include/linux/pci.h             |  5 ++
+ kernel/irq/msi.c                | 19 ++++++--
+ 4 files changed, 116 insertions(+), 6 deletions(-)
+
+diff --git a/Documentation/PCI/msi-howto.rst b/Documentation/PCI/msi-howto.rst
+index aa2046af69f7..f5cff8ae9296 100644
+--- a/Documentation/PCI/msi-howto.rst
++++ b/Documentation/PCI/msi-howto.rst
+@@ -164,6 +164,19 @@ the driver can specify that only MSI or MSI-X is acceptable::
+ 	if (nvec < 0)
+ 		goto out_err;
+ 
++To request additional MSI-X vectors after the probe phase, the
++pci_add_msix_irq_vector() API can be used::
++
++        irq = pci_add_msix_irq_vectors(struct pci_dev *dev);
++        if (irq < 0)
++                goto out_err;
++
++Each time this API is called, one MSI-X vector gets added to the device. This
++API should be called after pci_alloc_irq_vectors has been called by the driver.
++
++This API returns the device-relative interrupt vector index (0-based) which can
++be passed to pci_irq_vector() to retrieve the corresponding Linux IRQ number.
++
+ Legacy APIs
+ -----------
+ 
+diff --git a/drivers/pci/msi.c b/drivers/pci/msi.c
+index 12fb58923173..0905df8f2c87 100644
+--- a/drivers/pci/msi.c
++++ b/drivers/pci/msi.c
+@@ -668,7 +668,7 @@ static int msix_setup_entries(struct pci_dev *dev,
+ 	}
+ 	return 0;
+ out:
+-	if (!i)
++	if (!i && !dev->msix_enabled)
+ 		iounmap(dev->msix_table_base);
+ 	else
+ 		free_msi_irqs(dev);
+@@ -733,6 +733,44 @@ static int msix_capability_init(struct pci_dev *dev)
+ 	return 0;
+ }
+ 
++static ssize_t msix_mode_show(struct device *dev, struct device_attribute *attr,
++			      char *buf)
++{
++	return sysfs_emit(buf, "%s\n", "msix");
++}
++
++static int msix_add_sysfs(struct pci_dev *pdev)
++{
++	struct device_attribute *msi_dev_attr;
++	struct attribute *msi_attr;
++	struct msi_desc *entry;
++
++	for_each_new_pci_msi_entry(entry, pdev) {
++		msi_dev_attr = kzalloc(sizeof(*msi_dev_attr), GFP_KERNEL);
++		if (!msi_dev_attr)
++			goto error_attrs;
++
++		pdev->msi_irq_groups[0]->attrs[entry->msi_attrib.entry_nr] = &msi_dev_attr->attr;
++		sysfs_attr_init(&msi_dev_attr->attr);
++		msi_dev_attr->attr.name = kasprintf(GFP_KERNEL, "%d", entry->irq);
++		if (!msi_dev_attr->attr.name)
++			goto error_attrs;
++		msi_dev_attr->attr.mode = 0444;
++		msi_dev_attr->show = msix_mode_show;
++	}
++
++	return 0;
++
++error_attrs:
++	for_each_new_pci_msi_entry(entry, pdev) {
++		msi_attr = pdev->msi_irq_groups[0]->attrs[entry->msi_attrib.entry_nr];
++		msi_dev_attr = container_of(msi_attr, struct device_attribute, attr);
++		kfree(msi_attr->name);
++		kfree(msi_dev_attr);
++	}
++	return -ENOMEM;
++}
++
+ /**
+  * msix_setup_irqs - setup requested number of MSI-X entries
+  * @dev:	pointer to the pci_dev data structure of MSI-X device function
+@@ -780,8 +818,14 @@ static int msix_setup_irqs(struct pci_dev *dev, struct msix_entry *entries,
+ 		pci_msix_clear_and_set_ctrl(dev, PCI_MSIX_FLAGS_MASKALL, 0);
+ 
+ 		pcibios_free_irq(dev);
++	} else {
++		ret = msix_add_sysfs(dev);
++		if (ret)
++			goto out_free;
+ 	}
+ 
++	dev->msix_alloc_count += nvec;
++
+ 	return 0;
+ 
+ out_avail:
+@@ -950,8 +994,10 @@ static int __pci_enable_msix(struct pci_dev *dev, struct msix_entry *entries,
+ 	nr_entries = pci_msix_vec_count(dev);
+ 	if (nr_entries < 0)
+ 		return nr_entries;
+-	if (nvec > nr_entries && !(flags & PCI_IRQ_VIRTUAL))
+-		return nr_entries;
++	if (nr_entries - dev->msix_alloc_count == 0)
++		return -ENOSPC;
++	if ((nvec > nr_entries - dev->msix_alloc_count) && !(flags & PCI_IRQ_VIRTUAL))
++		return nr_entries - dev->msix_alloc_count;
+ 
+ 	/* Check whether driver already requested for MSI IRQ */
+ 	if (dev->msi_enabled) {
+@@ -989,6 +1035,7 @@ static void pci_msix_shutdown(struct pci_dev *dev)
+ 	pci_msix_clear_and_set_ctrl(dev, PCI_MSIX_FLAGS_ENABLE, 0);
+ 	pci_intx_for_msi(dev, 1);
+ 	kfree(dev->msix_map);
++	dev->msix_alloc_count = 0;
+ 	dev->msix_enabled = 0;
+ 	pcibios_alloc_irq(dev);
+ }
+@@ -1139,6 +1186,38 @@ int pci_enable_msix_range(struct pci_dev *dev, struct msix_entry *entries,
+ }
+ EXPORT_SYMBOL(pci_enable_msix_range);
+ 
++/**
++ * pci_add_msix_irq_vector - Add an additional MSI-X interrupt to a device
++ * @dev: pointer to the pci_dev data structure of MSI-X device function
++ *
++ * Add 1 MSI-X vector to the device function, after some vectors have already
++ * been allocated using pci_alloc_irq_vectors(). It returns a negative errno
++ * if an error occurs. If it succeeds, it returns the device-relative interrupt
++ * vector index (0-based) which can be passed to pci_irq_vector to retrieve the
++ * Linux IRQ number of that device vector.
++ **/
++int pci_add_msix_irq_vector(struct pci_dev *dev)
++{
++	struct msi_desc *entry;
++	int ret;
++
++	if (WARN_ON_ONCE(!dev->msix_enabled))
++		return -EINVAL;
++
++	mutex_lock(&dev->msix_mutex);
++	ret = __pci_enable_msix(dev, NULL, 1, NULL, 0);
++
++	if (ret == 0) {
++		entry = list_last_entry(dev_to_msi_list(&dev->dev), struct msi_desc, list);
++		mutex_unlock(&dev->msix_mutex);
++		return entry->msi_attrib.entry_nr;
++	}
++
++	mutex_unlock(&dev->msix_mutex);
++	return ret;
++}
++EXPORT_SYMBOL(pci_add_msix_irq_vector);
++
+ /**
+  * pci_alloc_irq_vectors_affinity - allocate multiple IRQs for a device
+  * @dev:		PCI device to operate on
+diff --git a/include/linux/pci.h b/include/linux/pci.h
+index 2ffe93e5369a..a5b500cb71fb 100644
+--- a/include/linux/pci.h
++++ b/include/linux/pci.h
+@@ -472,6 +472,7 @@ struct pci_dev {
+ #endif
+ #ifdef CONFIG_PCI_MSI
+ 	const struct attribute_group **msi_irq_groups;
++	int		msix_alloc_count;	/* No. of MSI-X vectors allocated to device */
+ 	void __iomem	*msix_table_base;	/* Base address of device MSI-X table */
+ 	struct mutex	msix_mutex;		/* Serialize MSI-X interrupt allocation */
+ 	unsigned long	*msix_map;		/* Bitmap to track allocated MSI-X vectors */
+@@ -1540,6 +1541,7 @@ static inline int pci_enable_msix_exact(struct pci_dev *dev,
+ int pci_alloc_irq_vectors_affinity(struct pci_dev *dev, unsigned int min_vecs,
+ 				   unsigned int max_vecs, unsigned int flags,
+ 				   struct irq_affinity *affd);
++int pci_add_msix_irq_vector(struct pci_dev *dev);
+ 
+ void pci_free_irq_vectors(struct pci_dev *dev);
+ int pci_irq_vector(struct pci_dev *dev, unsigned int nr);
+@@ -1571,6 +1573,9 @@ pci_alloc_irq_vectors_affinity(struct pci_dev *dev, unsigned int min_vecs,
+ 	return -ENOSPC;
+ }
+ 
++static inline int pci_add_msix_irq_vector(struct pci_dev *dev)
++{ return -ENOSYS; }
++
+ static inline void pci_free_irq_vectors(struct pci_dev *dev)
+ {
+ }
+diff --git a/kernel/irq/msi.c b/kernel/irq/msi.c
+index c6ff8cc6542a..75a23cc2367b 100644
+--- a/kernel/irq/msi.c
++++ b/kernel/irq/msi.c
+@@ -114,9 +114,22 @@ const struct attribute_group **msi_populate_sysfs(struct device *dev)
+ 	int count = 0;
+ 	int i;
+ 
+-	/* Determine how many msi entries we have */
+-	for_each_msi_entry(entry, dev)
+-		num_msi += entry->nvec_used;
++	entry = first_msi_entry(dev);
++	if (entry->msi_attrib.is_msix) {
++		/* Since msi-x vectors can be allocated multiple times,
++		 * allocate maximum no. of vectors supported by the device
++		 */
++#ifdef CONFIG_PCI_MSI
++		num_msi = pci_msix_vec_count(to_pci_dev(dev));
++#endif
++	}
++
++	if (!num_msi) {
++		/* Determine how many msi entries we have */
++		for_each_msi_entry(entry, dev)
++			num_msi += entry->nvec_used;
++	}
++
+ 	if (!num_msi)
+ 		return NULL;
+ 
+-- 
+2.31.1
+

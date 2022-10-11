@@ -1,0 +1,82 @@
+From 00138c1e2cbf51355fff0db95fac291974de9509 Mon Sep 17 00:00:00 2001
+From: Yi Sun <yi.y.sun@linux.intel.com>
+Date: Fri, 19 Mar 2021 13:54:11 +0800
+Subject: [PATCH 0650/1418] iommu/vt-d: Fix gpasid bind/unbind issue
+
+When gpasid 0 binding/unbinding, ioasid_get_if_owned() returns
+errors because the set type is not valid. We should change api
+to ioasid_get() to fix it.
+
+When doing cache invalidation, we have similar issue.
+
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+---
+ drivers/iommu/intel/iommu.c | 9 ++++++++-
+ drivers/iommu/iommu.c       | 5 +++--
+ 2 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index cbd4d65c4999..eb8f15f68e95 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -4949,6 +4949,7 @@ intel_iommu_sva_invalidate(struct iommu_domain *domain, struct device *dev,
+ 	u16 did, sid;
+ 	int ret = 0;
+ 	u64 size = 0;
++	bool default_pasid = false;
+ 
+ 	if (!inv_info || !dmar_domain)
+ 		return -EINVAL;
+@@ -5002,6 +5003,7 @@ intel_iommu_sva_invalidate(struct iommu_domain *domain, struct device *dev,
+ 				pasid = inv_info->granu.pasid_info.pasid;
+ 			} else {
+ 				pasid = domain_get_pasid(domain, dev);
++				default_pasid = true;
+ 			}
+ 		} else if (inv_info->granularity == IOMMU_INV_GRANU_ADDR) {
+ 			if (inv_info->granu.addr_info.flags &
+@@ -5009,10 +5011,15 @@ intel_iommu_sva_invalidate(struct iommu_domain *domain, struct device *dev,
+ 				pasid = inv_info->granu.addr_info.pasid;
+ 			} else {
+ 				pasid = domain_get_pasid(domain, dev);
++				default_pasid = true;
+ 			}
+ 		}
+ 
+-		ret = ioasid_get_if_owned(pasid);
++		if (default_pasid)
++			ret = ioasid_get(NULL, pasid);
++		else
++			ret = ioasid_get_if_owned(pasid);
++
+ 		if (ret)
+ 			goto out_unlock;
+ 
+diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
+index a8cf248a39d4..11083aa0fa39 100644
+--- a/drivers/iommu/iommu.c
++++ b/drivers/iommu/iommu.c
+@@ -2514,9 +2514,10 @@ int iommu_uapi_sva_bind_gpasid(struct iommu_domain *domain, struct device *dev,
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = ioasid_get_if_owned(data.hpasid);
++	ret = ioasid_get(NULL, data.hpasid);
+ 	if (ret)
+ 		return ret;
++
+ 	ret = domain->ops->sva_bind_gpasid(domain, dev, &data, fault_data);
+ 	ioasid_put(NULL, data.hpasid);
+ 
+@@ -2593,7 +2594,7 @@ int iommu_uapi_sva_unbind_gpasid(struct iommu_domain *domain, struct device *dev
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = ioasid_get_if_owned(data.hpasid);
++	ret = ioasid_get(NULL, data.hpasid);
+ 	if (ret)
+ 		return ret;
+ 	ret = iommu_sva_unbind_gpasid(domain, dev, data.hpasid, data.flags);
+-- 
+2.31.1
+

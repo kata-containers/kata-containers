@@ -1,0 +1,60 @@
+From 871156beb45cc3f5505ae7e6abac69d2a6eb5827 Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Thu, 9 Sep 2021 12:50:31 +0300
+Subject: [PATCH 0229/1418] mm/vmstat: Add counter for memory accepting
+
+The counter increased every time kernel accepts a memory region.
+
+The counter allows to see if memory acception is still ongoing and
+contributes to memory allocation latancy.
+
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+---
+ arch/x86/mm/unaccepted_memory.c | 1 +
+ include/linux/vm_event_item.h   | 3 +++
+ mm/vmstat.c                     | 3 +++
+ 3 files changed, 7 insertions(+)
+
+diff --git a/arch/x86/mm/unaccepted_memory.c b/arch/x86/mm/unaccepted_memory.c
+index 9f468d58d51f..9cae10efe8f5 100644
+--- a/arch/x86/mm/unaccepted_memory.c
++++ b/arch/x86/mm/unaccepted_memory.c
+@@ -27,6 +27,7 @@ static void __accept_memory(phys_addr_t start, phys_addr_t end)
+ 		else
+ 			panic("Cannot accept memory");
+ 		bitmap_clear(unaccepted_memory, rs, re - rs);
++		count_vm_events(ACCEPT_MEMORY, PMD_SIZE / PAGE_SIZE);
+ 	}
+ }
+ 
+diff --git a/include/linux/vm_event_item.h b/include/linux/vm_event_item.h
+index a185cc75ff52..f0fb25f0671e 100644
+--- a/include/linux/vm_event_item.h
++++ b/include/linux/vm_event_item.h
+@@ -130,6 +130,9 @@ enum vm_event_item { PGPGIN, PGPGOUT, PSWPIN, PSWPOUT,
+ #ifdef CONFIG_X86
+ 		DIRECT_MAP_LEVEL2_SPLIT,
+ 		DIRECT_MAP_LEVEL3_SPLIT,
++#endif
++#ifdef CONFIG_UNACCEPTED_MEMORY
++		ACCEPT_MEMORY,
+ #endif
+ 		NR_VM_EVENT_ITEMS
+ };
+diff --git a/mm/vmstat.c b/mm/vmstat.c
+index 8ce2620344b2..8137b522c4dd 100644
+--- a/mm/vmstat.c
++++ b/mm/vmstat.c
+@@ -1381,6 +1381,9 @@ const char * const vmstat_text[] = {
+ 	"direct_map_level2_splits",
+ 	"direct_map_level3_splits",
+ #endif
++#ifdef CONFIG_UNACCEPTED_MEMORY
++	"accept_memory",
++#endif
+ #endif /* CONFIG_VM_EVENT_COUNTERS || CONFIG_MEMCG */
+ };
+ #endif /* CONFIG_PROC_FS || CONFIG_SYSFS || CONFIG_NUMA || CONFIG_MEMCG */
+-- 
+2.31.1
+

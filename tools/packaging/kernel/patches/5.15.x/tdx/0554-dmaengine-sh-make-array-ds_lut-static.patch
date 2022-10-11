@@ -1,0 +1,41 @@
+From c33fac0be9c3c5282db2b57d353292b25289061a Mon Sep 17 00:00:00 2001
+From: Colin Ian King <colin.king@canonical.com>
+Date: Wed, 15 Sep 2021 12:20:38 +0100
+Subject: [PATCH 0554/1418] dmaengine: sh: make array ds_lut static
+
+Don't populate the read-only array ds_lut on the stack but instead it
+static. Also makes the object code smaller by 163 bytes:
+
+Before:
+   text    data     bss     dec     hex filename
+  23508    4796       0   28304    6e90 ./drivers/dma/sh/rz-dmac.o
+
+After:
+   text    data     bss     dec     hex filename
+  23281    4860       0   28141    6ded ./drivers/dma/sh/rz-dmac.o
+
+(gcc version 11.2.0)
+
+Signed-off-by: Colin Ian King <colin.king@canonical.com>
+Link: https://lore.kernel.org/r/20210915112038.12407-1-colin.king@canonical.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/sh/rz-dmac.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/dma/sh/rz-dmac.c b/drivers/dma/sh/rz-dmac.c
+index d9f2cfef878e..ee2872e7d64c 100644
+--- a/drivers/dma/sh/rz-dmac.c
++++ b/drivers/dma/sh/rz-dmac.c
+@@ -574,7 +574,7 @@ static void rz_dmac_issue_pending(struct dma_chan *chan)
+ static u8 rz_dmac_ds_to_val_mapping(enum dma_slave_buswidth ds)
+ {
+ 	u8 i;
+-	const enum dma_slave_buswidth ds_lut[] = {
++	static const enum dma_slave_buswidth ds_lut[] = {
+ 		DMA_SLAVE_BUSWIDTH_1_BYTE,
+ 		DMA_SLAVE_BUSWIDTH_2_BYTES,
+ 		DMA_SLAVE_BUSWIDTH_4_BYTES,
+-- 
+2.31.1
+

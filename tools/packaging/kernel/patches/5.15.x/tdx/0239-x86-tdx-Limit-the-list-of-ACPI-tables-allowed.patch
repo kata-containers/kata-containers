@@ -1,0 +1,30 @@
+From e39a505a9c4849f751ea2c4cafa47817fa93a3e6 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Fri, 2 Apr 2021 17:57:54 -0700
+Subject: [PATCH 0239/1418] x86/tdx: Limit the list of ACPI tables allowed
+
+In order to reduce the attack surface, allow only necessary
+ACPI tables in TDX guest platforms.
+
+Current list of allowed tables are, XSDT,FACP,DSDT,FACS,APIC.
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdx-filter.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/x86/kernel/tdx-filter.c b/arch/x86/kernel/tdx-filter.c
+index 4a021fa2c518..1cd3cee78c42 100644
+--- a/arch/x86/kernel/tdx-filter.c
++++ b/arch/x86/kernel/tdx-filter.c
+@@ -259,5 +259,7 @@ void __init tdx_filter_init(void)
+ 		pr_debug("Device filter is overridden\n");
+ 	}
+ 
++	acpi_tbl_allow_setup("XSDT,FACP,DSDT,FACS,APIC");
++
+ 	pr_info("Enabled TDX guest device filter\n");
+ }
+-- 
+2.31.1
+

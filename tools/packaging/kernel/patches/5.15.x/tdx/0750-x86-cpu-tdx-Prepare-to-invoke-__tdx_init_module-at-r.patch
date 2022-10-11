@@ -1,0 +1,70 @@
+From 091ae33ab93f6c91b8adb50f3b93b22015e0945c Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Sun, 12 Dec 2021 17:30:30 +0800
+Subject: [PATCH 0750/1418] x86/cpu/tdx: Prepare to invoke __tdx_init_module()
+ at runtime
+
+Drop __init from __tdx_init_module(), functions and global variables
+used in it. __tdx_init_module() can be reused to configure TDX global
+private key, TDMR and PAMT for the TDX module loaded at runtime.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 1c8276924440..e88e51523422 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -971,9 +971,9 @@ static int __init tdx_arch_init(void)
+ arch_initcall(tdx_arch_init);
+ 
+ /* Array of all TDMR info array. */
+-static struct tdmr_info *tdmr_info __initdata; /* aligned to TDX_TDMR_INFO_ALIGNMENT. */
++static struct tdmr_info *tdmr_info; /* aligned to TDX_TDMR_INFO_ALIGNMENT. */
+ /* Number of actual TDMRs */
+-static int tdx_nr_tdmrs __initdata;
++static int tdx_nr_tdmrs;
+ 
+ /* data structure for tdx_init_tdmrs() */
+ struct tdx_tdmr_init_data {
+@@ -998,7 +998,7 @@ struct tdx_tdmr_init_request {
+  * Get an uninitialized TDMR, initialize it and loop until all TDMRs are
+  * initialized.
+  */
+-static void __init __tdx_init_tdmrs(struct work_struct *work)
++static void __tdx_init_tdmrs(struct work_struct *work)
+ {
+ 	struct tdx_tdmr_init_request *req = container_of(
+ 		work, struct tdx_tdmr_init_request, work);
+@@ -1063,7 +1063,7 @@ static void __init __tdx_init_tdmrs(struct work_struct *work)
+  * initializes Physical Address Metadata Table(PAMT) which is something similar
+  * to Linux struct page.  Parallelize it to shorten boot time by work queue.
+  */
+-static int __init tdx_init_tdmrs(void)
++static int tdx_init_tdmrs(void)
+ {
+ 	/*
+ 	 * One TDMR can be initialized only by one thread.  No point to have
+@@ -1103,7 +1103,7 @@ static int __init tdx_init_tdmrs(void)
+ 	return 0;
+ }
+ 
+-static int __init do_tdh_sys_key_config(void *param)
++static int do_tdh_sys_key_config(void *param)
+ {
+ 	u64 err;
+ 
+@@ -1123,7 +1123,7 @@ static int __init do_tdh_sys_key_config(void *param)
+  * __tdx_init_module - finial initialization of TDX module so that it can be
+  *                     workable.
+  */
+-static int __init __tdx_init_module(void)
++static int __tdx_init_module(void)
+ {
+ 	u64 *tdmr_addrs;
+ 	u64 err;
+-- 
+2.31.1
+

@@ -1,0 +1,34 @@
+From 05613fb4fd488bded298111966cba10629d814b6 Mon Sep 17 00:00:00 2001
+From: Dongliang Mu <mudongliangabcd@gmail.com>
+Date: Thu, 21 Oct 2021 11:14:31 +0800
+Subject: [PATCH 0543/1418] dmaengine: tegra210-adma: fix pm runtime unbalance
+ in tegra_adma_remove
+
+Since pm_runtime_put is done when tegra_adma_probe is successful, we
+cannot do pm_runtime_put_sync again in tegra_adma_remove.
+
+Fix this by removing the pm_runtime_put_sync in tegra_adma_remove.
+
+Signed-off-by: Dongliang Mu <mudongliangabcd@gmail.com>
+Reviewed-by: Jon Hunter <jonathanh@nvidia.com>
+Link: https://lore.kernel.org/r/20211021031432.3466261-1-mudongliangabcd@gmail.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/tegra210-adma.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/drivers/dma/tegra210-adma.c b/drivers/dma/tegra210-adma.c
+index ebbcff567c81..ae39b52012b2 100644
+--- a/drivers/dma/tegra210-adma.c
++++ b/drivers/dma/tegra210-adma.c
+@@ -961,7 +961,6 @@ static int tegra_adma_remove(struct platform_device *pdev)
+ 	for (i = 0; i < tdma->nr_channels; ++i)
+ 		irq_dispose_mapping(tdma->channels[i].irq);
+ 
+-	pm_runtime_put_sync(&pdev->dev);
+ 	pm_runtime_disable(&pdev->dev);
+ 
+ 	return 0;
+-- 
+2.31.1
+

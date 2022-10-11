@@ -1,0 +1,35 @@
+From 83f829acc1313ed9950581c021c4fac7302ebf4b Mon Sep 17 00:00:00 2001
+From: Tom Zanussi <tom.zanussi@linux.intel.com>
+Date: Tue, 5 Jul 2022 12:52:39 -0700
+Subject: [PATCH 1412/1418] crypto: iax: Return only 0 or err val from
+ iax_crypto_enable()
+
+The return value from this param-setting function should only return 0
+or an error val, where it now erroneously returns the number of
+workqueues, causing unexpected results.
+
+Signed-off-by: Tom Zanussi <tom.zanussi@linux.intel.com>
+(cherry picked from commit 2940bebda92bfe1acd9f88f3b7a7e89359602225)
+---
+ drivers/crypto/iax/iax_crypto_main.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/crypto/iax/iax_crypto_main.c b/drivers/crypto/iax/iax_crypto_main.c
+index 0143bbf4e026..bb4eee2db488 100644
+--- a/drivers/crypto/iax/iax_crypto_main.c
++++ b/drivers/crypto/iax/iax_crypto_main.c
+@@ -121,8 +121,10 @@ static int iax_crypto_enable(const char *val, const struct kernel_param *kp)
+ 		} else if (ret < 0) {
+ 			pr_err("%s: iax_crypto enable failed: ret=%d\n", __func__, ret);
+ 			return ret;
+-		} else
++		} else {
+ 			iax_crypto_enabled = true;
++			ret = 0;
++		}
+ 	} else {
+ 		pr_err("%s: iax_crypto failed, bad enable val: ret=%d\n", __func__, -EINVAL);
+ 		return -EINVAL;
+-- 
+2.31.1
+

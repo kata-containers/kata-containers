@@ -1,0 +1,196 @@
+From 2e9e9b9801626392e31e064c77be5dca81a4e5f7 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Mon, 29 Nov 2021 15:30:09 +0800
+Subject: [PATCH 0731/1418] x86/cpu/tdx: Switch to use cpu_vmx_get/put()
+
+Use cpu_vmx_get/put() which help to coordinate all the users of VMX.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/Kconfig               |  1 +
+ arch/x86/kernel/cpu/tdx/seam.c | 70 +++-------------------------------
+ arch/x86/kernel/cpu/tdx/seam.h |  2 -
+ arch/x86/kernel/cpu/tdx/tdx.c  |  8 ----
+ 4 files changed, 6 insertions(+), 75 deletions(-)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index 3b64139a6283..4200ec069345 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -1385,6 +1385,7 @@ config INTEL_TDX_HOST
+ 	depends on X86_64
+ 	select CONTIG_ALLOC
+ 	select MEMORY_ISOLATION
++	select VIRTUALIZATION_EXTENSION
+ 	help
+ 	  Intel's Trust Domain Extensions (TDX) protect guest VMs from malicious
+ 	  hosts and some physical attacks.  This option enables initialization
+diff --git a/arch/x86/kernel/cpu/tdx/seam.c b/arch/x86/kernel/cpu/tdx/seam.c
+index 5fab0bf1f183..f88f61850f0b 100644
+--- a/arch/x86/kernel/cpu/tdx/seam.c
++++ b/arch/x86/kernel/cpu/tdx/seam.c
+@@ -55,7 +55,6 @@ bool __init seam_get_firmware(struct cpio_data *blob, const char *name)
+ }
+ 
+ static u32 seam_vmxon_version_id __initdata;
+-static DEFINE_PER_CPU(struct vmcs *, seam_vmxon_region);
+ 
+ /*
+  * This function must be called after init_ia32_feat_ctl() that sets
+@@ -63,21 +62,15 @@ static DEFINE_PER_CPU(struct vmcs *, seam_vmxon_region);
+  */
+ int __init seam_init_vmx_early(void)
+ {
+-	u32 vmx_msr_low, vmx_msr_high;
++	struct vmx_basic_info info;
+ 
+ 	if (!this_cpu_has(X86_FEATURE_VMX))
+ 		return -EOPNOTSUPP;
+ 
+-	rdmsr(MSR_IA32_VMX_BASIC, vmx_msr_low, vmx_msr_high);
+-
+-	/*
+-	 * IA-32 SDM Vol 3C: VMCS size is never greater than 4kB.  The size of
+-	 * VMXON region is same to VMCS size.
+-	 */
+-	if ((vmx_msr_high & 0x1fff) > PAGE_SIZE)
++	if (cpu_vmx_get_basic_info(&info))
+ 		return -EIO;
+ 
+-	seam_vmxon_version_id = vmx_msr_low;
++	seam_vmxon_version_id = info.rev_id;
+ 
+ 	return 0;
+ }
+@@ -96,60 +89,12 @@ void __init seam_init_vmxon_vmcs(struct vmcs *vmcs)
+ 	vmcs->hdr.revision_id = seam_vmxon_version_id;
+ }
+ 
+-void __init seam_free_vmcs_tmp_set(void)
+-{
+-	int cpu;
+-
+-	for_each_online_cpu(cpu) {
+-		/* It's safe to pass NULL to free_page() that ignores NULL. */
+-		free_page((unsigned long)per_cpu(seam_vmxon_region, cpu));
+-		per_cpu(seam_vmxon_region, cpu) = NULL;
+-	}
+-}
+-
+-/*
+- * seam_alloc_init_vmcs_tmp_set -
+- *	allocate temporary one page for VMXON region for each CPU and stash
+- *	pages to the per-cpu variable, seam_vmxon_region, and initialize those
+- *	regions on each CPU for later VMXON.
+- * @return: 0 on success, -ENOMEM on failure.
+- *
+- * Call this function before use of seam_vmxon_on_each_cpu() and
+- * seam_vmxoff_on_each_cpu().
+- *
+- * Disable cpu hotplug by cpus_read_lock() and cpus_read_unlock() until
+- * seam_free_vmcs_tmp_set().
+- */
+-int __init seam_alloc_init_vmcs_tmp_set(void)
+-{
+-	int cpu;
+-	struct vmcs *vmxon_region;
+-
+-	if (!this_cpu_has(X86_FEATURE_VMX))
+-		return -EOPNOTSUPP;
+-
+-	for_each_online_cpu(cpu) {
+-		/* VMXON region must be 4K-aligned. */
+-		vmxon_region = (struct vmcs *)get_zeroed_page(GFP_KERNEL);
+-		if (!vmxon_region)
+-			goto err;
+-		seam_init_vmxon_vmcs(vmxon_region);
+-		per_cpu(seam_vmxon_region, cpu) = vmxon_region;
+-	}
+-
+-	return 0;
+-
+-err:
+-	seam_free_vmcs_tmp_set();
+-	return -ENOMEM;
+-}
+-
+ static void __init seam_vmxon(void *data)
+ {
+ 	atomic_t *error = data;
+ 	int r;
+ 
+-	r = cpu_vmxon(__pa(this_cpu_read(seam_vmxon_region)));
++	r = cpu_vmx_get();
+ 	if (r)
+ 		atomic_set(error, r);
+ }
+@@ -170,12 +115,7 @@ int __init seam_vmxon_on_each_cpu(void)
+ 
+ static void __init seam_vmxoff(void *data)
+ {
+-	atomic_t *error = data;
+-	int r;
+-
+-	r = cpu_vmxoff();
+-	if (r)
+-		atomic_set(error, r);
++	cpu_vmx_put();
+ }
+ 
+ int __init seam_vmxoff_on_each_cpu(void)
+diff --git a/arch/x86/kernel/cpu/tdx/seam.h b/arch/x86/kernel/cpu/tdx/seam.h
+index dcbb74333a20..196ed7574dd5 100644
+--- a/arch/x86/kernel/cpu/tdx/seam.h
++++ b/arch/x86/kernel/cpu/tdx/seam.h
+@@ -9,8 +9,6 @@ bool __init seam_get_firmware(struct cpio_data *blob, const char *name);
+ int __init seam_init_vmx_early(void);
+ void __init seam_init_vmxon_vmcs(struct vmcs *vmcs);
+ 
+-void __init seam_free_vmcs_tmp_set(void);
+-int __init seam_alloc_init_vmcs_tmp_set(void);
+ int __init seam_vmxon_on_each_cpu(void);
+ int __init seam_vmxoff_on_each_cpu(void);
+ 
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 4d8d9beb7cec..014200ab481d 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -777,9 +777,6 @@ static int __init tdx_arch_init(void)
+ 	}
+ 
+ 	/* SEAMCALL requires to enable VMXON on CPUs. */
+-	ret = seam_alloc_init_vmcs_tmp_set();
+-	if (ret)
+-		goto out;
+ 	ret = seam_vmxon_on_each_cpu();
+ 	if (ret)
+ 		goto out;
+@@ -809,7 +806,6 @@ static int __init tdx_arch_init(void)
+ 		tdx_module_state = TDX_MODULE_ERROR;
+ 	cpus_read_unlock();
+ 
+-	seam_free_vmcs_tmp_set();
+ 	if (ret && cpuhp_state != CPUHP_INVALID) {
+ 		cpuhp_remove_state_nocalls(cpuhp_state);
+ 		cpuhp_state = CPUHP_INVALID;
+@@ -1128,9 +1124,6 @@ static int __init tdx_late_init(void)
+ 		goto out_err;
+ 
+ 	/* SEAMCALL requires to enable VMXON on CPUs. */
+-	ret = seam_alloc_init_vmcs_tmp_set();
+-	if (ret)
+-		goto out_err;
+ 	ret = seam_vmxon_on_each_cpu();
+ 	if (ret)
+ 		goto out;
+@@ -1163,7 +1156,6 @@ static int __init tdx_late_init(void)
+ 	}
+ 	cpus_read_unlock();
+ 
+-	seam_free_vmcs_tmp_set();
+ 	kfree(tdmr_info);
+ 	kfree(tdx_cmrs);
+ 	cleanup_subtype_tdx_memory();
+-- 
+2.31.1
+

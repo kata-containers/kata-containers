@@ -1,0 +1,119 @@
+From 22dbbdb3cb313998fd622db1598c78e57ab0e16f Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Wed, 10 Jun 2020 10:23:50 -0700
+Subject: [PATCH 0384/1418] KVM: x86/mmu: Move 'pfn' variable to caller of
+ direct_page_fault()
+
+When adding pages prior to boot, TDX will need the resulting host pfn so
+that it can be passed to TDADDPAGE (TDX-SEAM always works with physical
+addresses as it has its own page tables).  Start plumbing pfn back up
+the page fault stack.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 26 +++++++++++++++-----------
+ 1 file changed, 15 insertions(+), 11 deletions(-)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 3c54e32ad5db..57a2ad35d11b 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -4288,7 +4288,8 @@ static bool kvm_faultin_pfn(struct kvm_vcpu *vcpu, bool prefault, gfn_t gfn,
+ }
+ 
+ static int direct_page_fault(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code,
+-			     bool prefault, int max_level, bool is_tdp)
++			     bool prefault, int max_level, bool is_tdp,
++			     kvm_pfn_t *pfn)
+ {
+ 	bool is_tdp_mmu_fault = is_tdp_mmu(vcpu->arch.mmu);
+ 	bool write = error_code & PFERR_WRITE_MASK;
+@@ -4296,7 +4297,6 @@ static int direct_page_fault(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code,
+ 
+ 	gfn_t gfn = vcpu_gpa_to_gfn_unalias(vcpu, gpa);
+ 	unsigned long mmu_seq;
+-	kvm_pfn_t pfn;
+ 	hva_t hva;
+ 	int r;
+ 
+@@ -4314,11 +4314,11 @@ static int direct_page_fault(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code,
+ 	mmu_seq = vcpu->kvm->mmu_notifier_seq;
+ 	smp_rmb();
+ 
+-	if (kvm_faultin_pfn(vcpu, prefault, gfn, gpa, &pfn, &hva,
++	if (kvm_faultin_pfn(vcpu, prefault, gfn, gpa, pfn, &hva,
+ 			 write, &map_writable, &r))
+ 		return r;
+ 
+-	if (handle_abnormal_pfn(vcpu, is_tdp ? 0 : gpa, gfn, pfn, ACC_ALL, &r))
++	if (handle_abnormal_pfn(vcpu, is_tdp ? 0 : gpa, gfn, *pfn, ACC_ALL, &r))
+ 		return r;
+ 
+ 	r = RET_PF_RETRY;
+@@ -4328,7 +4328,8 @@ static int direct_page_fault(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code,
+ 	else
+ 		write_lock(&vcpu->kvm->mmu_lock);
+ 
+-	if (!is_noslot_pfn(pfn) && mmu_notifier_retry_hva(vcpu->kvm, mmu_seq, hva))
++	if (!is_noslot_pfn(*pfn) &&
++	    mmu_notifier_retry_hva(vcpu->kvm, mmu_seq, hva))
+ 		goto out_unlock;
+ 	r = make_mmu_pages_available(vcpu);
+ 	if (r)
+@@ -4336,28 +4337,30 @@ static int direct_page_fault(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code,
+ 
+ 	if (is_tdp_mmu_fault)
+ 		r = kvm_tdp_mmu_map(vcpu, gpa, error_code, map_writable, max_level,
+-				    pfn, prefault);
++				    *pfn, prefault);
+ 	else
+-		r = __direct_map(vcpu, gpa, error_code, map_writable, max_level, pfn,
+-				 prefault, is_tdp);
++		r = __direct_map(vcpu, gpa, error_code, map_writable, max_level,
++				 *pfn, prefault, is_tdp);
+ 
+ out_unlock:
+ 	if (is_tdp_mmu_fault)
+ 		read_unlock(&vcpu->kvm->mmu_lock);
+ 	else
+ 		write_unlock(&vcpu->kvm->mmu_lock);
+-	kvm_release_pfn_clean(pfn);
++	kvm_release_pfn_clean(*pfn);
+ 	return r;
+ }
+ 
+ static int nonpaging_page_fault(struct kvm_vcpu *vcpu, gpa_t gpa,
+ 				u32 error_code, bool prefault)
+ {
++	kvm_pfn_t pfn;
++
+ 	pgprintk("%s: gva %lx error %x\n", __func__, gpa, error_code);
+ 
+ 	/* This path builds a PAE pagetable, we can map 2mb pages at maximum. */
+ 	return direct_page_fault(vcpu, gpa & PAGE_MASK, error_code, prefault,
+-				 PG_LEVEL_2M, false);
++				 PG_LEVEL_2M, false, &pfn);
+ }
+ 
+ int kvm_handle_page_fault(struct kvm_vcpu *vcpu, u64 error_code,
+@@ -4396,6 +4399,7 @@ EXPORT_SYMBOL_GPL(kvm_handle_page_fault);
+ int kvm_tdp_page_fault(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code,
+ 		       bool prefault)
+ {
++	kvm_pfn_t pfn;
+ 	int max_level;
+ 
+ 	for (max_level = KVM_MAX_HUGEPAGE_LEVEL;
+@@ -4409,7 +4413,7 @@ int kvm_tdp_page_fault(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code,
+ 	}
+ 
+ 	return direct_page_fault(vcpu, gpa, error_code, prefault,
+-				 max_level, true);
++				 max_level, true, &pfn);
+ }
+ 
+ static void nonpaging_init_context(struct kvm_mmu *context)
+-- 
+2.31.1
+

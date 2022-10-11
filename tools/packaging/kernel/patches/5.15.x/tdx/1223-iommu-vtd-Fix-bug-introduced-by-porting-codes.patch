@@ -1,0 +1,28 @@
+From a4406472befc7ff6c1f913817c1d7d9b3608b4da Mon Sep 17 00:00:00 2001
+From: Yi Sun <yi.y.sun@linux.intel.com>
+Date: Tue, 15 Mar 2022 22:04:40 +0800
+Subject: [PATCH 1223/1418] iommu/vtd: Fix bug introduced by porting codes
+
+Unlock is missed when porting codes, we can observe kernel hang issue.
+
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+---
+ drivers/iommu/intel/iommu.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index f4612fc619ca..981e53982b3d 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -5911,6 +5911,8 @@ static int intel_iommu_set_hwdbm(struct iommu_domain *domain, bool enable,
+ 	}
+ 
+ out:
++	spin_unlock_irqrestore(&device_domain_lock, flags);
++
+ 	return ret;
+ }
+ 
+-- 
+2.31.1
+

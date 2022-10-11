@@ -1,0 +1,74 @@
+From fd6650eb9d53ceadd5a6066936367335831e2cae Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Sun, 13 Mar 2022 19:38:13 +0000
+Subject: [PATCH 1215/1418] x86/tdx: Extend TDX filter to support ACPI bus
+
+To support QEMU monitor based ACPI shutdown feature, allow
+enumeration of ACPI power button device.
+
+Currently the TDX device filter only supports PCI bus. So
+extend it to support ACPI bus and whitelist ACPI power
+button device (LNXPWRBN).
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdx-filter.c | 23 ++++++++++++++++++++++-
+ 1 file changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/tdx-filter.c b/arch/x86/kernel/tdx-filter.c
+index 4ed2ff94ffae..4b229590abe2 100644
+--- a/arch/x86/kernel/tdx-filter.c
++++ b/arch/x86/kernel/tdx-filter.c
+@@ -67,14 +67,29 @@ struct pci_device_id pci_allow_ids[] = {
+ 	{ 0, },
+ };
+ 
++/* List of ACPI HID allow list */
++static char *acpi_allow_hids[] = {
++	"LNXPWRBN",
++};
++
+ static struct authorize_node allow_list[] = {
+ 	/* Allow devices in pci_allow_list in "pci" bus */
+ 	{ "pci", pci_allow_ids },
++	/* Allow devices in acpi_allow_hids in "acpi" bus */
++	{ "acpi", acpi_allow_hids },
+ };
+ 
++static bool dev_is_acpi(struct device *dev)
++{
++	return !strcmp(dev_bus_name(dev), "acpi");
++}
++
+ static bool authorized_node_match(struct device *dev,
+ 				  struct authorize_node *node)
+ {
++	int i;
++
++
+ 	/* If bus matches "ALL" and dev_list is NULL, return true */
+ 	if (!strcmp(node->bus, "ALL") && !node->dev_list)
+ 		return true;
+@@ -93,12 +108,18 @@ static bool authorized_node_match(struct device *dev,
+ 
+ 	/*
+ 	 * Do bus specific device ID match. Currently only PCI
+-	 * bus is supported.
++	 * and ACPI bus is supported.
+ 	 */
+ 	if (dev_is_pci(dev)) {
+ 		if (pci_match_id((struct pci_device_id *)node->dev_list,
+ 				 to_pci_dev(dev)))
+ 			return true;
++	} else if (dev_is_acpi(dev)) {
++		for (i = 0; i < ARRAY_SIZE(acpi_allow_hids); i++) {
++			if (!strncmp(acpi_allow_hids[i], dev_name(dev),
++						strlen(acpi_allow_hids[i])))
++				return true;
++		}
+ 	}
+ 
+ 	return false;
+-- 
+2.31.1
+

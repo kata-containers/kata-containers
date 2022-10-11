@@ -1,0 +1,112 @@
+From 291ba7796717c2ace86401c6ff6bb9c4c2f67a27 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Tue, 10 Aug 2021 15:38:24 +0800
+Subject: [PATCH 0263/1418] x86/sgx: Track page type for SECS, VA, and Guest
+ EPC page
+
+Track Guest Enclave page cache (EPC) page type to distinguish them from
+bare metal EPC pages so that SGX CPUSVN update process can recognize
+and handle them in different way.
+
+Enclave EPC pages are tracked by sgx_active_page_list, except the
+SGX Enclave Control Structure (SECS) and Version Array (VA) pages.
+When sgx_active_page_list is empty, SGX CPUSVN update process knows
+that all the tracked pages are marked as unused, but there is no way
+to observe when all the SECS and VA pages are unused. So, track page
+type for SECS, VA pages, then CPUSVN update process can handle them.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/kernel/cpu/sgx/encl.c  |  3 +++
+ arch/x86/kernel/cpu/sgx/ioctl.c |  1 +
+ arch/x86/kernel/cpu/sgx/main.c  |  2 ++
+ arch/x86/kernel/cpu/sgx/sgx.h   | 12 ++++++++++++
+ arch/x86/kernel/cpu/sgx/virt.c  |  2 ++
+ 5 files changed, 20 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/sgx/encl.c b/arch/x86/kernel/cpu/sgx/encl.c
+index a93abd6b44f7..3dba41385ca1 100644
+--- a/arch/x86/kernel/cpu/sgx/encl.c
++++ b/arch/x86/kernel/cpu/sgx/encl.c
+@@ -132,6 +132,7 @@ static struct sgx_encl_page *sgx_encl_load_page(struct sgx_encl *encl,
+ 		epc_page = sgx_encl_eldu(&encl->secs, NULL);
+ 		if (IS_ERR(epc_page))
+ 			return ERR_CAST(epc_page);
++		epc_page->flags |= SGX_EPC_PAGE_SECS;
+ 	}
+ 
+ 	epc_page = sgx_encl_eldu(entry, encl->secs.epc_page);
+@@ -709,6 +710,8 @@ struct sgx_epc_page *sgx_alloc_va_page(struct sgx_va_page *va_page)
+ 		goto out;
+ 	}
+ 
++	epc_page->flags |= SGX_EPC_PAGE_VA;
++
+ out:
+ 	srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ 	return epc_page;
+diff --git a/arch/x86/kernel/cpu/sgx/ioctl.c b/arch/x86/kernel/cpu/sgx/ioctl.c
+index bcabe7eae1ea..b2c9ce8f0f6e 100644
+--- a/arch/x86/kernel/cpu/sgx/ioctl.c
++++ b/arch/x86/kernel/cpu/sgx/ioctl.c
+@@ -117,6 +117,7 @@ static int sgx_encl_create(struct sgx_encl *encl, struct sgx_secs *secs)
+ 	if (secs->attributes & SGX_ATTR_DEBUG)
+ 		set_bit(SGX_ENCL_DEBUG, &encl->flags);
+ 
++	encl->secs.epc_page->flags |= SGX_EPC_PAGE_SECS;
+ 	encl->secs.encl = encl;
+ 	encl->base = secs->base;
+ 	encl->size = secs->size;
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index f07ae4b199cf..c9d2aa87a1a9 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -635,7 +635,9 @@ void sgx_free_epc_page(struct sgx_epc_page *page)
+ 
+ 	spin_lock(&node->lock);
+ 
++	page->flags = 0;
+ 	page->owner = NULL;
++
+ 	list_add_tail(&page->list, &node->free_page_list);
+ 	sgx_nr_free_pages++;
+ 
+diff --git a/arch/x86/kernel/cpu/sgx/sgx.h b/arch/x86/kernel/cpu/sgx/sgx.h
+index fb9ac38ffc50..1cfda5ede517 100644
+--- a/arch/x86/kernel/cpu/sgx/sgx.h
++++ b/arch/x86/kernel/cpu/sgx/sgx.h
+@@ -33,6 +33,18 @@ struct sgx_epc_page {
+ 	struct list_head list;
+ };
+ 
++/**
++ * enum sgx_epc_page_flags - the flag field in &struct sgx_epc_page
++ * %SGX_EPC_PAGE_SECS:		a SECS page
++ * %SGX_EPC_PAGE_VA:		a VA page
++ * %SGX_EPC_PAGE_GUEST:		an EPC page allocated for KVM guest
++ */
++enum sgx_epc_page_flags {
++	SGX_EPC_PAGE_SECS			= BIT(1),
++	SGX_EPC_PAGE_VA				= BIT(2),
++	SGX_EPC_PAGE_GUEST			= BIT(3),
++};
++
+ /*
+  * Contains the tracking data for NUMA nodes having EPC pages. Most importantly,
+  * the free page list local to the node is stored here.
+diff --git a/arch/x86/kernel/cpu/sgx/virt.c b/arch/x86/kernel/cpu/sgx/virt.c
+index d6ae86a98743..b5ad82e4a393 100644
+--- a/arch/x86/kernel/cpu/sgx/virt.c
++++ b/arch/x86/kernel/cpu/sgx/virt.c
+@@ -50,6 +50,8 @@ static int __sgx_vepc_fault(struct sgx_vepc *vepc,
+ 	if (IS_ERR(epc_page))
+ 		return PTR_ERR(epc_page);
+ 
++	epc_page->flags |= SGX_EPC_PAGE_GUEST;
++
+ 	ret = xa_err(xa_store(&vepc->page_array, index, epc_page, GFP_KERNEL));
+ 	if (ret)
+ 		goto err_free;
+-- 
+2.31.1
+

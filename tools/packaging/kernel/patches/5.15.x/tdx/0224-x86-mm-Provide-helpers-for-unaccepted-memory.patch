@@ -1,0 +1,184 @@
+From cf36eadbb8c398b0129058de7cc1ab0f837495f3 Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Wed, 25 Aug 2021 21:42:52 +0300
+Subject: [PATCH 0224/1418] x86/mm: Provide helpers for unaccepted memory
+
+Core-mm requires few helpers to support unaccepted memory:
+
+ - accept_memory() checks the range of addresses against the bitmap and
+   accept memory if needed;
+
+ - maybe_set_page_offline() checks the bitmap and marks a page with
+   PageOffline() if memory acceptance is required on the first
+   allocation of the page.
+
+ - accept_and_clear_page_offline() accepts memory for the page and clears
+   PageOffline().
+
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/boot/compressed/unaccepted_memory.c |  3 +-
+ arch/x86/include/asm/page.h                  |  5 ++
+ arch/x86/include/asm/unaccepted_memory.h     |  3 +
+ arch/x86/mm/Makefile                         |  2 +
+ arch/x86/mm/unaccepted_memory.c              | 90 ++++++++++++++++++++
+ 5 files changed, 101 insertions(+), 2 deletions(-)
+ create mode 100644 arch/x86/mm/unaccepted_memory.c
+
+diff --git a/arch/x86/boot/compressed/unaccepted_memory.c b/arch/x86/boot/compressed/unaccepted_memory.c
+index 91db800d5f5e..b6caca4d3d22 100644
+--- a/arch/x86/boot/compressed/unaccepted_memory.c
++++ b/arch/x86/boot/compressed/unaccepted_memory.c
+@@ -20,8 +20,7 @@ void mark_unaccepted(struct boot_params *params, u64 start, u64 end)
+ 
+ 	/* Immediately accept whole range if it is within a PMD_SIZE block: */
+ 	if ((start & PMD_MASK) == (end & PMD_MASK)) {
+-		npages = (end - start) / PAGE_SIZE;
+-		__accept_memory(start, start + npages * PAGE_SIZE);
++		__accept_memory(start, end);
+ 		return;
+ 	}
+ 
+diff --git a/arch/x86/include/asm/page.h b/arch/x86/include/asm/page.h
+index 4d5810c8fab7..1e56d76ca474 100644
+--- a/arch/x86/include/asm/page.h
++++ b/arch/x86/include/asm/page.h
+@@ -19,6 +19,11 @@
+ struct page;
+ 
+ #include <linux/range.h>
++
++#ifdef CONFIG_UNACCEPTED_MEMORY
++#include <asm/unaccepted_memory.h>
++#endif
++
+ extern struct range pfn_mapped[];
+ extern int nr_pfn_mapped;
+ 
+diff --git a/arch/x86/include/asm/unaccepted_memory.h b/arch/x86/include/asm/unaccepted_memory.h
+index f1f835d3cd78..8a06ac8fc9e9 100644
+--- a/arch/x86/include/asm/unaccepted_memory.h
++++ b/arch/x86/include/asm/unaccepted_memory.h
+@@ -6,9 +6,12 @@
+ #include <linux/types.h>
+ 
+ struct boot_params;
++struct page;
+ 
+ void mark_unaccepted(struct boot_params *params, u64 start, u64 num);
+ 
+ void accept_memory(phys_addr_t start, phys_addr_t end);
+ 
++void maybe_set_page_offline(struct page *page, unsigned int order);
++void accept_and_clear_page_offline(struct page *page, unsigned int order);
+ #endif
+diff --git a/arch/x86/mm/Makefile b/arch/x86/mm/Makefile
+index b31cb52bf1bd..fe4e16322868 100644
+--- a/arch/x86/mm/Makefile
++++ b/arch/x86/mm/Makefile
+@@ -57,3 +57,5 @@ obj-$(CONFIG_X86_MEM_ENCRYPT_COMMON)	+= mem_encrypt_common.o
+ obj-$(CONFIG_AMD_MEM_ENCRYPT)	+= mem_encrypt.o
+ obj-$(CONFIG_AMD_MEM_ENCRYPT)	+= mem_encrypt_identity.o
+ obj-$(CONFIG_AMD_MEM_ENCRYPT)	+= mem_encrypt_boot.o
++
++obj-$(CONFIG_UNACCEPTED_MEMORY)	+= unaccepted_memory.o
+diff --git a/arch/x86/mm/unaccepted_memory.c b/arch/x86/mm/unaccepted_memory.c
+new file mode 100644
+index 000000000000..984eaead0b11
+--- /dev/null
++++ b/arch/x86/mm/unaccepted_memory.c
+@@ -0,0 +1,90 @@
++#include <linux/memblock.h>
++#include <linux/mm.h>
++#include <linux/pfn.h>
++#include <linux/spinlock.h>
++
++#include <asm/io.h>
++#include <asm/setup.h>
++#include <asm/unaccepted_memory.h>
++
++static DEFINE_SPINLOCK(unaccepted_memory_lock);
++
++#define PMD_ORDER (PMD_SHIFT - PAGE_SHIFT)
++
++static void __accept_memory(phys_addr_t start, phys_addr_t end)
++{
++	unsigned long *unaccepted_memory;
++	unsigned int rs, re;
++
++	unaccepted_memory = __va(boot_params.unaccepted_memory);
++	bitmap_for_each_set_region(unaccepted_memory, rs, re,
++				   start / PMD_SIZE,
++				   DIV_ROUND_UP(end, PMD_SIZE)) {
++		/* Platform-specific memory-acceptance call goes here */
++		panic("Cannot accept memory");
++		bitmap_clear(unaccepted_memory, rs, re - rs);
++	}
++}
++
++void accept_memory(phys_addr_t start, phys_addr_t end)
++{
++	unsigned long flags;
++	if (!boot_params.unaccepted_memory)
++		return;
++
++	spin_lock_irqsave(&unaccepted_memory_lock, flags);
++	__accept_memory(start, end);
++	spin_unlock_irqrestore(&unaccepted_memory_lock, flags);
++}
++
++void __init maybe_set_page_offline(struct page *page, unsigned int order)
++{
++	unsigned long *unaccepted_memory;
++	phys_addr_t addr = page_to_phys(page);
++	unsigned long flags;
++	bool unaccepted = false;
++	unsigned int i;
++
++	if (!boot_params.unaccepted_memory)
++		return;
++
++	unaccepted_memory = __va(boot_params.unaccepted_memory);
++	spin_lock_irqsave(&unaccepted_memory_lock, flags);
++	if (order < PMD_ORDER) {
++		BUG_ON(test_bit(addr / PMD_SIZE, unaccepted_memory));
++		goto out;
++	}
++
++	for (i = 0; i < (1 << (order - PMD_ORDER)); i++) {
++		if (test_bit(addr / PMD_SIZE + i, unaccepted_memory)) {
++			unaccepted = true;
++			break;
++		}
++	}
++
++	/* At least part of page is uneccepted */
++	if (unaccepted)
++		__SetPageOffline(page);
++out:
++	spin_unlock_irqrestore(&unaccepted_memory_lock, flags);
++}
++
++void accept_and_clear_page_offline(struct page *page, unsigned int order)
++{
++	phys_addr_t addr = round_down(page_to_phys(page), PMD_SIZE);
++	int i;
++
++	/* PageOffline() page on a free list, but no unaccepted memory? Hm. */
++	WARN_ON_ONCE(!boot_params.unaccepted_memory);
++
++	page = pfn_to_page(addr >> PAGE_SHIFT);
++	if (order < PMD_ORDER)
++		order = PMD_ORDER;
++
++	accept_memory(addr, addr + (PAGE_SIZE << order));
++
++	for (i = 0; i < (1 << order); i++) {
++		if (PageOffline(page + i))
++			__ClearPageOffline(page + i);
++	}
++}
+-- 
+2.31.1
+

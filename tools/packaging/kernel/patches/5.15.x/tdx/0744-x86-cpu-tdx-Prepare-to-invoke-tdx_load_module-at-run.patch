@@ -1,0 +1,57 @@
+From ba86a15646084cfc1e7d04af93b52137932401b7 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Fri, 10 Dec 2021 22:52:13 +0800
+Subject: [PATCH 0744/1418] x86/cpu/tdx: Prepare to invoke tdx_load_module() at
+ runtime
+
+TDX module update loads a TDX module at runtime. So, drop
+__init from tdx_load_module() and functions called by it.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 13623e2378ea..41eaafd4c31e 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -488,7 +488,7 @@ static int __init tdx_sys_info_alloc(struct tdsysinfo_struct **tdsysinfo,
+  *			 pages by params.
+  * @params: virtual address of struct seamldr_params to free
+  */
+-static void __init free_seamldr_params(struct seamldr_params *params)
++static void free_seamldr_params(struct seamldr_params *params)
+ {
+ 	int i;
+ 
+@@ -519,7 +519,7 @@ static void __init free_seamldr_params(struct seamldr_params *params)
+  * Here module and sigstruct come from initrd image, not from memory allocator.
+  * Annotate it with __no_sanitize_address to apiece KASAN.
+  */
+-static struct seamldr_params * __init __no_sanitize_address alloc_seamldr_params(
++static struct seamldr_params *__no_sanitize_address alloc_seamldr_params(
+ 	const void *module, unsigned long module_size, const void *sigstruct,
+ 	unsigned long sigstruct_size, u64 scenario)
+ {
+@@ -597,7 +597,7 @@ struct tdx_install_module_data {
+ };
+ 
+ /* Load seam module on one CPU */
+-static void __init tdx_install_module_cpu(void *data)
++static void tdx_install_module_cpu(void *data)
+ {
+ 	struct tdx_install_module_data *install_module = data;
+ 	int ret = seamldr_install(__pa(install_module->params));
+@@ -774,7 +774,7 @@ static int __init tdx_get_system_info(void)
+  * load TDX module on all CPUs through P-SEAMLDR and does get system info about
+  * TDX module.
+  */
+-static int __init tdx_load_module(
++static int tdx_load_module(
+ 	const void *module, unsigned long module_size, const void *sigstruct,
+ 	unsigned long sigstruct_size, u64 scenario)
+ {
+-- 
+2.31.1
+

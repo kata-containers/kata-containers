@@ -1,0 +1,37 @@
+From 5d92237d9d0e785197a97959de5061541b125efd Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Mon, 1 Mar 2021 16:33:54 +0800
+Subject: [PATCH 0615/1418] iommu/vt-d: Check ownership in sva cache invalidate
+
+Change-Id: I4f945e6d361b41633828cac2c34d0efb14f133d5
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/intel/iommu.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index adf348a494c3..bee2f90793ee 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -4987,6 +4987,10 @@ intel_iommu_sva_invalidate(struct iommu_domain *domain, struct device *dev,
+ 			 (inv_info->granu.addr_info.flags & IOMMU_INV_ADDR_FLAGS_PASID))
+ 			pasid = inv_info->granu.addr_info.pasid;
+ 
++		ret = ioasid_get_if_owned(pasid);
++		if (ret)
++			goto out_unlock;
++
+ 		switch (BIT(cache_type)) {
+ 		case IOMMU_CACHE_INV_TYPE_IOTLB:
+ 			/* HW will ignore LSB bits based on address mask */
+@@ -5043,6 +5047,7 @@ intel_iommu_sva_invalidate(struct iommu_domain *domain, struct device *dev,
+ 					    cache_type);
+ 			ret = -EINVAL;
+ 		}
++		ioasid_put(NULL, pasid);
+ 	}
+ out_unlock:
+ 	spin_unlock(&iommu->lock);
+-- 
+2.31.1
+

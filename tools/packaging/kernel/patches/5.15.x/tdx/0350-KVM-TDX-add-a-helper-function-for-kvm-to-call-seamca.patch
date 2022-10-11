@@ -1,0 +1,178 @@
+From 347474dca3f7285cc446a37f53868f2307927bc3 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Wed, 30 Jun 2021 17:38:21 -0700
+Subject: [PATCH 0350/1418] KVM: TDX: add a helper function for kvm to call
+ seamcall
+
+Add a helper function for kvm to call seamcall and a helper macro to check
+its return value.  The later patches will use them.
+
+Co-developed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/Makefile       |  1 +
+ arch/x86/kvm/vmx/seamcall.S | 67 +++++++++++++++++++++++++++++++++++++
+ arch/x86/kvm/vmx/seamcall.h | 64 +++++++++++++++++++++++++++++++++++
+ 3 files changed, 132 insertions(+)
+ create mode 100644 arch/x86/kvm/vmx/seamcall.S
+ create mode 100644 arch/x86/kvm/vmx/seamcall.h
+
+diff --git a/arch/x86/kvm/Makefile b/arch/x86/kvm/Makefile
+index 75dfd27b6e8a..d973e6691ad8 100644
+--- a/arch/x86/kvm/Makefile
++++ b/arch/x86/kvm/Makefile
+@@ -29,6 +29,7 @@ kvm-$(CONFIG_KVM_XEN)	+= xen.o
+ kvm-intel-y		+= vmx/vmx.o vmx/vmenter.o vmx/pmu_intel.o vmx/vmcs12.o \
+ 			   vmx/evmcs.o vmx/nested.o vmx/posted_intr.o
+ kvm-intel-$(CONFIG_X86_SGX_KVM)	+= vmx/sgx.o
++kvm-intel-$(CONFIG_INTEL_TDX_HOST)	+= vmx/seamcall.o
+ 
+ kvm-amd-y		+= svm/svm.o svm/vmenter.o svm/pmu.o svm/nested.o svm/avic.o svm/sev.o
+ 
+diff --git a/arch/x86/kvm/vmx/seamcall.S b/arch/x86/kvm/vmx/seamcall.S
+new file mode 100644
+index 000000000000..9dbad2eaf6b1
+--- /dev/null
++++ b/arch/x86/kvm/vmx/seamcall.S
+@@ -0,0 +1,67 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* ASM helper to call SEAMCALL for P-SEAMLDR, TDX module */
++
++#include <linux/linkage.h>
++
++#include <asm/alternative.h>
++#include <asm/asm-offsets.h>
++#include <asm/frame.h>
++#include <asm/asm.h>
++
++#include "seamcall.h"
++
++/*
++ * kvm_seamcall - helper function to invoke SEAMCALL to request service
++ *		  of TDX module for KVM.
++ *
++ * @op  (RDI)   SEAMCALL leaf ID
++ * @rcx (RSI)   input 1 (optional based on leaf ID)
++ * @rdx (RDX)   input 2 (optional based on leaf ID)
++ * @r8  (RCX)   input 3 (optional based on leaf ID)
++ * @r9  (R8)    input 4 (optional based on leaf ID)
++ * @r10 (R9)    input 5 (optional based on leaf ID)
++ * @ex  stack   pointer to struct tdx_ex_ret. optional return value stored.
++ *
++ * @return RAX: completion code of P-SEAMLDR or TDX module
++ *		0 on success, non-0 on failure
++ *		trapnumber on fault
++ */
++SYM_FUNC_START(kvm_seamcall)
++	FRAME_BEGIN
++
++	/* shuffle registers from function call ABI to SEAMCALL ABI. */
++	movq	%r9, %r10
++	movq	%r8, %r9
++	movq	%rcx, %r8
++	/* %rdx doesn't need shuffle. */
++	movq	%rsi, %rcx
++	movq	%rdi, %rax
++
++1:
++	seamcall
++
++	/*
++	 * Store extra returned values into ex.  Some registers
++	 * may be unused depending on SEAMCALL functions.
++	 */
++	movq	(FRAME_OFFSET + 8)(%rsp), %rdi
++
++	movq	%rcx, TDX_SEAM_rcx(%rdi)
++	movq	%rdx, TDX_SEAM_rdx(%rdi)
++	movq	%r8,  TDX_SEAM_r8(%rdi)
++	movq	%r9,  TDX_SEAM_r9(%rdi)
++	movq	%r10, TDX_SEAM_r10(%rdi)
++	movq	%r11, TDX_SEAM_r11(%rdi)
++
++2:
++	FRAME_END
++	ret
++
++.pushsection .fixup, "ax"
++	/* The seamcall instruction above can cause an exception. */
++3:
++	call	kvm_spurious_fault
++	jmp	2b
++.popsection
++	_ASM_EXTABLE(1b, 3b)
++SYM_FUNC_END(kvm_seamcall)
+diff --git a/arch/x86/kvm/vmx/seamcall.h b/arch/x86/kvm/vmx/seamcall.h
+new file mode 100644
+index 000000000000..c42e4ffc1d18
+--- /dev/null
++++ b/arch/x86/kvm/vmx/seamcall.h
+@@ -0,0 +1,64 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef __KVM_VMX_SEAMCALL_H
++#define __KVM_VMX_SEAMCALL_H
++
++#ifdef CONFIG_INTEL_TDX_HOST
++
++#ifdef __ASSEMBLY__
++
++.macro seamcall
++	.byte 0x66, 0x0f, 0x01, 0xcf
++.endm
++
++#else
++
++#include <asm/tdx_host.h>
++
++asmlinkage u64 kvm_seamcall(u64 op, u64 rcx, u64 rdx, u64 r8, u64 r9, u64 r10,
++			struct tdx_ex_ret *ex);
++
++static inline u64 _seamcall(u64 op, u64 rcx, u64 rdx, u64 r8, u64 r9, u64 r10,
++			struct tdx_ex_ret *ex)
++{
++	u64 err;
++	struct tdx_ex_ret dummy;
++	if (!ex)
++		/* kvm_seamcall requires non-NULL ex. */
++		ex = &dummy;
++
++	/* TODO add trace point */
++	err = kvm_seamcall(op, rcx, rdx, r8, r9, r10, ex);
++	/* TODO add trace point */
++	return err;
++}
++
++#define seamcall(op, rcx, rdx, r8, r9, r10, ex)				\
++	_seamcall(SEAMCALL_##op, (rcx), (rdx), (r8), (r9), (r10), (ex))
++
++static inline void __pr_seamcall_error(u64 op, const char *op_str,
++				u64 err, struct tdx_ex_ret *ex)
++{
++	pr_err_ratelimited("SEAMCALL[%s] failed on cpu %d: %s (0x%llx)\n",
++			op_str, smp_processor_id(),
++			tdx_seamcall_error_name(err), (err));
++	if (ex)
++		pr_seamcall_ex_ret_info(op, err, ex);
++}
++
++#define pr_seamcall_error(op, err, ex)			\
++	__pr_seamcall_error(SEAMCALL_##op, #op, (err), (ex))
++
++/* ex is a pointer to struct tdx_ex_ret or NULL. */
++#define TDX_ERR(err, op, ex)			\
++({						\
++	u64 __ret_warn_on = WARN_ON_ONCE(err);	\
++						\
++	if (unlikely(__ret_warn_on))		\
++		pr_seamcall_error(op, err, ex);	\
++	__ret_warn_on;				\
++})
++
++#endif	/* __ASSEMBLY__ */
++#endif	/* CONFIG_INTEL_TDX_HOST */
++
++#endif /* __KVM_VMX_SEAMCALL_H */
+-- 
+2.31.1
+

@@ -1,0 +1,96 @@
+From d730290a21ec3b63ccf2ba0dddf568f5fbc7f981 Mon Sep 17 00:00:00 2001
+From: Megha Dey <megha.dey@intel.com>
+Date: Mon, 18 Oct 2021 12:31:35 -0700
+Subject: [PATCH 0586/1418] PCI/MSI: Store MSI-X table address in struct
+ pci_dev
+
+This is a preparatory patch to enable dynamic allocation of MSI-X
+interrupts.
+
+Store the base address of the device MSI-X table in struct pci_dev,
+so that it can be retrieved easily every time new MSI-X vectors are
+requested for the device.
+
+No functional change.
+
+Signed-off-by: Megha Dey <megha.dey@intel.com>
+---
+ drivers/pci/msi.c   | 15 +++++++--------
+ include/linux/pci.h |  1 +
+ 2 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/pci/msi.c b/drivers/pci/msi.c
+index d8dde70b5647..99e483838d8a 100644
+--- a/drivers/pci/msi.c
++++ b/drivers/pci/msi.c
+@@ -602,7 +602,7 @@ static void __iomem *msix_map_region(struct pci_dev *dev, unsigned nr_entries)
+ 	return ioremap_host_shared(phys_addr, nr_entries * PCI_MSIX_ENTRY_SIZE);
+ }
+ 
+-static int msix_setup_entries(struct pci_dev *dev, void __iomem *base,
++static int msix_setup_entries(struct pci_dev *dev,
+ 			      struct msix_entry *entries, int nvec,
+ 			      struct irq_affinity *affd)
+ {
+@@ -619,7 +619,7 @@ static int msix_setup_entries(struct pci_dev *dev, void __iomem *base,
+ 		entry = alloc_msi_entry(&dev->dev, 1, curmsk);
+ 		if (!entry) {
+ 			if (!i)
+-				iounmap(base);
++				iounmap(dev->msix_table_base);
+ 			else
+ 				free_msi_irqs(dev);
+ 			/* No enough memory. Don't try again */
+@@ -639,7 +639,7 @@ static int msix_setup_entries(struct pci_dev *dev, void __iomem *base,
+ 			entry->msi_attrib.entry_nr >= vec_count;
+ 
+ 		entry->msi_attrib.default_irq	= dev->irq;
+-		entry->mask_base		= base;
++		entry->mask_base		= dev->msix_table_base;
+ 
+ 		if (!entry->msi_attrib.is_virtual) {
+ 			addr = pci_msix_desc_addr(entry);
+@@ -695,7 +695,6 @@ static int msix_capability_init(struct pci_dev *dev, struct msix_entry *entries,
+ 				int nvec, struct irq_affinity *affd)
+ {
+ 	const struct attribute_group **groups;
+-	void __iomem *base;
+ 	int ret, tsize;
+ 	u16 control;
+ 
+@@ -710,16 +709,16 @@ static int msix_capability_init(struct pci_dev *dev, struct msix_entry *entries,
+ 	pci_read_config_word(dev, dev->msix_cap + PCI_MSIX_FLAGS, &control);
+ 	/* Request & Map MSI-X table region */
+ 	tsize = msix_table_size(control);
+-	base = msix_map_region(dev, tsize);
+-	if (!base) {
++	dev->msix_table_base = msix_map_region(dev, tsize);
++	if (!dev->msix_table_base) {
+ 		ret = -ENOMEM;
+ 		goto out_disable;
+ 	}
+ 
+ 	/* Ensure that all table entries are masked. */
+-	msix_mask_all(base, tsize);
++	msix_mask_all(dev->msix_table_base, tsize);
+ 
+-	ret = msix_setup_entries(dev, base, entries, nvec, affd);
++	ret = msix_setup_entries(dev, entries, nvec, affd);
+ 	if (ret)
+ 		goto out_disable;
+ 
+diff --git a/include/linux/pci.h b/include/linux/pci.h
+index cd8aa6fce204..b82cdb411a3b 100644
+--- a/include/linux/pci.h
++++ b/include/linux/pci.h
+@@ -472,6 +472,7 @@ struct pci_dev {
+ #endif
+ #ifdef CONFIG_PCI_MSI
+ 	const struct attribute_group **msi_irq_groups;
++	void __iomem	*msix_table_base;	/* Base address of device MSI-X table */
+ #endif
+ 	struct pci_vpd	vpd;
+ #ifdef CONFIG_PCIE_DPC
+-- 
+2.31.1
+

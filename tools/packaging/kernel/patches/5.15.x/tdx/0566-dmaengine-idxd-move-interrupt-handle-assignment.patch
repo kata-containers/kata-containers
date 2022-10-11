@@ -1,0 +1,51 @@
+From af13ea12c9a5d2fb048570f52b4a9f8e3d6469ca Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Thu, 7 Oct 2021 14:41:58 -0700
+Subject: [PATCH 0566/1418] dmaengine: idxd: move interrupt handle assignment
+
+In preparation of supporting interrupt handle revoke event, move the
+interrupt handle assignment to right before the descriptor to be submitted.
+This allows the interrupt handle revoke logic to assign the latest
+interrupt handle on submission.
+
+Reviewed-by: Kevin Tian <kevin.tian@intel.com>
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/submit.c | 14 +++++---------
+ 1 file changed, 5 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/dma/idxd/submit.c b/drivers/dma/idxd/submit.c
+index d4688f369bc2..df02c5c814e7 100644
+--- a/drivers/dma/idxd/submit.c
++++ b/drivers/dma/idxd/submit.c
+@@ -21,15 +21,6 @@ static struct idxd_desc *__get_desc(struct idxd_wq *wq, int idx, int cpu)
+ 	if (device_pasid_enabled(idxd))
+ 		desc->hw->pasid = idxd->pasid;
+ 
+-	/*
+-	 * On host, MSIX vecotr 0 is used for misc interrupt. Therefore when we match
+-	 * vector 1:1 to the WQ id, we need to add 1
+-	 */
+-	if (wq->ie->int_handle == INVALID_INT_HANDLE)
+-		desc->hw->int_handle = wq->id + 1;
+-	else
+-		desc->hw->int_handle = wq->ie->int_handle;
+-
+ 	return desc;
+ }
+ 
+@@ -160,6 +151,11 @@ int idxd_submit_desc(struct idxd_wq *wq, struct idxd_desc *desc)
+ 	 */
+ 	if (desc->hw->flags & IDXD_OP_FLAG_RCI) {
+ 		ie = wq->ie;
++		if (ie->int_handle == INVALID_INT_HANDLE)
++			desc->hw->int_handle = ie->id;
++		else
++			desc->hw->int_handle = ie->int_handle;
++
+ 		llist_add(&desc->llnode, &ie->pending_llist);
+ 	}
+ 
+-- 
+2.31.1
+

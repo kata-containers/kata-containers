@@ -1,0 +1,62 @@
+From fce7275c36528e0bce3bfafead0aa780c301b050 Mon Sep 17 00:00:00 2001
+From: Huang Ying <ying.huang@intel.com>
+Date: Tue, 17 Aug 2021 11:22:29 +0800
+Subject: [PATCH 1158/1418] mm/migrate_pages: batch copying pages
+
+In this patch, the page copying during the page migration for
+MIGRATE_SYNC migration mode is split from the _move stage and
+batched.  This makes it easy to use some hardware accelerator to
+offload the page copying from the CPU.
+
+After the batched page copying, the migration mode is changed from
+MIGRATE_SYNC to MIGRATE_SYNC_NO_COPY.  Because the pages are unmapped
+and locked before copying, its content cannot be changed, it's safe to
+copy the page batched before _move.  Similar thing can be done for
+MIGRATE_SYNC too if necessary.
+
+Signed-off-by: "Huang, Ying" <ying.huang@intel.com>
+---
+ mm/migrate.c | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/mm/migrate.c b/mm/migrate.c
+index 02252b07f446..3c407c3b40c5 100644
+--- a/mm/migrate.c
++++ b/mm/migrate.c
+@@ -1407,6 +1407,21 @@ static inline int try_split_thp(struct page *page, struct page **page2,
+ 	return rc;
+ }
+ 
++static void migrate_pages_copy(struct list_head *pages,
++			      struct list_head *new_pages)
++{
++	struct page *page, *newpage;
++
++	newpage = list_first_entry(new_pages, struct page, lru);
++	list_for_each_entry(page, pages, lru) {
++		if (PageHuge(page) || PageTransHuge(page))
++			copy_huge_page(newpage, page);
++		else
++			copy_highpage(newpage, page);
++		newpage = list_next_entry(newpage, lru);
++	}
++}
++
+ /*
+  * migrate_pages - migrate the pages specified in a list, to the free pages
+  *		   supplied as the target for the page migration
+@@ -1628,6 +1643,11 @@ int migrate_pages(struct list_head *from, new_page_t get_new_page,
+ move:
+ 	try_to_unmap_flush();
+ 
++	if (mode == MIGRATE_SYNC) {
++		migrate_pages_copy(&unmap_pages, &new_pages);
++		mode = MIGRATE_SYNC_NO_COPY;
++	}
++
+ 	retry = 1;
+ 	thp_retry = 1;
+ 	for (pass = 0; pass < 10 && (retry || thp_retry); pass++) {
+-- 
+2.31.1
+

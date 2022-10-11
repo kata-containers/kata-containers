@@ -1,0 +1,171 @@
+From be7fe6fa6d88a51ac34a3faa6de5fcfcc4853c88 Mon Sep 17 00:00:00 2001
+From: Jithu Joseph <jithu.joseph@intel.com>
+Date: Mon, 31 Jan 2022 15:34:12 -0800
+Subject: [PATCH 1071/1418] platform/x86/intel/ifs: Add driver for In-Field
+ Scan
+
+In-Field Scan (IFS) provides hardware hooks to perform core tests and
+report failures for portions of silicon that lack error detection
+capabilities, which will be available in some server SKUs starting with
+Sapphire Rapids. It offers infrastructure to specific users such as cloud
+providers or OEMs to schedule tests and find in-field failures due to aging
+in silicon that might not necessarily be reported with normal machine
+checks.
+
+Add basic parts of the IFS module (initialization and check IFS capability
+support in a processor).
+
+MSR IA32_CORE_CAPABILITY is a feature-enumerating MSR, bit 2 of which
+reports MSR_INTEGRITY_CAPABILITIES. Processor that supports IFS
+should reports the MSR_INTEGRITY_CAPABILITIES enabled.
+
+Please check the latest Intel 64 and IA-32 Architectures Software
+Developer's Manual for more detailed information on the MSR and the
+MSR_INTEGRITY_CAPABILITIES.
+
+Originally-by: Kyung Min Park <kyung.min.park@intel.com>
+Signed-off-by: Jithu Joseph <jithu.joseph@intel.com>
+Reviewed-by: Ashok Raj <ashok.raj@intel.com>
+---
+ drivers/platform/x86/intel/Kconfig      |  1 +
+ drivers/platform/x86/intel/Makefile     |  1 +
+ drivers/platform/x86/intel/ifs/Kconfig  |  9 +++++
+ drivers/platform/x86/intel/ifs/Makefile |  7 ++++
+ drivers/platform/x86/intel/ifs/core.c   | 49 +++++++++++++++++++++++++
+ drivers/platform/x86/intel/ifs/ifs.h    | 14 +++++++
+ 6 files changed, 81 insertions(+)
+ create mode 100644 drivers/platform/x86/intel/ifs/Kconfig
+ create mode 100644 drivers/platform/x86/intel/ifs/Makefile
+ create mode 100644 drivers/platform/x86/intel/ifs/core.c
+ create mode 100644 drivers/platform/x86/intel/ifs/ifs.h
+
+diff --git a/drivers/platform/x86/intel/Kconfig b/drivers/platform/x86/intel/Kconfig
+index 32854202251b..ff64398c5148 100644
+--- a/drivers/platform/x86/intel/Kconfig
++++ b/drivers/platform/x86/intel/Kconfig
+@@ -17,6 +17,7 @@ menuconfig X86_PLATFORM_DRIVERS_INTEL
+ if X86_PLATFORM_DRIVERS_INTEL
+ 
+ source "drivers/platform/x86/intel/atomisp2/Kconfig"
++source "drivers/platform/x86/intel/ifs/Kconfig"
+ source "drivers/platform/x86/intel/int1092/Kconfig"
+ source "drivers/platform/x86/intel/int33fe/Kconfig"
+ source "drivers/platform/x86/intel/int3472/Kconfig"
+diff --git a/drivers/platform/x86/intel/Makefile b/drivers/platform/x86/intel/Makefile
+index 293f8a599135..c7b36f3c75f9 100644
+--- a/drivers/platform/x86/intel/Makefile
++++ b/drivers/platform/x86/intel/Makefile
+@@ -5,6 +5,7 @@
+ #
+ 
+ obj-$(CONFIG_INTEL_ATOMISP2_PDX86)	+= atomisp2/
++obj-$(CONFIG_INTEL_IFS)			+= ifs/
+ obj-$(CONFIG_INTEL_SAR_INT1092)		+= int1092/
+ obj-$(CONFIG_INTEL_CHT_INT33FE)		+= int33fe/
+ obj-$(CONFIG_INTEL_SKL_INT3472)		+= int3472/
+diff --git a/drivers/platform/x86/intel/ifs/Kconfig b/drivers/platform/x86/intel/ifs/Kconfig
+new file mode 100644
+index 000000000000..88e3d4fa1759
+--- /dev/null
++++ b/drivers/platform/x86/intel/ifs/Kconfig
+@@ -0,0 +1,9 @@
++config INTEL_IFS
++	tristate "Intel In Field Scan"
++	depends on X86 && 64BIT && SMP
++	help
++	  Enable support for In Field Scan in Intel CPU to perform core
++	  logic test in the field. To compile this driver as a module, choose
++	  M here. The module will be called intel_ifs.
++
++	  If unsure, say N.
+diff --git a/drivers/platform/x86/intel/ifs/Makefile b/drivers/platform/x86/intel/ifs/Makefile
+new file mode 100644
+index 000000000000..05b4925402b4
+--- /dev/null
++++ b/drivers/platform/x86/intel/ifs/Makefile
+@@ -0,0 +1,7 @@
++#
++# Makefile for the In-Field Scan driver
++#
++
++obj-$(CONFIG_INTEL_IFS)			+= intel_ifs.o
++
++intel_ifs-objs				:= core.o
+diff --git a/drivers/platform/x86/intel/ifs/core.c b/drivers/platform/x86/intel/ifs/core.c
+new file mode 100644
+index 000000000000..fb3c864d3085
+--- /dev/null
++++ b/drivers/platform/x86/intel/ifs/core.c
+@@ -0,0 +1,49 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* Copyright(c) 2021 Intel Corporation.
++ *
++ * Author: Jithu Joseph <jithu.joseph@intel.com>
++ */
++
++#include <linux/module.h>
++#include <asm/cpu_device_id.h>
++
++#include "ifs.h"
++
++#define X86_MATCH(model)					\
++	X86_MATCH_VENDOR_FAM_MODEL_FEATURE(INTEL, 6,		\
++		INTEL_FAM6_##model, X86_FEATURE_CORE_CAPABILITIES, NULL)
++
++static const struct x86_cpu_id ifs_cpu_ids[] __initconst = {
++	X86_MATCH(SAPPHIRERAPIDS_X),
++	{}
++};
++
++MODULE_DEVICE_TABLE(x86cpu, ifs_cpu_ids);
++
++static int __init ifs_init(void)
++{
++	const struct x86_cpu_id *m;
++	u64 ia32_core_caps;
++
++	/* ifs capability check */
++	m = x86_match_cpu(ifs_cpu_ids);
++	if (!m)
++		return -ENODEV;
++	if (rdmsrl_safe(MSR_IA32_CORE_CAPS, &ia32_core_caps))
++		return -ENODEV;
++	if (!(ia32_core_caps & MSR_IA32_CORE_CAPS_INTEGRITY))
++		return -ENODEV;
++
++	return 0;
++}
++
++static void __exit ifs_exit(void)
++{
++	pr_info("unloaded 'In-Field Scan' module\n");
++}
++
++MODULE_LICENSE("GPL");
++MODULE_INFO(name, "ifs");
++MODULE_DESCRIPTION("ifs");
++module_init(ifs_init);
++module_exit(ifs_exit);
+diff --git a/drivers/platform/x86/intel/ifs/ifs.h b/drivers/platform/x86/intel/ifs/ifs.h
+new file mode 100644
+index 000000000000..f3f924fced06
+--- /dev/null
++++ b/drivers/platform/x86/intel/ifs/ifs.h
+@@ -0,0 +1,14 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Copyright(c) 2021 Intel Corporation.
++ *
++ * Author: Jithu Joseph <jithu.joseph@intel.com>
++ */
++
++#ifndef _IFS_H_
++#define _IFS_H_
++
++/* These bits are in the IA32_CORE_CAPABILITIES MSR */
++#define MSR_IA32_CORE_CAPS_INTEGRITY_BIT	2
++#define MSR_IA32_CORE_CAPS_INTEGRITY		BIT(MSR_IA32_CORE_CAPS_INTEGRITY_BIT)
++
++#endif
+-- 
+2.31.1
+

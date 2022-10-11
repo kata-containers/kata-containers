@@ -1,0 +1,49 @@
+From 970afbf2d3a4ef841539e856f021a404bfed904e Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Wed, 25 Aug 2021 22:56:51 +0000
+Subject: [PATCH 0184/1418] virtio: Initialize authorized attribute for
+ confidential guest
+
+Confidential guest platforms like TDX have a requirement to allow
+only trusted devices. By default the confidential-guest core will
+arrange for all devices to default to unauthorized (via
+dev_default_authorization) in device_initialize(). Since virtio
+driver is already hardened against the attack from the un-trusted host,
+override the confidential computing default unauthorized state
+
+Reviewed-by: Dan Williams <dan.j.williams@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ drivers/virtio/virtio.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/virtio/virtio.c b/drivers/virtio/virtio.c
+index 236081afe9a2..b14bcd76b397 100644
+--- a/drivers/virtio/virtio.c
++++ b/drivers/virtio/virtio.c
+@@ -5,6 +5,8 @@
+ #include <linux/module.h>
+ #include <linux/idr.h>
+ #include <linux/of.h>
++#include <linux/cc_platform.h>
++#include <linux/device.h>
+ #include <uapi/linux/virtio_ids.h>
+ 
+ /* Unique numbering for virtio devices. */
+@@ -406,6 +408,13 @@ int register_virtio_device(struct virtio_device *dev)
+ 	dev->config_enabled = false;
+ 	dev->config_change_pending = false;
+ 
++	/*
++	 * For Confidential guest (like TDX), virtio devices are
++	 * trusted. So set authorized status as true.
++	 */
++	if (cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
++		dev->dev.authorized = true;
++
+ 	/* We always start by resetting the device, in case a previous
+ 	 * driver messed it up.  This also tests that code path a little. */
+ 	dev->config->reset(dev);
+-- 
+2.31.1
+

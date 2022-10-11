@@ -1,0 +1,43 @@
+From 362448d41af45053dea54575f247ea57404de3de Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Thu, 16 Dec 2021 15:32:34 +0800
+Subject: [PATCH 0822/1418] x86/sgx: Define error codes for ENCLS[EUPDATESVN]
+
+Add error codes for ENCLS[EUPDATESVN], then SGX CPUSVN update
+process can know the execution state of EUPDATESVN and notify
+userspace.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/include/asm/sgx.h | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/arch/x86/include/asm/sgx.h b/arch/x86/include/asm/sgx.h
+index 6ca2417cf2f0..ce768ba6a205 100644
+--- a/arch/x86/include/asm/sgx.h
++++ b/arch/x86/include/asm/sgx.h
+@@ -55,6 +55,11 @@ enum sgx_encls_function {
+  *				public key does not match IA32_SGXLEPUBKEYHASH.
+  * %SGX_PAGE_NOT_MODIFIABLE:	The EPC page cannot be modified because it
+  *				is in the PENDING or MODIFIED state.
++ * %SGX_INSUFFICIENT_ENTROPY:	Insufficient entropy in RNG.
++ * %SGX_EPC_NOT_READY:		EPC is not ready for SVN update.
++ * %SGX_NO_UPDATE:		EUPDATESVN was successful, but CPUSVN was not
++ *				updated because current SVN was not newer than
++ *				CPUSVN.
+  * %SGX_UNMASKED_EVENT:		An unmasked event, e.g. INTR, was received
+  */
+ enum sgx_return_code {
+@@ -63,6 +68,9 @@ enum sgx_return_code {
+ 	SGX_CHILD_PRESENT		= 13,
+ 	SGX_INVALID_EINITTOKEN		= 16,
+ 	SGX_PAGE_NOT_MODIFIABLE		= 20,
++	SGX_INSUFFICIENT_ENTROPY	= 29,
++	SGX_EPC_NOT_READY		= 30,
++	SGX_NO_UPDATE			= 31,
+ 	SGX_UNMASKED_EVENT		= 128,
+ };
+ 
+-- 
+2.31.1
+

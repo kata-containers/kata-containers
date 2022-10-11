@@ -1,0 +1,48 @@
+From f3c6f40c21290c470486ba74af23986b3a359754 Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Tue, 11 Jan 2022 14:27:58 +0800
+Subject: [PATCH 0860/1418] TDX: SEAM: check the tdx_host parameter to avoid
+ NULL pointer dereference
+
+Resolve a issue when add the kernel parameter tdx_host, which will cause
+the kernel panic.
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 5d169b6dd71c..4bcfe5e9af01 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -42,7 +42,7 @@ static enum TDX_HOST_OPTION tdx_host __initdata;
+ 
+ static int __init tdx_host_param(char *str)
+ {
+-	if (!strcmp(str, "on"))
++	if (str && !strcmp(str, "on"))
+ 		tdx_host = TDX_HOST_ON;
+ 
+ 	return 0;
+@@ -79,6 +79,8 @@ static char tdx_sigstruct_name[128] __initdata = "intel-seam/libtdx.so.sigstruct
+ 
+ static int __init setup_tdx_module(char *str)
+ {
++	if (!str || str[0] == '\0')
++		return 0;
+ 	strscpy(tdx_module_name, str, sizeof(tdx_module_name));
+ 	return 1;
+ }
+@@ -86,6 +88,8 @@ __setup("tdx_module=", setup_tdx_module);
+ 
+ static int __init setup_tdx_sigstruct(char *str)
+ {
++	if (!str || str[0] == '\0')
++		return 0;
+ 	strscpy(tdx_sigstruct_name, str, sizeof(tdx_sigstruct_name));
+ 	return 1;
+ }
+-- 
+2.31.1
+

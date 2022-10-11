@@ -1,0 +1,54 @@
+From 2535058da1ed200e9bc690f13b6ebbbbe60696d0 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Tue, 22 Mar 2022 17:23:58 +0800
+Subject: [PATCH 1270/1418] KVM: TDX: Remove guest_pmi_exit flag from struct
+ vcpu_tdx
+
+The flag is not necessary because we introduced a dedicated
+interrupt vector for guest PMI injection, so remove it.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 13 ++++---------
+ arch/x86/kvm/vmx/tdx.h |  1 -
+ 2 files changed, 4 insertions(+), 10 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 2b2aca610352..bba7fec3db55 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -1021,15 +1021,10 @@ static void tdx_handle_exit_irqoff(struct kvm_vcpu *vcpu)
+ 	u16 exit_reason = tdx->exit_reason.basic;
+ 
+ 	if (exit_reason == EXIT_REASON_EXCEPTION_NMI) {
+-		if (tdx->guest_pmi_exit) {
+-			kvm_make_request(KVM_REQ_PMI, vcpu);
+-			tdx->guest_pmi_exit = false;
+-		} else {
+-			kvm_before_interrupt(vcpu);
+-			vmx_handle_exception_nmi_irqoff(vcpu,
+-							tdexit_intr_info(vcpu));
+-			kvm_after_interrupt(vcpu);
+-		}
++		kvm_before_interrupt(vcpu);
++		vmx_handle_exception_nmi_irqoff(vcpu,
++						tdexit_intr_info(vcpu));
++		kvm_after_interrupt(vcpu);
+ 	} else if (exit_reason == EXIT_REASON_EXTERNAL_INTERRUPT)
+ 		vmx_handle_external_interrupt_irqoff(vcpu,
+ 						     tdexit_intr_info(vcpu));
+diff --git a/arch/x86/kvm/vmx/tdx.h b/arch/x86/kvm/vmx/tdx.h
+index 8648764cfa9c..5d8a44cdaf54 100644
+--- a/arch/x86/kvm/vmx/tdx.h
++++ b/arch/x86/kvm/vmx/tdx.h
+@@ -121,7 +121,6 @@ struct vcpu_tdx {
+ 
+ 	bool host_state_need_save;
+ 	bool host_state_need_restore;
+-	bool guest_pmi_exit;
+ 	u64 msr_host_kernel_gs_base;
+ 	u64 guest_perf_global_ctrl;
+ 	bool load_guest_dr6;
+-- 
+2.31.1
+

@@ -1,0 +1,29 @@
+From 267a8bdb779cdd9224259b471384c30aa5d04d72 Mon Sep 17 00:00:00 2001
+From: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Date: Tue, 15 Feb 2022 18:19:56 +0200
+Subject: [PATCH 1394/1418] x86/tdx: Disable Memory Bandwidth Allocation
+ capability
+
+To avoid reading untrusted input from the host VMM, disable MBA, which
+is not needed for TDX anyway.
+
+Signed-off-by: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+---
+ arch/x86/kernel/tdx.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 74225713ae90..e3c58f4454e3 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -1034,6 +1034,7 @@ void __init tdx_early_init(void)
+ 	setup_clear_cpu_cap(X86_FEATURE_APERFMPERF);
+ 	setup_clear_cpu_cap(X86_FEATURE_TME);
+ 	setup_clear_cpu_cap(X86_FEATURE_CQM_LLC);
++	setup_clear_cpu_cap(X86_FEATURE_MBA);
+ 
+ 	/*
+ 	 * The only secure (mononotonous) timer inside a TD guest
+-- 
+2.31.1
+

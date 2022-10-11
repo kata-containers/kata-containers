@@ -1,0 +1,671 @@
+From 6752a5f532f751dd1501d2091d463f8f55394dae Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Mon, 29 Nov 2021 15:30:07 +0800
+Subject: [PATCH 0729/1418] x86/virtext: Split out VMX enabling code from
+ kvm-intel
+
+Both TDX module driver (code that initializes TDX module) and kvm-intel
+rely on VMX. Move VMX enabling code out of kvm-intel to a common place
+for reuse.
+
+Since multiple components can use VMX, disabling VMX when anyone is using
+it would lead to unexpected failures. So, a refcount is introduced to track
+the number of references of VMX on each CPU along with two APIs to
+in(de)crease it.
+
+Note that
+1. KVM performs compatibility checks before enabling VMX on any CPU. This
+common code doesn't do such checks, then VMX is allowed to be enabled
+on some CPUs even if there are other CPUs that don't support VMX. But an
+error is returned if trying to enable VMX on CPUs lack of VMX capability.
+
+2. VMX reference count is tracked in per-cpu scope. This common code
+doesn't ensure consistent VMX state (enabled or disabled) system-wide.
+Users of VMX that need consistent VMX state across all CPUs should enforce
+it by themselves.
+
+3. intel_pt_handle_vmx() is used to prevent host kernel from enabling PT
+when VMX is enabled because initial implementations of Intel PT do not
+support tracing in VMX operation. It is just noop for later
+implementations.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/Kconfig               |   3 +
+ arch/x86/include/asm/virtext.h |  21 +++
+ arch/x86/include/asm/vmx.h     |   6 +
+ arch/x86/kernel/cpu/Makefile   |   2 +
+ arch/x86/kernel/cpu/virtext.c  | 225 +++++++++++++++++++++++++++++++++
+ arch/x86/kvm/Kconfig           |   2 +
+ arch/x86/kvm/svm/svm_ops.h     |   7 +-
+ arch/x86/kvm/vmx/seamcall.S    |   2 +-
+ arch/x86/kvm/vmx/vmx.c         |  86 ++-----------
+ arch/x86/kvm/vmx/vmx_ops.h     |   5 +-
+ arch/x86/kvm/x86.c             |  14 --
+ arch/x86/kvm/x86.h             |   3 +-
+ 12 files changed, 277 insertions(+), 99 deletions(-)
+ create mode 100644 arch/x86/kernel/cpu/virtext.c
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index 9b6243709967..3b64139a6283 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -2917,6 +2917,9 @@ config HAVE_ATOMIC_IOMAP
+ 	def_bool y
+ 	depends on X86_32
+ 
++config VIRTUALIZATION_EXTENSION
++	bool
++
+ source "arch/x86/kvm/Kconfig"
+ 
+ source "arch/x86/Kconfig.assembler"
+diff --git a/arch/x86/include/asm/virtext.h b/arch/x86/include/asm/virtext.h
+index 8efd0147dcce..d739abe8a4ba 100644
+--- a/arch/x86/include/asm/virtext.h
++++ b/arch/x86/include/asm/virtext.h
+@@ -102,6 +102,27 @@ static inline void cpu_emergency_vmxoff(void)
+ 		__cpu_emergency_vmxoff();
+ }
+ 
++#ifdef CONFIG_VIRTUALIZATION_EXTENSION
++extern int cpu_vmx_get(void);
++extern void cpu_vmx_put(void);
++extern int cpu_vmx_get_basic_info(struct vmx_basic_info *info);
++extern void virt_spurious_fault(void);
++#else
++static inline int cpu_vmx_get(void)
++{
++	return -EOPNOTSUPP;
++}
++static inline void cpu_vmx_put(void)
++{
++}
++static inline int cpu_vmx_get_basic_info(struct vmx_basic_info *info)
++{
++	return -EIO;
++}
++static inline void virt_spurious_fault(void)
++{
++}
++#endif
+ 
+ 
+ 
+diff --git a/arch/x86/include/asm/vmx.h b/arch/x86/include/asm/vmx.h
+index b8d14badf504..5530c636c754 100644
+--- a/arch/x86/include/asm/vmx.h
++++ b/arch/x86/include/asm/vmx.h
+@@ -28,6 +28,12 @@ struct vmcs {
+ 	char data[];
+ };
+ 
++struct vmx_basic_info {
++	int size;
++	u32 rev_id;
++	u32 cap;
++};
++
+ #define VMCS_CONTROL_BIT(x)	BIT(VMX_FEATURE_##x & 0x1f)
+ 
+ /*
+diff --git a/arch/x86/kernel/cpu/Makefile b/arch/x86/kernel/cpu/Makefile
+index 7e9e9e9360e7..ad9632df065a 100644
+--- a/arch/x86/kernel/cpu/Makefile
++++ b/arch/x86/kernel/cpu/Makefile
+@@ -67,3 +67,5 @@ $(obj)/capflags.c: $(cpufeature) $(vmxfeature) $(src)/mkcapflags.sh FORCE
+ 	$(call if_changed,mkcapflags)
+ endif
+ targets += capflags.c
++
++obj-$(CONFIG_VIRTUALIZATION_EXTENSION)	+= virtext.o
+diff --git a/arch/x86/kernel/cpu/virtext.c b/arch/x86/kernel/cpu/virtext.c
+new file mode 100644
+index 000000000000..2b6486afbdaf
+--- /dev/null
++++ b/arch/x86/kernel/cpu/virtext.c
+@@ -0,0 +1,225 @@
++// SPDX-License-Identifier: GPL-2.0
++/* CPU virtualization extensions handling */
++
++#include <linux/gfp.h>
++#include <linux/notifier.h>
++#include <linux/percpu-defs.h>
++#include <linux/reboot.h>
++#include <linux/topology.h>
++
++#include <asm/perf_event.h>
++#include <asm/vmx.h>
++#include <asm/virtext.h>
++
++/* per-cpu VMCS pointer, holding VMCSs passed to VMXON instruction */
++static DEFINE_PER_CPU(struct vmcs *, vmxon_vmcs);
++/*
++ * Cached to initialize VMCSs for VMXON instruction.
++ *
++ * VMCS size and revision id are supposed to be identical on all CPUs,
++ * otherwise, migrating VMCSs between CPU is problematic. A warning is
++ * emitted when VMXON is executed on a CPU that doesn't support a VMCS
++ * of this revision id.
++ */
++static struct vmx_basic_info basic_info __read_mostly;
++
++/* VMX's reference count on each CPU */
++static DEFINE_PER_CPU(int, vmx_count);
++
++/* Is system rebooting? */
++static bool virt_rebooting;
++
++/*
++ * Handle a fault on a hardware virtualization (VMX or SVM) instruction.
++ *
++ * Hardware virtualization extension instructions may fault if a reboot turns
++ * off virtualization while processes are running.  Usually after catching the
++ * fault we just panic; during reboot instead the instruction is ignored.
++ */
++noinstr void virt_spurious_fault(void)
++{
++	/* Fault while not rebooting.  We want the trace. */
++	BUG_ON(!virt_rebooting);
++}
++EXPORT_SYMBOL_GPL(virt_spurious_fault);
++
++static int virt_reboot(struct notifier_block *notifier, unsigned long val,
++		       void *v)
++{
++	virt_rebooting = true;
++	return NOTIFY_OK;
++}
++
++static struct notifier_block virt_reboot_notifier = {
++	.notifier_call = virt_reboot,
++	.priority = 0,
++};
++
++static void free_vmxon_vmcs(int size)
++{
++	int cpu = raw_smp_processor_id();
++
++	free_pages((unsigned long)per_cpu(vmxon_vmcs, cpu), get_order(size));
++	per_cpu(vmxon_vmcs, cpu) = NULL;
++}
++
++static int alloc_vmxon_vmcs(int size, u32 rev_id)
++{
++	int node = cpu_to_node(raw_smp_processor_id());
++	struct page *pages;
++	struct vmcs *vmcs;
++
++	pages = __alloc_pages_node(node, GFP_ATOMIC, get_order(size));
++	if (!pages)
++		return -ENOMEM;
++
++	vmcs = page_address(pages);
++	memset(vmcs, 0, size);
++	vmcs->hdr.revision_id = rev_id;
++	this_cpu_write(vmxon_vmcs, vmcs);
++
++	return 0;
++}
++
++int cpu_vmx_get_basic_info(struct vmx_basic_info *info)
++{
++	u32 vmx_msr_low, vmx_msr_high;
++
++	rdmsr(MSR_IA32_VMX_BASIC, vmx_msr_low, vmx_msr_high);
++
++	/* IA-32 SDM Vol 3B: VMCS size is never greater than 4kB. */
++	if ((vmx_msr_high & 0x1fff) > PAGE_SIZE)
++		return -EIO;
++
++#ifdef CONFIG_X86_64
++	/* IA-32 SDM Vol 3B: 64-bit CPUs always have VMX_BASIC_MSR[48]==0. */
++	if (vmx_msr_high & (1u<<16))
++		return -EIO;
++#endif
++
++	/* Require Write-Back (WB) memory type for VMCS accesses. */
++	if (((vmx_msr_high >> 18) & 15) != 6)
++		return -EIO;
++
++	info->size = vmx_msr_high & 0x1fff;
++	info->cap = vmx_msr_high & ~0x1fff;
++	info->rev_id = vmx_msr_low;
++
++	return 0;
++}
++EXPORT_SYMBOL_GPL(cpu_vmx_get_basic_info);
++
++static DEFINE_SPINLOCK(vmx_init_lock);
++
++static int cpu_vmx_init(void)
++{
++	int ret = 0;
++	u64 msr;
++
++	/*
++	 * cpu_vmx_init() is designed to be invoked once, subsequent
++	 * invocations just return success. Hold a lock to prevent
++	 * concurrent initializations.
++	 */
++	spin_lock(&vmx_init_lock);
++
++	/* Check if this initialization is already done. */
++	if (basic_info.size)
++		goto unlock;
++
++	if (!cpu_has_vmx()) {
++		ret = -EOPNOTSUPP;
++		goto unlock;
++	}
++
++	if (rdmsrl_safe(MSR_IA32_FEAT_CTL, &msr) ||
++		!(msr & FEAT_CTL_LOCKED) ||
++		!(msr & FEAT_CTL_VMX_ENABLED_OUTSIDE_SMX)) {
++		ret = -EOPNOTSUPP;
++		goto unlock;
++	}
++
++	ret = cpu_vmx_get_basic_info(&basic_info);
++	if (ret)
++		goto unlock;
++
++	register_reboot_notifier(&virt_reboot_notifier);
++unlock:
++	spin_unlock(&vmx_init_lock);
++
++	return ret;
++}
++
++/*
++ * Increase VMX's reference count on current CPU. Preemption must be
++ * disabled in advance.
++ */
++int cpu_vmx_get(void)
++{
++	int *count = this_cpu_ptr(&vmx_count);
++	int r = 0;
++	unsigned long flags;
++
++	local_irq_save(flags);
++
++	/* Retrieve VMX basic info if it isn't done */
++	if (!basic_info.size) {
++		r = cpu_vmx_init();
++		if (r)
++			goto restore;
++	}
++
++	if (*count == 0) {
++		r = -EBUSY;
++		/*
++		 * someone else is manipulating (enable or disable) VMX.
++		 * We cannot ensure VMX state as callers requested. Return
++		 * an error to prevent unexpected behavior.
++		 */
++		if (cpu_vmx_enabled())
++			goto restore;
++
++		r = alloc_vmxon_vmcs(basic_info.size, basic_info.rev_id);
++		if (r)
++			goto restore;
++
++		intel_pt_handle_vmx(1);
++		r = cpu_vmxon(__pa(__this_cpu_read(vmxon_vmcs)));
++		if (r) {
++			intel_pt_handle_vmx(0);
++			goto restore;
++		}
++	}
++	*count += 1;
++
++restore:
++	local_irq_restore(flags);
++
++	return r;
++}
++EXPORT_SYMBOL_GPL(cpu_vmx_get);
++
++/*
++ * Decrease VMX's reference count on current CPU. Preemption must be
++ * disabled in advance.
++ */
++void cpu_vmx_put(void)
++{
++	int *count = this_cpu_ptr(&vmx_count);
++	unsigned long flags;
++
++	if (WARN_ON_ONCE(!count))
++		return;
++
++	local_irq_save(flags);
++
++	if (*count == 1) {
++		if (cpu_vmxoff())
++			virt_spurious_fault();
++		intel_pt_handle_vmx(0);
++		free_vmxon_vmcs(basic_info.size);
++	}
++	*count -= 1;
++	local_irq_restore(flags);
++}
++EXPORT_SYMBOL_GPL(cpu_vmx_put);
+diff --git a/arch/x86/kvm/Kconfig b/arch/x86/kvm/Kconfig
+index 01372d0e74b4..cf023ed712c4 100644
+--- a/arch/x86/kvm/Kconfig
++++ b/arch/x86/kvm/Kconfig
+@@ -75,6 +75,7 @@ config KVM_WERROR
+ config KVM_INTEL
+ 	tristate "KVM for Intel (and compatible) processors support"
+ 	depends on KVM && IA32_FEAT_CTL
++	select VIRTUALIZATION_EXTENSION
+ 	help
+ 	  Provides support for KVM on processors equipped with Intel's VT
+ 	  extensions, a.k.a. Virtual Machine Extensions (VMX).
+@@ -111,6 +112,7 @@ config KVM_INTEL_TDX_SEAM_BACKDOOR
+ config KVM_AMD
+ 	tristate "KVM for AMD processors support"
+ 	depends on KVM
++	select VIRTUALIZATION_EXTENSION
+ 	help
+ 	  Provides support for KVM on AMD processors equipped with the AMD-V
+ 	  (SVM) extensions.
+diff --git a/arch/x86/kvm/svm/svm_ops.h b/arch/x86/kvm/svm/svm_ops.h
+index 22e2b019de37..7624163527cf 100644
+--- a/arch/x86/kvm/svm/svm_ops.h
++++ b/arch/x86/kvm/svm/svm_ops.h
+@@ -4,6 +4,7 @@
+ 
+ #include <linux/compiler_types.h>
+ 
++#include <asm/virtext.h>
+ #include "x86.h"
+ 
+ #define svm_asm(insn, clobber...)				\
+@@ -13,7 +14,7 @@ do {								\
+ 			  ::: clobber : fault);			\
+ 	return;							\
+ fault:								\
+-	kvm_spurious_fault();					\
++	virt_spurious_fault();					\
+ } while (0)
+ 
+ #define svm_asm1(insn, op1, clobber...)				\
+@@ -23,7 +24,7 @@ do {								\
+ 			  :: op1 : clobber : fault);		\
+ 	return;							\
+ fault:								\
+-	kvm_spurious_fault();					\
++	virt_spurious_fault();					\
+ } while (0)
+ 
+ #define svm_asm2(insn, op1, op2, clobber...)				\
+@@ -33,7 +34,7 @@ do {									\
+ 			  :: op1, op2 : clobber : fault);		\
+ 	return;								\
+ fault:									\
+-	kvm_spurious_fault();						\
++	virt_spurious_fault();						\
+ } while (0)
+ 
+ static inline void clgi(void)
+diff --git a/arch/x86/kvm/vmx/seamcall.S b/arch/x86/kvm/vmx/seamcall.S
+index 9dbad2eaf6b1..f70c9807b887 100644
+--- a/arch/x86/kvm/vmx/seamcall.S
++++ b/arch/x86/kvm/vmx/seamcall.S
+@@ -60,7 +60,7 @@ SYM_FUNC_START(kvm_seamcall)
+ .pushsection .fixup, "ax"
+ 	/* The seamcall instruction above can cause an exception. */
+ 3:
+-	call	kvm_spurious_fault
++	call	virt_spurious_fault
+ 	jmp	2b
+ .popsection
+ 	_ASM_EXTABLE(1b, 3b)
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 3e32ccda893d..cecfce3339d8 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -392,7 +392,7 @@ do {					\
+ asmlinkage void vmread_error(unsigned long field, bool fault)
+ {
+ 	if (fault)
+-		kvm_spurious_fault();
++		virt_spurious_fault();
+ 	else
+ 		vmx_insn_failed("kvm: vmread failed: field=%lx\n", field);
+ }
+@@ -425,7 +425,6 @@ noinline void invept_error(unsigned long ext, u64 eptp, gpa_t gpa)
+ 			ext, eptp, gpa);
+ }
+ 
+-static DEFINE_PER_CPU(struct vmcs *, vmxarea);
+ DEFINE_PER_CPU(struct vmcs *, current_vmcs);
+ /*
+  * We maintain a per-CPU linked-list of VMCS loaded on that CPU. This is needed
+@@ -2333,7 +2332,6 @@ static __init int vmx_disabled_by_bios(void)
+ static int hardware_enable(void)
+ {
+ 	int cpu = raw_smp_processor_id();
+-	u64 phys_addr = __pa(per_cpu(vmxarea, cpu));
+ 	int r;
+ 
+ 	if (cr4_read_shadow() & X86_CR4_VMXE)
+@@ -2347,13 +2345,9 @@ static int hardware_enable(void)
+ 	    !hv_get_vp_assist_page(cpu))
+ 		return -EFAULT;
+ 
+-	intel_pt_handle_vmx(1);
+-
+-	r = cpu_vmxon(phys_addr);
+-	if (r) {
+-		intel_pt_handle_vmx(0);
++	r = cpu_vmx_get();
++	if (r)
+ 		return r;
+-	}
+ 
+ 	if (enable_ept)
+ 		ept_sync_global();
+@@ -2375,10 +2369,7 @@ static void hardware_disable(void)
+ {
+ 	vmclear_local_loaded_vmcss();
+ 
+-	if (cpu_vmxoff())
+-		kvm_spurious_fault();
+-
+-	intel_pt_handle_vmx(0);
++	cpu_vmx_put();
+ }
+ 
+ /*
+@@ -2429,7 +2420,6 @@ static __init int adjust_vmx_controls_64(u64 ctl_min, u64 ctl_opt,
+ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf,
+ 				    struct vmx_capability *vmx_cap)
+ {
+-	u32 vmx_msr_low, vmx_msr_high;
+ 	u32 min, opt, min2, opt2;
+ 	u32 _pin_based_exec_control = 0;
+ 	u32 _cpu_based_exec_control = 0;
+@@ -2437,6 +2427,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf,
+ 	u64 _cpu_based_3rd_exec_control = 0;
+ 	u32 _vmexit_control = 0;
+ 	u32 _vmentry_control = 0;
++	struct vmx_basic_info basic_info;
+ 
+ 	memset(vmcs_conf, 0, sizeof(*vmcs_conf));
+ 	min = CPU_BASED_HLT_EXITING |
+@@ -2606,27 +2597,14 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf,
+ 	}
+ 
+ 
+-	rdmsr(MSR_IA32_VMX_BASIC, vmx_msr_low, vmx_msr_high);
+-
+-	/* IA-32 SDM Vol 3B: VMCS size is never greater than 4kB. */
+-	if ((vmx_msr_high & 0x1fff) > PAGE_SIZE)
+-		return -EIO;
+-
+-#ifdef CONFIG_X86_64
+-	/* IA-32 SDM Vol 3B: 64-bit CPUs always have VMX_BASIC_MSR[48]==0. */
+-	if (vmx_msr_high & (1u<<16))
+-		return -EIO;
+-#endif
+-
+-	/* Require Write-Back (WB) memory type for VMCS accesses. */
+-	if (((vmx_msr_high >> 18) & 15) != 6)
++	if (cpu_vmx_get_basic_info(&basic_info))
+ 		return -EIO;
+ 
+-	vmcs_conf->size = vmx_msr_high & 0x1fff;
++	vmcs_conf->size = basic_info.size;
+ 	vmcs_conf->order = get_order(vmcs_conf->size);
+-	vmcs_conf->basic_cap = vmx_msr_high & ~0x1fff;
++	vmcs_conf->basic_cap = basic_info.cap;
+ 
+-	vmcs_conf->revision_id = vmx_msr_low;
++	vmcs_conf->revision_id = basic_info.rev_id;
+ 
+ 	vmcs_conf->pin_based_exec_ctrl = _pin_based_exec_control;
+ 	vmcs_conf->cpu_based_exec_ctrl = _cpu_based_exec_control;
+@@ -2727,47 +2705,6 @@ int alloc_loaded_vmcs(struct loaded_vmcs *loaded_vmcs)
+ 	return -ENOMEM;
+ }
+ 
+-static void free_kvm_area(void)
+-{
+-	int cpu;
+-
+-	for_each_possible_cpu(cpu) {
+-		free_vmcs(per_cpu(vmxarea, cpu));
+-		per_cpu(vmxarea, cpu) = NULL;
+-	}
+-}
+-
+-static __init int alloc_kvm_area(void)
+-{
+-	int cpu;
+-
+-	for_each_possible_cpu(cpu) {
+-		struct vmcs *vmcs;
+-
+-		vmcs = alloc_vmcs_cpu(false, cpu, GFP_KERNEL);
+-		if (!vmcs) {
+-			free_kvm_area();
+-			return -ENOMEM;
+-		}
+-
+-		/*
+-		 * When eVMCS is enabled, alloc_vmcs_cpu() sets
+-		 * vmcs->revision_id to KVM_EVMCS_VERSION instead of
+-		 * revision_id reported by MSR_IA32_VMX_BASIC.
+-		 *
+-		 * However, even though not explicitly documented by
+-		 * TLFS, VMXArea passed as VMXON argument should
+-		 * still be marked with revision_id reported by
+-		 * physical CPU.
+-		 */
+-		if (static_branch_unlikely(&enable_evmcs))
+-			vmcs->hdr.revision_id = vmcs_config.revision_id;
+-
+-		per_cpu(vmxarea, cpu) = vmcs;
+-	}
+-	return 0;
+-}
+-
+ static void fix_pmode_seg(struct kvm_vcpu *vcpu, int seg,
+ 		struct kvm_segment *save)
+ {
+@@ -7637,8 +7574,6 @@ static void hardware_unsetup(void)
+ {
+ 	if (nested)
+ 		nested_vmx_hardware_unsetup();
+-
+-	free_kvm_area();
+ }
+ 
+ static bool vmx_check_apicv_inhibit_reasons(ulong bit)
+@@ -7848,9 +7783,6 @@ static __init int hardware_setup(void)
+ 
+ 	vmx_set_cpu_caps();
+ 
+-	r = alloc_kvm_area();
+-	if (r)
+-		nested_vmx_hardware_unsetup();
+ 	return r;
+ }
+ 
+diff --git a/arch/x86/kvm/vmx/vmx_ops.h b/arch/x86/kvm/vmx/vmx_ops.h
+index 9e9ef47e988c..da20fb688cfa 100644
+--- a/arch/x86/kvm/vmx/vmx_ops.h
++++ b/arch/x86/kvm/vmx/vmx_ops.h
+@@ -4,6 +4,7 @@
+ 
+ #include <linux/nospec.h>
+ 
++#include <asm/virtext.h>
+ #include <asm/vmx.h>
+ 
+ #include "evmcs.h"
+@@ -153,7 +154,7 @@ error:									\
+ 	instrumentation_end();						\
+ 	return;								\
+ fault:									\
+-	kvm_spurious_fault();						\
++	virt_spurious_fault();						\
+ } while (0)
+ 
+ #define vmx_asm2(insn, op1, op2, error_args...)				\
+@@ -170,7 +171,7 @@ error:									\
+ 	instrumentation_end();						\
+ 	return;								\
+ fault:									\
+-	kvm_spurious_fault();						\
++	virt_spurious_fault();						\
+ } while (0)
+ 
+ static __always_inline void __vmcs_writel(unsigned long field, unsigned long value)
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index bc761fbd5988..cefd0797843f 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -506,20 +506,6 @@ int kvm_set_apic_base(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ }
+ EXPORT_SYMBOL_GPL(kvm_set_apic_base);
+ 
+-/*
+- * Handle a fault on a hardware virtualization (VMX or SVM) instruction.
+- *
+- * Hardware virtualization extension instructions may fault if a reboot turns
+- * off virtualization while processes are running.  Usually after catching the
+- * fault we just panic; during reboot instead the instruction is ignored.
+- */
+-noinstr void kvm_spurious_fault(void)
+-{
+-	/* Fault while not rebooting.  We want the trace. */
+-	BUG_ON(!kvm_rebooting);
+-}
+-EXPORT_SYMBOL_GPL(kvm_spurious_fault);
+-
+ #define EXCPT_BENIGN		0
+ #define EXCPT_CONTRIBUTORY	1
+ #define EXCPT_PF		2
+diff --git a/arch/x86/kvm/x86.h b/arch/x86/kvm/x86.h
+index ed5db82477ea..07732ca9e119 100644
+--- a/arch/x86/kvm/x86.h
++++ b/arch/x86/kvm/x86.h
+@@ -5,11 +5,10 @@
+ #include <linux/kvm_host.h>
+ #include <asm/mce.h>
+ #include <asm/pvclock.h>
++#include <asm/virtext.h>
+ #include "kvm_cache_regs.h"
+ #include "kvm_emulate.h"
+ 
+-void kvm_spurious_fault(void);
+-
+ static __always_inline void kvm_guest_enter_irqoff(void)
+ {
+ 	/*
+-- 
+2.31.1
+

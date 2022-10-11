@@ -1,0 +1,87 @@
+From 95ce1e43caa13f23a02978e8811158cbab347d19 Mon Sep 17 00:00:00 2001
+From: Qiuxu Zhuo <qiuxu.zhuo@intel.com>
+Date: Wed, 20 Apr 2022 10:45:57 -0400
+Subject: [PATCH 1310/1418] x86/mm: Forbid the zero page once it has
+ uncorrectable errors
+
+Accessing to the zero page with uncorrectable errors causes unexpected
+machine checks. So forbid the zero page from being used by user-space
+processes once it has uncorrectable errors. Processes that have already
+mapped the zero page with uncorrectable errors will get killed once they
+access to it. New processes will not use the zero page.
+
+Signed-off-by: Qiuxu Zhuo <qiuxu.zhuo@intel.com>
+---
+ arch/x86/include/asm/pgtable.h | 3 +++
+ arch/x86/kernel/cpu/mce/core.c | 6 ++++++
+ arch/x86/mm/pgtable.c          | 2 ++
+ mm/memory-failure.c            | 2 +-
+ 4 files changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/pgtable.h b/arch/x86/include/asm/pgtable.h
+index 2aeeeb33f9d2..8712783d4f04 100644
+--- a/arch/x86/include/asm/pgtable.h
++++ b/arch/x86/include/asm/pgtable.h
+@@ -57,6 +57,9 @@ extern unsigned long empty_zero_page[PAGE_SIZE / sizeof(unsigned long)]
+ 	__visible;
+ #define ZERO_PAGE(vaddr) ((void)(vaddr),virt_to_page(empty_zero_page))
+ 
++extern bool __read_mostly forbids_zeropage;
++#define mm_forbids_zeropage(x)	forbids_zeropage
++
+ extern spinlock_t pgd_lock;
+ extern struct list_head pgd_list;
+ 
+diff --git a/arch/x86/kernel/cpu/mce/core.c b/arch/x86/kernel/cpu/mce/core.c
+index 218c87fc8e59..ff2f0306a728 100644
+--- a/arch/x86/kernel/cpu/mce/core.c
++++ b/arch/x86/kernel/cpu/mce/core.c
+@@ -44,6 +44,7 @@
+ #include <linux/sync_core.h>
+ #include <linux/task_work.h>
+ #include <linux/hardirq.h>
++#include <linux/pgtable.h>
+ 
+ #include <asm/intel-family.h>
+ #include <asm/processor.h>
+@@ -1305,6 +1306,11 @@ static void queue_task_work(struct mce *m, char *msg, int kill_current_task)
+ 	if (count > 1)
+ 		return;
+ 
++	if (is_zero_pfn(current->mce_addr >> PAGE_SHIFT) && !forbids_zeropage) {
++		pr_err("Forbid user-space process from using zero page\n");
++		forbids_zeropage = true;
++	}
++
+ 	task_work_add(current, &current->mce_kill_me, TWA_RESUME);
+ }
+ 
+diff --git a/arch/x86/mm/pgtable.c b/arch/x86/mm/pgtable.c
+index 61a364b9ae0a..9aeaf39bf740 100644
+--- a/arch/x86/mm/pgtable.c
++++ b/arch/x86/mm/pgtable.c
+@@ -28,6 +28,8 @@ void paravirt_tlb_remove_table(struct mmu_gather *tlb, void *table)
+ 
+ gfp_t __userpte_alloc_gfp = GFP_PGTABLE_USER | PGTABLE_HIGHMEM;
+ 
++bool __read_mostly forbids_zeropage;
++
+ pgtable_t pte_alloc_one(struct mm_struct *mm)
+ {
+ 	return __pte_alloc_one(mm, __userpte_alloc_gfp);
+diff --git a/mm/memory-failure.c b/mm/memory-failure.c
+index bdbbb32211a5..dc710ab9e9e9 100644
+--- a/mm/memory-failure.c
++++ b/mm/memory-failure.c
+@@ -1639,7 +1639,7 @@ int memory_failure(unsigned long pfn, int flags)
+ 		goto unlock_mutex;
+ 	}
+ 
+-	if (TestSetPageHWPoison(p)) {
++	if (TestSetPageHWPoison(p) || is_zero_pfn(pfn)) {
+ 		pr_err("Memory failure: %#lx: already hardware poisoned\n",
+ 			pfn);
+ 		res = -EHWPOISON;
+-- 
+2.31.1
+

@@ -1,0 +1,94 @@
+From 66bce36152740a52f36be8065ade1fd4f2958ee5 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Tue, 31 Aug 2021 15:34:37 +0800
+Subject: [PATCH 0481/1418] KVM: TDX: Pass page level to tdh_clflush_page()
+
+tdh_mem_page_aug() will support 2MB large page in the near future.
+Extend tdh_clflush_page() to require size info in prepartion for
+large pages.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kvm/vmx/tdx_ops.h | 19 ++++++++++---------
+ 1 file changed, 10 insertions(+), 9 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx_ops.h b/arch/x86/kvm/vmx/tdx_ops.h
+index 6bbd5e1fc9bf..f867404745aa 100644
+--- a/arch/x86/kvm/vmx/tdx_ops.h
++++ b/arch/x86/kvm/vmx/tdx_ops.h
+@@ -6,6 +6,7 @@
+ 
+ #include <asm/asm.h>
+ #include <asm/kvm_host.h>
++#include <asm/pgtable_types.h>
+ #include <asm/cacheflush.h>
+ #include <asm/tdx_errno.h>
+ #include <asm/tdx_host.h>
+@@ -13,41 +14,41 @@
+ #include "seamcall.h"
+ 
+ #ifdef CONFIG_INTEL_TDX_HOST
+-static inline void tdx_clflush_page(hpa_t addr)
++static inline void tdh_clflush_page(hpa_t addr, enum pg_level level)
+ {
+-	clflush_cache_range(__va(addr), PAGE_SIZE);
++	clflush_cache_range(__va(addr), KVM_HPAGE_SIZE(level));
+ }
+ 
+ static inline u64 tdh_mng_addcx(hpa_t tdr, hpa_t addr)
+ {
+-	tdx_clflush_page(addr);
++	tdh_clflush_page(addr, PG_LEVEL_4K);
+ 	return seamcall(TDH_MNG_ADDCX, addr, tdr, 0, 0, 0, NULL);
+ }
+ 
+ static inline u64 tdh_mem_page_add(hpa_t tdr, gpa_t gpa, hpa_t hpa, hpa_t source,
+ 			    struct tdx_ex_ret *ex)
+ {
+-	tdx_clflush_page(hpa);
++	tdh_clflush_page(hpa, PG_LEVEL_4K);
+ 	return seamcall(TDH_MEM_PAGE_ADD, gpa, tdr, hpa, source, 0, ex);
+ }
+ 
+ static inline u64 tdh_mem_sept_add(hpa_t tdr, gpa_t gpa, int level, hpa_t page,
+ 			    struct tdx_ex_ret *ex)
+ {
+-	tdx_clflush_page(page);
++	tdh_clflush_page(page, PG_LEVEL_4K);
+ 	return seamcall(TDH_MEM_SEPT_ADD, gpa | level, tdr, page, 0, 0, ex);
+ }
+ 
+ static inline u64 tdh_vp_addcx(hpa_t tdvpr, hpa_t addr)
+ {
+-	tdx_clflush_page(addr);
++	tdh_clflush_page(addr, PG_LEVEL_4K);
+ 	return seamcall(TDH_VP_ADDCX, addr, tdvpr, 0, 0, 0, NULL);
+ }
+ 
+ static inline u64 tdh_mem_page_aug(hpa_t tdr, gpa_t gpa, hpa_t hpa,
+ 			    struct tdx_ex_ret *ex)
+ {
+-	tdx_clflush_page(hpa);
++	tdh_clflush_page(hpa, PG_LEVEL_4K);
+ 	return seamcall(TDH_MEM_PAGE_AUG, gpa, tdr, hpa, 0, 0, ex);
+ }
+ 
+@@ -64,13 +65,13 @@ static inline u64 tdh_mng_key_config(hpa_t tdr)
+ 
+ static inline u64 tdh_mng_create(hpa_t tdr, int hkid)
+ {
+-	tdx_clflush_page(tdr);
++	tdh_clflush_page(tdr, PG_LEVEL_4K);
+ 	return seamcall(TDH_MNG_CREATE, tdr, hkid, 0, 0, 0, NULL);
+ }
+ 
+ static inline u64 tdh_vp_create(hpa_t tdr, hpa_t tdvpr)
+ {
+-	tdx_clflush_page(tdvpr);
++	tdh_clflush_page(tdvpr, PG_LEVEL_4K);
+ 	return seamcall(TDH_VP_CREATE, tdvpr, tdr, 0, 0, 0, NULL);
+ }
+ 
+-- 
+2.31.1
+

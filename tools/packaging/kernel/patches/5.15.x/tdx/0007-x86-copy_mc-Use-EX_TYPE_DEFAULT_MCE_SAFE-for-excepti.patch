@@ -1,0 +1,47 @@
+From 78c0cafc56bbc989d2942e1f7871b7e867dcd9d0 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 8 Sep 2021 15:29:21 +0200
+Subject: [PATCH 0007/1418] x86/copy_mc: Use EX_TYPE_DEFAULT_MCE_SAFE for
+ exception fixups
+
+Nothing in that code uses the trap number which was stored by the exception
+fixup which is instantiated via _ASM_EXTABLE_FAULT().
+
+Use _ASM_EXTABLE(... EX_TYPE_DEFAULT_MCE_SAFE) instead which just handles
+the IP fixup and the type indicates to the #MC handler that the call site
+can handle the abort caused by #MC correctly.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20210908132525.328706042@linutronix.de
+---
+ arch/x86/lib/copy_mc_64.S | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/lib/copy_mc_64.S b/arch/x86/lib/copy_mc_64.S
+index e5f77e293034..7334055157ba 100644
+--- a/arch/x86/lib/copy_mc_64.S
++++ b/arch/x86/lib/copy_mc_64.S
+@@ -107,9 +107,9 @@ SYM_FUNC_END(copy_mc_fragile)
+ 
+ 	.previous
+ 
+-	_ASM_EXTABLE_FAULT(.L_read_leading_bytes, .E_leading_bytes)
+-	_ASM_EXTABLE_FAULT(.L_read_words, .E_read_words)
+-	_ASM_EXTABLE_FAULT(.L_read_trailing_bytes, .E_trailing_bytes)
++	_ASM_EXTABLE_TYPE(.L_read_leading_bytes, .E_leading_bytes, EX_TYPE_DEFAULT_MCE_SAFE)
++	_ASM_EXTABLE_TYPE(.L_read_words, .E_read_words, EX_TYPE_DEFAULT_MCE_SAFE)
++	_ASM_EXTABLE_TYPE(.L_read_trailing_bytes, .E_trailing_bytes, EX_TYPE_DEFAULT_MCE_SAFE)
+ 	_ASM_EXTABLE(.L_write_leading_bytes, .E_leading_bytes)
+ 	_ASM_EXTABLE(.L_write_words, .E_write_words)
+ 	_ASM_EXTABLE(.L_write_trailing_bytes, .E_trailing_bytes)
+@@ -149,5 +149,5 @@ SYM_FUNC_END(copy_mc_enhanced_fast_string)
+ 
+ 	.previous
+ 
+-	_ASM_EXTABLE_FAULT(.L_copy, .E_copy)
++	_ASM_EXTABLE_TYPE(.L_copy, .E_copy, EX_TYPE_DEFAULT_MCE_SAFE)
+ #endif /* !CONFIG_UML */
+-- 
+2.31.1
+

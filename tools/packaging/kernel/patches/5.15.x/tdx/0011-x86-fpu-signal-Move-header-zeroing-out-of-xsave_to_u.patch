@@ -1,0 +1,78 @@
+From 88041f69143003bd2dccc7faa9d1b7faf0d9ed2e Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 8 Sep 2021 15:29:29 +0200
+Subject: [PATCH 0011/1418] x86/fpu/signal: Move header zeroing out of
+ xsave_to_user_sigframe()
+
+There is no reason to have the header zeroing in the pagefault disabled
+region. Do it upfront once.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20210908132525.621674721@linutronix.de
+---
+ arch/x86/include/asm/fpu/internal.h | 17 ++++++-----------
+ arch/x86/kernel/fpu/signal.c        | 12 ++++++++++++
+ 2 files changed, 18 insertions(+), 11 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/internal.h b/arch/x86/include/asm/fpu/internal.h
+index 4cfd40dc3cb5..c856ca481546 100644
+--- a/arch/x86/include/asm/fpu/internal.h
++++ b/arch/x86/include/asm/fpu/internal.h
+@@ -318,9 +318,12 @@ static inline void os_xrstor(struct xregs_state *xstate, u64 mask)
+  * We don't use modified optimization because xrstor/xrstors might track
+  * a different application.
+  *
+- * We don't use compacted format xsave area for
+- * backward compatibility for old applications which don't understand
+- * compacted format of xsave area.
++ * We don't use compacted format xsave area for backward compatibility for
++ * old applications which don't understand the compacted format of the
++ * xsave area.
++ *
++ * The caller has to zero buf::header before calling this because XSAVE*
++ * does not touch the reserved fields in the header.
+  */
+ static inline int xsave_to_user_sigframe(struct xregs_state __user *buf)
+ {
+@@ -334,14 +337,6 @@ static inline int xsave_to_user_sigframe(struct xregs_state __user *buf)
+ 	u32 hmask = mask >> 32;
+ 	int err;
+ 
+-	/*
+-	 * Clear the xsave header first, so that reserved fields are
+-	 * initialized to zero.
+-	 */
+-	err = __clear_user(&buf->header, sizeof(buf->header));
+-	if (unlikely(err))
+-		return -EFAULT;
+-
+ 	stac();
+ 	XSTATE_OP(XSAVE, buf, lmask, hmask, err);
+ 	clac();
+diff --git a/arch/x86/kernel/fpu/signal.c b/arch/x86/kernel/fpu/signal.c
+index cd96f5ce0ca7..91c1e68e5fca 100644
+--- a/arch/x86/kernel/fpu/signal.c
++++ b/arch/x86/kernel/fpu/signal.c
+@@ -189,6 +189,18 @@ int copy_fpstate_to_sigframe(void __user *buf, void __user *buf_fx, int size)
+ 
+ 	if (!access_ok(buf, size))
+ 		return -EACCES;
++
++	if (use_xsave()) {
++		struct xregs_state __user *xbuf = buf_fx;
++
++		/*
++		 * Clear the xsave header first, so that reserved fields are
++		 * initialized to zero.
++		 */
++		ret = __clear_user(&xbuf->header, sizeof(xbuf->header));
++		if (unlikely(ret))
++			return ret;
++	}
+ retry:
+ 	/*
+ 	 * Load the FPU registers if they are not valid for the current task.
+-- 
+2.31.1
+

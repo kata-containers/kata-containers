@@ -1,0 +1,263 @@
+From 9a922362b0b8d2f8c5f53a50039a6b4c01aa5394 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Sun, 14 Nov 2021 10:12:41 +0800
+Subject: [PATCH 0742/1418] KVM: TDX: Attach to and detach from TDX module
+
+TDX module update leads to a period when TDX module cannot serve
+KVM's requests (like creating a TD, etc). And a requirement that KVM
+should keep unloaded during TDX module update is overkill as normal
+VMs needn't be shut down. To minimize the impact to normal VMs, KVM
+should provide a mechanism to dynamically detach from and attach
+to TDX module.
+
+Detaching and attaching happen before/after TDX module update. By
+registering a callback to TDX notifier chain, KVM can know the
+start and end of TDX module update.
+
+Detaching from TDX module shouldn't break anything in KVM. So, a
+refcount (kvm_tdx_refcnt) is used to count the reference to TDX
+module. KVM only detachs from TDX module when there is no reference
+
+Currently, a reference is held in each TD's life-cycle. And a
+reference is held temporarily when userspace queries TDX capabilities
+because TDX module update may lead to a result mixing capabilities of
+the old module and the new one being returned to userspace, which
+is not good.
+
+After detaching from TDX module, activities that rely on TDX module
+should be rejected. So, try_tdx_get() returns an error if KVM hasn't
+attached to TDX module.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 139 +++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 128 insertions(+), 11 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 4a42e7d97c4a..034ddb9b9b68 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -6,6 +6,7 @@
+ #include <linux/pagemap.h>
+ #include <linux/perf_event.h>
+ #include <linux/debugfs.h>
++#include <linux/refcount.h>
+ 
+ #include <asm/tdx_errno.h>
+ #include <asm/tdx_host.h>
+@@ -86,6 +87,75 @@ static int tdx_get_caps(void)
+ 	return 0;
+ }
+ 
++/*
++ * Reference count of TDX module
++ *
++ * 0 denotes KVM doesn't attach to TDX module. In this case, KVM
++ * shouldn't use TDX module, for example, create TDs.
++ */
++static refcount_t kvm_tdx_refcnt = REFCOUNT_INIT(0);
++
++/*
++ * Try to increase the reference count of TDX module by 1.
++ *
++ * Return an error if KVM hasn't attached to TDX module.
++ */
++static int try_tdx_get(void)
++{
++	if (!refcount_inc_not_zero(&kvm_tdx_refcnt))
++		return -ENODEV;
++
++	return 0;
++}
++
++static void tdx_put(void)
++{
++	WARN_ON(!refcount_dec_not_one(&kvm_tdx_refcnt));
++}
++
++/*
++ * Attach KVM to TDX module.
++ *
++ * Set the reference count to 1 and retrieve TDX capabilities.
++ */
++static int attach_tdx_module(void)
++{
++	int ret;
++
++	/* Already attached */
++	if (refcount_read(&kvm_tdx_refcnt))
++		return 0;
++
++	/*
++	 * Shouldn't fail as this function is called by notifier callback when
++	 * TDX module is ready. TDX module state isn't supposed to be changed
++	 */
++	ret = tdx_get_caps();
++	if (WARN_ON(ret))
++		return ret;
++
++	refcount_set(&kvm_tdx_refcnt, 1);
++
++	return 0;
++}
++
++/*
++ * Detach from TDX module
++ *
++ * return -EBUSY if TDX module is in use.
++ */
++static int detach_tdx_module(void)
++{
++	/* Already detached */
++	if (!refcount_read(&kvm_tdx_refcnt))
++		return 0;
++
++	if (!refcount_dec_if_one(&kvm_tdx_refcnt))
++		return -EBUSY;
++
++	return 0;
++}
++
+ static DEFINE_MUTEX(tdx_lock);
+ static struct mutex *tdx_mng_key_config_lock;
+ 
+@@ -441,6 +511,7 @@ static void tdx_vm_destroy(struct kvm *kvm)
+ 		return;
+ 
+ 	free_page(kvm_tdx->tdr.va);
++	tdx_put();
+ }
+ 
+ static int tdx_do_tdh_mng_key_config(void *param)
+@@ -491,9 +562,15 @@ static int tdx_vm_init(struct kvm *kvm)
+ 	/* vCPUs can't be created until after KVM_TDX_INIT_VM. */
+ 	kvm->max_vcpus = 0;
+ 
++	ret = try_tdx_get();
++	if (ret)
++		return ret;
++
+ 	kvm_tdx->hkid = tdx_keyid_alloc();
+-	if (kvm_tdx->hkid < 0)
+-		return -EBUSY;
++	if (kvm_tdx->hkid < 0) {
++		ret = -EBUSY;
++		goto put_tdx;
++	}
+ 	if (WARN_ON_ONCE(kvm_tdx->hkid >> 16)) {
+ 		ret = -EIO;
+ 		goto free_hkid;
+@@ -553,6 +630,8 @@ static int tdx_vm_init(struct kvm *kvm)
+ 	free_page(kvm_tdx->tdr.va);
+ free_hkid:
+ 	tdx_keyid_free(kvm_tdx->hkid);
++put_tdx:
++	tdx_put();
+ 	return ret;
+ }
+ 
+@@ -1976,6 +2055,7 @@ static int tdx_dev_ioctl(void __user *argp)
+ 	struct kvm_tdx_capabilities __user *user_caps;
+ 	struct kvm_tdx_capabilities caps;
+ 	struct kvm_tdx_cmd cmd;
++	int ret;
+ 
+ 	BUILD_BUG_ON(sizeof(struct kvm_tdx_cpuid_config) !=
+ 		     sizeof(struct tdx_cpuid_config));
+@@ -1990,13 +2070,22 @@ static int tdx_dev_ioctl(void __user *argp)
+ 	if (copy_from_user(&caps, user_caps, sizeof(caps)))
+ 		return -EFAULT;
+ 
+-	if (caps.nr_cpuid_configs < tdx_caps.nr_cpuid_configs)
+-		return -E2BIG;
++	ret = try_tdx_get();
++	if (ret)
++		return ret;
++
++	if (caps.nr_cpuid_configs < tdx_caps.nr_cpuid_configs) {
++		ret = -E2BIG;
++		goto put_tdx;
++	}
++
+ 	caps.nr_cpuid_configs = tdx_caps.nr_cpuid_configs;
+ 
+ 	if (copy_to_user(user_caps->cpuid_configs, &tdx_caps.cpuid_configs,
+-			 tdx_caps.nr_cpuid_configs * sizeof(struct tdx_cpuid_config)))
+-		return -EFAULT;
++			 tdx_caps.nr_cpuid_configs * sizeof(struct tdx_cpuid_config))) {
++		ret = -EFAULT;
++		goto put_tdx;
++	}
+ 
+ 	caps.attrs_fixed0 = tdx_caps.attrs_fixed0;
+ 	caps.attrs_fixed1 = tdx_caps.attrs_fixed1;
+@@ -2004,9 +2093,11 @@ static int tdx_dev_ioctl(void __user *argp)
+ 	caps.xfam_fixed1 = tdx_caps.xfam_fixed1;
+ 
+ 	if (copy_to_user((void __user *)cmd.data, &caps, sizeof(caps)))
+-		return -EFAULT;
++		ret = -EFAULT;
+ 
+-	return 0;
++put_tdx:
++	tdx_put();
++	return ret;
+ }
+ 
+ /*
+@@ -3138,13 +3229,42 @@ static int tdx_skip_emulated_instruction(struct kvm_vcpu *vcpu)
+ 	return 1;
+ }
+ 
++static int tdx_notifier_callback(struct notifier_block *notifier,
++				 unsigned long val, void *v)
++{
++	int ret = NOTIFY_OK;
++
++	switch (val) {
++	case TDX_MODULE_LOAD_BEGIN:
++		ret = detach_tdx_module();
++		if (ret)
++			ret = notifier_from_errno(ret);
++		break;
++
++	case TDX_MODULE_LOAD_DONE:
++		attach_tdx_module();
++		break;
++
++	default:
++		break;
++	}
++
++	return ret;
++}
++
++static struct notifier_block tdx_notifier = {
++	.notifier_call = tdx_notifier_callback,
++};
++
+ static int __init tdx_init(void)
+ {
++	register_tdx_notifier(&tdx_notifier);
+ 	return 0;
+ }
+ 
+ static void __exit tdx_exit(void)
+ {
++	unregister_tdx_notifier(&tdx_notifier);
+ }
+ 
+ static int __init tdx_hardware_setup(struct kvm_x86_ops *x86_ops)
+@@ -3157,9 +3277,6 @@ static int __init tdx_hardware_setup(struct kvm_x86_ops *x86_ops)
+ 		return -EINVAL;
+ 	}
+ 
+-	if (tdx_get_caps())
+-		return -EIO;
+-
+ 	if (WARN_ON_ONCE(x86_ops->tlb_remote_flush))
+ 		return -EIO;
+ 
+-- 
+2.31.1
+

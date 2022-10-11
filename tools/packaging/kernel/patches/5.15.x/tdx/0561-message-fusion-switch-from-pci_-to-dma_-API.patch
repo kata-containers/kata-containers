@@ -1,0 +1,102 @@
+From fd0dc2b5376ffc8d9fd7055f78b93500bb86f542 Mon Sep 17 00:00:00 2001
+From: Qing Wang <wangqing@vivo.com>
+Date: Thu, 7 Oct 2021 20:28:33 -0700
+Subject: [PATCH 0561/1418] message: fusion: switch from 'pci_' to 'dma_' API
+
+The wrappers in include/linux/pci-dma-compat.h should go away.
+
+pci_set_dma_mask()/pci_set_consistent_dma_mask() should be
+replaced with dma_set_mask()/dma_set_coherent_mask(),
+and use dma_set_mask_and_coherent() for both.
+
+Signed-off-by: Qing Wang <wangqing@vivo.com>
+Link: https://lore.kernel.org/r/1633663733-47199-8-git-send-email-wangqing@vivo.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/message/fusion/mptbase.c | 31 +++++++++----------------------
+ 1 file changed, 9 insertions(+), 22 deletions(-)
+
+diff --git a/drivers/message/fusion/mptbase.c b/drivers/message/fusion/mptbase.c
+index 7f7abc9069f7..4baf57d4956e 100644
+--- a/drivers/message/fusion/mptbase.c
++++ b/drivers/message/fusion/mptbase.c
+@@ -1666,16 +1666,12 @@ mpt_mapresources(MPT_ADAPTER *ioc)
+ 		const uint64_t required_mask = dma_get_required_mask
+ 		    (&pdev->dev);
+ 		if (required_mask > DMA_BIT_MASK(32)
+-			&& !pci_set_dma_mask(pdev, DMA_BIT_MASK(64))
+-			&& !pci_set_consistent_dma_mask(pdev,
+-						 DMA_BIT_MASK(64))) {
++			&& dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64))) {
+ 			ioc->dma_mask = DMA_BIT_MASK(64);
+ 			dinitprintk(ioc, printk(MYIOC_s_INFO_FMT
+ 				": 64 BIT PCI BUS DMA ADDRESSING SUPPORTED\n",
+ 				ioc->name));
+-		} else if (!pci_set_dma_mask(pdev, DMA_BIT_MASK(32))
+-			&& !pci_set_consistent_dma_mask(pdev,
+-						DMA_BIT_MASK(32))) {
++		} else if (!dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32))) {
+ 			ioc->dma_mask = DMA_BIT_MASK(32);
+ 			dinitprintk(ioc, printk(MYIOC_s_INFO_FMT
+ 				": 32 BIT PCI BUS DMA ADDRESSING SUPPORTED\n",
+@@ -1686,9 +1682,7 @@ mpt_mapresources(MPT_ADAPTER *ioc)
+ 			goto out_pci_release_region;
+ 		}
+ 	} else {
+-		if (!pci_set_dma_mask(pdev, DMA_BIT_MASK(32))
+-			&& !pci_set_consistent_dma_mask(pdev,
+-						DMA_BIT_MASK(32))) {
++		if (!dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32))) {
+ 			ioc->dma_mask = DMA_BIT_MASK(32);
+ 			dinitprintk(ioc, printk(MYIOC_s_INFO_FMT
+ 				": 32 BIT PCI BUS DMA ADDRESSING SUPPORTED\n",
+@@ -4452,9 +4446,7 @@ PrimeIocFifos(MPT_ADAPTER *ioc)
+ 		 */
+ 		if (ioc->pcidev->device == MPI_MANUFACTPAGE_DEVID_SAS1078 &&
+ 		    ioc->dma_mask > DMA_BIT_MASK(35)) {
+-			if (!pci_set_dma_mask(ioc->pcidev, DMA_BIT_MASK(32))
+-			    && !pci_set_consistent_dma_mask(ioc->pcidev,
+-			    DMA_BIT_MASK(32))) {
++			if (!dma_set_mask_and_coherent(&ioc->pcidev, DMA_BIT_MASK(32))) {
+ 				dma_mask = DMA_BIT_MASK(35);
+ 				d36memprintk(ioc, printk(MYIOC_s_DEBUG_FMT
+ 				    "setting 35 bit addressing for "
+@@ -4462,10 +4454,7 @@ PrimeIocFifos(MPT_ADAPTER *ioc)
+ 				    ioc->name));
+ 			} else {
+ 				/*Reseting DMA mask to 64 bit*/
+-				pci_set_dma_mask(ioc->pcidev,
+-					DMA_BIT_MASK(64));
+-				pci_set_consistent_dma_mask(ioc->pcidev,
+-					DMA_BIT_MASK(64));
++				dma_set_mask_and_coherent(&ioc->pcidev, DMA_BIT_MASK(64));
+ 
+ 				printk(MYIOC_s_ERR_FMT
+ 				    "failed setting 35 bit addressing for "
+@@ -4600,9 +4589,8 @@ PrimeIocFifos(MPT_ADAPTER *ioc)
+ 		alloc_dma += ioc->reply_sz;
+ 	}
+ 
+-	if (dma_mask == DMA_BIT_MASK(35) && !pci_set_dma_mask(ioc->pcidev,
+-	    ioc->dma_mask) && !pci_set_consistent_dma_mask(ioc->pcidev,
+-	    ioc->dma_mask))
++	if (dma_mask == DMA_BIT_MASK(35) &&
++	    !dma_set_mask_and_coherent(&ioc->pcidev, ioc->dma_mask))
+ 		d36memprintk(ioc, printk(MYIOC_s_DEBUG_FMT
+ 		    "restoring 64 bit addressing\n", ioc->name));
+ 
+@@ -4625,9 +4613,8 @@ PrimeIocFifos(MPT_ADAPTER *ioc)
+ 		ioc->sense_buf_pool = NULL;
+ 	}
+ 
+-	if (dma_mask == DMA_BIT_MASK(35) && !pci_set_dma_mask(ioc->pcidev,
+-	    DMA_BIT_MASK(64)) && !pci_set_consistent_dma_mask(ioc->pcidev,
+-	    DMA_BIT_MASK(64)))
++	if (dma_mask == DMA_BIT_MASK(35) &&
++	    !dma_set_mask_and_coherent(&ioc->pcidev, DMA_BIT_MASK(64)))
+ 		d36memprintk(ioc, printk(MYIOC_s_DEBUG_FMT
+ 		    "restoring 64 bit addressing\n", ioc->name));
+ 
+-- 
+2.31.1
+

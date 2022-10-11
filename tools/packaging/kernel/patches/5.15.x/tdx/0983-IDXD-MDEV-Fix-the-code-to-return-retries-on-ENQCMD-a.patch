@@ -1,0 +1,163 @@
+From a9816da2439e1f66e6974ccf9666fa6d06e4f294 Mon Sep 17 00:00:00 2001
+From: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Date: Thu, 30 Sep 2021 03:04:53 -0700
+Subject: [PATCH 0983/1418] IDXD/MDEV: Fix the code to return retries on ENQCMD
+ and ENQCMDS instructions when the vDEV is paused. Also fix the code where we
+ were returning without unlocking the mig_submit_lock mutex on errors. Also
+ use the exact same portal (within the MMIO page) to re-submit the work on
+ destination that was used to submit the work on source machine during live VM
+ migration.
+
+---
+ drivers/vfio/mdev/idxd/mdev.c |  4 ++
+ drivers/vfio/mdev/idxd/mdev.h |  1 +
+ drivers/vfio/mdev/idxd/vdev.c | 69 ++++++++++++++++++++++++-----------
+ 3 files changed, 52 insertions(+), 22 deletions(-)
+
+diff --git a/drivers/vfio/mdev/idxd/mdev.c b/drivers/vfio/mdev/idxd/mdev.c
+index 9a8b428e0391..f13198604020 100644
+--- a/drivers/vfio/mdev/idxd/mdev.c
++++ b/drivers/vfio/mdev/idxd/mdev.c
+@@ -579,6 +579,8 @@ static int vidxd_resubmit_pending_descs (struct vdcm_idxd *vidxd,
+ 			*offset += sizeof(el);
+ 
+ 			portal = wq->portal;
++			portal += (el.portal_id << 6);
++
+ 			pr_info("submitting a desc to WQ %d:%d ded %d\n",
+ 					i, wq->id, wq_dedicated(wq));
+ 			if (wq_dedicated(wq)) {
+@@ -597,6 +599,8 @@ static int vidxd_resubmit_pending_descs (struct vdcm_idxd *vidxd,
+ 					continue;
+ 				}
+ 				hw->pasid = hpasid;
++				/* FIXME: Allow enqcmds to retry a few times
++				 * before failing */
+ 				rc = enqcmds(portal, el.work_desc);
+ 				if (rc < 0) {
+ 					pr_info("%s: enqcmds failed\n", __func__);
+diff --git a/drivers/vfio/mdev/idxd/mdev.h b/drivers/vfio/mdev/idxd/mdev.h
+index 775f4927b2e3..8af1bb8ee21a 100644
+--- a/drivers/vfio/mdev/idxd/mdev.h
++++ b/drivers/vfio/mdev/idxd/mdev.h
+@@ -50,6 +50,7 @@ struct ioasid_mm_entry {
+ 
+ struct idxd_wq_desc_elem {
+ 	enum idxd_portal_prot portal_prot;
++	u8   portal_id;
+ 	u8  work_desc[IDXD_DESC_SIZE];
+ 	struct list_head link;
+ };
+diff --git a/drivers/vfio/mdev/idxd/vdev.c b/drivers/vfio/mdev/idxd/vdev.c
+index 42019cfaa371..0846270e6073 100644
+--- a/drivers/vfio/mdev/idxd/vdev.c
++++ b/drivers/vfio/mdev/idxd/vdev.c
+@@ -283,6 +283,7 @@ int vidxd_portal_mmio_write(struct vdcm_idxd *vidxd, u64 pos, void *buf,
+ 	struct idxd_wq *wq;
+ 	struct idxd_wq_portal *portal;
+ 	enum idxd_portal_prot portal_prot = IDXD_PORTAL_UNLIMITED;
++	int rc = 0;
+ 
+ 	BUG_ON((size & (size - 1)) != 0);
+ 	BUG_ON(size > 64);
+@@ -315,51 +316,75 @@ int vidxd_portal_mmio_write(struct vdcm_idxd *vidxd, u64 pos, void *buf,
+ 		printk("desc: %016llx %016llx  %016llx %016llx %016llx %016llx %016llx %016llx\n",
+ 				p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]);
+ 
+-		if (wq_dedicated(wq) && vwq->ndescs == wq->size) {
+-			printk("can't submit more descriptors than WQ size. Dropping.\n");
+-			memset(&portal->data, 0, IDXD_DESC_SIZE);
+-			portal->count = 0;
+-			return 0;
+-		}
+-
+ 		mutex_lock(&vidxd->mig_submit_lock);
+ 		if (vidxd->paused) {
+-			elem = kmalloc(sizeof(struct idxd_wq_desc_elem),
++			if (wq_dedicated(wq)) {
++				/* Queue the descriptor if submitted to DWQ */
++				if (vwq->ndescs == wq->size) {
++					printk("can't submit more descriptors than WQ size. Dropping.\n");
++					goto out_unlock;
++				}
++
++				elem = kmalloc(sizeof(struct idxd_wq_desc_elem),
+ 					GFP_KERNEL);
+ 
+-			if (elem == NULL) {
+-				printk("kmalloc failed\n");
+-				return 0;
+-			}
+-			printk("queuing the desc\n");
+-			memcpy(elem->work_desc, portal->data, IDXD_DESC_SIZE);
+-			elem->portal_prot = portal_prot;
++				if (elem == NULL) {
++					printk("kmalloc failed\n");
++					rc = -ENOMEM;
++					goto out_unlock;
++				}
++				printk("queuing the desc\n");
++				memcpy(elem->work_desc, portal->data, IDXD_DESC_SIZE);
++				elem->portal_prot = portal_prot;
++				elem->portal_id = portal_id;
+ 
+-			list_add_tail(&elem->link, &vwq->head);
+-			vwq->ndescs++;
++				list_add_tail(&elem->link, &vwq->head);
++				vwq->ndescs++;
++			} else {
++				/* Return retry if submitted to SWQ */
++				rc = -EAGAIN;
++				goto out_unlock;
++			}
+                } else {
+ 			void __iomem *wq_portal;
+-
+-			wq_portal = wq->portal;
++			portal = wq->portal;
++			wq_portal += (portal_id << 6);
+ 			printk("submitting a desc to WQ %d ded %d\n", wq->id,
+ 					wq_dedicated(wq));
+ 			if (wq_dedicated(wq)) {
+ 				iosubmit_cmds512(wq_portal, (struct dsa_hw_desc *)p, 1);
+ 			} else {
+ 				int rc;
+-				rc = enqcmds(wq_portal, (struct dsa_hw_desc *)p);
++				struct dsa_hw_desc *hw =
++					(struct dsa_hw_desc *)portal->data;
++				int hpasid, gpasid = hw->pasid;
++
++				/* Translate the gpasid in the descriptor */
++				rc = idxd_mdev_get_host_pasid(vidxd->ivdev.mdev,
++							gpasid, &hpasid);
++                                if (rc < 0) {
++                                        pr_info("gpasid->hpasid trans failed\n");
++					rc = -EINVAL;
++					goto out_unlock;
++                                }
++                                hw->pasid = hpasid;
++
++				/* FIXME: Allow enqcmds to retry a few times
++				 * before failing */
++				rc = enqcmds(wq_portal, hw);
+ 				if (rc < 0) {
+ 					pr_info("%s: enqcmds failed\n", __func__);
+-					return rc;
++					goto out_unlock;
+ 				}
+ 			}
+ 		}
++out_unlock:
+ 		mutex_unlock(&vidxd->mig_submit_lock);
+ 		memset(&portal->data, 0, IDXD_DESC_SIZE);
+ 		portal->count = 0;
+ 	}
+ 
+-	return 0;
++	return rc;
+ }
+ 
+ int vidxd_mmio_read(struct vdcm_idxd *vidxd, u64 pos, void *buf, unsigned int size)
+-- 
+2.31.1
+

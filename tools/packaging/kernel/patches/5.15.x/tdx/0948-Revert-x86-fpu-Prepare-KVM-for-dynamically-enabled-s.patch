@@ -1,0 +1,93 @@
+From a5bd7e5d59dbf9e0ea74d80b2dd175070ceb33cd Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 18:06:58 -0800
+Subject: [PATCH 0948/1418] Revert "x86/fpu: Prepare KVM for dynamically
+ enabled states"
+
+This reverts commit 2acc15e8add25ec43c1cb529173a1ce309aace5d.
+---
+ arch/x86/include/asm/fpu/types.h | 23 -----------------------
+ arch/x86/kernel/fpu/core.c       | 26 +-------------------------
+ 2 files changed, 1 insertion(+), 48 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/types.h b/arch/x86/include/asm/fpu/types.h
+index 861cffca3209..6ddf80637697 100644
+--- a/arch/x86/include/asm/fpu/types.h
++++ b/arch/x86/include/asm/fpu/types.h
+@@ -504,29 +504,6 @@ struct fpu {
+  * Guest pseudo FPU container
+  */
+ struct fpu_guest {
+-	/*
+-	 * @user_xfeatures:		xfeature bitmap of features which are
+-	 *				currently enabled for the guest vCPU.
+-	 */
+-	u64				user_xfeatures;
+-
+-	/*
+-	 * @user_perm:			xfeature bitmap of features which are
+-	 *				permitted to be enabled for the guest
+-	 *				vCPU.
+-	 */
+-	u64				user_perm;
+-
+-	/*
+-	 * @realloc_request:		xfeature bitmap of features which are
+-	 *				requested to be enabled dynamically
+-	 *				which requires reallocation of @fpstate
+-	 *
+-	 *				Set by an intercept handler and
+-	 *				evaluated in fpu_swap_kvm_fpstate()
+-	 */
+-	u64				realloc_request;
+-
+ 	/*
+ 	 * @fpstate:			Pointer to the allocated guest fpstate
+ 	 */
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index a5e42d32e601..4304175529c8 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -200,26 +200,6 @@ void fpu_reset_from_exception_fixup(void)
+ #if IS_ENABLED(CONFIG_KVM)
+ static void __fpstate_reset(struct fpstate *fpstate);
+ 
+-static void fpu_init_guest_permissions(struct fpu_guest *gfpu)
+-{
+-	struct fpu_state_perm *fpuperm;
+-	u64 perm;
+-
+-	if (!IS_ENABLED(CONFIG_X86_64))
+-		return;
+-
+-	spin_lock_irq(&current->sighand->siglock);
+-	fpuperm = &current->group_leader->thread.fpu.guest_perm;
+-	perm = fpuperm->__state_perm;
+-
+-	/* First fpstate allocation locks down permissions. */
+-	WRITE_ONCE(fpuperm->__state_perm, perm | FPU_GUEST_PERM_LOCKED);
+-
+-	spin_unlock_irq(&current->sighand->siglock);
+-
+-	gfpu->user_perm = perm & ~FPU_GUEST_PERM_LOCKED;
+-}
+-
+ bool fpu_alloc_guest_fpstate(struct fpu_guest *gfpu)
+ {
+ 	struct fpstate *fpstate;
+@@ -235,11 +215,7 @@ bool fpu_alloc_guest_fpstate(struct fpu_guest *gfpu)
+ 	fpstate->is_valloc	= true;
+ 	fpstate->is_guest	= true;
+ 
+-	gfpu->fpstate		= fpstate;
+-	gfpu->user_xfeatures	= fpu_user_cfg.default_features;
+-	gfpu->user_perm		= fpu_user_cfg.default_features;
+-	fpu_init_guest_permissions(gfpu);
+-
++	gfpu->fpstate = fpstate;
+ 	return true;
+ }
+ EXPORT_SYMBOL_GPL(fpu_alloc_guest_fpstate);
+-- 
+2.31.1
+

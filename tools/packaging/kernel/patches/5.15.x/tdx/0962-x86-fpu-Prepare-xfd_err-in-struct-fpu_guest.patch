@@ -1,0 +1,51 @@
+From 900c2f4a91b76f76ecfd0ad99aae0ae1cbd65f2c Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Wed, 5 Jan 2022 04:35:22 -0800
+Subject: [PATCH 0962/1418] x86/fpu: Prepare xfd_err in struct fpu_guest
+
+When XFD causes an instruction to generate #NM, IA32_XFD_ERR
+contains information about which disabled state components are
+being accessed. The #NM handler is expected to check this
+information and then enable the state components by clearing
+IA32_XFD for the faulting task (if having permission).
+
+If the XFD_ERR value generated in guest is consumed/clobbered
+by the host before the guest itself doing so, it may lead to
+non-XFD-related #NM treated as XFD #NM in host (due to non-zero
+value in XFD_ERR), or XFD-related #NM treated as non-XFD #NM in
+guest (XFD_ERR cleared by the host #NM handler).
+
+Introduce a new field in fpu_guest to save the guest xfd_err value.
+KVM is expected to save guest xfd_err before interrupt is enabled
+and restore it right before entering the guest (with interrupt
+disabled).
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+Signed-off-by: Kevin Tian <kevin.tian@intel.com>
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Message-Id: <20220105123532.12586-12-yang.zhong@intel.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/include/asm/fpu/types.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/arch/x86/include/asm/fpu/types.h b/arch/x86/include/asm/fpu/types.h
+index c752d0aa23a4..3795d0573773 100644
+--- a/arch/x86/include/asm/fpu/types.h
++++ b/arch/x86/include/asm/fpu/types.h
+@@ -517,6 +517,11 @@ struct fpu_guest {
+ 	 */
+ 	u64				perm;
+ 
++	/*
++	 * @xfd_err:			Save the guest value.
++	 */
++	u64				xfd_err;
++
+ 	/*
+ 	 * @fpstate:			Pointer to the allocated guest fpstate
+ 	 */
+-- 
+2.31.1
+

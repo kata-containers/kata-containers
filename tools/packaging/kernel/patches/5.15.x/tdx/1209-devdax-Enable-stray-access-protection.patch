@@ -1,0 +1,33 @@
+From 20641f16d30677e0b9924795e109118deb51a70d Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Thu, 26 Mar 2020 15:14:31 -0700
+Subject: [PATCH 1209/1418] devdax: Enable stray access protection
+
+Device dax is primarily accessed through user space and kernel access is
+controlled through the kmap interfaces.
+
+Now that all valid kernel initiated access to dax devices have been
+accounted for, turn on PGMAP_PKEYS_PROTECT for device dax.
+
+Reviewed-by: Dan Williams <dan.j.williams@intel.com>
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ drivers/dax/device.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/dax/device.c b/drivers/dax/device.c
+index dd8222a42808..7992b6253c35 100644
+--- a/drivers/dax/device.c
++++ b/drivers/dax/device.c
+@@ -426,6 +426,8 @@ int dev_dax_probe(struct dev_dax *dev_dax)
+ 	}
+ 
+ 	pgmap->type = MEMORY_DEVICE_GENERIC;
++	if (pgmap_protection_available())
++		pgmap->flags |= PGMAP_PROTECTION;
+ 	addr = devm_memremap_pages(dev, pgmap);
+ 	if (IS_ERR(addr))
+ 		return PTR_ERR(addr);
+-- 
+2.31.1
+

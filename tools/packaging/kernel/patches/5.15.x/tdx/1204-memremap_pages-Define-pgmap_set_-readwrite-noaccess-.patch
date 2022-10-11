@@ -1,0 +1,163 @@
+From cf8ace8b39cc29f33a7e19c1a8df793794dda9c1 Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Tue, 11 Jan 2022 21:05:23 -0800
+Subject: [PATCH 1204/1418] memremap_pages: Define
+ pgmap_set_{readwrite|noaccess}() calls
+
+A thread that wants to access memory protected by PGMAP protections must
+first enable access, and then disable access when it is done.
+
+Introduce pgmap_set_{readwrite|noaccess}() for this purpose.  The two
+calls are destined to be used by the kmap API and take a struct page for
+convenience.  They determine if the page is protected and, if so,
+perform the requested operation.
+
+Toggling between Read/Write and No Access was chosen as it fits well
+with the accessibility of a kmap'ed page.  Discussions did occur
+regarding making a finer grained mapping for Read Only but that is
+something which can be added at a later date.
+
+In addition, two lower level functions are exported.  They take the
+dev_pagemap object directly for internal consumers who have knowledge of
+the of the dev_pagemap.
+
+All changes in the protections must be through the above calls.  They
+abstract the protection implementation (currently the PKS api) from
+upper layer consumers.
+
+The calls are made nestable by the use of a per task reference count.
+This ensures that the first call to re-enable protection does not
+'break' the last access of the device memory.  Expansion of the task
+struct is unavoidable due to the desire to maintain kmap_local_page() as
+non-atomic and migratable.  The only other idea to track a reference
+count was in a per-cpu variable.  However, doing so would make
+kmap_local_page() equivalent to kmap_atomic() which is undesirable.
+
+Access to device memory during exceptions (#PF) is expected only from
+user faults.  Therefore there is no need to maintain the reference count
+during exceptions.
+
+NOTE: It is not anticipated that any code path will directly nest these
+calls.  For this reason multiple reviewers, including Dan and Thomas,
+asked why this reference counting was needed at this level rather than
+in a higher level call such as kmap_local_page().  The reason is that
+pgmap_set_readwrite() can nest with kmap_{atomic,local_page}().
+Therefore this reference counting is pushed to the lower level to ensure
+that any combination of calls is nestable.
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ include/linux/mm.h    | 35 +++++++++++++++++++++++++++++++++++
+ include/linux/sched.h |  7 +++++++
+ init/init_task.c      |  3 +++
+ mm/memremap.c         | 14 ++++++++++++++
+ 4 files changed, 59 insertions(+)
+
+diff --git a/include/linux/mm.h b/include/linux/mm.h
+index c644f00bc5e8..acdfdb459ed1 100644
+--- a/include/linux/mm.h
++++ b/include/linux/mm.h
+@@ -1234,8 +1234,43 @@ static inline bool devmap_protected(struct page *page)
+ 	return false;
+ }
+ 
++void __pgmap_set_readwrite(struct dev_pagemap *pgmap);
++void __pgmap_set_noaccess(struct dev_pagemap *pgmap);
++
++static inline bool pgmap_check_pgmap_prot(struct page *page)
++{
++	if (!devmap_protected(page))
++		return false;
++
++	/*
++	 * There is no known use case to change permissions in an irq for pgmap
++	 * pages
++	 */
++	lockdep_assert_in_irq();
++	return true;
++}
++
++static inline void pgmap_set_readwrite(struct page *page)
++{
++	if (!pgmap_check_pgmap_prot(page))
++		return;
++	__pgmap_set_readwrite(page->pgmap);
++}
++
++static inline void pgmap_set_noaccess(struct page *page)
++{
++	if (!pgmap_check_pgmap_prot(page))
++		return;
++	__pgmap_set_noaccess(page->pgmap);
++}
++
+ #else
+ 
++static inline void __pgmap_set_readwrite(struct dev_pagemap *pgmap) { }
++static inline void __pgmap_set_noaccess(struct dev_pagemap *pgmap) { }
++static inline void pgmap_set_readwrite(struct page *page) { }
++static inline void pgmap_set_noaccess(struct page *page) { }
++
+ static inline bool pgmap_protection_available(void)
+ {
+ 	return false;
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index ec3f61b625ab..d87f322247b5 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -1491,6 +1491,13 @@ struct task_struct {
+ 	struct callback_head		l1d_flush_kill;
+ #endif
+ 
++#ifdef CONFIG_DEVMAP_ACCESS_PROTECTION
++	/*
++	 * NOTE: pgmap_prot_count is modified within a single thread of
++	 * execution.  So it does not need to be atomic_t.
++	 */
++	u32                             pgmap_prot_count;
++#endif
+ 	/*
+ 	 * New fields for task_struct should be added above here, so that
+ 	 * they are included in the randomized portion of task_struct.
+diff --git a/init/init_task.c b/init/init_task.c
+index 2d024066e27b..0c7d4970fc4d 100644
+--- a/init/init_task.c
++++ b/init/init_task.c
+@@ -214,6 +214,9 @@ struct task_struct init_task
+ #ifdef CONFIG_SECCOMP_FILTER
+ 	.seccomp	= { .filter_count = ATOMIC_INIT(0) },
+ #endif
++#ifdef CONFIG_DEVMAP_ACCESS_PROTECTION
++	.pgmap_prot_count = 0,
++#endif
+ };
+ EXPORT_SYMBOL(init_task);
+ 
+diff --git a/mm/memremap.c b/mm/memremap.c
+index ac841dec1420..2aba447c0ad8 100644
+--- a/mm/memremap.c
++++ b/mm/memremap.c
+@@ -95,6 +95,20 @@ static void devmap_protection_disable(void)
+ 	static_branch_dec(&dev_pgmap_protection_static_key);
+ }
+ 
++void __pgmap_set_readwrite(struct dev_pagemap *pgmap)
++{
++	if (!current->pgmap_prot_count++)
++		pks_set_readwrite(PKS_KEY_PGMAP_PROTECTION);
++}
++EXPORT_SYMBOL_GPL(__pgmap_set_readwrite);
++
++void __pgmap_set_noaccess(struct dev_pagemap *pgmap)
++{
++	if (!--current->pgmap_prot_count)
++		pks_set_noaccess(PKS_KEY_PGMAP_PROTECTION);
++}
++EXPORT_SYMBOL_GPL(__pgmap_set_noaccess);
++
+ #else /* !CONFIG_DEVMAP_ACCESS_PROTECTION */
+ 
+ static void devmap_protection_enable(void) { }
+-- 
+2.31.1
+

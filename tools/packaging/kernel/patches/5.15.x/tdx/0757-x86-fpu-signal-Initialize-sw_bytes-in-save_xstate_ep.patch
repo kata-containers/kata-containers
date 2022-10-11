@@ -1,0 +1,70 @@
+From 24bd33ab28ebc2b195d82dae74a6ada1dd64c018 Mon Sep 17 00:00:00 2001
+From: Marco Elver <elver@google.com>
+Date: Fri, 26 Nov 2021 13:47:46 +0100
+Subject: [PATCH 0757/1418] x86/fpu/signal: Initialize sw_bytes in
+ save_xstate_epilog()
+
+save_sw_bytes() did not fully initialize sw_bytes, which caused KMSAN
+to report an infoleak (see below).
+Initialize sw_bytes explicitly to avoid this.
+
+KMSAN report follows:
+
+=====================================================
+BUG: KMSAN: kernel-infoleak in instrument_copy_to_user ./include/linux/instrumented.h:121
+BUG: KMSAN: kernel-infoleak in __copy_to_user ./include/linux/uaccess.h:154
+BUG: KMSAN: kernel-infoleak in save_xstate_epilog+0x2df/0x510 arch/x86/kernel/fpu/signal.c:127
+ instrument_copy_to_user ./include/linux/instrumented.h:121
+ __copy_to_user ./include/linux/uaccess.h:154
+ save_xstate_epilog+0x2df/0x510 arch/x86/kernel/fpu/signal.c:127
+ copy_fpstate_to_sigframe+0x861/0xb60 arch/x86/kernel/fpu/signal.c:245
+ get_sigframe+0x656/0x7e0 arch/x86/kernel/signal.c:296
+ __setup_rt_frame+0x14d/0x2a60 arch/x86/kernel/signal.c:471
+ setup_rt_frame arch/x86/kernel/signal.c:781
+ handle_signal arch/x86/kernel/signal.c:825
+ arch_do_signal_or_restart+0x417/0xdd0 arch/x86/kernel/signal.c:870
+ handle_signal_work kernel/entry/common.c:149
+ exit_to_user_mode_loop+0x1f6/0x490 kernel/entry/common.c:173
+ exit_to_user_mode_prepare kernel/entry/common.c:208
+ __syscall_exit_to_user_mode_work kernel/entry/common.c:290
+ syscall_exit_to_user_mode+0x7e/0xc0 kernel/entry/common.c:302
+ do_syscall_64+0x60/0xd0 arch/x86/entry/common.c:88
+ entry_SYSCALL_64_after_hwframe+0x44/0xae ??:?
+
+Local variable sw_bytes created at:
+ save_xstate_epilog+0x80/0x510 arch/x86/kernel/fpu/signal.c:121
+ copy_fpstate_to_sigframe+0x861/0xb60 arch/x86/kernel/fpu/signal.c:245
+
+Bytes 20-47 of 48 are uninitialized
+Memory access of size 48 starts at ffff8880801d3a18
+Data copied to user address 00007ffd90e2ef50
+=====================================================
+
+Link: https://lore.kernel.org/all/CAG_fn=V9T6OKPonSjsi9PmWB0hMHFC=yawozdft8i1-MSxrv=w@mail.gmail.com/
+Fixes: 53599b4d54b9b8dd ("x86/fpu/signal: Prepare for variable sigframe length")
+Reported-by: Alexander Potapenko <glider@google.com>
+Signed-off-by: Marco Elver <elver@google.com>
+Signed-off-by: Alexander Potapenko <glider@google.com>
+Signed-off-by: Dave Hansen <dave.hansen@linux.intel.com>
+Tested-by: Alexander Potapenko <glider@google.com>
+Link: https://lkml.kernel.org/r/20211126124746.761278-1-glider@google.com
+---
+ arch/x86/kernel/fpu/signal.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/fpu/signal.c b/arch/x86/kernel/fpu/signal.c
+index cc977da6e128..b35643ad17f5 100644
+--- a/arch/x86/kernel/fpu/signal.c
++++ b/arch/x86/kernel/fpu/signal.c
+@@ -118,7 +118,7 @@ static inline bool save_xstate_epilog(void __user *buf, int ia32_frame,
+ 				      struct fpstate *fpstate)
+ {
+ 	struct xregs_state __user *x = buf;
+-	struct _fpx_sw_bytes sw_bytes;
++	struct _fpx_sw_bytes sw_bytes = {};
+ 	u32 xfeatures;
+ 	int err;
+ 
+-- 
+2.31.1
+

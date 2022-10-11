@@ -1,0 +1,231 @@
+From 8bd438eb5747161902c5bf0470ce351b9bcff64f Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Tue, 21 Sep 2021 14:56:57 -0700
+Subject: [PATCH 0299/1418] x86/cpu/tdx: Find firmware loader in builtin
+ firmware or initrd
+
+TDX provides increased levels of memory confidentiality and integrity.  It
+requires a firmware to load into an isolated SEAM memory region that runs
+in a protected CPU SEAM mode.
+
+1. Launch the first Non-Persistent SEAM loader NP_SEAMLDR that will load
+   the second Persistent SEAM loader P-SEAMLDR.
+2. Invoke the P-SEAMLDR, to load the TDX module firmware.
+3. Load and initialize the "TDX module".  Allocate and initialize
+   necessary memory for the "TDX module".
+
+This patch addresses a part of the first step.  Retrieve the first firmware
+loader from built-in firmware or initrd.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ .../admin-guide/kernel-parameters.txt         |  7 +++
+ arch/x86/kernel/cpu/tdx/Makefile              |  2 +-
+ arch/x86/kernel/cpu/tdx/p-seamldr.c           | 56 +++++++++++++++++++
+ arch/x86/kernel/cpu/tdx/p-seamldr.h           |  2 +
+ arch/x86/kernel/cpu/tdx/seam.c                | 47 ++++++++++++++++
+ arch/x86/kernel/cpu/tdx/seam.h                |  2 +
+ arch/x86/kernel/cpu/tdx/tdx.c                 |  6 +-
+ 7 files changed, 119 insertions(+), 3 deletions(-)
+ create mode 100644 arch/x86/kernel/cpu/tdx/p-seamldr.c
+
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index ccc1960cb258..dfa4e0dd7eef 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -3615,6 +3615,13 @@
+ 			Format: integer between 1 and 255
+ 			Default: 255
+ 
++	np_seamldr=	[X86-64, TDX]
++			The name of NP-SEAMLDR to launch.
++			Default value is "intel-seam/np-seamldr.acm".
++                        It searches for <filename> in builtin firmwares and if
++                        it failed, it searches in initrd for
++                        lib/firmware/<filename> and usr/lib/firmware/<filename>.
++
+ 	nptcg=		[IA-64] Override max number of concurrent global TLB
+ 			purges which is reported from either PAL_VM_SUMMARY or
+ 			SAL PALO.
+diff --git a/arch/x86/kernel/cpu/tdx/Makefile b/arch/x86/kernel/cpu/tdx/Makefile
+index 9cbba9b2f867..98d9dbd09c8b 100644
+--- a/arch/x86/kernel/cpu/tdx/Makefile
++++ b/arch/x86/kernel/cpu/tdx/Makefile
+@@ -1,5 +1,5 @@
+ # SPDX-License-Identifier: GPL-2.0
+ # Makefile for seamldr and tdx module
+ 
+-obj-y	+= seam.o seamcall.o
++obj-y	+= seam.o seamcall.o p-seamldr.o
+ obj-y	+= tdx-error.o tdx.o
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.c b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+new file mode 100644
+index 000000000000..39085ed78113
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+@@ -0,0 +1,56 @@
++// SPDX-License-Identifier: GPL-2.0
++/* C-wrapper functions for P-SEAMLDR SEAMCALLs and functions for P-SEAMLDR */
++
++#define pr_fmt(fmt) "seam: " fmt
++
++#include <linux/earlycpio.h>
++#include <linux/memblock.h>
++#include <linux/slab.h>
++
++#include <asm/cmdline.h>
++#include <asm/virtext.h>
++
++#include "p-seamldr.h"
++#include "seamcall.h"
++#include "seam.h"
++
++static char *np_seamldr_name __initdata = "intel-seam/np-seamldr.acm";
++static size_t np_seamldr_len __initdata;
++
++static int __init seamldr_param(char *str)
++{
++	np_seamldr_len = strlen(str) + 1;
++
++	np_seamldr_name = memblock_alloc(np_seamldr_len, 0);
++	if (!np_seamldr_name) {
++		np_seamldr_len = 0;
++		return -ENOMEM;
++	}
++
++	strscpy(np_seamldr_name, str, np_seamldr_len);
++	return 0;
++}
++early_param("np_seamldr", seamldr_param);
++
++/*
++ * load_p_seamldr() - load P-SEAMLDR
++ *
++ * Call this function
++ *  - only BSP is running before bringing up all APs by smp_init().
++ *  - after MTRR is setup for BSP.
++ *  - after mcheck is ready.
++ */
++int __init load_p_seamldr(void)
++{
++	struct cpio_data np_seamldr;
++
++	if (!seam_get_firmware(&np_seamldr, np_seamldr_name)) {
++		pr_err("no NP-SEAMLDR found %s\n", np_seamldr_name);
++		return -ENOENT;
++	}
++
++	/* TODO: Launch NP-SEAMLDR */
++	if (np_seamldr_len)
++		memblock_free_late(__pa(np_seamldr_name), np_seamldr_len);
++	return 0;
++}
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.h b/arch/x86/kernel/cpu/tdx/p-seamldr.h
+index 9229c4b4bc71..fe64588c78e6 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.h
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.h
+@@ -18,4 +18,6 @@
+ 
+ const char *p_seamldr_error_name(u64 error_code);
+ 
++int __init load_p_seamldr(void);
++
+ #endif /* _X86_TDX_P_SEAMLOADER_H */
+diff --git a/arch/x86/kernel/cpu/tdx/seam.c b/arch/x86/kernel/cpu/tdx/seam.c
+index f7e4c89636e7..5fab0bf1f183 100644
+--- a/arch/x86/kernel/cpu/tdx/seam.c
++++ b/arch/x86/kernel/cpu/tdx/seam.c
+@@ -3,10 +3,57 @@
+ 
+ #define pr_fmt(fmt) "seam: " fmt
+ 
++#include <linux/earlycpio.h>
++#include <linux/init.h>
++#include <linux/initrd.h>
++#include <linux/slab.h>
++
++#include <asm/microcode.h>
+ #include <asm/virtext.h>
++#include <asm/cpu.h>
+ 
+ #include "seam.h"
+ 
++bool __init seam_get_firmware(struct cpio_data *blob, const char *name)
++{
++	if (get_builtin_firmware(blob, name))
++		return true;
++
++#ifdef CONFIG_BLK_DEV_INITRD
++	if (initrd_start) {
++		static const char * const prepend[] = {
++			"lib/firmware",
++			/*
++			 * Some tools which generate initrd image, for example,
++			 * dracut, creates a symbolic link from lib/ to
++			 * usr/lib/.  In such case, search in lib/firmware/
++			 * doesn't find the file.  Search usr/lib too.
++			 */
++			"usr/lib/firmware",
++		};
++		int i;
++		size_t len = strlen(name) + 18;
++		char *path = kmalloc(len, GFP_KERNEL);
++
++		if (!path)
++			return false;
++
++		for (i = 0; i < ARRAY_SIZE(prepend); i++) {
++			sprintf(path, "%s/%s", prepend[i], name);
++			*blob = find_cpio_file(path, (void *)initrd_start,
++					       initrd_end - initrd_start);
++			if (blob->data) {
++				kfree(path);
++				return true;
++			}
++		}
++		kfree(path);
++	}
++#endif
++
++	return false;
++}
++
+ static u32 seam_vmxon_version_id __initdata;
+ static DEFINE_PER_CPU(struct vmcs *, seam_vmxon_region);
+ 
+diff --git a/arch/x86/kernel/cpu/tdx/seam.h b/arch/x86/kernel/cpu/tdx/seam.h
+index e3f691f9d9fe..dcbb74333a20 100644
+--- a/arch/x86/kernel/cpu/tdx/seam.h
++++ b/arch/x86/kernel/cpu/tdx/seam.h
+@@ -4,6 +4,8 @@
+ #ifndef _X86_TDX_SEAM_H
+ #define _X86_TDX_SEAM_H
+ 
++bool __init seam_get_firmware(struct cpio_data *blob, const char *name);
++
+ int __init seam_init_vmx_early(void);
+ void __init seam_init_vmxon_vmcs(struct vmcs *vmcs);
+ 
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index e795f275c577..d3158dbf65c9 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -25,11 +25,13 @@ early_param("tdx_host", tdx_host_param);
+ 
+ static int __init tdx_host_early_init(void)
+ {
++	int ret;
++
+ 	/* Avoid TDX overhead when opt-in is not present. */
+ 	if (tdx_host != TDX_HOST_ON)
+ 		return 0;
+ 
+-	/* TODO: Launch NP-SEAMLDR. */
+-	return 0;
++	ret = load_p_seamldr();
++	return ret;
+ }
+ early_initcall(tdx_host_early_init);
+-- 
+2.31.1
+

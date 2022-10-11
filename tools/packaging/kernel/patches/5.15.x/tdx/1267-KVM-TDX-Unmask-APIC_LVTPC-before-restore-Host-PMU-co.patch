@@ -1,0 +1,56 @@
+From bb17ddaf1a06984f5d481bb2b7c3df17b48c67f6 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Wed, 16 Mar 2022 12:15:29 +0800
+Subject: [PATCH 1267/1418] KVM: TDX: Unmask APIC_LVTPC before restore Host PMU
+ context
+
+Otherwise a Host PMI may get lost because APIC_LVTPC is
+still masked but PMU is context switched to host state.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index b7cfd7ccdea9..1454f998e4de 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -960,17 +960,7 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ 	}
+ 
+ 	tdx_vcpu_enter_exit(vcpu, tdx);
+-
+ 	tdx_user_return_update_cache();
+-	perf_restore_debug_store();
+-	tdx_restore_host_xsave_state(vcpu);
+-	tdx->host_state_need_restore = true;
+-
+-	/*
+-	 * See the comments above for intel_pmu_save() for why
+-	 * always do PMU context switch here
+-	 */
+-	intel_pmu_restore();
+ 
+ 	/*
+ 	 * Restoring PMU must be after DS area because PMU may start to log
+@@ -996,6 +986,16 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ 		}
+ 	}
+ 
++	perf_restore_debug_store();
++	tdx_restore_host_xsave_state(vcpu);
++	tdx->host_state_need_restore = true;
++
++	/*
++	 * See the comments above for intel_pmu_save() for why
++	 * always do PMU context switch here
++	 */
++	intel_pmu_restore();
++
+ 	tdx_register_cache_reset(vcpu);
+ 
+ 	trace_kvm_exit((unsigned int)tdx->exit_reason.full, vcpu, KVM_ISA_VMX);
+-- 
+2.31.1
+

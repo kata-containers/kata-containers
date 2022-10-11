@@ -1,0 +1,31 @@
+From d2cbc1bf60c735e3e83c87ede31fe8d96b2caab7 Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Tue, 15 Mar 2022 20:36:42 +0100
+Subject: [PATCH 1322/1418] cpuidle: intel_idle: Drop redundant backslash at
+ line end
+
+Drop a redundant backslash character at the end of a line in the
+spr_cstates[] definition.
+
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Acked-by: Artem Bityutskiy <artem.bityutskiy@linux.intel.com>
+---
+ drivers/idle/intel_idle.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/idle/intel_idle.c b/drivers/idle/intel_idle.c
+index b63b36a05c42..c6132f55cc76 100644
+--- a/drivers/idle/intel_idle.c
++++ b/drivers/idle/intel_idle.c
+@@ -775,7 +775,7 @@ static struct cpuidle_state spr_cstates[] __initdata = {
+ 	{
+ 		.name = "C1E",
+ 		.desc = "MWAIT 0x01",
+-		.flags = MWAIT2flg(0x01) | CPUIDLE_FLAG_ALWAYS_ENABLE | \
++		.flags = MWAIT2flg(0x01) | CPUIDLE_FLAG_ALWAYS_ENABLE |
+ 					   CPUIDLE_FLAG_UNUSABLE,
+ 		.exit_latency = 2,
+ 		.target_residency = 4,
+-- 
+2.31.1
+

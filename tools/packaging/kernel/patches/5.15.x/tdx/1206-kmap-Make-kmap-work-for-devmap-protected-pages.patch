@@ -1,0 +1,89 @@
+From 4d4df0075a66649343a36a739e42809972b29a6f Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Mon, 22 Feb 2021 17:31:38 -0800
+Subject: [PATCH 1206/1418] kmap: Make kmap work for devmap protected pages
+
+Today, kmap_{local_page,atomic}() handle granting access to HIGHMEM
+pages without the caller needing to know if the page is HIGHMEM, or not.
+Use that existing infrastructure to grant access to PGMAP (PKS)
+protected pages.
+
+kmap_{local_page,atomic}() are both thread local mappings so they work
+well with the thread specific protections available within PKS.
+
+On the other hand, the kmap() call is not changed.  kmap() allows for a
+mapping to be shared with other threads, while PKS protections operate
+on a thread local basis.  For this reason, and the desire to move away
+from mappings like this, kmap() is left unsupported.
+
+This behavior is safe because neither of the 2 current DAX-capable
+filesystems (ext4 and xfs) perform such global mappings.  And known
+device drivers that would handle devmap pages are not using kmap().  Any
+future filesystems that gain DAX support, or device drivers wanting to
+support devmap protected pages will need to use kmap_local_page().
+
+Note: HIGHMEM support is mutually exclusive with PGMAP protection.  The
+rationale is mainly to reduce complexity, but also because direct-map
+exposure is already mitigated by default on HIGHMEM systems because
+by definition HIGHMEM systems do not have large capacities of memory
+in the direct map.
+
+Cc: Dan Williams <dan.j.williams@intel.com>
+Cc: Dave Hansen <dave.hansen@intel.com>
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ include/linux/highmem-internal.h | 4 ++++
+ mm/Kconfig                       | 1 +
+ 2 files changed, 5 insertions(+)
+
+diff --git a/include/linux/highmem-internal.h b/include/linux/highmem-internal.h
+index 4aa1031d3e4c..705198b51e06 100644
+--- a/include/linux/highmem-internal.h
++++ b/include/linux/highmem-internal.h
+@@ -168,6 +168,7 @@ static inline void kunmap(struct page *page)
+ 
+ static inline void *kmap_local_page(struct page *page)
+ {
++	pgmap_set_readwrite(page);
+ 	return page_address(page);
+ }
+ 
+@@ -186,6 +187,7 @@ static inline void __kunmap_local(void *addr)
+ #ifdef ARCH_HAS_FLUSH_ON_KUNMAP
+ 	kunmap_flush_on_unmap(addr);
+ #endif
++	pgmap_set_noaccess(kmap_to_page(addr));
+ }
+ 
+ static inline void *kmap_atomic(struct page *page)
+@@ -195,6 +197,7 @@ static inline void *kmap_atomic(struct page *page)
+ 	else
+ 		preempt_disable();
+ 	pagefault_disable();
++	pgmap_set_readwrite(page);
+ 	return page_address(page);
+ }
+ 
+@@ -213,6 +216,7 @@ static inline void __kunmap_atomic(void *addr)
+ #ifdef ARCH_HAS_FLUSH_ON_KUNMAP
+ 	kunmap_flush_on_unmap(addr);
+ #endif
++	pgmap_set_noaccess(kmap_to_page(addr));
+ 	pagefault_enable();
+ 	if (IS_ENABLED(CONFIG_PREEMPT_RT))
+ 		migrate_enable();
+diff --git a/mm/Kconfig b/mm/Kconfig
+index 6fe0c7da567f..de210ceaf598 100644
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -798,6 +798,7 @@ config ZONE_DEVICE
+ config DEVMAP_ACCESS_PROTECTION
+ 	bool "Access protection for memremap_pages()"
+ 	depends on NVDIMM_PFN
++	depends on !HIGHMEM
+ 	depends on ARCH_HAS_SUPERVISOR_PKEYS
+ 	select ARCH_ENABLE_PKS_CONSUMER
+ 	default n
+-- 
+2.31.1
+

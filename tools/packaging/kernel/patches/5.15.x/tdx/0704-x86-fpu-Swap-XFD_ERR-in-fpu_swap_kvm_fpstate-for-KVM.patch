@@ -1,0 +1,67 @@
+From 46beeefc16bc604b177354ce1a54e60d9d6f5678 Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Thu, 11 Nov 2021 02:23:54 -0800
+Subject: [PATCH 0704/1418] x86/fpu: Swap XFD_ERR in fpu_swap_kvm_fpstate() for
+ KVM
+
+KVM need switch XFD_ERR since guest is possible to have a non-zero
+XFD_ERR at vmexit. When swapping fpu between userspace VMM and guest,
+XFD_ERR need be switched together.
+
+fpu_swap_kvm_fpstate() swaps the fpu and XFD between guest and userspace
+at kvm_{load|put}_guest_fpu(). XFD_ERR should be switched together there.
+Since KVM might have saved guest non-zero XFD_ERR and mark xfd_err_dirty
+when it was preempted, fpu_swap_kvm_fpstate() relies on the flag to swap.
+
+When going back to userspace, if xfd_err_dirty is true, just restore host.
+When entering guest, the userspace VMM XFD_ERR is always cleared so just
+restore the guest non-zero value.
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+---
+ arch/x86/kernel/fpu/core.c | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 99442f606f2c..4f33c82f6fc4 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -294,6 +294,25 @@ static int fpu_guest_realloc_fpstate(struct fpu_guest *guest_fpu,
+ 	return xfd_enable_guest_features(guest_fpu);
+ }
+ 
++static void fpu_guest_swap_xfd_err(struct fpu_guest *guest_fpu, bool enter_guest)
++{
++	if (!fpu_state_size_dynamic())
++		return;
++
++	if (enter_guest) {
++		if (guest_fpu->xfd_err) {
++			wrmsrl(MSR_IA32_XFD_ERR, guest_fpu->xfd_err);
++			if (guest_fpu->xfd_err_dirty)
++				guest_fpu->xfd_err_dirty = false;
++		}
++	} else {
++		if (!guest_fpu->xfd_err_dirty)
++			rdmsrl(MSR_IA32_XFD_ERR, guest_fpu->xfd_err);
++		if (guest_fpu->xfd_err)
++			wrmsrl(MSR_IA32_XFD_ERR, 0);
++	}
++}
++
+ int fpu_swap_kvm_fpstate(struct fpu_guest *guest_fpu, bool enter_guest)
+ {
+ 	struct fpstate *guest_fps, *cur_fps;
+@@ -335,6 +354,9 @@ int fpu_swap_kvm_fpstate(struct fpu_guest *guest_fpu, bool enter_guest)
+ 		xfd_update_state(cur_fps);
+ 	}
+ 
++	/* Swap XFD_ERR */
++	fpu_guest_swap_xfd_err(guest_fpu, enter_guest);
++
+ 	fpregs_mark_activate();
+ 	fpregs_unlock();
+ 	return ret;
+-- 
+2.31.1
+

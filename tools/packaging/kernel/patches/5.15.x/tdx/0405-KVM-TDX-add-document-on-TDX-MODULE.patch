@@ -1,0 +1,71 @@
+From 79e730e39db27431aed4b965509dc0c9303ba3cb Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Mon, 21 Dec 2020 12:46:02 -0800
+Subject: [PATCH 0405/1418] KVM: TDX: add document on TDX MODULE
+
+Add a document on how to integrate TDX MODULE into initrd so that
+TDX MODULE can be updated on kernel startup.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ Documentation/virt/kvm/tdx-module.rst | 48 +++++++++++++++++++++++++++
+ 1 file changed, 48 insertions(+)
+ create mode 100644 Documentation/virt/kvm/tdx-module.rst
+
+diff --git a/Documentation/virt/kvm/tdx-module.rst b/Documentation/virt/kvm/tdx-module.rst
+new file mode 100644
+index 000000000000..b86cf0015ba6
+--- /dev/null
++++ b/Documentation/virt/kvm/tdx-module.rst
+@@ -0,0 +1,48 @@
++.. SPDX-License-Identifier: GPL-2.0
++
++==========
++TDX MODULE
++==========
++
++Integrating TDX MODULE into initrd
++==================================
++If TDX is enabled in KVM(CONFIG_INTEL_TDX_HOST=y), kernel is able to load
++tdx seam module from initrd.
++The related modules (seamldr.ac, libtdx.so and libtdx.so.sigstruct) need to be
++stored in initrd.
++
++tdx-seam is a sample hook script for initramfs-tools.
++TDXSEAM_SRCDIR are the directory in the host file system to store files related
++to TDX MODULE.
++
++Since it heavily depends on distro how to prepare initrd, here's a example how
++to prepare an initrd.
++(Actually this is taken from Documentation/x86/microcode.rst)
++::
++  #!/bin/bash
++
++  if [ -z "$1" ]; then
++      echo "You need to supply an initrd file"
++      exit 1
++  fi
++
++  INITRD="$1"
++
++  DSTDIR=lib/firmware/intel-seam
++  TMPDIR=/tmp/initrd
++  LIBTDX="/lib/firmware/intel-seam/seamldr.acm /lib/firmware/intel-seam/libtdx.so /lib/firmware/intel-seam/libtdx.so.sigstruct"
++
++  rm -rf $TMPDIR
++
++  mkdir $TMPDIR
++  cd $TMPDIR
++  mkdir -p $DSTDIR
++
++  cp ${LIBTDX} ${DSTDIR}
++
++  find . | cpio -o -H newc > ../tdx-seam.cpio
++  cd ..
++  mv $INITRD $INITRD.orig
++  cat tdx-seam.cpio $INITRD.orig > $INITRD
++
++  rm -rf $TMPDIR
+-- 
+2.31.1
+

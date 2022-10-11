@@ -1,0 +1,77 @@
+From 088a9ffa2e40e7d937ddc728b93e13a918b32aa2 Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Fri, 11 Mar 2022 09:21:06 -0800
+Subject: [PATCH 1210/1418] FIXME x86/pkeys: Add get_current_pkrs() back
+
+get_current_pkrs() is required by the KVM PKS code.  It was removed by a
+revert of the old PKS work.
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ arch/x86/mm/pkeys.c   |  2 +-
+ include/linux/pkeys.h | 13 -------------
+ include/linux/pks.h   |  6 ++++++
+ 3 files changed, 7 insertions(+), 14 deletions(-)
+
+diff --git a/arch/x86/mm/pkeys.c b/arch/x86/mm/pkeys.c
+index 21c4707ddee4..029291698a03 100644
+--- a/arch/x86/mm/pkeys.c
++++ b/arch/x86/mm/pkeys.c
+@@ -497,7 +497,7 @@ EXPORT_SYMBOL_GPL(pks_update_exception);
+ 
+ u32 get_current_pkrs(void)
+ {
+-	return 0;
++	return this_cpu_read(pkrs_cache);
+ }
+ EXPORT_SYMBOL_GPL(get_current_pkrs);
+ 
+diff --git a/include/linux/pkeys.h b/include/linux/pkeys.h
+index 5e78095c956e..86be8bf27b41 100644
+--- a/include/linux/pkeys.h
++++ b/include/linux/pkeys.h
+@@ -48,17 +48,4 @@ static inline bool arch_pkeys_enabled(void)
+ 
+ #endif /* ! CONFIG_ARCH_HAS_PKEYS */
+ 
+-#ifdef CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS
+-
+-u32 get_current_pkrs(void);
+-
+-#else /* !CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
+-
+-static inline u32 get_current_pkrs(void)
+-{
+-	return 0;
+-}
+-
+-#endif /* CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
+-
+ #endif /* _LINUX_PKEYS_H */
+diff --git a/include/linux/pks.h b/include/linux/pks.h
+index 163c75992a8a..7412e4c4be7c 100644
+--- a/include/linux/pks.h
++++ b/include/linux/pks.h
+@@ -13,6 +13,7 @@
+ bool pks_available(void);
+ void pks_update_protection(u8 pkey, u8 protection);
+ void pks_update_exception(struct pt_regs *regs, u8 pkey, u8 protection);
++u32 get_current_pkrs(void);
+ 
+ /**
+  * pks_set_noaccess() - Disable all access to the domain
+@@ -55,6 +56,11 @@ static inline void pks_update_exception(struct pt_regs *regs,
+ 					u8 protection)
+ { }
+ 
++static inline u32 get_current_pkrs(void)
++{
++	return 0;
++}
++
+ #endif /* CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
+ 
+ #ifdef CONFIG_PKS_TEST
+-- 
+2.31.1
+

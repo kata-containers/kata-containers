@@ -1,0 +1,41 @@
+From e9a292e76ceaf21b8b104a9dd30e992af1222d86 Mon Sep 17 00:00:00 2001
+From: Amelie Delaunay <amelie.delaunay@foss.st.com>
+Date: Mon, 11 Oct 2021 11:42:58 +0200
+Subject: [PATCH 0531/1418] dmaengine: stm32-dma: fix stm32_dma_get_max_width
+
+buf_addr parameter of stm32_dma_set_xfer_param function is a dma_addr_t.
+We only need to check the remainder of buf_addr/max_width, so, no need to
+use do_div and extra u64 addr. Use '%' instead.
+
+Fixes: e0ebdbdcb42a ("dmaengine: stm32-dma: take address into account when computing max width")
+Signed-off-by: Amelie Delaunay <amelie.delaunay@foss.st.com>
+Link: https://lore.kernel.org/r/20211011094259.315023-3-amelie.delaunay@foss.st.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/stm32-dma.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/dma/stm32-dma.c b/drivers/dma/stm32-dma.c
+index a5ccf3fa95e0..6e4ef44941ef 100644
+--- a/drivers/dma/stm32-dma.c
++++ b/drivers/dma/stm32-dma.c
+@@ -270,7 +270,6 @@ static enum dma_slave_buswidth stm32_dma_get_max_width(u32 buf_len,
+ 						       u32 threshold)
+ {
+ 	enum dma_slave_buswidth max_width;
+-	u64 addr = buf_addr;
+ 
+ 	if (threshold == STM32_DMA_FIFO_THRESHOLD_FULL)
+ 		max_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+@@ -281,7 +280,7 @@ static enum dma_slave_buswidth stm32_dma_get_max_width(u32 buf_len,
+ 	       max_width > DMA_SLAVE_BUSWIDTH_1_BYTE)
+ 		max_width = max_width >> 1;
+ 
+-	if (do_div(addr, max_width))
++	if (buf_addr % max_width)
+ 		max_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
+ 
+ 	return max_width;
+-- 
+2.31.1
+

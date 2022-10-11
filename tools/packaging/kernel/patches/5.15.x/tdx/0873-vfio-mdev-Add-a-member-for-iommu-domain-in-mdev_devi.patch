@@ -1,0 +1,73 @@
+From fd601a66f30598a2deaff6bbab7db76cfbb0c22d Mon Sep 17 00:00:00 2001
+From: Lu Baolu <baolu.lu@linux.intel.com>
+Date: Mon, 8 Nov 2021 18:23:19 +0800
+Subject: [PATCH 0873/1418] vfio/mdev: Add a member for iommu domain in
+ mdev_device
+
+This adds a member to save iommu domain in mdev_device
+structure. Whenever an iommu domain is attached to the
+mediated device, it must be save here so that a VDCM
+(Virtual Device Control Module) could retreive it.
+
+Below member is added in struct mdev_device:
+* iommu_domain
+  - A place to save the iommu domain attached to this
+    mdev.
+
+Below helpers are added to set and get iommu domain in
+struct mdev_device.
+* mdev_set/get_iommu_domain(domain)
+  - A iommu domain which has been attached to the iommu
+    device in order to protect and isolate the mediated
+    device will be kept in the mdev data structure and
+    could be retrieved later.
+
+Cc: Ashok Raj <ashok.raj@intel.com>
+Cc: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Cc: Kevin Tian <kevin.tian@intel.com>
+Cc: Liu Yi L <yi.l.liu@intel.com>
+Suggested-by: Kevin Tian <kevin.tian@intel.com>
+Signed-off-by: Lu Baolu <baolu.lu@linux.intel.com>
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ include/linux/mdev.h | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/include/linux/mdev.h b/include/linux/mdev.h
+index 68427e8fadeb..12e4d3938ee5 100644
+--- a/include/linux/mdev.h
++++ b/include/linux/mdev.h
+@@ -19,6 +19,7 @@ struct mdev_device {
+ 	struct list_head next;
+ 	struct mdev_type *type;
+ 	struct device *iommu_device;
++	void *iommu_domain;
+ 	bool active;
+ };
+ 
+@@ -50,6 +51,22 @@ unsigned int mdev_get_type_group_id(struct mdev_device *mdev);
+ unsigned int mtype_get_type_group_id(struct mdev_type *mtype);
+ struct device *mtype_get_parent_dev(struct mdev_type *mtype);
+ 
++/*
++ * Called by vfio iommu modules to save the iommu domain after a domain being
++ * attached to the mediated device. The vDCM (virtual device control module)
++ * could call mdev_get_iommu_domain() to retrieve an auxiliary domain attached
++ * to an mdev.
++ */
++static inline void mdev_set_iommu_domain(struct mdev_device *mdev, void *domain)
++{
++	mdev->iommu_domain = domain;
++}
++
++static inline void *mdev_get_iommu_domain(struct mdev_device *mdev)
++{
++	return mdev->iommu_domain;
++}
++
+ /**
+  * struct mdev_parent_ops - Structure to be registered for each parent device to
+  * register the device to mdev module.
+-- 
+2.31.1
+

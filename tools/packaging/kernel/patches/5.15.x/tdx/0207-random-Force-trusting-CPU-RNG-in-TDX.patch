@@ -1,0 +1,81 @@
+From 0805c6fc5f509dd1d1f3841085a140c846228935 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Fri, 16 Jul 2021 15:55:55 -0700
+Subject: [PATCH 0207/1418] random: Force trusting CPU RNG in TDX
+
+In TDX relying on environmental noise like interrupt timing alone is
+dubious, because it can be directly controlled by a untrusted
+hypervisor. Make sure to always mix in the CPU hardware random number
+generator too.
+
+Do this by forcing to trust the CPU random's generator when running
+inside TDX. In this case the random number generator needs to be trusted
+anyways because all the keys for memory encryption and attestation depend
+on it. This way the default CONFIG setting can be still used
+in the same kernel binary when TDX is not used.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdx.c  | 9 +++++++++
+ drivers/char/random.c  | 5 +++++
+ include/linux/random.h | 2 ++
+ 3 files changed, 16 insertions(+)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index eef7242649cb..900ed3b1e36f 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -18,6 +18,7 @@
+ #include <asm/insn-eval.h>
+ #include <linux/sched/signal.h> /* force_sig_fault() */
+ #include <linux/swiotlb.h>
++#include <linux/random.h>
+ 
+ #define CREATE_TRACE_POINTS
+ #include <asm/trace/tdx.h>
+@@ -813,6 +814,14 @@ void __init tdx_early_init(void)
+ 	legacy_pic = &null_legacy_pic;
+ 	swiotlb_force = SWIOTLB_FORCE;
+ 
++	/*
++	 * In TDX relying on environmental noise like interrupt
++	 * timing alone is dubious, because it can be directly
++	 * controlled by a untrusted hypervisor. Make sure to
++	 * mix in the CPU hardware random number generator too.
++	 */
++	random_enable_trust_cpu();
++
+ 	/*
+ 	 * Make sure there is a panic if something goes wrong,
+ 	 * just in case it's some kind of host attack.
+diff --git a/drivers/char/random.c b/drivers/char/random.c
+index 605969ed0f96..3fdc3d0b2e93 100644
+--- a/drivers/char/random.c
++++ b/drivers/char/random.c
+@@ -771,6 +771,11 @@ static int __init parse_trust_cpu(char *arg)
+ }
+ early_param("random.trust_cpu", parse_trust_cpu);
+ 
++__init void random_enable_trust_cpu(void)
++{
++	trust_cpu = true;
++}
++
+ static bool crng_init_try_arch(struct crng_state *crng)
+ {
+ 	int		i;
+diff --git a/include/linux/random.h b/include/linux/random.h
+index f45b8be3e3c4..55618a5b13c2 100644
+--- a/include/linux/random.h
++++ b/include/linux/random.h
+@@ -158,4 +158,6 @@ static inline bool __init arch_get_random_long_early(unsigned long *v)
+ }
+ #endif
+ 
++void random_enable_trust_cpu(void);
++
+ #endif /* _LINUX_RANDOM_H */
+-- 
+2.31.1
+

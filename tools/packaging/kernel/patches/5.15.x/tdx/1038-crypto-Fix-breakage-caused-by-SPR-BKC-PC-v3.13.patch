@@ -1,0 +1,545 @@
+From 8a52b0e571c0df16a7dd8677dbeaddf009e10478 Mon Sep 17 00:00:00 2001
+From: Tom Zanussi <tom.zanussi@intel.com>
+Date: Fri, 11 Feb 2022 07:13:46 -0800
+Subject: [PATCH 1038/1418] crypto: Fix breakage caused by SPR-BKC-PC-v3.13
+
+The patches added in SPR-BKC-PC-v3.13 broke iax_crypto, fix it.
+
+Signed-off-by: Tom Zanussi <tom.zanussi@intel.com>
+---
+ drivers/crypto/iax/iax_crypto.h      |  22 ++-
+ drivers/crypto/iax/iax_crypto_main.c | 256 +++++++++++++++++++++++----
+ 2 files changed, 232 insertions(+), 46 deletions(-)
+
+diff --git a/drivers/crypto/iax/iax_crypto.h b/drivers/crypto/iax/iax_crypto.h
+index 30137c27aef5..fb6ebd7b18ac 100644
+--- a/drivers/crypto/iax/iax_crypto.h
++++ b/drivers/crypto/iax/iax_crypto.h
+@@ -52,16 +52,22 @@ struct iax_wq {
+ 
+ /* Representation of IAX device with wqs, populated by probe */
+ struct iax_device {
+-	struct list_head	list;
+-	struct idxd_device	*idxd;
++	struct list_head		list;
++	struct idxd_device		*idxd;
+ 
+-	int			n_wq;
+-	struct list_head	wqs;
++	struct aecs_table_record	*aecs_table;
++	dma_addr_t			aecs_table_addr;
+ 
+-	u64			comp_calls;
+-	u64			comp_bytes;
+-	u64			decomp_calls;
+-	u64			decomp_bytes;
++	void				*aecs_table_unaligned;
++	dma_addr_t			aecs_table_addr_unaligned;
++
++	int				n_wq;
++	struct list_head		wqs;
++
++	u64				comp_calls;
++	u64				comp_bytes;
++	u64				decomp_calls;
++	u64				decomp_bytes;
+ };
+ 
+ /*
+diff --git a/drivers/crypto/iax/iax_crypto_main.c b/drivers/crypto/iax/iax_crypto_main.c
+index 961c6c83a7b6..0d441ee23804 100644
+--- a/drivers/crypto/iax/iax_crypto_main.c
++++ b/drivers/crypto/iax/iax_crypto_main.c
+@@ -39,6 +39,31 @@ MODULE_PARM_DESC(iax_verify_compress,
+ static LIST_HEAD(iax_devices);
+ static DEFINE_SPINLOCK(iax_devices_lock);
+ 
++static struct crypto_comp *deflate_generic_tfm;
++
++static bool iax_crypto_enabled = true;
++static int iax_crypto_enable(const char *val, const struct kernel_param *kp)
++{
++	int ret = 0;
++
++        if (val[0] == '0')
++		iax_crypto_enabled = true; /* for BKC, never allow disable */
++	else if (val[0] == '1')
++		iax_crypto_enabled = true;
++	else
++		ret = -EINVAL;
++
++	pr_info("%s: iax_crypto now %s\n", __func__,
++		iax_crypto_enabled ? "ENABLED" : "DISABLED");
++
++	return ret;
++}
++static const struct kernel_param_ops enable_ops = {
++        .set = iax_crypto_enable,
++};
++module_param_cb(iax_crypto_enable, &enable_ops, &iax_crypto_enabled, 0644);
++MODULE_PARM_DESC(iax_crypto_enable, "Enable (value = 1) or disable (value = 0) iax_crypto");
++
+ int wq_stats_show(struct seq_file *m, void *v)
+ {
+ 	struct iax_device *iax_device;
+@@ -119,8 +144,6 @@ static unsigned int cpus_per_iax;
+ /* Per-cpu lookup table for balanced wqs */
+ static struct idxd_wq * __percpu *wq_table;
+ 
+-static struct aecs_table_record aecs_table __aligned(IAX_AECS_ALIGN);
+-
+ /*
+  * Given a cpu, find the closest IAX instance.  The idea is to try to
+  * choose the most appropriate IAX instance for a caller and spread
+@@ -212,6 +235,45 @@ const u32 fixed_d_sym[30] = {
+ 	0x28018, 0x28019, 0x2801A, 0x2801B, 0x2801C, 0x2801D
+ };
+ 
++static int iax_aecs_alloc(struct iax_device *iax_device)
++{
++	size_t size = sizeof(struct aecs_table_record) + IAX_AECS_ALIGN;
++	struct device *dev = &iax_device->idxd->pdev->dev;
++	u32 bfinal = 1;
++	u32 offset;
++
++	iax_device->aecs_table_unaligned = dma_alloc_coherent(dev, size,
++							      &iax_device->aecs_table_addr_unaligned, GFP_KERNEL);
++	if (!iax_device->aecs_table_unaligned) {
++		iax_device_free(iax_device);
++		return -ENOMEM;
++	}
++	iax_device->aecs_table = PTR_ALIGN(iax_device->aecs_table_unaligned, IAX_AECS_ALIGN);
++	iax_device->aecs_table_addr = ALIGN(iax_device->aecs_table_addr_unaligned, IAX_AECS_ALIGN);
++
++	/* Configure aecs table using fixed Huffman table */
++	iax_device->aecs_table->crc = 0;
++	iax_device->aecs_table->xor_checksum = 0;
++	offset = iax_device->aecs_table->num_output_accum_bits / 8;
++	iax_device->aecs_table->output_accum[offset] = DYNAMIC_HDR | bfinal;
++	iax_device->aecs_table->num_output_accum_bits = DYNAMIC_HDR_SIZE;
++
++	/* Add Huffman table to aecs */
++	memcpy(iax_device->aecs_table->ll_sym, fixed_ll_sym, sizeof(fixed_ll_sym));
++	memcpy(iax_device->aecs_table->d_sym, fixed_d_sym, sizeof(fixed_d_sym));
++
++	return 0;
++}
++
++static void iax_aecs_free(struct iax_device *iax_device)
++{
++	size_t size = sizeof(struct aecs_table_record) + IAX_AECS_ALIGN;
++	struct device *dev = &iax_device->idxd->pdev->dev;
++
++	dma_free_coherent(dev, size,
++			  iax_device->aecs_table_unaligned, iax_device->aecs_table_addr_unaligned);
++}
++
+ static struct iax_device *add_iax_device(struct idxd_device *idxd)
+ {
+ 	struct iax_device *iax_device;
+@@ -222,6 +284,11 @@ static struct iax_device *add_iax_device(struct idxd_device *idxd)
+ 
+ 	iax_device->idxd = idxd;
+ 
++	if (iax_aecs_alloc(iax_device) < 0) {
++		iax_device_free(iax_device);
++		return NULL;
++	}
++
+ 	list_add_tail(&iax_device->list, &iax_devices);
+ 
+ 	nr_iax++;
+@@ -231,6 +298,8 @@ static struct iax_device *add_iax_device(struct idxd_device *idxd)
+ 
+ static void del_iax_device(struct iax_device *iax_device)
+ {
++	iax_aecs_free(iax_device);
++
+ 	list_del(&iax_device->list);
+ 
+ 	iax_device_free(iax_device);
+@@ -324,6 +393,8 @@ static int save_iax_wq(struct idxd_wq *wq)
+ 	BUG_ON(nr_iax == 0);
+ 
+ 	cpus_per_iax = nr_cpus / nr_iax;
++
++	idxd_wq_get(wq);
+ out:
+ 	spin_unlock(&iax_devices_lock);
+ 
+@@ -396,7 +467,6 @@ static struct idxd_wq *request_iax_wq(int iax)
+ 	list_for_each_entry(iax_wq, &found_device->wqs, list) {
+ 		/* Prefer unused wq but use if we can't find one */
+ 		if (idxd_wq_refcount(iax_wq->wq) > 0) {
+-			idxd_wq_get(iax_wq->wq);
+ 			bkup_wq = iax_wq->wq;
+ 			cur_bkup = cur_wq;
+ 		} else {
+@@ -409,11 +479,9 @@ static struct idxd_wq *request_iax_wq(int iax)
+ 
+ 	if (bkup_wq) {
+ 		pr_debug("%s: returning used wq %p (%d) from iax device %p (%d)\n", __func__, bkup_wq, cur_bkup, found_device, cur_iax);
+-		idxd_wq_get(bkup_wq);
+ 		found_wq = bkup_wq;
+ 		goto out;
+ 	}
+-
+ out:
+ 	spin_unlock(&iax_devices_lock);
+ 
+@@ -463,10 +531,13 @@ static int iax_compress(struct crypto_tfm *tfm,
+ 			const u8 *src, unsigned int slen,
+ 			u8 *dst, unsigned int *dlen)
+ {
++	dma_addr_t src_addr, dst_addr;
+ 	struct idxd_desc *idxd_desc;
+ 	struct iax_hw_desc *desc;
++	struct iax_wq *iax_wq;
+ 	u32 compression_crc;
+ 	struct idxd_wq *wq;
++	struct device *dev;
+ 	int ret = 0;
+ 
+ 	wq = *per_cpu_ptr(wq_table, smp_processor_id());
+@@ -474,6 +545,9 @@ static int iax_compress(struct crypto_tfm *tfm,
+ 		pr_err("%s: no wq configured for cpu=%d\n", __func__, smp_processor_id());
+ 		return -ENODEV;
+ 	}
++	dev = &wq->idxd->pdev->dev;
++
++	iax_wq = wq->private_data;
+ 
+ 	pr_debug("%s: using wq for cpu=%d = wq %p\n", __func__, smp_processor_id(), wq);
+ 
+@@ -489,17 +563,36 @@ static int iax_compress(struct crypto_tfm *tfm,
+ 	desc->flags = IDXD_OP_FLAG_CRAV | IDXD_OP_FLAG_RCR |
+ 		IDXD_OP_FLAG_RD_SRC2_AECS | IDXD_OP_FLAG_CC;
+ 	desc->opcode = IAX_OPCODE_COMPRESS;
+-	desc->src2_addr = (u64)(u64 *)&aecs_table;
+-	desc->src2_size = sizeof(struct aecs_table_record);
+ 	desc->compr_flags = IAX_COMP_FLAGS;
++#ifdef SPR_E0
+ 	desc->priv = 1;
++#else
++	desc->priv = 0;
++#endif
++
++	src_addr = dma_map_single(dev, (void *)src, slen, DMA_TO_DEVICE);
++	pr_debug("%s: dma_map_single, src_addr %llx, dev %p, src %p, slen %d\n", __func__, src_addr, dev, src, slen);
++	if (unlikely(dma_mapping_error(dev, src_addr))) {
++		pr_debug("%s: dma_map_single err, exiting\n", __func__);
++		ret = -ENOMEM;
++		goto err_map_src;
++	}
+ 
+-	desc->src1_addr = (u64)src;
++	dst_addr = dma_map_single(dev, (void *)dst, *dlen, DMA_FROM_DEVICE);
++	pr_debug("%s: dma_map_single, dst_addr %llx, dev %p, dst %p, *dlen %d\n", __func__, dst_addr, dev, dst, *dlen);
++	if (unlikely(dma_mapping_error(dev, dst_addr))) {
++		pr_debug("%s: dma_map_single err, exiting\n", __func__);
++		ret = -ENOMEM;
++		goto err_map_dst;
++	}
++
++	desc->src1_addr = (u64)src_addr;
+ 	desc->src1_size = slen;
+-	desc->src2_addr = (u64)(u64 *)&aecs_table;
+-	desc->dst_addr = (u64)dst;
++	desc->dst_addr = (u64)dst_addr;
+ 	desc->max_dst_size = *dlen;
+-	desc->completion_addr = (u64)idxd_desc->iax_completion;
++	desc->src2_addr = iax_wq->iax_device->aecs_table_addr;
++	desc->src2_size = sizeof(struct aecs_table_record);
++	desc->completion_addr = idxd_desc->compl_dma;
+ 
+ 	ret = idxd_submit_desc(wq, idxd_desc);
+ 	if (ret) {
+@@ -513,6 +606,9 @@ static int iax_compress(struct crypto_tfm *tfm,
+ 		goto err;
+ 	}
+ 
++	dma_unmap_single(dev, src_addr, slen, DMA_TO_DEVICE);
++	dma_unmap_single(dev, dst_addr, *dlen, DMA_FROM_DEVICE);
++
+ 	*dlen = idxd_desc->iax_completion->output_size;
+ 
+ 	idxd_free_desc(wq, idxd_desc);
+@@ -543,13 +639,33 @@ static int iax_compress(struct crypto_tfm *tfm,
+ 	desc->opcode = IAX_OPCODE_DECOMPRESS;
+ 	desc->max_dst_size = PAGE_SIZE;
+ 	desc->decompr_flags = IAX_DECOMP_FLAGS | IAX_DECOMP_SUPPRESS_OUTPUT;
++#ifdef SPR_E0
+ 	desc->priv = 1;
++#else
++	desc->priv = 0;
++#endif
++
++	src_addr = dma_map_single(dev, (void *)src, slen, DMA_TO_DEVICE);
++	pr_debug("%s: dma_map_single, src_addr %llx, dev %p, src %p, slen %d\n", __func__, src_addr, dev, src, slen);
++	if (unlikely(dma_mapping_error(dev, src_addr))) {
++		pr_debug("%s: dma_map_single err, exiting\n", __func__);
++		ret = -ENOMEM;
++		goto err_map_src;
++	}
+ 
+-	desc->src1_addr = (u64)dst;
++	dst_addr = dma_map_single(dev, (void *)dst, *dlen, DMA_FROM_DEVICE);
++	pr_debug("%s: dma_map_single, dst_addr %llx, dev %p, dst %p, *dlen %d\n", __func__, dst_addr, dev, dst, *dlen);
++	if (unlikely(dma_mapping_error(dev, dst_addr))) {
++		pr_debug("%s: dma_map_single err, exiting\n", __func__);
++		ret = -ENOMEM;
++		goto err_map_dst;
++	}
++
++	desc->src1_addr = (u64)dst_addr;
+ 	desc->src1_size = *dlen;
+-	desc->dst_addr = (u64)src;
++	desc->dst_addr = (u64)src_addr;
+ 	desc->max_dst_size = slen;
+-	desc->completion_addr = (u64)idxd_desc->iax_completion;
++	desc->completion_addr = idxd_desc->compl_dma;
+ 
+ 	ret = idxd_submit_desc(wq, idxd_desc);
+ 	if (ret) {
+@@ -571,10 +687,17 @@ static int iax_compress(struct crypto_tfm *tfm,
+ 		goto err;
+ 	}
+ 
++	dma_unmap_single(dev, src_addr, slen, DMA_TO_DEVICE);
++	dma_unmap_single(dev, dst_addr, *dlen, DMA_FROM_DEVICE);
++
+ 	idxd_free_desc(wq, idxd_desc);
+ out:
+ 	return ret;
+ err:
++	dma_unmap_single(dev, dst_addr, *dlen, DMA_FROM_DEVICE);
++err_map_dst:
++	dma_unmap_single(dev, src_addr, slen, DMA_TO_DEVICE);
++err_map_src:
+ 	idxd_free_desc(wq, idxd_desc);
+ 	pr_warn("iax compress failed: ret=%d\n", ret);
+ 
+@@ -585,9 +708,11 @@ static int iax_decompress(struct crypto_tfm *tfm,
+ 			  const u8 *src, unsigned int slen,
+ 			  u8 *dst, unsigned int *dlen)
+ {
++	dma_addr_t src_addr, dst_addr;
+ 	struct idxd_desc *idxd_desc;
+ 	struct iax_hw_desc *desc;
+ 	struct idxd_wq *wq;
++	struct device *dev;
+ 	int ret = 0;
+ 
+ 	wq = *per_cpu_ptr(wq_table, smp_processor_id());
+@@ -595,6 +720,7 @@ static int iax_decompress(struct crypto_tfm *tfm,
+ 		pr_err("%s: no wq configured for cpu=%d\n", __func__, smp_processor_id());
+ 		return -ENODEV;
+ 	}
++	dev = &wq->idxd->pdev->dev;
+ 
+ 	pr_debug("%s: using wq for cpu=%d = wq %p\n", __func__, smp_processor_id(), wq);
+ 
+@@ -611,13 +737,33 @@ static int iax_decompress(struct crypto_tfm *tfm,
+ 	desc->opcode = IAX_OPCODE_DECOMPRESS;
+ 	desc->max_dst_size = PAGE_SIZE;
+ 	desc->decompr_flags = IAX_DECOMP_FLAGS;
++#ifdef SPR_E0
+ 	desc->priv = 1;
++#else
++	desc->priv = 0;
++#endif
++
++	src_addr = dma_map_single(dev, (void *)src, slen, DMA_TO_DEVICE);
++	pr_debug("%s: dma_map_single, src_addr %llx, dev %p, src %p, slen %d\n", __func__, src_addr, dev, src, slen);
++	if (unlikely(dma_mapping_error(dev, src_addr))) {
++		pr_debug("%s: dma_map_single err, exiting\n", __func__);
++		ret = -ENOMEM;
++		goto err_map_src;
++	}
++
++	dst_addr = dma_map_single(dev, (void *)dst, *dlen, DMA_FROM_DEVICE);
++	pr_debug("%s: dma_map_single, dst_addr %llx, dev %p, dst %p, *dlen %d\n", __func__, dst_addr, dev, dst, *dlen);
++	if (unlikely(dma_mapping_error(dev, dst_addr))) {
++		pr_debug("%s: dma_map_single err, exiting\n", __func__);
++		ret = -ENOMEM;
++		goto err_map_dst;
++	}
+ 
+-	desc->src1_addr = (u64)src;
+-	desc->dst_addr = (u64)dst;
++	desc->src1_addr = (u64)src_addr;
++	desc->dst_addr = (u64)dst_addr;
+ 	desc->max_dst_size = *dlen;
+ 	desc->src1_size = slen;
+-	desc->completion_addr = (u64)idxd_desc->iax_completion;
++	desc->completion_addr = idxd_desc->compl_dma;
+ 
+ 	ret = idxd_submit_desc(wq, idxd_desc);
+ 	if (ret) {
+@@ -631,6 +777,9 @@ static int iax_decompress(struct crypto_tfm *tfm,
+ 		goto err;
+ 	}
+ 
++	dma_unmap_single(dev, src_addr, slen, DMA_TO_DEVICE);
++	dma_unmap_single(dev, dst_addr, *dlen, DMA_FROM_DEVICE);
++
+ 	*dlen = idxd_desc->iax_completion->output_size;
+ 
+ 	idxd_free_desc(wq, idxd_desc);
+@@ -643,6 +792,10 @@ static int iax_decompress(struct crypto_tfm *tfm,
+ out:
+ 	return ret;
+ err:
++	dma_unmap_single(dev, dst_addr, *dlen, DMA_FROM_DEVICE);
++err_map_dst:
++	dma_unmap_single(dev, src_addr, slen, DMA_TO_DEVICE);
++err_map_src:
+ 	idxd_free_desc(wq, idxd_desc);
+ 	pr_warn("iax decompress failed: ret=%d\n", ret);
+ 
+@@ -654,7 +807,14 @@ static int iax_comp_compress(struct crypto_tfm *tfm,
+ 			     u8 *dst, unsigned int *dlen)
+ {
+ 	u64 start_time_ns;
+-	int ret;
++	int ret = 0;
++
++	if (!iax_crypto_enabled) {
++		pr_debug("%s: iax_crypto disabled, using deflate-generic compression\n", __func__);
++		ret = crypto_comp_compress(deflate_generic_tfm,
++					   src, slen, dst, dlen);
++		return ret;
++	}
+ 
+ 	pr_debug("%s: src %p, slen %d, dst %p, dlen %u\n",
+ 		 __func__, src, slen, dst, *dlen);
+@@ -673,7 +833,14 @@ static int iax_comp_decompress(struct crypto_tfm *tfm,
+ 			       u8 *dst, unsigned int *dlen)
+ {
+ 	u64 start_time_ns;
+-	int ret;
++	int ret = 0;
++
++	if (!iax_crypto_enabled) {
++		pr_debug("%s: iax_crypto disabled, using deflate-generic decompression\n", __func__);
++		ret = crypto_comp_decompress(deflate_generic_tfm,
++					     src, slen, dst, dlen);
++		return ret;
++	}
+ 
+ 	pr_debug("%s: src %p, slen %d, dst %p, dlen %u\n",
+ 		 __func__, src, slen, dst, *dlen);
+@@ -706,11 +873,21 @@ static int iax_comp_acompress(struct acomp_req *req)
+ 	struct crypto_tfm *tfm = req->base.tfm;
+ 	u64 start_time_ns;
+ 	void *src, *dst;
+-	int ret;
++	int ret = 0;
+ 
+ 	src = kmap_atomic(sg_page(req->src)) + req->src->offset;
+ 	dst = kmap_atomic(sg_page(req->dst)) + req->dst->offset;
+ 
++	if (!iax_crypto_enabled) {
++		pr_debug("%s: iax_crypto disabled, using deflate-generic compression\n", __func__);
++		ret = crypto_comp_compress(deflate_generic_tfm,
++					   src, req->slen, dst, &req->dlen);
++		kunmap_atomic(src);
++		kunmap_atomic(dst);
++
++		return ret;
++	}
++
+ 	pr_debug("%s: src %p (offset %d), slen %d, dst %p (offset %d), dlen %u\n",
+ 		 __func__, src, req->src->offset, req->slen,
+ 		 dst, req->dst->offset, req->dlen);
+@@ -738,6 +915,15 @@ static int iax_comp_adecompress(struct acomp_req *req)
+ 	src = kmap_atomic(sg_page(req->src)) + req->src->offset;
+ 	dst = kmap_atomic(sg_page(req->dst)) + req->dst->offset;
+ 
++	if (!iax_crypto_enabled) {
++		pr_debug("%s: iax_crypto disabled, using deflate-generic decompression\n", __func__);
++		ret = crypto_comp_decompress(deflate_generic_tfm,
++					     src, req->slen, dst, &req->dlen);
++		kunmap_atomic(src);
++		kunmap_atomic(dst);
++		return ret;
++	}
++
+ 	pr_debug("%s: src %p (offset %d), slen %d, dst %p (offset %d), dlen %u\n",
+ 		 __func__, src, req->src->offset, req->slen,
+ 		 dst, req->dst->offset, req->dlen);
+@@ -796,23 +982,6 @@ static void iax_unregister_compression_device(void)
+ 	crypto_unregister_acomp(&iax_acomp_deflate);
+ }
+ 
+-static void iax_set_aecs(void)
+-{
+-	u32 offset;
+-	u32 bfinal = 1;
+-
+-	/* Configure aecs table using fixed Huffman table */
+-	aecs_table.crc = 0;
+-	aecs_table.xor_checksum = 0;
+-	offset = aecs_table.num_output_accum_bits / 8;
+-	aecs_table.output_accum[offset] = DYNAMIC_HDR | bfinal;
+-	aecs_table.num_output_accum_bits = DYNAMIC_HDR_SIZE;
+-
+-	/* Add Huffman table to aecs */
+-	memcpy(aecs_table.ll_sym, fixed_ll_sym, sizeof(fixed_ll_sym));
+-	memcpy(aecs_table.d_sym, fixed_d_sym, sizeof(fixed_d_sym));
+-}
+-
+ static void rebalance_wq_table(void)
+ {
+ 	int node, cpu, iax;
+@@ -891,6 +1060,7 @@ static int iax_crypto_probe(struct idxd_dev *idxd_dev)
+ 
+ err_save:
+ 	__idxd_wq_quiesce(wq);
++	percpu_ref_exit(&wq->wq_active);
+ err_ref:
+ 	idxd_wq_free_resources(wq);
+ err_alloc:
+@@ -912,6 +1082,7 @@ static void iax_crypto_remove(struct idxd_dev *idxd_dev)
+ 	__drv_disable_wq(wq);
+ 	idxd_wq_free_resources(wq);
+ 	wq->type = IDXD_WQT_NONE;
++	percpu_ref_exit(&wq->wq_active);
+ 	rebalance_wq_table();
+ 
+ 	mutex_unlock(&wq->wq_lock);
+@@ -936,7 +1107,14 @@ static int __init iax_crypto_init_module(void)
+ 	nr_cpus = num_online_cpus();
+ 	nr_nodes = num_online_nodes();
+ 
+-	iax_set_aecs();
++	if (crypto_has_comp("deflate-generic", 0, 0))
++		deflate_generic_tfm = crypto_alloc_comp("deflate-generic", 0, 0);
++
++	if (IS_ERR_OR_NULL(deflate_generic_tfm)) {
++		pr_err("IAX could not alloc %s tfm: errcode = %ld\n",
++		       "deflate-generic", PTR_ERR(deflate_generic_tfm));
++		return -ENOMEM;
++	}
+ 
+ 	wq_table = alloc_percpu(struct idxd_wq *);
+ 	if (!wq_table)
+@@ -965,6 +1143,7 @@ static int __init iax_crypto_init_module(void)
+ err_crypto_register:
+ 	idxd_driver_unregister(&iax_crypto_driver);
+ err_driver_register:
++	crypto_free_comp(deflate_generic_tfm);
+ 	free_percpu(wq_table);
+ 
+ 	goto out;
+@@ -977,6 +1156,7 @@ static void __exit iax_crypto_cleanup_module(void)
+ 	iax_unregister_compression_device();
+ 	free_percpu(wq_table);
+ 	free_iax_devices();
++	crypto_free_comp(deflate_generic_tfm);
+ 	pr_info("%s: cleaned up\n", __func__);
+ }
+ 
+-- 
+2.31.1
+

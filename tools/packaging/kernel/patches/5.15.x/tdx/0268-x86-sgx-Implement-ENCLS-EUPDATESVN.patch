@@ -1,0 +1,123 @@
+From b0d14469f20936bb7c18147d738aaa7f6f8fd771 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Sat, 4 Sep 2021 16:20:14 +0800
+Subject: [PATCH 0268/1418] x86/sgx: Implement ENCLS[EUPDATESVN]
+
+The SGX attestation architecture assumes a compromise of all running
+enclaves and cryptographic assets (like internal SGX encryption keys)
+whenever a microcode update affects SGX. To mitigate the impact of
+this presumed compromise, a new supervisor SGX instruction:
+ENCLS[EUPDATESVN], is introduced to update SGX microcode version and
+generate new cryptographic assets in runtime after SGX microcode
+update.
+
+EUPDATESVN requires that SGX memory to be marked as "unused" before
+it will succeed. This ensures that no compromised enclave can survive
+the process and provides an opportunity to generate new cryptographic
+assets.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/include/asm/sgx.h | 71 ++++++++++++++++++++++++++++++--------
+ 1 file changed, 56 insertions(+), 15 deletions(-)
+
+diff --git a/arch/x86/include/asm/sgx.h b/arch/x86/include/asm/sgx.h
+index 4e1bd4c880d5..8efb9508753e 100644
+--- a/arch/x86/include/asm/sgx.h
++++ b/arch/x86/include/asm/sgx.h
+@@ -8,7 +8,9 @@
+ #define _ASM_X86_SGX_H
+ 
+ #include <linux/bits.h>
++#include <linux/printk.h>
+ #include <linux/types.h>
++#include "delay.h"
+ 
+ /*
+  * This file contains both data structures defined by SGX architecture and Linux
+@@ -28,21 +30,22 @@
+ #define SGX_CPUID_EPC_MASK	GENMASK(3, 0)
+ 
+ enum sgx_encls_function {
+-	ECREATE	= 0x00,
+-	EADD	= 0x01,
+-	EINIT	= 0x02,
+-	EREMOVE	= 0x03,
+-	EDGBRD	= 0x04,
+-	EDGBWR	= 0x05,
+-	EEXTEND	= 0x06,
+-	ELDU	= 0x08,
+-	EBLOCK	= 0x09,
+-	EPA	= 0x0A,
+-	EWB	= 0x0B,
+-	ETRACK	= 0x0C,
+-	EAUG	= 0x0D,
+-	EMODPR	= 0x0E,
+-	EMODT	= 0x0F,
++	ECREATE		= 0x00,
++	EADD		= 0x01,
++	EINIT		= 0x02,
++	EREMOVE		= 0x03,
++	EDGBRD		= 0x04,
++	EDGBWR		= 0x05,
++	EEXTEND		= 0x06,
++	ELDU		= 0x08,
++	EBLOCK		= 0x09,
++	EPA		= 0x0A,
++	EWB		= 0x0B,
++	ETRACK		= 0x0C,
++	EAUG		= 0x0D,
++	EMODPR		= 0x0E,
++	EMODT		= 0x0F,
++	EUPDATESVN	= 0x18,
+ };
+ 
+ /**
+@@ -385,6 +388,44 @@ int sgx_virt_einit(void __user *sigstruct, void __user *token,
+ int sgx_set_attribute(unsigned long *allowed_attributes,
+ 		      unsigned int attribute_fd);
+ 
++/**
++ * sgx_updatesvn() - Issue ENCLS[EUPDATESVN]
++ * If EPC is ready, this instruction will update CPUSVN to the currently
++ * loaded microcode update SVN and generate new cryptographic assets.
++ *
++ * Return:
++ * 0:				CPUSVN is update successfully.
++ * %SGX_LOCKFAIL:		An instruction concurrency rule was violated.
++ * %SGX_INSUFFICIENT_ENTROPY:	Insufficient entropy in RNG.
++ * %SGX_EPC_NOT_READY:		EPC is not ready for SVN update.
++ * %SGX_NO_UPDATE:		EUPDATESVN was successful, but CPUSVN was not
++ *				updated because current SVN was not newer than
++ *				CPUSVN.
++ */
++static inline int sgx_updatesvn(void)
++{
++	unsigned int eax;
++	int retry = 200;
++	int ret;
++
++	eax = EUPDATESVN;
++
++	do {
++		asm volatile (".byte 0x0f,0x01,0xcf"
++			      : "=a" (ret)
++			      : "a" (eax));
++
++		if (ret != SGX_INSUFFICIENT_ENTROPY)
++			break;
++
++		udelay(100);
++	} while (--retry);
++
++	pr_info("sgx: EUPDATESVN complete with ret %d\n", ret);
++
++	return ret;
++}
++
+ #ifdef CONFIG_X86_SGX
+ void sgx_lock_epc(void);
+ void sgx_unlock_epc(void);
+-- 
+2.31.1
+

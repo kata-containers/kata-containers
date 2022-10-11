@@ -1,0 +1,212 @@
+From 5b710e97055fd8d070dfe61d0f519d1bc4f5d199 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Thu, 23 Sep 2021 14:48:03 -0700
+Subject: [PATCH 0310/1418] x86/cpu/tdx: Add a helper function to do callback
+ on all packages
+
+There are per CPU package configurations for TDX.  For example, configure
+memory encryption key per CPU package because the memory controller is a
+resource per CPU package.  Per-package operation is needed not only for
+boot time TDX code but also for KVM code to maintain TDX protected memory.
+
+Create and initialize an array from the CPU package id to the CPU id, and
+introduce a helper function to invoke a callback function per CPU package
+and export it for KVM.  Because per-package operations needs serialization,
+call the callback on each package serially to avoid watchdog to trigger.
+
+For KVM use, handle CPU online/offline.  When offlining CPU, find another
+online CPU of the same package to use and keep the last online CPU of the
+package by preventing the last online CPU from offlining because TDX
+requires all packages to be configured, otherwise, the TDX protected guest
+creation fails.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx.c | 157 +++++++++++++++++++++++++++++++++-
+ 1 file changed, 155 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 45d859263499..040dc8771ea7 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -148,6 +148,150 @@ static void __init tdx_get_keyids(u32 *keyids_start, u32 *nr_keyids)
+ 	*keyids_start = nr_mktme_ids + 1;
+ }
+ 
++static int *tdx_package_leaders __read_mostly;
++
++static enum cpuhp_state cpuhp_state __read_mostly = CPUHP_INVALID;
++
++static int tdx_starting_cpu(unsigned int cpu)
++{
++	int pkg = topology_physical_package_id(cpu);
++	int ret = 0;
++
++	/*
++	 * If this package doesn't have a leader CPU for IPI operation, use this
++	 * CPU as package leader.
++	 */
++	if (tdx_package_leaders[pkg] == -1)
++		tdx_package_leaders[pkg] = cpu;
++
++	return ret;
++}
++
++static int tdx_dying_cpu(unsigned int cpu)
++{
++	int pkg = topology_physical_package_id(cpu);
++	int other;
++	int ret = 0;
++
++	if (tdx_package_leaders[pkg] != cpu)
++		return 0;
++
++	/*
++	 * If offlining cpu is used as package leader, find other online cpu on
++	 * this package.
++	 */
++	for_each_online_cpu(other) {
++		if (other == cpu)
++			continue;
++		if (topology_physical_package_id(other) != pkg)
++			continue;
++
++		tdx_package_leaders[pkg] = other;
++		break;
++	}
++	/*
++	 * Some of the TDX module API (tdh.sys.key.config, tdh.mng.key.config,
++	 * tdh.phymem.page.wbinvd) requires to invoke on all the CPU package.
++	 * Keep at least one CPU online.
++	 */
++	if (tdx_package_leaders[pkg] == cpu)
++		ret = -EINVAL;
++
++	return ret;
++}
++
++static int __init tdx_init_cpuhp(void)
++{
++	int ret;
++
++	ret = cpuhp_setup_state_nocalls_cpuslocked(CPUHP_AP_ONLINE_DYN,
++		"tdx/cpu:starting", tdx_starting_cpu, tdx_dying_cpu);
++	if (ret >= 0) {
++		cpuhp_state = ret;
++		ret = 0;
++	}
++	return ret;
++}
++
++/*
++ * Setup one-cpu-per-pkg array to do package-scoped SEAMCALLs. The array is
++ * only necessary if there are multiple packages.
++ */
++static int __init init_package_leaders(void)
++{
++	int cpu, pkg, nr_filled, nr_pkgs;
++
++	nr_pkgs = topology_max_packages();
++	tdx_package_leaders = kcalloc(nr_pkgs, sizeof(*tdx_package_leaders),
++				GFP_KERNEL);
++	if (!tdx_package_leaders)
++		return -ENOMEM;
++
++	memset(tdx_package_leaders, -1, nr_pkgs * sizeof(*tdx_package_leaders));
++
++	nr_filled = 0;
++	for_each_online_cpu(cpu) {
++		pkg = topology_physical_package_id(cpu);
++		if (tdx_package_leaders[pkg] >= 0)
++			continue;
++
++		tdx_package_leaders[pkg] = cpu;
++		if (++nr_filled == nr_pkgs)
++			break;
++	}
++
++	if (WARN_ON(nr_filled != nr_pkgs)) {
++		kfree(tdx_package_leaders);
++		tdx_package_leaders = NULL;
++		return -EIO;
++	}
++
++	return 0;
++}
++
++static int tdx_seamcall_on_each_pkg_cpuslocked(int (*fn)(void *), void *param)
++{
++	int ret, i;
++
++	/*
++	 * Some per-package operations require serialization between packages.
++	 * Invoke the callback one by one to avoid watchdog timer.
++	 */
++	ret = 0;
++	for (i = 0; i < topology_max_packages(); i++) {
++		if (WARN_ON_ONCE(tdx_package_leaders[i] < 0)) {
++			/* All packages need to configure. */
++			ret = -EIO;
++			break;
++		}
++
++		ret = smp_call_on_cpu(tdx_package_leaders[i], fn, param, 1);
++		if (ret)
++			break;
++	}
++
++	return ret;
++}
++
++/*
++ * tdx_seamcall_on_each_pkg - run function on each packages serially.
++ * @fn: function to be called on each packages in blocking manner.
++ * @param: parameter for fn
++ */
++int tdx_seamcall_on_each_pkg(int (*fn)(void *), void *param)
++{
++	int ret;
++
++	/* protect tdx_package_leaders. */
++	cpus_read_lock();
++	ret = tdx_seamcall_on_each_pkg_cpuslocked(fn, param);
++	cpus_read_unlock();
++
++	return ret;
++}
++/* kvm_intel will use this function to invoke SEAMCALL on each package. */
++EXPORT_SYMBOL_GPL(tdx_seamcall_on_each_pkg);
++
+ /*
+  * TDH_SYS_CONFIG requires that struct tdsysinfo_struct and the array of struct
+  * cmr_info have the alignment of TDX_TDSYSINFO_STRUCT_ALIGNEMNT(1024) and
+@@ -509,7 +653,13 @@ static int __init tdx_load_module(
+ 	if (ret)
+ 		goto out;
+ 
+-	/* TODO: Early initialization. */
++	ret = init_package_leaders();
++	if (ret)
++		goto out;
++
++	ret = tdx_init_cpuhp();
++	if (ret)
++		goto out;
+ 
+ out:
+ 	free_seamldr_params(params);
+@@ -593,7 +743,10 @@ static int __init tdx_arch_init(void)
+ 	cpus_read_unlock();
+ 
+ 	seam_free_vmcs_tmp_set();
+-
++	if (ret && cpuhp_state != CPUHP_INVALID) {
++		cpuhp_remove_state_nocalls(cpuhp_state);
++		cpuhp_state = CPUHP_INVALID;
++	}
+ out_free:
+ 	if (tdx_module_len)
+ 		memblock_free_late(__pa(tdx_module_name), tdx_module_len);
+-- 
+2.31.1
+

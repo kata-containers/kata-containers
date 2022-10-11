@@ -1,0 +1,43 @@
+From 353ce8a540949afd48e70daab4573aa6b520eb84 Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Wed, 5 Jan 2022 04:35:14 -0800
+Subject: [PATCH 0953/1418] kvm: x86: Fix xstate_required_size() to follow
+ XSTATE alignment rule
+
+CPUID.0xD.1.EBX enumerates the size of the XSAVE area (in compacted
+format) required by XSAVES. If CPUID.0xD.i.ECX[1] is set for a state
+component (i), this state component should be located on the next
+64-bytes boundary following the preceding state component in the
+compacted layout.
+
+Fix xstate_required_size() to follow the alignment rule. AMX is the
+first state component with 64-bytes alignment to catch this bug.
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Message-Id: <20220105123532.12586-4-yang.zhong@intel.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/kvm/cpuid.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c
+index 5e43dd6a7654..4126b41a4b77 100644
+--- a/arch/x86/kvm/cpuid.c
++++ b/arch/x86/kvm/cpuid.c
+@@ -42,7 +42,11 @@ static u32 xstate_required_size(u64 xstate_bv, bool compacted)
+ 		if (xstate_bv & 0x1) {
+ 		        u32 eax, ebx, ecx, edx, offset;
+ 		        cpuid_count(0xD, feature_bit, &eax, &ebx, &ecx, &edx);
+-			offset = compacted ? ret : ebx;
++			/* ECX[1]: 64B alignment in compacted form */
++			if (compacted)
++				offset = (ecx & 0x2) ? ALIGN(ret, 64) : ret;
++			else
++				offset = ebx;
+ 			ret = max(ret, offset + eax);
+ 		}
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,134 @@
+From ad5242f1472692b1160647421f18da256dbf873d Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Fri, 22 Oct 2021 01:09:40 -0700
+Subject: [PATCH 0302/1418] *** HACK *** x86/cpu/tdx: restore CS/SS after the
+ TDX first firmware loader
+
+NOTE: Not for upstreaming.  Drop this patch once the NP-SEAMLDR is fixed.
+This patch is needed until the NP-SEAMLDR is updated to restore segment
+selectors.
+
+Restore CS/SS selector value after launching the TDX first firmware
+loader(NP-SEAMLDR) and make a helper die notifier to correct CS/SS saved on
+the exception/interrupt stack for iret to work instead of general
+protection fault.
+
+There is a window where it's not NMI-safe in np_seamldr_launch because the
+NP-SEAMLDR returns to an OS with the clobbered segment selectors with the
+flat cached segment descriptors.  The cached segment descriptors are loaded
+with NP-SEAMLDR GDT.  Not with the restored kernel's GDT.  If NMI happens
+before restoring the segment selectors, the clobbered CS/SS are saved and
+iret causes GP by loading unintended segment descriptors from the kernel
+GDT.  Make a die-notifier to correct the saved clobbered CS/SS so that the
+iret returns back as expected.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/np-seamldr.S | 13 +++++++++-
+ arch/x86/kernel/cpu/tdx/p-seamldr.c  | 36 +++++++++++++++++++++++++---
+ 2 files changed, 45 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/np-seamldr.S b/arch/x86/kernel/cpu/tdx/np-seamldr.S
+index 7dc4c7b51646..cb98cc8d487e 100644
+--- a/arch/x86/kernel/cpu/tdx/np-seamldr.S
++++ b/arch/x86/kernel/cpu/tdx/np-seamldr.S
+@@ -38,6 +38,7 @@
+  * R9: Load status returned by NP-SEAMLDR: success (0x0) or error code.
+  * Other GPRs, including RSP 0x0
+  *
++ * CS: Flat.  Its segment selector is clobbered.
+  * DS: Flat.  Its segment selector is clobbered.
+  * GDTR: Base = As provided by OS in R9; Limit unchanged.
+  * IDTR: Base = As provided by OS in R12; Limit unchanged.
+@@ -54,7 +55,7 @@
+  *   CR0, CR3, CR4,
+  *   rflags,
+  * Restore segment registers. don't save them because they have known values.
+- *   DS
++ *   DS, ES, CS, SS
+  */
+ 	.text
+ 	__INIT
+@@ -165,6 +166,8 @@ SYM_FUNC_START(np_seamldr_launch)
+ 	 */
+ 	movl	$__KERNEL_DS, %eax
+ 	movl	%eax, %ds
++	movl	%eax, %es
++	movl	%eax, %ss
+ 
+ 	/*
+ 	 * The frame unwinder requires valid %rbp.  Restore %rbp early before
+@@ -182,6 +185,14 @@ SYM_FUNC_START(np_seamldr_launch)
+ 	 */
+ 	UNWIND_HINT sp_reg=ORC_REG_SP sp_offset=8*9 type=UNWIND_HINT_TYPE_CALL
+ 
++	/* Far return to load the kernel CS. */
++	pushq	$__KERNEL_CS
++	leaq	.Lkernel_cs(%rip), %rax
++	pushq	%rax
++	lretq
++.Lkernel_cs:
++	UNWIND_HINT sp_reg=ORC_REG_SP sp_offset=8*9 type=UNWIND_HINT_TYPE_CALL
++
+ 	/* Restore CPU status, in reverse order of saving. */
+ 
+ 	movq	np_seamldr_saved_cr4(%rip), %rax
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.c b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+index 6e095156be66..5805286dc62e 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.c
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+@@ -64,9 +64,11 @@ static bool __init is_seamrr_enabled(void)
+ }
+ 
+ /*
+- * The NP-SEAMLDR returns with the clobbered CR4.  If NMI happens before
+- * restoring CR4, the NMI handler uses the features disabled by CR4.  Restore
+- * saved CR4.
++ * The NP-SEAMLDR returns with the clobbered CS/SS with the flat cached
++ * descriptors.  If NMI happens before restoring segment selectors, the
++ * clobbered values of CS/SS are saved and the following iret tries to re-load
++ * the clobbered segment selector to trigger #GP.  Correct the saved CS/SS so
++ * that iret loads the intended segment selectors.
+  */
+ extern unsigned long np_seamldr_saved_cr4 __initdata;
+ 
+@@ -85,8 +87,36 @@ static int __init np_seamldr_die_notify(struct notifier_block *nb,
+ 		 * The NP-SEAMLDR clobbers CR4 outside of shadowed CR4.
+ 		 */
+ 		__write_cr4(np_seamldr_saved_cr4);
++		/*
++		 * Saved CS is clobbered value by NP-SEAMLDR.  Store correct
++		 * value.
++		 */
++		regs->cs = __KERNEL_CS;
++		/* SS is zero. no need to correct. */
+ 		return NOTIFY_STOP;
+ 	}
++
++	if (cmd == DIE_GPF && die_args->trapnr == X86_TRAP_GP &&
++	    np_seamldr_saved_cr4) {
++		/*
++		 * iretq in nmi_restore causes #GP due to clobbered %CS/%SS.
++		 * Correct them.
++		 */
++		struct iretq_frame {
++			unsigned long ip;
++			unsigned long cs;
++			unsigned long flags;
++			unsigned long sp;
++			unsigned long ss;
++		};
++		struct iretq_frame *iret = (struct iretq_frame *)regs->sp;
++
++		regs->cs = __KERNEL_CS;
++		iret->cs = __KERNEL_CS;
++		iret->ss = __KERNEL_DS;
++		return NOTIFY_STOP;
++	}
++
+ 	return NOTIFY_DONE;
+ }
+ 
+-- 
+2.31.1
+

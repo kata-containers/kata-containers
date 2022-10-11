@@ -1,0 +1,37 @@
+From 1a481b1532968c5da83723b07a962a1182fd1590 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Fri, 7 Aug 2020 18:34:43 -0700
+Subject: [PATCH 0373/1418] KVM: x86: Check for pending APICv interrupt in
+ kvm_vcpu_has_events()
+
+Return true for kvm_vcpu_has_events() if the vCPU has a pending APICv
+interrupt to support TDX's usage of APICv.  Unlike VMX, TDX doesn't have
+access to vmcs.GUEST_INTR_STATUS and so can't emulate posted interrupts,
+i.e. needs to generate a posted interrupt and more importantly can't
+manually move requested interrupts into the vIRR (which it also doesn't
+have access to).
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/x86.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index aaa790d8f0f2..6d194d71c7bc 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -11679,7 +11679,9 @@ static inline bool kvm_vcpu_has_events(struct kvm_vcpu *vcpu)
+ 
+ 	if (kvm_arch_interrupt_allowed(vcpu) &&
+ 	    (kvm_cpu_has_interrupt(vcpu) ||
+-	    kvm_guest_apic_has_interrupt(vcpu)))
++	     kvm_guest_apic_has_interrupt(vcpu) ||
++	     (vcpu->arch.apicv_active &&
++	      kvm_x86_ops.dy_apicv_has_pending_interrupt(vcpu))))
+ 		return true;
+ 
+ 	if (kvm_hv_has_stimer_pending(vcpu))
+-- 
+2.31.1
+

@@ -1,0 +1,65 @@
+From a1086775fab0b25bb5f008859e6534c208b9565a Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Fri, 7 May 2021 18:40:22 -0700
+Subject: [PATCH 0292/1418] KVM: X86: move out the definition vmcs_hdr/vmcs
+ from kvm to x86
+
+Move the definition of VMCS into a common x86 header,
+arch/x86/include/asm/vmx.h. The TDX initialization code outside of KVM will
+also use this definition.
+
+No functional change is intended.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/vmx.h | 11 +++++++++++
+ arch/x86/kvm/vmx/vmcs.h    | 11 -----------
+ 2 files changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/arch/x86/include/asm/vmx.h b/arch/x86/include/asm/vmx.h
+index e576b3f39049..792aae70bc3a 100644
+--- a/arch/x86/include/asm/vmx.h
++++ b/arch/x86/include/asm/vmx.h
+@@ -17,6 +17,17 @@
+ #include <uapi/asm/vmx.h>
+ #include <asm/vmxfeatures.h>
+ 
++struct vmcs_hdr {
++	u32 revision_id:31;
++	u32 shadow_vmcs:1;
++};
++
++struct vmcs {
++	struct vmcs_hdr hdr;
++	u32 abort;
++	char data[];
++};
++
+ #define VMCS_CONTROL_BIT(x)	BIT(VMX_FEATURE_##x & 0x1f)
+ 
+ /*
+diff --git a/arch/x86/kvm/vmx/vmcs.h b/arch/x86/kvm/vmx/vmcs.h
+index 5f515e0ad379..a4a145bfaf68 100644
+--- a/arch/x86/kvm/vmx/vmcs.h
++++ b/arch/x86/kvm/vmx/vmcs.h
+@@ -13,17 +13,6 @@
+ 
+ #define ROL16(val, n) ((u16)(((u16)(val) << (n)) | ((u16)(val) >> (16 - (n)))))
+ 
+-struct vmcs_hdr {
+-	u32 revision_id:31;
+-	u32 shadow_vmcs:1;
+-};
+-
+-struct vmcs {
+-	struct vmcs_hdr hdr;
+-	u32 abort;
+-	char data[];
+-};
+-
+ DECLARE_PER_CPU(struct vmcs *, current_vmcs);
+ 
+ /*
+-- 
+2.31.1
+

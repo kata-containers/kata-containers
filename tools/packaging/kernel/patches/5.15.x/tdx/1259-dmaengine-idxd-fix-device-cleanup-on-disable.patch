@@ -1,0 +1,44 @@
+From d3aaf24bbb2db01353531cbd499d55c713d523d5 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Fri, 1 Apr 2022 09:23:40 -0700
+Subject: [PATCH 1259/1418] dmaengine: idxd: fix device cleanup on disable
+
+There are certain parts of WQ that needs to be cleaned up even after WQ is
+disabled during the device disable. Those are the unchangeable parts for a
+WQ when the device is still enabled. Move the cleanup outside of WQ state
+check. Remove idxd_wq_disable_cleanup() inside idxd_wq_device_reset_cleanup()
+since only the unchangeable parts need to be cleared.
+
+Fixes: 0f225705cf65 ("dmaengine: idxd: fix wq settings post wq disable")
+Reported-by: Tony Zhu <tony.zhu@intel.com>
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/device.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index 06e3594c5a69..1b7b04ed7614 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -532,7 +532,6 @@ static void idxd_wq_device_reset_cleanup(struct idxd_wq *wq)
+ {
+ 	lockdep_assert_held(&wq->wq_lock);
+ 
+-	idxd_wq_disable_cleanup(wq);
+ 	wq->size = 0;
+ 	wq->group = NULL;
+ }
+@@ -892,9 +891,9 @@ static void idxd_device_wqs_clear_state(struct idxd_device *idxd)
+ 
+ 		if (wq->state == IDXD_WQ_ENABLED) {
+ 			idxd_wq_disable_cleanup(wq);
+-			idxd_wq_device_reset_cleanup(wq);
+ 			wq->state = IDXD_WQ_DISABLED;
+ 		}
++		idxd_wq_device_reset_cleanup(wq);
+ 	}
+ }
+ 
+-- 
+2.31.1
+

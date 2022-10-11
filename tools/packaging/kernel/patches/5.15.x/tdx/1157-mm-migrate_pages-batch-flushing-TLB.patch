@@ -1,0 +1,95 @@
+From 0f659cd45d87f09a86900aab04ea0925cf6d6dcc Mon Sep 17 00:00:00 2001
+From: Huang Ying <ying.huang@intel.com>
+Date: Wed, 18 Aug 2021 13:51:27 +0800
+Subject: [PATCH 1157/1418] mm/migrate_pages: batch flushing TLB
+
+The TLB flushing will cost quite some CPU cycles during the page
+migration in some situations.  For example, when migrate a page of a
+process with multiple active threads that run on multiple CPUs.  After
+batching the _unmap and _move in migrate_pages(), the TLB flushing can
+be batched easily with the existing TLB flush batching mechanism.
+This patch implements that.
+
+We use the following test case to test the patch.
+
+On a 2-socket Intel server,
+
+- Run pmbench memory accessing benchmark
+
+- Run `migratepages` to migrate pages of pmbench between node 0 and
+  node 1 back and forth.
+
+With the patch, the TLB flushing IPI reduces xx% during the test and
+the number of pages migrated successfully increases xx%.
+
+Signed-off-by: "Huang, Ying" <ying.huang@intel.com>
+---
+ mm/migrate.c |  4 +++-
+ mm/rmap.c    | 20 +++++++++++++++++---
+ 2 files changed, 20 insertions(+), 4 deletions(-)
+
+diff --git a/mm/migrate.c b/mm/migrate.c
+index 98c7b9aac2c9..02252b07f446 100644
+--- a/mm/migrate.c
++++ b/mm/migrate.c
+@@ -1163,7 +1163,7 @@ static int migrate_page_unmap(new_page_t get_new_page, free_page_t put_new_page,
+ 		/* Establish migration ptes */
+ 		VM_BUG_ON_PAGE(PageAnon(page) && !PageKsm(page) && !anon_vma,
+ 				page);
+-		try_to_migrate(page, 0);
++		try_to_migrate(page, TTU_BATCH_FLUSH);
+ 		page_was_mapped = 1;
+ 	}
+ 
+@@ -1626,6 +1626,8 @@ int migrate_pages(struct list_head *from, new_page_t get_new_page,
+ 	nr_failed += retry + thp_retry;
+ 	nr_thp_failed += thp_retry;
+ move:
++	try_to_unmap_flush();
++
+ 	retry = 1;
+ 	thp_retry = 1;
+ 	for (pass = 0; pass < 10 && (retry || thp_retry); pass++) {
+diff --git a/mm/rmap.c b/mm/rmap.c
+index 6aebd1747251..f733b3256d25 100644
+--- a/mm/rmap.c
++++ b/mm/rmap.c
+@@ -1797,7 +1797,21 @@ static bool try_to_migrate_one(struct page *page, struct vm_area_struct *vma,
+ 
+ 		/* Nuke the page table entry. */
+ 		flush_cache_page(vma, address, pte_pfn(*pvmw.pte));
+-		pteval = ptep_clear_flush(vma, address, pvmw.pte);
++		if (should_defer_flush(mm, flags)) {
++			/*
++			 * We clear the PTE but do not flush so potentially
++			 * a remote CPU could still be writing to the page.
++			 * If the entry was previously clean then the
++			 * architecture must guarantee that a clear->dirty
++			 * transition on a cached TLB entry is written through
++			 * and traps if the PTE is unmapped.
++			 */
++			pteval = ptep_get_and_clear(mm, address, pvmw.pte);
++
++			set_tlb_ubc_flush_pending(mm, pte_dirty(pteval));
++		} else {
++			pteval = ptep_clear_flush(vma, address, pvmw.pte);
++		}
+ 
+ 		/* Move the dirty bit to the page. Now the pte is gone. */
+ 		if (pte_dirty(pteval))
+@@ -1937,10 +1951,10 @@ void try_to_migrate(struct page *page, enum ttu_flags flags)
+ 
+ 	/*
+ 	 * Migration always ignores mlock and only supports TTU_RMAP_LOCKED and
+-	 * TTU_SPLIT_HUGE_PMD and TTU_SYNC flags.
++	 * TTU_SPLIT_HUGE_PMD, TTU_SYNC and TTU_BATCH_FLUSH flags.
+ 	 */
+ 	if (WARN_ON_ONCE(flags & ~(TTU_RMAP_LOCKED | TTU_SPLIT_HUGE_PMD |
+-					TTU_SYNC)))
++					TTU_SYNC | TTU_BATCH_FLUSH)))
+ 		return;
+ 
+ 	if (is_zone_device_page(page) && !is_device_private_page(page))
+-- 
+2.31.1
+

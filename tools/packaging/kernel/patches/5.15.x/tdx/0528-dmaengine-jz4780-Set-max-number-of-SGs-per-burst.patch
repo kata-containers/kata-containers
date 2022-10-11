@@ -1,0 +1,32 @@
+From 6285889041eb4ee45f0db2180b0e046ebf115873 Mon Sep 17 00:00:00 2001
+From: Artur Rojek <contact@artur-rojek.eu>
+Date: Sun, 29 Aug 2021 21:58:05 +0200
+Subject: [PATCH 0528/1418] dmaengine: jz4780: Set max number of SGs per burst
+
+Total amount of SG list entries executed in a single burst is limited by
+the number of available DMA descriptors.
+This information is useful for device drivers utilizing this DMA engine.
+
+Signed-off-by: Artur Rojek <contact@artur-rojek.eu>
+Acked-by: Paul Cercueil <paul@crapouillou.net>
+Link: https://lore.kernel.org/r/20210829195805.148964-1-contact@artur-rojek.eu
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/dma-jz4780.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/dma/dma-jz4780.c b/drivers/dma/dma-jz4780.c
+index ebee94dbd630..96701dedcac8 100644
+--- a/drivers/dma/dma-jz4780.c
++++ b/drivers/dma/dma-jz4780.c
+@@ -915,6 +915,7 @@ static int jz4780_dma_probe(struct platform_device *pdev)
+ 	dd->dst_addr_widths = JZ_DMA_BUSWIDTHS;
+ 	dd->directions = BIT(DMA_DEV_TO_MEM) | BIT(DMA_MEM_TO_DEV);
+ 	dd->residue_granularity = DMA_RESIDUE_GRANULARITY_BURST;
++	dd->max_sg_burst = JZ_DMA_MAX_DESC;
+ 
+ 	/*
+ 	 * Enable DMA controller, mark all channels as not programmable.
+-- 
+2.31.1
+

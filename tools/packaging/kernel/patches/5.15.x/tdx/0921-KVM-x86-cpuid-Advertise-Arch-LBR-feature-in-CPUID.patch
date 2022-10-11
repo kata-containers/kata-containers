@@ -1,0 +1,77 @@
+From 573d0ad6db5529124c8c7485b94071e3ffabcdf2 Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Fri, 9 Jul 2021 00:27:38 +0800
+Subject: [PATCH 0921/1418] KVM: x86/cpuid: Advertise Arch LBR feature in CPUID
+
+Add Arch LBR feature bit in CPU cap-mask to expose the feature.
+Only max LBR depth is supported for guest, and it's consistent
+with host Arch LBR settings.
+
+Co-developed-by: Like Xu <like.xu@linux.intel.com>
+Signed-off-by: Like Xu <like.xu@linux.intel.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/cpuid.c | 33 ++++++++++++++++++++++++++++++++-
+ 1 file changed, 32 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c
+index 26d2d1c5bf8b..a7b5427d903f 100644
+--- a/arch/x86/kvm/cpuid.c
++++ b/arch/x86/kvm/cpuid.c
+@@ -90,6 +90,16 @@ static int kvm_check_cpuid(struct kvm_cpuid_entry2 *entries, int nent)
+ 		if (vaddr_bits != 48 && vaddr_bits != 57 && vaddr_bits != 0)
+ 			return -EINVAL;
+ 	}
++	best = cpuid_entry2_find(entries, nent, 0x1c, 0);
++	if (best) {
++		unsigned int eax, ebx, ecx, edx;
++
++		/* Reject user-space CPUID if depth is different from host's.*/
++		cpuid_count(0x1c, 0, &eax, &ebx, &ecx, &edx);
++
++		if ((best->eax & 0xff) != BIT(fls(eax & 0xff) - 1))
++			return -EINVAL;
++	}
+ 
+ 	return 0;
+ }
+@@ -496,7 +506,7 @@ void kvm_set_cpu_caps(void)
+ 		F(SPEC_CTRL_SSBD) | F(ARCH_CAPABILITIES) | F(INTEL_STIBP) |
+ 		F(MD_CLEAR) | F(AVX512_VP2INTERSECT) | F(FSRM) |
+ 		F(SERIALIZE) | F(TSXLDTRK) | F(AVX512_FP16) |
+-		F(AMX_TILE) | F(AMX_INT8) | F(AMX_BF16)
++		F(AMX_TILE) | F(AMX_INT8) | F(AMX_BF16) | F(ARCH_LBR)
+ 	);
+ 
+ 	/* TSC_ADJUST and ARCH_CAPABILITIES are emulated in software. */
+@@ -916,6 +926,27 @@ static inline int __do_cpuid_func(struct kvm_cpuid_array *array, u32 function)
+ 				goto out;
+ 		}
+ 		break;
++	/* Architectural LBR */
++	case 0x1c: {
++		u32 lbr_depth_mask = entry->eax & 0xff;
++
++		if (!lbr_depth_mask ||
++		    !kvm_cpu_cap_has(X86_FEATURE_ARCH_LBR)) {
++			entry->eax = entry->ebx = entry->ecx = entry->edx = 0;
++			break;
++		}
++		/*
++		 * KVM only exposes the maximum supported depth, which is the
++		 * fixed value used on the host side.
++		 * KVM doesn't allow VMM userspace to adjust LBR depth because
++		 * guest LBR emulation depends on the configuration of host LBR
++		 * driver.
++		 */
++		lbr_depth_mask = BIT((fls(lbr_depth_mask) - 1));
++		entry->eax &= ~0xff;
++		entry->eax |= lbr_depth_mask;
++		break;
++	}
+ 	case KVM_CPUID_SIGNATURE: {
+ 		static const char signature[12] = "KVMKVMKVM\0\0";
+ 		const u32 *sigptr = (const u32 *)signature;
+-- 
+2.31.1
+

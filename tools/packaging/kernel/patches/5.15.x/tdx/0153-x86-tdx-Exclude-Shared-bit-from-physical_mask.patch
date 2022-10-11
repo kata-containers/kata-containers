@@ -1,0 +1,99 @@
+From 07d50e3cf323163cde6352bcd63ad6a04895b7ef Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Mon, 30 Mar 2020 18:42:53 +0300
+Subject: [PATCH 0153/1418] x86/tdx: Exclude Shared bit from physical_mask
+
+Just like MKTME, TDX reassigns bits of the physical address for
+metadata.  MKTME used several bits for an encryption KeyID. TDX
+uses a single bit in guests to communicate whether a physical page
+should be protected by TDX as private memory (bit set to 0) or
+unprotected and shared with the VMM (bit set to 1).
+
+Add a helper, tdx_shared_mask() to generate the mask.  The processor
+enumerates its physical address width to include the shared bit, which
+means it gets included in __PHYSICAL_MASK by default.
+
+Remove the shared mask from 'physical_mask' since any bits in
+tdx_shared_mask() are not used for physical addresses in page table
+entries.
+
+Also, note that shared mapping configuration cannot be clubbed between
+AMD SME and Intel TDX Guest platforms in common function. SME has
+to do it very early in __startup_64() as it sets the bit on all
+memory, except what is used for communication. TDX can postpone it,
+as it don't need any shared mapping in very early boot.
+
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/Kconfig           | 1 +
+ arch/x86/include/asm/tdx.h | 4 ++++
+ arch/x86/kernel/tdx.c      | 9 +++++++++
+ 3 files changed, 14 insertions(+)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index e087192728ad..c3486e818a6a 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -877,6 +877,7 @@ config INTEL_TDX_GUEST
+ 	depends on SECURITY
+ 	depends on X86_X2APIC
+ 	select ARCH_HAS_CC_PLATFORM
++	select X86_MEM_ENCRYPT_COMMON
+ 	help
+ 	  Provide support for running in a trusted domain on Intel processors
+ 	  equipped with Trusted Domain Extensions. TDX is a Intel technology
+diff --git a/arch/x86/include/asm/tdx.h b/arch/x86/include/asm/tdx.h
+index 6540c2ebf64b..676d0bde9ebe 100644
+--- a/arch/x86/include/asm/tdx.h
++++ b/arch/x86/include/asm/tdx.h
+@@ -76,6 +76,8 @@ bool tdx_handle_virtualization_exception(struct pt_regs *regs,
+ 
+ bool tdx_early_handle_ve(struct pt_regs *regs);
+ 
++extern phys_addr_t tdx_shared_mask(void);
++
+ /*
+  * To support I/O port access in decompressor or early kernel init
+  * code, since #VE exception handler cannot be used, use paravirt
+@@ -141,6 +143,8 @@ static inline void tdx_early_init(void) { };
+ 
+ static inline bool tdx_early_handle_ve(struct pt_regs *regs) { return false; }
+ 
++static inline phys_addr_t tdx_shared_mask(void) { return 0; }
++
+ #endif /* CONFIG_INTEL_TDX_GUEST */
+ 
+ #if defined(CONFIG_KVM_GUEST) && defined(CONFIG_INTEL_TDX_GUEST)
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index bb237cf291e6..8a37ab0c6cbf 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -71,6 +71,12 @@ static inline u64 _tdx_hypercall(u64 fn, u64 r12, u64 r13, u64 r14,
+ 	return out->r10;
+ }
+ 
++/* The highest bit of a guest physical address is the "sharing" bit */
++phys_addr_t tdx_shared_mask(void)
++{
++	return 1ULL << (td_info.gpa_width - 1);
++}
++
+ static void tdx_get_info(void)
+ {
+ 	struct tdx_module_output out;
+@@ -94,6 +100,9 @@ static void tdx_get_info(void)
+ 
+ 	td_info.gpa_width = out.rcx & GENMASK(5, 0);
+ 	td_info.attributes = out.rdx;
++
++	/* Exclude Shared bit from the __PHYSICAL_MASK */
++	physical_mask &= ~tdx_shared_mask();
+ }
+ 
+ static __cpuidle void _tdx_halt(const bool irq_disabled, const bool do_sti)
+-- 
+2.31.1
+

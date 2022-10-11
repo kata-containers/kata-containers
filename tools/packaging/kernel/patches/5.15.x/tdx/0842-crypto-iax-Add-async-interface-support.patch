@@ -1,0 +1,119 @@
+From 2abd641f981ae37b5ec90094ef9638bf0f401ef9 Mon Sep 17 00:00:00 2001
+From: Tom Zanussi <tom.zanussi@linux.intel.com>
+Date: Tue, 21 Sep 2021 15:46:57 -0700
+Subject: [PATCH 0842/1418] crypto: iax - Add async interface support
+
+Add support for the crypto async interface, so that the IAX crypto
+hardware can be used with facilities that require it, such as zswap.
+
+Signed-off-by: Tom Zanussi <tom.zanussi@linux.intel.com>
+---
+ drivers/crypto/iax/iax_crypto_main.c | 72 ++++++++++++++++++++++++++++
+ 1 file changed, 72 insertions(+)
+
+diff --git a/drivers/crypto/iax/iax_crypto_main.c b/drivers/crypto/iax/iax_crypto_main.c
+index 1dc57e8c981a..fd25632fc399 100644
+--- a/drivers/crypto/iax/iax_crypto_main.c
++++ b/drivers/crypto/iax/iax_crypto_main.c
+@@ -11,6 +11,7 @@
+ #include <linux/uacce.h>
+ #include <uapi/linux/idxd.h>
+ #include <linux/highmem.h>
++#include <crypto/internal/acompress.h>
+ 
+ #include "registers.h"
+ #include "idxd.h"
+@@ -660,6 +661,65 @@ static struct crypto_alg iax_comp_deflate = {
+ 	}
+ };
+ 
++static int iax_comp_acompress(struct acomp_req *req)
++{
++	struct crypto_tfm *tfm = req->base.tfm;
++	void *src, *dst;
++	int ret;
++
++	src = kmap_atomic(sg_page(req->src)) + req->src->offset;
++	dst = kmap_atomic(sg_page(req->dst)) + req->dst->offset;
++
++	pr_debug("%s: src %p (offset %d), slen %d, dst %p (offset %d), dlen %u\n",
++		 __func__, src, req->src->offset, req->slen,
++		 dst, req->dst->offset, req->dlen);
++
++	ret = iax_compress(tfm, (const u8 *)src, req->slen, (u8 *)dst, &req->dlen);
++
++	kunmap_atomic(src);
++	kunmap_atomic(dst);
++
++	if (ret != 0)
++		pr_warn("asynchronous compress failed ret=%d\n", ret);
++
++	return ret;
++}
++
++static int iax_comp_adecompress(struct acomp_req *req)
++{
++	struct crypto_tfm *tfm = req->base.tfm;
++	void *src, *dst;
++	int ret;
++
++	src = kmap_atomic(sg_page(req->src)) + req->src->offset;
++	dst = kmap_atomic(sg_page(req->dst)) + req->dst->offset;
++
++	pr_debug("%s: src %p (offset %d), slen %d, dst %p (offset %d), dlen %u\n",
++		 __func__, src, req->src->offset, req->slen,
++		 dst, req->dst->offset, req->dlen);
++
++	ret = iax_decompress(tfm, (const u8 *)src, req->slen, (u8 *)dst, &req->dlen);
++
++	kunmap_atomic(src);
++	kunmap_atomic(dst);
++
++	if (ret != 0)
++		pr_warn("asynchronous decompress failed ret=%d\n", ret);
++
++	return ret;
++}
++
++static struct acomp_alg iax_acomp_deflate = {
++	.compress		= iax_comp_acompress,
++	.decompress		= iax_comp_adecompress,
++	.base			= {
++		.cra_name		= "deflate",
++		.cra_driver_name	= "iax_crypto",
++		.cra_module		= THIS_MODULE,
++		.cra_priority           = IAX_ALG_PRIORITY,
++	}
++};
++
+ static int iax_register_compression_device(void)
+ {
+ 	int ret;
+@@ -670,12 +730,24 @@ static int iax_register_compression_device(void)
+ 		return ret;
+ 	}
+ 
++	ret = crypto_register_acomp(&iax_acomp_deflate);
++	if (ret) {
++		pr_err("deflate algorithm acomp registration failed (%d)\n", ret);
++		goto err_unregister_alg_deflate;
++	}
++
++	return ret;
++
++err_unregister_alg_deflate:
++	crypto_unregister_alg(&iax_comp_deflate);
++
+ 	return ret;
+ }
+ 
+ static void iax_unregister_compression_device(void)
+ {
+ 	crypto_unregister_alg(&iax_comp_deflate);
++	crypto_unregister_acomp(&iax_acomp_deflate);
+ }
+ 
+ static void iax_set_aecs(void)
+-- 
+2.31.1
+

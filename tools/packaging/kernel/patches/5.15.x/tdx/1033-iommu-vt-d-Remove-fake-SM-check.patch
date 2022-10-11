@@ -1,0 +1,25 @@
+From 690496e62408a48830198c3a30ea8dc8b91006ff Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Thu, 27 Jan 2022 21:34:08 -0800
+Subject: [PATCH 1033/1418] iommu/vt-d: Remove fake SM check
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/intel/cap_audit.h | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/drivers/iommu/intel/cap_audit.h b/drivers/iommu/intel/cap_audit.h
+index f5bcce472690..183e7dfda8ba 100644
+--- a/drivers/iommu/intel/cap_audit.h
++++ b/drivers/iommu/intel/cap_audit.h
+@@ -122,7 +122,6 @@ bool intel_cap_slad_sanity(void);
+ 
+ static inline bool scalable_mode_support(void)
+ {
+-	return true;
+ 	return (intel_iommu_sm && intel_cap_smts_sanity());
+ }
+ 
+-- 
+2.31.1
+

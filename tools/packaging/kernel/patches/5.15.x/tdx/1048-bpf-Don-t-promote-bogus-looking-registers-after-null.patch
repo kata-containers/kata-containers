@@ -1,0 +1,49 @@
+From 253512483065bd3c19b9107549152a5c97383b61 Mon Sep 17 00:00:00 2001
+From: Daniel Borkmann <daniel@iogearbox.net>
+Date: Wed, 5 Jan 2022 11:35:13 -0800
+Subject: [PATCH 1048/1418] bpf: Don't promote bogus looking registers after
+ null check.
+
+If we ever get to a point again where we convert a bogus looking <ptr>_or_null
+typed register containing a non-zero fixed or variable offset, then lets not
+reset these bounds to zero since they are not and also don't promote the register
+to a <ptr> type, but instead leave it as <ptr>_or_null. Converting to a unknown
+register could be an avenue as well, but then if we run into this case it would
+allow to leak a kernel pointer this way.
+
+Fixes: f1174f77b50c ("bpf/verifier: rework value tracking")
+Signed-off-by: Daniel Borkmann <daniel@iogearbox.net>
+Signed-off-by: Alexei Starovoitov <ast@kernel.org>
+---
+ kernel/bpf/verifier.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index e76b55917905..7da7681063c9 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -8732,15 +8732,15 @@ static void mark_ptr_or_null_reg(struct bpf_func_state *state,
+ {
+ 	if (reg_type_may_be_null(reg->type) && reg->id == id &&
+ 	    !WARN_ON_ONCE(!reg->id)) {
+-		/* Old offset (both fixed and variable parts) should
+-		 * have been known-zero, because we don't allow pointer
+-		 * arithmetic on pointers that might be NULL.
+-		 */
+ 		if (WARN_ON_ONCE(reg->smin_value || reg->smax_value ||
+ 				 !tnum_equals_const(reg->var_off, 0) ||
+ 				 reg->off)) {
+-			__mark_reg_known_zero(reg);
+-			reg->off = 0;
++			/* Old offset (both fixed and variable parts) should
++			 * have been known-zero, because we don't allow pointer
++			 * arithmetic on pointers that might be NULL. If we
++			 * see this happening, don't convert the register.
++			 */
++			return;
+ 		}
+ 		if (is_null) {
+ 			reg->type = SCALAR_VALUE;
+-- 
+2.31.1
+

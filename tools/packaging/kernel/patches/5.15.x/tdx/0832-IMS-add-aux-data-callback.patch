@@ -1,0 +1,47 @@
+From ba211c363e74e362f7982fd8d462741bf9d7c9bc Mon Sep 17 00:00:00 2001
+From: Megha Dey <megha.dey@intel.com>
+Date: Wed, 15 Dec 2021 13:17:40 -0800
+Subject: [PATCH 0832/1418] IMS:add aux data callback
+
+Signed-off-by: Megha Dey <megha.dey@intel.com>
+---
+ drivers/irqchip/irq-ims-msi.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/drivers/irqchip/irq-ims-msi.c b/drivers/irqchip/irq-ims-msi.c
+index 5d1d01eee386..7c9ef211dc40 100644
+--- a/drivers/irqchip/irq-ims-msi.c
++++ b/drivers/irqchip/irq-ims-msi.c
+@@ -52,11 +52,29 @@ static void ims_array_write_msi_msg(struct irq_data *data, struct msi_msg *msg)
+ 	iowrite32_and_flush(msg->data, &slot->data);
+ }
+ 
++static int ims_array_set_auxdata(struct irq_data *data, unsigned int which,
++				 u64 auxval)
++{
++	struct msi_desc *desc = irq_data_get_msi_desc(data);
++	struct ims_slot __iomem *slot = desc->device_msi.priv_iomem;
++	u32 val, __iomem *ctrl = &slot->ctrl;
++
++	if (which != IMS_AUXDATA_CONTROL_WORD)
++		return -EINVAL;
++	if (auxval & ~(u64)IMS_CONTROL_WORD_AUXMASK)
++		return -EINVAL;
++
++	val = ioread32(ctrl) & IMS_CONTROL_WORD_IRQMASK;
++	iowrite32_and_flush(val | (u32) auxval, ctrl);
++	return 0;
++}
++
+ static const struct irq_chip ims_array_msi_controller = {
+ 	.name			= "IMS",
+ 	.irq_mask		= ims_array_mask_irq,
+ 	.irq_unmask		= ims_array_unmask_irq,
+ 	.irq_write_msi_msg	= ims_array_write_msi_msg,
++	.irq_set_auxdata	= ims_array_set_auxdata,
+ 	.irq_retrigger		= irq_chip_retrigger_hierarchy,
+ 	.flags			= IRQCHIP_SKIP_SET_WAKE,
+ };
+-- 
+2.31.1
+

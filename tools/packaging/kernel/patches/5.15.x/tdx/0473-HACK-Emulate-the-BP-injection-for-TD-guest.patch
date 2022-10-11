@@ -1,0 +1,148 @@
+From 34c4909de7114a739c86c75173c20723adbb8119 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Thu, 1 Jul 2021 16:22:35 +0800
+Subject: [PATCH 0473/1418] *** HACK *** Emulate the #BP injection for TD guest
+
+This is emulation of injection #BP back to TD guest
+without SEAM module's supporting. This is a workaround
+to allow QEMU's gdbstub use software breakpoints without
+freeze the TD guest. The freezing can happen when vcpu
+executing int3 instruction while KVM is intercepting #BP.
+TD guest do use the int3 in start_kernel() -> check_bugs().
+
+Suggested-by: Gao Chao <chao.gao@intel.com>
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h |  1 +
+ arch/x86/kvm/vmx/tdx.c          | 68 +++++++++++++++++++++++++++++++++
+ 2 files changed, 69 insertions(+)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 01985aa2a059..e77c6eb12d96 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -734,6 +734,7 @@ struct kvm_vcpu_arch {
+ 		unsigned long payload;
+ 		bool has_payload;
+ 		u8 nested_apf;
++		bool emulate_inject_bp;
+ 	} exception;
+ 
+ 	struct kvm_queued_interrupt {
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index f17df4b6f6fe..a244147d343d 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -148,6 +148,9 @@ BUILD_TDVMCALL_ACCESSORS(p4, r15);
+ 
+ static void tdx_set_interrupt_shadow(struct kvm_vcpu *vcpu, int mask);
+ static int tdx_skip_emulated_instruction(struct kvm_vcpu *vcpu);
++static void tdx_set_rflags(struct kvm_vcpu *vcpu, unsigned long rflags);
++static void tdx_update_exception_bitmap(struct kvm_vcpu *vcpu);
++static unsigned long tdx_get_rflags(struct kvm_vcpu *vcpu);
+ 
+ static __always_inline unsigned long tdvmcall_exit_type(struct kvm_vcpu *vcpu)
+ {
+@@ -682,6 +685,9 @@ static void tdx_complete_interrupts(struct kvm_vcpu *vcpu)
+ 	if (vcpu->arch.nmi_injected)
+ 		vcpu->arch.nmi_injected = td_management_read8(to_tdx(vcpu),
+ 							      TD_VCPU_PEND_NMI);
++
++	if (is_debug_td(vcpu))
++		kvm_clear_exception_queue(vcpu);
+ }
+ 
+ static void tdx_user_return_update_cache(void)
+@@ -890,6 +896,32 @@ static void tdx_handle_exit_irqoff(struct kvm_vcpu *vcpu)
+ 						     tdexit_intr_info(vcpu));
+ }
+ 
++static int tdx_emulate_inject_bp_end(struct kvm_vcpu *vcpu, unsigned long dr6)
++{
++	if ((dr6 & DR6_BS) && vcpu->arch.exception.emulate_inject_bp) {
++		vcpu->arch.exception.emulate_inject_bp = false;
++
++		// Check if we need enable #BP interception again
++		tdx_update_exception_bitmap(vcpu);
++
++		// No guest debug single step request, so clear it
++		if (!(vcpu->guest_debug & KVM_GUESTDBG_SINGLESTEP)) {
++			unsigned long rflags;
++
++			rflags = tdx_get_rflags(vcpu);
++			rflags &= ~X86_EFLAGS_TF;
++			tdx_set_rflags(vcpu, rflags);
++			kvm_make_request(KVM_REQ_EVENT, vcpu);
++
++			pr_info("Emulate the #BP injection end with single-step disabled\n");
++			return 1;
++		}
++		pr_info("Emulate the #BP injection end with single-step enabled\n");
++	}
++
++	return 0;
++}
++
+ static int tdx_handle_exception(struct kvm_vcpu *vcpu)
+ {
+ 	u32 ex_no;
+@@ -908,6 +940,10 @@ static int tdx_handle_exception(struct kvm_vcpu *vcpu)
+ 	switch (ex_no) {
+ 	case DB_VECTOR:
+ 		dr6 = tdexit_exit_qual(vcpu);
++
++		if (tdx_emulate_inject_bp_end(vcpu, dr6))
++			return 1;
++
+ 		if (!(vcpu->guest_debug & guest_debug_enable)) {
+ 			if (is_icebp(intr_info))
+ 				WARN_ON(!tdx_skip_emulated_instruction(vcpu));
+@@ -934,6 +970,31 @@ static int tdx_handle_exception(struct kvm_vcpu *vcpu)
+ 	return -EFAULT;
+ }
+ 
++static void tdx_emulate_inject_bp_begin(struct kvm_vcpu *vcpu)
++{
++	unsigned long rflags;
++	unsigned long guest_debug_old;
++
++	/*
++	 * Disable #BP intercept and enable single stepping
++	 * so the int3 will execute normally in guest and
++	 * return to KVM due to single stepping enabled
++	 * this emulated the #BP injection.
++	 */
++	guest_debug_old = vcpu->guest_debug;
++	vcpu->guest_debug &= ~KVM_GUESTDBG_USE_SW_BP;
++	tdx_update_exception_bitmap(vcpu);
++	vcpu->guest_debug = guest_debug_old;
++
++	rflags = tdx_get_rflags(vcpu);
++	rflags |= X86_EFLAGS_TF;
++	tdx_set_rflags(vcpu, rflags);
++
++	vcpu->arch.exception.emulate_inject_bp = true;
++
++	pr_info("Emulate the #BP injection begin\n");
++}
++
+ static void tdx_queue_exception(struct kvm_vcpu *vcpu)
+ {
+ 	struct vcpu_tdx *tdx;
+@@ -951,6 +1012,13 @@ static void tdx_queue_exception(struct kvm_vcpu *vcpu)
+ 	error_code = vcpu->arch.exception.error_code;
+ 	intr_info = nr | INTR_INFO_VALID_MASK;
+ 
++	/*
++	 * Emulate BP injection due to
++	 * TDX doesn't support exception injection
++	 */
++	if (nr == BP_VECTOR)
++		return tdx_emulate_inject_bp_begin(vcpu);
++
+ 	kvm_deliver_exception_payload(vcpu);
+ 
+ 	if (has_error_code) {
+-- 
+2.31.1
+

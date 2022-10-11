@@ -1,0 +1,98 @@
+From 40d297e68af046b9d7e6f65d6f07210cddb88f33 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Mon, 29 Nov 2021 17:23:10 -0700
+Subject: [PATCH 0902/1418] vfio: vfio fixups for idxd mdev
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/vfio/pci/vfio_pci_core.c  | 17 ++++++++++-------
+ drivers/vfio/pci/vfio_pci_intrs.c |  3 ++-
+ include/linux/vfio_pci_core.h     |  4 ++++
+ 3 files changed, 16 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/vfio/pci/vfio_pci_core.c b/drivers/vfio/pci/vfio_pci_core.c
+index e4ffcdbdf203..8a539c739d9a 100644
+--- a/drivers/vfio/pci/vfio_pci_core.c
++++ b/drivers/vfio/pci/vfio_pci_core.c
+@@ -372,7 +372,7 @@ int vfio_pci_iommu_dev_fault_handler(struct iommu_fault *fault, void *data)
+ 
+ #define DMA_FAULT_RING_LENGTH 512
+ 
+-static int vfio_pci_dma_fault_init(struct vfio_pci_core_device *vdev)
++int vfio_pci_dma_fault_init(struct vfio_pci_core_device *vdev, bool register_fault)
+ {
+ 	struct vfio_region_dma_fault *header;
+ 	size_t size;
+@@ -406,11 +406,13 @@ static int vfio_pci_dma_fault_init(struct vfio_pci_core_device *vdev)
+ 	header->nb_entries = DMA_FAULT_RING_LENGTH;
+ 	header->offset = PAGE_SIZE;
+ 
+-	ret = iommu_register_device_fault_handler(&vdev->pdev->dev,
+-					vfio_pci_iommu_dev_fault_handler,
+-					vdev);
+-	if (ret) /* the dma fault region is freed in vfio_pci_disable() */
+-		goto out;
++	if (register_fault) {
++		ret = iommu_register_device_fault_handler(&vdev->pdev->dev,
++							  vfio_pci_iommu_dev_fault_handler,
++							  vdev);
++		if (ret) /* the dma fault region is freed in vfio_pci_disable() */
++			goto out;
++	}
+ 
+ 	ret = vfio_pci_register_irq(vdev, VFIO_IRQ_TYPE_NESTED,
+ 				    VFIO_IRQ_SUBTYPE_DMA_FAULT,
+@@ -423,6 +425,7 @@ static int vfio_pci_dma_fault_init(struct vfio_pci_core_device *vdev)
+ 	kfree(vdev->fault_pages);
+ 	return ret;
+ }
++EXPORT_SYMBOL_GPL(vfio_pci_dma_fault_init);
+ 
+ int vfio_pci_core_enable(struct vfio_pci_core_device *vdev)
+ {
+@@ -493,7 +496,7 @@ int vfio_pci_core_enable(struct vfio_pci_core_device *vdev)
+ 	if (!vfio_vga_disabled() && vfio_pci_is_vga(pdev))
+ 		vdev->has_vga = true;
+ 
+-	ret = vfio_pci_dma_fault_init(vdev);
++	ret = vfio_pci_dma_fault_init(vdev, true);
+ 	if (ret) {
+ 		pci_disable_device(pdev);
+ 		return ret;
+diff --git a/drivers/vfio/pci/vfio_pci_intrs.c b/drivers/vfio/pci/vfio_pci_intrs.c
+index 05e021096f22..b7bb1ae21b72 100644
+--- a/drivers/vfio/pci/vfio_pci_intrs.c
++++ b/drivers/vfio/pci/vfio_pci_intrs.c
+@@ -636,7 +636,7 @@ static int vfio_pci_set_req_trigger(struct vfio_pci_core_device *vdev,
+ 					       count, flags, data);
+ }
+ 
+-static int vfio_pci_set_ext_irq_trigger(struct vfio_pci_core_device *vdev,
++int vfio_pci_set_ext_irq_trigger(struct vfio_pci_core_device *vdev,
+ 					unsigned int index, unsigned int start,
+ 					unsigned int count, uint32_t flags,
+ 					void *data)
+@@ -653,6 +653,7 @@ static int vfio_pci_set_ext_irq_trigger(struct vfio_pci_core_device *vdev,
+ 	return vfio_pci_set_ctx_trigger_single(&vdev->ext_irqs[i].trigger,
+ 					       count, flags, data);
+ }
++EXPORT_SYMBOL_GPL(vfio_pci_set_ext_irq_trigger);
+ 
+ int vfio_pci_set_irqs_ioctl(struct vfio_pci_core_device *vdev, uint32_t flags,
+ 			    unsigned index, unsigned start, unsigned count,
+diff --git a/include/linux/vfio_pci_core.h b/include/linux/vfio_pci_core.h
+index 6247c942a3b3..a76040b38e14 100644
+--- a/include/linux/vfio_pci_core.h
++++ b/include/linux/vfio_pci_core.h
+@@ -256,4 +256,8 @@ static inline bool vfio_pci_is_vga(struct pci_dev *pdev)
+ 	return (pdev->class >> 8) == PCI_CLASS_DISPLAY_VGA;
+ }
+ 
++int vfio_pci_dma_fault_init(struct vfio_pci_core_device *vdev, bool register_fault);
++int vfio_pci_set_ext_irq_trigger(struct vfio_pci_core_device *vdev,
++				 unsigned int index, unsigned int start,
++				 unsigned int count, uint32_t flags, void *data);
+ #endif /* VFIO_PCI_CORE_H */
+-- 
+2.31.1
+

@@ -1,0 +1,37 @@
+From afd743a4fdcf2bf989190230a24568e590ca92e7 Mon Sep 17 00:00:00 2001
+From: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Date: Tue, 29 Mar 2022 18:05:03 +0300
+Subject: [PATCH 1395/1418] x86/tdx: Force X2APIC
+
+Make sure that x2apic is used in the tdx guest.
+
+Signed-off-by: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+---
+ arch/x86/kernel/apic/apic.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/x86/kernel/apic/apic.c b/arch/x86/kernel/apic/apic.c
+index 051fcf5472ab..0836dd924785 100644
+--- a/arch/x86/kernel/apic/apic.c
++++ b/arch/x86/kernel/apic/apic.c
+@@ -54,6 +54,7 @@
+ #include <asm/desc.h>
+ #include <asm/hpet.h>
+ #include <asm/mtrr.h>
++#include <asm/tdx.h>
+ #include <asm/time.h>
+ #include <asm/smp.h>
+ #include <asm/mce.h>
+@@ -1785,6 +1786,9 @@ static void __x2apic_enable(void)
+ 
+ static int __init setup_nox2apic(char *str)
+ {
++	if (is_tdx_guest())
++		return 0;
++
+ 	if (x2apic_enabled()) {
+ 		int apicid = native_apic_msr_read(APIC_ID);
+ 
+-- 
+2.31.1
+

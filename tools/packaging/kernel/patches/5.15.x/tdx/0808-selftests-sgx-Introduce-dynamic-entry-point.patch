@@ -1,0 +1,49 @@
+From 1b4322499e7bb22a6905413b7ef862d12aa0dbee Mon Sep 17 00:00:00 2001
+From: Reinette Chatre <reinette.chatre@intel.com>
+Date: Tue, 24 Aug 2021 08:45:42 -0700
+Subject: [PATCH 0808/1418] selftests/sgx: Introduce dynamic entry point
+
+The test enclave (test_encl.elf) is built with two initialized
+Thread Control Structures (TCS) included in the binary. Both TCS are
+initialized with the same entry point, encl_entry, that correctly
+computes the absolute address of the stack based on the stack of each
+TCS that is also built into the binary.
+
+A new TCS can be added dynamically to the enclave and requires to be
+initialized with an entry point used to enter the enclave. Since the
+existing entry point, encl_entry, assumes that the TCS and its stack
+exists at particular offsets within the binary it is not able to handle
+a dynamically added TCS and its stack.
+
+Introduce a new entry point, encl_dyn_entry, that initializes the absolute
+address of that thread's stack to the address immediately preceding the
+TCS itself. It is now possible to dynamically add a contiguous memory
+region to the enclave with the new stack preceding the new TCS. With the
+new TCS initialized with encl_dyn_entry as entry point the absolute address
+of the stack is computed correctly on entry.
+
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+---
+ tools/testing/selftests/sgx/test_encl_bootstrap.S | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/tools/testing/selftests/sgx/test_encl_bootstrap.S b/tools/testing/selftests/sgx/test_encl_bootstrap.S
+index 82fb0dfcbd23..03ae0f57e29d 100644
+--- a/tools/testing/selftests/sgx/test_encl_bootstrap.S
++++ b/tools/testing/selftests/sgx/test_encl_bootstrap.S
+@@ -45,6 +45,12 @@ encl_entry:
+ 	# TCS #2. By adding the value of encl_stack to it, we get
+ 	# the absolute address for the stack.
+ 	lea	(encl_stack)(%rbx), %rax
++	jmp encl_entry_core
++encl_dyn_entry:
++	# Entry point for dynamically created TCS page expected to follow
++	# its stack directly.
++	lea -1(%rbx), %rax
++encl_entry_core:
+ 	xchg	%rsp, %rax
+ 	push	%rax
+ 
+-- 
+2.31.1
+

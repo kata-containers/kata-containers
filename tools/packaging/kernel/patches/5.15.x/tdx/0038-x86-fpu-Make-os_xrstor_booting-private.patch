@@ -1,0 +1,88 @@
+From 37265ab8950125f832d7ed268b2a8b0440ed9278 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 15 Oct 2021 03:16:23 +0200
+Subject: [PATCH 0038/1418] x86/fpu: Make os_xrstor_booting() private
+
+It's only required in the xstate init code.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211015011539.455836597@linutronix.de
+---
+ arch/x86/include/asm/fpu/internal.h | 25 -------------------------
+ arch/x86/kernel/fpu/xstate.c        | 23 +++++++++++++++++++++++
+ 2 files changed, 23 insertions(+), 25 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/internal.h b/arch/x86/include/asm/fpu/internal.h
+index 5da7528b3b2f..3ad2ae73efa5 100644
+--- a/arch/x86/include/asm/fpu/internal.h
++++ b/arch/x86/include/asm/fpu/internal.h
+@@ -225,31 +225,6 @@ static inline void fxsave(struct fxregs_state *fx)
+ 		     : "D" (st), "m" (*st), "a" (lmask), "d" (hmask)	\
+ 		     : "memory")
+ 
+-/*
+- * This function is called only during boot time when x86 caps are not set
+- * up and alternative can not be used yet.
+- */
+-static inline void os_xrstor_booting(struct xregs_state *xstate)
+-{
+-	u64 mask = xfeatures_mask_fpstate();
+-	u32 lmask = mask;
+-	u32 hmask = mask >> 32;
+-	int err;
+-
+-	WARN_ON(system_state != SYSTEM_BOOTING);
+-
+-	if (boot_cpu_has(X86_FEATURE_XSAVES))
+-		XSTATE_OP(XRSTORS, xstate, lmask, hmask, err);
+-	else
+-		XSTATE_OP(XRSTOR, xstate, lmask, hmask, err);
+-
+-	/*
+-	 * We should never fault when copying from a kernel buffer, and the FPU
+-	 * state we set at boot time should be valid.
+-	 */
+-	WARN_ON_FPU(err);
+-}
+-
+ /*
+  * Save processor xstate to xsave area.
+  *
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 1f5a66a38671..b712c06cbbfb 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -350,6 +350,29 @@ static void __init print_xstate_offset_size(void)
+ 	}
+ }
+ 
++/*
++ * This function is called only during boot time when x86 caps are not set
++ * up and alternative can not be used yet.
++ */
++static __init void os_xrstor_booting(struct xregs_state *xstate)
++{
++	u64 mask = xfeatures_mask_fpstate();
++	u32 lmask = mask;
++	u32 hmask = mask >> 32;
++	int err;
++
++	if (cpu_feature_enabled(X86_FEATURE_XSAVES))
++		XSTATE_OP(XRSTORS, xstate, lmask, hmask, err);
++	else
++		XSTATE_OP(XRSTOR, xstate, lmask, hmask, err);
++
++	/*
++	 * We should never fault when copying from a kernel buffer, and the FPU
++	 * state we set at boot time should be valid.
++	 */
++	WARN_ON_FPU(err);
++}
++
+ /*
+  * All supported features have either init state all zeros or are
+  * handled in setup_init_fpu() individually. This is an explicit
+-- 
+2.31.1
+

@@ -1,0 +1,43 @@
+From 10a9139a504043cd223651a487e702c29ea0181f Mon Sep 17 00:00:00 2001
+From: Flavio Suligoi <f.suligoi@asem.it>
+Date: Tue, 28 Sep 2021 17:18:33 +0200
+Subject: [PATCH 0539/1418] dmaengine: imx-sdma: remove space after sizeof
+
+Space prohibited between function name and
+open parenthesis '('
+
+Signed-off-by: Flavio Suligoi <f.suligoi@asem.it>
+Link: https://lore.kernel.org/r/20210928151833.589843-4-f.suligoi@asem.it
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/imx-sdma.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/dma/imx-sdma.c b/drivers/dma/imx-sdma.c
+index 7b3bd3608651..75ec0754d4ad 100644
+--- a/drivers/dma/imx-sdma.c
++++ b/drivers/dma/imx-sdma.c
+@@ -1955,7 +1955,7 @@ static int sdma_init(struct sdma_engine *sdma)
+ 	writel_relaxed(0, sdma->regs + SDMA_H_C0PTR);
+ 
+ 	sdma->channel_control = dma_alloc_coherent(sdma->dev,
+-			MAX_DMA_CHANNELS * sizeof (struct sdma_channel_control) +
++			MAX_DMA_CHANNELS * sizeof(struct sdma_channel_control) +
+ 			sizeof(struct sdma_context_data),
+ 			&ccb_phys, GFP_KERNEL);
+ 
+@@ -1965,9 +1965,9 @@ static int sdma_init(struct sdma_engine *sdma)
+ 	}
+ 
+ 	sdma->context = (void *)sdma->channel_control +
+-		MAX_DMA_CHANNELS * sizeof (struct sdma_channel_control);
++		MAX_DMA_CHANNELS * sizeof(struct sdma_channel_control);
+ 	sdma->context_phys = ccb_phys +
+-		MAX_DMA_CHANNELS * sizeof (struct sdma_channel_control);
++		MAX_DMA_CHANNELS * sizeof(struct sdma_channel_control);
+ 
+ 	/* disable all channels */
+ 	for (i = 0; i < sdma->drvdata->num_events; i++)
+-- 
+2.31.1
+

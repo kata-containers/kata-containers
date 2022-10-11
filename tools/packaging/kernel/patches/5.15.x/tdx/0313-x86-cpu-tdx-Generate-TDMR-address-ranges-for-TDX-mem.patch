@@ -1,0 +1,296 @@
+From 1f04f407116ec8543a7b85c5b1e8e4a3f10652e5 Mon Sep 17 00:00:00 2001
+From: Kai Huang <kai.huang@intel.com>
+Date: Tue, 28 Sep 2021 09:55:39 +1300
+Subject: [PATCH 0313/1418] x86/cpu/tdx: Generate TDMR address ranges for TDX
+ memory
+
+TDX-convertible memory ranges are ranges of physical memory that can
+support TDX capabilities.  The kernel converts all the ranges so that they
+can be used as TDX-capable memory.  The conversion process requires the
+kernel to construct an array of "TD Memory Region" (TDMR) to cover all
+convertible memory regions and dedicate some convertible memory for TDX
+metadata (PAMT).
+
+The PAMT can be sourced from a "bare" (non-converted) range or a converted
+range (a range with one or multiple TDMRs).  However, the conversions must
+occur at a 1GB granularity [1].  If a PAMT did not consume memory *exactly*
+at 1GB granularity, there would be memory leftover as non-converted.  This
+would violate the "all memory must be TDX-capable" rule, so it would have
+to be wasted [2].  To avoid this waste, the kernel chooses to always carve
+the PAMT out of the converted range.
+
+To assist to construct TDMRs to fully cover all convertible memory regions
+(TDX memory blocks), and further to allocate PAMTs, introduce structure
+'tdmr_range' to represent a converted range or TDMR range, which meets
+TDMR's 1G alignment requirement.  Final TDMRs are later generated on the
+basis of TDMR range, meaning one TDMR range may have one or multiple TDMRs,
+but one TDMR cannot cross two TDMR ranges.
+
+As the first step of constructing TDMRs, generate a list of TDMR ranges to
+fully cover all TDX memory blocks.  Later patches will construct final
+TDMRs based on those TDMR ranges.
+
+Follow the below rules to generate the list of TDMR ranges:
+  1) One TDMR range doesn't cross multiple NUMA nodes.  This ensures local
+     PAMT access when the CPU accesses one TDMR.
+  2) If two TDX memory blocks (full or part) fall into the same 1G area,
+     then they are covered by one TDMR range.  If multiple TDMRs are
+     generated within this TDMR range, each TDMR can still find the right
+     TDX memory block for PAMT allocation.
+  3) For two TDX memory blocks that don't overlap within 1G area, one TDMR
+     range is created for each of them.  This ensures one TDMR doesn't
+     cross two TDX memory blocks, which may not be desirable.
+
+[1] The origin of the 1GB granularity requirement is an interaction
+between hardware and kernel constraints.  Those are:
+  - TDMRs must be 1GB aligned and sized (hardware requirement)
+  - Any memory within a TDMR that is not usable as guest memory must be
+    covered by a "reserved" area (hardware requirement).  PAMTs cannot be
+    used for TDX guest memory, which implies they must be covered by a
+    reserved area.
+  - All "System RAM" that might go into the page allocator at runtime must
+    be covered by a TDMR.  This ensures that the core VM does not need to
+    differentiate between memory which is TDX-convertible or not (kernel
+    imposed requirement).
+
+[2] Consider if you need 1 page of memory for a PAMT.  It needs to come
+from RAM.  That means it is covered in a TDMR by default.  There are two
+choices:
+  1. Leave the TDMR itself untouched.  Cover the 4k PAMT by consuming a
+     reserved area.
+  2. Change the TDMR.  Shrink it by 1GB (hardware requirement).  "Throw
+     away" the rest of the 1GB since it is unusable by TDX guests (kernel
+     requirement).
+
+Signed-off-by: Kai Huang <kai.huang@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdmr-common.c | 198 ++++++++++++++++++++++++++
+ 1 file changed, 198 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdmr-common.c b/arch/x86/kernel/cpu/tdx/tdmr-common.c
+index 3362803862a5..3b006edeabeb 100644
+--- a/arch/x86/kernel/cpu/tdx/tdmr-common.c
++++ b/arch/x86/kernel/cpu/tdx/tdmr-common.c
+@@ -68,6 +68,192 @@ static int __init sanity_check_cmrs(struct tdx_memory *tmem,
+ 	return -EFAULT;
+ }
+ 
++/**************************** Distributing TDMRs ***************************/
++
++/* TDMRs must be 1gb aligned */
++#define TDMR_ALIGNMENT		BIT(30)
++#define TDMR_PFN_ALIGNMENT	(TDMR_ALIGNMENT >> PAGE_SHIFT)
++
++#define TDX_MEMBLOCK_TDMR_START(_tmb)	\
++	(ALIGN_DOWN((_tmb)->start_pfn, TDMR_PFN_ALIGNMENT) << PAGE_SHIFT)
++#define TDX_MEMBLOCK_TDMR_END(_tmb)	\
++	(ALIGN((_tmb)->end_pfn, TDMR_PFN_ALIGNMENT) << PAGE_SHIFT)
++
++/*
++ * Structure to describe an address range, referred as TDMR range, which meets
++ * TDMR's 1G alignment.  It is used to assist constructing TDMRs.  Final TDMRs
++ * are generated on basis of TDMR range, meaning one TDMR range can have one or
++ * multiple TDMRs, but one TDMR cannot cross two TDMR ranges.
++ *
++ * @start_1g and @end_1g are 1G aligned.  @first_tmb and @last_tmb are the first
++ * and last TDX memory block that the TDMR range covers.  Note both @first_tmb
++ * and @last_tmb may only have part of it covered by the TDMR range.
++ */
++struct tdmr_range {
++	struct list_head list;
++	phys_addr_t start_1g;
++	phys_addr_t end_1g;
++	int nid;
++	struct tdx_memblock *first_tmb;
++	struct tdx_memblock *last_tmb;
++};
++
++/*
++ * Context of a set of TDMR ranges.  It is generated to cover all TDX memory
++ * blocks to assist constructing TDMRs.  It can be discarded after TDMRs are
++ * generated.
++ */
++struct tdmr_range_ctx {
++	struct tdx_memory *tmem;
++	struct list_head tr_list;
++	int tr_num;
++};
++
++/*
++ * Create a TDMR range which covers the TDX memory block @tmb.  @shrink_start
++ * indicates whether to shrink first 1G, i.e. when boundary of @tmb and
++ * previous block falls into the middle of 1G area, but a new TDMR range for
++ * @tmb is desired.
++ */
++static struct tdmr_range * __init tdmr_range_create(
++		struct tdx_memblock *tmb, bool shrink_start)
++{
++	struct tdmr_range *tr = kzalloc(sizeof(*tr), GFP_KERNEL);
++
++	if (!tr)
++		return NULL;
++
++	INIT_LIST_HEAD(&tr->list);
++
++	tr->start_1g = TDX_MEMBLOCK_TDMR_START(tmb);
++	if (shrink_start)
++		tr->start_1g += TDMR_ALIGNMENT;
++	tr->end_1g = TDX_MEMBLOCK_TDMR_END(tmb);
++	tr->nid = tmb->nid;
++	tr->first_tmb = tr->last_tmb = tmb;
++
++	return tr;
++}
++
++static void __init tdmr_range_free(struct tdmr_range *tr)
++{
++	/* kfree() is NULL safe */
++	kfree(tr);
++}
++
++/*
++ * Extend existing TDMR range to cover new TDX memory block @tmb.
++ * The TDMR range which covers @tmb and the existing TDMR range must
++ * not have address hole between them.
++ */
++static void __init tdmr_range_extend(struct tdmr_range *tr,
++		struct tdx_memblock *tmb)
++{
++	WARN_ON_ONCE(TDX_MEMBLOCK_TDMR_START(tmb) > tr->end_1g);
++	WARN_ON_ONCE(tr->nid != tmb->nid);
++	tr->end_1g = ALIGN(tmb->end_pfn, TDMR_PFN_ALIGNMENT) << PAGE_SHIFT;
++	tr->last_tmb = tmb;
++}
++
++/* Initialize the context for constructing TDMRs for given TDX memory. */
++static void __init tdmr_range_ctx_init(struct tdmr_range_ctx *tr_ctx,
++		struct tdx_memory *tmem)
++{
++	INIT_LIST_HEAD(&tr_ctx->tr_list);
++	tr_ctx->tr_num = 0;
++	tr_ctx->tmem = tmem;
++}
++
++/* Destroy the context for constructing TDMRs */
++static void __init tdmr_range_ctx_destroy(struct tdmr_range_ctx *tr_ctx)
++{
++	while (!list_empty(&tr_ctx->tr_list)) {
++		struct tdmr_range *tr = list_first_entry(&tr_ctx->tr_list,
++				struct tdmr_range, list);
++
++		list_del(&tr->list);
++		tdmr_range_free(tr);
++	}
++	tr_ctx->tr_num = 0;
++	tr_ctx->tmem = NULL;
++}
++
++/*
++ * Generate a list of TDMR ranges for given TDX memory @tmem, as a preparation
++ * to construct final TDMRs.
++ */
++static int __init generate_tdmr_ranges(struct tdmr_range_ctx *tr_ctx)
++{
++	struct tdx_memory *tmem = tr_ctx->tmem;
++	struct tdx_memblock *tmb;
++	struct tdmr_range *last_tr = NULL;
++
++	list_for_each_entry(tmb, &tmem->tmb_list, list) {
++		struct tdmr_range *tr;
++
++		/* Create a new TDMR range for the first @tmb */
++		if (!last_tr) {
++			tr = tdmr_range_create(tmb, false);
++			if (!tr)
++				return -ENOMEM;
++			/* Add to tail to keep TDMR ranges in ascending order */
++			list_add_tail(&tr->list, &tr_ctx->tr_list);
++			tr_ctx->tr_num++;
++			last_tr = tr;
++			continue;
++		}
++
++		/*
++		 * Always create a new TDMR range if @tmb belongs to a new NUMA
++		 * node, to ensure the TDMR and the PAMT which covers it are on
++		 * the same NUMA node.
++		 */
++		if (tmb->nid != last_tr->last_tmb->nid) {
++			/*
++			 * If boundary of two NUMA nodes falls into the middle
++			 * of 1G area, then part of @tmb has already been
++			 * covered by first node's last TDMR range.  In this
++			 * case, shrink the new TDMR range.
++			 */
++			bool shrink_start = TDX_MEMBLOCK_TDMR_START(tmb) <
++				last_tr->end_1g ? true : false;
++
++			tr = tdmr_range_create(tmb, shrink_start);
++			if (!tr)
++				return -ENOMEM;
++			list_add_tail(&tr->list, &tr_ctx->tr_list);
++			tr_ctx->tr_num++;
++			last_tr = tr;
++			continue;
++		}
++
++		/*
++		 * Always extend existing TDMR range to cover new @tmb if part
++		 * of @tmb has already been covered, regardless memory type of
++		 * @tmb.
++		 */
++		if (TDX_MEMBLOCK_TDMR_START(tmb) < last_tr->end_1g) {
++			tdmr_range_extend(last_tr, tmb);
++			continue;
++		}
++
++		/*
++		 * By reaching here, the new @tmb is in the same NUMA node, and
++		 * is not covered by last TDMR range.  Always create a new TDMR
++		 * range in this case, so that final TDMRs won't cross TDX
++		 * memory block boundary.
++		 */
++		tr = tdmr_range_create(tmb, false);
++		if (!tr)
++			return -ENOMEM;
++		list_add_tail(&tr->list, &tr_ctx->tr_list);
++		tr_ctx->tr_num++;
++		last_tr = tr;
++	}
++
++	return 0;
++}
++
+ /******************************* External APIs *****************************/
+ 
+ /**
+@@ -243,6 +429,7 @@ int __init tdx_memory_construct_tdmrs(struct tdx_memory *tmem,
+ 		struct tdx_module_descriptor *desc,
+ 		struct tdmr_info *tdmr_info_array, int *tdmr_num)
+ {
++	struct tdmr_range_ctx tr_ctx;
+ 	int ret;
+ 
+ 	BUILD_BUG_ON(sizeof(struct tdmr_info) != 512);
+@@ -266,6 +453,17 @@ int __init tdx_memory_construct_tdmrs(struct tdx_memory *tmem,
+ 		return -EINVAL;
+ 
+ 	ret = sanity_check_cmrs(tmem, cmr_array, cmr_num);
++	if (ret)
++		return ret;
+ 
++	/* Generate a list of TDMR ranges to cover all TDX memory blocks */
++	tdmr_range_ctx_init(&tr_ctx, tmem);
++	ret = generate_tdmr_ranges(&tr_ctx);
++	if (ret)
++		goto tr_ctx_err;
++
++	return 0;
++tr_ctx_err:
++	tdmr_range_ctx_destroy(&tr_ctx);
+ 	return ret;
+ }
+-- 
+2.31.1
+

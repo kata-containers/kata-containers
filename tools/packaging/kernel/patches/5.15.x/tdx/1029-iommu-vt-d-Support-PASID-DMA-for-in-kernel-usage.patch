@@ -1,0 +1,198 @@
+From 8fe1be37c82f088c1c7c372385e0c4db5b751a68 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Fri, 22 Oct 2021 15:44:47 -0700
+Subject: [PATCH 1029/1418] iommu/vt-d: Support PASID DMA for in-kernel usage
+
+Between DMA requests with and without PASID (legacy), DMA mapping APIs
+are used indiscriminately on a device. Therefore, we should always match
+the addressing mode of the legacy DMA when enabling kernel PASID.
+
+This patch adds support for VT-d driver where the kernel PASID is
+programmed to match RIDPASID. i.e. if the device is in pass-through, the
+kernel PASID is also in pass-through; if the device is in IOVA mode, the
+kernel PASID will also be using the same IOVA space.
+
+There is additional handling for IOTLB and device TLB flush w.r.t. the
+kernel PASID. On VT-d, PASID-selective IOTLB flush is also on a
+per-domain basis; whereas device TLB flush is per device. Note that
+IOTLBs are used even when devices are in pass-through mode. ATS is
+enabled device-wide, but the device drivers can choose to manage ATS at
+per PASID level whenever control is available.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/intel/iommu.c | 102 +++++++++++++++++++++++++++++++++++-
+ drivers/iommu/intel/pasid.c |   7 +++
+ include/linux/intel-iommu.h |   3 +-
+ 3 files changed, 110 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index d9a92d9d616f..ce26a49601dc 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -1656,7 +1656,14 @@ static void domain_flush_piotlb(struct intel_iommu *iommu,
+ 	if (domain->default_pasid)
+ 		qi_flush_piotlb(iommu, did, domain->default_pasid,
+ 				addr, npages, ih);
+-
++	if (domain->kernel_pasid && !domain_type_is_si(domain)) {
++		/*
++		 * REVISIT: we only do PASID IOTLB inval for FL, we could have SL
++		 * for PASID in the future such as vIOMMU PT. this doesn't get hit.
++		 */
++		qi_flush_piotlb(iommu, did, domain->kernel_pasid,
++				addr, npages, ih);
++	}
+ 	if (!list_empty(&domain->devices))
+ 		qi_flush_piotlb(iommu, did, PASID_RID2PASID, addr, npages, ih);
+ }
+@@ -5904,6 +5911,68 @@ static int intel_iommu_set_hwdbm(struct iommu_domain *domain, bool enable,
+ 	}
+ 
+ out:
++	return ret;
++}
++
++static int intel_enable_pasid_dma(struct device *dev, u32 pasid)
++{
++	struct intel_iommu *iommu = device_to_iommu(dev, NULL, NULL);
++	struct device_domain_info *info;
++	unsigned long flags;
++	int ret = 0;
++
++	info = get_domain_info(dev);
++	if (!info)
++		return -ENODEV;
++
++	if (!dev_is_pci(dev) || !sm_supported(info->iommu))
++		return -EINVAL;
++
++	if (intel_iommu_enable_pasid(info->iommu, dev))
++		return -ENODEV;
++
++	spin_lock_irqsave(&device_domain_lock, flags);
++	spin_lock(&iommu->lock);
++	/*
++	 * Store PASID for IOTLB flush, but only needed for non-passthrough
++	 * unmap case. For passthrough, we only need to do IOTLB flush during
++	 * PASID teardown. Flush covers all devices in the same domain as the
++	 * domain ID is the same for the same SL.
++	 */
++	info->domain->kernel_pasid = pasid;
++
++	/*
++	 * Tracks how many attached devices are using the kernel PASID. Clear
++	 * the domain kernel PASID when all users called disable_pasid_dma().
++	 */
++	atomic_inc(&info->domain->kernel_pasid_user);
++
++	/*
++	 * Addressing modes (IOVA vs. PA) is a per device choice made by the
++	 * platform code. We must treat legacy DMA (request w/o PASID) and
++	 * DMA w/ PASID identially in terms of mapping. Here we just set up
++	 * the kernel PASID to match the mapping of RID2PASID/PASID0.
++	 */
++	if (hw_pass_through && domain_type_is_si(info->domain)) {
++		ret = intel_pasid_setup_pass_through(info->iommu, info->domain,
++						dev, pasid);
++		if (ret)
++			dev_err(dev, "Failed kernel PASID %d in BYPASS", pasid);
++
++	} else if (domain_use_first_level(info->domain)) {
++		/* We are using FL for IOVA, this is the default option */
++		ret = domain_setup_first_level(info->iommu, info->domain, dev,
++					       pasid);
++		if (ret)
++			dev_err(dev, "Failed kernel PASID %d IOVA FL", pasid);
++	} else {
++		ret = intel_pasid_setup_second_level(info->iommu, info->domain,
++						     dev, pasid);
++		if (ret)
++			dev_err(dev, "Failed kernel SPASID %d IOVA SL", pasid);
++	}
++
++	spin_unlock(&iommu->lock);
+ 	spin_unlock_irqrestore(&device_domain_lock, flags);
+ 
+ 	return ret;
+@@ -6079,7 +6148,36 @@ static int intel_iommu_clear_dirty_log(struct iommu_domain *domain,
+ 
+ 	ret = __domain_clear_dirty_log(dmar_domain, iova, size, bitmap,
+ 					base_iova, bitmap_pgshift);
++	return ret;
++}
+ 
++static int intel_disable_pasid_dma(struct device *dev)
++{
++	struct intel_iommu *iommu = device_to_iommu(dev, NULL, NULL);
++	struct device_domain_info *info;
++	unsigned long flags;
++	int ret = 0;
++
++	info = get_domain_info(dev);
++	if (!info)
++		return -ENODEV;
++
++	if (!dev_is_pci(dev) || !sm_supported(info->iommu))
++		return -EINVAL;
++
++	spin_lock_irqsave(&device_domain_lock, flags);
++	spin_lock(&iommu->lock);
++
++	/* Tear down kernel PASID for this device */
++	intel_pasid_tear_down_entry(info->iommu, info->dev,
++				    info->domain->kernel_pasid, false,
++				    false);
++	/* Clear the domain kernel PASID when there is no users */
++	if (atomic_dec_and_test(&info->domain->kernel_pasid_user))
++		info->domain->kernel_pasid = 0;
++
++	spin_unlock(&iommu->lock);
++	spin_unlock_irqrestore(&device_domain_lock, flags);
+ 	return ret;
+ }
+ 
+@@ -6365,6 +6463,8 @@ const struct iommu_ops intel_iommu_ops = {
+ 	.set_hwdbm		= intel_iommu_set_hwdbm,
+ 	.sync_dirty_log		= intel_iommu_sync_dirty_log,
+ 	.clear_dirty_log	= intel_iommu_clear_dirty_log,
++	.enable_pasid_dma	= intel_enable_pasid_dma,
++	.disable_pasid_dma	= intel_disable_pasid_dma,
+ };
+ 
+ static void quirk_iommu_igfx(struct pci_dev *dev)
+diff --git a/drivers/iommu/intel/pasid.c b/drivers/iommu/intel/pasid.c
+index a60c4278acb4..4e28383b584d 100644
+--- a/drivers/iommu/intel/pasid.c
++++ b/drivers/iommu/intel/pasid.c
+@@ -524,6 +524,13 @@ devtlb_invalidation_with_pasid(struct intel_iommu *iommu,
+ 		qi_flush_dev_iotlb(iommu, sid, pfsid, qdep, 0, 64 - VTD_PAGE_SHIFT);
+ 	else
+ 		qi_flush_dev_iotlb_pasid(iommu, sid, pfsid, pasid, qdep, 0, 64 - VTD_PAGE_SHIFT);
++	/*
++	 * Flush the kernel PASID if used by the device. This is the case where
++	 * a device driver uses IOVA via DMA map APIs for request with PASID.
++	 */
++	if (dev->pasid)
++		qi_flush_dev_iotlb_pasid(iommu, sid, pfsid, dev->pasid, qdep, 0,
++					 64 - VTD_PAGE_SHIFT);
+ }
+ 
+ static void
+diff --git a/include/linux/intel-iommu.h b/include/linux/intel-iommu.h
+index b05c7ead9d48..4a42c016de11 100644
+--- a/include/linux/intel-iommu.h
++++ b/include/linux/intel-iommu.h
+@@ -590,7 +590,8 @@ struct dmar_domain {
+ 					 * The default pasid used for non-SVM
+ 					 * traffic on mediated devices.
+ 					 */
+-
++	u32 		kernel_pasid;	/* for in-kernel DMA w/ PASID */
++	atomic_t	kernel_pasid_user; /* count of kernel_pasid users */
+ 	struct iommu_domain domain;	/* generic domain data structure for
+ 					   iommu core */
+ };
+-- 
+2.31.1
+

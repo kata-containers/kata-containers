@@ -1,0 +1,65 @@
+From 3d77ee8bc720c3e960ce961c54b0ea95b605f87d Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Thu, 1 Jul 2021 09:12:09 +0800
+Subject: [PATCH 0465/1418] KVM: X86: Documentation for
+ KVM_MEMORY_ENCRYPT_{READ,WRITE}_MEMORY ioctl
+
+Add documentation of KVM_MEMORY_ENCRYPT_{READ,WRITE}_MEMORY.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ Documentation/virt/kvm/api.rst | 38 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 38 insertions(+)
+
+diff --git a/Documentation/virt/kvm/api.rst b/Documentation/virt/kvm/api.rst
+index ad22f452d23b..d4525d277c41 100644
+--- a/Documentation/virt/kvm/api.rst
++++ b/Documentation/virt/kvm/api.rst
+@@ -5324,6 +5324,44 @@ the trailing ``'\0'``, is indicated by ``name_size`` in the header.
+ The Stats Data block contains an array of 64-bit values in the same order
+ as the descriptors in Descriptors block.
+ 
++4.131 KVM_MEMORY_ENCRYPT_READ_MEMORY / KVM_MEMORY_ENCRYPT_WRITE_MEMORY
++------------------------------------
++:Capability: KVM_CAP_ENCRYPT_MEMORY_DEBUG
++:Architectures: x86
++:Type: vm ioctl
++:Parameters: struct kvm_rw_memory
++:Returns: 0 on success, < 0 on error
++
++::
++  struct kvm_rw_memory
++  {
++	__u64 addr;
++The guest address which userspace want to read from/write to, it can
++be GPA or HVA, depends on the implementation in KVM.
++
++::
++	__u64 len;
++The length in byte userspace want to read from/write to.
++
++::
++	__u64 ubuf;
++The userspace buffer to receive the data for reading/send the data for
++writing.
++
++  };
++
++::
++Example:
++  struct kvm_rw_memory rw_memory;
++
++  rw_memory.addr = gpa_addr_for_read_OR_write
++  rw_memory.len = size;
++  rw_memory.buf = buf_for_save_read_data_OR_provide_data_to_write
++
++  r = ioctl(kvm_vm_fd,
++            KVM_MEMORY_ENCRYPT_{READ,WRITE}_MEMORY,
++            &rw_memory);
++
+ 5. The kvm_run structure
+ ========================
+ 
+-- 
+2.31.1
+

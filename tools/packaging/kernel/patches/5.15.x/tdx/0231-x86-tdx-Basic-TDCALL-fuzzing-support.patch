@@ -1,0 +1,300 @@
+From a6d2ee30538d201a9c698a3649d85686854e6a25 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Tue, 28 Sep 2021 19:04:56 -0700
+Subject: [PATCH 0231/1418] x86/tdx: Basic TDCALL fuzzing support
+
+In TDX the hypervisor is untrusted and can attack the kernel
+through the output of MMIO/MSR reads/port IO and some other options.
+Untrusted "hardware" is a need concept in Linux, so we need to make sure the
+code is hardened against bad responses.
+
+Add a simple fuzzer to allow hardening the interfaces. This is not
+sufficient for full hardening, but useful for basic testing.
+
+This hooks into the low level TDcalls and allows to fuzz all
+interactions with the host, except those through shared memory.
+
+The basic setup is through the fault injection framework, but
+in addition there is own random generation state that allows
+flipping random bits in the TDCALL responses.
+
+/sys/kernel/debug/tdx_fail/ Tunables
+(in addition to standard fault injection tunables like skip etc.):
+seed: Set the seed for the random generator per CPU.
+tdcall: Enable bit flipping for TDCALLs
+num_change_bits: How many bits to flip in a TDCALL response.
+		 Set to 64 to replace the complete value.
+
+The same can be also configure with a command line parameter
+for early  boot coverage
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+---
+ arch/x86/Kconfig           |   7 +++
+ arch/x86/include/asm/tdx.h |  18 ++++++
+ arch/x86/kernel/Makefile   |   2 +
+ arch/x86/kernel/tdx-fuzz.c | 117 +++++++++++++++++++++++++++++++++++++
+ arch/x86/kernel/tdx.c      |  21 ++++---
+ 5 files changed, 158 insertions(+), 7 deletions(-)
+ create mode 100644 arch/x86/kernel/tdx-fuzz.c
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index b8cf3ecc7c72..4a7b68797f53 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -890,6 +890,13 @@ config INTEL_TDX_GUEST
+ 	  and the TD’s CPU state from other software, including VMM. TDX guest
+ 	  uses virtual X2APIC for interrupt management.
+ 
++config TDX_FUZZ
++	bool "Fuzzing support for TDX"
++	depends on INTEL_TDX_GUEST
++	select FAULT_INJECTION
++	help
++	  Support fuzzing of TDX guests against attacks from hosts
++
+ endif #HYPERVISOR_GUEST
+ 
+ source "arch/x86/Kconfig.cpu"
+diff --git a/arch/x86/include/asm/tdx.h b/arch/x86/include/asm/tdx.h
+index 442c8b6068d4..98831cccad11 100644
+--- a/arch/x86/include/asm/tdx.h
++++ b/arch/x86/include/asm/tdx.h
+@@ -107,6 +107,24 @@ bool tdx_guest_dev_authorized(struct device *dev);
+ 
+ bool tdx_filter_enabled(void);
+ 
++/* Update the trace point symbolic printing too */
++enum tdx_fuzz_loc {
++	TDX_FUZZ_MSR_READ,
++	TDX_FUZZ_MMIO_READ,
++	TDX_FUZZ_PORT_IN,
++	TDX_FUZZ_CPUID1,
++	TDX_FUZZ_CPUID2,
++	TDX_FUZZ_CPUID3,
++	TDX_FUZZ_CPUID4,
++	TDX_FUZZ_MAX
++};
++
++#ifdef CONFIG_TDX_FUZZ
++u64 tdx_fuzz(u64 var, enum tdx_fuzz_loc loc);
++#else
++static inline u64 tdx_fuzz(u64 var, enum tdx_fuzz_loc loc) { return var; }
++#endif
++
+ /*
+  * To support I/O port access in decompressor or early kernel init
+  * code, since #VE exception handler cannot be used, use paravirt
+diff --git a/arch/x86/kernel/Makefile b/arch/x86/kernel/Makefile
+index b5ac2c9daddb..a2db1ff7047e 100644
+--- a/arch/x86/kernel/Makefile
++++ b/arch/x86/kernel/Makefile
+@@ -33,6 +33,7 @@ KASAN_SANITIZE_paravirt.o				:= n
+ KASAN_SANITIZE_sev.o					:= n
+ KASAN_SANITIZE_cc_platform.o				:= n
+ KASAN_SANITIZE_tdx.o					:= n
++KASAN_SANITIZE_tdx-fuzz.o				:= n
+ 
+ # cc_platform_has cannot be instrumented because it can be called
+ # with invalid %gs. It also cannot use switch statements with jump
+@@ -142,6 +143,7 @@ obj-$(CONFIG_X86_PMEM_LEGACY_DEVICE) += pmem.o
+ 
+ obj-$(CONFIG_JAILHOUSE_GUEST)	+= jailhouse.o
+ obj-$(CONFIG_INTEL_TDX_GUEST)	+= tdcall.o tdx.o tdx-filter.o
++obj-$(CONFIG_TDX_FUZZ)		+= tdx-fuzz.o
+ 
+ obj-$(CONFIG_EISA)		+= eisa.o
+ obj-$(CONFIG_PCSPKR_PLATFORM)	+= pcspeaker.o
+diff --git a/arch/x86/kernel/tdx-fuzz.c b/arch/x86/kernel/tdx-fuzz.c
+new file mode 100644
+index 000000000000..c314e19e9b18
+--- /dev/null
++++ b/arch/x86/kernel/tdx-fuzz.c
+@@ -0,0 +1,117 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (C) 2020, 2021 Intel Corporation */
++/* Author: Andi Kleen */
++
++/*
++ * Fuzzer for TDCALLs/virtio to harden kernel against attacks from malicious
++ * hypervisors.
++ */
++#include <linux/fault-inject.h>
++#include <linux/kernel.h>
++#include <linux/random.h>
++#include <linux/debugfs.h>
++#include <linux/percpu.h>
++#include <linux/smp.h>
++#include <asm/tdx.h>
++
++static DEFINE_PER_CPU(struct rnd_state, fuzz_rndstate);
++static DECLARE_FAULT_ATTR(tdx_fault);
++static bool fuzz_tdcall;
++static u16 fuzz_num_bits = 2;
++static bool fuzz_early_seed;
++
++static u64 __tdx_fuzz(u64 var, int bits, enum tdx_fuzz_loc loc)
++{
++	struct rnd_state *rndstate;
++	unsigned num_bits;
++	u64 oldvar = var;
++
++	get_cpu();
++	rndstate = this_cpu_ptr(&fuzz_rndstate);
++	num_bits = READ_ONCE(fuzz_num_bits);
++	if (num_bits >= 64) {
++		prandom_bytes_state(rndstate, &var, sizeof(long));
++	} else {
++		int i;
++		char rnd[64];
++		prandom_bytes_state(rndstate, rnd, num_bits);
++		for (i = 0; i < num_bits; i++)
++			var ^= 1ULL << (rnd[i] & (bits-1));
++	}
++	put_cpu();
++	return var;
++}
++
++u64 tdx_fuzz(u64 var, enum tdx_fuzz_loc loc)
++{
++	if (!fuzz_tdcall || !should_fail(&tdx_fault, 1))
++		return var;
++
++	return __tdx_fuzz(var, BITS_PER_LONG, loc);
++}
++
++static void fuzz_init_seed(unsigned long seed)
++{
++	int cpu;
++	pr_info("tdxfuzz: setting seed to %lu\n", seed);
++	for_each_possible_cpu (cpu)
++		prandom_seed_state(&per_cpu(fuzz_rndstate, cpu), seed + cpu);
++}
++
++static int fuzz_seed_set(void *data, u64 val)
++{
++	fuzz_init_seed(val);
++	return 0;
++}
++
++DEFINE_DEBUGFS_ATTRIBUTE(fuzz_seed_fops, NULL, fuzz_seed_set, "%llu\n");
++
++static int __init tdx_fuzz_setup(char *str)
++{
++	unsigned long seed;
++	unsigned off;
++
++	if (sscanf(str, "seed:%lu%n", &seed, &off) == 1) {
++		fuzz_init_seed(seed);
++		fuzz_early_seed = true;
++		str += off;
++		if (*str == ',')
++			str++;
++	}
++	if (sscanf(str, "tdcall%n", &off) == 1) {
++		fuzz_tdcall = true;
++		str += off;
++		if (*str == ',')
++			str++;
++	}
++	if (sscanf(str, "numbits:%hu", &fuzz_num_bits) == 1) {
++		str += off;
++		if (*str == ',')
++			str++;
++	}
++	return setup_fault_attr(&tdx_fault, str);
++}
++early_param("fail_tdx", tdx_fuzz_setup);
++
++static int __init tdx_fuzz_init(void)
++{
++	struct dentry *dbp;
++
++	dbp = fault_create_debugfs_attr("fail_tdx", NULL, &tdx_fault);
++	if (!dbp)
++		return PTR_ERR(dbp);
++
++	/* Don't allow verbose because printk can trigger another tdcall */
++	tdx_fault.verbose = 0;
++	debugfs_remove(debugfs_lookup("verbose", dbp));
++
++	debugfs_create_bool("tdcall", 0600, dbp, &fuzz_tdcall);
++	debugfs_create_u16("num_change_bits", 0600, dbp, &fuzz_num_bits);
++	debugfs_create_file("seed", 0200, dbp, NULL, &fuzz_seed_fops);
++
++	if (!fuzz_early_seed)
++		fuzz_init_seed(get_random_u64());
++	return 0;
++}
++
++__initcall(tdx_fuzz_init)
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 29737385f79f..04f147f68ca5 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -309,6 +309,8 @@ static void tdx_get_info(void)
+ 	 */
+ 	BUG_ON(ret);
+ 
++	/* Not fuzzed because this comes from the trusted TDX module */
++
+ 	td_info.gpa_width = out.rcx & GENMASK(5, 0);
+ 	td_info.attributes = out.rdx;
+ 
+@@ -453,7 +455,8 @@ static bool tdx_read_msr_safe(unsigned int msr, u64 *val)
+ 	if (_trace_tdx_hypercall(EXIT_REASON_MSR_READ, msr, 0, 0, 0, &out))
+ 		return false;
+ 
+-	*val = out.r11;
++	/* Should filter the MSRs to only fuzz host controlled */
++	*val = tdx_fuzz(out.r11, TDX_FUZZ_MSR_READ);
+ 
+ 	return true;
+ }
+@@ -525,10 +528,10 @@ static bool tdx_handle_cpuid(struct pt_regs *regs)
+ 	 * EAX, EBX, ECX, EDX registers after CPUID instruction execution.
+ 	 * So copy the register contents back to pt_regs.
+ 	 */
+-	regs->ax = out.r12;
+-	regs->bx = out.r13;
+-	regs->cx = out.r14;
+-	regs->dx = out.r15;
++	regs->ax = tdx_fuzz(out.r12, TDX_FUZZ_CPUID1);
++	regs->bx = tdx_fuzz(out.r13, TDX_FUZZ_CPUID2);
++	regs->cx = tdx_fuzz(out.r14, TDX_FUZZ_CPUID3);
++	regs->dx = tdx_fuzz(out.r15, TDX_FUZZ_CPUID4);
+ 
+ 	return true;
+ }
+@@ -570,7 +573,9 @@ static bool tdx_handle_io(struct pt_regs *regs, u32 exit_qual)
+ 					   size, out, port, regs->ax,
+ 					   &outh);
+ 		regs->ax &= ~mask;
+-		regs->ax |= (ret ? UINT_MAX : outh.r11) & mask;
++		regs->ax |= tdx_fuzz(ret ?
++				UINT_MAX : outh.r11, TDX_FUZZ_PORT_IN)
++			& mask;
+ 	} else {
+ 		ret = _tdx_hypercall(EXIT_REASON_IO_INSTRUCTION,
+ 				     size, out, port, regs->ax,
+@@ -588,7 +593,8 @@ static unsigned long tdx_mmio(int size, bool write, unsigned long addr,
+ 
+ 	err = _trace_tdx_hypercall(EXIT_REASON_EPT_VIOLATION, size, write,
+ 				   addr, *val, &out);
+-	*val = out.r11;
++
++	*val = tdx_fuzz(out.r11, TDX_FUZZ_MMIO_READ);
+ 
+ 	return err;
+ }
+@@ -805,6 +811,7 @@ bool tdx_get_ve_info(struct ve_info *ve)
+ 	ve->instr_len   = out.r10 & UINT_MAX;
+ 	ve->instr_info  = out.r10 >> 32;
+ 
++	/* Not fuzzed because it comes from the trusted TDX module */
+ 	return true;
+ }
+ 
+-- 
+2.31.1
+

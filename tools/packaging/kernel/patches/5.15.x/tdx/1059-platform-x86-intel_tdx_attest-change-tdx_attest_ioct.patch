@@ -1,0 +1,35 @@
+From da9cf443aea15eb39dd54ed63d7fcead692b682b Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Tue, 23 Nov 2021 04:16:27 -0500
+Subject: [PATCH 1059/1418] platform/x86: intel_tdx_attest: change
+ tdx_attest_ioctl TDX_CMD_GEN_QUOTE ioctl interface
+
+The input parameter of TDX_CMD_GEN_QUOTE ioctl is changed to the struct
+tdx_gen_quote, which contains the user pointer of a message buffer and its
+buffer size. Copy the message buffer as the parameter of
+tdvmcall[GetQuote] to host VMM.
+
+Upon receiving the notify event, the overridden data is already saved in
+shared message buffer. Copy it back to userspace.
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ drivers/platform/x86/intel/tdx/intel_tdx_attest.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+index b34261b7fb87..116d48344def 100644
+--- a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
++++ b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+@@ -110,8 +110,6 @@ static long tdx_attest_ioctl(struct file *file, unsigned int cmd,
+ 			break;
+ 		}
+ 
+-		apic->send_IPI_all(HYPERVISOR_CALLBACK_VECTOR);
+-
+ 		/* Wait for attestation completion */
+ 		ret = wait_for_completion_interruptible_timeout(
+ 				&attestation_done,
+-- 
+2.31.1
+

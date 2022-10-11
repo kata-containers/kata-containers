@@ -1,0 +1,30 @@
+From dadd7426531dccf02349b88aa2d1be8b22ac68f9 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Wed, 23 Mar 2022 17:43:02 -0700
+Subject: [PATCH 1237/1418] vfio: mdev: idxd: fix uninit var in
+ vidxd_wq_reset()
+
+status variable uninitialized before being used. idxd_wq_abort() takes
+status by reference and may set it. But don't count on it.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/vfio/mdev/idxd/vdev.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/vfio/mdev/idxd/vdev.c b/drivers/vfio/mdev/idxd/vdev.c
+index df9ca074cfb4..0f593a3f2c0c 100644
+--- a/drivers/vfio/mdev/idxd/vdev.c
++++ b/drivers/vfio/mdev/idxd/vdev.c
+@@ -1007,7 +1007,7 @@ static void vidxd_wq_reset(struct vdcm_idxd *vidxd, int wq_id_mask)
+ 	union wqcfg *wqcfg = (union wqcfg *)(bar0 + VIDXD_WQCFG_OFFSET);
+ 	struct mdev_device *mdev = vidxd->ivdev.mdev;
+ 	struct device *dev = mdev_dev(mdev);
+-	u32 status;
++	u32 status = 0;
+ 
+ 	wq = vidxd->wq;
+ 	dev_dbg(dev, "vidxd reset wq %u:%u\n", 0, wq->id);
+-- 
+2.31.1
+

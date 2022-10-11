@@ -1,0 +1,39 @@
+From a2ae4987bb9a51086a225c59c0c6d28c9f9a93ad Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Thu, 4 Feb 2021 13:29:35 -0800
+Subject: [PATCH 0646/1418] iommu/vt-d: Enable write protect propagation from
+ guest
+
+Write protect bit, when set, inhibits supervisor writes to the read-only
+pages. In guest supervisor shared virtual addressing (SVA), write-protect
+should be honored upon guest bind supervisor PASID request.
+
+This patch extends the VT-d portion of the IOMMU UAPI to include WP bit.
+WPE bit of the  supervisor PASID entry will be set to match CPU CR0.WP bit.
+
+Signed-off-by: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/intel/pasid.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/iommu/intel/pasid.c b/drivers/iommu/intel/pasid.c
+index fb7ed429a317..6949a7a1c24e 100644
+--- a/drivers/iommu/intel/pasid.c
++++ b/drivers/iommu/intel/pasid.c
+@@ -795,8 +795,10 @@ intel_pasid_setup_bind_data(struct intel_iommu *iommu, struct pasid_entry *pte,
+ 		}
+ 		pasid_set_sre(pte);
+ 		/* Enable write protect WP if guest requested */
+-		if (pasid_data->flags & IOMMU_SVA_VTD_GPASID_WPE)
+-			pasid_set_wpe(pte);
++		if (pasid_data->flags & IOMMU_SVA_VTD_GPASID_WPE) {
++			if (pasid_enable_wpe(pte))
++				return -EINVAL;
++		}
+ 	}
+ 
+ 	if (pasid_data->flags & IOMMU_SVA_VTD_GPASID_EAFE) {
+-- 
+2.31.1
+

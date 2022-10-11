@@ -1,0 +1,165 @@
+From 9356e3b60c4c8670c5f2ed74bf1296ce67f54798 Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Tue, 14 Apr 2020 05:10:07 -0700
+Subject: [PATCH 0616/1418] iommu: Report domain nesting info
+
+IOMMUs that support nesting translation needs report the capability info
+to userspace. It gives information about requirements the userspace needs
+to implement plus other features characterizing the physical implementation.
+
+This patch introduces a new IOMMU UAPI struct that gives information about
+the nesting capabilities and features. This struct is supposed to be returned
+by iommu_domain_get_attr() with DOMAIN_ATTR_NESTING attribute parameter, with
+one domain whose type has been set to DOMAIN_ATTR_NESTING.
+
+v7 -> v8:
+*) add padding in struct iommu_nesting_info_vtd
+*) describe future extension rules for struct iommu_nesting_info in iommu.rst.
+*) remove SYSWIDE_PASID
+
+v6 -> v7:
+*) rephrase the commit message, replace the @data[] field in struct
+   iommu_nesting_info with union per comments from Eric Auger.
+
+v5 -> v6:
+*) rephrase the feature notes per comments from Eric Auger.
+*) rename @size of struct iommu_nesting_info to @argsz.
+
+v4 -> v5:
+*) address comments from Eric Auger.
+
+v3 -> v4:
+*) split the SMMU driver changes to be a separate patch
+*) move the @addr_width and @pasid_bits from vendor specific
+   part to generic part.
+*) tweak the description for the @features field of struct
+   iommu_nesting_info.
+*) add description on the @data[] field of struct iommu_nesting_info
+
+v2 -> v3:
+*) remvoe cap/ecap_mask in iommu_nesting_info.
+*) reuse DOMAIN_ATTR_NESTING to get nesting info.
+*) return an empty iommu_nesting_info for SMMU drivers per Jean'
+   suggestion.
+
+Cc: Kevin Tian <kevin.tian@intel.com>
+CC: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Cc: Alex Williamson <alex.williamson@redhat.com>
+Cc: Eric Auger <eric.auger@redhat.com>
+Cc: Jean-Philippe Brucker <jean-philippe@linaro.org>
+Cc: Joerg Roedel <joro@8bytes.org>
+Cc: Lu Baolu <baolu.lu@linux.intel.com>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ Documentation/userspace-api/iommu.rst |  5 +-
+ include/uapi/linux/iommu.h            | 72 +++++++++++++++++++++++++++
+ 2 files changed, 76 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/userspace-api/iommu.rst b/Documentation/userspace-api/iommu.rst
+index d3108c1519d5..ad06bb94aad5 100644
+--- a/Documentation/userspace-api/iommu.rst
++++ b/Documentation/userspace-api/iommu.rst
+@@ -26,6 +26,7 @@ supported user-kernel APIs are as follows:
+ 2. Bind/Unbind guest PASID table (e.g. ARM SMMU)
+ 3. Invalidate IOMMU caches upon guest requests
+ 4. Report errors to the guest and serve page requests
++5. Read iommu_nesting_info from kernel
+ 
+ Requirements
+ ============
+@@ -96,7 +97,9 @@ kernel. Simply recompiling existing code with newer kernel header should
+ not be an issue in that only existing flags are used.
+ 
+ IOMMU vendor driver should report the below features to IOMMU UAPI
+-consumers (e.g. via VFIO).
++consumers (e.g. via VFIO). The feature list is passed by struct
++iommu_nesting_info. The future extension to this structure follows
++the rule defined in section "Extension Rules & Precautions".
+ 
+ 1. IOMMU_NESTING_FEAT_SYSWIDE_PASID
+ 2. IOMMU_NESTING_FEAT_BIND_PGTBL
+diff --git a/include/uapi/linux/iommu.h b/include/uapi/linux/iommu.h
+index 59178fc229ca..e333b7224436 100644
+--- a/include/uapi/linux/iommu.h
++++ b/include/uapi/linux/iommu.h
+@@ -339,4 +339,76 @@ struct iommu_gpasid_bind_data {
+ 	} vendor;
+ };
+ 
++/*
++ * struct iommu_nesting_info_vtd - Intel VT-d specific nesting info.
++ *
++ * @flags:	VT-d specific flags. Currently reserved for future
++ *		extension. must be set to 0.
++ * @cap_reg:	Describe basic capabilities as defined in VT-d capability
++ *		register.
++ * @ecap_reg:	Describe the extended capabilities as defined in VT-d
++ *		extended capability register.
++ */
++struct iommu_nesting_info_vtd {
++	__u32	flags;
++	__u8	padding[12];
++	__u64	cap_reg;
++	__u64	ecap_reg;
++};
++
++/*
++ * struct iommu_nesting_info - Information for nesting-capable IOMMU.
++ *			       userspace should check it before using
++ *			       nesting capability.
++ *
++ * @argsz:	size of the whole structure.
++ * @flags:	currently reserved for future extension. must set to 0.
++ * @format:	PASID table entry format, the same definition as struct
++ *		iommu_gpasid_bind_data @format.
++ * @features:	supported nesting features.
++ * @addr_width:	the output addr width of first level/stage translation
++ * @pasid_bits:	maximum supported PASID bits, 0 represents no PASID
++ *		support.
++ * @vendor:	vendor specific data, structure type can be deduced from
++ *		@format field.
++ *
++ * +===============+======================================================+
++ * | feature       |  Notes                                               |
++ * +===============+======================================================+
++ * | BIND_PGTBL    |  IOMMU vendor driver sets it to mandate userspace to |
++ * |               |  bind the first level/stage page table to associated |
++ * |               |  PASID (either the one specified in bind request or  |
++ * |               |  the default PASID of iommu domain), through IOMMU   |
++ * |               |  UAPI.                                               |
++ * +---------------+------------------------------------------------------+
++ * | CACHE_INVLD   |  IOMMU vendor driver sets it to mandate userspace to |
++ * |               |  explicitly invalidate the IOMMU cache through IOMMU |
++ * |               |  UAPI according to vendor-specific requirement when  |
++ * |               |  changing the 1st level/stage page table.            |
++ * +---------------+------------------------------------------------------+
++ *
++ * data struct types defined for @format:
++ * +================================+=====================================+
++ * | @format                        | data struct                         |
++ * +================================+=====================================+
++ * | IOMMU_PASID_FORMAT_INTEL_VTD   | struct iommu_nesting_info_vtd       |
++ * +--------------------------------+-------------------------------------+
++ *
++ */
++struct iommu_nesting_info {
++	__u32	argsz;
++	__u32	flags;
++	__u32	format;
++#define IOMMU_NESTING_FEAT_BIND_PGTBL		(1 << 0)
++#define IOMMU_NESTING_FEAT_CACHE_INVLD		(1 << 1)
++	__u32	features;
++	__u16	addr_width;
++	__u16	pasid_bits;
++	__u8	padding[12];
++	/* Vendor specific data */
++	union {
++		struct iommu_nesting_info_vtd vtd;
++	} vendor;
++};
++
+ #endif /* _UAPI_IOMMU_H */
+-- 
+2.31.1
+

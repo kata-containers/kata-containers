@@ -1,0 +1,195 @@
+From 0dd2569347453ac1964b68eeb7bae6d12dc75495 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Thu, 2 Apr 2020 12:07:14 -0700
+Subject: [PATCH 0427/1418] *** HACK *** KVM: selftests: Add random_()
+ framework to common KVM code
+
+Add a randomization framework to common KVM selftest code for use in
+future TDX tests, and in the hopes that it can be upstreamed someday.
+
+Suggested-by: Zhang Chen <chen.zhang@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ tools/testing/selftests/kvm/Makefile          |  2 +-
+ .../selftests/kvm/include/kvm_random.h        | 86 +++++++++++++++++++
+ tools/testing/selftests/kvm/lib/kvm_random.c  | 61 +++++++++++++
+ 3 files changed, 148 insertions(+), 1 deletion(-)
+ create mode 100644 tools/testing/selftests/kvm/include/kvm_random.h
+ create mode 100644 tools/testing/selftests/kvm/lib/kvm_random.c
+
+diff --git a/tools/testing/selftests/kvm/Makefile b/tools/testing/selftests/kvm/Makefile
+index d1774f461393..5c263a273aee 100644
+--- a/tools/testing/selftests/kvm/Makefile
++++ b/tools/testing/selftests/kvm/Makefile
+@@ -33,7 +33,7 @@ ifeq ($(ARCH),s390)
+ 	UNAME_M := s390x
+ endif
+ 
+-LIBKVM = lib/assert.c lib/elf.c lib/io.c lib/kvm_util.c lib/rbtree.c lib/sparsebit.c lib/test_util.c lib/guest_modes.c lib/perf_test_util.c
++LIBKVM = lib/assert.c lib/elf.c lib/io.c lib/kvm_random.c lib/kvm_util.c lib/rbtree.c lib/sparsebit.c lib/test_util.c lib/guest_modes.c lib/perf_test_util.c
+ LIBKVM_x86_64 = lib/x86_64/apic.c lib/x86_64/processor.c lib/x86_64/vmx.c lib/x86_64/svm.c lib/x86_64/ucall.c lib/x86_64/handlers.S
+ LIBKVM_aarch64 = lib/aarch64/processor.c lib/aarch64/ucall.c lib/aarch64/handlers.S
+ LIBKVM_s390x = lib/s390x/processor.c lib/s390x/ucall.c lib/s390x/diag318_test_handler.c
+diff --git a/tools/testing/selftests/kvm/include/kvm_random.h b/tools/testing/selftests/kvm/include/kvm_random.h
+new file mode 100644
+index 000000000000..efed87235e67
+--- /dev/null
++++ b/tools/testing/selftests/kvm/include/kvm_random.h
+@@ -0,0 +1,86 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef SELFTEST_KVM_RANDOM_H
++#define SELFTEST_KVM_RANDOM_H
++
++#include <linux/bits.h>
++#include <linux/types.h>
++
++#include <stdlib.h>
++
++#ifdef __x86_64__
++extern u8 x86_phys_bits;
++#endif
++
++unsigned int parse_seed(int argc, char **argv);
++void init_random(unsigned int seed);
++
++static inline u8 __rand_u8(u8 mask)
++{
++	return (u8)rand() & mask;
++}
++
++static inline u8 rand_u8(void)
++{
++	return __rand_u8(0xff);
++}
++
++static inline u16 __rand_u16(u16 mask)
++{
++	return (u16)rand() & mask;
++}
++
++static inline u16 rand_u16(void)
++{
++	return __rand_u16(0xffff);
++}
++
++static inline u32 __rand_u32(u32 mask)
++{
++	return (u32)rand() & mask;
++}
++
++static inline u32 rand_u32(void)
++{
++	return __rand_u32(-1u);
++}
++
++static inline u64 __rand_u64(u64 mask)
++{
++	return (u64)rand() & mask;
++}
++
++static inline u64 rand_u64(void)
++{
++	return __rand_u64(-1ull);
++}
++
++#ifdef __x86_64__
++static inline u64 rand_pa(void)
++{
++	return __rand_u64(GENMASK_ULL(x86_phys_bits - 1, 12));
++}
++#endif
++
++static inline bool rand_bool(void)
++{
++	return rand_u32() < 0x80000000u;
++}
++
++static inline bool rand_bool_p(int percentage)
++{
++	if (percentage >= 100)
++		return true;
++
++	return rand_u32() < ((-1u / 100) * percentage);
++}
++
++static inline u64 rand_pa_or_u64(void)
++{
++#ifdef __x86_64__
++	if (rand_bool())
++		return rand_pa();
++#endif
++	return rand_u64();
++}
++
++#endif /* SELFTEST_KVM_RANDOM_H */
+diff --git a/tools/testing/selftests/kvm/lib/kvm_random.c b/tools/testing/selftests/kvm/lib/kvm_random.c
+new file mode 100644
+index 000000000000..dd689b740ea7
+--- /dev/null
++++ b/tools/testing/selftests/kvm/lib/kvm_random.c
+@@ -0,0 +1,61 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <linux/bits.h>
++#include <linux/kvm.h>
++
++#include <limits.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <sys/ioctl.h>
++#include <sys/types.h>
++#include <test_util.h>
++#include <unistd.h>
++
++#ifdef __x86_64__
++#include <processor.h>
++
++u8 x86_phys_bits;
++#endif
++
++unsigned int parse_seed(int argc, char **argv)
++{
++	unsigned int seed;
++	char *tmp = NULL;
++	int c;
++
++	c = getopt(argc, argv, "s:");
++	if (c == -1)
++		return 0;
++
++	TEST_ASSERT(c == 's', "Unknown option '%c'", c);
++
++	seed = (unsigned int)strtoul(optarg, &tmp, 0);
++	TEST_ASSERT(*tmp == '\0' && tmp != optarg,
++		    "Unabled to parse seed '%s'\n", optarg);
++
++	return seed;
++}
++
++void init_random(unsigned int seed)
++{
++	int fd, ret;
++
++#ifdef __x86_64__
++	x86_phys_bits = cpuid_eax(0x80000008) & 0xff;
++#endif
++	if (seed)
++		goto init_srand;
++
++	fd = open("/dev/urandom", O_RDONLY);
++	TEST_ASSERT(fd >= 0, "failed to open /dev/urandom, kvm_fd: %i errno: %i",
++		    fd, errno);
++
++	ret = read(fd, &seed, sizeof(seed));
++	TEST_ASSERT(ret == sizeof(seed),
++		    "failed read() on /dev/urandom, ret: %i errno: %i",
++		    ret, errno);
++	close(fd);
++
++init_srand:
++	printf("KVM random seed: %u\n", seed);
++	srand(seed);
++}
+-- 
+2.31.1
+

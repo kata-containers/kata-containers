@@ -1,0 +1,55 @@
+From d1ff210cd6571059bb554eaefda885341e9f6feb Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Tue, 3 Nov 2020 19:02:45 -0800
+Subject: [PATCH 1169/1418] mm/pkeys: Add Kconfig options for PKS
+
+Consumers wishing to implement additional protections on memory pages
+can use PKS.  However, PKS is only available on some architectures.
+
+For this reason PKS code, both in the core and in the consumers, is dead
+code without PKS being both available and used.
+
+Add Kconfig options to allow for the elimination of unneeded code by
+detecting architecture PKS support (ARCH_HAS_SUPERVISOR_PKEYS) and
+requiring an indication of consumer need (ARCH_ENABLE_SUPERVISOR_PKEYS).
+
+In this patch ARCH_ENABLE_SUPERVISOR_PKEYS remains off until the first
+kernel consumer sets it.
+
+Cc: "Moger, Babu" <Babu.Moger@amd.com>
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ arch/x86/Kconfig | 1 +
+ mm/Kconfig       | 4 ++++
+ 2 files changed, 5 insertions(+)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index e6cd9892c80d..110b6dc86068 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -1914,6 +1914,7 @@ config X86_INTEL_MEMORY_PROTECTION_KEYS
+ 	depends on X86_64 && (CPU_SUP_INTEL || CPU_SUP_AMD)
+ 	select ARCH_USES_HIGH_VMA_FLAGS
+ 	select ARCH_HAS_PKEYS
++	select ARCH_HAS_SUPERVISOR_PKEYS
+ 	help
+ 	  Memory Protection Keys provides a mechanism for enforcing
+ 	  page-based protections, but without requiring modification of the
+diff --git a/mm/Kconfig b/mm/Kconfig
+index d16ba9249bc5..ac8c0f5f448e 100644
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -823,6 +823,10 @@ config ARCH_USES_HIGH_VMA_FLAGS
+ 	bool
+ config ARCH_HAS_PKEYS
+ 	bool
++config ARCH_HAS_SUPERVISOR_PKEYS
++	bool
++config ARCH_ENABLE_SUPERVISOR_PKEYS
++	bool
+ 
+ config PERCPU_STATS
+ 	bool "Collect percpu memory statistics"
+-- 
+2.31.1
+

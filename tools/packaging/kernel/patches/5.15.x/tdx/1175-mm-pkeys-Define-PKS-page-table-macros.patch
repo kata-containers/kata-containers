@@ -1,0 +1,93 @@
+From 863fffff634d635cf8b05eb9ea364f9292e7fc1d Mon Sep 17 00:00:00 2001
+From: Fenghua Yu <fenghua.yu@intel.com>
+Date: Fri, 20 Mar 2020 15:59:26 +0000
+Subject: [PATCH 1175/1418] mm/pkeys: Define PKS page table macros
+
+Kernel PKS consumers will need a way to assign their pkey to pages.
+
+Define _PAGE_PKEY() and PAGE_KERNEL_PKEY() to allow users to set a pkey
+on a PTE.
+
+Add documentation.
+
+Co-developed-by: Ira Weiny <ira.weiny@intel.com>
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+Signed-off-by: Fenghua Yu <fenghua.yu@intel.com>
+---
+ Documentation/core-api/protection-keys.rst |  6 ++++++
+ arch/x86/include/asm/pgtable_types.h       | 22 ++++++++++++++++++++++
+ include/linux/pgtable.h                    |  4 ++++
+ 3 files changed, 32 insertions(+)
+
+diff --git a/Documentation/core-api/protection-keys.rst b/Documentation/core-api/protection-keys.rst
+index d501bd27ee29..fe63acf5abbe 100644
+--- a/Documentation/core-api/protection-keys.rst
++++ b/Documentation/core-api/protection-keys.rst
+@@ -136,3 +136,9 @@ PKS Key Allocation
+ ------------------
+ .. kernel-doc:: include/linux/pks-keys.h
+         :doc: PKS_KEY_ALLOCATION
++
++Adding pages to a pkey protected domain
++---------------------------------------
++
++.. kernel-doc:: arch/x86/include/asm/pgtable_types.h
++        :doc: PKS_KEY_ASSIGNMENT
+diff --git a/arch/x86/include/asm/pgtable_types.h b/arch/x86/include/asm/pgtable_types.h
+index 1bfab70ff9ac..fa8bac984041 100644
+--- a/arch/x86/include/asm/pgtable_types.h
++++ b/arch/x86/include/asm/pgtable_types.h
+@@ -81,6 +81,22 @@
+ 			 _PAGE_PKEY_BIT2 | \
+ 			 _PAGE_PKEY_BIT3)
+ 
++/**
++ * DOC: PKS_KEY_ASSIGNMENT
++ *
++ * The following macros are used to set a pkey value in a supervisor PTE.
++ *
++ * .. code-block:: c
++ *
++ *         #define _PAGE_KEY(pkey)
++ *         #define PAGE_KERNEL_PKEY(pkey)
++ */
++#ifdef CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS
++#define _PAGE_PKEY(pkey)	(_AT(pteval_t, pkey) << _PAGE_BIT_PKEY_BIT0)
++#else
++#define _PAGE_PKEY(pkey)	(_AT(pteval_t, 0))
++#endif
++
+ #if defined(CONFIG_X86_64) || defined(CONFIG_X86_PAE)
+ #define _PAGE_KNL_ERRATUM_MASK (_PAGE_DIRTY | _PAGE_ACCESSED)
+ #else
+@@ -266,6 +282,12 @@ enum page_cache_mode {
+ #define PAGE_KERNEL_IO		__pgprot_mask(__PAGE_KERNEL_IO)
+ #define PAGE_KERNEL_IO_NOCACHE	__pgprot_mask(__PAGE_KERNEL_IO_NOCACHE)
+ 
++#ifdef CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS
++#define PAGE_KERNEL_PKEY(pkey)	__pgprot_mask(__PAGE_KERNEL | _PAGE_PKEY(pkey))
++#else
++#define PAGE_KERNEL_PKEY(pkey) PAGE_KERNEL
++#endif
++
+ #endif	/* __ASSEMBLY__ */
+ 
+ /*         xwr */
+diff --git a/include/linux/pgtable.h b/include/linux/pgtable.h
+index 5ebe4677e13f..592c8c216d48 100644
+--- a/include/linux/pgtable.h
++++ b/include/linux/pgtable.h
+@@ -1510,6 +1510,10 @@ static inline bool arch_has_pfn_modify_check(void)
+ # define PAGE_KERNEL_EXEC PAGE_KERNEL
+ #endif
+ 
++#ifndef PAGE_KERNEL_PKEY
++#define PAGE_KERNEL_PKEY(pkey) PAGE_KERNEL
++#endif
++
+ /*
+  * Page Table Modification bits for pgtbl_mod_mask.
+  *
+-- 
+2.31.1
+

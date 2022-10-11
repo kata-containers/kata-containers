@@ -1,0 +1,46 @@
+From 70a682069c7964d549ae3376adacf68ab2c68949 Mon Sep 17 00:00:00 2001
+From: Wei Wang <wei.w.wang@intel.com>
+Date: Tue, 25 Jan 2022 00:59:24 -0800
+Subject: [PATCH 0978/1418] KVM: x86: remove PMU FIXED_CTR3 from
+ msrs_to_save_all
+
+The fixed counter 3 is used for the Topdown metrics, which hasn't been
+enabled for KVM guests. Userspace accessing to it will fail as it's not
+included in get_fixed_pmc(). This breaks KVM selftests on ICX+ machines,
+which have this counter.
+
+To reproduce it on ICX+ machines, ./state_test reports:
+==== Test Assertion Failure ====
+lib/x86_64/processor.c:1078: r == nmsrs
+pid=4564 tid=4564 - Argument list too long
+1  0x000000000040b1b9: vcpu_save_state at processor.c:1077
+2  0x0000000000402478: main at state_test.c:209 (discriminator 6)
+3  0x00007fbe21ed5f92: ?? ??:0
+4  0x000000000040264d: _start at ??:?
+Unexpected result from KVM_GET_MSRS, r: 17 (failed MSR was 0x30c)
+
+With this patch, it works well.
+
+Signed-off-by: Wei Wang <wei.w.wang@intel.com>
+Message-Id: <20211217124934.32893-1-wei.w.wang@intel.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/kvm/x86.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 544c9a157b76..e28491d5ec3d 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -1329,7 +1329,7 @@ static const u32 msrs_to_save_all[] = {
+ 	MSR_IA32_UMWAIT_CONTROL, MSR_IA32_PKRS,
+ 
+ 	MSR_ARCH_PERFMON_FIXED_CTR0, MSR_ARCH_PERFMON_FIXED_CTR1,
+-	MSR_ARCH_PERFMON_FIXED_CTR0 + 2, MSR_ARCH_PERFMON_FIXED_CTR0 + 3,
++	MSR_ARCH_PERFMON_FIXED_CTR0 + 2,
+ 	MSR_CORE_PERF_FIXED_CTR_CTRL, MSR_CORE_PERF_GLOBAL_STATUS,
+ 	MSR_CORE_PERF_GLOBAL_CTRL, MSR_CORE_PERF_GLOBAL_OVF_CTRL,
+ 	MSR_ARCH_PERFMON_PERFCTR0, MSR_ARCH_PERFMON_PERFCTR1,
+-- 
+2.31.1
+

@@ -1,0 +1,55 @@
+From fbe88e3b2353301f6afe511dc583e8a8a9bbc144 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Fri, 4 Oct 2019 05:13:31 -0700
+Subject: [PATCH 0630/1418] iommu: add place holder for PASID suspend
+
+APIs to suspend all operations of a given PASID-device combo while
+maintaining the SVA bound. PRQ will be drained.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ include/linux/iommu.h | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/include/linux/iommu.h b/include/linux/iommu.h
+index b389de63afbd..e00942b499d5 100644
+--- a/include/linux/iommu.h
++++ b/include/linux/iommu.h
+@@ -240,6 +240,8 @@ struct iommu_iotlb_gather {
+  *		- 0: use the default setting
+  * @pgsize_bitmap: bitmap of all possible supported page sizes
+  * @owner: Driver module providing these ops
++ * @sva_suspend_pasid: stop activities related to a pasid but maintain the bond
++ * @sva_resume_pasid: start activities related to a pasid
+  */
+ struct iommu_ops {
+ 	bool (*capable)(enum iommu_cap);
+@@ -311,6 +313,10 @@ struct iommu_ops {
+ 
+ 	int (*sva_unbind_gpasid)(struct device *dev, u32 pasid);
+ 
++	void (*sva_suspend_pasid)(struct device *dev, u32 pasid);
++
++	void (*sva_resume_pasid)(struct device *dev, u32 pasid);
++
+ 	int (*def_domain_type)(struct device *dev);
+ 
+ 	unsigned long pgsize_bitmap;
+@@ -1086,6 +1092,14 @@ static inline int iommu_sva_unbind_gpasid(struct iommu_domain *domain,
+ 	return -ENODEV;
+ }
+ 
++static inline void sva_suspend_pasid(struct device *dev, u32 pasid)
++{
++}
++
++static inline void (*sva_resume_pasid)(struct device *dev, u32 pasid)
++{
++}
++
+ static inline struct iommu_fwspec *dev_iommu_fwspec_get(struct device *dev)
+ {
+ 	return NULL;
+-- 
+2.31.1
+

@@ -1,0 +1,88 @@
+From c3b44663860dac8b4f4e6639922213808e222910 Mon Sep 17 00:00:00 2001
+From: Lu Baolu <baolu.lu@linux.intel.com>
+Date: Tue, 18 May 2021 13:54:57 +0800
+Subject: [PATCH 0655/1418] iommu/vt-d: Add PRQ handling latency sampling
+
+The execution time for page fault request handling is performance critical
+and needs to be monitored. This adds code to sample the execution time of
+page fault request handling.
+
+Signed-off-by: Lu Baolu <baolu.lu@linux.intel.com>
+---
+ drivers/iommu/intel/svm.c | 46 +++++++++++++++++++++++++++++++++++----
+ 1 file changed, 42 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index 33635b4715af..2020806b733d 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -25,7 +25,6 @@
+ 
+ #include "pasid.h"
+ #include "perf.h"
+-#include "../iommu-sva-lib.h"
+ 
+ static irqreturn_t prq_event_thread(int irq, void *d);
+ static void intel_svm_drain_prq(struct device *dev, u32 pasid);
+@@ -1129,6 +1128,10 @@ static irqreturn_t prq_event_thread(int irq, void *d)
+ 	struct intel_svm *svm = NULL;
+ 	int head, tail, handled = 0;
+ 	unsigned int flags = 0;
++	s64 start_ktime = 0;
++
++	if (dmar_latency_enabled(iommu, DMAR_LATENCY_PRQ))
++		start_ktime = ktime_to_ns(ktime_get());
+ 
+ 	/*
+ 	 * Clear PPR bit before reading head/tail registers, to ensure that
+@@ -1219,9 +1222,44 @@ static irqreturn_t prq_event_thread(int irq, void *d)
+ 		if (ret & VM_FAULT_ERROR)
+ 			goto invalid;
+ 
+-		trace_prq_report(iommu, sdev->dev, req->qw_0, req->qw_1,
+-				 req->priv_data[0], req->priv_data[1],
+-				 sdev->prq_seq_number);
++		result = QI_RESP_SUCCESS;
++invalid:
++		mmap_read_unlock(svm->mm);
++		mmput(svm->mm);
++bad_req:
++		/* We get here in the error case where the PASID lookup failed,
++		   and these can be NULL. Do not use them below this point! */
++		sdev = NULL;
++		svm = NULL;
++no_pasid:
++		if (req->lpig || req->priv_data_present) {
++			/*
++			 * Per VT-d spec. v3.0 ch7.7, system software must
++			 * respond with page group response if private data
++			 * is present (PDP) or last page in group (LPIG) bit
++			 * is set. This is an additional VT-d feature beyond
++			 * PCI ATS spec.
++			 */
++			resp.qw0 = QI_PGRP_PASID(req->pasid) |
++				QI_PGRP_DID(req->rid) |
++				QI_PGRP_PASID_P(req->pasid_present) |
++				QI_PGRP_PDP(req->priv_data_present) |
++				QI_PGRP_RESP_CODE(result) |
++				QI_PGRP_RESP_TYPE;
++			resp.qw1 = QI_PGRP_IDX(req->prg_index) |
++				QI_PGRP_LPIG(req->lpig);
++			resp.qw2 = 0;
++			resp.qw3 = 0;
++
++			if (req->priv_data_present)
++				memcpy(&resp.qw2, req->priv_data,
++				       sizeof(req->priv_data));
++			qi_submit_sync(iommu, &resp, 1, 0);
++		}
++
++		if (start_ktime)
++			dmar_latency_update(iommu, DMAR_LATENCY_PRQ,
++					    ktime_to_ns(ktime_get()) - start_ktime);
+ prq_advance:
+ 		head = (head + sizeof(*req)) & PRQ_RING_MASK;
+ 	}
+-- 
+2.31.1
+

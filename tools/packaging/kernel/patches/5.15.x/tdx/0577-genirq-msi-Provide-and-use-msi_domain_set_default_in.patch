@@ -1,0 +1,88 @@
+From e8e694e63c4884b1015cd11700a7b5a1f12eb750 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Tue, 25 Aug 2020 13:29:56 +0200
+Subject: [PATCH 0577/1418] genirq/msi: Provide and use
+ msi_domain_set_default_info_flags()
+
+MSI interrupts have some common flags which should be set not only for
+PCI/MSI interrupts.
+
+Move the PCI/MSI flag setting into a common function so it can be reused.
+
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Megha Dey <megha.dey@intel.com>
+---
+ drivers/pci/msi.c   |  7 +------
+ include/linux/msi.h |  1 +
+ kernel/irq/msi.c    | 24 ++++++++++++++++++++++++
+ 3 files changed, 26 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/pci/msi.c b/drivers/pci/msi.c
+index 831ce74ccb7e..d8dde70b5647 100644
+--- a/drivers/pci/msi.c
++++ b/drivers/pci/msi.c
+@@ -1401,12 +1401,7 @@ struct irq_domain *pci_msi_create_irq_domain(struct fwnode_handle *fwnode,
+ 	if (info->flags & MSI_FLAG_USE_DEF_CHIP_OPS)
+ 		pci_msi_domain_update_chip_ops(info);
+ 
+-	info->flags |= MSI_FLAG_ACTIVATE_EARLY;
+-	if (IS_ENABLED(CONFIG_GENERIC_IRQ_RESERVATION_MODE))
+-		info->flags |= MSI_FLAG_MUST_REACTIVATE;
+-
+-	/* PCI-MSI is oneshot-safe */
+-	info->chip->flags |= IRQCHIP_ONESHOT_SAFE;
++	msi_domain_set_default_info_flags(info);
+ 
+ 	domain = msi_create_irq_domain(fwnode, info, parent);
+ 	if (!domain)
+diff --git a/include/linux/msi.h b/include/linux/msi.h
+index 6fffe37a7bdf..c20ddd10a145 100644
+--- a/include/linux/msi.h
++++ b/include/linux/msi.h
+@@ -445,6 +445,7 @@ int platform_msi_domain_alloc(struct irq_domain *domain, unsigned int virq,
+ void platform_msi_domain_free(struct irq_domain *domain, unsigned int virq,
+ 			      unsigned int nvec);
+ void *platform_msi_get_host_data(struct irq_domain *domain);
++void msi_domain_set_default_info_flags(struct msi_domain_info *info);
+ #endif /* CONFIG_GENERIC_MSI_IRQ_DOMAIN */
+ 
+ #ifdef CONFIG_PCI_MSI_IRQ_DOMAIN
+diff --git a/kernel/irq/msi.c b/kernel/irq/msi.c
+index 6a5ecee6e567..7f86887002cb 100644
+--- a/kernel/irq/msi.c
++++ b/kernel/irq/msi.c
+@@ -206,6 +206,30 @@ void msi_destroy_sysfs(struct device *dev, const struct attribute_group **msi_ir
+ }
+ 
+ #ifdef CONFIG_GENERIC_MSI_IRQ_DOMAIN
++void msi_domain_set_default_info_flags(struct msi_domain_info *info)
++{
++	/* Required so that a device latches a valid MSI message on startup */
++	info->flags |= MSI_FLAG_ACTIVATE_EARLY;
++
++	/*
++	 * Interrupt reservation mode allows to stear the MSI message of an
++	 * inactive device to a special (usually spurious interrupt) target.
++	 * This allows to prevent interrupt vector exhaustion e.g. on x86.
++	 * But (PCI)MSI interrupts are activated early - see above - so the
++	 * interrupt request/startup sequence would not try to allocate a
++	 * usable vector which means that the device interrupts would end
++	 * up on the special vector and issue spurious interrupt messages.
++	 * Setting the reactivation flag ensures that when the interrupt
++	 * is requested the activation is invoked again so that a real
++	 * vector can be allocated.
++	 */
++	if (IS_ENABLED(CONFIG_GENERIC_IRQ_RESERVATION_MODE))
++		info->flags |= MSI_FLAG_MUST_REACTIVATE;
++
++	/* MSI is oneshot-safe at least in theory */
++	info->chip->flags |= IRQCHIP_ONESHOT_SAFE;
++}
++
+ static inline void irq_chip_write_msi_msg(struct irq_data *data,
+ 					  struct msi_msg *msg)
+ {
+-- 
+2.31.1
+

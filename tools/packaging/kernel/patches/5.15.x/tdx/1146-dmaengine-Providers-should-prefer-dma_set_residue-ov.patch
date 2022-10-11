@@ -1,0 +1,61 @@
+From 434d2e8c9aafa4ea2345b18acd6f8a1a6eb3aa90 Mon Sep 17 00:00:00 2001
+From: Ben Walker <benjamin.walker@intel.com>
+Date: Mon, 6 Dec 2021 11:45:10 -0700
+Subject: [PATCH 1146/1418] dmaengine: Providers should prefer dma_set_residue
+ over dma_set_tx_state
+
+The dma_set_tx_state function will go away shortly. The two functions
+are functionally equivalent.
+
+Signed-off-by: Ben Walker <benjamin.walker@intel.com>
+---
+ drivers/dma/imx-sdma.c | 3 +--
+ drivers/dma/mmp_tdma.c | 3 +--
+ drivers/dma/mxs-dma.c  | 3 +--
+ 3 files changed, 3 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/dma/imx-sdma.c b/drivers/dma/imx-sdma.c
+index 75ec0754d4ad..efb218221ba8 100644
+--- a/drivers/dma/imx-sdma.c
++++ b/drivers/dma/imx-sdma.c
+@@ -1734,8 +1734,7 @@ static enum dma_status sdma_tx_status(struct dma_chan *chan,
+ 
+ 	spin_unlock_irqrestore(&sdmac->vc.lock, flags);
+ 
+-	dma_set_tx_state(txstate, chan->completed_cookie, chan->cookie,
+-			 residue);
++	dma_set_residue(txstate, residue);
+ 
+ 	return sdmac->status;
+ }
+diff --git a/drivers/dma/mmp_tdma.c b/drivers/dma/mmp_tdma.c
+index a262e0eb4cc9..753b431ca206 100644
+--- a/drivers/dma/mmp_tdma.c
++++ b/drivers/dma/mmp_tdma.c
+@@ -539,8 +539,7 @@ static enum dma_status mmp_tdma_tx_status(struct dma_chan *chan,
+ 	struct mmp_tdma_chan *tdmac = to_mmp_tdma_chan(chan);
+ 
+ 	tdmac->pos = mmp_tdma_get_pos(tdmac);
+-	dma_set_tx_state(txstate, chan->completed_cookie, chan->cookie,
+-			 tdmac->buf_len - tdmac->pos);
++	dma_set_residue(txstate, tdmac->buf_len - tdmac->pos);
+ 
+ 	return tdmac->status;
+ }
+diff --git a/drivers/dma/mxs-dma.c b/drivers/dma/mxs-dma.c
+index 994fc4d2aca4..ab9eca6d682d 100644
+--- a/drivers/dma/mxs-dma.c
++++ b/drivers/dma/mxs-dma.c
+@@ -664,8 +664,7 @@ static enum dma_status mxs_dma_tx_status(struct dma_chan *chan,
+ 		residue -= bar;
+ 	}
+ 
+-	dma_set_tx_state(txstate, chan->completed_cookie, chan->cookie,
+-			residue);
++	dma_set_residue(txstate, residue);
+ 
+ 	return mxs_chan->status;
+ }
+-- 
+2.31.1
+

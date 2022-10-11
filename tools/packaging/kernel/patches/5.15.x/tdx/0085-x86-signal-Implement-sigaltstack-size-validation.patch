@@ -1,0 +1,160 @@
+From 480f8568cae833c42e669481924277e586e3f1c6 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Thu, 21 Oct 2021 15:55:06 -0700
+Subject: [PATCH 0085/1418] x86/signal: Implement sigaltstack size validation
+
+For historical reasons MINSIGSTKSZ is a constant which became already too
+small with AVX512 support.
+
+Add a mechanism to enforce strict checking of the sigaltstack size against
+the real size of the FPU frame.
+
+The strict check can be enabled via a config option and can also be
+controlled via the kernel command line option 'strict_sas_size' independent
+of the config switch.
+
+Enabling it might break existing applications which allocate a too small
+sigaltstack but 'work' because they never get a signal delivered. Though it
+can be handy to filter out binaries which are not yet aware of
+AT_MINSIGSTKSZ.
+
+Also the upcoming support for dynamically enabled FPU features requires a
+strict sanity check to ensure that:
+
+   - Enabling of a dynamic feature, which changes the sigframe size fits
+     into an enabled sigaltstack
+
+   - Installing a too small sigaltstack after a dynamic feature has been
+     added is not possible.
+
+Implement the base check which is controlled by config and command line
+options.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Chang S. Bae <chang.seok.bae@intel.com>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211021225527.10184-3-chang.seok.bae@intel.com
+---
+ .../admin-guide/kernel-parameters.txt         |  9 +++++
+ arch/x86/Kconfig                              | 17 +++++++++
+ arch/x86/kernel/signal.c                      | 35 +++++++++++++++++++
+ 3 files changed, 61 insertions(+)
+
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index 43dc35fe5bc0..eb9a73ad91a0 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -5497,6 +5497,15 @@
+ 	stifb=		[HW]
+ 			Format: bpp:<bpp1>[:<bpp2>[:<bpp3>...]]
+ 
++        strict_sas_size=
++			[X86]
++			Format: <bool>
++			Enable or disable strict sigaltstack size checks
++			against the required signal frame size which
++			depends on the supported FPU features. This can
++			be used to filter out binaries which have
++			not yet been made aware of AT_MINSIGSTKSZ.
++
+ 	sunrpc.min_resvport=
+ 	sunrpc.max_resvport=
+ 			[NFS,SUNRPC]
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index d9830e7e1060..8584b30e2536 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -125,6 +125,7 @@ config X86
+ 	select CLOCKSOURCE_VALIDATE_LAST_CYCLE
+ 	select CLOCKSOURCE_WATCHDOG
+ 	select DCACHE_WORD_ACCESS
++	select DYNAMIC_SIGFRAME
+ 	select EDAC_ATOMIC_SCRUB
+ 	select EDAC_SUPPORT
+ 	select GENERIC_CLOCKEVENTS_BROADCAST	if X86_64 || (X86_32 && X86_LOCAL_APIC)
+@@ -2388,6 +2389,22 @@ config MODIFY_LDT_SYSCALL
+ 
+ 	  Saying 'N' here may make sense for embedded or server kernels.
+ 
++config STRICT_SIGALTSTACK_SIZE
++	bool "Enforce strict size checking for sigaltstack"
++	depends on DYNAMIC_SIGFRAME
++	help
++	  For historical reasons MINSIGSTKSZ is a constant which became
++	  already too small with AVX512 support. Add a mechanism to
++	  enforce strict checking of the sigaltstack size against the
++	  real size of the FPU frame. This option enables the check
++	  by default. It can also be controlled via the kernel command
++	  line option 'strict_sas_size' independent of this config
++	  switch. Enabling it might break existing applications which
++	  allocate a too small sigaltstack but 'work' because they
++	  never get a signal delivered.
++
++	  Say 'N' unless you want to really enforce this check.
++
+ source "kernel/livepatch/Kconfig"
+ 
+ endmenu
+diff --git a/arch/x86/kernel/signal.c b/arch/x86/kernel/signal.c
+index 58bd07071d14..0111a6ae6e60 100644
+--- a/arch/x86/kernel/signal.c
++++ b/arch/x86/kernel/signal.c
+@@ -15,6 +15,7 @@
+ #include <linux/mm.h>
+ #include <linux/smp.h>
+ #include <linux/kernel.h>
++#include <linux/kstrtox.h>
+ #include <linux/errno.h>
+ #include <linux/wait.h>
+ #include <linux/tracehook.h>
+@@ -40,6 +41,7 @@
+ #include <linux/compat.h>
+ #include <asm/proto.h>
+ #include <asm/ia32_unistd.h>
++#include <asm/fpu/xstate.h>
+ #endif /* CONFIG_X86_64 */
+ 
+ #include <asm/syscall.h>
+@@ -907,6 +909,39 @@ void signal_fault(struct pt_regs *regs, void __user *frame, char *where)
+ 	force_sig(SIGSEGV);
+ }
+ 
++#ifdef CONFIG_DYNAMIC_SIGFRAME
++#ifdef CONFIG_STRICT_SIGALTSTACK_SIZE
++static bool strict_sigaltstack_size __ro_after_init = true;
++#else
++static bool strict_sigaltstack_size __ro_after_init = false;
++#endif
++
++static int __init strict_sas_size(char *arg)
++{
++	return kstrtobool(arg, &strict_sigaltstack_size);
++}
++__setup("strict_sas_size", strict_sas_size);
++
++/*
++ * MINSIGSTKSZ is 2048 and can't be changed despite the fact that AVX512
++ * exceeds that size already. As such programs might never use the
++ * sigaltstack they just continued to work. While always checking against
++ * the real size would be correct, this might be considered a regression.
++ *
++ * Therefore avoid the sanity check, unless enforced by kernel config or
++ * command line option.
++ */
++bool sigaltstack_size_valid(size_t ss_size)
++{
++	lockdep_assert_held(&current->sighand->siglock);
++
++	if (strict_sigaltstack_size)
++		return ss_size > get_sigframe_size();
++
++	return true;
++}
++#endif /* CONFIG_DYNAMIC_SIGFRAME */
++
+ #ifdef CONFIG_X86_X32_ABI
+ COMPAT_SYSCALL_DEFINE0(x32_rt_sigreturn)
+ {
+-- 
+2.31.1
+

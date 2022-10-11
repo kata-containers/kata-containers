@@ -1,0 +1,275 @@
+From 531b330032e6e0d59719d97a0f5683dd78775228 Mon Sep 17 00:00:00 2001
+From: Zhang Chen <chen.zhang@intel.com>
+Date: Sun, 1 Mar 2020 21:01:33 +0800
+Subject: [PATCH 0429/1418] *** HACK *** KVM: selftests: Add SEAMCALL test case
+ for Intel TDX-SEAM
+
+Test TDH_SYS_INFO, utilizing the newly introduced KVM_TRANSLATE_VA_TO_PA to
+get the host PAs required by TDX-SEAM.
+
+Implement a fuzzer to throw random leafs and parameters as TDX-SEAM.  Do
+not explicitly check the return, "success" is simply not crashing.
+
+Signed-off-by: Zhang Chen <chen.zhang@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ tools/testing/selftests/kvm/.gitignore        |  1 +
+ tools/testing/selftests/kvm/Makefile          |  3 +-
+ .../selftests/kvm/include/x86_64/tdx.h        | 93 +++++++++++++++++++
+ tools/testing/selftests/kvm/lib/x86_64/tdx.c  | 37 ++++++++
+ .../selftests/kvm/x86_64/tdx_seamcall_test.c  | 65 +++++++++++++
+ 5 files changed, 198 insertions(+), 1 deletion(-)
+ create mode 100644 tools/testing/selftests/kvm/include/x86_64/tdx.h
+ create mode 100644 tools/testing/selftests/kvm/lib/x86_64/tdx.c
+ create mode 100644 tools/testing/selftests/kvm/x86_64/tdx_seamcall_test.c
+
+diff --git a/tools/testing/selftests/kvm/.gitignore b/tools/testing/selftests/kvm/.gitignore
+index 105412f27b48..cd27c567dc57 100644
+--- a/tools/testing/selftests/kvm/.gitignore
++++ b/tools/testing/selftests/kvm/.gitignore
+@@ -27,6 +27,7 @@
+ /x86_64/svm_int_ctl_test
+ /x86_64/sync_regs_test
+ /x86_64/tdx_load_seam_test
++/x86_64/tdx_seamcall_test
+ /x86_64/tsc_msrs_test
+ /x86_64/userspace_msr_exit_test
+ /x86_64/vmx_apic_access_test
+diff --git a/tools/testing/selftests/kvm/Makefile b/tools/testing/selftests/kvm/Makefile
+index d0751ca454b8..4e213299ec33 100644
+--- a/tools/testing/selftests/kvm/Makefile
++++ b/tools/testing/selftests/kvm/Makefile
+@@ -34,7 +34,7 @@ ifeq ($(ARCH),s390)
+ endif
+ 
+ LIBKVM = lib/assert.c lib/elf.c lib/io.c lib/kvm_random.c lib/kvm_util.c lib/rbtree.c lib/sparsebit.c lib/test_util.c lib/guest_modes.c lib/perf_test_util.c
+-LIBKVM_x86_64 = lib/x86_64/apic.c lib/x86_64/processor.c lib/x86_64/vmx.c lib/x86_64/svm.c lib/x86_64/ucall.c lib/x86_64/handlers.S
++LIBKVM_x86_64 = lib/x86_64/apic.c lib/x86_64/processor.c lib/x86_64/vmx.c lib/x86_64/svm.c lib/x86_64/tdx.c lib/x86_64/ucall.c lib/x86_64/handlers.S
+ LIBKVM_aarch64 = lib/aarch64/processor.c lib/aarch64/ucall.c lib/aarch64/handlers.S
+ LIBKVM_s390x = lib/s390x/processor.c lib/s390x/ucall.c lib/s390x/diag318_test_handler.c
+ 
+@@ -67,6 +67,7 @@ TEST_GEN_PROGS_x86_64 += x86_64/vmx_tsc_adjust_test
+ TEST_GEN_PROGS_x86_64 += x86_64/vmx_nested_tsc_scaling_test
+ TEST_GEN_PROGS_x86_64 += x86_64/xapic_ipi_test
+ TEST_GEN_PROGS_x86_64 += x86_64/tdx_load_seam_test
++TEST_GEN_PROGS_x86_64 += x86_64/tdx_seamcall_test
+ TEST_GEN_PROGS_x86_64 += x86_64/xss_msr_test
+ TEST_GEN_PROGS_x86_64 += x86_64/debug_regs
+ TEST_GEN_PROGS_x86_64 += x86_64/tsc_msrs_test
+diff --git a/tools/testing/selftests/kvm/include/x86_64/tdx.h b/tools/testing/selftests/kvm/include/x86_64/tdx.h
+new file mode 100644
+index 000000000000..2260c4f5a30a
+--- /dev/null
++++ b/tools/testing/selftests/kvm/include/x86_64/tdx.h
+@@ -0,0 +1,93 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef SELFTEST_KVM_TDX_H
++#define SELFTEST_KVM_TDX_H
++
++#include <linux/types.h>
++
++#ifndef __packed
++#define __packed __attribute__((packed))
++#endif
++
++#ifndef __aligned
++#define __aligned(x) __attribute__((__aligned__(x)))
++#endif
++
++#undef SEAMCALL_VERBOSE
++
++#define PAGE_SIZE	4096
++
++#include "../../../../../arch/x86/include/asm/tdx_arch.h"
++
++extern struct tdsysinfo_struct sysinfo;
++extern int kvm_fd;
++
++struct td_page {
++	char data[PAGE_SIZE];
++} __aligned(PAGE_SIZE);
++
++void tdx_enable(int argc, char **argv);
++void tdx_disable(void);
++
++static inline void __seamcall(struct kvm_seamcall *seamcall)
++{
++	long ret;
++
++	memset(&seamcall->out, 0, sizeof(seamcall->out));
++
++#ifdef SEAMCALL_VERBOSE
++	printf("SEAMCALL[%llu] in = 0x%llx, 0x%llx, 0x%llx, 0x%llx, 0x%llx\n",
++	       seamcall->in.rax, seamcall->in.rcx, seamcall->in.rdx,
++	       seamcall->in.r8, seamcall->in.r9, seamcall->in.r10);
++#endif
++
++	ret = ioctl(kvm_fd, KVM_SEAMCALL, seamcall);
++	TEST_ASSERT(!ret, "KVM_SEAMCALL failed, ret: %ld, errno: %d", ret, errno);
++
++#ifdef SEAMCALL_VERBOSE
++	printf("SEAMCALL[%llu] out = 0x%llx, 0x%llx, 0x%llx, 0x%llx, 0x%llx, 0x%llx\n",
++	       seamcall->in.rax, seamcall->out.rax, seamcall->out.rcx, seamcall->out.rdx,
++	       seamcall->out.r8, seamcall->out.r9, seamcall->out.r10);
++#endif
++}
++
++static inline u64 seamcall(u64 rax, u64 rcx, u64 rdx, u64 r8, u64 r9, u64 r10)
++{
++	struct kvm_seamcall seamcall;
++
++	seamcall.in.rax = rax;
++	seamcall.in.rcx = rcx;
++	seamcall.in.rdx = rdx;
++	seamcall.in.r8  = r8;
++	seamcall.in.r9  = r9;
++	seamcall.in.r10 = r10;
++
++	__seamcall(&seamcall);
++
++	return seamcall.out.rax;
++}
++
++#define seamcall5(op, rcx, rdx, r8, r9)						\
++({										\
++	u64 err = seamcall(SEAMCALL_##op, rcx, rdx, r8, r9, rand_u64());	\
++										\
++	TEST_ASSERT(!err, "SEAMCALL[" #op "] failed, error code: 0x%lx", err);	\
++})
++
++#define seamcall4(op, rcx, rdx, r8) seamcall5(op, (rcx), (rdx), (r8), rand_u64())
++#define seamcall3(op, rcx, rdx)     seamcall4(op, (rcx), (rdx), rand_u64())
++#define seamcall2(op, rcx)	    seamcall3(op, (rcx), rand_u64())
++#define seamcall1(op)		    seamcall2(op, rand_u64())
++
++static inline u64 __pa(void *va)
++{
++	struct kvm_va_to_pa addr;
++	long ret;
++
++	addr.va = (u64)va;
++
++	ret = ioctl(kvm_fd, KVM_TRANSLATE_VA_TO_PA, &addr);
++	TEST_ASSERT(!ret, "VA_TO_PA failed, ret: %ld, errno: %d", ret, errno);
++	return addr.pa;
++}
++
++#endif /* SELFTEST_KVM_TDX_H */
+diff --git a/tools/testing/selftests/kvm/lib/x86_64/tdx.c b/tools/testing/selftests/kvm/lib/x86_64/tdx.c
+new file mode 100644
+index 000000000000..705b9a771a11
+--- /dev/null
++++ b/tools/testing/selftests/kvm/lib/x86_64/tdx.c
+@@ -0,0 +1,37 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <test_util.h>
++#include <kvm_random.h>
++#include <kvm_util.h>
++#include <processor.h>
++
++#include "tdx.h"
++
++struct tdsysinfo_struct sysinfo;
++
++int kvm_fd;
++
++static struct kvm_vm *dummy_vm;
++
++void tdx_enable(int argc, char **argv)
++{
++	struct cmr_info cmrs[TDX_MAX_NR_CMRS] __aligned(512);
++
++	init_random(parse_seed(argc, argv));
++
++	kvm_fd = open(KVM_DEV_PATH, O_RDWR);
++	TEST_ASSERT(kvm_fd >= 0, "failed to open /dev/kvm fd: %i errno: %i",
++		    kvm_fd, errno);
++
++	/* Create a dummy VM to coerce KVM into doing VMXON. */
++	dummy_vm = vm_create_default(0, 0, NULL);
++
++
++	seamcall5(TDH_SYS_INFO, __pa(&sysinfo), sizeof(sysinfo), __pa(&cmrs),
++		  ARRAY_SIZE(cmrs));
++}
++
++void tdx_disable(void)
++{
++	close(kvm_fd);
++	kvm_vm_free(dummy_vm);
++}
+diff --git a/tools/testing/selftests/kvm/x86_64/tdx_seamcall_test.c b/tools/testing/selftests/kvm/x86_64/tdx_seamcall_test.c
+new file mode 100644
+index 000000000000..eb636efb2009
+--- /dev/null
++++ b/tools/testing/selftests/kvm/x86_64/tdx_seamcall_test.c
+@@ -0,0 +1,65 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * TDX_SEAMCALL_test
++ *
++ * Copyright (C) 2019, Intel.
++ *
++ * This work is licensed under the terms of the GNU GPL, version 2.
++ *
++ * Author:
++ *   Zhang Chen <chen.zhang@intel.com>
++ *
++ */
++#include <linux/bits.h>
++#include <linux/kvm.h>
++
++#include <fcntl.h>
++#include <limits.h>
++#include <kvm_random.h>
++#include <kvm_util.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/ioctl.h>
++#include <sys/types.h>
++#include <test_util.h>
++#include <unistd.h>
++#include <processor.h>
++
++#include "tdx.h"
++
++static void do_random_seamcalls(void)
++{
++	struct kvm_seamcall seamcall;
++	int i;
++
++	for (i = 0; i < 1000; i++) {
++		/* Generate a valid(ish) leaf most of the time. */
++		if (rand_bool_p(90))
++			seamcall.in.rax = __rand_u8(64);
++		else
++			seamcall.in.rax = rand_u64();
++
++		seamcall.in.rcx = rand_pa_or_u64();
++		seamcall.in.rdx = rand_pa_or_u64();
++		seamcall.in.r8  = rand_pa_or_u64();
++		seamcall.in.r9  = rand_pa_or_u64();
++		seamcall.in.r10 = rand_pa_or_u64();
++
++		__seamcall(&seamcall);
++		TEST_ASSERT(seamcall.out.rax,
++			    "SEAMCALL[%llu](0x%llx, 0x%llx, 0x%llx, 0x%llx, 0x%llx) succeeded",
++			    seamcall.in.rax, seamcall.in.rcx, seamcall.in.rdx,
++			    seamcall.in.r8,  seamcall.in.r9,  seamcall.in.r10);
++	}
++}
++
++int main(int argc, char **argv)
++{
++	tdx_enable(argc, argv);
++
++	do_random_seamcalls();
++
++	tdx_disable();
++	return 0;
++}
+-- 
+2.31.1
+

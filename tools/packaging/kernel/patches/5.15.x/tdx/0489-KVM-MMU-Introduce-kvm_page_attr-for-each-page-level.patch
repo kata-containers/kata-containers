@@ -1,0 +1,147 @@
+From 7641af743873b00d35af886bc74bf9ed8138a746 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Tue, 31 Aug 2021 15:34:45 +0800
+Subject: [PATCH 0489/1418] KVM: MMU: Introduce kvm_page_attr for each page
+ level
+
+Maintain three kvm_page_attr arrays per each page size for a
+memory_slot to tell the attribute of given gfn on given page level.
+
+Currently, kvm_page_attr only contains one attribute, kvm_page_type,
+which can be one of below
+
+  - KVM_PAGE_TYPE_INVALID: the page at given level is not a complete page,
+			   it needs to query the next smaller level;
+  - KVM_PAGE_TYPE_SHARD:   the page at given level is a shared page;
+  - KVM_PAGE_TYPE_PRIVATE: the page at given level is a private page;
+  - KVM_PAGE_TYPE_MIXED:   the page at given level contains both shared
+                           and private smaller pages;
+
+Given a gfn, kvm_memory_slot->arch.page_attr[page_level-1][index].type is
+the kvm_page_type of the (large) page in which this gfn belongs to.
+
+KVM_PAGE_TYPE_INVALID or KVM_PAGE_TYPE_MIXED means we need to query the
+smaller level till 4K level.
+
+Note, kvm_page_type of a 4K level (PG_LEVEL_4K) page must be
+KVM_PAGE_TYPE_SHARED or KVM_PAGE_TYPE_PRIVATE.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h | 12 ++++++++++
+ arch/x86/kvm/x86.c              | 40 ++++++++++++++++++++++++++-------
+ 2 files changed, 44 insertions(+), 8 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 8939d7f16572..5f0d4e0d0cb0 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -937,8 +937,20 @@ struct kvm_lpage_info {
+ 	int disallow_lpage;
+ };
+ 
++enum kvm_page_type {
++	KVM_PAGE_TYPE_INVALID,
++	KVM_PAGE_TYPE_SHARED,
++	KVM_PAGE_TYPE_PRIVATE,
++	KVM_PAGE_TYPE_MIXED,
++};
++
++struct kvm_page_attr {
++	enum kvm_page_type type;
++};
++
+ struct kvm_arch_memory_slot {
+ 	struct kvm_rmap_head *rmap[KVM_NR_PAGE_SIZES];
++	struct kvm_page_attr *page_attr[KVM_NR_PAGE_SIZES];
+ 	struct kvm_lpage_info *lpage_info[KVM_NR_PAGE_SIZES - 1];
+ 	unsigned short *gfn_track[KVM_PAGE_TRACK_MAX];
+ };
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index ed4c6b3f82a9..b443d5c6651e 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -11490,7 +11490,12 @@ void kvm_arch_free_memslot(struct kvm *kvm, struct kvm_memory_slot *slot)
+ 
+ 	memslot_rmap_free(slot);
+ 
+-	for (i = 1; i < KVM_NR_PAGE_SIZES; ++i) {
++	for (i = 0; i < KVM_NR_PAGE_SIZES; ++i) {
++		kvfree(slot->arch.page_attr[i]);
++		slot->arch.page_attr[i] = NULL;
++		if (i == 0)
++			continue;
++
+ 		kvfree(slot->arch.lpage_info[i - 1]);
+ 		slot->arch.lpage_info[i - 1] = NULL;
+ 	}
+@@ -11584,32 +11589,46 @@ static int kvm_alloc_memslot_metadata(struct kvm *kvm,
+ 			return r;
+ 	}
+ 
+-	for (i = 1; i < KVM_NR_PAGE_SIZES; ++i) {
++	for (i = 0; i < KVM_NR_PAGE_SIZES; ++i) {
++		struct kvm_page_attr *page_attr;
+ 		struct kvm_lpage_info *linfo;
+-		unsigned long ugfn;
++		unsigned long ugfn, j;
+ 		int lpages;
+ 		int level = i + 1;
+ 
+ 		lpages = __kvm_mmu_slot_lpages(slot, npages, level);
+ 
++		page_attr = kvcalloc(lpages, sizeof(*page_attr), GFP_KERNEL_ACCOUNT);
++		if (!page_attr)
++			goto out_free;
++		slot->arch.page_attr[i] = page_attr;
++
++		for (j = 0; j < lpages; j++)
++			page_attr[j].type = KVM_PAGE_TYPE_PRIVATE;
++
++		if (i == 0)
++			continue;
++
+ 		linfo = kvcalloc(lpages, sizeof(*linfo), GFP_KERNEL_ACCOUNT);
+ 		if (!linfo)
+ 			goto out_free;
+ 
+ 		slot->arch.lpage_info[i - 1] = linfo;
+ 
+-		if (slot->base_gfn & (KVM_PAGES_PER_HPAGE(level) - 1))
++		if (slot->base_gfn & (KVM_PAGES_PER_HPAGE(level) - 1)) {
++			page_attr[0].type = KVM_PAGE_TYPE_INVALID;
+ 			linfo[0].disallow_lpage = 1;
+-		if ((slot->base_gfn + npages) & (KVM_PAGES_PER_HPAGE(level) - 1))
++		}
++		if ((slot->base_gfn + npages) & (KVM_PAGES_PER_HPAGE(level) - 1)) {
++			page_attr[lpages - 1].type = KVM_PAGE_TYPE_INVALID;
+ 			linfo[lpages - 1].disallow_lpage = 1;
++		}
+ 		ugfn = slot->userspace_addr >> PAGE_SHIFT;
+ 		/*
+ 		 * If the gfn and userspace address are not aligned wrt each
+ 		 * other, disable large page support for this slot.
+ 		 */
+ 		if ((slot->base_gfn ^ ugfn) & (KVM_PAGES_PER_HPAGE(level) - 1)) {
+-			unsigned long j;
+-
+ 			for (j = 0; j < lpages; ++j)
+ 				linfo[j].disallow_lpage = 1;
+ 		}
+@@ -11623,7 +11642,12 @@ static int kvm_alloc_memslot_metadata(struct kvm *kvm,
+ out_free:
+ 	memslot_rmap_free(slot);
+ 
+-	for (i = 1; i < KVM_NR_PAGE_SIZES; ++i) {
++	for (i = 0; i < KVM_NR_PAGE_SIZES; ++i) {
++		kvfree(slot->arch.page_attr[i]);
++		slot->arch.page_attr[i] = NULL;
++		if (i == 0)
++			continue;
++
+ 		kvfree(slot->arch.lpage_info[i - 1]);
+ 		slot->arch.lpage_info[i - 1] = NULL;
+ 	}
+-- 
+2.31.1
+

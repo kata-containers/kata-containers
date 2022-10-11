@@ -1,0 +1,120 @@
+From b317f94e37632cc53a5752c970bf51103cf099ad Mon Sep 17 00:00:00 2001
+From: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Date: Mon, 27 Dec 2021 20:23:12 +0200
+Subject: [PATCH 1057/1418] tdx: Illustrate #VE in NMI
+
+Signed-off-by: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+---
+ arch/x86/kernel/tdx-tests.c | 60 +++++++++++++++++++++++++++++++++++--
+ arch/x86/kernel/tdx.c       |  2 ++
+ 2 files changed, 59 insertions(+), 3 deletions(-)
+
+diff --git a/arch/x86/kernel/tdx-tests.c b/arch/x86/kernel/tdx-tests.c
+index bc180b66ce53..e5eca8946149 100644
+--- a/arch/x86/kernel/tdx-tests.c
++++ b/arch/x86/kernel/tdx-tests.c
+@@ -79,11 +79,16 @@ static struct perf_event_attr attr = {
+ 	.bp_len		= sizeof(long),
+ };
+ 
+-unsigned int bp_hit;
++unsigned int bp_hit, ovf_hit;
+ 
+-static void overflow_cb(struct perf_event *bp, struct perf_sample_data *sample, struct pt_regs *regs)
++static void breakpoint_cb(struct perf_event *bp, struct perf_sample_data *sample, struct pt_regs *regs)
+ {
++	unsigned int a, b, c, d;
+ 	bp_hit++;
++
++	a = b = c = d = 0;
++	cpuid_count(5, 0, &a, &b, &c, &d);
++	trace_printk("CPUID5: %u %u %u %u\n", a, b, c, d);
+ }
+ 
+ static void kvm_test_breakpoint(void)
+@@ -108,7 +113,7 @@ static void kvm_test_breakpoint(void)
+ 
+ 	if (!bp) {
+ 		attr.bp_addr = start + 5;
+-		bp = register_wide_hw_breakpoint(&attr, overflow_cb, NULL);
++		bp = register_wide_hw_breakpoint(&attr, breakpoint_cb, NULL);
+ 		if (IS_ERR(bp)) {
+ 			pr_warn("can't create breakpoint at %llu: %ld\n", attr.bp_addr, PTR_ERR(bp));
+ 			return;
+@@ -117,11 +122,60 @@ static void kvm_test_breakpoint(void)
+ 	goto again;
+ }
+ 
++static void overflow_cb(struct perf_event *bp, struct perf_sample_data *sample, struct pt_regs *regs)
++{
++	unsigned int a, b, c, d;
++	ovf_hit++;
++	a = b = c = d = 0;
++	cpuid_count(5, 0, &a, &b, &c, &d);
++	trace_printk("CPUID5: %u %u %u %u in_nmi: %d\n", a, b, c, d, !!in_nmi());
++}
++
++static struct perf_event_attr attr_insn = {
++	.type = PERF_TYPE_HARDWARE,
++	.config = PERF_COUNT_HW_CPU_CYCLES,
++	.size = sizeof(struct perf_event_attr),
++	.pinned = 1,
++	.sample_period = 1000,
++};
++
++static void kvm_test_instructions(void)
++{
++	unsigned long start = 0;
++	struct perf_event *event = NULL;
++	int retry = 20;
++
++again:
++	if (event && !--retry) {
++		perf_event_release_kernel(event);
++		pr_warn("ovf_hit: %d\n", ovf_hit);
++		return;
++	}
++
++	asm volatile(
++		"lea (%%rip),%0\n\t"
++		"movl $0x5,%%eax\n\t"
++		"cpuid\n\t"
++		: "=r" (start) : : "eax", "ebx", "ecx", "edx"
++	);
++
++	if (!event) {
++		event = perf_event_create_kernel_counter(&attr_insn, raw_smp_processor_id(),
++							 NULL, overflow_cb, NULL);
++		if (IS_ERR(event)) {
++			pr_warn("can't create on cpu%d: %ld\n", raw_smp_processor_id(), PTR_ERR(event));
++			return;
++		}
++	}
++	goto again;
++}
++
+ int __init kvm_unit_test_debug_init(void)
+ {
+ 	unsigned long start;
+ 
+ 	kvm_test_breakpoint();
++	kvm_test_instructions();
+ 
+ 	register_die_notifier(&kvm_unit_test_debug_notifier);
+ 
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 7f8c187dc406..bf6c139eddfa 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -883,6 +883,8 @@ bool tdx_handle_virtualization_exception(struct pt_regs *regs,
+ 		ret = tdx_write_msr_safe(regs->cx, regs->ax, regs->dx);
+ 		break;
+ 	case EXIT_REASON_CPUID:
++		if (regs->ax == 5)
++			trace_printk("#VE CPUID at %pS\n", (void *)regs->ip);
+ 		ret = tdx_handle_cpuid(regs);
+ 		break;
+ 	case EXIT_REASON_IO_INSTRUCTION:
+-- 
+2.31.1
+

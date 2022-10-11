@@ -1,0 +1,110 @@
+From 63888f11b4c46c7767e5ba395d76fb0553081439 Mon Sep 17 00:00:00 2001
+From: Haibo Xu <haibo1.xu@intel.com>
+Date: Tue, 12 Jul 2022 22:23:40 -0400
+Subject: [PATCH 1414/1418] update the TDEL support according to latest GHCI
+ spec
+
+ACPI TDEL table was renamed to CCEL(Confidential Computing Event Log)
+table in the latest TDX GHCI specification(Version 1.0, 344426-003US,
+Feb 2022), so change the table name as well as some table fields
+definition accordingly.
+
+Signed-off-by: Haibo Xu <haibo1.xu@intel.com>
+---
+ arch/x86/kernel/tdx-filter.c |  2 +-
+ drivers/acpi/sysfs.c         | 16 ++++++++--------
+ include/acpi/actbl3.h        | 14 ++++++++------
+ 3 files changed, 17 insertions(+), 15 deletions(-)
+
+diff --git a/arch/x86/kernel/tdx-filter.c b/arch/x86/kernel/tdx-filter.c
+index 4e1bfb745e3a..fe27728a404e 100644
+--- a/arch/x86/kernel/tdx-filter.c
++++ b/arch/x86/kernel/tdx-filter.c
+@@ -286,7 +286,7 @@ void __init tdx_filter_init(void)
+ 		pr_debug("Device filter is overridden\n");
+ 	}
+ 
+-	allowed = "XSDT,FACP,DSDT,FACS,APIC,SVKL,TDEL";
++	allowed = "XSDT,FACP,DSDT,FACS,APIC,SVKL,CCEL";
+ 	if (cmdline_find_option(boot_command_line, "tdx_allow_acpi",
+ 				a_allowed, sizeof(a_allowed)) >= 0) {
+ 		add_taint(TAINT_CONF_NO_LOCKDOWN, LOCKDEP_STILL_OK);
+diff --git a/drivers/acpi/sysfs.c b/drivers/acpi/sysfs.c
+index 782cb126a381..51547c62cb4d 100644
+--- a/drivers/acpi/sysfs.c
++++ b/drivers/acpi/sysfs.c
+@@ -446,18 +446,18 @@ static int acpi_bert_data_init(void *th, struct acpi_data_attr *data_attr)
+ 	return sysfs_create_bin_file(tables_data_kobj, &data_attr->attr);
+ }
+ 
+-static int acpi_tdel_data_init(void *th, struct acpi_data_attr *data_attr)
++static int acpi_ccel_data_init(void *th, struct acpi_data_attr *data_attr)
+ {
+-	struct acpi_table_tdel *tdel = th;
++	struct acpi_table_ccel *ccel = th;
+ 
+-	if (tdel->header.length < sizeof(struct acpi_table_tdel) ||
+-	    !(tdel->log_area_address) || !(tdel->log_area_length)) {
++	if (ccel->header.length < sizeof(struct acpi_table_ccel) ||
++	    !(ccel->log_area_address) || !(ccel->log_area_length)) {
+ 		kfree(data_attr);
+ 		return -EINVAL;
+ 	}
+-	data_attr->addr = tdel->log_area_address;
+-	data_attr->attr.size = tdel->log_area_length;
+-	data_attr->attr.attr.name = "TDEL";
++	data_attr->addr = ccel->log_area_address;
++	data_attr->attr.size = ccel->log_area_length;
++	data_attr->attr.attr.name = "CCEL";
+ 
+ 	return sysfs_create_bin_file(tables_data_kobj, &data_attr->attr);
+ }
+@@ -467,7 +467,7 @@ static struct acpi_data_obj {
+ 	int (*fn)(void *, struct acpi_data_attr *);
+ } acpi_data_objs[] = {
+ 	{ ACPI_SIG_BERT, acpi_bert_data_init },
+-	{ ACPI_SIG_TDEL, acpi_tdel_data_init },
++	{ ACPI_SIG_CCEL, acpi_ccel_data_init },
+ };
+ 
+ #define NUM_ACPI_DATA_OBJS ARRAY_SIZE(acpi_data_objs)
+diff --git a/include/acpi/actbl3.h b/include/acpi/actbl3.h
+index d58cb2cb51b1..f23cd44d855f 100644
+--- a/include/acpi/actbl3.h
++++ b/include/acpi/actbl3.h
+@@ -42,7 +42,7 @@
+ #define ACPI_SIG_WSMT           "WSMT"	/* Windows SMM Security Mitigations Table */
+ #define ACPI_SIG_XENV           "XENV"	/* Xen Environment table */
+ #define ACPI_SIG_XXXX           "XXXX"	/* Intermediate AML header for ASL/ASL+ converter */
+-#define ACPI_SIG_TDEL           "TDEL"	/* Intel Trust Domain Event Log table */
++#define ACPI_SIG_CCEL           "CCEL"	/* Confidential Computing Event Log table */
+ 
+ /*
+  * All tables must be byte-packed to match the ACPI specification, since
+@@ -472,16 +472,18 @@ struct acpi_tpm2_arm_smc {
+ 
+ /*******************************************************************************
+  *
+- * TDEL - Trust Domain Event Log Table
++ * CCEL - Confidential Computing Event Log Table
+  *
+- * Conforms to Intel TDX GHCI Specification
+- * Version 1, Sep 2021
++ * Conforms to Intel TDX GHCI Specification Version 1.0,
++ * 344426-003US, Feb 2022
+  *
+  ******************************************************************************/
+ 
+-struct acpi_table_tdel {
++struct acpi_table_ccel {
+ 	struct acpi_table_header header;    /* Common ACPI table header */
+-	u32 reserved;
++	u8  cc_type;            /* Confidential Computing type */
++	u8  cc_subtype;         /* Confidential Computing type specific sub-type */
++	u16 reserved;
+ 	u64 log_area_length;    /* Log area minimum length */
+ 	u64 log_area_address;   /* Log area start address */
+ };
+-- 
+2.31.1
+

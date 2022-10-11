@@ -1,0 +1,121 @@
+From c4c65ffa423a448b03e4aa75a2fc27bbb6e01116 Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Fri, 23 Jul 2021 15:58:31 +0800
+Subject: [PATCH 0281/1418] KVM: VMX: Expose PKS to guest
+
+Existence of PKS is enumerated via CPUID.(EAX=7,ECX=0):ECX[31]. It is
+enabled by setting CR4.PKS when long mode is active. PKS is only
+implemented when EPT is enabled and requires the support of
+VM_{ENTRY,EXIT}_LOAD_IA32_PKRS VMCS controls currently.
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h |  3 ++-
+ arch/x86/kvm/cpuid.c            |  2 +-
+ arch/x86/kvm/vmx/capabilities.h |  6 ++++++
+ arch/x86/kvm/vmx/vmx.c          | 15 ++++++++++++---
+ arch/x86/kvm/x86.h              |  2 ++
+ 5 files changed, 23 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index aa4aa633c8c5..8a94896b0575 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -118,7 +118,8 @@
+ 			  | X86_CR4_PGE | X86_CR4_PCE | X86_CR4_OSFXSR | X86_CR4_PCIDE \
+ 			  | X86_CR4_OSXSAVE | X86_CR4_SMEP | X86_CR4_FSGSBASE \
+ 			  | X86_CR4_OSXMMEXCPT | X86_CR4_LA57 | X86_CR4_VMXE \
+-			  | X86_CR4_SMAP | X86_CR4_PKE | X86_CR4_UMIP))
++			  | X86_CR4_SMAP | X86_CR4_PKE | X86_CR4_UMIP \
++			  | X86_CR4_PKS))
+ 
+ #define CR8_RESERVED_BITS (~(unsigned long)X86_CR8_TPR)
+ 
+diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c
+index 751aa85a3001..1f65bcfcbfbb 100644
+--- a/arch/x86/kvm/cpuid.c
++++ b/arch/x86/kvm/cpuid.c
+@@ -432,7 +432,7 @@ void kvm_set_cpu_caps(void)
+ 		F(AVX512_VPOPCNTDQ) | F(UMIP) | F(AVX512_VBMI2) | F(GFNI) |
+ 		F(VAES) | F(VPCLMULQDQ) | F(AVX512_VNNI) | F(AVX512_BITALG) |
+ 		F(CLDEMOTE) | F(MOVDIRI) | F(MOVDIR64B) | 0 /*WAITPKG*/ |
+-		F(SGX_LC) | F(BUS_LOCK_DETECT)
++		F(SGX_LC) | F(BUS_LOCK_DETECT) | 0 /*PKS*/
+ 	);
+ 	/* Set LA57 based on hardware capability. */
+ 	if (cpuid_ecx(7) & F(LA57))
+diff --git a/arch/x86/kvm/vmx/capabilities.h b/arch/x86/kvm/vmx/capabilities.h
+index 78b0525dd991..3f113db23277 100644
+--- a/arch/x86/kvm/vmx/capabilities.h
++++ b/arch/x86/kvm/vmx/capabilities.h
+@@ -106,6 +106,12 @@ static inline bool cpu_has_load_perf_global_ctrl(void)
+ 	       (vmcs_config.vmexit_ctrl & VM_EXIT_LOAD_IA32_PERF_GLOBAL_CTRL);
+ }
+ 
++static inline bool cpu_has_load_ia32_pkrs(void)
++{
++	return (vmcs_config.vmentry_ctrl & VM_ENTRY_LOAD_IA32_PKRS) &&
++	       (vmcs_config.vmexit_ctrl & VM_EXIT_LOAD_IA32_PKRS);
++}
++
+ static inline bool cpu_has_vmx_mpx(void)
+ {
+ 	return (vmcs_config.vmexit_ctrl & VM_EXIT_CLEAR_BNDCFGS) &&
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 0427403c4c24..e83e66c23dd0 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -3280,7 +3280,7 @@ void vmx_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
+ 		}
+ 
+ 		/*
+-		 * SMEP/SMAP/PKU is disabled if CPU is in non-paging mode in
++		 * SMEP/SMAP/PKU/PKS is disabled if CPU is in non-paging mode in
+ 		 * hardware.  To emulate this behavior, SMEP/SMAP/PKU needs
+ 		 * to be manually disabled when guest switches to non-paging
+ 		 * mode.
+@@ -3288,10 +3288,11 @@ void vmx_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
+ 		 * If !enable_unrestricted_guest, the CPU is always running
+ 		 * with CR0.PG=1 and CR4 needs to be modified.
+ 		 * If enable_unrestricted_guest, the CPU automatically
+-		 * disables SMEP/SMAP/PKU when the guest sets CR0.PG=0.
++		 * disables SMEP/SMAP/PKU/PKS when the guest sets CR0.PG=0.
+ 		 */
+ 		if (!is_paging(vcpu))
+-			hw_cr4 &= ~(X86_CR4_SMEP | X86_CR4_SMAP | X86_CR4_PKE);
++			hw_cr4 &= ~(X86_CR4_SMEP | X86_CR4_SMAP | X86_CR4_PKE |
++				    X86_CR4_PKS);
+ 	}
+ 
+ 	vmcs_writel(CR4_READ_SHADOW, cr4);
+@@ -7436,6 +7437,14 @@ static __init void vmx_set_cpu_caps(void)
+ 
+ 	if (cpu_has_vmx_waitpkg())
+ 		kvm_cpu_cap_check_and_set(X86_FEATURE_WAITPKG);
++
++	/*
++	 * PKS is not yet implemented for shadow paging.
++	 * If not support VM_{ENTRY, EXIT}_LOAD_IA32_PKRS,
++	 * don't expose the PKS as well.
++	 */
++	if (enable_ept && cpu_has_load_ia32_pkrs())
++		kvm_cpu_cap_check_and_set(X86_FEATURE_PKS);
+ }
+ 
+ static void vmx_request_immediate_exit(struct kvm_vcpu *vcpu)
+diff --git a/arch/x86/kvm/x86.h b/arch/x86/kvm/x86.h
+index 7fede6769f03..4ce3bc8c1dc9 100644
+--- a/arch/x86/kvm/x86.h
++++ b/arch/x86/kvm/x86.h
+@@ -483,6 +483,8 @@ bool kvm_msr_allowed(struct kvm_vcpu *vcpu, u32 index, u32 type);
+ 		__reserved_bits |= X86_CR4_VMXE;        \
+ 	if (!__cpu_has(__c, X86_FEATURE_PCID))          \
+ 		__reserved_bits |= X86_CR4_PCIDE;       \
++	if (!__cpu_has(__c, X86_FEATURE_PKS))		\
++		__reserved_bits |= X86_CR4_PKS;		\
+ 	__reserved_bits;                                \
+ })
+ 
+-- 
+2.31.1
+

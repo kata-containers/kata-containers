@@ -1,0 +1,56 @@
+From e9379e5da5f9a7edaae665c3359d70af85b0ec4d Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Wed, 10 Nov 2021 23:59:48 +0800
+Subject: [PATCH 0896/1418] vfio/type1: A fix for iommu: forklift v5.12 iommu
+ to v5.15 bkc
+
+The iommu part of below commit was merged by forklift v5.12 iommu to v5.15 bkc.
+But vfio is still using the old API, so it will cause compiling errors.
+
+   commit af8e85ec400d4fd01b80cc8cf8654098ffbff6ba
+   Author: Sun, Yi Y <yi.y.sun@intel.com>
+   Date:   Wed Nov 25 16:37:42 2020 +0800
+
+       iommu/vt-d: Support bind/unbind guest page table to default PASID
+
+       For guest IOVA support under nesting IOMMU, hypervisor needs to bind/
+       unbind guest's IOVA page table to host. For such bind/unbind request
+       from user space, host should figure out a target PASID (host default
+       PASID) to be bound. This patch adds a flag to indicate host IOMMU
+       driver if it needs to use default PASID in host.
+
+       FIXME: pasid_set = NULL; // dmar_domain->pasid_set;
+
+       Change-Id: I71301dd022be8970abad9a51e7fe52650bc9055b
+       Signed-off-by: Sun, Yi Y <yi.y.sun@intel.com>
+       Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ drivers/vfio/vfio_iommu_type1.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/vfio/vfio_iommu_type1.c b/drivers/vfio/vfio_iommu_type1.c
+index 24346b8bbd58..94ff94cf09db 100644
+--- a/drivers/vfio/vfio_iommu_type1.c
++++ b/drivers/vfio/vfio_iommu_type1.c
+@@ -170,6 +170,7 @@ struct domain_capsule {
+ 	void			*data;
+ 	/* set if @data contains a user pointer*/
+ 	bool			user;
++	u64			flags;
+ };
+ 
+ /* iommu->lock must be held */
+@@ -2786,7 +2787,7 @@ static int vfio_dev_unbind_gpasid_fn(struct device *dev, void *data)
+ 	} else {
+ 		ioasid_t pasid = *(ioasid_t *)dc->data;
+ 
+-		iommu_sva_unbind_gpasid(dc->domain, iommu_device, pasid);
++		iommu_sva_unbind_gpasid(dc->domain, iommu_device, pasid, dc->flags);
+ 	}
+ 	return 0;
+ }
+-- 
+2.31.1
+

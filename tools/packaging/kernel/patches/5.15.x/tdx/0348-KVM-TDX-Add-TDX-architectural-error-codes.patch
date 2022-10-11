@@ -1,0 +1,33 @@
+From a49e1b3979eca46bb3b183d3d0ff00b10be948ac Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Fri, 8 Nov 2019 07:05:42 -0800
+Subject: [PATCH 0348/1418] KVM: TDX: Add TDX "architectural" error codes
+
+Add TDX completion status codes for TDG_VP_VMCALL.  Completion status codes
+for TDG.VP.VMCALL is defined in The Guest-Hypervisor communication
+interface specification.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/tdx_errno.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/x86/include/asm/tdx_errno.h b/arch/x86/include/asm/tdx_errno.h
+index 5eb94150e3d1..98d6f59ff7ad 100644
+--- a/arch/x86/include/asm/tdx_errno.h
++++ b/arch/x86/include/asm/tdx_errno.h
+@@ -194,5 +194,11 @@
+ 	TDX_STATUS_CODE(TDX_PAGE_ALREADY_ACCEPTED),		\
+ 	TDX_STATUS_CODE(TDX_PAGE_SIZE_MISMATCH)
+ 
++/*
++ * TDG.VP.VMCALL Status Codes (returned in R10)
++ */
++#define TDG_VP_VMCALL_SUCCESS			0x0000000000000000ULL
++#define TDG_VP_VMCALL_INVALID_OPERAND		0x8000000000000000ULL
++#define TDG_VP_VMCALL_TDREPORT_FAILED		0x8000000000000001ULL
+ 
+ #endif /* __ASM_X86_TDX_ERRNO_H */
+-- 
+2.31.1
+

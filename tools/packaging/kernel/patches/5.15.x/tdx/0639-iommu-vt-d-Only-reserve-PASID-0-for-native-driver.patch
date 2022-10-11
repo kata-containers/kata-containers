@@ -1,0 +1,39 @@
+From 92c16d404d14afa8fcd3413d72eddd2aa60b4052 Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Tue, 1 Dec 2020 18:11:08 +0800
+Subject: [PATCH 0639/1418] iommu/vt-d: Only reserve PASID#0 for native driver
+
+This is a temparay fix. Without this fix, will always see an ioasid allocation
+failure in guest if scalable mode viommu is exposed.
+
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/intel/iommu.c | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index ba07ccd3a998..1f45854f8cee 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -3358,8 +3358,16 @@ static int __init init_dmars(void)
+ 		} else {
+ 			intel_svm_add_pasid_notifier();
+ 			/* TODO: where to free? */
+-			ioasid_alloc(host_pasid_set, PASID_RID2PASID,
+-				     PASID_RID2PASID, NULL);
++			/* If do this allocation in guest, then it may encounter
++			 * failure as guest allocation will go into host, while
++			 * PASID#0 should have been allocated before VM boot. So
++			 * Add this check. And in future, we may want to let ioasid
++			 * provide a way to only reserve PASID #0 in its own ioasid
++			 * space.
++			 */
++			if (!cap_caching_mode(iommu->cap))
++				ioasid_alloc(host_pasid_set, PASID_RID2PASID,
++					     PASID_RID2PASID, NULL);
+ 		}
+ 	}
+ 
+-- 
+2.31.1
+

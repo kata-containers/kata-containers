@@ -1,0 +1,47 @@
+From 58d4fe95705d1cfe22cb09be8f74146792415983 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Sun, 12 Dec 2021 17:33:02 +0800
+Subject: [PATCH 0751/1418] x86/cpu/tdx: Keep tdmr_info and tdx_cmrs for reuse
+
+TDMRs are built according to CMRs, e820 table and TDX architectual
+alignment requirements and TDX module's PAMT entry size. PAMT entry size is
+the only one that can change along with TDX module. But in practice, PAMT
+entry size is constant for TDX 1.0 and changes only in rare cases (adding
+TDXIO support).  For now, we assume PAMT entry size doesn't change. And
+based on this assumption, TDMRs can be reused for TDX module update.
+
+Reconstructing TDMRs/PAMTs when PAMT entry size changes is another
+solution.  For now leave it as a future task.
+
+tdx_cmrs can be used to hold CMRs passed from TDX module.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index e88e51523422..71063ec2a1ac 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -1312,8 +1312,15 @@ static int __init tdx_late_init(void)
+ 	}
+ 	cpus_read_unlock();
+ 
+-	kfree(tdmr_info);
+-	kfree(tdx_cmrs);
++	/*
++	 * Don't free tdmr_info and tdx_cmrs. tdmr_info can be reused
++	 * to configure TDMRs for the new TDX module. tdx_cmrs can be
++	 * used to hold CMRs passed from TDX module.
++	 */
++	if (ret) {
++		kfree(tdmr_info);
++		kfree(tdx_cmrs);
++	}
+ 	cleanup_subtype_tdx_memory();
+ 	mutex_unlock(&tdx_mutex);
+ 
+-- 
+2.31.1
+

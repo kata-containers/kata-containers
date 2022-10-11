@@ -1,0 +1,164 @@
+From 3a1d540d2f3a1e216fbc7052f3af1d468ce72025 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Fri, 22 Oct 2021 15:39:13 -0700
+Subject: [PATCH 1028/1418] iommu: Add PASID support for DMA mapping API users
+
+DMA mapping API is the de facto standard for in-kernel DMA. It operates
+on a per device/RID basis which is not PASID-aware.
+
+Some modern devices such as Intel Data Streaming Accelerator, PASID is
+required for certain work submissions. To allow such devices use DMA
+mapping API, we need the following functionalities:
+1. Provide device a way to retrive a kernel PASID for work submission
+2. Enable the kernel PASID on the IOMMU
+3. Establish address space for the kernel PASID that matches the default
+   domain. Let it be IOVA or physical address in case of pass-through.
+
+This patch introduces a driver facing API that enables DMA API
+PASID usage. Once enabled, device drivers can continue to use DMA APIs as
+is. There is no difference in dma_handle between without PASID and with
+PASID.
+
+To manage device IOTLB flush at PASID level, this patch also introduces
+a .pasid field to struct device. This also serves as a flag indicating
+whether PASID is being used for the device to perform in-kernel DMA.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/dma-iommu.c | 65 +++++++++++++++++++++++++++++++++++++++
+ include/linux/device.h    |  1 +
+ include/linux/dma-iommu.h |  7 +++++
+ include/linux/iommu.h     |  4 +++
+ 4 files changed, 77 insertions(+)
+
+diff --git a/drivers/iommu/dma-iommu.c b/drivers/iommu/dma-iommu.c
+index 0af40eb8fc47..95209428145d 100644
+--- a/drivers/iommu/dma-iommu.c
++++ b/drivers/iommu/dma-iommu.c
+@@ -172,6 +172,71 @@ void iommu_put_dma_cookie(struct iommu_domain *domain)
+ }
+ EXPORT_SYMBOL(iommu_put_dma_cookie);
+ 
++/**
++ * iommu_enable_pasid_dma --Enable in-kernel DMA request with PASID
++ * @dev:	Device to be enabled
++ *
++ * DMA request with PASID will be mapped the same way as the legacy DMA.
++ * If the device is in pass-through, PASID will also pass-through. If the
++ * device is in IOVA map, the supervisor PASID will point to the same IOVA
++ * page table.
++ *
++ * @return the kernel PASID to be used for DMA or INVALID_IOASID on failure
++ */
++ioasid_t iommu_enable_pasid_dma(struct device *dev)
++{
++	struct iommu_domain *dom;
++
++	if (dev->pasid) {
++		dev_err(dev, "PASID DMA already enabled\n");
++		return IOASID_DMA_PASID;
++	}
++	dom = iommu_get_domain_for_dev(dev);
++	/*
++	 * Use the reserved kernel PASID for all devices. For now,
++	 * there is no need to have different PASIDs for in-kernel use.
++	 */
++	if (!dom->ops->enable_pasid_dma || dom->ops->enable_pasid_dma(dev, IOASID_DMA_PASID))
++		return INVALID_IOASID;
++	/* Used for device IOTLB flush */
++	dev->pasid = IOASID_DMA_PASID;
++
++	return IOASID_DMA_PASID;
++}
++EXPORT_SYMBOL(iommu_enable_pasid_dma);
++
++/**
++ * iommu_disable_pasid_dma --Disable in-kernel DMA request with PASID
++ * @dev:	Device's PASID DMA to be disabled
++ *
++ * It is the device driver's responsibility to ensure no more incoming DMA
++ * requests with the kernel PASID before calling this function. IOMMU driver
++ * ensures PASID cache, IOTLBs related to the kernel PASID are cleared and
++ * drained.
++ *
++ * @return 0 on success or error code on failure
++ */
++int iommu_disable_pasid_dma(struct device *dev)
++{
++	struct iommu_domain *dom;
++	int ret = 0;
++
++	if (!dev->pasid) {
++		dev_err(dev, "PASID DMA not enabled\n");
++		return -ENODEV;
++	}
++	dom = iommu_get_domain_for_dev(dev);
++	if (!dom->ops->disable_pasid_dma)
++		return -ENOTSUPP;
++
++	ret = dom->ops->disable_pasid_dma(dev);
++	if (!ret)
++		dev->pasid = 0;
++
++	return ret;
++}
++EXPORT_SYMBOL(iommu_disable_pasid_dma);
++
+ /**
+  * iommu_dma_get_resv_regions - Reserved region driver helper
+  * @dev: Device from iommu_get_resv_regions()
+diff --git a/include/linux/device.h b/include/linux/device.h
+index 958096d5c19f..90e4741a965b 100644
+--- a/include/linux/device.h
++++ b/include/linux/device.h
+@@ -563,6 +563,7 @@ struct device {
+ 	void	(*release)(struct device *dev);
+ 	struct iommu_group	*iommu_group;
+ 	struct dev_iommu	*iommu;
++	u32			pasid;	/* For in-kernel DMA w/ PASID */
+ 
+ 	enum device_removable	removable;
+ 
+diff --git a/include/linux/dma-iommu.h b/include/linux/dma-iommu.h
+index 706b68d1359b..1f42f0ddc2a5 100644
+--- a/include/linux/dma-iommu.h
++++ b/include/linux/dma-iommu.h
+@@ -18,6 +18,13 @@ int iommu_get_dma_cookie(struct iommu_domain *domain);
+ int iommu_get_msi_cookie(struct iommu_domain *domain, dma_addr_t base);
+ void iommu_put_dma_cookie(struct iommu_domain *domain);
+ 
++/*
++ * For devices that can do DMA request with PASID, setup a system PASID.
++ * Address modes (IOVA, PA) are selected by the platform code.
++ */
++ioasid_t iommu_enable_pasid_dma(struct device *dev);
++int iommu_disable_pasid_dma(struct device *dev);
++
+ /* Setup call for arch DMA mapping code */
+ void iommu_setup_dma_ops(struct device *dev, u64 dma_base, u64 size);
+ 
+diff --git a/include/linux/iommu.h b/include/linux/iommu.h
+index fb2c665fe6c0..e35a82c9c5b4 100644
+--- a/include/linux/iommu.h
++++ b/include/linux/iommu.h
+@@ -234,6 +234,8 @@ struct iommu_iotlb_gather {
+  *		- IOMMU_DOMAIN_IDENTITY: must use an identity domain
+  *		- IOMMU_DOMAIN_DMA: must use a dma domain
+  *		- 0: use the default setting
++ * @enable_pasid_dma: Set up PASID for in-kernel DMA
++ * @disable_pasid_dma: Disable in-kernel DMA with PASID on the device
+  * @pgsize_bitmap: bitmap of all possible supported page sizes
+  * @owner: Driver module providing these ops
+  * @sva_suspend_pasid: stop activities related to a pasid but maintain the bond
+@@ -333,6 +335,8 @@ struct iommu_ops {
+ 			unsigned long *bitmap, unsigned long base_iova,
+ 			unsigned long bitmap_pgshift);
+ 
++	int (*enable_pasid_dma)(struct device *dev, u32 pasid);
++	int (*disable_pasid_dma)(struct device *dev);
+ 	unsigned long pgsize_bitmap;
+ 	struct module *owner;
+ };
+-- 
+2.31.1
+

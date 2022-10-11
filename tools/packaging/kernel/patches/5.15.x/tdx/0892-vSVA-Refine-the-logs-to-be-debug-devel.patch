@@ -1,0 +1,123 @@
+From b79f66a2abf4072aa01cac0f4b730780e5f730b0 Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Fri, 25 Jun 2021 20:53:09 +0800
+Subject: [PATCH 0892/1418] vSVA: Refine the logs to be debug devel
+
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/vfio/pci/vfio_pci_core.c |  4 ++--
+ drivers/vfio/vfio_iommu_type1.c  | 26 +++++++++++++-------------
+ 2 files changed, 15 insertions(+), 15 deletions(-)
+
+diff --git a/drivers/vfio/pci/vfio_pci_core.c b/drivers/vfio/pci/vfio_pci_core.c
+index 01186e6c7d9e..505fa632c280 100644
+--- a/drivers/vfio/pci/vfio_pci_core.c
++++ b/drivers/vfio/pci/vfio_pci_core.c
+@@ -340,7 +340,7 @@ int vfio_pci_iommu_dev_fault_handler(struct iommu_fault *fault, void *data)
+ 
+ 	mutex_lock(&vdev->fault_queue_lock);
+ 
+-	dev_info(&vdev->pdev->dev, "%s, enque fault event\n", __func__);
++	dev_dbg(&vdev->pdev->dev, "%s, enque fault event\n", __func__);
+ 	head = reg->head;
+ 	tail = reg->tail;
+ 	size = reg->nb_entries;
+@@ -363,7 +363,7 @@ int vfio_pci_iommu_dev_fault_handler(struct iommu_fault *fault, void *data)
+ 		return -EINVAL;
+ 
+ 	mutex_lock(&vdev->igate);
+-	dev_info(&vdev->pdev->dev, "%s, signal userspace!\n", __func__);
++	dev_dbg(&vdev->pdev->dev, "%s, signal userspace!\n", __func__);
+ 	if (vdev->ext_irqs[ext_irq_index].trigger)
+ 		eventfd_signal(vdev->ext_irqs[ext_irq_index].trigger, 1);
+ 	mutex_unlock(&vdev->igate);
+diff --git a/drivers/vfio/vfio_iommu_type1.c b/drivers/vfio/vfio_iommu_type1.c
+index 98358cf3ab0a..f2c5ac904ced 100644
+--- a/drivers/vfio/vfio_iommu_type1.c
++++ b/drivers/vfio/vfio_iommu_type1.c
+@@ -2735,7 +2735,7 @@ static int vfio_dev_bind_gpasid_fn(struct device *dev, void *data)
+ 	struct device *iommu_device;
+ 	void *iommu_fault_data = NULL;
+ 
+-	printk("%s, - arg: 0x%lx\n", __func__, arg);
++	pr_debug("%s, - arg: 0x%lx\n", __func__, arg);
+ 	iommu_device = vfio_get_iommu_device(dc->group, dev);
+ 	if (!iommu_device)
+ 		return -EINVAL;
+@@ -2743,7 +2743,7 @@ static int vfio_dev_bind_gpasid_fn(struct device *dev, void *data)
+ 	if (iommu_device != dev)
+ 		iommu_fault_data = mdev_get_iommu_fault_data(mdev);
+ 
+-	printk("%s: iommu_fault_data: %llx\n", __func__, (unsigned long long) iommu_fault_data);
++	pr_debug("%s: iommu_fault_data: %llx\n", __func__, (unsigned long long) iommu_fault_data);
+ 
+ 	return iommu_uapi_sva_bind_gpasid(dc->domain, iommu_device,
+ 					  (void __user *)arg,
+@@ -2770,7 +2770,7 @@ static int vfio_dev_unbind_gpasid_fn(struct device *dev, void *data)
+ 	if (dc->user) {
+ 		unsigned long arg = *(unsigned long *)dc->data;
+ 
+-		printk("%s, - arg: 0x%lx\n", __func__, arg);
++		pr_debug("%s, - arg: 0x%lx\n", __func__, arg);
+ 		iommu_uapi_sva_unbind_gpasid(dc->domain, iommu_device,
+ 					     (void __user *)arg);
+ 	} else {
+@@ -3443,7 +3443,7 @@ static int vfio_dev_cache_invalidate_fn(struct device *dev, void *data)
+ 	unsigned long arg = *(unsigned long *)dc->data;
+ 	struct device *iommu_device;
+ 
+-	printk("%s, - arg: 0x%lx\n", __func__, arg);
++	pr_debug("%s, - arg: 0x%lx\n", __func__, arg);
+ 	iommu_device = vfio_get_iommu_device(dc->group, dev);
+ 	if (!iommu_device)
+ 		return -EINVAL;
+@@ -3485,7 +3485,7 @@ static int vfio_dev_page_resp_fn(struct device *dev, void *data)
+ 	unsigned long arg = *(unsigned long *) dc->data;
+ 	struct device *iommu_device;
+ 
+-	printk("%s, - arg: 0x%lx\n", __func__, arg);
++	pr_debug("%s, - arg: 0x%lx\n", __func__, arg);
+ 	iommu_device = vfio_get_iommu_device(dc->group, dev);
+ 	if (!iommu_device)
+ 		return -EINVAL;
+@@ -3529,29 +3529,29 @@ static long vfio_iommu_type1_nesting_op(struct vfio_iommu *iommu,
+ 
+ 	minsz = offsetofend(struct vfio_iommu_type1_nesting_op, flags);
+ 
+-	printk("%s, - 1, arg: 0x%lx, minsz: %u\n", __func__, arg, minsz);
++	pr_debug("%s, - 1, arg: 0x%lx, minsz: %u\n", __func__, arg, minsz);
+ 	if (copy_from_user(&hdr, (void __user *)arg, minsz))
+ 		return -EFAULT;
+ 
+ 	if (hdr.argsz < minsz || hdr.flags & ~VFIO_NESTING_OP_MASK)
+ 		return -EINVAL;
+ 
+-	printk("%s, - 2\n", __func__);
++	pr_debug("%s, - 2\n", __func__);
+ 	switch (hdr.flags & VFIO_NESTING_OP_MASK) {
+ 	case VFIO_IOMMU_NESTING_OP_BIND_PGTBL:
+-	printk("%s, bind - 1\n", __func__);
++	pr_debug("%s, bind - 1\n", __func__);
+ 		ret = vfio_iommu_handle_pgtbl_op(iommu, true, arg + minsz);
+-	printk("%s, bind - 2, ret: %d\n", __func__, ret);
++	pr_debug("%s, bind - 2, ret: %d\n", __func__, ret);
+ 		break;
+ 	case VFIO_IOMMU_NESTING_OP_UNBIND_PGTBL:
+-	printk("%s, unbind - 1\n", __func__);
++	pr_debug("%s, unbind - 1\n", __func__);
+ 		ret = vfio_iommu_handle_pgtbl_op(iommu, false, arg + minsz);
+-	printk("%s, unbind - 2, ret: %d\n", __func__, ret);
++	pr_debug("%s, unbind - 2, ret: %d\n", __func__, ret);
+ 		break;
+ 	case VFIO_IOMMU_NESTING_OP_CACHE_INVLD:
+-	printk("%s, cache_inv - 1\n", __func__);
++	pr_debug("%s, cache_inv - 1\n", __func__);
+ 		ret = vfio_iommu_invalidate_cache(iommu, arg + minsz);
+-	printk("%s, cache_inv - 2, ret: %d\n", __func__, ret);
++	pr_debug("%s, cache_inv - 2, ret: %d\n", __func__, ret);
+ 		break;
+ 	case VFIO_IOMMU_NESTING_OP_PAGE_RESP:
+ 		ret = vfio_iommu_page_response(iommu, arg + minsz);
+-- 
+2.31.1
+

@@ -1,0 +1,82 @@
+From 576dc98bf5a7b58772d2d4d4e0e480b4ac161e71 Mon Sep 17 00:00:00 2001
+From: Fenghua Yu <fenghua.yu@intel.com>
+Date: Thu, 13 Feb 2020 20:09:37 +0000
+Subject: [PATCH 0111/1418] x86/traps: Demand-populate PASID MSR via #GP
+
+ENQCMD requires the IA32_PASID MSR has a valid PASID value which was
+allocated to the process during bind. The MSR could be populated eagerly
+by an IPI after the PASID is allocated in bind. But the method was
+disabled in commit 9bfecd058339 ("x86/cpufeatures: Force disable
+X86_FEATURE_ENQCMD and remove update_pasid()")' due to locking and other
+issues.
+
+Since the MSR was cleared in fork()/clone(), the first ENQCMD will
+generate a #GP fault. The #GP fault handler will initialize the MSR
+if a PASID has been allocated for this process.
+
+The lazy enabling of the PASID MSR in the #GP handler is not an elegant
+solution. But it has the least complexity that fits with h/w behavior.
+
+v2:
+- Directly write IA32_PASID MSR in fixup while local IRQ is still disabled
+  (Thomas)
+
+Signed-off-by: Fenghua Yu <fenghua.yu@intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+---
+ arch/x86/kernel/traps.c | 32 ++++++++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+diff --git a/arch/x86/kernel/traps.c b/arch/x86/kernel/traps.c
+index 6ca1454a65d4..a719674e54e0 100644
+--- a/arch/x86/kernel/traps.c
++++ b/arch/x86/kernel/traps.c
+@@ -528,6 +528,35 @@ static enum kernel_gp_hint get_kernel_gp_address(struct pt_regs *regs,
+ 
+ #define GPFSTR "general protection fault"
+ 
++/*
++ * When a user executes the ENQCMD instruction it will generate #GP
++ * fault if the IA32_PASID MSR has not been set up with a valid PASID.
++ * So if the process has been allocated a PASID (mm->pasid) AND the
++ * IA32_PASID MSR has not been initialized, try to fix this #GP by
++ * initializing the IA32_PASID MSR. If the #GP was for some other reason,
++ * it will trigger again, but this routine will return false and the #GP
++ * will be processed.
++ */
++static bool try_fixup_pasid(void)
++{
++#ifdef CONFIG_INTEL_IOMMU_SVM
++	u32 pasid;
++
++	if (!cpu_feature_enabled(X86_FEATURE_ENQCMD))
++		return false;
++
++	pasid = current->mm->pasid;
++
++	if (pasid != PASID_DISABLED && !current->pasid_activated) {
++		wrmsrl(MSR_IA32_PASID, pasid | MSR_IA32_PASID_VALID);
++		current->pasid_activated = 1;
++
++		return true;
++	}
++#endif
++	return false;
++}
++
+ DEFINE_IDTENTRY_ERRORCODE(exc_general_protection)
+ {
+ 	char desc[sizeof(GPFSTR) + 50 + 2*sizeof(unsigned long) + 1] = GPFSTR;
+@@ -536,6 +565,9 @@ DEFINE_IDTENTRY_ERRORCODE(exc_general_protection)
+ 	unsigned long gp_addr;
+ 	int ret;
+ 
++	if (user_mode(regs) && try_fixup_pasid())
++		return;
++
+ 	cond_local_irq_enable(regs);
+ 
+ 	if (static_cpu_has(X86_FEATURE_UMIP)) {
+-- 
+2.31.1
+

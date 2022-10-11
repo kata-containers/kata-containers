@@ -1,0 +1,59 @@
+From 1426c90b2c2b5bf30c9a1e957f27f14b9ca3f703 Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Tue, 9 Nov 2021 16:56:14 +0800
+Subject: [PATCH 0881/1418] vfio_pci: A fix to ext_irq support
+
+Two issues:
+a) VFIO code uses VFIO_PCI_NUM_IRQS as invalid value for vdev->irq_type field, but
+   with the introduction of ext_irqs, VFIO_PCI_NUM_IRQS will be number 0 of ext_irqs.
+   So the clearup in vfio_pci_disable() for vdev->irq_type should have a check.
+b) The ext_irqs is not exposed to userspace if nesting type iommu is configured by
+   userspace. e.g. no scalable modev virtual Intel IOMMU. So VFIO code should check
+   before heading to do cleanup for the ext_irqs.
+
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ drivers/vfio/pci/vfio_pci_core.c | 22 ++++++++++++++--------
+ 1 file changed, 14 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/vfio/pci/vfio_pci_core.c b/drivers/vfio/pci/vfio_pci_core.c
+index ea479c70a1fe..428816bad07c 100644
+--- a/drivers/vfio/pci/vfio_pci_core.c
++++ b/drivers/vfio/pci/vfio_pci_core.c
+@@ -505,18 +505,24 @@ void vfio_pci_core_disable(struct vfio_pci_core_device *vdev)
+ 	/* Stop the device from further DMA */
+ 	pci_clear_master(pdev);
+ 
+-	vfio_pci_set_irqs_ioctl(vdev, VFIO_IRQ_SET_DATA_NONE |
+-				VFIO_IRQ_SET_ACTION_TRIGGER,
+-				vdev->irq_type, 0, 0, NULL);
++	if (vdev->irq_type < VFIO_PCI_NUM_IRQS)
++		vfio_pci_set_irqs_ioctl(vdev, VFIO_IRQ_SET_DATA_NONE |
++					VFIO_IRQ_SET_ACTION_TRIGGER,
++					vdev->irq_type, 0, 0, NULL);
++
+ 	WARN_ON(iommu_unregister_device_fault_handler(&vdev->pdev->dev));
+ 
+-	for (i = 0; i < vdev->num_ext_irqs; i++)
+-		vfio_pci_set_irqs_ioctl(vdev, VFIO_IRQ_SET_DATA_NONE |
++	if (vdev->ext_irqs) {
++		for (i = 0; i < vdev->num_ext_irqs; i++)
++			if (vdev->ext_irqs[i].trigger)
++				vfio_pci_set_irqs_ioctl(
++					vdev, VFIO_IRQ_SET_DATA_NONE |
+ 					VFIO_IRQ_SET_ACTION_TRIGGER,
+ 					VFIO_PCI_NUM_IRQS + i, 0, 0, NULL);
+-	vdev->num_ext_irqs = 0;
+-	kfree(vdev->ext_irqs);
+-	vdev->ext_irqs = NULL;
++		vdev->num_ext_irqs = 0;
++		kfree(vdev->ext_irqs);
++		vdev->ext_irqs = NULL;
++	}
+ 
+ 	/* Device closed, don't need mutex here */
+ 	list_for_each_entry_safe(ioeventfd, ioeventfd_tmp,
+-- 
+2.31.1
+

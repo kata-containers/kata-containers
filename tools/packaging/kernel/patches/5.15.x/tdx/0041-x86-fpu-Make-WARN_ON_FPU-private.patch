@@ -1,0 +1,69 @@
+From de2bce62c0cd6fe1f4091b3e9d140a27c201bef5 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 15 Oct 2021 03:16:28 +0200
+Subject: [PATCH 0041/1418] x86/fpu: Make WARN_ON_FPU() private
+
+No point in being in global headers.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211015011539.628516182@linutronix.de
+---
+ arch/x86/include/asm/fpu/internal.h | 9 ---------
+ arch/x86/kernel/fpu/init.c          | 2 ++
+ arch/x86/kernel/fpu/internal.h      | 6 ++++++
+ 3 files changed, 8 insertions(+), 9 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/internal.h b/arch/x86/include/asm/fpu/internal.h
+index 7722aadc3278..f8413a509ba5 100644
+--- a/arch/x86/include/asm/fpu/internal.h
++++ b/arch/x86/include/asm/fpu/internal.h
+@@ -42,15 +42,6 @@ extern void fpu__init_system(struct cpuinfo_x86 *c);
+ extern void fpu__init_check_bugs(void);
+ extern void fpu__resume_cpu(void);
+ 
+-/*
+- * Debugging facility:
+- */
+-#ifdef CONFIG_X86_DEBUG_FPU
+-# define WARN_ON_FPU(x) WARN_ON_ONCE(x)
+-#else
+-# define WARN_ON_FPU(x) ({ (void)(x); 0; })
+-#endif
+-
+ extern union fpregs_state init_fpstate;
+ extern void fpstate_init_user(union fpregs_state *state);
+ 
+diff --git a/arch/x86/kernel/fpu/init.c b/arch/x86/kernel/fpu/init.c
+index 545c91c723b8..24873dfe2dba 100644
+--- a/arch/x86/kernel/fpu/init.c
++++ b/arch/x86/kernel/fpu/init.c
+@@ -10,6 +10,8 @@
+ #include <linux/sched/task.h>
+ #include <linux/init.h>
+ 
++#include "internal.h"
++
+ /*
+  * Initialize the registers found in all CPUs, CR0 and CR4:
+  */
+diff --git a/arch/x86/kernel/fpu/internal.h b/arch/x86/kernel/fpu/internal.h
+index a8aac21ba364..5ddc09e03c2a 100644
+--- a/arch/x86/kernel/fpu/internal.h
++++ b/arch/x86/kernel/fpu/internal.h
+@@ -13,6 +13,12 @@ static __always_inline __pure bool use_fxsr(void)
+ 	return cpu_feature_enabled(X86_FEATURE_FXSR);
+ }
+ 
++#ifdef CONFIG_X86_DEBUG_FPU
++# define WARN_ON_FPU(x) WARN_ON_ONCE(x)
++#else
++# define WARN_ON_FPU(x) ({ (void)(x); 0; })
++#endif
++
+ /* Init functions */
+ extern void fpu__init_prepare_fx_sw_frame(void);
+ 
+-- 
+2.31.1
+

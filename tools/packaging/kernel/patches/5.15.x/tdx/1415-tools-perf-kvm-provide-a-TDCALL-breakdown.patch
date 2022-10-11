@@ -1,0 +1,145 @@
+From 4e65d7404fa995c7fb25eeafa2ff9b08eb371da6 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Fri, 20 Aug 2021 12:21:26 +0800
+Subject: [PATCH 1415/1418] tools/perf/kvm: provide a TDCALL breakdown
+
+---
+ tools/arch/x86/include/uapi/asm/vmx.h | 12 +++++++++-
+ tools/perf/arch/x86/util/kvm-stat.c   | 33 +++++++++++++++++++++++++++
+ tools/perf/builtin-kvm.c              | 10 ++++++++
+ tools/perf/util/kvm-stat.h            | 10 ++++++++
+ 4 files changed, 64 insertions(+), 1 deletion(-)
+
+diff --git a/tools/arch/x86/include/uapi/asm/vmx.h b/tools/arch/x86/include/uapi/asm/vmx.h
+index 946d761adbd3..36e09057d5e8 100644
+--- a/tools/arch/x86/include/uapi/asm/vmx.h
++++ b/tools/arch/x86/include/uapi/asm/vmx.h
+@@ -91,6 +91,11 @@
+ #define EXIT_REASON_UMWAIT              67
+ #define EXIT_REASON_TPAUSE              68
+ #define EXIT_REASON_BUS_LOCK            74
++#define EXIT_REASON_TDCALL		77
++#define TDVMCALL_MAP_GPA		0x10001
++#define TDVMCALL_GET_QUOTE		0x10002
++#define TDVMCALL_REPORT_FATAL_ERROR	0x10003
++#define TDVMCALL_SETUP_EVENT_NOTIFY_INTERRUPT 0x10004
+ 
+ #define VMX_EXIT_REASONS \
+ 	{ EXIT_REASON_EXCEPTION_NMI,         "EXCEPTION_NMI" }, \
+@@ -153,7 +158,12 @@
+ 	{ EXIT_REASON_XRSTORS,               "XRSTORS" }, \
+ 	{ EXIT_REASON_UMWAIT,                "UMWAIT" }, \
+ 	{ EXIT_REASON_TPAUSE,                "TPAUSE" }, \
+-	{ EXIT_REASON_BUS_LOCK,              "BUS_LOCK" }
++	{ EXIT_REASON_BUS_LOCK,              "BUS_LOCK" }, \
++	{ EXIT_REASON_TDCALL,                "TDCALL" }, \
++	{ TDVMCALL_MAP_GPA,                  "MAP_GPA" }, \
++	{ TDVMCALL_GET_QUOTE,                "GET_GUOTE" }, \
++	{ TDVMCALL_REPORT_FATAL_ERROR,       "FATAL_ERROR" }, \
++	{ TDVMCALL_SETUP_EVENT_NOTIFY_INTERRUPT, "SET_EVENT_NOTIFY" }
+ 
+ #define VMX_EXIT_REASON_FLAGS \
+ 	{ VMX_EXIT_REASONS_FAILED_VMENTRY,	"FAILED_VMENTRY" }
+diff --git a/tools/perf/arch/x86/util/kvm-stat.c b/tools/perf/arch/x86/util/kvm-stat.c
+index c5dd54f6ef5e..c907f3c06899 100644
+--- a/tools/perf/arch/x86/util/kvm-stat.c
++++ b/tools/perf/arch/x86/util/kvm-stat.c
+@@ -17,6 +17,37 @@ static struct kvm_events_ops exit_events = {
+ 	.name = "VM-EXIT"
+ };
+ 
++static void tdcall_get_key(struct evsel *evsel,
++			   struct perf_sample *sample,
++			   struct event_key *key)
++{
++
++	unsigned long exit_reason;
++
++	exit_reason = evsel__intval(evsel, sample, "exit_reason");
++	key->key = exit_reason;
++}
++
++bool tdcall_event_begin(struct evsel *evsel,
++			struct perf_sample *sample, struct event_key *key)
++{
++	return exit_event_begin(evsel, sample, key) && key->key == EXIT_REASON_TDCALL;
++}
++
++static struct child_event_ops child_events[] = {
++	{ .name = "kvm:kvm_tdvmcall",
++	  .get_key = tdcall_get_key },
++	{ NULL, NULL },
++};
++
++static struct kvm_events_ops tdcall_events = {
++	.is_begin_event = tdcall_event_begin,
++	.is_end_event = exit_event_end,
++	.child_ops = child_events,
++	.decode_key = tdcall_event_decode_key,
++	.name = "TDCALL"
++};
++
+ const char *vcpu_id_str = "vcpu_id";
+ const int decode_str_len = 20;
+ const char *kvm_exit_reason = "exit_reason";
+@@ -183,6 +214,7 @@ const char *kvm_events_tp[] = {
+ 	"kvm:kvm_mmio",
+ 	"kvm:kvm_pio",
+ 	"kvm:kvm_msr",
++	"kvm:kvm_tdvmcall",
+ 	NULL,
+ };
+ 
+@@ -191,6 +223,7 @@ struct kvm_reg_events_ops kvm_reg_events_ops[] = {
+ 	{ .name = "mmio", .ops = &mmio_events },
+ 	{ .name = "ioport", .ops = &ioport_events },
+ 	{ .name = "msr", .ops = &msr_events },
++	{ .name = "tdcall", .ops = &tdcall_events },
+ 	{ NULL, NULL },
+ };
+ 
+diff --git a/tools/perf/builtin-kvm.c b/tools/perf/builtin-kvm.c
+index aa1b127ffb5b..cd59af85f549 100644
+--- a/tools/perf/builtin-kvm.c
++++ b/tools/perf/builtin-kvm.c
+@@ -125,6 +125,16 @@ void exit_event_decode_key(struct perf_kvm_stat *kvm,
+ 	scnprintf(decode, decode_str_len, "%s", exit_reason);
+ }
+ 
++void tdcall_event_decode_key(struct perf_kvm_stat *kvm,
++			     struct event_key *key,
++			     char *decode)
++{
++	const char *exit_reason = get_exit_reason(kvm, key->exit_reasons,
++						  key->key);
++
++	scnprintf(decode, decode_str_len, "%s", exit_reason);
++}
++
+ static bool register_kvm_events_ops(struct perf_kvm_stat *kvm)
+ {
+ 	struct kvm_reg_events_ops *events_ops = kvm_reg_events_ops;
+diff --git a/tools/perf/util/kvm-stat.h b/tools/perf/util/kvm-stat.h
+index 6f0fa05b62b6..07ddb860ecbd 100644
+--- a/tools/perf/util/kvm-stat.h
++++ b/tools/perf/util/kvm-stat.h
+@@ -123,6 +123,16 @@ bool exit_event_end(struct evsel *evsel,
+ void exit_event_decode_key(struct perf_kvm_stat *kvm,
+ 			   struct event_key *key,
+ 			   char *decode);
++bool tdcall_event_begin(struct evsel *evsel,
++		      struct perf_sample *sample,
++		      struct event_key *key);
++bool tdcall_event_end(struct evsel *evsel,
++		    struct perf_sample *sample,
++		    struct event_key *key);
++void tdcall_event_decode_key(struct perf_kvm_stat *kvm,
++			   struct event_key *key,
++			   char *decode);
++
+ 
+ bool kvm_exit_event(struct evsel *evsel);
+ bool kvm_entry_event(struct evsel *evsel);
+-- 
+2.31.1
+

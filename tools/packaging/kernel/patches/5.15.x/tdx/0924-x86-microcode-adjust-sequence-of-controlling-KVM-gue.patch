@@ -1,0 +1,50 @@
+From e35ac717f19ba9a2eda46e49994034b912a37789 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Thu, 20 Jan 2022 17:24:56 +0800
+Subject: [PATCH 0924/1418] x86/microcode: adjust sequence of controlling KVM
+ guest and EPC
+
+The current sequence to control SGX-enabled guest and EPC during
+SGX SVN update is as follows:
+
+lock EPC -> halt guest -> resume guest -> unlock EPC
+
+There is time window that guest has chance to try to touch EPC while
+EPC is "locked" for SVN update. To avoid any potential issue, change
+the order as below, to ensure guest will absolutely have no chance
+to do anything before SVN update completes.
+
+halt guest -> lock EPC -> unlock EPC -> resume guest
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/kernel/cpu/microcode/intel.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/microcode/intel.c b/arch/x86/kernel/cpu/microcode/intel.c
+index 16d794ee2c60..59133a58205c 100644
+--- a/arch/x86/kernel/cpu/microcode/intel.c
++++ b/arch/x86/kernel/cpu/microcode/intel.c
+@@ -1009,8 +1009,8 @@ int update_cpusvn_intel(void)
+ {
+ 	int ret;
+ 
+-	sgx_lock_epc();
+ 	sgx_kvm_notifier_halt();
++	sgx_lock_epc();
+ 	ret = sgx_zap_pages();
+ 	if (ret)
+ 		goto out;
+@@ -1032,8 +1032,8 @@ int update_cpusvn_intel(void)
+ 	}
+ 
+ out:
+-	sgx_kvm_notifier_resume();
+ 	sgx_unlock_epc();
++	sgx_kvm_notifier_resume();
+ 
+ 	return ret;
+ }
+-- 
+2.31.1
+

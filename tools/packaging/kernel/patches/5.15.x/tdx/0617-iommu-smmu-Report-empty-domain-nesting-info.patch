@@ -1,0 +1,187 @@
+From bf7b08f62693efdf99f8e3730cab38b5b9d959af Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Tue, 14 Apr 2020 05:10:07 -0700
+Subject: [PATCH 0617/1418] iommu/smmu: Report empty domain nesting info
+
+This patch is added as instead of returning a boolean for DOMAIN_ATTR_NESTING,
+iommu_domain_get_attr() should return an iommu_nesting_info handle. For
+now, return an empty nesting info struct for now as true nesting is not
+yet supported by the SMMUs.
+
+Note: this patch just ensure no compiling issue, to be functional ready
+fro ARM platform, needs to apply patches from Vivek Gautam in below link.
+
+https://lore.kernel.org/linux-iommu/20210212105859.8445-1-vivek.gautam@arm.com/
+
+v5 -> v6:
+*) add review-by from Eric Auger.
+
+v4 -> v5:
+*) address comments from Eric Auger.
+
+Cc: Will Deacon <will@kernel.org>
+Cc: Robin Murphy <robin.murphy@arm.com>
+Cc: Eric Auger <eric.auger@redhat.com>
+Cc: Jean-Philippe Brucker <jean-philippe@linaro.org>
+Suggested-by: Jean-Philippe Brucker <jean-philippe@linaro.org>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Reviewed-by: Eric Auger <eric.auger@redhat.com>
+---
+ drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c | 56 +++++++++++++++++-
+ drivers/iommu/arm/arm-smmu/arm-smmu.c       | 65 ++++++++++++++++++---
+ 2 files changed, 112 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c b/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c
+index a388e318f86e..e450ef7e4390 100644
+--- a/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c
++++ b/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c
+@@ -2716,9 +2716,63 @@ static struct iommu_group *arm_smmu_device_group(struct device *dev)
+ 	return group;
+ }
+ 
+-static int arm_smmu_enable_nesting(struct iommu_domain *domain)
++static int arm_smmu_domain_nesting_info(struct arm_smmu_domain *smmu_domain,
++					void *data)
++{
++	struct iommu_nesting_info *info = (struct iommu_nesting_info *)data;
++	unsigned int size;
++
++	if (!info || smmu_domain->stage != ARM_SMMU_DOMAIN_NESTED)
++		return -ENODEV;
++
++	size = sizeof(struct iommu_nesting_info);
++
++	/*
++	 * if provided buffer size is smaller than expected, should
++	 * return 0 and also the expected buffer size to caller.
++	 */
++	if (info->argsz < size) {
++		info->argsz = size;
++		return 0;
++	}
++
++	/* report an empty iommu_nesting_info for now */
++	memset(info, 0x0, size);
++	info->argsz = size;
++	return 0;
++}
++
++static int arm_smmu_domain_get_attr(struct iommu_domain *domain,
++				    enum iommu_attr attr, void *data)
+ {
+ 	struct arm_smmu_domain *smmu_domain = to_smmu_domain(domain);
++
++	switch (domain->type) {
++	case IOMMU_DOMAIN_UNMANAGED:
++		switch (attr) {
++		case DOMAIN_ATTR_NESTING:
++			return arm_smmu_domain_nesting_info(smmu_domain, data);
++		default:
++			return -ENODEV;
++		}
++		break;
++	case IOMMU_DOMAIN_DMA:
++		switch (attr) {
++		case DOMAIN_ATTR_DMA_USE_FLUSH_QUEUE:
++			*(int *)data = smmu_domain->non_strict;
++			return 0;
++		default:
++			return -ENODEV;
++		}
++		break;
++	default:
++		return -EINVAL;
++	}
++}
++
++static int arm_smmu_domain_set_attr(struct iommu_domain *domain,
++				    enum iommu_attr attr, void *data)
++{
+ 	int ret = 0;
+ 
+ 	mutex_lock(&smmu_domain->init_mutex);
+diff --git a/drivers/iommu/arm/arm-smmu/arm-smmu.c b/drivers/iommu/arm/arm-smmu/arm-smmu.c
+index 4bc75c4ce402..6f8e9ddcdc8f 100644
+--- a/drivers/iommu/arm/arm-smmu/arm-smmu.c
++++ b/drivers/iommu/arm/arm-smmu/arm-smmu.c
+@@ -1507,19 +1507,68 @@ static struct iommu_group *arm_smmu_device_group(struct device *dev)
+ 	return group;
+ }
+ 
+-static int arm_smmu_enable_nesting(struct iommu_domain *domain)
++static int arm_smmu_domain_nesting_info(struct arm_smmu_domain *smmu_domain,
++					void *data)
++{
++	struct iommu_nesting_info *info = (struct iommu_nesting_info *)data;
++	unsigned int size;
++
++	if (!info || smmu_domain->stage != ARM_SMMU_DOMAIN_NESTED)
++		return -ENODEV;
++
++	size = sizeof(struct iommu_nesting_info);
++
++	/*
++	 * if provided buffer size is smaller than expected, should
++	 * return 0 and also the expected buffer size to caller.
++	 */
++	if (info->argsz < size) {
++		info->argsz = size;
++		return 0;
++	}
++
++	/* report an empty iommu_nesting_info for now */
++	memset(info, 0x0, size);
++	info->argsz = size;
++	return 0;
++}
++
++static int arm_smmu_domain_get_attr(struct iommu_domain *domain,
++				    enum iommu_attr attr, void *data)
+ {
+ 	struct arm_smmu_domain *smmu_domain = to_smmu_domain(domain);
+ 	int ret = 0;
+ 
+-	mutex_lock(&smmu_domain->init_mutex);
+-	if (smmu_domain->smmu)
+-		ret = -EPERM;
+-	else
+-		smmu_domain->stage = ARM_SMMU_DOMAIN_NESTED;
+-	mutex_unlock(&smmu_domain->init_mutex);
++	switch(domain->type) {
++	case IOMMU_DOMAIN_UNMANAGED:
++		switch (attr) {
++		case DOMAIN_ATTR_NESTING:
++			return arm_smmu_domain_nesting_info(smmu_domain, data);
++		case DOMAIN_ATTR_IO_PGTABLE_CFG: {
++			struct io_pgtable_domain_attr *pgtbl_cfg = data;
++			*pgtbl_cfg = smmu_domain->pgtbl_cfg;
+ 
+-	return ret;
++			return 0;
++		}
++		default:
++			return -ENODEV;
++		}
++		break;
++	case IOMMU_DOMAIN_DMA:
++		switch (attr) {
++		case DOMAIN_ATTR_DMA_USE_FLUSH_QUEUE: {
++			bool non_strict = smmu_domain->pgtbl_cfg.quirks &
++					  IO_PGTABLE_QUIRK_NON_STRICT;
++			*(int *)data = non_strict;
++			return 0;
++		}
++		default:
++			return -ENODEV;
++		}
++		break;
++	default:
++		return -EINVAL;
++	}
+ }
+ 
+ static int arm_smmu_set_pgtable_quirks(struct iommu_domain *domain,
+-- 
+2.31.1
+

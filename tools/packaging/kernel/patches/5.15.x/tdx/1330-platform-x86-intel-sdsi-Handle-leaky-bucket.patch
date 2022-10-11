@@ -1,0 +1,75 @@
+From 333bd25c7cc9abf5c3f8928b060ac3aca3f30fbb Mon Sep 17 00:00:00 2001
+From: "David E. Box" <david.e.box@linux.intel.com>
+Date: Fri, 8 Apr 2022 19:33:39 -0700
+Subject: [PATCH 1330/1418] platform/x86/intel/sdsi: Handle leaky bucket
+
+Repeated access to the mailbox may incur a delay of up to 2.1 seconds
+due to a leaky bucket algorithm in firmware. Add a retry loop that tries
+for up to 2.5 seconds to acquire the mailbox.
+
+Signed-off-by: David E. Box <david.e.box@linux.intel.com>
+---
+ drivers/platform/x86/intel/sdsi.c | 32 ++++++++++++++++++++++++-------
+ 1 file changed, 25 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/platform/x86/intel/sdsi.c b/drivers/platform/x86/intel/sdsi.c
+index 626fe9558bee..c8d04b66b711 100644
+--- a/drivers/platform/x86/intel/sdsi.c
++++ b/drivers/platform/x86/intel/sdsi.c
+@@ -51,6 +51,8 @@
+ #define MBOX_TIMEOUT_US			2000
+ #define MBOX_TIMEOUT_ACQUIRE_US		1000
+ #define MBOX_POLLING_PERIOD_US		100
++#define MBOX_ACQUIRE_NUM_RETRIES	5
++#define MBOX_ACQUIRE_RETRY_DELAY_MS	500
+ #define MBOX_MAX_PACKETS		4
+ 
+ #define MBOX_OWNER_NONE			0x00
+@@ -265,7 +267,7 @@ static int sdsi_mbox_acquire(struct sdsi_priv *priv, struct sdsi_mbox_info *info
+ {
+ 	u64 control;
+ 	u32 owner;
+-	int ret;
++	int ret, retries = 0;
+ 
+ 	lockdep_assert_held(&priv->mb_lock);
+ 
+@@ -275,13 +277,29 @@ static int sdsi_mbox_acquire(struct sdsi_priv *priv, struct sdsi_mbox_info *info
+ 	if (owner != MBOX_OWNER_NONE)
+ 		return -EBUSY;
+ 
+-	/* Write first qword of payload */
+-	writeq(info->payload[0], priv->mbox_addr);
++	/*
++	 * If there has been no recent transaction and no one owns the mailbox,
++	 * we should acquire it in under 1ms. However, if we've accessed it
++	 * recently it may take up to 2.1 seconds to acquire it again.
++	 */
++	do {
++		/* Write first qword of payload */
++		writeq(info->payload[0], priv->mbox_addr);
++
++		/* Check for ownership */
++		ret = readq_poll_timeout(priv->control_addr, control,
++			FIELD_GET(CTRL_OWNER, control) == MBOX_OWNER_INBAND,
++			MBOX_POLLING_PERIOD_US, MBOX_TIMEOUT_ACQUIRE_US);
++
++		if (FIELD_GET(CTRL_OWNER, control) == MBOX_OWNER_NONE &&
++		    retries++ < MBOX_ACQUIRE_NUM_RETRIES) {
++			msleep(MBOX_ACQUIRE_RETRY_DELAY_MS);
++			continue;
++		}
+ 
+-	/* Check for ownership */
+-	ret = readq_poll_timeout(priv->control_addr, control,
+-				 FIELD_GET(CTRL_OWNER, control) & MBOX_OWNER_INBAND,
+-				 MBOX_POLLING_PERIOD_US, MBOX_TIMEOUT_ACQUIRE_US);
++		/* Either we got it or someone else did. */
++		break;
++	} while (true);
+ 
+ 	return ret;
+ }
+-- 
+2.31.1
+

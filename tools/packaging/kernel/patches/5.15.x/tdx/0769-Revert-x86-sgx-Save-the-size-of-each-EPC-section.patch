@@ -1,0 +1,38 @@
+From ee68f5c573fece6ae110e9c7ca41931863e88c58 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Fri, 17 Dec 2021 11:15:12 +0800
+Subject: [PATCH 0769/1418] Revert "x86/sgx: Save the size of each EPC section"
+
+This reverts commit 04e4fd140a441fc471c042e1e66ccc75379fe60d.
+---
+ arch/x86/kernel/cpu/sgx/main.c | 1 -
+ arch/x86/kernel/cpu/sgx/sgx.h  | 1 -
+ 2 files changed, 2 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index 9798268f50d8..cb9f14e5ebd8 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -662,7 +662,6 @@ static bool __init sgx_setup_epc_section(u64 phys_addr, u64 size,
+ 	}
+ 
+ 	section->phys_addr = phys_addr;
+-	section->size = size;
+ 
+ 	for (i = 0; i < nr_pages; i++) {
+ 		section->pages[i].section = index;
+diff --git a/arch/x86/kernel/cpu/sgx/sgx.h b/arch/x86/kernel/cpu/sgx/sgx.h
+index 8f42cea69acd..1cfda5ede517 100644
+--- a/arch/x86/kernel/cpu/sgx/sgx.h
++++ b/arch/x86/kernel/cpu/sgx/sgx.h
+@@ -65,7 +65,6 @@ struct sgx_epc_section {
+ 	void *virt_addr;
+ 	struct sgx_epc_page *pages;
+ 	struct sgx_numa_node *node;
+-	u64 size;
+ };
+ 
+ extern struct sgx_epc_section sgx_epc_sections[SGX_MAX_EPC_SECTIONS];
+-- 
+2.31.1
+

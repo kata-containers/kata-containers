@@ -1,0 +1,258 @@
+From f7e06f9a1e924eaff5d2e755e2fc173389019999 Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 18:07:14 -0800
+Subject: [PATCH 0949/1418] Revert "x86/fpu: Extend prctl() with guest
+ permissions"
+
+This reverts commit b339b4628883da8e85afff8cc931b19e28ad1bcd.
+---
+ arch/x86/include/asm/fpu/types.h  |  9 -------
+ arch/x86/include/uapi/asm/prctl.h | 26 +++++++++----------
+ arch/x86/kernel/fpu/core.c        |  3 ---
+ arch/x86/kernel/fpu/xstate.c      | 43 +++++++++----------------------
+ arch/x86/kernel/fpu/xstate.h      | 18 ++-----------
+ arch/x86/kernel/process.c         |  2 --
+ 6 files changed, 26 insertions(+), 75 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/types.h b/arch/x86/include/asm/fpu/types.h
+index 6ddf80637697..3c06c82ab355 100644
+--- a/arch/x86/include/asm/fpu/types.h
++++ b/arch/x86/include/asm/fpu/types.h
+@@ -387,8 +387,6 @@ struct fpstate {
+ 	/* @regs is dynamically sized! Don't add anything after @regs! */
+ } __aligned(64);
+ 
+-#define FPU_GUEST_PERM_LOCKED		BIT_ULL(63)
+-
+ struct fpu_state_perm {
+ 	/*
+ 	 * @__state_perm:
+@@ -478,13 +476,6 @@ struct fpu {
+ 	 */
+ 	struct fpu_state_perm		perm;
+ 
+-	/*
+-	 * @guest_perm:
+-	 *
+-	 * Permission related information for guest pseudo FPUs
+-	 */
+-	struct fpu_state_perm		guest_perm;
+-
+ 	/*
+ 	 * @__fpstate:
+ 	 *
+diff --git a/arch/x86/include/uapi/asm/prctl.h b/arch/x86/include/uapi/asm/prctl.h
+index 500b96e71f18..754a07856817 100644
+--- a/arch/x86/include/uapi/asm/prctl.h
++++ b/arch/x86/include/uapi/asm/prctl.h
+@@ -2,22 +2,20 @@
+ #ifndef _ASM_X86_PRCTL_H
+ #define _ASM_X86_PRCTL_H
+ 
+-#define ARCH_SET_GS			0x1001
+-#define ARCH_SET_FS			0x1002
+-#define ARCH_GET_FS			0x1003
+-#define ARCH_GET_GS			0x1004
++#define ARCH_SET_GS		0x1001
++#define ARCH_SET_FS		0x1002
++#define ARCH_GET_FS		0x1003
++#define ARCH_GET_GS		0x1004
+ 
+-#define ARCH_GET_CPUID			0x1011
+-#define ARCH_SET_CPUID			0x1012
++#define ARCH_GET_CPUID		0x1011
++#define ARCH_SET_CPUID		0x1012
+ 
+-#define ARCH_GET_XCOMP_SUPP		0x1021
+-#define ARCH_GET_XCOMP_PERM		0x1022
+-#define ARCH_REQ_XCOMP_PERM		0x1023
+-#define ARCH_GET_XCOMP_GUEST_PERM	0x1024
+-#define ARCH_REQ_XCOMP_GUEST_PERM	0x1025
++#define ARCH_GET_XCOMP_SUPP	0x1021
++#define ARCH_GET_XCOMP_PERM	0x1022
++#define ARCH_REQ_XCOMP_PERM	0x1023
+ 
+-#define ARCH_MAP_VDSO_X32		0x2001
+-#define ARCH_MAP_VDSO_32		0x2002
+-#define ARCH_MAP_VDSO_64		0x2003
++#define ARCH_MAP_VDSO_X32	0x2001
++#define ARCH_MAP_VDSO_32	0x2002
++#define ARCH_MAP_VDSO_64	0x2003
+ 
+ #endif /* _ASM_X86_PRCTL_H */
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 4304175529c8..290836d1f2a7 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -449,8 +449,6 @@ void fpstate_reset(struct fpu *fpu)
+ 	fpu->perm.__state_perm		= fpu_kernel_cfg.default_features;
+ 	fpu->perm.__state_size		= fpu_kernel_cfg.default_size;
+ 	fpu->perm.__user_state_size	= fpu_user_cfg.default_size;
+-	/* Same defaults for guests */
+-	fpu->guest_perm = fpu->perm;
+ }
+ 
+ static inline void fpu_inherit_perms(struct fpu *dst_fpu)
+@@ -461,7 +459,6 @@ static inline void fpu_inherit_perms(struct fpu *dst_fpu)
+ 		spin_lock_irq(&current->sighand->siglock);
+ 		/* Fork also inherits the permissions of the parent */
+ 		dst_fpu->perm = src_fpu->perm;
+-		dst_fpu->guest_perm = src_fpu->guest_perm;
+ 		spin_unlock_irq(&current->sighand->siglock);
+ 	}
+ }
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index e5019974767d..d28829403ed0 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -1595,7 +1595,7 @@ static int validate_sigaltstack(unsigned int usize)
+ 	return 0;
+ }
+ 
+-static int __xstate_request_perm(u64 permitted, u64 requested, bool guest)
++static int __xstate_request_perm(u64 permitted, u64 requested)
+ {
+ 	/*
+ 	 * This deliberately does not exclude !XSAVES as we still might
+@@ -1605,7 +1605,6 @@ static int __xstate_request_perm(u64 permitted, u64 requested, bool guest)
+ 	 */
+ 	bool compacted = cpu_feature_enabled(X86_FEATURE_XSAVES);
+ 	struct fpu *fpu = &current->group_leader->thread.fpu;
+-	struct fpu_state_perm *perm;
+ 	unsigned int ksize, usize;
+ 	u64 mask;
+ 	int ret;
+@@ -1622,18 +1621,15 @@ static int __xstate_request_perm(u64 permitted, u64 requested, bool guest)
+ 	mask &= XFEATURE_MASK_USER_SUPPORTED;
+ 	usize = xstate_calculate_size(mask, false);
+ 
+-	if (!guest) {
+-		ret = validate_sigaltstack(usize);
+-		if (ret)
+-			return ret;
+-	}
++	ret = validate_sigaltstack(usize);
++	if (ret)
++		return ret;
+ 
+-	perm = guest ? &fpu->guest_perm : &fpu->perm;
+ 	/* Pairs with the READ_ONCE() in xstate_get_group_perm() */
+-	WRITE_ONCE(perm->__state_perm, requested);
++	WRITE_ONCE(fpu->perm.__state_perm, requested);
+ 	/* Protected by sighand lock */
+-	perm->__state_size = ksize;
+-	perm->__user_state_size = usize;
++	fpu->perm.__state_size = ksize;
++	fpu->perm.__user_state_size = usize;
+ 	return ret;
+ }
+ 
+@@ -1644,7 +1640,7 @@ static const u64 xstate_prctl_req[XFEATURE_MAX] = {
+ 	[XFEATURE_XTILE_DATA] = XFEATURE_MASK_XTILE_DATA,
+ };
+ 
+-static int xstate_request_perm(unsigned long idx, bool guest)
++static int xstate_request_perm(unsigned long idx)
+ {
+ 	u64 permitted, requested;
+ 	int ret;
+@@ -1665,19 +1661,14 @@ static int xstate_request_perm(unsigned long idx, bool guest)
+ 		return -EOPNOTSUPP;
+ 
+ 	/* Lockless quick check */
+-	permitted = xstate_get_group_perm(guest);
++	permitted = xstate_get_host_group_perm();
+ 	if ((permitted & requested) == requested)
+ 		return 0;
+ 
+ 	/* Protect against concurrent modifications */
+ 	spin_lock_irq(&current->sighand->siglock);
+-	permitted = xstate_get_group_perm(guest);
+-
+-	/* First vCPU allocation locks the permissions. */
+-	if (guest && (permitted & FPU_GUEST_PERM_LOCKED))
+-		ret = -EBUSY;
+-	else
+-		ret = __xstate_request_perm(permitted, requested, guest);
++	permitted = xstate_get_host_group_perm();
++	ret = __xstate_request_perm(permitted, requested);
+ 	spin_unlock_irq(&current->sighand->siglock);
+ 	return ret;
+ }
+@@ -1751,7 +1742,6 @@ long fpu_xstate_prctl(struct task_struct *tsk, int option, unsigned long arg2)
+ 	u64 __user *uptr = (u64 __user *)arg2;
+ 	u64 permitted, supported;
+ 	unsigned long idx = arg2;
+-	bool guest = false;
+ 
+ 	if (tsk != current)
+ 		return -EPERM;
+@@ -1770,20 +1760,11 @@ long fpu_xstate_prctl(struct task_struct *tsk, int option, unsigned long arg2)
+ 		permitted &= XFEATURE_MASK_USER_SUPPORTED;
+ 		return put_user(permitted, uptr);
+ 
+-	case ARCH_GET_XCOMP_GUEST_PERM:
+-		permitted = xstate_get_guest_group_perm();
+-		permitted &= XFEATURE_MASK_USER_SUPPORTED;
+-		return put_user(permitted, uptr);
+-
+-	case ARCH_REQ_XCOMP_GUEST_PERM:
+-		guest = true;
+-		fallthrough;
+-
+ 	case ARCH_REQ_XCOMP_PERM:
+ 		if (!IS_ENABLED(CONFIG_X86_64))
+ 			return -EOPNOTSUPP;
+ 
+-		return xstate_request_perm(idx, guest);
++		return xstate_request_perm(idx);
+ 
+ 	default:
+ 		return -EINVAL;
+diff --git a/arch/x86/kernel/fpu/xstate.h b/arch/x86/kernel/fpu/xstate.h
+index 896032e0438c..86ea7c0fa2f6 100644
+--- a/arch/x86/kernel/fpu/xstate.h
++++ b/arch/x86/kernel/fpu/xstate.h
+@@ -20,24 +20,10 @@ static inline void xstate_init_xcomp_bv(struct xregs_state *xsave, u64 mask)
+ 		xsave->header.xcomp_bv = mask | XCOMP_BV_COMPACTED_FORMAT;
+ }
+ 
+-static inline u64 xstate_get_group_perm(bool guest)
+-{
+-	struct fpu *fpu = &current->group_leader->thread.fpu;
+-	struct fpu_state_perm *perm;
+-
+-	/* Pairs with WRITE_ONCE() in xstate_request_perm() */
+-	perm = guest ? &fpu->guest_perm : &fpu->perm;
+-	return READ_ONCE(perm->__state_perm);
+-}
+-
+ static inline u64 xstate_get_host_group_perm(void)
+ {
+-	return xstate_get_group_perm(false);
+-}
+-
+-static inline u64 xstate_get_guest_group_perm(void)
+-{
+-	return xstate_get_group_perm(true);
++	/* Pairs with WRITE_ONCE() in xstate_request_perm() */
++	return READ_ONCE(current->group_leader->thread.fpu.perm.__state_perm);
+ }
+ 
+ enum xstate_copy_mode {
+diff --git a/arch/x86/kernel/process.c b/arch/x86/kernel/process.c
+index e38b1ffae8f8..0ac691b996cd 100644
+--- a/arch/x86/kernel/process.c
++++ b/arch/x86/kernel/process.c
+@@ -1032,8 +1032,6 @@ long do_arch_prctl_common(struct task_struct *task, int option,
+ 	case ARCH_GET_XCOMP_SUPP:
+ 	case ARCH_GET_XCOMP_PERM:
+ 	case ARCH_REQ_XCOMP_PERM:
+-	case ARCH_GET_XCOMP_GUEST_PERM:
+-	case ARCH_REQ_XCOMP_GUEST_PERM:
+ 		return fpu_xstate_prctl(task, option, arg2);
+ 	}
+ 
+-- 
+2.31.1
+

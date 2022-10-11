@@ -1,0 +1,306 @@
+From 9cc22e23c30e38682b0fb48d3efb61f1e5ddb5c8 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Thu, 18 Apr 2019 11:29:19 -0700
+Subject: [PATCH 0360/1418] KVM: x86: Introduce "protected guest" concept and
+ block disallowed ioctls
+
+Add 'guest_state_protected' to mark a VM's state as being protected by
+hardware/firmware, e.g. SEV-ES or TDX-SEAM.  Use the flag to disallow
+ioctls() and/or flows that attempt to access protected state.
+
+Return an error if userspace attempts to get/set register state for a
+protected VM, e.g. a non-debug TDX guest.  KVM can't provide sane data,
+it's userspace's responsibility to avoid attempting to read guest state
+when it's known to be inaccessible.
+
+Retrieving vCPU events is the one exception, as the userspace VMM is
+allowed to inject NMIs.
+
+Co-developed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/x86.c | 103 +++++++++++++++++++++++++++++++++++++--------
+ 1 file changed, 85 insertions(+), 18 deletions(-)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 07081d8b5a82..3226e071c190 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -4430,6 +4430,10 @@ static int kvm_vcpu_ioctl_nmi(struct kvm_vcpu *vcpu)
+ 
+ static int kvm_vcpu_ioctl_smi(struct kvm_vcpu *vcpu)
+ {
++	/* TODO: use more precise flag */
++	if (vcpu->arch.guest_state_protected)
++		return -EINVAL;
++
+ 	kvm_make_request(KVM_REQ_SMI, vcpu);
+ 
+ 	return 0;
+@@ -4476,6 +4480,10 @@ static int kvm_vcpu_ioctl_x86_set_mce(struct kvm_vcpu *vcpu,
+ 	unsigned bank_num = mcg_cap & 0xff;
+ 	u64 *banks = vcpu->arch.mce_banks;
+ 
++	/* TODO: use more precise flag */
++	if (vcpu->arch.guest_state_protected)
++		return -EINVAL;
++
+ 	if (mce->bank >= bank_num || !(mce->status & MCI_STATUS_VAL))
+ 		return -EINVAL;
+ 	/*
+@@ -4571,7 +4579,8 @@ static void kvm_vcpu_ioctl_x86_get_vcpu_events(struct kvm_vcpu *vcpu,
+ 		vcpu->arch.interrupt.injected && !vcpu->arch.interrupt.soft;
+ 	events->interrupt.nr = vcpu->arch.interrupt.nr;
+ 	events->interrupt.soft = 0;
+-	events->interrupt.shadow = static_call(kvm_x86_get_interrupt_shadow)(vcpu);
++	if (!vcpu->arch.guest_state_protected)
++		events->interrupt.shadow = static_call(kvm_x86_get_interrupt_shadow)(vcpu);
+ 
+ 	events->nmi.injected = vcpu->arch.nmi_injected;
+ 	events->nmi.pending = vcpu->arch.nmi_pending != 0;
+@@ -4600,11 +4609,17 @@ static void kvm_smm_changed(struct kvm_vcpu *vcpu, bool entering_smm);
+ static int kvm_vcpu_ioctl_x86_set_vcpu_events(struct kvm_vcpu *vcpu,
+ 					      struct kvm_vcpu_events *events)
+ {
+-	if (events->flags & ~(KVM_VCPUEVENT_VALID_NMI_PENDING
+-			      | KVM_VCPUEVENT_VALID_SIPI_VECTOR
+-			      | KVM_VCPUEVENT_VALID_SHADOW
+-			      | KVM_VCPUEVENT_VALID_SMM
+-			      | KVM_VCPUEVENT_VALID_PAYLOAD))
++	u32 allowed_flags = KVM_VCPUEVENT_VALID_NMI_PENDING |
++			    KVM_VCPUEVENT_VALID_SIPI_VECTOR |
++			    KVM_VCPUEVENT_VALID_SHADOW |
++			    KVM_VCPUEVENT_VALID_SMM |
++			    KVM_VCPUEVENT_VALID_PAYLOAD;
++
++	/* TODO: introduce more precise flag */
++	if (vcpu->arch.guest_state_protected)
++		allowed_flags = KVM_VCPUEVENT_VALID_NMI_PENDING;
++
++	if (events->flags & ~allowed_flags)
+ 		return -EINVAL;
+ 
+ 	if (events->flags & KVM_VCPUEVENT_VALID_PAYLOAD) {
+@@ -4680,17 +4695,22 @@ static int kvm_vcpu_ioctl_x86_set_vcpu_events(struct kvm_vcpu *vcpu,
+ 	return 0;
+ }
+ 
+-static void kvm_vcpu_ioctl_x86_get_debugregs(struct kvm_vcpu *vcpu,
+-					     struct kvm_debugregs *dbgregs)
++static int kvm_vcpu_ioctl_x86_get_debugregs(struct kvm_vcpu *vcpu,
++					    struct kvm_debugregs *dbgregs)
+ {
+ 	unsigned long val;
+ 
++	if (vcpu->arch.guest_state_protected)
++		return -EINVAL;
++
+ 	memcpy(dbgregs->db, vcpu->arch.db, sizeof(vcpu->arch.db));
+ 	kvm_get_dr(vcpu, 6, &val);
+ 	dbgregs->dr6 = val;
+ 	dbgregs->dr7 = vcpu->arch.dr7;
+ 	dbgregs->flags = 0;
+ 	memset(&dbgregs->reserved, 0, sizeof(dbgregs->reserved));
++
++	return 0;
+ }
+ 
+ static int kvm_vcpu_ioctl_x86_set_debugregs(struct kvm_vcpu *vcpu,
+@@ -4704,6 +4724,9 @@ static int kvm_vcpu_ioctl_x86_set_debugregs(struct kvm_vcpu *vcpu,
+ 	if (!kvm_dr7_valid(dbgregs->dr7))
+ 		return -EINVAL;
+ 
++	if (vcpu->arch.guest_state_protected)
++		return -EINVAL;
++
+ 	memcpy(vcpu->arch.db, dbgregs->db, sizeof(vcpu->arch.db));
+ 	kvm_update_dr0123(vcpu);
+ 	vcpu->arch.dr6 = dbgregs->dr6;
+@@ -4713,21 +4736,28 @@ static int kvm_vcpu_ioctl_x86_set_debugregs(struct kvm_vcpu *vcpu,
+ 	return 0;
+ }
+ 
+-static void kvm_vcpu_ioctl_x86_get_xsave(struct kvm_vcpu *vcpu,
+-					 struct kvm_xsave *guest_xsave)
++static int kvm_vcpu_ioctl_x86_get_xsave(struct kvm_vcpu *vcpu,
++					struct kvm_xsave *guest_xsave)
+ {
++	if (vcpu->arch.guest_state_protected)
++		return -EINVAL;
++
+ 	if (fpstate_is_confidential(&vcpu->arch.guest_fpu))
+-		return;
++		return 0;
+ 
+ 	fpu_copy_guest_fpstate_to_uabi(&vcpu->arch.guest_fpu,
+ 				       guest_xsave->region,
+ 				       sizeof(guest_xsave->region),
+ 				       vcpu->arch.pkru);
++	return 0;
+ }
+ 
+ static int kvm_vcpu_ioctl_x86_set_xsave(struct kvm_vcpu *vcpu,
+ 					struct kvm_xsave *guest_xsave)
+ {
++	if (vcpu->arch.guest_state_protected)
++		return -EINVAL;
++
+ 	if (fpstate_is_confidential(&vcpu->arch.guest_fpu))
+ 		return 0;
+ 
+@@ -4736,18 +4766,22 @@ static int kvm_vcpu_ioctl_x86_set_xsave(struct kvm_vcpu *vcpu,
+ 					      supported_xcr0, &vcpu->arch.pkru);
+ }
+ 
+-static void kvm_vcpu_ioctl_x86_get_xcrs(struct kvm_vcpu *vcpu,
+-					struct kvm_xcrs *guest_xcrs)
++static int kvm_vcpu_ioctl_x86_get_xcrs(struct kvm_vcpu *vcpu,
++				       struct kvm_xcrs *guest_xcrs)
+ {
++	if (vcpu->arch.guest_state_protected)
++		return -EINVAL;
++
+ 	if (!boot_cpu_has(X86_FEATURE_XSAVE)) {
+ 		guest_xcrs->nr_xcrs = 0;
+-		return;
++		return 0;
+ 	}
+ 
+ 	guest_xcrs->nr_xcrs = 1;
+ 	guest_xcrs->flags = 0;
+ 	guest_xcrs->xcrs[0].xcr = XCR_XFEATURE_ENABLED_MASK;
+ 	guest_xcrs->xcrs[0].value = vcpu->arch.xcr0;
++	return 0;
+ }
+ 
+ static int kvm_vcpu_ioctl_x86_set_xcrs(struct kvm_vcpu *vcpu,
+@@ -4755,6 +4789,9 @@ static int kvm_vcpu_ioctl_x86_set_xcrs(struct kvm_vcpu *vcpu,
+ {
+ 	int i, r = 0;
+ 
++	if (vcpu->arch.guest_state_protected)
++		return -EINVAL;
++
+ 	if (!boot_cpu_has(X86_FEATURE_XSAVE))
+ 		return -EINVAL;
+ 
+@@ -5030,7 +5067,9 @@ long kvm_arch_vcpu_ioctl(struct file *filp,
+ 	case KVM_GET_DEBUGREGS: {
+ 		struct kvm_debugregs dbgregs;
+ 
+-		kvm_vcpu_ioctl_x86_get_debugregs(vcpu, &dbgregs);
++		r = kvm_vcpu_ioctl_x86_get_debugregs(vcpu, &dbgregs);
++		if (r)
++			break;
+ 
+ 		r = -EFAULT;
+ 		if (copy_to_user(argp, &dbgregs,
+@@ -5056,7 +5095,9 @@ long kvm_arch_vcpu_ioctl(struct file *filp,
+ 		if (!u.xsave)
+ 			break;
+ 
+-		kvm_vcpu_ioctl_x86_get_xsave(vcpu, u.xsave);
++		r = kvm_vcpu_ioctl_x86_get_xsave(vcpu, u.xsave);
++		if (r)
++			break;
+ 
+ 		r = -EFAULT;
+ 		if (copy_to_user(argp, u.xsave, sizeof(struct kvm_xsave)))
+@@ -5080,7 +5121,9 @@ long kvm_arch_vcpu_ioctl(struct file *filp,
+ 		if (!u.xcrs)
+ 			break;
+ 
+-		kvm_vcpu_ioctl_x86_get_xcrs(vcpu, u.xcrs);
++		r = kvm_vcpu_ioctl_x86_get_xcrs(vcpu, u.xcrs);
++		if (r)
++			break;
+ 
+ 		r = -EFAULT;
+ 		if (copy_to_user(argp, u.xcrs,
+@@ -9899,6 +9942,12 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
+ 		goto out;
+ 	}
+ 
++	if (vcpu->arch.guest_state_protected &&
++	    (kvm_run->kvm_valid_regs || kvm_run->kvm_dirty_regs)) {
++		r = -EINVAL;
++		goto out;
++	}
++
+ 	if (kvm_run->kvm_dirty_regs) {
+ 		r = sync_regs(vcpu);
+ 		if (r != 0)
+@@ -9929,7 +9978,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
+ 
+ out:
+ 	kvm_put_guest_fpu(vcpu);
+-	if (kvm_run->kvm_valid_regs)
++	if (kvm_run->kvm_valid_regs && !vcpu->arch.guest_state_protected)
+ 		store_regs(vcpu);
+ 	post_kvm_run_save(vcpu);
+ 	kvm_sigset_deactivate(vcpu);
+@@ -9976,6 +10025,9 @@ static void __get_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
+ 
+ int kvm_arch_vcpu_ioctl_get_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
+ {
++	if (vcpu->arch.guest_state_protected)
++		return -EINVAL;
++
+ 	vcpu_load(vcpu);
+ 	__get_regs(vcpu, regs);
+ 	vcpu_put(vcpu);
+@@ -10016,6 +10068,9 @@ static void __set_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
+ 
+ int kvm_arch_vcpu_ioctl_set_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
+ {
++	if (vcpu->arch.guest_state_protected)
++		return -EINVAL;
++
+ 	vcpu_load(vcpu);
+ 	__set_regs(vcpu, regs);
+ 	vcpu_put(vcpu);
+@@ -10098,6 +10153,9 @@ static void __get_sregs2(struct kvm_vcpu *vcpu, struct kvm_sregs2 *sregs2)
+ int kvm_arch_vcpu_ioctl_get_sregs(struct kvm_vcpu *vcpu,
+ 				  struct kvm_sregs *sregs)
+ {
++	if (vcpu->arch.guest_state_protected)
++		return -EINVAL;
++
+ 	vcpu_load(vcpu);
+ 	__get_sregs(vcpu, sregs);
+ 	vcpu_put(vcpu);
+@@ -10346,6 +10404,9 @@ int kvm_arch_vcpu_ioctl_set_sregs(struct kvm_vcpu *vcpu,
+ {
+ 	int ret;
+ 
++	if (vcpu->arch.guest_state_protected)
++		return -EINVAL;
++
+ 	vcpu_load(vcpu);
+ 	ret = __set_sregs(vcpu, sregs);
+ 	vcpu_put(vcpu);
+@@ -10439,6 +10500,9 @@ int kvm_arch_vcpu_ioctl_get_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
+ {
+ 	struct fxregs_state *fxsave;
+ 
++	if (vcpu->arch.guest_state_protected)
++		return -EINVAL;
++
+ 	if (fpstate_is_confidential(&vcpu->arch.guest_fpu))
+ 		return 0;
+ 
+@@ -10462,6 +10526,9 @@ int kvm_arch_vcpu_ioctl_set_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
+ {
+ 	struct fxregs_state *fxsave;
+ 
++	if (vcpu->arch.guest_state_protected)
++		return -EINVAL;
++
+ 	if (fpstate_is_confidential(&vcpu->arch.guest_fpu))
+ 		return 0;
+ 
+-- 
+2.31.1
+

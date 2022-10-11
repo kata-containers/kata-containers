@@ -1,0 +1,43 @@
+From a18d2fda18193fcb27cadbff219bff5dc1e2a252 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Thu, 27 Aug 2020 13:18:07 -0700
+Subject: [PATCH 0148/1418] x86/tdx: Forcefully disable legacy PIC for TDX
+ guests
+
+Disable the legacy PIC (8259) for TDX guests as the PIC cannot be
+supported by the VMM. TDX Module does not allow direct IRQ injection,
+and using posted interrupt style delivery requires the guest to EOI
+the IRQ, which diverges from the legacy PIC behavior.
+
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdx.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index d118de275284..79af9e78b300 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -7,6 +7,7 @@
+ #include <linux/cpuhotplug.h>
+ 
+ #include <asm/tdx.h>
++#include <asm/i8259.h>
+ #include <asm/vmx.h>
+ #include <asm/insn.h>
+ #include <asm/insn-eval.h>
+@@ -468,6 +469,8 @@ void __init tdx_early_init(void)
+ 	pv_ops.irq.safe_halt = tdx_safe_halt;
+ 	pv_ops.irq.halt = tdx_halt;
+ 
++	legacy_pic = &null_legacy_pic;
++
+ 	cpuhp_setup_state(CPUHP_AP_ONLINE_DYN, "tdx:cpu_hotplug",
+ 			  NULL, tdx_cpu_offline_prepare);
+ 
+-- 
+2.31.1
+

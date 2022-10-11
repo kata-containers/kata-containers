@@ -1,0 +1,120 @@
+From 685d49aa1fc564c8b037defa1ee26f75690f453e Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 8 Sep 2021 15:29:37 +0200
+Subject: [PATCH 0016/1418] x86/fpu/signal: Change return type of
+ fpu__restore_sig() to boolean
+
+None of the call sites cares about the error code. All they need to know is
+whether the function succeeded or not.
+
+Suggested-by: Al Viro <viro@zeniv.linux.org.uk>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20210908132525.909065931@linutronix.de
+---
+ arch/x86/ia32/ia32_signal.c         |  2 +-
+ arch/x86/include/asm/fpu/internal.h |  2 +-
+ arch/x86/kernel/fpu/signal.c        | 22 ++++++++++------------
+ arch/x86/kernel/signal.c            |  4 ++--
+ 4 files changed, 14 insertions(+), 16 deletions(-)
+
+diff --git a/arch/x86/ia32/ia32_signal.c b/arch/x86/ia32/ia32_signal.c
+index 0d6789b6e5ca..828ab0a9239b 100644
+--- a/arch/x86/ia32/ia32_signal.c
++++ b/arch/x86/ia32/ia32_signal.c
+@@ -94,7 +94,7 @@ static bool ia32_restore_sigcontext(struct pt_regs *regs,
+ 	 * normal case.
+ 	 */
+ 	reload_segments(&sc);
+-	return !fpu__restore_sig(compat_ptr(sc.fpstate), 1);
++	return fpu__restore_sig(compat_ptr(sc.fpstate), 1);
+ }
+ 
+ COMPAT_SYSCALL_DEFINE0(sigreturn)
+diff --git a/arch/x86/include/asm/fpu/internal.h b/arch/x86/include/asm/fpu/internal.h
+index 74aa53eeedf5..89960e479f87 100644
+--- a/arch/x86/include/asm/fpu/internal.h
++++ b/arch/x86/include/asm/fpu/internal.h
+@@ -26,7 +26,7 @@
+ /*
+  * High level FPU state handling functions:
+  */
+-extern int  fpu__restore_sig(void __user *buf, int ia32_frame);
++extern bool fpu__restore_sig(void __user *buf, int ia32_frame);
+ extern void fpu__drop(struct fpu *fpu);
+ extern void fpu__clear_user_states(struct fpu *fpu);
+ extern int  fpu__exception_code(struct fpu *fpu, int trap_nr);
+diff --git a/arch/x86/kernel/fpu/signal.c b/arch/x86/kernel/fpu/signal.c
+index 2e69b1113e9e..7bcb7b860b1f 100644
+--- a/arch/x86/kernel/fpu/signal.c
++++ b/arch/x86/kernel/fpu/signal.c
+@@ -438,17 +438,17 @@ static inline int xstate_sigframe_size(void)
+ /*
+  * Restore FPU state from a sigframe:
+  */
+-int fpu__restore_sig(void __user *buf, int ia32_frame)
++bool fpu__restore_sig(void __user *buf, int ia32_frame)
+ {
+ 	unsigned int size = xstate_sigframe_size();
+ 	struct fpu *fpu = &current->thread.fpu;
+ 	void __user *buf_fx = buf;
+ 	bool ia32_fxstate = false;
+-	int ret;
++	bool success = false;
+ 
+ 	if (unlikely(!buf)) {
+ 		fpu__clear_user_states(fpu);
+-		return 0;
++		return true;
+ 	}
+ 
+ 	ia32_frame &= (IS_ENABLED(CONFIG_X86_32) ||
+@@ -464,23 +464,21 @@ int fpu__restore_sig(void __user *buf, int ia32_frame)
+ 		ia32_fxstate = true;
+ 	}
+ 
+-	if (!access_ok(buf, size)) {
+-		ret = -EACCES;
++	if (!access_ok(buf, size))
+ 		goto out;
+-	}
+ 
+ 	if (!IS_ENABLED(CONFIG_X86_64) && !cpu_feature_enabled(X86_FEATURE_FPU)) {
+-		ret = fpregs_soft_set(current, NULL, 0,
+-				      sizeof(struct user_i387_ia32_struct),
+-				      NULL, buf);
++		success = !fpregs_soft_set(current, NULL, 0,
++					   sizeof(struct user_i387_ia32_struct),
++					   NULL, buf);
+ 	} else {
+-		ret = __fpu_restore_sig(buf, buf_fx, ia32_fxstate);
++		success = !__fpu_restore_sig(buf, buf_fx, ia32_fxstate);
+ 	}
+ 
+ out:
+-	if (unlikely(ret))
++	if (unlikely(!success))
+ 		fpu__clear_user_states(fpu);
+-	return ret;
++	return success;
+ }
+ 
+ unsigned long
+diff --git a/arch/x86/kernel/signal.c b/arch/x86/kernel/signal.c
+index 140b7b2dbafe..02ee68e68184 100644
+--- a/arch/x86/kernel/signal.c
++++ b/arch/x86/kernel/signal.c
+@@ -136,8 +136,8 @@ static bool restore_sigcontext(struct pt_regs *regs,
+ 		force_valid_ss(regs);
+ #endif
+ 
+-	return !fpu__restore_sig((void __user *)sc.fpstate,
+-				 IS_ENABLED(CONFIG_X86_32));
++	return fpu__restore_sig((void __user *)sc.fpstate,
++			       IS_ENABLED(CONFIG_X86_32));
+ }
+ 
+ static __always_inline int
+-- 
+2.31.1
+

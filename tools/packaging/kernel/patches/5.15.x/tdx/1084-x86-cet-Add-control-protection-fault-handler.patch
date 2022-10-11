@@ -1,0 +1,237 @@
+From 4c788a5fd920f5b43b2bc1d313fcfc38603cbfc1 Mon Sep 17 00:00:00 2001
+From: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Date: Mon, 30 Aug 2021 11:15:02 -0700
+Subject: [PATCH 1084/1418] x86/cet: Add control-protection fault handler
+
+A control-protection fault is triggered when a control-flow transfer
+attempt violates Shadow Stack or Indirect Branch Tracking constraints.
+For example, the return address for a RET instruction differs from the copy
+on the shadow stack; or an indirect JMP instruction, without the NOTRACK
+prefix, arrives at a non-ENDBR opcode.
+
+The control-protection fault handler works in a similar way as the general
+protection fault handler.  It provides the si_code SEGV_CPERR to the signal
+handler.
+
+Signed-off-by: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Signed-off-by: Rick Edgecombe <rick.p.edgecombe@intel.com>
+Cc: Kees Cook <keescook@chromium.org>
+Cc: Michael Kerrisk <mtk.manpages@gmail.com>
+---
+ arch/arm/kernel/signal.c           |  2 +-
+ arch/arm64/kernel/signal.c         |  2 +-
+ arch/arm64/kernel/signal32.c       |  2 +-
+ arch/sparc/kernel/signal32.c       |  2 +-
+ arch/sparc/kernel/signal_64.c      |  2 +-
+ arch/x86/include/asm/idtentry.h    |  4 ++
+ arch/x86/kernel/idt.c              |  4 ++
+ arch/x86/kernel/signal_compat.c    |  2 +-
+ arch/x86/kernel/traps.c            | 62 ++++++++++++++++++++++++++++++
+ include/uapi/asm-generic/siginfo.h |  3 +-
+ 10 files changed, 78 insertions(+), 7 deletions(-)
+
+diff --git a/arch/arm/kernel/signal.c b/arch/arm/kernel/signal.c
+index a41e27ace391..abe65cefa68f 100644
+--- a/arch/arm/kernel/signal.c
++++ b/arch/arm/kernel/signal.c
+@@ -681,7 +681,7 @@ asmlinkage void do_rseq_syscall(struct pt_regs *regs)
+  */
+ static_assert(NSIGILL	== 11);
+ static_assert(NSIGFPE	== 15);
+-static_assert(NSIGSEGV	== 9);
++static_assert(NSIGSEGV	== 10);
+ static_assert(NSIGBUS	== 5);
+ static_assert(NSIGTRAP	== 6);
+ static_assert(NSIGCHLD	== 6);
+diff --git a/arch/arm64/kernel/signal.c b/arch/arm64/kernel/signal.c
+index c287b9407f28..fc6007bec111 100644
+--- a/arch/arm64/kernel/signal.c
++++ b/arch/arm64/kernel/signal.c
+@@ -983,7 +983,7 @@ void __init minsigstksz_setup(void)
+  */
+ static_assert(NSIGILL	== 11);
+ static_assert(NSIGFPE	== 15);
+-static_assert(NSIGSEGV	== 9);
++static_assert(NSIGSEGV	== 10);
+ static_assert(NSIGBUS	== 5);
+ static_assert(NSIGTRAP	== 6);
+ static_assert(NSIGCHLD	== 6);
+diff --git a/arch/arm64/kernel/signal32.c b/arch/arm64/kernel/signal32.c
+index d984282b979f..8776a34c6444 100644
+--- a/arch/arm64/kernel/signal32.c
++++ b/arch/arm64/kernel/signal32.c
+@@ -460,7 +460,7 @@ void compat_setup_restart_syscall(struct pt_regs *regs)
+  */
+ static_assert(NSIGILL	== 11);
+ static_assert(NSIGFPE	== 15);
+-static_assert(NSIGSEGV	== 9);
++static_assert(NSIGSEGV	== 10);
+ static_assert(NSIGBUS	== 5);
+ static_assert(NSIGTRAP	== 6);
+ static_assert(NSIGCHLD	== 6);
+diff --git a/arch/sparc/kernel/signal32.c b/arch/sparc/kernel/signal32.c
+index 6cc124a3bb98..dc50b2a78692 100644
+--- a/arch/sparc/kernel/signal32.c
++++ b/arch/sparc/kernel/signal32.c
+@@ -752,7 +752,7 @@ asmlinkage int do_sys32_sigstack(u32 u_ssptr, u32 u_ossptr, unsigned long sp)
+  */
+ static_assert(NSIGILL	== 11);
+ static_assert(NSIGFPE	== 15);
+-static_assert(NSIGSEGV	== 9);
++static_assert(NSIGSEGV	== 10);
+ static_assert(NSIGBUS	== 5);
+ static_assert(NSIGTRAP	== 6);
+ static_assert(NSIGCHLD	== 6);
+diff --git a/arch/sparc/kernel/signal_64.c b/arch/sparc/kernel/signal_64.c
+index 2a78d2af1265..7fe2bd37bd1a 100644
+--- a/arch/sparc/kernel/signal_64.c
++++ b/arch/sparc/kernel/signal_64.c
+@@ -562,7 +562,7 @@ void do_notify_resume(struct pt_regs *regs, unsigned long orig_i0, unsigned long
+  */
+ static_assert(NSIGILL	== 11);
+ static_assert(NSIGFPE	== 15);
+-static_assert(NSIGSEGV	== 9);
++static_assert(NSIGSEGV	== 10);
+ static_assert(NSIGBUS	== 5);
+ static_assert(NSIGTRAP	== 6);
+ static_assert(NSIGCHLD	== 6);
+diff --git a/arch/x86/include/asm/idtentry.h b/arch/x86/include/asm/idtentry.h
+index 8ca55780df20..4a289aa37047 100644
+--- a/arch/x86/include/asm/idtentry.h
++++ b/arch/x86/include/asm/idtentry.h
+@@ -562,6 +562,10 @@ DECLARE_IDTENTRY_ERRORCODE(X86_TRAP_SS,	exc_stack_segment);
+ DECLARE_IDTENTRY_ERRORCODE(X86_TRAP_GP,	exc_general_protection);
+ DECLARE_IDTENTRY_ERRORCODE(X86_TRAP_AC,	exc_alignment_check);
+ 
++#ifdef CONFIG_X86_SHADOW_STACK
++DECLARE_IDTENTRY_ERRORCODE(X86_TRAP_CP, exc_control_protection);
++#endif
++
+ /* Raw exception entries which need extra work */
+ DECLARE_IDTENTRY_RAW(X86_TRAP_UD,		exc_invalid_op);
+ DECLARE_IDTENTRY_RAW(X86_TRAP_BP,		exc_int3);
+diff --git a/arch/x86/kernel/idt.c b/arch/x86/kernel/idt.c
+index 1da074123c16..c1a5d2e17d2e 100644
+--- a/arch/x86/kernel/idt.c
++++ b/arch/x86/kernel/idt.c
+@@ -116,6 +116,10 @@ static const __initconst struct idt_data def_idts[] = {
+ #elif defined(CONFIG_X86_32)
+ 	SYSG(IA32_SYSCALL_VECTOR,	entry_INT80_32),
+ #endif
++
++#ifdef CONFIG_X86_SHADOW_STACK
++	INTG(X86_TRAP_CP,		asm_exc_control_protection),
++#endif
+ };
+ 
+ /*
+diff --git a/arch/x86/kernel/signal_compat.c b/arch/x86/kernel/signal_compat.c
+index b52407c56000..ff50cd978ea5 100644
+--- a/arch/x86/kernel/signal_compat.c
++++ b/arch/x86/kernel/signal_compat.c
+@@ -27,7 +27,7 @@ static inline void signal_compat_build_tests(void)
+ 	 */
+ 	BUILD_BUG_ON(NSIGILL  != 11);
+ 	BUILD_BUG_ON(NSIGFPE  != 15);
+-	BUILD_BUG_ON(NSIGSEGV != 9);
++	BUILD_BUG_ON(NSIGSEGV != 10);
+ 	BUILD_BUG_ON(NSIGBUS  != 5);
+ 	BUILD_BUG_ON(NSIGTRAP != 6);
+ 	BUILD_BUG_ON(NSIGCHLD != 6);
+diff --git a/arch/x86/kernel/traps.c b/arch/x86/kernel/traps.c
+index c8ab7fa3c04a..1c3d1fc1eebd 100644
+--- a/arch/x86/kernel/traps.c
++++ b/arch/x86/kernel/traps.c
+@@ -39,6 +39,7 @@
+ #include <linux/io.h>
+ #include <linux/hardirq.h>
+ #include <linux/atomic.h>
++#include <linux/nospec.h>
+ 
+ #include <asm/stacktrace.h>
+ #include <asm/processor.h>
+@@ -640,6 +641,67 @@ DEFINE_IDTENTRY_ERRORCODE(exc_general_protection)
+ 	cond_local_irq_disable(regs);
+ }
+ 
++#ifdef CONFIG_X86_SHADOW_STACK
++static const char * const control_protection_err[] = {
++	"unknown",
++	"near-ret",
++	"far-ret/iret",
++	"endbranch",
++	"rstorssp",
++	"setssbsy",
++	"unknown",
++};
++
++static DEFINE_RATELIMIT_STATE(cpf_rate, DEFAULT_RATELIMIT_INTERVAL,
++			      DEFAULT_RATELIMIT_BURST);
++
++/*
++ * When a control protection exception occurs, send a signal to the responsible
++ * application.  Currently, control protection is only enabled for user mode.
++ * This exception should not come from kernel mode.
++ */
++DEFINE_IDTENTRY_ERRORCODE(exc_control_protection)
++{
++	struct task_struct *tsk;
++
++	if (!user_mode(regs)) {
++		die("kernel control protection fault", regs, error_code);
++		panic("Unexpected kernel control protection fault.  Machine halted.");
++	}
++
++	cond_local_irq_enable(regs);
++
++	if (!cpu_feature_enabled(X86_FEATURE_SHSTK))
++		WARN_ONCE(1, "Control protection fault with CET support disabled\n");
++
++	tsk = current;
++	tsk->thread.error_code = error_code;
++	tsk->thread.trap_nr = X86_TRAP_CP;
++
++	/*
++	 * Ratelimit to prevent log spamming.
++	 */
++	if (show_unhandled_signals && unhandled_signal(tsk, SIGSEGV) &&
++	    __ratelimit(&cpf_rate)) {
++		unsigned long ssp;
++		int cpf_type;
++
++		cpf_type = array_index_nospec(error_code, ARRAY_SIZE(control_protection_err));
++
++		rdmsrl(MSR_IA32_PL3_SSP, ssp);
++		pr_emerg("%s[%d] control protection ip:%lx sp:%lx ssp:%lx error:%lx(%s)",
++			 tsk->comm, task_pid_nr(tsk),
++			 regs->ip, regs->sp, ssp, error_code,
++			 control_protection_err[cpf_type]);
++		print_vma_addr(KERN_CONT " in ", regs->ip);
++		pr_cont("\n");
++	}
++
++	force_sig_fault(SIGSEGV, SEGV_CPERR, (void __user *)0);
++	cond_local_irq_disable(regs);
++}
++#endif
++
+ static bool do_int3(struct pt_regs *regs)
+ {
+ 	int res;
+diff --git a/include/uapi/asm-generic/siginfo.h b/include/uapi/asm-generic/siginfo.h
+index 3ba180f550d7..081f4b37d22c 100644
+--- a/include/uapi/asm-generic/siginfo.h
++++ b/include/uapi/asm-generic/siginfo.h
+@@ -240,7 +240,8 @@ typedef struct siginfo {
+ #define SEGV_ADIPERR	7	/* Precise MCD exception */
+ #define SEGV_MTEAERR	8	/* Asynchronous ARM MTE error */
+ #define SEGV_MTESERR	9	/* Synchronous ARM MTE exception */
+-#define NSIGSEGV	9
++#define SEGV_CPERR	10	/* Control protection fault */
++#define NSIGSEGV	10
+ 
+ /*
+  * SIGBUS si_codes
+-- 
+2.31.1
+

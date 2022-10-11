@@ -1,0 +1,46 @@
+From be09e604ff56753a3dd4a1926d6c0665a29dd7ae Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 8 Sep 2021 15:29:23 +0200
+Subject: [PATCH 0008/1418] x86/fpu: Use EX_TYPE_FAULT_MCE_SAFE for exception
+ fixups
+
+The macros used for restoring FPU state from a user space buffer can handle
+all exceptions including #MC. They need to return the trap number in the
+error case as the code which invokes them needs to distinguish the cause of
+the failure. It aborts the operation for anything except #PF.
+
+Use the new EX_TYPE_FAULT_MCE_SAFE exception table fixup type to document
+the nature of the fixup.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20210908132525.387464538@linutronix.de
+---
+ arch/x86/include/asm/fpu/internal.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/internal.h b/arch/x86/include/asm/fpu/internal.h
+index ce6fc4f8d1d1..cb1ca602e848 100644
+--- a/arch/x86/include/asm/fpu/internal.h
++++ b/arch/x86/include/asm/fpu/internal.h
+@@ -102,7 +102,7 @@ extern void save_fpregs_to_fpstate(struct fpu *fpu);
+ 		     "3:  negl %%eax\n"					\
+ 		     "    jmp  2b\n"					\
+ 		     ".previous\n"					\
+-		     _ASM_EXTABLE_FAULT(1b, 3b)				\
++		     _ASM_EXTABLE_TYPE(1b, 3b, EX_TYPE_FAULT_MCE_SAFE)	\
+ 		     : [err] "=a" (err), output				\
+ 		     : "0"(0), input);					\
+ 	err;								\
+@@ -209,7 +209,7 @@ static inline void fxsave(struct fxregs_state *fx)
+ 		     "3: negl %%eax\n\t"				\
+ 		     "jmp 2b\n\t"					\
+ 		     ".popsection\n\t"					\
+-		     _ASM_EXTABLE_FAULT(1b, 3b)				\
++		     _ASM_EXTABLE_TYPE(1b, 3b, EX_TYPE_FAULT_MCE_SAFE)	\
+ 		     : [err] "=a" (err)					\
+ 		     : "D" (st), "m" (*st), "a" (lmask), "d" (hmask)	\
+ 		     : "memory")
+-- 
+2.31.1
+

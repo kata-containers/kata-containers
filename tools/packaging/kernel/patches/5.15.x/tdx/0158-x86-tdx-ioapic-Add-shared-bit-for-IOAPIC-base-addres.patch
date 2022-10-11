@@ -1,0 +1,93 @@
+From 8ba4d7c77b3108e68dcb52e8bc027156dd9f05e8 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Mon, 28 Dec 2020 18:04:07 -0800
+Subject: [PATCH 0158/1418] x86/tdx: ioapic: Add shared bit for IOAPIC base
+ address
+
+The kernel interacts with each bare-metal IOAPIC with a special
+MMIO page. When running under KVM, the guest's IOAPICs are
+emulated by KVM.
+
+When running as a TDX guest, the guest needs to mark each IOAPIC
+mapping as "shared" with the host.  This ensures that TDX private
+protections are not applied to the page, which allows the TDX host
+emulation to work.
+
+Earlier patches in this series modified ioremap() so that
+ioremap()-created mappings such as virtio will be marked as
+shared. However, the IOAPIC code does not use ioremap() and instead
+uses the fixmap mechanism.
+
+Introduce a special fixmap helper just for the IOAPIC code.  Ensure
+that it marks IOAPIC pages as "shared".  This replaces
+set_fixmap_nocache() with __set_fixmap() since __set_fixmap()
+allows custom 'prot' values.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/apic/io_apic.c | 18 ++++++++++++++++--
+ 1 file changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/apic/io_apic.c b/arch/x86/kernel/apic/io_apic.c
+index c1bb384935b0..eefb260d7759 100644
+--- a/arch/x86/kernel/apic/io_apic.c
++++ b/arch/x86/kernel/apic/io_apic.c
+@@ -49,6 +49,7 @@
+ #include <linux/slab.h>
+ #include <linux/memblock.h>
+ #include <linux/msi.h>
++#include <linux/cc_platform.h>
+ 
+ #include <asm/irqdomain.h>
+ #include <asm/io.h>
+@@ -65,6 +66,7 @@
+ #include <asm/irq_remapping.h>
+ #include <asm/hw_irq.h>
+ #include <asm/apic.h>
++#include <asm/tdx.h>
+ 
+ #define	for_each_ioapic(idx)		\
+ 	for ((idx) = 0; (idx) < nr_ioapics; (idx)++)
+@@ -2677,6 +2679,18 @@ static struct resource * __init ioapic_setup_resources(void)
+ 	return res;
+ }
+ 
++static void io_apic_set_fixmap_nocache(enum fixed_addresses idx,
++				       phys_addr_t phys)
++{
++	pgprot_t flags = FIXMAP_PAGE_NOCACHE;
++
++	/* Set TDX guest shared bit in pgprot flags */
++	if (cc_platform_has(CC_ATTR_GUEST_SHARED_MAPPING_INIT))
++		flags = pgprot_cc_guest(flags);
++
++	__set_fixmap(idx, phys, flags);
++}
++
+ void __init io_apic_init_mappings(void)
+ {
+ 	unsigned long ioapic_phys, idx = FIX_IO_APIC_BASE_0;
+@@ -2709,7 +2723,7 @@ void __init io_apic_init_mappings(void)
+ 				      __func__, PAGE_SIZE, PAGE_SIZE);
+ 			ioapic_phys = __pa(ioapic_phys);
+ 		}
+-		set_fixmap_nocache(idx, ioapic_phys);
++		io_apic_set_fixmap_nocache(idx, ioapic_phys);
+ 		apic_printk(APIC_VERBOSE, "mapped IOAPIC to %08lx (%08lx)\n",
+ 			__fix_to_virt(idx) + (ioapic_phys & ~PAGE_MASK),
+ 			ioapic_phys);
+@@ -2838,7 +2852,7 @@ int mp_register_ioapic(int id, u32 address, u32 gsi_base,
+ 	ioapics[idx].mp_config.flags = MPC_APIC_USABLE;
+ 	ioapics[idx].mp_config.apicaddr = address;
+ 
+-	set_fixmap_nocache(FIX_IO_APIC_BASE_0 + idx, address);
++	io_apic_set_fixmap_nocache(FIX_IO_APIC_BASE_0 + idx, address);
+ 	if (bad_ioapic_register(idx)) {
+ 		clear_fixmap(FIX_IO_APIC_BASE_0 + idx);
+ 		return -ENODEV;
+-- 
+2.31.1
+

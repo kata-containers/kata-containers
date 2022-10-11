@@ -1,0 +1,32 @@
+From b3004773b4f26b2c2cfcde38139b5b71549e7f7c Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Wed, 24 Jun 2020 21:14:14 -0700
+Subject: [PATCH 0391/1418] KVM: VMX: Define VMCS encodings for shared EPT
+ pointer
+
+Add the VMCS field encoding for the shared EPTP, which will be used by
+TDX to have separate EPT walks for private GPAs (existing EPTP) versus
+shared GPAs (new shared EPTP).
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/vmx.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/x86/include/asm/vmx.h b/arch/x86/include/asm/vmx.h
+index 4ed787675f51..b8d14badf504 100644
+--- a/arch/x86/include/asm/vmx.h
++++ b/arch/x86/include/asm/vmx.h
+@@ -249,6 +249,8 @@ enum vmcs_field {
+ 	TERTIARY_VM_EXEC_CONTROL_HIGH	= 0x00002035,
+ 	PID_POINTER_TABLE		= 0x00002042,
+ 	PID_POINTER_TABLE_HIGH		= 0x00002043,
++	SHARED_EPT_POINTER		= 0x0000203C,
++	SHARED_EPT_POINTER_HIGH		= 0x0000203D,
+ 	GUEST_PHYSICAL_ADDRESS          = 0x00002400,
+ 	GUEST_PHYSICAL_ADDRESS_HIGH     = 0x00002401,
+ 	VMCS_LINK_POINTER               = 0x00002800,
+-- 
+2.31.1
+

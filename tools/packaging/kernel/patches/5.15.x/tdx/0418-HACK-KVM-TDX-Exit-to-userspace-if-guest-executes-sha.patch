@@ -1,0 +1,79 @@
+From 4ee2d422798100300a2d0b86afee6d94065acf9d Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Mon, 21 Sep 2020 19:44:08 -0700
+Subject: [PATCH 0418/1418] *** HACK *** KVM: TDX: Exit to userspace if guest
+ executes shared GPA
+
+Map shared GPAs as not-executable (to force EPT violation) and exit to
+userspace if the guest generates an instruction fetch EPT violation to a
+shared GPA.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c |  7 ++++++-
+ arch/x86/kvm/vmx/tdx.c | 14 ++++++++++++--
+ 2 files changed, 18 insertions(+), 3 deletions(-)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index edd1477b4e12..83fc820c80db 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -3282,6 +3282,7 @@ static int __direct_map(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code,
+ 	gfn_t base_gfn = gfn;
+ 	bool is_private = is_private_gfn(vcpu, gfn_stolen_bits);
+ 	bool is_zapped_pte;
++	unsigned int pte_access = ACC_ALL;
+ 
+ 	if (is_error_noslot_pfn(pfn) || kvm_is_reserved_pfn(pfn)) {
+ 		if (is_private)
+@@ -3290,6 +3291,10 @@ static int __direct_map(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code,
+ 		kvm_mmu_zap_alias_spte(vcpu, gfn, gpa ^ gpa_stolen_mask);
+ 	}
+ 
++	/* TDX shared GPAs are no executable, enforce this for the SDV. */
++	if (!is_private && vcpu->kvm->arch.gfn_shared_mask)
++		pte_access &= ~ACC_EXEC_MASK;
++
+ 	level = kvm_mmu_hugepage_adjust(vcpu, gfn, max_level, &pfn,
+ 					huge_page_disallowed, &req_level);
+ 
+@@ -3323,7 +3328,7 @@ static int __direct_map(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code,
+ 
+ 	is_zapped_pte = is_zapped_private_pte(*it.sptep);
+ 
+-	ret = mmu_set_spte(vcpu, it.sptep, ACC_ALL,
++	ret = mmu_set_spte(vcpu, it.sptep, pte_access,
+ 			   write, level, base_gfn, pfn, prefault,
+ 			   map_writable);
+ 	if (ret == RET_PF_SPURIOUS)
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 48584a9c0b8c..39ca88fc375c 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -1337,10 +1337,20 @@ static int tdx_handle_ept_violation(struct kvm_vcpu *vcpu)
+ {
+ 	unsigned long exit_qual;
+ 
+-	if (tdx_is_private_gpa(vcpu->kvm, tdexit_gpa(vcpu)))
++	if (tdx_is_private_gpa(vcpu->kvm, tdexit_gpa(vcpu))) {
+ 		exit_qual = TDX_SEPT_PFERR;
+-	else
++	} else {
+ 		exit_qual = tdexit_exit_qual(vcpu);
++		if (exit_qual & EPT_VIOLATION_ACC_INSTR) {
++			pr_warn("kvm: TDX instr fetch to shared GPA = 0x%lx @ RIP = 0x%lx\n",
++				tdexit_gpa(vcpu), kvm_rip_read(vcpu));
++			vcpu->run->exit_reason = KVM_EXIT_EXCEPTION;
++			vcpu->run->ex.exception = PF_VECTOR;
++			vcpu->run->ex.error_code = exit_qual;
++			return 0;
++		}
++	}
++
+ 	trace_kvm_page_fault(tdexit_gpa(vcpu), exit_qual);
+ 	return __vmx_handle_ept_violation(vcpu, tdexit_gpa(vcpu), exit_qual);
+ }
+-- 
+2.31.1
+

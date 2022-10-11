@@ -1,0 +1,165 @@
+From de89147cfead5b6ceea7c832c6a45de4fcc804de Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Tue, 31 Aug 2021 15:34:48 +0800
+Subject: [PATCH 0492/1418] KVM: TDX: Split a large page when 4KB page within
+ it converted to shared
+
+When mapping the shared page for TDX, it needs to zap private alias.
+
+In the case that private page is mapped as large page (2MB), it can be
+removed directly only when the whole 2MB is converted to shared.
+Otherwise, it has to split 2MB page into 512 4KB page, and only remove
+the pages that convertd to shared.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/include/asm/kvm-x86-ops.h |  1 +
+ arch/x86/include/asm/kvm_host.h    |  2 ++
+ arch/x86/kvm/mmu/mmu.c             | 53 ++++++++++++++++++++++++++++++
+ arch/x86/kvm/vmx/tdx.c             | 20 +++++++++++
+ 4 files changed, 76 insertions(+)
+
+diff --git a/arch/x86/include/asm/kvm-x86-ops.h b/arch/x86/include/asm/kvm-x86-ops.h
+index 856008188d81..29178f45bd1c 100644
+--- a/arch/x86/include/asm/kvm-x86-ops.h
++++ b/arch/x86/include/asm/kvm-x86-ops.h
+@@ -94,6 +94,7 @@ KVM_X86_OP(zap_private_spte)
+ KVM_X86_OP(unzap_private_spte)
+ KVM_X86_OP(link_private_sp)
+ KVM_X86_OP(free_private_sp)
++KVM_X86_OP(split_private_spte)
+ KVM_X86_OP_NULL(has_wbinvd_exit)
+ KVM_X86_OP(get_l2_tsc_offset)
+ KVM_X86_OP(get_l2_tsc_multiplier)
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 5f0d4e0d0cb0..73a239e21c3b 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1466,6 +1466,8 @@ struct kvm_x86_ops {
+ 			       void *private_sp);
+ 	int (*free_private_sp)(struct kvm *kvm, gfn_t gfn, enum pg_level level,
+ 			       void *private_sp);
++	int (*split_private_spte)(struct kvm *kvm, gfn_t gfn, enum pg_level level,
++				  void *private_sp);
+ 
+ 	bool (*has_wbinvd_exit)(void);
+ 
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 5415d02e66b8..ddb122f3b54b 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -3402,6 +3402,52 @@ static void kvm_mmu_link_private_sp(struct kvm_vcpu *vcpu,
+ 		free_page((unsigned long)p);
+ }
+ 
++static void split_private_spte(struct kvm_vcpu *vcpu, u64 *sptep, u64 old_spte)
++{
++	bool host_writable = !!(old_spte & EPT_SPTE_HOST_WRITABLE);
++	struct kvm_mmu_page *sp = sptep_to_sp(sptep);
++	kvm_pfn_t pfn = spte_to_pfn(old_spte);
++	struct kvm_rmap_head *rmap_head;
++	struct kvm_memory_slot *slot;
++	int level = sp->role.level;
++	gfn_t gfn;
++	void *p;
++	int i;
++
++	if (!is_zapped_private_pte(*sptep))
++		return;
++
++	if (WARN_ON_ONCE(level < PG_LEVEL_2M || !is_private_gfn(vcpu, sp->gfn_stolen_bits)))
++		return;
++
++	gfn = kvm_mmu_page_get_gfn(sp, sptep - sp->spt);
++	slot = kvm_vcpu_gfn_to_memslot(vcpu, gfn);
++	rmap_head = gfn_to_rmap(gfn, sp->role.level, slot);
++	__pte_list_remove(sptep, rmap_head);
++
++	level--;
++	sp = __kvm_mmu_get_page(vcpu, gfn, sp->gfn_stolen_bits,
++				gfn >> PAGE_SHIFT, level, true, ACC_ALL);
++
++	link_shadow_page(vcpu, sptep, sp);
++	kvm_update_page_stats(vcpu->kvm, PG_LEVEL_4K, -1);
++
++	for (i = 0; i < PT64_ENT_PER_PAGE; i++) {
++		mmu_set_spte(vcpu, sp->spt + i, ACC_ALL, false, level, gfn, pfn,
++			     false, host_writable);
++		gfn += KVM_PAGES_PER_HPAGE(level);
++		pfn += KVM_PAGES_PER_HPAGE(level);
++	}
++	if (level > PG_LEVEL_4K)
++		kvm_update_page_stats(vcpu->kvm, level, 1);
++
++	p = kvm_mmu_memory_cache_alloc(&vcpu->arch.mmu_private_sp_cache);
++	if (!static_call(kvm_x86_split_private_spte)(vcpu->kvm, sp->gfn, level + 1, p))
++		sp->private_sp = p;
++	else
++		free_page((unsigned long)p);
++}
++
+ static void kvm_mmu_zap_alias_spte(struct kvm_vcpu *vcpu, gfn_t gfn,
+ 				   gpa_t gpa_alias)
+ {
+@@ -3415,6 +3461,7 @@ static void kvm_mmu_zap_alias_spte(struct kvm_vcpu *vcpu, gfn_t gfn,
+ 	u64 *sptep;
+ 	u64 spte;
+ 
++re_start:
+ 	for_each_shadow_entry(vcpu, gpa_alias, it) {
+ 		if (!is_shadow_present_pte(*it.sptep))
+ 			break;
+@@ -3459,6 +3506,12 @@ static void kvm_mmu_zap_alias_spte(struct kvm_vcpu *vcpu, gfn_t gfn,
+ 	if (!is_private_gfn(vcpu, sp->gfn_stolen_bits))
+ 		return;
+ 
++	if (is_large_pte(spte) &&
++	    !kvm_page_type_valid_on_level(gfn, slot, it.level)) {
++		split_private_spte(vcpu, it.sptep, spte);
++		goto re_start;
++	}
++
+ 	for_each_rmap_spte(rmap_head, &iter, sptep) {
+ 		if (!is_zapped_private_pte(*sptep))
+ 			continue;
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 4a03857843cd..b0079031f606 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -1586,6 +1586,25 @@ static int tdx_sept_link_private_sp(struct kvm_vcpu *vcpu, gfn_t gfn,
+ 	return 0;
+ }
+ 
++static int tdx_sept_split_private_spte(struct kvm *kvm, gfn_t gfn,
++					enum pg_level level, void *sept_page)
++{
++	int tdx_level = pg_level_to_tdx_sept_level(level);
++	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
++	gpa_t gpa = gfn << PAGE_SHIFT;
++	hpa_t hpa = __pa(sept_page);
++	struct tdx_ex_ret ex_ret;
++	u64 err;
++
++	trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_PAGE_DEMOTE, gpa, hpa, tdx_level);
++
++	err = tdh_mem_page_demote(kvm_tdx->tdr.pa, gpa, tdx_level, hpa, &ex_ret);
++	if (SEPT_ERR(err, &ex_ret, TDH_MEM_PAGE_DEMOTE, kvm))
++		return -EIO;
++
++	return 0;
++}
++
+ static void tdx_sept_zap_private_spte(struct kvm *kvm, gfn_t gfn, enum pg_level level)
+ {
+ 	int tdx_level = pg_level_to_tdx_sept_level(level);
+@@ -3049,6 +3068,7 @@ static int __init tdx_hardware_setup(struct kvm_x86_ops *x86_ops)
+ 	x86_ops->unzap_private_spte = tdx_sept_unzap_private_spte;
+ 	x86_ops->link_private_sp = tdx_sept_link_private_sp;
+ 	x86_ops->free_private_sp = tdx_sept_free_private_sp;
++	x86_ops->split_private_spte = tdx_sept_split_private_spte;
+ 	x86_ops->mem_enc_read_memory = tdx_read_guest_memory;
+ 	x86_ops->mem_enc_write_memory = tdx_write_guest_memory;
+ 
+-- 
+2.31.1
+

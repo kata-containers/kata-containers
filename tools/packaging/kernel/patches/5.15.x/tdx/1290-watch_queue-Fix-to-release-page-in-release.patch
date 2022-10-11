@@ -1,0 +1,36 @@
+From d8dc43338c97cf6973912b487afd228197a60803 Mon Sep 17 00:00:00 2001
+From: David Howells <dhowells@redhat.com>
+Date: Fri, 11 Mar 2022 13:23:46 +0000
+Subject: [PATCH 1290/1418] watch_queue: Fix to release page in ->release()
+
+When a pipe ring descriptor points to a notification message, the
+refcount on the backing page is incremented by the generic get function,
+but the release function, which marks the bitmap, doesn't drop the page
+ref.
+
+Fix this by calling generic_pipe_buf_release() at the end of
+watch_queue_pipe_buf_release().
+
+Fixes: c73be61cede5 ("pipe: Add general notification queue support")
+Reported-by: Jann Horn <jannh@google.com>
+Signed-off-by: David Howells <dhowells@redhat.com>
+Signed-off-by: Linus Torvalds <torvalds@linux-foundation.org>
+---
+ kernel/watch_queue.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/kernel/watch_queue.c b/kernel/watch_queue.c
+index 427b0318e303..dfb3a7e28280 100644
+--- a/kernel/watch_queue.c
++++ b/kernel/watch_queue.c
+@@ -54,6 +54,7 @@ static void watch_queue_pipe_buf_release(struct pipe_inode_info *pipe,
+ 	bit += page->index;
+ 
+ 	set_bit(bit, wqueue->notes_bitmap);
++	generic_pipe_buf_release(pipe, buf);
+ }
+ 
+ // No try_steal function => no stealing
+-- 
+2.31.1
+

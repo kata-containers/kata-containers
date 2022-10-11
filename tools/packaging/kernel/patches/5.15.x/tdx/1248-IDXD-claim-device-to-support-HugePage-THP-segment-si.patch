@@ -1,0 +1,55 @@
+From 5851e4f0a638bfa35e705c664b0c325700184cb0 Mon Sep 17 00:00:00 2001
+From: Jiangbo Wu <jiangbo.wu@intel.com>
+Date: Sat, 19 Mar 2022 04:35:43 +0800
+Subject: [PATCH 1248/1418] IDXD: claim device to support HugePage/THP segment
+ size
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When using IDXD to copy HugePage/THP pages, if DMA_API_DEBUG is enabled,
+DMA-API debug code would complain mapping segment size is longer than
+device claimed, it use 64K as default if device doesn’t claim.
+
+Claim DSA max_segment_size to HugePage/THP to avoid DMA-API debug code
+print warning message if copy HugePage/THP pages.
+
+Signed-off-by: Jiangbo Wu <jiangbo.wu@intel.com>
+---
+ drivers/dma/idxd/dma.c  | 7 +++++++
+ drivers/dma/idxd/idxd.h | 1 +
+ 2 files changed, 8 insertions(+)
+
+diff --git a/drivers/dma/idxd/dma.c b/drivers/dma/idxd/dma.c
+index 92abb442167c..23fe5df419eb 100644
+--- a/drivers/dma/idxd/dma.c
++++ b/drivers/dma/idxd/dma.c
+@@ -387,6 +387,13 @@ int idxd_register_dma_device(struct idxd_device *idxd)
+ 	INIT_LIST_HEAD(&dma->channels);
+ 	dma->dev = dev;
+ 
++	/*
++	 * claim device max_segment_size to HugePage/THP size, otherwise
++	 * DMA-API debug code would complain it's longer than default.
++	 */
++	idxd_dma->dma_parms.max_segment_size = HPAGE_PMD_SIZE;
++	dma->dev->dma_parms = &idxd_dma->dma_parms;
++
+ 	dma_cap_set(DMA_PRIVATE, dma->cap_mask);
+ 	dma->device_release = idxd_dma_release;
+ 
+diff --git a/drivers/dma/idxd/idxd.h b/drivers/dma/idxd/idxd.h
+index 0ef632284a8b..b32d37e13f15 100644
+--- a/drivers/dma/idxd/idxd.h
++++ b/drivers/dma/idxd/idxd.h
+@@ -261,6 +261,7 @@ enum idxd_device_flag {
+ struct idxd_dma_dev {
+ 	struct idxd_device *idxd;
+ 	struct dma_device dma;
++	struct device_dma_parameters dma_parms;
+ };
+ 
+ struct idxd_driver_data {
+-- 
+2.31.1
+

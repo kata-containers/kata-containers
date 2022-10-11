@@ -1,0 +1,90 @@
+From bb876ed4f14698eb287a0350fabb4bd2c2dac0a5 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Tue, 31 Aug 2021 15:34:38 +0800
+Subject: [PATCH 0482/1418] KVM: TDX: Pass KVM page level to tdh_mem_page_add()
+ and tdh_mem_page_aug()
+
+Level info is needed in tdh_clflush_page() to generate the correct page
+size.
+
+Besides, explicitly pass level info to SEAMCALL instead of assuming
+it's zero. It works naturally when 2MB support lands.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c     |  4 ++--
+ arch/x86/kvm/vmx/tdx_ops.h | 19 ++++++++++++-------
+ 2 files changed, 14 insertions(+), 9 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index daed66fa953b..edef29b6e3df 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -1493,7 +1493,7 @@ static void tdx_sept_set_private_spte(struct kvm_vcpu *vcpu, gfn_t gfn,
+ 	if (is_td_finalized(kvm_tdx)) {
+ 		trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_PAGE_AUG, gpa, hpa, tdx_level);
+ 
+-		err = tdh_mem_page_aug(kvm_tdx->tdr.pa, gpa, hpa, &ex_ret);
++		err = tdh_mem_page_aug(kvm_tdx->tdr.pa, gpa, tdx_level, hpa, &ex_ret);
+ 		SEPT_ERR(err, &ex_ret, TDH_MEM_PAGE_AUG, vcpu->kvm);
+ 		return;
+ 	}
+@@ -1504,7 +1504,7 @@ static void tdx_sept_set_private_spte(struct kvm_vcpu *vcpu, gfn_t gfn,
+ 	source_pa = kvm_tdx->source_pa & ~KVM_TDX_MEASURE_MEMORY_REGION;
+ 
+ 	WARN_ON(hpa == source_pa);
+-	err = tdh_mem_page_add(kvm_tdx->tdr.pa, gpa, hpa, source_pa, &ex_ret);
++	err = tdh_mem_page_add(kvm_tdx->tdr.pa, gpa, tdx_level, hpa, source_pa, &ex_ret);
+ 	if (!SEPT_ERR(err, &ex_ret, TDH_MEM_PAGE_ADD, vcpu->kvm) &&
+ 	    (kvm_tdx->source_pa & KVM_TDX_MEASURE_MEMORY_REGION))
+ 		tdx_measure_page(kvm_tdx, gpa);
+diff --git a/arch/x86/kvm/vmx/tdx_ops.h b/arch/x86/kvm/vmx/tdx_ops.h
+index f867404745aa..df171f0fe7d3 100644
+--- a/arch/x86/kvm/vmx/tdx_ops.h
++++ b/arch/x86/kvm/vmx/tdx_ops.h
+@@ -14,6 +14,11 @@
+ #include "seamcall.h"
+ 
+ #ifdef CONFIG_INTEL_TDX_HOST
++static __always_inline enum pg_level tdx_sept_level_to_pg_level(int level)
++{
++	return level + 1;
++}
++
+ static inline void tdh_clflush_page(hpa_t addr, enum pg_level level)
+ {
+ 	clflush_cache_range(__va(addr), KVM_HPAGE_SIZE(level));
+@@ -25,11 +30,11 @@ static inline u64 tdh_mng_addcx(hpa_t tdr, hpa_t addr)
+ 	return seamcall(TDH_MNG_ADDCX, addr, tdr, 0, 0, 0, NULL);
+ }
+ 
+-static inline u64 tdh_mem_page_add(hpa_t tdr, gpa_t gpa, hpa_t hpa, hpa_t source,
+-			    struct tdx_ex_ret *ex)
++static inline u64 tdh_mem_page_add(hpa_t tdr, gpa_t gpa, int level, hpa_t hpa,
++				   hpa_t source, struct tdx_ex_ret *ex)
+ {
+-	tdh_clflush_page(hpa, PG_LEVEL_4K);
+-	return seamcall(TDH_MEM_PAGE_ADD, gpa, tdr, hpa, source, 0, ex);
++	tdh_clflush_page(hpa, tdx_sept_level_to_pg_level(level));
++	return seamcall(TDH_MEM_PAGE_ADD, gpa | level, tdr, hpa, source, 0, ex);
+ }
+ 
+ static inline u64 tdh_mem_sept_add(hpa_t tdr, gpa_t gpa, int level, hpa_t page,
+@@ -45,11 +50,11 @@ static inline u64 tdh_vp_addcx(hpa_t tdvpr, hpa_t addr)
+ 	return seamcall(TDH_VP_ADDCX, addr, tdvpr, 0, 0, 0, NULL);
+ }
+ 
+-static inline u64 tdh_mem_page_aug(hpa_t tdr, gpa_t gpa, hpa_t hpa,
++static inline u64 tdh_mem_page_aug(hpa_t tdr, gpa_t gpa, int level, hpa_t hpa,
+ 			    struct tdx_ex_ret *ex)
+ {
+-	tdh_clflush_page(hpa, PG_LEVEL_4K);
+-	return seamcall(TDH_MEM_PAGE_AUG, gpa, tdr, hpa, 0, 0, ex);
++	tdh_clflush_page(hpa, tdx_sept_level_to_pg_level(level));
++	return seamcall(TDH_MEM_PAGE_AUG, gpa | level, tdr, hpa, 0, 0, ex);
+ }
+ 
+ static inline u64 tdh_mem_range_block(hpa_t tdr, gpa_t gpa, int level,
+-- 
+2.31.1
+

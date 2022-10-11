@@ -1,0 +1,93 @@
+From c2b6dcf331f7b949c65c45cd0873b7556a7bd2fd Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Wed, 11 Aug 2021 15:20:34 +0800
+Subject: [PATCH 0825/1418] Document/x86: EUPDATESVN sysfs file
+
+A new sysfs file /sys/devices/system/cpu/microcode/svnupdate is
+provided, it allows system admin to echo 1 to trigger the CPUSVN
+update process.
+
+Document the new sysfs ABI.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ .../ABI/testing/sysfs-devices-system-cpu      | 14 ++++++
+ Documentation/x86/sgx.rst                     | 43 +++++++++++++++++++
+ 2 files changed, 57 insertions(+)
+
+diff --git a/Documentation/ABI/testing/sysfs-devices-system-cpu b/Documentation/ABI/testing/sysfs-devices-system-cpu
+index b46ef147616a..3b1abdb70bd4 100644
+--- a/Documentation/ABI/testing/sysfs-devices-system-cpu
++++ b/Documentation/ABI/testing/sysfs-devices-system-cpu
+@@ -666,3 +666,17 @@ Description:	Preferred MTE tag checking mode
+ 		================  ==============================================
+ 
+ 		See also: Documentation/arm64/memory-tagging-extension.rst
++
++What: 		/sys/devices/system/cpu/microcode/svnupdate
++Date:		Aug 2021
++Contact:	linux-sgx@vger.kernel.org
++Description:	Applying SGX Runtime Microcode Updates to Enclaves
++
++		Whenever a microcode update affects SGX, ENCLS[EUPDATESVN]
++		should be taken to update the attestation metric (called
++		CPUSVN) and generate new cryptographic assets without a
++		reboot. EUPDATESVN success requires that all SGX memory to
++		be marked as "unused" and its contents destroyed.
++
++		This sysfs interface is only exposed to userspace on host,
++		to trigger enclave destruction and the EUPDATESVN operation.
+diff --git a/Documentation/x86/sgx.rst b/Documentation/x86/sgx.rst
+index 265568a9292c..2dd53696d53d 100644
+--- a/Documentation/x86/sgx.rst
++++ b/Documentation/x86/sgx.rst
+@@ -285,3 +285,46 @@ to expected failures and handle them as follows:
+    first call.  It indicates a bug in the kernel or the userspace client
+    if any of the second round of ``SGX_IOC_VEPC_REMOVE_ALL`` calls has
+    a return code other than 0.
++
++
++Applying Runtime Microcode Updates to Enclaves
++==============================================
++
++SGX enclaves have an attestation mechanism. An enclave might, for
++instance, need to attest to its state before it is given a special
++decryption key. Since SGX must trust the CPU microcode, attestation
++incorporates the microcode versions of all processors on the system
++and is affected by microcode updates. This enables deployment
++decisions based on the microcode version. For example, an enclave
++might be denied a decryption key if it runs on a system that has
++old microcode without a specific mitigation.
++
++Unfortunately, this attestation metric (called CPUSVN) is only a
++snapshot. When the kernel first uses SGX (successfully executes any
++ENCLS instruction), SGX inspects all CPUs in the system and incorporates
++a record of their microcode versions into CPUSVN. CPUSVN is only
++automatically updated at reboot. This means that, although the
++microcode has been updated, enclaves can never attest to this fact.
++Enclaves are stuck attesting to the old version until a reboot.
++
++The SGX architecture has an alternative to these reboots: the
++ENCLS[EUPDATESVN] instruction. It allows another snapshot to be
++taken to update CPUSVN after a runtime microcode update without a
++reboot.
++
++Whenever a microcode update affects SGX, the SGX attestation
++architecture assumes that all running enclaves and cryptographic
++assets (like internal SGX encryption keys) have been compromised.
++To mitigate the impact of this presumed compromise, EUPDATESVN
++success requires that all SGX memory to be marked as "unused" and
++its contents destroyed. This requirement ensures that no compromised
++enclaves can survive the EUPDATESVN procedure and provides an
++opportunity to generate new cryptographic assets.
++
++EUPDATESVN was designed to be separate from the microcode update
++to provide flexibility to administractors. They can immediately
++update the microcode and then schedule enclave destruction and
++EUPDATESVN for a lter more convenient time.
++
++Any write to the sysfs file: **/sys/devices/system/cpu/microcode/svnupdate**
++triggers enclave destruction and the EUPDATESVN operation.
+-- 
+2.31.1
+

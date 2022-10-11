@@ -1,0 +1,104 @@
+From d77d7ad7326ddf7a7252da3739449b75d5f7c103 Mon Sep 17 00:00:00 2001
+From: Zhang Chen <chen.zhang@intel.com>
+Date: Fri, 13 Dec 2019 16:51:55 +0800
+Subject: [PATCH 0428/1418] *** HACK *** KVM: selftests: Add a test case for
+ Intel TDX-SEAM
+
+Add selftest for validating TDX-SEAM modules.  For now, implement basic
+functionality of probing KVM and (re)loading a SEAM module.
+
+Signed-off-by: Zhang Chen <chen.zhang@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ tools/testing/selftests/kvm/.gitignore        |  1 +
+ tools/testing/selftests/kvm/Makefile          |  1 +
+ .../selftests/kvm/x86_64/tdx_load_seam_test.c | 53 +++++++++++++++++++
+ 3 files changed, 55 insertions(+)
+ create mode 100644 tools/testing/selftests/kvm/x86_64/tdx_load_seam_test.c
+
+diff --git a/tools/testing/selftests/kvm/.gitignore b/tools/testing/selftests/kvm/.gitignore
+index b8dbabe24ac2..105412f27b48 100644
+--- a/tools/testing/selftests/kvm/.gitignore
++++ b/tools/testing/selftests/kvm/.gitignore
+@@ -26,6 +26,7 @@
+ /x86_64/svm_vmcall_test
+ /x86_64/svm_int_ctl_test
+ /x86_64/sync_regs_test
++/x86_64/tdx_load_seam_test
+ /x86_64/tsc_msrs_test
+ /x86_64/userspace_msr_exit_test
+ /x86_64/vmx_apic_access_test
+diff --git a/tools/testing/selftests/kvm/Makefile b/tools/testing/selftests/kvm/Makefile
+index 5c263a273aee..d0751ca454b8 100644
+--- a/tools/testing/selftests/kvm/Makefile
++++ b/tools/testing/selftests/kvm/Makefile
+@@ -66,6 +66,7 @@ TEST_GEN_PROGS_x86_64 += x86_64/vmx_set_nested_state_test
+ TEST_GEN_PROGS_x86_64 += x86_64/vmx_tsc_adjust_test
+ TEST_GEN_PROGS_x86_64 += x86_64/vmx_nested_tsc_scaling_test
+ TEST_GEN_PROGS_x86_64 += x86_64/xapic_ipi_test
++TEST_GEN_PROGS_x86_64 += x86_64/tdx_load_seam_test
+ TEST_GEN_PROGS_x86_64 += x86_64/xss_msr_test
+ TEST_GEN_PROGS_x86_64 += x86_64/debug_regs
+ TEST_GEN_PROGS_x86_64 += x86_64/tsc_msrs_test
+diff --git a/tools/testing/selftests/kvm/x86_64/tdx_load_seam_test.c b/tools/testing/selftests/kvm/x86_64/tdx_load_seam_test.c
+new file mode 100644
+index 000000000000..6543259b3214
+--- /dev/null
++++ b/tools/testing/selftests/kvm/x86_64/tdx_load_seam_test.c
+@@ -0,0 +1,53 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * TDX_load_SEAM_test
++ *
++ * Copyright (C) 2019, Intel.
++ *
++ * This work is licensed under the terms of the GNU GPL, version 2.
++ *
++ * Author:
++ *   Zhang Chen <chen.zhang@intel.com>
++ *
++ */
++
++#include <fcntl.h>
++#include <limits.h>
++#include <kvm_util.h>
++#include <linux/kvm.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/ioctl.h>
++#include <sys/types.h>
++#include <test_util.h>
++#include <unistd.h>
++#include <processor.h>
++
++void intel_seam_load_test(char *path)
++{
++	int ret, fd;
++
++	fd = open("/dev/kvm", O_RDWR);
++	TEST_ASSERT(fd >= 0, "failed to open /dev/kvm fd: %i errno: %i",
++		    fd, errno);
++
++	ret = ioctl(fd, KVM_LOAD_SEAM, path);
++	TEST_ASSERT(!ret, "KVM_LOAD_SEAM failed ret: %i errno: %i",
++		    ret, errno);
++
++	close(fd);
++}
++
++int main(int argc, char **argv)
++{
++	char path[PATH_MAX];
++
++	TEST_ASSERT(argc == 2, "Must specific path to SEAM module");
++
++	strncpy(path, argv[1], PATH_MAX);
++
++	intel_seam_load_test(path);
++
++	return 0;
++}
+-- 
+2.31.1
+

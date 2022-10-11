@@ -1,0 +1,66 @@
+From 0b1e84b4b41a6d9147257b718aa541e8e1a0dd00 Mon Sep 17 00:00:00 2001
+From: Eric Auger <eric.auger@redhat.com>
+Date: Tue, 9 Nov 2021 17:02:34 +0800
+Subject: [PATCH 0882/1418] vfio/pci: Register and allow DMA FAULT IRQ
+ signaling
+
+Register the VFIO_IRQ_TYPE_NESTED/VFIO_IRQ_SUBTYPE_DMA_FAULT
+IRQ that allows to signal a nested mode DMA fault.
+Signed-off-by: Eric Auger <eric.auger@redhat.com>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ drivers/vfio/pci/vfio_pci_core.c | 22 ++++++++++++++++++++--
+ 1 file changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/vfio/pci/vfio_pci_core.c b/drivers/vfio/pci/vfio_pci_core.c
+index 428816bad07c..32dcb01530e3 100644
+--- a/drivers/vfio/pci/vfio_pci_core.c
++++ b/drivers/vfio/pci/vfio_pci_core.c
+@@ -323,8 +323,8 @@ int vfio_pci_iommu_dev_fault_handler(struct iommu_fault *fault, void *data)
+ 	struct vfio_pci_core_device *vdev = (struct vfio_pci_core_device *)data;
+ 	struct vfio_region_dma_fault *reg =
+ 		(struct vfio_region_dma_fault *)vdev->fault_pages;
++	int head, tail, size, ext_irq_index;
+ 	struct iommu_fault *new;
+-	int head, tail, size;
+ 	int ret = 0;
+ 
+ 	if (WARN_ON(!reg))
+@@ -351,7 +351,19 @@ int vfio_pci_iommu_dev_fault_handler(struct iommu_fault *fault, void *data)
+ 	reg->head = (head + 1) % size;
+ unlock:
+ 	mutex_unlock(&vdev->fault_queue_lock);
+-	return ret;
++	if (ret)
++		return ret;
++
++	ext_irq_index = vfio_pci_get_ext_irq_index(vdev, VFIO_IRQ_TYPE_NESTED,
++						   VFIO_IRQ_SUBTYPE_DMA_FAULT);
++	if (ext_irq_index < 0)
++		return -EINVAL;
++
++	mutex_lock(&vdev->igate);
++	if (vdev->ext_irqs[ext_irq_index].trigger)
++		eventfd_signal(vdev->ext_irqs[ext_irq_index].trigger, 1);
++	mutex_unlock(&vdev->igate);
++	return 0;
+ }
+ 
+ #define DMA_FAULT_RING_LENGTH 512
+@@ -407,6 +419,12 @@ static int vfio_pci_dma_fault_init(struct vfio_pci_core_device *vdev)
+ 	if (ret) /* the dma fault region is freed in vfio_pci_disable() */
+ 		goto out;
+ 
++	ret = vfio_pci_register_irq(vdev, VFIO_IRQ_TYPE_NESTED,
++				    VFIO_IRQ_SUBTYPE_DMA_FAULT,
++				    VFIO_IRQ_INFO_EVENTFD);
++	if (ret) /* the fault handler is also freed in vfio_pci_disable() */
++		goto out;
++
+ 	return 0;
+ out:
+ 	kfree(vdev->fault_pages);
+-- 
+2.31.1
+

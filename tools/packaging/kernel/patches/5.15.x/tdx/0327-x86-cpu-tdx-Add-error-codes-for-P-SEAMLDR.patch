@@ -1,0 +1,51 @@
+From e6f6679e8698ea7521e3d0011aca003c4b587a87 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Thu, 14 Oct 2021 04:55:35 -0700
+Subject: [PATCH 0327/1418] x86/cpu/tdx: Add error codes for P-SEAMLDR
+
+To print symbolic error name for P-SEAMLDR, add all error codes for
+P-SEAMLDR.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/p-seamldr.h | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.h b/arch/x86/kernel/cpu/tdx/p-seamldr.h
+index ac6aa98954ea..a9abe2ad24fc 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.h
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.h
+@@ -19,11 +19,29 @@
+ #define P_SEAMLDR_SEAMCALL_ERROR_CODE	0x8000000000000000ULL
+ 
+ #define P_SEAMLDR_SUCCESS	0x0000000000000000ULL
++#define P_SEAMLDR_EBADPARAM	0x8000000000000000ULL
++#define P_SEAMLDR_EBADCALL	0x8000000000000003ULL
++#define P_SEAMLDR_ENOMEM	0x8000000000010002ULL
++#define P_SEAMLDR_EUNSPECERR	0x8000000000010003ULL
++#define P_SEAMLDR_EUNSUPCPU	0x8000000000010004ULL
++#define P_SEAMLDR_EBADSIG	0x8000000000020000ULL
++#define P_SEAMLDR_EBADHASH	0x8000000000020001ULL
++#define P_SEAMLDR_EINTERRUPT	0x8000000000030000ULL
++#define P_SEAMLDR_ENOENTROPY	0x8000000000030001ULL
+ 
+ #define P_SEAMLDR_ERROR_CODE(name)	{ name, #name }
+ 
+ #define P_SEAMLDR_ERROR_CODES				\
+-	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_SUCCESS)
++	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_SUCCESS),	\
++	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_EBADPARAM),	\
++	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_EBADCALL),	\
++	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_ENOMEM),		\
++	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_EUNSPECERR),	\
++	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_EUNSUPCPU),	\
++	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_EBADSIG),	\
++	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_EBADHASH),	\
++	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_EINTERRUPT),	\
++	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_ENOENTROPY)
+ 
+ const char *p_seamldr_error_name(u64 error_code);
+ 
+-- 
+2.31.1
+

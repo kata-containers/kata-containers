@@ -1,0 +1,63 @@
+From d4ccbc762fefe35f180dcb09b067f3a4ab1e5839 Mon Sep 17 00:00:00 2001
+From: Peter Zijlstra <peterz@infradead.org>
+Date: Wed, 22 Dec 2021 11:15:32 +0100
+Subject: [PATCH 1024/1418] sched/fair: Force progress on min_vruntime
+
+Given the nature and construction of min_vruntime, it will only move
+forward when the left-most task moves past it. Due to various
+placement issues -- mostly migration -- this can be delayed almost
+indefinitely, leading to starvation issues.
+
+Force min_vruntime forwards at the rate determined by the ideal
+scheduler S.
+
+Due to numerical issues (loss of remainder), this rate is actually
+slightly below the ideal rate, which means the left-most task can
+occasionally help pull it back in line -- this is the safe option, if
+it were too fast, it could run away.
+
+Signed-off-by: Peter Zijlstra (Intel) <peterz@infradead.org>
+---
+ kernel/sched/fair.c     |  7 +++++++
+ kernel/sched/features.h | 10 ++++++++++
+ 2 files changed, 17 insertions(+)
+
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index f6a05d9b5443..b590ff83e5c0 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -844,6 +844,13 @@ static void update_curr(struct cfs_rq *cfs_rq)
+ 	schedstat_add(cfs_rq->exec_clock, delta_exec);
+ 
+ 	curr->vruntime += calc_delta_fair(delta_exec, curr);
++	if (sched_feat(FORCE_MIN_VRUNTIME)) {
++		/*
++		 * Force advance min_vruntime at the runqueue rate, this
++		 * ensures it cannot get stuck due to placement trickery.
++		 */
++		cfs_rq->min_vruntime += __calc_delta(delta_exec, NICE_0_LOAD, &cfs_rq->load);
++	}
+ 	update_min_vruntime(cfs_rq);
+ 
+ 	if (entity_is_task(curr)) {
+diff --git a/kernel/sched/features.h b/kernel/sched/features.h
+index 7f8dace0964c..03573f0e7c4d 100644
+--- a/kernel/sched/features.h
++++ b/kernel/sched/features.h
+@@ -95,3 +95,13 @@ SCHED_FEAT(LATENCY_WARN, false)
+ 
+ SCHED_FEAT(ALT_PERIOD, true)
+ SCHED_FEAT(BASE_SLICE, true)
++
++#ifdef CONFIG_SMP
++/*
++ * SMP migrations in particular can cause the min_vruntime to stall,
++ * leading to starvation issues.
++ */
++SCHED_FEAT(FORCE_MIN_VRUNTIME, false)
++#else
++SCHED_FEAT(FORCE_MIN_VRUNTIME, false)
++#endif
+-- 
+2.31.1
+

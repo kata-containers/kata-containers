@@ -1,0 +1,34 @@
+From 89d361bdb6d82b796af488f3edd8286152c09b1a Mon Sep 17 00:00:00 2001
+From: Bixuan Cui <cuibixuan@huawei.com>
+Date: Wed, 8 Sep 2021 17:28:26 +0800
+Subject: [PATCH 0546/1418] dmaengine: idxd: Use list_move_tail instead of
+ list_del/list_add_tail
+
+Using list_move_tail() instead of list_del() + list_add_tail()
+
+Reported-by: Hulk Robot <hulkci@huawei.com>
+Signed-off-by: Bixuan Cui <cuibixuan@huawei.com>
+Acked-by: Dave Jiang <dave.jiang@intel.com>
+Link: https://lore.kernel.org/r/20210908092826.67765-1-cuibixuan@huawei.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/idxd/irq.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/dma/idxd/irq.c b/drivers/dma/idxd/irq.c
+index 1fe24b1b24be..0ad7df795717 100644
+--- a/drivers/dma/idxd/irq.c
++++ b/drivers/dma/idxd/irq.c
+@@ -221,8 +221,7 @@ static void irq_process_work_list(struct idxd_irq_entry *irq_entry)
+ 
+ 	list_for_each_entry_safe(desc, n, &irq_entry->work_list, list) {
+ 		if (desc->completion->status) {
+-			list_del(&desc->list);
+-			list_add_tail(&desc->list, &flist);
++			list_move_tail(&desc->list, &flist);
+ 		}
+ 	}
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,87 @@
+From 5046857aae96c31cf259558411739b966c167b0b Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Fri, 27 Mar 2020 15:19:32 -0700
+Subject: [PATCH 0147/1418] x86/topology: Disable CPU online/offline control
+ for TDX guest
+
+As per Intel TDX Virtual Firmware Design Guide, sec titled "AP
+initialization in OS" (index 4.3.5) and sec titled "Hotplug Device"
+(index 9.4), all unused CPUs are put in spinning state by TDVF until
+OS requests for CPU bring-up via mailbox address passed by ACPI MADT
+table. Since by default all unused CPUs are always in spinning state,
+there is no point in supporting dynamic CPU online/offline feature. So
+current generation of TDVF does not support CPU hotplug feature. It may
+be supported in next generation.
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+---
+ arch/x86/kernel/tdx.c      | 16 ++++++++++++++++
+ arch/x86/kernel/topology.c |  3 ++-
+ 2 files changed, 18 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 27df0ae3deeb..d118de275284 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -4,6 +4,8 @@
+ #undef pr_fmt
+ #define pr_fmt(fmt)     "tdx: " fmt
+ 
++#include <linux/cpuhotplug.h>
++
+ #include <asm/tdx.h>
+ #include <asm/vmx.h>
+ #include <asm/insn.h>
+@@ -308,6 +310,17 @@ static int tdx_handle_mmio(struct pt_regs *regs, struct ve_info *ve)
+ 	return insn.length;
+ }
+ 
++static int tdx_cpu_offline_prepare(unsigned int cpu)
++{
++	/*
++	 * Per Intel TDX Virtual Firmware Design Guide,
++	 * sec 4.3.5 and sec 9.4, Hotplug is not supported
++	 * in TDX platforms. So don't support CPU
++	 * offline feature once it is turned on.
++	 */
++	return -EOPNOTSUPP;
++}
++
+ bool tdx_get_ve_info(struct ve_info *ve)
+ {
+ 	struct tdx_module_output out;
+@@ -455,5 +468,8 @@ void __init tdx_early_init(void)
+ 	pv_ops.irq.safe_halt = tdx_safe_halt;
+ 	pv_ops.irq.halt = tdx_halt;
+ 
++	cpuhp_setup_state(CPUHP_AP_ONLINE_DYN, "tdx:cpu_hotplug",
++			  NULL, tdx_cpu_offline_prepare);
++
+ 	pr_info("Guest initialized\n");
+ }
+diff --git a/arch/x86/kernel/topology.c b/arch/x86/kernel/topology.c
+index bd83748e2bde..ded34eda5bac 100644
+--- a/arch/x86/kernel/topology.c
++++ b/arch/x86/kernel/topology.c
+@@ -32,6 +32,7 @@
+ #include <linux/init.h>
+ #include <linux/smp.h>
+ #include <linux/irq.h>
++#include <linux/cc_platform.h>
+ #include <asm/io_apic.h>
+ #include <asm/cpu.h>
+ 
+@@ -130,7 +131,7 @@ int arch_register_cpu(int num)
+ 			}
+ 		}
+ 	}
+-	if (num || cpu0_hotpluggable)
++	if ((num || cpu0_hotpluggable) && !cc_platform_has(CC_ATTR_GUEST_TDX))
+ 		per_cpu(cpu_devices, num).cpu.hotpluggable = 1;
+ 
+ 	return register_cpu(&per_cpu(cpu_devices, num).cpu, num);
+-- 
+2.31.1
+

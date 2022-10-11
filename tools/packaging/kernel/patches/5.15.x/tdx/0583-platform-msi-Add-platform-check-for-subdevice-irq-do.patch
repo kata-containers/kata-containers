@@ -1,0 +1,159 @@
+From ed2373e2527af95943a818b3cb8ba406a6e5ea72 Mon Sep 17 00:00:00 2001
+From: Lu Baolu <baolu.lu@linux.intel.com>
+Date: Mon, 23 Nov 2020 08:41:21 +0800
+Subject: [PATCH 0583/1418] platform-msi: Add platform check for subdevice irq
+ domain
+
+The pci_subdevice_msi_create_irq_domain() should fail if the underlying
+platform is not able to support IMS (Interrupt Message Storage). Otherwise,
+the isolation of interrupt is not guaranteed.
+
+For x86, IMS is only supported on bare metal for now. We could enable it
+in the virtualization environments in the future if interrupt HYPERCALL
+domain is supported or the hardware has the capability of interrupt
+isolation for subdevices.
+
+Cc: David Woodhouse <dwmw@amazon.co.uk>
+Cc: Leon Romanovsky <leon@kernel.org>
+Cc: Kevin Tian <kevin.tian@intel.com>
+Suggested-by: Thomas Gleixner <tglx@linutronix.de>
+Link: https://lore.kernel.org/linux-pci/87pn4nk7nn.fsf@nanos.tec.linutronix.de/
+Link: https://lore.kernel.org/linux-pci/877dqrnzr3.fsf@nanos.tec.linutronix.de/
+Link: https://lore.kernel.org/linux-pci/877dqqmc2h.fsf@nanos.tec.linutronix.de/
+Signed-off-by: Lu Baolu <baolu.lu@linux.intel.com>
+Signed-off-by: Megha Dey <megha.dey@intel.com>
+---
+ arch/x86/pci/common.c       | 72 +++++++++++++++++++++++++++++++++++++
+ drivers/base/platform-msi.c |  8 +++++
+ include/linux/msi.h         |  2 ++
+ 3 files changed, 82 insertions(+)
+
+diff --git a/arch/x86/pci/common.c b/arch/x86/pci/common.c
+index 828d6a68c4d1..bb2c4064046b 100644
+--- a/arch/x86/pci/common.c
++++ b/arch/x86/pci/common.c
+@@ -12,6 +12,8 @@
+ #include <linux/init.h>
+ #include <linux/dmi.h>
+ #include <linux/slab.h>
++#include <linux/iommu.h>
++#include <linux/msi.h>
+ 
+ #include <asm/acpi.h>
+ #include <asm/segment.h>
+@@ -729,3 +731,73 @@ void pci_disable_early(void)
+ {
+ 	pci_probe |= PCI_PROBE_NOEARLY;
+ }
++
++/*
++ * We want to figure out which context we are running in. But the hardware
++ * does not introduce a reliable way (instruction, CPUID leaf, MSR, whatever)
++ * which can be manipulated by the VMM to let the OS figure out where it runs.
++ * So we go with the below probably on_bare_metal() function as a replacement
++ * for definitely on_bare_metal() to go forward only for the very simple reason
++ * that this is the only option we have.
++ */
++static const char * const vmm_vendor_name[] = {
++	"QEMU", "Bochs", "KVM", "Xen", "VMware", "VMW", "VMware Inc.",
++	"innotek GmbH", "Oracle Corporation", "Parallels", "BHYVE"
++};
++
++static void read_type0_virtual_machine(const struct dmi_header *dm, void *p)
++{
++	u8 *data = (u8 *)dm + 0x13;
++
++	/* BIOS Information (Type 0) */
++	if (dm->type != 0 || dm->length < 0x14)
++		return;
++
++	/* Bit 4 of BIOS Characteristics Extension Byte 2*/
++	if (*data & BIT(4))
++		*((bool *)p) = true;
++}
++
++static bool smbios_virtual_machine(void)
++{
++	bool bit_present = false;
++
++	dmi_walk(read_type0_virtual_machine, &bit_present);
++
++	return bit_present;
++}
++
++static bool on_bare_metal(struct device *dev)
++{
++	int i;
++
++	if (boot_cpu_has(X86_FEATURE_HYPERVISOR))
++		return false;
++
++	if (smbios_virtual_machine())
++		return false;
++
++	if (iommu_capable(dev->bus, IOMMU_CAP_VIOMMU_HINT))
++		return false;
++
++	for (i = 0; i < ARRAY_SIZE(vmm_vendor_name); i++)
++		if (dmi_match(DMI_SYS_VENDOR, vmm_vendor_name[i]))
++			return false;
++
++	pr_info("System running on bare metal, report to bugzilla.kernel.org if not the case.");
++
++	return true;
++}
++
++bool arch_support_pci_device_msi(struct pci_dev *pdev)
++{
++	/*
++	 * When we are running in a VMM context, the device IMS could only be
++	 * enabled when the underlying hardware supports interrupt isolation
++	 * of the subdevice, or any mechanism (trap, hypercall) is added so
++	 * that changes in the interrupt message store could be managed by the
++	 * VMM. For now, we only support the device IMS when we are running on
++	 * the bare metal.
++	 */
++	return on_bare_metal(&pdev->dev);
++}
+diff --git a/drivers/base/platform-msi.c b/drivers/base/platform-msi.c
+index 56879f6d4427..29577b823b00 100644
+--- a/drivers/base/platform-msi.c
++++ b/drivers/base/platform-msi.c
+@@ -530,6 +530,11 @@ struct irq_domain *device_msi_create_irq_domain(struct fwnode_handle *fn,
+ #ifdef CONFIG_PCI
+ #include <linux/pci.h>
+ 
++bool __weak arch_support_pci_device_msi(struct pci_dev *pdev)
++{
++	return false;
++}
++
+ /**
+  * pci_subdevice_msi_create_irq_domain - Create an irq domain for subdevices
+  * @pdev:	Pointer to PCI device for which the subdevice domain is created
+@@ -541,6 +546,9 @@ struct irq_domain *pci_subdevice_msi_create_irq_domain(struct pci_dev *pdev,
+ 	struct irq_domain *domain, *pdev_msi;
+ 	struct fwnode_handle *fn;
+ 
++	if (!arch_support_pci_device_msi(pdev))
++		return NULL;
++
+ 	/*
+ 	 * Retrieve the MSI domain of the underlying PCI device's MSI
+ 	 * domain. The PCI device domain's parent domain is also the parent
+diff --git a/include/linux/msi.h b/include/linux/msi.h
+index 6cc50e4d7f1c..57d69df6fd81 100644
+--- a/include/linux/msi.h
++++ b/include/linux/msi.h
+@@ -480,6 +480,8 @@ struct irq_domain *pci_subdevice_msi_create_irq_domain(struct pci_dev *pdev,
+ # endif
+ #endif /* CONFIG_DEVICE_MSI */
+ 
++bool arch_support_pci_device_msi(struct pci_dev *pdev);
++
+ #ifdef CONFIG_PCI_MSI_IRQ_DOMAIN
+ void pci_msi_domain_write_msg(struct irq_data *irq_data, struct msi_msg *msg);
+ struct irq_domain *pci_msi_create_irq_domain(struct fwnode_handle *fwnode,
+-- 
+2.31.1
+

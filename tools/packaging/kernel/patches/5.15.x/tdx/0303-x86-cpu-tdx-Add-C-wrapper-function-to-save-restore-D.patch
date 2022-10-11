@@ -1,0 +1,120 @@
+From 14d4547acdbee5b0da4c6e276ceca78d66bc2a29 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Tue, 19 Oct 2021 10:03:37 -0700
+Subject: [PATCH 0303/1418] x86/cpu/tdx: Add C wrapper function to save/restore
+ DR7 and MSRs
+
+Introduce a C function to wrap an assembly helper function which launches
+the TDX first firmware loader to preserve DR7 and MSRs.
+
+The TDX first firmware loader(NP-SEAMLDR) clobbers DR7 and some MSRs. The
+assembly helper function to launch it preserves only general-purpose
+registers and control registers.  It doesn't save/restore clobbered DR7 and
+some MSRs.  Introduce a C wrapper function to save/restore clobbered DR7
+and MSRs to minimize hand-written assembly code.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/p-seamldr.c | 75 +++++++++++++++++++++++++++++
+ 1 file changed, 75 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.c b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+index 5805286dc62e..29d1022b3ef6 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.c
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+@@ -7,10 +7,13 @@
+ #include <linux/memblock.h>
+ #include <linux/slab.h>
+ 
++#include <asm/debugreg.h>
+ #include <asm/cmdline.h>
+ #include <asm/virtext.h>
+ #include <asm/trapnr.h>
++#include <asm/perf_event.h>
+ 
++#include "../../events/perf_event.h"
+ #include "p-seamldr.h"
+ #include "seamcall.h"
+ #include "seam.h"
+@@ -124,6 +127,78 @@ static struct notifier_block np_seamldr_die_notifier __initdata = {
+ 	.notifier_call = np_seamldr_die_notify,
+ };
+ 
++asmlinkage u64 __init np_seamldr_launch(unsigned long seamldr_pa,
++					unsigned long seamldr_size);
++
++static u64 __init __p_seamldr_load(void *np_seamldr,
++				unsigned long np_seamldr_size)
++{
++	/*
++	 * The NP-SEAMLDR will clobber some MSRs and DR7.  Save and restore
++	 * them.
++	 */
++	unsigned long debugctlmsr;
++
++	bool has_core_perf_global_ctrl = false;
++	union cpuid10_eax eax;
++	unsigned long core_perf_global_ctrl;
++
++	bool has_pebs_enable = false;
++	union perf_capabilities perf_cap;
++	unsigned long pebs_enable;
++
++	unsigned long rtit_ctl;
++	unsigned long arch_lbr;
++	unsigned long misc_enable;
++	unsigned long efer;
++	unsigned long cr_pat;
++	unsigned long dr7;
++
++	u64 err;
++
++	debugctlmsr = get_debugctlmsr();
++	if (boot_cpu_has(X86_FEATURE_ARCH_PERFMON)) {
++		eax.full = cpuid_eax(0xa);
++		if (eax.split.version_id > 0) {
++			has_core_perf_global_ctrl = true;
++			rdmsrl(MSR_CORE_PERF_GLOBAL_CTRL, core_perf_global_ctrl);
++		}
++	}
++	if (boot_cpu_has(X86_FEATURE_PDCM)) {
++		rdmsrl(MSR_IA32_PERF_CAPABILITIES, perf_cap.capabilities);
++		if (perf_cap.pebs_baseline) {
++			has_pebs_enable = true;
++			rdmsrl(MSR_IA32_PEBS_ENABLE, pebs_enable);
++		}
++	}
++	if (boot_cpu_has(X86_FEATURE_INTEL_PT))
++		rdmsrl(MSR_IA32_RTIT_CTL, rtit_ctl);
++	if (boot_cpu_has(X86_FEATURE_ARCH_LBR))
++		rdmsrl(MSR_ARCH_LBR_CTL, arch_lbr);
++	rdmsrl(MSR_IA32_MISC_ENABLE, misc_enable);
++	rdmsrl(MSR_EFER, efer);
++	rdmsrl(MSR_IA32_CR_PAT, cr_pat);
++	dr7 = local_db_save();
++
++	err = np_seamldr_launch(__pa(np_seamldr), np_seamldr_size);
++
++	local_db_restore(dr7);
++	wrmsrl(MSR_IA32_CR_PAT, cr_pat);
++	wrmsrl(MSR_EFER, efer);
++	wrmsrl(MSR_IA32_MISC_ENABLE, misc_enable);
++	update_debugctlmsr(debugctlmsr);
++	if (has_core_perf_global_ctrl)
++		wrmsrl(MSR_CORE_PERF_GLOBAL_CTRL, core_perf_global_ctrl);
++	if (has_pebs_enable)
++		wrmsrl(MSR_IA32_PEBS_ENABLE, pebs_enable);
++	if (boot_cpu_has(X86_FEATURE_INTEL_PT))
++		wrmsrl(MSR_IA32_RTIT_CTL, rtit_ctl);
++	if (boot_cpu_has(X86_FEATURE_ARCH_LBR))
++		wrmsrl(MSR_ARCH_LBR_CTL, arch_lbr);
++
++	return err;
++}
++
+ /*
+  * load_p_seamldr() - load P-SEAMLDR
+  *
+-- 
+2.31.1
+

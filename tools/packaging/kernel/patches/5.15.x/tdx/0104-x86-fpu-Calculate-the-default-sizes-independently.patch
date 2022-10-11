@@ -1,0 +1,106 @@
+From d6f6d67779488e37017b8ba5fa312f34a1dca4e8 Mon Sep 17 00:00:00 2001
+From: "Chang S. Bae" <chang.seok.bae@intel.com>
+Date: Thu, 21 Oct 2021 15:55:25 -0700
+Subject: [PATCH 0104/1418] x86/fpu: Calculate the default sizes independently
+
+When dynamically enabled states are supported the maximum and default sizes
+for the kernel buffers and user space interfaces are not longer identical.
+
+Put the necessary calculations in place which only take the default enabled
+features into account.
+
+Signed-off-by: Chang S. Bae <chang.seok.bae@intel.com>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lore.kernel.org/r/20211021225527.10184-22-chang.seok.bae@intel.com
+---
+ arch/x86/kernel/fpu/xstate.c | 30 +++++++++++++++++++++---------
+ 1 file changed, 21 insertions(+), 9 deletions(-)
+
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 3372da871a40..b0f6e9a0cf2e 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -781,35 +781,40 @@ static bool __init is_supported_xstate_size(unsigned int test_xstate_size)
+ static int __init init_xstate_size(void)
+ {
+ 	/* Recompute the context size for enabled features: */
+-	unsigned int user_size, kernel_size;
++	unsigned int user_size, kernel_size, kernel_default_size;
++	bool compacted = cpu_feature_enabled(X86_FEATURE_XSAVES);
+ 
+ 	/* Uncompacted user space size */
+ 	user_size = get_xsave_size_user();
+ 
+ 	/*
+ 	 * XSAVES kernel size includes supervisor states and
+-	 * uses compacted format.
++	 * uses compacted format when available.
+ 	 *
+ 	 * XSAVE does not support supervisor states so
+ 	 * kernel and user size is identical.
+ 	 */
+-	if (cpu_feature_enabled(X86_FEATURE_XSAVES))
++	if (compacted)
+ 		kernel_size = get_xsaves_size_no_independent();
+ 	else
+ 		kernel_size = user_size;
+ 
+-	/* Ensure we have the space to store all enabled features. */
+-	if (!is_supported_xstate_size(kernel_size))
++	kernel_default_size =
++		xstate_calculate_size(fpu_kernel_cfg.default_features, compacted);
++
++	/* Ensure we have the space to store all default enabled features. */
++	if (!is_supported_xstate_size(kernel_default_size))
+ 		return -EINVAL;
+ 
+ 	if (!paranoid_xstate_size_valid(kernel_size))
+ 		return -EINVAL;
+ 
+-	/* Keep it the same for now */
+ 	fpu_kernel_cfg.max_size = kernel_size;
+-	fpu_kernel_cfg.default_size = kernel_size;
+ 	fpu_user_cfg.max_size = user_size;
+-	fpu_user_cfg.default_size = user_size;
++
++	fpu_kernel_cfg.default_size = kernel_default_size;
++	fpu_user_cfg.default_size =
++		xstate_calculate_size(fpu_user_cfg.default_features, false);
+ 
+ 	return 0;
+ }
+@@ -894,15 +899,21 @@ void __init fpu__init_system_xstate(unsigned int legacy_size)
+ 			fpu_kernel_cfg.max_features &= ~BIT_ULL(i);
+ 	}
+ 
++	if (!cpu_feature_enabled(X86_FEATURE_XFD))
++		fpu_kernel_cfg.max_features &= ~XFEATURE_MASK_USER_DYNAMIC;
++
+ 	fpu_kernel_cfg.max_features &= XFEATURE_MASK_USER_SUPPORTED |
+ 			      XFEATURE_MASK_SUPERVISOR_SUPPORTED;
+ 
+ 	fpu_user_cfg.max_features = fpu_kernel_cfg.max_features;
+ 	fpu_user_cfg.max_features &= XFEATURE_MASK_USER_SUPPORTED;
+ 
+-	/* Identical for now */
++	/* Clean out dynamic features from default */
+ 	fpu_kernel_cfg.default_features = fpu_kernel_cfg.max_features;
++	fpu_kernel_cfg.default_features &= ~XFEATURE_MASK_USER_DYNAMIC;
++
+ 	fpu_user_cfg.default_features = fpu_user_cfg.max_features;
++	fpu_user_cfg.default_features &= ~XFEATURE_MASK_USER_DYNAMIC;
+ 
+ 	/* Store it for paranoia check at the end */
+ 	xfeatures = fpu_kernel_cfg.max_features;
+@@ -913,6 +924,7 @@ void __init fpu__init_system_xstate(unsigned int legacy_size)
+ 	if (err)
+ 		goto out_disable;
+ 
++	/* Reset the state for the current task */
+ 	fpstate_reset(&current->thread.fpu);
+ 
+ 	/*
+-- 
+2.31.1
+

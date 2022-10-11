@@ -1,0 +1,82 @@
+From cc74f20745aa7ed47de8ff23041df9e9252309dc Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Tue, 15 Mar 2022 17:36:10 +0800
+Subject: [PATCH 1219/1418] KVM: TDX: Enable CET in TD VM
+
+Current KVM only supports CET_U in supported_xss while TDX module
+requires CET_U and CET_S to be either 00b or 11b. Forcefully set both
+bits if either of them is required as a workaround.
+
+For the CET-related MSRs (U_CET/PL0_SSP/PL1_SSP/PL2_SSP/PL3_SSP),
+although they will be set to the INIT value on TD exit, these states
+are managed by XSAVES and can be restored to host values on demand.
+
+This patch need some modification once CET_S is supported in
+host side or TDX module can support only CET_U in future.
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ arch/x86/include/asm/tdx_arch.h |  1 +
+ arch/x86/kvm/vmx/tdx.c          | 19 +++++++++++++++++--
+ 2 files changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/tdx_arch.h b/arch/x86/include/asm/tdx_arch.h
+index af9127e63242..e27f0538ee9b 100644
+--- a/arch/x86/include/asm/tdx_arch.h
++++ b/arch/x86/include/asm/tdx_arch.h
+@@ -249,6 +249,7 @@ struct tdx_cpuid_value {
+ 
+ #define TDX_TD_XFAM_LBR		BIT_ULL(15)
+ #define TDX_TD_XFAM_AMX		(BIT_ULL(17) | BIT_ULL(18))
++#define TDX_TD_XFAM_CET		(BIT_ULL(11) | BIT_ULL(12))
+ 
+ /*
+  * TD_PARAMS is provided as an input to TDH_MNG_INIT, the size of which is 1024B.
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index c4d79b12568a..b7cfd7ccdea9 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -846,7 +846,8 @@ static void tdx_restore_host_xsave_state(struct kvm_vcpu *vcpu)
+ 		xsetbv(XCR_XFEATURE_ENABLED_MASK, host_xcr0);
+ 	if (static_cpu_has(X86_FEATURE_XSAVES) &&
+ 	    /* PT can be exposed to TD guest regardless of KVM's XSS support */
+-	    host_xss != (kvm_tdx->xfam & (supported_xss | XFEATURE_MASK_PT)))
++	    host_xss != (kvm_tdx->xfam & (supported_xss | XFEATURE_MASK_PT |
++					  TDX_TD_XFAM_CET)))
+ 		wrmsrl(MSR_IA32_XSS, host_xss);
+ 	if (static_cpu_has(X86_FEATURE_PKU) &&
+ 	    (kvm_tdx->xfam & XFEATURE_MASK_PKRU))
+@@ -2189,8 +2190,17 @@ static int setup_tdparams(struct kvm *kvm, struct td_params *td_params,
+ 		guest_supported_xss = (entry->ecx | ((u64)entry->edx << 32));
+ 	else
+ 		guest_supported_xss = 0;
++
++	/*
++	 * TDX module requires bit 11 and bit 12 are either 00b or 11b but current
++	 * KVM only support CET_U in supported_xss. Thus in TD guest, forcefully set
++	 * both bits if either of them is required.
++	 */
++	if (guest_supported_xss & TDX_TD_XFAM_CET)
++		guest_supported_xss |= TDX_TD_XFAM_CET;
++
+ 	/* PT can be exposed to TD guest regardless of KVM's XSS support */
+-	guest_supported_xss &= (supported_xss | XFEATURE_MASK_PT);
++	guest_supported_xss &= (supported_xss | XFEATURE_MASK_PT | TDX_TD_XFAM_CET);
+ 
+ 	max_pa = 36;
+ 	entry = tdx_find_cpuid_entry(kvm_tdx, 0x80000008, 0);
+@@ -2229,6 +2239,11 @@ static int setup_tdparams(struct kvm *kvm, struct td_params *td_params,
+ 	    ((td_params->xfam & TDX_TD_XFAM_AMX) != TDX_TD_XFAM_AMX))
+ 		return -EINVAL;
+ 
++	/* TDX module requires bit 11 and bit 12 are either 00b or 11b */
++	if ((td_params->xfam & TDX_TD_XFAM_CET) &&
++	    ((td_params->xfam & TDX_TD_XFAM_CET) != TDX_TD_XFAM_CET))
++		return -EINVAL;
++
+ 	if (init_vm->tsc_khz)
+ 		guest_tsc_khz = init_vm->tsc_khz;
+ 	else
+-- 
+2.31.1
+

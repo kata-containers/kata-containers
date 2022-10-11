@@ -1,0 +1,64 @@
+From 4ad699bdca41d77b8ff5dbf5b4d0100cd824726b Mon Sep 17 00:00:00 2001
+From: Jithu Joseph <jithu.joseph@intel.com>
+Date: Thu, 7 Apr 2022 23:58:22 -0700
+Subject: [PATCH 1280/1418] platform/x86/intel/ifs: Remove version check during
+ IFS binary load
+
+There was a check which prevented the user from loading an older version
+of the IFS binary when using reload.
+
+Remove this check for the following reasons:
+1. Users might legitimately want to load an older version of scan binary
+2. The ifs_header->blob_revision field has recently been overloaded with
+   specific bits conveying meaning like debug/release build or regular/
+   error_injection blob, the -1,-2,-3 part in case of multi image blob etc.
+   Due to this a simple numerical comparision of version number is not
+   sufficient.
+
+Signed-off-by: Jithu Joseph <jithu.joseph@intel.com>
+---
+ drivers/platform/x86/intel/ifs/load.c | 17 -----------------
+ 1 file changed, 17 deletions(-)
+
+diff --git a/drivers/platform/x86/intel/ifs/load.c b/drivers/platform/x86/intel/ifs/load.c
+index e65f4fdf5940..238e372f6763 100644
+--- a/drivers/platform/x86/intel/ifs/load.c
++++ b/drivers/platform/x86/intel/ifs/load.c
+@@ -260,15 +260,6 @@ static const struct firmware *load_binary(const char *path)
+ 	return fw;
+ }
+ 
+-/*
+- * Compare the image version whenever loading a new image.
+- * Load the new image only if it is later or equal than the current version.
+- */
+-static bool is_newer_binary(int current_loaded_version, struct ifs_header *new_image_ptr)
+-{
+-	return current_loaded_version <= new_image_ptr->blob_revision;
+-}
+-
+ /*
+  * Load ifs image. Before loading ifs module, the ifs image must be located
+  * in /lib/firmware/intel/ifs and named as {family/model/stepping}.{testname}.
+@@ -286,18 +277,10 @@ int load_ifs_binary(void)
+ 	if (!scan_fw)
+ 		return -ENOENT;
+ 
+-	/* only reload new scan image for later version than currently loaded */
+-	if (!is_newer_binary(ifs_params.loaded_version, (struct ifs_header *)scan_fw->data)) {
+-		pr_warn("Refusing to load older binary");
+-		ret = -EINVAL;
+-		goto out;
+-	}
+-
+ 	ifs_header_ptr = (struct ifs_header *)scan_fw->data;
+ 	ifs_hash_ptr = (u64)(ifs_header_ptr + 1);
+ 
+ 	ret = scan_chunks_sanity_check();
+-out:
+ 	release_firmware(scan_fw);
+ 
+ 	return ret;
+-- 
+2.31.1
+

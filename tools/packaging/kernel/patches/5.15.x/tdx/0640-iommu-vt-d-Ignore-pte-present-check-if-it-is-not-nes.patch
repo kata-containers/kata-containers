@@ -1,0 +1,57 @@
+From dadc6cb234f513021eef8ca4f2b3f655de52bfd2 Mon Sep 17 00:00:00 2001
+From: "Sun, Yi Y" <yi.y.sun@intel.com>
+Date: Wed, 25 Nov 2020 16:43:36 +0800
+Subject: [PATCH 0640/1418] iommu/vt-d: Ignore pte present check if it is not
+ nested PASID entry
+
+We do not bind same PASID to the same device twice. But for non-nested
+PASID entry, we can ignore present bit check. Because we need modify
+the entry to do nested setup.
+
+Change-Id: Ife4448664c7f6e46bae327f29f94911df7f9c134
+Signed-off-by: Sun, Yi Y <yi.y.sun@intel.com>
+---
+ drivers/iommu/intel/pasid.c | 7 ++++---
+ drivers/iommu/intel/pasid.h | 6 +++---
+ 2 files changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/iommu/intel/pasid.c b/drivers/iommu/intel/pasid.c
+index 07c390aed1fe..a69fd16be4cf 100644
+--- a/drivers/iommu/intel/pasid.c
++++ b/drivers/iommu/intel/pasid.c
+@@ -851,10 +851,11 @@ int intel_pasid_setup_nested(struct intel_iommu *iommu, struct device *dev,
+ 		return -EINVAL;
+ 
+ 	/*
+-	 * Caller must ensure PASID entry is not in use, i.e. not bind the
+-	 * same PASID to the same device twice.
++	 * PASID entries with nesting translation type should not be set
++	 * multiple times. If caller tries to setup nesting for a PASID
++	 * entry which is already nested mode, should fail it.
+ 	 */
+-	if (pasid_pte_is_present(pte))
++	if (pasid_pte_is_present(pte) && pasid_pte_is_nested(pte))
+ 		return -EBUSY;
+ 
+ 	pasid_clear_entry(pte);
+diff --git a/drivers/iommu/intel/pasid.h b/drivers/iommu/intel/pasid.h
+index eacadf0e3b61..7bb190a7dcf4 100644
+--- a/drivers/iommu/intel/pasid.h
++++ b/drivers/iommu/intel/pasid.h
+@@ -99,10 +99,10 @@ static inline bool pasid_pte_is_present(struct pasid_entry *pte)
+ 	return READ_ONCE(pte->val[0]) & PASID_PTE_PRESENT;
+ }
+ 
+-/* Get PGTT field of a PASID table entry */
+-static inline u16 pasid_pte_get_pgtt(struct pasid_entry *pte)
++/* Check if PGTT bits of a PASID table entry is nested. */
++static inline bool pasid_pte_is_nested(struct pasid_entry *pte)
+ {
+-	return (u16)((READ_ONCE(pte->val[0]) >> 6) & 0x7);
++	return ((READ_ONCE(pte->val[0]) >> 6) & 0x7) == PASID_ENTRY_PGTT_NESTED;
+ }
+ 
+ extern unsigned int intel_pasid_max_id;
+-- 
+2.31.1
+

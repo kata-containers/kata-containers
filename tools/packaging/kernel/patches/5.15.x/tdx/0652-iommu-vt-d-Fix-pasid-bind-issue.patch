@@ -1,0 +1,47 @@
+From 1a00026e3e2a30333dd8a95476e5f9612676ae79 Mon Sep 17 00:00:00 2001
+From: Yi Sun <yi.y.sun@linux.intel.com>
+Date: Fri, 9 Apr 2021 22:19:51 +0800
+Subject: [PATCH 0652/1418] iommu/vt-d: Fix pasid bind issue
+
+We need set the original hpasid back after binding gpasid.
+Otherwise, iommu layer will report error because the hpasid
+is different for ioasid_get/ioasid_put.
+
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+---
+ drivers/iommu/intel/svm.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index 74042e03b54a..33635b4715af 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -441,6 +441,7 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain,
+ 	unsigned long iflags;
+ 	int ret = 0;
+ 	struct ioasid_set *pasid_set;
++	u64 hpasid_org;
+ 
+ 	if (WARN_ON(!iommu) || !data)
+ 		return -EINVAL;
+@@ -474,6 +475,7 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain,
+ 		ret = domain_get_pasid(domain, dev);
+ 		if (ret < 0)
+ 			return ret;
++		hpasid_org = data->hpasid;
+ 		data->hpasid = ret;
+ 		/* TODO: may consider to use NULL because host_pasid_set is native scope */
+ 		pasid_set = host_pasid_set;
+@@ -585,6 +587,9 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain,
+ 		kfree(svm);
+ 	}
+ 
++	if (data->flags & IOMMU_SVA_HPASID_DEF)
++		data->hpasid = hpasid_org;
++
+ 	mutex_unlock(&pasid_mutex);
+ 	return ret;
+ }
+-- 
+2.31.1
+

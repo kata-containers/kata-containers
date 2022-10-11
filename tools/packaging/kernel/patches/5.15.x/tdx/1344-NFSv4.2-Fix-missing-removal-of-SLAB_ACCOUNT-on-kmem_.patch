@@ -1,0 +1,38 @@
+From 050e669aee641070888c990635f04ae673f33965 Mon Sep 17 00:00:00 2001
+From: Muchun Song <songmuchun@bytedance.com>
+Date: Fri, 1 Apr 2022 10:59:05 +0800
+Subject: [PATCH 1344/1418] NFSv4.2: Fix missing removal of SLAB_ACCOUNT on
+ kmem_cache allocation
+
+The commit 5c60e89e71f8 ("NFSv4.2: Fix up an invalid combination of memory
+allocation flags") has stripped GFP_KERNEL_ACCOUNT down to GFP_KERNEL,
+however, it forgot to remove SLAB_ACCOUNT from kmem_cache allocation.
+It means that memory is still limited by kmemcg.  This patch also fix a
+NULL pointer reference issue [1] reported by NeilBrown.
+
+Link: https://lore.kernel.org/all/164870069595.25542.17292003658915487357@noble.neil.brown.name/ [1]
+Fixes: 5c60e89e71f8 ("NFSv4.2: Fix up an invalid combination of memory allocation flags")
+Fixes: 5abc1e37afa0 ("mm: list_lru: allocate list_lru_one only when needed")
+Reported-by: NeilBrown <neilb@suse.de>
+Signed-off-by: Muchun Song <songmuchun@bytedance.com>
+Signed-off-by: Trond Myklebust <trond.myklebust@hammerspace.com>
+---
+ fs/nfs/nfs42xattr.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/nfs/nfs42xattr.c b/fs/nfs/nfs42xattr.c
+index 1c4d2a05b401..2520b8b80aed 100644
+--- a/fs/nfs/nfs42xattr.c
++++ b/fs/nfs/nfs42xattr.c
+@@ -998,7 +998,7 @@ int __init nfs4_xattr_cache_init(void)
+ 
+ 	nfs4_xattr_cache_cachep = kmem_cache_create("nfs4_xattr_cache_cache",
+ 	    sizeof(struct nfs4_xattr_cache), 0,
+-	    (SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD|SLAB_ACCOUNT),
++	    (SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD),
+ 	    nfs4_xattr_cache_init_once);
+ 	if (nfs4_xattr_cache_cachep == NULL)
+ 		return -ENOMEM;
+-- 
+2.31.1
+

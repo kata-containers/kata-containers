@@ -1,0 +1,37 @@
+From 593f20dd6d0c623bcb78e06633abccb4a3898a4a Mon Sep 17 00:00:00 2001
+From: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Date: Tue, 1 Feb 2022 14:07:42 +0200
+Subject: [PATCH 1391/1418] virtio_net: Guard against buffer length overflow in
+ xdp_linearize_page()
+
+When reassembling incoming buffers to an xdp_page, there is a potential
+integer overflow in the buffer size test and trigger and out of bounds
+memcpy().
+
+Fix this by reordering the test so that both sides are of the same
+signedness.
+
+Signed-off-by: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+---
+ drivers/net/virtio_net.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/virtio_net.c b/drivers/net/virtio_net.c
+index 4ad25a8b0870..f31fda19a143 100644
+--- a/drivers/net/virtio_net.c
++++ b/drivers/net/virtio_net.c
+@@ -682,8 +682,10 @@ static struct page *xdp_linearize_page(struct receive_queue *rq,
+ 
+ 		/* guard against a misconfigured or uncooperative backend that
+ 		 * is sending packet larger than the MTU.
++		 * At the same time, make sure that an especially uncooperative
++		 * backend can't overflow the test by supplying a large buflen.
+ 		 */
+-		if ((page_off + buflen + tailroom) > PAGE_SIZE) {
++		if (buflen > PAGE_SIZE - page_off - tailroom) {
+ 			put_page(p);
+ 			goto err_buf;
+ 		}
+-- 
+2.31.1
+

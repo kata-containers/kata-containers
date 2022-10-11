@@ -1,0 +1,53 @@
+From a2f5e424ff50d543c517f663de231d703b1b3ae2 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Tue, 28 Sep 2021 09:14:56 -0700
+Subject: [PATCH 0507/1418] dmaengine: idxd: move out percpu_ref_exit() to
+ ensure it's outside submission
+
+percpu_ref_tryget_live() is safe to call as long as ref is between init and
+exit according to the function comment. Move percpu_ref_exit() so it is
+called after the dma channel is no longer valid to ensure this holds true.
+
+Fixes: 93a40a6d7428 ("dmaengine: idxd: add percpu_ref to descriptor submission path")
+Suggested-by: Kevin Tian <kevin.tian@intel.com>
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/device.c | 1 -
+ drivers/dma/idxd/dma.c    | 2 ++
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index 83a5ff2ecf2a..cbbfa17d8d11 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -427,7 +427,6 @@ void idxd_wq_quiesce(struct idxd_wq *wq)
+ {
+ 	percpu_ref_kill(&wq->wq_active);
+ 	wait_for_completion(&wq->wq_dead);
+-	percpu_ref_exit(&wq->wq_active);
+ }
+ 
+ /* Device control bits */
+diff --git a/drivers/dma/idxd/dma.c b/drivers/dma/idxd/dma.c
+index e0f056c1d1f5..b90b085d18cf 100644
+--- a/drivers/dma/idxd/dma.c
++++ b/drivers/dma/idxd/dma.c
+@@ -311,6 +311,7 @@ static int idxd_dmaengine_drv_probe(struct idxd_dev *idxd_dev)
+ 
+ err_dma:
+ 	idxd_wq_quiesce(wq);
++	percpu_ref_exit(&wq->wq_active);
+ err_ref:
+ 	idxd_wq_free_resources(wq);
+ err_res_alloc:
+@@ -329,6 +330,7 @@ static void idxd_dmaengine_drv_remove(struct idxd_dev *idxd_dev)
+ 	idxd_wq_quiesce(wq);
+ 	idxd_unregister_dma_channel(wq);
+ 	__drv_disable_wq(wq);
++	percpu_ref_exit(&wq->wq_active);
+ 	idxd_wq_free_resources(wq);
+ 	wq->type = IDXD_WQT_NONE;
+ 	mutex_unlock(&wq->wq_lock);
+-- 
+2.31.1
+

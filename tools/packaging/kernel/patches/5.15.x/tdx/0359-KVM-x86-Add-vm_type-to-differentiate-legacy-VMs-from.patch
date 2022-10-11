@@ -1,0 +1,189 @@
+From 2b3f20f1297849fb6c1e81c601f7100b4ddfca61 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Fri, 15 Nov 2019 10:37:22 -0800
+Subject: [PATCH 0359/1418] KVM: x86: Add vm_type to differentiate legacy VMs
+ from protected VMs
+
+Add a capability to effectively allow userspace to query what VM types
+are supported by KVM.
+
+Co-developed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/kvm-x86-ops.h    | 1 +
+ arch/x86/include/asm/kvm_host.h       | 2 ++
+ arch/x86/include/uapi/asm/kvm.h       | 4 ++++
+ arch/x86/kvm/svm/svm.c                | 6 ++++++
+ arch/x86/kvm/vmx/vmx.c                | 6 ++++++
+ arch/x86/kvm/x86.c                    | 9 ++++++++-
+ include/uapi/linux/kvm.h              | 2 ++
+ tools/arch/x86/include/uapi/asm/kvm.h | 4 ++++
+ tools/include/uapi/linux/kvm.h        | 2 ++
+ 9 files changed, 35 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/kvm-x86-ops.h b/arch/x86/include/asm/kvm-x86-ops.h
+index cefe1d81e2e8..4aa0a1c10b84 100644
+--- a/arch/x86/include/asm/kvm-x86-ops.h
++++ b/arch/x86/include/asm/kvm-x86-ops.h
+@@ -18,6 +18,7 @@ KVM_X86_OP_NULL(hardware_unsetup)
+ KVM_X86_OP_NULL(cpu_has_accelerated_tpr)
+ KVM_X86_OP(has_emulated_msr)
+ KVM_X86_OP(vcpu_after_set_cpuid)
++KVM_X86_OP(is_vm_type_supported)
+ KVM_X86_OP(vm_init)
+ KVM_X86_OP_NULL(vm_destroy)
+ KVM_X86_OP(vcpu_create)
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index d6a0876511f4..9cdf0f965f8c 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1048,6 +1048,7 @@ struct kvm_x86_msr_filter {
+ #define APICV_INHIBIT_REASON_X2APIC	5
+ 
+ struct kvm_arch {
++	unsigned long vm_type;
+ 	unsigned long n_used_mmu_pages;
+ 	unsigned long n_requested_mmu_pages;
+ 	unsigned long n_max_mmu_pages;
+@@ -1318,6 +1319,7 @@ struct kvm_x86_ops {
+ 	bool (*has_emulated_msr)(struct kvm *kvm, u32 index);
+ 	void (*vcpu_after_set_cpuid)(struct kvm_vcpu *vcpu);
+ 
++	bool (*is_vm_type_supported)(unsigned long vm_type);
+ 	unsigned int vm_size;
+ 	int (*vm_init)(struct kvm *kvm);
+ 	void (*vm_destroy)(struct kvm *kvm);
+diff --git a/arch/x86/include/uapi/asm/kvm.h b/arch/x86/include/uapi/asm/kvm.h
+index 2ef1f6513c68..96b0064cff5c 100644
+--- a/arch/x86/include/uapi/asm/kvm.h
++++ b/arch/x86/include/uapi/asm/kvm.h
+@@ -504,4 +504,8 @@ struct kvm_pmu_event_filter {
+ #define KVM_PMU_EVENT_ALLOW 0
+ #define KVM_PMU_EVENT_DENY 1
+ 
++#define KVM_X86_LEGACY_VM	0
++#define KVM_X86_SEV_ES_VM	1
++#define KVM_X86_TDX_VM		2
++
+ #endif /* _ASM_X86_KVM_H */
+diff --git a/arch/x86/kvm/svm/svm.c b/arch/x86/kvm/svm/svm.c
+index 226482daa6eb..dc55aa669437 100644
+--- a/arch/x86/kvm/svm/svm.c
++++ b/arch/x86/kvm/svm/svm.c
+@@ -4507,6 +4507,11 @@ static void svm_vm_destroy(struct kvm *kvm)
+ 	sev_vm_destroy(kvm);
+ }
+ 
++static bool svm_is_vm_type_supported(unsigned long type)
++{
++	return type == KVM_X86_LEGACY_VM;
++}
++
+ static int svm_vm_init(struct kvm *kvm)
+ {
+ 	if (!pause_filter_count || !pause_filter_thresh)
+@@ -4532,6 +4537,7 @@ static struct kvm_x86_ops svm_x86_ops __initdata = {
+ 	.vcpu_free = svm_free_vcpu,
+ 	.vcpu_reset = svm_vcpu_reset,
+ 
++	.is_vm_type_supported = svm_is_vm_type_supported,
+ 	.vm_size = sizeof(struct kvm_svm),
+ 	.vm_init = svm_vm_init,
+ 	.vm_destroy = svm_vm_destroy,
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 0e7723bbcead..4464399ce457 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -7087,6 +7087,11 @@ static int vmx_create_vcpu(struct kvm_vcpu *vcpu)
+ 	return err;
+ }
+ 
++static bool vmx_is_vm_type_supported(unsigned long type)
++{
++	return type == KVM_X86_LEGACY_VM;
++}
++
+ #define L1TF_MSG_SMT "L1TF CPU bug present and SMT on, data leak possible. See CVE-2018-3646 and https://www.kernel.org/doc/html/latest/admin-guide/hw-vuln/l1tf.html for details.\n"
+ #define L1TF_MSG_L1D "L1TF CPU bug present and virtualization mitigation disabled, data leak possible. See CVE-2018-3646 and https://www.kernel.org/doc/html/latest/admin-guide/hw-vuln/l1tf.html for details.\n"
+ 
+@@ -7778,6 +7783,7 @@ static struct kvm_x86_ops vmx_x86_ops __initdata = {
+ 	.cpu_has_accelerated_tpr = report_flexpriority,
+ 	.has_emulated_msr = vmx_has_emulated_msr,
+ 
++	.is_vm_type_supported = vmx_is_vm_type_supported,
+ 	.vm_size = sizeof(struct kvm_vmx),
+ 	.vm_init = vmx_vm_init,
+ 	.vm_destroy = vmx_vm_destroy,
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 2703591432aa..07081d8b5a82 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -4125,6 +4125,11 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
+ 		else
+ 			r = 0;
+ 		break;
++	case KVM_CAP_VM_TYPES:
++		r = BIT(KVM_X86_LEGACY_VM);
++		if (static_call(kvm_x86_is_vm_type_supported)(KVM_X86_TDX_VM))
++			r |= BIT(KVM_X86_TDX_VM);
++		break;
+ 	default:
+ 		break;
+ 	}
+@@ -11017,9 +11022,11 @@ int kvm_arch_init_vm(struct kvm *kvm, unsigned long type)
+ {
+ 	int ret;
+ 
+-	if (type)
++	if (!static_call(kvm_x86_is_vm_type_supported)(type))
+ 		return -EINVAL;
+ 
++	kvm->arch.vm_type = type;
++
+ 	ret = kvm_page_track_init(kvm);
+ 	if (ret)
+ 		return ret;
+diff --git a/include/uapi/linux/kvm.h b/include/uapi/linux/kvm.h
+index 4ccbff0c447c..2e49dc925cab 100644
+--- a/include/uapi/linux/kvm.h
++++ b/include/uapi/linux/kvm.h
+@@ -1115,6 +1115,8 @@ struct kvm_ppc_resize_hpt {
+ #define KVM_CAP_EXIT_ON_EMULATION_FAILURE 204
+ #define KVM_CAP_ARM_MTE 205
+ 
++#define KVM_CAP_VM_TYPES 1000
++
+ #ifdef KVM_CAP_IRQ_ROUTING
+ 
+ struct kvm_irq_routing_irqchip {
+diff --git a/tools/arch/x86/include/uapi/asm/kvm.h b/tools/arch/x86/include/uapi/asm/kvm.h
+index 2ef1f6513c68..96b0064cff5c 100644
+--- a/tools/arch/x86/include/uapi/asm/kvm.h
++++ b/tools/arch/x86/include/uapi/asm/kvm.h
+@@ -504,4 +504,8 @@ struct kvm_pmu_event_filter {
+ #define KVM_PMU_EVENT_ALLOW 0
+ #define KVM_PMU_EVENT_DENY 1
+ 
++#define KVM_X86_LEGACY_VM	0
++#define KVM_X86_SEV_ES_VM	1
++#define KVM_X86_TDX_VM		2
++
+ #endif /* _ASM_X86_KVM_H */
+diff --git a/tools/include/uapi/linux/kvm.h b/tools/include/uapi/linux/kvm.h
+index a067410ebea5..e5aadad54ced 100644
+--- a/tools/include/uapi/linux/kvm.h
++++ b/tools/include/uapi/linux/kvm.h
+@@ -1113,6 +1113,8 @@ struct kvm_ppc_resize_hpt {
+ #define KVM_CAP_EXIT_ON_EMULATION_FAILURE 204
+ #define KVM_CAP_ARM_MTE 205
+ 
++#define KVM_CAP_VM_TYPES 1000
++
+ #ifdef KVM_CAP_IRQ_ROUTING
+ 
+ struct kvm_irq_routing_irqchip {
+-- 
+2.31.1
+

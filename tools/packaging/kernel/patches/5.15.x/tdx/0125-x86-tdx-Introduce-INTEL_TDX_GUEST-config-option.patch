@@ -1,0 +1,43 @@
+From e94f02f45ca075920615d06e0747a6135570aec9 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Sun, 17 Jan 2021 14:19:01 -0800
+Subject: [PATCH 0125/1418] x86/tdx: Introduce INTEL_TDX_GUEST config option
+
+Add INTEL_TDX_GUEST config option to selectively compile
+TDX guest support.
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+---
+ arch/x86/Kconfig | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index 7cfe83a7ea97..7b3ca7df66ba 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -871,6 +871,20 @@ config ACRN_GUEST
+ 	  IOT with small footprint and real-time features. More details can be
+ 	  found in https://projectacrn.org/.
+ 
++config INTEL_TDX_GUEST
++	bool "Intel Trusted Domain Extensions (TDX) Guest Support"
++	depends on X86_64 && CPU_SUP_INTEL && PARAVIRT
++	depends on SECURITY
++	depends on X86_X2APIC
++	help
++	  Provide support for running in a trusted domain on Intel processors
++	  equipped with Trusted Domain Extensions. TDX is a Intel technology
++	  that extends VMX and Memory Encryption with a new kind of virtual
++	  machine guest called Trust Domain (TD). A TD is designed to run in
++	  a CPU mode that protects the confidentiality of TD memory contents
++	  and the TD’s CPU state from other software, including VMM. TDX guest
++	  uses virtual X2APIC for interrupt management.
++
+ endif #HYPERVISOR_GUEST
+ 
+ source "arch/x86/Kconfig.cpu"
+-- 
+2.31.1
+

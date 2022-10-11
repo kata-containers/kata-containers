@@ -1,0 +1,62 @@
+From 989fa7f58affe2253eeb9f35f6adf8f103e8a953 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Tue, 14 Dec 2021 13:15:17 -0700
+Subject: [PATCH 1246/1418] dmaengine: idxd: fix wq settings post wq disable
+
+By the spec, wq size and group association is not changeable unless device
+is disabled. Exclude clearing the shadow copy on wq disable/reset. This
+allows wq type to be changed after disable to be re-enabled.
+
+Move the size and group association to its own cleanup and only call it
+during device disable.
+
+Fixes: 0dcfe41e9a4c ("dmanegine: idxd: cleanup all device related bits after disabling device")
+Reported-by: Lucas Van <lucas.van@intel.com>
+Tested-by: Lucas Van <lucas.van@intel.com>
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+Link: https://lore.kernel.org/r/163951291732.2987775.13576571320501115257.stgit@djiang5-desk3.ch.intel.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/idxd/device.c | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index c4d894b82e82..06e3594c5a69 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -516,8 +516,6 @@ static void idxd_wq_disable_cleanup(struct idxd_wq *wq)
+ 	lockdep_assert_held(&wq->wq_lock);
+ 	memset(wq->wqcfg, 0, idxd->wqcfg_size);
+ 	wq->type = IDXD_WQT_NONE;
+-	wq->size = 0;
+-	wq->group = NULL;
+ 	wq->threshold = 0;
+ 	wq->priority = 0;
+ 	wq->ats_dis = 0;
+@@ -530,6 +528,15 @@ static void idxd_wq_disable_cleanup(struct idxd_wq *wq)
+ 	wq->max_batch_size = WQ_DEFAULT_MAX_BATCH;
+ }
+ 
++static void idxd_wq_device_reset_cleanup(struct idxd_wq *wq)
++{
++	lockdep_assert_held(&wq->wq_lock);
++
++	idxd_wq_disable_cleanup(wq);
++	wq->size = 0;
++	wq->group = NULL;
++}
++
+ static void idxd_wq_ref_release(struct percpu_ref *ref)
+ {
+ 	struct idxd_wq *wq = container_of(ref, struct idxd_wq, wq_active);
+@@ -885,6 +892,7 @@ static void idxd_device_wqs_clear_state(struct idxd_device *idxd)
+ 
+ 		if (wq->state == IDXD_WQ_ENABLED) {
+ 			idxd_wq_disable_cleanup(wq);
++			idxd_wq_device_reset_cleanup(wq);
+ 			wq->state = IDXD_WQ_DISABLED;
+ 		}
+ 	}
+-- 
+2.31.1
+

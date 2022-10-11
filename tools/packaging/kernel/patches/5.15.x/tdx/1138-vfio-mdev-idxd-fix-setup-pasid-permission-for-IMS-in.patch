@@ -1,0 +1,377 @@
+From c9b06a295d7435c4b31ede4e22c79aca05e3dd3d Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Mon, 28 Feb 2022 16:44:02 -0700
+Subject: [PATCH 1138/1418] vfio: mdev: idxd: fix setup pasid permission for
+ IMS in guest scalable mode
+
+Change where pasid is setup for DWQ WQCFG. Have the driver only set it when
+WQ is being enabled.
+
+Also remove setting of IMS pasid entry in vidxd_mmio_write() to virtual MSIXPERM
+register. Add the IMS pasid configuration in set_signal() for both with
+vIOMMU and without. This is where it belongs anyhow.
+
+Also moved wq_enable_irq() to after device disable to reduce unnecessary
+extra code running when the wq isn't ready.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/device.c     | 47 ++++++++++++++++++++++++++---------
+ drivers/dma/idxd/dma.c        | 20 +++++++--------
+ drivers/vfio/mdev/idxd/mdev.c | 44 ++++++++++++++++++++++++++------
+ drivers/vfio/mdev/idxd/vdev.c | 44 +++++++++++---------------------
+ 4 files changed, 96 insertions(+), 59 deletions(-)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index 4386003675eb..9f089702fea3 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -374,16 +374,25 @@ int idxd_wq_abort(struct idxd_wq *wq, u32 *status)
+ }
+ EXPORT_SYMBOL_GPL(idxd_wq_abort);
+ 
+-int idxd_wq_set_pasid(struct idxd_wq *wq, int pasid)
++static void __idxd_wq_set_priv_locked(struct idxd_wq *wq)
+ {
+ 	struct idxd_device *idxd = wq->idxd;
+-	int rc;
+ 	union wqcfg wqcfg;
+ 	unsigned int offset;
+ 
+-	rc = idxd_wq_disable(wq, false, NULL);
+-	if (rc < 0)
+-		return rc;
++	offset = WQCFG_OFFSET(idxd, wq->id, WQCFG_PRIV_IDX);
++	spin_lock(&idxd->dev_lock);
++	wqcfg.bits[WQCFG_PRIV_IDX] = ioread32(idxd->reg_base + offset);
++	wqcfg.priv = 1;
++	iowrite32(wqcfg.bits[WQCFG_PRIV_IDX], idxd->reg_base + offset);
++	spin_unlock(&idxd->dev_lock);
++}
++
++static void __idxd_wq_set_pasid_locked(struct idxd_wq *wq, int pasid)
++{
++	struct idxd_device *idxd = wq->idxd;
++	union wqcfg wqcfg;
++	unsigned int offset;
+ 
+ 	offset = WQCFG_OFFSET(idxd, wq->id, WQCFG_PASID_IDX);
+ 	spin_lock(&idxd->dev_lock);
+@@ -392,6 +401,17 @@ int idxd_wq_set_pasid(struct idxd_wq *wq, int pasid)
+ 	wqcfg.pasid = pasid;
+ 	iowrite32(wqcfg.bits[WQCFG_PASID_IDX], idxd->reg_base + offset);
+ 	spin_unlock(&idxd->dev_lock);
++}
++
++int idxd_wq_set_pasid(struct idxd_wq *wq, int pasid)
++{
++	int rc;
++
++	rc = idxd_wq_disable(wq, false, NULL);
++	if (rc < 0)
++		return rc;
++
++	__idxd_wq_set_pasid_locked(wq, pasid);
+ 
+ 	rc = idxd_wq_enable(wq, NULL);
+ 	if (rc < 0)
+@@ -1228,9 +1248,11 @@ static void idxd_device_set_perm_entry(struct idxd_device *idxd, int idx)
+ {
+ 	union msix_perm mperm;
+ 
++	dev_dbg(&idxd->pdev->dev, "set MSIX_PERM entry for idx %d\n", idx);
+ 	if (!device_pasid_enabled(idxd))
+ 		return;
+ 
++	dev_dbg(&idxd->pdev->dev, "pasid %u for MSIX_PERM\n", idxd->pasid);
+ 	mperm.bits = 0;
+ 	mperm.pasid = idxd->pasid;
+ 	mperm.pasid_en = 1;
+@@ -1239,6 +1261,7 @@ static void idxd_device_set_perm_entry(struct idxd_device *idxd, int idx)
+ 
+ static void idxd_device_clear_perm_entry(struct idxd_device *idxd, int idx)
+ {
++	dev_dbg(&idxd->pdev->dev, "clear MSIX_PERM entry for idx %d\n", idx);
+ 	iowrite32(0, idxd->reg_base + idxd->msix_perm_offset + idx * 8);
+ }
+ 
+@@ -1270,6 +1293,8 @@ int idxd_wq_enable_irq(struct idxd_wq *wq)
+ 
+ 	ie = &idxd->irq_entries[wq->id + 1];
+ 
++	dev_dbg(dev, "wq %d enabling ie %d irq\n", wq->id, ie->id);
++
+ 	idxd_device_set_perm_entry(idxd, ie->id);
+ 	rc = request_threaded_irq(ie->vector, NULL, idxd_wq_thread, 0, "idxd-portal", ie);
+ 	if (rc < 0) {
+@@ -1354,13 +1379,11 @@ int __drv_enable_wq(struct idxd_wq *wq)
+ 		}
+ 	}
+ 
+-	if (device_pasid_enabled(idxd) && is_idxd_wq_kernel(wq) && wq_dedicated(wq)) {
+-		rc = idxd_wq_set_pasid(wq, idxd->pasid);
+-		if (rc < 0) {
+-			idxd->cmd_status = IDXD_SCMD_WQ_PASID_ERR;
+-			dev_dbg(dev, "wq set PASID failed.\n");
+-			goto err;
+-		}
++
++	if (is_idxd_wq_kernel(wq)) {
++		if (device_pasid_enabled(idxd) && wq_dedicated(wq))
++			__idxd_wq_set_pasid_locked(wq, idxd->pasid);
++		__idxd_wq_set_priv_locked(wq);
+ 	}
+ 
+ 	rc = 0;
+diff --git a/drivers/dma/idxd/dma.c b/drivers/dma/idxd/dma.c
+index 7f79edb97739..5f5928c5883b 100644
+--- a/drivers/dma/idxd/dma.c
++++ b/drivers/dma/idxd/dma.c
+@@ -290,13 +290,6 @@ static int idxd_dmaengine_drv_probe(struct idxd_dev *idxd_dev)
+ 	mutex_lock(&wq->wq_lock);
+ 	wq->type = IDXD_WQT_KERNEL;
+ 
+-	rc = idxd_wq_enable_irq(wq);
+-	if (rc < 0) {
+-		idxd->cmd_status = IDXD_SCMD_WQ_IRQ_ERR;
+-		dev_dbg(dev, "WQ %d irq setup failed: %d\n", wq->id, rc);
+-		goto err_irq;
+-	}
+-
+ 	rc = __drv_enable_wq(wq);
+ 	if (rc < 0) {
+ 		dev_dbg(dev, "Enable wq %d failed: %d\n", wq->id, rc);
+@@ -304,6 +297,13 @@ static int idxd_dmaengine_drv_probe(struct idxd_dev *idxd_dev)
+ 		goto err;
+ 	}
+ 
++	rc = idxd_wq_enable_irq(wq);
++	if (rc < 0) {
++		idxd->cmd_status = IDXD_SCMD_WQ_IRQ_ERR;
++		dev_dbg(dev, "WQ %d irq setup failed: %d\n", wq->id, rc);
++		goto err_irq;
++	}
++
+ 	rc = idxd_wq_alloc_resources(wq);
+ 	if (rc < 0) {
+ 		idxd->cmd_status = IDXD_SCMD_WQ_RES_ALLOC_ERR;
+@@ -335,10 +335,10 @@ static int idxd_dmaengine_drv_probe(struct idxd_dev *idxd_dev)
+ err_ref:
+ 	idxd_wq_free_resources(wq);
+ err_res_alloc:
+-	__drv_disable_wq(wq);
+-err:
+ 	idxd_wq_free_irq(wq);
+ err_irq:
++	__drv_disable_wq(wq);
++err:
+ 	wq->type = IDXD_WQT_NONE;
+ 	mutex_unlock(&wq->wq_lock);
+ 	return rc;
+@@ -352,9 +352,9 @@ static void idxd_dmaengine_drv_remove(struct idxd_dev *idxd_dev)
+ 	__idxd_wq_quiesce(wq);
+ 	idxd_unregister_dma_channel(wq);
+ 	idxd_wq_free_resources(wq);
++	idxd_wq_free_irq(wq);
+ 	__drv_disable_wq(wq);
+ 	percpu_ref_exit(&wq->wq_active);
+-	idxd_wq_free_irq(wq);
+ 	mutex_unlock(&wq->wq_lock);
+ }
+ 
+diff --git a/drivers/vfio/mdev/idxd/mdev.c b/drivers/vfio/mdev/idxd/mdev.c
+index 7ff1c87cecae..39ffca5c4a38 100644
+--- a/drivers/vfio/mdev/idxd/mdev.c
++++ b/drivers/vfio/mdev/idxd/mdev.c
+@@ -181,19 +181,24 @@ int idxd_mdev_get_host_pasid(struct mdev_device *mdev, u32 gpasid, u32 *pasid)
+ 	struct mm_struct *mm;
+ 
+ 	mm = get_task_mm(current);
+-	if (!mm)
++	if (!mm) {
++		dev_warn(mdev_dev(mdev), "%s no mm!\n", __func__);
+ 		return -ENXIO;
++	}
+ 
+ 	ioasid_set = ioasid_find_mm_set(mm);
+ 	if (!ioasid_set) {
+ 		mmput(mm);
++		dev_warn(mdev_dev(mdev), "%s no ioasid_set!\n", __func__);
+ 		return -ENXIO;
+ 	}
+ 
+ 	*pasid = ioasid_find_by_spid(ioasid_set, gpasid, true);
+ 	mmput(mm);
+-	if (*pasid == INVALID_IOASID)
++	if (*pasid == INVALID_IOASID) {
++		dev_warn(mdev_dev(mdev), "%s invalid ioasid by spid!\n", __func__);
+ 		return -ENXIO;
++	}
+ 
+ 	return 0;
+ }
+@@ -1480,6 +1485,8 @@ static int idxd_vdcm_msix_set_vector_signal(struct vdcm_idxd *vidxd, int vector,
+ 	char *name;
+ 	u32 pasid, auxval;
+ 	int irq, rc;
++	u8 *bar0 = vidxd->bar0;
++	u32 msix_perm;
+ 
+ 	dev_dbg(dev, "%s: set signal %d fd: %d\n", __func__, vector, fd);
+ 
+@@ -1523,6 +1530,7 @@ static int idxd_vdcm_msix_set_vector_signal(struct vdcm_idxd *vidxd, int vector,
+ 					vfio_pdev->ctx[vector].producer.token, rc);
+ 				vfio_pdev->ctx[vector].producer.token = NULL;
+ 			}
++			dev_dbg(dev, "%s: updated irq %d\n", __func__, irq);
+ 		}
+ 		return 0;
+ 	}
+@@ -1550,13 +1558,31 @@ static int idxd_vdcm_msix_set_vector_signal(struct vdcm_idxd *vidxd, int vector,
+ 		return 0;
+ 	}
+ 
+-	rc = idxd_mdev_get_pasid(mdev, &pasid);
+-	if (rc < 0) {
+-		dev_warn(dev, "%s unable to get pasid, failing\n", __func__);
+-		goto err;
+-	}
++	/*
++	 * This only points to MSIX entry 1, which is fine for now.
++	 */
++	msix_perm = *(u32 *)(bar0 + VIDXD_MSIX_PERM_OFFSET + 8 * vector);
++	dev_dbg(dev, "MSIX PERM: %#x\n", msix_perm);
++	if (!(msix_perm & BIT(3))) {
++		rc = idxd_mdev_get_pasid(mdev, &pasid);
++		if (rc < 0) {
++			dev_warn(dev, "%s unable to get pasid, failing\n", __func__);
++			goto err;
++		}
++
++		dev_dbg(dev, "%s: pasid: %d\n", __func__, pasid);
++	} else {
++		u32 gpasid;
+ 
+-	dev_dbg(dev, "%s: pasid: %d\n", __func__, pasid);
++		gpasid = (msix_perm & GENMASK(31, 12)) >> 12;
++		rc = idxd_mdev_get_host_pasid(vidxd->ivdev.mdev, gpasid, &pasid);
++		if (rc < 0) {
++			dev_warn(dev, "%s guest pasid %u translate failure\n", __func__, gpasid);
++			goto err;
++		}
++		dev_dbg(dev, "%s: guest pasid: %u host pasid: %u\n",
++			__func__, gpasid, pasid);
++	}
+ 
+ 	auxval = ims_ctrl_pasid_aux(pasid, true);
+ 	rc = irq_set_auxdata(irq, IMS_AUXDATA_CONTROL_WORD, auxval);
+@@ -1580,6 +1606,8 @@ static int idxd_vdcm_msix_set_vector_signal(struct vdcm_idxd *vidxd, int vector,
+ 		vfio_pdev->ctx[vector].producer.token = NULL;
+ 	}
+ 
++	dev_dbg(dev, "%s: irq %d set\n", __func__, irq);
++
+ 	return 0;
+ 
+  irq_err:
+diff --git a/drivers/vfio/mdev/idxd/vdev.c b/drivers/vfio/mdev/idxd/vdev.c
+index 041a12e52dcc..6d8bc48fb90c 100644
+--- a/drivers/vfio/mdev/idxd/vdev.c
++++ b/drivers/vfio/mdev/idxd/vdev.c
+@@ -83,6 +83,8 @@ static int vidxd_set_ims_pasid(struct vdcm_idxd *vidxd, int index, bool pasid_en
+ 		rc = idxd_mdev_get_pasid(vidxd->ivdev.mdev, &pasid);
+ 	if (rc < 0)
+ 		return rc;
++	dev_dbg(dev, "IMS entry: %d pasid_en: %u guest pasid %u host pasid: %u\n",
++		index, pasid_en, gpasid, pasid);
+ 	auxval = ims_ctrl_pasid_aux(pasid, 1);
+ 	return irq_set_auxdata(irq, IMS_AUXDATA_CONTROL_WORD, auxval);
+ 
+@@ -97,12 +99,16 @@ int vidxd_mmio_write(struct vdcm_idxd *vidxd, u64 pos, void *buf, unsigned int s
+ 	dev_dbg(dev, "vidxd mmio W %d %x %x: %llx\n", vidxd->wq->id, size,
+ 		offset, get_reg_val(buf, size));
+ 
+-	if (((size & (size - 1)) != 0) || (offset & (size - 1)) != 0)
++	if (((size & (size - 1)) != 0) || (offset & (size - 1)) != 0) {
++		dev_warn(dev, "XXX %s out of bounds\n", __func__);
+ 		return -EINVAL;
++	}
+ 
+ 	/* If we don't limit this, we potentially can write out of bound */
+-	if (size > sizeof(u32))
++	if (size > sizeof(u32)) {
++		dev_warn(dev, "XXX %s size greater than u32\n", __func__);
+ 		return -EINVAL;
++	}
+ 
+ 	switch (offset) {
+ 	case IDXD_GENCFG_OFFSET ... IDXD_GENCFG_OFFSET + 3:
+@@ -212,9 +218,8 @@ int vidxd_mmio_write(struct vdcm_idxd *vidxd, u64 pos, void *buf, unsigned int s
+ 	}
+ 
+ 	case VIDXD_MSIX_PERM_OFFSET ...  VIDXD_MSIX_PERM_OFFSET + VIDXD_MSIX_PERM_TBL_SZ - 1: {
+-		int index, rc;
++		int index;
+ 		u32 msix_perm;
+-		u32 pasid, pasid_en;
+ 
+ 		if (size != sizeof(u32) || !IS_ALIGNED(offset, sizeof(u64))) {
+ 			dev_warn(dev, "XXX unaligned MSIX PERM access\n");
+@@ -224,30 +229,8 @@ int vidxd_mmio_write(struct vdcm_idxd *vidxd, u64 pos, void *buf, unsigned int s
+ 		index = (offset - VIDXD_MSIX_PERM_OFFSET) / 8;
+ 		msix_perm = get_reg_val(buf, sizeof(u32)) & 0xfffff00d;
+ 		memcpy(bar0 + offset, buf, size);
+-		/*
+-		 * index 0 for MSIX is emulated for misc interrupts. The MSIX indices from
+-		 * 1...N are backed by IMS. Here we would pass in index - 1, which is 0 for
+-		 * the first one
+-		 */
+-		if (index > 0) {
+-			pasid_en = (msix_perm >> 3) & 1;
+-
+-			/*
+-			 * When vSVA is turned on, this is the only place where the guest PASID
+-			 * can be retrieved by the host. The guest driver writes the PASID to the
+-			 * MSIX permission entry. In turn the vdcm will translate this to the
+-			 * IMS entry.
+-			 */
+-
+-			if (pasid_en) {
+-				pasid = (msix_perm >> 12) & 0xfffff;
+-				if (!pasid)
+-					break;
+-			}
+-			rc = vidxd_set_ims_pasid(vidxd, index - 1, pasid_en, pasid);
+-			if (rc < 0)
+-				return rc;
+-		}
++		dev_dbg(dev, "%s writing to MSIX_PERM: %#x offset %#x index: %u\n",
++			__func__, msix_perm, offset, index);
+ 		break;
+ 	}
+ 	} /* offset */
+@@ -1199,7 +1182,7 @@ static void vidxd_wq_enable(struct vdcm_idxd *vidxd, int wq_id)
+ 	wq_pasid_enable = vwqcfg->pasid_en;
+ 
+ 	if (wq_dedicated(wq)) {
+-		u32 wq_pasid;
++		u32 wq_pasid = ~0U;
+ 		bool priv;
+ 
+ 		if (wq_pasid_enable) {
+@@ -1208,9 +1191,12 @@ static void vidxd_wq_enable(struct vdcm_idxd *vidxd, int wq_id)
+ 			priv = vwqcfg->priv;
+ 			gpasid = vwqcfg->pasid;
+ 			rc = idxd_mdev_get_host_pasid(mdev, gpasid, &wq_pasid);
++			dev_dbg(dev, "guest pasid enabled, translate gpasid: %d\n", gpasid);
+ 		} else {
+ 			priv = 1;
+ 			rc = idxd_mdev_get_pasid(mdev, &wq_pasid);
++			dev_dbg(dev, "guest pasid disabled, using default host pasid: %u\n",
++				wq_pasid);
+ 		}
+ 		if (rc < 0) {
+ 			dev_err(dev, "idxd pasid setup failed wq %d: %d\n", wq->id, rc);
+-- 
+2.31.1
+

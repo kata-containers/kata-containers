@@ -1,0 +1,65 @@
+From 7945fb21f3fa364aef87aa5d69333ccc305cfd9c Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Tue, 20 Jul 2021 20:01:33 -0700
+Subject: [PATCH 0197/1418] x86/tdx: Disable enhanced PCI parsing for TDX
+
+The PCI layer supports a lot of complicated PCI extensions configured
+using the PCI config space. For a confidential guest that doesn't trust
+the host this code would all need to be audited and hardened. Since
+this is not needed for TDX guest, just disable it when TDX is active.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ drivers/pci/pci.c   | 6 ++++++
+ drivers/pci/probe.c | 7 ++++++-
+ 2 files changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/pci/pci.c b/drivers/pci/pci.c
+index ce2ab62b64cf..81278850a486 100644
+--- a/drivers/pci/pci.c
++++ b/drivers/pci/pci.c
+@@ -29,6 +29,7 @@
+ #include <linux/pm_runtime.h>
+ #include <linux/pci_hotplug.h>
+ #include <linux/vmalloc.h>
++#include <linux/cc_platform.h>
+ #include <asm/dma.h>
+ #include <linux/aer.h>
+ #include <linux/bitfield.h>
+@@ -1699,6 +1700,11 @@ void pci_restore_state(struct pci_dev *dev)
+ 	if (!dev->state_saved)
+ 		return;
+ 
++	if (cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER)) {
++		pci_restore_msi_state(dev);
++		return;
++	}
++
+ 	/*
+ 	 * Restore max latencies (in the LTR capability) before enabling
+ 	 * LTR itself (in the PCIe capability).
+diff --git a/drivers/pci/probe.c b/drivers/pci/probe.c
+index aab9d1917d52..33888f45c385 100644
+--- a/drivers/pci/probe.c
++++ b/drivers/pci/probe.c
+@@ -2418,10 +2418,15 @@ void pcie_report_downtraining(struct pci_dev *dev)
+ 
+ static void pci_init_capabilities(struct pci_dev *dev)
+ {
+-	pci_ea_init(dev);		/* Enhanced Allocation */
++	if (!cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
++		pci_ea_init(dev);	/* Enhanced Allocation */
++
+ 	pci_msi_init(dev);		/* Disable MSI */
+ 	pci_msix_init(dev);		/* Disable MSI-X */
+ 
++	if (cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
++		return;
++
+ 	/* Buffers for saving PCIe and PCI-X capabilities */
+ 	pci_allocate_cap_save_buffers(dev);
+ 
+-- 
+2.31.1
+

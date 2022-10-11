@@ -1,0 +1,38 @@
+From 90e03e84eb9bf1265a48b9c9f0c63685fd0edeae Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Wed, 12 May 2021 17:01:15 -0700
+Subject: [PATCH 0205/1418] platform/x86/intel-uncore-freq: Disable uncore
+ frequency support for VM guest
+
+VM guest does not support uncore frequency features.
+
+Also, enabling this driver leads to an Unchecked MSR issue when
+read/write MSR_UNCORE_RATIO_LIMIT MSR for TDX guest.
+
+So disable it.
+
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ drivers/platform/x86/intel/uncore-frequency.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/platform/x86/intel/uncore-frequency.c b/drivers/platform/x86/intel/uncore-frequency.c
+index 3ee4c5c8a64f..19c319e85a90 100644
+--- a/drivers/platform/x86/intel/uncore-frequency.c
++++ b/drivers/platform/x86/intel/uncore-frequency.c
+@@ -386,6 +386,10 @@ static int __init intel_uncore_init(void)
+ 	const struct x86_cpu_id *id;
+ 	int ret;
+ 
++	/* Skip uncore support for VM guest */
++	if (boot_cpu_has(X86_FEATURE_HYPERVISOR))
++		return -ENODEV;
++
+ 	id = x86_match_cpu(intel_uncore_cpu_ids);
+ 	if (!id)
+ 		return -ENODEV;
+-- 
+2.31.1
+

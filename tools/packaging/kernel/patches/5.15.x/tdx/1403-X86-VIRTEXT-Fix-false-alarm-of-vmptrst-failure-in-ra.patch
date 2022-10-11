@@ -1,0 +1,73 @@
+From 1064507b1f60ce3b23e9a9e345c252ae92ccae6f Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Tue, 14 Jun 2022 08:53:50 +0800
+Subject: [PATCH 1403/1418] X86: VIRTEXT: Fix false alarm of vmptrst failure in
+ raw_vmcs_store()
+
+Use "+r" constraint modifier for variable fault in inline ASM.
+
+fault is used as input/output for the inline ASM statements, use "=r"
+makes AS treating fault as output only, which leads to panic because
+no guarantee of the register which maps to fault is 0 while the
+raw_vmcs_store() is called.
+
+Also remove all checkings to the EFLAGS.ZF and CF because
+only 2 scenarios vmptrst can meet: Successfully or #UD/#GP/#SS/#PF.
+rmptrst saves -1 to the memory operand if no current vmcs is loaded.
+
+kernel BUG at arch/x86/kernel/cpu/virtext.c:42!
+RIP: 0010:virt_spurious_fault+0x1c/0x30
+Call Trace:
+ raw_vmcs_store+0x60/0x90
+ pseamldr_seamcall.constprop.0+0x41/0x190
+ seamldr_info+0x1d/0x50
+ p_seamldr_get_info+0x157/0x21d
+ tdx_host_early_init+0x92/0x106
+ do_one_initcall+0x46/0x1d0
+ kernel_init_freeable+0x133/0x1b1
+ kernel_init+0x1b/0x150
+ ret_from_fork+0x1f/0x30
+
+Cc: Gao Chao <chao.gao@intel.com>
+Fixes: 796a0442e001 ("x86/cpu/virtext: Introduce raw_vmcs_store")
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kernel/cpu/virtext.c | 11 +++--------
+ 1 file changed, 3 insertions(+), 8 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/virtext.c b/arch/x86/kernel/cpu/virtext.c
+index 0cb6c039f1b4..cc567dae4c26 100644
+--- a/arch/x86/kernel/cpu/virtext.c
++++ b/arch/x86/kernel/cpu/virtext.c
+@@ -63,25 +63,20 @@ EXPORT_SYMBOL_GPL(vmptrld_error);
+ 
+ int raw_vmcs_store(u64 *vmcs_pa)
+ {
+-	bool ret;
+ 	bool fault = 0;
+ 
+-	asm volatile("1: vmptrst %1\n\t"
++	asm volatile("1: vmptrst %0\n\t"
+ 		     "2:\n\t"
+ 		     ".pushsection .fixup, \"ax\"\n\t"
+-		     "3: mov $1, %2\n\t"
++		     "3: mov $1, %1\n\t"
+ 		     "jmp 2b\n\t"
+ 		     ".popsection\n\t"
+ 		     _ASM_EXTABLE(1b, 3b)
+-		     CC_SET(na)
+-		     : CC_OUT(na) (ret), "=m" (*vmcs_pa), "=r" (fault) : :);
++		     : "=m" (*vmcs_pa), "+r" (fault) : :);
+ 
+ 	if (fault) {
+ 		virt_spurious_fault();
+ 		return -EIO;
+-	} else if (ret) {
+-		vmx_insn_failed("vmptrst failed: %p\n", vmcs_pa);
+-		return -EIO;
+ 	}
+ 
+ 	return 0;
+-- 
+2.31.1
+

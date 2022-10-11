@@ -1,0 +1,71 @@
+From e82a188c2adaca856b7c08ef792046d2c05ea4e1 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Wed, 28 Jul 2021 13:27:49 -0700
+Subject: [PATCH 0349/1418] KVM: TDX: more pretty print for TDX error code
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx-error.c | 39 ++++++++++++++++++++++++++++-
+ 1 file changed, 38 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx-error.c b/arch/x86/kernel/cpu/tdx/tdx-error.c
+index 1c7d2e4104b9..f9ddda0468e2 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx-error.c
++++ b/arch/x86/kernel/cpu/tdx/tdx-error.c
+@@ -56,6 +56,14 @@ const char *tdx_seamcall_error_name(u64 error_code)
+ }
+ EXPORT_SYMBOL_GPL(tdx_seamcall_error_name);
+ 
++static const char * const TDX_SEPT_ENTRY_STATES[] = {
++	"SEPT_FREE",
++	"SEPT_BLOCKED",
++	"SEPT_PENDING",
++	"SEPT_PENDING_BLOCKED",
++	"SEPT_PRESENT"
++};
++
+ void pr_seamcall_ex_ret_info(u64 op, u64 error_code,
+ 			     const struct tdx_ex_ret *ex_ret)
+ {
+@@ -63,8 +71,37 @@ void pr_seamcall_ex_ret_info(u64 op, u64 error_code,
+ 		return;
+ 
+ 	switch (error_code & TDX_SEAMCALL_STATUS_MASK) {
+-	/* TODO: add API specific pretty print. */
++	case TDX_INCORRECT_CPUID_VALUE:
++		pr_err("Expected CPUID [leaf 0x%x subleaf 0x%x]: "
++			"eax 0x%x check_mask 0x%x, ebx 0x%x check_mask 0x%x, "
++			"ecx 0x%x check_mask 0x%x, edx 0x%x check_mask 0x%x\n",
++			ex_ret->sys_init.leaf, ex_ret->sys_init.subleaf,
++			ex_ret->sys_init.eax_val, ex_ret->sys_init.eax_mask,
++			ex_ret->sys_init.ebx_val, ex_ret->sys_init.ebx_mask,
++			ex_ret->sys_init.ecx_val, ex_ret->sys_init.ecx_mask,
++			ex_ret->sys_init.edx_val, ex_ret->sys_init.edx_mask);
++		break;
++	case TDX_INCONSISTENT_CPUID_FIELD:
++		pr_err("Inconsistent CPUID [leaf 0x%x subleaf 0x%x]: "
++			"eax_mask 0x%x, ebx_mask 0x%x, ecx_mask %x, edx_mask 0x%x\n",
++			ex_ret->sys_init.leaf, ex_ret->sys_init.subleaf,
++			ex_ret->sys_init.eax_mask, ex_ret->sys_init.ebx_mask,
++			ex_ret->sys_init.ecx_mask, ex_ret->sys_init.edx_mask);
++		break;
++	case TDX_EPT_WALK_FAILED: {
++		const char *state;
++
++		if (ex_ret->sept_walk.state >= ARRAY_SIZE(TDX_SEPT_ENTRY_STATES))
++			state = "Invalid";
++		else
++			state = TDX_SEPT_ENTRY_STATES[ex_ret->sept_walk.state];
++
++		pr_err("Secure EPT walk error: SEPTE 0x%llx, level %d, %s\n",
++			ex_ret->sept_walk.septe, ex_ret->sept_walk.level, state);
++		break;
++	}
+ 	default:
++		/* TODO: print only meaningful registers depending on op */
+ 		pr_err("RCX 0x%llx, RDX 0x%llx, R8 0x%llx, R9 0x%llx, "
+ 		       "R10 0x%llx, R11 0x%llx\n",
+ 			ex_ret->regs.rcx, ex_ret->regs.rdx, ex_ret->regs.r8,
+-- 
+2.31.1
+

@@ -1,0 +1,33 @@
+From 440b6b597d8504b136728bcbbc21210d2927affa Mon Sep 17 00:00:00 2001
+From: Michael Tretter <m.tretter@pengutronix.de>
+Date: Thu, 26 Aug 2021 11:47:37 +0200
+Subject: [PATCH 0509/1418] dmaengine: zynqmp_dma: drop message on probe
+ success
+
+There is no need to print a message that the ZynqMP DMA driver probed
+successfully, since it carries no additional information. Drop the
+message.
+
+Signed-off-by: Michael Tretter <m.tretter@pengutronix.de>
+Link: https://lore.kernel.org/r/20210826094742.1302009-3-m.tretter@pengutronix.de
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/xilinx/zynqmp_dma.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/drivers/dma/xilinx/zynqmp_dma.c b/drivers/dma/xilinx/zynqmp_dma.c
+index 1d077a85f32b..bdeae8a34123 100644
+--- a/drivers/dma/xilinx/zynqmp_dma.c
++++ b/drivers/dma/xilinx/zynqmp_dma.c
+@@ -1103,8 +1103,6 @@ static int zynqmp_dma_probe(struct platform_device *pdev)
+ 	pm_runtime_mark_last_busy(zdev->dev);
+ 	pm_runtime_put_sync_autosuspend(zdev->dev);
+ 
+-	dev_info(&pdev->dev, "ZynqMP DMA driver Probe success\n");
+-
+ 	return 0;
+ 
+ free_chan_resources:
+-- 
+2.31.1
+

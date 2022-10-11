@@ -1,0 +1,66 @@
+From bb15b877c1bf931362e84c658ca8ca3b6c813556 Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Fri, 23 Jul 2021 10:30:26 +0800
+Subject: [PATCH 0460/1418] KVM: TDX: Fix guest PMI recognition
+
+check if last TD exit is caused by a guest PMI after TD exit. It is
+definitely wrong to do that before TD entry.
+
+Fixes: e5bc5ef7f272 ("KVM: TDX: recognize and inject a guest PMI")
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 30 +++++++++++++++---------------
+ 1 file changed, 15 insertions(+), 15 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 58466929c19b..686f758a3687 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -713,6 +713,20 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ 		kvm_wait_lapic_expire(vcpu, true);
+ 	}
+ 
++	if (kvm_tdx->attributes & TDX_TD_ATTRIBUTE_PERFMON)
++		intel_pmu_save();
++
++	tdx_vcpu_enter_exit(vcpu, tdx);
++
++	tdx_user_return_update_cache();
++	perf_restore_debug_store();
++	tdx_restore_host_xsave_state(vcpu);
++	tdx->host_state_need_restore = true;
++
++	/*
++	 * Restoring PMU must be after DS area because PMU may start to log
++	 * records in DS area.
++	 */
+ 	if (kvm_tdx->attributes & TDX_TD_ATTRIBUTE_PERFMON) {
+ 		/*
+ 		 * Guest perf counters overflow leads to a PMI configured by
+@@ -732,22 +746,8 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ 			}
+ 		}
+ 
+-		intel_pmu_save();
+-	}
+-
+-	tdx_vcpu_enter_exit(vcpu, tdx);
+-
+-	tdx_user_return_update_cache();
+-	perf_restore_debug_store();
+-	tdx_restore_host_xsave_state(vcpu);
+-	tdx->host_state_need_restore = true;
+-
+-	/*
+-	 * Restoring PMU must be after DS area because PMU may start to log
+-	 * records in DS area.
+-	 */
+-	if (kvm_tdx->attributes & TDX_TD_ATTRIBUTE_PERFMON)
+ 		intel_pmu_restore();
++	}
+ 
+ 	vmx_register_cache_reset(vcpu);
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,61 @@
+From 77a5ea408d472300711848648ee8a3b382f6c955 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Mon, 16 Aug 2021 18:51:27 +0800
+Subject: [PATCH 0262/1418] x86/sgx: Save enclave pointer for VA page
+
+An enclave VA page has struct sgx_va_page as its *owner*, which can
+tell if the VA page was initialized for an enclave. However, if
+the VA page has failed to be EREMOVEd while enclave is exiting, the
+*owner* field will not be cleared even if the enclave is destroyed.
+Consequently, it's hard to say if the VA page is still associated
+with an enclave.
+
+Define an enclave pointer field in struct sgx_va_page, and save
+the actual value when the VA page is initialized for an enclave.
+Once the enclave is destroyed, the enclave pointer will become
+invalid, so, it can tell exactly if the VA page is associated
+with an enclave.
+
+This information is useful for SGX CPUSVN update process, which
+will rely on it to decide how to zap the VA page.
+
+Note that the new pointer defined for struct sgx_va_page will
+mostly consumed 8M on a system with 2T of SGX EPC memory configured
+only when all the SGX EPC memory are allocated for enclaves
+concurrently running on host. For it's a rarely scenario, the actual
+memory consumption should be less than the estimated value.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/kernel/cpu/sgx/encl.h  | 1 +
+ arch/x86/kernel/cpu/sgx/ioctl.c | 2 ++
+ 2 files changed, 3 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/sgx/encl.h b/arch/x86/kernel/cpu/sgx/encl.h
+index 3d12dbeae14a..94c94a2f5294 100644
+--- a/arch/x86/kernel/cpu/sgx/encl.h
++++ b/arch/x86/kernel/cpu/sgx/encl.h
+@@ -75,6 +75,7 @@ struct sgx_va_page {
+ 	struct sgx_epc_page *epc_page;
+ 	DECLARE_BITMAP(slots, SGX_VA_SLOT_COUNT);
+ 	struct list_head list;
++	struct sgx_encl *encl;
+ };
+ 
+ struct sgx_backing {
+diff --git a/arch/x86/kernel/cpu/sgx/ioctl.c b/arch/x86/kernel/cpu/sgx/ioctl.c
+index b3c9dfbf0132..bcabe7eae1ea 100644
+--- a/arch/x86/kernel/cpu/sgx/ioctl.c
++++ b/arch/x86/kernel/cpu/sgx/ioctl.c
+@@ -31,6 +31,8 @@ static struct sgx_va_page *sgx_encl_grow(struct sgx_encl *encl)
+ 			return ERR_PTR(-ENOMEM);
+ 
+ 		INIT_LIST_HEAD(&va_page->list);
++		va_page->encl = encl;
++
+ 		va_page->epc_page = sgx_alloc_va_page(va_page);
+ 		if (IS_ERR(va_page->epc_page)) {
+ 			err = ERR_CAST(va_page->epc_page);
+-- 
+2.31.1
+

@@ -1,0 +1,30 @@
+From e1093bf655c571c45e12cbe1aacc91b6754ec31b Mon Sep 17 00:00:00 2001
+From: Joseph Ravichandran <jravi@mit.edu>
+Date: Thu, 28 Apr 2022 12:57:52 -0400
+Subject: [PATCH 1357/1418] io_uring: fix uninitialized field in rw io_kiocb
+
+io_rw_init_file does not initialize kiocb->private, so when iocb_bio_iopoll
+reads kiocb->private it can contain uninitialized data.
+
+Fixes: 3e08773c3841 ("block: switch polling to be bio based")
+Signed-off-by: Joseph Ravichandran <jravi@mit.edu>
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ fs/io_uring.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/fs/io_uring.c b/fs/io_uring.c
+index a79513167e70..62cc9c3fdc4b 100644
+--- a/fs/io_uring.c
++++ b/fs/io_uring.c
+@@ -2872,6 +2872,7 @@ static int io_prep_rw(struct io_kiocb *req, const struct io_uring_sqe *sqe,
+ 		    !kiocb->ki_filp->f_op->iopoll)
+ 			return -EOPNOTSUPP;
+ 
++		kiocb->private = NULL;
+ 		kiocb->ki_flags |= IOCB_HIPRI | IOCB_ALLOC_CACHE;
+ 		kiocb->ki_complete = io_complete_rw_iopoll;
+ 		req->iopoll_completed = 0;
+-- 
+2.31.1
+

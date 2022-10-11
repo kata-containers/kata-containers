@@ -1,0 +1,54 @@
+From 98ee2058cc61aa863a7abfa601c08c0d01eb2059 Mon Sep 17 00:00:00 2001
+From: Zeng Guang <guang.zeng@intel.com>
+Date: Mon, 29 Jun 2020 00:51:54 +0800
+Subject: [PATCH 0258/1418] KVM: x86: Support interrupt dispatch in x2APIC mode
+ with APIC-write VM exit
+
+In VMX non-root operation, new behavior applies to virtualize
+WRMSR to vICR in x2APIC mode. Depending on settings of the
+VM-execution controls, CPU would produce APIC-write VM-exit
+following the 64-bit value written to offset 300H on the
+virtual-APIC page(vICR). KVM needs to emulate writes to ICR2
+and ICR respectively to deliver interrupt in this case.
+
+Previously KVM doesn't consider to handle the 64-bit setting
+on vICR in trap-like APIC-write VM-exit, as it never happen
+in x2APIC mode.
+
+Signed-off-by: Zeng Guang <guang.zeng@intel.com>
+---
+ arch/x86/kvm/lapic.c | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/arch/x86/kvm/lapic.c b/arch/x86/kvm/lapic.c
+index d6ac32f3f650..161d60f0d0a8 100644
+--- a/arch/x86/kvm/lapic.c
++++ b/arch/x86/kvm/lapic.c
+@@ -2186,15 +2186,21 @@ EXPORT_SYMBOL_GPL(kvm_lapic_set_eoi);
+ /* emulate APIC access in a trap manner */
+ void kvm_apic_write_nodecode(struct kvm_vcpu *vcpu, u32 offset)
+ {
+-	u32 val = 0;
++	struct kvm_lapic *apic = vcpu->arch.apic;
++	u64 val = 0;
+ 
+ 	/* hw has done the conditional check and inst decode */
+ 	offset &= 0xff0;
+ 
+-	kvm_lapic_reg_read(vcpu->arch.apic, offset, 4, &val);
++	if ((offset == APIC_ICR) && apic_x2apic_mode(apic)) {
++		val = *((u64 *)(apic->regs + offset));
++		kvm_lapic_reg_write(apic, APIC_ICR2, (u32)(val>>32));
++	} else {
++		kvm_lapic_reg_read(apic, offset, 4, &val);
++	}
+ 
+ 	/* TODO: optimize to just emulate side effect w/o one more write */
+-	kvm_lapic_reg_write(vcpu->arch.apic, offset, val);
++	kvm_lapic_reg_write(apic, offset, (u32)val);
+ }
+ EXPORT_SYMBOL_GPL(kvm_apic_write_nodecode);
+ 
+-- 
+2.31.1
+

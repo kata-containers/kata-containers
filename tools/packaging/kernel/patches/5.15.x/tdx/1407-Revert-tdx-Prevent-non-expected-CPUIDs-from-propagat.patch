@@ -1,0 +1,37 @@
+From 36fef0d8a6800840345c0beaa91e4d48795e4156 Mon Sep 17 00:00:00 2001
+From: Fenghua Yu <fenghua.yu@intel.com>
+Date: Mon, 27 Jun 2022 12:09:09 -0700
+Subject: [PATCH 1407/1418] Revert "tdx: Prevent non-expected CPUIDs from
+ propagating to VMM"
+
+This reverts commit 8acaf5dc0e006327f173ef3cd7c8612ae1aadade.
+---
+ arch/x86/kernel/tdx.c | 12 ------------
+ 1 file changed, 12 deletions(-)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 4e1755aa746a..e3c58f4454e3 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -572,18 +572,6 @@ static bool tdx_handle_cpuid(struct pt_regs *regs)
+ {
+ 	struct tdx_hypercall_output out;
+ 
+-        /*
+-         * Only allow VMM to control range reserved for hypervisor
+-         * communication.
+-         *
+-         * Return all-zeros for any CPUID outside the range. It matches CPU
+-         * behaviour for non-supported leaf.
+-         */
+-        if (regs->ax < 0x40000000 || regs->ax > 0x4fffffff) {
+-                regs->ax = regs->bx = regs->cx = regs->dx = 0;
+-                return true;
+-        }
+-
+ 	/*
+ 	 * Emulate CPUID instruction via hypercall. More info about
+ 	 * ABI can be found in TDX Guest-Host-Communication Interface
+-- 
+2.31.1
+

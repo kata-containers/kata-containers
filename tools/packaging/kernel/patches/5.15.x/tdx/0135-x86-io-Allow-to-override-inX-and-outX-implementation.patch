@@ -1,0 +1,56 @@
+From 2c9f65adedb495e319f4db73aa6fa9bf4140072a Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Tue, 3 Mar 2020 13:49:05 +0300
+Subject: [PATCH 0135/1418] x86/io: Allow to override inX() and outX()
+ implementation
+
+The patch allows to override the implementation of the port IO
+helpers. TDX code will provide an implementation that redirect the
+helpers to paravirt calls.
+
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/io.h | 16 ++++++++++++----
+ 1 file changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/include/asm/io.h b/arch/x86/include/asm/io.h
+index 5c6a4af0b911..3647a96238a9 100644
+--- a/arch/x86/include/asm/io.h
++++ b/arch/x86/include/asm/io.h
+@@ -271,18 +271,26 @@ static inline bool sev_key_active(void) { return false; }
+ 
+ #endif /* CONFIG_AMD_MEM_ENCRYPT */
+ 
++#ifndef __out
++#define __out(bwl, bw)							\
++	asm volatile("out" #bwl " %" #bw "0, %w1" : : "a"(value), "Nd"(port))
++#endif
++
++#ifndef __in
++#define __in(bwl, bw)							\
++	asm volatile("in" #bwl " %w1, %" #bw "0" : "=a"(value) : "Nd"(port))
++#endif
++
+ #define BUILDIO(bwl, bw, type)						\
+ static inline void out##bwl(unsigned type value, int port)		\
+ {									\
+-	asm volatile("out" #bwl " %" #bw "0, %w1"			\
+-		     : : "a"(value), "Nd"(port));			\
++	__out(bwl, bw);							\
+ }									\
+ 									\
+ static inline unsigned type in##bwl(int port)				\
+ {									\
+ 	unsigned type value;						\
+-	asm volatile("in" #bwl " %w1, %" #bw "0"			\
+-		     : "=a"(value) : "Nd"(port));			\
++	__in(bwl, bw);							\
+ 	return value;							\
+ }									\
+ 									\
+-- 
+2.31.1
+

@@ -1,0 +1,424 @@
+From c9d92aa78327b7ed3dfbdb7edb760fcc4e5d0be4 Mon Sep 17 00:00:00 2001
+From: Megha Dey <megha.dey@intel.com>
+Date: Tue, 26 Oct 2021 13:25:46 -0700
+Subject: [PATCH 0594/1418] msi: dynamic dev_msi
+
+Enable a single device to hold both device msi and msi/x interrupts.
+
+Signed-off-by: Megha Dey <megha.dey@intel.com>
+---
+ drivers/base/core.c           |  2 ++
+ drivers/base/platform-msi.c   | 49 +++++++++++++++++++++++++++--
+ drivers/irqchip/irq-ims-msi.c | 22 +++++++++++--
+ include/linux/device.h        |  2 ++
+ include/linux/msi.h           | 59 ++++++++++++++++++++++++-----------
+ kernel/irq/msi.c              | 41 +++++++++++++++++++-----
+ 6 files changed, 145 insertions(+), 30 deletions(-)
+
+diff --git a/drivers/base/core.c b/drivers/base/core.c
+index 193623860fe5..0c696fdf9077 100644
+--- a/drivers/base/core.c
++++ b/drivers/base/core.c
+@@ -2885,7 +2885,9 @@ void device_initialize(struct device *dev)
+ #ifdef CONFIG_GENERIC_MSI_IRQ
+ 	raw_spin_lock_init(&dev->msi_lock);
+ 	INIT_LIST_HEAD(&dev->msi_list);
++	INIT_LIST_HEAD(&dev->dev_msi_list);
+ 	dev->msi_last_list = &dev->msi_list;
++	dev->dev_msi_last_list = &dev->dev_msi_list;
+ #endif
+ 	INIT_LIST_HEAD(&dev->links.consumers);
+ 	INIT_LIST_HEAD(&dev->links.suppliers);
+diff --git a/drivers/base/platform-msi.c b/drivers/base/platform-msi.c
+index 29577b823b00..bf689718876a 100644
+--- a/drivers/base/platform-msi.c
++++ b/drivers/base/platform-msi.c
+@@ -442,7 +442,7 @@ int platform_msi_domain_alloc(struct irq_domain *domain, unsigned int virq,
+ 
+ static void device_msi_free_msi_entries(struct device *dev)
+ {
+-	struct list_head *msi_list = dev_to_msi_list(dev);
++	struct list_head *msi_list = dev_to_dev_msi_list(dev);
+ 	struct msi_desc *entry, *tmp;
+ 
+ 	list_for_each_entry_safe(entry, tmp, msi_list, list) {
+@@ -463,6 +463,25 @@ static void device_msi_free_irqs(struct irq_domain *domain, struct device *dev)
+ 	device_msi_free_msi_entries(dev);
+ }
+ 
++static void device_msi_free_irq(struct irq_domain *domain, struct device *dev, unsigned int irq)
++{
++	struct msi_desc *entry, *tmp;
++	struct msi_domain_info *info = domain->host_data;
++	struct msi_domain_ops *ops = info->ops;
++
++	if (ops->msi_free_irq)
++		ops->msi_free_irq(domain, dev, irq);
++
++	list_for_each_entry_safe(entry, tmp, dev_to_dev_msi_list(dev), list) {
++		if (entry->irq == irq) {
++			list_del(&entry->list);
++			free_msi_entry(entry);
++		}
++	}
++
++	__msi_domain_free_irq(domain, dev, irq);
++}
++
+ /**
+  * device_msi_alloc_irqs - Allocate MSI interrupts for a device
+  * @dev:	Pointer to the device
+@@ -475,12 +494,14 @@ static int device_msi_alloc_irqs(struct irq_domain *domain, struct device *dev,
+ {
+ 	int i, ret = -ENOMEM;
+ 
++	dev->dev_msi_last_list = dev->dev_msi_list.prev;
++
+ 	for (i = 0; i < nvec; i++) {
+ 		struct msi_desc *entry = alloc_msi_entry(dev, 1, NULL);
+ 
+ 		if (!entry)
+ 			goto fail;
+-		list_add_tail(&entry->list, dev_to_msi_list(dev));
++		list_add_tail(&entry->list, dev_to_dev_msi_list(dev));
+ 	}
+ 
+ 	ret = __msi_domain_alloc_irqs(domain, dev, nvec);
+@@ -491,12 +512,36 @@ static int device_msi_alloc_irqs(struct irq_domain *domain, struct device *dev,
+ 	return ret;
+ }
+ 
++int device_msi_add_irq(struct irq_domain *domain, struct device *dev)
++{
++	struct msi_desc *entry;
++
++	dev->dev_msi_last_list = dev->dev_msi_list.prev;
++
++	entry = alloc_msi_entry(dev, 1, NULL);
++	if (!entry)
++		goto fail;
++	list_add_tail(&entry->list, dev_to_dev_msi_list(dev));
++
++	entry = list_last_entry(dev_to_dev_msi_list(dev), struct msi_desc, list);
++	if (!__msi_domain_alloc_irqs(domain, dev, 1))
++		return entry->device_msi.hwirq;
++
++	list_del(&entry->list);
++fail:
++	free_msi_entry(entry);
++	return -ENOMEM;
++}
++EXPORT_SYMBOL_GPL(device_msi_add_irq);
++
+ static void device_msi_update_dom_ops(struct msi_domain_info *info)
+ {
+ 	if (!info->ops->domain_alloc_irqs)
+ 		info->ops->domain_alloc_irqs = device_msi_alloc_irqs;
+ 	if (!info->ops->domain_free_irqs)
+ 		info->ops->domain_free_irqs = device_msi_free_irqs;
++	if (!info->ops->domain_free_irq)
++		info->ops->domain_free_irq = device_msi_free_irq;
+ 	if (!info->ops->msi_prepare)
+ 		info->ops->msi_prepare = arch_msi_prepare;
+ }
+diff --git a/drivers/irqchip/irq-ims-msi.c b/drivers/irqchip/irq-ims-msi.c
+index 61f2437d7c58..5d1d01eee386 100644
+--- a/drivers/irqchip/irq-ims-msi.c
++++ b/drivers/irqchip/irq-ims-msi.c
+@@ -76,7 +76,7 @@ static void ims_array_free_msi_store(struct irq_domain *domain,
+ 	struct ims_array_data *ims = info->data;
+ 	struct msi_desc *entry;
+ 
+-	for_each_msi_entry(entry, dev) {
++	for_each_dev_msi_entry(entry, dev) {
+ 		if (entry->device_msi.priv_iomem) {
+ 			clear_bit(entry->device_msi.hwirq, ims->map);
+ 			ims_array_reset_slot(entry->device_msi.priv_iomem);
+@@ -86,6 +86,23 @@ static void ims_array_free_msi_store(struct irq_domain *domain,
+ 	}
+ }
+ 
++static void ims_array_free_msi_irq(struct irq_domain *domain,
++				   struct device *dev, unsigned int irq)
++{
++	struct msi_domain_info *info = domain->host_data;
++	struct ims_array_data *ims = info->data;
++	struct msi_desc *entry;
++
++	for_each_dev_msi_entry(entry, dev) {
++		if (entry->irq == irq && entry->device_msi.priv_iomem) {
++			clear_bit(entry->device_msi.hwirq, ims->map);
++			ims_array_reset_slot(entry->device_msi.priv_iomem);
++			entry->device_msi.priv_iomem = NULL;
++			entry->device_msi.hwirq = 0;
++		}
++	}
++}
++
+ static int ims_array_alloc_msi_store(struct irq_domain *domain,
+ 				     struct device *dev, int nvec)
+ {
+@@ -93,7 +110,7 @@ static int ims_array_alloc_msi_store(struct irq_domain *domain,
+ 	struct ims_array_data *ims = info->data;
+ 	struct msi_desc *entry;
+ 
+-	for_each_msi_entry(entry, dev) {
++	for_each_new_dev_msi_entry(entry, dev) {
+ 		unsigned int idx;
+ 
+ 		idx = find_first_zero_bit(ims->map, ims->info.max_slots);
+@@ -126,6 +143,7 @@ static const struct ims_array_domain_template ims_array_domain_template = {
+ 	.ops = {
+ 		.msi_alloc_store	= ims_array_alloc_msi_store,
+ 		.msi_free_store		= ims_array_free_msi_store,
++		.msi_free_irq		= ims_array_free_msi_irq,
+ 		.set_desc               = ims_set_desc,
+ 	},
+ 	.info = {
+diff --git a/include/linux/device.h b/include/linux/device.h
+index ecf90c38787b..958096d5c19f 100644
+--- a/include/linux/device.h
++++ b/include/linux/device.h
+@@ -512,6 +512,8 @@ struct device {
+ 	struct list_head        *msi_last_list;
+ 	raw_spinlock_t		msi_lock;
+ 	struct list_head	msi_list;
++	struct list_head	dev_msi_list;
++	struct list_head	*dev_msi_last_list;
+ #endif
+ #ifdef CONFIG_DMA_OPS
+ 	const struct dma_map_ops *dma_ops;
+diff --git a/include/linux/msi.h b/include/linux/msi.h
+index 63506b3a3b9c..893e85cc479c 100644
+--- a/include/linux/msi.h
++++ b/include/linux/msi.h
+@@ -101,7 +101,6 @@ struct ti_sci_inta_msi_desc {
+  * @hwirq:		The hardware irq number in the device domain
+  */
+ struct device_msi_desc {
+-	void		*priv;
+ 	void __iomem	*priv_iomem;
+ 	u16		hwirq;
+ };
+@@ -189,31 +188,45 @@ struct msi_desc {
+ /* Helpers to hide struct msi_desc implementation details */
+ #define msi_desc_to_dev(desc)		((desc)->dev)
+ #define dev_to_msi_list(dev)		(&(dev)->msi_list)
++#define dev_to_dev_msi_list(dev)	(&(dev)->dev_msi_list)
+ #define first_msi_entry(dev)		\
+ 	list_first_entry(dev_to_msi_list((dev)), struct msi_desc, list)
+-#define for_each_msi_entry(desc, dev)	\
+-	list_for_each_entry((desc), dev_to_msi_list((dev)), list)
++#define __for_each_msi_entry(desc, msi_list)    \
++	list_for_each_entry((desc), (msi_list), list)
++#define for_each_msi_entry(desc, dev)		\
++	__for_each_msi_entry((desc), dev_to_msi_list((dev)))
+ #define for_each_msi_entry_safe(desc, tmp, dev)	\
+ 	list_for_each_entry_safe((desc), (tmp), dev_to_msi_list((dev)), list)
+-#define for_each_msi_vector(desc, __irq, dev)				\
+-	for_each_msi_entry((desc), (dev))				\
+-		if ((desc)->irq)					\
+-			for (__irq = (desc)->irq;			\
+-			     __irq < ((desc)->irq + (desc)->nvec_used);	\
++#define __for_each_msi_vector(desc, __irq, msi_list)	\
++	__for_each_msi_entry((desc), (msi_list))	\
++		if ((desc)->irq)			\
++			for (__irq = (desc)->irq;	\
++			     __irq < ((desc)->irq + (desc)->nvec_used); \
+ 			     __irq++)
++#define for_each_msi_vector(desc, __irq, dev)		\
++	__for_each_msi_vector(desc, __irq, dev_to_msi_list((dev)))
++
+ /* Iterate through all the msi_descs starting from a given desc */
+-#define for_each_new_msi_entry(desc, dev)                             \
+-	(desc) = list_entry((dev)->msi_last_list->next, struct msi_desc, list);         \
+-	list_for_each_entry_from((desc), dev_to_msi_list((dev)), list)
+-#define for_each_new_msi_vector(desc, __irq, dev)                             \
+-	for_each_new_msi_entry((desc), (dev))                          \
+-		if ((desc)->irq)                                        \
+-			for ((__irq) = (desc)->irq;                     \
+-			     (__irq) < ((desc)->irq + (desc)->nvec_used);       \
++#define __for_each_new_msi_entry(desc, msi_last_list, msi_list) \
++	(desc) = list_entry((msi_last_list)->next, struct msi_desc, list);	\
++	list_for_each_entry_from((desc), (msi_list), list)
++#define for_each_new_msi_entry(desc, dev)			\
++	 __for_each_new_msi_entry((desc), (dev)->msi_last_list, dev_to_msi_list((dev)))
++#define __for_each_new_msi_vector(desc, __irq, msi_last_list, msi_list)	\
++	__for_each_new_msi_entry((desc), (msi_last_list), (msi_list))	\
++		if ((desc)->irq)					\
++			for ((__irq) = (desc)->irq;			\
++			     (__irq) < ((desc)->irq + (desc)->nvec_used);	\
+ 			     (__irq)++)
+-#define for_each_new_msi_entry_safe(desc, tmp, dev)				\
+-        (desc) = list_entry((dev)->msi_last_list->next, struct msi_desc, list);	\
+-        list_for_each_entry_safe_from((desc), (tmp), dev_to_msi_list((dev)), list)
++#define for_each_new_msi_vector(desc, __irq, dev)	\
++	__for_each_new_msi_vector((desc), (__irq), (dev)->msi_last_list, dev_to_msi_list((dev)))
++#define for_each_new_msi_entry_safe(desc, tmp, dev)	\
++	(desc) = list_entry((dev)->msi_last_list->next, struct msi_desc, list);	\
++	list_for_each_entry_safe_from((desc), (tmp), dev_to_msi_list((dev)), list)
++#define for_each_dev_msi_entry(desc, dev)	\
++	list_for_each_entry((desc), dev_to_dev_msi_list((dev)), list)
++#define for_each_new_dev_msi_entry(desc, dev)                       \
++	__for_each_new_msi_entry((desc), (dev)->dev_msi_last_list, dev_to_dev_msi_list((dev)))
+ 
+ #ifdef CONFIG_IRQ_MSI_IOMMU
+ static inline const void *msi_desc_get_iommu_cookie(struct msi_desc *desc)
+@@ -384,10 +397,16 @@ struct msi_domain_ops {
+ 					     struct device *dev, int nvec);
+ 	void		(*domain_free_irqs)(struct irq_domain *domain,
+ 					    struct device *dev);
++	void		(*domain_free_irq)(struct irq_domain *domain,
++					   struct device *dev,
++					   unsigned int irq);
+ 	int		(*msi_alloc_store)(struct irq_domain *domain,
+ 					   struct device *dev, int nvec);
+ 	void		(*msi_free_store)(struct irq_domain *domain,
+ 					  struct device *dev);
++	void            (*msi_free_irq)(struct irq_domain *domain,
++					struct device *dev, unsigned int irq);
++
+ };
+ 
+ /**
+@@ -451,7 +470,9 @@ int msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
+ 			  int nvec);
+ void __msi_domain_free_irqs(struct irq_domain *domain, struct device *dev);
+ void msi_domain_free_irqs(struct irq_domain *domain, struct device *dev);
++int device_msi_add_irq(struct irq_domain *domain, struct device *dev);
+ void msi_domain_free_irq(struct irq_domain *domain, struct device *dev, unsigned int irq);
++void __msi_domain_free_irq(struct irq_domain *domain, struct device *dev, unsigned int irq);
+ struct msi_domain_info *msi_get_domain_info(struct irq_domain *domain);
+ 
+ struct irq_domain *platform_msi_create_irq_domain(struct fwnode_handle *fwnode,
+diff --git a/kernel/irq/msi.c b/kernel/irq/msi.c
+index b757df97dd14..72a51b4776bb 100644
+--- a/kernel/irq/msi.c
++++ b/kernel/irq/msi.c
+@@ -428,6 +428,7 @@ static struct msi_domain_ops msi_domain_ops_default = {
+ 	.set_desc		= msi_domain_ops_set_desc,
+ 	.domain_alloc_irqs	= __msi_domain_alloc_irqs,
+ 	.domain_free_irqs	= __msi_domain_free_irqs,
++	.domain_free_irq	= __msi_domain_free_irq,
+ };
+ 
+ static void msi_domain_update_dom_ops(struct msi_domain_info *info)
+@@ -443,6 +444,8 @@ static void msi_domain_update_dom_ops(struct msi_domain_info *info)
+ 		ops->domain_alloc_irqs = msi_domain_ops_default.domain_alloc_irqs;
+ 	if (ops->domain_free_irqs == NULL)
+ 		ops->domain_free_irqs = msi_domain_ops_default.domain_free_irqs;
++	if (ops->domain_free_irq == NULL)
++		ops->domain_free_irq = msi_domain_ops_default.domain_free_irq;
+ 
+ 	if (!(info->flags & MSI_FLAG_USE_DEF_DOM_OPS))
+ 		return;
+@@ -599,6 +602,8 @@ int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
+ 	msi_alloc_info_t arg = { };
+ 	int i, ret, virq;
+ 	bool can_reserve;
++	struct list_head *msi_last_list;
++	struct list_head *msi_list;
+ 
+ 	ret = msi_domain_prepare_irqs(domain, dev, nvec, &arg);
+ 	if (ret)
+@@ -610,7 +615,15 @@ int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
+ 			return ret;
+ 	}
+ 
+-	for_each_new_msi_entry(desc, dev) {
++	if (domain->bus_token == DOMAIN_BUS_DEVICE_MSI) {
++		msi_last_list = dev->dev_msi_last_list;
++		msi_list = dev_to_dev_msi_list(dev);
++	} else {
++		msi_last_list = dev->msi_last_list;
++		msi_list = dev_to_msi_list(dev);
++	}
++
++	__for_each_new_msi_entry(desc, msi_last_list, msi_list) {
+ 		ops->set_desc(&arg, desc);
+ 
+ 		virq = __irq_domain_alloc_irqs(domain, -1, desc->nvec_used,
+@@ -644,7 +657,7 @@ int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
+ 	if (!(info->flags & MSI_FLAG_ACTIVATE_EARLY))
+ 		goto skip_activate;
+ 
+-	for_each_new_msi_vector(desc, i, dev) {
++	__for_each_new_msi_vector(desc, i, msi_last_list, msi_list) {
+ 		if (desc->irq == i) {
+ 			virq = desc->irq;
+ 			dev_dbg(dev, "irq [%d-%d] for MSI\n",
+@@ -668,7 +681,7 @@ int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
+ 	 * so request_irq() will assign the final vector.
+ 	 */
+ 	if (can_reserve) {
+-		for_each_new_msi_vector(desc, i, dev) {
++		__for_each_new_msi_vector(desc, i, msi_last_list, msi_list) {
+ 			irq_data = irq_domain_get_irq_data(domain, i);
+ 			irqd_clr_activated(irq_data);
+ 		}
+@@ -705,14 +718,18 @@ void __msi_domain_free_irqs(struct irq_domain *domain, struct device *dev)
+ 	struct msi_domain_ops *ops = info->ops;
+ 	struct msi_desc *desc;
+ 	int i;
++	struct list_head *msi_list;
++
++	msi_list = (domain->bus_token == DOMAIN_BUS_DEVICE_MSI)
++			 ? dev_to_dev_msi_list(dev) : dev_to_msi_list(dev);
+ 
+-	for_each_msi_vector(desc, i, dev) {
++	__for_each_msi_vector(desc, i, msi_list) {
+ 		irq_data = irq_domain_get_irq_data(domain, i);
+ 		if (irqd_is_activated(irq_data))
+ 			irq_domain_deactivate_irq(irq_data);
+ 	}
+ 
+-	for_each_msi_entry(desc, dev) {
++	__for_each_msi_entry(desc, msi_list) {
+ 		/*
+ 		 * We might have failed to allocate an MSI early
+ 		 * enough that there is no IRQ associated to this
+@@ -741,6 +758,7 @@ void msi_domain_free_irqs(struct irq_domain *domain, struct device *dev)
+ 
+ 	return ops->domain_free_irqs(domain, dev);
+ }
++EXPORT_SYMBOL_GPL(msi_domain_free_irqs);
+ 
+ /**
+  * msi_domain_free_irq - Free interrupt from a MSI interrupt @domain associated to @dev
+@@ -748,7 +766,7 @@ void msi_domain_free_irqs(struct irq_domain *domain, struct device *dev)
+  * @dev:	Pointer to device struct for which the interrupt needs to be freed
+  * @irq:	Interrupt to be freed
+  */
+-void msi_domain_free_irq(struct irq_domain *domain, struct device *dev, unsigned int irq)
++void __msi_domain_free_irq(struct irq_domain *domain, struct device *dev, unsigned int irq)
+ {
+ 	struct msi_desc *desc = irq_get_msi_desc(irq);
+ 	struct irq_data *irq_data;
+@@ -763,6 +781,15 @@ void msi_domain_free_irq(struct irq_domain *domain, struct device *dev, unsigned
+ 	}
+ }
+ 
++void msi_domain_free_irq(struct irq_domain *domain, struct device *dev, unsigned int irq)
++{
++	struct msi_domain_info *info = domain->host_data;
++	struct msi_domain_ops *ops = info->ops;
++
++	return ops->domain_free_irq(domain, dev, irq);
++}
++EXPORT_SYMBOL_GPL(msi_domain_free_irq);
++
+ /**
+  * msi_get_domain_info - Get the MSI interrupt domain info for @domain
+  * @domain:	The interrupt domain to retrieve data from
+@@ -786,7 +813,7 @@ static struct msi_desc *get_dev_msi_entry(struct device *dev, unsigned int nr)
+ 	struct msi_desc *entry;
+ 	int i = 0;
+ 
+-	for_each_msi_entry(entry, dev) {
++	for_each_dev_msi_entry(entry, dev) {
+ 		if (i == nr)
+ 			return entry;
+ 		i++;
+-- 
+2.31.1
+

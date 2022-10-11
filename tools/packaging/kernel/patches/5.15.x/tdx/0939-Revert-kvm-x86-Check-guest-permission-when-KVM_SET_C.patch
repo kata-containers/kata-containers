@@ -1,0 +1,69 @@
+From 27a9988ebfa11c43f7916600fb5a1f45c8fab632 Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 18:04:25 -0800
+Subject: [PATCH 0939/1418] Revert "kvm: x86: Check guest permission when
+ KVM_SET_CPUID2"
+
+This reverts commit 7c8451006b565d43e0b4c5154e79d23f5612f675.
+---
+ arch/x86/kvm/cpuid.c | 30 ------------------------------
+ 1 file changed, 30 deletions(-)
+
+diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c
+index 95260cd1e711..5e43dd6a7654 100644
+--- a/arch/x86/kvm/cpuid.c
++++ b/arch/x86/kvm/cpuid.c
+@@ -18,7 +18,6 @@
+ #include <asm/processor.h>
+ #include <asm/user.h>
+ #include <asm/fpu/xstate.h>
+-#include <asm/fpu/api.h>
+ #include <asm/sgx.h>
+ #include "cpuid.h"
+ #include "lapic.h"
+@@ -117,29 +116,6 @@ void kvm_update_pv_runtime(struct kvm_vcpu *vcpu)
+ 		vcpu->arch.pv_cpuid.features = best->eax;
+ }
+ 
+-static int kvm_check_dyn_feature_perm(struct kvm_vcpu *vcpu)
+-{
+-	struct kvm_cpuid_entry2 *best;
+-	unsigned long mask = XFEATURE_MASK_USER_DYNAMIC;
+-	int bit = 0;
+-
+-	for_each_set_bit_from(bit, &mask, 8 * sizeof(mask)) {
+-		switch (bit) {
+-		case XFEATURE_XTILE_DATA:
+-			best = kvm_find_cpuid_entry(vcpu, 7, 0);
+-			if (best && cpuid_entry_has(best, X86_FEATURE_AMX_TILE)) {
+-				if (!(xstate_get_guest_group_perm() &
+-					 XFEATURE_MASK_XTILE_DATA))
+-					return -EINVAL;
+-			}
+-			break;
+-		default:
+-			break;
+-		}
+-	}
+-	return 0;
+-}
+-
+ void kvm_update_cpuid_runtime(struct kvm_vcpu *vcpu)
+ {
+ 	struct kvm_cpuid_entry2 *best;
+@@ -362,12 +338,6 @@ int kvm_vcpu_ioctl_set_cpuid2(struct kvm_vcpu *vcpu,
+ 	vcpu->arch.cpuid_entries = e2;
+ 	vcpu->arch.cpuid_nent = cpuid->nent;
+ 
+-	/* Report failure if dynamic feature has no permission */
+-	r = kvm_check_dyn_feature_perm(vcpu);
+-	if (r) {
+-		kvfree(e2);
+-		return r;
+-	}
+ 	kvm_update_cpuid_runtime(vcpu);
+ 	kvm_vcpu_after_set_cpuid(vcpu);
+ 
+-- 
+2.31.1
+

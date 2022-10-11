@@ -1,0 +1,124 @@
+From 273317ee049540ec45a93112523efb523ae244f0 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Mon, 29 Jul 2019 18:03:29 -0700
+Subject: [PATCH 0389/1418] KVM: VMX: Split out guts of EPT violation to
+ common/exposed function
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/common.h | 29 +++++++++++++++++++++++++++++
+ arch/x86/kvm/vmx/vmx.c    | 33 +++++----------------------------
+ 2 files changed, 34 insertions(+), 28 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/common.h b/arch/x86/kvm/vmx/common.h
+index 81c73f30d01d..9e5865b05d47 100644
+--- a/arch/x86/kvm/vmx/common.h
++++ b/arch/x86/kvm/vmx/common.h
+@@ -5,8 +5,11 @@
+ #include <linux/kvm_host.h>
+ 
+ #include <asm/traps.h>
++#include <asm/vmx.h>
+ 
++#include "mmu.h"
+ #include "vmcs.h"
++#include "vmx.h"
+ #include "x86.h"
+ 
+ extern unsigned long vmx_host_idt_base;
+@@ -49,4 +52,30 @@ static inline void vmx_handle_external_interrupt_irqoff(struct kvm_vcpu *vcpu,
+ 	vmx_handle_interrupt_nmi_irqoff(vcpu, gate_offset(desc));
+ }
+ 
++static inline int __vmx_handle_ept_violation(struct kvm_vcpu *vcpu, gpa_t gpa,
++					     unsigned long exit_qualification)
++{
++	u64 error_code;
++
++	/* Is it a read fault? */
++	error_code = (exit_qualification & EPT_VIOLATION_ACC_READ)
++		     ? PFERR_USER_MASK : 0;
++	/* Is it a write fault? */
++	error_code |= (exit_qualification & EPT_VIOLATION_ACC_WRITE)
++		      ? PFERR_WRITE_MASK : 0;
++	/* Is it a fetch fault? */
++	error_code |= (exit_qualification & EPT_VIOLATION_ACC_INSTR)
++		      ? PFERR_FETCH_MASK : 0;
++	/* ept page table entry is present? */
++	error_code |= (exit_qualification &
++		       (EPT_VIOLATION_READABLE | EPT_VIOLATION_WRITABLE |
++			EPT_VIOLATION_EXECUTABLE))
++		      ? PFERR_PRESENT_MASK : 0;
++
++	error_code |= (exit_qualification & EPT_VIOLATION_GVA_TRANSLATED) != 0 ?
++	       PFERR_GUEST_FINAL_MASK : PFERR_GUEST_PAGE_MASK;
++
++	return kvm_mmu_page_fault(vcpu, gpa, error_code, NULL, 0);
++}
++
+ #endif /* __KVM_X86_VMX_COMMON_H */
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 1b8bf65bf05d..dc0d72cab153 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -5389,11 +5389,10 @@ static int handle_task_switch(struct kvm_vcpu *vcpu)
+ 
+ static int handle_ept_violation(struct kvm_vcpu *vcpu)
+ {
+-	unsigned long exit_qualification;
+-	gpa_t gpa;
+-	u64 error_code;
++	unsigned long exit_qualification = vmx_get_exit_qual(vcpu);
++	gpa_t gpa = vmcs_read64(GUEST_PHYSICAL_ADDRESS);
+ 
+-	exit_qualification = vmx_get_exit_qual(vcpu);
++	trace_kvm_page_fault(gpa, exit_qualification);
+ 
+ 	/*
+ 	 * EPT violation happened while executing iret from NMI,
+@@ -5402,31 +5401,9 @@ static int handle_ept_violation(struct kvm_vcpu *vcpu)
+ 	 * AAK134, BY25.
+ 	 */
+ 	if (!(to_vmx(vcpu)->idt_vectoring_info & VECTORING_INFO_VALID_MASK) &&
+-			enable_vnmi &&
+-			(exit_qualification & INTR_INFO_UNBLOCK_NMI))
++	    enable_vnmi && (exit_qualification & INTR_INFO_UNBLOCK_NMI))
+ 		vmcs_set_bits(GUEST_INTERRUPTIBILITY_INFO, GUEST_INTR_STATE_NMI);
+ 
+-	gpa = vmcs_read64(GUEST_PHYSICAL_ADDRESS);
+-	trace_kvm_page_fault(gpa, exit_qualification);
+-
+-	/* Is it a read fault? */
+-	error_code = (exit_qualification & EPT_VIOLATION_ACC_READ)
+-		     ? PFERR_USER_MASK : 0;
+-	/* Is it a write fault? */
+-	error_code |= (exit_qualification & EPT_VIOLATION_ACC_WRITE)
+-		      ? PFERR_WRITE_MASK : 0;
+-	/* Is it a fetch fault? */
+-	error_code |= (exit_qualification & EPT_VIOLATION_ACC_INSTR)
+-		      ? PFERR_FETCH_MASK : 0;
+-	/* ept page table entry is present? */
+-	error_code |= (exit_qualification &
+-		       (EPT_VIOLATION_READABLE | EPT_VIOLATION_WRITABLE |
+-			EPT_VIOLATION_EXECUTABLE))
+-		      ? PFERR_PRESENT_MASK : 0;
+-
+-	error_code |= (exit_qualification & EPT_VIOLATION_GVA_TRANSLATED) != 0 ?
+-	       PFERR_GUEST_FINAL_MASK : PFERR_GUEST_PAGE_MASK;
+-
+ 	vcpu->arch.exit_qualification = exit_qualification;
+ 
+ 	/*
+@@ -5440,7 +5417,7 @@ static int handle_ept_violation(struct kvm_vcpu *vcpu)
+ 	if (unlikely(allow_smaller_maxphyaddr && kvm_vcpu_is_illegal_gpa(vcpu, gpa)))
+ 		return kvm_emulate_instruction(vcpu, 0);
+ 
+-	return kvm_mmu_page_fault(vcpu, gpa, error_code, NULL, 0);
++	return __vmx_handle_ept_violation(vcpu, gpa, exit_qualification);
+ }
+ 
+ static int handle_ept_misconfig(struct kvm_vcpu *vcpu)
+-- 
+2.31.1
+

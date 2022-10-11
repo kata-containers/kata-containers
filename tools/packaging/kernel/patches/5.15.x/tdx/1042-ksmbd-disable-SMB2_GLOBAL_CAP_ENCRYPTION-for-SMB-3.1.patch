@@ -1,0 +1,91 @@
+From 0df0f90b4101298ff32c8eff40308b7b26b2f1f1 Mon Sep 17 00:00:00 2001
+From: Marcos Del Sol Vives <marcos@orca.pet>
+Date: Thu, 16 Dec 2021 11:37:22 +0100
+Subject: [PATCH 1042/1418] ksmbd: disable SMB2_GLOBAL_CAP_ENCRYPTION for SMB
+ 3.1.1
+
+According to the official Microsoft MS-SMB2 document section 3.3.5.4, this
+flag should be used only for 3.0 and 3.0.2 dialects. Setting it for 3.1.1
+is a violation of the specification.
+
+This causes my Windows 10 client to detect an anomaly in the negotiation,
+and disable encryption entirely despite being explicitly enabled in ksmbd,
+causing all data transfers to go in plain text.
+
+Fixes: e2f34481b24d ("cifsd: add server-side procedures for SMB3")
+Cc: stable@vger.kernel.org # v5.15
+Acked-by: Namjae Jeon <linkinjeon@kernel.org>
+Signed-off-by: Marcos Del Sol Vives <marcos@orca.pet>
+Signed-off-by: Steve French <stfrench@microsoft.com>
+---
+ fs/ksmbd/smb2ops.c |  3 ---
+ fs/ksmbd/smb2pdu.c | 25 +++++++++++++++++++++----
+ 2 files changed, 21 insertions(+), 7 deletions(-)
+
+diff --git a/fs/ksmbd/smb2ops.c b/fs/ksmbd/smb2ops.c
+index fb6a65d23139..2a6205103df2 100644
+--- a/fs/ksmbd/smb2ops.c
++++ b/fs/ksmbd/smb2ops.c
+@@ -272,9 +272,6 @@ int init_smb3_11_server(struct ksmbd_conn *conn)
+ 	if (server_conf.flags & KSMBD_GLOBAL_FLAG_SMB2_LEASES)
+ 		conn->vals->capabilities |= SMB2_GLOBAL_CAP_LEASING;
+ 
+-	if (conn->cipher_type)
+-		conn->vals->capabilities |= SMB2_GLOBAL_CAP_ENCRYPTION;
+-
+ 	if (server_conf.flags & KSMBD_GLOBAL_FLAG_SMB3_MULTICHANNEL)
+ 		conn->vals->capabilities |= SMB2_GLOBAL_CAP_MULTI_CHANNEL;
+ 
+diff --git a/fs/ksmbd/smb2pdu.c b/fs/ksmbd/smb2pdu.c
+index 7e448df3f847..33bffb533f93 100644
+--- a/fs/ksmbd/smb2pdu.c
++++ b/fs/ksmbd/smb2pdu.c
+@@ -917,6 +917,25 @@ static void decode_encrypt_ctxt(struct ksmbd_conn *conn,
+ 	}
+ }
+ 
++/**
++ * smb3_encryption_negotiated() - checks if server and client agreed on enabling encryption
++ * @conn:	smb connection
++ *
++ * Return:	true if connection should be encrypted, else false
++ */
++static bool smb3_encryption_negotiated(struct ksmbd_conn *conn)
++{
++	if (!conn->ops->generate_encryptionkey)
++		return false;
++
++	/*
++	 * SMB 3.0 and 3.0.2 dialects use the SMB2_GLOBAL_CAP_ENCRYPTION flag.
++	 * SMB 3.1.1 uses the cipher_type field.
++	 */
++	return (conn->vals->capabilities & SMB2_GLOBAL_CAP_ENCRYPTION) ||
++	    conn->cipher_type;
++}
++
+ static void decode_compress_ctxt(struct ksmbd_conn *conn,
+ 				 struct smb2_compression_ctx *pneg_ctxt)
+ {
+@@ -1471,8 +1490,7 @@ static int ntlm_authenticate(struct ksmbd_work *work)
+ 		    (req->SecurityMode & SMB2_NEGOTIATE_SIGNING_REQUIRED))
+ 			sess->sign = true;
+ 
+-		if (conn->vals->capabilities & SMB2_GLOBAL_CAP_ENCRYPTION &&
+-		    conn->ops->generate_encryptionkey &&
++		if (smb3_encryption_negotiated(conn) &&
+ 		    !(req->Flags & SMB2_SESSION_REQ_FLAG_BINDING)) {
+ 			rc = conn->ops->generate_encryptionkey(sess);
+ 			if (rc) {
+@@ -1562,8 +1580,7 @@ static int krb5_authenticate(struct ksmbd_work *work)
+ 	    (req->SecurityMode & SMB2_NEGOTIATE_SIGNING_REQUIRED))
+ 		sess->sign = true;
+ 
+-	if ((conn->vals->capabilities & SMB2_GLOBAL_CAP_ENCRYPTION) &&
+-	    conn->ops->generate_encryptionkey) {
++	if (smb3_encryption_negotiated(conn)) {
+ 		retval = conn->ops->generate_encryptionkey(sess);
+ 		if (retval) {
+ 			ksmbd_debug(SMB,
+-- 
+2.31.1
+

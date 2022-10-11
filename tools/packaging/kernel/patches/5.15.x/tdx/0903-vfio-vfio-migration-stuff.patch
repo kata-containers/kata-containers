@@ -1,0 +1,242 @@
+From ff7e13a3c72577c411418ec07d9ad0af149c7159 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Mon, 29 Nov 2021 18:08:51 -0700
+Subject: [PATCH 0903/1418] vfio: vfio migration stuff
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/vfio/pci/vfio_pci_core.c | 108 +++++++++++++++++++++++++++++++
+ drivers/vfio/pci/vfio_pci_rdwr.c |  55 ++++++++++++++++
+ include/linux/vfio_pci_core.h    |  12 ++++
+ 3 files changed, 175 insertions(+)
+
+diff --git a/drivers/vfio/pci/vfio_pci_core.c b/drivers/vfio/pci/vfio_pci_core.c
+index 8a539c739d9a..19c22237c6a5 100644
+--- a/drivers/vfio/pci/vfio_pci_core.c
++++ b/drivers/vfio/pci/vfio_pci_core.c
+@@ -318,6 +318,114 @@ static const struct vfio_pci_regops vfio_pci_dma_fault_regops = {
+ 	.add_capability = vfio_pci_dma_fault_add_capability,
+ };
+ 
++static void vfio_pci_mregion_release(struct vfio_pci_core_device *vdev,
++				       struct vfio_pci_region *region)
++{
++}
++
++static int vfio_pci_mregion_mmap(struct vfio_pci_core_device *vdev,
++				   struct vfio_pci_region *region,
++				   struct vm_area_struct *vma)
++{
++	u64 phys_len, req_len, pgoff, req_start;
++	unsigned long long addr;
++	unsigned int ret;
++
++	phys_len = region->size;
++
++	req_len = vma->vm_end - vma->vm_start;
++	pgoff = vma->vm_pgoff &
++		((1U << (VFIO_PCI_OFFSET_SHIFT - PAGE_SHIFT)) - 1);
++	req_start = pgoff << PAGE_SHIFT;
++
++	/* only the second page of the producer fault region is mmappable */
++	if (req_start < PAGE_SIZE)
++		return -EINVAL;
++
++	if (req_start + req_len > phys_len)
++		return -EINVAL;
++
++	addr = virt_to_phys(vdev->mig_pages);
++	vma->vm_private_data = vdev;
++	vma->vm_pgoff = (addr >> PAGE_SHIFT) + pgoff;
++
++	printk("%s, mmap addr %llx\n", __func__, addr);
++	ret = remap_pfn_range(vma, vma->vm_start, vma->vm_pgoff,
++			      req_len, vma->vm_page_prot);
++	return ret;
++}
++
++static int vfio_pci_mregion_add_capability(struct vfio_pci_core_device *vdev,
++					     struct vfio_pci_region *region,
++					     struct vfio_info_cap *caps)
++{
++	struct vfio_region_info_cap_sparse_mmap *sparse = NULL;
++	size_t size = sizeof(*sparse) + sizeof(*sparse->areas);
++	int ret;
++
++	/* TODO: Look into re-enabling it */
++	return 0;
++
++	sparse = kzalloc(size, GFP_KERNEL);
++	if (!sparse)
++		return -ENOMEM;
++
++	sparse->header.id = VFIO_REGION_INFO_CAP_SPARSE_MMAP;
++	sparse->header.version = 1;
++	sparse->nr_areas = 1;
++	/* first page of the region is for vfio_device_migration_info */
++	sparse->areas[0].offset = PAGE_SIZE;
++	sparse->areas[0].size = region->size - PAGE_SIZE;
++
++	ret = vfio_info_add_capability(caps, &sparse->header, size);
++	if (ret)
++		kfree(sparse);
++
++	return ret;
++}
++
++static const struct vfio_pci_regops vfio_pci_mig_regops = {
++	.rw		= vfio_pci_mregion_rw,
++	.release	= vfio_pci_mregion_release,
++	.mmap		= vfio_pci_mregion_mmap,
++	.add_capability = vfio_pci_mregion_add_capability,
++};
++
++int vfio_pci_migration_init(struct vfio_pci_core_device *vdev, uint32_t state_size)
++{
++	struct vfio_device_migration_info *mig_info;
++	size_t size;
++	int ret;
++
++	mutex_init(&vdev->mig_lock);
++
++	size = ALIGN(sizeof(*mig_info) + state_size, PAGE_SIZE);
++
++	vdev->mig_pages = kzalloc(size, GFP_KERNEL);
++	if (!vdev->mig_pages)
++		return -ENOMEM;
++
++	mig_info = (struct vfio_device_migration_info *) vdev->mig_pages;
++	ret = vfio_pci_register_dev_region(vdev,
++		VFIO_REGION_TYPE_MIGRATION,
++		VFIO_REGION_SUBTYPE_MIGRATION,
++		&vfio_pci_mig_regops, size,
++		VFIO_REGION_INFO_FLAG_READ | VFIO_REGION_INFO_FLAG_WRITE,
++		//VFIO_REGION_INFO_FLAG_MMAP,
++		vdev->mig_pages);
++	if (ret)
++		goto out;
++
++	mig_info->data_offset = sizeof(*mig_info);
++	pr_info("%s, mig_info->data_offset: 0x%lx\n", __func__, (unsigned long) mig_info->data_offset);
++	return 0;
++out:
++	kfree(vdev->mig_pages);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(vfio_pci_migration_init);
++
++
+ int vfio_pci_iommu_dev_fault_handler(struct iommu_fault *fault, void *data)
+ {
+ 	struct vfio_pci_core_device *vdev = (struct vfio_pci_core_device *)data;
+diff --git a/drivers/vfio/pci/vfio_pci_rdwr.c b/drivers/vfio/pci/vfio_pci_rdwr.c
+index e3ff97613827..aa0b71dbbe20 100644
+--- a/drivers/vfio/pci/vfio_pci_rdwr.c
++++ b/drivers/vfio/pci/vfio_pci_rdwr.c
+@@ -425,6 +425,61 @@ ssize_t vfio_pci_dma_fault_rw(struct vfio_pci_core_device *vdev, char __user *bu
+ 	return ret;
+ }
+ 
++ssize_t vfio_pci_mregion_rw(struct vfio_pci_core_device *vdev, char __user *buf,
++			    size_t count, loff_t *ppos, bool iswrite)
++{
++	unsigned int i = VFIO_PCI_OFFSET_TO_INDEX(*ppos) - VFIO_PCI_NUM_REGIONS;
++	loff_t pos = *ppos & VFIO_PCI_OFFSET_MASK;
++	void *base = vdev->region[i].data;
++	struct vfio_device_migration_info *mig_info = (struct vfio_device_migration_info *) base;
++	int ret = -EFAULT;
++
++	//pr_info("%s, pos: 0x%llx, count: %lu, base: %px, index: %d wr %d\n",
++		//__func__, pos, count, base, i, iswrite);
++
++	if (pos >= vdev->region[i].size)
++		return -EINVAL;
++
++	count = min(count, (size_t)(vdev->region[i].size - pos));
++
++	mutex_lock(&vdev->mig_lock);
++
++	if (iswrite) {
++		if ((pos == offsetof(struct vfio_device_migration_info,
++				device_state)) && vdev->migops) {
++			u32 new_state;
++			/* Call into the device specific code to handle
++			 * the state change (before changing the state)
++			 */
++			if (count != sizeof(mig_info->device_state)) {
++				ret = -EINVAL;
++				goto unlock;
++			}
++
++			if (copy_from_user((void *)&new_state, buf, count))
++				goto unlock;
++
++			ret = vdev->migops->state_change(vdev, new_state);
++			if (ret)
++				goto unlock;
++			mig_info->device_state = new_state;
++		} else {
++			if (copy_from_user(base + pos, buf, count))
++				goto unlock;
++		}
++	} else {
++		if (copy_to_user(buf, base + pos, count))
++			goto unlock;
++		if (pos >= mig_info->data_offset &&
++			pos < mig_info->data_offset + mig_info->data_size)
++			mig_info->pending_bytes -= count;
++	}
++	ret = count;
++unlock:
++	mutex_unlock(&vdev->mig_lock);
++	return ret;
++}
++
+ static int vfio_pci_ioeventfd_handler(void *opaque, void *unused)
+ {
+ 	struct vfio_pci_ioeventfd *ioeventfd = opaque;
+diff --git a/include/linux/vfio_pci_core.h b/include/linux/vfio_pci_core.h
+index a76040b38e14..e75371446793 100644
+--- a/include/linux/vfio_pci_core.h
++++ b/include/linux/vfio_pci_core.h
+@@ -56,6 +56,10 @@ struct vfio_pci_irq_ctx {
+ struct vfio_pci_core_device;
+ struct vfio_pci_region;
+ 
++struct vfio_pci_migops {
++	int	(*state_change)(struct vfio_pci_core_device *vdev, u32 new_state);
++};
++
+ struct vfio_pci_regops {
+ 	ssize_t (*rw)(struct vfio_pci_core_device *vdev, char __user *buf,
+ 		      size_t count, loff_t *ppos, bool iswrite);
+@@ -148,6 +152,10 @@ struct vfio_pci_core_device {
+ 	struct mutex		vma_lock;
+ 	struct list_head	vma_list;
+ 	struct rw_semaphore	memory_lock;
++
++	struct vfio_pci_migops	*migops;
++	u8			*mig_pages;
++	struct mutex		mig_lock;
+ };
+ 
+ #define is_intx(vdev) (vdev->irq_type == VFIO_PCI_INTX_IRQ_INDEX)
+@@ -184,6 +192,9 @@ extern long vfio_pci_ioeventfd(struct vfio_pci_core_device *vdev, loff_t offset,
+ extern ssize_t vfio_pci_dma_fault_rw(struct vfio_pci_core_device *vdev,
+ 				    char __user *buf, size_t count,
+ 				    loff_t *ppos, bool iswrite);
++extern ssize_t vfio_pci_mregion_rw(struct vfio_pci_core_device *vdev,
++				   char __user *buf, size_t count,
++				   loff_t *ppos, bool iswrite);
+ 
+ extern int vfio_pci_init_perm_bits(void);
+ extern void vfio_pci_uninit_perm_bits(void);
+@@ -260,4 +271,5 @@ int vfio_pci_dma_fault_init(struct vfio_pci_core_device *vdev, bool register_fau
+ int vfio_pci_set_ext_irq_trigger(struct vfio_pci_core_device *vdev,
+ 				 unsigned int index, unsigned int start,
+ 				 unsigned int count, uint32_t flags, void *data);
++int vfio_pci_migration_init(struct vfio_pci_core_device *vdev, uint32_t size);
+ #endif /* VFIO_PCI_CORE_H */
+-- 
+2.31.1
+

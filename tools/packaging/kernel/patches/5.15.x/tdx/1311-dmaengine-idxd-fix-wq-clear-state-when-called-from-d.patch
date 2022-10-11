@@ -1,0 +1,35 @@
+From 2d85fdfa0f52922156b8920f7b1a6ff5dbfa2ee3 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Wed, 20 Apr 2022 13:15:29 -0700
+Subject: [PATCH 1311/1418] dmaengine: idxd: fix wq clear state when called
+ from device disable
+
+At the time when idxd_device_wqs_clear_state() gets called, which is from
+device disable path, the wq may already been disabled. Given that the
+driver does not actually know if the wq was previously disabled, force
+cleanup the context of any available wq.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/device.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index 8e2c79329a20..72be06c0eb6e 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -889,10 +889,7 @@ static void idxd_device_wqs_clear_state(struct idxd_device *idxd)
+ 	for (i = 0; i < idxd->max_wqs; i++) {
+ 		struct idxd_wq *wq = idxd->wqs[i];
+ 
+-		if (wq->state == IDXD_WQ_ENABLED) {
+-			idxd_wq_disable_cleanup(wq);
+-			wq->state = IDXD_WQ_DISABLED;
+-		}
++		idxd_wq_disable_cleanup(wq);
+ 		idxd_wq_device_reset_cleanup(wq);
+ 	}
+ }
+-- 
+2.31.1
+

@@ -1,0 +1,254 @@
+From 29f4a2c098ee6ba9c312a38f684252d54e2c9971 Mon Sep 17 00:00:00 2001
+From: Jarkko Sakkinen <jarkko@kernel.org>
+Date: Mon, 15 Nov 2021 10:35:22 -0800
+Subject: [PATCH 0783/1418] selftests/sgx: Provide per-op parameter structs for
+ the test enclave
+
+To add more operations to the test enclave, the protocol needs to allow
+to have operations with varying parameters. Create a separate parameter
+struct for each existing operation, with the shared parameters in struct
+encl_op_header.
+
+[reinette: rebased to apply on top of oversubscription test series]
+Signed-off-by: Jarkko Sakkinen <jarkko@kernel.org>
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+Signed-off-by: Dave Hansen <dave.hansen@linux.intel.com>
+Acked-by: Dave Hansen <dave.hansen@linux.intel.com>
+Link: https://lkml.kernel.org/r/f9a4a8c436b538003b8ebddaa66083992053cef1.1636997631.git.reinette.chatre@intel.com
+---
+ tools/testing/selftests/sgx/defines.h   | 14 ++++-
+ tools/testing/selftests/sgx/main.c      | 68 +++++++++++++------------
+ tools/testing/selftests/sgx/test_encl.c | 33 +++++++-----
+ 3 files changed, 69 insertions(+), 46 deletions(-)
+
+diff --git a/tools/testing/selftests/sgx/defines.h b/tools/testing/selftests/sgx/defines.h
+index f88562afcaa0..6ff95a766287 100644
+--- a/tools/testing/selftests/sgx/defines.h
++++ b/tools/testing/selftests/sgx/defines.h
+@@ -21,11 +21,21 @@
+ enum encl_op_type {
+ 	ENCL_OP_PUT,
+ 	ENCL_OP_GET,
++	ENCL_OP_MAX,
+ };
+ 
+-struct encl_op {
++struct encl_op_header {
+ 	uint64_t type;
+-	uint64_t buffer;
++};
++
++struct encl_op_put {
++	struct encl_op_header header;
++	uint64_t value;
++};
++
++struct encl_op_get {
++	struct encl_op_header header;
++	uint64_t value;
+ };
+ 
+ #endif /* DEFINES_H */
+diff --git a/tools/testing/selftests/sgx/main.c b/tools/testing/selftests/sgx/main.c
+index ee8139a22a3c..3996c00486b6 100644
+--- a/tools/testing/selftests/sgx/main.c
++++ b/tools/testing/selftests/sgx/main.c
+@@ -220,27 +220,28 @@ FIXTURE_TEARDOWN(enclave)
+ 
+ TEST_F(enclave, unclobbered_vdso)
+ {
+-	struct encl_op op;
++	struct encl_op_put put_op;
++	struct encl_op_get get_op;
+ 
+ 	ASSERT_TRUE(setup_test_encl(ENCL_HEAP_SIZE_DEFAULT, &self->encl, _metadata));
+ 
+ 	memset(&self->run, 0, sizeof(self->run));
+ 	self->run.tcs = self->encl.encl_base;
+ 
+-	op.type = ENCL_OP_PUT;
+-	op.buffer = MAGIC;
++	put_op.header.type = ENCL_OP_PUT;
++	put_op.value = MAGIC;
+ 
+-	EXPECT_EQ(ENCL_CALL(&op, &self->run, false), 0);
++	EXPECT_EQ(ENCL_CALL(&put_op, &self->run, false), 0);
+ 
+ 	EXPECT_EEXIT(&self->run);
+ 	EXPECT_EQ(self->run.user_data, 0);
+ 
+-	op.type = ENCL_OP_GET;
+-	op.buffer = 0;
++	get_op.header.type = ENCL_OP_GET;
++	get_op.value = 0;
+ 
+-	EXPECT_EQ(ENCL_CALL(&op, &self->run, false), 0);
++	EXPECT_EQ(ENCL_CALL(&get_op, &self->run, false), 0);
+ 
+-	EXPECT_EQ(op.buffer, MAGIC);
++	EXPECT_EQ(get_op.value, MAGIC);
+ 	EXPECT_EEXIT(&self->run);
+ 	EXPECT_EQ(self->run.user_data, 0);
+ }
+@@ -292,7 +293,8 @@ static unsigned long get_total_epc_mem(void)
+ TEST_F(enclave, unclobbered_vdso_oversubscribed)
+ {
+ 	unsigned long total_mem;
+-	struct encl_op op;
++	struct encl_op_put put_op;
++	struct encl_op_get get_op;
+ 
+ 	total_mem = get_total_epc_mem();
+ 	ASSERT_NE(total_mem, 0);
+@@ -301,20 +303,20 @@ TEST_F(enclave, unclobbered_vdso_oversubscribed)
+ 	memset(&self->run, 0, sizeof(self->run));
+ 	self->run.tcs = self->encl.encl_base;
+ 
+-	op.type = ENCL_OP_PUT;
+-	op.buffer = MAGIC;
++	put_op.header.type = ENCL_OP_PUT;
++	put_op.value = MAGIC;
+ 
+-	EXPECT_EQ(ENCL_CALL(&op, &self->run, false), 0);
++	EXPECT_EQ(ENCL_CALL(&put_op, &self->run, false), 0);
+ 
+ 	EXPECT_EEXIT(&self->run);
+ 	EXPECT_EQ(self->run.user_data, 0);
+ 
+-	op.type = ENCL_OP_GET;
+-	op.buffer = 0;
++	get_op.header.type = ENCL_OP_GET;
++	get_op.value = 0;
+ 
+-	EXPECT_EQ(ENCL_CALL(&op, &self->run, false), 0);
++	EXPECT_EQ(ENCL_CALL(&get_op, &self->run, false), 0);
+ 
+-	EXPECT_EQ(op.buffer, MAGIC);
++	EXPECT_EQ(get_op.value, MAGIC);
+ 	EXPECT_EEXIT(&self->run);
+ 	EXPECT_EQ(self->run.user_data, 0);
+ 
+@@ -322,27 +324,28 @@ TEST_F(enclave, unclobbered_vdso_oversubscribed)
+ 
+ TEST_F(enclave, clobbered_vdso)
+ {
+-	struct encl_op op;
++	struct encl_op_put put_op;
++	struct encl_op_get get_op;
+ 
+ 	ASSERT_TRUE(setup_test_encl(ENCL_HEAP_SIZE_DEFAULT, &self->encl, _metadata));
+ 
+ 	memset(&self->run, 0, sizeof(self->run));
+ 	self->run.tcs = self->encl.encl_base;
+ 
+-	op.type = ENCL_OP_PUT;
+-	op.buffer = MAGIC;
++	put_op.header.type = ENCL_OP_PUT;
++	put_op.value = MAGIC;
+ 
+-	EXPECT_EQ(ENCL_CALL(&op, &self->run, true), 0);
++	EXPECT_EQ(ENCL_CALL(&put_op, &self->run, true), 0);
+ 
+ 	EXPECT_EEXIT(&self->run);
+ 	EXPECT_EQ(self->run.user_data, 0);
+ 
+-	op.type = ENCL_OP_GET;
+-	op.buffer = 0;
++	get_op.header.type = ENCL_OP_GET;
++	get_op.value = 0;
+ 
+-	EXPECT_EQ(ENCL_CALL(&op, &self->run, true), 0);
++	EXPECT_EQ(ENCL_CALL(&get_op, &self->run, true), 0);
+ 
+-	EXPECT_EQ(op.buffer, MAGIC);
++	EXPECT_EQ(get_op.value, MAGIC);
+ 	EXPECT_EEXIT(&self->run);
+ 	EXPECT_EQ(self->run.user_data, 0);
+ }
+@@ -357,7 +360,8 @@ static int test_handler(long rdi, long rsi, long rdx, long ursp, long r8, long r
+ 
+ TEST_F(enclave, clobbered_vdso_and_user_function)
+ {
+-	struct encl_op op;
++	struct encl_op_put put_op;
++	struct encl_op_get get_op;
+ 
+ 	ASSERT_TRUE(setup_test_encl(ENCL_HEAP_SIZE_DEFAULT, &self->encl, _metadata));
+ 
+@@ -367,20 +371,20 @@ TEST_F(enclave, clobbered_vdso_and_user_function)
+ 	self->run.user_handler = (__u64)test_handler;
+ 	self->run.user_data = 0xdeadbeef;
+ 
+-	op.type = ENCL_OP_PUT;
+-	op.buffer = MAGIC;
++	put_op.header.type = ENCL_OP_PUT;
++	put_op.value = MAGIC;
+ 
+-	EXPECT_EQ(ENCL_CALL(&op, &self->run, true), 0);
++	EXPECT_EQ(ENCL_CALL(&put_op, &self->run, true), 0);
+ 
+ 	EXPECT_EEXIT(&self->run);
+ 	EXPECT_EQ(self->run.user_data, 0);
+ 
+-	op.type = ENCL_OP_GET;
+-	op.buffer = 0;
++	get_op.header.type = ENCL_OP_GET;
++	get_op.value = 0;
+ 
+-	EXPECT_EQ(ENCL_CALL(&op, &self->run, true), 0);
++	EXPECT_EQ(ENCL_CALL(&get_op, &self->run, true), 0);
+ 
+-	EXPECT_EQ(op.buffer, MAGIC);
++	EXPECT_EQ(get_op.value, MAGIC);
+ 	EXPECT_EEXIT(&self->run);
+ 	EXPECT_EQ(self->run.user_data, 0);
+ }
+diff --git a/tools/testing/selftests/sgx/test_encl.c b/tools/testing/selftests/sgx/test_encl.c
+index 734ea52f9924..f11eb8315704 100644
+--- a/tools/testing/selftests/sgx/test_encl.c
++++ b/tools/testing/selftests/sgx/test_encl.c
+@@ -16,20 +16,29 @@ static void *memcpy(void *dest, const void *src, size_t n)
+ 	return dest;
+ }
+ 
+-void encl_body(void *rdi,  void *rsi)
++static void do_encl_op_put(void *op)
++{
++	struct encl_op_put *op2 = op;
++
++	memcpy(&encl_buffer[0], &op2->value, 8);
++}
++
++static void do_encl_op_get(void *op)
+ {
+-	struct encl_op *op = (struct encl_op *)rdi;
++	struct encl_op_get *op2 = op;
+ 
+-	switch (op->type) {
+-	case ENCL_OP_PUT:
+-		memcpy(&encl_buffer[0], &op->buffer, 8);
+-		break;
++	memcpy(&op2->value, &encl_buffer[0], 8);
++}
++
++void encl_body(void *rdi,  void *rsi)
++{
++	const void (*encl_op_array[ENCL_OP_MAX])(void *) = {
++		do_encl_op_put,
++		do_encl_op_get,
++	};
+ 
+-	case ENCL_OP_GET:
+-		memcpy(&op->buffer, &encl_buffer[0], 8);
+-		break;
++	struct encl_op_header *op = (struct encl_op_header *)rdi;
+ 
+-	default:
+-		break;
+-	}
++	if (op->type < ENCL_OP_MAX)
++		(*encl_op_array[op->type])(op);
+ }
+-- 
+2.31.1
+

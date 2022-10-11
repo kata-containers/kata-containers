@@ -1,0 +1,272 @@
+From f2cb04fd4a6ae547299fa040646059985bd26c79 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Tue, 28 Sep 2021 19:05:00 -0700
+Subject: [PATCH 0235/1418] x86/tdx: Injection interface for fuzzer
+
+Allow a user space fuzzer inject values to fuzz for the TDCALLs. Add a new
+inject interface in debugfs. A user can write pairs of u64. The first
+is the tdx location (see enum tdx_fuzz_location), the second is the
+value to inject.
+
+When the injector runs out of values it will loop a small portion
+of the previous data.  That's called a fallback.
+
+Only one fuzz injector can be active at a time.
+
+Also add some statistics in debugfs to count various conditions,
+e.g. how often fallbacks occur .
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+---
+ .../fault-injection/fault-injection.rst       |  23 +++
+ arch/x86/kernel/tdx-fuzz.c                    | 163 +++++++++++++++++-
+ 2 files changed, 185 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/fault-injection/fault-injection.rst b/Documentation/fault-injection/fault-injection.rst
+index a265414201a8..a32da11a629e 100644
+--- a/Documentation/fault-injection/fault-injection.rst
++++ b/Documentation/fault-injection/fault-injection.rst
+@@ -218,6 +218,29 @@ configuration of fault-injection capabilities.
+ 	when set to 64 the whole value is replaced with a randon number.
+ 	otherwise the number of bits specified are randomly flipped.
+ 
++- /sys/kernel/debug/fail_tdx/inject
++
++        a file that allows to write values to inject as output values
++        of TDCALL operations. This replaces the random bit flipping
++        when the file is open. Each write must be 16 bytes, with the
++        first 8 bytes being a location of the TDCALL (see
++        arch/x86/include/asm/tdx.h:tdx_fuzz_loc), and the second 8 bytes
++        the injected output value. This is intended for feedback fuzzers
++        to inject targetted values.
++
++- /sys/kernel/debug/fail_tdx/fallback
++
++        when set to true loop over the last inject values when the
++        inject input buffer runs out.
++
++- /sys/kernel/debug/fail_tdx/stats/*
++
++        some statistic counts on the value injection:
++        inject_success: Number of successfull injections
++        inject_miss_no_fallback: Injection failed with no input data
++        inject_fallback: Injection ran out of data and failed back to previous values.
++        inject_nmi_conflict: Injection race with NMIs.
++
+ Boot option
+ ^^^^^^^^^^^
+ 
+diff --git a/arch/x86/kernel/tdx-fuzz.c b/arch/x86/kernel/tdx-fuzz.c
+index e021c88dcc19..c50c7e52af36 100644
+--- a/arch/x86/kernel/tdx-fuzz.c
++++ b/arch/x86/kernel/tdx-fuzz.c
+@@ -12,6 +12,8 @@
+ #include <linux/debugfs.h>
+ #include <linux/percpu.h>
+ #include <linux/smp.h>
++#include <linux/kfifo.h>
++#include <linux/slab.h>
+ #include <asm/tdx.h>
+ #include <asm/trace/tdx.h>
+ 
+@@ -21,6 +23,73 @@ static bool fuzz_tdcall;
+ static bool fuzz_errors;
+ static u16 fuzz_num_bits = 2;
+ static bool fuzz_early_seed;
++static bool fallback_enabled = true;
++static unsigned long inject_active;
++
++#define FUZZ_FIFO_LEN 4096
++#define FALLBACK_FIFO_LEN 256
++#define FALLBACK_FIFO_USED 199
++
++/*
++ * This all is not very cache line friendly.
++ * Assume fuzzed TDX guests don't have many vcpus for now.
++ *
++ * Maintain a fallback fifo to loop existing data in case
++ * the input doesn't feed enough.
++ */
++struct fuzz_fifo {
++	DECLARE_KFIFO(inject, u64, FUZZ_FIFO_LEN);
++	DECLARE_KFIFO(fallback, u64, FALLBACK_FIFO_LEN);
++};
++static struct fuzz_fifo *inject_fifo;
++/* protect fifos for multiple readers and most stats */
++static DEFINE_SPINLOCK(inject_lock);
++/* Statistics */
++static u64 inject_success;
++static u64 inject_fallback;
++static u64 inject_miss_no_fallback  = ATOMIC_INIT(0);
++static atomic_t inject_nmi_conflict;
++
++static bool get_inject_val(enum tdx_fuzz_loc loc, u64 *valp)
++{
++	struct fuzz_fifo *f = &inject_fifo[loc];
++
++	if (kfifo_out(&f->inject, valp, 1) != 1) {
++		if (!fallback_enabled)
++			return false;
++		if (!kfifo_out(&f->fallback, valp, 1)) {
++			inject_miss_no_fallback++;
++			return false;
++		}
++		inject_fallback++;
++	} else {
++		inject_success++;
++		if (kfifo_size(&f->fallback) == FALLBACK_FIFO_USED)
++			kfifo_skip(&f->fallback);
++	}
++	kfifo_in(&f->fallback, valp, 1);
++	return true;
++}
++
++static bool fuzz_inject(enum tdx_fuzz_loc loc, u64 *valp)
++{
++	bool ok;
++
++	if (in_nmi()) {
++		if (!spin_trylock(&inject_lock)) {
++			atomic_inc(&inject_nmi_conflict);
++			return false;
++		}
++		ok = get_inject_val(loc, valp);
++		spin_unlock(&inject_lock);
++	} else {
++		unsigned long flags;
++		spin_lock_irqsave(&inject_lock, flags);
++		ok = get_inject_val(loc, valp);
++		spin_unlock_irqrestore(&inject_lock, flags);
++	}
++	return ok;
++}
+ 
+ static u64 __tdx_fuzz(u64 var, int bits, enum tdx_fuzz_loc loc)
+ {
+@@ -28,6 +97,16 @@ static u64 __tdx_fuzz(u64 var, int bits, enum tdx_fuzz_loc loc)
+ 	unsigned num_bits;
+ 	u64 oldvar = var;
+ 
++	if (READ_ONCE(inject_active)) {
++		u64 newvar;
++		if (fuzz_inject(loc, &newvar)) {
++			var = newvar;
++			trace_tdx_fuzz((u64)__builtin_return_address(0),
++				       bits, oldvar, newvar, loc);
++		}
++		return var;
++	}
++
+ 	get_cpu();
+ 	rndstate = this_cpu_ptr(&fuzz_rndstate);
+ 	num_bits = READ_ONCE(fuzz_num_bits);
+@@ -58,6 +137,11 @@ bool tdx_fuzz_err(enum tdx_fuzz_loc loc)
+ 	if (!fuzz_errors || !should_fail(&tdx_fault, 1))
+ 		return false;
+ 
++	if (READ_ONCE(inject_active)) {
++		u64 res = 0;
++		return fuzz_inject(loc, &res);
++	}
++
+ 	trace_tdx_fuzz((u64)__builtin_return_address(0), 1, 0, 1, loc);
+ 	return true;
+ }
+@@ -111,9 +195,76 @@ static int __init tdx_fuzz_setup(char *str)
+ }
+ early_param("fail_tdx", tdx_fuzz_setup);
+ 
++/*
++ * Injection allows a feedbacker fuzzer to provide values.
++ */
++
++static int inject_open(struct inode *inode, struct file *file)
++{
++	if (test_and_set_bit(0, &inject_active))
++		return -EBUSY;
++	if (inject_fifo == NULL) {
++		struct fuzz_fifo *infifo;
++		int i;
++
++		infifo = kvmalloc(TDX_FUZZ_MAX * sizeof(struct fuzz_fifo),
++				  GFP_KERNEL);
++		if (!infifo) {
++			clear_bit(0, &inject_active);
++			return -ENOMEM;
++		}
++		for (i = 0; i < TDX_FUZZ_MAX; i++) {
++			INIT_KFIFO(infifo[i].inject);
++			INIT_KFIFO(infifo[i].fallback);
++		}
++		WRITE_ONCE(inject_fifo, infifo);
++	}
++	return 0;
++}
++
++static int inject_release(struct inode *inode, struct file *file)
++{
++	clear_bit(0, &inject_active);
++	/* Never free the fifos */
++	return 0;
++}
++
++static ssize_t inject_write(struct file *f, const char __user *buf,
++			    size_t len, loff_t *off)
++{
++	int num, i;
++	unsigned copied;
++
++	if (len % 16)
++		return -EINVAL;
++	num = len / 16;
++	for (i = 0; i < num; i++) {
++		u64 loc;
++		if (get_user(loc, buf))
++			return -EFAULT;
++		if (loc >= TDX_FUZZ_MAX)
++			return -EINVAL;
++		buf += 8;
++		if (kfifo_from_user(&inject_fifo[loc].inject, buf, 8, &copied))
++			return -EFAULT;
++		if (copied != 8)
++			return i*16;
++		buf += 8;
++	}
++	return len;
++}
++
++static struct file_operations inject_fops = {
++	.owner	 = THIS_MODULE,
++	.open	 = inject_open,
++	.release = inject_release,
++	.write	 = inject_write,
++	.llseek  = no_llseek,
++};
++
+ static int __init tdx_fuzz_init(void)
+ {
+-	struct dentry *dbp;
++	struct dentry *dbp, *statp;
+ 
+ 	dbp = fault_create_debugfs_attr("fail_tdx", NULL, &tdx_fault);
+ 	if (!dbp)
+@@ -128,6 +279,16 @@ static int __init tdx_fuzz_init(void)
+ 	debugfs_create_u16("num_change_bits", 0600, dbp, &fuzz_num_bits);
+ 	debugfs_create_file("seed", 0200, dbp, NULL, &fuzz_seed_fops);
+ 
++	debugfs_create_bool("fallback", 0600, dbp, &fallback_enabled);
++	debugfs_create_file("inject", 0600, dbp, NULL, &inject_fops);
++	statp = debugfs_create_dir("stats", dbp);
++	debugfs_create_u64("inject_success", 0600, statp, &inject_success);
++	debugfs_create_u64("inject_fallback", 0600, statp, &inject_fallback);
++	debugfs_create_u64("inject_miss_no_fallback", 0600, statp,
++			      &inject_miss_no_fallback);
++	debugfs_create_atomic_t("inject_nmi_conflict", 0600, statp,
++			      &inject_nmi_conflict);
++
+ 	if (!fuzz_early_seed)
+ 		fuzz_init_seed(get_random_u64());
+ 	return 0;
+-- 
+2.31.1
+

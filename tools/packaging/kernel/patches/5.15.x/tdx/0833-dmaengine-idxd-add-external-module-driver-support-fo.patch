@@ -1,0 +1,54 @@
+From d4f59ab114a4558726f1828f95db0b634f54f15b Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Wed, 17 Mar 2021 15:21:23 -0700
+Subject: [PATCH 0833/1418] dmaengine: idxd: add external module driver support
+ for dsa_bus_type
+
+Add support to allow an external driver to be registered to the
+dsa_bus_type and also auto-loaded.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/bus.c  | 6 ++++++
+ drivers/dma/idxd/idxd.h | 3 +++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/drivers/dma/idxd/bus.c b/drivers/dma/idxd/bus.c
+index 6f84621053c6..ae740168f468 100644
+--- a/drivers/dma/idxd/bus.c
++++ b/drivers/dma/idxd/bus.c
+@@ -67,11 +67,17 @@ static void idxd_config_bus_remove(struct device *dev)
+ 	idxd_drv->remove(idxd_dev);
+ }
+ 
++static int idxd_bus_uevent(struct device *dev, struct kobj_uevent_env *env)
++{
++	return add_uevent_var(env, "MODALIAS=" IDXD_DEVICES_MODALIAS_FMT, 0);
++}
++
+ struct bus_type dsa_bus_type = {
+ 	.name = "dsa",
+ 	.match = idxd_config_bus_match,
+ 	.probe = idxd_config_bus_probe,
+ 	.remove = idxd_config_bus_remove,
++	.uevent = idxd_bus_uevent,
+ };
+ EXPORT_SYMBOL_GPL(dsa_bus_type);
+ 
+diff --git a/drivers/dma/idxd/idxd.h b/drivers/dma/idxd/idxd.h
+index 4bb4c414e2a9..15f38adab4fa 100644
+--- a/drivers/dma/idxd/idxd.h
++++ b/drivers/dma/idxd/idxd.h
+@@ -514,6 +514,9 @@ static inline int idxd_wq_refcount(struct idxd_wq *wq)
+ 	return wq->client_count;
+ };
+ 
++#define MODULE_ALIAS_IDXD_DEVICE(type) MODULE_ALIAS("idxd:t" __stringify(type) "*")
++#define IDXD_DEVICES_MODALIAS_FMT "idxd:t%d"
++
+ int __must_check __idxd_driver_register(struct idxd_device_driver *idxd_drv,
+ 					struct module *module, const char *mod_name);
+ #define idxd_driver_register(driver) \
+-- 
+2.31.1
+

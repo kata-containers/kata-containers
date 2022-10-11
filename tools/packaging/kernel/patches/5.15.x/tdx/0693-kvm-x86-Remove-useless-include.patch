@@ -1,0 +1,27 @@
+From 5a21e238c88cd5c6bf317f06d398b1b72120fe85 Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Wed, 17 Nov 2021 22:05:53 -0800
+Subject: [PATCH 0693/1418] kvm: x86: Remove useless include
+
+The vmx.c does not need anything from api.h, so remove it.
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+---
+ arch/x86/kvm/vmx/vmx.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 0e001c141121..cc67d112bcf5 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -36,7 +36,6 @@
+ #include <asm/cpu_device_id.h>
+ #include <asm/debugreg.h>
+ #include <asm/desc.h>
+-#include <asm/fpu/api.h>
+ #include <asm/idtentry.h>
+ #include <asm/io.h>
+ #include <asm/irq_remapping.h>
+-- 
+2.31.1
+

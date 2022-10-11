@@ -1,0 +1,228 @@
+From 328734f561dd59ba313924aeb227effdddc0793f Mon Sep 17 00:00:00 2001
+From: Rick Edgecombe <rick.p.edgecombe@intel.com>
+Date: Wed, 30 Jun 2021 17:55:46 -0700
+Subject: [PATCH 1182/1418] mm/pkeys: Introduce PKS fault callbacks
+
+Some PKS consumers will want special handling on violations of pkey
+permissions.  Such a consumer is PMEM which will want to have a mode
+that logs the access violation, disables protection, and continues
+rather than oops'ing the machine.
+
+Provide an API to assign callbacks for individual pkeys.
+
+Since PKS faults do not provide the key that faulted, this information
+needs to be recovered by walking the page tables and extracting it from
+the leaf entry.  The key can then be used to call the proper callback.
+
+Add documentation.
+
+Co-developed-by: Ira Weiny <ira.weiny@intel.com>
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+Signed-off-by: Rick Edgecombe <rick.p.edgecombe@intel.com>
+---
+ Documentation/core-api/protection-keys.rst |  6 ++
+ arch/x86/include/asm/pks.h                 | 10 +++
+ arch/x86/mm/fault.c                        | 17 +++--
+ arch/x86/mm/pkeys.c                        | 86 ++++++++++++++++++++++
+ include/linux/pks.h                        |  3 +
+ 5 files changed, 116 insertions(+), 6 deletions(-)
+
+diff --git a/Documentation/core-api/protection-keys.rst b/Documentation/core-api/protection-keys.rst
+index 2ec35349ecfd..5fdc83a39d4e 100644
+--- a/Documentation/core-api/protection-keys.rst
++++ b/Documentation/core-api/protection-keys.rst
+@@ -149,6 +149,12 @@ Changing permissions of individual keys
+ .. kernel-doc:: include/linux/pks.h
+         :identifiers: pks_set_readwrite pks_set_noaccess
+ 
++Overriding Default Fault Behavior
++---------------------------------
++
++.. kernel-doc:: arch/x86/mm/pkeys.c
++        :doc: DEFINE_PKS_FAULT_CALLBACK
++
+ MSR details
+ ~~~~~~~~~~~
+ 
+diff --git a/arch/x86/include/asm/pks.h b/arch/x86/include/asm/pks.h
+index a7bad7301783..e9ad3ecd7ed0 100644
+--- a/arch/x86/include/asm/pks.h
++++ b/arch/x86/include/asm/pks.h
+@@ -7,11 +7,21 @@
+ void pks_setup(void);
+ void x86_pkrs_load(struct thread_struct *thread);
+ 
++bool pks_handle_key_fault(struct pt_regs *regs, unsigned long hw_error_code,
++			  unsigned long address);
++
+ #else /* !CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
+ 
+ static inline void pks_setup(void) { }
+ static inline void x86_pkrs_load(struct thread_struct *thread) { }
+ 
++static inline bool pks_handle_key_fault(struct pt_regs *regs,
++					unsigned long hw_error_code,
++					unsigned long address)
++{
++	return false;
++}
++
+ #endif /* CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
+ 
+ #endif /* _ASM_X86_PKS_H */
+diff --git a/arch/x86/mm/fault.c b/arch/x86/mm/fault.c
+index 0374b17d01e1..22f56b3d9f75 100644
+--- a/arch/x86/mm/fault.c
++++ b/arch/x86/mm/fault.c
+@@ -32,6 +32,7 @@
+ #include <asm/pgtable_areas.h>		/* VMALLOC_START, ...		*/
+ #include <asm/kvm_para.h>		/* kvm_handle_async_pf		*/
+ #include <asm/vdso.h>			/* fixup_vdso_exception()	*/
++#include <asm/pks.h>			/* pks_handle_key_fault() */
+ 
+ #define CREATE_TRACE_POINTS
+ #include <asm/trace/exceptions.h>
+@@ -1158,12 +1159,16 @@ static void
+ do_kern_addr_fault(struct pt_regs *regs, unsigned long hw_error_code,
+ 		   unsigned long address)
+ {
+-	/*
+-	 * PF_PF faults should only occur on kernel
+-	 * addresses when supervisor pkeys are enabled.
+-	 */
+-	WARN_ON_ONCE(!cpu_feature_enabled(X86_FEATURE_PKS) &&
+-		     (hw_error_code & X86_PF_PK));
++	if (hw_error_code & X86_PF_PK) {
++		/*
++		 * PF_PF faults should only occur on kernel
++		 * addresses when supervisor pkeys are enabled.
++		 */
++		WARN_ON_ONCE(!cpu_feature_enabled(X86_FEATURE_PKS));
++
++		if (pks_handle_key_fault(regs, hw_error_code, address))
++			return;
++	}
+ 
+ #ifdef CONFIG_X86_32
+ 	/*
+diff --git a/arch/x86/mm/pkeys.c b/arch/x86/mm/pkeys.c
+index ba00c1b30d47..7e91b3921096 100644
+--- a/arch/x86/mm/pkeys.c
++++ b/arch/x86/mm/pkeys.c
+@@ -12,6 +12,7 @@
+ 
+ #include <asm/cpufeature.h>             /* boot_cpu_has, ...            */
+ #include <asm/mmu_context.h>            /* vma_pkey()                   */
++#include <asm/trap_pf.h>		/* X86_PF_WRITE */
+ 
+ int __execute_only_pkey(struct mm_struct *mm)
+ {
+@@ -216,6 +217,91 @@ u32 pkey_update_pkval(u32 pkval, u8 pkey, u32 accessbits)
+ 
+ static DEFINE_PER_CPU(u32, pkrs_cache);
+ 
++/**
++ * DOC: DEFINE_PKS_FAULT_CALLBACK
++ *
++ * Users may also provide a fault handler which can handle a fault differently
++ * than an oops.  For example if 'MY_FEATURE' wanted to define a handler they
++ * can do so by adding the coresponding entry to the pks_key_callbacks array.
++ *
++ * .. code-block:: c
++ *
++ *	#ifdef CONFIG_MY_FEATURE
++ *	bool my_feature_pks_fault_callback(struct pt_regs *regs,
++ *					   unsigned long address, bool write)
++ *	{
++ *		if (my_feature_fault_is_ok)
++ *			return true;
++ *		return false;
++ *	}
++ *	#endif
++ *
++ *	static const pks_key_callback pks_key_callbacks[PKS_KEY_MAX] = {
++ *		[PKS_KEY_DEFAULT]            = NULL,
++ *	#ifdef CONFIG_MY_FEATURE
++ *		[PKS_KEY_MY_FEATURE]         = my_feature_pks_fault_callback,
++ *	#endif
++ *	};
++ */
++static const pks_key_callback pks_key_callbacks[PKS_KEY_MAX] = { 0 };
++
++static bool pks_call_fault_callback(struct pt_regs *regs, unsigned long address,
++				    bool write, u16 key)
++{
++	if (key >= PKS_KEY_MAX)
++		return false;
++
++	if (pks_key_callbacks[key])
++		return pks_key_callbacks[key](regs, address, write);
++
++	return false;
++}
++
++bool pks_handle_key_fault(struct pt_regs *regs, unsigned long hw_error_code,
++			  unsigned long address)
++{
++	bool write;
++	pgd_t pgd;
++	p4d_t p4d;
++	pud_t pud;
++	pmd_t pmd;
++	pte_t pte;
++
++	if (!cpu_feature_enabled(X86_FEATURE_PKS))
++		return false;
++
++	write = (hw_error_code & X86_PF_WRITE);
++
++	pgd = READ_ONCE(*(init_mm.pgd + pgd_index(address)));
++	if (!pgd_present(pgd))
++		return false;
++
++	p4d = READ_ONCE(*p4d_offset(&pgd, address));
++	if (p4d_large(p4d))
++		return pks_call_fault_callback(regs, address, write,
++					       pte_flags_pkey(p4d_val(p4d)));
++	if (!p4d_present(p4d))
++		return false;
++
++	pud = READ_ONCE(*pud_offset(&p4d, address));
++	if (pud_large(pud))
++		return pks_call_fault_callback(regs, address, write,
++					       pte_flags_pkey(pud_val(pud)));
++	if (!pud_present(pud))
++		return false;
++
++	pmd = READ_ONCE(*pmd_offset(&pud, address));
++	if (pmd_large(pmd))
++		return pks_call_fault_callback(regs, address, write,
++					       pte_flags_pkey(pmd_val(pmd)));
++	if (!pmd_present(pmd))
++		return false;
++
++	pte = READ_ONCE(*pte_offset_kernel(&pmd, address));
++	return pks_call_fault_callback(regs, address, write,
++				       pte_flags_pkey(pte_val(pte)));
++}
++
+ /*
+  * pks_write_pkrs() - Write the pkrs of the current CPU
+  * @new_pkrs: New value to write to the current CPU register
+diff --git a/include/linux/pks.h b/include/linux/pks.h
+index 9f18f8b4cbb1..d0d8bf1aaa1d 100644
+--- a/include/linux/pks.h
++++ b/include/linux/pks.h
+@@ -34,6 +34,9 @@ static inline void pks_set_readwrite(u8 pkey)
+ 	pks_update_protection(pkey, PKEY_READ_WRITE);
+ }
+ 
++typedef bool (*pks_key_callback)(struct pt_regs *regs, unsigned long address,
++				 bool write);
++
+ #else /* !CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
+ 
+ static inline void pks_set_noaccess(u8 pkey) {}
+-- 
+2.31.1
+

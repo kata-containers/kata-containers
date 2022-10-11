@@ -1,0 +1,30 @@
+From 9bea4983c447472ff19bc9f3f722891e0c47b7d1 Mon Sep 17 00:00:00 2001
+From: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Date: Tue, 15 Feb 2022 16:52:46 +0200
+Subject: [PATCH 1393/1418] efi/x86: Disable randomness for TDX guest
+
+It is important for the TDX guest to not allow its randomness data to be
+influenced by the host. Disable the EFI randomness for TDX guest.
+
+Signed-off-by: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+---
+ drivers/firmware/efi/libstub/x86-stub.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/firmware/efi/libstub/x86-stub.c b/drivers/firmware/efi/libstub/x86-stub.c
+index 9ec058cc78e3..26f47210cb14 100644
+--- a/drivers/firmware/efi/libstub/x86-stub.c
++++ b/drivers/firmware/efi/libstub/x86-stub.c
+@@ -874,7 +874,8 @@ unsigned long efi_main(efi_handle_t handle,
+ 	/* Ask the firmware to clear memory on unclean shutdown */
+ 	efi_enable_reset_attack_mitigation();
+ 
+-	efi_random_get_seed();
++	if (!intel_tdx_guest)
++		efi_random_get_seed();
+ 
+ 	efi_retrieve_tpm2_eventlog();
+ 
+-- 
+2.31.1
+

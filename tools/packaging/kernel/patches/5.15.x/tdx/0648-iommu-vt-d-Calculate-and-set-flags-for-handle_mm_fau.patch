@@ -1,0 +1,63 @@
+From 0b5db3b2104bf15285fda8f96fde557268ed111a Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Thu, 11 Feb 2021 15:25:05 -0800
+Subject: [PATCH 0648/1418] iommu/vt-d: Calculate and set flags for
+ handle_mm_fault
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Page requests are originated from the user page fault. Therefore, we
+shall set FAULT_FLAG_USER. 
+
+FAULT_FLAG_REMOTE indicates that we are walking an mm which is not
+guaranteed to be the same as the current->mm and should not be subject
+to protection key enforcement. Therefore, we should set FAULT_FLAG_REMOTE
+to avoid faults when both SVM and PKEY are used.
+
+References: commit 1b2ee1266ea6 ("mm/core: Do not enforce PKEY permissions on remote mm access")
+Reviewed-by: Raj Ashok <ashok.raj@intel.com>
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/intel/svm.c | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index eb512978e3bc..74042e03b54a 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -1122,9 +1122,8 @@ static irqreturn_t prq_event_thread(int irq, void *d)
+ 	struct intel_svm_dev *sdev = NULL;
+ 	struct intel_iommu *iommu = d;
+ 	struct intel_svm *svm = NULL;
+-	struct page_req_dsc *req;
+-	int head, tail, handled;
+-	u64 address;
++	int head, tail, handled = 0;
++	unsigned int flags = 0;
+ 
+ 	/*
+ 	 * Clear PPR bit before reading head/tail registers, to ensure that
+@@ -1207,12 +1206,13 @@ static irqreturn_t prq_event_thread(int irq, void *d)
+ 
+ 		sdev->prq_seq_number++;
+ 
+-		/*
+-		 * If prq is to be handled outside iommu driver via receiver of
+-		 * the fault notifiers, we skip the page response here.
+-		 */
+-		if (intel_svm_prq_report(iommu, sdev->dev, req))
+-			handle_bad_prq_event(iommu, req, QI_RESP_INVALID);
++		flags = FAULT_FLAG_USER | FAULT_FLAG_REMOTE;
++		if (req->wr_req)
++			flags |= FAULT_FLAG_WRITE;
++
++		ret = handle_mm_fault(vma, address, flags, NULL);
++		if (ret & VM_FAULT_ERROR)
++			goto invalid;
+ 
+ 		trace_prq_report(iommu, sdev->dev, req->qw_0, req->qw_1,
+ 				 req->priv_data[0], req->priv_data[1],
+-- 
+2.31.1
+

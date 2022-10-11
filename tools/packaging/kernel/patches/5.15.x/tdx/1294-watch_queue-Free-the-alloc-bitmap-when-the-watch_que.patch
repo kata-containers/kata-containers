@@ -1,0 +1,32 @@
+From 45812396881be91a9819a02be6a97af609afc1a1 Mon Sep 17 00:00:00 2001
+From: David Howells <dhowells@redhat.com>
+Date: Fri, 11 Mar 2022 13:24:29 +0000
+Subject: [PATCH 1294/1418] watch_queue: Free the alloc bitmap when the
+ watch_queue is torn down
+
+Free the watch_queue note allocation bitmap when the watch_queue is
+destroyed.
+
+Fixes: c73be61cede5 ("pipe: Add general notification queue support")
+Reported-by: Jann Horn <jannh@google.com>
+Signed-off-by: David Howells <dhowells@redhat.com>
+Signed-off-by: Linus Torvalds <torvalds@linux-foundation.org>
+---
+ kernel/watch_queue.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/kernel/watch_queue.c b/kernel/watch_queue.c
+index 9c476d2cbac0..c12267ccc70e 100644
+--- a/kernel/watch_queue.c
++++ b/kernel/watch_queue.c
+@@ -370,6 +370,7 @@ static void __put_watch_queue(struct kref *kref)
+ 
+ 	for (i = 0; i < wqueue->nr_pages; i++)
+ 		__free_page(wqueue->notes[i]);
++	bitmap_free(wqueue->notes_bitmap);
+ 
+ 	wfilter = rcu_access_pointer(wqueue->filter);
+ 	if (wfilter)
+-- 
+2.31.1
+

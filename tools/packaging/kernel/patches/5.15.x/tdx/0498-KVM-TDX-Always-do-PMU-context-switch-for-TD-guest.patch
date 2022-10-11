@@ -1,0 +1,84 @@
+From e7c3a64c67c7f2e87c9ee3b9a27ae3f84922c3ed Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Wed, 27 Oct 2021 16:55:20 +0800
+Subject: [PATCH 0498/1418] KVM: TDX: Always do PMU context switch for TD guest
+
+SEAM module now always clear MSR_IA32_DS_AREA after SEAMRET,
+Now no PMU context switch for TD guest without
+TDX_TD_ATTRIBUTE_PERFMON, this causes host kernel panic if
+host is using "perf -g -a XXX". Because CPU start to writing
+NULL DS area immediately after SEAMRET but before we restore
+the DS area.
+
+[  138.493406] BUG: kernel NULL pointer dereference, address: 0000000000000028
+[  138.501253] #PF: supervisor read access in kernel mode
+[  138.507069] #PF: error_code(0x0000) - not-present page
+[  138.512885] PGD 1eb449067 P4D 0
+[  138.516561] Oops: 0000 [#1] SMP NOPTI
+[  138.544086] RIP: 0010:__tdx_vcpu_run+0x59/0xf3 [kvm_intel]
+[  138.571365] RSP: 0018:ff2839240b147cb8 EFLAGS: 00000002
+[  138.577267] RAX: 000000000000004d RBX: 0000000000000000 RCX: 000000000000fc00
+[  138.585325] RDX: 0000000000000000 RSI: 0000000000000000 RDI: 0000000000000000
+[  138.593382] RBP: 0000000000000000 R08: 0000000000000000 R09: 0000000000000000
+[  138.601440] R10: 0000000000000000 R11: 0000000000000020 R12: 00000000000006e0
+[  138.609472] R13: 00000008254d5e9c R14: 0000000000000000 R15: 0000000000000000
+[  138.617530] FS:  00007f7847fff700(0000) GS:ff1ed5e484000000(0000) knlGS:0000000000000000
+[  138.626633] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  138.633110] CR2: 0000000000000028 CR3: 00000001eb78a002 CR4: 0000000000773ee0
+[  138.641152] PKRU: 00000000
+
+Fixes: d46a5d1f11e0 ("KVM: TDX: Add perfmon support for TD")
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 21 ++++++++++++++++-----
+ 1 file changed, 16 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 2073e69be35b..69e931b7886e 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -796,9 +796,16 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ 		kvm_wait_lapic_expire(vcpu, true);
+ 	}
+ 
+-	if (kvm_tdx->attributes & TDX_TD_ATTRIBUTE_PERFMON)
+-		intel_pmu_save();
+-	else if (td_profile_allowed(kvm_tdx))
++	/*
++	 * Always do PMU context switch here because SEAM module
++	 * unconditionally clear MSR_IA32_DS_AREA, otherwise CPU
++	 * may start to write data into DS area immediately after
++	 * SEAMRET to KVM, which cause PANIC with NULL access.
++	 */
++	intel_pmu_save();
++
++	if (!(kvm_tdx->attributes & TDX_TD_ATTRIBUTE_PERFMON) &&
++		td_profile_allowed(kvm_tdx))
+ 		tdx_switch_perf_msrs(vcpu);
+ 
+ 	/*
+@@ -824,6 +831,12 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ 	tdx_restore_host_xsave_state(vcpu);
+ 	tdx->host_state_need_restore = true;
+ 
++	/*
++	 * See the comments above for intel_pmu_save() for why
++	 * always do PMU context switch here
++	 */
++	intel_pmu_restore();
++
+ 	/*
+ 	 * Restoring PMU must be after DS area because PMU may start to log
+ 	 * records in DS area.
+@@ -846,8 +859,6 @@ static fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu)
+ 				apic_write(APIC_LVTPC, APIC_DM_NMI);
+ 			}
+ 		}
+-
+-		intel_pmu_restore();
+ 	}
+ 
+ 	tdx_register_cache_reset(vcpu);
+-- 
+2.31.1
+

@@ -1,0 +1,146 @@
+From f74b37fad84ed6b6557089e7ebe9d7879bbf2e63 Mon Sep 17 00:00:00 2001
+From: Fenghua Yu <fenghua.yu@intel.com>
+Date: Wed, 27 Apr 2022 16:52:47 -0700
+Subject: [PATCH 1326/1418] Revert "Initial hack at the code to force bus locks
+ to run one at a time"
+
+This reverts commit 9076c75f9c43334cfe970b9518462880ea6a59a8.
+---
+ arch/x86/kernel/cpu/intel.c | 65 ++++---------------------------------
+ 1 file changed, 7 insertions(+), 58 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/intel.c b/arch/x86/kernel/cpu/intel.c
+index 160924631219..0b382036132f 100644
+--- a/arch/x86/kernel/cpu/intel.c
++++ b/arch/x86/kernel/cpu/intel.c
+@@ -7,13 +7,10 @@
+ #include <linux/smp.h>
+ #include <linux/sched.h>
+ #include <linux/sched/clock.h>
+-#include <linux/semaphore.h>
+ #include <linux/thread_info.h>
+ #include <linux/init.h>
+ #include <linux/uaccess.h>
+-#include <linux/workqueue.h>
+ #include <linux/delay.h>
+-#include <linux/cpuhotplug.h>
+ 
+ #include <asm/cpufeature.h>
+ #include <asm/msr.h>
+@@ -46,7 +43,6 @@ enum split_lock_detect_state {
+ 	sld_warn,
+ 	sld_fatal,
+ 	sld_ratelimit,
+-	sld_sequential,
+ };
+ 
+ /*
+@@ -992,13 +988,10 @@ static const struct {
+ 	{ "warn",	sld_warn  },
+ 	{ "fatal",	sld_fatal },
+ 	{ "ratelimit:", sld_ratelimit },
+-	{ "sequential", sld_sequential },
+ };
+ 
+ static struct ratelimit_state bld_ratelimit;
+ 
+-static DEFINE_SEMAPHORE(buslock_sem);
+-
+ static inline bool match_option(const char *arg, int arglen, const char *opt)
+ {
+ 	int len = strlen(opt), ratelimit;
+@@ -1038,7 +1031,7 @@ static bool split_lock_verify_msr(bool on)
+ 
+ static void __init sld_state_setup(void)
+ {
+-	enum split_lock_detect_state state = sld_sequential;
++	enum split_lock_detect_state state = sld_warn;
+ 	char arg[20];
+ 	int i, ret;
+ 
+@@ -1109,55 +1102,18 @@ static void split_lock_init(void)
+ 		split_lock_verify_msr(sld_state != sld_off);
+ }
+ 
+-static void __split_lock_reenable(struct work_struct *work)
+-{
+-	sld_update_msr(true);
+-	up(&buslock_sem);
+-}
+-
+-/*
+- * If a CPU goes offline with pending delayed work to
+- * re-enable split lock detection then the delayed work
+- * will be executed on some other CPU. That handles releasing
+- * the buslock_sem, but because it executes on a different
+- * CPU probably won't re-enable split lock detection. This
+- * is a problem on HT systems since the sibling CPU on the
+- * same core may then be left running with split lock
+- * detection disabled.
+- *
+- * Unconditionally re-enable detection here.
+- */
+-static int splitlock_cpu_offline(unsigned int cpu)
+-{
+-	sld_update_msr(true);
+-
+-	return 0;
+-}
+-
+-static DECLARE_DELAYED_WORK(split_lock_reenable, __split_lock_reenable);
+-
+ static void split_lock_warn(unsigned long ip)
+ {
+ 	pr_warn_ratelimited("#AC: %s/%d took a split_lock trap at address: 0x%lx\n",
+ 			    current->comm, current->pid, ip);
+ 
+-	switch (sld_state) {
+-	case sld_warn:
+-		/* This task will keep running with split lock disabled */
+-		set_tsk_thread_flag(current, TIF_SLD);
+-		break;
+-	case sld_sequential:
+-		/* Only allow one buslocked disabled core at a time */
+-		if (down_interruptible(&buslock_sem) == -EINTR)
+-			return;
+-		schedule_delayed_work(&split_lock_reenable, 2);
+-		break;
+-	default:
+-		break;
+-	}
+-
+-	/* Disable split lock detection to make progress */
++	/*
++	 * Disable the split lock detection for this task so it can make
++	 * progress and set TIF_SLD so the detection is re-enabled via
++	 * switch_to_sld() when the task is scheduled out.
++	 */
+ 	sld_update_msr(false);
++	set_tsk_thread_flag(current, TIF_SLD);
+ }
+ 
+ bool handle_guest_split_lock(unsigned long ip)
+@@ -1227,7 +1183,6 @@ void handle_bus_lock(struct pt_regs *regs)
+ 		/* Warn on the bus lock. */
+ 		fallthrough;
+ 	case sld_warn:
+-	case sld_sequential:
+ 		pr_warn_ratelimited("#DB: %s/%d took a bus_lock trap at address: 0x%lx\n",
+ 				    current->comm, current->pid, regs->ip);
+ 		break;
+@@ -1335,12 +1290,6 @@ static void sld_state_show(void)
+ 		if (boot_cpu_has(X86_FEATURE_BUS_LOCK_DETECT))
+ 			pr_info("#DB: setting system wide bus lock rate limit to %u/sec\n", bld_ratelimit.burst);
+ 		break;
+-	case sld_sequential:
+-		pr_info("#AC: crashing the kernel on kernel split_locks and forcing sequential access for user-space split locks\n");
+-		if (cpuhp_setup_state(CPUHP_AP_ONLINE_DYN,
+-				      "x86/splitlock", NULL, splitlock_cpu_offline) < 0)
+-			pr_warn("No splitlock CPU offline handler\n");
+-		break;
+ 	}
+ }
+ 
+-- 
+2.31.1
+

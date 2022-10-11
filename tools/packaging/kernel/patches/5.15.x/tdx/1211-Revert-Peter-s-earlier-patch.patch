@@ -1,0 +1,72 @@
+From a80aed9fc4342313329064b61514090be1112727 Mon Sep 17 00:00:00 2001
+From: Tim Chen <tim.c.chen@linux.intel.com>
+Date: Mon, 14 Mar 2022 13:43:58 -0700
+Subject: [PATCH 1211/1418] Revert Peter's earlier patch
+
+Peter's previous patch should not be applied on BKC due to
+performance issue.  The two follow on patches
+will also fix the issue.
+
+Revert:
+Author: Peter Zijlstra (Intel) <peterz@infradead.org>
+
+    sched/fair: Simple runqueue order on migrate
+
+    There's a number of problems with SMP migration of fair tasks, but
+    basically it boils down to a task not receiving equal service on each
+    runqueue (consider the trivial 3 tasks 2 cpus infeasible weight
+    scenario).
+
+    Fully solving that with vruntime placement is 'hard', not least
+    because a task might be very under-services on a busy runqueue and
+    would need to be placed so far left on the new runqueue that it would
+    significantly impact latency on the existing tasks.
+
+    Instead do minimal / basic placement instead; when moving to a less
+    busy queue place at the front of the queue to receive time sooner.
+    When moving to a busier queue, place at the end of the queue to
+    receive time later.
+---
+ kernel/sched/fair.c     |  7 -------
+ kernel/sched/features.h | 10 ----------
+ 2 files changed, 17 deletions(-)
+
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index b590ff83e5c0..f6a05d9b5443 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -844,13 +844,6 @@ static void update_curr(struct cfs_rq *cfs_rq)
+ 	schedstat_add(cfs_rq->exec_clock, delta_exec);
+ 
+ 	curr->vruntime += calc_delta_fair(delta_exec, curr);
+-	if (sched_feat(FORCE_MIN_VRUNTIME)) {
+-		/*
+-		 * Force advance min_vruntime at the runqueue rate, this
+-		 * ensures it cannot get stuck due to placement trickery.
+-		 */
+-		cfs_rq->min_vruntime += __calc_delta(delta_exec, NICE_0_LOAD, &cfs_rq->load);
+-	}
+ 	update_min_vruntime(cfs_rq);
+ 
+ 	if (entity_is_task(curr)) {
+diff --git a/kernel/sched/features.h b/kernel/sched/features.h
+index 03573f0e7c4d..7f8dace0964c 100644
+--- a/kernel/sched/features.h
++++ b/kernel/sched/features.h
+@@ -95,13 +95,3 @@ SCHED_FEAT(LATENCY_WARN, false)
+ 
+ SCHED_FEAT(ALT_PERIOD, true)
+ SCHED_FEAT(BASE_SLICE, true)
+-
+-#ifdef CONFIG_SMP
+-/*
+- * SMP migrations in particular can cause the min_vruntime to stall,
+- * leading to starvation issues.
+- */
+-SCHED_FEAT(FORCE_MIN_VRUNTIME, false)
+-#else
+-SCHED_FEAT(FORCE_MIN_VRUNTIME, false)
+-#endif
+-- 
+2.31.1
+

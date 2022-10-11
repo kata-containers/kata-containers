@@ -1,0 +1,41 @@
+From 62144e4b748822288713790272757c8245f478f5 Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Mon, 10 Jan 2022 19:17:19 -0800
+Subject: [PATCH 1190/1418] x86/entry: Define
+ arch_{save|restore}_auxiliary_pt_regs()
+
+The x86 architecture supports the new auxiliary pt_regs space if
+ARCH_HAS_PTREGS_AUXILIARY is enabled.
+
+Define the callbacks within the x86 code required by the core entry code
+when this support is enabled.
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ arch/x86/include/asm/entry-common.h | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/arch/x86/include/asm/entry-common.h b/arch/x86/include/asm/entry-common.h
+index 43184640b579..5fa5dd2d539c 100644
+--- a/arch/x86/include/asm/entry-common.h
++++ b/arch/x86/include/asm/entry-common.h
+@@ -95,4 +95,16 @@ static __always_inline void arch_exit_to_user_mode(void)
+ }
+ #define arch_exit_to_user_mode arch_exit_to_user_mode
+ 
++#ifdef CONFIG_ARCH_HAS_PTREGS_AUXILIARY
++
++static inline void arch_save_aux_pt_regs(struct pt_regs *regs)
++{
++}
++
++static inline void arch_restore_aux_pt_regs(struct pt_regs *regs)
++{
++}
++
++#endif
++
+ #endif
+-- 
+2.31.1
+

@@ -1,0 +1,180 @@
+From b27cb896a642ed937007cd2be205dbe0dac59c9b Mon Sep 17 00:00:00 2001
+From: Kai Huang <kai.huang@intel.com>
+Date: Tue, 28 Sep 2021 09:55:44 +1300
+Subject: [PATCH 0318/1418] x86/cpu/tdx: Convert system memory to TDX memory
+
+The TDX module tells a hypervisor which areas can be used for TDX memory.
+The hypervisor is free to convert some or all of those areas for TDX use.
+The more area it converts, the more metadata (PAMT) it must allocate to
+TDX.
+
+When TDX is enabled, convert all system memory for TDX use.  This avoids
+confusion about which memory is TDX capable and provides a simple
+guarantee: if it's RAM, it works for TDX.
+
+Convert system memory to TDX memory by gathering all memory PFN ranges in
+memblock.  After memblock is down, it's not easy to find all memory blocks
+and put memory holes into TDMR reserved areas.
+
+Use for_each_mem_pfn_range() to loop over all memory blocks, rather than
+for_each_free_mem_range(), to prevent the case that reserved memory blocks
+may be freed to page allocator at a late time during kernel boot.
+
+Gather all memory blocks in tdx_early_init() after loading P-SEAMLDR,
+because it must be done before memblock_discard().
+
+Signed-off-by: Kai Huang <kai.huang@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/Makefile      |  2 +-
+ arch/x86/kernel/cpu/tdx/tdmr-sysmem.c | 83 +++++++++++++++++++++++++++
+ arch/x86/kernel/cpu/tdx/tdmr-sysmem.h | 12 ++++
+ arch/x86/kernel/cpu/tdx/tdx.c         |  6 +-
+ 4 files changed, 101 insertions(+), 2 deletions(-)
+ create mode 100644 arch/x86/kernel/cpu/tdx/tdmr-sysmem.c
+ create mode 100644 arch/x86/kernel/cpu/tdx/tdmr-sysmem.h
+
+diff --git a/arch/x86/kernel/cpu/tdx/Makefile b/arch/x86/kernel/cpu/tdx/Makefile
+index 3d2010ebbbd6..7e1c222da3e6 100644
+--- a/arch/x86/kernel/cpu/tdx/Makefile
++++ b/arch/x86/kernel/cpu/tdx/Makefile
+@@ -2,4 +2,4 @@
+ # Makefile for seamldr and tdx module
+ 
+ obj-y	+= seam.o seamcall.o p-seamldr.o np-seamldr.o
+-obj-y	+= tdx-error.o tdx.o tdmr-common.o
++obj-y	+= tdx-error.o tdx.o tdmr-common.o tdmr-sysmem.o
+diff --git a/arch/x86/kernel/cpu/tdx/tdmr-sysmem.c b/arch/x86/kernel/cpu/tdx/tdmr-sysmem.c
+new file mode 100644
+index 000000000000..f0077225f0c8
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/tdmr-sysmem.c
+@@ -0,0 +1,83 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Convert system memory to TDX memory.
++ */
++#define pr_fmt(fmt) "tdx: " fmt
++
++#include <linux/memblock.h>
++#include "tdmr-sysmem.h"
++
++/* TDX memory instance which contains all system memory blocks */
++struct tdx_memory tmem_sysmem __initdata;
++
++static void __init sysmem_tmb_free(struct tdx_memblock *tmb) { }
++
++static struct tdx_memblock_ops sysmem_ops = {
++	.tmb_free = sysmem_tmb_free,
++};
++
++static int __init tdx_sysmem_add_block(struct tdx_memory *tmem,
++		unsigned long start_pfn, unsigned long end_pfn, int nid)
++{
++	struct tdx_memblock *tmb;
++	int ret;
++
++	tmb = tdx_memblock_create(start_pfn, end_pfn, nid, NULL, &sysmem_ops);
++	if (!tmb)
++		return -ENOMEM;
++
++	ret = tdx_memory_add_block(tmem, tmb);
++	if (ret) {
++		tdx_memblock_free(tmb);
++		return ret;
++	}
++
++	return 0;
++}
++
++static int __init __tdx_sysmem_build(void)
++{
++	unsigned long start_pfn, end_pfn;
++	int i, nid, ret;
++
++	pr_info("Build all system memory blocks as TDX memory.\n");
++
++	tdx_memory_init(&tmem_sysmem);
++
++	for_each_mem_pfn_range(i, MAX_NUMNODES, &start_pfn, &end_pfn, &nid) {
++		ret = tdx_sysmem_add_block(&tmem_sysmem, start_pfn, end_pfn,
++				nid);
++		if (ret)
++			goto err;
++	}
++
++	return 0;
++err:
++	pr_err("Fail to build system memory as TDX memory.\n");
++	tdx_sysmem_cleanup();
++	return ret;
++}
++
++/**
++ * tdx_sysmem_build:	Build TDX memory for system memory
++ *
++ * Build TDX memory @tmem_sysmem for system memory, by gathering all memory
++ * blocks from memblock.
++ */
++int __init tdx_sysmem_build(void)
++{
++	if (!boot_cpu_has(X86_FEATURE_SEAM))
++		return 0;
++
++	return __tdx_sysmem_build();
++}
++
++/**
++ * tdx_sysmem_cleanup:	Clean up TDX memory for system memory
++ *
++ * Clean up TDX memory instances built from system memory for all NUMA nodes.
++ */
++void __init tdx_sysmem_cleanup(void)
++{
++	tdx_memory_destroy(&tmem_sysmem);
++}
+diff --git a/arch/x86/kernel/cpu/tdx/tdmr-sysmem.h b/arch/x86/kernel/cpu/tdx/tdmr-sysmem.h
+new file mode 100644
+index 000000000000..92083177768f
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/tdmr-sysmem.h
+@@ -0,0 +1,12 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _X86_TDMR_SYSMEM_H
++#define _X86_TDMR_SYSMEM_H
++
++#include "tdmr-common.h"
++
++extern struct tdx_memory tmem_sysmem __initdata;
++
++int __init tdx_sysmem_build(void);
++void __init tdx_sysmem_cleanup(void);
++
++#endif
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 040dc8771ea7..f96b0a01be28 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -15,6 +15,7 @@
+ #include <asm/virtext.h>
+ #include <asm/apic.h>
+ 
++#include "tdmr-sysmem.h"
+ #include "seamcall.h"
+ #include "tdx-ops.h"
+ #include "p-seamldr.h"
+@@ -45,7 +46,10 @@ static int __init tdx_host_early_init(void)
+ 		return 0;
+ 
+ 	ret = load_p_seamldr();
+-	return ret;
++	if (ret)
++		return ret;
++
++	return tdx_sysmem_build();
+ }
+ early_initcall(tdx_host_early_init);
+ 
+-- 
+2.31.1
+

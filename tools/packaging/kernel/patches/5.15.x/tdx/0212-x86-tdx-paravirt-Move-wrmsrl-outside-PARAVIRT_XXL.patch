@@ -1,0 +1,184 @@
+From 9d1a17b3d3394ccecf7dcd470662ac585496f556 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Fri, 30 Jul 2021 20:45:21 -0700
+Subject: [PATCH 0212/1418] x86/tdx/paravirt: Move wrmsrl outside PARAVIRT_XXL
+
+For performance optimizations it is useful to directly replace wrmsrl
+with an paravirtual operation when running in TDX. Currently
+MSR writes can be only patched when in full PARAVIRT_XXL mode,
+which includes many heavy changes and is only needed for old school
+Xen PV guests.
+
+Move wrmsrl out of PARAVIRT_XXL into the normal PARAVIRT support.
+Only do this for wrmsrl because that's the only case
+currently needed for performance optimization.
+
+It doesn't make a lot of difference for the code, since the msr
+write was already out of line for tracing, and the paravirt
+infrastructure takes care of directly patching in the alternative
+functions.
+
+One drawback is that these MSR writes will now go through patched
+code, which can confuse some debugging tools, but that's already
+fairly common in the kernel and shouldn't make a big difference.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/msr.h            |  9 ++------
+ arch/x86/include/asm/paravirt.h       | 32 ++++++++++++++++++---------
+ arch/x86/include/asm/paravirt_types.h |  3 ++-
+ arch/x86/kernel/paravirt.c            |  3 ++-
+ 4 files changed, 27 insertions(+), 20 deletions(-)
+
+diff --git a/arch/x86/include/asm/msr.h b/arch/x86/include/asm/msr.h
+index 6b52182e178a..12649ea43743 100644
+--- a/arch/x86/include/asm/msr.h
++++ b/arch/x86/include/asm/msr.h
+@@ -251,9 +251,9 @@ static inline unsigned long long native_read_pmc(int counter)
+ 	return EAX_EDX_VAL(val, low, high);
+ }
+ 
+-#ifdef CONFIG_PARAVIRT_XXL
+ #include <asm/paravirt.h>
+-#else
++
++#ifndef CONFIG_PARAVIRT_XXL
+ #include <linux/errno.h>
+ /*
+  * Access to machine-specific registers (available on 586 and better only)
+@@ -276,11 +276,6 @@ static inline void wrmsr(unsigned int msr, u32 low, u32 high)
+ #define rdmsrl(msr, val)			\
+ 	((val) = native_read_msr((msr)))
+ 
+-static inline void wrmsrl(unsigned int msr, u64 val)
+-{
+-	native_write_msr(msr, (u32)(val & 0xffffffffULL), (u32)(val >> 32));
+-}
+-
+ /* wrmsr with exception handling */
+ static inline int wrmsr_safe(unsigned int msr, u32 low, u32 high)
+ {
+diff --git a/arch/x86/include/asm/paravirt.h b/arch/x86/include/asm/paravirt.h
+index d323a626c7a8..8e04268d7c10 100644
+--- a/arch/x86/include/asm/paravirt.h
++++ b/arch/x86/include/asm/paravirt.h
+@@ -18,6 +18,8 @@
+ #include <linux/static_call_types.h>
+ #include <asm/frame.h>
+ 
++struct mm_struct;
++
+ u64 dummy_steal_clock(int cpu);
+ u64 dummy_sched_clock(void);
+ 
+@@ -107,6 +109,17 @@ static inline void halt(void)
+ 	PVOP_VCALL0(irq.halt);
+ }
+ 
++static inline void paravirt_write_msr(unsigned msr,
++				      unsigned low, unsigned high)
++{
++	PVOP_VCALL3(cpu.write_msr, msr, low, high);
++}
++
++static inline void wrmsrl(unsigned msr, u64 val)
++{
++	paravirt_write_msr(msr, (u32)val, (u32)(val>>32));
++}
++
+ #ifdef CONFIG_PARAVIRT_XXL
+ static inline void load_sp0(unsigned long sp0)
+ {
+@@ -182,12 +195,6 @@ static inline u64 paravirt_read_msr(unsigned msr)
+ 	return PVOP_CALL1(u64, cpu.read_msr, msr);
+ }
+ 
+-static inline void paravirt_write_msr(unsigned msr,
+-				      unsigned low, unsigned high)
+-{
+-	PVOP_VCALL3(cpu.write_msr, msr, low, high);
+-}
+-
+ static inline u64 paravirt_read_msr_safe(unsigned msr, int *err)
+ {
+ 	return PVOP_CALL2(u64, cpu.read_msr_safe, msr, err);
+@@ -216,11 +223,6 @@ do {						\
+ 	val = paravirt_read_msr(msr);		\
+ } while (0)
+ 
+-static inline void wrmsrl(unsigned msr, u64 val)
+-{
+-	wrmsr(msr, (u32)val, (u32)(val>>32));
+-}
+-
+ #define wrmsr_safe(msr, a, b)	paravirt_write_msr_safe(msr, a, b)
+ 
+ /* rdmsr with exception handling */
+@@ -767,6 +769,9 @@ extern void default_banner(void);
+ #endif /* !CONFIG_PARAVIRT */
+ 
+ #ifndef __ASSEMBLY__
++
++struct mm_struct;
++
+ #ifndef CONFIG_PARAVIRT_XXL
+ static inline void paravirt_arch_dup_mmap(struct mm_struct *oldmm,
+ 					  struct mm_struct *mm)
+@@ -778,6 +783,11 @@ static inline void paravirt_arch_dup_mmap(struct mm_struct *oldmm,
+ static inline void paravirt_arch_exit_mmap(struct mm_struct *mm)
+ {
+ }
++
++static inline void wrmsrl(unsigned msr, u64 val)
++{
++	native_write_msr(msr, (u32)val, (u32)(val>>32));
++}
+ #endif
+ 
+ #ifndef CONFIG_PARAVIRT_SPINLOCKS
+diff --git a/arch/x86/include/asm/paravirt_types.h b/arch/x86/include/asm/paravirt_types.h
+index 40082847f314..a2bef7711617 100644
+--- a/arch/x86/include/asm/paravirt_types.h
++++ b/arch/x86/include/asm/paravirt_types.h
+@@ -122,7 +122,6 @@ struct pv_cpu_ops {
+ 
+ 	/* Unsafe MSR operations.  These will warn or panic on failure. */
+ 	u64 (*read_msr)(unsigned int msr);
+-	void (*write_msr)(unsigned int msr, unsigned low, unsigned high);
+ 
+ 	/*
+ 	 * Safe MSR operations.
+@@ -136,6 +135,8 @@ struct pv_cpu_ops {
+ 	void (*start_context_switch)(struct task_struct *prev);
+ 	void (*end_context_switch)(struct task_struct *next);
+ #endif
++
++	void (*write_msr)(unsigned int msr, unsigned low, unsigned high);
+ } __no_randomize_layout;
+ 
+ struct pv_irq_ops {
+diff --git a/arch/x86/kernel/paravirt.c b/arch/x86/kernel/paravirt.c
+index 8cea6e75ba29..dbec2d9672d0 100644
+--- a/arch/x86/kernel/paravirt.c
++++ b/arch/x86/kernel/paravirt.c
+@@ -251,7 +251,6 @@ struct paravirt_patch_template pv_ops = {
+ 	.cpu.write_cr4		= native_write_cr4,
+ 	.cpu.wbinvd		= native_wbinvd,
+ 	.cpu.read_msr		= native_read_msr,
+-	.cpu.write_msr		= native_write_msr,
+ 	.cpu.read_msr_safe	= native_read_msr_safe,
+ 	.cpu.write_msr_safe	= native_write_msr_safe,
+ 	.cpu.read_pmc		= native_read_pmc,
+@@ -285,6 +284,8 @@ struct paravirt_patch_template pv_ops = {
+ 	.irq.irq_enable		= __PV_IS_CALLEE_SAVE(native_irq_enable),
+ #endif /* CONFIG_PARAVIRT_XXL */
+ 
++	.cpu.write_msr		= native_write_msr,
++
+ 	.irq.safe_halt		= native_safe_halt,
+ 	.irq.halt		= native_halt,
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,86 @@
+From f9ee4d3395acf2f41d437186d8e94c4e004357d2 Mon Sep 17 00:00:00 2001
+From: Ben Walker <benjamin.walker@intel.com>
+Date: Thu, 2 Dec 2021 12:00:17 -0700
+Subject: [PATCH 1148/1418] dmaengine: Add provider documentation on cookie
+ assignment
+
+Clarify the rules on assigning cookies to DMA transactions.
+
+Signed-off-by: Ben Walker <benjamin.walker@intel.com>
+---
+ .../driver-api/dmaengine/provider.rst         | 45 +++++++++++++++----
+ 1 file changed, 37 insertions(+), 8 deletions(-)
+
+diff --git a/Documentation/driver-api/dmaengine/provider.rst b/Documentation/driver-api/dmaengine/provider.rst
+index 6f70419893d5..c31ff54f3746 100644
+--- a/Documentation/driver-api/dmaengine/provider.rst
++++ b/Documentation/driver-api/dmaengine/provider.rst
+@@ -398,7 +398,9 @@ supported.
+ 
+     - tx_submit: A pointer to a function you have to implement,
+       that is supposed to push the current transaction descriptor to a
+-      pending queue, waiting for issue_pending to be called.
++      pending queue, waiting for issue_pending to be called. Each
++      descriptor is given a cookie to identify it. See the section
++      "Cookie Management" below.
+ 
+   - In this structure the function pointer callback_result can be
+     initialized in order for the submitter to be notified that a
+@@ -503,6 +505,40 @@ supported.
+ 
+   - May sleep.
+ 
++Cookie Management
++------------------
++
++When a transaction is queued for submission via tx_submit(), the provider
++must assign that transaction a cookie (dma_cookie_t) to uniquely identify it.
++The provider is allowed to perform this assignment however it wants, but for
++convenience the following utility functions are available to create
++monotonically increasing cookies
++
++  .. code-block:: c
++
++    void dma_cookie_init(struct dma_chan *chan);
++
++  Called once at channel creation
++
++  .. code-block:: c
++
++    dma_cookie_t dma_cookie_assign(struct dma_async_tx_descriptor *tx);
++
++  Assign a cookie to the given descriptor
++
++  .. code-block:: c
++
++    void dma_cookie_complete(struct dma_async_tx_descriptor *tx);
++
++  Mark the descriptor as complete and invalidate the cookie
++
++  .. code-block:: c
++
++    enum dma_status dma_cookie_status(struct dma_chan *chan,
++      dma_cookie_t cookie, struct dma_tx_state *state);
++
++  Report the status of the cookie and filling in state, if not NULL.
++
+ 
+ Misc notes
+ ==========
+@@ -518,13 +554,6 @@ where to put them)
+ - Makes sure that dependent operations are run before marking it
+   as complete.
+ 
+-dma_cookie_t
+-
+-- it's a DMA transaction ID.
+-
+-- The value can be chosen by the provider, or use the helper APIs
+-  such as dma_cookie_assign() and dma_cookie_complete().
+-
+ DMA_CTRL_ACK
+ 
+ - If clear, the descriptor cannot be reused by provider until the
+-- 
+2.31.1
+

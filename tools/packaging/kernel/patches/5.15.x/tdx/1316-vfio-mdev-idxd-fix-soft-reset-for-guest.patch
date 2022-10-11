@@ -1,0 +1,113 @@
+From 458efdeaf80c84397324f6a42b5284190f62b553 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Mon, 25 Apr 2022 16:34:26 -0700
+Subject: [PATCH 1316/1418] vfio: mdev: idxd: fix soft reset for guest
+
+Bypass signal to guest when doing reset via vfio ioctl since the eventfd is
+not available.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/vfio/mdev/idxd/mdev.c |  2 +-
+ drivers/vfio/mdev/idxd/mdev.h |  2 +-
+ drivers/vfio/mdev/idxd/vdev.c | 20 ++++++++++++++------
+ 3 files changed, 16 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/vfio/mdev/idxd/mdev.c b/drivers/vfio/mdev/idxd/mdev.c
+index b071521d2158..841221434d03 100644
+--- a/drivers/vfio/mdev/idxd/mdev.c
++++ b/drivers/vfio/mdev/idxd/mdev.c
+@@ -1453,7 +1453,7 @@ static int idxd_vdcm_mmap(struct vfio_device *vdev, struct vm_area_struct *vma)
+ 
+ static void vidxd_vdcm_reset(struct vdcm_idxd *vidxd)
+ {
+-	vidxd_reset(vidxd);
++	vidxd_reset(vidxd, false);
+ }
+ 
+ static irqreturn_t idxd_vdcm_msix_handler(int irq, void *arg)
+diff --git a/drivers/vfio/mdev/idxd/mdev.h b/drivers/vfio/mdev/idxd/mdev.h
+index 8af1bb8ee21a..17b2e18f2fdd 100644
+--- a/drivers/vfio/mdev/idxd/mdev.h
++++ b/drivers/vfio/mdev/idxd/mdev.h
+@@ -166,7 +166,7 @@ int vidxd_mmio_write(struct vdcm_idxd *vidxd, u64 pos, void *buf, unsigned int s
+ int vidxd_cfg_read(struct vdcm_idxd *vidxd, unsigned int pos, void *buf, unsigned int count);
+ int vidxd_cfg_write(struct vdcm_idxd *vidxd, unsigned int pos, void *buf, unsigned int size);
+ void vidxd_mmio_init(struct vdcm_idxd *vidxd);
+-void vidxd_reset(struct vdcm_idxd *vidxd);
++void vidxd_reset(struct vdcm_idxd *vidxd, bool interrupt);
+ void vidxd_send_interrupt(struct vdcm_idxd *vidxd, int msix_idx);
+ void idxd_wq_vidxd_send_errors(struct idxd_wq *wq);
+ 
+diff --git a/drivers/vfio/mdev/idxd/vdev.c b/drivers/vfio/mdev/idxd/vdev.c
+index 4d28e548283d..2460751feea0 100644
+--- a/drivers/vfio/mdev/idxd/vdev.c
++++ b/drivers/vfio/mdev/idxd/vdev.c
+@@ -29,7 +29,8 @@ void vidxd_send_interrupt(struct vdcm_idxd *vidxd, int msix_idx)
+ {
+ 	struct vfio_pci_core_device *vfio_pdev = &vidxd->vfio_pdev;
+ 
+-	eventfd_signal(vfio_pdev->ctx[msix_idx].trigger, 1);
++	if (vfio_pdev->ctx[msix_idx].trigger)
++		eventfd_signal(vfio_pdev->ctx[msix_idx].trigger, 1);
+ }
+ 
+ static void vidxd_report_error(struct vdcm_idxd *vidxd, unsigned int error)
+@@ -813,7 +814,8 @@ void vidxd_mmio_init(struct vdcm_idxd *vidxd)
+ 	vidxd_mmio_init_wqcfg(vidxd);
+ }
+ 
+-static void idxd_complete_command(struct vdcm_idxd *vidxd, enum idxd_cmdsts_err val)
++static void __idxd_complete_command(struct vdcm_idxd *vidxd, enum idxd_cmdsts_err val,
++				    bool interrupt)
+ {
+ 	u8 *bar0 = vidxd->bar0;
+ 	u32 *cmd = (u32 *)(bar0 + IDXD_CMD_OFFSET);
+@@ -827,10 +829,16 @@ static void idxd_complete_command(struct vdcm_idxd *vidxd, enum idxd_cmdsts_err
+ 
+ 	if (*cmd & IDXD_CMD_INT_MASK) {
+ 		*intcause |= IDXD_INTC_CMD;
+-		vidxd_send_interrupt(vidxd, 0);
++		if (interrupt)
++			vidxd_send_interrupt(vidxd, 0);
+ 	}
+ }
+ 
++static void idxd_complete_command(struct vdcm_idxd *vidxd, enum idxd_cmdsts_err val)
++{
++	__idxd_complete_command(vidxd, val, true);
++}
++
+ static void vidxd_enable(struct vdcm_idxd *vidxd)
+ {
+ 	u8 *bar0 = vidxd->bar0;
+@@ -974,7 +982,7 @@ static void vidxd_wq_abort(struct vdcm_idxd *vidxd, int val)
+ 	idxd_complete_command(vidxd, IDXD_CMDSTS_SUCCESS);
+ }
+ 
+-void vidxd_reset(struct vdcm_idxd *vidxd)
++void vidxd_reset(struct vdcm_idxd *vidxd, bool interrupt)
+ {
+ 	struct mdev_device *mdev = vidxd->ivdev.mdev;
+ 	struct device *dev = mdev_dev(mdev);
+@@ -997,7 +1005,7 @@ void vidxd_reset(struct vdcm_idxd *vidxd)
+ 
+ 	vidxd_mmio_reset(vidxd);
+ 	gensts->state = IDXD_DEVICE_STATE_DISABLED;
+-	idxd_complete_command(vidxd, IDXD_CMDSTS_SUCCESS);
++	__idxd_complete_command(vidxd, IDXD_CMDSTS_SUCCESS, interrupt);
+ }
+ 
+ static void vidxd_wq_reset(struct vdcm_idxd *vidxd, int wq_id_mask)
+@@ -1355,7 +1363,7 @@ static void vidxd_do_command(struct vdcm_idxd *vidxd, u32 val)
+ 		vidxd_abort_all(vidxd);
+ 		break;
+ 	case IDXD_CMD_RESET_DEVICE:
+-		vidxd_reset(vidxd);
++		vidxd_reset(vidxd, true);
+ 		break;
+ 	case IDXD_CMD_ENABLE_WQ:
+ 		vidxd_wq_enable(vidxd, reg->operand);
+-- 
+2.31.1
+

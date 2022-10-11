@@ -1,0 +1,114 @@
+From fe1994b6be39d961128c2fe27a01bea97871a6f1 Mon Sep 17 00:00:00 2001
+From: Wu Hao <hao.wu@intel.com>
+Date: Sat, 19 Sep 2020 23:12:04 +0800
+Subject: [PATCH 0901/1418] kvm: x86: enqcmd: pass through MSR_IA32_PASID
+
+Each execution of ENQCMD results in an enqueue store with a PASID value.
+ENQCMD obtains the PASID value from MSR_IA32_PASID. When PASID translation
+is enabled, this PASID value from MSR_IA32_PASID is interpreted as a guest
+PASID, and the guest PASID is converted to a host PASID, and the enqueue
+store uses the host PASID for the command data that it writes.
+
+This enables direct pass through MSR_IA32_PASID to guest, so that user can
+program guest PASID values into MSR_IA32_PASID directly.
+
+This patch enables the virtualization support for XSAVE extension of PASID
+supervisor state component, so guest can use this extension to save/restore
+PASID state (MSR_IA32_PASID) per context switch.
+
+v3: merge XSAVES PASID state component patch
+    rebase on top of msr filter changes
+
+Signed-off-by: Wu Hao <hao.wu@intel.com>
+---
+ arch/x86/kvm/vmx/vmx.c | 5 +++++
+ arch/x86/kvm/vmx/vmx.h | 2 +-
+ arch/x86/kvm/x86.c     | 5 ++++-
+ arch/x86/kvm/x86.h     | 5 +++++
+ 4 files changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index d8b5caddc45e..92d9f941a0ea 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -180,6 +180,7 @@ static u32 vmx_possible_passthrough_msrs[MAX_POSSIBLE_PASSTHROUGH_MSRS] = {
+ 	MSR_CORE_C6_RESIDENCY,
+ 	MSR_CORE_C7_RESIDENCY,
+ 	MSR_IA32_PKRS,
++	MSR_IA32_PASID,
+ };
+ 
+ /*
+@@ -6883,6 +6884,8 @@ static int vmx_create_vcpu(struct kvm_vcpu *vcpu)
+ 		vmx_disable_intercept_for_msr(vcpu, MSR_CORE_C6_RESIDENCY, MSR_TYPE_R);
+ 		vmx_disable_intercept_for_msr(vcpu, MSR_CORE_C7_RESIDENCY, MSR_TYPE_R);
+ 	}
++	if (cpu_has_vmx_pasid_trans())
++		vmx_disable_intercept_for_msr(vcpu, MSR_IA32_PASID, MSR_TYPE_RW);
+ 
+ 	vmx->loaded_vmcs = &vmx->vmcs01;
+ 	cpu = get_cpu();
+@@ -7597,6 +7600,8 @@ static __init void vmx_set_cpu_caps(void)
+ 
+ 	if (!cpu_has_vmx_pasid_trans())
+ 		kvm_cpu_cap_clear(X86_FEATURE_ENQCMD);
++	else if (kvm_cpu_cap_has(X86_FEATURE_ENQCMD))
++		supported_xss |= XFEATURE_MASK_PASID;
+ }
+ 
+ static void vmx_request_immediate_exit(struct kvm_vcpu *vcpu)
+diff --git a/arch/x86/kvm/vmx/vmx.h b/arch/x86/kvm/vmx/vmx.h
+index 11d3b10e7168..cbaf985dd5f3 100644
+--- a/arch/x86/kvm/vmx/vmx.h
++++ b/arch/x86/kvm/vmx/vmx.h
+@@ -332,7 +332,7 @@ struct vcpu_vmx {
+ 	struct lbr_desc lbr_desc;
+ 
+ 	/* Save desired MSR intercept (read: pass-through) state */
+-#define MAX_POSSIBLE_PASSTHROUGH_MSRS	16
++#define MAX_POSSIBLE_PASSTHROUGH_MSRS	17
+ 	struct {
+ 		DECLARE_BITMAP(read, MAX_POSSIBLE_PASSTHROUGH_MSRS);
+ 		DECLARE_BITMAP(write, MAX_POSSIBLE_PASSTHROUGH_MSRS);
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index e27eda5a6f21..581706324216 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -1722,7 +1722,7 @@ bool kvm_msr_allowed(struct kvm_vcpu *vcpu, u32 index, u32 type)
+ 	u32 i;
+ 
+ 	/* x2APIC MSRs do not support filtering. */
+-	if (index >= 0x800 && index <= 0x8ff)
++	if ((index >= 0x800 && index <= 0x8ff) || index == MSR_IA32_PASID)
+ 		return true;
+ 
+ 	idx = srcu_read_lock(&kvm->srcu);
+@@ -11425,6 +11425,9 @@ int kvm_arch_hardware_setup(void *opaque)
+ 	else
+ 		supported_xss &= host_xss;
+ 
++	if (!kvm_pasid_supported())
++		kvm_cpu_cap_clear(X86_FEATURE_ENQCMD);
++
+ #define __kvm_cpu_cap_has(UNUSED_, f) kvm_cpu_cap_has(f)
+ 	cr4_reserved_bits = __cr4_reserved_bits(__kvm_cpu_cap_has, UNUSED_);
+ #undef __kvm_cpu_cap_has
+diff --git a/arch/x86/kvm/x86.h b/arch/x86/kvm/x86.h
+index 07732ca9e119..a41d560df29d 100644
+--- a/arch/x86/kvm/x86.h
++++ b/arch/x86/kvm/x86.h
+@@ -336,6 +336,11 @@ static inline bool kvm_mpx_supported(void)
+ 		== (XFEATURE_MASK_BNDREGS | XFEATURE_MASK_BNDCSR);
+ }
+ 
++static inline bool kvm_pasid_supported(void)
++{
++	return supported_xss & XFEATURE_MASK_PASID;
++}
++
+ extern unsigned int min_timer_period_us;
+ 
+ extern bool enable_vmware_backdoor;
+-- 
+2.31.1
+

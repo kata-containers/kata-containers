@@ -1,0 +1,32 @@
+From bee7853160bebf36b2211b5da5cea68d798bb073 Mon Sep 17 00:00:00 2001
+From: Fenghua Yu <fenghua.yu@intel.com>
+Date: Thu, 20 May 2021 23:47:09 +0000
+Subject: [PATCH 0657/1418] Revert "iommu/vt-d: Disable SVM when ATS/PRI/PASID
+ are not enabled in the device"
+
+This reverts commit 22cf954aa525b5d5dbffd5345a033023517913b7.
+---
+ drivers/iommu/intel/iommu.c | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index d799f156ee64..b0a233e9d73a 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -5529,11 +5529,8 @@ intel_iommu_dev_enable_feat(struct device *dev, enum iommu_dev_features feat)
+ 	case IOMMU_DEV_FEAT_IOPF:
+ 		return intel_iommu_dev_has_feat(dev, feat) ? 0 : -ENODEV;
+ 
+-	case IOMMU_DEV_FEAT_SVA:
+-		return intel_iommu_enable_sva(dev);
+-
+-	default:
+-		return -ENODEV;
++		if (info->iommu->flags & VTD_FLAG_SVM_CAPABLE)
++			return 0;
+ 	}
+ }
+ 
+-- 
+2.31.1
+

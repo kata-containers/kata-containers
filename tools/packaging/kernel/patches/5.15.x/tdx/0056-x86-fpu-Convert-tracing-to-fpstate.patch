@@ -1,0 +1,35 @@
+From d82d9f7ddeb9b31a35cfead171bf35a06a1f75e6 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 13 Oct 2021 16:55:34 +0200
+Subject: [PATCH 0056/1418] x86/fpu: Convert tracing to fpstate
+
+Convert FPU tracing code to the new register storage mechanism in
+preparation for dynamically sized buffers.
+
+No functional change.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211013145322.503327333@linutronix.de
+---
+ arch/x86/include/asm/trace/fpu.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/trace/fpu.h b/arch/x86/include/asm/trace/fpu.h
+index 879b77792f94..4645a6334063 100644
+--- a/arch/x86/include/asm/trace/fpu.h
++++ b/arch/x86/include/asm/trace/fpu.h
+@@ -22,8 +22,8 @@ DECLARE_EVENT_CLASS(x86_fpu,
+ 		__entry->fpu		= fpu;
+ 		__entry->load_fpu	= test_thread_flag(TIF_NEED_FPU_LOAD);
+ 		if (boot_cpu_has(X86_FEATURE_OSXSAVE)) {
+-			__entry->xfeatures = fpu->state.xsave.header.xfeatures;
+-			__entry->xcomp_bv  = fpu->state.xsave.header.xcomp_bv;
++			__entry->xfeatures = fpu->fpstate->regs.xsave.header.xfeatures;
++			__entry->xcomp_bv  = fpu->fpstate->regs.xsave.header.xcomp_bv;
+ 		}
+ 	),
+ 	TP_printk("x86/fpu: %p load: %d xfeatures: %llx xcomp_bv: %llx",
+-- 
+2.31.1
+

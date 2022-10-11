@@ -1,0 +1,158 @@
+From a7ded2f15c1750919b99a15af34ac852f3f9a1fd Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Tue, 4 Jan 2022 14:07:08 -0800
+Subject: [PATCH 1195/1418] mm/pkeys: PKS testing, test pks_update_exception()
+
+A common use case for the custom fault callbacks will be for the
+callback to warn of the violation and relax the permissions rather than
+crash the kernel.  pks_update_exception() was added for this purpose.
+
+Add a test which uses pks_update_exception() to clear the pkey
+permissions.  Verify that the permissions are changed in the interrupted
+thread.
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ lib/pks/pks_test.c                     | 60 ++++++++++++++++++++++++++
+ tools/testing/selftests/x86/test_pks.c |  5 ++-
+ 2 files changed, 64 insertions(+), 1 deletion(-)
+
+diff --git a/lib/pks/pks_test.c b/lib/pks/pks_test.c
+index 762f4a19cb7d..a9cd2a49abfa 100644
+--- a/lib/pks/pks_test.c
++++ b/lib/pks/pks_test.c
+@@ -49,6 +49,7 @@
+ #define ARM_CTX_SWITCH		2
+ #define CHECK_CTX_SWITCH	3
+ #define RUN_EXCEPTION		4
++#define RUN_EXCEPTION_UPDATE	5
+ #define RUN_CRASH_TEST		9
+ 
+ DECLARE_PER_CPU(u32, pkrs_cache);
+@@ -64,6 +65,7 @@ struct pks_test_ctx {
+ 	void *test_page;
+ 	bool fault_seen;
+ 	bool validate_exp_handling;
++	bool validate_update_exp;
+ };
+ 
+ static bool check_pkey_val(u32 pk_reg, u8 pkey, u32 expected)
+@@ -164,6 +166,16 @@ static void validate_exception(struct pks_test_ctx *ctx, u32 thread_pkrs)
+ 	}
+ }
+ 
++static bool handle_update_exception(struct pt_regs *regs, struct pks_test_ctx *ctx)
++{
++	pr_debug("Updating pkey %d during exception\n", ctx->pkey);
++
++	ctx->fault_seen = true;
++	pks_update_exception(regs, ctx->pkey, 0);
++
++	return true;
++}
++
+ /* Global data protected by test_run_lock */
+ struct pks_test_ctx *g_ctx_under_test;
+ 
+@@ -190,6 +202,9 @@ bool pks_test_fault_callback(struct pt_regs *regs, unsigned long address,
+ 	if (!g_ctx_under_test)
+ 		return false;
+ 
++	if (g_ctx_under_test->validate_update_exp)
++		return handle_update_exception(regs, g_ctx_under_test);
++
+ 	if (g_ctx_under_test->validate_exp_handling) {
+ 		validate_exception(g_ctx_under_test, pkrs);
+ 		/*
+@@ -518,6 +533,47 @@ static void check_ctx_switch(struct pks_session_data *sd)
+ 	}
+ }
+ 
++static bool run_exception_update(struct pks_session_data *sd)
++{
++	struct pks_test_ctx *ctx;
++
++	ctx = alloc_ctx(PKS_KEY_TEST);
++	if (IS_ERR(ctx))
++		return false;
++
++	set_ctx_data(sd, ctx);
++
++	ctx->fault_seen = false;
++	ctx->validate_update_exp = true;
++	pks_set_noaccess(ctx->pkey);
++
++	set_context_for_fault(ctx);
++
++	/* fault */
++	memcpy(ctx->test_page, ctx->data, 8);
++
++	if (!ctx->fault_seen) {
++		pr_err("Failed to see the callback\n");
++		return false;
++	}
++
++	ctx->fault_seen = false;
++	ctx->validate_update_exp = false;
++
++	set_context_for_fault(ctx);
++
++	/* no fault */
++	memcpy(ctx->test_page, ctx->data, 8);
++
++	if (ctx->fault_seen) {
++		pr_err("Pkey %d failed to be set RD/WR in the callback\n",
++			ctx->pkey);
++		return false;
++	}
++
++	return true;
++}
++
+ static ssize_t pks_read_file(struct file *file, char __user *user_buf,
+ 			     size_t count, loff_t *ppos)
+ {
+@@ -584,6 +640,10 @@ static ssize_t pks_write_file(struct file *file, const char __user *user_buf,
+ 		pr_debug("Exception checking\n");
+ 		sd->last_test_pass = run_exception_test(file->private_data);
+ 		break;
++	case RUN_EXCEPTION_UPDATE:
++		pr_debug("Fault clear test\n");
++		sd->last_test_pass = run_exception_update(file->private_data);
++		break;
+ 	default:
+ 		pr_debug("Unknown test\n");
+ 		sd->last_test_pass = false;
+diff --git a/tools/testing/selftests/x86/test_pks.c b/tools/testing/selftests/x86/test_pks.c
+index 817df7a14923..243347e48228 100644
+--- a/tools/testing/selftests/x86/test_pks.c
++++ b/tools/testing/selftests/x86/test_pks.c
+@@ -36,6 +36,7 @@
+ #define ARM_CTX_SWITCH		"2"
+ #define CHECK_CTX_SWITCH	"3"
+ #define RUN_EXCEPTION		"4"
++#define RUN_EXCEPTION_UPDATE	"5"
+ #define RUN_CRASH_TEST		"9"
+ 
+ time_t g_start_time;
+@@ -63,6 +64,7 @@ enum {
+ 	TEST_SINGLE,
+ 	TEST_CTX_SWITCH,
+ 	TEST_EXCEPTION,
++	TEST_FAULT_CALLBACK,
+ 	MAX_TESTS,
+ } tests;
+ 
+@@ -77,7 +79,8 @@ struct test_item {
+ 	{ "check_defaults", CHECK_DEFAULTS, do_simple_test },
+ 	{ "single", RUN_SINGLE, do_simple_test },
+ 	{ "context_switch", ARM_CTX_SWITCH, do_context_switch },
+-	{ "exception", RUN_EXCEPTION, do_simple_test }
++	{ "exception", RUN_EXCEPTION, do_simple_test },
++	{ "exception_update", RUN_EXCEPTION_UPDATE, do_simple_test }
+ };
+ 
+ static char *get_test_name(int test_num)
+-- 
+2.31.1
+

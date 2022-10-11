@@ -1,0 +1,42 @@
+From 67a7d9f2c69c37bf74b9fd5f0318f9b38b35bf24 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Thu, 28 Oct 2021 01:50:58 +0800
+Subject: [PATCH 0499/1418] TDX/P-SEAMLDR: Recovery #NMI handling after load
+ ACM by restore %ss
+
+We already had some code there to recovery the clobbered
+%cs but it's not enough, we need restore clobbered %ss to
+avoid double fault (#DF) yet.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/p-seamldr.c | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.c b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+index 0e45335525ac..dbb330237791 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.c
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+@@ -145,7 +145,18 @@ static int __init np_seamldr_die_notify(struct notifier_block *nb,
+ 		 * value.
+ 		 */
+ 		regs->cs = __KERNEL_CS;
+-		/* SS is zero. no need to correct. */
++
++		/* A #UD will be nested into #NMI due to CR4.FSGSBASE = 0:
++		   #NMI handler -> call paranoid_entry -> rdgsbase -> #UD
++		   The %ss pushed for exception handler on IST stack is the
++		   orignal %ss value but not NULL, CPU push NULL for %ss onto
++		   IST stack only for INTERRUPT handler. So the clobbered %ss
++		   finally pushes onto IST stack for #UD handler, and lead to
++		   #DF finally when CPU return from #UD handler, so restore
++		   %ss here.
++		*/
++		regs->ss = __KERNEL_DS;
++
+ 		return NOTIFY_STOP;
+ 	}
+ 
+-- 
+2.31.1
+

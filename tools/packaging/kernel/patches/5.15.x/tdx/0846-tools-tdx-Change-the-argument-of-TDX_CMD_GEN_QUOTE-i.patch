@@ -1,0 +1,52 @@
+From 2e698ae59e79acdfa898016bbbb82b9d855e6155 Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Tue, 23 Nov 2021 04:23:11 -0500
+Subject: [PATCH 0846/1418] tools/tdx: Change the argument of TDX_CMD_GEN_QUOTE
+ ioctl
+
+Wrap up quote_data with struct tdx_gen_quote as the argument of TDX_CMD_GEN_QUOTE ioctl.
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ tools/tdx/attest/tdx-attest-test.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/tools/tdx/attest/tdx-attest-test.c b/tools/tdx/attest/tdx-attest-test.c
+index cff33c3a0c32..2ecbf672beea 100644
+--- a/tools/tdx/attest/tdx-attest-test.c
++++ b/tools/tdx/attest/tdx-attest-test.c
+@@ -47,6 +47,11 @@ struct tdx_attest_args {
+ 	char *out_file;
+ };
+ 
++struct tdx_gen_quote {
++	void *buf;
++	size_t len;
++};
++
+ static void print_hex_dump(const char *title, const char *prefix_str,
+ 			   const void *buf, int len)
+ {
+@@ -125,6 +130,7 @@ static int gen_quote(int devfd, bool dump_data)
+ 	__u8 *quote_data;
+ 	__u64 quote_size;
+ 	int ret;
++	struct tdx_gen_quote getquote_arg;
+ 
+ 	quote_size = get_quote_size(devfd);
+ 
+@@ -140,7 +146,10 @@ static int gen_quote(int devfd, bool dump_data)
+ 		goto done;
+ 	}
+ 
+-	ret = ioctl(devfd, TDX_CMD_GEN_QUOTE, quote_data);
++	getquote_arg.buf = quote_data;
++	getquote_arg.len = quote_size;
++
++	ret = ioctl(devfd, TDX_CMD_GEN_QUOTE, &getquote_arg);
+ 	if (ret) {
+ 		printf("TDX_CMD_GEN_QUOTE ioctl() %d failed\n", ret);
+ 		goto done;
+-- 
+2.31.1
+

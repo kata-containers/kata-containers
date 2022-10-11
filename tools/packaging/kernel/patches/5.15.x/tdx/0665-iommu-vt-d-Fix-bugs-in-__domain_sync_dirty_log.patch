@@ -1,0 +1,46 @@
+From 16af8b05176e5fbb7818e7234a254ccf01e19ca2 Mon Sep 17 00:00:00 2001
+From: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Date: Thu, 22 Jul 2021 21:15:31 +0800
+Subject: [PATCH 0665/1418] iommu/vt-d: Fix bugs in __domain_sync_dirty_log()
+
+Signed-off-by: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+---
+ drivers/iommu/intel/iommu.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index f752cc7dd406..98c6b0c5d787 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -5864,8 +5864,7 @@ __domain_sync_dirty_log(struct dmar_domain *domain,
+ 		return -EINVAL;
+ 
+ 	while (nr_pages > 0) {
+-		largepage_lvl = hardware_largepage_caps(domain, iov_pfn,
+-							0, nr_pages);
++		largepage_lvl = 0;
+ 
+ 		pte = pfn_to_dma_pte(domain, iov_pfn, &largepage_lvl);
+ 		if (!pte || !dma_pte_present(pte))
+@@ -5875,7 +5874,7 @@ __domain_sync_dirty_log(struct dmar_domain *domain,
+ 		BUG_ON(nr_pages < lvl_pages);
+ 
+ 		if (!(pte->val & DMA_PTE_WRITE)) {
+-			pr_warn("The 0x%lx pte is READ ONLY.\n", iova);
++			pr_debug("The 0x%lx pte is READ ONLY.\n", iova);
+ 			goto skip;
+ 		}
+ 
+@@ -5900,7 +5899,7 @@ __domain_sync_dirty_log(struct dmar_domain *domain,
+ skip:
+ 		nr_pages -= lvl_pages;
+ 		iov_pfn += lvl_pages;
+-		iova += lvl_pages * VTD_PAGE_SHIFT;
++		iova += lvl_pages * VTD_PAGE_SIZE;
+ 	}
+ 
+ 	return 0;
+-- 
+2.31.1
+

@@ -1,0 +1,177 @@
+From 6770a9840063a6324eafe77886c7fcfe38cf3f22 Mon Sep 17 00:00:00 2001
+From: Kai Huang <kai.huang@intel.com>
+Date: Tue, 28 Sep 2021 09:55:49 +1300
+Subject: [PATCH 0323/1418] x86/cpu/tdx: Merge system memory and legacy PMEM as
+ final TDX memory
+
+After the TDX memory instance for legacy PMEMs is ready, merge TDX memory
+instances for both system memory and legacy PMEMs as final TDX memory.
+A later patch will use the final TDX memory instance to construct TDMRs.
+
+Signed-off-by: Kai Huang <kai.huang@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/Makefile   |  1 +
+ arch/x86/kernel/cpu/tdx/tdx-tdmr.c | 79 ++++++++++++++++++++++++++++++
+ arch/x86/kernel/cpu/tdx/tdx-tdmr.h | 16 ++++++
+ arch/x86/kernel/cpu/tdx/tdx.c      | 13 ++++-
+ 4 files changed, 108 insertions(+), 1 deletion(-)
+ create mode 100644 arch/x86/kernel/cpu/tdx/tdx-tdmr.c
+ create mode 100644 arch/x86/kernel/cpu/tdx/tdx-tdmr.h
+
+diff --git a/arch/x86/kernel/cpu/tdx/Makefile b/arch/x86/kernel/cpu/tdx/Makefile
+index 7a57bf88489f..cbf1a6eb04e4 100644
+--- a/arch/x86/kernel/cpu/tdx/Makefile
++++ b/arch/x86/kernel/cpu/tdx/Makefile
+@@ -4,3 +4,4 @@
+ obj-y	+= seam.o seamcall.o p-seamldr.o np-seamldr.o
+ obj-y	+= tdx-error.o tdx.o tdmr-common.o tdmr-sysmem.o
+ obj-$(CONFIG_ENABLE_TDX_FOR_X86_PMEM_LEGACY)	+= tdmr-legacy-pmem.o
++obj-y	+= tdx-tdmr.o
+diff --git a/arch/x86/kernel/cpu/tdx/tdx-tdmr.c b/arch/x86/kernel/cpu/tdx/tdx-tdmr.c
+new file mode 100644
+index 000000000000..f77f3bee6e0d
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/tdx-tdmr.c
+@@ -0,0 +1,79 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Convert all types of TDX capable memory to final TDX memory.
++ */
++
++#define pr_fmt(fmt) "tdx: " fmt
++
++#include <linux/types.h>
++#include <linux/errno.h>
++#include "tdx-tdmr.h"
++
++/*
++ * Final TDX memory which contains all memory blocks that can be used by TDX.
++ * Use this to construct final TDMRs.
++ */
++struct tdx_memory tmem_all __initdata;
++
++/*
++ * Merge subtype TDX memory to final TDX memory.
++ */
++static int __init merge_subtype_tdx_memory(struct tdx_memory *final_tmem,
++		struct tdx_memory *subtype_tmem, char *subtype_name)
++{
++	int ret;
++
++	ret = tdx_memory_merge(final_tmem, subtype_tmem);
++	if (ret)
++		pr_err("Fail to merge %s as TDX memory\n", subtype_name);
++
++	return ret;
++}
++
++/**
++ * build_final_tdx_memory:	Build final TDX memory which contains all TDX
++ *				capable memory blocks.
++ *
++ * Build final TDX memory which contains all TDX capable memory blocks by
++ * merging all sub-types of TDX capable memory that have been built.  After
++ * this function, all TDX capable memory blocks will be in @tmem_all.  In case
++ * of any error, all TDX memory intances are destroyed internally.
++ */
++int __init build_final_tdx_memory(void)
++{
++	int ret;
++
++	tdx_memory_init(&tmem_all);
++
++	ret = merge_subtype_tdx_memory(&tmem_all, &tmem_sysmem,
++			"system memory");
++	if (ret)
++		goto err;
++
++#ifdef CONFIG_ENABLE_TDX_FOR_X86_PMEM_LEGACY
++	ret = merge_subtype_tdx_memory(&tmem_all, &tmem_legacy_pmem,
++			"legacy PMEM");
++#endif
++	if (ret)
++		goto err;
++
++	return 0;
++err:
++	tdx_memory_destroy(&tmem_all);
++	cleanup_subtype_tdx_memory();
++	return ret;
++}
++
++/**
++ * cleanup_subtype_tdx_memory:	Clean up all subtypes TDX memory
++ *
++ * Clean up all subtypes TDX memory as resource cleanup in case of any error
++ * before build_final_tdx_memory().
++ */
++void __init cleanup_subtype_tdx_memory(void)
++{
++	tdx_sysmem_cleanup();
++#ifdef CONFIG_ENABLE_TDX_FOR_X86_PMEM_LEGACY
++	tdx_legacy_pmem_cleanup();
++#endif
++}
+diff --git a/arch/x86/kernel/cpu/tdx/tdx-tdmr.h b/arch/x86/kernel/cpu/tdx/tdx-tdmr.h
+new file mode 100644
+index 000000000000..86de1a5de021
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/tdx-tdmr.h
+@@ -0,0 +1,16 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _X86_TDX_TDMR_H
++#define _X86_TDX_TDMR_H
++
++#include "tdmr-sysmem.h"
++#include "tdmr-legacy-pmem.h"
++
++extern struct tdx_memory tmem_all __initdata;
++
++/* Build final TDX memory with all TDX capable memory blocks */
++int __init build_final_tdx_memory(void);
++
++/* Clean up TDX memory in case of any error before build_final_tdx_memory(). */
++void __init cleanup_subtype_tdx_memory(void);
++
++#endif
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 37b62b026d76..a52518a8a6e5 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -17,6 +17,7 @@
+ 
+ #include "tdmr-sysmem.h"
+ #include "tdmr-legacy-pmem.h"
++#include "tdx-tdmr.h"
+ #include "seamcall.h"
+ #include "tdx-ops.h"
+ #include "p-seamldr.h"
+@@ -768,6 +769,8 @@ arch_initcall(tdx_arch_init);
+ 
+ static int __init tdx_late_init(void)
+ {
++	int ret;
++
+ 	if (tdx_module_state != TDX_MODULE_LOADED)
+ 		return -ENODEV;
+ 
+@@ -776,6 +779,14 @@ static int __init tdx_late_init(void)
+ 	 * after e820__reserve_resources_late() is done, since it uses
+ 	 * walk_iomem_res_desc() to find legacy PMEMs
+ 	 */
+-	return tdx_legacy_pmem_build();
++	ret = tdx_legacy_pmem_build();
++	if (ret)
++		return ret;
++
++	/*
++	 * Both TDX memory instances for system memory and legacy PMEMs are
++	 * ready.  Merge them into final TDX memory for constructing TDMRs.
++	 */
++	return build_final_tdx_memory();
+ }
+ subsys_initcall_sync(tdx_late_init);
+-- 
+2.31.1
+

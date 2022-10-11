@@ -1,0 +1,59 @@
+From 47657f7ddf5455881e1db219d505abb136478225 Mon Sep 17 00:00:00 2001
+From: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Date: Thu, 19 Aug 2021 09:28:44 -0700
+Subject: [PATCH 0981/1418] IDXD/MDEV: Add support for handling 8 byte MMIO
+ accesses.
+
+---
+ drivers/vfio/mdev/idxd/mdev.c | 28 ++++++++++++++++++++++++++--
+ 1 file changed, 26 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/vfio/mdev/idxd/mdev.c b/drivers/vfio/mdev/idxd/mdev.c
+index 69ba0f67052a..9a8b428e0391 100644
+--- a/drivers/vfio/mdev/idxd/mdev.c
++++ b/drivers/vfio/mdev/idxd/mdev.c
+@@ -1198,7 +1198,19 @@ static ssize_t idxd_vdcm_read(struct vfio_device *vdev, char __user *buf, size_t
+ 	while (count) {
+ 		size_t filled;
+ 
+-		if (count >= 4 && !(*ppos % 4)) {
++		if (count >= 8 && !(*ppos % 8)) {
++			u64 val;
++
++			rc = idxd_vdcm_rw(vdev, (char *)&val, sizeof(val),
++					  ppos, IDXD_VDCM_READ);
++			if (rc <= 0)
++				goto read_err;
++
++			if (copy_to_user(buf, &val, sizeof(val)))
++				goto read_err;
++
++			filled = 8;
++		} else if (count >= 4 && !(*ppos % 4)) {
+ 			u32 val;
+ 
+ 			rc = idxd_vdcm_rw(vdev, (char *)&val, sizeof(val),
+@@ -1283,7 +1295,19 @@ static ssize_t idxd_vdcm_write(struct vfio_device *vdev, const char __user *buf,
+ 	while (count) {
+ 		size_t filled;
+ 
+-		if (count >= 4 && !(*ppos % 4)) {
++		if (count >= 8 && !(*ppos % 8)) {
++			u64 val;
++
++			if (copy_from_user(&val, buf, sizeof(val)))
++				goto write_err;
++
++			rc = idxd_vdcm_rw(vdev, (char *)&val, sizeof(val),
++					  ppos, IDXD_VDCM_WRITE);
++			if (rc <= 0)
++				goto write_err;
++
++			filled = 8;
++		} else if (count >= 4 && !(*ppos % 4)) {
+ 			u32 val;
+ 
+ 			if (copy_from_user(&val, buf, sizeof(val)))
+-- 
+2.31.1
+

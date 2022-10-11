@@ -1,0 +1,105 @@
+From a39ae39b256e22f4a85a9aa7f9c07622bcce221a Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Fri, 16 Oct 2020 20:13:34 -0700
+Subject: [PATCH 1168/1418] x86/fpu: Refactor arch_set_user_pkey_access()
+
+Both PKU and PKS update their register values in the same way.  They can
+therefore share the update code.
+
+Define a helper, pkey_update_pkval(), which will be used to support both
+Protection Key User (PKU) and the new Protection Key for Supervisor
+(PKS) in subsequent patches.
+
+pkey_update_pkval() contributed by Thomas
+
+Acked-by: Dave Hansen <dave.hansen@linux.intel.com>
+Co-developed-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ arch/x86/include/asm/pkeys.h |  2 ++
+ arch/x86/kernel/fpu/xstate.c | 22 ++++------------------
+ arch/x86/mm/pkeys.c          | 16 ++++++++++++++++
+ 3 files changed, 22 insertions(+), 18 deletions(-)
+
+diff --git a/arch/x86/include/asm/pkeys.h b/arch/x86/include/asm/pkeys.h
+index 1d5f14aff5f6..26616cbe19e2 100644
+--- a/arch/x86/include/asm/pkeys.h
++++ b/arch/x86/include/asm/pkeys.h
+@@ -131,4 +131,6 @@ static inline int vma_pkey(struct vm_area_struct *vma)
+ 	return (vma->vm_flags & vma_pkey_mask) >> VM_PKEY_SHIFT;
+ }
+ 
++u32 pkey_update_pkval(u32 pkval, u8 pkey, u32 accessbits);
++
+ #endif /*_ASM_X86_PKEYS_H */
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 53d7f245787a..503dedab7350 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -1082,8 +1082,7 @@ void *get_xsave_addr(struct xregs_state *xsave, int xfeature_nr)
+ int arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
+ 			      unsigned long init_val)
+ {
+-	u32 old_pkru, new_pkru_bits = 0;
+-	int pkey_shift;
++	u32 pkru;
+ 
+ 	/*
+ 	 * This check implies XSAVE support.  OSPKE only gets
+@@ -1100,22 +1099,9 @@ int arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
+ 	if (WARN_ON_ONCE(pkey >= arch_max_pkey()))
+ 		return -EINVAL;
+ 
+-	/* Set the bits needed in PKRU:  */
+-	if (init_val & PKEY_DISABLE_ACCESS)
+-		new_pkru_bits |= PKR_AD_BIT;
+-	if (init_val & PKEY_DISABLE_WRITE)
+-		new_pkru_bits |= PKR_WD_BIT;
+-
+-	/* Shift the bits in to the correct place in PKRU for pkey: */
+-	pkey_shift = pkey * PKR_BITS_PER_PKEY;
+-	new_pkru_bits <<= pkey_shift;
+-
+-	/* Get old PKRU and mask off any old bits in place: */
+-	old_pkru = read_pkru();
+-	old_pkru &= ~((PKR_AD_BIT|PKR_WD_BIT) << pkey_shift);
+-
+-	/* Write old part along with new part: */
+-	write_pkru(old_pkru | new_pkru_bits);
++	pkru = read_pkru();
++	pkru = pkey_update_pkval(pkru, pkey, init_val);
++	write_pkru(pkru);
+ 
+ 	return 0;
+ }
+diff --git a/arch/x86/mm/pkeys.c b/arch/x86/mm/pkeys.c
+index 3c53f6c11829..1708d1a8f39d 100644
+--- a/arch/x86/mm/pkeys.c
++++ b/arch/x86/mm/pkeys.c
+@@ -194,6 +194,22 @@ static __init int setup_init_pkru(char *opt)
+ }
+ __setup("init_pkru=", setup_init_pkru);
+ 
++/*
++ * Kernel users use the same flags as user space:
++ *     PKEY_DISABLE_ACCESS
++ *     PKEY_DISABLE_WRITE
++ */
++u32 pkey_update_pkval(u32 pkval, u8 pkey, u32 accessbits)
++{
++	int shift = pkey * PKR_BITS_PER_PKEY;
++
++	if (WARN_ON_ONCE(accessbits & ~PKEY_ACCESS_MASK))
++		accessbits &= PKEY_ACCESS_MASK;
++
++	pkval &= ~(PKEY_ACCESS_MASK << shift);
++	return pkval | accessbits << shift;
++}
++
+ #ifdef CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS
+ 
+ u32 get_current_pkrs(void)
+-- 
+2.31.1
+

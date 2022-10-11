@@ -1,0 +1,63 @@
+From 399d6ef8857663dcb52acabd68f5fc5445079b99 Mon Sep 17 00:00:00 2001
+From: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Date: Wed, 8 Dec 2021 19:18:05 +0200
+Subject: [PATCH 1389/1418] virtio console: Harden control message handling
+ some more
+
+In handle_control_message(), we look at the ->event field twice, which
+gives a malicious VMM a window in which to switch it from PORT_ADD to
+PORT_REMOVE, triggering a null dereference further down the line:
+
+> RIP: 0010:spin_lock_irq ./include/linux/spinlock.h:388
+> RIP: 0010:unplug_port+0x9/0x150 drivers/char/virtio_console.c:1512
+> Call Trace:
+>  handle_control_message+0x108/0x2c0 drivers/char/virtio_console.c:1600
+>  elfcorehdr_read+0x40/0x40 ??:?
+>  process_one_work+0x1b4/0x310 kernel/workqueue.c:2297
+>  worker_thread+0x5c/0x3a0 kernel/workqueue.c:2444
+>  kthread+0x120/0x140 kernel/kthread.c:319
+>  ret_from_fork+0x1f/0x30 arch/x86/entry/entry_64.S:295
+
+Read the event code once instead, basing all following decisions on the
+same value.
+
+Signed-off-by: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+---
+ drivers/char/virtio_console.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/char/virtio_console.c b/drivers/char/virtio_console.c
+index c62b755d7b46..e1be575cb717 100644
+--- a/drivers/char/virtio_console.c
++++ b/drivers/char/virtio_console.c
+@@ -1566,22 +1566,22 @@ static void handle_control_message(struct virtio_device *vdev,
+ 	struct port *port;
+ 	size_t name_size;
+ 	int err;
+-	unsigned id;
++	unsigned id, event;
+ 
+ 	cpkt = (struct virtio_console_control *)(buf->buf + buf->offset);
+ 
+-	/* Make sure the host cannot change id under us */
++	/* Make sure the host cannot change id or event under us */
+ 	id = virtio32_to_cpu(vdev, READ_ONCE(cpkt->id));
++	event = virtio16_to_cpu(vdev, cpkt->event);
+ 	port = find_port_by_id(portdev, id);
+-	if (!port &&
+-	    cpkt->event != cpu_to_virtio16(vdev, VIRTIO_CONSOLE_PORT_ADD)) {
++	if (!port && event != VIRTIO_CONSOLE_PORT_ADD) {
+ 		/* No valid header at start of buffer.  Drop it. */
+ 		dev_dbg(&portdev->vdev->dev,
+ 			"Invalid index %u in control packet\n", cpkt->id);
+ 		return;
+ 	}
+ 
+-	switch (virtio16_to_cpu(vdev, cpkt->event)) {
++	switch (event) {
+ 	case VIRTIO_CONSOLE_PORT_ADD:
+ 		if (port) {
+ 			dev_dbg(&portdev->vdev->dev,
+-- 
+2.31.1
+

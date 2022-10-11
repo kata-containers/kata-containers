@@ -1,0 +1,44 @@
+From a0bafdec5da83917bce118b338c4cc82a41321f3 Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Tue, 23 Nov 2021 02:51:51 -0500
+Subject: [PATCH 0844/1418] platform/x86: intel_tdx_attest: Fix address
+ alignment and TDX_CMD_GEN_QUOTE ioctl return value
+
+Fix two minor issues:
+- Physicall address of report date should be 64B aligned.
+- wait_for_completion_interruptible_timeout() return positive if
+completed. Return 0 if completed successfully.
+
+Fixes: 7e6537b1363d ("platform/x86: intel_tdx_attest: Add TDX Guest
+attestation interface driver")
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ drivers/platform/x86/intel/tdx/intel_tdx_attest.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+index a3e19af69c69..7a697ab1390f 100644
+--- a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
++++ b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+@@ -38,7 +38,7 @@ static DEFINE_MUTEX(attestation_lock);
+ /* Completion object to track attestation status */
+ static DECLARE_COMPLETION(attestation_done);
+ /* Buffer used to copy report data in attestation handler */
+-static u8 report_data[TDX_REPORT_DATA_LEN];
++static u8 report_data[TDX_REPORT_DATA_LEN] __aligned(64);
+ /* Data pointer used to get TD Quote data in attestation handler */
+ static void *tdquote_data;
+ /* Data pointer used to get TDREPORT data in attestation handler */
+@@ -101,6 +101,9 @@ static long tdx_attest_ioctl(struct file *file, unsigned int cmd,
+ 			break;
+ 		}
+ 
++		/* ret will be positive if completed. */
++		ret = 0;
++
+ 		if (copy_to_user(argp, tdquote_data, QUOTE_SIZE))
+ 			ret = -EFAULT;
+ 
+-- 
+2.31.1
+

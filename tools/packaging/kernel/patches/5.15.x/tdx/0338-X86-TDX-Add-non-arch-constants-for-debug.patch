@@ -1,0 +1,55 @@
+From 00717a3c554aaf7e61e00b8cf755e43da30a9156 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Thu, 22 Jul 2021 12:20:00 -0700
+Subject: [PATCH 0338/1418] X86: TDX: Add non-arch constants for debug
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/tdx_arch.h | 24 +++++++++++++++++++++++-
+ 1 file changed, 23 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/tdx_arch.h b/arch/x86/include/asm/tdx_arch.h
+index f44e1724ee39..8d7c90531a2b 100644
+--- a/arch/x86/include/asm/tdx_arch.h
++++ b/arch/x86/include/asm/tdx_arch.h
+@@ -16,6 +16,26 @@
+ #define SEAMCALL_TDH_SYS_TDMR_INIT		36
+ #define SEAMCALL_TDH_SYS_CONFIG			45
+ 
++/* Non-architectural debug configuration SEAMCALLs. */
++#define SEAMCALL_TDDEBUGCONFIG		0xFE
++#define SEAMCALL_TDXMODE		0XFF
++
++#define DEBUGCONFIG_SET_TARGET			0
++#define DEBUGCONFIG_TARGET_TRACE_BUFFER		0
++#define DEBUGCONFIG_TARGET_SERIAL_PORT		1
++#define DEBUGCONFIG_TARGET_EXTERNAL_BUFFER	2
++
++#define DEBUGCONFIG_DUMP_TRACE_BUFFER	1
++
++#define DEBUGCONFIG_SET_EMERGENCY_BUFFER	2
++
++#define DEBUGCONFIG_SET_TRACE_LEVEL	3
++#define DEBUGCONFIG_TRACE_ALL		0
++#define DEBUGCONFIG_TRACE_WARN		1
++#define DEBUGCONFIG_TRACE_ERROR		2
++#define DEBUGCONFIG_TRACE_CUSTOM	1000
++#define DEBUGCONFIG_TRACE_NONE		-1ull
++
+ #define TDX_SEAMCALL(name)	{ SEAMCALL_##name, #name }
+ 
+ #define TDX_SEAMCALLS				\
+@@ -24,7 +44,9 @@
+ 	TDX_SEAMCALL(TDH_SYS_INIT),		\
+ 	TDX_SEAMCALL(TDH_SYS_LP_INIT),		\
+ 	TDX_SEAMCALL(TDH_SYS_TDMR_INIT),	\
+-	TDX_SEAMCALL(TDH_SYS_CONFIG)
++	TDX_SEAMCALL(TDH_SYS_CONFIG),		\
++	TDX_SEAMCALL(TDDEBUGCONFIG),		\
++	TDX_SEAMCALL(TDXMODE)
+ 
+ #define TDX_MAX_NR_CMRS			32
+ #define TDX_MAX_NR_TDMRS		64
+-- 
+2.31.1
+

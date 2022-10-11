@@ -1,0 +1,112 @@
+From 2b64a280e419fea94feb4987f97908872d430d1c Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Sat, 21 Nov 2020 05:04:37 +0000
+Subject: [PATCH 0176/1418] x86/tdx: Add GetQuote TDX hypercall support
+
+The second stage in the attestation process is for the guest to request
+the VMM generate and sign a quote based on the TDREPORT acquired
+earlier.
+
+Add tdx_hcall_get_quote() helper function to implement the GetQuote
+hypercall.
+
+More details about the GetQuote TDVMCALL are in the Guest-Host
+Communication Interface (GHCI) Specification, sec 3.3, titled
+"VP.VMCALL<GetQuote>".
+
+This will be used by the TD attestation driver in follow-on patches.
+
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/tdx.h |  2 ++
+ arch/x86/kernel/tdx.c      | 45 ++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 47 insertions(+)
+
+diff --git a/arch/x86/include/asm/tdx.h b/arch/x86/include/asm/tdx.h
+index 0969b719eb8d..6a5ebea9bbfa 100644
+--- a/arch/x86/include/asm/tdx.h
++++ b/arch/x86/include/asm/tdx.h
+@@ -92,6 +92,8 @@ extern int tdx_hcall_gpa_intent(phys_addr_t gpa, int numpages,
+ 
+ int tdx_mcall_tdreport(u64 data, u64 reportdata);
+ 
++int tdx_hcall_get_quote(u64 data);
++
+ /*
+  * To support I/O port access in decompressor or early kernel init
+  * code, since #VE exception handler cannot be used, use paravirt
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 7eb93af7d7dc..04fd1c1d4032 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -25,6 +25,7 @@
+ 
+ /* TDX hypercall Leaf IDs */
+ #define TDVMCALL_MAP_GPA		0x10001
++#define TDVMCALL_GET_QUOTE		0x10002
+ 
+ /* TDX Module call error codes */
+ #define TDX_PAGE_ALREADY_ACCEPTED	0x00000b0a00000000
+@@ -34,6 +35,11 @@
+ #define TDCALL_SUCCESS			0x0
+ #define TDCALL_RETURN_CODE(a)		((a) & TDCALL_RETURN_CODE_MASK)
+ 
++/* TDX hypercall error codes */
++#define TDVMCALL_SUCCESS		0x0
++#define TDVMCALL_INVALID_OPERAND	0x8000000000000000
++#define TDVMCALL_TDREPORT_FAILED	0x8000000000000001
++
+ #define VE_IS_IO_OUT(exit_qual)		(((exit_qual) & 8) ? 0 : 1)
+ #define VE_GET_IO_SIZE(exit_qual)	(((exit_qual) & 7) + 1)
+ #define VE_GET_PORT_NUM(exit_qual)	((exit_qual) >> 16)
+@@ -169,6 +175,45 @@ int tdx_mcall_tdreport(u64 data, u64 reportdata)
+ }
+ EXPORT_SYMBOL_GPL(tdx_mcall_tdreport);
+ 
++/*
++ * tdx_hcall_get_quote() - Generate TDQUOTE using TDREPORT_STRUCT.
++ *
++ * @data        : Physical address of 4KB GPA memory which contains
++ *                TDREPORT_STRUCT.
++ *
++ * return 0 on success or failure error number.
++ */
++int tdx_hcall_get_quote(u64 data)
++{
++	u64 ret;
++
++	/*
++	 * Use confidential guest TDX check to ensure this API is only
++	 * used by TDX guest platforms.
++	 */
++	if (!data || !cc_platform_has(CC_ATTR_GUEST_TDX))
++		return -EINVAL;
++
++	/*
++	 * Pass the physical address of tdreport data to the VMM
++	 * and trigger the tdquote generation. Quote data will be
++	 * stored back in the same physical address space. More info
++	 * about ABI can be found in TDX Guest-Host-Communication
++	 * Interface (GHCI), sec 3.3.
++	 */
++	ret = _trace_tdx_hypercall(TDVMCALL_GET_QUOTE, data, 0, 0, 0, NULL);
++
++	if (ret == TDVMCALL_SUCCESS)
++		return 0;
++	else if (ret == TDVMCALL_INVALID_OPERAND)
++		return -EINVAL;
++	else if (ret == TDVMCALL_TDREPORT_FAILED)
++		return -EBUSY;
++
++	return -EIO;
++}
++EXPORT_SYMBOL_GPL(tdx_hcall_get_quote);
++
+ static void tdx_get_info(void)
+ {
+ 	struct tdx_module_output out;
+-- 
+2.31.1
+

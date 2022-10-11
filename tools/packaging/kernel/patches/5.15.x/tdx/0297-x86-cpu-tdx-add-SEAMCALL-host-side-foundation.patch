@@ -1,0 +1,367 @@
+From 1e8d5b5aef5946a9426b56d318e229d03a5d1f41 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Fri, 7 May 2021 22:37:52 -0700
+Subject: [PATCH 0297/1418] x86/cpu/tdx: add SEAMCALL host-side foundation
+
+SEAMCALLs are similar to a hypercall, except that they are made from a host
+kernel to the software running in a dedicated isolated CPU SEAM mode around
+the SEAMCALL instruction.  All SEAMCALLs (leaf functions) return a
+completion status in %rax.  In addition, some SEAMCALLs use additional
+registers as additional input and output.  Those registers include %rcx,
+%rdx, and %r8->%r11.  Due to the application binary interface (ABI)
+difference from the x86-64 system-v ABI, the ABI conversion is written in
+assembly code.
+
+To support different SEAMCALLs in a unified way, define a data structure
+'tdx_ex_ret' that has all possible input and output registers for the
+kernel to pass values around SEAMCALL, as real registers normally get
+clobbered quickly.
+
+Implement a wrapper function around a SEAMCALL instruction in preparation
+to support all SEAMCALLs.  Specific SEAMCALLs will be introduced when
+required in later patches.  Also, Implement a conversion function from
+error codes to symbolic names for log.
+
+Co-developed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/tdx_errno.h    | 19 ++++++++
+ arch/x86/include/asm/tdx_host.h     | 49 +++++++++++++++++++++
+ arch/x86/kernel/asm-offsets_64.c    | 12 ++++++
+ arch/x86/kernel/cpu/tdx/Makefile    |  3 +-
+ arch/x86/kernel/cpu/tdx/p-seamldr.h | 21 +++++++++
+ arch/x86/kernel/cpu/tdx/seamcall.S  | 62 ++++++++++++++++++++++++++
+ arch/x86/kernel/cpu/tdx/seamcall.h  | 25 +++++++++++
+ arch/x86/kernel/cpu/tdx/tdx-error.c | 67 +++++++++++++++++++++++++++++
+ 8 files changed, 257 insertions(+), 1 deletion(-)
+ create mode 100644 arch/x86/include/asm/tdx_errno.h
+ create mode 100644 arch/x86/include/asm/tdx_host.h
+ create mode 100644 arch/x86/kernel/cpu/tdx/p-seamldr.h
+ create mode 100644 arch/x86/kernel/cpu/tdx/seamcall.S
+ create mode 100644 arch/x86/kernel/cpu/tdx/seamcall.h
+ create mode 100644 arch/x86/kernel/cpu/tdx/tdx-error.c
+
+diff --git a/arch/x86/include/asm/tdx_errno.h b/arch/x86/include/asm/tdx_errno.h
+new file mode 100644
+index 000000000000..0e419855c147
+--- /dev/null
++++ b/arch/x86/include/asm/tdx_errno.h
+@@ -0,0 +1,19 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* architectural status code for SEAMCALL */
++
++#ifndef __ASM_X86_TDX_ERRNO_H
++#define __ASM_X86_TDX_ERRNO_H
++
++#define TDX_SEAMCALL_STATUS_MASK		0xFFFFFFFF00000000ULL
++
++/*
++ * TDX SEAMCALL Status Codes (returned in RAX)
++ */
++#define TDX_SUCCESS				0x0000000000000000ULL
++
++#define TDX_STATUS_CODE(name)	{ name, #name }
++
++#define TDX_STATUS_CODES					\
++	TDX_STATUS_CODE(TDX_SUCCESS)
++
++#endif /* __ASM_X86_TDX_ERRNO_H */
+diff --git a/arch/x86/include/asm/tdx_host.h b/arch/x86/include/asm/tdx_host.h
+new file mode 100644
+index 000000000000..162f96f0eedb
+--- /dev/null
++++ b/arch/x86/include/asm/tdx_host.h
+@@ -0,0 +1,49 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* constants/data definitions for TDX host */
++
++#ifndef __ASM_X86_TDX_HOST_H
++#define __ASM_X86_TDX_HOST_H
++
++#ifdef CONFIG_INTEL_TDX_HOST
++/*
++ * TDX extended return:
++ * Some of The "TDX module" SEAMCALLs return extended values (which are function
++ * leaf specific) in registers in addition to the completion status code in
++ * %rax.  For example, in the error case of TDH.SYS.INIT, the registers hold
++ * more detailed information about the error in addition to an error code.  Note
++ * that some registers may be unused depending on SEAMCALL functions.
++ */
++struct tdx_ex_ret {
++	union {
++		/*
++		 * TODO: define symbolic names for each SEAMCALLs to the
++		 * "TDX module" instead of register name for readability.
++		 */
++		struct {
++			u64 rcx;
++			u64 rdx;
++			u64 r8;
++			u64 r9;
++			u64 r10;
++			u64 r11;
++		} regs;
++	};
++};
++
++const char *tdx_seamcall_error_name(u64 error_code);
++void pr_seamcall_ex_ret_info(u64 op, u64 error_code,
++			     const struct tdx_ex_ret *ex_ret);
++#else
++static inline const char *tdx_seamcall_error_name(u64 error_code)
++{
++	return "";
++}
++
++struct tdx_ex_ret;
++static inline void pr_seamcall_ex_ret_info(u64 op, u64 error_code,
++					   const struct tdx_ex_ret *ex_ret)
++{
++}
++#endif
++
++#endif /* __ASM_X86_TDX_HOST_H */
+diff --git a/arch/x86/kernel/asm-offsets_64.c b/arch/x86/kernel/asm-offsets_64.c
+index b14533af7676..c4fda2788831 100644
+--- a/arch/x86/kernel/asm-offsets_64.c
++++ b/arch/x86/kernel/asm-offsets_64.c
+@@ -9,6 +9,8 @@
+ #include <asm/kvm_para.h>
+ #endif
+ 
++#include <asm/tdx_host.h>
++
+ int main(void)
+ {
+ #ifdef CONFIG_PARAVIRT
+@@ -25,6 +27,16 @@ int main(void)
+ 	BLANK();
+ #endif
+ 
++#ifdef CONFIG_INTEL_TDX_HOST
++	OFFSET(TDX_SEAM_rcx, tdx_ex_ret, regs.rcx);
++	OFFSET(TDX_SEAM_rdx, tdx_ex_ret, regs.rdx);
++	OFFSET(TDX_SEAM_r8,  tdx_ex_ret, regs.r8);
++	OFFSET(TDX_SEAM_r9,  tdx_ex_ret, regs.r9);
++	OFFSET(TDX_SEAM_r10, tdx_ex_ret, regs.r10);
++	OFFSET(TDX_SEAM_r11, tdx_ex_ret, regs.r11);
++	BLANK();
++#endif
++
+ #define ENTRY(entry) OFFSET(pt_regs_ ## entry, pt_regs, entry)
+ 	ENTRY(bx);
+ 	ENTRY(cx);
+diff --git a/arch/x86/kernel/cpu/tdx/Makefile b/arch/x86/kernel/cpu/tdx/Makefile
+index d4220ece410c..9e3739336c28 100644
+--- a/arch/x86/kernel/cpu/tdx/Makefile
++++ b/arch/x86/kernel/cpu/tdx/Makefile
+@@ -1,4 +1,5 @@
+ # SPDX-License-Identifier: GPL-2.0
+ # Makefile for seamldr and tdx module
+ 
+-obj-y	+= seam.o
++obj-y	+= seam.o seamcall.o
++obj-y	+= tdx-error.o
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.h b/arch/x86/kernel/cpu/tdx/p-seamldr.h
+new file mode 100644
+index 000000000000..9229c4b4bc71
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.h
+@@ -0,0 +1,21 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* data structures and C wrapper functions for the NP-SEAMLDR ABI and the P-SEAMLDR ABI */
++
++#ifndef _X86_TDX_P_SEAMLOADER_H
++#define _X86_TDX_P_SEAMLOADER_H
++
++/*
++ * P-SEAMLDR error codes
++ */
++#define P_SEAMLDR_SEAMCALL_ERROR_CODE	0x8000000000000000ULL
++
++#define P_SEAMLDR_SUCCESS	0x0000000000000000ULL
++
++#define P_SEAMLDR_ERROR_CODE(name)	{ name, #name }
++
++#define P_SEAMLDR_ERROR_CODES				\
++	P_SEAMLDR_ERROR_CODE(P_SEAMLDR_SUCCESS)
++
++const char *p_seamldr_error_name(u64 error_code);
++
++#endif /* _X86_TDX_P_SEAMLOADER_H */
+diff --git a/arch/x86/kernel/cpu/tdx/seamcall.S b/arch/x86/kernel/cpu/tdx/seamcall.S
+new file mode 100644
+index 000000000000..a79aff5d86fe
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/seamcall.S
+@@ -0,0 +1,62 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* ASM helper to call SEAMCALL for P-SEAMLDR, TDX module */
++
++#include <linux/linkage.h>
++
++#include <asm/asm-offsets.h>
++#include <asm/frame.h>
++#include <asm/asm.h>
++
++.macro seamcall
++	.byte 0x66, 0x0f, 0x01, 0xcf
++.endm
++
++/*
++ * u64 __seamcall(u64 op, u64 rcx, u64 rdx, u64 r8, u64 r9,
++ *                struct tdx_ex_ret *ex);
++ * A helper function to invoke SEAMCALL to request service for the
++ * P-SEAMLDR or the "TDX module".
++ *
++ * @op  (RDI)   SEAMCALL leaf ID
++ * @rcx (RSI)   input 1 (optional based on leaf ID)
++ * @rdx (RDX)   input 2 (optional based on leaf ID)
++ * @r8  (RCX)   input 3 (optional based on leaf ID)
++ * @r9  (R8)    input 4 (optional based on leaf ID)
++ * @ex  (R9)    pointer to struct tdx_ex_ret. optional returned values stored.
++ *
++ * @return RAX: completion code of P-SEAMLDR or TDX module
++ *              0 on success, non-0 on failure, trap number on fault.
++ */
++SYM_FUNC_START(__seamcall)
++	FRAME_BEGIN
++
++	/* save ex to use after the seamcall instruction. */
++	pushq	%r9
++
++	/*
++	 * shuffle registers from the function
++	 * call ABI to the SEAMCALL ABI.
++	 */
++	movq	%r8,  %r9
++	movq	%rcx, %r8
++	/* %rdx doesn't need shuffle. */
++	movq	%rsi, %rcx
++	movq	%rdi, %rax
++
++	seamcall
++
++	/*
++	 * Store extra returned values into ex.  Some registers
++	 * may be unused depending on SEAMCALL functions.
++	 */
++	popq	%rdi
++	movq	%rcx, TDX_SEAM_rcx(%rdi)
++	movq	%rdx, TDX_SEAM_rdx(%rdi)
++	movq	%r8,  TDX_SEAM_r8(%rdi)
++	movq	%r9,  TDX_SEAM_r9(%rdi)
++	movq	%r10, TDX_SEAM_r10(%rdi)
++	movq	%r11, TDX_SEAM_r11(%rdi)
++
++	FRAME_END
++	ret
++SYM_FUNC_END(__seamcall)
+diff --git a/arch/x86/kernel/cpu/tdx/seamcall.h b/arch/x86/kernel/cpu/tdx/seamcall.h
+new file mode 100644
+index 000000000000..fab1fe6c10ae
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/seamcall.h
+@@ -0,0 +1,25 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* C function wrapper for SEAMCALL */
++#ifndef __SEAM_SEAMCALL_H
++#define __SEAM_SEAMCALL_H
++
++#include <linux/linkage.h>
++
++#include <asm/tdx_host.h>
++
++asmlinkage u64 __seamcall(u64 op, u64 rcx, u64 rdx, u64 r8, u64 r9,
++			  struct tdx_ex_ret *ex);
++
++static inline u64 seamcall(u64 op, u64 rcx, u64 rdx, u64 r8, u64 r9,
++			   struct tdx_ex_ret *ex)
++{
++	struct tdx_ex_ret dummy;
++
++	if (!ex)
++		/* __seamcall requires non-NULL ex. */
++		ex = &dummy;
++
++	return __seamcall(op, rcx, rdx, r8, r9, ex);
++}
++
++#endif /* __SEAM_SEAMCALL_H */
+diff --git a/arch/x86/kernel/cpu/tdx/tdx-error.c b/arch/x86/kernel/cpu/tdx/tdx-error.c
+new file mode 100644
+index 000000000000..58ec4a70398d
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/tdx-error.c
+@@ -0,0 +1,67 @@
++// SPDX-License-Identifier: GPL-2.0
++/* functions to record TDX SEAMCALL error */
++
++#include <asm/tdx_errno.h>
++#include <asm/tdx_arch.h>
++#include <asm/tdx_host.h>
++
++#include "p-seamldr.h"
++
++struct tdx_seamcall_status {
++	u64 err_code;
++	const char *err_name;
++};
++
++static const struct tdx_seamcall_status p_seamldr_error_codes[] = {
++	P_SEAMLDR_ERROR_CODES
++};
++
++const char *p_seamldr_error_name(u64 error_code)
++{
++	struct tdx_seamcall_status status;
++	int i;
++
++	for (i = 0; i < ARRAY_SIZE(p_seamldr_error_codes); i++) {
++		status = p_seamldr_error_codes[i];
++		if (error_code == status.err_code)
++			return status.err_name;
++	}
++	return "Unknown SEAMLDR error code";
++}
++
++static const struct tdx_seamcall_status tdx_status_codes[] = {
++	TDX_STATUS_CODES
++};
++
++const char *tdx_seamcall_error_name(u64 error_code)
++{
++	struct tdx_seamcall_status status;
++	int i;
++
++	for (i = 0; i < ARRAY_SIZE(tdx_status_codes); i++) {
++		status = tdx_status_codes[i];
++		if ((error_code & TDX_SEAMCALL_STATUS_MASK) == status.err_code)
++			return status.err_name;
++	}
++
++	return "Unknown SEAMCALL status code";
++}
++EXPORT_SYMBOL_GPL(tdx_seamcall_error_name);
++
++void pr_seamcall_ex_ret_info(u64 op, u64 error_code,
++			     const struct tdx_ex_ret *ex_ret)
++{
++	if (WARN_ON(!ex_ret))
++		return;
++
++	switch (error_code & TDX_SEAMCALL_STATUS_MASK) {
++	/* TODO: add API specific pretty print. */
++	default:
++		pr_err("RCX 0x%llx, RDX 0x%llx, R8 0x%llx, R9 0x%llx, "
++		       "R10 0x%llx, R11 0x%llx\n",
++			ex_ret->regs.rcx, ex_ret->regs.rdx, ex_ret->regs.r8,
++			ex_ret->regs.r9, ex_ret->regs.r10, ex_ret->regs.r11);
++		break;
++	}
++}
++EXPORT_SYMBOL_GPL(pr_seamcall_ex_ret_info);
+-- 
+2.31.1
+

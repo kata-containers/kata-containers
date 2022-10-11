@@ -1,0 +1,55 @@
+From 12f0f78d221d5a6a71878761746b3acad052163b Mon Sep 17 00:00:00 2001
+From: "Sun, Yi Y" <yi.y.sun@intel.com>
+Date: Wed, 25 Nov 2020 16:53:56 +0800
+Subject: [PATCH 0641/1418] iommu/vt-d: Support cache_invalidation request for
+ gIOVA case
+
+This patch supports IOMMU cache invalidation for gIOVA page table. Such
+invalidation request from guest requires host IOMMU driver to figure out
+proper PASID (e.g. default PASID of aux-domain and etc.).
+
+From internal code based on 5.11-rc5, YiLiu used the ioasid_get_if_owned()
+to check ownership.
+
+Change-Id: Id49239b5a612d3f1afd6b543dbfc67e749cec6ed
+Signed-off-by: Sun, Yi Y <yi.y.sun@intel.com>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/intel/iommu.c | 21 +++++++++++++++------
+ 1 file changed, 15 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 1f45854f8cee..8533fe1123e6 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -4991,12 +4991,21 @@ intel_iommu_sva_invalidate(struct iommu_domain *domain, struct device *dev,
+ 		 * PASID is stored in different locations based on the
+ 		 * granularity.
+ 		 */
+-		if (inv_info->granularity == IOMMU_INV_GRANU_PASID &&
+-		    (inv_info->granu.pasid_info.flags & IOMMU_INV_PASID_FLAGS_PASID))
+-			pasid = inv_info->granu.pasid_info.pasid;
+-		else if (inv_info->granularity == IOMMU_INV_GRANU_ADDR &&
+-			 (inv_info->granu.addr_info.flags & IOMMU_INV_ADDR_FLAGS_PASID))
+-			pasid = inv_info->granu.addr_info.pasid;
++		if (inv_info->granularity == IOMMU_INV_GRANU_PASID) {
++			if (inv_info->granu.pasid_info.flags &
++			    IOMMU_INV_PASID_FLAGS_PASID) {
++				pasid = inv_info->granu.pasid_info.pasid;
++			} else {
++				pasid = domain_get_pasid(domain, dev);
++			}
++		} else if (inv_info->granularity == IOMMU_INV_GRANU_ADDR) {
++			if (inv_info->granu.addr_info.flags &
++			    IOMMU_INV_ADDR_FLAGS_PASID) {
++				pasid = inv_info->granu.addr_info.pasid;
++			} else {
++				pasid = domain_get_pasid(domain, dev);
++			}
++		}
+ 
+ 		ret = ioasid_get_if_owned(pasid);
+ 		if (ret)
+-- 
+2.31.1
+

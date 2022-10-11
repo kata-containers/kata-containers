@@ -1,0 +1,188 @@
+From 1e4ab15e3350347d018a67cca9d240a17c30858c Mon Sep 17 00:00:00 2001
+From: Yi Liu <yi.l.liu@intel.com>
+Date: Sat, 23 Apr 2022 20:58:04 -0700
+Subject: [PATCH 1317/1418] iommu/vt-d: Fix A-B-C-A dead lock issue which
+ results in PRQ timeout
+
+A lock: param->lock
+B lock: fparam->lock
+C lock: pasid_mutex
+
+Thread #1: prq report, holds A lock, and tries to hold B lock
+Thread #2: page response, holds B lock, and tries to hold C lock
+Thread #3: unbind_gpasid (could be bind_gpasid or intel_svm_free_async_fn as well),
+           holds C lock, and tries to hold A lock.
+
+Dead lock happens when #1 holds A lock, #2 holds B lock and #3 holds C lock.
+
+PRQ report:
+     A lock    =>      B lock        unlock   =>     unlock
+       |                 |             |               |
+       |                 +-------------+               |
+       +-----------------------------------------------+
+
+Page response:
+     B lock    =>      C lock        unlock   =>     unlock
+       |                  |             |              |
+       |                  +-------------+              |
+       +-----------------------------------------------+
+
+Unbind_gpasid:
+     C lock   =>        A lock        unlock  =>     unlock
+       |                  |             |              |
+       |                  +-------------+              |
+       +-----------------------------------------------+
+
+This fix moves the attempt of holding A lock in Thread #3 to be
+outside of C lock protection. To demonstrate well, also draw
+the bind_gpasid explicitly. After fixing, the locking sequence is as
+below:
+
+Bind_gpasid:
+                                                    {only for bind failure}
+    A lock      unlock  =>   C lock     unlock  =>  A lock       unlock
+      |           |           |          |            |            |
+      +-----------+           +----------+            +------------+
+
+PRQ report:
+    A lock   =>    B lock        unlock   =>    unlock
+      |              |             |              |
+      |              +-------------+              |
+      +-------------------------------------------+
+
+Page response:
+    B lock   =>    C lock        unlock   =>    unlock
+      |              |             |              |
+      |              +-------------+              |
+      +-------------------------------------------+
+
+Unbind_gpasid:
+    C lock       unlock  =>    A lock     unlock
+      |            |             |          |
+      +------------+             +----------+
+
+Signed-off-by: Yi Liu <yi.l.liu@intel.com>
+---
+ drivers/iommu/intel/svm.c | 56 +++++++++++++++++++++++++++------------
+ 1 file changed, 39 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index ba63f7c7b44f..a3fb6d7db955 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -116,7 +116,9 @@ static DEFINE_MUTEX(pasid_mutex);
+ static void intel_svm_free_async_fn(struct work_struct *work)
+ {
+ 	struct intel_svm *svm = container_of(work, struct intel_svm, work);
+-	struct intel_svm_dev *sdev;
++	struct intel_svm_dev *sdev, *tmp;
++	LIST_HEAD(sdevs);
++	u32 pasid = svm->pasid;
+ 
+ 	/*
+ 	 * Unbind all devices associated with this PASID which is
+@@ -132,11 +134,10 @@ static void intel_svm_free_async_fn(struct work_struct *work)
+ 		intel_svm_drain_prq(sdev->dev, svm->pasid);
+ 		spin_unlock(&sdev->iommu->lock);
+ 		/*
+-		 * Partial assignment needs to delete fault data
++		 * Record the sdev and delete device_fault_data outside pasid_mutex
++		 * protection to avoid race with page response and prq reporting.
+ 		 */
+-		if (is_aux_domain(sdev->dev, &sdev->domain->domain))
+-			iommu_delete_device_fault_data(sdev->dev, svm->pasid);
+-		kfree_rcu(sdev, rcu);
++		list_add_tail(&sdev->list, &sdevs);
+ 	}
+ 	/*
+ 	 * We may not be the last user to drop the reference but since
+@@ -156,6 +157,16 @@ static void intel_svm_free_async_fn(struct work_struct *work)
+ 	kfree(svm);
+ 
+ 	mutex_unlock(&pasid_mutex);
++
++	list_for_each_entry_safe(sdev, tmp, &sdevs, list) {
++		list_del(&sdev->list);
++		/*
++		 * Partial assignment needs to delete fault data
++		 */
++		if (is_aux_domain(sdev->dev, &sdev->domain->domain))
++			iommu_delete_device_fault_data(sdev->dev, pasid);
++		kfree_rcu(sdev, rcu);
++	}
+ }
+ 
+ 
+@@ -424,6 +435,15 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain,
+ 	if (!info)
+ 		return -EINVAL;
+ 
++	/*
++	 * Partial assignment needs to add fault data per-pasid.
++	 * Add the fault data in advance as per pasid entry setup it should
++	 * be able to handle prq. And this should be outside of pasid_mutex
++	 * to avoid race with page response and prq reporting.
++	 */
++	if (is_aux_domain(dev, domain) && fault_data)
++		iommu_add_device_fault_data(dev, data->hpasid,
++					    fault_data);
+ 	mutex_lock(&pasid_mutex);
+ 	ret = pasid_to_svm_sdev(dev, pasid_set,
+ 				data->hpasid, &svm, &sdev);
+@@ -455,12 +475,6 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain,
+ 			svm->flags |= SVM_FLAG_GUEST_PASID;
+ 			if (!(data->flags & IOMMU_SVA_HPASID_DEF))
+ 				ioasid_attach_spid(data->hpasid, data->gpasid);
+-			/*
+-			 * Partial assignment needs to add fault data per-pasid
+-			 */
+-			if (is_aux_domain(dev, domain) && fault_data)
+-				iommu_add_device_fault_data(dev, data->hpasid,
+-							    fault_data);
+ 		}
+ 		ioasid_attach_data(data->hpasid, svm);
+ 		ioasid_get(NULL, svm->pasid);
+@@ -534,6 +548,10 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain,
+ 		data->hpasid = hpasid_org;
+ 
+ 	mutex_unlock(&pasid_mutex);
++
++	if (ret && is_aux_domain(dev, domain) && fault_data)
++		iommu_delete_device_fault_data(dev,
++				(data->flags & IOMMU_SVA_HPASID_DEF) ? hpasid_org : data->hpasid);
+ 	return ret;
+ }
+ 
+@@ -576,12 +594,6 @@ int intel_svm_unbind_gpasid(struct iommu_domain *domain,
+ 			intel_pasid_tear_down_entry(iommu, dev,
+ 						    svm->pasid, false, keep_pte);
+ 			intel_svm_drain_prq(dev, svm->pasid);
+-			/*
+-			 * Partial assignment needs to delete fault data
+-			 */
+-			if (is_aux_domain(dev, domain))
+-				iommu_delete_device_fault_data(dev, pasid);
+-			kfree_rcu(sdev, rcu);
+ 
+ 			if (list_empty(&svm->devs)) {
+ 				/*
+@@ -600,6 +612,16 @@ int intel_svm_unbind_gpasid(struct iommu_domain *domain,
+ 	}
+ out:
+ 	mutex_unlock(&pasid_mutex);
++	if (sdev) {
++		/*
++		 * Partial assignment needs to delete fault data, this should
++		 * be outside of pasid_mutex protection to avoid race with
++		 * page response and prq reporting.
++		 */
++		if (is_aux_domain(dev, domain))
++			iommu_delete_device_fault_data(dev, pasid);
++		kfree_rcu(sdev, rcu);
++	}
+ 	return ret;
+ }
+ 
+-- 
+2.31.1
+

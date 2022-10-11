@@ -1,0 +1,73 @@
+From 0cf727170dfecf1a7b71d0d120326245c3ea6f62 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Wed, 8 Sep 2021 16:21:04 -0700
+Subject: [PATCH 0341/1418] *** HACK *** KVM: TDX: SEAMLOADR print CMRs, TMDRs
+ and PAMTs region as info
+
+For debug purpose, print the region of CMRs, TDMRs and PAMTs. Those regions
+are useful to analyze issues related to TDX-module.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdx-tdmr.c | 16 ++++++++++++++++
+ arch/x86/kernel/cpu/tdx/tdx.c      |  3 +++
+ 2 files changed, 19 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdx-tdmr.c b/arch/x86/kernel/cpu/tdx/tdx-tdmr.c
+index 7e459bb3815e..424ad9bc1179 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx-tdmr.c
++++ b/arch/x86/kernel/cpu/tdx/tdx-tdmr.c
+@@ -7,6 +7,8 @@
+ 
+ #include <linux/types.h>
+ #include <linux/errno.h>
++#include <linux/cache.h>
++#include <asm/page_types.h>
+ #include <asm/tdx_host.h>
+ #include <asm/page_types.h>
+ #include "tdx-tdmr.h"
+@@ -101,6 +103,8 @@ int __init construct_tdx_tdmrs(struct cmr_info *cmr_array, int cmr_num,
+ 		struct tdmr_info *tdmr_info_array, int *tdmr_num)
+ {
+ 	int ret = 0;
++	int i;
++	struct tdx_memblock *tmb;
+ 
+ 	/* No TDX memory available */
+ 	if (list_empty(&tmem_all.tmb_list))
+@@ -113,6 +117,18 @@ int __init construct_tdx_tdmrs(struct cmr_info *cmr_array, int cmr_num,
+ 		goto out;
+ 	}
+ 
++	i = 0;
++	list_for_each_entry(tmb, &tmem_all.tmb_list, list) {
++		pr_info("TDX TDMR[%2d]: base 0x%016lx size 0x%016lx\n",
++			i, tmb->start_pfn << PAGE_SHIFT,
++			tmb->end_pfn << PAGE_SHIFT);
++		if (tmb->pamt)
++			pr_info("TDX PAMT[%2d]: base 0x%016lx size 0x%016lx\n",
++				i, tmb->pamt->pamt_pfn << PAGE_SHIFT,
++				tmb->pamt->total_pages << PAGE_SHIFT);
++		i++;
++	}
++
+ out:
+ 	/*
+ 	 * Keep @tmem_all if constructing TDMRs was successfully done, since
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index 0baa8eec5b78..96e693eced2b 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -626,6 +626,9 @@ static int __init tdx_get_system_info(void)
+ 
+ 	/* Keep tdx_tdsysinfo to export that info via sysfs. */
+ 
++	for (i = 0; i < tdx_nr_cmrs; i++)
++		pr_info("TDX CMR[%2d]: base 0x%016llx size 0x%016llx\n",
++			i, tdx_cmrs[i].base, tdx_cmrs[i].size);
+ out:
+ 	return err;
+ }
+-- 
+2.31.1
+

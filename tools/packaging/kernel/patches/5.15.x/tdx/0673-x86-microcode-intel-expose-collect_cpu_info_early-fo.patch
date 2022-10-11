@@ -1,0 +1,90 @@
+From cc3bd84e95ce907ff15cdef9978075c27f7d0d54 Mon Sep 17 00:00:00 2001
+From: Kyung Min Park <kyung.min.park@intel.com>
+Date: Mon, 23 Aug 2021 16:23:35 -0700
+Subject: [PATCH 0673/1418] x86/microcode/intel: expose
+ collect_cpu_info_early() for SAF
+
+SAF uses a image provided by Intel that can be regarded as firmware.
+SAF image carries the Processor Signature such as family/model/stepping
+similar to what we find in the microcode header.
+
+Expose collect_cpu_info_early() and cpu_signatures_match() for SAF image
+sanity check.
+
+No functional change.
+
+Signed-off-by: Kyung Min Park <kyung.min.park@intel.com>
+Reviewed-by: Ashok Raj <ashok.raj@intel.com>
+Signed-off-by: Jithu Joseph <jithu.joseph@intel.com>
+---
+ arch/x86/include/asm/microcode_intel.h | 6 ++++++
+ arch/x86/kernel/cpu/microcode/intel.c  | 8 +++++---
+ 2 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/arch/x86/include/asm/microcode_intel.h b/arch/x86/include/asm/microcode_intel.h
+index a342234a0a5b..c2976e1deb1b 100644
+--- a/arch/x86/include/asm/microcode_intel.h
++++ b/arch/x86/include/asm/microcode_intel.h
+@@ -75,6 +75,9 @@ extern void show_ucode_info_early(void);
+ extern int __init save_microcode_in_initrd_intel(void);
+ void reload_ucode_intel(void);
+ int update_cpusvn_intel(void);
++int collect_cpu_info_early(struct ucode_cpu_info *uci);
++bool cpu_signatures_match(unsigned int s1, unsigned int p1,
++			  unsigned int s2, unsigned int p2);
+ #else
+ static inline __init void load_ucode_intel_bsp(void) {}
+ static inline void load_ucode_intel_ap(void) {}
+@@ -82,6 +85,9 @@ static inline void show_ucode_info_early(void) {}
+ static inline int __init save_microcode_in_initrd_intel(void) { return -EINVAL; }
+ static inline void reload_ucode_intel(void) {}
+ static inline int update_cpusvn_intel(void) { return -1; }
++static inline void collect_cpu_info_early(struct ucode_cpu_info *uci) {}
++static inline void cpu_signatures_match(unsigned int s1, unsigned int p1,
++					unsigned int s2, unsigned int p2) {}
+ #endif
+ 
+ #endif /* _ASM_X86_MICROCODE_INTEL_H */
+diff --git a/arch/x86/kernel/cpu/microcode/intel.c b/arch/x86/kernel/cpu/microcode/intel.c
+index 6453ac8ba9f6..c81304d7376b 100644
+--- a/arch/x86/kernel/cpu/microcode/intel.c
++++ b/arch/x86/kernel/cpu/microcode/intel.c
+@@ -48,8 +48,8 @@ static struct microcode_intel *intel_ucode_patch;
+ /* last level cache size per core */
+ static int llc_size_per_core;
+ 
+-static inline bool cpu_signatures_match(unsigned int s1, unsigned int p1,
+-					unsigned int s2, unsigned int p2)
++bool cpu_signatures_match(unsigned int s1, unsigned int p1,
++			  unsigned int s2, unsigned int p2)
+ {
+ 	if (s1 != s2)
+ 		return false;
+@@ -61,6 +61,7 @@ static inline bool cpu_signatures_match(unsigned int s1, unsigned int p1,
+ 	/* ... or they intersect. */
+ 	return p1 & p2;
+ }
++EXPORT_SYMBOL_GPL(cpu_signatures_match);
+ 
+ /*
+  * Returns 1 if update has been found, 0 otherwise.
+@@ -345,7 +346,7 @@ scan_microcode(void *data, size_t size, struct ucode_cpu_info *uci, bool save)
+ 	return patch;
+ }
+ 
+-static int collect_cpu_info_early(struct ucode_cpu_info *uci)
++int collect_cpu_info_early(struct ucode_cpu_info *uci)
+ {
+ 	unsigned int val[2];
+ 	unsigned int family, model;
+@@ -375,6 +376,7 @@ static int collect_cpu_info_early(struct ucode_cpu_info *uci)
+ 
+ 	return 0;
+ }
++EXPORT_SYMBOL_GPL(collect_cpu_info_early);
+ 
+ static void show_saved_mc(void)
+ {
+-- 
+2.31.1
+

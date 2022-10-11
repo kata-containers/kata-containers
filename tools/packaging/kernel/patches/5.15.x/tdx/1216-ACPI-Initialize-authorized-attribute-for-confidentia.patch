@@ -1,0 +1,47 @@
+From e8fdd3b7ac2109aaa22a22104ff223bc13e87d6f Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Sun, 13 Mar 2022 19:38:50 +0000
+Subject: [PATCH 1216/1418] ACPI: Initialize authorized attribute for
+ confidential guest
+
+Confidential guest platforms like TDX have a requirement to allow
+only trusted devices. So initialize the "authorized" attribute
+using cc_guest_dev_authorized().
+
+cc_guest_dev_authorized() will consult ARCH specific allow list
+to return authorization status of the given device.
+
+Add support to initialize the ACPI bus authorized attribute using
+cc_guest_dev_authorized() API.
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ drivers/acpi/scan.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/acpi/scan.c b/drivers/acpi/scan.c
+index 6d795d6db4ce..c3ddc1217562 100644
+--- a/drivers/acpi/scan.c
++++ b/drivers/acpi/scan.c
+@@ -19,6 +19,7 @@
+ #include <linux/dma-map-ops.h>
+ #include <linux/platform_data/x86/apple.h>
+ #include <linux/pgtable.h>
++#include <linux/cc_platform.h>
+ 
+ #include "internal.h"
+ 
+@@ -720,6 +721,10 @@ static int __acpi_device_add(struct acpi_device *device,
+ 
+ 	device->dev.bus = &acpi_bus_type;
+ 	device->dev.release = release;
++
++	if (cc_platform_has(CC_ATTR_GUEST_DEVICE_FILTER))
++		device->dev.authorized = cc_guest_dev_authorized(&device->dev);
++
+ 	result = device_add(&device->dev);
+ 	if (result) {
+ 		dev_err(&device->dev, "Error registering device\n");
+-- 
+2.31.1
+

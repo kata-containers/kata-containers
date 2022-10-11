@@ -1,0 +1,121 @@
+From 7831fe747a4c0bb3d16e7b5aa957b6af833a39fa Mon Sep 17 00:00:00 2001
+From: Artem Bityutskiy <artem.bityutskiy@linux.intel.com>
+Date: Wed, 2 Mar 2022 10:15:58 +0200
+Subject: [PATCH 1319/1418] intel_idle: add SPR support
+
+Add Sapphire Rapids Xeon support.
+
+Up until very recently, the C1 and C1E C-states were independent, but this
+has changed in some new chips, including Sapphire Rapids Xeon (SPR). In these
+chips the C1 and C1E states cannot be enabled at the same time. The "C1E
+promotion" bit in 'MSR_IA32_POWER_CTL' also has its semantics changed a bit.
+
+Here are the C1, C1E, and "C1E promotion" bit rules on Xeons before SPR.
+
+1. If C1E promotion bit is disabled.
+   a. C1  requests end up with C1  C-state.
+   b. C1E requests end up with C1E C-state.
+2. If C1E promotion bit is enabled.
+   a. C1  requests end up with C1E C-state.
+   b. C1E requests end up with C1E C-state.
+
+Here are the C1, C1E, and "C1E promotion" bit rules on Sapphire Rapids Xeon.
+1. If C1E promotion bit is disabled.
+   a. C1  requests end up with C1 C-state.
+   b. C1E requests end up with C1 C-state.
+2. If C1E promotion bit is enabled.
+   a. C1  requests end up with C1E C-state.
+   b. C1E requests end up with C1E C-state.
+
+Before SPR Xeon, the 'intel_idle' driver was disabling C1E promotion and was
+exposing C1 and C1E as independent C-states. But on SPR, C1 and C1E cannot be
+enabled at the same time.
+
+This patch adds both C1 and C1E states. However, C1E is marked as with the
+"CPUIDLE_FLAG_UNUSABLE" flag, which means that in won't be registered by
+default. The C1E promotion bit will be cleared, which means that by default
+only C1 and C6 will be registered on SPR.
+
+The next patch will add an option for enabling C1E and disabling C1 on SPR.
+
+Signed-off-by: Artem Bityutskiy <artem.bityutskiy@linux.intel.com>
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ drivers/idle/intel_idle.c | 47 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 47 insertions(+)
+
+diff --git a/drivers/idle/intel_idle.c b/drivers/idle/intel_idle.c
+index e6c543b5ee1d..0ce09a67ddbf 100644
+--- a/drivers/idle/intel_idle.c
++++ b/drivers/idle/intel_idle.c
+@@ -752,6 +752,46 @@ static struct cpuidle_state icx_cstates[] __initdata = {
+ 		.enter = NULL }
+ };
+ 
++/*
++ * On Sapphire Rapids Xeon C1 has to be disabled if C1E is enabled, and vice
++ * versa. On SPR C1E is enabled only if "C1E promotion" bit is set in
++ * MSR_IA32_POWER_CTL. But in this case there effectively no C1, because C1
++ * requests are promoted to C1E. If the "C1E promotion" bit is cleared, then
++ * both C1 and C1E requests end up with C1, so there is effectively no C1E.
++ *
++ * By default we enable C1 and disable C1E by marking it with
++ * 'CPUIDLE_FLAG_UNUSABLE'.
++ */
++static struct cpuidle_state spr_cstates[] __initdata = {
++	{
++		.name = "C1",
++		.desc = "MWAIT 0x00",
++		.flags = MWAIT2flg(0x00),
++		.exit_latency = 1,
++		.target_residency = 1,
++		.enter = &intel_idle,
++		.enter_s2idle = intel_idle_s2idle, },
++	{
++		.name = "C1E",
++		.desc = "MWAIT 0x01",
++		.flags = MWAIT2flg(0x01) | CPUIDLE_FLAG_ALWAYS_ENABLE | \
++					   CPUIDLE_FLAG_UNUSABLE,
++		.exit_latency = 2,
++		.target_residency = 4,
++		.enter = &intel_idle,
++		.enter_s2idle = intel_idle_s2idle, },
++	{
++		.name = "C6",
++		.desc = "MWAIT 0x20",
++		.flags = MWAIT2flg(0x20) | CPUIDLE_FLAG_TLB_FLUSHED,
++		.exit_latency = 290,
++		.target_residency = 800,
++		.enter = &intel_idle,
++		.enter_s2idle = intel_idle_s2idle, },
++	{
++		.enter = NULL }
++};
++
+ static struct cpuidle_state atom_cstates[] __initdata = {
+ 	{
+ 		.name = "C1E",
+@@ -1095,6 +1135,12 @@ static const struct idle_cpu idle_cpu_icx __initconst = {
+ 	.use_acpi = true,
+ };
+ 
++static const struct idle_cpu idle_cpu_spr __initconst = {
++	.state_table = spr_cstates,
++	.disable_promotion_to_c1e = true,
++	.use_acpi = true,
++};
++
+ static const struct idle_cpu idle_cpu_avn __initconst = {
+ 	.state_table = avn_cstates,
+ 	.disable_promotion_to_c1e = true,
+@@ -1157,6 +1203,7 @@ static const struct x86_cpu_id intel_idle_ids[] __initconst = {
+ 	X86_MATCH_INTEL_FAM6_MODEL(SKYLAKE_X,		&idle_cpu_skx),
+ 	X86_MATCH_INTEL_FAM6_MODEL(ICELAKE_X,		&idle_cpu_icx),
+ 	X86_MATCH_INTEL_FAM6_MODEL(ICELAKE_D,		&idle_cpu_icx),
++	X86_MATCH_INTEL_FAM6_MODEL(SAPPHIRERAPIDS_X,	&idle_cpu_spr),
+ 	X86_MATCH_INTEL_FAM6_MODEL(XEON_PHI_KNL,	&idle_cpu_knl),
+ 	X86_MATCH_INTEL_FAM6_MODEL(XEON_PHI_KNM,	&idle_cpu_knl),
+ 	X86_MATCH_INTEL_FAM6_MODEL(ATOM_GOLDMONT,	&idle_cpu_bxt),
+-- 
+2.31.1
+

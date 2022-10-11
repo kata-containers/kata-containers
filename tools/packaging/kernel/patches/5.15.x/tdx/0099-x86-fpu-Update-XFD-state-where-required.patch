@@ -1,0 +1,174 @@
+From 8c8cc19234ed2d306e6f75477d90831117ffda53 Mon Sep 17 00:00:00 2001
+From: "Chang S. Bae" <chang.seok.bae@intel.com>
+Date: Thu, 21 Oct 2021 15:55:20 -0700
+Subject: [PATCH 0099/1418] x86/fpu: Update XFD state where required
+
+The IA32_XFD_MSR allows to arm #NM traps for XSTATE components which are
+enabled in XCR0. The register has to be restored before the tasks XSTATE is
+restored. The life time rules are the same as for FPU state.
+
+XFD is updated on return to userspace only when the FPU state of the task
+is not up to date in the registers. It's updated before the XRSTORS so
+that eventually enabled dynamic features are restored as well and not
+brought into init state.
+
+Also in signal handling for restoring FPU state from user space the
+correctness of the XFD state has to be ensured.
+
+Add it to CPU initialization and resume as well.
+
+Signed-off-by: Chang S. Bae <chang.seok.bae@intel.com>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lore.kernel.org/r/20211021225527.10184-17-chang.seok.bae@intel.com
+---
+ arch/x86/kernel/fpu/context.h |  2 ++
+ arch/x86/kernel/fpu/core.c    | 28 +++++++++++++++++++++++++++-
+ arch/x86/kernel/fpu/signal.c  |  2 ++
+ arch/x86/kernel/fpu/xstate.c  | 12 ++++++++++++
+ arch/x86/kernel/fpu/xstate.h  | 19 ++++++++++++++++++-
+ 5 files changed, 61 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/fpu/context.h b/arch/x86/kernel/fpu/context.h
+index a06ebf315d83..958accf2ccf0 100644
+--- a/arch/x86/kernel/fpu/context.h
++++ b/arch/x86/kernel/fpu/context.h
+@@ -69,6 +69,8 @@ static inline void fpregs_restore_userregs(void)
+ 		 * correct because it was either set in switch_to() or in
+ 		 * flush_thread(). So it is excluded because it might be
+ 		 * not up to date in current->thread.fpu.xsave state.
++		 *
++		 * XFD state is handled in restore_fpregs_from_fpstate().
+ 		 */
+ 		restore_fpregs_from_fpstate(fpu->fpstate, XFEATURE_MASK_FPSTATE);
+ 
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index b5f5b08b84d7..12ca174891dc 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -155,6 +155,23 @@ void restore_fpregs_from_fpstate(struct fpstate *fpstate, u64 mask)
+ 	}
+ 
+ 	if (use_xsave()) {
++		/*
++		 * Dynamically enabled features are enabled in XCR0, but
++		 * usage requires also that the corresponding bits in XFD
++		 * are cleared.  If the bits are set then using a related
++		 * instruction will raise #NM. This allows to do the
++		 * allocation of the larger FPU buffer lazy from #NM or if
++		 * the task has no permission to kill it which would happen
++		 * via #UD if the feature is disabled in XCR0.
++		 *
++		 * XFD state is following the same life time rules as
++		 * XSTATE and to restore state correctly XFD has to be
++		 * updated before XRSTORS otherwise the component would
++		 * stay in or go into init state even if the bits are set
++		 * in fpstate::regs::xsave::xfeatures.
++		 */
++		xfd_update_state(fpstate);
++
+ 		/*
+ 		 * Restoring state always needs to modify all features
+ 		 * which are in @mask even if the current task cannot use
+@@ -241,8 +258,17 @@ int fpu_swap_kvm_fpstate(struct fpu_guest *guest_fpu, bool enter_guest)
+ 
+ 	cur_fps = fpu->fpstate;
+ 
+-	if (!cur_fps->is_confidential)
++	if (!cur_fps->is_confidential) {
++		/* Includes XFD update */
+ 		restore_fpregs_from_fpstate(cur_fps, XFEATURE_MASK_FPSTATE);
++	} else {
++		/*
++		 * XSTATE is restored by firmware from encrypted
++		 * memory. Make sure XFD state is correct while
++		 * running with guest fpstate
++		 */
++		xfd_update_state(cur_fps);
++	}
+ 
+ 	fpregs_mark_activate();
+ 	fpregs_unlock();
+diff --git a/arch/x86/kernel/fpu/signal.c b/arch/x86/kernel/fpu/signal.c
+index 16fdecd02341..cc977da6e128 100644
+--- a/arch/x86/kernel/fpu/signal.c
++++ b/arch/x86/kernel/fpu/signal.c
+@@ -282,6 +282,8 @@ static bool restore_fpregs_from_user(void __user *buf, u64 xrestore,
+ 
+ retry:
+ 	fpregs_lock();
++	/* Ensure that XFD is up to date */
++	xfd_update_state(fpu->fpstate);
+ 	pagefault_disable();
+ 	ret = __restore_fpregs_from_user(buf, fpu->fpstate->user_xfeatures,
+ 					 xrestore, fx_only);
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 603edeb7b913..77739b0a56d5 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -136,6 +136,15 @@ void fpu__init_cpu_xstate(void)
+ 
+ 	cr4_set_bits(X86_CR4_OSXSAVE);
+ 
++	/*
++	 * Must happen after CR4 setup and before xsetbv() to allow KVM
++	 * lazy passthrough.  Write independent of the dynamic state static
++	 * key as that does not work on the boot CPU. This also ensures
++	 * that any stale state is wiped out from XFD.
++	 */
++	if (cpu_feature_enabled(X86_FEATURE_XFD))
++		wrmsrl(MSR_IA32_XFD, init_fpstate.xfd);
++
+ 	/*
+ 	 * XCR_XFEATURE_ENABLED_MASK (aka. XCR0) sets user features
+ 	 * managed by XSAVE{C, OPT, S} and XRSTOR{S}.  Only XSAVE user
+@@ -875,6 +884,9 @@ void fpu__resume_cpu(void)
+ 		wrmsrl(MSR_IA32_XSS, xfeatures_mask_supervisor()  |
+ 				     xfeatures_mask_independent());
+ 	}
++
++	if (fpu_state_size_dynamic())
++		wrmsrl(MSR_IA32_XFD, current->thread.fpu.fpstate->xfd);
+ }
+ 
+ /*
+diff --git a/arch/x86/kernel/fpu/xstate.h b/arch/x86/kernel/fpu/xstate.h
+index 29024244965b..e18210dff88c 100644
+--- a/arch/x86/kernel/fpu/xstate.h
++++ b/arch/x86/kernel/fpu/xstate.h
+@@ -136,6 +136,22 @@ extern void xfd_validate_state(struct fpstate *fpstate, u64 mask, bool rstor);
+ static inline void xfd_validate_state(struct fpstate *fpstate, u64 mask, bool rstor) { }
+ #endif
+ 
++#ifdef CONFIG_X86_64
++static inline void xfd_update_state(struct fpstate *fpstate)
++{
++	if (fpu_state_size_dynamic()) {
++		u64 xfd = fpstate->xfd;
++
++		if (__this_cpu_read(xfd_state) != xfd) {
++			wrmsrl(MSR_IA32_XFD, xfd);
++			__this_cpu_write(xfd_state, xfd);
++		}
++	}
++}
++#else
++static inline void xfd_update_state(struct fpstate *fpstate) { }
++#endif
++
+ /*
+  * Save processor xstate to xsave area.
+  *
+@@ -247,7 +263,8 @@ static inline int os_xrstor_safe(struct fpstate *fpstate, u64 mask)
+ 	u32 hmask = mask >> 32;
+ 	int err;
+ 
+-	/* Must enforce XFD update here */
++	/* Ensure that XFD is up to date */
++	xfd_update_state(fpstate);
+ 
+ 	if (cpu_feature_enabled(X86_FEATURE_XSAVES))
+ 		XSTATE_OP(XRSTORS, xstate, lmask, hmask, err);
+-- 
+2.31.1
+

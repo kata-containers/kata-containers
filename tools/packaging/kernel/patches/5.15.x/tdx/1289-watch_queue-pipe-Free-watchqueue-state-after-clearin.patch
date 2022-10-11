@@ -1,0 +1,54 @@
+From b0280452e8046e1c96dbe4cb214ad88e716689e2 Mon Sep 17 00:00:00 2001
+From: David Howells <dhowells@redhat.com>
+Date: Fri, 11 Mar 2022 13:23:38 +0000
+Subject: [PATCH 1289/1418] watch_queue, pipe: Free watchqueue state after
+ clearing pipe ring
+
+In free_pipe_info(), free the watchqueue state after clearing the pipe
+ring as each pipe ring descriptor has a release function, and in the
+case of a notification message, this is watch_queue_pipe_buf_release()
+which tries to mark the allocation bitmap that was previously released.
+
+Fix this by moving the put of the pipe's ref on the watch queue to after
+the ring has been cleared.  We still need to call watch_queue_clear()
+before doing that to make sure that the pipe is disconnected from any
+notification sources first.
+
+Fixes: c73be61cede5 ("pipe: Add general notification queue support")
+Reported-by: Jann Horn <jannh@google.com>
+Signed-off-by: David Howells <dhowells@redhat.com>
+Signed-off-by: Linus Torvalds <torvalds@linux-foundation.org>
+---
+ fs/pipe.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/fs/pipe.c b/fs/pipe.c
+index 6d4342bad9f1..8b0f6979fb49 100644
+--- a/fs/pipe.c
++++ b/fs/pipe.c
+@@ -830,10 +830,8 @@ void free_pipe_info(struct pipe_inode_info *pipe)
+ 	int i;
+ 
+ #ifdef CONFIG_WATCH_QUEUE
+-	if (pipe->watch_queue) {
++	if (pipe->watch_queue)
+ 		watch_queue_clear(pipe->watch_queue);
+-		put_watch_queue(pipe->watch_queue);
+-	}
+ #endif
+ 
+ 	(void) account_pipe_buffers(pipe->user, pipe->nr_accounted, 0);
+@@ -843,6 +841,10 @@ void free_pipe_info(struct pipe_inode_info *pipe)
+ 		if (buf->ops)
+ 			pipe_buf_release(pipe, buf);
+ 	}
++#ifdef CONFIG_WATCH_QUEUE
++	if (pipe->watch_queue)
++		put_watch_queue(pipe->watch_queue);
++#endif
+ 	if (pipe->tmp_page)
+ 		__free_page(pipe->tmp_page);
+ 	kfree(pipe->bufs);
+-- 
+2.31.1
+

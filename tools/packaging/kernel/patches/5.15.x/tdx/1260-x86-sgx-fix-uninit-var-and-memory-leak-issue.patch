@@ -1,0 +1,49 @@
+From a812448ae8c011420efade6a1e98e5a685968ab3 Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Thu, 24 Mar 2022 13:53:33 +0800
+Subject: [PATCH 1260/1418] x86/sgx: fix uninit var and memory leak issue
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ arch/x86/kernel/cpu/sgx/ioctl.c | 4 +++-
+ arch/x86/kernel/cpu/sgx/main.c  | 2 +-
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/sgx/ioctl.c b/arch/x86/kernel/cpu/sgx/ioctl.c
+index 34767faa2ebe..00fc28bffc34 100644
+--- a/arch/x86/kernel/cpu/sgx/ioctl.c
++++ b/arch/x86/kernel/cpu/sgx/ioctl.c
+@@ -168,7 +168,8 @@ static long sgx_ioc_enclave_create(struct sgx_encl *encl, void __user *arg)
+ 		srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
+ 		if (sgx_epc_is_locked()) {
+ 			srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+-			return -EBUSY;
++			ret = -EBUSY;
++			goto out;
+ 		}
+ 
+ 		ret = sgx_encl_create(encl, secs);
+@@ -176,6 +177,7 @@ static long sgx_ioc_enclave_create(struct sgx_encl *encl, void __user *arg)
+ 		srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ 	}
+ 
++out:
+ 	kfree(secs);
+ 	return ret;
+ }
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index 097edb8e413a..68d0ecc57f9d 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -1039,7 +1039,7 @@ static int sgx_zap_section_pages(struct sgx_epc_section *section,
+ 				 struct list_head *secs_pages_list)
+ {
+ 	struct sgx_epc_page *epc_page;
+-	int i, ret;
++	int i, ret = 0;
+ 	unsigned long nr_pages = section->size >> PAGE_SHIFT;
+ 
+ 	for (i = 0; i < nr_pages; i++) {
+-- 
+2.31.1
+

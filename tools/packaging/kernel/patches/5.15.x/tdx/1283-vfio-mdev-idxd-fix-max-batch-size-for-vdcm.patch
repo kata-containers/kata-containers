@@ -1,0 +1,57 @@
+From 94a5396d47c481c1279d45e3850e893c27cacbc4 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Thu, 7 Apr 2022 16:38:15 -0700
+Subject: [PATCH 1283/1418] vfio: mdev: idxd: fix max batch size for vdcm
+
+Set wq max batch size and max xfer size to actual wq values.
+
+Also add permission check to reject guest modification.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/sysfs.c      | 6 ++++++
+ drivers/vfio/mdev/idxd/vdev.c | 4 ++--
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/dma/idxd/sysfs.c b/drivers/dma/idxd/sysfs.c
+index 70243157ed6f..07ab242ecf39 100644
+--- a/drivers/dma/idxd/sysfs.c
++++ b/drivers/dma/idxd/sysfs.c
+@@ -848,6 +848,9 @@ static ssize_t wq_max_transfer_size_store(struct device *dev, struct device_attr
+ 	u64 xfer_size;
+ 	int rc;
+ 
++	if (!test_bit(IDXD_FLAG_CONFIGURABLE, &idxd->flags))
++		return -EPERM;
++
+ 	if (wq->state != IDXD_WQ_DISABLED)
+ 		return -EPERM;
+ 
+@@ -882,6 +885,9 @@ static ssize_t wq_max_batch_size_store(struct device *dev, struct device_attribu
+ 	u64 batch_size;
+ 	int rc;
+ 
++	if (!test_bit(IDXD_FLAG_CONFIGURABLE, &idxd->flags))
++		return -EPERM;
++
+ 	if (wq->state != IDXD_WQ_DISABLED)
+ 		return -EPERM;
+ 
+diff --git a/drivers/vfio/mdev/idxd/vdev.c b/drivers/vfio/mdev/idxd/vdev.c
+index 760bdc38b307..4d28e548283d 100644
+--- a/drivers/vfio/mdev/idxd/vdev.c
++++ b/drivers/vfio/mdev/idxd/vdev.c
+@@ -685,8 +685,8 @@ static void vidxd_mmio_init_wqcfg(struct vdcm_idxd *vidxd)
+ 	wqcfg->bof = wq->wqcfg->bof;
+ 
+ 	wqcfg->priority = wq->priority;
+-	wqcfg->max_xfer_shift = idxd->hw.gen_cap.max_xfer_shift;
+-	wqcfg->max_batch_shift = idxd->hw.gen_cap.max_batch_shift;
++	wqcfg->max_xfer_shift = ilog2(wq->max_xfer_bytes);
++	wqcfg->max_batch_shift = ilog2(wq->max_batch_size);
+ 	wqcfg->mode_support = 1;
+ }
+ 
+-- 
+2.31.1
+

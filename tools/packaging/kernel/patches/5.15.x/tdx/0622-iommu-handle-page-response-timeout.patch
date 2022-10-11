@@ -1,0 +1,156 @@
+From 8f53a6b31da617b4ace5898ee11434307b8f8638 Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Wed, 5 Jun 2019 19:13:55 +0100
+Subject: [PATCH 0622/1418] iommu: handle page response timeout
+
+When IO page faults are reported outside IOMMU subsystem, the page
+request handler may fail for various reasons. E.g. a guest received
+page requests but did not have a chance to run for a long time. The
+irresponsive behavior could hold off limited resources on the pending
+device.
+There can be hardware or credit based software solutions as suggested
+in the PCI ATS Ch-4. To provide a basic safty net this patch
+introduces a per device deferrable timer which monitors the longest
+pending page fault that requires a response. Proper action such as
+sending failure response code could be taken when timer expires but not
+included in this patch. We need to consider the life cycle of page
+groupd ID to prevent confusion with reused group ID by a device.
+For now, a warning message provides clue of such failure.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Signed-off-by: Ashok Raj <ashok.raj@intel.com>
+---
+ drivers/iommu/iommu.c | 55 +++++++++++++++++++++++++++++++++++++++++++
+ include/linux/iommu.h |  4 ++++
+ 2 files changed, 59 insertions(+)
+
+diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
+index 54ebdaf34600..210f541e30ec 100644
+--- a/drivers/iommu/iommu.c
++++ b/drivers/iommu/iommu.c
+@@ -1095,6 +1095,39 @@ int iommu_group_unregister_notifier(struct iommu_group *group,
+ }
+ EXPORT_SYMBOL_GPL(iommu_group_unregister_notifier);
+ 
++static void iommu_dev_fault_timer_fn(struct timer_list *t)
++{
++	struct iommu_fault_param *fparam = from_timer(fparam, t, timer);
++	struct iommu_fault_event *evt;
++	struct iommu_fault_page_request *prm;
++
++	u64 now;
++
++	now = get_jiffies_64();
++
++	/* The goal is to ensure driver or guest page fault handler(via vfio)
++	 * send page response on time. Otherwise, limited queue resources
++	 * may be occupied by some irresponsive guests or drivers.
++	 * When per device pending fault list is not empty, we periodically checks
++	 * if any anticipated page response time has expired.
++	 *
++	 * TODO:
++	 * We could do the following if response time expires:
++	 * 1. send page response code FAILURE to all pending PRQ
++	 * 2. inform device driver or vfio
++	 * 3. drain in-flight page requests and responses for this device
++	 * 4. clear pending fault list such that driver can unregister fault
++	 *    handler(otherwise blocked when pending faults are present).
++	 */
++	list_for_each_entry(evt, &fparam->faults, list) {
++		prm = &evt->fault.prm;
++		if (time_after64(now, evt->expire))
++			pr_err("Page response time expired!, pasid %d gid %d exp %llu now %llu\n",
++				prm->pasid, prm->grpid, evt->expire, now);
++	}
++	mod_timer(t, now + prq_timeout);
++}
++
+ /**
+  * iommu_register_device_fault_handler() - Register a device fault handler
+  * @dev: the device
+@@ -1142,6 +1175,9 @@ int iommu_register_device_fault_handler(struct device *dev,
+ 	mutex_init(&param->fault_param->lock);
+ 	INIT_LIST_HEAD(&param->fault_param->faults);
+ 
++	if (prq_timeout)
++		timer_setup(&param->fault_param->timer, iommu_dev_fault_timer_fn,
++			TIMER_DEFERRABLE);
+ done_unlock:
+ 	mutex_unlock(&param->lock);
+ 
+@@ -1203,7 +1239,9 @@ int iommu_report_device_fault(struct device *dev, struct iommu_fault_event *evt)
+ 	struct dev_iommu *param = dev->iommu;
+ 	struct iommu_fault_event *evt_pending = NULL;
+ 	struct iommu_fault_param *fparam;
++	struct timer_list *tmr;
+ 	int ret = 0;
++	u64 exp;
+ 
+ 	if (!param || !evt)
+ 		return -EINVAL;
+@@ -1224,7 +1262,17 @@ int iommu_report_device_fault(struct device *dev, struct iommu_fault_event *evt)
+ 			ret = -ENOMEM;
+ 			goto done_unlock;
+ 		}
++		/* Keep track of response expiration time */
++		exp = get_jiffies_64() + prq_timeout;
++		evt_pending->expire = exp;
+ 		mutex_lock(&fparam->lock);
++		if (list_empty(&fparam->faults)) {
++			/* First pending event, start timer */
++			tmr = &dev->iommu->fault_param->timer;
++			WARN_ON(timer_pending(tmr));
++			mod_timer(tmr, exp);
++		}
++
+ 		list_add_tail(&evt_pending->list, &fparam->faults);
+ 		mutex_unlock(&fparam->lock);
+ 	}
+@@ -1302,6 +1350,13 @@ int iommu_page_response(struct device *dev,
+ 		break;
+ 	}
+ 
++	/* stop response timer if no more pending request */
++	if (list_empty(&param->fault_param->faults) &&
++		timer_pending(&param->fault_param->timer)) {
++		pr_debug("no pending PRQ, stop timer\n");
++		del_timer(&param->fault_param->timer);
++	}
++
+ done_unlock:
+ 	mutex_unlock(&param->fault_param->lock);
+ 	return ret;
+diff --git a/include/linux/iommu.h b/include/linux/iommu.h
+index 57ba032213dd..f4a5b4b84813 100644
+--- a/include/linux/iommu.h
++++ b/include/linux/iommu.h
+@@ -338,10 +338,12 @@ struct iommu_device {
+  *
+  * @fault: fault descriptor
+  * @list: pending fault event list, used for tracking responses
++ * @expire: time limit in jiffies will wait for page response
+  */
+ struct iommu_fault_event {
+ 	struct iommu_fault fault;
+ 	struct list_head list;
++	u64 expire;
+ };
+ 
+ /**
+@@ -350,11 +352,13 @@ struct iommu_fault_event {
+  * @data: handler private data
+  * @faults: holds the pending faults which needs response
+  * @lock: protect pending faults list
++ * @timer: track page request pending time limit
+  */
+ struct iommu_fault_param {
+ 	iommu_dev_fault_handler_t handler;
+ 	void *data;
+ 	struct list_head faults;
++	struct timer_list timer;
+ 	struct mutex lock;
+ };
+ 
+-- 
+2.31.1
+

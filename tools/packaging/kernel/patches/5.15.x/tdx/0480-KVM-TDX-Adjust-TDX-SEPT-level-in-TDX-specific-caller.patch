@@ -1,0 +1,231 @@
+From 04b21d149f6c352b7454b559ba16dbe40e44ba04 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Tue, 31 Aug 2021 15:34:36 +0800
+Subject: [PATCH 0480/1418] KVM: TDX: Adjust TDX SEPT level in TDX specific
+ callers
+
+For private spte related callbacks, define level with enum pg_level.
+
+For TDX specific implementation, since TDX SEPT level is always one level
+smaller than KVM page level, introduce helper function
+pg_level_to_tdx_sept_level() for it.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h | 12 +++++-----
+ arch/x86/kvm/mmu/mmu.c          |  8 +++----
+ arch/x86/kvm/vmx/tdx.c          | 39 +++++++++++++++++++--------------
+ arch/x86/kvm/vmx/tdx.h          |  6 +++++
+ 4 files changed, 38 insertions(+), 27 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index e77c6eb12d96..8939d7f16572 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1444,15 +1444,15 @@ struct kvm_x86_ops {
+ 	void (*load_mmu_pgd)(struct kvm_vcpu *vcpu, hpa_t root_hpa,
+ 			     int root_level);
+ 
+-	void (*set_private_spte)(struct kvm_vcpu *vcpu, gfn_t gfn, int level,
++	void (*set_private_spte)(struct kvm_vcpu *vcpu, gfn_t gfn, enum pg_level level,
+ 				 kvm_pfn_t pfn);
+-	void (*drop_private_spte)(struct kvm *kvm, gfn_t gfn, int level,
++	void (*drop_private_spte)(struct kvm *kvm, gfn_t gfn, enum pg_level level,
+ 				  kvm_pfn_t pfn);
+-	void (*zap_private_spte)(struct kvm *kvm, gfn_t gfn, int level);
+-	void (*unzap_private_spte)(struct kvm *kvm, gfn_t gfn, int level);
+-	int (*link_private_sp)(struct kvm_vcpu *vcpu, gfn_t gfn, int level,
++	void (*zap_private_spte)(struct kvm *kvm, gfn_t gfn, enum pg_level level);
++	void (*unzap_private_spte)(struct kvm *kvm, gfn_t gfn, enum pg_level level);
++	int (*link_private_sp)(struct kvm_vcpu *vcpu, gfn_t gfn, enum pg_level level,
+ 			       void *private_sp);
+-	int (*free_private_sp)(struct kvm *kvm, gfn_t gfn, int level,
++	int (*free_private_sp)(struct kvm *kvm, gfn_t gfn, enum pg_level level,
+ 			       void *private_sp);
+ 
+ 	bool (*has_wbinvd_exit)(void);
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 4083a986e6d6..41b23ad06cd5 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -1161,7 +1161,7 @@ static void rmap_remove(struct kvm *kvm, u64 *spte, u64 old_spte)
+ 
+ 	if (__is_private_gfn(kvm, sp->gfn_stolen_bits))
+ 		static_call(kvm_x86_drop_private_spte)(
+-			kvm, gfn, sp->role.level - 1, spte_to_pfn(old_spte));
++			kvm, gfn, sp->role.level, spte_to_pfn(old_spte));
+ }
+ 
+ /*
+@@ -1519,7 +1519,7 @@ static bool kvm_mmu_zap_private_spte(struct kvm *kvm, u64 *sptep)
+ 	gfn = kvm_mmu_page_get_gfn(sp, sptep - sp->spt);
+ 	pfn = spte_to_pfn(*sptep);
+ 
+-	static_call(kvm_x86_zap_private_spte)(kvm, gfn, sp->role.level - 1);
++	static_call(kvm_x86_zap_private_spte)(kvm, gfn, sp->role.level);
+ 
+ 	__mmu_spte_clear_track_bits(kvm, sptep,
+ 				    SPTE_PRIVATE_ZAPPED | pfn << PAGE_SHIFT);
+@@ -3238,7 +3238,7 @@ static void kvm_mmu_link_private_sp(struct kvm_vcpu *vcpu,
+ 	void *p = kvm_mmu_memory_cache_alloc(&vcpu->arch.mmu_private_sp_cache);
+ 
+ 	if (!static_call(kvm_x86_link_private_sp)(vcpu, sp->gfn,
+-						  sp->role.level, p))
++						  sp->role.level + 1, p))
+ 		sp->private_sp = p;
+ 	else
+ 		free_page((unsigned long)p);
+@@ -3378,7 +3378,7 @@ static int __direct_map(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code,
+ 	} else if (!WARN_ON_ONCE(ret != RET_PF_FIXED)) {
+ 		if (is_zapped_pte)
+ 			static_call(kvm_x86_unzap_private_spte)(vcpu->kvm, gfn,
+-								level - 1);
++								level);
+ 		else
+ 			static_call(kvm_x86_set_private_spte)(vcpu, gfn, level,
+ 							      pfn);
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index bc989f4bccc1..daed66fa953b 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -1469,8 +1469,9 @@ static void tdx_measure_page(struct kvm_tdx *kvm_tdx, hpa_t gpa)
+ }
+ 
+ static void tdx_sept_set_private_spte(struct kvm_vcpu *vcpu, gfn_t gfn,
+-				      int level, kvm_pfn_t pfn)
++				      enum pg_level level, kvm_pfn_t pfn)
+ {
++	int tdx_level = pg_level_to_tdx_sept_level(level);
+ 	struct kvm_tdx *kvm_tdx = to_kvm_tdx(vcpu->kvm);
+ 	hpa_t hpa = pfn << PAGE_SHIFT;
+ 	gpa_t gpa = gfn << PAGE_SHIFT;
+@@ -1490,14 +1491,14 @@ static void tdx_sept_set_private_spte(struct kvm_vcpu *vcpu, gfn_t gfn,
+ 
+ 	/* Build-time faults are induced and handled via TDH_MEM_PAGE_ADD. */
+ 	if (is_td_finalized(kvm_tdx)) {
+-		trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_PAGE_AUG, gpa, hpa, level);
++		trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_PAGE_AUG, gpa, hpa, tdx_level);
+ 
+ 		err = tdh_mem_page_aug(kvm_tdx->tdr.pa, gpa, hpa, &ex_ret);
+ 		SEPT_ERR(err, &ex_ret, TDH_MEM_PAGE_AUG, vcpu->kvm);
+ 		return;
+ 	}
+ 
+-	trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_PAGE_ADD, gpa, hpa, level);
++	trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_PAGE_ADD, gpa, hpa, tdx_level);
+ 
+ 	WARN_ON(kvm_tdx->source_pa == INVALID_PAGE);
+ 	source_pa = kvm_tdx->source_pa & ~KVM_TDX_MEASURE_MEMORY_REGION;
+@@ -1511,9 +1512,10 @@ static void tdx_sept_set_private_spte(struct kvm_vcpu *vcpu, gfn_t gfn,
+ 	kvm_tdx->source_pa = INVALID_PAGE;
+ }
+ 
+-static void tdx_sept_drop_private_spte(struct kvm *kvm, gfn_t gfn, int level,
++static void tdx_sept_drop_private_spte(struct kvm *kvm, gfn_t gfn, enum pg_level level,
+ 				       kvm_pfn_t pfn)
+ {
++	int tdx_level = pg_level_to_tdx_sept_level(level);
+ 	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
+ 	gpa_t gpa = gfn << PAGE_SHIFT;
+ 	hpa_t hpa = pfn << PAGE_SHIFT;
+@@ -1522,13 +1524,13 @@ static void tdx_sept_drop_private_spte(struct kvm *kvm, gfn_t gfn, int level,
+ 	u64 err;
+ 
+ 	/* TODO: handle large pages. */
+-	if (KVM_BUG_ON(level != PG_LEVEL_NONE, kvm))
++	if (KVM_BUG_ON(level != PG_LEVEL_4K, kvm))
+ 		return;
+ 
+ 	if (is_hkid_assigned(kvm_tdx)) {
+-		trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_PAGE_REMOVE, gpa, hpa, level);
++		trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_PAGE_REMOVE, gpa, hpa, tdx_level);
+ 
+-		err = tdh_mem_page_remove(kvm_tdx->tdr.pa, gpa, level, &ex_ret);
++		err = tdh_mem_page_remove(kvm_tdx->tdr.pa, gpa, tdx_level, &ex_ret);
+ 		if (SEPT_ERR(err, &ex_ret, TDH_MEM_PAGE_REMOVE, kvm))
+ 			return;
+ 
+@@ -1544,50 +1546,53 @@ static void tdx_sept_drop_private_spte(struct kvm *kvm, gfn_t gfn, int level,
+ }
+ 
+ static int tdx_sept_link_private_sp(struct kvm_vcpu *vcpu, gfn_t gfn,
+-				    int level, void *sept_page)
++				    enum pg_level level, void *sept_page)
+ {
++	int tdx_level = pg_level_to_tdx_sept_level(level);
+ 	struct kvm_tdx *kvm_tdx = to_kvm_tdx(vcpu->kvm);
+ 	gpa_t gpa = gfn << PAGE_SHIFT;
+ 	hpa_t hpa = __pa(sept_page);
+ 	struct tdx_ex_ret ex_ret;
+ 	u64 err;
+ 
+-	trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_SEPT_ADD, gpa, hpa, level);
++	trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_SEPT_ADD, gpa, hpa, tdx_level);
+ 
+-	err = tdh_mem_sept_add(kvm_tdx->tdr.pa, gpa, level, hpa, &ex_ret);
++	err = tdh_mem_sept_add(kvm_tdx->tdr.pa, gpa, tdx_level, hpa, &ex_ret);
+ 	if (SEPT_ERR(err, &ex_ret, TDH_MEM_SEPT_ADD, vcpu->kvm))
+ 		return -EIO;
+ 
+ 	return 0;
+ }
+ 
+-static void tdx_sept_zap_private_spte(struct kvm *kvm, gfn_t gfn, int level)
++static void tdx_sept_zap_private_spte(struct kvm *kvm, gfn_t gfn, enum pg_level level)
+ {
++	int tdx_level = pg_level_to_tdx_sept_level(level);
+ 	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
+ 	gpa_t gpa = gfn << PAGE_SHIFT;
+ 	struct tdx_ex_ret ex_ret;
+ 	u64 err;
+ 
+-	trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_RANGE_BLOCK, gpa, -1ull, level);
++	trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_RANGE_BLOCK, gpa, -1ull, tdx_level);
+ 
+-	err = tdh_mem_range_block(kvm_tdx->tdr.pa, gpa, level, &ex_ret);
++	err = tdh_mem_range_block(kvm_tdx->tdr.pa, gpa, tdx_level, &ex_ret);
+ 	SEPT_ERR(err, &ex_ret, TDH_MEM_RANGE_BLOCK, kvm);
+ }
+ 
+-static void tdx_sept_unzap_private_spte(struct kvm *kvm, gfn_t gfn, int level)
++static void tdx_sept_unzap_private_spte(struct kvm *kvm, gfn_t gfn, enum pg_level level)
+ {
++	int tdx_level = pg_level_to_tdx_sept_level(level);
+ 	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
+ 	gpa_t gpa = gfn << PAGE_SHIFT;
+ 	struct tdx_ex_ret ex_ret;
+ 	u64 err;
+ 
+-	trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_RANGE_UNBLOCK, gpa, -1ull, level);
++	trace_kvm_sept_seamcall(SEAMCALL_TDH_MEM_RANGE_UNBLOCK, gpa, -1ull, tdx_level);
+ 
+-	err = tdh_mem_range_unblock(kvm_tdx->tdr.pa, gpa, level, &ex_ret);
++	err = tdh_mem_range_unblock(kvm_tdx->tdr.pa, gpa, tdx_level, &ex_ret);
+ 	SEPT_ERR(err, &ex_ret, TDH_MEM_RANGE_UNBLOCK, kvm);
+ }
+ 
+-static int tdx_sept_free_private_sp(struct kvm *kvm, gfn_t gfn, int level,
++static int tdx_sept_free_private_sp(struct kvm *kvm, gfn_t gfn, enum pg_level level,
+ 				    void *sept_page)
+ {
+ 	/*
+diff --git a/arch/x86/kvm/vmx/tdx.h b/arch/x86/kvm/vmx/tdx.h
+index 29a168b0c2de..b7643785def2 100644
+--- a/arch/x86/kvm/vmx/tdx.h
++++ b/arch/x86/kvm/vmx/tdx.h
+@@ -263,6 +263,12 @@ static __always_inline u64 td_tdcs_exec_read64(struct kvm_tdx *kvm_tdx, u32 fiel
+ /* Export for caller in common.h */
+ __always_inline unsigned long tdexit_exit_qual(struct kvm_vcpu *vcpu);
+ 
++static __always_inline int pg_level_to_tdx_sept_level(enum pg_level level)
++{
++	WARN_ON(level == PG_LEVEL_NONE);
++	return level - 1;
++}
++
+ #else
+ 
+ struct kvm_tdx;
+-- 
+2.31.1
+

@@ -1,0 +1,93 @@
+From efe1145ade5b910413beb080a337ef3846f83886 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Fri, 15 Oct 2021 16:21:39 -0700
+Subject: [PATCH 0562/1418] dmaengine: idxd: cleanup completion record
+ allocation
+
+According to core-api/dma-api-howto.rst, the address from
+dma_alloc_coherent is gauranteed to align to the smallest PAGE_SIZE order.
+That supercedes the 64B/32B alignment requirement of the completion record.
+Remove alignment adjustment code.
+
+Tested-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/device.c | 22 +++++-----------------
+ drivers/dma/idxd/idxd.h   |  2 --
+ 2 files changed, 5 insertions(+), 19 deletions(-)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index b1407465d5c4..fab412349f7f 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -135,8 +135,6 @@ int idxd_wq_alloc_resources(struct idxd_wq *wq)
+ 	struct idxd_device *idxd = wq->idxd;
+ 	struct device *dev = &idxd->pdev->dev;
+ 	int rc, num_descs, i;
+-	int align;
+-	u64 tmp;
+ 
+ 	if (wq->type != IDXD_WQT_KERNEL)
+ 		return 0;
+@@ -148,21 +146,13 @@ int idxd_wq_alloc_resources(struct idxd_wq *wq)
+ 	if (rc < 0)
+ 		return rc;
+ 
+-	align = idxd->data->align;
+-	wq->compls_size = num_descs * idxd->data->compl_size + align;
+-	wq->compls_raw = dma_alloc_coherent(dev, wq->compls_size,
+-					    &wq->compls_addr_raw, GFP_KERNEL);
+-	if (!wq->compls_raw) {
++	wq->compls_size = num_descs * idxd->data->compl_size;
++	wq->compls = dma_alloc_coherent(dev, wq->compls_size, &wq->compls_addr, GFP_KERNEL);
++	if (!wq->compls) {
+ 		rc = -ENOMEM;
+ 		goto fail_alloc_compls;
+ 	}
+ 
+-	/* Adjust alignment */
+-	wq->compls_addr = (wq->compls_addr_raw + (align - 1)) & ~(align - 1);
+-	tmp = (u64)wq->compls_raw;
+-	tmp = (tmp + (align - 1)) & ~(align - 1);
+-	wq->compls = (struct dsa_completion_record *)tmp;
+-
+ 	rc = alloc_descs(wq, num_descs);
+ 	if (rc < 0)
+ 		goto fail_alloc_descs;
+@@ -191,8 +181,7 @@ int idxd_wq_alloc_resources(struct idxd_wq *wq)
+  fail_sbitmap_init:
+ 	free_descs(wq);
+  fail_alloc_descs:
+-	dma_free_coherent(dev, wq->compls_size, wq->compls_raw,
+-			  wq->compls_addr_raw);
++	dma_free_coherent(dev, wq->compls_size, wq->compls, wq->compls_addr);
+  fail_alloc_compls:
+ 	free_hw_descs(wq);
+ 	return rc;
+@@ -207,8 +196,7 @@ void idxd_wq_free_resources(struct idxd_wq *wq)
+ 
+ 	free_hw_descs(wq);
+ 	free_descs(wq);
+-	dma_free_coherent(dev, wq->compls_size, wq->compls_raw,
+-			  wq->compls_addr_raw);
++	dma_free_coherent(dev, wq->compls_size, wq->compls, wq->compls_addr);
+ 	sbitmap_queue_free(&wq->sbq);
+ }
+ 
+diff --git a/drivers/dma/idxd/idxd.h b/drivers/dma/idxd/idxd.h
+index bfcb03329f77..0cf8d3145870 100644
+--- a/drivers/dma/idxd/idxd.h
++++ b/drivers/dma/idxd/idxd.h
+@@ -187,9 +187,7 @@ struct idxd_wq {
+ 		struct dsa_completion_record *compls;
+ 		struct iax_completion_record *iax_compls;
+ 	};
+-	void *compls_raw;
+ 	dma_addr_t compls_addr;
+-	dma_addr_t compls_addr_raw;
+ 	int compls_size;
+ 	struct idxd_desc **descs;
+ 	struct sbitmap_queue sbq;
+-- 
+2.31.1
+

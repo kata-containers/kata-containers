@@ -1,0 +1,493 @@
+From cd02c13b807b0264ff1db4c6218a5ecd328e809b Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Mon, 1 Nov 2021 16:39:36 +0800
+Subject: [PATCH 0816/1418] x86/sgx: Introduce mechanism to prevent new
+ initializations of EPC pages
+
+== Background ==
+
+EUPDATESVN is a new SGX instruction which allows enclave attestation
+to include information about updated microcode without a reboot.
+
+The SGX hardware maintains metadata for each enclave page to help
+enforce its security guarantees. This includes things like a record
+of the enclave to which the page belongs and the type of the page:
+SGX metadata like "VA" or "SECS" pages, or regular enclave pages
+like those that store user data.
+
+Before an EUPDATESVN operation can be successful, all SGX memory (aka.
+EPC) must be marked as "unused" in the SGX hardware metadata (aka,
+EPCM). The SGX microcode now maintains a reference count of pages
+which are unused to aid in determining when all pages reach the
+"unused" state.
+
+Both bare-metal and KVM guest EPC must be made unused. To increase
+the chance of a successful EUPDATESVN, the kernel prevents existing
+enclaves from creating new, valid pages and prevents new enclave
+creation (creating an enclave involves initializing a "SECS" page).
+
+The entire EUPDATESVN process is very slow since it potentially
+affects gigabytes of enclave memory. It can potentially take seconds
+or minutes to complete. Userspace may encounter -EBUSY errors during
+the update and is expected to retry.
+
+== Patch contents ==
+
+Introduce mechanism to prevent new initializations of EPC pages.
+
+Use a flag to indicate when SGX EPC pages are "locked", which means
+it's not allowed to allocate new EPC page for use. Check it in all
+paths that can initialize an EPC page. Use SRCU to ensure that the
+flag is visible across the system before proceeding with an update.
+
+Add checks to all sites that call SGX instructions that can transition
+pages from unused to initialized to ensure that the SRCU lock is held.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/include/asm/sgx.h      |  8 ++++++
+ arch/x86/kernel/cpu/sgx/encl.c  | 25 +++++++++++++++--
+ arch/x86/kernel/cpu/sgx/encls.h | 10 +++++++
+ arch/x86/kernel/cpu/sgx/ioctl.c | 50 ++++++++++++++++++++++++++++++++-
+ arch/x86/kernel/cpu/sgx/main.c  | 28 ++++++++++++++++++
+ arch/x86/kernel/cpu/sgx/sgx.h   |  3 ++
+ arch/x86/kernel/cpu/sgx/virt.c  | 20 +++++++++++++
+ 7 files changed, 141 insertions(+), 3 deletions(-)
+
+diff --git a/arch/x86/include/asm/sgx.h b/arch/x86/include/asm/sgx.h
+index 8b6cbedada96..61aa8f470231 100644
+--- a/arch/x86/include/asm/sgx.h
++++ b/arch/x86/include/asm/sgx.h
+@@ -383,4 +383,12 @@ int sgx_virt_einit(void __user *sigstruct, void __user *token,
+ int sgx_set_attribute(unsigned long *allowed_attributes,
+ 		      unsigned int attribute_fd);
+ 
++#ifdef CONFIG_X86_SGX
++void sgx_lock_epc(void);
++void sgx_unlock_epc(void);
++#else
++static inline void sgx_lock_epc(void) { }
++static inline void sgx_unlock_epc(void) { }
++#endif
++
+ #endif /* _ASM_X86_SGX_H */
+diff --git a/arch/x86/kernel/cpu/sgx/encl.c b/arch/x86/kernel/cpu/sgx/encl.c
+index 37203da382f8..a5870fb0a7f2 100644
+--- a/arch/x86/kernel/cpu/sgx/encl.c
++++ b/arch/x86/kernel/cpu/sgx/encl.c
+@@ -256,6 +256,7 @@ static vm_fault_t sgx_vma_fault(struct vm_fault *vmf)
+ 	unsigned long phys_addr;
+ 	struct sgx_encl *encl;
+ 	vm_fault_t ret;
++	int srcu_idx;
+ 
+ 	encl = vma->vm_private_data;
+ 
+@@ -267,6 +268,12 @@ static vm_fault_t sgx_vma_fault(struct vm_fault *vmf)
+ 	if (unlikely(!encl))
+ 		return VM_FAULT_SIGBUS;
+ 
++	srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
++	if (sgx_epc_is_locked()) {
++		srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
++		return VM_FAULT_SIGBUS;
++	}
++
+ 	/*
+ 	 * The page_array keeps track of all enclave pages, whether they
+ 	 * are swapped out or not. If there is no entry for this page and
+@@ -275,14 +282,18 @@ static vm_fault_t sgx_vma_fault(struct vm_fault *vmf)
+ 	 * enclave that will be checked for right away.
+ 	 */
+ 	if (cpu_feature_enabled(X86_FEATURE_SGX2) &&
+-	    (!xa_load(&encl->page_array, PFN_DOWN(addr))))
+-		return sgx_encl_eaug_page(vma, encl, addr);
++	    (!xa_load(&encl->page_array, PFN_DOWN(addr)))) {
++		ret = sgx_encl_eaug_page(vma, encl, addr);
++		srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
++		return ret;
++	}
+ 
+ 	mutex_lock(&encl->lock);
+ 
+ 	entry = sgx_encl_load_page(encl, addr);
+ 	if (IS_ERR(entry)) {
+ 		mutex_unlock(&encl->lock);
++		srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ 
+ 		if (PTR_ERR(entry) == -EBUSY)
+ 			return VM_FAULT_NOPAGE;
+@@ -307,12 +318,14 @@ static vm_fault_t sgx_vma_fault(struct vm_fault *vmf)
+ 				  vm_get_page_prot(page_prot_bits));
+ 	if (ret != VM_FAULT_NOPAGE) {
+ 		mutex_unlock(&encl->lock);
++		srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ 
+ 		return VM_FAULT_SIGBUS;
+ 	}
+ 
+ 	sgx_encl_test_and_clear_young(vma->vm_mm, entry);
+ 	mutex_unlock(&encl->lock);
++	srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ 
+ 	return VM_FAULT_NOPAGE;
+ }
+@@ -508,6 +521,7 @@ static int sgx_vma_access(struct vm_area_struct *vma, unsigned long addr,
+ 	int cnt;
+ 	int ret = 0;
+ 	int i;
++	int srcu_idx;
+ 
+ 	/*
+ 	 * If process was forked, VMA is still there but vm_private_data is set
+@@ -520,6 +534,12 @@ static int sgx_vma_access(struct vm_area_struct *vma, unsigned long addr,
+ 		return -EFAULT;
+ 
+ 	for (i = 0; i < len; i += cnt) {
++		srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
++		if (sgx_epc_is_locked()) {
++			ret = -EBUSY;
++			goto out;
++		}
++
+ 		entry = sgx_encl_reserve_page(encl, (addr + i) & PAGE_MASK);
+ 		if (IS_ERR(entry)) {
+ 			ret = PTR_ERR(entry);
+@@ -546,6 +566,7 @@ static int sgx_vma_access(struct vm_area_struct *vma, unsigned long addr,
+ 
+ out:
+ 		mutex_unlock(&encl->lock);
++		srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ 
+ 		if (ret)
+ 			break;
+diff --git a/arch/x86/kernel/cpu/sgx/encls.h b/arch/x86/kernel/cpu/sgx/encls.h
+index 243c30301ddb..889279c9b4d8 100644
+--- a/arch/x86/kernel/cpu/sgx/encls.h
++++ b/arch/x86/kernel/cpu/sgx/encls.h
+@@ -165,6 +165,8 @@ static inline bool encls_failed(int ret)
+ /* Create an SECS page in the Enclave Page Cache (EPC) */
+ static inline int __ecreate(struct sgx_pageinfo *pginfo, void *secs)
+ {
++	lockdep_assert_held(&sgx_lock_epc_srcu);
++
+ 	return __encls_2(ECREATE, pginfo, secs);
+ }
+ 
+@@ -177,6 +179,8 @@ static inline int __eextend(void *secs, void *addr)
+ /* Add a page to an uninitialized enclave */
+ static inline int __eadd(struct sgx_pageinfo *pginfo, void *addr)
+ {
++	lockdep_assert_held(&sgx_lock_epc_srcu);
++
+ 	return __encls_2(EADD, pginfo, addr);
+ }
+ 
+@@ -214,6 +218,8 @@ static inline int __etrack(void *addr)
+ static inline int __eldu(struct sgx_pageinfo *pginfo, void *addr,
+ 			 void *va)
+ {
++	lockdep_assert_held(&sgx_lock_epc_srcu);
++
+ 	return __encls_ret_3(ELDU, pginfo, addr, va);
+ }
+ 
+@@ -228,6 +234,8 @@ static inline int __epa(void *addr)
+ {
+ 	unsigned long rbx = SGX_PAGE_TYPE_VA;
+ 
++	lockdep_assert_held(&sgx_lock_epc_srcu);
++
+ 	return __encls_2(EPA, rbx, addr);
+ }
+ 
+@@ -253,6 +261,8 @@ static inline int __emodt(struct sgx_secinfo *secinfo, void *addr)
+ /* Add a page to an initialized enclave */
+ static inline int __eaug(struct sgx_pageinfo *pginfo, void *addr)
+ {
++	lockdep_assert_held(&sgx_lock_epc_srcu);
++
+ 	return __encls_2(EAUG, pginfo, addr);
+ }
+ 
+diff --git a/arch/x86/kernel/cpu/sgx/ioctl.c b/arch/x86/kernel/cpu/sgx/ioctl.c
+index fc2737b3c7cc..e90d820a21bf 100644
+--- a/arch/x86/kernel/cpu/sgx/ioctl.c
++++ b/arch/x86/kernel/cpu/sgx/ioctl.c
+@@ -149,6 +149,7 @@ static long sgx_ioc_enclave_create(struct sgx_encl *encl, void __user *arg)
+ 	struct sgx_enclave_create create_arg;
+ 	void *secs;
+ 	int ret;
++	int srcu_idx;
+ 
+ 	if (test_bit(SGX_ENCL_CREATED, &encl->flags))
+ 		return -EINVAL;
+@@ -162,9 +163,18 @@ static long sgx_ioc_enclave_create(struct sgx_encl *encl, void __user *arg)
+ 
+ 	if (copy_from_user(secs, (void __user *)create_arg.src, PAGE_SIZE))
+ 		ret = -EFAULT;
+-	else
++	else {
++		srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
++		if (sgx_epc_is_locked()) {
++			srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
++			return -EBUSY;
++		}
++
+ 		ret = sgx_encl_create(encl, secs);
+ 
++		srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
++	}
++
+ 	kfree(secs);
+ 	return ret;
+ }
+@@ -425,6 +435,7 @@ static long sgx_ioc_enclave_add_pages(struct sgx_encl *encl, void __user *arg)
+ 	struct sgx_secinfo secinfo;
+ 	unsigned long c;
+ 	int ret;
++	int srcu_idx;
+ 
+ 	if (!test_bit(SGX_ENCL_CREATED, &encl->flags) ||
+ 	    test_bit(SGX_ENCL_INITIALIZED, &encl->flags))
+@@ -461,8 +472,18 @@ static long sgx_ioc_enclave_add_pages(struct sgx_encl *encl, void __user *arg)
+ 		if (need_resched())
+ 			cond_resched();
+ 
++		srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
++		if (sgx_epc_is_locked()) {
++			ret = -EBUSY;
++			srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
++			break;
++		}
++
+ 		ret = sgx_encl_add_page(encl, add_arg.src + c, add_arg.offset + c,
+ 					&secinfo, add_arg.flags);
++
++		srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
++
+ 		if (ret)
+ 			break;
+ 	}
+@@ -721,6 +742,7 @@ static long sgx_page_modp(struct sgx_encl *encl, struct sgx_page_modp *modp)
+ 	unsigned long c;
+ 	void *epc_virt;
+ 	int ret;
++	int srcu_idx;
+ 
+ 	secinfo_perm = modp->prot & SGX_SECINFO_PERMISSION_MASK;
+ 
+@@ -737,6 +759,12 @@ static long sgx_page_modp(struct sgx_encl *encl, struct sgx_page_modp *modp)
+ 	vm_prot = calc_vm_prot_bits(vm_prot, 0);
+ 
+ 	for (c = 0 ; c < modp->length; c += PAGE_SIZE) {
++		srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
++		if (sgx_epc_is_locked()) {
++			srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
++			return -EBUSY;
++		}
++
+ 		addr = encl->base + modp->offset + c;
+ 
+ 		sgx_direct_reclaim();
+@@ -845,6 +873,7 @@ static long sgx_page_modp(struct sgx_encl *encl, struct sgx_page_modp *modp)
+ 
+ 		sgx_mark_page_reclaimable(entry->epc_page);
+ 		mutex_unlock(&encl->lock);
++		srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ 	}
+ 
+ 	ret = 0;
+@@ -856,6 +885,7 @@ static long sgx_page_modp(struct sgx_encl *encl, struct sgx_page_modp *modp)
+ 	sgx_mark_page_reclaimable(entry->epc_page);
+ out_unlock:
+ 	mutex_unlock(&encl->lock);
++	srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ out:
+ 	modp->count = c;
+ 
+@@ -948,6 +978,7 @@ static long sgx_page_modt(struct sgx_encl *encl, struct sgx_page_modt *modt)
+ 	unsigned long c;
+ 	void *epc_virt;
+ 	int ret;
++	int srcu_idx;
+ 
+ 	page_type = modt->type & SGX_PAGE_TYPE_MASK;
+ 
+@@ -962,6 +993,12 @@ static long sgx_page_modt(struct sgx_encl *encl, struct sgx_page_modt *modt)
+ 	secinfo.flags = page_type << 8;
+ 
+ 	for (c = 0 ; c < modt->length; c += PAGE_SIZE) {
++		srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
++		if (sgx_epc_is_locked()) {
++			srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
++			return -EBUSY;
++		}
++
+ 		addr = encl->base + modt->offset + c;
+ 
+ 		sgx_direct_reclaim();
+@@ -1080,6 +1117,7 @@ static long sgx_page_modt(struct sgx_encl *encl, struct sgx_page_modt *modt)
+ 		entry->type = page_type;
+ 
+ 		mutex_unlock(&encl->lock);
++		srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ 	}
+ 
+ 	ret = 0;
+@@ -1090,6 +1128,7 @@ static long sgx_page_modt(struct sgx_encl *encl, struct sgx_page_modt *modt)
+ 	entry->vm_run_prot_bits = run_prot_restore;
+ out_unlock:
+ 	mutex_unlock(&encl->lock);
++	srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ out:
+ 	modt->count = c;
+ 
+@@ -1184,11 +1223,18 @@ static long sgx_page_remove(struct sgx_encl *encl,
+ 	unsigned long c;
+ 	void *epc_virt;
+ 	int ret;
++	int srcu_idx;
+ 
+ 	memset(&secinfo, 0, sizeof(secinfo));
+ 	secinfo.flags = SGX_SECINFO_R | SGX_SECINFO_W | SGX_SECINFO_X;
+ 
+ 	for (c = 0 ; c < params->length; c += PAGE_SIZE) {
++		srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
++		if (sgx_epc_is_locked()) {
++			srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
++			return -EBUSY;
++		}
++
+ 		addr = encl->base + params->offset + c;
+ 
+ 		sgx_direct_reclaim();
+@@ -1244,6 +1290,7 @@ static long sgx_page_remove(struct sgx_encl *encl,
+ 		kfree(entry);
+ 
+ 		mutex_unlock(&encl->lock);
++		srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ 	}
+ 
+ 	ret = 0;
+@@ -1251,6 +1298,7 @@ static long sgx_page_remove(struct sgx_encl *encl,
+ 
+ out_unlock:
+ 	mutex_unlock(&encl->lock);
++	srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ out:
+ 	params->count = c;
+ 
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index 026528b85b26..fb96b1adae1b 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -20,6 +20,17 @@ struct sgx_epc_section sgx_epc_sections[SGX_MAX_EPC_SECTIONS];
+ static int sgx_nr_epc_sections;
+ static struct task_struct *ksgxd_tsk;
+ static DECLARE_WAIT_QUEUE_HEAD(ksgxd_waitq);
++/*
++ * The flags prevents new from using SGX for
++ * things like EADD.
++ */
++static bool __rcu sgx_epc_locked;
++/*
++ * SRCU ensures that old users that might not
++ * have noticed the flag have gone away before
++ * proceeding with an SVN update.
++ */
++DEFINE_SRCU(sgx_lock_epc_srcu);
+ 
+ /*
+  * These variables are part of the state of the reclaimer, and must be accessed
+@@ -791,3 +802,20 @@ static int __init sgx_init(void)
+ }
+ 
+ device_initcall(sgx_init);
++
++void sgx_lock_epc(void)
++{
++	sgx_epc_locked = true;
++	synchronize_srcu(&sgx_lock_epc_srcu);
++}
++
++void sgx_unlock_epc(void)
++{
++	sgx_epc_locked = false;
++	synchronize_srcu(&sgx_lock_epc_srcu);
++}
++
++bool sgx_epc_is_locked(void)
++{
++	return sgx_epc_locked;
++}
+diff --git a/arch/x86/kernel/cpu/sgx/sgx.h b/arch/x86/kernel/cpu/sgx/sgx.h
+index 9c753fd67f3d..6299b0b669a3 100644
+--- a/arch/x86/kernel/cpu/sgx/sgx.h
++++ b/arch/x86/kernel/cpu/sgx/sgx.h
+@@ -98,4 +98,7 @@ static inline int __init sgx_vepc_init(void)
+ 
+ void sgx_update_lepubkeyhash(u64 *lepubkeyhash);
+ 
++extern struct srcu_struct sgx_lock_epc_srcu;
++bool sgx_epc_is_locked(void);
++
+ #endif /* _X86_SGX_H */
+diff --git a/arch/x86/kernel/cpu/sgx/virt.c b/arch/x86/kernel/cpu/sgx/virt.c
+index 6a77a14eee38..d6ae86a98743 100644
+--- a/arch/x86/kernel/cpu/sgx/virt.c
++++ b/arch/x86/kernel/cpu/sgx/virt.c
+@@ -76,9 +76,20 @@ static vm_fault_t sgx_vepc_fault(struct vm_fault *vmf)
+ 	struct vm_area_struct *vma = vmf->vma;
+ 	struct sgx_vepc *vepc = vma->vm_private_data;
+ 	int ret;
++	int srcu_idx;
+ 
+ 	mutex_lock(&vepc->lock);
++	srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
++
++	if (sgx_epc_is_locked()) {
++		ret = -EBUSY;
++		goto out_unlock;
++	}
++
+ 	ret = __sgx_vepc_fault(vepc, vma, vmf->address);
++
++out_unlock:
++	srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
+ 	mutex_unlock(&vepc->lock);
+ 
+ 	if (!ret)
+@@ -332,6 +343,7 @@ int sgx_virt_ecreate(struct sgx_pageinfo *pageinfo, void __user *secs,
+ 		     int *trapnr)
+ {
+ 	int ret;
++	int srcu_idx;
+ 
+ 	/*
+ 	 * @secs is an untrusted, userspace-provided address.  It comes from
+@@ -347,6 +359,12 @@ int sgx_virt_ecreate(struct sgx_pageinfo *pageinfo, void __user *secs,
+ 	if (WARN_ON_ONCE(!access_ok(secs, PAGE_SIZE)))
+ 		return -EINVAL;
+ 
++	srcu_idx = srcu_read_lock(&sgx_lock_epc_srcu);
++	if (sgx_epc_is_locked()) {
++		srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
++		return -EBUSY;
++	}
++
+ 	__uaccess_begin();
+ 	ret = __ecreate(pageinfo, (void *)secs);
+ 	__uaccess_end();
+@@ -356,6 +374,8 @@ int sgx_virt_ecreate(struct sgx_pageinfo *pageinfo, void __user *secs,
+ 		return -EFAULT;
+ 	}
+ 
++	srcu_read_unlock(&sgx_lock_epc_srcu, srcu_idx);
++
+ 	/* ECREATE doesn't return an error code, it faults or succeeds. */
+ 	WARN_ON_ONCE(ret);
+ 	return 0;
+-- 
+2.31.1
+

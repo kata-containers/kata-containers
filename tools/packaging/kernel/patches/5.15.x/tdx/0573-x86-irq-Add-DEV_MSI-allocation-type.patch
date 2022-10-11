@@ -1,0 +1,30 @@
+From 3624dcc912e63cfd60fb07e44a3e9102c2703e3e Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 30 Oct 2020 14:56:06 -0700
+Subject: [PATCH 0573/1418] x86/irq: Add DEV_MSI allocation type
+
+For the upcoming device MSI support a new allocation type is
+required.
+
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Megha Dey <megha.dey@intel.com>
+---
+ arch/x86/include/asm/hw_irq.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/x86/include/asm/hw_irq.h b/arch/x86/include/asm/hw_irq.h
+index d465ece58151..0531b9ccdbc7 100644
+--- a/arch/x86/include/asm/hw_irq.h
++++ b/arch/x86/include/asm/hw_irq.h
+@@ -41,6 +41,7 @@ enum irq_alloc_type {
+ 	X86_IRQ_ALLOC_TYPE_DMAR,
+ 	X86_IRQ_ALLOC_TYPE_AMDVI,
+ 	X86_IRQ_ALLOC_TYPE_UV,
++	X86_IRQ_ALLOC_TYPE_DEV_MSI,
+ };
+ 
+ struct ioapic_alloc_info {
+-- 
+2.31.1
+

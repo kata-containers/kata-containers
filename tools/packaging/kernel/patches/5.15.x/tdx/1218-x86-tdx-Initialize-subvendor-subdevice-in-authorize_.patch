@@ -1,0 +1,39 @@
+From 01ae69a3e1d7166290fb4765254c019718a1970a Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Mon, 14 Mar 2022 22:59:27 +0000
+Subject: [PATCH 1218/1418] x86/tdx: Initialize subvendor/subdevice in
+ "authorize_allow_devs" parser
+
+Currently when parsing PCI bus data in the "authorize_allow_devs"
+command line option, we only parse and initialize "vendor" and "device"
+data. But this logic is incorrect.
+
+For a PCI driver to probe the given device, "subdevice" and
+"subvendor" details also need to be initialized properly.
+
+So add relevant support.
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdx-filter.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/tdx-filter.c b/arch/x86/kernel/tdx-filter.c
+index 4b229590abe2..50ecf161eb6a 100644
+--- a/arch/x86/kernel/tdx-filter.c
++++ b/arch/x86/kernel/tdx-filter.c
+@@ -141,7 +141,10 @@ static struct pci_device_id *parse_pci_id(char *ids)
+ 		if (fields < 2)
+ 			continue;
+ 		cmd_pci_ids[cmd_pci_nodes_len].vendor = vendor;
+-		cmd_pci_ids[cmd_pci_nodes_len++].device = device;
++		cmd_pci_ids[cmd_pci_nodes_len].device = device;
++		cmd_pci_ids[cmd_pci_nodes_len].subvendor = subvendor;
++		cmd_pci_ids[cmd_pci_nodes_len].subdevice = subdevice;
++		cmd_pci_nodes_len++;
+ 	}
+ 
+ 	return cmd_pci_ids;
+-- 
+2.31.1
+

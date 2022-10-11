@@ -1,0 +1,41 @@
+From a7c667cd30d3c630c9c1c0d15c37f64bf4a927f3 Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Thu, 9 Dec 2021 15:26:40 +0800
+Subject: [PATCH 0727/1418] KVM: TDX: Fix a false postive when setting
+ userspace TSC frequency
+
+Due to the calculation accuracy, the result of kvm_scale_tsc() will not
+be equal to vcpu->kvm->arch.initial_tsc_khz, e.g. when userspace sets
+tsc frequency as 3000MHz on a 2200MHz processor, kvm_scale_tsc() will
+return 2999MHz. This will always trigger KVM_BUG_ON() which is not
+expected.
+
+Remove this check.
+
+Fixes: b14334c95120 ("KVM: TDX: Add "basic" support for building and running Trust Domains")
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ arch/x86/kvm/vmx/main.c | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index 8034bf25f86a..d5a6098fb5ed 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -899,12 +899,8 @@ static void vt_write_tsc_offset(struct kvm_vcpu *vcpu, u64 offset)
+ 
+ static void vt_write_tsc_multiplier(struct kvm_vcpu *vcpu, u64 multiplier)
+ {
+-	if (is_td_vcpu(vcpu)) {
+-		if (kvm_scale_tsc(vcpu, tsc_khz, multiplier) !=
+-		    vcpu->kvm->arch.initial_tsc_khz)
+-			KVM_BUG_ON(is_td_vcpu(vcpu), vcpu->kvm);
++	if (is_td_vcpu(vcpu))
+ 		return;
+-	}
+ 
+ 	vmx_write_tsc_multiplier(vcpu, multiplier);
+ }
+-- 
+2.31.1
+

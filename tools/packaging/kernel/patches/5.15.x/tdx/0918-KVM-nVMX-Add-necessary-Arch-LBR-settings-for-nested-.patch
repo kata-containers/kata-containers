@@ -1,0 +1,92 @@
+From 8626cbf9e45a7371ff36b3e0a6ab5d712e175388 Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Thu, 5 Aug 2021 18:42:51 +0800
+Subject: [PATCH 0918/1418] KVM: nVMX: Add necessary Arch LBR settings for
+ nested VM
+
+Arch LBR is not supported in nested VM now. This patch is to add
+necessary settings to make it pass host KVM checks before L2 VM is
+launched and also to avoid some warnings reported from L1.
+
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/vmx/nested.c    | 7 +++++--
+ arch/x86/kvm/vmx/pmu_intel.c | 2 ++
+ arch/x86/kvm/vmx/vmcs12.c    | 1 +
+ arch/x86/kvm/vmx/vmcs12.h    | 3 ++-
+ 4 files changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/nested.c b/arch/x86/kvm/vmx/nested.c
+index a6a0c540cff9..64b2147cc3d3 100644
+--- a/arch/x86/kvm/vmx/nested.c
++++ b/arch/x86/kvm/vmx/nested.c
+@@ -6549,7 +6549,8 @@ void nested_vmx_setup_ctls_msrs(struct nested_vmx_msrs *msrs, u32 ept_caps)
+ #endif
+ 		VM_EXIT_LOAD_IA32_PAT | VM_EXIT_SAVE_IA32_PAT |
+ 		VM_EXIT_CLEAR_BNDCFGS | VM_EXIT_LOAD_IA32_PERF_GLOBAL_CTRL |
+-		VM_EXIT_LOAD_IA32_PKRS;
++		VM_EXIT_LOAD_IA32_PKRS | VM_EXIT_CLEAR_IA32_LBR_CTL;
++
+ 	msrs->exit_ctls_high |=
+ 		VM_EXIT_ALWAYSON_WITHOUT_TRUE_MSR |
+ 		VM_EXIT_LOAD_IA32_EFER | VM_EXIT_SAVE_IA32_EFER |
+@@ -6569,7 +6570,9 @@ void nested_vmx_setup_ctls_msrs(struct nested_vmx_msrs *msrs, u32 ept_caps)
+ 		VM_ENTRY_IA32E_MODE |
+ #endif
+ 		VM_ENTRY_LOAD_IA32_PAT | VM_ENTRY_LOAD_BNDCFGS |
+-		VM_ENTRY_LOAD_IA32_PERF_GLOBAL_CTRL | VM_ENTRY_LOAD_IA32_PKRS;
++		VM_ENTRY_LOAD_IA32_PERF_GLOBAL_CTRL | VM_ENTRY_LOAD_IA32_PKRS |
++		VM_ENTRY_LOAD_IA32_LBR_CTL;
++
+ 	msrs->entry_ctls_high |=
+ 		(VM_ENTRY_ALWAYSON_WITHOUT_TRUE_MSR | VM_ENTRY_LOAD_IA32_EFER);
+ 
+diff --git a/arch/x86/kvm/vmx/pmu_intel.c b/arch/x86/kvm/vmx/pmu_intel.c
+index 2f866d8630fb..b6ce30529c01 100644
+--- a/arch/x86/kvm/vmx/pmu_intel.c
++++ b/arch/x86/kvm/vmx/pmu_intel.c
+@@ -235,6 +235,8 @@ static bool intel_is_valid_msr(struct kvm_vcpu *vcpu, u32 msr)
+ 		break;
+ 	case MSR_ARCH_LBR_DEPTH:
+ 	case MSR_ARCH_LBR_CTL:
++		if (is_guest_mode(vcpu))
++			break;
+ 		if (kvm_cpu_cap_has(X86_FEATURE_ARCH_LBR))
+ 			ret = guest_cpuid_has(vcpu, X86_FEATURE_ARCH_LBR);
+ 		break;
+diff --git a/arch/x86/kvm/vmx/vmcs12.c b/arch/x86/kvm/vmx/vmcs12.c
+index f3b964e1496c..cfc598fdc1cb 100644
+--- a/arch/x86/kvm/vmx/vmcs12.c
++++ b/arch/x86/kvm/vmx/vmcs12.c
+@@ -67,6 +67,7 @@ const unsigned short vmcs_field_to_offset_table[] = {
+ 	FIELD64(HOST_IA32_EFER, host_ia32_efer),
+ 	FIELD64(HOST_IA32_PERF_GLOBAL_CTRL, host_ia32_perf_global_ctrl),
+ 	FIELD64(HOST_IA32_PKRS, host_ia32_pkrs),
++	FIELD64(GUEST_IA32_LBR_CTL, guest_lbr_ctl),
+ 	FIELD(PIN_BASED_VM_EXEC_CONTROL, pin_based_vm_exec_control),
+ 	FIELD(CPU_BASED_VM_EXEC_CONTROL, cpu_based_vm_exec_control),
+ 	FIELD(EXCEPTION_BITMAP, exception_bitmap),
+diff --git a/arch/x86/kvm/vmx/vmcs12.h b/arch/x86/kvm/vmx/vmcs12.h
+index 42cb4a2b806a..5f97bd3484fe 100644
+--- a/arch/x86/kvm/vmx/vmcs12.h
++++ b/arch/x86/kvm/vmx/vmcs12.h
+@@ -71,7 +71,7 @@ struct __packed vmcs12 {
+ 	u64 pml_address;
+ 	u64 encls_exiting_bitmap;
+ 	u64 tsc_multiplier;
+-	u64 padding64[1]; /* room for future expansion */
++	u64 guest_lbr_ctl;
+ 	/*
+ 	 * To allow migration of L1 (complete with its L2 guests) between
+ 	 * machines of different natural widths (32 or 64 bit), we cannot have
+@@ -256,6 +256,7 @@ static inline void vmx_check_vmcs12_offsets(void)
+ 	CHECK_OFFSET(pml_address, 312);
+ 	CHECK_OFFSET(encls_exiting_bitmap, 320);
+ 	CHECK_OFFSET(tsc_multiplier, 328);
++	CHECK_OFFSET(guest_lbr_ctl, 336);
+ 	CHECK_OFFSET(cr0_guest_host_mask, 344);
+ 	CHECK_OFFSET(cr4_guest_host_mask, 352);
+ 	CHECK_OFFSET(cr0_read_shadow, 360);
+-- 
+2.31.1
+

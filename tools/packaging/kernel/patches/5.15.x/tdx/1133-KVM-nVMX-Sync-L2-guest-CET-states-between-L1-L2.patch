@@ -1,0 +1,118 @@
+From c0247d51e5d95ba8e810c40e5e1a109814db6465 Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Wed, 24 Feb 2021 16:02:44 +0800
+Subject: [PATCH 1133/1418] KVM: nVMX: Sync L2 guest CET states between L1/L2
+
+These fields are rarely updated by L1 QEMU/KVM, sync them when L1 is trying to
+read/write them and after they're changed. If CET guest entry-load bit is not
+set by L1 guest, migrate them to L2 manaully.
+
+Opportunistically remove one blank line in previous patch.
+
+Suggested-by: Sean Christopherson <seanjc@google.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/cpuid.c      |  1 -
+ arch/x86/kvm/vmx/nested.c | 31 +++++++++++++++++++++++++++++++
+ arch/x86/kvm/vmx/vmx.h    |  3 +++
+ 3 files changed, 34 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c
+index 25ededa80f22..52ddc1af9698 100644
+--- a/arch/x86/kvm/cpuid.c
++++ b/arch/x86/kvm/cpuid.c
+@@ -175,7 +175,6 @@ void kvm_update_cpuid_runtime(struct kvm_vcpu *vcpu)
+ 		}
+ 		vcpu->arch.guest_supported_xss =
+ 			(((u64)best->edx << 32) | best->ecx) & supported_xss;
+-
+ 	} else {
+ 		vcpu->arch.guest_supported_xss = 0;
+ 	}
+diff --git a/arch/x86/kvm/vmx/nested.c b/arch/x86/kvm/vmx/nested.c
+index 807467901283..4af644fc3231 100644
+--- a/arch/x86/kvm/vmx/nested.c
++++ b/arch/x86/kvm/vmx/nested.c
+@@ -2532,6 +2532,13 @@ static void prepare_vmcs02_rare(struct vcpu_vmx *vmx, struct vmcs12 *vmcs12)
+ 	vmcs_write32(VM_ENTRY_MSR_LOAD_COUNT, vmx->msr_autoload.guest.nr);
+ 
+ 	set_cr4_guest_host_mask(vmx);
++
++	if (kvm_cet_supported() && vmx->nested.nested_run_pending &&
++	    (vmcs12->vm_entry_controls & VM_ENTRY_LOAD_CET_STATE)) {
++		vmcs_writel(GUEST_SSP, vmcs12->guest_ssp);
++		vmcs_writel(GUEST_S_CET, vmcs12->guest_s_cet);
++		vmcs_writel(GUEST_INTR_SSP_TABLE, vmcs12->guest_ssp_tbl);
++	}
+ }
+ 
+ /*
+@@ -2577,6 +2584,14 @@ static int prepare_vmcs02(struct kvm_vcpu *vcpu, struct vmcs12 *vmcs12,
+ 	     !(vmcs12->vm_entry_controls & VM_ENTRY_LOAD_IA32_PKRS)))
+ 		vmcs_write64(GUEST_IA32_PKRS, vmx->nested.vmcs01_guest_pkrs);
+ 
++	if (kvm_cet_supported() && (!vmx->nested.nested_run_pending ||
++	    !(vmcs12->vm_entry_controls & VM_ENTRY_LOAD_CET_STATE))) {
++		vmcs_writel(GUEST_SSP, vmx->nested.vmcs01_guest_ssp);
++		vmcs_writel(GUEST_S_CET, vmx->nested.vmcs01_guest_s_cet);
++		vmcs_writel(GUEST_INTR_SSP_TABLE,
++			    vmx->nested.vmcs01_guest_ssp_tbl);
++	}
++
+ 	vmx_set_rflags(vcpu, vmcs12->guest_rflags);
+ 
+ 	/* EXCEPTION_BITMAP and CR0_GUEST_HOST_MASK should basically be the
+@@ -3437,6 +3452,13 @@ enum nvmx_vmentry_status nested_vmx_enter_non_root_mode(struct kvm_vcpu *vcpu,
+ 	    !(vmcs12->vm_entry_controls & VM_ENTRY_LOAD_IA32_PKRS))
+ 		vmx->nested.vmcs01_guest_pkrs = vmcs_read64(GUEST_IA32_PKRS);
+ 
++	if (kvm_cet_supported() && (!vmx->nested.nested_run_pending ||
++	    !(vmcs12->vm_entry_controls & VM_ENTRY_LOAD_CET_STATE))) {
++		vmx->nested.vmcs01_guest_ssp = vmcs_readl(GUEST_SSP);
++		vmx->nested.vmcs01_guest_s_cet = vmcs_readl(GUEST_S_CET);
++		vmx->nested.vmcs01_guest_ssp_tbl = vmcs_readl(GUEST_INTR_SSP_TABLE);
++	}
++
+ 	/*
+ 	 * Overwrite vmcs01.GUEST_CR3 with L1's CR3 if EPT is disabled *and*
+ 	 * nested early checks are disabled.  In the event of a "late" VM-Fail,
+@@ -4076,6 +4098,9 @@ static bool is_vmcs12_ext_field(unsigned long field)
+ 	case GUEST_PENDING_DBG_EXCEPTIONS:
+ 	case GUEST_BNDCFGS:
+ 	case GUEST_IA32_PKRS:
++	case GUEST_SSP:
++	case GUEST_INTR_SSP_TABLE:
++	case GUEST_S_CET:
+ 		return true;
+ 	default:
+ 		break;
+@@ -4129,6 +4154,12 @@ static void sync_vmcs02_to_vmcs12_rare(struct kvm_vcpu *vcpu,
+ 		vmcs12->guest_bndcfgs = vmcs_read64(GUEST_BNDCFGS);
+ 	if (guest_cpuid_has(vcpu, X86_FEATURE_PKS))
+ 		vmcs12->guest_ia32_pkrs = vmcs_read64(GUEST_IA32_PKRS);
++	if (kvm_cet_supported() && (guest_cpuid_has(vcpu, X86_FEATURE_SHSTK) ||
++	    guest_cpuid_has(vcpu, X86_FEATURE_IBT))) {
++		vmcs12->guest_ssp = vmcs_readl(GUEST_SSP);
++		vmcs12->guest_s_cet = vmcs_readl(GUEST_S_CET);
++		vmcs12->guest_ssp_tbl = vmcs_readl(GUEST_INTR_SSP_TABLE);
++	}
+ 
+ 	vmx->nested.need_sync_vmcs02_to_vmcs12_rare = false;
+ }
+diff --git a/arch/x86/kvm/vmx/vmx.h b/arch/x86/kvm/vmx/vmx.h
+index cbaf985dd5f3..8611a31e5584 100644
+--- a/arch/x86/kvm/vmx/vmx.h
++++ b/arch/x86/kvm/vmx/vmx.h
+@@ -202,6 +202,9 @@ struct nested_vmx {
+ 	/* to migrate it to L2 if VM_ENTRY_LOAD_DEBUG_CONTROLS is off */
+ 	u64 vmcs01_debugctl;
+ 	u64 vmcs01_guest_bndcfgs;
++	u64 vmcs01_guest_ssp;
++	u64 vmcs01_guest_s_cet;
++	u64 vmcs01_guest_ssp_tbl;
+ 
+ 	u64 vmcs01_guest_pkrs;
+ 
+-- 
+2.31.1
+

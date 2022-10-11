@@ -1,0 +1,287 @@
+From 7827429515f34367851e0f5064ad50b61b5aec3f Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Thu, 19 Aug 2021 16:38:44 -0700
+Subject: [PATCH 0502/1418] KVM: TDX: kvm exit to user space on some TDX
+ hypercalls
+
+TDX guest needs help from the VMM side for TDX specific operations such as
+TDX attestation.  Guest-Host-Communication Interface(GHCI) for TDX
+specification defines the communication between the TDX guest and the VMM
+for that purpose.  One of the defined communication is the hypercalls from
+TDX guest to the VMM which is called TDG.VP.VMCALL or VMCALL.  The
+specification defines its APIs and the ABI.  The KVM kernel module can
+handle some VMCALLs and some VMCALL requires the help of user space such as
+qemu.  For example, to connect to a server over network and get a reply
+from it.
+
+Define a new KVM exit specific for TDX and on GetQuote VMCALL and
+SetupEventNotifyInterrupt VMCALL, toss VMCALLs to user space as KVM exit so
+that user space process such as qemu can handle it.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c   | 135 +++++++++++++++++++++++++--------------
+ include/uapi/linux/kvm.h |  57 +++++++++++++++++
+ 2 files changed, 144 insertions(+), 48 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index eaca07f94a3a..fd809e851df9 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -146,6 +146,18 @@ BUILD_TDVMCALL_ACCESSORS(p2, r13);
+ BUILD_TDVMCALL_ACCESSORS(p3, r14);
+ BUILD_TDVMCALL_ACCESSORS(p4, r15);
+ 
++#define TDX_VMCALL_REG_MASK_RBX	BIT_ULL(2)
++#define TDX_VMCALL_REG_MASK_RDX	BIT_ULL(3)
++#define TDX_VMCALL_REG_MASK_RBP	BIT_ULL(5)
++#define TDX_VMCALL_REG_MASK_RSI	BIT_ULL(6)
++#define TDX_VMCALL_REG_MASK_RDI	BIT_ULL(7)
++#define TDX_VMCALL_REG_MASK_R8	BIT_ULL(8)
++#define TDX_VMCALL_REG_MASK_R9	BIT_ULL(9)
++#define TDX_VMCALL_REG_MASK_R12	BIT_ULL(12)
++#define TDX_VMCALL_REG_MASK_R13	BIT_ULL(13)
++#define TDX_VMCALL_REG_MASK_R14	BIT_ULL(14)
++#define TDX_VMCALL_REG_MASK_R15	BIT_ULL(15)
++
+ static void tdx_set_interrupt_shadow(struct kvm_vcpu *vcpu, int mask);
+ static int tdx_skip_emulated_instruction(struct kvm_vcpu *vcpu);
+ static void tdx_set_rflags(struct kvm_vcpu *vcpu, unsigned long rflags);
+@@ -1338,12 +1350,81 @@ static int tdx_map_gpa(struct kvm_vcpu *vcpu)
+ 	return 1;
+ }
+ 
++static int tdx_complete_vp_vmcall(struct kvm_vcpu *vcpu)
++{
++	struct kvm_tdx_vmcall *tdx_vmcall = &vcpu->run->tdx.u.vmcall;
++	__u64 reg_mask;
++
++	tdvmcall_set_return_code(vcpu, tdx_vmcall->status_code);
++	tdvmcall_set_return_val(vcpu, tdx_vmcall->out_r11);
++
++	reg_mask = kvm_rcx_read(vcpu);
++	if (reg_mask & TDX_VMCALL_REG_MASK_R12)
++		kvm_r12_write(vcpu, tdx_vmcall->out_r12);
++	if (reg_mask & TDX_VMCALL_REG_MASK_R13)
++		kvm_r13_write(vcpu, tdx_vmcall->out_r13);
++	if (reg_mask & TDX_VMCALL_REG_MASK_R14)
++		kvm_r14_write(vcpu, tdx_vmcall->out_r14);
++	if (reg_mask & TDX_VMCALL_REG_MASK_R15)
++		kvm_r15_write(vcpu, tdx_vmcall->out_r15);
++	if (reg_mask & TDX_VMCALL_REG_MASK_RBX)
++		kvm_rbx_write(vcpu, tdx_vmcall->out_rbx);
++	if (reg_mask & TDX_VMCALL_REG_MASK_RDI)
++		kvm_rdi_write(vcpu, tdx_vmcall->out_rdi);
++	if (reg_mask & TDX_VMCALL_REG_MASK_RSI)
++		kvm_rsi_write(vcpu, tdx_vmcall->out_rsi);
++	if (reg_mask & TDX_VMCALL_REG_MASK_R8)
++		kvm_r8_write(vcpu, tdx_vmcall->out_r8);
++	if (reg_mask & TDX_VMCALL_REG_MASK_R9)
++		kvm_r9_write(vcpu, tdx_vmcall->out_r9);
++	if (reg_mask & TDX_VMCALL_REG_MASK_RDX)
++		kvm_rdx_write(vcpu, tdx_vmcall->out_rdx);
++
++	return 1;
++}
++
++static int tdx_vp_vmcall_to_user(struct kvm_vcpu *vcpu)
++{
++	struct kvm_tdx_vmcall *tdx_vmcall = &vcpu->run->tdx.u.vmcall;
++	__u64 reg_mask;
++
++	vcpu->arch.complete_userspace_io = tdx_complete_vp_vmcall;
++	memset(tdx_vmcall, 0, sizeof(*tdx_vmcall));
++
++	vcpu->run->exit_reason = KVM_EXIT_TDX;
++	vcpu->run->tdx.type = KVM_EXIT_TDX_VMCALL;
++	tdx_vmcall->type = tdvmcall_exit_type(vcpu);
++	tdx_vmcall->subfunction = tdvmcall_exit_reason(vcpu);
++
++	reg_mask = kvm_rcx_read(vcpu);
++	tdx_vmcall->reg_mask = reg_mask;
++	if (reg_mask & TDX_VMCALL_REG_MASK_R12)
++		tdx_vmcall->in_r12 = kvm_r12_read(vcpu);
++	if (reg_mask & TDX_VMCALL_REG_MASK_R13)
++		tdx_vmcall->in_r13 = kvm_r13_read(vcpu);
++	if (reg_mask & TDX_VMCALL_REG_MASK_R14)
++		tdx_vmcall->in_r14 = kvm_r14_read(vcpu);
++	if (reg_mask & TDX_VMCALL_REG_MASK_R15)
++		tdx_vmcall->in_r15 = kvm_r15_read(vcpu);
++	if (reg_mask & TDX_VMCALL_REG_MASK_RBX)
++		tdx_vmcall->in_rbx = kvm_rbx_read(vcpu);
++	if (reg_mask & TDX_VMCALL_REG_MASK_RDI)
++		tdx_vmcall->in_rdi = kvm_rdi_read(vcpu);
++	if (reg_mask & TDX_VMCALL_REG_MASK_RSI)
++		tdx_vmcall->in_rsi = kvm_rsi_read(vcpu);
++	if (reg_mask & TDX_VMCALL_REG_MASK_R8)
++		tdx_vmcall->in_r8 = kvm_r8_read(vcpu);
++	if (reg_mask & TDX_VMCALL_REG_MASK_R9)
++		tdx_vmcall->in_r9 = kvm_r9_read(vcpu);
++	if (reg_mask & TDX_VMCALL_REG_MASK_RDX)
++		tdx_vmcall->in_rdx = kvm_rdx_read(vcpu);
++
++	/* notify userspace to handle the request */
++	return 0;
++}
++
+ static int tdx_get_quote(struct kvm_vcpu *vcpu)
+ {
+-#if 1
+-	tdvmcall_set_return_code(vcpu, TDG_VP_VMCALL_SUCCESS);
+-	return 1;
+-#else
+ 	gpa_t gpa = tdvmcall_p1_read(vcpu);
+ 
+ 	if (!IS_ALIGNED(gpa, PAGE_SIZE)) {
+@@ -1351,26 +1432,7 @@ static int tdx_get_quote(struct kvm_vcpu *vcpu)
+ 		return 1;
+ 	}
+ 
+-	/*
+-	 * Default return value is set as error.  user space would update this
+-	 * value
+-	 */
+-	tdvmcall_set_return_code(vcpu, TDG_VP_VMCALL_TDREPORT_FAILED);
+-	vcpu->run->exit_reason = KVM_EXIT_HYPERCALL;
+-	vcpu->run->hypercall.nr = TDG_VP_VMCALL_GET_QUOTE;
+-	vcpu->run->hypercall.args[0] = gpa;
+-	vcpu->run->hypercall.args[1] = 0;
+-	vcpu->run->hypercall.args[2] = 0;
+-	vcpu->run->hypercall.args[3] = 0;
+-	vcpu->run->hypercall.args[4] = 0;
+-	vcpu->run->hypercall.args[5] = 0;
+-	vcpu->run->hypercall.ret = 0;
+-	vcpu->run->hypercall.longmode = 1;
+-	vcpu->run->hypercall.pad = 0;
+-
+-	/* notify userspace to handle the request */
+-	return 0;
+-#endif
++	return tdx_vp_vmcall_to_user(vcpu);
+ }
+ 
+ static int tdx_report_fatal_error(struct kvm_vcpu *vcpu)
+@@ -1383,10 +1445,6 @@ static int tdx_report_fatal_error(struct kvm_vcpu *vcpu)
+ 
+ static int tdx_setup_event_notify_interrupt(struct kvm_vcpu *vcpu)
+ {
+-#if 1
+-	tdvmcall_set_return_code(vcpu, TDG_VP_VMCALL_SUCCESS);
+-	return 1;
+-#else
+ 	u64 vector = tdvmcall_p1_read(vcpu);
+ 
+ 	if (!(vector >= 32 && vector <= 255)) {
+@@ -1394,26 +1452,7 @@ static int tdx_setup_event_notify_interrupt(struct kvm_vcpu *vcpu)
+ 		return 1;
+ 	}
+ 
+-	/*
+-	 * Default return value is set as error.  user space would update this
+-	 * value
+-	 */
+-	tdvmcall_set_return_code(vcpu, TDG_VP_VMCALL_INVALID_OPERAND);
+-	vcpu->run->exit_reason = KVM_EXIT_HYPERCALL;
+-	vcpu->run->hypercall.nr = TDG_VP_VMCALL_SETUP_EVENT_NOTIFY_INTERRUPT;
+-	vcpu->run->hypercall.args[0] = vector;
+-	vcpu->run->hypercall.args[1] = 0;
+-	vcpu->run->hypercall.args[2] = 0;
+-	vcpu->run->hypercall.args[3] = 0;
+-	vcpu->run->hypercall.args[4] = 0;
+-	vcpu->run->hypercall.args[5] = 0;
+-	vcpu->run->hypercall.ret = 0;
+-	vcpu->run->hypercall.longmode = 1;
+-	vcpu->run->hypercall.pad = 0;
+-
+-	/* notify userspace to handle the request */
+-	return 0;
+-#endif
++	return tdx_vp_vmcall_to_user(vcpu);
+ }
+ 
+ static int handle_tdvmcall(struct kvm_vcpu *vcpu)
+diff --git a/include/uapi/linux/kvm.h b/include/uapi/linux/kvm.h
+index c3aa07fe3d43..97716b49bcda 100644
+--- a/include/uapi/linux/kvm.h
++++ b/include/uapi/linux/kvm.h
+@@ -231,6 +231,60 @@ struct kvm_xen_exit {
+ 	} u;
+ };
+ 
++struct kvm_tdx_exit {
++#define KVM_EXIT_TDX_VMCALL	1
++	__u32 type;
++	__u32 pad;
++
++	union {
++		struct kvm_tdx_vmcall {
++			/*
++			 * Guest-Host-Communication Interface for TDX spec
++			 * defines the ABI for TDG.VP.VMCALL.
++			 */
++
++			/* Input parameters: guest -> VMM */
++			__u64 type;		/* r10 */
++			__u64 subfunction;	/* r11 */
++			__u64 reg_mask;		/* rcx */
++			/*
++			 * Subfunction specific.
++			 * Registers are used in this order to pass input
++			 * arguments.  r12=in0, r13=in1, etc.
++			 */
++			__u64 in_r12;
++			__u64 in_r13;
++			__u64 in_r14;
++			__u64 in_r15;
++			__u64 in_rbx;
++			__u64 in_rdi;
++			__u64 in_rsi;
++			__u64 in_r8;
++			__u64 in_r9;
++			__u64 in_rdx;
++
++			/* Output parameters: VMM -> guest */
++			__u64 status_code;	/* r10 */
++			/*
++			 * Subfunction specific.
++			 * Registers are used in this order to output return
++			 * values.  r11=out0, r12=out1, etc.
++			 */
++			__u64 out_r11;
++			__u64 out_r12;
++			__u64 out_r13;
++			__u64 out_r14;
++			__u64 out_r15;
++			__u64 out_rbx;
++			__u64 out_rdi;
++			__u64 out_rsi;
++			__u64 out_r8;
++			__u64 out_r9;
++			__u64 out_rdx;
++		} vmcall;
++	} u;
++};
++
+ #define KVM_S390_GET_SKEYS_NONE   1
+ #define KVM_S390_SKEYS_MAX        1048576
+ 
+@@ -269,6 +323,7 @@ struct kvm_xen_exit {
+ #define KVM_EXIT_AP_RESET_HOLD    32
+ #define KVM_EXIT_X86_BUS_LOCK     33
+ #define KVM_EXIT_XEN              34
++#define KVM_EXIT_TDX              35
+ 
+ /* For KVM_EXIT_INTERNAL_ERROR */
+ /* Emulate instruction failed. */
+@@ -471,6 +526,8 @@ struct kvm_run {
+ 		} msr;
+ 		/* KVM_EXIT_XEN */
+ 		struct kvm_xen_exit xen;
++		/* KVM_EXIT_TDX */
++		struct kvm_tdx_exit tdx;
+ 		/* Fix the size of the union. */
+ 		char padding[256];
+ 	};
+-- 
+2.31.1
+

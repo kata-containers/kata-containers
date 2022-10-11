@@ -1,0 +1,50 @@
+From 2dcbdae00bf7aeaa23358064c2540266c6fc17db Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Wed, 12 May 2021 17:18:11 -0700
+Subject: [PATCH 0149/1418] x86: Skip WBINVD instruction for VM guest
+
+VM guests that supports ACPI, use standard ACPI mechanisms to signal
+sleep state entry (including reboot) to the host. The ACPI
+specification mandates WBINVD on any sleep state entry with the
+expectation that the platform is only responsible for maintaining the
+state of memory over sleep states, not preserving dirty data in any
+CPU caches. ACPI cache flushing requirements pre-date the advent of
+virtualization. Given guest sleep state entry does not affect any
+host power rails it is not required to flush caches. The host is
+responsible for maintaining cache state over its own bare metal sleep
+state transitions that power-off the cache. A TDX guest, unlike a
+typical guest, will machine check if the CPU cache is powered off.
+
+Cc: Rafael J. Wysocki <rjw@rjwysocki.net>
+Cc: linux-acpi@vger.kernel.org
+Reviewed-by: Dan Williams <dan.j.williams@intel.com>
+Acked-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/acenv.h | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/acenv.h b/arch/x86/include/asm/acenv.h
+index 9aff97f0de7f..d4162e94bee8 100644
+--- a/arch/x86/include/asm/acenv.h
++++ b/arch/x86/include/asm/acenv.h
+@@ -10,10 +10,15 @@
+ #define _ASM_X86_ACENV_H
+ 
+ #include <asm/special_insns.h>
++#include <asm/cpu.h>
+ 
+ /* Asm macros */
+ 
+-#define ACPI_FLUSH_CPU_CACHE()	wbinvd()
++#define ACPI_FLUSH_CPU_CACHE()				\
++do {							\
++	if (!boot_cpu_has(X86_FEATURE_HYPERVISOR))	\
++		wbinvd();				\
++} while (0)
+ 
+ int __acpi_acquire_global_lock(unsigned int *lock);
+ int __acpi_release_global_lock(unsigned int *lock);
+-- 
+2.31.1
+

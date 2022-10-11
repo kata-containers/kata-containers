@@ -1,0 +1,49 @@
+From 48e86c06c92a83fe11a208d6f7e660b0f7a3be86 Mon Sep 17 00:00:00 2001
+From: Tony Luck <tony.luck@intel.com>
+Date: Fri, 6 May 2022 15:54:00 -0700
+Subject: [PATCH 1370/1418] x86/msr-index: Define INTEGRITY_CAPABILITIES MSR
+
+The INTEGRITY_CAPABILITIES MSR is enumerated by bit 2 of the
+CORE_CAPABILITIES MSR.
+
+Add defines for the CORE_CAPS enumeration as well as for the integrity
+MSR.
+
+Reviewed-by: Dan Williams <dan.j.williams@intel.com>
+Signed-off-by: Tony Luck <tony.luck@intel.com>
+Reviewed-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Reviewed-by: Thomas Gleixner <tglx@linutronix.de>
+Link: https://lore.kernel.org/r/20220506225410.1652287-3-tony.luck@intel.com
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+---
+ arch/x86/include/asm/msr-index.h | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/arch/x86/include/asm/msr-index.h b/arch/x86/include/asm/msr-index.h
+index 552909d6f742..257d47075918 100644
+--- a/arch/x86/include/asm/msr-index.h
++++ b/arch/x86/include/asm/msr-index.h
+@@ -76,6 +76,8 @@
+ 
+ /* Abbreviated from Intel SDM name IA32_CORE_CAPABILITIES */
+ #define MSR_IA32_CORE_CAPS			  0x000000cf
++#define MSR_IA32_CORE_CAPS_INTEGRITY_CAPS_BIT	  2
++#define MSR_IA32_CORE_CAPS_INTEGRITY_CAPS	  BIT(MSR_IA32_CORE_CAPS_INTEGRITY_CAPS_BIT)
+ #define MSR_IA32_CORE_CAPS_SPLIT_LOCK_DETECT_BIT  5
+ #define MSR_IA32_CORE_CAPS_SPLIT_LOCK_DETECT	  BIT(MSR_IA32_CORE_CAPS_SPLIT_LOCK_DETECT_BIT)
+ 
+@@ -155,6 +157,11 @@
+ #define MSR_IA32_POWER_CTL		0x000001fc
+ #define MSR_IA32_POWER_CTL_BIT_EE	19
+ 
++/* Abbreviated from Intel SDM name IA32_INTEGRITY_CAPABILITIES */
++#define MSR_INTEGRITY_CAPS			0x000002d9
++#define MSR_INTEGRITY_CAPS_PERIODIC_BIST_BIT	4
++#define MSR_INTEGRITY_CAPS_PERIODIC_BIST	BIT(MSR_INTEGRITY_CAPS_PERIODIC_BIST_BIT)
++
+ #define MSR_LBR_NHM_FROM		0x00000680
+ #define MSR_LBR_NHM_TO			0x000006c0
+ #define MSR_LBR_CORE_FROM		0x00000040
+-- 
+2.31.1
+

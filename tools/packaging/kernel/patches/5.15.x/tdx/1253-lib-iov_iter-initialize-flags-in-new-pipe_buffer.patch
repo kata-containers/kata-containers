@@ -1,0 +1,43 @@
+From 4349d2bf65b44cdcd43b83313bb614653a9a5c58 Mon Sep 17 00:00:00 2001
+From: Max Kellermann <max.kellermann@ionos.com>
+Date: Mon, 21 Feb 2022 11:03:13 +0100
+Subject: [PATCH 1253/1418] lib/iov_iter: initialize "flags" in new pipe_buffer
+
+The functions copy_page_to_iter_pipe() and push_pipe() can both
+allocate a new pipe_buffer, but the "flags" member initializer is
+missing.
+
+Fixes: 241699cd72a8 ("new iov_iter flavour: pipe-backed")
+To: Alexander Viro <viro@zeniv.linux.org.uk>
+To: linux-fsdevel@vger.kernel.org
+To: linux-kernel@vger.kernel.org
+Cc: stable@vger.kernel.org
+Signed-off-by: Max Kellermann <max.kellermann@ionos.com>
+Signed-off-by: Al Viro <viro@zeniv.linux.org.uk>
+---
+ lib/iov_iter.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/lib/iov_iter.c b/lib/iov_iter.c
+index 755c10c5138c..13cba0c40f63 100644
+--- a/lib/iov_iter.c
++++ b/lib/iov_iter.c
+@@ -416,6 +416,7 @@ static size_t copy_page_to_iter_pipe(struct page *page, size_t offset, size_t by
+ 		return 0;
+ 
+ 	buf->ops = &page_cache_pipe_buf_ops;
++	buf->flags = 0;
+ 	get_page(page);
+ 	buf->page = page;
+ 	buf->offset = offset;
+@@ -532,6 +533,7 @@ static size_t push_pipe(struct iov_iter *i, size_t size,
+ 			break;
+ 
+ 		buf->ops = &default_pipe_buf_ops;
++		buf->flags = 0;
+ 		buf->page = page;
+ 		buf->offset = 0;
+ 		buf->len = min_t(ssize_t, left, PAGE_SIZE);
+-- 
+2.31.1
+

@@ -1,0 +1,31 @@
+From 66acac22b40c86a340703abe8b5251582f49f06d Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Wed, 24 Feb 2021 16:38:44 +0800
+Subject: [PATCH 1134/1418] KVM: nVMX: Set X86_CR4_CET in cr4_fixed1_bits if
+ CET IBT is enabled
+
+CET SHSTK and IBT are independently controlled by kernel, set X86_CR4_CET
+bit in cr4_fixed1_bits if either of them is enabled so that nested guest
+can enjoy the feature.
+
+Reviewed-by: Sean Christopherson <seanjc@google.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/vmx/vmx.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index a540a5319c2e..d7c0be36a6b4 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -7550,6 +7550,7 @@ static void nested_vmx_cr_fixed1_bits_update(struct kvm_vcpu *vcpu)
+ 	cr4_fixed1_update(X86_CR4_LA57,       ecx, feature_bit(LA57));
+ 	cr4_fixed1_update(X86_CR4_PKS,        ecx, feature_bit(PKS));
+ 	cr4_fixed1_update(X86_CR4_CET,	      ecx, feature_bit(SHSTK));
++	cr4_fixed1_update(X86_CR4_CET,	      edx, feature_bit(IBT));
+ 
+ #undef cr4_fixed1_update
+ }
+-- 
+2.31.1
+

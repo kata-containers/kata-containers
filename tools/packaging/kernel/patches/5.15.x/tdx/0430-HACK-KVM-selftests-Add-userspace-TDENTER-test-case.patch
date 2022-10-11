@@ -1,0 +1,258 @@
+From d74a6bb8b33cb2e91b8341c23737f195240b6716 Mon Sep 17 00:00:00 2001
+From: Zhang Chen <chen.zhang@intel.com>
+Date: Mon, 30 Mar 2020 18:04:09 +0800
+Subject: [PATCH 0430/1418] *** HACK *** KVM: selftests: Add userspace TDENTER
+ test case
+
+Replace the placeholder TDENTER test with a proper selftest, e.g. build
+the TD in the selftest using the SEAMCALL ioctl() to get the TD to the
+poitner where TDENTER can succeed.
+
+Signed-off-by: Zhang Chen <chen.zhang@intel.com>
+Co-developed-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ tools/testing/selftests/kvm/.gitignore        |  1 +
+ tools/testing/selftests/kvm/Makefile          |  1 +
+ .../selftests/kvm/include/x86_64/tdx.h        | 11 +++
+ tools/testing/selftests/kvm/lib/x86_64/tdx.c  | 92 +++++++++++++++++++
+ .../selftests/kvm/x86_64/tdx_load_seam_test.c |  4 +-
+ .../selftests/kvm/x86_64/tdx_tdenter_test.c   | 41 +++++++++
+ 6 files changed, 148 insertions(+), 2 deletions(-)
+ create mode 100644 tools/testing/selftests/kvm/x86_64/tdx_tdenter_test.c
+
+diff --git a/tools/testing/selftests/kvm/.gitignore b/tools/testing/selftests/kvm/.gitignore
+index cd27c567dc57..8b6145f28e53 100644
+--- a/tools/testing/selftests/kvm/.gitignore
++++ b/tools/testing/selftests/kvm/.gitignore
+@@ -28,6 +28,7 @@
+ /x86_64/sync_regs_test
+ /x86_64/tdx_load_seam_test
+ /x86_64/tdx_seamcall_test
++/x86_64/tdx_tdenter_test
+ /x86_64/tsc_msrs_test
+ /x86_64/userspace_msr_exit_test
+ /x86_64/vmx_apic_access_test
+diff --git a/tools/testing/selftests/kvm/Makefile b/tools/testing/selftests/kvm/Makefile
+index 4e213299ec33..a07a6b0ba064 100644
+--- a/tools/testing/selftests/kvm/Makefile
++++ b/tools/testing/selftests/kvm/Makefile
+@@ -68,6 +68,7 @@ TEST_GEN_PROGS_x86_64 += x86_64/vmx_nested_tsc_scaling_test
+ TEST_GEN_PROGS_x86_64 += x86_64/xapic_ipi_test
+ TEST_GEN_PROGS_x86_64 += x86_64/tdx_load_seam_test
+ TEST_GEN_PROGS_x86_64 += x86_64/tdx_seamcall_test
++TEST_GEN_PROGS_x86_64 += x86_64/tdx_tdenter_test
+ TEST_GEN_PROGS_x86_64 += x86_64/xss_msr_test
+ TEST_GEN_PROGS_x86_64 += x86_64/debug_regs
+ TEST_GEN_PROGS_x86_64 += x86_64/tsc_msrs_test
+diff --git a/tools/testing/selftests/kvm/include/x86_64/tdx.h b/tools/testing/selftests/kvm/include/x86_64/tdx.h
+index 2260c4f5a30a..b5ca32104407 100644
+--- a/tools/testing/selftests/kvm/include/x86_64/tdx.h
++++ b/tools/testing/selftests/kvm/include/x86_64/tdx.h
+@@ -17,6 +17,7 @@
+ #define PAGE_SIZE	4096
+ 
+ #include "../../../../../arch/x86/include/asm/tdx_arch.h"
++#include "../../../../../arch/x86/include/asm/tdx_errno.h"
+ 
+ extern struct tdsysinfo_struct sysinfo;
+ extern int kvm_fd;
+@@ -25,8 +26,18 @@ struct td_page {
+ 	char data[PAGE_SIZE];
+ } __aligned(PAGE_SIZE);
+ 
++struct test_td {
++	struct td_page tdr;
++	struct td_page tdcx[TDX_NR_TDCX_PAGES];
++	struct td_page tdvpr;
++	struct td_page tdvpx[TDX_NR_TDVPX_PAGES];
++	int hkid;
++};
++
+ void tdx_enable(int argc, char **argv);
+ void tdx_disable(void);
++void tdx_create_td(struct test_td *td);
++void tdx_destroy_td(struct test_td *td);
+ 
+ static inline void __seamcall(struct kvm_seamcall *seamcall)
+ {
+diff --git a/tools/testing/selftests/kvm/lib/x86_64/tdx.c b/tools/testing/selftests/kvm/lib/x86_64/tdx.c
+index 705b9a771a11..18b1b749d7a3 100644
+--- a/tools/testing/selftests/kvm/lib/x86_64/tdx.c
++++ b/tools/testing/selftests/kvm/lib/x86_64/tdx.c
+@@ -6,6 +6,9 @@
+ 
+ #include "tdx.h"
+ 
++#define VMX_EPTP_MT_WB				0x6ull
++#define VMX_EPTP_PWL_4				0x18ull
++
+ struct tdsysinfo_struct sysinfo;
+ 
+ int kvm_fd;
+@@ -35,3 +38,92 @@ void tdx_disable(void)
+ 	close(kvm_fd);
+ 	kvm_vm_free(dummy_vm);
+ }
++
++static void tdx_init_td(struct test_td *td)
++{
++	struct td_params params;
++
++	memset(&params, 0, sizeof(params));
++	params.max_vcpus = 1;
++	params.eptp_controls = VMX_EPTP_MT_WB | VMX_EPTP_PWL_4;
++	params.exec_controls = 0;
++	params.xfam = sysinfo.xfam_fixed1;
++	params.tsc_frequency = TDX_TSC_KHZ_TO_25MHZ(5 * 1000 * 1000);
++
++	seamcall3(TDH_MNG_INIT, __pa(&td->tdr), __pa(&params));
++}
++
++static void tdx_create_tdvps(struct test_td *td)
++{
++	int i;
++
++	seamcall3(TDH_VP_CREATE, __pa(&td->tdvpr), __pa(&td->tdr));
++
++	for (i = 0; i < ((sysinfo.tdvps_base_size / PAGE_SIZE) - 1); i++)
++		seamcall3(TDH_VP_ADDCX, __pa(&td->tdvpx[i]), __pa(&td->tdvpr));
++
++	seamcall3(TDH_VP_INIT, __pa(&td->tdvpr), 0);
++}
++
++void tdx_create_td(struct test_td *td)
++{
++	int i;
++
++	/* Zero the TD, even though it may be redundant, to fault it in. */
++	memset(td, 0, sizeof(*td));
++
++	/* Can't get real hkid from KVM, just hardcode a fake hkid. */
++	td->hkid = 2;
++
++	seamcall3(TDH_MNG_CREATE, __pa(&td->tdr), td->hkid);
++
++	/* TODO: Run TDCONFIGKEY on each CPU. */
++	seamcall2(TDH_SYS_KEY_CONFIG, __pa(&td->tdr));
++
++	for (i = 0; i < ((sysinfo.tdcs_base_size) / PAGE_SIZE); i++)
++		seamcall3(TDH_MNG_ADDCX, __pa(&td->tdcx[i]), __pa(&td->tdr));
++
++	tdx_init_td(td);
++
++	tdx_create_tdvps(td);
++
++	seamcall2(TDH_MR_FINALIZE, __pa(&td->tdr));
++}
++
++static void tdx_tdwbcache(void)
++{
++	u64 err = 0;
++
++	do {
++		err = seamcall(SEAMCALL_TDH_PHYMEM_CACHE_WB, !!err, 0, 0, 0, 0);
++	} while (err == TDX_INTERRUPTED_RESUMABLE);
++}
++
++static void tdx_reclaim_td_page(struct td_page *page)
++{
++	seamcall2(TDH_PHYMEM_PAGE_RECLAIM, __pa(page));
++	seamcall2(TDH_PHYMEM_PAGE_WBINVD, __pa(page));
++}
++
++void tdx_destroy_td(struct test_td *td)
++{
++	int i;
++
++	seamcall2(TDH_MNG_KEY_RECLAIMID, __pa(&td->tdr));
++
++	seamcall2(TDH_VP_FLUSH, __pa(&td->tdvpr));
++
++	seamcall2(TDH_MNG_VPFLUSHDONE, __pa(&td->tdr));
++
++	tdx_tdwbcache();
++
++	seamcall2(TDH_MNG_KEY_FREEID, __pa(&td->tdr));
++
++	for (i = 0; i < ((sysinfo.tdvps_base_size / PAGE_SIZE) - 1); i++)
++		tdx_reclaim_td_page(&td->tdvpx[i]);
++	tdx_reclaim_td_page(&td->tdvpr);
++
++	for (i = 0; i < ((sysinfo.tdcs_base_size) / PAGE_SIZE); i++)
++		tdx_reclaim_td_page(&td->tdcx[i]);
++	tdx_reclaim_td_page(&td->tdr);
++}
+diff --git a/tools/testing/selftests/kvm/x86_64/tdx_load_seam_test.c b/tools/testing/selftests/kvm/x86_64/tdx_load_seam_test.c
+index 6543259b3214..8b08422564b4 100644
+--- a/tools/testing/selftests/kvm/x86_64/tdx_load_seam_test.c
++++ b/tools/testing/selftests/kvm/x86_64/tdx_load_seam_test.c
+@@ -28,7 +28,7 @@ void intel_seam_load_test(char *path)
+ {
+ 	int ret, fd;
+ 
+-	fd = open("/dev/kvm", O_RDWR);
++	fd = open(KVM_DEV_PATH, O_RDWR);
+ 	TEST_ASSERT(fd >= 0, "failed to open /dev/kvm fd: %i errno: %i",
+ 		    fd, errno);
+ 
+@@ -43,7 +43,7 @@ int main(int argc, char **argv)
+ {
+ 	char path[PATH_MAX];
+ 
+-	TEST_ASSERT(argc == 2, "Must specific path to SEAM module");
++	TEST_ASSERT(argc == 2, "Must specify path to SEAM module");
+ 
+ 	strncpy(path, argv[1], PATH_MAX);
+ 
+diff --git a/tools/testing/selftests/kvm/x86_64/tdx_tdenter_test.c b/tools/testing/selftests/kvm/x86_64/tdx_tdenter_test.c
+new file mode 100644
+index 000000000000..832658ede585
+--- /dev/null
++++ b/tools/testing/selftests/kvm/x86_64/tdx_tdenter_test.c
+@@ -0,0 +1,41 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <fcntl.h>
++#include <limits.h>
++#include <kvm_util.h>
++#include <linux/kvm.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/ioctl.h>
++#include <sys/types.h>
++#include <test_util.h>
++#include <unistd.h>
++#include <processor.h>
++#include <time.h>
++
++#include "tdx.h"
++
++/* Global to avoid stack overflow and lack of malloc() alignment. */
++static struct test_td td;
++
++int main(int argc, char **argv)
++{
++	struct kvm_tdenter tdenter;
++	long ret;
++
++	tdx_enable(argc, argv);
++
++	tdx_create_td(&td);
++
++	/* Call TDENTER ioctl*/
++	memset(&tdenter, 0, sizeof(tdenter));
++	tdenter.regs[0] = __pa(&td.tdvpr);
++
++	ret = ioctl(kvm_fd, KVM_TDENTER, &tdenter);
++	TEST_ASSERT(!ret, "KVM_TDENTER failed, ret: %ld, errno: %d", ret, errno);
++
++	tdx_destroy_td(&td);
++
++	tdx_disable();
++	return 0;
++}
+-- 
+2.31.1
+

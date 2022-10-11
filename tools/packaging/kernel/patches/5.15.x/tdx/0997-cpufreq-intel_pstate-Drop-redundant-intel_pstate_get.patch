@@ -1,0 +1,59 @@
+From bb7e1bdb83f96e559d7387dd605627fff14edbbd Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Fri, 10 Dec 2021 17:12:18 +0100
+Subject: [PATCH 0997/1418] cpufreq: intel_pstate: Drop redundant
+ intel_pstate_get_hwp_cap() call
+
+It is not necessary to call intel_pstate_get_hwp_cap() from
+intel_pstate_update_perf_limits(), because it gets called from
+intel_pstate_verify_cpu_policy() which is either invoked directly
+right before intel_pstate_update_perf_limits(), in
+intel_cpufreq_verify_policy() in the passive mode, or called
+from driver callbacks in a sequence that causes it to be followed
+by an immediate intel_pstate_update_perf_limits().
+
+Namely, in the active mode intel_cpufreq_verify_policy() is called
+by intel_pstate_verify_policy() which is the ->verify() callback
+routine of intel_pstate and gets called by the cpufreq core right
+before intel_pstate_set_policy(), which is the driver's ->setoplicy()
+callback routine, where intel_pstate_update_perf_limits() is called.
+
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ drivers/cpufreq/intel_pstate.c | 20 ++++++++------------
+ 1 file changed, 8 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/cpufreq/intel_pstate.c b/drivers/cpufreq/intel_pstate.c
+index dec2a5649ac1..87902060e1c6 100644
+--- a/drivers/cpufreq/intel_pstate.c
++++ b/drivers/cpufreq/intel_pstate.c
+@@ -2486,18 +2486,14 @@ static void intel_pstate_update_perf_limits(struct cpudata *cpu,
+ 	 * HWP needs some special consideration, because HWP_REQUEST uses
+ 	 * abstract values to represent performance rather than pure ratios.
+ 	 */
+-	if (hwp_active) {
+-		intel_pstate_get_hwp_cap(cpu);
+-
+-		if (cpu->pstate.scaling != perf_ctl_scaling) {
+-			int scaling = cpu->pstate.scaling;
+-			int freq;
+-
+-			freq = max_policy_perf * perf_ctl_scaling;
+-			max_policy_perf = DIV_ROUND_UP(freq, scaling);
+-			freq = min_policy_perf * perf_ctl_scaling;
+-			min_policy_perf = DIV_ROUND_UP(freq, scaling);
+-		}
++	if (hwp_active && cpu->pstate.scaling != perf_ctl_scaling) {
++		int scaling = cpu->pstate.scaling;
++		int freq;
++
++		freq = max_policy_perf * perf_ctl_scaling;
++		max_policy_perf = DIV_ROUND_UP(freq, scaling);
++		freq = min_policy_perf * perf_ctl_scaling;
++		min_policy_perf = DIV_ROUND_UP(freq, scaling);
+ 	}
+ 
+ 	pr_debug("cpu:%d min_policy_perf:%d max_policy_perf:%d\n",
+-- 
+2.31.1
+

@@ -1,0 +1,169 @@
+From 8427e6b083210c29dc4bd5717f86f7ec897287da Mon Sep 17 00:00:00 2001
+From: Kai Huang <kai.huang@intel.com>
+Date: Tue, 28 Sep 2021 09:55:53 +1300
+Subject: [PATCH 0330/1418] x86/mm: Prevent memory hotplug for TDX
+
+TDX architecturally doesn't support memory hotplug, so ACPI memory hotplug
+needs to be disabled.  Also, the kernel converts all convertible memory to
+TDX memory to avoid having to modify the page allocator to distinguish TDX
+and non-TDX memory allocation.  This means driver-managed memory hotplug
+(i.e. kmem-hot-added PMEM) needs to be disabled too.  Meanwhile,
+memremap_pages() should continue to work.  Although it extends the NUMA
+node's spanned pages, the newly added memory region will end up in
+ZONE_DEVICE, whose pages won't be managed by the page allocator.
+
+To cover all the above cases, implement an x86 replacement version of
+arch_check_hotplug_memory_range() to deny memory hotplug if memory the
+range is not fully covered by any TDX memory block because TDX memory
+blocks are converted to TDX memory during kernel boot.
+
+Signed-off-by: Kai Huang <kai.huang@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/tdx_host.h    |  6 ++++
+ arch/x86/kernel/cpu/tdx/tdx-tdmr.c | 50 +++++++++++++++++++++++++++---
+ arch/x86/kernel/cpu/tdx/tdx-tdmr.h |  2 +-
+ arch/x86/mm/init_64.c              |  9 ++++++
+ 4 files changed, 62 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/include/asm/tdx_host.h b/arch/x86/include/asm/tdx_host.h
+index 4c74a5f65711..b37705b1bdb9 100644
+--- a/arch/x86/include/asm/tdx_host.h
++++ b/arch/x86/include/asm/tdx_host.h
+@@ -54,6 +54,7 @@ extern u32 tdx_keyids_start __read_mostly;
+ extern u32 tdx_nr_keyids __read_mostly;
+ extern u32 tdx_seam_keyid __read_mostly;
+ 
++bool range_is_tdx_memory(phys_addr_t start, phys_addr_t end);
+ #else
+ static inline const char *tdx_seamcall_error_name(u64 error_code)
+ {
+@@ -76,6 +77,11 @@ static inline int tdx_seamcall_on_each_pkg(int (*fn)(void *), void *param)
+ {
+ 	return 0;
+ }
++
++static inline bool range_is_tdx_memory(phys_addr_t start, phys_addr_t end)
++{
++	return false;
++}
+ #endif
+ 
+ #endif /* __ASM_X86_TDX_HOST_H */
+diff --git a/arch/x86/kernel/cpu/tdx/tdx-tdmr.c b/arch/x86/kernel/cpu/tdx/tdx-tdmr.c
+index 434974aa70b3..7e459bb3815e 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx-tdmr.c
++++ b/arch/x86/kernel/cpu/tdx/tdx-tdmr.c
+@@ -7,13 +7,15 @@
+ 
+ #include <linux/types.h>
+ #include <linux/errno.h>
++#include <asm/tdx_host.h>
++#include <asm/page_types.h>
+ #include "tdx-tdmr.h"
+ 
+ /*
+  * Final TDX memory which contains all memory blocks that can be used by TDX.
+  * Use this to construct final TDMRs.
+  */
+-struct tdx_memory tmem_all __initdata;
++struct tdx_memory tmem_all;
+ 
+ /*
+  * Merge subtype TDX memory to final TDX memory.
+@@ -113,9 +115,49 @@ int __init construct_tdx_tdmrs(struct cmr_info *cmr_array, int cmr_num,
+ 
+ out:
+ 	/*
+-	 * Always discard @tmem_all no matter whether constructing TDMRs
+-	 * was successful or not, since it is not needed anymore.
++	 * Keep @tmem_all if constructing TDMRs was successfully done, since
++	 * memory hotplug needs it to check whether new memory can be added
++	 * or not.
+ 	 */
+-	tdx_memory_destroy(&tmem_all);
++	if (ret)
++		tdx_memory_destroy(&tmem_all);
+ 	return ret;
+ }
++
++/**
++ * range_is_tdx_memory:		Check whether range is TDX memory
++ *
++ * @start:	Range start physical address
++ * @end:	Range end physical address
++ *
++ * Check whether given range is TDX memory.  This allows memory hotplug to
++ * fail when TDX is enabled, because TDX doesn't support memory hotplug.
++ *
++ * This function should be called after TDX module is properly initialized.
++ */
++bool range_is_tdx_memory(phys_addr_t start, phys_addr_t end)
++{
++	struct tdx_memblock *tmb;
++
++	/*
++	 * @tmem_all being empty means TDX is not enabled.  Return true
++	 * in this case to not impact normal memory hotplug behaviour.
++	 */
++	if (list_empty(&tmem_all.tmb_list))
++		return true;
++
++	/*
++	 * Target range is TDX memory if it is fully covered by one TDX
++	 * memory block in @tmem_all.
++	 */
++	list_for_each_entry(tmb, &tmem_all.tmb_list, list) {
++		phys_addr_t tmb_start, tmb_end;
++
++		tmb_start = tmb->start_pfn << PAGE_SHIFT;
++		tmb_end = tmb->end_pfn << PAGE_SHIFT;
++		if (tmb_start <= start && tmb_end >= end)
++			return true;
++	}
++
++	return false;
++}
+diff --git a/arch/x86/kernel/cpu/tdx/tdx-tdmr.h b/arch/x86/kernel/cpu/tdx/tdx-tdmr.h
+index 5beafe7d60b6..a2eb82466f2e 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx-tdmr.h
++++ b/arch/x86/kernel/cpu/tdx/tdx-tdmr.h
+@@ -5,7 +5,7 @@
+ #include "tdmr-sysmem.h"
+ #include "tdmr-legacy-pmem.h"
+ 
+-extern struct tdx_memory tmem_all __initdata;
++extern struct tdx_memory tmem_all;
+ 
+ /* Build final TDX memory with all TDX capable memory blocks */
+ int __init build_final_tdx_memory(void);
+diff --git a/arch/x86/mm/init_64.c b/arch/x86/mm/init_64.c
+index 36098226a957..085779b7093c 100644
+--- a/arch/x86/mm/init_64.c
++++ b/arch/x86/mm/init_64.c
+@@ -56,6 +56,8 @@
+ #include <asm/setup.h>
+ #include <asm/ftrace.h>
+ 
++#include <asm/tdx_host.h>
++
+ #include "mm_internal.h"
+ 
+ #include "ident_map.c"
+@@ -972,6 +974,13 @@ int arch_add_memory(int nid, u64 start, u64 size,
+ 	return add_pages(nid, start_pfn, nr_pages, params);
+ }
+ 
++int arch_check_hotplug_memory_range(u64 start, u64 size)
++{
++	if (!boot_cpu_has(X86_FEATURE_TDX))
++		return 0;
++	return range_is_tdx_memory(start, start + size) ? 0 : -EINVAL;
++}
++
+ static void __meminit free_pagetable(struct page *page, int order)
+ {
+ 	unsigned long magic;
+-- 
+2.31.1
+

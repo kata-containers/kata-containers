@@ -1,0 +1,119 @@
+From 275f560b0f85c2ff169dc158af4fcda49cfe2591 Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Fri, 9 Jul 2021 00:03:00 +0800
+Subject: [PATCH 0917/1418] KVM: x86/vmx: Check Arch LBR config when return
+ perf capabilities
+
+Two new bit fields(VM_EXIT_CLEAR_IA32_LBR_CTL, VM_ENTRY_LOAD_IA32_LBR_CTL)
+are added to support guest Arch LBR. These two bits should be set in order
+to make Arch LBR workable in both guest and host.
+
+Co-developed-by: Like Xu <like.xu@linux.intel.com>
+Signed-off-by: Like Xu <like.xu@linux.intel.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/include/asm/vmx.h      |  2 ++
+ arch/x86/kvm/vmx/capabilities.h | 25 +++++++++++++++++--------
+ arch/x86/kvm/vmx/vmx.c          | 10 ++++++++--
+ 3 files changed, 27 insertions(+), 10 deletions(-)
+
+diff --git a/arch/x86/include/asm/vmx.h b/arch/x86/include/asm/vmx.h
+index c23235578b2d..557154f14287 100644
+--- a/arch/x86/include/asm/vmx.h
++++ b/arch/x86/include/asm/vmx.h
+@@ -138,6 +138,7 @@ struct vmx_basic_info {
+ #define VM_EXIT_CLEAR_BNDCFGS                   0x00800000
+ #define VM_EXIT_PT_CONCEAL_PIP			0x01000000
+ #define VM_EXIT_CLEAR_IA32_RTIT_CTL		0x02000000
++#define VM_EXIT_CLEAR_IA32_LBR_CTL		0x04000000
+ #define VM_EXIT_LOAD_IA32_PKRS			0x20000000
+ 
+ #define VM_EXIT_ALWAYSON_WITHOUT_TRUE_MSR	0x00036dff
+@@ -152,6 +153,7 @@ struct vmx_basic_info {
+ #define VM_ENTRY_LOAD_BNDCFGS                   0x00010000
+ #define VM_ENTRY_PT_CONCEAL_PIP			0x00020000
+ #define VM_ENTRY_LOAD_IA32_RTIT_CTL		0x00040000
++#define VM_ENTRY_LOAD_IA32_LBR_CTL		0x00200000
+ #define VM_ENTRY_LOAD_IA32_PKRS			0x00400000
+ 
+ #define VM_ENTRY_ALWAYSON_WITHOUT_TRUE_MSR	0x000011ff
+diff --git a/arch/x86/kvm/vmx/capabilities.h b/arch/x86/kvm/vmx/capabilities.h
+index 5512ab400120..9aa7cd4af8d0 100644
+--- a/arch/x86/kvm/vmx/capabilities.h
++++ b/arch/x86/kvm/vmx/capabilities.h
+@@ -403,20 +403,29 @@ static inline bool vmx_pt_mode_is_host_guest(void)
+ 	return pt_mode == PT_MODE_HOST_GUEST;
+ }
+ 
+-static inline u64 vmx_get_perf_capabilities(void)
++static inline bool cpu_has_vmx_arch_lbr(void)
+ {
+-	u64 perf_cap = 0;
+-
+-	if (boot_cpu_has(X86_FEATURE_PDCM))
+-		rdmsrl(MSR_IA32_PERF_CAPABILITIES, perf_cap);
+-
+-	perf_cap &= PMU_CAP_LBR_FMT;
++	return (vmcs_config.vmexit_ctrl & VM_EXIT_CLEAR_IA32_LBR_CTL) &&
++		(vmcs_config.vmentry_ctrl & VM_ENTRY_LOAD_IA32_LBR_CTL);
++}
+ 
++static inline u64 vmx_get_perf_capabilities(void)
++{
+ 	/*
+ 	 * Since counters are virtualized, KVM would support full
+ 	 * width counting unconditionally, even if the host lacks it.
+ 	 */
+-	return PMU_CAP_FW_WRITES | perf_cap;
++	u64 perf_cap = PMU_CAP_FW_WRITES;
++	u64 host_perf_cap = 0;
++
++	if (boot_cpu_has(X86_FEATURE_PDCM))
++		rdmsrl(MSR_IA32_PERF_CAPABILITIES, host_perf_cap);
++
++	perf_cap |= host_perf_cap & PMU_CAP_LBR_FMT;
++	if (boot_cpu_has(X86_FEATURE_ARCH_LBR) && !cpu_has_vmx_arch_lbr())
++		perf_cap &= ~PMU_CAP_LBR_FMT;
++
++	return perf_cap;
+ }
+ 
+ static inline u64 vmx_supported_debugctl(void)
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 2d7de5ab2ae9..629b5ed8994a 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -2562,7 +2562,8 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf,
+ 	      VM_EXIT_CLEAR_BNDCFGS |
+ 	      VM_EXIT_PT_CONCEAL_PIP |
+ 	      VM_EXIT_CLEAR_IA32_RTIT_CTL |
+-	      VM_EXIT_LOAD_IA32_PKRS;
++	      VM_EXIT_LOAD_IA32_PKRS |
++	      VM_EXIT_CLEAR_IA32_LBR_CTL;
+ 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_EXIT_CTLS,
+ 				&_vmexit_control) < 0)
+ 		return -EIO;
+@@ -2587,7 +2588,8 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf,
+ 	      VM_ENTRY_LOAD_BNDCFGS |
+ 	      VM_ENTRY_PT_CONCEAL_PIP |
+ 	      VM_ENTRY_LOAD_IA32_RTIT_CTL |
+-	      VM_ENTRY_LOAD_IA32_PKRS;
++	      VM_ENTRY_LOAD_IA32_PKRS |
++	      VM_ENTRY_LOAD_IA32_LBR_CTL;
+ 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_ENTRY_CTLS,
+ 				&_vmentry_control) < 0)
+ 		return -EIO;
+@@ -5852,6 +5854,10 @@ void dump_vmcs(struct kvm_vcpu *vcpu)
+ 	    vmentry_ctl & VM_ENTRY_LOAD_IA32_PERF_GLOBAL_CTRL)
+ 		pr_err("PerfGlobCtl = 0x%016llx\n",
+ 		       vmcs_read64(GUEST_IA32_PERF_GLOBAL_CTRL));
++	if (kvm_cpu_cap_has(X86_FEATURE_ARCH_LBR) &&
++	    vmentry_ctl & VM_ENTRY_LOAD_IA32_LBR_CTL)
++		pr_err("ArchLBRCtl = 0x%016llx\n",
++		       vmcs_read64(GUEST_IA32_LBR_CTL));
+ 	if (vmentry_ctl & VM_ENTRY_LOAD_BNDCFGS)
+ 		pr_err("BndCfgS = 0x%016llx\n", vmcs_read64(GUEST_BNDCFGS));
+ 	if (vmentry_ctl & VM_ENTRY_LOAD_IA32_PKRS)
+-- 
+2.31.1
+

@@ -1,0 +1,53 @@
+From 037407fbdf85ba0eafd90280df50a2ae8aa364e7 Mon Sep 17 00:00:00 2001
+From: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Date: Wed, 11 Aug 2021 03:24:12 -0700
+Subject: [PATCH 0662/1418] Fix missing invalidation when changing a present
+ SL-only PGTT type to a Nested type.
+
+---
+ drivers/iommu/intel/pasid.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/iommu/intel/pasid.c b/drivers/iommu/intel/pasid.c
+index 67ab4d0a3dd8..e5d14d70e47d 100644
+--- a/drivers/iommu/intel/pasid.c
++++ b/drivers/iommu/intel/pasid.c
+@@ -849,6 +849,7 @@ int intel_pasid_setup_nested(struct intel_iommu *iommu, struct device *dev,
+ 	u64 pgd_val;
+ 	int agaw;
+ 	u16 did;
++	bool pasid_present;
+ 
+ 	if (!ecap_nest(iommu->ecap)) {
+ 		pr_err_ratelimited("IOMMU: %s: No nested translation support\n",
+@@ -871,11 +872,18 @@ int intel_pasid_setup_nested(struct intel_iommu *iommu, struct device *dev,
+ 	 * multiple times. If caller tries to setup nesting for a PASID
+ 	 * entry which is already nested mode, should fail it.
+ 	 */
+-	if (pasid_pte_is_present(pte) && pasid_pte_is_nested(pte))
++	pasid_present = pasid_pte_is_present(pte);
++
++	if (pasid_present && pasid_pte_is_nested(pte))
+ 		return -EBUSY;
+ 
+ 	pasid_clear_entry(pte);
+ 
++	did = domain->iommu_did[iommu->seq_id];
++
++	if (pasid_present)
++		flush_iotlb_all(iommu, dev, did, pasid, DMA_TLB_DSI_FLUSH);
++
+ 	/* Sanity checking performed by caller to make sure address
+ 	 * width matching in two dimensions:
+ 	 * 1. CPU vs. IOMMU
+@@ -928,7 +936,6 @@ int intel_pasid_setup_nested(struct intel_iommu *iommu, struct device *dev,
+ 	pasid_set_slptr(pte, pgd_val);
+ 	pasid_set_fault_enable(pte);
+ 
+-	did = domain->iommu_did[iommu->seq_id];
+ 	pasid_set_domain_id(pte, did);
+ 
+ 	pasid_set_address_width(pte, agaw);
+-- 
+2.31.1
+

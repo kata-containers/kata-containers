@@ -1,0 +1,91 @@
+From 4577607237d6f4a1d6b5924b99eeec6390501314 Mon Sep 17 00:00:00 2001
+From: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Date: Mon, 30 Aug 2021 11:15:15 -0700
+Subject: [PATCH 1097/1418] mm/mmap: Add shadow stack pages to memory
+ accounting
+
+Account shadow stack pages to stack memory.
+
+Signed-off-by: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Reviewed-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+Signed-off-by: Rick Edgecombe <rick.p.edgecombe@intel.com>
+Cc: Kees Cook <keescook@chromium.org>
+---
+ arch/x86/include/asm/pgtable.h | 3 +++
+ arch/x86/mm/pgtable.c          | 5 +++++
+ include/linux/pgtable.h        | 8 ++++++++
+ mm/mmap.c                      | 5 +++++
+ 4 files changed, 21 insertions(+)
+
+diff --git a/arch/x86/include/asm/pgtable.h b/arch/x86/include/asm/pgtable.h
+index 6b6af4cce322..2aeeeb33f9d2 100644
+--- a/arch/x86/include/asm/pgtable.h
++++ b/arch/x86/include/asm/pgtable.h
+@@ -1645,6 +1645,9 @@ static inline bool arch_faults_on_old_pte(void)
+ #define maybe_mkwrite maybe_mkwrite
+ extern pte_t maybe_mkwrite(pte_t pte, struct vm_area_struct *vma);
+ 
++#define is_shadow_stack_mapping is_shadow_stack_mapping
++extern bool is_shadow_stack_mapping(vm_flags_t vm_flags);
++
+ #endif	/* __ASSEMBLY__ */
+ 
+ #endif /* _ASM_X86_PGTABLE_H */
+diff --git a/arch/x86/mm/pgtable.c b/arch/x86/mm/pgtable.c
+index c22c8e9c37e8..61a364b9ae0a 100644
+--- a/arch/x86/mm/pgtable.c
++++ b/arch/x86/mm/pgtable.c
+@@ -884,3 +884,8 @@ int pmd_free_pte_page(pmd_t *pmd, unsigned long addr)
+ 
+ #endif /* CONFIG_X86_64 */
+ #endif	/* CONFIG_HAVE_ARCH_HUGE_VMAP */
++
++bool is_shadow_stack_mapping(vm_flags_t vm_flags)
++{
++	return vm_flags & VM_SHADOW_STACK;
++}
+diff --git a/include/linux/pgtable.h b/include/linux/pgtable.h
+index e24d2c992b11..5ebe4677e13f 100644
+--- a/include/linux/pgtable.h
++++ b/include/linux/pgtable.h
+@@ -903,6 +903,14 @@ static inline void ptep_modify_prot_commit(struct vm_area_struct *vma,
+ 	__ptep_modify_prot_commit(vma, addr, ptep, pte);
+ }
+ #endif /* __HAVE_ARCH_PTEP_MODIFY_PROT_TRANSACTION */
++
++#ifndef is_shadow_stack_mapping
++static inline bool is_shadow_stack_mapping(vm_flags_t vm_flags)
++{
++	return false;
++}
++#endif
++
+ #endif /* CONFIG_MMU */
+ 
+ /*
+diff --git a/mm/mmap.c b/mm/mmap.c
+index 88dcc5c25225..16b0ab8084c2 100644
+--- a/mm/mmap.c
++++ b/mm/mmap.c
+@@ -1710,6 +1710,9 @@ static inline int accountable_mapping(struct file *file, vm_flags_t vm_flags)
+ 	if (file && is_file_hugepages(file))
+ 		return 0;
+ 
++	if (is_shadow_stack_mapping(vm_flags))
++		return 1;
++
+ 	return (vm_flags & (VM_NORESERVE | VM_SHARED | VM_WRITE)) == VM_WRITE;
+ }
+ 
+@@ -3340,6 +3343,8 @@ void vm_stat_account(struct mm_struct *mm, vm_flags_t flags, long npages)
+ 		mm->stack_vm += npages;
+ 	else if (is_data_mapping(flags))
+ 		mm->data_vm += npages;
++	else if (is_shadow_stack_mapping(flags))
++		mm->stack_vm += npages;
+ }
+ 
+ static vm_fault_t special_mapping_fault(struct vm_fault *vmf);
+-- 
+2.31.1
+

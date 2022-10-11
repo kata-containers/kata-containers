@@ -1,0 +1,38 @@
+From aac56f065c3e26185bef3a09eb38ba866ca74a69 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Thu, 28 Oct 2021 22:08:04 +0800
+Subject: [PATCH 0501/1418] KVM: MMU: Distinguish TD guest MMIO access in
+ handle_abnormal_pfn()
+
+The TD guest hang there when do MMIO accessing due to the original
+checking in handle_abnormal_pfn() treats it as same as shadow page
+MMIO accessing, for TD guest it needs to setup an EPT entry to
+inject #VE and let guest to just try again.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 17d23e9e3464..a67c2e575a34 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -3681,9 +3681,12 @@ static bool handle_abnormal_pfn(struct kvm_vcpu *vcpu, gva_t gva, gfn_t gfn,
+ 		/*
+ 		 * If MMIO caching is disabled, emulate immediately without
+ 		 * touching the shadow page tables as attempting to install an
+-		 * MMIO SPTE will just be an expensive nop.
++		 * MMIO SPTE will just be an expensive nop, but excludes the
++		 * INTEL TD guest due to it also uses shadow_mmio_value = 0
++		 * to emulating MMIO access.
+ 		 */
+-		if (unlikely(!vcpu->kvm->arch.shadow_mmio_value)) {
++		if (unlikely(!vcpu->kvm->arch.shadow_mmio_value)
++		    && !vcpu->kvm->arch.gfn_shared_mask) {
+ 			*ret_val = RET_PF_EMULATE;
+ 			return true;
+ 		}
+-- 
+2.31.1
+

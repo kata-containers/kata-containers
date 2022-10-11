@@ -1,0 +1,56 @@
+From 0ec91d3db27f0605e03f1b6dc0100209ae5b6507 Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Thu, 24 Feb 2022 09:55:27 -0500
+Subject: [PATCH 1120/1418] TDX: AMX: enable AMX feature in the TD VM
+
+Since AMX MSRs need passthrough to TD VM, we directly set
+xfd_no_write_intercept to true here. This can make sync
+xfd state before irqoff.
+
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 13 ++++++++-----
+ 1 file changed, 8 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 8c985097ddb0..c4d79b12568a 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -638,6 +638,7 @@ static int tdx_vm_init(struct kvm *kvm)
+ static int tdx_vcpu_create(struct kvm_vcpu *vcpu)
+ {
+ 	struct vcpu_tdx *tdx = to_tdx(vcpu);
++	struct kvm_tdx *kvm_tdx = to_kvm_tdx(vcpu->kvm);
+ 	int ret, i;
+ 
+ 	ret = tdx_alloc_td_page(&tdx->tdvpr);
+@@ -666,6 +667,9 @@ static int tdx_vcpu_create(struct kvm_vcpu *vcpu)
+ 		!(to_kvm_tdx(vcpu->kvm)->attributes & TDX_TD_ATTRIBUTE_DEBUG);
+ 	vcpu->arch.root_mmu.no_prefetch = true;
+ 
++	if ((kvm_tdx->xfam & TDX_TD_XFAM_AMX) == TDX_TD_XFAM_AMX)
++		vcpu->arch.xfd_no_write_intercept = true;
++
+ 	tdx->pi_desc.nv = POSTED_INTR_VECTOR;
+ 	tdx->pi_desc.sn = 1;
+ 	tdx->host_state_need_save = true;
+@@ -2220,11 +2224,10 @@ static int setup_tdparams(struct kvm *kvm, struct td_params *td_params,
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+-	if (td_params->xfam & TDX_TD_XFAM_AMX) {
+-		pr_warn("TD doesn't support AMX. KVM needs to save/restore "
+-			"IA32_XFD, IA32_XFD_ERR properly.\n");
+-		return -EOPNOTSUPP;
+-	}
++	/* TDX module requires bit 17 and bit 18 are either 00b or 11b */
++	if ((td_params->xfam & TDX_TD_XFAM_AMX) &&
++	    ((td_params->xfam & TDX_TD_XFAM_AMX) != TDX_TD_XFAM_AMX))
++		return -EINVAL;
+ 
+ 	if (init_vm->tsc_khz)
+ 		guest_tsc_khz = init_vm->tsc_khz;
+-- 
+2.31.1
+

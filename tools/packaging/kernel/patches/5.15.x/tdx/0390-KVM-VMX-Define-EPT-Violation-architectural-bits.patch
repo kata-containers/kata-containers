@@ -1,0 +1,46 @@
+From 702f6498de77fc491c71bae72a2e9f9af199ce4f Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Thu, 18 Jan 2018 13:03:04 -0800
+Subject: [PATCH 0390/1418] KVM: VMX: Define EPT Violation architectural bits
+
+Define the EPT Violation #VE control bit, #VE info VMCS fields, and the
+suppress #VE bit for EPT entries.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/vmx.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/x86/include/asm/vmx.h b/arch/x86/include/asm/vmx.h
+index 792aae70bc3a..4ed787675f51 100644
+--- a/arch/x86/include/asm/vmx.h
++++ b/arch/x86/include/asm/vmx.h
+@@ -79,6 +79,7 @@ struct vmcs {
+ #define SECONDARY_EXEC_ENCLS_EXITING		VMCS_CONTROL_BIT(ENCLS_EXITING)
+ #define SECONDARY_EXEC_RDSEED_EXITING		VMCS_CONTROL_BIT(RDSEED_EXITING)
+ #define SECONDARY_EXEC_ENABLE_PML               VMCS_CONTROL_BIT(PAGE_MOD_LOGGING)
++#define SECONDARY_EXEC_EPT_VIOLATION_VE		VMCS_CONTROL_BIT(EPT_VIOLATION_VE)
+ #define SECONDARY_EXEC_PT_CONCEAL_VMX		VMCS_CONTROL_BIT(PT_CONCEAL_VMX)
+ #define SECONDARY_EXEC_XSAVES			VMCS_CONTROL_BIT(XSAVES)
+ #define SECONDARY_EXEC_MODE_BASED_EPT_EXEC	VMCS_CONTROL_BIT(MODE_BASED_EPT_EXEC)
+@@ -236,6 +237,8 @@ enum vmcs_field {
+ 	VMREAD_BITMAP_HIGH              = 0x00002027,
+ 	VMWRITE_BITMAP                  = 0x00002028,
+ 	VMWRITE_BITMAP_HIGH             = 0x00002029,
++	VE_INFO_ADDRESS                 = 0x0000202A,
++	VE_INFO_ADDRESS_HIGH            = 0x0000202B,
+ 	XSS_EXIT_BITMAP                 = 0x0000202C,
+ 	XSS_EXIT_BITMAP_HIGH            = 0x0000202D,
+ 	ENCLS_EXITING_BITMAP		= 0x0000202E,
+@@ -528,6 +531,7 @@ enum vmcs_field {
+ #define VMX_EPT_IPAT_BIT    			(1ull << 6)
+ #define VMX_EPT_ACCESS_BIT			(1ull << 8)
+ #define VMX_EPT_DIRTY_BIT			(1ull << 9)
++#define VMX_EPT_SUPPRESS_VE_BIT			(1ull << 63)
+ #define VMX_EPT_RWX_MASK                        (VMX_EPT_READABLE_MASK |       \
+ 						 VMX_EPT_WRITABLE_MASK |       \
+ 						 VMX_EPT_EXECUTABLE_MASK)
+-- 
+2.31.1
+

@@ -1,0 +1,41 @@
+From 338186e9da54a0bdb5af57c6c6f1014b8a49dc1a Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Tue, 31 Aug 2021 15:34:43 +0800
+Subject: [PATCH 0487/1418] KVM: MMU: Retain large page bit when zapping
+ private spte
+
+Retain PT_PAGE_SIZE  bit when zapping private spte so that is_last_spte()
+can identify zapped private large page.
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 54584c78a923..37ee957f3104 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -1505,6 +1505,7 @@ static bool rmap_write_protect(struct kvm_vcpu *vcpu, u64 gfn)
+ static bool kvm_mmu_zap_private_spte(struct kvm *kvm, u64 *sptep)
+ {
+ 	struct kvm_mmu_page *sp;
++	u64 clear_bits;
+ 	kvm_pfn_t pfn;
+ 	gfn_t gfn;
+ 
+@@ -1521,8 +1522,9 @@ static bool kvm_mmu_zap_private_spte(struct kvm *kvm, u64 *sptep)
+ 
+ 	static_call(kvm_x86_zap_private_spte)(kvm, gfn, sp->role.level);
+ 
+-	__mmu_spte_clear_track_bits(kvm, sptep,
+-				    SPTE_PRIVATE_ZAPPED | pfn << PAGE_SHIFT);
++	clear_bits = SPTE_PRIVATE_ZAPPED | pfn << PAGE_SHIFT |
++		     (is_large_pte(*sptep) ? PT_PAGE_SIZE_MASK : 0);
++	__mmu_spte_clear_track_bits(kvm, sptep, clear_bits);
+ 	return true;
+ }
+ 
+-- 
+2.31.1
+

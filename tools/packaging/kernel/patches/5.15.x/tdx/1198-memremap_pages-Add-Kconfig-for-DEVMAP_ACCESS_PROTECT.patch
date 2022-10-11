@@ -1,0 +1,62 @@
+From 9cae19863a406d0c9c50b9e576eaaf0c622646fa Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Mon, 30 Mar 2020 15:18:54 -0700
+Subject: [PATCH 1198/1418] memremap_pages: Add Kconfig for
+ DEVMAP_ACCESS_PROTECTION
+
+The persistent memory (PMEM) driver uses the memremap_pages facility to
+provide 'struct page' metadata (vmemmap) for PMEM.  Given that PMEM
+capacity may be orders of magnitude higher capacity than System RAM it
+presents a large vulnerability surface to stray writes.  Unlike stray
+writes to System RAM, which may result in a crash or other undesirable
+behavior, stray writes to PMEM additionally are more likely to result in
+permanent data loss. Reboot is not a remediation for PMEM corruption
+like it is for System RAM.
+
+Given that PMEM access from the kernel is limited to a constrained set
+of locations (PMEM driver, Filesystem-DAX, and direct-I/O to a DAX
+page), it is amenable to supervisor pkey protection.
+
+Add a Kconfig option to configure additional devmap protections using
+PKS.
+
+Only PMEM which is advertised to the memory subsystem needs this
+protection.  Therefore, the feature depends on NVDIMM_PFN.
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ mm/Kconfig | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/mm/Kconfig b/mm/Kconfig
+index 67199d9eb4a9..6fe0c7da567f 100644
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -795,6 +795,24 @@ config ZONE_DEVICE
+ 
+ 	  If FS_DAX is enabled, then say Y.
+ 
++config DEVMAP_ACCESS_PROTECTION
++	bool "Access protection for memremap_pages()"
++	depends on NVDIMM_PFN
++	depends on ARCH_HAS_SUPERVISOR_PKEYS
++	select ARCH_ENABLE_PKS_CONSUMER
++	default n
++
++	help
++	  Enable extra protections on device memory.  This protects against
++	  unintended access to devices such as a stray writes.  This feature is
++	  particularly useful to protect against corruption of persistent
++	  memory.
++
++	  This depends on architecture support of supervisor PKeys and has no
++	  overhead if the architecture does not support them.
++
++	  If you have persistent memory say 'Y'.
++
+ config DEV_PAGEMAP_OPS
+ 	bool
+ 
+-- 
+2.31.1
+

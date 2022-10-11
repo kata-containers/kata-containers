@@ -1,0 +1,285 @@
+From 3ecfe5c7869a9b40b9b5db9372aaaad423cb63dd Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Wed, 28 Apr 2021 20:17:08 -0700
+Subject: [PATCH 0170/1418] x86/tdx: Add TDCALL tracepoint
+
+Add TDCALL tracepoint in __tdx_module_call() and __tdx_hypercall()
+helper functions. These two helper functions are core calls for
+triggering the "TDCALL" instruction. Having a trace point for each
+TDCALL is useful for debugging and performance analysis, as well as
+testing.
+
+For __tdx_module_call(), it will dump info about TDCALL leaf ID (RAX)
+and input parameters (RCX, RDX, R8, R9) in entry path and TDCALL return
+status (RAX) and output parameters (RCX, RDX, R8, R9, R10, R11) in exit
+path.
+
+For __tdx_hypercall(), it will dump info about TDG.VP.VMCALL sub ID
+(R11), and input parameters (R12-R15) in entry path and TDG.VP.VMCALL
+return status (R10) and output parameters (R11-R15) in exit path.
+
+Also, make trace points RCU idle safe to avoid warnings when RCU
+debugging is enabled.
+
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/include/asm/trace/tdx.h | 99 ++++++++++++++++++++++++++++++++
+ arch/x86/kernel/tdx.c            | 64 +++++++++++++++++----
+ 2 files changed, 151 insertions(+), 12 deletions(-)
+
+diff --git a/arch/x86/include/asm/trace/tdx.h b/arch/x86/include/asm/trace/tdx.h
+index bdb6a6ad84cd..240cff27c758 100644
+--- a/arch/x86/include/asm/trace/tdx.h
++++ b/arch/x86/include/asm/trace/tdx.h
+@@ -47,6 +47,105 @@ TRACE_EVENT(tdx_virtualization_exception,
+ 		      )
+ 	    );
+ 
++TRACE_EVENT(tdx_module_call_enter,
++	    TP_PROTO(u64 id, u64 rcx, u64 rdx, u64 r8, u64 r9),
++	    TP_ARGS(id, rcx, rdx, r8, r9),
++	    TP_STRUCT__entry(
++		__field(u64, id)
++		__field(u64, rcx)
++		__field(u64, rdx)
++		__field(u64, r8)
++		__field(u64, r9)
++		),
++	    TP_fast_assign(
++		__entry->id  = id;
++		__entry->rcx = rcx;
++		__entry->rdx = rdx;
++		__entry->r8  = r8;
++		__entry->r9  = r9;
++		),
++	    TP_printk("id %lld rcx 0x%016llx rdx 0x%016llx r8 0x%016llx r9 0x%016llx",
++		      __entry->id, __entry->rcx, __entry->rdx,
++		      __entry->r8, __entry->r9
++		      )
++	    );
++
++TRACE_EVENT(tdx_module_call_exit,
++	    TP_PROTO(u64 rax, u64 rcx, u64 rdx, u64 r8, u64 r9,
++		     u64 r10, u64 r11),
++	    TP_ARGS(rax, rcx, rdx, r8, r9, r10, r11),
++	    TP_STRUCT__entry(
++		__field(u64, rax)
++		__field(u64, rcx)
++		__field(u64, rdx)
++		__field(u64, r8)
++		__field(u64, r9)
++		__field(u64, r10)
++		__field(u64, r11)
++		),
++	    TP_fast_assign(
++		__entry->rax = rax;
++		__entry->rcx = rcx;
++		__entry->rdx = rdx;
++		__entry->r8  = r8;
++		__entry->r9  = r9;
++		__entry->r10 = r10;
++		__entry->r11 = r11;
++		),
++	    TP_printk("ret %lld rcx 0x%016llx rdx 0x%016llx r8 0x%016llx r9 0x%016llx r10 0x%016llx r11 0x%016llx",
++		      __entry->rax, __entry->rcx, __entry->rdx,
++		      __entry->r8, __entry->r9, __entry->r10, __entry->r11
++		      )
++	    );
++
++TRACE_EVENT(tdx_hypercall_enter,
++	    TP_PROTO(u64 id, u64 r12, u64 r13, u64 r14, u64 r15),
++	    TP_ARGS(id, r12, r13, r14, r15),
++	    TP_STRUCT__entry(
++		__field(u64, id)
++		__field(u64, r12)
++		__field(u64, r13)
++		__field(u64, r14)
++		__field(u64, r15)
++		),
++	    TP_fast_assign(
++		__entry->id  = id;
++		__entry->r12 = r12;
++		__entry->r13 = r13;
++		__entry->r14 = r14;
++		__entry->r15 = r15;
++		),
++	    TP_printk("subfn %lld r12 0x%016llx r13 0x%016llx r14 0x%016llx r15 0x%016llx",
++		      __entry->id, __entry->r12, __entry->r13,
++		      __entry->r14, __entry->r15
++		      )
++	    );
++
++TRACE_EVENT(tdx_hypercall_exit,
++	    TP_PROTO(u64 r10, u64 r11, u64 r12, u64 r13, u64 r14, u64 r15),
++	    TP_ARGS(r10, r11, r12, r13, r14, r15),
++	    TP_STRUCT__entry(
++		__field(u64, r10)
++		__field(u64, r11)
++		__field(u64, r12)
++		__field(u64, r13)
++		__field(u64, r14)
++		__field(u64, r15)
++		),
++	    TP_fast_assign(
++		__entry->r10 = r10;
++		__entry->r11 = r11;
++		__entry->r12 = r12;
++		__entry->r13 = r13;
++		__entry->r14 = r14;
++		__entry->r15 = r15;
++		),
++	    TP_printk("ret %lld r11 0x%016llx r12 0x%016llx r13 0x%016llx r14 0x%016llx r15 0x%016llx",
++		      __entry->r10, __entry->r11, __entry->r12,
++		      __entry->r13, __entry->r14, __entry->r15
++		      )
++	    );
++
+ #endif // CONFIG_INTEL_TDX_GUEST
+ 
+ #undef TRACE_INCLUDE_PATH
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index ba07fc6194ad..3f49c32c25b5 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -84,6 +84,39 @@ static inline u64 _tdx_hypercall(u64 fn, u64 r12, u64 r13, u64 r14,
+ 	return out->r10;
+ }
+ 
++/* Traced version of _tdx_hypercall() */
++static u64 _trace_tdx_hypercall(u64 fn, u64 r12, u64 r13, u64 r14, u64 r15,
++				struct tdx_hypercall_output *out)
++{
++	struct tdx_hypercall_output dummy_out;
++	u64 err;
++
++	trace_tdx_hypercall_enter_rcuidle(fn, r12, r13, r14, r15);
++	err = _tdx_hypercall(fn, r12, r13, r14, r15, out);
++	if (!out)
++		out = &dummy_out;
++	trace_tdx_hypercall_exit_rcuidle(err, out->r11, out->r12, out->r13,
++					 out->r14, out->r15);
++
++	return err;
++}
++
++static u64 __trace_tdx_module_call(u64 fn, u64 rcx, u64 rdx, u64 r8, u64 r9,
++				   struct tdx_module_output *out)
++{
++	struct tdx_module_output dummy_out;
++	u64 err;
++
++	trace_tdx_module_call_enter_rcuidle(fn, rcx, rdx, r8, r9);
++	err = __tdx_module_call(fn, rcx, rdx, r8, r9, out);
++	if (!out)
++		out = &dummy_out;
++	trace_tdx_module_call_exit_rcuidle(err, out->rcx, out->rdx, out->r8,
++					   out->r9, out->r10, out->r11);
++
++	return err;
++}
++
+ /* The highest bit of a guest physical address is the "sharing" bit */
+ phys_addr_t tdx_shared_mask(void)
+ {
+@@ -103,7 +136,7 @@ static void tdx_get_info(void)
+ 	 * can be found in TDX Guest-Host-Communication
+ 	 * Interface (GHCI), sec 2.4.2 TDCALL [TDG.VP.INFO].
+ 	 */
+-	ret = __tdx_module_call(TDX_GET_INFO, 0, 0, 0, 0, &out);
++	ret = __trace_tdx_module_call(TDX_GET_INFO, 0, 0, 0, 0, &out);
+ 
+ 	/*
+ 	 * Non zero return means buggy TDX module (which is
+@@ -128,7 +161,7 @@ static void tdx_accept_page(phys_addr_t gpa)
+ 	 * about ABI can be found in TDX Guest-Host-Communication
+ 	 * Interface (GHCI), sec 2.4.7.
+ 	 */
+-	ret = __tdx_module_call(TDX_ACCEPT_PAGE, gpa, 0, 0, 0, NULL);
++	ret = __trace_tdx_module_call(TDX_ACCEPT_PAGE, gpa, 0, 0, 0, NULL);
+ 
+ 	/*
+ 	 * Non zero return value means buggy TDX module (which is
+@@ -194,7 +227,8 @@ static __cpuidle void _tdx_halt(const bool irq_disabled, const bool do_sti)
+ 	 * whether to call STI instruction before executing TDCALL
+ 	 * instruction.
+ 	 */
+-	ret = _tdx_hypercall(EXIT_REASON_HLT, irq_disabled, 0, 0, do_sti, NULL);
++	ret = _trace_tdx_hypercall(EXIT_REASON_HLT, irq_disabled, 0, 0,
++				   do_sti, NULL);
+ 
+ 	/*
+ 	 * Use WARN_ONCE() to report the failure. Since tdx_*halt() calls
+@@ -239,7 +273,7 @@ static bool tdx_read_msr_safe(unsigned int msr, u64 *val)
+ 	 * can be found in TDX Guest-Host-Communication Interface
+ 	 * (GHCI), sec titled "TDG.VP.VMCALL<Instruction.RDMSR>".
+ 	 */
+-	if (_tdx_hypercall(EXIT_REASON_MSR_READ, msr, 0, 0, 0, &out))
++	if (_trace_tdx_hypercall(EXIT_REASON_MSR_READ, msr, 0, 0, 0, &out))
+ 		return false;
+ 
+ 	*val = out.r11;
+@@ -257,8 +291,8 @@ static bool tdx_write_msr_safe(unsigned int msr, unsigned int low,
+ 	 * can be found in TDX Guest-Host-Communication Interface
+ 	 * (GHCI) sec titled "TDG.VP.VMCALL<Instruction.WRMSR>".
+ 	 */
+-	ret = _tdx_hypercall(EXIT_REASON_MSR_WRITE, msr, (u64)high << 32 | low,
+-			     0, 0, NULL);
++	ret = _trace_tdx_hypercall(EXIT_REASON_MSR_WRITE, msr,
++				   (u64)high << 32 | low, 0, 0, NULL);
+ 
+ 	return ret ? false : true;
+ }
+@@ -272,7 +306,8 @@ static bool tdx_handle_cpuid(struct pt_regs *regs)
+ 	 * ABI can be found in TDX Guest-Host-Communication Interface
+ 	 * (GHCI), section titled "VP.VMCALL<Instruction.CPUID>".
+ 	 */
+-	if (_tdx_hypercall(EXIT_REASON_CPUID, regs->ax, regs->cx, 0, 0, &out))
++	if (_trace_tdx_hypercall(EXIT_REASON_CPUID, regs->ax, regs->cx,
++				 0, 0, &out))
+ 		return false;
+ 
+ 	/*
+@@ -312,11 +347,16 @@ static bool tdx_handle_io(struct pt_regs *regs, u32 exit_qual)
+ 	port = VE_GET_PORT_NUM(exit_qual);
+ 	mask = GENMASK(8 * size, 0);
+ 
+-	ret = _tdx_hypercall(EXIT_REASON_IO_INSTRUCTION, size, out, port,
+-			     regs->ax, &outh);
+ 	if (!out) {
++		ret = _trace_tdx_hypercall(EXIT_REASON_IO_INSTRUCTION,
++					   size, out, port, regs->ax,
++					   &outh);
+ 		regs->ax &= ~mask;
+ 		regs->ax |= (ret ? UINT_MAX : outh.r11) & mask;
++	} else {
++		ret = _tdx_hypercall(EXIT_REASON_IO_INSTRUCTION,
++				     size, out, port, regs->ax,
++				     &outh);
+ 	}
+ 
+ 	return ret ? false : true;
+@@ -328,8 +368,8 @@ static unsigned long tdx_mmio(int size, bool write, unsigned long addr,
+ 	struct tdx_hypercall_output out;
+ 	u64 err;
+ 
+-	err = _tdx_hypercall(EXIT_REASON_EPT_VIOLATION, size, write,
+-			     addr, *val, &out);
++	err = _trace_tdx_hypercall(EXIT_REASON_EPT_VIOLATION, size, write,
++				   addr, *val, &out);
+ 	*val = out.r11;
+ 
+ 	return err;
+@@ -445,7 +485,7 @@ bool tdx_get_ve_info(struct ve_info *ve)
+ 	 * additional #VEs are permitted (but it is expected not to
+ 	 * happen unless kernel panics).
+ 	 */
+-	ret = __tdx_module_call(TDX_GET_VEINFO, 0, 0, 0, 0, &out);
++	ret = __trace_tdx_module_call(TDX_GET_VEINFO, 0, 0, 0, 0, &out);
+ 	if (ret)
+ 		return false;
+ 
+-- 
+2.31.1
+

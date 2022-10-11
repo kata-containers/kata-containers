@@ -1,0 +1,58 @@
+From 3754a9c0dc59688d1bbdfa90b61f48df062642f0 Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Wed, 30 Sep 2020 06:46:41 -0700
+Subject: [PATCH 0620/1418] iommu/vt-d: Fix bug in page response
+
+Should use NULL as pasid_set for pasid_to_svm_sdev(). host_pasid_set is
+used for native SVM. The ideal implementation is to use the pasid_set
+stored in domain, which needs to wait for DOMAIN_ATTR_IOASID_SET.
+
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/intel/svm.c | 24 +-----------------------
+ 1 file changed, 1 insertion(+), 23 deletions(-)
+
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index 9bf12d5ad2b9..3d6b10b719eb 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -1275,35 +1275,13 @@ int intel_svm_page_response(struct device *dev,
+ 		goto out;
+ 	}
+ 
+-	ret = pasid_to_svm_sdev(dev, host_pasid_set,
++	ret = pasid_to_svm_sdev(dev, NULL,
+ 				prm->pasid, &svm, &sdev);
+ 	if (ret || !sdev) {
+ 		ret = -ENODEV;
+ 		goto out;
+ 	}
+ 
+-	/*
+-	 * For responses from userspace, need to make sure that the
+-	 * pasid has been bound to its mm.
+-	 */
+-	if (svm->flags & SVM_FLAG_GUEST_MODE) {
+-		struct mm_struct *mm;
+-
+-		mm = get_task_mm(current);
+-		if (!mm) {
+-			ret = -EINVAL;
+-			goto out;
+-		}
+-
+-		if (mm != svm->mm) {
+-			ret = -ENODEV;
+-			mmput(mm);
+-			goto out;
+-		}
+-
+-		mmput(mm);
+-	}
+-
+ 	/*
+ 	 * Per VT-d spec. v3.0 ch7.7, system software must respond
+ 	 * with page group response if private data is present (PDP)
+-- 
+2.31.1
+

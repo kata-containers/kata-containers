@@ -1,0 +1,237 @@
+From e5f62ec195d091f11eefaf88e60b585978588adb Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Thu, 4 Jun 2020 23:40:56 -0700
+Subject: [PATCH 1207/1418] dax: Stray access protection for
+ dax_direct_access()
+
+dax_direct_access() provides a way to obtain the direct map address of
+PMEM memory.  With the new devmap protections the use of this address
+needs to be bracketed by calls to enable and disable protection of
+those pages.  These calls only need to be used to guard actual access to
+the memory.  Other uses of dax_direct_access() do not need to use these
+guards.
+
+Introduce 2 new calls dax_set_readwrite() and dax_set_noaccess().
+Bracket all uses of the address returned by dax_direct_access() with
+those calls.
+
+For consumers who require a permanent address to the dax device, such as
+the DM write cache, dax_map_protected() is used to query for additional
+protections.
+
+Update the DM write cache code to create a permanent mapping if
+dax_map_protected() is true.
+
+Cc: Jane Chu <jane.chu@oracle.com>
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ drivers/dax/super.c        | 59 ++++++++++++++++++++++++++++++++++++++
+ drivers/md/dm-writecache.c |  8 +++++-
+ fs/dax.c                   |  8 ++++++
+ fs/fuse/virtio_fs.c        |  2 ++
+ include/linux/dax.h        |  6 ++++
+ 5 files changed, 82 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/dax/super.c b/drivers/dax/super.c
+index fc89e91beea7..241fbe0a853b 100644
+--- a/drivers/dax/super.c
++++ b/drivers/dax/super.c
+@@ -33,6 +33,7 @@ struct dax_device {
+ 	void *private;
+ 	unsigned long flags;
+ 	const struct dax_operations *ops;
++	struct dev_pagemap *pgmap;
+ };
+ 
+ static dev_t dax_devt;
+@@ -301,6 +302,8 @@ EXPORT_SYMBOL_GPL(dax_attribute_group);
+  * @pgoff: offset in pages from the start of the device to translate
+  * @nr_pages: number of consecutive pages caller can handle relative to @pfn
+  * @kaddr: output parameter that returns a virtual address mapping of pfn
++ *         Direct access through this pointer must be guarded by calls to
++ *         dax_set_{readwrite,noaccess}()
+  * @pfn: output parameter that returns an absolute pfn translation of @pgoff
+  *
+  * Return: negative errno if an error occurs, otherwise the number of
+@@ -381,6 +384,56 @@ void dax_flush(struct dax_device *dax_dev, void *addr, size_t size)
+ #endif
+ EXPORT_SYMBOL_GPL(dax_flush);
+ 
++bool dax_map_protected(struct dax_device *dax_dev)
++{
++	struct dev_pagemap *pgmap = dax_dev->pgmap;
++
++	if (!dax_alive(dax_dev))
++		return false;
++
++	return pgmap && (pgmap->flags & PGMAP_PROTECTION);
++}
++EXPORT_SYMBOL_GPL(dax_map_protected);
++
++/**
++ * dax_set_readwrite() - make protected dax devices read/write
++ * @dax_dev: the dax device representing the memory to access
++ *
++ * Any access of the kaddr memory returned from dax_direct_access() must be
++ * guarded by dax_set_readwrite() and dax_set_noaccess().  This ensures that any
++ * dax devices which have additional protections are allowed to relax those
++ * protections for the thread using this memory.
++ *
++ * NOTE these calls must be contained within a single thread of execution and
++ * both must be guarded by dax_read_lock()  Which is also a requirement for
++ * dax_direct_access() anyway.
++ */
++void dax_set_readwrite(struct dax_device *dax_dev)
++{
++	if (!dax_map_protected(dax_dev))
++		return;
++
++	__pgmap_set_readwrite(dax_dev->pgmap);
++}
++EXPORT_SYMBOL_GPL(dax_set_readwrite);
++
++/**
++ * dax_set_noaccess() - restore protection to dax devices if needed
++ * @dax_dev: the dax device representing the memory to access
++ *
++ * See dax_direct_access() and dax_set_readwrite()
++ *
++ * NOTE Must be called prior to dax_read_unlock()
++ */
++void dax_set_noaccess(struct dax_device *dax_dev)
++{
++	if (!dax_map_protected(dax_dev))
++		return;
++
++	__pgmap_set_noaccess(dax_dev->pgmap);
++}
++EXPORT_SYMBOL_GPL(dax_set_noaccess);
++
+ void dax_write_cache(struct dax_device *dax_dev, bool wc)
+ {
+ 	if (wc)
+@@ -408,6 +461,12 @@ void __set_dax_synchronous(struct dax_device *dax_dev)
+ }
+ EXPORT_SYMBOL_GPL(__set_dax_synchronous);
+ 
++void set_dax_pgmap(struct dax_device *dax_dev, struct dev_pagemap *pgmap)
++{
++	dax_dev->pgmap = pgmap;
++}
++EXPORT_SYMBOL_GPL(set_dax_pgmap);
++
+ bool dax_alive(struct dax_device *dax_dev)
+ {
+ 	lockdep_assert_held(&dax_srcu);
+diff --git a/drivers/md/dm-writecache.c b/drivers/md/dm-writecache.c
+index 18320444fb0a..0f3300dba2da 100644
+--- a/drivers/md/dm-writecache.c
++++ b/drivers/md/dm-writecache.c
+@@ -297,7 +297,13 @@ static int persistent_memory_claim(struct dm_writecache *wc)
+ 		r = -EOPNOTSUPP;
+ 		goto err2;
+ 	}
+-	if (da != p) {
++
++	/*
++	 * Force the write cache to map the pages directly if the dax device
++	 * mapping is protected or if the number of pages returned was not what
++	 * was requested.
++	 */
++	if (dax_map_protected(wc->ssd_dev->dax_dev) || da != p) {
+ 		long i;
+ 		wc->memory_map = NULL;
+ 		pages = kvmalloc_array(p, sizeof(struct page *), GFP_KERNEL);
+diff --git a/fs/dax.c b/fs/dax.c
+index 4e3e5a283a91..1ddb27694c93 100644
+--- a/fs/dax.c
++++ b/fs/dax.c
+@@ -728,7 +728,9 @@ static int copy_cow_page_dax(struct block_device *bdev, struct dax_device *dax_d
+ 		return rc;
+ 	}
+ 	vto = kmap_atomic(to);
++	dax_set_readwrite(dax_dev);
+ 	copy_user_page(vto, (void __force *)kaddr, vaddr, to);
++	dax_set_noaccess(dax_dev);
+ 	kunmap_atomic(vto);
+ 	dax_read_unlock(id);
+ 	return 0;
+@@ -937,8 +939,10 @@ static int dax_writeback_one(struct xa_state *xas, struct dax_device *dax_dev,
+ 	count = 1UL << dax_entry_order(entry);
+ 	index = xas->xa_index & ~(count - 1);
+ 
++	dax_set_readwrite(dax_dev);
+ 	dax_entry_mkclean(mapping, index, pfn);
+ 	dax_flush(dax_dev, page_address(pfn_to_page(pfn)), count * PAGE_SIZE);
++	dax_set_noaccess(dax_dev);
+ 	/*
+ 	 * After we have flushed the cache, we can clear the dirty tag. There
+ 	 * cannot be new dirty data in the pfn after the flush has completed as
+@@ -1156,8 +1160,10 @@ s64 dax_iomap_zero(loff_t pos, u64 length, struct iomap *iomap)
+ 	}
+ 
+ 	if (!page_aligned) {
++		dax_set_readwrite(iomap->dax_dev);
+ 		memset(kaddr + offset, 0, size);
+ 		dax_flush(iomap->dax_dev, kaddr + offset, size);
++		dax_set_noaccess(iomap->dax_dev);
+ 	}
+ 	dax_read_unlock(id);
+ 	return size;
+@@ -1235,12 +1241,14 @@ static loff_t dax_iomap_iter(const struct iomap_iter *iomi,
+ 		 * validated via access_ok() in either vfs_read() or
+ 		 * vfs_write(), depending on which operation we are doing.
+ 		 */
++		dax_set_readwrite(dax_dev);
+ 		if (iov_iter_rw(iter) == WRITE)
+ 			xfer = dax_copy_from_iter(dax_dev, pgoff, kaddr,
+ 					map_len, iter);
+ 		else
+ 			xfer = dax_copy_to_iter(dax_dev, pgoff, kaddr,
+ 					map_len, iter);
++		dax_set_noaccess(dax_dev);
+ 
+ 		pos += xfer;
+ 		length -= xfer;
+diff --git a/fs/fuse/virtio_fs.c b/fs/fuse/virtio_fs.c
+index 94fc874f5de7..4824f20bf704 100644
+--- a/fs/fuse/virtio_fs.c
++++ b/fs/fuse/virtio_fs.c
+@@ -776,8 +776,10 @@ static int virtio_fs_zero_page_range(struct dax_device *dax_dev,
+ 	rc = dax_direct_access(dax_dev, pgoff, nr_pages, &kaddr, NULL);
+ 	if (rc < 0)
+ 		return rc;
++	dax_set_readwrite(dax_dev);
+ 	memset(kaddr, 0, nr_pages << PAGE_SHIFT);
+ 	dax_flush(dax_dev, kaddr, nr_pages << PAGE_SHIFT);
++	dax_set_noaccess(dax_dev);
+ 	return 0;
+ }
+ 
+diff --git a/include/linux/dax.h b/include/linux/dax.h
+index 2619d94c308d..43920f621a77 100644
+--- a/include/linux/dax.h
++++ b/include/linux/dax.h
+@@ -106,6 +106,8 @@ static inline bool daxdev_mapping_supported(struct vm_area_struct *vma,
+ }
+ #endif
+ 
++void set_dax_pgmap(struct dax_device *dax_dev, struct dev_pagemap *pgmap);
++
+ struct writeback_control;
+ int bdev_dax_pgoff(struct block_device *, sector_t, size_t, pgoff_t *pgoff);
+ #if IS_ENABLED(CONFIG_FS_DAX)
+@@ -201,6 +203,10 @@ int dax_zero_page_range(struct dax_device *dax_dev, pgoff_t pgoff,
+ 			size_t nr_pages);
+ void dax_flush(struct dax_device *dax_dev, void *addr, size_t size);
+ 
++bool dax_map_protected(struct dax_device *dax_dev);
++void dax_set_readwrite(struct dax_device *dax_dev);
++void dax_set_noaccess(struct dax_device *dax_dev);
++
+ ssize_t dax_iomap_rw(struct kiocb *iocb, struct iov_iter *iter,
+ 		const struct iomap_ops *ops);
+ vm_fault_t dax_iomap_fault(struct vm_fault *vmf, enum page_entry_size pe_size,
+-- 
+2.31.1
+

@@ -1,0 +1,47 @@
+From 797d5730f20110023dc863abcfa6c7bf34fa2736 Mon Sep 17 00:00:00 2001
+From: Artem Bityutskiy <artem.bityutskiy@linux.intel.com>
+Date: Tue, 26 Apr 2022 13:29:42 +0300
+Subject: [PATCH 1324/1418] intel_idle: fix SPR C6 optimization
+
+This patch is a fix for the following 5.18-rc1 commit:
+	commit 3a9cf77b60dc intel_idle: add core C6 optimization for SPR
+
+The Sapphire Rapids (SPR) C6 optimization was added to the end of the
+'spr_idle_state_table_update()' function. However, the function has a
+'return' which may happen before the optimization has a chance to run.
+And this may prevent the optimization from happening.
+
+This is an unlikely scenario, but possible if user boots with, say,
+the 'intel_idle.preferred_cstates=6' kernel boot option.
+
+This patch fixes the issue by eliminating the 'return'.
+
+Suggested-by: Jan Beulich <jbeulich@suse.com>
+Reported-by: Jan Beulich <jbeulich@suse.com>
+Signed-off-by: Artem Bityutskiy <artem.bityutskiy@linux.intel.com>
+---
+ drivers/idle/intel_idle.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/idle/intel_idle.c b/drivers/idle/intel_idle.c
+index 738726065981..aaf3576d8a42 100644
+--- a/drivers/idle/intel_idle.c
++++ b/drivers/idle/intel_idle.c
+@@ -1575,11 +1575,9 @@ static void __init spr_idle_state_table_update(void)
+ 	unsigned long long msr;
+ 
+ 	/* Check if user prefers C1E over C1. */
+-	if (preferred_states_mask & BIT(2)) {
+-		if (preferred_states_mask & BIT(1))
+-			/* Both can't be enabled, stick to the defaults. */
+-			return;
+-
++	if ((preferred_states_mask & BIT(2)) &&
++	    !(preferred_states_mask & BIT(1))) {
++		/* Disable C1 and enable C1E. */
+ 		spr_cstates[0].flags |= CPUIDLE_FLAG_UNUSABLE;
+ 		spr_cstates[1].flags &= ~CPUIDLE_FLAG_UNUSABLE;
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,62 @@
+From eec4c8d98c87b2ec7554558551a0085abc2ef99a Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Thu, 18 Jun 2020 22:00:22 -0700
+Subject: [PATCH 0357/1418] KVM: x86/mmu: Zap only leaf SPTEs for deleted/moved
+ memslot by default
+
+Zap only leaf SPTEs when deleting/moving a memslot by default, and add a
+module param to allow reverting to the old behavior of zapping all SPTEs
+at all levels and memslots when any memslot is updated.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 21 ++++++++++++++++++++-
+ 1 file changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 21aec06693f4..0b4ffa210ffb 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -87,6 +87,9 @@ __MODULE_PARM_TYPE(nx_huge_pages_recovery_ratio, "uint");
+ static bool __read_mostly force_flush_and_sync_on_reuse;
+ module_param_named(flush_on_reuse, force_flush_and_sync_on_reuse, bool, 0644);
+ 
++static bool __read_mostly memslot_update_zap_all;
++module_param(memslot_update_zap_all, bool, 0444);
++
+ /*
+  * When setting this variable to true it enables Two-Dimensional-Paging
+  * where the hardware walks 2 page tables:
+@@ -5693,11 +5696,27 @@ static bool kvm_has_zapped_obsolete_pages(struct kvm *kvm)
+ 	return unlikely(!list_empty_careful(&kvm->arch.zapped_obsolete_pages));
+ }
+ 
++static void kvm_mmu_zap_memslot(struct kvm *kvm, struct kvm_memory_slot *slot)
++{
++	/*
++	 * Zapping non-leaf SPTEs, a.k.a. not-last SPTEs, isn't required, worst
++	 * case scenario we'll have unused shadow pages lying around until they
++	 * are recycled due to age or when the VM is destroyed.
++	 */
++	write_lock(&kvm->mmu_lock);
++	slot_handle_level(kvm, slot, kvm_zap_rmapp, PG_LEVEL_4K,
++			  KVM_MAX_HUGEPAGE_LEVEL, true);
++	write_unlock(&kvm->mmu_lock);
++}
++
+ static void kvm_mmu_invalidate_zap_pages_in_memslot(struct kvm *kvm,
+ 			struct kvm_memory_slot *slot,
+ 			struct kvm_page_track_notifier_node *node)
+ {
+-	kvm_mmu_zap_all_fast(kvm);
++	if (memslot_update_zap_all)
++		kvm_mmu_zap_all_fast(kvm);
++	else
++		kvm_mmu_zap_memslot(kvm, slot);
+ }
+ 
+ void kvm_mmu_init_vm(struct kvm *kvm)
+-- 
+2.31.1
+

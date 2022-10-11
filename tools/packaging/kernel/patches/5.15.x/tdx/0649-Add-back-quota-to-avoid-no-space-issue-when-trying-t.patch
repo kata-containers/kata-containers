@@ -1,0 +1,34 @@
+From 8f7ac923ca54728a6ea629e4d4d7e968e3b140f5 Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Mon, 1 Mar 2021 15:35:56 +0800
+Subject: [PATCH 0649/1418] Add back quota to avoid no space issue when trying
+ to open /dev/ioasid in the second time.
+
+Need to fix the issue in ioasid.c.
+
+Change-Id: Id7c6e252d33c12471306a8c234aef6623ebc1aef
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/ioasid_user.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/ioasid_user.c b/drivers/iommu/ioasid_user.c
+index 2f8957cd055a..242f5886df1b 100644
+--- a/drivers/iommu/ioasid_user.c
++++ b/drivers/iommu/ioasid_user.c
+@@ -125,10 +125,11 @@ static int ioasid_fops_open(struct inode *inode, struct file *filep)
+ 	 * the token and create a IOASID set per mm_struct. All the
+ 	 * containers of the process share the same IOASID set.
+ 	 */
+-	iset = ioasid_set_alloc(mm, 0, IOASID_SET_TYPE_MM);
++	iset = ioasid_set_alloc(mm, 1000, IOASID_SET_TYPE_MM);
+ 	if (IS_ERR(iset)) {
+ 		kfree(iuser);
+ 		ret = PTR_ERR(iset);
++		printk("%s, ret: %d\n", __func__, ret);
+ 		goto out;
+ 	}
+ 
+-- 
+2.31.1
+

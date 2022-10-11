@@ -1,0 +1,34 @@
+From 46c499edf5efdf2f4a896dcbc8d406ff94c81baf Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Tue, 9 Nov 2021 21:59:45 +0800
+Subject: [PATCH 0883/1418] vfio/pci: check fault type before reporting
+
+IOMMU detected device faults need to be injected into the guest
+if the guest owns the resource. e.g. Page requests of 1st level
+faults has to be handled by the guest by calling handle_mm_fault().
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ drivers/vfio/pci/vfio_pci_core.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/vfio/pci/vfio_pci_core.c b/drivers/vfio/pci/vfio_pci_core.c
+index 32dcb01530e3..839dd47a1723 100644
+--- a/drivers/vfio/pci/vfio_pci_core.c
++++ b/drivers/vfio/pci/vfio_pci_core.c
+@@ -333,7 +333,9 @@ int vfio_pci_iommu_dev_fault_handler(struct iommu_fault *fault, void *data)
+ 	new = (struct iommu_fault *)(vdev->fault_pages + reg->offset +
+ 				     reg->head * reg->entry_size);
+ 
+-	if (fault->type != IOMMU_FAULT_DMA_UNRECOV)
++	/* We need to send page request and relavent unrecoverable fault to userspace */
++	if (fault->type != IOMMU_FAULT_DMA_UNRECOV &&
++	    fault->type != IOMMU_FAULT_PAGE_REQ)
+ 		return -ENOENT;
+ 
+ 	mutex_lock(&vdev->fault_queue_lock);
+-- 
+2.31.1
+

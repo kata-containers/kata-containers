@@ -1,0 +1,37 @@
+From 043a8730b282d6faf1f4117049f678717b12c028 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Fri, 15 Apr 2022 17:40:36 -0700
+Subject: [PATCH 1308/1418] dmaengine: idxd: fix mdev driver ->remove()
+ unregistering mdev device
+
+Remove code that skips mdev device unregister and host setup teardown in
+mdev idxd_driver ->remove() call.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/vfio/mdev/idxd/mdev.c | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/drivers/vfio/mdev/idxd/mdev.c b/drivers/vfio/mdev/idxd/mdev.c
+index 4d32ad10fa93..5086e1146dee 100644
+--- a/drivers/vfio/mdev/idxd/mdev.c
++++ b/drivers/vfio/mdev/idxd/mdev.c
+@@ -2413,15 +2413,9 @@ static void idxd_mdev_drv_remove(struct idxd_dev *idxd_dev)
+ 	struct idxd_wq *wq = idxd_dev_to_wq(idxd_dev);
+ 	struct idxd_device *idxd = wq->idxd;
+ 
+-
+ 	mutex_lock(&wq->wq_lock);
+ 	__drv_disable_wq(wq);
+ 
+-	if (wq->state == IDXD_WQ_DISABLED) {
+-		mutex_unlock(&wq->wq_lock);
+-		return;
+-	}
+-
+ 	if (wq->state == IDXD_WQ_LOCKED)
+ 		wq->state = IDXD_WQ_DISABLED;
+ 	mutex_unlock(&wq->wq_lock);
+-- 
+2.31.1
+

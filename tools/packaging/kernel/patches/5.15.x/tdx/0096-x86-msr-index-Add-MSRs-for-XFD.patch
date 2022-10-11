@@ -1,0 +1,39 @@
+From 20645c502d935ea2b240db17b453c2b8cc9d5db8 Mon Sep 17 00:00:00 2001
+From: "Chang S. Bae" <chang.seok.bae@intel.com>
+Date: Thu, 21 Oct 2021 15:55:17 -0700
+Subject: [PATCH 0096/1418] x86/msr-index: Add MSRs for XFD
+
+XFD introduces two MSRs:
+
+    - IA32_XFD to enable/disable a feature controlled by XFD
+
+    - IA32_XFD_ERR to expose to the #NM trap handler which feature
+      was tried to be used for the first time.
+
+Both use the same xstate-component bitmap format, used by XCR0.
+
+Signed-off-by: Chang S. Bae <chang.seok.bae@intel.com>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Chang S. Bae <chang.seok.bae@intel.com>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211021225527.10184-14-chang.seok.bae@intel.com
+---
+ arch/x86/include/asm/msr-index.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/x86/include/asm/msr-index.h b/arch/x86/include/asm/msr-index.h
+index a7c413432b33..01e2650b9585 100644
+--- a/arch/x86/include/asm/msr-index.h
++++ b/arch/x86/include/asm/msr-index.h
+@@ -625,6 +625,8 @@
+ 
+ #define MSR_IA32_BNDCFGS_RSVD		0x00000ffc
+ 
++#define MSR_IA32_XFD			0x000001c4
++#define MSR_IA32_XFD_ERR		0x000001c5
+ #define MSR_IA32_XSS			0x00000da0
+ 
+ #define MSR_IA32_APICBASE		0x0000001b
+-- 
+2.31.1
+

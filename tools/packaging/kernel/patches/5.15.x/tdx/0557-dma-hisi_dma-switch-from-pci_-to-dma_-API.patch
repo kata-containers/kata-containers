@@ -1,0 +1,38 @@
+From 6eeac7c9c2ed85c314929eb162d4c001556556f6 Mon Sep 17 00:00:00 2001
+From: Qing Wang <wangqing@vivo.com>
+Date: Thu, 7 Oct 2021 20:28:30 -0700
+Subject: [PATCH 0557/1418] dma: hisi_dma: switch from 'pci_' to 'dma_' API
+
+The wrappers in include/linux/pci-dma-compat.h should go away.
+
+pci_set_dma_mask()/pci_set_consistent_dma_mask() should be
+replaced with dma_set_mask()/dma_set_coherent_mask(),
+and use dma_set_mask_and_coherent() for both.
+
+Signed-off-by: Qing Wang <wangqing@vivo.com>
+Link: https://lore.kernel.org/r/1633663733-47199-5-git-send-email-wangqing@vivo.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/hisi_dma.c | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/drivers/dma/hisi_dma.c b/drivers/dma/hisi_dma.c
+index c855a0e4f9ff..97c87a7cba87 100644
+--- a/drivers/dma/hisi_dma.c
++++ b/drivers/dma/hisi_dma.c
+@@ -519,11 +519,7 @@ static int hisi_dma_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+ 		return ret;
+ 	}
+ 
+-	ret = pci_set_dma_mask(pdev, DMA_BIT_MASK(64));
+-	if (ret)
+-		return ret;
+-
+-	ret = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(64));
++	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+ 	if (ret)
+ 		return ret;
+ 
+-- 
+2.31.1
+

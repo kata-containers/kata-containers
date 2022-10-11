@@ -1,0 +1,112 @@
+From 4c0f40215fbeddad6d57dce3c0f17561aa23ede8 Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Tue, 14 Apr 2020 05:10:07 -0700
+Subject: [PATCH 0870/1418] vfio/type1: Allow invalidating first-level/stage
+ IOMMU cache
+
+This patch provides an interface allowing the userspace to invalidate
+IOMMU cache for first-level page table. It is required when the first
+level IOMMU page table is not managed by the host kernel in the nested
+translation setup.
+
+v1 -> v2:
+*) rename from "vfio/type1: Flush stage-1 IOMMU cache for nesting type"
+*) rename vfio_cache_inv_fn() to vfio_dev_cache_invalidate_fn()
+*) vfio_dev_cache_inv_fn() always successful
+*) remove VFIO_IOMMU_CACHE_INVALIDATE, and reuse VFIO_IOMMU_NESTING_OP
+
+Cc: Kevin Tian <kevin.tian@intel.com>
+CC: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Cc: Alex Williamson <alex.williamson@redhat.com>
+Cc: Eric Auger <eric.auger@redhat.com>
+Cc: Jean-Philippe Brucker <jean-philippe@linaro.org>
+Cc: Joerg Roedel <joro@8bytes.org>
+Cc: Lu Baolu <baolu.lu@linux.intel.com>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Signed-off-by: Eric Auger <eric.auger@redhat.com>
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/vfio/vfio_iommu_type1.c | 38 +++++++++++++++++++++++++++++++++
+ include/uapi/linux/vfio.h       |  3 +++
+ 2 files changed, 41 insertions(+)
+
+diff --git a/drivers/vfio/vfio_iommu_type1.c b/drivers/vfio/vfio_iommu_type1.c
+index 3be0972f9e1d..e485da37103e 100644
+--- a/drivers/vfio/vfio_iommu_type1.c
++++ b/drivers/vfio/vfio_iommu_type1.c
+@@ -3395,6 +3395,41 @@ static long vfio_iommu_handle_pgtbl_op(struct vfio_iommu *iommu,
+ 	return ret;
+ }
+ 
++static int vfio_dev_cache_invalidate_fn(struct device *dev, void *data)
++{
++	struct domain_capsule *dc = (struct domain_capsule *)data;
++	unsigned long arg = *(unsigned long *)dc->data;
++
++	iommu_uapi_cache_invalidate(dc->domain, dev, (void __user *)arg);
++	return 0;
++}
++
++static long vfio_iommu_invalidate_cache(struct vfio_iommu *iommu,
++					unsigned long arg)
++{
++	struct domain_capsule dc = { .data = &arg };
++	struct iommu_nesting_info *info;
++	int ret;
++
++	mutex_lock(&iommu->lock);
++	info = iommu->nesting_info;
++	if (!info || !(info->features & IOMMU_NESTING_FEAT_CACHE_INVLD)) {
++		ret = -EOPNOTSUPP;
++		goto out_unlock;
++	}
++
++	ret = vfio_prepare_nesting_domain_capsule(iommu, &dc);
++	if (ret)
++		goto out_unlock;
++
++	iommu_group_for_each_dev(dc.group->iommu_group, &dc,
++				 vfio_dev_cache_invalidate_fn);
++
++out_unlock:
++	mutex_unlock(&iommu->lock);
++	return ret;
++}
++
+ static long vfio_iommu_type1_nesting_op(struct vfio_iommu *iommu,
+ 					unsigned long arg)
+ {
+@@ -3417,6 +3452,9 @@ static long vfio_iommu_type1_nesting_op(struct vfio_iommu *iommu,
+ 	case VFIO_IOMMU_NESTING_OP_UNBIND_PGTBL:
+ 		ret = vfio_iommu_handle_pgtbl_op(iommu, false, arg + minsz);
+ 		break;
++	case VFIO_IOMMU_NESTING_OP_CACHE_INVLD:
++		ret = vfio_iommu_invalidate_cache(iommu, arg + minsz);
++		break;
+ 	default:
+ 		ret = -EINVAL;
+ 	}
+diff --git a/include/uapi/linux/vfio.h b/include/uapi/linux/vfio.h
+index d258b616479e..04fea424ac68 100644
+--- a/include/uapi/linux/vfio.h
++++ b/include/uapi/linux/vfio.h
+@@ -1253,6 +1253,8 @@ struct vfio_iommu_type1_dirty_bitmap_get {
+  * +-----------------+-----------------------------------------------+
+  * | UNBIND_PGTBL    |      struct iommu_gpasid_bind_data            |
+  * +-----------------+-----------------------------------------------+
++ * | CACHE_INVLD     |      struct iommu_cache_invalidate_info       |
++ * +-----------------+-----------------------------------------------+
+  *
+  * returns: 0 on success, -errno on failure.
+  */
+@@ -1266,6 +1268,7 @@ struct vfio_iommu_type1_nesting_op {
+ enum {
+ 	VFIO_IOMMU_NESTING_OP_BIND_PGTBL,
+ 	VFIO_IOMMU_NESTING_OP_UNBIND_PGTBL,
++	VFIO_IOMMU_NESTING_OP_CACHE_INVLD,
+ };
+ 
+ #define VFIO_IOMMU_NESTING_OP		_IO(VFIO_TYPE, VFIO_BASE + 18)
+-- 
+2.31.1
+

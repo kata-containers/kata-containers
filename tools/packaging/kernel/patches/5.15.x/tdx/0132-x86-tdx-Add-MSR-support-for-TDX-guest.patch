@@ -1,0 +1,106 @@
+From 1485393812f877ce2cf56f5aaabe84086d0ee4e7 Mon Sep 17 00:00:00 2001
+From: "Kirill A. Shutemov" <kirill.shutemov@linux.intel.com>
+Date: Thu, 21 Nov 2019 15:48:29 +0300
+Subject: [PATCH 0132/1418] x86/tdx: Add MSR support for TDX guest
+
+Use hypercall to emulate MSR read/write for TDX platform.
+
+TDVMCALL[Instruction.RDMSR] and TDVMCALL[Instruction.WRMSR] provide MSR
+oprations.
+
+RDMSR and WRMSR specification details can be found in
+Guest-Host-Communication Interface (GHCI) for Intel Trust Domain
+Extensions (Intel TDX) specification, sec titled "TDG.VP.
+VMCALL<Instruction.RDMSR>" and "TDG.VP.VMCALL<Instruction.WRMSR>".
+
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdx.c | 51 +++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 49 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index c05e8824e5e0..7c6c84015302 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -110,6 +110,39 @@ static __cpuidle void tdx_safe_halt(void)
+ 	_tdx_halt(irq_disabled, do_sti);
+ }
+ 
++static bool tdx_read_msr_safe(unsigned int msr, u64 *val)
++{
++	struct tdx_hypercall_output out;
++
++	/*
++	 * Emulate the MSR read via hypercall. More info about ABI
++	 * can be found in TDX Guest-Host-Communication Interface
++	 * (GHCI), sec titled "TDG.VP.VMCALL<Instruction.RDMSR>".
++	 */
++	if (_tdx_hypercall(EXIT_REASON_MSR_READ, msr, 0, 0, 0, &out))
++		return false;
++
++	*val = out.r11;
++
++	return true;
++}
++
++static bool tdx_write_msr_safe(unsigned int msr, unsigned int low,
++			       unsigned int high)
++{
++	u64 ret;
++
++	/*
++	 * Emulate the MSR write via hypercall. More info about ABI
++	 * can be found in TDX Guest-Host-Communication Interface
++	 * (GHCI) sec titled "TDG.VP.VMCALL<Instruction.WRMSR>".
++	 */
++	ret = _tdx_hypercall(EXIT_REASON_MSR_WRITE, msr, (u64)high << 32 | low,
++			     0, 0, NULL);
++
++	return ret ? false : true;
++}
++
+ bool tdx_get_ve_info(struct ve_info *ve)
+ {
+ 	struct tdx_module_output out;
+@@ -141,19 +174,33 @@ bool tdx_get_ve_info(struct ve_info *ve)
+ bool tdx_handle_virtualization_exception(struct pt_regs *regs,
+ 					 struct ve_info *ve)
+ {
++	bool ret = true;
++	u64 val;
++
+ 	switch (ve->exit_reason) {
+ 	case EXIT_REASON_HLT:
+ 		tdx_halt();
+ 		break;
++	case EXIT_REASON_MSR_READ:
++		ret = tdx_read_msr_safe(regs->cx, &val);
++		if (ret) {
++			regs->ax = (u32)val;
++			regs->dx = val >> 32;
++		}
++		break;
++	case EXIT_REASON_MSR_WRITE:
++		ret = tdx_write_msr_safe(regs->cx, regs->ax, regs->dx);
++		break;
+ 	default:
+ 		pr_warn("Unexpected #VE: %lld\n", ve->exit_reason);
+ 		return false;
+ 	}
+ 
+ 	/* After successful #VE handling, move the IP */
+-	regs->ip += ve->instr_len;
++	if (ret)
++		regs->ip += ve->instr_len;
+ 
+-	return true;
++	return ret;
+ }
+ 
+ void __init tdx_early_init(void)
+-- 
+2.31.1
+

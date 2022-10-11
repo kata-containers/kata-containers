@@ -1,0 +1,123 @@
+From 69b5f34642938dcadb55b15fd1fb3921c4eaeecf Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Thu, 9 Jul 2020 23:18:12 -0700
+Subject: [PATCH 1179/1418] x86/pkeys: Preserve the PKS MSR on context switch
+
+The PKS MSR (PKRS) is a per-logical-processor register.  Unfortunately,
+the MSR is not managed by XSAVE.  Therefore, software must save/restore
+the MSR value on context switch.
+
+Allocate space in thread_struct to hold the saved MSR value.  Ensure all
+tasks, including the init_task are properly initialized.  Set the CPU
+PKRS value when a task is scheduled.
+
+Co-developed-by: Fenghua Yu <fenghua.yu@intel.com>
+Signed-off-by: Fenghua Yu <fenghua.yu@intel.com>
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ arch/x86/include/asm/pks.h       |  2 ++
+ arch/x86/include/asm/processor.h | 15 ++++++++++++++-
+ arch/x86/kernel/process_64.c     |  2 ++
+ arch/x86/mm/pkeys.c              |  9 +++++++++
+ 4 files changed, 27 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/pks.h b/arch/x86/include/asm/pks.h
+index 8180fc59790b..a7bad7301783 100644
+--- a/arch/x86/include/asm/pks.h
++++ b/arch/x86/include/asm/pks.h
+@@ -5,10 +5,12 @@
+ #ifdef CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS
+ 
+ void pks_setup(void);
++void x86_pkrs_load(struct thread_struct *thread);
+ 
+ #else /* !CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
+ 
+ static inline void pks_setup(void) { }
++static inline void x86_pkrs_load(struct thread_struct *thread) { }
+ 
+ #endif /* CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
+ 
+diff --git a/arch/x86/include/asm/processor.h b/arch/x86/include/asm/processor.h
+index df48ebc5e207..d6a97c7008d6 100644
+--- a/arch/x86/include/asm/processor.h
++++ b/arch/x86/include/asm/processor.h
+@@ -2,6 +2,8 @@
+ #ifndef _ASM_X86_PROCESSOR_H
+ #define _ASM_X86_PROCESSOR_H
+ 
++#include <linux/pks-keys.h>
++
+ #include <asm/processor-flags.h>
+ 
+ /* Forward declaration, a strange C thing */
+@@ -526,6 +528,10 @@ struct thread_struct {
+ 	 * PKRU is the hardware itself.
+ 	 */
+ 	u32			pkru;
++#ifdef	CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS
++	/* Saved Protection key register for supervisor mappings */
++	u32			pkrs;
++#endif
+ 
+ #ifdef CONFIG_X86_SHADOW_STACK
+ 	struct thread_shstk	shstk;
+@@ -773,7 +779,14 @@ static inline void spin_lock_prefetch(const void *x)
+ #define KSTK_ESP(task)		(task_pt_regs(task)->sp)
+ 
+ #else
+-#define INIT_THREAD { }
++
++#ifdef CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS
++#define INIT_THREAD  {			\
++	.pkrs = PKS_INIT_VALUE,		\
++}
++#else
++#define INIT_THREAD  { }
++#endif
+ 
+ extern unsigned long KSTK_ESP(struct task_struct *task);
+ 
+diff --git a/arch/x86/kernel/process_64.c b/arch/x86/kernel/process_64.c
+index 0e0ed3f61bbe..d5ac78fae921 100644
+--- a/arch/x86/kernel/process_64.c
++++ b/arch/x86/kernel/process_64.c
+@@ -59,6 +59,7 @@
+ /* Not included via unistd.h */
+ #include <asm/unistd_32_ia32.h>
+ #endif
++#include <asm/pks.h>
+ 
+ #include "process.h"
+ 
+@@ -612,6 +613,7 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
+ 	x86_fsgsbase_load(prev, next);
+ 
+ 	x86_pkru_load(prev, next);
++	x86_pkrs_load(next);
+ 
+ 	/*
+ 	 * Switch the PDA and FPU contexts.
+diff --git a/arch/x86/mm/pkeys.c b/arch/x86/mm/pkeys.c
+index cf2b5716893e..d4fae6903ed8 100644
+--- a/arch/x86/mm/pkeys.c
++++ b/arch/x86/mm/pkeys.c
+@@ -246,6 +246,15 @@ static inline void pks_write_pkrs(u32 new_pkrs)
+ 	}
+ }
+ 
++/* x86_pkrs_load() - Update CPU with the incoming thread pkrs value */
++void x86_pkrs_load(struct thread_struct *thread)
++{
++	if (!cpu_feature_enabled(X86_FEATURE_PKS))
++		return;
++
++	pks_write_pkrs(thread->pkrs);
++}
++
+ /*
+  * PKS is independent of PKU and either or both may be supported on a CPU.
+  *
+-- 
+2.31.1
+

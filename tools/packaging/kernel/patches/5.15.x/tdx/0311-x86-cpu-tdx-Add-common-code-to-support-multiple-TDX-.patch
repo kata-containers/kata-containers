@@ -1,0 +1,331 @@
+From 50d8fe0c8587925e37dc54f982273b8b39ee1215 Mon Sep 17 00:00:00 2001
+From: Kai Huang <kai.huang@intel.com>
+Date: Tue, 28 Sep 2021 09:55:37 +1300
+Subject: [PATCH 0311/1418] x86/cpu/tdx: Add common code to support multiple
+ TDX memory types
+
+TDX provides increased levels of memory confidentiality and integrity.
+This requires special hardware support for features like memory encryption
+and storage of memory integrity checksums.  Not all memory satisfies these
+requirements.
+
+As a result, TDX introduced the concept of a "Convertible Memory Region"
+(CMR).  During boot, the firmware builds a list of all of the memory ranges
+which can provide the TDX security guarantees.  The list of these ranges is
+available to the kernel by querying the TDX module.
+
+The TDX architecture needs additional metadata to record things like which
+TD guest "owns" a given page of memory.  This metadata essentially serves
+as the 'struct page' for the TDX module.  The space for this metadata is
+not reserved by the hardware upfront and must be allocated by the kernel
+and given to the TDX module.
+
+Since this metadata consumes space, the VMM can choose whether or not to
+allocate it for a given area of convertible memory.  If it chooses not to,
+the memory cannot receive TDX protections and can not be used by TDX guests
+as a private memory.  This implementation simply assumes that all
+convertible memory might be used for TD guests and allocates metadata for
+all convertible memory.
+
+For every convertible area that the VMM wants to use as TDX memory, it sets
+up a "TD Memory Region" (TDMR).  Each TDMR represents a physically
+contiguous convertible range and must also have its own physically
+contiguous metadata table referred to as a Physical Address Metadata Table
+(PAMT), to track the status for each page in the TDMR range.
+
+Unlike CMRs, each TDMR requires 1G granularity and alignment.  To support
+physical RAM areas that don't meet those strict requirements, each TDMR
+permits some internal "reserved areas" (currently 16) which can be placed
+over memory holes.  If PAMT metadata is placed within a TDMR it must be
+covered by one of these reserved areas.
+
+Let's summarize the concepts:
+
+ CMR - Firmware-enumerated physical ranges that support TDX.  CMRs are
+       4K aligned.
+TDMR - Physical address range which is chosen by the kernel to support
+       TDX.  1G granularity and alignment required.  Each TDMR has
+       reserved areas where TDX memory holes and overlapping PAMTs can
+       be put into.
+PAMT - Physically contiguous TDX metadata.  One table for each page size
+       per TDMR.  Roughly 1/256th of TDMR in size.  256G TDMR =~ 1G
+       PAMT.
+
+Theoretically, as long as a memory or resource range falls into a CMR, it
+can be used as TDX memory.  Although the first generation of TDX only
+supports normal RAM as TDX memory, it's better not to assume so for the
+extension of future generations.  Even for the first generation, the kernel
+supports 'memmap=nn!ss' parameter to reserve part of memory as x86 legacy
+PMEMs.  Those legacy PMEMs are not managed as system memory, but they are
+covered by CMRs and can be used as TDX memory.
+
+Add common code to convert convertible memory as TDX memory, regardless of
+the type of TDX memory (currently only system memory and legacy PMEM).  The
+common code handles "constructing TDMRs" related things, which isn't
+related to the type of TDX memory.  Overall, constructing TDMRs involves
+the below steps: 1) gather all TDX memory blocks that kernel wants to use
+as TDX memory; 2) generate several TDMRs (address ranges of TDMRs) to
+cover all TDX memory blocks; 3) allocate PAMTs for those TDMRs; 4) put TDX
+memory block holes and PAMTs into reserved areas of TDMRs.  The kernel then
+uses those TDMRs to initialize the TDX module.
+
+Implement common code to support the first step of "constructing TDMRs",
+which is gathering all TDX memory blocks.  Specifically, add structure
+'tdx_memblock' to describe a common TDX memory block, and structure
+'tdx_memory" to describe a set of TDX memory blocks that can be used as TDX
+memory.  Add helpers to create and add TDX memory blocks to one TDX memory
+instance.  Also add a helper to merge two TDX memory instances, to allow
+the kernel to build one TDX memory instance for each type of TDX memory,
+and merge them as final TDX memory.
+
+Use __init and __initdata when necessary, since constructing TDMRs and
+initializing TDX module will be done during kernel boot phase (in later
+patches).
+
+Signed-off-by: Kai Huang <kai.huang@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/Makefile      |   2 +-
+ arch/x86/kernel/cpu/tdx/tdmr-common.c | 159 ++++++++++++++++++++++++++
+ arch/x86/kernel/cpu/tdx/tdmr-common.h |  53 +++++++++
+ 3 files changed, 213 insertions(+), 1 deletion(-)
+ create mode 100644 arch/x86/kernel/cpu/tdx/tdmr-common.c
+ create mode 100644 arch/x86/kernel/cpu/tdx/tdmr-common.h
+
+diff --git a/arch/x86/kernel/cpu/tdx/Makefile b/arch/x86/kernel/cpu/tdx/Makefile
+index 7943649121e1..3d2010ebbbd6 100644
+--- a/arch/x86/kernel/cpu/tdx/Makefile
++++ b/arch/x86/kernel/cpu/tdx/Makefile
+@@ -2,4 +2,4 @@
+ # Makefile for seamldr and tdx module
+ 
+ obj-y	+= seam.o seamcall.o p-seamldr.o np-seamldr.o
+-obj-y	+= tdx-error.o tdx.o
++obj-y	+= tdx-error.o tdx.o tdmr-common.o
+diff --git a/arch/x86/kernel/cpu/tdx/tdmr-common.c b/arch/x86/kernel/cpu/tdx/tdmr-common.c
+new file mode 100644
+index 000000000000..f39ac52d454b
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/tdmr-common.c
+@@ -0,0 +1,159 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Intel Trust Domain Extensions (TDX) memory initialization
++ */
++#define pr_fmt(fmt) "tdx: " fmt
++
++#include <linux/pgtable.h>
++#include <linux/limits.h>
++#include <linux/slab.h>
++#include <linux/gfp.h>
++#include "tdmr-common.h"
++
++/**
++ * tdx_memblock_create:	Create one TDX memory block
++ *
++ * @start_pfn:	Start PFN of the TDX memory block
++ * @end_pfn:	End PFN of the TDX memory block
++ * @nid:	Node the TDX memory block belongs to
++ * @data:	Type-specific TDX memory block opaque data
++ * @ops:	Type-specific TDX memory block ops
++ *
++ * Create one TDX memory block with type-specific data and ops.
++ */
++struct tdx_memblock * __init tdx_memblock_create(unsigned long start_pfn,
++		unsigned long end_pfn, int nid, void *data,
++		struct tdx_memblock_ops *ops)
++{
++	struct tdx_memblock *tmb;
++
++	tmb = kzalloc(sizeof(*tmb), GFP_KERNEL);
++	if (!tmb)
++		return NULL;
++
++	INIT_LIST_HEAD(&tmb->list);
++	tmb->start_pfn = start_pfn;
++	tmb->end_pfn = end_pfn;
++	tmb->data = data;
++	tmb->ops = ops;
++
++	return tmb;
++}
++
++/**
++ * tdx_memblock_free:	Free the TDX memory block
++ *
++ * @tmb:	TDX memory block to free
++ */
++void __init tdx_memblock_free(struct tdx_memblock *tmb)
++{
++	if (!tmb)
++		return;
++
++	tmb->ops->tmb_free(tmb);
++	kfree(tmb);
++}
++
++/**
++ * tdx_memory_init:	Initialize one TDX memory instance
++ *
++ * @tmem:	The TDX memory to initialize.
++ */
++void __init tdx_memory_init(struct tdx_memory *tmem)
++{
++	INIT_LIST_HEAD(&tmem->tmb_list);
++}
++
++/**
++ * tdx_memory_destroy:	Destroy one TDX memory instance
++ *
++ * @tmem:	The TDX memory to destroy
++ */
++void __init tdx_memory_destroy(struct tdx_memory *tmem)
++{
++	while (!list_empty(&tmem->tmb_list)) {
++		struct tdx_memblock *tmb = list_first_entry(&tmem->tmb_list,
++				struct tdx_memblock, list);
++
++		list_del(&tmb->list);
++		tdx_memblock_free(tmb);
++	}
++}
++
++/**
++ * tdx_memory_add_block:	Add a TDX memory block to TDX memory instance
++ *
++ * @tmem:	The TDX memory instance to add to
++ * @tmb:	The TDX memory block to add
++ *
++ * Add a TDX memory block to TDX memory instance in address ascending order.
++ *
++ * Returns 0 on success, or failure if the new block overlaps with any existing
++ * ones in TDX memory.
++ */
++int __init tdx_memory_add_block(struct tdx_memory *tmem,
++		struct tdx_memblock *tmb)
++{
++	struct tdx_memblock *p;
++
++	/* Insert new @tmb to @tr in address ascending order */
++	list_for_each_entry_reverse(p, &tmem->tmb_list, list) {
++		if (p->start_pfn >= tmb->end_pfn)
++			continue;
++		/*
++		 * Found memory block at lower position.  Sanity check the new
++		 * block doesn't overlap with the existing one.
++		 */
++		if (WARN_ON_ONCE(p->end_pfn > tmb->start_pfn))
++			return -EFAULT;
++
++		break;
++	}
++
++	/*
++	 * @p is either head, or valid memory block which is at lower
++	 * position than @tmb.
++	 */
++	list_add(&tmb->list, &p->list);
++
++	return 0;
++}
++
++/**
++ * tdx_memory_merge:	Merge two TDX memory instances to one
++ *
++ * @tmem_dst:	The first TDX memory as destination
++ * @tmem_src:	The second TDX memory as source
++ *
++ * Merge all TDX memory blocks in @tmem_src to @tmem_dst.  This allows caller
++ * to build multiple intermediate TDX memory instances based on TDX memory type
++ * (for instance, system memory, or x86 legacy PMEM) and/or NUMA locality, and
++ * merge them together as final TDX memory to generate final TDMRs.
++ *
++ * On success, @tmem_src will be empty.  In case of any error, some TDX memory
++ * blocks in @tmem_src may have already been moved to @tmem_dst.  Caller is
++ * responsible for destroying both @tmem_src and @tmem_dst.
++ */
++int __init tdx_memory_merge(struct tdx_memory *tmem_dst,
++		struct tdx_memory *tmem_src)
++{
++	while (!list_empty(&tmem_src->tmb_list)) {
++		struct tdx_memblock *tmb = list_first_entry(&tmem_src->tmb_list,
++				struct tdx_memblock, list);
++		int ret;
++
++		list_del(&tmb->list);
++
++		ret = tdx_memory_add_block(tmem_dst, tmb);
++		if (ret) {
++			/*
++			 * Add @tmb back to @tmem_src, so it can be properly
++			 * freed by caller.
++			 */
++			list_add(&tmb->list, &tmem_src->tmb_list);
++			return ret;
++		}
++	}
++
++	return 0;
++}
+diff --git a/arch/x86/kernel/cpu/tdx/tdmr-common.h b/arch/x86/kernel/cpu/tdx/tdmr-common.h
+new file mode 100644
+index 000000000000..570f805e9f3c
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/tdmr-common.h
+@@ -0,0 +1,53 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef	_X86_TDMR_COMMON_H
++#define	_X86_TDMR_COMMON_H
++
++#include <linux/types.h>
++#include <linux/list.h>
++#include <asm/tdx_arch.h>
++
++struct tdx_memblock;
++struct tdx_memory;
++
++struct tdx_memblock_ops {
++	void (*tmb_free)(struct tdx_memblock *tmb);
++};
++
++/*
++ * Structure to describe common TDX memory block which can be covered by TDMRs.
++ * To support specific type of TDX memory block, a type-specific data structure
++ * should be defined, and pass as opaque data, along with type-specific ops.
++ */
++struct tdx_memblock {
++	struct list_head list;
++	unsigned long start_pfn;
++	unsigned long end_pfn;
++	int nid;
++	void *data;	/* TDX memory block type specific data */
++	struct tdx_memblock_ops *ops;
++};
++
++/*
++ * Structure to describe a set of TDX memory blocks.  Basically it represents
++ * memory which will be used by TDX.  Final TDMRs used to configure TDX module
++ * is generated based on this.
++ */
++struct tdx_memory {
++	struct list_head tmb_list;
++};
++
++struct tdx_memblock * __init tdx_memblock_create(unsigned long start_pfn,
++		unsigned long end_pfn, int nid, void *data,
++		struct tdx_memblock_ops *ops);
++void __init tdx_memblock_free(struct tdx_memblock *tmb);
++
++void __init tdx_memory_init(struct tdx_memory *tmem);
++void __init tdx_memory_destroy(struct tdx_memory *tmem);
++
++int __init tdx_memory_add_block(struct tdx_memory *tmem,
++		struct tdx_memblock *tmb);
++
++int __init tdx_memory_merge(struct tdx_memory *tmem_dst,
++		struct tdx_memory *tmem_src);
++
++#endif
+-- 
+2.31.1
+

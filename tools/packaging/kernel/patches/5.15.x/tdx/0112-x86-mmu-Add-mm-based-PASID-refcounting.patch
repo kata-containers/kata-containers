@@ -1,0 +1,134 @@
+From 471f4026f159a5dc0d371c4d3a1b8f78c41a8d02 Mon Sep 17 00:00:00 2001
+From: Fenghua Yu <fenghua.yu@intel.com>
+Date: Thu, 13 Feb 2020 20:09:37 +0000
+Subject: [PATCH 0112/1418] x86/mmu: Add mm-based PASID refcounting
+
+The SVM (Shared Virtual Memory) capability in certain devices allows user
+processes to submit requests that operate on process virtual addresses
+directly to the device.
+
+This works because the ENQCMD instruction picks up the PASID to use from
+an MSR that holds the value whenever the task is running in user mode.
+
+ctively freeing the PASID and clearing each running task's IA32_PASID MSR
+was disabled by Thomas in commit 9bfecd058339 ("x86/cpufeatures:
+Force disable X86_FEATURE_ENQCMD and remove update_pasid()")' due to
+locking and other issues.
+
+Track the process usage of the PASID and lazily free it on mm exit.
+
+Thus each thread in a process may have an implicit reference to the
+PASID that is allocated to the process.
+
+Systems that support SVM devices take an extra reference when the
+PASID is first allocated and keep it until the process exits.
+
+Add new CONFIG_FREE_PASID_MM_EXIT to Kconfig to control taking and
+release the extra reference to the PASID.
+
+CONFIG_INTEL_IOMMU_SVM uses "select" to choose this option
+
+v2:
+- Free PASID on mm exit instead of in exit(2) or unbind() (Thomas, AndyL,
+  PeterZ)
+- Update commit message (Tony)
+
+Signed-off-by: Fenghua Yu <fenghua.yu@intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+---
+ arch/x86/include/asm/mmu_context.h | 15 +++++++++++++++
+ drivers/iommu/Kconfig              |  4 ++++
+ drivers/iommu/intel/Kconfig        |  1 +
+ drivers/iommu/iommu-sva-lib.c      | 12 ++++++++++--
+ 4 files changed, 30 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/mmu_context.h b/arch/x86/include/asm/mmu_context.h
+index 27516046117a..adac23b4bfac 100644
+--- a/arch/x86/include/asm/mmu_context.h
++++ b/arch/x86/include/asm/mmu_context.h
+@@ -6,6 +6,7 @@
+ #include <linux/atomic.h>
+ #include <linux/mm_types.h>
+ #include <linux/pkeys.h>
++#include <linux/ioasid.h>
+ 
+ #include <trace/events/tlb.h>
+ 
+@@ -119,10 +120,24 @@ static inline int init_new_context(struct task_struct *tsk,
+ 	return 0;
+ }
+ 
++/* If the mm has a valid PASID, free it on mm exit. */
++static inline void destroy_pasid(struct mm_struct *mm)
++{
++#ifdef CONFIG_FREE_PASID_MM_EXIT
++	if (!cpu_feature_enabled(X86_FEATURE_ENQCMD))
++		return;
++
++	/* Nothing to do if the mm doesn't have a valid PASID. */
++	if (mm->pasid != PASID_DISABLED)
++		ioasid_put(mm->pasid);
++#endif
++}
++
+ #define destroy_context destroy_context
+ static inline void destroy_context(struct mm_struct *mm)
+ {
+ 	destroy_context_ldt(mm);
++	destroy_pasid(mm);
+ }
+ 
+ extern void switch_mm(struct mm_struct *prev, struct mm_struct *next,
+diff --git a/drivers/iommu/Kconfig b/drivers/iommu/Kconfig
+index 3eb68fa1b8cc..5fdff0c21e3c 100644
+--- a/drivers/iommu/Kconfig
++++ b/drivers/iommu/Kconfig
+@@ -486,4 +486,8 @@ config SPRD_IOMMU
+ 
+ 	  Say Y here if you want to use the multimedia devices listed above.
+ 
++# Selected by architectures that lazily free PASID on mm exit
++config FREE_PASID_MM_EXIT
++	bool
++
+ endif # IOMMU_SUPPORT
+diff --git a/drivers/iommu/intel/Kconfig b/drivers/iommu/intel/Kconfig
+index 0ddb77115be7..5533bd8d6eb5 100644
+--- a/drivers/iommu/intel/Kconfig
++++ b/drivers/iommu/intel/Kconfig
+@@ -49,6 +49,7 @@ config INTEL_IOMMU_SVM
+ 	select MMU_NOTIFIER
+ 	select IOASID
+ 	select IOMMU_SVA_LIB
++	select FREE_PASID_MM_EXIT
+ 	help
+ 	  Shared Virtual Memory (SVM) provides a facility for devices
+ 	  to access DMA resources through process address space by
+diff --git a/drivers/iommu/iommu-sva-lib.c b/drivers/iommu/iommu-sva-lib.c
+index bd41405d34e9..934adf1df873 100644
+--- a/drivers/iommu/iommu-sva-lib.c
++++ b/drivers/iommu/iommu-sva-lib.c
+@@ -40,10 +40,18 @@ int iommu_sva_alloc_pasid(struct mm_struct *mm, ioasid_t min, ioasid_t max)
+ 			ret = -EOVERFLOW;
+ 	} else {
+ 		pasid = ioasid_alloc(&iommu_sva_pasid, min, max, mm);
+-		if (pasid == INVALID_IOASID)
++		if (pasid == INVALID_IOASID) {
+ 			ret = -ENOMEM;
+-		else
++		} else {
+ 			mm->pasid = pasid;
++#ifdef CONFIG_FREE_PASID_MM_EXIT
++			/*
++			 * Take an extra reference to the PASID so that the mm
++			 * will keep the PASID until the mm exits.
++			 */
++			ioasid_get(pasid);
++#endif
++		}
+ 	}
+ 	mutex_unlock(&iommu_sva_lock);
+ 	return ret;
+-- 
+2.31.1
+

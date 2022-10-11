@@ -1,0 +1,116 @@
+From 73e4cfc0c4bc8296c883a24cbbb0651d619dc32d Mon Sep 17 00:00:00 2001
+From: Eric Dumazet <edumazet@google.com>
+Date: Thu, 3 Mar 2022 09:37:28 -0800
+Subject: [PATCH 1285/1418] ipv6: fix skb drops in igmp6_event_query() and
+ igmp6_event_report()
+
+While investigating on why a synchronize_net() has been added recently
+in ipv6_mc_down(), I found that igmp6_event_query() and igmp6_event_report()
+might drop skbs in some cases.
+
+Discussion about removing synchronize_net() from ipv6_mc_down()
+will happen in a different thread.
+
+Fixes: f185de28d9ae ("mld: add new workqueues for process mld events")
+Signed-off-by: Eric Dumazet <edumazet@google.com>
+Cc: Taehee Yoo <ap420073@gmail.com>
+Cc: Cong Wang <xiyou.wangcong@gmail.com>
+Cc: David Ahern <dsahern@kernel.org>
+Link: https://lore.kernel.org/r/20220303173728.937869-1-eric.dumazet@gmail.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ include/net/ndisc.h |  4 ++--
+ net/ipv6/mcast.c    | 32 ++++++++++++--------------------
+ 2 files changed, 14 insertions(+), 22 deletions(-)
+
+diff --git a/include/net/ndisc.h b/include/net/ndisc.h
+index 38e4094960ce..e97ef508664f 100644
+--- a/include/net/ndisc.h
++++ b/include/net/ndisc.h
+@@ -487,9 +487,9 @@ int igmp6_late_init(void);
+ void igmp6_cleanup(void);
+ void igmp6_late_cleanup(void);
+ 
+-int igmp6_event_query(struct sk_buff *skb);
++void igmp6_event_query(struct sk_buff *skb);
+ 
+-int igmp6_event_report(struct sk_buff *skb);
++void igmp6_event_report(struct sk_buff *skb);
+ 
+ 
+ #ifdef CONFIG_SYSCTL
+diff --git a/net/ipv6/mcast.c b/net/ipv6/mcast.c
+index bed8155508c8..d5855f192350 100644
+--- a/net/ipv6/mcast.c
++++ b/net/ipv6/mcast.c
+@@ -1371,27 +1371,23 @@ static void mld_process_v2(struct inet6_dev *idev, struct mld2_query *mld,
+ }
+ 
+ /* called with rcu_read_lock() */
+-int igmp6_event_query(struct sk_buff *skb)
++void igmp6_event_query(struct sk_buff *skb)
+ {
+ 	struct inet6_dev *idev = __in6_dev_get(skb->dev);
+ 
+-	if (!idev)
+-		return -EINVAL;
+-
+-	if (idev->dead) {
+-		kfree_skb(skb);
+-		return -ENODEV;
+-	}
++	if (!idev || idev->dead)
++		goto out;
+ 
+ 	spin_lock_bh(&idev->mc_query_lock);
+ 	if (skb_queue_len(&idev->mc_query_queue) < MLD_MAX_SKBS) {
+ 		__skb_queue_tail(&idev->mc_query_queue, skb);
+ 		if (!mod_delayed_work(mld_wq, &idev->mc_query_work, 0))
+ 			in6_dev_hold(idev);
++		skb = NULL;
+ 	}
+ 	spin_unlock_bh(&idev->mc_query_lock);
+-
+-	return 0;
++out:
++	kfree_skb(skb);
+ }
+ 
+ static void __mld_query_work(struct sk_buff *skb)
+@@ -1542,27 +1538,23 @@ static void mld_query_work(struct work_struct *work)
+ }
+ 
+ /* called with rcu_read_lock() */
+-int igmp6_event_report(struct sk_buff *skb)
++void igmp6_event_report(struct sk_buff *skb)
+ {
+ 	struct inet6_dev *idev = __in6_dev_get(skb->dev);
+ 
+-	if (!idev)
+-		return -EINVAL;
+-
+-	if (idev->dead) {
+-		kfree_skb(skb);
+-		return -ENODEV;
+-	}
++	if (!idev || idev->dead)
++		goto out;
+ 
+ 	spin_lock_bh(&idev->mc_report_lock);
+ 	if (skb_queue_len(&idev->mc_report_queue) < MLD_MAX_SKBS) {
+ 		__skb_queue_tail(&idev->mc_report_queue, skb);
+ 		if (!mod_delayed_work(mld_wq, &idev->mc_report_work, 0))
+ 			in6_dev_hold(idev);
++		skb = NULL;
+ 	}
+ 	spin_unlock_bh(&idev->mc_report_lock);
+-
+-	return 0;
++out:
++	kfree_skb(skb);
+ }
+ 
+ static void __mld_report_work(struct sk_buff *skb)
+-- 
+2.31.1
+

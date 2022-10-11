@@ -1,0 +1,57 @@
+From 336a2fe88989e7d87201457ac1dbc447a35c41ba Mon Sep 17 00:00:00 2001
+From: "Eric W. Biederman" <ebiederm@xmission.com>
+Date: Mon, 24 Jan 2022 12:46:50 -0600
+Subject: [PATCH 1045/1418] ucount: Make get_ucount a safe get_user replacement
+
+When the ucount code was refactored to create get_ucount it was missed
+that some of the contexts in which a rlimit is kept elevated can be
+the only reference to the user/ucount in the system.
+
+Ordinary ucount references exist in places that also have a reference
+to the user namspace, but in POSIX message queues, the SysV shm code,
+and the SIGPENDING code there is no independent user namespace
+reference.
+
+Inspection of the the user_namespace show no instance of circular
+references between struct ucounts and the user_namespace.  So
+hold a reference from struct ucount to i's user_namespace to
+resolve this problem.
+
+Link: https://lore.kernel.org/lkml/YZV7Z+yXbsx9p3JN@fixkernel.com/
+Reported-by: Qian Cai <quic_qiancai@quicinc.com>
+Reported-by: Mathias Krause <minipli@grsecurity.net>
+Tested-by: Mathias Krause <minipli@grsecurity.net>
+Reviewed-by: Mathias Krause <minipli@grsecurity.net>
+Reviewed-by: Alexey Gladkov <legion@kernel.org>
+Fixes: d64696905554 ("Reimplement RLIMIT_SIGPENDING on top of ucounts")
+Fixes: 6e52a9f0532f ("Reimplement RLIMIT_MSGQUEUE on top of ucounts")
+Fixes: d7c9e99aee48 ("Reimplement RLIMIT_MEMLOCK on top of ucounts")
+Cc: stable@vger.kernel.org
+Signed-off-by: "Eric W. Biederman" <ebiederm@xmission.com>
+---
+ kernel/ucount.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/kernel/ucount.c b/kernel/ucount.c
+index eb03f3c68375..9036cb735481 100644
+--- a/kernel/ucount.c
++++ b/kernel/ucount.c
+@@ -184,6 +184,7 @@ struct ucounts *alloc_ucounts(struct user_namespace *ns, kuid_t uid)
+ 			kfree(new);
+ 		} else {
+ 			hlist_add_head(&new->node, hashent);
++			get_user_ns(new->ns);
+ 			spin_unlock_irq(&ucounts_lock);
+ 			return new;
+ 		}
+@@ -204,6 +205,7 @@ void put_ucounts(struct ucounts *ucounts)
+ 	if (atomic_dec_and_lock_irqsave(&ucounts->count, &ucounts_lock, flags)) {
+ 		hlist_del_init(&ucounts->node);
+ 		spin_unlock_irqrestore(&ucounts_lock, flags);
++		put_user_ns(ucounts->ns);
+ 		kfree(ucounts);
+ 	}
+ }
+-- 
+2.31.1
+

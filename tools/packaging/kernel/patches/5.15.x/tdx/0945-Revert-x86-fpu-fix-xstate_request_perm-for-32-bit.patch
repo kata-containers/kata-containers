@@ -1,0 +1,27 @@
+From c4b281ae86aba3c85fad898daa30e317715ba1dd Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 24 Jan 2022 18:06:08 -0800
+Subject: [PATCH 0945/1418] Revert "x86/fpu: fix xstate_request_perm() for
+ 32-bit"
+
+This reverts commit 8c5a74129b34d09e15c5885e13a1be2237b2073f.
+---
+ arch/x86/kernel/fpu/xstate.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 3e9709969e61..3b1a12109b9b 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -1751,7 +1751,7 @@ int xfd_enable_guest_features(struct fpu_guest *guest_fpu)
+ }
+ 
+ #else /* CONFIG_X86_64 */
+-static inline int xstate_request_perm(unsigned long idx, bool guest)
++static inline int xstate_request_perm(unsigned long idx)
+ {
+ 	return -EPERM;
+ }
+-- 
+2.31.1
+

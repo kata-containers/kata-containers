@@ -1,0 +1,95 @@
+From 2798f77093bfe8e78a6a333857bdca9cc68148ab Mon Sep 17 00:00:00 2001
+From: Fenghua Yu <fenghua.yu@intel.com>
+Date: Mon, 10 Feb 2020 12:01:45 +0000
+Subject: [PATCH 0115/1418] docs: x86: Change documentation for SVA (Shared
+ Virtual Addressing)
+
+Since allocating, freeing and fixing up PASID are changed, the
+documentation is updated to reflect the changes.
+
+Originally-by: Ashok Raj <ashok.raj@intel.com>
+Signed-off-by: Fenghua Yu <fenghua.yu@intel.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+---
+ Documentation/x86/sva.rst | 62 ++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 55 insertions(+), 7 deletions(-)
+
+diff --git a/Documentation/x86/sva.rst b/Documentation/x86/sva.rst
+index 076efd51ef1f..758eaee2a29d 100644
+--- a/Documentation/x86/sva.rst
++++ b/Documentation/x86/sva.rst
+@@ -106,16 +106,64 @@ process share the same page tables, thus the same MSR value.
+ 
+ PASID is cleared when a process is created. The PASID allocation and MSR
+ programming may occur long after a process and its threads have been created.
+-One thread must call iommu_sva_bind_device() to allocate the PASID for the
+-process. If a thread uses ENQCMD without the MSR first being populated, a #GP
+-will be raised. The kernel will update the PASID MSR with the PASID for all
+-threads in the process. A single process PASID can be used simultaneously
++One thread must call iommu_sva_bind(_device) to allocate the PASID for the process.
++If a thread uses ENQCMD without the MSR first being populated, it will cause #GP.
++The kernel will fix up the #GP by writing the process-wide PASID into the
++thread that took the #GP. A single process PASID can be used simultaneously
+ with multiple devices since they all share the same address space.
+ 
+-One thread can call iommu_sva_unbind_device() to free the allocated PASID.
+-The kernel will clear the PASID MSR for all threads belonging to the process.
++The PASID MSR value is cleared at thread creation and is never inherited from a
++parent. This ensures consistent child behavior no matter whether the thread is
++created first or the PASID is allocated (and the MSR written).
+ 
+-New threads inherit the MSR value from the parent.
++
++PASID Life Cycle Management
++==========================
++
++Only processes that access SVA-capable devices need to have a PASID
++allocated. This allocation happens when a process opens/binds an SVA-capable
++device but finds no PASID for this process. Subsequent binds of the same, or
++other devices will share the same PASID.
++
++Although the PASID is allocated to the process by opening a device,
++it is not active in any of the threads of that process. It's loaded to the
++IA32_PASID MSR lazily when a thread tries to submit a work descriptor
++to a device using the ENQCMD.
++
++That first access will trigger a #GP fault because the IA32_PASID MSR
++has not been initialized with the PASID value assigned to the process
++when the device was opened. The Linux #GP handler notes that a PASID has
++been allocated for the process, and so initializes the IA32_PASID MSR
++and returns so that the ENQCMD instruction is re-executed.
++
++On fork(2) or exec(2) the PASID is removed from the process as it no
++longer has the same address space that it had when the device was opened.
++
++On clone(2) the new task shares the same address space, so will be
++able to use the PASID allocated to the process. The IA32_PASID is not
++preemptively initialized as the PASID value might not be allocated yet or
++the kernel does not know whether this thread is going to access the device
++and the cleared IA32_PASID MSR reduces context switch overhead by xstate
++init optimization. Since #GP faults have to be handled on any threads that
++were created before the PASID was assigned to the mm of the process, newly
++created threads might as well be treated in a consistent way.
++
++Due to complexity of freeing the PASID and clearing all IA32_PASID MSRs in
++all threads in unbind, free the PASID lazily only on mm exit. Track the
++PASID's reference count in the following way:
++
++- Track device usage of the PASID: The PASID's reference count is initialized
++  as 1 when the PASID is allocated in the first bind. Bind takes a reference
++  and unbind drops the reference.
++- Track mm usage of the PASID: Take one reference to the PASID when the PASID
++  is first allocated to the mm. The reference is held for the rest life time
++  of the mm until it's dropped to 0 and the PASID is freed on mm exit.
++
++If a process does a close(2) of the device file descriptor and munmap(2)
++of the device MMIO portal, then the driver will unbind the device. The
++PASID is still marked VALID in the PASID_MSR for any threads in the
++process that accessed the device. But this is harmless as without the
++MMIO portal they cannot submit new work to the device.
+ 
+ Relationships
+ =============
+-- 
+2.31.1
+

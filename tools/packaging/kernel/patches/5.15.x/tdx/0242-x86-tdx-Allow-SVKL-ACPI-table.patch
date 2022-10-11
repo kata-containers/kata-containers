@@ -1,0 +1,30 @@
+From 56d7df84d5d8ef98791cbdd1088d4ee7aee1478d Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Thu, 3 Sep 2020 14:41:39 -0700
+Subject: [PATCH 0242/1418] x86/tdx: Allow SVKL ACPI table
+
+TDX architecture allows encrypted storage volumes in guest
+platforms. Since SVKL table is used to by BIOS to share
+the encryption key with guest kernel, allow its enumeration.
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdx-filter.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/tdx-filter.c b/arch/x86/kernel/tdx-filter.c
+index 7c7c3a396601..bf50e067efcb 100644
+--- a/arch/x86/kernel/tdx-filter.c
++++ b/arch/x86/kernel/tdx-filter.c
+@@ -263,7 +263,7 @@ void __init tdx_filter_init(void)
+ 		pr_debug("Device filter is overridden\n");
+ 	}
+ 
+-	allowed = "XSDT,FACP,DSDT,FACS,APIC";
++	allowed = "XSDT,FACP,DSDT,FACS,APIC,SVKL";
+ 	if (cmdline_find_option(boot_command_line, "tdx_allow_acpi",
+ 				a_allowed, sizeof(a_allowed)) >= 0) {
+ 		add_taint(TAINT_CONF_NO_LOCKDOWN, LOCKDEP_STILL_OK);
+-- 
+2.31.1
+

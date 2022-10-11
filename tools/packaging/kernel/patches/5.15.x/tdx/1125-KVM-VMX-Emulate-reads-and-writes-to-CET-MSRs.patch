@@ -1,0 +1,153 @@
+From 2a6ae879adfe15e13057fdcdfe1681f1158abb30 Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Wed, 22 Jul 2020 10:30:33 -0700
+Subject: [PATCH 1125/1418] KVM: VMX: Emulate reads and writes to CET MSRs
+
+Add support for emulating read and write accesses to CET MSRs.  CET MSRs
+are universally "special" as they are either context switched via
+dedicated VMCS fields or via XSAVES, i.e. no additional in-memory
+tracking is needed, but emulated reads/writes are more expensive.
+
+MSRs that are switched through XSAVES are especially annoying due to the
+possibility of the kernel's FPU being used in IRQ context.  Disable IRQs
+and ensure the guest's FPU state is loaded when accessing such MSRs.
+
+Co-developed-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/vmx/vmx.c | 87 ++++++++++++++++++++++++++++++++++++++++++
+ arch/x86/kvm/x86.h     |  5 +++
+ 2 files changed, 92 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index cdc0d28c068a..dc43d5355c6b 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -1827,6 +1827,48 @@ static int vmx_get_msr_feature(struct kvm_msr_entry *msr)
+ 	}
+ }
+ 
++static bool cet_is_ssp_msr_accessible(struct kvm_vcpu *vcpu,
++				      struct msr_data *msr)
++{
++	u64 mask;
++
++	if (!kvm_cet_supported())
++		return false;
++
++	if (msr->host_initiated)
++		return true;
++
++	if (!guest_cpuid_has(vcpu, X86_FEATURE_SHSTK))
++		return false;
++
++	if (msr->index == MSR_IA32_INT_SSP_TAB)
++		return true;
++
++	mask = (msr->index == MSR_IA32_PL3_SSP) ? XFEATURE_MASK_CET_USER :
++						  XFEATURE_MASK_CET_KERNEL;
++	return !!(vcpu->arch.guest_supported_xss & mask);
++}
++
++static bool cet_is_control_msr_accessible(struct kvm_vcpu *vcpu,
++					  struct msr_data *msr)
++{
++	u64 mask;
++
++	if (!kvm_cet_supported())
++		return false;
++
++	if (msr->host_initiated)
++		return true;
++
++	if (!guest_cpuid_has(vcpu, X86_FEATURE_SHSTK) &&
++	    !guest_cpuid_has(vcpu, X86_FEATURE_IBT))
++		return false;
++
++	mask = (msr->index == MSR_IA32_U_CET) ? XFEATURE_MASK_CET_USER :
++						XFEATURE_MASK_CET_KERNEL;
++	return !!(vcpu->arch.guest_supported_xss & mask);
++}
++
+ /*
+  * Reads an msr value (of 'msr_index') into 'pdata'.
+  * Returns 0 on success, non-0 otherwise.
+@@ -1977,6 +2019,26 @@ static int vmx_get_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ 			return 1;
+ 		msr_info->data = kvm_read_pkrs(vcpu);
+ 		break;
++	case MSR_IA32_S_CET:
++		if (!cet_is_control_msr_accessible(vcpu, msr_info))
++			return 1;
++		msr_info->data = vmcs_readl(GUEST_S_CET);
++		break;
++	case MSR_IA32_U_CET:
++		if (!cet_is_control_msr_accessible(vcpu, msr_info))
++			return 1;
++		vmx_get_xsave_msr(msr_info);
++		break;
++	case MSR_IA32_INT_SSP_TAB:
++		if (!cet_is_ssp_msr_accessible(vcpu, msr_info))
++			return 1;
++		msr_info->data = vmcs_readl(GUEST_INTR_SSP_TABLE);
++		break;
++	case MSR_IA32_PL0_SSP ... MSR_IA32_PL3_SSP:
++		if (!cet_is_ssp_msr_accessible(vcpu, msr_info))
++			return 1;
++		vmx_get_xsave_msr(msr_info);
++		break;
+ 	default:
+ 	find_uret_msr:
+ 		msr = vmx_find_uret_msr(vmx, msr_info->index);
+@@ -2344,6 +2406,31 @@ static int vmx_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ 			return 1;
+ 		vmx_set_pkrs(vcpu, data);
+ 		break;
++	case MSR_IA32_S_CET:
++	case MSR_IA32_U_CET:
++		if (!cet_is_control_msr_accessible(vcpu, msr_info))
++			return 1;
++		if (data & GENMASK(9, 6))
++			return 1;
++		if (msr_index == MSR_IA32_S_CET)
++			vmcs_writel(GUEST_S_CET, data);
++		else
++			vmx_set_xsave_msr(msr_info);
++		break;
++	case MSR_IA32_INT_SSP_TAB:
++		if (!cet_is_control_msr_accessible(vcpu, msr_info))
++			return 1;
++		if (is_noncanonical_address(data, vcpu))
++			return 1;
++		vmcs_writel(GUEST_INTR_SSP_TABLE, data);
++		break;
++	case MSR_IA32_PL0_SSP ... MSR_IA32_PL3_SSP:
++		if (!cet_is_ssp_msr_accessible(vcpu, msr_info))
++			return 1;
++		if ((data & GENMASK(2, 0)) || is_noncanonical_address(data, vcpu))
++			return 1;
++		vmx_set_xsave_msr(msr_info);
++		break;
+ 	default:
+ 	find_uret_msr:
+ 		msr = vmx_find_uret_msr(vmx, msr_index);
+diff --git a/arch/x86/kvm/x86.h b/arch/x86/kvm/x86.h
+index 5f808094c717..48f0150f23cd 100644
+--- a/arch/x86/kvm/x86.h
++++ b/arch/x86/kvm/x86.h
+@@ -341,6 +341,11 @@ static inline bool kvm_pasid_supported(void)
+ 	return supported_xss & XFEATURE_MASK_PASID;
+ }
+ 
++static inline bool kvm_cet_supported(void)
++{
++	return supported_xss & XFEATURE_MASK_CET_USER;
++}
++
+ extern unsigned int min_timer_period_us;
+ 
+ extern bool enable_vmware_backdoor;
+-- 
+2.31.1
+

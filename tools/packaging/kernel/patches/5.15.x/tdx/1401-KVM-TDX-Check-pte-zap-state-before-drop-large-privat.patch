@@ -1,0 +1,86 @@
+From 67cb4974d1d87adfd05bcfb5f27625b4831fcbf3 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Tue, 24 May 2022 21:29:27 +0800
+Subject: [PATCH 1401/1418] KVM: TDX: Check pte zap state before drop large
+ private page
+
+The pte is zapped already before drop by __drop_large_spte(),
+for example it can be zapped in MMU notifier handler and then
+dropped by __drop_large_spte().
+
+------------[ cut here ]------------
+[  493.697148] WARNING: CPU: 18 PID: 7585 at arch/x86/kvm/vmx/tdx.c:1766 tdx_sept_zap_private_spte+0xa3/0x1d0 [kvm_intel]
+[  493.709216] Modules linked in: vhost_net vhost vhost_iotlb tap tun xt_CHECKSUM xt_MASQUERADE xt_conntrack ipt_REJECT nf_reject_ipv4 nft_compat nft_counter nft_chain_nat nf_nat nf_conntrack nf_defrag_ipv6 nf_defrag_ipv4 nf_tables bridge stp llc nfnetlink sunrpc intel_rapl_msr intel_rapl_common i10nm_edac nfit x86_pkg_temp_thermal intel_powerclamp coretemp ofpart kvm_intel spi_nor pmt_crashlog pmt_telemetry mtd pmt_class intel_sdsi kvm idxd_mdev vfio_pci_core isst_if_mmio isst_if_mbox_pci vfio_virqfd snd_pcm mei_me isst_if_common joydev i2c_i801 irqbypass spi_intel_pci intel_vsec mei snd_timer spi_intel i2c_smbus i2c_ismt wmi pfr_update pfr_telemetry iax_crypto ast drm_vram_helper crc32c_intel igc idxd drm_ttm_helper pinctrl_emmitsburg pinctrl_intel asix usbnet fuse
+[  493.784898] CPU: 18 PID: 7585 Comm: CPU 4/KVM Not tainted 5.15.0-spr.bkc.pc.6.13.0.x86_64 #1
+[  493.794432] Hardware name: Intel Corporation EAGLESTREAM/EAGLESTREAM, BIOS EGSDREL1.SYS.0080.D21.2205151327 05/15/2022
+[  493.806464] RIP: 0010:tdx_sept_zap_private_spte+0xa3/0x1d0 [kvm_intel]
+[  493.813853] Code: 07 00 00 00 e8 be 86 02 00 5a 48 89 c3 8b 05 9c 1c 20 cb 85 c0 7f 62 4c 39 eb 74 c6 85 db 74 38 41 80 be f4 59 03 00 00 75 17 <0f> 0b be 04 03 00 00 41 c6 86 f4 59 03 00 01 4c 89 f7 e8 76 19 0b
+[  493.834910] RSP: 0018:ff742afc4475f9a0 EFLAGS: 00010246
+[  493.840845] RAX: 0000000000000000 RBX: 00000b0700000001 RCX: 0000000000000000
+[  493.848926] RDX: ff742afc4475f9a0 RSI: 00000001a7000001 RDI: ff742afc4475f9a0
+[  493.856978] RBP: 00000001a7000001 R08: 0000000000000000 R09: 0000000000000000
+[  493.865028] R10: 0000000000000000 R11: 0000000000000000 R12: 0000000337bf5000
+[  493.873076] R13: 8000020000000092 R14: ff742afc46fb5000 R15: 0000000000000000
+[  493.881136] FS:  00007fb480bf2700(0000) GS:ff4418ac1d080000(0000) knlGS:0000000000000000
+[  493.890262] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  493.896746] CR2: 0000000000000000 CR3: 0000000194f0a002 CR4: 0000000001f73ee0
+[  493.904812] PKRU: 55555554
+[  493.907903] PKRS: 0x8a000a8a
+[  493.911206] Call Trace:
+[  493.914029]  kvm_mmu_zap_private_spte+0x94/0xe0 [kvm]
+[  493.919799]  drop_large_spte+0x8b/0x170 [kvm]
+[  493.924766]  __direct_map+0x1a7/0xce0 [kvm]
+[  493.929556]  direct_page_fault+0x696/0x6f0 [kvm]
+[  493.934830]  kvm_tdp_page_fault+0xc3/0xf0 [kvm]
+[  493.940018]  kvm_mmu_page_fault+0x77/0x570 [kvm]
+[  493.945284]  ? restart_apic_timer+0x66/0x110 [kvm]
+[  493.950746]  ? perf_event_update_userpage+0xd8/0x120
+[  493.956382]  ? kvm_set_msr_common+0x7cc/0xf30 [kvm]
+[  493.961952]  ? eventfd_signal+0x8f/0xb0
+[  493.966325]  ? x86_perf_event_set_period+0x12b/0x1d0
+[  493.971959]  ? irqentry_enter+0x27/0x60
+[  493.976341]  ? irqentry_exit+0xc/0x40
+[  493.980521]  vt_handle_exit+0x62d/0x14d0 [kvm_intel]
+[  493.986151]  vcpu_enter_guest+0xae0/0x1690 [kvm]
+[  493.991431]  ? __schedule+0x344/0x900
+[  493.995603]  ? vt_deliver_posted_interrupt+0xa1/0x140 [kvm_intel]
+[  494.002514]  ? __apic_accept_irq+0x19d/0x2a0 [kvm]
+[  494.007987]  kvm_arch_vcpu_ioctl_run+0x11b/0x650 [kvm]
+[  494.013848]  kvm_vcpu_ioctl+0x2cb/0x630 [kvm]
+[  494.018826]  ? __fget_files+0xab/0xc0
+[  494.023013]  __x64_sys_ioctl+0x81/0xc0
+[  494.027305]  do_syscall_64+0x3f/0x90
+[  494.031382]  entry_SYSCALL_64_after_hwframe+0x44/0xae
+[  494.037107] RIP: 0033:0x7fb48d6cc34b
+[  494.041194] Code: 0f 1e fa 48 8b 05 55 4b 0d 00 64 c7 00 26 00 00 00 48 c7 c0 ff ff ff ff c3 66 0f 1f 44 00 00 f3 0f 1e fa b8 10 00 00 00 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 8b 0d 25 4b 0d 00 f7 d8 64 89 01 48
+[  494.062250] RSP: 002b:00007fb480bf1638 EFLAGS: 00000246 ORIG_RAX: 0000000000000010
+[  494.070810] RAX: ffffffffffffffda RBX: 0000000000000000 RCX: 00007fb48d6cc34b
+[  494.078866] RDX: 0000000000000000 RSI: 000000000000ae80 RDI: 000000000000001e
+[  494.086926] RBP: 0000000000000000 R08: 0000000000000000 R09: 0000000000000000
+[  494.094983] R10: 0000000000000001 R11: 0000000000000246 R12: 00005642462a9940
+[  494.103035] R13: 00007fb490538000 R14: 0000000000000000 R15: 0000564246e23a50
+[  494.111084] ---[ end trace 3a586884347fadc1 ]---
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index a93fa2ce3328..bd3ec6266445 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -1418,7 +1418,9 @@ static bool __drop_large_spte(struct kvm_vcpu *vcpu, u64 *sptep)
+ 
+ 		if (is_private_spte(vcpu->kvm, sptep)) {
+ 			old_spte = *sptep;
+-			kvm_mmu_zap_private_spte(vcpu->kvm, sptep);
++
++			if (!is_zapped_private_pte(old_spte))
++				kvm_mmu_zap_private_spte(vcpu->kvm, sptep);
+ 			split_private_spte(vcpu, sptep, old_spte);
+ 		} else {
+ 			drop_spte(vcpu->kvm, sptep);
+-- 
+2.31.1
+

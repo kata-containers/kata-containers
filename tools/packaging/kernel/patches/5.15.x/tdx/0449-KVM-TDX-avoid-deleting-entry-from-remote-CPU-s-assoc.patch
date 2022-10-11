@@ -1,0 +1,70 @@
+From f5135c6ae605855148c10d389082cad4175c8f1f Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Fri, 23 Jul 2021 10:17:26 +0800
+Subject: [PATCH 0449/1418] KVM: TDX: avoid deleting entry from remote CPU's
+ associated_tdvcpus list
+
+tdx_flush_vp_on_cpu() may delete entry from remote CPU's associated_tdvcpus
+list. It may race with the list_add() on remote CPU. Disable interrupt on
+current CPU cannot mitigate the issue.
+
+Send IPIs to let the remote CPU manipulate its per-cpu list. The IPI
+handler checks if tdvcpu is already created to save a seamcall.
+
+Fixes: f7952ab6231c ("KVM: TDX: Disable interrupt when adding a vcpu to associated_tdvcpus")
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 28 +++++++++++-----------------
+ 1 file changed, 11 insertions(+), 17 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 5789196c31a0..13bbf5cb2341 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -257,32 +257,26 @@ static void tdx_flush_vp(void *arg)
+ 	if (vcpu->cpu != raw_smp_processor_id())
+ 		return;
+ 
+-	err = tdh_vp_flush(to_tdx(vcpu)->tdvpr.pa);
+-	if (unlikely(err && err != TDX_VCPU_NOT_ASSOCIATED))
+-		TDX_ERR(err, TDH_VP_FLUSH, NULL);
++	/*
++	 * No need to do TDH_VP_FLUSH if the vCPU hasn't been initialized.  The
++	 * list tracking still needs to be updated so that it's correct if/when
++	 * the vCPU does get initialized.
++	 */
++	if (is_td_vcpu_created(to_tdx(vcpu))) {
++		err = tdh_vp_flush(to_tdx(vcpu)->tdvpr.pa);
++		if (unlikely(err && err != TDX_VCPU_NOT_ASSOCIATED))
++			TDX_ERR(err, TDH_VP_FLUSH, NULL);
++	}
+ 
+ 	tdx_disassociate_vp(vcpu);
+ }
+ 
+ static void tdx_flush_vp_on_cpu(struct kvm_vcpu *vcpu)
+ {
+-	unsigned long flags;
+-
+ 	if (unlikely(vcpu->cpu == -1))
+ 		return;
+ 
+-	/*
+-	 * No need to do TDH_VP_FLUSH if the vCPU hasn't been initialized.  The
+-	 * list tracking still needs to be updated so that it's correct if/when
+-	 * the vCPU does get initialized.
+-	 */
+-	if (is_td_vcpu_created(to_tdx(vcpu)))
+-		smp_call_function_single(vcpu->cpu, tdx_flush_vp, vcpu, 1);
+-	else {
+-		local_irq_save(flags);
+-		tdx_disassociate_vp(vcpu);
+-		local_irq_restore(flags);
+-	}
++	smp_call_function_single(vcpu->cpu, tdx_flush_vp, vcpu, 1);
+ }
+ 
+ static int tdx_do_tdh_phymem_cache_wb(void *param)
+-- 
+2.31.1
+

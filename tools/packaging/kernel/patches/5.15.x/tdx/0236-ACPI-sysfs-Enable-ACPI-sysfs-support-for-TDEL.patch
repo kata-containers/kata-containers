@@ -1,0 +1,98 @@
+From 954ce95a15370af9dea39d6fed9e72555dace9b8 Mon Sep 17 00:00:00 2001
+From: Haibo Xu <haibo1.xu@intel.com>
+Date: Wed, 29 Sep 2021 21:04:07 -0400
+Subject: [PATCH 0236/1418] ACPI/sysfs: Enable ACPI sysfs support for TDEL
+
+Currently, all ACPI tables can be accessed via entries under
+'/sys/firmware/acpi/tables/'. The TDEL(Trust Domain Event Log)[1]
+table simply provide the address and length of the TDEL records
+area in UEFI reserved memory. To access these records, userspace
+can use /dev/mem to retrieve them. But '/dev/mem' is not enabled on
+many systems for security reasons.
+
+The ACPI driver has provided read only access to BERT records area
+via '/sys/firmware/acpi/tables/data/BERT' in sysfs. So follow the same
+way, this patch create a new file /sys/firmware/acpi/tables/data/TDEL
+to enable read-only access to the TDEL records area.
+
+[1] https://software.intel.com/content/dam/develop/external/us/en/
+    documents/intel-tdx-guest-hypervisor-communication-interface-
+    1.0-344426-002.pdf
+
+Signed-off-by: Haibo Xu <haibo1.xu@intel.com>
+---
+ drivers/acpi/sysfs.c  | 17 +++++++++++++++++
+ include/acpi/actbl3.h | 17 +++++++++++++++++
+ 2 files changed, 34 insertions(+)
+
+diff --git a/drivers/acpi/sysfs.c b/drivers/acpi/sysfs.c
+index 00c0ebaab29f..782cb126a381 100644
+--- a/drivers/acpi/sysfs.c
++++ b/drivers/acpi/sysfs.c
+@@ -446,11 +446,28 @@ static int acpi_bert_data_init(void *th, struct acpi_data_attr *data_attr)
+ 	return sysfs_create_bin_file(tables_data_kobj, &data_attr->attr);
+ }
+ 
++static int acpi_tdel_data_init(void *th, struct acpi_data_attr *data_attr)
++{
++	struct acpi_table_tdel *tdel = th;
++
++	if (tdel->header.length < sizeof(struct acpi_table_tdel) ||
++	    !(tdel->log_area_address) || !(tdel->log_area_length)) {
++		kfree(data_attr);
++		return -EINVAL;
++	}
++	data_attr->addr = tdel->log_area_address;
++	data_attr->attr.size = tdel->log_area_length;
++	data_attr->attr.attr.name = "TDEL";
++
++	return sysfs_create_bin_file(tables_data_kobj, &data_attr->attr);
++}
++
+ static struct acpi_data_obj {
+ 	char *name;
+ 	int (*fn)(void *, struct acpi_data_attr *);
+ } acpi_data_objs[] = {
+ 	{ ACPI_SIG_BERT, acpi_bert_data_init },
++	{ ACPI_SIG_TDEL, acpi_tdel_data_init },
+ };
+ 
+ #define NUM_ACPI_DATA_OBJS ARRAY_SIZE(acpi_data_objs)
+diff --git a/include/acpi/actbl3.h b/include/acpi/actbl3.h
+index 9125e2f16329..d58cb2cb51b1 100644
+--- a/include/acpi/actbl3.h
++++ b/include/acpi/actbl3.h
+@@ -42,6 +42,7 @@
+ #define ACPI_SIG_WSMT           "WSMT"	/* Windows SMM Security Mitigations Table */
+ #define ACPI_SIG_XENV           "XENV"	/* Xen Environment table */
+ #define ACPI_SIG_XXXX           "XXXX"	/* Intermediate AML header for ASL/ASL+ converter */
++#define ACPI_SIG_TDEL           "TDEL"	/* Intel Trust Domain Event Log table */
+ 
+ /*
+  * All tables must be byte-packed to match the ACPI specification, since
+@@ -469,6 +470,22 @@ struct acpi_tpm2_arm_smc {
+ 
+ #define ACPI_TPM2_IDLE_SUPPORT          (1)
+ 
++/*******************************************************************************
++ *
++ * TDEL - Trust Domain Event Log Table
++ *
++ * Conforms to Intel TDX GHCI Specification
++ * Version 1, Sep 2021
++ *
++ ******************************************************************************/
++
++struct acpi_table_tdel {
++	struct acpi_table_header header;    /* Common ACPI table header */
++	u32 reserved;
++	u64 log_area_length;    /* Log area minimum length */
++	u64 log_area_address;   /* Log area start address */
++};
++
+ /*******************************************************************************
+  *
+  * UEFI - UEFI Boot optimization Table
+-- 
+2.31.1
+

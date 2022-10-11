@@ -1,0 +1,41 @@
+From 19d0dd0ff16089c5efe6485a5ec3480a225dfc37 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Fri, 22 Apr 2022 22:30:11 -0700
+Subject: [PATCH 1315/1418] vfio: mdev: idxd: fix mm ref leak
+
+Fix leaked mm reference get when registering ioasid notifier.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/vfio/mdev/idxd/mdev.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/vfio/mdev/idxd/mdev.c b/drivers/vfio/mdev/idxd/mdev.c
+index 5086e1146dee..b071521d2158 100644
+--- a/drivers/vfio/mdev/idxd/mdev.c
++++ b/drivers/vfio/mdev/idxd/mdev.c
+@@ -1102,6 +1102,7 @@ static int vidxd_register_ioasid_notifier(struct vdcm_idxd *vidxd)
+ 	list_for_each_entry(mm_entry, &vdev->mm_list, node) {
+ 		if (mm_entry->mm == mm) {
+ 			mutex_unlock(&vdev->ioasid_lock);
++			mmput(mm);
+ 			return 0;
+ 		}
+ 	}
+@@ -1117,12 +1118,12 @@ static int vidxd_register_ioasid_notifier(struct vdcm_idxd *vidxd)
+ 	vidxd->ivdev.pasid_nb.priority = IOASID_PRIO_DEVICE;
+ 	vidxd->ivdev.pasid_nb.notifier_call = idxd_mdev_ioasid_event;
+ 	rc = ioasid_register_notifier_mm(mm, &vidxd->ivdev.pasid_nb);
+-	mmput(mm);
+ 	if (rc < 0)
+ 		goto err_ioasid;
+ 
+ 	list_add(&mm_entry->node, &vdev->mm_list);
+ 	mutex_unlock(&vdev->ioasid_lock);
++	mmput(mm);
+ 
+ 	return 0;
+ 
+-- 
+2.31.1
+

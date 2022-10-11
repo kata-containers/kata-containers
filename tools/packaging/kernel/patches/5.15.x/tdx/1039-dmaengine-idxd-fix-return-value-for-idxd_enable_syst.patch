@@ -1,0 +1,38 @@
+From 0df990f1c0fe720623fbaa5d95359c0da8e0f9a5 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Tue, 15 Feb 2022 10:01:35 -0700
+Subject: [PATCH 1039/1418] dmaengine: idxd: fix return value for
+ idxd_enable_system_pasid()
+
+The return value ret is returned without being initialized to an error
+value. This caused the failing function to return success no matter what.
+Remove return value and return error directly.
+
+Fixes: 253a70def285 ("dmaengine: idxd: Use DMA API for in-kernel PASID DMA")
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/init.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/dma/idxd/init.c b/drivers/dma/idxd/init.c
+index 23cbd7f21201..6d1c0d05e576 100644
+--- a/drivers/dma/idxd/init.c
++++ b/drivers/dma/idxd/init.c
+@@ -491,12 +491,11 @@ static struct idxd_device *idxd_alloc(struct pci_dev *pdev, struct idxd_driver_d
+ static int idxd_enable_system_pasid(struct idxd_device *idxd)
+ {
+ 	u32 pasid;
+-	int ret;
+ 
+ 	pasid = iommu_enable_pasid_dma(&idxd->pdev->dev);
+ 	if (pasid == INVALID_IOASID) {
+-		dev_err(&idxd->pdev->dev, "No DMA PASID %d\n", ret);
+-		return ret;
++		dev_err(&idxd->pdev->dev, "No DMA PASID.\n");
++		return -ENXIO;
+ 	}
+ 	idxd->pasid = pasid;
+ 
+-- 
+2.31.1
+

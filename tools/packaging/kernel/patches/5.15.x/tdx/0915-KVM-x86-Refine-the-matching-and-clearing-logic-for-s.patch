@@ -1,0 +1,63 @@
+From a9ecaab664f98efa4bea024478cec3341cad7af0 Mon Sep 17 00:00:00 2001
+From: Like Xu <like.xu@linux.intel.com>
+Date: Sun, 14 Mar 2021 23:52:23 +0800
+Subject: [PATCH 0915/1418] KVM: x86: Refine the matching and clearing logic
+ for supported_xss
+
+Refine the code path of the existing clearing of supported_xss in this way:
+initialize the supported_xss with the filter of KVM_SUPPORTED_XSS mask and
+update its value in a bit clear manner (rather than bit setting).
+
+Suggested-by: Sean Christopherson <seanjc@google.com>
+Signed-off-by: Like Xu <like.xu@linux.intel.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/kvm/vmx/vmx.c | 5 +++--
+ arch/x86/kvm/x86.c     | 6 +++++-
+ 2 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index c22f4647d191..8389a4d81b91 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -7592,9 +7592,10 @@ static __init void vmx_set_cpu_caps(void)
+ 		kvm_cpu_cap_set(X86_FEATURE_UMIP);
+ 
+ 	/* CPUID 0xD.1 */
+-	supported_xss = 0;
+-	if (!cpu_has_vmx_xsaves())
++	if (!cpu_has_vmx_xsaves()) {
+ 		kvm_cpu_cap_clear(X86_FEATURE_XSAVES);
++		supported_xss = 0;
++	}
+ 
+ 	/* CPUID 0x80000001 and 0x7 (RDPID) */
+ 	if (!cpu_has_vmx_rdtscp()) {
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 341c86767a6f..d06902caa7be 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -215,6 +215,8 @@ static struct kvm_user_return_msrs __percpu *user_return_msrs;
+ 				| XFEATURE_MASK_BNDCSR | XFEATURE_MASK_AVX512 \
+ 				| XFEATURE_MASK_PKRU | XFEATURE_MASK_XTILE)
+ 
++#define KVM_SUPPORTED_XSS     0
++
+ u64 __read_mostly host_efer;
+ EXPORT_SYMBOL_GPL(host_efer);
+ 
+@@ -11416,8 +11418,10 @@ int kvm_arch_hardware_setup(void *opaque)
+ 
+ 	rdmsrl_safe(MSR_EFER, &host_efer);
+ 
+-	if (boot_cpu_has(X86_FEATURE_XSAVES))
++	if (boot_cpu_has(X86_FEATURE_XSAVES)) {
+ 		rdmsrl(MSR_IA32_XSS, host_xss);
++		supported_xss = host_xss & KVM_SUPPORTED_XSS;
++	}
+ 
+ 	r = ops->hardware_setup();
+ 	if (r != 0)
+-- 
+2.31.1
+

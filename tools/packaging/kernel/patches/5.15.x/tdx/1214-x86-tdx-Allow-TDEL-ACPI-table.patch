@@ -1,0 +1,32 @@
+From a0f714ed99fb20c9ec2dc7cbb224a80e8be85b93 Mon Sep 17 00:00:00 2001
+From: Haibo Xu <haibo1.xu@intel.com>
+Date: Thu, 10 Feb 2022 19:59:24 -0500
+Subject: [PATCH 1214/1418] x86/tdx: Allow TDEL ACPI table
+
+TDX architecture support measured boot for TD guest, and
+TD guest firmware is designed to report TD event log by
+ACPI TDEL table. Since TDEL table is used to support TD
+attestation, allow its enumeration.
+
+Signed-off-by: Haibo Xu <haibo1.xu@intel.com>
+Signed-off-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+---
+ arch/x86/kernel/tdx-filter.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/tdx-filter.c b/arch/x86/kernel/tdx-filter.c
+index 5f37f1bcd1ab..4ed2ff94ffae 100644
+--- a/arch/x86/kernel/tdx-filter.c
++++ b/arch/x86/kernel/tdx-filter.c
+@@ -261,7 +261,7 @@ void __init tdx_filter_init(void)
+ 		pr_debug("Device filter is overridden\n");
+ 	}
+ 
+-	allowed = "XSDT,FACP,DSDT,FACS,APIC,SVKL";
++	allowed = "XSDT,FACP,DSDT,FACS,APIC,SVKL,TDEL";
+ 	if (cmdline_find_option(boot_command_line, "tdx_allow_acpi",
+ 				a_allowed, sizeof(a_allowed)) >= 0) {
+ 		add_taint(TAINT_CONF_NO_LOCKDOWN, LOCKDEP_STILL_OK);
+-- 
+2.31.1
+

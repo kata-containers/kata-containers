@@ -1,0 +1,57 @@
+From 6badf98ea31724f415b9afc84be9ea15ec7204ad Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Tue, 6 Jul 2021 20:19:26 +0800
+Subject: [PATCH 0659/1418] ioasid: Fix unexpected ioasid_set free
+
+This patch fixes a problem in which ioasid_set is free when the last ioasid
+in it is free. I think the motivation of this atomatic ioasid_set free is
+based on the consideration when an ioasid_set_free() is called but there is
+still ioasid within it. To reclaim the ioasid_set later, this logic was added.
+
+Cc: Jacob Pan <jacob.jun.pan@intel.com>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/ioasid.c | 6 +++++-
+ include/linux/ioasid.h | 1 +
+ 2 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/ioasid.c b/drivers/iommu/ioasid.c
+index 8b66ca689308..585bd8839c3f 100644
+--- a/drivers/iommu/ioasid.c
++++ b/drivers/iommu/ioasid.c
+@@ -717,6 +717,8 @@ static int ioasid_set_free_locked(struct ioasid_set *set)
+ 
+ 	if (atomic_read(&set->nr_ioasids)) {
+ 		ret = -EBUSY;
++		set->free_pending = true;
++		pr_info("Set marked as free_pending, will be released when the last ioasid reclaimed!\n");
+ 		goto exit_done;
+ 	}
+ 
+@@ -856,8 +858,10 @@ static void ioasid_do_free_locked(struct ioasid_data *data)
+ 	ioasid_cg_uncharge(data->set);
+ 	xa_erase(&data->set->xa, data->id);
+ 	/* Destroy the set if empty */
+-	if (!atomic_read(&data->set->nr_ioasids))
++	if (data->set->free_pending && !atomic_read(&data->set->nr_ioasids)) {
++		pr_info("%s free set set->id: %u\n", __func__, data->set->id);
+ 		ioasid_set_free_locked(data->set);
++	}
+ }
+ 
+ static void ioasid_free_locked(struct ioasid_set *set, ioasid_t ioasid)
+diff --git a/include/linux/ioasid.h b/include/linux/ioasid.h
+index b82abe6325f7..6e4d8baf15a3 100644
+--- a/include/linux/ioasid.h
++++ b/include/linux/ioasid.h
+@@ -41,6 +41,7 @@ struct ioasid_set {
+ 	int quota;
+ 	atomic_t nr_ioasids;
+ 	int id;
++	bool free_pending;
+ 	struct rcu_head rcu;
+ };
+ 
+-- 
+2.31.1
+

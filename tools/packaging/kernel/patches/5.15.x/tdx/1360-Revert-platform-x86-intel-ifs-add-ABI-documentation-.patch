@@ -1,0 +1,107 @@
+From f08096682a13c34396f7a5dc634aac09ccc5edf6 Mon Sep 17 00:00:00 2001
+From: Jithu Joseph <jithu.joseph@intel.com>
+Date: Thu, 12 May 2022 17:17:09 -0700
+Subject: [PATCH 1360/1418] Revert "platform/x86/intel/ifs: add ABI
+ documentation for IFS"
+
+This reverts commit 1672563c46e40a6847bce7d8ccd6a0dae15c172f.
+---
+ Documentation/ABI/stable/sysfs-driver-ifs | 86 -----------------------
+ 1 file changed, 86 deletions(-)
+ delete mode 100644 Documentation/ABI/stable/sysfs-driver-ifs
+
+diff --git a/Documentation/ABI/stable/sysfs-driver-ifs b/Documentation/ABI/stable/sysfs-driver-ifs
+deleted file mode 100644
+index 9eb9b8e260c0..000000000000
+--- a/Documentation/ABI/stable/sysfs-driver-ifs
++++ /dev/null
+@@ -1,86 +0,0 @@
+-What:		/sys/devices/system/cpu/ifs/run_test
+-Date:		Feb 14, 2022
+-KernelVersion:	5.18.0
+-Contact:	linux-kernel@vger.kernel.org
+-Description:	echo 1 to trigger ifs test for all online cores.
+-
+-What:		/sys/devices/system/cpu/ifs/status
+-Date:		Feb 14, 2022
+-KernelVersion:	5.18.0
+-Contact:	linux-kernel@vger.kernel.org
+-Description:	status of IFS test across all cores. It would show "pass" if all cpus
+-		passed the test. It would appear "fail", if at least one cpu failed
+-		the test. It there are no failures, but there is a mix of passed and untested
+-		cpus, the status will show as "untested".
+-
+-What:		/sys/devices/system/cpu/ifs/image_version
+-Date:		Feb 14, 2022
+-KernelVersion:	5.18.0
+-Contact:	linux-kernel@vger.kernel.org
+-Description:	IFS image version of loaded IFS binary image.
+-
+-What:		/sys/devices/system/cpu/ifs/reload
+-Date:		Feb 14, 2022
+-KernelVersion:	5.18.0
+-Contact:	linux-kernel@vger.kernel.org
+-Description:	echo 1 to reload IFS image.
+-
+-What:		/sys/devices/system/cpu/ifs/cpu_pass_list
+-Date:		Feb 14, 2022
+-KernelVersion:	5.18.0
+-Contact:	linux-kernel@vger.kernel.org
+-Description:	List of cpus which passed the IFS test.
+-
+-What:		/sys/devices/system/cpu/ifs/cpu_fail_list
+-Date:		Feb 14, 2022
+-KernelVersion:	5.18.0
+-Contact:	linux-kernel@vger.kernel.org
+-Description:	List of cpus which failed the IFS test.
+-
+-What:		/sys/devices/system/cpu/ifs/cpu_untested_list
+-Date:		Feb 14, 2022
+-KernelVersion:	5.18.0
+-Contact:	linux-kernel@vger.kernel.org
+-Description:	List of cpus which could not be tested.
+-
+-What:		/sys/module/intel_ifs/parameters/noint
+-Date:		Feb 14, 2022
+-KernelVersion:	5.18.0
+-Contact:	linux-kernel@vger.kernel.org
+-Description:	SAF tunable parameters that user can modify before
+-		the scan run if they wish to override default value.
+-
+-		When set, no interrupt is allowed when running ifs.
+-		When unset, it allows interrupt.
+-
+-What:		/sys/module/intel_ifs/parameters/retry
+-Date:		Feb 14, 2022
+-KernelVersion:	5.18.0
+-Contact:	linux-kernel@vger.kernel.org
+-Description:	SAF tunable parameters that user can modify at
+-		load time if they wish to override default value.
+-
+-		The maximum number of retry when the test is not
+-		executed due to an event such as interrupt. This parameter
+-		can only be overridden at module load time.
+-
+-What:		/sys/devices/system/cpu/cpu#/ifs/run_test
+-Date:		Feb 14, 2022
+-KernelVersion:	5.18.0
+-Contact:	linux-kernel@vger.kernel.org
+-Description:	IFS target core testing. echo 1 to trigger
+-		scan test on cpu#.
+-
+-What:		/sys/devices/system/cpu/cpu#/ifs/status
+-Date:		Feb 14, 2022
+-KernelVersion:	5.18.0
+-Contact:	linux-kernel@vger.kernel.org
+-Description:	The status of IFS test on a specific cpu#. It can be one of "pass", "fail"
+-		or "untested".
+-
+-What:		/sys/devices/system/cpu/cpu#/ifs/details
+-Date:		Feb 14, 2022
+-KernelVersion:	5.18.0
+-Contact:	linux-kernel@vger.kernel.org
+-Description:	A 64 bit number which can be treated like an error code.
+-
+-- 
+2.31.1
+

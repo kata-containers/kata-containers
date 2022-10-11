@@ -1,0 +1,71 @@
+From 6803491c5d4401a5802bdc9947256b04d6dc82d2 Mon Sep 17 00:00:00 2001
+From: Sameer Pujar <spujar@nvidia.com>
+Date: Wed, 15 Sep 2021 21:37:03 +0530
+Subject: [PATCH 0516/1418] dmaengine: tegra210-adma: Re-order
+ 'has_outstanding_reqs' member
+
+The 'has_outstanding_reqs' member description order in structure
+'tegra_adma_chip_data' does not match with the corresponding member
+declaration. The same is true for member assignment in chip data
+structures declared for Tegra210 and Tegra186.
+
+This is a trivial fix to re-order the mentioned member for a better
+readability.
+
+Signed-off-by: Sameer Pujar <spujar@nvidia.com>
+Reviewed-by: Jon Hunter <jonathanh@nvidia.com>
+Link: https://lore.kernel.org/r/1631722025-19873-2-git-send-email-spujar@nvidia.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/tegra210-adma.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/dma/tegra210-adma.c b/drivers/dma/tegra210-adma.c
+index b1115a6d1935..caf200e53a6b 100644
+--- a/drivers/dma/tegra210-adma.c
++++ b/drivers/dma/tegra210-adma.c
+@@ -78,12 +78,12 @@ struct tegra_adma;
+  * @ch_req_tx_shift: Register offset for AHUB transmit channel select.
+  * @ch_req_rx_shift: Register offset for AHUB receive channel select.
+  * @ch_base_offset: Register offset of DMA channel registers.
+- * @has_outstanding_reqs: If DMA channel can have outstanding requests.
+  * @ch_fifo_ctrl: Default value for channel FIFO CTRL register.
+  * @ch_req_mask: Mask for Tx or Rx channel select.
+  * @ch_req_max: Maximum number of Tx or Rx channels available.
+  * @ch_reg_size: Size of DMA channel register space.
+  * @nr_channels: Number of DMA channels available.
++ * @has_outstanding_reqs: If DMA channel can have outstanding requests.
+  */
+ struct tegra_adma_chip_data {
+ 	unsigned int (*adma_get_burst_config)(unsigned int burst_size);
+@@ -782,12 +782,12 @@ static const struct tegra_adma_chip_data tegra210_chip_data = {
+ 	.ch_req_tx_shift	= 28,
+ 	.ch_req_rx_shift	= 24,
+ 	.ch_base_offset		= 0,
+-	.has_outstanding_reqs	= false,
+ 	.ch_fifo_ctrl		= TEGRA210_FIFO_CTRL_DEFAULT,
+ 	.ch_req_mask		= 0xf,
+ 	.ch_req_max		= 10,
+ 	.ch_reg_size		= 0x80,
+ 	.nr_channels		= 22,
++	.has_outstanding_reqs	= false,
+ };
+ 
+ static const struct tegra_adma_chip_data tegra186_chip_data = {
+@@ -797,12 +797,12 @@ static const struct tegra_adma_chip_data tegra186_chip_data = {
+ 	.ch_req_tx_shift	= 27,
+ 	.ch_req_rx_shift	= 22,
+ 	.ch_base_offset		= 0x10000,
+-	.has_outstanding_reqs	= true,
+ 	.ch_fifo_ctrl		= TEGRA186_FIFO_CTRL_DEFAULT,
+ 	.ch_req_mask		= 0x1f,
+ 	.ch_req_max		= 20,
+ 	.ch_reg_size		= 0x100,
+ 	.nr_channels		= 32,
++	.has_outstanding_reqs	= true,
+ };
+ 
+ static const struct of_device_id tegra_adma_of_match[] = {
+-- 
+2.31.1
+

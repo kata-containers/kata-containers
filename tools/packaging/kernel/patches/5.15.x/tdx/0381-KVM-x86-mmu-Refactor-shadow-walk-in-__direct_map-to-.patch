@@ -1,0 +1,39 @@
+From 232ffefbaa5d85a6e14f973bf12e6dd388fdb503 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Tue, 2 Jun 2020 21:04:06 -0700
+Subject: [PATCH 0381/1418] KVM: x86/mmu: Refactor shadow walk in
+ __direct_map() to reduce indentation
+
+Employ a 'continue' to reduce the indentation for linking a new shadow
+page during __direct_map() in preparation for linking private pages.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index afeaf86a8ef0..8cc6be64bfdb 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -3085,13 +3085,11 @@ static int __direct_map(struct kvm_vcpu *vcpu, gpa_t gpa, u32 error_code,
+ 		if (is_shadow_present_pte(*it.sptep))
+ 			continue;
+ 
+-		sp = __kvm_mmu_get_page(vcpu, base_gfn,
+-					gfn_stolen_bits, it.addr,
+-					it.level - 1, true, ACC_ALL);
++		sp = __kvm_mmu_get_page(vcpu, base_gfn, gfn_stolen_bits,
++					it.addr, it.level - 1, true, ACC_ALL);
+ 
+ 		link_shadow_page(vcpu, it.sptep, sp);
+-		if (is_tdp && huge_page_disallowed &&
+-		    req_level >= it.level)
++		if (is_tdp && huge_page_disallowed && req_level >= it.level)
+ 			account_huge_nx_page(vcpu->kvm, sp);
+ 	}
+ 
+-- 
+2.31.1
+

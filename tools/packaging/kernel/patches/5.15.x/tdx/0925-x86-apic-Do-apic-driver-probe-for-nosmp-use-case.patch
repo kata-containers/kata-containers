@@ -1,0 +1,78 @@
+From 8244717580ab86b63a215a51019b90142f4b614e Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Sat, 15 Jan 2022 11:39:45 +0000
+Subject: [PATCH 0925/1418] x86/apic: Do apic driver probe for "nosmp" use case
+
+For the "nosmp" use case, APIC initialization code uses
+"APIC_SYMMETRIC_IO_NO_ROUTING" as a default interrupt mode. As per
+current design, APIC drivers are not probed (via
+default_setup_apic_routing()) for the above mentioned interrupt mode.
+Due to missing probe, later when local APIC is initialized (for x2APIC
+case), it leads to the null pointer exception due to missing allocation
+of "cluster_hotplug_mask" (aka 'cmsk').
+
+This is observed in TDX platform where x2APIC is enabled and "nosmp"
+command line option is allowed.
+
+To fix this issue, probe APIC drivers via default_setup_apic_routing()
+for the APIC_SYMMETRIC_IO_NO_ROUTING interrupt mode. This will make the
+code similar to APIC_SYMMETRIC_IO and APIC_VIRTUAL_WIRE interrupt modes.
+Since APIC_SYMMETRIC_IO_NO_ROUTING interrupt mode is in-between
+configuration between APIC_SYMMETRIC_IO and APIC_VIRTUAL_WIRE, making
+the code similar to them will not have any impact (other than just
+loading the apic drivers).
+
+ BUG: kernel NULL pointer dereference, address: 0000000000000000
+ #PF: supervisor write access in kernel mode
+ #PF: error_code(0x0002) - not-present page
+ PGD 0 P4D 0
+ Oops: 0002 1 SMP NOPTI
+ CPU: 0 PID: 0 Comm: swapper/0 Tainted: G Y 5.14.0-rc4-tdx-guest-v5.14-2-tdx-attest-y-vsockets+ #32
+ RIP: 0010:init_x2apic_ldr+0xaf/0xc0
+ Code: fb 76 65 8b 15 9a 88 fb 76 89 d2 f0 48 0f ab 50 08 5b 5d 41 5c 41 5d c3 48 8b 05 74 0d fe 02 48 c7 05 69 0d fe 02 00 00 00 00 <89> 18 eb c9 48 89 e8 eb c7 0f 1f 84 00 00 00 00 00 0f 1f 44 00 00
+ RSP: 0000:ffffffff8ae03e48 EFLAGS: 00010283
+ RAX: 0000000000000000 RBX: 0000000000000000 RCX: 0000000000000200
+ RDX: fffffffffffffffe RSI: 0000000000000000 RDI: 0000000000000200
+ RBP: ffffffff8b7704a0 R08: 0000000000000000 R09: 0000000000000000
+ R10: 0000000000000000 R11: 0000000000000007 R12: 0000000000000001
+ R13: 0000000000017120 R14: ffffffff8ae13108 R15: ffffffff8aab7a20
+ FS: 0000000000000000(0000) GS:ffff976a37c00000(0000) knlGS:0000000000000000
+ CS: 0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+ CR2: 0000000000000000 CR3: 000000017ae0c001 CR4: 00000000000606f0
+ DR0: 0000000000000000 DR1: 0000000000000000 DR2: 0000000000000000
+ DR3: 0000000000000000 DR6: 00000000fffe07f0 DR7: 0000000000000400
+ Call Trace:
+ setup_local_APIC+0x9b/0x350
+ ? printk+0x58/0x6f
+ apic_intr_mode_init+0xe5/0x109
+ x86_late_time_init+0x20/0x30
+ start_kernel+0x5fb/0x6b9
+ secondary_startup_64_no_verify+0xbf/0xcb
+ Modules linked in:
+ CR2: 0000000000000000
+ --[ end trace e82759a76de428f6 ]--
+ RIP: 0010:init_x2apic_ldr+0xaf/0xc0
+
+Suggested-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+Suggested-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/apic/apic.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/x86/kernel/apic/apic.c b/arch/x86/kernel/apic/apic.c
+index 8544e2d2b00e..051fcf5472ab 100644
+--- a/arch/x86/kernel/apic/apic.c
++++ b/arch/x86/kernel/apic/apic.c
+@@ -1433,6 +1433,8 @@ void __init apic_intr_mode_init(void)
+ 		break;
+ 	case APIC_SYMMETRIC_IO_NO_ROUTING:
+ 		pr_info("APIC: Switch to symmetric I/O mode setup in no SMP routine\n");
++		upmode = true;
++		default_setup_apic_routing();
+ 		break;
+ 	}
+ 
+-- 
+2.31.1
+

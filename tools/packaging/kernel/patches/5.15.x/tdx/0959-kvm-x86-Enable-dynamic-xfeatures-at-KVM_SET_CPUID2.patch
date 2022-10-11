@@ -1,0 +1,110 @@
+From 6d1698fbbc76ec16548946d331ee79a99571de74 Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Mon, 24 Jan 2022 19:21:29 -0800
+Subject: [PATCH 0959/1418] kvm: x86: Enable dynamic xfeatures at
+ KVM_SET_CPUID2
+
+KVM can request fpstate expansion in two approaches:
+
+  1) When intercepting guest updates to XCR0 and XFD MSR;
+
+  2) Before vcpu runs (e.g. at KVM_SET_CPUID2);
+
+The first option doesn't waste memory for legacy guest if it doesn't
+support XFD. However doing so introduces more complexity and also
+imposes an order requirement in the restoring path, i.e. XCR0/XFD
+must be restored before XSTATE.
+
+Given that the agreement is to do the static approach. This is
+considered a better tradeoff though it does waste 8K memory for
+legacy guest if its CPUID includes dynamically-enabled xfeatures.
+
+Successful fpstate expansion requires userspace VMM to acquire
+guest xstate permissions before calling KVM_SET_CPUID2.
+
+Also take the chance to adjust the indent in kvm_set_cpuid().
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+Signed-off-by: Kevin Tian <kevin.tian@intel.com>
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Message-Id: <20220105123532.12586-9-yang.zhong@intel.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/kvm/cpuid.c | 40 ++++++++++++++++++++++++++++------------
+ 1 file changed, 28 insertions(+), 12 deletions(-)
+
+diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c
+index b3056a85250c..13157e1febcf 100644
+--- a/arch/x86/kvm/cpuid.c
++++ b/arch/x86/kvm/cpuid.c
+@@ -77,9 +77,12 @@ static inline struct kvm_cpuid_entry2 *cpuid_entry2_find(
+ 	return NULL;
+ }
+ 
+-static int kvm_check_cpuid(struct kvm_cpuid_entry2 *entries, int nent)
++static int kvm_check_cpuid(struct kvm_vcpu *vcpu,
++			   struct kvm_cpuid_entry2 *entries,
++			   int nent)
+ {
+ 	struct kvm_cpuid_entry2 *best;
++	u64 xfeatures;
+ 
+ 	/*
+ 	 * The existing code assumes virtual address is 48-bit or 57-bit in the
+@@ -103,7 +106,20 @@ static int kvm_check_cpuid(struct kvm_cpuid_entry2 *entries, int nent)
+ 			return -EINVAL;
+ 	}
+ 
+-	return 0;
++	/*
++	 * Exposing dynamic xfeatures to the guest requires additional
++	 * enabling in the FPU, e.g. to expand the guest XSAVE state size.
++	 */
++	best = cpuid_entry2_find(entries, nent, 0xd, 0);
++	if (!best)
++		return 0;
++
++	xfeatures = best->eax | ((u64)best->edx << 32);
++	xfeatures &= XFEATURE_MASK_USER_DYNAMIC;
++	if (!xfeatures)
++		return 0;
++
++	return fpu_enable_guest_xfd_features(&vcpu->arch.guest_fpu, xfeatures);
+ }
+ 
+ void kvm_update_pv_runtime(struct kvm_vcpu *vcpu)
+@@ -264,20 +280,20 @@ u64 kvm_vcpu_reserved_gpa_bits_raw(struct kvm_vcpu *vcpu)
+ static int kvm_set_cpuid(struct kvm_vcpu *vcpu, struct kvm_cpuid_entry2 *e2,
+                         int nent)
+ {
+-    int r;
++	int r;
+ 
+-    r = kvm_check_cpuid(e2, nent);
+-    if (r)
+-        return r;
++	r = kvm_check_cpuid(vcpu, e2, nent);
++	if (r)
++		return r;
+ 
+-    kvfree(vcpu->arch.cpuid_entries);
+-    vcpu->arch.cpuid_entries = e2;
+-    vcpu->arch.cpuid_nent = nent;
++	kvfree(vcpu->arch.cpuid_entries);
++	vcpu->arch.cpuid_entries = e2;
++	vcpu->arch.cpuid_nent = nent;
+ 
+-    kvm_update_cpuid_runtime(vcpu);
+-    kvm_vcpu_after_set_cpuid(vcpu);
++	kvm_update_cpuid_runtime(vcpu);
++	kvm_vcpu_after_set_cpuid(vcpu);
+ 
+-    return 0;
++	return 0;
+ }
+ 
+ /* when an old userspace process fills a new kernel module */
+-- 
+2.31.1
+

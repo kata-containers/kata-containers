@@ -1,0 +1,125 @@
+From f7424eedf15b39f72f1d8f5bb21ea2a31b882d5e Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Fri, 4 Oct 2019 04:51:29 -0700
+Subject: [PATCH 0628/1418] iommu: add domain argument to page response
+
+With mdev, page response needs pdev domain that is different than
+the device's own domain. Extend iommu_page_response() to support
+such case.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/intel/svm.c   |  3 ++-
+ drivers/iommu/iommu.c       |  8 ++++----
+ include/linux/intel-iommu.h |  3 ++-
+ include/linux/iommu.h       | 11 ++++++++---
+ 4 files changed, 16 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index 3d6b10b719eb..97cd046408df 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -1232,7 +1232,8 @@ u32 intel_svm_get_pasid(struct iommu_sva *sva)
+ 	return pasid;
+ }
+ 
+-int intel_svm_page_response(struct device *dev,
++int intel_svm_page_response(struct iommu_domain *domain,
++			    struct device *dev,
+ 			    struct iommu_fault_event *evt,
+ 			    struct iommu_page_response *msg)
+ {
+diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
+index 4901e9e58790..60be95d93987 100644
+--- a/drivers/iommu/iommu.c
++++ b/drivers/iommu/iommu.c
+@@ -1318,7 +1318,7 @@ int iommu_report_device_fault(struct device *dev, struct iommu_fault_event *evt)
+ EXPORT_SYMBOL_GPL(iommu_report_device_fault);
+ 
+ static int iommu_page_response_prepare_msg(void __user *udata,
+-					   struct iommu_page_response *msg)
++				struct iommu_page_response *msg)
+ {
+ 	unsigned long minsz, maxsz;
+ 
+@@ -1352,7 +1352,8 @@ static int iommu_page_response_prepare_msg(void __user *udata,
+ 	return 0;
+ }
+ 
+-int iommu_page_response(struct device *dev,
++int iommu_page_response(struct iommu_domain *domain,
++			struct device *dev,
+ 			void __user *uinfo)
+ {
+ 	bool needs_pasid;
+@@ -1361,7 +1362,6 @@ int iommu_page_response(struct device *dev,
+ 	struct iommu_fault_event *evt;
+ 	struct iommu_fault_page_request *prm;
+ 	struct dev_iommu *param = dev->iommu;
+-	struct iommu_domain *domain = iommu_get_domain_for_dev(dev);
+ 	bool has_pasid;
+ 
+ 	if (!domain || !domain->ops->page_response)
+@@ -1407,7 +1407,7 @@ int iommu_page_response(struct device *dev,
+ 			msg.pasid = 0;
+ 		}
+ 
+-		ret = domain->ops->page_response(dev, evt, &msg);
++		ret = domain->ops->page_response(domain, dev, evt, &msg);
+ 		trace_dev_page_response(dev, &msg);
+ 		list_del(&evt->list);
+ 		kfree(evt);
+diff --git a/include/linux/intel-iommu.h b/include/linux/intel-iommu.h
+index b6462e155b9b..99b97745bff2 100644
+--- a/include/linux/intel-iommu.h
++++ b/include/linux/intel-iommu.h
+@@ -769,7 +769,8 @@ struct iommu_sva *intel_svm_bind(struct device *dev, struct mm_struct *mm,
+ 				 void *drvdata);
+ void intel_svm_unbind(struct iommu_sva *handle);
+ u32 intel_svm_get_pasid(struct iommu_sva *handle);
+-int intel_svm_page_response(struct device *dev, struct iommu_fault_event *evt,
++int intel_svm_page_response(struct iommu_domain *domain, struct device *dev,
++			    struct iommu_fault_event *evt,
+ 			    struct iommu_page_response *msg);
+ void intel_svm_add_pasid_notifier(void);
+ 
+diff --git a/include/linux/iommu.h b/include/linux/iommu.h
+index 0e5a65bb82ef..b389de63afbd 100644
+--- a/include/linux/iommu.h
++++ b/include/linux/iommu.h
+@@ -300,7 +300,8 @@ struct iommu_ops {
+ 	void (*sva_unbind)(struct iommu_sva *handle);
+ 	u32 (*sva_get_pasid)(struct iommu_sva *handle);
+ 
+-	int (*page_response)(struct device *dev,
++	int (*page_response)(struct iommu_domain *domain,
++			     struct device *dev,
+ 			     struct iommu_fault_event *evt,
+ 			     struct iommu_page_response *msg);
+ 	int (*cache_invalidate)(struct iommu_domain *domain, struct device *dev,
+@@ -499,7 +500,9 @@ extern int iommu_unregister_device_fault_handler(struct device *dev);
+ 
+ extern int iommu_report_device_fault(struct device *dev,
+ 				     struct iommu_fault_event *evt);
+-extern int iommu_page_response(struct device *dev, void __user *uinfo);
++extern int iommu_page_response(struct iommu_domain *domain,
++			       struct device *dev,
++			       void __user *uinfo);
+ 
+ extern int iommu_group_id(struct iommu_group *group);
+ extern struct iommu_domain *iommu_group_default_domain(struct iommu_group *);
+@@ -913,7 +916,9 @@ int iommu_report_device_fault(struct device *dev, struct iommu_fault_event *evt)
+ 	return -ENODEV;
+ }
+ 
+-static inline int iommu_page_response(struct device *dev, void __user *uinfo)
++static inline int iommu_page_response(struct iommu_domain *domain,
++				      struct device *dev,
++				      void __user *uinfo)
+ {
+ 	return -ENODEV;
+ }
+-- 
+2.31.1
+

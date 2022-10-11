@@ -1,0 +1,243 @@
+From f8ff2650871b61fe0e08b5cae72aff8e8bdd885d Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Tue, 1 Jun 2021 18:29:01 -0700
+Subject: [PATCH 0296/1418] x86/cpu/tdx: Introduce helper functions to enable
+ or disable VMX
+
+To ensure TDX's security property, Intel introduced a new Secure
+Arbitration Mode (SEAM) in recent CPUs.  SEAM is an extension to Virtual
+Machines Extension (VMX) architecture to define a new VMX-root operation
+called SEAM VMX-root.  The TDX firmware module is loaded to a special
+protected SEAM range in the CPU and acts as a secure hypervisor to create
+and run protected guests.
+
+The kernel/hypervisor communicates with the TDX firmware using a new
+SEAMCALL instruction.  Calling SEAMCALL requires the CPU to be in VMX
+operation, therefore VMXON must be called before SEAMCALL.  However, it is
+OK to exit VMX operation after SEAMCALL by calling VMXOFF and enter VMX
+operation again before the next SEAMCALL.
+
+The TDX firmware is loaded during kernel boot before the KVM module is
+loaded, or enabled when built-in.  KVM assumes CPUs are not in VMX
+operation during its initialization, therefore the kernel needs to exit VMX
+operation for all CPUs before initializing KVM.
+
+Introduce helper functions to VMXON/VMXOFF on all online CPUs, to allow
+kernel to enter/exit VMX operation when calling SEAMCALL.
+
+Create a new arch/x86/kernel/cpu/tdx/ directory and a new seam.c under it
+to hold SEAMCALL related code.  Only build in the new tdx directory when a
+new Kconfig option CONFIG_INTEL_TDX_HOST is true.  Defer introducing the
+new CONFIG_INTEL_TDX_HOST to the later stage when TDX is ready to be turned
+on so that later intermediate TDX patches won't impact kernel
+functionality.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kernel/cpu/Makefile     |   1 +
+ arch/x86/kernel/cpu/tdx/Makefile |   4 +
+ arch/x86/kernel/cpu/tdx/seam.c   | 146 +++++++++++++++++++++++++++++++
+ arch/x86/kernel/cpu/tdx/seam.h   |  15 ++++
+ 4 files changed, 166 insertions(+)
+ create mode 100644 arch/x86/kernel/cpu/tdx/Makefile
+ create mode 100644 arch/x86/kernel/cpu/tdx/seam.c
+ create mode 100644 arch/x86/kernel/cpu/tdx/seam.h
+
+diff --git a/arch/x86/kernel/cpu/Makefile b/arch/x86/kernel/cpu/Makefile
+index 637b499450d1..7e9e9e9360e7 100644
+--- a/arch/x86/kernel/cpu/Makefile
++++ b/arch/x86/kernel/cpu/Makefile
+@@ -49,6 +49,7 @@ obj-$(CONFIG_MTRR)			+= mtrr/
+ obj-$(CONFIG_MICROCODE)			+= microcode/
+ obj-$(CONFIG_X86_CPU_RESCTRL)		+= resctrl/
+ obj-$(CONFIG_X86_SGX)			+= sgx/
++obj-$(CONFIG_INTEL_TDX_HOST)		+= tdx/
+ 
+ obj-$(CONFIG_X86_LOCAL_APIC)		+= perfctr-watchdog.o
+ 
+diff --git a/arch/x86/kernel/cpu/tdx/Makefile b/arch/x86/kernel/cpu/tdx/Makefile
+new file mode 100644
+index 000000000000..d4220ece410c
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/Makefile
+@@ -0,0 +1,4 @@
++# SPDX-License-Identifier: GPL-2.0
++# Makefile for seamldr and tdx module
++
++obj-y	+= seam.o
+diff --git a/arch/x86/kernel/cpu/tdx/seam.c b/arch/x86/kernel/cpu/tdx/seam.c
+new file mode 100644
+index 000000000000..f7e4c89636e7
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/seam.c
+@@ -0,0 +1,146 @@
++// SPDX-License-Identifier: GPL-2.0
++/* common helper functions for the P-SEAMLDR and the TDX module to VMXON/VMXOFF */
++
++#define pr_fmt(fmt) "seam: " fmt
++
++#include <asm/virtext.h>
++
++#include "seam.h"
++
++static u32 seam_vmxon_version_id __initdata;
++static DEFINE_PER_CPU(struct vmcs *, seam_vmxon_region);
++
++/*
++ * This function must be called after init_ia32_feat_ctl() that sets
++ * X86_FEATURE_VMX.
++ */
++int __init seam_init_vmx_early(void)
++{
++	u32 vmx_msr_low, vmx_msr_high;
++
++	if (!this_cpu_has(X86_FEATURE_VMX))
++		return -EOPNOTSUPP;
++
++	rdmsr(MSR_IA32_VMX_BASIC, vmx_msr_low, vmx_msr_high);
++
++	/*
++	 * IA-32 SDM Vol 3C: VMCS size is never greater than 4kB.  The size of
++	 * VMXON region is same to VMCS size.
++	 */
++	if ((vmx_msr_high & 0x1fff) > PAGE_SIZE)
++		return -EIO;
++
++	seam_vmxon_version_id = vmx_msr_low;
++
++	return 0;
++}
++
++/*
++ * seam_init_vmxon_vmcs - initialize VMXON region with version id for this CPU.
++ * @vmcs: vmxon region to initialize.  zero it before call.
++ *
++ * VMXON region has the same header format as the vmcs region.  It is assumed
++ * that all CPUs have the same vmcs version.  The KVM kernel module has this
++ * same assumption.  Even if the version differs, VMXON fails with
++ * seam_vmxon_on_each_cpu() to catch it.
++ */
++void __init seam_init_vmxon_vmcs(struct vmcs *vmcs)
++{
++	vmcs->hdr.revision_id = seam_vmxon_version_id;
++}
++
++void __init seam_free_vmcs_tmp_set(void)
++{
++	int cpu;
++
++	for_each_online_cpu(cpu) {
++		/* It's safe to pass NULL to free_page() that ignores NULL. */
++		free_page((unsigned long)per_cpu(seam_vmxon_region, cpu));
++		per_cpu(seam_vmxon_region, cpu) = NULL;
++	}
++}
++
++/*
++ * seam_alloc_init_vmcs_tmp_set -
++ *	allocate temporary one page for VMXON region for each CPU and stash
++ *	pages to the per-cpu variable, seam_vmxon_region, and initialize those
++ *	regions on each CPU for later VMXON.
++ * @return: 0 on success, -ENOMEM on failure.
++ *
++ * Call this function before use of seam_vmxon_on_each_cpu() and
++ * seam_vmxoff_on_each_cpu().
++ *
++ * Disable cpu hotplug by cpus_read_lock() and cpus_read_unlock() until
++ * seam_free_vmcs_tmp_set().
++ */
++int __init seam_alloc_init_vmcs_tmp_set(void)
++{
++	int cpu;
++	struct vmcs *vmxon_region;
++
++	if (!this_cpu_has(X86_FEATURE_VMX))
++		return -EOPNOTSUPP;
++
++	for_each_online_cpu(cpu) {
++		/* VMXON region must be 4K-aligned. */
++		vmxon_region = (struct vmcs *)get_zeroed_page(GFP_KERNEL);
++		if (!vmxon_region)
++			goto err;
++		seam_init_vmxon_vmcs(vmxon_region);
++		per_cpu(seam_vmxon_region, cpu) = vmxon_region;
++	}
++
++	return 0;
++
++err:
++	seam_free_vmcs_tmp_set();
++	return -ENOMEM;
++}
++
++static void __init seam_vmxon(void *data)
++{
++	atomic_t *error = data;
++	int r;
++
++	r = cpu_vmxon(__pa(this_cpu_read(seam_vmxon_region)));
++	if (r)
++		atomic_set(error, r);
++}
++
++int __init seam_vmxon_on_each_cpu(void)
++{
++	atomic_t error;
++
++	atomic_set(&error, 0);
++	on_each_cpu(seam_vmxon, &error, 1);
++
++	/*
++	 * Check if any of the CPUs fail.  Don't care how about many CPUs failed
++	 * and about the exact error code.
++	 */
++	return atomic_read(&error);
++}
++
++static void __init seam_vmxoff(void *data)
++{
++	atomic_t *error = data;
++	int r;
++
++	r = cpu_vmxoff();
++	if (r)
++		atomic_set(error, r);
++}
++
++int __init seam_vmxoff_on_each_cpu(void)
++{
++	atomic_t error;
++
++	atomic_set(&error, 0);
++	on_each_cpu(seam_vmxoff, &error, 1);
++
++	/*
++	 * Check if any of the CPUs fail.  Don't care how many CPUs failed and
++	 * about the exact error code.
++	 */
++	return atomic_read(&error);
++}
+diff --git a/arch/x86/kernel/cpu/tdx/seam.h b/arch/x86/kernel/cpu/tdx/seam.h
+new file mode 100644
+index 000000000000..e3f691f9d9fe
+--- /dev/null
++++ b/arch/x86/kernel/cpu/tdx/seam.h
+@@ -0,0 +1,15 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* helper functions to invoke SEAM ACM. */
++
++#ifndef _X86_TDX_SEAM_H
++#define _X86_TDX_SEAM_H
++
++int __init seam_init_vmx_early(void);
++void __init seam_init_vmxon_vmcs(struct vmcs *vmcs);
++
++void __init seam_free_vmcs_tmp_set(void);
++int __init seam_alloc_init_vmcs_tmp_set(void);
++int __init seam_vmxon_on_each_cpu(void);
++int __init seam_vmxoff_on_each_cpu(void);
++
++#endif /* _X86_TDX_SEAM_H */
+-- 
+2.31.1
+

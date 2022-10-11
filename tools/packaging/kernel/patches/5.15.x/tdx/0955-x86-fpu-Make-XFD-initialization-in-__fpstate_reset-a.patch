@@ -1,0 +1,77 @@
+From 2c3d90549db83e43e41e23c51667a145a3889ac5 Mon Sep 17 00:00:00 2001
+From: Jing Liu <jing2.liu@intel.com>
+Date: Wed, 5 Jan 2022 04:35:16 -0800
+Subject: [PATCH 0955/1418] x86/fpu: Make XFD initialization in
+ __fpstate_reset() a function argument
+
+vCPU threads are different from native tasks regarding to the initial XFD
+value. While all native tasks follow a fixed value (init_fpstate::xfd)
+established by the FPU core at boot, vCPU threads need to obey the reset
+value (i.e. ZERO) defined by the specification, to meet the expectation of
+the guest.
+
+Let the caller supply an argument and adjust the host and guest related
+invocations accordingly.
+
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Message-Id: <20220105123532.12586-6-yang.zhong@intel.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/kernel/fpu/core.c | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 0c6df2a6f8c4..1b6123124063 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -198,7 +198,7 @@ void fpu_reset_from_exception_fixup(void)
+ }
+ 
+ #if IS_ENABLED(CONFIG_KVM)
+-static void __fpstate_reset(struct fpstate *fpstate);
++static void __fpstate_reset(struct fpstate *fpstate, u64 xfd);
+ 
+ static void fpu_init_guest_permissions(struct fpu_guest *gfpu)
+ {
+@@ -230,7 +230,8 @@ bool fpu_alloc_guest_fpstate(struct fpu_guest *gfpu)
+ 	if (!fpstate)
+ 		return false;
+ 
+-	__fpstate_reset(fpstate);
++	/* Leave xfd to 0 (the reset value defined by spec) */
++	__fpstate_reset(fpstate, 0);
+ 	fpstate_init_user(fpstate);
+ 	fpstate->is_valloc	= true;
+ 	fpstate->is_guest	= true;
+@@ -453,21 +454,21 @@ void fpstate_init_user(struct fpstate *fpstate)
+ 		fpstate_init_fstate(fpstate);
+ }
+ 
+-static void __fpstate_reset(struct fpstate *fpstate)
++static void __fpstate_reset(struct fpstate *fpstate, u64 xfd)
+ {
+ 	/* Initialize sizes and feature masks */
+ 	fpstate->size		= fpu_kernel_cfg.default_size;
+ 	fpstate->user_size	= fpu_user_cfg.default_size;
+ 	fpstate->xfeatures	= fpu_kernel_cfg.default_features;
+ 	fpstate->user_xfeatures	= fpu_user_cfg.default_features;
+-	fpstate->xfd		= init_fpstate.xfd;
++	fpstate->xfd		= xfd;
+ }
+ 
+ void fpstate_reset(struct fpu *fpu)
+ {
+ 	/* Set the fpstate pointer to the default fpstate */
+ 	fpu->fpstate = &fpu->__fpstate;
+-	__fpstate_reset(fpu->fpstate);
++	__fpstate_reset(fpu->fpstate, init_fpstate.xfd);
+ 
+ 	/* Initialize the permission related info in fpu */
+ 	fpu->perm.__state_perm		= fpu_kernel_cfg.default_features;
+-- 
+2.31.1
+

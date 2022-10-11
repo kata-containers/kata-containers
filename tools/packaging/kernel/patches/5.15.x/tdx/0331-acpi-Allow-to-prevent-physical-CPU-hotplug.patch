@@ -1,0 +1,56 @@
+From c125b512032048177b8bba6f2acfb8b7b843bcb9 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Tue, 20 Jul 2021 16:22:47 +1200
+Subject: [PATCH 0331/1418] acpi: Allow to prevent physical CPU hotplug
+
+Allow preventing physical CPU hotplug.  Add default code to allow physical
+CPU hotplug with a weak symbol.
+
+The next x86 patch prevents physical CPU hotplug.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ drivers/acpi/acpi_processor.c | 7 +++++++
+ include/linux/acpi.h          | 1 +
+ 2 files changed, 8 insertions(+)
+
+diff --git a/drivers/acpi/acpi_processor.c b/drivers/acpi/acpi_processor.c
+index 6737b1cbf6d6..e46efcda77ad 100644
+--- a/drivers/acpi/acpi_processor.c
++++ b/drivers/acpi/acpi_processor.c
+@@ -161,6 +161,11 @@ int __weak acpi_unmap_cpu(int cpu)
+ 	return -ENODEV;
+ }
+ 
++bool __weak acpi_unmap_cpu_allowed(int cpu)
++{
++	return true;
++}
++
+ int __weak arch_register_cpu(int cpu)
+ {
+ 	return -ENODEV;
+@@ -437,6 +442,8 @@ static void acpi_processor_remove(struct acpi_device *device)
+ 	pr = acpi_driver_data(device);
+ 	if (pr->id >= nr_cpu_ids)
+ 		goto out;
++	if (!acpi_unmap_cpu_allowed(pr->id))
++		goto out;
+ 
+ 	/*
+ 	 * The only reason why we ever get here is CPU hot-removal.  The CPU is
+diff --git a/include/linux/acpi.h b/include/linux/acpi.h
+index 974d497a897d..1f5da3b4800c 100644
+--- a/include/linux/acpi.h
++++ b/include/linux/acpi.h
+@@ -308,6 +308,7 @@ static inline int acpi_processor_evaluate_cst(acpi_handle handle, u32 cpu,
+ int acpi_map_cpu(acpi_handle handle, phys_cpuid_t physid, u32 acpi_id,
+ 		 int *pcpu);
+ int acpi_unmap_cpu(int cpu);
++bool acpi_unmap_cpu_allowed(int cpu);
+ #endif /* CONFIG_ACPI_HOTPLUG_CPU */
+ 
+ #ifdef CONFIG_ACPI_HOTPLUG_IOAPIC
+-- 
+2.31.1
+

@@ -1,0 +1,44 @@
+From 22bb89b5e62bbb109aed32e8aff1d9bb8a86dbb3 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 13 Oct 2021 16:55:33 +0200
+Subject: [PATCH 0055/1418] x86/KVM: Convert to fpstate
+
+Convert KVM code to the new register storage mechanism in preparation for
+dynamically sized buffers.
+
+No functional change.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Acked-by: Paolo Bonzini <pbonzini@redhat.com>
+Cc: kvm@vger.kernel.org
+Link: https://lkml.kernel.org/r/20211013145322.451439983@linutronix.de
+---
+ arch/x86/kvm/x86.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 07ce4c11f3fc..d985f9c4c512 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -10428,7 +10428,7 @@ int kvm_arch_vcpu_ioctl_get_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
+ 
+ 	vcpu_load(vcpu);
+ 
+-	fxsave = &vcpu->arch.guest_fpu->state.fxsave;
++	fxsave = &vcpu->arch.guest_fpu->fpstate->regs.fxsave;
+ 	memcpy(fpu->fpr, fxsave->st_space, 128);
+ 	fpu->fcw = fxsave->cwd;
+ 	fpu->fsw = fxsave->swd;
+@@ -10451,7 +10451,7 @@ int kvm_arch_vcpu_ioctl_set_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
+ 
+ 	vcpu_load(vcpu);
+ 
+-	fxsave = &vcpu->arch.guest_fpu->state.fxsave;
++	fxsave = &vcpu->arch.guest_fpu->fpstate->regs.fxsave;
+ 
+ 	memcpy(fxsave->st_space, fpu->fpr, 128);
+ 	fxsave->cwd = fpu->fcw;
+-- 
+2.31.1
+

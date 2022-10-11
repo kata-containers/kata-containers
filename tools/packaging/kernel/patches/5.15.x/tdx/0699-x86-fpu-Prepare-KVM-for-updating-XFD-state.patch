@@ -1,0 +1,66 @@
+From 3fda57b53bc016ba9881b09ae3729c78951a00ce Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 17 Nov 2021 01:56:50 -0800
+Subject: [PATCH 0699/1418] x86/fpu: Prepare KVM for updating XFD state
+
+When XFD is non-trapped, it should be ensured that XFD and
+guest_fp::fpstate::xfd are consistency at exit of fastpath loop to avoid
+breaking the existing fpstate mechanism. Because within the fastpath loop,
+the preemption and interrupt are both disabled so there is no chance for
+KVM or native to use or swap the XFD.
+
+Provide the function for KVM. So when XFD passthrough, at exit of
+fastpath loop, KVM uses to update the state accordingly.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Jing Liu <jing2.liu@intel.com>
+---
+ arch/x86/include/asm/fpu/xstate.h |  2 ++
+ arch/x86/kernel/fpu/core.c        | 20 ++++++++++++++++++++
+ 2 files changed, 22 insertions(+)
+
+diff --git a/arch/x86/include/asm/fpu/xstate.h b/arch/x86/include/asm/fpu/xstate.h
+index 0f8b90ab18c9..1428e5a35608 100644
+--- a/arch/x86/include/asm/fpu/xstate.h
++++ b/arch/x86/include/asm/fpu/xstate.h
+@@ -122,4 +122,6 @@ static __always_inline __pure bool fpu_state_size_dynamic(void)
+ }
+ #endif
+ 
++extern inline void kvm_update_guest_xfd_state(void);
++
+ #endif
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index a8f787a62248..99442f606f2c 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -200,6 +200,26 @@ void fpu_reset_from_exception_fixup(void)
+ #if IS_ENABLED(CONFIG_KVM)
+ static void __fpstate_reset(struct fpstate *fpstate);
+ 
++#ifdef CONFIG_X86_64
++static void fpu_update_guest_xfd_state(void)
++{
++	u64 xfd;
++
++	rdmsrl(MSR_IA32_XFD, xfd);
++	current->thread.fpu.fpstate->xfd = xfd;
++	__this_cpu_write(xfd_state, xfd);
++}
++#else
++static void fpu_update_guest_xfd_state(void) { }
++#endif
++
++inline void kvm_update_guest_xfd_state(void)
++{
++	if (fpu_state_size_dynamic())
++		fpu_update_guest_xfd_state();
++}
++EXPORT_SYMBOL_GPL(kvm_update_guest_xfd_state);
++
+ static void fpu_init_guest_permissions(struct fpu_guest *gfpu)
+ {
+ 	struct fpu_state_perm *fpuperm;
+-- 
+2.31.1
+

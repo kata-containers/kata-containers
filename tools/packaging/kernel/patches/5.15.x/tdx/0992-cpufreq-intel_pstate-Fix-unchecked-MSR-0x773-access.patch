@@ -1,0 +1,40 @@
+From 2e4b6a59d6535168ad881395f40efbd4367bbef7 Mon Sep 17 00:00:00 2001
+From: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Date: Wed, 3 Nov 2021 22:19:25 -0700
+Subject: [PATCH 0992/1418] cpufreq: intel_pstate: Fix unchecked MSR 0x773
+ access
+
+It is possible that on some platforms HWP interrupts are disabled. In
+that case accessing MSR 0x773 will result in warning.
+
+So check X86_FEATURE_HWP_NOTIFY feature to access MSR 0x773. The other
+places in code where this MSR is accessed, already checks this feature
+except during disable path called during cpufreq offline and suspend
+callbacks.
+
+Fixes: 57577c996d73 ("cpufreq: intel_pstate: Process HWP Guaranteed change notification")
+Reported-by: Steven Rostedt <rostedt@goodmis.org>
+Signed-off-by: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Tested-by: Steven Rostedt (VMware) <rostedt@goodmis.org>
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ drivers/cpufreq/intel_pstate.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/cpufreq/intel_pstate.c b/drivers/cpufreq/intel_pstate.c
+index 8896a44ec7b0..2bb847650b9d 100644
+--- a/drivers/cpufreq/intel_pstate.c
++++ b/drivers/cpufreq/intel_pstate.c
+@@ -1627,6 +1627,9 @@ static void intel_pstate_disable_hwp_interrupt(struct cpudata *cpudata)
+ {
+ 	unsigned long flags;
+ 
++	if (!boot_cpu_has(X86_FEATURE_HWP_NOTIFY))
++		return;
++
+ 	/* wrmsrl_on_cpu has to be outside spinlock as this can result in IPC */
+ 	wrmsrl_on_cpu(cpudata->cpu, MSR_HWP_INTERRUPT, 0x00);
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,94 @@
+From 98f832578baf2166525a4d7462e230f367d579f7 Mon Sep 17 00:00:00 2001
+From: Reinette Chatre <reinette.chatre@intel.com>
+Date: Thu, 23 Sep 2021 14:56:45 -0700
+Subject: [PATCH 0814/1418] x86/sgx: Free up EPC pages directly to support
+ large page ranges
+
+The page reclaimer ensures availability of EPC pages across all
+enclaves. In support of this it runs independently from the individual
+enclaves in order to take locks from the different enclaves as it writes
+pages to swap.
+
+When needing to load a page from swap an EPC page needs to be available for
+its contents to be loaded into. Loading an existing enclave page from swap
+does not reclaim EPC pages directly if none are available, instead the
+reclaimer is woken when the available EPC pages are found to be below a
+watermark.
+
+When iterating over a large number of pages in an oversubscribed
+environment there is a race between the reclaimer woken up and EPC pages
+reclaimed fast enough for the page operations to proceed.
+
+Instead of tuning the race between the page operations and the reclaimer
+the page operations instead makes sure that there are EPC pages available.
+
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+---
+ arch/x86/kernel/cpu/sgx/ioctl.c | 6 ++++++
+ arch/x86/kernel/cpu/sgx/main.c  | 6 ++++++
+ arch/x86/kernel/cpu/sgx/sgx.h   | 1 +
+ 3 files changed, 13 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/sgx/ioctl.c b/arch/x86/kernel/cpu/sgx/ioctl.c
+index d11da6c53b26..fc2737b3c7cc 100644
+--- a/arch/x86/kernel/cpu/sgx/ioctl.c
++++ b/arch/x86/kernel/cpu/sgx/ioctl.c
+@@ -739,6 +739,8 @@ static long sgx_page_modp(struct sgx_encl *encl, struct sgx_page_modp *modp)
+ 	for (c = 0 ; c < modp->length; c += PAGE_SIZE) {
+ 		addr = encl->base + modp->offset + c;
+ 
++		sgx_direct_reclaim();
++
+ 		mutex_lock(&encl->lock);
+ 
+ 		entry = sgx_encl_load_page(encl, addr);
+@@ -962,6 +964,8 @@ static long sgx_page_modt(struct sgx_encl *encl, struct sgx_page_modt *modt)
+ 	for (c = 0 ; c < modt->length; c += PAGE_SIZE) {
+ 		addr = encl->base + modt->offset + c;
+ 
++		sgx_direct_reclaim();
++
+ 		mutex_lock(&encl->lock);
+ 
+ 		entry = sgx_encl_load_page(encl, addr);
+@@ -1187,6 +1191,8 @@ static long sgx_page_remove(struct sgx_encl *encl,
+ 	for (c = 0 ; c < params->length; c += PAGE_SIZE) {
+ 		addr = encl->base + params->offset + c;
+ 
++		sgx_direct_reclaim();
++
+ 		mutex_lock(&encl->lock);
+ 
+ 		entry = sgx_encl_load_page(encl, addr);
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c
+index 3239c7a8cebd..026528b85b26 100644
+--- a/arch/x86/kernel/cpu/sgx/main.c
++++ b/arch/x86/kernel/cpu/sgx/main.c
+@@ -357,6 +357,12 @@ static bool sgx_should_reclaim(unsigned long watermark)
+ 	       !list_empty(&sgx_active_page_list);
+ }
+ 
++void sgx_direct_reclaim(void)
++{
++	if (sgx_should_reclaim(SGX_NR_LOW_PAGES))
++		sgx_reclaim_pages();
++}
++
+ static int ksgxd(void *p)
+ {
+ 	set_freezable();
+diff --git a/arch/x86/kernel/cpu/sgx/sgx.h b/arch/x86/kernel/cpu/sgx/sgx.h
+index b8aade6752ad..9c753fd67f3d 100644
+--- a/arch/x86/kernel/cpu/sgx/sgx.h
++++ b/arch/x86/kernel/cpu/sgx/sgx.h
+@@ -80,6 +80,7 @@ static inline void *sgx_get_epc_virt_addr(struct sgx_epc_page *page)
+ struct sgx_epc_page *__sgx_alloc_epc_page(void);
+ void sgx_free_epc_page(struct sgx_epc_page *page);
+ 
++void sgx_direct_reclaim(void);
+ void sgx_mark_page_reclaimable(struct sgx_epc_page *page);
+ int sgx_unmark_page_reclaimable(struct sgx_epc_page *page);
+ struct sgx_epc_page *sgx_alloc_epc_page(void *owner, bool reclaim);
+-- 
+2.31.1
+

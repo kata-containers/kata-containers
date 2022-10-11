@@ -1,0 +1,26 @@
+From 483fbb081c8eddcdca3128bc09eddafd6827dc23 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Tue, 20 Jul 2021 03:55:31 -0700
+Subject: [PATCH 0443/1418] KVM: TDX: tdx_vcpu_load() add unlikely
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 54babec50719..036c9fdd2ab0 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -268,7 +268,7 @@ static void tdx_flush_vp_on_cpu(struct kvm_vcpu *vcpu)
+ {
+ 	unsigned long flags;
+ 
+-	if (vcpu->cpu == -1)
++	if (unlikely(vcpu->cpu == -1))
+ 		return;
+ 
+ 	/*
+-- 
+2.31.1
+

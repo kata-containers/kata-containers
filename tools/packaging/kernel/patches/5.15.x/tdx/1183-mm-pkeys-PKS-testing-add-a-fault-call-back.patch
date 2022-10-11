@@ -1,0 +1,70 @@
+From 205019d4f13631a2bf294e3c6069ff5b9719ea3b Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Wed, 23 Feb 2022 09:24:52 -0800
+Subject: [PATCH 1183/1418] mm/pkeys: PKS testing, add a fault call back
+
+PKS testing will need to know when a fault occurs due to it's actions so
+that it can properly determine functionality.
+
+Install a PKS fault handler for the PKS test pkey.
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ arch/x86/mm/pkeys.c | 6 +++++-
+ include/linux/pks.h | 7 +++++++
+ lib/pks/pks_test.c  | 6 ++++++
+ 3 files changed, 18 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/mm/pkeys.c b/arch/x86/mm/pkeys.c
+index 7e91b3921096..0905e50e8a91 100644
+--- a/arch/x86/mm/pkeys.c
++++ b/arch/x86/mm/pkeys.c
+@@ -243,7 +243,11 @@ static DEFINE_PER_CPU(u32, pkrs_cache);
+  *	#endif
+  *	};
+  */
+-static const pks_key_callback pks_key_callbacks[PKS_KEY_MAX] = { 0 };
++static const pks_key_callback pks_key_callbacks[PKS_KEY_MAX] = {
++#ifdef CONFIG_PKS_TEST
++	[PKS_KEY_TEST]		= pks_test_fault_callback,
++#endif
++};
+ 
+ static bool pks_call_fault_callback(struct pt_regs *regs, unsigned long address,
+ 				    bool write, u16 key)
+diff --git a/include/linux/pks.h b/include/linux/pks.h
+index d0d8bf1aaa1d..208f88fcb48c 100644
+--- a/include/linux/pks.h
++++ b/include/linux/pks.h
+@@ -44,4 +44,11 @@ static inline void pks_set_readwrite(u8 pkey) {}
+ 
+ #endif /* CONFIG_ARCH_ENABLE_SUPERVISOR_PKEYS */
+ 
++#ifdef CONFIG_PKS_TEST
++
++bool pks_test_fault_callback(struct pt_regs *regs, unsigned long address,
++			     bool write);
++
++#endif /* CONFIG_PKS_TEST */
++
+ #endif /* _LINUX_PKS_H */
+diff --git a/lib/pks/pks_test.c b/lib/pks/pks_test.c
+index 2fc92aaa54e8..37f2cd7d0f56 100644
+--- a/lib/pks/pks_test.c
++++ b/lib/pks/pks_test.c
+@@ -85,6 +85,12 @@ static void debug_result(const char *label, int test_num,
+ 		     sd->last_test_pass ? "PASS" : "FAIL");
+ }
+ 
++bool pks_test_fault_callback(struct pt_regs *regs, unsigned long address,
++			     bool write)
++{
++	return false;
++}
++
+ static void *alloc_test_page(u8 pkey)
+ {
+ 	return __vmalloc_node_range(PKS_TEST_MEM_SIZE, 1, VMALLOC_START,
+-- 
+2.31.1
+

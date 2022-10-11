@@ -1,0 +1,152 @@
+From 4518b883aa91f6b1b363273bc9c951d06a2e34f2 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Fri, 20 Aug 2021 14:21:50 -0700
+Subject: [PATCH 0217/1418] x86/tdx: Enable direct iomap MMIO optimizations
+
+Using the infrastructure added in a previous patch, enable direct
+TDCALLs for MMIO accesses through iomap. Add functions for each
+of the read and write operations and hook them in using the iomap_mmio
+call vector when TDX is active.
+
+This improves the TD virtio performance for disk workloads by about 4%
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+---
+ arch/x86/Kconfig      |  1 +
+ arch/x86/kernel/tdx.c | 94 +++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 95 insertions(+)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index c9a8ce41fa65..de5985916899 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -879,6 +879,7 @@ config INTEL_TDX_GUEST
+ 	select ARCH_HAS_CC_PLATFORM
+ 	select X86_MEM_ENCRYPT_COMMON
+ 	select ARCH_HAS_RESTRICTED_VIRTIO_MEMORY_ACCESS
++	select IOMAP_IND_MMIO
+ 	help
+ 	  Provide support for running in a trusted domain on Intel processors
+ 	  equipped with Trusted Domain Extensions. TDX is a Intel technology
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 768ada1362de..835d774d113c 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -5,6 +5,7 @@
+ #define pr_fmt(fmt)     "tdx: " fmt
+ 
+ #include <linux/cpuhotplug.h>
++#include <linux/io.h>
+ 
+ #include <asm/tdx.h>
+ #include <asm/i8259.h>
+@@ -665,6 +666,97 @@ static int tdx_handle_mmio(struct pt_regs *regs, struct ve_info *ve)
+ 	return insn.length;
+ }
+ 
++static unsigned long tdx_virt_mmio(int size, bool write, unsigned long vaddr,
++				   unsigned long *val)
++{
++	pte_t *pte;
++	int level;
++
++	pte = lookup_address(vaddr, &level);
++	if (!pte)
++		return -EIO;
++
++	return tdx_mmio(size, write,
++			(pte_pfn(*pte) << PAGE_SHIFT) +
++			(vaddr & ~page_level_mask(level)),
++			val);
++}
++
++static unsigned char tdx_mmio_readb(void __iomem *addr)
++{
++	unsigned long val;
++
++	if (tdx_virt_mmio(1, false, (unsigned long)addr, &val))
++		return 0xff;
++	return val;
++}
++
++static unsigned short tdx_mmio_readw(void __iomem *addr)
++{
++	unsigned long val;
++
++	if (tdx_virt_mmio(2, false, (unsigned long)addr, &val))
++		return 0xffff;
++	return val;
++}
++
++static unsigned int tdx_mmio_readl(void __iomem *addr)
++{
++	unsigned long val;
++
++	if (tdx_virt_mmio(4, false, (unsigned long)addr, &val))
++		return 0xffffffff;
++	return val;
++}
++
++unsigned long tdx_mmio_readq(void __iomem *addr)
++{
++	unsigned long val;
++
++	if (tdx_virt_mmio(8, false, (unsigned long)addr, &val))
++		return 0xffffffffffffffff;
++	return val;
++}
++
++static void tdx_mmio_writeb(unsigned char v, void __iomem *addr)
++{
++	unsigned long val = v;
++
++	tdx_virt_mmio(1, true, (unsigned long)addr, &val);
++}
++
++static void tdx_mmio_writew(unsigned short v, void __iomem *addr)
++{
++	unsigned long val = v;
++
++	tdx_virt_mmio(2, true, (unsigned long)addr, &val);
++}
++
++static void tdx_mmio_writel(unsigned int v, void __iomem *addr)
++{
++	unsigned long val = v;
++
++	tdx_virt_mmio(4, true, (unsigned long)addr, &val);
++}
++
++static void tdx_mmio_writeq(unsigned long v, void __iomem *addr)
++{
++	unsigned long val = v;
++
++	tdx_virt_mmio(8, true, (unsigned long)addr, &val);
++}
++
++static const struct iomap_mmio tdx_iomap_mmio = {
++	.ireadb  = tdx_mmio_readb,
++	.ireadw  = tdx_mmio_readw,
++	.ireadl  = tdx_mmio_readl,
++	.ireadq  = tdx_mmio_readq,
++	.iwriteb = tdx_mmio_writeb,
++	.iwritew = tdx_mmio_writew,
++	.iwritel = tdx_mmio_writel,
++	.iwriteq = tdx_mmio_writeq,
++};
++
+ static int tdx_cpu_offline_prepare(unsigned int cpu)
+ {
+ 	/*
+@@ -856,6 +948,8 @@ void __init tdx_early_init(void)
+ 	 */
+ 	random_enable_trust_cpu();
+ 
++	iomap_mmio = &tdx_iomap_mmio;
++
+ 	/*
+ 	 * Make sure there is a panic if something goes wrong,
+ 	 * just in case it's some kind of host attack.
+-- 
+2.31.1
+

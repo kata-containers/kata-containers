@@ -1,0 +1,35 @@
+From ee8acdd40c946adb95e37d6aa2638f6603bdebbc Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Wed, 29 Jul 2020 21:03:50 -0700
+Subject: [PATCH 0247/1418] x86/tdx: Use VMCALL in place of actual TDCALL
+ opcode
+
+Use VMCALL instead of the real TDCALL opcode to allow running on the
+ICX SDV, which doesn't support the actual opcode due to inability to
+hijack said opcode via ucode patch.
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdcall.S | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/x86/kernel/tdcall.S b/arch/x86/kernel/tdcall.S
+index 5ce04f6a34ce..4b35cfa51c43 100644
+--- a/arch/x86/kernel/tdcall.S
++++ b/arch/x86/kernel/tdcall.S
+@@ -35,7 +35,11 @@
+  * TDX module and hypercalls to the VMM. It is supported in
+  * Binutils >= 2.36.
+  */
++#ifdef CONFIG_INTEL_TDX_ICL_FIXES
++#define tdcall  vmcall
++#else
+ #define tdcall .byte 0x66,0x0f,0x01,0xcc
++#endif
+ 
+ /* HLT TDVMCALL sub-function ID */
+ #define EXIT_REASON_HLT			12
+-- 
+2.31.1
+

@@ -1,0 +1,31 @@
+From 4ce86a117671d065a4afaef470005454faad175a Mon Sep 17 00:00:00 2001
+From: Jiangbo Wu <jiangbo.wu@intel.com>
+Date: Mon, 21 Mar 2022 02:02:55 +0800
+Subject: [PATCH 1249/1418] mm: Remove unnecessary info log
+
+If no DSA enabled channel can be used to accelerate page migration,
+fallback to CPU do page migration is by natural. No necessary to
+print this message.
+
+Signed-off-by: Jiangbo Wu <jiangbo.wu@intel.com>
+---
+ mm/migrate.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/mm/migrate.c b/mm/migrate.c
+index 18cf1c99edd8..130860cb7534 100644
+--- a/mm/migrate.c
++++ b/mm/migrate.c
+@@ -1415,9 +1415,6 @@ static void migrate_pages_copy(struct list_head *pages,
+ 	if (migrate_use_dma() && !dma_migrate_pages_copy(pages, new_pages))
+ 		return;
+ 
+-	if (migrate_use_dma())
+-		pr_info("DMA copy failed, fallback to CPU\n");
+-
+ 	newpage = list_first_entry(new_pages, struct page, lru);
+ 	list_for_each_entry(page, pages, lru) {
+ 		if (PageHuge(page) || PageTransHuge(page))
+-- 
+2.31.1
+

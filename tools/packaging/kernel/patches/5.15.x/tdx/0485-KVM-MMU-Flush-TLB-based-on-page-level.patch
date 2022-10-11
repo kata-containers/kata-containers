@@ -1,0 +1,34 @@
+From 125c9621a27c1fad4ccde65789c3d60e3081c9bb Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Tue, 31 Aug 2021 15:34:41 +0800
+Subject: [PATCH 0485/1418] KVM: MMU: Flush TLB based on page level
+
+It's the preparetion for 2MB support
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 41b23ad06cd5..b07a13aaf761 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -3290,7 +3290,13 @@ static void kvm_mmu_zap_alias_spte(struct kvm_vcpu *vcpu, gfn_t gfn,
+ 	slot = __gfn_to_memslot(slots, gfn);
+ 	rmap_head = gfn_to_rmap(gfn, sp->role.level, slot);
+ 	if (__kvm_zap_rmapp(kvm, rmap_head))
+-		kvm_flush_remote_tlbs_with_address(kvm, gfn, 1);
++		kvm_flush_remote_tlbs_with_address(kvm,
++			/*
++			 * Because the page to zap can be large page, get the
++			 * base gfn instead of gfn that may not be aligned.
++			 */
++			kvm_mmu_page_get_gfn(sp, it.sptep - sp->spt),
++			KVM_PAGES_PER_HPAGE(sp->role.level));
+ 
+ 	if (!is_private_gfn(vcpu, sp->gfn_stolen_bits))
+ 		return;
+-- 
+2.31.1
+

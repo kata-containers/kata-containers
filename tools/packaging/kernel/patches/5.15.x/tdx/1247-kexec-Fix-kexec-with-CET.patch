@@ -1,0 +1,38 @@
+From b55ee35b0f49cf5a011b2cb1fc740183df066d92 Mon Sep 17 00:00:00 2001
+From: Rick Edgecombe <rick.p.edgecombe@intel.com>
+Date: Fri, 25 Feb 2022 17:01:09 -0800
+Subject: [PATCH 1247/1418] kexec: Fix kexec with CET
+
+This snippet is from PeterZ's upstream fix for making kexec work with
+CET as part of the kernel IBT series. Mask out CR4.CET before disabling
+CR0.WP, or it will #GP.
+
+Co-Developed-by: Peter Zijlstra <peterz@infradead.org>
+Signed-off-by: Peter Zijlstra <peterz@infradead.org>
+Signed-off-by: Rick Edgecombe <rick.p.edgecombe@intel.com>
+---
+ arch/x86/kernel/relocate_kernel_64.S | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/arch/x86/kernel/relocate_kernel_64.S b/arch/x86/kernel/relocate_kernel_64.S
+index c8fe74a28143..cdb6efa71580 100644
+--- a/arch/x86/kernel/relocate_kernel_64.S
++++ b/arch/x86/kernel/relocate_kernel_64.S
+@@ -114,6 +114,14 @@ SYM_CODE_START_LOCAL_NOALIGN(identity_mapped)
+ 	/* store the start address on the stack */
+ 	pushq   %rdx
+ 
++	/*
++	 * Clear X86_CR4_CET (if it was set) such that we can clear CR0_WP
++	 * below.
++	 */
++	movq	%cr4, %rax
++	andq	$~(X86_CR4_CET), %rax
++	movq	%rax, %cr4
++
+ 	/*
+ 	 * Set cr0 to a known state:
+ 	 *  - Paging enabled
+-- 
+2.31.1
+

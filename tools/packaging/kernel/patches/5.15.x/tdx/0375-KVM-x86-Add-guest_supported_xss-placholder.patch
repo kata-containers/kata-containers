@@ -1,0 +1,32 @@
+From f7f9ebb8af8cdb3e6f670e00f1b6505fcdb0afca Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Thu, 12 Mar 2020 18:18:32 -0700
+Subject: [PATCH 0375/1418] KVM: x86: Add guest_supported_xss placholder
+
+Add a per-vcpu placeholder for the support XSS of the guest so that the
+TDX configuration code doesn't need to hack in manual computation of the
+supported XSS.  KVM XSS enabling is currently being upstreamed, i.e.
+guest_supported_xss will no longer be a placeholder by the time TDX is
+ready for upstreaming (hopefully).
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 2e29a0f3e98c..353c7829debc 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -712,6 +712,7 @@ struct kvm_vcpu_arch {
+ 
+ 	u64 xcr0;
+ 	u64 guest_supported_xcr0;
++	u64 guest_supported_xss;
+ 
+ 	struct kvm_pio_request pio;
+ 	void *pio_data;
+-- 
+2.31.1
+

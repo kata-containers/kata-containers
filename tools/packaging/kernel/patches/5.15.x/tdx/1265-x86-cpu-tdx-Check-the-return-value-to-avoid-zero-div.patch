@@ -1,0 +1,28 @@
+From def7d0aacafe2742d1649f3fe8eed6a50977875c Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Thu, 24 Mar 2022 16:05:07 +0800
+Subject: [PATCH 1265/1418] x86/cpu/tdx: Check the return value to avoid zero
+ division
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/tdmr-common.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/tdx/tdmr-common.c b/arch/x86/kernel/cpu/tdx/tdmr-common.c
+index 3125cad8233e..eec8a4985e3f 100644
+--- a/arch/x86/kernel/cpu/tdx/tdmr-common.c
++++ b/arch/x86/kernel/cpu/tdx/tdmr-common.c
+@@ -559,6 +559,9 @@ static int __init distribute_tdmrs_across_tdmr_ranges(
+ 	/* Distribute TDMRs on basis of 'struct tdmr_range' one by one. */
+ 	remain_1g_areas =
+ 		TDMR_SIZE_TO_1G_AREAS(calculate_total_tdmr_range_size(tr_ctx));
++	if (!remain_1g_areas)
++		return 0;
++
+ 	remain_tdmr_num = max_tdmr_num;
+ 	last_tdmr_idx = 0;
+ 	list_for_each_entry(tr, &tr_ctx->tr_list, list) {
+-- 
+2.31.1
+

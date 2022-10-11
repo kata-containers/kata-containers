@@ -1,0 +1,39 @@
+From 2fd4da97c4c26fb60ea9a5ae28490a8fe0c3e3f6 Mon Sep 17 00:00:00 2001
+From: Kai Huang <kai.huang@linux.intel.com>
+Date: Tue, 7 Apr 2020 14:51:45 +1200
+Subject: [PATCH 0401/1418] cpu/hotplug: Document that TDX also depends on
+ booting CPUs once
+
+Add a comment to explain that TDX also depends on booting logical CPUs
+at least once.
+
+TDSYSINITLP must be run on all CPUs, even software disabled CPUs in the
+-nosmt case.  Fortunately, current SMT handling for #MC already supports
+booting all CPUs once; the to-be-disabled sibling is booted once (and
+later put into deep C-state to honor SMT=off) to allow the init code to
+set CR4.MCE and avoid an unwanted shutdown on a broadcasted MCE.
+
+Signed-off-by: Kai Huang <kai.huang@linux.intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ kernel/cpu.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/kernel/cpu.c b/kernel/cpu.c
+index 192e43a87407..b99ed76a0261 100644
+--- a/kernel/cpu.c
++++ b/kernel/cpu.c
+@@ -457,6 +457,10 @@ static inline bool cpu_smt_allowed(unsigned int cpu)
+ 	 * that the init code can get a chance to set CR4.MCE on each
+ 	 * CPU. Otherwise, a broadcasted MCE observing CR4.MCE=0b on any
+ 	 * core will shutdown the machine.
++	 *
++	 * Intel TDX also requires running TDH_SYS_LP_INIT on all logical CPUs
++	 * during boot, booting all CPUs once allows TDX to play nice with
++	 * 'nosmt'.
+ 	 */
+ 	return !cpumask_test_cpu(cpu, &cpus_booted_once_mask);
+ }
+-- 
+2.31.1
+

@@ -1,0 +1,66 @@
+From cceb1ab9ad78534541c6ad9298dc5503f3648c3d Mon Sep 17 00:00:00 2001
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Thu, 23 Dec 2021 09:53:20 -0500
+Subject: [PATCH 0973/1418] selftest: kvm: Reorder vcpu_load_state steps for
+ AMX
+
+For AMX support it is recommended to load XCR0 after XFD, so
+that KVM does not see XFD=0, XCR=1 for a save state that will
+eventually be disabled (which would lead to premature allocation
+of the space required for that save state).
+
+It is also required to load XSAVE data after XCR0 and XFD, so
+that KVM can trigger allocation of the extra space required to
+store AMX state.
+
+Adjust vcpu_load_state to obey these new requirements.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Message-Id: <20211223145322.2914028-2-yang.zhong@intel.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ .../selftests/kvm/lib/x86_64/processor.c        | 17 +++++++++--------
+ 1 file changed, 9 insertions(+), 8 deletions(-)
+
+diff --git a/tools/testing/selftests/kvm/lib/x86_64/processor.c b/tools/testing/selftests/kvm/lib/x86_64/processor.c
+index 5e60e4c68f5a..44573d40cd6c 100644
+--- a/tools/testing/selftests/kvm/lib/x86_64/processor.c
++++ b/tools/testing/selftests/kvm/lib/x86_64/processor.c
+@@ -1214,24 +1214,25 @@ void vcpu_load_state(struct kvm_vm *vm, uint32_t vcpuid, struct kvm_x86_state *s
+ 	struct vcpu *vcpu = vcpu_find(vm, vcpuid);
+ 	int r;
+ 
+-	r = ioctl(vcpu->fd, KVM_SET_XSAVE, state->xsave);
+-        TEST_ASSERT(r == 0, "Unexpected result from KVM_SET_XSAVE, r: %i",
++	r = ioctl(vcpu->fd, KVM_SET_SREGS, &state->sregs);
++	TEST_ASSERT(r == 0, "Unexpected result from KVM_SET_SREGS, r: %i",
+                 r);
+ 
++	r = ioctl(vcpu->fd, KVM_SET_MSRS, &state->msrs);
++	TEST_ASSERT(r == state->msrs.nmsrs,
++		"Unexpected result from KVM_SET_MSRS, r: %i (failed at %x)",
++		r, r == state->msrs.nmsrs ? -1 : state->msrs.entries[r].index);
++
+ 	if (kvm_check_cap(KVM_CAP_XCRS)) {
+ 		r = ioctl(vcpu->fd, KVM_SET_XCRS, &state->xcrs);
+ 		TEST_ASSERT(r == 0, "Unexpected result from KVM_SET_XCRS, r: %i",
+ 			    r);
+ 	}
+ 
+-	r = ioctl(vcpu->fd, KVM_SET_SREGS, &state->sregs);
+-        TEST_ASSERT(r == 0, "Unexpected result from KVM_SET_SREGS, r: %i",
++	r = ioctl(vcpu->fd, KVM_SET_XSAVE, state->xsave);
++	TEST_ASSERT(r == 0, "Unexpected result from KVM_SET_XSAVE, r: %i",
+                 r);
+ 
+-	r = ioctl(vcpu->fd, KVM_SET_MSRS, &state->msrs);
+-        TEST_ASSERT(r == state->msrs.nmsrs, "Unexpected result from KVM_SET_MSRS, r: %i (failed at %x)",
+-                r, r == state->msrs.nmsrs ? -1 : state->msrs.entries[r].index);
+-
+ 	r = ioctl(vcpu->fd, KVM_SET_VCPU_EVENTS, &state->events);
+         TEST_ASSERT(r == 0, "Unexpected result from KVM_SET_VCPU_EVENTS, r: %i",
+                 r);
+-- 
+2.31.1
+

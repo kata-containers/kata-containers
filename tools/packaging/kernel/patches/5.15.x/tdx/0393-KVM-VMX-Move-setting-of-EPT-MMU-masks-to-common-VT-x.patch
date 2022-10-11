@@ -1,0 +1,46 @@
+From e09ff980deced8be6cfd1384850fab792f38c587 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Tue, 2 Jun 2020 21:48:09 -0700
+Subject: [PATCH 0393/1418] KVM: VMX: Move setting of EPT MMU masks to common
+ VT-x code
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/main.c | 4 ++++
+ arch/x86/kvm/vmx/vmx.c  | 4 ----
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index ef0a2fd0316e..9b2ca2756eb8 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -34,6 +34,10 @@ static __init int vt_hardware_setup(void)
+ 	if (ret)
+ 		return ret;
+ 
++	if (enable_ept)
++		kvm_mmu_set_ept_masks(enable_ept_ad_bits,
++				      cpu_has_vmx_ept_execute_only());
++
+ 	return 0;
+ }
+ 
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 400737d979a7..70959b21d821 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -7818,10 +7818,6 @@ static __init int hardware_setup(void)
+ 
+ 	set_bit(0, vmx_vpid_bitmap); /* 0 is reserved for host */
+ 
+-	if (enable_ept)
+-		kvm_mmu_set_ept_masks(enable_ept_ad_bits,
+-				      cpu_has_vmx_ept_execute_only());
+-
+ 	if (!enable_ept)
+ 		ept_lpage_level = 0;
+ 	else if (cpu_has_vmx_ept_1g_page())
+-- 
+2.31.1
+

@@ -1,0 +1,251 @@
+From f9da362dced0db6ebafd79540a99a15c06788188 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Thu, 21 Oct 2021 15:55:19 -0700
+Subject: [PATCH 0098/1418] x86/fpu: Add sanity checks for XFD
+
+Add debug functionality to ensure that the XFD MSR is up to date for XSAVE*
+and XRSTOR* operations.
+
+ [ tglx: Improve comment. ]
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Chang S. Bae <chang.seok.bae@intel.com>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211021225527.10184-16-chang.seok.bae@intel.com
+---
+ arch/x86/kernel/fpu/core.c   |  9 +++---
+ arch/x86/kernel/fpu/signal.c |  6 ++--
+ arch/x86/kernel/fpu/xstate.c | 58 ++++++++++++++++++++++++++++++++++++
+ arch/x86/kernel/fpu/xstate.h | 34 ++++++++++++++++++---
+ 4 files changed, 95 insertions(+), 12 deletions(-)
+
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 3b72cddf990d..b5f5b08b84d7 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -166,7 +166,7 @@ void restore_fpregs_from_fpstate(struct fpstate *fpstate, u64 mask)
+ 		 */
+ 		mask = fpu_kernel_cfg.max_features & mask;
+ 
+-		os_xrstor(&fpstate->regs.xsave, mask);
++		os_xrstor(fpstate, mask);
+ 	} else {
+ 		if (use_fxsr())
+ 			fxrstor(&fpstate->regs.fxsave);
+@@ -534,7 +534,7 @@ void fpu__drop(struct fpu *fpu)
+ static inline void restore_fpregs_from_init_fpstate(u64 features_mask)
+ {
+ 	if (use_xsave())
+-		os_xrstor(&init_fpstate.regs.xsave, features_mask);
++		os_xrstor(&init_fpstate, features_mask);
+ 	else if (use_fxsr())
+ 		fxrstor(&init_fpstate.regs.fxsave);
+ 	else
+@@ -591,9 +591,8 @@ void fpu__clear_user_states(struct fpu *fpu)
+ 	 * corresponding registers.
+ 	 */
+ 	if (xfeatures_mask_supervisor() &&
+-	    !fpregs_state_valid(fpu, smp_processor_id())) {
+-		os_xrstor(&fpu->fpstate->regs.xsave, xfeatures_mask_supervisor());
+-	}
++	    !fpregs_state_valid(fpu, smp_processor_id()))
++		os_xrstor_supervisor(fpu->fpstate);
+ 
+ 	/* Reset user states in registers. */
+ 	restore_fpregs_from_init_fpstate(XFEATURE_MASK_USER_RESTORE);
+diff --git a/arch/x86/kernel/fpu/signal.c b/arch/x86/kernel/fpu/signal.c
+index 3b7f7d07c0b5..16fdecd02341 100644
+--- a/arch/x86/kernel/fpu/signal.c
++++ b/arch/x86/kernel/fpu/signal.c
+@@ -261,7 +261,7 @@ static int __restore_fpregs_from_user(void __user *buf, u64 ufeatures,
+ 			ret = fxrstor_from_user_sigframe(buf);
+ 
+ 		if (!ret && unlikely(init_bv))
+-			os_xrstor(&init_fpstate.regs.xsave, init_bv);
++			os_xrstor(&init_fpstate, init_bv);
+ 		return ret;
+ 	} else if (use_fxsr()) {
+ 		return fxrstor_from_user_sigframe(buf);
+@@ -322,7 +322,7 @@ static bool restore_fpregs_from_user(void __user *buf, u64 xrestore,
+ 	 * been restored from a user buffer directly.
+ 	 */
+ 	if (test_thread_flag(TIF_NEED_FPU_LOAD) && xfeatures_mask_supervisor())
+-		os_xrstor(&fpu->fpstate->regs.xsave, xfeatures_mask_supervisor());
++		os_xrstor_supervisor(fpu->fpstate);
+ 
+ 	fpregs_mark_activate();
+ 	fpregs_unlock();
+@@ -432,7 +432,7 @@ static bool __fpu_restore_sig(void __user *buf, void __user *buf_fx,
+ 		u64 mask = user_xfeatures | xfeatures_mask_supervisor();
+ 
+ 		fpregs->xsave.header.xfeatures &= mask;
+-		success = !os_xrstor_safe(&fpregs->xsave,
++		success = !os_xrstor_safe(fpu->fpstate,
+ 					  fpu_kernel_cfg.max_features);
+ 	} else {
+ 		success = !fxrstor_safe(&fpregs->fxsave);
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index bf42ee22de15..603edeb7b913 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -1301,6 +1301,64 @@ EXPORT_SYMBOL_GPL(fpstate_clear_xstate_component);
+ #endif
+ 
+ #ifdef CONFIG_X86_64
++
++#ifdef CONFIG_X86_DEBUG_FPU
++/*
++ * Ensure that a subsequent XSAVE* or XRSTOR* instruction with RFBM=@mask
++ * can safely operate on the @fpstate buffer.
++ */
++static bool xstate_op_valid(struct fpstate *fpstate, u64 mask, bool rstor)
++{
++	u64 xfd = __this_cpu_read(xfd_state);
++
++	if (fpstate->xfd == xfd)
++		return true;
++
++	 /*
++	  * The XFD MSR does not match fpstate->xfd. That's invalid when
++	  * the passed in fpstate is current's fpstate.
++	  */
++	if (fpstate->xfd == current->thread.fpu.fpstate->xfd)
++		return false;
++
++	/*
++	 * XRSTOR(S) from init_fpstate are always correct as it will just
++	 * bring all components into init state and not read from the
++	 * buffer. XSAVE(S) raises #PF after init.
++	 */
++	if (fpstate == &init_fpstate)
++		return rstor;
++
++	/*
++	 * XSAVE(S): clone(), fpu_swap_kvm_fpu()
++	 * XRSTORS(S): fpu_swap_kvm_fpu()
++	 */
++
++	/*
++	 * No XSAVE/XRSTOR instructions (except XSAVE itself) touch
++	 * the buffer area for XFD-disabled state components.
++	 */
++	mask &= ~xfd;
++
++	/*
++	 * Remove features which are valid in fpstate. They
++	 * have space allocated in fpstate.
++	 */
++	mask &= ~fpstate->xfeatures;
++
++	/*
++	 * Any remaining state components in 'mask' might be written
++	 * by XSAVE/XRSTOR. Fail validation it found.
++	 */
++	return !mask;
++}
++
++void xfd_validate_state(struct fpstate *fpstate, u64 mask, bool rstor)
++{
++	WARN_ON_ONCE(!xstate_op_valid(fpstate, mask, rstor));
++}
++#endif /* CONFIG_X86_DEBUG_FPU */
++
+ static int validate_sigaltstack(unsigned int usize)
+ {
+ 	struct task_struct *thread, *leader = current->group_leader;
+diff --git a/arch/x86/kernel/fpu/xstate.h b/arch/x86/kernel/fpu/xstate.h
+index 32a4dee4de3b..29024244965b 100644
+--- a/arch/x86/kernel/fpu/xstate.h
++++ b/arch/x86/kernel/fpu/xstate.h
+@@ -130,6 +130,12 @@ static inline u64 xfeatures_mask_independent(void)
+ 		     : "D" (st), "m" (*st), "a" (lmask), "d" (hmask)	\
+ 		     : "memory")
+ 
++#if defined(CONFIG_X86_64) && defined(CONFIG_X86_DEBUG_FPU)
++extern void xfd_validate_state(struct fpstate *fpstate, u64 mask, bool rstor);
++#else
++static inline void xfd_validate_state(struct fpstate *fpstate, u64 mask, bool rstor) { }
++#endif
++
+ /*
+  * Save processor xstate to xsave area.
+  *
+@@ -144,6 +150,7 @@ static inline void os_xsave(struct fpstate *fpstate)
+ 	int err;
+ 
+ 	WARN_ON_FPU(!alternatives_patched);
++	xfd_validate_state(fpstate, mask, false);
+ 
+ 	XSTATE_XSAVE(&fpstate->regs.xsave, lmask, hmask, err);
+ 
+@@ -156,12 +163,23 @@ static inline void os_xsave(struct fpstate *fpstate)
+  *
+  * Uses XRSTORS when XSAVES is used, XRSTOR otherwise.
+  */
+-static inline void os_xrstor(struct xregs_state *xstate, u64 mask)
++static inline void os_xrstor(struct fpstate *fpstate, u64 mask)
++{
++	u32 lmask = mask;
++	u32 hmask = mask >> 32;
++
++	xfd_validate_state(fpstate, mask, true);
++	XSTATE_XRESTORE(&fpstate->regs.xsave, lmask, hmask);
++}
++
++/* Restore of supervisor state. Does not require XFD */
++static inline void os_xrstor_supervisor(struct fpstate *fpstate)
+ {
++	u64 mask = xfeatures_mask_supervisor();
+ 	u32 lmask = mask;
+ 	u32 hmask = mask >> 32;
+ 
+-	XSTATE_XRESTORE(xstate, lmask, hmask);
++	XSTATE_XRESTORE(&fpstate->regs.xsave, lmask, hmask);
+ }
+ 
+ /*
+@@ -184,11 +202,14 @@ static inline int xsave_to_user_sigframe(struct xregs_state __user *buf)
+ 	 * internally, e.g. PKRU. That's user space ABI and also required
+ 	 * to allow the signal handler to modify PKRU.
+ 	 */
+-	u64 mask = current->thread.fpu.fpstate->user_xfeatures;
++	struct fpstate *fpstate = current->thread.fpu.fpstate;
++	u64 mask = fpstate->user_xfeatures;
+ 	u32 lmask = mask;
+ 	u32 hmask = mask >> 32;
+ 	int err;
+ 
++	xfd_validate_state(fpstate, mask, false);
++
+ 	stac();
+ 	XSTATE_OP(XSAVE, buf, lmask, hmask, err);
+ 	clac();
+@@ -206,6 +227,8 @@ static inline int xrstor_from_user_sigframe(struct xregs_state __user *buf, u64
+ 	u32 hmask = mask >> 32;
+ 	int err;
+ 
++	xfd_validate_state(current->thread.fpu.fpstate, mask, true);
++
+ 	stac();
+ 	XSTATE_OP(XRSTOR, xstate, lmask, hmask, err);
+ 	clac();
+@@ -217,12 +240,15 @@ static inline int xrstor_from_user_sigframe(struct xregs_state __user *buf, u64
+  * Restore xstate from kernel space xsave area, return an error code instead of
+  * an exception.
+  */
+-static inline int os_xrstor_safe(struct xregs_state *xstate, u64 mask)
++static inline int os_xrstor_safe(struct fpstate *fpstate, u64 mask)
+ {
++	struct xregs_state *xstate = &fpstate->regs.xsave;
+ 	u32 lmask = mask;
+ 	u32 hmask = mask >> 32;
+ 	int err;
+ 
++	/* Must enforce XFD update here */
++
+ 	if (cpu_feature_enabled(X86_FEATURE_XSAVES))
+ 		XSTATE_OP(XRSTORS, xstate, lmask, hmask, err);
+ 	else
+-- 
+2.31.1
+

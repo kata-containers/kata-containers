@@ -1,0 +1,179 @@
+From e3658f251b9554593ea8e1ea96c3b49eb3b52a4b Mon Sep 17 00:00:00 2001
+From: Megha Dey <megha.dey@intel.com>
+Date: Fri, 3 Sep 2021 14:07:36 -0700
+Subject: [PATCH 0590/1418] genirq/msi: Iterate msi_list starting from a given
+ desc
+
+This is a preparatory patch to enable dynamic allocation of MSI-X
+interrupts.
+
+With the addition of dynamic msix, the msi_list of the device is no
+longer immutable. To set up new vectors, we need to iterate only through
+the newly added entries of this list.
+
+To help with this:
+1. A msi_last_list pointer is added to struct device which points to the
+   last msi_desc's list before a new allocation.
+2. New macros are introduced which iterate the msi_list from the 1st
+   newly added msi_desc of every allocation using (1).
+
+No functional change.
+
+Signed-off-by: Megha Dey <megha.dey@intel.com>
+---
+ drivers/base/core.c    |  1 +
+ drivers/pci/msi.c      | 14 ++++++++++----
+ include/linux/device.h |  2 ++
+ include/linux/msi.h    | 12 ++++++++++++
+ kernel/irq/msi.c       |  6 +++---
+ 5 files changed, 28 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/base/core.c b/drivers/base/core.c
+index 2c282b6ada39..193623860fe5 100644
+--- a/drivers/base/core.c
++++ b/drivers/base/core.c
+@@ -2885,6 +2885,7 @@ void device_initialize(struct device *dev)
+ #ifdef CONFIG_GENERIC_MSI_IRQ
+ 	raw_spin_lock_init(&dev->msi_lock);
+ 	INIT_LIST_HEAD(&dev->msi_list);
++	dev->msi_last_list = &dev->msi_list;
+ #endif
+ 	INIT_LIST_HEAD(&dev->links.consumers);
+ 	INIT_LIST_HEAD(&dev->links.suppliers);
+diff --git a/drivers/pci/msi.c b/drivers/pci/msi.c
+index 5c5ab38a500e..12fb58923173 100644
+--- a/drivers/pci/msi.c
++++ b/drivers/pci/msi.c
+@@ -83,7 +83,7 @@ int __weak arch_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
+ 	if (type == PCI_CAP_ID_MSI && nvec > 1)
+ 		return 1;
+ 
+-	for_each_pci_msi_entry(entry, dev) {
++	for_each_new_pci_msi_entry(entry, dev) {
+ 		ret = arch_setup_msi_irq(dev, entry);
+ 		if (ret < 0)
+ 			return ret;
+@@ -510,7 +510,7 @@ static int msi_verify_entries(struct pci_dev *dev)
+ 	if (!dev->no_64bit_msi)
+ 		return 0;
+ 
+-	for_each_pci_msi_entry(entry, dev) {
++	for_each_new_pci_msi_entry(entry, dev) {
+ 		if (entry->msg.address_hi) {
+ 			pci_err(dev, "arch assigned 64-bit MSI address %#x%08x but device only supports 32 bits\n",
+ 				entry->msg.address_hi, entry->msg.address_lo);
+@@ -615,6 +615,12 @@ static int msix_setup_entries(struct pci_dev *dev,
+ 	if (affd)
+ 		masks = irq_create_affinity_masks(nvec, affd);
+ 
++	/* Store pointer to the last msi_desc entry's list before adding new
++	 * entries to the device msi_list or to the device msi_list itself
++	 * if msi_list is empty.
++	 */
++	dev->dev.msi_last_list = dev->dev.msi_list.prev;
++
+ 	for (i = 0, curmsk = masks; i < nvec; i++) {
+ 		entry = alloc_msi_entry(&dev->dev, 1, curmsk);
+ 		if (!entry) {
+@@ -675,7 +681,7 @@ static void msix_update_entries(struct pci_dev *dev, struct msix_entry *entries)
+ {
+ 	struct msi_desc *entry;
+ 
+-	for_each_pci_msi_entry(entry, dev) {
++	for_each_new_pci_msi_entry(entry, dev) {
+ 		if (entries) {
+ 			entries->vector = entry->irq;
+ 			entries++;
+@@ -787,7 +793,7 @@ static int msix_setup_irqs(struct pci_dev *dev, struct msix_entry *entries,
+ 		struct msi_desc *entry;
+ 		int avail = 0;
+ 
+-		for_each_pci_msi_entry(entry, dev) {
++		for_each_new_pci_msi_entry(entry, dev) {
+ 			if (entry->irq != 0)
+ 				avail++;
+ 		}
+diff --git a/include/linux/device.h b/include/linux/device.h
+index 125590e80c35..ecf90c38787b 100644
+--- a/include/linux/device.h
++++ b/include/linux/device.h
+@@ -409,6 +409,7 @@ struct dev_links_info {
+  *		See Documentation/driver-api/pin-control.rst for details.
+  * @msi_lock:	Lock to protect MSI mask cache and mask register
+  * @msi_list:	Hosts MSI descriptors
++ * @msi_last_list: Pointer to list of last msi_desc entry
+  * @msi_domain: The generic MSI domain this device is using.
+  * @numa_node:	NUMA node this device is close to.
+  * @dma_ops:    DMA mapping operations for this device.
+@@ -508,6 +509,7 @@ struct device {
+ 	struct dev_pin_info	*pins;
+ #endif
+ #ifdef CONFIG_GENERIC_MSI_IRQ
++	struct list_head        *msi_last_list;
+ 	raw_spinlock_t		msi_lock;
+ 	struct list_head	msi_list;
+ #endif
+diff --git a/include/linux/msi.h b/include/linux/msi.h
+index ba6162f8f5fc..495bdb76388f 100644
+--- a/include/linux/msi.h
++++ b/include/linux/msi.h
+@@ -201,6 +201,16 @@ struct msi_desc {
+ 			for (__irq = (desc)->irq;			\
+ 			     __irq < ((desc)->irq + (desc)->nvec_used);	\
+ 			     __irq++)
++/* Iterate through all the msi_descs starting from a given desc */
++#define for_each_new_msi_entry(desc, dev)                             \
++	(desc) = list_entry((dev)->msi_last_list->next, struct msi_desc, list);         \
++	list_for_each_entry_from((desc), dev_to_msi_list((dev)), list)
++#define for_each_new_msi_vector(desc, __irq, dev)                             \
++	for_each_new_msi_entry((desc), (dev))                          \
++		if ((desc)->irq)                                        \
++			for ((__irq) = (desc)->irq;                     \
++			     (__irq) < ((desc)->irq + (desc)->nvec_used);       \
++			     (__irq)++)
+ 
+ #ifdef CONFIG_IRQ_MSI_IOMMU
+ static inline const void *msi_desc_get_iommu_cookie(struct msi_desc *desc)
+@@ -229,6 +239,8 @@ static inline void msi_desc_set_iommu_cookie(struct msi_desc *desc,
+ #define first_pci_msi_entry(pdev)	first_msi_entry(&(pdev)->dev)
+ #define for_each_pci_msi_entry(desc, pdev)	\
+ 	for_each_msi_entry((desc), &(pdev)->dev)
++#define for_each_new_pci_msi_entry(desc, pdev)        \
++	for_each_new_msi_entry((desc), &(pdev)->dev)
+ 
+ struct pci_dev *msi_desc_to_pci_dev(struct msi_desc *desc);
+ void *msi_desc_to_pci_sysdata(struct msi_desc *desc);
+diff --git a/kernel/irq/msi.c b/kernel/irq/msi.c
+index f8c478c9b59b..c6ff8cc6542a 100644
+--- a/kernel/irq/msi.c
++++ b/kernel/irq/msi.c
+@@ -580,7 +580,7 @@ int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
+ 			return ret;
+ 	}
+ 
+-	for_each_msi_entry(desc, dev) {
++	for_each_new_msi_entry(desc, dev) {
+ 		ops->set_desc(&arg, desc);
+ 
+ 		virq = __irq_domain_alloc_irqs(domain, -1, desc->nvec_used,
+@@ -614,7 +614,7 @@ int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
+ 	if (!(info->flags & MSI_FLAG_ACTIVATE_EARLY))
+ 		goto skip_activate;
+ 
+-	for_each_msi_vector(desc, i, dev) {
++	for_each_new_msi_vector(desc, i, dev) {
+ 		if (desc->irq == i) {
+ 			virq = desc->irq;
+ 			dev_dbg(dev, "irq [%d-%d] for MSI\n",
+@@ -638,7 +638,7 @@ int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
+ 	 * so request_irq() will assign the final vector.
+ 	 */
+ 	if (can_reserve) {
+-		for_each_msi_vector(desc, i, dev) {
++		for_each_new_msi_vector(desc, i, dev) {
+ 			irq_data = irq_domain_get_irq_data(domain, i);
+ 			irqd_clr_activated(irq_data);
+ 		}
+-- 
+2.31.1
+

@@ -1,0 +1,135 @@
+From 85a4359fbd1cb19054f300711aa2ddc7ed0dac65 Mon Sep 17 00:00:00 2001
+From: Yi Liu <yi.l.liu@intel.com>
+Date: Wed, 27 Apr 2022 05:32:37 -0700
+Subject: [PATCH 1325/1418] iommu/vtd-: Fix regression issue in
+ intel_svm_free_async_fn
+
+Call trace
+
+[  149.745157] BUG: spinlock bad magic on CPU#99, kworker/u384:0/8
+[  149.745249] BUG: unable to handle page fault for address: 0000001000000930
+[  149.745355] #PF: supervisor read access in kernel mode
+[  149.745436] #PF: error_code(0x0000) - not-present page
+[  149.745517] PGD 0
+[  149.745550] Oops: 0000 1 SMP NOPTI
+[  149.745607] CPU: 99 PID: 8 Comm: kworker/u384:0 Tainted: G        W          5.15.0-spr.bkc.pc.6.8.0.x86_64 #1
+[  149.745764] Hardware name: Intel Corporation ArcherCity/ArcherCity, BIOS EGSDCRB1.86B.0073.D14.2201260628 01/26/2022
+[  149.745929] Workqueue: ioasid_wq intel_svm_free_async_fn
+[  149.746012] RIP: 0010:spin_dump.cold.5+0x24/0x34
+[  149.746085] Code: c3 e9 83 75 78 ff 41 83 c8 ff 48 c7 c1 32 dd 8f 88 8b 55 04 48 89 ee 48 c7 c7 80 b8 87 88 e8 81 24 00 00 5b 5d e9 87 cf 01 00 <44> 8b 83 50 09 00 00 48 8d 8b 38 0b 00 00 eb d7 48 8d 45 10 40 84
+[  149.746378] RSP: 0018:ff46f841403c7e18 EFLAGS: 00010202
+[  149.746460] RAX: 0000000000000033 RBX: 0000000fffffffe0 RCX: 0000000000000000
+[  149.746571] RDX: 0000000000000000 RSI: ff4531203f4d7c70 RDI: ff4531203f4d7c70
+[  149.746683] RBP: ff453120efa04788 R08: 0000000000000000 R09: 00000000efa04788
+[  149.746795] R10: ff46f841403c7c40 R11: ff46f841403c7c38 R12: ff45311115c7f250
+[  149.746907] R13: dead000000000122 R14: ff46f841403c7e50 R15: ff46f841403c7e50
+[  149.747019] FS:  0000000000000000(0000) GS:ff4531203f4c0000(0000) knlGS:0000000000000000
+[  149.747146] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  149.747236] CR2: 0000001000000930 CR3: 000000189720c004 CR4: 0000000001f73ee0
+[  149.747347] DR0: ffffffff89b9879b DR1: 0000000000000000 DR2: 0000000000000000
+[  149.747459] DR3: 0000000000000000 DR6: 00000000fffe07f0 DR7: 0000000000000600
+[  149.747571] PKRU: 55555554
+[  149.747615] PKRS: 0x55555554
+[  149.747660] Call Trace:
+[  149.747700]  do_raw_spin_lock+0x71/0xc0
+[  149.750580]  intel_svm_free_async_fn+0x9a/0x1f0
+[  149.753505]  process_one_work+0x193/0x370
+[  149.756409]  worker_thread+0x30/0x380
+[  149.759282]  ? process_one_work+0x370/0x370
+[  149.762121]  kthread+0x118/0x140
+[  149.764908]  ? set_kthread_struct+0x40/0x40
+[  149.767656]  ret_from_fork+0x1f/0x30
+[  149.770337] Modules linked in: vhost_net vhost vhost_iotlb tap tun vfio_pci nfsv3 rpcsec_gss_krb5 auth_rpcgss nfsv4 nfs lockd grace bridge nft_ct stp llc nft_chain_nat nf_nat nf_conntrack nf_defrag_ipv6 nf_defrag_ipv4 ip_set nf_tables nfnetlink sunrpc ofpart spi_nor intel_rapl_msr mtd intel_sdsi pmt_crashlog intel_rapl_common pmt_telemetry pmt_class i10nm_edac nfit x86_pkg_temp_thermal intel_powerclamp coretemp kvm_intel kvm isst_if_mbox_pci isst_if_mmio joydev isst_if_common idxd_mdev snd_pcm vfio_pci_core mei_me vfio_virqfd irqbypass intel_vsec mei spi_intel_pci i2c_i801 snd_timer spi_intel i2c_smbus i2c_ismt wmi acpi_power_meter acpi_pad pfr_update pfr_telemetry iax_crypto i40e crc32c_intel igb drm_vram_helper igc idxd drm_ttm_helper dca pinctrl_emmitsburg pinctrl_intel sr_mod cdrom fuse
+[  149.797488] CR2: 0000001000000930
+[  149.800524] --[ end trace 160b85f4bc67d73d ]--
+[  150.111945] RIP: 0010:spin_dump.cold.5+0x24/0x34
+[  150.114947] Code: c3 e9 83 75 78 ff 41 83 c8 ff 48 c7 c1 32 dd 8f 88 8b 55 04 48 89 ee 48 c7 c7 80 b8 87 88 e8 81 24 00 00 5b 5d e9 87 cf 01 00 <44> 8b 83 50 09 00 00 48 8d 8b 38 0b 00 00 eb d7 48 8d 45 10 40 84
+[  150.124033] RSP: 0018:ff46f841403c7e18 EFLAGS: 00010202
+[  150.127065] RAX: 0000000000000033 RBX: 0000000fffffffe0 RCX: 0000000000000000
+[  150.130157] RDX: 0000000000000000 RSI: ff4531203f4d7c70 RDI: ff4531203f4d7c70
+[  150.133233] RBP: ff453120efa04788 R08: 0000000000000000 R09: 00000000efa04788
+[  150.136309] R10: ff46f841403c7c40 R11: ff46f841403c7c38 R12: ff45311115c7f250
+[  150.139411] R13: dead000000000122 R14: ff46f841403c7e50 R15: ff46f841403c7e50
+[  150.142470] FS:  0000000000000000(0000) GS:ff4531203f4c0000(0000) knlGS:0000000000000000
+[  150.145555] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[  150.148611] CR2: 0000001000000930 CR3: 000000189720c004 CR4: 0000000001f73ee0
+[  150.151713] DR0: ffffffff89b9879b DR1: 0000000000000000 DR2: 0000000000000000
+[  150.154831] DR3: 0000000000000000 DR6: 00000000fffe07f0 DR7: 0000000000000600
+[  150.157904] PKRU: 55555554
+[  150.160985] PKRS: 0x55555554
+[  150.183267] virbr0: port 2(tap0) entered disabled state
+[  150.186582] device tap0 left promiscuous mode
+[  150.189711] virbr0: port 2(tap0) entered disabled state
+[  150.352879] iommu: iommu_sva_unbind_gpasid: FIXME need to clear all pending faults!
+[  153.162117] vfio-pci 0000:6a:01.0: No device request channel registered, blocked until released by user
+
+Signed-off-by: Yi Liu <yi.l.liu@intel.com>
+---
+ drivers/iommu/intel/svm.c | 34 ++++++++++++++++++++++------------
+ 1 file changed, 22 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index ef7cc863d9bc..6baf7c37435b 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -116,8 +116,8 @@ static DEFINE_MUTEX(pasid_mutex);
+ static void intel_svm_free_async_fn(struct work_struct *work)
+ {
+ 	struct intel_svm *svm = container_of(work, struct intel_svm, work);
+-	struct intel_svm_dev *sdev, *tmp;
+-	LIST_HEAD(sdevs);
++	struct intel_svm_dev *sdev, *subdev, *tmp;
++	LIST_HEAD(subdevs);
+ 	u32 pasid = svm->pasid;
+ 
+ 	/*
+@@ -133,11 +133,21 @@ static void intel_svm_free_async_fn(struct work_struct *work)
+ 					svm->pasid, true, false);
+ 		intel_svm_drain_prq(sdev->dev, svm->pasid);
+ 		spin_unlock(&sdev->iommu->lock);
+-		/*
+-		 * Record the sdev and delete device_fault_data outside pasid_mutex
+-		 * protection to avoid race with page response and prq reporting.
+-		 */
+-		list_add_tail(&sdev->list, &sdevs);
++		if (is_aux_domain(sdev->dev, &sdev->domain->domain)) {
++			subdev = kzalloc(sizeof(*subdev), GFP_KERNEL);
++			if (!subdev) {
++				dev_err_ratelimited(sdev->dev, "Failed to record for fault data del %u\n", pasid);
++				continue;
++			}
++			subdev->dev = sdev->dev;
++
++			kfree_rcu(sdev, rcu);
++			/*
++			 * Record the sdev and delete device_fault_data outside pasid_mutex
++			 * protection to avoid race with page response and prq reporting.
++			 */
++			list_add_tail(&subdev->list, &subdevs);
++		}
+ 	}
+ 	/*
+ 	 * We may not be the last user to drop the reference but since
+@@ -158,14 +168,14 @@ static void intel_svm_free_async_fn(struct work_struct *work)
+ 
+ 	mutex_unlock(&pasid_mutex);
+ 
+-	list_for_each_entry_safe(sdev, tmp, &sdevs, list) {
+-		list_del(&sdev->list);
++	list_for_each_entry_safe(subdev, tmp, &subdevs, list) {
++		list_del(&subdev->list);
+ 		/*
+ 		 * Partial assignment needs to delete fault data
+ 		 */
+-		if (is_aux_domain(sdev->dev, &sdev->domain->domain))
+-			iommu_delete_device_fault_data(sdev->dev, pasid);
+-		kfree_rcu(sdev, rcu);
++		dev_dbg(subdev->dev, "try to del fault data for %u\n", pasid);
++		iommu_delete_device_fault_data(subdev->dev, pasid);
++		kfree(subdev);
+ 	}
+ }
+ 
+-- 
+2.31.1
+

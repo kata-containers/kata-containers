@@ -1,0 +1,186 @@
+From 8ee06b209d1df185479ba50150cb77c89cd79e11 Mon Sep 17 00:00:00 2001
+From: Rick Edgecombe <rick.p.edgecombe@intel.com>
+Date: Thu, 20 Jan 2022 15:04:26 -0800
+Subject: [PATCH 1111/1418] x86/cet/shstk: Support wrss for userspace
+
+For the current shadow stack implementation, shadow stacks contents cannot
+be arbitrarily provisioned with data. This property helps apps protect
+themselves better, but also restricts any potential apps that may want to
+do exotic things at the expense of a little security.
+
+The x86 shadow stack feature introduces a new instruction, wrss, which
+can be enabled to write directly to shadow stack permissioned memory from
+userspace. Allow it to get enabled via the prctl interface.
+
+Only enable the userspace wrss instruction, which allows writes to
+userspace shadow stacks from userspace. Do not allow it to be enabled
+independently of shadow stack, as HW does not support using WRSS when
+shadow stack is disabled.
+
+Prevent shadow stack's from becoming executable to assist apps who want
+W^X enforced. Add an arch_validate_flags() implementation to handle the
+check. Rename the uapi/asm/mman.h header guard to be able to use it for
+arch/x86/include/asm/mman.h where the arch_validate_flags() will be.
+
+From a fault handler perspective, WRSS will behave very similar to WRUSS,
+which is treated like a user access from a PF err code perspective.
+
+Signed-off-by: Rick Edgecombe <rick.p.edgecombe@intel.com>
+---
+ arch/x86/include/asm/cet.h          |  3 +++
+ arch/x86/include/asm/mman.h         |  5 ++++-
+ arch/x86/include/uapi/asm/prctl.h   |  2 +-
+ arch/x86/kernel/elf_feature_prctl.c |  7 ++++++
+ arch/x86/kernel/shstk.c             | 35 ++++++++++++++++++++++++++++-
+ 5 files changed, 49 insertions(+), 3 deletions(-)
+
+diff --git a/arch/x86/include/asm/cet.h b/arch/x86/include/asm/cet.h
+index 796b489334fb..b1d0372db489 100644
+--- a/arch/x86/include/asm/cet.h
++++ b/arch/x86/include/asm/cet.h
+@@ -10,6 +10,7 @@ struct task_struct;
+ struct thread_shstk {
+ 	u64	base;
+ 	u64	size;
++	bool	wrss;
+ };
+ 
+ #ifdef CONFIG_X86_SHADOW_STACK
+@@ -18,6 +19,7 @@ int shstk_alloc_thread_stack(struct task_struct *p, unsigned long clone_flags,
+ 			     unsigned long stack_size);
+ void shstk_free(struct task_struct *p);
+ int shstk_disable(void);
++int wrss_control(bool enable);
+ int shstk_setup_rstor_token(bool proc32, unsigned long restorer,
+ 			    unsigned long *new_ssp);
+ int shstk_check_rstor_token(bool proc32, unsigned long *new_ssp);
+@@ -31,6 +33,7 @@ static inline int shstk_alloc_thread_stack(struct task_struct *p,
+ static inline void shstk_free(struct task_struct *p) {}
+ static inline void shstk_disable(void) {}
+ static inline void reset_thread_shstk(void) {}
++static inline void wrss_control(bool enable) {}
+ static inline int shstk_setup_rstor_token(bool proc32, unsigned long restorer,
+ 					  unsigned long *new_ssp) { return 0; }
+ static inline int shstk_check_rstor_token(bool proc32,
+diff --git a/arch/x86/include/asm/mman.h b/arch/x86/include/asm/mman.h
+index b44fe31deb3a..c05951a36d93 100644
+--- a/arch/x86/include/asm/mman.h
++++ b/arch/x86/include/asm/mman.h
+@@ -8,7 +8,10 @@
+ #ifdef CONFIG_X86_SHADOW_STACK
+ static inline bool arch_validate_flags(unsigned long vm_flags)
+ {
+-	if ((vm_flags & VM_SHADOW_STACK) && (vm_flags & VM_WRITE))
++	/*
++	 * Shadow stack must not be executable, to help with W^X due to wrss.
++	 */
++	if ((vm_flags & VM_SHADOW_STACK) && (vm_flags & (VM_WRITE | VM_EXEC)))
+ 		return false;
+ 
+ 	return true;
+diff --git a/arch/x86/include/uapi/asm/prctl.h b/arch/x86/include/uapi/asm/prctl.h
+index 124c15fe95b5..4f3cb575cd1f 100644
+--- a/arch/x86/include/uapi/asm/prctl.h
++++ b/arch/x86/include/uapi/asm/prctl.h
+@@ -28,6 +28,6 @@
+ /* x86 feature bits to be used with ARCH_X86_FEATURE arch_prctl()s */
+ #define LINUX_X86_FEATURE_IBT		0x00000001
+ #define LINUX_X86_FEATURE_SHSTK		0x00000002
+-
++#define LINUX_X86_FEATURE_WRSS		0x00000010
+ 
+ #endif /* _ASM_X86_PRCTL_H */
+diff --git a/arch/x86/kernel/elf_feature_prctl.c b/arch/x86/kernel/elf_feature_prctl.c
+index 55222f48fbff..786384e6b984 100644
+--- a/arch/x86/kernel/elf_feature_prctl.c
++++ b/arch/x86/kernel/elf_feature_prctl.c
+@@ -21,6 +21,8 @@ static int elf_feat_copy_status_to_user(struct thread_shstk *shstk, u64 __user *
+ 		buf[1] = shstk->base;
+ 		buf[2] = shstk->size;
+ 	}
++	if (shstk->wrss)
++		buf[0] |= LINUX_X86_FEATURE_WRSS;
+ 
+ 	return copy_to_user(ubuf, buf, sizeof(buf));
+ }
+@@ -41,12 +43,17 @@ int prctl_elf_feature(int option, u64 arg2)
+ 
+ 		if (arg2 & LINUX_X86_FEATURE_SHSTK)
+ 			shstk_disable()
++		if (arg2 & LINUX_X86_FEATURE_WRSS)
++			wrss_control(false);
+ 
+ 		return 0;
+ 	case ARCH_X86_FEATURE_ENABLE:
+ 		if (arg2 & thread->feat_prctl_locked)
+ 			return -EPERM;
+ 
++		if (arg2 & LINUX_X86_FEATURE_WRSS)
++			wrss_control(true);
++
+ 		return 0;
+ 	case ARCH_X86_FEATURE_LOCK:
+ 		thread->feat_prctl_locked |= arg2;
+diff --git a/arch/x86/kernel/shstk.c b/arch/x86/kernel/shstk.c
+index 59565daf4b1d..27c49d3dd46c 100644
+--- a/arch/x86/kernel/shstk.c
++++ b/arch/x86/kernel/shstk.c
+@@ -212,6 +212,36 @@ void shstk_free(struct task_struct *tsk)
+ 	shstk->size = 0;
+ }
+ 
++int wrss_control(bool enable)
++{
++	struct thread_shstk *shstk = &current->thread.shstk;
++	void *xstate;
++	int err;
++
++	if (!cpu_feature_enabled(X86_FEATURE_SHSTK))
++		return 1;
++	/*
++	 * Only enable wrss if shadow stack is enabled. If shadow stack is not
++	 * enabled, wrss will already be disabled, so don't bother clearing it
++	 * when disabling.
++	 */
++	if (!shstk->size || shstk->wrss == enable)
++		return 1;
++
++	xstate = start_update_xsave_msrs(XFEATURE_CET_USER);
++	if (enable)
++		err = xsave_set_clear_bits_msrl(xstate, MSR_IA32_U_CET, CET_WRSS_EN, 0);
++	else
++		err = xsave_set_clear_bits_msrl(xstate, MSR_IA32_U_CET, 0, CET_WRSS_EN);
++	end_update_xsave_msrs();
++
++	if (err)
++		return 1;
++
++	shstk->wrss = enable;
++	return 0;
++}
++
+ int shstk_disable(void)
+ {
+ 	struct thread_shstk *shstk = &current->thread.shstk;
+@@ -224,7 +254,9 @@ int shstk_disable(void)
+ 		return 1;
+ 
+ 	xstate = start_update_xsave_msrs(XFEATURE_CET_USER);
+-	err = xsave_set_clear_bits_msrl(xstate, MSR_IA32_U_CET, 0, CET_SHSTK_EN);
++	/* Disable WRSS too when disabling shadow stack */
++	err = xsave_set_clear_bits_msrl(xstate, MSR_IA32_U_CET, 0,
++					CET_SHSTK_EN | CET_WRSS_EN);
+ 	if (!err)
+ 		err = xsave_wrmsrl(xstate, MSR_IA32_PL3_SSP, 0);
+ 	end_update_xsave_msrs();
+@@ -233,6 +265,7 @@ int shstk_disable(void)
+ 		return 1;
+ 
+ 	shstk_free(current);
++	shstk->wrss = 0;
+ 	return 0;
+ }
+ 
+-- 
+2.31.1
+

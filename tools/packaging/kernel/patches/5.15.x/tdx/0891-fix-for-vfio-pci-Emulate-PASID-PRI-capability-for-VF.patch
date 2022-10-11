@@ -1,0 +1,38 @@
+From 39097c4d65a16cbeb4d97b137280f2c3c07f715e Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Wed, 10 Nov 2021 17:14:19 +0800
+Subject: [PATCH 0891/1418] fix for vfio/pci: Emulate PASID/PRI capability for
+ VFs
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ drivers/vfio/pci/vfio_pci_config.c | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/drivers/vfio/pci/vfio_pci_config.c b/drivers/vfio/pci/vfio_pci_config.c
+index c7b68bd14cb7..7f829a7e88c1 100644
+--- a/drivers/vfio/pci/vfio_pci_config.c
++++ b/drivers/vfio/pci/vfio_pci_config.c
+@@ -2109,9 +2109,6 @@ static size_t vfio_pci_cap_remaining_dword(struct vfio_pci_core_device *vdev,
+ 	return i;
+ }
+ 
+-<<<<<<< HEAD
+-static ssize_t vfio_config_do_rw(struct vfio_pci_core_device *vdev, char __user *buf,
+-=======
+ static bool vfio_pci_need_virt_perm(struct pci_dev *pdev, u8 cap_id)
+ {
+ #ifdef CONFIG_PCI_ATS
+@@ -2123,8 +2120,7 @@ static bool vfio_pci_need_virt_perm(struct pci_dev *pdev, u8 cap_id)
+ #endif
+ }
+ 
+-static ssize_t vfio_config_do_rw(struct vfio_pci_device *vdev, char __user *buf,
+->>>>>>> 64511739a93d... vfio/pci: Emulate PASID/PRI capability for VFs
++static ssize_t vfio_config_do_rw(struct vfio_pci_core_device *vdev, char __user *buf,
+ 				 size_t count, loff_t *ppos, bool iswrite)
+ {
+ 	struct pci_dev *pdev = vdev->pdev;
+-- 
+2.31.1
+

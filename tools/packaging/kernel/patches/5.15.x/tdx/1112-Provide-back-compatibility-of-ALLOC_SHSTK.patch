@@ -1,0 +1,133 @@
+From ae953a2f2a632fc8b3ea1c30965fd76ca6e1de31 Mon Sep 17 00:00:00 2001
+From: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Date: Tue, 8 Sep 2020 15:39:28 -0700
+Subject: [PATCH 1112/1418] Provide back compatibility of ALLOC_SHSTK
+
+Signed-off-by: Yu-cheng Yu <yu-cheng.yu@intel.com>
+---
+ arch/x86/include/asm/cet.h          |  1 +
+ arch/x86/include/uapi/asm/prctl.h   |  2 ++
+ arch/x86/kernel/elf_feature_prctl.c | 28 +++++++++++++++++++++++++++-
+ arch/x86/kernel/shstk.c             | 26 ++++++++++++++++++++++++++
+ 4 files changed, 56 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/cet.h b/arch/x86/include/asm/cet.h
+index b1d0372db489..b0a4b88da725 100644
+--- a/arch/x86/include/asm/cet.h
++++ b/arch/x86/include/asm/cet.h
+@@ -25,6 +25,7 @@ int shstk_setup_rstor_token(bool proc32, unsigned long restorer,
+ int shstk_check_rstor_token(bool proc32, unsigned long *new_ssp);
+ int setup_signal_shadow_stack(int proc32, void __user *restorer);
+ int restore_signal_shadow_stack(void);
++unsigned long cet_alloc_shstk(unsigned long size);
+ #else
+ static inline void shstk_setup(void) {}
+ static inline int shstk_alloc_thread_stack(struct task_struct *p,
+diff --git a/arch/x86/include/uapi/asm/prctl.h b/arch/x86/include/uapi/asm/prctl.h
+index 4f3cb575cd1f..eeb11c6e6180 100644
+--- a/arch/x86/include/uapi/asm/prctl.h
++++ b/arch/x86/include/uapi/asm/prctl.h
+@@ -23,6 +23,7 @@
+ #define ARCH_X86_FEATURE_STATUS		0x3001
+ #define ARCH_X86_FEATURE_DISABLE	0x3002
+ #define ARCH_X86_FEATURE_LOCK		0x3003
++#define ARCH_X86_CET_ALLOC_SHSTK	0x3004
+ #define ARCH_X86_FEATURE_ENABLE		0x3005
+ 
+ /* x86 feature bits to be used with ARCH_X86_FEATURE arch_prctl()s */
+@@ -30,4 +31,5 @@
+ #define LINUX_X86_FEATURE_SHSTK		0x00000002
+ #define LINUX_X86_FEATURE_WRSS		0x00000010
+ 
++
+ #endif /* _ASM_X86_PRCTL_H */
+diff --git a/arch/x86/kernel/elf_feature_prctl.c b/arch/x86/kernel/elf_feature_prctl.c
+index 786384e6b984..55ebf9473433 100644
+--- a/arch/x86/kernel/elf_feature_prctl.c
++++ b/arch/x86/kernel/elf_feature_prctl.c
+@@ -27,6 +27,28 @@ static int elf_feat_copy_status_to_user(struct thread_shstk *shstk, u64 __user *
+ 	return copy_to_user(ubuf, buf, sizeof(buf));
+ }
+ 
++#ifdef CONFIG_X86_SHADOW_STACK
++static int handle_alloc_shstk(u64 arg2)
++{
++	unsigned long addr, size;
++
++	if (get_user(size, (unsigned long __user *)arg2))
++		return -EFAULT;
++
++	addr = cet_alloc_shstk(size);
++	if (IS_ERR_VALUE(addr))
++		return PTR_ERR((void *)addr);
++
++	if (put_user((u64)addr, (u64 __user *)arg2)) {
++		vm_munmap(addr, size);
++		return -EFAULT;
++	}
++
++	return 0;
++}
++#endif
++
++
+ int prctl_elf_feature(int option, u64 arg2)
+ {
+ 	struct thread_struct *thread = &current->thread;
+@@ -42,7 +64,7 @@ int prctl_elf_feature(int option, u64 arg2)
+ 			return -EPERM;
+ 
+ 		if (arg2 & LINUX_X86_FEATURE_SHSTK)
+-			shstk_disable()
++			shstk_disable();
+ 		if (arg2 & LINUX_X86_FEATURE_WRSS)
+ 			wrss_control(false);
+ 
+@@ -58,6 +80,10 @@ int prctl_elf_feature(int option, u64 arg2)
+ 	case ARCH_X86_FEATURE_LOCK:
+ 		thread->feat_prctl_locked |= arg2;
+ 		return 0;
++#ifdef CONFIG_X86_SHADOW_STACK
++	case ARCH_X86_CET_ALLOC_SHSTK:
++		return handle_alloc_shstk(arg2);
++#endif
+ 
+ 	default:
+ 		return -EINVAL;
+diff --git a/arch/x86/kernel/shstk.c b/arch/x86/kernel/shstk.c
+index 27c49d3dd46c..70326bd6e955 100644
+--- a/arch/x86/kernel/shstk.c
++++ b/arch/x86/kernel/shstk.c
+@@ -407,3 +407,29 @@ int restore_signal_shadow_stack(void)
+ 
+ 	return err;
+ }
++
++unsigned long cet_alloc_shstk(unsigned long len)
++{
++	unsigned long token;
++	unsigned long addr, ssp;
++
++	addr = alloc_shstk(round_up(len, PAGE_SIZE));
++
++	if (IS_ERR_VALUE(addr))
++		return addr;
++
++	/* Restore token is 8 bytes and aligned to 8 bytes */
++	ssp = addr + len;
++	token = ssp;
++
++	if (!in_ia32_syscall())
++		token |= BIT(0);
++	ssp -= 8;
++
++	if (write_user_shstk_64((u64 __user *)ssp, (u64)token)) {
++		vm_munmap(addr, len);
++		return -EINVAL;
++	}
++
++	return addr;
++}
+-- 
+2.31.1
+

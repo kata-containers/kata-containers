@@ -1,0 +1,67 @@
+From 425e0aedfb5247c85aa76cae93121751dd6ac22b Mon Sep 17 00:00:00 2001
+From: Biju Das <biju.das.jz@bp.renesas.com>
+Date: Thu, 23 Sep 2021 11:24:51 +0100
+Subject: [PATCH 0527/1418] dmaengine: sh: rz-dmac: Add DMA clock handling
+
+Currently, DMA clocks are turned on by the bootloader.
+This patch adds support for DMA clock handling so that
+the driver manages the DMA clocks.
+
+Fixes: 5000d37042a6 ("dmaengine: sh: Add DMAC driver for RZ/G2L SoC")
+Signed-off-by: Biju Das <biju.das.jz@bp.renesas.com>
+Reviewed-by: Geert Uytterhoeven <geert+renesas@glider.be>
+Link: https://lore.kernel.org/r/20210923102451.11403-1-biju.das.jz@bp.renesas.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/sh/rz-dmac.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/drivers/dma/sh/rz-dmac.c b/drivers/dma/sh/rz-dmac.c
+index f9f30cbeccbe..d9f2cfef878e 100644
+--- a/drivers/dma/sh/rz-dmac.c
++++ b/drivers/dma/sh/rz-dmac.c
+@@ -18,6 +18,7 @@
+ #include <linux/of_dma.h>
+ #include <linux/of_platform.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_runtime.h>
+ #include <linux/slab.h>
+ #include <linux/spinlock.h>
+ 
+@@ -872,6 +873,13 @@ static int rz_dmac_probe(struct platform_device *pdev)
+ 	/* Initialize the channels. */
+ 	INIT_LIST_HEAD(&dmac->engine.channels);
+ 
++	pm_runtime_enable(&pdev->dev);
++	ret = pm_runtime_resume_and_get(&pdev->dev);
++	if (ret < 0) {
++		dev_err(&pdev->dev, "pm_runtime_resume_and_get failed\n");
++		goto err_pm_disable;
++	}
++
+ 	for (i = 0; i < dmac->n_channels; i++) {
+ 		ret = rz_dmac_chan_probe(dmac, &dmac->channels[i], i);
+ 		if (ret < 0)
+@@ -925,6 +933,10 @@ static int rz_dmac_probe(struct platform_device *pdev)
+ 				  channel->lmdesc.base_dma);
+ 	}
+ 
++	pm_runtime_put(&pdev->dev);
++err_pm_disable:
++	pm_runtime_disable(&pdev->dev);
++
+ 	return ret;
+ }
+ 
+@@ -943,6 +955,8 @@ static int rz_dmac_remove(struct platform_device *pdev)
+ 	}
+ 	of_dma_controller_free(pdev->dev.of_node);
+ 	dma_async_device_unregister(&dmac->engine);
++	pm_runtime_put(&pdev->dev);
++	pm_runtime_disable(&pdev->dev);
+ 
+ 	return 0;
+ }
+-- 
+2.31.1
+

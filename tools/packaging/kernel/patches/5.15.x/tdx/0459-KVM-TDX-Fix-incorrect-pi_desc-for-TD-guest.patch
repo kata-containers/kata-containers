@@ -1,0 +1,32 @@
+From ba62102a1576e35e29c10b7e6f4794f9d1534712 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Fri, 13 Aug 2021 14:28:36 +0800
+Subject: [PATCH 0459/1418] KVM: TDX: Fix incorrect pi_desc for TD guest
+
+The incorrect vmx->pi_desc is assigned to IOMMU which
+causes pass-thru device in TD guest can't receive posted
+interrupts at all.
+
+This patch tested on 5.12-rc2 branch with NVME device.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/vmx/posted_intr.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kvm/vmx/posted_intr.c b/arch/x86/kvm/vmx/posted_intr.c
+index 1a46729f352b..1985aef53b4b 100644
+--- a/arch/x86/kvm/vmx/posted_intr.c
++++ b/arch/x86/kvm/vmx/posted_intr.c
+@@ -339,7 +339,7 @@ int pi_update_irte(struct kvm *kvm, unsigned int host_irq, uint32_t guest_irq,
+ 			continue;
+ 		}
+ 
+-		vcpu_info.pi_desc_addr = __pa(&to_vmx(vcpu)->pi_desc);
++		vcpu_info.pi_desc_addr = __pa(vcpu_to_pi_desc(vcpu));
+ 		vcpu_info.vector = irq.vector;
+ 
+ 		trace_kvm_pi_irte_update(host_irq, vcpu->vcpu_id, e->gsi,
+-- 
+2.31.1
+

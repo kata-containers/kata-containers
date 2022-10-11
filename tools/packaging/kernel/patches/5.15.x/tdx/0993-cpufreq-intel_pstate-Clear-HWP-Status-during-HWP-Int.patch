@@ -1,0 +1,37 @@
+From 3eff62ccfc2a2548dfdbe8ec38f4aa2cf692a650 Mon Sep 17 00:00:00 2001
+From: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Date: Thu, 4 Nov 2021 03:22:30 -0700
+Subject: [PATCH 0993/1418] cpufreq: intel_pstate: Clear HWP Status during HWP
+ Interrupt enable
+
+It is possible that some performance excursions happened before OS boot
+or enable HWP interrupts. So clear MSR_HWP_STATUS bits when we enable
+HWP interrupt. In this way a next excursion will results in a HWP
+interrupt.
+
+The status bits of MSR_HWP_STATUS must be cleared (0) by software so
+that a new status condition change will cause the hardware to set the
+bit again and issue the notification.
+
+Fixes: 57577c996d73 ("cpufreq: intel_pstate: Process HWP Guaranteed change notification")
+Signed-off-by: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ drivers/cpufreq/intel_pstate.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/cpufreq/intel_pstate.c b/drivers/cpufreq/intel_pstate.c
+index 2bb847650b9d..815df3daae9d 100644
+--- a/drivers/cpufreq/intel_pstate.c
++++ b/drivers/cpufreq/intel_pstate.c
+@@ -1652,6 +1652,7 @@ static void intel_pstate_enable_hwp_interrupt(struct cpudata *cpudata)
+ 
+ 		/* wrmsrl_on_cpu has to be outside spinlock as this can result in IPC */
+ 		wrmsrl_on_cpu(cpudata->cpu, MSR_HWP_INTERRUPT, 0x01);
++		wrmsrl_on_cpu(cpudata->cpu, MSR_HWP_STATUS, 0);
+ 	}
+ }
+ 
+-- 
+2.31.1
+

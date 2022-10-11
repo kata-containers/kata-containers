@@ -1,0 +1,26 @@
+From 3a6c00d7c4eb6272912f2ce0c4e8c11682f8e156 Mon Sep 17 00:00:00 2001
+From: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Date: Wed, 1 Dec 2021 17:10:21 -0700
+Subject: [PATCH 0905/1418] vfio: Adding Dynamic trap flag
+
+Signed-off-by: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+---
+ include/uapi/linux/vfio.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/include/uapi/linux/vfio.h b/include/uapi/linux/vfio.h
+index 901bddea4f7e..476faad24bd5 100644
+--- a/include/uapi/linux/vfio.h
++++ b/include/uapi/linux/vfio.h
+@@ -256,6 +256,7 @@ struct vfio_region_info {
+ #define VFIO_REGION_INFO_FLAG_WRITE	(1 << 1) /* Region supports write */
+ #define VFIO_REGION_INFO_FLAG_MMAP	(1 << 2) /* Region supports mmap */
+ #define VFIO_REGION_INFO_FLAG_CAPS	(1 << 3) /* Info supports caps */
++#define VFIO_REGION_INFO_FLAG_DYNAMIC_TRAP	(1 << 4) /* Region supports dynamic trap/untrap */
+ 	__u32	index;		/* Region index */
+ 	__u32	cap_offset;	/* Offset within info struct of first cap */
+ 	__u64	size;		/* Region size (bytes) */
+-- 
+2.31.1
+

@@ -1,0 +1,36 @@
+From 2c0d9339aead75ceb4e990c9ed323dcd32fe1c43 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Thu, 3 Dec 2020 15:12:40 -0800
+Subject: [PATCH 0432/1418] *** HACK *** KVM: TDX: remove sysprof bit
+
+It removes TDH.SYS.INIT .sysprof bit and ATTRIBUTE.sysporf bit.
+So drop related logics.
+
+Once TDX SEAM module is updated, squash this patch into corresponding
+patch.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/vmx.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 0e001c141121..0ddff41062b3 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -6522,6 +6522,12 @@ static void vmx_cancel_injection(struct kvm_vcpu *vcpu)
+ 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 0);
+ }
+ 
++/*
++ * TODO: TDX: if td.attribute.{debug = 1, perfmon = 0} and guest profiling
++ * is requested, * update GUEST_IA32_PERF_GLBOAL_CTRL,
++ * VM_ENTRY_LOAD_IA32_PERF_GLOBAL_CTRL, and
++ * VM_EXIT_LOAD_IA32_PERF_GLOBAL_CTRL properly.
++ */
+ static void atomic_switch_perf_msrs(struct vcpu_vmx *vmx)
+ {
+ 	int i, nr_msrs;
+-- 
+2.31.1
+

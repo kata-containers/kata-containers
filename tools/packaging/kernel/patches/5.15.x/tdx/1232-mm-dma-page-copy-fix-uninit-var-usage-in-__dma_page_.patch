@@ -1,0 +1,32 @@
+From ab3ab75ec2595c059b58fec57a8d40b9712a5e51 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Wed, 23 Mar 2022 16:21:07 -0700
+Subject: [PATCH 1232/1418] mm: dma page copy: fix uninit var usage in
+ __dma_page_copy_sg()
+
+nr_sgd is not initialized. However, when we hit the goto unmap_sg when if
+(!nr_sgs) branch is taken, we are checking using this variable. Init
+the variable to 0.
+
+Cc: Jiangbo Wu <jiangbo.wu@intel.com>
+Signed-off-by: Dave Jiang <dave.jiang>
+---
+ mm/dma_page_copy.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/mm/dma_page_copy.c b/mm/dma_page_copy.c
+index 084fbcf3bc60..faf0bb6dd712 100644
+--- a/mm/dma_page_copy.c
++++ b/mm/dma_page_copy.c
+@@ -15,7 +15,7 @@ static int __dma_page_copy_sg(struct scatterlist *src, struct scatterlist *dst,
+ 	dma_cap_mask_t mask;
+ 	dma_cookie_t cookie;
+ 	enum dma_status status;
+-	unsigned int nr_sgs, nr_sgd;
++	unsigned int nr_sgs, nr_sgd = 0;
+ 	int err = 0;
+ 
+ 	/* acquire DMA chan */
+-- 
+2.31.1
+

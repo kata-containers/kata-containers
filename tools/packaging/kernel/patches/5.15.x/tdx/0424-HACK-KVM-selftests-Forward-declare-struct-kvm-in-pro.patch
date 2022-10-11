@@ -1,0 +1,27 @@
+From f68318de4fe1b2992a4eda1d1c9c5783ba0af645 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Thu, 2 Apr 2020 13:58:54 -0700
+Subject: [PATCH 0424/1418] *** HACK *** KVM: selftests: Forward declare
+ 'struct kvm' in processor.h
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ tools/testing/selftests/kvm/include/x86_64/processor.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/tools/testing/selftests/kvm/include/x86_64/processor.h b/tools/testing/selftests/kvm/include/x86_64/processor.h
+index 05e65ca1c30c..6b8da10055b1 100644
+--- a/tools/testing/selftests/kvm/include/x86_64/processor.h
++++ b/tools/testing/selftests/kvm/include/x86_64/processor.h
+@@ -348,6 +348,7 @@ static inline unsigned long get_xmm(int n)
+ 
+ bool is_intel_cpu(void);
+ 
++struct kvm_vm;
+ struct kvm_x86_state;
+ struct kvm_x86_state *vcpu_save_state(struct kvm_vm *vm, uint32_t vcpuid);
+ void vcpu_load_state(struct kvm_vm *vm, uint32_t vcpuid,
+-- 
+2.31.1
+

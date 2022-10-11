@@ -1,0 +1,34 @@
+From feaaaaa2b3f38e92d280c935ed302271264c8972 Mon Sep 17 00:00:00 2001
+From: Liu Yi L <yi.l.liu@intel.com>
+Date: Wed, 10 Nov 2021 00:00:20 +0800
+Subject: [PATCH 0889/1418] vfio/pci: Add debug log in PRQ reporting
+
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ drivers/vfio/pci/vfio_pci_core.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/vfio/pci/vfio_pci_core.c b/drivers/vfio/pci/vfio_pci_core.c
+index 839dd47a1723..01186e6c7d9e 100644
+--- a/drivers/vfio/pci/vfio_pci_core.c
++++ b/drivers/vfio/pci/vfio_pci_core.c
+@@ -340,6 +340,7 @@ int vfio_pci_iommu_dev_fault_handler(struct iommu_fault *fault, void *data)
+ 
+ 	mutex_lock(&vdev->fault_queue_lock);
+ 
++	dev_info(&vdev->pdev->dev, "%s, enque fault event\n", __func__);
+ 	head = reg->head;
+ 	tail = reg->tail;
+ 	size = reg->nb_entries;
+@@ -362,6 +363,7 @@ int vfio_pci_iommu_dev_fault_handler(struct iommu_fault *fault, void *data)
+ 		return -EINVAL;
+ 
+ 	mutex_lock(&vdev->igate);
++	dev_info(&vdev->pdev->dev, "%s, signal userspace!\n", __func__);
+ 	if (vdev->ext_irqs[ext_irq_index].trigger)
+ 		eventfd_signal(vdev->ext_irqs[ext_irq_index].trigger, 1);
+ 	mutex_unlock(&vdev->igate);
+-- 
+2.31.1
+

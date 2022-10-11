@@ -1,0 +1,38 @@
+From 84af955d2b11a7eee376f94e0a0116176927de55 Mon Sep 17 00:00:00 2001
+From: Dongliang Mu <mudongliangabcd@gmail.com>
+Date: Thu, 21 Oct 2021 11:05:38 +0800
+Subject: [PATCH 0542/1418] dmaengine: tegra210-adma: fix pm runtime unbalance
+
+The previous commit 059e969c2a7d ("dmaengine: tegra210-adma: Using
+pm_runtime_resume_and_get to replace open coding") forgets to replace
+the pm_runtime_get_sync in the tegra_adma_probe, but removes the
+pm_runtime_put_noidle.
+
+Fix this by continuing to replace pm_runtime_get_sync with
+pm_runtime_resume_and_get in tegra_adma_probe.
+
+Fixes: 059e969c2a7d ("dmaengine: tegra210-adma: Using pm_runtime_resume_and_get to replace open coding")
+Signed-off-by: Dongliang Mu <mudongliangabcd@gmail.com>
+Reviewed-by: Jon Hunter <jonathanh@nvidia.com>
+Link: https://lore.kernel.org/r/20211021030538.3465287-1-mudongliangabcd@gmail.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/tegra210-adma.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/dma/tegra210-adma.c b/drivers/dma/tegra210-adma.c
+index 911533cc3133..ebbcff567c81 100644
+--- a/drivers/dma/tegra210-adma.c
++++ b/drivers/dma/tegra210-adma.c
+@@ -888,7 +888,7 @@ static int tegra_adma_probe(struct platform_device *pdev)
+ 
+ 	pm_runtime_enable(&pdev->dev);
+ 
+-	ret = pm_runtime_get_sync(&pdev->dev);
++	ret = pm_runtime_resume_and_get(&pdev->dev);
+ 	if (ret < 0)
+ 		goto rpm_disable;
+ 
+-- 
+2.31.1
+

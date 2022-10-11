@@ -1,0 +1,38 @@
+From 0f5c0c92dc96e59fe9bf2971362d448187e7b3ff Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Fri, 12 Jun 2020 10:26:19 -0700
+Subject: [PATCH 0399/1418] KVM: VMX: MOVE GDT and IDT accessors to common code
+
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/main.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index 9154971bbde1..782b8271e65f 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -311,7 +311,8 @@ static int vt_set_efer(struct kvm_vcpu *vcpu, u64 efer)
+ 
+ static void vt_get_idt(struct kvm_vcpu *vcpu, struct desc_ptr *dt)
+ {
+-	vmx_get_idt(vcpu, dt);
++	dt->size = vmread32(vcpu, GUEST_IDTR_LIMIT);
++	dt->address = vmreadl(vcpu, GUEST_IDTR_BASE);
+ }
+ 
+ static void vt_set_idt(struct kvm_vcpu *vcpu, struct desc_ptr *dt)
+@@ -321,7 +322,8 @@ static void vt_set_idt(struct kvm_vcpu *vcpu, struct desc_ptr *dt)
+ 
+ static void vt_get_gdt(struct kvm_vcpu *vcpu, struct desc_ptr *dt)
+ {
+-	vmx_get_gdt(vcpu, dt);
++	dt->size = vmread32(vcpu, GUEST_GDTR_LIMIT);
++	dt->address = vmreadl(vcpu, GUEST_GDTR_BASE);
+ }
+ 
+ static void vt_set_gdt(struct kvm_vcpu *vcpu, struct desc_ptr *dt)
+-- 
+2.31.1
+

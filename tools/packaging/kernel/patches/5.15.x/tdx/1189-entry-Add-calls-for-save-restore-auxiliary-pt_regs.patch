@@ -1,0 +1,114 @@
+From 0609dc3d9dbe5145ca3051ec60caebf1a1b0506e Mon Sep 17 00:00:00 2001
+From: Ira Weiny <ira.weiny@intel.com>
+Date: Mon, 10 Jan 2022 15:06:07 -0800
+Subject: [PATCH 1189/1418] entry: Add calls for save/restore auxiliary pt_regs
+
+Some architectures have auxiliary pt_regs space which is available to
+store extra information on the stack.  For ease of implementation the
+common C code was left to fill in the data when needed.
+
+Add calls to the architecture save and restore auxiliary pt_regs
+functions.  Define empty calls for any architecture which does not have
+auxiliary pt_regs.
+
+NOTE: Due to the split nature of the Xen exit code
+irqentry_exit_cond_resched() requires an unbalanced call to
+arch_restore_aux_pt_regs() regardless of the nature of the preemption
+configuration.
+
+Signed-off-by: Ira Weiny <ira.weiny@intel.com>
+---
+ include/linux/entry-common.h |  7 +++++++
+ kernel/entry/common.c        | 16 ++++++++++++++--
+ 2 files changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/include/linux/entry-common.h b/include/linux/entry-common.h
+index 14fd329847e7..b243f1cfd491 100644
+--- a/include/linux/entry-common.h
++++ b/include/linux/entry-common.h
+@@ -99,6 +99,13 @@ static inline __must_check int arch_syscall_enter_tracehook(struct pt_regs *regs
+ }
+ #endif
+ 
++#ifndef CONFIG_ARCH_HAS_PTREGS_AUXILIARY
++
++static inline void arch_save_aux_pt_regs(struct pt_regs *regs) { }
++static inline void arch_restore_aux_pt_regs(struct pt_regs *regs) { }
++
++#endif
++
+ /**
+  * enter_from_user_mode - Establish state when coming from user mode
+  *
+diff --git a/kernel/entry/common.c b/kernel/entry/common.c
+index 2bbad7af15be..19e87ea1896f 100644
+--- a/kernel/entry/common.c
++++ b/kernel/entry/common.c
+@@ -323,7 +323,7 @@ noinstr irqentry_state_t irqentry_enter(struct pt_regs *regs)
+ 
+ 	if (user_mode(regs)) {
+ 		irqentry_enter_from_user_mode(regs);
+-		return ret;
++		goto aux_save;
+ 	}
+ 
+ 	/*
+@@ -362,7 +362,7 @@ noinstr irqentry_state_t irqentry_enter(struct pt_regs *regs)
+ 		instrumentation_end();
+ 
+ 		ret.exit_rcu = true;
+-		return ret;
++		goto aux_save;
+ 	}
+ 
+ 	/*
+@@ -377,6 +377,11 @@ noinstr irqentry_state_t irqentry_enter(struct pt_regs *regs)
+ 	trace_hardirqs_off_finish();
+ 	instrumentation_end();
+ 
++aux_save:
++	instrumentation_begin();
++	arch_save_aux_pt_regs(regs);
++	instrumentation_end();
++
+ 	return ret;
+ }
+ 
+@@ -408,6 +413,7 @@ static void exit_cond_resched(void)
+ 
+ void irqentry_exit_cond_resched(struct pt_regs *regs)
+ {
++	arch_restore_aux_pt_regs(regs);
+ 	exit_cond_resched();
+ }
+ 
+@@ -415,6 +421,10 @@ noinstr void irqentry_exit(struct pt_regs *regs, irqentry_state_t state)
+ {
+ 	lockdep_assert_irqs_disabled();
+ 
++	instrumentation_begin();
++	arch_restore_aux_pt_regs(regs);
++	instrumentation_end();
++
+ 	/* Check whether this returns to user mode */
+ 	if (user_mode(regs)) {
+ 		irqentry_exit_to_user_mode(regs);
+@@ -464,6 +474,7 @@ irqentry_state_t noinstr irqentry_nmi_enter(struct pt_regs *regs)
+ 	instrumentation_begin();
+ 	trace_hardirqs_off_finish();
+ 	ftrace_nmi_enter();
++	arch_save_aux_pt_regs(regs);
+ 	instrumentation_end();
+ 
+ 	return irq_state;
+@@ -472,6 +483,7 @@ irqentry_state_t noinstr irqentry_nmi_enter(struct pt_regs *regs)
+ void noinstr irqentry_nmi_exit(struct pt_regs *regs, irqentry_state_t irq_state)
+ {
+ 	instrumentation_begin();
++	arch_restore_aux_pt_regs(regs);
+ 	ftrace_nmi_exit();
+ 	if (irq_state.lockdep) {
+ 		trace_hardirqs_on_prepare();
+-- 
+2.31.1
+

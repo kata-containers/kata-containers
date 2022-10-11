@@ -1,0 +1,243 @@
+From 6d89ed5ae43bd56bdd29b146ef9ae03e0fd6fb5d Mon Sep 17 00:00:00 2001
+From: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Date: Mon, 30 Aug 2021 11:15:23 -0700
+Subject: [PATCH 1108/1418] x86/cet/shstk: Handle signals for shadow stack
+
+When a signal is handled normally the context is pushed to the stack
+before handling it. For shadow stacks, since the shadow stack only track's
+return addresses, there isn't any state that needs to be pushed. However,
+there are still a few things that need to be done. These things are
+userspace visible and which will be kernel ABI for shadow stacks.
+
+One is to make sure the restorer address is written to shadow stack, since
+the signal handler (if not changing ucontext) returns to the restorer, and
+the restorer calls sigreturn. So add the restorer on the shadow stack
+before handling the signal, so there is not a conflict when the signal
+handler returns to the restorer.
+
+The other thing to do is to place a restore token on the thread's shadow
+stack before handling the signal and check it during sigreturn. This
+is an extra layer of protection to hamper attackers calling sigreturn
+manually as in SROP-like attacks.
+
+So, when handling a signal push
+ - a shadow stack restore token pointing to the current shadow stack
+   address
+ - the restorer address below the restore token.
+
+In sigreturn, verify the restore token and pop the shadow stack.
+
+Signed-off-by: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Signed-off-by: Rick Edgecombe <rick.p.edgecombe@intel.com>
+Cc: Andy Lutomirski <luto@kernel.org>
+Cc: Cyrill Gorcunov <gorcunov@gmail.com>
+Cc: Florian Weimer <fweimer@redhat.com>
+Cc: H. Peter Anvin <hpa@zytor.com>
+Cc: Kees Cook <keescook@chromium.org>
+---
+ arch/x86/ia32/ia32_signal.c | 25 ++++++++++++++++-----
+ arch/x86/include/asm/cet.h  |  4 ++++
+ arch/x86/kernel/shstk.c     | 44 +++++++++++++++++++++++++++++++++++++
+ arch/x86/kernel/signal.c    | 13 +++++++++++
+ 4 files changed, 81 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/ia32/ia32_signal.c b/arch/x86/ia32/ia32_signal.c
+index c9c3859322fa..a8d038409d60 100644
+--- a/arch/x86/ia32/ia32_signal.c
++++ b/arch/x86/ia32/ia32_signal.c
+@@ -34,6 +34,7 @@
+ #include <asm/sigframe.h>
+ #include <asm/sighandling.h>
+ #include <asm/smap.h>
++#include <asm/cet.h>
+ 
+ static inline void reload_segments(struct sigcontext_32 *sc)
+ {
+@@ -112,6 +113,10 @@ COMPAT_SYSCALL_DEFINE0(sigreturn)
+ 
+ 	if (!ia32_restore_sigcontext(regs, &frame->sc))
+ 		goto badframe;
++
++	if (restore_signal_shadow_stack())
++		goto badframe;
++
+ 	return regs->ax;
+ 
+ badframe:
+@@ -137,6 +142,9 @@ COMPAT_SYSCALL_DEFINE0(rt_sigreturn)
+ 	if (!ia32_restore_sigcontext(regs, &frame->uc.uc_mcontext))
+ 		goto badframe;
+ 
++	if (restore_signal_shadow_stack())
++		goto badframe;
++
+ 	if (compat_restore_altstack(&frame->uc.uc_stack))
+ 		goto badframe;
+ 
+@@ -261,6 +269,9 @@ int ia32_setup_frame(int sig, struct ksignal *ksig,
+ 			restorer = &frame->retcode;
+ 	}
+ 
++	if (setup_signal_shadow_stack(1, restorer))
++		return -EFAULT;
++
+ 	if (!user_access_begin(frame, sizeof(*frame)))
+ 		return -EFAULT;
+ 
+@@ -318,6 +329,15 @@ int ia32_setup_rt_frame(int sig, struct ksignal *ksig,
+ 
+ 	frame = get_sigframe(ksig, regs, sizeof(*frame), &fp);
+ 
++	if (ksig->ka.sa.sa_flags & SA_RESTORER)
++		restorer = ksig->ka.sa.sa_restorer;
++	else
++		restorer = current->mm->context.vdso +
++			vdso_image_32.sym___kernel_rt_sigreturn;
++
++	if (setup_signal_shadow_stack(1, restorer))
++		return -EFAULT;
++
+ 	if (!user_access_begin(frame, sizeof(*frame)))
+ 		return -EFAULT;
+ 
+@@ -333,11 +353,6 @@ int ia32_setup_rt_frame(int sig, struct ksignal *ksig,
+ 	unsafe_put_user(0, &frame->uc.uc_link, Efault);
+ 	unsafe_compat_save_altstack(&frame->uc.uc_stack, regs->sp, Efault);
+ 
+-	if (ksig->ka.sa.sa_flags & SA_RESTORER)
+-		restorer = ksig->ka.sa.sa_restorer;
+-	else
+-		restorer = current->mm->context.vdso +
+-			vdso_image_32.sym___kernel_rt_sigreturn;
+ 	unsafe_put_user(ptr_to_compat(restorer), &frame->pretcode, Efault);
+ 
+ 	/*
+diff --git a/arch/x86/include/asm/cet.h b/arch/x86/include/asm/cet.h
+index 1f4bd9c14717..64bd5e3ccb07 100644
+--- a/arch/x86/include/asm/cet.h
++++ b/arch/x86/include/asm/cet.h
+@@ -21,6 +21,8 @@ int shstk_disable(void);
+ int shstk_setup_rstor_token(bool proc32, unsigned long restorer,
+ 			    unsigned long *new_ssp);
+ int shstk_check_rstor_token(bool proc32, unsigned long *new_ssp);
++int setup_signal_shadow_stack(int proc32, void __user *restorer);
++int restore_signal_shadow_stack(void);
+ #else
+ static inline void shstk_setup(void) {}
+ static inline int shstk_alloc_thread_stack(struct task_struct *p,
+@@ -33,6 +35,8 @@ static inline int shstk_setup_rstor_token(bool proc32, unsigned long restorer,
+ 					  unsigned long *new_ssp) { return 0; }
+ static inline int shstk_check_rstor_token(bool proc32,
+ 					  unsigned long *new_ssp) { return 0; }
++static inline int setup_signal_shadow_stack(int proc32, void __user *restorer) { return 0; }
++static inline int restore_signal_shadow_stack(void) { return 0; }
+ #endif /* CONFIG_X86_SHADOW_STACK */
+ 
+ #endif /* __ASSEMBLY__ */
+diff --git a/arch/x86/kernel/shstk.c b/arch/x86/kernel/shstk.c
+index 01a780629529..59565daf4b1d 100644
+--- a/arch/x86/kernel/shstk.c
++++ b/arch/x86/kernel/shstk.c
+@@ -330,3 +330,47 @@ int shstk_check_rstor_token(bool proc32, unsigned long *new_ssp)
+ 
+ 	return 0;
+ }
++
++int setup_signal_shadow_stack(int proc32, void __user *restorer)
++{
++	struct thread_shstk *shstk = &current->thread.shstk;
++	unsigned long new_ssp;
++	void *xstate;
++	int err;
++
++	if (!cpu_feature_enabled(X86_FEATURE_SHSTK) || !shstk->size)
++		return 0;
++
++	err = shstk_setup_rstor_token(proc32, (unsigned long)restorer,
++				      &new_ssp);
++	if (err)
++		return err;
++
++	xstate = start_update_xsave_msrs(XFEATURE_CET_USER);
++	err = xsave_wrmsrl(xstate, MSR_IA32_PL3_SSP, new_ssp);
++	end_update_xsave_msrs();
++
++	return err;
++}
++
++int restore_signal_shadow_stack(void)
++{
++	struct thread_shstk *shstk = &current->thread.shstk;
++	void *xstate;
++	int proc32 = in_ia32_syscall();
++	unsigned long new_ssp;
++	int err;
++
++	if (!cpu_feature_enabled(X86_FEATURE_SHSTK) || !shstk->size)
++		return 0;
++
++	err = shstk_check_rstor_token(proc32, &new_ssp);
++	if (err)
++		return err;
++
++	xstate = start_update_xsave_msrs(XFEATURE_CET_USER);
++	err = xsave_wrmsrl(xstate, MSR_IA32_PL3_SSP, new_ssp);
++	end_update_xsave_msrs();
++
++	return err;
++}
+diff --git a/arch/x86/kernel/signal.c b/arch/x86/kernel/signal.c
+index ec71e06ae364..e6202fc2a56c 100644
+--- a/arch/x86/kernel/signal.c
++++ b/arch/x86/kernel/signal.c
+@@ -48,6 +48,7 @@
+ #include <asm/syscall.h>
+ #include <asm/sigframe.h>
+ #include <asm/signal.h>
++#include <asm/cet.h>
+ 
+ #ifdef CONFIG_X86_64
+ /*
+@@ -471,6 +472,9 @@ static int __setup_rt_frame(int sig, struct ksignal *ksig,
+ 	frame = get_sigframe(&ksig->ka, regs, sizeof(struct rt_sigframe), &fp);
+ 	uc_flags = frame_uc_flags(regs);
+ 
++	if (setup_signal_shadow_stack(0, ksig->ka.sa.sa_restorer))
++		return -EFAULT;
++
+ 	if (!user_access_begin(frame, sizeof(*frame)))
+ 		return -EFAULT;
+ 
+@@ -576,6 +580,9 @@ static int x32_setup_rt_frame(struct ksignal *ksig,
+ 
+ 	uc_flags = frame_uc_flags(regs);
+ 
++	if (setup_signal_shadow_stack(0, ksig->ka.sa.sa_restorer))
++		return -EFAULT;
++
+ 	if (!user_access_begin(frame, sizeof(*frame)))
+ 		return -EFAULT;
+ 
+@@ -674,6 +681,9 @@ SYSCALL_DEFINE0(rt_sigreturn)
+ 	if (!restore_sigcontext(regs, &frame->uc.uc_mcontext, uc_flags))
+ 		goto badframe;
+ 
++	if (restore_signal_shadow_stack())
++		goto badframe;
++
+ 	if (restore_altstack(&frame->uc.uc_stack))
+ 		goto badframe;
+ 
+@@ -991,6 +1001,9 @@ COMPAT_SYSCALL_DEFINE0(x32_rt_sigreturn)
+ 	if (!restore_sigcontext(regs, &frame->uc.uc_mcontext, uc_flags))
+ 		goto badframe;
+ 
++	if (restore_signal_shadow_stack())
++		goto badframe;
++
+ 	if (compat_restore_altstack(&frame->uc.uc_stack))
+ 		goto badframe;
+ 
+-- 
+2.31.1
+

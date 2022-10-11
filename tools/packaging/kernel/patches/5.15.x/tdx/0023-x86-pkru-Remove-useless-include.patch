@@ -1,0 +1,47 @@
+From 72853b297bae3e6891fc99e85fa73cf3ffa7939d Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 15 Oct 2021 03:15:57 +0200
+Subject: [PATCH 0023/1418] x86/pkru: Remove useless include
+
+PKRU code does not need anything from FPU headers. Include cpufeature.h
+instead and fixup the resulting fallout in perf.
+
+This is a preparation for FPU changes in order to prevent recursive include
+hell.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211015011538.551522694@linutronix.de
+---
+ arch/x86/events/perf_event.h | 1 +
+ arch/x86/include/asm/pkru.h  | 2 +-
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/events/perf_event.h b/arch/x86/events/perf_event.h
+index e3ac05c97b5e..134c08df7340 100644
+--- a/arch/x86/events/perf_event.h
++++ b/arch/x86/events/perf_event.h
+@@ -14,6 +14,7 @@
+ 
+ #include <linux/perf_event.h>
+ 
++#include <asm/fpu/xstate.h>
+ #include <asm/intel_ds.h>
+ #include <asm/cpu.h>
+ 
+diff --git a/arch/x86/include/asm/pkru.h b/arch/x86/include/asm/pkru.h
+index ccc539faa5bb..4cd49afa0ca4 100644
+--- a/arch/x86/include/asm/pkru.h
++++ b/arch/x86/include/asm/pkru.h
+@@ -2,7 +2,7 @@
+ #ifndef _ASM_X86_PKRU_H
+ #define _ASM_X86_PKRU_H
+ 
+-#include <asm/fpu/xstate.h>
++#include <asm/cpufeature.h>
+ 
+ #define PKRU_AD_BIT 0x1
+ #define PKRU_WD_BIT 0x2
+-- 
+2.31.1
+

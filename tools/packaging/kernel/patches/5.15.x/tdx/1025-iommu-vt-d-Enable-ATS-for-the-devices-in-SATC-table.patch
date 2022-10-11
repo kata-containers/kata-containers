@@ -1,0 +1,128 @@
+From b5b3824d19ed99d746f6dded0b048291662b7735 Mon Sep 17 00:00:00 2001
+From: Yian Chen <yian.chen@intel.com>
+Date: Mon, 11 Oct 2021 17:21:29 -0700
+Subject: [PATCH 1025/1418] iommu/vt-d: Enable ATS for the devices in SATC
+ table
+
+Starting from Intel VT-d v3.2, Intel platform BIOS can provide
+additional SATC table structure. SATC table includes a list of
+SoC integrated devices that support ATC (Address translation
+cache).
+
+All Intel SoC devices in SATC table are trusted to enable and
+use ATS. When IOMMU is working in scalable mode, software
+should enable ATS for every device in SATC table.
+
+On the other hand, if IOMMU is in legacy mode, ATS of SATC
+capable devices can work transparently to software and be
+automatically enabled by IOMMU hardware. As the result,
+software shouldn't enable ATS on these devices, otherwise
+duplicate device TLB invalidation will occur.
+
+Signed-off-by: Yian Chen <yian.chen@intel.com>
+---
+ drivers/iommu/intel/iommu.c | 53 ++++++++++++++++++++++++++++++++++---
+ include/linux/intel-iommu.h |  2 +-
+ 2 files changed, 51 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 47d31feaa800..2e96002be0ef 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -896,7 +896,6 @@ static bool iommu_is_dummy(struct intel_iommu *iommu, struct device *dev)
+ 
+ 	return false;
+ }
+-
+ struct intel_iommu *device_to_iommu(struct device *dev, u8 *bus, u8 *devfn)
+ {
+ 	struct dmar_drhd_unit *drhd = NULL;
+@@ -2618,7 +2617,7 @@ static struct dmar_domain *dmar_insert_one_dev_info(struct intel_iommu *iommu,
+ 
+ 		if (ecap_dev_iotlb_support(iommu->ecap) &&
+ 		    pci_ats_supported(pdev) &&
+-		    dmar_find_matched_atsr_unit(pdev))
++		    dmar_ats_supported(pdev, iommu))
+ 			info->ats_supported = 1;
+ 
+ 		if (sm_supported(iommu)) {
+@@ -3983,7 +3982,42 @@ static void intel_iommu_free_dmars(void)
+ 	}
+ }
+ 
+-int dmar_find_matched_atsr_unit(struct pci_dev *dev)
++/* dev_satc_state - Find if dev is in a DMAR SATC table
++ *
++ * return value:
++ *    1: dev is in STAC table and ATS is required
++ *    0: dev is in SATC table and ATS is optional
++ *    -1: dev isn't in SATC table
++ */
++static int dev_satc_state(struct pci_dev *dev)
++{
++	int i, ret = -1;
++	struct device *tmp;
++	struct dmar_satc_unit *satcu;
++	struct acpi_dmar_satc *satc;
++
++	dev = pci_physfn(dev);
++	rcu_read_lock();
++
++	list_for_each_entry_rcu(satcu, &dmar_satc_units, list) {
++		satc = container_of(satcu->hdr, struct acpi_dmar_satc, header);
++		if (satc->segment != pci_domain_nr(dev->bus))
++			continue;
++		for_each_dev_scope(satcu->devices, satcu->devices_cnt, i, tmp)
++			if (to_pci_dev(tmp) == dev) {
++				if (satc->flags)
++					ret = 1;
++				else
++					ret = 0;
++				goto out;
++			}
++	}
++out:
++	rcu_read_unlock();
++	return ret;
++}
++
++int dmar_ats_supported(struct pci_dev *dev, struct intel_iommu *iommu)
+ {
+ 	int i, ret = 1;
+ 	struct pci_bus *bus;
+@@ -3993,6 +4027,19 @@ int dmar_find_matched_atsr_unit(struct pci_dev *dev)
+ 	struct dmar_atsr_unit *atsru;
+ 
+ 	dev = pci_physfn(dev);
++	i = dev_satc_state(dev);
++	if (i >= 0) {
++		/* This dev supports ATS as it is in SATC table!
++		 * When IOMMU is in legacy mode, enabling ATS is done
++		 * automatically by HW for the device that requires
++		 * ATS, hence OS should not enable this device ATS
++		 * to avoid duplicated TLB invalidation
++		 */
++		if (i && !sm_supported(iommu))
++			ret = 0;
++		return ret;
++	}
++
+ 	for (bus = dev->bus; bus; bus = bus->parent) {
+ 		bridge = bus->self;
+ 		/* If it's an integrated device, allow ATS */
+diff --git a/include/linux/intel-iommu.h b/include/linux/intel-iommu.h
+index 73b39a5b24fe..b05c7ead9d48 100644
+--- a/include/linux/intel-iommu.h
++++ b/include/linux/intel-iommu.h
+@@ -733,7 +733,7 @@ static inline int first_pte_in_page(struct dma_pte *pte)
+ }
+ 
+ extern struct dmar_drhd_unit * dmar_find_matched_drhd_unit(struct pci_dev *dev);
+-extern int dmar_find_matched_atsr_unit(struct pci_dev *dev);
++extern int dmar_ats_supported(struct pci_dev *dev, struct intel_iommu *iommu);
+ 
+ extern int dmar_enable_qi(struct intel_iommu *iommu);
+ extern void dmar_disable_qi(struct intel_iommu *iommu);
+-- 
+2.31.1
+

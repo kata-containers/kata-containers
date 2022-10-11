@@ -1,0 +1,79 @@
+From e02f4b34b3ab17e49e81883e9880a926ce204c68 Mon Sep 17 00:00:00 2001
+From: Jithu Joseph <jithu.joseph@intel.com>
+Date: Thu, 12 May 2022 17:17:43 -0700
+Subject: [PATCH 1368/1418] Revert "x86/microcode/intel: expose
+ collect_cpu_info_early() for IFS"
+
+This reverts commit 294c9aa68a08ffe7c3aef3194fbca3c2fa137144.
+---
+ arch/x86/include/asm/microcode_intel.h | 6 ------
+ arch/x86/kernel/cpu/microcode/intel.c  | 8 +++-----
+ 2 files changed, 3 insertions(+), 11 deletions(-)
+
+diff --git a/arch/x86/include/asm/microcode_intel.h b/arch/x86/include/asm/microcode_intel.h
+index c2976e1deb1b..a342234a0a5b 100644
+--- a/arch/x86/include/asm/microcode_intel.h
++++ b/arch/x86/include/asm/microcode_intel.h
+@@ -75,9 +75,6 @@ extern void show_ucode_info_early(void);
+ extern int __init save_microcode_in_initrd_intel(void);
+ void reload_ucode_intel(void);
+ int update_cpusvn_intel(void);
+-int collect_cpu_info_early(struct ucode_cpu_info *uci);
+-bool cpu_signatures_match(unsigned int s1, unsigned int p1,
+-			  unsigned int s2, unsigned int p2);
+ #else
+ static inline __init void load_ucode_intel_bsp(void) {}
+ static inline void load_ucode_intel_ap(void) {}
+@@ -85,9 +82,6 @@ static inline void show_ucode_info_early(void) {}
+ static inline int __init save_microcode_in_initrd_intel(void) { return -EINVAL; }
+ static inline void reload_ucode_intel(void) {}
+ static inline int update_cpusvn_intel(void) { return -1; }
+-static inline void collect_cpu_info_early(struct ucode_cpu_info *uci) {}
+-static inline void cpu_signatures_match(unsigned int s1, unsigned int p1,
+-					unsigned int s2, unsigned int p2) {}
+ #endif
+ 
+ #endif /* _ASM_X86_MICROCODE_INTEL_H */
+diff --git a/arch/x86/kernel/cpu/microcode/intel.c b/arch/x86/kernel/cpu/microcode/intel.c
+index b2982c1b0b84..5e9dcd645913 100644
+--- a/arch/x86/kernel/cpu/microcode/intel.c
++++ b/arch/x86/kernel/cpu/microcode/intel.c
+@@ -48,8 +48,8 @@ static struct microcode_intel *intel_ucode_patch;
+ static int llc_size_per_core;
+ extern bool ucode_rollback;
+ 
+-bool cpu_signatures_match(unsigned int s1, unsigned int p1,
+-			  unsigned int s2, unsigned int p2)
++static inline bool cpu_signatures_match(unsigned int s1, unsigned int p1,
++					unsigned int s2, unsigned int p2)
+ {
+ 	if (s1 != s2)
+ 		return false;
+@@ -61,7 +61,6 @@ bool cpu_signatures_match(unsigned int s1, unsigned int p1,
+ 	/* ... or they intersect. */
+ 	return p1 & p2;
+ }
+-EXPORT_SYMBOL_GPL(cpu_signatures_match);
+ 
+ /*
+  * Returns 1 if update has been found, 0 otherwise.
+@@ -346,7 +345,7 @@ scan_microcode(void *data, size_t size, struct ucode_cpu_info *uci, bool save)
+ 	return patch;
+ }
+ 
+-int collect_cpu_info_early(struct ucode_cpu_info *uci)
++static int collect_cpu_info_early(struct ucode_cpu_info *uci)
+ {
+ 	unsigned int val[2];
+ 	unsigned int family, model;
+@@ -376,7 +375,6 @@ int collect_cpu_info_early(struct ucode_cpu_info *uci)
+ 
+ 	return 0;
+ }
+-EXPORT_SYMBOL_GPL(collect_cpu_info_early);
+ 
+ static void show_saved_mc(void)
+ {
+-- 
+2.31.1
+

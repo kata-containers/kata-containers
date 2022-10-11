@@ -1,0 +1,420 @@
+From b47629145a66bb3dd6a88a0397634f7144ba93e8 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@intel.com>
+Date: Fri, 1 Apr 2022 22:43:13 +0000
+Subject: [PATCH 1278/1418] x86/tdx: Port attestation changes from v5.17-rcx
+ tree
+
+Attestation driver has been modified in latest upstream version to
+adapt to GetQuote ABI changes in Guest-Host Communication Interface
+(GHCI) Specification, sec 3.3, titled "VP.VMCALL<GetQuote>".
+
+It also includes some changes related to upstream review.
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@intel.com>
+---
+ arch/x86/include/asm/tdx.h                    |  10 +-
+ arch/x86/kernel/tdx.c                         | 140 ++++++++++--------
+ .../platform/x86/intel/tdx/intel_tdx_attest.c |  35 ++---
+ include/uapi/misc/tdx.h                       |   5 +
+ 4 files changed, 104 insertions(+), 86 deletions(-)
+
+diff --git a/arch/x86/include/asm/tdx.h b/arch/x86/include/asm/tdx.h
+index cff0c27230aa..f96cce25ec51 100644
+--- a/arch/x86/include/asm/tdx.h
++++ b/arch/x86/include/asm/tdx.h
+@@ -97,13 +97,15 @@ extern int tdx_hcall_gpa_intent(phys_addr_t start, phys_addr_t end,
+ 
+ extern void tdx_accept_memory(phys_addr_t start, phys_addr_t end);
+ 
+-int tdx_mcall_tdreport(u64 data, u64 reportdata);
++int tdx_mcall_tdreport(void *data, void *reportdata);
+ 
+-int tdx_mcall_rtmr_extend(u64 data, u64 rmtr);
++int tdx_mcall_rtmr_extend(void *data, u64 rmtr);
+ 
+-int tdx_hcall_get_quote(u64 data);
++int tdx_hcall_get_quote(void *data, u64 len);
+ 
+-extern void (*tdx_event_notify_handler)(void);
++void tdx_setup_ev_notify_handler(void (*handler)(void));
++
++void tdx_remove_ev_notify_handler(void);
+ 
+ bool tdx_guest_dev_authorized(struct device *dev);
+ 
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index bf6c139eddfa..d926065718ae 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -41,16 +41,15 @@
+ 
+ /* TDX Module call error codes */
+ #define TDX_PAGE_ALREADY_ACCEPTED	0x00000b0a00000000
+-#define TDCALL_RETURN_CODE_MASK		0xFFFFFFFF00000000
++#define TDCALL_RETURN_CODE_MASK		0xffffffff00000000
+ #define TDCALL_OPERAND_BUSY		0x8000020000000000
+ #define TDCALL_INVALID_OPERAND		0x8000000000000000
+ #define TDCALL_SUCCESS			0x0
+ #define TDCALL_RETURN_CODE(a)		((a) & TDCALL_RETURN_CODE_MASK)
+ 
+ /* TDX hypercall error codes */
+-#define TDVMCALL_SUCCESS		0x0
+-#define TDVMCALL_INVALID_OPERAND	0x8000000000000000
+-#define TDVMCALL_TDREPORT_FAILED	0x8000000000000001
++#define TDVMCALL_GET_QUOTE_ERR		0x8000000000000000
++#define TDVMCALL_GET_QUOTE_QGS_UNAVIL	0x8000000000000001
+ 
+ #define VE_IS_IO_OUT(exit_qual)		(((exit_qual) & 8) ? 0 : 1)
+ #define VE_GET_IO_SIZE(exit_qual)	(((exit_qual) & 7) + 1)
+@@ -63,12 +62,26 @@ static struct {
+ } td_info __ro_after_init;
+ 
+ /*
+- * Currently it will be used only by the attestation
+- * driver. So, race condition with read/write operation
+- * is not considered.
++ * Handler used to report notifications about
++ * TDX_GUEST_EVENT_NOTIFY_VECTOR IRQ. Currently it will be
++ * used only by the attestation driver. So, race condition
++ * with read/write operation is not considered.
+  */
+-void (*tdx_event_notify_handler)(void);
+-EXPORT_SYMBOL_GPL(tdx_event_notify_handler);
++static void (*tdx_event_notify_handler)(void);
++
++/* Helper function to register tdx_event_notify_handler */
++void tdx_setup_ev_notify_handler(void (*handler)(void))
++{
++        tdx_event_notify_handler = handler;
++}
++EXPORT_SYMBOL_GPL(tdx_setup_ev_notify_handler);
++
++/* Helper function to unregister tdx_event_notify_handler */
++void tdx_remove_ev_notify_handler(void)
++{
++        tdx_event_notify_handler = NULL;
++}
++EXPORT_SYMBOL_GPL(tdx_remove_ev_notify_handler);
+ 
+ static int tdx_guest = -1;
+ 
+@@ -176,13 +189,6 @@ DEFINE_IDTENTRY_SYSVEC(sysvec_tdx_event_notify)
+ 	if (tdx_event_notify_handler)
+ 		tdx_event_notify_handler();
+ 
+-	/*
+-	 * The hypervisor requires that the APIC EOI should be acked.
+-	 * If the APIC EOI is not acked, the APIC ISR bit for the
+-	 * TDX_GUEST_EVENT_NOTIFY_VECTOR will not be cleared and then it
+-	 * will block the interrupt whose vector is lower than
+-	 * TDX_GUEST_EVENT_NOTIFY_VECTOR.
+-	 */
+ 	ack_APIC_irq();
+ 
+ 	set_irq_regs(old_regs);
+@@ -191,82 +197,88 @@ DEFINE_IDTENTRY_SYSVEC(sysvec_tdx_event_notify)
+ /*
+  * tdx_mcall_tdreport() - Generate TDREPORT_STRUCT using TDCALL.
+  *
+- * @data        : Physical address of 1024B aligned data to store
++ * @data        : Address of 1024B aligned data to store
+  *                TDREPORT_STRUCT.
+- * @reportdata  : Physical address of 64B aligned report data
++ * @reportdata  : Address of 64B aligned report data
+  *
+  * return 0 on success or failure error number.
+  */
+-int tdx_mcall_tdreport(u64 data, u64 reportdata)
++int tdx_mcall_tdreport(void *data, void *reportdata)
+ {
+ 	u64 ret;
+ 
+ 	/*
+-	 * Use confidential guest TDX check to ensure this API is only
+-	 * used by TDX guest platforms.
++	 * Check for a valid TDX guest to ensure this API is only
++	 * used by TDX guest platform. Also make sure "data" and
++	 * "reportdata" pointers are valid.
+ 	 */
+-	if (!data || !reportdata || !cc_platform_has(CC_ATTR_GUEST_TDX))
++	if (!data || !reportdata || !cpu_feature_enabled(X86_FEATURE_TDX_GUEST))
+ 		return -EINVAL;
+ 
+ 	/*
+ 	 * Pass the physical address of user generated reportdata
+ 	 * and the physical address of out pointer to store the
+-	 * tdreport data to the TDX module to generate the
++	 * TDREPORT data to the TDX module to generate the
+ 	 * TD report. Generated data contains measurements/configuration
+ 	 * data of the TD guest. More info about ABI can be found in TDX
+-	 * Guest-Host-Communication Interface (GHCI), sec 2.4.5.
++	 * Guest-Host-Communication Interface (GHCI), sec titled
++	 * "TDG.MR.REPORT".
+ 	 */
+-	ret = __trace_tdx_module_call(TDX_GET_REPORT, data, reportdata, 0, 0,
+-				      NULL);
++	ret = __trace_tdx_module_call(TDX_GET_REPORT, virt_to_phys(data),
++				virt_to_phys(reportdata), 0, 0, NULL);
+ 
+-	if (ret == TDCALL_SUCCESS)
+-		return 0;
+-	else if (TDCALL_RETURN_CODE(ret) == TDCALL_INVALID_OPERAND)
+-		return -EINVAL;
+-	else if (TDCALL_RETURN_CODE(ret) == TDCALL_OPERAND_BUSY)
+-		return -EBUSY;
++	if (ret) {
++		if (TDCALL_RETURN_CODE(ret) == TDCALL_INVALID_OPERAND)
++			return -EINVAL;
++		if (TDCALL_RETURN_CODE(ret) == TDCALL_OPERAND_BUSY)
++			return -EBUSY;
++		return -EIO;
++	}
+ 
+-	return -EIO;
++	return 0;
+ }
+ EXPORT_SYMBOL_GPL(tdx_mcall_tdreport);
+ 
+ /*
+  * tdx_mcall_rtmr_extend() - Extend a TDX measurement register
+  *
+- * @data	: Physical address of 96B aligned data.
++ * @data	: Address of 96B aligned data.
+  * @rtmr	: RTMR number
+  *
+  * return 0 on success or failure error number.
+  */
+-int tdx_mcall_rtmr_extend(u64 data, u64 rtmr)
++int tdx_mcall_rtmr_extend(void *data, u64 rtmr)
+ {
+ 	u64 ret;
+ 
+-	if (!data || !cc_platform_has(CC_ATTR_GUEST_TDX))
++	if (!data || !cpu_feature_enabled(X86_FEATURE_TDX_GUEST))
+ 		return -EINVAL;
+ 
+-	ret = __trace_tdx_module_call(TDX_RMTR_EXTEND, data, rtmr, 0, 0, NULL);
++	ret = __trace_tdx_module_call(TDX_RMTR_EXTEND, virt_to_phys(data),
++			rtmr, 0, 0, NULL);
+ 
+-	if (ret == TDCALL_SUCCESS)
+-		return 0;
+-	else if (TDCALL_RETURN_CODE(ret) == TDCALL_INVALID_OPERAND)
+-		return -EINVAL;
+-	else if (TDCALL_RETURN_CODE(ret) == TDCALL_OPERAND_BUSY)
+-		return -EBUSY;
++	if (ret) {
++		if (TDCALL_RETURN_CODE(ret) == TDCALL_INVALID_OPERAND)
++			return -EINVAL;
++		if (TDCALL_RETURN_CODE(ret) == TDCALL_OPERAND_BUSY)
++			return -EBUSY;
++		return -EIO;
++	}
+ 
+-	return -EIO;
++	return 0;
+ }
+ EXPORT_SYMBOL_GPL(tdx_mcall_rtmr_extend);
+ 
+ /*
+  * tdx_hcall_get_quote() - Generate TDQUOTE using TDREPORT_STRUCT.
+  *
+- * @data        : Physical address of 4KB GPA memory which contains
++ * @data        : Address of 8KB GPA memory which contains
+  *                TDREPORT_STRUCT.
++ * @len		: Length of the GPA in bytes.
+  *
+  * return 0 on success or failure error number.
+  */
+-int tdx_hcall_get_quote(u64 data)
++int tdx_hcall_get_quote(void *data, u64 len)
+ {
+ 	u64 ret;
+ 
+@@ -274,7 +286,7 @@ int tdx_hcall_get_quote(u64 data)
+ 	 * Use confidential guest TDX check to ensure this API is only
+ 	 * used by TDX guest platforms.
+ 	 */
+-	if (!data || !cc_platform_has(CC_ATTR_GUEST_TDX))
++	if (!data || !cpu_feature_enabled(X86_FEATURE_TDX_GUEST))
+ 		return -EINVAL;
+ 
+ 	/*
+@@ -282,18 +294,20 @@ int tdx_hcall_get_quote(u64 data)
+ 	 * and trigger the tdquote generation. Quote data will be
+ 	 * stored back in the same physical address space. More info
+ 	 * about ABI can be found in TDX Guest-Host-Communication
+-	 * Interface (GHCI), sec 3.3.
++	 * Interface (GHCI), sec titled "TDG.VP.VMCALL<GetQuote>".
+ 	 */
+-	ret = _trace_tdx_hypercall(TDVMCALL_GET_QUOTE, data, 0, 0, 0, NULL);
++	ret = _trace_tdx_hypercall(TDVMCALL_GET_QUOTE, virt_to_phys(data),
++					len, 0, 0, NULL);
+ 
+-	if (ret == TDVMCALL_SUCCESS)
+-		return 0;
+-	else if (ret == TDVMCALL_INVALID_OPERAND)
+-		return -EINVAL;
+-	else if (ret == TDVMCALL_TDREPORT_FAILED)
+-		return -EBUSY;
++	if (ret) {
++		if (ret == TDVMCALL_GET_QUOTE_ERR)
++			return -EINVAL;
++		else if (ret == TDVMCALL_GET_QUOTE_QGS_UNAVIL)
++			return -EBUSY;
++		return -EIO;
++	}
+ 
+-	return -EIO;
++	return 0;
+ }
+ EXPORT_SYMBOL_GPL(tdx_hcall_get_quote);
+ 
+@@ -315,17 +329,19 @@ int tdx_hcall_set_notify_intr(u8 vector)
+ 	/*
+ 	 * Register callback vector address with VMM. More details
+ 	 * about the ABI can be found in TDX Guest-Host-Communication
+-	 * Interface (GHCI), sec 3.5.
++	 * Interface (GHCI), sec titled
++	 * "TDG.VP.VMCALL<SetupEventNotifyInterrupt>".
+ 	 */
+ 	ret = _trace_tdx_hypercall(TDVMCALL_SETUP_NOTIFY_INTR, vector, 0, 0, 0,
+ 				   NULL);
+ 
+-	if (ret == TDVMCALL_SUCCESS)
+-		return 0;
+-	else if (ret == TDCALL_INVALID_OPERAND)
+-		return -EINVAL;
++	if (ret) {
++		if (ret == TDCALL_INVALID_OPERAND)
++			return -EINVAL;
++		return -EIO;
++	}
+ 
+-	return -EIO;
++	return 0;
+ }
+ 
+ static void tdx_get_info(void)
+diff --git a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+index 4ec06f5dfff1..e30a548419ef 100644
+--- a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
++++ b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+@@ -5,7 +5,7 @@
+  * Implements user interface to trigger attestation process and
+  * read the TD Quote result.
+  *
+- * Copyright (C) 2020 Intel Corporation
++ * Copyright (C) 2021-2022 Intel Corporation
+  *
+  * Author:
+  *     Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+@@ -48,11 +48,6 @@ static void *tdreport_data;
+ /* DMA handle used to allocate and free tdquote DMA buffer */
+ dma_addr_t tdquote_dma_handle;
+ 
+-struct tdx_gen_quote {
+-	void *buf __user;
+-	size_t len;
+-};
+-
+ static void attestation_callback_handler(void)
+ {
+ 	complete(&attestation_done);
+@@ -76,8 +71,7 @@ static long tdx_attest_ioctl(struct file *file, unsigned int cmd,
+ 		}
+ 
+ 		/* Generate TDREPORT_STRUCT */
+-		if (tdx_mcall_tdreport(virt_to_phys(tdreport_data),
+-				       virt_to_phys(report_data))) {
++		if (tdx_mcall_tdreport(tdreport_data, report_data)) {
+ 			ret = -EIO;
+ 			break;
+ 		}
+@@ -105,7 +99,7 @@ static long tdx_attest_ioctl(struct file *file, unsigned int cmd,
+ 		}
+ 
+ 		/* Submit GetQuote Request */
+-		if (tdx_hcall_get_quote(virt_to_phys(tdquote_data))) {
++		if (tdx_hcall_get_quote(tdquote_data, GET_QUOTE_MAX_SIZE)) {
+ 			ret = -EIO;
+ 			break;
+ 		}
+@@ -146,7 +140,7 @@ static long tdx_attest_ioctl(struct file *file, unsigned int cmd,
+ 			break;
+ 
+ 		ret = 0;
+-		if (tdx_mcall_rtmr_extend(virt_to_phys(report_data), rtmr))
++		if (tdx_mcall_rtmr_extend(report_data, rtmr))
+ 			ret = -EIO;
+ 
+ 		break;
+@@ -182,9 +176,12 @@ static int __init tdx_attest_init(void)
+ 	dma_addr_t handle;
+ 	long ret = 0;
+ 
++	mutex_lock(&attestation_lock);
++
+ 	ret = misc_register(&tdx_attest_device);
+ 	if (ret) {
+ 		pr_err("misc device registration failed\n");
++		mutex_unlock(&attestation_lock);
+ 		return ret;
+ 	}
+ 
+@@ -216,11 +213,10 @@ static int __init tdx_attest_init(void)
+ 
+ 	tdquote_dma_handle =  handle;
+ 
+-	/*
+-	 * Currently tdx_event_notify_handler is only used in attestation
+-	 * driver. But, WRITE_ONCE is used as benign data race notice.
+-	 */
+-	WRITE_ONCE(tdx_event_notify_handler, attestation_callback_handler);
++	/* Register attestation event notify handler */
++	tdx_setup_ev_notify_handler(attestation_callback_handler);
++
++	mutex_unlock(&attestation_lock);
+ 
+ 	pr_debug("module initialization success\n");
+ 
+@@ -232,6 +228,8 @@ static int __init tdx_attest_init(void)
+ 
+ 	misc_deregister(&tdx_attest_device);
+ 
++	mutex_unlock(&attestation_lock);
++
+ 	pr_debug("module initialization failed\n");
+ 
+ 	return ret;
+@@ -245,11 +243,8 @@ static void __exit tdx_attest_exit(void)
+ 			  tdquote_data, tdquote_dma_handle);
+ 	free_pages((unsigned long)tdreport_data, 0);
+ 	misc_deregister(&tdx_attest_device);
+-	/*
+-	 * Currently tdx_event_notify_handler is only used in attestation
+-	 * driver. But, WRITE_ONCE is used as benign data race notice.
+-	 */
+-	WRITE_ONCE(tdx_event_notify_handler, NULL);
++	/* Unregister attestation event notify handler */
++	tdx_remove_ev_notify_handler();
+ 	mutex_unlock(&attestation_lock);
+ 	pr_debug("module is successfully removed\n");
+ }
+diff --git a/include/uapi/misc/tdx.h b/include/uapi/misc/tdx.h
+index 28cc274fddcb..11a6c6a85877 100644
+--- a/include/uapi/misc/tdx.h
++++ b/include/uapi/misc/tdx.h
+@@ -47,4 +47,9 @@
+ /* Report input buffer size for TDX_CMD_EXTEND_RTMR */
+ #define TDX_CMD_GET_EXTEND_SIZE		_IOR('T', 0x05, __u64)
+ 
++struct tdx_gen_quote {
++	void *buf __user;
++	size_t len;
++};
++
+ #endif /* _UAPI_MISC_TDX_H */
+-- 
+2.31.1
+

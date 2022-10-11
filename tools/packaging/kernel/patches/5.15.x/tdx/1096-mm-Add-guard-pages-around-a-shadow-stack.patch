@@ -1,0 +1,129 @@
+From c27b995bb71e9dfc7ff6cdc71bf762c09d1db7d2 Mon Sep 17 00:00:00 2001
+From: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Date: Mon, 30 Aug 2021 11:15:14 -0700
+Subject: [PATCH 1096/1418] mm: Add guard pages around a shadow stack.
+
+INCSSP(Q/D) increments shadow stack pointer and 'pops and discards' the
+first and the last elements in the range, effectively touches those memory
+areas.
+
+The maximum moving distance by INCSSPQ is 255 * 8 = 2040 bytes and
+255 * 4 = 1020 bytes by INCSSPD.  Both ranges are far from PAGE_SIZE.
+Thus, putting a gap page on both ends of a shadow stack prevents INCSSP,
+CALL, and RET from going beyond.
+
+Signed-off-by: Yu-cheng Yu <yu-cheng.yu@intel.com>
+Reviewed-by: Kirill A. Shutemov <kirill.shutemov@linux.intel.com>
+Signed-off-by: Rick Edgecombe <rick.p.edgecombe@intel.com>
+Cc: Kees Cook <keescook@chromium.org>
+---
+ arch/x86/include/asm/page_types.h |  7 +++++
+ arch/x86/mm/mmap.c                | 46 +++++++++++++++++++++++++++++++
+ include/linux/mm.h                |  4 +++
+ 3 files changed, 57 insertions(+)
+
+diff --git a/arch/x86/include/asm/page_types.h b/arch/x86/include/asm/page_types.h
+index a506a411474d..e1533fdc08b4 100644
+--- a/arch/x86/include/asm/page_types.h
++++ b/arch/x86/include/asm/page_types.h
+@@ -73,6 +73,13 @@ bool pfn_range_is_mapped(unsigned long start_pfn, unsigned long end_pfn);
+ 
+ extern void initmem_init(void);
+ 
++#define vm_start_gap vm_start_gap
++struct vm_area_struct;
++extern unsigned long vm_start_gap(struct vm_area_struct *vma);
++
++#define vm_end_gap vm_end_gap
++extern unsigned long vm_end_gap(struct vm_area_struct *vma);
++
+ #endif	/* !__ASSEMBLY__ */
+ 
+ #endif	/* _ASM_X86_PAGE_DEFS_H */
+diff --git a/arch/x86/mm/mmap.c b/arch/x86/mm/mmap.c
+index f3f52c5e2fd6..81f9325084d3 100644
+--- a/arch/x86/mm/mmap.c
++++ b/arch/x86/mm/mmap.c
+@@ -250,3 +250,49 @@ bool pfn_modify_allowed(unsigned long pfn, pgprot_t prot)
+ 		return false;
+ 	return true;
+ }
++
++/*
++ * Shadow stack pointer is moved by CALL, RET, and INCSSP(Q/D).  INCSSPQ
++ * moves shadow stack pointer up to 255 * 8 = ~2 KB (~1KB for INCSSPD) and
++ * touches the first and the last element in the range, which triggers a
++ * page fault if the range is not in a shadow stack.  Because of this,
++ * creating 4-KB guard pages around a shadow stack prevents these
++ * instructions from going beyond.
++ */
++#define SHADOW_STACK_GUARD_GAP PAGE_SIZE
++
++unsigned long vm_start_gap(struct vm_area_struct *vma)
++{
++	unsigned long vm_start = vma->vm_start;
++	unsigned long gap = 0;
++
++	if (vma->vm_flags & VM_GROWSDOWN)
++		gap = stack_guard_gap;
++	else if (vma->vm_flags & VM_SHADOW_STACK)
++		gap = SHADOW_STACK_GUARD_GAP;
++
++	if (gap != 0) {
++		vm_start -= gap;
++		if (vm_start > vma->vm_start)
++			vm_start = 0;
++	}
++	return vm_start;
++}
++
++unsigned long vm_end_gap(struct vm_area_struct *vma)
++{
++	unsigned long vm_end = vma->vm_end;
++	unsigned long gap = 0;
++
++	if (vma->vm_flags & VM_GROWSUP)
++		gap = stack_guard_gap;
++	else if (vma->vm_flags & VM_SHADOW_STACK)
++		gap = SHADOW_STACK_GUARD_GAP;
++
++	if (gap != 0) {
++		vm_end += gap;
++		if (vm_end < vma->vm_end)
++			vm_end = -PAGE_SIZE;
++	}
++	return vm_end;
++}
+diff --git a/include/linux/mm.h b/include/linux/mm.h
+index 2bf642cde2f7..dfd96fb1d392 100644
+--- a/include/linux/mm.h
++++ b/include/linux/mm.h
+@@ -2730,6 +2730,7 @@ struct vm_area_struct *vma_lookup(struct mm_struct *mm, unsigned long addr)
+ 	return vma;
+ }
+ 
++#ifndef vm_start_gap
+ static inline unsigned long vm_start_gap(struct vm_area_struct *vma)
+ {
+ 	unsigned long vm_start = vma->vm_start;
+@@ -2741,7 +2742,9 @@ static inline unsigned long vm_start_gap(struct vm_area_struct *vma)
+ 	}
+ 	return vm_start;
+ }
++#endif
+ 
++#ifndef vm_end_gap
+ static inline unsigned long vm_end_gap(struct vm_area_struct *vma)
+ {
+ 	unsigned long vm_end = vma->vm_end;
+@@ -2753,6 +2756,7 @@ static inline unsigned long vm_end_gap(struct vm_area_struct *vma)
+ 	}
+ 	return vm_end;
+ }
++#endif
+ 
+ static inline unsigned long vma_pages(struct vm_area_struct *vma)
+ {
+-- 
+2.31.1
+

@@ -1,0 +1,102 @@
+From f27f018c5a310aacc555498ff246596a8250031c Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Fri, 15 Apr 2022 05:57:06 +0000
+Subject: [PATCH 1313/1418] platform/x86: intel_tdx_attest: Use kmalloc to
+ allocate report_data
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+So that virt_to_phys can work properly when converting the virtual
+address of report_data to physical address. This is aimed to fix an
+unaccepted memory issue when calling TDCALL to get tdreport data.
+
+The calltrace is like:
+
+[   27.952508] Kernel panic - not syncing: #VE due to access to unaccepted memory. GPA: 0x349438580
+[   27.957943] CPU: 3 PID: 964 Comm: test_tdx_attest Tainted: G                 Y 5.15.0-01502-gc4b2b600cc06-dirty #2
+[   27.960756] Call Trace:
+[   27.961440]  dump_stack_lvl+0x33/0x42
+[   27.962452]  panic+0xed/0x2bf
+[   27.963287]  tdx_handle_virtualization_exception.cold.23+0xc/0xc
+[   27.964923]  ? tdx_get_ve_info.part.18+0x19/0x60
+[   27.966202]  exc_virtualization_exception+0x214/0x3f0
+[   27.967631]  asm_exc_virtualization_exception+0x16/0x50
+[   27.969071] RIP: 0010:__tdx_module_call+0x10/0x40
+[   27.970363] Code: cc cc cc cc cc cc cc cc cc cc 0f 1f 44 00 00 b8 01 00 00 00 c3 cc cc cc cc cc 41 54 41 51 48 89 f8 4d 89 c1 49 89 c8 48 89 f1 <66> 0f 01 cc 41 5c 48 85 c0 75 22 4d 85 e4 74 1d 49 89 0c 24 49 89
+[   27.975423] RSP: 0018:ff6fb40f8075be38 EFLAGS: 00010246
+[   27.976857] RAX: 0000000000000004 RBX: 0000000000000000 RCX: 00000001050a1000
+[   27.978802] RDX: 0000000349438580 RSI: 00000001050a1000 RDI: 0000000000000004
+[   27.980784] RBP: 0000000000000004 R08: 0000000000000000 R09: 0000000000000000
+[   27.982716] R10: ff6fb40f8075bd08 R11: ff6fb40f8075bd00 R12: 00000001050a1000
+[   27.984664] R13: 0000000349438580 R14: 0000000000000003 R15: 0000000000000000
+[   27.986595]  __trace_tdx_module_call.constprop.20+0x3a/0x190
+[   27.988139]  ? _printk+0x58/0x6f
+[   27.989046]  tdx_mcall_tdreport+0x32/0x90
+[   27.990151]  tdx_attest_ioctl.cold.1+0x7f/0xe7 [intel_tdx_attest]
+[   27.991839]  __x64_sys_ioctl+0x81/0xc0
+[   27.992887]  do_syscall_64+0x3f/0x90
+[   27.993876]  entry_SYSCALL_64_after_hwframe+0x44/0xae
+[   27.995311] RIP: 0033:0x7f6993c5834b
+[   27.996298] Code: 0f 1e fa 48 8b 05 55 4b 0d 00 64 c7 00 26 00 00 00 48 c7 c0 ff ff ff ff c3 66 0f 1f 44 00 00 f3 0f 1e fa b8 10 00 00 00 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 8b 0d 25 4b 0d 00 f7 d8 64 89 01 48
+[   28.001397] RSP: 002b:00007ffe33d3ace8 EFLAGS: 00000246 ORIG_RAX: 0000000000000010
+[   28.003448] RAX: ffffffffffffffda RBX: 00007ffe33d3b1b0 RCX: 00007f6993c5834b
+[   28.005383] RDX: 00007ffe33d3acf0 RSI: 00000000c0085401 RDI: 0000000000000003
+[   28.007578] RBP: 00007ffe33d3acf0 R08: 0000000000000003 R09: 0000000000000003
+[   28.009541] R10: 0000000000000000 R11: 0000000000000246 R12: 00007ffe33d3b170
+[   28.011509] R13: 00007ffe33d3b1b0 R14: 0000000000000000 R15: 0000000000000000
+[   28.013762] Kernel Offset: 0x1b000000 from 0xffffffff81000000 (relocation range: 0xffffffff80000000-0xffffffffbfffffff)
+[   28.020274] ---[ end Kernel panic - not syncing: #VE due to access to unaccepted memory. GPA: 0x349438580 ]---
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ drivers/platform/x86/intel/tdx/intel_tdx_attest.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+index e30a548419ef..913493cec822 100644
+--- a/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
++++ b/drivers/platform/x86/intel/tdx/intel_tdx_attest.c
+@@ -40,7 +40,7 @@ static DEFINE_MUTEX(attestation_lock);
+ /* Completion object to track attestation status */
+ static DECLARE_COMPLETION(attestation_done);
+ /* Buffer used to copy report data in attestation handler */
+-static u8 report_data[TDX_REPORT_DATA_LEN] __aligned(64);
++static void *report_data;
+ /* Data pointer used to get TD Quote data in attestation handler */
+ static void *tdquote_data;
+ /* Data pointer used to get TDREPORT data in attestation handler */
+@@ -195,6 +195,12 @@ static int __init tdx_attest_init(void)
+ 		goto failed;
+ 	}
+ 
++	report_data = kmalloc(TDX_REPORT_DATA_LEN, GFP_KERNEL);
++	if (!report_data) {
++		ret = -ENOMEM;
++		goto failed;
++	}
++
+ 	ret = dma_set_coherent_mask(tdx_attest_device.this_device,
+ 				    DMA_BIT_MASK(64));
+ 	if (ret) {
+@@ -223,6 +229,9 @@ static int __init tdx_attest_init(void)
+ 	return 0;
+ 
+ failed:
++	if (report_data)
++		kfree(report_data);
++
+ 	if (tdreport_data)
+ 		free_pages((unsigned long)tdreport_data, 0);
+ 
+@@ -241,6 +250,7 @@ static void __exit tdx_attest_exit(void)
+ 
+ 	dma_free_coherent(tdx_attest_device.this_device, GET_QUOTE_MAX_SIZE,
+ 			  tdquote_data, tdquote_dma_handle);
++	kfree(report_data);
+ 	free_pages((unsigned long)tdreport_data, 0);
+ 	misc_deregister(&tdx_attest_device);
+ 	/* Unregister attestation event notify handler */
+-- 
+2.31.1
+

@@ -1,0 +1,232 @@
+From b7f36045127077f4e772272db94ffb9f04d0b3c9 Mon Sep 17 00:00:00 2001
+From: Cathy Zhang <cathy.zhang@intel.com>
+Date: Wed, 26 May 2021 17:37:38 +0800
+Subject: [PATCH 0828/1418] x86/kvm: Register SGX notifier callbacks
+
+When KVM guest wrmsr with SGX enabled indication, it tells KVM
+to register SGX notifier to host side, then KVM can get notification
+from host and take action to pause or resume guest.
+
+Sleep all the online cpus for guest, then guest has no chance
+to fail CPUSVN update by running enclaves.
+
+Signed-off-by: Cathy Zhang <cathy.zhang@intel.com>
+---
+ arch/x86/include/asm/kvm_host.h |  9 ++++++
+ arch/x86/kvm/vmx/sgx.c          | 56 ++++++++++++++++++++++++++++++++-
+ arch/x86/kvm/vmx/sgx.h          |  4 +++
+ arch/x86/kvm/vmx/vmx.c          |  7 +++++
+ arch/x86/kvm/x86.c              | 17 ++++++++++
+ 5 files changed, 92 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index fbbf66d3cefe..764610edc0aa 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -34,6 +34,7 @@
+ #include <asm/kvm_page_track.h>
+ #include <asm/kvm_vcpu_regs.h>
+ #include <asm/hyperv-tlfs.h>
++#include <asm/sgx.h>
+ 
+ #define __KVM_HAVE_ARCH_VCPU_DEBUGFS
+ 
+@@ -103,6 +104,8 @@
+ #define KVM_REQ_MSR_FILTER_CHANGED	KVM_ARCH_REQ(29)
+ #define KVM_REQ_UPDATE_CPU_DIRTY_LOGGING \
+ 	KVM_ARCH_REQ_FLAGS(30, KVM_REQUEST_WAIT | KVM_REQUEST_NO_WAKEUP)
++#define KVM_REQ_SLEEP \
++	KVM_ARCH_REQ_FLAGS(31, KVM_REQUEST_WAIT | KVM_REQUEST_NO_WAKEUP)
+ 
+ #define CR0_RESERVED_BITS                                               \
+ 	(~(unsigned long)(X86_CR0_PE | X86_CR0_MP | X86_CR0_EM | X86_CR0_TS \
+@@ -930,6 +933,8 @@ struct kvm_vcpu_arch {
+ #if IS_ENABLED(CONFIG_HYPERV)
+ 	hpa_t hv_root_tdp;
+ #endif
++
++	bool pause;
+ };
+ 
+ struct kvm_lpage_info {
+@@ -1196,6 +1201,10 @@ struct kvm_arch {
+ 
+ 	/* Guest can access the SGX PROVISIONKEY. */
+ 	bool sgx_provisioning_allowed;
++#ifdef CONFIG_X86_SGX_KVM
++	struct sgx_kvm_notifier sgx_notifier;
++	struct mutex sgx_notifier_lock;
++#endif
+ 
+ 	struct kvm_pmu_event_filter __rcu *pmu_event_filter;
+ 	struct task_struct *nx_lpage_recovery_thread;
+diff --git a/arch/x86/kvm/vmx/sgx.c b/arch/x86/kvm/vmx/sgx.c
+index 6693ebdc0770..6c7c2c148ea3 100644
+--- a/arch/x86/kvm/vmx/sgx.c
++++ b/arch/x86/kvm/vmx/sgx.c
+@@ -365,7 +365,7 @@ static inline bool encls_leaf_enabled_in_guest(struct kvm_vcpu *vcpu, u32 leaf)
+ 	return false;
+ }
+ 
+-static inline bool sgx_enabled_in_guest_bios(struct kvm_vcpu *vcpu)
++inline bool sgx_enabled_in_guest_bios(struct kvm_vcpu *vcpu)
+ {
+ 	const u64 bits = FEAT_CTL_SGX_ENABLED | FEAT_CTL_LOCKED;
+ 
+@@ -500,3 +500,57 @@ void vmx_write_encls_bitmap(struct kvm_vcpu *vcpu, struct vmcs12 *vmcs12)
+ 	}
+ 	vmcs_write64(ENCLS_EXITING_BITMAP, bitmap);
+ }
++
++static inline struct kvm *sgx_notifier_to_kvm(struct sgx_kvm_notifier *notifier)
++{
++	struct kvm_arch *arch = container_of(notifier, struct kvm_arch, sgx_notifier);
++
++	return container_of(arch, struct kvm, arch);
++}
++
++static void kvm_sgx_notifier_halt_guest(struct sgx_kvm_notifier *notifier)
++{
++	struct kvm *kvm = sgx_notifier_to_kvm(notifier);
++	struct kvm_vcpu *vcpu;
++	int i;
++
++	kvm_for_each_vcpu(i, vcpu, kvm) {
++		vcpu->arch.pause = true;
++		kvm_make_request(KVM_REQ_SLEEP, vcpu);
++		kvm_vcpu_kick(vcpu);
++	}
++}
++
++static void kvm_sgx_notifier_resume_guest(struct sgx_kvm_notifier *notifier)
++{
++	struct kvm *kvm = sgx_notifier_to_kvm(notifier);
++	struct kvm_vcpu *vcpu;
++	int i;
++
++	kvm_for_each_vcpu(i, vcpu, kvm) {
++		kvm_set_guest_paused(vcpu);
++		vcpu->arch.pause = false;
++		rcuwait_wake_up(kvm_arch_vcpu_get_wait(vcpu));
++	}
++}
++
++static const struct sgx_kvm_notifier_ops kvm_sgx_notifier_ops = {
++	.halt = kvm_sgx_notifier_halt_guest,
++	.resume = kvm_sgx_notifier_resume_guest,
++};
++
++void kvm_init_sgx_notifier(struct kvm_vcpu *vcpu)
++{
++	struct kvm *kvm = vcpu->kvm;
++
++	if (!guest_cpuid_has(vcpu, X86_FEATURE_SGX) ||
++	    !sgx_enabled_in_guest_bios(vcpu))
++		return;
++
++	mutex_lock(&kvm->arch.sgx_notifier_lock);
++	if (!kvm->arch.sgx_notifier.ops) {
++		kvm->arch.sgx_notifier.ops = &kvm_sgx_notifier_ops;
++		sgx_kvm_notifier_register(&kvm->arch.sgx_notifier);
++	}
++	mutex_unlock(&kvm->arch.sgx_notifier_lock);
++}
+diff --git a/arch/x86/kvm/vmx/sgx.h b/arch/x86/kvm/vmx/sgx.h
+index a400888b376d..ad0acbc34a78 100644
+--- a/arch/x86/kvm/vmx/sgx.h
++++ b/arch/x86/kvm/vmx/sgx.h
+@@ -16,6 +16,8 @@ void setup_default_sgx_lepubkeyhash(void);
+ void vcpu_setup_sgx_lepubkeyhash(struct kvm_vcpu *vcpu);
+ 
+ void vmx_write_encls_bitmap(struct kvm_vcpu *vcpu, struct vmcs12 *vmcs12);
++inline bool sgx_enabled_in_guest_bios(struct kvm_vcpu *vcpu);
++void kvm_init_sgx_notifier(struct kvm_vcpu *vcpu);
+ #else
+ #define enable_sgx 0
+ 
+@@ -29,6 +31,8 @@ static inline void vmx_write_encls_bitmap(struct kvm_vcpu *vcpu,
+ 	if (cpu_has_vmx_encls_vmexit())
+ 		vmcs_write64(ENCLS_EXITING_BITMAP, -1ull);
+ }
++static inline bool sgx_enabled_in_guest_bios(struct kvm_vcpu *vcpu) { return false; }
++static inline void kvm_init_sgx_notifier(struct kvm_vcpu *vcpu) { }
+ #endif
+ 
+ #endif /* __KVM_X86_SGX_H */
+diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c
+index 6fa74527ae79..fec33d9d8360 100644
+--- a/arch/x86/kvm/vmx/vmx.c
++++ b/arch/x86/kvm/vmx/vmx.c
+@@ -46,6 +46,7 @@
+ #include <asm/mshyperv.h>
+ #include <asm/mwait.h>
+ #include <asm/spec-ctrl.h>
++#include <asm/sgx.h>
+ #include <asm/virtext.h>
+ #include <asm/vmx.h>
+ 
+@@ -2185,6 +2186,12 @@ static int vmx_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ 
+ 		/* SGX may be enabled/disabled by guest's firmware */
+ 		vmx_write_encls_bitmap(vcpu, NULL);
++
++		/* Register SGX notifier when SGX is enabled, then
++		 * KVM could be notified by host while SGX CPUSVN
++		 * update is running.
++		 */
++		kvm_init_sgx_notifier(vcpu);
+ 		break;
+ 	case MSR_IA32_SGXLEPUBKEYHASH0 ... MSR_IA32_SGXLEPUBKEYHASH3:
+ 		/*
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 29cafe0e3bd0..cefd0797843f 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -3360,6 +3360,13 @@ static void record_steal_time(struct kvm_vcpu *vcpu)
+ 	kvm_unmap_gfn(vcpu, &map, &vcpu->arch.st.cache, true, false);
+ }
+ 
++static void kvm_vcpu_req_sleep(struct kvm_vcpu *vcpu)
++{
++	struct rcuwait *wait = kvm_arch_vcpu_get_wait(vcpu);
++
++	rcuwait_wait_event(wait, !vcpu->arch.pause, TASK_UNINTERRUPTIBLE);
++}
++
+ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
+ {
+ 	bool pr = false;
+@@ -9717,6 +9724,8 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
+ 			r = -EIO;
+ 			goto out;
+ 		}
++		if (kvm_check_request(KVM_REQ_SLEEP, vcpu))
++			kvm_vcpu_req_sleep(vcpu);
+ 		if (kvm_check_request(KVM_REQ_GET_NESTED_STATE_PAGES, vcpu)) {
+ 			if (unlikely(!kvm_x86_ops.nested_ops->get_nested_state_pages(vcpu))) {
+ 				r = 0;
+@@ -11492,6 +11501,10 @@ int kvm_arch_init_vm(struct kvm *kvm, unsigned long type)
+ 	kvm_mmu_init_vm(kvm);
+ 	kvm_xen_init_vm(kvm);
+ 
++#ifdef CONFIG_X86_SGX_KVM
++	mutex_init(&kvm->arch.sgx_notifier_lock);
++#endif
++
+ 	return static_call(kvm_x86_vm_init)(kvm);
+ }
+ 
+@@ -11643,6 +11656,10 @@ void kvm_arch_destroy_vm(struct kvm *kvm)
+ 	kvfree(rcu_dereference_check(kvm->arch.apic_map, 1));
+ 	kfree(srcu_dereference_check(kvm->arch.pmu_event_filter, &kvm->srcu, 1));
+ 	kvm_mmu_uninit_vm(kvm);
++#ifdef CONFIG_X86_SGX_KVM
++	if (kvm->arch.sgx_notifier.ops)
++		sgx_kvm_notifier_unregister(&kvm->arch.sgx_notifier);
++#endif
+ 	kvm_page_track_cleanup(kvm);
+ 	kvm_xen_destroy_vm(kvm);
+ 	kvm_hv_destroy_vm(kvm);
+-- 
+2.31.1
+

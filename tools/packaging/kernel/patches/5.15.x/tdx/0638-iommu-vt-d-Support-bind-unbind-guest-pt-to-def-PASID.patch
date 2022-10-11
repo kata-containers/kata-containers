@@ -1,0 +1,308 @@
+From f775164b11b8675f3dcb7981e03dc5b181e12d7a Mon Sep 17 00:00:00 2001
+From: "Sun, Yi Y" <yi.y.sun@intel.com>
+Date: Wed, 25 Nov 2020 16:37:42 +0800
+Subject: [PATCH 0638/1418] iommu/vt-d: Support bind/unbind guest pt to def
+ PASID (!VFIO)
+
+For guest IOVA support under nesting IOMMU, hypervisor needs to bind/
+unbind guest's IOVA page table to host. For such bind/unbind request
+from user space, host should figure out a target PASID (host default
+PASID) to be bound. This patch adds a flag to indicate host IOMMU
+driver if it needs to use default PASID in host.
+
+FIXME: pasid_set = NULL; // dmar_domain->pasid_set;
+
+Change-Id: I71301dd022be8970abad9a51e7fe52650bc9055b
+Signed-off-by: Sun, Yi Y <yi.y.sun@intel.com>
+Signed-off-by: Liu Yi L <yi.l.liu@intel.com>
+---
+ drivers/iommu/intel/iommu.c | 11 ++++++++
+ drivers/iommu/intel/svm.c   | 56 ++++++++++++++++++++++++++++---------
+ drivers/iommu/iommu.c       |  8 +++---
+ include/linux/intel-iommu.h |  3 +-
+ include/linux/iommu.h       |  9 ++++--
+ include/uapi/linux/iommu.h  |  1 +
+ 6 files changed, 67 insertions(+), 21 deletions(-)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 1af7cfb518e0..ba07ccd3a998 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -3357,6 +3357,9 @@ static int __init init_dmars(void)
+ 			intel_iommu_sm = 0;
+ 		} else {
+ 			intel_svm_add_pasid_notifier();
++			/* TODO: where to free? */
++			ioasid_alloc(host_pasid_set, PASID_RID2PASID,
++				     PASID_RID2PASID, NULL);
+ 		}
+ 	}
+ 
+@@ -5548,6 +5551,14 @@ intel_iommu_aux_get_pasid(struct iommu_domain *domain, struct device *dev)
+ 			dmar_domain->default_pasid : -EINVAL;
+ }
+ 
++int domain_get_pasid(struct iommu_domain *domain, struct device *dev)
++{
++	if (is_aux_domain(dev, domain))
++		return intel_iommu_aux_get_pasid(domain, dev);
++
++	return PASID_RID2PASID;
++}
++
+ static bool intel_iommu_is_attach_deferred(struct iommu_domain *domain,
+ 					   struct device *dev)
+ {
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index e01444f53dde..5c6356862212 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -173,14 +173,15 @@ static inline bool intel_svm_capable(struct intel_iommu *iommu)
+ 	return iommu->flags & VTD_FLAG_SVM_CAPABLE;
+ }
+ 
+-static inline void intel_svm_drop_pasid(ioasid_t pasid)
++static inline void intel_svm_drop_pasid(ioasid_t pasid, u64 flags)
+ {
+ 	/*
+ 	 * Detaching SPID results in UNBIND notification on the set, we must
+ 	 * do this before dropping the IOASID reference, otherwise the
+ 	 * notification chain may get destroyed.
+ 	 */
+-	ioasid_detach_spid(pasid);
++	if (!(flags & IOMMU_SVA_HPASID_DEF))
++		ioasid_detach_spid(pasid);
+ 	ioasid_detach_data(pasid);
+ 	ioasid_put(NULL, pasid);
+ }
+@@ -213,7 +214,7 @@ static void intel_svm_free_async_fn(struct work_struct *work)
+ 	 * the PASID is in FREE_PENDING state, no one can get new reference.
+ 	 * Therefore, we can safely free the private data svm.
+ 	 */
+-	intel_svm_drop_pasid(svm->pasid);
++	intel_svm_drop_pasid(svm->pasid, 0);
+ 
+ 	/*
+ 	 * Free before unbind can only happen with host PASIDs used for
+@@ -401,8 +402,13 @@ static int pasid_to_svm_sdev(struct device *dev,
+ 		return -EINVAL;
+ 
+ 	svm = ioasid_find(set, pasid, NULL);
+-	if (IS_ERR(svm))
+-		return PTR_ERR(svm);
++	if (IS_ERR(svm)) {
++		if (pasid == PASID_RID2PASID) {
++			svm = NULL;
++		} else {
++			return PTR_ERR(svm);
++		}
++	}
+ 
+ 	if (!svm)
+ 		goto out;
+@@ -434,6 +440,7 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain,
+ 	struct intel_svm *svm = NULL;
+ 	unsigned long iflags;
+ 	int ret = 0;
++	struct ioasid_set *pasid_set;
+ 
+ 	if (WARN_ON(!iommu) || !data)
+ 		return -EINVAL;
+@@ -456,21 +463,29 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain,
+ 	if (pci_max_pasids(to_pci_dev(dev)) != PASID_MAX)
+ 		return -EINVAL;
+ 
++	dmar_domain = to_dmar_domain(domain);
++	pasid_set = NULL; //dmar_domain->pasid_set;
++
+ 	/*
+ 	 * We only check host PASID range, we have no knowledge to check
+ 	 * guest PASID range.
+ 	 */
+-	if (data->hpasid <= 0 || data->hpasid >= PASID_MAX)
++	if (data->flags & IOMMU_SVA_HPASID_DEF) {
++		ret = domain_get_pasid(domain, dev);
++		if (ret < 0)
++			return ret;
++		data->hpasid = ret;
++		/* TODO: may consider to use NULL because host_pasid_set is native scope */
++		pasid_set = host_pasid_set;
++	} else if (data->hpasid <= 0 || data->hpasid >= PASID_MAX)
+ 		return -EINVAL;
+ 
+ 	info = get_domain_info(dev);
+ 	if (!info)
+ 		return -EINVAL;
+ 
+-	dmar_domain = to_dmar_domain(domain);
+-
+ 	mutex_lock(&pasid_mutex);
+-	ret = pasid_to_svm_sdev(dev, NULL,
++	ret = pasid_to_svm_sdev(dev, pasid_set,
+ 				data->hpasid, &svm, &sdev);
+ 	if (ret)
+ 		goto out;
+@@ -498,7 +513,8 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain,
+ 		if (data->flags & IOMMU_SVA_GPASID_VAL) {
+ 			svm->gpasid = data->gpasid;
+ 			svm->flags |= SVM_FLAG_GUEST_PASID;
+-			ioasid_attach_spid(data->hpasid, data->gpasid);
++			if (!(data->flags & IOMMU_SVA_HPASID_DEF))
++				ioasid_attach_spid(data->hpasid, data->gpasid);
+ 			/*
+ 			 * Partial assignment needs to add fault data per-pasid
+ 			 */
+@@ -573,18 +589,32 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain,
+ 	return ret;
+ }
+ 
+-int intel_svm_unbind_gpasid(struct device *dev, u32 pasid)
++int intel_svm_unbind_gpasid(struct iommu_domain *domain,
++			    struct device *dev, u32 pasid, u64 user_flags)
+ {
+ 	struct intel_iommu *iommu = device_to_iommu(dev, NULL, NULL);
+ 	struct intel_svm_dev *sdev;
+ 	struct intel_svm *svm;
+ 	int ret;
++	struct dmar_domain *dmar_domain;
++	struct ioasid_set *pasid_set;
+ 
+ 	if (WARN_ON(!iommu))
+ 		return -EINVAL;
+ 
++	dmar_domain = to_dmar_domain(domain);
++	pasid_set = NULL; // dmar_domain->pasid_set;
++
++	if (user_flags & IOMMU_SVA_HPASID_DEF) {
++		ret = domain_get_pasid(domain, dev);
++		if (ret < 0)
++			return ret;
++		pasid = ret;
++		pasid_set = host_pasid_set;
++	}
++
+ 	mutex_lock(&pasid_mutex);
+-	ret = pasid_to_svm_sdev(dev, NULL, pasid, &svm, &sdev);
++	ret = pasid_to_svm_sdev(dev, pasid_set, pasid, &svm, &sdev);
+ 	if (ret)
+ 		goto out;
+ 
+@@ -613,7 +643,7 @@ int intel_svm_unbind_gpasid(struct device *dev, u32 pasid)
+ 				 * the unbind, IOMMU driver will get notified
+ 				 * and perform cleanup.
+ 				 */
+-				intel_svm_drop_pasid(pasid);
++				intel_svm_drop_pasid(pasid, user_flags);
+ 				kfree(svm);
+ 			}
+ 		}
+diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
+index 5575efa07fd6..a8cf248a39d4 100644
+--- a/drivers/iommu/iommu.c
++++ b/drivers/iommu/iommu.c
+@@ -2449,7 +2449,7 @@ static int iommu_check_bind_data(struct iommu_gpasid_bind_data *data)
+ 		return -EINVAL;
+ 
+ 	/* Check all flags */
+-	mask = IOMMU_SVA_GPASID_VAL;
++	mask = IOMMU_SVA_GPASID_VAL | IOMMU_SVA_HPASID_DEF;
+ 	if (data->flags & ~mask)
+ 		return -EINVAL;
+ 
+@@ -2525,7 +2525,7 @@ int iommu_uapi_sva_bind_gpasid(struct iommu_domain *domain, struct device *dev,
+ EXPORT_SYMBOL_GPL(iommu_uapi_sva_bind_gpasid);
+ 
+ int iommu_sva_unbind_gpasid(struct iommu_domain *domain, struct device *dev,
+-			     ioasid_t pasid)
++			     ioasid_t pasid, u64 flags)
+ {
+ 	pr_warn("%s: FIXME need to clear all pending faults!\n", __func__);
+ #if 0
+@@ -2576,7 +2576,7 @@ int iommu_sva_unbind_gpasid(struct iommu_domain *domain, struct device *dev,
+ 	if (unlikely(!domain->ops->sva_unbind_gpasid))
+ 		return -ENODEV;
+ 
+-	return domain->ops->sva_unbind_gpasid(dev, pasid);
++	return domain->ops->sva_unbind_gpasid(domain, dev, pasid, flags);
+ }
+ EXPORT_SYMBOL_GPL(iommu_sva_unbind_gpasid);
+ 
+@@ -2596,7 +2596,7 @@ int iommu_uapi_sva_unbind_gpasid(struct iommu_domain *domain, struct device *dev
+ 	ret = ioasid_get_if_owned(data.hpasid);
+ 	if (ret)
+ 		return ret;
+-	ret = iommu_sva_unbind_gpasid(domain, dev, data.hpasid);
++	ret = iommu_sva_unbind_gpasid(domain, dev, data.hpasid, data.flags);
+ 	ioasid_put(NULL, data.hpasid);
+ 
+ 	return ret;
+diff --git a/include/linux/intel-iommu.h b/include/linux/intel-iommu.h
+index d534b266ae20..710cf98624b1 100644
+--- a/include/linux/intel-iommu.h
++++ b/include/linux/intel-iommu.h
+@@ -758,6 +758,7 @@ int intel_iommu_enable_pasid(struct intel_iommu *iommu, struct device *dev);
+ struct dmar_domain *find_domain(struct device *dev);
+ struct device_domain_info *get_domain_info(struct device *dev);
+ struct intel_iommu *device_to_iommu(struct device *dev, u8 *bus, u8 *devfn);
++int domain_get_pasid(struct iommu_domain *domain, struct device *dev);
+ 
+ #ifdef CONFIG_INTEL_IOMMU_SVM
+ extern void intel_svm_check(struct intel_iommu *iommu);
+@@ -769,7 +770,7 @@ int intel_svm_bind_gpasid(struct iommu_domain *domain, struct device *dev,
+ 			  struct iommu_gpasid_bind_data *data,
+ 			  void *fault_data);
+ int intel_svm_unbind_gpasid(struct iommu_domain *domain,
+-			    struct device *dev, u32 pasid);
++			    struct device *dev, u32 pasid, u64 user_flags);
+ struct iommu_sva *intel_svm_bind(struct device *dev, struct mm_struct *mm,
+ 				 void *drvdata);
+ void intel_svm_unbind(struct iommu_sva *handle);
+diff --git a/include/linux/iommu.h b/include/linux/iommu.h
+index e333c4d39800..2a4a72aa1999 100644
+--- a/include/linux/iommu.h
++++ b/include/linux/iommu.h
+@@ -315,7 +315,8 @@ struct iommu_ops {
+ 				struct iommu_gpasid_bind_data *data,
+ 				void *fault_data);
+ 
+-	int (*sva_unbind_gpasid)(struct device *dev, u32 pasid);
++	int (*sva_unbind_gpasid)(struct iommu_domain *domain,
++				 struct device *dev, u32 pasid, u64 flags);
+ 
+ 	void (*sva_suspend_pasid)(struct device *dev, u32 pasid);
+ 
+@@ -455,7 +456,8 @@ extern int iommu_uapi_sva_bind_gpasid(struct iommu_domain *domain,
+ extern int iommu_uapi_sva_unbind_gpasid(struct iommu_domain *domain,
+ 					struct device *dev, void __user *udata);
+ extern int iommu_sva_unbind_gpasid(struct iommu_domain *domain,
+-				   struct device *dev, ioasid_t pasid);
++				   struct device *dev, ioasid_t pasid,
++				   u64 flags);
+ extern struct iommu_domain *iommu_get_domain_for_dev(struct device *dev);
+ extern struct iommu_domain *iommu_get_dma_domain(struct device *dev);
+ extern int iommu_map(struct iommu_domain *domain, unsigned long iova,
+@@ -1115,7 +1117,8 @@ static inline int iommu_uapi_sva_unbind_gpasid(struct iommu_domain *domain,
+ 
+ static inline int iommu_sva_unbind_gpasid(struct iommu_domain *domain,
+ 					  struct device *dev,
+-					  ioasid_t pasid)
++					  ioasid_t pasid,
++					  u64 flags)
+ {
+ 	return -ENODEV;
+ }
+diff --git a/include/uapi/linux/iommu.h b/include/uapi/linux/iommu.h
+index 1566dfe83f6f..6695e91c64f4 100644
+--- a/include/uapi/linux/iommu.h
++++ b/include/uapi/linux/iommu.h
+@@ -328,6 +328,7 @@ struct iommu_gpasid_bind_data {
+ 	__u32 format;
+ 	__u32 addr_width;
+ #define IOMMU_SVA_GPASID_VAL	(1 << 0) /* guest PASID valid */
++#define IOMMU_SVA_HPASID_DEF	(1 << 1) /* use default host PASID */
+ 	__u64 flags;
+ 	__u64 gpgd;
+ 	__u64 hpasid;
+-- 
+2.31.1
+

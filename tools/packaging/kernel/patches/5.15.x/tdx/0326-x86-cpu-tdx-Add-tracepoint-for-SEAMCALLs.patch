@@ -1,0 +1,304 @@
+From beb4a7505e50a5fb3c1c0ff885ae93fd07d11828 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Thu, 2 Sep 2021 04:48:29 -0700
+Subject: [PATCH 0326/1418] x86/cpu/tdx: Add tracepoint for SEAMCALLs
+
+Add tracepoint before and after SEAMCALLs to record the arguments and
+return status of each SEAMCALL. The corresponding debug fs entry is
+debug/tracing/events/seam and the event names are seam:seamcall_enter and
+seam:seamcall_exit. This trace logging can be useful for debugging but can
+take a long time when there are potentially hundreds of logical CPUs so
+it's configurable by adding "trace_event= seam:*" to the kernel command
+line.
+
+For details, refer to <file:Documentation/trace/boottime-trace.rst>
+and <file:Documentation/x86/tdx-module.rst>.
+
+Suggested-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ Documentation/x86/tdx.rst           |  61 +++++++++++++++++
+ arch/x86/include/asm/tdx_arch.h     |  10 +++
+ arch/x86/include/asm/trace/seam.h   | 101 ++++++++++++++++++++++++++++
+ arch/x86/kernel/cpu/tdx/p-seamldr.c |   1 +
+ arch/x86/kernel/cpu/tdx/p-seamldr.h |   6 ++
+ arch/x86/kernel/cpu/tdx/seamcall.h  |   6 +-
+ arch/x86/kernel/cpu/tdx/tdx-error.c |   8 +++
+ 7 files changed, 192 insertions(+), 1 deletion(-)
+ create mode 100644 Documentation/x86/tdx.rst
+ create mode 100644 arch/x86/include/asm/trace/seam.h
+
+diff --git a/Documentation/x86/tdx.rst b/Documentation/x86/tdx.rst
+new file mode 100644
+index 000000000000..a44258afc2a8
+--- /dev/null
++++ b/Documentation/x86/tdx.rst
+@@ -0,0 +1,61 @@
++.. SPDX-License-Identifier: GPL-2.0
++
++Debugging loading the P-SEAMLDR and the TDX module
++==================================================
++boot-time trace
++---------------
++There are tracepoints to record SEAMCALL entry and exit.  (seam:seamcall_entry,
++seam:seamcall_exit function events).  Enable ftrace and boot time tracing, and
++update kernel command line to enable boot time tracepoint. An example kernel
++command line looks like "trace_event=seam:*".  For details, please refer to
++<fileDocumentation/trace/boottime-trace.rst>
++
++After booting, the trace can be retrieved by
++"cat /sys/kernel/debug/tracing/trace"::
++
++        # tracer: nop
++        #
++        # entries-in-buffer/entries-written: 66450/66450   #P:224
++        #
++        #                                _-----=> irqs-off
++        #                               / _----=> need-resched
++        #                              | / _---=> hardirq/softirq
++        #                              || / _--=> preempt-depth
++        #                              ||| /     delay
++        #           TASK-PID     CPU#  ||||   TIMESTAMP  FUNCTION
++        #              | |         |   ||||      |         |
++               swapper/0-1       [000] ...1    14.819509: seamcall_enter: op: SEAMLDR_INFO 1081185000 0 0 0 0 0
++               swapper/0-1       [000] .N.1    14.847999: seamcall_exit: op: SEAMLDR_INFO err: TDX_SUCCESS(0) 1081185000 0 0 0 ffffffffb9e7ba67 fffffbfff73cf74c
++                  <idle>-0       [000] dN.2    85.565879: seamcall_enter: op: SEAMLDR_INSTALL 10a7c67000 0 0 0 0 0
++                  <idle>-0       [000] dN.2    85.594079: seamcall_exit: op: SEAMLDR_INSTALL err: TDX_SUCCESS(0) 10a7c67000 0 0 0 ffffffffb9e7ba67 fffffbfff73cf74c
++                  <idle>-0       [001] dN.2    85.594088: seamcall_enter: op: SEAMLDR_INSTALL 10a7c67000 0 0 0 0 0
++                  <idle>-0       [001] dN.2    85.622382: seamcall_exit: op: SEAMLDR_INSTALL err: TDX_SUCCESS(0) 10a7c67000 0 0 0 ffffffffb9e7ba67 fffffbfff73cf74c
++                  <idle>-0       [002] dN.2    85.622389: seamcall_enter: op: SEAMLDR_INSTALL 10a7c67000 0 0 0 0 0
++                ...
++                  <idle>-0       [223] dN.2    92.096809: seamcall_enter: op: SEAMLDR_INSTALL 10a7c67000 0 0 0 0 0
++                  <idle>-0       [223] dN.2    92.140551: seamcall_exit: op: SEAMLDR_INSTALL err: TDX_SUCCESS(0) 10a7c67000 0 0 0 ffffffffb9e7ba7f fffffbfff73cf74f
++               swapper/0-1       [019] .N.2    92.140556: seamcall_enter: op: TDH_SYS_INIT 0 0 0 0 0 0
++               swapper/0-1       [019] .N.2    92.166347: seamcall_exit: op: TDH_SYS_INIT err: TDX_SUCCESS(0) 0 0 0 0 0 fffffbfff73cf74c
++               swapper/0-1       [019] .N.2    92.166348: seamcall_enter: op: TDH_SYS_LP_INIT 0 0 0 0 0 0
++               swapper/0-1       [019] .N.2    92.191947: seamcall_exit: op: TDH_SYS_LP_INIT err: TDX_SUCCESS(0) 0 0 0 0 ffffffffb9e7ba67 fffffbfff73cf74c
++               swapper/0-1       [019] .N.2    92.191948: seamcall_enter: op: TDH_SYS_INFO 133cd1000 400 133c9c400 20 0 0
++               swapper/0-1       [019] .N.2    92.217539: seamcall_exit: op: TDH_SYS_INFO err: TDX_SUCCESS(0) 133cd1000 400 133c9c400 20 ffffffffb9e7ba67 fffffbfff73cf74c
++               swapper/0-1       [031] d..2    92.344016: seamcall_enter: op: TDH_SYS_LP_INIT 0 0 0 0 0 0
++                  <idle>-0       [006] d.h2    92.344018: seamcall_enter: op: TDH_SYS_LP_INIT 0 0 0 0 0 0
++
++run-time trace
++--------------
++For run-time recording of trace event, there are several front end tool for
++trace.  Record seam event (or seam:seamcall_entry or seam:seamcall_exit).  Here
++is the example of trace-cmd::
++
++  # record seam:* events. (both seamcall enter/exit events.)
++  $ trace-cmd record -e seam
++  <Ctrl^C>
++  $ trace-cmd report
++
++  # to record only seamcall enter event.
++  $ trace-cmd record -e seam:seamcall_enter
++
++  # to record only seamcall exit event.
++  $ trace-cmd record -e seam:seamcall_exit
+diff --git a/arch/x86/include/asm/tdx_arch.h b/arch/x86/include/asm/tdx_arch.h
+index f4bce0b1ad2a..f44e1724ee39 100644
+--- a/arch/x86/include/asm/tdx_arch.h
++++ b/arch/x86/include/asm/tdx_arch.h
+@@ -16,6 +16,16 @@
+ #define SEAMCALL_TDH_SYS_TDMR_INIT		36
+ #define SEAMCALL_TDH_SYS_CONFIG			45
+ 
++#define TDX_SEAMCALL(name)	{ SEAMCALL_##name, #name }
++
++#define TDX_SEAMCALLS				\
++	TDX_SEAMCALL(TDH_SYS_KEY_CONFIG),	\
++	TDX_SEAMCALL(TDH_SYS_INFO),		\
++	TDX_SEAMCALL(TDH_SYS_INIT),		\
++	TDX_SEAMCALL(TDH_SYS_LP_INIT),		\
++	TDX_SEAMCALL(TDH_SYS_TDMR_INIT),	\
++	TDX_SEAMCALL(TDH_SYS_CONFIG)
++
+ #define TDX_MAX_NR_CMRS			32
+ #define TDX_MAX_NR_TDMRS		64
+ #define TDX_MAX_NR_RSVD_AREAS		16
+diff --git a/arch/x86/include/asm/trace/seam.h b/arch/x86/include/asm/trace/seam.h
+new file mode 100644
+index 000000000000..d217bb7ea90a
+--- /dev/null
++++ b/arch/x86/include/asm/trace/seam.h
+@@ -0,0 +1,101 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#undef TRACE_SYSTEM
++#define TRACE_SYSTEM seam
++
++#if !defined(_TRACE_SEAM_H) || defined(TRACE_HEADER_MULTI_READ)
++#define _TRACE_SEAM_H
++
++#include <linux/tracepoint.h>
++
++#if IS_ENABLED(CONFIG_INTEL_TDX_HOST)
++
++#define SEAMCALLS		\
++	SEAMLDR_SEAMCALLS,	\
++	TDX_SEAMCALLS
++
++TRACE_EVENT(seamcall_enter,
++	    TP_PROTO(u64 fn, u64 rcx, u64 rdx,
++		     u64 r8, u64 r9, u64 r10, u64 r11),
++	    TP_ARGS(fn, rcx, rdx, r8, r9, r10, r11),
++	    TP_STRUCT__entry(
++		__field(u64, fn)
++		__field(u64, rcx)
++		__field(u64, rdx)
++		__field(u64, r8)
++		__field(u64, r9)
++		__field(u64, r10)
++		__field(u64, r11)
++	    ),
++	    TP_fast_assign(
++		__entry->fn = fn;
++		__entry->rcx = rcx;
++		__entry->rdx = rdx;
++		__entry->r8 = r8;
++		__entry->r9 = r9;
++		__entry->r10 = r10;
++		__entry->r11 = r11;
++	    ),
++	    TP_printk("op: %s %llx %llx %llx %llx %llx %llx",
++		__print_symbolic_u64(__entry->fn, SEAMCALLS),
++		__entry->rcx,
++		__entry->rdx,
++		__entry->r8,
++		__entry->r9,
++		__entry->r10,
++		__entry->r11
++	    )
++);
++
++struct tdx_ex_ret;
++TRACE_EVENT(seamcall_exit,
++	    TP_PROTO(u64 fn, u64 err,
++		     const struct tdx_ex_ret *ex_ret),
++	    TP_ARGS(fn, err, ex_ret),
++	    TP_STRUCT__entry(
++		__field(u64, fn)
++		__field(u64, err)
++		__field(u64, rcx)
++		__field(u64, rdx)
++		__field(u64, r8)
++		__field(u64, r9)
++		__field(u64, r10)
++		__field(u64, r11)
++	    ),
++	    TP_fast_assign(
++		__entry->fn = fn;
++		__entry->err = err;
++		__entry->rcx = ex_ret->regs.rcx;
++		__entry->rdx = ex_ret->regs.rdx;
++		__entry->r8 = ex_ret->regs.r8;
++		__entry->r9 = ex_ret->regs.r9;
++		__entry->r10 = ex_ret->regs.r10;
++		__entry->r11 = ex_ret->regs.r11;
++	    ),
++	    TP_printk("op: %s err: %s(%llx) %llx %llx %llx %llx %llx %llx",
++		__print_symbolic_u64(__entry->fn, SEAMCALLS),
++		({ ((__entry->err & TDX_SEAMCALL_STATUS_MASK) ==
++			  P_SEAMLDR_SEAMCALL_ERROR_CODE) ?
++				__print_symbolic_u64(__entry->err,
++						     P_SEAMLDR_ERROR_CODES) :
++				__print_symbolic_u64(__entry->err &
++						     TDX_SEAMCALL_STATUS_MASK,
++						     TDX_STATUS_CODES); }),
++		__entry->err,
++		__entry->rcx,
++		__entry->rdx,
++		__entry->r8,
++		__entry->r9,
++		__entry->r10,
++		__entry->r11
++	    )
++);
++#endif /* CONFIG_INTEL_TDX_HOST */
++
++#undef TRACE_INCLUDE_PATH
++#define TRACE_INCLUDE_PATH ../../arch/x86/include/asm/trace/
++#undef TRACE_INCLUDE_FILE
++#define TRACE_INCLUDE_FILE seam
++#endif /* _TRACE_SEAM_H */
++
++/* This part must be outside protection */
++#include <trace/define_trace.h>
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.c b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+index 18a7c8d70a47..3b47fda86442 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.c
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+@@ -14,6 +14,7 @@
+ #include <asm/virtext.h>
+ #include <asm/trapnr.h>
+ #include <asm/perf_event.h>
++#include <asm/trace/seam.h>
+ 
+ #include "../../events/perf_event.h"
+ #include "p-seamldr.h"
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.h b/arch/x86/kernel/cpu/tdx/p-seamldr.h
+index 3a461814d727..ac6aa98954ea 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.h
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.h
+@@ -34,6 +34,12 @@ const char *p_seamldr_error_name(u64 error_code);
+ #define SEAMCALL_SEAMLDR_INFO		SEAMCALL_SEAMLDR_BASE
+ #define SEAMCALL_SEAMLDR_INSTALL	(SEAMCALL_SEAMLDR_BASE | 1)
+ 
++#define SEAMLDR_SEAMCALL(name)	{ SEAMCALL_##name, #name }
++
++#define SEAMLDR_SEAMCALLS			\
++	SEAMLDR_SEAMCALL(SEAMLDR_INFO),		\
++	SEAMLDR_SEAMCALL(SEAMLDR_INSTALL)
++
+ struct tee_tcb_svn {
+ 	u16 seam;
+ 	u8 reserved[14];
+diff --git a/arch/x86/kernel/cpu/tdx/seamcall.h b/arch/x86/kernel/cpu/tdx/seamcall.h
+index fab1fe6c10ae..1e895abbb87d 100644
+--- a/arch/x86/kernel/cpu/tdx/seamcall.h
++++ b/arch/x86/kernel/cpu/tdx/seamcall.h
+@@ -14,12 +14,16 @@ static inline u64 seamcall(u64 op, u64 rcx, u64 rdx, u64 r8, u64 r9,
+ 			   struct tdx_ex_ret *ex)
+ {
+ 	struct tdx_ex_ret dummy;
++	u64 err;
+ 
+ 	if (!ex)
+ 		/* __seamcall requires non-NULL ex. */
+ 		ex = &dummy;
+ 
+-	return __seamcall(op, rcx, rdx, r8, r9, ex);
++	trace_seamcall_enter(op, rcx, rdx, r8, r9, 0, 0);
++	err = __seamcall(op, rcx, rdx, r8, r9, ex);
++	trace_seamcall_exit(op, err, ex);
++	return err;
+ }
+ 
+ #endif /* __SEAM_SEAMCALL_H */
+diff --git a/arch/x86/kernel/cpu/tdx/tdx-error.c b/arch/x86/kernel/cpu/tdx/tdx-error.c
+index 58ec4a70398d..1c7d2e4104b9 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx-error.c
++++ b/arch/x86/kernel/cpu/tdx/tdx-error.c
+@@ -1,12 +1,20 @@
+ // SPDX-License-Identifier: GPL-2.0
+ /* functions to record TDX SEAMCALL error */
+ 
++#include <linux/trace_events.h>
++
+ #include <asm/tdx_errno.h>
+ #include <asm/tdx_arch.h>
+ #include <asm/tdx_host.h>
+ 
+ #include "p-seamldr.h"
+ 
++#define CREATE_TRACE_POINTS
++#include <asm/trace/seam.h>
++
++EXPORT_TRACEPOINT_SYMBOL_GPL(seamcall_enter);
++EXPORT_TRACEPOINT_SYMBOL_GPL(seamcall_exit);
++
+ struct tdx_seamcall_status {
+ 	u64 err_code;
+ 	const char *err_name;
+-- 
+2.31.1
+

@@ -1,0 +1,39 @@
+From 08fc12074d699f69a7978a4435a460e9fe465ead Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Thu, 24 Mar 2022 16:46:31 -0700
+Subject: [PATCH 1242/1418] vfio: mdev: idxd: check return value for
+ iommu_unregister_device_fault_handler()
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/vfio/mdev/idxd/mdev_host.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/vfio/mdev/idxd/mdev_host.c b/drivers/vfio/mdev/idxd/mdev_host.c
+index b05858e22759..ef94f5994023 100644
+--- a/drivers/vfio/mdev/idxd/mdev_host.c
++++ b/drivers/vfio/mdev/idxd/mdev_host.c
+@@ -66,7 +66,7 @@ void idxd_mdev_host_release(struct kref *kref)
+ 	struct idxd_device *idxd = container_of(kref, struct idxd_device, mdev_kref);
+ 	struct device *dev = &idxd->pdev->dev;
+ 	struct vfio_pci_core_device *vfio_pdev = &idxd->vfio_pdev;
+-	int i;
++	int i, rc;
+ 
+ 	if (!idxd->mdev_host_init)
+ 		return;
+@@ -78,7 +78,10 @@ void idxd_mdev_host_release(struct kref *kref)
+ 	vfio_pdev->num_regions = 0;
+ 	kfree(vfio_pdev->region);
+ 	vfio_pdev->region = NULL;
+-	iommu_unregister_device_fault_handler(&idxd->pdev->dev);
++	rc = iommu_unregister_device_fault_handler(&idxd->pdev->dev);
++	if (rc)
++		dev_warn(dev, "iommu_unregister_device_fault_handler() failed\n");
++
+ 	for (i = 0; i < vfio_pdev->num_ext_irqs; i++)
+ 		vfio_pci_set_ext_irq_trigger(vfio_pdev,
+ 					     VFIO_IRQ_SET_DATA_NONE | VFIO_IRQ_SET_ACTION_TRIGGER,
+-- 
+2.31.1
+

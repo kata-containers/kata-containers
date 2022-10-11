@@ -1,0 +1,37 @@
+From 5c6f5496bfe8b8ab53885d7a23d3355361640e58 Mon Sep 17 00:00:00 2001
+From: Trond Myklebust <trond.myklebust@hammerspace.com>
+Date: Wed, 6 Apr 2022 23:18:57 -0400
+Subject: [PATCH 1345/1418] SUNRPC: Handle ENOMEM in call_transmit_status()
+
+Both call_transmit() and call_bc_transmit() can now return ENOMEM, so
+let's make sure that we handle the errors gracefully.
+
+Fixes: 0472e4766049 ("SUNRPC: Convert socket page send code to use iov_iter()")
+Signed-off-by: Trond Myklebust <trond.myklebust@hammerspace.com>
+---
+ net/sunrpc/clnt.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/net/sunrpc/clnt.c b/net/sunrpc/clnt.c
+index 1b23a20b838c..68950b1e37a3 100644
+--- a/net/sunrpc/clnt.c
++++ b/net/sunrpc/clnt.c
+@@ -2200,6 +2200,7 @@ call_transmit_status(struct rpc_task *task)
+ 		 * socket just returned a connection error,
+ 		 * then hold onto the transport lock.
+ 		 */
++	case -ENOMEM:
+ 	case -ENOBUFS:
+ 		rpc_delay(task, HZ>>2);
+ 		fallthrough;
+@@ -2283,6 +2284,7 @@ call_bc_transmit_status(struct rpc_task *task)
+ 	case -ENOTCONN:
+ 	case -EPIPE:
+ 		break;
++	case -ENOMEM:
+ 	case -ENOBUFS:
+ 		rpc_delay(task, HZ>>2);
+ 		fallthrough;
+-- 
+2.31.1
+

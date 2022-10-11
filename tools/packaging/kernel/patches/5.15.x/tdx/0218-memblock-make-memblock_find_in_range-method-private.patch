@@ -1,0 +1,48 @@
+From af4fd268d02bfc9420c1cbb5881d506cab3af721 Mon Sep 17 00:00:00 2001
+From: Mike Rapoport <rppt@linux.ibm.com>
+Date: Wed, 25 Aug 2021 21:42:47 +0300
+Subject: [PATCH 0218/1418] memblock: make memblock_find_in_range method
+ private
+
+There are a lot of uses of memblock_find_in_range() along with
+memblock_reserve() from the times memblock allocation APIs did not exist.
+
+memblock_find_in_range() is the very core of memblock allocations, so any
+future changes to its internal behaviour would mandate updates of all the
+users outside memblock.
+
+Replace the calls to memblock_find_in_range() with an equivalent calls to
+memblock_phys_alloc() and memblock_phys_alloc_range() and make
+memblock_find_in_range() private method of memblock.
+
+This simplifies the callers, ensures that (unlikely) errors in
+memblock_reserve() are handled and improves maintainability of
+memblock_find_in_range().
+
+Signed-off-by: Mike Rapoport <rppt@linux.ibm.com>
+Acked-by: Kirill A. Shutemov <kirill.shtuemov@linux.intel.com>
+Acked-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>	# ACPI
+Acked-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
+Acked-by: Nick Kossifidis <mick@ics.forth.gr>			# riscv
+Reviewed-by: Catalin Marinas <catalin.marinas@arm.com>		# arm64
+Tested-by: Guenter Roeck <linux@roeck-us.net>
+Acked-by: Rob Herring <robh@kernel.org>
+---
+ arch/s390/kernel/setup.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/arch/s390/kernel/setup.c b/arch/s390/kernel/setup.c
+index 67e5fff96ee0..5f2233ec61dd 100644
+--- a/arch/s390/kernel/setup.c
++++ b/arch/s390/kernel/setup.c
+@@ -701,7 +701,6 @@ static void __init reserve_crashkernel(void)
+ 		diag10_range(PFN_DOWN(crash_base), PFN_DOWN(crash_size));
+ 	crashk_res.start = crash_base;
+ 	crashk_res.end = crash_base + crash_size - 1;
+-	memblock_remove(crash_base, crash_size);
+ 	pr_info("Reserving %lluMB of memory at %lluMB "
+ 		"for crashkernel (System RAM: %luMB)\n",
+ 		crash_size >> 20, crash_base >> 20,
+-- 
+2.31.1
+

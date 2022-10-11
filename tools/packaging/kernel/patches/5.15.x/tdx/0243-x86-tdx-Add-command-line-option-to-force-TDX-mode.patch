@@ -1,0 +1,83 @@
+From 25ee44e753389c495330c1cb799e258911318a1f Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Fri, 23 Oct 2020 10:09:39 +0000
+Subject: [PATCH 0243/1418] x86/tdx: Add command line option to force TDX mode
+
+In order to deal with faulty BIOS or TDX Module, allow user to
+force enable the TDX mode from kernel command line option.
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ Documentation/admin-guide/kernel-parameters.txt |  3 +++
+ arch/x86/boot/compressed/tdx.c                  |  5 ++++-
+ arch/x86/kernel/tdx.c                           | 10 +++++++++-
+ 3 files changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index c28951301bb0..eca655843d84 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -1437,6 +1437,9 @@
+ 			Warning: use of this parameter will taint the kernel
+ 			and may cause unknown problems.
+ 
++	force_tdx_guest [x86]
++			Force enable TDX guest mode.
++
+ 	ftrace=[tracer]
+ 			[FTRACE] will set and start the specified tracer
+ 			as early as possible in order to facilitate early
+diff --git a/arch/x86/boot/compressed/tdx.c b/arch/x86/boot/compressed/tdx.c
+index dd7f79655de6..d62db309004a 100644
+--- a/arch/x86/boot/compressed/tdx.c
++++ b/arch/x86/boot/compressed/tdx.c
+@@ -52,6 +52,8 @@ u64 __tdx_module_call(u64 fn, u64 rcx, u64 rdx, u64 r8, u64 r9,
+ u64 __tdx_hypercall(u64 type, u64 fn, u64 r12, u64 r13, u64 r14,
+ 		    u64 r15, struct tdx_hypercall_output *out);
+ 
++int cmdline_find_option_bool(const char *option);
++
+ static inline bool early_cpuid_has_tdx_guest(void)
+ {
+ 	u32 eax = TDX_CPUID_LEAF_ID, sig[3] = {0};
+@@ -67,7 +69,8 @@ static inline bool early_cpuid_has_tdx_guest(void)
+ bool early_is_tdx_guest(void)
+ {
+ 	if (tdx_guest < 0)
+-		tdx_guest = early_cpuid_has_tdx_guest();
++		tdx_guest = early_cpuid_has_tdx_guest() ||
++			cmdline_find_option_bool("force_tdx_guest");
+ 
+ 	return !!tdx_guest;
+ }
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 4e52c78949ed..bad0fe891683 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -8,6 +8,7 @@
+ #include <linux/io.h>
+ 
+ #include <asm/tdx.h>
++#include <asm/cmdline.h>
+ #include <asm/i8259.h>
+ #include <asm/apic.h>
+ #include <asm/idtentry.h>
+@@ -933,7 +934,14 @@ __init bool tdx_early_handle_ve(struct pt_regs *regs)
+ 
+ void __init tdx_early_init(void)
+ {
+-	if (!is_tdx_guest())
++	bool tdx_guest_forced;
++
++	tdx_guest_forced = cmdline_find_option_bool(boot_command_line,
++						    "force_tdx_guest");
++	if (tdx_guest_forced)
++		pr_info("Force enabling TDX Guest feature\n");
++
++	if (!is_tdx_guest() && !tdx_guest_forced)
+ 		return;
+ 
+ 	setup_force_cpu_cap(X86_FEATURE_TDX_GUEST);
+-- 
+2.31.1
+

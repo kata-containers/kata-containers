@@ -1,0 +1,287 @@
+From d8d4455275dd22be89c8819b35cb38754acc0863 Mon Sep 17 00:00:00 2001
+From: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Date: Thu, 22 Jul 2021 23:08:35 +0800
+Subject: [PATCH 1221/1418] kvm/x86: This commit emulates ENQCMD and ENQCMDS on
+ an EPT exit
+
+It doesnt support PASID MSR and VDCM PASID translation table yet.
+
+Signed-off-by: Sanjay Kumar <sanjay.k.kumar@intel.com>
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+---
+ arch/x86/kvm/emulate.c     | 95 +++++++++++++++++++++++++++++++++++++-
+ arch/x86/kvm/kvm_emulate.h |  5 +-
+ arch/x86/kvm/x86.c         | 42 +++++++++++++----
+ include/linux/kvm_host.h   |  4 ++
+ 4 files changed, 135 insertions(+), 11 deletions(-)
+
+diff --git a/arch/x86/kvm/emulate.c b/arch/x86/kvm/emulate.c
+index d76c85d94912..5abaebe2c920 100644
+--- a/arch/x86/kvm/emulate.c
++++ b/arch/x86/kvm/emulate.c
+@@ -170,6 +170,7 @@
+ #define NoMod	    ((u64)1 << 47)  /* Mod field is ignored */
+ #define Intercept   ((u64)1 << 48)  /* Has valid intercept field */
+ #define CheckPerm   ((u64)1 << 49)  /* Has valid check_perm field */
++#define NonPostedWrite  ((u64)1 << 50)  /* Instruction does non-posted write */
+ #define PrivUD      ((u64)1 << 51)  /* #UD instead of #GP on CPL > 0 */
+ #define NearBranch  ((u64)1 << 52)  /* Near branches */
+ #define No16	    ((u64)1 << 53)  /* No 16 bit operand */
+@@ -1384,12 +1385,15 @@ static int segmented_write(struct x86_emulate_ctxt *ctxt,
+ {
+ 	int rc;
+ 	ulong linear;
++	bool non_posted = false;
+ 
+ 	rc = linearize(ctxt, addr, size, true, &linear);
+ 	if (rc != X86EMUL_CONTINUE)
+ 		return rc;
++	if (ctxt->d & NonPostedWrite)
++		non_posted = true;
+ 	return ctxt->ops->write_emulated(ctxt, linear, data, size,
+-					 &ctxt->exception);
++					 &ctxt->exception, non_posted);
+ }
+ 
+ static int segmented_cmpxchg(struct x86_emulate_ctxt *ctxt,
+@@ -3554,6 +3558,91 @@ static int em_mov(struct x86_emulate_ctxt *ctxt)
+ 	return X86EMUL_CONTINUE;
+ }
+ 
++static int em_enqcmd(struct x86_emulate_ctxt *ctxt)
++{
++	u64 dest_va = ctxt->dst.val;
++	int rc = X86EMUL_CONTINUE;
++	bool retry = false;
++
++	if (ctxt->ops->np_write_complete(ctxt, &retry)) {
++		/* Dont do writeback on the return path*/
++		ctxt->d &= ~NoWrite;
++		if (retry)
++			ctxt->eflags |=  X86_EFLAGS_ZF;
++		else
++			ctxt->eflags &=  ~X86_EFLAGS_ZF;
++
++		return rc;
++	}
++
++	if (dest_va & 0x3f) {
++		printk("dest va is not 64 byte aligned\n");
++	}
++	ctxt->op_bytes = 64;
++	ctxt->src.bytes = 64;
++	ctxt->dst.bytes = 64;
++
++	ctxt->dst.type = OP_MEM;
++	ctxt->dst.addr.mem.ea = dest_va;
++	ctxt->dst.addr.mem.seg = ctxt->src.addr.mem.seg;
++
++	rc = segmented_read(ctxt, ctxt->src.addr.mem,
++	ctxt->src.valptr512, ctxt->src.bytes);
++	if (rc != X86EMUL_CONTINUE) {
++		printk("ENQCMD: read src data failed rc %d\n", rc);
++		goto done;
++	}
++
++	/* TODO: Get PASID from PASID MSR */
++
++	/* TODO: Translate PASID through VMCS PASID translation table */
++
++	memcpy(ctxt->dst.valptr512, ctxt->src.valptr512, sizeof(ctxt->src.valptr512));
++done:
++	return rc;
++}
++
++static int em_enqcmds(struct x86_emulate_ctxt *ctxt)
++{
++	u64 dest_va = ctxt->dst.val;
++	int rc = X86EMUL_CONTINUE;
++	bool retry = false;
++
++	if (ctxt->ops->np_write_complete(ctxt, &retry)) {
++		/* Dont do writeback on the return path*/
++		ctxt->d &= ~NoWrite;
++		if (retry)
++			ctxt->eflags |=  X86_EFLAGS_ZF;
++		else
++			ctxt->eflags &=  ~X86_EFLAGS_ZF;
++
++		return rc;
++	}
++
++	if (dest_va & 0x3f) {
++		printk("dest va is not 64 byte aligned\n");
++	}
++	ctxt->op_bytes = 64;
++	ctxt->src.bytes = 64;
++	ctxt->dst.bytes = 64;
++
++	ctxt->dst.type = OP_MEM;
++	ctxt->dst.addr.mem.ea = dest_va;
++	ctxt->dst.addr.mem.seg = ctxt->src.addr.mem.seg;
++
++	rc = segmented_read(ctxt, ctxt->src.addr.mem,
++	ctxt->src.valptr512, ctxt->src.bytes);
++	if (rc != X86EMUL_CONTINUE) {
++		printk("ENQCMDS: read src data failed rc %d\n", rc);
++		goto done;
++	}
++
++	/* TODO: Translate PASID through VMCS PASID translation table */
++	memcpy(ctxt->dst.valptr512, ctxt->src.valptr512, sizeof(ctxt->src.valptr512));
++done:
++	return rc;
++}
++
+ static int em_movdir64b(struct x86_emulate_ctxt *ctxt)
+ {
+ 	u64 dest_va = ctxt->dst.val;
+@@ -4809,7 +4898,9 @@ static const struct gprefix three_byte_0f_38_f1 = {
+  * Not sure how to specify Unaligned only on the source addr
+  */
+ static const struct gprefix three_byte_0f_38_f8 = {
+-	N, I(DstReg | SrcMem | Mov | NoAccess | TwoMemOp | Unaligned, em_movdir64b), N, N
++	N, I(DstReg | SrcMem | Mov | NoAccess | TwoMemOp | Unaligned, em_movdir64b),
++	I(DstReg | SrcMem | Mov | NoAccess | TwoMemOp | Unaligned | NonPostedWrite, em_enqcmd),
++	I(DstReg | SrcMem | Mov | NoAccess | TwoMemOp | Unaligned | NonPostedWrite, em_enqcmds)
+ };
+ 
+ /*
+diff --git a/arch/x86/kvm/kvm_emulate.h b/arch/x86/kvm/kvm_emulate.h
+index 52a3e106f8b8..e50736c30d83 100644
+--- a/arch/x86/kvm/kvm_emulate.h
++++ b/arch/x86/kvm/kvm_emulate.h
+@@ -167,7 +167,10 @@ struct x86_emulate_ops {
+ 	int (*write_emulated)(struct x86_emulate_ctxt *ctxt,
+ 			      unsigned long addr, const void *val,
+ 			      unsigned int bytes,
+-			      struct x86_exception *fault);
++			      struct x86_exception *fault,
++			      bool non_posted);
++
++	int (*np_write_complete)(struct x86_emulate_ctxt *ctxt, bool *retry);
+ 
+ 	/*
+ 	 * cmpxchg_emulated: Emulate an atomic (LOCKed) CMPXCHG operation on an
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 2cfd21e4d8b3..fd01fa0f6b6d 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -6979,7 +6979,8 @@ static int emulator_read_write(struct x86_emulate_ctxt *ctxt,
+ 			unsigned long addr,
+ 			void *val, unsigned int bytes,
+ 			struct x86_exception *exception,
+-			const struct read_write_emulator_ops *ops)
++			const struct read_write_emulator_ops *ops,
++			bool non_posted)
+ {
+ 	struct kvm_vcpu *vcpu = emul_to_vcpu(ctxt);
+ 	gpa_t gpa;
+@@ -7023,6 +7024,12 @@ static int emulator_read_write(struct x86_emulate_ctxt *ctxt,
+ 
+ 	vcpu->run->mmio.len = min(8u, vcpu->mmio_fragments[0].len);
+ 	vcpu->run->mmio.is_write = vcpu->mmio_is_write = ops->write;
++
++	if (non_posted && ops->write) {
++		vcpu->mmio_is_write |= MMIO_NONPOSTED_WRITE;
++		vcpu->run->mmio.is_write = vcpu->mmio_is_write;
++	}
++
+ 	vcpu->run->exit_reason = KVM_EXIT_MMIO;
+ 	vcpu->run->mmio.phys_addr = gpa;
+ 
+@@ -7036,17 +7043,31 @@ static int emulator_read_emulated(struct x86_emulate_ctxt *ctxt,
+ 				  struct x86_exception *exception)
+ {
+ 	return emulator_read_write(ctxt, addr, val, bytes,
+-				   exception, &read_emultor);
++				   exception, &read_emultor, false);
+ }
+ 
+ static int emulator_write_emulated(struct x86_emulate_ctxt *ctxt,
+ 			    unsigned long addr,
+ 			    const void *val,
+ 			    unsigned int bytes,
+-			    struct x86_exception *exception)
++			    struct x86_exception *exception,
++			    bool non_posted)
+ {
+ 	return emulator_read_write(ctxt, addr, (void *)val, bytes,
+-				   exception, &write_emultor);
++				   exception, &write_emultor, non_posted);
++}
++
++static int emulator_np_write_complete(struct x86_emulate_ctxt *ctxt, bool *retry)
++{
++	struct kvm_vcpu *vcpu = emul_to_vcpu(ctxt);
++
++	if (vcpu->mmio_nonposted_write_completed) {
++		vcpu->mmio_nonposted_write_completed = 0;
++		*retry = !!(vcpu->run->mmio.is_write & MMIO_NONPOSTED_DEFERRED);
++		return 1;
++	}
++
++	return 0;
+ }
+ 
+ #define CMPXCHG_TYPE(t, ptr, old, new) \
+@@ -7129,7 +7150,7 @@ static int emulator_cmpxchg_emulated(struct x86_emulate_ctxt *ctxt,
+ emul_write:
+ 	printk_once(KERN_WARNING "kvm: emulating exchange as write\n");
+ 
+-	return emulator_write_emulated(ctxt, addr, new, bytes, exception);
++	return emulator_write_emulated(ctxt, addr, new, bytes, exception, false);
+ }
+ 
+ static int kernel_pio(struct kvm_vcpu *vcpu, void *pd)
+@@ -7598,6 +7619,7 @@ static const struct x86_emulate_ops emulate_ops = {
+ 	.fetch               = kvm_fetch_guest_virt,
+ 	.read_emulated       = emulator_read_emulated,
+ 	.write_emulated      = emulator_write_emulated,
++	.np_write_complete   = emulator_np_write_complete,
+ 	.cmpxchg_emulated    = emulator_cmpxchg_emulated,
+ 	.invlpg              = emulator_invlpg,
+ 	.pio_in_emulated     = emulator_pio_in_emulated,
+@@ -9034,7 +9056,7 @@ static int emulator_fix_hypercall(struct x86_emulate_ctxt *ctxt)
+ 	static_call(kvm_x86_patch_hypercall)(vcpu, instruction);
+ 
+ 	return emulator_write_emulated(ctxt, rip, instruction, 3,
+-		&ctxt->exception);
++		&ctxt->exception, false);
+ }
+ 
+ static int dm_request_for_irq_injection(struct kvm_vcpu *vcpu)
+@@ -10214,9 +10236,13 @@ static int complete_emulated_mmio(struct kvm_vcpu *vcpu)
+ 		vcpu->mmio_needed = 0;
+ 
+ 		/* FIXME: return into emulator if single-stepping.  */
+-		if (vcpu->mmio_is_write)
++		if (vcpu->mmio_is_write == MMIO_WRITE)
+ 			return 1;
+-		vcpu->mmio_read_completed = 1;
++		if (vcpu->mmio_is_write == MMIO_NONPOSTED_WRITE)
++			vcpu->mmio_nonposted_write_completed = 1;
++		else
++			vcpu->mmio_read_completed = 1;
++
+ 		return complete_emulated_io(vcpu);
+ 	}
+ 
+diff --git a/include/linux/kvm_host.h b/include/linux/kvm_host.h
+index 2f43215e3ff0..91732dcf33dc 100644
+--- a/include/linux/kvm_host.h
++++ b/include/linux/kvm_host.h
+@@ -321,6 +321,10 @@ struct kvm_vcpu {
+ #ifdef CONFIG_HAS_IOMEM
+ 	int mmio_needed;
+ 	int mmio_read_completed;
++	int mmio_nonposted_write_completed;
++#define MMIO_WRITE 1
++#define MMIO_NONPOSTED_WRITE 3
++#define MMIO_NONPOSTED_DEFERRED 4
+ 	int mmio_is_write;
+ 	int mmio_cur_fragment;
+ 	int mmio_nr_fragments;
+-- 
+2.31.1
+

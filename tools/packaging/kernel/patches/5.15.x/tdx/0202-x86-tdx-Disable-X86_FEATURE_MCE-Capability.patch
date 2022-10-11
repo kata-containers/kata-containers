@@ -1,0 +1,45 @@
+From aece3c8f3ea6592c90250245c7a5457993bdbe1a Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Wed, 31 Mar 2021 13:14:22 -0700
+Subject: [PATCH 0202/1418] x86/tdx: Disable X86_FEATURE_MCE Capability
+
+Machine check code is very complex and a possible attack point of
+guests. While there are use cases of hosts forwarding machine checks
+to guests for machine check recovery, in TDX this requires para
+virtualization (as in converting MSR accesses to TDCALLs).
+
+The #VE handler has the code to do that, and it could in theory work
+with the KVM emulation, it's not really needed for current TDX because
+there can be no host handled machine checks for TDX memory (machine
+checks for TDX encrypted memory are always handled in the TDX module
+and lead to a shutdown of the TD). In theory they could be handled on
+shared memory, but that's such a small memory area to not worth
+bothering with.
+
+Based on that and that it would be some effort to harden and audit the
+machine check code just disable the MCE CPUID bit in TDX guests. This
+could be revisited if there is a real use case for forwarding machine
+checks to TDs.
+
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Reviewed-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ arch/x86/kernel/tdx.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/x86/kernel/tdx.c b/arch/x86/kernel/tdx.c
+index 26edbb84c745..b965cdad9294 100644
+--- a/arch/x86/kernel/tdx.c
++++ b/arch/x86/kernel/tdx.c
+@@ -790,6 +790,7 @@ void __init tdx_early_init(void)
+ 		return;
+ 
+ 	setup_force_cpu_cap(X86_FEATURE_TDX_GUEST);
++	setup_clear_cpu_cap(X86_FEATURE_MCE);
+ 
+ 	/*
+ 	 * The only secure (mononotonous) timer inside a TD guest
+-- 
+2.31.1
+

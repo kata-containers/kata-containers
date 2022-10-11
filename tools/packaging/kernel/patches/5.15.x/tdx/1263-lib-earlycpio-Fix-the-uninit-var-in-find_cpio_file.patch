@@ -1,0 +1,26 @@
+From 691fa516afb905260352bee271f4f2895da389f2 Mon Sep 17 00:00:00 2001
+From: Chenyi Qiang <chenyi.qiang@intel.com>
+Date: Thu, 24 Mar 2022 15:43:08 +0800
+Subject: [PATCH 1263/1418] lib/earlycpio: Fix the uninit var in find_cpio_file
+
+Signed-off-by: Chenyi Qiang <chenyi.qiang@intel.com>
+---
+ lib/earlycpio.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/earlycpio.c b/lib/earlycpio.c
+index f329dc6e88b9..090754fd4583 100644
+--- a/lib/earlycpio.c
++++ b/lib/earlycpio.c
+@@ -153,7 +153,7 @@ struct cpio_data find_cpio_data(const char *path, void *data,
+ struct cpio_data find_cpio_file(const char *path, void *data, size_t len)
+ {
+ 	struct cpio_data blob;
+-	long offset;
++	long offset = 0;
+ 
+ 	while (len > 0) {
+ 		blob = find_cpio_data(path, data, len, &offset);
+-- 
+2.31.1
+

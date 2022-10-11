@@ -1,0 +1,42 @@
+From fb84cad96e45e5b0146272263621171ea846a7b5 Mon Sep 17 00:00:00 2001
+From: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Date: Tue, 15 Mar 2022 17:26:58 +0200
+Subject: [PATCH 1329/1418] x86/tdx: Add vsock to TDX device filter's allow
+ list
+
+Vsock driver has been audited, add it to the allow list in the TDX device
+filter.
+
+Signed-off-by: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+---
+ arch/x86/kernel/tdx-filter.c    | 2 +-
+ include/uapi/linux/virtio_ids.h | 1 +
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/tdx-filter.c b/arch/x86/kernel/tdx-filter.c
+index 56243636870a..4e1bfb745e3a 100644
+--- a/arch/x86/kernel/tdx-filter.c
++++ b/arch/x86/kernel/tdx-filter.c
+@@ -64,7 +64,7 @@ struct pci_device_id pci_allow_ids[] = {
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO1_ID_BLOCK) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO1_ID_CONSOLE) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO1_ID_9P) },
+-	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO_ID_VSOCK) },
++	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, VIRTIO1_ID_VSOCK) },
+ 	{ 0, },
+ };
+ 
+diff --git a/include/uapi/linux/virtio_ids.h b/include/uapi/linux/virtio_ids.h
+index a2fcb4681028..f592efd82450 100644
+--- a/include/uapi/linux/virtio_ids.h
++++ b/include/uapi/linux/virtio_ids.h
+@@ -88,5 +88,6 @@
+ #define VIRTIO1_ID_BLOCK		0x1042 /* transitional virtio block */
+ #define VIRTIO1_ID_CONSOLE		0x1043 /* transitional virtio console */
+ #define VIRTIO1_ID_9P			0x1049 /* transitional virtio 9p console */
++#define VIRTIO1_ID_VSOCK		0x1053 /* transitional virtio vsock transport */
+ 
+ #endif /* _LINUX_VIRTIO_IDS_H */
+-- 
+2.31.1
+

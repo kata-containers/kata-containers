@@ -1,0 +1,282 @@
+From f1f874bf5c622568b7f5fc1fff5fc2a812c7a1c8 Mon Sep 17 00:00:00 2001
+From: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+Date: Fri, 19 Jun 2020 15:26:30 -0700
+Subject: [PATCH 0241/1418] ACPI: Add SVKL table support
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+For highly secure systems like (TDX), the storage volume will
+typically be an encrypted volume. In that case, by design, the
+Firmware will need to support quote generation and attestation
+to be able to fetch a set of storage-volume key(s) from a
+remote-key server during boot and pass the key to the OS. Also
+by design, the key is stored in the memory, and the information
+of the key is passed from Firmware to OS via an ACPI table. More
+details about ACPI Storage Volume Key Label (SVKL) table can be
+found in TDX spec titled "Guest-Host-Communication Interface (GHCI)
+for Intel® Trust Domain Extensions (Intel® TDX)", sec 4.4.
+
+Also, in order to pass the received storage keys to userspace,
+define following set of IOCTLs.
+
+/* Get the total number of keys */
+   #define ACPI_SVKL_GET_KEY_COUNT _IOW('E', 0x01, __u32)
+/* Get the key header (by index) */
+   #define ACPI_SVKL_GET_KEY_INFO  _IOWR('E', 0x02, key_info_size)
+/* Get the key data (by index) */
+   #define ACPI_SVKL_GET_KEY_DATA  _IOR('E', 0x03, __u64)
+/* Clear the key data (by index) */
+   #define ACPI_SVKL_CLEAR_KEY     _IOR('E', 0x04, __u32)
+
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ drivers/acpi/Makefile |   1 +
+ drivers/acpi/svkl.c   | 178 ++++++++++++++++++++++++++++++++++++++++++
+ drivers/acpi/tables.c |   2 +-
+ include/linux/svkl.h  |  23 ++++++
+ 4 files changed, 203 insertions(+), 1 deletion(-)
+ create mode 100644 drivers/acpi/svkl.c
+ create mode 100644 include/linux/svkl.h
+
+diff --git a/drivers/acpi/Makefile b/drivers/acpi/Makefile
+index 3018714e87d9..c7850fa31a92 100644
+--- a/drivers/acpi/Makefile
++++ b/drivers/acpi/Makefile
+@@ -102,6 +102,7 @@ obj-$(CONFIG_ACPI_CPPC_LIB)	+= cppc_acpi.o
+ obj-$(CONFIG_ACPI_SPCR_TABLE)	+= spcr.o
+ obj-$(CONFIG_ACPI_DEBUGGER_USER) += acpi_dbg.o
+ obj-$(CONFIG_ACPI_PPTT) 	+= pptt.o
++obj-$(CONFIG_ACPI) 		+= svkl.o
+ 
+ # processor has its own "processor." module_param namespace
+ processor-y			:= processor_driver.o
+diff --git a/drivers/acpi/svkl.c b/drivers/acpi/svkl.c
+new file mode 100644
+index 000000000000..015f6d55bb12
+--- /dev/null
++++ b/drivers/acpi/svkl.c
+@@ -0,0 +1,178 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ * svkl.c - ACPI SVKL interface driver.
++ *
++ * Copyright (C) 2020 Intel Corporation
++ *
++ * Parses the ACPI SVKL table and adds support to access/modify
++ * the SVKL table entries via set of user IOCTLs.
++ *
++ * Author:
++ *     Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
++ */
++
++#define pr_fmt(fmt) "SVKL: " fmt
++
++#include <linux/acpi.h>
++#include <linux/miscdevice.h>
++#include <linux/uaccess.h>
++#include <linux/svkl.h>
++#include <linux/fs.h>
++
++/* SVKL table header */
++static struct acpi_table_header *svkl_tbl_hdr;
++/* Lock to protect access to SVKL table */
++static struct mutex svkl_lock;
++
++static void dump_svkl_header(void)
++{
++	struct acpi_table_svkl *svkl_ktbl;
++	struct acpi_svkl_key *svkl_key;
++	int i;
++
++	svkl_ktbl = (struct acpi_table_svkl *)svkl_tbl_hdr;
++	svkl_key = (struct acpi_svkl_key *)(&svkl_ktbl[1]);
++
++	pr_info("Key Count   :%x\n", svkl_ktbl->count);
++
++	mutex_lock(&svkl_lock);
++	for (i = 0; i < svkl_ktbl->count; i++) {
++		svkl_key = &svkl_key[i];
++		pr_info("Key%d Type   :%x\n", i, svkl_key->type);
++		pr_info("Key%d Format :%x\n", i, svkl_key->format);
++		pr_info("Key%d Size   :%d\n", i, svkl_key->size);
++		pr_info("Key%d Addr   :%llx\n", i, svkl_key->address);
++	}
++	mutex_unlock(&svkl_lock);
++}
++
++static int get_index(void __user *argp, u32 *index)
++{
++	struct acpi_table_svkl *svkl_ktbl;
++
++	svkl_ktbl = (struct acpi_table_svkl *)svkl_tbl_hdr;
++
++	if (get_user(*index, (u32 __user *)argp))
++		return -EFAULT;
++
++	if (*index >= svkl_ktbl->count)
++		return -EINVAL;
++
++	return 0;
++}
++
++static long acpi_svkl_ioctl(struct file *f, unsigned int cmd,
++			    unsigned long arg)
++{
++	void __user *argp = (void __user *)arg;
++	struct acpi_table_svkl *svkl_ktbl;
++	struct acpi_svkl_key *svkl_key;
++	struct acpi_svkl_key_info *kinfo;
++	char *kdata;
++	int ret = 0;
++	u32 index = 0;
++
++	svkl_ktbl = (struct acpi_table_svkl *)svkl_tbl_hdr;
++	/* SVKL Key headers are at svkl_tbl_hdr + sizeof(*svkl_ktbl) */
++	svkl_key = (struct acpi_svkl_key *)(&svkl_ktbl[1]);
++
++	mutex_lock(&svkl_lock);
++	switch (cmd) {
++	case ACPI_SVKL_GET_KEY_COUNT:
++		if (put_user(svkl_ktbl->count, (u32 __user *)argp))
++			ret = -EFAULT;
++		break;
++	case ACPI_SVKL_GET_KEY_INFO:
++		ret = get_index(argp, &index);
++		if (ret)
++			break;
++		kinfo = (struct acpi_svkl_key_info *)(&svkl_key[index]);
++		if (copy_to_user(argp, kinfo, sizeof(*kinfo)))
++			ret = -EFAULT;
++		break;
++	case ACPI_SVKL_GET_KEY_DATA:
++		ret = get_index(argp, &index);
++		if (ret)
++			break;
++		svkl_key = (struct acpi_svkl_key *)(&svkl_key[index]);
++		kdata = memremap(svkl_key->address, svkl_key->size,
++				 MEMREMAP_WB);
++		if (!kdata) {
++			ret = -ENOMEM;
++			break;
++		}
++		if (copy_to_user(argp, kdata, svkl_key->size))
++			ret = -EFAULT;
++		memunmap(kdata);
++		break;
++	case ACPI_SVKL_CLEAR_KEY:
++		ret = get_index(argp, &index);
++		if (ret)
++			break;
++		svkl_key = (struct acpi_svkl_key *)(&svkl_key[index]);
++		kdata = memremap(svkl_key->address, svkl_key->size,
++				 MEMREMAP_WB);
++		if (!kdata) {
++			ret = -ENOMEM;
++			break;
++		}
++		memset(kdata, 0, svkl_key->size);
++		memunmap(kdata);
++		break;
++	}
++	mutex_unlock(&svkl_lock);
++
++	return ret;
++}
++
++static const struct file_operations acpi_svkl_ops = {
++	.owner		= THIS_MODULE,
++	.unlocked_ioctl	= acpi_svkl_ioctl,
++	.llseek		= no_llseek,
++};
++
++static struct miscdevice acpi_svkl_dev = {
++	.minor	= MISC_DYNAMIC_MINOR,
++	.name	= "svkl",
++	.fops	= &acpi_svkl_ops,
++};
++
++static int __init acpi_svkl_init(void)
++{
++	acpi_status status = AE_OK;
++	int ret;
++
++	ret = misc_register(&acpi_svkl_dev);
++	if (ret) {
++		pr_err("SVKL: can't misc_register on minor=%d\n",
++		       MISC_DYNAMIC_MINOR);
++		return ret;
++	}
++
++	mutex_init(&svkl_lock);
++
++	status = acpi_get_table(ACPI_SIG_SVKL, 0, &svkl_tbl_hdr);
++	if (ACPI_FAILURE(status) || !svkl_tbl_hdr) {
++		pr_err("get table failed\n");
++		return -ENODEV;
++	}
++
++	dump_svkl_header();
++
++	pr_info("ACPI: SVKL module loaded\n");
++
++	return 0;
++}
++
++static void __exit acpi_svkl_exit(void)
++{
++	acpi_put_table(svkl_tbl_hdr);
++	misc_deregister(&acpi_svkl_dev);
++}
++
++module_init(acpi_svkl_init);
++module_exit(acpi_svkl_exit);
++
++MODULE_AUTHOR(" Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>");
++MODULE_DESCRIPTION("ACPI SVKL table interface driver");
++MODULE_LICENSE("GPL v2");
+diff --git a/drivers/acpi/tables.c b/drivers/acpi/tables.c
+index eb988dfb943c..f1c895485aa1 100644
+--- a/drivers/acpi/tables.c
++++ b/drivers/acpi/tables.c
+@@ -511,7 +511,7 @@ static const char table_sigs[][ACPI_NAMESEG_SIZE] __initconst = {
+ 	ACPI_SIG_WDDT, ACPI_SIG_WDRT, ACPI_SIG_DSDT, ACPI_SIG_FADT,
+ 	ACPI_SIG_PSDT, ACPI_SIG_RSDT, ACPI_SIG_XSDT, ACPI_SIG_SSDT,
+ 	ACPI_SIG_IORT, ACPI_SIG_NFIT, ACPI_SIG_HMAT, ACPI_SIG_PPTT,
+-	ACPI_SIG_NHLT };
++	ACPI_SIG_NHLT, ACPI_SIG_SVKL };
+ 
+ #define ACPI_HEADER_SIZE sizeof(struct acpi_table_header)
+ 
+diff --git a/include/linux/svkl.h b/include/linux/svkl.h
+new file mode 100644
+index 000000000000..426a1c75a81e
+--- /dev/null
++++ b/include/linux/svkl.h
+@@ -0,0 +1,23 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * svkl.h - Linux ACPI SVKL Interface
++ */
++
++#ifndef ACPI_SVKL_H
++#define ACPI_SVKL_H
++
++#include <linux/types.h>
++#include <linux/ioctl.h>
++
++struct acpi_svkl_key_info {
++	__u16 type;
++	__u16 format;
++	__u32 size;
++} __packed;
++
++#define ACPI_SVKL_GET_KEY_COUNT	_IOW('E', 0x01, __u32)
++#define ACPI_SVKL_GET_KEY_INFO	_IOWR('E', 0x02, struct acpi_svkl_key_info)
++#define ACPI_SVKL_GET_KEY_DATA	_IOR('E', 0x03, __u64)
++#define ACPI_SVKL_CLEAR_KEY	_IOR('E', 0x04, __u32)
++
++#endif
+-- 
+2.31.1
+

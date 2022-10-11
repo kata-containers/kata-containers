@@ -1,0 +1,80 @@
+From febdaf5f3c712928eab33a0a5069f7e41adebc8a Mon Sep 17 00:00:00 2001
+From: Flavio Suligoi <f.suligoi@asem.it>
+Date: Tue, 28 Sep 2021 17:18:32 +0200
+Subject: [PATCH 0538/1418] dmaengine: imx-sdma: align statement to open
+ parenthesis
+
+Alignment should match open parenthesis.
+
+Signed-off-by: Flavio Suligoi <f.suligoi@asem.it>
+Link: https://lore.kernel.org/r/20210928151833.589843-3-f.suligoi@asem.it
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/imx-sdma.c | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/dma/imx-sdma.c b/drivers/dma/imx-sdma.c
+index 726076683400..7b3bd3608651 100644
+--- a/drivers/dma/imx-sdma.c
++++ b/drivers/dma/imx-sdma.c
+@@ -1241,7 +1241,7 @@ static int sdma_config_channel(struct dma_chan *chan)
+ }
+ 
+ static int sdma_set_channel_priority(struct sdma_channel *sdmac,
+-		unsigned int priority)
++				     unsigned int priority)
+ {
+ 	struct sdma_engine *sdma = sdmac->sdma;
+ 	int channel = sdmac->channel;
+@@ -1261,7 +1261,7 @@ static int sdma_request_channel0(struct sdma_engine *sdma)
+ 	int ret = -EBUSY;
+ 
+ 	sdma->bd0 = dma_alloc_coherent(sdma->dev, PAGE_SIZE, &sdma->bd0_phys,
+-					GFP_NOWAIT);
++				       GFP_NOWAIT);
+ 	if (!sdma->bd0) {
+ 		ret = -ENOMEM;
+ 		goto out;
+@@ -1284,7 +1284,7 @@ static int sdma_alloc_bd(struct sdma_desc *desc)
+ 	int ret = 0;
+ 
+ 	desc->bd = dma_alloc_coherent(desc->sdmac->sdma->dev, bd_size,
+-				       &desc->bd_phys, GFP_NOWAIT);
++				      &desc->bd_phys, GFP_NOWAIT);
+ 	if (!desc->bd) {
+ 		ret = -ENOMEM;
+ 		goto out;
+@@ -1757,7 +1757,7 @@ static void sdma_issue_pending(struct dma_chan *chan)
+ #define SDMA_SCRIPT_ADDRS_ARRAY_SIZE_V4	46
+ 
+ static void sdma_add_scripts(struct sdma_engine *sdma,
+-		const struct sdma_script_start_addrs *addr)
++			     const struct sdma_script_start_addrs *addr)
+ {
+ 	s32 *addr_arr = (u32 *)addr;
+ 	s32 *saddr_arr = (u32 *)sdma->script_addrs;
+@@ -1840,8 +1840,8 @@ static void sdma_load_firmware(const struct firmware *fw, void *context)
+ 	clk_enable(sdma->clk_ahb);
+ 	/* download the RAM image for SDMA */
+ 	sdma_load_script(sdma, ram_code,
+-			header->ram_code_size,
+-			addr->ram_code_start_addr);
++			 header->ram_code_size,
++			 addr->ram_code_start_addr);
+ 	clk_disable(sdma->clk_ipg);
+ 	clk_disable(sdma->clk_ahb);
+ 
+@@ -1850,8 +1850,8 @@ static void sdma_load_firmware(const struct firmware *fw, void *context)
+ 	sdma->fw_loaded = true;
+ 
+ 	dev_info(sdma->dev, "loaded firmware %d.%d\n",
+-			header->version_major,
+-			header->version_minor);
++		 header->version_major,
++		 header->version_minor);
+ 
+ err_firmware:
+ 	release_firmware(fw);
+-- 
+2.31.1
+

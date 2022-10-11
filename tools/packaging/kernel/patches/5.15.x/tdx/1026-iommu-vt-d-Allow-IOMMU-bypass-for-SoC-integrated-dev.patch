@@ -1,0 +1,64 @@
+From f6dd55f1c66d3bbfdca3eccdbe8590fcaa8475dc Mon Sep 17 00:00:00 2001
+From: Jacob Pan <jacob.jun.pan@linux.intel.com>
+Date: Fri, 22 Oct 2021 15:25:18 -0700
+Subject: [PATCH 1026/1418] iommu/vt-d: Allow IOMMU bypass for SoC integrated
+ devices
+
+SoC integrated devices listed under ACPI SATC  (SoC Integrated Address
+Translation Cache) should be trusted for DMA. These are the devices
+co-designed with the CPU, can be viewed as co-processors rather than
+devices.
+
+This patch leverage the existing infrastructure to mark devices
+under SATC device scope as identity mapping by default. This will in
+turn bypass DMA map ops. The drivers invoke DMA map APIs will get physical
+address in returned dma_addr_t. Devices will be in hardware pass-through
+mode whenever available.
+
+Signed-off-by: Jacob Pan <jacob.jun.pan@linux.intel.com>
+---
+ drivers/iommu/intel/iommu.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 2e96002be0ef..10258cd19867 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -171,6 +171,8 @@ static inline unsigned long virt_to_dma_pfn(void *p)
+ 	return page_to_dma_pfn(virt_to_page(p));
+ }
+ 
++static int dev_satc_state(struct pci_dev *dev);
++
+ /* global iommu list, set NULL for ignored DMAR units */
+ static struct intel_iommu **g_iommus;
+ 
+@@ -2878,6 +2880,13 @@ static bool device_is_rmrr_locked(struct device *dev)
+ 	return true;
+ }
+ 
++static bool device_has_satc(struct device *dev)
++{
++	struct pci_dev *pdev = to_pci_dev(dev);
++
++	return dev_satc_state(pdev) >= 0;
++}
++
+ /*
+  * Return the required default domain type for a specific device.
+  *
+@@ -2899,6 +2908,11 @@ static int device_def_domain_type(struct device *dev)
+ 
+ 		if ((iommu_identity_mapping & IDENTMAP_GFX) && IS_GFX_DEVICE(pdev))
+ 			return IOMMU_DOMAIN_IDENTITY;
++
++		if (device_has_satc(dev)) {
++			dev_info(dev, "Use identity domain for SATC devices");
++			return IOMMU_DOMAIN_IDENTITY;
++		}
+ 	}
+ 
+ 	return 0;
+-- 
+2.31.1
+

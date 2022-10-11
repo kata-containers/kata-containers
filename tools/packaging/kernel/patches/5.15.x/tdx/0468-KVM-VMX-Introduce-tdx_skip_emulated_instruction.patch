@@ -1,0 +1,137 @@
+From eafe8eee48e4707ec187f83692516c59426b5a15 Mon Sep 17 00:00:00 2001
+From: Yuan Yao <yuan.yao@intel.com>
+Date: Thu, 1 Jul 2021 16:22:30 +0800
+Subject: [PATCH 0468/1418] KVM: VMX: Introduce tdx_skip_emulated_instruction()
+
+This patch provide basic support for TD vmexit handler to call
+kvm_skip_emulated_instrction() or other related functions for
+TD guest, another new function tdx_set_interrupt_shadow() is
+still based on vmx_set_interrupt_shadow() due to both of them
+have same logic.
+
+Signed-off-by: Yuan Yao <yuan.yao@intel.com>
+---
+ arch/x86/kvm/vmx/common.h    | 14 +++++++++++
+ arch/x86/kvm/vmx/main.c      |  7 ++++--
+ arch/x86/kvm/vmx/tdx.c       | 46 ++++++++++++++++++++++++++++++++++++
+ arch/x86/kvm/vmx/tdx_stubs.c |  2 ++
+ 4 files changed, 67 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/common.h b/arch/x86/kvm/vmx/common.h
+index 6d4d40e2ee18..6d96f4661c94 100644
+--- a/arch/x86/kvm/vmx/common.h
++++ b/arch/x86/kvm/vmx/common.h
+@@ -193,4 +193,18 @@ static inline void vmx_decode_ar_bytes(u32 ar, struct kvm_segment *var)
+ 	var->g = (ar >> 15) & 1;
+ }
+ 
++static inline unsigned long vmx_mask_out_guest_rip(struct kvm_vcpu *vcpu,
++						   unsigned long orig_rip,
++						   unsigned long new_rip)
++{
++	/*
++	 * We need to mask out the high 32 bits of RIP if not in 64-bit
++	 * mode, but just finding out that we are in 64-bit mode is
++	 * quite expensive.  Only do it if there was a carry.
++	 */
++	if (unlikely(((new_rip ^ orig_rip) >> 31) == 3) &&
++	    !is_64_bit_mode(vcpu))
++		return (u32)new_rip;
++	return new_rip;
++}
+ #endif /* __KVM_X86_VMX_COMMON_H */
+diff --git a/arch/x86/kvm/vmx/main.c b/arch/x86/kvm/vmx/main.c
+index 9b8bfc2b8525..8f1d94f21d74 100644
+--- a/arch/x86/kvm/vmx/main.c
++++ b/arch/x86/kvm/vmx/main.c
+@@ -207,6 +207,9 @@ static void vt_handle_exit_irqoff(struct kvm_vcpu *vcpu)
+ 
+ static int vt_skip_emulated_instruction(struct kvm_vcpu *vcpu)
+ {
++	if (is_td_vcpu(vcpu))
++		return tdx_skip_emulated_instruction(vcpu);
++
+ 	return vmx_skip_emulated_instruction(vcpu);
+ }
+ 
+@@ -692,8 +695,8 @@ static void vt_flush_tlb_guest(struct kvm_vcpu *vcpu)
+ 
+ static void vt_set_interrupt_shadow(struct kvm_vcpu *vcpu, int mask)
+ {
+-	if (KVM_BUG_ON(is_td_vcpu(vcpu), vcpu->kvm))
+-		return;
++	if (is_td_vcpu(vcpu))
++		return tdx_set_interrupt_shadow(vcpu, mask);
+ 
+ 	vmx_set_interrupt_shadow(vcpu, mask);
+ }
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 4db9e030c8ea..c35a57aa4e85 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -2616,6 +2616,52 @@ static int tdx_write_guest_memory(struct kvm *kvm, struct kvm_rw_memory *rw_memo
+ 				      (void __user *)rw_memory->ubuf);
+ }
+ 
++static void tdx_set_interrupt_shadow(struct kvm_vcpu *vcpu, int mask)
++{
++	if (!is_debug_td(vcpu))
++		return;
++
++	vmx_set_interrupt_shadow(vcpu, mask);
++}
++
++static int tdx_skip_emulated_instruction(struct kvm_vcpu *vcpu)
++{
++	unsigned long rip, orig_rip;
++
++	if (!is_debug_td(vcpu))
++		return 0;
++
++	if (is_guest_mode(vcpu)) {
++		/*
++		 * Refer vmx_update_emulated_instruction(vcpu)
++		 * for more information.
++		 */
++		kvm_pr_unimpl("No nested support to TD guest\n");
++		return 0;
++	}
++
++	/*
++	 * Refer skip_emulated_instruction() in vmx.c for more information
++	 * about this checking
++	 */
++	if (static_cpu_has(X86_FEATURE_HYPERVISOR) &&
++	    to_tdx(vcpu)->exit_reason.basic == EXIT_REASON_EPT_MISCONFIG) {
++		kvm_pr_unimpl("kvm_emulate_instruction() doesn't support TD guest\n");
++		return 0;
++	}
++
++	orig_rip = kvm_rip_read(vcpu);
++	rip = orig_rip + td_vmcs_read32(to_tdx(vcpu), VM_EXIT_INSTRUCTION_LEN);
++#ifdef CONFIG_X86_64
++	rip = vmx_mask_out_guest_rip(vcpu, orig_rip, rip);
++#endif
++	kvm_rip_write(vcpu, rip);
++
++	tdx_set_interrupt_shadow(vcpu, 0);
++
++	return 1;
++}
++
+ static int __init tdx_debugfs_init(void);
+ static void __exit tdx_debugfs_exit(void);
+ 
+diff --git a/arch/x86/kvm/vmx/tdx_stubs.c b/arch/x86/kvm/vmx/tdx_stubs.c
+index d78314090d01..cf3a9a71ad97 100644
+--- a/arch/x86/kvm/vmx/tdx_stubs.c
++++ b/arch/x86/kvm/vmx/tdx_stubs.c
+@@ -49,3 +49,5 @@ static int tdx_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr) { return 1;
+ static u64 tdx_get_segment_base(struct kvm_vcpu *vcpu, int seg) { return 0; }
+ static void tdx_get_segment(struct kvm_vcpu *vcpu, struct kvm_segment *var,
+ 			    int seg) {}
++static void tdx_set_interrupt_shadow(struct kvm_vcpu *vcpu, int mask) {}
++static int tdx_skip_emulated_instruction(struct kvm_vcpu *vcpu) { return 0; }
+-- 
+2.31.1
+

@@ -1,0 +1,50 @@
+From f8999962a3206432a1e05304d7ee35d44e6491b8 Mon Sep 17 00:00:00 2001
+From: Lu Baolu <baolu.lu@linux.intel.com>
+Date: Tue, 18 May 2021 13:43:46 +0800
+Subject: [PATCH 0653/1418] iommu/vt-d: Add common code for dmar latency
+ performance monitors
+
+The execution time of some operations is very performance critical, such
+as cache invalidation and PRQ processing time. This adds some common code
+to monitor the execution time range of those operations. The interfaces
+include enabling/disabling, checking status, updating sampling data and
+providing a common string format for users.
+
+Signed-off-by: Fenghua Yu <fenghua.yu@intel.com>
+Signed-off-by: Lu Baolu <baolu.lu@linux.intel.com>
+---
+ drivers/iommu/intel/perf.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/iommu/intel/perf.c b/drivers/iommu/intel/perf.c
+index 0e8e03252d92..faaa96dda437 100644
+--- a/drivers/iommu/intel/perf.c
++++ b/drivers/iommu/intel/perf.c
+@@ -1,5 +1,5 @@
+ // SPDX-License-Identifier: GPL-2.0
+-/*
++/**
+  * perf.c - performance monitor
+  *
+  * Copyright (C) 2021 Intel Corporation
+@@ -141,14 +141,14 @@ int dmar_latency_snapshot(struct intel_iommu *iommu, char *str, size_t size)
+ 				if (val == UINT_MAX)
+ 					val = 0;
+ 				else
+-					val = div_u64(val, 1000);
++					val /= 1000;
+ 				break;
+ 			case COUNTS_MAX:
+-				val = div_u64(val, 1000);
++				val /= 1000;
+ 				break;
+ 			case COUNTS_SUM:
+ 				if (lstat[i].samples)
+-					val = div_u64(val, (lstat[i].samples * 1000));
++					val /= (lstat[i].samples * 1000);
+ 				else
+ 					val = 0;
+ 				break;
+-- 
+2.31.1
+

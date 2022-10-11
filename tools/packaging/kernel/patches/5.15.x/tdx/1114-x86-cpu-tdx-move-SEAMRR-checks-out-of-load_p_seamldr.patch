@@ -1,0 +1,122 @@
+From b837fc7b767d00804e414f2c02d07486323f2881 Mon Sep 17 00:00:00 2001
+From: Xiaoyao Li <xiaoyao.li@intel.com>
+Date: Wed, 16 Feb 2022 15:29:14 +0800
+Subject: [PATCH 1114/1418] x86/cpu/tdx: move SEAMRR checks out of
+ load_p_seamldr()
+
+It's better to check SEAM availablity early and separately in
+tdx_early_init() instead of putting it in load_p_seamldr().
+
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+---
+ arch/x86/kernel/cpu/tdx/p-seamldr.c | 34 -----------------------------
+ arch/x86/kernel/cpu/tdx/tdx.c       | 34 +++++++++++++++++++++++++++++
+ 2 files changed, 34 insertions(+), 34 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/tdx/p-seamldr.c b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+index 37f9e003e332..fef647957a45 100644
+--- a/arch/x86/kernel/cpu/tdx/p-seamldr.c
++++ b/arch/x86/kernel/cpu/tdx/p-seamldr.c
+@@ -86,36 +86,6 @@ int seamldr_install(phys_addr_t seamldr_params)
+ 	return 0;
+ }
+ 
+-/*
+- * is_seamrr_enabled - check if seamrr is supported.
+- */
+-static bool __init is_seamrr_enabled(void)
+-{
+-	u64 mtrrcap, seamrr_base, seamrr_mask;
+-
+-	if (!boot_cpu_has(X86_FEATURE_MTRR))
+-		return false;
+-
+-	/* MTRRcap.SEAMRR indicates the support of SEAMRR_PHYS_{BASE, MASK} */
+-	rdmsrl(MSR_MTRRcap, mtrrcap);
+-	if (!(mtrrcap & MTRRCAP_SEAMRR))
+-		return false;
+-
+-	rdmsrl(MSR_IA32_SEAMRR_PHYS_BASE, seamrr_base);
+-	if (!(seamrr_base & MSR_IA32_SEAMRR_PHYS_BASE_CONFIGURED)) {
+-		pr_info("SEAMRR base is not configured by BIOS\n");
+-		return false;
+-	}
+-
+-	rdmsrl(MSR_IA32_SEAMRR_PHYS_MASK, seamrr_mask);
+-	if (!(seamrr_mask & MSR_IA32_SEAMRR_PHYS_MASK_ENABLED)) {
+-		pr_info("SEAMRR is not enabled by BIOS\n");
+-		return false;
+-	}
+-
+-	return true;
+-}
+-
+ /*
+  * The NP-SEAMLDR returns with the clobbered CS/SS with the flat cached
+  * descriptors.  If NMI happens before restoring segment selectors, the
+@@ -492,10 +462,6 @@ int __init load_p_seamldr(void)
+ 	struct cpio_data np_seamldr;
+ 	int err;
+ 
+-	/* TDX requires SEAM mode. */
+-	if (!is_seamrr_enabled())
+-		return -EOPNOTSUPP;
+-
+ 	/* TDX requires VMX. */
+ 	err = seam_init_vmx_early();
+ 	if (err)
+diff --git a/arch/x86/kernel/cpu/tdx/tdx.c b/arch/x86/kernel/cpu/tdx/tdx.c
+index bb8d610b04bc..ce3222a734dd 100644
+--- a/arch/x86/kernel/cpu/tdx/tdx.c
++++ b/arch/x86/kernel/cpu/tdx/tdx.c
+@@ -49,6 +49,36 @@ static int __init tdx_host_param(char *str)
+ }
+ early_param("tdx_host", tdx_host_param);
+ 
++/*
++ * is_seamrr_enabled - check if seamrr is supported.
++ */
++static bool __init is_seamrr_enabled(void)
++{
++	u64 mtrrcap, seamrr_base, seamrr_mask;
++
++	if (!boot_cpu_has(X86_FEATURE_MTRR))
++		return false;
++
++	/* MTRRcap.SEAMRR indicates the support of SEAMRR_PHYS_{BASE, MASK} */
++	rdmsrl(MSR_MTRRcap, mtrrcap);
++	if (!(mtrrcap & MTRRCAP_SEAMRR))
++		return false;
++
++	rdmsrl(MSR_IA32_SEAMRR_PHYS_BASE, seamrr_base);
++	if (!(seamrr_base & MSR_IA32_SEAMRR_PHYS_BASE_CONFIGURED)) {
++		pr_info("SEAMRR base is not configured by BIOS\n");
++		return false;
++	}
++
++	rdmsrl(MSR_IA32_SEAMRR_PHYS_MASK, seamrr_mask);
++	if (!(seamrr_mask & MSR_IA32_SEAMRR_PHYS_MASK_ENABLED)) {
++		pr_info("SEAMRR is not enabled by BIOS\n");
++		return false;
++	}
++
++	return true;
++}
++
+ static int __init tdx_host_early_init(void)
+ {
+ 	int ret;
+@@ -57,6 +87,10 @@ static int __init tdx_host_early_init(void)
+ 	if (tdx_host != TDX_HOST_ON)
+ 		return 0;
+ 
++	/* TDX requires SEAM mode. */
++	if (!is_seamrr_enabled())
++		return -EOPNOTSUPP;
++
+ 	ret = load_p_seamldr();
+ 	if (ret)
+ 		return ret;
+-- 
+2.31.1
+

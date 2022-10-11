@@ -1,0 +1,45 @@
+From acafe9909c2112518511372f91931a7fbb89beea Mon Sep 17 00:00:00 2001
+From: Chao Gao <chao.gao@intel.com>
+Date: Thu, 20 May 2021 11:42:08 +0800
+Subject: [PATCH 0436/1418] KVM: TDX: Don't freeze lbr on PMI for TD vCPUs
+
+As KVM cannot access/maintain TD's PMU registers for security
+purpose, PMU virtualization for a TD has a totally different
+design.
+
+In TD's case, KVM only needs to recognize TD PMIs and inject PMIs.
+But current PMI injection would emulate legacy PMU behavior that
+lbr is frozen on PMI. It is needless for TD guest and would access
+GUEST_IA32_DEBUGCTL, which isn't allowed at least for non-debug TD.
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/pmu_intel.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/pmu_intel.c b/arch/x86/kvm/vmx/pmu_intel.c
+index 10cc4f65c4ef..3b028ca4d48e 100644
+--- a/arch/x86/kvm/vmx/pmu_intel.c
++++ b/arch/x86/kvm/vmx/pmu_intel.c
+@@ -17,6 +17,7 @@
+ #include "lapic.h"
+ #include "nested.h"
+ #include "pmu.h"
++#include "tdx.h"
+ 
+ #define MSR_PMC_FULL_WIDTH_BIT      (MSR_IA32_PMC0 - MSR_IA32_PERFCTR0)
+ 
+@@ -616,6 +617,9 @@ static void intel_pmu_deliver_pmi(struct kvm_vcpu *vcpu)
+ {
+ 	u8 version = vcpu_to_pmu(vcpu)->version;
+ 
++	if (unlikely(is_td_vcpu(vcpu)))
++		return;
++
+ 	if (!intel_pmu_lbr_is_enabled(vcpu))
+ 		return;
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,337 @@
+From 2b8497ba1b1fd3b902a551d08fbf3cc146ecf718 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Wed, 28 Jul 2021 14:45:58 -0700
+Subject: [PATCH 0347/1418] KVM: TDX: Add architectural definitions for
+ structures and values for kvm
+
+KVM uses more TDX SEAMCALLs.  Update tdx_arch.h for KVM.  Structures and
+values that are architecturally defined in [1] chapter 18 ABI Reference:
+Data Types and in [1] 20.2.1 SEAMCALL Instruction(Common) Table 20.4
+SEAMCALL Instruction Leaf Numbers Definition.
+
+[1] TDX Module Spec
+https://software.intel.com/content/dam/develop/external/us/en/documents/tdx-module-1eas-v0.85.039.pdf
+
+Co-developed-by: Kai Huang <kai.huang@intel.com>
+Signed-off-by: Kai Huang <kai.huang@intel.com>
+Co-developed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Signed-off-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Co-developed-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/include/asm/tdx_arch.h | 207 +++++++++++++++++++++++++++++++-
+ arch/x86/include/asm/tdx_host.h |  38 ++++++
+ 2 files changed, 242 insertions(+), 3 deletions(-)
+
+diff --git a/arch/x86/include/asm/tdx_arch.h b/arch/x86/include/asm/tdx_arch.h
+index 8d7c90531a2b..93d516695ba5 100644
+--- a/arch/x86/include/asm/tdx_arch.h
++++ b/arch/x86/include/asm/tdx_arch.h
+@@ -9,23 +9,60 @@
+ /*
+  * TDX SEAMCALL API function leaves
+  */
++#define SEAMCALL_TDH_VP_ENTER			0
++#define SEAMCALL_TDH_MNG_ADDCX			1
++#define SEAMCALL_TDH_MEM_PAGE_ADD		2
++#define SEAMCALL_TDH_MEM_SEPT_ADD		3
++#define SEAMCALL_TDH_VP_ADDCX			4
++#define SEAMCALL_TDH_MEM_PAGE_AUG		6
++#define SEAMCALL_TDH_MEM_RANGE_BLOCK		7
++#define SEAMCALL_TDH_MNG_KEY_CONFIG		8
++#define SEAMCALL_TDH_MNG_CREATE			9
++#define SEAMCALL_TDH_VP_CREATE			10
++#define SEAMCALL_TDH_MNG_RD			11
++#define SEAMCALL_TDH_MEM_RD			12
++#define SEAMCALL_TDH_MNG_WR			13
++#define SEAMCALL_TDH_MEM_WR			14
++#define SEAMCALL_TDH_MEM_PAGE_DEMOTE		15
++#define SEAMCALL_TDH_MR_EXTEND			16
++#define SEAMCALL_TDH_MR_FINALIZE		17
++#define SEAMCALL_TDH_VP_FLUSH			18
++#define SEAMCALL_TDH_MNG_VPFLUSHDONE		19
++#define SEAMCALL_TDH_MNG_KEY_FREEID		20
++#define SEAMCALL_TDH_MNG_INIT			21
++#define SEAMCALL_TDH_VP_INIT			22
++#define SEAMCALL_TDH_MEM_PAGE_PROMOTE		23
++#define SEAMCALL_TDH_PHYMEM_PAGE_RDMD		24
++#define SEAMCALL_TDH_MEM_SEPT_RD		25
++#define SEAMCALL_TDH_VP_RD			26
++#define SEAMCALL_TDH_MNG_KEY_RECLAIMID		27
++#define SEAMCALL_TDH_PHYMEM_PAGE_RECLAIM	28
++#define SEAMCALL_TDH_MEM_PAGE_REMOVE		29
++#define SEAMCALL_TDH_MEM_SEPT_REMOVE		30
+ #define SEAMCALL_TDH_SYS_KEY_CONFIG		31
+ #define SEAMCALL_TDH_SYS_INFO			32
+ #define SEAMCALL_TDH_SYS_INIT			33
+ #define SEAMCALL_TDH_SYS_LP_INIT		35
+ #define SEAMCALL_TDH_SYS_TDMR_INIT		36
++#define SEAMCALL_TDH_MEM_TRACK			38
++#define SEAMCALL_TDH_MEM_RANGE_UNBLOCK		39
++#define SEAMCALL_TDH_PHYMEM_CACHE_WB		40
++#define SEAMCALL_TDH_PHYMEM_PAGE_WBINVD		41
++#define SEAMCALL_TDH_MEM_SEPT_WR		42
++#define SEAMCALL_TDH_VP_WR			43
++#define SEAMCALL_TDH_SYS_LP_SHUTDOWN		44
+ #define SEAMCALL_TDH_SYS_CONFIG			45
+ 
+ /* Non-architectural debug configuration SEAMCALLs. */
+-#define SEAMCALL_TDDEBUGCONFIG		0xFE
+-#define SEAMCALL_TDXMODE		0XFF
++#define SEAMCALL_TDDEBUGCONFIG			0xFE
++#define SEAMCALL_TDXMODE			0xFF
+ 
+ #define DEBUGCONFIG_SET_TARGET			0
+ #define DEBUGCONFIG_TARGET_TRACE_BUFFER		0
+ #define DEBUGCONFIG_TARGET_SERIAL_PORT		1
+ #define DEBUGCONFIG_TARGET_EXTERNAL_BUFFER	2
+ 
+-#define DEBUGCONFIG_DUMP_TRACE_BUFFER	1
++#define DEBUGCONFIG_DUMP_TRACE_BUFFER		1
+ 
+ #define DEBUGCONFIG_SET_EMERGENCY_BUFFER	2
+ 
+@@ -39,19 +76,129 @@
+ #define TDX_SEAMCALL(name)	{ SEAMCALL_##name, #name }
+ 
+ #define TDX_SEAMCALLS				\
++	TDX_SEAMCALL(TDH_VP_ENTER),		\
++	TDX_SEAMCALL(TDH_MNG_ADDCX),		\
++	TDX_SEAMCALL(TDH_MEM_PAGE_ADD),		\
++	TDX_SEAMCALL(TDH_MEM_SEPT_ADD),		\
++	TDX_SEAMCALL(TDH_VP_ADDCX),		\
++	TDX_SEAMCALL(TDH_MEM_PAGE_AUG),		\
++	TDX_SEAMCALL(TDH_MEM_RANGE_BLOCK),	\
++	TDX_SEAMCALL(TDH_MNG_KEY_CONFIG),	\
++	TDX_SEAMCALL(TDH_MNG_CREATE),		\
++	TDX_SEAMCALL(TDH_VP_CREATE),		\
++	TDX_SEAMCALL(TDH_MNG_RD),		\
++	TDX_SEAMCALL(TDH_MEM_RD),		\
++	TDX_SEAMCALL(TDH_MNG_WR),		\
++	TDX_SEAMCALL(TDH_MEM_WR),		\
++	TDX_SEAMCALL(TDH_MEM_PAGE_DEMOTE),	\
++	TDX_SEAMCALL(TDH_MR_EXTEND),		\
++	TDX_SEAMCALL(TDH_MR_FINALIZE),		\
++	TDX_SEAMCALL(TDH_VP_FLUSH),		\
++	TDX_SEAMCALL(TDH_MNG_VPFLUSHDONE),	\
++	TDX_SEAMCALL(TDH_MNG_KEY_FREEID),	\
++	TDX_SEAMCALL(TDH_MNG_INIT),		\
++	TDX_SEAMCALL(TDH_VP_INIT),		\
++	TDX_SEAMCALL(TDH_MEM_PAGE_PROMOTE),	\
++	TDX_SEAMCALL(TDH_PHYMEM_PAGE_RDMD),	\
++	TDX_SEAMCALL(TDH_MEM_SEPT_RD),		\
++	TDX_SEAMCALL(TDH_VP_RD),		\
++	TDX_SEAMCALL(TDH_MNG_KEY_RECLAIMID),	\
++	TDX_SEAMCALL(TDH_PHYMEM_PAGE_RECLAIM),	\
++	TDX_SEAMCALL(TDH_MEM_PAGE_REMOVE),	\
++	TDX_SEAMCALL(TDH_MEM_SEPT_REMOVE),	\
+ 	TDX_SEAMCALL(TDH_SYS_KEY_CONFIG),	\
+ 	TDX_SEAMCALL(TDH_SYS_INFO),		\
+ 	TDX_SEAMCALL(TDH_SYS_INIT),		\
+ 	TDX_SEAMCALL(TDH_SYS_LP_INIT),		\
+ 	TDX_SEAMCALL(TDH_SYS_TDMR_INIT),	\
++	TDX_SEAMCALL(TDH_MEM_TRACK),		\
++	TDX_SEAMCALL(TDH_MEM_RANGE_UNBLOCK),	\
++	TDX_SEAMCALL(TDH_PHYMEM_CACHE_WB),	\
++	TDX_SEAMCALL(TDH_PHYMEM_PAGE_WBINVD),	\
++	TDX_SEAMCALL(TDH_MEM_SEPT_WR),		\
++	TDX_SEAMCALL(TDH_VP_WR),		\
++	TDX_SEAMCALL(TDH_SYS_LP_SHUTDOWN),	\
+ 	TDX_SEAMCALL(TDH_SYS_CONFIG),		\
+ 	TDX_SEAMCALL(TDDEBUGCONFIG),		\
+ 	TDX_SEAMCALL(TDXMODE)
+ 
++#define TDG_VP_VMCALL_GET_TD_VM_CALL_INFO		0x10000
++#define TDG_VP_VMCALL_MAP_GPA				0x10001
++#define TDG_VP_VMCALL_GET_QUOTE				0x10002
++#define TDG_VP_VMCALL_REPORT_FATAL_ERROR		0x10003
++#define TDG_VP_VMCALL_SETUP_EVENT_NOTIFY_INTERRUPT	0x10004
++
++#define TDG_VP_VMCALL_EXIT_REASONS				\
++	{ TDG_VP_VMCALL_GET_TD_VM_CALL_INFO,			\
++			"GET_TD_VM_CALL_INFO" },		\
++	{ TDG_VP_VMCALL_MAP_GPA,	"MAP_GPA" },		\
++	{ TDG_VP_VMCALL_GET_QUOTE,	"GET_QUOTE" },		\
++	{ TDG_VP_VMCALL_SETUP_EVENT_NOTIFY_INTERRUPT,		\
++			"SETUP_EVENT_NOTIFY_INTERRUPT" },	\
++	VMX_EXIT_REASONS
++
++/* TDX control structure (TDR/TDCS/TDVPS) field access codes */
++#define TDX_CLASS_SHIFT		56
++#define TDX_FIELD_MASK		GENMASK_ULL(31, 0)
++
++#define BUILD_TDX_FIELD(class, field)	\
++	(((u64)(class) << TDX_CLASS_SHIFT) | ((u64)(field) & TDX_FIELD_MASK))
++
++/* @field is the VMCS field encoding */
++#define TDVPS_VMCS(field)	BUILD_TDX_FIELD(0, (field))
++
++/*
++ * @offset is the offset (in bytes) from the beginning of the architectural
++ * virtual APIC page.
++ */
++#define TDVPS_APIC(offset)	BUILD_TDX_FIELD(1, (offset))
++
++/* @gpr is the index of a general purpose register, e.g. eax=0 */
++#define TDVPS_GPR(gpr)		BUILD_TDX_FIELD(16, (gpr))
++
++#define TDVPS_DR(dr)		BUILD_TDX_FIELD(17, (0 + (dr)))
++
++enum tdx_guest_other_state {
++	TD_VCPU_XCR0 = 32,
++	TD_VCPU_IWK_ENCKEY0 = 64,
++	TD_VCPU_IWK_ENCKEY1,
++	TD_VCPU_IWK_ENCKEY2,
++	TD_VCPU_IWK_ENCKEY3,
++	TD_VCPU_IWK_INTKEY0 = 68,
++	TD_VCPU_IWK_INTKEY1,
++	TD_VCPU_IWK_FLAGS = 70,
++};
++
++/* @field is any of enum tdx_guest_other_state */
++#define TDVPS_STATE(field)	BUILD_TDX_FIELD(17, (field))
++
++/* @msr is the MSR index */
++#define TDVPS_MSR(msr)		BUILD_TDX_FIELD(19, (msr))
++
++/* Management class fields */
++enum tdx_guest_management {
++	TD_VCPU_PEND_NMI = 11,
++};
++
++/* @field is any of enum tdx_guest_management */
++#define TDVPS_MANAGEMENT(field)	BUILD_TDX_FIELD(32, (field))
++
++enum tdx_tdcs_execution_control {
++	TD_TDCS_EXEC_TSC_OFFSET = 10,
++};
++
++/* @field is any of enum tdx_tdcs_execution_control */
++#define TDCS_EXEC(field)	BUILD_TDX_FIELD(17, (field))
++
++#define TDX_NR_TDCX_PAGES		4
++#define TDX_NR_TDVPX_PAGES		5
++
++#define TDX_MAX_NR_CPUID_CONFIGS	6
+ #define TDX_MAX_NR_CMRS			32
+ #define TDX_MAX_NR_TDMRS		64
+ #define TDX_MAX_NR_RSVD_AREAS		16
+ #define TDX_PAMT_ENTRY_SIZE		16
++#define TDX_EXTENDMR_CHUNKSIZE		256
+ 
+ struct tdx_cpuid_config {
+ 	u32 leaf;
+@@ -68,6 +215,60 @@ struct cmr_info {
+ 	u64 size;
+ } __packed;
+ 
++struct tdx_cpuid_value {
++	u32 eax;
++	u32 ebx;
++	u32 ecx;
++	u32 edx;
++} __packed;
++
++#define TDX_TD_ATTRIBUTE_DEBUG		BIT_ULL(0)
++#define TDX_TD_ATTRIBUTE_PKS		BIT_ULL(30)
++#define TDX_TD_ATTRIBUTE_KL		BIT_ULL(31)
++#define TDX_TD_ATTRIBUTE_PERFMON	BIT_ULL(63)
++
++#define TDX_TD_XFAM_LBR		BIT_ULL(15)
++#define TDX_TD_XFAM_AMX		(BIT_ULL(17) | BIT_ULL(18))
++
++/*
++ * TD_PARAMS is provided as an input to TDH_MNG_INIT, the size of which is 1024B.
++ */
++struct td_params {
++	u64 attributes;
++	u64 xfam;
++	u32 max_vcpus;
++	u32 reserved0;
++
++	u64 eptp_controls;
++	u64 exec_controls;
++	u16 tsc_frequency;
++	u8  reserved1[38];
++
++	u64 mrconfigid[6];
++	u64 mrowner[6];
++	u64 mrownerconfig[6];
++	u64 reserved2[4];
++
++	union {
++		struct tdx_cpuid_value cpuid_values[0];
++		u8 reserved3[768];
++	};
++} __packed __aligned(1024);
++
++/* Guest uses MAX_PA for GPAW when set. */
++#define TDX_EXEC_CONTROL_MAX_GPAW      BIT_ULL(0)
++
++/*
++ * TDX requires the frequency to be defined in units of 25MHz, which is the
++ * frequency of the core crystal clock on TDX-capable platforms, i.e. TDX-SEAM
++ * can only program frequencies that are multiples of 25MHz.  The frequency
++ * must be between 1ghz and 10ghz (inclusive).
++ */
++#define TDX_TSC_KHZ_TO_25MHZ(tsc_in_khz)	((tsc_in_khz) / (25 * 1000))
++#define TDX_TSC_25MHZ_TO_KHZ(tsc_in_25mhz)	((tsc_in_25mhz) * (25 * 1000))
++#define TDX_MIN_TSC_FREQUENCY_KHZ		(100 * 1000)
++#define TDX_MAX_TSC_FREQUENCY_KHZ		(10 * 1000 * 1000)
++
+ struct tdmr_reserved_area {
+ 	u64 offset;
+ 	u64 size;
+diff --git a/arch/x86/include/asm/tdx_host.h b/arch/x86/include/asm/tdx_host.h
+index 797b2629e403..7fa91125c6c8 100644
+--- a/arch/x86/include/asm/tdx_host.h
++++ b/arch/x86/include/asm/tdx_host.h
+@@ -38,6 +38,44 @@ struct tdx_ex_ret {
+ 			u64 prev;
+ 			u64 next;
+ 		} sys_tdmr_init;
++		/* TDH_SYS_INIT returns CPUID info on error. */
++		struct {
++			u32 leaf;
++			u32 subleaf;
++			u32 eax_mask;
++			u32 ebx_mask;
++			u32 ecx_mask;
++			u32 edx_mask;
++			u32 eax_val;
++			u32 ebx_val;
++			u32 ecx_val;
++			u32 edx_val;
++		} sys_init;
++		/* TDH_MNG_INIT returns CPUID info on error. */
++		struct {
++			u32 leaf;
++			u32 subleaf;
++		} mng_init;
++		/* Functions that walk SEPT */
++		struct {
++			u64 septe;
++			struct {
++				u64 level		:3;
++				u64 sept_reserved_0	:5;
++				u64 state		:8;
++				u64 sept_reserved_1	:48;
++			};
++		} sept_walk;
++		/* TDH_MNG_{RD,WR} return the field value. */
++		struct {
++			u64 field_val;
++		} mng_rdwr;
++		/* TDH_PHYMEM_PAGE_RDMD and TDH_PHYMEM_PAGE_RECLAIM return page metadata. */
++		struct {
++			u64 page_type;
++			u64 owner;
++			u64 page_size;
++		} phymem_page_md;
+ 	};
+ };
+ 
+-- 
+2.31.1
+

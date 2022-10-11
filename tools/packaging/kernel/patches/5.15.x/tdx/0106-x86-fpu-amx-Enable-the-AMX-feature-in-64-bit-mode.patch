@@ -1,0 +1,107 @@
+From 90404bb331febb1b44b02e3e4a3d5d2c142a2d16 Mon Sep 17 00:00:00 2001
+From: "Chang S. Bae" <chang.seok.bae@intel.com>
+Date: Thu, 21 Oct 2021 15:55:27 -0700
+Subject: [PATCH 0106/1418] x86/fpu/amx: Enable the AMX feature in 64-bit mode
+
+Add the AMX state components in XFEATURE_MASK_USER_SUPPORTED and the
+TILE_DATA component to the dynamic states and update the permission check
+table accordingly.
+
+This is only effective on 64 bit kernels as for 32bit kernels
+XFEATURE_MASK_TILE is defined as 0.
+
+TILE_DATA is caller-saved state and the only dynamic state. Add build time
+sanity check to ensure the assumption that every dynamic feature is caller-
+saved.
+
+Make AMX state depend on XFD as it is dynamic feature.
+
+Signed-off-by: Chang S. Bae <chang.seok.bae@intel.com>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lore.kernel.org/r/20211021225527.10184-24-chang.seok.bae@intel.com
+---
+ arch/x86/include/asm/fpu/xstate.h | 5 +++--
+ arch/x86/kernel/cpu/cpuid-deps.c  | 1 +
+ arch/x86/kernel/fpu/core.c        | 6 ++++++
+ arch/x86/kernel/fpu/xstate.c      | 5 +++--
+ 4 files changed, 13 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/include/asm/fpu/xstate.h b/arch/x86/include/asm/fpu/xstate.h
+index 10adf1376f0c..0f8b90ab18c9 100644
+--- a/arch/x86/include/asm/fpu/xstate.h
++++ b/arch/x86/include/asm/fpu/xstate.h
+@@ -35,7 +35,8 @@
+ 				      XFEATURE_MASK_Hi16_ZMM	 | \
+ 				      XFEATURE_MASK_PKRU | \
+ 				      XFEATURE_MASK_BNDREGS | \
+-				      XFEATURE_MASK_BNDCSR)
++				      XFEATURE_MASK_BNDCSR | \
++				      XFEATURE_MASK_XTILE)
+ 
+ /*
+  * Features which are restored when returning to user space.
+@@ -46,7 +47,7 @@
+ 	(XFEATURE_MASK_USER_SUPPORTED & ~XFEATURE_MASK_PKRU)
+ 
+ /* Features which are dynamically enabled for a process on request */
+-#define XFEATURE_MASK_USER_DYNAMIC	0ULL
++#define XFEATURE_MASK_USER_DYNAMIC	XFEATURE_MASK_XTILE_DATA
+ 
+ /* All currently supported supervisor features */
+ #define XFEATURE_MASK_SUPERVISOR_SUPPORTED (XFEATURE_MASK_PASID)
+diff --git a/arch/x86/kernel/cpu/cpuid-deps.c b/arch/x86/kernel/cpu/cpuid-deps.c
+index d9ead9c20408..cb2fdd130aae 100644
+--- a/arch/x86/kernel/cpu/cpuid-deps.c
++++ b/arch/x86/kernel/cpu/cpuid-deps.c
+@@ -76,6 +76,7 @@ static const struct cpuid_dep cpuid_deps[] = {
+ 	{ X86_FEATURE_SGX1,			X86_FEATURE_SGX       },
+ 	{ X86_FEATURE_SGX2,			X86_FEATURE_SGX1      },
+ 	{ X86_FEATURE_XFD,			X86_FEATURE_XSAVES    },
++	{ X86_FEATURE_AMX_TILE,			X86_FEATURE_XFD       },
+ 	{}
+ };
+ 
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index 12ca174891dc..290836d1f2a7 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -494,6 +494,12 @@ int fpu_clone(struct task_struct *dst, unsigned long clone_flags)
+ 		return 0;
+ 	}
+ 
++	/*
++	 * If a new feature is added, ensure all dynamic features are
++	 * caller-saved from here!
++	 */
++	BUILD_BUG_ON(XFEATURE_MASK_USER_DYNAMIC != XFEATURE_MASK_XTILE_DATA);
++
+ 	/*
+ 	 * Save the default portion of the current FPU state into the
+ 	 * clone. Assume all dynamic features to be defined as caller-
+diff --git a/arch/x86/kernel/fpu/xstate.c b/arch/x86/kernel/fpu/xstate.c
+index 987a07bc668b..d28829403ed0 100644
+--- a/arch/x86/kernel/fpu/xstate.c
++++ b/arch/x86/kernel/fpu/xstate.c
+@@ -404,7 +404,8 @@ static __init void os_xrstor_booting(struct xregs_state *xstate)
+ 	 XFEATURE_MASK_PKRU |			\
+ 	 XFEATURE_MASK_BNDREGS |		\
+ 	 XFEATURE_MASK_BNDCSR |			\
+-	 XFEATURE_MASK_PASID)
++	 XFEATURE_MASK_PASID |			\
++	 XFEATURE_MASK_XTILE)
+ 
+ /*
+  * setup the xstate image representing the init state
+@@ -1636,7 +1637,7 @@ static int __xstate_request_perm(u64 permitted, u64 requested)
+  * Permissions array to map facilities with more than one component
+  */
+ static const u64 xstate_prctl_req[XFEATURE_MAX] = {
+-	/* [XFEATURE_XTILE_DATA] = XFEATURE_MASK_XTILE, */
++	[XFEATURE_XTILE_DATA] = XFEATURE_MASK_XTILE_DATA,
+ };
+ 
+ static int xstate_request_perm(unsigned long idx)
+-- 
+2.31.1
+

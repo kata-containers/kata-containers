@@ -1,0 +1,94 @@
+From aa622287490b28c5793661217351632922ffaabe Mon Sep 17 00:00:00 2001
+From: Yi Sun <yi.y.sun@linux.intel.com>
+Date: Fri, 14 Aug 2020 15:46:44 +0800
+Subject: [PATCH 0642/1418] iommu/vt-d: do not clear pte if pgtt is nesting
+
+If the pte pgtt is nesting mode, we should not clear it but
+only reset the pgtt to slt only. Otherwise, there will be
+page request without pasid happens when the scalable mode
+guest reboots to legacy mode guest. The root cause is that
+there will be no chance to setup second level page table
+on host when legacy guest booting.
+
+Signed-off-by: Yi Sun <yi.y.sun@linux.intel.com>
+---
+ drivers/iommu/intel/pasid.c | 23 +++++++++++++++++++----
+ drivers/iommu/intel/svm.c   |  1 +
+ include/linux/intel-iommu.h |  1 +
+ 3 files changed, 21 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/iommu/intel/pasid.c b/drivers/iommu/intel/pasid.c
+index a69fd16be4cf..40b32f97d504 100644
+--- a/drivers/iommu/intel/pasid.c
++++ b/drivers/iommu/intel/pasid.c
+@@ -309,14 +309,31 @@ static inline void pasid_clear_entry_with_fpd(struct pasid_entry *pe)
+ }
+ 
+ static void
+-intel_pasid_clear_entry(struct device *dev, u32 pasid, bool fault_ignore)
++intel_pasid_clear_entry(struct intel_iommu *iommu, struct device *dev,
++			u32 pasid, bool fault_ignore)
+ {
+ 	struct pasid_entry *pe;
++	u64 pe_val;
++	bool nested;
+ 
+ 	pe = intel_pasid_get_entry(dev, pasid);
+ 	if (WARN_ON(!pe))
+ 		return;
+ 
++	/*
++	 * The guest may reboot from scalable mode to legacy mode. During this
++	 * phase, there is no chance to setup SLT. So, we should only reset PGTT
++	 * from NESTED to SL and keep other bits when unbind gpasid is executed.
++	 */
++	pe_val = READ_ONCE(pe->val[0]);
++	nested = (((pe_val >> 6) & 0x7) == PASID_ENTRY_PGTT_NESTED) ? true : false;
++	if (nested && (iommu->flags & VTD_FLAG_PGTT_SL_ONLY)) {
++		pe_val &= 0xfffffffffffffebf;
++		WRITE_ONCE(pe->val[0], pe_val);
++		iommu->flags &= ~VTD_FLAG_PGTT_SL_ONLY;
++		return;
++	}
++
+ 	if (fault_ignore && pasid_pte_is_present(pe))
+ 		pasid_clear_entry_with_fpd(pe);
+ 	else
+@@ -521,9 +538,7 @@ void intel_pasid_tear_down_entry(struct intel_iommu *iommu, struct device *dev,
+ 		return;
+ 
+ 	did = pasid_get_domain_id(pte);
+-	pgtt = pasid_pte_get_pgtt(pte);
+-
+-	intel_pasid_clear_entry(dev, pasid, fault_ignore);
++	intel_pasid_clear_entry(iommu, dev, pasid, fault_ignore);
+ 
+ 	if (!ecap_coherent(iommu->ecap))
+ 		clflush_cache_range(pte, sizeof(*pte));
+diff --git a/drivers/iommu/intel/svm.c b/drivers/iommu/intel/svm.c
+index 5c6356862212..f6de5027f50a 100644
+--- a/drivers/iommu/intel/svm.c
++++ b/drivers/iommu/intel/svm.c
+@@ -623,6 +623,7 @@ int intel_svm_unbind_gpasid(struct iommu_domain *domain,
+ 			sdev->users--;
+ 		if (!sdev->users) {
+ 			list_del_rcu(&sdev->list);
++			iommu->flags |= VTD_FLAG_PGTT_SL_ONLY;
+ 			intel_pasid_tear_down_entry(iommu, dev,
+ 						    svm->pasid, false);
+ 			intel_svm_drain_prq(dev, svm->pasid);
+diff --git a/include/linux/intel-iommu.h b/include/linux/intel-iommu.h
+index 710cf98624b1..a0d165a48f12 100644
+--- a/include/linux/intel-iommu.h
++++ b/include/linux/intel-iommu.h
+@@ -478,6 +478,7 @@ enum {
+ #define VTD_FLAG_TRANS_PRE_ENABLED	(1 << 0)
+ #define VTD_FLAG_IRQ_REMAP_PRE_ENABLED	(1 << 1)
+ #define VTD_FLAG_SVM_CAPABLE		(1 << 2)
++#define VTD_FLAG_PGTT_SL_ONLY		(1 << 3)
+ 
+ extern int intel_iommu_sm;
+ extern spinlock_t device_domain_lock;
+-- 
+2.31.1
+

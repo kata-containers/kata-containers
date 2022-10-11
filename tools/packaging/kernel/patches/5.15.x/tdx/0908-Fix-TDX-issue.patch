@@ -1,0 +1,27 @@
+From 920c7ec641faa77f0b35ff2a3ee2f715545a3b8a Mon Sep 17 00:00:00 2001
+From: Kirill Shutemov <kirill.shutemov@intel.com>
+Date: Wed, 20 Oct 2021 21:45:51 +0000
+Subject: [PATCH 0908/1418] Fix TDX issue
+
+Fix TDX issue
+---
+ arch/x86/kernel/kvmclock.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/x86/kernel/kvmclock.c b/arch/x86/kernel/kvmclock.c
+index b9e110b21336..20e404a43015 100644
+--- a/arch/x86/kernel/kvmclock.c
++++ b/arch/x86/kernel/kvmclock.c
+@@ -196,6 +196,9 @@ static void kvm_setup_secondary_clock(void)
+ 
+ void kvmclock_disable(void)
+ {
++	if (cc_platform_has(CC_ATTR_GUEST_SECURE_TIME))
++		return;
++
+ 	native_write_msr(msr_kvm_system_time, 0, 0);
+ }
+ 
+-- 
+2.31.1
+

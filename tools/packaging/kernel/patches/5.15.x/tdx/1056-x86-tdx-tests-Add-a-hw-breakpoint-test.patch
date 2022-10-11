@@ -1,0 +1,115 @@
+From f33f6878639acfaa7a14e2c3e8bd8747f3bed184 Mon Sep 17 00:00:00 2001
+From: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Date: Mon, 27 Dec 2021 20:23:11 +0200
+Subject: [PATCH 1056/1418] x86/tdx-tests: Add a hw breakpoint test
+
+Signed-off-by: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+---
+ arch/x86/kernel/tdx-tests.c | 60 +++++++++++++++++++++++++++++++++++--
+ 1 file changed, 58 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/kernel/tdx-tests.c b/arch/x86/kernel/tdx-tests.c
+index c004769f39c6..bc180b66ce53 100644
+--- a/arch/x86/kernel/tdx-tests.c
++++ b/arch/x86/kernel/tdx-tests.c
+@@ -1,7 +1,10 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (C) 2020 Intel Corporation */
++
+ /*
+  * Test for x86 debugging facilities
+  *
+- * Loosely based on the kvm-unit-tests/x86/debug.c by
++ * Single-stepping tests are based on the kvm-unit-tests/x86/debug.c by
+  *
+  * Copyright (c) Siemens AG, 2014
+  *
+@@ -11,12 +14,17 @@
+  * This work is licensed under the terms of the GNU GPL, version 2.
+  */
+ 
++#undef pr_fmt
++#define pr_fmt(fmt)     "tdx-tests: " fmt
++
+ #include <linux/kernel.h>
+ #include <linux/module.h>
+ #include <linux/notifier.h>
+ #include <linux/printk.h>
+ #include <linux/kdebug.h>
+ #include <linux/types.h>
++#include <linux/perf_event.h>
++#include <linux/hw_breakpoint.h>
+ #include <asm/debugreg.h>
+ 
+ static volatile unsigned long db_addr[10], dr6[10];
+@@ -30,7 +38,7 @@ static void report(bool cond, const char *fmt, ...)
+ 	va_start(ap, fmt);
+ 	vaf.fmt = fmt;
+ 	vaf.va = &ap;
+-	pr_info("KVM-debug: %s: %pV\n", cond ? "PASS" : "FAIL", &vaf);
++	pr_info("%s: %pV\n", cond ? "PASS" : "FAIL", &vaf);
+ 	va_end(ap);
+ }
+ 
+@@ -63,10 +71,58 @@ static struct notifier_block kvm_unit_test_debug_notifier = {
+ 	.priority	= -INT_MAX,
+ };
+ 
++static struct perf_event_attr attr = {
++	.type		= PERF_TYPE_BREAKPOINT,
++	.size		= sizeof(struct perf_event_attr),
++	.sample_period	= 1,
++	.bp_type	= HW_BREAKPOINT_X,
++	.bp_len		= sizeof(long),
++};
++
++unsigned int bp_hit;
++
++static void overflow_cb(struct perf_event *bp, struct perf_sample_data *sample, struct pt_regs *regs)
++{
++	bp_hit++;
++}
++
++static void kvm_test_breakpoint(void)
++{
++	unsigned long start = 0;
++	struct perf_event **bp = NULL;
++	int retry = 20;
++
++again:
++	if (bp && !--retry) {
++		unregister_wide_hw_breakpoint(bp);
++		pr_warn("bp_hit: %d\n", bp_hit);
++		return;
++	}
++
++	asm volatile(
++		"lea (%%rip),%0\n\t"
++		"movl $0x5,%%eax\n\t"
++		"cpuid\n\t"
++		: "=r" (start) : : "eax", "ebx", "ecx", "edx"
++	);
++
++	if (!bp) {
++		attr.bp_addr = start + 5;
++		bp = register_wide_hw_breakpoint(&attr, overflow_cb, NULL);
++		if (IS_ERR(bp)) {
++			pr_warn("can't create breakpoint at %llu: %ld\n", attr.bp_addr, PTR_ERR(bp));
++			return;
++		}
++	}
++	goto again;
++}
++
+ int __init kvm_unit_test_debug_init(void)
+ {
+ 	unsigned long start;
+ 
++	kvm_test_breakpoint();
++
+ 	register_die_notifier(&kvm_unit_test_debug_notifier);
+ 
+ 	/*
+-- 
+2.31.1
+

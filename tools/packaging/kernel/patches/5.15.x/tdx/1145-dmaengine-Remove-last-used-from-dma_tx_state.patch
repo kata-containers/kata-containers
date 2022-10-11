@@ -1,0 +1,59 @@
+From 463f8dd16f7425cac3e0d22423a4551e242084bb Mon Sep 17 00:00:00 2001
+From: Ben Walker <benjamin.walker@intel.com>
+Date: Thu, 2 Dec 2021 16:05:50 -0700
+Subject: [PATCH 1145/1418] dmaengine: Remove last, used from dma_tx_state
+
+Nothing uses these and they don't convey usable information.
+
+Signed-off-by: Ben Walker <benjamin.walker@intel.com>
+---
+ drivers/dma/dmaengine.h   | 4 ----
+ include/linux/dmaengine.h | 4 ----
+ 2 files changed, 8 deletions(-)
+
+diff --git a/drivers/dma/dmaengine.h b/drivers/dma/dmaengine.h
+index e72876a512a3..08c7bd7cfc22 100644
+--- a/drivers/dma/dmaengine.h
++++ b/drivers/dma/dmaengine.h
+@@ -74,8 +74,6 @@ static inline enum dma_status dma_cookie_status(struct dma_chan *chan,
+ 	complete = chan->completed_cookie;
+ 	barrier();
+ 	if (state) {
+-		state->last = complete;
+-		state->used = used;
+ 		state->residue = 0;
+ 		state->in_flight_bytes = 0;
+ 	}
+@@ -96,8 +94,6 @@ static inline void dma_set_tx_state(struct dma_tx_state *st,
+ 	if (!st)
+ 		return;
+ 
+-	st->last = last;
+-	st->used = used;
+ 	st->residue = residue;
+ }
+ 
+diff --git a/include/linux/dmaengine.h b/include/linux/dmaengine.h
+index bf644779d052..72fa90c25994 100644
+--- a/include/linux/dmaengine.h
++++ b/include/linux/dmaengine.h
+@@ -719,16 +719,12 @@ static inline struct dma_async_tx_descriptor *txd_next(struct dma_async_tx_descr
+ /**
+  * struct dma_tx_state - filled in to report the status of
+  * a transfer.
+- * @last: last completed DMA cookie
+- * @used: last issued DMA cookie (i.e. the one in progress)
+  * @residue: the remaining number of bytes left to transmit
+  *	on the selected transfer for states DMA_IN_PROGRESS and
+  *	DMA_PAUSED if this is implemented in the driver, else 0
+  * @in_flight_bytes: amount of data in bytes cached by the DMA.
+  */
+ struct dma_tx_state {
+-	dma_cookie_t last;
+-	dma_cookie_t used;
+ 	u32 residue;
+ 	u32 in_flight_bytes;
+ };
+-- 
+2.31.1
+

@@ -1,0 +1,30 @@
+From 491ed13ffaeac2337cd6eff7fd24f06eb2288e40 Mon Sep 17 00:00:00 2001
+From: Andi Kleen <ak@linux.intel.com>
+Date: Tue, 13 Jul 2021 17:48:31 -0700
+Subject: [PATCH 0163/1418] PCI: Mark MSI data shared
+
+In a TDX guest the MSI area must be shared with the host, so use
+a shared mapping.
+
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+Signed-off-by: Kuppuswamy Sathyanarayanan <sathyanarayanan.kuppuswamy@linux.intel.com>
+---
+ drivers/pci/msi.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/pci/msi.c b/drivers/pci/msi.c
+index 4b4792940e86..831ce74ccb7e 100644
+--- a/drivers/pci/msi.c
++++ b/drivers/pci/msi.c
+@@ -599,7 +599,7 @@ static void __iomem *msix_map_region(struct pci_dev *dev, unsigned nr_entries)
+ 	table_offset &= PCI_MSIX_TABLE_OFFSET;
+ 	phys_addr = pci_resource_start(dev, bir) + table_offset;
+ 
+-	return ioremap(phys_addr, nr_entries * PCI_MSIX_ENTRY_SIZE);
++	return ioremap_host_shared(phys_addr, nr_entries * PCI_MSIX_ENTRY_SIZE);
+ }
+ 
+ static int msix_setup_entries(struct pci_dev *dev, void __iomem *base,
+-- 
+2.31.1
+

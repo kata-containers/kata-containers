@@ -1,0 +1,33 @@
+From d0c5dde9c31f1c088bdd5eac19fe87ba7a2f25d6 Mon Sep 17 00:00:00 2001
+From: Isaku Yamahata <isaku.yamahata@intel.com>
+Date: Tue, 20 Jul 2021 14:23:22 -0700
+Subject: [PATCH 0444/1418] KVM: TDX: unlink tdx_vcpu from associated_tdvcpus
+ on freeing
+
+Fix use-after-free by tdx_disable_hardware() which traverses linked per-cpu
+tdx_vcpu associated_tdvcpus.  The per-cpu list maintains associated tdx
+vcpu which tdenter on pcpu.  When tdx_vcpu is freed, it should be removed
+from the list.  Otherwise tdx_disabel_hardware() traverses freed vcpu.
+
+Signed-off-by: Isaku Yamahata <isaku.yamahata@intel.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index 036c9fdd2ab0..9480e13cea73 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -586,6 +586,9 @@ static void tdx_vcpu_free(struct kvm_vcpu *vcpu)
+ 		tdx_reclaim_td_page(&tdx->tdvpx[i]);
+ 
+ 	tdx_reclaim_td_page(&tdx->tdvpr);
++
++	/* kvm_unload_vcpu_mmu() in kvm_free_vcpus() reloads vcpu. */
++	tdx_flush_vp_on_cpu(vcpu);
+ }
+ 
+ static void tdx_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
+-- 
+2.31.1
+

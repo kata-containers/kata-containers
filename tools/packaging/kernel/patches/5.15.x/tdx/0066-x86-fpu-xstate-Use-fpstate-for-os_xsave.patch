@@ -1,0 +1,85 @@
+From 1c59d33978a447b0ecd38e800c3cc702210aa17e Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 13 Oct 2021 16:55:49 +0200
+Subject: [PATCH 0066/1418] x86/fpu/xstate: Use fpstate for os_xsave()
+
+With variable feature sets XSAVE[S] requires to know the feature set for
+which the buffer is valid. Retrieve it from fpstate.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20211013145323.025695590@linutronix.de
+---
+ arch/x86/kernel/fpu/core.c   | 2 +-
+ arch/x86/kernel/fpu/signal.c | 4 ++--
+ arch/x86/kernel/fpu/xstate.h | 6 +++---
+ 3 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/arch/x86/kernel/fpu/core.c b/arch/x86/kernel/fpu/core.c
+index cb48c80ce5e3..f4db70b64e2e 100644
+--- a/arch/x86/kernel/fpu/core.c
++++ b/arch/x86/kernel/fpu/core.c
+@@ -105,7 +105,7 @@ EXPORT_SYMBOL(irq_fpu_usable);
+ void save_fpregs_to_fpstate(struct fpu *fpu)
+ {
+ 	if (likely(use_xsave())) {
+-		os_xsave(&fpu->fpstate->regs.xsave);
++		os_xsave(fpu->fpstate);
+ 
+ 		/*
+ 		 * AVX512 state is tracked here because its use is
+diff --git a/arch/x86/kernel/fpu/signal.c b/arch/x86/kernel/fpu/signal.c
+index aa9329189864..5aca418490f0 100644
+--- a/arch/x86/kernel/fpu/signal.c
++++ b/arch/x86/kernel/fpu/signal.c
+@@ -349,7 +349,6 @@ static bool __fpu_restore_sig(void __user *buf, void __user *buf_fx,
+ 	if (__copy_from_user(&env, buf, sizeof(env)))
+ 		return false;
+ 
+-	fpregs = &fpu->fpstate->regs;
+ 	/*
+ 	 * By setting TIF_NEED_FPU_LOAD it is ensured that our xstate is
+ 	 * not modified on context switch and that the xstate is considered
+@@ -367,13 +366,14 @@ static bool __fpu_restore_sig(void __user *buf, void __user *buf_fx,
+ 		 * the right place in memory. It's ia32 mode. Shrug.
+ 		 */
+ 		if (xfeatures_mask_supervisor())
+-			os_xsave(&fpregs->xsave);
++			os_xsave(fpu->fpstate);
+ 		set_thread_flag(TIF_NEED_FPU_LOAD);
+ 	}
+ 	__fpu_invalidate_fpregs_state(fpu);
+ 	__cpu_invalidate_fpregs_state();
+ 	fpregs_unlock();
+ 
++	fpregs = &fpu->fpstate->regs;
+ 	if (use_xsave() && !fx_only) {
+ 		if (copy_sigframe_from_user_to_xstate(&fpregs->xsave, buf_fx))
+ 			return false;
+diff --git a/arch/x86/kernel/fpu/xstate.h b/arch/x86/kernel/fpu/xstate.h
+index 99f8cfec719d..24a1479caea2 100644
+--- a/arch/x86/kernel/fpu/xstate.h
++++ b/arch/x86/kernel/fpu/xstate.h
+@@ -101,16 +101,16 @@ extern void *get_xsave_addr(struct xregs_state *xsave, int xfeature_nr);
+  * Uses either XSAVE or XSAVEOPT or XSAVES depending on the CPU features
+  * and command line options. The choice is permanent until the next reboot.
+  */
+-static inline void os_xsave(struct xregs_state *xstate)
++static inline void os_xsave(struct fpstate *fpstate)
+ {
+-	u64 mask = xfeatures_mask_all;
++	u64 mask = fpstate->xfeatures;
+ 	u32 lmask = mask;
+ 	u32 hmask = mask >> 32;
+ 	int err;
+ 
+ 	WARN_ON_FPU(!alternatives_patched);
+ 
+-	XSTATE_XSAVE(xstate, lmask, hmask, err);
++	XSTATE_XSAVE(&fpstate->regs.xsave, lmask, hmask, err);
+ 
+ 	/* We should never fault when copying to a kernel buffer: */
+ 	WARN_ON_FPU(err);
+-- 
+2.31.1
+

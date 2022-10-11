@@ -1,0 +1,30 @@
+From df4e933f9de47adcfc5eb574b62e0a3cac4cbdc7 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Thu, 7 Apr 2022 13:17:00 -0700
+Subject: [PATCH 1282/1418] dmaengine: idxd: don't clear device context when
+ read-only
+
+Do not clear device context when the device is not configurable.
+
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/dma/idxd/device.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/dma/idxd/device.c b/drivers/dma/idxd/device.c
+index ffa16557e178..1272ae89bb91 100644
+--- a/drivers/dma/idxd/device.c
++++ b/drivers/dma/idxd/device.c
+@@ -899,6 +899,9 @@ static void idxd_device_wqs_clear_state(struct idxd_device *idxd)
+ 
+ void idxd_device_clear_state(struct idxd_device *idxd)
+ {
++	if (!test_bit(IDXD_FLAG_CONFIGURABLE, &idxd->flags))
++		return;
++
+ 	idxd_groups_clear_state(idxd);
+ 	idxd_engines_clear_state(idxd);
+ 	idxd_device_wqs_clear_state(idxd);
+-- 
+2.31.1
+

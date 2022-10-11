@@ -1,0 +1,211 @@
+From d6534f08f2a8380b9e047c7bad9c689679b376bd Mon Sep 17 00:00:00 2001
+From: Ben Walker <benjamin.walker@intel.com>
+Date: Wed, 1 Dec 2021 10:59:18 -0700
+Subject: [PATCH 1144/1418] dmaengine: Remove the last, used parameters in
+ dma_async_is_tx_complete
+
+These are only used by a single driver (pxa_camera) which knows exactly
+which DMA engine it is dealing with and therefore knows the behavior
+of the cookie values. It can grab the value it needs directly from
+the dma_chan instead. No other DMA client assumes anything about
+the behavior of the cookie values, so the cookie becomes an opaque
+handle after this patch.
+
+Signed-off-by: Ben Walker <benjamin.walker@intel.com>
+---
+ Documentation/driver-api/dmaengine/client.rst  | 17 +++--------------
+ .../driver-api/dmaengine/provider.rst          |  6 +++---
+ drivers/crypto/stm32/stm32-hash.c              |  3 +--
+ drivers/dma/dmaengine.c                        |  2 +-
+ drivers/dma/dmatest.c                          |  3 +--
+ drivers/media/platform/omap/omap_vout_vrfb.c   |  2 +-
+ drivers/media/platform/pxa_camera.c            | 13 +++++++++++--
+ drivers/rapidio/devices/rio_mport_cdev.c       |  3 +--
+ include/linux/dmaengine.h                      | 18 +++---------------
+ 9 files changed, 25 insertions(+), 42 deletions(-)
+
+diff --git a/Documentation/driver-api/dmaengine/client.rst b/Documentation/driver-api/dmaengine/client.rst
+index 85ecec2c4000..6e43c9c428e6 100644
+--- a/Documentation/driver-api/dmaengine/client.rst
++++ b/Documentation/driver-api/dmaengine/client.rst
+@@ -259,8 +259,8 @@ The details of these operations are:
+ 
+       dma_cookie_t dmaengine_submit(struct dma_async_tx_descriptor *desc)
+ 
+-   This returns a cookie can be used to check the progress of DMA engine
+-   activity via other DMA engine calls not covered in this document.
++   This returns a cookie that can be used to check the progress of a transaction
++   via dma_async_is_tx_complete().
+ 
+    dmaengine_submit() will not start the DMA operation, it merely adds
+    it to the pending queue. For this, see step 5, dma_async_issue_pending.
+@@ -340,22 +340,11 @@ Further APIs
+    .. code-block:: c
+ 
+       enum dma_status dma_async_is_tx_complete(struct dma_chan *chan,
+-		dma_cookie_t cookie, dma_cookie_t *last, dma_cookie_t *used)
+-
+-   This can be used to check the status of the channel. Please see
+-   the documentation in include/linux/dmaengine.h for a more complete
+-   description of this API.
++		dma_cookie_t cookie)
+ 
+    This can be used with the cookie returned from dmaengine_submit()
+    to check for completion of a specific DMA transaction.
+ 
+-   .. note::
+-
+-      Not all DMA engine drivers can return reliable information for
+-      a running DMA channel. It is recommended that DMA engine users
+-      pause or stop (via dmaengine_terminate_all()) the channel before
+-      using this API.
+-
+ 5. Synchronize termination API
+ 
+    .. code-block:: c
+diff --git a/Documentation/driver-api/dmaengine/provider.rst b/Documentation/driver-api/dmaengine/provider.rst
+index ddb0a81a796c..6f70419893d5 100644
+--- a/Documentation/driver-api/dmaengine/provider.rst
++++ b/Documentation/driver-api/dmaengine/provider.rst
+@@ -520,10 +520,10 @@ where to put them)
+ 
+ dma_cookie_t
+ 
+-- it's a DMA transaction ID that will increment over time.
++- it's a DMA transaction ID.
+ 
+-- Not really relevant any more since the introduction of ``virt-dma``
+-  that abstracts it away.
++- The value can be chosen by the provider, or use the helper APIs
++  such as dma_cookie_assign() and dma_cookie_complete().
+ 
+ DMA_CTRL_ACK
+ 
+diff --git a/drivers/crypto/stm32/stm32-hash.c b/drivers/crypto/stm32/stm32-hash.c
+index 389de9e3302d..ccdd49184812 100644
+--- a/drivers/crypto/stm32/stm32-hash.c
++++ b/drivers/crypto/stm32/stm32-hash.c
+@@ -453,8 +453,7 @@ static int stm32_hash_xmit_dma(struct stm32_hash_dev *hdev,
+ 					 msecs_to_jiffies(100)))
+ 		err = -ETIMEDOUT;
+ 
+-	if (dma_async_is_tx_complete(hdev->dma_lch, cookie,
+-				     NULL, NULL) != DMA_COMPLETE)
++	if (dma_async_is_tx_complete(hdev->dma_lch, cookie) != DMA_COMPLETE)
+ 		err = -ETIMEDOUT;
+ 
+ 	if (err) {
+diff --git a/drivers/dma/dmaengine.c b/drivers/dma/dmaengine.c
+index d9f7c097cfd6..e312fc243ebd 100644
+--- a/drivers/dma/dmaengine.c
++++ b/drivers/dma/dmaengine.c
+@@ -523,7 +523,7 @@ enum dma_status dma_sync_wait(struct dma_chan *chan, dma_cookie_t cookie)
+ 
+ 	dma_async_issue_pending(chan);
+ 	do {
+-		status = dma_async_is_tx_complete(chan, cookie, NULL, NULL);
++		status = dma_async_is_tx_complete(chan, cookie);
+ 		if (time_after_eq(jiffies, dma_sync_wait_timeout)) {
+ 			dev_err(chan->device->dev, "%s: timeout!\n", __func__);
+ 			return DMA_ERROR;
+diff --git a/drivers/dma/dmatest.c b/drivers/dma/dmatest.c
+index f696246f57fd..0574090a80c8 100644
+--- a/drivers/dma/dmatest.c
++++ b/drivers/dma/dmatest.c
+@@ -832,8 +832,7 @@ static int dmatest_func(void *data)
+ 					done->done,
+ 					msecs_to_jiffies(params->timeout));
+ 
+-			status = dma_async_is_tx_complete(chan, cookie, NULL,
+-							  NULL);
++			status = dma_async_is_tx_complete(chan, cookie);
+ 		}
+ 
+ 		if (!done->done) {
+diff --git a/drivers/media/platform/omap/omap_vout_vrfb.c b/drivers/media/platform/omap/omap_vout_vrfb.c
+index 6bd672cbdb62..6750db90b450 100644
+--- a/drivers/media/platform/omap/omap_vout_vrfb.c
++++ b/drivers/media/platform/omap/omap_vout_vrfb.c
+@@ -289,7 +289,7 @@ int omap_vout_prepare_vrfb(struct omap_vout_device *vout,
+ 					 vout->vrfb_dma_tx.tx_status == 1,
+ 					 VRFB_TX_TIMEOUT);
+ 
+-	status = dma_async_is_tx_complete(chan, cookie, NULL, NULL);
++	status = dma_async_is_tx_complete(chan, cookie);
+ 
+ 	if (vout->vrfb_dma_tx.tx_status == 0) {
+ 		pr_err("%s: Timeout while waiting for DMA\n", __func__);
+diff --git a/drivers/media/platform/pxa_camera.c b/drivers/media/platform/pxa_camera.c
+index ec4c010644ca..7789c304315a 100644
+--- a/drivers/media/platform/pxa_camera.c
++++ b/drivers/media/platform/pxa_camera.c
+@@ -1049,8 +1049,17 @@ static void pxa_camera_dma_irq(struct pxa_camera_dev *pcdev,
+ 	last_buf = list_entry(pcdev->capture.prev,
+ 			      struct pxa_buffer, queue);
+ 	last_status = dma_async_is_tx_complete(pcdev->dma_chans[chan],
+-					       last_buf->cookie[chan],
+-					       NULL, &last_issued);
++					       last_buf->cookie[chan]);
++	/*
++	 * Peek into the channel and read the last cookie that was issued.
++	 * This is a layering violation - the dmaengine API does not officially
++	 * provide this information. Since this camera driver is tightly coupled
++	 * with a specific DMA device we know exactly how this cookie value will
++	 * behave. Otherwise, this wouldn't be safe.
++	 */
++	last_issued = pcdev->dma_chans[chan]->cookie;
++	barrier();
++
+ 	if (camera_status & overrun &&
+ 	    last_status != DMA_COMPLETE) {
+ 		dev_dbg(pcdev_to_dev(pcdev), "FIFO overrun! CISR: %x\n",
+diff --git a/drivers/rapidio/devices/rio_mport_cdev.c b/drivers/rapidio/devices/rio_mport_cdev.c
+index 94331d999d27..d93cb68dd438 100644
+--- a/drivers/rapidio/devices/rio_mport_cdev.c
++++ b/drivers/rapidio/devices/rio_mport_cdev.c
+@@ -597,8 +597,7 @@ static void dma_xfer_callback(void *param)
+ 	struct mport_dma_req *req = (struct mport_dma_req *)param;
+ 	struct mport_cdev_priv *priv = req->priv;
+ 
+-	req->status = dma_async_is_tx_complete(priv->dmach, req->cookie,
+-					       NULL, NULL);
++	req->status = dma_async_is_tx_complete(priv->dmach, req->cookie);
+ 	complete(&req->req_comp);
+ 	kref_put(&req->refcount, dma_req_free);
+ }
+diff --git a/include/linux/dmaengine.h b/include/linux/dmaengine.h
+index 95e694d7292c..bf644779d052 100644
+--- a/include/linux/dmaengine.h
++++ b/include/linux/dmaengine.h
+@@ -1420,25 +1420,13 @@ static inline void dma_async_issue_pending(struct dma_chan *chan)
+  * dma_async_is_tx_complete - poll for transaction completion
+  * @chan: DMA channel
+  * @cookie: transaction identifier to check status of
+- * @last: returns last completed cookie, can be NULL
+- * @used: returns last issued cookie, can be NULL
+- *
+- * If @last and @used are passed in, upon return they reflect the most
+- * recently submitted (used) cookie and the most recently completed
+- * cookie.
+  */
+ static inline enum dma_status dma_async_is_tx_complete(struct dma_chan *chan,
+-	dma_cookie_t cookie, dma_cookie_t *last, dma_cookie_t *used)
++	dma_cookie_t cookie)
+ {
+ 	struct dma_tx_state state;
+-	enum dma_status status;
+-
+-	status = chan->device->device_tx_status(chan, cookie, &state);
+-	if (last)
+-		*last = state.last;
+-	if (used)
+-		*used = state.used;
+-	return status;
++
++	return chan->device->device_tx_status(chan, cookie, &state);
+ }
+ 
+ #ifdef CONFIG_DMA_ENGINE
+-- 
+2.31.1
+

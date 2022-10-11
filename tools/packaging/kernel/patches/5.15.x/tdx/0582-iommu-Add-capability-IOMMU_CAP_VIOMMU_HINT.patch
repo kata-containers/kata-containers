@@ -1,0 +1,103 @@
+From 3ed41e5a6025d51d4a4f1d921317d34470a86d0b Mon Sep 17 00:00:00 2001
+From: Megha Dey <megha.dey@intel.com>
+Date: Tue, 29 Jun 2021 05:55:12 -0700
+Subject: [PATCH 0582/1418] iommu: Add capability IOMMU_CAP_VIOMMU_HINT
+
+Some IOMMU specification defines some kind of hint mechanism, through
+which BIOS can imply that OS runs in a virtualized environment. For
+example, the caching mode defined in VT-d spec and NpCache capability
+defined in the AMD IOMMU specification. This hint could also be used
+outside of the IOMMU subsystem, where it could be used with other known
+means (CPUID, smbios) to sense whether Linux is running in a virtualized
+environment. Add a capability bit so that it could be used there.
+
+Cc: Joerg Roedel <joro@8bytes.org>
+Signed-off-by: Lu Baolu <baolu.lu@linux.intel.com>
+Signed-off-by: Megha Dey <megha.dey@intel.com>
+---
+ drivers/iommu/amd/iommu.c    | 2 ++
+ drivers/iommu/intel/iommu.c  | 5 +++++
+ drivers/iommu/virtio-iommu.c | 9 +++++++++
+ include/linux/iommu.h        | 2 ++
+ 4 files changed, 18 insertions(+)
+
+diff --git a/drivers/iommu/amd/iommu.c b/drivers/iommu/amd/iommu.c
+index 9e5da037d949..08c777da5b71 100644
+--- a/drivers/iommu/amd/iommu.c
++++ b/drivers/iommu/amd/iommu.c
+@@ -2135,6 +2135,8 @@ static bool amd_iommu_capable(enum iommu_cap cap)
+ 		return (irq_remapping_enabled == 1);
+ 	case IOMMU_CAP_NOEXEC:
+ 		return false;
++	case IOMMU_CAP_VIOMMU_HINT:
++		return amd_iommu_np_cache;
+ 	default:
+ 		break;
+ 	}
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index d75f59ae28e6..6fb75fb02461 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -278,6 +278,7 @@ static inline void context_clear_entry(struct context_entry *context)
+  */
+ static struct dmar_domain *si_domain;
+ static int hw_pass_through = 1;
++static int intel_caching_mode;
+ 
+ #define for_each_domain_iommu(idx, domain)			\
+ 	for (idx = 0; idx < g_num_of_iommus; idx++)		\
+@@ -3290,6 +3291,8 @@ static int __init init_dmars(void)
+ 
+ 		if (!ecap_pass_through(iommu->ecap))
+ 			hw_pass_through = 0;
++		if (cap_caching_mode(iommu->cap))
++			intel_caching_mode = 1;
+ 		intel_svm_check(iommu);
+ 	}
+ 
+@@ -5152,6 +5155,8 @@ static bool intel_iommu_capable(enum iommu_cap cap)
+ 		return domain_update_iommu_snooping(NULL);
+ 	if (cap == IOMMU_CAP_INTR_REMAP)
+ 		return irq_remapping_enabled == 1;
++	if (cap == IOMMU_CAP_VIOMMU_HINT)
++		return intel_caching_mode;
+ 
+ 	return false;
+ }
+diff --git a/drivers/iommu/virtio-iommu.c b/drivers/iommu/virtio-iommu.c
+index 80930ce04a16..da9d2c9025f2 100644
+--- a/drivers/iommu/virtio-iommu.c
++++ b/drivers/iommu/virtio-iommu.c
+@@ -932,7 +932,16 @@ static int viommu_of_xlate(struct device *dev, struct of_phandle_args *args)
+ 	return iommu_fwspec_add_ids(dev, args->args, 1);
+ }
+ 
++static bool viommu_capable(enum iommu_cap cap)
++{
++	if (cap == IOMMU_CAP_VIOMMU_HINT)
++		return true;
++
++	return false;
++}
++
+ static struct iommu_ops viommu_ops = {
++	.capable		= viommu_capable,
+ 	.domain_alloc		= viommu_domain_alloc,
+ 	.domain_free		= viommu_domain_free,
+ 	.attach_dev		= viommu_attach_dev,
+diff --git a/include/linux/iommu.h b/include/linux/iommu.h
+index d2f3435e7d17..57ba032213dd 100644
+--- a/include/linux/iommu.h
++++ b/include/linux/iommu.h
+@@ -106,6 +106,8 @@ enum iommu_cap {
+ 					   transactions */
+ 	IOMMU_CAP_INTR_REMAP,		/* IOMMU supports interrupt isolation */
+ 	IOMMU_CAP_NOEXEC,		/* IOMMU_NOEXEC flag */
++	IOMMU_CAP_VIOMMU_HINT,		/* IOMMU can detect a hit for running in
++					   VM */
+ };
+ 
+ /* These are the possible reserved region types */
+-- 
+2.31.1
+

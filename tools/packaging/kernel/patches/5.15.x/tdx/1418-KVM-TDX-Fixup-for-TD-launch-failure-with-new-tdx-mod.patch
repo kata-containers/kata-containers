@@ -1,0 +1,62 @@
+From 1e0e6ded1dd3b3a2657e1abd22ab5404f0864e7e Mon Sep 17 00:00:00 2001
+From: Yang Weijiang <weijiang.yang@intel.com>
+Date: Thu, 1 Sep 2022 18:05:36 -0400
+Subject: [PATCH 1418/1418] KVM:TDX: Fixup for TD launch failure with new tdx
+ module release
+
+TDX module 1.5 requires more page for TDVPS/TDCS and have more CPUID configs.
+Bump up those constants so that TDX module 1.5 can be supported.
+
+This fixup patch is also required by tdx module: TDX_1.0.03.00.394.
+
+Without the fixup patch we see below error:
+
+ioctl(KVM_CREATE_VM) failed: 19 No such device
+qemu-kvm: -accel kvm: failed to initialize kvm: No such device
+
+Signed-off-by: Chao Gao <chao.gao@intel.com>
+Signed-off-by: Yang Weijiang <weijiang.yang@intel.com>
+---
+ arch/x86/include/asm/tdx_arch.h | 6 +++---
+ arch/x86/kvm/vmx/tdx.c          | 4 ++--
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/include/asm/tdx_arch.h b/arch/x86/include/asm/tdx_arch.h
+index e27f0538ee9b..6abc6587f18b 100644
+--- a/arch/x86/include/asm/tdx_arch.h
++++ b/arch/x86/include/asm/tdx_arch.h
+@@ -210,10 +210,10 @@ enum tdx_tdcs_execution_control {
+ /* @field is any of enum tdx_tdcs_execution_control */
+ #define TDCS_EXEC(field)	BUILD_TDX_FIELD(17, (field))
+ 
+-#define TDX_NR_TDCX_PAGES		4
+-#define TDX_NR_TDVPX_PAGES		5
++#define TDX_NR_TDCX_PAGES		10
++#define TDX_NR_TDVPX_PAGES		10
+ 
+-#define TDX_MAX_NR_CPUID_CONFIGS	6
++#define TDX_MAX_NR_CPUID_CONFIGS	10
+ #define TDX_MAX_NR_CMRS			32
+ #define TDX_MAX_NR_TDMRS		64
+ #define TDX_MAX_NR_RSVD_AREAS		16
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index bba7fec3db55..1ced4ae8009d 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -64,11 +64,11 @@ static int tdx_get_caps(void)
+ 	}
+ 
+ 	tdx_caps.tdcs_nr_pages = tdsysinfo->tdcs_base_size / PAGE_SIZE;
+-	if (tdx_caps.tdcs_nr_pages != TDX_NR_TDCX_PAGES)
++	if (tdx_caps.tdcs_nr_pages > TDX_NR_TDCX_PAGES)
+ 		return -EIO;
+ 
+ 	tdx_caps.tdvpx_nr_pages = tdsysinfo->tdvps_base_size / PAGE_SIZE - 1;
+-	if (tdx_caps.tdvpx_nr_pages != TDX_NR_TDVPX_PAGES)
++	if (tdx_caps.tdvpx_nr_pages > TDX_NR_TDVPX_PAGES)
+ 		return -EIO;
+ 
+ 	tdx_caps.attrs_fixed0 = tdsysinfo->attributes_fixed0;
+-- 
+2.31.1
+

@@ -1,0 +1,54 @@
+From 82b4a0f1ba5c3be41e72fbcf02386a425d91eb90 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <sean.j.christopherson@intel.com>
+Date: Mon, 15 Nov 2021 10:35:14 -0800
+Subject: [PATCH 0775/1418] selftests/sgx: Fix a benign linker warning
+
+The enclave binary (test_encl.elf) is built with only three sections (tcs,
+text, and data) as controlled by its custom linker script.
+
+If gcc is built with "--enable-linker-build-id" (this appears to be a
+common configuration even if it is by default off) then gcc
+will pass "--build-id" to the linker that will prompt it (the linker) to
+write unique bits identifying the linked file to a ".note.gnu.build-id"
+section.
+
+The section ".note.gnu.build-id" does not exist in the test enclave
+resulting in the following warning emitted by the linker:
+
+/usr/bin/ld: warning: .note.gnu.build-id section discarded, --build-id
+ignored
+
+The test enclave does not use the build id within the binary so fix the
+warning by passing a build id of "none" to the linker that will disable the
+setting from any earlier "--build-id" options and thus disable the attempt
+to write the build id to a ".note.gnu.build-id" section that does not
+exist.
+
+Link: https://lore.kernel.org/linux-sgx/20191017030340.18301-2-sean.j.christopherson@intel.com/
+Suggested-by: Cedric Xing <cedric.xing@intel.com>
+Signed-off-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+Signed-off-by: Dave Hansen <dave.hansen@linux.intel.com>
+Reviewed-by: Jarkko Sakkinen <jarkko@kernel.org>
+Acked-by: Dave Hansen <dave.hansen@linux.intel.com>
+Link: https://lkml.kernel.org/r/ca0f8a81fc1e78af9bdbc6a88e0f9c37d82e53f2.1636997631.git.reinette.chatre@intel.com
+---
+ tools/testing/selftests/sgx/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/testing/selftests/sgx/Makefile b/tools/testing/selftests/sgx/Makefile
+index 7f12d55b97f8..2956584e1e37 100644
+--- a/tools/testing/selftests/sgx/Makefile
++++ b/tools/testing/selftests/sgx/Makefile
+@@ -45,7 +45,7 @@ $(OUTPUT)/sign_key.o: sign_key.S
+ 	$(CC) $(HOST_CFLAGS) -c $< -o $@
+ 
+ $(OUTPUT)/test_encl.elf: test_encl.lds test_encl.c test_encl_bootstrap.S
+-	$(CC) $(ENCL_CFLAGS) -T $^ -o $@
++	$(CC) $(ENCL_CFLAGS) -T $^ -o $@ -Wl,--build-id=none
+ 
+ EXTRA_CLEAN := \
+ 	$(OUTPUT)/test_encl.elf \
+-- 
+2.31.1
+

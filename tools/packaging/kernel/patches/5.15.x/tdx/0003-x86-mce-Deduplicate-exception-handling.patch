@@ -1,0 +1,78 @@
+From 1923a2bb08a0e937bf79c05a674cf4e0a641ff50 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 8 Sep 2021 15:29:15 +0200
+Subject: [PATCH 0003/1418] x86/mce: Deduplicate exception handling
+
+Prepare code for further simplification. No functional change.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Borislav Petkov <bp@suse.de>
+Link: https://lkml.kernel.org/r/20210908132525.096452100@linutronix.de
+---
+ arch/x86/kernel/cpu/mce/core.c | 34 +++++++++++++++++-----------------
+ 1 file changed, 17 insertions(+), 17 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/mce/core.c b/arch/x86/kernel/cpu/mce/core.c
+index 193204aee880..94c41b3c04a5 100644
+--- a/arch/x86/kernel/cpu/mce/core.c
++++ b/arch/x86/kernel/cpu/mce/core.c
+@@ -373,13 +373,16 @@ static int msr_to_offset(u32 msr)
+ 	return -1;
+ }
+ 
+-__visible bool ex_handler_rdmsr_fault(const struct exception_table_entry *fixup,
+-				      struct pt_regs *regs, int trapnr,
+-				      unsigned long error_code,
+-				      unsigned long fault_addr)
++static void ex_handler_msr_mce(struct pt_regs *regs, bool wrmsr)
+ {
+-	pr_emerg("MSR access error: RDMSR from 0x%x at rIP: 0x%lx (%pS)\n",
+-		 (unsigned int)regs->cx, regs->ip, (void *)regs->ip);
++	if (wrmsr) {
++		pr_emerg("MSR access error: WRMSR to 0x%x (tried to write 0x%08x%08x) at rIP: 0x%lx (%pS)\n",
++			 (unsigned int)regs->cx, (unsigned int)regs->dx, (unsigned int)regs->ax,
++			 regs->ip, (void *)regs->ip);
++	} else {
++		pr_emerg("MSR access error: RDMSR from 0x%x at rIP: 0x%lx (%pS)\n",
++			 (unsigned int)regs->cx, regs->ip, (void *)regs->ip);
++	}
+ 
+ 	show_stack_regs(regs);
+ 
+@@ -387,7 +390,14 @@ __visible bool ex_handler_rdmsr_fault(const struct exception_table_entry *fixup,
+ 
+ 	while (true)
+ 		cpu_relax();
++}
+ 
++__visible bool ex_handler_rdmsr_fault(const struct exception_table_entry *fixup,
++				      struct pt_regs *regs, int trapnr,
++				      unsigned long error_code,
++				      unsigned long fault_addr)
++{
++	ex_handler_msr_mce(regs, false);
+ 	return true;
+ }
+ 
+@@ -432,17 +442,7 @@ __visible bool ex_handler_wrmsr_fault(const struct exception_table_entry *fixup,
+ 				      unsigned long error_code,
+ 				      unsigned long fault_addr)
+ {
+-	pr_emerg("MSR access error: WRMSR to 0x%x (tried to write 0x%08x%08x) at rIP: 0x%lx (%pS)\n",
+-		 (unsigned int)regs->cx, (unsigned int)regs->dx, (unsigned int)regs->ax,
+-		  regs->ip, (void *)regs->ip);
+-
+-	show_stack_regs(regs);
+-
+-	panic("MCA architectural violation!\n");
+-
+-	while (true)
+-		cpu_relax();
+-
++	ex_handler_msr_mce(regs, true);
+ 	return true;
+ }
+ 
+-- 
+2.31.1
+
