@@ -119,7 +119,6 @@ The table below lists the core parts of the project:
 | [runtime](src/runtime) | core | Main component run by a container manager and providing a containerd shimv2 runtime implementation. |
 | [runtime-rs](src/runtime-rs) | core | The Rust version runtime. |
 | [agent](src/agent) | core | Management process running inside the virtual machine / POD that sets up the container environment. |
-| [libraries](src/libs) | core | Library crates shared by multiple Kata Container components or published to [`crates.io`](https://crates.io/index.html) |
 | [`dragonball`](src/dragonball) | core | An optional built-in VMM brings out-of-the-box Kata Containers experience with optimizations on container workloads |
 | [documentation](docs) | documentation | Documentation common to all components (such as design and install documentation). |
 | [libraries](src/libs) | core | Library crates shared by multiple Kata Container components or published to [`crates.io`](https://crates.io/index.html) |
