@@ -10,7 +10,7 @@ use serde_derive::{Deserialize, Serialize};
 /// When Dragonball starts, the instance state is Uninitialized. Once start_microvm method is
 /// called, the state goes from Uninitialized to Starting. The state is changed to Running until
 /// the start_microvm method ends. Halting and Halted are currently unsupported.
-#[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Copy, Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub enum InstanceState {
     /// Microvm is not initialized.
     Uninitialized,
@@ -29,7 +29,7 @@ pub enum InstanceState {
 }
 
 /// The state of async actions
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub enum AsyncState {
     /// Uninitialized
     Uninitialized,
