@@ -126,9 +126,9 @@ AGENTCONFIGFILEPATH := /etc/agent-config.toml
 AGENTCONFIGFILEKERNELPARAM := agent.config_file=$(AGENTCONFIGFILEPATH)
 
 ROOTMEASURECONFIG ?= ""
-TDXKERNELPARAMS := tdx_disable_filter $(ROOTMEASURECONFIG)
-SEVKERNELPARAMS := $(AGENTCONFIGFILEKERNELPARAM) $(ROOTMEASURECONFIG)
-KERNELPARAMS += $(ROOTMEASURECONFIG)
+TDXKERNELPARAMS := tdx_disable_filter $(ROOTMEASURECONFIG) agent.enable_signature_verification=false
+SEVKERNELPARAMS := $(AGENTCONFIGFILEKERNELPARAM) $(ROOTMEASURECONFIG) agent.enable_signature_verification=false
+KERNELPARAMS += $(ROOTMEASURECONFIG) agent.enable_signature_verification=false
 
 # Name of default configuration file the runtime will use.
 CONFIG_FILE = configuration.toml
