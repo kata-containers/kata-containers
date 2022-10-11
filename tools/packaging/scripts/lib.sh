@@ -17,6 +17,11 @@ short_commit_length=10
 
 hub_bin="hub-bin"
 
+# Jenkins URL
+jenkins_url="http://jenkins.katacontainers.io"
+# Path where cached artifacts are found.
+cached_artifacts_path="lastSuccessfulBuild/artifact/artifacts"
+
 clone_tests_repo() {
 	# KATA_CI_NO_NETWORK is (has to be) ignored if there is
 	# no existing clone.
@@ -143,5 +148,34 @@ push_to_registry() {
 		else
 			docker push ${tag}
 		fi
+	fi
+}
+
+sha256sum_from_files() {
+	local files_in=${@:-}
+	local files=""
+	local shasum=""
+
+	# Process the input files:
+	#  - discard the files/directories that don't exist.
+	#  - find the files if it is a directory
+	for f in $files_in; do
+		if [ -d "$f" ]; then
+			files+=" $(find $f -type f)"
+		elif [ -f "$f" ]; then
+			files+=" $f"
+		fi
+	done
+	# Return in case there is none input files.
+	[ -n "$files" ] || return 0
+
+	# Alphabetically sorting the files.
+	files="$(echo $files | tr ' ' '\n' | LC_ALL=C sort -u)"
+	# Concate the files and calculate a hash.
+	shasum="$(cat $files | sha256sum -b)" || true
+	info "shasum of files $shasum"
+	if [ -n "$shasum" ];then
+		# Return only the SHA field.
+		echo $(awk '{ print $1 }' <<< $shasum)
 	fi
 }
