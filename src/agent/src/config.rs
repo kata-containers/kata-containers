@@ -31,6 +31,7 @@ const AA_KBC_PARAMS: &str = "agent.aa_kbc_params";
 const HTTPS_PROXY: &str = "agent.https_proxy";
 const NO_PROXY: &str = "agent.no_proxy";
 const ENABLE_DATA_INTEGRITY: &str = "agent.data_integrity";
+const ENABLE_SIGNATURE_VERIFICATION: &str = "agent.enable_signature_verification";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
@@ -93,6 +94,7 @@ pub struct AgentConfig {
     pub https_proxy: String,
     pub no_proxy: String,
     pub data_integrity: bool,
+    pub enable_signature_verification: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -113,6 +115,7 @@ pub struct AgentConfigBuilder {
     pub https_proxy: Option<String>,
     pub no_proxy: Option<String>,
     pub data_integrity: Option<bool>,
+    pub enable_signature_verification: Option<bool>,
 }
 
 macro_rules! config_override {
@@ -179,6 +182,7 @@ impl Default for AgentConfig {
             https_proxy: String::from(""),
             no_proxy: String::from(""),
             data_integrity: false,
+            enable_signature_verification: true,
         }
     }
 }
@@ -212,6 +216,11 @@ impl FromStr for AgentConfig {
         config_override!(agent_config_builder, agent_config, https_proxy);
         config_override!(agent_config_builder, agent_config, no_proxy);
         config_override!(agent_config_builder, agent_config, data_integrity);
+        config_override!(
+            agent_config_builder,
+            agent_config,
+            enable_signature_verification
+        );
 
         // Populate the allowed endpoints hash set, if we got any from the config file.
         if let Some(endpoints) = agent_config_builder.endpoints {
@@ -332,6 +341,13 @@ impl AgentConfig {
                 param,
                 ENABLE_DATA_INTEGRITY,
                 config.data_integrity,
+                get_bool_value
+            );
+
+            parse_cmdline_param!(
+                param,
+                ENABLE_SIGNATURE_VERIFICATION,
+                config.enable_signature_verification,
                 get_bool_value
             );
         }
@@ -537,6 +553,7 @@ mod tests {
         assert_eq!(config.log_level, DEFAULT_LOG_LEVEL);
         assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
         assert_eq!(config.container_policy_path, "");
+        assert!(config.enable_signature_verification);
     }
 
     #[test]
@@ -560,6 +577,7 @@ mod tests {
             https_proxy: &'a str,
             no_proxy: &'a str,
             data_integrity: bool,
+            enable_signature_verification: bool,
         }
 
         impl Default for TestData<'_> {
@@ -580,6 +598,7 @@ mod tests {
                     https_proxy: "",
                     no_proxy: "",
                     data_integrity: false,
+                    enable_signature_verification: true,
                 }
             }
         }
@@ -1009,6 +1028,26 @@ mod tests {
                 data_integrity: false,
                 ..Default::default()
             },
+            TestData {
+                contents: "agent.enable_signature_verification=false",
+                enable_signature_verification: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.enable_signature_verification=0",
+                enable_signature_verification: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.enable_signature_verification=1",
+                enable_signature_verification: true,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.enable_signature_verification=foo",
+                enable_signature_verification: false,
+                ..Default::default()
+            },
         ];
 
         let dir = tempdir().expect("failed to create tmpdir");
@@ -1065,6 +1104,11 @@ mod tests {
             assert_eq!(d.https_proxy, config.https_proxy, "{}", msg);
             assert_eq!(d.no_proxy, config.no_proxy, "{}", msg);
             assert_eq!(d.data_integrity, config.data_integrity, "{}", msg);
+            assert_eq!(
+                d.enable_signature_verification, config.enable_signature_verification,
+                "{}",
+                msg
+            );
 
             for v in vars_to_unset {
                 env::remove_var(v);
