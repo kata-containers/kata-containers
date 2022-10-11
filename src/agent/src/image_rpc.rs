@@ -35,7 +35,6 @@ const OCICRYPT_CONFIG_PATH: &str = "/tmp/ocicrypt_config.json";
 const KATA_CC_IMAGE_WORK_DIR: &str = "/run/image/";
 const KATA_CC_PAUSE_BUNDLE: &str = "/pause_bundle";
 const CONFIG_JSON: &str = "config.json";
-const OFFLINE_FS_KBC_RESOURCE_PATH: &str = "/etc/aa-offline_fs_kbc-resources.json";
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -268,13 +267,15 @@ impl ImageService {
             Self::pull_image_from_registry(image, &cid, source_creds, policy_path, aa_kbc_params)?;
             Self::unpack_image(&cid)?;
         } else {
-            // TODO #4888 - Create a better way to enable signature verification. This is temporary for the PoC
-            if aa_kbc_params.eq("offline_fs_kbc::null")
-                && Path::new(OFFLINE_FS_KBC_RESOURCE_PATH).exists()
-            {
-                info!(sl!(), "Enabling security_validate on image_client");
-                self.image_client.lock().await.config.security_validate = true;
-            }
+            // Read enable signature verification from the agent config and set it in the image_client
+            let enable_signature_verification =
+                &AGENT_CONFIG.read().await.enable_signature_verification;
+            info!(
+                sl!(),
+                "enable_signature_verification set to: {}", enable_signature_verification
+            );
+            self.image_client.lock().await.config.security_validate =
+                *enable_signature_verification;
 
             let bundle_path = Path::new(CONTAINER_BASE).join(&cid);
             fs::create_dir_all(&bundle_path)?;
