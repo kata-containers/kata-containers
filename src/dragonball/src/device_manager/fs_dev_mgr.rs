@@ -89,7 +89,7 @@ pub enum FsDeviceError {
 }
 
 /// Configuration information for a vhost-user-fs device.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub struct FsDeviceConfigInfo {
     /// vhost-user socket path.
     pub sock_path: String,
@@ -201,7 +201,7 @@ impl FsDeviceConfigInfo {
 }
 
 /// Configuration information for virtio-fs.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub struct FsDeviceConfigUpdateInfo {
     /// virtiofs mount tag name used inside the guest.
     /// used as the device name during mount.
@@ -242,7 +242,7 @@ impl ConfigItem for FsDeviceConfigInfo {
 }
 
 /// Configuration information of manipulating backend fs for a virtiofs device.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Default)]
 pub struct FsMountConfigInfo {
     /// Mount operations, mount, update, umount
     pub ops: String,

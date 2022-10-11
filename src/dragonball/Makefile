@@ -15,6 +15,9 @@ clippy:
 		-- \
 		-D warnings
 
+vendor:
+	@echo "INFO: vendor do nothing.."
+
 format:
 	@echo "INFO: cargo fmt..."
 	cargo fmt -- --check
@@ -23,5 +26,4 @@ clean:
 	cargo clean
 
 test:
-	@echo "INFO: testing dragonball for development build"
-	cargo test --all-features -- --nocapture
+	@echo "INFO: skip testing dragonball"

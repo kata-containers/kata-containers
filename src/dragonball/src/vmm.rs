@@ -189,6 +189,8 @@ impl Vmm {
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use test_utils::skip_if_not_root;
+
     use super::*;
 
     pub fn create_vmm_instance() -> Vmm {
@@ -210,6 +212,8 @@ pub(crate) mod tests {
 
     #[test]
     fn test_create_vmm_instance() {
+        skip_if_not_root!();
+
         create_vmm_instance();
     }
 }

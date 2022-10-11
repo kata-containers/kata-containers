@@ -147,7 +147,11 @@ pub type Result<T> = ::std::result::Result<T, DeviceMgrError>;
 /// Type of the dragonball virtio devices.
 #[cfg(feature = "dbs-virtio-devices")]
 pub type DbsVirtioDevice = Box<
-    dyn VirtioDevice<GuestAddressSpaceImpl, virtio_queue::QueueStateSync, vm_memory::GuestRegionMmap>,
+    dyn VirtioDevice<
+        GuestAddressSpaceImpl,
+        virtio_queue::QueueStateSync,
+        vm_memory::GuestRegionMmap,
+    >,
 >;
 
 /// Type of the dragonball virtio mmio devices.
@@ -997,7 +1001,7 @@ impl DeviceManager {
         {
             self.vsock_manager
                 .get_default_connector()
-                .map(|d| Some(d))
+                .map(Some)
                 .unwrap_or(None)
         }
         #[cfg(not(feature = "virtio-vsock"))]
