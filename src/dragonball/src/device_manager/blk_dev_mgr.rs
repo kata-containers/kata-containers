@@ -285,7 +285,6 @@ impl std::fmt::Debug for BlockDeviceInfo {
 pub type BlockDeviceInfo = DeviceConfigInfo<BlockDeviceConfigInfo>;
 
 /// Wrapper for the collection that holds all the Block Devices Configs
-//#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[derive(Clone)]
 pub struct BlockDeviceMgr {
     /// A list of `BlockDeviceInfo` objects.
