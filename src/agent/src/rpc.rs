@@ -126,11 +126,7 @@ macro_rules! ttrpc_error {
 
 macro_rules! is_allowed {
     ($req:ident) => {
-        if !AGENT_CONFIG
-            .read()
-            .await
-            .is_allowed_endpoint($req.descriptor_dyn().name())
-        {
+        if !AGENT_CONFIG.is_allowed_endpoint($req.descriptor_dyn().name()) {
             return Err(ttrpc_error!(
                 ttrpc::Code::UNIMPLEMENTED,
                 format!("{} is blocked", $req.descriptor_dyn().name()),
@@ -240,7 +236,7 @@ impl AgentService {
         let mut ctr: LinuxContainer =
             LinuxContainer::new(cid.as_str(), CONTAINER_BASE, opts, &sl!())?;
 
-        let pipe_size = AGENT_CONFIG.read().await.container_pipe_size;
+        let pipe_size = AGENT_CONFIG.container_pipe_size;
 
         let p = if let Some(p) = oci.process {
             Process::new(&sl!(), &p, cid.as_str(), true, pipe_size)?
@@ -374,7 +370,7 @@ impl AgentService {
         // Apply any necessary corrections for PCI addresses
         update_env_pci(&mut process.Env, &sandbox.pcimap)?;
 
-        let pipe_size = AGENT_CONFIG.read().await.container_pipe_size;
+        let pipe_size = AGENT_CONFIG.container_pipe_size;
         let ocip = rustjail::process_grpc_to_oci(&process);
         let p = Process::new(&sl!(), &ocip, exec_id.as_str(), false, pipe_size)?;
 
