@@ -13,8 +13,8 @@ mod arch_specific {
     const PROC_CPUINFO: &str = "/proc/cpuinfo";
     const CPUINFO_DELIMITER: &str = "\nprocessor";
     const CPUINFO_FLAGS_TAG: &str = "flags";
-    const CPU_FLAGS_INTEL: &'static [&'static str] = &["lm", "sse4_1", "vmx"];
-    const CPU_ATTRIBS_INTEL: &'static [&'static str] = &["GenuineIntel"];
+    const CPU_FLAGS_INTEL: &[&str] = &["lm", "sse4_1", "vmx"];
+    const CPU_ATTRIBS_INTEL: &[&str] = &["GenuineIntel"];
 
     // check cpu
     fn check_cpu() -> Result<()> {
@@ -29,14 +29,14 @@ mod arch_specific {
         // TODO: Perform checks based on hypervisor type
         // TODO: Add more information to output (see kata-check in go tool); adjust formatting
         let missing_cpu_attributes = check::check_cpu_attribs(&cpu_info, CPU_ATTRIBS_INTEL)?;
-        if missing_cpu_attributes.len() > 0 {
+        if !missing_cpu_attributes.is_empty() {
             eprintln!(
                 "WARNING: Missing CPU attributes {:?}",
                 missing_cpu_attributes
             );
         }
         let missing_cpu_flags = check::check_cpu_flags(&cpu_flags, CPU_FLAGS_INTEL)?;
-        if missing_cpu_flags.len() > 0 {
+        if !missing_cpu_flags.is_empty() {
             eprintln!("WARNING: Missing CPU flags {:?}", missing_cpu_flags);
         }
 

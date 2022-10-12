@@ -45,10 +45,10 @@ pub fn get_cpu_flags(cpu_info: &str, cpu_flags_tag: &str) -> Result<String> {
         return Err(anyhow!("cpu_info string is empty"))?;
     }
 
-    let subcontents: Vec<&str> = cpu_info.split("\n").collect();
+    let subcontents: Vec<&str> = cpu_info.split('\n').collect();
     for line in subcontents {
         if line.starts_with(cpu_flags_tag) {
-            let line_data: Vec<&str> = line.split(":").collect();
+            let line_data: Vec<&str> = line.split(':').collect();
             let flags = line_data
                 .last()
                 .ok_or("error splitting flags in cpuinfo")
@@ -64,12 +64,10 @@ pub fn get_cpu_flags(cpu_info: &str, cpu_flags_tag: &str) -> Result<String> {
 // get_missing_strings searches for required (strings) in data and returns
 // a vector containing the missing strings
 fn get_missing_strings(data: &str, required: &'static [&'static str]) -> Result<Vec<String>> {
-    let data_vec: Vec<&str> = data.split_whitespace().collect();
-
     let mut missing: Vec<String> = Vec::new();
 
     for item in required {
-        if !data_vec.contains(&item) {
+        if !data.split_whitespace().any(|x| x == *item) {
             missing.push(item.to_string());
         }
     }
@@ -90,8 +88,8 @@ pub fn check_cpu_attribs(
     cpu_info: &str,
     required_attribs: &'static [&'static str],
 ) -> Result<Vec<String>> {
-    let mut cpu_info_processed = cpu_info.replace("\t", "");
-    cpu_info_processed = cpu_info_processed.replace("\n", " ");
+    let mut cpu_info_processed = cpu_info.replace('\t', "");
+    cpu_info_processed = cpu_info_processed.replace('\n', " ");
 
     let missing_attribs = get_missing_strings(&cpu_info_processed, required_attribs)?;
     Ok(missing_attribs)
@@ -134,7 +132,7 @@ fn handle_reqwest_error(e: reqwest::Error) -> anyhow::Error {
 }
 
 pub fn check_version() -> Result<()> {
-    let version = get_kata_version_by_url(KATA_GITHUB_URL).map_err(|e| handle_reqwest_error(e))?;
+    let version = get_kata_version_by_url(KATA_GITHUB_URL).map_err(handle_reqwest_error)?;
 
     println!("Version: {}", version);
 
