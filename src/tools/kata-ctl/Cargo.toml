@@ -7,7 +7,7 @@
 name = "kata-ctl"
 version = "0.0.1"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-edition = "2021"
+edition = "2018"
 
 [dependencies]
 anyhow = "1.0.31"
