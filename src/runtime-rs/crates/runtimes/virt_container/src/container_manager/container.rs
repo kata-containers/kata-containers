@@ -15,6 +15,7 @@ use common::{
         ProcessType,
     },
 };
+use kata_sys_util::k8s::update_ephemeral_storage_type;
 use oci::{LinuxResources, Process as OCIProcess};
 use resource::ResourceManager;
 use tokio::sync::RwLock;
@@ -110,6 +111,7 @@ impl Container {
             .context("handler volumes")?;
         let mut oci_mounts = vec![];
         let mut storages = vec![];
+
         for v in volumes {
             let mut volume_mounts = v.get_volume_mount().context("get volume mount")?;
             if !volume_mounts.is_empty() {
@@ -377,6 +379,9 @@ impl Container {
 fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
     // hook should be done on host
     spec.hooks = None;
+
+    // special process K8s ephemeral volumes.
+    update_ephemeral_storage_type(spec);
 
     if let Some(linux) = spec.linux.as_mut() {
         if disable_guest_seccomp {
