@@ -124,11 +124,7 @@ macro_rules! ttrpc_error {
 
 macro_rules! is_allowed {
     ($req:ident) => {
-        if !AGENT_CONFIG
-            .read()
-            .await
-            .is_allowed_endpoint($req.descriptor().name())
-        {
+        if !AGENT_CONFIG.is_allowed_endpoint($req.descriptor().name()) {
             return Err(ttrpc_error!(
                 ttrpc::Code::UNIMPLEMENTED,
                 format!("{} is blocked", $req.descriptor().name()),
@@ -228,7 +224,7 @@ impl AgentService {
             let dev_major_minor = format!("{}:{}", specdev.major, specdev.minor);
 
             if specdev.path == TRUSTED_STORAGE_DEVICE {
-                let data_integrity = AGENT_CONFIG.read().await.data_integrity;
+                let data_integrity = AGENT_CONFIG.data_integrity;
                 info!(
                     sl!(),
                     "trusted_store device major:min {}, enable data integrity {}",
@@ -290,7 +286,7 @@ impl AgentService {
         let mut ctr: LinuxContainer =
             LinuxContainer::new(cid.as_str(), CONTAINER_BASE, opts, &sl!())?;
 
-        let pipe_size = AGENT_CONFIG.read().await.container_pipe_size;
+        let pipe_size = AGENT_CONFIG.container_pipe_size;
 
         let p = if let Some(p) = oci.process {
             Process::new(&sl!(), &p, cid.as_str(), true, pipe_size)?
@@ -425,7 +421,7 @@ impl AgentService {
         // Apply any necessary corrections for PCI addresses
         update_env_pci(&mut process.Env, &sandbox.pcimap)?;
 
-        let pipe_size = AGENT_CONFIG.read().await.container_pipe_size;
+        let pipe_size = AGENT_CONFIG.container_pipe_size;
         let ocip = rustjail::process_grpc_to_oci(&process);
         let p = Process::new(&sl!(), &ocip, exec_id.as_str(), false, pipe_size)?;
 

@@ -206,12 +206,12 @@ impl ImageService {
     async fn pull_image(&self, req: &image::PullImageRequest) -> Result<String> {
         env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
 
-        let https_proxy = &AGENT_CONFIG.read().await.https_proxy;
+        let https_proxy = &AGENT_CONFIG.https_proxy;
         if !https_proxy.is_empty() {
             env::set_var("HTTPS_PROXY", https_proxy);
         }
 
-        let no_proxy = &AGENT_CONFIG.read().await.no_proxy;
+        let no_proxy = &AGENT_CONFIG.no_proxy;
         if !no_proxy.is_empty() {
             env::set_var("NO_PROXY", no_proxy);
         }
@@ -219,7 +219,7 @@ impl ImageService {
         let image = req.get_image();
         let mut cid = req.get_container_id().to_string();
 
-        let aa_kbc_params = &AGENT_CONFIG.read().await.aa_kbc_params;
+        let aa_kbc_params = &AGENT_CONFIG.aa_kbc_params;
 
         if cid.is_empty() {
             let v: Vec<&str> = image.rsplit('/').collect();
@@ -259,8 +259,8 @@ impl ImageService {
 
         if Path::new(SKOPEO_PATH).exists() {
             // Read the policy path from the agent config
-            let config_policy_path = &AGENT_CONFIG.read().await.container_policy_path;
-            let policy_path = (!config_policy_path.is_empty()).then(|| config_policy_path.as_str());
+            let config_policy_path = AGENT_CONFIG.container_policy_path.as_str();
+            let policy_path = (!config_policy_path.is_empty()).then(|| config_policy_path);
             Self::pull_image_from_registry(image, &cid, source_creds, policy_path, aa_kbc_params)?;
             Self::unpack_image(&cid)?;
         } else {

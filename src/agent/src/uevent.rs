@@ -141,7 +141,7 @@ pub async fn wait_for_uevent(
 
     info!(sl!(), "{}: waiting on channel", logprefix);
 
-    let hotplug_timeout = AGENT_CONFIG.read().await.hotplug_timeout;
+    let hotplug_timeout = AGENT_CONFIG.hotplug_timeout;
 
     let uev = match tokio::time::timeout(hotplug_timeout, rx).await {
         Ok(v) => v?,
