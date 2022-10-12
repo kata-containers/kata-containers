@@ -177,7 +177,7 @@ impl ImageService {
 
     // If we fail to start the AA, Skopeo/ocicrypt won't be able to unwrap keys
     // and container decryption will fail.
-    fn init_attestation_agent() {
+    fn init_attestation_agent() -> Result<()> {
         let config_path = OCICRYPT_CONFIG_PATH;
 
         // The image will need to be encrypted using a keyprovider
@@ -190,10 +190,8 @@ impl ImageService {
             }
         });
 
-        let mut config_file = fs::File::create(config_path).unwrap();
-        config_file
-            .write_all(ocicrypt_config.to_string().as_bytes())
-            .unwrap();
+        let mut config_file = fs::File::create(config_path)?;
+        config_file.write_all(ocicrypt_config.to_string().as_bytes())?;
 
         // The Attestation Agent will run for the duration of the guest.
         Command::new(AA_PATH)
@@ -201,8 +199,8 @@ impl ImageService {
             .arg(AA_KEYPROVIDER_PORT)
             .arg("--getresource_sock")
             .arg(AA_GETRESOURCE_PORT)
-            .spawn()
-            .unwrap();
+            .spawn()?;
+        Ok(())
     }
 
     async fn pull_image(&self, req: &image::PullImageRequest) -> Result<String> {
@@ -252,7 +250,7 @@ impl ImageService {
                 Ordering::SeqCst,
                 Ordering::SeqCst,
             ) {
-                Ok(_) => Self::init_attestation_agent(),
+                Ok(_) => Self::init_attestation_agent()?,
                 Err(_) => info!(sl!(), "Attestation Agent already running"),
             }
         }
