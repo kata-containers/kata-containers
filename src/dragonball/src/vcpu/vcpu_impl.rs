@@ -851,7 +851,7 @@ pub mod tests {
 
         let kvm = Kvm::new().unwrap();
         let vm = Arc::new(kvm.create_vm().unwrap());
-        let kvm_context = KvmContext::new(Some(kvm.as_raw_fd())).unwrap();
+        let _kvm_context = KvmContext::new(Some(kvm.as_raw_fd())).unwrap();
         let vcpu_fd = Arc::new(vm.create_vcpu(0).unwrap());
         let io_manager = IoManagerCached::new(Arc::new(ArcSwap::new(Arc::new(IoManager::new()))));
         let reset_event_fd = EventFd::new(libc::EFD_NONBLOCK).unwrap();

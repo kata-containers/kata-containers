@@ -774,7 +774,7 @@ impl VcpuManager {
             self.reset_event_fd.as_ref().unwrap().try_clone().unwrap(),
             self.vcpu_state_event.try_clone().unwrap(),
             self.vcpu_state_sender.clone(),
-            request_ts.clone(),
+            request_ts,
             self.support_immediate_exit,
         )
         .map_err(VcpuManagerError::Vcpu)
