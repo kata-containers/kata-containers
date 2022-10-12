@@ -13,27 +13,27 @@ const KATA_CTL_VERSION: &str = "@KATA_CTL_VERSION@";
 
 pub fn get() -> Result<String, String> {
     if KATA_CTL_VERSION.trim().is_empty() {
-        return Err("Unable to retrieve kata Version. Check that Kata is properly installed".to_string());
-    }
-    else {
-        let version=format!("{}-{}", KATA_CTL_VERSION, crate_version!());
-        return Ok(version);
+        Err("Unable to retrieve kata Version. Check that Kata is properly installed".to_string())
+    } else {
+        let version = format!("{}-{}", KATA_CTL_VERSION, crate_version!());
+
+        Ok(version)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use semver::{Version};
+    use semver::Version;
 
     #[test]
     fn test_get() {
         let version = get().unwrap();
-	    let v = Version::parse(&version).unwrap();
+        let v = Version::parse(&version).unwrap();
 
-	    assert!(!v.major.to_string().is_empty());
-	    assert!(!v.minor.to_string().is_empty());
-	    assert!(!v.patch.to_string().is_empty());
-	    assert!(!v.pre.to_string().is_empty());
+        assert!(!v.major.to_string().is_empty());
+        assert!(!v.minor.to_string().is_empty());
+        assert!(!v.patch.to_string().is_empty());
+        assert!(!v.pre.to_string().is_empty());
     }
 }
