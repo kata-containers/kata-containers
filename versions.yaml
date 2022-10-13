@@ -161,8 +161,8 @@ assets:
     version: "v5.19.2"
     tdx:
       description: "Linux kernel that supports TDX"
-      url: "https://github.com/intel/linux-kernel-dcp/archive/refs/tags"
-      tag: "SPR-BKC-PC-v9.6"
+      url: "https://github.com/kata-containers/linux/archive/refs/tags"
+      tag: "5.15-plus-TDX"
     sev:
       description: "Linux kernel that supports SEV"
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
