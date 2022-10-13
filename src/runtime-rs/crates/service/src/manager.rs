@@ -155,7 +155,7 @@ impl ServiceManager {
         let handler = RuntimeHandlerManager::new(sid, sender)
             .await
             .context("new runtime handler")?;
-        handler.cleanup().await?;
+        handler.cleanup().await.context("runtime handler cleanup")?;
         let temp_dir = [KATA_PATH, sid].join("/");
         if std::fs::metadata(temp_dir.as_str()).is_ok() {
             // try to remove dir and skip the result
