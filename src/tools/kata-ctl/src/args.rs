@@ -16,7 +16,7 @@ pub struct KataCtlCli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
-    /// Tests if system can run Kata Containers
+    /// Test if system can run Kata Containers
     Check(CheckArgument),
 
     /// Directly assign a volume to Kata Containers to manage
@@ -25,13 +25,13 @@ pub enum Commands {
     /// Display settings
     Env,
 
-    /// Enter into guest by debug console
+    /// Enter into guest VM by debug console
     Exec,
 
-    /// Manage vm factory
+    /// Manage VM factory
     Factory,
 
-    /// Manages iptables
+    /// Manage guest VM iptables
     Iptables(IptablesCommand),
 
     /// Gather metrics associated with infrastructure used to run a sandbox
@@ -50,10 +50,10 @@ pub struct CheckArgument {
 
 #[derive(Debug, Subcommand)]
 pub enum CheckSubCommand {
-    /// Runs all checks
+    /// Run all checks
     All,
 
-    /// Runs all checks but excluding network checks.
+    /// Run all checks but excluding network checks.
     NoNetworkChecks,
 
     /// Only compare the current and latest available versions
