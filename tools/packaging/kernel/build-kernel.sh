@@ -31,6 +31,7 @@ readonly default_kernel_config_dir="${script_dir}/configs"
 # Default path to search for kernel config fragments
 readonly default_config_frags_dir="${script_dir}/configs/fragments"
 readonly default_config_whitelist="${script_dir}/configs/fragments/whitelist.conf"
+readonly default_initramfs="${script_dir}/initramfs.cpio.gz"
 # GPU vendor
 readonly GV_INTEL="intel"
 readonly GV_NVIDIA="nvidia"
@@ -62,6 +63,7 @@ PREFIX="${PREFIX:-/usr}"
 #Kernel URL
 kernel_url=""
 
+KATA_BUILD_CC=${KATA_BUILD_CC:-no}
 packaging_scripts_dir="${script_dir}/../scripts"
 source "${packaging_scripts_dir}/lib.sh"
 
@@ -243,11 +245,19 @@ get_kernel_frag_path() {
 		all_configs="${all_configs} ${gpu_configs}"
 	fi
 
-	if [[ "${conf_guest}" != "" ]];then
+	if [ "${KATA_BUILD_CC}" == "yes" ]; then
 		info "Enabling config for confidential guest trust storage protection"
 		local cryptsetup_configs="$(ls ${common_path}/confidential_containers/cryptsetup.conf)"
 		all_configs="${all_configs} ${cryptsetup_configs}"
 
+		if [ -f "${default_initramfs}" ]; then
+			info "Enabling config for confidential guest measured boot"
+			local initramfs_configs="$(ls ${common_path}/confidential_containers/initramfs.conf)"
+			all_configs="${all_configs} ${initramfs_configs}"
+		fi
+	fi
+
+	if [[ "${conf_guest}" != "" ]];then
 		info "Enabling config for '${conf_guest}' confidential guest protection"
 		local conf_configs="$(ls ${arch_path}/${conf_guest}/*.conf)"
 		all_configs="${all_configs} ${conf_configs}"
@@ -379,6 +389,11 @@ setup_kernel() {
 
 	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
 	[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}" "${kernel_path}")
+
+	if [ "${KATA_BUILD_CC}" == "yes" ] && [ -f "${default_initramfs}" ]; then
+		info "Copying initramfs from: ${default_initramfs}"
+		cp "${default_initramfs}" ./
+	fi
 
 	info "Copying config file from: ${kernel_config_path}"
 	cp "${kernel_config_path}" ./.config
