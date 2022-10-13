@@ -795,13 +795,14 @@ impl DeviceManager {
     fn allocate_mmio_device_resource(
         &self,
     ) -> std::result::Result<DeviceResources, StartMicroVmError> {
-        let mut requests = Vec::new();
-        requests.push(ResourceConstraint::MmioAddress {
-            range: None,
-            align: MMIO_DEFAULT_CFG_SIZE,
-            size: MMIO_DEFAULT_CFG_SIZE,
-        });
-        requests.push(ResourceConstraint::LegacyIrq { irq: None });
+        let requests = vec![
+            ResourceConstraint::MmioAddress {
+                range: None,
+                align: MMIO_DEFAULT_CFG_SIZE,
+                size: MMIO_DEFAULT_CFG_SIZE,
+            },
+            ResourceConstraint::LegacyIrq { irq: None },
+        ];
 
         self.res_manager
             .allocate_device_resources(&requests, false)
