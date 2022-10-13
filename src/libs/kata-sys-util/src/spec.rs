@@ -49,7 +49,7 @@ pub enum ShimIdInfo {
 }
 
 /// get container type
-pub fn get_contaier_type(spec: &oci::Spec) -> Result<ContainerType, Error> {
+pub fn get_container_type(spec: &oci::Spec) -> Result<ContainerType, Error> {
     for k in CRI_CONTAINER_TYPE_KEY_LIST.iter() {
         if let Some(type_value) = spec.annotations.get(*k) {
             match type_value.as_str() {
@@ -67,7 +67,7 @@ pub fn get_contaier_type(spec: &oci::Spec) -> Result<ContainerType, Error> {
 /// get shim id info
 pub fn get_shim_id_info() -> Result<ShimIdInfo, Error> {
     let spec = load_oci_spec()?;
-    match get_contaier_type(&spec)? {
+    match get_container_type(&spec)? {
         ContainerType::PodSandbox => Ok(ShimIdInfo::Sandbox),
         ContainerType::PodContainer => {
             for k in CRI_SANDBOX_ID_KEY_LIST {
