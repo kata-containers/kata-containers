@@ -236,7 +236,13 @@ impl ResourceManagerInner {
         spec: &oci::Spec,
     ) -> Result<Vec<Arc<dyn Volume>>> {
         self.volume_resource
-            .handler_volumes(&self.share_fs, cid, spec)
+            .handler_volumes(
+                &self.share_fs,
+                cid,
+                spec,
+                self.device_manager.as_ref(),
+                &self.sid,
+            )
             .await
     }
 

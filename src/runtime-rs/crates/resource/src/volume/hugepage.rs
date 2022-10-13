@@ -91,6 +91,10 @@ impl Volume for Hugepage {
     async fn cleanup(&self) -> Result<()> {
         Ok(())
     }
+
+    fn get_device_id(&self) -> Result<Option<String>> {
+        Ok(None)
+    }
 }
 
 pub(crate) fn get_huge_page_option(m: &oci::Mount) -> Result<Option<Vec<String>>> {
