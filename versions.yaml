@@ -100,8 +100,8 @@ assets:
         .*/v?(\d\S+)\.tar\.gz
       tdx:
         description: "VMM that uses KVM and supports TDX"
-        url: "https://github.com/intel/qemu-dcp"
-        tag: "SPR-BKC-QEMU-v2.5"
+        url: "https://github.com/kata-containers/qemu"
+        tag: "TDX-v3.1"
       snp:
         description: "VMM that uses KVM and supports AMD SEV-SNP"
         url: "https://github.com/AMDESE/qemu"
