@@ -63,8 +63,8 @@ impl ImageService {
     fn pull_image_from_registry(
         image: &str,
         cid: &str,
-        source_creds: &Option<&str>,
-        policy_path: &Option<&String>,
+        source_creds: Option<&str>,
+        policy_path: Option<&str>,
         aa_kbc_params: &str,
     ) -> Result<()> {
         let source_image = format!("{}{}", "docker://", image);
@@ -262,16 +262,8 @@ impl ImageService {
         if Path::new(SKOPEO_PATH).exists() {
             // Read the policy path from the agent config
             let config_policy_path = &AGENT_CONFIG.read().await.container_policy_path;
-            let policy_path = (!config_policy_path.is_empty()).then(|| config_policy_path);
-
-            Self::pull_image_from_registry(
-                image,
-                &cid,
-                &source_creds,
-                &policy_path,
-                aa_kbc_params,
-            )?;
-
+            let policy_path = (!config_policy_path.is_empty()).then(|| config_policy_path.as_str());
+            Self::pull_image_from_registry(image, &cid, source_creds, policy_path, aa_kbc_params)?;
             Self::unpack_image(&cid)?;
         } else {
             // TODO #4888 - Create a better way to enable signature verification. This is temporary for the PoC
