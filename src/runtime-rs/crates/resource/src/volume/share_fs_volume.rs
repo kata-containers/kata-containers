@@ -36,6 +36,7 @@ impl ShareFsVolume {
         share_fs: &Option<Arc<dyn ShareFs>>,
         m: &oci::Mount,
         cid: &str,
+        readonly: bool,
     ) -> Result<Self> {
         // The file_name is in the format of "sandbox-{uuid}-{file_name}"
         let file_name = Path::new(&m.source).file_name().unwrap().to_str().unwrap();
@@ -69,8 +70,6 @@ impl ShareFsVolume {
                 }
             }
             Some(share_fs) => {
-                let readonly = m.options.iter().any(|opt| opt == "ro");
-
                 let share_fs_mount = share_fs.get_share_fs_mount();
                 let mounted_info_set = share_fs.mounted_info_set();
                 let mut mounted_info_set = mounted_info_set.lock().await;
@@ -225,6 +224,10 @@ impl Volume for ShareFsVolume {
         }
 
         Ok(())
+    }
+
+    fn get_device_id(&self) -> Result<Option<String>> {
+        Ok(None)
     }
 }
 

@@ -38,4 +38,8 @@ impl Volume for DefaultVolume {
         warn!(sl!(), "Cleaning up DefaultVolume is still unimplemented.");
         Ok(())
     }
+
+    fn get_device_id(&self) -> Result<Option<String>> {
+        Ok(None)
+    }
 }
