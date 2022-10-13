@@ -6,7 +6,7 @@
 
 use anyhow::{Context, Result};
 use containerd_shim_protos::api;
-use kata_sys_util::spec::{get_bundle_path, get_contaier_type, load_oci_spec};
+use kata_sys_util::spec::{get_bundle_path, get_container_type, load_oci_spec};
 use kata_types::container::ContainerType;
 use nix::{sys::signal::kill, sys::signal::SIGKILL, unistd::Pid};
 use protobuf::Message;
@@ -53,7 +53,7 @@ impl ShimExecutor {
 
             let bundle_path = get_bundle_path().context("get bundle path")?;
             if let Ok(spec) = load_oci_spec() {
-                if let Ok(ContainerType::PodSandbox) = get_contaier_type(&spec) {
+                if let Ok(ContainerType::PodSandbox) = get_container_type(&spec) {
                     // only force shutdown for sandbox container
                     if let Ok(shim_pid) = self.read_pid_file(&bundle_path) {
                         info!(sl!(), "force to shutdown shim process {}", shim_pid);
