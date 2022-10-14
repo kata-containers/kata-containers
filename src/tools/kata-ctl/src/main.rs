@@ -7,6 +7,7 @@ mod arch;
 mod args;
 mod check;
 mod ops;
+mod utils;
 
 use anyhow::Result;
 use clap::Parser;
