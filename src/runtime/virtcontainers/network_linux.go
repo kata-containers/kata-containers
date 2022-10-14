@@ -1045,6 +1045,15 @@ func doNetNS(netNSPath string, cb func(ns.NetNS) error) error {
 	return cb(targetNS)
 }
 
+// EnterNetNS is free from any call to a go routine, and it calls
+// into runtime.LockOSThread(), meaning it won't be executed in a
+// different thread than the one expected by the caller.
+func EnterNetNS(networkID string, cb func() error) error {
+	return doNetNS(networkID, func(nn ns.NetNS) error {
+		return cb()
+	})
+}
+
 func deleteNetNS(netNSPath string) error {
 	n, err := ns.GetNS(netNSPath)
 	if err != nil {
