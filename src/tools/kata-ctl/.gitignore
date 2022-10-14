@@ -1,1 +1,3 @@
+Cargo.lock
+src/ops/version.rs
 /vendor/
