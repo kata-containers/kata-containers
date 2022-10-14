@@ -5,6 +5,9 @@
 
 // Contains checks that are not architecture-specific
 
+// TODO: not all architectures support check functions yet, so disable dead_code rule for check.rs
+#![allow(dead_code)]
+
 use anyhow::{anyhow, Result};
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use serde_json::Value;
