@@ -321,35 +321,23 @@ parts:
 
   virtiofsd:
     plugin: nil
-    after: [godeps, rustdeps]
+    after: [godeps, rustdeps, docker]
     override-build: |
       source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
 
-      # Currently, powerpc makes use of the QEMU's C implementation.
-      # The other platforms make use of the new rust virtiofsd.
-      #
-      # See "tools/packaging/scripts/configure-hypervisor.sh".
-      if [ "${arch}" == "ppc64le" ]
-      then
-          echo "INFO: Building QEMU's C version of virtiofsd"
-          # Handled by the 'qemu' part, so nothing more to do here.
-          exit 0
-      else
-          echo "INFO: Building rust version of virtiofsd"
-      fi
+      echo "INFO: Building rust version of virtiofsd"
 
-      cd "${kata_dir}"
+      cd "${SNAPCRAFT_PROJECT_DIR}"
+      # Clean-up build dir in case it already exists
+      sudo -E NO_TTY=true make virtiofsd-tarball
 
-      export PATH=${PATH}:${HOME}/.cargo/bin
-      # Download the rust implementation of virtiofsd
-      tools/packaging/static-build/virtiofsd/build-static-virtiofsd.sh
       sudo install \
         --owner='root' \
         --group='root' \
         --mode=0755 \
         -D \
         --target-directory="${SNAPCRAFT_PART_INSTALL}/usr/libexec/" \
-        virtiofsd/virtiofsd
+        build/virtiofsd/builddir/virtiofsd/virtiofsd
 
   cloud-hypervisor:
     plugin: nil
