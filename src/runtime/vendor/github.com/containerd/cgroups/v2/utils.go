@@ -37,6 +37,7 @@ import (
 
 const (
 	cgroupProcs    = "cgroup.procs"
+	cgroupThreads  = "cgroup.threads"
 	defaultDirPerm = 0755
 )
 

@@ -336,6 +336,14 @@ func (c *Manager) AddProc(pid uint64) error {
 	return writeValues(c.path, []Value{v})
 }
 
+func (c *Manager) AddThread(tid uint64) error {
+	v := Value{
+		filename: cgroupThreads,
+		value:    tid,
+	}
+	return writeValues(c.path, []Value{v})
+}
+
 func (c *Manager) Delete() error {
 	return remove(c.path)
 }
