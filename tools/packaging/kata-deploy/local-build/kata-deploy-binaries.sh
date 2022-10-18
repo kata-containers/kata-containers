@@ -28,7 +28,7 @@ readonly ovmf_builder="${static_build_dir}/ovmf/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
 readonly shimv2_builder="${static_build_dir}/shim-v2/build.sh"
 readonly td_shim_builder="${static_build_dir}/td-shim/build.sh"
-readonly virtiofsd_builder="${static_build_dir}/virtiofsd/build-static-virtiofsd.sh"
+readonly virtiofsd_builder="${static_build_dir}/virtiofsd/build.sh"
 
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
 
@@ -149,7 +149,9 @@ install_cc_qemu() {
 #Install all components that are not assets
 install_cc_shimv2() {
 	GO_VERSION="$(yq r ${versions_yaml} languages.golang.meta.newest-version)"
+	RUST_VERSION="$(yq r ${versions_yaml} languages.rust.meta.newest-version)"
 	export GO_VERSION
+	export RUST_VERSION
 	export REMOVE_VMM_CONFIGS="acrn fc"
 
         extra_opts="DEFSERVICEOFFLOAD=true"

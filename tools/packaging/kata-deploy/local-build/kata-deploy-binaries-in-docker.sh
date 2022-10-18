@@ -23,7 +23,7 @@ fi
 # This is the gid of the "docker" group on host. In case of docker in docker builds
 # for some of the targets (clh builds from source), the nested container user needs to
 # be part of this group.
-docker_gid=$(getent group docker | cut -d: -f3 || { echo >&2 "Missing docker group, docker needs to be installed" && false; })
+docker_gid=$(getent group docker | cut -d: -f3 || { echo >&2 "Missing docker group, probably podman is being used" && echo "${gid}"; })
 
 # If docker gid is the effective group id of the user, do not pass it as
 # an additional group.
@@ -45,6 +45,7 @@ docker build -q -t build-kata-deploy \
 	"${script_dir}/dockerbuild/"
 
 docker run \
+	--privileged \
 	-v $HOME/.docker:/root/.docker \
 	-v /var/run/docker.sock:/var/run/docker.sock \
 	--user ${uid}:${gid} \
