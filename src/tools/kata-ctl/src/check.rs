@@ -6,19 +6,8 @@
 // Contains checks that are not architecture-specific
 
 use anyhow::{anyhow, Result};
-// See: https://github.com/kata-containers/kata-containers/issues/5438
-#[cfg(any(
-    target_arch = "aarch64",
-    target_arch = "powerpc64le",
-    target_arch = "x86_64"
-))]
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use serde_json::Value;
-#[cfg(any(
-    target_arch = "aarch64",
-    target_arch = "powerpc64le",
-    target_arch = "x86_64"
-))]
 use std::collections::HashMap;
 use std::fs;
 
@@ -110,11 +99,6 @@ pub fn run_network_checks() -> Result<()> {
     Ok(())
 }
 
-#[cfg(any(
-    target_arch = "aarch64",
-    target_arch = "powerpc64le",
-    target_arch = "x86_64"
-))]
 fn get_kata_version_by_url(url: &str) -> std::result::Result<String, reqwest::Error> {
     let content = reqwest::blocking::Client::new()
         .get(url)
@@ -127,11 +111,6 @@ fn get_kata_version_by_url(url: &str) -> std::result::Result<String, reqwest::Er
     Ok(version.to_string())
 }
 
-#[cfg(any(
-    target_arch = "aarch64",
-    target_arch = "powerpc64le",
-    target_arch = "x86_64"
-))]
 fn handle_reqwest_error(e: reqwest::Error) -> anyhow::Error {
     if e.is_connect() {
         return anyhow!(e).context("http connection failure: connection refused");
@@ -152,11 +131,6 @@ fn handle_reqwest_error(e: reqwest::Error) -> anyhow::Error {
     anyhow!(e).context("unknown http connection failure: {:?}")
 }
 
-#[cfg(any(
-    target_arch = "aarch64",
-    target_arch = "powerpc64le",
-    target_arch = "x86_64"
-))]
 pub fn check_version() -> Result<()> {
     let version = get_kata_version_by_url(KATA_GITHUB_URL).map_err(handle_reqwest_error)?;
 
@@ -190,11 +164,6 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
-    #[cfg(any(
-        target_arch = "aarch64",
-        target_arch = "powerpc64le",
-        target_arch = "x86_64"
-    ))]
     #[test]
     fn check_version_by_empty_url() {
         const TEST_URL: &str = "http:";
@@ -203,11 +172,6 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
-    #[cfg(any(
-        target_arch = "aarch64",
-        target_arch = "powerpc64le",
-        target_arch = "x86_64"
-    ))]
     #[test]
     fn check_version_by_garbage_url() {
         const TEST_URL: &str = "_localhost_";
@@ -216,11 +180,6 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
-    #[cfg(any(
-        target_arch = "aarch64",
-        target_arch = "powerpc64le",
-        target_arch = "x86_64"
-    ))]
     #[test]
     fn check_version_by_invalid_url() {
         const TEST_URL: &str = "http://localhost :80";
@@ -229,11 +188,6 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
-    #[cfg(any(
-        target_arch = "aarch64",
-        target_arch = "powerpc64le",
-        target_arch = "x86_64"
-    ))]
     #[test]
     fn check_latest_version() {
         let version = get_kata_version_by_url(KATA_GITHUB_URL).unwrap();
