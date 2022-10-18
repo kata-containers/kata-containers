@@ -50,7 +50,7 @@ $ qemu_commit="$(get_from_kata_deps "assets.hypervisor.qemu.snp.commit")"
 $ git clone -b "${qemu_branch}" "${qemu_url}"
 $ pushd qemu
 $ git checkout "${qemu_commit}"
-$ ./configure --target-list=x86_64-softmmu --enable-debug
+$ ./configure --enable-virtfs --target-list=x86_64-softmmu --enable-debug
 $ make -j "$(nproc)"
 $ popd
 ```
