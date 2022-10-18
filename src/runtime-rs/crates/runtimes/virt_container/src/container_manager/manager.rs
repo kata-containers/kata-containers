@@ -5,8 +5,9 @@
 //
 
 use anyhow::{anyhow, Context, Result};
+use kata_types::cpu::LinuxContainerCpuResources;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, convert::TryFrom, sync::Arc};
 
 use agent::Agent;
 use async_trait::async_trait;
@@ -55,18 +56,22 @@ impl VirtContainerManager {
 #[async_trait]
 impl ContainerManager for VirtContainerManager {
     async fn create_container(&self, config: ContainerConfig, spec: oci::Spec) -> Result<PID> {
+        let linux_resources = match spec.linux.clone() {
+            Some(linux) => linux.resources,
+            _ => None,
+        };
         let container = Container::new(
             self.pid,
             config,
             self.agent.clone(),
             self.resource_manager.clone(),
+            linux_resources,
         )
         .context("new container")?;
 
         let mut containers = self.containers.write().await;
         container.create(spec).await.context("create")?;
         containers.insert(container.container_id.to_string(), container);
-
         Ok(PID { pid: self.pid })
     }
 
@@ -271,5 +276,111 @@ impl ContainerManager for VirtContainerManager {
     async fn is_sandbox_container(&self, process: &ContainerProcess) -> bool {
         process.process_type == ProcessType::Container
             && process.container_id.container_id == self.sid
+    }
+
+    // unit: byte
+    // if guest_swap is true, add swap to memory_sandbox
+    // returns `(memory_sandbox_b, swap_sandbox_b)`
+    async fn total_mems(&self) -> Result<(u64, i64)> {
+        // sb stands for sandbox
+        let cpu_mem_info = self.resource_manager.sandbox_cpu_mem_info().await?;
+        let mut mem_sb = 0;
+        let mut need_pod_swap = false;
+        let mut swap_sb = 0;
+
+        let containers = self.containers.read().await;
+        // for each container, calculate its memory by
+        // - adding its hugepage limits
+        // - adding its memory limit
+        // - adding its swap size correspondingly
+        for c in containers.values() {
+            if let Some(resource) = &c.linux_resources {
+                // Add hugepage memory, hugepage limit is u64
+                // https://github.com/opencontainers/runtime-spec/blob/master/specs-go/config.go#L242
+                for l in &resource.hugepage_limits {
+                    mem_sb += l.limit;
+                }
+
+                if let Some(memory) = &resource.memory {
+                    let current_limit = match memory.limit {
+                        Some(limit) => {
+                            mem_sb += limit as u64;
+                            info!(sl!(), "memory sb: {}, memory limit: {}", mem_sb, limit);
+                            limit
+                        }
+                        None => 0,
+                    };
+
+                    // add swap
+                    if let Some(swappiness) = memory.swappiness {
+                        if swappiness > 0 && cpu_mem_info.use_guest_swap()? {
+                            match memory.swap {
+                                Some(swap) => {
+                                    if swap > current_limit {
+                                        swap_sb = swap.saturating_sub(current_limit);
+                                    }
+                                }
+                                None => {
+                                    if current_limit == 0 {
+                                        need_pod_swap = true;
+                                    } else {
+                                        swap_sb += current_limit;
+                                    }
+                                }
+                            };
+                        }
+                    } // end of if let Some(swappiness)
+                } // end of if let Some(memory)
+            } // end of if let Some(resource)
+        }
+
+        // add default memory to this
+        mem_sb += (cpu_mem_info.default_mem_mb()? << 20) as u64;
+        if need_pod_swap {
+            swap_sb += (cpu_mem_info.default_mem_mb()? << 20) as i64;
+        }
+
+        Ok((mem_sb, swap_sb))
+    }
+
+    // calculates the total required vpus by adding each containers' requirement within the pod
+    async fn total_vcpus(&self) -> Result<u32> {
+        let cpu_mem_info = self.resource_manager.sandbox_cpu_mem_info().await?;
+        let mut total_vcpu = 0;
+        let mut cpuset_count = 0;
+        let containers = self.containers.read().await;
+        for c in containers.values() {
+            if let Some(resource) = &c.linux_resources {
+                if let Some(cpu) = &resource.cpu {
+                    // calculate cpu # based on cpu-period and cpu-quota
+                    let cpu_resource = LinuxContainerCpuResources::try_from(cpu);
+                    if let Ok(cpu_resource) = cpu_resource {
+                        let vcpu = if let Some(v) = cpu_resource.get_vcpus() {
+                            v as u32
+                        } else {
+                            0
+                        };
+                        cpuset_count += cpu_resource.cpuset().len();
+                        total_vcpu += vcpu;
+                    }
+                }
+            }
+        }
+
+        //  If we aren't being constrained, then we could have two scenarios:
+        //  1. BestEffort QoS: no proper support today in Kata.
+        //  2. We could be constrained only by CPUSets. Check for this:
+        if total_vcpu == 0 && cpuset_count > 0 {
+            info!(sl!(), "(from cpuset)get total vcpus # {:?}", cpuset_count);
+            return Ok(cpuset_count as u32);
+        }
+
+        // add the default vcpu to it
+        total_vcpu += cpu_mem_info.default_vcpu()? as u32;
+        info!(
+            sl!(),
+            "total_vcpus(): sandbox requires {:?} total vcpus", total_vcpu
+        );
+        Ok(total_vcpu)
     }
 }

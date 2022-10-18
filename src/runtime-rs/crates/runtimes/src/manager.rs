@@ -212,6 +212,13 @@ impl RuntimeHandlerManager {
                 .await
                 .context("create container")?;
 
+            // update sandbox resource when creating container
+            // the function is idempotent
+            instance
+                .update_sandbox_resource()
+                .await
+                .context("update sandbox resource")?;
+
             Ok(Response::CreateContainer(shim_pid))
         } else {
             self.handler_request(req).await.context("handler request")
@@ -262,6 +269,13 @@ impl RuntimeHandlerManager {
                     .start_process(&process_id)
                     .await
                     .context("start process")?;
+
+                // update sandbox resource in case when starting a paused container
+                instance
+                    .update_sandbox_resource()
+                    .await
+                    .context("failed to update sandbox resource")?;
+
                 Ok(Response::StartProcess(shim_pid))
             }
 

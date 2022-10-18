@@ -9,6 +9,7 @@ use async_trait::async_trait;
 
 #[async_trait]
 pub trait Sandbox: Send + Sync {
+    // sandbox lifetime management
     async fn start(&self, netns: Option<String>) -> Result<()>;
     async fn stop(&self) -> Result<()>;
     async fn cleanup(&self, container_id: &str) -> Result<()>;
@@ -16,4 +17,7 @@ pub trait Sandbox: Send + Sync {
 
     // agent function
     async fn agent_sock(&self) -> Result<String>;
+
+    // sandbox resource management
+    async fn update_cpu_resource(&self, new_vcpus: u32) -> Result<()>;
 }

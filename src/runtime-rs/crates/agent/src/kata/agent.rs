@@ -113,5 +113,6 @@ impl_agent!(
     create_sandbox | crate::CreateSandboxRequest | crate::Empty | None,
     destroy_sandbox | crate::Empty | crate::Empty | None,
     copy_file | crate::CopyFileRequest | crate::Empty | None,
-    get_oom_event | crate::Empty | crate::OomEventResponse | Some(0)
+    get_oom_event | crate::Empty | crate::OomEventResponse | Some(0),
+    online_cpu_mem | crate::OnlineCPUMemRequest | crate::Empty | None
 );

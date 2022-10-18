@@ -18,8 +18,8 @@ use anyhow::{anyhow, Context, Result};
 use dragonball::{
     api::v1::{
         BlockDeviceConfigInfo, BootSourceConfig, FsDeviceConfigInfo, FsMountConfigInfo,
-        InstanceInfo, InstanceState, VirtioNetDeviceConfigInfo, VmmAction, VmmActionError, VmmData,
-        VmmRequest, VmmResponse, VmmService, VsockDeviceConfigInfo,
+        InstanceInfo, InstanceState, VcpuResizeInfo, VirtioNetDeviceConfigInfo, VmmAction,
+        VmmActionError, VmmData, VmmRequest, VmmResponse, VmmService, VsockDeviceConfigInfo,
     },
     vm::VmConfigInfo,
     Vmm,
@@ -230,6 +230,12 @@ impl VmmInstance {
                     op, cfg.fstype, cfg.mountpoint, cfg
                 )
             })?;
+        Ok(())
+    }
+
+    pub fn resize_vcpu(&self, cfg: &VcpuResizeInfo) -> Result<()> {
+        self.handle_request(Request::Sync(VmmAction::ResizeVcpu(cfg.clone())))
+            .with_context(|| format!("Failed to resize_vm(hotplug vcpu), cfg: {:?}", cfg))?;
         Ok(())
     }
 

@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::cpu_mem::CpuMemResource;
 use crate::resource_persist::ResourceState;
 use crate::{manager_inner::ResourceManagerInner, rootfs::Rootfs, volume::Volume, ResourceConfig};
 use agent::{Agent, Storage};
@@ -101,6 +102,16 @@ impl ResourceManager {
     pub async fn delete_cgroups(&self) -> Result<()> {
         let inner = self.inner.read().await;
         inner.delete_cgroups().await
+    }
+
+    pub async fn sandbox_cpu_mem_info(&self) -> Result<CpuMemResource> {
+        let inner = self.inner.read().await;
+        inner.sandbox_cpu_mem_info().await
+    }
+
+    pub async fn update_cpu_resource(&self, new_vcpus: u32) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.update_cpu_resource(new_vcpus).await
     }
 }
 

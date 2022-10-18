@@ -6,9 +6,9 @@
 
 use std::sync::Arc;
 
-use crate::resource_persist::ResourceState;
-use agent::{Agent, Storage};
-use anyhow::{Context, Result};
+use crate::{cpu_mem::CpuMemResource, resource_persist::ResourceState};
+use agent::{Agent, OnlineCPUMemRequest, Storage};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::Hypervisor;
 use kata_types::config::TomlConfig;
@@ -37,6 +37,7 @@ pub(crate) struct ResourceManagerInner {
     pub rootfs_resource: RootFsResource,
     pub volume_resource: VolumeResource,
     pub cgroups_resource: CgroupsResource,
+    pub cpu_mem_resource: CpuMemResource,
 }
 
 impl ResourceManagerInner {
@@ -47,6 +48,7 @@ impl ResourceManagerInner {
         toml_config: Arc<TomlConfig>,
     ) -> Result<Self> {
         let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
+        let cpu_mem_resource = CpuMemResource::new(toml_config.clone())?;
         Ok(Self {
             sid: sid.to_string(),
             toml_config,
@@ -57,6 +59,7 @@ impl ResourceManagerInner {
             rootfs_resource: RootFsResource::new(),
             volume_resource: VolumeResource::new(),
             cgroups_resource,
+            cpu_mem_resource,
         })
     }
 
@@ -201,6 +204,56 @@ impl ResourceManagerInner {
         self.rootfs_resource.dump().await;
         self.volume_resource.dump().await;
     }
+
+    pub(crate) async fn sandbox_cpu_mem_info(&self) -> Result<CpuMemResource> {
+        Ok(self.cpu_mem_resource)
+    }
+
+    // this is where cpu is actually hotplugged, error should be correctly handled here
+    // if a returned error is ok to be tolerated, we should never return it upwards
+    pub async fn update_cpu_resource(&mut self, new_vcpus: u32) -> Result<()> {
+        if self.toml_config.runtime.static_resource_mgmt {
+            warn!(sl!(), "static resource mgmt is set, no update allowed");
+            return Ok(());
+        }
+
+        // let the hypervisor resize the vcpu
+        let old_vcpus = self.cpu_mem_resource.current_vcpu()? as u32;
+        let (old, new) = self
+            .hypervisor
+            .resize_vcpu(old_vcpus, new_vcpus)
+            .await
+            .map_err(|e| {
+                return anyhow!("error {:?} when resizing vcpu", e);
+            })?;
+
+        // update the state of cpu and memory info
+        self.cpu_mem_resource
+            .update_current_vcpu(new as i32)
+            .context("resource mgr: failed to update current vcpu")?;
+
+        // if vcpus were increased, ask the agent to online them inside the sandbox
+        // some VMMs online vcpus for us, e.g. dragonball, but some VMMs only set the bitmap
+        // of cpu and wait for us to online them, e.g. QEMU
+        if old < new {
+            let added = new - old;
+            info!(sl!(), "request to onlineCpuMem with {:?} cpus", added);
+            let _ = self.agent
+                .online_cpu_mem(OnlineCPUMemRequest {
+                    wait: false,
+                    nb_cpus: added,
+                    cpu_only: true,
+                })
+                .await
+                .map_err(|e| {
+                    warn!(sl!(),
+                        "{}",
+                        format!("agent failed to online cpu, because cpu is already onlined by VMM, error: {:?}", e));
+                });
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -246,6 +299,7 @@ impl Persist for ResourceManagerInner {
             )
             .await?,
             toml_config: Arc::new(TomlConfig::default()),
+            cpu_mem_resource: CpuMemResource::default(),
         })
     }
 }

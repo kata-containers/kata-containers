@@ -259,7 +259,17 @@ impl Sandbox for VirtSandbox {
     async fn cleanup(&self, _id: &str) -> Result<()> {
         self.resource_manager.delete_cgroups().await?;
         self.hypervisor.cleanup().await?;
-        // TODO: cleanup other snadbox resource
+        // TODO: cleanup other sandbox resource
+        Ok(())
+    }
+
+    // update sandbox's cpu resource
+    // if the vmm does not support hotplug or hotunplug, it is vmm duty to
+    // log warning and return correspondently, the error is handled
+    // within resource_manager.update_cpu_resources()
+    async fn update_cpu_resource(&self, new_vcpus: u32) -> Result<()> {
+        info!(sl!(), "requesting vmm to update vcpus to {:?}", new_vcpus);
+        self.resource_manager.update_cpu_resource(new_vcpus).await?;
         Ok(())
     }
 
