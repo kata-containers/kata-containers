@@ -13,7 +13,7 @@ use std::collections::HashMap;
 const KATA_GITHUB_URL: &str =
     "https://api.github.com/repos/kata-containers/kata-containers/releases/latest";
 
-#[cfg(any(target_arch = "x86_64"))]
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 fn get_cpu_info(cpu_info_file: &str) -> Result<String> {
     let contents = std::fs::read_to_string(cpu_info_file)?;
     Ok(contents)
@@ -21,7 +21,7 @@ fn get_cpu_info(cpu_info_file: &str) -> Result<String> {
 
 // get_single_cpu_info returns the contents of the first cpu from
 // the specified cpuinfo file by parsing based on a specified delimiter
-#[cfg(any(target_arch = "x86_64"))]
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 pub fn get_single_cpu_info(cpu_info_file: &str, substring: &str) -> Result<String> {
     let contents = get_cpu_info(cpu_info_file)?;
 
@@ -41,7 +41,7 @@ pub fn get_single_cpu_info(cpu_info_file: &str, substring: &str) -> Result<Strin
 
 // get_cpu_flags returns a string of cpu flags from cpuinfo, passed in
 // as a string
-#[cfg(any(target_arch = "x86_64"))]
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 pub fn get_cpu_flags(cpu_info: &str, cpu_flags_tag: &str) -> Result<String> {
     if cpu_info.is_empty() {
         return Err(anyhow!("cpu_info string is empty"))?;
@@ -65,7 +65,7 @@ pub fn get_cpu_flags(cpu_info: &str, cpu_flags_tag: &str) -> Result<String> {
 
 // get_missing_strings searches for required (strings) in data and returns
 // a vector containing the missing strings
-#[cfg(any(target_arch = "x86_64"))]
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 fn get_missing_strings(data: &str, required: &'static [&'static str]) -> Result<Vec<String>> {
     let mut missing: Vec<String> = Vec::new();
 
@@ -78,7 +78,7 @@ fn get_missing_strings(data: &str, required: &'static [&'static str]) -> Result<
     Ok(missing)
 }
 
-#[cfg(any(target_arch = "x86_64"))]
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 pub fn check_cpu_flags(
     retrieved_flags: &str,
     required_flags: &'static [&'static str],
@@ -144,7 +144,7 @@ pub fn check_version() -> Result<()> {
     Ok(())
 }
 
-#[cfg(any(target_arch = "x86_64"))]
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 #[cfg(test)]
 mod tests {
     use super::*;
