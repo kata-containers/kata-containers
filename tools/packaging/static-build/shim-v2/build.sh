@@ -23,11 +23,12 @@ PREFIX=${PREFIX:-/opt/kata}
 container_image="${BUILDER_REGISTRY}:shim-v2-go-${GO_VERSION}-rust-${RUST_VERSION}-$(get_last_modification ${repo_root_dir} ${script_dir})-$(uname -m)"
 
 sudo docker pull ${container_image} || \
-       	sudo docker build  \
+       	(sudo docker build  \
 		--build-arg GO_VERSION="${GO_VERSION}" \
 		--build-arg RUST_VERSION="${RUST_VERSION}" \
 		-t "${container_image}" \
-		"${script_dir}"
+		"${script_dir}" && \
+	 push_to_registry "${container_image}")
 
 arch=$(uname -m)
 if [ ${arch} = "ppc64le" ]; then
