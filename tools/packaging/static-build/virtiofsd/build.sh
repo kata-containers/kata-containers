@@ -51,9 +51,12 @@ esac
 
 container_image="${BUILDER_REGISTRY}:virtiofsd-${virtiofsd_toolchain}-${libc}-$(get_last_modification ${repo_root_dir} ${script_dir})-$(umame -m)"
 
-sudo docker pull ${container_image} || sudo docker build \
-	--build-arg RUST_TOOLCHAIN="${virtiofsd_toolchain}" \
-	-t "${container_image}" "${script_dir}/${libc}"
+sudo docker pull ${container_image} || \
+	(sudo docker build \
+		--build-arg RUST_TOOLCHAIN="${virtiofsd_toolchain}" \
+		-t "${container_image}" "${script_dir}/${libc}" && \
+	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
+	 push_to_registry "${container_image}")
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
