@@ -177,7 +177,7 @@ ifneq (,$(DBCMD))
     SYSCONFIG_DB = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_DB))
     SYSCONFIG_PATHS += $(SYSCONFIG_DB)
     CONFIGS += $(CONFIG_DB)
-    # dragonball-specific options (all should be suffixed by "_dragonball")
+    # dragonball-specific options (all should be suffixed by "_DB")
     DEFMAXVCPUS_DB := 1
     DEFBLOCKSTORAGEDRIVER_DB := virtio-blk
     DEFNETWORKMODEL_DB := tcfilter
