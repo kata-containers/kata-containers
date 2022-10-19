@@ -84,4 +84,4 @@ jobs:
       - name: build-and-push-kata-payload
         id: build-and-push-kata-payload
         run: |
-          ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh $(pwd)/kata-static.tar.xz "quay.io/repository/confidential-containers/runtime-payload-ci" "kata-containers-latest"
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh $(pwd)/kata-static.tar.xz "quay.io/confidential-containers/runtime-payload-ci" "kata-containers-latest"
