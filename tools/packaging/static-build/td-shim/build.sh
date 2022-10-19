@@ -16,7 +16,6 @@ source "${script_dir}/../../scripts/lib.sh"
 
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
-container_image="kata-td-shim-builder"
 kata_version="${kata_version:-}"
 tdshim_repo="${tdshim_repo:-}"
 tdshim_version="${tdshim_version:-}"
@@ -31,9 +30,12 @@ package_output_dir="${package_output_dir:-}"
 [ -n "${tdshim_version}" ] || die "Failed to get TD-shim version or commit"
 [ -n "${tdshim_toolchain}" ] || die "Failed to get TD-shim toolchain to be used to build the project"
 
-sudo docker build \
+container_image="${BUILDER_REGISTRY}:td-shim-${tdshim_toolchain}-$(get_last_modification ${repo_root_dir} ${script_dir})-$(uname -m)"
+
+sudo docker pull ${container_image} || sudo docker build \
 	--build-arg RUST_TOOLCHAIN="${tdshim_toolchain}" \
-	-t "${container_image}" "${script_dir}"
+	-t "${container_image}" \
+	"${script_dir}"
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
