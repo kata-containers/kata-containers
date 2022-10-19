@@ -31,7 +31,7 @@ test:
 else
 ##TARGET default: build code
 default: runtime show-header
-#TARGET test: run cargo tests
+##TARGET test: run cargo tests
 test:
 	@cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
 endif
@@ -50,7 +50,6 @@ EXEC_PREFIX := $(PREFIX)/local
 BINDIR := $(EXEC_PREFIX)/bin
 else
 EXEC_PREFIX := $(PREFIX)
-##VAR BINDIR=<path> is a directory for installing executable programs
 # when creating the kata-deploy image, the default installation path for go runtime is $(EXEC_PREFIX)/bin, so we put it here for multiple runtime
 BINDIR := $(EXEC_PREFIX)/runtime-rs/bin/
 endif
@@ -73,7 +72,7 @@ HYPERVISOR_CLH = cloud-hypervisor
 
 DEFAULT_HYPERVISOR ?= $(HYPERVISOR_DB)
 
-# List of hypervisors this build system can generate configuration for.
+##VAR HYPERVISOR=<hypervisor_name> List of hypervisors this build system can generate configuration for.
 HYPERVISORS := $(HYPERVISOR_DB) $(HYPERVISOR_ACRN) $(HYPERVISOR_FC) $(HYPERVISOR_QEMU) $(HYPERVISOR_CLH)
 
 DBVALIDHYPERVISORPATHS := []
@@ -84,28 +83,28 @@ PKGLIBEXECDIR := $(LIBEXECDIR)/$(PROJECT_DIR)
 FIRMWAREPATH :=
 FIRMWAREVOLUMEPATH :=
 
-# Default number of vCPUs
+##VAR DEFVCPUS=<number> Default number of vCPUs
 DEFVCPUS := 1
-# Default maximum number of vCPUs
+##VAR DEFMAXVCPUS=<number> Default maximum number of vCPUs
 DEFMAXVCPUS := 0
-# Default memory size in MiB
+##VAR DEFMEMSZ=<number> Default memory size in MiB
 DEFMEMSZ := 2048
-# Default memory slots
+##VAR DEFMEMSLOTS=<number> Default memory slots
 # Cases to consider :
 # - nvdimm rootfs image
 # - preallocated memory
 # - vm template memory
 # - hugepage memory
 DEFMEMSLOTS := 10
-#Default number of bridges
+##VAR DEFBRIDGES=<number> Default number of bridges
 DEFBRIDGES := 0
 DEFENABLEANNOTATIONS := []
 DEFDISABLEGUESTSECCOMP := true
 DEFDISABLEGUESTEMPTYDIR := false
-#Default experimental features enabled
+##VAR DEFAULTEXPFEATURES=[features] Default experimental features enabled
 DEFAULTEXPFEATURES := []
 DEFDISABLESELINUX := false
-#Default entropy source
+##VAR DEFENTROPYSOURCE=[entropy_source] Default entropy source
 DEFENTROPYSOURCE := /dev/urandom
 DEFVALIDENTROPYSOURCES := [\"/dev/urandom\",\"/dev/random\",\"\"]
 DEFDISABLEBLOCK := false
@@ -116,8 +115,8 @@ ifeq ($(ARCH),x86_64)
 DEFVIRTIOFSDAEMON := $(LIBEXECDIR)/virtiofsd
 endif
 DEFVALIDVIRTIOFSDAEMONPATHS := [\"$(DEFVIRTIOFSDAEMON)\"]
-# Default DAX mapping cache size in MiB
-#if value is 0, DAX is not enabled
+##VAR DEFVIRTIOFSCACHESIZE=<cache_size> Default DAX mapping cache size in MiB
+# if value is 0, DAX is not enabled
 DEFVIRTIOFSCACHESIZE ?= 0
 DEFVIRTIOFSCACHE ?= auto
 # Format example:
@@ -134,7 +133,7 @@ DEFFILEMEMBACKEND := ""
 DEFVALIDFILEMEMBACKENDS := [\"$(DEFFILEMEMBACKEND)\"]
 DEFMSIZE9P := 8192
 DEFVFIOMODE := guest-kernel
-# Default cgroup model
+##VAR DEFSANDBOXCGROUPONLY=<bool> Default cgroup model
 DEFSANDBOXCGROUPONLY ?= false
 DEFSTATICRESOURCEMGMT_DB ?= false
 DEFBINDMOUNTS := []
@@ -160,9 +159,9 @@ KNOWN_HYPERVISORS =
 
 CONFDIR := $(DEFAULTSDIR)/$(PROJECT_DIR)
 SYSCONFDIR := $(SYSCONFDIR)/$(PROJECT_DIR)
-# Main configuration file location for stateless systems
+##VAR CONFIG_PATH=<path> Main configuration file location for stateless systems
 CONFIG_PATH := $(abspath $(CONFDIR)/$(CONFIG_FILE))
-# Secondary configuration file location. Note that this takes precedence
+##VAR SYSCONFIG=<path> Secondary configuration file location. Note that this takes precedence
 # over CONFIG_PATH.
 SYSCONFIG := $(abspath $(SYSCONFDIR)/$(CONFIG_FILE))
 SHAREDIR := $(SHAREDIR)
@@ -454,7 +453,7 @@ endif
 	@printf "\tassets path (PKGDATADIR) : %s\n" $(abspath $(PKGDATADIR))
 	@printf "\tshim path (PKGLIBEXECDIR) : %s\n" $(abspath $(PKGLIBEXECDIR))
 	@printf "\n"
-## help: Show help comments that start with `##VAR` and `##TARGET`
+##TARGET help: Show help comments that start with `##VAR` and `##TARGET` in runtime-rs makefile
 help: Makefile show-summary
 	@echo "========================== Help ============================="
 	@echo "Variables:"
