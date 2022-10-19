@@ -55,6 +55,7 @@ pub struct ShareFsVolumeConfig {
     pub target: String,
     pub readonly: bool,
     pub mount_options: Vec<String>,
+    pub mount: oci::Mount,
 }
 
 pub struct ShareFsMountResult {

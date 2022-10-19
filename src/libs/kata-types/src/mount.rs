@@ -13,7 +13,7 @@ pub const KATA_VOLUME_TYPE_PREFIX: &str = "kata:";
 pub const KATA_GUEST_MOUNT_PREFIX: &str = "kata:guest-mount:";
 
 /// KATA_EPHEMERAL_DEV_TYPE creates a tmpfs backed volume for sharing files between containers.
-pub const KATA_EPHEMERAL_VOLUME_TYPE: &str = "kata:ephemeral";
+pub const KATA_EPHEMERAL_VOLUME_TYPE: &str = "ephemeral";
 
 /// KATA_HOST_DIR_TYPE use for host empty dir
 pub const KATA_HOST_DIR_VOLUME_TYPE: &str = "kata:hostdir";

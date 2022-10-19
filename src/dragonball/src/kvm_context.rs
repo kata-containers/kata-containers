@@ -210,14 +210,19 @@ mod x86_64 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use kvm_ioctls::Kvm;
     use std::fs::File;
     use std::os::unix::fs::MetadataExt;
     use std::os::unix::io::{AsRawFd, FromRawFd};
 
+    use kvm_ioctls::Kvm;
+    use test_utils::skip_if_not_root;
+
+    use super::*;
+
     #[test]
     fn test_create_kvm_context() {
+        skip_if_not_root!();
+
         let c = KvmContext::new(None).unwrap();
 
         assert!(c.max_memslots >= 32);
@@ -234,6 +239,8 @@ mod tests {
     #[cfg(target_arch = "x86_64")]
     #[test]
     fn test_get_supported_cpu_id() {
+        skip_if_not_root!();
+
         let c = KvmContext::new(None).unwrap();
 
         let _ = c
@@ -244,6 +251,8 @@ mod tests {
 
     #[test]
     fn test_create_vm() {
+        skip_if_not_root!();
+
         let c = KvmContext::new(None).unwrap();
 
         let _ = c.create_vm().unwrap();

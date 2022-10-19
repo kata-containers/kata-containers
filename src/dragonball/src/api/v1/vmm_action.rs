@@ -83,13 +83,13 @@ pub enum VmmActionError {
 
     #[cfg(feature = "virtio-fs")]
     /// The action `InsertFsDevice` failed either because of bad user input or an internal error.
-    #[error("virtio-fs device: {0}")]
+    #[error("virtio-fs device error: {0}")]
     FsDevice(#[source] FsDeviceError),
 }
 
 /// This enum represents the public interface of the VMM. Each action contains various
 /// bits of information (ids, paths, etc.).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum VmmAction {
     /// Configure the boot source of the microVM using `BootSourceConfig`.
     /// This action can only be called before the microVM has booted.
@@ -298,7 +298,6 @@ impl VmmService {
         let mut cmdline = linux_loader::cmdline::Cmdline::new(dbs_boot::layout::CMDLINE_MAX_SIZE);
         let boot_args = boot_source_config
             .boot_args
-            .clone()
             .unwrap_or_else(|| String::from(DEFAULT_KERNEL_CMDLINE));
         cmdline
             .insert_str(boot_args)
@@ -633,4 +632,784 @@ fn handle_cpu_topology(
     }
 
     Ok(cpu_topology)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc::channel;
+    use std::sync::{Arc, Mutex};
+
+    use dbs_utils::epoll_manager::EpollManager;
+    use test_utils::skip_if_not_root;
+    use vmm_sys_util::tempfile::TempFile;
+
+    use super::*;
+    use crate::vmm::tests::create_vmm_instance;
+
+    struct TestData<'a> {
+        req: Option<VmmAction>,
+        vm_state: InstanceState,
+        f: &'a dyn Fn(VmmRequestResult),
+    }
+
+    impl<'a> TestData<'a> {
+        fn new(req: VmmAction, vm_state: InstanceState, f: &'a dyn Fn(VmmRequestResult)) -> Self {
+            Self {
+                req: Some(req),
+                vm_state,
+                f,
+            }
+        }
+
+        fn check_request(&mut self) {
+            let (to_vmm, from_api) = channel();
+            let (to_api, from_vmm) = channel();
+
+            let vmm = Arc::new(Mutex::new(create_vmm_instance()));
+            let mut vservice = VmmService::new(from_api, to_api);
+
+            let epoll_mgr = EpollManager::default();
+            let mut event_mgr = EventManager::new(&vmm, epoll_mgr).unwrap();
+            let mut v = vmm.lock().unwrap();
+
+            let vm = v.get_vm_mut().unwrap();
+            vm.set_instance_state(self.vm_state);
+
+            to_vmm.send(Box::new(self.req.take().unwrap())).unwrap();
+            assert!(vservice.run_vmm_action(&mut v, &mut event_mgr).is_ok());
+
+            let response = from_vmm.try_recv();
+            assert!(response.is_ok());
+            (self.f)(*response.unwrap());
+        }
+    }
+
+    #[test]
+    fn test_vmm_action_receive_unknown() {
+        skip_if_not_root!();
+
+        let (_to_vmm, from_api) = channel();
+        let (to_api, _from_vmm) = channel();
+        let vmm = Arc::new(Mutex::new(create_vmm_instance()));
+        let mut vservice = VmmService::new(from_api, to_api);
+        let epoll_mgr = EpollManager::default();
+        let mut event_mgr = EventManager::new(&vmm, epoll_mgr).unwrap();
+        let mut v = vmm.lock().unwrap();
+
+        assert!(vservice.run_vmm_action(&mut v, &mut event_mgr).is_ok());
+    }
+
+    #[should_panic]
+    #[test]
+    fn test_vmm_action_disconnected() {
+        let (to_vmm, from_api) = channel();
+        let (to_api, _from_vmm) = channel();
+        let vmm = Arc::new(Mutex::new(create_vmm_instance()));
+        let mut vservice = VmmService::new(from_api, to_api);
+        let epoll_mgr = EpollManager::default();
+        let mut event_mgr = EventManager::new(&vmm, epoll_mgr).unwrap();
+        let mut v = vmm.lock().unwrap();
+
+        drop(to_vmm);
+        vservice.run_vmm_action(&mut v, &mut event_mgr).unwrap();
+    }
+
+    #[test]
+    fn test_vmm_action_config_boot_source() {
+        skip_if_not_root!();
+
+        let kernel_file = TempFile::new().unwrap();
+
+        let tests = &mut [
+            // invalid state
+            TestData::new(
+                VmmAction::ConfigureBootSource(BootSourceConfig::default()),
+                InstanceState::Running,
+                &|result| {
+                    if let Err(VmmActionError::BootSource(
+                        BootSourceConfigError::UpdateNotAllowedPostBoot,
+                    )) = result
+                    {
+                        let err_string = format!("{}", result.unwrap_err());
+                        let expected_err = String::from(
+                            "failed to configure boot source for VM: \
+                    the update operation is not allowed after boot",
+                        );
+                        assert_eq!(err_string, expected_err);
+                    } else {
+                        panic!();
+                    }
+                },
+            ),
+            // invalid kernel file path
+            TestData::new(
+                VmmAction::ConfigureBootSource(BootSourceConfig::default()),
+                InstanceState::Uninitialized,
+                &|result| {
+                    if let Err(VmmActionError::BootSource(
+                        BootSourceConfigError::InvalidKernelPath(_),
+                    )) = result
+                    {
+                        let err_string = format!("{}", result.unwrap_err());
+                        let expected_err = String::from(
+                    "failed to configure boot source for VM: \
+                    the kernel file cannot be opened due to invalid kernel path or invalid permissions: \
+                    No such file or directory (os error 2)");
+                        assert_eq!(err_string, expected_err);
+                    } else {
+                        panic!();
+                    }
+                },
+            ),
+            //success
+            TestData::new(
+                VmmAction::ConfigureBootSource(BootSourceConfig {
+                    kernel_path: kernel_file.as_path().to_str().unwrap().to_string(),
+                    ..Default::default()
+                }),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(result.is_ok());
+                },
+            ),
+        ];
+
+        for t in tests.iter_mut() {
+            t.check_request();
+        }
+    }
+
+    #[test]
+    fn test_vmm_action_set_vm_configuration() {
+        skip_if_not_root!();
+
+        let tests = &mut [
+            // invalid state
+            TestData::new(
+                VmmAction::SetVmConfiguration(VmConfigInfo::default()),
+                InstanceState::Running,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::MachineConfig(
+                            VmConfigError::UpdateNotAllowedPostBoot
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "failed to set configuration for the VM: \
+                    update operation is not allowed after boot",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+            // invalid cpu count (0)
+            TestData::new(
+                VmmAction::SetVmConfiguration(VmConfigInfo {
+                    vcpu_count: 0,
+                    ..Default::default()
+                }),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::MachineConfig(
+                            VmConfigError::InvalidVcpuCount(0)
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                    "failed to set configuration for the VM: \
+                    the vCPU number '0' can only be 1 or an even number when hyperthreading is enabled");
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+            // invalid max cpu count (too small)
+            TestData::new(
+                VmmAction::SetVmConfiguration(VmConfigInfo {
+                    vcpu_count: 4,
+                    max_vcpu_count: 2,
+                    ..Default::default()
+                }),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::MachineConfig(
+                            VmConfigError::InvalidMaxVcpuCount(2)
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                    "failed to set configuration for the VM: \
+                    the max vCPU number '2' shouldn't less than vCPU count and can only be 1 or an even number when hyperthreading is enabled");
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+            // invalid cpu topology (larger than 254)
+            TestData::new(
+                VmmAction::SetVmConfiguration(VmConfigInfo {
+                    vcpu_count: 254,
+                    cpu_topology: CpuTopology {
+                        threads_per_core: 2,
+                        cores_per_die: 128,
+                        dies_per_socket: 1,
+                        sockets: 1,
+                    },
+                    ..Default::default()
+                }),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::MachineConfig(
+                            VmConfigError::VcpuCountExceedsMaximum
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "failed to set configuration for the VM: \
+                the vCPU number shouldn't large than 254",
+                    );
+
+                    assert_eq!(err_string, expected_err)
+                },
+            ),
+            // cpu topology and max_vcpu_count are not matched - success
+            TestData::new(
+                VmmAction::SetVmConfiguration(VmConfigInfo {
+                    vcpu_count: 16,
+                    max_vcpu_count: 32,
+                    cpu_topology: CpuTopology {
+                        threads_per_core: 1,
+                        cores_per_die: 128,
+                        dies_per_socket: 1,
+                        sockets: 1,
+                    },
+                    ..Default::default()
+                }),
+                InstanceState::Uninitialized,
+                &|result| {
+                    result.unwrap();
+                },
+            ),
+            // invalid threads_per_core
+            TestData::new(
+                VmmAction::SetVmConfiguration(VmConfigInfo {
+                    vcpu_count: 4,
+                    max_vcpu_count: 4,
+                    cpu_topology: CpuTopology {
+                        threads_per_core: 4,
+                        cores_per_die: 1,
+                        dies_per_socket: 1,
+                        sockets: 1,
+                    },
+                    ..Default::default()
+                }),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::MachineConfig(
+                            VmConfigError::InvalidThreadsPerCore(4)
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "failed to set configuration for the VM: \
+                    the threads_per_core number '4' can only be 1 or 2",
+                    );
+
+                    assert_eq!(err_string, expected_err)
+                },
+            ),
+            // invalid mem size
+            TestData::new(
+                VmmAction::SetVmConfiguration(VmConfigInfo {
+                    mem_size_mib: 3,
+                    ..Default::default()
+                }),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::MachineConfig(
+                            VmConfigError::InvalidMemorySize(3)
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "failed to set configuration for the VM: \
+                    the memory size 0x3MiB is invalid",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+            // invalid mem path
+            TestData::new(
+                VmmAction::SetVmConfiguration(VmConfigInfo {
+                    mem_type: String::from("hugetlbfs"),
+                    mem_file_path: String::from(""),
+                    ..Default::default()
+                }),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::MachineConfig(
+                            VmConfigError::InvalidMemFilePath(_)
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "failed to set configuration for the VM: \
+                    the memory file path is invalid",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+            // success
+            TestData::new(
+                VmmAction::SetVmConfiguration(VmConfigInfo::default()),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(result.is_ok());
+                },
+            ),
+        ];
+
+        for t in tests.iter_mut() {
+            t.check_request();
+        }
+    }
+
+    #[test]
+    fn test_vmm_action_start_microvm() {
+        skip_if_not_root!();
+
+        let tests = &mut [
+            // invalid state (running)
+            TestData::new(VmmAction::StartMicroVm, InstanceState::Running, &|result| {
+                assert!(matches!(
+                    result,
+                    Err(VmmActionError::StartMicroVm(
+                        StartMicroVmError::MicroVMAlreadyRunning
+                    ))
+                ));
+                let err_string = format!("{}", result.unwrap_err());
+                let expected_err = String::from(
+                    "failed to boot the VM: \
+                    the virtual machine is already running",
+                );
+                assert_eq!(err_string, expected_err);
+            }),
+            // no kernel configuration
+            TestData::new(
+                VmmAction::StartMicroVm,
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::StartMicroVm(
+                            StartMicroVmError::MissingKernelConfig
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "failed to boot the VM: \
+                    cannot start the virtual machine without kernel configuration",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+        ];
+
+        for t in tests.iter_mut() {
+            t.check_request();
+        }
+    }
+
+    #[test]
+    fn test_vmm_action_shutdown_microvm() {
+        skip_if_not_root!();
+
+        let tests = &mut [
+            // success
+            TestData::new(
+                VmmAction::ShutdownMicroVm,
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(result.is_ok());
+                },
+            ),
+        ];
+
+        for t in tests.iter_mut() {
+            t.check_request();
+        }
+    }
+
+    #[cfg(feature = "virtio-blk")]
+    #[test]
+    fn test_vmm_action_insert_block_device() {
+        skip_if_not_root!();
+
+        let dummy_file = TempFile::new().unwrap();
+        let dummy_path = dummy_file.as_path().to_owned();
+
+        let tests = &mut [
+            // invalid state
+            TestData::new(
+                VmmAction::InsertBlockDevice(BlockDeviceConfigInfo::default()),
+                InstanceState::Running,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::Block(
+                            BlockDeviceError::UpdateNotAllowedPostBoot
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "virtio-blk device error: \
+                    block device does not support runtime update",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+            // success
+            TestData::new(
+                VmmAction::InsertBlockDevice(BlockDeviceConfigInfo {
+                    path_on_host: dummy_path,
+                    device_type: crate::device_manager::blk_dev_mgr::BlockDeviceType::RawBlock,
+                    is_root_device: true,
+                    part_uuid: None,
+                    is_read_only: false,
+                    is_direct: false,
+                    no_drop: false,
+                    drive_id: String::from("1"),
+                    rate_limiter: None,
+                    num_queues: BlockDeviceConfigInfo::default_num_queues(),
+                    queue_size: 256,
+                    use_shared_irq: None,
+                    use_generic_irq: None,
+                }),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(result.is_ok());
+                },
+            ),
+        ];
+
+        for t in tests.iter_mut() {
+            t.check_request();
+        }
+    }
+
+    #[cfg(feature = "virtio-blk")]
+    #[test]
+    fn test_vmm_action_update_block_device() {
+        skip_if_not_root!();
+
+        let tests = &mut [
+            // invalid id
+            TestData::new(
+                VmmAction::UpdateBlockDevice(BlockDeviceConfigUpdateInfo {
+                    drive_id: String::from("1"),
+                    rate_limiter: None,
+                }),
+                InstanceState::Running,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::Block(BlockDeviceError::InvalidDeviceId(_)))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "virtio-blk device error: \
+                    invalid block device id '1'",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+        ];
+
+        for t in tests.iter_mut() {
+            t.check_request();
+        }
+    }
+
+    #[cfg(feature = "virtio-blk")]
+    #[test]
+    fn test_vmm_action_remove_block_device() {
+        skip_if_not_root!();
+
+        let tests = &mut [
+            // invalid state
+            TestData::new(
+                VmmAction::RemoveBlockDevice(String::from("1")),
+                InstanceState::Running,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::Block(
+                            BlockDeviceError::UpdateNotAllowedPostBoot
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "virtio-blk device error: \
+                    block device does not support runtime update",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+            // invalid id
+            TestData::new(
+                VmmAction::RemoveBlockDevice(String::from("1")),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::Block(BlockDeviceError::InvalidDeviceId(_)))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "virtio-blk device error: \
+                    invalid block device id '1'",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+        ];
+
+        for t in tests.iter_mut() {
+            t.check_request();
+        }
+    }
+
+    #[cfg(feature = "virtio-fs")]
+    #[test]
+    fn test_vmm_action_insert_fs_device() {
+        skip_if_not_root!();
+
+        let tests = &mut [
+            // invalid state
+            TestData::new(
+                VmmAction::InsertFsDevice(FsDeviceConfigInfo::default()),
+                InstanceState::Running,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::FsDevice(
+                            FsDeviceError::UpdateNotAllowedPostBoot
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "virtio-fs device error: \
+                    update operation is not allowed after boot",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+            // success
+            TestData::new(
+                VmmAction::InsertFsDevice(FsDeviceConfigInfo::default()),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(result.is_ok());
+                },
+            ),
+        ];
+
+        for t in tests.iter_mut() {
+            t.check_request();
+        }
+    }
+
+    #[cfg(feature = "virtio-fs")]
+    #[test]
+    fn test_vmm_action_manipulate_fs_device() {
+        skip_if_not_root!();
+
+        let tests = &mut [
+            // invalid state
+            TestData::new(
+                VmmAction::ManipulateFsBackendFs(FsMountConfigInfo::default()),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::FsDevice(FsDeviceError::MicroVMNotRunning))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "virtio-fs device error: \
+                    vm is not running when attaching a backend fs",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+            // invalid backend
+            TestData::new(
+                VmmAction::ManipulateFsBackendFs(FsMountConfigInfo::default()),
+                InstanceState::Running,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::FsDevice(
+                            FsDeviceError::AttachBackendFailed(_)
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    println!("{}", err_string);
+                    let expected_err = String::from(
+                        "virtio-fs device error: \
+                    Fs device attach a backend fs failed",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+        ];
+        for t in tests.iter_mut() {
+            t.check_request();
+        }
+    }
+
+    #[cfg(feature = "virtio-net")]
+    #[test]
+    fn test_vmm_action_insert_network_device() {
+        skip_if_not_root!();
+
+        let tests = &mut [
+            // hotplug unready
+            TestData::new(
+                VmmAction::InsertNetworkDevice(VirtioNetDeviceConfigInfo::default()),
+                InstanceState::Running,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::StartMicroVm(
+                            StartMicroVmError::UpcallMissVsock
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "failed to boot the VM: \
+                        the upcall client needs a virtio-vsock device for communication",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+            // success
+            TestData::new(
+                VmmAction::InsertNetworkDevice(VirtioNetDeviceConfigInfo::default()),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(result.is_ok());
+                },
+            ),
+        ];
+
+        for t in tests.iter_mut() {
+            t.check_request();
+        }
+    }
+
+    #[cfg(feature = "virtio-net")]
+    #[test]
+    fn test_vmm_action_update_network_interface() {
+        skip_if_not_root!();
+
+        let tests = &mut [
+            // invalid id
+            TestData::new(
+                VmmAction::UpdateNetworkInterface(VirtioNetDeviceConfigUpdateInfo {
+                    iface_id: String::from("1"),
+                    rx_rate_limiter: None,
+                    tx_rate_limiter: None,
+                }),
+                InstanceState::Running,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::VirtioNet(
+                            VirtioNetDeviceError::InvalidIfaceId(_)
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "virtio-net device error: \
+                    invalid virtio-net iface id '1'",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+        ];
+
+        for t in tests.iter_mut() {
+            t.check_request();
+        }
+    }
+
+    #[cfg(feature = "virtio-vsock")]
+    #[test]
+    fn test_vmm_action_insert_vsock_device() {
+        skip_if_not_root!();
+
+        let tests = &mut [
+            // invalid state
+            TestData::new(
+                VmmAction::InsertVsockDevice(VsockDeviceConfigInfo::default()),
+                InstanceState::Running,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::Vsock(
+                            VsockDeviceError::UpdateNotAllowedPostBoot
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "failed to add virtio-vsock device: \
+                    update operation is not allowed after boot",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+            // invalid guest_cid
+            TestData::new(
+                VmmAction::InsertVsockDevice(VsockDeviceConfigInfo::default()),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::Vsock(VsockDeviceError::GuestCIDInvalid(0)))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "failed to add virtio-vsock device: \
+                    the guest CID 0 is invalid",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+            // success
+            TestData::new(
+                VmmAction::InsertVsockDevice(VsockDeviceConfigInfo {
+                    guest_cid: 3,
+                    ..Default::default()
+                }),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(result.is_ok());
+                },
+            ),
+        ];
+
+        for t in tests.iter_mut() {
+            t.check_request();
+        }
+    }
 }

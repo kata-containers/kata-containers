@@ -43,6 +43,7 @@ vm-memory = { version = "0.9.0", features = ["backend-mmap"] }
 [dev-dependencies]
 slog-term = "2.9.0"
 slog-async = "2.7.0"
+test-utils = { path = "../libs/test-utils" }
 
 [features]
 acpi = []

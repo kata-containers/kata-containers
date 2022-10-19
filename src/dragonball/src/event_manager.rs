@@ -101,7 +101,6 @@ impl EventManager {
     /// Poll pending events and invoke registered event handler.
     ///
     /// # Arguments:
-    /// * max_events: maximum number of pending events to handle
     /// * timeout: maximum time in milliseconds to wait
     pub fn handle_events(&self, timeout: i32) -> std::result::Result<usize, EpollError> {
         self.epoll_mgr

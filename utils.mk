@@ -173,6 +173,7 @@ TRIPLE = $(ARCH)-unknown-linux-$(LIBC)
 CWD := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
 standard_rust_check:
+	@echo "standard rust check..."
 	cargo fmt -- --check
 	cargo clippy --all-targets --all-features --release \
 		-- \

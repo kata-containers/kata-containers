@@ -67,7 +67,10 @@ impl ShareVirtioFsStandalone {
     fn virtiofsd_args(&self, sock_path: &str) -> Result<Vec<String>> {
         let source_path = get_host_ro_shared_path(&self.config.id);
         if !source_path.exists() {
-            return Err(anyhow!("The virtiofs shared path didn't exist"));
+            return Err(anyhow!(
+                "The virtiofs shared path({:?}) didn't exist",
+                source_path
+            ));
         }
 
         let mut args: Vec<String> = vec![

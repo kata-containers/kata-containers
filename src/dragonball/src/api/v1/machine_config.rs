@@ -10,7 +10,7 @@ pub const MAX_SUPPORTED_VCPUS: u8 = 254;
 pub const MEMORY_HOTPLUG_ALIGHMENT: u8 = 64;
 
 /// Errors associated with configuring the microVM.
-#[derive(Debug, PartialEq, thiserror::Error)]
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum VmConfigError {
     /// Cannot update the configuration of the microvm post boot.
     #[error("update operation is not allowed after boot")]
