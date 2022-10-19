@@ -52,7 +52,10 @@ fi
 [ -n "$ovmf_package" ] || die "failed to get ovmf package or commit"
 [ -n "$package_output_dir" ] || die "failed to get ovmf package or commit"
 
-sudo docker pull ${container_image} || sudo docker build -t "${container_image}" "${script_dir}"
+sudo docker pull ${container_image} || \
+	(sudo docker build -t "${container_image}" "${script_dir}" && \
+	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
+	 push_to_registry "${container_image}")
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
