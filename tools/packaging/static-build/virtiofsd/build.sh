@@ -16,7 +16,6 @@ source "${script_dir}/../../scripts/lib.sh"
 
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
-container_image="kata-virtiofsd-builder"
 kata_version="${kata_version:-}"
 virtiofsd_repo="${virtiofsd_repo:-}"
 virtiofsd_version="${virtiofsd_version:-}"
@@ -50,7 +49,9 @@ case ${ARCH} in
 		;;
 esac
 
-sudo docker build \
+container_image="${BUILDER_REGISTRY}:virtiofsd-${virtiofsd_toolchain}-${libc}-$(get_last_modification ${repo_root_dir} ${script_dir})-$(umame -m)"
+
+sudo docker pull ${container_image} || sudo docker build \
 	--build-arg RUST_TOOLCHAIN="${virtiofsd_toolchain}" \
 	-t "${container_image}" "${script_dir}/${libc}"
 
