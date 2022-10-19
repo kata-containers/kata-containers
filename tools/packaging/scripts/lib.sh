@@ -98,3 +98,18 @@ get_kata_hash() {
 	ref=$2
 	git ls-remote --heads --tags "https://github.com/${project}/${repo}.git" | grep "${ref}" | awk '{print $1}'
 }
+
+# $1 - Repo's root dir
+# $2 - The file we're looking for the last modification
+get_last_modification() {
+	local repo_root_dir="${1}"
+	local file="${2}"
+
+	# This is a workaround needed for when running this code on Jenkins
+	git config --global --add safe.directory ${repo_root_dir} &> /dev/null
+
+	dirty=""
+	[ $(git status --porcelain | grep "${file#${repo_root_dir}/}" | wc -l) -gt 0 ] && dirty="-dirty"
+
+	echo "$(git log -1 --pretty=format:"%H" ${file})${dirty}"
+}
