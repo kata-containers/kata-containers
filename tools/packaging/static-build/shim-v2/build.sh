@@ -12,18 +12,22 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly repo_root_dir="$(cd "${script_dir}/../../../.." && pwd)"
 readonly kernel_builder="${repo_root_dir}/tools/packaging/kernel/build-kernel.sh"
 
+source "${script_dir}/../../scripts/lib.sh"
 
 GO_VERSION=${GO_VERSION}
 RUST_VERSION=${RUST_VERSION:-}
 
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
-container_image="shim-v2-builder"
+container_image="${CC_BUILDER_REGISTRY}:shim-v2-go-${GO_VERSION}-rust-${RUST_VERSION}-$(get_last_modification ${repo_root_dir} ${script_dir})"
 
 EXTRA_OPTS="${EXTRA_OPTS:-""}"
 REMOVE_VMM_CONFIGS="${REMOVE_VMM_CONFIGS:-""}"
 
-sudo docker build  --build-arg GO_VERSION="${GO_VERSION}"  --build-arg RUST_VERSION="${RUST_VERSION}" -t "${container_image}" "${script_dir}"
+sudo docker pull ${container_image} || sudo docker build \
+	--build-arg GO_VERSION="${GO_VERSION}" \
+      	--build-arg RUST_VERSION="${RUST_VERSION}" \
+	-t "${container_image}" "${script_dir}"
 
 arch=$(uname -m)
 if [ ${arch} = "ppc64le" ]; then
