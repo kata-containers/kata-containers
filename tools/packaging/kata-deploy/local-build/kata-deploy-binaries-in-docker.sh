@@ -48,7 +48,9 @@ docker run \
 	-v $HOME/.docker:/root/.docker \
 	-v /var/run/docker.sock:/var/run/docker.sock \
 	--env CI="${CI:-}" \
-	--env USER=${USER} -v "${kata_dir}:${kata_dir}" \
+	--env USER=${USER} \ 
+	--env PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-"no"}" \
+	- -v "${kata_dir}:${kata_dir}" \
 	--rm \
 	-w ${script_dir} \
 	build-kata-deploy "${kata_deploy_create}" $@
