@@ -32,10 +32,13 @@ package_output_dir="${package_output_dir:-}"
 
 container_image="${BUILDER_REGISTRY}:td-shim-${tdshim_toolchain}-$(get_last_modification ${repo_root_dir} ${script_dir})-$(uname -m)"
 
-sudo docker pull ${container_image} || sudo docker build \
+sudo docker pull ${container_image} || (sudo docker build \
 	--build-arg RUST_TOOLCHAIN="${tdshim_toolchain}" \
 	-t "${container_image}" \
-	"${script_dir}"
+	"${script_dir}" && \
+	# No-op unless PUSH_TO_REGISTRY is exported as "yes"
+	push_to_registry "${container_image}")
+
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
