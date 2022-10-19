@@ -24,10 +24,13 @@ container_image="${CC_BUILDER_REGISTRY}:shim-v2-go-${GO_VERSION}-rust-${RUST_VER
 EXTRA_OPTS="${EXTRA_OPTS:-""}"
 REMOVE_VMM_CONFIGS="${REMOVE_VMM_CONFIGS:-""}"
 
-sudo docker pull ${container_image} || sudo docker build \
-	--build-arg GO_VERSION="${GO_VERSION}" \
-      	--build-arg RUST_VERSION="${RUST_VERSION}" \
-	-t "${container_image}" "${script_dir}"
+sudo docker pull ${container_image} || \
+	(sudo docker build \
+		--build-arg GO_VERSION="${GO_VERSION}" \
+	      	--build-arg RUST_VERSION="${RUST_VERSION}" \
+		-t "${container_image}" "${script_dir}" && \
+	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
+	 push_to_registry "${container_image}")
 
 arch=$(uname -m)
 if [ ${arch} = "ppc64le" ]; then
