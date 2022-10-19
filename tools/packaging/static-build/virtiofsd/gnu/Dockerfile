@@ -4,6 +4,7 @@
 
 FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND=noninteractive
+ARG RUST_TOOLCHAIN
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 RUN apt-get update && \
@@ -16,4 +17,4 @@ RUN apt-get update && \
         libseccomp-dev \
         unzip && \
     apt-get clean && rm -rf /var/lib/lists/ && \
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}

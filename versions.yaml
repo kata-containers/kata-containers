@@ -291,6 +291,7 @@ externals:
     description: "vhost-user virtio-fs device backend written in Rust"
     url: "https://gitlab.com/virtio-fs/virtiofsd"
     version: "v1.3.0"
+    toolchain: "1.62.0"
     meta:
       # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.3.0,
       # this is the link labelled virtiofsd-v1.3.0.zip
