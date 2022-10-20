@@ -16,6 +16,8 @@ kata_deploy_create="${script_dir}/kata-deploy-binaries.sh"
 uid=$(id -u ${USER})
 gid=$(id -g ${USER})
 
+source "${script_dir}/../../scripts/lib.sh"
+
 if [ "${script_dir}" != "${PWD}" ]; then
 	ln -sf "${script_dir}/build" "${PWD}/build"
 fi
@@ -37,7 +39,9 @@ if [ ! -d "$HOME/.docker" ]; then
 	remove_dot_docker_dir=true
 fi
 
-docker build -q -t build-kata-deploy \
+container_image="${CC_BUILDER_REGISTRY}:build-kata-deploy-$(get_last_modification ${kata_dir} ${script_dir})"
+
+docker pull "${container_image}" || docker build -q -t "${container_image}" \
 	--build-arg IMG_USER="${USER}" \
 	--build-arg UID=${uid} \
 	--build-arg GID=${gid} \
@@ -60,7 +64,7 @@ docker run \
 	-v "${kata_dir}:${kata_dir}" \
 	--rm \
 	-w ${script_dir} \
-	build-kata-deploy "${kata_deploy_create}" $@
+	"${container_image}" "${kata_deploy_create}" $@
 
 if [ $remove_dot_docker_dir == true ]; then
 	rm -rf "$HOME/.docker"
