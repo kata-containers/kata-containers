@@ -41,12 +41,15 @@ fi
 
 container_image="${CC_BUILDER_REGISTRY}:build-kata-deploy-$(get_last_modification ${kata_dir} ${script_dir})"
 
-docker pull "${container_image}" || docker build -q -t "${container_image}" \
-	--build-arg IMG_USER="${USER}" \
-	--build-arg UID=${uid} \
-	--build-arg GID=${gid} \
-	--build-arg HOST_DOCKER_GID=${docker_gid} \
-	"${script_dir}/dockerbuild/"
+docker pull "${container_image}" || \
+	(docker build -q -t "${container_image}" \
+		--build-arg IMG_USER="${USER}" \
+		--build-arg UID=${uid} \
+		--build-arg GID=${gid} \
+		--build-arg HOST_DOCKER_GID=${docker_gid} \
+		"${script_dir}/dockerbuild/" && \
+ 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
+	 push_to_registry "${container_image}" "no")
 
 docker run \
 	--privileged \
