@@ -24,7 +24,16 @@ jobs:
           - cc-tdx-td-shim
           - cc-tdx-tdvf
     steps:
+      - name: Login to Kata Containers quay.io
+        uses: docker/login-action@v2
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # This is needed in order to keep the commit ids history
       - name: Build ${{ matrix.asset }}
         run: |
           make "${KATA_ASSET}-tarball"
@@ -34,6 +43,7 @@ jobs:
         env:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
+          PUSH_TO_REGISTRY: yes
 
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@v3
@@ -68,7 +78,7 @@ jobs:
     needs: create-kata-tarball
     runs-on: ubuntu-latest
     steps:
-      - name: Login to quay.io
+      - name: Login to Confidential Containers quay.io
         uses: docker/login-action@v2
         with:
           registry: quay.io
