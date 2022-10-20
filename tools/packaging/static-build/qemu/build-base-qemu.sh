@@ -41,13 +41,16 @@ CACHE_TIMEOUT=$(date +"%Y-%m-%d")
 
 container_image="${CC_BUILDER_REGISTRY}:qemu-$(get_last_modification ${repo_root_dir} ${script_dir})"
 
-sudo docker pull ${container_image} || sudo "${container_engine}" build \
-	--build-arg CACHE_TIMEOUT="${CACHE_TIMEOUT}" \
-	--build-arg http_proxy="${http_proxy}" \
-	--build-arg https_proxy="${https_proxy}" \
-	"${packaging_dir}" \
-	-f "${script_dir}/Dockerfile" \
-	-t "${container_image}"
+sudo docker pull ${container_image} || \
+	(sudo "${container_engine}" build \
+		--build-arg CACHE_TIMEOUT="${CACHE_TIMEOUT}" \
+		--build-arg http_proxy="${http_proxy}" \
+		--build-arg https_proxy="${https_proxy}" \
+		"${packaging_dir}" \
+		-f "${script_dir}/Dockerfile" \
+		-t "${container_image}" && \
+	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
+	 push_to_registry "${container_image}")
 
 sudo "${container_engine}" run \
 	--rm \
