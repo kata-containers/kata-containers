@@ -67,6 +67,4 @@ sudo "${container_engine}" run \
 	-v "${PWD}":/share "${container_image}" \
 	bash -c "/root/kata-containers/tools/packaging/static-build/qemu/build-qemu.sh"
 
-sudo docker image rm "${container_image}"
-
 sudo chown ${USER}:$(id -gn ${USER}) "${PWD}/${qemu_tar}"
