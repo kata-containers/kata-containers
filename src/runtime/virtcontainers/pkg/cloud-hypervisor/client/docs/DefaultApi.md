@@ -554,7 +554,7 @@ No authorization required
 
 ## VmAddDevicePut
 
-> PciDeviceInfo VmAddDevicePut(ctx).VmAddDevice(vmAddDevice).Execute()
+> PciDeviceInfo VmAddDevicePut(ctx).DeviceConfig(deviceConfig).Execute()
 
 Add a new device to the VM
 
@@ -571,11 +571,11 @@ import (
 )
 
 func main() {
-    vmAddDevice := *openapiclient.NewVmAddDevice() // VmAddDevice | The path of the new device
+    deviceConfig := *openapiclient.NewDeviceConfig("Path_example") // DeviceConfig | The path of the new device
 
     configuration := openapiclient.NewConfiguration()
     api_client := openapiclient.NewAPIClient(configuration)
-    resp, r, err := api_client.DefaultApi.VmAddDevicePut(context.Background()).VmAddDevice(vmAddDevice).Execute()
+    resp, r, err := api_client.DefaultApi.VmAddDevicePut(context.Background()).DeviceConfig(deviceConfig).Execute()
     if err != nil {
         fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddDevicePut``: %v\n", err)
         fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
@@ -596,7 +596,7 @@ Other parameters are passed through a pointer to a apiVmAddDevicePutRequest stru
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **vmAddDevice** | [**VmAddDevice**](VmAddDevice.md) | The path of the new device | 
+ **deviceConfig** | [**DeviceConfig**](DeviceConfig.md) | The path of the new device | 
 
 ### Return type
 
