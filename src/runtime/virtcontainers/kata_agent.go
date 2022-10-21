@@ -1096,8 +1096,18 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 		kataDevice.Type = kataVfioGuestKernelDevType
 	}
 
+	skipped := 0
 	for i, pciDev := range devList {
+		if pciDev.GuestPciPath.IsNil() {
+			skipped += 1
+			continue
+		}
+
 		kataDevice.Options[i] = fmt.Sprintf("0000:%s=%s", pciDev.BDF, pciDev.GuestPciPath)
+	}
+
+	if skipped == len(devList) {
+		return nil
 	}
 
 	return kataDevice
