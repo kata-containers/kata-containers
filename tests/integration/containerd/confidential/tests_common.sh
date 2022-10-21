@@ -64,6 +64,7 @@ setup_common() {
 		sed -i -e 's/8.8.8.8/'${local_dns}'/' "${pod_config}"
 		cat "$pod_config"
 	fi
+	switch_measured_rootfs_verity_scheme none
 }
 
 # Common teardown for tests. Use alongside setup_common().

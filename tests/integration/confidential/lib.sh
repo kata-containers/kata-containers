@@ -44,6 +44,31 @@ switch_image_service_offload() {
 	esac
 }
 
+# Toggle between different measured rootfs verity schemes during tests.
+#
+# Parameters:
+#	$1: "none" to disable or "dm-verity" to enable measured boot.
+#
+# Environment variables:
+#	RUNTIME_CONFIG_PATH - path to kata's configuration.toml. If it is not
+#			      export then it will figure out the path via
+#			      `kata-runtime env` and export its value.
+#
+switch_measured_rootfs_verity_scheme() {
+	# Load the RUNTIME_CONFIG_PATH variable.
+	load_runtime_config_path
+
+	case "$1" in
+		"dm-verity"|"none")
+			sudo sed -i -e 's/scheme=.* cc_rootfs/scheme='"$1"' cc_rootfs/g' \
+				"$RUNTIME_CONFIG_PATH"
+			;;
+		*)
+			die "Unknown option '$1'"
+			;;
+	esac
+}
+
 # Add parameters to the 'kernel_params' property on kata's configuration.toml
 #
 # Parameters:
@@ -219,4 +244,13 @@ setup_offline_fs_kbc_agent_config_in_guest() {
 
 	cp_to_guest_img "/tests/fixtures" "${rootfs_agent_config}"
 	add_kernel_params "agent.config_file=/tests/fixtures/$(basename ${rootfs_agent_config})"
+}
+
+setup_signature_files() {
+	echo "setup signature files"
+	if [ "${SKOPEO:-}" = "yes" ]; then
+		setup_skopeo_signature_files_in_guest
+	else
+		setup_offline_fs_kbc_signature_files_in_guest
+	fi
 }

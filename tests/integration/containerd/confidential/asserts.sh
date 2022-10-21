@@ -66,3 +66,12 @@ assert_logs_contain() {
 	cmd+=" --since \"$test_start_time\" -n 100000"
 	eval $cmd | grep "$message"
 }
+
+# Try to create a pod when it is expected to fail.
+#
+# Note: the global $sandbox_name and $pod_config should be set already.
+#
+assert_pod_fail() {
+	echo "Attempt to create the pod but it should fail"
+	! crictl_create_cc_pod "$pod_config" || /bin/false
+}

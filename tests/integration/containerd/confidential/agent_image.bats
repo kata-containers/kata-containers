@@ -10,15 +10,31 @@ test_tag="[cc][agent][cri][containerd]"
 
 setup() {
 	setup_common
-	if [ "${SKOPEO:-}" = "yes" ]; then
-		setup_skopeo_signature_files_in_guest
-	else
-		setup_offline_fs_kbc_signature_files_in_guest
-	fi
+}
+
+@test "$test_tag Test can launch pod with measured boot enabled" {
+	local container_config="${FIXTURES_DIR}/container-config_unsigned-unprotected.yaml"
+
+	switch_measured_rootfs_verity_scheme dm-verity
+
+	create_test_pod
+
+	assert_container "$container_config"
+}
+
+@test "$test_tag Test cannot launch pod with measured boot enabled and rootfs modified" {
+	local container_config="${FIXTURES_DIR}/container-config_unsigned-unprotected.yaml"
+
+	switch_measured_rootfs_verity_scheme dm-verity
+	setup_signature_files
+
+	assert_pod_fail
 }
 
 @test "$test_tag Test can pull an unencrypted image inside the guest" {
 	local container_config="${FIXTURES_DIR}/container-config.yaml"
+
+	setup_signature_files
 
 	create_test_pod
 
@@ -34,6 +50,7 @@ setup() {
 @test "$test_tag Test can pull a unencrypted signed image from a protected registry" {
 	local container_config="${FIXTURES_DIR}/container-config.yaml"
 
+	setup_signature_files
 	if [ "${SKOPEO:-}" = "yes" ]; then
 		add_kernel_params \
 			"agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
@@ -47,6 +64,7 @@ setup() {
 @test "$test_tag Test cannot pull an unencrypted unsigned image from a protected registry" {
 	local container_config="${FIXTURES_DIR}/container-config_unsigned-protected.yaml"
 
+	setup_signature_files
 	if [ "${SKOPEO:-}" = "yes" ]; then
 		add_kernel_params \
 			"agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
@@ -65,6 +83,7 @@ setup() {
 @test "$test_tag Test can pull an unencrypted unsigned image from an unprotected registry" {
 	local container_config="${FIXTURES_DIR}/container-config_unsigned-unprotected.yaml"
 
+	setup_signature_files
 	if [ "${SKOPEO:-}" = "yes" ]; then
 		add_kernel_params \
 			"agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
@@ -78,6 +97,7 @@ setup() {
 @test "$test_tag Test unencrypted signed image with unknown signature is rejected" {
 	local container_config="${FIXTURES_DIR}/container-config_signed-protected-other.yaml"
 
+	setup_signature_files
 	if [ "${SKOPEO:-}" = "yes" ]; then
 		add_kernel_params \
 			"agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
