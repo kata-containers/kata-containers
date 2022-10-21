@@ -14,7 +14,7 @@ readonly kernel_builder="${repo_root_dir}/tools/packaging/kernel/build-kernel.sh
 
 
 GO_VERSION=${GO_VERSION}
-RUST_VERSION=${RUST_VERSION}
+RUST_VERSION=${RUST_VERSION:-}
 
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
@@ -30,15 +30,17 @@ if [ ${arch} = "ppc64le" ]; then
 	arch="ppc64"
 fi
 
-sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
-	-w "${repo_root_dir}/src/runtime-rs" \
-	"${container_image}" \
-	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch}"
+if [ -n "${RUST_VERSION}" ]; then
+	sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+		-w "${repo_root_dir}/src/runtime-rs" \
+		"${container_image}" \
+		bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch}"
 
-sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
-	-w "${repo_root_dir}/src/runtime-rs" \
-	"${container_image}" \
-	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}" install"
+	sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+		-w "${repo_root_dir}/src/runtime-rs" \
+		"${container_image}" \
+		bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}" install"
+fi
 	
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${repo_root_dir}/src/runtime" \
