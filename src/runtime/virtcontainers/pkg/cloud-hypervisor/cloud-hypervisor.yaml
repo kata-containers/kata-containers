@@ -185,7 +185,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/VmAddDevice"
+              $ref: "#/components/schemas/DeviceConfig"
         required: true
       responses:
         200:
@@ -1076,17 +1076,6 @@ components:
           description: desired memory zone size in bytes
           type: integer
           format: int64
-
-    VmAddDevice:
-      type: object
-      properties:
-        path:
-          type: string
-        iommu:
-          type: boolean
-          default: false
-        id:
-          type: string
 
     VmRemoveDevice:
       type: object
