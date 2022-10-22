@@ -529,7 +529,9 @@ impl Handle {
             .map_err(|e| anyhow!("Failed to parse IP {}: {:?}", ip_address, e))?;
 
         // Import rtnetlink objects that make sense only for this function
-        use packet::constants::{NDA_UNSPEC, NLM_F_ACK, NLM_F_CREATE, NLM_F_EXCL, NLM_F_REQUEST};
+        use packet::constants::{
+            NDA_UNSPEC, NLM_F_ACK, NLM_F_CREATE, NLM_F_REPLACE, NLM_F_REQUEST,
+        };
         use packet::neighbour::{NeighbourHeader, NeighbourMessage};
         use packet::nlas::neighbour::Nla;
         use packet::{NetlinkMessage, NetlinkPayload, RtnlMessage};
@@ -572,7 +574,9 @@ impl Handle {
 
         // Send request and ACK
         let mut req = NetlinkMessage::from(RtnlMessage::NewNeighbour(message));
-        req.header.flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_EXCL | NLM_F_CREATE;
+
+        // If neighbor exists, NLM_F_EXCL will fail, Do replace instead of add to avoid failure
+        req.header.flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_REPLACE | NLM_F_CREATE;
 
         let mut response = self.handle.request(req)?;
         while let Some(message) = response.next().await {
