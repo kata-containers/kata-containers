@@ -3,6 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+[workspace]
+resolver = "2"
+
 [package]
 name = "kata-ctl"
 version = "0.0.1"
@@ -15,7 +18,9 @@ clap = { version = "3.2.20", features = ["derive", "cargo"] }
 serde_json = "1.0.85"
 thiserror = "1.0.35"
 
-# See: https://github.com/kata-containers/kata-containers/issues/5438
+[target.'cfg(target_arch = "s390x")'.dependencies]
+reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "native-tls"] }
+
 [target.'cfg(not(target_arch = "s390x"))'.dependencies]
 reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "rustls-tls"] }
 
