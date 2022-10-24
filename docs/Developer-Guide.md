@@ -16,6 +16,31 @@ The installation guide instructions will install all required Kata Containers
 components, plus *Docker*, the hypervisor, and the Kata Containers image and
 guest kernel.
 
+Assuming Ubuntu as your base distro, the top level **Makefile.dev** can be used to
+bootstrap a development environment by automating all necessary steps described
+below. Here are a few ways to use it:
+
+```bash
+$ wget https://raw.githubusercontent.com/jxyang/kata-containers/jxyang-dev-makefile/Makefile.dev -O Makefile
+$ make devenv
+# Or to use a different hypervisor (default QEMU) and guest image (default Ubuntu):
+$ make devenv KATA_HYPERVISOR=cloud-hypervisor GUEST_OS_DISTRO=clearlinux
+```
+
+Kata CC requires more setups listed below at the minimum:
+
+* Use feature branch **CCv0** as the base
+* Build and install a forked containerd, and configure it with a **cri_handler **
+for kata shim
+* Enable guest pulling in the kata configuration file
+
+To bootstrap a dev environment for Kata CC, append **KATA-CC=yes** to
+the make command, e.g.:
+
+```bash
+$ make devenv KATA-CC=yes
+```
+
 # Requirements to build individual components
 
 You need to install the following to build Kata Containers components:

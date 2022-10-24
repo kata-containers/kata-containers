@@ -1,0 +1,302 @@
+KATA_REPO = https://github.com/kata-containers/kata-containers
+KATA_BRANCH = main
+CONTAINERD_REPO = https://github.com/containerd/containerd
+ifdef KATA-CC
+	# Confidential containers uses a forked containerd
+	CONTAINERD_REPO = https://github.com/confidential-containers/containerd
+	# Kata-CC uses its own kata-containers branch
+	KATA_BRANCH = CCv0
+endif
+
+PATH := ${PATH}:${HOME}/go/bin:${HOME}/.cargo/bin
+CDIR = $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+GOPATH = ${HOME}/go
+GO111MODULE = "auto"
+ARCH = x86_64
+
+# Host related configs
+KATA_DIR = ${GOPATH}/src/github.com/kata-containers/kata-containers
+ifndef KATA_HYPERVISOR
+KATA_HYPERVISOR = qemu
+endif
+KATA_INSTALL_PATH = /usr/share/defaults/kata-containers/
+KATA_RUNTIME_CONFIG = ${KATA_INSTALL_PATH}/configuration.toml
+KATA_OS_BUILDER = ${KATA_DIR}/tools/osbuilder
+CONTAINERD_CONFIG_FILE = /etc/containerd/config.toml
+CNI_CONFIG_FILE = /etc/cni/net.d/01-mynet.conf
+
+# Guest related configs
+ifndef GUEST_OS_DISTRO
+GUEST_OS_DISTRO = ubuntu
+endif
+ifndef GUEST_OS_EXTRA_PKGS
+GUEST_OS_EXTRA_PKGS = "vim iputils-ping net-tools"
+endif
+ROOTFS_DIR = ${CDIR}/rootfs
+GUEST_INSTALL_PATH = /usr/share/kata-containers/
+AGENT_BIN_PATH = ${KATA_DIR}/src/agent/target/${ARCH}-unknown-linux-musl/release/kata-agent
+
+YQ_VERSION=3.4.1
+# Versions dedicated by Kata Containers versions.yaml
+GO_VERSION= $(shell \
+    wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64 && \
+    chmod +x yq_linux_amd64 && \
+    sudo mv yq_linux_amd64 /usr/local/bin/yq && \
+    wget https://raw.githubusercontent.com/kata-containers/kata-containers/${KATA_BRANCH}/versions.yaml && \
+    yq r versions.yaml languages.golang.meta.newest-version)
+RUST_VERSION=$(shell yq r versions.yaml languages.rust.meta.newest-version)
+ifndef KATA-CC
+	  CONTAINERD_BRANCH=$(shell yq r versions.yaml externals.containerd.version)
+else
+	  CONTAINERD_BRANCH="CC-main"
+endif
+
+# Versions not included in versions.yaml. May need update from time to time.
+FLANNEL_VERSION = 0.14.0
+CLOUD_HYPERVISOR_VERSION = v26.0
+
+prereqs:
+	test -e package-installed || make force-prereqs
+
+force-prereqs:
+	sudo apt update
+
+	# For general build tools
+	sudo apt install -y build-essential grep wget curl tar gzip
+
+	# For building Kata Agent
+	sudo apt install -y libseccomp-dev musl-tools protobuf-compiler unzip
+
+	# For building Linux kernel
+	sudo apt install -y flex bison libelf-dev libssl-dev
+
+	# For Rust
+	sudo rm -rf .cargo
+	curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -o rustinit
+	sh ./rustinit -y
+	. ${HOME}/.cargo/env
+	rm -f rustinit
+	# Install rust target for building agent
+	rustup target add ${ARCH}-unknown-linux-musl
+	# Set defaut Rust version
+	rustup default ${RUST_VERSION}
+
+	# For Go
+	wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz
+	sudo rm -rf /usr/local/go
+	sudo tar -C /usr/local -xzf go*.linux-amd64.tar.gz
+	sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
+	rm -f go*.linux-amd64.tar.gz
+
+	# For building rootfs
+	sudo apt install -y docker.io
+	sudo systemctl enable docker
+	sudo chmod 666 /var/run/docker.sock
+
+	# For building cri-cni-containerd
+	sudo apt install -y btrfs-progs libbtrfs-dev pkg-config
+
+	# Build and install conatinerd-cri-cni from the source:
+	mkdir -p ${GOPATH}/src/github.com/containerd
+	( cd ${GOPATH}/src/github.com/containerd; \
+	  sudo rm -rf containerd; \
+	  git clone ${CONTAINERD_REPO} -b  ${CONTAINERD_BRANCH}; \
+	  cd containerd; \
+	  sudo -E GOPATH=${GOPATH} make cri-cni-release; \
+	  sudo tar -xvf releases/cri-containerd-cni-*.tar.gz -C /; \
+	  sudo rm -rf ${GOPATH}/src/github.com/containerd \
+	)
+
+	# Don't install again
+	touch package-installed
+
+kata-runtime: prereqs
+	test -e ${KATA_INSTALL_PATH} || make force-kata-runtime
+
+force-kata-runtime: prereqs
+ifeq ("$(wildcard ${KATA_DIR})","")
+	( mkdir -p ${GOPATH}/src/github.com/kata-containers; \
+	  cd ${GOPATH}/src/github.com/kata-containers; \
+	  git clone ${KATA_REPO} -b ${KATA_BRANCH}; \
+	)
+endif
+	( cd ${KATA_DIR}/src/runtime; \
+	  make clean && make  DEFAULT_HYPERVISOR=${KATA_HYPERVISOR}; \
+	  sudo -E make DEFAULT_HYPERVISOR=${KATA_HYPERVISOR} install )
+	make configure-kata
+	# Configure containerd/cni for kata
+	make configure-containerd-cni
+
+configure-kata:
+ifdef USE_INITRD
+	sudo sed -i 's/image =/initrd =/' ${KATA_RUNTIME_CONFIG} --follow-symlinks
+else
+	sudo sed -i 's/initrd =/image =/' ${KATA_RUNTIME_CONFIG} --follow-symlinks
+endif
+ifndef NO_DEBUG
+	sh -c "sudo sed -i -e 's/^# *\(enable_debug\).*=.*$$/\1 = true/g' ${KATA_RUNTIME_CONFIG} --follow-symlinks"
+	# Enable the agent console so that one can open a shell with the guest VM
+	sh -c "sudo sed -i -e 's/^# *\(debug_console_enabled\).*=.*$$/\1 = true/g' ${KATA_RUNTIME_CONFIG} --follow-symlinks"
+endif
+ifdef KATA-CC
+	# Enable guest pulling of container images
+	sudo sed -i -e 's/^\(service_offload\).*=.*$$/\1 = true/g' ${KATA_RUNTIME_CONFIG} --follow-symlinks
+endif
+
+configure-containerd-cni:
+	sudo systemctl stop containerd
+	sudo mkdir -p /etc/containerd/
+	sudo mkdir -p /etc/cni/net.d
+
+	# Create a CNI config file
+	@printf "{\n  \"cniVersion\": \"0.2.0\",\n" > mycni.conf
+	@printf "  \"name\": \"mynet\",\n" >> mycni.conf
+	@printf "  \"type\": \"bridge\",\n" >> mycni.conf
+	@printf "  \"bridge\": \"cni0\",\n">> mycni.conf
+	@printf "  \"isGateway\": true,\n  \"ipMasq\": true,\n" >> mycni.conf
+	@printf "  \"ipam\": {\n    \"type\": \"host-local\",\n" >> mycni.conf
+	@printf "    \"subnet\": \"10.244.0.0/16\",\n" >> mycni.conf
+	@printf "    \"routes\": [{ \"dst\": \"0.0.0.0/0\" }]\n  }\n}"  >> mycni.conf
+	sudo cp mycni.conf ${CNI_CONFIG_FILE}
+
+	# Create the containerd config file with Kata runtime added
+	@printf "[debug]\n  level = \"debug\"\n" > mycontainerd.conf
+	@printf "[plugins]\n  [plugins.cri]\n    disable_hugetlb_controller = false\n" >> mycontainerd.conf
+	@printf "    [plugins.cri.containerd]\n" >>  mycontainerd.conf
+	@printf "      [plugins.cri.containerd.runtimes]\n" >> mycontainerd.conf
+	@printf "        [plugins.cri.containerd.runtimes.runc]\n" >> mycontainerd.conf
+	@printf "          runtime_type = \"io.containerd.runc.v2\"\n" >> mycontainerd.conf
+	@printf "       [plugins.cri.containerd.runtimes.runc.options]\n"  >> mycontainerd.conf
+	@printf "         BinaryName = \"/usr/local/sbin/runc\"\n" >> mycontainerd.conf
+	@printf "         Root = \"\"\n"  | sudo tee >> mycontainerd.conf
+	@printf "      [plugins.cri.containerd.runtimes.kata]\n" >> mycontainerd.conf
+	@printf "         runtime_type = \"io.containerd.kata.v2\"\n" >> mycontainerd.conf
+	@printf "         privileged_without_host_devices = true\n" >> mycontainerd.conf
+	@printf "      [plugins.cri.registry.mirrors.\"localhost:5000\"]\n" >> mycontainerd.conf
+	@printf "        endpoint = [\"http://localhost:5000\"]\n" >> mycontainerd.conf
+	@printf "      [plugins.cri.cni]\n        conf_dir = \"/etc/cni/net.d\"\n" >> mycontainerd.conf
+	sudo cp mycontainerd.conf ${CONTAINERD_CONFIG_FILE}
+
+ifdef KATA-CC
+	# Modify the containerd config for Kata-CC
+	grep 'cri_handler = \"cc\"' ${CONTAINERD_CONFIG_FILE} || \
+		sudo sed -i 's/\([[:blank:]]*\)\(runtime_type = "io.containerd.kata.v2"\)/\1\2\n\1cri_handler = "cc"/' ${CONTAINERD_CONFIG_FILE}
+endif
+
+	# Reload and restart the containerd service
+	sudo systemctl daemon-reload
+	sudo systemctl restart containerd && sudo systemctl --no-pager status containerd
+	sudo iptables -P FORWARD ACCEPT
+	sudo crictl config --set timeout=10
+
+kata-agent: kata-runtime
+	test -e ${AGENT_BIN_PATH} || make force-kata-agent
+
+force-kata-agent:
+	( cd ${KATA_DIR}/src/agent; \
+	  sudo chown -R ${USER}:${USER} ${KATA_DIR}/src; \
+	  make SECCOMP=no )
+
+guest-rootfs:
+	test -e ${ROOTFS_DIR} || make force-guest-rootfs
+
+force-guest-rootfs: kata-agent
+	sudo rm -rf ${ROOTFS_DIR}
+	sudo rm -rf ${KATA_OS_BUILDER}/rootfs-builder/rootfs-*/
+	# Build rootfs for the given distro with agent binary provided
+	sudo -E GOPATH=${GOPATH} USE_DOCKER=true SECCOMP=no \
+		-E AGENT_SOURCE_BIN=${AGENT_BIN_PATH} \
+		EXTRA_PKGS=${GUEST_OS_EXTRA_PKGS} \
+		${KATA_OS_BUILDER}/rootfs-builder/rootfs.sh ${GUEST_OS_DISTRO}
+	sudo mv ${KATA_OS_BUILDER}/rootfs-builder/rootfs-*/ ${ROOTFS_DIR}
+	@echo "Build guest rootfs at ${ROOTFS_DIR}"
+
+guest-os:
+	test -e ${GUEST_INSTALL_PATH}/kata-containers.img || make force-guest-os
+
+force-guest-os: force-kata-agent
+	make force-guest-rootfs
+
+	# Install kata-agent service
+	( cd ${KATA_DIR}/src/agent; sudo -E make install DESTDIR=${ROOTFS_DIR} )
+
+ifneq ("$(wildcard {CDIR}/customize-rootfs.sh)","")
+	# Allow arbitraty changes to files in the rootfs
+	${CDIR}/customize-rootfs.sh ${ROOTFS_DIR}
+endif
+
+	# Build and install the guest OS image
+	sudo -E USE_DOCKER=true ${KATA_OS_BUILDER}/image-builder/image_builder.sh ${ROOTFS_DIR}
+	sudo mkdir -p ${GUEST_INSTALL_PATH}
+	sudo install -o root -g root -m 0640 -D kata-containers.img ${GUEST_INSTALL_PATH}
+	@echo "Built Rootfs from ${ROOTFS_DIR} and copied to ${GUEST_INSTALL_PATH}/kata-containers.img"
+	sudo rm -f kata-containers.img
+	ls -al ${GUEST_INSTALL_PATH}
+
+kernel:
+	test -e ${GUEST_INSTALL_PATH}/vmlinux.container || make force-kernel
+
+force-kernel:
+	( cd ${KATA_DIR}/tools/packaging/kernel; \
+	  rm -rf kata-linux-*; \
+	 ./build-kernel.sh -f setup; \
+	 ./build-kernel.sh build; \
+	 sudo ./build-kernel.sh install )
+	 ls -al ${GUEST_INSTALL_PATH}
+
+virtiofsd:
+	test -e /usr/libexec/virtiofsd || make force-virtiofsd
+
+force-virtiofsd:
+	( cd ${KATA_DIR}/tools/packaging/static-build/virtiofsd; \
+	  ./build.sh; \
+	  sudo cp virtiofsd/virtiofsd /usr/libexec/ )
+
+qemu:
+	test -e /usr/bin/qemu-system-${ARCH} || make force-qemu
+
+force-qemu:
+	( cd ${KATA_DIR}/tools/packaging/static-build/qemu; \
+	  prefix=/usr make build; \
+	  sudo tar -xf kata-static-qemu.tar.gz -C /; \
+	  rm -rf kata-static-qemu.tar.gz; \
+	)
+
+cloud-hypervisor:
+	test -e /usr/bin/cloud-hypervisor || make force-cloud-hypervisor
+
+force-cloud-hypervisor:
+	sudo wget https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/${CLOUD_HYPERVISOR_VERSION}/cloud-hypervisor-static -O \
+	   /usr/bin/cloud-hypervisor
+	sudo chmod +x /usr/bin/cloud-hypervisor
+	@echo "Downloaded cloud-hypervisor"
+
+devenv: kata-runtime virtiofsd ${KATA_HYPERVISOR} guest-os kernel
+	make tests
+	@echo "\nCongratulations! You have set up the dev environment for Kata Containers successfully. Now a few pointers for developing:\n"
+	@echo "* To work on Kata runtime, modify code under \"kata-containers/src/runtime\", and then \"make force-kata-runtime && make tests\" for quick test of your changes"
+	@echo "* To work on Kata Agent, modify code under \"kata-containers/src/agent\", and then \"make force-guest-os && make tests\" for quick test of your changes"
+	@echo "* Additional setups are likely required if you plan to work on intergration with Kubernetes; Firecracker/ACRN as the hypervisor; Alpine Linux as the guest distro; initrd as the guest image, etc."
+	@echo "\n === Happy coding :-) ===\n"
+
+tests:
+	# Test container launching with ctr
+	sudo kata-runtime check
+	sudo ctr image pull docker.io/library/busybox:latest
+	sudo ctr run --runtime io.containerd.run.kata.v2 -t --rm docker.io/library/busybox:latest hello uname -a
+
+	# Test container launching with crictl
+	wget https://raw.githubusercontent.com/jxyang/kata-containers/jxyang-dev-makefile/docs/how-to/data/crictl/busybox/test-crictl.sh
+	chmod +x test-crictl.sh
+	./test-crictl.sh
+
+distclean:
+	# Best effort clean up of the current dev environment installation
+	sudo rm -rf /usr/bin/cloud-hypervisor
+	sudo rm -rf /usr/bin/qemu-system-* /usr/share/kata-qemu
+	sudo rm -rf /usr/libexec/virtiofsd
+	sudo rm -rf rootfs package-installed my*.conf my*.yaml versions*.yaml
+	sudo rm -rf test-crictl*
+	sudo rm -rf ${GUEST_INSTALL_PATH} ${KATA_INSTALL_PATH}
+	sudo rm -rf ${CNI_CONFIG_FILE} ${CONTAINERD_CONFIG_FILE}
+	sudo rm -rf ${KATA_DIR} ${GOPATH}/src/github.com/containerd
