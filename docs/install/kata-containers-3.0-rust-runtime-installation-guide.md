@@ -24,7 +24,7 @@ architectures:
 
 | Installation method                                  | Description                                                                                  | Automatic updates | Use case                                                                                      | Availability
 |------------------------------------------------------|----------------------------------------------------------------------------------------------|-------------------|-----------------------------------------------------------------------------------------------|----------- |
-| [Using kata-deploy](#kata-deploy-installation)       | The preferred way to deploy the Kata Containers distributed binaries on a Kubernetes cluster | **No!**           | Best way to give it a try on kata-containers on an already up and running Kubernetes cluster. | No |
+| [Using kata-deploy](#kata-deploy-installation)       | The preferred way to deploy the Kata Containers distributed binaries on a Kubernetes cluster | **No!**           | Best way to give it a try on kata-containers on an already up and running Kubernetes cluster. | Yes |
 | [Using official distro packages](#official-packages) | Kata packages provided by Linux distributions official repositories                          | yes               | Recommended for most users. | No |                                                                   
 | [Using snap](#snap-installation)                     | Easy to install                                                                              | yes               | Good alternative to official distro packages.                                                 | No |
 | [Automatic](#automatic-installation)                 | Run a single command to install a full system                                                | **No!**           | For those wanting the latest release quickly.                                                 | No |
@@ -32,7 +32,8 @@ architectures:
 | [Build from source](#build-from-source-installation) | Build the software components manually                                                       | **No!**           | Power users and developers only.  | Yes |              
 
 ### Kata Deploy Installation
-`ToDo`
+
+Follow the [`kata-deploy`](../../tools/packaging/kata-deploy/README.md).
 ### Official packages
 `ToDo`
 ### Snap Installation
