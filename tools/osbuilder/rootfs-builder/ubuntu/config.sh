@@ -21,13 +21,19 @@ case "$ARCH" in
 esac
 
 if [ "${AA_KBC}" == "eaa_kbc" ] && [ "${ARCH}" == "x86_64" ]; then
-	PACKAGES+=" apt gnupg"
-	AA_KBC_EXTRAS="
-RUN echo 'deb [arch=amd64] http://mirrors.openanolis.cn/inclavare-containers/ubuntu20.04 bionic main' \| tee /etc/apt/sources.list.d/inclavare-containers.list; \
-    curl -L http://mirrors.openanolis.cn/inclavare-containers/ubuntu20.04/DEB-GPG-KEY.key \| apt-key add -; \
+	source /etc/os-release
+
+	if [ "${VERSION_ID}" == "20.04" ]; then
+		PACKAGES+=" apt gnupg"
+		AA_KBC_EXTRAS="
+RUN echo 'deb [arch=amd64] http://mirrors.openanolis.cn/inclavare-containers/ubuntu${VERSION_ID} bionic main' \| tee /etc/apt/sources.list.d/inclavare-containers.list; \
+    curl -L http://mirrors.openanolis.cn/inclavare-containers/ubuntu${VERSION_ID}/DEB-GPG-KEY.key \| apt-key add -; \
     apt-get update; \
     apt-get install -y rats-tls
 "
+	else
+		echo "rats-tls is only provided for Ubuntu 20.04, there's yet no packages for Ubuntu ${VERSION_ID}"
+	fi
 fi
 
 if [ "$(uname -m)" != "$ARCH" ]; then
