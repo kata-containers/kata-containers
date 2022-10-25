@@ -15,7 +15,6 @@ readonly default_install_dir="$(cd "${script_dir}/../../kernel" && pwd)"
 
 source "${script_dir}/../../scripts/lib.sh"
 
-container_image="kata-initramfs-builder"
 kata_version="${kata_version:-}"
 cryptsetup_repo="${cryptsetup_repo:-}"
 cryptsetup_version="${cryptsetup_version:-}"
@@ -33,7 +32,9 @@ package_output_dir="${package_output_dir:-}"
 [ -n "${lvm2_repo}" ] || die "Failed to get lvm2 repo"
 [ -n "${lvm2_version}" ] || die "Failed to get lvm2 version"
 
-sudo docker build \
+container_image="${BUILDER_REGISTRY}:initramfs-cryptsetup-${cryptsetup_version}-lvm2-${lvm2_version}-$(get_last_modification ${repo_root_dir} ${script_dir})"
+
+sudo docker pull ${container_image} || sudo docker build \
 	-t "${container_image}" "${script_dir}"
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
