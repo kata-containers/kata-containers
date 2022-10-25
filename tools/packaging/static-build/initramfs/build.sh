@@ -35,15 +35,15 @@ package_output_dir="${package_output_dir:-}"
 container_image="${BUILDER_REGISTRY}:initramfs-cryptsetup-${cryptsetup_version}-lvm2-${lvm2_version}-$(get_last_modification ${repo_root_dir} ${script_dir})"
 
 sudo docker pull ${container_image} || (sudo docker build \
+	--build-arg cryptsetup_repo="${cryptsetup_repo}" \
+	--build-arg cryptsetup_version="${cryptsetup_version}" \
+	--build-arg lvm2_repo="${lvm2_repo}" \
+	--build-arg lvm2_version="${lvm2_version}" \
 	-t "${container_image}" "${script_dir}" && \
 	# No-op unless PUSH_TO_REGISTRY is exported as "yes"
 	push_to_registry "${container_image}")
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
-	--env cryptsetup_repo="${cryptsetup_repo}" \
-	--env cryptsetup_version="${cryptsetup_version}" \
-	--env lvm2_repo="${lvm2_repo}" \
-	--env lvm2_version="${lvm2_version}" \
 	"${container_image}" \
 	bash -c "${initramfs_builder} ${default_install_dir}"
