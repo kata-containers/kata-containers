@@ -152,9 +152,7 @@ install_cc_qemu() {
 #Install all components that are not assets
 install_cc_shimv2() {
 	GO_VERSION="$(yq r ${versions_yaml} languages.golang.meta.newest-version)"
-	RUST_VERSION="$(yq r ${versions_yaml} languages.rust.meta.newest-version)"
 	export GO_VERSION
-	export RUST_VERSION
 	export REMOVE_VMM_CONFIGS="acrn fc"
 
         extra_opts="DEFSERVICEOFFLOAD=true"
