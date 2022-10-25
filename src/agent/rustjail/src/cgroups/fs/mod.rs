@@ -32,6 +32,7 @@ use protocols::agent::{
     BlkioStats, BlkioStatsEntry, CgroupStats, CpuStats, CpuUsage, HugetlbStats, MemoryData,
     MemoryStats, PidsStats, ThrottlingData,
 };
+use std::any::Any;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -192,6 +193,79 @@ impl CgroupManager for Manager {
         let result = pids.iter().map(|x| x.pid as i32).collect::<Vec<i32>>();
 
         Ok(result)
+    }
+
+    fn update_cpuset_path(&self, guest_cpuset: &str, container_cpuset: &str) -> Result<()> {
+        if guest_cpuset.is_empty() {
+            return Ok(());
+        }
+        info!(sl!(), "update_cpuset_path to: {}", guest_cpuset);
+
+        let h = cgroups::hierarchies::auto();
+        let root_cg = h.root_control_group();
+
+        let root_cpuset_controller: &CpuSetController = root_cg.controller_of().unwrap();
+        let path = root_cpuset_controller.path();
+        let root_path = Path::new(path);
+        info!(sl!(), "root cpuset path: {:?}", &path);
+
+        let container_cpuset_controller: &CpuSetController = self.cgroup.controller_of().unwrap();
+        let path = container_cpuset_controller.path();
+        let container_path = Path::new(path);
+        info!(sl!(), "container cpuset path: {:?}", &path);
+
+        let mut paths = vec![];
+        for ancestor in container_path.ancestors() {
+            if ancestor == root_path {
+                break;
+            }
+            paths.push(ancestor);
+        }
+        info!(sl!(), "parent paths to update cpuset: {:?}", &paths);
+
+        let mut i = paths.len();
+        loop {
+            if i == 0 {
+                break;
+            }
+            i -= 1;
+
+            // remove cgroup root from path
+            let r_path = &paths[i]
+                .to_str()
+                .unwrap()
+                .trim_start_matches(root_path.to_str().unwrap());
+            info!(sl!(), "updating cpuset for parent path {:?}", &r_path);
+            let cg = new_cgroup(cgroups::hierarchies::auto(), r_path);
+            let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
+            cpuset_controller.set_cpus(guest_cpuset)?;
+        }
+
+        if !container_cpuset.is_empty() {
+            info!(
+                sl!(),
+                "updating cpuset for container path: {:?} cpuset: {}",
+                &container_path,
+                container_cpuset
+            );
+            container_cpuset_controller.set_cpus(container_cpuset)?;
+        }
+
+        Ok(())
+    }
+
+    fn get_cgroup_path(&self, cg: &str) -> Result<String> {
+        if cgroups::hierarchies::is_cgroup2_unified_mode() {
+            let cg_path = format!("/sys/fs/cgroup/{}", self.cpath);
+            return Ok(cg_path);
+        }
+
+        // for cgroup v1
+        Ok(self.paths.get(cg).map(|s| s.to_string()).unwrap())
+    }
+
+    fn as_any(&self) -> Result<&dyn Any> {
+        Ok(self)
     }
 }
 
@@ -980,75 +1054,6 @@ impl Manager {
             cpath: cpath.to_string(),
             cgroup: new_cgroup(cgroups::hierarchies::auto(), cpath),
         })
-    }
-
-    pub fn update_cpuset_path(&self, guest_cpuset: &str, container_cpuset: &str) -> Result<()> {
-        if guest_cpuset.is_empty() {
-            return Ok(());
-        }
-        info!(sl!(), "update_cpuset_path to: {}", guest_cpuset);
-
-        let h = cgroups::hierarchies::auto();
-        let root_cg = h.root_control_group();
-
-        let root_cpuset_controller: &CpuSetController = root_cg.controller_of().unwrap();
-        let path = root_cpuset_controller.path();
-        let root_path = Path::new(path);
-        info!(sl!(), "root cpuset path: {:?}", &path);
-
-        let container_cpuset_controller: &CpuSetController = self.cgroup.controller_of().unwrap();
-        let path = container_cpuset_controller.path();
-        let container_path = Path::new(path);
-        info!(sl!(), "container cpuset path: {:?}", &path);
-
-        let mut paths = vec![];
-        for ancestor in container_path.ancestors() {
-            if ancestor == root_path {
-                break;
-            }
-            paths.push(ancestor);
-        }
-        info!(sl!(), "parent paths to update cpuset: {:?}", &paths);
-
-        let mut i = paths.len();
-        loop {
-            if i == 0 {
-                break;
-            }
-            i -= 1;
-
-            // remove cgroup root from path
-            let r_path = &paths[i]
-                .to_str()
-                .unwrap()
-                .trim_start_matches(root_path.to_str().unwrap());
-            info!(sl!(), "updating cpuset for parent path {:?}", &r_path);
-            let cg = new_cgroup(cgroups::hierarchies::auto(), r_path);
-            let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
-            cpuset_controller.set_cpus(guest_cpuset)?;
-        }
-
-        if !container_cpuset.is_empty() {
-            info!(
-                sl!(),
-                "updating cpuset for container path: {:?} cpuset: {}",
-                &container_path,
-                container_cpuset
-            );
-            container_cpuset_controller.set_cpus(container_cpuset)?;
-        }
-
-        Ok(())
-    }
-
-    pub fn get_cg_path(&self, cg: &str) -> Option<String> {
-        if cgroups::hierarchies::is_cgroup2_unified_mode() {
-            let cg_path = format!("/sys/fs/cgroup/{}", self.cpath);
-            return Some(cg_path);
-        }
-
-        // for cgroup v1
-        self.paths.get(cg).map(|s| s.to_string())
     }
 }
 

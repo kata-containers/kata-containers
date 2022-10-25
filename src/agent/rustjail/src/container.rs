@@ -22,6 +22,7 @@ use crate::capabilities;
 use crate::cgroups::fs::Manager as FsManager;
 #[cfg(test)]
 use crate::cgroups::mock::Manager as FsManager;
+use crate::cgroups::systemd::manager::Manager as SystemdManager;
 use crate::cgroups::Manager;
 #[cfg(feature = "standard-oci-runtime")]
 use crate::console;
@@ -49,6 +50,7 @@ use std::os::unix::io::AsRawFd;
 use protobuf::SingularPtrField;
 
 use oci::State as OCIState;
+use regex::Regex;
 use std::collections::HashMap;
 use std::os::unix::io::FromRawFd;
 use std::str::FromStr;
@@ -201,6 +203,8 @@ lazy_static! {
             },
         ]
     };
+
+    pub static ref SYSTEMD_CGROUP_PATH_FORMAT:Regex = Regex::new(r"^[\w\-.]*:[\w\-.]*:[\w\-.]*$").unwrap();
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -239,7 +243,7 @@ pub struct LinuxContainer {
     pub id: String,
     pub root: String,
     pub config: Config,
-    pub cgroup_manager: Option<FsManager>,
+    pub cgroup_manager: Option<Box<dyn Manager + Send + Sync>>,
     pub init_process_pid: pid_t,
     pub init_process_start_time: u64,
     pub uid_map_path: String,
@@ -390,7 +394,9 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let buf = read_sync(crfd)?;
     let cm_str = std::str::from_utf8(&buf)?;
 
-    let cm: FsManager = serde_json::from_str(cm_str)?;
+    // deserialize cm_str into FsManager and SystemdManager separately
+    let fs_cm: Result<FsManager, serde_json::Error> = serde_json::from_str(cm_str);
+    let systemd_cm: Result<SystemdManager, serde_json::Error> = serde_json::from_str(cm_str);
 
     #[cfg(feature = "standard-oci-runtime")]
     let csocket_fd = console::setup_console_socket(&std::env::var(CONSOLE_SOCKET_FD)?)?;
@@ -548,7 +554,18 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     if to_new.contains(CloneFlags::CLONE_NEWNS) {
         // setup rootfs
-        mount::init_rootfs(cfd_log, &spec, &cm.paths, &cm.mounts, bind_device)?;
+        if let Ok(systemd_cm) = systemd_cm {
+            mount::init_rootfs(
+                cfd_log,
+                &spec,
+                &systemd_cm.paths,
+                &systemd_cm.mounts,
+                bind_device,
+            )?;
+        } else {
+            let fs_cm = fs_cm.unwrap();
+            mount::init_rootfs(cfd_log, &spec, &fs_cm.paths, &fs_cm.mounts, bind_device)?;
+        }
     }
 
     if init {
@@ -1018,7 +1035,8 @@ impl BaseContainer for LinuxContainer {
             &logger,
             spec,
             &p,
-            self.cgroup_manager.as_ref().unwrap(),
+            self.cgroup_manager.as_ref().unwrap().as_ref(),
+            self.config.use_systemd_cgroup,
             &st,
             &mut pipe_w,
             &mut pipe_r,
@@ -1280,11 +1298,13 @@ pub fn setup_child_logger(fd: RawFd, child_logger: Logger) -> tokio::task::JoinH
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn join_namespaces(
     logger: &Logger,
     spec: &Spec,
     p: &Process,
-    cm: &FsManager,
+    cm: &(dyn Manager + Send + Sync),
+    use_systemd_cgroup: bool,
     st: &OCIState,
     pipe_w: &mut PipeStream,
     pipe_r: &mut PipeStream,
@@ -1311,7 +1331,11 @@ async fn join_namespaces(
     info!(logger, "wait child received oci process");
     read_async(pipe_r).await?;
 
-    let cm_str = serde_json::to_string(cm)?;
+    let cm_str = if use_systemd_cgroup {
+        serde_json::to_string(cm.as_any()?.downcast_ref::<SystemdManager>().unwrap())
+    } else {
+        serde_json::to_string(cm.as_any()?.downcast_ref::<FsManager>().unwrap())
+    }?;
     write_async(pipe_w, SYNC_DATA, cm_str.as_str()).await?;
 
     // wait child setup user namespace
@@ -1334,13 +1358,16 @@ async fn join_namespaces(
     }
 
     // apply cgroups
-    if p.init && res.is_some() {
-        info!(logger, "apply cgroups!");
-        cm.set(res.unwrap(), false)?;
+    // For FsManger, it's no matter about the order of apply and set.
+    // For SystemdManger, apply must be precede set because we can only create a systemd unit with specific processes(pids).
+    if res.is_some() {
+        info!(logger, "apply processes to cgroups!");
+        cm.apply(p.pid)?;
     }
 
-    if res.is_some() {
-        cm.apply(p.pid)?;
+    if p.init && res.is_some() {
+        info!(logger, "set properties to cgroups!");
+        cm.set(res.unwrap(), false)?;
     }
 
     info!(logger, "notify child to continue");
@@ -1419,7 +1446,7 @@ impl LinuxContainer {
     pub fn new<T: Into<String> + Display + Clone>(
         id: T,
         base: T,
-        config: Config,
+        mut config: Config,
         logger: &Logger,
     ) -> Result<Self> {
         let base = base.into();
@@ -1448,18 +1475,40 @@ impl LinuxContainer {
 
         let linux = spec.linux.as_ref().unwrap();
 
-        let cpath = if linux.cgroups_path.is_empty() {
-            format!("/{}", id.as_str())
+        // determine which cgroup driver to take and then assign to config.use_systemd_cgroup
+        // systemd: "[slice]:[prefix]:[name]"
+        // fs: "/path_a/path_b"
+        let cpath = if SYSTEMD_CGROUP_PATH_FORMAT.is_match(linux.cgroups_path.as_str()) {
+            config.use_systemd_cgroup = true;
+            if linux.cgroups_path.len() == 2 {
+                format!("system.slice:kata_agent:{}", id.as_str())
+            } else {
+                linux.cgroups_path.clone()
+            }
         } else {
-            linux.cgroups_path.clone()
+            config.use_systemd_cgroup = false;
+            if linux.cgroups_path.is_empty() {
+                format!("/{}", id.as_str())
+            } else {
+                linux.cgroups_path.clone()
+            }
         };
 
-        let cgroup_manager = FsManager::new(cpath.as_str()).map_err(|e| {
-            anyhow!(format!(
-                "fail to create cgroup manager with path {}: {:}",
-                cpath, e
-            ))
-        })?;
+        let cgroup_manager: Box<dyn Manager + Send + Sync> = if config.use_systemd_cgroup {
+            Box::new(SystemdManager::new(cpath.as_str()).map_err(|e| {
+                anyhow!(format!(
+                    "fail to create cgroup manager with path {}: {:}",
+                    cpath, e
+                ))
+            })?)
+        } else {
+            Box::new(FsManager::new(cpath.as_str()).map_err(|e| {
+                anyhow!(format!(
+                    "fail to create cgroup manager with path {}: {:}",
+                    cpath, e
+                ))
+            })?)
+        };
         info!(logger, "new cgroup_manager {:?}", &cgroup_manager);
 
         Ok(LinuxContainer {
@@ -1944,7 +1993,11 @@ mod tests {
     #[test]
     fn test_linuxcontainer_pause() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.cgroup_manager = FsManager::new("").ok();
+            let cgroup_manager: Box<dyn Manager + Send + Sync> =
+                Box::new(FsManager::new("").map_err(|e| {
+                    anyhow!(format!("fail to create cgroup manager with path: {:}", e))
+                })?);
+            c.cgroup_manager = Some(cgroup_manager);
             c.pause().map_err(|e| anyhow!(e))
         });
 
@@ -1977,7 +2030,11 @@ mod tests {
     #[test]
     fn test_linuxcontainer_resume() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.cgroup_manager = FsManager::new("").ok();
+            let cgroup_manager: Box<dyn Manager + Send + Sync> =
+                Box::new(FsManager::new("").map_err(|e| {
+                    anyhow!(format!("fail to create cgroup manager with path: {:}", e))
+                })?);
+            c.cgroup_manager = Some(cgroup_manager);
             // Change status to paused, this way we can resume it
             c.status.transition(ContainerState::Paused);
             c.resume().map_err(|e| anyhow!(e))

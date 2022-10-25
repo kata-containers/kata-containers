@@ -44,7 +44,6 @@ use nix::errno::Errno;
 use nix::mount::MsFlags;
 use nix::sys::{stat, statfs};
 use nix::unistd::{self, Pid};
-use rustjail::cgroups::Manager;
 use rustjail::process::ProcessOperations;
 
 use crate::device::{
@@ -267,9 +266,9 @@ impl AgentService {
 
         // start oom event loop
         if let Some(ref ctr) = ctr.cgroup_manager {
-            let cg_path = ctr.get_cg_path("memory");
+            let cg_path = ctr.get_cgroup_path("memory");
 
-            if let Some(cg_path) = cg_path {
+            if let Ok(cg_path) = cg_path {
                 let rx = notifier::notify_oom(cid.as_str(), cg_path.to_string()).await?;
 
                 s.run_oom_event_monitor(rx, cid.clone()).await;

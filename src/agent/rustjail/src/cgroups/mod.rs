@@ -4,8 +4,10 @@
 //
 
 use anyhow::{anyhow, Result};
+use core::fmt::Debug;
 use oci::LinuxResources;
 use protocols::agent::CgroupStats;
+use std::any::Any;
 
 use cgroups::freezer::FreezerState;
 
@@ -37,5 +39,23 @@ pub trait Manager {
 
     fn set(&self, _container: &LinuxResources, _update: bool) -> Result<()> {
         Err(anyhow!("not supported!"))
+    }
+
+    fn update_cpuset_path(&self, _: &str, _: &str) -> Result<()> {
+        Err(anyhow!("not supported!"))
+    }
+
+    fn get_cgroup_path(&self, _: &str) -> Result<String> {
+        Err(anyhow!("not supported!"))
+    }
+
+    fn as_any(&self) -> Result<&dyn Any> {
+        Err(anyhow!("not supported!"))
+    }
+}
+
+impl Debug for dyn Manager + Send + Sync {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "CgroupManager")
     }
 }
