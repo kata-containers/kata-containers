@@ -126,7 +126,7 @@ get_last_modification() {
 	git config --global --add safe.directory ${repo_root_dir} &> /dev/null
 
 	dirty=""
-	[ $(git status --porcelain | grep "${file}" | wc -l) -gt 0 ] && dirty="-dirty"
+	[ $(git status --porcelain | grep "${file#${repo_root_dir}/}" | wc -l) -gt 0 ] && dirty="-dirty"
 
 	echo "$(git log -1 --pretty=format:"%H" ${file})${dirty}"
 }
