@@ -11,6 +11,7 @@ use anyhow::Result;
 use cgroups::freezer::FreezerState;
 use libc::{self, pid_t};
 use oci::LinuxResources;
+use std::any::Any;
 use std::collections::HashMap;
 use std::string::String;
 
@@ -53,6 +54,18 @@ impl CgroupManager for Manager {
     fn get_pids(&self) -> Result<Vec<pid_t>> {
         Ok(Vec::new())
     }
+
+    fn update_cpuset_path(&self, _: &str, _: &str) -> Result<()> {
+        Ok(())
+    }
+
+    fn get_cgroup_path(&self, _: &str) -> Result<String> {
+        Ok("".to_string())
+    }
+
+    fn as_any(&self) -> Result<&dyn Any> {
+        Ok(self)
+    }
 }
 
 impl Manager {
@@ -62,13 +75,5 @@ impl Manager {
             mounts: HashMap::new(),
             cpath: cpath.to_string(),
         })
-    }
-
-    pub fn update_cpuset_path(&self, _: &str, _: &str) -> Result<()> {
-        Ok(())
-    }
-
-    pub fn get_cg_path(&self, _: &str) -> Option<String> {
-        Some("".to_string())
     }
 }
