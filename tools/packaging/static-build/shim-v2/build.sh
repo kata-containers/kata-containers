@@ -19,7 +19,7 @@ RUST_VERSION=${RUST_VERSION:-}
 
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
-container_image="${CC_BUILDER_REGISTRY}:shim-v2-go-${GO_VERSION}-rust-${RUST_VERSION}-$(get_last_modification ${repo_root_dir} ${script_dir})"
+container_image="${CC_BUILDER_REGISTRY}:shim-v2-go-${GO_VERSION}-rust-${RUST_VERSION}-$(get_last_modification ${repo_root_dir} ${script_dir})-$(uname -m)"
 
 EXTRA_OPTS="${EXTRA_OPTS:-""}"
 REMOVE_VMM_CONFIGS="${REMOVE_VMM_CONFIGS:-""}"
