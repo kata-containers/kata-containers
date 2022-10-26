@@ -119,10 +119,8 @@ The table below lists the core parts of the project:
 | [runtime](src/runtime) | core | Main component run by a container manager and providing a containerd shimv2 runtime implementation. |
 | [runtime-rs](src/runtime-rs) | core | The Rust version runtime. |
 | [agent](src/agent) | core | Management process running inside the virtual machine / POD that sets up the container environment. |
-| [libraries](src/libs) | core | Library crates shared by multiple Kata Container components or published to [`crates.io`](https://crates.io/index.html) |
 | [`dragonball`](src/dragonball) | core | An optional built-in VMM brings out-of-the-box Kata Containers experience with optimizations on container workloads |
 | [documentation](docs) | documentation | Documentation common to all components (such as design and install documentation). |
-| [libraries](src/libs) | core | Library crates shared by multiple Kata Container components or published to [`crates.io`](https://crates.io/index.html) |
 | [tests](https://github.com/kata-containers/tests) | tests | Excludes unit tests which live with the main code. |
 
 ### Additional components
@@ -135,6 +133,7 @@ The table below lists the remaining parts of the project:
 | [kernel](https://www.kernel.org) | kernel | Linux kernel used by the hypervisor to boot the guest image. Patches are stored [here](tools/packaging/kernel). |
 | [osbuilder](tools/osbuilder) | infrastructure | Tool to create "mini O/S" rootfs and initrd images and kernel for the hypervisor. |
 | [`agent-ctl`](src/tools/agent-ctl) | utility | Tool that provides low-level access for testing the agent. |
+| [`kata-ctl`](src/tools/kata-ctl) | utility | Tool that provides advanced commands and debug facilities. |
 | [`trace-forwarder`](src/tools/trace-forwarder) | utility | Agent tracing helper. |
 | [`runk`](src/tools/runk) | utility | Standard OCI container runtime based on the agent. |
 | [`ci`](https://github.com/kata-containers/ci) | CI | Continuous Integration configuration files and scripts. |

@@ -35,6 +35,7 @@ use crate::event_manager::EventManager;
 /// * `device_info` - A hashmap containing the attached devices for building FDT device nodes.
 /// * `gic_device` - The GIC device.
 /// * `initrd` - Information about an optional initrd.
+#[allow(clippy::borrowed_box)]
 fn configure_system<T: DeviceInfoForFDT + Clone + Debug, M: GuestMemory>(
     guest_mem: &M,
     cmdline: &str,
@@ -58,8 +59,9 @@ fn configure_system<T: DeviceInfoForFDT + Clone + Debug, M: GuestMemory>(
 #[cfg(target_arch = "aarch64")]
 impl Vm {
     /// Gets a reference to the irqchip of the VM
+    #[allow(clippy::borrowed_box)]
     pub fn get_irqchip(&self) -> &Box<dyn GICDevice> {
-        &self.irqchip_handle.as_ref().unwrap()
+        self.irqchip_handle.as_ref().unwrap()
     }
 
     /// Creates the irq chip in-kernel device model.

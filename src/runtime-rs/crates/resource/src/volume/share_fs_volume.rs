@@ -10,6 +10,7 @@ use anyhow::{anyhow, Context, Result};
 
 use super::Volume;
 use crate::share_fs::{ShareFs, ShareFsVolumeConfig};
+use kata_types::mount;
 
 // copy file to container's rootfs if filesystem sharing is not supported, otherwise
 // bind mount it in the shared directory.
@@ -66,6 +67,7 @@ impl ShareFsVolume {
                         target: file_name,
                         readonly: false,
                         mount_options: m.options.clone(),
+                        mount: m.clone(),
                     })
                     .await
                     .context("share fs volume")?;
@@ -101,7 +103,8 @@ impl Volume for ShareFsVolume {
 }
 
 pub(crate) fn is_share_fs_volume(m: &oci::Mount) -> bool {
-    m.r#type == "bind" && !is_host_device(&m.destination)
+    (m.r#type == "bind" || m.r#type == mount::KATA_EPHEMERAL_VOLUME_TYPE)
+        && !is_host_device(&m.destination)
 }
 
 fn is_host_device(dest: &str) -> bool {
