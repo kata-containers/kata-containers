@@ -47,6 +47,7 @@ pull_virtiofsd_released_binary() {
 init_env() {
    source "$HOME/.cargo/env"
 
+   extra_rust_flags=" -C link-self-contained=yes"
    case ${ARCH} in
      "aarch64")
        LIBC="musl"
@@ -60,6 +61,7 @@ init_env() {
      "s390x")
        LIBC="gnu"
        ARCH_LIBC=${ARCH}-linux-${LIBC}
+       extra_rust_flags=""
      ;;
      "x86_64")
        LIBC="musl"
@@ -76,7 +78,7 @@ build_virtiofsd_from_source() {
    git clone --depth 1 --branch ${virtiofsd_version} ${virtiofsd_repo} virtiofsd
    pushd virtiofsd
 
-   export RUSTFLAGS='-C target-feature=+crt-static -C link-self-contained=yes'
+   export RUSTFLAGS='-C target-feature=+crt-static'${extra_rust_flags}
    export LIBSECCOMP_LINK_TYPE=static
    export LIBSECCOMP_LIB_PATH=/usr/lib/${ARCH_LIBC}
    export LIBCAPNG_LINK_TYPE=static
