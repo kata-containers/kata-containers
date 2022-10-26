@@ -7,7 +7,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go-version: [1.17.x]
+        go-version: [1.19.2]
         os: [ubuntu-20.04]
     runs-on: ${{ matrix.os }}
     # don't run this action on forks
