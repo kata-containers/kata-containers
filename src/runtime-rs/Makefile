@@ -357,14 +357,14 @@ endef
 
 .DEFAULT_GOAL := default
 
+GENERATED_FILES += $(CONFIGS)
+
 runtime: $(TARGET)
 
-$(TARGET): $(GENERATED_CODE) $(TARGET_PATH)
+$(TARGET): $(GENERATED_FILES) $(TARGET_PATH)
 
 $(TARGET_PATH): $(SOURCES) | show-summary
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE) $(EXTRA_RUSTFEATURES)
-
-GENERATED_FILES += $(CONFIGS)
 
 $(GENERATED_FILES): %: %.in
 	@sed \
