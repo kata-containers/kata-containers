@@ -50,7 +50,14 @@ docker run \
 	--env CI="${CI:-}" \
 	--env USER=${USER} \ 
 	--env PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-"no"}" \
-	- -v "${kata_dir}:${kata_dir}" \
+	--env INITRAMFS_CONTAINER_BUILDER="${INITRAMFS_CONTAINER_BUILDER:-}" \
+	--env KERNEL_CONTAINER_BUILDER="${KERNEL_CONTAINER_BUILDER:-}" \
+	--env OVMF_CONTAINER_BUILDER="${OVMF_CONTAINER_BUILDER:-}" \
+	--env QEMU_CONTAINER_BUILDER="${QEMU_CONTAINER_BUILDER:-}" \
+	--env SHIM_V2_CONTAINER_BUILDER="${SHIM_V2_CONTAINER_BUILDER:-}" \
+	--env TDSHIM_CONTAINER_BUILDER="${TDSHIM_CONTAINER_BUILDER:-}" \
+	--env VIRTIOFSD_CONTAINER_BUILDER="${VIRTIOFSD_CONTAINER_BUILDER:-}" \
+	-v "${kata_dir}:${kata_dir}" \
 	--rm \
 	-w ${script_dir} \
 	build-kata-deploy "${kata_deploy_create}" $@
