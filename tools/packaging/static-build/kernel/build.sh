@@ -16,7 +16,7 @@ source "${script_dir}/../../scripts/lib.sh"
 
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
-container_image="${BUILDER_REGISTRY}:kernel-$(get_last_modification ${repo_root_dir} ${script_dir})-$(umame -m)"
+container_image="${KERNEL_CONTAINER_BUILDER:-${BUILDER_REGISTRY}:kernel-$(get_last_modification ${repo_root_dir} ${script_dir})-$(uname -m)}"
 
 sudo docker pull ${container_image} || \
 	(sudo docker build -t "${container_image}" "${script_dir}" && \
