@@ -61,6 +61,9 @@ spec:
           name: eosgx-demo-job-1
           image: oeciteam/oe-helloworld:latest
           imagePullPolicy: IfNotPresent
+          volumeMounts:
+          - mountPath: /dev
+            name: dev-mount
           securityContext:
             readOnlyRootFilesystem: true
             capabilities:
