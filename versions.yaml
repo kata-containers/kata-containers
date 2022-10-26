@@ -324,7 +324,7 @@ languages:
   golangci-lint:
     description: "golangci-lint"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.41.1"
+    version: "1.46.2"
     meta:
       description: |
         'newest-version' is the latest version known to work when
