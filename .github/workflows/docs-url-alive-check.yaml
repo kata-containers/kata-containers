@@ -5,11 +5,7 @@ on:
 name: Docs URL Alive Check
 jobs:
   test:
-    strategy:
-      matrix:
-        go-version: [1.17.x]
-        os: [ubuntu-20.04]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-20.04
     # don't run this action on forks
     if: github.repository_owner == 'kata-containers'
     env:
@@ -18,7 +14,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v2
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version: 1.19.2
       env:
         GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Set env
