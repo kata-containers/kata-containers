@@ -25,10 +25,10 @@ cloud_hypervisor_pr="${cloud_hypervisor_pr:-}"
 cloud_hypervisor_pull_ref_branch="${cloud_hypervisor_pull_ref_branch:-main}"
 
 if [ -z "$cloud_hypervisor_repo" ]; then
-       info "Get cloud_hypervisor information from runtime versions.yaml"
-       cloud_hypervisor_url=$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.url")
-       [ -n "$cloud_hypervisor_url" ] || die "failed to get cloud_hypervisor url"
-       cloud_hypervisor_repo="${cloud_hypervisor_url}.git"
+	info "Get cloud_hypervisor information from runtime versions.yaml"
+	cloud_hypervisor_url=$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.url")
+	[ -n "$cloud_hypervisor_url" ] || die "failed to get cloud_hypervisor url"
+	cloud_hypervisor_repo="${cloud_hypervisor_url}.git"
 fi
 [ -n "$cloud_hypervisor_repo" ] || die "failed to get cloud_hypervisor repo"
 
@@ -41,61 +41,61 @@ else
 fi
 
 pull_clh_released_binary() {
-    info "Download cloud-hypervisor version: ${cloud_hypervisor_version}"
-    cloud_hypervisor_binary="https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/${cloud_hypervisor_version}/cloud-hypervisor-static"
+	info "Download cloud-hypervisor version: ${cloud_hypervisor_version}"
+	cloud_hypervisor_binary="https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/${cloud_hypervisor_version}/cloud-hypervisor-static"
 
-    curl --fail -L ${cloud_hypervisor_binary} -o cloud-hypervisor-static || return 1
-    mkdir -p cloud-hypervisor
-    mv -f cloud-hypervisor-static cloud-hypervisor/cloud-hypervisor
-    chmod +x cloud-hypervisor/cloud-hypervisor
+	curl --fail -L ${cloud_hypervisor_binary} -o cloud-hypervisor-static || return 1
+	mkdir -p cloud-hypervisor
+	mv -f cloud-hypervisor-static cloud-hypervisor/cloud-hypervisor
+	chmod +x cloud-hypervisor/cloud-hypervisor
 }
 
 build_clh_from_source() {
-    info "Build ${cloud_hypervisor_repo} version: ${cloud_hypervisor_version}"
-    repo_dir=$(basename "${cloud_hypervisor_repo}")
-    repo_dir="${repo_dir//.git}"
-    rm -rf "${repo_dir}"
-    git clone "${cloud_hypervisor_repo}"
-    git config --global --add safe.directory "$PWD/repo_dir"
-    pushd "${repo_dir}"
+	info "Build ${cloud_hypervisor_repo} version: ${cloud_hypervisor_version}"
+	repo_dir=$(basename "${cloud_hypervisor_repo}")
+	repo_dir="${repo_dir//.git}"
+	rm -rf "${repo_dir}"
+	git clone "${cloud_hypervisor_repo}"
+	git config --global --add safe.directory "$PWD/repo_dir"
+	pushd "${repo_dir}"
 
-    if [ -n "${cloud_hypervisor_pr}" ]; then
-	    local pr_branch="PR_${cloud_hypervisor_pr}"
-	    git fetch origin "pull/${cloud_hypervisor_pr}/head:${pr_branch}" || return 1
-	    git checkout "${pr_branch}"
-	    git rebase "origin/${cloud_hypervisor_pull_ref_branch}"
+	if [ -n "${cloud_hypervisor_pr}" ]; then
+		local pr_branch="PR_${cloud_hypervisor_pr}"
+		git fetch origin "pull/${cloud_hypervisor_pr}/head:${pr_branch}" || return 1
+		git checkout "${pr_branch}"
+		git rebase "origin/${cloud_hypervisor_pull_ref_branch}"
 
-	    git log --oneline main~1..HEAD
-    else
-	    git fetch || true
-	    git checkout "${cloud_hypervisor_version}"
-    fi 
+		git log --oneline main~1..HEAD
+	else
+		git fetch || true
+		git checkout "${cloud_hypervisor_version}"
+	fi
 
-    if [ -n "${features}" ]; then
-        info "Build cloud-hypervisor enabling the following features: ${features}"
-        ./scripts/dev_cli.sh build --release --libc musl --features "${features}"
-    else
-        ./scripts/dev_cli.sh build --release --libc musl
-    fi
-    rm -f cloud-hypervisor
-    cp build/cargo_target/$(uname -m)-unknown-linux-musl/release/cloud-hypervisor .
-    popd
+	if [ -n "${features}" ]; then
+		info "Build cloud-hypervisor enabling the following features: ${features}"
+		./scripts/dev_cli.sh build --release --libc musl --features "${features}"
+	else
+		./scripts/dev_cli.sh build --release --libc musl
+	fi
+	rm -f cloud-hypervisor
+	cp build/cargo_target/$(uname -m)-unknown-linux-musl/release/cloud-hypervisor .
+	popd
 }
 
 if [ "${ARCH}" == "aarch64" ]; then
-    info "aarch64 binaries are not distributed as part of the Cloud Hypervisor releases, forcing to build from source"
-    force_build_from_source="true"
+	info "aarch64 binaries are not distributed as part of the Cloud Hypervisor releases, forcing to build from source"
+	force_build_from_source="true"
 fi
 
 if [ -n "${features}" ]; then
-    info "As an extra build argument has been passed to the script, forcing to build from source"
-    force_build_from_source="true"
+	info "As an extra build argument has been passed to the script, forcing to build from source"
+	force_build_from_source="true"
 fi
 
 if [ "${force_build_from_source}" == "true" ]; then
-    info "Build cloud-hypervisor from source as it's been request via the force_build_from_source flag"
-    build_clh_from_source
+	info "Build cloud-hypervisor from source as it's been request via the force_build_from_source flag"
+	build_clh_from_source
 else
-    pull_clh_released_binary || 
-        (info "Failed to pull cloud-hypervisor released binary, trying to build from source" && build_clh_from_source)
+	pull_clh_released_binary ||
+	(info "Failed to pull cloud-hypervisor released binary, trying to build from source" && build_clh_from_source)
 fi
