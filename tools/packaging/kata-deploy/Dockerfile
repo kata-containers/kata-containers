@@ -4,18 +4,9 @@
 
 # Specify alternative base image, e.g. clefos for s390x
 ARG IMAGE
-FROM ${IMAGE:-registry.centos.org/centos}:7
-ARG KATA_ARTIFACTS=./kata-static.tar.xz
+FROM ${IMAGE:-docker.io/centos}:7
+ARG KATA_ARTIFACTS=./local-build/kata-static.tar.xz
 ARG DESTINATION=/opt/kata-artifacts
-
-COPY ${KATA_ARTIFACTS} ${WORKDIR}
-
-RUN \
-yum -y update && \
-yum -y install xz && \
-yum clean all && \
-mkdir -p ${DESTINATION} && \
-tar xvf ${KATA_ARTIFACTS} -C ${DESTINATION}
 
 # hadolint will deny echo -e, heredocs don't work in Dockerfiles, shell substitution doesn't work with $'...'
 RUN \
@@ -26,4 +17,6 @@ echo "gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packa
 yum -y install kubectl && \
 yum clean all
 
+RUN mkdir -p ${DESTINATION}
+ADD ${KATA_ARTIFACTS} ${DESTINATION}/
 COPY scripts ${DESTINATION}/scripts
