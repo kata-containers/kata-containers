@@ -27,6 +27,7 @@ const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "agent.unified_cgroup_hierarchy";
 const CONFIG_FILE: &str = "agent.config_file";
 const CONTAINER_POLICY_FILE: &str = "agent.container_policy_file";
+const AA_KBC_PARAMS: &str = "agent.aa_kbc_params";
 const HTTPS_PROXY: &str = "agent.https_proxy";
 const NO_PROXY: &str = "agent.no_proxy";
 const ENABLE_DATA_INTEGRITY: &str = "agent.data_integrity";
@@ -316,6 +317,7 @@ impl AgentConfig {
                 get_container_policy_path_value
             );
 
+            parse_cmdline_param!(param, AA_KBC_PARAMS, config.aa_kbc_params, get_string_value);
             parse_cmdline_param!(param, HTTPS_PROXY, config.https_proxy, get_url_value);
             parse_cmdline_param!(param, NO_PROXY, config.no_proxy, get_string_value);
             parse_cmdline_param!(
@@ -544,6 +546,7 @@ mod tests {
             unified_cgroup_hierarchy: bool,
             tracing: bool,
             container_policy_path: &'a str,
+            aa_kbc_params: &'a str,
             https_proxy: &'a str,
             no_proxy: &'a str,
             data_integrity: bool,
@@ -563,6 +566,7 @@ mod tests {
                     unified_cgroup_hierarchy: false,
                     tracing: false,
                     container_policy_path: "",
+                    aa_kbc_params: "",
                     https_proxy: "",
                     no_proxy: "",
                     data_integrity: false,
@@ -941,6 +945,16 @@ mod tests {
                 ..Default::default()
             },
             TestData {
+                contents: "agent.aa_kbc_params=offline_fs_kbc::null",
+                aa_kbc_params: "offline_fs_kbc::null",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.aa_kbc_params=eaa_kbc::127.0.0.1:50000",
+                aa_kbc_params: "eaa_kbc::127.0.0.1:50000",
+                ..Default::default()
+            },
+            TestData {
                 contents: "agent.https_proxy=http://proxy.url.com:81/",
                 https_proxy: "http://proxy.url.com:81/",
                 ..Default::default()
@@ -1037,6 +1051,7 @@ mod tests {
                 "{}",
                 msg
             );
+            assert_eq!(d.aa_kbc_params, config.aa_kbc_params, "{}", msg);
             assert_eq!(d.https_proxy, config.https_proxy, "{}", msg);
             assert_eq!(d.no_proxy, config.no_proxy, "{}", msg);
             assert_eq!(d.data_integrity, config.data_integrity, "{}", msg);
