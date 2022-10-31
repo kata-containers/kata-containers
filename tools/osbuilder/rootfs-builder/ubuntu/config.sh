@@ -26,7 +26,7 @@ if [ "${AA_KBC}" == "eaa_kbc" ] && [ "${ARCH}" == "x86_64" ]; then
 	if [ "${VERSION_ID}" == "20.04" ]; then
 		PACKAGES+=" apt gnupg"
 		AA_KBC_EXTRAS="
-RUN echo 'deb [arch=amd64] http://mirrors.openanolis.cn/inclavare-containers/ubuntu${VERSION_ID} bionic main' \| tee /etc/apt/sources.list.d/inclavare-containers.list; \
+RUN echo 'deb [arch=amd64] http://mirrors.openanolis.cn/inclavare-containers/ubuntu${VERSION_ID} ${OS_VERSION} main' \| tee /etc/apt/sources.list.d/inclavare-containers.list; \
     curl -L http://mirrors.openanolis.cn/inclavare-containers/ubuntu${VERSION_ID}/DEB-GPG-KEY.key \| apt-key add -; \
     apt-get update; \
     apt-get install -y rats-tls

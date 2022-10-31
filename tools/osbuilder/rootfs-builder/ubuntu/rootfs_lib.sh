@@ -39,7 +39,7 @@ EOF
 		if [ "${VERSION_ID}" == "20.04" ]; then
 			curl -L http://mirrors.openanolis.cn/inclavare-containers/ubuntu${VERSION_ID}/DEB-GPG-KEY.key | chroot "$rootfs_dir" apt-key add -
 			cat << EOF | chroot "$rootfs_dir"
-echo 'deb [arch=amd64] http://mirrors.openanolis.cn/inclavare-containers/ubuntu${VERSION_ID} bionic main' | tee /etc/apt/sources.list.d/inclavare-containers.list
+echo 'deb [arch=amd64] http://mirrors.openanolis.cn/inclavare-containers/ubuntu${VERSION_ID} focal main' | tee /etc/apt/sources.list.d/inclavare-containers.list
 apt-get update
 apt-get install -y rats-tls
 EOF
