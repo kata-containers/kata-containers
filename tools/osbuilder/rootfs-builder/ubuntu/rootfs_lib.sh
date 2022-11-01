@@ -47,6 +47,8 @@ echo 'deb [arch=amd64] https://download.01.org/intel-sgx/sgx_repo/ubuntu focal m
 echo 'deb [arch=amd64] http://mirrors.openanolis.cn/inclavare-containers/ubuntu${VERSION_ID} focal main' | tee /etc/apt/sources.list.d/inclavare-containers.list
 apt-get update
 apt-get install -y rats-tls-tdx
+
+echo 'port=4050' | tee /etc/tdx-attest.conf
 EOF
 		else
 			echo "rats-tls-tdx is only provided for Ubuntu 20.04, there's yet no packages for Ubuntu ${VERSION_ID}"
