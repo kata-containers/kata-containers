@@ -21,6 +21,11 @@ patches_path=""
 readonly default_patches_dir="${packaging_root_dir}/kernel/patches"
 
 export GOPATH=${GOPATH:-${HOME}/go}
+
+final_image_name="kata-containers"
+final_initrd_name="kata-containers-initrd"
+image_initrd_extension=".img"
+
 source "${packaging_root_dir}/scripts/lib.sh"
 
 arch_target="$(uname -m)"
@@ -53,7 +58,7 @@ build_initrd() {
 	mv "kata-containers-initrd.img" "${install_dir}/${initrd_name}"
 	(
 		cd "${install_dir}"
-		ln -sf "${initrd_name}" kata-containers-initrd.img
+		ln -sf "${initrd_name}" "${final_initrd_name}${image_initrd_extension}"
 	)
 }
 
@@ -73,7 +78,7 @@ build_image() {
 	fi
 	(
 		cd "${install_dir}"
-		ln -sf "${image_name}" kata-containers.img
+		ln -sf "${image_name}" "${final_image_name}${image_initrd_extension}"
 	)
 }
 
@@ -90,6 +95,7 @@ Options:
  --imagetype=${image_type}
  --prefix=${prefix}
  --destdir=${destdir}
+ --image_initrd_sufix=${image_initrd_suffix}
 EOF
 
 	exit "${return_code}"
@@ -99,6 +105,7 @@ main() {
 	image_type=image
 	destdir="$PWD"
 	prefix="/opt/kata"
+	image_initrd_suffix=""
 	builddir="${PWD}"
 	while getopts "h-:" opt; do
 		case "$opt" in
@@ -117,6 +124,20 @@ main() {
 				initrd_distro=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.name")
 				initrd_os_version=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.version")
 				initrd_name="kata-${initrd_distro}-${initrd_os_version}.${image_type}"
+				;;
+			image_initrd_suffix=*)
+				image_initrd_suffix=${OPTARG#*=}
+				if [ -n "${image_initrd_suffix}" ]; then
+					img_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name")
+					img_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version")
+					image_name="kata-${img_distro}-${img_os_version}-${image_initrd_suffix}.${image_type}"
+					final_image_name="${final_image_name}-${image_initrd_suffix}"
+
+					initrd_distro=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.name")
+					initrd_os_version=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.version")
+					initrd_name="kata-${initrd_distro}-${initrd_os_version}-${image_initrd_suffix}.${image_type}"
+					final_initrd_name="${final_initrd_name}-${image_initrd_suffix}"
+				fi
 				;;
 			prefix=*)
 				prefix=${OPTARG#*=}
