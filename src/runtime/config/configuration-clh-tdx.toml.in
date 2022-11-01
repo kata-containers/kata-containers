@@ -14,7 +14,7 @@
 [hypervisor.clh]
 path = "@CLHPATH@"
 kernel = "@KERNELTDXPATH_CLH@"
-image = "@IMAGEPATH@"
+image = "@IMAGETDXPATH@"
 
 # Enable confidential guest support.
 # Toggling that setting may trigger different hardware features, ranging
