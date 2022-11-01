@@ -136,7 +136,6 @@ Class | Method | HTTP request | Description
  - [SgxEpcConfig](docs/SgxEpcConfig.md)
  - [TokenBucket](docs/TokenBucket.md)
  - [VdpaConfig](docs/VdpaConfig.md)
- - [VmAddDevice](docs/VmAddDevice.md)
  - [VmConfig](docs/VmConfig.md)
  - [VmCoredumpData](docs/VmCoredumpData.md)
  - [VmInfo](docs/VmInfo.md)

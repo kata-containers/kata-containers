@@ -176,7 +176,7 @@ ifneq (,$(DBCMD))
     SYSCONFIG_DB = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_DB))
     SYSCONFIG_PATHS += $(SYSCONFIG_DB)
     CONFIGS += $(CONFIG_DB)
-    # dragonball-specific options (all should be suffixed by "_dragonball")
+    # dragonball-specific options (all should be suffixed by "_DB")
     DEFMAXVCPUS_DB := 1
     DEFBLOCKSTORAGEDRIVER_DB := virtio-blk
     DEFNETWORKMODEL_DB := tcfilter
@@ -357,14 +357,14 @@ endef
 
 .DEFAULT_GOAL := default
 
+GENERATED_FILES += $(CONFIGS)
+
 runtime: $(TARGET)
 
-$(TARGET): $(GENERATED_CODE) $(TARGET_PATH)
+$(TARGET): $(GENERATED_FILES) $(TARGET_PATH)
 
 $(TARGET_PATH): $(SOURCES) | show-summary
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE) $(EXTRA_RUSTFEATURES)
-
-GENERATED_FILES += $(CONFIGS)
 
 $(GENERATED_FILES): %: %.in
 	@sed \
@@ -490,7 +490,7 @@ install-runtime: runtime
 
 install-configs: $(CONFIGS)
 	$(foreach f,$(CONFIGS),$(call INSTALL_FILE,$f,$(dir $(CONFIG_PATH)))) \
-    sudo ln -sf $(DEFAULT_HYPERVISOR_CONFIG) $(DESTDIR)/$(CONFIG_PATH)
+	ln -sf $(DEFAULT_HYPERVISOR_CONFIG) $(DESTDIR)/$(CONFIG_PATH)
 
 .PHONY: \
 	help \

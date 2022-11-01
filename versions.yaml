@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "2115a4156891804e5fc7bbd0d1831d2e92a0c50e"
+      version: "b4e39427080293c674b8db627ee6daf1f1b56806"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -353,7 +353,7 @@ languages:
   golangci-lint:
     description: "golangci-lint"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.41.1"
+    version: "1.46.2"
     meta:
       description: |
         'newest-version' is the latest version known to work when
