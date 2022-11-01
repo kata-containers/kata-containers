@@ -31,10 +31,8 @@ setup() {
 	assert_pod_fail
 }
 
-@test "$test_tag Test can pull an unencrypted image inside the guest" {
+@test "$test_tag Test can pull an unencrypted image inside the guest without signature config" {
 	local container_config="${FIXTURES_DIR}/container-config.yaml"
-
-	setup_signature_files
 
 	create_test_pod
 

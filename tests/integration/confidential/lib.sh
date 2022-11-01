@@ -116,6 +116,24 @@ clear_kernel_params() {
 		"$RUNTIME_CONFIG_PATH"
 }
 
+# Remove parameters in the 'kernel_params' property on kata's configuration.toml
+#
+# Parameters:
+#	$1 - parameter name
+#
+# Environment variables:
+#	RUNTIME_CONFIG_PATH - path to kata's configuration.toml. If it is not
+#			      export then it will figure out the path via
+#			      `kata-runtime env` and export its value.
+#
+remove_kernel_param() {
+	local param_name="${1}"
+	load_runtime_config_path
+
+	sudo sed -i "/kernel_params = /s/$param_name=[^[:space:]\"]*//g" \
+		"$RUNTIME_CONFIG_PATH"
+}
+
 # Enable the agent console so that one can open a shell with the guest VM.
 #
 # Environment variables:
@@ -222,6 +240,10 @@ setup_common_signature_files_in_guest() {
 }
 
 setup_offline_fs_kbc_signature_files_in_guest() {
+	# Enable signature verification via kata-configuration by removing the param that disables it
+	remove_kernel_param "agent.enable_signature_verification"
+
+	# Set-up required files in guest image
 	setup_common_signature_files_in_guest
 	setup_offline_fs_kbc_agent_config_in_guest
 	cp_to_guest_img "etc" "${SHARED_FIXTURES_DIR}/offline-fs-kbc/aa-offline_fs_kbc-resources.json"
