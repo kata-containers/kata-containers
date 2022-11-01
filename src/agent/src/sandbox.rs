@@ -329,7 +329,7 @@ impl Sandbox {
             // Reject non-file, symlinks and non-executable files
             if !entry.file_type()?.is_file()
                 || entry.file_type()?.is_symlink()
-                || entry.metadata()?.permissions().mode() & 0o777 & 0o111 == 0
+                || entry.metadata()?.permissions().mode() & 0o111 == 0
             {
                 continue;
             }

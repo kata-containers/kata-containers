@@ -130,7 +130,11 @@ impl KataAgent {
 
     pub(crate) async fn agent_sock(&self) -> Result<String> {
         let inner = self.inner.read().await;
-        Ok(inner.socket_address.clone())
+        Ok(format!(
+            "{}:{}",
+            inner.socket_address.clone(),
+            inner.config.server_port
+        ))
     }
 
     pub(crate) async fn agent_config(&self) -> AgentConfig {

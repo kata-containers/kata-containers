@@ -15,7 +15,10 @@ use common::{
 };
 use containerd_shim_protos::events::task::TaskOOM;
 use hypervisor::{dragonball::Dragonball, Hypervisor, HYPERVISOR_DRAGONBALL};
-use kata_types::config::TomlConfig;
+use kata_types::config::{
+    default::{DEFAULT_AGENT_LOG_PORT, DEFAULT_AGENT_VSOCK_PORT},
+    TomlConfig,
+};
 use resource::{
     manager::ManagerArgs,
     network::{NetworkConfig, NetworkWithNetNsConfig},
@@ -299,8 +302,8 @@ impl Persist for VirtSandbox {
         let agent = Arc::new(KataAgent::new(kata_types::config::Agent {
             debug: true,
             enable_tracing: false,
-            server_port: 1024,
-            log_port: 1025,
+            server_port: DEFAULT_AGENT_VSOCK_PORT,
+            log_port: DEFAULT_AGENT_LOG_PORT,
             dial_timeout_ms: 10,
             reconnect_timeout_ms: 3_000,
             request_timeout_ms: 30_000,

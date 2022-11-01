@@ -32,16 +32,7 @@ pub fn handle_check(checkcmd: CheckArgument) -> Result<()> {
 
         CheckSubCommand::CheckVersionOnly => {
             // retrieve latest release
-            #[cfg(any(
-                target_arch = "aarch64",
-                target_arch = "powerpc64le",
-                target_arch = "x86_64"
-            ))]
             check::check_version()?;
-
-            // See: https://github.com/kata-containers/kata-containers/issues/5438
-            #[cfg(target_arch = "s390x")]
-            unimplemented!("Network check not implemented on s390x")
         }
     }
 

@@ -6,32 +6,22 @@
 // Contains checks that are not architecture-specific
 
 use anyhow::{anyhow, Result};
-// See: https://github.com/kata-containers/kata-containers/issues/5438
-#[cfg(any(
-    target_arch = "aarch64",
-    target_arch = "powerpc64le",
-    target_arch = "x86_64"
-))]
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use serde_json::Value;
-#[cfg(any(
-    target_arch = "aarch64",
-    target_arch = "powerpc64le",
-    target_arch = "x86_64"
-))]
 use std::collections::HashMap;
-use std::fs;
 
 const KATA_GITHUB_URL: &str =
     "https://api.github.com/repos/kata-containers/kata-containers/releases/latest";
 
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 fn get_cpu_info(cpu_info_file: &str) -> Result<String> {
-    let contents = fs::read_to_string(cpu_info_file)?;
+    let contents = std::fs::read_to_string(cpu_info_file)?;
     Ok(contents)
 }
 
 // get_single_cpu_info returns the contents of the first cpu from
 // the specified cpuinfo file by parsing based on a specified delimiter
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 pub fn get_single_cpu_info(cpu_info_file: &str, substring: &str) -> Result<String> {
     let contents = get_cpu_info(cpu_info_file)?;
 
@@ -51,6 +41,7 @@ pub fn get_single_cpu_info(cpu_info_file: &str, substring: &str) -> Result<Strin
 
 // get_cpu_flags returns a string of cpu flags from cpuinfo, passed in
 // as a string
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 pub fn get_cpu_flags(cpu_info: &str, cpu_flags_tag: &str) -> Result<String> {
     if cpu_info.is_empty() {
         return Err(anyhow!("cpu_info string is empty"))?;
@@ -74,6 +65,7 @@ pub fn get_cpu_flags(cpu_info: &str, cpu_flags_tag: &str) -> Result<String> {
 
 // get_missing_strings searches for required (strings) in data and returns
 // a vector containing the missing strings
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 fn get_missing_strings(data: &str, required: &'static [&'static str]) -> Result<Vec<String>> {
     let mut missing: Vec<String> = Vec::new();
 
@@ -86,6 +78,7 @@ fn get_missing_strings(data: &str, required: &'static [&'static str]) -> Result<
     Ok(missing)
 }
 
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 pub fn check_cpu_flags(
     retrieved_flags: &str,
     required_flags: &'static [&'static str],
@@ -95,6 +88,7 @@ pub fn check_cpu_flags(
     Ok(missing_flags)
 }
 
+#[cfg(any(target_arch = "x86_64"))]
 pub fn check_cpu_attribs(
     cpu_info: &str,
     required_attribs: &'static [&'static str],
@@ -110,11 +104,6 @@ pub fn run_network_checks() -> Result<()> {
     Ok(())
 }
 
-#[cfg(any(
-    target_arch = "aarch64",
-    target_arch = "powerpc64le",
-    target_arch = "x86_64"
-))]
 fn get_kata_version_by_url(url: &str) -> std::result::Result<String, reqwest::Error> {
     let content = reqwest::blocking::Client::new()
         .get(url)
@@ -127,11 +116,6 @@ fn get_kata_version_by_url(url: &str) -> std::result::Result<String, reqwest::Er
     Ok(version.to_string())
 }
 
-#[cfg(any(
-    target_arch = "aarch64",
-    target_arch = "powerpc64le",
-    target_arch = "x86_64"
-))]
 fn handle_reqwest_error(e: reqwest::Error) -> anyhow::Error {
     if e.is_connect() {
         return anyhow!(e).context("http connection failure: connection refused");
@@ -152,11 +136,6 @@ fn handle_reqwest_error(e: reqwest::Error) -> anyhow::Error {
     anyhow!(e).context("unknown http connection failure: {:?}")
 }
 
-#[cfg(any(
-    target_arch = "aarch64",
-    target_arch = "powerpc64le",
-    target_arch = "x86_64"
-))]
 pub fn check_version() -> Result<()> {
     let version = get_kata_version_by_url(KATA_GITHUB_URL).map_err(handle_reqwest_error)?;
 
@@ -165,6 +144,7 @@ pub fn check_version() -> Result<()> {
     Ok(())
 }
 
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,11 +170,6 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
-    #[cfg(any(
-        target_arch = "aarch64",
-        target_arch = "powerpc64le",
-        target_arch = "x86_64"
-    ))]
     #[test]
     fn check_version_by_empty_url() {
         const TEST_URL: &str = "http:";
@@ -203,11 +178,6 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
-    #[cfg(any(
-        target_arch = "aarch64",
-        target_arch = "powerpc64le",
-        target_arch = "x86_64"
-    ))]
     #[test]
     fn check_version_by_garbage_url() {
         const TEST_URL: &str = "_localhost_";
@@ -216,11 +186,6 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
-    #[cfg(any(
-        target_arch = "aarch64",
-        target_arch = "powerpc64le",
-        target_arch = "x86_64"
-    ))]
     #[test]
     fn check_version_by_invalid_url() {
         const TEST_URL: &str = "http://localhost :80";
@@ -229,11 +194,6 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
-    #[cfg(any(
-        target_arch = "aarch64",
-        target_arch = "powerpc64le",
-        target_arch = "x86_64"
-    ))]
     #[test]
     fn check_latest_version() {
         let version = get_kata_version_by_url(KATA_GITHUB_URL).unwrap();
