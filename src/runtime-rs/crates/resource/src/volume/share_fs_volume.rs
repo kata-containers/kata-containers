@@ -65,7 +65,7 @@ impl ShareFsVolume {
                         cid: cid.to_string(),
                         source: m.source.clone(),
                         target: file_name,
-                        readonly: false,
+                        readonly: m.options.iter().any(|o| *o == "ro"),
                         mount_options: m.options.clone(),
                         mount: m.clone(),
                     })
