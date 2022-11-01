@@ -20,6 +20,7 @@ jobs:
           - cc-sev-ovmf
           - cc-sev-rootfs-initrd
           - cc-tdx-kernel
+          - cc-tdx-rootfs-image
           - cc-tdx-qemu
           - cc-tdx-td-shim
           - cc-tdx-tdvf
