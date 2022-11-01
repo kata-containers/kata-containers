@@ -1619,6 +1619,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "netns-rs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23541694f1d7d18cd1a0da3a1352a6ea48b01cbb4a8e7a6e547963823fd5276e"
+dependencies = [
+ "nix 0.23.1",
+ "thiserror",
+]
+
+[[package]]
 name = "nix"
 version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2299,6 +2309,7 @@ dependencies = [
  "logging",
  "netlink-packet-route",
  "netlink-sys",
+ "netns-rs",
  "nix 0.24.2",
  "oci",
  "persist",

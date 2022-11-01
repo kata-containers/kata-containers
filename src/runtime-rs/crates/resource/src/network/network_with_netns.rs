@@ -23,7 +23,7 @@ use super::{
     },
     network_entity::NetworkEntity,
     network_info::network_info_from_link::NetworkInfoFromLink,
-    utils::{link, netns},
+    utils::link,
     Network,
 };
 use crate::network::NetworkInfo;
@@ -74,7 +74,9 @@ impl NetworkWithNetns {
 impl Network for NetworkWithNetns {
     async fn setup(&self, h: &dyn Hypervisor) -> Result<()> {
         let inner = self.inner.read().await;
-        let _netns_guard = netns::NetnsGuard::new(&inner.netns_path).context("net netns guard")?;
+        let netns = netns_rs::get_from_path(&inner.netns_path)
+            .context("failed to get network namespace from the path")?;
+        netns.enter().context("failed to enter network namespace")?;
         for e in &inner.entity_list {
             e.endpoint.attach(h).await.context("attach")?;
         }
@@ -130,9 +132,9 @@ async fn get_entity_from_netns(config: &NetworkWithNetNsConfig) -> Result<Vec<Ne
         nix::unistd::gettid()
     );
     let mut entity_list = vec![];
-    let _netns_guard = netns::NetnsGuard::new(&config.netns_path)
-        .context("net netns guard")
-        .unwrap();
+    let netns = netns_rs::get_from_path(&config.netns_path)
+        .context("failed to get network namespace from path")?;
+    netns.enter().context("failed to enter network namespace")?;
     let (connection, handle, _) = rtnetlink::new_connection().context("new connection")?;
     let thread_handler = tokio::spawn(connection);
     defer!({
@@ -167,9 +169,9 @@ async fn create_endpoint(
     idx: u32,
     config: &NetworkWithNetNsConfig,
 ) -> Result<(Arc<dyn Endpoint>, Arc<dyn NetworkInfo>)> {
-    let _netns_guard = netns::NetnsGuard::new(&config.netns_path)
-        .context("net netns guard")
-        .unwrap();
+    let netns = netns_rs::get_from_path(&config.netns_path)
+        .context("failed to get network namespace from path")?;
+    netns.enter().context("failed to enter network namespace")?;
     let attrs = link.attrs();
     let link_type = link.r#type();
     let endpoint: Arc<dyn Endpoint> = if is_physical_iface(&attrs.name)? {
