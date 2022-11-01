@@ -670,10 +670,13 @@ EOF
 			AA_KBC_PARAMS="offline_sev_kbc::null" envsubst < "${script_dir}/agent-config.toml.in" | tee "${ROOTFS_DIR}/etc/agent-config.toml"
 		fi
 		attestation_agent_url="$(get_package_version_from_kata_yaml externals.attestation-agent.url)"
-		attestation_agent_branch="$(get_package_version_from_kata_yaml externals.attestation-agent.branch)"
+		attestation_agent_version="$(get_package_version_from_kata_yaml externals.attestation-agent.version)"
 		info "Install attestation-agent with KBC ${AA_KBC}"
-		git clone "${attestation_agent_url}" --branch "${attestation_agent_branch}"
+		#git clone "${attestation_agent_url}" --branch "${attestation_agent_tag}" --single-branch
+		git clone --depth=1 "${attestation_agent_url}" attestation-agent
 		pushd attestation-agent/app
+		git fetch --depth=1 origin "${attestation_agent_version}"
+		git checkout FETCH_HEAD
 		source "${HOME}/.cargo/env"
 		target="${ARCH}-unknown-linux-${LIBC}"
 		if [ "${AA_KBC}" == "eaa_kbc" ] && [ "${ARCH}" == "x86_64" ]; then
