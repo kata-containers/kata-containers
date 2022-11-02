@@ -71,12 +71,21 @@ impl ResourceManagerInner {
         for dc in device_configs {
             match dc {
                 ResourceConfig::ShareFs(c) => {
-                    let share_fs = share_fs::new(&self.sid, &c).context("new share fs")?;
-                    share_fs
-                        .setup_device_before_start_vm(self.hypervisor.as_ref())
-                        .await
-                        .context("setup share fs device before start vm")?;
-                    self.share_fs = Some(share_fs);
+                    self.share_fs = if self
+                        .hypervisor
+                        .capabilities()
+                        .await?
+                        .is_fs_sharing_supported()
+                    {
+                        let share_fs = share_fs::new(&self.sid, &c).context("new share fs")?;
+                        share_fs
+                            .setup_device_before_start_vm(self.hypervisor.as_ref())
+                            .await
+                            .context("setup share fs device before start vm")?;
+                        Some(share_fs)
+                    } else {
+                        None
+                    };
                 }
                 ResourceConfig::Network(c) => {
                     let d = network::new(&c).await.context("new network")?;
