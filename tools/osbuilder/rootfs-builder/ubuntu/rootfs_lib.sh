@@ -40,9 +40,7 @@ EOF
 			curl -L http://mirrors.openanolis.cn/inclavare-containers/ubuntu${VERSION_ID}/DEB-GPG-KEY.key | chroot "$rootfs_dir" apt-key add -
     			curl -L https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key | chroot "${rootfs_dir}" apt-key add -
 			cat << EOF | chroot "$rootfs_dir"
-apt-get update
-apt-get install -y software-properties-common
-add-apt-repository universe
+echo 'deb [arch=amd64] http://security.ubuntu.com/ubuntu focal-security main universe' | tee /etc/apt/sources.list.d/universe.list
 echo 'deb [arch=amd64] https://download.01.org/intel-sgx/sgx_repo/ubuntu focal main' | tee /etc/apt/sources.list.d/intel-sgx.list
 echo 'deb [arch=amd64] http://mirrors.openanolis.cn/inclavare-containers/ubuntu${VERSION_ID} focal main' | tee /etc/apt/sources.list.d/inclavare-containers.list
 apt-get update
