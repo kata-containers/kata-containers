@@ -240,6 +240,10 @@ impl AgentConfig {
         let mut config: AgentConfig = Default::default();
         let cmdline = fs::read_to_string(file)?;
         let params: Vec<&str> = cmdline.split_ascii_whitespace().collect();
+
+        let mut using_config_file = false;
+        // Check if there is config file before parsing params that might
+        // override values from the config file.
         for param in params.iter() {
             // If we get a configuration file path from the command line, we
             // generate our config from it.
@@ -247,9 +251,13 @@ impl AgentConfig {
             // or if it can't be parsed properly.
             if param.starts_with(format!("{}=", CONFIG_FILE).as_str()) {
                 let config_file = get_string_value(param)?;
-                return AgentConfig::from_config_file(&config_file);
+                config = AgentConfig::from_config_file(&config_file)?;
+                using_config_file = true;
+                break;
             }
+        }
 
+        for param in params.iter() {
             // parse cmdline flags
             parse_cmdline_param!(param, DEBUG_CONSOLE_FLAG, config.debug_console);
             parse_cmdline_param!(param, DEV_MODE_FLAG, config.dev_mode);
@@ -345,7 +353,9 @@ impl AgentConfig {
         }
 
         // We did not get a configuration file: allow all endpoints.
-        config.endpoints.all_allowed = true;
+        if !using_config_file {
+            config.endpoints.all_allowed = true;
+        }
 
         Ok(config)
     }
@@ -1621,5 +1631,51 @@ Caused by:
 
         // Verify that the default values are valid
         assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
+    }
+
+    #[test]
+    fn test_config_from_cmdline_and_config_file() {
+        let dir = tempdir().expect("failed to create tmpdir");
+
+        let agent_config = r#"
+               dev_mode = false
+               server_addr = 'vsock://8:2048'
+
+               [endpoints]
+               allowed = ["CreateContainer", "StartContainer"]
+              "#;
+
+        let config_path = dir.path().join("agent-config.toml");
+        let config_filename = config_path.to_str().expect("failed to get config filename");
+
+        fs::write(config_filename, agent_config).expect("failed to write agen config");
+
+        let cmdline = format!("agent.devmode agent.config_file={}", config_filename);
+
+        let cmdline_path = dir.path().join("cmdline");
+        let cmdline_filename = cmdline_path
+            .to_str()
+            .expect("failed to get cmdline filename");
+
+        fs::write(cmdline_filename, cmdline).expect("failed to write agen config");
+
+        let config = AgentConfig::from_cmdline(cmdline_filename, vec![])
+            .expect("failed to parse command line");
+
+        // Should be overwritten by cmdline
+        assert!(config.dev_mode);
+
+        // Should be from agent config
+        assert_eq!(config.server_addr, "vsock://8:2048");
+
+        // Should be from agent config
+        assert_eq!(
+            config.endpoints.allowed,
+            vec!["CreateContainer".to_string(), "StartContainer".to_string()]
+                .iter()
+                .cloned()
+                .collect()
+        );
+        assert!(!config.endpoints.all_allowed);
     }
 }
