@@ -21,7 +21,7 @@ use tokio::{
 };
 
 use super::{
-    share_virtio_fs::generate_sock_path, utils::get_host_ro_shared_path,
+    share_virtio_fs::generate_sock_path, utils::ensure_dir_exist, utils::get_host_ro_shared_path,
     virtio_fs_share_mount::VirtiofsShareMount, ShareFs, ShareFsMount,
 };
 
@@ -49,16 +49,15 @@ pub(crate) struct ShareVirtioFsStandalone {
 }
 
 impl ShareVirtioFsStandalone {
-    pub(crate) fn new(id: &str, _config: &SharedFsInfo) -> Result<Self> {
+    pub(crate) fn new(id: &str, config: &SharedFsInfo) -> Result<Self> {
         Ok(Self {
             inner: Arc::new(RwLock::new(ShareVirtioFsStandaloneInner::default())),
-            // TODO: update with config
             config: ShareVirtioFsStandaloneConfig {
                 id: id.to_string(),
                 jail_root: "".to_string(),
-                virtio_fs_daemon: "".to_string(),
-                virtio_fs_cache: "".to_string(),
-                virtio_fs_extra_args: vec![],
+                virtio_fs_daemon: config.virtio_fs_daemon.clone(),
+                virtio_fs_cache: config.virtio_fs_cache.clone(),
+                virtio_fs_extra_args: config.virtio_fs_extra_args.clone(),
             },
             share_fs_mount: Arc::new(VirtiofsShareMount::new(id)),
         })
@@ -66,17 +65,11 @@ impl ShareVirtioFsStandalone {
 
     fn virtiofsd_args(&self, sock_path: &str) -> Result<Vec<String>> {
         let source_path = get_host_ro_shared_path(&self.config.id);
-        if !source_path.exists() {
-            return Err(anyhow!(
-                "The virtiofs shared path({:?}) didn't exist",
-                source_path
-            ));
-        }
+        ensure_dir_exist(&source_path)?;
 
         let mut args: Vec<String> = vec![
             String::from("-f"),
-            String::from("-o"),
-            format!("vhost_user_socket={}", sock_path),
+            format!("--socket-path={}", sock_path),
             String::from("-o"),
             format!("source={}", source_path.to_str().unwrap()),
             String::from("-o"),
