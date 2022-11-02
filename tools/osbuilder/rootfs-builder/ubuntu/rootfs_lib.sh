@@ -30,9 +30,6 @@ EOF
 		cp --remove-destination "$file" "$rootfs_dir$file"
 	done
 
-	# Reduce image size and memory footprint by removing unnecessary files and directories.
-	rm -rf $rootfs_dir/usr/share/{bash-completion,bug,doc,info,lintian,locale,man,menu,misc,pixmaps,terminfo,zsh}
-
 	if [ "${AA_KBC}" == "eaa_kbc" ] && [ "${ARCH}" == "x86_64" ]; then
 		source /etc/os-release
 
@@ -52,4 +49,7 @@ EOF
 			echo "rats-tls-tdx is only provided for Ubuntu 20.04, there's yet no packages for Ubuntu ${VERSION_ID}"
 		fi
 	fi
+
+	# Reduce image size and memory footprint by removing unnecessary files and directories.
+	rm -rf $rootfs_dir/usr/share/{bash-completion,bug,doc,info,lintian,locale,man,menu,misc,pixmaps,terminfo,zsh}
 }
