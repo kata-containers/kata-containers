@@ -9,7 +9,8 @@ use std::{
     iter::FromIterator,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Ok, Result};
+use kata_types::capabilities::Capabilities;
 
 use super::inner::DragonballInner;
 use crate::{utils, VcpuThreadIds, VmmState};
@@ -132,5 +133,9 @@ impl DragonballInner {
 
     pub(crate) async fn get_jailer_root(&self) -> Result<String> {
         Ok(self.jailer_root.clone())
+    }
+
+    pub(crate) async fn capabilities(&self) -> Result<Capabilities> {
+        Ok(self.capabilities.clone())
     }
 }

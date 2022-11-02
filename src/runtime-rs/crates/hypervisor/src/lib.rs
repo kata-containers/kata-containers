@@ -21,8 +21,8 @@ use std::collections::HashMap;
 use anyhow::Result;
 use async_trait::async_trait;
 use hypervisor_persist::HypervisorState;
+use kata_types::capabilities::Capabilities;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
-
 // Config which driver to use as vm root dev
 const VM_ROOTFS_DRIVER_BLK: &str = "virtio-blk";
 const VM_ROOTFS_DRIVER_PMEM: &str = "virtio-pmem";
@@ -65,4 +65,5 @@ pub trait Hypervisor: Send + Sync {
     async fn check(&self) -> Result<()>;
     async fn get_jailer_root(&self) -> Result<String>;
     async fn save_state(&self) -> Result<HypervisorState>;
+    async fn capabilities(&self) -> Result<Capabilities>;
 }
