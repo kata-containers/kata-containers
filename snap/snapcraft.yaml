@@ -88,12 +88,13 @@ parts:
     prime:
       - -*
     build-packages:
+      - ca-certificates
       - curl
+      - gnupg
+      - lsb-release
     override-build: |
       source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
 
-      sudo apt-get -y update
-      sudo apt-get -y install ca-certificates curl gnupg lsb-release
       curl -fsSL https://download.docker.com/linux/ubuntu/gpg |\
           sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
       distro_codename=$(lsb_release -cs)
