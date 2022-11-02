@@ -89,9 +89,11 @@ parts:
       - -*
     build-packages:
       - ca-certificates
+      - containerd
       - curl
       - gnupg
       - lsb-release
+      - runc
     override-build: |
       source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
 
