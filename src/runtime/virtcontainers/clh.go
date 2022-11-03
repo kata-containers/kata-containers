@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -720,6 +721,55 @@ func (clh *cloudHypervisor) GetThreadIDs(ctx context.Context) (VcpuThreadIDs, er
 	var vcpuInfo VcpuThreadIDs
 
 	vcpuInfo.vcpus = make(map[int]int)
+
+	getVcpus := func(pid int) (map[int]int, error) {
+		vcpus := make(map[int]int)
+
+		dir := fmt.Sprintf("/proc/%d/task", pid)
+		files, err := os.ReadDir(dir)
+		if err != nil {
+			return vcpus, err
+		}
+
+		pattern, err := regexp.Compile(`^vcpu\d+$`)
+		if err != nil {
+			return vcpus, err
+		}
+		for _, file := range files {
+			comm, err := os.ReadFile(fmt.Sprintf("%s/%s/comm", dir, file.Name()))
+			if err != nil {
+				return vcpus, err
+			}
+			pName := strings.TrimSpace(string(comm))
+			if !pattern.MatchString(pName) {
+				continue
+			}
+
+			cpuID := strings.TrimPrefix(pName, "vcpu")
+			threadID := file.Name()
+
+			k, err := strconv.Atoi(cpuID)
+			if err != nil {
+				return vcpus, err
+			}
+			v, err := strconv.Atoi(threadID)
+			if err != nil {
+				return vcpus, err
+			}
+			vcpus[k] = v
+		}
+		return vcpus, nil
+	}
+
+	if clh.state.PID == 0 {
+		return vcpuInfo, nil
+	}
+
+	vcpus, err := getVcpus(clh.state.PID)
+	if err != nil {
+		return vcpuInfo, err
+	}
+	vcpuInfo.vcpus = vcpus
 
 	return vcpuInfo, nil
 }
