@@ -268,6 +268,15 @@ setup_offline_fs_kbc_agent_config_in_guest() {
 	add_kernel_params "agent.config_file=/tests/fixtures/$(basename ${rootfs_agent_config})"
 }
 
+setup_cosign_signatures_files() {
+	# Enable signature verification via kata-configuration by removing the param that disables it
+	remove_kernel_param "agent.enable_signature_verification"
+
+	# Set-up required files in guest image
+	add_kernel_params "agent.aa_kbc_params=offline_fs_kbc::null"
+	cp_to_guest_img "etc" "${SHARED_FIXTURES_DIR}/cosign/offline-fs-kbc/aa-offline_fs_kbc-resources.json"
+}
+
 setup_signature_files() {
 	echo "setup signature files"
 	if [ "${SKOPEO:-}" = "yes" ]; then

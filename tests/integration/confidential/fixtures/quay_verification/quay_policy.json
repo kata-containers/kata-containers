@@ -6,7 +6,7 @@
     ],
     "transports": {
         "docker": {
-            "quay.io/kata-containers": [
+            "quay.io/kata-containers/confidential-containers": [
                 {
                     "type": "signedBy",
                     "keyType": "GPGKeys",

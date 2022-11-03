@@ -111,6 +111,31 @@ setup() {
 	fi
 }
 
+@test "$test_tag Test unencrypted image signed with cosign" {
+	local container_config="${FIXTURES_DIR}/container-config_cosigned.yaml"
+
+	setup_cosign_signatures_files
+
+	create_test_pod
+
+	assert_container "$container_config"
+}
+
+@test "$test_tag Test unencrypted image with unknown cosign signature" {
+	local container_config="${FIXTURES_DIR}/container-config_cosigned-other.yaml"
+
+	setup_cosign_signatures_files
+
+	create_test_pod
+
+	assert_container_fail "$container_config"
+	if [ "${SKOPEO:-}" = "yes" ]; then
+		assert_logs_contain 'Signature for identity .* is not accepted'
+	else
+		assert_logs_contain 'Validate image failed: \[PublicKeyVerifier { key: CosignVerificationKey'
+	fi
+}
+
 teardown() {
 	teardown_common
 

@@ -1,0 +1,11 @@
+# Copyright (c) 2021, 2022 IBM Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+metadata:
+  name: kata-cc-busybox-cosigned-other
+image:
+  image: quay.io/kata-containers/confidential-containers:cosign-signed-key2
+command:
+- top
+log_path: kata-cc.0.log
