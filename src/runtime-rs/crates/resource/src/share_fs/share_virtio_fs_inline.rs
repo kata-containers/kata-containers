@@ -4,11 +4,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::collections::HashMap;
+
 use agent::Storage;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use hypervisor::Hypervisor;
 use kata_types::config::hypervisor::SharedFsInfo;
+use tokio::sync::RwLock;
 
 use super::{
     share_virtio_fs::{
@@ -27,9 +30,15 @@ pub struct ShareVirtioFsInlineConfig {
     pub id: String,
 }
 
+#[derive(Default)]
+pub struct ShareVirtioFsInlineInner {
+    mounted_info_set: HashMap<String, MountedInfo>,
+}
+
 pub struct ShareVirtioFsInline {
     config: ShareVirtioFsInlineConfig,
     share_fs_mount: Arc<dyn ShareFsMount>,
+    inner: Arc<RwLock<ShareVirtioFsInlineInner>>,
 }
 
 impl ShareVirtioFsInline {
@@ -37,6 +46,7 @@ impl ShareVirtioFsInline {
         Ok(Self {
             config: ShareVirtioFsInlineConfig { id: id.to_string() },
             share_fs_mount: Arc::new(VirtiofsShareMount::new(id)),
+            inner: Arc::new(RwLock::new(ShareVirtioFsInlineInner::default())),
         })
     }
 }
@@ -76,5 +86,18 @@ impl ShareFs for ShareVirtioFsInline {
 
         storages.push(shared_volume);
         Ok(storages)
+    }
+
+    async fn get_mounted_info(&self, source: &str) -> Option<MountedInfo> {
+        let inner = self.inner.read().await;
+        inner.mounted_info_set.get(source).map(|m| m.clone())
+    }
+
+    async fn set_mounted_info(&self, source: &str, mounted_info: MountedInfo) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner
+            .mounted_info_set
+            .insert(source.to_owned(), mounted_info.clone());
+        Ok(())
     }
 }

@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{process::Stdio, sync::Arc};
+use std::{collections::HashMap, process::Stdio, sync::Arc};
 
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
@@ -22,7 +22,7 @@ use tokio::{
 
 use super::{
     share_virtio_fs::generate_sock_path, utils::ensure_dir_exist, utils::get_host_ro_shared_path,
-    virtio_fs_share_mount::VirtiofsShareMount, ShareFs, ShareFsMount,
+    virtio_fs_share_mount::VirtiofsShareMount, MountedInfo, ShareFs, ShareFsMount,
 };
 
 #[derive(Debug, Clone)]
@@ -41,6 +41,7 @@ pub struct ShareVirtioFsStandaloneConfig {
 #[derive(Default)]
 struct ShareVirtioFsStandaloneInner {
     pid: Option<u32>,
+    mounted_info_set: HashMap<String, MountedInfo>,
 }
 pub(crate) struct ShareVirtioFsStandalone {
     inner: Arc<RwLock<ShareVirtioFsStandaloneInner>>,
@@ -171,5 +172,18 @@ impl ShareFs for ShareVirtioFsStandalone {
 
     async fn get_storages(&self) -> Result<Vec<Storage>> {
         Ok(vec![])
+    }
+
+    async fn get_mounted_info(&self, source: &str) -> Option<MountedInfo> {
+        let inner = self.inner.read().await;
+        inner.mounted_info_set.get(source).map(|m| m.clone())
+    }
+
+    async fn set_mounted_info(&self, source: &str, mounted_info: MountedInfo) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner
+            .mounted_info_set
+            .insert(source.to_owned(), mounted_info.clone());
+        Ok(())
     }
 }

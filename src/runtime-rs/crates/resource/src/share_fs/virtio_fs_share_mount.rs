@@ -7,6 +7,7 @@
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use kata_sys_util::mount::bind_remount;
 use kata_types::k8s::is_watchable_mount;
 use kata_types::mount;
 use nix::sys::stat::stat;
@@ -19,7 +20,8 @@ const WATCHABLE_BIND_DEV_TYPE: &str = "watchable-bind";
 const EPHEMERAL_PATH: &str = "/run/kata-containers/sandbox/ephemeral";
 
 use super::{
-    utils, ShareFsMount, ShareFsMountResult, ShareFsRootfsConfig, ShareFsVolumeConfig,
+    utils::{self, do_get_host_path},
+    ShareFsMount, ShareFsMountResult, ShareFsRootfsConfig, ShareFsVolumeConfig,
     KATA_GUEST_SHARE_DIR, PASSTHROUGH_FS_DIR,
 };
 
@@ -165,5 +167,29 @@ impl ShareFsMount for VirtiofsShareMount {
             guest_path,
             storages: vec![],
         })
+    }
+
+    async fn upgrade(&self, file_name: &str) -> Result<()> {
+        // Remount readonly directory with readwrite permission
+        let host_dest = do_get_host_path(file_name, &self.id, "", true, true);
+        bind_remount(&host_dest, false)
+            .context("remount readonly directory with readwrite permission")?;
+        // Remount readwrite directory with readwrite permission
+        let host_dest = do_get_host_path(file_name, &self.id, "", true, false);
+        bind_remount(&host_dest, false)
+            .context("remount readwrite directory with readwrite permission")?;
+        Ok(())
+    }
+
+    async fn downgrade(&self, file_name: &str) -> Result<()> {
+        // Remount readwrite directory with readonly permission
+        let host_dest = do_get_host_path(file_name, &self.id, "", true, false);
+        bind_remount(&host_dest, true)
+            .context("remount readwrite directory with readonly permission")?;
+        // Remount readonly directory with readonly permission
+        let host_dest = do_get_host_path(file_name, &self.id, "", true, true);
+        bind_remount(&host_dest, true)
+            .context("remount readonly directory with readonly permission")?;
+        Ok(())
     }
 }

@@ -4,12 +4,16 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{path::Path, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
+};
 
 use anyhow::{anyhow, Context, Result};
 
 use super::Volume;
-use crate::share_fs::{ShareFs, ShareFsVolumeConfig};
+use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
 use kata_types::mount;
 
 // copy file to container's rootfs if filesystem sharing is not supported, otherwise
@@ -29,10 +33,12 @@ impl ShareFsVolume {
         m: &oci::Mount,
         cid: &str,
     ) -> Result<Self> {
+        // The file_name is in the format of "sandbox-{uuid}-{file_name}"
         let file_name = Path::new(&m.source).file_name().unwrap().to_str().unwrap();
-        let file_name = generate_mount_path(cid, file_name);
+        let file_name = generate_mount_path("sandbox", file_name);
 
         let mut volume = Self {
+            // share_fs: share_fs.as_ref().map(Arc::clone),
             mounts: vec![],
             storages: vec![],
         };
@@ -59,30 +65,80 @@ impl ShareFsVolume {
                 }
             }
             Some(share_fs) => {
+                let readonly = m.options.iter().any(|opt| opt == "ro");
+
                 let share_fs_mount = share_fs.get_share_fs_mount();
-                let mount_result = share_fs_mount
-                    .share_volume(ShareFsVolumeConfig {
-                        cid: cid.to_string(),
-                        source: m.source.clone(),
-                        target: file_name,
-                        readonly: m.options.iter().any(|o| *o == "ro"),
-                        mount_options: m.options.clone(),
-                        mount: m.clone(),
-                        is_rafs: false,
+                if let Some(mut mounted_info) = share_fs.get_mounted_info(&m.source).await {
+                    // Mounted at least once
+                    let guest_path = mounted_info
+                        .guest_path
+                        .clone()
+                        .as_os_str()
+                        .to_str()
+                        .unwrap()
+                        .to_owned();
+                    if !readonly && mounted_info.readonly() {
+                        // The current mount should be upgraded to readwrite permission
+                        info!(
+                            sl!(),
+                            "The mount will be upgraded, mount = {:?}, cid = {}", m, cid
+                        );
+                        share_fs_mount
+                            .upgrade(&mounted_info.name().context("get name of mounted info")?)
+                            .await
+                            .context("upgrade mount")?;
+                    }
+                    if readonly {
+                        mounted_info.ro_ref_count += 1;
+                    } else {
+                        mounted_info.rw_ref_count += 1;
+                    }
+                    share_fs
+                        .set_mounted_info(&m.source, mounted_info)
+                        .await
+                        .context("set mounted info")?;
+
+                    volume.mounts.push(oci::Mount {
+                        destination: m.destination.clone(),
+                        r#type: "bind".to_string(),
+                        source: guest_path,
+                        options: m.options.clone(),
                     })
-                    .await
-                    .context("share fs volume")?;
+                } else {
+                    // Not mounted ever
+                    let mount_result = share_fs_mount
+                        .share_volume(ShareFsVolumeConfig {
+                            // The scope of shared volume is sandbox
+                            cid: String::from(""),
+                            source: m.source.clone(),
+                            target: file_name.clone(),
+                            readonly,
+                            mount_options: m.options.clone(),
+                            mount: m.clone(),
+                            is_rafs: false,
+                        })
+                        .await
+                        .context("mount shared volume")?;
+                    let mounted_info = MountedInfo::new(
+                        PathBuf::from_str(&mount_result.guest_path)
+                            .context("convert guest path")?,
+                        readonly,
+                    );
+                    share_fs
+                        .set_mounted_info(&m.source, mounted_info)
+                        .await
+                        .context("set mounted info")?;
+                    // set storages for the volume
+                    volume.storages = mount_result.storages;
 
-                // set storages for the volume
-                volume.storages = mount_result.storages;
-
-                // set mount for the volume
-                volume.mounts.push(oci::Mount {
-                    destination: m.destination.clone(),
-                    r#type: "bind".to_string(),
-                    source: mount_result.guest_path,
-                    options: m.options.clone(),
-                });
+                    // set mount for the volume
+                    volume.mounts.push(oci::Mount {
+                        destination: m.destination.clone(),
+                        r#type: "bind".to_string(),
+                        source: mount_result.guest_path,
+                        options: m.options.clone(),
+                    });
+                }
             }
         }
         Ok(volume)
