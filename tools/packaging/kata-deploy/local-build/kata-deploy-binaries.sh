@@ -118,16 +118,24 @@ install_cc_clh() {
 install_cc_image() {
 	export AA_KBC="${1:-offline_fs_kbc}"
 	image_type="${2:-image}"
+	image_initrd_suffix="${3:-""}"
 	export KATA_BUILD_CC=yes
 
 	info "Create CC image configured with AA_KBC=${AA_KBC}"
-	"${rootfs_builder}" --imagetype="${image_type}" --prefix="${cc_prefix}" --destdir="${destdir}"
+	"${rootfs_builder}" --imagetype="${image_type}" --prefix="${cc_prefix}" --destdir="${destdir}" --image_initrd_suffix="${image_initrd_suffix}"
 }
 
 install_cc_sev_image() {
 	AA_KBC="offline_sev_kbc"
 	image_type="initrd"
 	install_cc_image "${AA_KBC}" "${image_type}"
+}
+
+install_cc_tdx_image() {
+	AA_KBC="eaa_kbc"
+	image_type="image"
+	image_suffix="tdx"
+	install_cc_image "${AA_KBC}" "${image_type}" "${image_suffix}"
 }
 
 #Install CC kernel asset
@@ -358,6 +366,8 @@ handle_build() {
 	cc-rootfs-image) install_cc_image ;;
 
 	cc-sev-rootfs-initrd) install_cc_sev_image ;;
+
+	cc-tdx-rootfs-image) install_cc_tdx_image ;;
 
 	cc-shim-v2) install_cc_shimv2 ;;
 
