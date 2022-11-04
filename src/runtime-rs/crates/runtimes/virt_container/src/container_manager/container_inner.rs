@@ -180,6 +180,8 @@ impl ContainerInner {
                 }
             })?;
 
+        // TODO(justxuewei): clean mount
+
         // close the exit channel to wakeup wait service
         // send to notify watchers who are waiting for the process exit
         self.init_process.stop().await;

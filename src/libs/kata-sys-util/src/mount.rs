@@ -213,11 +213,11 @@ pub fn create_mount_destination<S: AsRef<Path>, D: AsRef<Path>, R: AsRef<Path>>(
     }
 }
 
-/// Remount a bind mount into readonly mode.
+/// Remount a bind mount
 ///
 /// # Safety
 /// Caller needs to ensure safety of the `dst` to avoid possible file path based attacks.
-pub fn bind_remount_read_only<P: AsRef<Path>>(dst: P) -> Result<()> {
+pub fn bind_remount<P: AsRef<Path>>(dst: P, readonly: bool) -> Result<()> {
     let dst = dst.as_ref();
     if dst.is_empty() {
         return Err(Error::NullMountPointPath);
@@ -225,8 +225,8 @@ pub fn bind_remount_read_only<P: AsRef<Path>>(dst: P) -> Result<()> {
     let dst = dst
         .canonicalize()
         .map_err(|_e| Error::InvalidPath(dst.to_path_buf()))?;
-
-    do_rebind_mount_read_only(dst, MsFlags::empty())
+    
+    do_rebind_mount(dst, readonly, MsFlags::empty())
 }
 
 /// Bind mount `src` to `dst` in slave mode, optionally in readonly mode if `readonly` is true.
@@ -239,7 +239,7 @@ pub fn bind_remount_read_only<P: AsRef<Path>>(dst: P) -> Result<()> {
 pub fn bind_mount_unchecked<S: AsRef<Path>, D: AsRef<Path>>(
     src: S,
     dst: D,
-    read_only: bool,
+    readonly: bool,
 ) -> Result<()> {
     fail::fail_point!("bind_mount", |_| {
         Err(Error::FailureInject(
@@ -275,8 +275,8 @@ pub fn bind_mount_unchecked<S: AsRef<Path>, D: AsRef<Path>>(
         .map_err(|e| Error::Mount(PathBuf::new(), dst.to_path_buf(), e))?;
 
     // Optionally rebind into readonly mode.
-    if read_only {
-        do_rebind_mount_read_only(dst, MsFlags::empty())?;
+    if readonly {
+        do_rebind_mount(dst, readonly, MsFlags::empty())?;
     }
 
     Ok(())
@@ -356,7 +356,7 @@ impl Mounter for kata_types::mount::Mount {
         // Bind mount readonly.
         let bro_flag = MsFlags::MS_BIND | MsFlags::MS_RDONLY;
         if (o_flag & bro_flag) == bro_flag {
-            do_rebind_mount_read_only(target, o_flag)?;
+            do_rebind_mount(target, true, o_flag)?;
         }
 
         Ok(())
@@ -364,12 +364,16 @@ impl Mounter for kata_types::mount::Mount {
 }
 
 #[inline]
-fn do_rebind_mount_read_only<P: AsRef<Path>>(path: P, flags: MsFlags) -> Result<()> {
+fn do_rebind_mount<P: AsRef<Path>>(path: P, readonly: bool, flags: MsFlags) -> Result<()> {
     mount(
         Some(""),
         path.as_ref(),
         Some(""),
-        flags | MsFlags::MS_BIND | MsFlags::MS_REMOUNT | MsFlags::MS_RDONLY,
+        if readonly {
+            flags | MsFlags::MS_BIND | MsFlags::MS_REMOUNT | MsFlags::MS_RDONLY
+        } else {
+            flags | MsFlags::MS_BIND | MsFlags::MS_REMOUNT
+        },
         Some(""),
     )
     .map_err(|e| Error::Remount(path.as_ref().to_path_buf(), e))
@@ -820,21 +824,21 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn test_bind_remount_read_only() {
+    fn test_bind_remount() {
         let tmpdir = tempfile::tempdir().unwrap();
         let tmpdir2 = tempfile::tempdir().unwrap();
 
         assert!(matches!(
-            bind_remount_read_only(&PathBuf::from("")),
+            bind_remount(&PathBuf::from(""), true),
             Err(Error::NullMountPointPath)
         ));
         assert!(matches!(
-            bind_remount_read_only(&PathBuf::from("../______doesn't____exist____nnn")),
+            bind_remount(&PathBuf::from("../______doesn't____exist____nnn"), true),
             Err(Error::InvalidPath(_))
         ));
 
         bind_mount_unchecked(tmpdir2.path(), tmpdir.path(), true).unwrap();
-        bind_remount_read_only(tmpdir.path()).unwrap();
+        bind_remount(tmpdir.path(), true).unwrap();
         umount_timeout(tmpdir.path().to_str().unwrap(), 0).unwrap();
     }
 

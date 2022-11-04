@@ -18,6 +18,7 @@ pub(crate) fn ensure_dir_exist(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Bind mount the original path to the runtime directory.
 pub(crate) fn share_to_guest(
     // absolute path for source
     source: &str,
@@ -37,7 +38,7 @@ pub(crate) fn share_to_guest(
     // to remount the read only dir mount point directly.
     if readonly {
         let dst = do_get_host_path(target, sid, cid, is_volume, true);
-        mount::bind_remount_read_only(&dst).context("bind remount readonly")?;
+        mount::bind_remount(&dst, readonly).context("bind remount readonly")?;
     }
 
     Ok(do_get_guest_path(target, cid, is_volume, is_rafs))
@@ -114,3 +115,17 @@ pub(crate) fn do_get_host_path(
     };
     path.to_str().unwrap().to_string()
 }
+
+// /// Get the bind mounted path on the host that will be shared to the guest in
+// /// **sandbox level**.
+// /// The filename is in format of "sandbox-{uuid}-examplename".
+// pub(crate) fn do_get_sandbox_level_host_path(sid: &str, filename: &str, readonly: bool) -> String {
+//     do_get_host_path(filename, sid, "", true, readonly)
+// }
+
+// /// Get the bind mounted path on the guest that will be shared from the host in
+// /// **sandbox level**.
+// /// The filename is in format of "sandbox-{uuid}-examplename".
+// pub(crate) fn do_get_sandbox_level_guest_path(filename: &str) -> String {
+//     do_get_guest_any_path(filename, "", true, false)
+// }
