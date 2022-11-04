@@ -349,6 +349,7 @@ func (q *qemuAmd64) appendSEVObject(devices []govmmQemu.Device, firmware, firmwa
 				CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
 				ReducedPhysBits: cpuid.AMDMemEncrypt.PhysAddrReduction,
 				SevPolicy:       config.Policy,
+				SevKernelHashes: true,
 			}), "", nil
 	}
 }
