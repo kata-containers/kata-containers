@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use kata_types::capabilities::Capabilities;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use tokio::sync::RwLock;
 
@@ -130,6 +131,11 @@ impl Hypervisor for Dragonball {
 
     async fn save_state(&self) -> Result<HypervisorState> {
         self.save().await
+    }
+
+    async fn capabilities(&self) -> Result<Capabilities> {
+        let inner = self.inner.read().await;
+        inner.capabilities().await
     }
 }
 
