@@ -129,6 +129,7 @@ impl ImageService {
         let source_path_oci = tmp_cid_path.join(IMAGE_OCI);
 
         let target_path_bundle = Path::new(CONTAINER_BASE).join(cid);
+        let _ = fs::remove_dir_all(&target_path_bundle);
 
         info!(sl!(), "unpack image {:?} to {:?}", cid, target_path_bundle);
 
