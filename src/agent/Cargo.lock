@@ -1920,7 +1920,7 @@ dependencies = [
 [[package]]
 name = "image-rs"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/image-rs?rev=60bfcfa86011355362992f91bdd92da75e75eec6#60bfcfa86011355362992f91bdd92da75e75eec6"
+source = "git+https://github.com/confidential-containers/image-rs?tag=v0.2.0#3aca6fd576f50b9e960309caddeb9d91573d4e69"
 dependencies = [
  "anyhow",
  "dircpy",
@@ -2810,7 +2810,7 @@ dependencies = [
 [[package]]
 name = "ocicrypt-rs"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/ocicrypt-rs?rev=2a09bd03abbfae99e065e3ec4bdddd0054a62d2f#2a09bd03abbfae99e065e3ec4bdddd0054a62d2f"
+source = "git+https://github.com/confidential-containers/ocicrypt-rs?tag=v0.2.0#2a09bd03abbfae99e065e3ec4bdddd0054a62d2f"
 dependencies = [
  "aes 0.8.1",
  "aes-gcm 0.9.4",
@@ -4280,7 +4280,7 @@ dependencies = [
 [[package]]
 name = "signature"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/image-rs?rev=60bfcfa86011355362992f91bdd92da75e75eec6#60bfcfa86011355362992f91bdd92da75e75eec6"
+source = "git+https://github.com/confidential-containers/image-rs?tag=v0.2.0#3aca6fd576f50b9e960309caddeb9d91573d4e69"
 dependencies = [
  "anyhow",
  "async-trait",

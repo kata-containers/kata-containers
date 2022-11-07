@@ -27,11 +27,13 @@ pushd ${build_root}
 git clone --single-branch "${tdshim_repo}"
 pushd td-shim
 git checkout "${tdshim_version}"
+git submodule update --init
+make preparation
 bash sh_script/build_final.sh boot_kernel
 
 install_dir="${DESTDIR}/${PREFIX}/share/td-shim"
 mkdir -p ${install_dir}
-install target/x86_64-unknown-uefi/release/final-boot-kernel.bin ${install_dir}/td-shim.bin
+install target/release/final-boot-kernel.bin ${install_dir}/td-shim.bin
 popd #td-shim
 popd #${build_root}
 
