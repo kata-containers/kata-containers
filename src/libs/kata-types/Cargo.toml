@@ -11,6 +11,7 @@ license = "Apache-2.0"
 edition = "2018"
 
 [dependencies]
+bitmask-enum = "2.1.0"
 byte-unit = "3.1.4"
 glob = "0.3.0"
 lazy_static = "1.4.0"
