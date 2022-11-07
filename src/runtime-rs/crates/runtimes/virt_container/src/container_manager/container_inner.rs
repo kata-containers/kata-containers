@@ -180,8 +180,6 @@ impl ContainerInner {
                 }
             })?;
 
-        // TODO(justxuewei): clean mount
-
         // close the exit channel to wakeup wait service
         // send to notify watchers who are waiting for the process exit
         self.init_process.stop().await;
@@ -235,7 +233,7 @@ impl ContainerInner {
     }
 
     pub(crate) async fn signal_process(
-        &self,
+        &mut self,
         process: &ContainerProcess,
         signal: u32,
         all: bool,
@@ -249,6 +247,9 @@ impl ContainerInner {
         self.agent
             .signal_process(agent::SignalProcessRequest { process_id, signal })
             .await?;
+
+        self.clean_volumes().await.context("clean volumes")?;
+
         Ok(())
     }
 
@@ -268,6 +269,20 @@ impl ContainerInner {
             }
         };
 
+        Ok(())
+    }
+
+    async fn clean_volumes(&mut self) -> Result<()> {
+        let mut unhandled = Vec::new();
+        for v in self.volumes.iter() {
+            if let Err(err) = v.cleanup().await {
+                unhandled.push(Arc::clone(v));
+                warn!(sl!(), "Failed to clean volume {:?}, error = {:?}", v, err);
+            }
+        }
+        if !unhandled.is_empty() {
+            self.volumes = unhandled;
+        }
         Ok(())
     }
 }
