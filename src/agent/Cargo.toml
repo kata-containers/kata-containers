@@ -68,7 +68,7 @@ toml = "0.5.8"
 clap = { version = "3.0.1", features = ["derive"] }
 
 # Image pull/decrypt
-image-rs = { git = "https://github.com/confidential-containers/image-rs", rev = "60bfcfa86011355362992f91bdd92da75e75eec6" }
+image-rs = { git = "https://github.com/confidential-containers/image-rs", tag = "v0.2.0" }
 # "vendored" feature for openssl is required by musl build
 openssl = { version = "0.10.38", features = ["vendored"] }
 
