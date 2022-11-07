@@ -155,6 +155,7 @@ type hypervisor struct {
 	DisableSeccomp                 bool     `toml:"disable_seccomp"`
 	DisableSeLinux                 bool     `toml:"disable_selinux"`
 	LegacySerial                   bool     `toml:"use_legacy_serial"`
+	EnableVCPUsPinning             bool     `toml:"enable_vcpus_pinning"`
 }
 
 type runtime struct {
@@ -833,6 +834,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		Rootless:                h.Rootless,
 		LegacySerial:            h.LegacySerial,
 		DisableSeLinux:          h.DisableSeLinux,
+		EnableVCPUsPinning:      h.EnableVCPUsPinning,
 	}, nil
 }
 
