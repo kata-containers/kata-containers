@@ -30,11 +30,12 @@ pub struct ShareVirtioFsInlineConfig {
     pub id: String,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ShareVirtioFsInlineInner {
     mounted_info_set: HashMap<String, MountedInfo>,
 }
 
+#[derive(Debug)]
 pub struct ShareVirtioFsInline {
     config: ShareVirtioFsInlineConfig,
     share_fs_mount: Arc<dyn ShareFsMount>,
@@ -90,7 +91,7 @@ impl ShareFs for ShareVirtioFsInline {
 
     async fn get_mounted_info(&self, source: &str) -> Option<MountedInfo> {
         let inner = self.inner.read().await;
-        inner.mounted_info_set.get(source).map(|m| m.clone())
+        inner.mounted_info_set.get(source).cloned()
     }
 
     async fn set_mounted_info(&self, source: &str, mounted_info: MountedInfo) -> Result<()> {
@@ -99,5 +100,22 @@ impl ShareFs for ShareVirtioFsInline {
             .mounted_info_set
             .insert(source.to_owned(), mounted_info.clone());
         Ok(())
+    }
+
+    async fn rm_mounted_info(&self, source: &str) -> Result<Option<MountedInfo>> {
+        let mut inner = self.inner.write().await;
+        Ok(inner.mounted_info_set.remove(source))
+    }
+
+    async fn get_mounted_info_by_guest_path(
+        &self,
+        guest_path: &str,
+    ) -> Option<(String, MountedInfo)> {
+        let inner = self.inner.read().await;
+        inner
+            .mounted_info_set
+            .iter()
+            .find(|m| m.1.guest_path.as_os_str().to_str().unwrap() == guest_path)
+            .map(|m| (m.0.to_owned(), m.1.clone()))
     }
 }

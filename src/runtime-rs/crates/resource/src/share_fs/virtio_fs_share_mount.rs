@@ -7,7 +7,7 @@
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use kata_sys_util::mount::bind_remount;
+use kata_sys_util::mount::{bind_remount, umount_timeout};
 use kata_types::k8s::is_watchable_mount;
 use kata_types::mount;
 use nix::sys::stat::stat;
@@ -25,6 +25,7 @@ use super::{
     KATA_GUEST_SHARE_DIR, PASSTHROUGH_FS_DIR,
 };
 
+#[derive(Debug)]
 pub struct VirtiofsShareMount {
     id: String,
 }
@@ -190,6 +191,14 @@ impl ShareFsMount for VirtiofsShareMount {
         let host_dest = do_get_host_path(file_name, &self.id, "", true, true);
         bind_remount(&host_dest, true)
             .context("remount readonly directory with readonly permission")?;
+        Ok(())
+    }
+
+    async fn umount(&self, file_name: &str) -> Result<()> {
+        let host_dest = do_get_host_path(file_name, &self.id, "", true, false);
+        umount_timeout(&host_dest, 0).context("Umount readonly host dest")?;
+        let host_dest = do_get_host_path(file_name, &self.id, "", true, true);
+        umount_timeout(&host_dest, 0).context("Umount readwrite host dest")?;
         Ok(())
     }
 }

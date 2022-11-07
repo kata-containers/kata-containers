@@ -258,7 +258,7 @@ impl Container {
         signal: u32,
         all: bool,
     ) -> Result<()> {
-        let inner = self.inner.read().await;
+        let mut inner = self.inner.write().await;
         inner.signal_process(container_process, signal, all).await
     }
 

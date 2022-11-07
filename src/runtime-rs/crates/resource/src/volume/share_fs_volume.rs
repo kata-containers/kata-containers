@@ -7,10 +7,11 @@
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Weak},
 };
 
 use anyhow::{anyhow, Context, Result};
+use async_trait::async_trait;
 
 use super::Volume;
 use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
@@ -22,7 +23,9 @@ use kata_types::mount;
 // only regular files in /dev. It does not make sense to pass the host
 // device nodes to the guest.
 // skip the volumes whose source had already set to guest share dir.
+#[derive(Debug)]
 pub(crate) struct ShareFsVolume {
+    share_fs: Option<Weak<dyn ShareFs>>,
     mounts: Vec<oci::Mount>,
     storages: Vec<agent::Storage>,
 }
@@ -38,7 +41,7 @@ impl ShareFsVolume {
         let file_name = generate_mount_path("sandbox", file_name);
 
         let mut volume = Self {
-            // share_fs: share_fs.as_ref().map(Arc::clone),
+            share_fs: share_fs.as_ref().map(Arc::downgrade),
             mounts: vec![],
             storages: vec![],
         };
@@ -84,7 +87,11 @@ impl ShareFsVolume {
                             "The mount will be upgraded, mount = {:?}, cid = {}", m, cid
                         );
                         share_fs_mount
-                            .upgrade(&mounted_info.name().context("get name of mounted info")?)
+                            .upgrade(
+                                &mounted_info
+                                    .file_name()
+                                    .context("get name of mounted info")?,
+                            )
                             .await
                             .context("upgrade mount")?;
                     }
@@ -145,6 +152,7 @@ impl ShareFsVolume {
     }
 }
 
+#[async_trait]
 impl Volume for ShareFsVolume {
     fn get_volume_mount(&self) -> anyhow::Result<Vec<oci::Mount>> {
         Ok(self.mounts.clone())
@@ -154,8 +162,76 @@ impl Volume for ShareFsVolume {
         Ok(self.storages.clone())
     }
 
-    fn cleanup(&self) -> Result<()> {
-        todo!()
+    async fn cleanup(&self) -> Result<()> {
+        if self.share_fs.is_none() {
+            return Ok(());
+        }
+        let share_fs = match self.share_fs.as_ref().unwrap().upgrade() {
+            Some(share_fs) => share_fs,
+            None => return Err(anyhow!("The share_fs was released unexpectedly")),
+        };
+
+        for m in self.mounts.iter() {
+            let (host_source, mut mounted_info) =
+                match share_fs.get_mounted_info_by_guest_path(&m.source).await {
+                    Some(entry) => entry,
+                    None => {
+                        warn!(
+                            sl!(),
+                            "The mounted info for guest path {} not found", m.source
+                        );
+                        continue;
+                    }
+                };
+
+            let old_readonly = mounted_info.readonly();
+
+            if m.options.iter().any(|opt| *opt == "ro") {
+                mounted_info.ro_ref_count -= 1;
+            } else {
+                mounted_info.rw_ref_count -= 1;
+            }
+
+            debug!(
+                sl!(),
+                "Ref count for {} was updated to {} due to volume cleanup",
+                host_source,
+                mounted_info.ref_count()
+            );
+            let share_fs_mount = share_fs.get_share_fs_mount();
+            let file_name = mounted_info.file_name()?;
+
+            if mounted_info.ref_count() > 0 {
+                // Downgrade to readonly if no container needs readwrite permission
+                if !old_readonly && mounted_info.readonly() {
+                    info!(sl!(), "Downgrade {} to readonly due to no container that needs readwrite permission", host_source);
+                    share_fs_mount
+                        .downgrade(&file_name)
+                        .await
+                        .context("Downgrade volume")?;
+                }
+                share_fs
+                    .set_mounted_info(&host_source, mounted_info)
+                    .await
+                    .context("Update mounted info")?;
+            } else {
+                info!(
+                    sl!(),
+                    "The path will be umounted due to no references, host_source = {}", host_source
+                );
+                share_fs
+                    .rm_mounted_info(&host_source)
+                    .await
+                    .context("Rm mounted info due to no reference")?;
+                // Umount the volume
+                share_fs_mount
+                    .umount(&file_name)
+                    .await
+                    .context("Umount volume")?
+            }
+        }
+
+        Ok(())
     }
 }
 

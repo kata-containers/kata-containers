@@ -115,17 +115,3 @@ pub(crate) fn do_get_host_path(
     };
     path.to_str().unwrap().to_string()
 }
-
-// /// Get the bind mounted path on the host that will be shared to the guest in
-// /// **sandbox level**.
-// /// The filename is in format of "sandbox-{uuid}-examplename".
-// pub(crate) fn do_get_sandbox_level_host_path(sid: &str, filename: &str, readonly: bool) -> String {
-//     do_get_host_path(filename, sid, "", true, readonly)
-// }
-
-// /// Get the bind mounted path on the guest that will be shared from the host in
-// /// **sandbox level**.
-// /// The filename is in format of "sandbox-{uuid}-examplename".
-// pub(crate) fn do_get_sandbox_level_guest_path(filename: &str) -> String {
-//     do_get_guest_any_path(filename, "", true, false)
-// }

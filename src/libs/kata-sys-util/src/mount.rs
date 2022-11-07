@@ -225,7 +225,7 @@ pub fn bind_remount<P: AsRef<Path>>(dst: P, readonly: bool) -> Result<()> {
     let dst = dst
         .canonicalize()
         .map_err(|_e| Error::InvalidPath(dst.to_path_buf()))?;
-    
+
     do_rebind_mount(dst, readonly, MsFlags::empty())
 }
 

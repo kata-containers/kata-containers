@@ -5,9 +5,11 @@
 //
 
 use anyhow::Result;
+use async_trait::async_trait;
 
 use super::Volume;
 
+#[derive(Debug)]
 pub(crate) struct DefaultVolume {
     mount: oci::Mount,
 }
@@ -21,6 +23,7 @@ impl DefaultVolume {
     }
 }
 
+#[async_trait]
 impl Volume for DefaultVolume {
     fn get_volume_mount(&self) -> anyhow::Result<Vec<oci::Mount>> {
         Ok(vec![self.mount.clone()])
@@ -30,7 +33,8 @@ impl Volume for DefaultVolume {
         Ok(vec![])
     }
 
-    fn cleanup(&self) -> Result<()> {
-        todo!()
+    async fn cleanup(&self) -> Result<()> {
+        warn!(sl!(), "Cleaning up DefaultVolume is still unimplemented.");
+        Ok(())
     }
 }

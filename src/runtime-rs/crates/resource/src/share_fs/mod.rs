@@ -15,7 +15,7 @@ pub use utils::{do_get_guest_path, do_get_guest_share_path, get_host_rw_shared_p
 mod virtio_fs_share_mount;
 use virtio_fs_share_mount::VirtiofsShareMount;
 
-use std::{path::PathBuf, sync::Arc};
+use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
 use agent::Storage;
 use anyhow::{anyhow, Context, Ok, Result};
@@ -38,18 +38,26 @@ pub const PASSTHROUGH_FS_DIR: &str = "passthrough";
 const RAFS_DIR: &str = "rafs";
 
 #[async_trait]
-pub trait ShareFs: Send + Sync {
+pub trait ShareFs: Send + Sync + Debug {
     fn get_share_fs_mount(&self) -> Arc<dyn ShareFsMount>;
     async fn setup_device_before_start_vm(&self, h: &dyn Hypervisor) -> Result<()>;
     async fn setup_device_after_start_vm(&self, h: &dyn Hypervisor) -> Result<()>;
     async fn get_storages(&self) -> Result<Vec<Storage>>;
 
-    /// Get mounted info from ShareFs.
+    /// Get a mounted info from ShareFs.
     /// The source is an original path on the host (not in the `/run/kata-containers/...`).
     async fn get_mounted_info(&self, source: &str) -> Option<MountedInfo>;
-    /// Set mounted info to ShareFS.
-    /// The source is an original path on the host (not in the `/run/kata-containers/...`).
+    /// Set a mounted info to ShareFS.
+    /// The source is the same as get_mounted_info's.
     async fn set_mounted_info(&self, source: &str, mounted_info: MountedInfo) -> Result<()>;
+    /// Remove a mounted info from ShareFs.
+    /// The source is the same as get_mounted_info's.
+    async fn rm_mounted_info(&self, source: &str) -> Result<Option<MountedInfo>>;
+    /// Get a mounted info by guest path.
+    async fn get_mounted_info_by_guest_path(
+        &self,
+        guest_path: &str,
+    ) -> Option<(String, MountedInfo)>;
 }
 
 #[derive(Debug)]
@@ -109,7 +117,7 @@ impl MountedInfo {
     }
 
     // File/dir name in the form of "sandbox-<uuid>-<file/dir name>"
-    pub fn name(&self) -> Result<String> {
+    pub fn file_name(&self) -> Result<String> {
         match self.guest_path.file_name() {
             Some(file_name) => match file_name.to_str() {
                 Some(file_name) => Ok(file_name.to_owned()),
@@ -124,13 +132,15 @@ impl MountedInfo {
 }
 
 #[async_trait]
-pub trait ShareFsMount: Send + Sync {
+pub trait ShareFsMount: Send + Sync + Debug {
     async fn share_rootfs(&self, config: ShareFsRootfsConfig) -> Result<ShareFsMountResult>;
     async fn share_volume(&self, config: ShareFsVolumeConfig) -> Result<ShareFsMountResult>;
     /// Upgrade to readwrite permission
     async fn upgrade(&self, file_name: &str) -> Result<()>;
     /// Downgrade to readonly permission
     async fn downgrade(&self, file_name: &str) -> Result<()>;
+    /// Umount the volume
+    async fn umount(&self, file_name: &str) -> Result<()>;
 }
 
 pub fn new(id: &str, config: &SharedFsInfo) -> Result<Arc<dyn ShareFs>> {
