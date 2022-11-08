@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -109,7 +110,7 @@ type qemu struct {
 
 	nvdimmCount int
 
-	stopped bool
+	stopped int32
 
 	mu sync.Mutex
 }
@@ -976,7 +977,7 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 	defer span.End()
 
 	q.Logger().Info("Stopping Sandbox")
-	if q.stopped {
+	if atomic.LoadInt32(&q.stopped) != 0 {
 		q.Logger().Info("Already stopped")
 		return nil
 	}
@@ -984,7 +985,7 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 	defer func() {
 		q.cleanupVM()
 		if err == nil {
-			q.stopped = true
+			atomic.StoreInt32(&q.stopped, 1)
 		}
 	}()
 
@@ -2570,7 +2571,7 @@ func (q *qemu) toGrpc(ctx context.Context) ([]byte, error) {
 func (q *qemu) Save() (s hv.HypervisorState) {
 
 	// If QEMU isn't even running, there isn't any state to Save
-	if q.stopped {
+	if atomic.LoadInt32(&q.stopped) != 0 {
 		return
 	}
 
@@ -2621,6 +2622,10 @@ func (q *qemu) Load(s hv.HypervisorState) {
 }
 
 func (q *qemu) Check() error {
+	if atomic.LoadInt32(&q.stopped) != 0 {
+		return fmt.Errorf("qemu is not running")
+	}
+
 	q.memoryDumpFlag.Lock()
 	defer q.memoryDumpFlag.Unlock()
 
