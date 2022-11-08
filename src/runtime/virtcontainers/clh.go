@@ -1401,16 +1401,16 @@ func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 		return false, nil
 	}
 
-	if err := syscall.Kill(pid, syscall.Signal(0)); err != nil {
-		return false, nil
-	}
-
 	timeStart := time.Now()
 	cl := clh.client()
 	for {
+		err := syscall.Kill(pid, syscall.Signal(0))
+		if err != nil {
+			return false, nil
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
-		defer cancel()
-		_, _, err := cl.VmmPingGet(ctx)
+		_, _, err = cl.VmmPingGet(ctx)
+		cancel()
 		if err == nil {
 			return true, nil
 		} else {
