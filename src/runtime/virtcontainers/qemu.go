@@ -969,7 +969,7 @@ func (q *qemu) waitVM(ctx context.Context, timeout int) error {
 }
 
 // StopVM will stop the Sandbox's VM.
-func (q *qemu) StopVM(ctx context.Context, waitOnly bool) error {
+func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	span, _ := katatrace.Trace(ctx, q.Logger(), "StopVM", qemuTracingTags, map[string]string{"sandbox_id": q.id})
@@ -983,7 +983,9 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) error {
 
 	defer func() {
 		q.cleanupVM()
-		q.stopped = true
+		if err == nil {
+			q.stopped = true
+		}
 	}()
 
 	if q.config.Debug && q.qemuConfig.LogFile != "" {
