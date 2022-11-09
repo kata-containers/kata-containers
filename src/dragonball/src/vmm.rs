@@ -200,11 +200,10 @@ pub(crate) mod tests {
 
     use super::*;
 
-    pub fn create_vmm_instance() -> Vmm {
+    pub fn create_vmm_instance(epoll_manager: EpollManager) -> Vmm {
         let info = Arc::new(RwLock::new(InstanceInfo::default()));
         let event_fd = EventFd::new(libc::EFD_NONBLOCK).unwrap();
         let seccomp_filter: BpfProgram = Vec::new();
-        let epoll_manager = EpollManager::default();
 
         Vmm::new_with_epoll_manager(
             info,
@@ -221,6 +220,6 @@ pub(crate) mod tests {
     fn test_create_vmm_instance() {
         skip_if_not_root!();
 
-        create_vmm_instance();
+        create_vmm_instance(EpollManager::default());
     }
 }

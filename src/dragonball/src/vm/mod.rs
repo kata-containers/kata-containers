@@ -921,8 +921,10 @@ pub mod tests {
     #[test]
     fn test_vm_create_devices() {
         skip_if_not_root!();
-        let vmm = Arc::new(Mutex::new(crate::vmm::tests::create_vmm_instance()));
         let epoll_mgr = EpollManager::default();
+        let vmm = Arc::new(Mutex::new(crate::vmm::tests::create_vmm_instance(
+            epoll_mgr.clone(),
+        )));
 
         let mut guard = vmm.lock().unwrap();
         let vm = guard.get_vm_mut().unwrap();
