@@ -12,7 +12,7 @@ use std::{path::Path, path::PathBuf, time::Duration};
 
 use super::server::mgmt_socket_addr;
 use anyhow::{anyhow, Context, Result};
-use hyper::{Body, Client, Response};
+use hyper::{Body, Client, Method, Request, Response};
 use hyperlocal::{UnixClientExt, UnixConnector, Uri};
 
 /// Shim management client with timeout
@@ -56,6 +56,24 @@ impl MgmtClient {
             },
             // if timeout not set, work executes directly
             None => work.await.context("failed to GET"),
+        }
+    }
+
+    /// The http PUT method for client
+    pub async fn put(&self, uri: &str, data: Vec<u8>) -> Result<Response<Body>> {
+        let url: hyper::Uri = Uri::new(&self.sock_path, uri).into();
+        let request = Request::builder()
+            .method(Method::PUT)
+            .uri(url)
+            .body(Body::from(data))
+            .unwrap();
+        let work = self.client.request(request);
+        match self.timeout {
+            Some(timeout) => match tokio::time::timeout(timeout, work).await {
+                Ok(result) => result.map_err(|e| anyhow!(e)),
+                Err(_) => Err(anyhow!("TIMEOUT")),
+            },
+            None => work.await.context("failed to PUT"),
         }
     }
 }
