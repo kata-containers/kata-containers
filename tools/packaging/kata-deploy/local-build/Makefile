@@ -92,7 +92,7 @@ cc: cc-cloud-hypervisor-tarball \
 	cc-tdx-tdvf-tarball \
 	cc-sev-ovmf-tarball \
 	cc-sev-rootfs-initrd-tarball \
-	cc-tdx-rootfs-tarball
+	cc-tdx-rootfs-image-tarball
 
 cc-cloud-hypervisor-tarball:
 	${MAKE} $@-build
