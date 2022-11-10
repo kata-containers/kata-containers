@@ -1397,6 +1397,10 @@ func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 
 	pid := clh.state.PID
 
+	if atomic.LoadInt32(&clh.stopped) != 0 {
+		return false, nil
+	}
+
 	if err := syscall.Kill(pid, syscall.Signal(0)); err != nil {
 		return false, nil
 	}
