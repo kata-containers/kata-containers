@@ -864,7 +864,7 @@ impl SharedFsInfo {
             )?;
         }
 
-        let l = ["none", "auto", "always"];
+        let l = ["never", "auto", "always"];
 
         if !l.contains(&self.virtio_fs_cache.as_str()) {
             return Err(eother!(
