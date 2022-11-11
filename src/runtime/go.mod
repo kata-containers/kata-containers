@@ -17,6 +17,7 @@ require (
 	github.com/containernetworking/plugins v1.1.1
 	github.com/containers/podman/v4 v4.2.0
 	github.com/coreos/go-systemd/v22 v22.3.2
+	github.com/docker/go-metrics v0.0.1
 	github.com/docker/go-units v0.4.0
 	github.com/frankban/quicktest v1.13.1 // indirect
 	github.com/fsnotify/fsnotify v1.5.4
