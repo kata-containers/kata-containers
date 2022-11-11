@@ -4,6 +4,7 @@
 //
 use std::convert::TryInto;
 use std::fmt;
+use std::fs;
 use std::ops::Deref;
 use std::str::FromStr;
 
@@ -17,6 +18,10 @@ const SLOT_MAX: u8 = (1 << SLOT_BITS) - 1;
 // The PCI spec reserves 3 bits (0..7) for function number
 const FUNCTION_BITS: u8 = 3;
 const FUNCTION_MAX: u8 = (1 << FUNCTION_BITS) - 1;
+
+// The linux file to trigger pci rescan
+const PCI_RESCAN_FILE: &str = "/sys/bus/pci/rescan";
+const PCI_RESCAN_SIGNAL: &str = "1";
 
 // Represents a PCI function's slot (a.k.a. device) and function
 // numbers, giving its location on a single logical bus
@@ -179,6 +184,13 @@ impl FromStr for Path {
     fn from_str(s: &str) -> anyhow::Result<Self> {
         let rslots: anyhow::Result<Vec<SlotFn>> = s.split('/').map(SlotFn::from_str).collect();
         Path::new(rslots?)
+    }
+}
+
+pub fn rescan_pci_meta() -> anyhow::Result<()> {
+    match fs::write(PCI_RESCAN_FILE, PCI_RESCAN_SIGNAL) {
+        Err(e) => return Err(anyhow!("Failed to rescan pci device {}", e)),
+        Ok(_) => Ok(()),
     }
 }
 

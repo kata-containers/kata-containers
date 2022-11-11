@@ -10,6 +10,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::iter;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
+use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -48,6 +49,8 @@ const RW_MASK: u32 = 0o660;
 const RO_MASK: u32 = 0o440;
 const EXEC_MASK: u32 = 0o110;
 const MODE_SETGID: u32 = 0o2000;
+
+const MTAB_PATH: &str = "/etc/mtab";
 
 #[rustfmt::skip]
 lazy_static! {
@@ -1008,6 +1011,40 @@ fn ensure_destination_file_exists(path: &Path) -> Result<()> {
     fs::create_dir_all(dir).context(format!("create_dir_all {:?}", dir))?;
 
     fs::File::create(path).context(format!("create empty file {:?}", path))?;
+
+    Ok(())
+}
+
+/// Parse mtab and return the device which is mounted at a given directory
+pub fn get_mount_device(mount_dir: &Path) -> Result<String> {
+    let dir = mount_dir.to_string_lossy().into_owned();
+    let f = File::open(MTAB_PATH)?;
+    let reader = BufReader::new(f);
+
+    for line in reader.lines() {
+        let tem_line = line?;
+        let parts: Vec<&str> = tem_line.split_whitespace().collect();
+        if parts.contains(&dir.as_str()) && !parts.is_empty() {
+            return Ok(String::from(parts[0]));
+        }
+    }
+
+    return Err(anyhow!("can't find mount point {:?}", dir));
+}
+
+#[instrument]
+pub fn expand_file_system(mountpoint: &String, logger: Logger) -> Result<()> {
+    let path = Path::new(mountpoint);
+    match get_mount_device(path) {
+        Ok(device_path) => {
+            info!(logger, "resize to file system of device {:?}", device_path);
+            Command::new("resize2fs")
+                .arg(device_path)
+                .output()
+                .expect("failed to execute file system expand");
+        }
+        Err(e) => return Err(e),
+    };
 
     Ok(())
 }

@@ -34,8 +34,8 @@ import (
 const (
 	DirectVolumePathKey   = "path"
 	AgentUrl              = "/agent-url"
-	DirectVolumeStatUrl   = "/direct-volume/stats"
-	DirectVolumeResizeUrl = "/direct-volume/resize"
+	DirectVolumeStatUrl   = "direct-volume/stats"
+	DirectVolumeResizeUrl = "direct-volume/resize"
 	IPTablesUrl           = "/iptables"
 	IP6TablesUrl          = "/ip6tables"
 	MetricsUrl            = "/metrics"
@@ -179,6 +179,7 @@ func (s *service) serveVolumeResize(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(err.Error()))
 		return
 	}
+
 	var resizeReq ResizeRequest
 	err = json.Unmarshal(body, &resizeReq)
 	if err != nil {
@@ -262,8 +263,8 @@ func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec
 	m := http.NewServeMux()
 	m.Handle(MetricsUrl, http.HandlerFunc(s.serveMetrics))
 	m.Handle(AgentUrl, http.HandlerFunc(s.agentURL))
-	m.Handle(DirectVolumeStatUrl, http.HandlerFunc(s.serveVolumeStats))
-	m.Handle(DirectVolumeResizeUrl, http.HandlerFunc(s.serveVolumeResize))
+	m.Handle("/"+DirectVolumeStatUrl, http.HandlerFunc(s.serveVolumeStats))
+	m.Handle("/"+DirectVolumeResizeUrl, http.HandlerFunc(s.serveVolumeResize))
 	m.Handle(IPTablesUrl, http.HandlerFunc(s.ipTablesHandler))
 	m.Handle(IP6TablesUrl, http.HandlerFunc(s.ip6TablesHandler))
 	s.mountPprofHandle(m, ociSpec)

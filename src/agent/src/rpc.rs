@@ -51,7 +51,7 @@ use crate::device::{
 };
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
-use crate::mount::{add_storages, baremount, STORAGE_HANDLER_LIST};
+use crate::mount::{add_storages, baremount, expand_file_system, STORAGE_HANDLER_LIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
 use crate::pci;
@@ -1480,6 +1480,34 @@ impl agent_ttrpc::AgentService for AgentService {
         }
 
         Err(ttrpc_error!(ttrpc::Code::INTERNAL, ""))
+    }
+
+    async fn resize_volume(
+        &self,
+        ctx: &TtrpcContext,
+        req: protocols::agent::ResizeVolumeRequest,
+    ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "resize_volume", req);
+        is_allowed!(req);
+
+        info!(sl!(), "resize volume");
+        
+        // rescan pci metadta
+        pci::rescan_pci_meta().map_err(|e| {
+            ttrpc_error!(
+                ttrpc::Code::INTERNAL,
+                format!("Failed to scan pci device: {:?}", e),
+            )
+        })?;
+
+        // resize the volume to file system
+        expand_file_system(&req.volume_guest_path, sl!()).map_err(|e| {
+            ttrpc_error!(
+                ttrpc::Code::INTERNAL,
+                format!("Failed to resize the volume: {:?}", e),
+            )
+        })?;
+        Ok(Empty::new())
     }
 
     async fn get_volume_stats(
