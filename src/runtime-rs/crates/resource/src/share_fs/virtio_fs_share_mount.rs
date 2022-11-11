@@ -44,6 +44,7 @@ impl ShareFsMount for VirtiofsShareMount {
             &config.cid,
             config.readonly,
             false,
+            config.is_rafs,
         )
         .context("share to guest")?;
         Ok(ShareFsMountResult {
@@ -60,6 +61,7 @@ impl ShareFsMount for VirtiofsShareMount {
             &config.cid,
             config.readonly,
             true,
+            config.is_rafs,
         )
         .context("share to guest")?;
 

@@ -101,6 +101,10 @@ impl Container {
             }
             None => return Err(anyhow!("spec miss root field")),
         };
+        let mut storages = vec![];
+        if let Some(storage) = rootfs.get_storage().await {
+            storages.push(storage);
+        }
         inner.rootfs.push(rootfs);
 
         // handler volumes
@@ -110,8 +114,6 @@ impl Container {
             .await
             .context("handler volumes")?;
         let mut oci_mounts = vec![];
-        let mut storages = vec![];
-
         for v in volumes {
             let mut volume_mounts = v.get_volume_mount().context("get volume mount")?;
             if !volume_mounts.is_empty() {
