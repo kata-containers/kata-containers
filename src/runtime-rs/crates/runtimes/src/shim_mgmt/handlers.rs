@@ -85,9 +85,7 @@ async fn generic_ip_table_handler(
                 let body = Body::from(data);
                 Response::builder().body(body).map_err(|e| anyhow!(e))
             }
-            _ => {
-                Err(anyhow!("Failed to get iptable"))
-            }
+            _ => Err(anyhow!("Failed to get iptable")),
         },
 
         Method::PUT => {
