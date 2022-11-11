@@ -8,7 +8,7 @@ The diagram below gives an overview for the hypervisor config
 
 VMM's config info will be loaded when initialize the runtime instance, there are some important functions need to be focused on. 
 ### `VirtContainer::init()`
-
+test
 This function initialize the runtime handler. It will register the plugins into the HYPERVISOR_PLUGINS. Different plugins are needed for different hypervisors. 
 ```rust
 #[async_trait]
