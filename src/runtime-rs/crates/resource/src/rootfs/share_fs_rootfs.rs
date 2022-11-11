@@ -4,12 +4,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::sync::Arc;
-
+use agent::Storage;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::mount::Mounter;
 use kata_types::mount::Mount;
+use std::sync::Arc;
 
 use super::{Rootfs, ROOTFS};
 use crate::share_fs::{ShareFsMount, ShareFsRootfsConfig};
@@ -37,6 +37,7 @@ impl ShareFsRootfs {
                 source: bundle_rootfs.to_string(),
                 target: ROOTFS.to_string(),
                 readonly: false,
+                is_rafs: false,
             })
             .await
             .context("share rootfs")?;
@@ -55,5 +56,9 @@ impl Rootfs for ShareFsRootfs {
 
     async fn get_rootfs_mount(&self) -> Result<Vec<oci::Mount>> {
         todo!()
+    }
+
+    async fn get_storage(&self) -> Option<Storage> {
+        None
     }
 }

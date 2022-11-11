@@ -68,6 +68,7 @@ impl ShareFsVolume {
                         readonly: m.options.iter().any(|o| *o == "ro"),
                         mount_options: m.options.clone(),
                         mount: m.clone(),
+                        is_rafs: false,
                     })
                     .await
                     .context("share fs volume")?;

@@ -27,6 +27,7 @@ pub(crate) fn share_to_guest(
     cid: &str,
     readonly: bool,
     is_volume: bool,
+    is_rafs: bool,
 ) -> Result<String> {
     let host_dest = do_get_host_path(target, sid, cid, is_volume, false);
     mount::bind_mount_unchecked(source, &host_dest, readonly)
@@ -39,7 +40,7 @@ pub(crate) fn share_to_guest(
         mount::bind_remount_read_only(&dst).context("bind remount readonly")?;
     }
 
-    Ok(do_get_guest_path(target, cid, is_volume))
+    Ok(do_get_guest_path(target, cid, is_volume, is_rafs))
 }
 // Shared path handling:
 // 1. create two directories for each sandbox:
@@ -53,12 +54,22 @@ pub(crate) fn get_host_ro_shared_path(id: &str) -> PathBuf {
     Path::new(KATA_HOST_SHARED_DIR).join(id).join("ro")
 }
 
-pub(crate) fn get_host_rw_shared_path(sid: &str) -> PathBuf {
+pub fn get_host_rw_shared_path(sid: &str) -> PathBuf {
     Path::new(KATA_HOST_SHARED_DIR).join(sid).join("rw")
 }
 
-fn do_get_guest_any_path(target: &str, cid: &str, is_volume: bool, is_virtiofs: bool) -> String {
-    let dir = PASSTHROUGH_FS_DIR;
+fn do_get_guest_any_path(
+    target: &str,
+    cid: &str,
+    is_volume: bool,
+    is_rafs: bool,
+    is_virtiofs: bool,
+) -> String {
+    let dir = if is_rafs {
+        RAFS_DIR
+    } else {
+        PASSTHROUGH_FS_DIR
+    };
     let guest_share_dir = if is_virtiofs {
         Path::new("/").to_path_buf()
     } else {
@@ -73,8 +84,12 @@ fn do_get_guest_any_path(target: &str, cid: &str, is_volume: bool, is_virtiofs: 
     path.to_str().unwrap().to_string()
 }
 
-pub(crate) fn do_get_guest_path(target: &str, cid: &str, is_volume: bool) -> String {
-    do_get_guest_any_path(target, cid, is_volume, false)
+pub fn do_get_guest_path(target: &str, cid: &str, is_volume: bool, is_rafs: bool) -> String {
+    do_get_guest_any_path(target, cid, is_volume, is_rafs, false)
+}
+
+pub fn do_get_guest_share_path(target: &str, cid: &str, is_rafs: bool) -> String {
+    do_get_guest_any_path(target, cid, false, is_rafs, true)
 }
 
 pub(crate) fn do_get_host_path(
