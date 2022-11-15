@@ -33,6 +33,23 @@ impl QemuInner {
 
     pub(crate) async fn start_vm(&mut self, _timeout: i32) -> Result<()> {
         info!(sl!(), "Starting QEMU VM");
+
+        let mut command = std::process::Command::new(&self.config.path);
+
+        command
+            .arg("-kernel")
+            .arg(&self.config.boot_info.kernel)
+            .arg("-m")
+            .arg(format!("{}M", &self.config.memory_info.default_memory))
+            .arg("-initrd")
+            .arg(&self.config.boot_info.initrd)
+            .arg("-vga")
+            .arg("none")
+            .arg("-nodefaults")
+            .arg("-nographic");
+
+        command.spawn()?;
+
         Ok(())
     }
 
