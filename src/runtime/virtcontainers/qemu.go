@@ -531,7 +531,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		NoDefaults:    true,
 		NoGraphic:     true,
 		NoReboot:      true,
-		Daemonize:     true,
+		Daemonize:     false,
 		MemPrealloc:   q.config.MemPrealloc,
 		HugePages:     q.config.HugePages,
 		IOMMUPlatform: q.config.IOMMUPlatform,
@@ -951,6 +951,11 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 		// Wait for it to exit to assume that the QEMU daemon was
 		// actually started.
 		qemuCmd.Wait()
+	} else {
+		// Ensure the QEMU process is reaped after termination
+		go func() {
+			qemuCmd.Wait()
+		}()
 	}
 
 	err = q.waitVM(ctx, qmpConn, timeout)
