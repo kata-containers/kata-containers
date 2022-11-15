@@ -93,10 +93,9 @@ const defaultDisableSeccomp = false
 const defaultVfioMode = "guest-kernel"
 const defaultLegacySerial = false
 const defaultGuestPreAttestation = false
-const defaultGuestPreAttestationProxy string = ""
+const defaultGuestPreAttestationURI string = ""
+const defaultGuestPreAttestationMode string = ""
 const defaultGuestPreAttestationKeyset string = ""
-const defaultGuestPreAttestationSecretGuid string = ""
-const defaultGuestPreAttestationSecretType string = ""
 const defaultSEVCertChainPath string = ""
 const defaultSEVGuestPolicy uint32 = 0
 

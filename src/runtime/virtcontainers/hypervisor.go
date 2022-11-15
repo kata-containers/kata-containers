@@ -266,7 +266,8 @@ type HypervisorConfig struct {
 	GuestPreAttestationKeyset      string
 	BlockDeviceDriver              string
 	HypervisorMachineType          string
-	GuestPreAttestationProxy       string
+	GuestPreAttestationURI         string
+	GuestPreAttestationMode        string
 	DevicesStatePath               string
 	EntropySource                  string
 	SharedFS                       string
@@ -283,8 +284,6 @@ type HypervisorConfig struct {
 	SELinuxProcessLabel            string
 	JailerPath                     string
 	MemoryPath                     string
-	GuestPreAttestationSecretGuid  string
-	GuestPreAttestationSecretType  string
 	SEVCertChainPath               string
 	BlockDeviceAIO                 string
 	User                           string

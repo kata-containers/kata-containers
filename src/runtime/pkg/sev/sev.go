@@ -15,20 +15,6 @@ import (
 	"os"
 )
 
-type GuestPreAttestationConfig struct {
-	Proxy               string
-	Keyset              string
-	LaunchId            string
-	KernelPath          string
-	InitrdPath          string
-	FwPath              string
-	KernelParameters    string
-	CertChainPath       string
-	KeyBrokerSecretType string
-	KeyBrokerSecretGuid string
-	Policy              uint32
-}
-
 type guidLE [16]byte
 
 // The following definitions must be identical to those in QEMU target/i386/sev.c
