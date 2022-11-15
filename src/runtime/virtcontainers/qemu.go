@@ -41,7 +41,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/sev"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/sev/kbs"
 	pkgUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -182,6 +182,13 @@ func (q *qemu) kernelParameters() string {
 	} else {
 		q.Logger().Info("Set selinux=1 to kernel params because SELinux on the guest is enabled")
 		params = append(params, Param{"selinux", "1"})
+	}
+
+	// set the location of the online-kbs for SEV(-ES) guest attestation
+	if q.arch.guestProtection() == sevProtection &&
+		q.config.GuestPreAttestation &&
+		q.config.GuestPreAttestationMode == kbs.Online {
+		params = append(params, Param{"agent.aa_kbc_params", kbs.OnlineBootParam + "::" + q.config.GuestPreAttestationURI})
 	}
 
 	// add the params specified by the provided config. As the kernel
@@ -667,8 +674,8 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		PidFile:        filepath.Join(q.config.VMStorePath, q.id, "pid"),
 	}
 	if q.arch.guestProtection() == sevProtection {
-		sevConfig := sev.GuestPreAttestationConfig{
-			Proxy:         q.config.GuestPreAttestationProxy,
+		sevConfig := kbs.GuestPreAttestationConfig{
+			Proxy:         q.config.GuestPreAttestationURI,
 			Policy:        q.config.SEVGuestPolicy,
 			CertChainPath: q.config.SEVCertChainPath,
 		}
@@ -883,18 +890,27 @@ func (q *qemu) AttestVM(ctx context.Context) error {
 
 	// Guest must be paused so that secrets can be injected.
 	// Guest will be continued by the Attestation function
-	sevConfig := sev.GuestPreAttestationConfig{
-		Proxy:               q.config.GuestPreAttestationProxy,
-		Policy:              q.config.SEVGuestPolicy,
-		Keyset:              q.config.GuestPreAttestationKeyset,
-		KeyBrokerSecretGuid: q.config.GuestPreAttestationSecretGuid,
-		KeyBrokerSecretType: q.config.GuestPreAttestationSecretType,
-		LaunchId:            launchId,
-		KernelPath:          kernelPath,
-		InitrdPath:          initrdPath,
-		FwPath:              firmwarePath,
-		KernelParameters:    kernelParameters,
+	sevConfig := kbs.GuestPreAttestationConfig{
+		Proxy:            q.config.GuestPreAttestationURI,
+		Policy:           q.config.SEVGuestPolicy,
+		Keyset:           q.config.GuestPreAttestationKeyset,
+		LaunchId:         launchId,
+		KernelPath:       kernelPath,
+		InitrdPath:       initrdPath,
+		FwPath:           firmwarePath,
+		KernelParameters: kernelParameters,
 	}
+
+	if q.config.GuestPreAttestationMode == kbs.Online {
+		sevConfig.SecretGuid = kbs.OnlineSecretGuid
+		sevConfig.SecretType = kbs.OnlineSecretType
+	} else if q.config.GuestPreAttestationMode == kbs.Offline {
+		sevConfig.SecretGuid = kbs.OfflineSecretGuid
+		sevConfig.SecretType = kbs.OfflineSecretType
+	} else {
+		return fmt.Errorf("Unsupported pre-attestation mode: %s", q.config.GuestPreAttestationMode)
+	}
+
 	if err := q.arch.sevGuestPreAttestation(
 		q.qmpMonitorCh.ctx,
 		q.qmpMonitorCh.qmp,
