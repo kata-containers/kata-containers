@@ -46,3 +46,31 @@ const (
 	// 'EPYC-Milan-v2': family=25, model=1, stepping=1
 	SigEpycMilanV2 VCPUSig = 0xa00f11
 )
+
+// NewVCPUSig computes the CPU signature (32-bit value) from the given family,
+// model, and stepping.
+//
+// This computation is described in AMD's CPUID Specification, publication #25481
+// https://www.amd.com/system/files/TechDocs/25481.pdf
+// See section: CPUID Fn0000_0001_EAX Family, Model, Stepping Identifiers
+func NewVCPUSig(family, model, stepping uint32) VCPUSig {
+	var family_low, family_high uint32
+	if family > 0xf {
+		family_low = 0xf
+		family_high = (family - 0x0f) & 0xff
+	} else {
+		family_low = family
+		family_high = 0
+	}
+
+	model_low := model & 0xf
+	model_high := (model >> 4) & 0xf
+
+	stepping_low := stepping & 0xf
+
+	return VCPUSig((family_high << 20) |
+		(model_high << 16) |
+		(family_low << 8) |
+		(model_low << 4) |
+		stepping_low)
+}
