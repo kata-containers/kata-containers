@@ -277,6 +277,15 @@ impl ImageService {
             self.image_client.lock().await.config.security_validate =
                 *enable_signature_verification;
 
+            // If the attestation-agent is being used, then enable the authenticated credentials support
+            //TODO tidy logic once skopeo is removed to combine with aa_kbc_params check above
+            info!(
+                sl!(),
+                "image_client.config.auth set to: {}",
+                !aa_kbc_params.is_empty()
+            );
+            self.image_client.lock().await.config.auth = !aa_kbc_params.is_empty();
+
             let bundle_path = Path::new(CONTAINER_BASE).join(&cid);
             fs::create_dir_all(&bundle_path)?;
 
@@ -290,6 +299,11 @@ impl ImageService {
                 .await
                 .pull_image(image, &bundle_path, &source_creds, &Some(&decrypt_config))
                 .await?;
+
+            info!(
+                sl!(),
+                "pull and unpack image {:?}, with image-rs succeeded ", cid
+            );
         }
 
         let mut sandbox = self.sandbox.lock().await;
