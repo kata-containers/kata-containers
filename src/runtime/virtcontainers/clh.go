@@ -24,6 +24,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -256,6 +258,8 @@ type cloudHypervisor struct {
 	vmconfig        chclient.VmConfig
 	state           CloudHypervisorState
 	config          HypervisorConfig
+	stopped         int32
+	mu              sync.Mutex
 }
 
 var clhKernelParams = []Param{
@@ -1081,9 +1085,21 @@ func (clh *cloudHypervisor) ResumeVM(ctx context.Context) error {
 
 // StopVM will stop the Sandbox's VM.
 func (clh *cloudHypervisor) StopVM(ctx context.Context, waitOnly bool) (err error) {
+	clh.mu.Lock()
+	defer func() {
+		if err == nil {
+			atomic.StoreInt32(&clh.stopped, 1)
+		}
+		clh.mu.Unlock()
+	}()
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "StopVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 	clh.Logger().WithField("function", "StopVM").Info("Stop Sandbox")
+	if atomic.LoadInt32(&clh.stopped) != 0 {
+		clh.Logger().Info("Already stopped")
+		return nil
+	}
+
 	return clh.terminate(ctx, waitOnly)
 }
 
@@ -1385,16 +1401,20 @@ func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 
 	pid := clh.state.PID
 
-	if err := syscall.Kill(pid, syscall.Signal(0)); err != nil {
+	if atomic.LoadInt32(&clh.stopped) != 0 {
 		return false, nil
 	}
 
 	timeStart := time.Now()
 	cl := clh.client()
 	for {
+		err := syscall.Kill(pid, syscall.Signal(0))
+		if err != nil {
+			return false, nil
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
-		defer cancel()
-		_, _, err := cl.VmmPingGet(ctx)
+		_, _, err = cl.VmmPingGet(ctx)
+		cancel()
 		if err == nil {
 			return true, nil
 		} else {
