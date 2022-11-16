@@ -312,7 +312,8 @@ func parseGrpcHybridVSockAddr(sock string) (string, uint32, error) {
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md
 func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), timeoutErrMsg error) (net.Conn, error) {
 	t := time.NewTimer(timeout)
-	cancel := make(chan bool)
+	// Create a buffered channel so that notifying subroutine is not blocked
+	cancel := make(chan bool, 1)
 	ch := make(chan net.Conn)
 	go func() {
 		for {
