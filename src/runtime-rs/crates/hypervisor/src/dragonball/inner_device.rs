@@ -15,8 +15,8 @@ use dragonball::api::v1::{
 
 use super::DragonballInner;
 use crate::{
-    device::Device, NetworkConfig, ShareFsDeviceConfig, ShareFsMountConfig, ShareFsMountType,
-    ShareFsOperation, VmmState, VsockConfig,
+    device::Device, HybridVsockConfig, NetworkConfig, ShareFsDeviceConfig, ShareFsMountConfig,
+    ShareFsMountType, ShareFsOperation, VmmState,
 };
 
 const MB_TO_B: u32 = 1024 * 1024;
@@ -56,13 +56,16 @@ impl DragonballInner {
                     config.no_drop,
                 )
                 .context("add block device"),
-            Device::Vsock(config) => self.add_vsock(&config).context("add vsock"),
+            Device::HybridVsock(config) => self.add_hvsock(&config).context("add vsock"),
             Device::ShareFsDevice(config) => self
                 .add_share_fs_device(&config)
                 .context("add share fs device"),
             Device::ShareFsMount(config) => self
                 .add_share_fs_mount(&config)
                 .context("add share fs mount"),
+            Device::Vsock(_) => {
+                todo!()
+            }
         }
     }
 
@@ -139,7 +142,7 @@ impl DragonballInner {
             .context("insert network device")
     }
 
-    fn add_vsock(&mut self, config: &VsockConfig) -> Result<()> {
+    fn add_hvsock(&mut self, config: &HybridVsockConfig) -> Result<()> {
         let vsock_cfg = VsockDeviceConfigInfo {
             id: String::from("root"),
             guest_cid: config.guest_cid,
