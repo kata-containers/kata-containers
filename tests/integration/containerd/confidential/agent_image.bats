@@ -136,6 +136,36 @@ setup() {
 	fi
 }
 
+@test "$test_tag Test pull an unencrypted unsigned image from an authenticated registry with correct credentials" {
+	local container_config="${FIXTURES_DIR}/container-config_authenticated.yaml"
+
+	setup_credentials_files "quay.io/kata-containers/confidential-containers-auth" 
+
+	create_test_pod
+	
+	assert_container "${container_config}"
+}
+
+@test "$test_tag Test cannot pull an image from an authenticated registry with incorrect credentials" {
+	local container_config="${FIXTURES_DIR}/container-config_authenticated.yaml"
+
+	REGISTRY_CREDENTIAL_ENCODED="QXJhbmRvbXF1YXl0ZXN0YWNjb3VudHRoYXRkb2VzbnRleGlzdDpwYXNzd29yZAo=" setup_credentials_files "quay.io/kata-containers/confidential-containers-auth"
+
+	create_test_pod
+
+	assert_container_fail "$container_config"
+	assert_logs_contain 'failed to pull manifest Authentication failure'
+}
+
+@test "$test_tag Test cannot pull an image from an authenticated registry without credentials" {
+	local container_config="${FIXTURES_DIR}/container-config_authenticated.yaml"
+
+	create_test_pod
+
+	assert_container_fail "$container_config"
+	assert_logs_contain 'failed to pull manifest Not authorized'
+}
+
 teardown() {
 	teardown_common
 

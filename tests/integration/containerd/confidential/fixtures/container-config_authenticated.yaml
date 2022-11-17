@@ -1,0 +1,9 @@
+# Copyright (c) 2022 IBM
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+metadata:
+  name: kata-cc-nginx-authenticated
+image:
+  image: quay.io/kata-containers/confidential-containers-auth:nginx
+log_path: kata-cc.0.log
