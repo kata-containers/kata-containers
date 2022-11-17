@@ -53,7 +53,7 @@ const acrnDevice = "/dev/acrn_vhm"
 // Due to this several macros are not defined in Linux headers.
 // Until the support is available, directly use the value instead
 // of macros.
-//https://github.com/kata-containers/runtime/issues/1784
+// https://github.com/kata-containers/runtime/issues/1784
 const ioctl_ACRN_CREATE_VM = 0x43000010  //nolint
 const ioctl_ACRN_DESTROY_VM = 0x43000011 //nolint
 

@@ -37,11 +37,11 @@ const (
 // tables). The names of these tables are in dotted ("nested table")
 // form:
 //
-//   [<component>.<type>]
+//	[<component>.<type>]
 //
 // The components are hypervisor, and agent. For example,
 //
-//   [agent.kata]
+//	[agent.kata]
 //
 // The currently supported types are listed below:
 const (

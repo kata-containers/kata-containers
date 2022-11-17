@@ -227,9 +227,7 @@ var vmAddNetPutRequest = func(clh *cloudHypervisor) error {
 	return nil
 }
 
-//
 // Cloud hypervisor state
-//
 type CloudHypervisorState struct {
 	apiSocket         string
 	PID               int
@@ -1321,9 +1319,9 @@ func kernelParamsToString(params []Param) string {
 	return strings.TrimSpace(paramBuilder.String())
 }
 
-//****************************************
+// ****************************************
 // API calls
-//****************************************
+// ****************************************
 func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 
 	pid := clh.state.PID

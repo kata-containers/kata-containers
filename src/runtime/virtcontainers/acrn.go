@@ -119,7 +119,7 @@ const acrnDevice = "/dev/acrn_vhm"
 // Due to this several macros are not defined in Linux headers.
 // Until the support is available, directly use the value instead
 // of macros.
-//https://github.com/kata-containers/runtime/issues/1784
+// https://github.com/kata-containers/runtime/issues/1784
 const ioctl_ACRN_GET_PLATFORM_INFO = 0x43000003 //nolint
 
 const (
@@ -127,10 +127,10 @@ const (
 	acrnStopSandboxTimeoutSecs = 15
 )
 
-//UUIDBusy marks a particular UUID as busy
+// UUIDBusy marks a particular UUID as busy
 const UUIDBusy = 1
 
-//UUIDFree marks a particular UUID as free
+// UUIDFree marks a particular UUID as free
 const UUIDFree = 0
 
 // agnostic list of kernel parameters
