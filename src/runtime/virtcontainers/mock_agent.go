@@ -223,6 +223,10 @@ func (n *mockAgent) addSwap(ctx context.Context, PCIPath types.PciPath) error {
 func (n *mockAgent) markDead(ctx context.Context) {
 }
 
+func (n *mockAgent) isDead() bool {
+	return false
+}
+
 func (n *mockAgent) cleanup(ctx context.Context) {
 }
 

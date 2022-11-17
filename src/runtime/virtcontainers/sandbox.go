@@ -2348,6 +2348,10 @@ func (s *Sandbox) GetAgentURL() (string, error) {
 	return s.agent.getAgentURL()
 }
 
+func (s *Sandbox) IsAgentDead() bool {
+	return s.agent.isDead()
+}
+
 // GetIPTables will obtain the iptables from the guest
 func (s *Sandbox) GetIPTables(ctx context.Context, isIPv6 bool) ([]byte, error) {
 	return s.agent.getIPTables(ctx, isIPv6)

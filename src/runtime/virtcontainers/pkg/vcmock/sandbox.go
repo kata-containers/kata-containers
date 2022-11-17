@@ -251,6 +251,10 @@ func (s *Sandbox) GetAgentURL() (string, error) {
 	return "", nil
 }
 
+func (s *Sandbox) IsAgentDead() bool {
+	return false
+}
+
 func (s *Sandbox) GetHypervisorPid() (int, error) {
 	return 0, nil
 }

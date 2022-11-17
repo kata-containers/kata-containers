@@ -76,6 +76,7 @@ type VCSandbox interface {
 	UpdateRuntimeMetrics() error
 	GetAgentMetrics(ctx context.Context) (string, error)
 	GetAgentURL() (string, error)
+	IsAgentDead() bool
 
 	GuestVolumeStats(ctx context.Context, volumePath string) ([]byte, error)
 	ResizeGuestVolume(ctx context.Context, volumePath string, size uint64) error

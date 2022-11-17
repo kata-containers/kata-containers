@@ -2170,6 +2170,10 @@ func (k *kataAgent) markDead(ctx context.Context) {
 	k.disconnect(ctx)
 }
 
+func (k *kataAgent) isDead() bool {
+	return k.dead
+}
+
 func (k *kataAgent) cleanup(ctx context.Context) {
 }
 
