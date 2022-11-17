@@ -7,7 +7,6 @@
 package main
 
 import (
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -32,7 +31,7 @@ func TestUtilsResolvePathEmptyPath(t *testing.T) {
 func TestUtilsResolvePathValidPath(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +69,7 @@ func TestUtilsResolvePathValidPath(t *testing.T) {
 func TestUtilsResolvePathENOENT(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
