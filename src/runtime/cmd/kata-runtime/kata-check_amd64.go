@@ -52,7 +52,7 @@ const acrnDevice = "/dev/acrn_hsm"
 // Due to this several macros are not defined in Linux headers.
 // Until the support is available, directly use the value instead
 // of macros.
-//https://github.com/kata-containers/runtime/issues/1784
+// https://github.com/kata-containers/runtime/issues/1784
 const ioctl_ACRN_CREATE_VM = 0xC030A210 //nolint
 const ioctl_ACRN_PAUSE_VM = 0xA213      //nolint
 const ioctl_ACRN_DESTROY_VM = 0xA211    //nolint

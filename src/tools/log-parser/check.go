@@ -15,9 +15,9 @@ import (
 // checkValid determines if the specified string is valid or not.
 // It looks for:
 //
-// - Invalid (unprintable) characters.
-// - Standard golang error strings added by the formatting functions into the
-//   resulting strings when issues are detected.
+//   - Invalid (unprintable) characters.
+//   - Standard golang error strings added by the formatting functions into the
+//     resulting strings when issues are detected.
 func checkValid(value string) error {
 	if value == "" {
 		return nil
