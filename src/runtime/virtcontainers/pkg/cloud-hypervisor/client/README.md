@@ -135,6 +135,7 @@ Class | Method | HTTP request | Description
  - [SendMigrationData](docs/SendMigrationData.md)
  - [SgxEpcConfig](docs/SgxEpcConfig.md)
  - [TokenBucket](docs/TokenBucket.md)
+ - [TpmConfig](docs/TpmConfig.md)
  - [VdpaConfig](docs/VdpaConfig.md)
  - [VmConfig](docs/VmConfig.md)
  - [VmCoredumpData](docs/VmCoredumpData.md)

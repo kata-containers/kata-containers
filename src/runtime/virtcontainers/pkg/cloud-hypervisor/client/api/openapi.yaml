@@ -469,6 +469,7 @@ components:
               hotplug_size: 7
             hotplug_size: 4
             hotplug_method: Acpi
+            thp: true
           disks:
           - pci_segment: 8
             path: path
@@ -620,6 +621,8 @@ components:
             tdx: false
             serial_number: serial_number
             uuid: uuid
+          tpm:
+            socket: socket
           pmem:
           - pci_segment: 6
             file: file
@@ -828,6 +831,7 @@ components:
             hotplug_size: 7
           hotplug_size: 4
           hotplug_method: Acpi
+          thp: true
         disks:
         - pci_segment: 8
           path: path
@@ -979,6 +983,8 @@ components:
           tdx: false
           serial_number: serial_number
           uuid: uuid
+        tpm:
+          socket: socket
         pmem:
         - pci_segment: 6
           file: file
@@ -1107,6 +1113,8 @@ components:
           type: boolean
         platform:
           $ref: '#/components/schemas/PlatformConfig'
+        tpm:
+          $ref: '#/components/schemas/TpmConfig'
       required:
       - payload
       type: object
@@ -1311,6 +1319,7 @@ components:
           hotplug_size: 7
         hotplug_size: 4
         hotplug_method: Acpi
+        thp: true
       properties:
         size:
           format: int64
@@ -1338,6 +1347,9 @@ components:
           type: integer
         prefault:
           default: false
+          type: boolean
+        thp:
+          default: true
           type: boolean
         zones:
           items:
@@ -1650,6 +1662,15 @@ components:
           type: string
       required:
       - path
+      type: object
+    TpmConfig:
+      example:
+        socket: socket
+      properties:
+        socket:
+          type: string
+      required:
+      - socket
       type: object
     VdpaConfig:
       example:
