@@ -35,6 +35,7 @@ type VmConfig struct {
 	Iommu    *bool           `json:"iommu,omitempty"`
 	Watchdog *bool           `json:"watchdog,omitempty"`
 	Platform *PlatformConfig `json:"platform,omitempty"`
+	Tpm      *TpmConfig      `json:"tpm,omitempty"`
 }
 
 // NewVmConfig instantiates a new VmConfig object
@@ -663,6 +664,38 @@ func (o *VmConfig) SetPlatform(v PlatformConfig) {
 	o.Platform = &v
 }
 
+// GetTpm returns the Tpm field value if set, zero value otherwise.
+func (o *VmConfig) GetTpm() TpmConfig {
+	if o == nil || o.Tpm == nil {
+		var ret TpmConfig
+		return ret
+	}
+	return *o.Tpm
+}
+
+// GetTpmOk returns a tuple with the Tpm field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VmConfig) GetTpmOk() (*TpmConfig, bool) {
+	if o == nil || o.Tpm == nil {
+		return nil, false
+	}
+	return o.Tpm, true
+}
+
+// HasTpm returns a boolean if a field has been set.
+func (o *VmConfig) HasTpm() bool {
+	if o != nil && o.Tpm != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetTpm gets a reference to the given TpmConfig and assigns it to the Tpm field.
+func (o *VmConfig) SetTpm(v TpmConfig) {
+	o.Tpm = &v
+}
+
 func (o VmConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Cpus != nil {
@@ -721,6 +754,9 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Platform != nil {
 		toSerialize["platform"] = o.Platform
+	}
+	if o.Tpm != nil {
+		toSerialize["tpm"] = o.Tpm
 	}
 	return json.Marshal(toSerialize)
 }
