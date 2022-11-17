@@ -1136,17 +1136,18 @@ func addRxRateLimiter(endpoint Endpoint, maxRate uint64) error {
 // from their parents once they have exceeded rate. A child class will continue to attempt to borrow until
 // it reaches ceil. See more details in https://tldp.org/HOWTO/Traffic-Control-HOWTO/classful-qdiscs.html.
 //
-//         * +-----+     +---------+     +-----------+      +-----------+
-//         * |     |     |  qdisc  |     | class 1:1 |      | class 1:2 |
-//         * | NIC |     |   htb   |     |   rate    |      |   rate    |
-//         * |     | --> | def 1:2 | --> |   ceil    | -+-> |   ceil    |
-//         * +-----+     +---------+     +-----------+  |   +-----------+
-//         *                                            |
-//         *                                            |   +-----------+
-//         *                                            |   | class 1:n |
-//         *                                            |   |   rate    |
-//         *                                            +-> |   ceil    |
-//         *                                            |   +-----------+
+//   - +-----+     +---------+     +-----------+      +-----------+
+//   - |     |     |  qdisc  |     | class 1:1 |      | class 1:2 |
+//   - | NIC |     |   htb   |     |   rate    |      |   rate    |
+//   - |     | --> | def 1:2 | --> |   ceil    | -+-> |   ceil    |
+//   - +-----+     +---------+     +-----------+  |   +-----------+
+//   - |
+//   - |   +-----------+
+//   - |   | class 1:n |
+//   - |   |   rate    |
+//   - +-> |   ceil    |
+//   - |   +-----------+
+//
 // Seeing from pic, after the routing decision, all packets will be sent to the interface root htb qdisc.
 // This root qdisc has only one direct child class (with id 1:1) which shapes the overall maximum rate
 // that will be sent through interface. Then, this class has at least one default child (1:2) meant to control all

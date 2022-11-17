@@ -303,7 +303,7 @@ func createLogEntry(filename string, line uint64, pairs kvPairs) (LogEntry, erro
 		return LogEntry{}, fmt.Errorf("need line number for file %v", filename)
 	}
 
-	if pairs == nil || len(pairs) == 0 {
+	if len(pairs) == 0 {
 		return LogEntry{}, fmt.Errorf("need key/value pairs for line %v:%d", filename, line)
 	}
 
