@@ -214,7 +214,7 @@ externals:
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
     url: "https://github.com/kubernetes-sigs/cri-tools"
-    version: "1.23.0"
+    version: "1.25.0"
 
   gperf:
     description: "GNU gperf is a perfect hash function generator"
