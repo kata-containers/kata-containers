@@ -10,7 +10,6 @@ package katautils
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1410,7 +1409,7 @@ func decodeDropIns(mainConfigPath string, tomlConf *tomlConfig) error {
 	configDir := filepath.Dir(mainConfigPath)
 	dropInDir := filepath.Join(configDir, "config.d")
 
-	files, err := ioutil.ReadDir(dropInDir)
+	files, err := os.ReadDir(dropInDir)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("error reading %q directory: %s", dropInDir, err)
