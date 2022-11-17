@@ -573,6 +573,8 @@ components:
           default: false
         platform:
           $ref: "#/components/schemas/PlatformConfig"
+        tpm:
+          $ref: "#/components/schemas/TpmConfig"
       description: Virtual machine configuration
 
     CpuAffinity:
@@ -726,6 +728,9 @@ components:
         prefault:
           type: boolean
           default: false
+        thp:
+          type: boolean
+          default: true
         zones:
           type: array
           items:
@@ -953,6 +958,14 @@ components:
           type: integer
           format: int16
         id:
+          type: string
+
+    TpmConfig:
+      required:
+        - socket
+      type: object
+      properties:
+        socket:
           type: string
 
     VdpaConfig:
