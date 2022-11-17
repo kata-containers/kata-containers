@@ -7,7 +7,6 @@ package qemu
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
@@ -186,8 +185,8 @@ func TestAppendDeviceNetwork(t *testing.T) {
 }
 
 func TestAppendDeviceNetworkMq(t *testing.T) {
-	foo, _ := ioutil.TempFile(os.TempDir(), "govmm-qemu-test")
-	bar, _ := ioutil.TempFile(os.TempDir(), "govmm-qemu-test")
+	foo, _ := os.CreateTemp(os.TempDir(), "govmm-qemu-test")
+	bar, _ := os.CreateTemp(os.TempDir(), "govmm-qemu-test")
 
 	defer func() {
 		_ = foo.Close()

@@ -45,9 +45,8 @@ func Ioctl(fd uintptr, request, data uintptr) error {
 // close vhost file descriptor.
 //
 // Benefits of using random context IDs:
-// - Reduce the probability of a *DoS attack*, since other processes don't know whatis the initial context ID
-//   used by findContextID to find a context ID available
-//
+//   - Reduce the probability of a *DoS attack*, since other processes don't know whatis the initial context ID
+//     used by findContextID to find a context ID available
 func FindContextID() (*os.File, uint64, error) {
 	// context IDs 0x0, 0x1 and 0x2 are reserved, 0x3 is the first context ID usable.
 	var firstContextID uint64 = 0x3

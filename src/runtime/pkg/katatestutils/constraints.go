@@ -87,15 +87,16 @@ func getKernelVersion() (string, error) {
 // Examples of actual kernel versions which can be made into valid semver
 // format by calling this function:
 //
-//   centos: 3.10.0-957.12.1.el7.x86_64
-//   fedora: 5.0.9-200.fc29.x86_64
+//	centos: 3.10.0-957.12.1.el7.x86_64
+//	fedora: 5.0.9-200.fc29.x86_64
 //
 // For some self compiled kernel, the kernel version will be with "+" as its suffix
 // For example:
-//   5.12.0-rc4+
+//
+//	5.12.0-rc4+
+//
 // These kernel version can't be parsed by the current lib and lead to panic
 // therefore the '+' should be removed.
-//
 func fixKernelVersion(version string) string {
 	version = strings.Replace(version, "_", "-", -1)
 	return strings.Replace(version, "+", "", -1)

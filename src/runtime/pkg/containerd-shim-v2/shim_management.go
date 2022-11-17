@@ -11,7 +11,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
@@ -173,7 +172,7 @@ func (s *service) serveVolumeStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *service) serveVolumeResize(w http.ResponseWriter, r *http.Request) {
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		shimMgtLog.WithError(err).Error("failed to read request body")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -212,7 +211,7 @@ func (s *service) genericIPTablesHandler(w http.ResponseWriter, r *http.Request,
 
 	switch r.Method {
 	case http.MethodPut:
-		body, err := ioutil.ReadAll(r.Body)
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			logger.WithError(err).Error("failed to read request body")
 			w.WriteHeader(http.StatusInternalServerError)
