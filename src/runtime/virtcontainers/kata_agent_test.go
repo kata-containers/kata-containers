@@ -9,7 +9,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -1168,7 +1167,7 @@ func TestHandleHugepages(t *testing.T) {
 	// are present (default is 1M, can only be changed on LPAR). See
 	// https://www.ibm.com/docs/en/linuxonibm/pdf/lku5dd05.pdf, p. 345 for more information.
 	if runtime.GOARCH == "s390x" {
-		dirs, err := ioutil.ReadDir(sysHugepagesDir)
+		dirs, err := os.ReadDir(sysHugepagesDir)
 		assert.Nil(err)
 		for _, dir := range dirs {
 			formattedSizes = append(formattedSizes, strings.TrimPrefix(dir.Name(), "hugepages-"))

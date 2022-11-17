@@ -7,7 +7,7 @@
 package main
 
 import (
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,7 +36,7 @@ func TestNewHexByteReaderStdin(t *testing.T) {
 func TestHexByteReaderRead(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestHexByteReaderRead(t *testing.T) {
 		assert.NoError(err)
 
 		reader := NewHexByteReader(file)
-		bytes, err := ioutil.ReadAll(reader)
+		bytes, err := io.ReadAll(reader)
 
 		if d.expectError {
 			assert.Errorf(err, "test[%d]: %+v", i, d)
