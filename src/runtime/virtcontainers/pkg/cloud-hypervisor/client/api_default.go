@@ -38,8 +38,8 @@ func (r ApiBootVMRequest) Execute() (*_nethttp.Response, error) {
 /*
 BootVM Boot the previously created VM instance.
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiBootVMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiBootVMRequest
 */
 func (a *DefaultApiService) BootVM(ctx _context.Context) ApiBootVMRequest {
 	return ApiBootVMRequest{
@@ -133,8 +133,8 @@ func (r ApiCreateVMRequest) Execute() (*_nethttp.Response, error) {
 /*
 CreateVM Create the cloud-hypervisor Virtual Machine (VM) instance. The instance is not booted, only created.
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiCreateVMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiCreateVMRequest
 */
 func (a *DefaultApiService) CreateVM(ctx _context.Context) ApiCreateVMRequest {
 	return ApiCreateVMRequest{
@@ -226,8 +226,8 @@ func (r ApiDeleteVMRequest) Execute() (*_nethttp.Response, error) {
 /*
 DeleteVM Delete the cloud-hypervisor Virtual Machine (VM) instance.
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiDeleteVMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiDeleteVMRequest
 */
 func (a *DefaultApiService) DeleteVM(ctx _context.Context) ApiDeleteVMRequest {
 	return ApiDeleteVMRequest{
@@ -314,8 +314,8 @@ func (r ApiPauseVMRequest) Execute() (*_nethttp.Response, error) {
 /*
 PauseVM Pause a previously booted VM instance.
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiPauseVMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiPauseVMRequest
 */
 func (a *DefaultApiService) PauseVM(ctx _context.Context) ApiPauseVMRequest {
 	return ApiPauseVMRequest{
@@ -402,8 +402,8 @@ func (r ApiPowerButtonVMRequest) Execute() (*_nethttp.Response, error) {
 /*
 PowerButtonVM Trigger a power button in the VM
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiPowerButtonVMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiPowerButtonVMRequest
 */
 func (a *DefaultApiService) PowerButtonVM(ctx _context.Context) ApiPowerButtonVMRequest {
 	return ApiPowerButtonVMRequest{
@@ -490,8 +490,8 @@ func (r ApiRebootVMRequest) Execute() (*_nethttp.Response, error) {
 /*
 RebootVM Reboot the VM instance.
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiRebootVMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiRebootVMRequest
 */
 func (a *DefaultApiService) RebootVM(ctx _context.Context) ApiRebootVMRequest {
 	return ApiRebootVMRequest{
@@ -578,8 +578,8 @@ func (r ApiResumeVMRequest) Execute() (*_nethttp.Response, error) {
 /*
 ResumeVM Resume a previously paused VM instance.
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiResumeVMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiResumeVMRequest
 */
 func (a *DefaultApiService) ResumeVM(ctx _context.Context) ApiResumeVMRequest {
 	return ApiResumeVMRequest{
@@ -666,8 +666,8 @@ func (r ApiShutdownVMRequest) Execute() (*_nethttp.Response, error) {
 /*
 ShutdownVM Shut the VM instance down.
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiShutdownVMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiShutdownVMRequest
 */
 func (a *DefaultApiService) ShutdownVM(ctx _context.Context) ApiShutdownVMRequest {
 	return ApiShutdownVMRequest{
@@ -754,8 +754,8 @@ func (r ApiShutdownVMMRequest) Execute() (*_nethttp.Response, error) {
 /*
 ShutdownVMM Shuts the cloud-hypervisor VMM.
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiShutdownVMMRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiShutdownVMMRequest
 */
 func (a *DefaultApiService) ShutdownVMM(ctx _context.Context) ApiShutdownVMMRequest {
 	return ApiShutdownVMMRequest{
@@ -849,8 +849,8 @@ func (r ApiVmAddDevicePutRequest) Execute() (PciDeviceInfo, *_nethttp.Response, 
 /*
 VmAddDevicePut Add a new device to the VM
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmAddDevicePutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmAddDevicePutRequest
 */
 func (a *DefaultApiService) VmAddDevicePut(ctx _context.Context) ApiVmAddDevicePutRequest {
 	return ApiVmAddDevicePutRequest{
@@ -860,7 +860,8 @@ func (a *DefaultApiService) VmAddDevicePut(ctx _context.Context) ApiVmAddDeviceP
 }
 
 // Execute executes the request
-//  @return PciDeviceInfo
+//
+//	@return PciDeviceInfo
 func (a *DefaultApiService) VmAddDevicePutExecute(r ApiVmAddDevicePutRequest) (PciDeviceInfo, *_nethttp.Response, error) {
 	var (
 		localVarHTTPMethod   = _nethttp.MethodPut
@@ -960,8 +961,8 @@ func (r ApiVmAddDiskPutRequest) Execute() (PciDeviceInfo, *_nethttp.Response, er
 /*
 VmAddDiskPut Add a new disk to the VM
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmAddDiskPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmAddDiskPutRequest
 */
 func (a *DefaultApiService) VmAddDiskPut(ctx _context.Context) ApiVmAddDiskPutRequest {
 	return ApiVmAddDiskPutRequest{
@@ -971,7 +972,8 @@ func (a *DefaultApiService) VmAddDiskPut(ctx _context.Context) ApiVmAddDiskPutRe
 }
 
 // Execute executes the request
-//  @return PciDeviceInfo
+//
+//	@return PciDeviceInfo
 func (a *DefaultApiService) VmAddDiskPutExecute(r ApiVmAddDiskPutRequest) (PciDeviceInfo, *_nethttp.Response, error) {
 	var (
 		localVarHTTPMethod   = _nethttp.MethodPut
@@ -1071,8 +1073,8 @@ func (r ApiVmAddFsPutRequest) Execute() (PciDeviceInfo, *_nethttp.Response, erro
 /*
 VmAddFsPut Add a new virtio-fs device to the VM
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmAddFsPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmAddFsPutRequest
 */
 func (a *DefaultApiService) VmAddFsPut(ctx _context.Context) ApiVmAddFsPutRequest {
 	return ApiVmAddFsPutRequest{
@@ -1082,7 +1084,8 @@ func (a *DefaultApiService) VmAddFsPut(ctx _context.Context) ApiVmAddFsPutReques
 }
 
 // Execute executes the request
-//  @return PciDeviceInfo
+//
+//	@return PciDeviceInfo
 func (a *DefaultApiService) VmAddFsPutExecute(r ApiVmAddFsPutRequest) (PciDeviceInfo, *_nethttp.Response, error) {
 	var (
 		localVarHTTPMethod   = _nethttp.MethodPut
@@ -1182,8 +1185,8 @@ func (r ApiVmAddNetPutRequest) Execute() (PciDeviceInfo, *_nethttp.Response, err
 /*
 VmAddNetPut Add a new network device to the VM
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmAddNetPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmAddNetPutRequest
 */
 func (a *DefaultApiService) VmAddNetPut(ctx _context.Context) ApiVmAddNetPutRequest {
 	return ApiVmAddNetPutRequest{
@@ -1193,7 +1196,8 @@ func (a *DefaultApiService) VmAddNetPut(ctx _context.Context) ApiVmAddNetPutRequ
 }
 
 // Execute executes the request
-//  @return PciDeviceInfo
+//
+//	@return PciDeviceInfo
 func (a *DefaultApiService) VmAddNetPutExecute(r ApiVmAddNetPutRequest) (PciDeviceInfo, *_nethttp.Response, error) {
 	var (
 		localVarHTTPMethod   = _nethttp.MethodPut
@@ -1293,8 +1297,8 @@ func (r ApiVmAddPmemPutRequest) Execute() (PciDeviceInfo, *_nethttp.Response, er
 /*
 VmAddPmemPut Add a new pmem device to the VM
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmAddPmemPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmAddPmemPutRequest
 */
 func (a *DefaultApiService) VmAddPmemPut(ctx _context.Context) ApiVmAddPmemPutRequest {
 	return ApiVmAddPmemPutRequest{
@@ -1304,7 +1308,8 @@ func (a *DefaultApiService) VmAddPmemPut(ctx _context.Context) ApiVmAddPmemPutRe
 }
 
 // Execute executes the request
-//  @return PciDeviceInfo
+//
+//	@return PciDeviceInfo
 func (a *DefaultApiService) VmAddPmemPutExecute(r ApiVmAddPmemPutRequest) (PciDeviceInfo, *_nethttp.Response, error) {
 	var (
 		localVarHTTPMethod   = _nethttp.MethodPut
@@ -1404,8 +1409,8 @@ func (r ApiVmAddVdpaPutRequest) Execute() (PciDeviceInfo, *_nethttp.Response, er
 /*
 VmAddVdpaPut Add a new vDPA device to the VM
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmAddVdpaPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmAddVdpaPutRequest
 */
 func (a *DefaultApiService) VmAddVdpaPut(ctx _context.Context) ApiVmAddVdpaPutRequest {
 	return ApiVmAddVdpaPutRequest{
@@ -1415,7 +1420,8 @@ func (a *DefaultApiService) VmAddVdpaPut(ctx _context.Context) ApiVmAddVdpaPutRe
 }
 
 // Execute executes the request
-//  @return PciDeviceInfo
+//
+//	@return PciDeviceInfo
 func (a *DefaultApiService) VmAddVdpaPutExecute(r ApiVmAddVdpaPutRequest) (PciDeviceInfo, *_nethttp.Response, error) {
 	var (
 		localVarHTTPMethod   = _nethttp.MethodPut
@@ -1515,8 +1521,8 @@ func (r ApiVmAddVsockPutRequest) Execute() (PciDeviceInfo, *_nethttp.Response, e
 /*
 VmAddVsockPut Add a new vsock device to the VM
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmAddVsockPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmAddVsockPutRequest
 */
 func (a *DefaultApiService) VmAddVsockPut(ctx _context.Context) ApiVmAddVsockPutRequest {
 	return ApiVmAddVsockPutRequest{
@@ -1526,7 +1532,8 @@ func (a *DefaultApiService) VmAddVsockPut(ctx _context.Context) ApiVmAddVsockPut
 }
 
 // Execute executes the request
-//  @return PciDeviceInfo
+//
+//	@return PciDeviceInfo
 func (a *DefaultApiService) VmAddVsockPutExecute(r ApiVmAddVsockPutRequest) (PciDeviceInfo, *_nethttp.Response, error) {
 	var (
 		localVarHTTPMethod   = _nethttp.MethodPut
@@ -1626,8 +1633,8 @@ func (r ApiVmCoredumpPutRequest) Execute() (*_nethttp.Response, error) {
 /*
 VmCoredumpPut Takes a VM coredump.
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmCoredumpPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmCoredumpPutRequest
 */
 func (a *DefaultApiService) VmCoredumpPut(ctx _context.Context) ApiVmCoredumpPutRequest {
 	return ApiVmCoredumpPutRequest{
@@ -1719,8 +1726,8 @@ func (r ApiVmCountersGetRequest) Execute() (map[string]map[string]int64, *_netht
 /*
 VmCountersGet Get counters from the VM
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmCountersGetRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmCountersGetRequest
 */
 func (a *DefaultApiService) VmCountersGet(ctx _context.Context) ApiVmCountersGetRequest {
 	return ApiVmCountersGetRequest{
@@ -1730,7 +1737,8 @@ func (a *DefaultApiService) VmCountersGet(ctx _context.Context) ApiVmCountersGet
 }
 
 // Execute executes the request
-//  @return map[string]map[string]int64
+//
+//	@return map[string]map[string]int64
 func (a *DefaultApiService) VmCountersGetExecute(r ApiVmCountersGetRequest) (map[string]map[string]int64, *_nethttp.Response, error) {
 	var (
 		localVarHTTPMethod   = _nethttp.MethodGet
@@ -1818,8 +1826,8 @@ func (r ApiVmInfoGetRequest) Execute() (VmInfo, *_nethttp.Response, error) {
 /*
 VmInfoGet Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmInfoGetRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmInfoGetRequest
 */
 func (a *DefaultApiService) VmInfoGet(ctx _context.Context) ApiVmInfoGetRequest {
 	return ApiVmInfoGetRequest{
@@ -1829,7 +1837,8 @@ func (a *DefaultApiService) VmInfoGet(ctx _context.Context) ApiVmInfoGetRequest 
 }
 
 // Execute executes the request
-//  @return VmInfo
+//
+//	@return VmInfo
 func (a *DefaultApiService) VmInfoGetExecute(r ApiVmInfoGetRequest) (VmInfo, *_nethttp.Response, error) {
 	var (
 		localVarHTTPMethod   = _nethttp.MethodGet
@@ -1924,8 +1933,8 @@ func (r ApiVmReceiveMigrationPutRequest) Execute() (*_nethttp.Response, error) {
 /*
 VmReceiveMigrationPut Receive a VM migration from URL
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmReceiveMigrationPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmReceiveMigrationPutRequest
 */
 func (a *DefaultApiService) VmReceiveMigrationPut(ctx _context.Context) ApiVmReceiveMigrationPutRequest {
 	return ApiVmReceiveMigrationPutRequest{
@@ -2024,8 +2033,8 @@ func (r ApiVmRemoveDevicePutRequest) Execute() (*_nethttp.Response, error) {
 /*
 VmRemoveDevicePut Remove a device from the VM
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmRemoveDevicePutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmRemoveDevicePutRequest
 */
 func (a *DefaultApiService) VmRemoveDevicePut(ctx _context.Context) ApiVmRemoveDevicePutRequest {
 	return ApiVmRemoveDevicePutRequest{
@@ -2124,8 +2133,8 @@ func (r ApiVmResizePutRequest) Execute() (*_nethttp.Response, error) {
 /*
 VmResizePut Resize the VM
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmResizePutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmResizePutRequest
 */
 func (a *DefaultApiService) VmResizePut(ctx _context.Context) ApiVmResizePutRequest {
 	return ApiVmResizePutRequest{
@@ -2224,8 +2233,8 @@ func (r ApiVmResizeZonePutRequest) Execute() (*_nethttp.Response, error) {
 /*
 VmResizeZonePut Resize a memory zone
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmResizeZonePutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmResizeZonePutRequest
 */
 func (a *DefaultApiService) VmResizeZonePut(ctx _context.Context) ApiVmResizeZonePutRequest {
 	return ApiVmResizeZonePutRequest{
@@ -2324,8 +2333,8 @@ func (r ApiVmRestorePutRequest) Execute() (*_nethttp.Response, error) {
 /*
 VmRestorePut Restore a VM from a snapshot.
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmRestorePutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmRestorePutRequest
 */
 func (a *DefaultApiService) VmRestorePut(ctx _context.Context) ApiVmRestorePutRequest {
 	return ApiVmRestorePutRequest{
@@ -2424,8 +2433,8 @@ func (r ApiVmSendMigrationPutRequest) Execute() (*_nethttp.Response, error) {
 /*
 VmSendMigrationPut Send a VM migration to URL
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmSendMigrationPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmSendMigrationPutRequest
 */
 func (a *DefaultApiService) VmSendMigrationPut(ctx _context.Context) ApiVmSendMigrationPutRequest {
 	return ApiVmSendMigrationPutRequest{
@@ -2524,8 +2533,8 @@ func (r ApiVmSnapshotPutRequest) Execute() (*_nethttp.Response, error) {
 /*
 VmSnapshotPut Returns a VM snapshot.
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmSnapshotPutRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmSnapshotPutRequest
 */
 func (a *DefaultApiService) VmSnapshotPut(ctx _context.Context) ApiVmSnapshotPutRequest {
 	return ApiVmSnapshotPutRequest{
@@ -2617,8 +2626,8 @@ func (r ApiVmmPingGetRequest) Execute() (VmmPingResponse, *_nethttp.Response, er
 /*
 VmmPingGet Ping the VMM to check for API server availability
 
- @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiVmmPingGetRequest
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmmPingGetRequest
 */
 func (a *DefaultApiService) VmmPingGet(ctx _context.Context) ApiVmmPingGetRequest {
 	return ApiVmmPingGetRequest{
@@ -2628,7 +2637,8 @@ func (a *DefaultApiService) VmmPingGet(ctx _context.Context) ApiVmmPingGetReques
 }
 
 // Execute executes the request
-//  @return VmmPingResponse
+//
+//	@return VmmPingResponse
 func (a *DefaultApiService) VmmPingGetExecute(r ApiVmmPingGetRequest) (VmmPingResponse, *_nethttp.Response, error) {
 	var (
 		localVarHTTPMethod   = _nethttp.MethodGet

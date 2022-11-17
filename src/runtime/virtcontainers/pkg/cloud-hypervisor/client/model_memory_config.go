@@ -25,6 +25,7 @@ type MemoryConfig struct {
 	Hugepages      *bool               `json:"hugepages,omitempty"`
 	HugepageSize   *int64              `json:"hugepage_size,omitempty"`
 	Prefault       *bool               `json:"prefault,omitempty"`
+	Thp            *bool               `json:"thp,omitempty"`
 	Zones          *[]MemoryZoneConfig `json:"zones,omitempty"`
 }
 
@@ -45,6 +46,8 @@ func NewMemoryConfig(size int64) *MemoryConfig {
 	this.Hugepages = &hugepages
 	var prefault bool = false
 	this.Prefault = &prefault
+	var thp bool = true
+	this.Thp = &thp
 	return &this
 }
 
@@ -63,6 +66,8 @@ func NewMemoryConfigWithDefaults() *MemoryConfig {
 	this.Hugepages = &hugepages
 	var prefault bool = false
 	this.Prefault = &prefault
+	var thp bool = true
+	this.Thp = &thp
 	return &this
 }
 
@@ -346,6 +351,38 @@ func (o *MemoryConfig) SetPrefault(v bool) {
 	o.Prefault = &v
 }
 
+// GetThp returns the Thp field value if set, zero value otherwise.
+func (o *MemoryConfig) GetThp() bool {
+	if o == nil || o.Thp == nil {
+		var ret bool
+		return ret
+	}
+	return *o.Thp
+}
+
+// GetThpOk returns a tuple with the Thp field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *MemoryConfig) GetThpOk() (*bool, bool) {
+	if o == nil || o.Thp == nil {
+		return nil, false
+	}
+	return o.Thp, true
+}
+
+// HasThp returns a boolean if a field has been set.
+func (o *MemoryConfig) HasThp() bool {
+	if o != nil && o.Thp != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetThp gets a reference to the given bool and assigns it to the Thp field.
+func (o *MemoryConfig) SetThp(v bool) {
+	o.Thp = &v
+}
+
 // GetZones returns the Zones field value if set, zero value otherwise.
 func (o *MemoryConfig) GetZones() []MemoryZoneConfig {
 	if o == nil || o.Zones == nil {
@@ -406,6 +443,9 @@ func (o MemoryConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Prefault != nil {
 		toSerialize["prefault"] = o.Prefault
+	}
+	if o.Thp != nil {
+		toSerialize["thp"] = o.Thp
 	}
 	if o.Zones != nil {
 		toSerialize["zones"] = o.Zones
