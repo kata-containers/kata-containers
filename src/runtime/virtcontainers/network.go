@@ -142,7 +142,7 @@ const (
 	noneNetModelStr = "none"
 )
 
-//GetModel returns the string value of a NetInterworkingModel
+// GetModel returns the string value of a NetInterworkingModel
 func (n *NetInterworkingModel) GetModel() string {
 	switch *n {
 	case DefaultNetInterworkingModel:
@@ -157,7 +157,7 @@ func (n *NetInterworkingModel) GetModel() string {
 	return "unknown"
 }
 
-//SetModel change the model string value
+// SetModel change the model string value
 func (n *NetInterworkingModel) SetModel(modelName string) error {
 	switch modelName {
 	case defaultNetModelStr:

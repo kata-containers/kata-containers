@@ -369,7 +369,7 @@ func (f *FilesystemShare) shareRootFilesystemWithNydus(ctx context.Context, c *C
 	}, nil
 }
 
-//func (c *Container) shareRootfs(ctx context.Context) (*grpc.Storage, string, error) {
+// func (c *Container) shareRootfs(ctx context.Context) (*grpc.Storage, string, error) {
 func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container) (*SharedFile, error) {
 	if c.rootFs.Type == NydusRootFSType {
 		return f.shareRootFilesystemWithNydus(ctx, c)
