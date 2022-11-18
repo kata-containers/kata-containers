@@ -545,9 +545,6 @@ github.com/gobuffalo/tags/v3 v3.0.2/go.mod h1:ZQeN6TCTiwAFnS0dNcbDtSgZDwNKSpqajv
 github.com/gobuffalo/tags/v3 v3.1.0/go.mod h1:ZQeN6TCTiwAFnS0dNcbDtSgZDwNKSpqajvVtt6mlYpA=
 github.com/gobuffalo/validate/v3 v3.0.0/go.mod h1:HFpjq+AIiA2RHoQnQVTFKF/ZpUPXwyw82LgyDPxQ9r0=
 github.com/gobuffalo/validate/v3 v3.1.0/go.mod h1:HFpjq+AIiA2RHoQnQVTFKF/ZpUPXwyw82LgyDPxQ9r0=
-github.com/godbus/dbus v0.0.0-20151105175453-c7fdd8b5cd55/go.mod h1:/YcGZj5zSblfDWMMoOzV4fas9FZnQYTkDnsGvmh2Grw=
-github.com/godbus/dbus v0.0.0-20180201030542-885f9cc04c9c/go.mod h1:/YcGZj5zSblfDWMMoOzV4fas9FZnQYTkDnsGvmh2Grw=
-github.com/godbus/dbus v0.0.0-20190422162347-ade71ed3457e/go.mod h1:bBOAhwG1umN6/6ZUMtDFBMQR8jRg9O75tm9K00oMsK4=
 github.com/godbus/dbus/v5 v5.0.3/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
 github.com/godbus/dbus/v5 v5.0.4/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
 github.com/godbus/dbus/v5 v5.0.6/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
