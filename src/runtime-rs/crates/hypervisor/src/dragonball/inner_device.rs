@@ -223,6 +223,7 @@ impl DragonballInner {
             },
             cache_size: (self.config.shared_fs.virtio_fs_cache_size as u64)
                 .saturating_mul(MB_TO_B as u64),
+            xattr: true,
             ..Default::default()
         };
         self.do_add_fs_device(&config.fs_type, &mut fs_cfg)
@@ -264,7 +265,7 @@ impl DragonballInner {
             fstype: Some(fstype.to_string()),
             source: Some(config.source.clone()),
             mountpoint: config.mount_point.clone(),
-            config: None,
+            config: config.config.clone(),
             tag: config.tag.clone(),
             prefetch_list_path: config.prefetch_list_path.clone(),
             dax_threshold_size_kb: None,
