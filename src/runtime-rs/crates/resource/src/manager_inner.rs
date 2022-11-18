@@ -178,7 +178,14 @@ impl ResourceManagerInner {
         rootfs_mounts: &[Mount],
     ) -> Result<Arc<dyn Rootfs>> {
         self.rootfs_resource
-            .handler_rootfs(&self.share_fs, cid, bundle_path, rootfs_mounts)
+            .handler_rootfs(
+                &self.share_fs,
+                self.hypervisor.as_ref(),
+                &self.sid,
+                cid,
+                bundle_path,
+                rootfs_mounts,
+            )
             .await
     }
 
