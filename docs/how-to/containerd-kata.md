@@ -10,6 +10,8 @@ Previous versions are addressed here, but we suggest users upgrade to the newer 
 
 ## Concepts
 
+DO NOt merge - doc static-check test
+
 ### Kubernetes `RuntimeClass`
 
 [`RuntimeClass`](https://kubernetes.io/docs/concepts/containers/runtime-class/) is a Kubernetes feature first 
