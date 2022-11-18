@@ -143,6 +143,9 @@ const (
 	// DefaultVCPUs is a sandbox annotation that specifies the maximum number of vCPUs allocated for the VM by the hypervisor.
 	DefaultMaxVCPUs = kataAnnotHypervisorPrefix + "default_max_vcpus"
 
+	// EnableVCPUsPinning is a sandbox annotation that controls bundling between vCPU threads and CPUs
+	EnableVCPUsPinning = kataAnnotationsPrefix + "enable_vcpus_pinning"
+
 	//
 	//	Memory related annotations
 	//

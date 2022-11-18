@@ -12,15 +12,15 @@ edition = "2018"
 [dependencies]
 arc-swap = "1.5.0"
 bytes = "1.1.0"
-dbs-address-space = "0.1.0"
+dbs-address-space = "0.2.0"
 dbs-allocator = "0.1.0"
-dbs-arch = "0.1.0"
-dbs-boot = "0.2.0"
-dbs-device = "0.1.0"
-dbs-interrupt = { version = "0.1.0", features = ["kvm-irq"] }
+dbs-arch = "0.2.0"
+dbs-boot = "0.3.0"
+dbs-device = "0.2.0"
+dbs-interrupt = { version = "0.2.0", features = ["kvm-irq"] }
 dbs-legacy-devices = "0.1.0"
 dbs-upcall = { version = "0.1.0", optional = true }
-dbs-utils = "0.1.0"
+dbs-utils = "0.2.0"
 dbs-virtio-devices = { version = "0.1.0", optional = true, features = ["virtio-mmio"] }
 kvm-bindings = "0.5.0"
 kvm-ioctls = "0.11.0"
@@ -36,7 +36,7 @@ serde_json = "1.0.9"
 slog = "2.5.2"
 slog-scope = "4.4.0"
 thiserror = "1"
-vmm-sys-util = "0.10.0"
+vmm-sys-util = "0.11.0"
 virtio-queue = { version = "0.4.0", optional = true }
 vm-memory = { version = "0.9.0", features = ["backend-mmap"] }
 
@@ -54,14 +54,3 @@ virtio-blk = ["dbs-virtio-devices/virtio-blk", "virtio-queue"]
 virtio-net = ["dbs-virtio-devices/virtio-net", "virtio-queue"]
 # virtio-fs only work on atomic-guest-memory
 virtio-fs = ["dbs-virtio-devices/virtio-fs", "virtio-queue", "atomic-guest-memory"]
-
-[patch.'crates-io']
-dbs-device = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }
-dbs-interrupt = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }
-dbs-legacy-devices = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }
-dbs-upcall = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }
-dbs-utils = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }
-dbs-virtio-devices = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }
-dbs-boot = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }
-dbs-arch = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }
-dbs-address-space = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "c3d7831aee7c3962b8a90f0afbfd0fb7e4d30323" }

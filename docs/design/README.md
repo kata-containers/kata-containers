@@ -7,6 +7,7 @@ Kata Containers design documents:
 - [Design requirements for Kata Containers](kata-design-requirements.md)
 - [VSocks](VSocks.md)
 - [VCPU handling](vcpu-handling.md)
+- [VCPU threads pinning](vcpu-threads-pinning.md)
 - [Host cgroups](host-cgroups.md)
 - [`Inotify` support](inotify.md)
 - [Metrics(Kata 2.0)](kata-2-0-metrics.md)

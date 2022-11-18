@@ -402,6 +402,20 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 [[package]]
 name = "bitvec"
 version = "0.20.4"
+
+[[package]]
+name = "bitmask-enum"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd9e32d7420c85055e8107e5b2463c4eeefeaac18b52359fe9f9c08a18f342b2"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "bumpalo"
+version = "3.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7774144344a4faa177370406a7ff5f1da24303817368584c6206c8303eb07848"
 dependencies = [
@@ -2204,6 +2218,9 @@ dependencies = [
 name = "kata-types"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "base64",
+ "bitmask-enum",
  "byte-unit",
  "glob",
  "lazy_static",

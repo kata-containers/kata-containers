@@ -34,6 +34,9 @@ pub mod vm;
 
 mod event_manager;
 mod io_manager;
+
+mod test_utils;
+
 mod vmm;
 
 pub use self::error::StartMicroVmError;

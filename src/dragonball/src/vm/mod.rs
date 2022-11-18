@@ -520,6 +520,7 @@ impl Vm {
         let mem_type = self.vm_config.mem_type.clone();
         let mut mem_file_path = String::from("");
         if mem_type == "hugetlbfs" {
+            mem_file_path = self.vm_config.mem_file_path.clone();
             let shared_info = self.shared_info.read()
                     .expect("Failed to determine if instance is initialized because shared info couldn't be read due to poisoned lock");
             mem_file_path.push_str("/dragonball/");
@@ -826,5 +827,11 @@ pub mod tests {
             .expect("Failed to start microVM because shared info couldn't be written due to poisoned lock")
             .state = mstate;
         }
+    }
+
+    pub fn create_vm_instance() -> Vm {
+        let instance_info = Arc::new(RwLock::new(InstanceInfo::default()));
+        let epoll_manager = EpollManager::default();
+        Vm::new(None, instance_info, epoll_manager).unwrap()
     }
 }

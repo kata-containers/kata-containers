@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "b4e39427080293c674b8db627ee6daf1f1b56806"
+      version: "v28.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -330,15 +330,12 @@ languages:
   golang:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
-    issue: "https://github.com/golang/go/issues/20676"
-    uscan-url: >-
-      https://github.com/golang/go/tags .*/go?([\d\.]+)\.tar\.gz
-    version: "1.16.10"
+    version: "1.19.2"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.17.3"
+      newest-version: "1.19.2"
 
   rust:
     description: "Rust language"
@@ -353,12 +350,12 @@ languages:
   golangci-lint:
     description: "golangci-lint"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.46.2"
+    version: "1.50.1"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.46.2"
+      newest-version: "1.50.1"
 
 specs:
   description: "Details of important specifications"

@@ -9,11 +9,7 @@ on:
 name: Static checks
 jobs:
   check-vendored-code:
-    strategy:
-      matrix:
-        go-version: [1.16.x, 1.17.x]
-        os: [ubuntu-20.04]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-20.04
     env:
       TRAVIS: "true"
       TRAVIS_BRANCH: ${{ github.base_ref }}
@@ -26,7 +22,7 @@ jobs:
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       uses: actions/setup-go@v3
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version: 1.19.2
       env:
         GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Setup GOPATH
@@ -65,11 +61,7 @@ jobs:
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make vendor
 
   static-checks:
-    strategy:
-      matrix:
-        go-version: [1.16.x, 1.17.x]
-        os: [ubuntu-20.04]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-20.04
     env:
       TRAVIS: "true"
       TRAVIS_BRANCH: ${{ github.base_ref }}
@@ -82,7 +74,7 @@ jobs:
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       uses: actions/setup-go@v3
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version: 1.19.2
       env:
         GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Setup GOPATH
@@ -134,12 +126,9 @@ jobs:
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make static-checks
 
+
   compiler-checks:
-    strategy:
-      matrix:
-        go-version: [1.16.x, 1.17.x]
-        os: [ubuntu-20.04]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-20.04
     env:
       TRAVIS: "true"
       TRAVIS_BRANCH: ${{ github.base_ref }}
@@ -152,7 +141,7 @@ jobs:
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       uses: actions/setup-go@v3
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version: 1.19.2
       env:
         GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Setup GOPATH
@@ -218,7 +207,7 @@ jobs:
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       uses: actions/setup-go@v3
       with:
-        go-version: 1.17.x
+        go-version: 1.19.2
       env:
         GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Setup GOPATH
@@ -284,7 +273,7 @@ jobs:
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       uses: actions/setup-go@v3
       with:
-        go-version: 1.17.x 
+        go-version: 1.19.2 
       env:
         GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Setup GOPATH

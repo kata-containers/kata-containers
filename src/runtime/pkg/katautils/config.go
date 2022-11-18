@@ -10,7 +10,6 @@ package katautils
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -38,11 +37,11 @@ const (
 // tables). The names of these tables are in dotted ("nested table")
 // form:
 //
-//   [<component>.<type>]
+//	[<component>.<type>]
 //
 // The components are hypervisor, and agent. For example,
 //
-//   [agent.kata]
+//	[agent.kata]
 //
 // The currently supported types are listed below:
 const (
@@ -166,6 +165,7 @@ type hypervisor struct {
 	DisableSeLinux                 bool     `toml:"disable_selinux"`
 	LegacySerial                   bool     `toml:"use_legacy_serial"`
 	GuestPreAttestation            bool     `toml:"guest_pre_attestation"`
+	EnableVCPUsPinning             bool     `toml:"enable_vcpus_pinning"`
 }
 
 type runtime struct {
@@ -851,6 +851,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		GuestPreAttestationSecretType: h.GuestPreAttestationSecretType,
 		SEVGuestPolicy:                h.SEVGuestPolicy,
 		SEVCertChainPath:              h.SEVCertChainPath,
+		EnableVCPUsPinning:            h.EnableVCPUsPinning,
 	}, nil
 }
 
@@ -1448,7 +1449,7 @@ func decodeDropIns(mainConfigPath string, tomlConf *tomlConfig) error {
 	configDir := filepath.Dir(mainConfigPath)
 	dropInDir := filepath.Join(configDir, "config.d")
 
-	files, err := ioutil.ReadDir(dropInDir)
+	files, err := os.ReadDir(dropInDir)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("error reading %q directory: %s", dropInDir, err)

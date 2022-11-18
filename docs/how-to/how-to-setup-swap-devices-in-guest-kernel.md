@@ -17,9 +17,9 @@ Enable setup swap device in guest kernel as follows:
 $ sudo sed -i -e 's/^#enable_guest_swap.*$/enable_guest_swap = true/g' /etc/kata-containers/configuration.toml
 ```
 
-## Run a Kata Container utilizing swap device
+## Run a Kata Containers utilizing swap device
 
-Use following command to start a Kata Container with swappiness 60 and 1GB swap device (swap_in_bytes - memory_limit_in_bytes).
+Use following command to start a Kata Containers with swappiness 60 and 1GB swap device (swap_in_bytes - memory_limit_in_bytes).
 ```
 $ pod_yaml=pod.yaml
 $ container_yaml=container.yaml
@@ -45,12 +45,12 @@ command:
 - top
 EOF
 $ sudo crictl pull $image
-$ podid=$(sudo crictl runp $pod_yaml)
+$ podid=$(sudo crictl runp --runtime kata $pod_yaml)
 $ cid=$(sudo crictl create $podid $container_yaml $pod_yaml)
 $ sudo crictl start $cid
 ```
 
-Kata Container setups swap device for this container only when `io.katacontainers.container.resource.swappiness` is set.
+Kata Containers setups swap device for this container only when `io.katacontainers.container.resource.swappiness` is set.
 
 The following table shows the swap size how to decide if `io.katacontainers.container.resource.swappiness` is set.
 |`io.katacontainers.container.resource.swap_in_bytes`|`memory_limit_in_bytes`|swap size|
