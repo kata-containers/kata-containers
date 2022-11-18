@@ -18,6 +18,8 @@ use hypervisor::Param;
 use kata_types::{
     annotations::Annotation, config::default::DEFAULT_GUEST_DNS_FILE, config::TomlConfig,
 };
+use kata_sys_util::hooks::HookStates;
+
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
 use persist::sandbox_persist::Persist;
@@ -81,7 +83,12 @@ impl RuntimeHandlerManagerInner {
         Ok(())
     }
 
-    async fn try_init(&mut self, spec: &oci::Spec, options: &Option<Vec<u8>>) -> Result<()> {
+    async fn try_init(
+        &mut self,
+        spec: &oci::Spec,
+        state: &oci::State,
+        options: &Option<Vec<u8>>,
+    ) -> Result<()> {
         // return if runtime instance has init
         if self.runtime_instance.is_some() {
             return Ok(());
@@ -124,6 +131,35 @@ impl RuntimeHandlerManagerInner {
         self.init_runtime_handler(netns, dns, Arc::new(config))
             .await
             .context("init runtime handler")?;
+
+        let mut st = state.clone();
+        if let Some(runtime_instance) = self.runtime_instance.clone() {
+            let vmm_master_tid = runtime_instance
+                .sandbox
+                .get_vmm_master_tid()
+                .await
+                .context("get vmm master tid")?;
+            st.pid = vmm_master_tid as i32;
+        }
+
+        // Prestart Hooks [DEPRECATED in newest oci spec]:
+        // * should be run in runtime namespace
+        // * should be run after vm is started, but before container is created
+        //      if Prestart Hook and CreateRuntime Hook are both supported
+        // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#prestart
+        if let Some(hooks) = spec.hooks.as_ref() {
+            let mut prestart_hook_states = HookStates::new();
+            prestart_hook_states.execute_hooks(&hooks.prestart, Some(st.clone()))?
+        }
+
+        // CreateRuntime Hooks:
+        // * should be run in runtime namespace
+        // * should be run when creating the runtime
+        // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#createruntime-hooks
+        if let Some(hooks) = spec.hooks.as_ref() {
+            let mut create_runtime_hook_states = HookStates::new();
+            create_runtime_hook_states.execute_hooks(&hooks.create_runtime, Some(st.clone()))?
+        }
 
         // the sandbox creation can reach here only once and the sandbox is created
         // so we can safely create the shim management socket right now
@@ -207,10 +243,11 @@ impl RuntimeHandlerManager {
     async fn try_init_runtime_instance(
         &self,
         spec: &oci::Spec,
+        state: &oci::State,
         options: &Option<Vec<u8>>,
     ) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.try_init(spec, options).await
+        inner.try_init(spec, state, options).await
     }
 
     pub async fn handler_message(&self, req: Request) -> Result<Response> {
@@ -222,8 +259,16 @@ impl RuntimeHandlerManager {
                 oci::OCI_SPEC_CONFIG_FILE_NAME
             );
             let spec = oci::Spec::load(&bundler_path).context("load spec")?;
+            let state = oci::State {
+                version: spec.version.clone(),
+                id: container_config.container_id.to_string(),
+                status: oci::ContainerState::Creating,
+                pid: 0,
+                bundle: bundler_path,
+                annotations: spec.annotations.clone(),
+            };
 
-            self.try_init_runtime_instance(&spec, &container_config.options)
+            self.try_init_runtime_instance(&spec, &state, &container_config.options)
                 .await
                 .context("try init runtime instance")?;
             let instance = self

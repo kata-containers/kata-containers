@@ -154,12 +154,15 @@ fn hook_grpc_to_oci(h: &[grpcHook]) -> Vec<oci::Hook> {
 fn hooks_grpc_to_oci(h: &grpc::Hooks) -> oci::Hooks {
     let prestart = hook_grpc_to_oci(h.Prestart.as_ref());
 
+    let create_runtime = hook_grpc_to_oci(h.CreateRuntime.as_ref());
+
     let poststart = hook_grpc_to_oci(h.Poststart.as_ref());
 
     let poststop = hook_grpc_to_oci(h.Poststop.as_ref());
 
     oci::Hooks {
         prestart,
+        create_runtime,
         poststart,
         poststop,
     }
@@ -860,6 +863,7 @@ mod tests {
                         env: Vec::from([String::from("env1"), String::from("env2")]),
                         timeout: Some(10),
                     }]),
+                    ..Default::default()
                 },
             },
             TestData {
@@ -908,6 +912,7 @@ mod tests {
                         env: Vec::from([String::from("env1"), String::from("env2")]),
                         timeout: Some(10),
                     }]),
+                    ..Default::default()
                 },
             },
         ];

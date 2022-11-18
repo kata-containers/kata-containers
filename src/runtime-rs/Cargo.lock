@@ -1703,6 +1703,8 @@ dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
  "libc",
+ "memoffset 0.6.5",
+ "pin-utils",
 ]
 
 [[package]]
@@ -2428,12 +2430,15 @@ dependencies = [
  "hyper",
  "hyperlocal",
  "hypervisor",
+ "kata-sys-util",
  "kata-types",
  "lazy_static",
  "linux_container",
  "logging",
+ "nix 0.25.1",
  "oci",
  "persist",
+ "serde_json",
  "shim-interface",
  "slog",
  "slog-scope",
