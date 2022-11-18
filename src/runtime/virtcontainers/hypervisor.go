@@ -467,6 +467,9 @@ type HypervisorConfig struct {
 	// VirtioFSCacheSize is the DAX cache size in MiB
 	VirtioFSCacheSize uint32
 
+	// Size of virtqueues
+	VirtioFSQueueSize uint32
+
 	// User ID.
 	Uid uint32
 

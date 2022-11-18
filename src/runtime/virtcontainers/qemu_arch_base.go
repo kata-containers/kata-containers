@@ -663,6 +663,7 @@ func (q *qemuArchBase) appendVhostUserDevice(ctx context.Context, devices []govm
 		qemuVhostUserDevice.TypeDevID = utils.MakeNameID("fs", attr.DevID, maxDevIDSize)
 		qemuVhostUserDevice.Tag = attr.Tag
 		qemuVhostUserDevice.CacheSize = attr.CacheSize
+		qemuVhostUserDevice.QueueSize = attr.QueueSize
 		qemuVhostUserDevice.VhostUserType = govmmQemu.VhostUserFS
 	}
 
