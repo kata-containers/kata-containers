@@ -17,6 +17,9 @@ pub trait Sandbox: Send + Sync {
     // agent function
     async fn agent_sock(&self) -> Result<String>;
 
+    // hypervisor function
+    async fn get_vmm_master_tid(&self) -> Result<u32>;
+
     // utils
     async fn set_iptables(&self, is_ipv6: bool, data: Vec<u8>) -> Result<Vec<u8>>;
     async fn get_iptables(&self, is_ipv6: bool) -> Result<Vec<u8>>;

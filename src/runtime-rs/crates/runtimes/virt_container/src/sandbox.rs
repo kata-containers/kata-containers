@@ -278,6 +278,10 @@ impl Sandbox for VirtSandbox {
         self.agent.agent_sock().await
     }
 
+    async fn get_vmm_master_tid(&self) -> Result<u32> {
+        self.hypervisor.get_vmm_master_tid().await
+    }
+
     async fn set_iptables(&self, is_ipv6: bool, data: Vec<u8>) -> Result<Vec<u8>> {
         info!(sl!(), "sb: set_iptables invoked");
         let req = SetIPTablesRequest { is_ipv6, data };

@@ -37,6 +37,7 @@ pub struct Container {
     pid: u32,
     pub container_id: ContainerID,
     config: ContainerConfig,
+    spec: oci::Spec,
     inner: Arc<RwLock<ContainerInner>>,
     agent: Arc<dyn Agent>,
     resource_manager: Arc<ResourceManager>,
@@ -47,6 +48,7 @@ impl Container {
     pub fn new(
         pid: u32,
         config: ContainerConfig,
+        spec: oci::Spec,
         agent: Arc<dyn Agent>,
         resource_manager: Arc<ResourceManager>,
     ) -> Result<Self> {
@@ -67,6 +69,7 @@ impl Container {
             pid,
             container_id,
             config,
+            spec,
             inner: Arc::new(RwLock::new(ContainerInner::new(
                 agent.clone(),
                 init_process,
@@ -381,6 +384,14 @@ impl Container {
             .await
             .context("agent update container")?;
         Ok(())
+    }
+
+    pub async fn config(&self) -> ContainerConfig {
+        self.config.clone()
+    }
+
+    pub async fn spec(&self) -> oci::Spec {
+        self.spec.clone()
     }
 }
 

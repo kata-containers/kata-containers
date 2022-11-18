@@ -86,13 +86,18 @@ impl RuntimeHandler for VirtContainer {
             sid,
             msg_sender,
             agent.clone(),
-            hypervisor,
+            hypervisor.clone(),
             resource_manager.clone(),
         )
         .await
         .context("new virt sandbox")?;
-        let container_manager =
-            container_manager::VirtContainerManager::new(sid, pid, agent, resource_manager);
+        let container_manager = container_manager::VirtContainerManager::new(
+            sid,
+            pid,
+            agent,
+            hypervisor,
+            resource_manager,
+        );
         Ok(RuntimeInstance {
             sandbox: Arc::new(sandbox),
             container_manager: Arc::new(container_manager),

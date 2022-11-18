@@ -193,6 +193,8 @@ pub struct Hooks {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub prestart: Vec<Hook>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub create_runtime: Vec<Hook>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub poststart: Vec<Hook>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub poststop: Vec<Hook>,
@@ -1401,6 +1403,7 @@ mod tests {
                     env: vec![],
                     timeout: None,
                 }],
+                ..Default::default()
             }),
             annotations: [
                 ("com.example.key1".to_string(), "value1".to_string()),
