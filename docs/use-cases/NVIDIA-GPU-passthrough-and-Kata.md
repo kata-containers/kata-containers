@@ -545,6 +545,12 @@ Create the hook execution file for Kata:
 /usr/bin/nvidia-container-toolkit -debug $@
 ```
 
+Make sure the hook shell is executable:
+
+```sh
+chmod +x $ROOTFS_DIR/usr/share/oci/hooks/prestart/nvidia-container-toolkit.sh
+```
+
 As the last step one can do some cleanup of files or package caches. Build the
 rootfs and configure it for use with Kata according to the development guide.
 
