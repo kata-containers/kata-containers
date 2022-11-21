@@ -34,6 +34,11 @@ pub fn handle_check(checkcmd: CheckArgument) -> Result<()> {
             // retrieve latest release
             check::check_version()?;
         }
+
+        CheckSubCommand::Network => {
+            // run local network checks only
+            check::run_network_checks()?;
+        }
     }
 
     Ok(())
