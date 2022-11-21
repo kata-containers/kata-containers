@@ -306,6 +306,36 @@ func ConvertAddressFamily(family int32) pbTypes.IPFamily {
 	}
 }
 
+func waitProcessUsingWaitLoop(pid int, timeoutSecs uint, logger *logrus.Entry) bool {
+	secs := time.Duration(timeoutSecs)
+	timeout := time.After(secs * time.Second)
+
+	for {
+		// Check if the process is running periodically to avoid a busy loop
+		// "A watched pot never boils" and an unwaited-for process never appears to die!
+		waitedPid, err := syscall.Wait4(pid, nil, syscall.WNOHANG, nil)
+
+		if waitedPid == pid && err == nil {
+			return false
+		}
+
+		if err := syscall.Kill(pid, syscall.Signal(0)); err != nil {
+			return false
+		}
+
+		select {
+		case <-time.After(50 * time.Millisecond):
+		case <-timeout:
+			logger.Warnf("process %v still running after waiting %ds", pid, timeoutSecs)
+			return true
+		}
+	}
+}
+
+func waitForProcessCompletion(pid int, timeoutSecs uint, logger *logrus.Entry) bool {
+	return waitProcessUsingWaitLoop(pid, timeoutSecs, logger)
+}
+
 // WaitLocalProcess waits for the specified process for up to timeoutSecs seconds.
 //
 // Notes:
@@ -334,43 +364,7 @@ func WaitLocalProcess(pid int, timeoutSecs uint, initialSignal syscall.Signal, l
 		}
 	}
 
-	pidRunning := true
-
-	secs := time.Duration(timeoutSecs)
-	timeout := time.After(secs * time.Second)
-
-	// Wait for the VM process to terminate
-outer:
-	for {
-		select {
-		case <-time.After(50 * time.Millisecond):
-			// Check if the process is running periodically to avoid a busy loop
-
-			var _status syscall.WaitStatus
-			var _rusage syscall.Rusage
-			var waitedPid int
-
-			// "A watched pot never boils" and an unwaited-for process never appears to die!
-			waitedPid, err = syscall.Wait4(pid, &_status, syscall.WNOHANG, &_rusage)
-
-			if waitedPid == pid && err == nil {
-				pidRunning = false
-				break outer
-			}
-
-			if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
-				pidRunning = false
-				break outer
-			}
-
-			break
-
-		case <-timeout:
-			logger.Warnf("process %v still running after waiting %ds", pid, timeoutSecs)
-
-			break outer
-		}
-	}
+	pidRunning := waitForProcessCompletion(pid, timeoutSecs, logger)
 
 	if pidRunning {
 		// Force process to die
