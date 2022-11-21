@@ -5,8 +5,9 @@
 
 // Contains checks that are not architecture-specific
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
+use scopeguard::defer;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -100,8 +101,26 @@ pub fn check_cpu_attribs(
     Ok(missing_attribs)
 }
 
-pub fn run_network_checks() -> Result<()> {
-    Ok(())
+#[tokio::main]
+pub async fn run_network_checks() -> Result<()> {
+    println!("Running network checks...");
+    if let Ok((connection, handle, _)) =
+            rtnetlink::new_connection().context("failed to create netlink connection")
+        {
+            let thread_handler = tokio::spawn(connection);
+            defer!({
+                thread_handler.abort();
+            });
+
+            handle
+                .link()
+                .add()
+                .veth("foo".to_string(), "bar".to_string());
+        }
+    else {
+        return Err(anyhow!("cannot create veth pair"));
+    }
+    return Ok(())
 }
 
 fn get_kata_version_by_url(url: &str) -> std::result::Result<String, reqwest::Error> {
