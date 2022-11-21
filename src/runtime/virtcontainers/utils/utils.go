@@ -399,7 +399,7 @@ func MkdirAllWithInheritedOwner(path string, perm os.FileMode) error {
 		info, err := os.Stat(curPath)
 
 		if err != nil {
-			if err = os.Mkdir(curPath, perm); err != nil {
+			if err = os.MkdirAll(curPath, perm); err != nil {
 				return fmt.Errorf("mkdir call failed: %v", err.Error())
 			}
 			if err = syscall.Chown(curPath, uid, gid); err != nil {
