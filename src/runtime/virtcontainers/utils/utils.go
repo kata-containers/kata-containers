@@ -375,7 +375,18 @@ outer:
 	if pidRunning {
 		// Force process to die
 		if err = syscall.Kill(pid, syscall.SIGKILL); err != nil {
+			if err == syscall.ESRCH {
+				logger.WithField("pid", pid).Warnf("process already finished")
+				return nil
+			}
 			return fmt.Errorf("Failed to stop process %v: %s", pid, err)
+		}
+
+		for {
+			_, err := syscall.Wait4(pid, nil, 0, nil)
+			if err != syscall.EINTR {
+				break
+			}
 		}
 	}
 
