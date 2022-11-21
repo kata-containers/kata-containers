@@ -346,10 +346,6 @@ func waitProcessUsingWaitLoop(pid int, timeoutSecs uint, logger *logrus.Entry) b
 	}
 }
 
-func waitForProcessCompletion(pid int, timeoutSecs uint, logger *logrus.Entry) bool {
-	return waitProcessUsingWaitLoop(pid, timeoutSecs, logger)
-}
-
 // WaitLocalProcess waits for the specified process for up to timeoutSecs seconds.
 //
 // Notes:
