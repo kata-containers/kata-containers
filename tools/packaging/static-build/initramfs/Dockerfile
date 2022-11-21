@@ -14,7 +14,6 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV TZ=UTC
 RUN apt-get update &&\
     apt-get --no-install-recommends install -y software-properties-common &&\
-    add-apt-repository ppa:git-core/ppa -y &&\
     apt-get update && apt-get upgrade -y && \
     apt-get --no-install-recommends install -y \
 	    apt-utils \
@@ -61,11 +60,8 @@ RUN apt-get update &&\
     strip /usr/sbin/veritysetup.static && \
     popd && \
     echo "Build gen_init_cpio tool" && \
-    git clone --depth 1 --filter=blob:none --sparse https://github.com/torvalds/linux.git && \
-    pushd linux && \
-    git sparse-checkout add usr && cd usr && make gen_init_cpio && \
-    install gen_init_cpio /usr/sbin/ && \
-    popd && \
+    curl -LO https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/usr/gen_init_cpio.c && \
+    make gen_init_cpio && mv gen_init_cpio /usr/sbin/ && rm -f gen_init_cpio.c && \
     popd && \
     rm -rf ${build_root}
 

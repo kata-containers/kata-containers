@@ -22,6 +22,7 @@ PREFIX=${PREFIX:-/opt/kata}
 container_image="${SHIM_V2_CONTAINER_BUILDER:-${CC_BUILDER_REGISTRY}:shim-v2-go-${GO_VERSION}-rust-${RUST_VERSION}-$(get_last_modification ${repo_root_dir} ${script_dir})-$(uname -m)}"
 
 EXTRA_OPTS="${EXTRA_OPTS:-""}"
+VMM_CONFIGS="qemu fc"
 REMOVE_VMM_CONFIGS="${REMOVE_VMM_CONFIGS:-""}"
 
 sudo docker pull ${container_image} || \
@@ -59,11 +60,15 @@ sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	"${container_image}" \
 	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}"  ${EXTRA_OPTS} install"
 
-sudo sed -i -e '/^initrd =/d' "${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-qemu.toml"
-sudo sed -i -e '/^initrd =/d' "${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-fc.toml"
+for vmm in ${VMM_CONFIGS}; do
+	config_file="${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-${vmm}.toml"
+	if [ -f ${config_file} ]; then
+		sudo sed -i -e '/^initrd =/d' ${config_file}
+	fi
+done
 
 for vmm in ${REMOVE_VMM_CONFIGS}; do
-	sudo rm "${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-$vmm.toml"
+	sudo rm -f "${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-$vmm.toml"
 done
 
 pushd "${DESTDIR}/${PREFIX}/share/defaults/kata-containers"
