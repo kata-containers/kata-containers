@@ -23,6 +23,7 @@ slog-scope = "4.4.0"
 thiserror = "1.0"
 tokio = { version = "1.8.0", features = ["sync"] }
 vmm-sys-util = "0.11.0"
+rand = "0.8.4"
 
 kata-sys-util = { path = "../../../libs/kata-sys-util" }
 kata-types = { path = "../../../libs/kata-types" }

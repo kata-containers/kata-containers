@@ -15,7 +15,7 @@ pub use vfio::{bind_device_to_host, bind_device_to_vfio, VfioBusMode, VfioConfig
 mod share_fs_mount;
 pub use share_fs_mount::{ShareFsMountConfig, ShareFsMountType, ShareFsOperation};
 mod vsock;
-pub use vsock::VsockConfig;
+pub use vsock::{HybridVsockConfig, VsockConfig};
 
 use std::fmt;
 
@@ -27,6 +27,7 @@ pub enum Device {
     Vfio(VfioConfig),
     ShareFsMount(ShareFsMountConfig),
     Vsock(VsockConfig),
+    HybridVsock(HybridVsockConfig),
 }
 
 impl fmt::Display for Device {
