@@ -40,13 +40,25 @@ cache_clh_artifacts() {
 }
 
 cache_kernel_artifacts() {
-	local current_kernel_version=$(get_from_kata_deps "assets.kernel.version")
-	source "${script_dir}/kernel/build.sh"
-	local kernel_tarball_name="linux-${cached_kernel_version}.tar.xz"
+	local current_kernel_version=$(get_from_kata_deps "assets.kernel.version" | cut -c2- )
 	local gral_path="$(echo $script_dir | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,')"
 	local kernel_config_file="${gral_path}/tools/packaging/kernel/kata_config_version"
-	local kernel_config="$(cat $kernel_config_file)"
-	echo "${current_kernel_version} ${kernel_config_file}" > "latest"
+	local kernel_config="$(cat ${kernel_config_file})"
+	echo "${current_kernel_version} ${kernel_config}" > "latest"
+	local kernel_path="${gral_path}/tools/packaging/kata-deploy/local-build/build/cc-kernel/destdir/opt/confidential-containers/share/kata-containers"
+	local vmlinux_binary_name="vmlinux-${current_kernel_version}-${kernel_config}"
+	ls ${kernel_path}
+	local vmlinux_file="${kernel_path}/${vmlinux_binary_name}"
+	if [ -f "${vmlinux_file}" ]; then
+		cp -a "${vmlinux_file}" .
+		create_cache_asset "${vmlinux_binary_name}" "${current_kernel_version}"
+	fi
+	local vmlinuz_binary_name="vmlinuz-${current_kernel_version}-${kernel_config}"
+	local vmlinuz_file="${kernel_path}/${vmlinuz_binary_name}"
+	if [ -f "${vmlinuz_file}" ]; then
+		cp -a "${vmlinuz_file}" .
+		create_cache_asset "${vmlinuz_binary_name}" "${current_kernel_version}"
+	fi
 }
 
 create_cache_asset() {
