@@ -290,9 +290,6 @@ COMMIT_NO := $(shell git rev-parse HEAD 2>/dev/null || true)
 COMMIT := $(if $(shell git status --porcelain --untracked-files=no 2>/dev/null || true),${COMMIT_NO}-dirty,${COMMIT_NO})
 COMMIT_MSG = $(if $(COMMIT),$(COMMIT),unknown)
 
-# Exported to allow cargo to see it
-export VERSION_COMMIT := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
-
 EXTRA_RUSTFEATURES :=
 
 ifneq ($(EXTRA_RUSTFEATURES),)
@@ -322,8 +319,8 @@ GENERATED_REPLACEMENTS= \
     CONTAINERD_RUNTIME_NAME \
     RUNTIME_VERSION \
     BINDIR \
-    COMMIT \
-    VERSION_COMMIT
+    COMMIT
+
 GENERATED_FILES :=
 
 GENERATED_FILES += $(GENERATED_CODE)
