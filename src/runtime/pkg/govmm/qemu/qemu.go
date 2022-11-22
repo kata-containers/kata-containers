@@ -2699,9 +2699,14 @@ func (config *Config) appendQMPSockets() {
 	}
 }
 
-func (config *Config) appendDevices() {
+func (config *Config) appendDevices(logger QMPLog) {
+	if logger == nil {
+		logger = qmpNullLogger{}
+	}
+
 	for _, d := range config.Devices {
 		if !d.Valid() {
+			logger.Errorf("vm device is not valid: %+v", config.Devices)
 			continue
 		}
 
@@ -2976,7 +2981,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendCPUModel()
 	config.appendQMPSockets()
 	config.appendMemory()
-	config.appendDevices()
+	config.appendDevices(logger)
 	config.appendRTC()
 	config.appendGlobalParam()
 	config.appendPFlashParam()
