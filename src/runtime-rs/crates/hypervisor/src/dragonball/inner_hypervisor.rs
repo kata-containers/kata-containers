@@ -32,7 +32,7 @@ impl DragonballInner {
 
         // prepare vsock
         let uds_path = [&self.jailer_root, DEFAULT_HYBRID_VSOCK_NAME].join("/");
-        let d = crate::device::Device::Vsock(crate::device::VsockConfig {
+        let d = crate::device::Device::HybridVsock(crate::device::HybridVsockConfig {
             id: format!("vsock-{}", &self.id),
             guest_cid: 3,
             uds_path,

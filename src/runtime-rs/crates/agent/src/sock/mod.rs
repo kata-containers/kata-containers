@@ -35,8 +35,8 @@ pub enum Stream {
     // model, and mediates communication between AF_UNIX sockets (on the host end)
     // and AF_VSOCK sockets (on the guest end).
     Unix(UnixStream),
-    // TODO: support vsock
     // vsock://<cid>:<port>
+    Vsock(UnixStream),
 }
 
 impl Stream {
@@ -47,7 +47,7 @@ impl Stream {
     ) -> Poll<std::io::Result<()>> {
         // Safety: `UnixStream::read` correctly handles reads into uninitialized memory
         match self {
-            Stream::Unix(stream) => Pin::new(stream).poll_read(cx, buf),
+            Stream::Unix(stream) | Stream::Vsock(stream) => Pin::new(stream).poll_read(cx, buf),
         }
     }
 }
@@ -55,7 +55,7 @@ impl Stream {
 impl IntoRawFd for Stream {
     fn into_raw_fd(self) -> RawFd {
         match self {
-            Stream::Unix(stream) => match stream.into_std() {
+            Stream::Unix(stream) | Stream::Vsock(stream) => match stream.into_std() {
                 Ok(stream) => stream.into_raw_fd(),
                 Err(err) => {
                     error!(sl!(), "failed to into std unix stream {:?}", err);
