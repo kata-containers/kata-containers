@@ -2083,6 +2083,7 @@ func (q *qemu) AddDevice(ctx context.Context, devInfo interface{}, devType Devic
 				Type:      config.VhostUserFS,
 				CacheSize: q.config.VirtioFSCacheSize,
 				Cache:     q.config.VirtioFSCache,
+				QueueSize: q.config.VirtioFSQueueSize,
 			}
 			vhostDev.SocketPath = sockPath
 			vhostDev.DevID = id

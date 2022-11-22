@@ -1605,6 +1605,9 @@ func (clh *cloudHypervisor) addVolume(volume types.Volume) error {
 	// default values defined by cloud-hypervisor
 	numQueues := int32(1)
 	queueSize := int32(1024)
+	if clh.config.VirtioFSQueueSize != 0 {
+		queueSize = int32(clh.config.VirtioFSQueueSize)
+	}
 
 	fs := chclient.NewFsConfig(volume.MountTag, vfsdSockPath, numQueues, queueSize)
 	clh.vmconfig.Fs = &[]chclient.FsConfig{*fs}

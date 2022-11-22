@@ -113,6 +113,7 @@ type hypervisor struct {
 	RxRateLimiterMaxRate           uint64   `toml:"rx_rate_limiter_max_rate"`
 	TxRateLimiterMaxRate           uint64   `toml:"tx_rate_limiter_max_rate"`
 	MemOffset                      uint64   `toml:"memory_offset"`
+	DefaultMaxMemorySize           uint64   `toml:"default_maxmemory"`
 	DiskRateLimiterBwMaxRate       int64    `toml:"disk_rate_limiter_bw_max_rate"`
 	DiskRateLimiterBwOneTimeBurst  int64    `toml:"disk_rate_limiter_bw_one_time_burst"`
 	DiskRateLimiterOpsMaxRate      int64    `toml:"disk_rate_limiter_ops_max_rate"`
@@ -122,10 +123,10 @@ type hypervisor struct {
 	NetRateLimiterOpsMaxRate       int64    `toml:"net_rate_limiter_ops_max_rate"`
 	NetRateLimiterOpsOneTimeBurst  int64    `toml:"net_rate_limiter_ops_one_time_burst"`
 	VirtioFSCacheSize              uint32   `toml:"virtio_fs_cache_size"`
+	VirtioFSQueueSize              uint32   `toml:"virtio_fs_queue_size"`
 	DefaultMaxVCPUs                uint32   `toml:"default_maxvcpus"`
 	MemorySize                     uint32   `toml:"default_memory"`
 	MemSlots                       uint32   `toml:"memory_slots"`
-	DefaultMaxMemorySize           uint64   `toml:"default_maxmemory"`
 	DefaultBridges                 uint32   `toml:"default_bridges"`
 	Msize9p                        uint32   `toml:"msize_9p"`
 	PCIeRootPort                   uint32   `toml:"pcie_root_port"`
@@ -797,6 +798,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		VirtioFSDaemonList:      h.VirtioFSDaemonList,
 		VirtioFSCacheSize:       h.VirtioFSCacheSize,
 		VirtioFSCache:           h.defaultVirtioFSCache(),
+		VirtioFSQueueSize:       h.VirtioFSQueueSize,
 		VirtioFSExtraArgs:       h.VirtioFSExtraArgs,
 		MemPrealloc:             h.MemPrealloc,
 		HugePages:               h.HugePages,
