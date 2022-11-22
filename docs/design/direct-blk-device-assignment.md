@@ -81,7 +81,7 @@ Notes: given that the `mountInfo` is persisted to the disk by the Kata runtime, 
 Instead of the CSI node driver writing the mount info into a `csiPlugin.json` file under the volume root, 
 as described in the original proposal, here we propose that the CSI node driver passes the mount information to 
 the Kata Containers runtime through a new `kata-runtime` commandline command. The `kata-runtime` then writes the mount 
-information to a `mount-info.json` file in a predefined location (`/run/kata-containers/shared/direct-volumes/[volume_path]/`).
+information to a `mountInfo.json` file in a predefined location (`/run/kata-containers/shared/direct-volumes/[volume_path]/`).
 
 When the Kata Containers runtime starts a container, it verifies whether a volume mount is a direct-assigned volume by checking 
 whether there is a `mountInfo` file under the computed Kata `direct-volumes` directory. If it is, the runtime parses the `mountInfo` file, 
