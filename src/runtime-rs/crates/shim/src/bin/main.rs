@@ -99,7 +99,7 @@ fn show_version(err: Option<anyhow::Error>) {
         config::PROJECT_NAME,
         config::CONTAINERD_RUNTIME_NAME,
         config::RUNTIME_VERSION,
-        config::RUNTIME_VERSION_COMMIT,
+        config::RUNTIME_GIT_COMMIT,
     );
 
     if let Some(err) = err {
