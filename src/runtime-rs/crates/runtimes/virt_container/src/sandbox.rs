@@ -18,10 +18,7 @@ use common::{
 use containerd_shim_protos::events::task::TaskOOM;
 use hypervisor::{dragonball::Dragonball, Hypervisor, HYPERVISOR_DRAGONBALL};
 use kata_sys_util::hooks::HookStates;
-use kata_types::config::{
-    default::{DEFAULT_AGENT_LOG_PORT, DEFAULT_AGENT_VSOCK_PORT},
-    TomlConfig,
-};
+use kata_types::config::TomlConfig;
 use resource::{
     manager::ManagerArgs,
     network::{NetworkConfig, NetworkWithNetNsConfig},
@@ -380,19 +377,7 @@ impl Persist for VirtSandbox {
             HYPERVISOR_DRAGONBALL => Ok(Arc::new(Dragonball::restore((), h).await?)),
             _ => Err(anyhow!("Unsupported hypervisor {}", &h.hypervisor_type)),
         }?;
-        let agent = Arc::new(KataAgent::new(kata_types::config::Agent {
-            debug: true,
-            enable_tracing: false,
-            server_port: DEFAULT_AGENT_VSOCK_PORT,
-            log_port: DEFAULT_AGENT_LOG_PORT,
-            dial_timeout_ms: 10,
-            reconnect_timeout_ms: 3_000,
-            request_timeout_ms: 30_000,
-            health_check_request_timeout_ms: 90_000,
-            kernel_modules: Default::default(),
-            container_pipe_size: 0,
-            debug_console_enabled: false,
-        }));
+        let agent = Arc::new(KataAgent::new(kata_types::config::Agent::default()));
         let sid = sandbox_args.sid;
         let args = ManagerArgs {
             sid: sid.clone(),
