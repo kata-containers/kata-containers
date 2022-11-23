@@ -698,8 +698,8 @@ func TestFailToAppendCPUs(t *testing.T) {
 	}
 }
 
-var qmpSingleSocketServerString = "-qmp unix:cc-qmp,server=on,wait=off"
-var qmpSingleSocketString = "-qmp unix:cc-qmp"
+var qmpSingleSocketServerString = "-qmp unix:path=cc-qmp,server=on,wait=off"
+var qmpSingleSocketString = "-qmp unix:path=cc-qmp"
 
 func TestAppendSingleQMPSocketServer(t *testing.T) {
 	qmp := QMPSocket{
@@ -722,7 +722,27 @@ func TestAppendSingleQMPSocket(t *testing.T) {
 	testAppend(qmp, qmpSingleSocketString, t)
 }
 
-var qmpSocketServerString = "-qmp unix:cc-qmp-1,server=on,wait=off -qmp unix:cc-qmp-2,server=on,wait=off"
+var qmpSocketServerFdString = "-qmp unix:fd=3,server=on,wait=off"
+
+func TestAppendQMPSocketServerFd(t *testing.T) {
+	foo, _ := os.CreateTemp(os.TempDir(), "govmm-qemu-test")
+
+	defer func() {
+		_ = foo.Close()
+		_ = os.Remove(foo.Name())
+	}()
+
+	qmp := QMPSocket{
+		Type:   "unix",
+		FD:     foo,
+		Server: true,
+		NoWait: true,
+	}
+
+	testAppend(qmp, qmpSocketServerFdString, t)
+}
+
+var qmpSocketServerString = "-qmp unix:path=cc-qmp-1,server=on,wait=off -qmp unix:path=cc-qmp-2,server=on,wait=off"
 
 func TestAppendQMPSocketServer(t *testing.T) {
 	qmp := []QMPSocket{
