@@ -172,7 +172,7 @@ fn merge_oci_process(target: &mut oci::Process, source: &oci::Process) {
         target.args.append(&mut source.args.clone());
     }
 
-    if target.cwd.is_empty() && !source.cwd.is_empty() {
+    if target.cwd == "/" && source.cwd != "/" {
         target.cwd = String::from(&source.cwd);
     }
 
@@ -3073,6 +3073,56 @@ COMMIT
                 .contains("INPUT -s 2001:db8:100::1/128 -i sit+ -p tcp -m tcp --sport 512:65535"),
             "We should see the resulting rule"
         );
+    }
+
+    #[tokio::test]
+    async fn test_merge_cwd() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            container_process_cwd: &'a str,
+            image_process_cwd: &'a str,
+            expected: &'a str,
+        }
+
+        let tests = &[
+            // Image cwd should override blank container cwd
+            // TODO - how can we tell the user didn't specifically set it to `/` vs not setting at all? Is that scenario valid?
+            TestData {
+                container_process_cwd: "/",
+                image_process_cwd: "/imageDir",
+                expected: "/imageDir",
+            },
+            // Container cwd should override image cwd
+            TestData {
+                container_process_cwd: "/containerDir",
+                image_process_cwd: "/imageDir",
+                expected: "/containerDir",
+            },
+            // Container cwd should override blank image cwd
+            TestData {
+                container_process_cwd: "/containerDir",
+                image_process_cwd: "/",
+                expected: "/containerDir",
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let mut container_process = oci::Process {
+                cwd: d.container_process_cwd.to_string(),
+                ..Default::default()
+            };
+
+            let image_process = oci::Process {
+                cwd: d.image_process_cwd.to_string(),
+                ..Default::default()
+            };
+
+            merge_oci_process(&mut container_process, &image_process);
+
+            assert_eq!(d.expected, container_process.cwd, "{}", msg);
+        }
     }
 
     #[tokio::test]
