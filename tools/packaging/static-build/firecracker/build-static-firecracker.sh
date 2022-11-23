@@ -20,9 +20,9 @@ firecracker_version="${firecracker_version:-}"
 
 if [ -z "$firecracker_repo" ]; then
 	info "Get firecracker information from runtime versions.yaml"
-        firecracker_url=$(get_from_kata_deps "assets.hypervisor.firecracker.url")
+	firecracker_url=$(get_from_kata_deps "assets.hypervisor.firecracker.url")
 	[ -n "$firecracker_url" ] || die "failed to get firecracker url"
-        firecracker_repo="${firecracker_url}.git"
+	firecracker_repo="${firecracker_url}.git"
 fi
 [ -n "$firecracker_repo" ] || die "failed to get firecracker repo"
 
