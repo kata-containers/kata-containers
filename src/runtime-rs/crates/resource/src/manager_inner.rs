@@ -4,17 +4,18 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::sync::Arc;
+use std::{sync::Arc, thread};
 
 use crate::resource_persist::ResourceState;
 use agent::{Agent, Storage};
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::Hypervisor;
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
 use oci::LinuxResources;
 use persist::sandbox_persist::Persist;
+use tokio::runtime;
 
 use crate::{
     cgroups::{CgroupArgs, CgroupsResource},
@@ -88,11 +89,32 @@ impl ResourceManagerInner {
                     };
                 }
                 ResourceConfig::Network(c) => {
-                    let d = network::new(&c).await.context("new network")?;
-                    d.setup(self.hypervisor.as_ref())
-                        .await
-                        .context("setup network")?;
-                    self.network = Some(d)
+                    // 1. When using Rust asynchronous programming, we use .await to
+                    //    allow other task to run instead of waiting for the completion of the current task.
+                    // 2. Also, when handling the pod network, we need to set the shim threads
+                    //    into the network namespace to perform those operations.
+                    // However, as the increase of the I/O intensive tasks, two issues could be caused by the two points above:
+                    // a. When the future is blocked, the current thread (which is in the pod netns)
+                    //    might be take over by other tasks. After the future is finished, the thread take over
+                    //    the current task might not be in the pod netns. But the current task still need to run in pod netns
+                    // b. When finish setting up the network, the current thread will be set back to the host namespace.
+                    //    In Rust Async, if the current thread is taken over by other task, the netns is dropped on another thread,
+                    //    but it is not in netns. So, the previous thread would still remain in the pod netns.
+                    // The solution is to block the future on the current thread, it is enabled by spawn an os thread, create a
+                    // tokio runtime, and block the task on it.
+                    let hypervisor = self.hypervisor.clone();
+                    let network = thread::spawn(move || -> Result<Arc<dyn Network>> {
+                        let rt = runtime::Builder::new_current_thread().enable_io().build()?;
+                        let d = rt.block_on(network::new(&c)).context("new network")?;
+                        rt.block_on(d.setup(hypervisor.as_ref()))
+                            .context("setup network")?;
+                        Ok(d)
+                    })
+                    .join()
+                    .map_err(|e| anyhow!("{:?}", e))
+                    .context("Couldn't join on the associated thread")?
+                    .context("failed to set up network")?;
+                    self.network = Some(network);
                 }
             };
         }
