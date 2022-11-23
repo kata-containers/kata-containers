@@ -2327,6 +2327,9 @@ type QMPSocket struct {
 	// Type is the socket type (e.g. "unix").
 	Type QMPSocketType
 
+	// QMP listener file descriptor to be passed to qemu
+	FD *os.File
+
 	// Name is the socket name.
 	Name string
 
@@ -2339,7 +2342,8 @@ type QMPSocket struct {
 
 // Valid returns true if the QMPSocket structure is valid and complete.
 func (qmp QMPSocket) Valid() bool {
-	if qmp.Type == "" || qmp.Name == "" {
+	// Exactly one of Name of FD must be set.
+	if qmp.Type == "" || (qmp.Name == "") == (qmp.FD == nil) {
 		return false
 	}
 
@@ -2679,7 +2683,13 @@ func (config *Config) appendQMPSockets() {
 			continue
 		}
 
-		qmpParams := append([]string{}, fmt.Sprintf("%s:%s", q.Type, q.Name))
+		var qmpParams []string
+		if q.FD != nil {
+			qemuFDs := config.appendFDs([]*os.File{q.FD})
+			qmpParams = append([]string{}, fmt.Sprintf("%s:fd=%d", q.Type, qemuFDs[0]))
+		} else {
+			qmpParams = append([]string{}, fmt.Sprintf("%s:path=%s", q.Type, q.Name))
+		}
 		if q.Server {
 			qmpParams = append(qmpParams, "server=on")
 			if q.NoWait {
