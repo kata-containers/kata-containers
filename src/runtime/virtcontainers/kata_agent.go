@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -2139,7 +2138,7 @@ func (k *kataAgent) copyFile(ctx context.Context, src, dst string) error {
 	case unix.S_IFREG:
 		var err error
 		// TODO: Support incrementail file copying instead of loading whole file into memory
-		b, err = ioutil.ReadFile(src)
+		b, err = os.ReadFile(src)
 		if err != nil {
 			return fmt.Errorf("Could not read file %s: %v", src, err)
 		}
