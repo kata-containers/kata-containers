@@ -42,14 +42,6 @@ cache_clh_artifacts() {
 create_cache_asset() {
 	local component_name="$1"
 	local component_version="$2"
-	local verify_qemu=$(echo "${component_name}" | grep qemu || true)
-	local verify_clh=$(echo "${component_name}" | grep cloud || true)
-
-	if  [ ! -z "${verify_qemu}" ]; then
-		local qemu_cc_tarball_path=$(sudo find / -iname "${qemu_cc_tarball_name}")
-		info "qemu cc tarball_path ${qemu_cc_tarball_path}"
-		cp -a "${qemu_cc_tarball_path}" .
-	fi
 
 	sudo chown -R "${USER}:${USER}" .
 	sha256sum "${component_name}" > "sha256sum-${component_name}"
