@@ -20,11 +20,12 @@ use kata_types::{annotations::Annotation, config::TomlConfig};
 use linux_container::LinuxContainer;
 use persist::sandbox_persist::Persist;
 use tokio::sync::{mpsc::Sender, RwLock};
-use virt_container::sandbox::SandboxRestoreArgs;
-use virt_container::sandbox::VirtSandbox;
-use virt_container::sandbox_persist::{SandboxState, SandboxTYPE};
 #[cfg(feature = "virt")]
-use virt_container::VirtContainer;
+use virt_container::{
+    sandbox::{SandboxRestoreArgs, VirtSandbox},
+    sandbox_persist::SandboxState,
+    VirtContainer,
+};
 #[cfg(feature = "wasm")]
 use wasm_container::WasmContainer;
 
@@ -153,8 +154,19 @@ impl RuntimeHandlerManager {
             toml_config: TomlConfig::default(),
             sender,
         };
-        match sandbox_state.sandbox_type {
-            SandboxTYPE::VIRTCONTAINER => {
+        match sandbox_state.sandbox_type.clone() {
+            #[cfg(feature = "linux")]
+            name if name == LinuxContainer::name() => {
+                // TODO :support linux container (https://github.com/kata-containers/kata-containers/issues/4905)
+                return Ok(());
+            }
+            #[cfg(feature = "wasm")]
+            name if name == WasmContainer::name() => {
+                // TODO :support wasm container (https://github.com/kata-containers/kata-containers/issues/4906)
+                return Ok(());
+            }
+            #[cfg(feature = "virt")]
+            name if name == VirtContainer::name() => {
                 let sandbox = VirtSandbox::restore(sandbox_args, sandbox_state)
                     .await
                     .context("failed to restore the sandbox")?;
@@ -163,12 +175,7 @@ impl RuntimeHandlerManager {
                     .await
                     .context("failed to cleanup the resource")?;
             }
-            SandboxTYPE::LINUXCONTAINER => {
-                // TODO :support linux container (https://github.com/kata-containers/kata-containers/issues/4905)
-                return Ok(());
-            }
-            SandboxTYPE::WASMCONTAINER => {
-                // TODO :support wasm container (https://github.com/kata-containers/kata-containers/issues/4906)
+            _ => {
                 return Ok(());
             }
         }
