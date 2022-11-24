@@ -34,7 +34,7 @@ func testConfigAppend(config *Config, structure interface{}, expected string, t 
 
 	case Device:
 		config.Devices = []Device{s}
-		config.appendDevices()
+		config.appendDevices(nil)
 
 	case Knobs:
 		config.Knobs = s
@@ -889,7 +889,7 @@ func TestBadQMPSockets(t *testing.T) {
 
 func TestBadDevices(t *testing.T) {
 	c := &Config{}
-	c.appendDevices()
+	c.appendDevices(nil)
 	if len(c.qemuParams) != 0 {
 		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
 	}
@@ -941,7 +941,7 @@ func TestBadDevices(t *testing.T) {
 		},
 	}
 
-	c.appendDevices()
+	c.appendDevices(nil)
 	if len(c.qemuParams) != 0 {
 		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
 	}
