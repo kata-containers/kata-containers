@@ -310,11 +310,11 @@ func ConvertAddressFamily(family int32) pbTypes.IPFamily {
 //
 // Notes:
 //
-// - If the initial signal is zero, the specified process is assumed to be
-//   attempting to stop itself.
-// - If the initial signal is not zero, it will be sent to the process before
-//   checking if it is running.
-// - If the process has not ended after the timeout value, it will be forcibly killed.
+//   - If the initial signal is zero, the specified process is assumed to be
+//     attempting to stop itself.
+//   - If the initial signal is not zero, it will be sent to the process before
+//     checking if it is running.
+//   - If the process has not ended after the timeout value, it will be forcibly killed.
 func WaitLocalProcess(pid int, timeoutSecs uint, initialSignal syscall.Signal, logger *logrus.Entry) error {
 	var err error
 

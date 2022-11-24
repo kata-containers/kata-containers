@@ -44,7 +44,7 @@ build_type=""
 force_setup_generate_config="false"
 #GPU kernel support
 gpu_vendor=""
-#Confidential guest type 
+#Confidential guest type
 conf_guest=""
 #
 patches_path=""
@@ -136,7 +136,7 @@ get_tee_kernel() {
 	# different name, such as linux-${version}.tar.gz or simply
 	# ${version}.tar.gz.  Let's try both before failing.
 	curl --fail -L "${kernel_url}/linux-${kernel_tarball}" -o ${kernel_tarball} || curl --fail -OL "${kernel_url}/${kernel_tarball}"
-	
+
 	mkdir -p ${kernel_path}
 	tar --strip-components=1 -xf ${kernel_tarball} -C ${kernel_path}
 }
@@ -476,7 +476,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:deEfg:hk:p:t:u:v:x:" opt; do	
+	while getopts "a:b:c:deEfg:hk:p:t:u:v:x:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -519,7 +519,7 @@ main() {
 			t)
 				hypervisor_target="${OPTARG}"
 				;;
-			u)	
+			u)
 				kernel_url="${OPTARG}"
 				;;
 			v)

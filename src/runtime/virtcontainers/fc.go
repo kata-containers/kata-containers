@@ -175,10 +175,10 @@ func (fc *firecracker) Logger() *logrus.Entry {
 	return virtLog.WithField("subsystem", "firecracker")
 }
 
-//At some cases, when sandbox id is too long, it will incur error of overlong
-//firecracker API unix socket(fc.socketPath).
-//In Linux, sun_path could maximumly contains 108 bytes in size.
-//(http://man7.org/linux/man-pages/man7/unix.7.html)
+// At some cases, when sandbox id is too long, it will incur error of overlong
+// firecracker API unix socket(fc.socketPath).
+// In Linux, sun_path could maximumly contains 108 bytes in size.
+// (http://man7.org/linux/man-pages/man7/unix.7.html)
 func (fc *firecracker) truncateID(id string) string {
 	if len(id) > 32 {
 		//truncate the id to only leave the size of UUID(128bit).

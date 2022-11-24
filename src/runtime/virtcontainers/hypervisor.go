@@ -356,6 +356,7 @@ type HypervisorConfig struct {
 	DisableSeccomp                 bool
 	DisableSeLinux                 bool
 	LegacySerial                   bool
+	EnableVCPUsPinning             bool
 }
 
 // vcpu mapping from vcpu number to thread number

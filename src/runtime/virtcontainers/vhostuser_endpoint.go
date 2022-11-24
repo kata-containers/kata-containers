@@ -149,7 +149,8 @@ func findVhostUserNetSocketPath(netInfo NetworkInfo) (string, error) {
 
 // vhostUserSocketPath returns the path of the socket discovered.  This discovery
 // will vary depending on the type of vhost-user socket.
-//  Today only VhostUserNetDevice is supported.
+//
+//	Today only VhostUserNetDevice is supported.
 func vhostUserSocketPath(info interface{}) (string, error) {
 
 	switch v := info.(type) {

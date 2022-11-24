@@ -202,7 +202,8 @@ func checkCPUAttribs(cpuinfo string, attribs map[string]string) uint32 {
 // onVMM  - `true` if the host is running under a VMM environment
 // fields - A set of fields showing the expected and actual module parameter values.
 // msg    - The message that would be logged showing the incorrect kernel module
-//          parameter.
+//
+//	parameter.
 //
 // The function must return `true` if the kernel module parameter error should
 // be ignored, or `false` if it is a real error.
@@ -274,7 +275,7 @@ func checkKernelModules(modules map[string]kernelModule, handler kernelParamHand
 
 // genericHostIsVMContainerCapable checks to see if the host is theoretically capable
 // of creating a VM container.
-//nolint: unused,deadcode
+// nolint: unused,deadcode
 func genericHostIsVMContainerCapable(details vmContainerCapableDetails) error {
 	cpuinfo, err := getCPUInfo(details.cpuInfoFile)
 	if err != nil {

@@ -45,12 +45,11 @@ const logEntryFormatVersion = "0.0.2"
 //
 // Notes:
 //
-// - An anonymous field is not used to distinguish between the two
-//   categories of fields because that extra layer becomes visible when the
-//   struct is converted to various formats (specifically CSV, text and YAML).
+//   - An anonymous field is not used to distinguish between the two
+//     categories of fields because that extra layer becomes visible when the
+//     struct is converted to various formats (specifically CSV, text and YAML).
 //
 // - XXX: If you change this struct, update logEntryFormatVersion!
-//
 type LogEntry struct {
 	// Used to store additional (non-standard) fields
 	Data MapSS

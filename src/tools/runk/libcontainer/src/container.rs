@@ -83,14 +83,6 @@ impl Container {
     }
 
     pub fn kill(&self, signal: Signal, all: bool) -> Result<()> {
-        if self.state == ContainerState::Stopped {
-            return Err(anyhow!(
-                "container {} can't be killed because it is {:?}",
-                self.status.id,
-                self.state
-            ));
-        }
-
         if all {
             let pids = self.processes()?;
             for pid in pids {
@@ -100,6 +92,16 @@ impl Container {
                 kill(pid, signal)?;
             }
         } else {
+            // If --all option is not specified and the container is stopped,
+            // kill operation generates an error in accordance with the OCI runtime spec.
+            if self.state == ContainerState::Stopped {
+                return Err(anyhow!(
+                    "container {} can't be killed because it is {:?}",
+                    self.status.id,
+                    self.state
+                ));
+            }
+
             let pid = Pid::from_raw(self.status.pid);
             if status::is_process_running(pid)? {
                 kill(pid, signal)?;
