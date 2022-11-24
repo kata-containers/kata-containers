@@ -28,8 +28,10 @@ use resource::{
 };
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 
-use crate::{health_check::HealthCheck, sandbox_persist::SandboxTYPE};
+use crate::health_check::HealthCheck;
 use persist::{self, sandbox_persist::Persist};
+
+pub(crate) const VIRTCONTAINER: &str = "virt_container";
 pub struct SandboxRestoreArgs {
     pub sid: String,
     pub toml_config: TomlConfig,
@@ -303,7 +305,7 @@ impl Persist for VirtSandbox {
     /// Save a state of Sandbox
     async fn save(&self) -> Result<Self::State> {
         let sandbox_state = crate::sandbox_persist::SandboxState {
-            sandbox_type: SandboxTYPE::VIRTCONTAINER,
+            sandbox_type: VIRTCONTAINER.to_string(),
             resource: Some(self.resource_manager.save().await?),
             hypervisor: Some(self.hypervisor.save_state().await?),
         };
