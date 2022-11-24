@@ -702,6 +702,16 @@ func QMPStart(ctx context.Context, socket string, cfg QMPConfig, disconnectedCh 
 		return nil, nil, err
 	}
 
+	return QMPStartWithConn(ctx, conn, cfg, disconnectedCh)
+}
+
+// Same as QMPStart but with a pre-established connection
+func QMPStartWithConn(ctx context.Context, conn net.Conn, cfg QMPConfig, disconnectedCh chan struct{}) (*QMP, *QMPVersion, error) {
+	if conn == nil {
+		close(disconnectedCh)
+		return nil, nil, fmt.Errorf("invalid connection")
+	}
+
 	connectedCh := make(chan *QMPVersion)
 
 	q := startQMPLoop(conn, cfg, connectedCh, disconnectedCh)
