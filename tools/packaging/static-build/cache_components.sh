@@ -48,6 +48,16 @@ create_cache_asset() {
 	cat "sha256sum-${component_name}"
 }
 
+cache_virtiofsd_artifacts() {
+	local binary_name="virtiofsd"
+	local binary_path="$(echo $script_dir | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,')"
+	local current_virtiofsd_version=$(get_from_kata_deps "assets.externals.virtiofsd.version")
+	local virtiosfd_binary_path="${binary_path}/tools/packaging/kata-deploy/local-build/build/cc-virtiofsd/builddir/virtiofsd"
+	cp "${virtiofsd_binary_path}/${binary_name}" .
+	create_cache_asset "${binary_name}" "${current_virtiofsd_version}"
+	echo "${current_virtiofsd_version}"  > "latest"
+}
+
 help() {
 echo "$(cat << EOF
 Usage: $0 "[options]"
@@ -57,6 +67,7 @@ Usage: $0 "[options]"
 		-c	Cloud hypervisor cache
 		-q	Qemu cache
 		-h	Shows help
+		-v	Virtiofsd cache
 EOF
 )"
 }
@@ -65,7 +76,7 @@ main() {
 	local cloud_hypervisor_component="${cloud_hypervisor_component:-}"
 	local qemu_component="${qemu_component:-}"
 	local OPTIND
-	while getopts ":cqh:" opt
+	while getopts ":cqhv:" opt
 	do
 		case "$opt" in
 		c)
@@ -78,6 +89,9 @@ main() {
 			help
 			exit 0;
 			;;
+		v)
+			virtiofsd_component="1"
+			;;
 		:)
 			echo "Missing argument for -$OPTARG";
 			help
@@ -89,6 +103,7 @@ main() {
 
 	[[ -z "${cloud_hypervisor_component}" ]] && \
 	[[ -z "${qemu_component}" ]] && \
+	[[ -z "${virtiofsd_component}" ]] && \
 		help && die "Must choose at least one option"
 
 	mkdir -p "${WORKSPACE}/artifacts"
@@ -97,6 +112,7 @@ main() {
 
 	[ "${cloud_hypervisor_component}" == "1" ] && cache_clh_artifacts
 	[ "${qemu_component}" == "1" ] && cache_qemu_artifacts
+	[ "${virtiofsd_component}" == "1" ] && cache_virtiofsd_artifacts
 
 	ls -la "${WORKSPACE}/artifacts/"
 	popd

@@ -26,6 +26,8 @@ virtiofsd_zip="${virtiofsd_zip:-}"
 
 [ -d "virtiofsd" ] && rm -r virtiofsd
 
+virtiofsd_latest_build_url="${jenkins_url}/job/kata-containers-2.0-virtiofsd-cc-$(uname -m)/${cached_artifacts_path}"
+
 pull_virtiofsd_released_binary() {
 	if [ "${ARCH}" != "x86_64" ]; then
 		info "Only x86_64 binaries are distributed as part of the virtiofsd releases" && return 1
@@ -93,4 +95,32 @@ build_virtiofsd_from_source() {
 	popd
 }
 
-pull_virtiofsd_released_binary || build_virtiofsd_from_source
+check_cached_virtiofsd() {
+	local current_virtiofsd_version=$(curl -sfL "${virtiofsd_latest_build_url}"/latest) || latest="none"
+	info "Current virtiofsd version: ${current_virtiofsd_version}"
+	info "Cached virtiofsd version: ${cached_virtiofsd_version}"
+	if [ "${current_virtiofsd_version}" == "${cached_virtiofsd_version}" ] && [ "$(uname -m)" == "x86_64" ]; then
+		install_cached_virtiofsd
+	else
+		pull_virtiofsd_released_binary || build_virtiofsd_from_source
+	fi
+}
+
+install_cached_virtiofsd() {
+	local cached_path="$(echo ${script_dir} | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,')"
+	local virtiofsd_directory="${cached_path}/tools/packaging/kata-deploy/local-build/build/cc-virtiofsd/builddir/virtiofsd"
+	local checksum_file="sha256sum-virtiofsd"
+	info "Downloading virtiofsd binary"
+	curl -fOL --progress-bar "${virtiofsd_latest_build_url}/virtiofsd" || return 1
+	info "Checking virtiofsd binary checksum"
+	curl -fOL --progress-bar "${virtiofsd_latest_build_url}/${checksum_file}" || return 1
+	info "Verify checksum"
+	sudo sha256sum -c "${checksum_file}" || return 1
+	chmod +x virtiofsd
+}
+
+
+main() {
+	check_cached_virtiofsd
+}
+main $*
