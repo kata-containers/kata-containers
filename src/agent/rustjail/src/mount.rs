@@ -32,7 +32,7 @@ use crate::log_child;
 
 // Info reveals information about a particular mounted filesystem. This
 // struct is populated from the content in the /proc/<pid>/mountinfo file.
-#[derive(std::fmt::Debug, PartialEq)]
+#[derive(std::fmt::Debug, PartialEq, Eq)]
 pub struct Info {
     mount_point: String,
     optional: String,

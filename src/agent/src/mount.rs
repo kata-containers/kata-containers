@@ -90,7 +90,7 @@ lazy_static! {
     };
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct InitMount<'a> {
     fstype: &'a str,
     src: &'a str,

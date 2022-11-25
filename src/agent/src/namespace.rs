@@ -96,7 +96,7 @@ impl Namespace {
         let hostname = self.hostname.clone();
 
         let new_thread = std::thread::spawn(move || {
-            if let Err(err) = || -> Result<()> {
+            || -> Result<()> {
                 let origin_ns_path = get_current_thread_ns_path(ns_type.get());
 
                 let source = Path::new(&origin_ns_path);
@@ -135,11 +135,9 @@ impl Namespace {
                 })?;
 
                 Ok(())
-            }() {
-                return Err(err);
-            }
+            }()?;
 
-            Ok(())
+            Ok::<(), anyhow::Error>(())
         });
 
         new_thread
