@@ -16,7 +16,7 @@ const VSOCK_LOGS_PORT: &str = "1025";
 const KERNEL_KV_DELIMITER: &str = "=";
 const KERNEL_PARAM_DELIMITER: &str = " ";
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Param {
     pub key: String,
     pub value: String,

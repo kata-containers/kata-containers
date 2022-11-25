@@ -19,7 +19,7 @@ use super::{ConnectConfig, Sock, Stream};
 unsafe impl Send for Vsock {}
 unsafe impl Sync for Vsock {}
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Vsock {
     vsock_cid: u32,
     port: u32,

@@ -38,7 +38,7 @@ pub struct SandboxRestoreArgs {
     pub sender: Sender<Message>,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SandboxState {
     Init,
     Running,

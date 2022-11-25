@@ -60,7 +60,7 @@ pub enum Response {
     ConnectContainer(PID),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProcessType {
     Container,
     Exec,
@@ -176,7 +176,7 @@ pub struct ExecProcessRequest {
     pub spec_value: Vec<u8>,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProcessStatus {
     Unknown = 0,
     Created = 1,

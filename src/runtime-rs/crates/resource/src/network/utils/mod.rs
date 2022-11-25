@@ -25,7 +25,7 @@ pub(crate) fn parse_mac(s: &str) -> Option<hypervisor::Address> {
 
 pub(crate) fn get_mac_addr(b: &[u8]) -> Result<String> {
     if b.len() != 6 {
-        return Err(anyhow!("invalid mac address {:?}", b));
+        Err(anyhow!("invalid mac address {:?}", b))
     } else {
         Ok(format!(
             "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",

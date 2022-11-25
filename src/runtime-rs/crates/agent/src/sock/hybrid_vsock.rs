@@ -18,7 +18,7 @@ use super::{ConnectConfig, Sock, Stream};
 unsafe impl Send for HybridVsock {}
 unsafe impl Sync for HybridVsock {}
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct HybridVsock {
     uds: String,
     port: u32,

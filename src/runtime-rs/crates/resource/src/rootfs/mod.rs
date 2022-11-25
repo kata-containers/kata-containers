@@ -100,12 +100,10 @@ impl RootFsResource {
                 inner.rootfs.push(Arc::clone(&rootfs));
                 Ok(rootfs)
             }
-            _ => {
-                return Err(anyhow!(
-                    "unsupported rootfs mounts count {}",
-                    rootfs_mounts.len()
-                ))
-            }
+            _ => Err(anyhow!(
+                "unsupported rootfs mounts count {}",
+                rootfs_mounts.len()
+            )),
         }
     }
 
