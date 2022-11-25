@@ -103,10 +103,9 @@ Some helper libraries are maintained in [the library directory](../libs) so that
 
 ## Build and install
 
-```bash
-$ make
-$ sudo make install
-```
+See the
+[build from the source section of the rust runtime installation guide](../../docs/install/kata-containers-3.0-rust-runtime-installation-guide.md#build-from-source-installation).
+
 ## Configuration
 
 `runtime-rs` has the same [configuration as `runtime`](../runtime/README.md#configuration) with some [limitations](#limitations).
