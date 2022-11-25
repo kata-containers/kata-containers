@@ -440,11 +440,8 @@ impl ResourceManager {
                             size: *size,
                         },
                         None => {
-                            if let Err(e) = self.free_device_resources(&resources) {
-                                return Err(e);
-                            } else {
-                                return Err(ResourceError::NoAvailResource);
-                            }
+                            self.free_device_resources(&resources)?;
+                            return Err(ResourceError::NoAvailResource);
                         }
                     }
                 }
@@ -457,11 +454,8 @@ impl ResourceManager {
                     match self.allocate_mmio_address(&constraint) {
                         Some(base) => Resource::MmioAddressRange { base, size: *size },
                         None => {
-                            if let Err(e) = self.free_device_resources(&resources) {
-                                return Err(e);
-                            } else {
-                                return Err(ResourceError::NoAvailResource);
-                            }
+                            self.free_device_resources(&resources)?;
+                            return Err(ResourceError::NoAvailResource);
                         }
                     }
                 }
@@ -474,11 +468,8 @@ impl ResourceManager {
                     match self.allocate_mem_address(&constraint) {
                         Some(base) => Resource::MemAddressRange { base, size: *size },
                         None => {
-                            if let Err(e) = self.free_device_resources(&resources) {
-                                return Err(e);
-                            } else {
-                                return Err(ResourceError::NoAvailResource);
-                            }
+                            self.free_device_resources(&resources)?;
+                            return Err(ResourceError::NoAvailResource);
                         }
                     }
                 }
@@ -486,11 +477,8 @@ impl ResourceManager {
                     match self.allocate_legacy_irq(shared_irq, *irq) {
                         Some(v) => Resource::LegacyIrq(v),
                         None => {
-                            if let Err(e) = self.free_device_resources(&resources) {
-                                return Err(e);
-                            } else {
-                                return Err(ResourceError::NoAvailResource);
-                            }
+                            self.free_device_resources(&resources)?;
+                            return Err(ResourceError::NoAvailResource);
                         }
                     }
                 }
@@ -502,11 +490,8 @@ impl ResourceManager {
                             size: *size,
                         },
                         None => {
-                            if let Err(e) = self.free_device_resources(&resources) {
-                                return Err(e);
-                            } else {
-                                return Err(ResourceError::NoAvailResource);
-                            }
+                            self.free_device_resources(&resources)?;
+                            return Err(ResourceError::NoAvailResource);
                         }
                     }
                 }
@@ -517,11 +502,8 @@ impl ResourceManager {
                         size: *size,
                     },
                     None => {
-                        if let Err(e) = self.free_device_resources(&resources) {
-                            return Err(e);
-                        } else {
-                            return Err(ResourceError::NoAvailResource);
-                        }
+                        self.free_device_resources(&resources)?;
+                        return Err(ResourceError::NoAvailResource);
                     }
                 },
                 ResourceConstraint::GenericIrq { size } => match self.allocate_msi_irq(*size) {
@@ -531,22 +513,16 @@ impl ResourceManager {
                         size: *size,
                     },
                     None => {
-                        if let Err(e) = self.free_device_resources(&resources) {
-                            return Err(e);
-                        } else {
-                            return Err(ResourceError::NoAvailResource);
-                        }
+                        self.free_device_resources(&resources)?;
+                        return Err(ResourceError::NoAvailResource);
                     }
                 },
                 ResourceConstraint::KvmMemSlot { slot, size } => {
                     match self.allocate_kvm_mem_slot(*size, *slot) {
                         Some(v) => Resource::KvmMemSlot(v),
                         None => {
-                            if let Err(e) = self.free_device_resources(&resources) {
-                                return Err(e);
-                            } else {
-                                return Err(ResourceError::NoAvailResource);
-                            }
+                            self.free_device_resources(&resources)?;
+                            return Err(ResourceError::NoAvailResource);
                         }
                     }
                 }
