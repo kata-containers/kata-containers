@@ -82,8 +82,39 @@ parts:
       fi
       rustup component add rustfmt
 
+  docker:
+    after: [metadata]
+    plugin: nil
+    prime:
+      - -*
+    build-packages:
+      - ca-certificates
+      - containerd
+      - curl
+      - gnupg
+      - lsb-release
+      - runc
+    override-build: |
+      source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
+
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg |\
+          sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+      distro_codename=$(lsb_release -cs)
+      echo "deb [arch=${dpkg_arch} signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu ${distro_codename} stable" |\
+          sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+      sudo apt-get -y update
+      sudo apt-get -y install docker-ce docker-ce-cli containerd.io
+
+      echo "Unmasking docker service"
+      sudo -E systemctl unmask docker.service || true
+      sudo -E systemctl unmask docker.socket || true
+      echo "Adding $USER into docker group"
+      sudo -E gpasswd -a $USER docker
+      echo "Starting docker"
+      sudo -E systemctl start docker || true
+
   image:
-    after: [godeps, qemu, kernel]
+    after: [godeps, docker, qemu, kernel]
     plugin: nil
     build-packages:
       - docker.io
@@ -106,14 +137,6 @@ parts:
 
       # Copy yq binary. It's used in the container
       cp -a "${yq}" "${GOPATH}/bin/"
-
-      echo "Unmasking docker service"
-      sudo -E systemctl unmask docker.service || true
-      sudo -E systemctl unmask docker.socket || true
-      echo "Adding $USER into docker group"
-      sudo -E gpasswd -a $USER docker
-      echo "Starting docker"
-      sudo -E systemctl start docker || true
 
       cd "${kata_dir}/tools/osbuilder"
 
@@ -301,54 +324,31 @@ parts:
 
   virtiofsd:
     plugin: nil
-    after: [godeps, rustdeps]
+    after: [godeps, rustdeps, docker]
     override-build: |
       source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
 
-      # Currently, powerpc makes use of the QEMU's C implementation.
-      # The other platforms make use of the new rust virtiofsd.
-      #
-      # See "tools/packaging/scripts/configure-hypervisor.sh".
-      if [ "${arch}" == "ppc64le" ]
-      then
-          echo "INFO: Building QEMU's C version of virtiofsd"
-          # Handled by the 'qemu' part, so nothing more to do here.
-          exit 0
-      else
-          echo "INFO: Building rust version of virtiofsd"
-      fi
+      echo "INFO: Building rust version of virtiofsd"
 
-      cd "${kata_dir}"
+      cd "${SNAPCRAFT_PROJECT_DIR}"
+      # Clean-up build dir in case it already exists
+      sudo -E NO_TTY=true make virtiofsd-tarball
 
-      export PATH=${PATH}:${HOME}/.cargo/bin
-      # Download the rust implementation of virtiofsd
-      tools/packaging/static-build/virtiofsd/build-static-virtiofsd.sh
       sudo install \
         --owner='root' \
         --group='root' \
         --mode=0755 \
         -D \
         --target-directory="${SNAPCRAFT_PART_INSTALL}/usr/libexec/" \
-        virtiofsd/virtiofsd
+        build/virtiofsd/builddir/virtiofsd/virtiofsd
 
   cloud-hypervisor:
     plugin: nil
-    after: [godeps]
+    after: [godeps, docker]
     override-build: |
       source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
 
       if [ "${arch}" == "aarch64" ] || [ "${arch}" == "x86_64" ]; then
-          sudo apt-get -y update
-          sudo apt-get -y install ca-certificates curl gnupg lsb-release
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg |\
-              sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-          distro_codename=$(lsb_release -cs)
-          echo "deb [arch=${dpkg_arch} signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu ${distro_codename} stable" |\
-              sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-          sudo apt-get -y update
-          sudo apt-get -y install docker-ce docker-ce-cli containerd.io
-          sudo systemctl start docker.socket
-
           cd "${SNAPCRAFT_PROJECT_DIR}"
           sudo -E NO_TTY=true make cloud-hypervisor-tarball
 

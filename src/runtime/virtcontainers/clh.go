@@ -14,7 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -210,13 +210,13 @@ var vmAddNetPutRequest = func(clh *cloudHypervisor) error {
 			return err
 		}
 
-		respBody, err := ioutil.ReadAll(resp.Body)
+		respBody, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
 		}
 
 		resp.Body.Close()
-		resp.Body = ioutil.NopCloser(bytes.NewBuffer(respBody))
+		resp.Body = io.NopCloser(bytes.NewBuffer(respBody))
 
 		if resp.StatusCode != 204 {
 			clh.Logger().Errorf("vmAddNetPut failed with error '%d'. Response: %+v", resp.StatusCode, resp)
@@ -227,9 +227,7 @@ var vmAddNetPutRequest = func(clh *cloudHypervisor) error {
 	return nil
 }
 
-//
 // Cloud hypervisor state
-//
 type CloudHypervisorState struct {
 	apiSocket         string
 	PID               int
@@ -1321,9 +1319,9 @@ func kernelParamsToString(params []Param) string {
 	return strings.TrimSpace(paramBuilder.String())
 }
 
-//****************************************
+// ****************************************
 // API calls
-//****************************************
+// ****************************************
 func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 
 	pid := clh.state.PID

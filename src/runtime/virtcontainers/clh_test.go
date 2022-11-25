@@ -10,7 +10,6 @@ package virtcontainers
 
 import (
 	"context"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -134,7 +133,7 @@ func TestCloudHypervisorAddNetCheckNetConfigListValues(t *testing.T) {
 
 	macTest := "00:00:00:00:00"
 
-	file, err := ioutil.TempFile("", "netFd")
+	file, err := os.CreateTemp("", "netFd")
 	assert.Nil(err)
 	defer os.Remove(file.Name())
 
@@ -172,7 +171,7 @@ func TestCloudHypervisorAddNetCheckEnpointTypes(t *testing.T) {
 
 	macTest := "00:00:00:00:00"
 
-	file, err := ioutil.TempFile("", "netFd")
+	file, err := os.CreateTemp("", "netFd")
 	assert.Nil(err)
 	defer os.Remove(file.Name())
 
@@ -214,7 +213,7 @@ func TestCloudHypervisorAddNetCheckEnpointTypes(t *testing.T) {
 func TestCloudHypervisorNetRateLimiter(t *testing.T) {
 	assert := assert.New(t)
 
-	file, err := ioutil.TempFile("", "netFd")
+	file, err := os.CreateTemp("", "netFd")
 	assert.Nil(err)
 	defer os.Remove(file.Name())
 

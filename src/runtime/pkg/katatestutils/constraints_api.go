@@ -84,12 +84,12 @@ func NewTestConstraint(debug bool) TestConstraint {
 //
 // Notes:
 //
-// - Constraints are applied in the order specified.
-// - A constraint type (user, kernel) can only be specified once.
-// - If the function fails to determine whether it can check the constraints,
-//   it will panic. Since this is facility is used for testing, this seems like
-//   the best approach as it unburdens the caller from checking for an error
-//   (which should never be ignored).
+//   - Constraints are applied in the order specified.
+//   - A constraint type (user, kernel) can only be specified once.
+//   - If the function fails to determine whether it can check the constraints,
+//     it will panic. Since this is facility is used for testing, this seems like
+//     the best approach as it unburdens the caller from checking for an error
+//     (which should never be ignored).
 func (tc *TestConstraint) NotValid(constraints ...Constraint) bool {
 	if len(constraints) == 0 {
 		panic("need atleast one constraint")

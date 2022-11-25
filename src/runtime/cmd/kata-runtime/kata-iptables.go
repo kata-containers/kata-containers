@@ -7,7 +7,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	containerdshim "github.com/kata-containers/kata-containers/src/runtime/pkg/containerd-shim-v2"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
@@ -103,7 +103,7 @@ var setIPTablesCommand = cli.Command{
 		}
 
 		// Read file into buffer, and make request to the appropriate shim
-		buf, err := ioutil.ReadFile(iptablesFile)
+		buf, err := os.ReadFile(iptablesFile)
 		if err != nil {
 			return err
 		}
