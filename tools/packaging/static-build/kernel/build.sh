@@ -69,7 +69,7 @@ check_cached_kernel() {
 
 install_cached_kernel() {
 	local kernel_directory="${cached_path}/tools/packaging/kata-deploy/local-build/build/cc-kernel/destdir/opt/confidential-containers/share/kata-containers"
-        local vmlinux_kernel_name="vmlinux-${cached_kernel_version}-${cached_kernel_config}"
+	local vmlinux_kernel_name="vmlinux-${cached_kernel_version}-${cached_kernel_config}"
 	local vmlinuz_kernel_name="vmlinuz-${cached_kernel_version}-${cached_kernel_config}"
 	mkdir -p "${kernel_directory}"
 	pushd "${kernel_directory}"
