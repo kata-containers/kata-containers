@@ -409,10 +409,10 @@ impl Annotation {
         match self.get_value::<u32>(KATA_ANNO_CONTAINER_RES_SWAPPINESS) {
             Ok(r) => {
                 if r.unwrap_or_default() > 100 {
-                    return Err(io::Error::new(
+                    Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         format!("{} greater than 100", r.unwrap_or_default()),
-                    ));
+                    ))
                 } else {
                     Ok(r)
                 }
