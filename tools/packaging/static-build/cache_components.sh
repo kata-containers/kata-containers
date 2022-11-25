@@ -39,6 +39,28 @@ cache_clh_artifacts() {
 	echo "${current_cloud_hypervisor_version}"  > "latest"
 }
 
+cache_kernel_artifacts() {
+	local current_kernel_version=$(get_from_kata_deps "assets.kernel.version" | cut -c2- )
+	local gral_path="$(echo $script_dir | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,')"
+	local kernel_config_file="${gral_path}/tools/packaging/kernel/kata_config_version"
+	local kernel_config="$(cat ${kernel_config_file})"
+	echo "${current_kernel_version} ${kernel_config}" > "latest"
+	local kernel_path="${gral_path}/tools/packaging/kata-deploy/local-build/build/cc-kernel/destdir/opt/confidential-containers/share/kata-containers"
+	local vmlinux_binary_name="vmlinux-${current_kernel_version}-${kernel_config}"
+	ls ${kernel_path}
+	local vmlinux_file="${kernel_path}/${vmlinux_binary_name}"
+	if [ -f "${vmlinux_file}" ]; then
+		cp -a "${vmlinux_file}" .
+		create_cache_asset "${vmlinux_binary_name}" "${current_kernel_version}"
+	fi
+	local vmlinuz_binary_name="vmlinuz-${current_kernel_version}-${kernel_config}"
+	local vmlinuz_file="${kernel_path}/${vmlinuz_binary_name}"
+	if [ -f "${vmlinuz_file}" ]; then
+		cp -a "${vmlinuz_file}" .
+		create_cache_asset "${vmlinuz_binary_name}" "${current_kernel_version}"
+	fi
+}
+
 create_cache_asset() {
 	local component_name="$1"
 	local component_version="$2"
@@ -55,6 +77,7 @@ Usage: $0 "[options]"
 	Builds the cache of several kata components.
 	Options:
 		-c	Cloud hypervisor cache
+		-k	Kernel cache
 		-q	Qemu cache
 		-h	Shows help
 EOF
@@ -64,12 +87,16 @@ EOF
 main() {
 	local cloud_hypervisor_component="${cloud_hypervisor_component:-}"
 	local qemu_component="${qemu_component:-}"
+	local kernel_component="${kernel_component:-}"
 	local OPTIND
-	while getopts ":cqh:" opt
+	while getopts ":ckqh:" opt
 	do
 		case "$opt" in
 		c)
 			cloud_hypervisor_component="1"
+			;;
+		k)
+			kernel_component="1"
 			;;
 		q)
 			qemu_component="1"
@@ -88,6 +115,7 @@ main() {
 	shift $((OPTIND-1))
 
 	[[ -z "${cloud_hypervisor_component}" ]] && \
+	[[ -z "${kernel_component}" ]] && \
 	[[ -z "${qemu_component}" ]] && \
 		help && die "Must choose at least one option"
 
@@ -96,6 +124,7 @@ main() {
 	echo "Artifacts:"
 
 	[ "${cloud_hypervisor_component}" == "1" ] && cache_clh_artifacts
+	[ "${kernel_component}" == "1" ] && cache_kernel_artifacts
 	[ "${qemu_component}" == "1" ] && cache_qemu_artifacts
 
 	ls -la "${WORKSPACE}/artifacts/"
