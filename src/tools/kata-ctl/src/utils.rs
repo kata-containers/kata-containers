@@ -62,14 +62,15 @@ mod tests {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("proc-version");
         let path = file_path.clone();
-        let mut file = fs::File::create(file_path).unwrap();
-        writeln!(
-            file,
-            "Linux version 5.15.0-75-generic (buildd@lcy02-amd64-045)"
-        )
-        .unwrap();
-        let kernel = get_kernel_version(path.to_str().unwrap()).unwrap();
-        assert_eq!(kernel, "5.15.0-75-generic");
+        if let Ok(mut file) = fs::File::create(file_path) {
+            writeln!(
+                file,
+                "Linux version 5.15.0-75-generic (buildd@lcy02-amd64-045)"
+            )
+            .unwrap();
+            let version = get_kernel_version(path.to_str().unwrap()).unwrap();
+            assert_eq!(version, "5.15.0-75-generic");
+        }
     }
 
     #[test]
@@ -83,12 +84,13 @@ mod tests {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("proc-version");
         let path = file_path.clone();
-        let mut file = fs::File::create(file_path).unwrap();
-        writeln!(file, "Linux-version-5.15.0-75-generic").unwrap();
-        let actual = get_kernel_version(path.to_str().unwrap())
-            .unwrap_err()
-            .to_string();
-        let expected = format!("unexpected contents in file {}", path.to_str().unwrap());
-        assert_eq!(actual, expected);
+        if let Ok(mut file) = fs::File::create(file_path) {
+            writeln!(file, "Linux-version-5.15.0-75-generic").unwrap();
+            let actual = get_kernel_version(path.to_str().unwrap())
+                .unwrap_err()
+                .to_string();
+            let expected = format!("unexpected contents in file {}", path.to_str().unwrap());
+            assert_eq!(actual, expected);
+        }
     }
 }
