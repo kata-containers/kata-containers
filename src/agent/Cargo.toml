@@ -75,6 +75,7 @@ openssl = { version = "0.10.38", features = ["vendored"] }
 [dev-dependencies]
 tempfile = "3.1.0"
 test-utils = { path = "../libs/test-utils" }
+which = "4.3.0"
 
 [workspace]
 members = [

@@ -2185,6 +2185,7 @@ dependencies = [
  "ttrpc",
  "url 2.2.2",
  "vsock-exporter",
+ "which",
 ]
 
 [[package]]
