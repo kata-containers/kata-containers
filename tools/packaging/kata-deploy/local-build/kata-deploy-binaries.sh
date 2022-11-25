@@ -195,6 +195,7 @@ install_cc_tee_kernel() {
 	[[ "${tee}" != "tdx" && "${tee}" != "sev" ]] && die "Non supported TEE"
 
 	info "build initramfs for tee kernel"
+	export kernel_version=${kernel_version}
 	"${initramfs_builder}"
 	kernel_url="$(yq r $versions_yaml assets.kernel.${tee}.url)"
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -x "${tee}" -v "${kernel_version}" -u "${kernel_url}"
