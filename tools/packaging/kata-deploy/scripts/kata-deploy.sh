@@ -16,6 +16,7 @@ containerd_conf_file_backup="${containerd_conf_file}.bak"
 shims=(
 	"fc"
 	"qemu"
+	"qemu-nydus"
 	"clh"
 	"dragonball"
 )
