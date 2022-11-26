@@ -185,7 +185,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/VmAddDevice"
+              $ref: "#/components/schemas/DeviceConfig"
         required: true
       responses:
         200:
@@ -502,6 +502,8 @@ components:
     PayloadConfig:
       type: object
       properties:
+        firmware:
+          type: string
         kernel:
           type: string
         cmdline:
@@ -559,8 +561,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SgxEpcConfig"
-        tdx:
-          $ref: "#/components/schemas/TdxConfig"
         numa:
           type: array
           items:
@@ -573,6 +573,8 @@ components:
           default: false
         platform:
           $ref: "#/components/schemas/PlatformConfig"
+        tpm:
+          $ref: "#/components/schemas/TpmConfig"
       description: Virtual machine configuration
 
     CpuAffinity:
@@ -650,6 +652,9 @@ components:
           type: array
           items:
             type: string
+        tdx:
+          type: boolean
+          default: false
 
     MemoryZoneConfig:
       required:
@@ -723,6 +728,9 @@ components:
         prefault:
           type: boolean
           default: false
+        thp:
+          type: boolean
+          default: true
         zones:
           type: array
           items:
@@ -818,6 +826,10 @@ components:
           default: "255.255.255.0"
         mac:
           type: string
+        host_mac:
+          type: string
+        mtu:
+          type: integer
         iommu:
           type: boolean
           default: false
@@ -948,6 +960,14 @@ components:
         id:
           type: string
 
+    TpmConfig:
+      required:
+        - socket
+      type: object
+      properties:
+        socket:
+          type: string
+
     VdpaConfig:
       required:
         - path
@@ -1005,15 +1025,6 @@ components:
         prefault:
           type: boolean
           default: false
-
-    TdxConfig:
-      required:
-        - firmware
-      type: object
-      properties:
-        firmware:
-          type: string
-          description: Path to the firmware that will be used to boot the TDx guest up.
 
     NumaDistance:
       required:
@@ -1078,17 +1089,6 @@ components:
           description: desired memory zone size in bytes
           type: integer
           format: int64
-
-    VmAddDevice:
-      type: object
-      properties:
-        path:
-          type: string
-        iommu:
-          type: boolean
-          default: false
-        id:
-          type: string
 
     VmRemoveDevice:
       type: object

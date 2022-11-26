@@ -831,14 +831,14 @@ func (a *DefaultApiService) ShutdownVMMExecute(r ApiShutdownVMMRequest) (*_netht
 }
 
 type ApiVmAddDevicePutRequest struct {
-	ctx         _context.Context
-	ApiService  *DefaultApiService
-	vmAddDevice *VmAddDevice
+	ctx          _context.Context
+	ApiService   *DefaultApiService
+	deviceConfig *DeviceConfig
 }
 
 // The path of the new device
-func (r ApiVmAddDevicePutRequest) VmAddDevice(vmAddDevice VmAddDevice) ApiVmAddDevicePutRequest {
-	r.vmAddDevice = &vmAddDevice
+func (r ApiVmAddDevicePutRequest) DeviceConfig(deviceConfig DeviceConfig) ApiVmAddDevicePutRequest {
+	r.deviceConfig = &deviceConfig
 	return r
 }
 
@@ -882,8 +882,8 @@ func (a *DefaultApiService) VmAddDevicePutExecute(r ApiVmAddDevicePutRequest) (P
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := _neturl.Values{}
 	localVarFormParams := _neturl.Values{}
-	if r.vmAddDevice == nil {
-		return localVarReturnValue, nil, reportError("vmAddDevice is required and must be specified")
+	if r.deviceConfig == nil {
+		return localVarReturnValue, nil, reportError("deviceConfig is required and must be specified")
 	}
 
 	// to determine the Content-Type header
@@ -904,7 +904,7 @@ func (a *DefaultApiService) VmAddDevicePutExecute(r ApiVmAddDevicePutRequest) (P
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
 	// body params
-	localVarPostBody = r.vmAddDevice
+	localVarPostBody = r.deviceConfig
 	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
 	if err != nil {
 		return localVarReturnValue, nil, err

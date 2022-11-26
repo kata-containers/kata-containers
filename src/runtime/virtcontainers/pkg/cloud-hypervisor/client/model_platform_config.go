@@ -21,6 +21,7 @@ type PlatformConfig struct {
 	SerialNumber   *string   `json:"serial_number,omitempty"`
 	Uuid           *string   `json:"uuid,omitempty"`
 	OemStrings     *[]string `json:"oem_strings,omitempty"`
+	Tdx            *bool     `json:"tdx,omitempty"`
 }
 
 // NewPlatformConfig instantiates a new PlatformConfig object
@@ -29,6 +30,8 @@ type PlatformConfig struct {
 // will change when the set of required properties is changed
 func NewPlatformConfig() *PlatformConfig {
 	this := PlatformConfig{}
+	var tdx bool = false
+	this.Tdx = &tdx
 	return &this
 }
 
@@ -37,6 +40,8 @@ func NewPlatformConfig() *PlatformConfig {
 // but it doesn't guarantee that properties required by API are set
 func NewPlatformConfigWithDefaults() *PlatformConfig {
 	this := PlatformConfig{}
+	var tdx bool = false
+	this.Tdx = &tdx
 	return &this
 }
 
@@ -200,6 +205,38 @@ func (o *PlatformConfig) SetOemStrings(v []string) {
 	o.OemStrings = &v
 }
 
+// GetTdx returns the Tdx field value if set, zero value otherwise.
+func (o *PlatformConfig) GetTdx() bool {
+	if o == nil || o.Tdx == nil {
+		var ret bool
+		return ret
+	}
+	return *o.Tdx
+}
+
+// GetTdxOk returns a tuple with the Tdx field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetTdxOk() (*bool, bool) {
+	if o == nil || o.Tdx == nil {
+		return nil, false
+	}
+	return o.Tdx, true
+}
+
+// HasTdx returns a boolean if a field has been set.
+func (o *PlatformConfig) HasTdx() bool {
+	if o != nil && o.Tdx != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetTdx gets a reference to the given bool and assigns it to the Tdx field.
+func (o *PlatformConfig) SetTdx(v bool) {
+	o.Tdx = &v
+}
+
 func (o PlatformConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.NumPciSegments != nil {
@@ -216,6 +253,9 @@ func (o PlatformConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.OemStrings != nil {
 		toSerialize["oem_strings"] = o.OemStrings
+	}
+	if o.Tdx != nil {
+		toSerialize["tdx"] = o.Tdx
 	}
 	return json.Marshal(toSerialize)
 }

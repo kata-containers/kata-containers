@@ -171,7 +171,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/VmAddDevice'
+              $ref: '#/components/schemas/DeviceConfig'
         description: The path of the new device
         required: true
       responses:
@@ -425,7 +425,7 @@ components:
     VmInfo:
       description: Virtual Machine information
       example:
-        memory_actual_size: 3
+        memory_actual_size: 7
         state: Created
         config:
           console:
@@ -433,7 +433,7 @@ components:
             file: file
             iommu: false
           balloon:
-            size: 6
+            size: 1
             deflate_on_oom: false
             free_page_reporting: false
           memory:
@@ -469,6 +469,7 @@ components:
               hotplug_size: 7
             hotplug_size: 4
             hotplug_method: Acpi
+            thp: true
           disks:
           - pci_segment: 8
             path: path
@@ -530,83 +531,81 @@ components:
               - 3
               - 3
           devices:
-          - pci_segment: 6
+          - pci_segment: 3
             path: path
             iommu: false
             id: id
-          - pci_segment: 6
+          - pci_segment: 3
             path: path
             iommu: false
             id: id
           vdpa:
-          - pci_segment: 3
+          - pci_segment: 7
             path: path
             num_queues: 3
             iommu: false
             id: id
-          - pci_segment: 3
+          - pci_segment: 7
             path: path
             num_queues: 3
             iommu: false
             id: id
           numa:
           - distances:
-            - distance: 8
-              destination: 4
-            - distance: 8
-              destination: 4
+            - distance: 7
+              destination: 8
+            - distance: 7
+              destination: 8
             cpus:
-            - 0
-            - 0
+            - 4
+            - 4
             sgx_epc_sections:
             - sgx_epc_sections
             - sgx_epc_sections
             memory_zones:
             - memory_zones
             - memory_zones
-            guest_numa_id: 6
+            guest_numa_id: 0
           - distances:
-            - distance: 8
-              destination: 4
-            - distance: 8
-              destination: 4
+            - distance: 7
+              destination: 8
+            - distance: 7
+              destination: 8
             cpus:
-            - 0
-            - 0
+            - 4
+            - 4
             sgx_epc_sections:
             - sgx_epc_sections
             - sgx_epc_sections
             memory_zones:
             - memory_zones
             - memory_zones
-            guest_numa_id: 6
-          tdx:
-            firmware: firmware
+            guest_numa_id: 0
           rng:
             iommu: false
             src: /dev/urandom
           sgx_epc:
           - prefault: false
-            size: 7
+            size: 6
             id: id
           - prefault: false
-            size: 7
+            size: 6
             id: id
           fs:
           - pci_segment: 6
-            num_queues: 1
-            queue_size: 2
+            num_queues: 2
+            queue_size: 6
             tag: tag
             socket: socket
             id: id
           - pci_segment: 6
-            num_queues: 1
-            queue_size: 2
+            num_queues: 2
+            queue_size: 6
             tag: tag
             socket: socket
             id: id
           vsock:
-            pci_segment: 0
+            pci_segment: 7
             iommu: false
             socket: socket
             id: id
@@ -615,22 +614,25 @@ components:
             iommu_segments:
             - 3
             - 3
-            num_pci_segments: 7
+            num_pci_segments: 3
             oem_strings:
             - oem_strings
             - oem_strings
+            tdx: false
             serial_number: serial_number
             uuid: uuid
+          tpm:
+            socket: socket
           pmem:
-          - pci_segment: 5
+          - pci_segment: 6
             file: file
-            size: 6
+            size: 5
             iommu: false
             id: id
             discard_writes: false
-          - pci_segment: 5
+          - pci_segment: 6
             file: file
-            size: 6
+            size: 5
             iommu: false
             id: id
             discard_writes: false
@@ -640,14 +642,16 @@ components:
             cmdline: cmdline
             kernel: kernel
             initramfs: initramfs
+            firmware: firmware
           serial:
             mode: "false"
             file: file
             iommu: false
           net:
           - tap: tap
-            num_queues: 9
-            queue_size: 6
+            host_mac: host_mac
+            num_queues: 6
+            queue_size: 3
             ip: 192.168.249.1
             rate_limiter_config:
               ops:
@@ -659,7 +663,8 @@ components:
                 one_time_burst: 0
                 refill_time: 0
             mac: mac
-            pci_segment: 3
+            mtu: 9
+            pci_segment: 6
             vhost_mode: Client
             iommu: false
             vhost_socket: vhost_socket
@@ -667,8 +672,9 @@ components:
             id: id
             mask: 255.255.255.0
           - tap: tap
-            num_queues: 9
-            queue_size: 6
+            host_mac: host_mac
+            num_queues: 6
+            queue_size: 3
             ip: 192.168.249.1
             rate_limiter_config:
               ops:
@@ -680,7 +686,8 @@ components:
                 one_time_burst: 0
                 refill_time: 0
             mac: mac
-            pci_segment: 3
+            mtu: 9
+            pci_segment: 6
             vhost_mode: Client
             iommu: false
             vhost_socket: vhost_socket
@@ -769,7 +776,10 @@ components:
         cmdline: cmdline
         kernel: kernel
         initramfs: initramfs
+        firmware: firmware
       properties:
+        firmware:
+          type: string
         kernel:
           type: string
         cmdline:
@@ -785,7 +795,7 @@ components:
           file: file
           iommu: false
         balloon:
-          size: 6
+          size: 1
           deflate_on_oom: false
           free_page_reporting: false
         memory:
@@ -821,6 +831,7 @@ components:
             hotplug_size: 7
           hotplug_size: 4
           hotplug_method: Acpi
+          thp: true
         disks:
         - pci_segment: 8
           path: path
@@ -882,83 +893,81 @@ components:
             - 3
             - 3
         devices:
-        - pci_segment: 6
+        - pci_segment: 3
           path: path
           iommu: false
           id: id
-        - pci_segment: 6
+        - pci_segment: 3
           path: path
           iommu: false
           id: id
         vdpa:
-        - pci_segment: 3
+        - pci_segment: 7
           path: path
           num_queues: 3
           iommu: false
           id: id
-        - pci_segment: 3
+        - pci_segment: 7
           path: path
           num_queues: 3
           iommu: false
           id: id
         numa:
         - distances:
-          - distance: 8
-            destination: 4
-          - distance: 8
-            destination: 4
+          - distance: 7
+            destination: 8
+          - distance: 7
+            destination: 8
           cpus:
-          - 0
-          - 0
+          - 4
+          - 4
           sgx_epc_sections:
           - sgx_epc_sections
           - sgx_epc_sections
           memory_zones:
           - memory_zones
           - memory_zones
-          guest_numa_id: 6
+          guest_numa_id: 0
         - distances:
-          - distance: 8
-            destination: 4
-          - distance: 8
-            destination: 4
+          - distance: 7
+            destination: 8
+          - distance: 7
+            destination: 8
           cpus:
-          - 0
-          - 0
+          - 4
+          - 4
           sgx_epc_sections:
           - sgx_epc_sections
           - sgx_epc_sections
           memory_zones:
           - memory_zones
           - memory_zones
-          guest_numa_id: 6
-        tdx:
-          firmware: firmware
+          guest_numa_id: 0
         rng:
           iommu: false
           src: /dev/urandom
         sgx_epc:
         - prefault: false
-          size: 7
+          size: 6
           id: id
         - prefault: false
-          size: 7
+          size: 6
           id: id
         fs:
         - pci_segment: 6
-          num_queues: 1
-          queue_size: 2
+          num_queues: 2
+          queue_size: 6
           tag: tag
           socket: socket
           id: id
         - pci_segment: 6
-          num_queues: 1
-          queue_size: 2
+          num_queues: 2
+          queue_size: 6
           tag: tag
           socket: socket
           id: id
         vsock:
-          pci_segment: 0
+          pci_segment: 7
           iommu: false
           socket: socket
           id: id
@@ -967,22 +976,25 @@ components:
           iommu_segments:
           - 3
           - 3
-          num_pci_segments: 7
+          num_pci_segments: 3
           oem_strings:
           - oem_strings
           - oem_strings
+          tdx: false
           serial_number: serial_number
           uuid: uuid
+        tpm:
+          socket: socket
         pmem:
-        - pci_segment: 5
+        - pci_segment: 6
           file: file
-          size: 6
+          size: 5
           iommu: false
           id: id
           discard_writes: false
-        - pci_segment: 5
+        - pci_segment: 6
           file: file
-          size: 6
+          size: 5
           iommu: false
           id: id
           discard_writes: false
@@ -992,14 +1004,16 @@ components:
           cmdline: cmdline
           kernel: kernel
           initramfs: initramfs
+          firmware: firmware
         serial:
           mode: "false"
           file: file
           iommu: false
         net:
         - tap: tap
-          num_queues: 9
-          queue_size: 6
+          host_mac: host_mac
+          num_queues: 6
+          queue_size: 3
           ip: 192.168.249.1
           rate_limiter_config:
             ops:
@@ -1011,7 +1025,8 @@ components:
               one_time_burst: 0
               refill_time: 0
           mac: mac
-          pci_segment: 3
+          mtu: 9
+          pci_segment: 6
           vhost_mode: Client
           iommu: false
           vhost_socket: vhost_socket
@@ -1019,8 +1034,9 @@ components:
           id: id
           mask: 255.255.255.0
         - tap: tap
-          num_queues: 9
-          queue_size: 6
+          host_mac: host_mac
+          num_queues: 6
+          queue_size: 3
           ip: 192.168.249.1
           rate_limiter_config:
             ops:
@@ -1032,7 +1048,8 @@ components:
               one_time_burst: 0
               refill_time: 0
           mac: mac
-          pci_segment: 3
+          mtu: 9
+          pci_segment: 6
           vhost_mode: Client
           iommu: false
           vhost_socket: vhost_socket
@@ -1084,8 +1101,6 @@ components:
           items:
             $ref: '#/components/schemas/SgxEpcConfig'
           type: array
-        tdx:
-          $ref: '#/components/schemas/TdxConfig'
         numa:
           items:
             $ref: '#/components/schemas/NumaConfig'
@@ -1098,6 +1113,8 @@ components:
           type: boolean
         platform:
           $ref: '#/components/schemas/PlatformConfig'
+        tpm:
+          $ref: '#/components/schemas/TpmConfig'
       required:
       - payload
       type: object
@@ -1191,10 +1208,11 @@ components:
         iommu_segments:
         - 3
         - 3
-        num_pci_segments: 7
+        num_pci_segments: 3
         oem_strings:
         - oem_strings
         - oem_strings
+        tdx: false
         serial_number: serial_number
         uuid: uuid
       properties:
@@ -1214,6 +1232,9 @@ components:
           items:
             type: string
           type: array
+        tdx:
+          default: false
+          type: boolean
       type: object
     MemoryZoneConfig:
       example:
@@ -1298,6 +1319,7 @@ components:
           hotplug_size: 7
         hotplug_size: 4
         hotplug_method: Acpi
+        thp: true
       properties:
         size:
           format: int64
@@ -1325,6 +1347,9 @@ components:
           type: integer
         prefault:
           default: false
+          type: boolean
+        thp:
+          default: true
           type: boolean
         zones:
           items:
@@ -1442,8 +1467,9 @@ components:
     NetConfig:
       example:
         tap: tap
-        num_queues: 9
-        queue_size: 6
+        host_mac: host_mac
+        num_queues: 6
+        queue_size: 3
         ip: 192.168.249.1
         rate_limiter_config:
           ops:
@@ -1455,7 +1481,8 @@ components:
             one_time_burst: 0
             refill_time: 0
         mac: mac
-        pci_segment: 3
+        mtu: 9
+        pci_segment: 6
         vhost_mode: Client
         iommu: false
         vhost_socket: vhost_socket
@@ -1473,6 +1500,10 @@ components:
           type: string
         mac:
           type: string
+        host_mac:
+          type: string
+        mtu:
+          type: integer
         iommu:
           default: false
           type: boolean
@@ -1514,7 +1545,7 @@ components:
       type: object
     BalloonConfig:
       example:
-        size: 6
+        size: 1
         deflate_on_oom: false
         free_page_reporting: false
       properties:
@@ -1535,8 +1566,8 @@ components:
     FsConfig:
       example:
         pci_segment: 6
-        num_queues: 1
-        queue_size: 2
+        num_queues: 2
+        queue_size: 6
         tag: tag
         socket: socket
         id: id
@@ -1564,9 +1595,9 @@ components:
       type: object
     PmemConfig:
       example:
-        pci_segment: 5
+        pci_segment: 6
         file: file
-        size: 6
+        size: 5
         iommu: false
         id: id
         discard_writes: false
@@ -1614,7 +1645,7 @@ components:
       type: object
     DeviceConfig:
       example:
-        pci_segment: 6
+        pci_segment: 3
         path: path
         iommu: false
         id: id
@@ -1632,9 +1663,18 @@ components:
       required:
       - path
       type: object
+    TpmConfig:
+      example:
+        socket: socket
+      properties:
+        socket:
+          type: string
+      required:
+      - socket
+      type: object
     VdpaConfig:
       example:
-        pci_segment: 3
+        pci_segment: 7
         path: path
         num_queues: 3
         iommu: false
@@ -1659,7 +1699,7 @@ components:
       type: object
     VsockConfig:
       example:
-        pci_segment: 0
+        pci_segment: 7
         iommu: false
         socket: socket
         id: id
@@ -1688,7 +1728,7 @@ components:
     SgxEpcConfig:
       example:
         prefault: false
-        size: 7
+        size: 6
         id: id
       properties:
         id:
@@ -1703,21 +1743,10 @@ components:
       - id
       - size
       type: object
-    TdxConfig:
-      example:
-        firmware: firmware
-      properties:
-        firmware:
-          description: Path to the firmware that will be used to boot the TDx guest
-            up.
-          type: string
-      required:
-      - firmware
-      type: object
     NumaDistance:
       example:
-        distance: 8
-        destination: 4
+        distance: 7
+        destination: 8
       properties:
         destination:
           format: int32
@@ -1732,20 +1761,20 @@ components:
     NumaConfig:
       example:
         distances:
-        - distance: 8
-          destination: 4
-        - distance: 8
-          destination: 4
+        - distance: 7
+          destination: 8
+        - distance: 7
+          destination: 8
         cpus:
-        - 0
-        - 0
+        - 4
+        - 4
         sgx_epc_sections:
         - sgx_epc_sections
         - sgx_epc_sections
         memory_zones:
         - memory_zones
         - memory_zones
-        guest_numa_id: 6
+        guest_numa_id: 0
       properties:
         guest_numa_id:
           format: int32
@@ -1799,20 +1828,6 @@ components:
           description: desired memory zone size in bytes
           format: int64
           type: integer
-      type: object
-    VmAddDevice:
-      example:
-        path: path
-        iommu: false
-        id: id
-      properties:
-        path:
-          type: string
-        iommu:
-          default: false
-          type: boolean
-        id:
-          type: string
       type: object
     VmRemoveDevice:
       example:
