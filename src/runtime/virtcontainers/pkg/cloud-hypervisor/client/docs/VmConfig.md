@@ -19,11 +19,11 @@ Name | Type | Description | Notes
 **Vdpa** | Pointer to [**[]VdpaConfig**](VdpaConfig.md) |  | [optional] 
 **Vsock** | Pointer to [**VsockConfig**](VsockConfig.md) |  | [optional] 
 **SgxEpc** | Pointer to [**[]SgxEpcConfig**](SgxEpcConfig.md) |  | [optional] 
-**Tdx** | Pointer to [**TdxConfig**](TdxConfig.md) |  | [optional] 
 **Numa** | Pointer to [**[]NumaConfig**](NumaConfig.md) |  | [optional] 
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
 **Watchdog** | Pointer to **bool** |  | [optional] [default to false]
 **Platform** | Pointer to [**PlatformConfig**](PlatformConfig.md) |  | [optional] 
+**Tpm** | Pointer to [**TpmConfig**](TpmConfig.md) |  | [optional] 
 
 ## Methods
 
@@ -414,31 +414,6 @@ SetSgxEpc sets SgxEpc field to given value.
 
 HasSgxEpc returns a boolean if a field has been set.
 
-### GetTdx
-
-`func (o *VmConfig) GetTdx() TdxConfig`
-
-GetTdx returns the Tdx field if non-nil, zero value otherwise.
-
-### GetTdxOk
-
-`func (o *VmConfig) GetTdxOk() (*TdxConfig, bool)`
-
-GetTdxOk returns a tuple with the Tdx field if it's non-nil, zero value otherwise
-and a boolean to check if the value has been set.
-
-### SetTdx
-
-`func (o *VmConfig) SetTdx(v TdxConfig)`
-
-SetTdx sets Tdx field to given value.
-
-### HasTdx
-
-`func (o *VmConfig) HasTdx() bool`
-
-HasTdx returns a boolean if a field has been set.
-
 ### GetNuma
 
 `func (o *VmConfig) GetNuma() []NumaConfig`
@@ -538,6 +513,31 @@ SetPlatform sets Platform field to given value.
 `func (o *VmConfig) HasPlatform() bool`
 
 HasPlatform returns a boolean if a field has been set.
+
+### GetTpm
+
+`func (o *VmConfig) GetTpm() TpmConfig`
+
+GetTpm returns the Tpm field if non-nil, zero value otherwise.
+
+### GetTpmOk
+
+`func (o *VmConfig) GetTpmOk() (*TpmConfig, bool)`
+
+GetTpmOk returns a tuple with the Tpm field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetTpm
+
+`func (o *VmConfig) SetTpm(v TpmConfig)`
+
+SetTpm sets Tpm field to given value.
+
+### HasTpm
+
+`func (o *VmConfig) HasTpm() bool`
+
+HasTpm returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

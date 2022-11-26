@@ -21,8 +21,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -100,7 +103,7 @@ type clhClient interface {
 	// Add/remove CPUs to/from the VM
 	VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error)
 	// Add VFIO PCI device to the VM
-	VmAddDevicePut(ctx context.Context, vmAddDevice chclient.VmAddDevice) (chclient.PciDeviceInfo, *http.Response, error)
+	VmAddDevicePut(ctx context.Context, deviceConfig chclient.DeviceConfig) (chclient.PciDeviceInfo, *http.Response, error)
 	// Add a new disk device to the VM
 	VmAddDiskPut(ctx context.Context, diskConfig chclient.DiskConfig) (chclient.PciDeviceInfo, *http.Response, error)
 	// Remove a device from the VM
@@ -136,8 +139,8 @@ func (c *clhClientApi) VmResizePut(ctx context.Context, vmResize chclient.VmResi
 	return c.ApiInternal.VmResizePut(ctx).VmResize(vmResize).Execute()
 }
 
-func (c *clhClientApi) VmAddDevicePut(ctx context.Context, vmAddDevice chclient.VmAddDevice) (chclient.PciDeviceInfo, *http.Response, error) {
-	return c.ApiInternal.VmAddDevicePut(ctx).VmAddDevice(vmAddDevice).Execute()
+func (c *clhClientApi) VmAddDevicePut(ctx context.Context, deviceConfig chclient.DeviceConfig) (chclient.PciDeviceInfo, *http.Response, error) {
+	return c.ApiInternal.VmAddDevicePut(ctx).DeviceConfig(deviceConfig).Execute()
 }
 
 func (c *clhClientApi) VmAddDiskPut(ctx context.Context, diskConfig chclient.DiskConfig) (chclient.PciDeviceInfo, *http.Response, error) {
@@ -253,6 +256,8 @@ type cloudHypervisor struct {
 	vmconfig        chclient.VmConfig
 	state           CloudHypervisorState
 	config          HypervisorConfig
+	stopped         int32
+	mu              sync.Mutex
 }
 
 var clhKernelParams = []Param{
@@ -415,7 +420,13 @@ func (clh *cloudHypervisor) enableProtection() error {
 			return errors.New("Firmware path is not specified")
 		}
 
-		clh.vmconfig.Tdx = chclient.NewTdxConfig(firmwarePath)
+		clh.vmconfig.Payload.SetFirmware(firmwarePath)
+
+		if clh.vmconfig.Platform == nil {
+			clh.vmconfig.Platform = chclient.NewPlatformConfig()
+		}
+		clh.vmconfig.Platform.SetTdx(true)
+
 		return nil
 
 	case sevProtection:
@@ -715,6 +726,55 @@ func (clh *cloudHypervisor) GetThreadIDs(ctx context.Context) (VcpuThreadIDs, er
 
 	vcpuInfo.vcpus = make(map[int]int)
 
+	getVcpus := func(pid int) (map[int]int, error) {
+		vcpus := make(map[int]int)
+
+		dir := fmt.Sprintf("/proc/%d/task", pid)
+		files, err := os.ReadDir(dir)
+		if err != nil {
+			return vcpus, err
+		}
+
+		pattern, err := regexp.Compile(`^vcpu\d+$`)
+		if err != nil {
+			return vcpus, err
+		}
+		for _, file := range files {
+			comm, err := os.ReadFile(fmt.Sprintf("%s/%s/comm", dir, file.Name()))
+			if err != nil {
+				return vcpus, err
+			}
+			pName := strings.TrimSpace(string(comm))
+			if !pattern.MatchString(pName) {
+				continue
+			}
+
+			cpuID := strings.TrimPrefix(pName, "vcpu")
+			threadID := file.Name()
+
+			k, err := strconv.Atoi(cpuID)
+			if err != nil {
+				return vcpus, err
+			}
+			v, err := strconv.Atoi(threadID)
+			if err != nil {
+				return vcpus, err
+			}
+			vcpus[k] = v
+		}
+		return vcpus, nil
+	}
+
+	if clh.state.PID == 0 {
+		return vcpuInfo, nil
+	}
+
+	vcpus, err := getVcpus(clh.state.PID)
+	if err != nil {
+		return vcpuInfo, err
+	}
+	vcpuInfo.vcpus = vcpus
+
 	return vcpuInfo, nil
 }
 
@@ -798,8 +858,7 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 	defer cancel()
 
 	// Create the clh device config via the constructor to ensure default values are properly assigned
-	clhDevice := *chclient.NewVmAddDevice()
-	clhDevice.Path = &device.SysfsDev
+	clhDevice := *chclient.NewDeviceConfig(device.SysfsDev)
 	pciInfo, _, err := cl.VmAddDevicePut(ctx, clhDevice)
 	if err != nil {
 		return fmt.Errorf("Failed to hotplug device %+v %s", device, openAPIClientError(err))
@@ -1022,9 +1081,21 @@ func (clh *cloudHypervisor) ResumeVM(ctx context.Context) error {
 
 // StopVM will stop the Sandbox's VM.
 func (clh *cloudHypervisor) StopVM(ctx context.Context, waitOnly bool) (err error) {
+	clh.mu.Lock()
+	defer func() {
+		if err == nil {
+			atomic.StoreInt32(&clh.stopped, 1)
+		}
+		clh.mu.Unlock()
+	}()
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "StopVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 	clh.Logger().WithField("function", "StopVM").Info("Stop Sandbox")
+	if atomic.LoadInt32(&clh.stopped) != 0 {
+		clh.Logger().Info("Already stopped")
+		return nil
+	}
+
 	return clh.terminate(ctx, waitOnly)
 }
 
@@ -1326,16 +1397,20 @@ func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 
 	pid := clh.state.PID
 
-	if err := syscall.Kill(pid, syscall.Signal(0)); err != nil {
+	if atomic.LoadInt32(&clh.stopped) != 0 {
 		return false, nil
 	}
 
 	timeStart := time.Now()
 	cl := clh.client()
 	for {
+		err := syscall.Kill(pid, syscall.Signal(0))
+		if err != nil {
+			return false, nil
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
-		defer cancel()
-		_, _, err := cl.VmmPingGet(ctx)
+		_, _, err = cl.VmmPingGet(ctx)
+		cancel()
 		if err == nil {
 			return true, nil
 		} else {
