@@ -195,7 +195,7 @@ handle_build() {
 		install_shimv2
 		install_virtiofsd
 		;;
-	
+
 	cloud-hypervisor) install_clh ;;
 
 	firecracker) install_firecracker ;;
@@ -216,7 +216,6 @@ handle_build() {
 
 	virtiofsd) install_virtiofsd ;;
 
-	
 	*)
 		die "Invalid build target ${build_target}"
 		;;
