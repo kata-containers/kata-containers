@@ -16,7 +16,7 @@ readonly kernel_builder="${repo_root_dir}/tools/packaging/kernel/build-kernel.sh
 
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
-container_image="${KERNEL_CONTAINER_BUILDER:-${CC_BUILDER_REGISTRY}:kernel-$(get_last_modification ${repo_root_dir} ${script_dir})-$(uname -m)}"
+container_image="${KERNEL_CONTAINER_BUILDER:-$(get_kernel_image_name)}"
 kernel_latest_build_url="${jenkins_url}/job/kata-containers-2.0-kernel-cc-$(uname -m)/${cached_artifacts_path}"
 current_kernel_version=${kernel_version:-$(get_from_kata_deps "assets.kernel.version")}
 cached_path="$(echo ${script_dir} | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,')"

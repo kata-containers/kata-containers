@@ -29,7 +29,7 @@ package_output_dir="${package_output_dir:-}"
 [ -n "${tdshim_version}" ] || die "Failed to get TD-shim version or commit"
 [ -n "${tdshim_toolchain}" ] || die "Failed to get TD-shim toolchain to be used to build the project"
 
-container_image="${TDSHIM_CONTAINER_BUILDER:-${CC_BUILDER_REGISTRY}:td-shim-${tdshim_toolchain}-$(get_last_modification ${repo_root_dir} ${script_dir})-$(uname -m)}"
+container_image="${TDSHIM_CONTAINER_BUILDER:-$(get_td_shim_image_name)}"
 
 sudo docker pull ${container_image} || \
 	(sudo docker build \

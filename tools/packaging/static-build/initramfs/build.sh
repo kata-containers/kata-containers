@@ -30,7 +30,7 @@ package_output_dir="${package_output_dir:-}"
 [ -n "${lvm2_repo}" ] || die "Failed to get lvm2 repo"
 [ -n "${lvm2_version}" ] || die "Failed to get lvm2 version"
 
-container_image="${INITRAMFS_CONTAINER_BUILDER:-${CC_BUILDER_REGISTRY}:initramfs-cryptsetup-${cryptsetup_version}-lvm2-${lvm2_version}-$(get_last_modification ${repo_root_dir} ${script_dir})-$(uname -m)}"
+container_image="${INITRAMFS_CONTAINER_BUILDER:-$(get_initramfs_image_name)}"
 
 sudo docker pull ${container_image} || (sudo docker build \
 	--build-arg cryptsetup_repo="${cryptsetup_repo}" \

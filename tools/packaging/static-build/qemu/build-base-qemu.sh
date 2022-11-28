@@ -38,7 +38,7 @@ CACHE_TIMEOUT=$(date +"%Y-%m-%d")
 [ -n "${build_suffix}" ] && HYPERVISOR_NAME="kata-qemu-${build_suffix}" || HYPERVISOR_NAME="kata-qemu"
 [ -n "${build_suffix}" ] && PKGVERSION="kata-static-${build_suffix}" || PKGVERSION="kata-static"
 
-container_image="${QEMU_CONTAINER_BUILDER:-${CC_BUILDER_REGISTRY}:qemu-$(get_last_modification ${repo_root_dir} ${script_dir})-$(uname -m)}"
+container_image="${QEMU_CONTAINER_BUILDER:-$(get_qemu_image_name)}"
 
 sudo docker pull ${container_image} || \
 	(sudo "${container_engine}" build \
