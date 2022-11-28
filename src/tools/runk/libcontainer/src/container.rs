@@ -17,6 +17,7 @@ use nix::{
 };
 use oci::{ContainerState, State as OCIState};
 use procfs;
+use rustjail::cgroups::fs::Manager as CgroupManager;
 use rustjail::{
     container::{self, BaseContainer, LinuxContainer, EXEC_FIFO_FILENAME},
     process::{Process, ProcessOperations},
@@ -329,8 +330,12 @@ impl ContainerLauncher {
             self.runner.created,
             self.runner
                 .cgroup_manager
-                .clone()
-                .ok_or_else(|| anyhow!("cgroup manager was not present"))?,
+                .as_ref()
+                .unwrap()
+                .as_any()?
+                .downcast_ref::<CgroupManager>()
+                .unwrap()
+                .clone(),
             self.runner.config.clone(),
         )
     }
