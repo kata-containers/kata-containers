@@ -23,7 +23,6 @@ cloud_hypervisor_repo="${cloud_hypervisor_repo:-}"
 cloud_hypervisor_version="${cloud_hypervisor_version:-}"
 cloud_hypervisor_pr="${cloud_hypervisor_pr:-}"
 cloud_hypervisor_pull_ref_branch="${cloud_hypervisor_pull_ref_branch:-main}"
-cloud_hypervisor_latest_build_url="${jenkins_url}/job/kata-containers-2.0-clh-cc-$(uname -m)/${cached_artifacts_path}"
 
 if [ -z "$cloud_hypervisor_repo" ]; then
 	info "Get cloud_hypervisor information from runtime versions.yaml"
@@ -83,40 +82,6 @@ build_clh_from_source() {
 	popd
 }
 
-check_cached_cloud_hypervisor() {
-	local cached_cloud_hypervisor_version=$(curl -sfL "${cloud_hypervisor_latest_build_url}"/latest) || latest="none"
-	info "Current cloud hypervisor version: ${cloud_hypervisor_version}"
-	info "Cached cloud hypervisor version: ${cached_cloud_hypervisor_version}"
-	if [ "${cloud_hypervisor_version}" == "${cached_cloud_hypervisor_version}" ] && [ "${ARCH}" == "x86_64" ]; then
-		install_cached_cloud_hypervisor
-	else
-		build_clh_from_source
-	fi
-}
-
-install_cached_cloud_hypervisor() {
-	local cached_path="$(echo ${script_dir} | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,')"
-	local clh_directory="${cached_path}/tools/packaging/kata-deploy/local-build/build/cc-cloud-hypervisor/builddir/cloud-hypervisor"
-	mkdir cloud-hypervisor
-	pushd cloud-hypervisor
-	local checksum_file="sha256sum-cloud-hypervisor"
-	info "Downloading the cloud hypervisor binary"
-	curl -fOL --progress-bar "${cloud_hypervisor_latest_build_url}/cloud-hypervisor" || return 1
-	info "Checking cloud hypervisor binary checksum"
-	curl -fOL --progress-bar "${cloud_hypervisor_latest_build_url}/${checksum_file}" || return 1
-	info "Verify checksum"
-	sudo sha256sum -c "${checksum_file}" || return 1
-	chmod +x cloud-hypervisor
-	local clh_binary_path="${cached_path}/cloud-hypervisor"
-	if [ ! -d "${clh_binary_path}" ]; then
-		mkdir -p "${clh_binary_path}"
-	fi
-	if [ ! -f "${clh_binary_path}/cloud-hypervisor" ]; then
-		cp cloud-hypervisor "${clh_binary_path}"
-	fi
-	popd
-}
-
 if [ "${ARCH}" == "aarch64" ]; then
 	info "aarch64 binaries are not distributed as part of the Cloud Hypervisor releases, forcing to build from source"
 	force_build_from_source="true"
@@ -129,8 +94,8 @@ fi
 
 if [ "${force_build_from_source}" == "true" ]; then
 	info "Build cloud-hypervisor from source as it's been request via the force_build_from_source flag"
-	check_cached_cloud_hypervisor
+	build_clh_from_source
 else
 	pull_clh_released_binary ||
-	(info "Failed to pull cloud-hypervisor released binary, trying to build from source" && check_cached_cloud_hypervisor)
+	(info "Failed to pull cloud-hypervisor released binary, trying to build from source" && build_clh_from_source)
 fi
