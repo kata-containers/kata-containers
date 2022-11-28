@@ -5,5 +5,5 @@
 metadata:
   name: kata-cc-nginx-authenticated
 image:
-  image: quay.io/kata-containers/confidential-containers-auth:nginx
+  image: quay.io/kata-containers/confidential-containers-auth:test
 log_path: kata-cc.0.log
