@@ -680,6 +680,8 @@ handle_vendor:
 vendor: handle_vendor
 	./hack/tree_status.sh
 
+static-checks-build: $(GENERATED_FILES)
+
 clean:
 	$(QUIET_CLEAN)rm -f \
 		$(CONFIGS) \
