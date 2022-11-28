@@ -9,7 +9,6 @@ set -o nounset
 set -o pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly repo_root_dir="$(cd "${script_dir}/../../../.." && pwd)"
 readonly tdshim_builder="${script_dir}/build-td-shim.sh"
 
 source "${script_dir}/../../scripts/lib.sh"
