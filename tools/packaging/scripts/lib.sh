@@ -173,7 +173,6 @@ sha256sum_from_files() {
 	files="$(echo $files | tr ' ' '\n' | LC_ALL=C sort -u)"
 	# Concate the files and calculate a hash.
 	shasum="$(cat $files | sha256sum -b)" || true
-	info "shasum of files $shasum"
 	if [ -n "$shasum" ];then
 		# Return only the SHA field.
 		echo $(awk '{ print $1 }' <<< $shasum)
