@@ -6,6 +6,7 @@ on:
       - synchronize
       - reopened
       - edited
+    paths-ignore: [ '**.md', '**.png', '**.jpg', '**.jpeg', '**.svg', '/docs/**' ]
 
 jobs:
   test:
