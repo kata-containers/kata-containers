@@ -9,10 +9,10 @@ set -o nounset
 set -o pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly repo_root_dir="$(cd "${script_dir}/../../../.." && pwd)"
-readonly kernel_builder="${repo_root_dir}/tools/packaging/kernel/build-kernel.sh"
 
 source "${script_dir}/../../scripts/lib.sh"
+
+readonly kernel_builder="${repo_root_dir}/tools/packaging/kernel/build-kernel.sh"
 
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}

@@ -9,7 +9,6 @@ set -o nounset
 set -o pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly repo_root_dir="$(cd "${script_dir}/../../../.." && pwd)"
 readonly qemu_builder="${script_dir}/build-qemu.sh"
 
 source "${script_dir}/../../scripts/lib.sh"

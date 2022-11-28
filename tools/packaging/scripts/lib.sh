@@ -13,6 +13,8 @@ export PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-"no"}"
 
 this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+export repo_root_dir="$(cd "${this_script_dir}/../../../" && pwd)"
+
 short_commit_length=10
 
 hub_bin="hub-bin"

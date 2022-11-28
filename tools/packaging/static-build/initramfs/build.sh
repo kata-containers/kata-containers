@@ -9,7 +9,6 @@ set -o nounset
 set -o pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly repo_root_dir="$(cd "${script_dir}/../../../.." && pwd)"
 readonly initramfs_builder="${script_dir}/build-initramfs.sh"
 readonly default_install_dir="$(cd "${script_dir}/../../kernel" && pwd)"
 
