@@ -13,61 +13,53 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/../scripts/lib.sh"
 
 export KATA_BUILD_CC="${KATA_BUILD_CC:-}"
-export qemu_cc_tarball_name="kata-static-qemu-cc.tar.gz"
+export TEE="${TEE:-}"
 
 cache_qemu_artifacts() {
-	source "${script_dir}/qemu/build-static-qemu-cc.sh"
+	local qemu_tarball_name="kata-static-cc-qemu.tar.xz"
 	local current_qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.version")
-	create_cache_asset "${qemu_cc_tarball_name}" "${current_qemu_version}"
+	if [ -n "${TEE}" ]; then
+		qemu_tarball_name="kata-static-cc-${TEE}-qemu.tar.xz"
+		[ "${TEE}" == "tdx" ] && current_qemu_version=$(get_from_kata_deps "asserts.hypervisor.qemu.tdx.tag")
+	fi
+	local qemu_script_dir="${repo_root_dir}/tools/packaging/static-build/qemu"
 	local qemu_sha=$(calc_qemu_files_sha256sum)
-        echo "${current_qemu_version} ${qemu_sha}" > "latest"
+	local current_qemu_image="$(get_qemu_image_name)"
+	create_cache_asset "${qemu_tarball_name}" "${current_qemu_version}-${qemu_sha}" "${current_qemu_image}"
 }
 
 cache_clh_artifacts() {
-	local binary="cloud-hypervisor"
-	local binary_path="$(echo $script_dir | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,')"
-	echo "binary path $binary_path"
-	local current_cloud_hypervisor_version=$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")
-	local clh_binary_path="${binary_path}/tools/packaging/kata-deploy/local-build/build/cc-cloud-hypervisor/builddir/cloud-hypervisor"
-	if [ -f "${clh_binary_path}/cloud-hypervisor" ]; then
-		cp "${clh_binary_path}/${binary}" .
-	else
-		cloud_hypervisor_build_path="${binary_path}/cloud-hypervisor"
-		cp "${cloud_hypervisor_build_path}/${binary}" .
-	fi
-	create_cache_asset "${binary}" "${current_cloud_hypervisor_version}"
-	echo "${current_cloud_hypervisor_version}"  > "latest"
+	local clh_tarball_name="kata-static-cc-clh.tar.xz"
+	[ -n "${TEE}" ] && clh_tarball_name="kata-static-cc-tdx-clh.tar.xz"
+	local current_clh_version=$(get_from_kata_deps "assets.cloud-hypervisor.version")
+	create_cache_asset "${clh_tarball_name}" "${current_clh_version}" ""
 }
 
 cache_kernel_artifacts() {
-	local current_kernel_version=$(get_from_kata_deps "assets.kernel.version" | cut -c2- )
-	local gral_path="$(echo $script_dir | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,' | sed 's,/*[^/]\+/*$,,')"
-	local kernel_config_file="${gral_path}/tools/packaging/kernel/kata_config_version"
-	local kernel_config="$(cat ${kernel_config_file})"
-	echo "${current_kernel_version} ${kernel_config}" > "latest"
-	local kernel_path="${gral_path}/tools/packaging/kata-deploy/local-build/build/cc-kernel/destdir/opt/confidential-containers/share/kata-containers"
-	local vmlinux_binary_name="vmlinux-${current_kernel_version}-${kernel_config}"
-	ls ${kernel_path}
-	local vmlinux_file="${kernel_path}/${vmlinux_binary_name}"
-	if [ -f "${vmlinux_file}" ]; then
-		cp -a "${vmlinux_file}" .
-		create_cache_asset "${vmlinux_binary_name}" "${current_kernel_version}"
+	local kernel_tarball_name="kata-static-cc-kernel.tar.xz"
+	local current_kernel_image="$(get_kernel_image_name)"
+	local current_kernel_version="$(get_from_kata_deps "assets.kernel.version")"
+	if [ -n "${TEE}" ]; then 
+		kernel_tarball_name="kata-stastic-cc-${TEE}-kernel.tar.xz"
+		[ "${TEE}" == "tdx" ] && current_kernel_version="$(get_from_kata_deps "assets.kernel.${TEE}.tag")"
+		[ "${TEE}" == "sev" ] && current_kernel_version="$(get_from_kata_deps "assets.kernel.${TEE}.version")"
 	fi
-	local vmlinuz_binary_name="vmlinuz-${current_kernel_version}-${kernel_config}"
-	local vmlinuz_file="${kernel_path}/${vmlinuz_binary_name}"
-	if [ -f "${vmlinuz_file}" ]; then
-		cp -a "${vmlinuz_file}" .
-		create_cache_asset "${vmlinuz_binary_name}" "${current_kernel_version}"
-	fi
+	create_cache_asset "${kernel_tarball_name}" "${current_kernel_version}" "${current_kernel_image}"
 }
 
 create_cache_asset() {
-	local component_name="$1"
-	local component_version="$2"
+	local component_name="${1}"
+	local component_version="${2}"
+	local component_image="${3}"
 
+	sudo cp "${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${component_name}" .
 	sudo chown -R "${USER}:${USER}" .
 	sha256sum "${component_name}" > "sha256sum-${component_name}"
 	cat "sha256sum-${component_name}"
+	echo "${component_version}" > "latest"
+	cat "latest"
+	echo "${component_image}" > "latest_image"
+	cat "latest_image"
 }
 
 help() {
