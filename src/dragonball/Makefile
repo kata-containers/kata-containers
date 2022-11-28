@@ -16,6 +16,9 @@ build:
 	@echo "INFO: cargo build..."
 	cargo build --all-features --target $(TRIPLE)
 
+static-checks-build:
+	@echo "INFO: static-checks-build do nothing.."
+
 check: clippy format
 
 clippy:

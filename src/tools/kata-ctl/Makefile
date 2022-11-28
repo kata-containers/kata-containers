@@ -36,6 +36,8 @@ $(TARGET): $(GENERATED_CODE)
 build:
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
 
+static-checks-build: $(GENERATED_CODE)
+
 $(GENERATED_FILES): %: %.in
 	@sed $(foreach r,$(GENERATED_REPLACEMENTS),-e 's|@$r@|$($r)|g') "$<" > "$@"
 
