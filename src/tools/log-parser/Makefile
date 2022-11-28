@@ -29,6 +29,9 @@ install: $(TARGET)
 	install -d $(shell dirname $(DESTTARGET))
 	install $(TARGET) $(DESTTARGET)
 
+static-checks-build:
+	@echo "INFO: static-checks-build do nothing.."
+
 clean:
 	rm -f $(TARGET)
 

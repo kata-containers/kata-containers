@@ -21,7 +21,7 @@ TOOLS += log-parser
 TOOLS += runk
 TOOLS += trace-forwarder
 
-STANDARD_TARGETS = build check clean install test vendor
+STANDARD_TARGETS = build check clean install static-checks-build test vendor
 
 default: all
 
@@ -37,7 +37,7 @@ generate-protocols:
 	make -C src/agent generate-protocols
 
 # Some static checks rely on generated source files of components.
-static-checks: build
+static-checks: static-checks-build
 	bash ci/static-checks.sh
 
 docs-url-alive-check:
