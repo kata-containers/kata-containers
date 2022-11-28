@@ -36,15 +36,6 @@ get_qemu_information() {
 	[ -n "${qemu_version}" ] || die "failed to get qemu version"
 }
 
-calc_qemu_files_sha256sum() {
-	info "pkg directory is at ${pkg_dir}"
-	local files="${pkg_dir}/qemu \
-		${pkg_dir}/static-build/qemu.blacklist \
-		${pkg_dir}/static-build/scripts"
-
-	sha256sum_from_files "$files"
-}
-
 cached_or_build_qemu_tar() {
 	# Check latest qemu cc tar version sha256sum
 	local latest=$(curl -sfL "${qemu_latest_build_url}/latest") || latest="none"

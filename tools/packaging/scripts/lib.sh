@@ -178,3 +178,11 @@ sha256sum_from_files() {
 		echo $(awk '{ print $1 }' <<< $shasum)
 	fi
 }
+
+calc_qemu_files_sha256sum() {
+	local files="${this_script_dir}/../qemu \
+		${this_script_dir}/../static-build/qemu.blacklist \
+		${this_script_dir}/../static-build/scripts"
+
+	sha256sum_from_files "$files"
+}
