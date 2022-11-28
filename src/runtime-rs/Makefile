@@ -361,6 +361,8 @@ GENERATED_FILES += $(CONFIGS)
 
 runtime: $(TARGET)
 
+static-checks-build: $(GENERATED_FILES)
+
 $(TARGET): $(GENERATED_FILES) $(TARGET_PATH)
 
 $(TARGET_PATH): $(SOURCES) | show-summary
