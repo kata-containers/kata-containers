@@ -176,7 +176,12 @@ fn merge_oci_process(target: &mut oci::Process, source: &oci::Process) {
         target.cwd = String::from(&source.cwd);
     }
 
-    target.env.append(&mut source.env.clone());
+    for source_env in &source.env {
+        let variable_name: Vec<&str> = source_env.split('=').collect();
+        if !target.env.iter().any(|i| i.contains(variable_name[0])) {
+            target.env.push(source_env.to_string());
+        }
+    }
 }
 
 impl AgentService {
@@ -3068,5 +3073,86 @@ COMMIT
                 .contains("INPUT -s 2001:db8:100::1/128 -i sit+ -p tcp -m tcp --sport 512:65535"),
             "We should see the resulting rule"
         );
+    }
+
+    #[tokio::test]
+    async fn test_merge_env() {
+        #[derive(Debug)]
+        struct TestData {
+            container_process_env: Vec<String>,
+            image_process_env: Vec<String>,
+            expected: Vec<String>,
+        }
+
+        let tests = &[
+            // Test that the pods environment overrides the images
+            TestData {
+                container_process_env: vec!["ISPRODUCTION=true".to_string()],
+                image_process_env: vec!["ISPRODUCTION=false".to_string()],
+                expected: vec!["ISPRODUCTION=true".to_string()],
+            },
+            // Test that multiple environment variables can be overrided
+            TestData {
+                container_process_env: vec![
+                    "ISPRODUCTION=true".to_string(),
+                    "ISDEVELOPMENT=false".to_string(),
+                ],
+                image_process_env: vec![
+                    "ISPRODUCTION=false".to_string(),
+                    "ISDEVELOPMENT=true".to_string(),
+                ],
+                expected: vec![
+                    "ISPRODUCTION=true".to_string(),
+                    "ISDEVELOPMENT=false".to_string(),
+                ],
+            },
+            // Test that when none of the variables match do not override them
+            TestData {
+                container_process_env: vec!["ANOTHERENV=TEST".to_string()],
+                image_process_env: vec![
+                    "ISPRODUCTION=false".to_string(),
+                    "ISDEVELOPMENT=true".to_string(),
+                ],
+                expected: vec![
+                    "ANOTHERENV=TEST".to_string(),
+                    "ISPRODUCTION=false".to_string(),
+                    "ISDEVELOPMENT=true".to_string(),
+                ],
+            },
+            // Test a mix of both overriding and not
+            TestData {
+                container_process_env: vec![
+                    "ANOTHERENV=TEST".to_string(),
+                    "ISPRODUCTION=true".to_string(),
+                ],
+                image_process_env: vec![
+                    "ISPRODUCTION=false".to_string(),
+                    "ISDEVELOPMENT=true".to_string(),
+                ],
+                expected: vec![
+                    "ANOTHERENV=TEST".to_string(),
+                    "ISPRODUCTION=true".to_string(),
+                    "ISDEVELOPMENT=true".to_string(),
+                ],
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let mut container_process = oci::Process {
+                env: d.container_process_env.clone(),
+                ..Default::default()
+            };
+
+            let image_process = oci::Process {
+                env: d.image_process_env.clone(),
+                ..Default::default()
+            };
+
+            merge_oci_process(&mut container_process, &image_process);
+
+            assert_eq!(d.expected, container_process.env, "{}", msg);
+        }
     }
 }
