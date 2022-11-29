@@ -274,11 +274,11 @@ type Object struct {
 	FirmwareVolume string
 
 	// CBitPos is the location of the C-bit in a guest page table entry
-	// This is only relevant for sev-guest objects
+	// This is only relevant for sev-guest and sev-snp-guest objects
 	CBitPos uint32
 
 	// ReducedPhysBits is the reduction in the guest physical address space
-	// This is only relevant for sev-guest objects
+	// This is only relevant for sev-guest and sev-snp-guest objects
 	ReducedPhysBits uint32
 
 	// ReadOnly specifies whether `MemPath` is opened read-only or read/write (default)
@@ -370,8 +370,6 @@ func (object Object) QemuParams(config *Config) []string {
 			deviceParams = append(deviceParams, fmt.Sprintf("config-firmware-volume=%s", object.FirmwareVolume))
 		}
 	case SEVGuest:
-		fallthrough
-	case SNPGuest:
 		objectParams = append(objectParams, string(object.Type))
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
 		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
@@ -386,6 +384,14 @@ func (object Object) QemuParams(config *Config) []string {
 		if object.SevKernelHashes {
 			objectParams = append(objectParams, "kernel-hashes=on")
 		}
+		// Add OVMF firmware as pflash drive
+		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
+		driveParams = append(driveParams, fmt.Sprintf("file=%s", object.File))
+	case SNPGuest:
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
+		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
+		objectParams = append(objectParams, fmt.Sprintf("reduced-phys-bits=%d", object.ReducedPhysBits))
 		// Add OVMF firmware as pflash drive
 		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
 		driveParams = append(driveParams, fmt.Sprintf("file=%s", object.File))
