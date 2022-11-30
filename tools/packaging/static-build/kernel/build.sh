@@ -53,7 +53,7 @@ check_cached_kernel() {
 	local cached_kernel_version="$(echo ${latest} | awk '{print $1}')"
 	info "Current kernel version: ${kernel_version}"
 	info "Cached kernel version: ${cached_kernel_version}"
-	if [ "${kernel_version}" == "${cached_kernel_version}" ] && [ "$(uname -m)" == "x86_64" ]; then
+	if [ "${kernel_version}" == "${cached_kernel_version}" ] && [ "$(uname -m)" == "x86_64" ] && [ "${2}" != "sev" ]; then
 		local cached_kernel_config="$(echo ${latest} | awk '{print $2}')"
 		info "Cached kernel config: ${cached_kernel_config}"
 		info "Current kernel config: ${current_kernel_config}"
