@@ -20,6 +20,7 @@ slog-scope = "4.4.0"
 ttrpc = { version = "0.6.1" }
 tokio = { version = "1.8.0", features = ["fs", "rt"] }
 url = "2.2.2"
+nix = "0.24.2"
 
 kata-types = { path = "../../../libs/kata-types"}
 logging = { path = "../../../libs/logging"}

@@ -23,6 +23,7 @@ use common::{message::Message, RuntimeHandler, RuntimeInstance};
 use hypervisor::{dragonball::Dragonball, Hypervisor, HYPERVISOR_DRAGONBALL};
 use kata_types::config::{hypervisor::register_hypervisor_plugin, DragonballConfig, TomlConfig};
 use resource::ResourceManager;
+use sandbox::VIRTCONTAINER;
 use tokio::sync::mpsc::Sender;
 
 unsafe impl Send for VirtContainer {}
@@ -39,7 +40,7 @@ impl RuntimeHandler for VirtContainer {
     }
 
     fn name() -> String {
-        "virt_container".to_string()
+        VIRTCONTAINER.to_string()
     }
 
     fn new_handler() -> Arc<dyn RuntimeHandler> {
