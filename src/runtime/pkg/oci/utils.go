@@ -456,6 +456,10 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
+	if err := addConfidentialComputingOverrides(ocispec, config); err != nil {
+		return err
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.MachineType]; ok {
 		if value != "" {
 			config.HypervisorConfig.HypervisorMachineType = value
@@ -908,6 +912,29 @@ func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error
 	}
 
 	config.AgentConfig = c
+
+	return nil
+}
+
+func addConfidentialComputingOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.GuestPreAttestation).setBool(func(guestPreAttestation bool) {
+		sbConfig.HypervisorConfig.GuestPreAttestation = guestPreAttestation
+	}); err != nil {
+		return err
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.GuestPreAttestationURI]; ok {
+		if value != "" {
+			sbConfig.HypervisorConfig.GuestPreAttestationURI = value
+		}
+	}
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.SEVGuestPolicy).setUint(func(sevGuestPolicy uint64) {
+		sbConfig.HypervisorConfig.SEVGuestPolicy = uint32(sevGuestPolicy)
+	}); err != nil {
+		return err
+	}
 
 	return nil
 }

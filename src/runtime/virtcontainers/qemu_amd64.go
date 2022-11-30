@@ -431,7 +431,7 @@ func getCPUSig(cpuModel string) sev.VCPUSig {
 	return sev.NewVCPUSig(cpuid.DisplayFamily, cpuid.DisplayModel, cpuid.SteppingId)
 }
 
-func calculateGuestLaunchDigest(config sev.GuestPreAttestationConfig, numVCPUs int, cpuModel string) ([sha256.Size]byte, error) {
+func calculateGuestLaunchDigest(config sevKbs.GuestPreAttestationConfig, numVCPUs int, cpuModel string) ([sha256.Size]byte, error) {
 	if config.Policy&sevPolicyBitSevEs != 0 {
 		// SEV-ES guest
 		return sev.CalculateSEVESLaunchDigest(
