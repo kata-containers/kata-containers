@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"syscall"
 
@@ -569,6 +570,21 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 			s.store.Destroy(s.id)
 		}
 	}()
+
+	// Apply Confidential Container annotations
+	if val, err := s.Annotations(annotations.GuestPreAttestation); err == nil {
+		if b, err := strconv.ParseBool(val); err == nil {
+			sandboxConfig.HypervisorConfig.GuestPreAttestation = b
+		}
+	}
+	if val, err := s.Annotations(annotations.GuestPreAttestationURI); err == nil {
+		sandboxConfig.HypervisorConfig.GuestPreAttestationURI = val
+	}
+	if val, err := s.Annotations(annotations.SEVGuestPolicy); err == nil {
+		if b, err := strconv.ParseUint(val, 10, 32); err == nil {
+			sandboxConfig.HypervisorConfig.SEVGuestPolicy = uint32(b)
+		}
+	}
 
 	sandboxConfig.HypervisorConfig.VMStorePath = s.store.RunVMStoragePath()
 	sandboxConfig.HypervisorConfig.RunStorePath = s.store.RunStoragePath()

@@ -6,10 +6,12 @@
 package annotations
 
 const (
-	kataAnnotationsPrefix     = "io.katacontainers."
-	kataConfAnnotationsPrefix = kataAnnotationsPrefix + "config."
-	kataAnnotHypervisorPrefix = kataConfAnnotationsPrefix + "hypervisor."
-	kataAnnotContainerPrefix  = kataAnnotationsPrefix + "container."
+	kataAnnotationsPrefix         = "io.katacontainers."
+	kataConfAnnotationsPrefix     = kataAnnotationsPrefix + "config."
+	kataAnnotHypervisorPrefix     = kataConfAnnotationsPrefix + "hypervisor."
+	kataAnnotContainerPrefix      = kataAnnotationsPrefix + "container."
+	kataAnnotPreAttestationPrefix = kataAnnotationsPrefix + "pre_attestation."
+	kataAnnotSevPrefix            = kataAnnotationsPrefix + "sev."
 
 	//
 	// OCI
@@ -22,6 +24,21 @@ const (
 	ContainerTypeKey = kataAnnotationsPrefix + "pkg.oci.container_type"
 
 	SandboxConfigPathKey = kataAnnotationsPrefix + "config_path"
+)
+
+// Annotations related to Confidential Containers (CoCo)
+const (
+	//
+	// Assets
+	//
+	// GuestPreAttestation toggled pre_attestation functionality on/off
+	GuestPreAttestation = kataAnnotPreAttestationPrefix + "enabled"
+
+	// GuestPreAttestationURI set the remote URL for online-kbs
+	GuestPreAttestationURI = kataAnnotPreAttestationPrefix + "uri"
+
+	// SEVGuestPolicy set the AMD SEV guest policy
+	SEVGuestPolicy = kataAnnotSevPrefix + "policy"
 )
 
 // Annotations related to Hypervisor configuration
