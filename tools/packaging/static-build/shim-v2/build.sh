@@ -9,17 +9,17 @@ set -o nounset
 set -o pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly repo_root_dir="$(cd "${script_dir}/../../../.." && pwd)"
-readonly kernel_builder="${repo_root_dir}/tools/packaging/kernel/build-kernel.sh"
 
 source "${script_dir}/../../scripts/lib.sh"
+
+readonly kernel_builder="${repo_root_dir}/tools/packaging/kernel/build-kernel.sh"
 
 GO_VERSION=${GO_VERSION}
 RUST_VERSION=${RUST_VERSION:-}
 
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
-container_image="${SHIM_V2_CONTAINER_BUILDER:-${CC_BUILDER_REGISTRY}:shim-v2-go-${GO_VERSION}-rust-${RUST_VERSION}-$(get_last_modification ${repo_root_dir} ${script_dir})-$(uname -m)}"
+container_image="${SHIM_V2_CONTAINER_BUILDER:-$(get_shim_v2_image_name)}"
 
 EXTRA_OPTS="${EXTRA_OPTS:-""}"
 VMM_CONFIGS="qemu fc"
