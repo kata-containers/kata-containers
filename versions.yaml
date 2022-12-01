@@ -182,6 +182,11 @@ assets:
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.15.7"
 
+  dragonball-kernel-experimental:
+    description: "Linux kernel with Dragonball VMM optimizations like upcall"
+    url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
+    version: "v5.10.25"
+
 externals:
   description: "Third-party projects used by the system"
 
