@@ -1,6 +1,6 @@
 name: Cargo Crates Check Runner
 on:
-  - pull_request:
+  pull_request:
     types:
       - opened
       - edited
