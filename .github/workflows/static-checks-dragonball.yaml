@@ -28,6 +28,6 @@ jobs:
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         run: |
           cd src/dragonball
-          /root/.cargo/bin/cargo version
+          cargo version
           rustc --version
           sudo -E env PATH=$PATH LIBC=gnu SUPPORT_VIRTUALIZATION=true make test
