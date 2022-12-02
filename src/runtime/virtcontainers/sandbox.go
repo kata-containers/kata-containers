@@ -2465,6 +2465,10 @@ func (s *Sandbox) fetchContainers(ctx context.Context) error {
 		// Add spec from bundle path
 		spec, err := compatoci.GetContainerSpec(contConfig.Annotations)
 		if err != nil {
+			if os.IsNotExist(err) {
+				s.Logger().Errorf("get container %s spec err: %v", contConfig.ID, err)
+				continue
+			}
 			return err
 		}
 		contConfig.CustomSpec = &spec
