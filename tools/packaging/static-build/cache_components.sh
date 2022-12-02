@@ -23,7 +23,6 @@ cache_qemu_artifacts() {
 		qemu_tarball_name="kata-static-cc-${TEE}-qemu.tar.xz"
 		[ "${TEE}" == "tdx" ] && current_qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.tdx.tag")
 	fi
-	local qemu_script_dir="${repo_root_dir}/tools/packaging/static-build/qemu"
 	local qemu_sha=$(calc_qemu_files_sha256sum)
 	local current_qemu_image="$(get_qemu_image_name)"
 
