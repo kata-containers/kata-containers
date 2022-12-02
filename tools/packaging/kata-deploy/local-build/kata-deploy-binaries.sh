@@ -318,7 +318,7 @@ install_cc_tdx_td_shim() {
 	install_cached_component \
 		"td-shim" \
 		"${jenkins_url}/job/kata-containers-2.0-td-shim-cc-$(uname -m)/${cached_artifacts_path}" \
-		"$(get_from_kata_deps "assets.externals.td-shim.version")" \
+		"$(get_from_kata_deps "externals.td-shim.version")-$(get_from_kata_deps "externals.td-shim.toolchain")" \
 		"$(get_td_shim_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
