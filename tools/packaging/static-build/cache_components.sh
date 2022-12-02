@@ -14,6 +14,7 @@ source "${script_dir}/../scripts/lib.sh"
 
 export KATA_BUILD_CC="${KATA_BUILD_CC:-}"
 export TEE="${TEE:-}"
+export FIRMWARE="${FIRMWARE:-}"
 
 cache_qemu_artifacts() {
 	local qemu_tarball_name="kata-static-cc-qemu.tar.xz"
@@ -47,6 +48,26 @@ cache_kernel_artifacts() {
 	create_cache_asset "${kernel_tarball_name}" "${current_kernel_version}" "${current_kernel_image}"
 }
 
+cache_firmware_artifacts() {
+	case ${FIRMWARE} in
+		"td-shim")
+			firmware_tarball_name="kata-static-cc-tdx-td-shim.tar.xz"
+			current_firmware_image="$(get_td_shim_image_name)"
+			current_firmware_version="$(get_from_kata_deps "externals.td-shim.version")-$(get_from_kata_deps "externals.td-shim.toolchain")"
+			;;
+		"tdvf")
+			firmware_tarball_name="kata-static-cc-tdx-tdvf.tar.xz"
+			current_firmware_image="$(get_ovmf_image_name)"
+			current_firmware_version="$(get_from_kata_deps "externals.ovmf.tdx.version")"
+			;;
+		*)
+			die "Not a valid firmware (td-shim, tdvf) wass set as the FIRMWARE environment variable."
+
+			;;
+	esac
+	create_cache_asset "${firmware_tarball_name}" "${current_firmware_version}" "${current_firmware_image}"
+}
+
 create_cache_asset() {
 	local component_name="${1}"
 	local component_version="${2}"
@@ -71,6 +92,10 @@ Usage: $0 "[options]"
 		-c	Cloud hypervisor cache
 		-k	Kernel cache
 		-q	Qemu cache
+		-f	Firmware cache
+			* Requires FIRMWARE environment variable set, valid values are:
+			  * tdvf
+			  * td-shim
 		-h	Shows help
 EOF
 )"
@@ -80,8 +105,9 @@ main() {
 	local cloud_hypervisor_component="${cloud_hypervisor_component:-}"
 	local qemu_component="${qemu_component:-}"
 	local kernel_component="${kernel_component:-}"
+	local firmware_component="${firmware_component:-}"
 	local OPTIND
-	while getopts ":ckqh:" opt
+	while getopts ":ckqfh:" opt
 	do
 		case "$opt" in
 		c)
@@ -92,6 +118,9 @@ main() {
 			;;
 		q)
 			qemu_component="1"
+			;;
+		f)
+			firmware_component="1"
 			;;
 		h)
 			help
@@ -109,6 +138,7 @@ main() {
 	[[ -z "${cloud_hypervisor_component}" ]] && \
 	[[ -z "${kernel_component}" ]] && \
 	[[ -z "${qemu_component}" ]] && \
+	[[ -z "${firmware_component}" ]] && \
 		help && die "Must choose at least one option"
 
 	mkdir -p "${WORKSPACE}/artifacts"
@@ -118,6 +148,7 @@ main() {
 	[ "${cloud_hypervisor_component}" == "1" ] && cache_clh_artifacts
 	[ "${kernel_component}" == "1" ] && cache_kernel_artifacts
 	[ "${qemu_component}" == "1" ] && cache_qemu_artifacts
+	[ "${firmware_component}" == "1" ] && cache_firmware_artifacts
 
 	ls -la "${WORKSPACE}/artifacts/"
 	popd
