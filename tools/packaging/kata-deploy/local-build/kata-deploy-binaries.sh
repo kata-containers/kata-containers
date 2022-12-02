@@ -338,7 +338,7 @@ install_cc_tee_ovmf() {
 	install_cached_component \
 		"${component_name}" \
 		"${jenkins_url}/job/kata-containers-2.0-${component_name}-cc-$(uname -m)/${cached_artifacts_path}" \
-		"$(component_version)" \
+		"${component_version}" \
 		"$(get_ovmf_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
