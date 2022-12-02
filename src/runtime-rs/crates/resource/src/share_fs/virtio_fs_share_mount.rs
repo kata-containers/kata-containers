@@ -17,7 +17,7 @@ use std::path::Path;
 
 const WATCHABLE_PATH_NAME: &str = "watchable";
 const WATCHABLE_BIND_DEV_TYPE: &str = "watchable-bind";
-const EPHEMERAL_PATH: &str = "/run/kata-containers/sandbox/ephemeral";
+pub const EPHEMERAL_PATH: &str = "/run/kata-containers/sandbox/ephemeral";
 
 use super::{
     utils::{self, do_get_host_path},

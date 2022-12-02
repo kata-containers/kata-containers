@@ -6,17 +6,20 @@
 
 mod block_volume;
 mod default_volume;
+pub mod hugepage;
 mod share_fs_volume;
 mod shm_volume;
 use async_trait::async_trait;
 
-use std::{sync::Arc, vec::Vec};
-
 use anyhow::{Context, Result};
+use std::{sync::Arc, vec::Vec};
 use tokio::sync::RwLock;
 
 use crate::share_fs::ShareFs;
 
+use self::hugepage::{get_huge_page_limits_map, get_huge_page_option};
+
+const BIND: &str = "bind";
 #[async_trait]
 pub trait Volume: Send + Sync {
     fn get_volume_mount(&self) -> Result<Vec<oci::Mount>>;
@@ -43,9 +46,11 @@ impl VolumeResource {
         &self,
         share_fs: &Option<Arc<dyn ShareFs>>,
         cid: &str,
-        oci_mounts: &[oci::Mount],
+        spec: &oci::Spec,
     ) -> Result<Vec<Arc<dyn Volume>>> {
         let mut volumes: Vec<Arc<dyn Volume>> = vec![];
+        let oci_mounts = &spec.mounts;
+        // handle mounts
         for m in oci_mounts {
             let volume: Arc<dyn Volume> = if shm_volume::is_shim_volume(m) {
                 let shm_size = shm_volume::DEFAULT_SHM_SIZE;
@@ -58,6 +63,17 @@ impl VolumeResource {
                     share_fs_volume::ShareFsVolume::new(share_fs, m, cid)
                         .await
                         .with_context(|| format!("new share fs volume {:?}", m))?,
+                )
+            } else if let Some(options) =
+                get_huge_page_option(m).context("failed to check huge page")?
+            {
+                // get hugepage limits from oci
+                let hugepage_limits =
+                    get_huge_page_limits_map(spec).context("get huge page option")?;
+                // handle container hugepage
+                Arc::new(
+                    hugepage::Hugepage::new(m, hugepage_limits, options)
+                        .with_context(|| format!("handle hugepages {:?}", m))?,
                 )
             } else if block_volume::is_block_volume(m) {
                 Arc::new(

@@ -62,7 +62,7 @@ use crate::sl;
 /// Default permission for directories created for mountpoint.
 const MOUNT_PERM: u32 = 0o755;
 
-const PROC_MOUNTS_FILE: &str = "/proc/mounts";
+pub const PROC_MOUNTS_FILE: &str = "/proc/mounts";
 const PROC_FIELDS_PER_LINE: usize = 6;
 const PROC_DEVICE_INDEX: usize = 0;
 const PROC_PATH_INDEX: usize = 1;

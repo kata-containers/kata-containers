@@ -110,7 +110,7 @@ impl Container {
         // handler volumes
         let volumes = self
             .resource_manager
-            .handler_volumes(&config.container_id, &spec.mounts)
+            .handler_volumes(&config.container_id, &spec)
             .await
             .context("handler volumes")?;
         let mut oci_mounts = vec![];
@@ -394,7 +394,6 @@ fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
             resource.devices = Vec::new();
             resource.pids = None;
             resource.block_io = None;
-            resource.hugepage_limits = Vec::new();
             resource.network = None;
         }
 

@@ -15,6 +15,7 @@ use tokio::sync::Mutex;
 pub use utils::{do_get_guest_path, do_get_guest_share_path, get_host_rw_shared_path};
 mod virtio_fs_share_mount;
 use virtio_fs_share_mount::VirtiofsShareMount;
+pub use virtio_fs_share_mount::EPHEMERAL_PATH;
 
 use std::{collections::HashMap, fmt::Debug, path::PathBuf, sync::Arc};
 
