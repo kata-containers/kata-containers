@@ -30,7 +30,6 @@ cache_qemu_artifacts() {
 
 cache_clh_artifacts() {
 	local clh_tarball_name="kata-static-cc-cloud-hypervisor.tar.xz"
-	[ -n "${TEE}" ] && clh_tarball_name="kata-static-cc-tdx-cloud-hypervisor.tar.xz"
 	local current_clh_version=$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")
 	create_cache_asset "${clh_tarball_name}" "${current_clh_version}" ""
 }
