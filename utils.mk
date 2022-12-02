@@ -39,6 +39,9 @@ $(2) : $(1)/$(2)/Makefile
 	make -C $(1)/$(2)
 build-$(2) : $(2)
 
+static-checks-build-$(2):
+	make -C $(1)/$(2) static-checks-build
+
 check-$(2) : $(2)
 	make -C $(1)/$(2) check
 

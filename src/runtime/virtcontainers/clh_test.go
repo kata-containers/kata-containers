@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2019 Ericsson Eurolab Deutschland G.m.b.H.
 //

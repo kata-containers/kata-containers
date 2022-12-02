@@ -6,6 +6,7 @@ on:
       - synchronize
       - reopened
       - edited
+    paths-ignore: [ '**.md', '**.png', '**.jpg', '**.jpeg', '**.svg', '/docs/**' ]
 
 jobs:
   test:
@@ -19,7 +20,16 @@ jobs:
 
       - name: Install Snapcraft
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-        uses: samuelmeuli/action-snapcraft@v1
+        run: |
+          # Required to avoid snapcraft install failure
+          sudo chown root:root /
+
+          # "--classic" is needed for the GitHub action runner
+          # environment.
+          sudo snap install snapcraft --classic
+
+          # Allow other parts to access snap binaries
+          echo /snap/bin >> "$GITHUB_PATH"
 
       - name: Build snap
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}

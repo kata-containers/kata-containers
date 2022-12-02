@@ -1,5 +1,12 @@
 name: Cargo Crates Check Runner
-on: [pull_request]
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+    paths-ignore: [ '**.md', '**.png', '**.jpg', '**.jpeg', '**.svg', '/docs/**' ]
 jobs:
   cargo-deny-runner:
     runs-on: ubuntu-latest
