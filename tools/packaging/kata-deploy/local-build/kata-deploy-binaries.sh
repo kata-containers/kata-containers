@@ -130,7 +130,7 @@ install_cached_component() {
 	echo "Downloading tarball from: ${jenkins_build_url}/${component_tarball_name}"
 	curl -fL --progress-bar "${jenkins_build_url}/${component_tarball_name}" -o "${component_tarball_path}" || return cleanup_and_fail
 	curl -fsOL "${jenkins_build_url}/sha256sum-${component_tarball_name}" || return cleanup_and_fail
-	sha256sum -c "sha256sum-${component_tarball_name}" && return cleanup_and_fail
+	sha256sum -c "sha256sum-${component_tarball_name}" || return cleanup_and_fail
 	popd
 }
 
@@ -253,11 +253,6 @@ install_cc_virtiofsd() {
 	sudo install -D --owner root --group root --mode 0744 virtiofsd/virtiofsd "${destdir}/${cc_prefix}/libexec/virtiofsd"
 }
 
-# Install static CC cloud-hypervisor asset
-install_tdx_cc_clh() {
-	install_cc_clh
-}
-
 #Install CC kernel assert, with TEE support
 install_cc_tee_kernel() {
 	tee="${1}"
@@ -343,7 +338,7 @@ install_cc_tee_ovmf() {
 	install_cached_component \
 		"${component_name}" \
 		"${jenkins_url}/job/kata-containers-2.0-${component_name}-cc-$(uname -m)/${cached_artifacts_path}" \
-		"$(component_version)" \
+		"${component_version}" \
 		"$(get_ovmf_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
@@ -502,8 +497,6 @@ handle_build() {
 	cc-shim-v2) install_cc_shimv2 ;;
 
 	cc-virtiofsd) install_cc_virtiofsd ;;
-
-	cc-tdx-cloud-hypervisor) install_tdx_cc_clh ;;
 
 	cc-tdx-kernel) install_cc_tdx_kernel ;;
 

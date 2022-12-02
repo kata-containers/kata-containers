@@ -121,9 +121,6 @@ cc-shim-v2-tarball:
 cc-virtiofsd-tarball:
 	${MAKE} $@-build
 
-cc-tdx-cloud-hypervisor-tarball:
-	${MAKE} $@-build
-
 cc-tdx-kernel-tarball:
 	${MAKE} $@-build
 
