@@ -20,11 +20,12 @@ cache_qemu_artifacts() {
 	local current_qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.version")
 	if [ -n "${TEE}" ]; then
 		qemu_tarball_name="kata-static-cc-${TEE}-qemu.tar.xz"
-		[ "${TEE}" == "tdx" ] && current_qemu_version=$(get_from_kata_deps "asserts.hypervisor.qemu.tdx.tag")
+		[ "${TEE}" == "tdx" ] && current_qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.tdx.tag")
 	fi
 	local qemu_script_dir="${repo_root_dir}/tools/packaging/static-build/qemu"
 	local qemu_sha=$(calc_qemu_files_sha256sum)
 	local current_qemu_image="$(get_qemu_image_name)"
+
 	create_cache_asset "${qemu_tarball_name}" "${current_qemu_version}-${qemu_sha}" "${current_qemu_image}"
 }
 
@@ -39,7 +40,7 @@ cache_kernel_artifacts() {
 	local current_kernel_image="$(get_kernel_image_name)"
 	local current_kernel_version="$(get_from_kata_deps "assets.kernel.version")"
 	if [ -n "${TEE}" ]; then 
-		kernel_tarball_name="kata-stastic-cc-${TEE}-kernel.tar.xz"
+		kernel_tarball_name="kata-static-cc-${TEE}-kernel.tar.xz"
 		[ "${TEE}" == "tdx" ] && current_kernel_version="$(get_from_kata_deps "assets.kernel.${TEE}.tag")"
 		[ "${TEE}" == "sev" ] && current_kernel_version="$(get_from_kata_deps "assets.kernel.${TEE}.version")"
 	fi
