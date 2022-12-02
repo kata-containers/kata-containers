@@ -7,7 +7,7 @@
 use super::vmm_instance::VmmInstance;
 use crate::{
     device::Device, hypervisor_persist::HypervisorState, kernel_param::KernelParams, VmmState,
-    HYPERVISOR_DRAGONBALL, VM_ROOTFS_DRIVER_BLK,
+    DEV_HUGEPAGES, HUGETLBFS, HYPERVISOR_DRAGONBALL, SHMEM, VM_ROOTFS_DRIVER_BLK,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -186,11 +186,18 @@ impl DragonballInner {
 
     fn set_vm_base_config(&mut self) -> Result<()> {
         let serial_path = [&self.run_dir, "console.sock"].join("/");
+        let (mem_type, mem_file_path) = if self.config.memory_info.enable_hugepages {
+            (String::from(HUGETLBFS), String::from(DEV_HUGEPAGES))
+        } else {
+            (String::from(SHMEM), String::from(""))
+        };
         let vm_config = VmConfigInfo {
             serial_path: Some(serial_path),
             mem_size_mib: self.config.memory_info.default_memory as usize,
             vcpu_count: self.config.cpu_info.default_vcpus as u8,
             max_vcpu_count: self.config.cpu_info.default_maxvcpus as u8,
+            mem_type,
+            mem_file_path,
             ..Default::default()
         };
         info!(sl!(), "vm config: {:?}", vm_config);
