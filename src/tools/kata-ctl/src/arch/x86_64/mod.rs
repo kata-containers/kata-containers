@@ -11,7 +11,6 @@ mod arch_specific {
     use crate::types::*;
     use anyhow::{anyhow, Result};
 
-    const PROC_CPUINFO: &str = "/proc/cpuinfo";
     const CPUINFO_DELIMITER: &str = "\nprocessor";
     const CPUINFO_FLAGS_TAG: &str = "flags";
     const CPU_FLAGS_INTEL: &[&str] = &["lm", "sse4_1", "vmx"];
@@ -32,10 +31,15 @@ mod arch_specific {
     fn check_cpu(_args: &str) -> Result<()> {
         println!("INFO: check CPU: x86_64");
 
-        let cpu_info = check::get_single_cpu_info(PROC_CPUINFO, CPUINFO_DELIMITER)?;
+        let cpu_info = check::get_single_cpu_info(check::PROC_CPUINFO, CPUINFO_DELIMITER)?;
 
-        let cpu_flags = check::get_cpu_flags(&cpu_info, CPUINFO_FLAGS_TAG)
-            .map_err(|e| anyhow!("Error parsing CPU flags, file {:?}, {:?}", PROC_CPUINFO, e))?;
+        let cpu_flags = check::get_cpu_flags(&cpu_info, CPUINFO_FLAGS_TAG).map_err(|e| {
+            anyhow!(
+                "Error parsing CPU flags, file {:?}, {:?}",
+                check::PROC_CPUINFO,
+                e
+            )
+        })?;
 
         // perform checks
         // TODO: Perform checks based on hypervisor type
