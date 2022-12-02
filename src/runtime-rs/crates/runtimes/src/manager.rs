@@ -200,12 +200,16 @@ impl RuntimeHandlerManager {
     }
 
     pub async fn handler_message(&self, req: Request) -> Result<Response> {
-        if let Request::CreateContainer(req) = req {
+        if let Request::CreateContainer(container_config) = req {
             // get oci spec
-            let bundler_path = format!("{}/{}", req.bundle, oci::OCI_SPEC_CONFIG_FILE_NAME);
+            let bundler_path = format!(
+                "{}/{}",
+                container_config.bundle,
+                oci::OCI_SPEC_CONFIG_FILE_NAME
+            );
             let spec = oci::Spec::load(&bundler_path).context("load spec")?;
 
-            self.try_init_runtime_instance(&spec, &req.options)
+            self.try_init_runtime_instance(&spec, &container_config.options)
                 .await
                 .context("try init runtime instance")?;
             let instance = self
@@ -215,7 +219,7 @@ impl RuntimeHandlerManager {
 
             let shim_pid = instance
                 .container_manager
-                .create_container(req, spec)
+                .create_container(container_config, spec)
                 .await
                 .context("create container")?;
 
