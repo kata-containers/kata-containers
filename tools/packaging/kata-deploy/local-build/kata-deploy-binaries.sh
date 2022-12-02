@@ -236,10 +236,11 @@ install_cc_shimv2() {
 
 # Install static CC virtiofsd asset
 install_cc_virtiofsd() {
+	local virtiofsd_version="$(get_from_kata_deps "externals.virtiofsd.version")-$(get_from_kata_deps "externals.virtiofsd.toolchain")"
 	install_cached_component \
 		"virtiofsd" \
 		"${jenkins_url}/job/kata-containers-2.0-virtiofsd-cc-$(uname -m)/${cached_artifacts_path}" \
-		"$(get_from_kata_deps "assets.externals.virtiofsd.version")" \
+		"${virtiofsd_version}" \
 		"$(get_virtiofsd_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \

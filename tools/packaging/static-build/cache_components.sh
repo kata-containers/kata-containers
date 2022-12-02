@@ -39,7 +39,7 @@ cache_kernel_artifacts() {
 	local kernel_tarball_name="kata-static-cc-kernel.tar.xz"
 	local current_kernel_image="$(get_kernel_image_name)"
 	local current_kernel_version="$(get_from_kata_deps "assets.kernel.version")"
-	if [ -n "${TEE}" ]; then 
+	if [ -n "${TEE}" ]; then
 		kernel_tarball_name="kata-static-cc-${TEE}-kernel.tar.xz"
 		[ "${TEE}" == "tdx" ] && current_kernel_version="$(get_from_kata_deps "assets.kernel.${TEE}.tag")"
 		[ "${TEE}" == "sev" ] && current_kernel_version="$(get_from_kata_deps "assets.kernel.${TEE}.version")"
@@ -65,6 +65,13 @@ cache_firmware_artifacts() {
 			;;
 	esac
 	create_cache_asset "${firmware_tarball_name}" "${current_firmware_version}" "${current_firmware_image}"
+}
+
+cache_virtiofsd_artifacts() {
+	local virtiofsd_tarball_name="kata-static-cc-virtiofsd.tar.xz"
+	local current_virtiofsd_version="$(get_from_kata_deps "externals.virtiofsd.version")-$(get_from_kata_deps "externals.virtiofsd.toolchain")"
+	local current_virtiofsd_image="$(get_virtiofsd_image_name)"
+	create_cache_asset "${virtiofsd_tarball_name}" "${current_virtiofsd_version}" "${current_virtiofsd_image}"
 }
 
 create_cache_asset() {
@@ -101,6 +108,7 @@ Usage: $0 "[options]"
 			* Requires FIRMWARE environment variable set, valid values are:
 			  * tdvf
 			  * td-shim
+		-v	Virtiofsd cache
 		-h	Shows help
 EOF
 )"
@@ -111,8 +119,9 @@ main() {
 	local qemu_component="${qemu_component:-}"
 	local kernel_component="${kernel_component:-}"
 	local firmware_component="${firmware_component:-}"
+	local virtiofsd_component="${virtiofsd_component:-}"
 	local OPTIND
-	while getopts ":ckqfh:" opt
+	while getopts ":ckqfvh:" opt
 	do
 		case "$opt" in
 		c)
@@ -126,6 +135,9 @@ main() {
 			;;
 		f)
 			firmware_component="1"
+			;;
+		v)
+			virtiofsd_component="1"
 			;;
 		h)
 			help
@@ -144,6 +156,7 @@ main() {
 	[[ -z "${kernel_component}" ]] && \
 	[[ -z "${qemu_component}" ]] && \
 	[[ -z "${firmware_component}" ]] && \
+	[[ -z "${virtiofsd_component}" ]] && \
 		help && die "Must choose at least one option"
 
 	mkdir -p "${WORKSPACE}/artifacts"
@@ -154,6 +167,7 @@ main() {
 	[ "${kernel_component}" == "1" ] && cache_kernel_artifacts
 	[ "${qemu_component}" == "1" ] && cache_qemu_artifacts
 	[ "${firmware_component}" == "1" ] && cache_firmware_artifacts
+	[ "${virtiofsd_component}" == "1" ] && cache_virtiofsd_artifacts
 
 	ls -la "${WORKSPACE}/artifacts/"
 	popd
