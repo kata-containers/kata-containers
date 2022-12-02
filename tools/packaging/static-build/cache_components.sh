@@ -90,7 +90,13 @@ Usage: $0 "[options]"
 	Options:
 		-c	Cloud hypervisor cache
 		-k	Kernel cache
+			* Can receive a TEE environnment variable value, valid values are:
+			  * tdx
+			  If no TEE environment is passed, the kernel is built without TEE support.
 		-q	Qemu cache
+			* Can receive a TEE environnment variable value, valid values are:
+			  * tdx
+			  If no TEE environment is passed, QEMU is built without TEE support.
 		-f	Firmware cache
 			* Requires FIRMWARE environment variable set, valid values are:
 			  * tdvf
