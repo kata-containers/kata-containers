@@ -26,7 +26,7 @@ pub fn to_disk<T: serde::Serialize>(value: &T, sid: &str) -> Result<()> {
         serde_json::to_writer_pretty(f, &j)?;
         return Ok(());
     }
-    return Err(anyhow!("invalid sid {}", sid));
+    Err(anyhow!("invalid sid {}", sid))
 }
 
 pub fn from_disk<T>(sid: &str) -> Result<T>
@@ -41,7 +41,7 @@ where
         let reader = BufReader::new(file);
         return serde_json::from_reader(reader).map_err(|e| anyhow!(e.to_string()));
     }
-    return Err(anyhow!("invalid sid {}", sid));
+    Err(anyhow!("invalid sid {}", sid))
 }
 
 #[cfg(test)]
