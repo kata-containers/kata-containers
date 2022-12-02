@@ -130,7 +130,7 @@ install_cached_component() {
 	echo "Downloading tarball from: ${jenkins_build_url}/${component_tarball_name}"
 	curl -fL --progress-bar "${jenkins_build_url}/${component_tarball_name}" -o "${component_tarball_path}" || return cleanup_and_fail
 	curl -fsOL "${jenkins_build_url}/sha256sum-${component_tarball_name}" || return cleanup_and_fail
-	sha256sum -c "sha256sum-${component_tarball_name}" && return cleanup_and_fail
+	sha256sum -c "sha256sum-${component_tarball_name}" || return cleanup_and_fail
 	popd
 }
 
