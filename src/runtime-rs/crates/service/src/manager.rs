@@ -65,7 +65,7 @@ async fn send_event(
             &namespace,
         ])
         .spawn()
-        .context("sawn cmd")?;
+        .context("spawn containerd cmd")?;
 
     let stdin = child.stdin.as_mut().context("failed to open stdin")?;
     stdin

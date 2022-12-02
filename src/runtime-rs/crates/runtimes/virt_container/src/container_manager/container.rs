@@ -93,8 +93,8 @@ impl Container {
 
         // update rootfs
         match spec.root.as_mut() {
-            Some(spec) => {
-                spec.path = rootfs
+            Some(root) => {
+                root.path = rootfs
                     .get_guest_rootfs_path()
                     .await
                     .context("get guest rootfs path")?
@@ -300,6 +300,11 @@ impl Container {
             .stop_process(container_process, true)
             .await
             .context("stop process")
+    }
+
+    pub async fn is_stopped(&self) -> bool {
+        let inner = self.inner.write().await;
+        inner.is_stopped().await
     }
 
     pub async fn pause(&self) -> Result<()> {
