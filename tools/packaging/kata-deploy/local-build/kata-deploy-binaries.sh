@@ -333,7 +333,7 @@ install_cc_tee_ovmf() {
 	tarball_name="${2}"
 
 	local component_name="ovmf"
-	local component_version="$(get_from_kata_deps "assets.external.ovmf.${tee}.version")"
+	local component_version="$(get_from_kata_deps "externals.ovmf.${tee}.version")"
 	[ "${tee}" == "tdx" ] && component_name="tdvf"
 	install_cached_component \
 		"${component_name}" \
