@@ -34,6 +34,27 @@ pub fn verify_id(id: &str) -> Result<(), Error> {
     }
 }
 
+// check and reserve valid environment variables
+// invalid env var may cause panic, refer to https://doc.rust-lang.org/std/env/fn.set_var.html#panics
+// key should not:
+//  * contain NUL character '\0'
+//  * contain ASCII equal sign '='
+//  * be empty
+// value should not:
+//  * contain NUL character '\0'
+pub fn valid_env(e: &str) -> Option<(&str, &str)> {
+    // split the env str by '=' at the first time to ensure there is no '=' in key,
+    // and also to ensure there is at least '=' in env str
+    if let Some((key, value)) = e.split_once('=') {
+        if !key.is_empty() && !key.as_bytes().contains(&b'\0') && !value.as_bytes().contains(&b'\0')
+        {
+            return Some((key.trim(), value.trim()));
+        }
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,5 +284,50 @@ mod tests {
                 assert!(d.expect_error, "{}", msg);
             }
         }
+    }
+
+    #[test]
+    fn test_valid_env() {
+        let env = valid_env("a=b=c");
+        assert_eq!(Some(("a", "b=c")), env);
+
+        let env = valid_env("a=b");
+        assert_eq!(Some(("a", "b")), env);
+        let env = valid_env("a =b");
+        assert_eq!(Some(("a", "b")), env);
+
+        let env = valid_env(" a =b");
+        assert_eq!(Some(("a", "b")), env);
+
+        let env = valid_env("a= b");
+        assert_eq!(Some(("a", "b")), env);
+
+        let env = valid_env("a=b ");
+        assert_eq!(Some(("a", "b")), env);
+        let env = valid_env("a=b c ");
+        assert_eq!(Some(("a", "b c")), env);
+
+        let env = valid_env("=b");
+        assert_eq!(None, env);
+
+        let env = valid_env("a=");
+        assert_eq!(Some(("a", "")), env);
+
+        let env = valid_env("a==");
+        assert_eq!(Some(("a", "=")), env);
+
+        let env = valid_env("a");
+        assert_eq!(None, env);
+
+        let invalid_str = vec![97, b'\0', 98];
+        let invalid_string = std::str::from_utf8(&invalid_str).unwrap();
+
+        let invalid_env = format!("{}=value", invalid_string);
+        let env = valid_env(&invalid_env);
+        assert_eq!(None, env);
+
+        let invalid_env = format!("key={}", invalid_string);
+        let env = valid_env(&invalid_env);
+        assert_eq!(None, env);
     }
 }

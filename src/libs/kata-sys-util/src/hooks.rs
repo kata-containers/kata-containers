@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use subprocess::{ExitStatus, Popen, PopenConfig, PopenError, Redirection};
 
+use crate::validate::valid_env;
 use crate::{eother, sl};
 
 const DEFAULT_HOOK_TIMEOUT_SEC: i32 = 10;
@@ -206,9 +207,8 @@ impl<'a> HookExecutor<'a> {
 
         let mut envs: Vec<(OsString, OsString)> = Vec::new();
         for e in hook.env.iter() {
-            match e.split_once('=') {
-                Some((key, value)) => envs.push((OsString::from(key), OsString::from(value))),
-                None => warn!(sl!(), "env {} of hook {:?} is invalid", e, hook),
+            if let Some((key, value)) = valid_env(e) {
+                envs.push((OsString::from(key), OsString::from(value)));
             }
         }
 
