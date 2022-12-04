@@ -800,7 +800,9 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 			return empty, errors.New("The exec process does not exist")
 		}
 		processStatus = execs.status
-	} else {
+	}
+
+	if signum == syscall.SIGKILL {
 		r.All = true
 	}
 
