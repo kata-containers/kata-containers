@@ -126,12 +126,11 @@ install_cached_component() {
 	[ "${cached_version}" != "${current_version}" ] && return 1
 
 	info "Using cached tarball of ${component}"
-	pushd ${workdir}
 	echo "Downloading tarball from: ${jenkins_build_url}/${component_tarball_name}"
-	curl -fL --progress-bar "${jenkins_build_url}/${component_tarball_name}" -o "${component_tarball_path}" || return cleanup_and_fail
-	curl -fsOL "${jenkins_build_url}/sha256sum-${component_tarball_name}" || return cleanup_and_fail
+	wget "${jenkins_build_url}/${component_tarball_name}" || return cleanup_and_fail
+	wget "${jenkins_build_url}/sha256sum-${component_tarball_name}" || return cleanup_and_fail
 	sha256sum -c "sha256sum-${component_tarball_name}" || return cleanup_and_fail
-	popd
+	mv "${component_tarball_name}" "${component_tarball_path}"
 }
 
 # Install static CC cloud-hypervisor asset
@@ -318,7 +317,7 @@ install_cc_tdx_td_shim() {
 	install_cached_component \
 		"td-shim" \
 		"${jenkins_url}/job/kata-containers-2.0-td-shim-cc-$(uname -m)/${cached_artifacts_path}" \
-		"$(get_from_kata_deps "assets.externals.td-shim.version")" \
+		"$(get_from_kata_deps "externals.td-shim.version")-$(get_from_kata_deps "externals.td-shim.toolchain")" \
 		"$(get_td_shim_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
@@ -333,7 +332,7 @@ install_cc_tee_ovmf() {
 	tarball_name="${2}"
 
 	local component_name="ovmf"
-	local component_version="$(get_from_kata_deps "assets.external.ovmf.${tee}.version")"
+	local component_version="$(get_from_kata_deps "externals.ovmf.${tee}.version")"
 	[ "${tee}" == "tdx" ] && component_name="tdvf"
 	install_cached_component \
 		"${component_name}" \
