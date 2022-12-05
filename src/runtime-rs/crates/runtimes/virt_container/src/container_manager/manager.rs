@@ -20,6 +20,7 @@ use common::{
 };
 use hypervisor::Hypervisor;
 use oci::Process as OCIProcess;
+use resource::network::NetnsGuard;
 use resource::ResourceManager;
 use tokio::sync::RwLock;
 
@@ -60,12 +61,36 @@ impl ContainerManager for VirtContainerManager {
     async fn create_container(&self, config: ContainerConfig, spec: oci::Spec) -> Result<PID> {
         let container = Container::new(
             self.pid,
-            config,
+            config.clone(),
             spec.clone(),
             self.agent.clone(),
             self.resource_manager.clone(),
         )
         .context("new container")?;
+
+        // CreateContainer Hooks:
+        // * should be run in vmm namespace (hook path in runtime namespace)
+        // * should be run after the vm is started, before container is created, and after CreateRuntime Hooks
+        // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#createcontainer-hooks
+        let vmm_master_tid = self.hypervisor.get_vmm_master_tid().await?;
+        let vmm_netns_path = format!("/proc/{}/task/{}/ns/{}", self.pid, vmm_master_tid, "net");
+        let state = oci::State {
+            version: spec.version.clone(),
+            id: config.container_id.clone(),
+            status: oci::ContainerState::Creating,
+            pid: vmm_master_tid as i32,
+            bundle: config.bundle.clone(),
+            annotations: spec.annotations.clone(),
+        };
+
+        // new scope, CreateContainer hooks in which will execute in a new network namespace
+        {
+            let _netns_guard = NetnsGuard::new(&vmm_netns_path).context("vmm netns guard")?;
+            if let Some(hooks) = spec.hooks.as_ref() {
+                let mut create_container_hook_states = HookStates::new();
+                create_container_hook_states.execute_hooks(&hooks.create_container, Some(state))?;
+            }
+        }
 
         let mut containers = self.containers.write().await;
         container.create(spec).await.context("create")?;
