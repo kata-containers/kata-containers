@@ -76,7 +76,8 @@ cache_virtiofsd_artifacts() {
 
 cache_shim_v2_artifacts() {
 	local shim_v2_tarball_name="kata-static-cc-shim-v2.tar.xz"
-	local current_shim_v2_version="$(get_from_kata_deps "languages.golang.meta.newest-version")"-"$(get_from_kata_deps "languages.rust.meta.newest-version")"
+	local shim_v2_file="${script_dir}/../../../VERSION"
+	local current_shim_v2_version="$(cat ${shim_v2_file})"
 	local current_shim_v2_image="$(get_shim_v2_image_name)"
 	create_cache_asset "${shim_v2_tarball_name}" "${current_shim_v2_version}" "${current_shim_v2_image}"
 }
@@ -115,7 +116,7 @@ Usage: $0 "[options]"
 			* Requires FIRMWARE environment variable set, valid values are:
 			  * tdvf
 			  * td-shim
-		-s	Shimv2 cache
+		-s	Shim v2 cache
 		-v	Virtiofsd cache
 		-h	Shows help
 EOF
@@ -127,7 +128,7 @@ main() {
 	local qemu_component="${qemu_component:-}"
 	local kernel_component="${kernel_component:-}"
 	local firmware_component="${firmware_component:-}"
-	local shimv2_component="${shimv2_component:-}"
+	local shim_v2_component="${shim_v2_component:-}"
 	local virtiofsd_component="${virtiofsd_component:-}"
 	local OPTIND
 	while getopts ":ckqfsvh:" opt
@@ -146,7 +147,7 @@ main() {
 			firmware_component="1"
 			;;
 		s)
-			shimv2_component="1"
+			shim_v2_component="1"
 			;;
 		v)
 			virtiofsd_component="1"
@@ -168,7 +169,7 @@ main() {
 	[[ -z "${kernel_component}" ]] && \
 	[[ -z "${qemu_component}" ]] && \
 	[[ -z "${firmware_component}" ]] && \
-	[[ -z "${shimv2_component}" ]] && \
+	[[ -z "${shim_v2_component}" ]] && \
 	[[ -z "${virtiofsd_component}" ]] && \
 		help && die "Must choose at least one option"
 
@@ -180,7 +181,7 @@ main() {
 	[ "${kernel_component}" == "1" ] && cache_kernel_artifacts
 	[ "${qemu_component}" == "1" ] && cache_qemu_artifacts
 	[ "${firmware_component}" == "1" ] && cache_firmware_artifacts
-	[ "${shimv2_component}" == "1" ] && cache_shimv2_artifacts
+	[ "${shim_v2_component}" == "1" ] && cache_shim_v2_artifacts
 	[ "${virtiofsd_component}" == "1" ] && cache_virtiofsd_artifacts
 
 	ls -la "${WORKSPACE}/artifacts/"

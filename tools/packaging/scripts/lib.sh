@@ -183,7 +183,7 @@ sha256sum_from_files() {
 
 calc_shim_v2_files_sha256sum() {
 	local files="${repo_root_dir}/src/runtime"
-	 sha256sum_from_files "$files"
+	sha256sum_from_files "$files"
 }
 
 calc_qemu_files_sha256sum() {
