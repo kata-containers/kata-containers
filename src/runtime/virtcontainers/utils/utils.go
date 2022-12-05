@@ -25,6 +25,8 @@ const cpBinaryName = "cp"
 
 const fileMode0755 = os.FileMode(0755)
 
+const maxWaitDelay = 50 * time.Millisecond
+
 // The DefaultRateLimiterRefillTime is used for calculating the rate at
 // which a TokenBucket is replinished, in cases where a RateLimiter is
 // applied to either network or disk I/O.
@@ -307,11 +309,18 @@ func ConvertAddressFamily(family int32) pbTypes.IPFamily {
 }
 
 func waitProcessUsingWaitLoop(pid int, timeoutSecs uint, logger *logrus.Entry) bool {
-	secs := time.Duration(timeoutSecs)
-	timeout := time.After(secs * time.Second)
+	secs := time.Duration(timeoutSecs) * time.Second
+	timeout := time.After(secs)
+	delay := 1 * time.Millisecond
 
 	for {
-		// Check if the process is running periodically to avoid a busy loop
+		// Wait4 is used to reap and check that a child terminated.
+		// Without the Wait4 call, Kill(0) for a child will always exit without
+		// error because the process isn't reaped.
+		// Wait4 return ECHLD error for non-child processes. Kill(0) is meant
+		// to address this case, once the process is reaped by init process,
+		// the call will return ESRCH error.
+
 		// "A watched pot never boils" and an unwaited-for process never appears to die!
 		waitedPid, err := syscall.Wait4(pid, nil, syscall.WNOHANG, nil)
 
@@ -324,7 +333,12 @@ func waitProcessUsingWaitLoop(pid int, timeoutSecs uint, logger *logrus.Entry) b
 		}
 
 		select {
-		case <-time.After(50 * time.Millisecond):
+		case <-time.After(delay):
+			delay = delay * 5
+
+			if delay > maxWaitDelay {
+				delay = maxWaitDelay
+			}
 		case <-timeout:
 			logger.Warnf("process %v still running after waiting %ds", pid, timeoutSecs)
 			return true
