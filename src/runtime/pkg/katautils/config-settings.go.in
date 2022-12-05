@@ -100,6 +100,7 @@ const defaultGuestPreAttestationSecretGuid string = ""
 const defaultGuestPreAttestationSecretType string = ""
 const defaultSEVCertChainPath string = ""
 const defaultSEVGuestPolicy uint32 = 0
+const defaultSNPGuestPolicy uint64 = 0x30000
 
 var defaultSGXEPCSize = int64(0)
 

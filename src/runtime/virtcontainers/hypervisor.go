@@ -337,6 +337,7 @@ type HypervisorConfig struct {
 	Uid                            uint32
 	Gid                            uint32
 	SEVGuestPolicy                 uint32
+	SNPGuestPolicy                 uint64
 	PCIeRootPort                   uint32
 	NumVCPUs                       uint32
 	RemoteHypervisorTimeout        uint32

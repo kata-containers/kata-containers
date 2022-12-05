@@ -291,6 +291,10 @@ type Object struct {
 	// This is only relevant for sev-guest objects
 	SevPolicy uint32
 
+	// SnpPolicy is the policy for the SNP instance. For more info, see AMD document 56860
+	// This is only relevant for sev-snp-guest objects
+	SnpPolicy uint64
+
 	// SevCertFilePath is the path to the guest Diffie–Hellman key
 	// This is only relevant for sev-guest objects
 	SevCertFilePath string
@@ -392,6 +396,7 @@ func (object Object) QemuParams(config *Config) []string {
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
 		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
 		objectParams = append(objectParams, fmt.Sprintf("reduced-phys-bits=%d", object.ReducedPhysBits))
+		objectParams = append(objectParams, fmt.Sprintf("policy=0x%x", object.SnpPolicy))
 		// Add OVMF firmware as pflash drive
 		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
 		driveParams = append(driveParams, fmt.Sprintf("file=%s", object.File))

@@ -139,6 +139,7 @@ type hypervisor struct {
 	PCIeRootPort                   uint32   `toml:"pcie_root_port"`
 	GuestPreAttestationGRPCTimeout uint32   `toml:"guest_pre_attestation_grpc_timeout"`
 	SEVGuestPolicy                 uint32   `toml:"sev_guest_policy"`
+	SNPGuestPolicy                 uint64   `toml:"snp_guest_policy"`
 	RemoteHypervisorTimeout        uint32   `toml:"remote_hypervisor_timeout"`
 	NumVCPUs                       int32    `toml:"default_vcpus"`
 	BlockDeviceCacheSet            bool     `toml:"block_device_cache_set"`
@@ -632,6 +633,13 @@ func (a agent) kernelModules() []string {
 	return a.KernelModules
 }
 
+func (h hypervisor) getSnpGuestPolicy() uint64 {
+	if h.SNPGuestPolicy == 0 { // or unspecified
+		return defaultSNPGuestPolicy
+	}
+	return h.SNPGuestPolicy
+}
+
 func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	hypervisor, err := h.path()
 	if err != nil {
@@ -855,6 +863,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		GuestPreAttestationSecretGuid: h.GuestPreAttestationSecretGuid,
 		GuestPreAttestationSecretType: h.GuestPreAttestationSecretType,
 		SEVGuestPolicy:                h.SEVGuestPolicy,
+		SNPGuestPolicy:                h.getSnpGuestPolicy(),
 		SEVCertChainPath:              h.SEVCertChainPath,
 		DisableGuestSeLinux:           h.DisableGuestSeLinux,
 	}, nil
@@ -1276,6 +1285,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		GuestPreAttestationSecretGuid: defaultGuestPreAttestationSecretGuid,
 		GuestPreAttestationSecretType: defaultGuestPreAttestationSecretType,
 		SEVGuestPolicy:                defaultSEVGuestPolicy,
+		SNPGuestPolicy:                defaultSNPGuestPolicy,
 		SEVCertChainPath:              defaultSEVCertChainPath,
 	}
 }

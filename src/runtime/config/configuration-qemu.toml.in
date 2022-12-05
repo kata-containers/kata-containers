@@ -65,6 +65,12 @@ machine_type = "@MACHINETYPE@"
 # Default false
 # sev_snp_guest = true
 
+# SNP guest policy
+# Refer SEV Secure Nested Paging Firmware ABI Specification (sectin 4.3) to
+# change this value.
+# unspecified or == 0  -->  0x30000 i.e. Bit#17 is '1' and Bit#16 is '1' (SMT is allowed)
+# snp_guest_policy=0x30000
+
 # Enable running QEMU VMM as a non-root user.
 # By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
 # a non-root random user. See documentation for the limitations of this mode.
