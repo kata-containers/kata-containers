@@ -153,19 +153,17 @@ fn hook_grpc_to_oci(h: &[grpcHook]) -> Vec<oci::Hook> {
 
 fn hooks_grpc_to_oci(h: &grpc::Hooks) -> oci::Hooks {
     let prestart = hook_grpc_to_oci(h.Prestart.as_ref());
-
     let create_runtime = hook_grpc_to_oci(h.CreateRuntime.as_ref());
-
     let create_container = hook_grpc_to_oci(h.CreateContainer.as_ref());
-
+    let start_container = hook_grpc_to_oci(h.StartContainer.as_ref());
     let poststart = hook_grpc_to_oci(h.Poststart.as_ref());
-
     let poststop = hook_grpc_to_oci(h.Poststop.as_ref());
 
     oci::Hooks {
         prestart,
         create_runtime,
         create_container,
+        start_container,
         poststart,
         poststop,
     }

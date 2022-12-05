@@ -172,6 +172,9 @@ message Hooks {
 
 	// CreateContainer is a list of hooks to be run after VM is started, and before container is created.
 	repeated Hook CreateContainer = 5  [(gogoproto.nullable) = false];
+
+	// StartContainer is a list of hooks to be run after container is created, but before it is started.
+	repeated Hook StartContainer = 6  [(gogoproto.nullable) = false];
 }
 
 message Hook {
