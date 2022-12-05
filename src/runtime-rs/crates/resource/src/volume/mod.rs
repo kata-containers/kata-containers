@@ -18,7 +18,7 @@ use tokio::sync::RwLock;
 use crate::share_fs::ShareFs;
 
 #[async_trait]
-pub trait Volume: Send + Sync + std::fmt::Debug {
+pub trait Volume: Send + Sync {
     fn get_volume_mount(&self) -> Result<Vec<oci::Mount>>;
     fn get_storage(&self) -> Result<Vec<agent::Storage>>;
     async fn cleanup(&self) -> Result<()>;

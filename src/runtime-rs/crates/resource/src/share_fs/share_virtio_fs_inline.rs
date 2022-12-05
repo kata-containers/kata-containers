@@ -11,7 +11,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use hypervisor::Hypervisor;
 use kata_types::config::hypervisor::SharedFsInfo;
-use tokio::sync::RwLock;
+use tokio::sync::Mutex;
 
 use super::{
     share_virtio_fs::{
@@ -30,16 +30,10 @@ pub struct ShareVirtioFsInlineConfig {
     pub id: String,
 }
 
-#[derive(Default, Debug)]
-pub struct ShareVirtioFsInlineInner {
-    mounted_info_set: HashMap<String, MountedInfo>,
-}
-
-#[derive(Debug)]
 pub struct ShareVirtioFsInline {
     config: ShareVirtioFsInlineConfig,
     share_fs_mount: Arc<dyn ShareFsMount>,
-    inner: Arc<RwLock<ShareVirtioFsInlineInner>>,
+    mounted_info_set: Arc<Mutex<HashMap<String, MountedInfo>>>,
 }
 
 impl ShareVirtioFsInline {
@@ -47,7 +41,7 @@ impl ShareVirtioFsInline {
         Ok(Self {
             config: ShareVirtioFsInlineConfig { id: id.to_string() },
             share_fs_mount: Arc::new(VirtiofsShareMount::new(id)),
-            inner: Arc::new(RwLock::new(ShareVirtioFsInlineInner::default())),
+            mounted_info_set: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 }
@@ -89,33 +83,7 @@ impl ShareFs for ShareVirtioFsInline {
         Ok(storages)
     }
 
-    async fn get_mounted_info(&self, source: &str) -> Option<MountedInfo> {
-        let inner = self.inner.read().await;
-        inner.mounted_info_set.get(source).cloned()
-    }
-
-    async fn set_mounted_info(&self, source: &str, mounted_info: MountedInfo) -> Result<()> {
-        let mut inner = self.inner.write().await;
-        inner
-            .mounted_info_set
-            .insert(source.to_owned(), mounted_info.clone());
-        Ok(())
-    }
-
-    async fn rm_mounted_info(&self, source: &str) -> Result<Option<MountedInfo>> {
-        let mut inner = self.inner.write().await;
-        Ok(inner.mounted_info_set.remove(source))
-    }
-
-    async fn get_mounted_info_by_guest_path(
-        &self,
-        guest_path: &str,
-    ) -> Option<(String, MountedInfo)> {
-        let inner = self.inner.read().await;
-        inner
-            .mounted_info_set
-            .iter()
-            .find(|m| m.1.guest_path.as_os_str().to_str().unwrap() == guest_path)
-            .map(|m| (m.0.to_owned(), m.1.clone()))
+    fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>> {
+        self.mounted_info_set.clone()
     }
 }

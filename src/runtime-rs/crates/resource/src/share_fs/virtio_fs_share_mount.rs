@@ -170,7 +170,7 @@ impl ShareFsMount for VirtiofsShareMount {
         })
     }
 
-    async fn upgrade(&self, file_name: &str) -> Result<()> {
+    async fn upgrade_to_rw(&self, file_name: &str) -> Result<()> {
         // Remount readonly directory with readwrite permission
         let host_dest = do_get_host_path(file_name, &self.id, "", true, true);
         bind_remount(&host_dest, false)
@@ -182,7 +182,7 @@ impl ShareFsMount for VirtiofsShareMount {
         Ok(())
     }
 
-    async fn downgrade(&self, file_name: &str) -> Result<()> {
+    async fn downgrade_to_ro(&self, file_name: &str) -> Result<()> {
         // Remount readwrite directory with readonly permission
         let host_dest = do_get_host_path(file_name, &self.id, "", true, false);
         bind_remount(&host_dest, true)
@@ -195,10 +195,9 @@ impl ShareFsMount for VirtiofsShareMount {
     }
 
     async fn umount(&self, file_name: &str) -> Result<()> {
-        let host_dest = do_get_host_path(file_name, &self.id, "", true, false);
-        umount_timeout(&host_dest, 0).context("Umount readonly host dest")?;
         let host_dest = do_get_host_path(file_name, &self.id, "", true, true);
         umount_timeout(&host_dest, 0).context("Umount readwrite host dest")?;
+        // Umount event will be propagated to ro directory
         Ok(())
     }
 }

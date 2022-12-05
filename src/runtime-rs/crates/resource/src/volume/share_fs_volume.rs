@@ -23,7 +23,6 @@ use kata_types::mount;
 // only regular files in /dev. It does not make sense to pass the host
 // device nodes to the guest.
 // skip the volumes whose source had already set to guest share dir.
-#[derive(Debug)]
 pub(crate) struct ShareFsVolume {
     share_fs: Option<Weak<dyn ShareFs>>,
     mounts: Vec<oci::Mount>,
@@ -71,7 +70,9 @@ impl ShareFsVolume {
                 let readonly = m.options.iter().any(|opt| opt == "ro");
 
                 let share_fs_mount = share_fs.get_share_fs_mount();
-                if let Some(mut mounted_info) = share_fs.get_mounted_info(&m.source).await {
+                let mounted_info_set = share_fs.mounted_info_set();
+                let mut mounted_info_set = mounted_info_set.lock().await;
+                if let Some(mut mounted_info) = mounted_info_set.get(&m.source).cloned() {
                     // Mounted at least once
                     let guest_path = mounted_info
                         .guest_path
@@ -87,7 +88,7 @@ impl ShareFsVolume {
                             "The mount will be upgraded, mount = {:?}, cid = {}", m, cid
                         );
                         share_fs_mount
-                            .upgrade(
+                            .upgrade_to_rw(
                                 &mounted_info
                                     .file_name()
                                     .context("get name of mounted info")?,
@@ -100,10 +101,7 @@ impl ShareFsVolume {
                     } else {
                         mounted_info.rw_ref_count += 1;
                     }
-                    share_fs
-                        .set_mounted_info(&m.source, mounted_info)
-                        .await
-                        .context("set mounted info")?;
+                    mounted_info_set.insert(m.source.clone(), mounted_info);
 
                     volume.mounts.push(oci::Mount {
                         destination: m.destination.clone(),
@@ -131,10 +129,7 @@ impl ShareFsVolume {
                             .context("convert guest path")?,
                         readonly,
                     );
-                    share_fs
-                        .set_mounted_info(&m.source, mounted_info)
-                        .await
-                        .context("set mounted info")?;
+                    mounted_info_set.insert(m.source.clone(), mounted_info);
                     // set storages for the volume
                     volume.storages = mount_result.storages;
 
@@ -171,18 +166,23 @@ impl Volume for ShareFsVolume {
             None => return Err(anyhow!("The share_fs was released unexpectedly")),
         };
 
+        let mounted_info_set = share_fs.mounted_info_set();
+        let mut mounted_info_set = mounted_info_set.lock().await;
         for m in self.mounts.iter() {
-            let (host_source, mut mounted_info) =
-                match share_fs.get_mounted_info_by_guest_path(&m.source).await {
-                    Some(entry) => entry,
-                    None => {
-                        warn!(
-                            sl!(),
-                            "The mounted info for guest path {} not found", m.source
-                        );
-                        continue;
-                    }
-                };
+            let (host_source, mut mounted_info) = match mounted_info_set
+                .iter()
+                .find(|entry| entry.1.guest_path.as_os_str().to_str().unwrap() == m.source)
+                .map(|entry| (entry.0.to_owned(), entry.1.clone()))
+            {
+                Some(entry) => entry,
+                None => {
+                    warn!(
+                        sl!(),
+                        "The mounted info for guest path {} not found", m.source
+                    );
+                    continue;
+                }
+            };
 
             let old_readonly = mounted_info.readonly();
 
@@ -206,23 +206,17 @@ impl Volume for ShareFsVolume {
                 if !old_readonly && mounted_info.readonly() {
                     info!(sl!(), "Downgrade {} to readonly due to no container that needs readwrite permission", host_source);
                     share_fs_mount
-                        .downgrade(&file_name)
+                        .downgrade_to_ro(&file_name)
                         .await
                         .context("Downgrade volume")?;
                 }
-                share_fs
-                    .set_mounted_info(&host_source, mounted_info)
-                    .await
-                    .context("Update mounted info")?;
+                mounted_info_set.insert(host_source.clone(), mounted_info);
             } else {
                 info!(
                     sl!(),
                     "The path will be umounted due to no references, host_source = {}", host_source
                 );
-                share_fs
-                    .rm_mounted_info(&host_source)
-                    .await
-                    .context("Rm mounted info due to no reference")?;
+                mounted_info_set.remove(&host_source);
                 // Umount the volume
                 share_fs_mount
                     .umount(&file_name)

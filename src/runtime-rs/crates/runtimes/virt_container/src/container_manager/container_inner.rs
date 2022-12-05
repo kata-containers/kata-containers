@@ -277,7 +277,12 @@ impl ContainerInner {
         for v in self.volumes.iter() {
             if let Err(err) = v.cleanup().await {
                 unhandled.push(Arc::clone(v));
-                warn!(sl!(), "Failed to clean volume {:?}, error = {:?}", v, err);
+                warn!(
+                    sl!(),
+                    "Failed to clean volume {:?}, error = {:?}",
+                    v.get_volume_mount(),
+                    err
+                );
             }
         }
         if !unhandled.is_empty() {
