@@ -105,6 +105,16 @@ cache_rootfs_artifacts() {
 	create_cache_asset "${rootfs_tarball_name}" "${current_rootfs_version}" "" "${root_hash_vanilla}" "${root_hash_tdx}"
 }
 
+cache_shim_v2_artifacts() {
+	local shim_v2_tarball_name="kata-static-cc-shim-v2.tar.xz"
+	local shim_v2_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime")"
+	local golang_version="$(get_from_kata_deps "languages.golang.meta.newest-version")"
+	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+	local current_shim_v2_version="${shim_v2_last_commit}-${golang_version}-${rust_version}"
+	local current_shim_v2_image="$(get_shim_v2_image_name)"
+	create_cache_asset "${shim_v2_tarball_name}" "${current_shim_v2_version}" "${current_shim_v2_image}" "${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt" "${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt"
+}
+
 create_cache_asset() {
 	local component_name="${1}"
 	local component_version="${2}"
@@ -153,6 +163,7 @@ Usage: $0 "[options]"
 			* Requires FIRMWARE environment variable set, valid values are:
 			  * tdvf
 			  * td-shim
+		-s	Shim v2 cache
 		-v	Virtiofsd cache
 		-r	Rootfs Cache
 			* can receive a TEE environment variable value, valid values are:
@@ -168,10 +179,11 @@ main() {
 	local qemu_component="${qemu_component:-}"
 	local kernel_component="${kernel_component:-}"
 	local firmware_component="${firmware_component:-}"
+	local shim_v2_component="${shim_v2_component:-}"
 	local virtiofsd_component="${virtiofsd_component:-}"
 	local rootfs_component="${rootfs_component:-}"
 	local OPTIND
-	while getopts ":ckqfvrh:" opt
+	while getopts ":ckqfvrsh:" opt
 	do
 		case "$opt" in
 		c)
@@ -185,6 +197,9 @@ main() {
 			;;
 		f)
 			firmware_component="1"
+			;;
+		s)
+			shim_v2_component="1"
 			;;
 		v)
 			virtiofsd_component="1"
@@ -209,6 +224,7 @@ main() {
 	[[ -z "${kernel_component}" ]] && \
 	[[ -z "${qemu_component}" ]] && \
 	[[ -z "${firmware_component}" ]] && \
+	[[ -z "${shim_v2_component}" ]] && \
 	[[ -z "${virtiofsd_component}" ]] && \
 	[[ -z "${rootfs_component}" ]] && \
 		help && die "Must choose at least one option"
@@ -221,6 +237,7 @@ main() {
 	[ "${kernel_component}" == "1" ] && cache_kernel_artifacts
 	[ "${qemu_component}" == "1" ] && cache_qemu_artifacts
 	[ "${firmware_component}" == "1" ] && cache_firmware_artifacts
+	[ "${shim_v2_component}" == "1" ] && cache_shim_v2_artifacts
 	[ "${virtiofsd_component}" == "1" ] && cache_virtiofsd_artifacts
 	[ "${rootfs_component}" == "1" ] && cache_rootfs_artifacts
 

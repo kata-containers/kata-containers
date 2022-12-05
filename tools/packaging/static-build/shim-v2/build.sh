@@ -49,7 +49,7 @@ if [ -n "${RUST_VERSION}" ]; then
 		"${container_image}" \
 		bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}" install"
 fi
-	
+
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${repo_root_dir}/src/runtime" \
 	"${container_image}" \
