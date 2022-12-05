@@ -74,10 +74,43 @@ cache_virtiofsd_artifacts() {
 	create_cache_asset "${virtiofsd_tarball_name}" "${current_virtiofsd_version}" "${current_virtiofsd_image}"
 }
 
+cache_rootfs_artifacts() {
+	# We need to remove `-dirty` from teh osbuilder_last_commit as the rootfs artefacts are generated on that folder
+	local osbuilder_last_commit="$(echo $(get_last_modification "${repo_root_dir}/tools/osbuilder") | sed s/-dirty//)"
+	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
+	local agent_last_commit="$(get_last_modification "${repo_root_dir}/src/agent")"
+	local libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
+	local attestation_agent_version="$(get_from_kata_deps "externals.attestation-agent.version")"
+	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
+	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
+	local pause_version="$(get_from_kata_deps "externals.pause.version")"
+	local skopeo_version="$(get_from_kata_deps "externals.skopeo.branch")"
+	local umoci_version="$(get_from_kata_deps "externals.umoci.tag")"
+	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+	local rootfs_tarball_name="kata-static-cc-rootfs-image.tar.xz"
+	local aa_kbc="offline_fs_kbc"
+	local image_type="image"
+	local root_hash_vanilla="${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt"
+	local root_hash_tdx=""
+	if [ -n "${TEE}" ]; then
+		if [ "${TEE}" == "tdx" ]; then
+			rootfs_tarball_name="kata-static-cc-tdx-rootfs-image.tar.xz"
+			aa_kbc="eaa_kbc"
+			image_type="image"
+			root_hash_vanilla=""
+			root_hash_tdx="${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt"
+		fi
+	fi
+	local current_rootfs_version="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${skopeo_version}-${umoci_version}-${rust_version}-${image_type}-${aa_kbc}"
+	create_cache_asset "${rootfs_tarball_name}" "${current_rootfs_version}" "" "${root_hash_vanilla}" "${root_hash_tdx}"
+}
+
 create_cache_asset() {
 	local component_name="${1}"
 	local component_version="${2}"
 	local component_image="${3}"
+	local root_hash_vanilla="${4:-""}"
+	local root_hash_tdx="${5:-""}"
 
 	sudo cp "${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${component_name}" .
 	sudo chown -R "${USER}:${USER}" .
@@ -87,6 +120,18 @@ create_cache_asset() {
 	cat "latest"
 	echo "${component_image}" > "latest_image"
 	cat "latest_image"
+	if [ -n "${root_hash_vanilla}" ]; then
+		local cached_root_hash_vanilla="$(basename ${root_hash_vanilla})"
+		sudo cp "${root_hash_vanilla}" "${cached_root_hash_vanilla}"
+		sudo chown -R "${USER}:${USER}" "${cached_root_hash_vanilla}"
+		echo "${cached_root_hash_vanilla}: $(cat "${cached_root_hash_vanilla}")"
+	fi
+	if [ -n "${root_hash_tdx}" ]; then
+		local cached_root_hash_tdx="$(basename ${root_hash_tdx})"
+		sudo cp "${root_hash_tdx}" "${cached_root_hash_tdx}"
+		sudo chown -R "${USER}:${USER}" "${cached_root_hash_tdx}"
+		echo "${cached_root_hash_tdx}: $(cat "${cached_root_hash_tdx}")"
+	fi
 }
 
 help() {
@@ -109,6 +154,10 @@ Usage: $0 "[options]"
 			  * tdvf
 			  * td-shim
 		-v	Virtiofsd cache
+		-r	Rootfs Cache
+			* can receive a TEE environment variable value, valid values are:
+			  * tdx
+			  If not TEE environment is passed, the Rootfs Image will be built without TEE support.
 		-h	Shows help
 EOF
 )"
@@ -120,8 +169,9 @@ main() {
 	local kernel_component="${kernel_component:-}"
 	local firmware_component="${firmware_component:-}"
 	local virtiofsd_component="${virtiofsd_component:-}"
+	local rootfs_component="${rootfs_component:-}"
 	local OPTIND
-	while getopts ":ckqfvh:" opt
+	while getopts ":ckqfvrh:" opt
 	do
 		case "$opt" in
 		c)
@@ -138,6 +188,9 @@ main() {
 			;;
 		v)
 			virtiofsd_component="1"
+			;;
+		r)
+			rootfs_component="1"
 			;;
 		h)
 			help
@@ -157,6 +210,7 @@ main() {
 	[[ -z "${qemu_component}" ]] && \
 	[[ -z "${firmware_component}" ]] && \
 	[[ -z "${virtiofsd_component}" ]] && \
+	[[ -z "${rootfs_component}" ]] && \
 		help && die "Must choose at least one option"
 
 	mkdir -p "${WORKSPACE}/artifacts"
@@ -168,6 +222,7 @@ main() {
 	[ "${qemu_component}" == "1" ] && cache_qemu_artifacts
 	[ "${firmware_component}" == "1" ] && cache_firmware_artifacts
 	[ "${virtiofsd_component}" == "1" ] && cache_virtiofsd_artifacts
+	[ "${rootfs_component}" == "1" ] && cache_rootfs_artifacts
 
 	ls -la "${WORKSPACE}/artifacts/"
 	popd
