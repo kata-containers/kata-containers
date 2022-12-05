@@ -118,6 +118,8 @@ install_cached_component() {
 	local current_image_version="${4}"
 	local component_tarball_name="${5}"
 	local component_tarball_path="${6}"
+	local root_hash_vanilla="${7:-""}"
+	local root_hash_tdx="${8:-""}"
 
 	local cached_version=$(curl -sfL "${jenkins_build_url}/latest" | awk '{print $1}') || cached_version="none"
 	local cached_image_version=$(curl -sfL "${jenkins_build_url}/latest_image" | awk '{print $1}') || cached_image_version="none"
@@ -130,6 +132,14 @@ install_cached_component() {
 	wget "${jenkins_build_url}/${component_tarball_name}" || return cleanup_and_fail
 	wget "${jenkins_build_url}/sha256sum-${component_tarball_name}" || return cleanup_and_fail
 	sha256sum -c "sha256sum-${component_tarball_name}" || return cleanup_and_fail
+	if [ -n "${root_hash_vanilla}" ]; then
+		wget "${jenkins_build_url}/${root_hash_vanilla}" || return cleanup_and_fail
+		mv "${root_hash_vanilla}" "${repo_root_dir}/tools/osbuilder/"
+	fi
+	if [ -n "${root_hash_tdx}" ]; then
+		wget "${jenkins_build_url}/${root_hash_tdx}" || return cleanup_and_fail
+		mv "${root_hash_tdx}" "${repo_root_dir}/tools/osbuilder/"
+	fi
 	mv "${component_tarball_name}" "${component_tarball_path}"
 }
 
@@ -161,7 +171,44 @@ install_cc_image() {
 	image_type="${2:-image}"
 	image_initrd_suffix="${3:-""}"
 	root_hash_suffix="${4:-""}"
+	tee="${5:-""}"
 	export KATA_BUILD_CC=yes
+
+	local jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-image-cc-$(uname -m)/${cached_artifacts_path}"
+	local component="rootfs-image"
+	local root_hash_vanilla="root_hash_vanilla.txt"
+	local root_hash_tdx=""
+	if [ -n "${tee}" ]; then
+		if [ "${tee}" == "tdx" ]; then
+			jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-image-${tee}-cc-$(uname -m)/${cached_artifacts_path}"
+			component="${tee}-rootfs-image"
+			root_hash_vanilla=""
+			root_hash_tdx="root_hash_${tee}.txt"
+		fi
+	fi
+
+	local osbuilder_last_commit="$(echo $(get_last_modification "${repo_root_dir}/tools/osbuilder") | sed s/-dirty//)"
+	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
+	local agent_last_commit="$(get_last_modification "${repo_root_dir}/src/agent")"
+	local libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
+	local attestation_agent_version="$(get_from_kata_deps "externals.attestation-agent.version")"
+	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
+	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
+	local pause_version="$(get_from_kata_deps "externals.pause.version")"
+	local skopeo_version="$(get_from_kata_deps "externals.skopeo.branch")"
+	local umoci_version="$(get_from_kata_deps "externals.umoci.tag")"
+	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+
+	install_cached_component \
+		"${component}" \
+		"${jenkins}" \
+		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${skopeo_version}-${umoci_version}-${rust_version}-${image_type}-${AA_KBC}" \
+		"" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		"${root_hash_vanilla}" \
+		"${root_hash_tdx}" \
+		&& return 0
 
 	info "Create CC image configured with AA_KBC=${AA_KBC}"
 	"${rootfs_builder}" \
@@ -175,7 +222,7 @@ install_cc_image() {
 install_cc_sev_image() {
 	AA_KBC="offline_sev_kbc"
 	image_type="initrd"
-	install_cc_image "${AA_KBC}" "${image_type}"
+	install_cc_image "${AA_KBC}" "${image_type}" "sev"
 }
 
 install_cc_tdx_image() {
@@ -183,7 +230,7 @@ install_cc_tdx_image() {
 	image_type="image"
 	image_suffix="tdx"
 	root_hash_suffix="tdx"
-	install_cc_image "${AA_KBC}" "${image_type}" "${image_suffix}" "${root_hash_suffix}"
+	install_cc_image "${AA_KBC}" "${image_type}" "${image_suffix}" "${root_hash_suffix}" "tdx"
 }
 
 #Install CC kernel asset
