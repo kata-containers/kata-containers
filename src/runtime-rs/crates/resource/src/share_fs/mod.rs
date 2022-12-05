@@ -11,11 +11,12 @@ use share_virtio_fs_inline::ShareVirtioFsInline;
 mod share_virtio_fs_standalone;
 use share_virtio_fs_standalone::ShareVirtioFsStandalone;
 mod utils;
+use tokio::sync::Mutex;
 pub use utils::{do_get_guest_path, do_get_guest_share_path, get_host_rw_shared_path};
 mod virtio_fs_share_mount;
 use virtio_fs_share_mount::VirtiofsShareMount;
 
-use std::{fmt::Debug, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, path::PathBuf, sync::Arc};
 
 use agent::Storage;
 use anyhow::{anyhow, Context, Ok, Result};
@@ -38,26 +39,12 @@ pub const PASSTHROUGH_FS_DIR: &str = "passthrough";
 const RAFS_DIR: &str = "rafs";
 
 #[async_trait]
-pub trait ShareFs: Send + Sync + Debug {
+pub trait ShareFs: Send + Sync {
     fn get_share_fs_mount(&self) -> Arc<dyn ShareFsMount>;
     async fn setup_device_before_start_vm(&self, h: &dyn Hypervisor) -> Result<()>;
     async fn setup_device_after_start_vm(&self, h: &dyn Hypervisor) -> Result<()>;
     async fn get_storages(&self) -> Result<Vec<Storage>>;
-
-    /// Get a mounted info from ShareFs.
-    /// The source is an original path on the host (not in the `/run/kata-containers/...`).
-    async fn get_mounted_info(&self, source: &str) -> Option<MountedInfo>;
-    /// Set a mounted info to ShareFS.
-    /// The source is the same as get_mounted_info's.
-    async fn set_mounted_info(&self, source: &str, mounted_info: MountedInfo) -> Result<()>;
-    /// Remove a mounted info from ShareFs.
-    /// The source is the same as get_mounted_info's.
-    async fn rm_mounted_info(&self, source: &str) -> Result<Option<MountedInfo>>;
-    /// Get a mounted info by guest path.
-    async fn get_mounted_info_by_guest_path(
-        &self,
-        guest_path: &str,
-    ) -> Option<(String, MountedInfo)>;
+    fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>>;
 }
 
 #[derive(Debug)]
@@ -132,13 +119,13 @@ impl MountedInfo {
 }
 
 #[async_trait]
-pub trait ShareFsMount: Send + Sync + Debug {
+pub trait ShareFsMount: Send + Sync {
     async fn share_rootfs(&self, config: ShareFsRootfsConfig) -> Result<ShareFsMountResult>;
     async fn share_volume(&self, config: ShareFsVolumeConfig) -> Result<ShareFsMountResult>;
     /// Upgrade to readwrite permission
-    async fn upgrade(&self, file_name: &str) -> Result<()>;
+    async fn upgrade_to_rw(&self, file_name: &str) -> Result<()>;
     /// Downgrade to readonly permission
-    async fn downgrade(&self, file_name: &str) -> Result<()>;
+    async fn downgrade_to_ro(&self, file_name: &str) -> Result<()>;
     /// Umount the volume
     async fn umount(&self, file_name: &str) -> Result<()>;
 }
