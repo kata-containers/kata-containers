@@ -181,6 +181,11 @@ sha256sum_from_files() {
 	fi
 }
 
+calc_shim_v2_files_sha256sum() {
+	local files="${repo_root_dir}/src/runtime"
+	 sha256sum_from_files "$files"
+}
+
 calc_qemu_files_sha256sum() {
 	local files="${this_script_dir}/../qemu \
 		${this_script_dir}/../static-build/qemu.blacklist \
