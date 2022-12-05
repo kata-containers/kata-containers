@@ -67,10 +67,15 @@ serde = { version = "1.0.129", features = ["derive"] }
 toml = "0.5.8"
 clap = { version = "3.0.1", features = ["derive"] }
 
-# Image pull/decrypt
-image-rs = { git = "https://github.com/confidential-containers/image-rs", rev = "76e6abed950152f000d8f70026d11a86cf95fb0c" }
 # "vendored" feature for openssl is required by musl build
 openssl = { version = "0.10.38", features = ["vendored"] }
+
+# Image pull/decrypt
+[target.'cfg(target_arch = "s390x")'.dependencies]
+image-rs = { git = "https://github.com/confidential-containers/image-rs", rev = "78a5114444629ad0af82174cb4bbaa1787b627a3", default-features = false, features = ["default_s390x"] }
+
+[target.'cfg(not(target_arch = "s390x"))'.dependencies]
+image-rs = { git = "https://github.com/confidential-containers/image-rs", rev = "78a5114444629ad0af82174cb4bbaa1787b627a3", default-features = true }
 
 [dev-dependencies]
 tempfile = "3.1.0"
@@ -78,6 +83,7 @@ test-utils = { path = "../libs/test-utils" }
 which = "4.3.0"
 
 [workspace]
+resolver = "2"
 members = [
     "rustjail",
 ]

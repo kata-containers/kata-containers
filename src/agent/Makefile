@@ -85,14 +85,6 @@ ifeq ($(INIT),no)
     UNIT_FILES += kata-containers.target
 endif
 
-# The following will be reverted, after
-# https://github.com/kata-containers/kata-containers/issues/5582
-# is resolved.
-IMAGE_RS_COMMIT = a1d7ba31201d9d7a575d05c5fed1f2cb2142a842
-ifeq ($(ARCH),s390x)
-    $(shell sed -i -e "s/^\(image-rs.*\)tag\(.*\)/\1rev\2/" -e "s/^\(image-rs.*rev = \"\).*\(\".*\)/\1$(IMAGE_RS_COMMIT)\2/" Cargo.toml)
-endif
-
 # Display name of command and it's version (or a message if not available).
 #
 # Arguments:

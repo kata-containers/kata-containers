@@ -1903,7 +1903,7 @@ dependencies = [
 [[package]]
 name = "image-rs"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/image-rs?rev=76e6abed950152f000d8f70026d11a86cf95fb0c#76e6abed950152f000d8f70026d11a86cf95fb0c"
+source = "git+https://github.com/confidential-containers/image-rs?rev=78a5114444629ad0af82174cb4bbaa1787b627a3#78a5114444629ad0af82174cb4bbaa1787b627a3"
 dependencies = [
  "anyhow",
  "async-trait",
