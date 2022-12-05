@@ -124,7 +124,6 @@ pub struct CreateContainerRequest {
     pub devices: Vec<Device>,
     pub storages: Vec<Storage>,
     pub oci: Option<oci::Spec>,
-    pub guest_hooks: Option<oci::Hooks>,
     pub sandbox_pidns: bool,
     pub rootfs_mounts: Vec<oci::Mount>,
 }

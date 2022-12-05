@@ -396,8 +396,20 @@ impl Container {
 }
 
 fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
-    // hook should be done on host
-    spec.hooks = None;
+    // Only the StartContainer hook needs to be reserved for execution in the guest
+    let start_container_hooks = match spec.hooks.as_ref() {
+        Some(hooks) => hooks.start_container.clone(),
+        None => Vec::new(),
+    };
+
+    spec.hooks = if start_container_hooks.is_empty() {
+        None
+    } else {
+        Some(oci::Hooks {
+            start_container: start_container_hooks,
+            ..Default::default()
+        })
+    };
 
     // special process K8s ephemeral volumes.
     update_ephemeral_storage_type(spec);

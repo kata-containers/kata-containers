@@ -296,6 +296,7 @@ impl From<oci::Hooks> for crate::oci::Hooks {
             Prestart: from_vec(from.prestart),
             CreateRuntime: from_vec(from.create_runtime),
             CreateContainer: from_vec(from.create_container),
+            StartContainer: from_vec(from.start_container),
             Poststart: from_vec(from.poststart),
             Poststop: from_vec(from.poststop),
             unknown_fields: Default::default(),
@@ -984,6 +985,10 @@ impl From<crate::oci::Hooks> for oci::Hooks {
         for hook in from.take_CreateContainer().to_vec() {
             create_container.push(hook.into())
         }
+        let mut start_container = Vec::new();
+        for hook in from.take_StartContainer().to_vec() {
+            start_container.push(hook.into())
+        }
         let mut poststart = Vec::new();
         for hook in from.take_Poststart().to_vec() {
             poststart.push(hook.into());
@@ -996,6 +1001,7 @@ impl From<crate::oci::Hooks> for oci::Hooks {
             prestart,
             create_runtime,
             create_container,
+            start_container,
             poststart,
             poststop,
         }
