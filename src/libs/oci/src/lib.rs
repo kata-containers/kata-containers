@@ -195,6 +195,8 @@ pub struct Hooks {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub create_runtime: Vec<Hook>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub create_container: Vec<Hook>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub poststart: Vec<Hook>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub poststop: Vec<Hook>,

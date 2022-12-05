@@ -10,12 +10,12 @@ use anyhow::{Context, Result};
 use nix::sched::{setns, CloneFlags};
 use nix::unistd::{getpid, gettid};
 
-pub(crate) struct NetnsGuard {
+pub struct NetnsGuard {
     old_netns: Option<File>,
 }
 
 impl NetnsGuard {
-    pub(crate) fn new(new_netns_path: &str) -> Result<Self> {
+    pub fn new(new_netns_path: &str) -> Result<Self> {
         let old_netns = if !new_netns_path.is_empty() {
             let current_netns_path = format!("/proc/{}/task/{}/ns/{}", getpid(), gettid(), "net");
             let old_netns = File::open(&current_netns_path)
