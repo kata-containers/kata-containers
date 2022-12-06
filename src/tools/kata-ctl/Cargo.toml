@@ -21,8 +21,15 @@ privdrop = "0.5.2"
 nix = "0.25.0"
 strum = "0.24.1"
 strum_macros = "0.24.3"
-
 serde = { version = "1.0.149", features = ["derive"] }
+url = "2.3.1"
+futures = "0.3.24"
+base64 = "0.13.0"
+
+shim-interface = { path = "../../libs/shim-interface"}
+kata-types = { path = "../../libs/kata-types" }
+safe-path = { path = "../../libs/safe-path" }
+agent = { path = "../../runtime-rs/crates/agent"}
 
 [target.'cfg(target_arch = "s390x")'.dependencies]
 reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "native-tls"] }
@@ -33,3 +40,4 @@ reqwest = { version = "0.11", default-features = false, features = ["json", "blo
 [dev-dependencies]
 semver = "1.0.12"
 tempfile = "3.1.0"
+test-utils = { path = "../../libs/test-utils" }
