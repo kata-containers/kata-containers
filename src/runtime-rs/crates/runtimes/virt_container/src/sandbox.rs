@@ -334,8 +334,20 @@ impl Sandbox for VirtSandbox {
         let req: agent::VolumeStatsRequest = VolumeStatsRequest {
             volume_guest_path: volume_guest_path.to_string(),
         };
-        let result = self.agent.get_volume_stats(req).await?.data;
-        Ok(result)
+        let result = self
+            .agent
+            .get_volume_stats(req)
+            .await
+            .context("sandbox: failed to process direct volume stats query")?;
+        Ok(result.data)
+    }
+
+    async fn direct_volume_resize(&self, resize_req: agent::ResizeVolumeRequest) -> Result<()> {
+        self.agent
+            .resize_volume(resize_req)
+            .await
+            .context("sandbox: failed to resize direct-volume")?;
+        Ok(())
     }
 
     async fn set_iptables(&self, is_ipv6: bool, data: Vec<u8>) -> Result<Vec<u8>> {
