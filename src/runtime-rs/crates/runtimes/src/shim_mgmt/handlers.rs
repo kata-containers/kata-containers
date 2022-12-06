@@ -11,8 +11,9 @@ use anyhow::{anyhow, Result};
 use common::Sandbox;
 use hyper::{Body, Method, Request, Response, StatusCode};
 use std::sync::Arc;
+use url::Url;
 
-use shim_interface::shim_mgmt::{AGENT_URL, IP6_TABLE_URL, IP_TABLE_URL};
+use shim_interface::shim_mgmt::{AGENT_URL, IP6_TABLE_URL, IP_TABLE_URL, DIRECT_VOLUMN_PATH_KEY, DIRECT_VOLUMN_STATS_URL,};
 
 // main router for response, this works as a multiplexer on
 // http arrival which invokes the corresponding handler function
@@ -34,6 +35,7 @@ pub(crate) async fn handler_mux(
         (&Method::PUT, IP6_TABLE_URL) | (&Method::GET, IP6_TABLE_URL) => {
             ipv6_table_handler(sandbox, req).await
         }
+        (&Method::POST, DIRECT_VOLUMN_STATS_URL) => direct_volume_stats_handler(sandbox, req).await,
         _ => Ok(not_found(req).await),
     }
 }
@@ -99,5 +101,26 @@ async fn generic_ip_table_handler(
         }
 
         _ => Err(anyhow!("IP Tables only takes PUT and GET")),
+    }
+}
+
+async fn direct_volume_stats_handler(
+    sandbox: Arc<dyn Sandbox>,
+    req: Request<Body>,
+) -> Result<Response<Body>> {
+    let params = Url::parse(&req.uri().to_string())
+        .unwrap()
+        .query_pairs()
+        .into_owned()
+        .collect::<std::collections::HashMap<String, String>>();
+    let volume_path = params.get(DIRECT_VOLUMN_PATH_KEY).unwrap();
+    let result = sandbox.direct_volume_stats(volume_path).await;
+    match result {
+        Ok(stats) => Ok(Response::new(Body::from(stats))),
+        Err(e) => {
+            let builder = Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR);
+            let resp = builder.body(Body::from(e.to_string())).unwrap();
+            Ok(resp)
+        }
     }
 }

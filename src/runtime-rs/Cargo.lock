@@ -2470,6 +2470,7 @@ dependencies = [
  "slog",
  "slog-scope",
  "tokio",
+ "url",
  "virt_container",
  "wasm_container",
 ]
