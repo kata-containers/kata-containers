@@ -9,13 +9,13 @@ import (
 	"syscall"
 	"time"
 
+	"context"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/image"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	"golang.org/x/net/context"
 )
 
 // mockAgent is an empty Agent implementation, for testing and

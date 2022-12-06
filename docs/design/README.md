@@ -9,6 +9,7 @@ Kata Containers design documents:
 - [VCPU handling](vcpu-handling.md)
 - [VCPU threads pinning](vcpu-threads-pinning.md)
 - [Host cgroups](host-cgroups.md)
+- [Agent systemd cgroup](agent-systemd-cgroup.md)
 - [`Inotify` support](inotify.md)
 - [Metrics(Kata 2.0)](kata-2-0-metrics.md)
 - [Design for Kata Containers `Lazyload` ability with `nydus`](kata-nydus-design.md)

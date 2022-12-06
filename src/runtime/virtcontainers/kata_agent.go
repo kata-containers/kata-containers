@@ -23,7 +23,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
-	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/image"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
@@ -35,10 +34,10 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
+	"context"
 	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
@@ -938,18 +937,19 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, str
 		grpcSpec.Linux.Resources.CPU.Mems = ""
 	}
 
+	// We need agent systemd cgroup now.
 	// There are three main reasons to do not apply systemd cgroups in the VM
 	// - Initrd image doesn't have systemd.
 	// - Nobody will be able to modify the resources of a specific container by using systemctl set-property.
 	// - docker is not running in the VM.
-	if resCtrl.IsSystemdCgroup(grpcSpec.Linux.CgroupsPath) {
-		// Convert systemd cgroup to cgroupfs
-		slice := strings.Split(grpcSpec.Linux.CgroupsPath, ":")
-		// 0 - slice: system.slice
-		// 1 - prefix: docker
-		// 2 - name: abc123
-		grpcSpec.Linux.CgroupsPath = filepath.Join("/", slice[1], slice[2])
-	}
+	// if resCtrl.IsSystemdCgroup(grpcSpec.Linux.CgroupsPath) {
+	// 	// Convert systemd cgroup to cgroupfs
+	// 	slice := strings.Split(grpcSpec.Linux.CgroupsPath, ":")
+	// 	// 0 - slice: system.slice
+	// 	// 1 - prefix: docker
+	// 	// 2 - name: abc123
+	// 	grpcSpec.Linux.CgroupsPath = filepath.Join("/", slice[1], slice[2])
+	// }
 
 	// Disable network namespace since it is already handled on the host by
 	// virtcontainers. The network is a complex part which cannot be simply

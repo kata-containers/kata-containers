@@ -573,7 +573,7 @@ func TestAppendVhostUserBlkDevices(t *testing.T) {
 
 func TestConstrainGRPCSpec(t *testing.T) {
 	assert := assert.New(t)
-	expectedCgroupPath := "/foo/bar"
+	expectedCgroupPath := "system.slice:foo:bar"
 
 	g := &pb.Spec{
 		Hooks: &pb.Hooks{},

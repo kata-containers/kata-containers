@@ -47,7 +47,6 @@ use nix::errno::Errno;
 use nix::mount::MsFlags;
 use nix::sys::{stat, statfs};
 use nix::unistd::{self, Pid};
-use rustjail::cgroups::Manager;
 use rustjail::process::ProcessOperations;
 
 use crate::device::{
@@ -92,9 +91,15 @@ const CONFIG_JSON: &str = "config.json";
 const INIT_TRUSTED_STORAGE: &str = "/usr/bin/kata-init-trusted-storage";
 const TRUSTED_STORAGE_DEVICE: &str = "/dev/trusted_store";
 
+/// the iptables seriers binaries could appear either in /sbin
+/// or /usr/sbin, we need to check both of them
+const USR_IPTABLES_SAVE: &str = "/usr/sbin/iptables-save";
 const IPTABLES_SAVE: &str = "/sbin/iptables-save";
+const USR_IPTABLES_RESTORE: &str = "/usr/sbin/iptables-store";
 const IPTABLES_RESTORE: &str = "/sbin/iptables-restore";
+const USR_IP6TABLES_SAVE: &str = "/usr/sbin/ip6tables-save";
 const IP6TABLES_SAVE: &str = "/sbin/ip6tables-save";
+const USR_IP6TABLES_RESTORE: &str = "/usr/sbin/ip6tables-save";
 const IP6TABLES_RESTORE: &str = "/sbin/ip6tables-restore";
 
 const ERR_CANNOT_GET_WRITER: &str = "Cannot get writer";
@@ -344,9 +349,9 @@ impl AgentService {
 
         // start oom event loop
         if let Some(ref ctr) = ctr.cgroup_manager {
-            let cg_path = ctr.get_cg_path("memory");
+            let cg_path = ctr.get_cgroup_path("memory");
 
-            if let Some(cg_path) = cg_path {
+            if let Ok(cg_path) = cg_path {
                 let rx = notifier::notify_oom(cid.as_str(), cg_path.to_string()).await?;
 
                 s.run_oom_event_monitor(rx, cid.clone()).await;
@@ -1123,8 +1128,18 @@ impl agent_ttrpc::AgentService for AgentService {
 
         info!(sl!(), "get_ip_tables: request received");
 
+        // the binary could exists in either /usr/sbin or /sbin
+        // here check both of the places and return the one exists
+        // if none exists, return the /sbin one, and the rpc will
+        // returns an internal error
         let cmd = if req.is_ipv6 {
-            IP6TABLES_SAVE
+            if Path::new(USR_IP6TABLES_SAVE).exists() {
+                USR_IP6TABLES_SAVE
+            } else {
+                IP6TABLES_SAVE
+            }
+        } else if Path::new(USR_IPTABLES_SAVE).exists() {
+            USR_IPTABLES_SAVE
         } else {
             IPTABLES_SAVE
         }
@@ -1152,8 +1167,18 @@ impl agent_ttrpc::AgentService for AgentService {
 
         info!(sl!(), "set_ip_tables request received");
 
+        // the binary could exists in both /usr/sbin and /sbin
+        // here check both of the places and return the one exists
+        // if none exists, return the /sbin one, and the rpc will
+        // returns an internal error
         let cmd = if req.is_ipv6 {
-            IP6TABLES_RESTORE
+            if Path::new(USR_IP6TABLES_RESTORE).exists() {
+                USR_IP6TABLES_RESTORE
+            } else {
+                IP6TABLES_RESTORE
+            }
+        } else if Path::new(USR_IPTABLES_RESTORE).exists() {
+            USR_IPTABLES_RESTORE
         } else {
             IPTABLES_RESTORE
         }
@@ -2926,16 +2951,25 @@ OtherField:other
     async fn test_ip_tables() {
         skip_if_not_root!();
 
-        if !check_command(IPTABLES_SAVE)
-            || !check_command(IPTABLES_RESTORE)
-            || !check_command(IP6TABLES_SAVE)
-            || !check_command(IP6TABLES_RESTORE)
-        {
-            warn!(
-                sl!(),
-                "one or more commands for ip tables test are missing, skip it"
-            );
-            return;
+        let iptables_cmd_list = [
+            USR_IPTABLES_SAVE,
+            USR_IP6TABLES_SAVE,
+            USR_IPTABLES_RESTORE,
+            USR_IP6TABLES_RESTORE,
+            IPTABLES_SAVE,
+            IP6TABLES_SAVE,
+            IPTABLES_RESTORE,
+            IP6TABLES_RESTORE,
+        ];
+
+        for cmd in iptables_cmd_list {
+            if !check_command(cmd) {
+                warn!(
+                    sl!(),
+                    "one or more commands for ip tables test are missing, skip it"
+                );
+                return;
+            }
         }
 
         let logger = slog::Logger::root(slog::Discard, o!());

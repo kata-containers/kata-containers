@@ -530,7 +530,6 @@ handle_build() {
 
 	virtiofsd) install_virtiofsd ;;
 
-	
 	*)
 		die "Invalid build target ${build_target}"
 		;;

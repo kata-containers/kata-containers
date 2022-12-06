@@ -95,11 +95,11 @@ fn show_help(cmd: &OsStr) {
 
 fn show_version(err: Option<anyhow::Error>) {
     let data = format!(
-        r#"{} containerd shim: id: {}, version: {}, commit: {}"#,
+        r#"{} containerd shim (Rust): id: {}, version: {}, commit: {}"#,
         config::PROJECT_NAME,
         config::CONTAINERD_RUNTIME_NAME,
         config::RUNTIME_VERSION,
-        config::RUNTIME_VERSION_COMMIT,
+        config::RUNTIME_GIT_COMMIT,
     );
 
     if let Some(err) = err {
