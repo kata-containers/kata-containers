@@ -114,10 +114,6 @@ pub fn handle_check(checkcmd: CheckArgument) -> Result<()> {
     Ok(())
 }
 
-pub fn handle_check_volume() -> Result<()> {
-    Ok(())
-}
-
 pub fn handle_env() -> Result<()> {
     Ok(())
 }
