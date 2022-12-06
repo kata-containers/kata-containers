@@ -20,6 +20,8 @@ thiserror = "1.0.35"
 privdrop = "0.5.2"
 nix = "0.25.0"
 
+runtimes = { path = "../../runtime-rs/crates/runtimes" }
+
 [target.'cfg(target_arch = "s390x")'.dependencies]
 reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "native-tls"] }
 
