@@ -2452,6 +2452,7 @@ dependencies = [
 name = "runtimes"
 version = "0.1.0"
 dependencies = [
+ "agent",
  "anyhow",
  "common",
  "hyper",
