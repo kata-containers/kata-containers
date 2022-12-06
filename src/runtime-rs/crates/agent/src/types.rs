@@ -568,6 +568,16 @@ pub struct ResizeVolumeRequest {
     pub size: u64,
 }
 
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct VolumeStatsRequest {
+    pub volume_guest_path: String,
+}
+
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct VolumeStatsResponse {
+    pub data: String,
+}
+
 #[cfg(test)]
 mod test {
     use std::convert::TryFrom;

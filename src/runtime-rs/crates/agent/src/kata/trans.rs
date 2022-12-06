@@ -8,7 +8,7 @@ use std::convert::Into;
 
 use protocols::{
     agent::{self, OOMEvent},
-    empty, health, types,
+    csi, empty, health, types,
 };
 
 use crate::{
@@ -24,7 +24,7 @@ use crate::{
         SetGuestDateTimeRequest, SetIPTablesRequest, SetIPTablesResponse, SignalProcessRequest,
         StatsContainerResponse, Storage, StringUser, ThrottlingData, TtyWinResizeRequest,
         UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest, VersionCheckResponse,
-        WaitProcessRequest, WriteStreamRequest,
+        VolumeStatsRequest, VolumeStatsResponse, WaitProcessRequest, WriteStreamRequest,
     },
     OomEventResponse, WaitProcessResponse, WriteStreamResponse,
 };
@@ -844,5 +844,26 @@ impl From<agent::OOMEvent> for OomEventResponse {
         Self {
             container_id: from.container_id,
         }
+    }
+}
+
+impl From<VolumeStatsRequest> for agent::VolumeStatsRequest {
+    fn from(from: VolumeStatsRequest) -> Self {
+        Self {
+            volume_guest_path: from.volume_guest_path,
+            unknown_fields: Default::default(),
+            cached_size: Default::default(),
+        }
+    }
+}
+
+impl From<csi::VolumeStatsResponse> for VolumeStatsResponse {
+    fn from(from: csi::VolumeStatsResponse) -> Self {
+        let result: String = format!(
+            "Usage: {:?}\nVolume Condition: {:?}",
+            from.get_usage(),
+            from.get_volume_condition()
+        );
+        Self { data: result }
     }
 }

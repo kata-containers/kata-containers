@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use agent::{
     self, kata::KataAgent, types::KernelModule, Agent, GetIPTablesRequest, SetIPTablesRequest,
+    VolumeStatsRequest,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -327,6 +328,14 @@ impl Sandbox for VirtSandbox {
 
     async fn agent_sock(&self) -> Result<String> {
         self.agent.agent_sock().await
+    }
+
+    async fn direct_volume_stats(&self, volume_guest_path: &str) -> Result<String> {
+        let req: agent::VolumeStatsRequest = VolumeStatsRequest {
+            volume_guest_path: volume_guest_path.to_string(),
+        };
+        let result = self.agent.get_volume_stats(req).await?.data;
+        Ok(result)
     }
 
     async fn set_iptables(&self, is_ipv6: bool, data: Vec<u8>) -> Result<Vec<u8>> {

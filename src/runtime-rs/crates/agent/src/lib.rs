@@ -23,8 +23,8 @@ pub use types::{
     ReseedRandomDevRequest, ResizeVolumeRequest, Route, Routes, SetGuestDateTimeRequest,
     SetIPTablesRequest, SetIPTablesResponse, SignalProcessRequest, StatsContainerResponse, Storage,
     TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
-    VersionCheckResponse, WaitProcessRequest, WaitProcessResponse, WriteStreamRequest,
-    WriteStreamResponse,
+    VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse, WaitProcessRequest,
+    WaitProcessResponse, WriteStreamRequest, WriteStreamResponse,
 };
 
 use anyhow::Result;
@@ -88,4 +88,5 @@ pub trait Agent: AgentManager + HealthService + Send + Sync {
     async fn get_oom_event(&self, req: Empty) -> Result<OomEventResponse>;
     async fn get_ip_tables(&self, req: GetIPTablesRequest) -> Result<GetIPTablesResponse>;
     async fn set_ip_tables(&self, req: SetIPTablesRequest) -> Result<SetIPTablesResponse>;
+    async fn get_volume_stats(&self, req: VolumeStatsRequest) -> Result<VolumeStatsResponse>;
 }
