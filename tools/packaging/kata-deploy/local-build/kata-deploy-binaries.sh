@@ -254,6 +254,7 @@ install_cc_virtiofsd() {
 
 #Install CC kernel assert, with TEE support
 install_cc_tee_kernel() {
+	export KATA_BUILD_CC=yes
 	tee="${1}"
 	kernel_version="${2}"
 
