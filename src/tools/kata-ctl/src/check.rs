@@ -6,6 +6,7 @@
 // Contains checks that are not architecture-specific
 
 use anyhow::{anyhow, Context, Result};
+use futures_util::TryStreamExt;
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use scopeguard::defer;
 use serde_json::Value;
@@ -104,23 +105,36 @@ pub fn check_cpu_attribs(
 #[tokio::main]
 pub async fn run_network_checks() -> Result<()> {
     println!("Running network checks...");
-    if let Ok((connection, handle, _)) =
-            rtnetlink::new_connection().context("failed to create netlink connection")
-        {
-            let thread_handler = tokio::spawn(connection);
-            defer!({
-                thread_handler.abort();
-            });
+    let (connection, handle, _) = rtnetlink::new_connection().context("failed to create netlink connection").unwrap();
+    let thread_handler = tokio::spawn(connection);
+    defer!({
+        thread_handler.abort();
+    });
 
-            handle
-                .link()
-                .add()
-                .veth("foo".to_string(), "bar".to_string());
-        }
-    else {
-        return Err(anyhow!("cannot create veth pair"));
+    let host_unique_id = String::from(&kata_sys_util::rand::UUID::new());
+    let vm_unique_id = String::from(&kata_sys_util::rand::UUID::new());
+    let hostname = format!("kata-ctl-{}", &host_unique_id[0..5]);
+    let vmname = format!("kata-ctl-{}", &vm_unique_id[0..5]);
+
+    println!("Creating a virtual ethernet pair between {} and {}...", hostname, vmname);
+
+    handle
+        .link()
+        .add()
+        .veth(hostname.to_string(), vmname.to_string())
+        .execute()
+        .await?;
+
+    println!("Deleting virtual ethernet pair between {} and {}...", hostname, vmname);
+
+    let mut links = handle.link().get().match_name(hostname.clone()).execute();
+    if let Some(link) = links.try_next().await? {
+        handle.link().del(link.header.index).execute().await?;
+    } else {
+        return Err(anyhow!(format!("Link {} not found", hostname)))?;
     }
-    return Ok(())
+
+    Ok(())
 }
 
 fn get_kata_version_by_url(url: &str) -> std::result::Result<String, reqwest::Error> {

@@ -1512,6 +1512,8 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "clap",
+ "futures-util",
+ "kata-sys-util",
  "nix 0.25.0",
  "privdrop",
  "reqwest",
