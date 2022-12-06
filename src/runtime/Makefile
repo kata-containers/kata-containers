@@ -128,10 +128,11 @@ AGENTCONFIGFILEPATH := /etc/agent-config.toml
 AGENTCONFIGFILEKERNELPARAM := agent.config_file=$(AGENTCONFIGFILEPATH)
 
 ROOTMEASURECONFIG ?= ""
+ROOTMEASURECONFIGTDX ?= ""
 AGENT_AA_KBC_PARAMS ?= ""
 AGENT_AA_KBC_PARAMS_TDX ?= ""
 AGENT_AA_KBC_PARAMS_SEV ?= ""
-TDXKERNELPARAMS := tdx_disable_filter $(ROOTMEASURECONFIG) agent.enable_signature_verification=false $(AGENT_AA_KBC_PARAMS_TDX)
+TDXKERNELPARAMS := tdx_disable_filter $(ROOTMEASURECONFIGTDX) agent.enable_signature_verification=false $(AGENT_AA_KBC_PARAMS_TDX)
 SEVKERNELPARAMS := $(AGENTCONFIGFILEKERNELPARAM) $(ROOTMEASURECONFIG) agent.enable_signature_verification=false $(AGENT_AA_KBC_PARAMS_SEV)
 KERNELPARAMS += $(ROOTMEASURECONFIG) agent.enable_signature_verification=false $(AGENT_AA_KBC_PARAMS)
 
