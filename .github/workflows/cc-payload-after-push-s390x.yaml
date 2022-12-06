@@ -16,6 +16,7 @@ jobs:
           - cc-qemu
           - cc-rootfs-image
           - cc-shim-v2
+          - cc-virtiofsd
     steps:
       - name: Login to Kata Containers quay.io
         uses: docker/login-action@v2
@@ -46,7 +47,7 @@ jobs:
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@v3
         with:
-          name: kata-artifacts
+          name: kata-artifacts-s390x
           path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
           retention-days: 1
           if-no-files-found: error
@@ -63,7 +64,7 @@ jobs:
       - name: get-artifacts
         uses: actions/download-artifact@v3
         with:
-          name: kata-artifacts
+          name: kata-artifacts-s390x
           path: kata-artifacts
       - name: merge-artifacts
         run: |
@@ -71,7 +72,7 @@ jobs:
       - name: store-artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: kata-static-tarball
+          name: kata-static-tarball-s390x
           path: kata-static.tar.xz
           retention-days: 1
           if-no-files-found: error
@@ -91,7 +92,7 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@v3
         with:
-          name: kata-static-tarball
+          name: kata-static-tarball-s390x
 
       - name: build-and-push-kata-payload
         id: build-and-push-kata-payload
