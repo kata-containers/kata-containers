@@ -181,8 +181,6 @@ install_cc_tdx_image() {
 
 #Install CC kernel asset
 install_cc_kernel() {
-	info "build initramfs for cc kernel"
-
 	export KATA_BUILD_CC=yes
 	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
 
@@ -195,6 +193,7 @@ install_cc_kernel() {
 		"${final_tarball_path}" \
 		&& return 0
 
+	info "build initramfs for CC kernel"
 	"${initramfs_builder}"
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -f -v "${kernel_version}"
 }
@@ -255,12 +254,12 @@ install_cc_virtiofsd() {
 
 #Install CC kernel assert, with TEE support
 install_cc_tee_kernel() {
+	export KATA_BUILD_CC=yes
 	tee="${1}"
 	kernel_version="${2}"
 
 	[[ "${tee}" != "tdx" && "${tee}" != "sev" ]] && die "Non supported TEE"
 
-	info "build initramfs for tee kernel"
 	export kernel_version=${kernel_version}
 
 	install_cached_component \
@@ -272,6 +271,7 @@ install_cc_tee_kernel() {
 		"${final_tarball_path}" \
 		&& return 0
 
+	info "build initramfs for TEE kernel"
 	"${initramfs_builder}"
 	kernel_url="$(yq r $versions_yaml assets.kernel.${tee}.url)"
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -x "${tee}" -v "${kernel_version}" -u "${kernel_url}"
