@@ -164,3 +164,130 @@ pub fn get_sandbox_id_for_volume(volume_path: &str) -> Result<String> {
 
     return Err(anyhow!("no sandbox found for {}", volume_path));
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kata_types::mount::DirectVolumeMountInfo;
+    use std::{collections::HashMap, fs};
+    use tempfile::tempdir;
+    use test_utils::skip_if_not_root;
+
+    #[test]
+    fn test_get_sandbox_id_for_volume() {
+        // this test has to run as root, so has to manually cleanup afterwards
+        skip_if_not_root!();
+
+        // create KATA_DIRECT_VOLUME_ROOT_PATH first as safe_path::scoped_join
+        // requires prefix dir to exist
+        fs::create_dir_all(KATA_DIRECT_VOLUME_ROOT_PATH)
+            .expect("create kata direct volume root path failed");
+
+        let test_sandbox_id = "sandboxid_test_file";
+        let test_volume_path = String::from("a/b/c");
+        let joined_volume_path =
+            join_path(KATA_DIRECT_VOLUME_ROOT_PATH, &test_volume_path).unwrap();
+
+        let test_file_dir = joined_volume_path.join(test_sandbox_id);
+        fs::create_dir_all(&joined_volume_path).expect("failed to mkdir -p");
+        fs::write(&test_file_dir, "teststring").expect("failed to write");
+
+        // test that get_sandbox_id gets the correct sandboxid it sees
+        let got = get_sandbox_id_for_volume(&test_volume_path).unwrap();
+        assert!(got.eq(test_sandbox_id));
+
+        // test that get_sandbox_id returns error if no sandboxid found
+        fs::remove_file(&test_file_dir).expect("failed to remove");
+        get_sandbox_id_for_volume(&test_volume_path).expect_err("error expected");
+
+        // cleanup test directory
+        fs::remove_dir_all(&joined_volume_path).expect("failed to cleanup test")
+    }
+
+    #[test]
+    fn test_path_join() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            rootfs: &'a str,
+            volume_path: &'a str,
+            result: Result<PathBuf>,
+        }
+        // the safe_path::scoped_join requires the prefix path to exist on testing machine
+        let root_fs = tempdir().expect("failed to create tmpdir").into_path();
+        let root_fs_str = root_fs.to_str().unwrap();
+
+        let relative_secret_path = "../../etc/passwd";
+        let b64_relative_secret_path = base64::encode(relative_secret_path);
+
+        // this byte array b64encodes to "/abcdddd"
+        let b64_abs_path = vec![253, 166, 220, 117, 215, 93];
+        let converted_relative_path = "abcdddd";
+
+        let tests = &[
+            TestData {
+                rootfs: root_fs_str,
+                volume_path: "",
+                result: Err(anyhow!("volume path must not be empty")),
+            },
+            TestData {
+                rootfs: root_fs_str,
+                volume_path: relative_secret_path,
+                result: Ok(root_fs.join(b64_relative_secret_path)),
+            },
+            TestData {
+                rootfs: root_fs_str,
+                volume_path: unsafe { std::str::from_utf8_unchecked(&b64_abs_path) },
+                result: Ok(root_fs.join(converted_relative_path)),
+            },
+        ];
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+            let result = join_path(d.rootfs, d.volume_path);
+            let msg = format!("{}, result: {:?}", msg, result);
+            if d.result.is_ok() {
+                assert!(
+                    result.as_ref().unwrap() == d.result.as_ref().unwrap(),
+                    "{}",
+                    msg
+                );
+                continue;
+            }
+            let expected_error = format!("{}", d.result.as_ref().unwrap_err());
+            let actual_error = format!("{}", result.unwrap_err());
+            assert!(actual_error == expected_error, "{}", msg);
+        }
+    }
+
+    #[test]
+    fn test_add_remove() {
+        skip_if_not_root!();
+        // example volume dir is a/b/c, note the behavior of join would take "/a" as absolute path.
+        // testing with isn't really viable here since the path is then b64 encoded,
+        // so this test had to run as root and call `remove()` to manully cleanup afterwards.
+
+        fs::create_dir_all(KATA_DIRECT_VOLUME_ROOT_PATH)
+            .expect("create kata direct volume root path failed");
+
+        let base_dir = tempdir().expect("failed to create tmpdir");
+        let dir_name = base_dir.path().join("a/b/c");
+        let volume_path = String::from(dir_name.to_str().unwrap());
+        let actual: DirectVolumeMountInfo = DirectVolumeMountInfo {
+            volume_type: String::from("block"),
+            device: String::from("/dev/sda"),
+            fs_type: String::from("ext4"),
+            metadata: HashMap::new(),
+            options: vec![String::from("journal_dev"), String::from("noload")],
+        };
+        // serialize volumemountinfo into json string
+        let mount_info = serde_json::to_string(&actual).unwrap();
+        add(&volume_path, &mount_info).expect("add failed");
+        let expected_file_path = volume_path;
+        let expected: DirectVolumeMountInfo = get_volume_mount_info(&expected_file_path).unwrap();
+        remove(&expected_file_path).expect("remove failed");
+        assert_eq!(actual.device, expected.device);
+        assert_eq!(actual.fs_type, expected.fs_type);
+        assert_eq!(actual.metadata, expected.metadata);
+        assert_eq!(actual.options, expected.options);
+        assert_eq!(actual.volume_type, expected.volume_type);
+    }
+}
