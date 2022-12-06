@@ -73,9 +73,6 @@ build_image() {
 		IMG_OS_VERSION="${img_os_version}" \
 		ROOTFS_BUILD_DEST="${builddir}/rootfs-image"
 	mv -f "kata-containers.img" "${install_dir}/${image_name}"
-	if [ -e "root_hash.txt" ]; then
-	    cp root_hash.txt "${install_dir}/"
-	fi
 	(
 		cd "${install_dir}"
 		ln -sf "${image_name}" "${final_image_name}${image_initrd_extension}"
