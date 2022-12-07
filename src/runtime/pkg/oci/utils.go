@@ -815,6 +815,10 @@ func addHypervisporNetworkOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConf
 
 func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {
 
+	if value, ok := ocispec.Annotations["cni-annotations"]; ok {
+		sbConfig.Annotations["cni-annotations"] = value
+	}
+
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DisableGuestSeccomp).setBool(func(disableGuestSeccomp bool) {
 		sbConfig.DisableGuestSeccomp = disableGuestSeccomp
 	}); err != nil {

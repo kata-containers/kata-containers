@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
@@ -16,6 +17,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/containernetworking/cni/pkg/types"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
@@ -144,8 +147,9 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 			networkLogger().Infof("macvtap interface found")
 			endpoint, err = createMacvtapNetworkEndpoint(netInfo)
 		} else if netInfo.Iface.Type == "tap" {
-			networkLogger().Info("tap interface found")
+			networkLogger().Info("AAAAA tap interface found")
 			endpoint, err = createTapNetworkEndpoint(idx, netInfo.Iface.Name)
+			networkLogger().Infof("AAAAA tap interface found %+v", endpoint)
 		} else if netInfo.Iface.Type == "tuntap" {
 			if netInfo.Link != nil {
 				switch netInfo.Link.(*netlink.Tuntap).Mode {
@@ -252,19 +256,92 @@ func (n *LinuxNetwork) removeSingleEndpoint(ctx context.Context, s *Sandbox, idx
 	return nil
 }
 
+type DirectAttachableNetworkType string
+
+const DirectAttachableNetworkTypeTap DirectAttachableNetworkType = "tap"
+const DirectAttachableNetworkTypePassthrough DirectAttachableNetworkType = "passthrough"
+const DirectAttachableNetworkTypeDPDK DirectAttachableNetworkType = "dpdk"
+
+type DirectAttachableNetwork struct {
+	// tell runtime about the network hardware parts
+	NetworkType            DirectAttachableNetworkType `json:"networkType"`
+	DeviceName             string                      `json:"deviceName"`
+	ContainerInterfaceName string                      `json:"containerInterfaceName"`
+	DPDKSocketPath         string                      `json:"dpdkSocketPath"`
+	HWAddr                 string                      `json:"hwaddr"`
+	KernelPath             string                      `json:"kernelPath"`
+	PCIAddr                string                      `json:"pciAddr"`
+
+	// in Direct Attachable Network, this maybe set by CNI plugins
+	Interfaces  []*current.Interface `json:"interfaces,omitempty"`
+	IPs         []*current.IPConfig  `json:"ips,omitempty"`
+	Routes      []*types.Route       `json:"routes,omitempty"`
+	DNS         types.DNS            `json:"dns,omitempty"`
+	Annotations map[string]string    `json:"annotations,omitempty"`
+}
+
+type AnnotationsList []map[string]string
+
 // Scan the networking namespace through netlink and then:
 // 1. Create the endpoints for the relevant interfaces found there.
 // 2. Attach them to the VM.
 func (n *LinuxNetwork) addAllEndpoints(ctx context.Context, s *Sandbox, hotplug bool) error {
-	netnsHandle, err := netns.GetFromPath(n.netNSPath)
-	if err != nil {
-		return err
-	}
-	defer netnsHandle.Close()
+	var (
+		netlinkHandle            *netlink.Handle
+		directAttachableNetworks map[string]*DirectAttachableNetwork
+		err                      error
+	)
 
-	netlinkHandle, err := netlink.NewHandleAt(netnsHandle)
-	if err != nil {
-		return err
+	directAttachableNetworks = make(map[string]*DirectAttachableNetwork)
+
+	networkLogger().Infof("AAAAA n.netNSPath %+v", n.netNSPath)
+	networkLogger().Infof("AAAAA Annotations %+v", s.config.Annotations)
+
+	// has direct attachable network
+	if value, ok := s.config.Annotations["cni-annotations"]; ok {
+		var vals AnnotationsList
+		if err = json.Unmarshal([]byte(value), &vals); err != nil {
+			networkLogger().Errorf("AAAAA Unmarshal %+v", err)
+			return err
+		}
+		networkLogger().Infof("AAAAA Annotations['cni-annotations'] vals %+v", vals)
+
+		for i := range vals {
+			if vals[i] != nil {
+				if v, ok := vals[i]["metafile"]; ok {
+					content, err := os.ReadFile(v)
+					if err != nil {
+						return err
+					}
+
+					// Now let's unmarshall the data into `payload`
+					var dan DirectAttachableNetwork
+					err = json.Unmarshal(content, &dan)
+					if err != nil {
+						return err
+					}
+					directAttachableNetworks[dan.DeviceName] = &dan
+				}
+			}
+		}
+
+		networkLogger().Infof("AAAAA DirectAttachableNetwork s val %+v", directAttachableNetworks)
+	}
+
+	if n.netNSPath == "" && len(directAttachableNetworks) == 0 {
+		return fmt.Errorf("network namespace or direct attachable network was not set")
+	}
+
+	if n.netNSPath != "" {
+		netnsHandle, err := netns.GetFromPath(n.netNSPath)
+		if err != nil {
+			return err
+		}
+		defer netnsHandle.Close()
+
+		netlinkHandle, err = netlink.NewHandleAt(netnsHandle)
+	} else {
+		netlinkHandle, err = netlink.NewHandle()
 	}
 	defer netlinkHandle.Close()
 
@@ -274,16 +351,29 @@ func (n *LinuxNetwork) addAllEndpoints(ctx context.Context, s *Sandbox, hotplug 
 	}
 
 	for _, link := range linkList {
-		netInfo, err := networkInfoFromLink(netlinkHandle, link)
+		netInfo, err := networkInfoFromLink(netlinkHandle, link, directAttachableNetworks)
 		if err != nil {
 			return err
 		}
+		networkLogger().Infof("AAAAA netInfo %+v", netInfo)
 
+		_, hasDan := directAttachableNetworks[netInfo.Iface.LinkAttrs.Name]
+
+		// FIXME: how about the relation between netns path and direct attachable netwok.
+		if n.netNSPath == "" && !hasDan {
+			continue
+		}
+
+		networkLogger().Infof("AAAAA hasDan %+v", hasDan)
 		// Ignore unconfigured network interfaces. These are
 		// either base tunnel devices that are not namespaced
 		// like gre0, gretap0, sit0, ipip0, tunl0 or incorrectly
 		// setup interfaces.
-		if len(netInfo.Addrs) == 0 {
+		if len(netInfo.Addrs) == 0 && !hasDan {
+			continue
+		}
+
+		if n.netNSPath == "" && !hasDan {
 			continue
 		}
 
@@ -292,20 +382,26 @@ func (n *LinuxNetwork) addAllEndpoints(ctx context.Context, s *Sandbox, hotplug 
 			continue
 		}
 
-		if err := doNetNS(n.netNSPath, func(_ ns.NetNS) error {
+		networkLogger().Infof("AAAAA add single endpoint %+v", netInfo)
+
+		if n.netNSPath != "" {
+			err = doNetNS(n.netNSPath, func(_ ns.NetNS) error {
+				_, err = n.addSingleEndpoint(ctx, s, netInfo, hotplug)
+				return err
+			})
+		} else {
 			_, err = n.addSingleEndpoint(ctx, s, netInfo, hotplug)
-			return err
-		}); err != nil {
+		}
+		if err != nil {
 			return err
 		}
-
 	}
 
 	sort.Slice(n.eps, func(i, j int) bool {
 		return n.eps[i].Name() < n.eps[j].Name()
 	})
 
-	networkLogger().WithField("endpoints", n.eps).Info("endpoints found after scan")
+	networkLogger().WithField("endpoints", n.eps).Info("AAAAA endpoints found after scan")
 
 	return nil
 }
@@ -1075,31 +1171,57 @@ func deleteNetNS(netNSPath string) error {
 	return nil
 }
 
-func networkInfoFromLink(handle *netlink.Handle, link netlink.Link) (NetworkInfo, error) {
-	addrs, err := handle.AddrList(link, netlink.FAMILY_ALL)
-	if err != nil {
-		return NetworkInfo{}, err
+func networkInfoFromLink(handle *netlink.Handle, link netlink.Link, directAttachableNetworks map[string]*DirectAttachableNetwork) (NetworkInfo, error) {
+	var (
+		err       error
+		addrs     []netlink.Addr
+		routes    []netlink.Route
+		neighbors []netlink.Neigh
+		dan       *DirectAttachableNetwork
+	)
+
+	val, ok := directAttachableNetworks[link.Attrs().Name]
+	if ok {
+		// driect attachable network
+		// FIXME: get address/routes/neighbors from dan
+		dan = val
+	} else {
+		addrs, err = handle.AddrList(link, netlink.FAMILY_ALL)
+		if err != nil {
+			return NetworkInfo{}, err
+		}
+
+		routes, err = handle.RouteList(link, netlink.FAMILY_ALL)
+		if err != nil {
+			return NetworkInfo{}, err
+		}
+
+		neighbors, err = handle.NeighList(link.Attrs().Index, netlink.FAMILY_ALL)
+		if err != nil {
+			return NetworkInfo{}, err
+		}
 	}
 
-	routes, err := handle.RouteList(link, netlink.FAMILY_ALL)
-	if err != nil {
-		return NetworkInfo{}, err
-	}
-
-	neighbors, err := handle.NeighList(link.Attrs().Index, netlink.FAMILY_ALL)
-	if err != nil {
-		return NetworkInfo{}, err
+	deviceType := link.Type()
+	if deviceType == "tuntap" {
+		tt := link.(*netlink.Tuntap)
+		if tt.Mode == netlink.TUNTAP_MODE_TAP {
+			deviceType = "tap"
+		}
 	}
 
 	return NetworkInfo{
 		Iface: NetlinkIface{
 			LinkAttrs: *(link.Attrs()),
-			Type:      link.Type(),
+			Type:      deviceType,
 		},
 		Addrs:     addrs,
 		Routes:    routes,
 		Neighbors: neighbors,
 		Link:      link,
+
+		// direct attachable network has the real info(addr/route) about the interface
+		DirectAttachableNetwork: dan,
 	}, nil
 }
 

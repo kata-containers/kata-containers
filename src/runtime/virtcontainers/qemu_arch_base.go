@@ -597,9 +597,23 @@ func genericNetwork(endpoint Endpoint, vhost, nestedRun bool, index int) (govmmQ
 			FDs:           netPair.VMFds,
 			VhostFDs:      netPair.VhostFds,
 		}
+	case *TapEndpoint:
+		d = govmmQemu.NetDevice{
+			Type:          govmmQemu.NetDeviceType("tap"),
+			Driver:        govmmQemu.VirtioNet,
+			ID:            fmt.Sprintf("network-%d", index),
+			IFName:        ep.TapInterface.Name,
+			MACAddress:    ep.TapInterface.TAPIface.HardAddr,
+			DownScript:    "no",
+			Script:        "no",
+			VHost:         vhost,
+			DisableModern: nestedRun,
+		}
 	default:
 		return govmmQemu.NetDevice{}, fmt.Errorf("Unknown type for endpoint")
 	}
+
+	hvLogger.Warnf("AAAAAAAAAA genericNetwork retrun %+v", d)
 
 	return d, nil
 }

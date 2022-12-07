@@ -69,26 +69,33 @@ func (endpoint *TapEndpoint) NetworkPair() *NetworkInterfacePair {
 // SetProperties sets the properties for the endpoint.
 func (endpoint *TapEndpoint) SetProperties(properties NetworkInfo) {
 	endpoint.EndpointProperties = properties
+
+	// FIXME
+	endpoint.TapInterface.TAPIface.HardAddr = properties.Link.Attrs().HardwareAddr.String()
 }
 
 // Attach for tap endpoint adds the tap interface to the hypervisor.
 func (endpoint *TapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
-	return fmt.Errorf("TapEndpoint does not support Attach, if you're using docker please use --net none")
+	span, ctx := tuntapTrace(ctx, "Attach", endpoint)
+	defer span.End()
+
+	return s.hypervisor.AddDevice(ctx, endpoint, NetDev)
 }
 
 // Detach for the tap endpoint tears down the tap
 func (endpoint *TapEndpoint) Detach(ctx context.Context, netNsCreated bool, netNsPath string) error {
-	if !netNsCreated && netNsPath != "" {
-		return nil
-	}
+	// if !netNsCreated && netNsPath != "" {
+	// 	return nil
+	// }
 
-	span, _ := tapTrace(ctx, "Detach", endpoint)
-	defer span.End()
+	// span, _ := tapTrace(ctx, "Detach", endpoint)
+	// defer span.End()
 
-	networkLogger().WithField("endpoint-type", TapEndpointType).Info("Detaching endpoint")
-	return doNetNS(netNsPath, func(_ ns.NetNS) error {
-		return unTapNetwork(endpoint.TapInterface.TAPIface.Name)
-	})
+	// networkLogger().WithField("endpoint-type", TapEndpointType).Info("Detaching endpoint")
+	// return doNetNS(netNsPath, func(_ ns.NetNS) error {
+	// 	return unTapNetwork(endpoint.TapInterface.TAPIface.Name)
+	// })
+	return nil
 }
 
 // HotAttach for the tap endpoint uses hot plug device

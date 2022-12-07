@@ -34,6 +34,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	"context"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -729,6 +730,8 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 	if err != nil {
 		return err
 	}
+	k.Logger().Errorf("AAAAAAAA interfaces %+v, routes %+v, neighs %+v", interfaces, routes, neighs)
+
 	if err = k.updateInterfaces(ctx, interfaces); err != nil {
 		return err
 	}

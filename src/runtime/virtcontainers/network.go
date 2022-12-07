@@ -95,12 +95,13 @@ type NetlinkIface struct {
 // NetworkInfo gathers all information related to a network interface.
 // It can be used to store the description of the underlying network.
 type NetworkInfo struct {
-	Iface     NetlinkIface
-	DNS       DNSInfo
-	Link      netlink.Link
-	Addrs     []netlink.Addr
-	Routes    []netlink.Route
-	Neighbors []netlink.Neigh
+	Iface                   NetlinkIface
+	DNS                     DNSInfo
+	Link                    netlink.Link
+	Addrs                   []netlink.Addr
+	Routes                  []netlink.Route
+	Neighbors               []netlink.Neigh
+	DirectAttachableNetwork *DirectAttachableNetwork
 }
 
 // NetInterworkingModel defines the network model connecting
@@ -228,101 +229,231 @@ type Network interface {
 	SetEndpoints([]Endpoint)
 }
 
-func generateVCNetworkStructures(ctx context.Context, network Network) ([]*pbTypes.Interface, []*pbTypes.Route, []*pbTypes.ARPNeighbor, error) {
-	if network.NetworkID() == "" {
-		return nil, nil, nil, nil
-	}
-	span, _ := networkTrace(ctx, "generateVCNetworkStructures", nil)
-	defer span.End()
+func generateEndpointNetworkStructure(ctx context.Context, endpoint Endpoint) ([]*pbTypes.Interface, []*pbTypes.Route, []*pbTypes.ARPNeighbor) {
 
 	var routes []*pbTypes.Route
 	var ifaces []*pbTypes.Interface
 	var neighs []*pbTypes.ARPNeighbor
 
-	for _, endpoint := range network.Endpoints() {
-		var ipAddresses []*pbTypes.IPAddress
-		for _, addr := range endpoint.Properties().Addrs {
+	var ipAddresses []*pbTypes.IPAddress
+	for _, addr := range endpoint.Properties().Addrs {
+		// Skip localhost interface
+		if addr.IP.IsLoopback() {
+			continue
+		}
+
+		netMask, _ := addr.Mask.Size()
+		ipAddress := pbTypes.IPAddress{
+			Family:  pbTypes.IPFamily_v4,
+			Address: addr.IP.String(),
+			Mask:    fmt.Sprintf("%d", netMask),
+		}
+
+		if addr.IP.To4() == nil {
+			ipAddress.Family = pbTypes.IPFamily_v6
+		}
+		ipAddresses = append(ipAddresses, &ipAddress)
+	}
+	noarp := endpoint.Properties().Iface.RawFlags & unix.IFF_NOARP
+	ifc := pbTypes.Interface{
+		IPAddresses: ipAddresses,
+		Device:      endpoint.Name(),
+		Name:        endpoint.Name(),
+		Mtu:         uint64(endpoint.Properties().Iface.MTU),
+		RawFlags:    noarp,
+		HwAddr:      endpoint.HardwareAddr(),
+		PciPath:     endpoint.PciPath().String(),
+	}
+
+	ifaces = append(ifaces, &ifc)
+
+	for _, route := range endpoint.Properties().Routes {
+		var r pbTypes.Route
+
+		if !validGuestRoute(route) {
+			continue
+		}
+
+		if route.Dst != nil {
+			r.Dest = route.Dst.String()
+		}
+
+		if route.Gw != nil {
+			gateway := route.Gw.String()
+			r.Gateway = gateway
+		}
+
+		if route.Src != nil {
+			r.Source = route.Src.String()
+		}
+
+		r.Device = endpoint.Name()
+		r.Scope = uint32(route.Scope)
+		r.Family = utils.ConvertAddressFamily((int32)(route.Family))
+		routes = append(routes, &r)
+	}
+
+	for _, neigh := range endpoint.Properties().Neighbors {
+		var n pbTypes.ARPNeighbor
+
+		if !validGuestNeighbor(neigh) {
+			continue
+		}
+
+		n.Device = endpoint.Name()
+		n.State = int32(neigh.State)
+		n.Flags = int32(neigh.Flags)
+
+		if neigh.HardwareAddr != nil {
+			n.Lladdr = neigh.HardwareAddr.String()
+		}
+
+		n.ToIPAddress = &pbTypes.IPAddress{
+			Family:  pbTypes.IPFamily_v4,
+			Address: neigh.IP.String(),
+		}
+		if neigh.IP.To4() == nil {
+			n.ToIPAddress.Family = pbTypes.IPFamily_v6
+		}
+
+		neighs = append(neighs, &n)
+	}
+
+	return ifaces, routes, neighs
+}
+
+func generateDanEndpointNetworkStructure(ctx context.Context, endpoint Endpoint) ([]*pbTypes.Interface, []*pbTypes.Route, []*pbTypes.ARPNeighbor) {
+
+	var routes []*pbTypes.Route
+	var ifaces []*pbTypes.Interface
+	var neighs []*pbTypes.ARPNeighbor
+
+	var ipAddresses []*pbTypes.IPAddress
+
+	networkInfo := endpoint.Properties()
+	dan := networkInfo.DirectAttachableNetwork
+	if dan == nil {
+		// FIXME: add error to return values
+		return ifaces, routes, neighs
+	}
+
+	for i := range dan.Interfaces {
+		inf := dan.Interfaces[i]
+
+		for j := range dan.IPs {
+			ip := dan.IPs[j]
 			// Skip localhost interface
-			if addr.IP.IsLoopback() {
+			if ip.Address.IP.IsLoopback() || ip.Interface == nil {
 				continue
 			}
 
-			netMask, _ := addr.Mask.Size()
 			ipAddress := pbTypes.IPAddress{
-				Family:  pbTypes.IPFamily_v4,
-				Address: addr.IP.String(),
-				Mask:    fmt.Sprintf("%d", netMask),
+				Family: pbTypes.IPFamily_v4,
 			}
 
-			if addr.IP.To4() == nil {
+			if *ip.Interface == i {
+				netMask, _ := ip.Address.Mask.Size()
+
+				ipAddress.Address = ip.Address.IP.String()
+				ipAddress.Mask = fmt.Sprintf("%d", netMask)
+			}
+
+			if ip.Address.IP.To4() == nil {
 				ipAddress.Family = pbTypes.IPFamily_v6
 			}
 			ipAddresses = append(ipAddresses, &ipAddress)
 		}
-		noarp := endpoint.Properties().Iface.RawFlags & unix.IFF_NOARP
+
+		noarp := networkInfo.Iface.RawFlags & unix.IFF_NOARP
 		ifc := pbTypes.Interface{
 			IPAddresses: ipAddresses,
-			Device:      endpoint.Name(),
-			Name:        endpoint.Name(),
-			Mtu:         uint64(endpoint.Properties().Iface.MTU),
+			Device:      inf.Name,
+			Name:        inf.Name,
+			Mtu:         uint64(networkInfo.Iface.MTU),
 			RawFlags:    noarp,
-			HwAddr:      endpoint.HardwareAddr(),
-			PciPath:     endpoint.PciPath().String(),
+			HwAddr:      inf.Mac,
+			PciPath:     dan.PCIAddr,
 		}
 
 		ifaces = append(ifaces, &ifc)
+	}
 
-		for _, route := range endpoint.Properties().Routes {
-			var r pbTypes.Route
+	// for _, route := range endpoint.Properties().Routes {
+	// 	var r pbTypes.Route
 
-			if !validGuestRoute(route) {
-				continue
-			}
+	// 	if !validGuestRoute(route) {
+	// 		continue
+	// 	}
 
-			if route.Dst != nil {
-				r.Dest = route.Dst.String()
-			}
+	// 	if route.Dst != nil {
+	// 		r.Dest = route.Dst.String()
+	// 	}
 
-			if route.Gw != nil {
-				gateway := route.Gw.String()
-				r.Gateway = gateway
-			}
+	// 	if route.Gw != nil {
+	// 		gateway := route.Gw.String()
+	// 		r.Gateway = gateway
+	// 	}
 
-			if route.Src != nil {
-				r.Source = route.Src.String()
-			}
+	// 	if route.Src != nil {
+	// 		r.Source = route.Src.String()
+	// 	}
 
-			r.Device = endpoint.Name()
-			r.Scope = uint32(route.Scope)
-			r.Family = utils.ConvertAddressFamily((int32)(route.Family))
-			routes = append(routes, &r)
+	// 	r.Device = endpoint.Name()
+	// 	r.Scope = uint32(route.Scope)
+	// 	r.Family = utils.ConvertAddressFamily((int32)(route.Family))
+	// 	routes = append(routes, &r)
+	// }
+
+	// for _, neigh := range endpoint.Properties().Neighbors {
+	// 	var n pbTypes.ARPNeighbor
+
+	// 	if !validGuestNeighbor(neigh) {
+	// 		continue
+	// 	}
+
+	// 	n.Device = endpoint.Name()
+	// 	n.State = int32(neigh.State)
+	// 	n.Flags = int32(neigh.Flags)
+
+	// 	if neigh.HardwareAddr != nil {
+	// 		n.Lladdr = neigh.HardwareAddr.String()
+	// 	}
+
+	// 	n.ToIPAddress = &pbTypes.IPAddress{
+	// 		Family:  pbTypes.IPFamily_v4,
+	// 		Address: neigh.IP.String(),
+	// 	}
+	// 	if neigh.IP.To4() == nil {
+	// 		n.ToIPAddress.Family = pbTypes.IPFamily_v6
+	// 	}
+
+	// 	neighs = append(neighs, &n)
+	// }
+
+	return ifaces, routes, neighs
+}
+
+func generateVCNetworkStructures(ctx context.Context, network Network) ([]*pbTypes.Interface, []*pbTypes.Route, []*pbTypes.ARPNeighbor, error) {
+	// if network.NetworkID() == "" {
+	// 	return nil, nil, nil, nil
+	// }
+	span, _ := networkTrace(ctx, "generateVCNetworkStructures", nil)
+	defer span.End()
+
+	var routes, rs []*pbTypes.Route
+	var ifaces, is []*pbTypes.Interface
+	var neighs, ns []*pbTypes.ARPNeighbor
+
+	for _, endpoint := range network.Endpoints() {
+		if endpoint.Properties().DirectAttachableNetwork != nil {
+			is, rs, ns = generateDanEndpointNetworkStructure(ctx, endpoint)
+		} else {
+			is, rs, ns = generateEndpointNetworkStructure(ctx, endpoint)
 		}
 
-		for _, neigh := range endpoint.Properties().Neighbors {
-			var n pbTypes.ARPNeighbor
-
-			if !validGuestNeighbor(neigh) {
-				continue
-			}
-
-			n.Device = endpoint.Name()
-			n.State = int32(neigh.State)
-			n.Flags = int32(neigh.Flags)
-
-			if neigh.HardwareAddr != nil {
-				n.Lladdr = neigh.HardwareAddr.String()
-			}
-
-			n.ToIPAddress = &pbTypes.IPAddress{
-				Family:  pbTypes.IPFamily_v4,
-				Address: neigh.IP.String(),
-			}
-			if neigh.IP.To4() == nil {
-				n.ToIPAddress.Family = pbTypes.IPFamily_v6
-			}
-
-			neighs = append(neighs, &n)
-		}
+		routes = append(routes, rs...)
+		ifaces = append(ifaces, is...)
+		neighs = append(neighs, ns...)
 	}
 
 	return ifaces, routes, neighs, nil

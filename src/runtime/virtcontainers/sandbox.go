@@ -832,10 +832,10 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 }
 
 func (s *Sandbox) createNetwork(ctx context.Context) error {
-	if s.config.NetworkConfig.DisableNewNetwork ||
-		s.config.NetworkConfig.NetworkID == "" {
-		return nil
-	}
+	// if s.config.NetworkConfig.DisableNewNetwork ||
+	// 	s.config.NetworkConfig.NetworkID == "" {
+	// 	return nil
+	// }
 
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "createNetwork", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()

@@ -116,6 +116,16 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 	katatrace.AddTags(span, "container_id", containerID)
 	defer span.End()
 
+	// kataUtilsLogger.Infof("AAAA old spec ns %+v", ociSpec.Linux.Namespaces)
+	// for i := range ociSpec.Linux.Namespaces {
+	// 	// FIXME for test only
+	// 	if ociSpec.Linux.Namespaces[i].Type == specs.NetworkNamespace {
+	// 		ociSpec.Linux.Namespaces[i].Path = ""
+	// 	}
+	// }
+	// kataUtilsLogger.Infof("AAAA new spec ns %+v", ociSpec.Linux.Namespaces)
+	// kataUtilsLogger.Infof("AAAA new spec Annotations %+v", ociSpec.Annotations)
+
 	sandboxConfig, err := oci.SandboxConfig(ociSpec, runtimeConfig, bundlePath, containerID, disableOutput, systemdCgroup)
 	if err != nil {
 		return nil, vc.Process{}, err

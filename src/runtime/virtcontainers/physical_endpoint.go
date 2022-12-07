@@ -173,6 +173,7 @@ func createPhysicalEndpoint(netInfo NetworkInfo) (*PhysicalEndpoint, error) {
 	if err != nil {
 		return nil, err
 	}
+	networkLogger().Infof("AAAAAAAAA phy bdf: %+v", bdf)
 
 	// Get driver by following symlink /sys/bus/pci/devices/$bdf/driver
 	driverPath := filepath.Join(sysPCIDevicesPath, bdf, "driver")
@@ -182,6 +183,7 @@ func createPhysicalEndpoint(netInfo NetworkInfo) (*PhysicalEndpoint, error) {
 	}
 
 	driver := filepath.Base(link)
+	networkLogger().Infof("AAAAAAAAA phy link: %+v", link)
 
 	// Get vendor and device id from pci space (sys/bus/pci/devices/$bdf)
 
@@ -192,6 +194,7 @@ func createPhysicalEndpoint(netInfo NetworkInfo) (*PhysicalEndpoint, error) {
 	}
 
 	deviceID := strings.TrimSpace(string(contents))
+	networkLogger().Infof("AAAAAAAAA phy deviceID: %+v", deviceID)
 
 	// Vendor id
 	ifaceVendorPath := filepath.Join(sysPCIDevicesPath, bdf, "vendor")
@@ -203,6 +206,7 @@ func createPhysicalEndpoint(netInfo NetworkInfo) (*PhysicalEndpoint, error) {
 	vendorID := strings.TrimSpace(string(contents))
 	vendorDeviceID := fmt.Sprintf("%s %s", vendorID, deviceID)
 	vendorDeviceID = strings.TrimSpace(vendorDeviceID)
+	networkLogger().Infof("AAAAAAAAA phy vendorDeviceID: %+v", vendorDeviceID)
 
 	physicalEndpoint := &PhysicalEndpoint{
 		IfaceName:      netInfo.Iface.Name,
@@ -212,6 +216,7 @@ func createPhysicalEndpoint(netInfo NetworkInfo) (*PhysicalEndpoint, error) {
 		Driver:         driver,
 		BDF:            bdf,
 	}
+	networkLogger().Infof("AAAAAAAAA phy physicalEndpoint: %+v", physicalEndpoint)
 
 	return physicalEndpoint, nil
 }
