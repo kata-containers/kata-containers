@@ -15,6 +15,8 @@ mod arch_specific {
     const CPUINFO_FLAGS_TAG: &str = "flags";
     const CPU_FLAGS_INTEL: &[&str] = &["lm", "sse4_1", "vmx"];
     const CPU_ATTRIBS_INTEL: &[&str] = &["GenuineIntel"];
+    pub const ARCH_CPU_VENDOR_FIELD: &str = check::GENERIC_CPU_VENDOR_FIELD;
+    pub const ARCH_CPU_MODEL_FIELD: &str = check::GENERIC_CPU_MODEL_FIELD;
 
     // List of check functions
     static CHECK_LIST: &[CheckItem] = &[CheckItem {
@@ -28,6 +30,7 @@ mod arch_specific {
         Some(CHECK_LIST)
     }
 
+    // check cpu
     fn check_cpu(_args: &str) -> Result<()> {
         println!("INFO: check CPU: x86_64");
 

@@ -16,6 +16,9 @@ mod arch_specific {
     const CPUINFO_FEATURES_TAG: &str = "features";
     const CPU_FEATURES_REQ: &[&str] = &["sie"];
 
+    pub const ARCH_CPU_VENDOR_FIELD: &str = check::GENERIC_CPU_VENDOR_FIELD;
+    pub const ARCH_CPU_MODEL_FIELD: &str = "machine";
+
     // check cpu
     fn check_cpu() -> Result<()> {
         println!("INFO: check CPU: s390x");

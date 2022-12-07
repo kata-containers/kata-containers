@@ -10,6 +10,9 @@ pub use arch_specific::*;
 mod arch_specific {
     use anyhow::Result;
 
+    pub const ARCH_CPU_VENDOR_FIELD: &str = "";
+    pub const ARCH_CPU_MODEL_FIELD: &str = "model";
+
     pub fn check() -> Result<()> {
         unimplemented!("Check not implemented in powerpc64le");
     }

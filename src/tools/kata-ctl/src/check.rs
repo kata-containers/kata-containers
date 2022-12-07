@@ -23,6 +23,9 @@ const JSON_TYPE: &str = "application/json";
 
 const USER_AGT: &str = "kata";
 
+pub const GENERIC_CPU_VENDOR_FIELD: &str = "vendor_id";
+pub const GENERIC_CPU_MODEL_FIELD: &str = "model name";
+
 pub const PROC_CPUINFO: &str = "/proc/cpuinfo";
 
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
