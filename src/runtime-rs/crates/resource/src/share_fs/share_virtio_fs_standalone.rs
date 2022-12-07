@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{process::Stdio, sync::Arc};
+use std::{collections::HashMap, process::Stdio, sync::Arc};
 
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
@@ -16,13 +16,13 @@ use tokio::{
     process::{Child, Command},
     sync::{
         mpsc::{channel, Receiver, Sender},
-        RwLock,
+        Mutex, RwLock,
     },
 };
 
 use super::{
     share_virtio_fs::generate_sock_path, utils::ensure_dir_exist, utils::get_host_ro_shared_path,
-    virtio_fs_share_mount::VirtiofsShareMount, ShareFs, ShareFsMount,
+    virtio_fs_share_mount::VirtiofsShareMount, MountedInfo, ShareFs, ShareFsMount,
 };
 
 #[derive(Debug, Clone)]
@@ -38,14 +38,16 @@ pub struct ShareVirtioFsStandaloneConfig {
     pub virtio_fs_extra_args: Vec<String>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct ShareVirtioFsStandaloneInner {
     pid: Option<u32>,
 }
+
 pub(crate) struct ShareVirtioFsStandalone {
     inner: Arc<RwLock<ShareVirtioFsStandaloneInner>>,
     config: ShareVirtioFsStandaloneConfig,
     share_fs_mount: Arc<dyn ShareFsMount>,
+    mounted_info_set: Arc<Mutex<HashMap<String, MountedInfo>>>,
 }
 
 impl ShareVirtioFsStandalone {
@@ -60,6 +62,7 @@ impl ShareVirtioFsStandalone {
                 virtio_fs_extra_args: config.virtio_fs_extra_args.clone(),
             },
             share_fs_mount: Arc::new(VirtiofsShareMount::new(id)),
+            mounted_info_set: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -171,5 +174,9 @@ impl ShareFs for ShareVirtioFsStandalone {
 
     async fn get_storages(&self) -> Result<Vec<Storage>> {
         Ok(vec![])
+    }
+
+    fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>> {
+        self.mounted_info_set.clone()
     }
 }
