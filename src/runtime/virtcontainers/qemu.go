@@ -926,17 +926,16 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 
 	}
 
-	var strErr string
-	strErr, err = govmmQemu.LaunchQemu(q.qemuConfig, newQMPLogger())
+	qemuCmd, err := govmmQemu.LaunchQemu(q.qemuConfig, newQMPLogger())
 	if err != nil {
-		if q.config.Debug && q.qemuConfig.LogFile != "" {
-			b, err := os.ReadFile(q.qemuConfig.LogFile)
-			if err == nil {
-				strErr += string(b)
-			}
-		}
-		q.Logger().WithError(err).Errorf("failed to launch qemu: %s", strErr)
-		return fmt.Errorf("failed to launch qemu: %s, error messages from qemu log: %s", err, strErr)
+		q.Logger().WithError(err).Error("failed to launch qemu")
+		return fmt.Errorf("failed to launch qemu: %s", err)
+	}
+	if q.qemuConfig.Knobs.Daemonize {
+		// LaunchQemu returns a handle on the upper QEMU process.
+		// Wait for it to exit to assume that the QEMU daemon was
+		// actually started.
+		qemuCmd.Wait()
 	}
 
 	err = q.waitVM(ctx, qmpConn, timeout)
