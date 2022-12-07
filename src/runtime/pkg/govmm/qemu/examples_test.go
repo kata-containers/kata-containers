@@ -27,13 +27,16 @@ func Example() {
 	// resources
 	params = append(params, "-m", "370", "-smp", "cpus=2")
 
-	// LaunchCustomQemu should return as soon as the instance has launched as we
-	// are using the --daemonize flag.  It will set up a unix domain socket
-	// called /tmp/qmp-socket that we can use to manage the instance.
-	_, err := qemu.LaunchCustomQemu(context.Background(), "", params, nil, nil, nil)
+	// LaunchCustomQemu should return immediately. We must then wait
+	// the returned process to terminate as we are using the --daemonize
+	// flag.
+	// It will set up a unix domain socket called /tmp/qmp-socket that we
+	// can use to manage the instance.
+	proc, err := qemu.LaunchCustomQemu(context.Background(), "", params, nil, nil, nil)
 	if err != nil {
 		panic(err)
 	}
+	proc.Wait()
 
 	// This channel will be closed when the instance dies.
 	disconnectedCh := make(chan struct{})

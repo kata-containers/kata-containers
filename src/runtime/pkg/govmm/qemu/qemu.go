@@ -14,7 +14,6 @@
 package qemu
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -2985,12 +2984,8 @@ func (config *Config) appendFwCfg(logger QMPLog) {
 //
 // The Config parameter contains a set of qemu parameters and settings.
 //
-// This function writes its log output via logger parameter.
-//
-// The function will block until the launched qemu process exits.  "", nil
-// will be returned if the launch succeeds.  Otherwise a string containing
-// the contents of stderr + a Go error object will be returned.
-func LaunchQemu(config Config, logger QMPLog) (string, error) {
+// See LaunchCustomQemu for more information.
+func LaunchQemu(config Config, logger QMPLog) (*exec.Cmd, error) {
 	config.appendName()
 	config.appendUUID()
 	config.appendMachine()
@@ -3013,7 +3008,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendSeccompSandbox()
 
 	if err := config.appendCPUs(); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	ctx := config.Ctx
@@ -3044,16 +3039,14 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 //
 // This function writes its log output via logger parameter.
 //
-// The function will block until the launched qemu process exits.  "", nil
-// will be returned if the launch succeeds.  Otherwise a string containing
-// the contents of stderr + a Go error object will be returned.
+// The function returns cmd, nil where cmd is a Go exec.Cmd object
+// representing the QEMU process if launched successfully. Otherwise
+// nil, err where err is a Go error object is returned.
 func LaunchCustomQemu(ctx context.Context, path string, params []string, fds []*os.File,
-	attr *syscall.SysProcAttr, logger QMPLog) (string, error) {
+	attr *syscall.SysProcAttr, logger QMPLog) (*exec.Cmd, error) {
 	if logger == nil {
 		logger = qmpNullLogger{}
 	}
-
-	errStr := ""
 
 	if path == "" {
 		path = "qemu-system-x86_64"
@@ -3068,15 +3061,12 @@ func LaunchCustomQemu(ctx context.Context, path string, params []string, fds []*
 
 	cmd.SysProcAttr = attr
 
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
 	logger.Infof("launching %s with: %v", path, params)
 
-	err := cmd.Run()
+	err := cmd.Start()
 	if err != nil {
 		logger.Errorf("Unable to launch %s: %v", path, err)
-		errStr = stderr.String()
-		logger.Errorf("%s", errStr)
+		return nil, err
 	}
-	return errStr, err
+	return cmd, nil
 }
