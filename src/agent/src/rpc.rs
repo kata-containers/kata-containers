@@ -459,6 +459,7 @@ impl AgentService {
             "signal process";
             "container-id" => cid.clone(),
             "exec-id" => eid.clone(),
+            "signal" => req.signal,
         );
 
         let mut sig: libc::c_int = req.signal as libc::c_int;

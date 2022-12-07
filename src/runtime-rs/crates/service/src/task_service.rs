@@ -40,7 +40,7 @@ where
     let r = req
         .try_into()
         .map_err(|err| ttrpc::Error::Others(format!("failed to translate from shim {:?}", err)))?;
-    let logger = sl!().new(o!("steam id" =>  ctx.mh.stream_id));
+    let logger = sl!().new(o!("stream id" =>  ctx.mh.stream_id));
     debug!(logger, "====> task service {:?}", &r);
     let resp = s
         .handler_message(r)
