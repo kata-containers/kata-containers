@@ -17,7 +17,6 @@ shims=(
 	"qemu-sev"
 	"clh"
 	"clh-tdx"
-	"clh-tdx-eaa-kbc"
 )
 
 default_shim="qemu"

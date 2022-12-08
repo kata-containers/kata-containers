@@ -357,18 +357,6 @@ ifneq (,$(CLHCMD))
 
     CONFIGS += $(CONFIG_CLH_TDX)
 
-    CONFIG_FILE_CLH_TDX_EAA_KBC = configuration-clh-tdx-eaa-kbc.toml
-    CONFIG_CLH_TDX_EAA_KBC = config/$(CONFIG_FILE_CLH_TDX_EAA_KBC)
-    CONFIG_CLH_TDX_EAA_KBC_IN = $(CONFIG_CLH_TDX_EAA_KBC).in
-
-    CONFIG_PATH_CLH_TDX_EAA_KBC = $(abspath $(CONFDIR)/$(CONFIG_FILE_CLH_TDX_EAA_KBC))
-    CONFIG_PATHS += $(CONFIG_PATH_CLH_TDX_EAA_KBC)
-
-    SYSCONFIG_CLH_TDX_EAA_KBC = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_CLH_TDX_EAA_KBC))
-    SYSCONFIG_PATHS += $(SYSCONFIG_CLH_TDX_EAA_KBC)
-
-    CONFIGS += $(CONFIG_CLH_TDX_EAA_KBC)
-
     # CLH-specific options (all should be suffixed by "_CLH")
     # currently, huge pages are required for virtiofsd support
     DEFNETWORKMODEL_CLH := tcfilter
