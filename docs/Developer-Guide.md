@@ -441,7 +441,7 @@ When using the file system type virtio-fs (default), `virtiofsd` is required
 
 ```bash
 $ pushd kata-containers/tools/packaging/static-build/virtiofsd
-$ ./build-static-virtiofsd.sh
+$ ./build.sh
 $ popd
 ```
 
