@@ -253,7 +253,7 @@ impl ContainerManager for VirtContainerManager {
         let c = containers
             .get(container_id)
             .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
-        c.update(&resource).await.context("stats")
+        c.update(&resource).await.context("update_container")
     }
 
     async fn pid(&self) -> Result<PID> {

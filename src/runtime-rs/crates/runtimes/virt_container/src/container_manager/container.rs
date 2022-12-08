@@ -93,8 +93,8 @@ impl Container {
 
         // update rootfs
         match spec.root.as_mut() {
-            Some(spec) => {
-                spec.path = rootfs
+            Some(root) => {
+                root.path = rootfs
                     .get_guest_rootfs_path()
                     .await
                     .context("get guest rootfs path")?

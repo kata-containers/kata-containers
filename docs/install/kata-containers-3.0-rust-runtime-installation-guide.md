@@ -49,14 +49,14 @@ Follow the [`kata-deploy`](../../tools/packaging/kata-deploy/README.md).
 
 * Download `Rustup` and install  `Rust`
     > **Notes:**
-    > Rust version 1.58 is needed
+    > Rust version 1.62.0 is needed
 
     Example for `x86_64`
     ```
     $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
     $ source $HOME/.cargo/env
-    $ rustup install 1.58
-    $ rustup default 1.58-x86_64-unknown-linux-gnu
+    $ rustup install 1.62.0
+    $ rustup default 1.62.0-x86_64-unknown-linux-gnu
     ```
 
 * Musl support for fully static binary

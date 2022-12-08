@@ -8,8 +8,18 @@ pub use arch_specific::*;
 
 mod arch_specific {
     use anyhow::Result;
+    use std::path::Path;
+
+    const KVM_DEV: &str = "/dev/kvm";
 
     pub fn check() -> Result<()> {
-        unimplemented!("Check not implemented in aarch64")
+        println!("INFO: check: aarch64");
+        if Path::new(KVM_DEV).exists() {
+            println!("Kata Containers can run on this host\n");
+        } else {
+            eprintln!("WARNING: Kata Containers can't run on this host as lack of virtulization support\n");
+        }
+
+        Ok(())
     }
 }
