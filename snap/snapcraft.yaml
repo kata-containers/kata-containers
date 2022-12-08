@@ -23,9 +23,11 @@ parts:
 
       version="9999"
 
-      if echo "${GITHUB_REF:-}" | grep -q -E "^refs/tags"; then
-        version=$(echo ${GITHUB_REF:-} | cut -d/ -f3)
-        git checkout ${version}
+      kata_url="https://github.com/kata-containers/kata-containers"
+      latest_version=$(git ls-remote --tags ${kata_url}  | egrep -o "refs.*" | egrep -v "\-alpha|\-rc|{}" | egrep -o "[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+" | sort -V -r | head -1)
+      if [ -n "${latest_version}" ]; then
+        version=${latest_version}
+        git clean -f && git checkout ${version}
       fi
 
       snapcraftctl set-grade "stable"
