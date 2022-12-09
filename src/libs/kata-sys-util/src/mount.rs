@@ -43,8 +43,6 @@
 use std::fmt::Debug;
 use std::fs;
 use std::io::{self, BufRead};
-use std::os::raw::c_char;
-use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
@@ -760,18 +758,11 @@ pub fn umount_all<P: AsRef<Path>>(mountpoint: P, lazy_umount: bool) -> Result<()
 
 // Counterpart of nix::umount2, with support of `UMOUNT_FOLLOW`.
 fn umount2<P: AsRef<Path>>(path: P, lazy_umount: bool) -> std::io::Result<()> {
-    let path_ptr = path.as_ref().as_os_str().as_bytes().as_ptr() as *const c_char;
-    let mut flags = MntFlags::UMOUNT_NOFOLLOW.bits();
+    let mut flags = MntFlags::UMOUNT_NOFOLLOW;
     if lazy_umount {
-        flags |= MntFlags::MNT_DETACH.bits();
+        flags |= MntFlags::MNT_DETACH;
     }
-
-    // Safe because parameter is valid and we have checked the reuslt.
-    if unsafe { libc::umount2(path_ptr, flags) } < 0 {
-        Err(io::Error::last_os_error())
-    } else {
-        Ok(())
-    }
+    nix::mount::umount2(path.as_ref(), flags).map_err(io::Error::from)
 }
 
 #[cfg(test)]
