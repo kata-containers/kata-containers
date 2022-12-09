@@ -19,6 +19,8 @@ serde_json = "1.0.85"
 thiserror = "1.0.35"
 privdrop = "0.5.2"
 nix = "0.25.0"
+strum = "0.24.1"
+strum_macros = "0.24.3"
 
 runtimes = { path = "../../runtime-rs/crates/runtimes" }
 serde = "1.0.149"
