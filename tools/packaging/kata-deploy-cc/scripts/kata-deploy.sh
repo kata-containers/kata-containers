@@ -14,11 +14,9 @@ containerd_conf_file_backup="${containerd_conf_file}.bak"
 shims=(
 	"qemu"
 	"qemu-tdx"
-	"qemu-tdx-eaa-kbc"
 	"qemu-sev"
 	"clh"
 	"clh-tdx"
-	"clh-tdx-eaa-kbc"
 )
 
 default_shim="qemu"
