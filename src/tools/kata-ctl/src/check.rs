@@ -147,11 +147,6 @@ fn get_kata_all_releases_by_url() -> std::result::Result<Vec<Release>, reqwest::
     Ok(releases)
 }
 
-#[cfg(any(
-    target_arch = "aarch64",
-    target_arch = "powerpc64le",
-    target_arch = "x86_64"
-))]
 fn handle_reqwest_error(e: reqwest::Error) -> anyhow::Error {
     if e.is_connect() {
         return anyhow!(e).context("http connection failure: connection refused");
@@ -186,7 +181,7 @@ pub fn check_all_releases() -> Result<()> {
     for release in releases {
         if !release.prerelease {
             println!(
-                "Official:   Release {:15}; created {} ; {}",
+                "Official  : Release {:15}; created {} ; {}",
                 release.tag_name, release.created_at, release.tarball_url
             );
         } else {
