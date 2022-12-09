@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::Result;
-
 #[cfg(target_arch = "aarch64")]
 pub mod aarch64;
 #[cfg(target_arch = "aarch64")]
@@ -32,7 +30,3 @@ pub use x86_64 as arch_specific;
     target_arch = "x86_64"
 )))]
 compile_error!("unknown architecture");
-
-pub fn check() -> Result<()> {
-    arch_specific::check()
-}
