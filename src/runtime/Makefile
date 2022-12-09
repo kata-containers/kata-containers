@@ -133,7 +133,7 @@ AGENT_AA_KBC_PARAMS ?= ""
 AGENT_AA_KBC_PARAMS_TDX ?= ""
 AGENT_AA_KBC_PARAMS_SEV ?= ""
 TDXKERNELPARAMS := tdx_disable_filter $(ROOTMEASURECONFIGTDX) agent.enable_signature_verification=false $(AGENT_AA_KBC_PARAMS_TDX)
-SEVKERNELPARAMS := $(AGENTCONFIGFILEKERNELPARAM) $(ROOTMEASURECONFIG) agent.enable_signature_verification=false $(AGENT_AA_KBC_PARAMS_SEV)
+SEVKERNELPARAMS := $(AGENTCONFIGFILEKERNELPARAM) agent.enable_signature_verification=false $(AGENT_AA_KBC_PARAMS_SEV)
 KERNELPARAMS += $(ROOTMEASURECONFIG) agent.enable_signature_verification=false $(AGENT_AA_KBC_PARAMS)
 
 # Name of default configuration file the runtime will use.
