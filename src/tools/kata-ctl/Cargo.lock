@@ -1518,6 +1518,8 @@ dependencies = [
  "runtimes",
  "semver",
  "serde_json",
+ "slog",
+ "slog-scope",
  "tempfile",
  "thiserror",
 ]
