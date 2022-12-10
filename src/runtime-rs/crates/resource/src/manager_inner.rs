@@ -196,6 +196,7 @@ impl ResourceManagerInner {
     pub async fn handler_rootfs(
         &self,
         cid: &str,
+        root: &oci::Root,
         bundle_path: &str,
         rootfs_mounts: &[Mount],
     ) -> Result<Arc<dyn Rootfs>> {
@@ -205,6 +206,7 @@ impl ResourceManagerInner {
                 self.hypervisor.as_ref(),
                 &self.sid,
                 cid,
+                root,
                 bundle_path,
                 rootfs_mounts,
             )
