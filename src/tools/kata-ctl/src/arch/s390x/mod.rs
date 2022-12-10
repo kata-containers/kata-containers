@@ -16,7 +16,9 @@ mod arch_specific {
     const CPUINFO_FEATURES_TAG: &str = "features";
     const CPU_FEATURES_REQ: &[&str] = &["sie"];
 
+    #[allow(dead_code)]
     pub const ARCH_CPU_VENDOR_FIELD: &str = check::GENERIC_CPU_VENDOR_FIELD;
+    #[allow(dead_code)]
     pub const ARCH_CPU_MODEL_FIELD: &str = "machine";
 
     // check cpu

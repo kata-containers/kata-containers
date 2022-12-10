@@ -5,8 +5,11 @@
 
 #![allow(dead_code)]
 
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 use crate::arch::arch_specific;
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 use crate::check::get_single_cpu_info;
+
 use anyhow::{anyhow, Context, Result};
 use std::fs;
 
@@ -103,6 +106,7 @@ pub fn get_distro_details(os_release: &str, os_release_clr: &str) -> Result<(Str
     Ok((name, version))
 }
 
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 pub fn get_generic_cpu_details(cpu_info_file: &str) -> Result<(String, String)> {
     let cpu_info = get_single_cpu_info(cpu_info_file, "\n\n")?;
     let lines = cpu_info.lines();
@@ -143,7 +147,6 @@ pub fn get_generic_cpu_details(cpu_info_file: &str) -> Result<(String, String)> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::check::PROC_CPUINFO;
     use std::io::Write;
     use tempfile::tempdir;
 
@@ -223,12 +226,14 @@ mod tests {
         assert!(res.is_ok());
     }
 
+    #[cfg(any(target_arch = "x86_64"))]
     #[test]
     fn get_generic_cpu_details_system() {
-        let res = get_generic_cpu_details(PROC_CPUINFO);
+        let res = get_generic_cpu_details(crate::check::PROC_CPUINFO);
         assert!(res.is_ok());
     }
 
+    #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
     #[test]
     fn get_generic_cpu_details_valid_contents() {
         let dir = tempdir().unwrap();
@@ -250,12 +255,14 @@ mod tests {
         assert_eq!(res.as_ref().unwrap().1, expected_model_name);
     }
 
+    #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
     #[test]
     fn get_generic_cpu_details_invalid_file() {
         let res = get_generic_cpu_details("/tmp/missing.txt");
         assert!(res.is_err());
     }
 
+    #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
     #[test]
     fn get_generic_cpu_details_invalid_contents() {
         let dir = tempdir().unwrap();
