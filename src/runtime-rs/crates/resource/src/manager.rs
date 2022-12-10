@@ -68,11 +68,14 @@ impl ResourceManager {
     pub async fn handler_rootfs(
         &self,
         cid: &str,
+        root: &oci::Root,
         bundle_path: &str,
         rootfs_mounts: &[Mount],
     ) -> Result<Arc<dyn Rootfs>> {
         let inner = self.inner.read().await;
-        inner.handler_rootfs(cid, bundle_path, rootfs_mounts).await
+        inner
+            .handler_rootfs(cid, root, bundle_path, rootfs_mounts)
+            .await
     }
 
     pub async fn handler_volumes(
