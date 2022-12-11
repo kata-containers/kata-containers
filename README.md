@@ -1,3 +1,25 @@
+# Table of Contents
+
+- [Kata Containers](#kata-containers)
+  - [Introduction](#introduction)
+  - [License](#license)
+  - [Platform support](#platform-support)
+    - [Hardware requirements](#hardware-requirements)
+  - [Getting started](#getting-started)
+  - [Documentation](#documentation)
+  - [Configuration](#configuration)
+  - [Hypervisors](#hypervisors)
+  - [Community](#community)
+  - [Getting help](#getting-help)
+    - [Raising issues](#raising-issues)
+  - [Developers](#developers)
+    - [Components](#components)
+    - [Main components](#main-components)
+    - [Additional components](#additional-components)
+    - [Packaging and releases](#packaging-and-releases)
+  - [Glossary of Terms](#glossary-of-terms)
+
+
 <img src="https://www.openstack.org/assets/kata/kata-vertical-on-white.png" width="150">
 
 # Kata Containers
