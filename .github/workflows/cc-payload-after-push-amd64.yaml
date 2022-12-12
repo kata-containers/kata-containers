@@ -75,6 +75,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-asset
     steps:
+      - name: Login to Kata Containers quay.io
+        uses: docker/login-action@v2
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
       - uses: actions/checkout@v3
 
       - name: Get root_hash_tdx.txt
