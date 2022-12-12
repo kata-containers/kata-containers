@@ -143,13 +143,10 @@ impl Container {
         // create container
         let r = agent::CreateContainerRequest {
             process_id: agent::ContainerProcessID::new(&config.container_id, ""),
-            string_user: None,
-            devices: vec![],
             storages,
             oci: Some(spec),
-            guest_hooks: None,
             sandbox_pidns,
-            rootfs_mounts: vec![],
+            ..Default::default()
         };
 
         self.agent
