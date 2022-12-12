@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use agent::Agent;
@@ -393,6 +394,7 @@ fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
             resource.block_io = None;
             resource.hugepage_limits = Vec::new();
             resource.network = None;
+            resource.rdma = HashMap::new();
         }
 
         // Host pidns path does not make sense in kata. Let's just align it with
