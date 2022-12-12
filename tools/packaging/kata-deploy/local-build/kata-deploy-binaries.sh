@@ -243,6 +243,7 @@ install_cc_shimv2() {
 		extra_opts+=" ROOTMEASURECONFIGTDX=\"${root_measure_config}\""
 	fi
 
+	info "extra_opts: ${extra_opts}"
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" EXTRA_OPTS="${extra_opts}" "${shimv2_builder}"
 }
 
