@@ -81,8 +81,8 @@ impl Container {
         let mut inner = self.inner.write().await;
         let toml_config = self.resource_manager.config().await;
         let config = &self.config;
-        amend_spec(&mut spec, toml_config.runtime.disable_guest_seccomp).context("amend spec")?;
         let sandbox_pidns = is_pid_namespace_enabled(&spec);
+        amend_spec(&mut spec, toml_config.runtime.disable_guest_seccomp).context("amend spec")?;
 
         // handler rootfs
         let rootfs = self
