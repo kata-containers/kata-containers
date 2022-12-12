@@ -160,10 +160,16 @@ install_cc_image() {
 	export AA_KBC="${1:-offline_fs_kbc}"
 	image_type="${2:-image}"
 	image_initrd_suffix="${3:-""}"
+	root_hash_suffix="${4:-""}"
 	export KATA_BUILD_CC=yes
 
 	info "Create CC image configured with AA_KBC=${AA_KBC}"
-	"${rootfs_builder}" --imagetype="${image_type}" --prefix="${cc_prefix}" --destdir="${destdir}" --image_initrd_suffix="${image_initrd_suffix}"
+	"${rootfs_builder}" \
+		--imagetype="${image_type}" \
+		--prefix="${cc_prefix}" \
+		--destdir="${destdir}" \
+		--image_initrd_suffix="${image_initrd_suffix}" \
+		--root_hash_suffix="${root_hash_suffix}"
 }
 
 install_cc_sev_image() {
@@ -176,7 +182,8 @@ install_cc_tdx_image() {
 	AA_KBC="eaa_kbc"
 	image_type="image"
 	image_suffix="tdx"
-	install_cc_image "${AA_KBC}" "${image_type}" "${image_suffix}"
+	root_hash_suffix="tdx"
+	install_cc_image "${AA_KBC}" "${image_type}" "${image_suffix}" "${root_hash_suffix}"
 }
 
 #Install CC kernel asset
@@ -224,12 +231,19 @@ install_cc_shimv2() {
 	export REMOVE_VMM_CONFIGS="acrn fc"
 
         extra_opts="DEFSERVICEOFFLOAD=true"
-	if [ -f "${repo_root_dir}/tools/osbuilder/root_hash.txt" ]; then
-		root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder//root_hash.txt")
+	if [ -f "${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt" ]; then
+		root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt")
 		root_measure_config="cc_rootfs_verity.scheme=dm-verity cc_rootfs_verity.hash=${root_hash}"
 		extra_opts+=" ROOTMEASURECONFIG=\"${root_measure_config}\""
 	fi
 
+	if [ -f "${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt" ]; then
+		root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt")
+		root_measure_config="cc_rootfs_verity.scheme=dm-verity cc_rootfs_verity.hash=${root_hash}"
+		extra_opts+=" ROOTMEASURECONFIGTDX=\"${root_measure_config}\""
+	fi
+
+	info "extra_opts: ${extra_opts}"
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" EXTRA_OPTS="${extra_opts}" "${shimv2_builder}"
 }
 

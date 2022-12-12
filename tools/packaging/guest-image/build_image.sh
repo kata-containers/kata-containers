@@ -74,7 +74,8 @@ build_image() {
 		ROOTFS_BUILD_DEST="${builddir}/rootfs-image"
 	mv -f "kata-containers.img" "${install_dir}/${image_name}"
 	if [ -e "root_hash.txt" ]; then
-	    cp root_hash.txt "${install_dir}/"
+		[ -z "${root_hash_suffix}" ] && root_hash_suffix=vanilla
+		mv "${repo_root_dir}/tools/osbuilder/root_hash.txt" "${repo_root_dir}/tools/osbuilder/root_hash_${root_hash_suffix}.txt"
 	fi
 	(
 		cd "${install_dir}"
@@ -106,6 +107,7 @@ main() {
 	destdir="$PWD"
 	prefix="/opt/kata"
 	image_initrd_suffix=""
+	root_hash_suffix=""
 	builddir="${PWD}"
 	while getopts "h-:" opt; do
 		case "$opt" in
@@ -138,6 +140,9 @@ main() {
 					initrd_name="kata-${initrd_distro}-${initrd_os_version}-${image_initrd_suffix}.${image_type}"
 					final_initrd_name="${final_initrd_name}-${image_initrd_suffix}"
 				fi
+				;;
+			root_hash_suffix=*)
+				root_hash_suffix=${OPTARG#*=}
 				;;
 			prefix=*)
 				prefix=${OPTARG#*=}
