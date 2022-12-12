@@ -403,7 +403,10 @@ fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
         for n in linux.namespaces.iter() {
             match n.r#type.as_str() {
                 oci::PIDNAMESPACE | oci::NETWORKNAMESPACE => continue,
-                _ => ns.push(n.clone()),
+                _ => ns.push(oci::LinuxNamespace {
+                    r#type: n.r#type.clone(),
+                    path: "".to_string(),
+                }),
             }
         }
 
