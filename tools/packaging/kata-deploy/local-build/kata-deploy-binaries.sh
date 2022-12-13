@@ -118,6 +118,8 @@ install_cached_component() {
 	local current_image_version="${4}"
 	local component_tarball_name="${5}"
 	local component_tarball_path="${6}"
+	local root_hash_vanilla="${7:-""}"
+	local root_hash_tdx="${8:-""}"
 
 	local cached_version=$(curl -sfL "${jenkins_build_url}/latest" | awk '{print $1}') || cached_version="none"
 	local cached_image_version=$(curl -sfL "${jenkins_build_url}/latest_image" | awk '{print $1}') || cached_image_version="none"
@@ -130,7 +132,73 @@ install_cached_component() {
 	wget "${jenkins_build_url}/${component_tarball_name}" || return cleanup_and_fail
 	wget "${jenkins_build_url}/sha256sum-${component_tarball_name}" || return cleanup_and_fail
 	sha256sum -c "sha256sum-${component_tarball_name}" || return cleanup_and_fail
+	if [ -n "${root_hash_vanilla}" ]; then
+		wget "${jenkins_build_url}/${root_hash_vanilla}" || return cleanup_and_fail
+		mv "${root_hash_vanilla}" "${repo_root_dir}/tools/osbuilder/"
+	fi
+	if [ -n "${root_hash_tdx}" ]; then
+		wget "${jenkins_build_url}/${root_hash_tdx}" || return cleanup_and_fail
+		mv "${root_hash_tdx}" "${repo_root_dir}/tools/osbuilder/"
+	fi
 	mv "${component_tarball_name}" "${component_tarball_path}"
+}
+
+# We've to add a different cached function here as for using the shim-v2 caching
+# we have to rely and check some artefacts coming from the cc-rootfs-image and the
+# cc-tdx-rootfs-image jobs.
+install_cached_cc_shim_v2() {
+	local component="${1}"
+	local jenkins_build_url="${2}"
+	local current_version="${3}"
+	local current_image_version="${4}"
+	local component_tarball_name="${5}"
+	local component_tarball_path="${6}"
+	local root_hash_vanilla="${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt"
+	local root_hash_tdx="${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt"
+
+	local rootfs_image_cached_root_hash="${jenkins_url}/job/kata-containers-2.0-rootfs-image-cc-$(uname -m)/${cached_artifacts_path}/root_hash_vanilla.txt"
+	local tdx_rootfs_image_cached_root_hash="${jenkins_url}/job/kata-containers-2.0-rootfs-image-tdx-cc-$(uname -m)/${cached_artifacts_path}/root_hash_tdx.txt"
+
+
+	wget "${rootfs_image_cached_root_hash}" -O "rootfs_root_hash_vanilla.txt" || return 1
+	if [ -f "${root_hash_vanilla}" ]; then
+		# There's already a pre-existent root_hash_vanilla.txt,
+		# let's check whether this is the same one cached on the
+		# rootfs job.
+
+		# In case it's not the same, let's proceed building the
+		# shim-v2 with what we have locally.
+		diff "${root_hash_vanilla}" "rootfs_root_hash_vanilla.txt" > /dev/null || return 1
+	fi
+	mv "rootfs_root_hash_vanilla.txt" "${root_hash_vanilla}"
+
+	wget "${rootfs_image_cached_root_hash}" -O "rootfs_root_hash_tdx.txt" || return 1
+	if [ -f "${root_hash_tdx}" ]; then
+		# There's already a pre-existent root_hash_tdx.txt,
+		# let's check whether this is the same one cached on the
+		# rootfs job.
+
+		# In case it's not the same, let's proceed building the
+		# shim-v2 with what we have locally.
+		diff "${root_hash_tdx}" "rootfs_root_hash_tdx.txt" > /dev/null || return 1
+	fi
+	mv "rootfs_root_hash_tdx.txt" "${root_hash_tdx}"
+
+	wget "${jenkins_build_url}/root_hash_vanilla.txt" -O "shim_v2_root_hash_vanilla.txt" || return 1
+	diff "${root_hash_vanilla}" "shim_v2_root_hash_vanilla.txt" > /dev/null || return 1
+
+	wget "${jenkins_build_url}/root_hash_tdx.txt" -O "shim_v2_root_hash_tdx.txt" || return 1
+	diff "${root_hash_tdx}" "shim_v2_root_hash_tdx.txt" > /dev/null || return 1
+
+	install_cached_component \
+		"${component}" \
+		"${jenkins_build_url}" \
+		"${current_version}" \
+		"${current_image_version}" \
+		"${component_tarball_name}" \
+		"${component_tarball_path}" \
+		"$(basename ${root_hash_vanilla})" \
+		"$(basename ${root_hash_tdx})"
 }
 
 # Install static CC cloud-hypervisor asset
@@ -161,7 +229,44 @@ install_cc_image() {
 	image_type="${2:-image}"
 	image_initrd_suffix="${3:-""}"
 	root_hash_suffix="${4:-""}"
+	tee="${5:-""}"
 	export KATA_BUILD_CC=yes
+
+	local jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-image-cc-$(uname -m)/${cached_artifacts_path}"
+	local component="rootfs-image"
+	local root_hash_vanilla="root_hash_vanilla.txt"
+	local root_hash_tdx=""
+	if [ -n "${tee}" ]; then
+		if [ "${tee}" == "tdx" ]; then
+			jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-image-${tee}-cc-$(uname -m)/${cached_artifacts_path}"
+			component="${tee}-rootfs-image"
+			root_hash_vanilla=""
+			root_hash_tdx="root_hash_${tee}.txt"
+		fi
+	fi
+
+	local osbuilder_last_commit="$(echo $(get_last_modification "${repo_root_dir}/tools/osbuilder") | sed s/-dirty//)"
+	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
+	local agent_last_commit="$(get_last_modification "${repo_root_dir}/src/agent")"
+	local libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
+	local attestation_agent_version="$(get_from_kata_deps "externals.attestation-agent.version")"
+	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
+	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
+	local pause_version="$(get_from_kata_deps "externals.pause.version")"
+	local skopeo_version="$(get_from_kata_deps "externals.skopeo.branch")"
+	local umoci_version="$(get_from_kata_deps "externals.umoci.tag")"
+	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+
+	install_cached_component \
+		"${component}" \
+		"${jenkins}" \
+		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${skopeo_version}-${umoci_version}-${rust_version}-${image_type}-${AA_KBC}" \
+		"" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		"${root_hash_vanilla}" \
+		"${root_hash_tdx}" \
+		&& return 0
 
 	info "Create CC image configured with AA_KBC=${AA_KBC}"
 	"${rootfs_builder}" \
@@ -175,7 +280,7 @@ install_cc_image() {
 install_cc_sev_image() {
 	AA_KBC="offline_sev_kbc"
 	image_type="initrd"
-	install_cc_image "${AA_KBC}" "${image_type}"
+	install_cc_image "${AA_KBC}" "${image_type}" "sev"
 }
 
 install_cc_tdx_image() {
@@ -183,7 +288,7 @@ install_cc_tdx_image() {
 	image_type="image"
 	image_suffix="tdx"
 	root_hash_suffix="tdx"
-	install_cc_image "${AA_KBC}" "${image_type}" "${image_suffix}" "${root_hash_suffix}"
+	install_cc_image "${AA_KBC}" "${image_type}" "${image_suffix}" "${root_hash_suffix}" "tdx"
 }
 
 #Install CC kernel asset
@@ -226,6 +331,20 @@ install_cc_qemu() {
 
 #Install all components that are not assets
 install_cc_shimv2() {
+	local shim_v2_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime")"
+	local golang_version="$(get_from_kata_deps "languages.golang.meta.newest-version")"
+	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+	local shim_v2_version="${shim_v2_last_commit}-${golang_version}-${rust_version}"
+
+	install_cached_cc_shim_v2 \
+		"shim-v2" \
+		"${jenkins_url}/job/kata-containers-2.0-shim-v2-cc-$(uname -m)/${cached_artifacts_path}" \
+		"${shim_v2_version}" \
+		"$(get_shim_v2_image_name)" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	GO_VERSION="$(yq r ${versions_yaml} languages.golang.meta.newest-version)"
 	export GO_VERSION
 	export REMOVE_VMM_CONFIGS="acrn fc"
