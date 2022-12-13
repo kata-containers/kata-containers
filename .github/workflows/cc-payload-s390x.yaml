@@ -1,0 +1,134 @@
+name: Publish Kata Containers payload for Confidential Containers (s390x)
+on:
+  workflow_call:
+    inputs:
+      target-arch:
+        required: true
+        type: string
+
+jobs:
+  build-asset:
+    runs-on: s390x
+    strategy:
+      matrix:
+        asset:
+          - cc-kernel
+          - cc-qemu
+          - cc-rootfs-image
+          - cc-virtiofsd
+    steps:
+      - name: Adjust a permission for repo
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+
+      - uses: actions/checkout@v3
+      - name: Build ${{ matrix.asset }}
+        run: |
+          make "${KATA_ASSET}-tarball"
+          build_dir=$(readlink -f build)
+          # store-artifact does not work with symlink
+          sudo cp -r "${build_dir}" "kata-build"
+        env:
+          KATA_ASSET: ${{ matrix.asset }}
+          TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
+
+      - name: store-artifact ${{ matrix.asset }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: kata-artifacts-s390x
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: store-artifact root_hash_vanilla.txt 
+        uses: actions/upload-artifact@v3
+        with:
+          name: root_hash_vanilla.txt-s390x
+          path: tools/osbuilder/root_hash_vanilla.txt
+          retention-days: 1
+          if-no-files-found: ignore
+
+  build-asset-cc-shim-v2:
+    runs-on: s390x
+    needs: build-asset
+    steps:
+      - name: Adjust a permission for repo
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+
+      - uses: actions/checkout@v3
+
+      - name: Get root_hash_vanilla.txt
+        uses: actions/download-artifact@v3
+        with:
+          name: root_hash_vanilla.txt-s390x
+          path: tools/osbuilder/
+
+      - name: Build cc-shim-v2
+        run: |
+          make cc-shim-v2-tarball
+          build_dir=$(readlink -f build)
+          # store-artifact does not work with symlink
+          sudo cp -r "${build_dir}" "kata-build"
+
+      - name: store-artifact cc-shim-v2
+        uses: actions/upload-artifact@v3
+        with:
+          name: kata-artifacts-s390x
+          path: kata-build/kata-static-cc-shim-v2.tar.xz
+          retention-days: 1
+          if-no-files-found: error
+
+  create-kata-tarball:
+    runs-on: s390x
+    needs: [build-asset, build-asset-cc-shim-v2]
+    steps:
+      - name: Adjust a permission for repo
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+
+      - uses: actions/checkout@v3
+      - name: get-artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-artifacts-s390x
+          path: kata-artifacts
+      - name: merge-artifacts
+        run: |
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts
+      - name: store-artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: kata-static-tarball-s390x
+          path: kata-static.tar.xz
+          retention-days: 1
+          if-no-files-found: error
+
+  kata-payload:
+    needs: create-kata-tarball
+    runs-on: s390x
+    steps:
+      - name: Login to quay.io
+        uses: docker/login-action@v2
+        with:
+          registry: quay.io
+          username: ${{ secrets.COCO_QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.COCO_QUAY_DEPLOYER_PASSWORD }}
+
+      - name: Adjust a permission for repo
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+
+      - uses: actions/checkout@v3
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-static-tarball-s390x
+
+      - name: build-and-push-kata-payload
+        id: build-and-push-kata-payload
+        run: |
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
+          $(pwd)/kata-static.tar.xz \
+          "quay.io/confidential-containers/runtime-payload" \
+          "kata-containers-${{ inputs.target-arch }}"
