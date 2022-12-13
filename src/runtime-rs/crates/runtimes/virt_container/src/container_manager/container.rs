@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use agent::Agent;
@@ -81,8 +82,8 @@ impl Container {
         let mut inner = self.inner.write().await;
         let toml_config = self.resource_manager.config().await;
         let config = &self.config;
-        amend_spec(&mut spec, toml_config.runtime.disable_guest_seccomp).context("amend spec")?;
         let sandbox_pidns = is_pid_namespace_enabled(&spec);
+        amend_spec(&mut spec, toml_config.runtime.disable_guest_seccomp).context("amend spec")?;
 
         // handler rootfs
         let rootfs = self
@@ -143,13 +144,10 @@ impl Container {
         // create container
         let r = agent::CreateContainerRequest {
             process_id: agent::ContainerProcessID::new(&config.container_id, ""),
-            string_user: None,
-            devices: vec![],
             storages,
             oci: Some(spec),
-            guest_hooks: None,
             sandbox_pidns,
-            rootfs_mounts: vec![],
+            ..Default::default()
         };
 
         self.agent
@@ -396,6 +394,7 @@ fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
             resource.block_io = None;
             resource.hugepage_limits = Vec::new();
             resource.network = None;
+            resource.rdma = HashMap::new();
         }
 
         // Host pidns path does not make sense in kata. Let's just align it with
@@ -404,7 +403,10 @@ fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
         for n in linux.namespaces.iter() {
             match n.r#type.as_str() {
                 oci::PIDNAMESPACE | oci::NETWORKNAMESPACE => continue,
-                _ => ns.push(n.clone()),
+                _ => ns.push(oci::LinuxNamespace {
+                    r#type: n.r#type.clone(),
+                    path: "".to_string(),
+                }),
             }
         }
 
