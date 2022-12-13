@@ -27,15 +27,16 @@ import (
 
 func newQemuConfig() HypervisorConfig {
 	return HypervisorConfig{
-		KernelPath:        testQemuKernelPath,
-		InitrdPath:        testQemuInitrdPath,
-		HypervisorPath:    testQemuPath,
-		NumVCPUs:          defaultVCPUs,
-		MemorySize:        defaultMemSzMiB,
-		DefaultBridges:    defaultBridges,
-		BlockDeviceDriver: defaultBlockDriver,
-		DefaultMaxVCPUs:   defaultMaxVCPUs,
-		Msize9p:           defaultMsize9p,
+		KernelPath:          testQemuKernelPath,
+		InitrdPath:          testQemuInitrdPath,
+		HypervisorPath:      testQemuPath,
+		NumVCPUs:            defaultVCPUs,
+		MemorySize:          defaultMemSzMiB,
+		DefaultBridges:      defaultBridges,
+		BlockDeviceDriver:   defaultBlockDriver,
+		DefaultMaxVCPUs:     defaultMaxVCPUs,
+		Msize9p:             defaultMsize9p,
+		DisableGuestSeLinux: defaultDisableGuestSeLinux,
 	}
 }
 
@@ -58,7 +59,7 @@ func testQemuKernelParameters(t *testing.T, kernelParams []Param, expected strin
 }
 
 func TestQemuKernelParameters(t *testing.T) {
-	expectedOut := fmt.Sprintf("panic=1 nr_cpus=%d foo=foo bar=bar", govmm.MaxVCPUs())
+	expectedOut := fmt.Sprintf("panic=1 nr_cpus=%d selinux=0 foo=foo bar=bar", govmm.MaxVCPUs())
 	params := []Param{
 		{
 			Key:   "foo",
