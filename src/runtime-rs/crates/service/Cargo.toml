@@ -16,5 +16,6 @@ ttrpc = { version = "0.6.1" }
 common = { path = "../runtimes/common" }
 containerd-shim-protos = { version = "0.2.0", features = ["async"]}
 logging = { path = "../../../libs/logging"}
+shim-interface = { path = "../../../libs/shim-interface" }
 runtimes = { path = "../runtimes" }
 persist = { path = "../persist" }

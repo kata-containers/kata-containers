@@ -12,7 +12,7 @@ use common::Sandbox;
 use hyper::{Body, Method, Request, Response, StatusCode};
 use std::sync::Arc;
 
-use super::server::{AGENT_URL, IP6_TABLE_URL, IP_TABLE_URL};
+use shim_interface::shim_mgmt::{AGENT_URL, IP6_TABLE_URL, IP_TABLE_URL};
 
 // main router for response, this works as a multiplexer on
 // http arrival which invokes the corresponding handler function

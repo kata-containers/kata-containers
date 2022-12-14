@@ -1,5 +1,5 @@
-// Copyright (c) 2019-2022 Alibaba Cloud
-// Copyright (c) 2019-2022 Ant Group
+// Copyright (c) 2022 Alibaba Cloud
+// Copyright (c) 2022 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -16,20 +16,10 @@ use std::{fs, path::Path, sync::Arc};
 use anyhow::{Context, Result};
 use common::Sandbox;
 use hyper::{server::conn::Http, service::service_fn};
-use persist::KATA_PATH;
+use shim_interface::{mgmt_socket_addr, shim_mgmt::ERR_NO_SHIM_SERVER};
 use tokio::net::UnixListener;
 
 use super::handlers::handler_mux;
-
-pub(crate) const DIRECT_VOLUMN_PATH_KEY: &str = "path";
-pub(crate) const DIRECT_VOLUMN_STATS_URL: &str = "/direct-volumn/stats";
-pub(crate) const DIRECT_VOLUMN_RESIZE_URL: &str = "/direct-volumn/resize";
-pub(crate) const AGENT_URL: &str = "/agent-url";
-pub(crate) const IP_TABLE_URL: &str = "/iptables";
-pub(crate) const IP6_TABLE_URL: &str = "/ip6tables";
-pub(crate) const METRICS_URL: &str = "/metrics";
-
-const SHIM_MGMT_SOCK_NAME: &str = "shim-monitor.sock";
 
 /// The shim management server instance
 pub struct MgmtServer {
@@ -42,11 +32,11 @@ pub struct MgmtServer {
 
 impl MgmtServer {
     /// construct a new management server
-    pub fn new(sid: &str, sandbox: Arc<dyn Sandbox>) -> Self {
-        Self {
-            s_addr: mgmt_socket_addr(sid.to_owned()),
+    pub fn new(sid: &str, sandbox: Arc<dyn Sandbox>) -> Result<Self> {
+        Ok(Self {
+            s_addr: mgmt_socket_addr(sid).context(ERR_NO_SHIM_SERVER)?,
             sandbox,
-        }
+        })
     }
 
     // TODO(when metrics is supported): write metric addresses to fs
@@ -75,21 +65,6 @@ impl MgmtServer {
     }
 }
 
-// return sandbox's storage path
-pub fn sb_storage_path() -> String {
-    String::from(KATA_PATH)
-}
-
-// returns the address of the unix domain socket(UDS) for communication with shim
-// management service using http
-// normally returns "unix:///run/kata/{sid}/shim_monitor.sock"
-pub fn mgmt_socket_addr(sid: String) -> String {
-    let p = Path::new(&sb_storage_path())
-        .join(sid)
-        .join(SHIM_MGMT_SOCK_NAME);
-    format!("unix://{}", p.to_string_lossy())
-}
-
 // from path, return a unix listener corresponding to that path,
 // if the path(socket file) is not created, we create that here
 async fn listener_from_path(path: String) -> Result<UnixListener> {
@@ -103,16 +78,4 @@ async fn listener_from_path(path: String) -> Result<UnixListener> {
     // bind the socket and return the listener
     info!(sl!(), "mgmt-svr: binding to path {}", path);
     UnixListener::bind(file_path).context("bind address")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn mgmt_svr_test_sock_addr() {
-        let sid = String::from("414123");
-        let addr = mgmt_socket_addr(sid);
-        assert_eq!(addr, "unix:///run/kata/414123/shim-monitor.sock");
-    }
 }

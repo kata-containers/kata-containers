@@ -7,9 +7,9 @@
 pub mod sandbox_persist;
 use anyhow::{anyhow, Context, Ok, Result};
 use serde::de;
+use shim_interface::KATA_PATH;
 use std::{fs::File, io::BufReader};
 
-pub const KATA_PATH: &str = "/run/kata";
 pub const PERSIST_FILE: &str = "state.json";
 use kata_sys_util::validate::verify_id;
 use safe_path::scoped_join;

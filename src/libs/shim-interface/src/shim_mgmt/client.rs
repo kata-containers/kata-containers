@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Copyright (c) 2019-2022 Alibaba Cloud
 // Copyright (c) 2019-2022 Ant Group
 //
@@ -10,7 +11,7 @@
 
 use std::{path::Path, path::PathBuf, time::Duration};
 
-use super::server::mgmt_socket_addr;
+use crate::mgmt_socket_addr;
 use anyhow::{anyhow, Context, Result};
 use hyper::{Body, Client, Method, Request, Response};
 use hyperlocal::{UnixClientExt, UnixConnector, Uri};
@@ -30,8 +31,8 @@ pub struct MgmtClient {
 
 impl MgmtClient {
     /// Construct a new client connecting to shim mgmt server
-    pub fn new(sid: String, timeout: Option<Duration>) -> Result<Self> {
-        let unix_socket_path = mgmt_socket_addr(sid);
+    pub fn new(sid: &str, timeout: Option<Duration>) -> Result<Self> {
+        let unix_socket_path = mgmt_socket_addr(sid).context("Failed to get unix socket path")?;
         let s_addr = unix_socket_path
             .strip_prefix("unix:")
             .context("failed to strix prefix")?;

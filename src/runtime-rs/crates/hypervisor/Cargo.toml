@@ -28,6 +28,7 @@ rand = "0.8.4"
 kata-sys-util = { path = "../../../libs/kata-sys-util" }
 kata-types = { path = "../../../libs/kata-types" }
 logging = { path = "../../../libs/logging" }
+shim-interface = { path = "../../../libs/shim-interface" }
 
 dragonball = { path = "../../../dragonball", features = ["atomic-guest-memory", "virtio-vsock", "hotplug", "virtio-blk", "virtio-net", "virtio-fs"] }
 
