@@ -9,6 +9,14 @@ use anyhow::{anyhow, Result};
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use serde_json::Value;
 use std::collections::HashMap;
+use slog::{info, Logger};
+
+#[macro_export]
+macro_rules! sl {
+    () => {
+        slog_scope::logger()
+    };
+}
 
 const KATA_GITHUB_URL: &str =
     "https://api.github.com/repos/kata-containers/kata-containers/releases/latest";
@@ -139,7 +147,8 @@ fn handle_reqwest_error(e: reqwest::Error) -> anyhow::Error {
 pub fn check_version() -> Result<()> {
     let version = get_kata_version_by_url(KATA_GITHUB_URL).map_err(handle_reqwest_error)?;
 
-    println!("Version: {}", version);
+    //println!("Version: {}", version);
+    info!(sl!(),"Version: {}", version);
 
     Ok(())
 }

@@ -9,8 +9,9 @@ mod check;
 mod ops;
 mod utils;
 
-use anyhow::Result;
-use clap::Parser;
+use std::io;
+use anyhow::{anyhow, Result};
+use clap::{crate_name, Parser};
 use std::process::exit;
 
 use args::{Commands, KataCtlCli};
@@ -20,7 +21,24 @@ use ops::check_ops::{
     handle_metrics, handle_version,
 };
 
+#[macro_export]
+macro_rules! sl {
+    () => {
+        slog_scope::logger()
+    };
+}
+
 fn real_main() -> Result<()> {
+    //create logger
+    let log_level_name = global_args
+        .value_of("log-level")
+        .ok_or_else(|| anyhow!("cannot get log level"))?;
+
+    let log_level = logging::level_name_to_slog_level(log_level_name).map_err(|e| anyhow!(e))?;
+
+    let writer = io::stdout();
+    let (logger, _guard) = logging::create_logger(name, crate_name!(), log_level, writer);
+
     let args = KataCtlCli::parse();
 
     match args.command {
