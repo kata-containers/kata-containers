@@ -209,9 +209,10 @@ externals:
       Containerd for Kubernetes Container Runtime Interface.
     # CCv0 is using our fork of containerd as the changes can't be merged yet
     url: "github.com/confidential-containers/containerd"
-    tarball_url: "https://github.com/containerd/containerd/releases/download"
-    version: "v1.6.8"
-    # CCv0 needs to build a branch from our fork to install containerd
+    # yamllint disable-line rule:line-length
+    tarball_url: "https://github.com/confidential-containers/containerd/releases/download"
+    version: "v1.6.8.1"
+    # CCv0 needs to know about the specific branch for the integration tests
     branch: "CC-main"
 
   critools:
