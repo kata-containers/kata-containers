@@ -27,6 +27,7 @@ pub trait Rootfs: Send + Sync {
     async fn get_guest_rootfs_path(&self) -> Result<String>;
     async fn get_rootfs_mount(&self) -> Result<Vec<oci::Mount>>;
     async fn get_storage(&self) -> Option<Storage>;
+    async fn cleanup(&self) -> Result<()>;
 }
 
 #[derive(Default)]
@@ -66,11 +67,10 @@ impl RootFsResource {
             // if rootfs_mounts is empty
             mounts_vec if mounts_vec.is_empty() => {
                 if let Some(share_fs) = share_fs {
-                    let share_fs_mount = share_fs.get_share_fs_mount();
                     // share fs rootfs
                     Ok(Arc::new(
                         share_fs_rootfs::ShareFsRootfs::new(
-                            &share_fs_mount,
+                            share_fs,
                             cid,
                             root.path.as_str(),
                             None,
@@ -86,25 +86,18 @@ impl RootFsResource {
                 // Safe as single_layer_rootfs must have one layer
                 let layer = &mounts_vec[0];
                 let rootfs: Arc<dyn Rootfs> = if let Some(share_fs) = share_fs {
-                    let share_fs_mount = share_fs.get_share_fs_mount();
                     // nydus rootfs
                     if layer.fs_type == NYDUS_ROOTFS_TYPE {
                         Arc::new(
-                            nydus_rootfs::NydusRootfs::new(
-                                &share_fs_mount,
-                                hypervisor,
-                                sid,
-                                cid,
-                                layer,
-                            )
-                            .await
-                            .context("new nydus rootfs")?,
+                            nydus_rootfs::NydusRootfs::new(share_fs, hypervisor, sid, cid, layer)
+                                .await
+                                .context("new nydus rootfs")?,
                         )
                     } else {
                         // share fs rootfs
                         Arc::new(
                             share_fs_rootfs::ShareFsRootfs::new(
-                                &share_fs_mount,
+                                share_fs,
                                 cid,
                                 bundle_path,
                                 Some(layer),

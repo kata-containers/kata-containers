@@ -7,7 +7,7 @@
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
-    sync::{Arc, Weak},
+    sync::Arc,
 };
 
 use anyhow::{anyhow, Context, Result};
@@ -24,7 +24,7 @@ use kata_types::mount;
 // device nodes to the guest.
 // skip the volumes whose source had already set to guest share dir.
 pub(crate) struct ShareFsVolume {
-    share_fs: Option<Weak<dyn ShareFs>>,
+    share_fs: Option<Arc<dyn ShareFs>>,
     mounts: Vec<oci::Mount>,
     storages: Vec<agent::Storage>,
 }
@@ -40,7 +40,7 @@ impl ShareFsVolume {
         let file_name = generate_mount_path("sandbox", file_name);
 
         let mut volume = Self {
-            share_fs: share_fs.as_ref().map(Arc::downgrade),
+            share_fs: share_fs.as_ref().map(Arc::clone),
             mounts: vec![],
             storages: vec![],
         };
@@ -161,10 +161,7 @@ impl Volume for ShareFsVolume {
         if self.share_fs.is_none() {
             return Ok(());
         }
-        let share_fs = match self.share_fs.as_ref().unwrap().upgrade() {
-            Some(share_fs) => share_fs,
-            None => return Err(anyhow!("The share_fs was released unexpectedly")),
-        };
+        let share_fs = self.share_fs.as_ref().unwrap();
 
         let mounted_info_set = share_fs.mounted_info_set();
         let mut mounted_info_set = mounted_info_set.lock().await;
@@ -219,7 +216,7 @@ impl Volume for ShareFsVolume {
                 mounted_info_set.remove(&host_source);
                 // Umount the volume
                 share_fs_mount
-                    .umount(&file_name)
+                    .umount_volume(&file_name)
                     .await
                     .context("Umount volume")?
             }

@@ -47,7 +47,7 @@ pub trait ShareFs: Send + Sync {
     fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ShareFsRootfsConfig {
     // TODO: for nydus v5/v6 need to update ShareFsMount
     pub cid: String,
@@ -127,7 +127,9 @@ pub trait ShareFsMount: Send + Sync {
     /// Downgrade to readonly permission
     async fn downgrade_to_ro(&self, file_name: &str) -> Result<()>;
     /// Umount the volume
-    async fn umount(&self, file_name: &str) -> Result<()>;
+    async fn umount_volume(&self, file_name: &str) -> Result<()>;
+    /// Umount the rootfs
+    async fn umount_rootfs(&self, config: ShareFsRootfsConfig) -> Result<()>;
 }
 
 pub fn new(id: &str, config: &SharedFsInfo) -> Result<Arc<dyn ShareFs>> {

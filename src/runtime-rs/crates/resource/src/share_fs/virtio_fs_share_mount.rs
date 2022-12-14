@@ -194,10 +194,34 @@ impl ShareFsMount for VirtiofsShareMount {
         Ok(())
     }
 
-    async fn umount(&self, file_name: &str) -> Result<()> {
-        let host_dest = do_get_host_path(file_name, &self.id, "", true, true);
-        umount_timeout(&host_dest, 0).context("Umount readwrite host dest")?;
+    async fn umount_volume(&self, file_name: &str) -> Result<()> {
+        let host_dest = do_get_host_path(file_name, &self.id, "", true, false);
+        umount_timeout(&host_dest, 0).context("umount volume")?;
         // Umount event will be propagated to ro directory
+
+        // Remove the directory of mointpoint
+        if let Ok(md) = fs::metadata(&host_dest) {
+            if md.is_file() {
+                fs::remove_file(&host_dest).context("remove the volume mount point as a file")?;
+            }
+            if md.is_dir() {
+                fs::remove_dir(&host_dest).context("remove the volume mount point as a dir")?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn umount_rootfs(&self, config: ShareFsRootfsConfig) -> Result<()> {
+        let host_dest = do_get_host_path(&config.target, &self.id, &config.cid, false, false);
+        umount_timeout(&host_dest, 0).context("umount rootfs")?;
+
+        // Remove the directory of mointpoint
+        if let Ok(md) = fs::metadata(&host_dest) {
+            if md.is_dir() {
+                fs::remove_dir(&host_dest).context("remove the rootfs mount point as a dir")?;
+            }
+        }
+
         Ok(())
     }
 }
