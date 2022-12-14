@@ -7,6 +7,7 @@
 use std::path::Path;
 
 use anyhow::Result;
+use async_trait::async_trait;
 
 use super::Volume;
 use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
@@ -19,6 +20,7 @@ pub const DEFAULT_SHM_SIZE: u64 = 65536 * 1024;
 // KATA_EPHEMERAL_DEV_TYPE creates a tmpfs backed volume for sharing files between containers.
 pub const KATA_EPHEMERAL_DEV_TYPE: &str = "ephemeral";
 
+#[derive(Debug)]
 pub(crate) struct ShmVolume {
     mount: oci::Mount,
     storage: Option<agent::Storage>,
@@ -82,6 +84,7 @@ impl ShmVolume {
     }
 }
 
+#[async_trait]
 impl Volume for ShmVolume {
     fn get_volume_mount(&self) -> anyhow::Result<Vec<oci::Mount>> {
         Ok(vec![self.mount.clone()])
@@ -96,8 +99,9 @@ impl Volume for ShmVolume {
         Ok(s)
     }
 
-    fn cleanup(&self) -> Result<()> {
-        todo!()
+    async fn cleanup(&self) -> Result<()> {
+        warn!(sl!(), "Cleaning up ShmVolume is still unimplemented.");
+        Ok(())
     }
 }
 

@@ -2300,7 +2300,6 @@ dependencies = [
  "slog",
  "slog-scope",
  "slog-stdlog",
- "sysinfo",
  "tempfile",
  "test-utils",
  "thiserror",
@@ -4076,6 +4075,7 @@ dependencies = [
  "tempfile",
  "test-utils",
  "tokio",
+ "xattr",
  "zbus",
 ]
 

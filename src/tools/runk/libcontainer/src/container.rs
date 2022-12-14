@@ -337,7 +337,6 @@ impl ContainerLauncher {
             self.runner
                 .cgroup_manager
                 .as_ref()
-                .unwrap()
                 .as_any()?
                 .downcast_ref::<CgroupManager>()
                 .unwrap()

@@ -48,9 +48,9 @@ info "Calling edksetup script"
 source edksetup.sh
 
 if [ "${ovmf_build}" == "sev" ]; then
-       info "Creating dummy grub file"
-       #required for building AmdSev package without grub
-       touch OvmfPkg/AmdSev/Grub/grub.efi
+	info "Creating dummy grub file"
+	#required for building AmdSev package without grub
+	touch OvmfPkg/AmdSev/Grub/grub.efi
 fi
 
 info "Building ovmf"
@@ -93,5 +93,5 @@ fi
 local_dir=${PWD}
 pushd $DESTDIR
 tar -czvf "${local_dir}/${ovmf_dir}-${ovmf_build}.tar.gz" "./$PREFIX"
-rm -rf $(dirname ./$PREFIX) 
+rm -rf $(dirname ./$PREFIX)
 popd

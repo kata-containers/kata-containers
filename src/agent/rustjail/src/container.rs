@@ -30,6 +30,7 @@ use crate::log_child;
 use crate::process::Process;
 #[cfg(feature = "seccomp")]
 use crate::seccomp;
+use crate::selinux;
 use crate::specconv::CreateOpts;
 use crate::{mount, validator};
 
@@ -109,7 +110,6 @@ impl Default for ContainerStatus {
 }
 
 // We might want to change this to thiserror in the future
-const MissingCGroupManager: &str = "failed to get container's cgroup Manager";
 const MissingLinux: &str = "no linux config";
 const InvalidNamespace: &str = "invalid namespace type";
 
@@ -243,7 +243,7 @@ pub struct LinuxContainer {
     pub id: String,
     pub root: String,
     pub config: Config,
-    pub cgroup_manager: Option<Box<dyn Manager + Send + Sync>>,
+    pub cgroup_manager: Box<dyn Manager + Send + Sync>,
     pub init_process_pid: pid_t,
     pub init_process_start_time: u64,
     pub uid_map_path: String,
@@ -292,16 +292,11 @@ impl Container for LinuxContainer {
             ));
         }
 
-        if self.cgroup_manager.is_some() {
-            self.cgroup_manager
-                .as_ref()
-                .unwrap()
-                .freeze(FreezerState::Frozen)?;
+        self.cgroup_manager.as_ref().freeze(FreezerState::Frozen)?;
 
-            self.status.transition(ContainerState::Paused);
-            return Ok(());
-        }
-        Err(anyhow!(MissingCGroupManager))
+        self.status.transition(ContainerState::Paused);
+
+        Ok(())
     }
 
     fn resume(&mut self) -> Result<()> {
@@ -310,16 +305,11 @@ impl Container for LinuxContainer {
             return Err(anyhow!("container status is: {:?}, not paused", status));
         }
 
-        if self.cgroup_manager.is_some() {
-            self.cgroup_manager
-                .as_ref()
-                .unwrap()
-                .freeze(FreezerState::Thawed)?;
+        self.cgroup_manager.as_ref().freeze(FreezerState::Thawed)?;
 
-            self.status.transition(ContainerState::Running);
-            return Ok(());
-        }
-        Err(anyhow!(MissingCGroupManager))
+        self.status.transition(ContainerState::Running);
+
+        Ok(())
     }
 }
 
@@ -537,6 +527,8 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         }
     }
 
+    let selinux_enabled = selinux::is_enabled()?;
+
     sched::unshare(to_new & !CloneFlags::CLONE_NEWUSER)?;
 
     if userns {
@@ -636,6 +628,18 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     // NoNewPrivileges
     if oci_process.no_new_privileges {
         capctl::prctl::set_no_new_privs().map_err(|_| anyhow!("cannot set no new privileges"))?;
+    }
+
+    // Set SELinux label
+    if !oci_process.selinux_label.is_empty() {
+        if !selinux_enabled {
+            return Err(anyhow!(
+                "SELinux label for the process is provided but SELinux is not enabled on the running kernel"
+            ));
+        }
+
+        log_child!(cfd_log, "Set SELinux label to the container process");
+        selinux::set_exec_label(&oci_process.selinux_label)?;
     }
 
     // Log unknown seccomp system calls in advance before the log file descriptor closes.
@@ -847,22 +851,17 @@ impl BaseContainer for LinuxContainer {
     }
 
     fn stats(&self) -> Result<StatsContainerResponse> {
-        let mut r = StatsContainerResponse::default();
-
-        if self.cgroup_manager.is_some() {
-            r.cgroup_stats =
-                SingularPtrField::some(self.cgroup_manager.as_ref().unwrap().get_stats()?);
-        }
-
         // what about network interface stats?
 
-        Ok(r)
+        Ok(StatsContainerResponse {
+            cgroup_stats: SingularPtrField::some(self.cgroup_manager.as_ref().get_stats()?),
+            ..Default::default()
+        })
     }
 
     fn set(&mut self, r: LinuxResources) -> Result<()> {
-        if self.cgroup_manager.is_some() {
-            self.cgroup_manager.as_ref().unwrap().set(&r, true)?;
-        }
+        self.cgroup_manager.as_ref().set(&r, true)?;
+
         self.config
             .spec
             .as_mut()
@@ -1035,7 +1034,7 @@ impl BaseContainer for LinuxContainer {
             &logger,
             spec,
             &p,
-            self.cgroup_manager.as_ref().unwrap().as_ref(),
+            self.cgroup_manager.as_ref(),
             self.config.use_systemd_cgroup,
             &st,
             &mut pipe_w,
@@ -1114,19 +1113,19 @@ impl BaseContainer for LinuxContainer {
         )?;
         fs::remove_dir_all(&self.root)?;
 
-        if let Some(cgm) = self.cgroup_manager.as_mut() {
-            // Kill all of the processes created in this container to prevent
-            // the leak of some daemon process when this container shared pidns
-            // with the sandbox.
-            let pids = cgm.get_pids().context("get cgroup pids")?;
-            for i in pids {
-                if let Err(e) = signal::kill(Pid::from_raw(i), Signal::SIGKILL) {
-                    warn!(self.logger, "kill the process {} error: {:?}", i, e);
-                }
+        let cgm = self.cgroup_manager.as_mut();
+        // Kill all of the processes created in this container to prevent
+        // the leak of some daemon process when this container shared pidns
+        // with the sandbox.
+        let pids = cgm.get_pids().context("get cgroup pids")?;
+        for i in pids {
+            if let Err(e) = signal::kill(Pid::from_raw(i), Signal::SIGKILL) {
+                warn!(self.logger, "kill the process {} error: {:?}", i, e);
             }
-
-            cgm.destroy().context("destroy cgroups")?;
         }
+
+        cgm.destroy().context("destroy cgroups")?;
+
         Ok(())
     }
 
@@ -1514,7 +1513,7 @@ impl LinuxContainer {
         Ok(LinuxContainer {
             id: id.clone(),
             root,
-            cgroup_manager: Some(cgroup_manager),
+            cgroup_manager,
             status: ContainerStatus::new(),
             uid_map_path: String::from(""),
             gid_map_path: "".to_string(),
@@ -1981,23 +1980,11 @@ mod tests {
     }
 
     #[test]
-    fn test_linuxcontainer_pause_cgroupmgr_is_none() {
-        let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.cgroup_manager = None;
-            c.pause().map_err(|e| anyhow!(e))
-        });
-
-        assert!(ret.is_err(), "Expecting error, Got {:?}", ret);
-    }
-
-    #[test]
     fn test_linuxcontainer_pause() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
-            let cgroup_manager: Box<dyn Manager + Send + Sync> =
-                Box::new(FsManager::new("").map_err(|e| {
-                    anyhow!(format!("fail to create cgroup manager with path: {:}", e))
-                })?);
-            c.cgroup_manager = Some(cgroup_manager);
+            c.cgroup_manager = Box::new(FsManager::new("").map_err(|e| {
+                anyhow!(format!("fail to create cgroup manager with path: {:}", e))
+            })?);
             c.pause().map_err(|e| anyhow!(e))
         });
 
@@ -2017,24 +2004,11 @@ mod tests {
     }
 
     #[test]
-    fn test_linuxcontainer_resume_cgroupmgr_is_none() {
-        let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.status.transition(ContainerState::Paused);
-            c.cgroup_manager = None;
-            c.resume().map_err(|e| anyhow!(e))
-        });
-
-        assert!(ret.is_err(), "Expecting error, Got {:?}", ret);
-    }
-
-    #[test]
     fn test_linuxcontainer_resume() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
-            let cgroup_manager: Box<dyn Manager + Send + Sync> =
-                Box::new(FsManager::new("").map_err(|e| {
-                    anyhow!(format!("fail to create cgroup manager with path: {:}", e))
-                })?);
-            c.cgroup_manager = Some(cgroup_manager);
+            c.cgroup_manager = Box::new(FsManager::new("").map_err(|e| {
+                anyhow!(format!("fail to create cgroup manager with path: {:}", e))
+            })?);
             // Change status to paused, this way we can resume it
             c.status.transition(ContainerState::Paused);
             c.resume().map_err(|e| anyhow!(e))

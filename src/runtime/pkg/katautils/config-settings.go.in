@@ -90,6 +90,7 @@ const defaultSevSnpGuest = false
 const defaultGuestSwap = false
 const defaultRootlessHypervisor = false
 const defaultDisableSeccomp = false
+const defaultDisableGuestSeLinux = true
 const defaultVfioMode = "guest-kernel"
 const defaultLegacySerial = false
 const defaultGuestPreAttestation = false

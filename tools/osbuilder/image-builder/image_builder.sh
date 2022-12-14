@@ -65,6 +65,8 @@ readonly -a systemd_files=(
 
 # Set a default value
 AGENT_INIT=${AGENT_INIT:-no}
+SELINUX=${SELINUX:-no}
+SELINUXFS="/sys/fs/selinux"
 
 # Align image to 128M
 readonly mem_boundary_mb=128
@@ -94,6 +96,10 @@ Extra environment variables:
 	                DEFAULT: not set
 	USE_PODMAN:     If set and USE_DOCKER not set, will build image in a Podman Container (requries podman)
 	                DEFAULT: not set
+	SELINUX:        If set to "yes", the rootfs is labeled for SELinux.
+	                Make sure that selinuxfs is mounted to /sys/fs/selinux on the host
+	                and the rootfs is built with SELINUX=yes.
+	                DEFAULT value: "no"
 
 
 Following diagram shows how the resulting image will look like
@@ -135,6 +141,7 @@ build_with_container() {
 	local nsdax_bin="$9"
 	local container_image_name="image-builder-osbuilder"
 	local shared_files=""
+	local selinuxfs=""
 
 	image_dir=$(readlink -f "$(dirname "${image}")")
 	image_name=$(basename "${image}")
@@ -158,6 +165,14 @@ build_with_container() {
 		shared_files+="-v ${mke2fs_conf}:${mke2fs_conf}:ro "
 	fi
 
+	if [ "${SELINUX}" == "yes" ]; then
+		if mountpoint $SELINUXFS > /dev/null; then
+			selinuxfs="-v ${SELINUXFS}:${SELINUXFS}"
+		else
+			die "Make sure that SELinux is enabled on the host"
+		fi
+	fi
+
 	#Make sure we use a compatible runtime to build rootfs
 	# In case Clear Containers Runtime is installed we dont want to hit issue:
 	#https://github.com/clearcontainers/runtime/issues/828
@@ -172,12 +187,14 @@ build_with_container() {
 		   --env ROOT_FREE_SPACE="${root_free_space}" \
 		   --env NSDAX_BIN="${nsdax_bin}" \
 		   --env KATA_BUILD_CC="${KATA_BUILD_CC}" \
+		   --env SELINUX="${SELINUX}" \
 		   --env DEBUG="${DEBUG}" \
 		   -v /dev:/dev \
 		   -v "${script_dir}":"/osbuilder" \
 		   -v "${script_dir}/../scripts":"/scripts" \
 		   -v "${rootfs}":"/rootfs" \
 		   -v "${image_dir}":"/image" \
+		   ${selinuxfs} \
 		   ${shared_files} \
 		   ${container_image_name} \
 		   bash "/osbuilder/${script_name}" -o "/image/${image_name}" /rootfs
@@ -398,6 +415,7 @@ create_rootfs_image() {
 	local img_size="$3"
 	local fs_type="$4"
 	local block_size="$5"
+	local agent_bin="$6"
 
 	create_disk "${image}" "${img_size}" "${fs_type}" "${rootfs_start}"
 
@@ -416,6 +434,31 @@ create_rootfs_image() {
 
 	info "Copying content from rootfs to root partition"
 	cp -a "${rootfs}"/* "${mount_dir}"
+
+	if [ "${SELINUX}" == "yes" ]; then
+		if [ "${AGENT_INIT}" == "yes" ]; then
+			die "Guest SELinux with the agent init is not supported yet"
+		fi
+
+		info "Labeling rootfs for SELinux"
+		selinuxfs_path="${mount_dir}${SELINUXFS}"
+		mkdir -p $selinuxfs_path
+		if mountpoint $SELINUXFS > /dev/null && \
+			chroot "${mount_dir}" command -v restorecon > /dev/null; then
+			mount -t selinuxfs selinuxfs $selinuxfs_path
+			chroot "${mount_dir}" restorecon -RF -e ${SELINUXFS} /
+			# TODO: This operation will be removed after the updated container-selinux that
+			# includes the following commit is released.
+			# https://github.com/containers/container-selinux/commit/39f83cc74d50bd10ab6be4d0bdd98bc04857469f
+			# We use chcon as an interim solution until then.
+			chroot "${mount_dir}" chcon -t container_runtime_exec_t "/usr/bin/${agent_bin}"
+			umount $selinuxfs_path
+		else
+			die "Could not label the rootfs. Make sure that SELinux is enabled on the host \
+and the rootfs is built with SELINUX=yes"
+		fi
+	fi
+
 	sync
 	OK "rootfs copied"
 
@@ -549,7 +592,7 @@ main() {
 	# consider in calculate_img_size
 	rootfs_img_size=$((img_size - dax_header_sz))
 	create_rootfs_image "${rootfs}" "${image}" "${rootfs_img_size}" \
-						"${fs_type}" "${block_size}"
+						"${fs_type}" "${block_size}" "${agent_bin}"
 
 	# insert at the beginning of the image the MBR + DAX header
 	set_dax_header "${image}" "${img_size}" "${fs_type}" "${nsdax_bin}"

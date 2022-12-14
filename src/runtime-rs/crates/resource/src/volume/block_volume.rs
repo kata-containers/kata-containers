@@ -5,9 +5,11 @@
 //
 
 use anyhow::Result;
+use async_trait::async_trait;
 
 use super::Volume;
 
+#[derive(Debug)]
 pub(crate) struct BlockVolume {}
 
 /// BlockVolume: block device volume
@@ -17,6 +19,7 @@ impl BlockVolume {
     }
 }
 
+#[async_trait]
 impl Volume for BlockVolume {
     fn get_volume_mount(&self) -> anyhow::Result<Vec<oci::Mount>> {
         todo!()
@@ -26,8 +29,9 @@ impl Volume for BlockVolume {
         todo!()
     }
 
-    fn cleanup(&self) -> Result<()> {
-        todo!()
+    async fn cleanup(&self) -> Result<()> {
+        warn!(sl!(), "Cleaning up BlockVolume is still unimplemented.");
+        Ok(())
     }
 }
 

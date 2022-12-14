@@ -4,11 +4,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::collections::HashMap;
+
 use agent::Storage;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use hypervisor::Hypervisor;
 use kata_types::config::hypervisor::SharedFsInfo;
+use tokio::sync::Mutex;
 
 use super::{
     share_virtio_fs::{
@@ -30,6 +33,7 @@ pub struct ShareVirtioFsInlineConfig {
 pub struct ShareVirtioFsInline {
     config: ShareVirtioFsInlineConfig,
     share_fs_mount: Arc<dyn ShareFsMount>,
+    mounted_info_set: Arc<Mutex<HashMap<String, MountedInfo>>>,
 }
 
 impl ShareVirtioFsInline {
@@ -37,6 +41,7 @@ impl ShareVirtioFsInline {
         Ok(Self {
             config: ShareVirtioFsInlineConfig { id: id.to_string() },
             share_fs_mount: Arc::new(VirtiofsShareMount::new(id)),
+            mounted_info_set: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 }
@@ -76,5 +81,9 @@ impl ShareFs for ShareVirtioFsInline {
 
         storages.push(shared_volume);
         Ok(storages)
+    }
+
+    fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>> {
+        self.mounted_info_set.clone()
     }
 }

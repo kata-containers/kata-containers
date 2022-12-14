@@ -135,6 +135,8 @@ type SandboxConfig struct {
 	Hostname       string
 	ID             string
 	HypervisorType HypervisorType
+	// Custom SELinux security policy to the container process inside the VM
+	GuestSeLinuxLabel string
 	// Volumes is a list of shared volumes between the host and the Sandbox.
 	Volumes []types.Volume
 	// SandboxBindMounts - list of paths to mount into guest

@@ -25,6 +25,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 use crate::container::DEFAULT_DEVICES;
+use crate::selinux;
 use crate::sync::write_count;
 use std::string::ToString;
 
@@ -181,6 +182,8 @@ pub fn init_rootfs(
         None => flags |= MsFlags::MS_SLAVE,
     }
 
+    let label = &linux.mount_label;
+
     let root = spec
         .root
         .as_ref()
@@ -244,7 +247,7 @@ pub fn init_rootfs(
                 }
             }
 
-            mount_from(cfd_log, m, rootfs, flags, &data, "")?;
+            mount_from(cfd_log, m, rootfs, flags, &data, label)?;
             // bind mount won't change mount options, we need remount to make mount options
             // effective.
             // first check that we have non-default options required before attempting a
@@ -524,7 +527,6 @@ pub fn pivot_rootfs<P: ?Sized + NixPath + std::fmt::Debug>(path: &P) -> Result<(
 
 fn rootfs_parent_mount_private(path: &str) -> Result<()> {
     let mount_infos = parse_mount_table(MOUNTINFO_PATH)?;
-
     let mut max_len = 0;
     let mut mount_point = String::from("");
     let mut options = String::from("");
@@ -767,9 +769,9 @@ fn mount_from(
     rootfs: &str,
     flags: MsFlags,
     data: &str,
-    _label: &str,
+    label: &str,
 ) -> Result<()> {
-    let d = String::from(data);
+    let mut d = String::from(data);
     let dest = secure_join(rootfs, &m.destination);
 
     let src = if m.r#type.as_str() == "bind" {
@@ -822,6 +824,37 @@ fn mount_from(
         e
     })?;
 
+    // Set the SELinux context for the mounts
+    let mut use_xattr = false;
+    if !label.is_empty() {
+        if selinux::is_enabled()? {
+            let device = Path::new(&m.source)
+                .file_name()
+                .ok_or_else(|| anyhow!("invalid device source path: {}", &m.source))?
+                .to_str()
+                .ok_or_else(|| anyhow!("failed to convert device source path: {}", &m.source))?;
+
+            match device {
+                // SELinux does not support labeling of /proc or /sys
+                "proc" | "sysfs" => (),
+                // SELinux does not support mount labeling against /dev/mqueue,
+                // so we use setxattr instead
+                "mqueue" => {
+                    use_xattr = true;
+                }
+                _ => {
+                    log_child!(cfd_log, "add SELinux mount label to {}", dest.as_str());
+                    selinux::add_mount_label(&mut d, label);
+                }
+            }
+        } else {
+            log_child!(
+                cfd_log,
+                "SELinux label for the mount is provided but SELinux is not enabled on the running kernel"
+            );
+        }
+    }
+
     mount(
         Some(src.as_str()),
         dest.as_str(),
@@ -833,6 +866,10 @@ fn mount_from(
         log_child!(cfd_log, "mount error: {:?}", e);
         e
     })?;
+
+    if !label.is_empty() && selinux::is_enabled()? && use_xattr {
+        xattr::set(dest.as_str(), "security.selinux", label.as_bytes())?;
+    }
 
     if flags.contains(MsFlags::MS_BIND)
         && flags.intersects(

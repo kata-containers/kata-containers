@@ -18,6 +18,7 @@ pub(crate) fn ensure_dir_exist(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Bind mount the original path to the runtime directory.
 pub(crate) fn share_to_guest(
     // absolute path for source
     source: &str,
@@ -37,7 +38,7 @@ pub(crate) fn share_to_guest(
     // to remount the read only dir mount point directly.
     if readonly {
         let dst = do_get_host_path(target, sid, cid, is_volume, true);
-        mount::bind_remount_read_only(&dst).context("bind remount readonly")?;
+        mount::bind_remount(&dst, readonly).context("bind remount readonly")?;
     }
 
     Ok(do_get_guest_path(target, cid, is_volume, is_rafs))
