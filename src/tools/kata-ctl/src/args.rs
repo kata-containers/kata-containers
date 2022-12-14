@@ -58,6 +58,12 @@ pub enum CheckSubCommand {
 
     /// Only compare the current and latest available versions
     CheckVersionOnly,
+
+    /// List official release packages
+    OnlyListReleases,
+
+    /// List all official and pre-release packages
+    IncludeAllReleases,
 }
 
 #[derive(Debug, Args)]
