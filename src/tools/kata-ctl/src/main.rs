@@ -7,6 +7,7 @@ mod arch;
 mod args;
 mod check;
 mod ops;
+mod types;
 mod utils;
 
 use anyhow::Result;

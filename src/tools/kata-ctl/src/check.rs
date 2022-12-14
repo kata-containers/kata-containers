@@ -16,16 +16,11 @@ struct Release {
     tarball_url: String,
 }
 
-use serde_json::Value;
 #[cfg(any(
     target_arch = "aarch64",
     target_arch = "powerpc64le",
     target_arch = "x86_64"
 ))]
-use std::collections::HashMap;
-
-const KATA_GITHUB_URL: &str =
-    "https://api.github.com/repos/kata-containers/kata-containers/releases/latest";
 
 const KATA_GITHUB_RELEASE_URL: &str =
     "https://api.github.com/repos/kata-containers/kata-containers/releases";
@@ -125,18 +120,6 @@ pub fn run_network_checks() -> Result<()> {
     Ok(())
 }
 
-fn get_kata_version_by_url(url: &str) -> std::result::Result<String, reqwest::Error> {
-    let content = reqwest::blocking::Client::new()
-        .get(url)
-        .header(CONTENT_TYPE, JSON_TYPE)
-        .header(USER_AGENT, USER_AGT)
-        .send()?
-        .json::<HashMap<String, Value>>()?;
-
-    let version = content["tag_name"].as_str().unwrap();
-    Ok(version.to_string())
-}
-
 fn get_kata_all_releases_by_url() -> std::result::Result<Vec<Release>, reqwest::Error> {
     let releases: Vec<Release> = reqwest::blocking::Client::new()
         .get(KATA_GITHUB_RELEASE_URL)
@@ -165,14 +148,6 @@ fn handle_reqwest_error(e: reqwest::Error) -> anyhow::Error {
     }
 
     anyhow!(e).context("unknown http connection failure: {:?}")
-}
-
-pub fn check_version() -> Result<()> {
-    let version = get_kata_version_by_url(KATA_GITHUB_URL).map_err(handle_reqwest_error)?;
-
-    println!("Version: {}", version);
-
-    Ok(())
 }
 
 pub fn check_all_releases() -> Result<()> {
@@ -215,6 +190,23 @@ pub fn check_official_releases() -> Result<()> {
 mod tests {
     use super::*;
     use semver::Version;
+    use serde_json::Value;
+    use std::collections::HashMap;
+
+    const KATA_GITHUB_URL: &str =
+        "https://api.github.com/repos/kata-containers/kata-containers/releases/latest";
+
+    fn get_kata_version_by_url(url: &str) -> std::result::Result<String, reqwest::Error> {
+        let content = reqwest::blocking::Client::new()
+            .get(url)
+            .header(CONTENT_TYPE, JSON_TYPE)
+            .header(USER_AGENT, USER_AGT)
+            .send()?
+            .json::<HashMap<String, Value>>()?;
+
+        let version = content["tag_name"].as_str().unwrap();
+        Ok(version.to_string())
+    }
 
     #[test]
     fn test_get_cpu_info_empty_input() {

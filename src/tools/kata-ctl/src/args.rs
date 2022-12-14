@@ -64,6 +64,9 @@ pub enum CheckSubCommand {
 
     /// List all official and pre-release packages
     IncludeAllReleases,
+
+    /// List all available checks
+    List,
 }
 
 #[derive(Debug, Args)]
