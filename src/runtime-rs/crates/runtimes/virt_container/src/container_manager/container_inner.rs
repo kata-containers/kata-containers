@@ -249,6 +249,7 @@ impl ContainerInner {
             .await?;
 
         self.clean_volumes().await.context("clean volumes")?;
+        self.clean_rootfs().await.context("clean rootfs")?;
 
         Ok(())
     }
@@ -279,7 +280,7 @@ impl ContainerInner {
                 unhandled.push(Arc::clone(v));
                 warn!(
                     sl!(),
-                    "Failed to clean volume {:?}, error = {:?}",
+                    "Failed to clean the volume = {:?}, error = {:?}",
                     v.get_volume_mount(),
                     err
                 );
@@ -287,6 +288,25 @@ impl ContainerInner {
         }
         if !unhandled.is_empty() {
             self.volumes = unhandled;
+        }
+        Ok(())
+    }
+
+    async fn clean_rootfs(&mut self) -> Result<()> {
+        let mut unhandled = Vec::new();
+        for rootfs in self.rootfs.iter() {
+            if let Err(err) = rootfs.cleanup().await {
+                unhandled.push(Arc::clone(rootfs));
+                warn!(
+                    sl!(),
+                    "Failed to umount rootfs, cid = {:?}, error = {:?}",
+                    self.container_id(),
+                    err
+                );
+            }
+        }
+        if !unhandled.is_empty() {
+            self.rootfs = unhandled;
         }
         Ok(())
     }
