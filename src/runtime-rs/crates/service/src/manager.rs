@@ -28,7 +28,7 @@ use ttrpc::asynchronous::Server;
 use crate::task_service::TaskService;
 /// message buffer size
 const MESSAGE_BUFFER_SIZE: usize = 8;
-use persist::KATA_PATH;
+use shim_interface::KATA_PATH;
 
 pub struct ServiceManager {
     receiver: Option<Receiver<Message>>,

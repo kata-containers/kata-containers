@@ -18,6 +18,7 @@ common = { path = "./common" }
 kata-types = { path = "../../../libs/kata-types" }
 logging = { path = "../../../libs/logging"}
 oci = { path = "../../../libs/oci" }
+shim-interface = { path = "../../../libs/shim-interface" }
 persist = { path = "../persist" }
 hypervisor = { path = "../hypervisor" }
 # runtime handler

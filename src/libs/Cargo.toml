@@ -6,6 +6,7 @@ members = [
     "oci",
     "protocols",
     "safe-path",
+    "shim-interface",
     "test-utils",
 ]
 resolver = "2"
