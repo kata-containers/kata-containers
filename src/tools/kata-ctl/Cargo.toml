@@ -19,6 +19,11 @@ serde_json = "1.0.85"
 thiserror = "1.0.35"
 privdrop = "0.5.2"
 nix = "0.25.0"
+rtnetlink = "0.11.0"
+tokio = { version = "1.8.0", features = ["full"] }
+scopeguard = "1.1.0"
+kata-sys-util = { path = "../../libs/kata-sys-util"}
+futures-util = "0.3.25"
 
 runtimes = { path = "../../runtime-rs/crates/runtimes" }
 

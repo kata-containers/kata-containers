@@ -58,6 +58,9 @@ pub enum CheckSubCommand {
 
     /// Only compare the current and latest available versions
     CheckVersionOnly,
+
+    /// Run only network checks.
+    Network,
 }
 
 #[derive(Debug, Args)]
