@@ -120,6 +120,8 @@ See the
 See the
 [debugging section of the developer guide](../../docs/Developer-Guide.md#troubleshoot-kata-containers).
 
+An [experimental alternative binary](crates/shim-ctl/README.md) is available that removes containerd dependencies and makes it easier to run the shim proper outside of the runtime's usual deployment environment (i.e. on a developer machine).
+
 ## Limitations
 
 For Kata Containers limitations, see the

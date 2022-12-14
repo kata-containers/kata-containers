@@ -14,6 +14,7 @@ pub mod hypervisor_persist;
 pub use device::*;
 pub mod dragonball;
 mod kernel_param;
+pub mod qemu;
 pub use kernel_param::Param;
 mod utils;
 use std::collections::HashMap;
@@ -28,6 +29,8 @@ const VM_ROOTFS_DRIVER_BLK: &str = "virtio-blk";
 const VM_ROOTFS_DRIVER_PMEM: &str = "virtio-pmem";
 
 pub const HYPERVISOR_DRAGONBALL: &str = "dragonball";
+pub const HYPERVISOR_QEMU: &str = "qemu";
+
 #[derive(PartialEq)]
 pub(crate) enum VmmState {
     NotReady,
