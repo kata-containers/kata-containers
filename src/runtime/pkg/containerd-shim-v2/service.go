@@ -825,7 +825,7 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 
 // Pids returns all pids inside the container
 // Since for kata, it cannot get the process's pid from VM,
-// thus only return the Shim's pid directly.
+// thus only return the hypervisor's pid directly.
 func (s *service) Pids(ctx context.Context, r *taskAPI.PidsRequest) (_ *taskAPI.PidsResponse, err error) {
 	shimLog.WithField("container", r.ID).Debug("Pids() start")
 	defer shimLog.WithField("container", r.ID).Debug("Pids() end")
@@ -927,7 +927,7 @@ func (s *service) Connect(ctx context.Context, r *taskAPI.ConnectRequest) (_ *ta
 
 	return &taskAPI.ConnectResponse{
 		ShimPid: s.pid,
-		//Since kata cannot get the container's pid in VM, thus only return the shim's pid.
+		//Since kata cannot get the container's pid in VM, thus only return the hypervisor's pid.
 		TaskPid: s.hpid,
 	}, nil
 }
