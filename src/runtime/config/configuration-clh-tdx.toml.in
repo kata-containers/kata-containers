@@ -38,6 +38,13 @@ confidential_guest = true
 # disable applying SELinux on the VMM process (default false)
 disable_selinux=@DEFDISABLESELINUX@
 
+# disable applying SELinux on the container process
+# If set to false, the type `container_t` is applied to the container process by default.
+# Note: To enable guest SELinux, the guest rootfs must be CentOS that is created and built
+# with `SELINUX=yes`.
+# (default: true)
+disable_guest_selinux=@DEFDISABLEGUESTSELINUX@
+
 # Path to the firmware.
 # If you want Cloud Hypervisor to use a specific firmware, set its path below.
 # This is option is only used when confidential_guest is enabled.
@@ -317,6 +324,14 @@ internetworking_model="@DEFNETWORKMODEL_CLH@"
 # within the guest
 # (default: true)
 disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
+
+# Apply a custom SELinux security policy to the container process inside the VM.
+# This is used when you want to apply a type other than the default `container_t`,
+# so general users should not uncomment and apply it.
+# (format: "user:role:type")
+# Note: You cannot specify MCS policy with the label because the sensitivity levels and
+# categories are determined automatically by high-level container runtimes such as containerd.
+#guest_selinux_label="@DEFGUESTSELINUXLABEL@"
 
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).
