@@ -48,7 +48,7 @@ impl ShareFsRootfs {
         };
 
         let mount_result = share_fs_mount
-            .share_rootfs(config.clone())
+            .share_rootfs(&config)
             .await
             .context("share rootfs")?;
 
@@ -78,7 +78,7 @@ impl Rootfs for ShareFsRootfs {
         // Umount the mount point shared to guest
         let share_fs_mount = self.share_fs.get_share_fs_mount();
         share_fs_mount
-            .umount_rootfs(self.config.clone())
+            .umount_rootfs(&self.config)
             .await
             .context("umount shared rootfs")?;
 

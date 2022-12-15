@@ -38,7 +38,7 @@ impl VirtiofsShareMount {
 
 #[async_trait]
 impl ShareFsMount for VirtiofsShareMount {
-    async fn share_rootfs(&self, config: ShareFsRootfsConfig) -> Result<ShareFsMountResult> {
+    async fn share_rootfs(&self, config: &ShareFsRootfsConfig) -> Result<ShareFsMountResult> {
         // TODO: select virtiofs or support nydus
         let guest_path = utils::share_to_guest(
             &config.source,
@@ -56,7 +56,7 @@ impl ShareFsMount for VirtiofsShareMount {
         })
     }
 
-    async fn share_volume(&self, config: ShareFsVolumeConfig) -> Result<ShareFsMountResult> {
+    async fn share_volume(&self, config: &ShareFsVolumeConfig) -> Result<ShareFsMountResult> {
         let mut guest_path = utils::share_to_guest(
             &config.source,
             &config.target,
@@ -103,7 +103,7 @@ impl ShareFsMount for VirtiofsShareMount {
                 source: guest_path,
                 fs_type: String::from("bind"),
                 fs_group: None,
-                options: config.mount_options,
+                options: config.mount_options.clone(),
                 mount_point: watchable_guest_mount.clone(),
             };
 
@@ -211,7 +211,7 @@ impl ShareFsMount for VirtiofsShareMount {
         Ok(())
     }
 
-    async fn umount_rootfs(&self, config: ShareFsRootfsConfig) -> Result<()> {
+    async fn umount_rootfs(&self, config: &ShareFsRootfsConfig) -> Result<()> {
         let host_dest = do_get_host_path(&config.target, &self.id, &config.cid, false, false);
         umount_timeout(&host_dest, 0).context("umount rootfs")?;
 
