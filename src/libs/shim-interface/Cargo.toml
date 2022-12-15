@@ -1,0 +1,18 @@
+[package]
+name = "shim-interface"
+version = "0.1.0"
+description = "A library to provide service interface of Kata Containers"
+keywords = ["kata", "container", "http"]
+categories = ["services"]
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+repository = "https://github.com/kata-containers/kata-containers.git"
+homepage = "https://katacontainers.io/"
+readme = "README.md"
+license = "Apache-2.0"
+edition = "2018"
+
+[dependencies]
+anyhow = "^1.0"
+tokio = { version = "1.8.0", features = ["rt-multi-thread"] }
+hyper = { version = "0.14.20", features = ["stream", "server", "http1"] }
+hyperlocal = "0.8"
