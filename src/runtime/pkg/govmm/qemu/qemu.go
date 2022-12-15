@@ -2611,9 +2611,6 @@ type Config struct {
 	// PidFile is the -pidfile parameter
 	PidFile string
 
-	// LogFile is the -D parameter
-	LogFile string
-
 	qemuParams []string
 }
 
@@ -2941,13 +2938,6 @@ func (config *Config) appendPidFile() {
 	}
 }
 
-func (config *Config) appendLogFile() {
-	if config.LogFile != "" {
-		config.qemuParams = append(config.qemuParams, "-D")
-		config.qemuParams = append(config.qemuParams, config.LogFile)
-	}
-}
-
 func (config *Config) appendFwCfg(logger QMPLog) {
 	if logger == nil {
 		logger = qmpNullLogger{}
@@ -2986,7 +2976,6 @@ func LaunchQemu(config Config, logger QMPLog) (*exec.Cmd, io.ReadCloser, error) 
 	config.appendIOThreads()
 	config.appendIncoming()
 	config.appendPidFile()
-	config.appendLogFile()
 	config.appendFwCfg(logger)
 	config.appendSeccompSandbox()
 

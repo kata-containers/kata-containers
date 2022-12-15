@@ -902,10 +902,6 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 		return err
 	}
 	q.Logger().WithField("vm path", vmPath).Info("created vm path")
-	// append logfile only on debug
-	if q.config.Debug {
-		q.qemuConfig.LogFile = filepath.Join(vmPath, "qemu.log")
-	}
 
 	defer func() {
 		if err != nil {
@@ -1068,19 +1064,6 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) error {
 		q.cleanupVM()
 		q.stopped = true
 	}()
-
-	if q.config.Debug && q.qemuConfig.LogFile != "" {
-		f, err := os.OpenFile(q.qemuConfig.LogFile, os.O_RDONLY, 0)
-		if err == nil {
-			scanner := bufio.NewScanner(f)
-			for scanner.Scan() {
-				q.Logger().WithField("file", q.qemuConfig.LogFile).Debug(scanner.Text())
-			}
-			if err := scanner.Err(); err != nil {
-				q.Logger().WithError(err).Debug("read qemu log failed")
-			}
-		}
-	}
 
 	if err := q.qmpSetup(); err != nil {
 		return err
