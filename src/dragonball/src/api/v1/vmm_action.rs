@@ -406,19 +406,10 @@ impl VmmService {
         }
         config.vpmu_feature = machine_config.vpmu_feature;
 
-        let vm_id = vm.shared_info().read().unwrap().id.clone();
-        let serial_path = match machine_config.serial_path {
-            Some(value) => value,
-            None => {
-                if config.serial_path.is_none() {
-                    String::from("/run/dragonball/") + &vm_id + "_com1"
-                } else {
-                    // Safe to unwrap() because we have checked it has a value.
-                    config.serial_path.as_ref().unwrap().clone()
-                }
-            }
-        };
-        config.serial_path = Some(serial_path);
+        // If serial_path is:
+        // - None, legacy_manager will create_stdio_console.
+        // - Some(path), legacy_manager will create_socket_console on that path.
+        config.serial_path = machine_config.serial_path;
 
         vm.set_vm_config(config.clone());
         self.machine_config = config;
