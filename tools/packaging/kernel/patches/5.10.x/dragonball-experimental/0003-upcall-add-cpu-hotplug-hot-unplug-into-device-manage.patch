@@ -1,0 +1,301 @@
+From 901fb71c77144b170465611617f0f25099d8a780 Mon Sep 17 00:00:00 2001
+From: Chao Wu <chaowu@linux.alibaba.com>
+Date: Mon, 21 Nov 2022 19:44:50 +0800
+Subject: [PATCH 3/4] upcall: add cpu hotplug/hot-unplug into device manager
+ service
+
+Add cpu hotplug and hot-unplug support into device manager. In the
+`devmgr_req` message, `msg_type` ADD_CPU in `msg_header` will trigger
+`add_cpu_dev` action and DEL_CPU will trigger `del_cpu_dev` action, and
+we use `apic_ids` and `count` delivered in `cpu_dev_info` to notify
+which and how many cpus will be hotplugged / hot-unplugged.
+
+`add_cpu_dev` and `del_cpu_dev` will eventually trigger `add_cpu_upcall`
+and `del_cpu_upcall` to trigger the cpu hotplug / hot-unplug process in
+the kernel. After the cpu hotplug / hot-unplug process,
+`cpu_event_notification` will generate device manager reply to the
+client side.
+
+Signed-off-by: Liu Jiang <gerry@linux.alibaba.com>
+Signed-off-by: Zizheng Bian <zizheng.bian@linux.alibaba.com>
+Signed-off-by: Chao Wu <chaowu@linux.alibaba.com>
+Signed-off-by: WangYu <WangYu@linux.alibaba.com>
+Signed-off-by: Xingjun Liu <xingjun.liu@linux.alibaba.com>
+---
+ drivers/misc/dragonball/upcall_srv/Kconfig    |  11 +
+ .../upcall_srv/dragonball_device_manager.c    | 219 ++++++++++++++++++
+ 2 files changed, 230 insertions(+)
+
+diff --git a/drivers/misc/dragonball/upcall_srv/Kconfig b/drivers/misc/dragonball/upcall_srv/Kconfig
+index 6554a9741c00..b237882a2928 100644
+--- a/drivers/misc/dragonball/upcall_srv/Kconfig
++++ b/drivers/misc/dragonball/upcall_srv/Kconfig
+@@ -24,3 +24,14 @@ config DRAGONBALL_DEVICE_MANAGER
+ 	  devices etc.
+ 
+ 	  If unsure, say N.
++
++config DRAGONBALL_HOTPLUG_CPU
++	bool "CPU hotplug/hotunplug support"
++	depends on DRAGONBALL_DEVICE_MANAGER
++	default y
++	help
++	  This configure implements a vCPU hotplug/hotunplug support, vmm
++	  should send hotplug request by vsock which follow special data
++	  structure with command and parameter to hot-pluging an vCPU.
++
++	  If unsure, say N.
+diff --git a/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c b/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c
+index ebcb6ef74285..210ef5d6c9d5 100644
+--- a/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c
++++ b/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c
+@@ -75,9 +75,20 @@ struct devmgr_req {
+ 	struct devmgr_msg_header msg_header;
+ 	union {
+ 		char	pad[DEV_MGR_MSG_SIZE - sizeof(struct devmgr_msg_header)];
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU)
++		struct {
++			uint8_t count;
++			uint8_t apic_ver;
++			uint8_t apic_ids[256];
++		} cpu_dev_info;
++#endif
+ 	} msg_load;
+ };
+ 
++struct cpu_dev_reply_info {
++	uint32_t apic_index;
++};
++
+ struct devmgr_reply {
+ 	struct devmgr_msg_header msg_header;
+ 	/*
+@@ -87,6 +98,9 @@ struct devmgr_reply {
+ 	int32_t ret;
+ 	union {
+ 		char	pad[DEV_MGR_MSG_SIZE - sizeof(struct devmgr_msg_header) - sizeof(int32_t)];
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU)
++	struct cpu_dev_reply_info cpu_dev_info;
++#endif
+ 	} msg_load;
+ };
+ 
+@@ -109,10 +123,215 @@ static void _fill_msg_header(struct devmgr_msg_header *msg, uint32_t msg_size,
+ 	msg->msg_flags     = msg_flags;
+ }
+ 
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU) && defined(CONFIG_X86_64)
++static int get_cpu_id(int apic_id)
++{
++	int i;
++
++	for (i = 0; i < num_processors; i++) {
++		if (cpu_physical_id(i) == apic_id)
++			return i;
++	}
++	return -1;
++}
++
++/**
++ * Return the first failed hotplug index of the apic_ids to dragonball.
++ * If it is not equal to the count of all hotplug needed vcpus,
++ * we will rollback the vcpus from apics_ids[0] to apic_ids[i-1] in dragonball.
++ */
++static void cpu_event_notification(
++	uint8_t apic_ids_index,
++	int ret,
++	uint32_t action_type,
++	struct devmgr_reply *rep)
++{
++	pr_info("cpu event notification: apic ids index %d", apic_ids_index);
++	rep->msg_load.cpu_dev_info.apic_index = apic_ids_index;
++	rep->ret = ret;
++	_fill_msg_header(&rep->msg_header,
++	sizeof(struct cpu_dev_reply_info), action_type, 0);
++}
++#endif
++
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU) && defined(CONFIG_X86_64)
++static int add_cpu_upcall(int apic_id, uint8_t apic_ver)
++{
++	int cpu_id, node_id;
++	int ret;
++
++	pr_info("adding vcpu apic_id %d", apic_id);
++
++	/**
++	 * Get the mutex lock for hotplug and cpu update and cpu write lock.
++	 * So that other threads won't influence the hotplug process.
++	 */
++	lock_device_hotplug();
++	cpu_maps_update_begin();
++	cpu_hotplug_begin();
++
++	cpu_id = generic_processor_info(apic_id, apic_ver);
++	if (cpu_id < 0) {
++		pr_err("cpu (apic id %d) cannot be added, generic processor info failed", apic_id);
++		ret = -EINVAL;
++		goto rollback_generic_cpu;
++	}
++
++	/* update numa mapping for hot-plugged cpus. */
++	node_id = numa_cpu_node(cpu_id);
++	if (node_id != NUMA_NO_NODE)
++		numa_set_node(cpu_id, node_id);
++
++	ret = arch_register_cpu(cpu_id);
++	if (ret) {
++		pr_err("cpu %d cannot be added, register cpu failed %d", cpu_id, ret);
++		goto rollback_register_cpu;
++	}
++
++	cpu_hotplug_done();
++	cpu_maps_update_done();
++	unlock_device_hotplug();
++
++	ret = add_cpu(cpu_id);
++	if (ret) {
++		pr_err("cpu %d cannot be added, cpu up failed: %d", cpu_id, ret);
++		goto rollback_cpu_up;
++	}
++	return ret;
++
++rollback_cpu_up:
++	arch_unregister_cpu(cpu_id);
++	set_cpu_present(cpu_id, false);
++	per_cpu(x86_cpu_to_apicid, cpu_id) = -1;
++	num_processors--;
++	return ret;
++
++rollback_register_cpu:
++	set_cpu_present(cpu_id, false);
++	per_cpu(x86_cpu_to_apicid, cpu_id) = -1;
++	num_processors--;
++rollback_generic_cpu:
++	cpu_hotplug_done();
++	cpu_maps_update_done();
++	unlock_device_hotplug();
++	return ret;
++}
++
++static int del_cpu_upcall(int apic_id)
++{
++	int cpu_id = get_cpu_id(apic_id);
++	int ret;
++
++	if (cpu_id == 0) {
++		pr_err("cannot del bootstrap processor.");
++		return -EINVAL;
++	}
++	pr_info("deleting vcpu %d", cpu_id);
++	ret = remove_cpu(cpu_id);
++	if (ret) {
++		pr_err("del vcpu failed, err: %d", ret);
++		return ret;
++	}
++
++	lock_device_hotplug();
++	cpu_maps_update_begin();
++	cpu_hotplug_begin();
++
++	arch_unregister_cpu(cpu_id);
++	set_cpu_present(cpu_id, false);
++	per_cpu(x86_cpu_to_apicid, cpu_id) = -1;
++	num_processors--;
++
++	cpu_hotplug_done();
++	cpu_maps_update_done();
++	unlock_device_hotplug();
++
++	return ret;
++}
++
++static int add_cpu_dev(struct devmgr_req *req,
++			struct devmgr_reply *rep)
++{
++	int ret;
++	uint8_t i;
++	int apic_id;
++
++	uint8_t count = req->msg_load.cpu_dev_info.count;
++	uint8_t apic_ver = req->msg_load.cpu_dev_info.apic_ver;
++	uint8_t *apic_ids = req->msg_load.cpu_dev_info.apic_ids;
++
++	pr_info("add vcpu number: %d", count);
++
++	for (i = 0; i < count; ++i) {
++		apic_id = apic_ids[i];
++		if (get_cpu_id(apic_id) != -1) {
++			pr_err("cpu cannot be added: apci_id %d is already been used.", apic_id);
++			ret = -EINVAL;
++			return ret;
++		}
++	}
++
++	for (i = 0; i < count; ++i) {
++		apic_id = apic_ids[i];
++		ret = add_cpu_upcall(apic_id, apic_ver);
++		if (ret != 0)
++			break;
++	}
++
++	if (!ret)
++		cpu_event_notification(i, ret, ADD_CPU, rep);
++	return ret;
++}
++
++static int del_cpu_dev(struct devmgr_req *req,
++			struct devmgr_reply *rep)
++{
++	int ret;
++	uint8_t i;
++	int cpu_id;
++
++	uint8_t count = req->msg_load.cpu_dev_info.count;
++	uint8_t *apic_ids = req->msg_load.cpu_dev_info.apic_ids;
++
++	pr_info("del vcpu number : %d", count);
++
++	if (count >= num_processors) {
++		pr_err("cpu del parameter check error: cannot remove all vcpus");
++		ret = -EINVAL;
++		cpu_event_notification(0, ret, DEL_CPU, rep);
++		return ret;
++	}
++
++	for (i = 0; i < count; ++i) {
++		cpu_id = get_cpu_id(apic_ids[i]);
++		if (!cpu_possible(cpu_id)) {
++			pr_err("cpu %d cannot be deleted: cpu not possible", cpu_id);
++			ret = -EINVAL;
++			cpu_event_notification(0, ret, DEL_CPU, rep);
++			return ret;
++		}
++	}
++
++	for (i = 0; i < count; ++i) {
++		ret = del_cpu_upcall(apic_ids[i]);
++		if (ret != 0)
++			break;
++	}
++
++	if (!ret)
++		cpu_event_notification(i, ret, DEL_CPU, rep);
++	return ret;
++}
++#endif
++
+ static struct {
+ 	enum devmgr_msg_type cmd;
+ 	action_route_t fn;
+ } opt_map[] = {
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU) && defined(CONFIG_X86_64)
++	{ADD_CPU, add_cpu_dev},
++	{DEL_CPU, del_cpu_dev},
++#endif
+ };
+ 
+ static action_route_t get_action(struct devmgr_req *req)
+-- 
+2.19.1.6.gb485710b
+

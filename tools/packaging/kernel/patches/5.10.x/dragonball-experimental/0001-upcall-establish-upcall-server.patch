@@ -1,0 +1,520 @@
+From 691186a091ecfc1777531a61594b88394d384cff Mon Sep 17 00:00:00 2001
+From: Chao Wu <chaowu@linux.alibaba.com>
+Date: Wed, 9 Nov 2022 11:38:36 +0800
+Subject: [PATCH 1/4] upcall: establish upcall server
+
+Upcall is a direct communication tool between hypervisor and guest. This
+patch introduces the server side in the upcall system.
+At the start of the upcall server, A kthread `db-vsock-srv` will be
+created. In this kthread, a vsock listener is established upon specific
+port(currently that port is 0xDB, DB refers to Dragonball). After socket
+is created, it will start accepting the connection from the client side.
+If the connection is established, upcall server will try to get cmd from
+the client and that cmd could determine which upcall service will handle
+the request from the client.
+
+Besides, different service needs to be registered into upcall server so
+that it could handle the request from the client. There is a
+`register_db_vsock_service` in this commit provided for every service to
+register service into service_entry list during initialization and we will
+introduce device manager service in the following commits.
+
+Signed-off-by: Liu Jiang <gerry@linux.alibaba.com>
+Signed-off-by: Zizheng Bian <zizheng.bian@linux.alibaba.com>
+Signed-off-by: Chao Wu <chaowu@linux.alibaba.com>
+Signed-off-by: WangYu <WangYu@linux.alibaba.com>
+Signed-off-by: Xingjun Liu <xingjun.liu@linux.alibaba.com>
+---
+ drivers/misc/Kconfig                          |   1 +
+ drivers/misc/Makefile                         |   1 +
+ drivers/misc/dragonball/Kconfig               |  21 ++
+ drivers/misc/dragonball/Makefile              |   6 +
+ drivers/misc/dragonball/upcall_srv/Kconfig    |  14 +
+ drivers/misc/dragonball/upcall_srv/Makefile   |  13 +
+ .../upcall_srv/dragonball_upcall_srv.c        | 323 ++++++++++++++++++
+ include/dragonball/upcall_srv.h               |  42 +++
+ 8 files changed, 421 insertions(+)
+ create mode 100644 drivers/misc/dragonball/Kconfig
+ create mode 100644 drivers/misc/dragonball/Makefile
+ create mode 100644 drivers/misc/dragonball/upcall_srv/Kconfig
+ create mode 100644 drivers/misc/dragonball/upcall_srv/Makefile
+ create mode 100644 drivers/misc/dragonball/upcall_srv/dragonball_upcall_srv.c
+ create mode 100644 include/dragonball/upcall_srv.h
+
+diff --git a/drivers/misc/Kconfig b/drivers/misc/Kconfig
+index fafa8b0d8099..e05a14f77510 100644
+--- a/drivers/misc/Kconfig
++++ b/drivers/misc/Kconfig
+@@ -481,4 +481,5 @@ source "drivers/misc/ocxl/Kconfig"
+ source "drivers/misc/cardreader/Kconfig"
+ source "drivers/misc/habanalabs/Kconfig"
+ source "drivers/misc/uacce/Kconfig"
++source "drivers/misc/dragonball/Kconfig"
+ endmenu
+diff --git a/drivers/misc/Makefile b/drivers/misc/Makefile
+index d23231e73330..e0a1af9c05b2 100644
+--- a/drivers/misc/Makefile
++++ b/drivers/misc/Makefile
+@@ -57,3 +57,4 @@ obj-$(CONFIG_HABANA_AI)		+= habanalabs/
+ obj-$(CONFIG_UACCE)		+= uacce/
+ obj-$(CONFIG_XILINX_SDFEC)	+= xilinx_sdfec.o
+ obj-$(CONFIG_HISI_HIKEY_USB)	+= hisi_hikey_usb.o
++obj-$(CONFIG_DRAGONBALL_DRIVERS)       += dragonball/
+diff --git a/drivers/misc/dragonball/Kconfig b/drivers/misc/dragonball/Kconfig
+new file mode 100644
+index 000000000000..f81be3721908
+--- /dev/null
++++ b/drivers/misc/dragonball/Kconfig
+@@ -0,0 +1,21 @@
++#
++# Alibaba Dragonball Secure Container Runtime Drivers
++#
++
++menuconfig DRAGONBALL_DRIVERS
++	bool "Alibaba Dragonball Secure Container Runtime Drivers"
++	depends on X86_64 || ARM64
++	default n
++	help
++	  Alibaba Dragonball is a secure container runtime with an embedded micro-vmm
++	  to securely isolate container workloads.
++
++	  Say Y here to get to see options for various misc drivers to support the
++	  Alibaba Dragonball secure container runtime. This option alone does not
++	  add any kernel code.
++
++	  If unsure, say N.
++
++if DRAGONBALL_DRIVERS
++source "drivers/misc/dragonball/upcall_srv/Kconfig"
++endif # DRAGONBALL_DRIVERS
+diff --git a/drivers/misc/dragonball/Makefile b/drivers/misc/dragonball/Makefile
+new file mode 100644
+index 000000000000..b7bd86d73ade
+--- /dev/null
++++ b/drivers/misc/dragonball/Makefile
+@@ -0,0 +1,6 @@
++# SPDX-License-Identifier: GPL-2.0
++#
++# Makefile for Dragonball misc drivers
++#
++
++obj-$(CONFIG_DRAGONBALL_UPCALL_SRV)	+= upcall_srv/
+diff --git a/drivers/misc/dragonball/upcall_srv/Kconfig b/drivers/misc/dragonball/upcall_srv/Kconfig
+new file mode 100644
+index 000000000000..b00bf1f8637d
+--- /dev/null
++++ b/drivers/misc/dragonball/upcall_srv/Kconfig
+@@ -0,0 +1,14 @@
++#
++# Alibaba Dragonball Secure Container Runtime Drivers for vsock
++#
++
++config DRAGONBALL_UPCALL_SRV
++	bool "Dragonball in-kernel Virtual Sockets Server"
++	depends on VIRTIO_VSOCKETS
++	default y
++	help
++	  This configure implements an in-kernel vsock server to dispatch Dragonball
++	  requests to registered service handlers, based on the reliable Virtual
++	  Sockets communication channels between guest and host/vmm.
++
++	  If unsure, say N.
+diff --git a/drivers/misc/dragonball/upcall_srv/Makefile b/drivers/misc/dragonball/upcall_srv/Makefile
+new file mode 100644
+index 000000000000..4102e6c7edef
+--- /dev/null
++++ b/drivers/misc/dragonball/upcall_srv/Makefile
+@@ -0,0 +1,13 @@
++# SPDX-License-Identifier: GPL-2.0
++#
++# Makefile for the in-kernel vsock server.
++#
++# Copyright (C) 2022 Alibaba Cloud, Inc
++#
++# This program is free software; you can redistribute it and/or
++# modify it under the terms of the GNU General Public License
++# as published by the Free Software Foundation; either version
++# 2 of the License, or (at your option) any later version.
++#
++
++obj-$(CONFIG_DRAGONBALL_UPCALL_SRV) 	+= dragonball_upcall_srv.o
+diff --git a/drivers/misc/dragonball/upcall_srv/dragonball_upcall_srv.c b/drivers/misc/dragonball/upcall_srv/dragonball_upcall_srv.c
+new file mode 100644
+index 000000000000..1670bd8597f0
+--- /dev/null
++++ b/drivers/misc/dragonball/upcall_srv/dragonball_upcall_srv.c
+@@ -0,0 +1,323 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * drivers/misc/dragonball/upcall_srv/dragonball_upcall_srv.c
++ * Dragonball upcall server
++ *
++ * Copyright (C) 2022 Alibaba Cloud, Inc
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * as published by the Free Software Foundation; either version
++ * 2 of the License, or (at your option) any later version.
++ *
++ */
++
++#define pr_fmt(fmt) "db-upcall-srv: " fmt
++
++#include <linux/kthread.h>
++#include <linux/list.h>
++#include <linux/module.h>
++#include <linux/net.h>
++#include <linux/vm_sockets.h>
++#include <net/net_namespace.h>
++#include <net/sock.h>
++#include <dragonball/upcall_srv.h>
++
++struct db_conn_info {
++	struct work_struct work;
++	struct socket *sock;
++};
++
++struct db_service_entry {
++	char			cmd;
++	db_vsock_svc_handler_t	handler;
++	struct list_head	list;
++};
++
++/* Protects registered command. */
++static DEFINE_RWLOCK(db_service_lock);
++static LIST_HEAD(db_service_list);
++
++static struct task_struct *db_service_task;
++static unsigned int db_server_port = DB_SERVER_PORT;
++
++struct socket *db_create_vsock_listener(unsigned int port)
++{
++	struct socket *sock;
++	int ret = 0;
++
++	union {
++		struct sockaddr sa;
++		struct sockaddr_vm svm;
++	} addr = {
++		.svm = {
++			.svm_family = AF_VSOCK,
++			.svm_port = port,
++			.svm_cid = VMADDR_CID_ANY,
++		}
++	};
++
++	ret = sock_create_kern(&init_net, AF_VSOCK, SOCK_STREAM, 0, &sock);
++	if (ret) {
++		pr_err("Server vsock create failed, err: %d\n", ret);
++		return ERR_PTR(ret);
++	}
++
++	ret = sock->ops->bind(sock, &addr.sa, sizeof(addr.svm));
++	if (ret) {
++		pr_err("Server vsock bind failed, err: %d\n", ret);
++		goto err;
++	}
++	ret = sock->ops->listen(sock, 10);
++	if (ret < 0) {
++		pr_err("Server vsock listen error: %d\n", ret);
++		goto err;
++	}
++
++	return sock;
++err:
++	sock_release(sock);
++	return ERR_PTR(ret);
++}
++EXPORT_SYMBOL_GPL(db_create_vsock_listener);
++
++int db_vsock_sendmsg(struct socket *sock, char *buf, size_t len)
++{
++	struct kvec vec;
++	struct msghdr msgh;
++
++	vec.iov_base = buf;
++	vec.iov_len  = len;
++	memset(&msgh, 0, sizeof(msgh));
++
++	return kernel_sendmsg(sock, &msgh, &vec, 1, len);
++}
++EXPORT_SYMBOL_GPL(db_vsock_sendmsg);
++
++int db_vsock_recvmsg(struct socket *sock, char *buf, size_t len, int flags)
++{
++	struct kvec vec;
++	struct msghdr msgh;
++
++	memset(&vec, 0, sizeof(vec));
++	memset(&msgh, 0, sizeof(msgh));
++	vec.iov_base = buf;
++	vec.iov_len = len;
++
++	return kernel_recvmsg(sock, &msgh, &vec, 1, len, flags);
++}
++EXPORT_SYMBOL_GPL(db_vsock_recvmsg);
++
++static int db_vsock_recvcmd(struct socket *cli_socket, char *cmd)
++{
++	int ret;
++	char rcv;
++	long timeout;
++	struct kvec vec;
++	struct msghdr msg;
++
++	memset(&vec, 0, sizeof(vec));
++	memset(&msg, 0, sizeof(msg));
++	vec.iov_base = &rcv;
++	vec.iov_len = 1;
++
++	timeout = cli_socket->sk->sk_rcvtimeo;
++	cli_socket->sk->sk_rcvtimeo = DB_INIT_TIMEOUT * HZ;
++	ret = kernel_recvmsg(cli_socket, &msg, &vec, 1, 1, 0);
++	cli_socket->sk->sk_rcvtimeo = timeout;
++	*cmd = rcv;
++
++	return ret;
++}
++
++/*
++ * The workqueue handler for vsock work_struct.
++ *
++ * Each worker-pool bound to an actual CPU implements concurrency management
++ * by hooking into the scheduler. The worker-pool is notified whenever an
++ * active worker wakes up or sleeps and keeps track of the number of the
++ * currently runnable workers. Generally, work items are not expected to hog
++ * a CPU and consume many cycles. That means maintaining just enough concurrency
++ * to prevent work processing from stalling should be optimal.
++ *
++ * So it's OK to sleep in a workqueue handler, it won't cause too many worker
++ * threads.
++ */
++static void db_conn_service(struct work_struct *work)
++{
++	struct db_conn_info *conn_info =
++		container_of(work, struct db_conn_info, work);
++	struct db_service_entry *service_entry;
++	int len, ret = -1;
++	char cmd;
++
++	len = db_vsock_recvcmd(conn_info->sock, &cmd);
++	if (len <= 0)
++		goto recv_failed;
++
++	read_lock(&db_service_lock);
++	list_for_each_entry(service_entry, &db_service_list, list) {
++		if (cmd == service_entry->cmd) {
++			ret = service_entry->handler(conn_info->sock);
++			break;
++		}
++	}
++	read_unlock(&db_service_lock);
++
++recv_failed:
++	if (ret) {
++		sock_release(conn_info->sock);
++		pr_info("Client connection closed, error code: %d\n", ret);
++	}
++	kfree(conn_info);
++}
++
++static int db_create_cli_conn(struct socket *sock)
++{
++	struct db_conn_info *conn;
++
++	conn = kmalloc(sizeof(*conn), GFP_KERNEL);
++	if (!conn)
++		return -ENOMEM;
++
++	conn->sock = sock;
++	INIT_WORK(&conn->work, db_conn_service);
++	schedule_work(&conn->work);
++
++	return 0;
++}
++
++static int db_vsock_server(void *data)
++{
++	struct socket *sock;
++	int err;
++
++	sock = db_create_vsock_listener(db_server_port);
++	if (IS_ERR(sock)) {
++		err = PTR_ERR(sock);
++		pr_err("Init server err: %d\n", err);
++		return err;
++	}
++
++	while (!kthread_should_stop()) {
++		struct socket *conn;
++
++		conn = sock_alloc();
++		if (!conn)
++			return -ENOMEM;
++
++		conn->type = sock->type;
++		conn->ops  = sock->ops;
++
++		/* 0:propotal 1:kernel */
++		err = sock->ops->accept(sock, conn, 0, 1);
++		if (err < 0) {
++			pr_err("Server accept err: %d\n", err);
++			sock_release(conn);
++			continue;
++		}
++
++		err = db_create_cli_conn(conn);
++		if (err)
++			pr_err("Create client connetion err: %d\n", err);
++	}
++
++	return 0;
++}
++
++static int db_create_service(void)
++{
++	struct task_struct *service;
++	int rc = 0;
++
++	service = kthread_create(db_vsock_server, NULL, "db-vsock-srv");
++	if (IS_ERR(service)) {
++		rc = PTR_ERR(service);
++		pr_err("Server task create failed, err: %d\n", rc);
++	} else {
++		db_service_task = service;
++		wake_up_process(service);
++	}
++	return rc;
++}
++
++static int db_vsock_srv_cmdline_set(const char *device,
++				    const struct kernel_param *kp)
++{
++	unsigned int port = 0;
++	int processed, consumed = 0;
++
++	/* Get "@<port>" */
++	processed = sscanf(device, "@%u%n", &port, &consumed);
++	if (processed < 1 || device[consumed] || port == 0 || port > 1024) {
++		pr_err("Using @<port> format and port range (0, 1024].\n");
++		return -EINVAL;
++	}
++
++	db_server_port = port;
++	return 0;
++}
++
++static const struct kernel_param_ops db_vsock_srv_cmdline_param_ops = {
++	.set = db_vsock_srv_cmdline_set,
++};
++
++device_param_cb(port, &db_vsock_srv_cmdline_param_ops, NULL, 0400);
++
++int register_db_vsock_service(const char cmd, db_vsock_svc_handler_t handler)
++{
++	int rc = -EEXIST;
++	struct db_service_entry *service_entry;
++
++	write_lock(&db_service_lock);
++	list_for_each_entry(service_entry, &db_service_list, list) {
++		if (cmd == service_entry->cmd) {
++			rc = -EEXIST;
++			goto out;
++		}
++	}
++
++	service_entry = kzalloc(sizeof(*service_entry), GFP_KERNEL);
++	if (!service_entry) {
++		rc = -ENOMEM;
++		goto out;
++	}
++	service_entry->cmd = cmd;
++	service_entry->handler = handler;
++	list_add_tail(&service_entry->list, &db_service_list);
++	rc = 0;
++out:
++	write_unlock(&db_service_lock);
++	return rc;
++}
++EXPORT_SYMBOL_GPL(register_db_vsock_service);
++
++int unregister_db_vsock_service(const char cmd)
++{
++	int rc = -EEXIST;
++	struct db_service_entry *service_entry, *n;
++
++	write_lock(&db_service_lock);
++	list_for_each_entry_safe(service_entry, n, &db_service_list, list) {
++		if (cmd == service_entry->cmd) {
++			list_del(&service_entry->list);
++			rc = 0;
++			break;
++		}
++	}
++	write_unlock(&db_service_lock);
++
++	return rc;
++}
++EXPORT_SYMBOL_GPL(unregister_db_vsock_service);
++
++static int __init db_vsock_srv_init(void)
++{
++	return db_create_service();
++}
++
++late_initcall(db_vsock_srv_init);
++
++MODULE_AUTHOR("Alibaba, Inc.");
++MODULE_DESCRIPTION("Dragonball vsock server");
++MODULE_LICENSE("GPL v2");
+diff --git a/include/dragonball/upcall_srv.h b/include/dragonball/upcall_srv.h
+new file mode 100644
+index 000000000000..1c733982cc30
+--- /dev/null
++++ b/include/dragonball/upcall_srv.h
+@@ -0,0 +1,42 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * db_upcall_srv.h  Virtual Sockets Server for Dragonball
++ *
++ * Copyright (C) 2022 Alibaba Cloud, Inc
++ *
++ * This program is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License as published by the Free
++ * Software Foundation; either version 2 of the License, or (at your option)
++ * any later version.
++ */
++
++#ifndef _DB_UPCALL_SRV_H
++#define _DB_UPCALL_SRV_H
++
++#include <linux/workqueue.h>
++#include <linux/net.h>
++
++/* Vsock port to listen for incoming connections. */
++#define DB_SERVER_PORT				0xDB
++#define DB_RECVBUF_SIZE			0x400
++#define DB_INIT_TIMEOUT			10
++
++/*
++ * Vsock service handler to handle new incoming connections.
++ *
++ * Return:
++ * 0: on success and the callback takes ownership of the sock.
++ * !0: on failure and the callback should keep the sock as is.
++ */
++typedef int (*db_vsock_svc_handler_t) (struct socket *sock);
++
++extern int register_db_vsock_service(const char cmd,
++				     db_vsock_svc_handler_t handler);
++extern int unregister_db_vsock_service(const char cmd);
++
++extern struct socket *db_create_vsock_listener(unsigned int port);
++extern int db_vsock_sendmsg(struct socket *sock, char *buf, size_t len);
++extern int db_vsock_recvmsg(struct socket *sock, char *buf, size_t len,
++			    int flags);
++
++#endif /* _DB_UPCALL_SRV_H */
+-- 
+2.19.1.6.gb485710b
+
