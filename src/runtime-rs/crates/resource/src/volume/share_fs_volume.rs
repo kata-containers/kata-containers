@@ -112,7 +112,7 @@ impl ShareFsVolume {
                 } else {
                     // Not mounted ever
                     let mount_result = share_fs_mount
-                        .share_volume(ShareFsVolumeConfig {
+                        .share_volume(&ShareFsVolumeConfig {
                             // The scope of shared volume is sandbox
                             cid: String::from(""),
                             source: m.source.clone(),
@@ -158,10 +158,10 @@ impl Volume for ShareFsVolume {
     }
 
     async fn cleanup(&self) -> Result<()> {
-        if self.share_fs.is_none() {
-            return Ok(());
-        }
-        let share_fs = self.share_fs.as_ref().unwrap();
+        let share_fs = match self.share_fs.as_ref() {
+            Some(fs) => fs,
+            None => return Ok(()),
+        };
 
         let mounted_info_set = share_fs.mounted_info_set();
         let mut mounted_info_set = mounted_info_set.lock().await;

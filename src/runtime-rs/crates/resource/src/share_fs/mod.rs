@@ -120,8 +120,8 @@ impl MountedInfo {
 
 #[async_trait]
 pub trait ShareFsMount: Send + Sync {
-    async fn share_rootfs(&self, config: ShareFsRootfsConfig) -> Result<ShareFsMountResult>;
-    async fn share_volume(&self, config: ShareFsVolumeConfig) -> Result<ShareFsMountResult>;
+    async fn share_rootfs(&self, config: &ShareFsRootfsConfig) -> Result<ShareFsMountResult>;
+    async fn share_volume(&self, config: &ShareFsVolumeConfig) -> Result<ShareFsMountResult>;
     /// Upgrade to readwrite permission
     async fn upgrade_to_rw(&self, file_name: &str) -> Result<()>;
     /// Downgrade to readonly permission
@@ -129,7 +129,7 @@ pub trait ShareFsMount: Send + Sync {
     /// Umount the volume
     async fn umount_volume(&self, file_name: &str) -> Result<()>;
     /// Umount the rootfs
-    async fn umount_rootfs(&self, config: ShareFsRootfsConfig) -> Result<()>;
+    async fn umount_rootfs(&self, config: &ShareFsRootfsConfig) -> Result<()>;
 }
 
 pub fn new(id: &str, config: &SharedFsInfo) -> Result<Arc<dyn ShareFs>> {
