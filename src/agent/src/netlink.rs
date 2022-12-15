@@ -16,6 +16,11 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::ops::Deref;
 use std::str::{self, FromStr};
 
+// for example, mac address: AB:0C:DE:12:34:56
+const MAC_ADDRESS_LEN: usize = 17;
+// for example, ib hw address: 00:00:0D:26:FE:80:00:00:00:00:00:00:02:00:00:00:00:00:00:39
+const IB_HW_ADDRESS_LEN: usize = 59;
+
 /// Search criteria to use when looking for a link in `find_link`.
 pub enum LinkFilter<'a> {
     /// Find by link name.
@@ -174,22 +179,45 @@ impl Handle {
         let next = if let LinkFilter::Address(addr) = filter {
             use packet::link::nlas::Nla;
 
-            let mac_addr = parse_mac_address(addr)
-                .with_context(|| format!("Failed to parse MAC address: {}", addr))?;
+            match addr.len() {
+                MAC_ADDRESS_LEN => {
+                    // mac address
+                    let mac_addr = parse_mac_address(addr)
+                        .with_context(|| format!("Failed to parse MAC address: {}", addr))?;
 
-            // Hardware filter might not be supported by netlink,
-            // we may have to dump link list and then find the target link.
-            stream
-                .try_filter(|f| {
-                    let result = f.nlas.iter().any(|n| match n {
-                        Nla::Address(data) => data.eq(&mac_addr),
-                        _ => false,
-                    });
+                    // Hardware filter might not be supported by netlink,
+                    // we may have to dump link list and the find the target link.
+                    stream
+                        .try_filter(|f| {
+                            let result = f.nlas.iter().any(|n| match n {
+                                Nla::Address(data) => data.eq(&mac_addr),
+                                _ => false,
+                            });
 
-                    future::ready(result)
-                })
-                .try_next()
-                .await?
+                            future::ready(result)
+                        })
+                        .try_next()
+                        .await?
+                }
+                IB_HW_ADDRESS_LEN => {
+                    // ib hardware address
+                    let ib_hw_addr = parse_ib_hw_address(addr)
+                        .with_context(|| format!("Failed to parse ib hw address: {}", addr))?;
+
+                    stream
+                        .try_filter(|f| {
+                            let result = f.nlas.iter().any(|n| match n {
+                                Nla::Address(data) => data.eq(&ib_hw_addr),
+                                _ => false,
+                            });
+
+                            future::ready(result)
+                        })
+                        .try_next()
+                        .await?
+                }
+                _ => None,
+            }
         } else {
             stream.try_next().await?
         };
@@ -605,6 +633,13 @@ fn format_address(data: &[u8]) -> Result<String> {
             let octets = <[u8; 16]>::try_from(data)?;
             Ok(Ipv6Addr::from(octets).to_string())
         }
+        20 => {
+            // Infiniband link address
+            Ok(format!(
+                "{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}",
+                data[0], data[1], data[2], data[3], data[4], data[5],data[6], data[7], data[8], data[9], data[10], data[11],data[12], data[13], data[14], data[15], data[16], data[17],data[18], data[19]
+            ))
+        }
         _ => Err(anyhow!("Unsupported address length: {}", data.len())),
     }
 }
@@ -624,14 +659,32 @@ fn parse_mac_address(addr: &str) -> Result<[u8; 6]> {
     };
 
     // Parse all 6 blocks
-    let arr = [
-        parse_next()?,
-        parse_next()?,
-        parse_next()?,
-        parse_next()?,
-        parse_next()?,
-        parse_next()?,
-    ];
+    let mut arr: [u8; 6] = [0; 6];
+    let mut index = 0;
+    while index < 6 {
+        arr[index] = parse_next()?;
+        index += 1;
+    }
+
+    Ok(arr)
+}
+
+fn parse_ib_hw_address(addr: &str) -> Result<[u8; 20]> {
+    let mut split = addr.splitn(20, ':');
+
+    // Parse single IB hw address block
+    let mut parse_next = || -> Result<u8> {
+        let v = u8::from_str_radix(split.next().ok_or_else(|| anyhow!(nix::Error::EINVAL))?, 16)?;
+        Ok(v)
+    };
+
+    // Parse all 20 blocks
+    let mut arr: [u8; 20] = [0; 20];
+    let mut index = 0;
+    while index < 20 {
+        arr[index] = parse_next()?;
+        index += 1;
+    }
 
     Ok(arr)
 }
@@ -941,6 +994,20 @@ mod tests {
     fn parse_mac() {
         let bytes = parse_mac_address("AB:0C:DE:12:34:56").expect("Failed to parse mac address");
         assert_eq!(bytes, [0xAB, 0x0C, 0xDE, 0x12, 0x34, 0x56]);
+    }
+
+    #[test]
+    fn parse_ib_hw_addr() {
+        let bytes =
+            parse_ib_hw_address("00:00:0D:26:FE:80:00:00:00:00:00:00:02:00:00:00:00:00:00:39")
+                .expect("Failed to parse ib hw address");
+        assert_eq!(
+            bytes,
+            [
+                0x0, 0x00, 0x0D, 0x26, 0xFE, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x39
+            ]
+        )
     }
 
     fn clean_env_for_test_add_one_arp_neighbor(dummy_name: &str, ip: &str) {
