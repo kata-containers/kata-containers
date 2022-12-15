@@ -34,6 +34,7 @@ impl Volume for DefaultVolume {
     }
 
     async fn cleanup(&self) -> Result<()> {
+        // TODO: Clean up DefaultVolume
         warn!(sl!(), "Cleaning up DefaultVolume is still unimplemented.");
         Ok(())
     }

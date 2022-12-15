@@ -42,19 +42,11 @@ impl NydusRootfs {
         cid: &str,
         rootfs: &Mount,
     ) -> Result<Self> {
-        let share_fs = Arc::clone(share_fs);
         let share_fs_mount = share_fs.get_share_fs_mount();
         let extra_options =
             NydusExtraOptions::new(rootfs).context("failed to parse nydus extra options")?;
         info!(sl!(), "extra_option {:?}", &extra_options);
         let rafs_meta = &extra_options.source;
-        let config = ShareFsRootfsConfig {
-            cid: cid.to_string(),
-            source: extra_options.snapshot_dir.clone(),
-            target: SNAPSHOT_DIR.to_string(),
-            readonly: true,
-            is_rafs: false,
-        };
         let (rootfs_storage, rootfs_guest_path) = match extra_options.fs_version.as_str() {
             // both nydus v5 and v6 can be handled by the builtin nydus in dragonball by using the rafs mode.
             // nydus v6 could also be handled by the guest kernel as well, but some kernel patch is not support in the upstream community. We will add an option to let runtime-rs handle nydus v6 in the guest kernel optionally once the patch is ready
@@ -81,7 +73,13 @@ impl NydusRootfs {
                 let rootfs_guest_path = do_get_guest_path(ROOTFS, cid, false, false);
                 // bind mount the snapshot dir under the share directory
                 share_fs_mount
-                    .share_rootfs(config.clone())
+                    .share_rootfs(&ShareFsRootfsConfig {
+                        cid: cid.to_string(),
+                        source: extra_options.snapshot_dir.clone(),
+                        target: SNAPSHOT_DIR.to_string(),
+                        readonly: true,
+                        is_rafs: false,
+                    })
                     .await
                     .context("share nydus rootfs")?;
                 let mut options: Vec<String> = Vec::new();
@@ -148,7 +146,8 @@ impl Rootfs for NydusRootfs {
     }
 
     async fn cleanup(&self) -> Result<()> {
-        warn!(sl!(), "Cleaning up Nydus Rootfs is still unimplemented.");
+        // TODO: Clean up NydusRootfs after the container is killed
+        warn!(sl!(), "Cleaning up NydusRootfs is still unimplemented.");
         Ok(())
     }
 }
