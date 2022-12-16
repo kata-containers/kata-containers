@@ -42,6 +42,7 @@ git submodule init
 git submodule update
 
 info "Using BaseTools make target"
+export PYTHON_COMMAND=python3
 make -C BaseTools/
 
 info "Calling edksetup script"
