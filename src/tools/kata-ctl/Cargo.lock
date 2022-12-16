@@ -1382,6 +1382,7 @@ dependencies = [
  "seccompiler",
  "serde",
  "serde_json",
+ "shim-interface",
  "slog",
  "slog-scope",
  "thiserror",
@@ -1512,6 +1513,9 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "clap",
+ "epoll",
+ "glob",
+ "libc",
  "nix 0.25.0",
  "privdrop",
  "reqwest",
@@ -1519,10 +1523,13 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "slog",
+ "slog-scope",
  "strum",
  "strum_macros",
  "tempfile",
  "thiserror",
+ "vmm-sys-util 0.11.0",
 ]
 
 [[package]]
@@ -1606,9 +1613,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.135"
+version = "0.2.138"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68783febc7782c6c5cb401fbda4de5a9898be1762314da0bb2c10ced61f18b0c"
+checksum = "db6d7e329c562c5dfab7a46a2afabc8b987ab9a4834c9d1ca04dc54c1546cef8"
 
 [[package]]
 name = "link-cplusplus"
@@ -2188,6 +2195,7 @@ dependencies = [
  "safe-path",
  "serde",
  "serde_json",
+ "shim-interface",
 ]
 
 [[package]]
@@ -2717,6 +2725,7 @@ dependencies = [
  "logging",
  "oci",
  "persist",
+ "shim-interface",
  "slog",
  "slog-scope",
  "tokio",
@@ -2911,6 +2920,16 @@ dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",
  "digest",
+]
+
+[[package]]
+name = "shim-interface"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hyper",
+ "hyperlocal",
+ "tokio",
 ]
 
 [[package]]

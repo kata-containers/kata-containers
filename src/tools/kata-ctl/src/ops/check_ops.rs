@@ -5,9 +5,10 @@
 
 use crate::arch::arch_specific::get_checks;
 
-use crate::args::{CheckArgument, CheckSubCommand, IptablesCommand, MetricsCommand};
+use crate::args::{CheckArgument, CheckSubCommand, ExecArguments, IptablesCommand, MetricsCommand};
 
 use crate::check;
+use crate::exec;
 
 use crate::ops::version;
 
@@ -122,7 +123,9 @@ pub fn handle_env() -> Result<()> {
     Ok(())
 }
 
-pub fn handle_exec() -> Result<()> {
+pub fn handle_exec(exec_args: ExecArguments) -> Result<()> {
+    exec::do_run_exec(exec_args.sandbox_id.as_str(), exec_args.vport)?;
+
     Ok(())
 }
 

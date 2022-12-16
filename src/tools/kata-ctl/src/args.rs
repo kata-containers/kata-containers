@@ -26,7 +26,7 @@ pub enum Commands {
     Env,
 
     /// Enter into guest VM by debug console
-    Exec,
+    Exec(ExecArguments),
 
     /// Manage VM factory
     Factory,
@@ -92,4 +92,15 @@ pub struct IptablesCommand {
 pub enum IpTablesArguments {
     /// Configure iptables
     Metrics,
+}
+
+#[derive(Debug, Args, Error)]
+#[error("Argument is not valid")]
+pub struct ExecArguments {
+    #[clap(short, long, forbid_empty_values = true)]
+    /// pod sandbox ID or pouch container ID
+    pub sandbox_id: String,
+    #[clap(short = 'p', long, default_value_t = 1026)]
+    /// hvsock debug port, default is 1026.
+    pub vport: u64,
 }

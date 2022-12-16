@@ -6,6 +6,7 @@
 mod arch;
 mod args;
 mod check;
+mod exec;
 mod ops;
 mod types;
 mod utils;
@@ -28,7 +29,7 @@ fn real_main() -> Result<()> {
         Commands::Check(args) => handle_check(args),
         Commands::DirectVolume => handle_check_volume(),
         Commands::Env => handle_env(),
-        Commands::Exec => handle_exec(),
+        Commands::Exec(args) => handle_exec(args),
         Commands::Factory => handle_factory(),
         Commands::Iptables(args) => handle_iptables(args),
         Commands::Metrics(args) => handle_metrics(args),
