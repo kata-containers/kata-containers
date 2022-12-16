@@ -138,8 +138,8 @@ func constructSevHashesTable(kernelPath, initrdPath, cmdline string) ([]byte, er
 	return htBuf.Bytes(), nil
 }
 
-// CalculateLaunchDigest returns the sha256 encoded launch digest based
-// off the current firmware, kernel, and initrd images, and the kernel cmdline
+// CalculateLaunchDigest returns the sha256 encoded SEV launch digest based off
+// the current firmware, kernel, initrd, and the kernel cmdline
 func CalculateLaunchDigest(firmwarePath, kernelPath, initrdPath, cmdline string) (res [sha256.Size]byte, err error) {
 	f, err := os.Open(firmwarePath)
 	if err != nil {
@@ -152,12 +152,64 @@ func CalculateLaunchDigest(firmwarePath, kernelPath, initrdPath, cmdline string)
 		return res, err
 	}
 
+	// When used for confidential containers in kata-containers, kernelPath
+	// is always set (direct boot).  However, this current package can also
+	// be used by other programs which may calculate launch digests of
+	// arbitrary SEV guests without SEV kernel hashes table.
 	if kernelPath != "" {
 		ht, err := constructSevHashesTable(kernelPath, initrdPath, cmdline)
 		if err != nil {
 			return res, err
 		}
 		digest.Write(ht)
+	}
+
+	copy(res[:], digest.Sum(nil))
+	return res, nil
+}
+
+// CalculateSEVESLaunchDigest returns the sha256 encoded SEV-ES launch digest
+// based off the current firmware, kernel, initrd, and the kernel cmdline, and
+// the number of vcpus and their type
+func CalculateSEVESLaunchDigest(vcpus int, vcpuSig VCPUSig, firmwarePath, kernelPath, initrdPath, cmdline string) (res [sha256.Size]byte, err error) {
+	f, err := os.Open(firmwarePath)
+	if err != nil {
+		return res, err
+	}
+	defer f.Close()
+
+	digest := sha256.New()
+	if _, err := io.Copy(digest, f); err != nil {
+		return res, err
+	}
+
+	// When used for confidential containers in kata-containers, kernelPath
+	// is always set (direct boot).  However, this current package can also
+	// be used by other programs which may calculate launch digests of
+	// arbitrary SEV guests without SEV kernel hashes table.
+	if kernelPath != "" {
+		ht, err := constructSevHashesTable(kernelPath, initrdPath, cmdline)
+		if err != nil {
+			return res, err
+		}
+		digest.Write(ht)
+	}
+
+	o, err := NewOvmf(firmwarePath)
+	if err != nil {
+		return res, err
+	}
+	resetEip, err := o.sevEsResetEip()
+	if err != nil {
+		return res, err
+	}
+	v := vmsaBuilder{uint64(resetEip), vcpuSig}
+	for i := 0; i < vcpus; i++ {
+		vmsaPage, err := v.buildPage(i)
+		if err != nil {
+			return res, err
+		}
+		digest.Write(vmsaPage)
 	}
 
 	copy(res[:], digest.Sum(nil))
