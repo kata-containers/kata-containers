@@ -79,7 +79,23 @@ gpgcheck=1
 gpgkey=file://${CONFIG_DIR}/${GPG_KEY_FILE}
 EOF
 	fi
-
+	if [ "$SELINUX" == "yes" ]; then
+		cat > "${DNF_CONF}" << EOF
+[appstream]
+name=${OS_NAME}-${OS_VERSION} upstream
+releasever=${OS_VERSION}
+EOF
+		echo "metalink=$METALINK_APPSTREAM" >> "$DNF_CONF"
+		if [ -n "$GPG_KEY_URL" ]; then
+			if [ ! -f "${CONFIG_DIR}/${GPG_KEY_FILE}" ]; then
+				curl -L "${GPG_KEY_URL}" -o "${CONFIG_DIR}/${GPG_KEY_FILE}"
+			fi
+			cat >> "${DNF_CONF}" << EOF
+gpgcheck=1
+gpgkey=file://${CONFIG_DIR}/${GPG_KEY_FILE}
+EOF
+		fi
+	fi
 }
 
 build_rootfs()

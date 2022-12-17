@@ -298,7 +298,6 @@ impl Sandbox {
             info!(self.logger, "updating {}", ctr.id.as_str());
             ctr.cgroup_manager
                 .as_ref()
-                .unwrap()
                 .update_cpuset_path(guest_cpuset.as_str(), container_cpust)?;
         }
 

@@ -348,14 +348,13 @@ impl AgentService {
         }
 
         // start oom event loop
-        if let Some(ref ctr) = ctr.cgroup_manager {
-            let cg_path = ctr.get_cgroup_path("memory");
 
-            if let Ok(cg_path) = cg_path {
-                let rx = notifier::notify_oom(cid.as_str(), cg_path.to_string()).await?;
+        let cg_path = ctr.cgroup_manager.as_ref().get_cgroup_path("memory");
 
-                s.run_oom_event_monitor(rx, cid.clone()).await;
-            }
+        if let Ok(cg_path) = cg_path {
+            let rx = notifier::notify_oom(cid.as_str(), cg_path.to_string()).await?;
+
+            s.run_oom_event_monitor(rx, cid.clone()).await;
         }
 
         Ok(())
@@ -542,11 +541,7 @@ impl AgentService {
         let ctr = sandbox
             .get_container(cid)
             .ok_or_else(|| anyhow!("Invalid container id {}", cid))?;
-        let cm = ctr
-            .cgroup_manager
-            .as_ref()
-            .ok_or_else(|| anyhow!("cgroup manager not exist"))?;
-        cm.freeze(state)?;
+        ctr.cgroup_manager.as_ref().freeze(state)?;
         Ok(())
     }
 
@@ -556,11 +551,7 @@ impl AgentService {
         let ctr = sandbox
             .get_container(cid)
             .ok_or_else(|| anyhow!("Invalid container id {}", cid))?;
-        let cm = ctr
-            .cgroup_manager
-            .as_ref()
-            .ok_or_else(|| anyhow!("cgroup manager not exist"))?;
-        let pids = cm.get_pids()?;
+        let pids = ctr.cgroup_manager.as_ref().get_pids()?;
         Ok(pids)
     }
 

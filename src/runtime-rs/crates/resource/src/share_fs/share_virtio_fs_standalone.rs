@@ -4,8 +4,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{process::Stdio, sync::Arc};
+use std::{collections::HashMap, process::Stdio, sync::Arc};
 
+use crate::share_fs::share_virtio_fs::{
+    prepare_virtiofs, FS_TYPE_VIRTIO_FS, KATA_VIRTIO_FS_DEV_TYPE, MOUNT_GUEST_TAG,
+};
+use crate::share_fs::{KATA_GUEST_SHARE_DIR, VIRTIO_FS};
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -16,19 +20,18 @@ use tokio::{
     process::{Child, Command},
     sync::{
         mpsc::{channel, Receiver, Sender},
-        RwLock,
+        Mutex, RwLock,
     },
 };
 
 use super::{
     share_virtio_fs::generate_sock_path, utils::ensure_dir_exist, utils::get_host_ro_shared_path,
-    virtio_fs_share_mount::VirtiofsShareMount, ShareFs, ShareFsMount,
+    virtio_fs_share_mount::VirtiofsShareMount, MountedInfo, ShareFs, ShareFsMount,
 };
 
 #[derive(Debug, Clone)]
 pub struct ShareVirtioFsStandaloneConfig {
     id: String,
-    jail_root: String,
 
     // virtio_fs_daemon is the virtio-fs vhost-user daemon path
     pub virtio_fs_daemon: String,
@@ -38,14 +41,16 @@ pub struct ShareVirtioFsStandaloneConfig {
     pub virtio_fs_extra_args: Vec<String>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct ShareVirtioFsStandaloneInner {
     pid: Option<u32>,
 }
+
 pub(crate) struct ShareVirtioFsStandalone {
     inner: Arc<RwLock<ShareVirtioFsStandaloneInner>>,
     config: ShareVirtioFsStandaloneConfig,
     share_fs_mount: Arc<dyn ShareFsMount>,
+    mounted_info_set: Arc<Mutex<HashMap<String, MountedInfo>>>,
 }
 
 impl ShareVirtioFsStandalone {
@@ -54,26 +59,33 @@ impl ShareVirtioFsStandalone {
             inner: Arc::new(RwLock::new(ShareVirtioFsStandaloneInner::default())),
             config: ShareVirtioFsStandaloneConfig {
                 id: id.to_string(),
-                jail_root: "".to_string(),
                 virtio_fs_daemon: config.virtio_fs_daemon.clone(),
                 virtio_fs_cache: config.virtio_fs_cache.clone(),
                 virtio_fs_extra_args: config.virtio_fs_extra_args.clone(),
             },
             share_fs_mount: Arc::new(VirtiofsShareMount::new(id)),
+            mounted_info_set: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
     fn virtiofsd_args(&self, sock_path: &str) -> Result<Vec<String>> {
         let source_path = get_host_ro_shared_path(&self.config.id);
         ensure_dir_exist(&source_path)?;
+        let shared_dir = source_path
+            .to_str()
+            .ok_or_else(|| anyhow!("convert source path {:?} to str failed", source_path))?;
 
         let mut args: Vec<String> = vec![
-            String::from("-f"),
-            format!("--socket-path={}", sock_path),
-            String::from("-o"),
-            format!("source={}", source_path.to_str().unwrap()),
-            String::from("-o"),
-            format!("cache={}", self.config.virtio_fs_cache),
+            String::from("--socket-path"),
+            String::from(sock_path),
+            String::from("--shared-dir"),
+            String::from(shared_dir),
+            String::from("--cache"),
+            self.config.virtio_fs_cache.clone(),
+            String::from("--sandbox"),
+            String::from("none"),
+            String::from("--seccomp"),
+            String::from("none"),
         ];
 
         if !self.config.virtio_fs_extra_args.is_empty() {
@@ -84,8 +96,8 @@ impl ShareVirtioFsStandalone {
         Ok(args)
     }
 
-    async fn setup_virtiofsd(&self) -> Result<()> {
-        let sock_path = generate_sock_path(&self.config.jail_root);
+    async fn setup_virtiofsd(&self, h: &dyn Hypervisor) -> Result<()> {
+        let sock_path = generate_sock_path(&h.get_jailer_root().await?);
         let args = self.virtiofsd_args(&sock_path).context("virtiofsd args")?;
 
         let mut cmd = Command::new(&self.config.virtio_fs_daemon);
@@ -160,8 +172,11 @@ impl ShareFs for ShareVirtioFsStandalone {
         self.share_fs_mount.clone()
     }
 
-    async fn setup_device_before_start_vm(&self, _h: &dyn Hypervisor) -> Result<()> {
-        self.setup_virtiofsd().await.context("setup virtiofsd")?;
+    async fn setup_device_before_start_vm(&self, h: &dyn Hypervisor) -> Result<()> {
+        prepare_virtiofs(h, VIRTIO_FS, &self.config.id, &h.get_jailer_root().await?)
+            .await
+            .context("prepare virtiofs")?;
+        self.setup_virtiofsd(h).await.context("setup virtiofsd")?;
         Ok(())
     }
 
@@ -170,6 +185,23 @@ impl ShareFs for ShareVirtioFsStandalone {
     }
 
     async fn get_storages(&self) -> Result<Vec<Storage>> {
-        Ok(vec![])
+        let mut storages: Vec<Storage> = Vec::new();
+
+        let shared_volume: Storage = Storage {
+            driver: String::from(KATA_VIRTIO_FS_DEV_TYPE),
+            driver_options: Vec::new(),
+            source: String::from(MOUNT_GUEST_TAG),
+            fs_type: String::from(FS_TYPE_VIRTIO_FS),
+            fs_group: None,
+            options: vec![String::from("nodev")],
+            mount_point: String::from(KATA_GUEST_SHARE_DIR),
+        };
+
+        storages.push(shared_volume);
+        Ok(storages)
+    }
+
+    fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>> {
+        self.mounted_info_set.clone()
     }
 }

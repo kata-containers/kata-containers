@@ -77,6 +77,8 @@ const (
 	MinHypervisorMemory = 256
 
 	defaultMsize9p = 8192
+
+	defaultDisableGuestSeLinux = true
 )
 
 var (
@@ -356,6 +358,7 @@ type HypervisorConfig struct {
 	Rootless                       bool
 	DisableSeccomp                 bool
 	DisableSeLinux                 bool
+	DisableGuestSeLinux            bool
 	LegacySerial                   bool
 	EnableVCPUsPinning             bool
 }

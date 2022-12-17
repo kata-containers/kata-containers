@@ -554,6 +554,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		VhostUserStorePath:    defaultVhostUserStorePath,
 		VirtioFSCache:         defaultVirtioFSCacheMode,
 		BlockDeviceAIO:        defaultBlockDeviceAIO,
+		DisableGuestSeLinux:   defaultDisableGuestSeLinux,
 	}
 
 	expectedAgentConfig := vc.KataAgentConfig{

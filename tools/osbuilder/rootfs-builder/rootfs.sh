@@ -26,6 +26,7 @@ LIBC=${LIBC:-musl}
 # The kata agent enables seccomp feature.
 # However, it is not enforced by default: you need to enable that in the main configuration file.
 SECCOMP=${SECCOMP:-"yes"}
+SELINUX=${SELINUX:-"no"}
 
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
@@ -142,6 +143,11 @@ ROOTFS_DIR          Path to the directory that is populated with the rootfs.
 
 SECCOMP             When set to "no", the kata-agent is built without seccomp capability.
                     Default value: "yes"
+
+SELINUX             When set to "yes", build the rootfs with the required packages to
+                    enable SELinux in the VM.
+                    Make sure the guest kernel is compiled with SELinux enabled.
+                    Default value: "no"
 
 USE_DOCKER          If set, build the rootfs inside a container (requires
                     Docker).
@@ -369,6 +375,15 @@ build_rootfs_distro()
 
 	echo "Required rust version: $RUST_VERSION"
 
+	if [ "${SELINUX}" == "yes" ]; then
+		if [ "${AGENT_INIT}" == "yes" ]; then
+			die "Guest SELinux with the agent init is not supported yet"
+		fi
+		if [ "${distro}" != "centos" ]; then
+			die "The guest rootfs must be CentOS to enable guest SELinux"
+		fi
+	fi
+
 	if [ -z "${USE_DOCKER}" ] && [ -z "${USE_PODMAN}" ]; then
 		info "build directly"
 		build_rootfs ${ROOTFS_DIR}
@@ -454,6 +469,7 @@ build_rootfs_distro()
 			--env AA_KBC="${AA_KBC}" \
 			--env KATA_BUILD_CC="${KATA_BUILD_CC}" \
 			--env SECCOMP="${SECCOMP}" \
+			--env SELINUX="${SELINUX}" \
 			--env DEBUG="${DEBUG}" \
 			--env HOME="/root" \
 			-v "${repo_dir}":"/kata-containers" \
