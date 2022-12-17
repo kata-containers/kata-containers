@@ -48,4 +48,16 @@ mod arch_specific {
 
         Ok(())
     }
+
+    // List of check functions
+    static CHECK_LIST: &[CheckItem] = &[CheckItem {
+        name: CheckType::CheckCpu,
+        descr: "This parameter performs the cpu check",
+        fp: check,
+        perm: PermissionType::NonPrivileged,
+    }];
+
+    pub fn get_checks() -> Option<&'static [CheckItem<'static>]> {
+        Some(CHECK_LIST)
+    }
 }
