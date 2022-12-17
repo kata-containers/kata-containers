@@ -23,14 +23,18 @@ impl ShareFsRootfs {
         share_fs_mount: &Arc<dyn ShareFsMount>,
         cid: &str,
         bundle_path: &str,
-        rootfs: &Mount,
+        rootfs: Option<&Mount>,
     ) -> Result<Self> {
-        let bundle_rootfs = format!("{}/{}", bundle_path, ROOTFS);
-        rootfs.mount(&bundle_rootfs).context(format!(
-            "mount rootfs from {:?} to {}",
-            &rootfs, &bundle_rootfs
-        ))?;
-
+        let bundle_rootfs = if let Some(rootfs) = rootfs {
+            let bundle_rootfs = format!("{}/{}", bundle_path, ROOTFS);
+            rootfs.mount(&bundle_rootfs).context(format!(
+                "mount rootfs from {:?} to {}",
+                &rootfs, &bundle_rootfs
+            ))?;
+            bundle_rootfs
+        } else {
+            bundle_path.to_string()
+        };
         let mount_result = share_fs_mount
             .share_rootfs(ShareFsRootfsConfig {
                 cid: cid.to_string(),
