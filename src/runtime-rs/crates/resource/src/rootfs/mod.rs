@@ -51,16 +51,37 @@ impl RootFsResource {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn handler_rootfs(
         &self,
         share_fs: &Option<Arc<dyn ShareFs>>,
         hypervisor: &dyn Hypervisor,
         sid: &str,
         cid: &str,
+        root: &oci::Root,
         bundle_path: &str,
         rootfs_mounts: &[Mount],
     ) -> Result<Arc<dyn Rootfs>> {
         match rootfs_mounts {
+            // if rootfs_mounts is empty
+            mounts_vec if mounts_vec.is_empty() => {
+                if let Some(share_fs) = share_fs {
+                    let share_fs_mount = share_fs.get_share_fs_mount();
+                    // share fs rootfs
+                    Ok(Arc::new(
+                        share_fs_rootfs::ShareFsRootfs::new(
+                            &share_fs_mount,
+                            cid,
+                            root.path.as_str(),
+                            None,
+                        )
+                        .await
+                        .context("new share fs rootfs")?,
+                    ))
+                } else {
+                    return Err(anyhow!("share fs is unavailable"));
+                }
+            }
             mounts_vec if is_single_layer_rootfs(mounts_vec) => {
                 // Safe as single_layer_rootfs must have one layer
                 let layer = &mounts_vec[0];
@@ -86,7 +107,7 @@ impl RootFsResource {
                                 &share_fs_mount,
                                 cid,
                                 bundle_path,
-                                layer,
+                                Some(layer),
                             )
                             .await
                             .context("new share fs rootfs")?,
