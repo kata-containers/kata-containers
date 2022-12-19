@@ -447,6 +447,27 @@ async fn virtio_blk_storage_handler(
         storage.source = dev_path;
     }
 
+    // TODO: Should we try to mount something else?
+    if storage.get_fstype() == "tar-overlay" {
+        let mount_point = storage.mount_point.to_string();
+        info!(
+            logger,
+            "overlayfs mount source={:?}, dest={:?}", storage.source, mount_point
+        );
+        let mut lower = Vec::new();
+        for l in &storage.options {
+            lower.push("/run/kata-containers/sandbox/layers/".to_string() + l);
+        }
+        let status = std::process::Command::new("mount_tar.sh")
+            .arg(lower.join(":"))
+            .arg(&mount_point)
+            .status()?;
+        if !status.success() {
+            return Err(anyhow!("mount_script failed: {status}"));
+        }
+        return Ok(mount_point);
+    }
+
     common_storage_handler(logger, &storage)
 }
 
