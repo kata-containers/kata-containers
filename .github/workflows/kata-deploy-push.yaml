@@ -25,6 +25,7 @@ jobs:
           - rootfs-image
           - rootfs-initrd
           - virtiofsd
+          - nydus
     steps:
       - uses: actions/checkout@v2
       - name: Install docker
