@@ -295,8 +295,8 @@ externals:
       package_output_dir: "OvmfX64"
     sev:
       description: "AmdSev build needed for SEV measured direct boot."
-      #CCv0 switching to this fork until new release of edk2 has fix
-      #per #5893, will need to be reverted to upstream
+      # CCv0 switching to this fork until new release of edk2 has fix
+      # per #5893, will need to be reverted to upstream
       url: "https://github.com/kata-containers/edk2"
       version: "edk2-202208-sev-alloc-runtime-secret-area"
       package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
