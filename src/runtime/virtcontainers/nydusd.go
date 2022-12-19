@@ -167,6 +167,7 @@ func (nd *nydusd) args() ([]string, error) {
 		logLevel = "debug"
 	}
 	args := []string{
+		"virtiofs", "--hybrid-mode",
 		"--log-level", logLevel,
 		"--apisock", nd.apiSockPath,
 		"--sock", nd.sockPath,

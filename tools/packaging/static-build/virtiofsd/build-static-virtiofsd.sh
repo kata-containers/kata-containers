@@ -49,7 +49,7 @@ init_env() {
 
    case ${ARCH} in
      "aarch64")
-       LIBC="musl"
+       LIBC="gnu"
        ARCH_LIBC=""
      ;;
      "ppc64le")
@@ -81,6 +81,10 @@ build_virtiofsd_from_source() {
    export LIBSECCOMP_LIB_PATH=/usr/lib/${ARCH_LIBC}
    export LIBCAPNG_LINK_TYPE=static
    export LIBCAPNG_LIB_PATH=/usr/lib/${ARCH_LIBC}
+
+   default_toolchain=$(get_from_kata_deps "languages.rust.version")
+   curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSLf | sh -s -- -y --default-toolchain ${default_toolchain} -t ${ARCH}-unknown-linux-${LIBC}
+   source /root/.cargo/env
    
    cargo build --release --target ${ARCH}-unknown-linux-${LIBC}
 

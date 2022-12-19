@@ -41,7 +41,9 @@ RUN apt-get update && \
   git \
   make \
   unzip \
-  xz-utils && \
+  xz-utils \
+  libcap-ng-dev \
+  libseccomp-dev && \
   apt-get clean && rm -rf /var/lib/apt/lists
 
 ENV USER ${IMG_USER}
