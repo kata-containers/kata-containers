@@ -748,13 +748,14 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 	kmodules := setupKernelModules(k.kmodules)
 
 	req := &grpc.CreateSandboxRequest{
-		Hostname:      hostname,
-		Dns:           dns,
-		Storages:      storages,
-		SandboxPidns:  sandbox.sharePidNs,
-		SandboxId:     sandbox.id,
-		GuestHookPath: sandbox.config.HypervisorConfig.GuestHookPath,
-		KernelModules: kmodules,
+		Hostname:         hostname,
+		Dns:              dns,
+		Storages:         storages,
+		SandboxPidns:     sandbox.sharePidNs,
+		SandboxId:        sandbox.id,
+		GuestHookPath:    sandbox.config.HypervisorConfig.GuestHookPath,
+		GuestHookTimeout: sandbox.config.HypervisorConfig.GuestHookTimeout,
+		KernelModules:    kmodules,
 	}
 
 	_, err = k.sendReq(ctx, req)

@@ -90,37 +90,38 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	maxMemory := uint64(memory.TotalMemory() / 1024 / 1024)
 
 	configFileOptions := ktu.RuntimeConfigOptions{
-		Hypervisor:           "qemu",
-		HypervisorPath:       hypervisorPath,
-		KernelPath:           kernelPath,
-		ImagePath:            imagePath,
-		KernelParams:         kernelParams,
-		MachineType:          machineType,
-		LogPath:              logPath,
-		DefaultGuestHookPath: defaultGuestHookPath,
-		DisableBlock:         disableBlockDevice,
-		BlockDeviceDriver:    blockDeviceDriver,
-		BlockDeviceAIO:       blockDeviceAIO,
-		EnableIOThreads:      enableIOThreads,
-		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
-		PCIeRootPort:         pcieRootPort,
-		DisableNewNetNs:      disableNewNetNs,
-		DefaultVCPUCount:     defaultVCPUCount,
-		DefaultMaxVCPUCount:  defaultMaxVCPUCount,
-		DefaultMemSize:       defaultMemSize,
-		DefaultMaxMemorySize: maxMemory,
-		DefaultMsize9p:       defaultMsize9p,
-		HypervisorDebug:      hypervisorDebug,
-		RuntimeDebug:         runtimeDebug,
-		RuntimeTrace:         runtimeTrace,
-		AgentDebug:           agentDebug,
-		AgentTrace:           agentTrace,
-		SharedFS:             sharedFS,
-		VirtioFSDaemon:       virtioFSdaemon,
-		EnablePprof:          enablePprof,
-		JaegerEndpoint:       jaegerEndpoint,
-		JaegerUser:           jaegerUser,
-		JaegerPassword:       jaegerPassword,
+		Hypervisor:              "qemu",
+		HypervisorPath:          hypervisorPath,
+		KernelPath:              kernelPath,
+		ImagePath:               imagePath,
+		KernelParams:            kernelParams,
+		MachineType:             machineType,
+		LogPath:                 logPath,
+		DefaultGuestHookPath:    defaultGuestHookPath,
+		DefaultGuestHookTimeout: defaultGuestHookTimeout,
+		DisableBlock:            disableBlockDevice,
+		BlockDeviceDriver:       blockDeviceDriver,
+		BlockDeviceAIO:          blockDeviceAIO,
+		EnableIOThreads:         enableIOThreads,
+		HotplugVFIOOnRootBus:    hotplugVFIOOnRootBus,
+		PCIeRootPort:            pcieRootPort,
+		DisableNewNetNs:         disableNewNetNs,
+		DefaultVCPUCount:        defaultVCPUCount,
+		DefaultMaxVCPUCount:     defaultMaxVCPUCount,
+		DefaultMemSize:          defaultMemSize,
+		DefaultMaxMemorySize:    maxMemory,
+		DefaultMsize9p:          defaultMsize9p,
+		HypervisorDebug:         hypervisorDebug,
+		RuntimeDebug:            runtimeDebug,
+		RuntimeTrace:            runtimeTrace,
+		AgentDebug:              agentDebug,
+		AgentTrace:              agentTrace,
+		SharedFS:                sharedFS,
+		VirtioFSDaemon:          virtioFSdaemon,
+		EnablePprof:             enablePprof,
+		JaegerEndpoint:          jaegerEndpoint,
+		JaegerUser:              jaegerUser,
+		JaegerPassword:          jaegerPassword,
 	}
 
 	runtimeConfigFileData := ktu.MakeRuntimeConfigFileData(configFileOptions)
@@ -170,6 +171,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		MemSlots:              defaultMemSlots,
 		EntropySource:         defaultEntropySource,
 		GuestHookPath:         defaultGuestHookPath,
+		GuestHookTimeout:      defaultGuestHookTimeout,
 		VhostUserStorePath:    defaultVhostUserStorePath,
 		SharedFS:              sharedFS,
 		VirtioFSDaemon:        virtioFSdaemon,
@@ -551,6 +553,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		BlockDeviceDriver:     defaultBlockDeviceDriver,
 		Msize9p:               defaultMsize9p,
 		GuestHookPath:         defaultGuestHookPath,
+		GuestHookTimeout:      defaultGuestHookTimeout,
 		VhostUserStorePath:    defaultVhostUserStorePath,
 		VirtioFSCache:         defaultVirtioFSCacheMode,
 		BlockDeviceAIO:        defaultBlockDeviceAIO,
@@ -1116,6 +1119,23 @@ func TestHypervisorDefaultsGuestHookPath(t *testing.T) {
 	}
 	guestHookPath = h.guestHookPath()
 	assert.Equal(guestHookPath, testGuestHookPath, "custom guest hook path wrong")
+}
+
+func TestHypervisorDefaultsGuestHookTimeout(t *testing.T) {
+	assert := assert.New(t)
+
+	h := hypervisor{
+		GuestHookTimeout: -1,
+	}
+	guestHookTimeout := h.guestHookTimeout()
+	assert.Equal(guestHookTimeout, defaultGuestHookTimeout, "default guest hook timeout wrong")
+
+	var testGuestHookTimeout int32 = 20
+	h = hypervisor{
+		GuestHookTimeout: testGuestHookTimeout,
+	}
+	guestHookTimeout = h.guestHookTimeout()
+	assert.Equal(guestHookTimeout, testGuestHookTimeout, "custom guest hook path wrong")
 }
 
 func TestHypervisorDefaultsVhostUserStorePath(t *testing.T) {

@@ -117,6 +117,10 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_ACRN@"
 # Warnings will be logged if any error is encountered while scanning for hooks,
 # but it will not abort container execution.
 #guest_hook_path = "/usr/share/oci/hooks"
+#
+# Guest hook timeout is the number of seconds to wait for a hook execution before aborting it.
+# It must be a non-negative integer. Zero means no timeout. The default value is 10 seconds.
+#guest_hook_timeout = 10
 
 # disable applying SELinux on the VMM process (default false)
 disable_selinux=@DEFDISABLESELINUX@

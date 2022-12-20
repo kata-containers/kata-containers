@@ -97,6 +97,7 @@ type hypervisor struct {
 	VhostUserStorePath             string   `toml:"vhost_user_store_path"`
 	FileBackedMemRootDir           string   `toml:"file_mem_backend"`
 	GuestHookPath                  string   `toml:"guest_hook_path"`
+	GuestHookTimeout               int32    `toml:"guest_hook_timeout"`
 	GuestMemoryDumpPath            string   `toml:"guest_memory_dump_path"`
 	SeccompSandbox                 string   `toml:"seccompsandbox"`
 	BlockDeviceAIO                 string   `toml:"block_device_aio"`
@@ -521,6 +522,13 @@ func (h hypervisor) guestHookPath() string {
 	return h.GuestHookPath
 }
 
+func (h hypervisor) guestHookTimeout() int32 {
+	if h.GuestHookTimeout < 0 {
+		return defaultGuestHookTimeout
+	}
+	return h.GuestHookTimeout
+}
+
 func (h hypervisor) vhostUserStorePath() string {
 	if h.VhostUserStorePath == "" {
 		return defaultVhostUserStorePath
@@ -688,6 +696,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EnableIOThreads:       h.EnableIOThreads,
 		DisableVhostNet:       true, // vhost-net backend is not supported in Firecracker
 		GuestHookPath:         h.guestHookPath(),
+		GuestHookTimeout:      h.guestHookTimeout(),
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
 		EnableAnnotations:     h.EnableAnnotations,
@@ -827,6 +836,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		VhostUserStorePathList:  h.VhostUserStorePathList,
 		SeccompSandbox:          h.SeccompSandbox,
 		GuestHookPath:           h.guestHookPath(),
+		GuestHookTimeout:        h.guestHookTimeout(),
 		RxRateLimiterMaxRate:    rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:    txRateLimiterMaxRate,
 		EnableAnnotations:       h.EnableAnnotations,
@@ -904,6 +914,7 @@ func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		BlockDeviceDriver:     blockDriver,
 		DisableVhostNet:       h.DisableVhostNet,
 		GuestHookPath:         h.guestHookPath(),
+		GuestHookTimeout:      h.guestHookTimeout(),
 		DisableSeLinux:        h.DisableSeLinux,
 		EnableAnnotations:     h.EnableAnnotations,
 		DisableGuestSeLinux:   true, // Guest SELinux is not supported in ACRN
@@ -1006,6 +1017,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		PCIeRootPort:                   h.PCIeRootPort,
 		DisableVhostNet:                true,
 		GuestHookPath:                  h.guestHookPath(),
+		GuestHookTimeout:               h.guestHookTimeout(),
 		VirtioFSExtraArgs:              h.VirtioFSExtraArgs,
 		SGXEPCSize:                     defaultSGXEPCSize,
 		EnableAnnotations:              h.EnableAnnotations,
@@ -1225,6 +1237,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		HotplugVFIOOnRootBus:    defaultHotplugVFIOOnRootBus,
 		PCIeRootPort:            defaultPCIeRootPort,
 		GuestHookPath:           defaultGuestHookPath,
+		GuestHookTimeout:        defaultGuestHookTimeout,
 		VhostUserStorePath:      defaultVhostUserStorePath,
 		VirtioFSCache:           defaultVirtioFSCacheMode,
 		DisableImageNvdimm:      defaultDisableImageNvdimm,

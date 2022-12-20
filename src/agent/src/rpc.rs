@@ -1209,7 +1209,9 @@ impl agent_ttrpc::AgentService for AgentService {
             s.running = true;
 
             if !req.guest_hook_path.is_empty() {
-                let _ = s.add_hooks(&req.guest_hook_path).map_err(|e| {
+                let timeout: Option<i32> = Some(req.guest_hook_timeout);
+
+                let _ = s.add_hooks(&req.guest_hook_path, timeout).map_err(|e| {
                     error!(
                         sl!(),
                         "add guest hook {} failed: {:?}", req.guest_hook_path, e

@@ -80,6 +80,7 @@ const defaultHotplugVFIOOnRootBus bool = false
 const defaultPCIeRootPort = 0
 const defaultEntropySource = "/dev/urandom"
 const defaultGuestHookPath string = ""
+const defaultGuestHookTimeout int32 = 10
 const defaultVirtioFSCacheMode = "none"
 const defaultDisableImageNvdimm = false
 const defaultVhostUserStorePath string = "/var/run/kata-containers/vhost-user/"
