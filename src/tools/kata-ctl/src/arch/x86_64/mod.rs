@@ -8,6 +8,7 @@ pub use arch_specific::*;
 
 mod arch_specific {
     use crate::check;
+    use crate::types::*;
     use anyhow::{anyhow, Result};
 
     const PROC_CPUINFO: &str = "/proc/cpuinfo";
@@ -16,8 +17,19 @@ mod arch_specific {
     const CPU_FLAGS_INTEL: &[&str] = &["lm", "sse4_1", "vmx"];
     const CPU_ATTRIBS_INTEL: &[&str] = &["GenuineIntel"];
 
-    // check cpu
-    fn check_cpu() -> Result<()> {
+    // List of check functions
+    static CHECK_LIST: &[CheckItem] = &[CheckItem {
+        name: CheckType::CheckCpu,
+        descr: "This parameter performs the cpu check",
+        fp: check_cpu,
+        perm: PermissionType::NonPrivileged,
+    }];
+
+    pub fn get_checks() -> &'static [CheckItem<'static>] {
+        CHECK_LIST
+    }
+
+    fn check_cpu(_args: &str) -> Result<()> {
         println!("INFO: check CPU: x86_64");
 
         let cpu_info = check::get_single_cpu_info(PROC_CPUINFO, CPUINFO_DELIMITER)?;
@@ -39,16 +51,6 @@ mod arch_specific {
         if !missing_cpu_flags.is_empty() {
             eprintln!("WARNING: Missing CPU flags {:?}", missing_cpu_flags);
         }
-
-        Ok(())
-    }
-
-    pub fn check() -> Result<()> {
-        println!("INFO: check: x86_64");
-
-        let _cpu_result = check_cpu();
-
-        // TODO: collect outcome of tests to determine if checks pass or not
 
         Ok(())
     }

@@ -197,11 +197,6 @@ vhost_user_store_path = "<Path of the base directory for vhost-user device>"
 > under `[hypervisor.qemu]` section.
 
 
-For the subdirectories of `vhost_user_store_path`: `block` is used for block
-device; `block/sockets` is where we expect UNIX domain sockets for vhost-user
-block devices to live; `block/devices` is where simulated block device nodes
-for vhost-user block devices are created.
-
 For the subdirectories of `vhost_user_store_path`:
 -  `block` is used for block device;
 -  `block/sockets` is where we expect UNIX domain sockets for vhost-user

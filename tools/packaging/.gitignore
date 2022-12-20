@@ -4,6 +4,11 @@
 *.snap
 *.tar.gz
 *.tar.xz
+*.gz
+*.dsc
+*.deb
+*.buildinfo
+*.changes
 debian.series
 parts/
 prime/
@@ -11,3 +16,4 @@ sha256sums.asc
 snap/.snapcraft/
 stage/
 typescript
+kata-linux-*

@@ -541,6 +541,16 @@ main() {
 
 	[ -z "${subcmd}" ] && usage 1
 
+	if [[ ${build_type} == "experimental" ]] && [[ ${hypervisor_target} == "dragonball" ]]; then
+		build_type="dragonball-experimental"
+		if [ -n "$kernel_version" ];  then
+			kernel_major_version=$(get_major_kernel_version "${kernel_version}")
+			if [[ ${kernel_major_version} != "5.10" ]]; then
+				info "dragonball-experimental kernel patches are only tested on 5.10.x kernel now, other kernel version may cause confliction"	
+			fi
+		fi
+	fi
+
 	# If not kernel version take it from versions.yaml
 	if [ -z "$kernel_version" ]; then
 		if [[ ${build_type} == "experimental" ]]; then
@@ -556,6 +566,8 @@ main() {
 				kernel_version=$(get_from_kata_deps "assets.kernel-experimental.tag")
 			;;
 			esac
+		elif [[ ${build_type} == "dragonball-experimental" ]]; then
+			kernel_version=$(get_from_kata_deps "assets.dragonball-kernel-experimental.version")
 		elif [[ "${conf_guest}" != "" ]]; then
 			#If specifying a tag for kernel_version, must be formatted version-like to avoid unintended parsing issues
 			kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)

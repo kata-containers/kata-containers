@@ -14,7 +14,7 @@ use kata_types::capabilities::Capabilities;
 
 use super::inner::DragonballInner;
 use crate::{utils, VcpuThreadIds, VmmState};
-use persist::KATA_PATH;
+use shim_interface::KATA_PATH;
 const DEFAULT_HYBRID_VSOCK_NAME: &str = "kata.hvsock";
 
 fn get_vsock_path(root: &str) -> String {

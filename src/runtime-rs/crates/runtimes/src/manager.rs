@@ -19,6 +19,7 @@ use kata_types::{annotations::Annotation, config::TomlConfig};
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
 use persist::sandbox_persist::Persist;
+use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
 use tokio::sync::{mpsc::Sender, RwLock};
 #[cfg(feature = "virt")]
 use virt_container::{
@@ -117,7 +118,9 @@ impl RuntimeHandlerManagerInner {
         let shim_mgmt_svr = MgmtServer::new(
             &self.id,
             self.runtime_instance.as_ref().unwrap().sandbox.clone(),
-        );
+        )
+        .context(ERR_NO_SHIM_SERVER)?;
+
         tokio::task::spawn(Arc::new(shim_mgmt_svr).run());
         info!(sl!(), "shim management http server starts");
 
