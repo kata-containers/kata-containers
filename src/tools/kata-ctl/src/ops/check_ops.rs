@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::arch::x86_64::get_checks;
+use crate::arch::arch_specific::get_checks;
 
 use crate::args::{CheckArgument, CheckSubCommand, IptablesCommand, MetricsCommand};
 
@@ -19,11 +19,11 @@ const NAME: &str = "kata-ctl";
 
 // This function retrieves the cmd function passes as argument
 fn get_builtin_check_func(name: CheckType) -> Result<BuiltinCmdFp> {
-    let check_list = get_checks();
-
-    for check in check_list {
-        if check.name.eq(&name) {
-            return Ok(check.fp);
+    if let Some(check_list) = get_checks() {
+        for check in check_list {
+            if check.name.eq(&name) {
+                return Ok(check.fp);
+            }
         }
     }
 
@@ -42,10 +42,10 @@ fn handle_builtin_check(check: CheckType, args: &str) -> Result<()> {
 
 fn get_client_cmd_details() -> Vec<String> {
     let mut cmds = Vec::new();
-    let check_list = get_checks();
-
-    for cmd in check_list {
-        cmds.push(format!("{} ({}. Mode: {})", cmd.name, cmd.descr, cmd.perm));
+    if let Some(check_list) = get_checks() {
+        for cmd in check_list {
+            cmds.push(format!("{} ({}. Mode: {})", cmd.name, cmd.descr, cmd.perm));
+        }
     }
 
     cmds
