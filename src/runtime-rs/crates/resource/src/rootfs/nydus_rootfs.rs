@@ -9,8 +9,8 @@ use super::{Rootfs, TYPE_OVERLAY_FS};
 use crate::{
     rootfs::{HYBRID_ROOTFS_LOWER_DIR, ROOTFS},
     share_fs::{
-        do_get_guest_path, do_get_guest_share_path, get_host_rw_shared_path, rafs_mount,
-        ShareFsMount, ShareFsRootfsConfig, PASSTHROUGH_FS_DIR,
+        do_get_guest_path, do_get_guest_share_path, get_host_rw_shared_path, rafs_mount, ShareFs,
+        ShareFsRootfsConfig, PASSTHROUGH_FS_DIR,
     },
 };
 use agent::Storage;
@@ -36,12 +36,13 @@ pub(crate) struct NydusRootfs {
 
 impl NydusRootfs {
     pub async fn new(
-        share_fs_mount: &Arc<dyn ShareFsMount>,
+        share_fs: &Arc<dyn ShareFs>,
         h: &dyn Hypervisor,
         sid: &str,
         cid: &str,
         rootfs: &Mount,
     ) -> Result<Self> {
+        let share_fs_mount = share_fs.get_share_fs_mount();
         let extra_options =
             NydusExtraOptions::new(rootfs).context("failed to parse nydus extra options")?;
         info!(sl!(), "extra_option {:?}", &extra_options);
@@ -72,7 +73,7 @@ impl NydusRootfs {
                 let rootfs_guest_path = do_get_guest_path(ROOTFS, cid, false, false);
                 // bind mount the snapshot dir under the share directory
                 share_fs_mount
-                    .share_rootfs(ShareFsRootfsConfig {
+                    .share_rootfs(&ShareFsRootfsConfig {
                         cid: cid.to_string(),
                         source: extra_options.snapshot_dir.clone(),
                         target: SNAPSHOT_DIR.to_string(),
@@ -142,5 +143,11 @@ impl Rootfs for NydusRootfs {
 
     async fn get_storage(&self) -> Option<Storage> {
         Some(self.rootfs.clone())
+    }
+
+    async fn cleanup(&self) -> Result<()> {
+        // TODO: Clean up NydusRootfs after the container is killed
+        warn!(sl!(), "Cleaning up NydusRootfs is still unimplemented.");
+        Ok(())
     }
 }
