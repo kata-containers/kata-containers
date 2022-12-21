@@ -7,11 +7,27 @@
 
 use anyhow::{anyhow, Result};
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
-use serde_json::Value;
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+struct Release {
+    tag_name: String,
+    prerelease: bool,
+    created_at: String,
+    tarball_url: String,
+}
 
-const KATA_GITHUB_URL: &str =
-    "https://api.github.com/repos/kata-containers/kata-containers/releases/latest";
+#[cfg(any(
+    target_arch = "aarch64",
+    target_arch = "powerpc64le",
+    target_arch = "x86_64"
+))]
+
+const KATA_GITHUB_RELEASE_URL: &str =
+    "https://api.github.com/repos/kata-containers/kata-containers/releases";
+
+const JSON_TYPE: &str = "application/json";
+
+const USER_AGT: &str = "kata";
 
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 fn get_cpu_info(cpu_info_file: &str) -> Result<String> {
@@ -104,16 +120,14 @@ pub fn run_network_checks() -> Result<()> {
     Ok(())
 }
 
-fn get_kata_version_by_url(url: &str) -> std::result::Result<String, reqwest::Error> {
-    let content = reqwest::blocking::Client::new()
-        .get(url)
-        .header(CONTENT_TYPE, "application/json")
-        .header(USER_AGENT, "kata")
+fn get_kata_all_releases_by_url() -> std::result::Result<Vec<Release>, reqwest::Error> {
+    let releases: Vec<Release> = reqwest::blocking::Client::new()
+        .get(KATA_GITHUB_RELEASE_URL)
+        .header(CONTENT_TYPE, JSON_TYPE)
+        .header(USER_AGENT, USER_AGT)
         .send()?
-        .json::<HashMap<String, Value>>()?;
-
-    let version = content["tag_name"].as_str().unwrap();
-    Ok(version.to_string())
+        .json()?;
+    Ok(releases)
 }
 
 fn handle_reqwest_error(e: reqwest::Error) -> anyhow::Error {
@@ -136,10 +150,37 @@ fn handle_reqwest_error(e: reqwest::Error) -> anyhow::Error {
     anyhow!(e).context("unknown http connection failure: {:?}")
 }
 
-pub fn check_version() -> Result<()> {
-    let version = get_kata_version_by_url(KATA_GITHUB_URL).map_err(handle_reqwest_error)?;
+pub fn check_all_releases() -> Result<()> {
+    let releases: Vec<Release> = get_kata_all_releases_by_url().map_err(handle_reqwest_error)?;
 
-    println!("Version: {}", version);
+    for release in releases {
+        if !release.prerelease {
+            println!(
+                "Official  : Release {:15}; created {} ; {}",
+                release.tag_name, release.created_at, release.tarball_url
+            );
+        } else {
+            println!(
+                "PreRelease: Release {:15}; created {} ; {}",
+                release.tag_name, release.created_at, release.tarball_url
+            );
+        }
+    }
+    Ok(())
+}
+
+pub fn check_official_releases() -> Result<()> {
+    let releases: Vec<Release> = get_kata_all_releases_by_url().map_err(handle_reqwest_error)?;
+
+    println!("Official Releases...");
+    for release in releases {
+        if !release.prerelease {
+            println!(
+                "Release {:15}; created {} ; {}",
+                release.tag_name, release.created_at, release.tarball_url
+            );
+        }
+    }
 
     Ok(())
 }
@@ -149,6 +190,23 @@ pub fn check_version() -> Result<()> {
 mod tests {
     use super::*;
     use semver::Version;
+    use serde_json::Value;
+    use std::collections::HashMap;
+
+    const KATA_GITHUB_URL: &str =
+        "https://api.github.com/repos/kata-containers/kata-containers/releases/latest";
+
+    fn get_kata_version_by_url(url: &str) -> std::result::Result<String, reqwest::Error> {
+        let content = reqwest::blocking::Client::new()
+            .get(url)
+            .header(CONTENT_TYPE, JSON_TYPE)
+            .header(USER_AGENT, USER_AGT)
+            .send()?
+            .json::<HashMap<String, Value>>()?;
+
+        let version = content["tag_name"].as_str().unwrap();
+        Ok(version.to_string())
+    }
 
     #[test]
     fn test_get_cpu_info_empty_input() {

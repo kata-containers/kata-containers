@@ -20,7 +20,8 @@ use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
     config::hypervisor::Hypervisor as HypervisorConfig,
 };
-use persist::{sandbox_persist::Persist, KATA_PATH};
+use persist::sandbox_persist::Persist;
+use shim_interface::KATA_PATH;
 use std::{collections::HashSet, fs::create_dir_all, path::PathBuf};
 
 const DRAGONBALL_KERNEL: &str = "vmlinux";

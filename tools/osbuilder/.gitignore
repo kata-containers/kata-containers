@@ -1,9 +1,11 @@
+**/*.tar.gz
 image-builder/nsdax
 dracut/Dockerfile
 dracut/dracut.conf.d/15-extra-libs.conf
 /.*.done
-/*_rootfs
-/kata-centos-dnf.conf
-/kata-containers-initrd.img
-/kata-containers.img
+*_rootfs
+kata-centos-dnf.conf
+kata-containers-initrd.img
+kata-containers.img
 rootfs-builder/centos/RPM-GPG-KEY-*
+typescript

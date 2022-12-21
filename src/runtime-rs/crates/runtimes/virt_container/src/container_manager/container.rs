@@ -17,6 +17,7 @@ use common::{
     },
 };
 use kata_sys_util::k8s::update_ephemeral_storage_type;
+
 use oci::{LinuxResources, Process as OCIProcess};
 use resource::ResourceManager;
 use tokio::sync::RwLock;
@@ -85,23 +86,30 @@ impl Container {
         let sandbox_pidns = is_pid_namespace_enabled(&spec);
         amend_spec(&mut spec, toml_config.runtime.disable_guest_seccomp).context("amend spec")?;
 
+        // get mutable root from oci spec
+        let mut root = match spec.root.as_mut() {
+            Some(root) => root,
+            None => return Err(anyhow!("spec miss root field")),
+        };
+
         // handler rootfs
         let rootfs = self
             .resource_manager
-            .handler_rootfs(&config.container_id, &config.bundle, &config.rootfs_mounts)
+            .handler_rootfs(
+                &config.container_id,
+                root,
+                &config.bundle,
+                &config.rootfs_mounts,
+            )
             .await
             .context("handler rootfs")?;
 
         // update rootfs
-        match spec.root.as_mut() {
-            Some(root) => {
-                root.path = rootfs
-                    .get_guest_rootfs_path()
-                    .await
-                    .context("get guest rootfs path")?
-            }
-            None => return Err(anyhow!("spec miss root field")),
-        };
+        root.path = rootfs
+            .get_guest_rootfs_path()
+            .await
+            .context("get guest rootfs path")?;
+
         let mut storages = vec![];
         if let Some(storage) = rootfs.get_storage().await {
             storages.push(storage);

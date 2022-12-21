@@ -257,6 +257,48 @@ This launches a BusyBox container named `hello`, and it will be removed by `--rm
 The `--cni` flag enables CNI networking for the container. Without this flag, a container with just a
 loopback interface is created.
 
+### Launch containers using `ctr` command line with rootfs bundle
+
+#### Get rootfs
+Use the script to create rootfs
+```bash
+ctr i pull quay.io/prometheus/busybox:latest
+ctr i export rootfs.tar quay.io/prometheus/busybox:latest
+
+rootfs_tar=rootfs.tar
+bundle_dir="./bundle"
+mkdir -p "${bundle_dir}"
+
+# extract busybox rootfs
+rootfs_dir="${bundle_dir}/rootfs"
+mkdir -p "${rootfs_dir}"
+layers_dir="$(mktemp -d)"
+tar -C "${layers_dir}" -pxf "${rootfs_tar}"
+for ((i=0;i<$(cat ${layers_dir}/manifest.json | jq -r ".[].Layers | length");i++)); do
+  tar -C ${rootfs_dir} -xf ${layers_dir}/$(cat ${layers_dir}/manifest.json | jq -r ".[].Layers[${i}]")
+done
+```
+#### Get `config.json`
+Use runc spec to generate `config.json`
+```bash
+cd ./bundle/rootfs
+runc spec
+mv config.json ../
+```
+Change the root `path` in `config.json` to the absolute path of rootfs
+
+```JSON
+"root":{
+    "path":"/root/test/bundle/rootfs",
+    "readonly": false
+},
+```
+
+#### Run container
+```bash
+sudo ctr run -d --runtime io.containerd.run.kata.v2 --config bundle/config.json hello
+sudo ctr t exec --exec-id ${ID} -t hello sh
+```
 ### Launch Pods with `crictl` command line
 
 With the `crictl` command line of `cri-tools`, you can specify runtime class with `-r` or `--runtime` flag.
