@@ -100,6 +100,7 @@ impl Volume for ShmVolume {
     }
 
     async fn cleanup(&self) -> Result<()> {
+        // TODO: Clean up ShmVolume
         warn!(sl!(), "Cleaning up ShmVolume is still unimplemented.");
         Ok(())
     }
