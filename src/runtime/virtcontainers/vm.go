@@ -19,6 +19,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Mutable and not constant so we can mock in tests
 var urandomDev = "/dev/urandom"
 
 // VM is abstraction of a virtual machine.
