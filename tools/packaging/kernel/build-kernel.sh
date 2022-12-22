@@ -151,36 +151,36 @@ get_kernel() {
 		return
 	fi
 
-		#Remove extra 'v'
-		version=${version#v}
+	#Remove extra 'v'
+	version=${version#v}
 
-		major_version=$(echo "${version}" | cut -d. -f1)
-		kernel_tarball="linux-${version}.tar.xz"
+	major_version=$(echo "${version}" | cut -d. -f1)
+	kernel_tarball="linux-${version}.tar.xz"
 
-		if [ ! -f sha256sums.asc ] || ! grep -q "${kernel_tarball}" sha256sums.asc; then
-			shasum_url="https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
-			info "Download kernel checksum file: sha256sums.asc from ${shasum_url}"
-			curl --fail -OL "${shasum_url}"
-		fi
-		grep "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"
+	if [ ! -f sha256sums.asc ] || ! grep -q "${kernel_tarball}" sha256sums.asc; then
+		shasum_url="https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
+		info "Download kernel checksum file: sha256sums.asc from ${shasum_url}"
+		curl --fail -OL "${shasum_url}"
+	fi
+	grep "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"
 
-		if [ -f "${kernel_tarball}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
-			info "invalid kernel tarball ${kernel_tarball} removing "
-			rm -f "${kernel_tarball}"
-		fi
-		if [ ! -f "${kernel_tarball}" ]; then
-			info "Download kernel version ${version}"
-			info "Download kernel"
-			curl --fail -OL "https://www.kernel.org/pub/linux/kernel/v${major_version}.x/${kernel_tarball}"
-		else
-			info "kernel tarball already downloaded"
-		fi
+	if [ -f "${kernel_tarball}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
+		info "invalid kernel tarball ${kernel_tarball} removing "
+		rm -f "${kernel_tarball}"
+	fi
+	if [ ! -f "${kernel_tarball}" ]; then
+		info "Download kernel version ${version}"
+		info "Download kernel"
+		curl --fail -OL "https://www.kernel.org/pub/linux/kernel/v${major_version}.x/${kernel_tarball}"
+	else
+		info "kernel tarball already downloaded"
+	fi
 
-		sha256sum -c "${kernel_tarball}.sha256"
+	sha256sum -c "${kernel_tarball}.sha256"
 
-		tar xf "${kernel_tarball}"
+	tar xf "${kernel_tarball}"
 
-		mv "linux-${version}" "${kernel_path}"
+	mv "linux-${version}" "${kernel_path}"
 }
 
 get_major_kernel_version() {
