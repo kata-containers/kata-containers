@@ -327,9 +327,9 @@ impl VmmInstance {
                 }
             }
         }
-        return Err(anyhow::anyhow!(
+        Err(anyhow::anyhow!(
             "After {} attempts, it still doesn't work.",
             REQUEST_RETRY
-        ));
+        ))
     }
 }
