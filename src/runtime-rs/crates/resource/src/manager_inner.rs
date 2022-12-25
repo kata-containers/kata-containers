@@ -216,10 +216,10 @@ impl ResourceManagerInner {
     pub async fn handler_volumes(
         &self,
         cid: &str,
-        oci_mounts: &[oci::Mount],
+        spec: &oci::Spec,
     ) -> Result<Vec<Arc<dyn Volume>>> {
         self.volume_resource
-            .handler_volumes(&self.share_fs, cid, oci_mounts)
+            .handler_volumes(&self.share_fs, cid, spec)
             .await
     }
 

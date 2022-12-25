@@ -330,6 +330,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "415301c9de11005d4b92193c0eb7ac7adc37e5a49e0ac9bed0a42343512744b8"
 
 [[package]]
+name = "byte-unit"
+version = "4.0.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "581ad4b3d627b0c09a0ccb2912148f839acaca0b93cf54cbe42b6c674e86079c"
+dependencies = [
+ "serde",
+ "utf8-width",
+]
+
+[[package]]
 name = "byteorder"
 version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1362,7 +1372,7 @@ dependencies = [
  "anyhow",
  "base64",
  "bitmask-enum",
- "byte-unit",
+ "byte-unit 3.1.4",
  "glob",
  "lazy_static",
  "num_cpus",
@@ -2281,6 +2291,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bitflags",
+ "byte-unit 4.0.17",
  "cgroups-rs",
  "futures 0.3.21",
  "hypervisor",
@@ -2301,6 +2312,7 @@ dependencies = [
  "serde_json",
  "slog",
  "slog-scope",
+ "tempfile",
  "test-utils",
  "tokio",
  "uuid",
@@ -3022,6 +3034,12 @@ dependencies = [
  "matches",
  "percent-encoding",
 ]
+
+[[package]]
+name = "utf8-width"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5190c9442dcdaf0ddd50f37420417d219ae5261bbf5db120d0f9bab996c9cba1"
 
 [[package]]
 name = "uuid"
