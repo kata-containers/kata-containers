@@ -87,12 +87,28 @@ const MODPROBE_PATH: &str = "/sbin/modprobe";
 /// or /usr/sbin, we need to check both of them
 const USR_IPTABLES_SAVE: &str = "/usr/sbin/iptables-save";
 const IPTABLES_SAVE: &str = "/sbin/iptables-save";
-const USR_IPTABLES_RESTORE: &str = "/usr/sbin/iptables-store";
+const USR_IPTABLES_LEGACY_SAVE: &str = "/usr/sbin/iptables-legacy-save";
+const IPTABLES_LEGACY_SAVE: &str = "/sbin/iptables-legacy-save";
+const USR_IPTABLES_NFT_SAVE: &str = "/usr/sbin/iptables-nft-save";
+const IPTABLES_NFT_SAVE: &str = "/sbin/iptables-nft-save";
+const USR_IPTABLES_RESTORE: &str = "/usr/sbin/iptables-restore";
 const IPTABLES_RESTORE: &str = "/sbin/iptables-restore";
+const USR_IPTABLES_LEGACY_RESTORE: &str = "/usr/sbin/iptables-legacy-restore";
+const IPTABLES_LEGACY_RESTORE: &str = "/sbin/iptables-legacy-restore";
+const USR_IPTABLES_NFT_RESTORE: &str = "/usr/sbin/iptables-nft-restore";
+const IPTABLES_NFT_RESTORE: &str = "/sbin/iptables-nft-restore";
 const USR_IP6TABLES_SAVE: &str = "/usr/sbin/ip6tables-save";
 const IP6TABLES_SAVE: &str = "/sbin/ip6tables-save";
+const USR_IP6TABLES_LEGACY_SAVE: &str = "/usr/sbin/ip6tables-legacy-save";
+const IP6TABLES_LEGACY_SAVE: &str = "/sbin/ip6tables-legacy-save";
+const USR_IP6TABLES_NFT_SAVE: &str = "/usr/sbin/ip6tables-nft-save";
+const IP6TABLES_NFT_SAVE: &str = "/sbin/ip6tables-nft-save";
 const USR_IP6TABLES_RESTORE: &str = "/usr/sbin/ip6tables-save";
 const IP6TABLES_RESTORE: &str = "/sbin/ip6tables-restore";
+const USR_IP6TABLES_LEGACY_RESTORE: &str = "/usr/sbin/ip6tables-legacy-restore";
+const IP6TABLES_LEGACY_RESTORE: &str = "/sbin/ip6tables-legacy-restore";
+const USR_IP6TABLES_NFT_RESTORE: &str = "/usr/sbin/ip6tables-nft-restore";
+const IP6TABLES_NFT_RESTORE: &str = "/sbin/ip6tables-nft-restore";
 
 const ERR_CANNOT_GET_WRITER: &str = "Cannot get writer";
 const ERR_INVALID_BLOCK_SIZE: &str = "Invalid block size";
@@ -1010,13 +1026,31 @@ impl agent_ttrpc::AgentService for AgentService {
         let cmd = if req.is_ipv6 {
             if Path::new(USR_IP6TABLES_SAVE).exists() {
                 USR_IP6TABLES_SAVE
-            } else {
+            } else if Path::new(IP6TABLES_SAVE).exists() {
                 IP6TABLES_SAVE
+            } else if Path::new(USR_IP6TABLES_NFT_SAVE).exists() {
+                USR_IP6TABLES_NFT_SAVE
+            } else if Path::new(IP6TABLES_NFT_SAVE).exists() {
+                IP6TABLES_NFT_SAVE
+            } else if Path::new(USR_IP6TABLES_LEGACY_SAVE).exists() {
+                USR_IP6TABLES_LEGACY_SAVE
+            } else {
+                IP6TABLES_LEGACY_SAVE
             }
-        } else if Path::new(USR_IPTABLES_SAVE).exists() {
-            USR_IPTABLES_SAVE
         } else {
-            IPTABLES_SAVE
+            if Path::new(USR_IPTABLES_SAVE).exists() {
+                USR_IPTABLES_SAVE
+            } else if Path::new(IPTABLES_SAVE).exists() {
+                IPTABLES_SAVE
+            } else if Path::new(USR_IPTABLES_LEGACY_SAVE).exists() {
+                USR_IPTABLES_LEGACY_SAVE
+            } else if Path::new(IPTABLES_LEGACY_SAVE).exists() {
+                IPTABLES_LEGACY_SAVE
+            } else if Path::new(USR_IPTABLES_NFT_SAVE).exists() {
+                USR_IPTABLES_NFT_SAVE
+            } else {
+                IPTABLES_NFT_SAVE
+            }
         }
         .to_string();
 
@@ -1049,13 +1083,31 @@ impl agent_ttrpc::AgentService for AgentService {
         let cmd = if req.is_ipv6 {
             if Path::new(USR_IP6TABLES_RESTORE).exists() {
                 USR_IP6TABLES_RESTORE
-            } else {
+            } else if Path::new(IP6TABLES_RESTORE).exists() {
                 IP6TABLES_RESTORE
+            } else if Path::new(USR_IP6TABLES_NFT_RESTORE).exists() {
+                USR_IP6TABLES_NFT_RESTORE
+            } else if Path::new(IP6TABLES_NFT_RESTORE).exists() {
+                IP6TABLES_NFT_RESTORE
+            } else if Path::new(USR_IP6TABLES_LEGACY_RESTORE).exists() {
+                USR_IP6TABLES_LEGACY_RESTORE
+            } else {
+                IP6TABLES_LEGACY_RESTORE
             }
-        } else if Path::new(USR_IPTABLES_RESTORE).exists() {
-            USR_IPTABLES_RESTORE
         } else {
-            IPTABLES_RESTORE
+            if Path::new(USR_IPTABLES_RESTORE).exists() {
+                USR_IPTABLES_RESTORE
+            } else if Path::new(IPTABLES_RESTORE).exists() {
+                IPTABLES_RESTORE
+            } else if Path::new(USR_IPTABLES_LEGACY_RESTORE).exists() {
+                USR_IPTABLES_LEGACY_RESTORE
+            } else if Path::new(IPTABLES_LEGACY_RESTORE).exists() {
+                IPTABLES_LEGACY_RESTORE
+            } else if Path::new(USR_IPTABLES_NFT_RESTORE).exists() {
+                USR_IPTABLES_NFT_RESTORE
+            } else {
+                IPTABLES_NFT_RESTORE
+            }
         }
         .to_string();
 
@@ -2786,10 +2838,26 @@ OtherField:other
             USR_IP6TABLES_SAVE,
             USR_IPTABLES_RESTORE,
             USR_IP6TABLES_RESTORE,
+            USR_IPTABLES_LEGACY_SAVE,
+            USR_IP6TABLES_LEGACY_SAVE,
+            USR_IPTABLES_NFT_SAVE,
+            USR_IP6TABLES_NFT_SAVE,
+            USR_IPTABLES_LEGACY_RESTORE,
+            USR_IP6TABLES_LEGACY_RESTORE,
+            USR_IPTABLES_NFT_RESTORE,
+            USR_IP6TABLES_NFT_RESTORE,
             IPTABLES_SAVE,
             IP6TABLES_SAVE,
             IPTABLES_RESTORE,
             IP6TABLES_RESTORE,
+            IPTABLES_LEGACY_SAVE,
+            IP6TABLES_LEGACY_SAVE,
+            IPTABLES_NFT_SAVE,
+            IP6TABLES_NFT_SAVE,
+            IPTABLES_LEGACY_RESTORE,
+            IP6TABLES_LEGACY_RESTORE,
+            IPTABLES_NFT_RESTORE,
+            IP6TABLES_NFT_RESTORE,
         ];
 
         for cmd in iptables_cmd_list {
