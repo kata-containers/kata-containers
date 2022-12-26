@@ -6,7 +6,7 @@
 use std::io::Result;
 use std::path::Path;
 
-use super::default;
+use super::default::{self, DEFAULT_RUNTIME_NAME};
 use crate::config::{ConfigOps, TomlConfig};
 use crate::{eother, resolve_path, validate_path};
 
@@ -17,14 +17,14 @@ pub const RUNTIME_NAME_VIRTCONTAINER: &str = "virt_container";
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Runtime {
     /// Runtime name: Plan to support virt-container, linux-container, wasm-container
-    #[serde(default)]
+    #[serde(default = "default_runtime")]
     pub name: String,
 
-    /// Hypervisor name: Plan to support dragonball, qemu
+    /// Hypervisor name: Plan to support dragonball, qemu, cloud hypervisor
     #[serde(default)]
     pub hypervisor_name: String,
 
-    /// Agent name
+    /// Agent name: Plan to support kata
     #[serde(default)]
     pub agent_name: String,
 
@@ -131,11 +131,29 @@ pub struct Runtime {
     pub vendor: RuntimeVendor,
 }
 
+fn default_runtime() -> String {
+    DEFAULT_RUNTIME_NAME.to_string()
+}
+
 impl ConfigOps for Runtime {
     fn adjust_config(conf: &mut TomlConfig) -> Result<()> {
         RuntimeVendor::adjust_config(conf)?;
         if conf.runtime.internetworking_model.is_empty() {
             conf.runtime.internetworking_model = default::DEFAULT_INTERNETWORKING_MODEL.to_owned();
+        }
+        // set the default hypervisor name
+        if conf.runtime.hypervisor_name.is_empty() {
+            let hypervisors: Vec<String> = conf.hypervisor.keys().cloned().collect();
+            for hypervisor in hypervisors.iter() {
+                conf.runtime.hypervisor_name = hypervisor.to_string();
+            }
+        }
+        // set the default agent name
+        if conf.runtime.agent_name.is_empty() {
+            let agents: Vec<String> = conf.agent.keys().cloned().collect();
+            for agent in agents.iter() {
+                conf.runtime.agent_name = agent.to_string();
+            }
         }
 
         for bind in conf.runtime.sandbox_bind_mounts.iter_mut() {

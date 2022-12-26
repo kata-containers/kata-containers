@@ -207,8 +207,6 @@ container_pipe_size=@PIPESIZE@
 internetworking_model="@DEFNETWORKMODEL_DB@"
 
 name="@RUNTIMENAME@"
-hypervisor_name="@HYPERVISOR_DB@"
-agent_name="@PROJECT_TYPE@"
 
 # disable guest seccomp
 # Determines whether container seccomp profiles are passed to the virtual

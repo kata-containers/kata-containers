@@ -12,9 +12,6 @@ use std::u32;
 
 use serde::Deserialize;
 
-use crate::config::default::DEFAULT_AGENT_TYPE_NAME;
-use crate::config::default::DEFAULT_HYPERVISOR;
-use crate::config::default::DEFAULT_RUNTIME_NAME;
 use crate::config::hypervisor::get_hypervisor_plugin;
 
 use crate::config::TomlConfig;
@@ -433,26 +430,21 @@ impl Annotation {
 impl Annotation {
     /// update config info by annotation
     pub fn update_config_by_annotation(&self, config: &mut TomlConfig) -> Result<()> {
+        // change the default runtime by annotation
+        if let Some(name) = self.annotations.get(KATA_ANNO_CFG_RUNTIME_NAME) {
+            config.runtime.name = name.to_string();
+        }
+        // change the default hypervisor by annotation
         if let Some(hv) = self.annotations.get(KATA_ANNO_CFG_RUNTIME_HYPERVISOR) {
             if config.hypervisor.get(hv).is_some() {
                 config.runtime.hypervisor_name = hv.to_string();
             }
         }
+        // change the default agent by annotation
         if let Some(ag) = self.annotations.get(KATA_ANNO_CFG_RUNTIME_AGENT) {
             if config.agent.get(ag).is_some() {
                 config.runtime.agent_name = ag.to_string();
             }
-        }
-
-        // set default values for runtime.name, runtime.hypervisor_name and runtime.agent
-        if config.runtime.name.is_empty() {
-            config.runtime.name = DEFAULT_RUNTIME_NAME.to_string()
-        }
-        if config.runtime.hypervisor_name.is_empty() {
-            config.runtime.hypervisor_name = DEFAULT_HYPERVISOR.to_string()
-        }
-        if config.runtime.agent_name.is_empty() {
-            config.runtime.agent_name = DEFAULT_AGENT_TYPE_NAME.to_string()
         }
 
         let hypervisor_name = &config.runtime.hypervisor_name;
