@@ -206,40 +206,41 @@ const (
 )
 
 type RuntimeConfigOptions struct {
-	Hypervisor           string
-	HypervisorPath       string
-	DefaultGuestHookPath string
-	KernelPath           string
-	ImagePath            string
-	KernelParams         string
-	MachineType          string
-	ShimPath             string
-	LogPath              string
-	BlockDeviceDriver    string
-	BlockDeviceAIO       string
-	SharedFS             string
-	VirtioFSDaemon       string
-	JaegerEndpoint       string
-	JaegerUser           string
-	JaegerPassword       string
-	PFlash               []string
-	PCIeRootPort         uint32
-	DefaultVCPUCount     uint32
-	DefaultMaxVCPUCount  uint32
-	DefaultMemSize       uint32
-	DefaultMaxMemorySize uint64
-	DefaultMsize9p       uint32
-	DisableBlock         bool
-	EnableIOThreads      bool
-	HotplugVFIOOnRootBus bool
-	DisableNewNetNs      bool
-	HypervisorDebug      bool
-	RuntimeDebug         bool
-	RuntimeTrace         bool
-	ShimDebug            bool
-	AgentDebug           bool
-	AgentTrace           bool
-	EnablePprof          bool
+	Hypervisor              string
+	HypervisorPath          string
+	DefaultGuestHookPath    string
+	KernelPath              string
+	ImagePath               string
+	KernelParams            string
+	MachineType             string
+	ShimPath                string
+	LogPath                 string
+	BlockDeviceDriver       string
+	BlockDeviceAIO          string
+	SharedFS                string
+	VirtioFSDaemon          string
+	JaegerEndpoint          string
+	JaegerUser              string
+	JaegerPassword          string
+	PFlash                  []string
+	PCIeRootPort            uint32
+	DefaultVCPUCount        uint32
+	DefaultMaxVCPUCount     uint32
+	DefaultMemSize          uint32
+	DefaultMaxMemorySize    uint64
+	DefaultMsize9p          uint32
+	DefaultGuestHookTimeout int32
+	DisableBlock            bool
+	EnableIOThreads         bool
+	HotplugVFIOOnRootBus    bool
+	DisableNewNetNs         bool
+	HypervisorDebug         bool
+	RuntimeDebug            bool
+	RuntimeTrace            bool
+	ShimDebug               bool
+	AgentDebug              bool
+	AgentTrace              bool
+	EnablePprof             bool
 }
 
 // ContainerIDTestDataType is a type used to test Container and Sandbox ID's.
@@ -320,6 +321,7 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	msize_9p = ` + strconv.FormatUint(uint64(config.DefaultMsize9p), 10) + `
 	enable_debug = ` + strconv.FormatBool(config.HypervisorDebug) + `
 	guest_hook_path = "` + config.DefaultGuestHookPath + `"
+    guest_hook_timeout = ` + strconv.FormatUint(uint64(config.DefaultGuestHookTimeout), 10) + `
 	shared_fs = "` + config.SharedFS + `"
 	virtio_fs_daemon = "` + config.VirtioFSDaemon + `"
 

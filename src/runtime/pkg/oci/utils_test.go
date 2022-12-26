@@ -658,6 +658,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.CPUFeatures] = "pmu=off"
 	ocispec.Annotations[vcAnnotations.DisableVhostNet] = "true"
 	ocispec.Annotations[vcAnnotations.GuestHookPath] = "/usr/bin/"
+	ocispec.Annotations[vcAnnotations.GuestHookTimeout] = "15"
 	ocispec.Annotations[vcAnnotations.DisableImageNvdimm] = "true"
 	ocispec.Annotations[vcAnnotations.HotplugVFIOOnRootBus] = "true"
 	ocispec.Annotations[vcAnnotations.PCIeRootPort] = "2"

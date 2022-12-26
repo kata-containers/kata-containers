@@ -195,6 +195,10 @@ block_device_driver = "virtio-blk"
 # but it will not abort container execution.
 #guest_hook_path = "/usr/share/oci/hooks"
 #
+# Guest hook timeout is the number of seconds to wait for a hook execution before aborting it.
+# It must be a non-negative integer. Zero means no timeout. The default value is 10 seconds.
+#guest_hook_timeout = 10
+
 # These options are related to network rate limiter at the VMM level, and are
 # based on the Cloud Hypervisor I/O throttling.  Those are disabled by default
 # and we strongly advise users to refer the Cloud Hypervisor official

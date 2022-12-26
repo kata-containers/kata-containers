@@ -295,6 +295,9 @@ message CreateSandboxRequest {
 	string guest_hook_path = 6;
 	// This field is the list of kernel modules to be loaded in the guest kernel.
 	repeated KernelModule kernel_modules = 7;
+	// This field is the number of seconds to wait for a hook execution before aborting it.
+	// It must be a non-negative integer. Zero means no timeout. The default value is 10 seconds.
+	int32 guest_hook_timeout = 8;
 }
 
 message DestroySandboxRequest {

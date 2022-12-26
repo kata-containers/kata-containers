@@ -475,6 +475,16 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		}
 	}
 
+	if value, ok := ocispec.Annotations[vcAnnotations.GuestHookTimeout]; ok {
+		if value != "" {
+			timeout, err := strconv.ParseInt(value, 10, 32)
+			if err != nil {
+				return err
+			}
+			config.HypervisorConfig.GuestHookTimeout = int32(timeout)
+		}
+	}
+
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DisableImageNvdimm).setBool(func(disableNvdimm bool) {
 		config.HypervisorConfig.DisableImageNvdimm = disableNvdimm
 	}); err != nil {
@@ -495,6 +505,12 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.PCIeRootPort).setUint(func(pcieRootPort uint64) {
 		config.HypervisorConfig.PCIeRootPort = uint32(pcieRootPort)
+	}); err != nil {
+		return err
+	}
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.GuestHookTimeout).setInt(func(guestHookTimeout int64) {
+		config.HypervisorConfig.GuestHookTimeout = int32(guestHookTimeout)
 	}); err != nil {
 		return err
 	}
@@ -1106,6 +1122,24 @@ func (a *annotationConfiguration) setBool(f func(bool)) error {
 			return fmt.Errorf(errAnnotationBoolKey, a.key)
 		}
 		f(boolValue)
+	}
+	return nil
+}
+
+func (a *annotationConfiguration) setInt(f func(int64)) error {
+	return a.setIntWithCheck(func(v int64) error {
+		f(v)
+		return nil
+	})
+}
+
+func (a *annotationConfiguration) setIntWithCheck(f func(int64) error) error {
+	if value, ok := a.ocispec.Annotations[a.key]; ok {
+		intValue, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return fmt.Errorf(errAnnotationPositiveNumericKey, a.key)
+		}
+		return f(intValue)
 	}
 	return nil
 }

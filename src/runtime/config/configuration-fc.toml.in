@@ -210,6 +210,10 @@ valid_entropy_sources = @DEFVALIDENTROPYSOURCES@
 # but it will not abort container execution.
 #guest_hook_path = "/usr/share/oci/hooks"
 #
+# Guest hook timeout is the number of seconds to wait for a hook execution before aborting it.
+# It must be a non-negative integer. Zero means no timeout. The default value is 10 seconds.
+#guest_hook_timeout = 10
+
 # Use rx Rate Limiter to control network I/O inbound bandwidth(size in bits/sec for SB/VM).
 # In Firecracker, it provides a built-in rate limiter, which is based on TBF(Token Bucket Filter)
 # queueing discipline.
