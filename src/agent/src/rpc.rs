@@ -84,6 +84,8 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
 
+use oci_distribution::Reference;
+
 pub const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
 const ANNO_K8S_IMAGE_NAME: &str = "io.kubernetes.cri.image-name";
@@ -147,21 +149,20 @@ pub struct AgentService {
     sandbox: Arc<Mutex<Sandbox>>,
 }
 
-// A container ID must match this regex:
-//
-//     ^[a-zA-Z0-9][a-zA-Z0-9_.-]+$
-//
+// A container ID must be valid according to oci distribution spec
 pub fn verify_cid(id: &str) -> Result<()> {
-    let mut chars = id.chars();
+    let reference: Reference = id.parse()?;
 
-    let valid = matches!(chars.next(), Some(first) if first.is_alphanumeric()
-                && id.len() > 1
-                && chars.all(|c| c.is_alphanumeric() || ['.', '-', '_'].contains(&c)));
-
-    match valid {
-        true => Ok(()),
-        false => Err(anyhow!("invalid container ID: {:?}", id)),
-    }
+    match id.eq(reference.whole().as_str()) {
+        true => return Ok(()),
+        false => {
+            return Err(anyhow!(
+                "invalid container ID: whole reference doesn't match {} == {}",
+                id,
+                reference.whole().as_str()
+            ))
+        }
+    };
 }
 
 // Partially merge an OCI process specification into another one.
@@ -2263,6 +2264,33 @@ mod tests {
             .unwrap(),
             dir,
         )
+    }
+
+    #[test]
+    fn test_verify_cid() {
+        let result = verify_cid("registry.fedoraproject.org/fedora:latest");
+        assert!(result.is_ok(), "valid referance with tag should success");
+
+        let result = verify_cid("gcr.io/google-containers/echoserver@sha256:cb5c1bddd1b5665e1867a7fa1b5fa843a47ee433bbb75d4293888b71def53229");
+        assert!(result.is_ok(), "valid sha256 digest should success");
+
+        let result = verify_cid("quay.io/foo/bar@sha512:77eaef55bb11cac4173b924512f3b4a5df8b83bdf89d7e8cd9a86a85b7161031fcdf094a785517ab4adc828d9676a3c7b6408af5ed23030cf1c4132fe5d02f22");
+        assert!(result.is_ok(), "valid sha512 digest should success");
+
+        let result = verify_cid("quay.io");
+        assert!(result.is_err(), "registry only referance should failed");
+
+        let result = verify_cid("quay.io/foo/bar:inval!dTAG");
+        assert!(result.is_err(), "invalid tag should failed");
+
+        let result = verify_cid("gcr.io/google-containers/echoserver@sha256:cb5c");
+        assert!(result.is_err(), "invalid short sha256 digest should failed");
+
+        let result = verify_cid("gcr.io/google-containers/echoserver@sha256:cb5c1bddd1b5665e1867a7fa1b5fa843a47ee433bbb75d4293888b71def53229ffffffffffffffffffffffffffffffffffffffff");
+        assert!(result.is_err(), "invalid long sha256 digest should failed");
+
+        let result = verify_cid("gcr.io/echoserver@fakealgo:cb5c1bddd1b5665e1867a7fa1b5fa843a47ee433bbb75d4293888b71def53229");
+        assert!(result.is_err(), "invalid digest algorithm should failed");
     }
 
     #[test]

@@ -24,6 +24,7 @@ serial_test = "0.5.1"
 kata-sys-util = { path = "../libs/kata-sys-util" }
 kata-types = { path = "../libs/kata-types" }
 url = "2.2.2"
+oci-distribution = "0.9.4"
 
 # Async helpers
 async-trait = "0.1.42"
