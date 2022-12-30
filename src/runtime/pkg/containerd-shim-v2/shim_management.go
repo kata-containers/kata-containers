@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -306,8 +307,19 @@ func GetSandboxesStoragePath() string {
 	return "/run/vc/sbs"
 }
 
+// GetSandboxesStoragePath returns the storage path where sandboxes info are stored in runtime-rs
+func GetSandboxesStoragePathRust() string {
+	return "/run/kata"
+}
+
 // SocketAddress returns the address of the unix domain socket for communicating with the
 // shim management endpoint
 func SocketAddress(id string) string {
-	return fmt.Sprintf("unix://%s", filepath.Join(string(filepath.Separator), GetSandboxesStoragePath(), id, "shim-monitor.sock"))
+	socketAddress := fmt.Sprintf("unix://%s", filepath.Join(string(filepath.Separator), GetSandboxesStoragePath(), id, "shim-monitor.sock"))
+	_, err := os.Stat(socketAddress)
+	// if the path not exist, check the rust runtime path
+	if err != nil {
+		return fmt.Sprintf("unix://%s", filepath.Join(string(filepath.Separator), GetSandboxesStoragePathRust(), id, "shim-monitor.sock"))
+	}
+	return socketAddress
 }
