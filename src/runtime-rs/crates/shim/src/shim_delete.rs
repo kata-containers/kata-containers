@@ -40,7 +40,7 @@ impl ShimExecutor {
         let trim_path = address.strip_prefix("unix://").context("trim path")?;
         let file_path = Path::new("/").join(trim_path);
         let file_path = file_path.as_path();
-        if std::fs::metadata(&file_path).is_ok() {
+        if std::fs::metadata(file_path).is_ok() {
             info!(sl!(), "remote socket path: {:?}", &file_path);
             fs::remove_file(file_path).ok();
         }

@@ -1223,6 +1223,7 @@ dependencies = [
  "seccompiler",
  "serde",
  "serde_json",
+ "shim-interface",
  "slog",
  "slog-scope",
  "thiserror",
@@ -1919,6 +1920,7 @@ dependencies = [
  "safe-path",
  "serde",
  "serde_json",
+ "shim-interface",
 ]
 
 [[package]]
@@ -2343,6 +2345,7 @@ dependencies = [
  "logging",
  "oci",
  "persist",
+ "shim-interface",
  "slog",
  "slog-scope",
  "tokio",
@@ -2474,6 +2477,7 @@ dependencies = [
  "logging",
  "persist",
  "runtimes",
+ "shim-interface",
  "slog",
  "slog-scope",
  "tokio",
@@ -2539,9 +2543,20 @@ dependencies = [
 name = "shim-ctl"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "common",
  "logging",
  "runtimes",
+ "tokio",
+]
+
+[[package]]
+name = "shim-interface"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hyper",
+ "hyperlocal",
  "tokio",
 ]
 
