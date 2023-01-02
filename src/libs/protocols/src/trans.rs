@@ -106,8 +106,8 @@ impl From<oci::LinuxDeviceCgroup> for crate::oci::LinuxDeviceCgroup {
         crate::oci::LinuxDeviceCgroup {
             Allow: from.allow,
             Type: from.r#type.map_or("".to_string(), |t| t as String),
-            Major: from.major.map_or(0, |t| t as i64),
-            Minor: from.minor.map_or(0, |t| t as i64),
+            Major: from.major.map_or(0, |t| t),
+            Minor: from.minor.map_or(0, |t| t),
             Access: from.access,
             unknown_fields: Default::default(),
             cached_size: Default::default(),
@@ -123,7 +123,7 @@ impl From<oci::LinuxMemory> for crate::oci::LinuxMemory {
             Swap: from.swap.map_or(0, |t| t),
             Kernel: from.kernel.map_or(0, |t| t),
             KernelTCP: from.kernel_tcp.map_or(0, |t| t),
-            Swappiness: from.swappiness.map_or(0, |t| t as u64),
+            Swappiness: from.swappiness.map_or(0, |t| t),
             DisableOOMKiller: from.disable_oom_killer.map_or(false, |t| t),
             unknown_fields: Default::default(),
             cached_size: Default::default(),
@@ -332,7 +332,7 @@ impl From<oci::LinuxDevice> for crate::oci::LinuxDevice {
             Type: from.r#type,
             Major: from.major,
             Minor: from.minor,
-            FileMode: from.file_mode.map_or(0, |v| v as u32),
+            FileMode: from.file_mode.map_or(0, |v| v),
             UID: from.uid.map_or(0, |v| v),
             GID: from.gid.map_or(0, |v| v),
             unknown_fields: Default::default(),
@@ -468,12 +468,12 @@ impl From<crate::oci::LinuxDeviceCgroup> for oci::LinuxDeviceCgroup {
     fn from(mut from: crate::oci::LinuxDeviceCgroup) -> Self {
         let mut major = None;
         if from.get_Major() > 0 {
-            major = Some(from.get_Major() as i64);
+            major = Some(from.get_Major());
         }
 
         let mut minor = None;
         if from.get_Minor() > 0 {
-            minor = Some(from.get_Minor() as i64)
+            minor = Some(from.get_Minor())
         }
 
         oci::LinuxDeviceCgroup {
