@@ -173,11 +173,11 @@ impl ShareFsMount for VirtiofsShareMount {
     async fn upgrade_to_rw(&self, file_name: &str) -> Result<()> {
         // Remount readonly directory with readwrite permission
         let host_dest = do_get_host_path(file_name, &self.id, "", true, true);
-        bind_remount(&host_dest, false)
+        bind_remount(host_dest, false)
             .context("remount readonly directory with readwrite permission")?;
         // Remount readwrite directory with readwrite permission
         let host_dest = do_get_host_path(file_name, &self.id, "", true, false);
-        bind_remount(&host_dest, false)
+        bind_remount(host_dest, false)
             .context("remount readwrite directory with readwrite permission")?;
         Ok(())
     }
@@ -185,11 +185,11 @@ impl ShareFsMount for VirtiofsShareMount {
     async fn downgrade_to_ro(&self, file_name: &str) -> Result<()> {
         // Remount readwrite directory with readonly permission
         let host_dest = do_get_host_path(file_name, &self.id, "", true, false);
-        bind_remount(&host_dest, true)
+        bind_remount(host_dest, true)
             .context("remount readwrite directory with readonly permission")?;
         // Remount readonly directory with readonly permission
         let host_dest = do_get_host_path(file_name, &self.id, "", true, true);
-        bind_remount(&host_dest, true)
+        bind_remount(host_dest, true)
             .context("remount readonly directory with readonly permission")?;
         Ok(())
     }
