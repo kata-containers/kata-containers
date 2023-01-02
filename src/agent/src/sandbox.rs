@@ -1072,7 +1072,7 @@ mod tests {
                 fs::create_dir(&subdir_path).unwrap();
                 for file in j.files {
                     let subfile_path = format!("{}/{}", subdir_path, file.name);
-                    let mut subfile = File::create(&subfile_path).unwrap();
+                    let mut subfile = File::create(subfile_path).unwrap();
                     subfile.write_all(file.content.as_bytes()).unwrap();
                 }
             }

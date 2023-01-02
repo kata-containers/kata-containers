@@ -946,13 +946,13 @@ mod tests {
     fn clean_env_for_test_add_one_arp_neighbor(dummy_name: &str, ip: &str) {
         // ip link delete dummy
         Command::new("ip")
-            .args(&["link", "delete", dummy_name])
+            .args(["link", "delete", dummy_name])
             .output()
             .expect("prepare: failed to delete dummy");
 
         // ip neigh del dev dummy ip
         Command::new("ip")
-            .args(&["neigh", "del", dummy_name, ip])
+            .args(["neigh", "del", dummy_name, ip])
             .output()
             .expect("prepare: failed to delete neigh");
     }
@@ -967,19 +967,19 @@ mod tests {
 
         // ip link add dummy type dummy
         Command::new("ip")
-            .args(&["link", "add", dummy_name, "type", "dummy"])
+            .args(["link", "add", dummy_name, "type", "dummy"])
             .output()
             .expect("failed to add dummy interface");
 
         // ip addr add 192.168.0.2/16 dev dummy
         Command::new("ip")
-            .args(&["addr", "add", "192.168.0.2/16", "dev", dummy_name])
+            .args(["addr", "add", "192.168.0.2/16", "dev", dummy_name])
             .output()
             .expect("failed to add ip for dummy");
 
         // ip link set dummy up;
         Command::new("ip")
-            .args(&["link", "set", dummy_name, "up"])
+            .args(["link", "set", dummy_name, "up"])
             .output()
             .expect("failed to up dummy");
     }
@@ -1011,7 +1011,7 @@ mod tests {
 
         // ip neigh show dev dummy ip
         let stdout = Command::new("ip")
-            .args(&["neigh", "show", "dev", dummy_name, to_ip])
+            .args(["neigh", "show", "dev", dummy_name, to_ip])
             .output()
             .expect("failed to show neigh")
             .stdout;
