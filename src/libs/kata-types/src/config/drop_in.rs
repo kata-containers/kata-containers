@@ -240,7 +240,7 @@ mod drop_in_directory_handling {
                 "drop-in cfg file can only be a regular file or a symlink",
             ));
         }
-        let dropin_contents = fs::read_to_string(&dropin_file.path())?;
+        let dropin_contents = fs::read_to_string(dropin_file.path())?;
         let dropin_config: toml::Value = toml::from_str(&dropin_contents)?;
         super::toml_tree_ops::merge(base_config, dropin_config);
         Ok(())
@@ -267,7 +267,7 @@ mod drop_in_directory_handling {
     }
 
     pub fn load(base_cfg_file_path: &Path) -> Result<TomlConfig> {
-        let base_toml_str = fs::read_to_string(&base_cfg_file_path)?;
+        let base_toml_str = fs::read_to_string(base_cfg_file_path)?;
         let mut base_config: toml::Value = toml::from_str(&base_toml_str)?;
         let dropin_dir = get_dropin_dir_path(base_cfg_file_path)?;
 
@@ -324,7 +324,7 @@ mod drop_in_directory_handling {
             create_file(&config_path, BASE_CONFIG_DATA.as_bytes()).unwrap();
 
             let dropin_dir = tmpdir.path().join("config.d");
-            fs::create_dir(&dropin_dir).unwrap();
+            fs::create_dir(dropin_dir).unwrap();
 
             let config = load(&config_path).unwrap();
             check_base_config(&config);
