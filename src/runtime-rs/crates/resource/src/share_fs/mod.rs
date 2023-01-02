@@ -88,8 +88,8 @@ impl MountedInfo {
     pub fn new(guest_path: PathBuf, readonly: bool) -> Self {
         Self {
             guest_path,
-            ro_ref_count: if readonly { 1 } else { 0 },
-            rw_ref_count: if readonly { 0 } else { 1 },
+            ro_ref_count: readonly.into(),
+            rw_ref_count: (!readonly).into(),
         }
     }
 
