@@ -295,7 +295,7 @@ mod tests {
             barrier2.wait();
         });
 
-        let path = scoped_join(&root_path, "s").unwrap();
+        let path = scoped_join(root_path, "s").unwrap();
         let data = fs::read_to_string(&path).unwrap();
         assert_eq!(&data, "a");
         assert!(path.is_file());
@@ -306,7 +306,7 @@ mod tests {
         assert_eq!(&data, "b");
         PinnedPathBuf::from_path(&path).unwrap_err();
 
-        let pinned_path = PinnedPathBuf::new(&root_path, "s").unwrap();
+        let pinned_path = PinnedPathBuf::new(root_path, "s").unwrap();
         let data = fs::read_to_string(&pinned_path).unwrap();
         assert_eq!(&data, "b");
 

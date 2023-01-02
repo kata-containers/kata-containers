@@ -173,7 +173,7 @@ mod tests {
         fs::write(rootfs_path.join("txt"), "test").unwrap();
         ScopedDirBuilder::new(rootfs_path.join("txt")).unwrap_err();
 
-        let mut builder = ScopedDirBuilder::new(&rootfs_path).unwrap();
+        let mut builder = ScopedDirBuilder::new(rootfs_path).unwrap();
 
         // file with the same name already exists.
         builder
@@ -268,7 +268,7 @@ mod tests {
         symlink(rootfs_dir.path().join("b"), rootfs_dir.path().join("a")).unwrap();
         let rootfs_path = &rootfs_dir.path().join("a");
 
-        let mut builder = ScopedDirBuilder::new(&rootfs_path).unwrap();
+        let mut builder = ScopedDirBuilder::new(rootfs_path).unwrap();
         builder.create_with_unscoped_path("/").unwrap_err();
         builder
             .create_with_unscoped_path(rootfs_path.join("../__xxxx___xxx__"))
@@ -278,13 +278,13 @@ mod tests {
             .unwrap_err();
 
         // Return `AlreadyExist` when recursive is false
-        builder.create_with_unscoped_path(&rootfs_path).unwrap_err();
+        builder.create_with_unscoped_path(rootfs_path).unwrap_err();
         builder
             .create_with_unscoped_path(rootfs_path.join("."))
             .unwrap_err();
 
         builder.recursive(true);
-        builder.create_with_unscoped_path(&rootfs_path).unwrap();
+        builder.create_with_unscoped_path(rootfs_path).unwrap();
         builder
             .create_with_unscoped_path(rootfs_path.join("."))
             .unwrap();
