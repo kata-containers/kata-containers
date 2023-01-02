@@ -154,16 +154,9 @@ pub struct AgentService {
 pub fn verify_cid(id: &str) -> Result<()> {
     let mut chars = id.chars();
 
-    let valid = match chars.next() {
-        Some(first)
-            if first.is_alphanumeric()
+    let valid = matches!(chars.next(), Some(first) if first.is_alphanumeric()
                 && id.len() > 1
-                && chars.all(|c| c.is_alphanumeric() || ['.', '-', '_'].contains(&c)) =>
-        {
-            true
-        }
-        _ => false,
-    };
+                && chars.all(|c| c.is_alphanumeric() || ['.', '-', '_'].contains(&c)));
 
     match valid {
         true => Ok(()),
