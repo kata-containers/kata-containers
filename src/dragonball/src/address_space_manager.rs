@@ -401,9 +401,9 @@ impl AddressSpaceMgr {
             let flags = 0u32;
 
             let mem_region = kvm_userspace_memory_region {
-                slot: slot as u32,
+                slot,
                 guest_phys_addr: reg.start_addr().raw_value(),
-                memory_size: reg.len() as u64,
+                memory_size: reg.len(),
                 userspace_addr: host_addr as u64,
                 flags,
             };
@@ -421,7 +421,7 @@ impl AddressSpaceMgr {
         self.base_to_slot
             .lock()
             .unwrap()
-            .insert(reg.start_addr().raw_value(), slot as u32);
+            .insert(reg.start_addr().raw_value(), slot);
 
         Ok(())
     }
