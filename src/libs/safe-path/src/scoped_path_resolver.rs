@@ -329,31 +329,31 @@ mod tests {
         let rootfs_path = &rootfs_dir.path();
 
         assert_eq!(
-            scoped_join(&rootfs_path, "a").unwrap(),
+            scoped_join(rootfs_path, "a").unwrap(),
             rootfs_path.join("a")
         );
         assert_eq!(
-            scoped_join(&rootfs_path, "./a").unwrap(),
+            scoped_join(rootfs_path, "./a").unwrap(),
             rootfs_path.join("a")
         );
         assert_eq!(
-            scoped_join(&rootfs_path, "././a").unwrap(),
+            scoped_join(rootfs_path, "././a").unwrap(),
             rootfs_path.join("a")
         );
         assert_eq!(
-            scoped_join(&rootfs_path, "c/d/../../a").unwrap(),
+            scoped_join(rootfs_path, "c/d/../../a").unwrap(),
             rootfs_path.join("a")
         );
         assert_eq!(
-            scoped_join(&rootfs_path, "c/d/../../../.././a").unwrap(),
+            scoped_join(rootfs_path, "c/d/../../../.././a").unwrap(),
             rootfs_path.join("a")
         );
         assert_eq!(
-            scoped_join(&rootfs_path, "../../a").unwrap(),
+            scoped_join(rootfs_path, "../../a").unwrap(),
             rootfs_path.join("a")
         );
         assert_eq!(
-            scoped_join(&rootfs_path, "./../a").unwrap(),
+            scoped_join(rootfs_path, "./../a").unwrap(),
             rootfs_path.join("a")
         );
     }
@@ -370,18 +370,18 @@ mod tests {
         fs::symlink("b/c", rootfs_dir.path().join("a")).unwrap();
 
         let target = rootfs_path.join("b/c");
-        assert_eq!(scoped_join(&rootfs_path, "a").unwrap(), target);
-        assert_eq!(scoped_join(&rootfs_path, "./a").unwrap(), target);
-        assert_eq!(scoped_join(&rootfs_path, "././a").unwrap(), target);
-        assert_eq!(scoped_join(&rootfs_path, "b/c/../../a").unwrap(), target);
+        assert_eq!(scoped_join(rootfs_path, "a").unwrap(), target);
+        assert_eq!(scoped_join(rootfs_path, "./a").unwrap(), target);
+        assert_eq!(scoped_join(rootfs_path, "././a").unwrap(), target);
+        assert_eq!(scoped_join(rootfs_path, "b/c/../../a").unwrap(), target);
         assert_eq!(
-            scoped_join(&rootfs_path, "b/c/../../../.././a").unwrap(),
+            scoped_join(rootfs_path, "b/c/../../../.././a").unwrap(),
             target
         );
-        assert_eq!(scoped_join(&rootfs_path, "../../a").unwrap(), target);
-        assert_eq!(scoped_join(&rootfs_path, "./../a").unwrap(), target);
-        assert_eq!(scoped_join(&rootfs_path, "a/../../../a").unwrap(), target);
-        assert_eq!(scoped_join(&rootfs_path, "a/../../../b/c").unwrap(), target);
+        assert_eq!(scoped_join(rootfs_path, "../../a").unwrap(), target);
+        assert_eq!(scoped_join(rootfs_path, "./../a").unwrap(), target);
+        assert_eq!(scoped_join(rootfs_path, "a/../../../a").unwrap(), target);
+        assert_eq!(scoped_join(rootfs_path, "a/../../../b/c").unwrap(), target);
     }
 
     #[test]
