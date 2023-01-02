@@ -420,6 +420,7 @@ impl ResourceManager {
     }
 
     /// Allocate requested resources for a device.
+    #[allow(clippy::question_mark)]
     pub fn allocate_device_resources(
         &self,
         requests: &[ResourceConstraint],
