@@ -435,10 +435,7 @@ impl ResourceManager {
                         constraint.max = r.1 as u64;
                     }
                     match self.allocate_pio_address(&constraint) {
-                        Some(base) => Resource::PioAddressRange {
-                            base: base as u16,
-                            size: *size,
-                        },
+                        Some(base) => Resource::PioAddressRange { base, size: *size },
                         None => {
                             if let Err(e) = self.free_device_resources(&resources) {
                                 return Err(e);

@@ -41,7 +41,7 @@ extern "C" fn sigsys_handler(num: c_int, info: *mut siginfo_t, _unused: *mut c_v
     let si_code = unsafe { (*info).si_code };
 
     // Sanity check. The condition should never be true.
-    if num != si_signo || num != SIGSYS || si_code != SYS_SECCOMP_CODE as i32 {
+    if num != si_signo || num != SIGSYS || si_code != SYS_SECCOMP_CODE {
         // Safe because we're terminating the process anyway.
         unsafe { _exit(i32::from(super::EXIT_CODE_UNEXPECTED_ERROR)) };
     }
