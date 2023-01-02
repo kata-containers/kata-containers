@@ -71,10 +71,10 @@ openssl = { version = "0.10.38", features = ["vendored"] }
 
 # Image pull/decrypt
 [target.'cfg(target_arch = "s390x")'.dependencies]
-image-rs = { git = "https://github.com/confidential-containers/image-rs", rev = "78a5114444629ad0af82174cb4bbaa1787b627a3", default-features = false, features = ["default_s390x"] }
+image-rs = { git = "https://github.com/confidential-containers/image-rs", rev = "cf1f7f96eb60ec4cc4aaa671c04d574a4ea0e441", default-features = false, features = ["default_s390x"] }
 
 [target.'cfg(not(target_arch = "s390x"))'.dependencies]
-image-rs = { git = "https://github.com/confidential-containers/image-rs", rev = "78a5114444629ad0af82174cb4bbaa1787b627a3", default-features = true }
+image-rs = { git = "https://github.com/confidential-containers/image-rs", rev = "cf1f7f96eb60ec4cc4aaa671c04d574a4ea0e441", default-features = true }
 
 [dev-dependencies]
 tempfile = "3.1.0"
