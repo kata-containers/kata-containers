@@ -247,7 +247,7 @@ impl AgentService {
                 );
 
                 Command::new(INIT_TRUSTED_STORAGE)
-                    .args(&[&dev_major_minor, &data_integrity.to_string()])
+                    .args([&dev_major_minor, &data_integrity.to_string()])
                     .output()
                     .expect("Failed to initialize confidential storage");
             }

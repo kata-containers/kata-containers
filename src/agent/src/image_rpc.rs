@@ -156,7 +156,7 @@ impl ImageService {
         }
 
         info!(sl!(), "use guest pause image cid {:?}", cid);
-        let pause_bundle = Path::new(CONTAINER_BASE).join(&cid);
+        let pause_bundle = Path::new(CONTAINER_BASE).join(cid);
         let pause_rootfs = pause_bundle.join("rootfs");
         let pause_config = pause_bundle.join(CONFIG_JSON);
         let pause_binary = pause_rootfs.join("pause");
