@@ -592,7 +592,7 @@ fn compact_lowerdir_option(opts: &[String]) -> (Option<PathBuf>, Vec<String>) {
         }
     };
 
-    let idx = idx as usize;
+    let idx = idx;
     let common_dir = match get_longest_common_prefix(&lower_opts) {
         None => return (None, n_opts),
         Some(v) => {
@@ -620,7 +620,7 @@ fn compact_lowerdir_option(opts: &[String]) -> (Option<PathBuf>, Vec<String>) {
         .iter()
         .map(|c| c.replace(&common_prefix, ""))
         .collect();
-    n_opts[idx as usize] = format!("lowerdir={}", lower.join(":"));
+    n_opts[idx] = format!("lowerdir={}", lower.join(":"));
 
     (Some(common_dir), n_opts)
 }
