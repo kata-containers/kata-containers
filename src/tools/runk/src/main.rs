@@ -105,7 +105,7 @@ fn setup_logger(
             .read(true)
             .create(true)
             .truncate(true)
-            .open(&file)?;
+            .open(file)?;
 
         // TODO: Support 'text' log format.
         let (logger_local, logger_async_guard_local) =
