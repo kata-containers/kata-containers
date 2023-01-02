@@ -78,6 +78,7 @@ impl Namespace {
     // setup creates persistent namespace without switching to it.
     // Note, pid namespaces cannot be persisted.
     #[instrument]
+    #[allow(clippy::question_mark)]
     pub async fn setup(mut self) -> Result<Self> {
         fs::create_dir_all(&self.persistent_ns_dir)?;
 
