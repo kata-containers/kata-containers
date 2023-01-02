@@ -145,7 +145,7 @@ pub fn reflink_copy<S: AsRef<Path>, D: AsRef<Path>>(src: S, dst: D) -> Result<()
 // Copy file using cp command, which handles sparse file copy.
 fn do_regular_copy(src: &str, dst: &str) -> Result<()> {
     let mut cmd = Command::new("/bin/cp");
-    cmd.args(&["--sparse=auto", src, dst]);
+    cmd.args(["--sparse=auto", src, dst]);
 
     match cmd.output() {
         Ok(output) => match output.status.success() {

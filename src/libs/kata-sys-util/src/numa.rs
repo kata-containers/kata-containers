@@ -37,9 +37,9 @@ pub type Result<T> = std::result::Result<T, Error>;
 lazy_static! {
     static ref SYS_FS_PREFIX: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test/texture");
     // numa node file for UT, we can mock data
-    static ref NUMA_NODE_PATH: PathBuf = (&*SYS_FS_PREFIX).join("sys/devices/system/node");
+    static ref NUMA_NODE_PATH: PathBuf = (*SYS_FS_PREFIX).join("sys/devices/system/node");
     // sysfs directory for CPU devices
-    static ref NUMA_CPU_PATH: PathBuf = (&*SYS_FS_PREFIX).join("sys/devices/system/cpu");
+    static ref NUMA_CPU_PATH: PathBuf = (*SYS_FS_PREFIX).join("sys/devices/system/cpu");
 }
 
 // global config in release
