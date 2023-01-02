@@ -820,11 +820,11 @@ mod tests {
         let tmpdir2 = tempfile::tempdir().unwrap();
 
         assert!(matches!(
-            bind_remount(&PathBuf::from(""), true),
+            bind_remount(PathBuf::from(""), true),
             Err(Error::NullMountPointPath)
         ));
         assert!(matches!(
-            bind_remount(&PathBuf::from("../______doesn't____exist____nnn"), true),
+            bind_remount(PathBuf::from("../______doesn't____exist____nnn"), true),
             Err(Error::InvalidPath(_))
         ));
 
@@ -1066,7 +1066,7 @@ mod tests {
         .unwrap_err();
 
         let src = path.join("src");
-        fs::write(&src, "test").unwrap();
+        fs::write(src, "test").unwrap();
         let dst = path.join("dst");
         fs::write(&dst, "test1").unwrap();
         mount_at(
