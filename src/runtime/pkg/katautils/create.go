@@ -162,6 +162,21 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 	ociSpec.Annotations["nerdctl/network-namespace"] = sandboxConfig.NetworkConfig.NetworkID
 	sandboxConfig.Annotations["nerdctl/network-namespace"] = ociSpec.Annotations["nerdctl/network-namespace"]
 
+	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig)
+	if err != nil {
+		return nil, vc.Process{}, err
+	}
+
+	hid, err := sandbox.GetHypervisorPid()
+	if err != nil {
+		return nil, vc.Process{}, err
+	}
+	ctx = context.WithValue(ctx, "hypervisor-pid", hid)
+
+	sid := sandbox.ID()
+	kataUtilsLogger = kataUtilsLogger.WithField("sandbox", sid)
+	katatrace.AddTags(span, "sandbox_id", sid)
+
 	// Run pre-start OCI hooks, in the runtime namespace.
 	if err := PreStartHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
 		return nil, vc.Process{}, err
@@ -171,15 +186,6 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 	if err := CreateRuntimeHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
 		return nil, vc.Process{}, err
 	}
-
-	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig)
-	if err != nil {
-		return nil, vc.Process{}, err
-	}
-
-	sid := sandbox.ID()
-	kataUtilsLogger = kataUtilsLogger.WithField("sandbox", sid)
-	katatrace.AddTags(span, "sandbox_id", sid)
 
 	containers := sandbox.GetAllContainers()
 	if len(containers) != 1 {
@@ -254,6 +260,12 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 	if err != nil {
 		return vc.Process{}, err
 	}
+
+	hid, err := sandbox.GetHypervisorPid()
+	if err != nil {
+		return vc.Process{}, err
+	}
+	ctx = context.WithValue(ctx, HypervisorPidKey{}, hid)
 
 	// Run pre-start OCI hooks.
 	err = EnterNetNS(sandbox.GetNetNs(), func() error {
