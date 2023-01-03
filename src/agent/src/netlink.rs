@@ -7,7 +7,7 @@ use anyhow::{anyhow, Context, Result};
 use futures::{future, StreamExt, TryStreamExt};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use nix::errno::Errno;
-use protocols::types::{ARPNeighbor, IPAddress, IPFamily, Interface, Route};
+use protocols::types::{ARPNeighbor, IPAddress, IPFamily, Interface, Route, Rule};
 use rtnetlink::{new_connection, packet, IpVersion};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
@@ -159,6 +159,26 @@ impl Handle {
         Ok(())
     }
 
+    pub async fn update_rules<I>(&mut self, list: I) -> Result<()>
+    where
+        I: IntoIterator<Item = Rule>,
+    {
+        let old_rules = self
+            .query_rules()
+            .await
+            .with_context(|| "Failed to query old rules")?;
+
+        self.delete_rules(old_rules)
+            .await
+            .with_context(|| "Failed to delete old rules")?;
+
+        self.add_rules(list)
+            .await
+            .with_context(|| "Failed to add new rules")?;
+
+        Ok(())
+    }
+
     /// Retireve available network interfaces.
     pub async fn list_interfaces(&self) -> Result<Vec<Interface>> {
         let mut list = Vec::new();
@@ -281,6 +301,30 @@ impl Handle {
         };
 
         Ok(list)
+    }
+
+    async fn query_rules(&self) -> Result<Vec<packet::RuleMessage>> {
+        // These queries must be executed sequentially, otherwise
+        // it'll throw "Device or resource busy (os error 16)"
+        let rules4 = self
+            .handle
+            .rule()
+            .get(IpVersion::V4)
+            .execute()
+            .try_collect::<Vec<_>>()
+            .await
+            .with_context(|| "Failed to query IP v4 rules")?;
+
+        let rules6 = self
+            .handle
+            .rule()
+            .get(IpVersion::V6)
+            .execute()
+            .try_collect::<Vec<_>>()
+            .await
+            .with_context(|| "Failed to query IP v6 rules")?;
+
+        Ok([rules4, rules6].concat())
     }
 
     pub async fn list_routes(&self) -> Result<Vec<Route>> {
@@ -450,6 +494,162 @@ impl Handle {
         Ok(())
     }
 
+    async fn add_rules<I>(&mut self, list: I) -> Result<()>
+    where
+        I: IntoIterator<Item = Rule>,
+    {
+        // Import rtnetlink::packet::nlas::rule::Nal objects that make sense only for this function
+        use packet::nlas::rule::Nla;
+
+        for rule in list {
+            let mut request = self
+                .handle
+                .rule()
+                .add()
+                .action(packet::constants::RTN_UNICAST);
+
+            if rule.priority >= 0 {
+                request
+                    .message_mut()
+                    .nlas
+                    .push(Nla::Priority(rule.priority as u32));
+            }
+
+            // The default value of mark is -1
+            if rule.mark >= 0 {
+                request
+                    .message_mut()
+                    .nlas
+                    .push(Nla::FwMark(rule.mark as u32));
+            }
+
+            // The default value of mask is -1
+            if rule.mask >= 0 {
+                request
+                    .message_mut()
+                    .nlas
+                    .push(Nla::FwMask(rule.mask as u32));
+            }
+
+            // The default value of goto is -1
+            if rule.goto >= 0 {
+                request = request.action(packet::constants::FR_ACT_GOTO);
+                request.message_mut().nlas.push(Nla::Goto(rule.goto as u32));
+            }
+
+            // The default value of flow is -1
+            if rule.flow >= 0 {
+                request.message_mut().nlas.push(Nla::Flow(rule.flow as u32));
+            }
+
+            // If Nla::Table value is set, request.table(value) will be overrided.
+            if rule.table >= 256 {
+                request
+                    .message_mut()
+                    .nlas
+                    .push(Nla::Table(rule.table as u32));
+            }
+
+            // The default value of suppressPrefixlen and suppressIfgroup is -1
+            if rule.table > 0 {
+                if rule.suppressPrefixlen >= 0 {
+                    request
+                        .message_mut()
+                        .nlas
+                        .push(Nla::SuppressPrefixLen(rule.suppressPrefixlen as u32));
+                }
+                if rule.suppressIfgroup >= 0 {
+                    request
+                        .message_mut()
+                        .nlas
+                        .push(Nla::SuppressIfGroup(rule.suppressIfgroup as u32));
+                }
+            }
+
+            let table = if rule.table > 0 && rule.table < 256 {
+                rule.table as u8
+            } else {
+                packet::constants::RT_TABLE_UNSPEC
+            };
+
+            // table will be override by Nla::Table
+            request = request.table(table);
+            match rule.get_family() {
+                IPFamily::v6 => {
+                    let mut request = request.v6();
+
+                    if !rule.src.is_empty() {
+                        let network = Ipv6Network::from_str(&rule.src)?;
+                        if network.prefix() > 0 {
+                            request = request.source_prefix(network.ip(), network.prefix());
+                        } else {
+                            request
+                                .message_mut()
+                                .nlas
+                                .push(Nla::Source(network.ip().octets().to_vec()));
+                        }
+                    }
+
+                    request
+                        .execute()
+                        .await
+                        .or_else(|e| match e {
+                            rtnetlink::Error::NetlinkError(message)
+                                if Errno::from_i32(message.code.abs()) != Errno::EEXIST =>
+                            {
+                                Err(message)
+                            }
+                            _ => Ok(()),
+                        })
+                        .map_err(|message| {
+                            anyhow!(
+                                "Failed to add IP v6 rule (src: {} table: {} Err: {})",
+                                rule.get_src(),
+                                rule.get_table(),
+                                message
+                            )
+                        })?;
+                }
+                IPFamily::v4 => {
+                    let mut request = request.v4();
+                    if !rule.src.is_empty() {
+                        let network = Ipv4Network::from_str(&rule.src)?;
+                        if network.prefix() > 0 {
+                            request = request.source_prefix(network.ip(), network.prefix());
+                        } else {
+                            request
+                                .message_mut()
+                                .nlas
+                                .push(Nla::Source(network.ip().octets().to_vec()));
+                        }
+                    }
+
+                    request
+                        .execute()
+                        .await
+                        .or_else(|e| match e {
+                            rtnetlink::Error::NetlinkError(message)
+                                if Errno::from_i32(message.code.abs()) != Errno::EEXIST =>
+                            {
+                                Err(message)
+                            }
+                            _ => Ok(()),
+                        })
+                        .map_err(|message| {
+                            anyhow!(
+                                "Failed to add IP v4 rule (src: {} table: {} Err: {})",
+                                rule.get_src(),
+                                rule.get_table(),
+                                message
+                            )
+                        })?;
+                }
+            };
+        }
+
+        Ok(())
+    }
+
     async fn delete_routes<I>(&mut self, routes: I) -> Result<()>
     where
         I: IntoIterator<Item = packet::RouteMessage>,
@@ -473,6 +673,17 @@ impl Handle {
             }
 
             self.handle.route().del(route).execute().await?;
+        }
+
+        Ok(())
+    }
+
+    async fn delete_rules<I>(&mut self, rules: I) -> Result<()>
+    where
+        I: IntoIterator<Item = packet::RuleMessage>,
+    {
+        for rule in rules.into_iter() {
+            self.handle.rule().del(rule).execute().await?;
         }
 
         Ok(())

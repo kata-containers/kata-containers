@@ -20,10 +20,10 @@ pub use types::{
     GetIPTablesResponse, GuestDetailsResponse, HealthCheckResponse, IPAddress, IPFamily, Interface,
     Interfaces, ListProcessesRequest, MemHotplugByProbeRequest, MetricsResponse,
     OnlineCPUMemRequest, OomEventResponse, ReadStreamRequest, ReadStreamResponse,
-    RemoveContainerRequest, ReseedRandomDevRequest, ResizeVolumeRequest, Route, Routes,
+    RemoveContainerRequest, ReseedRandomDevRequest, ResizeVolumeRequest, Route, Routes, Rule, Rules,
     SetGuestDateTimeRequest, SetIPTablesRequest, SetIPTablesResponse, SignalProcessRequest,
     StatsContainerResponse, Storage, TtyWinResizeRequest, UpdateContainerRequest,
-    UpdateInterfaceRequest, UpdateRoutesRequest, VersionCheckResponse, VolumeStatsRequest,
+    UpdateInterfaceRequest, UpdateRoutesRequest, UpdateRulesRequest, VersionCheckResponse, VolumeStatsRequest,
     VolumeStatsResponse, WaitProcessRequest, WaitProcessResponse, WriteStreamRequest,
     WriteStreamResponse,
 };
@@ -63,6 +63,7 @@ pub trait Agent: AgentManager + HealthService + Send + Sync {
     async fn list_routes(&self, req: Empty) -> Result<Routes>;
     async fn update_interface(&self, req: UpdateInterfaceRequest) -> Result<Interface>;
     async fn update_routes(&self, req: UpdateRoutesRequest) -> Result<Routes>;
+    async fn update_rules(&self, req: UpdateRulesRequest) -> Result<Rules>;
 
     // container
     async fn create_container(&self, req: CreateContainerRequest) -> Result<Empty>;

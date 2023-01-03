@@ -65,3 +65,17 @@ message ARPNeighbor {
 	int32 state = 4;
 	int32 flags = 5;
 }
+
+
+message Rule {
+    string src = 1;
+    int64 suppressIfgroup = 2;
+    int64 suppressPrefixlen = 3;
+    int64 mark = 4;
+    int64 mask = 5;
+    int64 goto = 6;
+    int64 flow = 7;
+    IPFamily family = 8;
+    int64 priority = 9;
+    int64 table = 10;
+}

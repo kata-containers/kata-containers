@@ -109,6 +109,25 @@ pub struct Routes {
     pub routes: Vec<Route>,
 }
 
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone, Default)]
+pub struct Rule {
+    pub src: String,
+    pub suppress_if_group: i64,
+    pub suppress_prefix_len: i64,
+    pub mark: i64,
+    pub mask: i64,
+    pub goto: i64,
+    pub flow: i64,
+    pub family: IPFamily,
+    pub priority: i64,
+    pub table: i64,
+}
+
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone, Default)]
+pub struct Rules {
+    pub rules: Vec<Rule>,
+}
+
 #[derive(PartialEq, Clone, Default)]
 pub struct CreateContainerRequest {
     pub process_id: ContainerProcessID,
@@ -387,6 +406,11 @@ pub struct UpdateInterfaceRequest {
 #[derive(PartialEq, Clone, Default, Debug)]
 pub struct UpdateRoutesRequest {
     pub route: Option<Routes>,
+}
+
+#[derive(PartialEq, Eq, Clone, Default, Debug)]
+pub struct UpdateRulesRequest {
+    pub rules: Option<Rules>,
 }
 
 #[derive(Deserialize, PartialEq, Clone, Default, Debug)]

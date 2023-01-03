@@ -26,7 +26,7 @@ use oci::{LinuxNamespace, Root, Spec};
 use protobuf::{MessageDyn, MessageField};
 use protocols::agent::{
     AddSwapRequest, AgentDetails, CopyFileRequest, GetIPTablesRequest, GetIPTablesResponse,
-    GuestDetailsResponse, Interfaces, Metrics, OOMEvent, ReadStreamResponse, Routes,
+    GuestDetailsResponse, Interfaces, Metrics, OOMEvent, ReadStreamResponse, Routes, Rules,
     SetIPTablesRequest, SetIPTablesResponse, StatsContainerResponse, VolumeStatsRequest,
     WaitProcessResponse, WriteStreamResponse,
 };
@@ -974,6 +974,43 @@ impl agent_ttrpc::AgentService for AgentService {
             .await
             .map_ttrpc_err(|e| format!("Failed to update mounts: {:?}", e))?;
         Ok(Empty::new())
+    }
+
+    async fn update_rules(
+        &self,
+        ctx: &TtrpcContext,
+        req: protocols::agent::UpdateRulesRequest,
+    ) -> ttrpc::Result<Rules> {
+        trace_rpc_call!(ctx, "update_rules", req);
+        is_allowed!(req);
+
+        let new_rules = req
+            .rules
+            .into_option()
+            .map(|r| r.rules.into_vec())
+            .ok_or_else(|| {
+                ttrpc_error!(
+                    ttrpc::Code::INVALID_ARGUMENT,
+                    "empty update rules request".to_string(),
+                )
+            })?;
+
+        let mut sandbox = self.sandbox.lock().await;
+        sandbox
+            .rtnl
+            .update_rules(new_rules.clone())
+            .await
+            .map_err(|e| {
+                ttrpc_error!(
+                    ttrpc::Code::INTERNAL,
+                    format!("Failed to update rules: {:?}", e),
+                )
+            })?;
+
+        Ok(protocols::agent::Rules {
+            rules: RepeatedField::from_vec(new_rules),
+            ..Default::default()
+        })
     }
 
     async fn get_ip_tables(

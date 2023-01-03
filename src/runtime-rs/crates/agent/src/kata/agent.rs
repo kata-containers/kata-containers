@@ -110,6 +110,7 @@ impl_agent!(
     tty_win_resize | crate::TtyWinResizeRequest | crate::Empty | None,
     update_interface | crate::UpdateInterfaceRequest | crate::Interface | None,
     update_routes | crate::UpdateRoutesRequest | crate::Routes | None,
+    update_rules | crate::UpdateRulesRequest | crate::Rules | None,
     add_arp_neighbors | crate::AddArpNeighborRequest | crate::Empty | None,
     list_interfaces | crate::Empty | crate::Interfaces | None,
     list_routes | crate::Empty | crate::Routes | None,

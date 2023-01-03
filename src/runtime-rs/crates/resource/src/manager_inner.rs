@@ -204,6 +204,20 @@ impl ResourceManagerInner {
         Ok(())
     }
 
+    async fn handle_rules(&self, network: &dyn Network) -> Result<()> {
+        let rules = network.rules().await.context("rules")?;
+        if !rules.is_empty() {
+            info!(sl!(), "update rules {:?}", rules);
+            self.agent
+                .update_rules(agent::UpdateRulesRequest {
+                    rules: Some(agent::Rules { rules }),
+                })
+                .await
+                .context("update rules")?;
+        }
+        Ok(())
+    }
+
     pub async fn setup_after_start_vm(&mut self) -> Result<()> {
         if let Some(share_fs) = self.share_fs.as_ref() {
             share_fs
@@ -221,6 +235,7 @@ impl ResourceManagerInner {
                 .await
                 .context("handle neighbors")?;
             self.handle_routes(network).await.context("handle routes")?;
+            self.handle_rules(network).await.context("handle rules")?;
         }
         Ok(())
     }

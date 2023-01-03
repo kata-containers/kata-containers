@@ -50,11 +50,13 @@ service AgentService {
 	// networking
 	rpc UpdateInterface(UpdateInterfaceRequest) returns (types.Interface);
 	rpc UpdateRoutes(UpdateRoutesRequest) returns (Routes);
+	rpc UpdateRules(UpdateRulesRequest) returns (Rules);
 	rpc ListInterfaces(ListInterfacesRequest) returns(Interfaces);
 	rpc ListRoutes(ListRoutesRequest) returns (Routes);
 	rpc AddARPNeighbors(AddARPNeighborsRequest) returns (google.protobuf.Empty);
 	rpc GetIPTables(GetIPTablesRequest) returns (GetIPTablesResponse);
 	rpc SetIPTables(SetIPTablesRequest) returns (SetIPTablesResponse);
+	
 
 	// observability
 	rpc GetMetrics(GetMetricsRequest) returns (Metrics);
@@ -359,6 +361,14 @@ message SetIPTablesRequest {
 message SetIPTablesResponse{
         // raw stdout from iptables-restore or ip6tables-restore
         bytes data = 1;
+}
+
+message Rules {
+    repeated types.Rule rules = 1;
+}
+
+message UpdateRulesRequest {
+    Rules rules = 1;
 }
 
 message OnlineCPUMemRequest {

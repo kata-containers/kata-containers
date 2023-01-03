@@ -43,6 +43,7 @@ pub trait Network: Send + Sync {
     async fn neighs(&self) -> Result<Vec<agent::ARPNeighbor>>;
     async fn save(&self) -> Option<Vec<EndpointState>>;
     async fn remove(&self, h: &dyn Hypervisor) -> Result<()>;
+    async fn rules(&self) -> Result<Vec<agent::Rule>>;
 }
 
 pub async fn new(

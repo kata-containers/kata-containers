@@ -27,10 +27,11 @@ use super::{
     },
     network_entity::NetworkEntity,
     network_info::network_info_from_link::{handle_addresses, NetworkInfoFromLink},
-    utils::{link, netns},
+    utils::{link, netns, policy_rule::NetworkRule},
     Network,
 };
 use crate::network::NetworkInfo;
+use agent::Rule;
 
 #[derive(Debug)]
 pub struct NetworkWithNetNsConfig {
@@ -44,29 +45,38 @@ struct NetworkWithNetnsInner {
     netns_path: String,
     entity_list: Vec<NetworkEntity>,
     network_created: bool,
+    rules: Vec<Rule>,
 }
 
 impl NetworkWithNetnsInner {
     async fn new(config: &NetworkWithNetNsConfig, d: Arc<RwLock<DeviceManager>>) -> Result<Self> {
-        let entity_list = if config.netns_path.is_empty() {
+        let (entity_list, rules) = if config.netns_path.is_empty() {
             warn!(sl!(), "Skip to scan network for empty netns");
-            vec![]
+            (vec![], vec![])
         } else if config.network_model.as_str() == "none" {
             warn!(
                 sl!(),
                 "Skip to scan network from netns due to the none network model"
             );
-            vec![]
+            (vec![], vec![])
         } else {
-            // get endpoint
-            get_entity_from_netns(config, d)
-                .await
-                .context("get entity from netns")?
+            (
+                // get endpoint
+                get_entity_from_netns(config)
+                    .await
+                    .context("get entity from netns")?,
+                // get rule list
+                get_rules_from_netns(config)
+                    .await
+                    .context("get rules from netns")?,
+            )
         };
+
         Ok(Self {
             netns_path: config.netns_path.to_string(),
             entity_list,
             network_created: config.network_created,
+            rules,
         })
     }
 }
@@ -156,6 +166,33 @@ impl Network for NetworkWithNetns {
         fs::remove_dir_all(inner.netns_path.clone()).context("failed to remove netns path")?;
         Ok(())
     }
+    async fn rules(&self) -> Result<Vec<agent::Rule>> {
+        let inner = self.inner.read().await;
+        Ok(inner.rules.clone())
+    }
+}
+
+async fn get_rules_from_netns(config: &NetworkWithNetNsConfig) -> Result<Vec<Rule>> {
+    info!(
+        sl!(),
+        "get network rule list for config {:?} tid {:?}",
+        config,
+        nix::unistd::gettid()
+    );
+
+    let _netns_guard = netns::NetnsGuard::new(&config.netns_path).context("net netns guard")?;
+
+    let (connection, handle, _) = rtnetlink::new_connection().context("new connection")?;
+    let thread_handler = tokio::spawn(connection);
+    defer!({
+        thread_handler.abort();
+    });
+
+    let network_rule = NetworkRule::new(&handle)
+        .await
+        .context("new network rule from netns")?;
+
+    Ok(network_rule.rules)
 }
 
 async fn get_entity_from_netns(

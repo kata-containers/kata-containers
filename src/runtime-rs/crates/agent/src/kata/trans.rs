@@ -21,10 +21,10 @@ use crate::{
         IPFamily, Interface, Interfaces, KernelModule, MemHotplugByProbeRequest, MemoryData,
         MemoryStats, MetricsResponse, NetworkStats, OnlineCPUMemRequest, PidsStats,
         ReadStreamRequest, ReadStreamResponse, RemoveContainerRequest, ReseedRandomDevRequest,
-        ResizeVolumeRequest, Route, Routes, SetGuestDateTimeRequest, SetIPTablesRequest,
+        ResizeVolumeRequest, Route, Routes, Rule, Rules, SetGuestDateTimeRequest, SetIPTablesRequest,
         SetIPTablesResponse, SignalProcessRequest, StatsContainerResponse, Storage, StringUser,
         ThrottlingData, TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest,
-        UpdateRoutesRequest, VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse,
+        UpdateRoutesRequest, UpdateRulesRequest, VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse,
         WaitProcessRequest, WriteStreamRequest,
     },
     OomEventResponse, WaitProcessResponse, WriteStreamResponse,
@@ -246,6 +246,60 @@ impl From<agent::Routes> for Routes {
     fn from(src: agent::Routes) -> Self {
         Self {
             routes: trans_vec(src.Routes),
+        }
+    }
+}
+
+impl From<Rule> for types::Rule {
+    fn from(from: Rule) -> Self {
+        Self {
+            src: from.src,
+            suppressIfgroup: from.suppress_if_group,
+            suppressPrefixlen: from.suppress_prefix_len,
+            mark: from.mark,
+            mask: from.mask,
+            goto: from.goto,
+            flow: from.flow,
+            family: from.family.into(),
+            priority: from.priority,
+            table: from.table,
+            unknown_fields: Default::default(),
+            cached_size: Default::default(),
+        }
+    }
+}
+
+impl From<types::Rule> for Rule {
+    fn from(from: types::Rule) -> Self {
+        Self {
+            src: from.src,
+            suppress_if_group: from.suppressIfgroup,
+            suppress_prefix_len: from.suppressPrefixlen,
+            mark: from.mark,
+            mask: from.mask,
+            goto: from.goto,
+            flow: from.flow,
+            family: from.family.into(),
+            priority: from.priority,
+            table: from.table,
+        }
+    }
+}
+
+impl From<Rules> for agent::Rules {
+    fn from(from: Rules) -> Self {
+        Self {
+            rules: from_vec(from.rules),
+            unknown_fields: Default::default(),
+            cached_size: Default::default(),
+        }
+    }
+}
+
+impl From<agent::Rules> for Rules {
+    fn from(src: agent::Rules) -> Self {
+        Self {
+            rules: into_vec(src.rules),
         }
     }
 }
@@ -604,6 +658,16 @@ impl From<UpdateRoutesRequest> for agent::UpdateRoutesRequest {
         Self {
             routes: from_option(from.route),
             ..Default::default()
+        }
+    }
+}
+
+impl From<UpdateRulesRequest> for agent::UpdateRulesRequest {
+    fn from(from: UpdateRulesRequest) -> Self {
+        Self {
+            rules: from_option(from.rules),
+            unknown_fields: Default::default(),
+            cached_size: Default::default(),
         }
     }
 }
