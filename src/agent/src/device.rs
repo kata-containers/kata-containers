@@ -414,7 +414,7 @@ fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
 
     // Scan scsi host passing in the channel, SCSI id and LUN.
     // Channel is always 0 because we have only one SCSI controller.
-    let scan_data = format!("0 {} {}", tokens[0], tokens[1]);
+    let scan_data = &format!("0 {} {}", tokens[0], tokens[1]);
 
     for entry in fs::read_dir(SYSFS_SCSI_HOST_PATH)? {
         let host = entry?.file_name();
@@ -428,7 +428,7 @@ fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
 
         let scan_path = PathBuf::from(&format!("{}/{}/{}", SYSFS_SCSI_HOST_PATH, host_str, "scan"));
 
-        fs::write(scan_path, &scan_data)?;
+        fs::write(scan_path, scan_data)?;
     }
 
     Ok(())
@@ -1533,7 +1533,7 @@ mod tests {
         pci_driver_override(syspci, dev0, "drv_b").unwrap();
         assert_eq!(fs::read_to_string(&dev0override).unwrap(), "drv_b");
         assert_eq!(fs::read_to_string(&probepath).unwrap(), dev0.to_string());
-        assert_eq!(fs::read_to_string(&drvaunbind).unwrap(), dev0.to_string());
+        assert_eq!(fs::read_to_string(drvaunbind).unwrap(), dev0.to_string());
     }
 
     #[test]
@@ -1545,7 +1545,7 @@ mod tests {
         let dev0 = pci::Address::new(0, 0, pci::SlotFn::new(0, 0).unwrap());
         let dev0path = syspci.join("devices").join(dev0.to_string());
 
-        fs::create_dir_all(&dev0path).unwrap();
+        fs::create_dir_all(dev0path).unwrap();
 
         // Test dev0
         assert!(pci_iommu_group(&syspci, dev0).unwrap().is_none());
@@ -1556,7 +1556,7 @@ mod tests {
         let dev1group = dev1path.join("iommu_group");
 
         fs::create_dir_all(&dev1path).unwrap();
-        std::os::unix::fs::symlink("../../../kernel/iommu_groups/12", &dev1group).unwrap();
+        std::os::unix::fs::symlink("../../../kernel/iommu_groups/12", dev1group).unwrap();
 
         // Test dev1
         assert_eq!(
@@ -1569,7 +1569,7 @@ mod tests {
         let dev2path = syspci.join("devices").join(dev2.to_string());
         let dev2group = dev2path.join("iommu_group");
 
-        fs::create_dir_all(&dev2group).unwrap();
+        fs::create_dir_all(dev2group).unwrap();
 
         // Test dev2
         assert!(pci_iommu_group(&syspci, dev2).is_err());

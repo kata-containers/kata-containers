@@ -17,7 +17,7 @@ fn replace_text_in_file(file_name: &str, from: &str, to: &str) -> Result<(), std
 
     let new_contents = contents.replace(from, to);
 
-    let mut dst = File::create(&file_name)?;
+    let mut dst = File::create(file_name)?;
     dst.write_all(new_contents.as_bytes())?;
 
     Ok(())
@@ -67,7 +67,7 @@ fn handle_file(autogen_comment: &str, rust_filename: &str) -> Result<(), std::io
 
         let pattern = "//! Generated file from";
 
-        if line.starts_with(&pattern) {
+        if line.starts_with(pattern) {
             new_contents.push(autogen_comment.into());
         }
 
@@ -76,14 +76,14 @@ fn handle_file(autogen_comment: &str, rust_filename: &str) -> Result<(), std::io
         // Although we've requested serde support via `Customize`, to
         // allow the `kata-agent-ctl` tool to partially deserialise structures
         // specified in JSON, we need this bit of additional magic.
-        if line.starts_with(&struct_pattern) {
+        if line.starts_with(struct_pattern) {
             new_contents.insert(new_contents.len() - 1, serde_default_code.trim().into());
         }
     }
 
     let data = new_contents.join("\n");
 
-    let mut dst = File::create(&rust_filename)?;
+    let mut dst = File::create(rust_filename)?;
 
     dst.write_all(data.as_bytes())?;
 

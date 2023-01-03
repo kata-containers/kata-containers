@@ -98,7 +98,7 @@ impl DragonballInner {
         };
 
         for tid in self.vmm_instance.get_vcpu_tids() {
-            vcpu_thread_ids.vcpus.insert(tid.0 as u32, tid.1 as u32);
+            vcpu_thread_ids.vcpus.insert(tid.0 as u32, tid.1);
         }
         info!(sl!(), "get thread ids {:?}", vcpu_thread_ids);
         Ok(vcpu_thread_ids)

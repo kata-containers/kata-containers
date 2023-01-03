@@ -592,7 +592,7 @@ fn compact_lowerdir_option(opts: &[String]) -> (Option<PathBuf>, Vec<String>) {
         }
     };
 
-    let idx = idx as usize;
+    let idx = idx;
     let common_dir = match get_longest_common_prefix(&lower_opts) {
         None => return (None, n_opts),
         Some(v) => {
@@ -620,7 +620,7 @@ fn compact_lowerdir_option(opts: &[String]) -> (Option<PathBuf>, Vec<String>) {
         .iter()
         .map(|c| c.replace(&common_prefix, ""))
         .collect();
-    n_opts[idx as usize] = format!("lowerdir={}", lower.join(":"));
+    n_opts[idx] = format!("lowerdir={}", lower.join(":"));
 
     (Some(common_dir), n_opts)
 }
@@ -820,11 +820,11 @@ mod tests {
         let tmpdir2 = tempfile::tempdir().unwrap();
 
         assert!(matches!(
-            bind_remount(&PathBuf::from(""), true),
+            bind_remount(PathBuf::from(""), true),
             Err(Error::NullMountPointPath)
         ));
         assert!(matches!(
-            bind_remount(&PathBuf::from("../______doesn't____exist____nnn"), true),
+            bind_remount(PathBuf::from("../______doesn't____exist____nnn"), true),
             Err(Error::InvalidPath(_))
         ));
 
@@ -1066,7 +1066,7 @@ mod tests {
         .unwrap_err();
 
         let src = path.join("src");
-        fs::write(&src, "test").unwrap();
+        fs::write(src, "test").unwrap();
         let dst = path.join("dst");
         fs::write(&dst, "test1").unwrap();
         mount_at(

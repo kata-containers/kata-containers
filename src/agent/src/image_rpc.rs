@@ -156,7 +156,7 @@ impl ImageService {
         }
 
         info!(sl!(), "use guest pause image cid {:?}", cid);
-        let pause_bundle = Path::new(CONTAINER_BASE).join(&cid);
+        let pause_bundle = Path::new(CONTAINER_BASE).join(cid);
         let pause_rootfs = pause_bundle.join("rootfs");
         let pause_config = pause_bundle.join(CONFIG_JSON);
         let pause_binary = pause_rootfs.join("pause");
@@ -263,7 +263,8 @@ impl ImageService {
         if Path::new(SKOPEO_PATH).exists() {
             // Read the policy path from the agent config
             let config_policy_path = &AGENT_CONFIG.read().await.container_policy_path;
-            let policy_path = (!config_policy_path.is_empty()).then(|| config_policy_path.as_str());
+            let policy_path =
+                (!config_policy_path.is_empty()).then_some(config_policy_path.as_str());
             Self::pull_image_from_registry(image, &cid, source_creds, policy_path, aa_kbc_params)?;
             Self::unpack_image(&cid)?;
         } else {

@@ -96,14 +96,14 @@ impl Vcpu {
         if let Some(start_addr) = kernel_start_addr {
             dbs_arch::regs::setup_regs(
                 &self.fd,
-                start_addr.raw_value() as u64,
+                start_addr.raw_value(),
                 dbs_boot::layout::BOOT_STACK_POINTER,
                 dbs_boot::layout::BOOT_STACK_POINTER,
                 dbs_boot::layout::ZERO_PAGE_START,
             )
             .map_err(VcpuError::REGSConfiguration)?;
             dbs_arch::regs::setup_fpu(&self.fd).map_err(VcpuError::FPUConfiguration)?;
-            let gdt_table: [u64; dbs_boot::layout::BOOT_GDT_MAX as usize] = [
+            let gdt_table: [u64; dbs_boot::layout::BOOT_GDT_MAX] = [
                 gdt_entry(0, 0, 0),            // NULL
                 gdt_entry(0xa09b, 0, 0xfffff), // CODE
                 gdt_entry(0xc093, 0, 0xfffff), // DATA
@@ -129,7 +129,7 @@ impl Vcpu {
     fn set_cpuid(&mut self, vcpu_config: &VcpuConfig) -> Result<()> {
         let cpuid_vm_spec = VmSpec::new(
             self.id,
-            vcpu_config.max_vcpu_count as u8,
+            vcpu_config.max_vcpu_count,
             vcpu_config.threads_per_core,
             vcpu_config.cores_per_die,
             vcpu_config.dies_per_socket,
