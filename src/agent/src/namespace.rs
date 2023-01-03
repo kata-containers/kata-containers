@@ -78,6 +78,7 @@ impl Namespace {
     // setup creates persistent namespace without switching to it.
     // Note, pid namespaces cannot be persisted.
     #[instrument]
+    #[allow(clippy::question_mark)]
     pub async fn setup(mut self) -> Result<Self> {
         fs::create_dir_all(&self.persistent_ns_dir)?;
 
@@ -88,7 +89,7 @@ impl Namespace {
         }
         let logger = self.logger.clone();
 
-        let new_ns_path = ns_path.join(&ns_type.get());
+        let new_ns_path = ns_path.join(ns_type.get());
 
         File::create(new_ns_path.as_path())?;
 
@@ -102,7 +103,7 @@ impl Namespace {
                 let source = Path::new(&origin_ns_path);
                 let destination = new_ns_path.as_path();
 
-                File::open(&source)?;
+                File::open(source)?;
 
                 // Create a new netns on the current thread.
                 let cf = ns_type.get_flags();

@@ -11,6 +11,7 @@ use netlink_packet_route::{
 
 use super::{Link, LinkAttrs};
 
+#[allow(clippy::box_default)]
 pub fn get_link_from_message(mut msg: LinkMessage) -> Box<dyn Link> {
     let mut base = LinkAttrs {
         index: msg.header.index,
@@ -83,6 +84,7 @@ pub fn get_link_from_message(mut msg: LinkMessage) -> Box<dyn Link> {
     ret
 }
 
+#[allow(clippy::box_default)]
 fn link_info(mut infos: Vec<Info>) -> Box<dyn Link> {
     let mut link: Option<Box<dyn Link>> = None;
     while let Some(info) = infos.pop() {

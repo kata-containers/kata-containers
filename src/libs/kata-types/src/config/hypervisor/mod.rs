@@ -1133,7 +1133,7 @@ mod tests {
                 },
                 output: CpuInfo {
                     cpu_features: "".to_string(),
-                    default_vcpus: default_vcpus as i32,
+                    default_vcpus,
                     default_maxvcpus: node_cpus,
                 },
             },

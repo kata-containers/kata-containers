@@ -63,7 +63,7 @@ pub fn get_unknown_syscalls(scmp: &LinuxSeccomp) -> Option<Vec<String>> {
 // init_seccomp creates a seccomp filter and loads it for the current process
 // including all the child processes.
 pub fn init_seccomp(scmp: &LinuxSeccomp) -> Result<()> {
-    let def_action = ScmpAction::from_str(scmp.default_action.as_str(), Some(libc::EPERM as i32))?;
+    let def_action = ScmpAction::from_str(scmp.default_action.as_str(), Some(libc::EPERM))?;
 
     // Create a new filter context
     let mut filter = ScmpFilterContext::new_filter(def_action)?;

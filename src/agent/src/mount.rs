@@ -648,7 +648,7 @@ pub fn recursive_ownership_change(
 ) -> Result<()> {
     let mut mask = if read_only { RO_MASK } else { RW_MASK };
     if path.is_dir() {
-        for entry in fs::read_dir(&path)? {
+        for entry in fs::read_dir(path)? {
             recursive_ownership_change(entry?.path().as_path(), uid, gid, read_only)?;
         }
         mask |= EXEC_MASK;
@@ -894,7 +894,7 @@ pub fn get_cgroup_mounts(
         }]);
     }
 
-    let file = File::open(&cg_path)?;
+    let file = File::open(cg_path)?;
     let reader = BufReader::new(file);
 
     let mut has_device_cgroup = false;
@@ -1777,7 +1777,7 @@ mod tests {
             let tempdir = tempdir().unwrap();
 
             let src = if d.mask_src {
-                tempdir.path().join(&d.src)
+                tempdir.path().join(d.src)
             } else {
                 Path::new(d.src).to_path_buf()
             };

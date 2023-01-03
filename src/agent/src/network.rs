@@ -64,7 +64,7 @@ fn do_setup_guest_dns(logger: Logger, dns_list: Vec<String>, src: &str, dst: &st
         .map(|x| x.trim())
         .collect::<Vec<&str>>()
         .join("\n");
-    fs::write(src, &content)?;
+    fs::write(src, content)?;
 
     // bind mount to /etc/resolv.conf
     mount::mount(Some(src), dst, Some("bind"), MsFlags::MS_BIND, None::<&str>)
