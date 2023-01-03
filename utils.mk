@@ -169,6 +169,7 @@ ifneq ($(HOST_ARCH),$(ARCH))
          $(warning "WARNING: A foreign ARCH was passed, but no CC alternative. Using gcc.")
     endif
     override EXTRA_RUSTFLAGS += -C linker=$(CC)
+    undefine CC
 endif
 
 TRIPLE = $(ARCH)-unknown-linux-$(LIBC)
