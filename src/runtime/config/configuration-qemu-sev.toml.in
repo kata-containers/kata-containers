@@ -13,7 +13,7 @@
 [hypervisor.qemu]
 path = "@QEMUPATH@"
 kernel = "@KERNELSEVPATH@"
-initrd = "@INITRDPATH@"
+initrd = "@INITRDSEVPATH@"
 machine_type = "@MACHINETYPE@"
 
 # Enable confidential guest support.
