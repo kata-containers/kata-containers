@@ -168,12 +168,12 @@ impl FileRotator {
         #[cfg(test)]
         if !self.fail_rename && self.path.exists() {
             let rotated_path = self.rotated_path(1);
-            let _ = fs::rename(&self.path, &rotated_path);
+            let _ = fs::rename(&self.path, rotated_path);
         }
         #[cfg(not(test))]
         if self.path.exists() {
             let rotated_path = self.rotated_path(1);
-            let _ = fs::rename(&self.path, &rotated_path);
+            let _ = fs::rename(&self.path, rotated_path);
         }
 
         let delete_path = self.rotated_path(self.rotate_keep + 1);

@@ -340,7 +340,7 @@ mod tests {
 
         let path = env!("CARGO_MANIFEST_DIR");
         let path = Path::new(path).join("tests/texture/configuration-anno-0.toml");
-        let content = fs::read_to_string(&path).unwrap();
+        let content = fs::read_to_string(path).unwrap();
         let mut config = TomlConfig::load(&content).unwrap();
         assert!(anno.update_config_by_annotation(&mut config).is_err());
     }
@@ -349,7 +349,7 @@ mod tests {
     fn test_fail_to_change_kernel_path_because_of_invalid_path() {
         let path = env!("CARGO_MANIFEST_DIR");
         let path = Path::new(path).join("tests/texture/configuration-anno-0.toml");
-        let content = fs::read_to_string(&path).unwrap();
+        let content = fs::read_to_string(path).unwrap();
 
         let qemu = QemuConfig::new();
         qemu.register();

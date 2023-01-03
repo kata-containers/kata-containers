@@ -124,7 +124,7 @@ impl Storage {
 
         // if we are creating a directory: just create it, nothing more to do
         if metadata.file_type().is_dir() {
-            let dest_file_path = self.make_target_path(&source_file_path)?;
+            let dest_file_path = self.make_target_path(source_file_path)?;
 
             fs::create_dir_all(&dest_file_path)
                 .await
@@ -152,7 +152,7 @@ impl Storage {
             // Assume target mount is a file path
             self.target_mount_point.clone()
         } else {
-            let dest_file_path = self.make_target_path(&source_file_path)?;
+            let dest_file_path = self.make_target_path(source_file_path)?;
 
             if let Some(path) = dest_file_path.parent() {
                 debug!(logger, "Creating destination directory: {}", path.display());
@@ -778,7 +778,7 @@ mod tests {
             22
         );
         assert_eq!(
-            fs::read_to_string(&entries.0[0].target_mount_point.as_path().join("1.txt")).unwrap(),
+            fs::read_to_string(entries.0[0].target_mount_point.as_path().join("1.txt")).unwrap(),
             "updated"
         );
 
@@ -823,7 +823,7 @@ mod tests {
             2
         );
         assert_eq!(
-            fs::read_to_string(&entries.0[1].target_mount_point.as_path().join("foo.txt")).unwrap(),
+            fs::read_to_string(entries.0[1].target_mount_point.as_path().join("foo.txt")).unwrap(),
             "updated"
         );
 
@@ -1000,7 +1000,7 @@ mod tests {
 
         // create a path we'll remove later
         fs::create_dir_all(source_dir.path().join("tmp")).unwrap();
-        fs::write(&source_dir.path().join("tmp/test-file"), "foo").unwrap();
+        fs::write(source_dir.path().join("tmp/test-file"), "foo").unwrap();
         assert_eq!(entry.scan(&logger).await.unwrap(), 3); // root, ./tmp, test-file
 
         // Verify expected directory, file:

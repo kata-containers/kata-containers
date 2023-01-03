@@ -499,6 +499,7 @@ mod tests {
         let error_closure = |logger: &Logger, msg: String| error!(logger, "{}", msg);
         let critical_closure = |logger: &Logger, msg: String| crit!(logger, "{}", msg);
 
+        #[allow(clippy::type_complexity)]
         struct TestData<'a> {
             slog_level: slog::Level,
             slog_level_tag: &'a str,

@@ -55,7 +55,7 @@ async fn send_event(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .args(&[
+        .args([
             "--address",
             &address,
             "publish",

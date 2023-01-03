@@ -119,7 +119,7 @@ pub fn create_link(name: &str, link_type: LinkType, queues: usize) -> Result<()>
 
 fn create_queue(name: &str, flags: libc::c_int) -> Result<(File, String)> {
     let path = Path::new(DEVICE_PATH);
-    let file = OpenOptions::new().read(true).write(true).open(&path)?;
+    let file = OpenOptions::new().read(true).write(true).open(path)?;
     let mut req = CreateLinkReq::from_name(name)?;
     unsafe {
         req.set_raw_flags(flags as libc::c_short);
