@@ -126,6 +126,7 @@ fn get_kata_all_releases_by_url() -> std::result::Result<Vec<Release>, reqwest::
         .header(CONTENT_TYPE, JSON_TYPE)
         .header(USER_AGENT, USER_AGT)
         .send()?
+        .error_for_status()?
         .json()?;
     Ok(releases)
 }
@@ -202,6 +203,7 @@ mod tests {
             .header(CONTENT_TYPE, JSON_TYPE)
             .header(USER_AGENT, USER_AGT)
             .send()?
+            .error_for_status()?
             .json::<HashMap<String, Value>>()?;
 
         let version = content["tag_name"].as_str().unwrap();
@@ -254,7 +256,17 @@ mod tests {
 
     #[test]
     fn check_latest_version() {
-        let version = get_kata_version_by_url(KATA_GITHUB_URL).unwrap();
+        let version = get_kata_version_by_url(KATA_GITHUB_URL);
+        // sometime in GitHub action accessing to github.com API may fail
+        // we can skip this test to prevent the whole test fail.
+        if version.is_err() {
+            println!(
+                "WARNING!!!\nget kata version failed({:?}), this maybe a temporary error, just skip the test.",
+                version.unwrap_err()
+            );
+            return;
+        }
+        let version = version.unwrap();
 
         let v = Version::parse(&version).unwrap();
         assert!(!v.major.to_string().is_empty());

@@ -1382,6 +1382,7 @@ dependencies = [
  "seccompiler",
  "serde",
  "serde_json",
+ "shim-interface",
  "slog",
  "slog-scope",
  "thiserror",
@@ -2188,6 +2189,7 @@ dependencies = [
  "safe-path",
  "serde",
  "serde_json",
+ "shim-interface",
 ]
 
 [[package]]
@@ -2717,6 +2719,7 @@ dependencies = [
  "logging",
  "oci",
  "persist",
+ "shim-interface",
  "slog",
  "slog-scope",
  "tokio",
@@ -2911,6 +2914,16 @@ dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",
  "digest",
+]
+
+[[package]]
+name = "shim-interface"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hyper",
+ "hyperlocal",
+ "tokio",
 ]
 
 [[package]]
