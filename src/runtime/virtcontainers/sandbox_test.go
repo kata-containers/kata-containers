@@ -1348,7 +1348,7 @@ func TestSandboxCreationFromConfigRollbackFromCreateSandbox(t *testing.T) {
 	// Ensure hypervisor doesn't exist
 	assert.NoError(os.Remove(hConf.HypervisorPath))
 
-	_, err := createSandboxFromConfig(ctx, sConf, nil)
+	_, err := createSandboxFromConfig(ctx, sConf, nil, nil)
 	// Fail at createSandbox: QEMU path does not exist, it is expected. Then rollback is called
 	assert.Error(err)
 
