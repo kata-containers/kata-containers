@@ -252,6 +252,22 @@ func (n *LinuxNetwork) removeSingleEndpoint(ctx context.Context, s *Sandbox, idx
 	return nil
 }
 
+func (n *LinuxNetwork) endpointAlreadyAdded(netInfo *NetworkInfo) bool {
+	for _, ep := range n.eps {
+		// Existing endpoint
+		if ep.Name() == netInfo.Iface.Name {
+			return true
+		}
+		pair := ep.NetworkPair()
+		// Existing virtual endpoints
+		if pair != nil && (pair.TapInterface.Name == netInfo.Iface.Name || pair.TapInterface.TAPIface.Name == netInfo.Iface.Name || pair.VirtIface.Name == netInfo.Iface.Name) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Scan the networking namespace through netlink and then:
 // 1. Create the endpoints for the relevant interfaces found there.
 // 2. Attach them to the VM.
@@ -289,6 +305,12 @@ func (n *LinuxNetwork) addAllEndpoints(ctx context.Context, s *Sandbox, hotplug 
 
 		// Skip any loopback interfaces:
 		if (netInfo.Iface.Flags & net.FlagLoopback) != 0 {
+			continue
+		}
+
+		// Skip any interfaces that are already added
+		if n.endpointAlreadyAdded(&netInfo) {
+			networkLogger().WithField("endpoint", netInfo.Iface.Name).Info("already added")
 			continue
 		}
 
