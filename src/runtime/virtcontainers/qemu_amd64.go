@@ -9,6 +9,7 @@ package virtcontainers
 
 import (
 	"context"
+	"crypto/sha256"
 	b64 "encoding/base64"
 	"fmt"
 	"log"
@@ -38,6 +39,8 @@ type qemuAmd64 struct {
 	devLoadersCount uint32
 
 	sgxEPCSize int64
+
+	numVCPUs uint32
 }
 
 const (
@@ -58,6 +61,9 @@ const (
 	sevAttestationGodhName = "godh.b64"
 
 	sevAttestationSessionFileName = "session_file.b64"
+
+	// For more info, see AMD SEV API document 55766
+	sevPolicyBitSevEs = 0x4
 )
 
 var kernelParams = []Param{
@@ -140,6 +146,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		},
 		vmFactory: factory,
 		snpGuest:  config.SevSnpGuest,
+		numVCPUs:  config.NumVCPUs,
 	}
 
 	if config.ConfidentialGuest {
@@ -409,6 +416,34 @@ func (q *qemuAmd64) setupSEVGuestPreAttestation(ctx context.Context, config sev.
 	return attestationId, nil
 }
 
+func getCPUSig(cpuModel string) sev.VCPUSig {
+	// This is for the special case for SNP (see cpuModel()).
+	if cpuModel == "EPYC-v4" {
+		return sev.SigEpycV4
+	}
+	return sev.NewVCPUSig(cpuid.DisplayFamily, cpuid.DisplayModel, cpuid.SteppingId)
+}
+
+func calculateGuestLaunchDigest(config sev.GuestPreAttestationConfig, numVCPUs int, cpuModel string) ([sha256.Size]byte, error) {
+	if config.Policy&sevPolicyBitSevEs != 0 {
+		// SEV-ES guest
+		return sev.CalculateSEVESLaunchDigest(
+			numVCPUs,
+			getCPUSig(cpuModel),
+			config.FwPath,
+			config.KernelPath,
+			config.InitrdPath,
+			config.KernelParameters)
+	}
+
+	// SEV guest
+	return sev.CalculateLaunchDigest(
+		config.FwPath,
+		config.KernelPath,
+		config.InitrdPath,
+		config.KernelParameters)
+}
+
 // wait for prelaunch attestation to complete
 func (q *qemuAmd64) sevGuestPreAttestation(ctx context.Context,
 	qmp *govmmQemu.QMP, config sev.GuestPreAttestationConfig) error {
@@ -447,9 +482,9 @@ func (q *qemuAmd64) sevGuestPreAttestation(ctx context.Context,
 
 	secrets := []*pb.RequestDetails{&requestDetails}
 
-	launchDigest, err := sev.CalculateLaunchDigest(config.FwPath, config.KernelPath, config.InitrdPath, config.KernelParameters)
+	launchDigest, err := calculateGuestLaunchDigest(config, int(q.numVCPUs), q.cpuModel())
 	if err != nil {
-		return fmt.Errorf("Could not calculate SEV launch digest: %v", err)
+		return fmt.Errorf("Could not calculate SEV/SEV-ES launch digest: %v", err)
 	}
 	launchDigestBase64 := b64.StdEncoding.EncodeToString(launchDigest[:])
 
