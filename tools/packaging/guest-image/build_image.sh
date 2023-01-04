@@ -40,8 +40,8 @@ build_initrd() {
 	export USE_DOCKER=1
 	export AGENT_INIT="yes"
 	# ROOTFS_BUILD_DEST is a Make variable
-
-	if [ "${AA_KBC:-}" == "offline_sev_kbc" ]; then
+	# SNP will also use the SEV guest module
+	if [ "${AA_KBC:-}" == "offline_sev_kbc" | "${AA_KBC:-}" == "online_sev_kbc"]; then
 		config_version=$(get_config_version)
 		kernel_version="$(get_from_kata_deps "assets.kernel.sev.version")"
 		kernel_version=${kernel_version#v}
