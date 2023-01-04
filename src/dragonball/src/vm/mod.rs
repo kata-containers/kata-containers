@@ -492,6 +492,13 @@ impl Vm {
             .map_err(StopMicrovmError::DeviceManager)
     }
 
+    /// Remove upcall client when the VM is destoryed.
+    #[cfg(feature = "dbs-upcall")]
+    pub fn remove_upcall(&mut self) -> std::result::Result<(), StopMicrovmError> {
+        self.upcall_client = None;
+        Ok(())
+    }
+
     /// Reset the console into canonical mode.
     pub fn reset_console(&self) -> std::result::Result<(), DeviceMgrError> {
         self.device_manager.reset_console()
