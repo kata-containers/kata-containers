@@ -662,6 +662,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dbs-upcall"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2fa8b67657cd71779eaceea1b5fa989b62a1be629a07be8498417772e5a8d35"
+dependencies = [
+ "anyhow",
+ "dbs-utils",
+ "dbs-virtio-devices",
+ "log",
+ "thiserror",
+ "timerfd",
+]
+
+[[package]]
 name = "dbs-utils"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -753,6 +767,7 @@ dependencies = [
  "dbs-device",
  "dbs-interrupt",
  "dbs-legacy-devices",
+ "dbs-upcall",
  "dbs-utils",
  "dbs-virtio-devices",
  "kvm-bindings",

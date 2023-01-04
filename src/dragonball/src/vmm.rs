@@ -162,6 +162,11 @@ impl Vmm {
                     warn!("failed to remove devices: {:?}", e);
                 }
 
+                #[cfg(feature = "dbs-upcall")]
+                if let Err(e) = vm.remove_upcall() {
+                    warn!("failed to remove upcall: {:?}", e);
+                }
+
                 if let Err(e) = vm.reset_console() {
                     warn!("Cannot set canonical mode for the terminal. {:?}", e);
                 }
@@ -174,6 +179,8 @@ impl Vmm {
                         if let Err(e) = mgr.exit_all_vcpus() {
                             warn!("Failed to exit vcpu thread. {:?}", e);
                         }
+                        #[cfg(feature = "dbs-upcall")]
+                        mgr.set_upcall_channel(None);
                     }
                     Err(e) => warn!("Failed to get vcpu manager {:?}", e),
                 }
