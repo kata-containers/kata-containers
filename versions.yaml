@@ -204,7 +204,7 @@ externals:
     description: |
       OCI-based Kubernetes Container Runtime Interface implementation
     url: "https://github.com/cri-o/cri-o"
-    branch: "release-1.23"
+    branch: "release-1.26"
 
   containerd:
     description: |
@@ -234,7 +234,7 @@ externals:
     uscan-url: >-
       https://github.com/kubernetes/kubernetes/tags
       .*/v?([\d\.]+)\.tar\.gz
-    version: "1.23.1-00"
+    version: "1.26.0-00"
 
   libseccomp:
     description: "High level interface to Linux seccomp filter"
