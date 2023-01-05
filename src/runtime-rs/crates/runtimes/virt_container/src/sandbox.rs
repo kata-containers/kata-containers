@@ -248,6 +248,12 @@ impl Sandbox for VirtSandbox {
             .await
             .context("delete cgroups")?;
 
+        info!(sl!(), "delete hypervisor");
+        self.hypervisor
+            .cleanup()
+            .await
+            .context("delete hypervisor")?;
+
         info!(sl!(), "stop monitor");
         self.monitor.stop().await;
 
