@@ -42,7 +42,7 @@ pub fn get_single_cpu_info(cpu_info_file: &str, substring: &str) -> Result<Strin
     let contents = get_cpu_info(cpu_info_file)?;
 
     if contents.is_empty() {
-        return Err(anyhow!("cpu_info string is empty"))?;
+        return Err(anyhow!("cpu_info string is empty"));
     }
 
     let subcontents: Vec<&str> = contents.split(substring).collect();
@@ -60,7 +60,7 @@ pub fn get_single_cpu_info(cpu_info_file: &str, substring: &str) -> Result<Strin
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 pub fn get_cpu_flags(cpu_info: &str, cpu_flags_tag: &str) -> Result<String> {
     if cpu_info.is_empty() {
-        return Err(anyhow!("cpu_info string is empty"))?;
+        return Err(anyhow!("cpu_info string is empty"));
     }
 
     let subcontents: Vec<&str> = cpu_info.split('\n').collect();

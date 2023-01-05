@@ -17,16 +17,17 @@ use std::process::exit;
 use args::{Commands, KataCtlCli};
 
 use ops::check_ops::{
-    handle_check, handle_check_volume, handle_env, handle_exec, handle_factory, handle_iptables,
-    handle_metrics, handle_version,
+    handle_check, handle_env, handle_exec, handle_factory, handle_iptables, handle_metrics,
+    handle_version,
 };
+use ops::volume_ops::handle_direct_volume;
 
 fn real_main() -> Result<()> {
     let args = KataCtlCli::parse();
 
     match args.command {
         Commands::Check(args) => handle_check(args),
-        Commands::DirectVolume => handle_check_volume(),
+        Commands::DirectVolume(args) => handle_direct_volume(args),
         Commands::Env => handle_env(),
         Commands::Exec => handle_exec(),
         Commands::Factory => handle_factory(),
