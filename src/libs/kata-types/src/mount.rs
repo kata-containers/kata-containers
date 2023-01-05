@@ -5,7 +5,7 @@
 //
 
 use anyhow::{anyhow, Context, Result};
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 /// Prefix to mark a volume as Kata special.
 pub const KATA_VOLUME_TYPE_PREFIX: &str = "kata:";
@@ -18,6 +18,12 @@ pub const KATA_EPHEMERAL_VOLUME_TYPE: &str = "ephemeral";
 
 /// KATA_HOST_DIR_TYPE use for host empty dir
 pub const KATA_HOST_DIR_VOLUME_TYPE: &str = "kata:hostdir";
+
+/// KATA_MOUNT_INFO_FILE_NAME is used for the file that holds direct-volume mount info
+pub const KATA_MOUNT_INFO_FILE_NAME: &str = "mountInfo.json";
+
+/// KATA_DIRECT_VOLUME_ROOT_PATH is the root path used for concatenating with the direct-volume mount info file path
+pub const KATA_DIRECT_VOLUME_ROOT_PATH: &str = "/run/kata-containers/shared/direct-volumes";
 
 /// Information about a mount.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -47,6 +53,22 @@ impl Mount {
     pub fn option_size(&self) -> usize {
         self.options.iter().map(|v| v.len() + 1).sum()
     }
+}
+
+/// DirectVolumeMountInfo contains the information needed by Kata
+/// to consume a host block device and mount it as a filesystem inside the guest VM.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct DirectVolumeMountInfo {
+    /// The type of the volume (ie. block)
+    pub volume_type: String,
+    /// The device backing the volume.
+    pub device: String,
+    /// The filesystem type to be mounted on the volume.
+    pub fs_type: String,
+    /// Additional metadata to pass to the agent regarding this volume.
+    pub metadata: HashMap<String, String>,
+    /// Additional mount options.
+    pub options: Vec<String>,
 }
 
 /// Check whether a mount type is a marker for Kata specific volume.
