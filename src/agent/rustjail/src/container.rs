@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Context, Result};
-use libc::pid_t;
+use anyhow::{anyhow, bail, Context, Result};
+use libc::{pid_t, setdomainname};
 use oci::{ContainerState, LinuxDevice, LinuxIdMapping};
 use oci::{Hook, Linux, LinuxNamespace, LinuxResources, Spec};
 use std::clone::Clone;
@@ -535,8 +535,14 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         bind_device = true;
     }
 
+    // Set hostname and domainname if present.
     if to_new.contains(CloneFlags::CLONE_NEWUTS) {
-        unistd::sethostname(&spec.hostname)?;
+        if !spec.hostname.is_empty() {
+            unistd::sethostname(&spec.hostname)?;
+        }
+        if !spec.domainname.is_empty() {
+            set_domainname(&spec.domainname)?;
+        }
     }
 
     let rootfs = spec.root.as_ref().unwrap().path.as_str();
@@ -1295,6 +1301,31 @@ pub fn setup_child_logger(fd: RawFd, child_logger: Logger) -> tokio::task::JoinH
             }
         }
     })
+}
+
+/// Sets domainname for process (see
+/// [setdomainname(2)](https://man7.org/linux/man-pages/man2/setdomainname.2.html)).
+///
+/// unistd doesn't have a safe binding for this, so need to make our own.
+/// Pulled from https://github.com/containers/youki/blob/6d698da2c70ca7bfa71699495157acf3d9930657/crates/libcontainer/src/syscall/linux.rs#L350-L369
+/// with some small tweaks.
+fn set_domainname(name: &str) -> Result<()> {
+    let ptr = name.as_bytes().as_ptr().cast();
+    let len = name.len();
+    let res = unsafe { setdomainname(ptr, len) };
+
+    match res {
+        0 => Ok(()),
+        -1 => bail!(
+            "Failed to set {} as domainname. {}",
+            name,
+            std::io::Error::last_os_error()
+        ),
+        _ => bail!(
+            "Failed to set {} as domainname. unexpected error occurred.",
+            name
+        ),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

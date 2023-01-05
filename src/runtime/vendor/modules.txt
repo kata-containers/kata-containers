@@ -295,7 +295,7 @@ github.com/opencontainers/runc/libcontainer/devices
 github.com/opencontainers/runc/libcontainer/user
 github.com/opencontainers/runc/libcontainer/userns
 github.com/opencontainers/runc/libcontainer/utils
-# github.com/opencontainers/runtime-spec v1.0.3-0.20211214071223-8958f93039ab
+# github.com/opencontainers/runtime-spec v1.0.3-0.20220909204839-494a5a6aca78
 ## explicit
 github.com/opencontainers/runtime-spec/specs-go
 # github.com/opencontainers/selinux v1.10.1

@@ -85,6 +85,19 @@ fn hostname(oci: &Spec) -> Result<()> {
     Ok(())
 }
 
+fn domainname(oci: &Spec) -> Result<()> {
+    if oci.domainname.is_empty() {
+        return Ok(());
+    }
+
+    let linux = get_linux(oci)?;
+    if !contain_namespace(&linux.namespaces, "uts") {
+        return Err(anyhow!("Linux namespace does not contain uts"));
+    }
+
+    Ok(())
+}
+
 fn security(oci: &Spec) -> Result<()> {
     let linux = get_linux(oci)?;
     let label_pattern = r".*_u:.*_r:.*_t:s[0-9]|1[0-5].*";
@@ -286,6 +299,7 @@ pub fn validate(conf: &Config) -> Result<()> {
 
     rootfs(root).context("rootfs")?;
     hostname(oci).context("hostname")?;
+    domainname(oci).context("domainname")?;
     security(oci).context("security")?;
     usernamespace(oci).context("usernamespace")?;
     cgroupnamespace(oci).context("cgroupnamespace")?;
@@ -365,6 +379,30 @@ mod tests {
         ];
         spec.linux = Some(linux);
         hostname(&spec).unwrap();
+    }
+
+    #[test]
+    fn test_domainname() {
+        let mut spec = Spec::default();
+
+        domainname(&spec).unwrap();
+
+        spec.domainname = "foobar.baz".to_owned();
+        domainname(&spec).unwrap_err();
+
+        let mut linux = Linux::default();
+        linux.namespaces = vec![
+            LinuxNamespace {
+                r#type: "net".to_owned(),
+                path: "/sys/cgroups/net".to_owned(),
+            },
+            LinuxNamespace {
+                r#type: "uts".to_owned(),
+                path: "/sys/cgroups/uts".to_owned(),
+            },
+        ];
+        spec.linux = Some(linux);
+        domainname(&spec).unwrap();
     }
 
     #[test]

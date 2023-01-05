@@ -107,6 +107,7 @@
 		"path": "rootfs"
 	},
 	"hostname": "mrsdalloway",
+	"domainname": "foobar.baz",
 	"mounts": [
 		{
 			"destination": "/proc",

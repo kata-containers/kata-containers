@@ -502,6 +502,7 @@ pub fn grpc_to_oci(grpc: &grpc::Spec) -> oci::Spec {
         process,
         root,
         hostname: grpc.Hostname.clone(),
+        domainname: grpc.Domainname.clone(),
         mounts,
         hooks,
         annotations: grpc.Annotations.clone(),

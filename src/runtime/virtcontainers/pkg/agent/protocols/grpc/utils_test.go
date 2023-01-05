@@ -39,6 +39,10 @@ func assertIsEqual(t *testing.T, ociSpec *specs.Spec, grpcSpec *Spec) {
 	// Version check
 	assert.Equal(grpcSpec.Version, ociSpec.Version)
 
+	// Hostname+domainname checks
+	assert.Equal(ociSpec.Hostname, grpcSpec.Hostname)
+	assert.Equal(ociSpec.Domainname, grpcSpec.Domainname)
+
 	// Process checks:
 	assertProcessIsEqual(t, ociSpec.Process, grpcSpec.Process)
 

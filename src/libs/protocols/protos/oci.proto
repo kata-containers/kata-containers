@@ -45,6 +45,9 @@ message Spec {
 	Solaris Solaris = 9;
 	// Windows is platform-specific configuration for Windows based containers.
 	Windows Windows = 10;
+
+	// Domainname configures the container's domainname.
+	string Domainname = 11;
 }
 
 message Process {
