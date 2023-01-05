@@ -49,7 +49,7 @@ The table below summarized when and where those different hooks will be executed
 |---|---|---|---|---|
 | `Prestart(deprecated)` | OCI hook | host runtime namespace | host runtime namespace | After VM is started, before container is created. |
 | `CreateRuntime` | OCI hook | host runtime namespace | host runtime namespace | After VM is started, before container is created, after `Prestart` hooks. |
-| `CreateContainer` | OCI hook | host runtime namespace | host vmm namespace | After VM is started, before container is created, after `CreateRuntime` hooks. |
+| `CreateContainer` | OCI hook | host runtime namespace | host vmm namespace* | After VM is started, before container is created, after `CreateRuntime` hooks. |
 | `StartContainer` | OCI hook | guest container namespace | guest container namespace | After container is created, before container is started. |
 | `Poststart` | OCI hook | host runtime namespace | host runtime namespace | After container is started, before start operation returns. |
 | `Poststop` | OCI hook | host runtime namespace | host runtime namespace | After container is deleted, before delete operation returns. |
@@ -59,4 +59,5 @@ The table below summarized when and where those different hooks will be executed
 
 + `Hook Path` specifies where hook's path be resolved.
 + `Exec Place` specifies in which namespace those hooks can be executed.
+  + For `CreateContainer` Hooks, OCI requires to run them inside the container namespace while the hook executable path is in the host runtime, which is a non-starter for VM-based containers. So we design to keep them running in the *host vmm namespace.* 
 + `Exec Time` specifies at which time point those hooks can be executed.
