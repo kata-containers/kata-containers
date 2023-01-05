@@ -114,9 +114,9 @@ pub fn run_network_checks() -> Result<()> {
     Ok(())
 }
 
-fn get_kata_all_releases_by_url() -> std::result::Result<Vec<Release>, reqwest::Error> {
+fn get_kata_all_releases_by_url(url: &str) -> std::result::Result<Vec<Release>, reqwest::Error> {
     let releases: Vec<Release> = reqwest::blocking::Client::new()
-        .get(KATA_GITHUB_RELEASE_URL)
+        .get(url)
         .header(CONTENT_TYPE, JSON_TYPE)
         .header(USER_AGENT, USER_AGT)
         .send()?
@@ -146,7 +146,8 @@ fn handle_reqwest_error(e: reqwest::Error) -> anyhow::Error {
 }
 
 pub fn check_all_releases() -> Result<()> {
-    let releases: Vec<Release> = get_kata_all_releases_by_url().map_err(handle_reqwest_error)?;
+    let releases: Vec<Release> =
+        get_kata_all_releases_by_url(KATA_GITHUB_RELEASE_URL).map_err(handle_reqwest_error)?;
 
     for release in releases {
         if !release.prerelease {
@@ -165,7 +166,8 @@ pub fn check_all_releases() -> Result<()> {
 }
 
 pub fn check_official_releases() -> Result<()> {
-    let releases: Vec<Release> = get_kata_all_releases_by_url().map_err(handle_reqwest_error)?;
+    let releases: Vec<Release> =
+        get_kata_all_releases_by_url(KATA_GITHUB_RELEASE_URL).map_err(handle_reqwest_error)?;
 
     println!("Official Releases...");
     for release in releases {
@@ -185,24 +187,6 @@ pub fn check_official_releases() -> Result<()> {
 mod tests {
     use super::*;
     use semver::Version;
-    use serde_json::Value;
-    use std::collections::HashMap;
-
-    const KATA_GITHUB_URL: &str =
-        "https://api.github.com/repos/kata-containers/kata-containers/releases/latest";
-
-    fn get_kata_version_by_url(url: &str) -> std::result::Result<String, reqwest::Error> {
-        let content = reqwest::blocking::Client::new()
-            .get(url)
-            .header(CONTENT_TYPE, JSON_TYPE)
-            .header(USER_AGENT, USER_AGT)
-            .send()?
-            .error_for_status()?
-            .json::<HashMap<String, Value>>()?;
-
-        let version = content["tag_name"].as_str().unwrap();
-        Ok(version.to_string())
-    }
 
     #[test]
     fn test_get_cpu_info_empty_input() {
@@ -228,7 +212,10 @@ mod tests {
     fn check_version_by_empty_url() {
         const TEST_URL: &str = "http:";
         let expected = "builder error: empty host";
-        let actual = get_kata_version_by_url(TEST_URL).err().unwrap().to_string();
+        let actual = get_kata_all_releases_by_url(TEST_URL)
+            .err()
+            .unwrap()
+            .to_string();
         assert_eq!(expected, actual);
     }
 
@@ -236,7 +223,10 @@ mod tests {
     fn check_version_by_garbage_url() {
         const TEST_URL: &str = "_localhost_";
         let expected = "builder error: relative URL without a base";
-        let actual = get_kata_version_by_url(TEST_URL).err().unwrap().to_string();
+        let actual = get_kata_all_releases_by_url(TEST_URL)
+            .err()
+            .unwrap()
+            .to_string();
         assert_eq!(expected, actual);
     }
 
@@ -244,25 +234,31 @@ mod tests {
     fn check_version_by_invalid_url() {
         const TEST_URL: &str = "http://localhost :80";
         let expected = "builder error: invalid domain character";
-        let actual = get_kata_version_by_url(TEST_URL).err().unwrap().to_string();
+        let actual = get_kata_all_releases_by_url(TEST_URL)
+            .err()
+            .unwrap()
+            .to_string();
         assert_eq!(expected, actual);
     }
 
     #[test]
     fn check_latest_version() {
-        let version = get_kata_version_by_url(KATA_GITHUB_URL);
+        let releases = get_kata_all_releases_by_url(KATA_GITHUB_RELEASE_URL);
         // sometime in GitHub action accessing to github.com API may fail
         // we can skip this test to prevent the whole test fail.
-        if version.is_err() {
+        if releases.is_err() {
             println!(
                 "WARNING!!!\nget kata version failed({:?}), this maybe a temporary error, just skip the test.",
-                version.unwrap_err()
+                releases.unwrap_err()
             );
             return;
         }
-        let version = version.unwrap();
+        let releases = releases.unwrap();
 
-        let v = Version::parse(&version).unwrap();
+        assert!(!releases.is_empty());
+        let release = &releases[0];
+
+        let v = Version::parse(&release.tag_name).unwrap();
         assert!(!v.major.to_string().is_empty());
         assert!(!v.minor.to_string().is_empty());
         assert!(!v.patch.to_string().is_empty());
