@@ -9,16 +9,19 @@ use async_trait::async_trait;
 
 #[async_trait]
 pub trait Sandbox: Send + Sync {
-    async fn start(&self, netns: Option<String>, dns: Vec<String>) -> Result<()>;
+    async fn start(
+        &self,
+        netns: Option<String>,
+        dns: Vec<String>,
+        spec: &oci::Spec,
+        state: &oci::State,
+    ) -> Result<()>;
     async fn stop(&self) -> Result<()>;
     async fn cleanup(&self) -> Result<()>;
     async fn shutdown(&self) -> Result<()>;
 
     // agent function
     async fn agent_sock(&self) -> Result<String>;
-
-    // hypervisor function
-    async fn get_vmm_master_tid(&self) -> Result<u32>;
 
     // utils
     async fn set_iptables(&self, is_ipv6: bool, data: Vec<u8>) -> Result<Vec<u8>>;

@@ -18,7 +18,6 @@ use hypervisor::Param;
 use kata_types::{
     annotations::Annotation, config::default::DEFAULT_GUEST_DNS_FILE, config::TomlConfig,
 };
-use kata_sys_util::hooks::HookStates;
 
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
@@ -52,6 +51,8 @@ impl RuntimeHandlerManagerInner {
 
     async fn init_runtime_handler(
         &mut self,
+        spec: &oci::Spec,
+        state: &oci::State,
         netns: Option<String>,
         dns: Vec<String>,
         config: Arc<TomlConfig>,
@@ -76,7 +77,7 @@ impl RuntimeHandlerManagerInner {
         // start sandbox
         runtime_instance
             .sandbox
-            .start(netns, dns)
+            .start(netns, dns, spec, state)
             .await
             .context("start sandbox")?;
         self.runtime_instance = Some(Arc::new(runtime_instance));
@@ -128,38 +129,9 @@ impl RuntimeHandlerManagerInner {
         }
 
         let config = load_config(spec, options).context("load config")?;
-        self.init_runtime_handler(netns, dns, Arc::new(config))
+        self.init_runtime_handler(spec, state, netns, dns, Arc::new(config))
             .await
             .context("init runtime handler")?;
-
-        let mut st = state.clone();
-        if let Some(runtime_instance) = self.runtime_instance.clone() {
-            let vmm_master_tid = runtime_instance
-                .sandbox
-                .get_vmm_master_tid()
-                .await
-                .context("get vmm master tid")?;
-            st.pid = vmm_master_tid as i32;
-        }
-
-        // Prestart Hooks [DEPRECATED in newest oci spec]:
-        // * should be run in runtime namespace
-        // * should be run after vm is started, but before container is created
-        //      if Prestart Hook and CreateRuntime Hook are both supported
-        // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#prestart
-        if let Some(hooks) = spec.hooks.as_ref() {
-            let mut prestart_hook_states = HookStates::new();
-            prestart_hook_states.execute_hooks(&hooks.prestart, Some(st.clone()))?
-        }
-
-        // CreateRuntime Hooks:
-        // * should be run in runtime namespace
-        // * should be run when creating the runtime
-        // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#createruntime-hooks
-        if let Some(hooks) = spec.hooks.as_ref() {
-            let mut create_runtime_hook_states = HookStates::new();
-            create_runtime_hook_states.execute_hooks(&hooks.create_runtime, Some(st.clone()))?
-        }
 
         // the sandbox creation can reach here only once and the sandbox is created
         // so we can safely create the shim management socket right now
