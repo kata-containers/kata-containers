@@ -220,7 +220,7 @@ var vmAddNetPutRequest = func(clh *cloudHypervisor) error {
 		resp.Body.Close()
 		resp.Body = io.NopCloser(bytes.NewBuffer(respBody))
 
-		if resp.StatusCode != 204 {
+		if resp.StatusCode != 200 && resp.StatusCode != 204 {
 			clh.Logger().Errorf("vmAddNetPut failed with error '%d'. Response: %+v", resp.StatusCode, resp)
 			return fmt.Errorf("Failed to add the network device '%+v' to Cloud Hypervisor: %v", netDevice, resp.StatusCode)
 		}
@@ -886,6 +886,15 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 	return err
 }
 
+func (clh *cloudHypervisor) hotplugAddNetDevice(e Endpoint) error {
+	err := clh.addNet(e)
+	if err != nil {
+		return err
+	}
+
+	return clh.vmAddNetPut()
+}
+
 func (clh *cloudHypervisor) HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "HotplugAddDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
@@ -897,6 +906,9 @@ func (clh *cloudHypervisor) HotplugAddDevice(ctx context.Context, devInfo interf
 	case VfioDev:
 		device := devInfo.(*config.VFIODev)
 		return nil, clh.hotPlugVFIODevice(device)
+	case NetDev:
+		device := devInfo.(Endpoint)
+		return nil, clh.hotplugAddNetDevice(device)
 	default:
 		return nil, fmt.Errorf("cannot hotplug device: unsupported device type '%v'", devType)
 	}
