@@ -16,12 +16,6 @@ struct Release {
     tarball_url: String,
 }
 
-#[cfg(any(
-    target_arch = "aarch64",
-    target_arch = "powerpc64le",
-    target_arch = "x86_64"
-))]
-
 const KATA_GITHUB_RELEASE_URL: &str =
     "https://api.github.com/repos/kata-containers/kata-containers/releases";
 
