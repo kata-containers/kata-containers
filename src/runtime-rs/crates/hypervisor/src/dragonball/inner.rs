@@ -6,8 +6,8 @@
 
 use super::vmm_instance::VmmInstance;
 use crate::{
-    device::Device, hypervisor_persist::HypervisorState, kernel_param::KernelParams, VmmState,
-    DEV_HUGEPAGES, HUGETLBFS, HYPERVISOR_DRAGONBALL, SHMEM, VM_ROOTFS_DRIVER_BLK,
+    device::Device, hypervisor_persist::HypervisorState, kernel_param::KernelParams, Param,
+    VmmState, DEV_HUGEPAGES, HUGETLBFS, HYPERVISOR_DRAGONBALL, SHMEM, VM_ROOTFS_DRIVER_BLK,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -18,7 +18,10 @@ use dragonball::{
 use kata_sys_util::mount;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
-    config::hypervisor::Hypervisor as HypervisorConfig,
+    config::{
+        default::DEFAULT_AGENT_LOG_PORT, hypervisor::Hypervisor as HypervisorConfig,
+        LOG_VPORT_OPTION,
+    },
 };
 use persist::sandbox_persist::Persist;
 use shim_interface::KATA_PATH;
@@ -100,11 +103,22 @@ impl DragonballInner {
         let rootfs_driver = self.config.blockdev_info.block_device_driver.clone();
 
         // get kernel params
-        let mut kernel_params = KernelParams::new(self.config.debug_info.enable_debug);
+        let mut kernel_params = KernelParams::new();
         kernel_params.append(&mut KernelParams::new_rootfs_kernel_params(&rootfs_driver));
         kernel_params.append(&mut KernelParams::from_string(
             &self.config.boot_info.kernel_params,
         ));
+
+        if self.config.debug_info.enable_debug {
+            // export guest kernel log
+            kernel_params.push(Param::new("console", "ttyS1"));
+            // export kata-agent's log in hypervisor's log stream
+            kernel_params.push(Param::new(
+                LOG_VPORT_OPTION,
+                DEFAULT_AGENT_LOG_PORT.to_string().as_str(),
+            ));
+        }
+
         info!(sl!(), "prepared kernel_params={:?}", kernel_params);
 
         // set boot source

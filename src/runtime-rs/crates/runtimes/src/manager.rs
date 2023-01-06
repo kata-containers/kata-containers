@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{str::from_utf8, sync::Arc};
+use std::{str::from_utf8, sync::Arc, vec};
 
 use anyhow::{anyhow, Context, Result};
 

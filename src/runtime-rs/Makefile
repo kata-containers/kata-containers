@@ -180,7 +180,6 @@ ifneq (,$(DBCMD))
     DEFMAXVCPUS_DB := 1
     DEFBLOCKSTORAGEDRIVER_DB := virtio-blk
     DEFNETWORKMODEL_DB := tcfilter
-    KERNELPARAMS = console=ttyS1 agent.log_vport=1025
 	KERNELTYPE_DB = uncompressed
     KERNEL_NAME_DB = $(call MAKE_KERNEL_NAME,$(KERNELTYPE_DB))
     KERNELPATH_DB = $(KERNELDIR)/$(KERNEL_NAME_DB)
