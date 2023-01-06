@@ -220,7 +220,7 @@ var vmAddNetPutRequest = func(clh *cloudHypervisor) error {
 		resp.Body.Close()
 		resp.Body = io.NopCloser(bytes.NewBuffer(respBody))
 
-		if resp.StatusCode != 204 {
+		if resp.StatusCode != 200 && resp.StatusCode != 204 {
 			clh.Logger().Errorf("vmAddNetPut failed with error '%d'. Response: %+v", resp.StatusCode, resp)
 			return fmt.Errorf("Failed to add the network device '%+v' to Cloud Hypervisor: %v", netDevice, resp.StatusCode)
 		}
