@@ -146,6 +146,7 @@ shared_fs = "@DBSHAREDFS@"
 
 [agent.@PROJECT_TYPE@]
 container_pipe_size=@PIPESIZE@
+
 # If enabled, make the agent display debug-level messages.
 # (default: disabled)
 #enable_debug = true
@@ -165,10 +166,9 @@ container_pipe_size=@PIPESIZE@
 #enable_tracing = true
 
 # Enable debug console.
-
+#
 # If enabled, user can connect guest OS running inside hypervisor
 # through "kata-runtime exec <sandbox-id>" command
-
 #debug_console_enabled = true
 
 # Agent connection dialing timeout value in seconds
@@ -240,7 +240,7 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # (default: false)
 #disable_new_netns = true
 
-# if enabled, the runtime will add all the kata processes inside one dedicated cgroup.
+# If enabled, the runtime will add all the kata processes inside one dedicated cgroup.
 # The container cgroups in the host are not created, just one single cgroup per sandbox.
 # The runtime caller is free to restrict or collect cgroup stats of the overall Kata sandbox.
 # The sandbox cgroup path is the parent cgroup of a container with the PodSandbox annotation.
