@@ -23,7 +23,7 @@ type VC interface {
 	SetLogger(ctx context.Context, logger *logrus.Entry)
 	SetFactory(ctx context.Context, factory Factory)
 
-	CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig) (VCSandbox, error)
+	CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, hookFunc func(context.Context) error) (VCSandbox, error)
 	CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error
 }
 

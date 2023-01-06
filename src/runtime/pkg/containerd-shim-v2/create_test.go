@@ -41,7 +41,7 @@ func TestCreateSandboxSuccess(t *testing.T) {
 		},
 	}
 
-	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig, hookFunc func(context.Context) error) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 

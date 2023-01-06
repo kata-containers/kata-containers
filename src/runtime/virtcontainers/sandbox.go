@@ -92,6 +92,9 @@ var (
 	errSandboxNotRunning = errors.New("Sandbox not running")
 )
 
+// HypervisorPidKey is the context key for hypervisor pid
+type HypervisorPidKey struct{}
+
 // SandboxStatus describes a sandbox status.
 type SandboxStatus struct {
 	ContainersStatus []ContainerStatus
@@ -1194,7 +1197,7 @@ func (s *Sandbox) cleanSwap(ctx context.Context) {
 }
 
 // startVM starts the VM.
-func (s *Sandbox) startVM(ctx context.Context) (err error) {
+func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Context) error) (err error) {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "startVM", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
@@ -1234,9 +1237,24 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 		return err
 	}
 
+	if prestartHookFunc != nil {
+		hid, err := s.GetHypervisorPid()
+		if err != nil {
+			return err
+		}
+		s.Logger().Infof("hypervisor pid is %v", hid)
+		ctx = context.WithValue(ctx, HypervisorPidKey{}, hid)
+
+		if err := prestartHookFunc(ctx); err != nil {
+			return err
+		}
+	}
+
 	// In case of vm factory, network interfaces are hotplugged
 	// after vm is started.
-	if s.factory != nil {
+	// In case of prestartHookFunc, network config might have been changed.
+	// We need to rescan and handle the change.
+	if s.factory != nil || prestartHookFunc != nil {
 		if _, err := s.network.AddEndpoints(ctx, s, nil, true); err != nil {
 			return err
 		}
