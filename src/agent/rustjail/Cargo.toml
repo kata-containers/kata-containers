@@ -11,6 +11,7 @@ serde_json = "1.0.39"
 serde_derive = "1.0.91"
 oci = { path = "../../libs/oci" }
 protocols = { path ="../../libs/protocols" }
+kata-sys-util = { path = "../../libs/kata-sys-util" }
 caps = "0.5.0"
 nix = "0.24.2"
 scopeguard = "1.0.0"
