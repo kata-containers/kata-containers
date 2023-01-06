@@ -886,6 +886,15 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 	return err
 }
 
+func (clh *cloudHypervisor) hotplugAddNetDevice(e Endpoint) error {
+	err := clh.addNet(e)
+	if err != nil {
+		return err
+	}
+
+	return clh.vmAddNetPut()
+}
+
 func (clh *cloudHypervisor) HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "HotplugAddDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
@@ -897,6 +906,9 @@ func (clh *cloudHypervisor) HotplugAddDevice(ctx context.Context, devInfo interf
 	case VfioDev:
 		device := devInfo.(*config.VFIODev)
 		return nil, clh.hotPlugVFIODevice(device)
+	case NetDev:
+		device := devInfo.(Endpoint)
+		return nil, clh.hotplugAddNetDevice(device)
 	default:
 		return nil, fmt.Errorf("cannot hotplug device: unsupported device type '%v'", devType)
 	}
