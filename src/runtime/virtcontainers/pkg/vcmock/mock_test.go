@@ -120,22 +120,22 @@ func TestVCMockCreateSandbox(t *testing.T) {
 	assert.Nil(m.CreateSandboxFunc)
 
 	ctx := context.Background()
-	_, err := m.CreateSandbox(ctx, vc.SandboxConfig{})
+	_, err := m.CreateSandbox(ctx, vc.SandboxConfig{}, nil)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	m.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig, hookFunc func(context.Context) error) (vc.VCSandbox, error) {
 		return &Sandbox{}, nil
 	}
 
-	sandbox, err := m.CreateSandbox(ctx, vc.SandboxConfig{})
+	sandbox, err := m.CreateSandbox(ctx, vc.SandboxConfig{}, nil)
 	assert.NoError(err)
 	assert.Equal(sandbox, &Sandbox{})
 
 	// reset
 	m.CreateSandboxFunc = nil
 
-	_, err = m.CreateSandbox(ctx, vc.SandboxConfig{})
+	_, err = m.CreateSandbox(ctx, vc.SandboxConfig{}, nil)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }

@@ -162,17 +162,19 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 	ociSpec.Annotations["nerdctl/network-namespace"] = sandboxConfig.NetworkConfig.NetworkID
 	sandboxConfig.Annotations["nerdctl/network-namespace"] = ociSpec.Annotations["nerdctl/network-namespace"]
 
-	// Run pre-start OCI hooks, in the runtime namespace.
-	if err := PreStartHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
-		return nil, vc.Process{}, err
-	}
+	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig, func(ctx context.Context) error {
+		// Run pre-start OCI hooks, in the runtime namespace.
+		if err := PreStartHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
+			return err
+		}
 
-	// Run create runtime OCI hooks, in the runtime namespace.
-	if err := CreateRuntimeHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
-		return nil, vc.Process{}, err
-	}
+		// Run create runtime OCI hooks, in the runtime namespace.
+		if err := CreateRuntimeHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
+			return err
+		}
 
-	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig)
+		return nil
+	})
 	if err != nil {
 		return nil, vc.Process{}, err
 	}
@@ -254,6 +256,12 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 	if err != nil {
 		return vc.Process{}, err
 	}
+
+	hid, err := sandbox.GetHypervisorPid()
+	if err != nil {
+		return vc.Process{}, err
+	}
+	ctx = context.WithValue(ctx, vc.HypervisorPidKey{}, hid)
 
 	// Run pre-start OCI hooks.
 	err = EnterNetNS(sandbox.GetNetNs(), func() error {
