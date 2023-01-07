@@ -23,7 +23,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils/retry"
@@ -54,8 +53,6 @@ const (
 	nydusPassthroughfs = "passthrough_fs"
 
 	sharedPathInGuest = "/containers"
-
-	shimNsPath = "/proc/self/ns/net"
 )
 
 var (
@@ -83,13 +80,6 @@ type nydusd struct {
 	extraArgs       []string
 	pid             int
 	debug           bool
-}
-
-func startInShimNS(cmd *exec.Cmd) error {
-	// Create nydusd in shim netns as it needs to access host network
-	return doNetNS(shimNsPath, func(_ ns.NetNS) error {
-		return cmd.Start()
-	})
 }
 
 func (nd *nydusd) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
