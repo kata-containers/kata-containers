@@ -23,7 +23,9 @@ const JSON_TYPE: &str = "application/json";
 
 const USER_AGT: &str = "kata";
 
+#[allow(dead_code)]
 pub const GENERIC_CPU_VENDOR_FIELD: &str = "vendor_id";
+#[allow(dead_code)]
 pub const GENERIC_CPU_MODEL_FIELD: &str = "model name";
 
 #[allow(dead_code)]
