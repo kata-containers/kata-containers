@@ -9,6 +9,8 @@ set -o nounset
 set -o pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly repo_root_dir="$(cd "${script_dir}/../../../.." && pwd)"
+readonly qemu_builder="${script_dir}/build-qemu.sh"
 
 source "${script_dir}/../../scripts/lib.sh"
 source "${script_dir}/../qemu.blacklist"
@@ -34,16 +36,13 @@ prefix="${prefix:-"/opt/kata"}"
 
 CACHE_TIMEOUT=$(date +"%Y-%m-%d")
 
+[ -n "${build_suffix}" ] && HYPERVISOR_NAME="kata-qemu-${build_suffix}" || HYPERVISOR_NAME="kata-qemu"
+[ -n "${build_suffix}" ] && PKGVERSION="kata-static-${build_suffix}" || PKGVERSION="kata-static"
+
 sudo "${container_engine}" build \
 	--build-arg CACHE_TIMEOUT="${CACHE_TIMEOUT}" \
-	--build-arg BUILD_SUFFIX="${build_suffix}" \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
-	--build-arg QEMU_DESTDIR="${qemu_destdir}" \
-	--build-arg QEMU_REPO="${qemu_repo}" \
-	--build-arg QEMU_VERSION="${qemu_version}" \
-	--build-arg QEMU_TARBALL="${qemu_tar}" \
-	--build-arg PREFIX="${prefix}" \
 	"${packaging_dir}" \
 	-f "${script_dir}/Dockerfile" \
 	-t qemu-static
@@ -51,7 +50,16 @@ sudo "${container_engine}" build \
 sudo "${container_engine}" run \
 	--rm \
 	-i \
+	--env BUILD_SUFFIX="${build_suffix}" \
+	--env HYPERVISOR_NAME="${HYPERVISOR_NAME}" \
+	--env PKGVERSION="${PKGVERSION}" \
+	--env QEMU_DESTDIR="${qemu_destdir}" \
+	--env QEMU_REPO="${qemu_repo}" \
+	--env QEMU_VERSION="${qemu_version}" \
+	--env QEMU_TARBALL="${qemu_tar}" \
+	--env PREFIX="${prefix}" \
+	-v "${repo_root_dir}:/root/kata-containers" \
 	-v "${PWD}":/share qemu-static \
-	mv "${qemu_destdir}/${qemu_tar}" /share/
+	bash -c "/root/kata-containers/tools/packaging/static-build/qemu/build-qemu.sh"
 
 sudo chown ${USER}:$(id -gn ${USER}) "${PWD}/${qemu_tar}"

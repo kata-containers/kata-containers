@@ -43,7 +43,7 @@ build_type=""
 force_setup_generate_config="false"
 #GPU kernel support
 gpu_vendor=""
-#Confidential guest type 
+#Confidential guest type
 conf_guest=""
 #
 patches_path=""
@@ -59,6 +59,8 @@ skip_config_checks="false"
 DESTDIR="${DESTDIR:-/}"
 #PREFIX=
 PREFIX="${PREFIX:-/usr}"
+#Kernel URL
+kernel_url=""
 
 packaging_scripts_dir="${script_dir}/../scripts"
 source "${packaging_scripts_dir}/lib.sh"
@@ -97,8 +99,9 @@ Options:
 	-p <path>   	: Path to a directory with patches to apply to kernel.
 	-s          	: Skip .config checks
 	-t <hypervisor>	: Hypervisor_target.
+	-u <url>	: Kernel URL to be used to download the kernel tarball.
 	-v <version>	: Kernel version to use if kernel path not provided.
-	-x <type>	: Confidential guest protection type, such as sev and tdx
+	-x <type>	: Confidential guest protection type, such as sev, snp and tdx
 EOF
 	exit "$exit_code"
 }
@@ -116,19 +119,23 @@ arch_to_kernel() {
 	esac
 }
 
-get_tdx_kernel() {
+get_tee_kernel() {
 	local version="${1}"
-	local kernel_path=${2}
+	local kernel_path="${2}"
+	local tee="${3}"
 
 	mkdir -p ${kernel_path}
 
-	kernel_url=$(get_from_kata_deps "assets.kernel.tdx.url")
-	kernel_tarball="${version}.tar.gz"
+	[ -z "${kernel_url}" ] && kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
 
-	if [ ! -f "${kernel_tarball}" ]; then
-	   curl --fail -OL "${kernel_url}/${kernel_tarball}"
-	fi
+	local kernel_tarball="${version}.tar.gz"
 
+	# Depending on where we're getting the terball from it may have a
+	# different name, such as linux-${version}.tar.gz or simply
+	# ${version}.tar.gz.  Let's try both before failing.
+	curl --fail -L "${kernel_url}/linux-${kernel_tarball}" -o ${kernel_tarball} || curl --fail -OL "${kernel_url}/${kernel_tarball}"
+
+	mkdir -p ${kernel_path}
 	tar --strip-components=1 -xf ${kernel_tarball} -C ${kernel_path}
 }
 
@@ -139,41 +146,41 @@ get_kernel() {
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
 	[ ! -d "${kernel_path}" ] || die "kernel_path already exist"
 
-	if [ "${conf_guest}" == "tdx" ]; then
-		get_tdx_kernel ${version} ${kernel_path}
+	if [ "${conf_guest}" != "" ]; then
+		get_tee_kernel ${version} ${kernel_path} ${conf_guest}
 		return
 	fi
 
-		#Remove extra 'v'
-		version=${version#v}
+	#Remove extra 'v'
+	version=${version#v}
 
-		major_version=$(echo "${version}" | cut -d. -f1)
-		kernel_tarball="linux-${version}.tar.xz"
+	major_version=$(echo "${version}" | cut -d. -f1)
+	kernel_tarball="linux-${version}.tar.xz"
 
-                if [ ! -f sha256sums.asc ] || ! grep -q "${kernel_tarball}" sha256sums.asc; then
-                        shasum_url="https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
-                        info "Download kernel checksum file: sha256sums.asc from ${shasum_url}"
-                        curl --fail -OL "${shasum_url}"
-                fi
-                grep "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"
+	if [ ! -f sha256sums.asc ] || ! grep -q "${kernel_tarball}" sha256sums.asc; then
+		shasum_url="https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
+		info "Download kernel checksum file: sha256sums.asc from ${shasum_url}"
+		curl --fail -OL "${shasum_url}"
+	fi
+	grep "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"
 
-		if [ -f "${kernel_tarball}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
-			info "invalid kernel tarball ${kernel_tarball} removing "
-			rm -f "${kernel_tarball}"
-		fi
-		if [ ! -f "${kernel_tarball}" ]; then
-			info "Download kernel version ${version}"
-			info "Download kernel"
-			curl --fail -OL "https://www.kernel.org/pub/linux/kernel/v${major_version}.x/${kernel_tarball}"
-		else
-			info "kernel tarball already downloaded"
-		fi
+	if [ -f "${kernel_tarball}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
+		info "invalid kernel tarball ${kernel_tarball} removing "
+		rm -f "${kernel_tarball}"
+	fi
+	if [ ! -f "${kernel_tarball}" ]; then
+		info "Download kernel version ${version}"
+		info "Download kernel"
+		curl --fail -OL "https://www.kernel.org/pub/linux/kernel/v${major_version}.x/${kernel_tarball}"
+	else
+		info "kernel tarball already downloaded"
+	fi
 
-		sha256sum -c "${kernel_tarball}.sha256"
+	sha256sum -c "${kernel_tarball}.sha256"
 
-		tar xf "${kernel_tarball}"
+	tar xf "${kernel_tarball}"
 
-		mv "linux-${version}" "${kernel_path}"
+	mv "linux-${version}" "${kernel_path}"
 }
 
 get_major_kernel_version() {
@@ -398,7 +405,10 @@ build_kernel() {
 	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
 	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
-	make -j $(nproc) ARCH="${arch_target}"
+	make -j $(nproc ${CI:+--ignore 1}) ARCH="${arch_target}"
+	if [ "${conf_guest}" == "sev" ]; then
+		make -j $(nproc ${CI:+--ignore 1}) INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH=${kernel_path} modules_install
+	fi
 	[ "$arch_target" != "powerpc" ] && ([ -e "arch/${arch_target}/boot/bzImage" ] || [ -e "arch/${arch_target}/boot/Image.gz" ])
 	[ -e "vmlinux" ]
 	([ "${hypervisor_target}" == "firecracker" ] || [ "${hypervisor_target}" == "cloud-hypervisor" ]) && [ "${arch_target}" == "arm64" ] && [ -e "arch/${arch_target}/boot/Image" ]
@@ -448,7 +458,7 @@ install_kata() {
 	if [ "${arch_target}" = "arm64" ]; then
 		install --mode 0644 -D "arch/${arch_target}/boot/Image" "${install_path}/${vmlinux}"
 	elif [ "${arch_target}" = "s390" ]; then
-		install --mode 0644 -D "arch/${arch_target}/boot/compressed/vmlinux" "${install_path}/${vmlinux}"
+		install --mode 0644 -D "arch/${arch_target}/boot/vmlinux" "${install_path}/${vmlinux}"
 	else
 		install --mode 0644 -D "vmlinux" "${install_path}/${vmlinux}"
 	fi
@@ -463,7 +473,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:deEfg:hk:p:t:v:x:" opt; do	
+	while getopts "a:b:c:deEfg:hk:p:t:u:v:x:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -506,13 +516,16 @@ main() {
 			t)
 				hypervisor_target="${OPTARG}"
 				;;
+			u)
+				kernel_url="${OPTARG}"
+				;;
 			v)
 				kernel_version="${OPTARG}"
 				;;
 			x)
 				conf_guest="${OPTARG}"
 				case "$conf_guest" in
-					sev|tdx) ;;
+					sev|snp|tdx) ;;
 					*) die "Confidential guest type '$conf_guest' not supported" ;;
 				esac
 				;;
@@ -524,6 +537,16 @@ main() {
 	subcmd="${1:-}"
 
 	[ -z "${subcmd}" ] && usage 1
+
+	if [[ ${build_type} == "experimental" ]] && [[ ${hypervisor_target} == "dragonball" ]]; then
+		build_type="dragonball-experimental"
+		if [ -n "$kernel_version" ];  then
+			kernel_major_version=$(get_major_kernel_version "${kernel_version}")
+			if [[ ${kernel_major_version} != "5.10" ]]; then
+				info "dragonball-experimental kernel patches are only tested on 5.10.x kernel now, other kernel version may cause confliction"	
+			fi
+		fi
+	fi
 
 	# If not kernel version take it from versions.yaml
 	if [ -z "$kernel_version" ]; then
@@ -540,8 +563,12 @@ main() {
 				kernel_version=$(get_from_kata_deps "assets.kernel-experimental.tag")
 			;;
 			esac
-		elif [[ "${conf_guest}" == "tdx" ]]; then
-			 kernel_version=$(get_from_kata_deps "assets.kernel.tdx.tag")
+		elif [[ ${build_type} == "dragonball-experimental" ]]; then
+			kernel_version=$(get_from_kata_deps "assets.dragonball-kernel-experimental.version")
+		elif [[ "${conf_guest}" != "" ]]; then
+			#If specifying a tag for kernel_version, must be formatted version-like to avoid unintended parsing issues
+			kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)
+			[ -n "${kernel_version}" ] || kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.tag")
 		else
 			kernel_version=$(get_from_kata_deps "assets.kernel.version")
 		fi

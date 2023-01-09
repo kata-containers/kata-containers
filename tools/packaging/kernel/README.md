@@ -9,7 +9,8 @@ automates the process to build a kernel for Kata Containers.
 The `build-kernel.sh` script requires an installed Golang version matching the
 [component build requirements](../../../docs/Developer-Guide.md#requirements-to-build-individual-components).
 It also requires [yq](https://github.com/mikefarah/yq) version 3.4.1
-> **Hint**: `snap install yq --channel=v3/stable`
+> **Hint**: `snap install yq --channel=v3/stable` \
+> **or** `go install github.com/mikefarah/yq/v3@latest`
 
 
 The Linux kernel scripts further require a few packages (flex, bison, and libelf-dev)
@@ -47,13 +48,13 @@ Options:
 	-g <vendor> 	: GPU vendor, intel or nvidia.
 	-h          	: Display this help.
 	-k <path>   	: Path to kernel to build.
-	-p <path>   	: Path to a directory with patches to apply to kernel.
+	-p <path>   	: Path to a directory with patches to apply to kernel, only patches in top-level directory are applied.
 	-t <hypervisor>	: Hypervisor_target.
 	-v <version>	: Kernel version to use if kernel path not provided.
 ```
 
 Example:
-```
+```bash
 $ ./build-kernel.sh -v 5.10.25 -g nvidia -f -d setup
 ```
 > **Note**
@@ -68,15 +69,15 @@ $ ./build-kernel.sh -v 5.10.25 -g nvidia -f -d setup
 ## Setup kernel source code
 
 ```bash
-$ go get -d -u github.com/kata-containers/kata-containers
-$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kernel
+$ git clone github.com/kata-containers/kata-containers
+$ cd kata-containers/tools/packaging/kernel
 $ ./build-kernel.sh setup
 ```
 
 The script `./build-kernel.sh` tries to apply the patches from
 `${GOPATH}/src/github.com/kata-containers/kata-containers/tools/packaging/kernel/patches/` when it
 sets up a kernel. If you want to add a source modification, add a patch on this
-directory.
+directory. Patches present in the top-level directory are applied, with subdirectories being ignored.
 
 The script also adds a kernel config file from
 `${GOPATH}/src/github.com/kata-containers/kata-containers/tools/packaging/kernel/configs/` to `.config`

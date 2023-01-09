@@ -26,6 +26,8 @@ readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firec
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
 readonly shimv2_builder="${static_build_dir}/shim-v2/build.sh"
+readonly virtiofsd_builder="${static_build_dir}/virtiofsd/build.sh"
+readonly nydus_builder="${static_build_dir}/nydus/build.sh"
 
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
 
@@ -72,10 +74,12 @@ options:
 	firecracker
 	kernel
 	kernel-experimental
+	nydus
 	qemu
 	rootfs-image
 	rootfs-initrd
 	shim-v2
+	virtiofsd
 EOF
 
 	exit "${return_code}"
@@ -140,10 +144,32 @@ install_clh() {
 	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor/cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor"
 }
 
+# Install static virtiofsd asset
+install_virtiofsd() {
+	info "build static virtiofsd"
+	"${virtiofsd_builder}"
+	info "Install static virtiofsd"
+	mkdir -p "${destdir}/opt/kata/libexec/"
+	sudo install -D --owner root --group root --mode 0744 virtiofsd/virtiofsd "${destdir}/opt/kata/libexec/virtiofsd"
+}
+
+# Install static nydus asset
+install_nydus() {
+	info "build static nydus"
+	"${nydus_builder}"
+	info "Install static nydus"
+	mkdir -p "${destdir}/opt/kata/libexec/"
+	ls -tl . || true
+	ls -tl nydus-static || true
+	sudo install -D --owner root --group root --mode 0744 nydus-static/nydusd "${destdir}/opt/kata/libexec/nydusd"
+}
+
 #Install all components that are not assets
 install_shimv2() {
 	GO_VERSION="$(yq r ${versions_yaml} languages.golang.meta.newest-version)"
+	RUST_VERSION="$(yq r ${versions_yaml} languages.rust.meta.newest-version)"
 	export GO_VERSION
+	export RUST_VERSION
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }
 
@@ -164,8 +190,10 @@ handle_build() {
 		install_image
 		install_initrd
 		install_kernel
+		install_nydus
 		install_qemu
 		install_shimv2
+		install_virtiofsd
 		;;
 
 	cloud-hypervisor) install_clh ;;
@@ -173,6 +201,8 @@ handle_build() {
 	firecracker) install_firecracker ;;
 
 	kernel) install_kernel ;;
+
+	nydus) install_nydus ;;
 
 	kernel-experimental) install_experimental_kernel;;
 
@@ -183,6 +213,8 @@ handle_build() {
 	rootfs-initrd) install_initrd ;;
 
 	shim-v2) install_shimv2 ;;
+
+	virtiofsd) install_virtiofsd ;;
 
 	*)
 		die "Invalid build target ${build_target}"
@@ -217,10 +249,12 @@ main() {
 		firecracker
 		kernel
 		kernel-experimental
+		nydus
 		qemu
 		rootfs-image
 		rootfs-initrd
 		shim-v2
+		virtiofsd
 	)
 	silent=false
 	while getopts "hs-:" opt; do

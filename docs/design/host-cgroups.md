@@ -12,7 +12,7 @@ The OCI [runtime specification][linux-config] provides guidance on where the con
   > [`cgroupsPath`][cgroupspath]: (string, OPTIONAL) path to the cgroups. It can be used to either control the cgroups
   > hierarchy for containers or to run a new process in an existing container
 
-Cgroups are hierarchical, and this can be seen with the following pod example:
+The cgroups are hierarchical, and this can be seen with the following pod example:
 
 - Pod 1: `cgroupsPath=/kubepods/pod1`
   - Container 1: `cgroupsPath=/kubepods/pod1/container1`
@@ -247,14 +247,14 @@ cgroup size and constraints accordingly.
 
 # Supported cgroups
 
-Kata Containers currently only supports cgroups `v1`. 
+Kata Containers currently supports cgroups `v1` and `v2`. 
 
 In the following sections each cgroup is described briefly.
 
-## Cgroups V1
+## cgroups v1
 
-`Cgroups V1` are under a [`tmpfs`][1] filesystem mounted at `/sys/fs/cgroup`, where each cgroup is
-mounted under a separate cgroup filesystem. A `Cgroups v1` hierarchy may look like the following
+`cgroups v1` are under a [`tmpfs`][1] filesystem mounted at `/sys/fs/cgroup`, where each cgroup is
+mounted under a separate cgroup filesystem. A `cgroups v1` hierarchy may look like the following
 diagram:
 
 ```
@@ -301,13 +301,12 @@ diagram:
 A process can join a cgroup by writing its process id (`pid`) to `cgroup.procs` file,
 or join a cgroup partially by writing the task (thread) id (`tid`) to the `tasks` file.
 
-Kata Containers only supports `v1`.
 To know more about `cgroups v1`, see [cgroupsv1(7)][2].
 
-## Cgroups V2
+## cgroups v2
 
-`Cgroups v2` are also known as unified cgroups, unlike `cgroups v1`, the cgroups are
-mounted under the same cgroup filesystem. A `Cgroups v2` hierarchy may look like the following
+`cgroups v2` are also known as unified cgroups, unlike `cgroups v1`, the cgroups are
+mounted under the same cgroup filesystem. A `cgroups v2` hierarchy may look like the following
 diagram:
 
 ```
@@ -353,8 +352,6 @@ diagram:
 Same as `cgroups v1`, a process can join the cgroup by writing its process id (`pid`) to
 `cgroup.procs` file, or join a cgroup partially by writing the task (thread) id (`tid`) to
 `cgroup.threads` file.
-
-Kata Containers does not support cgroups `v2` on the host.
 
 ### Distro Support
 

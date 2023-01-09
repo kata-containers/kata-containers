@@ -12,18 +12,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	goruntime "runtime"
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	"github.com/pbnjay/memory"
 	"github.com/sirupsen/logrus"
 )
 
@@ -35,11 +37,11 @@ const (
 // tables). The names of these tables are in dotted ("nested table")
 // form:
 //
-//   [<component>.<type>]
+//	[<component>.<type>]
 //
 // The components are hypervisor, and agent. For example,
 //
-//   [agent.kata]
+//	[agent.kata]
 //
 // The currently supported types are listed below:
 const (
@@ -48,6 +50,7 @@ const (
 	clhHypervisorTableType         = "clh"
 	qemuHypervisorTableType        = "qemu"
 	acrnHypervisorTableType        = "acrn"
+	dragonballHypervisorTableType  = "dragonball"
 
 	// the maximum amount of PCI bridges that can be cold plugged in a VM
 	maxPCIBridges uint32 = 5
@@ -56,9 +59,9 @@ const (
 type tomlConfig struct {
 	Hypervisor map[string]hypervisor
 	Agent      map[string]agent
-	Runtime    runtime
 	Image      image
 	Factory    factory
+	Runtime    runtime
 }
 
 type image struct {
@@ -95,6 +98,8 @@ type hypervisor struct {
 	FileBackedMemRootDir           string   `toml:"file_mem_backend"`
 	GuestHookPath                  string   `toml:"guest_hook_path"`
 	GuestMemoryDumpPath            string   `toml:"guest_memory_dump_path"`
+	SeccompSandbox                 string   `toml:"seccompsandbox"`
+	BlockDeviceAIO                 string   `toml:"block_device_aio"`
 	HypervisorPathList             []string `toml:"valid_hypervisor_paths"`
 	JailerPathList                 []string `toml:"valid_jailer_paths"`
 	CtlPathList                    []string `toml:"valid_ctlpaths"`
@@ -108,6 +113,7 @@ type hypervisor struct {
 	RxRateLimiterMaxRate           uint64   `toml:"rx_rate_limiter_max_rate"`
 	TxRateLimiterMaxRate           uint64   `toml:"tx_rate_limiter_max_rate"`
 	MemOffset                      uint64   `toml:"memory_offset"`
+	DefaultMaxMemorySize           uint64   `toml:"default_maxmemory"`
 	DiskRateLimiterBwMaxRate       int64    `toml:"disk_rate_limiter_bw_max_rate"`
 	DiskRateLimiterBwOneTimeBurst  int64    `toml:"disk_rate_limiter_bw_one_time_burst"`
 	DiskRateLimiterOpsMaxRate      int64    `toml:"disk_rate_limiter_ops_max_rate"`
@@ -117,6 +123,7 @@ type hypervisor struct {
 	NetRateLimiterOpsMaxRate       int64    `toml:"net_rate_limiter_ops_max_rate"`
 	NetRateLimiterOpsOneTimeBurst  int64    `toml:"net_rate_limiter_ops_one_time_burst"`
 	VirtioFSCacheSize              uint32   `toml:"virtio_fs_cache_size"`
+	VirtioFSQueueSize              uint32   `toml:"virtio_fs_queue_size"`
 	DefaultMaxVCPUs                uint32   `toml:"default_maxvcpus"`
 	MemorySize                     uint32   `toml:"default_memory"`
 	MemSlots                       uint32   `toml:"memory_slots"`
@@ -142,10 +149,14 @@ type hypervisor struct {
 	DisableVhostNet                bool     `toml:"disable_vhost_net"`
 	GuestMemoryDumpPaging          bool     `toml:"guest_memory_dump_paging"`
 	ConfidentialGuest              bool     `toml:"confidential_guest"`
+	SevSnpGuest                    bool     `toml:"sev_snp_guest"`
 	GuestSwap                      bool     `toml:"enable_guest_swap"`
 	Rootless                       bool     `toml:"rootless"`
 	DisableSeccomp                 bool     `toml:"disable_seccomp"`
 	DisableSeLinux                 bool     `toml:"disable_selinux"`
+	DisableGuestSeLinux            bool     `toml:"disable_guest_selinux"`
+	LegacySerial                   bool     `toml:"use_legacy_serial"`
+	EnableVCPUsPinning             bool     `toml:"enable_vcpus_pinning"`
 }
 
 type runtime struct {
@@ -154,12 +165,13 @@ type runtime struct {
 	JaegerUser                string   `toml:"jaeger_user"`
 	JaegerPassword            string   `toml:"jaeger_password"`
 	VfioMode                  string   `toml:"vfio_mode"`
+	GuestSeLinuxLabel         string   `toml:"guest_selinux_label"`
 	SandboxBindMounts         []string `toml:"sandbox_bind_mounts"`
 	Experimental              []string `toml:"experimental"`
-	Debug                     bool     `toml:"enable_debug"`
 	Tracing                   bool     `toml:"enable_tracing"`
 	DisableNewNetNs           bool     `toml:"disable_new_netns"`
 	DisableGuestSeccomp       bool     `toml:"disable_guest_seccomp"`
+	Debug                     bool     `toml:"enable_debug"`
 	SandboxCgroupOnly         bool     `toml:"sandbox_cgroup_only"`
 	StaticSandboxResourceMgmt bool     `toml:"static_sandbox_resource_mgmt"`
 	EnablePprof               bool     `toml:"enable_pprof"`
@@ -172,6 +184,20 @@ type agent struct {
 	Tracing             bool     `toml:"enable_tracing"`
 	DebugConsoleEnabled bool     `toml:"debug_console_enabled"`
 	DialTimeout         uint32   `toml:"dial_timeout"`
+}
+
+func (orig *tomlConfig) Clone() tomlConfig {
+	clone := *orig
+	clone.Hypervisor = make(map[string]hypervisor)
+	clone.Agent = make(map[string]agent)
+
+	for key, value := range orig.Hypervisor {
+		clone.Hypervisor[key] = value
+	}
+	for key, value := range orig.Agent {
+		clone.Agent[key] = value
+	}
+	return clone
 }
 
 func (h hypervisor) path() (string, error) {
@@ -218,7 +244,7 @@ func (h hypervisor) initrd() (string, error) {
 	p := h.Initrd
 
 	if p == "" {
-		return "", errors.New("initrd is not set")
+		return "", nil
 	}
 
 	return ResolvePath(p)
@@ -228,7 +254,7 @@ func (h hypervisor) image() (string, error) {
 	p := h.Image
 
 	if p == "" {
-		return "", errors.New("image is not set")
+		return "", nil
 	}
 
 	return ResolvePath(p)
@@ -398,6 +424,20 @@ func (h hypervisor) defaultMemOffset() uint64 {
 	return offset
 }
 
+func (h hypervisor) defaultMaxMemSz() uint64 {
+	hostMemory := memory.TotalMemory() / 1024 / 1024 //MiB
+
+	if h.DefaultMaxMemorySize == 0 {
+		return hostMemory
+	}
+
+	if h.DefaultMaxMemorySize > hostMemory {
+		return hostMemory
+	}
+
+	return h.DefaultMaxMemorySize
+}
+
 func (h hypervisor) defaultBridges() uint32 {
 	if h.DefaultBridges == 0 {
 		return defaultBridgesCount
@@ -432,6 +472,22 @@ func (h hypervisor) blockDeviceDriver() (string, error) {
 	}
 
 	return "", fmt.Errorf("Invalid hypervisor block storage driver %v specified (supported drivers: %v)", h.BlockDeviceDriver, supportedBlockDrivers)
+}
+
+func (h hypervisor) blockDeviceAIO() (string, error) {
+	supportedBlockAIO := []string{config.AIOIOUring, config.AIONative, config.AIOThreads}
+
+	if h.BlockDeviceAIO == "" {
+		return defaultBlockDeviceAIO, nil
+	}
+
+	for _, b := range supportedBlockAIO {
+		if b == h.BlockDeviceAIO {
+			return h.BlockDeviceAIO, nil
+		}
+	}
+
+	return "", fmt.Errorf("Invalid hypervisor block storage I/O mechanism  %v specified (supported AIO: %v)", h.BlockDeviceAIO, supportedBlockAIO)
 }
 
 func (h hypervisor) sharedFS() (string, error) {
@@ -470,24 +526,6 @@ func (h hypervisor) vhostUserStorePath() string {
 		return defaultVhostUserStorePath
 	}
 	return h.VhostUserStorePath
-}
-
-func (h hypervisor) getInitrdAndImage() (initrd string, image string, err error) {
-	initrd, errInitrd := h.initrd()
-
-	image, errImage := h.image()
-
-	if h.ConfidentialGuest && h.MachineType == vc.QemuCCWVirtio {
-		if image != "" || initrd != "" {
-			return "", "", errors.New("Neither the image nor initrd path may be set for Secure Execution")
-		}
-	} else if image != "" && initrd != "" {
-		return "", "", errors.New("having both an image and an initrd defined in the configuration file is not supported")
-	} else if errInitrd != nil && errImage != nil {
-		return "", "", fmt.Errorf("Either initrd or image must be set to a valid path (initrd: %v) (image: %v)", errInitrd, errImage)
-	}
-
-	return
 }
 
 func (h hypervisor) getDiskRateLimiterBwMaxRate() int64 {
@@ -599,7 +637,12 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	initrd, image, err := h.getInitrdAndImage()
+	initrd, err := h.initrd()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	image, err := h.image()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
 	}
@@ -633,6 +676,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
 		MemorySize:            h.defaultMemSz(),
 		MemSlots:              h.defaultMemSlots(),
+		DefaultMaxMemorySize:  h.defaultMaxMemSz(),
 		EntropySource:         h.GetEntropySource(),
 		EntropySourceList:     h.EntropySourceList,
 		DefaultBridges:        h.defaultBridges(),
@@ -647,6 +691,8 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
 		EnableAnnotations:     h.EnableAnnotations,
+		DisableSeLinux:        h.DisableSeLinux,
+		DisableGuestSeLinux:   true, // Guest SELinux is not supported in Firecracker
 	}, nil
 }
 
@@ -661,7 +707,12 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	initrd, image, err := h.getInitrdAndImage()
+	initrd, err := h.initrd()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	image, err := h.image()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
 	}
@@ -695,6 +746,11 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	}
 
 	blockDriver, err := h.blockDeviceDriver()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	blockAIO, err := h.blockDeviceAIO()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
 	}
@@ -734,6 +790,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemorySize:              h.defaultMemSz(),
 		MemSlots:                h.defaultMemSlots(),
 		MemOffset:               h.defaultMemOffset(),
+		DefaultMaxMemorySize:    h.defaultMaxMemSz(),
 		VirtioMem:               h.VirtioMem,
 		EntropySource:           h.GetEntropySource(),
 		EntropySourceList:       h.EntropySourceList,
@@ -744,6 +801,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		VirtioFSDaemonList:      h.VirtioFSDaemonList,
 		VirtioFSCacheSize:       h.VirtioFSCacheSize,
 		VirtioFSCache:           h.defaultVirtioFSCache(),
+		VirtioFSQueueSize:       h.VirtioFSQueueSize,
 		VirtioFSExtraArgs:       h.VirtioFSExtraArgs,
 		MemPrealloc:             h.MemPrealloc,
 		HugePages:               h.HugePages,
@@ -754,6 +812,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		Debug:                   h.Debug,
 		DisableNestingChecks:    h.DisableNestingChecks,
 		BlockDeviceDriver:       blockDriver,
+		BlockDeviceAIO:          blockAIO,
 		BlockDeviceCacheSet:     h.BlockDeviceCacheSet,
 		BlockDeviceCacheDirect:  h.BlockDeviceCacheDirect,
 		BlockDeviceCacheNoflush: h.BlockDeviceCacheNoflush,
@@ -766,6 +825,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EnableVhostUserStore:    h.EnableVhostUserStore,
 		VhostUserStorePath:      h.vhostUserStorePath(),
 		VhostUserStorePathList:  h.VhostUserStorePathList,
+		SeccompSandbox:          h.SeccompSandbox,
 		GuestHookPath:           h.guestHookPath(),
 		RxRateLimiterMaxRate:    rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:    txRateLimiterMaxRate,
@@ -773,8 +833,13 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		GuestMemoryDumpPath:     h.GuestMemoryDumpPath,
 		GuestMemoryDumpPaging:   h.GuestMemoryDumpPaging,
 		ConfidentialGuest:       h.ConfidentialGuest,
+		SevSnpGuest:             h.SevSnpGuest,
 		GuestSwap:               h.GuestSwap,
 		Rootless:                h.Rootless,
+		LegacySerial:            h.LegacySerial,
+		DisableSeLinux:          h.DisableSeLinux,
+		EnableVCPUsPinning:      h.EnableVCPUsPinning,
+		DisableGuestSeLinux:     h.DisableGuestSeLinux,
 	}, nil
 }
 
@@ -829,6 +894,7 @@ func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
 		MemorySize:            h.defaultMemSz(),
 		MemSlots:              h.defaultMemSlots(),
+		DefaultMaxMemorySize:  h.defaultMaxMemSz(),
 		EntropySource:         h.GetEntropySource(),
 		EntropySourceList:     h.EntropySourceList,
 		DefaultBridges:        h.defaultBridges(),
@@ -838,7 +904,9 @@ func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		BlockDeviceDriver:     blockDriver,
 		DisableVhostNet:       h.DisableVhostNet,
 		GuestHookPath:         h.guestHookPath(),
+		DisableSeLinux:        h.DisableSeLinux,
 		EnableAnnotations:     h.EnableAnnotations,
+		DisableGuestSeLinux:   true, // Guest SELinux is not supported in ACRN
 	}, nil
 }
 
@@ -853,7 +921,12 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	initrd, image, err := h.getInitrdAndImage()
+	initrd, err := h.initrd()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	image, err := h.image()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
 	}
@@ -906,6 +979,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemorySize:                     h.defaultMemSz(),
 		MemSlots:                       h.defaultMemSlots(),
 		MemOffset:                      h.defaultMemOffset(),
+		DefaultMaxMemorySize:           h.defaultMaxMemSz(),
 		VirtioMem:                      h.VirtioMem,
 		EntropySource:                  h.GetEntropySource(),
 		EntropySourceList:              h.EntropySourceList,
@@ -938,6 +1012,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableSeccomp:                 h.DisableSeccomp,
 		ConfidentialGuest:              h.ConfidentialGuest,
 		DisableSeLinux:                 h.DisableSeLinux,
+		DisableGuestSeLinux:            h.DisableGuestSeLinux,
 		NetRateLimiterBwMaxRate:        h.getNetRateLimiterBwMaxRate(),
 		NetRateLimiterBwOneTimeBurst:   h.getNetRateLimiterBwOneTimeBurst(),
 		NetRateLimiterOpsMaxRate:       h.getNetRateLimiterOpsMaxRate(),
@@ -946,6 +1021,30 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DiskRateLimiterBwOneTimeBurst:  h.getDiskRateLimiterBwOneTimeBurst(),
 		DiskRateLimiterOpsMaxRate:      h.getDiskRateLimiterOpsMaxRate(),
 		DiskRateLimiterOpsOneTimeBurst: h.getDiskRateLimiterOpsOneTimeBurst(),
+	}, nil
+}
+
+func newDragonballHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
+	kernel, err := h.kernel()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+	image, err := h.image()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+	kernelParams := h.kernelParams()
+
+	return vc.HypervisorConfig{
+		KernelPath:      kernel,
+		ImagePath:       image,
+		KernelParams:    vc.DeserializeParams(strings.Fields(kernelParams)),
+		NumVCPUs:        h.defaultVCPUs(),
+		DefaultMaxVCPUs: h.defaultMaxVCPUs(),
+		MemorySize:      h.defaultMemSz(),
+		MemSlots:        h.defaultMemSlots(),
+		EntropySource:   h.GetEntropySource(),
+		Debug:           h.Debug,
 	}, nil
 }
 
@@ -982,6 +1081,9 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 		case clhHypervisorTableType:
 			config.HypervisorType = vc.ClhHypervisor
 			hConfig, err = newClhHypervisorConfig(hypervisor)
+		case dragonballHypervisorTableType:
+			config.HypervisorType = vc.DragonballHypervisor
+			hConfig, err = newDragonballHypervisorConfig(hypervisor)
 		}
 
 		if err != nil {
@@ -1114,6 +1216,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		Debug:                   defaultEnableDebug,
 		DisableNestingChecks:    defaultDisableNestingChecks,
 		BlockDeviceDriver:       defaultBlockDeviceDriver,
+		BlockDeviceAIO:          defaultBlockDeviceAIO,
 		BlockDeviceCacheSet:     defaultBlockDeviceCacheSet,
 		BlockDeviceCacheDirect:  defaultBlockDeviceCacheDirect,
 		BlockDeviceCacheNoflush: defaultBlockDeviceCacheNoflush,
@@ -1129,9 +1232,12 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		TxRateLimiterMaxRate:    defaultTxRateLimiterMaxRate,
 		SGXEPCSize:              defaultSGXEPCSize,
 		ConfidentialGuest:       defaultConfidentialGuest,
+		SevSnpGuest:             defaultSevSnpGuest,
 		GuestSwap:               defaultGuestSwap,
 		Rootless:                defaultRootlessHypervisor,
 		DisableSeccomp:          defaultDisableSeccomp,
+		DisableGuestSeLinux:     defaultDisableGuestSeLinux,
+		LegacySerial:            defaultLegacySerial,
 	}
 }
 
@@ -1218,7 +1324,7 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	}
 
 	config.DisableGuestSeccomp = tomlConf.Runtime.DisableGuestSeccomp
-
+	config.GuestSeLinuxLabel = tomlConf.Runtime.GuestSeLinuxLabel
 	config.StaticSandboxResourceMgmt = tomlConf.Runtime.StaticSandboxResourceMgmt
 	config.SandboxCgroupOnly = tomlConf.Runtime.SandboxCgroupOnly
 	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
@@ -1300,7 +1406,177 @@ func decodeConfig(configPath string) (tomlConfig, string, error) {
 		return tomlConf, resolved, err
 	}
 
+	err = decodeDropIns(resolved, &tomlConf)
+	if err != nil {
+		return tomlConf, resolved, err
+	}
+
 	return tomlConf, resolved, nil
+}
+
+func decodeDropIns(mainConfigPath string, tomlConf *tomlConfig) error {
+	configDir := filepath.Dir(mainConfigPath)
+	dropInDir := filepath.Join(configDir, "config.d")
+
+	files, err := os.ReadDir(dropInDir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("error reading %q directory: %s", dropInDir, err)
+		} else {
+			return nil
+		}
+	}
+
+	for _, file := range files {
+		dropInFpath := filepath.Join(dropInDir, file.Name())
+
+		err = updateFromDropIn(dropInFpath, tomlConf)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func updateFromDropIn(dropInFpath string, tomlConf *tomlConfig) error {
+	configData, err := os.ReadFile(dropInFpath)
+	if err != nil {
+		return fmt.Errorf("error reading file %q: %s", dropInFpath, err)
+	}
+
+	// Ordinarily, BurntSushi only updates fields of tomlConfig that are
+	// changed by the file and leaves the rest alone.  This doesn't apply
+	// though to tomlConfig substructures that are stored in maps.  Their
+	// previous contents are erased by toml.Decode() and only fields changed by
+	// the file are set.  To work around this, a bit of juggling is needed to
+	// preserve the previous contents and merge them manually with the incoming
+	// changes afterwards, using reflection.
+	tomlConfOrig := tomlConf.Clone()
+
+	var md toml.MetaData
+	md, err = toml.Decode(string(configData), &tomlConf)
+
+	if err != nil {
+		return fmt.Errorf("error decoding file %q: %s", dropInFpath, err)
+	}
+
+	if len(md.Undecoded()) > 0 {
+		msg := fmt.Sprintf("warning: undecoded keys in %q: %+v", dropInFpath, md.Undecoded())
+		kataUtilsLogger.Warn(msg)
+	}
+
+	for _, key := range md.Keys() {
+		err = applyKey(*tomlConf, key, &tomlConfOrig)
+		if err != nil {
+			return fmt.Errorf("error applying key '%+v' from drop-in file %q: %s", key, dropInFpath, err)
+		}
+	}
+
+	tomlConf.Hypervisor = tomlConfOrig.Hypervisor
+	tomlConf.Agent = tomlConfOrig.Agent
+
+	return nil
+}
+
+func applyKey(sourceConf tomlConfig, key []string, targetConf *tomlConfig) error {
+	// Any key that might need treatment provided by this function has to have
+	// (at least) three components: [ map_name map_key_name field_toml_tag ],
+	// e.g. [agent kata enable_tracing] or [hypervisor qemu confidential_guest].
+	if len(key) < 3 {
+		return nil
+	}
+	switch key[0] {
+	case "agent":
+		return applyAgentKey(sourceConf, key[1:], targetConf)
+	case "hypervisor":
+		return applyHypervisorKey(sourceConf, key[1:], targetConf)
+		// The table the 'key' is in is not stored in a map so no special handling
+		// is needed.
+	}
+	return nil
+}
+
+// Both of the following functions copy the value of a 'sourceConf' field
+// identified by the TOML tag in 'key' into the corresponding field in
+// 'targetConf'.
+func applyAgentKey(sourceConf tomlConfig, key []string, targetConf *tomlConfig) error {
+	agentName := key[0]
+	tomlKeyName := key[1]
+
+	sourceAgentConf := sourceConf.Agent[agentName]
+	targetAgentConf := targetConf.Agent[agentName]
+
+	err := copyFieldValue(reflect.ValueOf(&sourceAgentConf).Elem(), tomlKeyName, reflect.ValueOf(&targetAgentConf).Elem())
+	if err != nil {
+		return err
+	}
+
+	targetConf.Agent[agentName] = targetAgentConf
+	return nil
+}
+
+func applyHypervisorKey(sourceConf tomlConfig, key []string, targetConf *tomlConfig) error {
+	hypervisorName := key[0]
+	tomlKeyName := key[1]
+
+	sourceHypervisorConf := sourceConf.Hypervisor[hypervisorName]
+	targetHypervisorConf := targetConf.Hypervisor[hypervisorName]
+
+	err := copyFieldValue(reflect.ValueOf(&sourceHypervisorConf).Elem(), tomlKeyName, reflect.ValueOf(&targetHypervisorConf).Elem())
+	if err != nil {
+		return err
+	}
+
+	targetConf.Hypervisor[hypervisorName] = targetHypervisorConf
+	return nil
+}
+
+// Copies a TOML value of the source field identified by its TOML key to the
+// corresponding field of the target.  Basically
+// 'target[tomlKeyName] = source[tomlKeyNmae]'.
+func copyFieldValue(source reflect.Value, tomlKeyName string, target reflect.Value) error {
+	val, err := getValue(source, tomlKeyName)
+	if err != nil {
+		return fmt.Errorf("error getting key %q from a decoded drop-in conf file: %s", tomlKeyName, err)
+	}
+	err = setValue(target, tomlKeyName, val)
+	if err != nil {
+		return fmt.Errorf("error setting key %q to a new value '%v': %s", tomlKeyName, val.Interface(), err)
+	}
+	return nil
+}
+
+// The first argument is expected to be a reflect.Value of a tomlConfig
+// substructure (hypervisor, agent), the second argument is a TOML key
+// corresponding to the substructure field whose TOML value is queried.
+// Return value corresponds to 'tomlConfStruct[tomlKey]'.
+func getValue(tomlConfStruct reflect.Value, tomlKey string) (reflect.Value, error) {
+	tomlConfStructType := tomlConfStruct.Type()
+	for j := 0; j < tomlConfStruct.NumField(); j++ {
+		fieldTomlTag := tomlConfStructType.Field(j).Tag.Get("toml")
+		if fieldTomlTag == tomlKey {
+			return tomlConfStruct.Field(j), nil
+		}
+	}
+	return reflect.Value{}, fmt.Errorf("key %q not found", tomlKey)
+}
+
+// The first argument is expected to be a reflect.Value of a tomlConfig
+// substructure (hypervisor, agent), the second argument is a TOML key
+// corresponding to the substructure field whose TOML value is to be changed,
+// the third argument is a reflect.Value representing the new TOML value.
+// An equivalent of 'tomlConfStruct[tomlKey] = newVal'.
+func setValue(tomlConfStruct reflect.Value, tomlKey string, newVal reflect.Value) error {
+	tomlConfStructType := tomlConfStruct.Type()
+	for j := 0; j < tomlConfStruct.NumField(); j++ {
+		fieldTomlTag := tomlConfStructType.Field(j).Tag.Get("toml")
+		if fieldTomlTag == tomlKey {
+			tomlConfStruct.Field(j).Set(newVal)
+			return nil
+		}
+	}
+	return fmt.Errorf("key %q not found", tomlKey)
 }
 
 // checkConfig checks the validity of the specified config.

@@ -20,11 +20,35 @@ import (
 // DefaultResourceControllerID runtime-determined location in the cgroups hierarchy.
 const DefaultResourceControllerID = "/vc"
 
-// ValidCgroupPath returns a valid cgroup path.
+// ValidCgroupPathV1 returns a valid cgroup path for cgroup v1.
 // see https://github.com/opencontainers/runtime-spec/blob/master/config-linux.md#cgroups-path
-func ValidCgroupPath(path string, systemdCgroup bool) (string, error) {
+func ValidCgroupPathV1(path string, systemdCgroup bool) (string, error) {
 	if IsSystemdCgroup(path) {
 		return path, nil
+	}
+
+	if systemdCgroup {
+		return "", fmt.Errorf("malformed systemd path '%v': expected to be of form 'slice:prefix:name'", path)
+	}
+
+	// In the case of an absolute path (starting with /), the runtime MUST
+	// take the path to be relative to the cgroups mount point.
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path), nil
+	}
+
+	// In the case of a relative path (not starting with /), the runtime MAY
+	// interpret the path relative to a runtime-determined location in the cgroups hierarchy.
+	// clean up path and return a new path relative to DefaultResourceControllerID
+	return filepath.Join(DefaultResourceControllerID, filepath.Clean("/"+path)), nil
+}
+
+// ValidCgroupPathV2 returns a valid cgroup path for cgroup v2.
+// see https://github.com/opencontainers/runtime-spec/blob/master/config-linux.md#cgroups-path
+func ValidCgroupPathV2(path string, systemdCgroup bool) (string, error) {
+	// In cgroup v2，path must be a "clean" absolute path starts with "/".
+	if IsSystemdCgroup(path) {
+		return filepath.Join("/", path), nil
 	}
 
 	if systemdCgroup {
@@ -68,7 +92,7 @@ func cgroupHierarchy(path string) (cgroups.Hierarchy, cgroups.Path, error) {
 	}
 }
 
-func createCgroupsSystemd(slice string, unit string, pid uint32) error {
+func createCgroupsSystemd(slice string, unit string, pid int) error {
 	ctx := context.TODO()
 	conn, err := systemdDbus.NewWithContext(ctx)
 	if err != nil {
@@ -84,14 +108,19 @@ func createCgroupsSystemd(slice string, unit string, pid uint32) error {
 		newProperty("IOAccounting", true),
 	}
 
-	// https://github.com/opencontainers/runc/blob/master/docs/systemd.md
-	if strings.HasSuffix(unit, ".scope") {
-		// It's a scope, which we put into a Slice=.
-		properties = append(properties, systemdDbus.PropSlice(slice))
-		properties = append(properties, newProperty("Delegate", true))
-		properties = append(properties, systemdDbus.PropPids(pid))
+	if strings.HasSuffix(unit, ".slice") {
+		// If we create a slice, the parent is defined via a Wants=.
+		properties = append(properties, systemdDbus.PropWants(slice))
 	} else {
-		return fmt.Errorf("Failed to create cgroups with systemd: unit %s is not a scope", unit)
+		// Otherwise it's a scope, which we put into a Slice=.
+		properties = append(properties, systemdDbus.PropSlice(slice))
+	}
+
+	// Assume scopes always support delegation (supported since systemd v218).
+	properties = append(properties, newProperty("Delegate", true))
+
+	if pid != -1 {
+		properties = append(properties, systemdDbus.PropPids(uint32(pid)))
 	}
 
 	ch := make(chan string)

@@ -28,7 +28,6 @@ const (
 
 	testSandboxID   = "777-77-77777777"
 	testContainerID = "42"
-	testConsole     = "/dev/pts/888"
 
 	testContainerTypeAnnotation = "io.kubernetes.cri.container-type"
 	testSandboxIDAnnotation     = "io.kubernetes.cri.sandbox-id"
@@ -91,7 +90,7 @@ func newTestHypervisorConfig(dir string, create bool) (vc.HypervisorConfig, erro
 }
 
 // newTestRuntimeConfig creates a new RuntimeConfig
-func newTestRuntimeConfig(dir, consolePath string, create bool) (oci.RuntimeConfig, error) {
+func newTestRuntimeConfig(dir string, create bool) (oci.RuntimeConfig, error) {
 	if dir == "" {
 		return oci.RuntimeConfig{}, errors.New("BUG: need directory")
 	}
@@ -104,7 +103,6 @@ func newTestRuntimeConfig(dir, consolePath string, create bool) (oci.RuntimeConf
 	return oci.RuntimeConfig{
 		HypervisorType:   vc.QemuHypervisor,
 		HypervisorConfig: hypervisorConfig,
-		Console:          consolePath,
 	}, nil
 }
 

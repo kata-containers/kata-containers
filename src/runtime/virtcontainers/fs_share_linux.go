@@ -19,8 +19,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
@@ -369,7 +369,7 @@ func (f *FilesystemShare) shareRootFilesystemWithNydus(ctx context.Context, c *C
 	}, nil
 }
 
-//func (c *Container) shareRootfs(ctx context.Context) (*grpc.Storage, string, error) {
+// func (c *Container) shareRootfs(ctx context.Context) (*grpc.Storage, string, error) {
 func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container) (*SharedFile, error) {
 	if c.rootFs.Type == NydusRootFSType {
 		return f.shareRootFilesystemWithNydus(ctx, c)
@@ -405,7 +405,11 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 			rootfsStorage.Source = blockDrive.DevNo
 		case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock:
 			rootfsStorage.Driver = kataBlkDevType
-			rootfsStorage.Source = blockDrive.PCIPath.String()
+			if f.sandbox.config.HypervisorType == AcrnHypervisor {
+				rootfsStorage.Source = blockDrive.VirtPath
+			} else {
+				rootfsStorage.Source = blockDrive.PCIPath.String()
+			}
 		case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioSCSI:
 			rootfsStorage.Driver = kataSCSIDevType
 			rootfsStorage.Source = blockDrive.SCSIAddr

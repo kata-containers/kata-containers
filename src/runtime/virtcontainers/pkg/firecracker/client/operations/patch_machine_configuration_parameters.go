@@ -13,65 +13,78 @@ import (
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/runtime"
 	cr "github.com/go-openapi/runtime/client"
+	"github.com/go-openapi/strfmt"
 
-	strfmt "github.com/go-openapi/strfmt"
-
-	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 )
 
-// NewPatchMachineConfigurationParams creates a new PatchMachineConfigurationParams object
-// with the default values initialized.
+// NewPatchMachineConfigurationParams creates a new PatchMachineConfigurationParams object,
+// with the default timeout for this client.
+//
+// Default values are not hydrated, since defaults are normally applied by the API server side.
+//
+// To enforce default values in parameter, use SetDefaults or WithDefaults.
 func NewPatchMachineConfigurationParams() *PatchMachineConfigurationParams {
-	var ()
 	return &PatchMachineConfigurationParams{
-
 		timeout: cr.DefaultTimeout,
 	}
 }
 
 // NewPatchMachineConfigurationParamsWithTimeout creates a new PatchMachineConfigurationParams object
-// with the default values initialized, and the ability to set a timeout on a request
+// with the ability to set a timeout on a request.
 func NewPatchMachineConfigurationParamsWithTimeout(timeout time.Duration) *PatchMachineConfigurationParams {
-	var ()
 	return &PatchMachineConfigurationParams{
-
 		timeout: timeout,
 	}
 }
 
 // NewPatchMachineConfigurationParamsWithContext creates a new PatchMachineConfigurationParams object
-// with the default values initialized, and the ability to set a context for a request
+// with the ability to set a context for a request.
 func NewPatchMachineConfigurationParamsWithContext(ctx context.Context) *PatchMachineConfigurationParams {
-	var ()
 	return &PatchMachineConfigurationParams{
-
 		Context: ctx,
 	}
 }
 
 // NewPatchMachineConfigurationParamsWithHTTPClient creates a new PatchMachineConfigurationParams object
-// with the default values initialized, and the ability to set a custom HTTPClient for a request
+// with the ability to set a custom HTTPClient for a request.
 func NewPatchMachineConfigurationParamsWithHTTPClient(client *http.Client) *PatchMachineConfigurationParams {
-	var ()
 	return &PatchMachineConfigurationParams{
 		HTTPClient: client,
 	}
 }
 
-/*PatchMachineConfigurationParams contains all the parameters to send to the API endpoint
-for the patch machine configuration operation typically these are written to a http.Request
+/* PatchMachineConfigurationParams contains all the parameters to send to the API endpoint
+   for the patch machine configuration operation.
+
+   Typically these are written to a http.Request.
 */
 type PatchMachineConfigurationParams struct {
 
-	/*Body
-	  A subset of Machine Configuration Parameters
+	/* Body.
 
+	   A subset of Machine Configuration Parameters
 	*/
 	Body *models.MachineConfiguration
 
 	timeout    time.Duration
 	Context    context.Context
 	HTTPClient *http.Client
+}
+
+// WithDefaults hydrates default values in the patch machine configuration params (not the query body).
+//
+// All values with no default are reset to their zero value.
+func (o *PatchMachineConfigurationParams) WithDefaults() *PatchMachineConfigurationParams {
+	o.SetDefaults()
+	return o
+}
+
+// SetDefaults hydrates default values in the patch machine configuration params (not the query body).
+//
+// All values with no default are reset to their zero value.
+func (o *PatchMachineConfigurationParams) SetDefaults() {
+	// no default values defined for this parameter
 }
 
 // WithTimeout adds the timeout to the patch machine configuration params
@@ -125,7 +138,6 @@ func (o *PatchMachineConfigurationParams) WriteToRequest(r runtime.ClientRequest
 		return err
 	}
 	var res []error
-
 	if o.Body != nil {
 		if err := r.SetBodyParam(o.Body); err != nil {
 			return err

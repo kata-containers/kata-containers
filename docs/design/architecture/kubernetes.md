@@ -17,7 +17,7 @@ Kubelet instance is responsible for managing the lifecycle of pods
 within the nodes and eventually relies on a container runtime to
 handle execution. The Kubelet architecture decouples lifecycle
 management from container execution through a dedicated gRPC based
-[Container Runtime Interface (CRI)](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/node/container-runtime-interface-v1.md).
+[Container Runtime Interface (CRI)](https://github.com/kubernetes/design-proposals-archive/blob/main/node/container-runtime-interface-v1.md).
 
 In other words, a Kubelet is a CRI client and expects a CRI
 implementation to handle the server side of the interface.

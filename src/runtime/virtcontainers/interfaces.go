@@ -10,8 +10,8 @@ import (
 	"io"
 	"syscall"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -23,7 +23,7 @@ type VC interface {
 	SetLogger(ctx context.Context, logger *logrus.Entry)
 	SetFactory(ctx context.Context, factory Factory)
 
-	CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig) (VCSandbox, error)
+	CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, hookFunc func(context.Context) error) (VCSandbox, error)
 	CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error
 }
 
@@ -79,6 +79,9 @@ type VCSandbox interface {
 
 	GuestVolumeStats(ctx context.Context, volumePath string) ([]byte, error)
 	ResizeGuestVolume(ctx context.Context, volumePath string, size uint64) error
+
+	GetIPTables(ctx context.Context, isIPv6 bool) ([]byte, error)
+	SetIPTables(ctx context.Context, isIPv6 bool, data []byte) error
 }
 
 // VCContainer is the Container interface

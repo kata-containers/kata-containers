@@ -56,6 +56,7 @@ BINLIBEXECLIST :=
 BIN_PREFIX = $(PROJECT_TYPE)
 PROJECT_DIR = $(PROJECT_TAG)
 IMAGENAME = $(PROJECT_TAG).img
+INITRDNAME = $(PROJECT_TAG)-initrd.img
 
 TARGET = $(BIN_PREFIX)-runtime
 RUNTIME_OUTPUT = $(CURDIR)/$(TARGET)
@@ -110,6 +111,7 @@ PKGLIBEXECDIR := $(LIBEXECDIR)/$(PROJECT_DIR)
 KERNELDIR := $(PKGDATADIR)
 
 IMAGEPATH := $(PKGDATADIR)/$(IMAGENAME)
+INITRDPATH := $(PKGDATADIR)/$(INITRDNAME)
 FIRMWAREPATH :=
 FIRMWAREVOLUMEPATH :=
 
@@ -158,15 +160,27 @@ DEFMEMSZ := 2048
 # - vm template memory
 # - hugepage memory
 DEFMEMSLOTS := 10
+# Default maximum memory in MiB
+DEFMAXMEMSZ := 0
 #Default number of bridges
 DEFBRIDGES := 1
-DEFENABLEANNOTATIONS := []
+DEFENABLEANNOTATIONS := [\"enable_iommu\"]
 DEFDISABLEGUESTSECCOMP := true
 DEFDISABLEGUESTEMPTYDIR := false
 #Default experimental features enabled
 DEFAULTEXPFEATURES := []
 
 DEFDISABLESELINUX := false
+
+# Default guest SELinux configuration
+DEFDISABLEGUESTSELINUX := true
+DEFGUESTSELINUXLABEL := system_u:system_r:container_t
+
+#Default SeccomSandbox param
+#The same default policy is used by libvirt
+#More explanation on https://lists.gnu.org/archive/html/qemu-devel/2017-02/msg03348.html
+# Note: "elevateprivileges=deny" doesn't work with daemonize option, so it's removed from the seccomp sandbox
+DEFSECCOMPSANDBOXPARAM := on,obsolete=deny,spawn=deny,resourcecontrol=deny
 
 #Default entropy source
 DEFENTROPYSOURCE := /dev/urandom
@@ -175,12 +189,16 @@ DEFVALIDENTROPYSOURCES := [\"/dev/urandom\",\"/dev/random\",\"\"]
 DEFDISABLEBLOCK := false
 DEFSHAREDFS_CLH_VIRTIOFS := virtio-fs
 DEFSHAREDFS_QEMU_VIRTIOFS := virtio-fs
+DEFVIRTIOFSDAEMON := $(LIBEXECDIR)/virtiofsd
+ifeq ($(ARCH),ppc64le)
 DEFVIRTIOFSDAEMON := $(LIBEXECDIR)/kata-qemu/virtiofsd
+endif
 DEFVALIDVIRTIOFSDAEMONPATHS := [\"$(DEFVIRTIOFSDAEMON)\"]
 # Default DAX mapping cache size in MiB
 #if value is 0, DAX is not enabled
 DEFVIRTIOFSCACHESIZE ?= 0
 DEFVIRTIOFSCACHE ?= auto
+DEFVIRTIOFSQUEUESIZE ?= 1024
 # Format example:
 #   [\"-o\", \"arg1=xxx,arg2\", \"-o\", \"hello world\", \"--arg3=yyy\"]
 #
@@ -243,6 +261,7 @@ ifneq (,$(QEMUCMD))
 
     # qemu-specific options (all should be suffixed by "_QEMU")
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
+    DEFBLOCKDEVICEAIO_QEMU := io_uring
     DEFNETWORKMODEL_QEMU := tcfilter
     KERNELTYPE = uncompressed
     KERNELNAME = $(call MAKE_KERNEL_NAME,$(KERNELTYPE))
@@ -315,7 +334,8 @@ ifneq (,$(ACRNCMD))
     DEFMAXVCPUS_ACRN := 1
     DEFBLOCKSTORAGEDRIVER_ACRN := virtio-blk
     DEFNETWORKMODEL_ACRN := macvtap
-    KERNEL_NAME_ACRN = $(call MAKE_KERNEL_NAME,$(KERNELTYPE))
+    KERNELTYPE_ACRN = compressed
+    KERNEL_NAME_ACRN = $(call MAKE_KERNEL_NAME,$(KERNELTYPE_ACRN))
     KERNELPATH_ACRN = $(KERNELDIR)/$(KERNEL_NAME_ACRN)
 endif
 
@@ -390,6 +410,8 @@ USER_VARS += FCVALIDJAILERPATHS
 USER_VARS += SYSCONFIG
 USER_VARS += IMAGENAME
 USER_VARS += IMAGEPATH
+USER_VARS += INITRDNAME
+USER_VARS += INITRDPATH
 USER_VARS += MACHINETYPE
 USER_VARS += KERNELDIR
 USER_VARS += KERNELTYPE
@@ -434,6 +456,7 @@ USER_VARS += DEFMAXVCPUS
 USER_VARS += DEFMAXVCPUS_ACRN
 USER_VARS += DEFMEMSZ
 USER_VARS += DEFMEMSLOTS
+USER_VARS += DEFMAXMEMSZ
 USER_VARS += DEFBRIDGES
 USER_VARS += DEFNETWORKMODEL_ACRN
 USER_VARS += DEFNETWORKMODEL_CLH
@@ -442,20 +465,25 @@ USER_VARS += DEFNETWORKMODEL_QEMU
 USER_VARS += DEFDISABLEGUESTEMPTYDIR
 USER_VARS += DEFDISABLEGUESTSECCOMP
 USER_VARS += DEFDISABLESELINUX
+USER_VARS += DEFDISABLEGUESTSELINUX
+USER_VARS += DEFGUESTSELINUXLABEL
 USER_VARS += DEFAULTEXPFEATURES
 USER_VARS += DEFDISABLEBLOCK
 USER_VARS += DEFBLOCKSTORAGEDRIVER_ACRN
 USER_VARS += DEFBLOCKSTORAGEDRIVER_FC
 USER_VARS += DEFBLOCKSTORAGEDRIVER_QEMU
+USER_VARS += DEFBLOCKDEVICEAIO_QEMU
 USER_VARS += DEFSHAREDFS_CLH_VIRTIOFS
 USER_VARS += DEFSHAREDFS_QEMU_VIRTIOFS
 USER_VARS += DEFVIRTIOFSDAEMON
 USER_VARS += DEFVALIDVIRTIOFSDAEMONPATHS
 USER_VARS += DEFVIRTIOFSCACHESIZE
 USER_VARS += DEFVIRTIOFSCACHE
+USER_VARS += DEFVIRTIOFSQUEUESIZE
 USER_VARS += DEFVIRTIOFSEXTRAARGS
 USER_VARS += DEFENABLEANNOTATIONS
 USER_VARS += DEFENABLEIOTHREADS
+USER_VARS += DEFSECCOMPSANDBOXPARAM
 USER_VARS += DEFENABLEVHOSTUSERSTORE
 USER_VARS += DEFVHOSTUSERSTOREPATH
 USER_VARS += DEFVALIDVHOSTUSERSTOREPATHS
@@ -596,7 +624,7 @@ hook:
 
 go-test: $(GENERATED_FILES)
 	go clean -testcache
-	$(QUIET_TEST)../../ci/go-test.sh
+	$(QUIET_TEST)./go-test.sh
 
 fast-test: $(GENERATED_FILES)
 	go clean -testcache
@@ -658,6 +686,8 @@ handle_vendor:
 
 vendor: handle_vendor
 	./hack/tree_status.sh
+
+static-checks-build: $(GENERATED_FILES)
 
 clean:
 	$(QUIET_CLEAN)rm -f \
@@ -746,15 +776,15 @@ endif
 	@printf "\tbinary installation path (BINDIR) : %s\n" $(abspath $(BINDIR))
 	@printf "\tbinaries to install :\n"
 	@printf \
-          "$(foreach b,$(sort $(BINLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+          "$(foreach b,$(sort $(BINLIST)),$(shell printf "\\t - $(abspath $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
-          "$(foreach b,$(sort $(SHIMV2)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+          "$(foreach b,$(sort $(SHIMV2)),$(shell printf "\\t - $(abspath $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
-          "$(foreach b,$(sort $(MONITOR)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+          "$(foreach b,$(sort $(MONITOR)),$(shell printf "\\t - $(abspath $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
-          "$(foreach b,$(sort $(BINLIBEXECLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(PKGLIBEXECDIR)/$(b))\\\n"))"
+          "$(foreach b,$(sort $(BINLIBEXECLIST)),$(shell printf "\\t - $(abspath $(DESTDIR)/$(PKGLIBEXECDIR)/$(b))\\\n"))"
 	@printf \
-          "$(foreach s,$(sort $(SCRIPTS)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(s))\\\n"))"
+          "$(foreach s,$(sort $(SCRIPTS)),$(shell printf "\\t - $(abspath $(DESTDIR)/$(BINDIR)/$(s))\\\n"))"
 	@printf "\tconfigs to install (CONFIGS) :\n"
 	@printf \
 	  "$(foreach c,$(sort $(CONFIGS)),$(shell printf "\\t - $(c)\\\n"))"

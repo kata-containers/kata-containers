@@ -19,15 +19,21 @@ $(MK_DIR)/dockerbuild/install_yq.sh:
 	$(MK_DIR)/kata-deploy-copy-yq-installer.sh
 
 all-parallel: $(MK_DIR)/dockerbuild/install_yq.sh
-	${MAKE} -f $(MK_PATH) all -j$$(( $$(nproc) - 1  )) V=
+	${MAKE} -f $(MK_PATH) all -j $(shell nproc ${CI:+--ignore 1}) V=
 
-all: cloud-hypervisor-tarball \
+all: serial-targets \
 	firecracker-tarball \
 	kernel-tarball \
+	nydus-tarball \
 	qemu-tarball \
+	shim-v2-tarball \
+	virtiofsd-tarball
+
+serial-targets:
+	${MAKE} -f $(MK_PATH) -j 1 V= \
 	rootfs-image-tarball \
 	rootfs-initrd-tarball \
-	shim-v2-tarball
+	cloud-hypervisor-tarball
 
 %-tarball-build: $(MK_DIR)/dockerbuild/install_yq.sh
 	$(call BUILD,$*)
@@ -44,6 +50,8 @@ kernel-tarball:
 kernel-experimental-tarball:
 	${MAKE} $@-build
 
+nydus-tarball:
+	${MAKE} $@-build
 
 qemu-tarball:
 	${MAKE} $@-build
@@ -55,6 +63,9 @@ rootfs-initrd-tarball:
 	${MAKE} $@-build
 
 shim-v2-tarball:
+	${MAKE} $@-build
+
+virtiofsd-tarball:
 	${MAKE} $@-build
 
 merge-builds:

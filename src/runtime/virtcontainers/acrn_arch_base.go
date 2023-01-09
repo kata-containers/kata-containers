@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2019 Intel Corporation
 //
@@ -16,7 +15,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/sirupsen/logrus"
 )
@@ -54,6 +53,9 @@ type acrnArch interface {
 
 	// appendSocket appends a socket to devices
 	appendSocket(devices []Device, socket types.Socket) []Device
+
+	// appendVSock appends a vsock PCI to devices
+	appendVSock(devices []Device, vsock types.VSock) []Device
 
 	// appendNetwork appends a endpoint device to devices
 	appendNetwork(devices []Device, endpoint Endpoint) []Device
@@ -141,13 +143,6 @@ var acrnKernelParams = []Param{
 	{"console", "hvc0"},
 	{"log_buf_len", "16M"},
 	{"consoleblank", "0"},
-	{"iommu", "off"},
-	{"i915.avail_planes_per_pipe", "0x070F00"},
-	{"i915.enable_hangcheck", "0"},
-	{"i915.nuclear_pageflip", "1"},
-	{"i915.enable_guc_loading", "0"},
-	{"i915.enable_guc_submission", "0"},
-	{"i915.enable_guc", "0"},
 }
 
 // Device is the acrn device interface.
@@ -201,6 +196,12 @@ type ConsoleDevice struct {
 
 	// PortType marks the port as serial or console port (@)
 	PortType BEPortType
+}
+
+// VSOCKDevice represents a AF_VSOCK socket.
+type VSOCKDevice struct {
+	//Guest CID assigned by Host.
+	ContextID uint64
 }
 
 // NetDeviceType is a acrn networking device type.
@@ -293,8 +294,8 @@ type Config struct {
 	// Name is the acrn guest name
 	Name string
 
-	// UUID is the acrn process UUID.
-	UUID string
+	// APICID to identify vCPU that will be assigned for this VM.
+	ApicID string
 
 	// Kernel is the guest kernel configuration.
 	Kernel Kernel
@@ -431,6 +432,33 @@ func (netdev NetDevice) AcrnNetdevParam() []string {
 	return deviceParams
 }
 
+const (
+	// MinimalGuestCID is the smallest valid context ID for a guest.
+	MinimalGuestCID uint64 = 3
+
+	// MaxGuestCID is the largest valid context ID for a guest.
+	MaxGuestCID uint64 = 1<<32 - 1
+)
+
+// Valid returns true if the VSOCKDevice structure is valid and complete.
+func (vsock VSOCKDevice) Valid() bool {
+	if vsock.ContextID < MinimalGuestCID || vsock.ContextID > MaxGuestCID {
+		return false
+	}
+
+	return true
+}
+
+// AcrnParams returns the acrn parameters built out of this vsock device.
+func (vsock VSOCKDevice) AcrnParams(slot int, config *Config) []string {
+	var acrnParams []string
+
+	acrnParams = append(acrnParams, "-s")
+	acrnParams = append(acrnParams, fmt.Sprintf("%d,vhost-vsock,cid=%d", slot, uint32(vsock.ContextID)))
+
+	return acrnParams
+}
+
 // Valid returns true if the NetDevice structure is valid and complete.
 func (netdev NetDevice) Valid() bool {
 	if netdev.IFName == "" {
@@ -546,13 +574,6 @@ func (config *Config) appendDevices() {
 	}
 }
 
-func (config *Config) appendUUID() {
-	if config.UUID != "" {
-		config.acrnParams = append(config.acrnParams, "-U")
-		config.acrnParams = append(config.acrnParams, config.UUID)
-	}
-}
-
 func (config *Config) appendACPI() {
 	if config.ACPIVirt {
 		config.acrnParams = append(config.acrnParams, "-A")
@@ -566,10 +587,20 @@ func (config *Config) appendMemory() {
 	}
 }
 
+func (config *Config) appendCPUAffinity() {
+	if config.ApicID == "" {
+		return
+	}
+
+	config.acrnParams = append(config.acrnParams, "--cpu_affinity")
+	config.acrnParams = append(config.acrnParams, config.ApicID)
+}
+
 func (config *Config) appendKernel() {
 	if config.Kernel.Path == "" {
 		return
 	}
+
 	config.acrnParams = append(config.acrnParams, "-k")
 	config.acrnParams = append(config.acrnParams, config.Kernel.Path)
 
@@ -587,10 +618,10 @@ func (config *Config) appendKernel() {
 // This function writes its log output via logger parameter.
 func LaunchAcrn(config Config, logger *logrus.Entry) (int, string, error) {
 	baselogger = logger
-	config.appendUUID()
 	config.appendACPI()
 	config.appendMemory()
 	config.appendDevices()
+	config.appendCPUAffinity()
 	config.appendKernel()
 	config.appendName()
 
@@ -693,6 +724,15 @@ func (a *acrnArchBase) appendSocket(devices []Device, socket types.Socket) []Dev
 	}
 
 	devices = append(devices, serailsocket)
+	return devices
+}
+
+func (a *acrnArchBase) appendVSock(devices []Device, vsock types.VSock) []Device {
+	vmsock := VSOCKDevice{
+		ContextID: vsock.ContextID,
+	}
+
+	devices = append(devices, vmsock)
 	return devices
 }
 

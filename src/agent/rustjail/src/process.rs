@@ -5,7 +5,7 @@
 
 use libc::pid_t;
 use std::fs::File;
-use std::os::unix::io::RawFd;
+use std::os::unix::io::{AsRawFd, RawFd};
 use tokio::sync::mpsc::Sender;
 
 use nix::errno::Errno;
@@ -28,7 +28,6 @@ macro_rules! close_process_stream {
     ($self: ident, $stream:ident, $stream_type: ident) => {
         if $self.$stream.is_some() {
             $self.close_stream(StreamType::$stream_type);
-            let _ = unistd::close($self.$stream.unwrap());
             $self.$stream = None;
         }
     };
@@ -137,19 +136,25 @@ impl Process {
         info!(logger, "before create console socket!");
 
         if !p.tty {
-            info!(logger, "created console socket!");
+            if cfg!(feature = "standard-oci-runtime") {
+                p.stdin = Some(std::io::stdin().as_raw_fd());
+                p.stdout = Some(std::io::stdout().as_raw_fd());
+                p.stderr = Some(std::io::stderr().as_raw_fd());
+            } else {
+                info!(logger, "created console socket!");
 
-            let (stdin, pstdin) = unistd::pipe2(OFlag::O_CLOEXEC)?;
-            p.parent_stdin = Some(pstdin);
-            p.stdin = Some(stdin);
+                let (stdin, pstdin) = unistd::pipe2(OFlag::O_CLOEXEC)?;
+                p.parent_stdin = Some(pstdin);
+                p.stdin = Some(stdin);
 
-            let (pstdout, stdout) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
-            p.parent_stdout = Some(pstdout);
-            p.stdout = Some(stdout);
+                let (pstdout, stdout) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
+                p.parent_stdout = Some(pstdout);
+                p.stdout = Some(stdout);
 
-            let (pstderr, stderr) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
-            p.parent_stderr = Some(pstderr);
-            p.stderr = Some(stderr);
+                let (pstderr, stderr) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
+                p.parent_stderr = Some(pstderr);
+                p.stderr = Some(stderr);
+            }
         }
         Ok(p)
     }
@@ -219,7 +224,7 @@ impl Process {
         Some(writer)
     }
 
-    pub fn close_stream(&mut self, stream_type: StreamType) {
+    fn close_stream(&mut self, stream_type: StreamType) {
         let _ = self.readers.remove(&stream_type);
         let _ = self.writers.remove(&stream_type);
     }
@@ -284,5 +289,11 @@ mod tests {
         // group of the calling process.
         process.pid = 0;
         assert!(process.signal(libc::SIGCONT).is_ok());
+
+        if cfg!(feature = "standard-oci-runtime") {
+            assert_eq!(process.stdin.unwrap(), std::io::stdin().as_raw_fd());
+            assert_eq!(process.stdout.unwrap(), std::io::stdout().as_raw_fd());
+            assert_eq!(process.stderr.unwrap(), std::io::stderr().as_raw_fd());
+        }
     }
 }

@@ -8,13 +8,17 @@ on:
 
 name: Static checks
 jobs:
-  test:
+  static-checks:
+    runs-on: ubuntu-20.04
     uses: ./.github/workflows/check-docs-only.yaml
     strategy:
       matrix:
-        go-version: [1.16.x, 1.17.x]
-        os: [ubuntu-20.04]
-    runs-on: ${{ matrix.os }}
+        cmd:
+          - "make vendor"
+          - "make static-checks"
+          - "make check"
+          - "make test"
+          - "sudo -E PATH=\"$PATH\" make test"
     env:
       TRAVIS: "true"
       TRAVIS_BRANCH: ${{ github.base_ref }}
@@ -23,11 +27,16 @@ jobs:
       RUST_BACKTRACE: "1"
       target_branch: ${{ github.base_ref }}
     steps:
-    - name: Install Go
+    - name: Checkout code
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      uses: actions/setup-go@v2
+      uses: actions/checkout@v3
       with:
-        go-version: ${{ matrix.go-version }}
+        fetch-depth: 0
+        path: ./src/github.com/${{ github.repository }}
+    - name: Install Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.19.3
       env:
         GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Setup GOPATH
@@ -42,12 +51,6 @@ jobs:
       run: |
         echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
         echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
-    - name: Checkout code
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-        path: ./src/github.com/${{ github.repository }}
     - name: Setup travis references
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
@@ -67,6 +70,7 @@ jobs:
         rustup target add x86_64-unknown-linux-musl
         rustup component add rustfmt clippy
     - name: Setup seccomp
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
         gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
@@ -74,24 +78,7 @@ jobs:
         echo "Set environment variables for the libseccomp crate to link the libseccomp library statically"
         echo "LIBSECCOMP_LINK_TYPE=static" >> $GITHUB_ENV
         echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> $GITHUB_ENV
-    # Check whether the vendored code is up-to-date & working as the first thing
-    - name: Check vendored code
+    - name: Run check
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && make vendor
-    - name: Static Checks
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && make static-checks
-    - name: Run Compiler Checks
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && make check
-    - name: Run Unit Tests
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && make test
-    - name: Run Unit Tests As Root User
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && sudo -E PATH="$PATH" make test
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && ${{ matrix.cmd }}

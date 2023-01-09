@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2018 Intel Corporation
 //
@@ -87,7 +86,7 @@ func TestQemuAmd64CPUModel(t *testing.T) {
 	base, ok := amd64.(*qemuAmd64)
 	assert.True(ok)
 	base.vmFactory = true
-	expectedOut = defaultCPUModel + ",vmx=off"
+	expectedOut = defaultCPUModel
 	model = amd64.cpuModel()
 	assert.Equal(expectedOut, model)
 }
@@ -290,6 +289,26 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 			ReducedPhysBits: cpuid.AMDMemEncrypt.PhysAddrReduction,
 		},
 	}
+
+	assert.Equal(expectedOut, devices)
+
+	// snp protection
+	amd64.(*qemuAmd64).protection = snpProtection
+
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
+	assert.NoError(err)
+	assert.Empty(bios)
+
+	expectedOut = append(expectedOut,
+		govmmQemu.Object{
+			Type:            govmmQemu.SNPGuest,
+			ID:              "snp",
+			Debug:           false,
+			File:            firmware,
+			CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
+			ReducedPhysBits: 1,
+		},
+	)
 
 	assert.Equal(expectedOut, devices)
 

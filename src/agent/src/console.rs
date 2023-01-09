@@ -9,7 +9,7 @@ use anyhow::{anyhow, Result};
 use nix::fcntl::{self, FcntlArg, FdFlag, OFlag};
 use nix::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use nix::pty::{openpty, OpenptyResult};
-use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
+use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
 use nix::sys::stat::Mode;
 use nix::sys::wait;
 use nix::unistd::{self, close, dup2, fork, setsid, ForkResult, Pid};
@@ -67,7 +67,7 @@ pub async fn debug_console_handler(
             SockFlag::SOCK_CLOEXEC,
             None,
         )?;
-        let addr = SockAddr::new_vsock(libc::VMADDR_CID_ANY, port);
+        let addr = VsockAddr::new(libc::VMADDR_CID_ANY, port);
         socket::bind(listenfd, &addr)?;
         socket::listen(listenfd, 1)?;
 

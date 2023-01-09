@@ -48,7 +48,7 @@ func DoGet(sandboxID string, timeoutInSeconds time.Duration, urlPath string) ([]
 		return nil, err
 	}
 
-	resp, err := client.Get(fmt.Sprintf("http://shim/%s", urlPath))
+	resp, err := client.Get(fmt.Sprintf("http://shim%s", urlPath))
 	if err != nil {
 		return nil, err
 	}
@@ -65,15 +65,60 @@ func DoGet(sandboxID string, timeoutInSeconds time.Duration, urlPath string) ([]
 	return body, nil
 }
 
-func DoPost(sandboxID string, timeoutInSeconds time.Duration, urlPath string, payload []byte) error {
+// DoPut will make a PUT request to the shim endpoint that handles the given sandbox ID
+func DoPut(sandboxID string, timeoutInSeconds time.Duration, urlPath, contentType string, payload []byte) error {
 	client, err := BuildShimClient(sandboxID, timeoutInSeconds)
 	if err != nil {
 		return err
 	}
 
-	resp, err := client.Post(fmt.Sprintf("http://shim/%s", urlPath), "application/json", bytes.NewBuffer(payload))
+	req, err := http.NewRequest(http.MethodPut, fmt.Sprintf("http://shim%s", urlPath), bytes.NewBuffer(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", contentType)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
 	defer func() {
-		resp.Body.Close()
+		if resp != nil {
+			resp.Body.Close()
+		}
 	}()
-	return err
+
+	if resp.StatusCode != http.StatusOK {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("error sending put: url: %s, status code: %d, response data: %s", urlPath, resp.StatusCode, string(data))
+	}
+
+	return nil
+}
+
+// DoPost will make a POST request to the shim endpoint that handles the given sandbox ID
+func DoPost(sandboxID string, timeoutInSeconds time.Duration, urlPath, contentType string, payload []byte) error {
+	client, err := BuildShimClient(sandboxID, timeoutInSeconds)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.Post(fmt.Sprintf("http://shim%s", urlPath), contentType, bytes.NewBuffer(payload))
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("error sending post: url: %s, status code: %d, response data: %s", urlPath, resp.StatusCode, string(data))
+	}
+
+	return nil
 }

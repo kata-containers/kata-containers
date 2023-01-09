@@ -4,21 +4,22 @@
 //
 
 use anyhow::Result;
-use libcontainer::{builder::ContainerBuilder, container::ContainerAction};
+use libcontainer::{container::ContainerAction, init_builder::InitContainerBuilder};
 use liboci_cli::Run;
 use slog::{info, Logger};
 use std::path::Path;
 
 pub async fn run(opts: Run, root: &Path, logger: &Logger) -> Result<()> {
-    let ctx = ContainerBuilder::default()
+    let mut launcher = InitContainerBuilder::default()
         .id(opts.container_id)
         .bundle(opts.bundle)
         .root(root.to_path_buf())
         .console_socket(opts.console_socket)
+        .pid_file(opts.pid_file)
         .build()?
-        .create_ctx()?;
+        .create_launcher(logger)?;
 
-    ctx.launch(ContainerAction::Run, logger).await?;
+    launcher.launch(ContainerAction::Run, logger).await?;
 
     info!(&logger, "run command finished successfully");
 

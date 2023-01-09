@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2018 Intel Corporation
 //
@@ -96,7 +95,6 @@ func (endpoint *IPVlanEndpoint) NetworkPair() *NetworkInterfacePair {
 
 // Attach for ipvlan endpoint bridges the network pair and adds the
 // tap interface of the network pair to the hypervisor.
-// tap interface of the network pair to the Hypervisor.
 func (endpoint *IPVlanEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	span, ctx := ipvlanTrace(ctx, "Attach", endpoint)
 	defer span.End()

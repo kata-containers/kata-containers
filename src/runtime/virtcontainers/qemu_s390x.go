@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2018 IBM
 //
@@ -13,8 +12,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
@@ -39,9 +38,7 @@ const (
 )
 
 // Verify needed parameters
-var kernelParams = []Param{
-	{"console", "ttysclp0"},
-}
+var kernelParams = []Param{}
 
 var ccwbridge = types.NewBridge(types.CCW, "", make(map[uint32]string, types.CCWBridgeMaxCapacity), 0)
 
@@ -68,6 +65,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			kernelParamsNonDebug: kernelParamsNonDebug,
 			kernelParamsDebug:    kernelParamsDebug,
 			kernelParams:         kernelParams,
+			legacySerial:         false,
 		},
 	}
 	// Set first bridge type to CCW
@@ -111,6 +109,8 @@ func (q *qemuS390x) appendConsole(ctx context.Context, devices []govmmQemu.Devic
 	if err != nil {
 		return devices, fmt.Errorf("Failed to append console %v", err)
 	}
+
+	q.kernelParams = append(q.kernelParams, Param{"console", "ttysclp0"})
 
 	serial := govmmQemu.SerialDevice{
 		Driver:        virtioSerialCCW,

@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 rustjail = { path = "../../../agent/rustjail", features = ["standard-oci-runtime"] }
 oci = { path = "../../../libs/oci" }
+kata-sys-util = { path = "../../../libs/kata-sys-util" }
 logging = { path = "../../../libs/logging" }
 derive_builder = "0.10.2"
 libc = "0.2.108"
@@ -18,6 +19,10 @@ slog = "2.7.0"
 chrono = { version = "0.4.19", features = ["serde"] }
 serde = { version = "1.0.133", features = ["derive"] }
 serde_json = "1.0.74"
+scopeguard = "1.1.0"
+cgroups = { package = "cgroups-rs", version = "0.2.10" }
+procfs = "0.14.0"
 
 [dev-dependencies]
 tempfile = "3.3.0"
+test-utils = { path = "../../../libs/test-utils" }

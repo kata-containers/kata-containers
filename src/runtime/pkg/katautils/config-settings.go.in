@@ -63,6 +63,7 @@ const defaultBridgesCount uint32 = 1
 const defaultInterNetworkingModel = "tcfilter"
 const defaultDisableBlockDeviceUse bool = false
 const defaultBlockDeviceDriver = "virtio-scsi"
+const defaultBlockDeviceAIO string = "io_uring"
 const defaultBlockDeviceCacheSet bool = false
 const defaultBlockDeviceCacheDirect bool = false
 const defaultBlockDeviceCacheNoflush bool = false
@@ -85,10 +86,13 @@ const defaultVhostUserStorePath string = "/var/run/kata-containers/vhost-user/"
 const defaultRxRateLimiterMaxRate = uint64(0)
 const defaultTxRateLimiterMaxRate = uint64(0)
 const defaultConfidentialGuest = false
+const defaultSevSnpGuest = false
 const defaultGuestSwap = false
 const defaultRootlessHypervisor = false
 const defaultDisableSeccomp = false
+const defaultDisableGuestSeLinux = true
 const defaultVfioMode = "guest-kernel"
+const defaultLegacySerial = false
 
 var defaultSGXEPCSize = int64(0)
 

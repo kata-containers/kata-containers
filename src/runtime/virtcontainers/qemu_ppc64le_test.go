@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2018 IBM
 //
@@ -75,6 +74,12 @@ func TestQemuPPC64leAppendProtectionDevice(t *testing.T) {
 
 	//SEV protection
 	ppc64le.(*qemuPPC64le).protection = sevProtection
+	devices, bios, err = ppc64le.appendProtectionDevice(devices, firmware, "")
+	assert.Error(err)
+	assert.Empty(bios)
+
+	//SNP protection
+	ppc64le.(*qemuPPC64le).protection = snpProtection
 	devices, bios, err = ppc64le.appendProtectionDevice(devices, firmware, "")
 	assert.Error(err)
 	assert.Empty(bios)

@@ -1,0 +1,200 @@
+From 4755927ae12547c2e7cb22c5fa1b39038c6c11b1 Mon Sep 17 00:00:00 2001
+From: Yang Zhong <yang.zhong@intel.com>
+Date: Mon, 1 Nov 2021 12:20:07 -0400
+Subject: [PATCH 2/3] numa: Support SGX numa in the monitor and Libvirt
+ interfaces
+
+Add the SGXEPCSection list into SGXInfo to show the multiple
+SGX EPC sections detailed info, not the total size like before.
+This patch can enable numa support for 'info sgx' command and
+QMP interfaces. The new interfaces show each EPC section info
+in one numa node. Libvirt can use QMP interface to get the
+detailed host SGX EPC capabilities to decide how to allocate
+host EPC sections to guest.
+
+(qemu) info sgx
+ SGX support: enabled
+ SGX1 support: enabled
+ SGX2 support: enabled
+ FLC support: enabled
+ NUMA node #0: size=67108864
+ NUMA node #1: size=29360128
+
+The QMP interface show:
+(QEMU) query-sgx
+{"return": {"sgx": true, "sgx2": true, "sgx1": true, "sections": \
+[{"node": 0, "size": 67108864}, {"node": 1, "size": 29360128}], "flc": true}}
+
+(QEMU) query-sgx-capabilities
+{"return": {"sgx": true, "sgx2": true, "sgx1": true, "sections": \
+[{"node": 0, "size": 17070817280}, {"node": 1, "size": 17079205888}], "flc": true}}
+
+Signed-off-by: Yang Zhong <yang.zhong@intel.com>
+Message-Id: <20211101162009.62161-4-yang.zhong@intel.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ hw/i386/sgx.c         | 51 +++++++++++++++++++++++++++++++++++--------
+ qapi/misc-target.json | 19 ++++++++++++++--
+ 2 files changed, 59 insertions(+), 11 deletions(-)
+
+diff --git a/hw/i386/sgx.c b/hw/i386/sgx.c
+index d04299904a..5de5dd0893 100644
+--- a/hw/i386/sgx.c
++++ b/hw/i386/sgx.c
+@@ -83,11 +83,13 @@ static uint64_t sgx_calc_section_metric(uint64_t low, uint64_t high)
+            ((high & MAKE_64BIT_MASK(0, 20)) << 32);
+ }
+ 
+-static uint64_t sgx_calc_host_epc_section_size(void)
++static SGXEPCSectionList *sgx_calc_host_epc_sections(void)
+ {
++    SGXEPCSectionList *head = NULL, **tail = &head;
++    SGXEPCSection *section;
+     uint32_t i, type;
+     uint32_t eax, ebx, ecx, edx;
+-    uint64_t size = 0;
++    uint32_t j = 0;
+ 
+     for (i = 0; i < SGX_MAX_EPC_SECTIONS; i++) {
+         host_cpuid(0x12, i + 2, &eax, &ebx, &ecx, &edx);
+@@ -101,10 +103,13 @@ static uint64_t sgx_calc_host_epc_section_size(void)
+             break;
+         }
+ 
+-        size += sgx_calc_section_metric(ecx, edx);
++        section = g_new0(SGXEPCSection, 1);
++        section->node = j++;
++        section->size = sgx_calc_section_metric(ecx, edx);
++        QAPI_LIST_APPEND(tail, section);
+     }
+ 
+-    return size;
++    return head;
+ }
+ 
+ static void sgx_epc_reset(void *opaque)
+@@ -168,13 +173,35 @@ SGXInfo *qmp_query_sgx_capabilities(Error **errp)
+     info->sgx1 = eax & (1U << 0) ? true : false;
+     info->sgx2 = eax & (1U << 1) ? true : false;
+ 
+-    info->section_size = sgx_calc_host_epc_section_size();
++    info->sections = sgx_calc_host_epc_sections();
+ 
+     close(fd);
+ 
+     return info;
+ }
+ 
++static SGXEPCSectionList *sgx_get_epc_sections_list(void)
++{
++    GSList *device_list = sgx_epc_get_device_list();
++    SGXEPCSectionList *head = NULL, **tail = &head;
++    SGXEPCSection *section;
++
++    for (; device_list; device_list = device_list->next) {
++        DeviceState *dev = device_list->data;
++        Object *obj = OBJECT(dev);
++
++        section = g_new0(SGXEPCSection, 1);
++        section->node = object_property_get_uint(obj, SGX_EPC_NUMA_NODE_PROP,
++                                                 &error_abort);
++        section->size = object_property_get_uint(obj, SGX_EPC_SIZE_PROP,
++                                                 &error_abort);
++        QAPI_LIST_APPEND(tail, section);
++    }
++    g_slist_free(device_list);
++
++    return head;
++}
++
+ SGXInfo *qmp_query_sgx(Error **errp)
+ {
+     SGXInfo *info = NULL;
+@@ -193,14 +220,13 @@ SGXInfo *qmp_query_sgx(Error **errp)
+         return NULL;
+     }
+ 
+-    SGXEPCState *sgx_epc = &pcms->sgx_epc;
+     info = g_new0(SGXInfo, 1);
+ 
+     info->sgx = true;
+     info->sgx1 = true;
+     info->sgx2 = true;
+     info->flc = true;
+-    info->section_size = sgx_epc->size;
++    info->sections = sgx_get_epc_sections_list();
+ 
+     return info;
+ }
+@@ -208,6 +234,7 @@ SGXInfo *qmp_query_sgx(Error **errp)
+ void hmp_info_sgx(Monitor *mon, const QDict *qdict)
+ {
+     Error *err = NULL;
++    SGXEPCSectionList *section_list, *section;
+     g_autoptr(SGXInfo) info = qmp_query_sgx(&err);
+ 
+     if (err) {
+@@ -222,8 +249,14 @@ void hmp_info_sgx(Monitor *mon, const QDict *qdict)
+                    info->sgx2 ? "enabled" : "disabled");
+     monitor_printf(mon, "FLC support: %s\n",
+                    info->flc ? "enabled" : "disabled");
+-    monitor_printf(mon, "size: %" PRIu64 "\n",
+-                   info->section_size);
++
++    section_list = info->sections;
++    for (section = section_list; section; section = section->next) {
++        monitor_printf(mon, "NUMA node #%" PRId64 ": ",
++                       section->value->node);
++        monitor_printf(mon, "size=%" PRIu64 "\n",
++                       section->value->size);
++    }
+ }
+ 
+ bool sgx_epc_get_section(int section_nr, uint64_t *addr, uint64_t *size)
+diff --git a/qapi/misc-target.json b/qapi/misc-target.json
+index 5aa2b95b7d..1022aa0184 100644
+--- a/qapi/misc-target.json
++++ b/qapi/misc-target.json
+@@ -337,6 +337,21 @@
+   'if': 'TARGET_ARM' }
+ 
+ 
++##
++# @SGXEPCSection:
++#
++# Information about intel SGX EPC section info
++#
++# @node: the numa node
++#
++# @size: the size of epc section
++#
++# Since: 6.2
++##
++{ 'struct': 'SGXEPCSection',
++  'data': { 'node': 'int',
++            'size': 'uint64'}}
++
+ ##
+ # @SGXInfo:
+ #
+@@ -350,7 +365,7 @@
+ #
+ # @flc: true if FLC is supported
+ #
+-# @section-size: The EPC section size for guest
++# @sections: The EPC sections info for guest
+ #
+ # Since: 6.2
+ ##
+@@ -359,7 +374,7 @@
+             'sgx1': 'bool',
+             'sgx2': 'bool',
+             'flc': 'bool',
+-            'section-size': 'uint64'},
++            'sections': ['SGXEPCSection']},
+    'if': 'TARGET_I386' }
+ 
+ ##
+-- 
+2.25.1
+

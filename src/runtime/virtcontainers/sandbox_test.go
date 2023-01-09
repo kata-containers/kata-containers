@@ -16,10 +16,10 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
 
@@ -41,6 +41,7 @@ func newHypervisorConfig(kernelParams []Param, hParams []Param) HypervisorConfig
 		HypervisorPath:   filepath.Join(testDir, testHypervisor),
 		KernelParams:     kernelParams,
 		HypervisorParams: hParams,
+		MemorySize:       1,
 	}
 
 }
@@ -1347,7 +1348,7 @@ func TestSandboxCreationFromConfigRollbackFromCreateSandbox(t *testing.T) {
 	// Ensure hypervisor doesn't exist
 	assert.NoError(os.Remove(hConf.HypervisorPath))
 
-	_, err := createSandboxFromConfig(ctx, sConf, nil)
+	_, err := createSandboxFromConfig(ctx, sConf, nil, nil)
 	// Fail at createSandbox: QEMU path does not exist, it is expected. Then rollback is called
 	assert.Error(err)
 
@@ -1360,7 +1361,6 @@ func TestSandboxUpdateResources(t *testing.T) {
 	contConfig1 := newTestContainerConfigNoop("cont-00001")
 	contConfig2 := newTestContainerConfigNoop("cont-00002")
 	hConfig := newHypervisorConfig(nil, nil)
-
 	defer cleanUp()
 	// create a sandbox
 	s, err := testCreateSandbox(t,
@@ -1370,28 +1370,37 @@ func TestSandboxUpdateResources(t *testing.T) {
 		NetworkConfig{},
 		[]ContainerConfig{contConfig1, contConfig2},
 		nil)
-
 	assert.NoError(t, err)
+
 	err = s.updateResources(context.Background())
 	assert.NoError(t, err)
 
-	containerMemLimit := int64(1000)
+	// For mock hypervisor, we MemSlots to be 0 since the memory wasn't changed.
+	assert.Equal(t, s.hypervisor.HypervisorConfig().MemSlots, uint32(0))
+
+	containerMemLimit := int64(4 * 1024 * 1024 * 1024)
 	containerCPUPeriod := uint64(1000)
 	containerCPUQouta := int64(5)
-	for _, c := range s.config.Containers {
-		c.Resources.Memory = &specs.LinuxMemory{
+	for idx := range s.config.Containers {
+		s.config.Containers[idx].Resources.Memory = &specs.LinuxMemory{
 			Limit: new(int64),
 		}
-		c.Resources.CPU = &specs.LinuxCPU{
+		s.config.Containers[idx].Resources.CPU = &specs.LinuxCPU{
 			Period: new(uint64),
 			Quota:  new(int64),
 		}
-		c.Resources.Memory.Limit = &containerMemLimit
-		c.Resources.CPU.Period = &containerCPUPeriod
-		c.Resources.CPU.Quota = &containerCPUQouta
+		s.config.Containers[idx].Resources.Memory.Limit = &containerMemLimit
+		s.config.Containers[idx].Resources.CPU.Period = &containerCPUPeriod
+		s.config.Containers[idx].Resources.CPU.Quota = &containerCPUQouta
 	}
 	err = s.updateResources(context.Background())
 	assert.NoError(t, err)
+
+	// Since we're starting with a memory of 1 MB, we expect it to take 3 hotplugs to add 4GiB of memory when using ACPI hotplug:
+	// +48MB
+	// +2352MB
+	// +the remaining
+	assert.Equal(t, s.hypervisor.HypervisorConfig().MemSlots, uint32(3))
 }
 
 func TestSandboxExperimentalFeature(t *testing.T) {

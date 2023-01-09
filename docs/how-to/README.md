@@ -5,7 +5,7 @@
 - [Run Kata containers with `crictl`](run-kata-with-crictl.md)
 - [Run Kata Containers with Kubernetes](run-kata-with-k8s.md)
 - [How to use Kata Containers and Containerd](containerd-kata.md)
-- [How to use Kata Containers and CRI (containerd) with Kubernetes](how-to-use-k8s-with-cri-containerd-and-kata.md)
+- [How to use Kata Containers and containerd with Kubernetes](how-to-use-k8s-with-containerd-and-kata.md)
 - [Kata Containers and service mesh for Kubernetes](service-mesh.md)
 - [How to import Kata Containers logs into Fluentd](how-to-import-kata-logs-with-fluentd.md)
 
@@ -43,3 +43,4 @@
 - [How to run rootless vmm](how-to-run-rootless-vmm.md)
 - [How to run Docker with Kata Containers](how-to-run-docker-with-kata.md)
 - [How to run Kata Containers with `nydus`](how-to-use-virtio-fs-nydus-with-kata.md)
+- [How to run Kata Containers with AMD SEV-SNP](how-to-run-kata-containers-with-SNP-VMs.md)

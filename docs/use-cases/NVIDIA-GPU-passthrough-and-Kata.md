@@ -2,20 +2,20 @@
 
 An NVIDIA GPU device can be passed to a Kata Containers container using GPU
 passthrough (NVIDIA GPU pass-through mode) as well as GPU mediated passthrough
-(NVIDIA vGPU mode).
+(NVIDIA `vGPU` mode).
 
 NVIDIA GPU pass-through mode, an entire physical GPU is directly assigned to one
 VM, bypassing the NVIDIA Virtual GPU Manager. In this mode of operation, the GPU
 is accessed exclusively by the NVIDIA driver running in the VM to which it is
 assigned. The GPU is not shared among VMs.
 
-NVIDIA Virtual GPU (vGPU) enables multiple virtual machines (VMs) to have
+NVIDIA Virtual GPU (`vGPU`) enables multiple virtual machines (VMs) to have
 simultaneous, direct access to a single physical GPU, using the same NVIDIA
 graphics drivers that are deployed on non-virtualized operating systems. By
-doing this, NVIDIA vGPU provides VMs with unparalleled graphics performance,
+doing this, NVIDIA `vGPU` provides VMs with unparalleled graphics performance,
 compute performance, and application compatibility, together with the
 cost-effectiveness and scalability brought about by sharing a GPU among multiple
-workloads. A vGPU can be either time-sliced or Multi-Instance GPU (MIG)-backed
+workloads. A `vGPU` can be either time-sliced or Multi-Instance GPU (MIG)-backed
 with [MIG-slices](https://docs.nvidia.com/datacenter/tesla/mig-user-guide/).
 
 | Technology | Description | Behavior | Detail |
@@ -46,14 +46,14 @@ $ lspci -s d0:00.0 -vv | grep Region
 For large BARs devices, MMIO mapping above 4G address space should be `enabled`
 in the PCI configuration of the BIOS.
 
-Some hardware vendors use different name in BIOS, such as:
+Some hardware vendors use a different name in BIOS, such as:
 
 - Above 4G Decoding
 - Memory Hole for PCI MMIO
 - Memory Mapped I/O above 4GB
 
 If one is using a GPU based on the Ampere architecture and later additionally
-SR-IOV needs to be enabled for the vGPU use-case.
+SR-IOV needs to be enabled for the `vGPU` use-case.
 
 The following steps outline the workflow for using an NVIDIA GPU with Kata.
 
@@ -154,7 +154,7 @@ $ ./build-kernel.sh -v 5.15.23 -g nvidia build
 $ sudo -E ./build-kernel.sh -v 5.15.23 -g nvidia install
 ```
 
-To build NVIDIA Driver in Kata container, `linux-headers` is required.
+To build NVIDIA Driver in Kata container, `linux-headers` are required.
 This is a way to generate deb packages for `linux-headers`:
 
 > **Note**:
@@ -177,7 +177,7 @@ kernel = "/usr/share/kata-containers/vmlinuz-nvidia-gpu.container"
 
 Use the following steps to pass an NVIDIA GPU device in pass-through mode with Kata:
 
-1. Find the Bus-Device-Function (BDF) for GPU device on host:
+1. Find the Bus-Device-Function (BDF) for the GPU device on the host:
 
    ```sh
    $ sudo lspci -nn -D | grep -i nvidia
@@ -219,7 +219,7 @@ Use the following steps to pass an NVIDIA GPU device in pass-through mode with K
    crw-rw-rw- 1 root    root     10, 196 Mar 18 02:27 vfio
    ```
 
-4. Start a Kata container with GPU device:
+4. Start a Kata container with the GPU device:
 
    ```sh
    # You may need to `modprobe vhost-vsock` if you get
@@ -246,9 +246,228 @@ Use the following steps to pass an NVIDIA GPU device in pass-through mode with K
 ## NVIDIA vGPU mode with Kata Containers
 
 NVIDIA vGPU is a licensed product on all supported GPU boards. A software license
-is required to enable all vGPU features within the guest VM.
+is required to enable all vGPU features within the guest VM. NVIDIA vGPU manager
+needs to be installed on the host to configure GPUs in vGPU mode. See [NVIDIA Virtual GPU Software Documentation v14.0 through 14.1](https://docs.nvidia.com/grid/14.0/) for more details.
 
-> **TODO**: Will follow up with instructions
+### NVIDIA vGPU time-sliced
+
+In the time-sliced mode, the GPU is not partitioned and the workload uses the
+whole GPU and shares access to the GPU engines. Processes are scheduled in
+series. The best effort scheduler is the default one and can be exchanged by
+other scheduling policies see the documentation above how to do that.
+
+Beware if you had `MIG` enabled before to disable `MIG` on the GPU if you want
+to use `time-sliced` `vGPU`.
+
+```sh
+$ sudo nvidia-smi -mig 0
+```
+
+Enable the virtual functions for the physical GPU in the `sysfs` file system.
+
+```sh
+$ sudo /usr/lib/nvidia/sriov-manage -e 0000:41:00.0
+```
+
+Get the `BDF` of the available virtual function on the GPU, and choose one for the
+following steps.
+
+```sh
+$ cd /sys/bus/pci/devices/0000:41:00.0/
+$ ls -l |  grep virtfn
+```
+
+#### List all available vGPU instances
+
+The following shell snippet will walk the `sysfs` and only print instances
+that are available, that can be created.
+
+```sh
+# The 00.0 is often the PF of the device the VFs will have the funciont in the
+# BDF incremented by some values so e.g. the very first VF is 0000:41:00.4
+
+cd /sys/bus/pci/devices/0000:41:00.0/
+
+for vf in $(ls -d virtfn*)
+do
+        BDF=$(basename $(readlink -f $vf))
+        for md in $(ls -d $vf/mdev_supported_types/*)
+        do
+                AVAIL=$(cat $md/available_instances)
+                NAME=$(cat $md/name)
+                DIR=$(basename $md)
+
+                if [ $AVAIL -gt 0 ]; then
+                        echo "| BDF          | INSTANCES | NAME           | DIR        |"
+                        echo "+--------------+-----------+----------------+------------+"
+                        printf "| %12s |%10d |%15s | %10s |\n\n" "$BDF" "$AVAIL" "$NAME" "$DIR"
+                fi
+
+        done
+done
+```
+
+If there are available instances you get something like this (for the first VF),
+beware that the output is highly dependent on the GPU you have, if there is no
+output check again if `MIG` is really disabled.
+
+```sh
+| BDF          | INSTANCES | NAME           | DIR        |
++--------------+-----------+----------------+------------+
+| 0000:41:00.4 |         1 |  GRID A100D-4C | nvidia-692 |
+
+| BDF          | INSTANCES | NAME           | DIR        |
++--------------+-----------+----------------+------------+
+| 0000:41:00.4 |         1 |  GRID A100D-8C | nvidia-693 |
+
+| BDF          | INSTANCES | NAME           | DIR        |
++--------------+-----------+----------------+------------+
+| 0000:41:00.4 |         1 | GRID A100D-10C | nvidia-694 |
+
+| BDF          | INSTANCES | NAME           | DIR        |
++--------------+-----------+----------------+------------+
+| 0000:41:00.4 |         1 | GRID A100D-16C | nvidia-695 |
+
+| BDF          | INSTANCES | NAME           | DIR        |
++--------------+-----------+----------------+------------+
+| 0000:41:00.4 |         1 | GRID A100D-20C | nvidia-696 |
+
+| BDF          | INSTANCES | NAME           | DIR        |
++--------------+-----------+----------------+------------+
+| 0000:41:00.4 |         1 | GRID A100D-40C | nvidia-697 |
+
+| BDF          | INSTANCES | NAME           | DIR        |
++--------------+-----------+----------------+------------+
+| 0000:41:00.4 |         1 | GRID A100D-80C | nvidia-698 |
+
+```
+
+Change to the `mdev_supported_types` directory for the virtual function on which
+you want to create the `vGPU`. Taking the first output as an example:
+
+```sh
+$ cd virtfn0/mdev_supported_types/nvidia-692
+$ UUIDGEN=$(uuidgen)
+$ sudo bash -c "echo $UUIDGEN > create"
+```
+
+Confirm that the `vGPU` was created. You should see the `UUID` pointing to a
+subdirectory of the `sysfs` space.
+
+```sh
+$ ls -l /sys/bus/mdev/devices/
+```
+
+Get the `IOMMU` group number and verify there is a `VFIO` device created to use
+with Kata.
+
+```sh
+$ ls -l /sys/bus/mdev/devices/*/
+$ ls -l /dev/vfio
+```
+
+Use the `VFIO` device created in the same way as in the pass-through use-case.
+Beware that the guest needs the NVIDIA guest drivers, so one would need to build
+a new guest `OS` image.
+
+### NVIDIA vGPU MIG-backed
+
+We're not going into detail what `MIG` is but briefly it is a technology to
+partition the hardware into independent instances with guaranteed quality of
+service. For more details see [NVIDIA Multi-Instance GPU User Guide](https://docs.nvidia.com/datacenter/tesla/mig-user-guide/).
+
+First enable `MIG` mode for a GPU, depending on the platform you're running
+a reboot would be necessary. Some platforms support GPU reset.
+
+```sh
+$ sudo nvidia-smi -mig 1
+```
+
+If the platform supports a GPU reset one can run, otherwise you will get a
+warning to reboot the server.
+
+```sh
+$ sudo nvidia-smi --gpu-reset
+```
+
+The driver per default provides a number of profiles that users can opt-in when
+configuring the MIG feature.
+
+```sh
+$ sudo nvidia-smi mig -lgip
++-----------------------------------------------------------------------------+
+| GPU instance profiles:                                                      |
+| GPU   Name             ID    Instances   Memory     P2P    SM    DEC   ENC  |
+|                              Free/Total   GiB              CE    JPEG  OFA  |
+|=============================================================================|
+|   0  MIG 1g.10gb       19     7/7        9.50       No     14     0     0   |
+|                                                             1     0     0   |
++-----------------------------------------------------------------------------+
+|   0  MIG 1g.10gb+me    20     1/1        9.50       No     14     1     0   |
+|                                                             1     1     1   |
++-----------------------------------------------------------------------------+
+|   0  MIG 2g.20gb       14     3/3        19.50      No     28     1     0   |
+|                                                             2     0     0   |
++-----------------------------------------------------------------------------+
+                              ...
+```
+
+Create the GPU instances that correspond to the `vGPU` types of the `MIG-backed`
+`vGPUs` that you will create [NVIDIA A100 PCIe 80GB Virtual GPU Types](https://docs.nvidia.com/grid/13.0/grid-vgpu-user-guide/index.html#vgpu-types-nvidia-a100-pcie-80gb).
+
+```sh
+# MIG 1g.10gb --> vGPU A100D-1-10C
+$ sudo nvidia-smi mig -cgi 19
+```
+
+List the GPU instances and get the GPU instance id to create the compute
+instance.
+
+```sh
+$ sudo nvidia-smi mig -lgi # list the created GPU instances
+$ sudo nvidia-smi mig -cci -gi 9 # each GPU instance can have several compute
+                                 # instances. Instance -> Workload
+```
+
+Verify that the compute instances were created within the GPU instance
+
+```sh
+$ nvidia-smi
+                              ... snip ...
++-----------------------------------------------------------------------------+
+| MIG devices:                                                                |
++------------------+----------------------+-----------+-----------------------+
+| GPU  GI  CI  MIG |         Memory-Usage |        Vol|         Shared        |
+|      ID  ID  Dev |           BAR1-Usage | SM     Unc| CE  ENC  DEC  OFA  JPG|
+|                  |                      |        ECC|                       |
+|==================+======================+===========+=======================|
+|  0    9   0   0  |      0MiB /  9728MiB | 14      0 |  1   0    0    0    0 |
+|                  |      0MiB /  4095MiB |           |                       |
++------------------+----------------------+-----------+-----------------------+
+                              ... snip ...
+```
+
+We can use the [snippet](#list-all-available-vgpu-instances) from before to list
+the available `vGPU` instances, this time `MIG-backed`.
+
+```sh
+| BDF          | INSTANCES | NAME           | DIR        |
++--------------+-----------+----------------+------------+
+| 0000:41:00.4 |         1 |GRID A100D-1-10C | nvidia-699 |
+
+| BDF          | INSTANCES | NAME           | DIR        |
++--------------+-----------+----------------+------------+
+| 0000:41:00.5 |         1 |GRID A100D-1-10C | nvidia-699 |
+
+| BDF          | INSTANCES | NAME           | DIR        |
++--------------+-----------+----------------+------------+
+| 0000:41:01.6 |         1 |GRID A100D-1-10C | nvidia-699 |
+                       ... snip ...
+```
+
+Repeat the steps after the [snippet](#list-all-available-vgpu-instances) listing
+to create the corresponding `mdev` device and use the guest `OS` created in the
+previous section with `time-sliced` `vGPUs`.
 
 ## Install NVIDIA Driver + Toolkit in Kata Containers Guest OS
 
@@ -263,7 +482,7 @@ export EXTRA_PKGS="gcc make curl gnupg"
 ```
 
 Having the `$ROOTFS_DIR` exported in the previous step we can now install all the
-need parts in the guest OS. In this case we have an Ubuntu based rootfs.
+needed parts in the guest OS. In this case, we have an Ubuntu based rootfs.
 
 First off all mount the special filesystems into the rootfs
 
@@ -281,9 +500,9 @@ Now we can enter `chroot`
 $ sudo chroot ${ROOTFS_DIR}
 ```
 
-Inside the rootfs one is going to install the drivers and toolkit to enable easy
-creation of GPU containers with Kata. We can also use this rootfs for any other
-container not specifically only for GPUs.
+Inside the rootfs one is going to install the drivers and toolkit to enable the
+easy creation of GPU containers with Kata. We can also use this rootfs for any
+other container not specifically only for GPUs.
 
 As a prerequisite install the copied kernel development packages
 
@@ -304,6 +523,7 @@ $ ./NVIDIA-Linux-x86_64-510.54.run -x
 $ cd NVIDIA-Linux-x86_64-510.54
 $ ./nvidia-installer -k 5.15.23-nvidia-gpu
 ```
+
 Having the drivers installed we need to install the toolkit which will take care
 of providing the right bits into the container.
 
@@ -325,7 +545,13 @@ Create the hook execution file for Kata:
 /usr/bin/nvidia-container-toolkit -debug $@
 ```
 
-As a last step one can do some cleanup of files or package caches. Build the
+Make sure the hook shell is executable:
+
+```sh
+chmod +x $ROOTFS_DIR/usr/share/oci/hooks/prestart/nvidia-container-toolkit.sh
+```
+
+As the last step one can do some cleanup of files or package caches. Build the
 rootfs and configure it for use with Kata according to the development guide.
 
 Enable the `guest_hook_path` in Kata's `configuration.toml`
@@ -334,7 +560,7 @@ Enable the `guest_hook_path` in Kata's `configuration.toml`
 guest_hook_path = "/usr/share/oci/hooks"
 ```
 
-One has build a NVIDIA rootfs, kernel and now we can run any GPU container
+One has built a NVIDIA rootfs, kernel and now we can run any GPU container
 without installing the drivers into the container. Check NVIDIA device status
 with `nvidia-smi`
 
@@ -362,7 +588,7 @@ Fri Mar 18 10:36:59 2022
 +-----------------------------------------------------------------------------+
 ```
 
-As a last step one can remove the additional packages and files that were added
+As the last step one can remove the additional packages and files that were added
 to the `$ROOTFS_DIR` to keep it as small as possible.
 
 ## References

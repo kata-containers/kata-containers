@@ -16,13 +16,13 @@ import (
 	"testing"
 
 	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
-	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
+	podmanAnnotations "github.com/containers/podman/v4/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/unix"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	dockerAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations/dockershim"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
@@ -38,7 +38,6 @@ const (
 var (
 	tempRoot       = ""
 	tempBundlePath = ""
-	consolePath    = ""
 )
 
 func createConfig(fileName string, fileData string) (string, error) {
@@ -72,7 +71,6 @@ func TestMinimalSandboxConfig(t *testing.T) {
 
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
-		Console:        consolePath,
 	}
 
 	capList := []string{"CAP_AUDIT_WRITE", "CAP_KILL", "CAP_NET_BIND_SERVICE"}
@@ -94,7 +92,6 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		PrimaryGroup:        "0",
 		SupplementaryGroups: []string{"10", "29"},
 		Interactive:         true,
-		Console:             consolePath,
 		NoNewPrivileges:     true,
 		Capabilities: &specs.LinuxCapabilities{
 			Bounding:    capList,
@@ -181,7 +178,7 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		SystemdCgroup: true,
 	}
 
-	sandboxConfig, err := SandboxConfig(spec, runtimeConfig, tempBundlePath, containerID, consolePath, false, true)
+	sandboxConfig, err := SandboxConfig(spec, runtimeConfig, tempBundlePath, containerID, false, true)
 	assert.NoError(err)
 
 	assert.Exactly(sandboxConfig, expectedSandboxConfig)
@@ -227,22 +224,22 @@ func TestContainerType(t *testing.T) {
 		},
 		{
 			description:     "crio unexpected annotation, expect error",
-			annotationKey:   crioAnnotations.ContainerType,
+			annotationKey:   podmanAnnotations.ContainerType,
 			annotationValue: "foo",
 			expectedType:    vc.UnknownContainerType,
 			expectedErr:     true,
 		},
 		{
 			description:     "crio sandbox",
-			annotationKey:   crioAnnotations.ContainerType,
-			annotationValue: string(crioAnnotations.ContainerTypeSandbox),
+			annotationKey:   podmanAnnotations.ContainerType,
+			annotationValue: string(podmanAnnotations.ContainerTypeSandbox),
 			expectedType:    vc.PodSandbox,
 			expectedErr:     false,
 		},
 		{
 			description:     "crio container",
-			annotationKey:   crioAnnotations.ContainerType,
-			annotationValue: string(crioAnnotations.ContainerTypeContainer),
+			annotationKey:   podmanAnnotations.ContainerType,
+			annotationValue: string(podmanAnnotations.ContainerTypeContainer),
 			expectedType:    vc.PodContainer,
 			expectedErr:     false,
 		},
@@ -290,7 +287,7 @@ func TestSandboxIDSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
 	ociSpec.Annotations = map[string]string{
-		crioAnnotations.SandboxID: testSandboxID,
+		podmanAnnotations.SandboxID: testSandboxID,
 	}
 
 	sandboxID, err := SandboxID(ociSpec)
@@ -452,7 +449,6 @@ func TestMain(m *testing.M) {
 	}
 
 	tempBundlePath = filepath.Join(tempRoot, "ocibundle")
-	consolePath = filepath.Join(tempRoot, "console")
 
 	/* Create temp bundle directory if necessary */
 	err = os.MkdirAll(tempBundlePath, dirMode)
@@ -513,7 +509,6 @@ func TestAddAssetAnnotations(t *testing.T) {
 
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
-		Console:        consolePath,
 	}
 
 	// Try annotations without enabling them first
@@ -567,7 +562,6 @@ func TestAddAgentAnnotations(t *testing.T) {
 
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
-		Console:        consolePath,
 	}
 
 	ocispec.Annotations[vcAnnotations.KernelModules] = strings.Join(expectedAgentConfig.KernelModules, KernelModulesSeparator)
@@ -594,7 +588,6 @@ func TestContainerPipeSizeAnnotation(t *testing.T) {
 
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
-		Console:        consolePath,
 	}
 
 	ocispec.Annotations[vcAnnotations.AgentContainerPipeSize] = "foo"
@@ -629,7 +622,6 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
-		Console:        consolePath,
 	}
 	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{".*"}
 	runtimeConfig.HypervisorConfig.FileBackedMemRootList = []string{"/dev/shm*"}
@@ -650,6 +642,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.HugePages] = "true"
 	ocispec.Annotations[vcAnnotations.IOMMU] = "true"
 	ocispec.Annotations[vcAnnotations.BlockDeviceDriver] = "virtio-scsi"
+	ocispec.Annotations[vcAnnotations.BlockDeviceAIO] = "io_uring"
 	ocispec.Annotations[vcAnnotations.DisableBlockDeviceUse] = "true"
 	ocispec.Annotations[vcAnnotations.EnableIOThreads] = "true"
 	ocispec.Annotations[vcAnnotations.BlockDeviceCacheSet] = "true"
@@ -670,6 +663,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.PCIeRootPort] = "2"
 	ocispec.Annotations[vcAnnotations.IOMMUPlatform] = "true"
 	ocispec.Annotations[vcAnnotations.SGXEPC] = "64Mi"
+	ocispec.Annotations[vcAnnotations.UseLegacySerial] = "true"
 	// 10Mbit
 	ocispec.Annotations[vcAnnotations.RxRateLimiterMaxRate] = "10000000"
 	ocispec.Annotations[vcAnnotations.TxRateLimiterMaxRate] = "10000000"
@@ -686,6 +680,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(config.HypervisorConfig.HugePages, true)
 	assert.Equal(config.HypervisorConfig.IOMMU, true)
 	assert.Equal(config.HypervisorConfig.BlockDeviceDriver, "virtio-scsi")
+	assert.Equal(config.HypervisorConfig.BlockDeviceAIO, "io_uring")
 	assert.Equal(config.HypervisorConfig.DisableBlockDeviceUse, true)
 	assert.Equal(config.HypervisorConfig.EnableIOThreads, true)
 	assert.Equal(config.HypervisorConfig.BlockDeviceCacheSet, true)
@@ -706,6 +701,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(config.HypervisorConfig.PCIeRootPort, uint32(2))
 	assert.Equal(config.HypervisorConfig.IOMMUPlatform, true)
 	assert.Equal(config.HypervisorConfig.SGXEPCSize, int64(67108864))
+	assert.Equal(config.HypervisorConfig.LegacySerial, true)
 	assert.Equal(config.HypervisorConfig.RxRateLimiterMaxRate, uint64(10000000))
 	assert.Equal(config.HypervisorConfig.TxRateLimiterMaxRate, uint64(10000000))
 
@@ -741,7 +737,6 @@ func TestAddProtectedHypervisorAnnotations(t *testing.T) {
 
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
-		Console:        consolePath,
 	}
 	ocispec.Annotations[vcAnnotations.KernelParams] = "vsyscall=emulate iommu=on"
 	err := addAnnotations(ocispec, &config, runtimeConfig)
@@ -807,7 +802,6 @@ func TestAddRuntimeAnnotations(t *testing.T) {
 
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
-		Console:        consolePath,
 	}
 
 	ocispec.Annotations[vcAnnotations.DisableGuestSeccomp] = "true"
@@ -891,15 +885,15 @@ func TestIsCRIOContainerManager(t *testing.T) {
 		result      bool
 	}{
 		{
-			annotations: map[string]string{crioAnnotations.ContainerType: "abc"},
+			annotations: map[string]string{podmanAnnotations.ContainerType: "abc"},
 			result:      false,
 		},
 		{
-			annotations: map[string]string{crioAnnotations.ContainerType: crioAnnotations.ContainerTypeSandbox},
+			annotations: map[string]string{podmanAnnotations.ContainerType: podmanAnnotations.ContainerTypeSandbox},
 			result:      true,
 		},
 		{
-			annotations: map[string]string{crioAnnotations.ContainerType: crioAnnotations.ContainerTypeContainer},
+			annotations: map[string]string{podmanAnnotations.ContainerType: podmanAnnotations.ContainerTypeContainer},
 			result:      true,
 		},
 	}
@@ -1194,6 +1188,11 @@ func TestCalculateSandboxSizing(t *testing.T) {
 			expectedCPU: 100,
 			expectedMem: 0,
 		},
+		{
+			spec:        makeSizingAnnotations("4294967296", "400", "100"),
+			expectedCPU: 4,
+			expectedMem: 4096,
+		},
 	}
 
 	for _, tt := range testCases {
@@ -1201,5 +1200,81 @@ func TestCalculateSandboxSizing(t *testing.T) {
 		cpu, mem := CalculateSandboxSizing(tt.spec)
 		assert.Equal(tt.expectedCPU, cpu, "unexpected CPU")
 		assert.Equal(tt.expectedMem, mem, "unexpected memory")
+	}
+}
+
+func TestNewMount(t *testing.T) {
+	assert := assert.New(t)
+
+	testCases := []struct {
+		out vc.Mount
+		in  specs.Mount
+	}{
+		{
+			in: specs.Mount{
+				Source:      "proc",
+				Destination: "/proc",
+				Type:        "proc",
+				Options:     nil,
+			},
+			out: vc.Mount{
+				Source:      "proc",
+				Destination: "/proc",
+				Type:        "proc",
+				Options:     nil,
+			},
+		},
+		{
+			in: specs.Mount{
+				Source:      "proc",
+				Destination: "/proc",
+				Type:        "proc",
+				Options:     []string{"ro"},
+			},
+			out: vc.Mount{
+				Source:      "proc",
+				Destination: "/proc",
+				Type:        "proc",
+				Options:     []string{"ro"},
+				ReadOnly:    true,
+			},
+		},
+		{
+			in: specs.Mount{
+				Source:      "/abc",
+				Destination: "/def",
+				Type:        "none",
+				Options:     []string{"bind"},
+			},
+			out: vc.Mount{
+				Source:      "/abc",
+				Destination: "/def",
+				Type:        "bind",
+				Options:     []string{"bind"},
+			},
+		}, {
+			in: specs.Mount{
+				Source:      "/abc",
+				Destination: "/def",
+				Type:        "none",
+				Options:     []string{"rbind"},
+			},
+			out: vc.Mount{
+				Source:      "/abc",
+				Destination: "/def",
+				Type:        "bind",
+				Options:     []string{"rbind"},
+			},
+		},
+	}
+
+	for _, tt := range testCases {
+		actualMount := newMount(tt.in)
+
+		assert.Equal(tt.out.Source, actualMount.Source, "unexpected mount source")
+		assert.Equal(tt.out.Destination, actualMount.Destination, "unexpected mount destination")
+		assert.Equal(tt.out.Type, actualMount.Type, "unexpected mount type")
+		assert.Equal(tt.out.Options, actualMount.Options, "unexpected mount options")
+		assert.Equal(tt.out.ReadOnly, actualMount.ReadOnly, "unexpected mount ReadOnly")
 	}
 }

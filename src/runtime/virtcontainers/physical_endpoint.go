@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2018 Intel Corporation
 //
@@ -15,9 +14,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/safchain/ethtool"

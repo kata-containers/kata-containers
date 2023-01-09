@@ -6,14 +6,16 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	strfmt "github.com/go-openapi/strfmt"
+	"context"
 
 	"github.com/go-openapi/errors"
+	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 	"github.com/go-openapi/validate"
 )
 
 // PartialNetworkInterface Defines a partial network interface structure, used to update the rate limiters for that interface, after microvm start.
+//
 // swagger:model PartialNetworkInterface
 type PartialNetworkInterface struct {
 
@@ -60,7 +62,6 @@ func (m *PartialNetworkInterface) validateIfaceID(formats strfmt.Registry) error
 }
 
 func (m *PartialNetworkInterface) validateRxRateLimiter(formats strfmt.Registry) error {
-
 	if swag.IsZero(m.RxRateLimiter) { // not required
 		return nil
 	}
@@ -69,6 +70,8 @@ func (m *PartialNetworkInterface) validateRxRateLimiter(formats strfmt.Registry)
 		if err := m.RxRateLimiter.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
 				return ve.ValidateName("rx_rate_limiter")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("rx_rate_limiter")
 			}
 			return err
 		}
@@ -78,7 +81,6 @@ func (m *PartialNetworkInterface) validateRxRateLimiter(formats strfmt.Registry)
 }
 
 func (m *PartialNetworkInterface) validateTxRateLimiter(formats strfmt.Registry) error {
-
 	if swag.IsZero(m.TxRateLimiter) { // not required
 		return nil
 	}
@@ -87,6 +89,58 @@ func (m *PartialNetworkInterface) validateTxRateLimiter(formats strfmt.Registry)
 		if err := m.TxRateLimiter.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
 				return ve.ValidateName("tx_rate_limiter")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("tx_rate_limiter")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ContextValidate validate this partial network interface based on the context it is used
+func (m *PartialNetworkInterface) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+	var res []error
+
+	if err := m.contextValidateRxRateLimiter(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.contextValidateTxRateLimiter(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if len(res) > 0 {
+		return errors.CompositeValidationError(res...)
+	}
+	return nil
+}
+
+func (m *PartialNetworkInterface) contextValidateRxRateLimiter(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.RxRateLimiter != nil {
+		if err := m.RxRateLimiter.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("rx_rate_limiter")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("rx_rate_limiter")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *PartialNetworkInterface) contextValidateTxRateLimiter(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.TxRateLimiter != nil {
+		if err := m.TxRateLimiter.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("tx_rate_limiter")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("tx_rate_limiter")
 			}
 			return err
 		}

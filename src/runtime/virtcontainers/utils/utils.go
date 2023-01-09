@@ -25,6 +25,8 @@ const cpBinaryName = "cp"
 
 const fileMode0755 = os.FileMode(0755)
 
+const maxWaitDelay = 50 * time.Millisecond
+
 // The DefaultRateLimiterRefillTime is used for calculating the rate at
 // which a TokenBucket is replinished, in cases where a RateLimiter is
 // applied to either network or disk I/O.
@@ -306,15 +308,53 @@ func ConvertAddressFamily(family int32) pbTypes.IPFamily {
 	}
 }
 
+func waitProcessUsingWaitLoop(pid int, timeoutSecs uint, logger *logrus.Entry) bool {
+	secs := time.Duration(timeoutSecs) * time.Second
+	timeout := time.After(secs)
+	delay := 1 * time.Millisecond
+
+	for {
+		// Wait4 is used to reap and check that a child terminated.
+		// Without the Wait4 call, Kill(0) for a child will always exit without
+		// error because the process isn't reaped.
+		// Wait4 return ECHLD error for non-child processes. Kill(0) is meant
+		// to address this case, once the process is reaped by init process,
+		// the call will return ESRCH error.
+
+		// "A watched pot never boils" and an unwaited-for process never appears to die!
+		waitedPid, err := syscall.Wait4(pid, nil, syscall.WNOHANG, nil)
+
+		if waitedPid == pid && err == nil {
+			return false
+		}
+
+		if err := syscall.Kill(pid, syscall.Signal(0)); err != nil {
+			return false
+		}
+
+		select {
+		case <-time.After(delay):
+			delay = delay * 5
+
+			if delay > maxWaitDelay {
+				delay = maxWaitDelay
+			}
+		case <-timeout:
+			logger.Warnf("process %v still running after waiting %ds", pid, timeoutSecs)
+			return true
+		}
+	}
+}
+
 // WaitLocalProcess waits for the specified process for up to timeoutSecs seconds.
 //
 // Notes:
 //
-// - If the initial signal is zero, the specified process is assumed to be
-//   attempting to stop itself.
-// - If the initial signal is not zero, it will be sent to the process before
-//   checking if it is running.
-// - If the process has not ended after the timeout value, it will be forcibly killed.
+//   - If the initial signal is zero, the specified process is assumed to be
+//     attempting to stop itself.
+//   - If the initial signal is not zero, it will be sent to the process before
+//     checking if it is running.
+//   - If the process has not ended after the timeout value, it will be forcibly killed.
 func WaitLocalProcess(pid int, timeoutSecs uint, initialSignal syscall.Signal, logger *logrus.Entry) error {
 	var err error
 
@@ -334,48 +374,23 @@ func WaitLocalProcess(pid int, timeoutSecs uint, initialSignal syscall.Signal, l
 		}
 	}
 
-	pidRunning := true
-
-	secs := time.Duration(timeoutSecs)
-	timeout := time.After(secs * time.Second)
-
-	// Wait for the VM process to terminate
-outer:
-	for {
-		select {
-		case <-time.After(50 * time.Millisecond):
-			// Check if the process is running periodically to avoid a busy loop
-
-			var _status syscall.WaitStatus
-			var _rusage syscall.Rusage
-			var waitedPid int
-
-			// "A watched pot never boils" and an unwaited-for process never appears to die!
-			waitedPid, err = syscall.Wait4(pid, &_status, syscall.WNOHANG, &_rusage)
-
-			if waitedPid == pid && err == nil {
-				pidRunning = false
-				break outer
-			}
-
-			if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
-				pidRunning = false
-				break outer
-			}
-
-			break
-
-		case <-timeout:
-			logger.Warnf("process %v still running after waiting %ds", pid, timeoutSecs)
-
-			break outer
-		}
-	}
+	pidRunning := waitForProcessCompletion(pid, timeoutSecs, logger)
 
 	if pidRunning {
 		// Force process to die
 		if err = syscall.Kill(pid, syscall.SIGKILL); err != nil {
+			if err == syscall.ESRCH {
+				logger.WithField("pid", pid).Warnf("process already finished")
+				return nil
+			}
 			return fmt.Errorf("Failed to stop process %v: %s", pid, err)
+		}
+
+		for {
+			_, err := syscall.Wait4(pid, nil, 0, nil)
+			if err != syscall.EINTR {
+				break
+			}
 		}
 	}
 
@@ -399,7 +414,7 @@ func MkdirAllWithInheritedOwner(path string, perm os.FileMode) error {
 		info, err := os.Stat(curPath)
 
 		if err != nil {
-			if err = os.Mkdir(curPath, perm); err != nil {
+			if err = os.MkdirAll(curPath, perm); err != nil {
 				return fmt.Errorf("mkdir call failed: %v", err.Error())
 			}
 			if err = syscall.Chown(curPath, uid, gid); err != nil {

@@ -1,0 +1,16 @@
+// Copyright (c) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
+//
+// WARNING: This file is auto-generated - DO NOT EDIT!
+//
+
+pub const PROJECT_NAME: &str = "@PROJECT_NAME@";
+pub const RUNTIME_VERSION: &str = "@RUNTIME_VERSION@";
+pub const RUNTIME_GIT_COMMIT: &str = "@COMMIT@";
+pub const RUNTIME_NAME: &str = "@RUNTIME_NAME@";
+pub const CONTAINERD_RUNTIME_NAME: &str = "@CONTAINERD_RUNTIME_NAME@";
+pub const RUNTIME_DIR: &str = "@BINDIR@";
+pub const RUNTIME_PATH: &str = "@BINDIR@/@RUNTIME_NAME@";

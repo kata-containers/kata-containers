@@ -8,8 +8,9 @@ package virtcontainers
 import (
 	"errors"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
+	devconfig "github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
@@ -65,7 +66,7 @@ func (s *Sandbox) dumpHypervisor(ss *persistapi.SandboxState) {
 	ss.HypervisorState.BlockIndexMap = s.state.BlockIndexMap
 }
 
-func deviceToDeviceState(devices []api.Device) (dss []persistapi.DeviceState) {
+func deviceToDeviceState(devices []api.Device) (dss []devconfig.DeviceState) {
 	for _, dev := range devices {
 		dss = append(dss, dev.Save())
 	}
@@ -188,6 +189,7 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		SystemdCgroup:       sconfig.SystemdCgroup,
 		SandboxCgroupOnly:   sconfig.SandboxCgroupOnly,
 		DisableGuestSeccomp: sconfig.DisableGuestSeccomp,
+		GuestSeLinuxLabel:   sconfig.GuestSeLinuxLabel,
 	}
 
 	ss.Config.SandboxBindMounts = append(ss.Config.SandboxBindMounts, sconfig.SandboxBindMounts...)
@@ -247,6 +249,7 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		BootFromTemplate:        sconfig.HypervisorConfig.BootFromTemplate,
 		DisableVhostNet:         sconfig.HypervisorConfig.DisableVhostNet,
 		EnableVhostUserStore:    sconfig.HypervisorConfig.EnableVhostUserStore,
+		SeccompSandbox:          sconfig.HypervisorConfig.SeccompSandbox,
 		VhostUserStorePath:      sconfig.HypervisorConfig.VhostUserStorePath,
 		VhostUserStorePathList:  sconfig.HypervisorConfig.VhostUserStorePathList,
 		GuestHookPath:           sconfig.HypervisorConfig.GuestHookPath,
@@ -323,7 +326,7 @@ func (s *Sandbox) loadAgent(as persistapi.AgentState) {
 	}
 }
 
-func (s *Sandbox) loadDevices(devStates []persistapi.DeviceState) {
+func (s *Sandbox) loadDevices(devStates []devconfig.DeviceState) {
 	s.devManager.LoadDevices(devStates)
 }
 
@@ -427,6 +430,7 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		SystemdCgroup:       savedConf.SystemdCgroup,
 		SandboxCgroupOnly:   savedConf.SandboxCgroupOnly,
 		DisableGuestSeccomp: savedConf.DisableGuestSeccomp,
+		GuestSeLinuxLabel:   savedConf.GuestSeLinuxLabel,
 	}
 	sconfig.SandboxBindMounts = append(sconfig.SandboxBindMounts, savedConf.SandboxBindMounts...)
 

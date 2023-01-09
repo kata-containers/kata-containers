@@ -163,7 +163,7 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
     let (logger, _guard) = logging::create_logger(name, crate_name!(), log_level, writer);
 
     let timeout_nano: i64 = match args.value_of("timeout") {
-        Some(t) => utils::human_time_to_ns(t).map_err(|e| e)?,
+        Some(t) => utils::human_time_to_ns(t)?,
         None => 0,
     };
 
@@ -181,11 +181,11 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
     let cfg = Config {
         server_address,
         bundle_dir,
-        interactive,
-        ignore_errors,
         timeout_nano,
         hybrid_vsock_port,
+        interactive,
         hybrid_vsock,
+        ignore_errors,
         no_auto_values,
     };
 
@@ -320,7 +320,7 @@ fn real_main() -> Result<()> {
 
 fn main() {
     if let Err(e) = real_main() {
-        eprintln!("ERROR: {}", e);
+        eprintln!("ERROR: {:#?}", e);
         exit(1);
     }
 }

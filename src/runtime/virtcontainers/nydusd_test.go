@@ -28,6 +28,7 @@ func TestNydusdStart(t *testing.T) {
 		debug           bool
 		extraArgs       []string
 		startFn         func(cmd *exec.Cmd) error
+		waitFn          func() error
 		setupShareDirFn func() error
 	}
 
@@ -44,6 +45,9 @@ func TestNydusdStart(t *testing.T) {
 		sourcePath:  sourcePath,
 		startFn: func(cmd *exec.Cmd) error {
 			cmd.Process = &os.Process{}
+			return nil
+		},
+		waitFn: func() error {
 			return nil
 		},
 		setupShareDirFn: func() error { return nil },
@@ -72,9 +76,11 @@ func TestNydusdStart(t *testing.T) {
 				debug:           tt.fields.debug,
 				pid:             tt.fields.pid,
 				startFn:         tt.fields.startFn,
+				waitFn:          tt.fields.waitFn,
 				setupShareDirFn: tt.fields.setupShareDirFn,
 			}
 			ctx := context.Background()
+
 			_, err := nd.Start(ctx, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("nydusd.Start() error = %v, wantErr %v", err, tt.wantErr)
@@ -93,13 +99,13 @@ func TestNydusdArgs(t *testing.T) {
 		apiSockPath: "/var/lib/api.sock",
 		debug:       true,
 	}
-	expected := "--log-level debug --apisock /var/lib/api.sock --sock /var/lib/vhost-user.sock"
+	expected := "virtiofs --hybrid-mode --log-level debug --apisock /var/lib/api.sock --sock /var/lib/vhost-user.sock"
 	args, err := nd.args()
 	assert.NoError(err)
 	assert.Equal(expected, strings.Join(args, " "))
 
 	nd.debug = false
-	expected = "--log-level info --apisock /var/lib/api.sock --sock /var/lib/vhost-user.sock"
+	expected = "virtiofs --hybrid-mode --log-level info --apisock /var/lib/api.sock --sock /var/lib/vhost-user.sock"
 	args, err = nd.args()
 	assert.NoError(err)
 	assert.Equal(expected, strings.Join(args, " "))

@@ -51,6 +51,8 @@ service AgentService {
 	rpc ListInterfaces(ListInterfacesRequest) returns(Interfaces);
 	rpc ListRoutes(ListRoutesRequest) returns (Routes);
 	rpc AddARPNeighbors(AddARPNeighborsRequest) returns (google.protobuf.Empty);
+	rpc GetIPTables(GetIPTablesRequest) returns (GetIPTablesResponse);
+	rpc SetIPTables(SetIPTablesRequest) returns (SetIPTablesResponse);
 
 	// observability
 	rpc GetMetrics(GetMetricsRequest) returns (Metrics);
@@ -326,6 +328,28 @@ message ARPNeighbors {
 
 message AddARPNeighborsRequest {
        ARPNeighbors neighbors = 1;
+}
+
+message GetIPTablesRequest {
+       bool is_ipv6 = 1;
+}
+
+message GetIPTablesResponse{
+        // raw stdout from iptables-save or ip6tables-save
+        bytes data = 1;
+}
+
+message SetIPTablesRequest {
+       bool is_ipv6 = 1;
+
+       // iptables, in raw format expected to be passed to stdin
+       // of iptables-save or ip6tables-save
+       bytes data = 2;
+}
+
+message SetIPTablesResponse{
+        // raw stdout from iptables-restore or ip6tables-restore
+        bytes data = 1;
 }
 
 message OnlineCPUMemRequest {

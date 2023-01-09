@@ -9,13 +9,12 @@ import (
 	"syscall"
 	"time"
 
+	"context"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	"golang.org/x/net/context"
 )
 
 type newAgentFuncKey struct{}
@@ -170,7 +169,7 @@ type agent interface {
 	copyFile(ctx context.Context, src, dst string) error
 
 	// Tell the agent to setup the swapfile in the guest
-	addSwap(ctx context.Context, PCIPath vcTypes.PciPath) error
+	addSwap(ctx context.Context, PCIPath types.PciPath) error
 
 	// markDead tell agent that the guest is dead
 	markDead(ctx context.Context)
@@ -191,9 +190,15 @@ type agent interface {
 	// getAgentMetrics get metrics of agent and guest through agent
 	getAgentMetrics(context.Context, *grpc.GetMetricsRequest) (*grpc.Metrics, error)
 
-	//getGuestVolumeStats get the filesystem stats of a volume specified by the volume mount path on the guest.
+	// getGuestVolumeStats get the filesystem stats of a volume specified by the volume mount path on the guest.
 	getGuestVolumeStats(ctx context.Context, volumeGuestPath string) ([]byte, error)
 
 	// resizeGuestVolume resizes a volume specified by the volume mount path on the guest.
 	resizeGuestVolume(ctx context.Context, volumeGuestPath string, size uint64) error
+
+	// getIPTables obtains the iptables from the guest
+	getIPTables(ctx context.Context, isIPv6 bool) ([]byte, error)
+
+	// setIPTables sets the iptables from the guest
+	setIPTables(ctx context.Context, isIPv6 bool, data []byte) error
 }

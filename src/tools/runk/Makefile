@@ -3,35 +3,41 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# LIBC=musl|gnu (default: gnu)
+LIBC ?= gnu
+
 include ../../../utils.mk
 
 TARGET = runk
 TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
-
-AGENT_TARGET = oci-kata-agent
-AGENT_TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(AGENT_TARGET)
 AGENT_SOURCE_PATH = ../../agent
+
+EXTRA_RUSTFEATURES :=
+
+# Define if runk enables seccomp support (default: yes)
+SECCOMP := yes
 
 # BINDIR is a directory for installing executable programs
 BINDIR := /usr/local/bin
 
+ifeq ($(SECCOMP),yes)
+    override EXTRA_RUSTFEATURES += seccomp
+endif
+
+ifneq ($(EXTRA_RUSTFEATURES),)
+    override EXTRA_RUSTFEATURES := --features "$(EXTRA_RUSTFEATURES)"
+endif
+
 .DEFAULT_GOAL := default
 default: build
 
-build: build-agent build-runk
+build:
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE) $(EXTRA_RUSTFEATURES)
 
-build-agent:
-	make -C $(AGENT_SOURCE_PATH) STANDARD_OCI_RUNTIME=yes
+static-checks-build:
+	@echo "INFO: static-checks-build do nothing.."
 
-build-runk:
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
-
-install: install-agent install-runk
-
-install-agent:
-	install -D $(AGENT_SOURCE_PATH)/$(AGENT_TARGET_PATH) $(BINDIR)/$(AGENT_TARGET)
-
-install-runk:
+install:
 	install -D $(TARGET_PATH) $(BINDIR)/$(TARGET)
 
 clean:
@@ -40,18 +46,19 @@ clean:
 vendor:
 	cargo vendor
 
-test:
-	cargo test --all --target $(TRIPLE) -- --nocapture
+test: test-runk test-agent
+
+test-runk:
+	cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
+
+test-agent:
+	make test -C $(AGENT_SOURCE_PATH) STANDARD_OCI_RUNTIME=yes
 
 check: standard_rust_check
 
 .PHONY: \
 	build \
-	build-agent \
-	build-runk \
 	install \
-	install-agent \
-	install-runk \
 	clean \
 	clippy \
 	format \

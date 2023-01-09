@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2020 Ant Group
 //
@@ -355,7 +354,7 @@ func updateFirecrackerMetrics(fm *FirecrackerMetrics) {
 
 }
 
-//  Structure storing all metrics while enforcing serialization support on them.
+// Structure storing all metrics while enforcing serialization support on them.
 type FirecrackerMetrics struct {
 	// API Server related metrics.
 	APIServer APIServerMetrics `json:"api_server"`
@@ -393,7 +392,7 @@ type FirecrackerMetrics struct {
 	Vsock VsockDeviceMetrics `json:"vsock"`
 }
 
-//  API Server related metrics.
+// API Server related metrics.
 type APIServerMetrics struct {
 	// Measures the process's startup time in microseconds.
 	ProcessStartupTimeUs uint64 `json:"process_startup_time_us"`
@@ -405,7 +404,7 @@ type APIServerMetrics struct {
 	SyncVmmSendTimeoutCount uint64 `json:"sync_vmm_send_timeout_count"`
 }
 
-//  A block device's related metrics.
+// A block device's related metrics.
 type BlockDeviceMetrics struct {
 	// Number of times when activate failed on a block device.
 	ActivateFails uint64 `json:"activate_fails"`
@@ -441,7 +440,7 @@ type BlockDeviceMetrics struct {
 	RateLimiterThrottledEvents uint64 `json:"rate_limiter_throttled_events"`
 }
 
-//  Metrics related to API GET requests.
+// Metrics related to API GET requests.
 type GetRequestsMetrics struct {
 	// Number of GETs for getting information on the instance.
 	InstanceInfoCount uint64 `json:"instance_info_count"`
@@ -453,7 +452,7 @@ type GetRequestsMetrics struct {
 	MachineCfgFails uint64 `json:"machine_cfg_fails"`
 }
 
-//  Metrics related to the i8042 device.
+// Metrics related to the i8042 device.
 type I8042DeviceMetrics struct {
 	// Errors triggered while using the i8042 device.
 	ErrorCount uint64 `json:"error_count"`
@@ -469,7 +468,7 @@ type I8042DeviceMetrics struct {
 	WriteCount uint64 `json:"write_count"`
 }
 
-//  Metrics related to performance measurements.
+// Metrics related to performance measurements.
 type PerformanceMetrics struct {
 	// Measures the snapshot full create time, at the API (user) level, in microseconds.
 	FullCreateSnapshot uint64 `json:"full_create_snapshot"`
@@ -493,7 +492,7 @@ type PerformanceMetrics struct {
 	VmmResumeVM uint64 `json:"vmm_resume_vm"`
 }
 
-//  Logging related metrics.
+// Logging related metrics.
 type LoggerSystemMetrics struct {
 	// Number of misses on flushing metrics.
 	MissedMetricsCount uint64 `json:"missed_metrics_count"`
@@ -505,7 +504,7 @@ type LoggerSystemMetrics struct {
 	LogFails uint64 `json:"log_fails"`
 }
 
-//  Metrics specific to MMDS functionality.
+// Metrics specific to MMDS functionality.
 type MmdsMetrics struct {
 	// Number of frames rerouted to MMDS.
 	RxAccepted uint64 `json:"rx_accepted"`
@@ -531,7 +530,7 @@ type MmdsMetrics struct {
 	ConnectionsDestroyed uint64 `json:"connections_destroyed"`
 }
 
-//  A network device's related metrics.
+// A network device's related metrics.
 type NetDeviceMetrics struct {
 	// Number of times when activate failed on a network device.
 	ActivateFails uint64 `json:"activate_fails"`
@@ -588,7 +587,7 @@ type NetDeviceMetrics struct {
 	TxSpoofedMacCount uint64 `json:"tx_spoofed_mac_count"`
 }
 
-//  Metrics related to API PATCH requests.
+// Metrics related to API PATCH requests.
 type PatchRequestsMetrics struct {
 	// Number of tries to PATCH a block device.
 	DriveCount uint64 `json:"drive_count"`
@@ -604,7 +603,7 @@ type PatchRequestsMetrics struct {
 	MachineCfgFails uint64 `json:"machine_cfg_fails"`
 }
 
-//  Metrics related to API PUT requests.
+// Metrics related to API PUT requests.
 type PutRequestsMetrics struct {
 	// Number of PUTs triggering an action on the VM.
 	ActionsCount uint64 `json:"actions_count"`
@@ -636,7 +635,7 @@ type PutRequestsMetrics struct {
 	NetworkFails uint64 `json:"network_fails"`
 }
 
-//  Metrics related to the RTC device.
+// Metrics related to the RTC device.
 type RTCDeviceMetrics struct {
 	// Errors triggered while using the RTC device.
 	ErrorCount uint64 `json:"error_count"`
@@ -646,13 +645,13 @@ type RTCDeviceMetrics struct {
 	MissedWriteCount uint64 `json:"missed_write_count"`
 }
 
-//  Metrics related to seccomp filtering.
+// Metrics related to seccomp filtering.
 type SeccompMetrics struct {
 	// Number of errors inside the seccomp filtering.
 	NumFaults uint64 `json:"num_faults"`
 }
 
-//  Metrics related to a vcpu's functioning.
+// Metrics related to a vcpu's functioning.
 type VcpuMetrics struct {
 	// Number of KVM exits for handling input IO.
 	ExitIoIn uint64 `json:"exit_io_in"`
@@ -668,7 +667,7 @@ type VcpuMetrics struct {
 	FilterCPUid uint64 `json:"filter_cpuid"`
 }
 
-//  Metrics related to the virtual machine manager.
+// Metrics related to the virtual machine manager.
 type VmmMetrics struct {
 	// Number of device related events received for a VM.
 	DeviceEvents uint64 `json:"device_events"`
@@ -676,7 +675,7 @@ type VmmMetrics struct {
 	PanicCount uint64 `json:"panic_count"`
 }
 
-//  Metrics related to the UART device.
+// Metrics related to the UART device.
 type SerialDeviceMetrics struct {
 	// Errors triggered while using the UART device.
 	ErrorCount uint64 `json:"error_count"`
@@ -692,7 +691,7 @@ type SerialDeviceMetrics struct {
 	WriteCount uint64 `json:"write_count"`
 }
 
-//  Metrics related to signals.
+// Metrics related to signals.
 type SignalMetrics struct {
 	// Number of times that SIGBUS was handled.
 	Sigbus uint64 `json:"sigbus"`
@@ -700,7 +699,7 @@ type SignalMetrics struct {
 	Sigsegv uint64 `json:"sigsegv"`
 }
 
-//  Metrics related to virtio-vsockets.
+// Metrics related to virtio-vsockets.
 type VsockDeviceMetrics struct {
 	// Number of times when activate failed on a vsock device.
 	ActivateFails uint64 `json:"activate_fails"`

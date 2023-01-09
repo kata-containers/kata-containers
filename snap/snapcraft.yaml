@@ -1,4 +1,5 @@
 name: kata-containers
+website: https://github.com/kata-containers/kata-containers
 summary: Build lightweight VMs that seamlessly plug into the containers ecosystem
 description: |
   Kata Containers is an open source project and community working to build a
@@ -18,20 +19,18 @@ parts:
       - git
       - git-extras
     override-pull: |
-      version="9999"
-      kata_url="https://github.com/kata-containers/kata-containers"
+      source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
 
-      if echo "${GITHUB_REF}" | grep -q -E "^refs/tags"; then
-        version=$(echo ${GITHUB_REF} | cut -d/ -f3)
+      version="9999"
+
+      if echo "${GITHUB_REF:-}" | grep -q -E "^refs/tags"; then
+        version=$(echo ${GITHUB_REF:-} | cut -d/ -f3)
         git checkout ${version}
       fi
 
       snapcraftctl set-grade "stable"
       snapcraftctl set-version "${version}"
 
-      # setup GOPATH - this repo dir should be there
-      export GOPATH=${SNAPCRAFT_STAGE}/gopath
-      kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
       mkdir -p $(dirname ${kata_dir})
       ln -sf $(realpath "${SNAPCRAFT_STAGE}/..") ${kata_dir}
 
@@ -43,33 +42,79 @@ parts:
     build-packages:
       - curl
     override-build: |
+      source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
+
       # put everything in stage
-      cd ${SNAPCRAFT_STAGE}
+      cd "${SNAPCRAFT_STAGE}"
 
-      yq_path="./yq"
-      yq_pkg="github.com/mikefarah/yq"
-      goos="linux"
-      case "$(uname -m)" in
-        aarch64) goarch="arm64";;
-        ppc64le) goarch="ppc64le";;
-        x86_64) goarch="amd64";;
-        s390x) goarch="s390x";;
-        *) echo "unsupported architecture: $(uname -m)"; exit 1;;
-      esac
-
-      yq_version=3.4.1
-      yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_${goos}_${goarch}"
-      curl -o "${yq_path}" -L "${yq_url}"
-      chmod +x "${yq_path}"
-
-      kata_dir=gopath/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
-      version="$(${yq_path} r ${kata_dir}/versions.yaml languages.golang.meta.newest-version)"
+      version="$(${yq} r ${kata_dir}/versions.yaml languages.golang.meta.newest-version)"
       tarfile="go${version}.${goos}-${goarch}.tar.gz"
       curl -LO https://golang.org/dl/${tarfile}
       tar -xf ${tarfile} --strip-components=1
 
+  rustdeps:
+    after: [metadata]
+    plugin: nil
+    prime:
+      - -*
+    build-packages:
+      - curl
+    override-build: |
+      source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
+
+      # put everything in stage
+      cd "${SNAPCRAFT_STAGE}"
+
+      version="$(${yq} r ${kata_dir}/versions.yaml languages.rust.meta.newest-version)"
+      if ! command -v rustup > /dev/null; then
+        curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain ${version}
+      fi
+
+      export PATH=${PATH}:${HOME}/.cargo/bin
+      rustup toolchain install ${version}
+      rustup default ${version}
+      if [ "${arch}" == "ppc64le" ] || [ "${arch}" == "s390x" ] ; then
+        [ "${arch}" == "ppc64le" ] && arch="powerpc64le"
+        rustup target add ${arch}-unknown-linux-gnu
+      else
+        rustup target add ${arch}-unknown-linux-musl
+        $([ "$(whoami)" != "root" ] && echo sudo) ln -sf /usr/bin/g++ /bin/musl-g++
+      fi
+      rustup component add rustfmt
+
+  docker:
+    after: [metadata]
+    plugin: nil
+    prime:
+      - -*
+    build-packages:
+      - ca-certificates
+      - containerd
+      - curl
+      - gnupg
+      - lsb-release
+      - runc
+    override-build: |
+      source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
+
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg |\
+          sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+      distro_codename=$(lsb_release -cs)
+      echo "deb [arch=${dpkg_arch} signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu ${distro_codename} stable" |\
+          sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+      sudo apt-get -y update
+      sudo apt-get -y install docker-ce docker-ce-cli containerd.io
+
+      echo "Unmasking docker service"
+      sudo -E systemctl unmask docker.service || true
+      sudo -E systemctl unmask docker.socket || true
+      echo "Adding $USER into docker group"
+      sudo -E gpasswd -a $USER docker
+      echo "Starting docker"
+      sudo -E systemctl start docker || true
+
   image:
-    after: [godeps, qemu, kernel]
+    after: [godeps, docker, qemu, kernel]
     plugin: nil
     build-packages:
       - docker.io
@@ -80,95 +125,67 @@ parts:
       - uidmap
       - gnupg2
     override-build: |
-      [ "$(uname -m)" = "ppc64le" ] || [ "$(uname -m)" = "s390x" ] && sudo apt-get --no-install-recommends install -y protobuf-compiler
+      source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
 
-      yq=${SNAPCRAFT_STAGE}/yq
+      [ "${arch}" = "ppc64le" ] || [ "${arch}" = "s390x" ] && sudo apt-get --no-install-recommends install -y protobuf-compiler
 
-      # set GOPATH
-      export GOPATH=${SNAPCRAFT_STAGE}/gopath
-      kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
-
-      export GOROOT=${SNAPCRAFT_STAGE}
-      export PATH="${GOROOT}/bin:${PATH}"
-      export GO111MODULE="auto"
-
-      http_proxy=${http_proxy:-""}
-      https_proxy=${https_proxy:-""}
       if [ -n "$http_proxy" ]; then
         echo "Setting proxy $http_proxy"
-        sudo -E systemctl set-environment http_proxy=$http_proxy || true
-        sudo -E systemctl set-environment https_proxy=$https_proxy || true
+        sudo -E systemctl set-environment http_proxy="$http_proxy" || true
+        sudo -E systemctl set-environment https_proxy="$https_proxy" || true
       fi
 
       # Copy yq binary. It's used in the container
-      mkdir -p "${GOPATH}/bin/"
       cp -a "${yq}" "${GOPATH}/bin/"
 
-      echo "Unmasking docker service"
-      sudo -E systemctl unmask docker.service || true
-      sudo -E systemctl unmask docker.socket || true
-      echo "Adding $USER into docker group"
-      sudo -E gpasswd -a $USER docker
-      echo "Starting docker"
-      sudo -E systemctl start docker || true
-
-      cd ${kata_dir}/tools/osbuilder
+      cd "${kata_dir}/tools/osbuilder"
 
       # build image
       export AGENT_INIT=yes
       export USE_DOCKER=1
       export DEBUG=1
-      arch="$(uname -m)"
       initrd_distro=$(${yq} r -X ${kata_dir}/versions.yaml assets.initrd.architecture.${arch}.name)
       image_distro=$(${yq} r -X ${kata_dir}/versions.yaml assets.image.architecture.${arch}.name)
       case "$arch" in
         x86_64)
           # In some build systems it's impossible to build a rootfs image, try with the initrd image
-          sudo -E PATH=$PATH make image DISTRO=${image_distro} || sudo -E PATH=$PATH make initrd DISTRO=${initrd_distro}
+          sudo -E PATH=$PATH make image DISTRO="${image_distro}" || sudo -E PATH="$PATH" make initrd DISTRO="${initrd_distro}"
         ;;
 
         aarch64|ppc64le|s390x)
-          sudo -E PATH=$PATH make initrd DISTRO=${initrd_distro}
+          sudo -E PATH="$PATH" make initrd DISTRO="${initrd_distro}"
         ;;
 
-        *) echo "unsupported architecture: $(uname -m)"; exit 1;;
+        *) die "unsupported architecture: ${arch}" ;;
       esac
 
       # Install image
-      kata_image_dir=${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers
-      mkdir -p ${kata_image_dir}
-      cp kata-containers*.img ${kata_image_dir}
+      kata_image_dir="${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers"
+      mkdir -p "${kata_image_dir}"
+      cp kata-containers*.img "${kata_image_dir}"
 
   runtime:
     after: [godeps, image, cloud-hypervisor]
     plugin: nil
     build-attributes: [no-patchelf]
     override-build: |
-      # set GOPATH
-      export GOPATH=${SNAPCRAFT_STAGE}/gopath
-      export GOROOT=${SNAPCRAFT_STAGE}
-      export PATH="${GOROOT}/bin:${PATH}"
-      export GO111MODULE="auto"
-      kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
+      source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
 
-      cd ${kata_dir}/src/runtime
+      cd "${kata_dir}/src/runtime"
 
-      # setup arch
-      arch=$(uname -m)
-      if [ ${arch} = "ppc64le" ]; then
-        arch="ppc64"
-      fi
+      qemu_cmd="qemu-system-${qemu_arch}"
 
       # build and install runtime
       make \
-        PREFIX=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr \
+        PREFIX="/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr" \
         SKIP_GO_VERSION_CHECK=1 \
-        QEMUCMD=qemu-system-$arch
+        QEMUCMD="${qemu_cmd}"
+
       make install \
         PREFIX=/usr \
-        DESTDIR=${SNAPCRAFT_PART_INSTALL} \
+        DESTDIR="${SNAPCRAFT_PART_INSTALL}" \
         SKIP_GO_VERSION_CHECK=1 \
-        QEMUCMD=qemu-system-$arch
+        QEMUCMD="${qemu_cmd}"
 
       if [ ! -f ${SNAPCRAFT_PART_INSTALL}/../../image/install/usr/share/kata-containers/kata-containers.img ]; then
         sed -i -e "s|^image =.*|initrd = \"/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share/kata-containers/kata-containers-initrd.img\"|" \
@@ -185,44 +202,37 @@ parts:
       - bison
       - flex
     override-build: |
-      yq=${SNAPCRAFT_STAGE}/yq
-      export PATH="${PATH}:${SNAPCRAFT_STAGE}"
-      export GOPATH=${SNAPCRAFT_STAGE}/gopath
-      kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
-      versions_file="${kata_dir}/versions.yaml"
+      source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
+
       kernel_version="$(${yq} r $versions_file assets.kernel.version)"
       #Remove extra 'v'
-      kernel_version=${kernel_version#v}
+      kernel_version="${kernel_version#v}"
 
-      [ "$(uname -m)" = "s390x" ] && sudo apt-get --no-install-recommends install -y libssl-dev
+      [ "${arch}" = "s390x" ] && sudo apt-get --no-install-recommends install -y libssl-dev
 
-      export GOPATH=${SNAPCRAFT_STAGE}/gopath
-      export GO111MODULE="auto"
-      kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
-
-      cd ${kata_dir}/tools/packaging/kernel
+      cd "${kata_dir}/tools/packaging/kernel"
       kernel_dir_prefix="kata-linux-"
 
       # Setup and build kernel
-      ./build-kernel.sh -v ${kernel_version} -d setup
+      ./build-kernel.sh -v "${kernel_version}" -d setup
       cd ${kernel_dir_prefix}*
-      make -j $(($(nproc)-1)) EXTRAVERSION=".container"
+      make -j $(nproc ${CI:+--ignore 1}) EXTRAVERSION=".container"
 
-      kernel_suffix=${kernel_version}.container
-      kata_kernel_dir=${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers
-      mkdir -p ${kata_kernel_dir}
+      kernel_suffix="${kernel_version}.container"
+      kata_kernel_dir="${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers"
+      mkdir -p "${kata_kernel_dir}"
 
       # Install bz kernel
-      make install INSTALL_PATH=${kata_kernel_dir} EXTRAVERSION=".container" || true
-      vmlinuz_name=vmlinuz-${kernel_suffix}
-      ln -sf ${vmlinuz_name} ${kata_kernel_dir}/vmlinuz.container
+      make install INSTALL_PATH="${kata_kernel_dir}" EXTRAVERSION=".container" || true
+      vmlinuz_name="vmlinuz-${kernel_suffix}"
+      ln -sf "${vmlinuz_name}" "${kata_kernel_dir}/vmlinuz.container"
 
       # Install raw kernel
-      vmlinux_path=vmlinux
-      [ "$(uname -m)" = "s390x" ] && vmlinux_path=arch/s390/boot/compressed/vmlinux
-      vmlinux_name=vmlinux-${kernel_suffix}
-      cp ${vmlinux_path} ${kata_kernel_dir}/${vmlinux_name}
-      ln -sf ${vmlinux_name} ${kata_kernel_dir}/vmlinux.container
+      vmlinux_path="vmlinux"
+      [ "${arch}" = "s390x" ] && vmlinux_path="arch/s390/boot/vmlinux"
+      vmlinux_name="vmlinux-${kernel_suffix}"
+      cp "${vmlinux_path}" "${kata_kernel_dir}/${vmlinux_name}"
+      ln -sf "${vmlinux_name}" "${kata_kernel_dir}/vmlinux.container"
 
   qemu:
     plugin: make
@@ -249,12 +259,8 @@ parts:
       - libselinux1-dev
       - ninja-build
     override-build: |
-      yq=${SNAPCRAFT_STAGE}/yq
-      export GOPATH=${SNAPCRAFT_STAGE}/gopath
-      export GO111MODULE="auto"
-      kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
+      source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
 
-      versions_file="${kata_dir}/versions.yaml"
       branch="$(${yq} r ${versions_file} assets.hypervisor.qemu.version)"
       url="$(${yq} r ${versions_file} assets.hypervisor.qemu.url)"
       commit=""
@@ -262,11 +268,11 @@ parts:
       patches_version_dir="${kata_dir}/tools/packaging/qemu/patches/tag_patches/${branch}"
 
       # download source
-      qemu_dir=${SNAPCRAFT_STAGE}/qemu
+      qemu_dir="${SNAPCRAFT_STAGE}/qemu"
       rm -rf "${qemu_dir}"
       git clone --depth 1 --branch ${branch} --single-branch ${url} "${qemu_dir}"
-      cd ${qemu_dir}
-      [ -z "${commit}" ] || git checkout ${commit}
+      cd "${qemu_dir}"
+      [ -z "${commit}" ] || git checkout "${commit}"
 
       [ -n "$(ls -A ui/keycodemapdb)" ] || git clone --depth 1 https://github.com/qemu/keycodemapdb ui/keycodemapdb/
       [ -n "$(ls -A capstone)" ] || git clone --depth 1 https://github.com/qemu/capstone capstone
@@ -277,10 +283,10 @@ parts:
       ${kata_dir}/tools/packaging/scripts/apply_patches.sh "${patches_version_dir}"
 
       # Only x86_64 supports libpmem
-      [ "$(uname -m)" = "x86_64" ] && sudo apt-get --no-install-recommends install -y apt-utils ca-certificates libpmem-dev
+      [ "${arch}" = "x86_64" ] && sudo apt-get --no-install-recommends install -y apt-utils ca-certificates libpmem-dev
 
-      configure_hypervisor=${kata_dir}/tools/packaging/scripts/configure-hypervisor.sh
-      chmod +x ${configure_hypervisor}
+      configure_hypervisor="${kata_dir}/tools/packaging/scripts/configure-hypervisor.sh"
+      chmod +x "${configure_hypervisor}"
       # static build. The --prefix, --libdir, --libexecdir, --datadir arguments are
       # based on PREFIX and set by configure-hypervisor.sh
       echo "$(PREFIX=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr ${configure_hypervisor} -s kata-qemu) \
@@ -290,17 +296,17 @@ parts:
       # Copy QEMU configurations (Kconfigs)
       case "${branch}" in
       "v5.1.0")
-        cp -a ${kata_dir}/tools/packaging/qemu/default-configs/* default-configs
+        cp -a "${kata_dir}"/tools/packaging/qemu/default-configs/* default-configs
         ;;
 
       *)
-        cp -a ${kata_dir}/tools/packaging/qemu/default-configs/* configs/devices/
+        cp -a "${kata_dir}"/tools/packaging/qemu/default-configs/* configs/devices/
         ;;
       esac
 
       # build and install
-      make -j $(($(nproc)-1))
-      make install DESTDIR=${SNAPCRAFT_PART_INSTALL}
+      make -j $(nproc ${CI:+--ignore 1})
+      make install DESTDIR="${SNAPCRAFT_PART_INSTALL}"
     prime:
       - -snap/
       - -usr/bin/qemu-ga
@@ -316,26 +322,44 @@ parts:
       # Hack: move qemu to /
       "snap/kata-containers/current/": "./"
 
+  virtiofsd:
+    plugin: nil
+    after: [godeps, rustdeps, docker]
+    override-build: |
+      source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
+
+      echo "INFO: Building rust version of virtiofsd"
+
+      cd "${SNAPCRAFT_PROJECT_DIR}"
+      # Clean-up build dir in case it already exists
+      sudo -E NO_TTY=true make virtiofsd-tarball
+
+      sudo install \
+        --owner='root' \
+        --group='root' \
+        --mode=0755 \
+        -D \
+        --target-directory="${SNAPCRAFT_PART_INSTALL}/usr/libexec/" \
+        build/virtiofsd/builddir/virtiofsd/virtiofsd
+
   cloud-hypervisor:
     plugin: nil
-    after: [godeps]
+    after: [godeps, docker]
     override-build: |
-      arch=$(uname -m)
-      if [ "{$arch}" == "aarch64" ] || [ "${arch}" == "x64_64" ]; then 
-          sudo apt-get -y update
-          sudo apt-get -y install ca-certificates curl gnupg lsb-release
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-          sudo apt-get -y update
-          sudo apt-get -y install docker-ce docker-ce-cli containerd.io
-          sudo systemctl start docker.socket
+      source "${SNAPCRAFT_PROJECT_DIR}/snap/local/snap-common.sh"
 
-          export GOPATH=${SNAPCRAFT_STAGE}/gopath
-          kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
-          cd ${kata_dir}
+      if [ "${arch}" == "aarch64" ] || [ "${arch}" == "x86_64" ]; then
+          cd "${SNAPCRAFT_PROJECT_DIR}"
           sudo -E NO_TTY=true make cloud-hypervisor-tarball
-          tar xvJpf build/kata-static-cloud-hypervisor.tar.xz -C /tmp/
-          install -D /tmp/opt/kata/bin/cloud-hypervisor ${SNAPCRAFT_PART_INSTALL}/usr/bin/cloud-hypervisor
+
+          tarfile="${SNAPCRAFT_PROJECT_DIR}/tools/packaging/kata-deploy/local-build/build/kata-static-cloud-hypervisor.tar.xz"
+          tmpdir=$(mktemp -d)
+
+          tar -xvJpf "${tarfile}" -C "${tmpdir}"
+
+          install -D "${tmpdir}/opt/kata/bin/cloud-hypervisor" "${SNAPCRAFT_PART_INSTALL}/usr/bin/cloud-hypervisor"
+
+          rm -rf "${tmpdir}"
       fi
 
 apps:

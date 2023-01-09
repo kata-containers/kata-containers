@@ -16,37 +16,35 @@ import (
 
 // VmConfig Virtual machine configuration
 type VmConfig struct {
-	Cpus      *CpusConfig             `json:"cpus,omitempty"`
-	Memory    *MemoryConfig           `json:"memory,omitempty"`
-	Kernel    KernelConfig            `json:"kernel"`
-	Initramfs NullableInitramfsConfig `json:"initramfs,omitempty"`
-	Cmdline   *CmdLineConfig          `json:"cmdline,omitempty"`
-	Disks     *[]DiskConfig           `json:"disks,omitempty"`
-	Net       *[]NetConfig            `json:"net,omitempty"`
-	Rng       *RngConfig              `json:"rng,omitempty"`
-	Balloon   *BalloonConfig          `json:"balloon,omitempty"`
-	Fs        *[]FsConfig             `json:"fs,omitempty"`
-	Pmem      *[]PmemConfig           `json:"pmem,omitempty"`
-	Serial    *ConsoleConfig          `json:"serial,omitempty"`
-	Console   *ConsoleConfig          `json:"console,omitempty"`
-	Devices   *[]DeviceConfig         `json:"devices,omitempty"`
-	Vdpa      *[]VdpaConfig           `json:"vdpa,omitempty"`
-	Vsock     *VsockConfig            `json:"vsock,omitempty"`
-	SgxEpc    *[]SgxEpcConfig         `json:"sgx_epc,omitempty"`
-	Tdx       *TdxConfig              `json:"tdx,omitempty"`
-	Numa      *[]NumaConfig           `json:"numa,omitempty"`
-	Iommu     *bool                   `json:"iommu,omitempty"`
-	Watchdog  *bool                   `json:"watchdog,omitempty"`
-	Platform  *PlatformConfig         `json:"platform,omitempty"`
+	Cpus     *CpusConfig     `json:"cpus,omitempty"`
+	Memory   *MemoryConfig   `json:"memory,omitempty"`
+	Payload  PayloadConfig   `json:"payload"`
+	Disks    *[]DiskConfig   `json:"disks,omitempty"`
+	Net      *[]NetConfig    `json:"net,omitempty"`
+	Rng      *RngConfig      `json:"rng,omitempty"`
+	Balloon  *BalloonConfig  `json:"balloon,omitempty"`
+	Fs       *[]FsConfig     `json:"fs,omitempty"`
+	Pmem     *[]PmemConfig   `json:"pmem,omitempty"`
+	Serial   *ConsoleConfig  `json:"serial,omitempty"`
+	Console  *ConsoleConfig  `json:"console,omitempty"`
+	Devices  *[]DeviceConfig `json:"devices,omitempty"`
+	Vdpa     *[]VdpaConfig   `json:"vdpa,omitempty"`
+	Vsock    *VsockConfig    `json:"vsock,omitempty"`
+	SgxEpc   *[]SgxEpcConfig `json:"sgx_epc,omitempty"`
+	Numa     *[]NumaConfig   `json:"numa,omitempty"`
+	Iommu    *bool           `json:"iommu,omitempty"`
+	Watchdog *bool           `json:"watchdog,omitempty"`
+	Platform *PlatformConfig `json:"platform,omitempty"`
+	Tpm      *TpmConfig      `json:"tpm,omitempty"`
 }
 
 // NewVmConfig instantiates a new VmConfig object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewVmConfig(kernel KernelConfig) *VmConfig {
+func NewVmConfig(payload PayloadConfig) *VmConfig {
 	this := VmConfig{}
-	this.Kernel = kernel
+	this.Payload = payload
 	var iommu bool = false
 	this.Iommu = &iommu
 	var watchdog bool = false
@@ -130,103 +128,28 @@ func (o *VmConfig) SetMemory(v MemoryConfig) {
 	o.Memory = &v
 }
 
-// GetKernel returns the Kernel field value
-func (o *VmConfig) GetKernel() KernelConfig {
+// GetPayload returns the Payload field value
+func (o *VmConfig) GetPayload() PayloadConfig {
 	if o == nil {
-		var ret KernelConfig
+		var ret PayloadConfig
 		return ret
 	}
 
-	return o.Kernel
+	return o.Payload
 }
 
-// GetKernelOk returns a tuple with the Kernel field value
+// GetPayloadOk returns a tuple with the Payload field value
 // and a boolean to check if the value has been set.
-func (o *VmConfig) GetKernelOk() (*KernelConfig, bool) {
+func (o *VmConfig) GetPayloadOk() (*PayloadConfig, bool) {
 	if o == nil {
 		return nil, false
 	}
-	return &o.Kernel, true
+	return &o.Payload, true
 }
 
-// SetKernel sets field value
-func (o *VmConfig) SetKernel(v KernelConfig) {
-	o.Kernel = v
-}
-
-// GetInitramfs returns the Initramfs field value if set, zero value otherwise (both if not set or set to explicit null).
-func (o *VmConfig) GetInitramfs() InitramfsConfig {
-	if o == nil || o.Initramfs.Get() == nil {
-		var ret InitramfsConfig
-		return ret
-	}
-	return *o.Initramfs.Get()
-}
-
-// GetInitramfsOk returns a tuple with the Initramfs field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-// NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *VmConfig) GetInitramfsOk() (*InitramfsConfig, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return o.Initramfs.Get(), o.Initramfs.IsSet()
-}
-
-// HasInitramfs returns a boolean if a field has been set.
-func (o *VmConfig) HasInitramfs() bool {
-	if o != nil && o.Initramfs.IsSet() {
-		return true
-	}
-
-	return false
-}
-
-// SetInitramfs gets a reference to the given NullableInitramfsConfig and assigns it to the Initramfs field.
-func (o *VmConfig) SetInitramfs(v InitramfsConfig) {
-	o.Initramfs.Set(&v)
-}
-
-// SetInitramfsNil sets the value for Initramfs to be an explicit nil
-func (o *VmConfig) SetInitramfsNil() {
-	o.Initramfs.Set(nil)
-}
-
-// UnsetInitramfs ensures that no value is present for Initramfs, not even an explicit nil
-func (o *VmConfig) UnsetInitramfs() {
-	o.Initramfs.Unset()
-}
-
-// GetCmdline returns the Cmdline field value if set, zero value otherwise.
-func (o *VmConfig) GetCmdline() CmdLineConfig {
-	if o == nil || o.Cmdline == nil {
-		var ret CmdLineConfig
-		return ret
-	}
-	return *o.Cmdline
-}
-
-// GetCmdlineOk returns a tuple with the Cmdline field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *VmConfig) GetCmdlineOk() (*CmdLineConfig, bool) {
-	if o == nil || o.Cmdline == nil {
-		return nil, false
-	}
-	return o.Cmdline, true
-}
-
-// HasCmdline returns a boolean if a field has been set.
-func (o *VmConfig) HasCmdline() bool {
-	if o != nil && o.Cmdline != nil {
-		return true
-	}
-
-	return false
-}
-
-// SetCmdline gets a reference to the given CmdLineConfig and assigns it to the Cmdline field.
-func (o *VmConfig) SetCmdline(v CmdLineConfig) {
-	o.Cmdline = &v
+// SetPayload sets field value
+func (o *VmConfig) SetPayload(v PayloadConfig) {
+	o.Payload = v
 }
 
 // GetDisks returns the Disks field value if set, zero value otherwise.
@@ -613,38 +536,6 @@ func (o *VmConfig) SetSgxEpc(v []SgxEpcConfig) {
 	o.SgxEpc = &v
 }
 
-// GetTdx returns the Tdx field value if set, zero value otherwise.
-func (o *VmConfig) GetTdx() TdxConfig {
-	if o == nil || o.Tdx == nil {
-		var ret TdxConfig
-		return ret
-	}
-	return *o.Tdx
-}
-
-// GetTdxOk returns a tuple with the Tdx field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *VmConfig) GetTdxOk() (*TdxConfig, bool) {
-	if o == nil || o.Tdx == nil {
-		return nil, false
-	}
-	return o.Tdx, true
-}
-
-// HasTdx returns a boolean if a field has been set.
-func (o *VmConfig) HasTdx() bool {
-	if o != nil && o.Tdx != nil {
-		return true
-	}
-
-	return false
-}
-
-// SetTdx gets a reference to the given TdxConfig and assigns it to the Tdx field.
-func (o *VmConfig) SetTdx(v TdxConfig) {
-	o.Tdx = &v
-}
-
 // GetNuma returns the Numa field value if set, zero value otherwise.
 func (o *VmConfig) GetNuma() []NumaConfig {
 	if o == nil || o.Numa == nil {
@@ -773,6 +664,38 @@ func (o *VmConfig) SetPlatform(v PlatformConfig) {
 	o.Platform = &v
 }
 
+// GetTpm returns the Tpm field value if set, zero value otherwise.
+func (o *VmConfig) GetTpm() TpmConfig {
+	if o == nil || o.Tpm == nil {
+		var ret TpmConfig
+		return ret
+	}
+	return *o.Tpm
+}
+
+// GetTpmOk returns a tuple with the Tpm field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VmConfig) GetTpmOk() (*TpmConfig, bool) {
+	if o == nil || o.Tpm == nil {
+		return nil, false
+	}
+	return o.Tpm, true
+}
+
+// HasTpm returns a boolean if a field has been set.
+func (o *VmConfig) HasTpm() bool {
+	if o != nil && o.Tpm != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetTpm gets a reference to the given TpmConfig and assigns it to the Tpm field.
+func (o *VmConfig) SetTpm(v TpmConfig) {
+	o.Tpm = &v
+}
+
 func (o VmConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Cpus != nil {
@@ -782,13 +705,7 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 		toSerialize["memory"] = o.Memory
 	}
 	if true {
-		toSerialize["kernel"] = o.Kernel
-	}
-	if o.Initramfs.IsSet() {
-		toSerialize["initramfs"] = o.Initramfs.Get()
-	}
-	if o.Cmdline != nil {
-		toSerialize["cmdline"] = o.Cmdline
+		toSerialize["payload"] = o.Payload
 	}
 	if o.Disks != nil {
 		toSerialize["disks"] = o.Disks
@@ -826,9 +743,6 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 	if o.SgxEpc != nil {
 		toSerialize["sgx_epc"] = o.SgxEpc
 	}
-	if o.Tdx != nil {
-		toSerialize["tdx"] = o.Tdx
-	}
 	if o.Numa != nil {
 		toSerialize["numa"] = o.Numa
 	}
@@ -840,6 +754,9 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Platform != nil {
 		toSerialize["platform"] = o.Platform
+	}
+	if o.Tpm != nil {
+		toSerialize["tpm"] = o.Tpm
 	}
 	return json.Marshal(toSerialize)
 }

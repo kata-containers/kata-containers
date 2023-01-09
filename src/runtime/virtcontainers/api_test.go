@@ -145,7 +145,7 @@ func TestCreateSandboxNoopAgentSuccessful(t *testing.T) {
 	config := newTestSandboxConfigNoop()
 
 	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
-	p, err := CreateSandbox(ctx, config, nil)
+	p, err := CreateSandbox(ctx, config, nil, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
 
@@ -178,7 +178,7 @@ func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
 	defer hybridVSockTTRPCMock.Stop()
 
 	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
-	p, err := CreateSandbox(ctx, config, nil)
+	p, err := CreateSandbox(ctx, config, nil, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
 
@@ -199,7 +199,7 @@ func TestCreateSandboxFailing(t *testing.T) {
 	config := SandboxConfig{}
 
 	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
-	p, err := CreateSandbox(ctx, config, nil)
+	p, err := CreateSandbox(ctx, config, nil, nil)
 	assert.Error(err)
 	assert.Nil(p.(*Sandbox))
 }
@@ -227,7 +227,7 @@ func createAndStartSandbox(ctx context.Context, config SandboxConfig) (sandbox V
 	err error) {
 
 	// Create sandbox
-	sandbox, err = CreateSandbox(ctx, config, nil)
+	sandbox, err = CreateSandbox(ctx, config, nil, nil)
 	if sandbox == nil || err != nil {
 		return nil, "", err
 	}
@@ -260,7 +260,7 @@ func TestReleaseSandbox(t *testing.T) {
 	config := newTestSandboxConfigNoop()
 
 	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
-	s, err := CreateSandbox(ctx, config, nil)
+	s, err := CreateSandbox(ctx, config, nil, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, s)
 

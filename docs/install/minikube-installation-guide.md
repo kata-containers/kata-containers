@@ -55,11 +55,11 @@ Here are the features to set up a CRI-O based Minikube, and why you need them:
 
 | what | why |
 | ---- | --- |
-| `--bootstrapper=kubeadm` | As recommended for [minikube CRI-o](https://kubernetes.io/docs/setup/minikube/#cri-o) |
+| `--bootstrapper=kubeadm` | As recommended for [minikube CRI-O](https://minikube.sigs.k8s.io/docs/handbook/config/#runtime-configuration) |
 | `--container-runtime=cri-o` | Using CRI-O for Kata |
-| `--enable-default-cni` | As recommended for [minikube CRI-o](https://kubernetes.io/docs/setup/minikube/#cri-o) |
+| `--enable-default-cni` | As recommended for [minikube CRI-O](https://minikube.sigs.k8s.io/docs/handbook/config/#runtime-configuration) |
 | `--memory 6144` | Allocate sufficient memory, as Kata Containers default to 1 or 2Gb |
-| `--network-plugin=cni` | As recommended for [minikube CRI-o](https://kubernetes.io/docs/setup/minikube/#cri-o) |
+| `--network-plugin=cni` | As recommended for [minikube CRI-O](https://minikube.sigs.k8s.io/docs/handbook/config/#runtime-configuration) |
 | `--vm-driver kvm2` | The host VM driver |
 
 To use containerd, modify the `--container-runtime` argument:
@@ -71,12 +71,6 @@ To use containerd, modify the `--container-runtime` argument:
 > **Notes:**
 > - Adjust the `--memory 6144` line to suit your environment and requirements. Kata Containers default to
 > requesting 2048MB per container. We recommended you supply more than that to the Minikube node.
-> - Prior to Minikube/Kubernetes v1.14, the beta `RuntimeClass` feature also needed enabling with
-> the following.
->
-> | what | why |
-> | ---- | --- |
-> | `--feature-gates=RuntimeClass=true` | Kata needs to use the `RuntimeClass` Kubernetes feature |
 
 The full command is therefore:
 
@@ -138,16 +132,8 @@ $ kubectl -n kube-system exec ${podname} -- ps -ef | fgrep infinity
 
 ## Enabling Kata Containers
 
-> **Note:** Only Minikube/Kubernetes versions <= 1.13 require this step. Since version
-> v1.14, the `RuntimeClass` is enabled by default. Performing this step on Kubernetes > v1.14 is
-> however benign.
-
 Now you have installed the Kata Containers components in the Minikube node. Next, you need to configure
 Kubernetes `RuntimeClass` to know when to use Kata Containers to run a pod.
-
-```sh
-$ kubectl apply -f https://raw.githubusercontent.com/kubernetes/node-api/master/manifests/runtimeclass_crd.yaml > runtimeclass_crd.yaml
-```
 
 ### Register the runtime
 

@@ -98,13 +98,11 @@ pub fn signame_to_signum(name: &str) -> Result<u8> {
         return Ok(n);
     }
 
-    let mut search_term: String;
-
-    if name.starts_with("SIG") {
-        search_term = name.to_string();
+    let mut search_term = if name.starts_with("SIG") {
+        name.to_string()
     } else {
-        search_term = format!("SIG{}", name);
-    }
+        format!("SIG{}", name)
+    };
 
     search_term = search_term.to_uppercase();
 
@@ -203,11 +201,7 @@ pub fn get_option(name: &str, options: &mut Options, args: &str) -> Result<Strin
         "exec_id" => {
             msg = "derived";
 
-            match options.get("cid") {
-                Some(value) => value,
-                None => "",
-            }
-            .into()
+            options.get("cid").unwrap_or(&"".to_string()).into()
         }
         _ => "".into(),
     };
@@ -688,7 +682,7 @@ fn oci_to_ttrpc(bundle_dir: &str, cid: &str, oci: &ociSpec) -> Result<ttrpcSpec>
 
     let root = match &oci.root {
         Some(r) => {
-            let ttrpc_root = root_oci_to_ttrpc(bundle_dir, r).map_err(|e| e)?;
+            let ttrpc_root = root_oci_to_ttrpc(bundle_dir, r)?;
 
             protobuf::SingularPtrField::some(ttrpc_root)
         }

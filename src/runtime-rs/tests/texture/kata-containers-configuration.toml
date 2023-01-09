@@ -1,0 +1,11 @@
+[runtime]
+enable_debug = true
+
+[hypervisor]
+
+[hypervisor.dragonball]
+default_vcpus = 2
+
+[hypervisor.qemu]
+default_vcpus = 4
+

@@ -60,9 +60,18 @@ This section lists items that might be possible to fix.
 ## OCI CLI commands
 
 ### Docker and Podman support
-Currently Kata Containers does not support Docker or Podman.
+Currently Kata Containers does not support Podman.
 
 See issue https://github.com/kata-containers/kata-containers/issues/722 for more information.
+
+Docker supports Kata Containers since 22.06:
+
+```bash
+$ sudo docker run --runtime io.containerd.kata.v2
+```
+
+Kata Containers works perfectly with containerd, we recommend to use
+containerd's Docker-style command line tool [`nerdctl`](https://github.com/containerd/nerdctl).
 
 ## Runtime commands
 
@@ -70,7 +79,7 @@ See issue https://github.com/kata-containers/kata-containers/issues/722 for more
 
 The runtime does not provide `checkpoint` and `restore` commands. There
 are discussions about using VM save and restore to give us a
-`[criu](https://github.com/checkpoint-restore/criu)`-like functionality,
+[`criu`](https://github.com/checkpoint-restore/criu)-like functionality,
 which might provide a solution.
 
 Note that the OCI standard does not specify `checkpoint` and `restore`
@@ -92,6 +101,42 @@ Currently, only block I/O weight is not supported.
 All other configurations are supported and are working properly.
 
 ## Networking
+
+### Host network
+
+Host network (`nerdctl/docker run --net=host`or [Kubernetes `HostNetwork`](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#hosts-namespaces)) is not supported.
+It is not possible to directly access the host networking configuration
+from within the VM.
+
+The `--net=host` option can still be used with `runc` containers and
+inter-mixed with running Kata Containers, thus enabling use of `--net=host`
+when necessary.
+
+It should be noted, currently passing the `--net=host` option into a
+Kata Container may result in the Kata Container networking setup
+modifying, re-configuring and therefore possibly breaking the host
+networking setup. Do not use `--net=host` with Kata Containers.
+
+### Support for joining an existing VM network
+
+Docker supports the ability for containers to join another containers
+namespace with the `docker run --net=containers` syntax. This allows
+multiple containers to share a common network namespace and the network
+interfaces placed in the network namespace. Kata Containers does not
+support network namespace sharing. If a Kata Container is setup to
+share the network namespace of a `runc` container, the runtime
+effectively takes over all the network interfaces assigned to the
+namespace and binds them to the VM. Consequently, the `runc` container loses
+its network connectivity.
+
+### docker run --link
+
+The runtime does not support the `docker run --link` command. This
+command is now deprecated by docker and we have no intention of adding support.
+Equivalent functionality can be achieved with the newer docker networking commands.
+
+See more documentation at
+[docs.docker.com](https://docs.docker.com/network/links/).
 
 ## Resource management
 

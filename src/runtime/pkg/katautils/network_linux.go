@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	goruntime "runtime"
 	"strings"
 
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -27,30 +26,7 @@ const procMountInfoFile = "/proc/self/mountinfo"
 // into runtime.LockOSThread(), meaning it won't be executed in a
 // different thread than the one expected by the caller.
 func EnterNetNS(networkID string, cb func() error) error {
-	if networkID == "" {
-		return cb()
-	}
-
-	goruntime.LockOSThread()
-	defer goruntime.UnlockOSThread()
-
-	currentNS, err := ns.GetCurrentNS()
-	if err != nil {
-		return err
-	}
-	defer currentNS.Close()
-
-	targetNS, err := ns.GetNS(networkID)
-	if err != nil {
-		return err
-	}
-
-	if err := targetNS.Set(); err != nil {
-		return err
-	}
-	defer currentNS.Set()
-
-	return cb()
+	return vc.EnterNetNS(networkID, cb)
 }
 
 // SetupNetworkNamespace create a network namespace

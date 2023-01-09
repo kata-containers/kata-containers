@@ -13,6 +13,7 @@ Name | Type | Description | Notes
 **Hugepages** | Pointer to **bool** |  | [optional] [default to false]
 **HugepageSize** | Pointer to **int64** |  | [optional] 
 **Prefault** | Pointer to **bool** |  | [optional] [default to false]
+**Thp** | Pointer to **bool** |  | [optional] [default to true]
 **Zones** | Pointer to [**[]MemoryZoneConfig**](MemoryZoneConfig.md) |  | [optional] 
 
 ## Methods
@@ -253,6 +254,31 @@ SetPrefault sets Prefault field to given value.
 `func (o *MemoryConfig) HasPrefault() bool`
 
 HasPrefault returns a boolean if a field has been set.
+
+### GetThp
+
+`func (o *MemoryConfig) GetThp() bool`
+
+GetThp returns the Thp field if non-nil, zero value otherwise.
+
+### GetThpOk
+
+`func (o *MemoryConfig) GetThpOk() (*bool, bool)`
+
+GetThpOk returns a tuple with the Thp field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetThp
+
+`func (o *MemoryConfig) SetThp(v bool)`
+
+SetThp sets Thp field to given value.
+
+### HasThp
+
+`func (o *MemoryConfig) HasThp() bool`
+
+HasThp returns a boolean if a field has been set.
 
 ### GetZones
 

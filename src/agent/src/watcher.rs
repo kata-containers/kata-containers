@@ -6,13 +6,15 @@
 #![allow(unknown_lints)]
 
 use std::collections::HashMap;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use async_recursion::async_recursion;
 use nix::mount::{umount, MsFlags};
+use nix::unistd::{Gid, Uid};
 use slog::{debug, error, info, warn, Logger};
 use thiserror::Error;
 use tokio::fs;
@@ -32,8 +34,12 @@ const MAX_SIZE_PER_WATCHABLE_MOUNT: u64 = 1024 * 1024;
 /// How often to check for modified files.
 const WATCH_INTERVAL_SECS: u64 = 2;
 
-/// Destination path for tmpfs
+/// Destination path for tmpfs, which used by the golang runtime
 const WATCH_MOUNT_POINT_PATH: &str = "/run/kata-containers/shared/containers/watchable/";
+
+/// Destination path for tmpfs for runtime-rs passthrough file sharing
+const WATCH_MOUNT_POINT_PATH_PASSTHROUGH: &str =
+    "/run/kata-containers/shared/containers/passthrough/watchable/";
 
 /// Represents a single watched storage entry which may have multiple files to watch.
 #[derive(Default, Debug, Clone)]
@@ -80,7 +86,8 @@ impl Drop for Storage {
 }
 
 async fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
-    if fs::symlink_metadata(&from).await?.file_type().is_symlink() {
+    let metadata = fs::symlink_metadata(&from).await?;
+    if metadata.file_type().is_symlink() {
         // if source is a symlink, create new symlink with same link source. If
         // the symlink exists, remove and create new one:
         if fs::symlink_metadata(&to).await.is_ok() {
@@ -88,8 +95,15 @@ async fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
         }
         fs::symlink(fs::read_link(&from).await?, &to).await?;
     } else {
-        fs::copy(from, to).await?;
+        fs::copy(&from, &to).await?;
     }
+    // preserve the source uid and gid to the destination.
+    nix::unistd::chown(
+        to.as_ref(),
+        Some(Uid::from_raw(metadata.uid())),
+        Some(Gid::from_raw(metadata.gid())),
+    )?;
+
     Ok(())
 }
 
@@ -106,14 +120,29 @@ impl Storage {
 
     async fn update_target(&self, logger: &Logger, source_path: impl AsRef<Path>) -> Result<()> {
         let source_file_path = source_path.as_ref();
+        let metadata = source_file_path.symlink_metadata()?;
 
         // if we are creating a directory: just create it, nothing more to do
-        if source_file_path.symlink_metadata()?.file_type().is_dir() {
-            let dest_file_path = self.make_target_path(&source_file_path)?;
+        if metadata.file_type().is_dir() {
+            let dest_file_path = self.make_target_path(source_file_path)?;
 
             fs::create_dir_all(&dest_file_path)
                 .await
                 .with_context(|| format!("Unable to mkdir all for {}", dest_file_path.display()))?;
+            // set the directory permissions to match the source directory permissions
+            fs::set_permissions(&dest_file_path, metadata.permissions())
+                .await
+                .with_context(|| {
+                    format!("Unable to set permissions for {}", dest_file_path.display())
+                })?;
+            // preserve the source directory uid and gid to the destination.
+            nix::unistd::chown(
+                &dest_file_path,
+                Some(Uid::from_raw(metadata.uid())),
+                Some(Gid::from_raw(metadata.gid())),
+            )
+            .with_context(|| format!("Unable to set ownership for {}", dest_file_path.display()))?;
+
             return Ok(());
         }
 
@@ -123,7 +152,7 @@ impl Storage {
             // Assume target mount is a file path
             self.target_mount_point.clone()
         } else {
-            let dest_file_path = self.make_target_path(&source_file_path)?;
+            let dest_file_path = self.make_target_path(source_file_path)?;
 
             if let Some(path) = dest_file_path.parent() {
                 debug!(logger, "Creating destination directory: {}", path.display());
@@ -426,7 +455,7 @@ impl BindWatcher {
     ) -> Result<()> {
         if self.watch_thread.is_none() {
             // Virtio-fs shared path is RO by default, so we back the target-mounts by tmpfs.
-            self.mount(logger).await?;
+            self.mount(logger).await.context("mount watch directory")?;
 
             // Spawn background thread to monitor changes
             self.watch_thread = Some(Self::spawn_watcher(
@@ -475,16 +504,28 @@ impl BindWatcher {
     }
 
     async fn mount(&self, logger: &Logger) -> Result<()> {
-        fs::create_dir_all(WATCH_MOUNT_POINT_PATH).await?;
+        // the watchable directory is created on the host side.
+        // here we can only check if it exist.
+        // first we will check the default WATCH_MOUNT_POINT_PATH,
+        // and then check WATCH_MOUNT_POINT_PATH_PASSTHROUGH
+        // in turn which are introduced by runtime-rs file sharing.
+        let watchable_dir = if Path::new(WATCH_MOUNT_POINT_PATH).is_dir() {
+            WATCH_MOUNT_POINT_PATH
+        } else if Path::new(WATCH_MOUNT_POINT_PATH_PASSTHROUGH).is_dir() {
+            WATCH_MOUNT_POINT_PATH_PASSTHROUGH
+        } else {
+            return Err(anyhow!("watchable mount source not found"));
+        };
 
         baremount(
             Path::new("tmpfs"),
-            Path::new(WATCH_MOUNT_POINT_PATH),
+            Path::new(watchable_dir),
             "tmpfs",
             MsFlags::empty(),
             "",
             logger,
-        )?;
+        )
+        .context("baremount watchable mount path")?;
 
         Ok(())
     }
@@ -495,7 +536,12 @@ impl BindWatcher {
             handle.abort();
         }
 
-        let _ = umount(WATCH_MOUNT_POINT_PATH);
+        // try umount watchable mount path in turn
+        if Path::new(WATCH_MOUNT_POINT_PATH).is_dir() {
+            let _ = umount(WATCH_MOUNT_POINT_PATH);
+        } else if Path::new(WATCH_MOUNT_POINT_PATH_PASSTHROUGH).is_dir() {
+            let _ = umount(WATCH_MOUNT_POINT_PATH_PASSTHROUGH);
+        }
     }
 }
 
@@ -503,9 +549,11 @@ impl BindWatcher {
 mod tests {
     use super::*;
     use crate::mount::is_mounted;
-    use crate::skip_if_not_root;
+    use nix::unistd::{Gid, Uid};
+    use scopeguard::defer;
     use std::fs;
     use std::thread;
+    use test_utils::skip_if_not_root;
 
     async fn create_test_storage(dir: &Path, id: &str) -> Result<(protos::Storage, PathBuf)> {
         let src_path = dir.join(format!("src{}", id));
@@ -730,7 +778,7 @@ mod tests {
             22
         );
         assert_eq!(
-            fs::read_to_string(&entries.0[0].target_mount_point.as_path().join("1.txt")).unwrap(),
+            fs::read_to_string(entries.0[0].target_mount_point.as_path().join("1.txt")).unwrap(),
             "updated"
         );
 
@@ -775,7 +823,7 @@ mod tests {
             2
         );
         assert_eq!(
-            fs::read_to_string(&entries.0[1].target_mount_point.as_path().join("foo.txt")).unwrap(),
+            fs::read_to_string(entries.0[1].target_mount_point.as_path().join("foo.txt")).unwrap(),
             "updated"
         );
 
@@ -895,20 +943,28 @@ mod tests {
 
     #[tokio::test]
     async fn test_copy() {
+        skip_if_not_root!();
+
         // prepare tmp src/destination
         let source_dir = tempfile::tempdir().unwrap();
         let dest_dir = tempfile::tempdir().unwrap();
+        let uid = Uid::from_raw(10);
+        let gid = Gid::from_raw(200);
 
         // verify copy of a regular file
         let src_file = source_dir.path().join("file.txt");
         let dst_file = dest_dir.path().join("file.txt");
         fs::write(&src_file, "foo").unwrap();
+        nix::unistd::chown(&src_file, Some(uid), Some(gid)).unwrap();
+
         copy(&src_file, &dst_file).await.unwrap();
         // verify destination:
-        assert!(!fs::symlink_metadata(dst_file)
+        assert!(!fs::symlink_metadata(&dst_file)
             .unwrap()
             .file_type()
             .is_symlink());
+        assert_eq!(fs::metadata(&dst_file).unwrap().uid(), uid.as_raw());
+        assert_eq!(fs::metadata(&dst_file).unwrap().gid(), gid.as_raw());
 
         // verify copy of a symlink
         let src_symlink_file = source_dir.path().join("symlink_file.txt");
@@ -916,7 +972,7 @@ mod tests {
         tokio::fs::symlink(&src_file, &src_symlink_file)
             .await
             .unwrap();
-        copy(src_symlink_file, &dst_symlink_file).await.unwrap();
+        copy(&src_symlink_file, &dst_symlink_file).await.unwrap();
         // verify destination:
         assert!(fs::symlink_metadata(&dst_symlink_file)
             .unwrap()
@@ -924,6 +980,8 @@ mod tests {
             .is_symlink());
         assert_eq!(fs::read_link(&dst_symlink_file).unwrap(), src_file);
         assert_eq!(fs::read_to_string(&dst_symlink_file).unwrap(), "foo");
+        assert_ne!(fs::metadata(&dst_symlink_file).unwrap().uid(), uid.as_raw());
+        assert_ne!(fs::metadata(&dst_symlink_file).unwrap().gid(), gid.as_raw());
     }
 
     #[tokio::test]
@@ -942,7 +1000,7 @@ mod tests {
 
         // create a path we'll remove later
         fs::create_dir_all(source_dir.path().join("tmp")).unwrap();
-        fs::write(&source_dir.path().join("tmp/test-file"), "foo").unwrap();
+        fs::write(source_dir.path().join("tmp/test-file"), "foo").unwrap();
         assert_eq!(entry.scan(&logger).await.unwrap(), 3); // root, ./tmp, test-file
 
         // Verify expected directory, file:
@@ -1069,6 +1127,8 @@ mod tests {
 
     #[tokio::test]
     async fn watch_directory() {
+        skip_if_not_root!();
+
         // Prepare source directory:
         // ./tmp/1.txt
         // ./tmp/A/B/2.txt
@@ -1079,7 +1139,9 @@ mod tests {
 
         // A/C is an empty directory
         let empty_dir = "A/C";
-        fs::create_dir_all(source_dir.path().join(empty_dir)).unwrap();
+        let path = source_dir.path().join(empty_dir);
+        fs::create_dir_all(&path).unwrap();
+        nix::unistd::chown(&path, Some(Uid::from_raw(10)), Some(Gid::from_raw(200))).unwrap();
 
         // delay 20 ms between writes to files in order to ensure filesystem timestamps are unique
         thread::sleep(Duration::from_millis(20));
@@ -1123,7 +1185,9 @@ mod tests {
 
         // create another empty directory A/C/D
         let empty_dir = "A/C/D";
-        fs::create_dir_all(source_dir.path().join(empty_dir)).unwrap();
+        let path = source_dir.path().join(empty_dir);
+        fs::create_dir_all(&path).unwrap();
+        nix::unistd::chown(&path, Some(Uid::from_raw(10)), Some(Gid::from_raw(200))).unwrap();
         assert_eq!(entry.scan(&logger).await.unwrap(), 1);
         assert!(dest_dir.path().join(empty_dir).exists());
     }
@@ -1233,19 +1297,29 @@ mod tests {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut watcher = BindWatcher::default();
 
-        watcher.mount(&logger).await.unwrap();
-        assert!(is_mounted(WATCH_MOUNT_POINT_PATH).unwrap());
+        for mount_point in [WATCH_MOUNT_POINT_PATH, WATCH_MOUNT_POINT_PATH_PASSTHROUGH] {
+            fs::create_dir_all(mount_point).unwrap();
+            // ensure the watchable directory is deleted.
+            defer!(fs::remove_dir_all(mount_point).unwrap());
 
-        thread::sleep(Duration::from_millis(20));
+            watcher.mount(&logger).await.unwrap();
+            assert!(is_mounted(mount_point).unwrap());
 
-        watcher.cleanup();
-        assert!(!is_mounted(WATCH_MOUNT_POINT_PATH).unwrap());
+            thread::sleep(Duration::from_millis(20));
+
+            watcher.cleanup();
+            assert!(!is_mounted(mount_point).unwrap());
+        }
     }
 
     #[tokio::test]
     #[serial]
     async fn spawn_thread() {
         skip_if_not_root!();
+
+        fs::create_dir_all(WATCH_MOUNT_POINT_PATH).unwrap();
+        // ensure the watchable directory is deleted.
+        defer!(fs::remove_dir_all(WATCH_MOUNT_POINT_PATH).unwrap());
 
         let source_dir = tempfile::tempdir().unwrap();
         fs::write(source_dir.path().join("1.txt"), "one").unwrap();
@@ -1276,6 +1350,10 @@ mod tests {
     #[serial]
     async fn verify_container_cleanup_watching() {
         skip_if_not_root!();
+
+        fs::create_dir_all(WATCH_MOUNT_POINT_PATH).unwrap();
+        // ensure the watchable directory is deleted.
+        defer!(fs::remove_dir_all(WATCH_MOUNT_POINT_PATH).unwrap());
 
         let source_dir = tempfile::tempdir().unwrap();
         fs::write(source_dir.path().join("1.txt"), "one").unwrap();

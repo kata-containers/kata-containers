@@ -320,7 +320,7 @@ mod tests {
 
 ## Test user
 
-[Unit tests are run *twice*](https://github.com/kata-containers/tests/blob/main/.ci/go-test.sh):
+[Unit tests are run *twice*](../src/runtime/go-test.sh):
 
 - as the current user
 - as the `root` user (if different to the current user)
@@ -341,7 +341,7 @@ The main repository has the most comprehensive set of skip abilities. See:
 
 One method is to use the `nix` crate along with some custom macros:
 
-```
+```rust
 #[cfg(test)]
 mod tests {
     #[allow(unused_macros)]

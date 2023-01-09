@@ -15,6 +15,7 @@
 path = "@QEMUPATH@"
 kernel = "@KERNELPATH@"
 image = "@IMAGEPATH@"
+# initrd = "@INITRDPATH@"
 machine_type = "@MACHINETYPE@"
 
 # Enable confidential guest support.
@@ -32,6 +33,12 @@ machine_type = "@MACHINETYPE@"
 #
 # Default false
 # confidential_guest = true
+
+# Choose AMD SEV-SNP confidential guests
+# In case of using confidential guests on AMD hardware that supports both SEV
+# and SEV-SNP, the following enables SEV-SNP guests. SEV guests are default.
+# Default false
+# sev_snp_guest = true
 
 # Enable running QEMU VMM as a non-root user.
 # By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
@@ -76,10 +83,23 @@ firmware_volume = "@FIRMWAREVOLUMEPATH@"
 # For example, `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`
 machine_accelerators="@MACHINEACCELERATORS@"
 
+# Qemu seccomp sandbox feature
+# comma-separated list of seccomp sandbox features to control the syscall access.
+# For example, `seccompsandbox= "on,obsolete=deny,spawn=deny,resourcecontrol=deny"`
+# Note: "elevateprivileges=deny" doesn't work with daemonize option, so it's removed from the seccomp sandbox
+# Another note: enabling this feature may reduce performance, you may enable
+# /proc/sys/net/core/bpf_jit_enable to reduce the impact. see https://man7.org/linux/man-pages/man8/bpfc.8.html
+#seccompsandbox="@DEFSECCOMPSANDBOXPARAM@"
+
 # CPU features
 # comma-separated list of cpu features to pass to the cpu
 # For example, `cpu_features = "pmu=off,vmx=off"
 cpu_features="@CPUFEATURES@"
+
+# vCPUs pinning settings
+# if enabled, each vCPU thread will be scheduled to a fixed CPU
+# qualified condition: num(vCPU threads) == num(CPUs in sandbox's CPUSet)
+# enable_vcpus_pinning = false
 
 # Default number of vCPUs per SB/VM:
 # unspecified or 0                --> will be set to @DEFVCPUS@
@@ -126,6 +146,12 @@ default_memory = @DEFMEMSZ@
 # This is will determine the times that memory will be hotadded to sandbox/VM.
 #memory_slots = @DEFMEMSLOTS@
 
+# Default maximum memory in MiB per SB / VM
+# unspecified or == 0           --> will be set to the actual amount of physical RAM
+# > 0 <= amount of physical RAM --> will be set to the specified number
+# > amount of physical RAM      --> will be set to the actual amount of physical RAM
+default_maxmemory = @DEFMAXMEMSZ@
+
 # The size in MiB will be plused to max memory of hypervisor.
 # It is the memory address space for the NVDIMM devie.
 # If set block storage driver (block_device_driver) to "nvdimm",
@@ -164,6 +190,9 @@ valid_virtio_fs_daemon_paths = @DEFVALIDVIRTIOFSDAEMONPATHS@
 # Default size of DAX cache in MiB
 virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
 
+# Default size of virtqueues
+virtio_fs_queue_size = @DEFVIRTIOFSQUEUESIZE@
+
 # Extra args for virtiofsd daemon
 #
 # Format example:
@@ -193,6 +222,20 @@ virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 # rootfs is backed by a block device. This is virtio-scsi, virtio-blk
 # or nvdimm.
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER_QEMU@"
+
+# aio is the I/O mechanism used by qemu
+# Options:
+#
+#   - threads
+#     Pthread based disk I/O.
+#
+#   - native
+#     Native Linux I/O.
+#
+#   - io_uring
+#     Linux io_uring API. This provides the fastest I/O operations on Linux, requires kernel>5.1 and
+#     qemu >=5.0.
+block_device_aio = "@DEFBLOCKDEVICEAIO_QEMU@"
 
 # Specifies cache-related options will be set to block devices or not.
 # Default false
@@ -389,6 +432,20 @@ valid_entropy_sources = @DEFVALIDENTROPYSOURCES@
 # be default_memory.
 #enable_guest_swap = true
 
+# use legacy serial for guest console if available and implemented for architecture. Default false
+#use_legacy_serial = true
+
+# disable applying SELinux on the VMM process (default false)
+disable_selinux=@DEFDISABLESELINUX@
+
+# disable applying SELinux on the container process
+# If set to false, the type `container_t` is applied to the container process by default.
+# Note: To enable guest SELinux, the guest rootfs must be CentOS that is created and built
+# with `SELINUX=yes`.
+# (default: true)
+disable_guest_selinux=@DEFDISABLEGUESTSELINUX@
+
+
 [factory]
 # VM templating support. Once enabled, new VMs are created from template
 # using vm cloning. They will share the same initial kernel, initramfs and
@@ -506,8 +563,13 @@ internetworking_model="@DEFNETWORKMODEL_QEMU@"
 # (default: true)
 disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 
-# disable applying SELinux on the VMM process (default false)
-disable_selinux=@DEFDISABLESELINUX@
+# Apply a custom SELinux security policy to the container process inside the VM.
+# This is used when you want to apply a type other than the default `container_t`,
+# so general users should not uncomment and apply it.
+# (format: "user:role:type")
+# Note: You cannot specify MCS policy with the label because the sensitivity levels and
+# categories are determined automatically by high-level container runtimes such as containerd.
+#guest_selinux_label="@DEFGUESTSELINUXLABEL@"
 
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).

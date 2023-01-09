@@ -13,70 +13,84 @@ import (
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/runtime"
 	cr "github.com/go-openapi/runtime/client"
+	"github.com/go-openapi/strfmt"
 
-	strfmt "github.com/go-openapi/strfmt"
-
-	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 )
 
-// NewPatchGuestNetworkInterfaceByIDParams creates a new PatchGuestNetworkInterfaceByIDParams object
-// with the default values initialized.
+// NewPatchGuestNetworkInterfaceByIDParams creates a new PatchGuestNetworkInterfaceByIDParams object,
+// with the default timeout for this client.
+//
+// Default values are not hydrated, since defaults are normally applied by the API server side.
+//
+// To enforce default values in parameter, use SetDefaults or WithDefaults.
 func NewPatchGuestNetworkInterfaceByIDParams() *PatchGuestNetworkInterfaceByIDParams {
-	var ()
 	return &PatchGuestNetworkInterfaceByIDParams{
-
 		timeout: cr.DefaultTimeout,
 	}
 }
 
 // NewPatchGuestNetworkInterfaceByIDParamsWithTimeout creates a new PatchGuestNetworkInterfaceByIDParams object
-// with the default values initialized, and the ability to set a timeout on a request
+// with the ability to set a timeout on a request.
 func NewPatchGuestNetworkInterfaceByIDParamsWithTimeout(timeout time.Duration) *PatchGuestNetworkInterfaceByIDParams {
-	var ()
 	return &PatchGuestNetworkInterfaceByIDParams{
-
 		timeout: timeout,
 	}
 }
 
 // NewPatchGuestNetworkInterfaceByIDParamsWithContext creates a new PatchGuestNetworkInterfaceByIDParams object
-// with the default values initialized, and the ability to set a context for a request
+// with the ability to set a context for a request.
 func NewPatchGuestNetworkInterfaceByIDParamsWithContext(ctx context.Context) *PatchGuestNetworkInterfaceByIDParams {
-	var ()
 	return &PatchGuestNetworkInterfaceByIDParams{
-
 		Context: ctx,
 	}
 }
 
 // NewPatchGuestNetworkInterfaceByIDParamsWithHTTPClient creates a new PatchGuestNetworkInterfaceByIDParams object
-// with the default values initialized, and the ability to set a custom HTTPClient for a request
+// with the ability to set a custom HTTPClient for a request.
 func NewPatchGuestNetworkInterfaceByIDParamsWithHTTPClient(client *http.Client) *PatchGuestNetworkInterfaceByIDParams {
-	var ()
 	return &PatchGuestNetworkInterfaceByIDParams{
 		HTTPClient: client,
 	}
 }
 
-/*PatchGuestNetworkInterfaceByIDParams contains all the parameters to send to the API endpoint
-for the patch guest network interface by ID operation typically these are written to a http.Request
+/* PatchGuestNetworkInterfaceByIDParams contains all the parameters to send to the API endpoint
+   for the patch guest network interface by ID operation.
+
+   Typically these are written to a http.Request.
 */
 type PatchGuestNetworkInterfaceByIDParams struct {
 
-	/*Body
-	  A subset of the guest network interface properties
+	/* Body.
 
+	   A subset of the guest network interface properties
 	*/
 	Body *models.PartialNetworkInterface
-	/*IfaceID
-	  The id of the guest network interface
 
+	/* IfaceID.
+
+	   The id of the guest network interface
 	*/
 	IfaceID string
 
 	timeout    time.Duration
 	Context    context.Context
 	HTTPClient *http.Client
+}
+
+// WithDefaults hydrates default values in the patch guest network interface by ID params (not the query body).
+//
+// All values with no default are reset to their zero value.
+func (o *PatchGuestNetworkInterfaceByIDParams) WithDefaults() *PatchGuestNetworkInterfaceByIDParams {
+	o.SetDefaults()
+	return o
+}
+
+// SetDefaults hydrates default values in the patch guest network interface by ID params (not the query body).
+//
+// All values with no default are reset to their zero value.
+func (o *PatchGuestNetworkInterfaceByIDParams) SetDefaults() {
+	// no default values defined for this parameter
 }
 
 // WithTimeout adds the timeout to the patch guest network interface by ID params
@@ -141,7 +155,6 @@ func (o *PatchGuestNetworkInterfaceByIDParams) WriteToRequest(r runtime.ClientRe
 		return err
 	}
 	var res []error
-
 	if o.Body != nil {
 		if err := r.SetBodyParam(o.Body); err != nil {
 			return err

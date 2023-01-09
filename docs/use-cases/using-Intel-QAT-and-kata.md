@@ -279,8 +279,8 @@ $ export KERNEL_EXTRAVERSION=$(awk '/^EXTRAVERSION =/{print $NF}' $GOPATH/$LINUX
 $ export KERNEL_ROOTFS_DIR=${KERNEL_MAJOR_VERSION}.${KERNEL_PATHLEVEL}.${KERNEL_SUBLEVEL}${KERNEL_EXTRAVERSION}
 $ cd $QAT_SRC
 $ KERNEL_SOURCE_ROOT=$GOPATH/$LINUX_VER ./configure --enable-icp-sriov=guest
-$ sudo -E make all -j$(nproc)
-$ sudo -E make INSTALL_MOD_PATH=$ROOTFS_DIR qat-driver-install -j$(nproc)
+$ sudo -E make all -j $($(nproc ${CI:+--ignore 1}))
+$ sudo -E make INSTALL_MOD_PATH=$ROOTFS_DIR qat-driver-install -j $($(nproc ${CI:+--ignore 1}))
 ```
 
 The `usdm_drv` module also needs to be copied into the rootfs modules path and
@@ -312,7 +312,7 @@ working properly with the Kata Containers VM.
 
 ### Build OpenSSL Intel® QAT engine container
 
-Use the OpenSSL Intel® QAT [Dockerfile](https://github.com/intel/intel-device-plugins-for-kubernetes/tree/master/demo/openssl-qat-engine) 
+Use the OpenSSL Intel® QAT [Dockerfile](https://github.com/intel/intel-device-plugins-for-kubernetes/tree/main/demo/openssl-qat-engine) 
 to build a container image with an optimized OpenSSL engine for 
 Intel® QAT. Using `docker build` with the Kata Containers runtime can sometimes
 have issues. Therefore, make sure that `runc` is the default Docker container 
@@ -444,7 +444,7 @@ $ sudo docker save -o openssl-qat-engine.tar openssl-qat-engine:latest
 $ sudo ctr -n=k8s.io images import openssl-qat-engine.tar
 ```
 
-The [Intel® QAT Plugin](https://github.com/intel/intel-device-plugins-for-kubernetes/blob/master/cmd/qat_plugin/README.md)
+The [Intel® QAT Plugin](https://github.com/intel/intel-device-plugins-for-kubernetes/blob/main/cmd/qat_plugin/README.md)
 needs to be started so that the virtual functions can be discovered and
 used by Kubernetes. 
 

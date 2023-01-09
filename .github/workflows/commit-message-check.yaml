@@ -63,7 +63,8 @@ jobs:
         #   the entire commit message.
         #
         # - Body lines *can* be longer than the maximum if they start
-        #   with a non-alphabetic character.
+        #   with a non-alphabetic character or if there is no whitespace in
+        #   the line.
         #
         #   This allows stack traces, log files snippets, emails, long URLs,
         #   etc to be specified. Some of these naturally "work" as they start
@@ -74,8 +75,8 @@ jobs:
         #
         # - A SoB comment can be any length (as it is unreasonable to penalise
         #   people with long names/email addresses :)
-        pattern: '^.+(\n([a-zA-Z].{0,149}|[^a-zA-Z\n].*|Signed-off-by:.*|))+$'
-        error: 'Body line too long (max 72)'
+        pattern: '^.+(\n([a-zA-Z].{0,150}|[^a-zA-Z\n].*|[^\s\n]*|Signed-off-by:.*|))+$'
+        error: 'Body line too long (max 150)'
         post_error: ${{ env.error_msg }}
 
     - name: Check Fixes

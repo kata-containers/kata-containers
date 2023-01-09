@@ -107,20 +107,19 @@ endef
 ##TARGET default: build code
 default: $(TARGET) show-header
 
-$(TARGET): $(GENERATED_CODE) logging-crate-tests $(TARGET_PATH)
+static-checks-build: $(GENERATED_CODE)
 
-logging-crate-tests:
-	make -C $(CWD)/../libs/logging
+$(TARGET): $(GENERATED_CODE) $(TARGET_PATH)
 
 $(TARGET_PATH): show-summary
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE) $(EXTRA_RUSTFEATURES)
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
 
 $(GENERATED_FILES): %: %.in
 	@sed $(foreach r,$(GENERATED_REPLACEMENTS),-e 's|@$r@|$($r)|g') "$<" > "$@"
 
 ##TARGET optimize: optimized  build
 optimize: show-summary show-header
-	@RUSTFLAGS="-C link-arg=-s $(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE) $(EXTRA_RUSTFEATURES)
+	@RUSTFLAGS="-C link-arg=-s $(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
 
 ##TARGET install: install agent
 install: install-services
@@ -203,7 +202,6 @@ codecov-html: check_tarpaulin
 
 .PHONY: \
 	help \
-	logging-crate-tests \
 	optimize \
 	show-header \
 	show-summary \

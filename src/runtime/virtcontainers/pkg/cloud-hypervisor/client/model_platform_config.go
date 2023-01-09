@@ -16,8 +16,12 @@ import (
 
 // PlatformConfig struct for PlatformConfig
 type PlatformConfig struct {
-	NumPciSegments *int32   `json:"num_pci_segments,omitempty"`
-	IommuSegments  *[]int32 `json:"iommu_segments,omitempty"`
+	NumPciSegments *int32    `json:"num_pci_segments,omitempty"`
+	IommuSegments  *[]int32  `json:"iommu_segments,omitempty"`
+	SerialNumber   *string   `json:"serial_number,omitempty"`
+	Uuid           *string   `json:"uuid,omitempty"`
+	OemStrings     *[]string `json:"oem_strings,omitempty"`
+	Tdx            *bool     `json:"tdx,omitempty"`
 }
 
 // NewPlatformConfig instantiates a new PlatformConfig object
@@ -26,6 +30,8 @@ type PlatformConfig struct {
 // will change when the set of required properties is changed
 func NewPlatformConfig() *PlatformConfig {
 	this := PlatformConfig{}
+	var tdx bool = false
+	this.Tdx = &tdx
 	return &this
 }
 
@@ -34,6 +40,8 @@ func NewPlatformConfig() *PlatformConfig {
 // but it doesn't guarantee that properties required by API are set
 func NewPlatformConfigWithDefaults() *PlatformConfig {
 	this := PlatformConfig{}
+	var tdx bool = false
+	this.Tdx = &tdx
 	return &this
 }
 
@@ -101,6 +109,134 @@ func (o *PlatformConfig) SetIommuSegments(v []int32) {
 	o.IommuSegments = &v
 }
 
+// GetSerialNumber returns the SerialNumber field value if set, zero value otherwise.
+func (o *PlatformConfig) GetSerialNumber() string {
+	if o == nil || o.SerialNumber == nil {
+		var ret string
+		return ret
+	}
+	return *o.SerialNumber
+}
+
+// GetSerialNumberOk returns a tuple with the SerialNumber field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetSerialNumberOk() (*string, bool) {
+	if o == nil || o.SerialNumber == nil {
+		return nil, false
+	}
+	return o.SerialNumber, true
+}
+
+// HasSerialNumber returns a boolean if a field has been set.
+func (o *PlatformConfig) HasSerialNumber() bool {
+	if o != nil && o.SerialNumber != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetSerialNumber gets a reference to the given string and assigns it to the SerialNumber field.
+func (o *PlatformConfig) SetSerialNumber(v string) {
+	o.SerialNumber = &v
+}
+
+// GetUuid returns the Uuid field value if set, zero value otherwise.
+func (o *PlatformConfig) GetUuid() string {
+	if o == nil || o.Uuid == nil {
+		var ret string
+		return ret
+	}
+	return *o.Uuid
+}
+
+// GetUuidOk returns a tuple with the Uuid field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetUuidOk() (*string, bool) {
+	if o == nil || o.Uuid == nil {
+		return nil, false
+	}
+	return o.Uuid, true
+}
+
+// HasUuid returns a boolean if a field has been set.
+func (o *PlatformConfig) HasUuid() bool {
+	if o != nil && o.Uuid != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetUuid gets a reference to the given string and assigns it to the Uuid field.
+func (o *PlatformConfig) SetUuid(v string) {
+	o.Uuid = &v
+}
+
+// GetOemStrings returns the OemStrings field value if set, zero value otherwise.
+func (o *PlatformConfig) GetOemStrings() []string {
+	if o == nil || o.OemStrings == nil {
+		var ret []string
+		return ret
+	}
+	return *o.OemStrings
+}
+
+// GetOemStringsOk returns a tuple with the OemStrings field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetOemStringsOk() (*[]string, bool) {
+	if o == nil || o.OemStrings == nil {
+		return nil, false
+	}
+	return o.OemStrings, true
+}
+
+// HasOemStrings returns a boolean if a field has been set.
+func (o *PlatformConfig) HasOemStrings() bool {
+	if o != nil && o.OemStrings != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetOemStrings gets a reference to the given []string and assigns it to the OemStrings field.
+func (o *PlatformConfig) SetOemStrings(v []string) {
+	o.OemStrings = &v
+}
+
+// GetTdx returns the Tdx field value if set, zero value otherwise.
+func (o *PlatformConfig) GetTdx() bool {
+	if o == nil || o.Tdx == nil {
+		var ret bool
+		return ret
+	}
+	return *o.Tdx
+}
+
+// GetTdxOk returns a tuple with the Tdx field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetTdxOk() (*bool, bool) {
+	if o == nil || o.Tdx == nil {
+		return nil, false
+	}
+	return o.Tdx, true
+}
+
+// HasTdx returns a boolean if a field has been set.
+func (o *PlatformConfig) HasTdx() bool {
+	if o != nil && o.Tdx != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetTdx gets a reference to the given bool and assigns it to the Tdx field.
+func (o *PlatformConfig) SetTdx(v bool) {
+	o.Tdx = &v
+}
+
 func (o PlatformConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.NumPciSegments != nil {
@@ -108,6 +244,18 @@ func (o PlatformConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.IommuSegments != nil {
 		toSerialize["iommu_segments"] = o.IommuSegments
+	}
+	if o.SerialNumber != nil {
+		toSerialize["serial_number"] = o.SerialNumber
+	}
+	if o.Uuid != nil {
+		toSerialize["uuid"] = o.Uuid
+	}
+	if o.OemStrings != nil {
+		toSerialize["oem_strings"] = o.OemStrings
+	}
+	if o.Tdx != nil {
+		toSerialize["tdx"] = o.Tdx
 	}
 	return json.Marshal(toSerialize)
 }

@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2016 Intel Corporation
 //
@@ -15,27 +14,29 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	"github.com/pbnjay/memory"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
 
 func newQemuConfig() HypervisorConfig {
 	return HypervisorConfig{
-		KernelPath:        testQemuKernelPath,
-		InitrdPath:        testQemuInitrdPath,
-		HypervisorPath:    testQemuPath,
-		NumVCPUs:          defaultVCPUs,
-		MemorySize:        defaultMemSzMiB,
-		DefaultBridges:    defaultBridges,
-		BlockDeviceDriver: defaultBlockDriver,
-		DefaultMaxVCPUs:   defaultMaxVCPUs,
-		Msize9p:           defaultMsize9p,
+		KernelPath:          testQemuKernelPath,
+		InitrdPath:          testQemuInitrdPath,
+		HypervisorPath:      testQemuPath,
+		NumVCPUs:            defaultVCPUs,
+		MemorySize:          defaultMemSzMiB,
+		DefaultBridges:      defaultBridges,
+		BlockDeviceDriver:   defaultBlockDriver,
+		DefaultMaxVCPUs:     defaultMaxVCPUs,
+		Msize9p:             defaultMsize9p,
+		DisableGuestSeLinux: defaultDisableGuestSeLinux,
 	}
 }
 
@@ -58,7 +59,7 @@ func testQemuKernelParameters(t *testing.T, kernelParams []Param, expected strin
 }
 
 func TestQemuKernelParameters(t *testing.T) {
-	expectedOut := fmt.Sprintf("panic=1 nr_cpus=%d foo=foo bar=bar", govmm.MaxVCPUs())
+	expectedOut := fmt.Sprintf("panic=1 nr_cpus=%d selinux=0 foo=foo bar=bar", govmm.MaxVCPUs())
 	params := []Param{
 		{
 			Key:   "foo",
@@ -172,20 +173,20 @@ func TestQemuCPUTopology(t *testing.T) {
 
 func TestQemuMemoryTopology(t *testing.T) {
 	mem := uint32(1000)
+	maxMem := memory.TotalMemory() / 1024 / 1024 //MiB
 	slots := uint32(8)
 	assert := assert.New(t)
 
 	q := &qemu{
 		arch: &qemuArchBase{},
 		config: HypervisorConfig{
-			MemorySize: mem,
-			MemSlots:   slots,
+			MemorySize:           mem,
+			MemSlots:             slots,
+			DefaultMaxMemorySize: maxMem,
 		},
 	}
 
-	hostMemKb, err := GetHostMemorySizeKb(procMemInfo)
-	assert.NoError(err)
-	memMax := fmt.Sprintf("%dM", int(float64(hostMemKb)/1024))
+	memMax := fmt.Sprintf("%dM", int(maxMem))
 
 	expectedOut := govmmQemu.Memory{
 		Size:   fmt.Sprintf("%dM", mem),

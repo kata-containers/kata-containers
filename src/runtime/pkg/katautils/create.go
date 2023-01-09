@@ -111,12 +111,12 @@ func SetEphemeralStorageType(ociSpec specs.Spec, disableGuestEmptyDir bool) spec
 
 // CreateSandbox create a sandbox container
 func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeConfig oci.RuntimeConfig, rootFs vc.RootFs,
-	containerID, bundlePath, console string, disableOutput, systemdCgroup bool) (_ vc.VCSandbox, _ vc.Process, err error) {
+	containerID, bundlePath string, disableOutput, systemdCgroup bool) (_ vc.VCSandbox, _ vc.Process, err error) {
 	span, ctx := katatrace.Trace(ctx, nil, "CreateSandbox", createTracingTags)
 	katatrace.AddTags(span, "container_id", containerID)
 	defer span.End()
 
-	sandboxConfig, err := oci.SandboxConfig(ociSpec, runtimeConfig, bundlePath, containerID, console, disableOutput, systemdCgroup)
+	sandboxConfig, err := oci.SandboxConfig(ociSpec, runtimeConfig, bundlePath, containerID, disableOutput, systemdCgroup)
 	if err != nil {
 		return nil, vc.Process{}, err
 	}
@@ -162,17 +162,19 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 	ociSpec.Annotations["nerdctl/network-namespace"] = sandboxConfig.NetworkConfig.NetworkID
 	sandboxConfig.Annotations["nerdctl/network-namespace"] = ociSpec.Annotations["nerdctl/network-namespace"]
 
-	// Run pre-start OCI hooks, in the runtime namespace.
-	if err := PreStartHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
-		return nil, vc.Process{}, err
-	}
+	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig, func(ctx context.Context) error {
+		// Run pre-start OCI hooks, in the runtime namespace.
+		if err := PreStartHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
+			return err
+		}
 
-	// Run create runtime OCI hooks, in the runtime namespace.
-	if err := CreateRuntimeHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
-		return nil, vc.Process{}, err
-	}
+		// Run create runtime OCI hooks, in the runtime namespace.
+		if err := CreateRuntimeHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
+			return err
+		}
 
-	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig)
+		return nil
+	})
 	if err != nil {
 		return nil, vc.Process{}, err
 	}
@@ -219,7 +221,7 @@ func checkForFIPS(sandboxConfig *vc.SandboxConfig) error {
 }
 
 // CreateContainer create a container
-func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Spec, rootFs vc.RootFs, containerID, bundlePath, console string, disableOutput bool, disableGuestEmptyDir bool) (vc.Process, error) {
+func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Spec, rootFs vc.RootFs, containerID, bundlePath string, disableOutput bool, disableGuestEmptyDir bool) (vc.Process, error) {
 	var c vc.VCContainer
 
 	span, ctx := katatrace.Trace(ctx, nil, "CreateContainer", createTracingTags)
@@ -228,7 +230,7 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 
 	ociSpec = SetEphemeralStorageType(ociSpec, disableGuestEmptyDir)
 
-	contConfig, err := oci.ContainerConfig(ociSpec, bundlePath, containerID, console, disableOutput)
+	contConfig, err := oci.ContainerConfig(ociSpec, bundlePath, containerID, disableOutput)
 	if err != nil {
 		return vc.Process{}, err
 	}
@@ -254,6 +256,12 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 	if err != nil {
 		return vc.Process{}, err
 	}
+
+	hid, err := sandbox.GetHypervisorPid()
+	if err != nil {
+		return vc.Process{}, err
+	}
+	ctx = context.WithValue(ctx, vc.HypervisorPidKey{}, hid)
 
 	// Run pre-start OCI hooks.
 	err = EnterNetNS(sandbox.GetNetNs(), func() error {

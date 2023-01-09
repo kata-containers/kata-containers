@@ -253,7 +253,7 @@ mod tests {
         fs::write(rootfs_path.join("endpoint"), "test").unwrap();
 
         // Pin the target and validate the path/content.
-        let path = PinnedPathBuf::new(rootfs_path.to_path_buf(), "symlink_dir/endpoint").unwrap();
+        let path = PinnedPathBuf::new(rootfs_path, "symlink_dir/endpoint").unwrap();
         assert!(!path.is_dir());
         let path_ref = path.deref();
         let target = fs::read_link(path_ref).unwrap();
@@ -295,7 +295,7 @@ mod tests {
             barrier2.wait();
         });
 
-        let path = scoped_join(&root_path, "s").unwrap();
+        let path = scoped_join(root_path, "s").unwrap();
         let data = fs::read_to_string(&path).unwrap();
         assert_eq!(&data, "a");
         assert!(path.is_file());
@@ -306,7 +306,7 @@ mod tests {
         assert_eq!(&data, "b");
         PinnedPathBuf::from_path(&path).unwrap_err();
 
-        let pinned_path = PinnedPathBuf::new(&root_path, "s").unwrap();
+        let pinned_path = PinnedPathBuf::new(root_path, "s").unwrap();
         let data = fs::read_to_string(&pinned_path).unwrap();
         assert_eq!(&data, "b");
 
@@ -344,6 +344,7 @@ mod tests {
         PinnedPathBuf::new(rootfs_path, "does_not_exist").unwrap_err();
     }
 
+    #[allow(clippy::zero_prefixed_literal)]
     #[test]
     fn test_new_pinned_path_buf_without_read_perm() {
         let rootfs_dir = tempfile::tempdir().expect("failed to create tmpdir");

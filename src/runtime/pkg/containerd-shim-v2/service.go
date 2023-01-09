@@ -7,9 +7,11 @@ package containerdshim
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	sysexec "os/exec"
+	goruntime "runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -26,11 +28,13 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	otelTrace "go.opentelemetry.io/otel/trace"
 	"golang.org/x/sys/unix"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -83,6 +87,11 @@ func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown fu
 	vci.SetLogger(ctx, shimLog)
 	katautils.SetLogger(ctx, shimLog, shimLog.Logger.Level)
 
+	ns, found := namespaces.Namespace(ctx)
+	if !found {
+		return nil, fmt.Errorf("shim namespace cannot be empty")
+	}
+
 	s := &service{
 		id:         id,
 		pid:        uint32(os.Getpid()),
@@ -91,6 +100,7 @@ func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown fu
 		events:     make(chan interface{}, chSize),
 		ec:         make(chan exit, bufferSize),
 		cancel:     shutdown,
+		namespace:  ns,
 	}
 
 	go s.processExits()
@@ -113,8 +123,9 @@ type exit struct {
 type service struct {
 	sandbox vc.VCSandbox
 
-	ctx     context.Context
-	rootCtx context.Context // root context for tracing
+	ctx      context.Context
+	rootCtx  context.Context // root context for tracing
+	rootSpan otelTrace.Span
 
 	containers map[string]*container
 
@@ -128,6 +139,9 @@ type service struct {
 	cancel func()
 
 	id string
+
+	// Namespace from upper container engine
+	namespace string
 
 	mu          sync.Mutex
 	eventSendMu sync.Mutex
@@ -234,9 +248,19 @@ func (s *service) StartShim(ctx context.Context, opts cdshim.StartOpts) (_ strin
 
 	cmd.ExtraFiles = append(cmd.ExtraFiles, f)
 
+	goruntime.LockOSThread()
+	if os.Getenv("SCHED_CORE") != "" {
+		if err := utils.Create(utils.ProcessGroup); err != nil {
+			return "", errors.Wrap(err, "enable sched core support")
+		}
+	}
+
 	if err := cmd.Start(); err != nil {
 		return "", err
 	}
+
+	goruntime.UnlockOSThread()
+
 	defer func() {
 		if retErr != nil {
 			cmd.Process.Kill()
@@ -801,7 +825,7 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 
 // Pids returns all pids inside the container
 // Since for kata, it cannot get the process's pid from VM,
-// thus only return the Shim's pid directly.
+// thus only return the hypervisor's pid directly.
 func (s *service) Pids(ctx context.Context, r *taskAPI.PidsRequest) (_ *taskAPI.PidsResponse, err error) {
 	shimLog.WithField("container", r.ID).Debug("Pids() start")
 	defer shimLog.WithField("container", r.ID).Debug("Pids() end")
@@ -903,7 +927,7 @@ func (s *service) Connect(ctx context.Context, r *taskAPI.ConnectRequest) (_ *ta
 
 	return &taskAPI.ConnectResponse{
 		ShimPid: s.pid,
-		//Since kata cannot get the container's pid in VM, thus only return the shim's pid.
+		//Since kata cannot get the container's pid in VM, thus only return the hypervisor's pid.
 		TaskPid: s.hpid,
 	}, nil
 }
@@ -924,6 +948,7 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 		s.mu.Unlock()
 
 		span.End()
+		s.rootSpan.End()
 		katatrace.StopTracing(s.rootCtx)
 
 		return empty, nil

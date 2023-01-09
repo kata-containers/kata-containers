@@ -25,6 +25,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 use crate::container::DEFAULT_DEVICES;
+use crate::selinux;
 use crate::sync::write_count;
 use std::string::ToString;
 
@@ -181,6 +182,8 @@ pub fn init_rootfs(
         None => flags |= MsFlags::MS_SLAVE,
     }
 
+    let label = &linux.mount_label;
+
     let root = spec
         .root
         .as_ref()
@@ -244,7 +247,7 @@ pub fn init_rootfs(
                 }
             }
 
-            mount_from(cfd_log, m, rootfs, flags, &data, "")?;
+            mount_from(cfd_log, m, rootfs, flags, &data, label)?;
             // bind mount won't change mount options, we need remount to make mount options
             // effective.
             // first check that we have non-default options required before attempting a
@@ -524,7 +527,6 @@ pub fn pivot_rootfs<P: ?Sized + NixPath + std::fmt::Debug>(path: &P) -> Result<(
 
 fn rootfs_parent_mount_private(path: &str) -> Result<()> {
     let mount_infos = parse_mount_table(MOUNTINFO_PATH)?;
-
     let mut max_len = 0;
     let mut mount_point = String::from("");
     let mut options = String::from("");
@@ -767,9 +769,9 @@ fn mount_from(
     rootfs: &str,
     flags: MsFlags,
     data: &str,
-    _label: &str,
+    label: &str,
 ) -> Result<()> {
-    let d = String::from(data);
+    let mut d = String::from(data);
     let dest = secure_join(rootfs, &m.destination);
 
     let src = if m.r#type.as_str() == "bind" {
@@ -780,18 +782,31 @@ fn mount_from(
             Path::new(&dest).parent().unwrap()
         };
 
-        let _ = fs::create_dir_all(&dir).map_err(|e| {
+        fs::create_dir_all(dir).map_err(|e| {
             log_child!(
                 cfd_log,
                 "create dir {}: {}",
                 dir.to_str().unwrap(),
                 e.to_string()
-            )
-        });
+            );
+            e
+        })?;
 
         // make sure file exists so we can bind over it
         if !src.is_dir() {
-            let _ = OpenOptions::new().create(true).write(true).open(&dest);
+            let _ = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(&dest)
+                .map_err(|e| {
+                    log_child!(
+                        cfd_log,
+                        "open/create dest error. {}: {:?}",
+                        dest.as_str(),
+                        e
+                    );
+                    e
+                })?;
         }
         src.to_str().unwrap().to_string()
     } else {
@@ -804,8 +819,41 @@ fn mount_from(
         }
     };
 
-    let _ = stat::stat(dest.as_str())
-        .map_err(|e| log_child!(cfd_log, "dest stat error. {}: {:?}", dest.as_str(), e));
+    let _ = stat::stat(dest.as_str()).map_err(|e| {
+        log_child!(cfd_log, "dest stat error. {}: {:?}", dest.as_str(), e);
+        e
+    })?;
+
+    // Set the SELinux context for the mounts
+    let mut use_xattr = false;
+    if !label.is_empty() {
+        if selinux::is_enabled()? {
+            let device = Path::new(&m.source)
+                .file_name()
+                .ok_or_else(|| anyhow!("invalid device source path: {}", &m.source))?
+                .to_str()
+                .ok_or_else(|| anyhow!("failed to convert device source path: {}", &m.source))?;
+
+            match device {
+                // SELinux does not support labeling of /proc or /sys
+                "proc" | "sysfs" => (),
+                // SELinux does not support mount labeling against /dev/mqueue,
+                // so we use setxattr instead
+                "mqueue" => {
+                    use_xattr = true;
+                }
+                _ => {
+                    log_child!(cfd_log, "add SELinux mount label to {}", dest.as_str());
+                    selinux::add_mount_label(&mut d, label);
+                }
+            }
+        } else {
+            log_child!(
+                cfd_log,
+                "SELinux label for the mount is provided but SELinux is not enabled on the running kernel"
+            );
+        }
+    }
 
     mount(
         Some(src.as_str()),
@@ -818,6 +866,10 @@ fn mount_from(
         log_child!(cfd_log, "mount error: {:?}", e);
         e
     })?;
+
+    if !label.is_empty() && selinux::is_enabled()? && use_xattr {
+        xattr::set(dest.as_str(), "security.selinux", label.as_bytes())?;
+    }
 
     if flags.contains(MsFlags::MS_BIND)
         && flags.intersects(
@@ -1005,9 +1057,7 @@ pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec, process: &Process) -> Result<(
 }
 
 fn mask_path(path: &str) -> Result<()> {
-    if !path.starts_with('/') || path.contains("..") {
-        return Err(anyhow!(nix::Error::EINVAL));
-    }
+    check_paths(path)?;
 
     match mount(
         Some("/dev/null"),
@@ -1025,9 +1075,7 @@ fn mask_path(path: &str) -> Result<()> {
 }
 
 fn readonly_path(path: &str) -> Result<()> {
-    if !path.starts_with('/') || path.contains("..") {
-        return Err(anyhow!(nix::Error::EINVAL));
-    }
+    check_paths(path)?;
 
     if let Err(e) = mount(
         Some(&path[1..]),
@@ -1053,11 +1101,20 @@ fn readonly_path(path: &str) -> Result<()> {
     Ok(())
 }
 
+fn check_paths(path: &str) -> Result<()> {
+    if !path.starts_with('/') || path.contains("..") {
+        return Err(anyhow!(
+            "Cannot mount {} (path does not start with '/' or contains '..').",
+            path
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::assert_result;
-    use crate::skip_if_not_root;
     use std::fs::create_dir;
     use std::fs::create_dir_all;
     use std::fs::remove_dir_all;
@@ -1065,6 +1122,7 @@ mod tests {
     use std::os::unix::fs;
     use std::os::unix::io::AsRawFd;
     use tempfile::tempdir;
+    use test_utils::skip_if_not_root;
 
     #[test]
     #[serial(chdir)]
@@ -1402,6 +1460,55 @@ mod tests {
                 let error_msg = format!("{}", result.unwrap_err());
                 assert!(error_msg.contains(d.error_contains), "{}", msg);
             }
+        }
+    }
+
+    #[test]
+    fn test_check_paths() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            name: &'a str,
+            path: &'a str,
+            result: Result<()>,
+        }
+
+        let tests = &[
+            TestData {
+                name: "valid path",
+                path: "/foo/bar",
+                result: Ok(()),
+            },
+            TestData {
+                name: "does not starts with /",
+                path: "foo/bar",
+                result: Err(anyhow!(
+                    "Cannot mount foo/bar (path does not start with '/' or contains '..')."
+                )),
+            },
+            TestData {
+                name: "contains ..",
+                path: "../foo/bar",
+                result: Err(anyhow!(
+                    "Cannot mount ../foo/bar (path does not start with '/' or contains '..')."
+                )),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d.name);
+
+            let result = check_paths(d.path);
+
+            let msg = format!("{}: result: {:?}", msg, result);
+
+            if d.result.is_ok() {
+                assert!(result.is_ok());
+                continue;
+            }
+
+            let expected_error = format!("{}", d.result.as_ref().unwrap_err());
+            let actual_error = format!("{}", result.unwrap_err());
+            assert!(actual_error == expected_error, "{}", msg);
         }
     }
 

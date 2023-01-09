@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2018 IBM
 //
@@ -204,6 +203,13 @@ func TestQemuArm64AppendProtectionDevice(t *testing.T) {
 
 	// SEV protection
 	arm64.(*qemuArm64).protection = sevProtection
+	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "")
+	assert.Empty(devices)
+	assert.Empty(bios)
+	assert.NoError(err)
+
+	// SNP protection
+	arm64.(*qemuArm64).protection = snpProtection
 	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "")
 	assert.Empty(devices)
 	assert.Empty(bios)

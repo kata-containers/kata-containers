@@ -169,11 +169,12 @@ pub fn baremount(
 
     info!(
         logger,
-        "mount source={:?}, dest={:?}, fs_type={:?}, options={:?}",
+        "baremount source={:?}, dest={:?}, fs_type={:?}, options={:?}, flags={:?}",
         source,
         destination,
         fs_type,
-        options
+        options,
+        flags
     );
 
     nix::mount::mount(
@@ -647,7 +648,7 @@ pub fn recursive_ownership_change(
 ) -> Result<()> {
     let mut mask = if read_only { RO_MASK } else { RW_MASK };
     if path.is_dir() {
-        for entry in fs::read_dir(&path)? {
+        for entry in fs::read_dir(path)? {
             recursive_ownership_change(entry?.path().as_path(), uid, gid, read_only)?;
         }
         mask |= EXEC_MASK;
@@ -778,8 +779,20 @@ pub async fn add_storages(
             }
         };
 
-        // Todo need to rollback the mounted storage if err met.
-        let mount_point = res?;
+        let mount_point = match res {
+            Err(e) => {
+                error!(
+                    logger,
+                    "add_storages failed, storage: {:?}, error: {:?} ", storage, e
+                );
+                let mut sb = sandbox.lock().await;
+                sb.unset_sandbox_storage(&storage.mount_point)
+                    .map_err(|e| warn!(logger, "fail to unset sandbox storage {:?}", e))
+                    .ok();
+                return Err(e);
+            }
+            Ok(m) => m,
+        };
 
         if !mount_point.is_empty() {
             mount_list.push(mount_point);
@@ -840,15 +853,14 @@ pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Resul
         return Err(anyhow!("Invalid mount point {}", mount_point));
     }
 
-    let file = File::open(mount_file)?;
-    let reader = BufReader::new(file);
+    let content = fs::read_to_string(mount_file)
+        .map_err(|e| anyhow!("read mount file {}: {}", mount_file, e))?;
 
     let re = Regex::new(format!("device .+ mounted on {} with fstype (.+)", mount_point).as_str())?;
 
     // Read the file line by line using the lines() iterator from std::io::BufRead.
-    for (_index, line) in reader.lines().enumerate() {
-        let line = line?;
-        let capes = match re.captures(line.as_str()) {
+    for (_index, line) in content.lines().enumerate() {
+        let capes = match re.captures(line) {
             Some(c) => c,
             None => continue,
         };
@@ -859,8 +871,9 @@ pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Resul
     }
 
     Err(anyhow!(
-        "failed to find FS type for mount point {}",
-        mount_point
+        "failed to find FS type for mount point {}, mount file content: {:?}",
+        mount_point,
+        content
     ))
 }
 
@@ -881,7 +894,7 @@ pub fn get_cgroup_mounts(
         }]);
     }
 
-    let file = File::open(&cg_path)?;
+    let file = File::open(cg_path)?;
     let reader = BufReader::new(file);
 
     let mut has_device_cgroup = false;
@@ -1017,8 +1030,6 @@ fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::test_utils::TestUserType;
-    use crate::{skip_if_not_root, skip_loop_if_not_root, skip_loop_if_root};
     use protobuf::RepeatedField;
     use protocols::agent::FSGroup;
     use std::fs::File;
@@ -1026,6 +1037,10 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
     use tempfile::tempdir;
+    use test_utils::TestUserType;
+    use test_utils::{
+        skip_if_not_root, skip_loop_by_user, skip_loop_if_not_root, skip_loop_if_root,
+    };
 
     #[test]
     fn test_mount() {
@@ -1112,11 +1127,7 @@ mod tests {
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
 
-            if d.test_user == TestUserType::RootOnly {
-                skip_loop_if_not_root!(msg);
-            } else if d.test_user == TestUserType::NonRootOnly {
-                skip_loop_if_root!(msg);
-            }
+            skip_loop_by_user!(msg, d.test_user);
 
             let src: PathBuf;
             let dest: PathBuf;
@@ -1649,11 +1660,8 @@ mod tests {
 
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
-            if d.test_user == TestUserType::RootOnly {
-                skip_loop_if_not_root!(msg);
-            } else if d.test_user == TestUserType::NonRootOnly {
-                skip_loop_if_root!(msg);
-            }
+
+            skip_loop_by_user!(msg, d.test_user);
 
             let drain = slog::Discard;
             let logger = slog::Logger::root(drain, o!());
@@ -1762,18 +1770,14 @@ mod tests {
 
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
-            if d.test_user == TestUserType::RootOnly {
-                skip_loop_if_not_root!(msg);
-            } else if d.test_user == TestUserType::NonRootOnly {
-                skip_loop_if_root!(msg);
-            }
+            skip_loop_by_user!(msg, d.test_user);
 
             let drain = slog::Discard;
             let logger = slog::Logger::root(drain, o!());
             let tempdir = tempdir().unwrap();
 
             let src = if d.mask_src {
-                tempdir.path().join(&d.src)
+                tempdir.path().join(d.src)
             } else {
                 Path::new(d.src).to_path_buf()
             };

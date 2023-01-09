@@ -5,7 +5,8 @@
 
 use anyhow::{anyhow, Result};
 use clap::{crate_description, crate_name, Parser};
-use liboci_cli::{CommonCmd, GlobalOpts, StandardCmd};
+use liboci_cli::{CommonCmd, GlobalOpts};
+use liboci_cli::{Create, Delete, Start, State};
 use slog::{o, Logger};
 use slog_async::AsyncGuard;
 use std::{
@@ -25,6 +26,37 @@ enum SubCommand {
     Standard(StandardCmd),
     #[clap(flatten)]
     Common(CommonCmd),
+    #[clap(flatten)]
+    Custom(CustomCmd),
+    /// Launch an init process (do not call it outside of runk)
+    Init {},
+}
+
+// Copy from https://github.com/containers/youki/blob/v0.0.3/crates/liboci-cli/src/lib.rs#L38-L44
+// but without Kill command.
+#[derive(Parser, Debug)]
+pub enum StandardCmd {
+    Create(Create),
+    Start(Start),
+    State(State),
+    Delete(Delete),
+}
+
+// as a workaround to support --all option for kill command,
+// we use a custom implementation of Kill.
+#[derive(Parser, Debug)]
+pub enum CustomCmd {
+    Kill(Kill),
+}
+
+/// Send the specified signal to the container
+#[derive(Parser, Debug)]
+pub struct Kill {
+    #[clap(forbid_empty_values = true, required = true)]
+    pub container_id: String,
+    pub signal: String,
+    #[clap(short, long)]
+    pub all: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -40,18 +72,26 @@ async fn cmd_run(subcmd: SubCommand, root_path: &Path, logger: &Logger) -> Resul
     match subcmd {
         SubCommand::Standard(cmd) => match cmd {
             StandardCmd::Create(create) => commands::create::run(create, root_path, logger).await,
-            StandardCmd::Start(start) => commands::start::run(start, root_path, logger),
-            StandardCmd::Kill(kill) => commands::kill::run(kill, root_path, logger),
+            StandardCmd::Start(start) => commands::start::run(start, root_path, logger).await,
             StandardCmd::Delete(delete) => commands::delete::run(delete, root_path, logger).await,
             StandardCmd::State(state) => commands::state::run(state, root_path, logger),
         },
         SubCommand::Common(cmd) => match cmd {
             CommonCmd::Run(run) => commands::run::run(run, root_path, logger).await,
             CommonCmd::Spec(spec) => commands::spec::run(spec, logger),
+            CommonCmd::List(list) => commands::list::run(list, root_path, logger),
+            CommonCmd::Exec(exec) => commands::exec::run(exec, root_path, logger).await,
+            CommonCmd::Ps(ps) => commands::ps::run(ps, root_path, logger),
+            CommonCmd::Pause(pause) => commands::pause::run(pause, root_path, logger),
+            CommonCmd::Resume(resume) => commands::resume::run(resume, root_path, logger),
             _ => {
                 return Err(anyhow!("command is not implemented yet"));
             }
         },
+        SubCommand::Custom(cmd) => match cmd {
+            CustomCmd::Kill(kill) => commands::kill::run(kill, root_path, logger),
+        },
+        _ => unreachable!(),
     }
 }
 
@@ -65,7 +105,7 @@ fn setup_logger(
             .read(true)
             .create(true)
             .truncate(true)
-            .open(&file)?;
+            .open(file)?;
 
         // TODO: Support 'text' log format.
         let (logger_local, logger_async_guard_local) =
@@ -80,6 +120,11 @@ fn setup_logger(
 
 async fn real_main() -> Result<()> {
     let cli = Cli::parse();
+
+    if let SubCommand::Init {} = cli.subcmd {
+        rustjail::container::init_child();
+        exit(0);
+    }
 
     let root_path = if let Some(path) = cli.global.root {
         path

@@ -4,34 +4,25 @@
 //
 
 use anyhow::Result;
-use libcontainer::{builder::ContainerBuilder, container::ContainerAction};
+use libcontainer::{container::ContainerAction, init_builder::InitContainerBuilder};
+
 use liboci_cli::Create;
-use nix::unistd::Pid;
 use slog::{info, Logger};
-use std::{fs, path::Path};
+use std::path::Path;
 
 pub async fn run(opts: Create, root: &Path, logger: &Logger) -> Result<()> {
-    let ctx = ContainerBuilder::default()
+    let mut launcher = InitContainerBuilder::default()
         .id(opts.container_id)
         .bundle(opts.bundle)
         .root(root.to_path_buf())
         .console_socket(opts.console_socket)
+        .pid_file(opts.pid_file)
         .build()?
-        .create_ctx()?;
+        .create_launcher(logger)?;
 
-    let pid = ctx.launch(ContainerAction::Create, logger).await?;
-
-    if let Some(ref pid_file) = opts.pid_file {
-        create_pid_file(pid_file, pid)?;
-    }
+    launcher.launch(ContainerAction::Create, logger).await?;
 
     info!(&logger, "create command finished successfully");
-
-    Ok(())
-}
-
-fn create_pid_file<P: AsRef<Path>>(pid_file: P, pid: Pid) -> Result<()> {
-    fs::write(pid_file.as_ref(), format!("{}", pid))?;
 
     Ok(())
 }

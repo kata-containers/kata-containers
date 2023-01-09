@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2018 Intel Corporation
 //
@@ -19,7 +18,7 @@ import (
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/pkg/errors"
@@ -259,6 +258,36 @@ func TestQemuArchBaseAppendConsoles(t *testing.T) {
 	devices, err = qemuArchBase.appendConsole(context.Background(), devices, path)
 	assert.NoError(err)
 	assert.Equal(expectedOut, devices)
+	assert.Contains(qemuArchBase.kernelParams, Param{"console", "hvc0"})
+	assert.Contains(qemuArchBase.kernelParams, Param{"console", "hvc1"})
+}
+
+func TestQemuArchBaseAppendConsolesLegacy(t *testing.T) {
+	var devices []govmmQemu.Device
+	var err error
+	assert := assert.New(t)
+	qemuArchBase := newQemuArchBase()
+	qemuArchBase.legacySerial = true
+
+	path := filepath.Join(filepath.Join(fs.MockRunStoragePath(), "test"), consoleSocket)
+
+	expectedOut := []govmmQemu.Device{
+		govmmQemu.LegacySerialDevice{
+			Chardev: "charconsole0",
+		},
+		govmmQemu.CharDevice{
+			Driver:   govmmQemu.LegacySerial,
+			Backend:  govmmQemu.Socket,
+			DeviceID: "console0",
+			ID:       "charconsole0",
+			Path:     path,
+		},
+	}
+
+	devices, err = qemuArchBase.appendConsole(context.Background(), devices, path)
+	assert.NoError(err)
+	assert.Equal(expectedOut, devices)
+	assert.Contains(qemuArchBase.kernelParams, Param{"console", "ttyS0"})
 }
 
 func TestQemuArchBaseAppendImage(t *testing.T) {

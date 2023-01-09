@@ -53,9 +53,9 @@ pub fn reseed_rng(data: &[u8]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::skip_if_not_root;
     use std::fs::File;
     use std::io::prelude::*;
+    use test_utils::skip_if_not_root;
 
     #[test]
     fn test_reseed_rng() {
@@ -82,7 +82,7 @@ mod tests {
         if nix::unistd::Uid::effective().is_root() {
             assert!(ret.is_ok());
         } else {
-            assert!(!ret.is_ok());
+            assert!(ret.is_err());
         }
     }
 
@@ -90,6 +90,6 @@ mod tests {
     fn test_reseed_rng_zero_data() {
         let seed = [];
         let ret = reseed_rng(&seed);
-        assert!(!ret.is_ok());
+        assert!(ret.is_err());
     }
 }

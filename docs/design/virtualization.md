@@ -110,7 +110,7 @@ Devices and features used:
 - VFIO
 - hotplug
 - seccomp filters
-- [HTTP OpenAPI](https://github.com/cloud-hypervisor/cloud-hypervisor/blob/master/vmm/src/api/openapi/cloud-hypervisor.yaml)
+- [HTTP OpenAPI](https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/vmm/src/api/openapi/cloud-hypervisor.yaml)
 
 ### Summary
 

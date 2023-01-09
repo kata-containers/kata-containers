@@ -8,6 +8,7 @@ package containerdshim
 import (
 	"context"
 	"fmt"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/containerd/containerd/api/types/task"
@@ -75,7 +76,7 @@ func startContainer(ctx context.Context, s *service, c *container) (retErr error
 	c.stdinPipe = stdin
 
 	if c.stdin != "" || c.stdout != "" || c.stderr != "" {
-		tty, err := newTtyIO(ctx, c.stdin, c.stdout, c.stderr, c.terminal)
+		tty, err := newTtyIO(ctx, s.namespace, c.id, c.stdin, c.stdout, c.stderr, c.terminal)
 		if err != nil {
 			return err
 		}
@@ -141,7 +142,7 @@ func startExec(ctx context.Context, s *service, containerID, execID string) (e *
 
 	execs.stdinPipe = stdin
 
-	tty, err := newTtyIO(ctx, execs.tty.stdin, execs.tty.stdout, execs.tty.stderr, execs.tty.terminal)
+	tty, err := newTtyIO(ctx, s.namespace, execs.id, execs.tty.stdin, execs.tty.stdout, execs.tty.stderr, execs.tty.terminal)
 	if err != nil {
 		return nil, err
 	}

@@ -9,7 +9,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -23,11 +22,11 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"code.cloudfoundry.org/bytefmt"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
 	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	pb "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
@@ -35,7 +34,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/mock"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
 
 const sysHugepagesDir = "/sys/kernel/mm/hugepages"
@@ -45,7 +43,7 @@ var (
 	testBlockDeviceCtrPath = "testBlockDeviceCtrPath"
 	testDevNo              = "testDevNo"
 	testNvdimmID           = "testNvdimmID"
-	testPCIPath, _         = vcTypes.PciPathFromString("04/02")
+	testPCIPath, _         = types.PciPathFromString("04/02")
 	testSCSIAddr           = "testSCSIAddr"
 	testVirtPath           = "testVirtPath"
 )
@@ -372,11 +370,11 @@ func TestHandleBlockVolume(t *testing.T) {
 	vDestination := "/VhostUserBlk/destination"
 	bDestination := "/DeviceBlock/destination"
 	dDestination := "/DeviceDirectBlock/destination"
-	vPCIPath, err := vcTypes.PciPathFromString("01/02")
+	vPCIPath, err := types.PciPathFromString("01/02")
 	assert.NoError(t, err)
-	bPCIPath, err := vcTypes.PciPathFromString("03/04")
+	bPCIPath, err := types.PciPathFromString("03/04")
 	assert.NoError(t, err)
-	dPCIPath, err := vcTypes.PciPathFromString("04/05")
+	dPCIPath, err := types.PciPathFromString("04/05")
 	assert.NoError(t, err)
 
 	vDev := drivers.NewVhostUserBlkDevice(&config.DeviceInfo{ID: vDevID})
@@ -575,7 +573,7 @@ func TestAppendVhostUserBlkDevices(t *testing.T) {
 
 func TestConstrainGRPCSpec(t *testing.T) {
 	assert := assert.New(t)
-	expectedCgroupPath := "/foo/bar"
+	expectedCgroupPath := "system.slice:foo:bar"
 
 	g := &pb.Spec{
 		Hooks: &pb.Hooks{},
@@ -621,7 +619,7 @@ func TestConstrainGRPCSpec(t *testing.T) {
 	}
 
 	k := kataAgent{}
-	k.constrainGRPCSpec(g, true, true)
+	k.constrainGRPCSpec(g, true, true, "", true)
 
 	// Check nil fields
 	assert.Nil(g.Hooks)
@@ -1169,7 +1167,7 @@ func TestHandleHugepages(t *testing.T) {
 	// are present (default is 1M, can only be changed on LPAR). See
 	// https://www.ibm.com/docs/en/linuxonibm/pdf/lku5dd05.pdf, p. 345 for more information.
 	if runtime.GOARCH == "s390x" {
-		dirs, err := ioutil.ReadDir(sysHugepagesDir)
+		dirs, err := os.ReadDir(sysHugepagesDir)
 		assert.Nil(err)
 		for _, dir := range dirs {
 			formattedSizes = append(formattedSizes, strings.TrimPrefix(dir.Name(), "hugepages-"))

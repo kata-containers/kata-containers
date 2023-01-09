@@ -31,7 +31,7 @@ See below example config:
   [plugins.cri]
     [plugins.cri.containerd]
        [plugins.cri.containerd.runtimes.runc]
-         runtime_type = "io.containerd.runc.v1"
+         runtime_type = "io.containerd.runc.v2"
          privileged_without_host_devices = false
        [plugins.cri.containerd.runtimes.kata]
          runtime_type = "io.containerd.kata.v2"
@@ -40,7 +40,7 @@ See below example config:
            ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration.toml"
 ```
 
- - [Kata Containers with Containerd and CRI documentation](how-to-use-k8s-with-cri-containerd-and-kata.md)
+ - [How to use Kata Containers and containerd with Kubernetes](how-to-use-k8s-with-containerd-and-kata.md)
  - [Containerd CRI config documentation](https://github.com/containerd/containerd/blob/main/docs/cri/config.md)
 
 #### CRI-O

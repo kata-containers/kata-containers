@@ -23,25 +23,27 @@ arch=${ARCH:-$(uname -m)}
 workdir="$(mktemp -d --tmpdir build-libseccomp.XXXXX)"
 
 # Variables for libseccomp
-# Currently, specify the libseccomp version directly without using `versions.yaml`
-# because the current Snap workflow is incomplete.
-# After solving the issue, replace this code by using the `versions.yaml`.
-# libseccomp_version=$(get_version "externals.libseccomp.version")
-# libseccomp_url=$(get_version "externals.libseccomp.url")
-libseccomp_version="2.5.1"
-libseccomp_url="https://github.com/seccomp/libseccomp"
+libseccomp_version="${LIBSECCOMP_VERSION:-""}"
+if [ -z "${libseccomp_version}" ]; then
+    libseccomp_version=$(get_version "externals.libseccomp.version")
+fi
+libseccomp_url="${LIBSECCOMP_URL:-""}"
+if [ -z "${libseccomp_url}" ]; then
+    libseccomp_url=$(get_version "externals.libseccomp.url")
+fi
 libseccomp_tarball="libseccomp-${libseccomp_version}.tar.gz"
 libseccomp_tarball_url="${libseccomp_url}/releases/download/v${libseccomp_version}/${libseccomp_tarball}"
 cflags="-O2"
 
 # Variables for gperf
-# Currently, specify the gperf version directly without using `versions.yaml`
-# because the current Snap workflow is incomplete.
-# After solving the issue, replace this code by using the `versions.yaml`.
-# gperf_version=$(get_version "externals.gperf.version")
-# gperf_url=$(get_version "externals.gperf.url")
-gperf_version="3.1"
-gperf_url="https://ftp.gnu.org/gnu/gperf"
+gperf_version="${GPERF_VERSION:-""}"
+if [ -z "${gperf_version}" ]; then
+    gperf_version=$(get_version "externals.gperf.version")
+fi
+gperf_url="${GPERF_URL:-""}"
+if [ -z "${gperf_url}" ]; then
+    gperf_url=$(get_version "externals.gperf.url")
+fi
 gperf_tarball="gperf-${gperf_version}.tar.gz"
 gperf_tarball_url="${gperf_url}/${gperf_tarball}"
 

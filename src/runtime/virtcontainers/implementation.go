@@ -31,8 +31,8 @@ func (impl *VCImpl) SetFactory(ctx context.Context, factory Factory) {
 }
 
 // CreateSandbox implements the VC function of the same name.
-func (impl *VCImpl) CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig) (VCSandbox, error) {
-	return CreateSandbox(ctx, sandboxConfig, impl.factory)
+func (impl *VCImpl) CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, hookFunc func(context.Context) error) (VCSandbox, error) {
+	return CreateSandbox(ctx, sandboxConfig, impl.factory, hookFunc)
 }
 
 // CleanupContainer is used by shimv2 to stop and delete a container exclusively, once there is no container

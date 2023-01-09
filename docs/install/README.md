@@ -79,3 +79,6 @@ versions. This is not recommended for normal users.
 * [upgrading document](../Upgrading.md)
 * [developer guide](../Developer-Guide.md)
 * [runtime documentation](../../src/runtime/README.md)
+
+## Kata Containers 3.0 rust runtime installation
+* [installation guide](../install/kata-containers-3.0-rust-runtime-installation-guide.md)

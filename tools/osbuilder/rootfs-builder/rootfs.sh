@@ -25,6 +25,7 @@ LIBC=${LIBC:-musl}
 # The kata agent enables seccomp feature.
 # However, it is not enforced by default: you need to enable that in the main configuration file.
 SECCOMP=${SECCOMP:-"yes"}
+SELINUX=${SELINUX:-"no"}
 
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
@@ -141,6 +142,11 @@ ROOTFS_DIR          Path to the directory that is populated with the rootfs.
 
 SECCOMP             When set to "no", the kata-agent is built without seccomp capability.
                     Default value: "yes"
+
+SELINUX             When set to "yes", build the rootfs with the required packages to
+                    enable SELinux in the VM.
+                    Make sure the guest kernel is compiled with SELinux enabled.
+                    Default value: "no"
 
 USE_DOCKER          If set, build the rootfs inside a container (requires
                     Docker).
@@ -346,6 +352,15 @@ build_rootfs_distro()
 
 	echo "Required rust version: $RUST_VERSION"
 
+	if [ "${SELINUX}" == "yes" ]; then
+		if [ "${AGENT_INIT}" == "yes" ]; then
+			die "Guest SELinux with the agent init is not supported yet"
+		fi
+		if [ "${distro}" != "centos" ]; then
+			die "The guest rootfs must be CentOS to enable guest SELinux"
+		fi
+	fi
+
 	if [ -z "${USE_DOCKER}" ] && [ -z "${USE_PODMAN}" ]; then
 		info "build directly"
 		build_rootfs ${ROOTFS_DIR}
@@ -426,6 +441,7 @@ build_rootfs_distro()
 			--env OS_VERSION="${OS_VERSION}" \
 			--env INSIDE_CONTAINER=1 \
 			--env SECCOMP="${SECCOMP}" \
+			--env SELINUX="${SELINUX}" \
 			--env DEBUG="${DEBUG}" \
 			--env HOME="/root" \
 			-v "${repo_dir}":"/kata-containers" \
@@ -520,6 +536,11 @@ EOF
 			chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
 			chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chrony.service"
 			;;
+		"ubuntu")
+			# Fix for #4932 - Boot hang at: "A start job is running for /dev/ttyS0"
+			mkdir -p "${ROOTFS_DIR}/etc/systemd/system/getty.target.wants"
+			ln -sf "/lib/systemd/system/getty@.service" "${ROOTFS_DIR}/etc/systemd/system/getty.target.wants/getty@ttyS0.service"
+			;;
 		*)
 			chrony_conf_file="${ROOTFS_DIR}/etc/chrony.conf"
 			chrony_systemd_service="${ROOTFS_DIR}/usr/lib/systemd/system/chronyd.service"
@@ -540,8 +561,13 @@ EOF
 
 	if [ -f "$chrony_systemd_service" ]; then
 		# Remove user option, user could not exist in the rootfs
+		# Set the /var/lib/chrony for ReadWritePaths to be ignored if
+		# its nonexistent, this broke the service on boot previously
+		# due to the directory not being present "(code=exited, status=226/NAMESPACE)"
 		sed -i -e 's/^\(ExecStart=.*\)-u [[:alnum:]]*/\1/g' \
-		       -e '/^\[Unit\]/a ConditionPathExists=\/dev\/ptp0' ${chrony_systemd_service}
+		       -e '/^\[Unit\]/a ConditionPathExists=\/dev\/ptp0' \
+		       -e 's/^ReadWritePaths=\(.\+\) \/var\/lib\/chrony \(.\+\)$/ReadWritePaths=\1 -\/var\/lib\/chrony \2/m' \
+		       ${chrony_systemd_service}
 	fi
 
 	AGENT_DIR="${ROOTFS_DIR}/usr/bin"
@@ -563,8 +589,10 @@ EOF
 
 		if [ "${SECCOMP}" == "yes" ]; then
 			info "Set up libseccomp"
-			libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
-			gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
+			detect_libseccomp_info || \
+				die "Could not detect the required libseccomp version and url"
+			export libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
+			export gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
 			${script_dir}/../../../ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
 			echo "Set environment variables for the libseccomp crate to link the libseccomp library statically"
 			export LIBSECCOMP_LINK_TYPE=static
@@ -592,7 +620,13 @@ EOF
 	[ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
 	OK "Agent installed"
 
-	[ "${AGENT_INIT}" == "yes" ] && setup_agent_init "${AGENT_DEST}" "${init}"
+	if [ "${AGENT_INIT}" == "yes" ]; then
+		setup_agent_init "${AGENT_DEST}" "${init}"
+	else
+		# Setup systemd service for kata-agent
+		mkdir -p "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants"
+		ln -sf "/usr/lib/systemd/system/kata-containers.target" "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants/kata-containers.target"
+	fi
 
 	info "Check init is installed"
 	[ -x "${init}" ] || [ -L "${init}" ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"

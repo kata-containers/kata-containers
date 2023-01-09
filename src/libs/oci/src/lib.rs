@@ -14,6 +14,8 @@ use std::collections::HashMap;
 mod serialize;
 pub use serialize::{to_string, to_writer, Error, Result};
 
+pub const OCI_SPEC_CONFIG_FILE_NAME: &str = "config.json";
+
 #[allow(dead_code)]
 fn is_false(b: bool) -> bool {
     !b
@@ -43,7 +45,7 @@ pub struct Spec {
     pub process: Option<Process>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root: Option<Root>,
-    #[serde(default, skip_serializing_if = "String:: is_empty")]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub hostname: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mounts: Vec<Mount>,

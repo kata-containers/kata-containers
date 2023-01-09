@@ -5,7 +5,7 @@ The code is generated via go-swagger
 https://github.com/go-swagger/go-swagger#licensing
 
 ```
-swagger generate model -f ./firecracker.yaml --model-package=client/models --client-package=client
+swagger generate model -f ./firecracker.yaml --model-package=client/models
 swagger generate client -f ./firecracker.yaml --model-package=client/models --client-package=client
 ```
 

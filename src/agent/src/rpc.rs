@@ -23,8 +23,9 @@ use cgroups::freezer::FreezerState;
 use oci::{LinuxNamespace, Root, Spec};
 use protobuf::{Message, RepeatedField, SingularPtrField};
 use protocols::agent::{
-    AddSwapRequest, AgentDetails, CopyFileRequest, GuestDetailsResponse, Interfaces, Metrics,
-    OOMEvent, ReadStreamResponse, Routes, StatsContainerResponse, VolumeStatsRequest,
+    AddSwapRequest, AgentDetails, CopyFileRequest, GetIPTablesRequest, GetIPTablesResponse,
+    GuestDetailsResponse, Interfaces, Metrics, OOMEvent, ReadStreamResponse, Routes,
+    SetIPTablesRequest, SetIPTablesResponse, StatsContainerResponse, VolumeStatsRequest,
     WaitProcessResponse, WriteStreamResponse,
 };
 use protocols::csi::{VolumeCondition, VolumeStatsResponse, VolumeUsage, VolumeUsage_Unit};
@@ -33,6 +34,7 @@ use protocols::health::{
     HealthCheckResponse, HealthCheckResponse_ServingStatus, VersionCheckResponse,
 };
 use protocols::types::Interface;
+use protocols::{agent_ttrpc_async as agent_ttrpc, health_ttrpc_async as health_ttrpc};
 use rustjail::cgroups::notifier;
 use rustjail::container::{BaseContainer, Container, LinuxContainer};
 use rustjail::process::Process;
@@ -40,12 +42,9 @@ use rustjail::specconv::CreateOpts;
 
 use nix::errno::Errno;
 use nix::mount::MsFlags;
-use nix::sys::stat;
+use nix::sys::{stat, statfs};
 use nix::unistd::{self, Pid};
-use rustjail::cgroups::Manager;
 use rustjail::process::ProcessOperations;
-
-use sysinfo::{DiskExt, System, SystemExt};
 
 use crate::device::{
     add_devices, get_virtio_blk_pci_device_name, update_device_cgroup, update_env_pci,
@@ -71,24 +70,40 @@ use tracing::instrument;
 
 use libc::{self, c_char, c_ushort, pid_t, winsize, TIOCSWINSZ};
 use std::fs;
-use std::os::unix::fs::MetadataExt;
 use std::os::unix::prelude::PermissionsExt;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use nix::unistd::{Gid, Uid};
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
 
 const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
 
+/// the iptables seriers binaries could appear either in /sbin
+/// or /usr/sbin, we need to check both of them
+const USR_IPTABLES_SAVE: &str = "/usr/sbin/iptables-save";
+const IPTABLES_SAVE: &str = "/sbin/iptables-save";
+const USR_IPTABLES_RESTORE: &str = "/usr/sbin/iptables-store";
+const IPTABLES_RESTORE: &str = "/sbin/iptables-restore";
+const USR_IP6TABLES_SAVE: &str = "/usr/sbin/ip6tables-save";
+const IP6TABLES_SAVE: &str = "/sbin/ip6tables-save";
+const USR_IP6TABLES_RESTORE: &str = "/usr/sbin/ip6tables-save";
+const IP6TABLES_RESTORE: &str = "/sbin/ip6tables-restore";
+
 const ERR_CANNOT_GET_WRITER: &str = "Cannot get writer";
 const ERR_INVALID_BLOCK_SIZE: &str = "Invalid block size";
 const ERR_NO_LINUX_FIELD: &str = "Spec does not contain linux field";
 const ERR_NO_SANDBOX_PIDNS: &str = "Sandbox does not have sandbox_pidns";
+
+// IPTABLES_RESTORE_WAIT_SEC is the timeout value provided to iptables-restore --wait. Since we
+// don't expect other writers to iptables, we don't expect contention for grabbing the iptables
+// filesystem lock. Based on this, 5 seconds seems a resonable timeout period in case the lock is
+// not available.
+const IPTABLES_RESTORE_WAIT_SEC: u64 = 5;
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -124,30 +139,6 @@ pub struct AgentService {
     sandbox: Arc<Mutex<Sandbox>>,
 }
 
-// A container ID must match this regex:
-//
-//     ^[a-zA-Z0-9][a-zA-Z0-9_.-]+$
-//
-fn verify_cid(id: &str) -> Result<()> {
-    let mut chars = id.chars();
-
-    let valid = match chars.next() {
-        Some(first)
-            if first.is_alphanumeric()
-                && id.len() > 1
-                && chars.all(|c| c.is_alphanumeric() || ['.', '-', '_'].contains(&c)) =>
-        {
-            true
-        }
-        _ => false,
-    };
-
-    match valid {
-        true => Ok(()),
-        false => Err(anyhow!("invalid container ID: {:?}", id)),
-    }
-}
-
 impl AgentService {
     #[instrument]
     async fn do_create_container(
@@ -156,7 +147,7 @@ impl AgentService {
     ) -> Result<()> {
         let cid = req.container_id.clone();
 
-        verify_cid(&cid)?;
+        kata_sys_util::validate::verify_id(&cid)?;
 
         let mut oci_spec = req.OCI.clone();
         let use_sandbox_pidns = req.get_sandbox_pidns();
@@ -240,7 +231,20 @@ impl AgentService {
             info!(sl!(), "no process configurations!");
             return Err(anyhow!(nix::Error::EINVAL));
         };
-        ctr.start(p).await?;
+
+        // if starting container failed, we will do some rollback work
+        // to ensure no resources are leaked.
+        if let Err(err) = ctr.start(p).await {
+            error!(sl!(), "failed to start container: {:?}", err);
+            if let Err(e) = ctr.destroy().await {
+                error!(sl!(), "failed to destroy container: {:?}", e);
+            }
+            if let Err(e) = remove_container_resources(&mut s, &cid) {
+                error!(sl!(), "failed to remove container resources: {:?}", e);
+            }
+            return Err(err);
+        }
+
         s.update_shared_pidns(&ctr)?;
         s.add_container(ctr);
         info!(sl!(), "created container!");
@@ -260,21 +264,20 @@ impl AgentService {
             .get_container(&cid)
             .ok_or_else(|| anyhow!("Invalid container id"))?;
 
-        ctr.exec()?;
+        ctr.exec().await?;
 
         if sid == cid {
             return Ok(());
         }
 
         // start oom event loop
-        if let Some(ref ctr) = ctr.cgroup_manager {
-            let cg_path = ctr.get_cg_path("memory");
 
-            if let Some(cg_path) = cg_path {
-                let rx = notifier::notify_oom(cid.as_str(), cg_path.to_string()).await?;
+        let cg_path = ctr.cgroup_manager.as_ref().get_cgroup_path("memory");
 
-                s.run_oom_event_monitor(rx, cid.clone()).await;
-            }
+        if let Ok(cg_path) = cg_path {
+            let rx = notifier::notify_oom(cid.as_str(), cg_path.to_string()).await?;
+
+            s.run_oom_event_monitor(rx, cid.clone()).await;
         }
 
         Ok(())
@@ -286,27 +289,6 @@ impl AgentService {
         req: protocols::agent::RemoveContainerRequest,
     ) -> Result<()> {
         let cid = req.container_id.clone();
-        let mut cmounts: Vec<String> = vec![];
-
-        let mut remove_container_resources = |sandbox: &mut Sandbox| -> Result<()> {
-            // Find the sandbox storage used by this container
-            let mounts = sandbox.container_mounts.get(&cid);
-            if let Some(mounts) = mounts {
-                for m in mounts.iter() {
-                    if sandbox.storages.get(m).is_some() {
-                        cmounts.push(m.to_string());
-                    }
-                }
-            }
-
-            for m in cmounts.iter() {
-                sandbox.unset_and_remove_sandbox_storage(m)?;
-            }
-
-            sandbox.container_mounts.remove(cid.as_str());
-            sandbox.containers.remove(cid.as_str());
-            Ok(())
-        };
 
         if req.timeout == 0 {
             let s = Arc::clone(&self.sandbox);
@@ -320,7 +302,7 @@ impl AgentService {
                 .destroy()
                 .await?;
 
-            remove_container_resources(&mut sandbox)?;
+            remove_container_resources(&mut sandbox, &cid)?;
 
             return Ok(());
         }
@@ -352,8 +334,7 @@ impl AgentService {
 
         let s = self.sandbox.clone();
         let mut sandbox = s.lock().await;
-
-        remove_container_resources(&mut sandbox)?;
+        remove_container_resources(&mut sandbox, &cid)?;
 
         Ok(())
     }
@@ -371,7 +352,7 @@ impl AgentService {
         let mut process = req
             .process
             .into_option()
-            .ok_or_else(|| anyhow!(nix::Error::EINVAL))?;
+            .ok_or_else(|| anyhow!("Unable to parse process from ExecProcessRequest"))?;
 
         // Apply any necessary corrections for PCI addresses
         update_env_pci(&mut process.Env, &sandbox.pcimap)?;
@@ -400,6 +381,7 @@ impl AgentService {
             "signal process";
             "container-id" => cid.clone(),
             "exec-id" => eid.clone(),
+            "signal" => req.signal,
         );
 
         let mut sig: libc::c_int = req.signal as libc::c_int;
@@ -413,8 +395,22 @@ impl AgentService {
             if p.init && sig == libc::SIGTERM && !is_signal_handled(&proc_status_file, sig as u32) {
                 sig = libc::SIGKILL;
             }
-            p.signal(sig)?;
-        }
+
+            match p.signal(sig) {
+                Err(Errno::ESRCH) => {
+                    info!(
+                        sl!(),
+                        "signal encounter ESRCH, continue";
+                        "container-id" => cid.clone(),
+                        "exec-id" => eid.clone(),
+                        "pid" => p.pid,
+                        "signal" => sig,
+                    );
+                }
+                Err(err) => return Err(anyhow!(err)),
+                Ok(()) => (),
+            }
+        };
 
         if eid.is_empty() {
             // eid is empty, signal all the remaining processes in the container cgroup
@@ -468,11 +464,7 @@ impl AgentService {
         let ctr = sandbox
             .get_container(cid)
             .ok_or_else(|| anyhow!("Invalid container id {}", cid))?;
-        let cm = ctr
-            .cgroup_manager
-            .as_ref()
-            .ok_or_else(|| anyhow!("cgroup manager not exist"))?;
-        cm.freeze(state)?;
+        ctr.cgroup_manager.as_ref().freeze(state)?;
         Ok(())
     }
 
@@ -482,11 +474,7 @@ impl AgentService {
         let ctr = sandbox
             .get_container(cid)
             .ok_or_else(|| anyhow!("Invalid container id {}", cid))?;
-        let cm = ctr
-            .cgroup_manager
-            .as_ref()
-            .ok_or_else(|| anyhow!("cgroup manager not exist"))?;
-        let pids = cm.get_pids()?;
+        let pids = ctr.cgroup_manager.as_ref().get_pids()?;
         Ok(pids)
     }
 
@@ -620,7 +608,7 @@ impl AgentService {
         };
 
         if reader.is_none() {
-            return Err(anyhow!(nix::Error::EINVAL));
+            return Err(anyhow!("Unable to determine stream reader, is None"));
         }
 
         let reader = reader.ok_or_else(|| anyhow!("cannot get stream reader"))?;
@@ -641,7 +629,7 @@ impl AgentService {
 }
 
 #[async_trait]
-impl protocols::agent_ttrpc::AgentService for AgentService {
+impl agent_ttrpc::AgentService for AgentService {
     async fn create_container(
         &self,
         ctx: &TtrpcContext,
@@ -993,6 +981,160 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
         Ok(protocols::agent::Routes {
             Routes: RepeatedField::from_vec(list),
+            ..Default::default()
+        })
+    }
+
+    async fn get_ip_tables(
+        &self,
+        ctx: &TtrpcContext,
+        req: GetIPTablesRequest,
+    ) -> ttrpc::Result<GetIPTablesResponse> {
+        trace_rpc_call!(ctx, "get_iptables", req);
+        is_allowed!(req);
+
+        info!(sl!(), "get_ip_tables: request received");
+
+        // the binary could exists in either /usr/sbin or /sbin
+        // here check both of the places and return the one exists
+        // if none exists, return the /sbin one, and the rpc will
+        // returns an internal error
+        let cmd = if req.is_ipv6 {
+            if Path::new(USR_IP6TABLES_SAVE).exists() {
+                USR_IP6TABLES_SAVE
+            } else {
+                IP6TABLES_SAVE
+            }
+        } else if Path::new(USR_IPTABLES_SAVE).exists() {
+            USR_IPTABLES_SAVE
+        } else {
+            IPTABLES_SAVE
+        }
+        .to_string();
+
+        match Command::new(cmd.clone()).output() {
+            Ok(output) => Ok(GetIPTablesResponse {
+                data: output.stdout,
+                ..Default::default()
+            }),
+            Err(e) => {
+                warn!(sl!(), "failed to run {}: {:?}", cmd, e.kind());
+                return Err(ttrpc_error!(ttrpc::Code::INTERNAL, e));
+            }
+        }
+    }
+
+    async fn set_ip_tables(
+        &self,
+        ctx: &TtrpcContext,
+        req: SetIPTablesRequest,
+    ) -> ttrpc::Result<SetIPTablesResponse> {
+        trace_rpc_call!(ctx, "set_iptables", req);
+        is_allowed!(req);
+
+        info!(sl!(), "set_ip_tables request received");
+
+        // the binary could exists in both /usr/sbin and /sbin
+        // here check both of the places and return the one exists
+        // if none exists, return the /sbin one, and the rpc will
+        // returns an internal error
+        let cmd = if req.is_ipv6 {
+            if Path::new(USR_IP6TABLES_RESTORE).exists() {
+                USR_IP6TABLES_RESTORE
+            } else {
+                IP6TABLES_RESTORE
+            }
+        } else if Path::new(USR_IPTABLES_RESTORE).exists() {
+            USR_IPTABLES_RESTORE
+        } else {
+            IPTABLES_RESTORE
+        }
+        .to_string();
+
+        let mut child = match Command::new(cmd.clone())
+            .arg("--wait")
+            .arg(IPTABLES_RESTORE_WAIT_SEC.to_string())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(e) => {
+                warn!(sl!(), "failure to spawn {}: {:?}", cmd, e.kind());
+                return Err(ttrpc_error!(ttrpc::Code::INTERNAL, e));
+            }
+        };
+
+        let mut stdin = match child.stdin.take() {
+            Some(si) => si,
+            None => {
+                println!("failed to get stdin from child");
+                return Err(ttrpc_error!(
+                    ttrpc::Code::INTERNAL,
+                    "failed to take stdin from child".to_string()
+                ));
+            }
+        };
+
+        let (tx, rx) = tokio::sync::oneshot::channel::<i32>();
+        let handle = tokio::spawn(async move {
+            let _ = match stdin.write_all(&req.data) {
+                Ok(o) => o,
+                Err(e) => {
+                    warn!(sl!(), "error writing stdin: {:?}", e.kind());
+                    return;
+                }
+            };
+            if tx.send(1).is_err() {
+                warn!(sl!(), "stdin writer thread receiver dropped");
+            };
+        });
+
+        if tokio::time::timeout(Duration::from_secs(IPTABLES_RESTORE_WAIT_SEC), rx)
+            .await
+            .is_err()
+        {
+            return Err(ttrpc_error!(
+                ttrpc::Code::INTERNAL,
+                "timeout waiting for stdin writer to complete".to_string()
+            ));
+        }
+
+        if handle.await.is_err() {
+            return Err(ttrpc_error!(
+                ttrpc::Code::INTERNAL,
+                "stdin writer thread failure".to_string()
+            ));
+        }
+
+        let output = match child.wait_with_output() {
+            Ok(o) => o,
+            Err(e) => {
+                warn!(
+                    sl!(),
+                    "failure waiting for spawned {} to complete: {:?}",
+                    cmd,
+                    e.kind()
+                );
+                return Err(ttrpc_error!(ttrpc::Code::INTERNAL, e));
+            }
+        };
+
+        if !output.status.success() {
+            warn!(sl!(), "{} failed: {:?}", cmd, output.stderr);
+            return Err(ttrpc_error!(
+                ttrpc::Code::INTERNAL,
+                format!(
+                    "{} failed: {:?}",
+                    cmd,
+                    String::from_utf8_lossy(&output.stderr)
+                )
+            ));
+        }
+
+        Ok(SetIPTablesResponse {
+            data: output.stdout,
             ..Default::default()
         })
     }
@@ -1393,7 +1535,7 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 struct HealthService;
 
 #[async_trait]
-impl protocols::health_ttrpc::Health for HealthService {
+impl health_ttrpc::Health for HealthService {
     async fn check(
         &self,
         _ctx: &TtrpcContext,
@@ -1468,20 +1610,12 @@ fn get_memory_info(
 fn get_volume_capacity_stats(path: &str) -> Result<VolumeUsage> {
     let mut usage = VolumeUsage::new();
 
-    let s = System::new();
-    for disk in s.disks() {
-        if let Some(v) = disk.name().to_str() {
-            if v.to_string().eq(path) {
-                usage.available = disk.available_space();
-                usage.total = disk.total_space();
-                usage.used = usage.total - usage.available;
-                usage.unit = VolumeUsage_Unit::BYTES; // bytes
-                break;
-            }
-        } else {
-            return Err(anyhow!(nix::Error::EINVAL));
-        }
-    }
+    let stat = statfs::statfs(path)?;
+    let block_size = stat.block_size() as u64;
+    usage.total = stat.blocks() * block_size;
+    usage.available = stat.blocks_free() * block_size;
+    usage.used = usage.total - usage.available;
+    usage.unit = VolumeUsage_Unit::BYTES;
 
     Ok(usage)
 }
@@ -1489,20 +1623,11 @@ fn get_volume_capacity_stats(path: &str) -> Result<VolumeUsage> {
 fn get_volume_inode_stats(path: &str) -> Result<VolumeUsage> {
     let mut usage = VolumeUsage::new();
 
-    let s = System::new();
-    for disk in s.disks() {
-        if let Some(v) = disk.name().to_str() {
-            if v.to_string().eq(path) {
-                let meta = fs::metadata(disk.mount_point())?;
-                let inode = meta.ino();
-                usage.used = inode;
-                usage.unit = VolumeUsage_Unit::INODES;
-                break;
-            }
-        } else {
-            return Err(anyhow!(nix::Error::EINVAL));
-        }
-    }
+    let stat = statfs::statfs(path)?;
+    usage.total = stat.files();
+    usage.available = stat.files_free();
+    usage.used = usage.total - usage.available;
+    usage.unit = VolumeUsage_Unit::INODES;
 
     Ok(usage)
 }
@@ -1549,18 +1674,17 @@ async fn read_stream(reader: Arc<Mutex<ReadHalf<PipeStream>>>, l: usize) -> Resu
 }
 
 pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> Result<TtrpcServer> {
-    let agent_service = Box::new(AgentService { sandbox: s })
-        as Box<dyn protocols::agent_ttrpc::AgentService + Send + Sync>;
+    let agent_service =
+        Box::new(AgentService { sandbox: s }) as Box<dyn agent_ttrpc::AgentService + Send + Sync>;
 
     let agent_worker = Arc::new(agent_service);
 
-    let health_service =
-        Box::new(HealthService {}) as Box<dyn protocols::health_ttrpc::Health + Send + Sync>;
+    let health_service = Box::new(HealthService {}) as Box<dyn health_ttrpc::Health + Send + Sync>;
     let health_worker = Arc::new(health_service);
 
-    let aservice = protocols::agent_ttrpc::create_agent_service(agent_worker);
+    let aservice = agent_ttrpc::create_agent_service(agent_worker);
 
-    let hservice = protocols::health_ttrpc::create_health(health_worker);
+    let hservice = health_ttrpc::create_health(health_worker);
 
     let server = TtrpcServer::new()
         .bind(server_address)?
@@ -1626,6 +1750,35 @@ fn update_container_namespaces(
     Ok(())
 }
 
+fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<()> {
+    let mut cmounts: Vec<String> = vec![];
+
+    // Find the sandbox storage used by this container
+    let mounts = sandbox.container_mounts.get(cid);
+    if let Some(mounts) = mounts {
+        for m in mounts.iter() {
+            if sandbox.storages.get(m).is_some() {
+                cmounts.push(m.to_string());
+            }
+        }
+    }
+
+    for m in cmounts.iter() {
+        if let Err(err) = sandbox.unset_and_remove_sandbox_storage(m) {
+            error!(
+                sl!(),
+                "failed to unset_and_remove_sandbox_storage for container {}, error: {:?}",
+                cid,
+                err
+            );
+        }
+    }
+
+    sandbox.container_mounts.remove(cid);
+    sandbox.containers.remove(cid);
+    Ok(())
+}
+
 fn append_guest_hooks(s: &Sandbox, oci: &mut Spec) -> Result<()> {
     if let Some(ref guest_hooks) = s.hooks {
         let mut hooks = oci.hooks.take().unwrap_or_default();
@@ -1667,34 +1820,25 @@ fn is_signal_handled(proc_status_file: &str, signum: u32) -> bool {
     let sig_mask: u64 = 1 << shift_count;
     let reader = BufReader::new(file);
 
-    // Read the file line by line using the lines() iterator from std::io::BufRead.
-    for (_index, line) in reader.lines().enumerate() {
-        let line = match line {
-            Ok(l) => l,
-            Err(_) => {
-                warn!(sl!(), "failed to read file {}", proc_status_file);
-                return false;
-            }
-        };
-        if line.starts_with("SigCgt:") {
+    // read lines start with SigBlk/SigIgn/SigCgt and check any match the signal mask
+    reader
+        .lines()
+        .flatten()
+        .filter(|line| {
+            line.starts_with("SigBlk:")
+                || line.starts_with("SigIgn:")
+                || line.starts_with("SigCgt:")
+        })
+        .any(|line| {
             let mask_vec: Vec<&str> = line.split(':').collect();
-            if mask_vec.len() != 2 {
-                warn!(sl!(), "parse the SigCgt field failed");
-                return false;
-            }
-            let sig_cgt_str = mask_vec[1];
-            let sig_cgt_mask = match u64::from_str_radix(sig_cgt_str, 16) {
-                Ok(h) => h,
-                Err(_) => {
-                    warn!(sl!(), "failed to parse the str {} to hex", sig_cgt_str);
-                    return false;
+            if mask_vec.len() == 2 {
+                let sig_str = mask_vec[1].trim();
+                if let Ok(sig) = u64::from_str_radix(sig_str, 16) {
+                    return sig & sig_mask == sig_mask;
                 }
-            };
-
-            return (sig_cgt_mask & sig_mask) == sig_mask;
-        }
-    }
-    false
+            }
+            false
+        })
 }
 
 fn do_mem_hotplug_by_probe(addrs: &[u64]) -> Result<()> {
@@ -1726,7 +1870,11 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
     let path = PathBuf::from(req.path.as_str());
 
     if !path.starts_with(CONTAINER_BASE) {
-        return Err(anyhow!(nix::Error::EINVAL));
+        return Err(anyhow!(
+            "Path {:?} does not start with {}",
+            path,
+            CONTAINER_BASE
+        ));
     }
 
     let parent = path.parent();
@@ -1894,10 +2042,18 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assert_result, namespace::Namespace, protocols::agent_ttrpc::AgentService as _};
+    use crate::{namespace::Namespace, protocols::agent_ttrpc_async::AgentService as _};
+    use nix::mount;
+    use nix::sched::{unshare, CloneFlags};
     use oci::{Hook, Hooks, Linux, LinuxNamespace};
     use tempfile::{tempdir, TempDir};
+    use test_utils::{assert_result, skip_if_not_root};
     use ttrpc::{r#async::TtrpcContext, MessageHeader};
+    use which::which;
+
+    fn check_command(cmd: &str) -> bool {
+        which(cmd).is_ok()
+    }
 
     fn mk_ttrpc_context() -> TtrpcContext {
         TtrpcContext {
@@ -1962,6 +2118,7 @@ mod tests {
         let result = load_kernel_module(&m);
         assert!(result.is_err(), "load module should failed");
 
+        skip_if_not_root!();
         // case 3: normal module.
         // normally this module should eixsts...
         m.name = "bridge".to_string();
@@ -2140,6 +2297,7 @@ mod tests {
                     if d.has_fd {
                         Some(wfd)
                     } else {
+                        unistd::close(wfd).unwrap();
                         None
                     }
                 };
@@ -2174,13 +2332,14 @@ mod tests {
             if !d.break_pipe {
                 unistd::close(rfd).unwrap();
             }
-            unistd::close(wfd).unwrap();
+            // XXX: Do not close wfd.
+            // the fd will be closed on Process's dropping.
+            // unistd::close(wfd).unwrap();
 
             let msg = format!("{}, result: {:?}", msg, result);
             assert_result!(d.result, result, msg);
         }
     }
-
     #[tokio::test]
     async fn test_update_container_namespaces() {
         #[derive(Debug)]
@@ -2454,6 +2613,26 @@ OtherField:other
                 result: true,
             },
             TestData {
+                status_file_data: Some("SigCgt:\t000000004b813efb"),
+                signum: 4,
+                result: true,
+            },
+            TestData {
+                status_file_data: Some("SigCgt: 000000004b813efb"),
+                signum: 4,
+                result: true,
+            },
+            TestData {
+                status_file_data: Some("SigCgt:000000004b813efb "),
+                signum: 4,
+                result: true,
+            },
+            TestData {
+                status_file_data: Some("SigCgt:\t000000004b813efb "),
+                signum: 4,
+                result: true,
+            },
+            TestData {
                 status_file_data: Some("SigCgt:000000004b813efb"),
                 signum: 3,
                 result: false,
@@ -2491,7 +2670,12 @@ OtherField:other
             TestData {
                 status_file_data: Some("SigBlk:0000000000000001"),
                 signum: 1,
-                result: false,
+                result: true,
+            },
+            TestData {
+                status_file_data: Some("SigIgn:0000000000000001"),
+                signum: 1,
+                result: true,
             },
             TestData {
                 status_file_data: None,
@@ -2524,229 +2708,243 @@ OtherField:other
     }
 
     #[tokio::test]
-    async fn test_verify_cid() {
-        #[derive(Debug)]
-        struct TestData<'a> {
-            id: &'a str,
-            expect_error: bool,
-        }
+    async fn test_volume_capacity_stats() {
+        skip_if_not_root!();
 
-        let tests = &[
-            TestData {
-                // Cannot be blank
-                id: "",
-                expect_error: true,
-            },
-            TestData {
-                // Cannot be a space
-                id: " ",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: ".",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: "-",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: "_",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: " a",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: ".a",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: "-a",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: "_a",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: "..",
-                expect_error: true,
-            },
-            TestData {
-                // Too short
-                id: "a",
-                expect_error: true,
-            },
-            TestData {
-                // Too short
-                id: "z",
-                expect_error: true,
-            },
-            TestData {
-                // Too short
-                id: "A",
-                expect_error: true,
-            },
-            TestData {
-                // Too short
-                id: "Z",
-                expect_error: true,
-            },
-            TestData {
-                // Too short
-                id: "0",
-                expect_error: true,
-            },
-            TestData {
-                // Too short
-                id: "9",
-                expect_error: true,
-            },
-            TestData {
-                // Must start with an alphanumeric
-                id: "-1",
-                expect_error: true,
-            },
-            TestData {
-                id: "/",
-                expect_error: true,
-            },
-            TestData {
-                id: "a/",
-                expect_error: true,
-            },
-            TestData {
-                id: "a/../",
-                expect_error: true,
-            },
-            TestData {
-                id: "../a",
-                expect_error: true,
-            },
-            TestData {
-                id: "../../a",
-                expect_error: true,
-            },
-            TestData {
-                id: "../../../a",
-                expect_error: true,
-            },
-            TestData {
-                id: "foo/../bar",
-                expect_error: true,
-            },
-            TestData {
-                id: "foo bar",
-                expect_error: true,
-            },
-            TestData {
-                id: "a.",
-                expect_error: false,
-            },
-            TestData {
-                id: "a..",
-                expect_error: false,
-            },
-            TestData {
-                id: "aa",
-                expect_error: false,
-            },
-            TestData {
-                id: "aa.",
-                expect_error: false,
-            },
-            TestData {
-                id: "hello..world",
-                expect_error: false,
-            },
-            TestData {
-                id: "hello/../world",
-                expect_error: true,
-            },
-            TestData {
-                id: "aa1245124sadfasdfgasdga.",
-                expect_error: false,
-            },
-            TestData {
-                id: "aAzZ0123456789_.-",
-                expect_error: false,
-            },
-            TestData {
-                id: "abcdefghijklmnopqrstuvwxyz0123456789.-_",
-                expect_error: false,
-            },
-            TestData {
-                id: "0123456789abcdefghijklmnopqrstuvwxyz.-_",
-                expect_error: false,
-            },
-            TestData {
-                id: " abcdefghijklmnopqrstuvwxyz0123456789.-_",
-                expect_error: true,
-            },
-            TestData {
-                id: ".abcdefghijklmnopqrstuvwxyz0123456789.-_",
-                expect_error: true,
-            },
-            TestData {
-                id: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_",
-                expect_error: false,
-            },
-            TestData {
-                id: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ.-_",
-                expect_error: false,
-            },
-            TestData {
-                id: " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_",
-                expect_error: true,
-            },
-            TestData {
-                id: ".ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_",
-                expect_error: true,
-            },
-            TestData {
-                id: "/a/b/c",
-                expect_error: true,
-            },
-            TestData {
-                id: "a/b/c",
-                expect_error: true,
-            },
-            TestData {
-                id: "foo/../../../etc/passwd",
-                expect_error: true,
-            },
-            TestData {
-                id: "../../../../../../etc/motd",
-                expect_error: true,
-            },
-            TestData {
-                id: "/etc/passwd",
-                expect_error: true,
-            },
+        // Verify error if path does not exist
+        assert!(get_volume_capacity_stats("/does-not-exist").is_err());
+
+        // Create a new tmpfs mount, and verify the initial values
+        let mount_dir = tempfile::tempdir().unwrap();
+        mount::mount(
+            Some("tmpfs"),
+            mount_dir.path().to_str().unwrap(),
+            Some("tmpfs"),
+            mount::MsFlags::empty(),
+            None::<&str>,
+        )
+        .unwrap();
+        let mut stats = get_volume_capacity_stats(mount_dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(stats.used, 0);
+        assert_ne!(stats.available, 0);
+        let available = stats.available;
+
+        // Verify that writing a file will result in increased utilization
+        fs::write(mount_dir.path().join("file.dat"), "foobar").unwrap();
+        stats = get_volume_capacity_stats(mount_dir.path().to_str().unwrap()).unwrap();
+
+        assert_eq!(stats.used, 4 * 1024);
+        assert_eq!(stats.available, available - 4 * 1024);
+    }
+
+    #[tokio::test]
+    async fn test_get_volume_inode_stats() {
+        skip_if_not_root!();
+
+        // Verify error if path does not exist
+        assert!(get_volume_inode_stats("/does-not-exist").is_err());
+
+        // Create a new tmpfs mount, and verify the initial values
+        let mount_dir = tempfile::tempdir().unwrap();
+        mount::mount(
+            Some("tmpfs"),
+            mount_dir.path().to_str().unwrap(),
+            Some("tmpfs"),
+            mount::MsFlags::empty(),
+            None::<&str>,
+        )
+        .unwrap();
+        let mut stats = get_volume_inode_stats(mount_dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(stats.used, 1);
+        assert_ne!(stats.available, 0);
+        let available = stats.available;
+
+        // Verify that creating a directory and writing a file will result in increased utilization
+        let dir = mount_dir.path().join("foobar");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.as_path().join("file.dat"), "foobar").unwrap();
+        stats = get_volume_inode_stats(mount_dir.path().to_str().unwrap()).unwrap();
+
+        assert_eq!(stats.used, 3);
+        assert_eq!(stats.available, available - 2);
+    }
+
+    #[tokio::test]
+    async fn test_ip_tables() {
+        skip_if_not_root!();
+
+        let iptables_cmd_list = [
+            USR_IPTABLES_SAVE,
+            USR_IP6TABLES_SAVE,
+            USR_IPTABLES_RESTORE,
+            USR_IP6TABLES_RESTORE,
+            IPTABLES_SAVE,
+            IP6TABLES_SAVE,
+            IPTABLES_RESTORE,
+            IP6TABLES_RESTORE,
         ];
 
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let result = verify_cid(d.id);
-
-            let msg = format!("{}, result: {:?}", msg, result);
-
-            if result.is_ok() {
-                assert!(!d.expect_error, "{}", msg);
-            } else {
-                assert!(d.expect_error, "{}", msg);
+        for cmd in iptables_cmd_list {
+            if !check_command(cmd) {
+                warn!(
+                    sl!(),
+                    "one or more commands for ip tables test are missing, skip it"
+                );
+                return;
             }
         }
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Sandbox::new(&logger).unwrap();
+        let agent_service = Box::new(AgentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+        });
+
+        let ctx = mk_ttrpc_context();
+
+        // Move to a new netns in order to ensure we don't trash the hosts' iptables
+        unshare(CloneFlags::CLONE_NEWNET).unwrap();
+
+        // Get initial iptables, we expect to be empty:
+        let result = agent_service
+            .get_ip_tables(
+                &ctx,
+                GetIPTablesRequest {
+                    is_ipv6: false,
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(result.is_ok(), "get ip tables should succeed");
+        assert_eq!(
+            result.unwrap().data.len(),
+            0,
+            "ip tables should be empty initially"
+        );
+
+        // Initial ip6 ip tables should also be empty:
+        let result = agent_service
+            .get_ip_tables(
+                &ctx,
+                GetIPTablesRequest {
+                    is_ipv6: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(result.is_ok(), "get ip6 tables should succeed");
+        assert_eq!(
+            result.unwrap().data.len(),
+            0,
+            "ip tables should be empty initially"
+        );
+
+        // Verify that attempting to write 'empty' iptables results in no error:
+        let empty_rules = "";
+        let result = agent_service
+            .set_ip_tables(
+                &ctx,
+                SetIPTablesRequest {
+                    is_ipv6: false,
+                    data: empty_rules.as_bytes().to_vec(),
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(result.is_ok(), "set ip tables with no data should succeed");
+
+        // Verify that attempting to write "garbage" iptables results in an error:
+        let garbage_rules = r#"
+this
+is
+just garbage
+"#;
+        let result = agent_service
+            .set_ip_tables(
+                &ctx,
+                SetIPTablesRequest {
+                    is_ipv6: false,
+                    data: garbage_rules.as_bytes().to_vec(),
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(result.is_err(), "set iptables with garbage should fail");
+
+        // Verify setup of valid iptables:Setup  valid set of iptables:
+        let valid_rules = r#"
+*nat
+-A PREROUTING -d 192.168.103.153/32 -j DNAT --to-destination 192.168.188.153
+
+COMMIT
+
+"#;
+        let result = agent_service
+            .set_ip_tables(
+                &ctx,
+                SetIPTablesRequest {
+                    is_ipv6: false,
+                    data: valid_rules.as_bytes().to_vec(),
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(result.is_ok(), "set ip tables should succeed");
+
+        let result = agent_service
+            .get_ip_tables(
+                &ctx,
+                GetIPTablesRequest {
+                    is_ipv6: false,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert!(!result.data.is_empty(), "we should have non-zero output:");
+        assert!(
+            std::str::from_utf8(&result.data).unwrap().contains(
+                "PREROUTING -d 192.168.103.153/32 -j DNAT --to-destination 192.168.188.153"
+            ),
+            "We should see the resulting rule"
+        );
+
+        // Verify setup of valid ip6tables:
+        let valid_ipv6_rules = r#"
+*filter
+-A INPUT -s 2001:db8:100::1/128 -i sit+ -p tcp -m tcp --sport 512:65535
+
+COMMIT
+
+"#;
+        let result = agent_service
+            .set_ip_tables(
+                &ctx,
+                SetIPTablesRequest {
+                    is_ipv6: true,
+                    data: valid_ipv6_rules.as_bytes().to_vec(),
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(result.is_ok(), "set ip6 tables should succeed");
+
+        let result = agent_service
+            .get_ip_tables(
+                &ctx,
+                GetIPTablesRequest {
+                    is_ipv6: true,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert!(!result.data.is_empty(), "we should have non-zero output:");
+        assert!(
+            std::str::from_utf8(&result.data)
+                .unwrap()
+                .contains("INPUT -s 2001:db8:100::1/128 -i sit+ -p tcp -m tcp --sport 512:65535"),
+            "We should see the resulting rule"
+        );
     }
 }

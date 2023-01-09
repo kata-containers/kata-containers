@@ -94,6 +94,7 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**VmAddPmemPut**](docs/DefaultApi.md#vmaddpmemput) | **Put** /vm.add-pmem | Add a new pmem device to the VM
 *DefaultApi* | [**VmAddVdpaPut**](docs/DefaultApi.md#vmaddvdpaput) | **Put** /vm.add-vdpa | Add a new vDPA device to the VM
 *DefaultApi* | [**VmAddVsockPut**](docs/DefaultApi.md#vmaddvsockput) | **Put** /vm.add-vsock | Add a new vsock device to the VM
+*DefaultApi* | [**VmCoredumpPut**](docs/DefaultApi.md#vmcoredumpput) | **Put** /vm.coredump | Takes a VM coredump.
 *DefaultApi* | [**VmCountersGet**](docs/DefaultApi.md#vmcountersget) | **Get** /vm.counters | Get counters from the VM
 *DefaultApi* | [**VmInfoGet**](docs/DefaultApi.md#vminfoget) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
 *DefaultApi* | [**VmReceiveMigrationPut**](docs/DefaultApi.md#vmreceivemigrationput) | **Put** /vm.receive-migration | Receive a VM migration from URL
@@ -109,7 +110,6 @@ Class | Method | HTTP request | Description
 ## Documentation For Models
 
  - [BalloonConfig](docs/BalloonConfig.md)
- - [CmdLineConfig](docs/CmdLineConfig.md)
  - [ConsoleConfig](docs/ConsoleConfig.md)
  - [CpuAffinity](docs/CpuAffinity.md)
  - [CpuFeatures](docs/CpuFeatures.md)
@@ -119,13 +119,12 @@ Class | Method | HTTP request | Description
  - [DeviceNode](docs/DeviceNode.md)
  - [DiskConfig](docs/DiskConfig.md)
  - [FsConfig](docs/FsConfig.md)
- - [InitramfsConfig](docs/InitramfsConfig.md)
- - [KernelConfig](docs/KernelConfig.md)
  - [MemoryConfig](docs/MemoryConfig.md)
  - [MemoryZoneConfig](docs/MemoryZoneConfig.md)
  - [NetConfig](docs/NetConfig.md)
  - [NumaConfig](docs/NumaConfig.md)
  - [NumaDistance](docs/NumaDistance.md)
+ - [PayloadConfig](docs/PayloadConfig.md)
  - [PciDeviceInfo](docs/PciDeviceInfo.md)
  - [PlatformConfig](docs/PlatformConfig.md)
  - [PmemConfig](docs/PmemConfig.md)
@@ -135,11 +134,11 @@ Class | Method | HTTP request | Description
  - [RngConfig](docs/RngConfig.md)
  - [SendMigrationData](docs/SendMigrationData.md)
  - [SgxEpcConfig](docs/SgxEpcConfig.md)
- - [TdxConfig](docs/TdxConfig.md)
  - [TokenBucket](docs/TokenBucket.md)
+ - [TpmConfig](docs/TpmConfig.md)
  - [VdpaConfig](docs/VdpaConfig.md)
- - [VmAddDevice](docs/VmAddDevice.md)
  - [VmConfig](docs/VmConfig.md)
+ - [VmCoredumpData](docs/VmCoredumpData.md)
  - [VmInfo](docs/VmInfo.md)
  - [VmRemoveDevice](docs/VmRemoveDevice.md)
  - [VmResize](docs/VmResize.md)

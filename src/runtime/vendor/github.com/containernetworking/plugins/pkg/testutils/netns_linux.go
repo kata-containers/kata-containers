@@ -53,7 +53,7 @@ func NewNS() (ns.NetNS, error) {
 	nsRunDir := getNsRunDir()
 
 	b := make([]byte, 16)
-	_, err := rand.Reader.Read(b)
+	_, err := rand.Read(b)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate random netns name: %v", err)
 	}

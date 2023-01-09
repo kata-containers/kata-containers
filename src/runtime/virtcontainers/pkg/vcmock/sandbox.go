@@ -11,9 +11,9 @@ import (
 	"io"
 	"syscall"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -259,5 +259,13 @@ func (s *Sandbox) GuestVolumeStats(ctx context.Context, path string) ([]byte, er
 	return nil, nil
 }
 func (s *Sandbox) ResizeGuestVolume(ctx context.Context, path string, size uint64) error {
+	return nil
+}
+
+func (s *Sandbox) GetIPTables(ctx context.Context, isIPv6 bool) ([]byte, error) {
+	return nil, nil
+}
+
+func (s *Sandbox) SetIPTables(ctx context.Context, isIPv6 bool, data []byte) error {
 	return nil
 }

@@ -252,6 +252,22 @@ func (n *LinuxNetwork) removeSingleEndpoint(ctx context.Context, s *Sandbox, idx
 	return nil
 }
 
+func (n *LinuxNetwork) endpointAlreadyAdded(netInfo *NetworkInfo) bool {
+	for _, ep := range n.eps {
+		// Existing endpoint
+		if ep.Name() == netInfo.Iface.Name {
+			return true
+		}
+		pair := ep.NetworkPair()
+		// Existing virtual endpoints
+		if pair != nil && (pair.TapInterface.Name == netInfo.Iface.Name || pair.TapInterface.TAPIface.Name == netInfo.Iface.Name || pair.VirtIface.Name == netInfo.Iface.Name) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Scan the networking namespace through netlink and then:
 // 1. Create the endpoints for the relevant interfaces found there.
 // 2. Attach them to the VM.
@@ -289,6 +305,12 @@ func (n *LinuxNetwork) addAllEndpoints(ctx context.Context, s *Sandbox, hotplug 
 
 		// Skip any loopback interfaces:
 		if (netInfo.Iface.Flags & net.FlagLoopback) != 0 {
+			continue
+		}
+
+		// Skip any interfaces that are already added
+		if n.endpointAlreadyAdded(&netInfo) {
+			networkLogger().WithField("endpoint", netInfo.Iface.Name).Info("already added")
 			continue
 		}
 
@@ -408,9 +430,19 @@ func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Lin
 
 	switch expectedLink.Type() {
 	case (&netlink.Tuntap{}).Type():
-		flags := netlink.TUNTAP_VNET_HDR
+		flags := netlink.TUNTAP_VNET_HDR | netlink.TUNTAP_NO_PI
 		if queues > 0 {
 			flags |= netlink.TUNTAP_MULTI_QUEUE_DEFAULTS
+		} else {
+			// We need to enforce `queues = 1` here in case
+			// multi-queue is *not* supported, the reason being
+			// `linkModify()`, a method called by `LinkAdd()`, only
+			// returning the file descriptor of the opened tuntap
+			// device when the queues are set to *non zero*.
+			//
+			// Please, for more information, refer to:
+			// https://github.com/kata-containers/kata-containers/blob/e6e5d2593ac319329269d7b58c30f99ba7b2bf5a/src/runtime/vendor/github.com/vishvananda/netlink/link_linux.go#L1164-L1316
+			queues = 1
 		}
 		newLink = &netlink.Tuntap{
 			LinkAttrs: netlink.LinkAttrs{Name: name},
@@ -698,8 +730,8 @@ func tapNetworkPair(ctx context.Context, endpoint Endpoint, queues int, disableV
 	}
 
 	if err := netHandle.LinkSetHardwareAddr(tapLink, tapHardAddr); err != nil {
-		return fmt.Errorf("Could not set MAC address %s for veth interface %s: %s",
-			netPair.VirtIface.HardAddr, netPair.VirtIface.Name, err)
+		return fmt.Errorf("Could not set MAC address %s for TAP interface %s: %s",
+			netPair.TAPIface.HardAddr, netPair.TAPIface.Name, err)
 	}
 
 	if err := netHandle.LinkSetUp(tapLink); err != nil {
@@ -1035,6 +1067,15 @@ func doNetNS(netNSPath string, cb func(ns.NetNS) error) error {
 	return cb(targetNS)
 }
 
+// EnterNetNS is free from any call to a go routine, and it calls
+// into runtime.LockOSThread(), meaning it won't be executed in a
+// different thread than the one expected by the caller.
+func EnterNetNS(networkID string, cb func() error) error {
+	return doNetNS(networkID, func(nn ns.NetNS) error {
+		return cb()
+	})
+}
+
 func deleteNetNS(netNSPath string) error {
 	n, err := ns.GetNS(netNSPath)
 	if err != nil {
@@ -1117,17 +1158,18 @@ func addRxRateLimiter(endpoint Endpoint, maxRate uint64) error {
 // from their parents once they have exceeded rate. A child class will continue to attempt to borrow until
 // it reaches ceil. See more details in https://tldp.org/HOWTO/Traffic-Control-HOWTO/classful-qdiscs.html.
 //
-//         * +-----+     +---------+     +-----------+      +-----------+
-//         * |     |     |  qdisc  |     | class 1:1 |      | class 1:2 |
-//         * | NIC |     |   htb   |     |   rate    |      |   rate    |
-//         * |     | --> | def 1:2 | --> |   ceil    | -+-> |   ceil    |
-//         * +-----+     +---------+     +-----------+  |   +-----------+
-//         *                                            |
-//         *                                            |   +-----------+
-//         *                                            |   | class 1:n |
-//         *                                            |   |   rate    |
-//         *                                            +-> |   ceil    |
-//         *                                            |   +-----------+
+//   - +-----+     +---------+     +-----------+      +-----------+
+//   - |     |     |  qdisc  |     | class 1:1 |      | class 1:2 |
+//   - | NIC |     |   htb   |     |   rate    |      |   rate    |
+//   - |     | --> | def 1:2 | --> |   ceil    | -+-> |   ceil    |
+//   - +-----+     +---------+     +-----------+  |   +-----------+
+//   - |
+//   - |   +-----------+
+//   - |   | class 1:n |
+//   - |   |   rate    |
+//   - +-> |   ceil    |
+//   - |   +-----------+
+//
 // Seeing from pic, after the routing decision, all packets will be sent to the interface root htb qdisc.
 // This root qdisc has only one direct child class (with id 1:1) which shapes the overall maximum rate
 // that will be sent through interface. Then, this class has at least one default child (1:2) meant to control all

@@ -10,10 +10,9 @@ import (
 	"io"
 
 	"github.com/go-openapi/runtime"
+	"github.com/go-openapi/strfmt"
 
-	strfmt "github.com/go-openapi/strfmt"
-
-	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 )
 
 // PatchGuestDriveByIDReader is a Reader for the PatchGuestDriveByID structure.
@@ -24,21 +23,18 @@ type PatchGuestDriveByIDReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *PatchGuestDriveByIDReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
-
 	case 204:
 		result := NewPatchGuestDriveByIDNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
-
 	case 400:
 		result := NewPatchGuestDriveByIDBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
-
 	default:
 		result := NewPatchGuestDriveByIDDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -56,7 +52,7 @@ func NewPatchGuestDriveByIDNoContent() *PatchGuestDriveByIDNoContent {
 	return &PatchGuestDriveByIDNoContent{}
 }
 
-/*PatchGuestDriveByIDNoContent handles this case with default header values.
+/* PatchGuestDriveByIDNoContent describes a response with status code 204, with default header values.
 
 Drive updated
 */
@@ -77,7 +73,7 @@ func NewPatchGuestDriveByIDBadRequest() *PatchGuestDriveByIDBadRequest {
 	return &PatchGuestDriveByIDBadRequest{}
 }
 
-/*PatchGuestDriveByIDBadRequest handles this case with default header values.
+/* PatchGuestDriveByIDBadRequest describes a response with status code 400, with default header values.
 
 Drive cannot be updated due to bad input
 */
@@ -87,6 +83,9 @@ type PatchGuestDriveByIDBadRequest struct {
 
 func (o *PatchGuestDriveByIDBadRequest) Error() string {
 	return fmt.Sprintf("[PATCH /drives/{drive_id}][%d] patchGuestDriveByIdBadRequest  %+v", 400, o.Payload)
+}
+func (o *PatchGuestDriveByIDBadRequest) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PatchGuestDriveByIDBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
@@ -108,7 +107,7 @@ func NewPatchGuestDriveByIDDefault(code int) *PatchGuestDriveByIDDefault {
 	}
 }
 
-/*PatchGuestDriveByIDDefault handles this case with default header values.
+/* PatchGuestDriveByIDDefault describes a response with status code -1, with default header values.
 
 Internal server error.
 */
@@ -125,6 +124,9 @@ func (o *PatchGuestDriveByIDDefault) Code() int {
 
 func (o *PatchGuestDriveByIDDefault) Error() string {
 	return fmt.Sprintf("[PATCH /drives/{drive_id}][%d] patchGuestDriveByID default  %+v", o._statusCode, o.Payload)
+}
+func (o *PatchGuestDriveByIDDefault) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PatchGuestDriveByIDDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

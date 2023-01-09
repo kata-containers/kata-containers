@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2018 IBM
 //
@@ -41,8 +40,6 @@ const tpmHostPath = "/dev/tpmrm0"
 var kernelParams = []Param{
 	{"rcupdate.rcu_expedited", "1"},
 	{"reboot", "k"},
-	{"console", "hvc0"},
-	{"console", "hvc1"},
 	{"cryptomgr.notests", ""},
 	{"net.ifnames", "0"},
 }
@@ -76,6 +73,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			kernelParamsDebug:    kernelParamsDebug,
 			kernelParams:         kernelParams,
 			protection:           noneProtection,
+			legacySerial:         config.LegacySerial,
 		},
 	}
 
@@ -113,10 +111,6 @@ func (q *qemuPPC64le) capabilities() types.Capabilities {
 
 func (q *qemuPPC64le) bridges(number uint32) {
 	q.Bridges = genericBridges(number, q.qemuMachine.Type)
-}
-
-func (q *qemuPPC64le) cpuModel() string {
-	return defaultCPUModel
 }
 
 func (q *qemuPPC64le) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {

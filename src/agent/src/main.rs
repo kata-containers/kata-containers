@@ -22,12 +22,11 @@ extern crate slog;
 use anyhow::{anyhow, Context, Result};
 use clap::{AppSettings, Parser};
 use nix::fcntl::OFlag;
-use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
+use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
 use nix::unistd::{self, dup, Pid};
 use std::env;
 use std::ffi::OsStr;
 use std::fs::{self, File};
-use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs as unixfs;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
@@ -50,8 +49,6 @@ mod pci;
 pub mod random;
 mod sandbox;
 mod signal;
-#[cfg(test)]
-mod test_utils;
 mod uevent;
 mod util;
 mod version;
@@ -111,10 +108,6 @@ enum SubCommand {
 fn announce(logger: &Logger, config: &AgentConfig) {
     info!(logger, "announce";
     "agent-commit" => version::VERSION_COMMIT,
-
-    // Avoid any possibility of confusion with the old agent
-    "agent-type" => "rust",
-
     "agent-version" =>  version::AGENT_VERSION,
     "api-version" => version::API_VERSION,
     "config" => format!("{:?}", config),
@@ -133,7 +126,7 @@ async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool
             None,
         )?;
 
-        let addr = SockAddr::new_vsock(libc::VMADDR_CID_ANY, vsock_port);
+        let addr = VsockAddr::new(libc::VMADDR_CID_ANY, vsock_port);
         socket::bind(listenfd, &addr)?;
         socket::listen(listenfd, 1)?;
 
@@ -214,7 +207,7 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     if config.log_level == slog::Level::Trace {
         // Redirect ttrpc log calls to slog iff full debug requested
-        ttrpc_log_guard = Ok(slog_stdlog::init().map_err(|e| e)?);
+        ttrpc_log_guard = Ok(slog_stdlog::init()?);
     }
 
     if config.tracing {
@@ -382,25 +375,11 @@ fn init_agent_as_init(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result
     let contents_array: Vec<&str> = contents.split(' ').collect();
     let hostname = contents_array[0].trim();
 
-    if sethostname(OsStr::new(hostname)).is_err() {
+    if unistd::sethostname(OsStr::new(hostname)).is_err() {
         warn!(logger, "failed to set hostname");
     }
 
     Ok(())
-}
-
-#[instrument]
-fn sethostname(hostname: &OsStr) -> Result<()> {
-    let size = hostname.len() as usize;
-
-    let result =
-        unsafe { libc::sethostname(hostname.as_bytes().as_ptr() as *const libc::c_char, size) };
-
-    if result != 0 {
-        Err(anyhow!("failed to set hostname"))
-    } else {
-        Ok(())
-    }
 }
 
 // The Rust standard library had suppressed the default SIGPIPE behavior,
@@ -420,7 +399,8 @@ use std::os::unix::io::{FromRawFd, RawFd};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::test_utils::TestUserType;
+    use test_utils::TestUserType;
+    use test_utils::{assert_result, skip_if_not_root, skip_if_root};
 
     #[tokio::test]
     async fn test_create_logger_task() {

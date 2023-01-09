@@ -10,10 +10,9 @@ import (
 	"io"
 
 	"github.com/go-openapi/runtime"
+	"github.com/go-openapi/strfmt"
 
-	strfmt "github.com/go-openapi/strfmt"
-
-	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 )
 
 // PatchVMReader is a Reader for the PatchVM structure.
@@ -24,21 +23,18 @@ type PatchVMReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *PatchVMReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
-
 	case 204:
 		result := NewPatchVMNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
-
 	case 400:
 		result := NewPatchVMBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
-
 	default:
 		result := NewPatchVMDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -56,7 +52,7 @@ func NewPatchVMNoContent() *PatchVMNoContent {
 	return &PatchVMNoContent{}
 }
 
-/*PatchVMNoContent handles this case with default header values.
+/* PatchVMNoContent describes a response with status code 204, with default header values.
 
 Vm state updated
 */
@@ -77,7 +73,7 @@ func NewPatchVMBadRequest() *PatchVMBadRequest {
 	return &PatchVMBadRequest{}
 }
 
-/*PatchVMBadRequest handles this case with default header values.
+/* PatchVMBadRequest describes a response with status code 400, with default header values.
 
 Vm state cannot be updated due to bad input
 */
@@ -87,6 +83,9 @@ type PatchVMBadRequest struct {
 
 func (o *PatchVMBadRequest) Error() string {
 	return fmt.Sprintf("[PATCH /vm][%d] patchVmBadRequest  %+v", 400, o.Payload)
+}
+func (o *PatchVMBadRequest) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PatchVMBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
@@ -108,7 +107,7 @@ func NewPatchVMDefault(code int) *PatchVMDefault {
 	}
 }
 
-/*PatchVMDefault handles this case with default header values.
+/* PatchVMDefault describes a response with status code -1, with default header values.
 
 Internal server error
 */
@@ -125,6 +124,9 @@ func (o *PatchVMDefault) Code() int {
 
 func (o *PatchVMDefault) Error() string {
 	return fmt.Sprintf("[PATCH /vm][%d] patchVm default  %+v", o._statusCode, o.Payload)
+}
+func (o *PatchVMDefault) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PatchVMDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

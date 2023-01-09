@@ -5,7 +5,12 @@
 
 pub mod create;
 pub mod delete;
+pub mod exec;
 pub mod kill;
+pub mod list;
+pub mod pause;
+pub mod ps;
+pub mod resume;
 pub mod run;
 pub mod spec;
 pub mod start;

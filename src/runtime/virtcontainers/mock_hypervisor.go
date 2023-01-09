@@ -17,6 +17,7 @@ import (
 var MockHybridVSockPath = "/tmp/kata-mock-hybrid-vsock.socket"
 
 type mockHypervisor struct {
+	config  HypervisorConfig
 	mockPid int
 }
 
@@ -27,14 +28,11 @@ func (m *mockHypervisor) Capabilities(ctx context.Context) types.Capabilities {
 }
 
 func (m *mockHypervisor) HypervisorConfig() HypervisorConfig {
-	return HypervisorConfig{}
+	return m.config
 }
 
 func (m *mockHypervisor) setConfig(config *HypervisorConfig) error {
-	if err := config.Valid(); err != nil {
-		return err
-	}
-
+	m.config = *config
 	return nil
 }
 
@@ -42,7 +40,7 @@ func (m *mockHypervisor) CreateVM(ctx context.Context, id string, network Networ
 	if err := m.setConfig(hypervisorConfig); err != nil {
 		return err
 	}
-
+	m.config.MemSlots = 0
 	return nil
 }
 
@@ -96,12 +94,20 @@ func (m *mockHypervisor) GetVMConsole(ctx context.Context, sandboxID string) (st
 }
 
 func (m *mockHypervisor) ResizeMemory(ctx context.Context, memMB uint32, memorySectionSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
+	if m.config.MemorySize != memMB {
+		// For testing, we'll use MemSlots to track how many times we resized memory
+		m.config.MemSlots += 1
+		m.config.MemorySize = memMB
+	}
 	return 0, MemoryDevice{}, nil
 }
 func (m *mockHypervisor) ResizeVCPUs(ctx context.Context, cpus uint32) (uint32, uint32, error) {
 	return 0, 0, nil
 }
 
+func (m *mockHypervisor) GetTotalMemoryMB(ctx context.Context) uint32 {
+	return m.config.MemorySize
+}
 func (m *mockHypervisor) Disconnect(ctx context.Context) {
 }
 

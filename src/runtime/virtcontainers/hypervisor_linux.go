@@ -27,7 +27,6 @@ func generateVMSocket(id string, vmStogarePath string) (interface{}, error) {
 
 // NewHypervisor returns an hypervisor from a hypervisor type.
 func NewHypervisor(hType HypervisorType) (Hypervisor, error) {
-
 	switch hType {
 	case QemuHypervisor:
 		return &qemu{}, nil
@@ -37,6 +36,8 @@ func NewHypervisor(hType HypervisorType) (Hypervisor, error) {
 		return &Acrn{}, nil
 	case ClhHypervisor:
 		return &cloudHypervisor{}, nil
+	case DragonballHypervisor:
+		return &mockHypervisor{}, nil
 	case MockHypervisor:
 		return &mockHypervisor{}, nil
 	default:

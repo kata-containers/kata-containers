@@ -19,6 +19,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Mutable and not constant so we can mock in tests
 var urandomDev = "/dev/urandom"
 
 // VM is abstraction of a virtual machine.
@@ -42,9 +43,8 @@ type VMConfig struct {
 	HypervisorConfig HypervisorConfig
 }
 
-// Valid Check VMConfig validity.
 func (c *VMConfig) Valid() error {
-	return c.HypervisorConfig.Valid()
+	return validateHypervisorConfig(&c.HypervisorConfig)
 }
 
 // ToGrpc convert VMConfig struct to grpc format pb.GrpcVMConfig.

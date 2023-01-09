@@ -6,7 +6,6 @@
 package resourcecontrol
 
 import (
-	v1 "github.com/containerd/cgroups/stats/v1"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
@@ -56,7 +55,7 @@ type ResourceController interface {
 	Delete() error
 
 	// Stat returns the statistics for the controller.
-	Stat() (*v1.Metrics, error)
+	Stat() (interface{}, error)
 
 	// AddProcess adds a process to a set of controllers.
 	AddProcess(int, ...string) error

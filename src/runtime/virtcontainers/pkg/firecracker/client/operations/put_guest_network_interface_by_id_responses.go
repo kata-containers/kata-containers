@@ -10,10 +10,9 @@ import (
 	"io"
 
 	"github.com/go-openapi/runtime"
+	"github.com/go-openapi/strfmt"
 
-	strfmt "github.com/go-openapi/strfmt"
-
-	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 )
 
 // PutGuestNetworkInterfaceByIDReader is a Reader for the PutGuestNetworkInterfaceByID structure.
@@ -24,21 +23,18 @@ type PutGuestNetworkInterfaceByIDReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *PutGuestNetworkInterfaceByIDReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
-
 	case 204:
 		result := NewPutGuestNetworkInterfaceByIDNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
-
 	case 400:
 		result := NewPutGuestNetworkInterfaceByIDBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
-
 	default:
 		result := NewPutGuestNetworkInterfaceByIDDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -56,7 +52,7 @@ func NewPutGuestNetworkInterfaceByIDNoContent() *PutGuestNetworkInterfaceByIDNoC
 	return &PutGuestNetworkInterfaceByIDNoContent{}
 }
 
-/*PutGuestNetworkInterfaceByIDNoContent handles this case with default header values.
+/* PutGuestNetworkInterfaceByIDNoContent describes a response with status code 204, with default header values.
 
 Network interface created/updated
 */
@@ -77,7 +73,7 @@ func NewPutGuestNetworkInterfaceByIDBadRequest() *PutGuestNetworkInterfaceByIDBa
 	return &PutGuestNetworkInterfaceByIDBadRequest{}
 }
 
-/*PutGuestNetworkInterfaceByIDBadRequest handles this case with default header values.
+/* PutGuestNetworkInterfaceByIDBadRequest describes a response with status code 400, with default header values.
 
 Network interface cannot be created due to bad input
 */
@@ -87,6 +83,9 @@ type PutGuestNetworkInterfaceByIDBadRequest struct {
 
 func (o *PutGuestNetworkInterfaceByIDBadRequest) Error() string {
 	return fmt.Sprintf("[PUT /network-interfaces/{iface_id}][%d] putGuestNetworkInterfaceByIdBadRequest  %+v", 400, o.Payload)
+}
+func (o *PutGuestNetworkInterfaceByIDBadRequest) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PutGuestNetworkInterfaceByIDBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
@@ -108,7 +107,7 @@ func NewPutGuestNetworkInterfaceByIDDefault(code int) *PutGuestNetworkInterfaceB
 	}
 }
 
-/*PutGuestNetworkInterfaceByIDDefault handles this case with default header values.
+/* PutGuestNetworkInterfaceByIDDefault describes a response with status code -1, with default header values.
 
 Internal server error
 */
@@ -125,6 +124,9 @@ func (o *PutGuestNetworkInterfaceByIDDefault) Code() int {
 
 func (o *PutGuestNetworkInterfaceByIDDefault) Error() string {
 	return fmt.Sprintf("[PUT /network-interfaces/{iface_id}][%d] putGuestNetworkInterfaceByID default  %+v", o._statusCode, o.Payload)
+}
+func (o *PutGuestNetworkInterfaceByIDDefault) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PutGuestNetworkInterfaceByIDDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

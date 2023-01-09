@@ -10,9 +10,9 @@ import (
 	"io"
 	"syscall"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -88,6 +88,6 @@ type VCMock struct {
 	SetLoggerFunc  func(ctx context.Context, logger *logrus.Entry)
 	SetFactoryFunc func(ctx context.Context, factory vc.Factory)
 
-	CreateSandboxFunc    func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error)
+	CreateSandboxFunc    func(ctx context.Context, sandboxConfig vc.SandboxConfig, hookFunc func(context.Context) error) (vc.VCSandbox, error)
 	CleanupContainerFunc func(ctx context.Context, sandboxID, containerID string, force bool) error
 }

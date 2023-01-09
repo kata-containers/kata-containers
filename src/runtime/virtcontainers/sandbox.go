@@ -20,17 +20,19 @@ import (
 	"sync"
 	"syscall"
 
+	v1 "github.com/containerd/cgroups/stats/v1"
+	v2 "github.com/containerd/cgroups/v2/stats"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
+	deviceManager "github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
-	deviceManager "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
@@ -41,8 +43,8 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cpuset"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	"golang.org/x/sys/unix"
 )
 
 // sandboxTracingTags defines tags for the trace span
@@ -76,11 +78,22 @@ const (
 
 	// Restricted permission for shared directory managed by virtiofs
 	sharedDirMode = os.FileMode(0700) | os.ModeDir
+
+	// hotplug factor indicates how much memory can be hotplugged relative to the amount of
+	// RAM provided to the guest. This is a conservative heuristic based on needing 64 bytes per
+	// 4KiB page of hotplugged memory.
+	//
+	// As an example: 12 GiB hotplugged -> 3 Mi pages -> 192 MiBytes overhead (3Mi x 64B).
+	// This is approximately what should be free in a relatively unloaded 256 MiB guest (75% of available memory). So, 256 Mi x 48 => 12 Gi
+	acpiMemoryHotplugFactor = 48
 )
 
 var (
 	errSandboxNotRunning = errors.New("Sandbox not running")
 )
+
+// HypervisorPidKey is the context key for hypervisor pid
+type HypervisorPidKey struct{}
 
 // SandboxStatus describes a sandbox status.
 type SandboxStatus struct {
@@ -116,14 +129,17 @@ type SandboxResourceSizing struct {
 
 // SandboxConfig is a Sandbox configuration.
 type SandboxConfig struct {
-	// Volumes is a list of shared volumes between the host and the Sandbox.
-	Volumes []types.Volume
+	// Annotations keys must be unique strings and must be name-spaced
+	Annotations map[string]string
 
-	// Containers describe the list of containers within a Sandbox.
-	// This list can be empty and populated by adding containers
-	// to the Sandbox a posteriori.
-	//TODO: this should be a map to avoid duplicated containers
-	Containers []ContainerConfig
+	// Custom SELinux security policy to the container process inside the VM
+	GuestSeLinuxLabel string
+
+	HypervisorType HypervisorType
+
+	ID string
+
+	Hostname string
 
 	// SandboxBindMounts - list of paths to mount into guest
 	SandboxBindMounts []string
@@ -131,30 +147,28 @@ type SandboxConfig struct {
 	// Experimental features enabled
 	Experimental []exp.Feature
 
-	// Annotations keys must be unique strings and must be name-spaced
-	// with e.g. reverse domain notation (org.clearlinux.key).
-	Annotations map[string]string
+	// Containers describe the list of containers within a Sandbox.
+	// This list can be empty and populated by adding containers
+	// to the Sandbox a posteriori.
+	// TODO: this should be a map to avoid duplicated containers
+	Containers []ContainerConfig
 
-	ID string
-
-	Hostname string
-
-	HypervisorType HypervisorType
-
-	AgentConfig KataAgentConfig
+	Volumes []types.Volume
 
 	NetworkConfig NetworkConfig
 
+	AgentConfig KataAgentConfig
+
 	HypervisorConfig HypervisorConfig
-
-	SandboxResources SandboxResourceSizing
-
-	// StaticResourceMgmt indicates if the shim should rely on statically sizing the sandbox (VM)
-	StaticResourceMgmt bool
 
 	ShmSize uint64
 
+	SandboxResources SandboxResourceSizing
+
 	VfioMode config.VFIOModeType
+
+	// StaticResourceMgmt indicates if the shim should rely on statically sizing the sandbox (VM)
+	StaticResourceMgmt bool
 
 	// SharePidNs sets all containers to share the same sandbox level pid namespace.
 	SharePidNs bool
@@ -227,6 +241,7 @@ type Sandbox struct {
 	sharePidNs        bool
 	seccompSupported  bool
 	disableVMShutdown bool
+	isVCPUsPinningOn  bool
 }
 
 // ID returns the sandbox identifier string.
@@ -594,6 +609,10 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		s.Logger().WithError(err).Debug("restore sandbox failed")
 	}
 
+	if err := validateHypervisorConfig(&sandboxConfig.HypervisorConfig); err != nil {
+		return nil, err
+	}
+
 	// store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
@@ -695,7 +714,7 @@ func (s *Sandbox) createResourceController() error {
 		return fmt.Errorf("Could not create the sandbox resource controller %v", err)
 	}
 
-	// Now that the sandbox resource controller is created, we can set the state controller paths..
+	// Now that the sandbox resource controller is created, we can set the state controller paths.
 	s.state.SandboxCgroupPath = s.sandboxController.ID()
 	s.state.OverheadCgroupPath = ""
 
@@ -706,7 +725,7 @@ func (s *Sandbox) createResourceController() error {
 		// into the sandbox resource controller.
 		// We're creating an overhead controller, with no constraints. Everything but
 		// the vCPU threads will eventually make it there.
-		overheadController, err := resCtrl.NewResourceController(fmt.Sprintf("/%s/%s", resCtrlKataOverheadID, s.id), &specs.LinuxResources{})
+		overheadController, err := resCtrl.NewResourceController(fmt.Sprintf("%s%s", resCtrlKataOverheadID, s.id), &specs.LinuxResources{})
 		// TODO: support systemd cgroups overhead cgroup
 		// https://github.com/kata-containers/kata-containers/issues/2963
 		if err != nil {
@@ -744,18 +763,18 @@ func rwLockSandbox(sandboxID string) (func() error, error) {
 // sandbox structure, based on a container ID.
 func (s *Sandbox) findContainer(containerID string) (*Container, error) {
 	if s == nil {
-		return nil, vcTypes.ErrNeedSandbox
+		return nil, types.ErrNeedSandbox
 	}
 
 	if containerID == "" {
-		return nil, vcTypes.ErrNeedContainerID
+		return nil, types.ErrNeedContainerID
 	}
 
 	if c, ok := s.containers[containerID]; ok {
 		return c, nil
 	}
 
-	return nil, errors.Wrapf(vcTypes.ErrNoSuchContainer, "Could not find the container %q from the sandbox %q containers list",
+	return nil, errors.Wrapf(types.ErrNoSuchContainer, "Could not find the container %q from the sandbox %q containers list",
 		containerID, s.id)
 }
 
@@ -763,15 +782,15 @@ func (s *Sandbox) findContainer(containerID string) (*Container, error) {
 // sandbox structure, based on a container ID.
 func (s *Sandbox) removeContainer(containerID string) error {
 	if s == nil {
-		return vcTypes.ErrNeedSandbox
+		return types.ErrNeedSandbox
 	}
 
 	if containerID == "" {
-		return vcTypes.ErrNeedContainerID
+		return types.ErrNeedContainerID
 	}
 
 	if _, ok := s.containers[containerID]; !ok {
-		return errors.Wrapf(vcTypes.ErrNoSuchContainer, "Could not remove the container %q from the sandbox %q containers list",
+		return errors.Wrapf(types.ErrNoSuchContainer, "Could not remove the container %q from the sandbox %q containers list",
 			containerID, s.id)
 	}
 
@@ -1037,15 +1056,13 @@ func (cw *consoleWatcher) start(s *Sandbox) (err error) {
 		}
 
 		if err := scanner.Err(); err != nil {
-			if err == io.EOF {
-				s.Logger().Info("console watcher quits")
-			} else {
-				s.Logger().WithError(err).WithFields(logrus.Fields{
-					"console-protocol": cw.proto,
-					"console-url":      cw.consoleURL,
-					"sandbox":          s.id,
-				}).Error("Failed to read guest console logs")
-			}
+			s.Logger().WithError(err).WithFields(logrus.Fields{
+				"console-protocol": cw.proto,
+				"console-url":      cw.consoleURL,
+				"sandbox":          s.id,
+			}).Error("Failed to read guest console logs")
+		} else { // The error is `nil` in case of io.EOF
+			s.Logger().Info("console watcher quits")
 		}
 	}()
 
@@ -1180,7 +1197,7 @@ func (s *Sandbox) cleanSwap(ctx context.Context) {
 }
 
 // startVM starts the VM.
-func (s *Sandbox) startVM(ctx context.Context) (err error) {
+func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Context) error) (err error) {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "startVM", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
@@ -1220,9 +1237,24 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 		return err
 	}
 
+	if prestartHookFunc != nil {
+		hid, err := s.GetHypervisorPid()
+		if err != nil {
+			return err
+		}
+		s.Logger().Infof("hypervisor pid is %v", hid)
+		ctx = context.WithValue(ctx, HypervisorPidKey{}, hid)
+
+		if err := prestartHookFunc(ctx); err != nil {
+			return err
+		}
+	}
+
 	// In case of vm factory, network interfaces are hotplugged
 	// after vm is started.
-	if s.factory != nil {
+	// In case of prestartHookFunc, network config might have been changed.
+	// We need to rescan and handle the change.
+	if s.factory != nil || prestartHookFunc != nil {
 		if _, err := s.network.AddEndpoints(ctx, s, nil, true); err != nil {
 			return err
 		}
@@ -1342,6 +1374,10 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 		return nil, err
 	}
 
+	if err = s.checkVCPUsPinning(ctx); err != nil {
+		return nil, err
+	}
+
 	if err = s.storeSandbox(ctx); err != nil {
 		return nil, err
 	}
@@ -1371,6 +1407,10 @@ func (s *Sandbox) StartContainer(ctx context.Context, containerID string) (VCCon
 	// Update sandbox resources in case a stopped container
 	// is started
 	if err = s.updateResources(ctx); err != nil {
+		return nil, err
+	}
+
+	if err = s.checkVCPUsPinning(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1419,7 +1459,7 @@ func (s *Sandbox) KillContainer(ctx context.Context, containerID string, signal 
 // DeleteContainer deletes a container from the sandbox
 func (s *Sandbox) DeleteContainer(ctx context.Context, containerID string) (VCContainer, error) {
 	if containerID == "" {
-		return nil, vcTypes.ErrNeedContainerID
+		return nil, types.ErrNeedContainerID
 	}
 
 	// Fetch the container.
@@ -1446,6 +1486,10 @@ func (s *Sandbox) DeleteContainer(ctx context.Context, containerID string) (VCCo
 		return nil, err
 	}
 
+	if err = s.checkVCPUsPinning(ctx); err != nil {
+		return nil, err
+	}
+
 	if err = s.storeSandbox(ctx); err != nil {
 		return nil, err
 	}
@@ -1455,7 +1499,7 @@ func (s *Sandbox) DeleteContainer(ctx context.Context, containerID string) (VCCo
 // StatusContainer gets the status of a container
 func (s *Sandbox) StatusContainer(containerID string) (ContainerStatus, error) {
 	if containerID == "" {
-		return ContainerStatus{}, vcTypes.ErrNeedContainerID
+		return ContainerStatus{}, types.ErrNeedContainerID
 	}
 
 	if c, ok := s.containers[containerID]; ok {
@@ -1474,7 +1518,7 @@ func (s *Sandbox) StatusContainer(containerID string) (ContainerStatus, error) {
 		}, nil
 	}
 
-	return ContainerStatus{}, vcTypes.ErrNoSuchContainer
+	return ContainerStatus{}, types.ErrNoSuchContainer
 }
 
 // EnterContainer is the virtcontainers container command execution entry point.
@@ -1511,6 +1555,10 @@ func (s *Sandbox) UpdateContainer(ctx context.Context, containerID string, resou
 		return err
 	}
 
+	if err = s.checkVCPUsPinning(ctx); err != nil {
+		return err
+	}
+
 	if err = s.storeSandbox(ctx); err != nil {
 		return err
 	}
@@ -1543,8 +1591,15 @@ func (s *Sandbox) Stats(ctx context.Context) (SandboxStats, error) {
 	stats := SandboxStats{}
 
 	// TODO Do we want to aggregate the overhead cgroup stats to the sandbox ones?
-	stats.CgroupStats.CPUStats.CPUUsage.TotalUsage = metrics.CPU.Usage.Total
-	stats.CgroupStats.MemoryStats.Usage.Usage = metrics.Memory.Usage.Usage
+	switch mt := metrics.(type) {
+	case v1.Metrics:
+		stats.CgroupStats.CPUStats.CPUUsage.TotalUsage = mt.CPU.Usage.Total
+		stats.CgroupStats.MemoryStats.Usage.Usage = mt.Memory.Usage.Usage
+	case v2.Metrics:
+		stats.CgroupStats.CPUStats.CPUUsage.TotalUsage = mt.CPU.UsageUsec
+		stats.CgroupStats.MemoryStats.Usage.Usage = mt.Memory.Usage
+	}
+
 	tids, err := s.hypervisor.GetThreadIDs(ctx)
 	if err != nil {
 		return stats, err
@@ -1593,7 +1648,7 @@ func (s *Sandbox) ResumeContainer(ctx context.Context, containerID string) error
 }
 
 // createContainers registers all containers, create the
-// containers in the guest and starts one shim per container.
+// containers in the guest.
 func (s *Sandbox) createContainers(ctx context.Context) error {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "createContainers", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
@@ -1622,6 +1677,11 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 	if err := s.resourceControllerUpdate(ctx); err != nil {
 		return err
 	}
+
+	if err := s.checkVCPUsPinning(ctx); err != nil {
+		return err
+	}
+
 	if err := s.storeSandbox(ctx); err != nil {
 		return err
 	}
@@ -1721,7 +1781,7 @@ func (s *Sandbox) Stop(ctx context.Context, force bool) error {
 // setSandboxState sets the in-memory state of the sandbox.
 func (s *Sandbox) setSandboxState(state types.StateString) error {
 	if state == "" {
-		return vcTypes.ErrNeedState
+		return types.ErrNeedState
 	}
 
 	// update in-memory state
@@ -2002,9 +2062,60 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	}
 	s.Logger().Debugf("Sandbox CPUs: %d", newCPUs)
 
-	// Update Memory
-	s.Logger().WithField("memory-sandbox-size-byte", sandboxMemoryByte).Debugf("Request to hypervisor to update memory")
+	// Update Memory --
+	// If we're using ACPI hotplug for memory, there's a limitation on the amount of memory which can be hotplugged at a single time.
+	// We must have enough free memory in the guest kernel to cover 64bytes per (4KiB) page of memory added for mem_map.
+	// See https://github.com/kata-containers/kata-containers/issues/4847 for more details.
+	// For a typical pod lifecycle, we expect that each container is added when we start the workloads. Based on this, we'll "assume" that majority
+	// of the guest memory is readily available. From experimentation, we see that we can add approximately 48 times what is already provided to
+	// the guest workload. For example, a 256 MiB guest should be able to accommodate hotplugging 12 GiB of memory.
+	//
+	// If virtio-mem is being used, there isn't such a limitation - we can hotplug the maximum allowed memory at a single time.
+	//
 	newMemoryMB := uint32(sandboxMemoryByte >> utils.MibToBytesShift)
+	finalMemoryMB := newMemoryMB
+
+	hconfig := s.hypervisor.HypervisorConfig()
+
+	for {
+		currentMemoryMB := s.hypervisor.GetTotalMemoryMB(ctx)
+
+		maxhotPluggableMemoryMB := currentMemoryMB * acpiMemoryHotplugFactor
+
+		// In the case of virtio-mem, we don't have a restriction on how much can be hotplugged at
+		// a single time. As a result, the max hotpluggable is only limited by the maximum memory size
+		// of the guest.
+		if hconfig.VirtioMem {
+			maxhotPluggableMemoryMB = uint32(hconfig.DefaultMaxMemorySize) - currentMemoryMB
+		}
+
+		deltaMB := int32(finalMemoryMB - currentMemoryMB)
+
+		if deltaMB > int32(maxhotPluggableMemoryMB) {
+			s.Logger().Warnf("Large hotplug. Adding %d MB of %d total memory", maxhotPluggableMemoryMB, deltaMB)
+			newMemoryMB = currentMemoryMB + maxhotPluggableMemoryMB
+		} else {
+			newMemoryMB = finalMemoryMB
+		}
+
+		// Add the memory to the guest and online the memory:
+		if err := s.updateMemory(ctx, newMemoryMB); err != nil {
+			return err
+		}
+
+		if newMemoryMB == finalMemoryMB {
+			break
+		}
+
+	}
+
+	return nil
+
+}
+
+func (s *Sandbox) updateMemory(ctx context.Context, newMemoryMB uint32) error {
+	// online the memory:
+	s.Logger().WithField("memory-sandbox-size-mb", newMemoryMB).Debugf("Request to hypervisor to update memory")
 	newMemory, updatedMemoryDevice, err := s.hypervisor.ResizeMemory(ctx, newMemoryMB, s.state.GuestMemoryBlockSizeMB, s.state.GuestMemoryHotplugProbe)
 	if err != nil {
 		if err == noGuestMemHotplugErr {
@@ -2024,7 +2135,6 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	if err := s.agent.onlineCPUMem(ctx, 0, false); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -2257,6 +2367,16 @@ func (s *Sandbox) GetAgentURL() (string, error) {
 	return s.agent.getAgentURL()
 }
 
+// GetIPTables will obtain the iptables from the guest
+func (s *Sandbox) GetIPTables(ctx context.Context, isIPv6 bool) ([]byte, error) {
+	return s.agent.getIPTables(ctx, isIPv6)
+}
+
+// SetIPTables will set the iptables in the guest
+func (s *Sandbox) SetIPTables(ctx context.Context, isIPv6 bool, data []byte) error {
+	return s.agent.setIPTables(ctx, isIPv6, data)
+}
+
 // GuestVolumeStats return the filesystem stat of a given volume in the guest.
 func (s *Sandbox) GuestVolumeStats(ctx context.Context, volumePath string) ([]byte, error) {
 	guestMountPath, err := s.guestMountPath(volumePath)
@@ -2326,7 +2446,7 @@ func (s *Sandbox) getSandboxCPUSet() (string, string, error) {
 func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err error) {
 	virtLog.Info("fetch sandbox")
 	if sandboxID == "" {
-		return nil, vcTypes.ErrNeedSandboxID
+		return nil, types.ErrNeedSandboxID
 	}
 
 	var config SandboxConfig
@@ -2379,5 +2499,75 @@ func (s *Sandbox) fetchContainers(ctx context.Context) error {
 		}
 	}
 
+	return nil
+}
+
+// checkVCPUsPinning is used to support CPUSet mode of kata container.
+// CPUSet mode is on when Sandbox.HypervisorConfig.EnableVCPUsPinning
+// is set to true. Then it fetches sandbox's number of vCPU threads
+// and number of CPUs in CPUSet. If the two are equal, each vCPU thread
+// is then pinned to one fixed CPU in CPUSet.
+func (s *Sandbox) checkVCPUsPinning(ctx context.Context) error {
+	if s.config == nil {
+		return fmt.Errorf("no hypervisor config found")
+	}
+	if !s.config.HypervisorConfig.EnableVCPUsPinning {
+		return nil
+	}
+
+	// fetch vCPU thread ids and CPUSet
+	vCPUThreadsMap, err := s.hypervisor.GetThreadIDs(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get vCPU thread ids from hypervisor: %v", err)
+	}
+	cpuSetStr, _, err := s.getSandboxCPUSet()
+	if err != nil {
+		return fmt.Errorf("failed to get CPUSet config: %v", err)
+	}
+	cpuSet, err := cpuset.Parse(cpuSetStr)
+	if err != nil {
+		return fmt.Errorf("failed to parse CPUSet string: %v", err)
+	}
+	cpuSetSlice := cpuSet.ToSlice()
+
+	// check if vCPU thread numbers and CPU numbers are equal
+	numVCPUs, numCPUs := len(vCPUThreadsMap.vcpus), len(cpuSetSlice)
+	// if not equal, we should reset threads scheduling to random pattern
+	if numVCPUs != numCPUs {
+		if s.isVCPUsPinningOn {
+			s.isVCPUsPinningOn = false
+			return s.resetVCPUsPinning(ctx, vCPUThreadsMap, cpuSetSlice)
+		}
+		return nil
+	}
+
+	// if equal, we can now start vCPU threads pinning
+	i := 0
+	for _, tid := range vCPUThreadsMap.vcpus {
+		unixCPUSet := unix.CPUSet{}
+		unixCPUSet.Set(cpuSetSlice[i])
+		if err := unix.SchedSetaffinity(tid, &unixCPUSet); err != nil {
+			if err := s.resetVCPUsPinning(ctx, vCPUThreadsMap, cpuSetSlice); err != nil {
+				return err
+			}
+			return fmt.Errorf("failed to set vcpu thread %d affinity to cpu %d: %v", tid, cpuSetSlice[i], err)
+		}
+		i++
+	}
+	s.isVCPUsPinningOn = true
+	return nil
+}
+
+// resetVCPUsPinning cancels current pinning and restores default random vCPU threads scheduling
+func (s *Sandbox) resetVCPUsPinning(ctx context.Context, vCPUThreadsMap VcpuThreadIDs, cpuSetSlice []int) error {
+	unixCPUSet := unix.CPUSet{}
+	for cpuId := range cpuSetSlice {
+		unixCPUSet.Set(cpuId)
+	}
+	for _, tid := range vCPUThreadsMap.vcpus {
+		if err := unix.SchedSetaffinity(tid, &unixCPUSet); err != nil {
+			return fmt.Errorf("failed to reset vcpu thread %d affinity to default mode: %v", tid, err)
+		}
+	}
 	return nil
 }

@@ -7,6 +7,7 @@
 package persistapi
 
 import (
+	dev "github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 )
 
@@ -26,7 +27,7 @@ type SandboxState struct {
 	CgroupPaths map[string]string
 
 	// Devices plugged to sandbox(hypervisor)
-	Devices []DeviceState
+	Devices []dev.DeviceState
 
 	// State is sandbox running status
 	State string

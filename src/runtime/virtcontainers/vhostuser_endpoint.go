@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2018 Intel Corporation
 //
@@ -14,7 +13,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -149,7 +148,8 @@ func findVhostUserNetSocketPath(netInfo NetworkInfo) (string, error) {
 
 // vhostUserSocketPath returns the path of the socket discovered.  This discovery
 // will vary depending on the type of vhost-user socket.
-//  Today only VhostUserNetDevice is supported.
+//
+//	Today only VhostUserNetDevice is supported.
 func vhostUserSocketPath(info interface{}) (string, error) {
 
 	switch v := info.(type) {

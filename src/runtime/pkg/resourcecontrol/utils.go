@@ -6,12 +6,17 @@
 package resourcecontrol
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/opencontainers/runc/libcontainer/devices"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/sys/unix"
+)
+
+var (
+	ErrCgroupMode = errors.New("cgroup controller type error")
 )
 
 func DeviceToCgroupDeviceRule(device string) (*devices.Rule, error) {

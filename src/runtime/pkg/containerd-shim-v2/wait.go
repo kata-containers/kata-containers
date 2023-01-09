@@ -53,6 +53,11 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 			"container": c.id,
 			"pid":       processID,
 		}).Error("Wait for process failed")
+
+		// set return code if wait failed
+		if ret == 0 {
+			ret = exitCode255
+		}
 	}
 
 	timeStamp := time.Now()
@@ -78,7 +83,7 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 				shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
 			}
 		} else {
-			if _, err = s.sandbox.StopContainer(ctx, c.id, false); err != nil {
+			if _, err = s.sandbox.StopContainer(ctx, c.id, true); err != nil {
 				shimLog.WithError(err).WithField("container", c.id).Warn("stop container failed")
 			}
 		}
@@ -158,10 +163,10 @@ func watchOOMEvents(ctx context.Context, s *service) {
 			containerID, err := s.sandbox.GetOOMEvent(ctx)
 			if err != nil {
 				if err.Error() == "ttrpc: closed" || err.Error() == "Dead agent" {
-					shimLog.WithError(err).Warn("agent has shutdown, return from watching of OOM events")
+					shimLog.WithError(err).Info("agent has shutdown, return from watching of OOM events")
 					return
 				}
-				shimLog.WithError(err).Warn("failed to get OOM event from sandbox")
+				shimLog.WithError(err).Info("failed to get OOM event from sandbox")
 				time.Sleep(defaultCheckInterval)
 				continue
 			}

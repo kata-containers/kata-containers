@@ -1,0 +1,33 @@
+targets = [
+    { triple = "x86_64-apple-darwin" },
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "x86_64-unknown-linux-musl" },
+]
+
+[advisories]
+vulnerability = "deny"
+unsound = "deny"
+unmaintained = "deny"
+ignore = ["RUSTSEC-2020-0071"]
+
+[bans]
+multiple-versions = "allow"
+deny = [
+    { name = "cmake" },
+    { name = "openssl-sys" },
+]
+
+[licenses]
+unlicensed = "deny"
+allow-osi-fsf-free = "neither"
+copyleft = "allow"
+# We want really high confidence when inferring licenses from text
+confidence-threshold = 0.93
+allow = ["0BSD", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "CC0-1.0", "ISC", "MIT", "MPL-2.0"]
+private = { ignore = true}
+
+exceptions = []
+
+[sources]
+unknown-registry = "allow"
+unknown-git = "allow"

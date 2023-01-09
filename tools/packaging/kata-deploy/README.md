@@ -81,6 +81,14 @@ which will ensure the workload is only scheduled on a node that has Kata Contain
 ```bash
   $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
 ```
+The following YAML snippet shows how to specify a workload should use Kata with `Dragonball`:
+
+```yaml
+spec:
+  template:
+    spec:
+      runtimeClassName: kata-dragonball
+```
 
 The following YAML snippet shows how to specify a workload should use Kata with Cloud Hypervisor:
 
@@ -108,6 +116,11 @@ spec:
     spec:
       runtimeClassName: kata-qemu
 ```
+To run an example with `kata-dragonball`:
+
+```bash
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-dragonball.yaml
+```
 
 To run an example with `kata-clh`:
 
@@ -130,6 +143,7 @@ $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-contai
 The following removes the test pods:
 
 ```bash
+$ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-dragonball.yaml
 $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-clh.yaml
 $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-fc.yaml
 $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-qemu.yaml
@@ -192,7 +206,7 @@ from the [Kata Containers release page](https://github.com/kata-containers/kata-
 
 Host artifacts:
 * `cloud-hypervisor`, `firecracker`, `qemu`, and supporting binaries
-* `containerd-shim-kata-v2`
+* `containerd-shim-kata-v2` (go runtime and rust runtime)
 * `kata-collect-data.sh`
 * `kata-runtime`
 

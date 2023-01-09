@@ -15,6 +15,7 @@ package qemu
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -23,8 +24,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-
-	"context"
 )
 
 // Machine describes the machine type qemu will emulate.
@@ -232,6 +231,9 @@ const (
 	// SEVGuest represents an SEV guest object
 	SEVGuest ObjectType = "sev-guest"
 
+	// SNPGuest represents an SNP guest object
+	SNPGuest ObjectType = "sev-snp-guest"
+
 	// SecExecGuest represents an s390x Secure Execution (Protected Virtualization in QEMU) object
 	SecExecGuest ObjectType = "s390-pv-guest"
 	// PEFGuest represent ppc64le PEF(Protected Execution Facility) object.
@@ -296,6 +298,8 @@ func (object Object) Valid() bool {
 	case TDXGuest:
 		return object.ID != "" && object.File != "" && object.DeviceID != ""
 	case SEVGuest:
+		fallthrough
+	case SNPGuest:
 		return object.ID != "" && object.File != "" && object.CBitPos != 0 && object.ReducedPhysBits != 0
 	case SecExecGuest:
 		return object.ID != ""
@@ -350,6 +354,8 @@ func (object Object) QemuParams(config *Config) []string {
 			deviceParams = append(deviceParams, fmt.Sprintf("config-firmware-volume=%s", object.FirmwareVolume))
 		}
 	case SEVGuest:
+		fallthrough
+	case SNPGuest:
 		objectParams = append(objectParams, string(object.Type))
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
 		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
@@ -1141,8 +1147,11 @@ const (
 	// Threads is the pthread asynchronous I/O implementation.
 	Threads BlockDeviceAIO = "threads"
 
-	// Native is the pthread asynchronous I/O implementation.
+	// Native is the native Linux AIO implementation.
 	Native BlockDeviceAIO = "native"
+
+	// IOUring is the Linux io_uring I/O implementation.
+	IOUring BlockDeviceAIO = "io_uring"
 )
 
 const (
@@ -1327,6 +1336,7 @@ type VhostUserDevice struct {
 	Address        string //used for MAC address in net case
 	Tag            string //virtio-fs volume id for mounting inside guest
 	CacheSize      uint32 //virtio-fs DAX cache size in MiB
+	QueueSize      uint32 //size of virtqueues
 	SharedVersions bool   //enable virtio-fs shared version metadata
 	VhostUserType  DeviceDriver
 
@@ -1494,6 +1504,11 @@ func (vhostuserDev VhostUserDevice) QemuFSParams(config *Config) []string {
 	deviceParams = append(deviceParams, driver)
 	deviceParams = append(deviceParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
 	deviceParams = append(deviceParams, fmt.Sprintf("tag=%s", vhostuserDev.Tag))
+	queueSize := uint32(1024)
+	if vhostuserDev.QueueSize != 0 {
+		queueSize = vhostuserDev.QueueSize
+	}
+	deviceParams = append(deviceParams, fmt.Sprintf("queue-size=%d", queueSize))
 	if vhostuserDev.CacheSize != 0 {
 		deviceParams = append(deviceParams, fmt.Sprintf("cache-size=%dM", vhostuserDev.CacheSize))
 	}
@@ -2690,9 +2705,14 @@ func (config *Config) appendQMPSockets() {
 	}
 }
 
-func (config *Config) appendDevices() {
+func (config *Config) appendDevices(logger QMPLog) {
+	if logger == nil {
+		logger = qmpNullLogger{}
+	}
+
 	for _, d := range config.Devices {
 		if !d.Valid() {
+			logger.Errorf("vm device is not valid: %+v", config.Devices)
 			continue
 		}
 
@@ -2967,7 +2987,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendCPUModel()
 	config.appendQMPSockets()
 	config.appendMemory()
-	config.appendDevices()
+	config.appendDevices(logger)
 	config.appendRTC()
 	config.appendGlobalParam()
 	config.appendPFlashParam()

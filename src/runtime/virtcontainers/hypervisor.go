@@ -11,14 +11,13 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 
 	"github.com/sirupsen/logrus"
@@ -47,10 +46,15 @@ const (
 	// ClhHypervisor is the ICH hypervisor.
 	ClhHypervisor HypervisorType = "clh"
 
+	// DragonballHypervisor is the Dragonball hypervisor.
+	DragonballHypervisor HypervisorType = "dragonball"
+
+	// VirtFrameworkHypervisor is the Darwin Virtualization.framework hypervisor
+	VirtframeworkHypervisor HypervisorType = "virtframework"
+
 	// MockHypervisor is a mock hypervisor for testing purposes
 	MockHypervisor HypervisorType = "mock"
 
-	procMemInfo = "/proc/meminfo"
 	procCPUInfo = "/proc/cpuinfo"
 
 	defaultVCPUs = 1
@@ -73,6 +77,8 @@ const (
 	MinHypervisorMemory = 256
 
 	defaultMsize9p = 8192
+
+	defaultDisableGuestSeLinux = true
 )
 
 var (
@@ -81,6 +87,8 @@ var (
 )
 
 // In some architectures the maximum number of vCPUs depends on the number of physical cores.
+// TODO (dcantah): Find a suitable value for darwin/vfw. Seems perf degrades if > number of host
+// cores.
 var defaultMaxVCPUs = govmm.MaxVCPUs()
 
 // agnostic list of kernel root parameters for NVDIMM
@@ -170,6 +178,12 @@ func (hType *HypervisorType) Set(value string) error {
 		return nil
 	case "clh":
 		*hType = ClhHypervisor
+		return nil
+	case "dragonball":
+		*hType = DragonballHypervisor
+		return nil
+	case "virtframework":
+		*hType = VirtframeworkHypervisor
 		return nil
 	case "mock":
 		*hType = MockHypervisor
@@ -370,6 +384,15 @@ type HypervisorConfig struct {
 	// VhostUserStorePathList is the list of valid values for vhost-user paths
 	VhostUserStorePathList []string
 
+	// SeccompSandbox is the qemu function which enables the seccomp feature
+	SeccompSandbox string
+
+	// BlockiDeviceAIO specifies the I/O API to be used.
+	BlockDeviceAIO string
+
+	// The user maps to the uid.
+	User string
+
 	// KernelParams are additional guest kernel parameters.
 	KernelParams []Param
 
@@ -438,6 +461,9 @@ type HypervisorConfig struct {
 	// DefaultMem specifies default memory size in MiB for the VM.
 	MemorySize uint32
 
+	// DefaultMaxMemorySize specifies the maximum amount of RAM in MiB for the VM.
+	DefaultMaxMemorySize uint64
+
 	// DefaultBridges specifies default number of bridges for the VM.
 	// Bridges can be used to hot plug devices
 	DefaultBridges uint32
@@ -450,6 +476,9 @@ type HypervisorConfig struct {
 
 	// VirtioFSCacheSize is the DAX cache size in MiB
 	VirtioFSCacheSize uint32
+
+	// Size of virtqueues
+	VirtioFSQueueSize uint32
 
 	// User ID.
 	Uid uint32
@@ -514,6 +543,9 @@ type HypervisorConfig struct {
 	// from memory encryption to both memory and CPU-state encryption and integrity.
 	ConfidentialGuest bool
 
+	// Enable SEV-SNP guests on AMD machines capable of both
+	SevSnpGuest bool
+
 	// BootToBeTemplate used to indicate if the VM is created to be a template VM
 	BootToBeTemplate bool
 
@@ -537,6 +569,15 @@ type HypervisorConfig struct {
 
 	// Disable selinux from the hypervisor process
 	DisableSeLinux bool
+
+	// Disable selinux from the container process
+	DisableGuestSeLinux bool
+
+	// Use legacy serial for the guest console
+	LegacySerial bool
+
+	// EnableVCPUsPinning controls whether each vCPU thread should be scheduled to a fixed CPU
+	EnableVCPUsPinning bool
 }
 
 // vcpu mapping from vcpu number to thread number
@@ -557,61 +598,6 @@ func (conf *HypervisorConfig) CheckTemplateConfig() error {
 		if conf.BootFromTemplate && conf.DevicesStatePath == "" {
 			return fmt.Errorf("Missing DevicesStatePath to Load from vm template")
 		}
-	}
-
-	return nil
-}
-
-func (conf *HypervisorConfig) Valid() error {
-	// Kata specific checks. Should be done outside the hypervisor
-	if conf.KernelPath == "" {
-		return fmt.Errorf("Missing kernel path")
-	}
-
-	if conf.ConfidentialGuest && conf.HypervisorMachineType == QemuCCWVirtio {
-		if conf.ImagePath != "" || conf.InitrdPath != "" {
-			fmt.Println("yes, failing")
-			return fmt.Errorf("Neither the image or initrd path may be set for Secure Execution")
-		}
-	} else if conf.ImagePath == "" && conf.InitrdPath == "" {
-		return fmt.Errorf("Missing image and initrd path")
-	} else if conf.ImagePath != "" && conf.InitrdPath != "" {
-		return fmt.Errorf("Image and initrd path cannot be both set")
-	}
-
-	if err := conf.CheckTemplateConfig(); err != nil {
-		return err
-	}
-
-	if conf.NumVCPUs == 0 {
-		conf.NumVCPUs = defaultVCPUs
-	}
-
-	if conf.MemorySize == 0 {
-		conf.MemorySize = defaultMemSzMiB
-	}
-
-	if conf.DefaultBridges == 0 {
-		conf.DefaultBridges = defaultBridges
-	}
-
-	if conf.BlockDeviceDriver == "" {
-		conf.BlockDeviceDriver = defaultBlockDriver
-	} else if conf.BlockDeviceDriver == config.VirtioBlock && conf.HypervisorMachineType == QemuCCWVirtio {
-		conf.BlockDeviceDriver = config.VirtioBlockCCW
-	}
-
-	if conf.DefaultMaxVCPUs == 0 || conf.DefaultMaxVCPUs > defaultMaxVCPUs {
-		conf.DefaultMaxVCPUs = defaultMaxVCPUs
-	}
-
-	if conf.ConfidentialGuest && conf.NumVCPUs != conf.DefaultMaxVCPUs {
-		hvLogger.Warnf("Confidential guests do not support hotplugging of vCPUs. Setting DefaultMaxVCPUs to NumVCPUs (%d)", conf.NumVCPUs)
-		conf.DefaultMaxVCPUs = conf.NumVCPUs
-	}
-
-	if conf.Msize9p == 0 && conf.SharedFS != config.VirtioFS {
-		conf.Msize9p = defaultMsize9p
 	}
 
 	return nil
@@ -790,39 +776,6 @@ func DeserializeParams(parameters []string) []Param {
 	return params
 }
 
-func GetHostMemorySizeKb(memInfoPath string) (uint64, error) {
-	f, err := os.Open(memInfoPath)
-	if err != nil {
-		return 0, err
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		// Expected format: ["MemTotal:", "1234", "kB"]
-		parts := strings.Fields(scanner.Text())
-
-		// Sanity checks: Skip malformed entries.
-		if len(parts) < 3 || parts[0] != "MemTotal:" || parts[2] != "kB" {
-			continue
-		}
-
-		sizeKb, err := strconv.ParseUint(parts[1], 0, 64)
-		if err != nil {
-			continue
-		}
-
-		return sizeKb, nil
-	}
-
-	// Handle errors that may have occurred during the reading of the file.
-	if err := scanner.Err(); err != nil {
-		return 0, err
-	}
-
-	return 0, fmt.Errorf("unable get MemTotal from %s", memInfoPath)
-}
-
 // CheckCmdline checks whether an option or parameter is present in the kernel command line.
 // Search is case-insensitive.
 // Takes path to file that contains the kernel command line, desired option, and permitted values
@@ -942,6 +895,11 @@ const (
 	// Exclude from lint checking for it won't be used on arm64 code
 	sevProtection
 
+	// AMD Secure Encrypted Virtualization - Secure Nested Paging (SEV-SNP)
+	// https://developer.amd.com/sev/
+	// Exclude from lint checking for it won't be used on arm64 code
+	snpProtection
+
 	// IBM POWER 9 Protected Execution Facility
 	// https://www.kernel.org/doc/html/latest/powerpc/ultravisor.html
 	// Exclude from lint checking for it won't be used on arm64 code
@@ -958,6 +916,7 @@ var guestProtectionStr = [...]string{
 	pefProtection:  "pef",
 	seProtection:   "se",
 	sevProtection:  "sev",
+	snpProtection:  "snp",
 	tdxProtection:  "tdx",
 }
 
@@ -994,6 +953,7 @@ type Hypervisor interface {
 	HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error)
 	ResizeMemory(ctx context.Context, memMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error)
 	ResizeVCPUs(ctx context.Context, vcpus uint32) (uint32, uint32, error)
+	GetTotalMemoryMB(ctx context.Context) uint32
 	GetVMConsole(ctx context.Context, sandboxID string) (string, string, error)
 	Disconnect(ctx context.Context)
 	Capabilities(ctx context.Context) types.Capabilities

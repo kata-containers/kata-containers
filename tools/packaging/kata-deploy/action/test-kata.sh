@@ -66,7 +66,7 @@ function run_test() {
     cmd="kubectl get pods | grep $busybox_pod | grep Completed"
     wait_time=120
 
-    configurations=("nginx-deployment-qemu" "nginx-deployment-clh")
+    configurations=("nginx-deployment-qemu" "nginx-deployment-clh" "nginx-deployment-dragonball")
     for deployment in "${configurations[@]}"; do
         # start the kata pod:
         kubectl apply -f "$YAMLPATH/examples/${deployment}.yaml"
@@ -75,7 +75,7 @@ function run_test() {
       # our 'wait' for deployment status will fail to find the deployment at all
       sleep 3 
 
-      kubectl wait --timeout=5m --for=condition=Available deployment/${deployment}
+      kubectl wait --timeout=5m --for=condition=Available deployment/${deployment} || kubectl describe pods
       kubectl expose deployment/${deployment}
 
       # test pod connectivity:

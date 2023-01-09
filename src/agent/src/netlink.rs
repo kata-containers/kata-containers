@@ -64,7 +64,7 @@ impl Handle {
     pub async fn update_interface(&mut self, iface: &Interface) -> Result<()> {
         // The reliable way to find link is using hardware address
         // as filter. However, hardware filter might not be supported
-        // by netlink, we may have to dump link list and the find the
+        // by netlink, we may have to dump link list and then find the
         // target link. filter using name or family is supported, but
         // we cannot use that to find target link.
         // let's try if hardware address filter works. -_-
@@ -178,7 +178,7 @@ impl Handle {
                 .with_context(|| format!("Failed to parse MAC address: {}", addr))?;
 
             // Hardware filter might not be supported by netlink,
-            // we may have to dump link list and the find the target link.
+            // we may have to dump link list and then find the target link.
             stream
                 .try_filter(|f| {
                     let result = f.nlas.iter().any(|n| match n {
@@ -523,13 +523,15 @@ impl Handle {
             .as_ref()
             .map(|to| to.address.as_str()) // Extract address field
             .and_then(|addr| if addr.is_empty() { None } else { Some(addr) }) // Make sure it's not empty
-            .ok_or(anyhow!(nix::Error::EINVAL))?;
+            .ok_or_else(|| anyhow!("Unable to determine ip address of ARP neighbor"))?;
 
         let ip = IpAddr::from_str(ip_address)
             .map_err(|e| anyhow!("Failed to parse IP {}: {:?}", ip_address, e))?;
 
         // Import rtnetlink objects that make sense only for this function
-        use packet::constants::{NDA_UNSPEC, NLM_F_ACK, NLM_F_CREATE, NLM_F_EXCL, NLM_F_REQUEST};
+        use packet::constants::{
+            NDA_UNSPEC, NLM_F_ACK, NLM_F_CREATE, NLM_F_REPLACE, NLM_F_REQUEST,
+        };
         use packet::neighbour::{NeighbourHeader, NeighbourMessage};
         use packet::nlas::neighbour::Nla;
         use packet::{NetlinkMessage, NetlinkPayload, RtnlMessage};
@@ -572,7 +574,7 @@ impl Handle {
 
         // Send request and ACK
         let mut req = NetlinkMessage::from(RtnlMessage::NewNeighbour(message));
-        req.header.flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_EXCL | NLM_F_CREATE;
+        req.header.flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_REPLACE;
 
         let mut response = self.handle.request(req)?;
         while let Some(message) = response.next().await {
@@ -612,7 +614,12 @@ fn parse_mac_address(addr: &str) -> Result<[u8; 6]> {
 
     // Parse single Mac address block
     let mut parse_next = || -> Result<u8> {
-        let v = u8::from_str_radix(split.next().ok_or(anyhow!(nix::Error::EINVAL))?, 16)?;
+        let v = u8::from_str_radix(
+            split
+                .next()
+                .ok_or_else(|| anyhow!("Invalid MAC address {}", addr))?,
+            16,
+        )?;
         Ok(v)
     };
 
@@ -770,10 +777,10 @@ impl Address {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::skip_if_not_root;
     use rtnetlink::packet;
     use std::iter;
     use std::process::Command;
+    use test_utils::skip_if_not_root;
 
     #[tokio::test]
     async fn find_link_by_name() {
@@ -939,13 +946,13 @@ mod tests {
     fn clean_env_for_test_add_one_arp_neighbor(dummy_name: &str, ip: &str) {
         // ip link delete dummy
         Command::new("ip")
-            .args(&["link", "delete", dummy_name])
+            .args(["link", "delete", dummy_name])
             .output()
             .expect("prepare: failed to delete dummy");
 
         // ip neigh del dev dummy ip
         Command::new("ip")
-            .args(&["neigh", "del", dummy_name, ip])
+            .args(["neigh", "del", dummy_name, ip])
             .output()
             .expect("prepare: failed to delete neigh");
     }
@@ -960,19 +967,19 @@ mod tests {
 
         // ip link add dummy type dummy
         Command::new("ip")
-            .args(&["link", "add", dummy_name, "type", "dummy"])
+            .args(["link", "add", dummy_name, "type", "dummy"])
             .output()
             .expect("failed to add dummy interface");
 
         // ip addr add 192.168.0.2/16 dev dummy
         Command::new("ip")
-            .args(&["addr", "add", "192.168.0.2/16", "dev", dummy_name])
+            .args(["addr", "add", "192.168.0.2/16", "dev", dummy_name])
             .output()
             .expect("failed to add ip for dummy");
 
         // ip link set dummy up;
         Command::new("ip")
-            .args(&["link", "set", dummy_name, "up"])
+            .args(["link", "set", dummy_name, "up"])
             .output()
             .expect("failed to up dummy");
     }
@@ -1004,7 +1011,7 @@ mod tests {
 
         // ip neigh show dev dummy ip
         let stdout = Command::new("ip")
-            .args(&["neigh", "show", "dev", dummy_name, to_ip])
+            .args(["neigh", "show", "dev", dummy_name, to_ip])
             .output()
             .expect("failed to show neigh")
             .stdout;

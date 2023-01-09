@@ -19,7 +19,7 @@ import (
 	"syscall"
 
 	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
-	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
+	podmanAnnotations "github.com/containers/podman/v4/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -27,7 +27,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	dockershimAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations/dockershim"
@@ -46,17 +46,17 @@ var (
 
 	// CRIContainerTypeKeyList lists all the CRI keys that could define
 	// the container type from annotations in the config.json.
-	CRIContainerTypeKeyList = []string{ctrAnnotations.ContainerType, crioAnnotations.ContainerType, dockershimAnnotations.ContainerTypeLabelKey}
+	CRIContainerTypeKeyList = []string{ctrAnnotations.ContainerType, podmanAnnotations.ContainerType, dockershimAnnotations.ContainerTypeLabelKey}
 
 	// CRISandboxNameKeyList lists all the CRI keys that could define
 	// the sandbox ID (sandbox ID) from annotations in the config.json.
-	CRISandboxNameKeyList = []string{ctrAnnotations.SandboxID, crioAnnotations.SandboxID, dockershimAnnotations.SandboxIDLabelKey}
+	CRISandboxNameKeyList = []string{ctrAnnotations.SandboxID, podmanAnnotations.SandboxID, dockershimAnnotations.SandboxIDLabelKey}
 
 	// CRIContainerTypeList lists all the maps from CRI ContainerTypes annotations
 	// to a virtcontainers ContainerType.
 	CRIContainerTypeList = []annotationContainerType{
-		{crioAnnotations.ContainerTypeSandbox, vc.PodSandbox},
-		{crioAnnotations.ContainerTypeContainer, vc.PodContainer},
+		{podmanAnnotations.ContainerTypeSandbox, vc.PodSandbox},
+		{podmanAnnotations.ContainerTypeContainer, vc.PodContainer},
 		{ctrAnnotations.ContainerTypeSandbox, vc.PodSandbox},
 		{ctrAnnotations.ContainerTypeContainer, vc.PodContainer},
 		{dockershimAnnotations.ContainerTypeLabelSandbox, vc.PodSandbox},
@@ -105,7 +105,6 @@ type RuntimeConfig struct {
 	//Experimental features enabled
 	Experimental []exp.Feature
 
-	Console        string
 	JaegerEndpoint string
 	JaegerUser     string
 	JaegerPassword string
@@ -128,6 +127,9 @@ type RuntimeConfig struct {
 
 	//Determines if seccomp should be applied inside guest
 	DisableGuestSeccomp bool
+
+	//SELinux security context applied to the container process inside guest.
+	GuestSeLinuxLabel string
 
 	// Sandbox sizing information which, if provided, indicates the size of
 	// the sandbox needed for the workload(s)
@@ -187,16 +189,27 @@ func cmdEnvs(spec specs.Spec, envs []types.EnvVar) []types.EnvVar {
 
 func newMount(m specs.Mount) vc.Mount {
 	readonly := false
+	bind := false
 	for _, flag := range m.Options {
-		if flag == "ro" {
+		switch flag {
+		case "rbind", "bind":
+			bind = true
+		case "ro":
 			readonly = true
-			break
 		}
 	}
+
+	// normal bind mounts, set type to bind.
+	// https://github.com/opencontainers/runc/blob/v1.1.3/libcontainer/specconv/spec_linux.go#L512-L520
+	mountType := m.Type
+	if mountType != vc.KataEphemeralDevType && mountType != vc.KataLocalDevType && bind {
+		mountType = "bind"
+	}
+
 	return vc.Mount{
 		Source:      m.Source,
 		Destination: m.Destination,
-		Type:        m.Type,
+		Type:        mountType,
 		Options:     m.Options,
 		ReadOnly:    readonly,
 	}
@@ -474,6 +487,12 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.UseLegacySerial).setBool(func(useLegacySerial bool) {
+		config.HypervisorConfig.LegacySerial = useLegacySerial
+	}); err != nil {
+		return err
+	}
+
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.PCIeRootPort).setUint(func(pcieRootPort uint64) {
 		config.HypervisorConfig.PCIeRootPort = uint32(pcieRootPort)
 	}); err != nil {
@@ -635,6 +654,12 @@ func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) e
 		return err
 	}
 
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.EnableVCPUsPinning).setBool(func(enableVCPUsPinning bool) {
+		sbConfig.HypervisorConfig.EnableVCPUsPinning = enableVCPUsPinning
+	}); err != nil {
+		return err
+	}
+
 	return newAnnotationConfiguration(ocispec, vcAnnotations.DefaultMaxVCPUs).setUintWithCheck(func(maxVCPUs uint64) error {
 		max := uint32(maxVCPUs)
 
@@ -664,6 +689,22 @@ func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig)
 
 		if !valid {
 			return fmt.Errorf("Invalid hypervisor block storage driver %v specified in annotation (supported drivers: %v)", value, supportedBlockDrivers)
+		}
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.BlockDeviceAIO]; ok {
+		supportedAIO := []string{config.AIONative, config.AIOThreads, config.AIOIOUring}
+
+		valid := false
+		for _, b := range supportedAIO {
+			if b == value {
+				sbConfig.HypervisorConfig.BlockDeviceAIO = value
+				valid = true
+			}
+		}
+
+		if !valid {
+			return fmt.Errorf("Invalid AIO mechanism  %v specified in annotation (supported IO mechanism : %v)", value, supportedAIO)
 		}
 	}
 
@@ -855,8 +896,8 @@ func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error
 
 // SandboxConfig converts an OCI compatible runtime configuration file
 // to a virtcontainers sandbox configuration structure.
-func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, console string, detach, systemdCgroup bool) (vc.SandboxConfig, error) {
-	containerConfig, err := ContainerConfig(ocispec, bundlePath, cid, console, detach)
+func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid string, detach, systemdCgroup bool) (vc.SandboxConfig, error) {
+	containerConfig, err := ContainerConfig(ocispec, bundlePath, cid, detach)
 	if err != nil {
 		return vc.SandboxConfig{}, err
 	}
@@ -907,8 +948,7 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 
 		DisableGuestSeccomp: runtime.DisableGuestSeccomp,
 
-		// Q: Is this really necessary? @weizhang555
-		// Spec: &ocispec,
+		GuestSeLinuxLabel: runtime.GuestSeLinuxLabel,
 
 		Experimental: runtime.Experimental,
 	}
@@ -941,7 +981,7 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 
 // ContainerConfig converts an OCI compatible runtime configuration
 // file to a virtcontainers container configuration structure.
-func ContainerConfig(ocispec specs.Spec, bundlePath, cid, console string, detach bool) (vc.ContainerConfig, error) {
+func ContainerConfig(ocispec specs.Spec, bundlePath, cid string, detach bool) (vc.ContainerConfig, error) {
 	rootfs := vc.RootFs{Target: ocispec.Root.Path, Mounted: true}
 	if !filepath.IsAbs(rootfs.Target) {
 		rootfs.Target = filepath.Join(bundlePath, ocispec.Root.Path)
@@ -956,7 +996,6 @@ func ContainerConfig(ocispec specs.Spec, bundlePath, cid, console string, detach
 		User:            strconv.FormatUint(uint64(ocispec.Process.User.UID), 10),
 		PrimaryGroup:    strconv.FormatUint(uint64(ocispec.Process.User.GID), 10),
 		Interactive:     ocispec.Process.Terminal,
-		Console:         console,
 		Detach:          detach,
 		NoNewPrivileges: ocispec.Process.NoNewPrivileges,
 	}
@@ -1035,8 +1074,8 @@ func getShmSize(c vc.ContainerConfig) (uint64, error) {
 
 // IsCRIOContainerManager check if a Pod is created from CRI-O
 func IsCRIOContainerManager(spec *specs.Spec) bool {
-	if val, ok := spec.Annotations[crioAnnotations.ContainerType]; ok {
-		if val == crioAnnotations.ContainerTypeSandbox || val == crioAnnotations.ContainerTypeContainer {
+	if val, ok := spec.Annotations[podmanAnnotations.ContainerType]; ok {
+		if val == podmanAnnotations.ContainerTypeSandbox || val == podmanAnnotations.ContainerTypeContainer {
 			return true
 		}
 	}
@@ -1108,7 +1147,7 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU, memSizeMB uint32) {
 	// ... to result in VM resources of 1 (MB) for memory, and 3 for CPU (2200 mCPU rounded up to 3).
 	annotation, ok := spec.Annotations[ctrAnnotations.SandboxCPUPeriod]
 	if ok {
-		period, err = strconv.ParseUint(annotation, 10, 32)
+		period, err = strconv.ParseUint(annotation, 10, 64)
 		if err != nil {
 			ociLog.Warningf("sandbox-sizing: failure to parse SandboxCPUPeriod: %s", annotation)
 			period = 0
@@ -1117,7 +1156,7 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU, memSizeMB uint32) {
 
 	annotation, ok = spec.Annotations[ctrAnnotations.SandboxCPUQuota]
 	if ok {
-		quota, err = strconv.ParseInt(annotation, 10, 32)
+		quota, err = strconv.ParseInt(annotation, 10, 64)
 		if err != nil {
 			ociLog.Warningf("sandbox-sizing: failure to parse SandboxCPUQuota: %s", annotation)
 			quota = 0
@@ -1126,7 +1165,7 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU, memSizeMB uint32) {
 
 	annotation, ok = spec.Annotations[ctrAnnotations.SandboxMem]
 	if ok {
-		memory, err = strconv.ParseInt(annotation, 10, 32)
+		memory, err = strconv.ParseInt(annotation, 10, 64)
 		if err != nil {
 			ociLog.Warningf("sandbox-sizing: failure to parse SandboxMem: %s", annotation)
 			memory = 0

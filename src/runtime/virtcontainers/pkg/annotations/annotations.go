@@ -130,6 +130,9 @@ const (
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
 	EntropySource = kataAnnotHypervisorPrefix + "entropy_source"
 
+	// UseLegacySerial sets legacy serial device for guest console if available and implemented for architecture
+	UseLegacySerial = kataAnnotHypervisorPrefix + "use_legacy_serial"
+
 	//
 	//	CPU Annotations
 	//
@@ -139,6 +142,9 @@ const (
 
 	// DefaultVCPUs is a sandbox annotation that specifies the maximum number of vCPUs allocated for the VM by the hypervisor.
 	DefaultMaxVCPUs = kataAnnotHypervisorPrefix + "default_max_vcpus"
+
+	// EnableVCPUsPinning is a sandbox annotation that controls bundling between vCPU threads and CPUs
+	EnableVCPUsPinning = kataAnnotationsPrefix + "enable_vcpus_pinning"
 
 	//
 	//	Memory related annotations
@@ -200,6 +206,9 @@ const (
 	// BlockDeviceDriver specifies the driver to be used for block device either VirtioSCSI or VirtioBlock
 	BlockDeviceDriver = kataAnnotHypervisorPrefix + "block_device_driver"
 
+	// BlockDeviceAIO specifies I/O mechanism to be used with VirtioBlock for qemu
+	BlockDeviceAIO = kataAnnotHypervisorPrefix + "block_device_aio"
+
 	// DisableBlockDeviceUse  is a sandbox annotation that disallows a block device from being used.
 	DisableBlockDeviceUse = kataAnnotHypervisorPrefix + "disable_block_device_use"
 
@@ -237,6 +246,9 @@ const (
 
 	// DisableGuestSeccomp is a sandbox annotation that determines if seccomp should be applied inside guest.
 	DisableGuestSeccomp = kataAnnotRuntimePrefix + "disable_guest_seccomp"
+
+	// GuestSeLinuxLabel is a SELinux security policy that is applied to a container process inside guest.
+	GuestSeLinuxLabel = kataAnnotRuntimePrefix + "guest_selinux_label"
 
 	// SandboxCgroupOnly is a sandbox annotation that determines if kata processes are managed only in sandbox cgroup.
 	SandboxCgroupOnly = kataAnnotRuntimePrefix + "sandbox_cgroup_only"

@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2018 Intel Corporation
 //
@@ -24,6 +23,8 @@ type qemuAmd64 struct {
 	// inherit from qemuArchBase, overwrite methods if needed
 	qemuArchBase
 
+	snpGuest bool
+
 	vmFactory bool
 
 	devLoadersCount uint32
@@ -36,15 +37,12 @@ const (
 
 	defaultQemuMachineType = QemuQ35
 
-	defaultQemuMachineOptions = "accel=kvm,kernel_irqchip=on"
+	defaultQemuMachineOptions = "accel=kvm"
+
+	splitIrqChipMachineOptions = "accel=kvm,kernel_irqchip=split"
 
 	qmpMigrationWaitTimeout = 5 * time.Second
 )
-
-var qemuPaths = map[string]string{
-	QemuQ35:     defaultQemuPath,
-	QemuMicrovm: defaultQemuPath,
-}
 
 var kernelParams = []Param{
 	{"tsc", "reliable"},
@@ -56,8 +54,6 @@ var kernelParams = []Param{
 	{"i8042.noaux", "1"},
 	{"noreplace-smp", ""},
 	{"reboot", "k"},
-	{"console", "hvc0"},
-	{"console", "hvc1"},
 	{"cryptomgr.notests", ""},
 	{"net.ifnames", "0"},
 	{"pci", "lastbus=0"},
@@ -103,7 +99,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	// IOMMU and Guest Protection require a split IRQ controller for handling interrupts
 	// otherwise QEMU won't be able to create the kernel irqchip
 	if config.IOMMU || config.ConfidentialGuest {
-		mp.Options = "accel=kvm,kernel_irqchip=split"
+		mp.Options = splitIrqChipMachineOptions
 	}
 
 	if config.IOMMU {
@@ -116,7 +112,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	q := &qemuAmd64{
 		qemuArchBase: qemuArchBase{
 			qemuMachine:          *mp,
-			qemuExePath:          qemuPaths[machineType],
+			qemuExePath:          defaultQemuPath,
 			memoryOffset:         config.MemOffset,
 			kernelParamsNonDebug: kernelParamsNonDebug,
 			kernelParamsDebug:    kernelParamsDebug,
@@ -124,8 +120,10 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			disableNvdimm:        config.DisableImageNvdimm,
 			dax:                  true,
 			protection:           noneProtection,
+			legacySerial:         config.LegacySerial,
 		},
 		vmFactory: factory,
+		snpGuest:  config.SevSnpGuest,
 	}
 
 	if config.ConfidentialGuest {
@@ -174,13 +172,15 @@ func (q *qemuAmd64) bridges(number uint32) {
 }
 
 func (q *qemuAmd64) cpuModel() string {
+	var err error
 	cpuModel := defaultCPUModel
 
-	// VMX is not migratable yet.
-	// issue: https://github.com/kata-containers/runtime/issues/1750
-	if q.vmFactory {
-		hvLogger.WithField("subsystem", "qemuAmd64").Warn("VMX is not migratable yet: turning it off")
-		cpuModel += ",vmx=off"
+	// Temporary until QEMU cpu model 'host' supports AMD SEV-SNP
+	protection, err := availableGuestProtection()
+	if err == nil {
+		if protection == snpProtection && q.snpGuest {
+			cpuModel = "EPYC-v4"
+		}
 	}
 
 	return cpuModel
@@ -214,6 +214,11 @@ func (q *qemuAmd64) enableProtection() error {
 	if err != nil {
 		return err
 	}
+	// Configure SNP only if specified in config
+	if q.protection == snpProtection && !q.snpGuest {
+		q.protection = sevProtection
+	}
+
 	logger := hvLogger.WithFields(logrus.Fields{
 		"subsystem":               "qemuAmd64",
 		"machine":                 q.qemuMachine,
@@ -227,7 +232,6 @@ func (q *qemuAmd64) enableProtection() error {
 			q.qemuMachine.Options += ","
 		}
 		q.qemuMachine.Options += "kvm-type=tdx,confidential-guest-support=tdx"
-		q.kernelParams = append(q.kernelParams, Param{"tdx_guest", ""})
 		logger.Info("Enabling TDX guest protection")
 		return nil
 	case sevProtection:
@@ -236,6 +240,13 @@ func (q *qemuAmd64) enableProtection() error {
 		}
 		q.qemuMachine.Options += "confidential-guest-support=sev"
 		logger.Info("Enabling SEV guest protection")
+		return nil
+	case snpProtection:
+		if q.qemuMachine.Options != "" {
+			q.qemuMachine.Options += ","
+		}
+		q.qemuMachine.Options += "confidential-guest-support=snp"
+		logger.Info("Enabling SNP guest protection")
 		return nil
 
 	// TODO: Add support for other x86_64 technologies
@@ -280,6 +291,16 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 				File:            firmware,
 				CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
 				ReducedPhysBits: cpuid.AMDMemEncrypt.PhysAddrReduction,
+			}), "", nil
+	case snpProtection:
+		return append(devices,
+			govmmQemu.Object{
+				Type:            govmmQemu.SNPGuest,
+				ID:              "snp",
+				Debug:           false,
+				File:            firmware,
+				CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
+				ReducedPhysBits: 1,
 			}), "", nil
 	case noneProtection:
 		return devices, firmware, nil

@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2018 IBM
 //
@@ -16,7 +15,7 @@ import (
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 )
 
 func newTestQemu(assert *assert.Assertions, machineType string) qemuArch {
@@ -132,6 +131,12 @@ func TestQemuS390xAppendProtectionDevice(t *testing.T) {
 
 	// SEV protection
 	s390x.(*qemuS390x).protection = sevProtection
+	devices, bios, err = s390x.appendProtectionDevice(devices, firmware, "")
+	assert.Error(err)
+	assert.Empty(bios)
+
+	// SNP protection
+	s390x.(*qemuS390x).protection = snpProtection
 	devices, bios, err = s390x.appendProtectionDevice(devices, firmware, "")
 	assert.Error(err)
 	assert.Empty(bios)

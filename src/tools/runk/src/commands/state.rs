@@ -5,7 +5,7 @@
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use libcontainer::status::{get_current_container_state, Status};
+use libcontainer::{container::Container, status::Status};
 use liboci_cli::State;
 use oci::ContainerState;
 use serde::{Deserialize, Serialize};
@@ -37,9 +37,8 @@ impl RuntimeState {
 }
 
 pub fn run(opts: State, state_root: &Path, logger: &Logger) -> Result<()> {
-    let status = Status::load(state_root, &opts.container_id)?;
-    let state = get_current_container_state(&status)?;
-    let oci_state = RuntimeState::new(status, state);
+    let container = Container::load(state_root, &opts.container_id)?;
+    let oci_state = RuntimeState::new(container.status, container.state);
     let json_state = &serde_json::to_string_pretty(&oci_state)?;
 
     println!("{}", json_state);

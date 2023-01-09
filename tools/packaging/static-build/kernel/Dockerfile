@@ -16,6 +16,7 @@ RUN apt-get update && \
 	    flex \
 	    git \
 	    iptables \
+	    kmod \
 	    libelf-dev \
 	    patch && \
     if [ "$(uname -m)" = "s390x" ]; then apt-get install -y --no-install-recommends libssl-dev; fi && \

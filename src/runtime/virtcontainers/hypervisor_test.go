@@ -8,7 +8,6 @@ package virtcontainers
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
@@ -84,124 +83,6 @@ func TestNewHypervisorFromUnknownHypervisorType(t *testing.T) {
 	hy, err := NewHypervisor(hypervisorType)
 	assert.Error(err)
 	assert.Nil(hy)
-}
-
-func testHypervisorConfigValid(t *testing.T, hypervisorConfig *HypervisorConfig, success bool) {
-	err := hypervisorConfig.Valid()
-	assert := assert.New(t)
-	assert.False(success && err != nil)
-	assert.False(!success && err == nil)
-}
-
-func TestHypervisorConfigNoKernelPath(t *testing.T) {
-	hypervisorConfig := &HypervisorConfig{
-		KernelPath:     "",
-		ImagePath:      fmt.Sprintf("%s/%s", testDir, testImage),
-		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
-	}
-
-	testHypervisorConfigValid(t, hypervisorConfig, false)
-}
-
-func TestHypervisorConfigNoImagePath(t *testing.T) {
-	hypervisorConfig := &HypervisorConfig{
-		KernelPath:     fmt.Sprintf("%s/%s", testDir, testKernel),
-		ImagePath:      "",
-		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
-	}
-
-	testHypervisorConfigValid(t, hypervisorConfig, false)
-}
-
-func TestHypervisorConfigNoHypervisorPath(t *testing.T) {
-	hypervisorConfig := &HypervisorConfig{
-		KernelPath:     fmt.Sprintf("%s/%s", testDir, testKernel),
-		ImagePath:      fmt.Sprintf("%s/%s", testDir, testImage),
-		HypervisorPath: "",
-	}
-
-	testHypervisorConfigValid(t, hypervisorConfig, true)
-}
-
-func TestHypervisorConfigIsValid(t *testing.T) {
-	hypervisorConfig := &HypervisorConfig{
-		KernelPath:     fmt.Sprintf("%s/%s", testDir, testKernel),
-		ImagePath:      fmt.Sprintf("%s/%s", testDir, testImage),
-		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
-	}
-
-	testHypervisorConfigValid(t, hypervisorConfig, true)
-}
-
-func TestHypervisorConfigBothInitrdAndImage(t *testing.T) {
-	hypervisorConfig := &HypervisorConfig{
-		KernelPath:     fmt.Sprintf("%s/%s", testDir, testKernel),
-		ImagePath:      fmt.Sprintf("%s/%s", testDir, testImage),
-		InitrdPath:     fmt.Sprintf("%s/%s", testDir, testInitrd),
-		HypervisorPath: "",
-	}
-
-	testHypervisorConfigValid(t, hypervisorConfig, false)
-}
-
-func TestHypervisorConfigSecureExecution(t *testing.T) {
-	hypervisorConfig := &HypervisorConfig{
-		KernelPath:            fmt.Sprintf("%s/%s", testDir, testKernel),
-		InitrdPath:            fmt.Sprintf("%s/%s", testDir, testInitrd),
-		ConfidentialGuest:     true,
-		HypervisorMachineType: QemuCCWVirtio,
-	}
-
-	// Secure Execution should only specify a kernel (encrypted image contains all components)
-	testHypervisorConfigValid(t, hypervisorConfig, false)
-}
-
-func TestHypervisorConfigValidTemplateConfig(t *testing.T) {
-	hypervisorConfig := &HypervisorConfig{
-		KernelPath:       fmt.Sprintf("%s/%s", testDir, testKernel),
-		ImagePath:        fmt.Sprintf("%s/%s", testDir, testImage),
-		HypervisorPath:   fmt.Sprintf("%s/%s", testDir, testHypervisor),
-		BootToBeTemplate: true,
-		BootFromTemplate: true,
-	}
-	testHypervisorConfigValid(t, hypervisorConfig, false)
-
-	hypervisorConfig.BootToBeTemplate = false
-	testHypervisorConfigValid(t, hypervisorConfig, false)
-	hypervisorConfig.MemoryPath = "foobar"
-	testHypervisorConfigValid(t, hypervisorConfig, false)
-	hypervisorConfig.DevicesStatePath = "foobar"
-	testHypervisorConfigValid(t, hypervisorConfig, true)
-
-	hypervisorConfig.BootFromTemplate = false
-	hypervisorConfig.BootToBeTemplate = true
-	testHypervisorConfigValid(t, hypervisorConfig, true)
-	hypervisorConfig.MemoryPath = ""
-	testHypervisorConfigValid(t, hypervisorConfig, false)
-}
-
-func TestHypervisorConfigDefaults(t *testing.T) {
-	assert := assert.New(t)
-	hypervisorConfig := &HypervisorConfig{
-		KernelPath:     fmt.Sprintf("%s/%s", testDir, testKernel),
-		ImagePath:      fmt.Sprintf("%s/%s", testDir, testImage),
-		HypervisorPath: "",
-	}
-	testHypervisorConfigValid(t, hypervisorConfig, true)
-
-	hypervisorConfigDefaultsExpected := &HypervisorConfig{
-		KernelPath:        fmt.Sprintf("%s/%s", testDir, testKernel),
-		ImagePath:         fmt.Sprintf("%s/%s", testDir, testImage),
-		HypervisorPath:    "",
-		NumVCPUs:          defaultVCPUs,
-		MemorySize:        defaultMemSzMiB,
-		DefaultBridges:    defaultBridges,
-		BlockDeviceDriver: defaultBlockDriver,
-		DefaultMaxVCPUs:   defaultMaxVCPUs,
-		Msize9p:           defaultMsize9p,
-	}
-
-	assert.Exactly(hypervisorConfig, hypervisorConfigDefaultsExpected)
 }
 
 func TestAppendParams(t *testing.T) {
@@ -370,55 +251,6 @@ func TestAddKernelParamInvalid(t *testing.T) {
 
 	err := config.AddKernelParam(invalid[0])
 	assert.Error(err)
-}
-
-func TestGetHostMemorySizeKb(t *testing.T) {
-	assert := assert.New(t)
-	type testData struct {
-		contents       string
-		expectedResult int
-		expectError    bool
-	}
-
-	data := []testData{
-		{
-			`
-			MemTotal:      1 kB
-			MemFree:       2 kB
-			SwapTotal:     3 kB
-			SwapFree:      4 kB
-			`,
-			1024,
-			false,
-		},
-		{
-			`
-			MemFree:       2 kB
-			SwapTotal:     3 kB
-			SwapFree:      4 kB
-			`,
-			0,
-			true,
-		},
-	}
-
-	dir := t.TempDir()
-
-	file := filepath.Join(dir, "meminfo")
-	_, err := GetHostMemorySizeKb(file)
-	assert.Error(err)
-
-	for _, d := range data {
-		err = os.WriteFile(file, []byte(d.contents), os.FileMode(0640))
-		assert.NoError(err)
-		defer os.Remove(file)
-
-		hostMemKb, err := GetHostMemorySizeKb(file)
-
-		assert.False((d.expectError && err == nil))
-		assert.False((!d.expectError && err != nil))
-		assert.NotEqual(hostMemKb, d.expectedResult)
-	}
 }
 
 func TestCheckCmdline(t *testing.T) {

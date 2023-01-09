@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2019 Ericsson Eurolab Deutschland G.m.b.H.
 //
@@ -17,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	chclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cloud-hypervisor/client"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -103,7 +102,7 @@ func (c *clhClientMock) VmResizePut(ctx context.Context, vmResize chclient.VmRes
 }
 
 //nolint:golint
-func (c *clhClientMock) VmAddDevicePut(ctx context.Context, vmAddDevice chclient.VmAddDevice) (chclient.PciDeviceInfo, *http.Response, error) {
+func (c *clhClientMock) VmAddDevicePut(ctx context.Context, deviceConfig chclient.DeviceConfig) (chclient.PciDeviceInfo, *http.Response, error) {
 	return chclient.PciDeviceInfo{}, nil, nil
 }
 
@@ -129,33 +128,38 @@ func TestCloudHypervisorAddVSock(t *testing.T) {
 // Check addNet appends to the network config list new configurations.
 // Check that the elements in the list has the correct values
 func TestCloudHypervisorAddNetCheckNetConfigListValues(t *testing.T) {
-	macTest := "00:00:00:00:00"
-	tapPath := "/path/to/tap"
-
 	assert := assert.New(t)
 
+	macTest := "00:00:00:00:00"
+
+	file, err := os.CreateTemp("", "netFd")
+	assert.Nil(err)
+	defer os.Remove(file.Name())
+
+	vmFds := make([]*os.File, 1)
+	vmFds = append(vmFds, file)
+
 	clh := cloudHypervisor{}
+	clh.netDevicesFiles = make(map[string][]*os.File)
 
 	e := &VethEndpoint{}
 	e.NetPair.TAPIface.HardAddr = macTest
-	e.NetPair.TapInterface.TAPIface.Name = tapPath
+	e.NetPair.TapInterface.VMFds = vmFds
 
-	err := clh.addNet(e)
+	err = clh.addNet(e)
 	assert.Nil(err)
 
-	assert.Equal(len(*clh.vmconfig.Net), 1)
+	assert.Equal(len(*clh.netDevices), 1)
 	if err == nil {
-		assert.Equal(*(*clh.vmconfig.Net)[0].Mac, macTest)
-		assert.Equal(*(*clh.vmconfig.Net)[0].Tap, tapPath)
+		assert.Equal(*(*clh.netDevices)[0].Mac, macTest)
 	}
 
 	err = clh.addNet(e)
 	assert.Nil(err)
 
-	assert.Equal(len(*clh.vmconfig.Net), 2)
+	assert.Equal(len(*clh.netDevices), 2)
 	if err == nil {
-		assert.Equal(*(*clh.vmconfig.Net)[1].Mac, macTest)
-		assert.Equal(*(*clh.vmconfig.Net)[1].Tap, tapPath)
+		assert.Equal(*(*clh.netDevices)[1].Mac, macTest)
 	}
 }
 
@@ -164,10 +168,18 @@ func TestCloudHypervisorAddNetCheckNetConfigListValues(t *testing.T) {
 func TestCloudHypervisorAddNetCheckEnpointTypes(t *testing.T) {
 	assert := assert.New(t)
 
-	tapPath := "/path/to/tap"
+	macTest := "00:00:00:00:00"
+
+	file, err := os.CreateTemp("", "netFd")
+	assert.Nil(err)
+	defer os.Remove(file.Name())
+
+	vmFds := make([]*os.File, 1)
+	vmFds = append(vmFds, file)
 
 	validVeth := &VethEndpoint{}
-	validVeth.NetPair.TapInterface.TAPIface.Name = tapPath
+	validVeth.NetPair.TAPIface.HardAddr = macTest
+	validVeth.NetPair.TapInterface.VMFds = vmFds
 
 	type args struct {
 		e Endpoint
@@ -185,11 +197,12 @@ func TestCloudHypervisorAddNetCheckEnpointTypes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			clh := &cloudHypervisor{}
+			clh.netDevicesFiles = make(map[string][]*os.File)
 			if err := clh.addNet(tt.args.e); (err != nil) != tt.wantErr {
 				t.Errorf("cloudHypervisor.addNet() error = %v, wantErr %v", err, tt.wantErr)
-
 			} else if err == nil {
-				assert.Equal(*(*clh.vmconfig.Net)[0].Tap, tapPath)
+				files := clh.netDevicesFiles[macTest]
+				assert.Equal(files, vmFds)
 			}
 		})
 	}
@@ -199,10 +212,15 @@ func TestCloudHypervisorAddNetCheckEnpointTypes(t *testing.T) {
 func TestCloudHypervisorNetRateLimiter(t *testing.T) {
 	assert := assert.New(t)
 
-	tapPath := "/path/to/tap"
+	file, err := os.CreateTemp("", "netFd")
+	assert.Nil(err)
+	defer os.Remove(file.Name())
+
+	vmFds := make([]*os.File, 1)
+	vmFds = append(vmFds, file)
 
 	validVeth := &VethEndpoint{}
-	validVeth.NetPair.TapInterface.TAPIface.Name = tapPath
+	validVeth.NetPair.TapInterface.VMFds = vmFds
 
 	type args struct {
 		bwMaxRate       int64
@@ -339,13 +357,14 @@ func TestCloudHypervisorNetRateLimiter(t *testing.T) {
 			clhConfig.NetRateLimiterOpsOneTimeBurst = tt.args.opsOneTimeBurst
 
 			clh := &cloudHypervisor{}
+			clh.netDevicesFiles = make(map[string][]*os.File)
 			clh.config = clhConfig
 			clh.APIClient = &clhClientMock{}
 
 			if err := clh.addNet(validVeth); err != nil {
 				t.Errorf("cloudHypervisor.addNet() error = %v", err)
 			} else {
-				netConfig := (*clh.vmconfig.Net)[0]
+				netConfig := (*clh.netDevices)[0]
 
 				assert.Equal(netConfig.HasRateLimiterConfig(), tt.expectsRateLimiter)
 				if tt.expectsRateLimiter {
@@ -373,6 +392,13 @@ func TestCloudHypervisorNetRateLimiter(t *testing.T) {
 func TestCloudHypervisorBootVM(t *testing.T) {
 	clh := &cloudHypervisor{}
 	clh.APIClient = &clhClientMock{}
+
+	savedVmAddNetPutRequestFunc := vmAddNetPutRequest
+	vmAddNetPutRequest = func(clh *cloudHypervisor) error { return nil }
+	defer func() {
+		vmAddNetPutRequest = savedVmAddNetPutRequestFunc
+	}()
+
 	var ctx context.Context
 	if err := clh.bootVM(ctx); err != nil {
 		t.Errorf("cloudHypervisor.bootVM() error = %v", err)
@@ -486,6 +512,12 @@ func TestCloudHypervisorStartSandbox(t *testing.T) {
 	store, err := persist.GetDriver()
 	assert.NoError(err)
 
+	savedVmAddNetPutRequestFunc := vmAddNetPutRequest
+	vmAddNetPutRequest = func(clh *cloudHypervisor) error { return nil }
+	defer func() {
+		vmAddNetPutRequest = savedVmAddNetPutRequestFunc
+	}()
+
 	clhConfig.VMStorePath = store.RunVMStoragePath()
 	clhConfig.RunStorePath = store.RunStoragePath()
 
@@ -523,7 +555,7 @@ func TestCloudHypervisorResizeMemory(t *testing.T) {
 			clh := cloudHypervisor{}
 
 			mockClient := &clhClientMock{}
-			mockClient.vmInfo.Config = *chclient.NewVmConfig(*chclient.NewKernelConfig(""))
+			mockClient.vmInfo.Config = *chclient.NewVmConfig(*chclient.NewPayloadConfig())
 			mockClient.vmInfo.Config.Memory = chclient.NewMemoryConfig(int64(utils.MemUnit(clhConfig.MemorySize) * utils.MiB))
 			mockClient.vmInfo.Config.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64(40 * utils.GiB.ToBytes()))
 
@@ -563,6 +595,7 @@ func TestCloudHypervisorHotplugAddBlockDevice(t *testing.T) {
 	clh := &cloudHypervisor{}
 	clh.config = clhConfig
 	clh.APIClient = &clhClientMock{}
+	clh.devicesIds = make(map[string]string)
 
 	clh.config.BlockDeviceDriver = config.VirtioBlock
 	err = clh.hotplugAddBlockDevice(&config.BlockDrive{Pmem: false})
@@ -585,6 +618,7 @@ func TestCloudHypervisorHotplugRemoveDevice(t *testing.T) {
 	clh := &cloudHypervisor{}
 	clh.config = clhConfig
 	clh.APIClient = &clhClientMock{}
+	clh.devicesIds = make(map[string]string)
 
 	_, err = clh.HotplugRemoveDevice(context.Background(), &config.BlockDrive{}, BlockDev)
 	assert.NoError(err, "Hotplug remove block device expected no error")

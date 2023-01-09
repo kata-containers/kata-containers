@@ -29,6 +29,6 @@ snap: $(YQ)
 	@if [ "$$(cat $(VERSION_FILE))" != "$$($(YQ) r $(SNAPCRAFT_FILE) version)" ]; then \
 		>&2 echo "Warning: $(SNAPCRAFT_FILE) version is different to upstream $(VERSION_FILE) file"; \
 	fi
-	snapcraft -d
+	snapcraft -d --destructive-mode
 
 .PHONY: test-static-build snap

@@ -26,6 +26,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 
 	// only register the proto type
 	crioption "github.com/containerd/containerd/pkg/runtimeoptions/v1"
@@ -97,9 +98,10 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		}
 
 		// create root span
-		rootSpan, newCtx := katatrace.Trace(s.ctx, shimLog, "root span", shimTracingTags)
+		// rootSpan will be ended when the entire trace is ended
+		rootSpan, newCtx := katatrace.Trace(s.ctx, shimLog, "rootSpan", shimTracingTags)
 		s.rootCtx = newCtx
-		defer rootSpan.End()
+		s.rootSpan = rootSpan
 
 		// create span
 		span, newCtx := katatrace.Trace(s.rootCtx, shimLog, "create", shimTracingTags)
@@ -135,7 +137,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		katautils.HandleFactory(ctx, vci, s.config)
 		rootless.SetRootless(s.config.HypervisorConfig.Rootless)
 		if rootless.IsRootless() {
-			if err := configureNonRootHypervisor(s.config); err != nil {
+			if err := configureNonRootHypervisor(s.config, r.ID); err != nil {
 				return nil, err
 			}
 		}
@@ -144,7 +146,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		// ctx will be canceled after this rpc service call, but the sandbox will live
 		// across multiple rpc service calls.
 		//
-		sandbox, _, err := katautils.CreateSandbox(s.ctx, vci, *ociSpec, *s.config, rootFs, r.ID, bundlePath, "", disableOutput, false)
+		sandbox, _, err := katautils.CreateSandbox(s.ctx, vci, *ociSpec, *s.config, rootFs, r.ID, bundlePath, disableOutput, false)
 		if err != nil {
 			return nil, err
 		}
@@ -179,7 +181,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			}
 		}()
 
-		_, err = katautils.CreateContainer(ctx, s.sandbox, *ociSpec, rootFs, r.ID, bundlePath, "", disableOutput, runtimeConfig.DisableGuestEmptyDir)
+		_, err = katautils.CreateContainer(ctx, s.sandbox, *ociSpec, rootFs, r.ID, bundlePath, disableOutput, runtimeConfig.DisableGuestEmptyDir)
 		if err != nil {
 			return nil, err
 		}
@@ -302,13 +304,17 @@ func doMount(mounts []*containerd_types.Mount, rootfs string) error {
 	return nil
 }
 
-func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig) error {
+func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig, sandboxId string) error {
 	userName, err := utils.CreateVmmUser()
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if err != nil {
+			shimLog.WithFields(logrus.Fields{
+				"user_name":  userName,
+				"sandbox_id": sandboxId,
+			}).WithError(err).Warn("configure non root hypervisor failed, delete the user")
 			if err2 := utils.RemoveVmmUser(userName); err2 != nil {
 				shimLog.WithField("userName", userName).WithError(err).Warn("failed to remove user")
 			}
@@ -329,7 +335,14 @@ func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig) error {
 		return err
 	}
 	runtimeConfig.HypervisorConfig.Uid = uint32(uid)
+	runtimeConfig.HypervisorConfig.User = userName
 	runtimeConfig.HypervisorConfig.Gid = uint32(gid)
+	shimLog.WithFields(logrus.Fields{
+		"user_name":  userName,
+		"uid":        uid,
+		"gid":        gid,
+		"sandbox_id": sandboxId,
+	}).Debug("successfully created a non root user for the hypervisor")
 
 	userTmpDir := path.Join("/run/user/", fmt.Sprint(uid))
 	_, err = os.Stat(userTmpDir)
