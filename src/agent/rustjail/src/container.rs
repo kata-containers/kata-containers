@@ -6,7 +6,7 @@
 use anyhow::{anyhow, Context, Result};
 use libc::pid_t;
 use oci::{ContainerState, LinuxDevice, LinuxIdMapping};
-use oci::{Hook, Linux, LinuxNamespace, LinuxResources, Spec};
+use oci::{Linux, LinuxNamespace, LinuxResources, Spec};
 use std::clone::Clone;
 use std::ffi::CString;
 use std::fmt::Display;
@@ -66,6 +66,9 @@ use async_trait::async_trait;
 use rlimit::{setrlimit, Resource, Rlim};
 use tokio::io::AsyncBufReadExt;
 use tokio::sync::Mutex;
+
+use kata_sys_util::hooks::HookStates;
+use kata_sys_util::validate::valid_env;
 
 pub const EXEC_FIFO_FILENAME: &str = "exec.fifo";
 
@@ -1098,12 +1101,14 @@ impl BaseContainer for LinuxContainer {
             }
         }
 
-        if spec.hooks.is_some() {
-            info!(self.logger, "poststop");
-            let hooks = spec.hooks.as_ref().unwrap();
-            for h in hooks.poststop.iter() {
-                execute_hook(&self.logger, h, &st).await?;
-            }
+        // guest Poststop hook
+        // * should be executed after the container is deleted but before the delete operation returns
+        // * the executable file is in agent namespace
+        // * should also be executed in agent namespace.
+        if let Some(hooks) = spec.hooks.as_ref() {
+            info!(self.logger, "guest Poststop hook");
+            let mut hook_states = HookStates::new();
+            hook_states.execute_hooks(&hooks.poststop, Some(st))?;
         }
 
         self.status.transition(ContainerState::Stopped);
@@ -1149,16 +1154,14 @@ impl BaseContainer for LinuxContainer {
             .ok_or_else(|| anyhow!("OCI spec was not found"))?;
         let st = self.oci_state()?;
 
-        // run poststart hook
-        if spec.hooks.is_some() {
-            info!(self.logger, "poststart hook");
-            let hooks = spec
-                .hooks
-                .as_ref()
-                .ok_or_else(|| anyhow!("OCI hooks were not found"))?;
-            for h in hooks.poststart.iter() {
-                execute_hook(&self.logger, h, &st).await?;
-            }
+        // guest Poststart hook
+        // * should be executed after the container is started but before the delete operation returns
+        // * the executable file is in agent namespace
+        // * should also be executed in agent namespace.
+        if let Some(hooks) = spec.hooks.as_ref() {
+            info!(self.logger, "guest Poststart hook");
+            let mut hook_states = HookStates::new();
+            hook_states.execute_hooks(&hooks.poststart, Some(st))?;
         }
 
         unistd::close(fd)?;
@@ -1379,13 +1382,14 @@ async fn join_namespaces(
 
         info!(logger, "get ready to run prestart hook!");
 
-        // run prestart hook
-        if spec.hooks.is_some() {
-            info!(logger, "prestart hook");
-            let hooks = spec.hooks.as_ref().unwrap();
-            for h in hooks.prestart.iter() {
-                execute_hook(&logger, h, st).await?;
-            }
+        // guest Prestart hook
+        // * should be executed during the start operation, and before the container command is executed
+        // * the executable file is in agent namespace
+        // * should also be executed in agent namespace.
+        if let Some(hooks) = spec.hooks.as_ref() {
+            info!(logger, "guest Prestart hook");
+            let mut hook_states = HookStates::new();
+            hook_states.execute_hooks(&hooks.prestart, Some(st.clone()))?;
         }
 
         // notify child run prestart hooks completed
@@ -1565,143 +1569,6 @@ fn set_sysctls(sysctls: &HashMap<String, String>) -> Result<()> {
     Ok(())
 }
 
-use std::process::Stdio;
-use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-pub async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
-    let logger = logger.new(o!("action" => "execute-hook"));
-
-    let binary = PathBuf::from(h.path.as_str());
-    let path = binary.canonicalize()?;
-    if !path.exists() {
-        return Err(anyhow!("Path {:?} does not exist", path));
-    }
-
-    let mut args = h.args.clone();
-    // the hook.args[0] is the hook binary name which shouldn't be included
-    // in the Command.args
-    if args.len() > 1 {
-        args.remove(0);
-    }
-
-    // all invalid envs will be omitted, only valid envs will be passed to hook.
-    let env: HashMap<&str, &str> = h.env.iter().filter_map(|e| valid_env(e)).collect();
-
-    // Avoid the exit signal to be reaped by the global reaper.
-    let _wait_locker = WAIT_PID_LOCKER.lock().await;
-    let mut child = tokio::process::Command::new(path)
-        .args(args.iter())
-        .envs(env.iter())
-        .kill_on_drop(true)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-
-    // default timeout 10s
-    let mut timeout: u64 = 10;
-
-    // if timeout is set if hook, then use the specified value
-    if let Some(t) = h.timeout {
-        if t > 0 {
-            timeout = t as u64;
-        }
-    }
-
-    let state = serde_json::to_string(st)?;
-    let path = h.path.clone();
-
-    let join_handle = tokio::spawn(async move {
-        if let Some(mut stdin) = child.stdin.take() {
-            match stdin.write_all(state.as_bytes()).await {
-                Ok(_) => {}
-                Err(e) => {
-                    info!(logger, "write to child stdin failed: {:?}", e);
-                }
-            }
-        }
-
-        // read something from stdout and stderr for debug
-        if let Some(stdout) = child.stdout.as_mut() {
-            let mut out = String::new();
-            match stdout.read_to_string(&mut out).await {
-                Ok(_) => {
-                    info!(logger, "child stdout: {}", out.as_str());
-                }
-                Err(e) => {
-                    info!(logger, "read from child stdout failed: {:?}", e);
-                }
-            }
-        }
-
-        let mut err = String::new();
-        if let Some(stderr) = child.stderr.as_mut() {
-            match stderr.read_to_string(&mut err).await {
-                Ok(_) => {
-                    info!(logger, "child stderr: {}", err.as_str());
-                }
-                Err(e) => {
-                    info!(logger, "read from child stderr failed: {:?}", e);
-                }
-            }
-        }
-
-        match child.wait().await {
-            Ok(exit) => {
-                let code = exit
-                    .code()
-                    .ok_or_else(|| anyhow!("hook exit status has no status code"))?;
-
-                if code != 0 {
-                    error!(
-                        logger,
-                        "hook {} exit status is {}, error message is {}", &path, code, err
-                    );
-                    return Err(anyhow!(nix::Error::UnknownErrno));
-                }
-
-                debug!(logger, "hook {} exit status is 0", &path);
-                Ok(())
-            }
-            Err(e) => Err(anyhow!(
-                "wait child error: {} {}",
-                e,
-                e.raw_os_error().unwrap()
-            )),
-        }
-    });
-
-    match tokio::time::timeout(Duration::new(timeout, 0), join_handle).await {
-        Ok(r) => r.unwrap(),
-        Err(_) => Err(anyhow!(nix::Error::ETIMEDOUT)),
-    }
-}
-
-// valid environment variables according to https://doc.rust-lang.org/std/env/fn.set_var.html#panics
-fn valid_env(e: &str) -> Option<(&str, &str)> {
-    // wherther key or value will contain NULL char.
-    if e.as_bytes().contains(&b'\0') {
-        return None;
-    }
-
-    let v: Vec<&str> = e.splitn(2, '=').collect();
-
-    // key can't hold an `equal` sign, but value can
-    if v.len() != 2 {
-        return None;
-    }
-
-    let (key, value) = (v[0].trim(), v[1].trim());
-
-    // key can't be empty
-    if key.is_empty() {
-        return None;
-    }
-
-    Some((key, value))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1712,119 +1579,11 @@ mod tests {
     use std::os::unix::io::AsRawFd;
     use tempfile::tempdir;
     use test_utils::skip_if_not_root;
-    use tokio::process::Command;
 
     macro_rules! sl {
         () => {
             slog_scope::logger()
         };
-    }
-
-    async fn which(cmd: &str) -> String {
-        let output: std::process::Output = Command::new("which")
-            .arg(cmd)
-            .output()
-            .await
-            .expect("which command failed to run");
-
-        match String::from_utf8(output.stdout) {
-            Ok(v) => v.trim_end_matches('\n').to_string(),
-            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_execute_hook() {
-        let temp_file = "/tmp/test_execute_hook";
-
-        let touch = which("touch").await;
-
-        defer!(fs::remove_file(temp_file).unwrap(););
-        let invalid_str = vec![97, b'\0', 98];
-        let invalid_string = std::str::from_utf8(&invalid_str).unwrap();
-        let invalid_env = format!("{}=value", invalid_string);
-
-        execute_hook(
-            &slog_scope::logger(),
-            &Hook {
-                path: touch,
-                args: vec!["touch".to_string(), temp_file.to_string()],
-                env: vec![invalid_env],
-                timeout: Some(10),
-            },
-            &OCIState {
-                version: "1.2.3".to_string(),
-                id: "321".to_string(),
-                status: ContainerState::Running,
-                pid: 2,
-                bundle: "".to_string(),
-                annotations: Default::default(),
-            },
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(Path::new(&temp_file).exists(), true);
-    }
-
-    #[tokio::test]
-    async fn test_execute_hook_with_error() {
-        let ls = which("ls").await;
-
-        let res = execute_hook(
-            &slog_scope::logger(),
-            &Hook {
-                path: ls,
-                args: vec!["ls".to_string(), "/tmp/not-exist".to_string()],
-                env: vec![],
-                timeout: None,
-            },
-            &OCIState {
-                version: "1.2.3".to_string(),
-                id: "321".to_string(),
-                status: ContainerState::Running,
-                pid: 2,
-                bundle: "".to_string(),
-                annotations: Default::default(),
-            },
-        )
-        .await;
-
-        let expected_err = nix::Error::UnknownErrno;
-        assert_eq!(
-            res.unwrap_err().downcast::<nix::Error>().unwrap(),
-            expected_err
-        );
-    }
-
-    #[tokio::test]
-    async fn test_execute_hook_with_timeout() {
-        let sleep = which("sleep").await;
-
-        let res = execute_hook(
-            &slog_scope::logger(),
-            &Hook {
-                path: sleep,
-                args: vec!["sleep".to_string(), "2".to_string()],
-                env: vec![],
-                timeout: Some(1),
-            },
-            &OCIState {
-                version: "1.2.3".to_string(),
-                id: "321".to_string(),
-                status: ContainerState::Running,
-                pid: 2,
-                bundle: "".to_string(),
-                annotations: Default::default(),
-            },
-        )
-        .await;
-
-        let expected_err = nix::Error::ETIMEDOUT;
-        assert_eq!(
-            res.unwrap_err().downcast::<nix::Error>().unwrap(),
-            expected_err
-        );
     }
 
     #[test]
@@ -2140,50 +1899,5 @@ mod tests {
     fn test_linuxcontainer_do_init_child() {
         let ret = do_init_child(std::io::stdin().as_raw_fd());
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
-    }
-
-    #[test]
-    fn test_valid_env() {
-        let env = valid_env("a=b=c");
-        assert_eq!(Some(("a", "b=c")), env);
-
-        let env = valid_env("a=b");
-        assert_eq!(Some(("a", "b")), env);
-        let env = valid_env("a =b");
-        assert_eq!(Some(("a", "b")), env);
-
-        let env = valid_env(" a =b");
-        assert_eq!(Some(("a", "b")), env);
-
-        let env = valid_env("a= b");
-        assert_eq!(Some(("a", "b")), env);
-
-        let env = valid_env("a=b ");
-        assert_eq!(Some(("a", "b")), env);
-        let env = valid_env("a=b c ");
-        assert_eq!(Some(("a", "b c")), env);
-
-        let env = valid_env("=b");
-        assert_eq!(None, env);
-
-        let env = valid_env("a=");
-        assert_eq!(Some(("a", "")), env);
-
-        let env = valid_env("a==");
-        assert_eq!(Some(("a", "=")), env);
-
-        let env = valid_env("a");
-        assert_eq!(None, env);
-
-        let invalid_str = vec![97, b'\0', 98];
-        let invalid_string = std::str::from_utf8(&invalid_str).unwrap();
-
-        let invalid_env = format!("{}=value", invalid_string);
-        let env = valid_env(&invalid_env);
-        assert_eq!(None, env);
-
-        let invalid_env = format!("key={}", invalid_string);
-        let env = valid_env(&invalid_env);
-        assert_eq!(None, env);
     }
 }

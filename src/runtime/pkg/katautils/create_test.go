@@ -274,7 +274,7 @@ func TestCreateSandboxAnnotations(t *testing.T) {
 
 	rootFs := vc.RootFs{Mounted: true}
 
-	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig, hookFunc func(context.Context) error) (vc.VCSandbox, error) {
 		return &vcmock.Sandbox{
 			MockID: testSandboxID,
 			MockContainers: []*vcmock.Container{

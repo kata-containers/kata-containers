@@ -7,12 +7,21 @@
 pub use arch_specific::*;
 
 mod arch_specific {
+    use crate::types::*;
     use anyhow::Result;
     use std::path::Path;
 
     const KVM_DEV: &str = "/dev/kvm";
 
-    pub fn check() -> Result<()> {
+    // List of check functions
+    static CHECK_LIST: &[CheckItem] = &[CheckItem {
+        name: CheckType::CheckCpu,
+        descr: "This parameter performs the host check",
+        fp: check,
+        perm: PermissionType::NonPrivileged,
+    }];
+
+    pub fn check(_args: &str) -> Result<()> {
         println!("INFO: check: aarch64");
         if Path::new(KVM_DEV).exists() {
             println!("Kata Containers can run on this host\n");
@@ -21,5 +30,9 @@ mod arch_specific {
         }
 
         Ok(())
+    }
+
+    pub fn get_checks() -> Option<&'static [CheckItem<'static>]> {
+        Some(CHECK_LIST)
     }
 }

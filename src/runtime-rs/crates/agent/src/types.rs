@@ -7,7 +7,7 @@
 use anyhow::{anyhow, Result};
 use std::convert::TryFrom;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(PartialEq, Clone, Default)]
 pub struct Empty {}
@@ -559,6 +559,14 @@ pub struct VersionCheckResponse {
 #[derive(PartialEq, Clone, Default, Debug)]
 pub struct OomEventResponse {
     pub container_id: String,
+}
+
+// ResizeVolumeRequest is also the common struct for serialization and deserialization with json
+// between shim-client HTTP calls to the shim-mgmt-server
+#[derive(Serialize, Deserialize, PartialEq, Clone, Default, Debug)]
+pub struct ResizeVolumeRequest {
+    pub volume_guest_path: String,
+    pub size: u64,
 }
 
 #[cfg(test)]

@@ -15,6 +15,7 @@ use tokio::sync::Mutex;
 pub use utils::{do_get_guest_path, do_get_guest_share_path, get_host_rw_shared_path};
 mod virtio_fs_share_mount;
 use virtio_fs_share_mount::VirtiofsShareMount;
+pub use virtio_fs_share_mount::EPHEMERAL_PATH;
 
 use std::{collections::HashMap, fmt::Debug, path::PathBuf, sync::Arc};
 
@@ -47,7 +48,7 @@ pub trait ShareFs: Send + Sync {
     fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ShareFsRootfsConfig {
     // TODO: for nydus v5/v6 need to update ShareFsMount
     pub cid: String,
@@ -120,14 +121,16 @@ impl MountedInfo {
 
 #[async_trait]
 pub trait ShareFsMount: Send + Sync {
-    async fn share_rootfs(&self, config: ShareFsRootfsConfig) -> Result<ShareFsMountResult>;
-    async fn share_volume(&self, config: ShareFsVolumeConfig) -> Result<ShareFsMountResult>;
+    async fn share_rootfs(&self, config: &ShareFsRootfsConfig) -> Result<ShareFsMountResult>;
+    async fn share_volume(&self, config: &ShareFsVolumeConfig) -> Result<ShareFsMountResult>;
     /// Upgrade to readwrite permission
     async fn upgrade_to_rw(&self, file_name: &str) -> Result<()>;
     /// Downgrade to readonly permission
     async fn downgrade_to_ro(&self, file_name: &str) -> Result<()>;
     /// Umount the volume
-    async fn umount(&self, file_name: &str) -> Result<()>;
+    async fn umount_volume(&self, file_name: &str) -> Result<()>;
+    /// Umount the rootfs
+    async fn umount_rootfs(&self, config: &ShareFsRootfsConfig) -> Result<()>;
 }
 
 pub fn new(id: &str, config: &SharedFsInfo) -> Result<Arc<dyn ShareFs>> {

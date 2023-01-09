@@ -44,16 +44,16 @@ func SetLogger(ctx context.Context, logger *logrus.Entry) {
 
 // CreateSandbox is the virtcontainers sandbox creation entry point.
 // CreateSandbox creates a sandbox and its containers. It does not start them.
-func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error) {
+func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory, prestartHookFunc func(context.Context) error) (VCSandbox, error) {
 	span, ctx := katatrace.Trace(ctx, virtLog, "CreateSandbox", apiTracingTags)
 	defer span.End()
 
-	s, err := createSandboxFromConfig(ctx, sandboxConfig, factory)
+	s, err := createSandboxFromConfig(ctx, sandboxConfig, factory, prestartHookFunc)
 
 	return s, err
 }
 
-func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (_ *Sandbox, err error) {
+func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, factory Factory, prestartHookFunc func(context.Context) error) (_ *Sandbox, err error) {
 	span, ctx := katatrace.Trace(ctx, virtLog, "createSandboxFromConfig", apiTracingTags)
 	defer span.End()
 
@@ -88,7 +88,7 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 	}
 
 	// Start the VM
-	if err = s.startVM(ctx); err != nil {
+	if err = s.startVM(ctx, prestartHookFunc); err != nil {
 		return nil, err
 	}
 

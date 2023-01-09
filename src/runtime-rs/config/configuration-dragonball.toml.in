@@ -136,6 +136,14 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_DB@"
 # of shim, does not need an external virtiofsd process.
 shared_fs = "@DBSHAREDFS@"
 
+# Enable huge pages for VM RAM, default false
+# Enabling this will result in the VM memory
+# being allocated using huge pages.
+# This is useful when you want to use vhost-user network
+# stacks within the container. This will automatically
+# result in memory pre allocation
+#enable_hugepages = true
+
 [agent.@PROJECT_TYPE@]
 container_pipe_size=@PIPESIZE@
 # If enabled, make the agent display debug-level messages.
