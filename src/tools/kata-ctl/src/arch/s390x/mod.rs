@@ -9,6 +9,7 @@ pub use arch_specific::*;
 
 mod arch_specific {
     use crate::check;
+    use crate::types::*;
     use anyhow::{anyhow, Result};
 
     const PROC_CPUINFO: &str = "/proc/cpuinfo";
@@ -38,7 +39,7 @@ mod arch_specific {
         Ok(())
     }
 
-    pub fn check() -> Result<()> {
+    pub fn check(_args: &str) -> Result<()> {
         println!("INFO: check: s390x");
 
         let _cpu_result = check_cpu();

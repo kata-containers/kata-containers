@@ -93,20 +93,10 @@ pub fn handle_check(checkcmd: CheckArgument) -> Result<()> {
         }
         CheckSubCommand::OnlyListReleases => {
             // retrieve official release
-            #[cfg(any(
-                target_arch = "aarch64",
-                target_arch = "powerpc64le",
-                target_arch = "x86_64"
-            ))]
             check::check_official_releases()?;
         }
         CheckSubCommand::IncludeAllReleases => {
             // retrieve ALL releases including prerelease
-            #[cfg(any(
-                target_arch = "aarch64",
-                target_arch = "powerpc64le",
-                target_arch = "x86_64"
-            ))]
             check::check_all_releases()?;
         }
     }
