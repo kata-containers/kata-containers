@@ -17,7 +17,7 @@ use std::path::Path;
 
 const WATCHABLE_PATH_NAME: &str = "watchable";
 const WATCHABLE_BIND_DEV_TYPE: &str = "watchable-bind";
-const EPHEMERAL_PATH: &str = "/run/kata-containers/sandbox/ephemeral";
+pub const EPHEMERAL_PATH: &str = "/run/kata-containers/sandbox/ephemeral";
 
 use super::{
     utils::{self, do_get_host_path},
@@ -38,7 +38,7 @@ impl VirtiofsShareMount {
 
 #[async_trait]
 impl ShareFsMount for VirtiofsShareMount {
-    async fn share_rootfs(&self, config: ShareFsRootfsConfig) -> Result<ShareFsMountResult> {
+    async fn share_rootfs(&self, config: &ShareFsRootfsConfig) -> Result<ShareFsMountResult> {
         // TODO: select virtiofs or support nydus
         let guest_path = utils::share_to_guest(
             &config.source,
@@ -56,7 +56,7 @@ impl ShareFsMount for VirtiofsShareMount {
         })
     }
 
-    async fn share_volume(&self, config: ShareFsVolumeConfig) -> Result<ShareFsMountResult> {
+    async fn share_volume(&self, config: &ShareFsVolumeConfig) -> Result<ShareFsMountResult> {
         let mut guest_path = utils::share_to_guest(
             &config.source,
             &config.target,
@@ -103,7 +103,7 @@ impl ShareFsMount for VirtiofsShareMount {
                 source: guest_path,
                 fs_type: String::from("bind"),
                 fs_group: None,
-                options: config.mount_options,
+                options: config.mount_options.clone(),
                 mount_point: watchable_guest_mount.clone(),
             };
 
@@ -194,10 +194,34 @@ impl ShareFsMount for VirtiofsShareMount {
         Ok(())
     }
 
-    async fn umount(&self, file_name: &str) -> Result<()> {
-        let host_dest = do_get_host_path(file_name, &self.id, "", true, true);
-        umount_timeout(host_dest, 0).context("Umount readwrite host dest")?;
+    async fn umount_volume(&self, file_name: &str) -> Result<()> {
+        let host_dest = do_get_host_path(file_name, &self.id, "", true, false);
+        umount_timeout(&host_dest, 0).context("umount volume")?;
         // Umount event will be propagated to ro directory
+
+        // Remove the directory of mointpoint
+        if let Ok(md) = fs::metadata(&host_dest) {
+            if md.is_file() {
+                fs::remove_file(&host_dest).context("remove the volume mount point as a file")?;
+            }
+            if md.is_dir() {
+                fs::remove_dir(&host_dest).context("remove the volume mount point as a dir")?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn umount_rootfs(&self, config: &ShareFsRootfsConfig) -> Result<()> {
+        let host_dest = do_get_host_path(&config.target, &self.id, &config.cid, false, false);
+        umount_timeout(&host_dest, 0).context("umount rootfs")?;
+
+        // Remove the directory of mointpoint
+        if let Ok(md) = fs::metadata(&host_dest) {
+            if md.is_dir() {
+                fs::remove_dir(&host_dest).context("remove the rootfs mount point as a dir")?;
+            }
+        }
+
         Ok(())
     }
 }

@@ -35,7 +35,7 @@ impl MgmtClient {
         let unix_socket_path = mgmt_socket_addr(sid).context("Failed to get unix socket path")?;
         let s_addr = unix_socket_path
             .strip_prefix("unix:")
-            .context("failed to strix prefix")?;
+            .context("failed to strip prefix")?;
         let sock_path = Path::new("/").join(s_addr).as_path().to_owned();
         let client = Client::unix();
         Ok(Self {
@@ -49,32 +49,52 @@ impl MgmtClient {
     /// Parameter uri should be like "/agent-url" etc.
     pub async fn get(&self, uri: &str) -> Result<Response<Body>> {
         let url: hyper::Uri = Uri::new(&self.sock_path, uri).into();
-        let work = self.client.get(url);
-        match self.timeout {
-            Some(timeout) => match tokio::time::timeout(timeout, work).await {
-                Ok(result) => result.map_err(|e| anyhow!(e)),
-                Err(_) => Err(anyhow!("TIMEOUT")),
-            },
-            // if timeout not set, work executes directly
-            None => work.await.context("failed to GET"),
-        }
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri(url)
+            .body(Body::empty())?;
+        return self.send_request(req).await;
+    }
+
+    /// The HTTP Post method for client
+    pub async fn post(
+        &self,
+        uri: &str,
+        content_type: &str,
+        content: &str,
+    ) -> Result<Response<Body>> {
+        let url: hyper::Uri = Uri::new(&self.sock_path, uri).into();
+
+        // build body from content
+        let body = Body::from(content.to_string());
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri(url)
+            .header("content-type", content_type)
+            .body(body)?;
+        return self.send_request(req).await;
     }
 
     /// The http PUT method for client
     pub async fn put(&self, uri: &str, data: Vec<u8>) -> Result<Response<Body>> {
         let url: hyper::Uri = Uri::new(&self.sock_path, uri).into();
-        let request = Request::builder()
+        let req = Request::builder()
             .method(Method::PUT)
             .uri(url)
-            .body(Body::from(data))
-            .unwrap();
-        let work = self.client.request(request);
+            .body(Body::from(data))?;
+        return self.send_request(req).await;
+    }
+
+    async fn send_request(&self, req: Request<Body>) -> Result<Response<Body>> {
+        let msg = format!("Request ({:?}) to uri {:?}", req.method(), req.uri());
+        let resp = self.client.request(req);
         match self.timeout {
-            Some(timeout) => match tokio::time::timeout(timeout, work).await {
+            Some(timeout) => match tokio::time::timeout(timeout, resp).await {
                 Ok(result) => result.map_err(|e| anyhow!(e)),
-                Err(_) => Err(anyhow!("TIMEOUT")),
+                Err(_) => Err(anyhow!("{:?} timeout after {:?}", msg, self.timeout)),
             },
-            None => work.await.context("failed to PUT"),
+            // if client timeout is not set, request waits with no deadline
+            None => resp.await.context(format!("{:?} failed", msg)),
         }
     }
 }

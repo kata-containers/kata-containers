@@ -898,15 +898,15 @@ endif
 	@printf "\tbinary installation path (BINDIR) : %s\n" $(abspath $(BINDIR))
 	@printf "\tbinaries to install :\n"
 	@printf \
-          "$(foreach b,$(sort $(BINLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+          "$(foreach b,$(sort $(BINLIST)),$(shell printf "\\t - $(abspath $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
-          "$(foreach b,$(sort $(SHIMV2)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+          "$(foreach b,$(sort $(SHIMV2)),$(shell printf "\\t - $(abspath $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
-          "$(foreach b,$(sort $(MONITOR)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+          "$(foreach b,$(sort $(MONITOR)),$(shell printf "\\t - $(abspath $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
-          "$(foreach b,$(sort $(BINLIBEXECLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(PKGLIBEXECDIR)/$(b))\\\n"))"
+          "$(foreach b,$(sort $(BINLIBEXECLIST)),$(shell printf "\\t - $(abspath $(DESTDIR)/$(PKGLIBEXECDIR)/$(b))\\\n"))"
 	@printf \
-          "$(foreach s,$(sort $(SCRIPTS)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(s))\\\n"))"
+          "$(foreach s,$(sort $(SCRIPTS)),$(shell printf "\\t - $(abspath $(DESTDIR)/$(BINDIR)/$(s))\\\n"))"
 	@printf "\tconfigs to install (CONFIGS) :\n"
 	@printf \
 	  "$(foreach c,$(sort $(CONFIGS)),$(shell printf "\\t - $(c)\\\n"))"

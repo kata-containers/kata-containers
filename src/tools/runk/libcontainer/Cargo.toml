@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 rustjail = { path = "../../../agent/rustjail", features = ["standard-oci-runtime"] }
 oci = { path = "../../../libs/oci" }
+kata-sys-util = { path = "../../../libs/kata-sys-util" }
 logging = { path = "../../../libs/logging" }
 derive_builder = "0.10.2"
 libc = "0.2.108"

@@ -52,6 +52,9 @@ const (
 	// RemoteHypervisor is the Remote hypervisor.
 	RemoteHypervisor HypervisorType = "remote"
 
+	// VirtFrameworkHypervisor is the Darwin Virtualization.framework hypervisor
+	VirtframeworkHypervisor HypervisorType = "virtframework"
+
 	// MockHypervisor is a mock hypervisor for testing purposes
 	MockHypervisor HypervisorType = "mock"
 
@@ -87,6 +90,8 @@ var (
 )
 
 // In some architectures the maximum number of vCPUs depends on the number of physical cores.
+// TODO (dcantah): Find a suitable value for darwin/vfw. Seems perf degrades if > number of host
+// cores.
 var defaultMaxVCPUs = govmm.MaxVCPUs()
 
 // agnostic list of kernel root parameters for NVDIMM
@@ -182,6 +187,9 @@ func (hType *HypervisorType) Set(value string) error {
 		return nil
 	case "remote":
 		*hType = RemoteHypervisor
+		return nil
+	case "virtframework":
+		*hType = VirtframeworkHypervisor
 		return nil
 	case "mock":
 		*hType = MockHypervisor

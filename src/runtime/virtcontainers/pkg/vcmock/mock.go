@@ -42,9 +42,9 @@ func (m *VCMock) SetFactory(ctx context.Context, factory vc.Factory) {
 }
 
 // CreateSandbox implements the VC function of the same name.
-func (m *VCMock) CreateSandbox(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+func (m *VCMock) CreateSandbox(ctx context.Context, sandboxConfig vc.SandboxConfig, hookFunc func(context.Context) error) (vc.VCSandbox, error) {
 	if m.CreateSandboxFunc != nil {
-		return m.CreateSandboxFunc(ctx, sandboxConfig)
+		return m.CreateSandboxFunc(ctx, sandboxConfig, hookFunc)
 	}
 
 	return nil, fmt.Errorf("%s: %s (%+v): sandboxConfig: %v", mockErrorPrefix, getSelf(), m, sandboxConfig)

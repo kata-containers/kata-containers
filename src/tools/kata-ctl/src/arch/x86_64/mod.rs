@@ -25,8 +25,8 @@ mod arch_specific {
         perm: PermissionType::NonPrivileged,
     }];
 
-    pub fn get_checks() -> &'static [CheckItem<'static>] {
-        CHECK_LIST
+    pub fn get_checks() -> Option<&'static [CheckItem<'static>]> {
+        Some(CHECK_LIST)
     }
 
     fn check_cpu(_args: &str) -> Result<()> {

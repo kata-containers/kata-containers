@@ -30,6 +30,7 @@ impl Volume for BlockVolume {
     }
 
     async fn cleanup(&self) -> Result<()> {
+        // TODO: Clean up BlockVolume
         warn!(sl!(), "Cleaning up BlockVolume is still unimplemented.");
         Ok(())
     }

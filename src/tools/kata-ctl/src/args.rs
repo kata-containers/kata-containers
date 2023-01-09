@@ -20,7 +20,7 @@ pub enum Commands {
     Check(CheckArgument),
 
     /// Directly assign a volume to Kata Containers to manage
-    DirectVolume,
+    DirectVolume(DirectVolumeCommand),
 
     /// Display settings
     Env,
@@ -92,4 +92,47 @@ pub struct IptablesCommand {
 pub enum IpTablesArguments {
     /// Configure iptables
     Metrics,
+}
+
+#[derive(Debug, Args)]
+pub struct DirectVolumeCommand {
+    #[clap(subcommand)]
+    pub directvol_cmd: DirectVolSubcommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum DirectVolSubcommand {
+    /// Add a direct assigned block volume device to the Kata Containers runtime
+    Add(DirectVolAddArgs),
+
+    /// Remove a direct assigned block volume device from the Kata Containers runtime
+    Remove(DirectVolRemoveArgs),
+
+    /// Get the filesystem stat of a direct assigned volume
+    Stats(DirectVolStatsArgs),
+
+    /// Resize a direct assigned block volume
+    Resize(DirectVolResizeArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct DirectVolAddArgs {
+    pub volume_path: String,
+    pub mount_info: String,
+}
+
+#[derive(Debug, Args)]
+pub struct DirectVolRemoveArgs {
+    pub volume_path: String,
+}
+
+#[derive(Debug, Args)]
+pub struct DirectVolStatsArgs {
+    pub volume_path: String,
+}
+
+#[derive(Debug, Args)]
+pub struct DirectVolResizeArgs {
+    pub volume_path: String,
+    pub resize_size: u64,
 }

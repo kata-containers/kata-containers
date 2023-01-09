@@ -19,17 +19,19 @@ use oci::{ContainerState, State as OCIState};
 use procfs;
 use rustjail::cgroups::fs::Manager as CgroupManager;
 use rustjail::{
-    container::{self, BaseContainer, LinuxContainer, EXEC_FIFO_FILENAME},
+    container::{BaseContainer, LinuxContainer, EXEC_FIFO_FILENAME},
     process::{Process, ProcessOperations},
     specconv::CreateOpts,
 };
 use scopeguard::defer;
-use slog::{debug, Logger};
+use slog::{debug, info, Logger};
 use std::{
     env::current_dir,
     fs,
     path::{Path, PathBuf},
 };
+
+use kata_sys_util::hooks::HookStates;
 
 pub const CONFIG_FILE_NAME: &str = "config.json";
 
@@ -139,14 +141,10 @@ impl Container {
             annotations: spec.annotations.clone(),
         };
 
-        if spec.hooks.is_some() {
-            let hooks = spec
-                .hooks
-                .as_ref()
-                .ok_or_else(|| anyhow!("hooks config was not present"))?;
-            for h in hooks.poststop.iter() {
-                container::execute_hook(logger, h, &oci_state).await?;
-            }
+        if let Some(hooks) = spec.hooks.as_ref() {
+            info!(&logger, "Poststop Hooks");
+            let mut poststop_hookstates = HookStates::new();
+            poststop_hookstates.execute_hooks(&hooks.poststop, Some(oci_state.clone()))?;
         }
 
         match oci_state.status {

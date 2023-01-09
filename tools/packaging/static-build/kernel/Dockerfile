@@ -16,6 +16,7 @@ RUN apt-get update && \
 	    flex \
 	    git \
 	    iptables \
+	    kmod \
 	    libelf-dev \
 	    libssl-dev \
 	    patch && \

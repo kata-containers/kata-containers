@@ -4196,6 +4196,7 @@ dependencies = [
  "cgroups-rs",
  "futures",
  "inotify",
+ "kata-sys-util",
  "lazy_static",
  "libc",
  "libseccomp",

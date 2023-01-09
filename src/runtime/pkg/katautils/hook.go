@@ -17,6 +17,7 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	syscallWrapper "github.com/kata-containers/kata-containers/src/runtime/pkg/syscall"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
@@ -38,8 +39,16 @@ func runHook(ctx context.Context, spec specs.Spec, hook specs.Hook, cid, bundleP
 	defer span.End()
 	katatrace.AddTags(span, "path", hook.Path, "args", hook.Args)
 
+	pid, ok := ctx.Value(vc.HypervisorPidKey{}).(int)
+	if !ok || pid == 0 {
+		hookLogger().Info("no hypervisor pid")
+
+		pid = syscallWrapper.Gettid()
+	}
+	hookLogger().Infof("hypervisor pid %v", pid)
+
 	state := specs.State{
-		Pid:         syscallWrapper.Gettid(),
+		Pid:         pid,
 		Bundle:      bundlePath,
 		ID:          cid,
 		Annotations: spec.Annotations,

@@ -7,11 +7,13 @@ license = "Apache-2.0"
 
 [dev-dependencies]
 test-utils = { path = "../../../libs/test-utils" }
+tempfile = "3.2.0"
 
 [dependencies]
 anyhow = "^1.0"
 async-trait = "0.1.48"
 bitflags = "1.2.1"
+byte-unit = "4.0.14"
 cgroups-rs = "0.2.9"
 futures = "0.3.11"
 lazy_static = "1.4.0"
