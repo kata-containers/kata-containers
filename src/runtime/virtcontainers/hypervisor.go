@@ -51,7 +51,7 @@ const (
 
 	// RemoteHypervisor is the Remote hypervisor.
 	RemoteHypervisor HypervisorType = "remote"
-	
+
 	// VirtFrameworkHypervisor is the Darwin Virtualization.framework hypervisor
 	VirtframeworkHypervisor HypervisorType = "virtframework"
 

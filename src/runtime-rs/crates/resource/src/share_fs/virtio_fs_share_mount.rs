@@ -196,7 +196,7 @@ impl ShareFsMount for VirtiofsShareMount {
 
     async fn umount_volume(&self, file_name: &str) -> Result<()> {
         let host_dest = do_get_host_path(file_name, &self.id, "", true, false);
-        umount_timeout(host_dest, 0).context("umount volume")?;
+        umount_timeout(&host_dest, 0).context("umount volume")?;
         // Umount event will be propagated to ro directory
 
         // Remove the directory of mointpoint
