@@ -41,6 +41,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cpuset"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/portforward"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -987,6 +988,50 @@ func (s *Sandbox) UpdateRoutes(ctx context.Context, routes []*pbTypes.Route) ([]
 // ListRoutes lists all routes and their configurations in the sandbox.
 func (s *Sandbox) ListRoutes(ctx context.Context) ([]*pbTypes.Route, error) {
 	return s.agent.listRoutes(ctx)
+}
+
+// PortForward forwards a container port via a vsock to the host
+func (s *Sandbox) PortForward(ctx context.Context, hostAddr string, containerID string, port uint32) error {
+	// asynchronously starts a listener on a vsock port and
+	// passes the port to the agent using s.agent.portForward(ctx, container, port, vsockPort)
+	// this is a blocking call which will block until
+	// ctx is cancelled || the connection from agent is closed
+
+	// The agent will dial the vsock port
+	// The listener accepts the connection to agent
+	// and start forward data back and forth between vm and host
+	// from host -> conn && conn -> host
+
+	pf, err := portforward.NewPortForwarder(containerID, port)
+	if err != nil {
+		return err
+	}
+
+	c, err := net.Dial("unix", hostAddr)
+	if err != nil {
+		return err
+	}
+
+	pfCtx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		defer func() {
+			cancel()
+			c.Close()
+			pf.Close()
+		}()
+
+		if err := pf.Forward(pfCtx, c); err != nil {
+			s.Logger().Errorf("Error while portforwarding: %v", err)
+			return
+		}
+	}()
+
+	if err := s.agent.portForward(ctx, containerID, port, pf.GetVSockPort()); err != nil {
+		cancel()
+		return err
+	}
+	return nil
 }
 
 const (

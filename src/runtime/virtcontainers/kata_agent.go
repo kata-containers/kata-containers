@@ -114,6 +114,7 @@ var (
 const (
 	grpcCheckRequest             = "grpc.CheckRequest"
 	grpcExecProcessRequest       = "grpc.ExecProcessRequest"
+	grpcPortForwardRequest       = "grpc.PortForwardRequest"
 	grpcCreateSandboxRequest     = "grpc.CreateSandboxRequest"
 	grpcDestroySandboxRequest    = "grpc.DestroySandboxRequest"
 	grpcCreateContainerRequest   = "grpc.CreateContainerRequest"
@@ -556,6 +557,21 @@ func (k *kataAgent) exec(ctx context.Context, sandbox *Sandbox, c Container, cmd
 
 	return buildProcessFromExecID(req.ExecId)
 }
+
+func (k *kataAgent) portForward(ctx context.Context, containerID string, port uint32, vsockPort uint32) error {
+	span, ctx := katatrace.Trace(ctx, k.Logger(), "port-forward", kataAgentTracingTags)
+	defer span.End()
+
+	req := &grpc.PortForwardRequest{
+		ContainerId: containerID,
+		Port: port,
+		VsockPort: vsockPort,
+	}
+
+	_, err := k.sendReq(ctx, req)
+	return err
+}
+
 
 func (k *kataAgent) updateInterface(ctx context.Context, ifc *pbTypes.Interface) (*pbTypes.Interface, error) {
 	// send update interface request
@@ -1927,6 +1943,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	}
 	k.reqHandlers[grpcExecProcessRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.ExecProcess(ctx, req.(*grpc.ExecProcessRequest))
+	}
+	k.reqHandlers[grpcPortForwardRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.PortForwardClient.PortForward(ctx, req.(*grpc.PortForwardRequest))
 	}
 	k.reqHandlers[grpcCreateSandboxRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.CreateSandbox(ctx, req.(*grpc.CreateSandboxRequest))
