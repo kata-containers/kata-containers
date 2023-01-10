@@ -1502,6 +1502,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "protobuf-codegen-pure3"
+version = "2.27.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3524b02d9f8f449f0f96947d8788121b8d2001d94c862921fb0862937d1f1770"
+dependencies = [
+ "protobuf",
+ "protobuf-codegen",
+]
+
+[[package]]
 name = "protocols"
 version = "0.1.0"
 dependencies = [
@@ -2221,21 +2231,21 @@ dependencies = [
 
 [[package]]
 name = "ttrpc-codegen"
-version = "0.2.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "809eda4e459820237104e4b61d6b41bbe6c9e1ce6adf4057955e6e6722a90408"
+checksum = "b4aaeed0a2bd977ba058870b263abda3ccaba59482559514cc43e3854079f34c"
 dependencies = [
  "protobuf",
  "protobuf-codegen",
- "protobuf-codegen-pure",
+ "protobuf-codegen-pure3",
  "ttrpc-compiler",
 ]
 
 [[package]]
 name = "ttrpc-compiler"
-version = "0.4.1"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2978ed3fa047d8fd55cbeb4d4a61d461fb3021a90c9618519c73ce7e5bb66c15"
+checksum = "b73a5e485d4c3b5e4a5e27123886fb36ed47bfa41b7022c76714ab20e9ec224f"
 dependencies = [
  "derive-new",
  "prost",
