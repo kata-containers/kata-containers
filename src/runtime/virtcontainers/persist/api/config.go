@@ -70,7 +70,7 @@ type HypervisorConfig struct {
 	// VirtioFSDaemon is the virtio-fs vhost-user daemon path
 	VirtioFSDaemon string
 
-	// VirtioFSCache cache mode for fs version cache or "none"
+	// VirtioFSCache cache mode for fs version cache
 	VirtioFSCache string
 
 	// File based memory backend root directory
