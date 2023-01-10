@@ -219,7 +219,7 @@ type HypervisorConfig struct {
 	// VirtioFSDaemonList is the list of valid virtiofs names for annotations
 	VirtioFSDaemonList []string
 
-	// VirtioFSCache cache mode for fs version cache or "none"
+	// VirtioFSCache cache mode for fs version cache
 	VirtioFSCache string
 
 	// VirtioFSExtraArgs passes options to virtiofsd daemon

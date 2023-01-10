@@ -190,7 +190,7 @@ const (
 	// VirtioFSDaemon is a sandbox annotations to specify virtio-fs vhost-user daemon path
 	VirtioFSDaemon = kataAnnotHypervisorPrefix + "virtio_fs_daemon"
 
-	// VirtioFSCache is a sandbox annotation to specify the cache mode for fs version cache or "none"
+	// VirtioFSCache is a sandbox annotation to specify the cache mode for fs version cache
 	VirtioFSCache = kataAnnotHypervisorPrefix + "virtio_fs_cache"
 
 	// VirtioFSCacheSize is a sandbox annotation to specify the DAX cache size in MiB
