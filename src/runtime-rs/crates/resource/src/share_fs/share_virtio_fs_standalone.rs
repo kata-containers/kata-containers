@@ -35,7 +35,7 @@ pub struct ShareVirtioFsStandaloneConfig {
 
     // virtio_fs_daemon is the virtio-fs vhost-user daemon path
     pub virtio_fs_daemon: String,
-    // virtio_fs_cache cache mode for fs version cache or "none"
+    // virtio_fs_cache cache mode for fs version cache
     pub virtio_fs_cache: String,
     // virtio_fs_extra_args passes options to virtiofsd daemon
     pub virtio_fs_extra_args: Vec<String>,
