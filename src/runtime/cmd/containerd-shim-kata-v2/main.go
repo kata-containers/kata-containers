@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -28,5 +29,5 @@ func main() {
 		os.Exit(0)
 	}
 
-	shimapi.Run(types.DefaultKataRuntimeName, shim.New, shimConfig)
+	shimapi.RunManager(context.Background(), shim.NewShimManager(types.DefaultKataRuntimeName))
 }

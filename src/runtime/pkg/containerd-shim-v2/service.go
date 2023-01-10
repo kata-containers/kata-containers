@@ -180,40 +180,6 @@ type service struct {
 	pid uint32
 }
 
-func newCommand(ctx context.Context, id, containerdBinary, containerdAddress string) (*sysexec.Cmd, error) {
-	ns, err := namespaces.NamespaceRequired(ctx)
-	if err != nil {
-		return nil, err
-	}
-	self, err := os.Executable()
-	if err != nil {
-		return nil, err
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
-	args := []string{
-		"-namespace", ns,
-		"-address", containerdAddress,
-		"-publish-binary", containerdBinary,
-		"-id", id,
-	}
-	opts := ctx.Value(cdshim.OptsKey{}).(cdshim.Opts)
-	if opts.Debug {
-		args = append(args, "-debug")
-	}
-	cmd := sysexec.Command(self, args...)
-	cmd.Dir = cwd
-
-	// Set the go max process to 2 in case the shim forks too much process
-	cmd.Env = append(os.Environ(), "GOMAXPROCS=2")
-
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid: true,
-	}
-
-	return cmd, nil
 }
 
 // StartShim is a binary call that starts a kata shimv2 service which will

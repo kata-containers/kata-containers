@@ -41,10 +41,10 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 )
 
-type startManagementServerFunc func(s *service, ctx context.Context, ociSpec *specs.Spec)
+type startManagementServerFunc func(s *service, id string, ctx context.Context, ociSpec *specs.Spec)
 
-var defaultStartManagementServerFunc startManagementServerFunc = func(s *service, ctx context.Context, ociSpec *specs.Spec) {
-	go s.startManagementServer(ctx, ociSpec)
+var defaultStartManagementServerFunc startManagementServerFunc = func(s *service, id string, ctx context.Context, ociSpec *specs.Spec) {
+	go s.startManagementServer(ctx, id, ociSpec)
 	shimLog.Info("management server started")
 }
 
@@ -158,7 +158,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		s.hpid = uint32(pid)
 
 		if defaultStartManagementServerFunc != nil {
-			defaultStartManagementServerFunc(s, ctx, ociSpec)
+			defaultStartManagementServerFunc(s, r.ID, ctx, ociSpec)
 		}
 
 	case vc.PodContainer:
