@@ -20,6 +20,8 @@ import (
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/pkg/shutdown"
+	"github.com/containerd/containerd/plugin"
 	cdruntime "github.com/containerd/containerd/runtime"
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
@@ -39,6 +41,29 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
+
+func init() {
+	plugin.Register(&plugin.Registration{
+		Type: plugin.TTRPCPlugin,
+		ID:   "task",
+		Requires: []plugin.Type{
+			plugin.EventPlugin,
+			plugin.InternalPlugin,
+		},
+		InitFn: func(ic *plugin.InitContext) (interface{}, error) {
+			pp, err := ic.GetByID(plugin.EventPlugin, "publisher")
+			if err != nil {
+				return nil, err
+			}
+			ssInt, err := ic.GetByID(plugin.InternalPlugin, "shutdown")
+			if err != nil {
+				return nil, err
+			}
+			ss := ssInt.(shutdown.Service)
+			return New(ic.Context, pp.(cdshim.Publisher), ss)
+		},
+	})
+}
 
 // shimTracingTags defines tags for the trace span
 var shimTracingTags = map[string]string{
@@ -71,10 +96,9 @@ var shimLog = logrus.WithFields(logrus.Fields{
 })
 
 // New returns a new shim service that can be used via GRPC
-func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown func()) (cdshim.Shim, error) {
+func New(ctx context.Context, publisher cdshim.Publisher, shutdown shutdown.Service) (cdshim.Shim, error) {
 	shimLog = shimLog.WithFields(logrus.Fields{
-		"sandbox": id,
-		"pid":     os.Getpid(),
+		"pid": os.Getpid(),
 	})
 	// Discard the log before shim init its log output. Otherwise
 	// it will output into stdio, from which containerd would like
@@ -93,14 +117,15 @@ func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown fu
 	}
 
 	s := &service{
-		id:         id,
 		pid:        uint32(os.Getpid()),
 		ctx:        ctx,
 		containers: make(map[string]*container),
 		events:     make(chan interface{}, chSize),
 		ec:         make(chan exit, bufferSize),
-		cancel:     shutdown,
-		namespace:  ns,
+		cancel: func() {
+			shutdown.Shutdown()
+		},
+		namespace: ns,
 	}
 
 	go s.processExits()
@@ -1031,7 +1056,7 @@ func (s *service) Update(ctx context.Context, r *taskAPI.UpdateTaskRequest) (_ *
 	}
 	resources, ok := v.(*specs.LinuxResources)
 	if !ok {
-		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, "Invalid resources type for %s", s.id)
+		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, "Invalid resources type for %s", r.ID)
 	}
 
 	err = s.sandbox.UpdateContainer(spanCtx, r.ID, *resources)
