@@ -10,13 +10,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	sysexec "os/exec"
 	goruntime "runtime"
 	"sync"
 	"syscall"
 	"time"
 
 	eventstypes "github.com/containerd/containerd/api/events"
+	portForwardAPI "github.com/containerd/containerd/api/shim/portforward/v1"
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/namespaces"
@@ -25,6 +25,7 @@ import (
 	cdruntime "github.com/containerd/containerd/runtime"
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
+	"github.com/containerd/ttrpc"
 	"github.com/containerd/typeurl"
 	ptypes "github.com/gogo/protobuf/types"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -180,6 +181,10 @@ type service struct {
 	pid uint32
 }
 
+func (s *service) RegisterTTRPC(server *ttrpc.Server) error {
+	taskAPI.RegisterTaskService(server, s)
+	portForwardAPI.RegisterPortForwardService(server, s)
+	return nil
 }
 
 // StartShim is a binary call that starts a kata shimv2 service which will
@@ -571,6 +576,14 @@ func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *p
 		ExecID:      r.ExecID,
 	})
 
+	return empty, nil
+}
+
+func (s *service) PortForward(ctx context.Context, req *portForwardAPI.PortForwardRequest) (*ptypes.Empty, error) {
+	err := s.sandbox.PortForward(ctx, req.Addr, req.ID, uint32(req.Port))
+	if err != nil {
+		return nil, errdefs.ToGRPC(err)
+	}
 	return empty, nil
 }
 
