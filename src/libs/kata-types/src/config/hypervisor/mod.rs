@@ -779,6 +779,10 @@ pub struct SharedFsInfo {
     #[serde(default)]
     pub virtio_fs_cache_size: u32,
 
+    /// Default size of virtqueues
+    #[serde(default)]
+    pub virtio_fs_queue_size: u32,
+
     /// Enable virtio-fs DAX window if true.
     #[serde(default)]
     pub virtio_fs_is_dax: bool,
