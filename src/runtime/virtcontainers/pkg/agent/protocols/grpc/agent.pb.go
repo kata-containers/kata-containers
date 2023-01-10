@@ -1803,7 +1803,7 @@ func (m *SetIPTablesRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_SetIPTablesRequest proto.InternalMessageInfo
 
 type SetIPTablesResponse struct {
-	// raw stdout from iptables-restore or ip6tables-restore ?
+	// raw stdout from iptables-restore or ip6tables-restore
 	Data                 []byte   `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -7664,7 +7664,7 @@ func (this *MemoryStats) String() string {
 		return "nil"
 	}
 	keysForStats := make([]string, 0, len(this.Stats))
-	for k := range this.Stats {
+	for k, _ := range this.Stats {
 		keysForStats = append(keysForStats, k)
 	}
 	github_com_gogo_protobuf_sortkeys.Strings(keysForStats)
@@ -7775,7 +7775,7 @@ func (this *CgroupStats) String() string {
 		return "nil"
 	}
 	keysForHugetlbStats := make([]string, 0, len(this.HugetlbStats))
-	for k := range this.HugetlbStats {
+	for k, _ := range this.HugetlbStats {
 		keysForHugetlbStats = append(keysForHugetlbStats, k)
 	}
 	github_com_gogo_protobuf_sortkeys.Strings(keysForHugetlbStats)

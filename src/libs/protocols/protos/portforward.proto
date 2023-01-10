@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option go_package = "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc";
+
+package grpc;
+
+import "google/protobuf/empty.proto";
+
+service PortForwardService {
+	rpc PortForward(PortForwardRequest) returns (google.protobuf.Empty);
+}
+
+message PortForwardRequest {
+	string container_id = 1;
+	uint32 port = 2;
+	uint32 vsock_port = 3;
+}

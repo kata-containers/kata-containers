@@ -18,3 +18,6 @@ pub mod health_ttrpc_async;
 pub mod oci;
 pub mod trans;
 pub mod types;
+#[cfg(feature = "async")]
+pub mod portforward_ttrpc_async;
+pub mod portforward;
