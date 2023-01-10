@@ -1242,9 +1242,9 @@ func TestDefaultVirtioFSCache(t *testing.T) {
 	cache = h.defaultVirtioFSCache()
 	assert.Equal("always", cache)
 
-	h.VirtioFSCache = "none"
+	h.VirtioFSCache = "never"
 	cache = h.defaultVirtioFSCache()
-	assert.Equal("none", cache)
+	assert.Equal("never", cache)
 }
 
 func TestDefaultFirmware(t *testing.T) {
