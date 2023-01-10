@@ -29,11 +29,12 @@ var virtiofsdTracingTags = map[string]string{
 }
 
 var (
-	errVirtiofsdDaemonPathEmpty    = errors.New("virtiofsd daemon path is empty")
-	errVirtiofsdSocketPathEmpty    = errors.New("virtiofsd socket path is empty")
-	errVirtiofsdSourcePathEmpty    = errors.New("virtiofsd source path is empty")
-	errVirtiofsdSourceNotAvailable = errors.New("virtiofsd source path not available")
-	errUnimplemented               = errors.New("unimplemented")
+	errVirtiofsdDaemonPathEmpty          = errors.New("virtiofsd daemon path is empty")
+	errVirtiofsdSocketPathEmpty          = errors.New("virtiofsd socket path is empty")
+	errVirtiofsdSourcePathEmpty          = errors.New("virtiofsd source path is empty")
+	errVirtiofsdInvalidVirtiofsCacheMode = func(mode string) error { return errors.Errorf("Invalid virtio-fs cache mode: %s", mode) }
+	errVirtiofsdSourceNotAvailable       = errors.New("virtiofsd source path not available")
+	errUnimplemented                     = errors.New("unimplemented")
 )
 
 type VirtiofsDaemon interface {
@@ -63,7 +64,7 @@ type virtiofsd struct {
 	path string
 	// socketPath where daemon will serve
 	socketPath string
-	// cache size for virtiofsd
+	// cache mode for virtiofsd
 	cache string
 	// sourcePath path that daemon will help to share
 	sourcePath string
@@ -213,6 +214,16 @@ func (v *virtiofsd) valid() error {
 	if _, err := os.Stat(v.sourcePath); err != nil {
 		return errVirtiofsdSourceNotAvailable
 	}
+
+	if v.cache == "" {
+		v.cache = "auto"
+	} else if v.cache == "none" {
+		v.Logger().Warn("virtio-fs cache mode `none` is deprecated since Kata Containers 2.5.0 and will be removed in the future release, please use `never` instead. For more details please refer to https://github.com/kata-containers/kata-containers/issues/4234.")
+		v.cache = "never"
+	} else if v.cache != "auto" && v.cache != "always" && v.cache != "never" {
+		return errVirtiofsdInvalidVirtiofsCacheMode(v.cache)
+	}
+
 	return nil
 }
 

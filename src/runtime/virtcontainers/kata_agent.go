@@ -34,6 +34,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	"context"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/selinux/go-selinux"
@@ -87,7 +88,7 @@ var (
 	type9pFs                     = "9p"
 	typeVirtioFS                 = "virtiofs"
 	typeOverlayFS                = "overlay"
-	typeVirtioFSNoCache          = "none"
+	typeVirtioFSNoCache          = "never"
 	kata9pDevType                = "9p"
 	kataMmioBlkDevType           = "mmioblk"
 	kataBlkDevType               = "blk"
@@ -801,7 +802,7 @@ func setupStorages(ctx context.Context, sandbox *Sandbox) []*grpc.Storage {
 		if sharedFS == config.VirtioFS || sharedFS == config.VirtioFSNydus {
 			// If virtio-fs uses either of the two cache options 'auto, always',
 			// the guest directory can be mounted with option 'dax' allowing it to
-			// directly map contents from the host. When set to 'none', the mount
+			// directly map contents from the host. When set to 'never', the mount
 			// options should not contain 'dax' lest the virtio-fs daemon crashing
 			// with an invalid address reference.
 			if sandbox.config.HypervisorConfig.VirtioFSCache != typeVirtioFSNoCache {
