@@ -564,6 +564,8 @@ func xConnectVMNetwork(ctx context.Context, endpoint Endpoint, h Hypervisor) err
 	case NetXConnectTCFilterModel:
 		networkLogger().Info("connect TCFilter to VM network")
 		err = setupTCFiltering(ctx, endpoint, queues, disableVhostNet)
+	case NetXConnectNoneModel:
+		// internetworking_model is none, so do nothing?
 	default:
 		err = fmt.Errorf("Invalid internetworking model")
 	}
