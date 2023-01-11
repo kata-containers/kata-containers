@@ -332,6 +332,7 @@ the `kata-agent` needs to be labeled `container_runtime_exec_t` again by yoursel
 >   variable in the previous command and ensure the `qemu-img` command is
 >   available on your system.
 >   - If `qemu-img` is not installed, you will likely see errors such as `ERROR: File /dev/loop19p1 is not a block device` and `losetup: /tmp/tmp.bHz11oY851: Warning: file is smaller than 512 bytes; the loop device may be useless or invisible for system tools`. These can be mitigated by installing the `qemu-img` command (available in the `qemu-img` package on Fedora or the `qemu-utils` package on Debian).
+> - If `loop` module is not probed, you will likely see errors such as `losetup: cannot find an unused loop device`. Execute `modprobe loop` could resolve it.
 
 
 ### Install the rootfs image
