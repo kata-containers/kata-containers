@@ -235,7 +235,7 @@ pub(crate) mod test_utils {
     }
 
     pub fn create_dummy_cgroup(cpath: &Path) -> cgroups::Cgroup {
-        cgroups::Cgroup::new(cgroups::hierarchies::auto(), cpath)
+        cgroups::Cgroup::new(cgroups::hierarchies::auto(), cpath).unwrap()
     }
 
     pub fn clean_up_cgroup(cpath: &Path) {
