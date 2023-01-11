@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -34,17 +33,12 @@ func TestHandleHugepages(t *testing.T) {
 	var mounts []specs.Mount
 	var hugepageLimits []specs.LinuxHugepageLimit
 
-	// On s390x, hugepage sizes must be set at boot and cannot be created ad hoc. Use any that
-	// are present (default is 1M, can only be changed on LPAR). See
-	// https://www.ibm.com/docs/en/linuxonibm/pdf/lku5dd05.pdf, p. 345 for more information.
-	if runtime.GOARCH == "s390x" {
-		dirs, err := os.ReadDir(sysHugepagesDir)
-		assert.Nil(err)
-		for _, dir := range dirs {
-			formattedSizes = append(formattedSizes, strings.TrimPrefix(dir.Name(), "hugepages-"))
-		}
-	} else {
-		formattedSizes = []string{"1G", "2M"}
+	// Hugepage sizes must be set at boot time and cannot be created ad hoc.
+	// Use any that are present.
+	dirs, err := os.ReadDir(sysHugepagesDir)
+	assert.Nil(err)
+	for _, dir := range dirs {
+		formattedSizes = append(formattedSizes, strings.TrimPrefix(dir.Name(), "hugepages-"))
 	}
 
 	for _, formattedSize := range formattedSizes {
