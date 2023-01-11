@@ -147,10 +147,12 @@ pub fn get_generic_cpu_details(cpu_info_file: &str) -> Result<(String, String)> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::io::Write;
     use tempfile::tempdir;
 
     #[test]
+    #[serial]
     fn test_drop_privs() {
         let res = drop_privs();
         assert!(res.is_ok());
@@ -164,6 +166,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_kernel_version_valid_input() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("proc-version");
@@ -208,6 +211,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_get_distro_details_valid_file() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("os-version");
