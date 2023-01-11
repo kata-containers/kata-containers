@@ -68,7 +68,7 @@ pub fn get_container_type(spec: &oci::Spec) -> Result<ContainerType, Error> {
 pub fn get_shim_id_info() -> Result<ShimIdInfo, Error> {
     let spec = load_oci_spec()?;
     match get_container_type(&spec)? {
-        ContainerType::PodSandbox => Ok(ShimIdInfo::Sandbox),
+        ContainerType::PodSandbox | ContainerType::SingleContainer => Ok(ShimIdInfo::Sandbox),
         ContainerType::PodContainer => {
             for k in CRI_SANDBOX_ID_KEY_LIST {
                 if let Some(sandbox_id) = spec.annotations.get(*k) {
