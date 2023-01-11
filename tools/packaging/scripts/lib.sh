@@ -216,7 +216,7 @@ get_shim_v2_image_name() {
 
 get_td_shim_image_name() {
 	td_shim_script_dir="${this_script_dir}/../static-build/td-shim"
-	echo "${CC_BUILDER_REGISTRY}:td-shim-$(get_last_modification ${td_shim_script_dir})-$(uname -m)"
+	echo "${CC_BUILDER_REGISTRY}:td-shim-$(get_from_kata_deps "externals.td-shim.toolchain")-$(get_last_modification ${td_shim_script_dir})-$(uname -m)"
 }
 
 get_virtiofsd_image_name() {
