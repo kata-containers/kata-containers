@@ -53,7 +53,7 @@ test:
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo test --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES) -- --nocapture
 
 install:
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --target $(TRIPLE) --path .
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --locked --target $(TRIPLE) --path .
 
 check: standard_rust_check
 
