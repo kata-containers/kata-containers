@@ -102,6 +102,7 @@ GENERATED_VARS = \
 		CONFIG_CLH_TDX_IN \
 		CONFIG_QEMU_TDX_IN \
 		CONFIG_QEMU_SEV_IN \
+		CONFIG_QEMU_SNP_IN \
 		$(USER_VARS)
 SCRIPTS += $(COLLECT_SCRIPT)
 SCRIPTS_DIR := $(BINDIR)
@@ -322,6 +323,8 @@ ifneq (,$(QEMUCMD))
     SYSCONFIG_PATHS += $(SYSCONFIG_QEMU_SEV)
 
     CONFIGS += $(CONFIG_QEMU_SEV)
+
+	CONFIG_FILE_QEMU_SNP = configuration-qemu-sev-snp.toml
 
     # qemu-specific options (all should be suffixed by "_QEMU")
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
