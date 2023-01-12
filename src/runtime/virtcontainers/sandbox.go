@@ -1260,11 +1260,11 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 		}
 	}
 
-	// In case of vm factory, network interfaces are hotplugged
-	// after vm is started.
-	// In case of prestartHookFunc, network config might have been changed.
-	// We need to rescan and handle the change.
-	if s.factory != nil || prestartHookFunc != nil {
+	// 1. Do not scan the netns if we want no network for the vmm.
+	// 2. In case of vm factory, scan the netns to hotplug interfaces after vm is started.
+	// 3. In case of prestartHookFunc, network config might have been changed. We need to
+	//    rescan and handle the change.
+	if !s.config.NetworkConfig.DisableNewNetwork && (s.factory != nil || prestartHookFunc != nil) {
 		if _, err := s.network.AddEndpoints(ctx, s, nil, true); err != nil {
 			return err
 		}
