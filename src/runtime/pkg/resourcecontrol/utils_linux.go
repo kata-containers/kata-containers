@@ -15,6 +15,7 @@ import (
 	systemdDbus "github.com/coreos/go-systemd/v22/dbus"
 	"github.com/godbus/dbus/v5"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
+	"golang.org/x/sys/unix"
 )
 
 // DefaultResourceControllerID runtime-determined location in the cgroups hierarchy.
@@ -140,4 +141,18 @@ func getSliceAndUnit(cgroupPath string) (string, string, error) {
 	}
 
 	return "", "", fmt.Errorf("Path: %s is not valid systemd's cgroups path", cgroupPath)
+}
+
+func SetThreadAffinity(threadID int, cpuSetSlice []int) error {
+	unixCPUSet := unix.CPUSet{}
+
+	for cpuId := range cpuSetSlice {
+		unixCPUSet.Set(cpuId)
+	}
+
+	if err := unix.SchedSetaffinity(threadID, &unixCPUSet); err != nil {
+		return fmt.Errorf("failed to set vcpu thread %d affinity to cpu %d: %v", threadID, cpuSetSlice, err)
+	}
+
+	return nil
 }
