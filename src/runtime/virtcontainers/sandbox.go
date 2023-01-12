@@ -178,7 +178,11 @@ type SandboxConfig struct {
 	// SandboxCgroupOnly enables cgroup only at podlevel in the host
 	SandboxCgroupOnly bool
 
+	// DisableGuestSeccomp disable seccomp within the guest
 	DisableGuestSeccomp bool
+
+	// EnableVCPUsPinning controls whether each vCPU thread should be scheduled to a fixed CPU
+	EnableVCPUsPinning bool
 }
 
 // valid checks that the sandbox configuration is valid.
@@ -2508,9 +2512,9 @@ func (s *Sandbox) fetchContainers(ctx context.Context) error {
 // is then pinned to one fixed CPU in CPUSet.
 func (s *Sandbox) checkVCPUsPinning(ctx context.Context) error {
 	if s.config == nil {
-		return fmt.Errorf("no hypervisor config found")
+		return fmt.Errorf("no sandbox config found")
 	}
-	if !s.config.HypervisorConfig.EnableVCPUsPinning {
+	if !s.config.EnableVCPUsPinning {
 		return nil
 	}
 

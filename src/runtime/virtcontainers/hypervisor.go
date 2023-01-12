@@ -575,9 +575,6 @@ type HypervisorConfig struct {
 
 	// Use legacy serial for the guest console
 	LegacySerial bool
-
-	// EnableVCPUsPinning controls whether each vCPU thread should be scheduled to a fixed CPU
-	EnableVCPUsPinning bool
 }
 
 // vcpu mapping from vcpu number to thread number
