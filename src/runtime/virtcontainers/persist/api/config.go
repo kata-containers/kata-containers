@@ -288,4 +288,7 @@ type SandboxConfig struct {
 	SandboxCgroupOnly bool
 
 	DisableGuestSeccomp bool
+
+	// EnableVCPUsPinning controls whether each vCPU thread should be scheduled to a fixed CPU
+	EnableVCPUsPinning bool
 }
