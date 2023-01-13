@@ -143,9 +143,6 @@ const (
 	// DefaultVCPUs is a sandbox annotation that specifies the maximum number of vCPUs allocated for the VM by the hypervisor.
 	DefaultMaxVCPUs = kataAnnotHypervisorPrefix + "default_max_vcpus"
 
-	// EnableVCPUsPinning is a sandbox annotation that controls bundling between vCPU threads and CPUs
-	EnableVCPUsPinning = kataAnnotationsPrefix + "enable_vcpus_pinning"
-
 	//
 	//	Memory related annotations
 	//
@@ -252,6 +249,9 @@ const (
 
 	// SandboxCgroupOnly is a sandbox annotation that determines if kata processes are managed only in sandbox cgroup.
 	SandboxCgroupOnly = kataAnnotRuntimePrefix + "sandbox_cgroup_only"
+
+	// EnableVCPUsPinning is a sandbox annotation that controls bundling between vCPU threads and CPUs
+	EnableVCPUsPinning = kataAnnotationsPrefix + "enable_vcpus_pinning"
 
 	// EnablePprof is a sandbox annotation that determines if pprof enabled.
 	EnablePprof = kataAnnotRuntimePrefix + "enable_pprof"

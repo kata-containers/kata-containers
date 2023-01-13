@@ -44,7 +44,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
-	"golang.org/x/sys/unix"
 )
 
 // sandboxTracingTags defines tags for the trace span
@@ -179,7 +178,11 @@ type SandboxConfig struct {
 	// SandboxCgroupOnly enables cgroup only at podlevel in the host
 	SandboxCgroupOnly bool
 
+	// DisableGuestSeccomp disable seccomp within the guest
 	DisableGuestSeccomp bool
+
+	// EnableVCPUsPinning controls whether each vCPU thread should be scheduled to a fixed CPU
+	EnableVCPUsPinning bool
 }
 
 // valid checks that the sandbox configuration is valid.
@@ -2509,9 +2512,9 @@ func (s *Sandbox) fetchContainers(ctx context.Context) error {
 // is then pinned to one fixed CPU in CPUSet.
 func (s *Sandbox) checkVCPUsPinning(ctx context.Context) error {
 	if s.config == nil {
-		return fmt.Errorf("no hypervisor config found")
+		return fmt.Errorf("no sandbox config found")
 	}
-	if !s.config.HypervisorConfig.EnableVCPUsPinning {
+	if !s.config.EnableVCPUsPinning {
 		return nil
 	}
 
@@ -2540,19 +2543,14 @@ func (s *Sandbox) checkVCPUsPinning(ctx context.Context) error {
 		}
 		return nil
 	}
-
-	// if equal, we can now start vCPU threads pinning
-	i := 0
-	for _, tid := range vCPUThreadsMap.vcpus {
-		unixCPUSet := unix.CPUSet{}
-		unixCPUSet.Set(cpuSetSlice[i])
-		if err := unix.SchedSetaffinity(tid, &unixCPUSet); err != nil {
+	// if equal, we can use vCPU thread pinning
+	for i, tid := range vCPUThreadsMap.vcpus {
+		if err := resCtrl.SetThreadAffinity(tid, cpuSetSlice[i:i+1]); err != nil {
 			if err := s.resetVCPUsPinning(ctx, vCPUThreadsMap, cpuSetSlice); err != nil {
 				return err
 			}
 			return fmt.Errorf("failed to set vcpu thread %d affinity to cpu %d: %v", tid, cpuSetSlice[i], err)
 		}
-		i++
 	}
 	s.isVCPUsPinningOn = true
 	return nil
@@ -2560,13 +2558,9 @@ func (s *Sandbox) checkVCPUsPinning(ctx context.Context) error {
 
 // resetVCPUsPinning cancels current pinning and restores default random vCPU threads scheduling
 func (s *Sandbox) resetVCPUsPinning(ctx context.Context, vCPUThreadsMap VcpuThreadIDs, cpuSetSlice []int) error {
-	unixCPUSet := unix.CPUSet{}
-	for cpuId := range cpuSetSlice {
-		unixCPUSet.Set(cpuId)
-	}
 	for _, tid := range vCPUThreadsMap.vcpus {
-		if err := unix.SchedSetaffinity(tid, &unixCPUSet); err != nil {
-			return fmt.Errorf("failed to reset vcpu thread %d affinity to default mode: %v", tid, err)
+		if err := resCtrl.SetThreadAffinity(tid, cpuSetSlice); err != nil {
+			return fmt.Errorf("failed to reset vcpu thread %d affinity: %v", tid, err)
 		}
 	}
 	return nil
