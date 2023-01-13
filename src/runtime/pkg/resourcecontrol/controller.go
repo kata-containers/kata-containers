@@ -25,7 +25,8 @@ func SetLogger(logger *logrus.Entry) {
 type ResourceControllerType string
 
 const (
-	LinuxCgroups ResourceControllerType = "cgroups"
+	LinuxCgroups                 ResourceControllerType = "cgroups"
+	DarwinResourceControllerType ResourceControllerType = "darwin"
 )
 
 // String converts a resource type to a string.
