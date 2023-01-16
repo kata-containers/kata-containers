@@ -242,17 +242,7 @@ impl Sandbox for VirtSandbox {
 
         self.stop().await.context("stop")?;
 
-        info!(sl!(), "delete cgroup");
-        self.resource_manager
-            .delete_cgroups()
-            .await
-            .context("delete cgroups")?;
-
-        info!(sl!(), "delete hypervisor");
-        self.hypervisor
-            .cleanup()
-            .await
-            .context("delete hypervisor")?;
+        self.cleanup().await.context("do the clean up")?;
 
         info!(sl!(), "stop monitor");
         self.monitor.stop().await;
@@ -269,9 +259,19 @@ impl Sandbox for VirtSandbox {
         Ok(())
     }
 
-    async fn cleanup(&self, _id: &str) -> Result<()> {
-        self.resource_manager.delete_cgroups().await?;
-        self.hypervisor.cleanup().await?;
+    async fn cleanup(&self) -> Result<()> {
+        info!(sl!(), "delete hypervisor");
+        self.hypervisor
+            .cleanup()
+            .await
+            .context("delete hypervisor")?;
+
+        info!(sl!(), "resource clean up");
+        self.resource_manager
+            .cleanup()
+            .await
+            .context("resource clean up")?;
+
         // TODO: cleanup other snadbox resource
         Ok(())
     }
