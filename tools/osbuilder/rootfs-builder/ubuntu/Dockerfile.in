@@ -9,7 +9,7 @@ ARG IMAGE_REGISTRY=docker.io
 FROM ${IMAGE_REGISTRY}/golang:1.18 AS skopeo
 @SET_PROXY@
 WORKDIR /skopeo
-ARG SKOPEO_VERSION="1.9.1"
+ARG SKOPEO_VERSION
 RUN curl -fsSL "https://github.com/containers/skopeo/archive/v${SKOPEO_VERSION}.tar.gz" \
   | tar -xzf - --strip-components=1
 RUN CGO_ENABLED=0 DISABLE_DOCS=1 make BUILDTAGS=containers_image_openpgp GO_DYN_FLAGS=

@@ -388,10 +388,13 @@ build_rootfs_distro()
 			engine_build_args+=" --build-arg IMAGE_REGISTRY=${IMAGE_REGISTRY}"
 		fi
 
+		skopeo_version="$(get_package_version_from_kata_yaml externals.skopeo.version)"
+
 		# setup to install rust here
 		generate_dockerfile "${distro_config_dir}"
 		"$container_engine" build  \
 			${engine_build_args} \
+			--build-arg SKOPEO_VERSION="${skopeo_version}" \
 			--build-arg http_proxy="${http_proxy}" \
 			--build-arg https_proxy="${https_proxy}" \
 			-t "${image_name}" "${distro_config_dir}"
