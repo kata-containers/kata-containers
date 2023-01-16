@@ -207,22 +207,6 @@ ${extra}
 	  agent-is-init-daemon: "${AGENT_INIT}"
 EOF
 
-	if [ "${SKOPEO}" = "yes" ]; then
-		cat >> "${file}" <<-EOF
-	skopeo:
-	  url: "${skopeo_url}"
-	  version: "${skopeo_branch}"
-EOF
-	fi
-
-	if [ "${UMOCI}" = "yes" ]; then
-		cat >> "${file}" <<-EOF
-	umoci:
-	  url: "${umoci_url}"
-	  version: "${umoci_tag}"
-EOF
-	fi
-
 	if [ -n "${AA_KBC}" ]; then
 		cat >> "${file}" <<-EOF
 	attestation-agent:

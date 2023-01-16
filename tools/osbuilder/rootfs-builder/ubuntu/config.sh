@@ -9,7 +9,6 @@ PACKAGES="chrony iptables dbus kmod"
 [ "$AGENT_INIT" = no ] && PACKAGES+=" init"
 [ "$KATA_BUILD_CC" = yes ] && PACKAGES+=" cryptsetup-bin e2fsprogs"
 [ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp2"
-[ "$SKOPEO" = yes ] && PACKAGES+=" libgpgme11 libdevmapper1.02.1"
 REPO_URL=http://ports.ubuntu.com
 
 case "$ARCH" in

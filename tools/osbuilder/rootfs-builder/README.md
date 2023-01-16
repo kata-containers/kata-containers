@@ -187,9 +187,3 @@ To add additional packages, use one of the following methods:
 
 Once the rootfs directory is created, you can add and remove files as
 needed. Changes affect the files included in the final guest image.
-
-#### Confidential containers support
-
-When building the rootfs for confidential containers if `SKOPEO=yes` is set then the `skopeo`
-package is built and added into the rootfs.
-If `UMOCI=yes` is set then the `umoci` package is built and added into the rootfs.
