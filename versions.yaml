@@ -198,7 +198,7 @@ externals:
   conmon:
     description: "An OCI container runtime monitor"
     url: "https://github.com/containers/conmon"
-    version: "v2.0.5"
+    version: "v2.0.10"
 
   crio:
     description: |
