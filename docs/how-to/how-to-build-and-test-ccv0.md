@@ -68,7 +68,7 @@ $ chmod u+x ccv0.sh
         - Configure Kata to use containerd and for debug and confidential containers features to be enabled (including
           enabling console access to the Kata guest shell, which should only be done in development)
         - Create, build and install a rootfs for the Kata hypervisor to use. For 'CCv0' this is currently based on Ubuntu
-        20.04 and has extra packages like `umoci` added.
+        20.04.
         - Build the Kata guest kernel
         - Install the hypervisor (in order to select which hypervisor will be used, the `KATA_HYPERVISOR` environment
         variable can be used to select between `qemu` or `cloud-hypervisor`)
@@ -176,8 +176,6 @@ there.
         ```
         total 72
         -rw-r--r--  1 root root  2977 Jan 20 10:03 config.json
-        -rw-r--r--  1 root root   372 Jan 20 10:03 umoci.json
-        -rw-r--r--  1 root root 63584 Jan 20 10:03 sha256_be9faa75035c20288cde7d2cdeb6cd1f5f4dbcd845d3f86f7feab61c4eff9eb5.mtree
         drwxr-xr-x 12 root root   240 Jan 20 10:03 rootfs
         ```
         which shows how the image has been pulled and then unbundled on the guest.
@@ -279,8 +277,6 @@ the `ccv0.sh` script to automatically fill in the variables:
   total 72
   drwxr-xr-x 10 root root   200 Jan  1  1970 rootfs
   -rw-r--r--  1 root root  2977 Jan 20 16:45 config.json
-  -rw-r--r--  1 root root   372 Jan 20 16:45 umoci.json
-  -rw-r--r--  1 root root 63584 Jan 20 16:45 sha256_be9faa75035c20288cde7d2cdeb6cd1f5f4dbcd845d3f86f7feab61c4eff9eb5.mtree
   ```
 - Leave the Kata shell by running:
   ```bash
