@@ -26,7 +26,6 @@ const LOG_VPORT_OPTION: &str = "agent.log_vport";
 const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "agent.unified_cgroup_hierarchy";
 const CONFIG_FILE: &str = "agent.config_file";
-const CONTAINER_POLICY_FILE: &str = "agent.container_policy_file";
 const AA_KBC_PARAMS: &str = "agent.aa_kbc_params";
 const HTTPS_PROXY: &str = "agent.https_proxy";
 const NO_PROXY: &str = "agent.no_proxy";
@@ -58,11 +57,6 @@ const ERR_INVALID_CONTAINER_PIPE_SIZE: &str = "invalid container pipe size param
 const ERR_INVALID_CONTAINER_PIPE_SIZE_PARAM: &str = "unable to parse container pipe size";
 const ERR_INVALID_CONTAINER_PIPE_SIZE_KEY: &str = "invalid container pipe size key name";
 const ERR_INVALID_CONTAINER_PIPE_NEGATIVE: &str = "container pipe size should not be negative";
-
-const ERR_INVALID_CONTAINER_POLICY_PATH_VALUE: &str = "invalid container_policy_file value";
-const ERR_INVALID_CONTAINER_POLICY_PATH_KEY: &str = "invalid container_policy_file key";
-const ERR_INVALID_CONTAINER_POLICY_ABSOLUTE: &str =
-    "container_policy_file path must be an absolute file path";
 
 #[derive(Debug, Default, Deserialize)]
 pub struct EndpointsConfig {
@@ -327,13 +321,6 @@ impl AgentConfig {
                 get_bool_value
             );
 
-            parse_cmdline_param!(
-                param,
-                CONTAINER_POLICY_FILE,
-                config.container_policy_path,
-                get_container_policy_path_value
-            );
-
             parse_cmdline_param!(param, AA_KBC_PARAMS, config.aa_kbc_params, get_string_value);
             parse_cmdline_param!(param, HTTPS_PROXY, config.https_proxy, get_url_value);
             parse_cmdline_param!(param, NO_PROXY, config.no_proxy, get_string_value);
@@ -502,29 +489,6 @@ fn get_container_pipe_size(param: &str) -> Result<i32> {
 
     ensure!(value >= 0, ERR_INVALID_CONTAINER_PIPE_NEGATIVE);
 
-    Ok(value)
-}
-
-#[instrument]
-fn get_container_policy_path_value(param: &str) -> Result<String> {
-    let fields: Vec<&str> = param.split('=').collect();
-
-    ensure!(!fields[0].is_empty(), ERR_INVALID_CONTAINER_POLICY_PATH_KEY);
-    ensure!(fields.len() == 2, ERR_INVALID_CONTAINER_POLICY_PATH_VALUE);
-
-    let key = fields[0];
-    ensure!(
-        key == CONTAINER_POLICY_FILE,
-        ERR_INVALID_CONTAINER_POLICY_PATH_KEY
-    );
-
-    let value = String::from(fields[1]);
-    ensure!(!value.is_empty(), ERR_INVALID_CONTAINER_POLICY_PATH_VALUE);
-    ensure!(
-        value.starts_with('/'),
-        ERR_INVALID_CONTAINER_POLICY_ABSOLUTE
-    );
-    ensure!(!value.contains(".."), ERR_INVALID_CONTAINER_POLICY_ABSOLUTE);
     Ok(value)
 }
 
@@ -966,11 +930,6 @@ mod tests {
                 contents: "",
                 env_vars: vec!["KATA_AGENT_TRACING=true"],
                 tracing: true,
-                ..Default::default()
-            },
-            TestData {
-                contents: "agent.container_policy_file=/etc/containers/policy.json",
-                container_policy_path: "/etc/containers/policy.json",
                 ..Default::default()
             },
             TestData {
@@ -1573,72 +1532,6 @@ Caused by:
             let msg = format!("test[{}]: {:?}", i, d);
 
             let result = get_string_value(d.param);
-
-            let msg = format!("{}: result: {:?}", msg, result);
-
-            assert_result!(d.result, result, msg);
-        }
-    }
-
-    #[test]
-    fn test_get_container_policy_path_value() {
-        #[derive(Debug)]
-        struct TestData<'a> {
-            param: &'a str,
-            result: Result<String>,
-        }
-
-        let tests = &[
-            TestData {
-                param: "",
-                result: Err(anyhow!(ERR_INVALID_CONTAINER_POLICY_PATH_KEY)),
-            },
-            TestData {
-                param: "agent.container_policy_file",
-                result: Err(anyhow!(ERR_INVALID_CONTAINER_POLICY_PATH_VALUE)),
-            },
-            TestData {
-                param: "agent.container_policy_file=",
-                result: Err(anyhow!(ERR_INVALID_CONTAINER_POLICY_PATH_VALUE)),
-            },
-            TestData {
-                param: "foo=bar",
-                result: Err(anyhow!(ERR_INVALID_CONTAINER_POLICY_PATH_KEY)),
-            },
-            TestData {
-                param: "agent.policy_path=/another/absolute/path.json",
-                result: Err(anyhow!(ERR_INVALID_CONTAINER_POLICY_PATH_KEY)),
-            },
-            TestData {
-                param: "agent.container_policy_file=/etc/container/policy.json",
-                result: Ok("/etc/container/policy.json".into()),
-            },
-            TestData {
-                param: "agent.container_policy_file=/another/absolute/path.json",
-                result: Ok("/another/absolute/path.json".into()),
-            },
-            TestData {
-                param: "agent.container_policy_file=./relative/path.json",
-                result: Err(anyhow!(ERR_INVALID_CONTAINER_POLICY_ABSOLUTE)),
-            },
-            TestData {
-                param: "agent.container_policy_file=./relative/path.json",
-                result: Err(anyhow!(ERR_INVALID_CONTAINER_POLICY_ABSOLUTE)),
-            },
-            TestData {
-                param: "agent.container_policy_file=../../relative/path.json",
-                result: Err(anyhow!(ERR_INVALID_CONTAINER_POLICY_ABSOLUTE)),
-            },
-            TestData {
-                param: "agent.container_policy_file=junk_string",
-                result: Err(anyhow!(ERR_INVALID_CONTAINER_POLICY_ABSOLUTE)),
-            },
-        ];
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let result = get_container_policy_path_value(d.param);
 
             let msg = format!("{}: result: {:?}", msg, result);
 
