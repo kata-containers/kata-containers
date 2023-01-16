@@ -49,10 +49,6 @@ setup() {
 	local container_config="${FIXTURES_DIR}/container-config.yaml"
 
 	setup_signature_files
-	if [ "${SKOPEO:-}" = "yes" ]; then
-		add_kernel_params \
-			"agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
-	fi
 
 	create_test_pod
 
@@ -63,29 +59,17 @@ setup() {
 	local container_config="${FIXTURES_DIR}/container-config_unsigned-protected.yaml"
 
 	setup_signature_files
-	if [ "${SKOPEO:-}" = "yes" ]; then
-		add_kernel_params \
-			"agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
-	fi
-
+	
 	create_test_pod
 
 	assert_container_fail "$container_config"
-	if [ "${SKOPEO:-}" = "yes" ]; then
-		assert_logs_contain 'Signature for identity .* is not accepted'
-	else
-		assert_logs_contain 'Validate image failed: The signatures do not satisfied! Reject reason: \[Match reference failed.\]'
-	fi
+	assert_logs_contain 'Validate image failed: The signatures do not satisfied! Reject reason: \[Match reference failed.\]'
 }
 
 @test "$test_tag Test can pull an unencrypted unsigned image from an unprotected registry" {
 	local container_config="${FIXTURES_DIR}/container-config_unsigned-unprotected.yaml"
 
 	setup_signature_files
-	if [ "${SKOPEO:-}" = "yes" ]; then
-		add_kernel_params \
-			"agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
-	fi
 
 	create_test_pod
 
@@ -96,19 +80,11 @@ setup() {
 	local container_config="${FIXTURES_DIR}/container-config_signed-protected-other.yaml"
 
 	setup_signature_files
-	if [ "${SKOPEO:-}" = "yes" ]; then
-		add_kernel_params \
-			"agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
-	fi
 
 	create_test_pod
 
 	assert_container_fail "$container_config"
-	if [ "${SKOPEO:-}" = "yes" ]; then
-		assert_logs_contain "Invalid GPG signature"
-	else
-		assert_logs_contain 'Validate image failed: The signatures do not satisfied! Reject reason: \[signature verify failed! There is no pubkey can verify the signature!\]'
-	fi
+	assert_logs_contain 'Validate image failed: The signatures do not satisfied! Reject reason: \[signature verify failed! There is no pubkey can verify the signature!\]'
 }
 
 @test "$test_tag Test unencrypted image signed with cosign" {
@@ -129,11 +105,7 @@ setup() {
 	create_test_pod
 
 	assert_container_fail "$container_config"
-	if [ "${SKOPEO:-}" = "yes" ]; then
-		assert_logs_contain 'Signature for identity .* is not accepted'
-	else
-		assert_logs_contain 'Validate image failed: \[PublicKeyVerifier { key: CosignVerificationKey'
-	fi
+	assert_logs_contain 'Validate image failed: \[PublicKeyVerifier { key: CosignVerificationKey'
 }
 
 @test "$test_tag Test pull an unencrypted unsigned image from an authenticated registry with correct credentials" {
