@@ -101,9 +101,9 @@ impl ResourceManager {
         inner.update_cgroups(cid, linux_resources).await
     }
 
-    pub async fn delete_cgroups(&self) -> Result<()> {
+    pub async fn cleanup(&self) -> Result<()> {
         let inner = self.inner.read().await;
-        inner.delete_cgroups().await
+        inner.cleanup().await
     }
 }
 
