@@ -76,7 +76,7 @@ macro_rules! set_resource {
 
 impl CgroupManager for Manager {
     fn apply(&self, pid: pid_t) -> Result<()> {
-        self.cgroup.add_task(CgroupPid::from(pid as u64))?;
+        self.cgroup.add_task_by_tgid(CgroupPid::from(pid as u64))?;
         Ok(())
     }
 
@@ -236,7 +236,7 @@ impl CgroupManager for Manager {
                 .unwrap()
                 .trim_start_matches(root_path.to_str().unwrap());
             info!(sl!(), "updating cpuset for parent path {:?}", &r_path);
-            let cg = new_cgroup(cgroups::hierarchies::auto(), r_path);
+            let cg = new_cgroup(cgroups::hierarchies::auto(), r_path)?;
             let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
             cpuset_controller.set_cpus(guest_cpuset)?;
         }
@@ -1023,9 +1023,9 @@ pub fn get_mounts(paths: &HashMap<String, String>) -> Result<HashMap<String, Str
     Ok(m)
 }
 
-fn new_cgroup(h: Box<dyn cgroups::Hierarchy>, path: &str) -> Cgroup {
+fn new_cgroup(h: Box<dyn cgroups::Hierarchy>, path: &str) -> Result<Cgroup> {
     let valid_path = path.trim_start_matches('/').to_string();
-    cgroups::Cgroup::new(h, valid_path.as_str())
+    cgroups::Cgroup::new(h, valid_path.as_str()).map_err(anyhow::Error::from)
 }
 
 impl Manager {
@@ -1047,12 +1047,14 @@ impl Manager {
             m.insert(key.to_string(), p);
         }
 
+        let cg = new_cgroup(cgroups::hierarchies::auto(), cpath)?;
+
         Ok(Self {
             paths: m,
             mounts,
             // rels: paths,
             cpath: cpath.to_string(),
-            cgroup: new_cgroup(cgroups::hierarchies::auto(), cpath),
+            cgroup: cg,
         })
     }
 }

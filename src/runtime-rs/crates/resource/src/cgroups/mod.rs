@@ -69,7 +69,7 @@ impl CgroupsResource {
         // will either hold all the pod threads (sandbox_cgroup_only is true)
         // or only the virtual CPU ones (sandbox_cgroup_only is false).
         let hier = cgroups_rs::hierarchies::auto();
-        let cgroup_manager = CgroupBuilder::new(&config.path).build(hier);
+        let cgroup_manager = CgroupBuilder::new(&config.path).build(hier)?;
 
         // The shim configuration is requesting that we do not put all threads
         // into the sandbox resource controller.
@@ -77,7 +77,7 @@ impl CgroupsResource {
         // the vCPU threads will eventually make it there.
         let overhead_cgroup_manager = if !config.sandbox_cgroup_only {
             let hier = cgroups_rs::hierarchies::auto();
-            Some(CgroupBuilder::new(&config.overhead_path).build(hier))
+            Some(CgroupBuilder::new(&config.overhead_path).build(hier)?)
         } else {
             None
         };
@@ -109,7 +109,7 @@ impl CgroupsResource {
     /// overhead_cgroup_manager to the parent and then delete the cgroups.
     pub async fn delete(&self) -> Result<()> {
         for cg_pid in self.cgroup_manager.tasks() {
-            self.cgroup_manager.remove_task(cg_pid);
+            self.cgroup_manager.remove_task(cg_pid)?;
         }
 
         self.cgroup_manager
@@ -118,7 +118,7 @@ impl CgroupsResource {
 
         if let Some(overhead) = self.overhead_cgroup_manager.as_ref() {
             for cg_pid in overhead.tasks() {
-                overhead.remove_task(cg_pid);
+                overhead.remove_task(cg_pid)?;
             }
             overhead.delete().context("delete overhead")?;
         }
