@@ -253,14 +253,12 @@ install_cc_image() {
 	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
 	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
 	local pause_version="$(get_from_kata_deps "externals.pause.version")"
-	local skopeo_version="$(get_from_kata_deps "externals.skopeo.branch")"
-	local umoci_version="$(get_from_kata_deps "externals.umoci.tag")"
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
 
 	install_cached_component \
 		"${component}" \
 		"${jenkins}" \
-		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${skopeo_version}-${umoci_version}-${rust_version}-${image_type}-${AA_KBC}" \
+		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${rust_version}-${image_type}-${AA_KBC}" \
 		"" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
