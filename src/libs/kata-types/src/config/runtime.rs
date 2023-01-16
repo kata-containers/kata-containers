@@ -130,6 +130,21 @@ pub struct Runtime {
     /// Vendor customized runtime configuration.
     #[serde(default, flatten)]
     pub vendor: RuntimeVendor,
+
+    /// Base directory of directly attachable network config, the default value
+    /// is "/run/dans".
+    ///
+    /// Network devices for VM-based containers are allowed to be placed in the
+    /// host netns to eliminate as many hops as possible, which is what we
+    /// called a "directly attachable network". The config, set by special CNI
+    /// plugins, is used to tell the Kata containers what devices are attached
+    /// to the hypervisor.
+    #[serde(default = "default_dan_conf")]
+    pub dan_conf: String,
+}
+
+fn default_dan_conf() -> String {
+    "/run/dans".to_owned()
 }
 
 impl ConfigOps for Runtime {

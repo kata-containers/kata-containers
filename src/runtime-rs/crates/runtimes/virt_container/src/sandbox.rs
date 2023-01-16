@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use agent::{
     self, kata::KataAgent, types::KernelModule, Agent, GetIPTablesRequest, SetIPTablesRequest,
@@ -22,7 +22,7 @@ use kata_sys_util::hooks::HookStates;
 use kata_types::config::TomlConfig;
 use resource::{
     manager::ManagerArgs,
-    network::{NetworkConfig, NetworkWithNetNsConfig},
+    network::{DirectlyAttachableNetworkConfig, NetworkConfig, NetworkWithNetNsConfig},
     ResourceConfig, ResourceManager,
 };
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
@@ -88,15 +88,15 @@ impl VirtSandbox {
 
     async fn prepare_for_start_sandbox(
         &self,
-        _id: &str,
+        id: &str,
         netns: Option<String>,
     ) -> Result<Vec<ResourceConfig>> {
         let mut resource_configs = vec![];
 
         let config = self.resource_manager.config().await;
         if let Some(netns_path) = netns {
-            let network_config = ResourceConfig::Network(NetworkConfig::NetworkResourceWithNetNs(
-                NetworkWithNetNsConfig {
+            let network_config =
+                ResourceConfig::Network(NetworkConfig::Netns(NetworkWithNetNsConfig {
                     network_model: config.runtime.internetworking_model.clone(),
                     netns_path,
                     queues: self
@@ -105,8 +105,22 @@ impl VirtSandbox {
                         .await
                         .network_info
                         .network_queues as usize,
-                },
-            ));
+                }));
+            resource_configs.push(network_config);
+        }
+
+        // Directly attachable network
+        let dan_path = PathBuf::from(format!("{}/{}.json", config.runtime.dan_conf, id));
+        if dan_path.exists() {
+            info!(
+                sl!(),
+                "Directly attachable networks are enabled due to the config that exists at {:?}.",
+                dan_path
+            );
+            let network_config =
+                ResourceConfig::Network(NetworkConfig::Dan(DirectlyAttachableNetworkConfig {
+                    dan_conf_path: dan_path,
+                }));
             resource_configs.push(network_config);
         }
 
@@ -155,12 +169,19 @@ impl VirtSandbox {
 impl Sandbox for VirtSandbox {
     async fn start(
         &self,
-        netns: Option<String>,
+        mut netns: Option<String>,
         dns: Vec<String>,
         spec: &oci::Spec,
         state: &oci::State,
     ) -> Result<()> {
         let id = &self.sid;
+
+        // The containerd creates a netns for a pod so far, so we need disable
+        // netns explicitly if the directly attachable network (DAN) is enabled.
+        if self.resource_manager.disabled_netns(id).await {
+            info!(sl!(), "The netns is disabled forcely due to the DAN");
+            netns = None;
+        }
 
         // if sandbox running, return
         // if sandbox not running try to start sandbox

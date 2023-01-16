@@ -4,7 +4,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+mod directly_attachable_network;
 pub(crate) mod network_info_from_link;
+pub(crate) use directly_attachable_network::DirectlyAttachableNetworkInfo;
 
 use agent::{ARPNeighbor, Interface, Route};
 use anyhow::Result;

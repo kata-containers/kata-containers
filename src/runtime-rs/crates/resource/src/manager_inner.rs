@@ -181,6 +181,7 @@ impl ResourceManagerInner {
                 .context("handle neighbors")?;
             self.handle_routes(network).await.context("handle routes")?;
         }
+
         Ok(())
     }
 

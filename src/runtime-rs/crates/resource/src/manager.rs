@@ -14,6 +14,7 @@ use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
 use oci::LinuxResources;
 use persist::sandbox_persist::Persist;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -104,6 +105,14 @@ impl ResourceManager {
     pub async fn cleanup(&self) -> Result<()> {
         let inner = self.inner.read().await;
         inner.cleanup().await
+    }
+
+    /// A bool value indicates whether to disable netns forcely, return true if:
+    /// * The DAN is enabled.
+    pub async fn disabled_netns(&self, sandbox_id: &str) -> bool {
+        let config = self.config().await;
+        let dan_path = PathBuf::from(format!("{}/{}.json", config.runtime.dan_conf, sandbox_id));
+        dan_path.exists()
     }
 }
 

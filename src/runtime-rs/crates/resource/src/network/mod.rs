@@ -19,6 +19,9 @@ mod network_pair;
 use network_pair::NetworkPair;
 mod utils;
 pub use utils::netns::NetnsGuard;
+mod directly_attachable_network;
+use self::directly_attachable_network::DirectlyAttachableNetwork;
+pub use directly_attachable_network::DirectlyAttachableNetworkConfig;
 
 use std::sync::Arc;
 
@@ -28,7 +31,8 @@ use hypervisor::Hypervisor;
 
 #[derive(Debug)]
 pub enum NetworkConfig {
-    NetworkResourceWithNetNs(NetworkWithNetNsConfig),
+    Netns(NetworkWithNetNsConfig),
+    Dan(DirectlyAttachableNetworkConfig),
 }
 
 #[async_trait]
@@ -38,14 +42,21 @@ pub trait Network: Send + Sync {
     async fn routes(&self) -> Result<Vec<agent::Route>>;
     async fn neighs(&self) -> Result<Vec<agent::ARPNeighbor>>;
     async fn save(&self) -> Option<Vec<EndpointState>>;
+    async fn len(&self) -> usize;
+    async fn is_empty(&self) -> bool;
 }
 
 pub async fn new(config: &NetworkConfig) -> Result<Arc<dyn Network>> {
     match config {
-        NetworkConfig::NetworkResourceWithNetNs(c) => Ok(Arc::new(
+        NetworkConfig::Netns(c) => Ok(Arc::new(
             NetworkWithNetns::new(c)
                 .await
                 .context("new network with netns")?,
+        )),
+        NetworkConfig::Dan(c) => Ok(Arc::new(
+            DirectlyAttachableNetwork::new(c)
+                .await
+                .context("new directly attachable network")?,
         )),
     }
 }
