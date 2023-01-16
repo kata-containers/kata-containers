@@ -32,6 +32,36 @@ import (
 	"github.com/urfave/cli"
 )
 
+// getCPUInfo returns details of the first CPU read from the specified cpuinfo file
+func getCPUInfo(cpuInfoFile string) (string, error) {
+	text, err := katautils.GetFileContents(cpuInfoFile)
+	if err != nil {
+		return "", err
+	}
+
+	cpus := strings.SplitAfter(text, "\n\n")
+
+	trimmed := strings.TrimSpace(cpus[0])
+	if trimmed == "" {
+		return "", fmt.Errorf("Cannot determine CPU details")
+	}
+
+	return trimmed, nil
+}
+
+// getCPUFlags returns the CPU flags from the cpuinfo file specified
+func getCPUFlags(cpuinfo string) string {
+	for _, line := range strings.Split(cpuinfo, "\n") {
+		if strings.HasPrefix(line, cpuFlagsTag) {
+			fields := strings.Split(line, ":")
+			if len(fields) == 2 {
+				return strings.TrimSpace(fields[1])
+			}
+		}
+	}
+	return ""
+}
+
 // nolint: structcheck, unused, deadcode
 type kvmExtension struct {
 	// description
@@ -68,49 +98,6 @@ var (
 var (
 	kvmDevice = "/dev/kvm"
 )
-
-// getCPUInfo returns details of the first CPU read from the specified cpuinfo file
-func getCPUInfo(cpuInfoFile string) (string, error) {
-	text, err := katautils.GetFileContents(cpuInfoFile)
-	if err != nil {
-		return "", err
-	}
-
-	cpus := strings.SplitAfter(text, "\n\n")
-
-	trimmed := strings.TrimSpace(cpus[0])
-	if trimmed == "" {
-		return "", fmt.Errorf("Cannot determine CPU details")
-	}
-
-	return trimmed, nil
-}
-
-// findAnchoredString searches haystack for needle and returns true if found
-func findAnchoredString(haystack, needle string) bool {
-	if haystack == "" || needle == "" {
-		return false
-	}
-
-	// Ensure the search string is anchored
-	pattern := regexp.MustCompile(`\b` + needle + `\b`)
-
-	return pattern.MatchString(haystack)
-}
-
-// getCPUFlags returns the CPU flags from the cpuinfo file specified
-func getCPUFlags(cpuinfo string) string {
-	for _, line := range strings.Split(cpuinfo, "\n") {
-		if strings.HasPrefix(line, cpuFlagsTag) {
-			fields := strings.Split(line, ":")
-			if len(fields) == 2 {
-				return strings.TrimSpace(fields[1])
-			}
-		}
-	}
-
-	return ""
-}
 
 // haveKernelModule returns true if the specified module exists
 // (either loaded or available to be loaded)
@@ -184,7 +171,8 @@ func checkCPUAttribs(cpuinfo string, attribs map[string]string) uint32 {
 // onVMM  - `true` if the host is running under a VMM environment
 // fields - A set of fields showing the expected and actual module parameter values.
 // msg    - The message that would be logged showing the incorrect kernel module
-//          parameter.
+//
+//	parameter.
 //
 // The function must return `true` if the kernel module parameter error should
 // be ignored, or `false` if it is a real error.
@@ -256,7 +244,7 @@ func checkKernelModules(modules map[string]kernelModule, handler kernelParamHand
 
 // genericHostIsVMContainerCapable checks to see if the host is theoretically capable
 // of creating a VM container.
-//nolint: unused,deadcode
+// nolint: unused,deadcode
 func genericHostIsVMContainerCapable(details vmContainerCapableDetails) error {
 	cpuinfo, err := getCPUInfo(details.cpuInfoFile)
 	if err != nil {
@@ -290,141 +278,6 @@ func genericHostIsVMContainerCapable(details vmContainerCapableDetails) error {
 	}
 
 	return fmt.Errorf("ERROR: %s", failMessage)
-}
-
-var kataCheckCLICommand = cli.Command{
-	Name:    "check",
-	Aliases: []string{"kata-check"},
-	Usage:   "tests if system can run " + katautils.PROJECT,
-	Flags: []cli.Flag{
-		cli.BoolFlag{
-			Name:  "check-version-only",
-			Usage: "Only compare the current and latest available versions (requires network, non-root only)",
-		},
-		cli.BoolFlag{
-			Name:  "include-all-releases",
-			Usage: "Don't filter out pre-release release versions",
-		},
-		cli.BoolFlag{
-			Name:  "no-network-checks, n",
-			Usage: "Do not run any checks using the network",
-		},
-		cli.BoolFlag{
-			Name:  "only-list-releases",
-			Usage: "Only list newer available releases (non-root only)",
-		},
-		cli.BoolFlag{
-			Name:  "strict, s",
-			Usage: "perform strict checking",
-		},
-		cli.BoolFlag{
-			Name:  "verbose, v",
-			Usage: "display the list of checks performed",
-		},
-	},
-	Description: fmt.Sprintf(`tests if system can run %s and version is current.
-
-ENVIRONMENT VARIABLES:
-
-- %s: If set to any value, act as if "--no-network-checks" was specified.
-
-EXAMPLES:
-
-- Perform basic checks:
-
-  $ %s check
-
-- Local basic checks only:
-
-  $ %s check --no-network-checks
-
-- Perform further checks:
-
-  $ sudo %s check
-
-- Just check if a newer version is available:
-
-  $ %s check --check-version-only
-
-- List available releases (shows output in format "version;release-date;url"):
-
-  $ %s check --only-list-releases
-
-- List all available releases (includes pre-release versions):
-
-  $ %s check --only-list-releases --include-all-releases
-`,
-		katautils.PROJECT,
-		noNetworkEnvVar,
-		katautils.NAME,
-		katautils.NAME,
-		katautils.NAME,
-		katautils.NAME,
-		katautils.NAME,
-		katautils.NAME,
-	),
-
-	Action: func(context *cli.Context) error {
-		verbose := context.Bool("verbose")
-		if verbose {
-			kataLog.Logger.SetLevel(logrus.InfoLevel)
-		}
-
-		if !context.Bool("no-network-checks") && os.Getenv(noNetworkEnvVar) == "" {
-			cmd := RelCmdCheck
-
-			if context.Bool("only-list-releases") {
-				cmd = RelCmdList
-			}
-
-			if os.Geteuid() == 0 {
-				kataLog.Warn("Not running network checks as super user")
-			} else {
-				err := HandleReleaseVersions(cmd, katautils.VERSION, context.Bool("include-all-releases"))
-				if err != nil {
-					return err
-				}
-			}
-		}
-
-		if context.Bool("check-version-only") || context.Bool("only-list-releases") {
-			return nil
-		}
-
-		runtimeConfig, ok := context.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
-		if !ok {
-			return errors.New("check: cannot determine runtime config")
-		}
-
-		err := setCPUtype(runtimeConfig.HypervisorType)
-		if err != nil {
-			return err
-		}
-
-		details := vmContainerCapableDetails{
-			cpuInfoFile:           procCPUInfo,
-			requiredCPUFlags:      archRequiredCPUFlags,
-			requiredCPUAttribs:    archRequiredCPUAttribs,
-			requiredKernelModules: archRequiredKernelModules,
-		}
-
-		err = hostIsVMContainerCapable(details)
-		if err != nil {
-			return err
-		}
-		fmt.Println(successMessageCapable)
-
-		if os.Geteuid() == 0 {
-			err = archHostCanCreateVMContainer(runtimeConfig.HypervisorType)
-			if err != nil {
-				return err
-			}
-
-			fmt.Println(successMessageCreate)
-		}
-
-		return nil
-	},
 }
 
 func genericArchKernelParamHandler(onVMM bool, fields logrus.Fields, msg string) bool {

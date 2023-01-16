@@ -9,6 +9,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -33,6 +34,18 @@ var (
 		Commit: unknown,
 	}
 )
+
+// findAnchoredString searches haystack for needle and returns true if found
+func findAnchoredString(haystack, needle string) bool {
+	if haystack == "" || needle == "" {
+		return false
+	}
+
+	// Ensure the search string is anchored
+	pattern := regexp.MustCompile(`\b` + needle + `\b`)
+
+	return pattern.MatchString(haystack)
+}
 
 func getKernelVersion() (string, error) {
 	contents, err := katautils.GetFileContents(procVersion)

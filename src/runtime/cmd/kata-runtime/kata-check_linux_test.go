@@ -48,10 +48,6 @@ type testCPUDetail struct {
 
 var fakeCPUData = testCPUData{"", "", false}
 
-func createFile(file, contents string) error {
-	return os.WriteFile(file, []byte(contents), testFileMode)
-}
-
 func createModules(assert *assert.Assertions, cpuInfoFile string, moduleData []testModuleData) {
 	for _, d := range moduleData {
 		var dir string
