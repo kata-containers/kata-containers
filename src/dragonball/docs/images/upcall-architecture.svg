@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xl="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" version="1.1" viewBox="51 242 818 479" width="818" height="479">
+  <defs>
+    <marker orient="auto" overflow="visible" markerUnits="strokeWidth" id="FilledArrow_Marker" stroke-linejoin="miter" stroke-miterlimit="10" viewBox="-1 -4 10 8" markerWidth="10" markerHeight="8" color="black">
+      <g>
+        <path d="M 8 0 L 0 -3 L 0 3 Z" fill="currentColor" stroke="currentColor" stroke-width="1"/>
+      </g>
+    </marker>
+    <marker orient="auto" overflow="visible" markerUnits="strokeWidth" id="FilledArrow_Marker_2" stroke-linejoin="miter" stroke-miterlimit="10" viewBox="-9 -4 10 8" markerWidth="10" markerHeight="8" color="black">
+      <g>
+        <path d="M -8 0 L 0 3 L 0 -3 Z" fill="currentColor" stroke="currentColor" stroke-width="1"/>
+      </g>
+    </marker>
+  </defs>
+  <g id="Canvas_1" fill="none" fill-opacity="1" stroke="none" stroke-opacity="1" stroke-dasharray="none">
+    <title>Canvas 1</title>
+    <rect fill="white" x="51" y="242" width="818" height="479"/>
+    <g id="Canvas_1_Layer_1">
+      <title>Layer 1</title>
+      <g id="Line_4">
+        <line x1="153" y1="279.5" x2="856.1097" y2="279.5" stroke="black" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4.0,4.0" stroke-width="1"/>
+      </g>
+      <g id="Graphic_5">
+        <text transform="translate(56 247.5)" fill="black">
+          <tspan font-family="Alibaba PuHuiTi" font-size="16" fill="black" x="0" y="17">Guest User</tspan>
+        </text>
+      </g>
+      <g id="Graphic_6">
+        <text transform="translate(56 286)" fill="black">
+          <tspan font-family="Alibaba PuHuiTi" font-size="16" fill="black" x="0" y="17">Guest Kernel</tspan>
+        </text>
+      </g>
+      <g id="Line_7">
+        <line x1="153" y1="592" x2="856.1097" y2="592" stroke="black" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4.0,4.0" stroke-width="1"/>
+      </g>
+      <g id="Graphic_8">
+        <text transform="translate(62.76 597.5)" fill="black">
+          <tspan font-family="Alibaba PuHuiTi" font-size="16" fill="black" x="7531753e-19" y="17">Hypervisor</tspan>
+        </text>
+      </g>
+      <g id="Graphic_10">
+        <path d="M 264 328 L 347.456 328 C 354.0834 328 359.456 333.3726 359.456 340 L 359.456 524.5 C 359.456 531.1274 354.0834 536.5 347.456 536.5 L 264 536.5 C 257.37258 536.5 252 531.1274 252 524.5 L 252 340 C 252 333.3726 257.37258 328 264 328 Z" stroke="gray" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+      </g>
+      <g id="Graphic_11">
+        <text transform="translate(276.776 333)" fill="black">
+          <tspan font-family="Alibaba PuHuiTi" font-size="16" fill="black" x="0" y="17">socket</tspan>
+        </text>
+      </g>
+      <g id="Graphic_12">
+        <path d="M 582 294.5 L 672 294.5 C 678.6274 294.5 684 299.8726 684 306.5 L 684 354 C 684 360.6274 678.6274 366 672 366 L 582 366 C 575.3726 366 570 360.6274 570 354 L 570 306.5 C 570 299.8726 575.3726 294.5 582 294.5 Z" stroke="gray" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+        <text transform="translate(575 302.578)" fill="black">
+          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="27.704" y="15">Device </tspan>
+          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="20.44" y="33.448">Manager</tspan>
+          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="25.488" y="51.895996">Service</tspan>
+        </text>
+      </g>
+      <g id="Graphic_13">
+        <text transform="translate(284.824 374)" fill="black">
+          <tspan font-family="Alibaba PuHuiTi" font-size="16" fill="black" x="8135714e-19" y="17">bind</tspan>
+        </text>
+      </g>
+      <g id="Graphic_14">
+        <text transform="translate(280.528 416.25)" fill="black">
+          <tspan font-family="Alibaba PuHuiTi" font-size="16" fill="black" x="0" y="17">listen</tspan>
+        </text>
+      </g>
+      <g id="Graphic_15">
+        <text transform="translate(274.92 459.5)" fill="black">
+          <tspan font-family="Alibaba PuHuiTi" font-size="16" fill="black" x="0" y="17">accept</tspan>
+        </text>
+      </g>
+      <g id="Graphic_16">
+        <text transform="translate(256.372 503.5)" fill="black">
+          <tspan font-family="Alibaba PuHuiTi" font-size="16" fill="black" x="8668621e-19" y="17">new kthread</tspan>
+        </text>
+      </g>
+      <g id="Graphic_17">
+        <path d="M 268 566.5 L 807.5 566.5 C 813.0228 566.5 817.5 570.97715 817.5 576.5 L 817.5 576.5 C 817.5 582.02285 813.0228 586.5 807.5 586.5 L 268 586.5 C 262.47715 586.5 258 582.02285 258 576.5 L 258 576.5 C 258 570.97715 262.47715 566.5 268 566.5 Z" stroke="gray" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+        <text transform="translate(263 567.276)" fill="black">
+          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="226.454" y="15">virtio-vsocket</tspan>
+        </text>
+      </g>
+      <g id="Graphic_18">
+        <path d="M 268 598.5 L 807.5 598.5 C 813.0228 598.5 817.5 602.97715 817.5 608.5 L 817.5 608.5 C 817.5 614.02285 813.0228 618.5 807.5 618.5 L 268 618.5 C 262.47715 618.5 258 614.02285 258 608.5 L 258 608.5 C 258 602.97715 262.47715 598.5 268 598.5 Z" stroke="gray" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+        <text transform="translate(263 599.276)" fill="black">
+          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="193.254" y="15">virtio-vsocket backend</tspan>
+        </text>
+      </g>
+      <g id="Line_20">
+        <line x1="301.9" y1="352" x2="301.9" y2="369.84976" marker-end="url(#FilledArrow_Marker)" stroke="black" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+      </g>
+      <g id="Line_21">
+        <line x1="300.828" y1="394.6251" x2="300.828" y2="412.4749" marker-end="url(#FilledArrow_Marker)" stroke="black" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+      </g>
+      <g id="Line_22">
+        <line x1="300.828" y1="437.56256" x2="300.828" y2="455.4123" marker-end="url(#FilledArrow_Marker)" stroke="black" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+      </g>
+      <g id="Line_23">
+        <line x1="299.9" y1="480.1251" x2="299.9" y2="497.9749" marker-end="url(#FilledArrow_Marker)" stroke="black" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+      </g>
+      <g id="Graphic_24">
+        <rect x="266.5" y="541.5" width="71.188" height="20" stroke="gray" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+        <text transform="translate(271.5 540.5)" fill="black">
+          <tspan font-family="Alibaba PuHuiTi" font-size="16" fill="black" x="13.858" y="17">Port</tspan>
+        </text>
+      </g>
+      <g id="Graphic_27">
+        <path d="M 582 648.5 L 672 648.5 C 678.6274 648.5 684 653.8726 684 660.5 L 684 708 C 684 714.6274 678.6274 720 672 720 L 582 720 C 575.3726 720 570 714.6274 570 708 L 570 660.5 C 570 653.8726 575.3726 648.5 582 648.5 Z" stroke="gray" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+        <text transform="translate(575 656.578)" fill="black">
+          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="27.704" y="15">Device </tspan>
+          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="20.44" y="33.448">Manager</tspan>
+          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="20.288" y="51.895996">Backend</tspan>
+        </text>
+      </g>
+      <g id="Line_28">
+        <line x1="627" y1="375.9" x2="627" y2="638.6" marker-end="url(#FilledArrow_Marker)" marker-start="url(#FilledArrow_Marker_2)" stroke="black" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4.0,4.0" stroke-width="1"/>
+      </g>
+      <g id="Graphic_31">
+        <path d="M 711 294.5 L 801 294.5 C 807.6274 294.5 813 299.8726 813 306.5 L 813 354 C 813 360.6274 807.6274 366 801 366 L 711 366 C 704.3726 366 699 360.6274 699 354 L 699 306.5 C 699 299.8726 704.3726 294.5 711 294.5 Z" stroke="gray" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+        <text transform="translate(704 321.026)" fill="black">
+          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="17.784" y="15">Service B</tspan>
+        </text>
+      </g>
+      <g id="Graphic_30">
+        <path d="M 711 648.5 L 801 648.5 C 807.6274 648.5 813 653.8726 813 660.5 L 813 708 C 813 714.6274 807.6274 720 801 720 L 711 720 C 704.3726 720 699 714.6274 699 708 L 699 660.5 C 699 653.8726 704.3726 648.5 711 648.5 Z" stroke="gray" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+        <text transform="translate(704 675.026)" fill="black">
+          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="12.584" y="15">Backend B</tspan>
+        </text>
+      </g>
+      <g id="Line_29">
+        <line x1="756" y1="375.9" x2="756" y2="638.6" marker-end="url(#FilledArrow_Marker)" marker-start="url(#FilledArrow_Marker_2)" stroke="black" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4.0,4.0" stroke-width="1"/>
+      </g>
+      <g id="Graphic_32">
+        <text transform="translate(833 319.25)" fill="black">
+          <tspan font-family="Alibaba PuHuiTi" font-size="16" fill="black" x="58264504e-20" y="17">……</tspan>
+        </text>
+      </g>
+      <g id="Graphic_33">
+        <text transform="translate(833 673.25)" fill="black">
+          <tspan font-family="Alibaba PuHuiTi" font-size="16" fill="black" x="58264504e-20" y="17">……</tspan>
+        </text>
+      </g>
+      <g id="Graphic_34">
+        <text transform="translate(252.616 296)" fill="black">
+          <tspan font-family="Alibaba PuHuiTi" font-size="16" fill="black" x="0" y="17">Upcall Server</tspan>
+        </text>
+      </g>
+      <g id="Line_39">
+        <path d="M 251.372 514.94444 L 196.16455 515.40173 L 196.2135 443.25 L 290.92825 443.92903" marker-end="url(#FilledArrow_Marker)" stroke="black" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+      </g>
+      <g id="Graphic_41">
+        <text transform="translate(417 503.5)" fill="black">
+          <tspan font-family="Alibaba PuHuiTi" font-size="16" fill="black" x="0" y="17">Service handler</tspan>
+        </text>
+      </g>
+      <g id="Graphic_42">
+        <rect x="591.406" y="540.4723" width="71.188" height="20" stroke="gray" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+        <text transform="translate(596.406 539.4723)" fill="black">
+          <tspan font-family="Alibaba PuHuiTi" font-size="16" fill="black" x="10.386" y="17">Conn</tspan>
+        </text>
+      </g>
+      <g id="Graphic_43">
+        <rect x="720.406" y="541.4723" width="71.188" height="20" stroke="gray" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+        <text transform="translate(725.406 540.4723)" fill="black">
+          <tspan font-family="Alibaba PuHuiTi" font-size="16" fill="black" x="10.386" y="17">Conn</tspan>
+        </text>
+      </g>
+      <g id="Line_44">
+        <line x1="358.684" y1="514.5" x2="402.1" y2="514.5" marker-end="url(#FilledArrow_Marker)" stroke="black" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+      </g>
+      <g id="Line_46">
+        <path d="M 479.2467 498.5 L 480 328 L 560.10116 329.22604" marker-end="url(#FilledArrow_Marker)" stroke="black" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
+      </g>
+    </g>
+  </g>
+</svg>
