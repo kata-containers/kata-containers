@@ -82,7 +82,7 @@ func TestContainerRemoveDrive(t *testing.T) {
 	sandbox := &Sandbox{
 		ctx:        context.Background(),
 		id:         "sandbox",
-		devManager: manager.NewDeviceManager(config.VirtioSCSI, false, "", nil),
+		devManager: manager.NewDeviceManager(config.VirtioSCSI, false, "", 0, nil),
 		config:     &SandboxConfig{},
 	}
 

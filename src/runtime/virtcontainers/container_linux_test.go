@@ -216,7 +216,7 @@ func TestContainerAddDriveDir(t *testing.T) {
 	sandbox := &Sandbox{
 		ctx:        context.Background(),
 		id:         testSandboxID,
-		devManager: manager.NewDeviceManager(config.VirtioSCSI, false, "", nil),
+		devManager: manager.NewDeviceManager(config.VirtioSCSI, false, "", 0, nil),
 		hypervisor: &mockHypervisor{},
 		agent:      &mockAgent{},
 		config: &SandboxConfig{

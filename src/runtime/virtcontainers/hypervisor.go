@@ -302,6 +302,7 @@ type Param struct {
 }
 
 // HypervisorConfig is the hypervisor configuration.
+// nolint: govet
 type HypervisorConfig struct {
 	// customAssets is a map of assets.
 	// Each value in that map takes precedence over the configured assets.
@@ -386,6 +387,10 @@ type HypervisorConfig struct {
 	// VhostUserStorePath is the directory path where vhost-user devices
 	// related folders, sockets and device nodes should be.
 	VhostUserStorePath string
+
+	// VhostUserDeviceReconnect is the timeout for reconnecting on non-server spdk sockets
+	// when the remote end goes away. Zero disables reconnecting.
+	VhostUserDeviceReconnect uint32
 
 	// GuestCoredumpPath is the path in host for saving guest memory dump
 	GuestMemoryDumpPath string

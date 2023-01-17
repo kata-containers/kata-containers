@@ -1445,7 +1445,7 @@ func TestExecuteCharDevUnixSocketAdd(t *testing.T) {
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
-	err := q.ExecuteCharDevUnixSocketAdd(context.Background(), "foo", "foo.sock", false, true)
+	err := q.ExecuteCharDevUnixSocketAdd(context.Background(), "foo", "foo.sock", false, true, 1)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
