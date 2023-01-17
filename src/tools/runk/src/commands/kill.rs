@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::Kill;
 use anyhow::Result;
 use libcontainer::container::Container;
+use liboci_cli::Kill;
 use nix::sys::signal::Signal;
 use slog::{info, Logger};
 use std::{convert::TryFrom, path::Path, str::FromStr};
@@ -15,9 +15,6 @@ pub fn run(opts: Kill, state_root: &Path, logger: &Logger) -> Result<()> {
     let container = Container::load(state_root, container_id)?;
     let sig = parse_signal(&opts.signal)?;
 
-    // TODO: liboci-cli does not support --all option for kill command.
-    // After liboci-cli supports the option, we will change the following code.
-    // as a workaround we use a custom Kill command.
     let all = opts.all;
     container.kill(sig, all)?;
 
