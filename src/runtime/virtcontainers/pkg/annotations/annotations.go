@@ -112,6 +112,10 @@ const (
 	// related folders, sockets and device nodes should be.
 	VhostUserStorePath = kataAnnotHypervisorPrefix + "vhost_user_store_path"
 
+	// VhostUserDeviceReconnect is a sandbox annotation to specify the timeout for reconnecting on
+	// non-server sockets when the remote end goes away.
+	VhostUserDeviceReconnect = kataAnnotHypervisorPrefix + "vhost_user_reconnect_timeout_sec"
+
 	// GuestHookPath is a sandbox annotation to specify the path within the VM that will be used for 'drop-in' hooks.
 	GuestHookPath = kataAnnotHypervisorPrefix + "guest_hook_path"
 

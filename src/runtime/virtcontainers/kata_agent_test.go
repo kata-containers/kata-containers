@@ -408,7 +408,7 @@ func TestHandleBlockVolume(t *testing.T) {
 	mounts = append(mounts, vMount, bMount, dMount)
 
 	tmpDir := "/vhost/user/dir"
-	dm := manager.NewDeviceManager(config.VirtioBlock, true, tmpDir, devices)
+	dm := manager.NewDeviceManager(config.VirtioBlock, true, tmpDir, 0, devices)
 
 	sConfig := SandboxConfig{}
 	sConfig.HypervisorConfig.BlockDeviceDriver = config.VirtioBlock
@@ -466,7 +466,7 @@ func TestAppendDevicesEmptyContainerDeviceList(t *testing.T) {
 
 	c := &Container{
 		sandbox: &Sandbox{
-			devManager: manager.NewDeviceManager("virtio-scsi", false, "", nil),
+			devManager: manager.NewDeviceManager("virtio-scsi", false, "", 0, nil),
 		},
 		devices: ctrDevices,
 	}
@@ -499,7 +499,7 @@ func TestAppendDevices(t *testing.T) {
 
 	c := &Container{
 		sandbox: &Sandbox{
-			devManager: manager.NewDeviceManager("virtio-blk", false, "", ctrDevices),
+			devManager: manager.NewDeviceManager("virtio-blk", false, "", 0, ctrDevices),
 			config:     sandboxConfig,
 		},
 	}
@@ -547,7 +547,7 @@ func TestAppendVhostUserBlkDevices(t *testing.T) {
 	testVhostUserStorePath := "/test/vhost/user/store/path"
 	c := &Container{
 		sandbox: &Sandbox{
-			devManager: manager.NewDeviceManager("virtio-blk", true, testVhostUserStorePath, ctrDevices),
+			devManager: manager.NewDeviceManager("virtio-blk", true, testVhostUserStorePath, 0, ctrDevices),
 			config:     sandboxConfig,
 		},
 	}

@@ -30,7 +30,7 @@ func TestSandboxAttachDevicesVhostUserBlk(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	os.RemoveAll(tmpDir)
-	dm := manager.NewDeviceManager(config.VirtioSCSI, true, tmpDir, nil)
+	dm := manager.NewDeviceManager(config.VirtioSCSI, true, tmpDir, 0, nil)
 
 	vhostUserDevNodePath := filepath.Join(tmpDir, "/block/devices/")
 	vhostUserSockPath := filepath.Join(tmpDir, "/block/sockets/")
