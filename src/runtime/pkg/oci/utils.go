@@ -472,6 +472,12 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		config.HypervisorConfig.VhostUserStorePath = value
 	}
 
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.EnableVhostUserStore).setBool(func(enable bool) {
+		config.HypervisorConfig.EnableVhostUserStore = enable
+	}); err != nil {
+		return err
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.GuestHookPath]; ok {
 		if value != "" {
 			config.HypervisorConfig.GuestHookPath = value
