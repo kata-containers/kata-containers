@@ -16,20 +16,16 @@ const int ioctl_KVM_CHECK_EXTENSION = KVM_CHECK_EXTENSION;
 import "C"
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"syscall"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli"
 )
 
 // getCPUInfo returns details of the first CPU read from the specified cpuinfo file

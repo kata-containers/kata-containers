@@ -111,7 +111,6 @@ func hostIsVMContainerCapable(details vmContainerCapableDetails) error {
 	}
 
 	return fmt.Errorf("ERROR: %s", failMessage)
-
 }
 
 func archKernelParamHandler(onVMM bool, fields logrus.Fields, msg string) bool {
@@ -123,7 +122,6 @@ func archKernelParamHandler(onVMM bool, fields logrus.Fields, msg string) bool {
 // normalizeArmVendor maps 'CPU implementer' in /proc/cpuinfo
 // to human-readable description of that value.
 func normalizeArmVendor(vendor string) string {
-
 	switch vendor {
 	case "0x41":
 		vendor = "ARM Limited"
