@@ -534,57 +534,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hypervisor"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "dbs-utils",
- "dragonball",
- "go-flag",
- "kata-sys-util",
- "kata-types",
- "libc",
- "logging",
- "nix 0.24.2",
- "persist",
- "rand 0.8.5",
- "seccompiler",
- "serde",
- "serde_json",
- "shim-interface",
- "slog",
- "slog-scope",
- "thiserror",
- "tokio",
- "vmm-sys-util 0.11.0",
-]
-
-[[package]]
-name = "iana-time-zone"
-version = "0.1.53"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64c122667b287044802d6ce17ee2ddf13207ed924c712de9a66a5814d5b64765"
-dependencies = [
- "android_system_properties",
- "core-foundation-sys",
- "iana-time-zone-haiku",
- "js-sys",
- "wasm-bindgen",
- "winapi",
-]
-
-[[package]]
-name = "iana-time-zone-haiku"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0703ae284fc167426161c2e3f1da3ea71d94b21bedbcc9494e92b28e334e3dca"
-dependencies = [
- "cxx",
- "cxx-build",
-]
-
-[[package]]
 name = "idna"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -911,21 +860,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "478c572c3d73181ff3c2539045f6eb99e5491218eae919370993b890cdbdd98e"
 
 [[package]]
-name = "persist"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "kata-sys-util",
- "kata-types",
- "libc",
- "safe-path",
- "serde",
- "serde_json",
- "shim-interface",
-]
-
-[[package]]
 name = "petgraph"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1219,71 +1153,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rlimit"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "347703a5ae47adf1e693144157be231dde38c72bd485925cae7407ad3e52480b"
-dependencies = [
- "libc",
-]
-
-[[package]]
-name = "rtnetlink"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46f1cfa18f8cebe685373a2697915d7e0db3b4554918bba118385e0f71f258a7"
-dependencies = [
- "futures",
- "log",
- "netlink-packet-route",
- "netlink-proto",
- "nix 0.24.2",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "runtimes"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "common",
- "hyper",
- "hyperlocal",
- "hypervisor",
- "kata-types",
- "lazy_static",
- "logging",
- "oci",
- "persist",
- "shim-interface",
- "slog",
- "slog-scope",
- "tokio",
- "virt_container",
-]
-
-[[package]]
-name = "rustc-demangle"
-version = "0.1.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ef03e0a2b150c7a90d01faf6254c9c48a41e95fb2a8c2ac1c6f0d2b9aefc342"
-
-[[package]]
-name = "rustix"
-version = "0.34.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2079c267b8394eb529872c3cf92e181c378b41fea36e68130357b52493701d2e"
-dependencies = [
- "bitflags",
- "errno",
- "io-lifetimes",
- "libc",
- "linux-raw-sys",
- "winapi",
-]
-
-[[package]]
 name = "rustls"
 version = "0.20.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1416,17 +1285,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sha2"
-version = "0.10.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82e6b795fe2e3b1e845bafcb27aa35405c4d47cdfc92af5fc8d3002f76cebdc0"
-dependencies = [
- "cfg-if 1.0.0",
- "cpufeatures",
- "digest",
-]
-
-[[package]]
 name = "shim-interface"
 version = "0.1.0"
 dependencies = [
@@ -1434,15 +1292,6 @@ dependencies = [
  "hyper",
  "hyperlocal",
  "tokio",
-]
-
-[[package]]
-name = "signal-hook-registry"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e51e73328dc4ac0c7ccbda3a494dfa03df1de2f46018127f60c693f2648455b0"
-dependencies = [
- "libc",
 ]
 
 [[package]]

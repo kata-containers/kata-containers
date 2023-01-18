@@ -23,6 +23,14 @@ const JSON_TYPE: &str = "application/json";
 
 const USER_AGT: &str = "kata";
 
+#[allow(dead_code)]
+pub const GENERIC_CPU_VENDOR_FIELD: &str = "vendor_id";
+#[allow(dead_code)]
+pub const GENERIC_CPU_MODEL_FIELD: &str = "model name";
+
+#[allow(dead_code)]
+pub const PROC_CPUINFO: &str = "/proc/cpuinfo";
+
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 fn get_cpu_info(cpu_info_file: &str) -> Result<String> {
     let contents = std::fs::read_to_string(cpu_info_file)?;
