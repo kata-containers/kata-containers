@@ -5,10 +5,11 @@
 
 extern crate procfs;
 
-use prometheus::{Encoder, Gauge, GaugeVec, IntCounter, TextEncoder};
+use prometheus::{Encoder, Gauge, GaugeVec, IntCounter, Opts, Registry, TextEncoder};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use slog::warn;
+use std::sync::Mutex;
 use tracing::instrument;
 
 const NAMESPACE_KATA_AGENT: &str = "kata_agent";
@@ -23,55 +24,70 @@ macro_rules! sl {
 
 lazy_static! {
 
-    static ref     AGENT_SCRAPE_COUNT: IntCounter =
-    prometheus::register_int_counter!(format!("{}_{}",NAMESPACE_KATA_AGENT,"scrape_count"), "Metrics scrape count").unwrap();
+    static ref REGISTERED: Mutex<bool> = Mutex::new(false);
 
-    static ref     AGENT_THREADS: Gauge =
-    prometheus::register_gauge!(format!("{}_{}",NAMESPACE_KATA_AGENT,"threads"), "Agent process threads").unwrap();
+    // custom registry
+    static ref REGISTRY: Registry = Registry::new();
 
-    static ref     AGENT_TOTAL_TIME: Gauge =
-    prometheus::register_gauge!(format!("{}_{}",NAMESPACE_KATA_AGENT,"total_time"), "Agent process total time").unwrap();
+    static ref AGENT_SCRAPE_COUNT: IntCounter =
+    IntCounter::new(format!("{}_{}",NAMESPACE_KATA_AGENT,"scrape_count"), "Metrics scrape count").unwrap();
 
-    static ref     AGENT_TOTAL_VM: Gauge =
-    prometheus::register_gauge!(format!("{}_{}",NAMESPACE_KATA_AGENT,"total_vm"), "Agent process total VM size").unwrap();
+    // agent metrics
+    static ref AGENT_THREADS: Gauge =
+    Gauge::new(format!("{}_{}",NAMESPACE_KATA_AGENT,"threads"), "Agent process threads").unwrap();
 
-    static ref     AGENT_TOTAL_RSS: Gauge =
-    prometheus::register_gauge!(format!("{}_{}",NAMESPACE_KATA_AGENT,"total_rss"), "Agent process total RSS size").unwrap();
+    static ref AGENT_TOTAL_TIME: Gauge =
+    Gauge::new(format!("{}_{}",NAMESPACE_KATA_AGENT,"total_time"), "Agent process total time").unwrap();
 
-    static ref     AGENT_PROC_STATUS: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_AGENT,"proc_status"), "Agent process status.", &["item"]).unwrap();
+    static ref AGENT_TOTAL_VM: Gauge =
+    Gauge::new(format!("{}_{}",NAMESPACE_KATA_AGENT,"total_vm"), "Agent process total VM size").unwrap() ;
 
-    static ref     AGENT_IO_STAT: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_AGENT,"io_stat"), "Agent process IO statistics.", &["item"]).unwrap();
+    static ref AGENT_TOTAL_RSS: Gauge =
+    Gauge::new(format!("{}_{}",NAMESPACE_KATA_AGENT,"total_rss"), "Agent process total RSS size").unwrap();
 
-    static ref     AGENT_PROC_STAT: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_AGENT,"proc_stat"), "Agent process statistics.", &["item"]).unwrap();
+    static ref AGENT_PROC_STATUS: GaugeVec =
+    GaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_AGENT,"proc_status"), "Agent process status."), &["item"]).unwrap();
+
+    static ref AGENT_IO_STAT: GaugeVec =
+    GaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_AGENT,"io_stat"), "Agent process IO statistics."), &["item"]).unwrap();
+
+    static ref AGENT_PROC_STAT: GaugeVec =
+    GaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_AGENT,"proc_stat"), "Agent process statistics."), &["item"]).unwrap();
 
     // guest os metrics
-    static ref     GUEST_LOAD: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"load") , "Guest system load.", &["item"]).unwrap();
+    static ref GUEST_LOAD: GaugeVec =
+    GaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_GUEST,"load"), "Guest system load."), &["item"]).unwrap();
 
-    static ref     GUEST_TASKS: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"tasks") , "Guest system load.", &["item"]).unwrap();
+    static ref GUEST_TASKS: GaugeVec =
+    GaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_GUEST,"tasks"), "Guest system load."), &["item"]).unwrap();
 
-    static ref     GUEST_CPU_TIME: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"cpu_time") , "Guest CPU statistics.", &["cpu","item"]).unwrap();
+    static ref GUEST_CPU_TIME: GaugeVec =
+    GaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_GUEST,"cpu_time"), "Guest CPU statistics."), &["cpu","item"]).unwrap();
 
-    static ref     GUEST_VM_STAT: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"vm_stat") , "Guest virtual memory statistics.", &["item"]).unwrap();
+    static ref GUEST_VM_STAT: GaugeVec =
+    GaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_GUEST,"vm_stat"), "Guest virtual memory statistics."), &["item"]).unwrap();
 
-    static ref     GUEST_NETDEV_STAT: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"netdev_stat") , "Guest net devices statistics.", &["interface","item"]).unwrap();
+    static ref GUEST_NETDEV_STAT: GaugeVec =
+    GaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_GUEST,"netdev_stat"), "Guest net devices statistics."), &["interface","item"]).unwrap();
 
-    static ref     GUEST_DISKSTAT: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"diskstat") , "Disks statistics in system.", &["disk","item"]).unwrap();
+    static ref GUEST_DISKSTAT: GaugeVec =
+    GaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_GUEST,"diskstat"), "Disks statistics in system."), &["disk","item"]).unwrap();
 
-    static ref     GUEST_MEMINFO: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"meminfo") , "Statistics about memory usage in the system.", &["item"]).unwrap();
+    static ref GUEST_MEMINFO: GaugeVec =
+    GaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_GUEST,"meminfo"), "Statistics about memory usage in the system."), &["item"]).unwrap();
 }
 
 #[instrument]
 pub fn get_metrics(_: &protocols::agent::GetMetricsRequest) -> Result<String> {
+    let mut registered = REGISTERED
+        .lock()
+        .map_err(|e| anyhow!("failed to check agent metrics register status {:?}", e))?;
+
+    if !(*registered) {
+        register_metrics()?;
+        *registered = true;
+    }
+
     AGENT_SCRAPE_COUNT.inc();
 
     // update agent process metrics
@@ -81,13 +97,38 @@ pub fn get_metrics(_: &protocols::agent::GetMetricsRequest) -> Result<String> {
     update_guest_metrics();
 
     // gather all metrics and return as a String
-    let metric_families = prometheus::gather();
+    let metric_families = REGISTRY.gather();
 
     let mut buffer = Vec::new();
     let encoder = TextEncoder::new();
     encoder.encode(&metric_families, &mut buffer)?;
 
     Ok(String::from_utf8(buffer)?)
+}
+
+#[instrument]
+fn register_metrics() -> Result<()> {
+    REGISTRY.register(Box::new(AGENT_SCRAPE_COUNT.clone()))?;
+
+    // agent metrics
+    REGISTRY.register(Box::new(AGENT_THREADS.clone()))?;
+    REGISTRY.register(Box::new(AGENT_TOTAL_TIME.clone()))?;
+    REGISTRY.register(Box::new(AGENT_TOTAL_VM.clone()))?;
+    REGISTRY.register(Box::new(AGENT_TOTAL_RSS.clone()))?;
+    REGISTRY.register(Box::new(AGENT_PROC_STATUS.clone()))?;
+    REGISTRY.register(Box::new(AGENT_IO_STAT.clone()))?;
+    REGISTRY.register(Box::new(AGENT_PROC_STAT.clone()))?;
+
+    // guest metrics
+    REGISTRY.register(Box::new(GUEST_LOAD.clone()))?;
+    REGISTRY.register(Box::new(GUEST_TASKS.clone()))?;
+    REGISTRY.register(Box::new(GUEST_CPU_TIME.clone()))?;
+    REGISTRY.register(Box::new(GUEST_VM_STAT.clone()))?;
+    REGISTRY.register(Box::new(GUEST_NETDEV_STAT.clone()))?;
+    REGISTRY.register(Box::new(GUEST_DISKSTAT.clone()))?;
+    REGISTRY.register(Box::new(GUEST_MEMINFO.clone()))?;
+
+    Ok(())
 }
 
 #[instrument]
