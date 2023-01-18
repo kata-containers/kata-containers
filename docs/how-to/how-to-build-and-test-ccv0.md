@@ -297,9 +297,9 @@ In our test repository there are three tagged images:
 
 | Test Image | Base Image used | Signature status | GPG key status |
 | --- | --- | --- | --- |
-| `quay.io/kata-containers/confidential-containers:signed` | `busybox:1.33.1` | [signature](https://github.com/kata-containers/tests/tree/CCv0/integration/confidential/fixtures/quay_verification/signatures.tar) embedded in kata rootfs |  [public key](https://github.com/kata-containers/tests/tree/CCv0/integration/confidential/fixtures/quay_verification/public.gpg) embedded in kata rootfs |
+| `quay.io/kata-containers/confidential-containers:signed` | `busybox:1.33.1` | [signature](https://github.com/kata-containers/tests/tree/CCv0/integration/confidential/fixtures/quay_verification/x86_64/signatures.tar) embedded in kata rootfs |  [public key](https://github.com/kata-containers/tests/tree/CCv0/integration/confidential/fixtures/quay_verification/x86_64/public.gpg) embedded in kata rootfs |
 | `quay.io/kata-containers/confidential-containers:unsigned` | `busybox:1.33.1` | not signed | not signed |
-| `quay.io/kata-containers/confidential-containers:other_signed` | `nginx:1.21.3` | [signature](https://github.com/kata-containers/tests/tree/CCv0/integration/confidential/fixtures/quay_verification/signatures.tar) embedded in kata rootfs | GPG key not kept |
+| `quay.io/kata-containers/confidential-containers:other_signed` | `nginx:1.21.3` | [signature](https://github.com/kata-containers/tests/tree/CCv0/integration/confidential/fixtures/quay_verification/x86_64/signatures.tar) embedded in kata rootfs | GPG key not kept |
 
 Using a standard unsigned `busybox` image that can be pulled from another, *unprotected*, `quay.io` repository we can
 test a few scenarios.
