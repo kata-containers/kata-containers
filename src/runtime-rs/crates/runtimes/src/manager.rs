@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{str::from_utf8, sync::Arc};
+use std::{path::PathBuf, str::from_utf8, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 
@@ -104,7 +104,17 @@ impl RuntimeHandlerManagerInner {
         #[cfg(feature = "virt")]
         VirtContainer::init().context("init virt container")?;
 
-        let netns = if let Some(linux) = &spec.linux {
+        let config = load_config(spec, options).context("load config")?;
+
+        let dan_enabled = PathBuf::from(config.runtime.dan_conf.as_str())
+            .join(format!("{}.json", self.id))
+            .exists();
+
+        let netns = if dan_enabled {
+            // The netns will be disabled forcely if the DAN is enabled
+            info!(sl!(), "The netns is disabled forcely due to the DAN");
+            None
+        } else if let Some(linux) = &spec.linux {
             let mut netns = None;
             for ns in &linux.namespaces {
                 if ns.r#type.as_str() != oci::NETWORKNAMESPACE {
@@ -128,7 +138,6 @@ impl RuntimeHandlerManagerInner {
             }
         }
 
-        let config = load_config(spec, options).context("load config")?;
         self.init_runtime_handler(spec, state, netns, dns, Arc::new(config))
             .await
             .context("init runtime handler")?;

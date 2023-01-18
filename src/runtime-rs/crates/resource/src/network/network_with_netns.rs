@@ -120,15 +120,6 @@ impl Network for NetworkWithNetns {
         }
         Some(endpoint)
     }
-
-    async fn len(&self) -> usize {
-        let inner = self.inner.read().await;
-        inner.entity_list.len()
-    }
-
-    async fn is_empty(&self) -> bool {
-        self.len().await == 0
-    }
 }
 
 async fn get_entity_from_netns(config: &NetworkWithNetNsConfig) -> Result<Vec<NetworkEntity>> {

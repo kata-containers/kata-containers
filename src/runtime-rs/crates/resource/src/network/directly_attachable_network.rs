@@ -89,15 +89,6 @@ impl Network for DirectlyAttachableNetwork {
         }
         Some(endpoint)
     }
-
-    async fn len(&self) -> usize {
-        let inner = self.inner.read().await;
-        inner.entity_list.len()
-    }
-
-    async fn is_empty(&self) -> bool {
-        self.len().await == 0
-    }
 }
 
 pub struct DirectlyAttachableNetworkInner {
@@ -121,6 +112,7 @@ impl DirectlyAttachableNetworkInner {
         });
 
         for device in devices.iter_mut() {
+            let entity: NetworkEntity;
             match device.r#type.as_str() {
                 "tap" => {
                     let endpoint: Arc<dyn Endpoint> = Arc::new(
@@ -135,11 +127,12 @@ impl DirectlyAttachableNetworkInner {
                             info.set_hard_addr(endpoint.hardware_addr().await.as_str());
                             Arc::new(info.clone())
                         }
-                        None => return Err(anyhow!("Tap endpoint is required to network info")),
+                        None => {
+                            return Err(anyhow!("A network info is required to the tap devices"))
+                        }
                     };
 
-                    ret.entity_list
-                        .push(NetworkEntity::new(endpoint, network_info))
+                    entity = NetworkEntity::new(endpoint, network_info);
                 }
                 _ => {
                     return Err(anyhow!(
@@ -148,6 +141,7 @@ impl DirectlyAttachableNetworkInner {
                     ))
                 }
             }
+            ret.entity_list.push(entity);
             idx += 1;
         }
 

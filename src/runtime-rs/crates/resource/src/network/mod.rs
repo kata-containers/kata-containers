@@ -42,8 +42,6 @@ pub trait Network: Send + Sync {
     async fn routes(&self) -> Result<Vec<agent::Route>>;
     async fn neighs(&self) -> Result<Vec<agent::ARPNeighbor>>;
     async fn save(&self) -> Option<Vec<EndpointState>>;
-    async fn len(&self) -> usize;
-    async fn is_empty(&self) -> bool;
 }
 
 pub async fn new(config: &NetworkConfig) -> Result<Arc<dyn Network>> {

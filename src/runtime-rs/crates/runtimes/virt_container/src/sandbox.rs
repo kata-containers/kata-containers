@@ -169,19 +169,12 @@ impl VirtSandbox {
 impl Sandbox for VirtSandbox {
     async fn start(
         &self,
-        mut netns: Option<String>,
+        netns: Option<String>,
         dns: Vec<String>,
         spec: &oci::Spec,
         state: &oci::State,
     ) -> Result<()> {
         let id = &self.sid;
-
-        // The containerd creates a netns for a pod so far, so we need disable
-        // netns explicitly if the directly attachable network (DAN) is enabled.
-        if self.resource_manager.disabled_netns(id).await {
-            info!(sl!(), "The netns is disabled forcely due to the DAN");
-            netns = None;
-        }
 
         // if sandbox running, return
         // if sandbox not running try to start sandbox
