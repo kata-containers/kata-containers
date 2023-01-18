@@ -242,7 +242,9 @@ generate_qemu_options() {
 	# Disable graphical network access
 	qemu_options+=(size:--disable-vnc)
 	qemu_options+=(size:--disable-vnc-jpeg)
-	qemu_options+=(size:--disable-vnc-png)
+	if ! gt_eq "${qemu_version}" "7.2.0" ; then
+		qemu_options+=(size:--disable-vnc-png)
+	fi
 	qemu_options+=(size:--disable-vnc-sasl)
 
 	# Disable PAM authentication: it's a feature used together with VNC access
@@ -330,13 +332,16 @@ generate_qemu_options() {
 	# building QEMU.
 	case "$arch" in
 	aarch64)
+		qemu_options+=(functionality:--disable-virtiofsd)
 		;;
 	x86_64)
+		qemu_options+=(functionality:--disable-virtiofsd)
 		;;
 	ppc64le)
 		qemu_options+=(functionality:--enable-virtiofsd)
 		;;
 	s390x)
+		qemu_options+=(functionality:--disable-virtiofsd)
 		;;
 	esac
 
@@ -353,8 +358,10 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-vde)
 
 	# Don't build other options which can't be depent on build server.
-	qemu_options+=(size:--disable-xfsctl)
-	qemu_options+=(size:--disable-libxml2)
+	if ! gt_eq "${qemu_version}" "7.2.0" ; then
+		qemu_options+=(size:--disable-xfsctl)
+		qemu_options+=(size:--disable-libxml2)
+	fi
 	qemu_options+=(size:--disable-nettle)
 
 	# Disable XEN driver
