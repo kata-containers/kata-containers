@@ -110,7 +110,7 @@ impl VirtSandbox {
         }
 
         // Directly attachable network
-        let dan_path = PathBuf::from(format!("{}/{}.json", config.runtime.dan_conf, id));
+        let dan_path = PathBuf::from(config.runtime.dan_conf.as_str()).join(format!("{}.json", id));
         if dan_path.exists() {
             info!(
                 sl!(),
