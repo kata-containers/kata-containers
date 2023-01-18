@@ -12,6 +12,10 @@ mod arch_specific {
     use std::path::Path;
 
     const KVM_DEV: &str = "/dev/kvm";
+    #[allow(dead_code)]
+    pub const ARCH_CPU_VENDOR_FIELD: &str = "CPU implementer";
+    #[allow(dead_code)]
+    pub const ARCH_CPU_MODEL_FIELD: &str = "CPU architecture";
 
     // List of check functions
     static CHECK_LIST: &[CheckItem] = &[CheckItem {
