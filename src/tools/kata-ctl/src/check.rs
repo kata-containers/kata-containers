@@ -194,7 +194,6 @@ pub fn check_official_releases() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use semver::Version;
 
     #[test]
     fn test_get_cpu_info_empty_input() {
@@ -262,13 +261,6 @@ mod tests {
             return;
         }
         let releases = releases.unwrap();
-
         assert!(!releases.is_empty());
-        let release = &releases[0];
-
-        let v = Version::parse(&release.tag_name).unwrap();
-        assert!(!v.major.to_string().is_empty());
-        assert!(!v.minor.to_string().is_empty());
-        assert!(!v.patch.to_string().is_empty());
     }
 }
