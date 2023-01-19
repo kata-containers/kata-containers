@@ -17,14 +17,13 @@ $ popd
 
 ## Config KATA QEMU
 
-After executing the above script, two files will be generated under the directory /usr/share/kata-containers/ by default, namely kata-flash0.img and kata-flash1.img. Next we need to change the configuration file of kata qemu, which is in /opt/kata/share/defaults/kata-containers/configuration-qemu.toml by default, specify in the configuration file to use the UEFI ROM installed above. Please refer to the following configuration:
+After executing the above script, two files will be generated under the directory `/usr/share/kata-containers/` by default, namely `kata-flash0.img` and `kata-flash1.img`. Next we need to change the configuration file of kata qemu, which is in `/opt/kata/share/defaults/kata-containers/configuration-qemu.toml` by default, specify in the configuration file to use the UEFI ROM installed above. Please refer to the following configuration.
 
 ```
 [hypervisor.qemu]
 
 # -pflash can add image file to VM. The arguments of it should be in format
 # of ["/path/to/flash0.img", "/path/to/flash1.img"]
-# pflashes = []
 pflashes = ["/usr/share/kata-containers/kata-flash0.img", "/usr/share/kata-containers/kata-flash1.img"]
 ```
 
