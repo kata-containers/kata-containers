@@ -295,16 +295,33 @@ impl ImageService {
             info!(sl!(), "pull image {:?}, bundle path {:?}", cid, bundle_path);
             // Image layers will store at KATA_CC_IMAGE_WORK_DIR, generated bundles
             // with rootfs and config.json will store under CONTAINER_BASE/cid.
-            self.image_client
+            let res = self
+                .image_client
                 .lock()
                 .await
                 .pull_image(image, &bundle_path, &source_creds, &Some(&decrypt_config))
-                .await?;
+                .await;
 
-            info!(
-                sl!(),
-                "pull and unpack image {:?}, with image-rs succeeded ", cid
-            );
+            match res {
+                Ok(image) => {
+                    info!(
+                        sl!(),
+                        "pull and unpack image {:?}, cid: {:?}, with image-rs succeed. ",
+                        image,
+                        cid
+                    );
+                }
+                Err(e) => {
+                    error!(
+                        sl!(),
+                        "pull and unpack image {:?}, cid: {:?}, with image-rs failed with {:?}. ",
+                        image,
+                        cid,
+                        e.to_string()
+                    );
+                    return Err(e);
+                }
+            };
         }
 
         let mut sandbox = self.sandbox.lock().await;
