@@ -59,8 +59,13 @@ cache_firmware_artifacts() {
 			current_firmware_image="$(get_ovmf_image_name)"
 			current_firmware_version="$(get_from_kata_deps "externals.ovmf.tdx.version")"
 			;;
+		"ovmf")
+			firmware_tarball_name="kata-static-cc-sev-ovmf.tar.xz"
+			current_firmware_image="$(get_ovmf_image_name)"
+			current_firmware_version="$(get_from_kata_deps "externals.ovmf.sev.version")"
+			;;
 		*)
-			die "Not a valid firmware (td-shim, tdvf) wass set as the FIRMWARE environment variable."
+			die "Not a valid firmware (td-shim, tdvf, ovmf) wass set as the FIRMWARE environment variable."
 
 			;;
 	esac
@@ -163,6 +168,7 @@ Usage: $0 "[options]"
 			* Requires FIRMWARE environment variable set, valid values are:
 			  * tdvf
 			  * td-shim
+			  * ovmf
 		-s	Shim v2 cache
 		-v	Virtiofsd cache
 		-r	Rootfs Cache
