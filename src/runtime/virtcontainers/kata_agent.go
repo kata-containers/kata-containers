@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/docker/go-units"
+
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
@@ -32,8 +34,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
-
-	"context"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -265,6 +265,7 @@ func ephemeralPath() string {
 // KataAgentConfig is a structure storing information needed
 // to reach the Kata Containers agent.
 type KataAgentConfig struct {
+	LogLevel           string
 	KernelModules      []string
 	ContainerPipeSize  uint32
 	DialTimeout        uint32
@@ -309,13 +310,26 @@ func (k *kataAgent) longLiveConn() bool {
 	return k.keepConn
 }
 
+// agentLogLevel calculates the log level, LogLevel precedes the Debug flag.
+func agentLogLevel(config KataAgentConfig) string {
+	level := ""
+	if config.Debug {
+		level = "debug"
+	}
+	if config.LogLevel != "" {
+		level = config.LogLevel
+	}
+	return level
+}
+
 // KataAgentKernelParams returns a list of Kata Agent specific kernel
 // parameters.
 func KataAgentKernelParams(config KataAgentConfig) []Param {
 	var params []Param
 
-	if config.Debug {
-		params = append(params, Param{Key: "agent.log", Value: "debug"})
+	logLevel := agentLogLevel(config)
+	if logLevel != "" {
+		params = append(params, Param{Key: "agent.log", Value: logLevel})
 	}
 
 	if config.Trace {
@@ -1328,7 +1342,7 @@ func buildProcessFromExecID(token string) (*Process, error) {
 // handleHugePages handles hugepages storage by
 // creating a Storage from corresponding source of the mount point
 func (k *kataAgent) handleHugepages(mounts []specs.Mount, hugepageLimits []specs.LinuxHugepageLimit) ([]*grpc.Storage, error) {
-	//Map to hold the total memory of each type of hugepages
+	// Map to hold the total memory of each type of hugepages
 	optionsMap := make(map[int64]string)
 
 	for _, hp := range hugepageLimits {
@@ -1337,7 +1351,7 @@ func (k *kataAgent) handleHugepages(mounts []specs.Mount, hugepageLimits []specs
 				"Pagesize": hp.Pagesize,
 				"Limit":    hp.Limit,
 			}).Info("hugepage request")
-			//example Pagesize 2MB, 1GB etc. The Limit are in Bytes
+			// example Pagesize 2MB, 1GB etc. The Limit are in Bytes
 			pageSize, err := units.RAMInBytes(hp.Pagesize)
 			if err != nil {
 				k.Logger().Error("Unable to convert pagesize to bytes")
@@ -1353,10 +1367,10 @@ func (k *kataAgent) handleHugepages(mounts []specs.Mount, hugepageLimits []specs
 		if mnt.Type != KataLocalDevType {
 			continue
 		}
-		//HugePages mount Type is Local
+		// HugePages mount Type is Local
 		if _, fsType, fsOptions, _ := utils.GetDevicePathAndFsTypeOptions(mnt.Source); fsType == "hugetlbfs" {
 			k.Logger().WithField("fsOptions", fsOptions).Debug("hugepage mount options")
-			//Find the pagesize from the mountpoint options
+			// Find the pagesize from the mountpoint options
 			pagesizeOpt := getPagesizeFromOpt(fsOptions)
 			if pagesizeOpt == "" {
 				return nil, fmt.Errorf("No pagesize option found in filesystem mount options")
@@ -1366,7 +1380,7 @@ func (k *kataAgent) handleHugepages(mounts []specs.Mount, hugepageLimits []specs
 				k.Logger().Error("Unable to convert pagesize from fs mount options to bytes")
 				return nil, err
 			}
-			//Create mount option string
+			// Create mount option string
 			options := fmt.Sprintf("pagesize=%s,size=%s", strconv.FormatInt(pageSize, 10), optionsMap[pageSize])
 			k.Logger().WithField("Hugepage options string", options).Debug("hugepage mount options")
 			// Set the mount source path to a path that resides inside the VM

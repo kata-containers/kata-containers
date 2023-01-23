@@ -76,6 +76,7 @@ type RuntimeConfigInfo struct {
 type RuntimeInfo struct {
 	Config              RuntimeConfigInfo
 	Path                string
+	LogLevel            string
 	GuestSeLinuxLabel   string
 	Experimental        []exp.Feature
 	Version             RuntimeVersionInfo
@@ -119,8 +120,9 @@ type HypervisorInfo struct {
 
 // AgentInfo stores agent details
 type AgentInfo struct {
-	Debug bool
-	Trace bool
+	LogLevel string
+	Debug    bool
+	Trace    bool
 }
 
 // DistroInfo stores host operating system distribution details.
@@ -145,6 +147,7 @@ type HostInfo struct {
 // env command.
 //
 // XXX: Any changes must be coupled with a change to formatVersion.
+// nolint: govet
 type EnvInfo struct {
 	Kernel     KernelInfo
 	Meta       MetaInfo
@@ -179,6 +182,7 @@ func getRuntimeInfo(configFile string, config oci.RuntimeConfig) RuntimeInfo {
 
 	return RuntimeInfo{
 		Debug:               config.Debug,
+		LogLevel:            config.LogLevel,
 		Trace:               config.Trace,
 		Version:             runtimeVersion,
 		Config:              runtimeConfig,
@@ -278,6 +282,7 @@ func getAgentInfo(config oci.RuntimeConfig) (AgentInfo, error) {
 
 	agentConfig := config.AgentConfig
 	agent.Debug = agentConfig.Debug
+	agent.LogLevel = agentConfig.LogLevel
 	agent.Trace = agentConfig.Trace
 
 	return agent, nil

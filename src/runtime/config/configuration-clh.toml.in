@@ -272,6 +272,11 @@ block_device_driver = "virtio-blk"
 # (default: disabled)
 #enable_debug = true
 
+# Specify the agent log level, will override the enable_debug value (if both are set).
+# loglevel optional values: panic, fatal, error, warn/warning, info, debug, trace
+# (default: "warn")
+log_level = warn
+
 # Enable agent tracing.
 #
 # If enabled, the agent will generate OpenTelemetry trace spans.
@@ -302,7 +307,12 @@ block_device_driver = "virtio-blk"
 # system log
 # (default: disabled)
 #enable_debug = true
-#
+
+# Specify the runtime log level, will override the enable_debug value (if both are set).
+# loglevel optional values: panic, fatal, error, warn/warning, info, debug, trace
+# (default: "warn")
+log_level = warn
+
 # Internetworking model
 # Determines how the VM should be connected to the
 # the container network interface

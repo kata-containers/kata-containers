@@ -99,39 +99,40 @@ type FactoryConfig struct {
 // RuntimeConfig aggregates all runtime specific settings
 // nolint: govet
 type RuntimeConfig struct {
-	//Paths to be bindmounted RO into the guest.
+	// Paths to be bindmounted RO into the guest.
 	SandboxBindMounts []string
 
-	//Experimental features enabled
+	// Experimental features enabled
 	Experimental []exp.Feature
 
 	JaegerEndpoint string
 	JaegerUser     string
 	JaegerPassword string
+	LogLevel       string
 	HypervisorType vc.HypervisorType
 
 	FactoryConfig    FactoryConfig
 	HypervisorConfig vc.HypervisorConfig
 	AgentConfig      vc.KataAgentConfig
 
-	//Determines how the VM should be connected to the
-	//the container network interface
+	// Determines how the VM should be connected to the
+	// the container network interface
 	InterNetworkModel vc.NetInterworkingModel
 
-	//Determines how VFIO devices should be presented to the
-	//container
+	// Determines how VFIO devices should be presented to the
+	// container
 	VfioMode config.VFIOModeType
 
 	Debug bool
 	Trace bool
 
-	//Determines if seccomp should be applied inside guest
+	// Determines if seccomp should be applied inside guest
 	DisableGuestSeccomp bool
 
 	// EnableVCPUsPinning controls whether each vCPU thread should be scheduled to a fixed CPU
 	EnableVCPUsPinning bool
 
-	//SELinux security context applied to the container process inside guest.
+	// SELinux security context applied to the container process inside guest.
 	GuestSeLinuxLabel string
 
 	// Sandbox sizing information which, if provided, indicates the size of
@@ -146,7 +147,7 @@ type RuntimeConfig struct {
 	// Determines if create a netns for hypervisor process
 	DisableNewNetNs bool
 
-	//Determines kata processes are managed only in sandbox cgroup
+	// Determines kata processes are managed only in sandbox cgroup
 	SandboxCgroupOnly bool
 
 	// Determines if enable pprof

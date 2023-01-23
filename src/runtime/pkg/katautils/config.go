@@ -17,6 +17,9 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/pbnjay/memory"
+	"github.com/sirupsen/logrus"
+
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
@@ -25,8 +28,6 @@ import (
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
-	"github.com/pbnjay/memory"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -165,6 +166,7 @@ type runtime struct {
 	JaegerPassword            string   `toml:"jaeger_password"`
 	VfioMode                  string   `toml:"vfio_mode"`
 	GuestSeLinuxLabel         string   `toml:"guest_selinux_label"`
+	LogLevel                  string   `toml:"log_level"`
 	SandboxBindMounts         []string `toml:"sandbox_bind_mounts"`
 	Experimental              []string `toml:"experimental"`
 	Tracing                   bool     `toml:"enable_tracing"`
@@ -179,6 +181,7 @@ type runtime struct {
 }
 
 type agent struct {
+	LogLevel            string   `toml:"log_level"`
 	KernelModules       []string `toml:"kernel_modules"`
 	Debug               bool     `toml:"enable_debug"`
 	Tracing             bool     `toml:"enable_tracing"`
@@ -384,7 +387,7 @@ func (h hypervisor) defaultMaxVCPUs() uint32 {
 	maxvcpus := govmm.MaxVCPUs()
 	reqVCPUs := h.DefaultMaxVCPUs
 
-	//don't exceed the number of physical CPUs. If a default is not provided, use the
+	// don't exceed the number of physical CPUs. If a default is not provided, use the
 	// numbers of physical CPUs
 	if reqVCPUs >= numcpus || reqVCPUs == 0 {
 		reqVCPUs = numcpus
@@ -425,7 +428,7 @@ func (h hypervisor) defaultMemOffset() uint64 {
 }
 
 func (h hypervisor) defaultMaxMemSz() uint64 {
-	hostMemory := memory.TotalMemory() / 1024 / 1024 //MiB
+	hostMemory := memory.TotalMemory() / 1024 / 1024 // MiB
 
 	if h.DefaultMaxMemorySize == 0 {
 		return hostMemory
@@ -607,6 +610,10 @@ func (a agent) debugConsoleEnabled() bool {
 
 func (a agent) dialTimout() uint32 {
 	return a.DialTimeout
+}
+
+func (a agent) logLevel() string {
+	return a.LogLevel
 }
 
 func (a agent) debug() bool {
@@ -1100,6 +1107,7 @@ func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oc
 		config.AgentConfig = vc.KataAgentConfig{
 			LongLiveConn:       true,
 			Debug:              agent.debug(),
+			LogLevel:           agent.logLevel(),
 			Trace:              agent.trace(),
 			KernelModules:      agent.kernelModules(),
 			EnableDebugConsole: agent.debugConsoleEnabled(),
@@ -1284,7 +1292,20 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	if !tomlConf.Runtime.Debug {
 		// If debug is not required, switch back to the original
 		// default log priority, otherwise continue in debug mode.
-		kataUtilsLogger.Logger.Level = originalLoggerLevel
+		kataUtilsLogger.Logger.SetLevel(originalLoggerLevel)
+	}
+
+	// override to logLevel if it is set.
+	if tomlConf.Runtime.LogLevel != "" {
+		logLevel, err := parseLogLevel(tomlConf.Runtime.LogLevel)
+		if err != nil {
+			return "", oci.RuntimeConfig{}, err
+		}
+		kataUtilsLogger.Logger.SetLevel(*logLevel)
+		config.LogLevel = logLevel.String()
+		if *logLevel < logrus.DebugLevel {
+			config.Debug = false
+		}
 	}
 
 	config.Trace = tomlConf.Runtime.Tracing

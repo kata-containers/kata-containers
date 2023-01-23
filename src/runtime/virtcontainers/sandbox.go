@@ -10,6 +10,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -17,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -692,7 +694,7 @@ func (s *Sandbox) createResourceController() error {
 			}
 		}
 
-		//TODO: in Docker or Podman use case, it is reasonable to set a constraint. Need to add a flag
+		// TODO: in Docker or Podman use case, it is reasonable to set a constraint. Need to add a flag
 		// to allow users to configure Kata to constrain CPUs and Memory in this alternative
 		// scenario. See https://github.com/kata-containers/runtime/issues/2811
 	}
@@ -1025,6 +1027,10 @@ func newConsoleWatcher(ctx context.Context, s *Sandbox) (*consoleWatcher, error)
 	return &cw, nil
 }
 
+type agentLog struct {
+	Level string `json:"level"`
+}
+
 // start the console watcher
 func (cw *consoleWatcher) start(s *Sandbox) (err error) {
 	if cw.consoleWatched() {
@@ -1050,12 +1056,42 @@ func (cw *consoleWatcher) start(s *Sandbox) (err error) {
 
 	go func() {
 		for scanner.Scan() {
-			s.Logger().WithFields(logrus.Fields{
+			log := scanner.Text()
+			logEntry := s.Logger().WithFields(logrus.Fields{
 				"console-protocol": cw.proto,
 				"console-url":      cw.consoleURL,
 				"sandbox":          s.id,
-				"vmconsole":        scanner.Text(),
-			}).Debug("reading guest console")
+				"vmconsole":        log,
+			})
+
+			// if the agent log is not a json formatted one, we log with debug. Otherwise, we use the same
+			// level this log has in agent to log.
+			if !strings.HasPrefix(log, "{\"msg\"") {
+				logEntry.Debug("reading guest console")
+				continue
+			}
+			var agentLog agentLog
+			if err := json.Unmarshal([]byte(log), &agentLog); err != nil {
+				s.Logger().Error(fmt.Sprintf("error unmarshal, string: %s, err: %+v", log, err))
+				logEntry.Debug("reading guest console")
+				continue
+			}
+			switch agentLog.Level {
+			case "TRACE":
+				logEntry.Trace("reading guest console")
+			case "DEBUG":
+				logEntry.Debug("reading guest console")
+			case "INFO":
+				logEntry.Info("reading guest console")
+			case "WARN":
+				logEntry.Warn("reading guest console")
+			case "ERROR":
+				logEntry.Error("reading guest console")
+			case "FATAL":
+				logEntry.Fatal("reading guest console")
+			case "PANIC":
+				logEntry.Panic("reading guest console")
+			}
 		}
 
 		if err := scanner.Err(); err != nil {
@@ -1206,14 +1242,12 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 
 	s.Logger().Info("Starting VM")
 
-	if s.config.HypervisorConfig.Debug {
-		// create console watcher
-		consoleWatcher, err := newConsoleWatcher(ctx, s)
-		if err != nil {
-			return err
-		}
-		s.cw = consoleWatcher
+	// create console watcher
+	consoleWatcher, err := newConsoleWatcher(ctx, s)
+	if err != nil {
+		return err
 	}
+	s.cw = consoleWatcher
 
 	defer func() {
 		if err != nil {
@@ -1265,12 +1299,10 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 
 	s.Logger().Info("VM started")
 
-	if s.cw != nil {
-		s.Logger().Debug("console watcher starts")
-		if err := s.cw.start(s); err != nil {
-			s.cw.stop()
-			return err
-		}
+	s.Logger().Debug("console watcher starts")
+	if err := s.cw.start(s); err != nil {
+		s.cw.stop()
+		return err
 	}
 
 	// Once the hypervisor is done starting the sandbox,
@@ -1752,11 +1784,8 @@ func (s *Sandbox) Stop(ctx context.Context, force bool) error {
 		return err
 	}
 
-	// shutdown console watcher if exists
-	if s.cw != nil {
-		s.Logger().Debug("stop the console watcher")
-		s.cw.stop()
-	}
+	s.Logger().Debug("stop the console watcher")
+	s.cw.stop()
 
 	if err := s.setSandboxState(types.StateStopped); err != nil {
 		return err
