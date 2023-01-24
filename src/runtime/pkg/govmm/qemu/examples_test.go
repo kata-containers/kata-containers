@@ -32,7 +32,7 @@ func Example() {
 	// flag.
 	// It will set up a unix domain socket called /tmp/qmp-socket that we
 	// can use to manage the instance.
-	proc, err := qemu.LaunchCustomQemu(context.Background(), "", params, nil, nil, nil)
+	proc, _, err := qemu.LaunchCustomQemu(context.Background(), "", params, nil, nil, nil)
 	if err != nil {
 		panic(err)
 	}
