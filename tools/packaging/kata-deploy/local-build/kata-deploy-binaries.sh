@@ -94,10 +94,12 @@ options:
 	cc-kernel
 	cc-tdx-kernel
 	cc-sev-kernel
+	cc-se-kernel
 	cc-qemu
 	cc-tdx-qemu
 	cc-rootfs-image
 	cc-sev-rootfs-initrd
+	cc-se-rootfs-initrd
 	cc-shimv2
 	cc-virtiofsd
 	cc-sev-ovmf
@@ -283,6 +285,12 @@ install_cc_sev_image() {
 	install_cc_image "${AA_KBC}" "${image_type}" "sev"
 }
 
+install_cc_se_image() {
+	AA_KBC="offline_fs_kbc"
+	image_type="initrd"
+	install_cc_image "${AA_KBC}" "${image_type}" "se"
+}
+
 install_cc_tdx_image() {
 	AA_KBC="eaa_kbc"
 	image_type="image"
@@ -391,7 +399,7 @@ install_cc_tee_kernel() {
 	tee="${1}"
 	kernel_version="${2}"
 
-	[[ "${tee}" != "tdx" && "${tee}" != "sev" ]] && die "Non supported TEE"
+	[[ "${tee}" != "tdx" && "${tee}" != "sev" && "${tee}" != "se" ]] && die "Non supported TEE"
 
 	export kernel_version=${kernel_version}
 
@@ -419,6 +427,11 @@ install_cc_tdx_kernel() {
 install_cc_sev_kernel() {
 	kernel_version="$(yq r $versions_yaml assets.kernel.sev.version)"
 	install_cc_tee_kernel "sev" "${kernel_version}"
+}
+
+install_cc_se_kernel() {
+	kernel_version="$(yq r $versions_yaml assets.kernel.se.version)"
+	install_cc_tee_kernel "se" "${kernel_version}"
 }
 
 install_cc_tee_qemu() {
@@ -625,6 +638,8 @@ handle_build() {
 
 	cc-sev-rootfs-initrd) install_cc_sev_image ;;
 
+	cc-se-rootfs-initrd) install_cc_se_image ;;
+
 	cc-tdx-rootfs-image) install_cc_tdx_image ;;
 
 	cc-shim-v2) install_cc_shimv2 ;;
@@ -634,6 +649,8 @@ handle_build() {
 	cc-tdx-kernel) install_cc_tdx_kernel ;;
 
 	cc-sev-kernel) install_cc_sev_kernel ;;
+
+	cc-se-kernel) install_cc_se_kernel ;;
 
 	cc-tdx-qemu) install_cc_tdx_qemu ;;
 

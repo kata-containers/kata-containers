@@ -20,6 +20,8 @@ EXTRA_TARBALL=cc-cloud-hypervisor-tarball \
 	cc-sev-ovmf-tarball \
 	cc-sev-rootfs-initrd-tarball \
 	cc-tdx-rootfs-image-tarball
+else ifeq ($(ARCH), s390x)
+EXTRA_TARBALL=cc-se-rootfs-initrd-tarball
 endif
 
 define BUILD
@@ -117,6 +119,9 @@ cc-rootfs-image-tarball:
 cc-sev-rootfs-initrd-tarball: cc-sev-kernel-tarball
 	${MAKE} $@-build
 
+cc-se-rootfs-initrd-tarball: cc-se-kernel-tarball
+	${MAKE} $@-build
+
 cc-tdx-rootfs-image-tarball:
 	${MAKE} $@-build
 
@@ -130,6 +135,9 @@ cc-tdx-kernel-tarball:
 	${MAKE} $@-build
 
 cc-sev-kernel-tarball:
+	${MAKE} $@-build
+
+cc-se-kernel-tarball:
 	${MAKE} $@-build
 
 cc-tdx-qemu-tarball:

@@ -47,6 +47,13 @@ build_initrd() {
 		kernel_version=${kernel_version#v}
 		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/cc-sev-kernel/builddir/kata-linux-${kernel_version}-${config_version}/lib/modules/${kernel_version}"
 		sudo -E PATH="$PATH" make rootfs ROOTFS_BUILD_DEST="${rootfs_build_dest}" KERNEL_MODULES_DIR="${module_dir}"
+	elif [[ "${AA_KBC:-}" == "offline_fs_kbc" ]] && [[ "${arch_target}" == "s390x" ]]; then
+		# IBM Z SE (secure execution) builds initrd with rootfs including common crypto kernel modules
+		config_version=$(get_config_version)
+		kernel_version="$(get_from_kata_deps "assets.kernel.se.version")"
+		kernel_version=${kernel_version#v}
+		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/cc-se-kernel/builddir/kata-linux-${kernel_version}-${config_version}/lib/modules/${kernel_version}"
+		sudo -E PATH="$PATH" make rootfs ROOTFS_BUILD_DEST="${rootfs_build_dest}" KERNEL_MODULES_DIR="${module_dir}"
 	else
 		sudo -E PATH="$PATH" make rootfs ROOTFS_BUILD_DEST="${rootfs_build_dest}"
 	fi
