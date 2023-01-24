@@ -16,6 +16,7 @@ package qemu
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -2985,7 +2986,7 @@ func (config *Config) appendFwCfg(logger QMPLog) {
 // The Config parameter contains a set of qemu parameters and settings.
 //
 // See LaunchCustomQemu for more information.
-func LaunchQemu(config Config, logger QMPLog) (*exec.Cmd, error) {
+func LaunchQemu(config Config, logger QMPLog) (*exec.Cmd, io.ReadCloser, error) {
 	config.appendName()
 	config.appendUUID()
 	config.appendMachine()
@@ -3008,7 +3009,7 @@ func LaunchQemu(config Config, logger QMPLog) (*exec.Cmd, error) {
 	config.appendSeccompSandbox()
 
 	if err := config.appendCPUs(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	ctx := config.Ctx
@@ -3039,11 +3040,12 @@ func LaunchQemu(config Config, logger QMPLog) (*exec.Cmd, error) {
 //
 // This function writes its log output via logger parameter.
 //
-// The function returns cmd, nil where cmd is a Go exec.Cmd object
-// representing the QEMU process if launched successfully. Otherwise
-// nil, err where err is a Go error object is returned.
+// The function returns cmd, reader, nil where cmd is a Go exec.Cmd object
+// representing the QEMU process and reader a Go io.ReadCloser object
+// connected to QEMU's stderr, if launched successfully. Otherwise
+// nil, nil, err where err is a Go error object is returned.
 func LaunchCustomQemu(ctx context.Context, path string, params []string, fds []*os.File,
-	attr *syscall.SysProcAttr, logger QMPLog) (*exec.Cmd, error) {
+	attr *syscall.SysProcAttr, logger QMPLog) (*exec.Cmd, io.ReadCloser, error) {
 	if logger == nil {
 		logger = qmpNullLogger{}
 	}
@@ -3061,12 +3063,17 @@ func LaunchCustomQemu(ctx context.Context, path string, params []string, fds []*
 
 	cmd.SysProcAttr = attr
 
+	reader, err := cmd.StderrPipe()
+	if err != nil {
+		logger.Errorf("Unable to connect stderr to a pipe")
+		return nil, nil, err
+	}
 	logger.Infof("launching %s with: %v", path, params)
 
-	err := cmd.Start()
+	err = cmd.Start()
 	if err != nil {
 		logger.Errorf("Unable to launch %s: %v", path, err)
-		return nil, err
+		return nil, nil, err
 	}
-	return cmd, nil
+	return cmd, reader, nil
 }
