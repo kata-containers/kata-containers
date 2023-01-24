@@ -14,11 +14,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"net"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -849,6 +852,24 @@ func (q *qemu) setupEarlyQmpConnection() (net.Conn, error) {
 	return conn, nil
 }
 
+func (q *qemu) LogAndWait(qemuCmd *exec.Cmd, reader io.ReadCloser) {
+	pid := qemuCmd.Process.Pid
+	q.Logger().Infof("Start logging QEMU (qemuPid=%d)", pid)
+	scanner := bufio.NewScanner(reader)
+	warnRE := regexp.MustCompile("(^[^:]+: )warning: ")
+	for scanner.Scan() {
+		text := scanner.Text()
+		if warnRE.MatchString(text) {
+			text = warnRE.ReplaceAllString(text, "$1")
+			q.Logger().WithField("qemuPid", pid).Warning(text)
+		} else {
+			q.Logger().WithField("qemuPid", pid).Error(text)
+		}
+	}
+	q.Logger().Infof("Stop logging QEMU (qemuPid=%d)", pid)
+	qemuCmd.Wait()
+}
+
 // StartVM will start the Sandbox's VM.
 func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 	span, ctx := katatrace.Trace(ctx, q.Logger(), "StartVM", qemuTracingTags, map[string]string{"sandbox_id": q.id})
@@ -926,7 +947,7 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 
 	}
 
-	qemuCmd, err := govmmQemu.LaunchQemu(q.qemuConfig, newQMPLogger())
+	qemuCmd, reader, err := govmmQemu.LaunchQemu(q.qemuConfig, newQMPLogger())
 	if err != nil {
 		q.Logger().WithError(err).Error("failed to launch qemu")
 		return fmt.Errorf("failed to launch qemu: %s", err)
@@ -937,10 +958,9 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 		// actually started.
 		qemuCmd.Wait()
 	} else {
-		// Ensure the QEMU process is reaped after termination
-		go func() {
-			qemuCmd.Wait()
-		}()
+		// Log QEMU errors and ensure the QEMU process is reaped after
+		// termination.
+		go q.LogAndWait(qemuCmd, reader)
 	}
 
 	err = q.waitVM(ctx, qmpConn, timeout)
