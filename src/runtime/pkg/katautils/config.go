@@ -167,7 +167,6 @@ type hypervisor struct {
 	DisableGuestSeLinux            bool     `toml:"disable_guest_selinux"`
 	LegacySerial                   bool     `toml:"use_legacy_serial"`
 	GuestPreAttestation            bool     `toml:"guest_pre_attestation"`
-	EnableVCPUsPinning             bool     `toml:"enable_vcpus_pinning"`
 }
 
 type runtime struct {
@@ -182,6 +181,7 @@ type runtime struct {
 	Tracing                   bool     `toml:"enable_tracing"`
 	DisableNewNetNs           bool     `toml:"disable_new_netns"`
 	DisableGuestSeccomp       bool     `toml:"disable_guest_seccomp"`
+	EnableVCPUsPinning        bool     `toml:"enable_vcpus_pinning"`
 	Debug                     bool     `toml:"enable_debug"`
 	SandboxCgroupOnly         bool     `toml:"sandbox_cgroup_only"`
 	StaticSandboxResourceMgmt bool     `toml:"static_sandbox_resource_mgmt"`
@@ -856,7 +856,6 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		GuestPreAttestationSecretType: h.GuestPreAttestationSecretType,
 		SEVGuestPolicy:                h.SEVGuestPolicy,
 		SEVCertChainPath:              h.SEVCertChainPath,
-		EnableVCPUsPinning:            h.EnableVCPUsPinning,
 		DisableGuestSeLinux:           h.DisableGuestSeLinux,
 	}, nil
 }
@@ -1364,6 +1363,7 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	}
 
 	config.DisableGuestSeccomp = tomlConf.Runtime.DisableGuestSeccomp
+	config.EnableVCPUsPinning = tomlConf.Runtime.EnableVCPUsPinning
 	config.GuestSeLinuxLabel = tomlConf.Runtime.GuestSeLinuxLabel
 	config.StaticSandboxResourceMgmt = tomlConf.Runtime.StaticSandboxResourceMgmt
 	config.SandboxCgroupOnly = tomlConf.Runtime.SandboxCgroupOnly

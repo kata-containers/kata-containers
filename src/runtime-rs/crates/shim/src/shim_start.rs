@@ -38,7 +38,7 @@ impl ShimExecutor {
         let (container_type, id) = k8s::container_type_with_id(&spec);
 
         match container_type {
-            ContainerType::PodSandbox => {
+            ContainerType::PodSandbox | ContainerType::SingleContainer => {
                 let address = self.socket_address(&self.args.id)?;
                 let socket = new_listener(&address)?;
                 let child_pid = self.create_shim_process(socket)?;

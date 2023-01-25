@@ -120,10 +120,12 @@ func watchSandbox(ctx context.Context, s *service) {
 	if err == nil {
 		return
 	}
-	s.monitor = nil
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	s.monitor = nil
+
 	// sandbox malfunctioning, cleanup as much as we can
 	shimLog.WithError(err).Warn("sandbox stopped unexpectedly")
 	err = s.sandbox.Stop(ctx, true)

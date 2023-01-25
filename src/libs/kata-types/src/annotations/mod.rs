@@ -266,7 +266,7 @@ pub const KATA_ANNO_CFG_HYPERVISOR_SHARED_FS: &str =
 /// A sandbox annotations to specify virtio-fs vhost-user daemon path.
 pub const KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_DAEMON: &str =
     "io.katacontainers.config.hypervisor.virtio_fs_daemon";
-/// A sandbox annotation to specify the cache mode for fs version cache or "none".
+/// A sandbox annotation to specify the cache mode for fs version cache.
 pub const KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_CACHE: &str =
     "io.katacontainers.config.hypervisor.virtio_fs_cache";
 /// A sandbox annotation to specify the DAX cache size in MiB.

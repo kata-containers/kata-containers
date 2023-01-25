@@ -18,3 +18,4 @@ config-generated.go
 /virtcontainers/hook/mock/hook
 /virtcontainers/profile.cov
 /virtcontainers/utils/supportfiles
+/virtcontainers/cpu_affinity_idx

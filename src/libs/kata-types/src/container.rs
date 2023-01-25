@@ -19,6 +19,8 @@ pub(crate) const SANDBOX: &str = "sandbox";
 // docker: a sandbox sandbox container
 pub(crate) const PODSANDBOX: &str = "podsandbox";
 
+pub(crate) const SINGLE_CONTAINER: &str = "single_container";
+
 const STATE_READY: &str = "ready";
 const STATE_RUNNING: &str = "running";
 const STATE_STOPPED: &str = "stopped";
@@ -45,6 +47,8 @@ pub enum ContainerType {
     PodContainer,
     /// A pod sandbox.
     PodSandbox,
+    /// A single container.
+    SingleContainer,
 }
 
 impl ContainerType {
@@ -64,6 +68,7 @@ impl Display for ContainerType {
         match self {
             ContainerType::PodContainer => write!(f, "{}", POD_CONTAINER),
             ContainerType::PodSandbox => write!(f, "{}", POD_SANDBOX),
+            ContainerType::SingleContainer => write!(f, "{}", SINGLE_CONTAINER),
         }
     }
 }
