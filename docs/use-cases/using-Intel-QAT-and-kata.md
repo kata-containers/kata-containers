@@ -49,7 +49,7 @@ the latest driver.
 $ export QAT_DRIVER_VER=qat1.7.l.4.14.0-00031.tar.gz
 $ export QAT_DRIVER_URL=https://downloadmirror.intel.com/30178/eng/${QAT_DRIVER_VER}
 $ export QAT_CONF_LOCATION=~/QAT_conf
-$ export QAT_DOCKERFILE=https://raw.githubusercontent.com/intel/intel-device-plugins-for-kubernetes/master/demo/openssl-qat-engine/Dockerfile
+$ export QAT_DOCKERFILE=https://raw.githubusercontent.com/intel/intel-device-plugins-for-kubernetes/main/demo/openssl-qat-engine/Dockerfile
 $ export QAT_SRC=~/src/QAT
 $ export GOPATH=~/src/go
 $ export KATA_KERNEL_LOCATION=~/kata
