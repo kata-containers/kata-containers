@@ -205,6 +205,7 @@ checkout_tests_repo() {
 checkout_kata_containers_repo() {
     source "${tests_repo_dir}/.ci/lib.sh"
     echo "Creating repo: ${katacontainers_repo} and branch ${kata_default_branch} into ${katacontainers_repo_dir}..."
+    sudo -E chown -R ${USER}:${USER} "${katacontainers_repo_dir}"
     clone_katacontainers_repo
     sudo -E chown -R ${USER}:${USER} "${katacontainers_repo_dir}"
 }
