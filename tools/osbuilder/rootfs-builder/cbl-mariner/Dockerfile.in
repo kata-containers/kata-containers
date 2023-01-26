@@ -1,0 +1,15 @@
+# Copyright (c) 2023 Microsoft Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+ARG IMAGE_REGISTRY=mcr.microsoft.com
+FROM ${IMAGE_REGISTRY}/cbl-mariner/base/core:@OS_VERSION@
+
+RUN tdnf -y install \
+    ca-certificates \
+    build-essential \
+    dnf \
+    git \
+    tar
+
+@INSTALL_RUST@
