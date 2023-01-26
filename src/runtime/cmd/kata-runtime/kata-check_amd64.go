@@ -115,13 +115,13 @@ func setCPUtype(hypervisorType vc.HypervisorType) error {
 		}
 
 		switch hypervisorType {
-		case "firecracker":
+		case vc.FirecrackerHypervisor:
 			fallthrough
-		case "clh":
+		case vc.ClhHypervisor:
 			fallthrough
-		case "dragonball":
+		case vc.DragonballHypervisor:
 			fallthrough
-		case "qemu":
+		case vc.QemuHypervisor:
 			archRequiredCPUFlags = map[string]string{
 				cpuFlagVMX:    "Virtualization support",
 				cpuFlagLM:     "64Bit CPU",
@@ -153,7 +153,7 @@ func setCPUtype(hypervisorType vc.HypervisorType) error {
 					required: false,
 				},
 			}
-		case "acrn":
+		case vc.AcrnHypervisor:
 			archRequiredCPUFlags = map[string]string{
 				cpuFlagLM:     "64Bit CPU",
 				cpuFlagSSE4_1: "SSE4.1",
@@ -175,7 +175,7 @@ func setCPUtype(hypervisorType vc.HypervisorType) error {
 					required: false,
 				},
 			}
-		case "mock":
+		case vc.MockHypervisor:
 			archRequiredCPUFlags = map[string]string{
 				cpuFlagVMX:    "Virtualization support",
 				cpuFlagLM:     "64Bit CPU",
@@ -310,19 +310,18 @@ func acrnIsUsable() error {
 }
 
 func archHostCanCreateVMContainer(hypervisorType vc.HypervisorType) error {
-
 	switch hypervisorType {
-	case "qemu":
+	case vc.QemuHypervisor:
 		fallthrough
-	case "clh":
+	case vc.ClhHypervisor:
 		fallthrough
-	case "firecracker":
+	case vc.FirecrackerHypervisor:
 		return kvmIsUsable()
-	case "acrn":
+	case vc.AcrnHypervisor:
 		return acrnIsUsable()
-	case "remote":
+	case vc.RemoteHypervisor:
 		return nil
-	case "mock":
+	case vc.MockHypervisor:
 		return nil
 	default:
 		return fmt.Errorf("archHostCanCreateVMContainer: Unknown hypervisor type %s", hypervisorType)

@@ -121,11 +121,6 @@ machine_accelerators="@MACHINEACCELERATORS@"
 # For example, `cpu_features = "pmu=off,vmx=off"
 cpu_features="@CPUFEATURES@"
 
-# vCPUs pinning settings
-# if enabled, each vCPU thread will be scheduled to a fixed CPU
-# qualified condition: num(vCPU threads) == num(CPUs in sandbox's CPUSet)
-# enable_vcpus_pinning = false
-
 # Default number of vCPUs per SB/VM:
 # unspecified or 0                --> will be set to @DEFVCPUS@
 # < 0                             --> will be set to the actual number of physical cores
@@ -230,7 +225,7 @@ virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
 
 # Cache mode:
 #
-#  - none
+#  - never
 #    Metadata, data, and pathname lookup are not cached in guest. They are
 #    always fetched from host and any changes are immediately pushed to host.
 #
@@ -587,6 +582,11 @@ internetworking_model="@DEFNETWORKMODEL_QEMU@"
 # within the guest
 # (default: true)
 disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
+
+# vCPUs pinning settings
+# if enabled, each vCPU thread will be scheduled to a fixed CPU
+# qualified condition: num(vCPU threads) == num(CPUs in sandbox's CPUSet)
+# enable_vcpus_pinning = false
 
 # Apply a custom SELinux security policy to the container process inside the VM.
 # This is used when you want to apply a type other than the default `container_t`,

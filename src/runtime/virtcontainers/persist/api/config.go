@@ -70,7 +70,7 @@ type HypervisorConfig struct {
 	// VirtioFSDaemon is the virtio-fs vhost-user daemon path
 	VirtioFSDaemon string
 
-	// VirtioFSCache cache mode for fs version cache or "none"
+	// VirtioFSCache cache mode for fs version cache
 	VirtioFSCache string
 
 	// File based memory backend root directory
@@ -288,4 +288,7 @@ type SandboxConfig struct {
 	SandboxCgroupOnly bool
 
 	DisableGuestSeccomp bool
+
+	// EnableVCPUsPinning controls whether each vCPU thread should be scheduled to a fixed CPU
+	EnableVCPUsPinning bool
 }

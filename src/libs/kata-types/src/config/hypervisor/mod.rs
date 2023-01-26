@@ -767,7 +767,7 @@ pub struct SharedFsInfo {
     pub virtio_fs_extra_args: Vec<String>,
 
     /// Cache mode:
-    /// - none: Metadata, data, and pathname lookup are not cached in guest. They are always
+    /// - never: Metadata, data, and pathname lookup are not cached in guest. They are always
     ///   fetched from host and any changes are immediately pushed to host.
     /// - auto: Metadata and pathname lookup cache expires after a configured amount of time
     ///   (default is 1 second). Data is cached while the file is open (close to open consistency).

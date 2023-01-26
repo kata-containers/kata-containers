@@ -650,7 +650,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.BlockDeviceCacheNoflush] = "true"
 	ocispec.Annotations[vcAnnotations.SharedFS] = "virtio-fs"
 	ocispec.Annotations[vcAnnotations.VirtioFSDaemon] = "/bin/false"
-	ocispec.Annotations[vcAnnotations.VirtioFSCache] = "/home/cache"
+	ocispec.Annotations[vcAnnotations.VirtioFSCache] = "auto"
 	ocispec.Annotations[vcAnnotations.VirtioFSExtraArgs] = "[ \"arg0\", \"arg1\" ]"
 	ocispec.Annotations[vcAnnotations.Msize9p] = "512"
 	ocispec.Annotations[vcAnnotations.MachineType] = "q35"
@@ -688,7 +688,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(config.HypervisorConfig.BlockDeviceCacheNoflush, true)
 	assert.Equal(config.HypervisorConfig.SharedFS, "virtio-fs")
 	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "/bin/false")
-	assert.Equal(config.HypervisorConfig.VirtioFSCache, "/home/cache")
+	assert.Equal(config.HypervisorConfig.VirtioFSCache, "auto")
 	assert.ElementsMatch(config.HypervisorConfig.VirtioFSExtraArgs, [2]string{"arg0", "arg1"})
 	assert.Equal(config.HypervisorConfig.Msize9p, uint32(512))
 	assert.Equal(config.HypervisorConfig.HypervisorMachineType, "q35")

@@ -69,7 +69,7 @@ pub fn container_type(spec: &oci::Spec) -> ContainerType {
         }
     }
 
-    ContainerType::PodSandbox
+    ContainerType::SingleContainer
 }
 
 /// Determine the k8s sandbox ID from OCI annotations.
@@ -269,7 +269,7 @@ mod tests {
         // default
         assert_eq!(
             container_type_with_id(&spec),
-            (ContainerType::PodSandbox, None)
+            (ContainerType::SingleContainer, None)
         );
 
         // crio sandbox

@@ -12,21 +12,25 @@ mod arch_specific {
     use crate::types::*;
     use anyhow::{anyhow, Result};
 
-    const PROC_CPUINFO: &str = "/proc/cpuinfo";
     const CPUINFO_DELIMITER: &str = "processor ";
     const CPUINFO_FEATURES_TAG: &str = "features";
     const CPU_FEATURES_REQ: &[&str] = &["sie"];
+
+    #[allow(dead_code)]
+    pub const ARCH_CPU_VENDOR_FIELD: &str = check::GENERIC_CPU_VENDOR_FIELD;
+    #[allow(dead_code)]
+    pub const ARCH_CPU_MODEL_FIELD: &str = "machine";
 
     // check cpu
     fn check_cpu() -> Result<()> {
         println!("INFO: check CPU: s390x");
 
-        let cpu_info = check::get_single_cpu_info(PROC_CPUINFO, CPUINFO_DELIMITER)?;
+        let cpu_info = check::get_single_cpu_info(check::PROC_CPUINFO, CPUINFO_DELIMITER)?;
 
         let cpu_features = check::get_cpu_flags(&cpu_info, CPUINFO_FEATURES_TAG).map_err(|e| {
             anyhow!(
                 "Error parsing CPU features, file {:?}, {:?}",
-                PROC_CPUINFO,
+                check::PROC_CPUINFO,
                 e
             )
         })?;

@@ -91,7 +91,7 @@ func TestVirtiofsdArgs(t *testing.T) {
 }
 
 func TestValid(t *testing.T) {
-	assert := assert.New(t)
+	a := assert.New(t)
 
 	sourcePath := t.TempDir()
 	socketDir := t.TempDir()
@@ -103,31 +103,61 @@ func TestValid(t *testing.T) {
 			path:       "/usr/bin/virtiofsd",
 			sourcePath: sourcePath,
 			socketPath: socketPath,
+			cache:      "auto",
 		}
 	}
 
-	// valid case
-	v := newVirtiofsdFunc()
-	err := v.valid()
-	assert.NoError(err)
+	type fieldFunc func(v *virtiofsd)
+	type assertFunc func(name string, assert *assert.Assertions, v *virtiofsd)
 
-	v = newVirtiofsdFunc()
-	v.path = ""
-	err = v.valid()
-	assert.Equal(errVirtiofsdDaemonPathEmpty, err)
+	// nolint: govet
+	tests := []struct {
+		name         string
+		f            fieldFunc
+		wantErr      error
+		customAssert assertFunc
+	}{
+		{"valid case", nil, nil, nil},
+		{"no path", func(v *virtiofsd) {
+			v.path = ""
+		}, errVirtiofsdDaemonPathEmpty, nil},
+		{"no sourcePath", func(v *virtiofsd) {
+			v.sourcePath = ""
+		}, errVirtiofsdSourcePathEmpty, nil},
+		{"no socketPath", func(v *virtiofsd) {
+			v.socketPath = ""
+		}, errVirtiofsdSocketPathEmpty, nil},
+		{"source is not available", func(v *virtiofsd) {
+			v.sourcePath = "/foo/bar"
+		}, errVirtiofsdSourceNotAvailable, nil},
+		{"replace cache mode none by never", func(v *virtiofsd) {
+			v.cache = "none"
+		}, nil, func(name string, a *assert.Assertions, v *virtiofsd) {
+			a.Equal("never", v.cache, "test case %+s, cache mode none should be replaced by never", name)
+		}},
+		{"invald cache mode: replace none by never", func(v *virtiofsd) {
+			v.cache = "foo"
+		}, errVirtiofsdInvalidVirtiofsCacheMode("foo"), nil},
+	}
 
-	v = newVirtiofsdFunc()
-	v.sourcePath = ""
-	err = v.valid()
-	assert.Equal(errVirtiofsdSourcePathEmpty, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := newVirtiofsdFunc()
+			if tt.f != nil {
+				tt.f(v)
+			}
+			err := v.valid()
+			if tt.wantErr != nil && err == nil {
+				t.Errorf("test case %+s: virtiofsd.valid() should get error `%+v`, but got nil", tt.name, tt.wantErr)
+			} else if tt.wantErr == nil && err != nil {
+				t.Errorf("test case %+s: virtiofsd.valid() should get no erro, but got `%+v`", tt.name, err)
+			} else if tt.wantErr != nil && err != nil {
+				a.Equal(err.Error(), tt.wantErr.Error(), "test case %+s", tt.name)
+			}
 
-	v = newVirtiofsdFunc()
-	v.socketPath = ""
-	err = v.valid()
-	assert.Equal(errVirtiofsdSocketPathEmpty, err)
-
-	v = newVirtiofsdFunc()
-	v.sourcePath = "/foo/bar"
-	err = v.valid()
-	assert.Equal(errVirtiofsdSourceNotAvailable, err)
+			if tt.customAssert != nil {
+				tt.customAssert(tt.name, a, v)
+			}
+		})
+	}
 }

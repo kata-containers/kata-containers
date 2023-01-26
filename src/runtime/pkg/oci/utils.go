@@ -128,6 +128,9 @@ type RuntimeConfig struct {
 	//Determines if seccomp should be applied inside guest
 	DisableGuestSeccomp bool
 
+	// EnableVCPUsPinning controls whether each vCPU thread should be scheduled to a fixed CPU
+	EnableVCPUsPinning bool
+
 	//SELinux security context applied to the container process inside guest.
 	GuestSeLinuxLabel string
 
@@ -445,7 +448,7 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
-	if err := addHypervisporNetworkOverrides(ocispec, config); err != nil {
+	if err := addHypervisorNetworkOverrides(ocispec, config); err != nil {
 		return err
 	}
 
@@ -470,6 +473,12 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 			return fmt.Errorf("vhost store path %v required from annotation is not valid", value)
 		}
 		config.HypervisorConfig.VhostUserStorePath = value
+	}
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.EnableVhostUserStore).setBool(func(enable bool) {
+		config.HypervisorConfig.EnableVhostUserStore = enable
+	}); err != nil {
+		return err
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.GuestHookPath]; ok {
@@ -657,12 +666,6 @@ func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) e
 		return err
 	}
 
-	if err := newAnnotationConfiguration(ocispec, vcAnnotations.EnableVCPUsPinning).setBool(func(enableVCPUsPinning bool) {
-		sbConfig.HypervisorConfig.EnableVCPUsPinning = enableVCPUsPinning
-	}); err != nil {
-		return err
-	}
-
 	return newAnnotationConfiguration(ocispec, vcAnnotations.DefaultMaxVCPUs).setUintWithCheck(func(maxVCPUs uint64) error {
 		max := uint32(maxVCPUs)
 
@@ -795,7 +798,7 @@ func addHypervisorVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConf
 	})
 }
 
-func addHypervisporNetworkOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+func addHypervisorNetworkOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
 	if value, ok := ocispec.Annotations[vcAnnotations.CPUFeatures]; ok {
 		if value != "" {
 			sbConfig.HypervisorConfig.CPUFeatures = value
@@ -829,6 +832,12 @@ func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, r
 
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.SandboxCgroupOnly).setBool(func(sandboxCgroupOnly bool) {
 		sbConfig.SandboxCgroupOnly = sandboxCgroupOnly
+	}); err != nil {
+		return err
+	}
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.EnableVCPUsPinning).setBool(func(enableVCPUsPinning bool) {
+		sbConfig.EnableVCPUsPinning = enableVCPUsPinning
 	}); err != nil {
 		return err
 	}

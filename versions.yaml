@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v28.1"
+      version: "v29.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -88,8 +88,8 @@ assets:
     qemu:
       description: "VMM that uses KVM"
       url: "https://github.com/qemu/qemu"
-      version: "v6.2.0"
-      tag: "v6.2.0"
+      version: "v7.2.0"
+      tag: "v7.2.0"
       # Do not include any non-full release versions
       # Break the line *without CR or space being appended*, to appease
       # yamllint, and note the deliberate ' ' at the end of the expression.
@@ -201,7 +201,7 @@ externals:
   conmon:
     description: "An OCI container runtime monitor"
     url: "https://github.com/containers/conmon"
-    version: "v2.0.5"
+    version: "v2.0.10"
 
   crio:
     description: |
