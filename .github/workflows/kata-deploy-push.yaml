@@ -28,6 +28,13 @@ jobs:
           - virtiofsd
           - nydus
     steps:
+      - name: Login to Kata Containers quay.io
+        uses: docker/login-action@v2
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
       - uses: actions/checkout@v2
       - name: Install docker
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
@@ -44,6 +51,7 @@ jobs:
           sudo cp -r --preserve=all "${build_dir}" "kata-build"
         env:
           KATA_ASSET: ${{ matrix.asset }}
+          PUSH_TO_REGISTRY: yes
 
       - name: store-artifact ${{ matrix.asset }}
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
