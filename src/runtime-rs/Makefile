@@ -28,6 +28,13 @@ default:
 test:
 	@echo "s390x not support currently"
 	exit 0
+else ifeq ($(ARCH), powerpc64le)
+default:
+	@echo "PowerPC 64 LE is not currently supported"
+	exit 0
+test:
+	@echo "PowerPC 64 LE is not currently supported"
+	exit 0
 else
 ##TARGET default: build code
 default: runtime show-header
