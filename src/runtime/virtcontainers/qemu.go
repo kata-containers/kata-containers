@@ -13,10 +13,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
+	"net"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -368,7 +372,6 @@ func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
 	return []govmmQemu.QMPSocket{
 		{
 			Type:   "unix",
-			Name:   q.qmpMonitorCh.path,
 			Server: true,
 			NoWait: true,
 		},
@@ -531,7 +534,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		NoDefaults:    true,
 		NoGraphic:     true,
 		NoReboot:      true,
-		Daemonize:     true,
+		Daemonize:     false,
 		MemPrealloc:   q.config.MemPrealloc,
 		HugePages:     q.config.HugePages,
 		IOMMUPlatform: q.config.IOMMUPlatform,
@@ -812,6 +815,77 @@ func (q *qemu) setupVirtioMem(ctx context.Context) error {
 	return err
 }
 
+// setupEarlyQmpConnection creates a listener socket to be passed to QEMU
+// as a QMP listening endpoint. An initial connection is established, to
+// be used as the QMP client socket. This allows to detect an early failure
+// of QEMU instead of looping on connect until some timeout expires.
+func (q *qemu) setupEarlyQmpConnection() (net.Conn, error) {
+	monitorSockPath := q.qmpMonitorCh.path
+
+	qmpListener, err := net.Listen("unix", monitorSockPath)
+	if err != nil {
+		q.Logger().WithError(err).Errorf("Unable to listen on unix socket address (%s)", monitorSockPath)
+		return nil, err
+	}
+
+	// A duplicate fd of this socket will be passed to QEMU. We must
+	// close the original one when we're done.
+	defer qmpListener.Close()
+
+	if rootless.IsRootless() {
+		err = syscall.Chown(monitorSockPath, int(q.config.Uid), int(q.config.Gid))
+		if err != nil {
+			q.Logger().WithError(err).Errorf("Unable to make unix socket (%s) rootless", monitorSockPath)
+			return nil, err
+		}
+	}
+
+	VMFd, err := qmpListener.(*net.UnixListener).File()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			VMFd.Close()
+		}
+	}()
+
+	// This socket will be used to establish the initial QMP connection
+	dialer := net.Dialer{Cancel: q.qmpMonitorCh.ctx.Done()}
+	conn, err := dialer.Dial("unix", monitorSockPath)
+	if err != nil {
+		q.Logger().WithError(err).Errorf("Unable to connect to unix socket (%s)", monitorSockPath)
+		return nil, err
+	}
+
+	// We need to keep the socket file around to be able to re-connect
+	qmpListener.(*net.UnixListener).SetUnlinkOnClose(false)
+
+	// Pass the duplicated fd of the listener socket to QEMU
+	q.qemuConfig.QMPSockets[0].FD = VMFd
+	q.fds = append(q.fds, q.qemuConfig.QMPSockets[0].FD)
+
+	return conn, nil
+}
+
+func (q *qemu) LogAndWait(qemuCmd *exec.Cmd, reader io.ReadCloser) {
+	pid := qemuCmd.Process.Pid
+	q.Logger().Infof("Start logging QEMU (qemuPid=%d)", pid)
+	scanner := bufio.NewScanner(reader)
+	warnRE := regexp.MustCompile("(^[^:]+: )warning: ")
+	for scanner.Scan() {
+		text := scanner.Text()
+		if warnRE.MatchString(text) {
+			text = warnRE.ReplaceAllString(text, "$1")
+			q.Logger().WithField("qemuPid", pid).Warning(text)
+		} else {
+			q.Logger().WithField("qemuPid", pid).Error(text)
+		}
+	}
+	q.Logger().Infof("Stop logging QEMU (qemuPid=%d)", pid)
+	qemuCmd.Wait()
+}
+
 // StartVM will start the Sandbox's VM.
 func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 	span, ctx := katatrace.Trace(ctx, q.Logger(), "StartVM", qemuTracingTags, map[string]string{"sandbox_id": q.id})
@@ -857,6 +931,12 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 		}
 	}()
 
+	var qmpConn net.Conn
+	qmpConn, err = q.setupEarlyQmpConnection()
+	if err != nil {
+		return err
+	}
+
 	// This needs to be done as late as possible, just before launching
 	// virtiofsd are executed by kata-runtime after this call, run with
 	// the SELinux label. If these processes require privileged, we do
@@ -882,20 +962,23 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 
 	}
 
-	var strErr string
-	strErr, err = govmmQemu.LaunchQemu(q.qemuConfig, newQMPLogger())
+	qemuCmd, reader, err := govmmQemu.LaunchQemu(q.qemuConfig, newQMPLogger())
 	if err != nil {
-		if q.config.Debug && q.qemuConfig.LogFile != "" {
-			b, err := os.ReadFile(q.qemuConfig.LogFile)
-			if err == nil {
-				strErr += string(b)
-			}
-		}
-		q.Logger().WithError(err).Errorf("failed to launch qemu: %s", strErr)
-		return fmt.Errorf("failed to launch qemu: %s, error messages from qemu log: %s", err, strErr)
+		q.Logger().WithError(err).Error("failed to launch qemu")
+		return fmt.Errorf("failed to launch qemu: %s", err)
+	}
+	if q.qemuConfig.Knobs.Daemonize {
+		// LaunchQemu returns a handle on the upper QEMU process.
+		// Wait for it to exit to assume that the QEMU daemon was
+		// actually started.
+		qemuCmd.Wait()
+	} else {
+		// Log QEMU errors and ensure the QEMU process is reaped after
+		// termination.
+		go q.LogAndWait(qemuCmd, reader)
 	}
 
-	err = q.waitVM(ctx, timeout)
+	err = q.waitVM(ctx, qmpConn, timeout)
 	if err != nil {
 		return err
 	}
@@ -933,7 +1016,7 @@ func (q *qemu) bootFromTemplate() error {
 }
 
 // waitVM will wait for the Sandbox's VM to be up and running.
-func (q *qemu) waitVM(ctx context.Context, timeout int) error {
+func (q *qemu) waitVM(ctx context.Context, qmpConn net.Conn, timeout int) error {
 	span, _ := katatrace.Trace(ctx, q.Logger(), "waitVM", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
@@ -953,7 +1036,7 @@ func (q *qemu) waitVM(ctx context.Context, timeout int) error {
 	timeStart := time.Now()
 	for {
 		disconnectCh = make(chan struct{})
-		qmp, ver, err = govmmQemu.QMPStart(q.qmpMonitorCh.ctx, q.qmpMonitorCh.path, cfg, disconnectCh)
+		qmp, ver, err = govmmQemu.QMPStartWithConn(q.qmpMonitorCh.ctx, qmpConn, cfg, disconnectCh)
 		if err == nil {
 			break
 		}
