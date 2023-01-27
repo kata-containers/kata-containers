@@ -1,0 +1,5 @@
+# By default, all files require review by members of these teams
+* @microsoft/kata-cc-devs @microsoft/kata-cc-admins
+
+# Modifications to this file require admin approval
+/.github/CODEOWNERS @microsoft/kata-cc-admins
