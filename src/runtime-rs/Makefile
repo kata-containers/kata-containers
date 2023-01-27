@@ -23,10 +23,10 @@ ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 
 ifeq ($(ARCH), s390x)
 default:
-	@echo "s390x not support currently"
+	@echo "s390x is not currently supported"
 	exit 0
 test:
-	@echo "s390x not support currently"
+	@echo "s390x is not currently supported"
 	exit 0
 else ifeq ($(ARCH), powerpc64le)
 default:
