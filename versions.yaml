@@ -273,12 +273,7 @@ externals:
   skopeo:
     description: "Utility for container images and image repositories"
     url: "https://github.com/containers/skopeo"
-    branch: "release-1.4"
-
-  umoci:
-    description: "Utility for creating and manipulating container images"
-    url: "https://github.com/opencontainers/umoci"
-    tag: "v0.4.7"
+    version: "1.9.1"
 
   nydus:
     description: "Nydus image acceleration service"

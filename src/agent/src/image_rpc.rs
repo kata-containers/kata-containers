@@ -1,17 +1,18 @@
 // Copyright (c) 2021 Alibaba Cloud
+// Copyright (c) 2021, 2023 IBM Corporation
+// Copyright (c) 2022 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
 use std::env;
-use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
-use std::process::{Command, ExitStatus};
+use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use protocols::image;
 use tokio::sync::Mutex;
@@ -24,9 +25,6 @@ use crate::AGENT_CONFIG;
 use image_rs::image::ImageClient;
 use std::io::Write;
 
-const SKOPEO_PATH: &str = "/usr/bin/skopeo";
-const UMOCI_PATH: &str = "/usr/local/bin/umoci";
-const IMAGE_OCI: &str = "image_oci";
 const AA_PATH: &str = "/usr/local/bin/attestation-agent";
 const AA_KEYPROVIDER_PORT: &str = "127.0.0.1:50000";
 const AA_GETRESOURCE_PORT: &str = "127.0.0.1:50001";
@@ -59,95 +57,6 @@ impl ImageService {
         }
     }
 
-    fn pull_image_from_registry(
-        image: &str,
-        cid: &str,
-        source_creds: Option<&str>,
-        policy_path: Option<&str>,
-        aa_kbc_params: &str,
-    ) -> Result<()> {
-        let source_image = format!("{}{}", "docker://", image);
-
-        let tmp_cid_path = Path::new("/tmp/").join(cid);
-        let oci_path = tmp_cid_path.join(IMAGE_OCI);
-        let target_path_oci = format!("oci://{}:latest", oci_path.to_string_lossy());
-
-        fs::create_dir_all(&oci_path)?;
-
-        let mut pull_command = Command::new(SKOPEO_PATH);
-        pull_command
-            .arg("copy")
-            .arg(source_image)
-            .arg(&target_path_oci)
-            .arg("--remove-signatures"); //umoci requires signatures to be removed
-
-        // If source credentials were passed (so not using an anonymous registry), pass them through
-        if let Some(source_creds) = source_creds {
-            pull_command.arg("--src-creds").arg(source_creds);
-        }
-
-        // If a policy_path provided, use it, otherwise fall back to allow all image registries
-        if let Some(policy_path) = policy_path {
-            pull_command.arg("--policy").arg(policy_path);
-        } else {
-            info!(
-                sl!(),
-                "No policy path was supplied, so revert to allow all images to be pulled."
-            );
-            pull_command.arg("--insecure-policy");
-        }
-
-        debug!(sl!(), "skopeo command: {:?}", &pull_command);
-        if !aa_kbc_params.is_empty() {
-            // Skopeo will copy an unencrypted image even if the decryption key argument is provided.
-            // Thus, this does not guarantee that the image was encrypted.
-            pull_command
-                .arg("--decryption-key")
-                .arg(format!("provider:attestation-agent:{}", aa_kbc_params))
-                .env("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
-        }
-
-        let status: ExitStatus = pull_command.status()?;
-
-        if !status.success() {
-            let mut error_message = format!("failed to pull image: {:?}", status);
-
-            if let Err(e) = fs::remove_dir_all(&tmp_cid_path) {
-                let _ = write!(
-                    error_message,
-                    " and clean up of temporary container directory {:?} failed with error {:?}",
-                    tmp_cid_path, e
-                );
-            };
-            return Err(anyhow!(error_message));
-        }
-        Ok(())
-    }
-
-    fn unpack_image(cid: &str) -> Result<()> {
-        let tmp_cid_path = Path::new("/tmp/").join(cid);
-        let source_path_oci = tmp_cid_path.join(IMAGE_OCI);
-
-        let target_path_bundle = Path::new(CONTAINER_BASE).join(cid);
-
-        info!(sl!(), "unpack image {:?} to {:?}", cid, target_path_bundle);
-
-        // Unpack image
-        let status: ExitStatus = Command::new(UMOCI_PATH)
-            .arg("unpack")
-            .arg("--image")
-            .arg(&source_path_oci)
-            .arg(&target_path_bundle)
-            .status()?;
-
-        ensure!(status.success(), "failed to unpack image: {:?}", status);
-
-        // To save space delete the oci image after unpack
-        fs::remove_dir_all(&tmp_cid_path)?;
-
-        Ok(())
-    }
-
     // pause image is packaged in rootfs for CC
     fn unpack_pause_image(cid: &str) -> Result<()> {
         let cc_pause_bundle = Path::new(KATA_CC_PAUSE_BUNDLE);
@@ -174,7 +83,7 @@ impl ImageService {
         Ok(())
     }
 
-    // If we fail to start the AA, Skopeo/ocicrypt won't be able to unwrap keys
+    // If we fail to start the AA, ocicrypt won't be able to unwrap keys
     // and container decryption will fail.
     fn init_attestation_agent() -> Result<()> {
         let config_path = OCICRYPT_CONFIG_PATH;
@@ -211,7 +120,7 @@ impl ImageService {
         let cid = if !req_cid.is_empty() {
             req_cid.to_string()
         } else if let Some(last) = req.get_image().rsplit('/').next() {
-            // ':' have special meaning for umoci during upack
+            // ':' not valid for container id
             last.replace(':', "_")
         } else {
             return Err(anyhow!("Invalid image name. {}", req.get_image()));
@@ -235,9 +144,7 @@ impl ImageService {
 
         let cid = Self::cid_from_request(req)?;
         let image = req.get_image();
-        // Can switch to use cid directly when we remove umoci
-        let v: Vec<&str> = image.rsplit('/').collect();
-        if !v[0].is_empty() && v[0].starts_with("pause:") {
+        if cid.starts_with("pause") {
             Self::unpack_pause_image(&cid)?;
 
             let mut sandbox = self.sandbox.lock().await;
@@ -257,72 +164,58 @@ impl ImageService {
                 Err(_) => info!(sl!(), "Attestation Agent already running"),
             }
         }
+        // If the attestation-agent is being used, then enable the authenticated credentials support
+        info!(
+            sl!(),
+            "image_client.config.auth set to: {}",
+            !aa_kbc_params.is_empty()
+        );
+        self.image_client.lock().await.config.auth = !aa_kbc_params.is_empty();
+
+        // Read enable signature verification from the agent config and set it in the image_client
+        let enable_signature_verification =
+            &AGENT_CONFIG.read().await.enable_signature_verification;
+        info!(
+            sl!(),
+            "enable_signature_verification set to: {}", enable_signature_verification
+        );
+        self.image_client.lock().await.config.security_validate = *enable_signature_verification;
 
         let source_creds = (!req.get_source_creds().is_empty()).then(|| req.get_source_creds());
 
-        if Path::new(SKOPEO_PATH).exists() {
-            // Read the policy path from the agent config
-            let config_policy_path = &AGENT_CONFIG.read().await.container_policy_path;
-            let policy_path =
-                (!config_policy_path.is_empty()).then_some(config_policy_path.as_str());
-            Self::pull_image_from_registry(image, &cid, source_creds, policy_path, aa_kbc_params)?;
-            Self::unpack_image(&cid)?;
-        } else {
-            // Read enable signature verification from the agent config and set it in the image_client
-            let enable_signature_verification =
-                &AGENT_CONFIG.read().await.enable_signature_verification;
-            info!(
-                sl!(),
-                "enable_signature_verification set to: {}", enable_signature_verification
-            );
-            self.image_client.lock().await.config.security_validate =
-                *enable_signature_verification;
+        let bundle_path = Path::new(CONTAINER_BASE).join(&cid);
+        fs::create_dir_all(&bundle_path)?;
 
-            // If the attestation-agent is being used, then enable the authenticated credentials support
-            //TODO tidy logic once skopeo is removed to combine with aa_kbc_params check above
-            info!(
-                sl!(),
-                "image_client.config.auth set to: {}",
-                !aa_kbc_params.is_empty()
-            );
-            self.image_client.lock().await.config.auth = !aa_kbc_params.is_empty();
+        let decrypt_config = format!("provider:attestation-agent:{}", aa_kbc_params);
 
-            let bundle_path = Path::new(CONTAINER_BASE).join(&cid);
-            fs::create_dir_all(&bundle_path)?;
+        info!(sl!(), "pull image {:?}, bundle path {:?}", cid, bundle_path);
+        // Image layers will store at KATA_CC_IMAGE_WORK_DIR, generated bundles
+        // with rootfs and config.json will store under CONTAINER_BASE/cid.
+        let res = self
+            .image_client
+            .lock()
+            .await
+            .pull_image(image, &bundle_path, &source_creds, &Some(&decrypt_config))
+            .await;
 
-            let decrypt_config = format!("provider:attestation-agent:{}", aa_kbc_params);
-
-            info!(sl!(), "pull image {:?}, bundle path {:?}", cid, bundle_path);
-            // Image layers will store at KATA_CC_IMAGE_WORK_DIR, generated bundles
-            // with rootfs and config.json will store under CONTAINER_BASE/cid.
-            let res = self
-                .image_client
-                .lock()
-                .await
-                .pull_image(image, &bundle_path, &source_creds, &Some(&decrypt_config))
-                .await;
-
-            match res {
-                Ok(image) => {
-                    info!(
-                        sl!(),
-                        "pull and unpack image {:?}, cid: {:?}, with image-rs succeed. ",
-                        image,
-                        cid
-                    );
-                }
-                Err(e) => {
-                    error!(
-                        sl!(),
-                        "pull and unpack image {:?}, cid: {:?}, with image-rs failed with {:?}. ",
-                        image,
-                        cid,
-                        e.to_string()
-                    );
-                    return Err(e);
-                }
-            };
-        }
+        match res {
+            Ok(image) => {
+                info!(
+                    sl!(),
+                    "pull and unpack image {:?}, cid: {:?}, with image-rs succeed. ", image, cid
+                );
+            }
+            Err(e) => {
+                error!(
+                    sl!(),
+                    "pull and unpack image {:?}, cid: {:?}, with image-rs failed with {:?}. ",
+                    image,
+                    cid,
+                    e.to_string()
+                );
+                return Err(e);
+            }
+        };
 
         let mut sandbox = self.sandbox.lock().await;
         sandbox.images.insert(String::from(image), cid);

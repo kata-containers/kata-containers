@@ -157,23 +157,9 @@ USE_PODMAN          If set and USE_DOCKER not set, then build the rootfs inside
                     a podman container (requires podman).
                     Default value: <not set>
 
-SKOPEO              If set to "yes", build Skopeo for confidential
-                    containers guest image pull. Currently, this is only
-                    supported for Ubuntu guests; see
-                    https://github.com/kata-containers/kata-containers/pull/2908
-                    for discussion.
-                    Default value: <not set>
-
-UMOCI               If set to "yes", build and umoci for confidential
-                    containers guest image unpack. Currently, this is only
-                    supported for Ubuntu guests; see
-                    https://github.com/kata-containers/kata-containers/pull/2908
-                    for discussion.
-                    Default value: <not set>
-
 AA_KBC              Key broker client module for attestation-agent. This is
-                    required for confidential containers. Requires UMOCI
-                    to be set. See https://github.com/containers/attestation-agent
+                    required for confidential containers.
+                    See https://github.com/containers/attestation-agent
                     for more information on available modules.
                     Default value: <not set>
 
@@ -402,10 +388,13 @@ build_rootfs_distro()
 			engine_build_args+=" --build-arg IMAGE_REGISTRY=${IMAGE_REGISTRY}"
 		fi
 
+		skopeo_version="$(get_package_version_from_kata_yaml externals.skopeo.version)"
+
 		# setup to install rust here
 		generate_dockerfile "${distro_config_dir}"
 		"$container_engine" build  \
 			${engine_build_args} \
+			--build-arg SKOPEO_VERSION="${skopeo_version}" \
 			--build-arg http_proxy="${http_proxy}" \
 			--build-arg https_proxy="${https_proxy}" \
 			-t "${image_name}" "${distro_config_dir}"
@@ -464,8 +453,6 @@ build_rootfs_distro()
 			--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
 			--env OS_VERSION="${OS_VERSION}" \
 			--env INSIDE_CONTAINER=1 \
-			--env SKOPEO="${SKOPEO}" \
-			--env UMOCI="${UMOCI}" \
 			--env AA_KBC="${AA_KBC}" \
 			--env KATA_BUILD_CC="${KATA_BUILD_CC}" \
 			--env SECCOMP="${SECCOMP}" \
@@ -669,17 +656,6 @@ EOF
 	info "Create /etc/resolv.conf file in rootfs if not exist"
 	touch "$dns_file"
 
-	if [ "${SKOPEO}" = "yes" ]; then
-		skopeo_url="$(get_package_version_from_kata_yaml externals.skopeo.url)"
-		skopeo_branch="$(get_package_version_from_kata_yaml externals.skopeo.branch)"
-		info "Install skopeo"
-		git clone "${skopeo_url}" --branch "${skopeo_branch}"
-		pushd skopeo
-		make bin/skopeo
-		install -o root -g root -m 0755 bin/skopeo "${ROOTFS_DIR}/usr/bin/"
-		popd
-	fi
-
     if [ -n "${AA_KBC}" ]; then
 		if [ "${AA_KBC}" == "offline_sev_kbc" ]; then
 			info "Adding agent config for ${AA_KBC}"
@@ -712,24 +688,6 @@ EOF
 		# Foreign CC is incompatible with libgit2 -- CC is still handled by `-C linker=...` flag
 		CC= cargo build --release --target "${target}" --no-default-features --features "${AA_KBC}"
 		install -D -o root -g root -m 0755 "target/${target}/release/attestation-agent" -t "${ROOTFS_DIR}/usr/local/bin/"
-		popd
-	fi
-
-	if [ "${UMOCI}" = "yes" ]; then
-		case "$ARCH" in
-			aarch64) GOARCH=arm64;;
-			x86_64) GOARCH=amd64;;
-			*) GOARCH="$ARCH"
-		esac
-		export GOARCH
-
-		umoci_url="$(get_package_version_from_kata_yaml externals.umoci.url)"
-		umoci_tag="$(get_package_version_from_kata_yaml externals.umoci.tag)"
-		info "Install umoci"
-		git clone "${umoci_url}" --branch "${umoci_tag}"
-		pushd umoci
-		make
-		install -o root -g root -m 0755 umoci "${ROOTFS_DIR}/usr/local/bin/"
 		popd
 	fi
 

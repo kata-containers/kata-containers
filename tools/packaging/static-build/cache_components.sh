@@ -89,8 +89,6 @@ cache_rootfs_artifacts() {
 	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
 	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
 	local pause_version="$(get_from_kata_deps "externals.pause.version")"
-	local skopeo_version="$(get_from_kata_deps "externals.skopeo.branch")"
-	local umoci_version="$(get_from_kata_deps "externals.umoci.tag")"
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
 	local rootfs_tarball_name="kata-static-cc-rootfs-image.tar.xz"
 	local aa_kbc="offline_fs_kbc"
@@ -106,7 +104,7 @@ cache_rootfs_artifacts() {
 			root_hash_tdx="${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt"
 		fi
 	fi
-	local current_rootfs_version="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${skopeo_version}-${umoci_version}-${rust_version}-${image_type}-${aa_kbc}"
+	local current_rootfs_version="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${rust_version}-${image_type}-${aa_kbc}"
 	create_cache_asset "${rootfs_tarball_name}" "${current_rootfs_version}" "" "${root_hash_vanilla}" "${root_hash_tdx}"
 }
 
