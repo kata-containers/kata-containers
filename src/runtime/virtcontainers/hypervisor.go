@@ -505,7 +505,7 @@ type HypervisorConfig struct {
 	EnableIOThreads bool
 
 	// Debug changes the default hypervisor and kernel parameters to
-	// enable debug output where available.
+	// enable debug output where available. And Debug also enable the hmp socket.
 	Debug bool
 
 	// MemPrealloc specifies if the memory should be pre-allocated
