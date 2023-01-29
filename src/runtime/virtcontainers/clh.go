@@ -80,7 +80,6 @@ const (
 	clhAPISocket                           = "clh-api.sock"
 	virtioFsSocket                         = "virtiofsd.sock"
 	defaultClhPath                         = "/usr/local/bin/cloud-hypervisor"
-	virtioFsCacheAlways                    = "always"
 )
 
 // Interface that hides the implementation of openAPI client

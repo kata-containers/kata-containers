@@ -37,6 +37,13 @@ var (
 	errUnimplemented                     = errors.New("unimplemented")
 )
 
+const (
+	typeVirtioFSCacheModeNever  = "never"
+	typeVirtioFSCacheModeNone   = "none"
+	typeVirtioFSCacheModeAlways = "always"
+	typeVirtioFSCacheModeAuto   = "auto"
+)
+
 type VirtiofsDaemon interface {
 	// Start virtiofs daemon, return pid of virtiofs daemon process
 	Start(context.Context, onQuitFunc) (pid int, err error)
@@ -216,11 +223,11 @@ func (v *virtiofsd) valid() error {
 	}
 
 	if v.cache == "" {
-		v.cache = "auto"
-	} else if v.cache == "none" {
+		v.cache = typeVirtioFSCacheModeAuto
+	} else if v.cache == typeVirtioFSCacheModeNone {
 		v.Logger().Warn("virtio-fs cache mode `none` is deprecated since Kata Containers 2.5.0 and will be removed in the future release, please use `never` instead. For more details please refer to https://github.com/kata-containers/kata-containers/issues/4234.")
-		v.cache = "never"
-	} else if v.cache != "auto" && v.cache != "always" && v.cache != "never" {
+		v.cache = typeVirtioFSCacheModeNever
+	} else if v.cache != typeVirtioFSCacheModeAuto && v.cache != typeVirtioFSCacheModeAlways && v.cache != typeVirtioFSCacheModeNever {
 		return errVirtiofsdInvalidVirtiofsCacheMode(v.cache)
 	}
 
