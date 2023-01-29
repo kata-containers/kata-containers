@@ -386,6 +386,19 @@ impl Vm {
 
         (dragonball_version, instance_id)
     }
+
+    pub(crate) fn stop_prealloc(&mut self) -> std::result::Result<(), StartMicroVmError> {
+        if self.address_space.is_initialized() {
+            return self
+                .address_space
+                .wait_prealloc(true)
+                .map_err(StartMicroVmError::AddressManagerError);
+        }
+
+        Err(StartMicroVmError::AddressManagerError(
+            AddressManagerError::GuestMemoryNotInitialized,
+        ))
+    }
 }
 
 impl Vm {
