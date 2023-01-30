@@ -22,9 +22,15 @@ import (
 )
 
 func cReap(s *service, status int, id, execid string, exitat time.Time) {
+	var pid uint32
+	if execid == "" {
+		pid = s.hpid
+	} else {
+		pid = 0
+	}
 	s.ec <- exit{
 		timestamp: exitat,
-		pid:       s.hpid,
+		pid:       pid,
 		status:    status,
 		id:        id,
 		execid:    execid,
