@@ -701,6 +701,8 @@ func TestNewFirecrackerHypervisorConfig(t *testing.T) {
 	// !0Mbits/sec
 	rxRateLimiterMaxRate := uint64(10000000)
 	txRateLimiterMaxRate := uint64(10000000)
+	diskRateLimiterBwMaxRate := int64(20000000)
+	diskRateLimiterOpsMaxRate := int64(30000000)
 	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
 	defer func() {
 		utils.VHostVSockDevicePath = orgVHostVSockDevicePath
@@ -708,14 +710,16 @@ func TestNewFirecrackerHypervisorConfig(t *testing.T) {
 	utils.VHostVSockDevicePath = "/dev/null"
 
 	hypervisor := hypervisor{
-		Path:                  hypervisorPath,
-		Kernel:                kernelPath,
-		Image:                 imagePath,
-		JailerPath:            jailerPath,
-		DisableBlockDeviceUse: disableBlockDeviceUse,
-		BlockDeviceDriver:     blockDeviceDriver,
-		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
-		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
+		Path:                      hypervisorPath,
+		Kernel:                    kernelPath,
+		Image:                     imagePath,
+		JailerPath:                jailerPath,
+		DisableBlockDeviceUse:     disableBlockDeviceUse,
+		BlockDeviceDriver:         blockDeviceDriver,
+		RxRateLimiterMaxRate:      rxRateLimiterMaxRate,
+		TxRateLimiterMaxRate:      txRateLimiterMaxRate,
+		DiskRateLimiterBwMaxRate:  diskRateLimiterBwMaxRate,
+		DiskRateLimiterOpsMaxRate: diskRateLimiterOpsMaxRate,
 	}
 
 	files := []string{hypervisorPath, kernelPath, imagePath, jailerPath}
@@ -774,6 +778,14 @@ func TestNewFirecrackerHypervisorConfig(t *testing.T) {
 
 	if config.TxRateLimiterMaxRate != txRateLimiterMaxRate {
 		t.Errorf("Expected value for tx rate limiter %v, got %v", txRateLimiterMaxRate, config.TxRateLimiterMaxRate)
+	}
+
+	if config.DiskRateLimiterBwMaxRate != diskRateLimiterBwMaxRate {
+		t.Errorf("Expected value for disk bandwidth rate limiter %v, got %v", diskRateLimiterBwMaxRate, config.DiskRateLimiterBwMaxRate)
+	}
+
+	if config.DiskRateLimiterOpsMaxRate != diskRateLimiterOpsMaxRate {
+		t.Errorf("Expected value for disk operations rate limiter %v, got %v", diskRateLimiterOpsMaxRate, config.DiskRateLimiterOpsMaxRate)
 	}
 }
 

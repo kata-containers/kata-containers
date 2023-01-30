@@ -540,6 +540,42 @@ func (fc *firecracker) fcSetBootSource(ctx context.Context, path, params string)
 	return nil
 }
 
+func (fc *firecracker) fcGetDiskRateLimiter() *models.RateLimiter {
+	fc.Logger().WithFields(logrus.Fields{"Bw": fc.config.DiskRateLimiterBwMaxRate,
+		"Ops": fc.config.DiskRateLimiterOpsMaxRate}).Warn("rateLimiter: here we are")
+	refillTime := int64(utils.DefaultRateLimiterRefillTimeMilliSecs)
+	var bwBucket *models.TokenBucket
+	if fc.config.DiskRateLimiterBwMaxRate > 0 {
+		oneTimeBurst := int64(utils.RevertBytes(uint64(fc.config.DiskRateLimiterBwOneTimeBurst / 8)))
+		size := int64(utils.RevertBytes(uint64(fc.config.DiskRateLimiterBwMaxRate / 8)))
+		bwBucket = &models.TokenBucket{
+			OneTimeBurst: &oneTimeBurst,
+			RefillTime:   &refillTime,
+			Size:         &size,
+		}
+	}
+	var opsBucket *models.TokenBucket
+	if fc.config.DiskRateLimiterOpsMaxRate > 0 {
+		oneTimeBurst := int64(utils.RevertBytes(uint64(fc.config.DiskRateLimiterOpsOneTimeBurst / 8)))
+		size := int64(utils.RevertBytes(uint64(fc.config.DiskRateLimiterOpsMaxRate / 8)))
+		opsBucket = &models.TokenBucket{
+			OneTimeBurst: &oneTimeBurst,
+			RefillTime:   &refillTime,
+			Size:         &size,
+		}
+	}
+
+	var rateLimiter *models.RateLimiter
+	if bwBucket != nil || opsBucket != nil {
+		fc.Logger().Warn("rateLimiter: here we are")
+		rateLimiter = &models.RateLimiter{
+			Bandwidth: bwBucket,
+			Ops:       opsBucket,
+		}
+	}
+	return rateLimiter
+}
+
 func (fc *firecracker) fcSetVMRootfs(ctx context.Context, path string) error {
 	span, _ := katatrace.Trace(ctx, fc.Logger(), "fcSetVMRootfs", fcTracingTags, map[string]string{"sandbox_id": fc.id})
 	defer span.End()
@@ -554,12 +590,14 @@ func (fc *firecracker) fcSetVMRootfs(ctx context.Context, path string) error {
 	//Add it as a regular block device
 	//This allows us to use a partitoned root block device
 	isRootDevice := false
+	rateLimiter := fc.fcGetDiskRateLimiter()
 	// This is the path within the jailed root
 	drive := &models.Drive{
 		DriveID:      &driveID,
 		IsReadOnly:   &isReadOnly,
 		IsRootDevice: &isRootDevice,
 		PathOnHost:   &jailedRootfs,
+		RateLimiter:  rateLimiter,
 	}
 
 	fc.fcConfig.Drives = append(fc.fcConfig.Drives, drive)
@@ -831,11 +869,13 @@ func (fc *firecracker) createDiskPool(ctx context.Context) error {
 			return err
 		}
 
+		rateLimiter := fc.fcGetDiskRateLimiter()
 		drive := &models.Drive{
 			DriveID:      &driveID,
 			IsReadOnly:   &isReadOnly,
 			IsRootDevice: &isRootDevice,
 			PathOnHost:   &jailedDrive,
+			RateLimiter:  rateLimiter,
 		}
 
 		fc.fcConfig.Drives = append(fc.fcConfig.Drives, drive)
@@ -995,11 +1035,13 @@ func (fc *firecracker) fcAddBlockDrive(ctx context.Context, drive config.BlockDr
 		fc.Logger().WithField("fcAddBlockDrive failed", err).Error()
 		return err
 	}
+	rateLimiter := fc.fcGetDiskRateLimiter()
 	driveFc := &models.Drive{
 		DriveID:      &driveID,
 		IsReadOnly:   &isReadOnly,
 		IsRootDevice: &isRootDevice,
 		PathOnHost:   &jailedDrive,
+		RateLimiter:  rateLimiter,
 	}
 
 	fc.fcConfig.Drives = append(fc.fcConfig.Drives, driveFc)
