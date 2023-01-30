@@ -193,6 +193,12 @@ func (sandboxConfig *SandboxConfig) valid() bool {
 	return true
 }
 
+// Information about a layer device that is added to a sandbox.
+type layerDeviceInfo struct {
+	deviceID   string
+	usageCount uint
+}
+
 // Sandbox is composed of a set of containers and a runtime environment.
 // A Sandbox can be created, deleted, started, paused, stopped, listed, entered, and restored.
 type Sandbox struct {
@@ -225,6 +231,8 @@ type Sandbox struct {
 	state types.SandboxState
 
 	sync.Mutex
+
+	layerDevices map[string]*layerDeviceInfo
 
 	swapSizeBytes int64
 	shmSize       uint64
@@ -453,6 +461,81 @@ func createAssets(ctx context.Context, sandboxConfig *SandboxConfig) error {
 	return nil
 }
 
+// GetLayerDevice returns the DeviceID associated with the given layer, if one exists.
+func (s *Sandbox) GetLayerDevice(path string) (string, bool) {
+	s.Lock()
+	defer s.Unlock()
+
+	v, ok := s.layerDevices[path]
+	if !ok {
+		return "", false
+	}
+
+	v.usageCount++
+
+	return v.deviceID, true
+}
+
+// SetLayerDevice associates a deviceID with the given layer if it's not associated with
+// any another deviceID yet.
+//
+// Returns the deviceID that is associated with the layer.
+func (s *Sandbox) SetLayerDevice(path, deviceID string) string {
+	s.Lock()
+
+	v, ok := s.layerDevices[path]
+	if ok {
+		id := v.deviceID
+		v.usageCount++
+		s.Unlock()
+
+		// Remove the device that we won't use.
+		s.devManager.RemoveDevice(deviceID)
+
+		return id
+	}
+
+	defer s.Unlock()
+
+	s.layerDevices[path] = &layerDeviceInfo{
+		usageCount: 1,
+		deviceID:   deviceID,
+	}
+
+	return deviceID
+}
+
+func (s *Sandbox) removeLayerMapping(path string) (bool, string) {
+	s.Lock()
+	defer s.Unlock()
+
+	v, ok := s.layerDevices[path]
+	if !ok {
+		return false, ""
+	}
+
+	v.usageCount--
+	if v.usageCount != 0 {
+		return false, ""
+	}
+
+	delete(s.layerDevices, path)
+	return true, v.deviceID
+}
+
+// RemoveLayerDevice removes a layer device from a sandbox.
+//
+// When the last container removes a layer device, it is actually removed from
+// the device manager.
+func (s *Sandbox) RemoveLayerDevice(path string) error {
+	remove, id := s.removeLayerMapping(path)
+	if !remove {
+		return nil
+	}
+
+	return s.devManager.RemoveDevice(id)
+}
+
 func (s *Sandbox) getAndStoreGuestDetails(ctx context.Context) error {
 	guestDetailRes, err := s.agent.getGuestDetails(ctx, &grpc.GuestDetailsRequest{
 		MemBlockSize:    true,
@@ -561,6 +644,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		swapDeviceNum:   0,
 		swapSizeBytes:   0,
 		swapDevices:     []*config.BlockDrive{},
+		layerDevices:    map[string]*layerDeviceInfo{},
 	}
 
 	fsShare, err := NewFilesystemShare(s)
