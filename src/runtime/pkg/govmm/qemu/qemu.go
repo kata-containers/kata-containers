@@ -2336,9 +2336,13 @@ const (
 )
 
 // QMPSocket represents a qemu QMP socket configuration.
+// nolint: govet
 type QMPSocket struct {
 	// Type is the socket type (e.g. "unix").
 	Type QMPSocketType
+
+	// Human Monitor Interface (HMP) (true for HMP, false for QMP, default false)
+	IsHmp bool
 
 	// QMP listener file descriptor to be passed to qemu
 	FD *os.File
@@ -2710,7 +2714,12 @@ func (config *Config) appendQMPSockets() {
 			}
 		}
 
-		config.qemuParams = append(config.qemuParams, "-qmp")
+		if q.IsHmp {
+			config.qemuParams = append(config.qemuParams, "-monitor")
+		} else {
+			config.qemuParams = append(config.qemuParams, "-qmp")
+		}
+
 		config.qemuParams = append(config.qemuParams, strings.Join(qmpParams, ","))
 	}
 }
