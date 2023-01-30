@@ -18,6 +18,7 @@ jobs:
       matrix:
         asset:
           - kernel
+          - kernel-dragonball-experimental
           - shim-v2
           - qemu
           - cloud-hypervisor
