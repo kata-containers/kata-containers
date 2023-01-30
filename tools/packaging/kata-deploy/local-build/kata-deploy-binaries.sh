@@ -330,9 +330,11 @@ install_cc_qemu() {
 #Install all components that are not assets
 install_cc_shimv2() {
 	local shim_v2_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime")"
+	local runtime_rs_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime-rs")"
+	local protocols_last_commit="$(get_last_modification "${repo_root_dir}/src/libs/protocols")"
 	local golang_version="$(get_from_kata_deps "languages.golang.meta.newest-version")"
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
-	local shim_v2_version="${shim_v2_last_commit}-${golang_version}-${rust_version}"
+	local shim_v2_version="${shim_v2_last_commit}-${protocols_last_commit}-${runtime_rs_last_commit}-${golang_version}-${rust_version}"
 
 	install_cached_cc_shim_v2 \
 		"shim-v2" \
