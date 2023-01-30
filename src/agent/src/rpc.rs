@@ -438,6 +438,23 @@ impl AgentService {
                 "exec-id" => eid.clone(),
             );
 
+            // If the signal is SIGKILL lets try and use the support in 5.14+ kernels that
+            // will send a SIGKILL to every proc in the cgroup. This saves us from the
+            // freeze -> manually send signals -> thaw dance.
+            if sig == libc::SIGKILL {
+                if let Err(err) = self.kill_cgroup(&cid).await {
+                    warn!(
+                        sl!(),
+                        "failed to fast path kill cgroup, falling back";
+                        "container-id" => cid.clone(),
+                        "exec-id" => eid.clone(),
+                        "error" => format!("{:?}", err),
+                    );
+                } else {
+                    return Ok(());
+                }
+            }
+
             if let Err(err) = self.freeze_cgroup(&cid, FreezerState::Frozen).await {
                 warn!(
                     sl!(),
@@ -482,6 +499,16 @@ impl AgentService {
             .get_container(cid)
             .ok_or_else(|| anyhow!("Invalid container id {}", cid))?;
         ctr.cgroup_manager.as_ref().freeze(state)?;
+        Ok(())
+    }
+
+    async fn kill_cgroup(&self, cid: &str) -> Result<()> {
+        let s = self.sandbox.clone();
+        let mut sandbox = s.lock().await;
+        let ctr = sandbox
+            .get_container(cid)
+            .ok_or_else(|| anyhow!("Invalid container id {}", cid))?;
+        ctr.cgroup_manager.as_ref().kill()?;
         Ok(())
     }
 

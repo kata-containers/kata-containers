@@ -180,6 +180,11 @@ impl CgroupManager for Manager {
         Ok(())
     }
 
+    fn kill(&self) -> Result<()> {
+        self.cgroup.kill()?;
+        Ok(())
+    }
+
     fn destroy(&mut self) -> Result<()> {
         let _ = self.cgroup.delete();
         Ok(())
