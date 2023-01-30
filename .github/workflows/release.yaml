@@ -13,6 +13,7 @@ jobs:
           - cloud-hypervisor
           - firecracker
           - kernel
+          - kernel-dragonball-experimental
           - nydus
           - qemu
           - rootfs-image
