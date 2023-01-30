@@ -51,13 +51,11 @@ EOF
 trap finish EXIT
 
 rust_version=${2:-}
-if [ -n "${rust_version}" ]; then
-	ARCH=${ARCH:-$(uname -m)}
-	LIBC=${LIBC:-musl}
-	curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSLf | sh -s -- -y --default-toolchain ${rust_version} -t ${ARCH}-unknown-linux-${LIBC}
-	source /root/.cargo/env
-	rustup target add x86_64-unknown-linux-musl
-fi
+ARCH=${ARCH:-$(uname -m)}
+LIBC=${LIBC:-musl}
+curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSLf | sh -s -- -y --default-toolchain ${rust_version} -t ${ARCH}-unknown-linux-${LIBC}
+source /root/.cargo/env
+rustup target add x86_64-unknown-linux-musl
 
 pushd "${tmp_dir}"
 
