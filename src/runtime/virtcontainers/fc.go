@@ -556,8 +556,8 @@ func (fc *firecracker) fcGetDiskRateLimiter() *models.RateLimiter {
 	}
 	var opsBucket *models.TokenBucket
 	if fc.config.DiskRateLimiterOpsMaxRate > 0 {
-		oneTimeBurst := int64(utils.RevertBytes(uint64(fc.config.DiskRateLimiterOpsOneTimeBurst / 8)))
-		size := int64(utils.RevertBytes(uint64(fc.config.DiskRateLimiterOpsMaxRate / 8)))
+		oneTimeBurst := int64(utils.RevertBytes(uint64(fc.config.DiskRateLimiterOpsOneTimeBurst)))
+		size := int64(utils.RevertBytes(uint64(fc.config.DiskRateLimiterOpsMaxRate)))
 		opsBucket = &models.TokenBucket{
 			OneTimeBurst: &oneTimeBurst,
 			RefillTime:   &refillTime,
