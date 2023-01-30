@@ -136,6 +136,34 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_DB@"
 # of shim, does not need an external virtiofsd process.
 shared_fs = "@DBSHAREDFS@"
 
+# Default size of DAX cache in MiB
+virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
+
+# Extra args for virtiofsd daemon
+#
+# Format example:
+#   ["-o", "arg1=xxx,arg2", "-o", "hello world", "--arg3=yyy"]
+# Examples:
+#   Set virtiofsd log level to debug : ["-o", "log_level=debug"] or ["-d"]
+#
+# see `virtiofsd -h` for possible options.
+virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
+
+# Cache mode:
+#
+#  - never
+#    Metadata, data, and pathname lookup are not cached in guest. They are
+#    always fetched from host and any changes are immediately pushed to host.
+#
+#  - auto
+#    Metadata and pathname lookup cache expires after a configured amount of
+#    time (default is 1 second). Data is cached while the file is open (close
+#    to open consistency).
+#
+#  - always
+#    Metadata, data, and pathname lookup are cached in guest and never expire.
+virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
+
 # Enable huge pages for VM RAM, default false
 # Enabling this will result in the VM memory
 # being allocated using huge pages.

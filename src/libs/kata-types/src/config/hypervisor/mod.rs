@@ -32,7 +32,7 @@ use regex::RegexSet;
 
 use super::{default, ConfigOps, ConfigPlugin, TomlConfig};
 use crate::annotations::KATA_ANNO_CFG_HYPERVISOR_PREFIX;
-use crate::{eother, resolve_path, validate_path};
+use crate::{eother, resolve_path, sl, validate_path};
 
 mod dragonball;
 pub use self::dragonball::{DragonballConfig, HYPERVISOR_NAME_DRAGONBALL};
@@ -779,6 +779,10 @@ pub struct SharedFsInfo {
     #[serde(default)]
     pub virtio_fs_cache_size: u32,
 
+    /// Default size of virtqueues
+    #[serde(default)]
+    pub virtio_fs_queue_size: u32,
+
     /// Enable virtio-fs DAX window if true.
     #[serde(default)]
     pub virtio_fs_is_dax: bool,
@@ -844,6 +848,10 @@ impl SharedFsInfo {
         }
 
         if self.virtio_fs_cache.is_empty() {
+            self.virtio_fs_cache = default::DEFAULT_VIRTIO_FS_CACHE_MODE.to_string();
+        }
+        if self.virtio_fs_cache == *"none" {
+            warn!(sl!(), "virtio-fs cache mode `none` is deprecated since Kata Containers 2.5.0 and will be removed in the future release, please use `never` instead. For more details please refer to https://github.com/kata-containers/kata-containers/issues/4234.");
             self.virtio_fs_cache = default::DEFAULT_VIRTIO_FS_CACHE_MODE.to_string();
         }
         if self.virtio_fs_is_dax && self.virtio_fs_cache_size == 0 {
