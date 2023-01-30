@@ -121,6 +121,7 @@ type qemu struct {
 const (
 	consoleSocket = "console.sock"
 	qmpSocket     = "qmp.sock"
+	hmpSocket     = "hmp.sock"
 	vhostFSSocket = "vhost-fs.sock"
 	nydusdAPISock = "nydusd-api.sock"
 
@@ -328,6 +329,10 @@ func (q *qemu) qmpSocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(q.config.VMStorePath, id, qmpSocket)
 }
 
+func (q *qemu) hmpSocketPath(id string) (string, error) {
+	return utils.BuildSocketPath(q.config.VMStorePath, id, hmpSocket)
+}
+
 func (q *qemu) getQemuMachine() (govmmQemu.Machine, error) {
 	machine := q.arch.machine()
 
@@ -369,13 +374,30 @@ func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
 		path: monitorSockPath,
 	}
 
-	return []govmmQemu.QMPSocket{
-		{
+	var sockets []govmmQemu.QMPSocket
+
+	sockets = append(sockets, govmmQemu.QMPSocket{
+		Type:   "unix",
+		Server: true,
+		NoWait: true,
+	})
+
+	if q.HypervisorConfig().Debug {
+		humanMonitorSockPath, err := q.hmpSocketPath(q.id)
+		if err != nil {
+			return nil, err
+		}
+
+		sockets = append(sockets, govmmQemu.QMPSocket{
 			Type:   "unix",
+			IsHmp:  true,
+			Name:   humanMonitorSockPath,
 			Server: true,
 			NoWait: true,
-		},
-	}, nil
+		})
+	}
+
+	return sockets, nil
 }
 
 func (q *qemu) buildDevices(ctx context.Context, initrdPath string) ([]govmmQemu.Device, *govmmQemu.IOThread, error) {
