@@ -76,4 +76,4 @@ merge-builds:
 	$(MK_DIR)/kata-deploy-merge-builds.sh build
 
 install-tarball:
-	tar -xvf ./kata-static.tar.xz -C /
+	tar -xf ./kata-static.tar.xz -C /
