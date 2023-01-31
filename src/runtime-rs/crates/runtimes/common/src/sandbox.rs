@@ -6,6 +6,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
+use protocols::image_runtime::{PullImageRequest, PullImageResponse};
 
 #[derive(Clone)]
 pub struct SandboxNetworkEnv {
@@ -26,10 +27,15 @@ pub trait Sandbox: Send + Sync {
     async fn cleanup(&self) -> Result<()>;
     async fn shutdown(&self) -> Result<()>;
 
+    // agent function
+    async fn agent_sock(&self) -> Result<String>;
+
+    // image function
+    async fn pull_image(&self, req: PullImageRequest) -> Result<PullImageResponse>;
+
     // utils
     async fn set_iptables(&self, is_ipv6: bool, data: Vec<u8>) -> Result<Vec<u8>>;
     async fn get_iptables(&self, is_ipv6: bool) -> Result<Vec<u8>>;
     async fn direct_volume_stats(&self, volume_path: &str) -> Result<String>;
     async fn direct_volume_resize(&self, resize_req: agent::ResizeVolumeRequest) -> Result<()>;
-    async fn agent_sock(&self) -> Result<String>;
 }

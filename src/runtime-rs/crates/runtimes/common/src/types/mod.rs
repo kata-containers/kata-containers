@@ -14,6 +14,7 @@ use std::fmt;
 use anyhow::{Context, Result};
 use kata_sys_util::validate;
 use kata_types::mount::Mount;
+use protocols::image_runtime::{PullImageRequest, PullImageResponse};
 use strum::Display;
 
 /// Request: request from shim
@@ -36,6 +37,7 @@ pub enum Request {
     UpdateContainer(UpdateRequest),
     Pid,
     ConnectContainer(ContainerID),
+    PullImage(PullImageRequest),
 }
 
 /// Response: response to shim
@@ -58,6 +60,7 @@ pub enum Response {
     UpdateContainer,
     Pid(PID),
     ConnectContainer(PID),
+    PullImage(PullImageResponse),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

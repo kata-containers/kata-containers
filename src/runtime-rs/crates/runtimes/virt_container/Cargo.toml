@@ -32,6 +32,7 @@ kata-sys-util = { path = "../../../../libs/kata-sys-util" }
 kata-types = { path = "../../../../libs/kata-types" }
 logging = { path = "../../../../libs/logging"}
 oci = { path = "../../../../libs/oci" }
+protocols = { path = "../../../../libs/protocols" }
 persist = { path = "../../persist"}
 resource = { path = "../../resource" }
 

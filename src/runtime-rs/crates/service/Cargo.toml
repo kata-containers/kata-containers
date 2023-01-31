@@ -14,8 +14,9 @@ tokio = { version = "1.28.1", features = ["rt-multi-thread"] }
 ttrpc = { version = "0.7.1" }
 
 common = { path = "../runtimes/common" }
-containerd-shim-protos = { version = "0.3.0", features = ["async"]}
-logging = { path = "../../../libs/logging"}
+containerd-shim-protos = { version = "0.3.0", features = ["async"] }
+logging = { path = "../../../libs/logging" }
+protocols = { path = "../../../libs/protocols" }
 shim-interface = { path = "../../../libs/shim-interface" }
 runtimes = { path = "../runtimes" }
 persist = { path = "../persist" }

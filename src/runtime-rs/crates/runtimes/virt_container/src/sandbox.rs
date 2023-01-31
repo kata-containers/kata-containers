@@ -20,6 +20,7 @@ use containerd_shim_protos::events::task::TaskOOM;
 use hypervisor::{dragonball::Dragonball, Hypervisor, HYPERVISOR_DRAGONBALL};
 use kata_sys_util::hooks::HookStates;
 use kata_types::config::TomlConfig;
+use protocols::{image, image_runtime};
 use resource::{
     manager::ManagerArgs,
     network::{NetworkConfig, NetworkWithNetNsConfig},
@@ -387,6 +388,23 @@ impl Sandbox for VirtSandbox {
             .await
             .context("sandbox: failed to resize direct-volume")?;
         Ok(())
+    }
+
+    async fn pull_image(
+        &self,
+        req: image_runtime::PullImageRequest,
+    ) -> Result<image_runtime::PullImageResponse> {
+        let agent_req = image::PullImageRequest {
+            image: req.image,
+            container_id: req.container_id,
+            source_creds: req.source_creds,
+            ..Default::default()
+        };
+        let agent_resp = self.agent.pull_image(agent_req).await?;
+        Ok(image_runtime::PullImageResponse {
+            image_ref: agent_resp.image_ref,
+            ..Default::default()
+        })
     }
 
     async fn set_iptables(&self, is_ipv6: bool, data: Vec<u8>) -> Result<Vec<u8>> {

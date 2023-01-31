@@ -13,6 +13,7 @@ pub mod kata;
 mod log_forwarder;
 mod sock;
 pub mod types;
+use protocols::image::{PullImageRequest, PullImageResponse};
 pub use types::{
     ARPNeighbor, ARPNeighbors, AddArpNeighborRequest, BlkioStatsEntry, CheckRequest,
     CloseStdinRequest, ContainerID, ContainerProcessID, CopyFileRequest, CreateContainerRequest,
@@ -50,7 +51,12 @@ pub trait HealthService: Send + Sync {
 }
 
 #[async_trait]
-pub trait Agent: AgentManager + HealthService + Send + Sync {
+pub trait ImageService: Send + Sync {
+    async fn pull_image(&self, req: PullImageRequest) -> Result<PullImageResponse>;
+}
+
+#[async_trait]
+pub trait Agent: AgentManager + HealthService + ImageService + Send + Sync {
     // sandbox
     async fn create_sandbox(&self, req: CreateSandboxRequest) -> Result<Empty>;
     async fn destroy_sandbox(&self, req: Empty) -> Result<Empty>;

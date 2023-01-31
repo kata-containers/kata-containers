@@ -17,6 +17,7 @@ use containerd_shim_protos::{
     protobuf::{well_known_types::any::Any, Message as ProtobufMessage},
     shim_async,
 };
+use protocols::image_runtime_ttrpc_async;
 use runtimes::RuntimeHandlerManager;
 use tokio::{
     io::AsyncWriteExt,
@@ -25,7 +26,7 @@ use tokio::{
 };
 use ttrpc::asynchronous::Server;
 
-use crate::task_service::TaskService;
+use crate::{image_service::ImageService, task_service::TaskService};
 /// message buffer size
 const MESSAGE_BUFFER_SIZE: usize = 8;
 use shim_interface::KATA_PATH;
@@ -33,7 +34,7 @@ use shim_interface::KATA_PATH;
 pub struct ServiceManager {
     receiver: Option<Receiver<Message>>,
     handler: Arc<RuntimeHandlerManager>,
-    task_server: Option<Server>,
+    ttrpc_server: Option<Server>,
     binary: String,
     address: String,
     namespace: String,
@@ -86,7 +87,7 @@ impl ServiceManager {
         containerd_binary: &str,
         address: &str,
         namespace: &str,
-        task_server_fd: RawFd,
+        ttrpc_server_fd: RawFd,
     ) -> Result<Self> {
         let (sender, receiver) = channel::<Message>(MESSAGE_BUFFER_SIZE);
         let handler = Arc::new(
@@ -94,12 +95,12 @@ impl ServiceManager {
                 .await
                 .context("new runtime handler")?,
         );
-        let mut task_server = unsafe { Server::from_raw_fd(task_server_fd) };
-        task_server = task_server.set_domain_unix();
+        let mut ttrpc_server = unsafe { Server::from_raw_fd(ttrpc_server_fd) };
+        ttrpc_server = ttrpc_server.set_domain_unix();
         Ok(Self {
             receiver: Some(receiver),
             handler,
-            task_server: Some(task_server),
+            ttrpc_server: Some(ttrpc_server),
             binary: containerd_binary.to_string(),
             address: address.to_string(),
             namespace: namespace.to_string(),
@@ -172,29 +173,34 @@ impl ServiceManager {
     async fn start(&mut self) -> Result<()> {
         let task_service = Arc::new(Box::new(TaskService::new(self.handler.clone()))
             as Box<dyn shim_async::Task + Send + Sync>);
-        let task_server = self.task_server.take();
-        let task_server = match task_server {
+        let image_service = Arc::new(Box::new(ImageService::new(self.handler.clone()))
+            as Box<dyn image_runtime_ttrpc_async::Image + Send + Sync>);
+
+        let ttrpc_server = self.ttrpc_server.take();
+        let ttrpc_server = match ttrpc_server {
             Some(t) => {
-                let mut t = t.register_service(shim_async::create_task(task_service));
+                let mut t = t
+                    .register_service(shim_async::create_task(task_service))
+                    .register_service(image_runtime_ttrpc_async::create_image(image_service));
                 t.start().await.context("task server start")?;
                 Some(t)
             }
             None => None,
         };
-        self.task_server = task_server;
+        self.ttrpc_server = ttrpc_server;
         Ok(())
     }
 
     async fn stop_listen(&mut self) -> Result<()> {
-        let task_server = self.task_server.take();
-        let task_server = match task_server {
+        let ttrpc_server = self.ttrpc_server.take();
+        let ttrpc_server = match ttrpc_server {
             Some(mut t) => {
                 t.stop_listen().await;
                 Some(t)
             }
             None => None,
         };
-        self.task_server = task_server;
+        self.ttrpc_server = ttrpc_server;
         Ok(())
     }
 }

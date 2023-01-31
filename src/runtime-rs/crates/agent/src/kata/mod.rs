@@ -14,7 +14,10 @@ use std::{
 
 use anyhow::{Context, Result};
 use kata_types::config::Agent as AgentConfig;
-use protocols::{agent_ttrpc_async as agent_ttrpc, health_ttrpc_async as health_ttrpc};
+use protocols::{
+    agent_ttrpc_async as agent_ttrpc, health_ttrpc_async as health_ttrpc,
+    image_ttrpc_async as image_ttrpc,
+};
 use tokio::sync::RwLock;
 use ttrpc::asynchronous::Client;
 
@@ -67,6 +70,17 @@ impl KataAgent {
             (
                 health_ttrpc::HealthClient::new(c.clone()),
                 inner.config.health_check_request_timeout_ms as i64,
+                inner.client_fd,
+            )
+        })
+    }
+
+    pub async fn get_image_client(&self) -> Option<(image_ttrpc::ImageClient, i64, RawFd)> {
+        let inner = self.inner.read().await;
+        inner.client.as_ref().map(|c| {
+            (
+                image_ttrpc::ImageClient::new(c.clone()),
+                inner.config.request_timeout_ms as i64,
                 inner.client_fd,
             )
         })

@@ -12,6 +12,7 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use containerd_shim_protos::api;
+use protocols::image_runtime;
 
 use super::{ProcessExitStatus, ProcessStateInfo, ProcessStatus, Response};
 use crate::error::Error;
@@ -233,6 +234,19 @@ impl TryFrom<Response> for api::Empty {
             Response::ResumeContainer => Ok(api::Empty::new()),
             Response::ResizeProcessPTY => Ok(api::Empty::new()),
             Response::UpdateContainer => Ok(api::Empty::new()),
+            _ => Err(anyhow!(Error::UnexpectedResponse(
+                from,
+                type_name::<Self>().to_string()
+            ))),
+        }
+    }
+}
+
+impl TryFrom<Response> for image_runtime::PullImageResponse {
+    type Error = anyhow::Error;
+    fn try_from(from: Response) -> Result<Self> {
+        match from {
+            Response::PullImage(resp) => Ok(resp),
             _ => Err(anyhow!(Error::UnexpectedResponse(
                 from,
                 type_name::<Self>().to_string()
