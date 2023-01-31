@@ -232,16 +232,37 @@ $ rustup target add "${ARCH}-unknown-linux-${LIBC}"
 
 To build the agent:
 
-```bash
-$ make -C kata-containers/src/agent
-```
-
 The agent is built with seccomp capability by default.
 If you want to build the agent without the seccomp capability, you need to run `make` with `SECCOMP=no` as follows.
 
 ```bash
 $ make -C kata-containers/src/agent SECCOMP=no
 ```
+
+For building the agent with seccomp support using `musl`, set the environment
+variables for the [`libseccomp` crate](https://github.com/libseccomp-rs/libseccomp-rs).
+
+```bash
+$ export LIBSECCOMP_LINK_TYPE=static
+$ export LIBSECCOMP_LIB_PATH="the path of the directory containing libseccomp.a"
+$ make -C kata-containers/src/agent
+```
+
+If the compilation fails when the agent tries to link the `libseccomp` library statically
+against `musl`, you will need to build `libseccomp` manually with `-U_FORTIFY_SOURCE`.
+You can use [our script](https://github.com/kata-containers/kata-containers/blob/main/ci/install_libseccomp.sh)
+to install `libseccomp` for the agent.
+
+```bash
+$ mkdir -p ${seccomp_install_path} ${gperf_install_path}
+$ kata-containers/ci/install_libseccomp.sh ${seccomp_install_path} ${gperf_install_path}
+$ export LIBSECCOMP_LIB_PATH="${seccomp_install_path}/lib"
+```
+
+On `ppc64le` and `s390x`, `glibc` is used. You will need to install the `libseccomp` library
+provided by your distribution.
+
+> e.g. `libseccomp-dev` for Ubuntu, or `libseccomp-devel` for CentOS
 
 > **Note:**
 >
