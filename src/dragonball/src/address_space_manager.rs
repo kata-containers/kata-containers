@@ -250,6 +250,11 @@ impl AddressSpaceMgr {
         self.address_space.as_ref()
     }
 
+    /// Get the guest memory.
+    pub fn vm_memory(&self) -> Option<<GuestAddressSpaceImpl as GuestAddressSpace>::T> {
+        self.get_vm_as().map(|m| m.memory())
+    }
+
     /// Create the address space for a virtual machine.
     ///
     /// This method is designed to be called when starting up a virtual machine instead of at
