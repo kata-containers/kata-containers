@@ -656,10 +656,10 @@ mod tests {
             let (to_vmm, from_api) = channel();
             let (to_api, from_vmm) = channel();
 
-            let vmm = Arc::new(Mutex::new(create_vmm_instance()));
+            let epoll_mgr = EpollManager::default();
+            let vmm = Arc::new(Mutex::new(create_vmm_instance(epoll_mgr.clone())));
             let mut vservice = VmmService::new(from_api, to_api);
 
-            let epoll_mgr = EpollManager::default();
             let mut event_mgr = EventManager::new(&vmm, epoll_mgr).unwrap();
             let mut v = vmm.lock().unwrap();
 
@@ -681,9 +681,9 @@ mod tests {
 
         let (_to_vmm, from_api) = channel();
         let (to_api, _from_vmm) = channel();
-        let vmm = Arc::new(Mutex::new(create_vmm_instance()));
-        let mut vservice = VmmService::new(from_api, to_api);
         let epoll_mgr = EpollManager::default();
+        let vmm = Arc::new(Mutex::new(create_vmm_instance(epoll_mgr.clone())));
+        let mut vservice = VmmService::new(from_api, to_api);
         let mut event_mgr = EventManager::new(&vmm, epoll_mgr).unwrap();
         let mut v = vmm.lock().unwrap();
 
@@ -695,9 +695,9 @@ mod tests {
     fn test_vmm_action_disconnected() {
         let (to_vmm, from_api) = channel();
         let (to_api, _from_vmm) = channel();
-        let vmm = Arc::new(Mutex::new(create_vmm_instance()));
-        let mut vservice = VmmService::new(from_api, to_api);
         let epoll_mgr = EpollManager::default();
+        let vmm = Arc::new(Mutex::new(create_vmm_instance(epoll_mgr.clone())));
+        let mut vservice = VmmService::new(from_api, to_api);
         let mut event_mgr = EventManager::new(&vmm, epoll_mgr).unwrap();
         let mut v = vmm.lock().unwrap();
 
