@@ -16,6 +16,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func createFile(file, contents string) error {
+	return os.WriteFile(file, []byte(contents), testFileMode)
+}
+
 func TestFileExists(t *testing.T) {
 	dir := t.TempDir()
 

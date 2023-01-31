@@ -96,7 +96,6 @@ func archHostCanCreateVMContainer(hypervisorType vc.HypervisorType) error {
 // hostIsVMContainerCapable checks to see if the host is theoretically capable
 // of creating a VM container.
 func hostIsVMContainerCapable(details vmContainerCapableDetails) error {
-
 	_, err := getCPUInfo(details.cpuInfoFile)
 	if err != nil {
 		return err
@@ -112,7 +111,6 @@ func hostIsVMContainerCapable(details vmContainerCapableDetails) error {
 	}
 
 	return fmt.Errorf("ERROR: %s", failMessage)
-
 }
 
 func archKernelParamHandler(onVMM bool, fields logrus.Fields, msg string) bool {
@@ -124,7 +122,6 @@ func archKernelParamHandler(onVMM bool, fields logrus.Fields, msg string) bool {
 // normalizeArmVendor maps 'CPU implementer' in /proc/cpuinfo
 // to human-readable description of that value.
 func normalizeArmVendor(vendor string) string {
-
 	switch vendor {
 	case "0x41":
 		vendor = "ARM Limited"

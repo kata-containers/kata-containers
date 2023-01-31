@@ -1,4 +1,3 @@
-//
 // Copyright (c) 2018 HyperHQ Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -27,6 +26,5 @@ func SetLogger(ctx context.Context, logger logrus.FieldLogger) {
 	fields := logrus.Fields{
 		"source": "virtcontainers",
 	}
-
 	templateLog = logger.WithFields(fields)
 }
