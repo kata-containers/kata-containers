@@ -237,14 +237,20 @@ install_cc_image() {
 	local component="rootfs-image"
 	local root_hash_vanilla="root_hash_vanilla.txt"
 	local root_hash_tdx=""
+	local initramfs_last_commit=""
 	if [ -n "${tee}" ]; then
+		jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-image-${tee}-cc-$(uname -m)/${cached_artifacts_path}"
 		if [ "${tee}" == "tdx" ]; then
-			jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-image-${tee}-cc-$(uname -m)/${cached_artifacts_path}"
 			component="${tee}-rootfs-image"
 			root_hash_vanilla=""
 			root_hash_tdx="root_hash_${tee}.txt"
 		fi
-	fi
+		if [ "${tee}" == "sev" ]; then
+			component="${tee}-rootfs-initrd"
+			root_hash_vanilla=""
+			initramfs_last_commit="$(get_initramfs_image_name)"
+		fi
+	fi	
 
 	local osbuilder_last_commit="$(echo $(get_last_modification "${repo_root_dir}/tools/osbuilder") | sed s/-dirty//)"
 	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
@@ -259,7 +265,7 @@ install_cc_image() {
 	install_cached_component \
 		"${component}" \
 		"${jenkins}" \
-		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${rust_version}-${image_type}-${AA_KBC}" \
+		"${osbuilder_last_commit}-${guest_image_last_commit}$-${initramfs_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${rust_version}-${image_type}-${AA_KBC}" \
 		"" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
