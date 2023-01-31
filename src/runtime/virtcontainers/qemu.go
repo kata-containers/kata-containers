@@ -1183,6 +1183,7 @@ func (q *qemu) cleanupVM() error {
 					"user": q.config.User,
 					"uid":  q.config.Uid,
 				}).Warn("failed to delete the user")
+			return nil
 		}
 		q.Logger().WithFields(
 			logrus.Fields{
