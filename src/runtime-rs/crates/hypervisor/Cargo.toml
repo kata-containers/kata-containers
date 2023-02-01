@@ -32,4 +32,14 @@ shim-interface = { path = "../../../libs/shim-interface" }
 
 dragonball = { path = "../../../dragonball", features = ["atomic-guest-memory", "virtio-vsock", "hotplug", "virtio-blk", "virtio-net", "virtio-fs","dbs-upcall"] }
 
+ch-config = { path = "ch-config", optional = true }
+
+futures = "0.3.25"
+safe-path = "0.1.0"
+
 [features]
+default = []
+
+# Feature is not yet complete, so not enabled by default.
+# See https://github.com/kata-containers/kata-containers/issues/6264.
+cloud-hypervisor = ["ch-config"]
