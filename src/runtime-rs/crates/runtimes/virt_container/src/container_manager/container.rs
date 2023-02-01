@@ -105,7 +105,7 @@ impl Container {
             .resource_manager
             .handler_rootfs(
                 &config.container_id,
-                root,
+                root.path.as_str(),
                 &config.bundle,
                 &config.rootfs_mounts,
             )
@@ -113,16 +113,18 @@ impl Container {
             .context("handler rootfs")?;
 
         // update rootfs
-        root.path = rootfs
-            .get_guest_rootfs_path()
-            .await
-            .context("get guest rootfs path")?;
-
         let mut storages = vec![];
-        if let Some(storage) = rootfs.get_storage().await {
-            storages.push(storage);
+        if let Some(rootfs) = rootfs {
+            root.path = rootfs
+                .get_guest_rootfs_path()
+                .await
+                .context("get guest rootfs path")?;
+
+            if let Some(storage) = rootfs.get_storage().await {
+                storages.push(storage);
+            }
+            inner.rootfs.push(rootfs);
         }
-        inner.rootfs.push(rootfs);
 
         // handler volumes
         let volumes = self
