@@ -212,11 +212,12 @@ externals:
   containerd:
     description: |
       Containerd for Kubernetes Container Runtime Interface.
-    # CCv0 is using our fork of containerd as the changes can't be merged yet
-    url: "github.com/confidential-containers/containerd"
-    # yamllint disable-line rule:line-length
-    tarball_url: "https://github.com/confidential-containers/containerd/releases/download"
-    version: "v1.6.8.1"
+    url: "github.com/containerd/containerd"
+    tarball_url: "https://github.com/containerd/containerd/releases/download"
+    # containerd from v1.5.0 used the path unix socket
+    # instead of abstract socket, thus kata wouldn's support the containerd's
+    # version older than them.
+    version: "v1.7.0-beta.3"
     # CCv0 needs to know about the specific branch for the integration tests
     branch: "CC-main"
 
