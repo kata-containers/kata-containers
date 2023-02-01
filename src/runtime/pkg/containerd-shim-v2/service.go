@@ -960,6 +960,13 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 
 	s.cancel()
 
+	// We must clean up the socket file before os.Exit(0)
+	if address, err := cdshim.ReadAddress("address"); err == nil {
+		if err = cdshim.RemoveSocket(address); err != nil {
+			shimLog.WithError(err).Warnf("failed to rm unix socket file %s", address)
+		}
+	}
+
 	// Since we only send an shutdown qmp command to qemu when do stopSandbox, and
 	// didn't wait until qemu process's exit, thus we'd better to make sure it had
 	// exited when shimv2 terminated. Thus here to do the last cleanup of the hypervisor.
