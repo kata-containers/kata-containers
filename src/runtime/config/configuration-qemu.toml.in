@@ -336,7 +336,7 @@ valid_file_mem_backends = @DEFVALIDFILEMEMBACKENDS@
 pflashes = []
 
 # This option changes the default hypervisor and kernel parameters
-# to enable debug output where available.
+# to enable debug output where available. And Debug also enable the hmp socket.
 #
 # Default false
 #enable_debug = true

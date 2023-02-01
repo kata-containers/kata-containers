@@ -273,6 +273,22 @@ func TestQMPStartBadPath(t *testing.T) {
 	<-disconnectedCh
 }
 
+// Checks that a call to QMPStartWithConn with a nil connection exits gracefully.
+//
+// We call QMPStartWithConn with a nil connection.
+//
+// An error should be returned and the disconnected channel should be closed.
+func TestQMPStartWithConnNil(t *testing.T) {
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	disconnectedCh := make(chan struct{})
+	q, _, err := QMPStartWithConn(context.Background(), nil, cfg, disconnectedCh)
+	if err == nil {
+		t.Errorf("Expected error")
+		q.Shutdown()
+	}
+	<-disconnectedCh
+}
+
 // Checks that the qmp_capabilities command is correctly sent.
 //
 // We start a QMPLoop, send the qmp_capabilities command and stop the

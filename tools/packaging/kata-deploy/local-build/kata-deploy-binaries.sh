@@ -82,6 +82,7 @@ options:
 	cloud-hypervisor
 	firecracker
 	kernel
+	kernel-dragonball-experimental
 	kernel-experimental
 	nydus
 	qemu
@@ -505,6 +506,13 @@ install_kernel() {
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -f -v "${kernel_version}"
 }
 
+#Install dragonball experimental kernel asset
+install_dragonball_experimental_kernel() {
+	info "build dragonball experimental kernel"
+	export kernel_version="$(yq r $versions_yaml assets.dragonball-kernel-experimental.version)"
+	info "kernel version ${kernel_version}"
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -e -t dragonball -v ${kernel_version}	
+}
 
 #Install experimental kernel asset
 install_experimental_kernel() {
@@ -648,6 +656,8 @@ handle_build() {
 	kernel) install_kernel ;;
 
 	nydus) install_nydus ;;
+
+	kernel-dragonball-experimental) install_dragonball_experimental_kernel;;
 
 	kernel-experimental) install_experimental_kernel;;
 
