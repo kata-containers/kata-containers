@@ -390,23 +390,71 @@ func (f *FilesystemShare) shareRootFilesystemWithNydus(ctx context.Context, c *C
 	}, nil
 }
 
-// func (c *Container) shareRootfs(ctx context.Context) (*grpc.Storage, string, error) {
-func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container) (*SharedFile, error) {
+func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container) ([]*SharedFile, error) {
+	if c.rootFs.Type == NydusRootFSType {
+		f, err := f.shareRootFilesystemWithNydus(ctx, c)
+		if err != nil {
+			return nil, err
+		}
+		return []*SharedFile{f}, nil
+	}
+
+	result := []*SharedFile{}
+	if c.rootFs.Type == TarRootFSType {
+		for _, l := range c.rootFs.Options {
+			storage := &grpc.Storage{}
+
+			id, ok := c.sandbox.GetLayerDevice(l)
+			if !ok {
+				f.Logger().WithField("layer", l).Error("failed to find device for layer")
+				return nil, fmt.Errorf("failed to find device by for layer %q", l)
+			}
+
+			// TODO: A lot of repetitive work below. Move this to a common file.
+			device := f.sandbox.devManager.GetDeviceByID(id)
+			c.sandbox.RemoveLayerDevice(l) // Decrement the refcount we incremented above.
+			if device == nil {
+				f.Logger().WithField("device", c.state.BlockDeviceID).Error("failed to find device by id")
+				return nil, fmt.Errorf("failed to find device by id %q", c.state.BlockDeviceID)
+			}
+
+			blockDrive, ok := device.GetDeviceInfo().(*config.BlockDrive)
+			if !ok || blockDrive == nil {
+				f.Logger().Error("malformed block drive")
+				return nil, fmt.Errorf("malformed block drive")
+			}
+			switch {
+			case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioMmio:
+				storage.Driver = kataMmioBlkDevType
+				storage.Source = blockDrive.VirtPath
+			case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlockCCW:
+				storage.Driver = kataBlkCCWDevType
+				storage.Source = blockDrive.DevNo
+			case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock:
+				storage.Driver = kataBlkDevType
+				storage.Source = blockDrive.PCIPath.String()
+			case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioSCSI:
+				storage.Driver = kataSCSIDevType
+				storage.Source = blockDrive.SCSIAddr
+			default:
+				return nil, fmt.Errorf("Unknown block device driver: %s", f.sandbox.config.HypervisorConfig.BlockDeviceDriver)
+			}
+
+			f.Logger().Infof("adding shared file for layer %q", l)
+			storage.MountPoint = filepath.Join(kataGuestSandboxDir(), "layers", l)
+			storage.Fstype = "tar"
+			storage.Options = []string{"ro"}
+
+			result = append(result, &SharedFile{
+				storage:   storage,
+				guestPath: storage.MountPoint,
+			})
+		}
+	}
+
 	rootfsGuestPath := filepath.Join(kataGuestSharedDir(), c.id, c.rootfsSuffix)
 
-	// In the confidential computing, there is no Image information on the host,
-	// so there is no Rootfs.Target.
-	if f.sandbox.config.ServiceOffload && c.rootFs.Target == "" {
-		return &SharedFile{
-			storage:   nil,
-			guestPath: rootfsGuestPath,
-		}, nil
-	}
-
-	if c.rootFs.Type == NydusRootFSType {
-		return f.shareRootFilesystemWithNydus(ctx, c)
-	}
-
+	f.Logger().Infof("In ShareRootFilesystem, fstype=%q, blockDeviceID=%q", c.state.Fstype, c.state.BlockDeviceID)
 	if c.state.Fstype != "" && c.state.BlockDeviceID != "" {
 		// The rootfs storage volume represents the container rootfs
 		// mount point inside the guest.
@@ -453,6 +501,7 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 		// So we have to build the bundle path explicitly.
 		rootfsStorage.MountPoint = filepath.Join(kataGuestSharedDir(), c.id)
 		rootfsStorage.Fstype = c.state.Fstype
+		rootfsStorage.Options = c.rootFs.Options
 
 		if c.state.Fstype == "xfs" {
 			rootfsStorage.Options = []string{"nouuid"}
@@ -466,10 +515,10 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 			return nil, err
 		}
 
-		return &SharedFile{
+		return append(result, &SharedFile{
 			storage:   rootfsStorage,
 			guestPath: rootfsGuestPath,
-		}, nil
+		}), nil
 	}
 
 	// This is not a block based device rootfs. We are going to bind mount it into the shared drive
@@ -481,10 +530,10 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 		return nil, err
 	}
 
-	return &SharedFile{
+	return append(result, &SharedFile{
 		storage:   nil,
 		guestPath: rootfsGuestPath,
-	}, nil
+	}), nil
 }
 
 func (f *FilesystemShare) UnshareRootFilesystem(ctx context.Context, c *Container) error {

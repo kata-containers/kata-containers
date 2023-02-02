@@ -818,7 +818,8 @@ func (q *QMP) blockdevAddBaseArgs(driver string, blockDevice *BlockDevice) map[s
 // used to name the device.  As this identifier will be passed directly to QMP,
 // it must obey QMP's naming rules, e,g., it must start with a letter.
 func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, blockDevice *BlockDevice) error {
-	args := q.blockdevAddBaseArgs("host_device", blockDevice)
+	// TODO: We need to fix this.
+	args := q.blockdevAddBaseArgs("file", blockDevice)
 
 	return q.executeCommand(ctx, "blockdev-add", args, nil)
 }

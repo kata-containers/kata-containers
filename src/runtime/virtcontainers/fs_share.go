@@ -69,7 +69,7 @@ type FilesystemSharer interface {
 	// ShareRootFilesystem shares a container bundle rootfs with
 	// the Kata guest, allowing the kata agent to eventually start
 	// the container from that shared rootfs.
-	ShareRootFilesystem(context.Context, *Container) (*SharedFile, error)
+	ShareRootFilesystem(context.Context, *Container) ([]*SharedFile, error)
 
 	// UnshareRootFilesystem stops sharing a container bundle
 	// rootfs.

@@ -1202,11 +1202,49 @@ func (c *Container) resume(ctx context.Context) error {
 	return c.setContainerState(types.StateRunning)
 }
 
+func (c *Container) hotplugTarDrives(ctx context.Context) error {
+	// TODO: We need to remember the ones that succeeded so that we can cleanup.
+	for _, l := range c.rootFs.Options {
+		id, ok := c.sandbox.GetLayerDevice(l)
+		if !ok {
+			path := filepath.Join(c.rootFs.Source, l)
+			b, err := c.sandbox.devManager.NewDevice(config.DeviceInfo{
+				HostPath:      path,
+				ContainerPath: filepath.Join(kataGuestSandboxDir(), "layers", l),
+				DevType:       "b",
+				Major:         -1,
+				ReadOnly:      true,
+			})
+			if err != nil {
+				return fmt.Errorf("device manager failed to create rootfs layer device for %q: %v", path, err)
+			}
+			id = c.sandbox.SetLayerDevice(l, b.DeviceID())
+		}
+
+		// Remember the last device that was added. We will wait for it to appear in the
+		// guest before mounting all the layers.
+		// TODO: Do we need to remember all layers? Probably not because we can get it from
+		// from the options + sandbox.
+		c.state.BlockDeviceID = id
+
+		// Attach the device.
+		if err := c.sandbox.devManager.AttachDevice(ctx, id, c.sandbox); err != nil {
+			return err
+		}
+	}
+	c.rootfsSuffix = ""
+	return c.setStateFstype(c.rootFs.Type)
+}
+
 // hotplugDrive will attempt to hotplug the container rootfs if it is backed by a
 // block device
 func (c *Container) hotplugDrive(ctx context.Context) error {
 	var dev device
 	var err error
+
+	if c.rootFs.Type == TarRootFSType {
+		return c.hotplugTarDrives(ctx)
+	}
 
 	// Check to see if the rootfs is an umounted block device (source) or if the
 	// mount (target) is backed by a block device:
