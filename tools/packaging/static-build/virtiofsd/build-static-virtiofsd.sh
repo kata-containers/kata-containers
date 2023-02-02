@@ -57,6 +57,7 @@ init_env() {
 			LIBC="gnu"
 			ARCH="powerpc64le"
 			ARCH_LIBC=${ARCH}-linux-${LIBC}
+			extra_rust_flags=""
 			;;
 		"s390x")
 			LIBC="gnu"
