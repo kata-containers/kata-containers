@@ -87,7 +87,7 @@ const (
 	AssetHashType = kataAnnotationsPrefix + "asset_hash_type"
 
 	//
-	//	Generic annotations
+	// Generic annotations
 	//
 
 	// KernelParams is a sandbox annotation for passing additional guest kernel parameters.
@@ -134,7 +134,7 @@ const (
 	UseLegacySerial = kataAnnotHypervisorPrefix + "use_legacy_serial"
 
 	//
-	//	CPU Annotations
+	// CPU Annotations
 	//
 
 	// DefaultVCPUs is a sandbox annotation for passing the default vcpus assigned for a VM by the hypervisor.
@@ -144,7 +144,7 @@ const (
 	DefaultMaxVCPUs = kataAnnotHypervisorPrefix + "default_max_vcpus"
 
 	//
-	//	Memory related annotations
+	// Memory related annotations
 	//
 
 	// DefaultMemory is a sandbox annotation for the memory assigned for a VM by the hypervisor.
@@ -175,7 +175,7 @@ const (
 	FileBackedMemRootDir = kataAnnotHypervisorPrefix + "file_mem_backend"
 
 	//
-	//	Shared File System related annotations
+	// Shared File System related annotations
 	//
 
 	// Msize9p is a sandbox annotation to specify as the msize for 9p shares
@@ -197,7 +197,7 @@ const (
 	VirtioFSExtraArgs = kataAnnotHypervisorPrefix + "virtio_fs_extra_args"
 
 	//
-	//	Block Device related annotations
+	// Block Device related annotations
 	//
 
 	// BlockDeviceDriver specifies the driver to be used for block device either VirtioSCSI or VirtioBlock
