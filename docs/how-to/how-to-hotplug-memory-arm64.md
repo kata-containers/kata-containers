@@ -17,7 +17,7 @@ $ popd
 
 ## Config KATA QEMU
 
-After executing the above script, two files will be generated under the directory `/usr/share/kata-containers/` by default, namely `kata-flash0.img` and `kata-flash1.img`. Next we need to change the configuration file of `kata qemu`, which is in `/opt/kata/share/defaults/kata-containers/configuration-qemu.toml` by default, specify in the configuration file to use the UEFI ROM installed above. Please refer to the following configuration.
+After executing the above script, two files will be generated under the directory `/usr/share/kata-containers/` by default, namely `kata-flash0.img` and `kata-flash1.img`. Next we need to change the configuration file of `kata qemu`, which is in `/opt/kata/share/defaults/kata-containers/configuration-qemu.toml` by default, specify in the configuration file to use the UEFI ROM installed above. The above is an example of `kata deploy` installation. For package management installation, please use `kata-runtime env` to find the location of the configuration file. Please refer to the following configuration.
 
 ```
 [hypervisor.qemu]
