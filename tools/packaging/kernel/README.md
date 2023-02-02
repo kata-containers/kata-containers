@@ -107,6 +107,10 @@ Kata Containers packaging repository holds the kernel configs and patches. The
 config and patches can work for many versions, but we only test the
 kernel version defined in the [Kata Containers versions file][kata-containers-versions-file].
 
+For any change to the kernel configs or patches, the version defined in the file
+[`kata_config_version`][kata-containers-versions-file] needs to be incremented
+so that the CI can test with these changes.
+
 For further details, see [the kernel configuration documentation](configs).
 
 ## How is it tested
