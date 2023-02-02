@@ -34,6 +34,7 @@ readonly virtiofsd_builder="${static_build_dir}/virtiofsd/build.sh"
 readonly nydus_builder="${static_build_dir}/nydus/build.sh"
 
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
+readonly se_image_builder="${repo_root_dir}/tools/packaging/guest-image/build_se_image.sh"
 
 readonly cc_prefix="/opt/confidential-containers"
 readonly qemu_cc_builder="${static_build_dir}/qemu/build-static-qemu-cc.sh"
@@ -98,7 +99,9 @@ options:
 	cc-qemu
 	cc-tdx-qemu
 	cc-rootfs-image
+	cc-rootfs-initrd
 	cc-sev-rootfs-initrd
+	cc-se-image
 	cc-shimv2
 	cc-virtiofsd
 	cc-sev-ovmf
@@ -287,6 +290,11 @@ install_cc_sev_image() {
 	AA_KBC="online_sev_kbc"
 	image_type="initrd"
 	install_cc_image "${AA_KBC}" "${image_type}" "sev" "" "sev"
+}
+
+install_cc_se_image() {
+	info "Create IBM SE image configured with AA_KBC=${AA_KBC}"
+	"${se_image_builder}" --destdir="${destdir}"
 }
 
 install_cc_tdx_image() {
@@ -539,6 +547,11 @@ install_initrd() {
 	"${rootfs_builder}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}"
 }
 
+install_cc_initrd() {
+	info "Create initrd"
+	"${rootfs_builder}" --imagetype=initrd --prefix="${cc_prefix}" --destdir="${destdir}"
+}
+
 #Install kernel asset
 install_kernel() {
 	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
@@ -668,7 +681,11 @@ handle_build() {
 
 	cc-rootfs-image) install_cc_image ;;
 
+	cc-rootfs-initrd) install_cc_initrd ;;
+
 	cc-sev-rootfs-initrd) install_cc_sev_image ;;
+
+	cc-se-image) install_cc_se_image ;;
 
 	cc-tdx-rootfs-image) install_cc_tdx_image ;;
 
