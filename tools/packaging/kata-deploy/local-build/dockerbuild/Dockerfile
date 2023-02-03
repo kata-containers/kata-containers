@@ -8,6 +8,7 @@ ENV INSTALL_IN_GOPATH=false
 
 COPY install_yq.sh /usr/bin/install_yq.sh
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Install yq and docker
 RUN apt-get update && \
@@ -18,6 +19,7 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/ && \
     install_yq.sh && \
     curl -fsSL https://get.docker.com -o get-docker.sh && \
+    if uname -m | grep -Eq 's390x|ppc64le'; then export VERSION="v20.10"; fi && \
     sh get-docker.sh
 
 ARG IMG_USER=kata-builder
