@@ -169,11 +169,13 @@ pub fn get_sandbox_id_for_volume(volume_path: &str) -> Result<String> {
 mod tests {
     use super::*;
     use kata_types::mount::DirectVolumeMountInfo;
+    use serial_test::serial;
     use std::{collections::HashMap, fs};
     use tempfile::tempdir;
     use test_utils::skip_if_not_root;
 
     #[test]
+    #[serial]
     fn test_get_sandbox_id_for_volume() {
         // this test has to run as root, so has to manually cleanup afterwards
         skip_if_not_root!();
@@ -259,6 +261,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_add_remove() {
         skip_if_not_root!();
         // example volume dir is a/b/c, note the behavior of join would take "/a" as absolute path.
