@@ -108,8 +108,8 @@ impl CgroupsResource {
     /// delete will move the running processes in the cgroup_manager and
     /// overhead_cgroup_manager to the parent and then delete the cgroups.
     pub async fn delete(&self) -> Result<()> {
-        for cg_pid in self.cgroup_manager.tasks() {
-            self.cgroup_manager.remove_task(cg_pid)?;
+        for cg_pid in self.cgroup_manager.procs() {
+            self.cgroup_manager.remove_task_by_tgid(cg_pid)?;
         }
 
         self.cgroup_manager
@@ -117,8 +117,8 @@ impl CgroupsResource {
             .context("delete cgroup manager")?;
 
         if let Some(overhead) = self.overhead_cgroup_manager.as_ref() {
-            for cg_pid in overhead.tasks() {
-                overhead.remove_task(cg_pid)?;
+            for cg_pid in overhead.procs() {
+                overhead.remove_task_by_tgid(cg_pid)?;
             }
             overhead.delete().context("delete overhead")?;
         }
