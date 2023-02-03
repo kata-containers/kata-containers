@@ -242,7 +242,7 @@ generate_qemu_options() {
 	# Disable graphical network access
 	qemu_options+=(size:--disable-vnc)
 	qemu_options+=(size:--disable-vnc-jpeg)
-	if ! gt_eq "${qemu_version}" "7.2.0" ; then
+	if ! gt_eq "${qemu_version}" "7.1.0" ; then
 		qemu_options+=(size:--disable-vnc-png)
 	fi
 	qemu_options+=(size:--disable-vnc-sasl)
@@ -358,7 +358,7 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-vde)
 
 	# Don't build other options which can't be depent on build server.
-	if ! gt_eq "${qemu_version}" "7.2.0" ; then
+	if ! gt_eq "${qemu_version}" "7.1.0" ; then
 		qemu_options+=(size:--disable-xfsctl)
 		qemu_options+=(size:--disable-libxml2)
 	fi
