@@ -4,6 +4,7 @@
 use std::io::{self, Read, Seek, SeekFrom};
 use std::ops::Deref;
 use std::os::unix::io::RawFd;
+
 use std::sync::{Arc, Mutex, RwLock};
 
 use dbs_address_space::AddressSpace;
@@ -22,6 +23,8 @@ use vmm_sys_util::eventfd::EventFd;
 
 #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
 use dbs_upcall::{DevMgrService, UpcallClient};
+#[cfg(feature = "hotplug")]
+use std::sync::mpsc::Sender;
 
 use crate::address_space_manager::{
     AddressManagerError, AddressSpaceMgr, AddressSpaceMgrBuilder, GuestAddressSpaceImpl,
@@ -35,6 +38,8 @@ use crate::event_manager::EventManager;
 use crate::kvm_context::KvmContext;
 use crate::resource_manager::ResourceManager;
 use crate::vcpu::{VcpuManager, VcpuManagerError};
+#[cfg(feature = "hotplug")]
+use crate::vcpu::{VcpuResizeError, VcpuResizeInfo};
 #[cfg(target_arch = "aarch64")]
 use dbs_arch::gic::Error as GICError;
 
@@ -795,7 +800,30 @@ impl Vm {
         } else if self.is_upcall_client_ready() {
             Ok(DeviceOpContext::create_hotplug_ctx(self, epoll_mgr))
         } else {
-            Err(StartMicroVmError::UpcallNotReady)
+            Err(StartMicroVmError::UpcallServerNotReady)
+        }
+    }
+
+    /// Resize MicroVM vCPU number
+    #[cfg(feature = "hotplug")]
+    pub fn resize_vcpu(
+        &mut self,
+        config: VcpuResizeInfo,
+        sync_tx: Option<Sender<bool>>,
+    ) -> std::result::Result<(), VcpuResizeError> {
+        if self.upcall_client().is_none() {
+            Err(VcpuResizeError::UpcallClientMissing)
+        } else if self.is_upcall_client_ready() {
+            if let Some(vcpu_count) = config.vcpu_count {
+                self.vcpu_manager()
+                    .map_err(VcpuResizeError::Vcpu)?
+                    .resize_vcpu(vcpu_count, sync_tx)?;
+
+                self.vm_config.vcpu_count = vcpu_count;
+            }
+            Ok(())
+        } else {
+            Err(VcpuResizeError::UpcallServerNotReady)
         }
     }
 

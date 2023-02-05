@@ -314,7 +314,7 @@ impl VmmInstance {
                         return Ok(vmm_data);
                     }
                     Err(vmm_action_error) => {
-                        if let VmmActionError::UpcallNotReady = vmm_action_error {
+                        if let VmmActionError::UpcallServerNotReady = vmm_action_error {
                             std::thread::sleep(std::time::Duration::from_millis(10));
                             continue;
                         } else {
