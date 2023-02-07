@@ -825,7 +825,14 @@ impl Vm {
 
 #[cfg(test)]
 pub mod tests {
+    use kvm_ioctls::VcpuExit;
+    use linux_loader::cmdline::Cmdline;
+    use test_utils::skip_if_not_root;
+    use vm_memory::GuestMemory;
+    use vmm_sys_util::tempfile::TempFile;
+
     use super::*;
+    use crate::test_utils::tests::create_vm_for_test;
 
     impl Vm {
         pub fn set_instance_state(&mut self, mstate: InstanceState) {
@@ -840,5 +847,205 @@ pub mod tests {
         let instance_info = Arc::new(RwLock::new(InstanceInfo::default()));
         let epoll_manager = EpollManager::default();
         Vm::new(None, instance_info, epoll_manager).unwrap()
+    }
+
+    #[test]
+    fn test_create_vm_instance() {
+        skip_if_not_root!();
+        let vm = create_vm_instance();
+        assert!(vm.check_health().is_err());
+        assert!(vm.kernel_config.is_none());
+        assert!(vm.get_reset_eventfd().is_none());
+        assert!(!vm.is_vm_initialized());
+        assert!(!vm.is_vm_running());
+        assert!(vm.reset_console().is_ok());
+    }
+
+    #[test]
+    fn test_vm_init_guest_memory() {
+        skip_if_not_root!();
+        let vm_config = VmConfigInfo {
+            vcpu_count: 1,
+            max_vcpu_count: 3,
+            cpu_pm: "off".to_string(),
+            mem_type: "shmem".to_string(),
+            mem_file_path: "".to_string(),
+            mem_size_mib: 16,
+            serial_path: None,
+            cpu_topology: CpuTopology {
+                threads_per_core: 1,
+                cores_per_die: 1,
+                dies_per_socket: 1,
+                sockets: 1,
+            },
+            vpmu_feature: 0,
+        };
+
+        let mut vm = create_vm_instance();
+        vm.set_vm_config(vm_config);
+        assert!(vm.init_guest_memory().is_ok());
+        let vm_memory = vm.address_space.vm_memory().unwrap();
+
+        assert_eq!(vm_memory.num_regions(), 1);
+        assert_eq!(vm_memory.last_addr(), GuestAddress(0xffffff));
+
+        // Reconfigure an already configured vm will be ignored and just return OK.
+        let vm_config = VmConfigInfo {
+            vcpu_count: 1,
+            max_vcpu_count: 3,
+            cpu_pm: "off".to_string(),
+            mem_type: "shmem".to_string(),
+            mem_file_path: "".to_string(),
+            mem_size_mib: 16,
+            serial_path: None,
+            cpu_topology: CpuTopology {
+                threads_per_core: 1,
+                cores_per_die: 1,
+                dies_per_socket: 1,
+                sockets: 1,
+            },
+            vpmu_feature: 0,
+        };
+        vm.set_vm_config(vm_config);
+        assert!(vm.init_guest_memory().is_ok());
+        let vm_memory = vm.address_space.vm_memory().unwrap();
+        assert_eq!(vm_memory.num_regions(), 1);
+        assert_eq!(vm_memory.last_addr(), GuestAddress(0xffffff));
+
+        let obj_addr = GuestAddress(0xf0);
+        vm_memory.write_obj(67u8, obj_addr).unwrap();
+        let read_val: u8 = vm_memory.read_obj(obj_addr).unwrap();
+        assert_eq!(read_val, 67u8);
+    }
+
+    #[test]
+    fn test_vm_create_devices() {
+        skip_if_not_root!();
+        let epoll_mgr = EpollManager::default();
+        let vmm = Arc::new(Mutex::new(crate::vmm::tests::create_vmm_instance(
+            epoll_mgr.clone(),
+        )));
+
+        let mut guard = vmm.lock().unwrap();
+        let vm = guard.get_vm_mut().unwrap();
+
+        let vm_config = VmConfigInfo {
+            vcpu_count: 1,
+            max_vcpu_count: 3,
+            cpu_pm: "off".to_string(),
+            mem_type: "shmem".to_string(),
+            mem_file_path: "".to_string(),
+            mem_size_mib: 16,
+            serial_path: None,
+            cpu_topology: CpuTopology {
+                threads_per_core: 1,
+                cores_per_die: 1,
+                dies_per_socket: 1,
+                sockets: 1,
+            },
+            vpmu_feature: 0,
+        };
+
+        vm.set_vm_config(vm_config);
+        assert!(vm.init_guest_memory().is_ok());
+        assert!(vm.setup_interrupt_controller().is_ok());
+
+        let vm_memory = vm.address_space.vm_memory().unwrap();
+        assert_eq!(vm_memory.num_regions(), 1);
+        assert_eq!(vm_memory.last_addr(), GuestAddress(0xffffff));
+
+        let kernel_file = TempFile::new().unwrap();
+        let cmd_line = Cmdline::new(64);
+
+        vm.set_kernel_config(KernelConfigInfo::new(
+            kernel_file.into_file(),
+            None,
+            cmd_line,
+        ));
+
+        vm.init_devices(epoll_mgr).unwrap();
+    }
+
+    #[test]
+    fn test_vm_delete_devices() {
+        skip_if_not_root!();
+        let mut vm = create_vm_for_test();
+        let epoll_mgr = EpollManager::default();
+
+        vm.setup_interrupt_controller().unwrap();
+        vm.init_devices(epoll_mgr).unwrap();
+        assert!(vm.remove_devices().is_ok());
+    }
+
+    #[test]
+    fn test_run_code() {
+        skip_if_not_root!();
+
+        use std::io::{self, Write};
+        // This example is based on https://lwn.net/Articles/658511/
+        let code = [
+            0xba, 0xf8, 0x03, /* mov $0x3f8, %dx */
+            0x00, 0xd8, /* add %bl, %al */
+            0x04, b'0', /* add $'0', %al */
+            0xee, /* out %al, (%dx) */
+            0xb0, b'\n', /* mov $'\n', %al */
+            0xee,  /* out %al, (%dx) */
+            0xf4,  /* hlt */
+        ];
+        let load_addr = GuestAddress(0x1000);
+        let instance_info = Arc::new(RwLock::new(InstanceInfo::default()));
+        let epoll_manager = EpollManager::default();
+        let mut vm = Vm::new(None, instance_info, epoll_manager).unwrap();
+
+        let vcpu_count = 1;
+        let vm_config = VmConfigInfo {
+            vcpu_count,
+            max_vcpu_count: 1,
+            cpu_pm: "off".to_string(),
+            mem_type: "shmem".to_string(),
+            mem_file_path: "".to_string(),
+            mem_size_mib: 10,
+            serial_path: None,
+            cpu_topology: CpuTopology {
+                threads_per_core: 1,
+                cores_per_die: 1,
+                dies_per_socket: 1,
+                sockets: 1,
+            },
+            vpmu_feature: 0,
+        };
+
+        vm.set_vm_config(vm_config);
+        vm.init_guest_memory().unwrap();
+
+        let vm_memory = vm.address_space.vm_memory().unwrap();
+        vm_memory.write_obj(code, load_addr).unwrap();
+
+        let vcpu_fd = vm.vm_fd().create_vcpu(0).unwrap();
+        let mut vcpu_sregs = vcpu_fd.get_sregs().unwrap();
+        assert_ne!(vcpu_sregs.cs.base, 0);
+        assert_ne!(vcpu_sregs.cs.selector, 0);
+        vcpu_sregs.cs.base = 0;
+        vcpu_sregs.cs.selector = 0;
+        vcpu_fd.set_sregs(&vcpu_sregs).unwrap();
+
+        let mut vcpu_regs = vcpu_fd.get_regs().unwrap();
+
+        vcpu_regs.rip = 0x1000;
+        vcpu_regs.rax = 2;
+        vcpu_regs.rbx = 3;
+        vcpu_regs.rflags = 2;
+        vcpu_fd.set_regs(&vcpu_regs).unwrap();
+
+        match vcpu_fd.run().expect("run failed") {
+            VcpuExit::IoOut(0x3f8, data) => {
+                assert_eq!(data.len(), 1);
+                io::stdout().write_all(data).unwrap();
+            }
+            VcpuExit::Hlt => {
+                io::stdout().write_all(b"KVM_EXIT_HLT\n").unwrap();
+            }
+            r => panic!("unexpected exit reason: {:?}", r),
+        }
     }
 }
