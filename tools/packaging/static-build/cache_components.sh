@@ -111,9 +111,11 @@ cache_rootfs_artifacts() {
 cache_shim_v2_artifacts() {
 	local shim_v2_tarball_name="kata-static-cc-shim-v2.tar.xz"
 	local shim_v2_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime")"
+	local protocols_last_commit="$(get_last_modification "${repo_root_dir}/src/libs/protocols")"
+	local runtime_rs_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime-rs")"
 	local golang_version="$(get_from_kata_deps "languages.golang.meta.newest-version")"
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
-	local current_shim_v2_version="${shim_v2_last_commit}-${golang_version}-${rust_version}"
+	local current_shim_v2_version="${shim_v2_last_commit}-${protocols_last_commit}-${runtime_rs_last_commit}-${golang_version}-${rust_version}"
 	local current_shim_v2_image="$(get_shim_v2_image_name)"
 	create_cache_asset "${shim_v2_tarball_name}" "${current_shim_v2_version}" "${current_shim_v2_image}" "${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt" "${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt"
 }
