@@ -454,7 +454,6 @@ build_rootfs_distro()
 			--env OS_VERSION="${OS_VERSION}" \
 			--env INSIDE_CONTAINER=1 \
 			--env AA_KBC="${AA_KBC}" \
-			--env KATA_BUILD_CC="${KATA_BUILD_CC}" \
 			--env SECCOMP="${SECCOMP}" \
 			--env SELINUX="${SELINUX}" \
 			--env DEBUG="${DEBUG}" \
