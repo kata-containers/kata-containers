@@ -652,9 +652,6 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "StartVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
-	ctx, cancel := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
-	defer cancel()
-
 	clh.Logger().WithField("function", "StartVM").Info("starting Sandbox")
 
 	vmPath := filepath.Join(clh.config.VMStorePath, clh.id)
@@ -692,6 +689,9 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 		return fmt.Errorf("failed to launch cloud-hypervisor: %q", err)
 	}
 	clh.state.PID = pid
+
+	ctx, cancel := context.WithTimeout(ctx, clh.getClhAPITimeout()*time.Second)
+	defer cancel()
 
 	if err := clh.bootVM(ctx); err != nil {
 		return err
