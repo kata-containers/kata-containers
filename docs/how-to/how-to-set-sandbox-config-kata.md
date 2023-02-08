@@ -83,7 +83,7 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.msize_9p` | uint32 | the `msize` for 9p shares |
 | `io.katacontainers.config.hypervisor.path` | string | the hypervisor that will run the container VM |
 | `io.katacontainers.config.hypervisor.pcie_root_port` | specify the number of PCIe Root Port devices. The PCIe Root Port device is used to hot-plug a PCIe device (QEMU) |
-| `io.katacontainers.config.hypervisor.shared_fs` | string | the shared file system type, either `virtio-9p` or `virtio-fs` |
+| `io.katacontainers.config.hypervisor.shared_fs` | string | the shared file system type, either `virtio-9p`, `virtio-fs` or `virtio-fs-nydus` |
 | `io.katacontainers.config.hypervisor.use_vsock` | `boolean` | specify use of `vsock` for agent communication |
 | `io.katacontainers.config.hypervisor.vhost_user_store_path` (R) | `string` | specify the directory path where vhost-user devices related folders, sockets and device nodes should be (QEMU) |
 | `io.katacontainers.config.hypervisor.virtio_fs_cache_size` | uint32 | virtio-fs DAX cache size in `MiB` |

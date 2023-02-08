@@ -14,3 +14,4 @@ build-experimental:
 
 clean:
 	rm -f kata-qemu-static.tar.gz
+	rm -f kata-static-qemu-experimental.tar.gz
