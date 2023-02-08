@@ -64,8 +64,7 @@ typeset ROOTFS_DIR
 typeset init=
 
 #$1: Error code if want to exit different to 0
-usage()
-{
+usage() {
 	error="${1:-0}"
 	cat <<EOF
 
@@ -161,7 +160,7 @@ architectures:
 https://github.com/kata-containers/kata-containers/tree/main/tools/osbuilder#platform-distro-compatibility-matrix
 
 EOF
-exit "${error}"
+	exit "${error}"
 }
 
 get_distros() {
@@ -182,14 +181,12 @@ get_test_config() {
 	echo -e "ARCH_EXCLUDE_LIST:\t\t${ARCH_EXCLUDE_LIST[@]}"
 }
 
-check_function_exist()
-{
+check_function_exist() {
 	function_name="$1"
 	[ "$(type -t ${function_name})" == "function" ] || die "${function_name} function was not defined"
 }
 
-docker_extra_args()
-{
+docker_extra_args() {
 	local args=""
 
 	# Required to mount inside a container
@@ -207,13 +204,13 @@ docker_extra_args()
 		args+=" -v ${gentoo_local_portage_dir}:/usr/portage/packages"
 		args+=" --volumes-from ${gentoo_portage_container}"
 		;;
-        debian | ubuntu | suse)
+	debian | ubuntu | suse)
 		source /etc/os-release
 
 		case "$ID" in
-                fedora | centos | rhel)
+		fedora | centos | rhel)
 			# Depending on the podman version, we'll face issues when passing
-		        # `--security-opt apparmor=unconfined` on a system where not apparmor is not installed.
+			# `--security-opt apparmor=unconfined` on a system where not apparmor is not installed.
 			# Because of this, let's just avoid adding this option when the host OS comes from Red Hat.
 
 			# A explict check for podman, at least for now, can be avoided.
@@ -225,15 +222,14 @@ docker_extra_args()
 			;;
 		esac
 		;;
-	*)
-		;;
+	*) ;;
+
 	esac
 
 	echo "$args"
 }
 
-setup_agent_init()
-{
+setup_agent_init() {
 	agent_bin="$1"
 	init_bin="$2"
 
@@ -245,8 +241,7 @@ setup_agent_init()
 	OK "Agent is installed as init process"
 }
 
-copy_kernel_modules()
-{
+copy_kernel_modules() {
 	local module_dir="$1"
 	local rootfs_dir="$2"
 
@@ -261,8 +256,7 @@ copy_kernel_modules()
 	OK "Kernel modules copied"
 }
 
-error_handler()
-{
+error_handler() {
 	[ "$?" -eq 0 ] && return
 
 	if [ -n "$GRACEFUL_EXIT" ] && [ -n "$BUILD_CAN_FAIL" ]; then
@@ -277,28 +271,32 @@ error_handler()
 # Returns a zero exit code if the version specified by the first argument is
 # older OR equal than / to the version in the second argument, non-zero exit
 # code otherwise.
-compare_versions()
-{
+compare_versions() {
 	typeset -i -a v1=($(echo "$1" | awk 'BEGIN {FS = "."} {print $1" "$2}'))
 	typeset -i -a v2=($(echo "$2" | awk 'BEGIN {FS = "."} {print $1" "$2}'))
 
 	# Sanity check: first version can't be all zero
-	[ "${v1[0]}" -eq "0" ] && \
-		[ "${v1[1]}" -eq "0" ] && \
+	[ "${v1[0]}" -eq "0" ] &&
+		[ "${v1[1]}" -eq "0" ] &&
 		die "Failed to parse version number"
 
 	# Major
-	[ "${v1[0]}" -gt "${v2[0]}" ] && { false; return; }
+	[ "${v1[0]}" -gt "${v2[0]}" ] && {
+		false
+		return
+	}
 
 	# Minor
-	[ "${v1[0]}" -eq "${v2[0]}" ] && \
-		[ "${v1[1]}" -gt "${v2[1]}" ] && { false; return; }
+	[ "${v1[0]}" -eq "${v2[0]}" ] &&
+		[ "${v1[1]}" -gt "${v2[1]}" ] && {
+		false
+		return
+	}
 
 	true
 }
 
-check_env_variables()
-{
+check_env_variables() {
 	# this will be mounted to container for using yq on the host side.
 	GOPATH_LOCAL="${GOPATH%%:*}"
 
@@ -310,8 +308,7 @@ check_env_variables()
 }
 
 # Builds a rootfs based on the distro name provided as argument
-build_rootfs_distro()
-{
+build_rootfs_distro() {
 	repo_dir="${script_dir}/../../../"
 	[ -n "${distro}" ] || usage 1
 	distro_config_dir="${script_dir}/${distro}"
@@ -323,10 +320,10 @@ build_rootfs_distro()
 	source "${rootfs_config}"
 
 	if [ -z "$ROOTFS_DIR" ]; then
-		 ROOTFS_DIR="${script_dir}/rootfs-${OS_NAME}"
+		ROOTFS_DIR="${script_dir}/rootfs-${OS_NAME}"
 	fi
 
-	if [ -e "${distro_config_dir}/${LIB_SH}" ];then
+	if [ -e "${distro_config_dir}/${LIB_SH}" ]; then
 		rootfs_lib="${distro_config_dir}/${LIB_SH}"
 		info "rootfs_lib.sh file found. Loading content"
 		source "${rootfs_lib}"
@@ -335,7 +332,7 @@ build_rootfs_distro()
 	CONFIG_DIR=${distro_config_dir}
 	check_function_exist "build_rootfs"
 
-	if [ -z "$INSIDE_CONTAINER" ] ; then
+	if [ -z "$INSIDE_CONTAINER" ]; then
 		# Capture errors, but only outside of the docker container
 		trap error_handler ERR
 	fi
@@ -371,6 +368,8 @@ build_rootfs_distro()
 		elif [ -n "${USE_PODMAN}" ]; then
 			container_engine="podman"
 			engine_build_args+=" --runtime ${DOCKER_RUNTIME}"
+		elif [ -n "${USE_NERDCTL}" ]; then
+			container_engine="nerdctl"
 		fi
 
 		image_name="${distro}-rootfs-osbuilder"
@@ -381,7 +380,7 @@ build_rootfs_distro()
 
 		# setup to install rust here
 		generate_dockerfile "${distro_config_dir}"
-		"$container_engine" build  \
+		"$container_engine" build \
 			${engine_build_args} \
 			--build-arg http_proxy="${http_proxy}" \
 			--build-arg https_proxy="${https_proxy}" \
@@ -396,7 +395,7 @@ build_rootfs_distro()
 		engine_run_args+=" --ulimit nofile=262144:262144"
 		engine_run_args+=" --runtime ${DOCKER_RUNTIME}"
 
-		if [ -z "${AGENT_SOURCE_BIN}" ] ; then
+		if [ -z "${AGENT_SOURCE_BIN}" ]; then
 			engine_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
 		else
 			engine_run_args+=" --env AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN}"
@@ -407,14 +406,14 @@ build_rootfs_distro()
 		engine_run_args+=" $(docker_extra_args $distro)"
 
 		# Relabel volumes so SELinux allows access (see docker-run(1))
-		if command -v selinuxenabled > /dev/null && selinuxenabled ; then
+		if command -v selinuxenabled >/dev/null && selinuxenabled; then
 			SRC_VOL=("${GOPATH_LOCAL}")
 
 			for volume_dir in "${script_dir}" \
-					  "${ROOTFS_DIR}" \
-					  "${script_dir}/../scripts" \
-					  "${kernel_mod_dir}" \
-					  "${SRC_VOL[@]}"; do
+				"${ROOTFS_DIR}" \
+				"${script_dir}/../scripts" \
+				"${kernel_mod_dir}" \
+				"${SRC_VOL[@]}"; do
 				chcon -Rt svirt_sandbox_file_t "$volume_dir"
 			done
 		fi
@@ -425,7 +424,7 @@ build_rootfs_distro()
 		#Make sure we use a compatible runtime to build rootfs
 		# In case Clear Containers Runtime is installed we dont want to hit issue:
 		#https://github.com/clearcontainers/runtime/issues/828
-		"$container_engine" run  \
+		"$container_engine" run \
 			--env https_proxy="${https_proxy}" \
 			--env http_proxy="${http_proxy}" \
 			--env AGENT_VERSION="${AGENT_VERSION}" \
@@ -458,9 +457,8 @@ build_rootfs_distro()
 
 # Used to create a minimal directory tree where the agent can be installed.
 # This is used when a distro is not specified.
-prepare_overlay()
-{
-	pushd "${ROOTFS_DIR}" > /dev/null
+prepare_overlay() {
+	pushd "${ROOTFS_DIR}" >/dev/null
 	mkdir -p ./etc ./lib/systemd ./sbin ./var
 
 	# This symlink hacking is mostly to make later rootfs
@@ -468,36 +466,35 @@ prepare_overlay()
 	# We skip this if /sbin/init exists in the rootfs, meaning
 	# we were passed a pre-populated rootfs directory
 	if [ ! -e ./sbin/init ]; then
-		ln -sf  ./usr/lib/systemd/systemd ./init
-		ln -sf  /init ./sbin/init
+		ln -sf ./usr/lib/systemd/systemd ./init
+		ln -sf /init ./sbin/init
 	fi
 
 	# Kata systemd unit file
 	mkdir -p ./etc/systemd/system/basic.target.wants/
 	ln -sf /usr/lib/systemd/system/kata-containers.target ./etc/systemd/system/basic.target.wants/kata-containers.target
-	popd  > /dev/null
+	popd >/dev/null
 }
 
 # Setup an existing rootfs directory, based on the OPTIONAL distro name
 # provided as argument
-setup_rootfs()
-{
+setup_rootfs() {
 	info "Create symlink to /tmp in /var to create private temporal directories with systemd"
-	pushd "${ROOTFS_DIR}" >> /dev/null
-	if [ "$PWD" != "/" ] ; then
+	pushd "${ROOTFS_DIR}" >>/dev/null
+	if [ "$PWD" != "/" ]; then
 		rm -rf ./var/cache/ ./var/lib ./var/log ./var/tmp
 	fi
 
 	ln -s ../tmp ./var/
 
 	# For some distros tmp.mount may not be installed by default in systemd paths
-	if ! [ -f "./etc/systemd/system/tmp.mount" ] && \
+	if ! [ -f "./etc/systemd/system/tmp.mount" ] &&
 		! [ -f "./usr/lib/systemd/system/tmp.mount" ] &&
 		[ "$AGENT_INIT" != "yes" ]; then
 		local unitFile="./etc/systemd/system/tmp.mount"
 		info "Install tmp.mount in ./etc/systemd/system"
-		mkdir -p `dirname "$unitFile"`
-		cp ./usr/share/systemd/tmp.mount "$unitFile" || cat > "$unitFile" << EOF
+		mkdir -p $(dirname "$unitFile")
+		cp ./usr/share/systemd/tmp.mount "$unitFile" || cat >"$unitFile" <<EOF
 #  This file is part of systemd.
 #
 #  systemd is free software; you can redistribute it and/or modify it
@@ -523,7 +520,7 @@ Options=mode=1777,strictatime,nosuid,nodev
 EOF
 	fi
 
-	popd  >> /dev/null
+	popd >>/dev/null
 
 	[ -n "${KERNEL_MODULES_DIR}" ] && copy_kernel_modules ${KERNEL_MODULES_DIR} ${ROOTFS_DIR}
 
@@ -531,24 +528,24 @@ EOF
 	mkdir -p "${ROOTFS_DIR}/etc"
 
 	case "${distro}" in
-		"ubuntu" | "debian")
-			echo "I am ubuntu or debian"
-			chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
-			chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chrony.service"
-			;;
-		"ubuntu")
-			# Fix for #4932 - Boot hang at: "A start job is running for /dev/ttyS0"
-			mkdir -p "${ROOTFS_DIR}/etc/systemd/system/getty.target.wants"
-			ln -sf "/lib/systemd/system/getty@.service" "${ROOTFS_DIR}/etc/systemd/system/getty.target.wants/getty@ttyS0.service"
-			;;
-		*)
-			chrony_conf_file="${ROOTFS_DIR}/etc/chrony.conf"
-			chrony_systemd_service="${ROOTFS_DIR}/usr/lib/systemd/system/chronyd.service"
-			;;
+	"ubuntu" | "debian")
+		echo "I am ubuntu or debian"
+		chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
+		chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chrony.service"
+		;;
+	"ubuntu")
+		# Fix for #4932 - Boot hang at: "A start job is running for /dev/ttyS0"
+		mkdir -p "${ROOTFS_DIR}/etc/systemd/system/getty.target.wants"
+		ln -sf "/lib/systemd/system/getty@.service" "${ROOTFS_DIR}/etc/systemd/system/getty.target.wants/getty@ttyS0.service"
+		;;
+	*)
+		chrony_conf_file="${ROOTFS_DIR}/etc/chrony.conf"
+		chrony_systemd_service="${ROOTFS_DIR}/usr/lib/systemd/system/chronyd.service"
+		;;
 	esac
 
 	info "Configure chrony file ${chrony_conf_file}"
-	cat >> "${chrony_conf_file}" <<EOF
+	cat >>"${chrony_conf_file}" <<EOF
 refclock PHC /dev/ptp0 poll 3 dpoll -2 offset 0
 # Step the system clock instead of slewing it if the adjustment is larger than
 # one second, at any time
@@ -557,7 +554,7 @@ EOF
 
 	# Comment out ntp sources for chrony to be extra careful
 	# Reference:  https://chrony.tuxfamily.org/doc/3.4/chrony.conf.html
-	sed -i 's/^\(server \|pool \|peer \)/# &/g'  ${chrony_conf_file}
+	sed -i 's/^\(server \|pool \|peer \)/# &/g' ${chrony_conf_file}
 
 	if [ -f "$chrony_systemd_service" ]; then
 		# Remove user option, user could not exist in the rootfs
@@ -565,20 +562,20 @@ EOF
 		# its nonexistent, this broke the service on boot previously
 		# due to the directory not being present "(code=exited, status=226/NAMESPACE)"
 		sed -i -e 's/^\(ExecStart=.*\)-u [[:alnum:]]*/\1/g' \
-		       -e '/^\[Unit\]/a ConditionPathExists=\/dev\/ptp0' \
-		       -e 's/^ReadWritePaths=\(.\+\) \/var\/lib\/chrony \(.\+\)$/ReadWritePaths=\1 -\/var\/lib\/chrony \2/m' \
-		       ${chrony_systemd_service}
+			-e '/^\[Unit\]/a ConditionPathExists=\/dev\/ptp0' \
+			-e 's/^ReadWritePaths=\(.\+\) \/var\/lib\/chrony \(.\+\)$/ReadWritePaths=\1 -\/var\/lib\/chrony \2/m' \
+			${chrony_systemd_service}
 	fi
 
 	AGENT_DIR="${ROOTFS_DIR}/usr/bin"
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
-	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
+	if [ -z "${AGENT_SOURCE_BIN}" ]; then
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
-		if ! (rustup show | grep -v linux-${LIBC} > /dev/null); then
+		if ! (rustup show | grep -v linux-${LIBC} >/dev/null); then
 			if [ "$RUST_VERSION" == "null" ]; then
-				detect_rust_version || \
+				detect_rust_version ||
 					die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-main}'."
 			fi
 			bash ${script_dir}/../../../ci/install_rust.sh ${RUST_VERSION}
@@ -589,7 +586,7 @@ EOF
 
 		if [ "${SECCOMP}" == "yes" ]; then
 			info "Set up libseccomp"
-			detect_libseccomp_info || \
+			detect_libseccomp_info ||
 				die "Could not detect the required libseccomp version and url"
 			export libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
 			export gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
@@ -645,20 +642,18 @@ EOF
 	create_summary_file "${ROOTFS_DIR}"
 }
 
-parse_arguments()
-{
+parse_arguments() {
 	[ "$#" -eq 0 ] && usage && return 0
 
-	while getopts a:hlo:r:t: opt
-	do
+	while getopts a:hlo:r:t: opt; do
 		case $opt in
-			a)	AGENT_VERSION="${OPTARG}" ;;
-			h)	usage ;;
-			l)	get_distros | sort && exit 0;;
-			o)	OSBUILDER_VERSION="${OPTARG}" ;;
-			r)	ROOTFS_DIR="${OPTARG}" ;;
-			t)	get_test_config "${OPTARG}" && exit 0;;
-			*)  die "Found an invalid option";;
+		a) AGENT_VERSION="${OPTARG}" ;;
+		h) usage ;;
+		l) get_distros | sort && exit 0 ;;
+		o) OSBUILDER_VERSION="${OPTARG}" ;;
+		r) ROOTFS_DIR="${OPTARG}" ;;
+		t) get_test_config "${OPTARG}" && exit 0 ;;
+		*) die "Found an invalid option" ;;
 		esac
 	done
 
@@ -667,25 +662,23 @@ parse_arguments()
 	arch=$(uname -m)
 }
 
-detect_host_distro()
-{
+detect_host_distro() {
 	source /etc/os-release
 
 	case "$ID" in
-		"*suse*")
-			distro="suse"
-			;;
-		"clear-linux-os")
-			distro="clearlinux"
-			;;
-		*)
-			distro="$ID"
-			;;
+	"*suse*")
+		distro="suse"
+		;;
+	"clear-linux-os")
+		distro="clearlinux"
+		;;
+	*)
+		distro="$ID"
+		;;
 	esac
 }
 
-main()
-{
+main() {
 	parse_arguments $*
 	check_env_variables
 
