@@ -640,6 +640,13 @@ EOF
 		# Setup systemd service for kata-agent
 		mkdir -p "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants"
 		ln -sf "/usr/lib/systemd/system/kata-containers.target" "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants/kata-containers.target"
+
+		# TODO: clean-up OPA installation
+		cp /usr/bin/opa "${ROOTFS_DIR}/usr/bin"
+		chmod 755 "${ROOTFS_DIR}/usr/bin/opa"
+		cp ./coco-opa.service "${ROOTFS_DIR}/usr/lib/systemd/system"
+		cp ./coco-policy.rego "${ROOTFS_DIR}"
+		chmod 644 "${ROOTFS_DIR}/coco-policy.rego"
 	fi
 
 	info "Check init is installed"

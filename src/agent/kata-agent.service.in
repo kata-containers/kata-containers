@@ -9,6 +9,11 @@ Description=Kata Containers Agent
 Documentation=https://github.com/kata-containers/kata-containers
 Wants=kata-containers.target
 
+# TODO: clean-up OPA installation
+Requires=coco-opa.service
+After=coco-opa.service
+BindsTo=coco-opa.service
+
 [Service]
 # Send agent output to tty to allow capture debug logs
 # from a VM vsock port

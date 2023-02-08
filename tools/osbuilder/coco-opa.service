@@ -1,0 +1,9 @@
+[Unit]
+Description=OPA for Confidential Containers
+Documentation=https://github.com/confidential-containers
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/opa run -s --log-level debug /coco-policy.rego
+DynamicUser=yes
+RuntimeDirectory=coco-opa
