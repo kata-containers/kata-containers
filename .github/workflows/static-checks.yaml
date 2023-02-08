@@ -27,7 +27,6 @@ jobs:
       target_branch: ${{ github.base_ref }}
     steps:
     - name: Checkout code
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       uses: actions/checkout@v3
       with:
         fetch-depth: 0
@@ -38,6 +37,22 @@ jobs:
         go-version: 1.19.3
       env:
         GOPATH: ${{ runner.workspace }}/kata-containers
+    - name: Check kernel config version
+      run: |
+        cd "${{ github.workspace }}/src/github.com/${{ github.repository }}"
+        kernel_dir="tools/packaging/kernel/"
+        kernel_version_file="${kernel_dir}kata_config_version"
+        modified_files=$(git diff --name-only origin/main..HEAD)
+        result=$(git whatchanged origin/main..HEAD "${kernel_dir}" >>"/dev/null")
+        if git whatchanged origin/main..HEAD "${kernel_dir}" >>"/dev/null"; then
+          echo "Kernel directory has changed, checking if $kernel_version_file has been updated"
+          if echo "$modified_files" | grep -v "README.md" | grep "${kernel_dir}" >>"/dev/null"; then
+            echo "$modified_files" | grep "$kernel_version_file" >>/dev/null || ( echo "Please bump version in $kernel_version_file" && exit 1)
+          else
+            echo "Readme file changed, no need for kernel config version update."
+          fi
+          echo "Check passed"
+        fi
     - name: Setup GOPATH
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
