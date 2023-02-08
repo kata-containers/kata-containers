@@ -305,7 +305,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("vhost-vsock");
         let path = file_path.clone();
-        let _dir = fs::create_dir(file_path).unwrap();
+        fs::create_dir(file_path).unwrap();
         let res = supports_vsocks(path.to_str().unwrap()).unwrap();
         assert!(!res);
     }
