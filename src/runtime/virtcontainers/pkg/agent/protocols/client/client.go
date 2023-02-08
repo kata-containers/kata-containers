@@ -53,6 +53,7 @@ var agentClientLog = logrus.WithFields(agentClientFields)
 type AgentClient struct {
 	AgentServiceClient agentgrpc.AgentServiceService
 	HealthClient       agentgrpc.HealthService
+	PortForwardClient  agentgrpc.PortForwardServiceService
 	conn               *ttrpc.Client
 }
 
@@ -90,6 +91,7 @@ func NewAgentClient(ctx context.Context, sock string, timeout uint32) (*AgentCli
 	return &AgentClient{
 		AgentServiceClient: agentgrpc.NewAgentServiceClient(client),
 		HealthClient:       agentgrpc.NewHealthClient(client),
+		PortForwardClient:  agentgrpc.NewPortForwardServiceClient(client),
 		conn:               client,
 	}, nil
 }

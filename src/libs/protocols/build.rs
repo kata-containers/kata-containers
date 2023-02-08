@@ -103,9 +103,10 @@ fn codegen(path: &str, protos: &[&str], async_all: bool) -> Result<(), std::io::
         ..Default::default()
     };
 
+    // let protobuf_options = ProtobufCustomize::default().gen_mod_rs(false);
     let protobuf_options = ProtobufCustomize {
-        serde_derive: Some(true),
-        ..Default::default()
+	serde_derive: Some(true),
+	..Default::default()
     };
 
     let out_dir = Path::new("src");
@@ -157,10 +158,16 @@ fn real_main() -> Result<(), std::io::Error> {
     // generate async
     #[cfg(feature = "async")]
     {
-        codegen("src", &["protos/agent.proto", "protos/health.proto"], true)?;
+	// note that portforward is only supported async
+        codegen("src", &[
+	    "protos/agent.proto",
+	    "protos/health.proto",
+	    "protos/portforward.proto",
+	], true)?;
 
         fs::rename("src/agent_ttrpc.rs", "src/agent_ttrpc_async.rs")?;
         fs::rename("src/health_ttrpc.rs", "src/health_ttrpc_async.rs")?;
+        fs::rename("src/portforward_ttrpc.rs", "src/portforward_ttrpc_async.rs")?;
     }
 
     codegen("src", &["protos/agent.proto", "protos/health.proto"], false)?;

@@ -19,4 +19,4 @@ serde_json = { version = "1.0.68", optional = true }
 oci = { path = "../oci" }
 
 [build-dependencies]
-ttrpc-codegen = "0.2.0"
+ttrpc-codegen = "0.3.0"

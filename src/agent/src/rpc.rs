@@ -6,10 +6,13 @@
 use async_trait::async_trait;
 use rustjail::{pipestream::PipeStream, process::StreamType};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
+use tokio::net::TcpStream;
 use tokio::sync::Mutex;
+use tokio_vsock::VsockStream;
 
 use std::ffi::CString;
 use std::io;
+use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use ttrpc::{
@@ -33,8 +36,11 @@ use protocols::empty::Empty;
 use protocols::health::{
     HealthCheckResponse, HealthCheckResponse_ServingStatus, VersionCheckResponse,
 };
+use protocols::portforward;
+use protocols::portforward_ttrpc_async as portforward_ttrpc;
 use protocols::types::Interface;
 use protocols::{agent_ttrpc_async as agent_ttrpc, health_ttrpc_async as health_ttrpc};
+
 use rustjail::cgroups::notifier;
 use rustjail::container::{BaseContainer, Container, LinuxContainer};
 use rustjail::process::Process;
@@ -1531,6 +1537,65 @@ impl agent_ttrpc::AgentService for AgentService {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct PortForwardService {}
+
+#[async_trait]
+impl portforward_ttrpc::PortForwardService for PortForwardService {
+    async fn port_forward(
+        &self,
+        _ctx: &TtrpcContext,
+        req: portforward::PortForwardRequest,
+    ) -> ttrpc::Result<Empty> {
+        let cid = req.container_id.clone();
+        let port = req.port.clone();
+        let vsock_port = req.vsock_port.clone();
+
+        let addr = match format!("127.0.0.1:{}", port).parse::<SocketAddr>() {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(ttrpc_error!(ttrpc::Code::INTERNAL, e));
+            }
+        };
+        let mut container_stream = TcpStream::connect(&addr).await.map_err(|e| {
+            ttrpc_error!(
+                ttrpc::Code::INTERNAL,
+                format!("connect container_port failed {}", e)
+            )
+        })?;
+
+        let mut host_stream = VsockStream::connect(libc::VMADDR_CID_HOST, vsock_port)
+            .await
+            .map_err(|e| {
+                ttrpc_error!(
+                    ttrpc::Code::INTERNAL,
+                    format!("connect vsock_port failed {}", e)
+                )
+            })?;
+        tokio::spawn(async move {
+            match tokio::io::copy_bidirectional(&mut host_stream, &mut container_stream).await {
+                Ok(_) => {
+                    debug!(
+                        sl!(),
+                        "port forward complete";
+                        "container-id" => cid.clone(),
+                        "port" => port.clone(),
+                        "vsock-port" => vsock_port.clone(),
+                    );
+                }
+                Err(e) => {
+                    error!(
+                        sl!(),
+                        "failed to copy_bidirectional between host<>container, error: {:?}", e
+                    );
+                }
+            };
+        });
+
+        Ok(Empty::new())
+    }
+}
+
 #[derive(Clone)]
 struct HealthService;
 
@@ -1674,22 +1739,27 @@ async fn read_stream(reader: Arc<Mutex<ReadHalf<PipeStream>>>, l: usize) -> Resu
 }
 
 pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> Result<TtrpcServer> {
-    let agent_service =
-        Box::new(AgentService { sandbox: s }) as Box<dyn agent_ttrpc::AgentService + Send + Sync>;
+    let agent_service = Box::new(AgentService { sandbox: s.clone() })
+        as Box<dyn agent_ttrpc::AgentService + Send + Sync>;
 
     let agent_worker = Arc::new(agent_service);
 
     let health_service = Box::new(HealthService {}) as Box<dyn health_ttrpc::Health + Send + Sync>;
     let health_worker = Arc::new(health_service);
 
-    let aservice = agent_ttrpc::create_agent_service(agent_worker);
+    let portforward_service = Box::new(PortForwardService {})
+        as Box<dyn portforward_ttrpc::PortForwardService + Send + Sync>;
+    let portforward_worker = Arc::new(portforward_service);
 
+    let aservice = agent_ttrpc::create_agent_service(agent_worker);
     let hservice = health_ttrpc::create_health(health_worker);
+    let pfservice = portforward_ttrpc::create_port_forward_service(portforward_worker);
 
     let server = TtrpcServer::new()
         .bind(server_address)?
         .register_service(aservice)
-        .register_service(hservice);
+        .register_service(hservice)
+        .register_service(pfservice);
 
     info!(sl!(), "ttRPC server started"; "address" => server_address);
 

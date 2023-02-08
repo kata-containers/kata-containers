@@ -10,19 +10,22 @@ import (
 	"fmt"
 	"io"
 	"os"
-	sysexec "os/exec"
 	goruntime "runtime"
 	"sync"
 	"syscall"
 	"time"
 
 	eventstypes "github.com/containerd/containerd/api/events"
+	portForwardAPI "github.com/containerd/containerd/api/shim/portforward/v1"
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/pkg/shutdown"
+	"github.com/containerd/containerd/plugin"
 	cdruntime "github.com/containerd/containerd/runtime"
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
+	"github.com/containerd/ttrpc"
 	"github.com/containerd/typeurl"
 	ptypes "github.com/gogo/protobuf/types"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -39,6 +42,29 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
+
+func init() {
+	plugin.Register(&plugin.Registration{
+		Type: plugin.TTRPCPlugin,
+		ID:   "task",
+		Requires: []plugin.Type{
+			plugin.EventPlugin,
+			plugin.InternalPlugin,
+		},
+		InitFn: func(ic *plugin.InitContext) (interface{}, error) {
+			pp, err := ic.GetByID(plugin.EventPlugin, "publisher")
+			if err != nil {
+				return nil, err
+			}
+			ssInt, err := ic.GetByID(plugin.InternalPlugin, "shutdown")
+			if err != nil {
+				return nil, err
+			}
+			ss := ssInt.(shutdown.Service)
+			return New(ic.Context, pp.(cdshim.Publisher), ss)
+		},
+	})
+}
 
 // shimTracingTags defines tags for the trace span
 var shimTracingTags = map[string]string{
@@ -71,10 +97,9 @@ var shimLog = logrus.WithFields(logrus.Fields{
 })
 
 // New returns a new shim service that can be used via GRPC
-func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown func()) (cdshim.Shim, error) {
+func New(ctx context.Context, publisher cdshim.Publisher, shutdown shutdown.Service) (cdshim.Shim, error) {
 	shimLog = shimLog.WithFields(logrus.Fields{
-		"sandbox": id,
-		"pid":     os.Getpid(),
+		"pid": os.Getpid(),
 	})
 	// Discard the log before shim init its log output. Otherwise
 	// it will output into stdio, from which containerd would like
@@ -93,14 +118,15 @@ func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown fu
 	}
 
 	s := &service{
-		id:         id,
 		pid:        uint32(os.Getpid()),
 		ctx:        ctx,
 		containers: make(map[string]*container),
 		events:     make(chan interface{}, chSize),
 		ec:         make(chan exit, bufferSize),
-		cancel:     shutdown,
-		namespace:  ns,
+		cancel: func() {
+			shutdown.Shutdown()
+		},
+		namespace: ns,
 	}
 
 	go s.processExits()
@@ -155,40 +181,10 @@ type service struct {
 	pid uint32
 }
 
-func newCommand(ctx context.Context, id, containerdBinary, containerdAddress string) (*sysexec.Cmd, error) {
-	ns, err := namespaces.NamespaceRequired(ctx)
-	if err != nil {
-		return nil, err
-	}
-	self, err := os.Executable()
-	if err != nil {
-		return nil, err
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
-	args := []string{
-		"-namespace", ns,
-		"-address", containerdAddress,
-		"-publish-binary", containerdBinary,
-		"-id", id,
-	}
-	opts := ctx.Value(cdshim.OptsKey{}).(cdshim.Opts)
-	if opts.Debug {
-		args = append(args, "-debug")
-	}
-	cmd := sysexec.Command(self, args...)
-	cmd.Dir = cwd
-
-	// Set the go max process to 2 in case the shim forks too much process
-	cmd.Env = append(os.Environ(), "GOMAXPROCS=2")
-
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid: true,
-	}
-
-	return cmd, nil
+func (s *service) RegisterTTRPC(server *ttrpc.Server) error {
+	taskAPI.RegisterTaskService(server, s)
+	portForwardAPI.RegisterPortForwardService(server, s)
+	return nil
 }
 
 // StartShim is a binary call that starts a kata shimv2 service which will
@@ -580,6 +576,14 @@ func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *p
 		ExecID:      r.ExecID,
 	})
 
+	return empty, nil
+}
+
+func (s *service) PortForward(ctx context.Context, req *portForwardAPI.PortForwardRequest) (*ptypes.Empty, error) {
+	err := s.sandbox.PortForward(ctx, req.Addr, req.ID, uint32(req.Port))
+	if err != nil {
+		return nil, errdefs.ToGRPC(err)
+	}
 	return empty, nil
 }
 
@@ -1031,7 +1035,7 @@ func (s *service) Update(ctx context.Context, r *taskAPI.UpdateTaskRequest) (_ *
 	}
 	resources, ok := v.(*specs.LinuxResources)
 	if !ok {
-		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, "Invalid resources type for %s", s.id)
+		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, "Invalid resources type for %s", r.ID)
 	}
 
 	err = s.sandbox.UpdateContainer(spanCtx, r.ID, *resources)

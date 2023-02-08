@@ -76,6 +76,9 @@ type agent interface {
 	// exec will tell the agent to run a command in an already running container.
 	exec(ctx context.Context, sandbox *Sandbox, c Container, cmd types.Cmd) (*Process, error)
 
+	// portForward will tell the agent to run a command in an already running container.
+	portForward(ctx context.Context, containerID string, port uint32, vsockPort uint32) error
+	
 	// startSandbox will tell the agent to start all containers related to the Sandbox.
 	startSandbox(ctx context.Context, sandbox *Sandbox) error
 

@@ -82,6 +82,8 @@ type VCSandbox interface {
 
 	GetIPTables(ctx context.Context, isIPv6 bool) ([]byte, error)
 	SetIPTables(ctx context.Context, isIPv6 bool, data []byte) error
+
+	PortForward(ctx context.Context, hostAddr string, containerID string, port uint32) error
 }
 
 // VCContainer is the Container interface

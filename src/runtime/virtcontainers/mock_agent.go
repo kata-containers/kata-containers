@@ -56,6 +56,12 @@ func (n *mockAgent) exec(ctx context.Context, sandbox *Sandbox, c Container, cmd
 	return nil, nil
 }
 
+// portForward is the Noop agent command portForward implementation. It does nothing.
+func (n *mockAgent) portForward(ctx context.Context, containerID string, port uint32, vSockPort uint32) error {
+	return nil
+}
+
+
 // startSandbox is the Noop agent Sandbox starting implementation. It does nothing.
 func (n *mockAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 	return nil
