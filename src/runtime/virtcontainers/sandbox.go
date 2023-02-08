@@ -341,6 +341,7 @@ func (s *Sandbox) Release(ctx context.Context) error {
 	if s.monitor != nil {
 		s.monitor.stop()
 	}
+	s.fsShare.StopFileEventWatcher(ctx)
 	s.hypervisor.Disconnect(ctx)
 	return s.agent.disconnect(ctx)
 }

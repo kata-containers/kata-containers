@@ -1262,6 +1262,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	sharedDirMounts := make(map[string]Mount)
 	ignoredMounts := make(map[string]Mount)
 
+	k.Logger().Info("mounting shared dir mounts")
 	shareStorages, err := c.mountSharedDirMounts(ctx, sharedDirMounts, ignoredMounts)
 	if err != nil {
 		return nil, err

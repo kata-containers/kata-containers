@@ -56,3 +56,10 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 func (f *FilesystemShare) UnshareRootFilesystem(ctx context.Context, c *Container) error {
 	return nil
 }
+
+func (f *FilesystemShare) StartFileEventWatcher(ctx context.Context) error {
+	return nil
+}
+
+func (f *FilesystemShare) StopFileEventWatcher(ctx context.Context) {
+}
