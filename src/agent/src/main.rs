@@ -74,6 +74,7 @@ use tokio::{
 mod image_rpc;
 mod rpc;
 mod tracer;
+mod policy;
 
 const NAME: &str = "kata-agent";
 

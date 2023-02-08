@@ -63,6 +63,7 @@ use crate::random;
 use crate::sandbox::Sandbox;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
+use crate::policy;
 
 use crate::trace_rpc_call;
 use crate::tracer::extract_carrier_from_ttrpc;
@@ -138,6 +139,10 @@ macro_rules! is_allowed {
                 ttrpc::Code::UNIMPLEMENTED,
                 format!("{} is blocked", $req.descriptor().name()),
             ));
+        }
+
+        if let Err(e) = policy::allowed($req.descriptor().name()) {
+            return Err(ttrpc_error!(ttrpc::Code::UNIMPLEMENTED, e));
         }
     };
 }
