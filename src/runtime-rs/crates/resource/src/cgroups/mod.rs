@@ -9,6 +9,8 @@ mod utils;
 
 use std::{
     collections::{HashMap, HashSet},
+    error::Error,
+    io,
     iter::FromIterator,
     sync::Arc,
 };
@@ -23,6 +25,8 @@ use kata_types::config::TomlConfig;
 use oci::LinuxResources;
 use persist::sandbox_persist::Persist;
 use tokio::sync::RwLock;
+
+const OS_ERROR_NO_SUCH_PROCESS: i32 = 3;
 
 pub struct CgroupArgs {
     pub sid: String,
@@ -109,7 +113,22 @@ impl CgroupsResource {
     /// overhead_cgroup_manager to the parent and then delete the cgroups.
     pub async fn delete(&self) -> Result<()> {
         for cg_pid in self.cgroup_manager.tasks() {
-            self.cgroup_manager.remove_task(cg_pid)?;
+            // For now, we can't guarantee that the thread in cgroup_manager does still
+            // exist. Once it exit, we should ignor that error returned by remove_task
+            // to let it go.
+            if let Err(error) = self.cgroup_manager.remove_task(cg_pid) {
+                match error.source() {
+                    Some(err) => match err.downcast_ref::<io::Error>() {
+                        Some(e) => {
+                            if e.raw_os_error() != Some(OS_ERROR_NO_SUCH_PROCESS) {
+                                return Err(error.into());
+                            }
+                        }
+                        None => return Err(error.into()),
+                    },
+                    None => return Err(error.into()),
+                }
+            }
         }
 
         self.cgroup_manager
