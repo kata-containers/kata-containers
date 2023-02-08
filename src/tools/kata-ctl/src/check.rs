@@ -8,6 +8,7 @@
 use anyhow::{anyhow, Result};
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 struct Release {
     tag_name: String,
@@ -116,6 +117,30 @@ pub fn check_cpu_attribs(
 
     let missing_attribs = get_missing_strings(&cpu_info_processed, required_attribs)?;
     Ok(missing_attribs)
+}
+
+#[allow(dead_code)]
+#[derive(Debug, PartialEq)]
+pub enum GuestProtection {
+    NoProtection,
+    Tdx,
+    Sev,
+    Snp,
+    Pef,
+    Se,
+}
+
+#[allow(dead_code)]
+#[derive(Error, Debug)]
+pub enum ProtectionError {
+    #[error("No permission to check guest protection")]
+    NoPerms,
+
+    #[error("Failed to check guest protection: {0}")]
+    CheckFailed(String),
+
+    #[error("Invalid guest protection value: {0}")]
+    InvalidValue(String),
 }
 
 pub fn run_network_checks() -> Result<()> {
