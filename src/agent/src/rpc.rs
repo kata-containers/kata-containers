@@ -63,7 +63,7 @@ use crate::random;
 use crate::sandbox::Sandbox;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
-use crate::policy;
+use crate::AGENT_POLICY;
 
 use crate::trace_rpc_call;
 use crate::tracer::extract_carrier_from_ttrpc;
@@ -141,8 +141,16 @@ macro_rules! is_allowed {
             ));
         }
 
-        if let Err(e) = policy::allowed($req.descriptor().name()) {
-            return Err(ttrpc_error!(ttrpc::Code::UNIMPLEMENTED, e));
+        if !AGENT_POLICY
+            .lock()
+            .await
+            .is_allowed_endpoint($req.descriptor().name())
+            .await
+        {
+            return Err(ttrpc_error!(
+                ttrpc::Code::UNIMPLEMENTED,
+                format!("{} is blocked by policy", $req.descriptor().name()),
+            ));
         }
     };
 }

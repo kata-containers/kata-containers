@@ -87,6 +87,12 @@ lazy_static! {
     ));
 }
 
+lazy_static! {
+    static ref AGENT_POLICY: Arc<Mutex<AgentPolicy>> = Arc::new(Mutex::new(
+        AgentPolicy::from_opa_uri("http://localhost:8181/v1/data/coco_policy/").unwrap()
+    ));
+}
+
 #[derive(Parser)]
 // The default clap version info doesn't match our form, so we need to override it
 #[clap(global_setting(AppSettings::DisableVersionFlag))]
@@ -396,6 +402,7 @@ fn reset_sigpipe() {
 }
 
 use crate::config::AgentConfig;
+use crate::policy::AgentPolicy;
 use std::os::unix::io::{FromRawFd, RawFd};
 
 #[cfg(test)]
