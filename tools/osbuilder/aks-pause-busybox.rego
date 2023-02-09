@@ -114,7 +114,7 @@ allow_args(policy_process, input_process) {
 # root.path
 
 allow_root_path(policy_container, input_container, bundle_id) {
-    # "path": "^/run/kata-containers/shared/containers/$(bundle-id)/rootfs$",
+    # "path": "/run/kata-containers/shared/containers/$(bundle-id)/rootfs",
     policy_root_path := replace(policy_container.root.path, "$(bundle-id)", bundle_id)
     policy_root_path == input_container.root.path 
 }
@@ -214,7 +214,7 @@ policy_containers := [
             "oomScoreAdj": -998
         },
         "root": {
-            "path": "^/run/kata-containers/shared/containers/$(bundle-id)/rootfs$",
+            "path": "/run/kata-containers/shared/containers/$(bundle-id)/rootfs",
             "readonly": true
         },
         "hostname": "busybox-cc",
