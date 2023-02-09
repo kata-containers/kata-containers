@@ -2631,8 +2631,9 @@ type Config struct {
 	qemuParams []string
 }
 
-// appendFDs append a list of file descriptors to the qemu configuration and
-// returns a slice of offset file descriptors that will be seen by the qemu process.
+// appendFDs appends a list of arbitrary file descriptors to the qemu configuration and
+// returns a slice of consecutive file descriptors that will be seen by the qemu process.
+// Please see the comment below for details.
 func (config *Config) appendFDs(fds []*os.File) []int {
 	var fdInts []int
 
@@ -2644,6 +2645,10 @@ func (config *Config) appendFDs(fds []*os.File) []int {
 	//     ExtraFiles specifies additional open files to be inherited by the
 	//     new process. It does not include standard input, standard output, or
 	//     standard error. If non-nil, entry i becomes file descriptor 3+i.
+	// This means that arbitrary file descriptors fd0, fd1... fdN passed in
+	// the array will be presented to the guest as consecutive descriptors
+	// 3, 4... N+3. The golang library internally relies on dup2() to do
+	// the renumbering.
 	for i := range fds {
 		fdInts = append(fdInts, oldLen+3+i)
 	}
