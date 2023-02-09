@@ -77,6 +77,7 @@ CreateContainerRequest {
 
 ######################################################################
 # linux fields
+
 allow_linux(policy_container, input_container) {
     policy_container.linux.namespaces == input_container.linux.namespaces
     policy_container.linux.maskedPaths == input_container.linux.maskedPaths
@@ -116,7 +117,7 @@ allow_args(policy_process, input_process) {
 allow_root_path(policy_container, input_container, bundle_id) {
     # "path": "/run/kata-containers/shared/containers/$(bundle-id)/rootfs",
     policy_root_path := replace(policy_container.root.path, "$(bundle-id)", bundle_id)
-    policy_root_path == input_container.root.path 
+    policy_root_path == input_container.root.path
 }
 
 ######################################################################
@@ -144,6 +145,7 @@ policy_mount_allows(policy_mount, mount, bundle_id) {
 
 ######################################################################
 # containers
+
 policy_containers := [
 {
         "ociVersion": "1.0.2-dev",

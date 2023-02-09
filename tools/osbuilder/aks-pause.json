@@ -69,7 +69,7 @@
             "oomScoreAdj": -998
         },
         "root": {
-            "path": "^/run/kata-containers/shared/containers/521dcee15a4b51edb91f5678d61372d7516e2efa045d9704c9fb1b433a4d41b4/rootfs$",
+            "path": "/run/kata-containers/shared/containers/521dcee15a4b51edb91f5678d61372d7516e2efa045d9704c9fb1b433a4d41b4/rootfs",
             "readonly": true
         },
         "hostname": "busybox-cc",
