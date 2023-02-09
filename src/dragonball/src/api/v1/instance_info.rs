@@ -5,6 +5,15 @@
 
 use serde_derive::{Deserialize, Serialize};
 
+/// This struct represents the strongly typed equivalent of the json body
+/// from confidential container related requests.
+#[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub enum ConfidentialVmType {
+    /// Intel Trusted Domain
+    TDX = 2,
+}
+
 /// The microvm state.
 ///
 /// When Dragonball starts, the instance state is Uninitialized. Once start_microvm method is
@@ -56,10 +65,12 @@ pub struct InstanceInfo {
     pub tids: Vec<(u8, u32)>,
     /// Last instance downtime
     pub last_instance_downtime: u64,
+    /// confidential vm type
+    pub confidential_vm_type: Option<ConfidentialVmType>,
 }
 
 impl InstanceInfo {
-    /// create instance info object with given id, version, and platform type
+    /// create instance info object with given id, version, platform type and confidential vm type.
     pub fn new(id: String, vmm_version: String) -> Self {
         InstanceInfo {
             id,
@@ -69,6 +80,7 @@ impl InstanceInfo {
             async_state: AsyncState::Uninitialized,
             tids: Vec::new(),
             last_instance_downtime: 0,
+            confidential_vm_type: None,
         }
     }
 }
@@ -83,6 +95,7 @@ impl Default for InstanceInfo {
             async_state: AsyncState::Uninitialized,
             tids: Vec::new(),
             last_instance_downtime: 0,
+            confidential_vm_type: None,
         }
     }
 }

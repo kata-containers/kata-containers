@@ -12,7 +12,7 @@ pub use self::boot_source::{BootSourceConfig, BootSourceConfigError, DEFAULT_KER
 
 /// Wrapper over the microVM general information.
 mod instance_info;
-pub use self::instance_info::{InstanceInfo, InstanceState};
+pub use self::instance_info::{ConfidentialVmType, InstanceInfo, InstanceState};
 
 /// Wrapper for configuring the memory and CPU of the microVM.
 mod machine_config;
