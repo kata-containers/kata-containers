@@ -156,6 +156,34 @@ macro_rules! is_allowed {
     };
 }
 
+macro_rules! is_allowed_create_container {
+    ($req:ident) => {
+        if !AGENT_CONFIG
+            .read()
+            .await
+            .is_allowed_endpoint($req.descriptor().name())
+        {
+            return Err(ttrpc_error!(
+                ttrpc::Code::UNIMPLEMENTED,
+                format!("{} is blocked", $req.descriptor().name()),
+            ));
+        }
+
+        if !AGENT_POLICY
+            .lock()
+            .await
+            .is_allowed_create_container_endpoint($req.descriptor().name(), &$req)
+            .await
+        {
+            return Err(ttrpc_error!(
+                ttrpc::Code::UNIMPLEMENTED,
+                format!("{} is blocked by policy", $req.descriptor().name()),
+            ));
+        }
+    }
+}
+
+
 #[derive(Clone, Debug)]
 pub struct AgentService {
     sandbox: Arc<Mutex<Sandbox>>,
@@ -795,7 +823,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CreateContainerRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_container", req);
-        is_allowed!(req);
+        is_allowed_create_container!(req);
         match self.do_create_container(req).await {
             Err(e) => Err(ttrpc_error!(ttrpc::Code::INTERNAL, e)),
             Ok(_) => Ok(Empty::new()),

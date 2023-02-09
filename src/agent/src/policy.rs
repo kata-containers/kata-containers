@@ -30,7 +30,9 @@ impl AgentPolicy {
     }
 
     #[instrument]
-    pub async fn is_allowed_endpoint(&mut self, ep: &str) -> bool {
+    pub async fn is_allowed_endpoint(
+        &mut self,
+        ep: &str) -> bool {
         let mut allowed = false;
 
         for _ in 0..self.max_loop_count {
@@ -59,5 +61,12 @@ impl AgentPolicy {
         }
 
         allowed
+    }
+
+    pub async fn is_allowed_create_container_endpoint(
+        &mut self,
+        ep: &str,
+        _: &protocols::agent::CreateContainerRequest) -> bool {
+        return self.is_allowed_endpoint(ep).await;
     }
 }
