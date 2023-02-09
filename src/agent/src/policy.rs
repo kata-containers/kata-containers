@@ -83,7 +83,8 @@ impl AgentPolicy {
     pub async fn is_allowed_create_container_endpoint(
         &mut self,
         ep: &str,
-        req: &protocols::agent::CreateContainerRequest
+        req: &protocols::agent::CreateContainerRequest,
+        index: usize
     ) -> bool {
         let mut oci_spec = req.OCI.clone();
 
@@ -96,7 +97,12 @@ impl AgentPolicy {
         };
 
         if let Ok(spec_str) = serde_json::to_string(&spec) {
-            self.post_to_opa(ep, &spec_str).await.eq("{\"result\":true}")
+            let index_and_oci = format!(
+                "{{ \"index\":{}, \"oci\":{} }}",
+                index,
+                spec_str);
+
+            self.post_to_opa(ep, &index_and_oci).await.eq("{\"result\":true}")
         } else {
             error!(sl!(), "log_oci_spec: failed convert oci spec to json string");
             false

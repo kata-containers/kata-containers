@@ -12,6 +12,8 @@ use std::ffi::CString;
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use ttrpc::{
     self,
     error::get_rpc_status,
@@ -115,6 +117,8 @@ const ERR_NO_SANDBOX_PIDNS: &str = "Sandbox does not have sandbox_pidns";
 // not available.
 const IPTABLES_RESTORE_WAIT_SEC: u64 = 5;
 
+static CONTAINERS_COUNT: AtomicUsize = AtomicUsize::new(0);
+
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
     () => {
@@ -157,7 +161,7 @@ macro_rules! is_allowed {
 }
 
 macro_rules! is_allowed_create_container {
-    ($req:ident) => {
+    ($req:ident, $container_count:ident) => {
         if !AGENT_CONFIG
             .read()
             .await
@@ -172,7 +176,7 @@ macro_rules! is_allowed_create_container {
         if !AGENT_POLICY
             .lock()
             .await
-            .is_allowed_create_container_endpoint($req.descriptor().name(), &$req)
+            .is_allowed_create_container_endpoint($req.descriptor().name(), &$req, $container_count)
             .await
         {
             return Err(ttrpc_error!(
@@ -823,7 +827,10 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CreateContainerRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_container", req);
-        is_allowed_create_container!(req);
+
+        let container_count = CONTAINERS_COUNT.fetch_add(1, Ordering::SeqCst);
+        is_allowed_create_container!(req, container_count);
+
         match self.do_create_container(req).await {
             Err(e) => Err(ttrpc_error!(ttrpc::Code::INTERNAL, e)),
             Ok(_) => Ok(Empty::new()),
