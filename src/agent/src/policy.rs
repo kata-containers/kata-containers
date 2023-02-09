@@ -30,43 +30,76 @@ impl AgentPolicy {
     }
 
     #[instrument]
-    pub async fn is_allowed_endpoint(
+    async fn post_to_opa(
         &mut self,
-        ep: &str) -> bool {
-        let mut allowed = false;
+        ep: &str,
+        post_input: &str
+    ) -> String {
+        let client = reqwest::Client::new();
 
         for _ in 0..self.max_loop_count {
             let uri = self.opa_uri.to_owned() + ep;
-            info!(sl!(), "is_allowed_endpoint: GET {}", uri);
-            let result = reqwest::get(uri).await;
+            let input_with_key = format!("{{\"input\":{}}}", post_input);
+
+            info!(sl!(), "post_to_opa: uri {}, input <{}>", uri, input_with_key);
+            let result = client
+                .post(uri)
+                .body(input_with_key)
+                .send()
+                .await;
 
             match result {
                 Err(e) => {
-                    error!(sl!(), "is_allowed_endpoint: GET error {}", e);
+                    error!(sl!(), "post_to_opa: POST error {}", e);
                 }
                 Ok(response) => {
                     let status = response.status();
                     if status != http::StatusCode::OK {
-                        error!(sl!(), "is_allowed_endpoint: GET status code {}", status);
+                        error!(sl!(), "post_to_opa: POST response status {}", status);
                     } else {
-                        let body = response.text().await.unwrap();
-                        allowed = body.eq("{\"result\":true}");
-
                         // OPA is up an running, so don't retry in the future.
                         self.max_loop_count = 1;
-                        break;
+
+                        let response = response.text().await.unwrap();
+                        // info!(sl!(), "post_to_opa: response <{}>", response);
+                        return response;
                     }
                 }
             }
         }
 
-        allowed
+        error!(sl!(), "post_to_opa: returning empty string!");
+        return String::new();
+    }
+
+    #[instrument]
+    pub async fn is_allowed_endpoint(
+        &mut self,
+        ep: &str
+    ) -> bool {
+        self.post_to_opa(ep, "{}").await.eq("{\"result\":true}")
     }
 
     pub async fn is_allowed_create_container_endpoint(
         &mut self,
         ep: &str,
-        _: &protocols::agent::CreateContainerRequest) -> bool {
-        return self.is_allowed_endpoint(ep).await;
+        req: &protocols::agent::CreateContainerRequest
+    ) -> bool {
+        let mut oci_spec = req.OCI.clone();
+
+        let spec = match oci_spec.as_mut() {
+            Some(s) => rustjail::grpc_to_oci(s),
+            None => {
+                error!(sl!(), "no oci spec in the create container request!");
+                return false;
+            }
+        };
+
+        if let Ok(spec_str) = serde_json::to_string(&spec) {
+            self.post_to_opa(ep, &spec_str).await.eq("{\"result\":true}")
+        } else {
+            error!(sl!(), "log_oci_spec: failed convert oci spec to json string");
+            false
+        }
     }
 }
