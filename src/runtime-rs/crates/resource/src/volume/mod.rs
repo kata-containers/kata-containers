@@ -20,6 +20,7 @@ use crate::share_fs::ShareFs;
 use self::hugepage::{get_huge_page_limits_map, get_huge_page_option};
 
 const BIND: &str = "bind";
+
 #[async_trait]
 pub trait Volume: Send + Sync {
     fn get_volume_mount(&self) -> Result<Vec<oci::Mount>>;
