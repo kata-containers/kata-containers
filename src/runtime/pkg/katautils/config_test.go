@@ -176,6 +176,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		VirtioFSCache:         defaultVirtioFSCacheMode,
 		PFlash:                []string{},
 		SGXEPCSize:            epcSize,
+		SNPGuestPolicy:        defaultSNPGuestPolicy,
 	}
 
 	agentConfig := vc.KataAgentConfig{
@@ -555,6 +556,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		VirtioFSCache:         defaultVirtioFSCacheMode,
 		BlockDeviceAIO:        defaultBlockDeviceAIO,
 		DisableGuestSeLinux:   defaultDisableGuestSeLinux,
+		SNPGuestPolicy:        defaultSNPGuestPolicy,
 	}
 
 	expectedAgentConfig := vc.KataAgentConfig{

@@ -40,6 +40,8 @@ type qemuAmd64 struct {
 
 	sgxEPCSize int64
 
+	snpGuestPolicy uint64
+
 	numVCPUs uint32
 }
 
@@ -144,9 +146,10 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			protection:           noneProtection,
 			legacySerial:         config.LegacySerial,
 		},
-		vmFactory: factory,
-		snpGuest:  config.SevSnpGuest,
-		numVCPUs:  config.NumVCPUs,
+		vmFactory:      factory,
+		snpGuest:       config.SevSnpGuest,
+		numVCPUs:       config.NumVCPUs,
+		snpGuestPolicy: config.SNPGuestPolicy,
 	}
 
 	if config.ConfidentialGuest {
@@ -313,6 +316,7 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 				Debug:           false,
 				File:            firmware,
 				CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
+				SnpPolicy:       q.snpGuestPolicy,
 				ReducedPhysBits: 1,
 			}), "", nil
 	case noneProtection:
