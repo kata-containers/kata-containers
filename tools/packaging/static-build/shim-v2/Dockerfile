@@ -14,6 +14,7 @@ RUN apt-get update && \
         git \
         make \
         musl-tools \
+        protobuf-compiler \
         sudo && \
     apt-get clean && rm -rf /var/lib/apt/lists/
 
