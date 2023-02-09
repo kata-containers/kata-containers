@@ -250,14 +250,15 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "cgroups-rs"
-version = "0.2.10"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf5525f2cf84d5113ab26bfb6474180eb63224b4b1e4be31ee87be4098f11399"
+checksum = "8d5761f3a351b92e0e02a31ca418190bb323edb0d4fce0109b6dba673dc3fdc1"
 dependencies = [
  "libc",
  "log",
- "nix 0.24.2",
+ "nix 0.25.1",
  "regex",
+ "thiserror",
 ]
 
 [[package]]
@@ -719,7 +720,6 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "byteorder",
- "cgroups-rs",
  "clap",
  "hex",
  "humantime",
@@ -891,6 +891,18 @@ dependencies = [
  "cfg-if 1.0.0",
  "libc",
  "memoffset",
+]
+
+[[package]]
+name = "nix"
+version = "0.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f346ff70e7dbfd675fe90590b92d59ef2de15a8779ae305ebcbfd3f0caf59be4"
+dependencies = [
+ "autocfg",
+ "bitflags",
+ "cfg-if 1.0.0",
+ "libc",
 ]
 
 [[package]]
