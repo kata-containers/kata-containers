@@ -25,7 +25,7 @@ impl AgentPolicy {
     pub fn from_opa_uri(uri: &str) -> Result<AgentPolicy> {
         Ok(AgentPolicy {
             opa_uri: uri.to_string(),
-            max_loop_count: 100,
+            max_loop_count: 200,
         })
     }
 
