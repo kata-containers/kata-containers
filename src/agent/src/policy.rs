@@ -34,7 +34,9 @@ impl AgentPolicy {
         let mut allowed = false;
 
         for _ in 0..self.max_loop_count {
-            let result = reqwest::get(self.opa_uri.to_owned() + ep).await;
+            let uri = self.opa_uri.to_owned() + ep;
+            info!(sl!(), "is_allowed_endpoint: GET {}", uri);
+            let result = reqwest::get(uri).await;
 
             match result {
                 Err(e) => {
