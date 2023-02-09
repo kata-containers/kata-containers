@@ -45,10 +45,8 @@ docs-url-alive-check:
 
 .PHONY: \
 	all \
-	binary-tarball \
+	kata-tarball \
+	install-tarball \
 	default \
-	install-binary-tarball \
 	static-checks \
 	docs-url-alive-check
-
-
