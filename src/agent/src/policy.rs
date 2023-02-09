@@ -34,7 +34,8 @@ impl AgentPolicy {
         &mut self,
         ep: &str,
         post_input: &str
-    ) -> String {
+    ) -> bool {
+        let mut allow = false;
         let client = reqwest::Client::new();
 
         for _ in 0..self.max_loop_count {
@@ -57,19 +58,22 @@ impl AgentPolicy {
                     if status != http::StatusCode::OK {
                         error!(sl!(), "post_to_opa: POST response status {}", status);
                     } else {
-                        // OPA is up an running, so don't retry in the future.
-                        self.max_loop_count = 1;
+                        let result_json = response.text().await.unwrap();
+                        allow = result_json.eq("{\"result\":true}");
 
-                        let response = response.text().await.unwrap();
-                        // info!(sl!(), "post_to_opa: response <{}>", response);
-                        return response;
+                        if !allow {
+                            error!(sl!(), "post_to_opa: response <{}>", result_json);
+                        }
+
+                        // OPA is up and running, so don't retry in the future.
+                        self.max_loop_count = 1;
+                        break;
                     }
                 }
             }
         }
 
-        error!(sl!(), "post_to_opa: returning empty string!");
-        return String::new();
+        allow
     }
 
     #[instrument]
@@ -77,7 +81,7 @@ impl AgentPolicy {
         &mut self,
         ep: &str
     ) -> bool {
-        self.post_to_opa(ep, "{}").await.eq("{\"result\":true}")
+        self.post_to_opa(ep, "{}").await
     }
 
     pub async fn is_allowed_create_container_endpoint(
@@ -102,7 +106,7 @@ impl AgentPolicy {
                 index,
                 spec_str);
 
-            self.post_to_opa(ep, &index_and_oci).await.eq("{\"result\":true}")
+            self.post_to_opa(ep, &index_and_oci).await
         } else {
             error!(sl!(), "log_oci_spec: failed convert oci spec to json string");
             false
