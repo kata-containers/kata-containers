@@ -671,23 +671,11 @@ EOF
 		info "Install attestation-agent with KBC ${AA_KBC}"
 		#git clone "${attestation_agent_url}" --branch "${attestation_agent_tag}" --single-branch
 		git clone --depth=1 "${attestation_agent_url}" attestation-agent
-		pushd attestation-agent/app
+
+		pushd attestation-agent
 		git fetch --depth=1 origin "${attestation_agent_version}"
 		git checkout FETCH_HEAD
-		source "${HOME}/.cargo/env"
-		target="${ARCH}-unknown-linux-${LIBC}"
-		if [ "${AA_KBC}" == "eaa_kbc" ] && [ "${ARCH}" == "x86_64" ]; then
-			RUSTFLAGS="-C link-args=-Wl,-rpath,/usr/local/lib/rats-tls"
-			# Currently eaa_kbc module only support this specific platform
-			target="x86_64-unknown-linux-gnu"
-		fi
-		if [ "$(uname -m)" != "$ARCH" ]; then
-			RUSTFLAGS+=" -C linker=$CC"
-		fi
-		export RUSTFLAGS
-		# Foreign CC is incompatible with libgit2 -- CC is still handled by `-C linker=...` flag
-		CC= cargo build --release --target "${target}" --no-default-features --features "${AA_KBC}"
-		install -D -o root -g root -m 0755 "target/${target}/release/attestation-agent" -t "${ROOTFS_DIR}/usr/local/bin/"
+		make KBC=${AA_KBC} && make install DESTDIR="${ROOTFS_DIR}/usr/local/bin/"
 		popd
 	fi
 
