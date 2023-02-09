@@ -5,6 +5,7 @@
 
 use anyhow::Result;
 use reqwest;
+use tokio::time::{sleep, Duration};
 use tracing::instrument;
 
 // Convenience macro to obtain the scope logger
@@ -17,6 +18,7 @@ macro_rules! sl {
 #[derive(Debug)]
 pub struct AgentPolicy {
     opa_uri: String,
+    loop_sleep_millis: u64,
     max_loop_count: u32,
 }
 
@@ -25,7 +27,8 @@ impl AgentPolicy {
     pub fn from_opa_uri(uri: &str) -> Result<AgentPolicy> {
         Ok(AgentPolicy {
             opa_uri: uri.to_string(),
-            max_loop_count: 200,
+            loop_sleep_millis: 10,
+            max_loop_count: 500,
         })
     }
 
@@ -71,6 +74,9 @@ impl AgentPolicy {
                     }
                 }
             }
+
+            // Wait for opa to initialize.
+            sleep(Duration::from_millis(self.loop_sleep_millis)).await;
         }
 
         allow
