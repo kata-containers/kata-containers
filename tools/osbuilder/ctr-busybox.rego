@@ -10,7 +10,7 @@ default CopyFileRequest := true
 default CreateContainerRequest := false
 default CreateSandboxRequest := true
 default DestroySandboxRequest := true
-default ExecProcessRequest = false
+default ExecProcessRequest := false
 default GetMetricsRequest := true
 default GetOOMEventRequest := true
 default GuestDetailsRequest := true
@@ -50,7 +50,8 @@ CreateContainerRequest {
     policy_process.user             == input_process.user
     policy_process.args             == input_process.args
 
-    # Allow out of order and missing environment variables.    
+    # Ignore any policy environment variables that are not
+    # present in the input.
     every env_var in input_process.env {
         policy_process.env[_] == env_var
     }
