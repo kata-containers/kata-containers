@@ -66,13 +66,21 @@ CreateContainerRequest {
     policy_process.noNewPrivileges  == input_process.noNewPrivileges
     policy_process.oomScoreAdj      == input_process.oomScoreAdj
 
-    policy_container.linux          == input_container.linux
     policy_container.root.readonly  == input_container.root.readonly
 
     sandbox_id := input_container.annotations["io.kubernetes.cri.sandbox-id"]
     regex.match(input_container.annotations["io.kubernetes.cri.sandbox-id"], sandbox_id)
 
     allow_by_bundle_id(policy_container, input_container)
+    allow_linux(policy_container, input_container)
+}
+
+######################################################################
+# linux fields
+allow_linux(policy_container, input_container) {
+    policy_container.linux.namespaces == input_container.linux.namespaces
+    policy_container.linux.maskedPaths == input_container.linux.maskedPaths
+    policy_container.linux.readonlyPaths == input_container.linux.readonlyPaths
 }
 
 ######################################################################
@@ -88,8 +96,6 @@ allow_by_bundle_id(policy_container, input_container) {
     every mount in input.oci.mounts {
         allow_mount(mount, policy_container, bundle_id)
     }
-
-    #allow_bundle_path(policy_container, input_container, bundle_id)
 }
 
 ######################################################################
@@ -427,7 +433,7 @@ policy_containers := [
             "oomScoreAdj": 1000
         },
         "root": {
-            "path": "/run/kata-containers/shared/containers/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9/rootfs",
+            "path": "/run/kata-containers/shared/containers/$(bundle-id)/rootfs",
             "readonly": false
         },
         "mounts": [
@@ -501,7 +507,7 @@ policy_containers := [
             {
                 "destination": "/etc/hosts",
                 "type": "bind",
-                "source": "/run/kata-containers/shared/containers/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9-f34fbf5888dc7370-hosts",
+                "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-hosts$",
                 "options": [
                     "rbind",
                     "rprivate",
@@ -511,7 +517,7 @@ policy_containers := [
             {
                 "destination": "/dev/termination-log",
                 "type": "bind",
-                "source": "/run/kata-containers/shared/containers/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9-6f5eaef5c2560a2a-termination-log",
+                "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-termination-log$",
                 "options": [
                     "rbind",
                     "rprivate",
@@ -521,7 +527,7 @@ policy_containers := [
             {
                 "destination": "/etc/hostname",
                 "type": "bind",
-                "source": "/run/kata-containers/shared/containers/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9-2f8af54d8526ba82-hostname",
+                "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-hostname$",
                 "options": [
                     "rbind",
                     "rprivate",
@@ -531,7 +537,7 @@ policy_containers := [
             {
                 "destination": "/etc/resolv.conf",
                 "type": "bind",
-                "source": "/run/kata-containers/shared/containers/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9-4f6d7d118d5aface-resolv.conf",
+                "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-resolv.conf$",
                 "options": [
                     "rbind",
                     "rprivate",
@@ -549,7 +555,7 @@ policy_containers := [
             {
                 "destination": "/var/run/secrets/kubernetes.io/serviceaccount",
                 "type": "bind",
-                "source": "/run/kata-containers/shared/containers/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9-5d587d83e5075102-serviceaccount",
+                "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-serviceaccount$",
                 "options": [
                     "rbind",
                     "rprivate",
@@ -560,8 +566,8 @@ policy_containers := [
         "annotations": {
             "io.kubernetes.cri.image-name": "docker.io/library/busybox:latest",
             "io.kubernetes.cri.container-name": "busybox",
-            "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9",
-            "io.kubernetes.cri.sandbox-id": "521dcee15a4b51edb91f5678d61372d7516e2efa045d9704c9fb1b433a4d41b4",
+            "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/$(bundle-id)",
+            "io.kubernetes.cri.sandbox-id": "^[a-z0-9]{64}$",
             "io.katacontainers.pkg.oci.container_type": "pod_container",
             "io.kubernetes.cri.container-type": "container",
             "io.kubernetes.cri.sandbox-namespace": "default",
@@ -586,7 +592,7 @@ policy_containers := [
                     "realtimePeriod": 0
                 }
             },
-            "cgroupsPath": "/kubepods/besteffort/pod47f1fbee-9c44-4968-8a6a-373887167617/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9",
+            "cgroupsPath": "/kubepods/besteffort/pod47f1fbee-9c44-4968-8a6a-373887167617/$(bundle-id)",
             "namespaces": [
                 {
                     "type": "ipc"
