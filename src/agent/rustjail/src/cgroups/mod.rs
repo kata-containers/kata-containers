@@ -52,10 +52,12 @@ pub trait Manager {
     fn as_any(&self) -> Result<&dyn Any> {
         Err(anyhow!("not supported!"))
     }
+
+    fn name(&self) -> &str;
 }
 
 impl Debug for dyn Manager + Send + Sync {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "CgroupManager")
+        write!(f, "{}", self.name())
     }
 }
