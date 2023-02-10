@@ -126,7 +126,6 @@ Kernels and hypervisors that support DAX/NVDIMM read the MBR #2, otherwise MBR #
 EOF
 }
 
-
 # build the image using container engine
 build_with_container() {
 	local rootfs="$1"
@@ -153,11 +152,11 @@ build_with_container() {
 		engine_build_args+=" --runtime ${DOCKER_RUNTIME}"
 	fi
 
-	"${container_engine}" build  \
-		   ${engine_build_args} \
-		   --build-arg http_proxy="${http_proxy}" \
-		   --build-arg https_proxy="${https_proxy}" \
-		   -t "${container_image_name}" "${script_dir}"
+	"${container_engine}" build \
+		${engine_build_args} \
+		--build-arg http_proxy="${http_proxy}" \
+		--build-arg https_proxy="${https_proxy}" \
+		-t "${container_image_name}" "${script_dir}"
 
 	readonly mke2fs_conf="/etc/mke2fs.conf"
 	if [ -f "${mke2fs_conf}" ]; then
@@ -165,7 +164,7 @@ build_with_container() {
 	fi
 
 	if [ "${SELINUX}" == "yes" ]; then
-		if mountpoint $SELINUXFS > /dev/null; then
+		if mountpoint $SELINUXFS >/dev/null; then
 			selinuxfs="-v ${SELINUXFS}:${SELINUXFS}"
 		else
 			die "Make sure that SELinux is enabled on the host"
@@ -175,27 +174,27 @@ build_with_container() {
 	#Make sure we use a compatible runtime to build rootfs
 	# In case Clear Containers Runtime is installed we dont want to hit issue:
 	#https://github.com/clearcontainers/runtime/issues/828
-	"${container_engine}" run  \
-		   --rm \
-		   --runtime "${DOCKER_RUNTIME}"  \
-		   --privileged \
-		   --env AGENT_BIN="${agent_bin}" \
-		   --env AGENT_INIT="${agent_init}" \
-		   --env FS_TYPE="${fs_type}" \
-		   --env BLOCK_SIZE="${block_size}" \
-		   --env ROOT_FREE_SPACE="${root_free_space}" \
-		   --env NSDAX_BIN="${nsdax_bin}" \
-		   --env SELINUX="${SELINUX}" \
-		   --env DEBUG="${DEBUG}" \
-		   -v /dev:/dev \
-		   -v "${script_dir}":"/osbuilder" \
-		   -v "${script_dir}/../scripts":"/scripts" \
-		   -v "${rootfs}":"/rootfs" \
-		   -v "${image_dir}":"/image" \
-		   ${selinuxfs} \
-		   ${shared_files} \
-		   ${container_image_name} \
-		   bash "/osbuilder/${script_name}" -o "/image/${image_name}" /rootfs
+	"${container_engine}" run \
+		--rm \
+		--runtime "${DOCKER_RUNTIME}" \
+		--privileged \
+		--env AGENT_BIN="${agent_bin}" \
+		--env AGENT_INIT="${agent_init}" \
+		--env FS_TYPE="${fs_type}" \
+		--env BLOCK_SIZE="${block_size}" \
+		--env ROOT_FREE_SPACE="${root_free_space}" \
+		--env NSDAX_BIN="${nsdax_bin}" \
+		--env SELINUX="${SELINUX}" \
+		--env DEBUG="${DEBUG}" \
+		-v /dev:/dev \
+		-v "${script_dir}":"/osbuilder" \
+		-v "${script_dir}/../scripts":"/scripts" \
+		-v "${rootfs}":"/rootfs" \
+		-v "${image_dir}":"/image" \
+		${selinuxfs} \
+		${shared_files} \
+		${container_image_name} \
+		bash "/osbuilder/${script_name}" -o "/image/${image_name}" /rootfs
 }
 
 check_rootfs() {
@@ -212,49 +211,48 @@ check_rootfs() {
 	fi
 	OK "init is installed"
 
-
 	candidate_systemd_paths="/usr/lib/systemd/systemd /lib/systemd/systemd"
 
 	# check agent or systemd
 	case "${AGENT_INIT}" in
-		"no")
-			for systemd_path in $candidate_systemd_paths; do
-				systemd="${rootfs}${systemd_path}"
-				if [ -x "${systemd}" ] || [ -L "${systemd}" ]; then
-					found="yes"
-					break
-				fi
-			done
-			if [ ! $found ]; then
-				error "None of ${candidate_systemd_paths} is installed in ${rootfs}"
-				return 1
+	"no")
+		for systemd_path in $candidate_systemd_paths; do
+			systemd="${rootfs}${systemd_path}"
+			if [ -x "${systemd}" ] || [ -L "${systemd}" ]; then
+				found="yes"
+				break
 			fi
-			OK "init is systemd"
-			;;
-
-		"yes")
-			agent_path="/sbin/init"
-			agent="${rootfs}${agent_path}"
-			if  [ ! -x "${agent}" ]; then
-				error "${agent_path} is not installed in ${rootfs}. Use AGENT_BIN env variable to change the expected agent binary name"
-				return 1
-			fi
-			# checksum must be different to system
-			for systemd_path in $candidate_systemd_paths; do
-				systemd="${rootfs}${systemd_path}"
-				if [ -f "${systemd}" ] && cmp -s "${systemd}" "${agent}"; then
-					error "The agent is not the init process. ${agent_path} is systemd"
-					return 1
-				fi
-			done
-
-			OK "Agent installed"
-			;;
-
-		*)
-			error "Invalid value for AGENT_INIT: '${AGENT_INIT}'. Use to 'yes' or 'no'"
+		done
+		if [ ! $found ]; then
+			error "None of ${candidate_systemd_paths} is installed in ${rootfs}"
 			return 1
-			;;
+		fi
+		OK "init is systemd"
+		;;
+
+	"yes")
+		agent_path="/sbin/init"
+		agent="${rootfs}${agent_path}"
+		if [ ! -x "${agent}" ]; then
+			error "${agent_path} is not installed in ${rootfs}. Use AGENT_BIN env variable to change the expected agent binary name"
+			return 1
+		fi
+		# checksum must be different to system
+		for systemd_path in $candidate_systemd_paths; do
+			systemd="${rootfs}${systemd_path}"
+			if [ -f "${systemd}" ] && cmp -s "${systemd}" "${agent}"; then
+				error "The agent is not the init process. ${agent_path} is systemd"
+				return 1
+			fi
+		done
+
+		OK "Agent installed"
+		;;
+
+	*)
+		error "Invalid value for AGENT_INIT: '${AGENT_INIT}'. Use to 'yes' or 'no'"
+		return 1
+		;;
 	esac
 
 	return 0
@@ -273,12 +271,12 @@ calculate_required_disk_size() {
 
 	for i in $(seq 1 $max_tries); do
 		local img_size="$((rootfs_size_mb + (i * increment)))"
-		create_disk "${image}" "${img_size}" "${fs_type}" "${rootfs_start}" > /dev/null 2>&1
+		create_disk "${image}" "${img_size}" "${fs_type}" "${rootfs_start}" >/dev/null 2>&1
 		if ! device="$(setup_loop_device "${image}")"; then
 			continue
 		fi
 
-		if ! format_loop "${device}" "${block_size}" "${fs_type}" > /dev/null 2>&1 ; then
+		if ! format_loop "${device}" "${block_size}" "${fs_type}" >/dev/null 2>&1; then
 			die "Could not format loop device: ${device}"
 		fi
 		mount "${device}p1" "${mount_dir}"
@@ -293,7 +291,6 @@ calculate_required_disk_size() {
 			return
 		fi
 	done
-
 
 	rmdir "${mount_dir}"
 	rm -f "${image}"
@@ -333,7 +330,7 @@ setup_loop_device() {
 	device=$(losetup -P -f --show "${image}")
 
 	#Refresh partition table
-	partprobe -s "${device}" > /dev/null
+	partprobe -s "${device}" >/dev/null
 	# Poll for the block device p1
 	for _ in $(seq 1 5); do
 		if [ -b "${device}p1" ]; then
@@ -353,25 +350,25 @@ format_loop() {
 	local fs_type="$3"
 
 	case "${fs_type}" in
-		"${ext4_format}")
-			mkfs.ext4 -q -F -b "${block_size}" "${device}p1"
-			info "Set filesystem reserved blocks percentage to ${reserved_blocks_percentage}%"
-			tune2fs -m "${reserved_blocks_percentage}" "${device}p1"
-			;;
+	"${ext4_format}")
+		mkfs.ext4 -q -F -b "${block_size}" "${device}p1"
+		info "Set filesystem reserved blocks percentage to ${reserved_blocks_percentage}%"
+		tune2fs -m "${reserved_blocks_percentage}" "${device}p1"
+		;;
 
-		"${xfs_format}")
-			# DAX and reflink cannot be used together!
-			# Explicitly disable reflink, if it fails then reflink
-			# is not supported and '-m reflink=0' is not needed.
-			if mkfs.xfs -m reflink=0 -q -f -b size="${block_size}" "${device}p1" 2>&1 | grep -q "unknown option"; then
-				mkfs.xfs -q -f -b size="${block_size}" "${device}p1"
-			fi
-			;;
+	"${xfs_format}")
+		# DAX and reflink cannot be used together!
+		# Explicitly disable reflink, if it fails then reflink
+		# is not supported and '-m reflink=0' is not needed.
+		if mkfs.xfs -m reflink=0 -q -f -b size="${block_size}" "${device}p1" 2>&1 | grep -q "unknown option"; then
+			mkfs.xfs -q -f -b size="${block_size}" "${device}p1"
+		fi
+		;;
 
-		*)
-			error "Unsupported fs type: ${fs_type}"
-			return 1
-			;;
+	*)
+		error "Unsupported fs type: ${fs_type}"
+		return 1
+		;;
 	esac
 }
 
@@ -389,8 +386,8 @@ create_disk() {
 	# The partition is the rootfs content
 	info "Creating partitions"
 	parted -s -a optimal "${image}" -- \
-		   mklabel msdos \
-		   mkpart primary "${fs_type}" "${part_start}"M "${rootfs_end}"M
+		mklabel msdos \
+		mkpart primary "${fs_type}" "${part_start}"M "${rootfs_end}"M
 
 	OK "Partitions created"
 }
@@ -429,8 +426,8 @@ create_rootfs_image() {
 		info "Labeling rootfs for SELinux"
 		selinuxfs_path="${mount_dir}${SELINUXFS}"
 		mkdir -p $selinuxfs_path
-		if mountpoint $SELINUXFS > /dev/null && \
-			chroot "${mount_dir}" command -v restorecon > /dev/null; then
+		if mountpoint $SELINUXFS >/dev/null &&
+			chroot "${mount_dir}" command -v restorecon >/dev/null; then
 			mount -t selinuxfs selinuxfs $selinuxfs_path
 			chroot "${mount_dir}" restorecon -RF -e ${SELINUXFS} /
 			# TODO: This operation will be removed after the updated container-selinux that
@@ -451,9 +448,9 @@ and the rootfs is built with SELINUX=yes"
 	info "Removing unneeded systemd services and sockets"
 	for u in "${systemd_units[@]}"; do
 		find "${mount_dir}" -type f \( \
-			 -name "${u}.service" -o \
-			 -name "${u}.socket" \) \
-			 -exec rm -f {} \;
+			-name "${u}.service" -o \
+			-name "${u}.socket" \) \
+			-exec rm -f {} \;
 	done
 
 	info "Removing unneeded systemd files"
@@ -495,7 +492,7 @@ set_dax_header() {
 	info "Set DAX metadata"
 	# Set metadata header
 	# Issue: https://github.com/kata-containers/osbuilder/issues/240
-	if [ -z "${nsdax_bin}" ] ; then
+	if [ -z "${nsdax_bin}" ]; then
 		nsdax_bin="${script_dir}/nsdax"
 		gcc -O2 "${script_dir}/nsdax.gpl.c" -o "${nsdax_bin}"
 		trap "rm ${nsdax_bin}" EXIT
@@ -528,18 +525,20 @@ main() {
 	local root_free_space="${ROOT_FREE_SPACE:-}"
 	local nsdax_bin="${NSDAX_BIN:-}"
 
-	while getopts "ho:r:f:" opt
-	do
+	while getopts "ho:r:f:" opt; do
 		case "$opt" in
-			h)	usage; return 0;;
-			o)	image="${OPTARG}" ;;
-			r)	root_free_space="${OPTARG}" ;;
-			f)	fs_type="${OPTARG}" ;;
-			*) break ;;
+		h)
+			usage
+			return 0
+			;;
+		o) image="${OPTARG}" ;;
+		r) root_free_space="${OPTARG}" ;;
+		f) fs_type="${OPTARG}" ;;
+		*) break ;;
 		esac
 	done
 
-	shift $(( OPTIND - 1 ))
+	shift $((OPTIND - 1))
 	rootfs="$(readlink -f "$1")"
 	if [ -z "${rootfs}" ]; then
 		usage
@@ -562,7 +561,7 @@ main() {
 		exit $?
 	fi
 
-	if ! check_rootfs "${rootfs}" ; then
+	if ! check_rootfs "${rootfs}"; then
 		die "Invalid rootfs"
 	fi
 
@@ -572,7 +571,7 @@ main() {
 	# consider in calculate_img_size
 	rootfs_img_size=$((img_size - dax_header_sz))
 	create_rootfs_image "${rootfs}" "${image}" "${rootfs_img_size}" \
-						"${fs_type}" "${block_size}" "${agent_bin}"
+		"${fs_type}" "${block_size}" "${agent_bin}"
 
 	# insert at the beginning of the image the MBR + DAX header
 	set_dax_header "${image}" "${img_size}" "${fs_type}" "${nsdax_bin}"

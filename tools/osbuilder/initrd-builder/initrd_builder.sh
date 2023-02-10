@@ -20,8 +20,7 @@ INITRD_IMAGE="${INITRD_IMAGE:-kata-containers-initrd.img}"
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 
-usage()
-{
+usage() {
 	error="${1:-0}"
 	cat <<EOF
 Usage: ${script_name} [options] <rootfs-dir>
@@ -39,21 +38,19 @@ Extra environment variables:
 	AGENT_INIT: use kata agent as init process
 		    DEFAULT: no
 EOF
-exit "${error}"
+	exit "${error}"
 }
 
-while getopts "ho:" opt
-do
+while getopts "ho:" opt; do
 	case "$opt" in
-		h)	usage ;;
-		o)	INITRD_IMAGE="${OPTARG}" ;;
+	h) usage ;;
+	o) INITRD_IMAGE="${OPTARG}" ;;
 	esac
 done
 
-shift $(( $OPTIND - 1 ))
+shift $(($OPTIND - 1))
 
 ROOTFS="$1"
-
 
 [ -n "${ROOTFS}" ] || usage
 [ -d "${ROOTFS}" ] || die "${ROOTFS} is not a directory"
@@ -67,7 +64,7 @@ IMAGE_NAME=$(basename ${INITRD_IMAGE})
 init="${ROOTFS}/sbin/init"
 [ -x "${init}" ] || [ -L ${init} ] || die "/sbin/init is not installed in ${ROOTFS}"
 OK "init is installed"
-[ "${AGENT_INIT}" == "yes" ] || [ -x "${ROOTFS}/usr/bin/${AGENT_BIN}" ] || \
+[ "${AGENT_INIT}" == "yes" ] || [ -x "${ROOTFS}/usr/bin/${AGENT_BIN}" ] ||
 	die "/usr/bin/${AGENT_BIN} is not installed in ${ROOTFS}
 	use AGENT_BIN env variable to change the expected agent binary name"
 OK "Agent is installed"
@@ -76,4 +73,4 @@ OK "Agent is installed"
 ln -sf /sbin/init "${ROOTFS}/init"
 
 info "Creating ${IMAGE_DIR}/${IMAGE_NAME} based on rootfs at ${ROOTFS}"
-( cd "${ROOTFS}" && find . | cpio -H newc -o | gzip -9 ) > "${IMAGE_DIR}"/"${IMAGE_NAME}"
+(cd "${ROOTFS}" && find . | cpio -H newc -o | gzip -9) >"${IMAGE_DIR}"/"${IMAGE_NAME}"

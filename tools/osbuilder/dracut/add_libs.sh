@@ -6,7 +6,7 @@
 
 script_name="$(basename "$0")"
 usage() {
-	cat >&2 << EOF
+	cat >&2 <<EOF
 Usage: ${script_name} [-h] <agent-binary>
 Output dracut configuration with required additional libraries for the Kata agent.
 
@@ -35,16 +35,16 @@ fi
 # Cover both cases of "not a dynamic executable" being printed to STDERR
 # and "statically linked" being printed to STDOUT
 linked_libs="$(ldd "${agent_binary}" 2>&1)"
-if [ "$(wc -l <<< "${linked_libs}")" == 1 ]; then
+if [ "$(wc -l <<<"${linked_libs}")" == 1 ]; then
 	echo >&2 "Agent appears to be linked statically, exiting"
 	exit 0
 fi
 
 for lib in "${non_standard_libs[@]}"; do
-	install_items+=" $(grep -F "${lib}" <<< "${linked_libs}" | cut -d" " -f3)"
+	install_items+=" $(grep -F "${lib}" <<<"${linked_libs}" | cut -d" " -f3)"
 done
 
-cat << EOF
+cat <<EOF
 # add libraries that the Kata agent is linked against, but that are not included by default
 install_items+="${install_items} "
 EOF
