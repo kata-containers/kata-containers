@@ -46,6 +46,8 @@ CreateContainerRequest {
     policy_container := policy_containers[input.index]
 
     policy_container.ociVersion     == input_container.ociVersion
+
+    allow_cri_container_types(policy_container, input_container)
     
     policy_process := policy_container.process
     input_process := input_container.process
@@ -73,6 +75,26 @@ CreateContainerRequest {
 
     allow_by_bundle_id(policy_container, input_container)
     allow_linux(policy_container, input_container)
+}
+
+######################################################################
+# "io.kubernetes.cri.container-type" annotation
+
+allow_cri_container_types(policy_container, input_container) {
+    policy_cri_container_type := policy_container.annotations["io.kubernetes.cri.container-type"]
+    allow_cri_container_type(policy_cri_container_type)
+
+    input_cri_container_type := input_container.annotations["io.kubernetes.cri.container-type"]
+    allow_cri_container_type(input_cri_container_type)
+
+    policy_cri_container_type == input_cri_container_type
+}
+
+allow_cri_container_type(cri_container_type) {
+    cri_container_type == "container"
+}
+allow_cri_container_type(cri_container_type) {
+    cri_container_type == "sandbox"
 }
 
 ######################################################################

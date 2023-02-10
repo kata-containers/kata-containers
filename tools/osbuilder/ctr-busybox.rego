@@ -39,10 +39,15 @@ default WriteStreamRequest := true
 
 CreateContainerRequest {
     input_container := input.oci
-    policy_container := policy_containers[input.index]
+    input_index := input.index
+    input_index == 0
+
+    policy_container := policy_containers[input_index]
 
     policy_container.ociVersion     == input_container.ociVersion
-    
+
+    cri_container_types(policy_container, input_container)
+
     policy_process := policy_container.process
     input_process := input_container.process
 
@@ -67,6 +72,14 @@ CreateContainerRequest {
 
     policy_container.mounts         == input_container.mounts
     allow_linux(policy_container, input_container)
+}
+
+######################################################################
+# "io.kubernetes.cri.container-type" annotation
+
+cri_container_types(policy_container, input_container) {
+    not policy_container.annotations["io.kubernetes.cri.container-type"]
+    not input_container.annotations["io.kubernetes.cri.container-type"]
 }
 
 ######################################################################
