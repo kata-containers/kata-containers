@@ -224,6 +224,8 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     let root_span = span!(tracing::Level::TRACE, "root-span");
 
+    AGENT_POLICY.lock().await.initialize().await?;
+
     // XXX: Start the root trace transaction.
     //
     // XXX: Note that *ALL* spans needs to start after this point!!

@@ -18,18 +18,35 @@ macro_rules! sl {
 #[derive(Debug)]
 pub struct AgentPolicy {
     opa_uri: String,
-    loop_sleep_millis: u64,
-    max_loop_count: u32,
 }
 
 impl AgentPolicy {
-    #[instrument]
     pub fn from_opa_uri(uri: &str) -> Result<AgentPolicy> {
         Ok(AgentPolicy {
             opa_uri: uri.to_string(),
-            loop_sleep_millis: 10,
-            max_loop_count: 500,
         })
+    }
+
+    #[instrument]
+    pub async fn initialize(&self) -> Result<()> {
+        let request_uri = self.opa_uri.to_string() + "GuestDetailsRequest";
+        let post_input = "{{ \"input\": {{}} }}".to_string();
+        let client = reqwest::Client::new();
+
+        for _ in 0..10 {
+            if let Ok(_) = client
+                .post(request_uri.to_owned())
+                .body(post_input.to_owned())
+                .send()
+                .await {
+
+                break;
+            } else {
+                println!("policy initialize: POST failed");
+                sleep(Duration::from_millis(1000)).await;
+            }
+        }
+        Ok(())
     }
 
     #[instrument]
@@ -40,43 +57,28 @@ impl AgentPolicy {
     ) -> bool {
         let mut allow = false;
         let client = reqwest::Client::new();
+        let uri = self.opa_uri.to_string() + ep;
+        let input_with_key = format!("{{\"input\":{}}}", post_input);
 
-        for _ in 0..self.max_loop_count {
-            let uri = self.opa_uri.to_owned() + ep;
-            let input_with_key = format!("{{\"input\":{}}}", post_input);
+        info!(sl!(), "post_to_opa: uri {}, input <{}>", uri, input_with_key);
+        let response = client.post(uri)
+            .body(input_with_key)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(allow, false);
 
-            info!(sl!(), "post_to_opa: uri {}, input <{}>", uri, input_with_key);
-            let result = client
-                .post(uri)
-                .body(input_with_key)
-                .send()
-                .await;
+        let status = response.status();
+        if status != http::StatusCode::OK {
+            assert_eq!(allow, false);
+            error!(sl!(), "post_to_opa: POST response status {}", status);
+        } else {
+            let result_json = response.text().await.unwrap().trim().to_string();
+            allow = result_json.eq("{\"result\":true}");
 
-            match result {
-                Err(e) => {
-                    error!(sl!(), "post_to_opa: POST error {}", e);
-                }
-                Ok(response) => {
-                    let status = response.status();
-                    if status != http::StatusCode::OK {
-                        error!(sl!(), "post_to_opa: POST response status {}", status);
-                    } else {
-                        let result_json = response.text().await.unwrap();
-                        allow = result_json.eq("{\"result\":true}");
-
-                        if !allow {
-                            error!(sl!(), "post_to_opa: response <{}>", result_json);
-                        }
-
-                        // OPA is up and running, so don't retry in the future.
-                        self.max_loop_count = 1;
-                        break;
-                    }
-                }
+            if !allow {
+                error!(sl!(), "post_to_opa: response <{}>", result_json);
             }
-
-            // Wait for opa to initialize.
-            sleep(Duration::from_millis(self.loop_sleep_millis)).await;
         }
 
         allow
@@ -90,6 +92,7 @@ impl AgentPolicy {
         self.post_to_opa(ep, "{}").await
     }
 
+    #[instrument]
     pub async fn is_allowed_create_container_endpoint(
         &mut self,
         ep: &str,
