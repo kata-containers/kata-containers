@@ -7,11 +7,6 @@
 use anyhow::{anyhow, Result};
 
 use crate::{VM_ROOTFS_DRIVER_BLK, VM_ROOTFS_DRIVER_PMEM};
-use kata_types::config::LOG_VPORT_OPTION;
-
-// Port where the agent will send the logs. Logs are sent through the vsock in cases
-// where the hypervisor has no console.sock, i.e dragonball
-const VSOCK_LOGS_PORT: &str = "1025";
 
 const KERNEL_KV_DELIMITER: &str = "=";
 const KERNEL_PARAM_DELIMITER: &str = " ";
@@ -49,9 +44,9 @@ pub(crate) struct KernelParams {
 }
 
 impl KernelParams {
-    pub(crate) fn new(debug: bool) -> Self {
+    pub(crate) fn new() -> Self {
         // default kernel params
-        let mut params = vec![
+        let params = vec![
             Param::new("reboot", "k"),
             Param::new("earlyprintk", "ttyS0"),
             Param::new("initcall_debug", ""),
@@ -59,10 +54,6 @@ impl KernelParams {
             Param::new("systemd.unit", "kata-containers.target"),
             Param::new("systemd.mask", "systemd-networkd.service"),
         ];
-
-        if debug {
-            params.push(Param::new(LOG_VPORT_OPTION, VSOCK_LOGS_PORT));
-        }
 
         Self { params }
     }
@@ -108,6 +99,10 @@ impl KernelParams {
 
     pub(crate) fn append(&mut self, params: &mut KernelParams) {
         self.params.append(&mut params.params);
+    }
+
+    pub(crate) fn push(&mut self, param: Param) {
+        self.params.push(param);
     }
 
     pub(crate) fn from_string(params_string: &str) -> Self {
