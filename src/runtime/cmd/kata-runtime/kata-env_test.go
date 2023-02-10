@@ -78,6 +78,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	hypervisorPath := filepath.Join(prefixDir, "hypervisor")
 	kernelPath := filepath.Join(prefixDir, "kernel")
 	imagePath := filepath.Join(prefixDir, "image")
+	rootfsType := "ext4"
 	kernelParams := "foo=bar xyz"
 	machineType := "machineType"
 	disableBlock := true
@@ -119,6 +120,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		HypervisorPath:       hypervisorPath,
 		KernelPath:           kernelPath,
 		ImagePath:            imagePath,
+		RootfsType:           rootfsType,
 		KernelParams:         kernelParams,
 		MachineType:          machineType,
 		LogPath:              logPath,

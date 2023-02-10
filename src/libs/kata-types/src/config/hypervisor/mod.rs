@@ -210,6 +210,9 @@ pub struct BootInfo {
     /// Path to root device on host
     #[serde(default)]
     pub image: String,
+    /// Rootfs filesystem type.
+    #[serde(default)]
+    pub rootfs_type: String,
     /// Path to the firmware.
     ///
     /// If you want that qemu uses the default firmware leave this option empty.

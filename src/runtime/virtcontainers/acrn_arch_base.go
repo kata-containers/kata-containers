@@ -64,7 +64,7 @@ type acrnArch interface {
 	appendBlockDevice(devices []Device, drive config.BlockDrive) []Device
 
 	// handleImagePath handles the Hypervisor Config image path
-	handleImagePath(config HypervisorConfig)
+	handleImagePath(config HypervisorConfig) error
 }
 
 type acrnArchBase struct {
@@ -314,7 +314,7 @@ func MaxAcrnVCPUs() uint32 {
 	return uint32(8)
 }
 
-func newAcrnArch(config HypervisorConfig) acrnArch {
+func newAcrnArch(config HypervisorConfig) (acrnArch, error) {
 	a := &acrnArchBase{
 		path:                 acrnPath,
 		ctlpath:              acrnctlPath,
@@ -323,8 +323,11 @@ func newAcrnArch(config HypervisorConfig) acrnArch {
 		kernelParams:         acrnKernelParams,
 	}
 
-	a.handleImagePath(config)
-	return a
+	if err := a.handleImagePath(config); err != nil {
+		return nil, err
+	}
+
+	return a, nil
 }
 
 func (a *acrnArchBase) acrnPath() (string, error) {
@@ -788,10 +791,11 @@ func (a *acrnArchBase) appendBlockDevice(devices []Device, drive config.BlockDri
 	return devices
 }
 
-func (a *acrnArchBase) handleImagePath(config HypervisorConfig) {
+func (a *acrnArchBase) handleImagePath(config HypervisorConfig) error {
 	if config.ImagePath != "" {
 		a.kernelParams = append(a.kernelParams, acrnKernelRootParams...)
 		a.kernelParamsNonDebug = append(a.kernelParamsNonDebug, acrnKernelParamsSystemdNonDebug...)
 		a.kernelParamsDebug = append(a.kernelParamsDebug, acrnKernelParamsSystemdDebug...)
 	}
+	return nil
 }

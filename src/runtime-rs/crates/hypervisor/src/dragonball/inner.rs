@@ -101,7 +101,10 @@ impl DragonballInner {
 
         // get kernel params
         let mut kernel_params = KernelParams::new(self.config.debug_info.enable_debug);
-        kernel_params.append(&mut KernelParams::new_rootfs_kernel_params(&rootfs_driver));
+        kernel_params.append(&mut KernelParams::new_rootfs_kernel_params(
+            &rootfs_driver,
+            &self.config.boot_info.rootfs_type,
+        )?);
         kernel_params.append(&mut KernelParams::from_string(
             &self.config.boot_info.kernel_params,
         ));
