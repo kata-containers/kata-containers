@@ -66,7 +66,16 @@ CreateContainerRequest {
     policy_container.root.readonly  == input_container.root.readonly
 
     policy_container.mounts         == input_container.mounts
-    policy_container.linux          == input_container.linux
+    allow_linux(policy_container, input_container)
+}
+
+######################################################################
+# linux fields
+
+allow_linux(policy_container, input_container) {
+    policy_container.linux.namespaces == input_container.linux.namespaces
+    policy_container.linux.maskedPaths == input_container.linux.maskedPaths
+    policy_container.linux.readonlyPaths == input_container.linux.readonlyPaths
 }
 
 ######################################################################
