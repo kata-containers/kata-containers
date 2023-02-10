@@ -1482,12 +1482,11 @@ impl LinuxContainer {
             } else {
                 linux.cgroups_path.clone()
             }
+        } else if linux.cgroups_path.is_empty() {
+            format!("/{}", id.as_str())
         } else {
-            if linux.cgroups_path.is_empty() {
-                format!("/{}", id.as_str())
-            } else {
-                linux.cgroups_path.clone()
-            }
+            // if we have a systemd cgroup path we need to convert it to a fs cgroup path
+            linux.cgroups_path.replace(':', "/")
         };
 
         let cgroup_manager: Box<dyn Manager + Send + Sync> = if config.use_systemd_cgroup {

@@ -339,7 +339,7 @@ async fn start_sandbox(
     sandbox.lock().await.sender = Some(tx);
 
     // vsock:///dev/vsock, port
-    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str())?;
+    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str(), init_mode)?;
     server.start().await?;
 
     rx.await?;
