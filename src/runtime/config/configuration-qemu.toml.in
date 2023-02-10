@@ -18,6 +18,12 @@ image = "@IMAGEPATH@"
 # initrd = "@INITRDPATH@"
 machine_type = "@MACHINETYPE@"
 
+# rootfs filesystem type:
+#   - ext4 (default)
+#   - xfs
+#   - erofs
+rootfs_type=@DEFROOTFSTYPE@
+
 # Enable confidential guest support.
 # Toggling that setting may trigger different hardware features, ranging
 # from memory encryption to both memory and CPU-state encryption and integrity.

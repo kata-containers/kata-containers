@@ -83,7 +83,11 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	}
 
 	if config.ImagePath != "" {
-		q.kernelParams = append(q.kernelParams, commonVirtioblkKernelRootParams...)
+		kernelParams, err := GetKernelRootParams(config.RootfsType, true, false)
+		if err != nil {
+			return nil, err
+		}
+		q.kernelParams = append(q.kernelParams, kernelParams...)
 		q.kernelParamsNonDebug = append(q.kernelParamsNonDebug, kernelParamsSystemdNonDebug...)
 		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)
 	}

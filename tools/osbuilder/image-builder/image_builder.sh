@@ -18,6 +18,7 @@ readonly lib_file="${script_dir}/../scripts/lib.sh"
 
 readonly ext4_format="ext4"
 readonly xfs_format="xfs"
+readonly erofs_format="erofs"
 
 # ext4: percentage of the filesystem which may only be allocated by privileged processes.
 readonly reserved_blocks_percentage=3
@@ -83,7 +84,7 @@ Options:
 	-h Show this help
 	-o Path to generate image file. ENV: IMAGE
 	-r Free space of the root partition in MB. ENV: ROOT_FREE_SPACE
-	-f Filesystem type to use, only xfs and ext4 are supported. ENV: FS_TYPE
+	-f Filesystem type to use, only ext4, xfs and erofs are supported. ENV: FS_TYPE
 
 Extra environment variables:
 	AGENT_BIN:      Use it to change the expected agent binary name
@@ -99,7 +100,6 @@ Extra environment variables:
 	                Make sure that selinuxfs is mounted to /sys/fs/selinux on the host
 	                and the rootfs is built with SELINUX=yes.
 	                DEFAULT value: "no"
-
 
 Following diagram shows how the resulting image will look like
 
@@ -351,12 +351,14 @@ format_loop() {
 	local device="$1"
 	local block_size="$2"
 	local fs_type="$3"
+	local mount_dir="$4"
 
 	case "${fs_type}" in
 		"${ext4_format}")
 			mkfs.ext4 -q -F -b "${block_size}" "${device}p1"
 			info "Set filesystem reserved blocks percentage to ${reserved_blocks_percentage}%"
 			tune2fs -m "${reserved_blocks_percentage}" "${device}p1"
+      return 0
 			;;
 
 		"${xfs_format}")
@@ -366,7 +368,8 @@ format_loop() {
 			if mkfs.xfs -m reflink=0 -q -f -b size="${block_size}" "${device}p1" 2>&1 | grep -q "unknown option"; then
 				mkfs.xfs -q -f -b size="${block_size}" "${device}p1"
 			fi
-			;;
+      return 0
+    	;;
 
 		*)
 			error "Unsupported fs type: ${fs_type}"
@@ -395,6 +398,55 @@ create_disk() {
 	OK "Partitions created"
 }
 
+setup_selinux() {
+		local mount_dir="$1"
+		local agent_bin="$2"
+
+		if [ "${SELINUX}" == "yes" ]; then
+			if [ "${AGENT_INIT}" == "yes" ]; then
+				die "Guest SELinux with the agent init is not supported yet"
+			fi
+
+			info "Labeling rootfs for SELinux"
+			selinuxfs_path="${mount_dir}${SELINUXFS}"
+			mkdir -p "$selinuxfs_path"
+			if mountpoint $SELINUXFS > /dev/null && \
+				chroot "${mount_dir}" command -v restorecon > /dev/null; then
+				mount -t selinuxfs selinuxfs "$selinuxfs_path"
+				chroot "${mount_dir}" restorecon -RF -e ${SELINUXFS} /
+				# TODO: This operation will be removed after the updated container-selinux that
+				# includes the following commit is released.
+				# https://github.com/containers/container-selinux/commit/39f83cc74d50bd10ab6be4d0bdd98bc04857469f
+				# We use chcon as an interim solution until then.
+				chroot "${mount_dir}" chcon -t container_runtime_exec_t "/usr/bin/${agent_bin}"
+				umount "${selinuxfs_path}"
+			else
+				die "Could not label the rootfs. Make sure that SELinux is enabled on the host \
+  and the rootfs is built with SELINUX=yes"
+			fi
+		fi
+}
+
+setup_systemd() {
+		local mount_dir="$1"
+
+		info "Removing unneeded systemd services and sockets"
+		for u in "${systemd_units[@]}"; do
+			find "${mount_dir}" -type f \( \
+				 -name "${u}.service" -o \
+				 -name "${u}.socket" \) \
+				 -exec rm -f {} \;
+		done
+
+		info "Removing unneeded systemd files"
+		for u in "${systemd_files[@]}"; do
+			find "${mount_dir}" -type f -name "${u}" -exec rm -f {} \;
+		done
+
+		info "Creating empty machine-id to allow systemd to bind-mount it"
+		touch "${mount_dir}/etc/machine-id"
+}
+
 create_rootfs_image() {
 	local rootfs="$1"
 	local image="$2"
@@ -409,60 +461,26 @@ create_rootfs_image() {
 		die "Could not setup loop device"
 	fi
 
-	if ! format_loop "${device}" "${block_size}" "${fs_type}"; then
+	if ! format_loop "${device}" "${block_size}" "${fs_type}" ""; then
 		die "Could not format loop device: ${device}"
 	fi
 
 	info "Mounting root partition"
-	readonly mount_dir=$(mktemp -p ${TMPDIR:-/tmp} -d osbuilder-mount-dir.XXXX)
+	local mount_dir=$(mktemp -p "${TMPDIR:-/tmp}" -d osbuilder-mount-dir.XXXX)
 	mount "${device}p1" "${mount_dir}"
 	OK "root partition mounted"
 
 	info "Copying content from rootfs to root partition"
 	cp -a "${rootfs}"/* "${mount_dir}"
 
-	if [ "${SELINUX}" == "yes" ]; then
-		if [ "${AGENT_INIT}" == "yes" ]; then
-			die "Guest SELinux with the agent init is not supported yet"
-		fi
-
-		info "Labeling rootfs for SELinux"
-		selinuxfs_path="${mount_dir}${SELINUXFS}"
-		mkdir -p $selinuxfs_path
-		if mountpoint $SELINUXFS > /dev/null && \
-			chroot "${mount_dir}" command -v restorecon > /dev/null; then
-			mount -t selinuxfs selinuxfs $selinuxfs_path
-			chroot "${mount_dir}" restorecon -RF -e ${SELINUXFS} /
-			# TODO: This operation will be removed after the updated container-selinux that
-			# includes the following commit is released.
-			# https://github.com/containers/container-selinux/commit/39f83cc74d50bd10ab6be4d0bdd98bc04857469f
-			# We use chcon as an interim solution until then.
-			chroot "${mount_dir}" chcon -t container_runtime_exec_t "/usr/bin/${agent_bin}"
-			umount $selinuxfs_path
-		else
-			die "Could not label the rootfs. Make sure that SELinux is enabled on the host \
-and the rootfs is built with SELINUX=yes"
-		fi
-	fi
+	info "Setup SELinux"
+	setup_selinux "${mount_dir}" "${agent_bin}"
 
 	sync
 	OK "rootfs copied"
 
-	info "Removing unneeded systemd services and sockets"
-	for u in "${systemd_units[@]}"; do
-		find "${mount_dir}" -type f \( \
-			 -name "${u}.service" -o \
-			 -name "${u}.socket" \) \
-			 -exec rm -f {} \;
-	done
-
-	info "Removing unneeded systemd files"
-	for u in "${systemd_files[@]}"; do
-		find "${mount_dir}" -type f -name "${u}" -exec rm -f {} \;
-	done
-
-	info "Creating empty machine-id to allow systemd to bind-mount it"
-	touch "${mount_dir}/etc/machine-id"
+	info "Setup systemd"
+	setup_systemd "${mount_dir}"
 
 	info "Unmounting root partition"
 	umount "${mount_dir}"
@@ -473,7 +491,50 @@ and the rootfs is built with SELINUX=yes"
 	fi
 
 	losetup -d "${device}"
-	rmdir "${mount_dir}"
+	rm -rf "${mount_dir}"
+}
+
+create_erofs_rootfs_image() {
+	local rootfs="$1"
+	local image="$2"
+	local block_size="$3"
+	local agent_bin="$4"
+
+	if [ "$block_size" -ne 4096 ]; then
+		die "Invalid block size for erofs"
+	fi
+
+	if ! device="$(setup_loop_device "${image}")"; then
+		die "Could not setup loop device"
+	fi
+
+	local mount_dir=$(mktemp -p "${TMPDIR:-/tmp}" -d osbuilder-mount-dir.XXXX)
+
+	info "Copying content from rootfs to root partition"
+	cp -a "${rootfs}"/* "${mount_dir}"
+
+	info "Setup SELinux"
+	setup_selinux "${mount_dir}" "${agent_bin}"
+
+	sync
+	OK "rootfs copied"
+
+	info "Setup systemd"
+	setup_systemd "${mount_dir}"
+
+	readonly fsimage="$(mktemp)"
+	mkfs.erofs -Enoinline_data "${fsimage}" "${mount_dir}"
+	local img_size="$(stat -c"%s" "${fsimage}")"
+	local img_size_mb="$(((("${img_size}" + 1048576) / 1048576) + 1 + "${rootfs_start}"))"
+
+	create_disk "${image}" "${img_size_mb}" "ext4" "${rootfs_start}"
+
+	dd if="${fsimage}" of="${device}p1"
+
+	losetup -d "${device}"
+	rm -rf "${mount_dir}"
+
+	return "${img_size_mb}"
 }
 
 set_dax_header() {
@@ -566,14 +627,23 @@ main() {
 		die "Invalid rootfs"
 	fi
 
-	img_size=$(calculate_img_size "${rootfs}" "${root_free_space}" "${fs_type}" "${block_size}")
+	if [ "${fs_type}" == 'erofs' ]; then
+		# mkfs.erofs accepts an src root dir directory as an input
+		# rather than some device, so no need to guess the device dest size first.
+		create_erofs_rootfs_image "${rootfs}" "${image}" \
+						"${block_size}" "${agent_bin}"
+		rootfs_img_size=$?
+		img_size=$((rootfs_img_size + dax_header_sz))
+	else
+		img_size=$(calculate_img_size "${rootfs}" "${root_free_space}" \
+			"${fs_type}" "${block_size}")
 
-	# the first 2M are for the first MBR + NVDIMM metadata and were already
-	# consider in calculate_img_size
-	rootfs_img_size=$((img_size - dax_header_sz))
-	create_rootfs_image "${rootfs}" "${image}" "${rootfs_img_size}" \
+		# the first 2M are for the first MBR + NVDIMM metadata and were already
+		# consider in calculate_img_size
+		rootfs_img_size=$((img_size - dax_header_sz))
+		create_rootfs_image "${rootfs}" "${image}" "${rootfs_img_size}" \
 						"${fs_type}" "${block_size}" "${agent_bin}"
-
+	fi
 	# insert at the beginning of the image the MBR + DAX header
 	set_dax_header "${image}" "${img_size}" "${fs_type}" "${nsdax_bin}"
 }

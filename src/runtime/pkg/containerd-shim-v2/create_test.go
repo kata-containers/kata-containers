@@ -320,6 +320,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 	kernelPath := path.Join(dir, "kernel")
 	kernelParams := "foo=bar xyz"
 	imagePath := path.Join(dir, "image")
+	rootfsType := "ext4"
 	logDir := path.Join(dir, "logs")
 	logPath := path.Join(logDir, "runtime.log")
 	machineType := "machineType"
@@ -337,6 +338,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 		HypervisorPath:       hypervisorPath,
 		KernelPath:           kernelPath,
 		ImagePath:            imagePath,
+		RootfsType:           rootfsType,
 		KernelParams:         kernelParams,
 		MachineType:          machineType,
 		LogPath:              logPath,

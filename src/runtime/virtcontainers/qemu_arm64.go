@@ -65,7 +65,9 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		},
 	}
 
-	q.handleImagePath(config)
+	if err := q.handleImagePath(config); err != nil {
+		return nil, err
+	}
 
 	return q, nil
 }

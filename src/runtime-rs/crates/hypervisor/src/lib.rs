@@ -27,6 +27,16 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 // Config which driver to use as vm root dev
 const VM_ROOTFS_DRIVER_BLK: &str = "virtio-blk";
 const VM_ROOTFS_DRIVER_PMEM: &str = "virtio-pmem";
+
+//Configure the root corresponding to the driver
+const VM_ROOTFS_ROOT_BLK: &str = "/dev/vda1";
+const VM_ROOTFS_ROOT_PMEM: &str = "/dev/pmem0p1";
+
+// Config which filesystem to use as rootfs type
+const VM_ROOTFS_FILESYSTEM_EXT4: &str = "ext4";
+const VM_ROOTFS_FILESYSTEM_XFS: &str = "xfs";
+const VM_ROOTFS_FILESYSTEM_EROFS: &str = "erofs";
+
 // before using hugepages for VM, we need to mount hugetlbfs
 // /dev/hugepages will be the mount point
 // mkdir -p /dev/hugepages
