@@ -137,6 +137,7 @@ macro_rules! is_allowed {
 #[derive(Clone, Debug)]
 pub struct AgentService {
     sandbox: Arc<Mutex<Sandbox>>,
+    init_mode: bool,
 }
 
 impl AgentService {
@@ -213,8 +214,13 @@ impl AgentService {
         // determine which cgroup driver to take and then assign to use_systemd_cgroup
         // systemd: "[slice]:[prefix]:[name]"
         // fs: "/path_a/path_b"
+        // If agent is init we can't use systemd cgroup mode, no matter what the host tells us
         let cgroups_path = oci.linux.as_ref().map_or("", |linux| &linux.cgroups_path);
-        let use_systemd_cgroup = SYSTEMD_CGROUP_PATH_FORMAT.is_match(cgroups_path);
+        let use_systemd_cgroup = if self.init_mode {
+            false
+        } else {
+            SYSTEMD_CGROUP_PATH_FORMAT.is_match(cgroups_path)
+        };
 
         let opts = CreateOpts {
             cgroup_name: "".to_string(),
@@ -1679,9 +1685,11 @@ async fn read_stream(reader: Arc<Mutex<ReadHalf<PipeStream>>>, l: usize) -> Resu
     Ok(content)
 }
 
-pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> Result<TtrpcServer> {
-    let agent_service =
-        Box::new(AgentService { sandbox: s }) as Box<dyn agent_ttrpc::AgentService + Send + Sync>;
+pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str, init_mode: bool) -> Result<TtrpcServer> {
+    let agent_service = Box::new(AgentService {
+        sandbox: s,
+        init_mode,
+    }) as Box<dyn agent_ttrpc::AgentService + Send + Sync>;
 
     let agent_worker = Arc::new(agent_service);
 
@@ -2157,6 +2165,7 @@ mod tests {
 
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
         });
 
         let req = protocols::agent::UpdateInterfaceRequest::default();
@@ -2174,6 +2183,7 @@ mod tests {
 
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
         });
 
         let req = protocols::agent::UpdateRoutesRequest::default();
@@ -2191,6 +2201,7 @@ mod tests {
 
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
         });
 
         let req = protocols::agent::AddARPNeighborsRequest::default();
@@ -2324,6 +2335,7 @@ mod tests {
 
             let agent_service = Box::new(AgentService {
                 sandbox: Arc::new(Mutex::new(sandbox)),
+                init_mode: true,
             });
 
             let result = agent_service
@@ -2804,6 +2816,7 @@ OtherField:other
         let sandbox = Sandbox::new(&logger).unwrap();
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
         });
 
         let ctx = mk_ttrpc_context();
