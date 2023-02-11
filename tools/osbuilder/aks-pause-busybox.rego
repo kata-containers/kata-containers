@@ -40,7 +40,8 @@ default StartTracingRequest := true
 default StatsContainerRequest := true
 default StopTracingRequest := true
 default TtyWinResizeRequest := true
-default UpdateContainerRequest := true
+
+default UpdateContainerRequest := false
 
 # Could validate the format and/or consistency of fields.
 default UpdateInterfaceRequest := true
