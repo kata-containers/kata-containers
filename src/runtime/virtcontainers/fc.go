@@ -89,7 +89,7 @@ const (
 // Specify the minimum version of firecracker supported
 var fcMinSupportedVersion = semver.MustParse("0.21.1")
 
-var fcKernelParams = append(commonVirtioblkKernelRootParams, []Param{
+var fcKernelParams = []Param{
 	// The boot source is the first partition of the first block device added
 	{"pci", "off"},
 	{"reboot", "k"},
@@ -101,7 +101,7 @@ var fcKernelParams = append(commonVirtioblkKernelRootParams, []Param{
 	// Firecracker doesn't support ACPI
 	// Fix kernel error "ACPI BIOS Error (bug)"
 	{"acpi", "off"},
-}...)
+}
 
 func (s vmmState) String() string {
 	switch s {
@@ -700,6 +700,11 @@ func (fc *firecracker) fcInitConfiguration(ctx context.Context) error {
 		return err
 	}
 
+	params, err := GetKernelRootParams(fc.config.RootfsType, true, false)
+	if err != nil {
+		return err
+	}
+	fcKernelParams = append(params, fcKernelParams...)
 	if fc.config.Debug {
 		fcKernelParams = append(fcKernelParams, Param{"console", "ttyS0"})
 	} else {

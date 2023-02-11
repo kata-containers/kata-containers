@@ -16,6 +16,12 @@ path = "@FCPATH@"
 kernel = "@KERNELPATH_FC@"
 image = "@IMAGEPATH@"
 
+# rootfs filesystem type:
+#   - ext4 (default)
+#   - xfs
+#   - erofs
+rootfs_type=@DEFROOTFSTYPE@
+
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"

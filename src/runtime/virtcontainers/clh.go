@@ -503,10 +503,9 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs), int32(clh.config.DefaultMaxVCPUs))
 
-	// First take the default parameters defined by this driver
-	params := commonNvdimmKernelRootParams
-	if clh.config.ConfidentialGuest {
-		params = commonVirtioblkKernelRootParams
+	params, err := GetKernelRootParams(hypervisorConfig.RootfsType, clh.config.ConfidentialGuest, false)
+	if err != nil {
+		return err
 	}
 	params = append(params, clhKernelParams...)
 

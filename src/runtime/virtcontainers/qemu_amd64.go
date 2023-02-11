@@ -148,7 +148,9 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		q.qemuMachine.Options += "sgx-epc.0.memdev=epc0,sgx-epc.0.node=0"
 	}
 
-	q.handleImagePath(config)
+	if err := q.handleImagePath(config); err != nil {
+		return nil, err
+	}
 
 	return q, nil
 }

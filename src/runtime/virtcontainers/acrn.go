@@ -255,7 +255,11 @@ func (a *Acrn) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 	}
 
 	a.id = id
-	a.arch = newAcrnArch(a.config)
+	var err error
+	a.arch, err = newAcrnArch(a.config)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
