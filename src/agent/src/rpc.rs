@@ -133,7 +133,7 @@ macro_rules! ttrpc_error {
     };
 }
 
-macro_rules! is_allowed {
+macro_rules! config_allows {
     ($req:ident) => {
         if !AGENT_CONFIG
             .read()
@@ -145,6 +145,12 @@ macro_rules! is_allowed {
                 format!("{} is blocked", $req.descriptor().name()),
             ));
         }
+    }
+}
+
+macro_rules! is_allowed {
+    ($req:ident) => {
+        config_allows!($req);
 
         if !AGENT_POLICY
             .lock()
@@ -157,21 +163,12 @@ macro_rules! is_allowed {
                 format!("{} is blocked by policy", $req.descriptor().name()),
             ));
         }
-    };
+    }
 }
 
 macro_rules! is_allowed_create_container {
     ($req:ident, $container_count:ident) => {
-        if !AGENT_CONFIG
-            .read()
-            .await
-            .is_allowed_endpoint($req.descriptor().name())
-        {
-            return Err(ttrpc_error!(
-                ttrpc::Code::UNIMPLEMENTED,
-                format!("{} is blocked", $req.descriptor().name()),
-            ));
-        }
+        config_allows!($req);
 
         if !AGENT_POLICY
             .lock()
