@@ -21,21 +21,37 @@ default MemHotplugByProbeRequest := true
 default OnlineCPUMemRequest := true
 default PauseContainerRequest := true
 default PullImageRequest := true
+
+# Could check that "terminal": true.
 default ReadStreamRequest := true
+
 default RemoveContainerRequest := true
 default ReseedRandomDevRequest := false
 default ResumeContainerRequest := true
 default SetGuestDateTimeRequest := true
+
+# Could validate container_id and/or exec_id.
 default SignalProcessRequest := true
+
+# Could validate container_id.
 default StartContainerRequest := true
+
 default StartTracingRequest := true
 default StatsContainerRequest := true
 default StopTracingRequest := true
 default TtyWinResizeRequest := true
 default UpdateContainerRequest := true
+
+# Could validate the format and/or consistency of fields.
 default UpdateInterfaceRequest := true
+
+# Could validate the format and/or consistency of fields.
 default UpdateRoutesRequest := true
+
+# Could validate container_id and/or exec_id.
 default WaitProcessRequest := true
+
+# Could check that "terminal": true.
 default WriteStreamRequest := true
 
 ######################################################################
