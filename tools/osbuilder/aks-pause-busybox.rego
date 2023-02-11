@@ -39,6 +39,8 @@ default StartContainerRequest := true
 # Not found in agent.proto.
 #default StartTracingRequest := false
 
+# Could validate container_id.
+# Could disable if K8s works properly without these stats.
 default StatsContainerRequest := true
 
 # Not found in agent.proto.
