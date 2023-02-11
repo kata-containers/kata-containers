@@ -82,7 +82,6 @@ CreateContainerRequest {
     policy_process.cwd              == input_process.cwd
     policy_process.capabilities     == input_process.capabilities
     policy_process.noNewPrivileges  == input_process.noNewPrivileges
-    policy_process.oomScoreAdj      == input_process.oomScoreAdj
 
     policy_container.root.readonly  == input_container.root.readonly
 
