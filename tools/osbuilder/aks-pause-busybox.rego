@@ -28,7 +28,9 @@ default ReadStreamRequest := true
 default RemoveContainerRequest := true
 default ReseedRandomDevRequest := false
 default ResumeContainerRequest := true
-default SetGuestDateTimeRequest := true
+
+# Haven't found a use case for it.
+#default SetGuestDateTimeRequest := false
 
 # Could validate container_id and/or exec_id.
 default SignalProcessRequest := true
@@ -50,7 +52,7 @@ default StatsContainerRequest := true
 default TtyWinResizeRequest := true
 
 # Haven't found a use case for it.
-default UpdateContainerRequest := false
+#default UpdateContainerRequest := false
 
 # Could validate the format and/or consistency of fields.
 default UpdateInterfaceRequest := true
