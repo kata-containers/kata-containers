@@ -7,12 +7,166 @@ package virtcontainers
 
 import (
 	"fmt"
-	"os"
-	"testing"
-
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
+	"os"
+	"testing"
 )
+
+func TestGetKernelRootParams(t *testing.T) {
+	assert := assert.New(t)
+	tests := []struct {
+		rootfstype    string
+		expected      []Param
+		disableNvdimm bool
+		dax           bool
+		error         bool
+	}{
+		// EXT4
+		{
+			rootfstype: string(EXT4),
+			expected: []Param{
+				{"root", string(Nvdimm)},
+				{"rootflags", "data=ordered,errors=remount-ro ro"},
+				{"rootfstype", string(EXT4)},
+			},
+			disableNvdimm: false,
+			dax:           false,
+			error:         false,
+		},
+		{
+			rootfstype: string(EXT4),
+			expected: []Param{
+				{"root", string(Nvdimm)},
+				{"rootflags", "dax,data=ordered,errors=remount-ro ro"},
+				{"rootfstype", string(EXT4)},
+			},
+			disableNvdimm: false,
+			dax:           true,
+			error:         false,
+		},
+		{
+			rootfstype: string(EXT4),
+			expected: []Param{
+				{"root", string(VirtioBlk)},
+				{"rootflags", "data=ordered,errors=remount-ro ro"},
+				{"rootfstype", string(EXT4)},
+			},
+			disableNvdimm: true,
+			dax:           false,
+			error:         false,
+		},
+
+		// XFS
+		{
+			rootfstype: string(XFS),
+			expected: []Param{
+				{"root", string(Nvdimm)},
+				{"rootflags", "data=ordered,errors=remount-ro ro"},
+				{"rootfstype", string(XFS)},
+			},
+			disableNvdimm: false,
+			dax:           false,
+			error:         false,
+		},
+		{
+			rootfstype: string(XFS),
+			expected: []Param{
+				{"root", string(Nvdimm)},
+				{"rootflags", "dax,data=ordered,errors=remount-ro ro"},
+				{"rootfstype", string(XFS)},
+			},
+			disableNvdimm: false,
+			dax:           true,
+			error:         false,
+		},
+		{
+			rootfstype: string(XFS),
+			expected: []Param{
+				{"root", string(VirtioBlk)},
+				{"rootflags", "data=ordered,errors=remount-ro ro"},
+				{"rootfstype", string(XFS)},
+			},
+			disableNvdimm: true,
+			dax:           false,
+			error:         false,
+		},
+
+		// EROFS
+		{
+			rootfstype: string(EROFS),
+			expected: []Param{
+				{"root", string(Nvdimm)},
+				{"rootflags", "ro"},
+				{"rootfstype", string(EROFS)},
+			},
+			disableNvdimm: false,
+			dax:           false,
+			error:         false,
+		},
+		{
+			rootfstype: string(EROFS),
+			expected: []Param{
+				{"root", string(Nvdimm)},
+				{"rootflags", "dax ro"},
+				{"rootfstype", string(EROFS)},
+			},
+			disableNvdimm: false,
+			dax:           true,
+			error:         false,
+		},
+		{
+			rootfstype: string(EROFS),
+			expected: []Param{
+				{"root", string(VirtioBlk)},
+				{"rootflags", "ro"},
+				{"rootfstype", string(EROFS)},
+			},
+			disableNvdimm: true,
+			dax:           false,
+			error:         false,
+		},
+
+		// Unsupported rootfs type
+		{
+			rootfstype: "foo",
+			expected: []Param{
+				{"root", string(VirtioBlk)},
+				{"rootflags", "data=ordered,errors=remount-ro ro"},
+				{"rootfstype", string(EXT4)},
+			},
+			disableNvdimm: false,
+			dax:           false,
+			error:         true,
+		},
+
+		// Nvdimm does not support DAX
+		{
+			rootfstype: string(EXT4),
+			expected: []Param{
+				{"root", string(VirtioBlk)},
+				{"rootflags", "dax,data=ordered,errors=remount-ro ro"},
+				{"rootfstype", string(EXT4)},
+			},
+			disableNvdimm: true,
+			dax:           true,
+			error:         true,
+		},
+	}
+
+	for _, t := range tests {
+		kernelRootParams, err := GetKernelRootParams(t.rootfstype, t.disableNvdimm, t.dax)
+		if t.error {
+			assert.Error(err)
+			continue
+		} else {
+			assert.NoError(err)
+		}
+		assert.Equal(t.expected, kernelRootParams,
+			"Invalid parameters rootfstype: %v, disableNvdimm: %v, dax: %v, "+
+				"unable to get kernel root params", t.rootfstype, t.disableNvdimm, t.dax)
+	}
+}
 
 func testSetHypervisorType(t *testing.T, value string, expected HypervisorType) {
 	var hypervisorType HypervisorType

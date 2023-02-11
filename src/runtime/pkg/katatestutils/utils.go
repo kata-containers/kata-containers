@@ -211,6 +211,7 @@ type RuntimeConfigOptions struct {
 	DefaultGuestHookPath string
 	KernelPath           string
 	ImagePath            string
+	RootfsType           string
 	KernelParams         string
 	MachineType          string
 	LogPath              string
@@ -307,6 +308,7 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	block_device_aio =  "` + config.BlockDeviceAIO + `"
 	kernel_params = "` + config.KernelParams + `"
 	image = "` + config.ImagePath + `"
+	rootfs_type = "` + config.RootfsType + `"
 	machine_type = "` + config.MachineType + `"
 	default_vcpus = ` + strconv.FormatUint(uint64(config.DefaultVCPUCount), 10) + `
 	default_maxvcpus = ` + strconv.FormatUint(uint64(config.DefaultMaxVCPUCount), 10) + `
