@@ -37,15 +37,17 @@ default SignalProcessRequest := true
 default StartContainerRequest := true
 
 # Not found in agent.proto.
-default StartTracingRequest := false
+#default StartTracingRequest := false
 
 default StatsContainerRequest := true
 
 # Not found in agent.proto.
-default StopTracingRequest := false
+#default StopTracingRequest := false
 
+# Could check that "terminal": true.
 default TtyWinResizeRequest := true
 
+# Haven't found a use case for it.
 default UpdateContainerRequest := false
 
 # Could validate the format and/or consistency of fields.
