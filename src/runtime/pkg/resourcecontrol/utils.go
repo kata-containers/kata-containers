@@ -19,9 +19,6 @@ var (
 	ErrCgroupMode = errors.New("cgroup controller type error")
 )
 
-// DefaultResourceControllerID runtime-determined location in the cgroups hierarchy.
-const DefaultResourceControllerID = "/vc"
-
 func DeviceToCgroupDeviceRule(device string) (*devices.Rule, error) {
 	var st unix.Stat_t
 	deviceRule := devices.Rule{

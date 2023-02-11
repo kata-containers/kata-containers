@@ -17,8 +17,7 @@ import (
 )
 
 func TestStatNetworkMetric(t *testing.T) {
-
-	assert := assert.New(t)
+	assertions := assert.New(t)
 	var err error
 
 	mockNetwork := []*vc.NetworkStats{
@@ -52,8 +51,8 @@ func TestStatNetworkMetric(t *testing.T) {
 	}()
 
 	resp, err := sandbox.StatsContainer(context.Background(), testContainerID)
-	assert.NoError(err)
+	assertions.NoError(err)
 
-	metrics := statsToMetrics(&resp)
-	assert.Equal(expectedNetwork, metrics.Network)
+	metrics := statsToMetricsV1(&resp)
+	assertions.Equal(expectedNetwork, metrics.Network)
 }
