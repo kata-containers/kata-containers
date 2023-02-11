@@ -33,7 +33,12 @@ impl AgentPolicy {
         let post_input = "{{ \"input\": {{}} }}".to_string();
         let client = reqwest::Client::new();
 
-        for _ in 0..10 {
+        for i in 0..50 {
+            if i > 0 {
+                sleep(Duration::from_millis(100)).await;
+                println!("policy initialize: POST failed, retrying");
+            }
+
             if let Ok(_) = client
                 .post(request_uri.to_owned())
                 .body(post_input.to_owned())
@@ -41,9 +46,6 @@ impl AgentPolicy {
                 .await {
 
                 break;
-            } else {
-                println!("policy initialize: POST failed");
-                sleep(Duration::from_millis(1000)).await;
             }
         }
         Ok(())
