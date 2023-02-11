@@ -26,10 +26,10 @@ default PullImageRequest := true
 default ReadStreamRequest := true
 
 default RemoveContainerRequest := true
-default ReseedRandomDevRequest := false
-default ResumeContainerRequest := true
 
-# Haven't found a use case for it.
+# Haven't found a use case for these.
+#default ReseedRandomDevRequest := false
+#default ResumeContainerRequest := false
 #default SetGuestDateTimeRequest := false
 
 # Could validate container_id and/or exec_id.
