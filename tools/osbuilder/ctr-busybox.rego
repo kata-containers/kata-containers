@@ -27,9 +27,15 @@ default ResumeContainerRequest := true
 default SetGuestDateTimeRequest := true
 default SignalProcessRequest := true
 default StartContainerRequest := true
-default StartTracingRequest := true
+
+# Not found in agent.proto.
+default StartTracingRequest := false
+
 default StatsContainerRequest := true
-default StopTracingRequest := true
+
+# Not found in agent.proto.
+default StopTracingRequest := false
+
 default TtyWinResizeRequest := true
 default UpdateContainerRequest := true
 default UpdateInterfaceRequest := true
