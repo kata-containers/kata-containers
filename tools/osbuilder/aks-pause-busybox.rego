@@ -83,7 +83,7 @@ CreateContainerRequest {
 }
 
 ######################################################################
-# Rules for and/or based on annotations
+# Rules for, and/or based, on annotations
 
 allow_annotations(policy_container, input_container) {
     allow_by_container_types(policy_container, input_container)
@@ -93,9 +93,12 @@ allow_annotations(policy_container, input_container) {
 }
 
 ######################################################################
-# Validate the "io.kubernetes.cri.container-type" and
-# "io.katacontainers.pkg.oci.container_type" annotations,
-# then use their values to check various other rules.
+# - Check that the "io.kubernetes.cri.container-type" and
+#   "io.katacontainers.pkg.oci.container_type" annotations
+#   designate either a "sandbox" or a "container".
+#
+# - Other annotations then get validated depending on this
+#   "sandbox" or "container" value.
 
 allow_by_container_types(policy_container, input_container) {
     policy_cri_container_type := policy_container.annotations["io.kubernetes.cri.container-type"]
@@ -107,45 +110,56 @@ allow_by_container_types(policy_container, input_container) {
 }
 
 allow_by_container_type(input_cri_container_type, policy_container, input_container) {
-    input_cri_container_type == "container"
-
-    input_kata_container_type := input_container.annotations["io.katacontainers.pkg.oci.container_type"]
-    input_kata_container_type == "pod_container"
-
-    alow_sandbox_memory_for_container(input_container)
-    alow_network_namespace_for_container(policy_container, input_container)
-    allow_sandbox_log_directory_for_container(policy_container, input_container)
-}
-allow_by_container_type(input_cri_container_type, policy_container, input_container) {
     input_cri_container_type == "sandbox"
 
     input_kata_container_type := input_container.annotations["io.katacontainers.pkg.oci.container_type"]
     input_kata_container_type == "pod_sandbox"
 
-    alow_sandbox_memory_for_sandbox(input_container)
+    alow_image_name_for_sandbox(policy_container, input_container)
     alow_network_namespace_for_sandbox(policy_container, input_container)
     allow_sandbox_log_directory_for_sandbox(policy_container, input_container)
+    alow_sandbox_memory_for_sandbox(input_container)
+}
+allow_by_container_type(input_cri_container_type, policy_container, input_container) {
+    input_cri_container_type == "container"
+
+    input_kata_container_type := input_container.annotations["io.katacontainers.pkg.oci.container_type"]
+    input_kata_container_type == "pod_container"
+
+    alow_image_name_for_container(policy_container, input_container)
+    alow_network_namespace_for_container(policy_container, input_container)
+    allow_sandbox_log_directory_for_container(policy_container, input_container)
+    alow_sandbox_memory_for_container(input_container)
+}
+
+######################################################################
+# "io.kubernetes.cri.image-name" annotation
+
+alow_image_name_for_sandbox(policy_container, input_container) {
+    not policy_container.annotations["io.kubernetes.cri.image-name"]
+    not input_container.annotations["io.kubernetes.cri.image-name"]
+}
+
+alow_image_name_for_container(policy_container, input_container) {
+    policy_image_name := input_container.annotations["io.kubernetes.cri.image-name"]
+    input_image_name := input_container.annotations["io.kubernetes.cri.image-name"]
+
+    policy_image_name == input_image_name
 }
 
 ######################################################################
 # "io.kubernetes.cri.sandbox-memory" annotation
 
-alow_sandbox_memory_for_container(input_container) {
-    not input_container.annotations["io.kubernetes.cri.sandbox-memory"]
-}
-
 alow_sandbox_memory_for_sandbox(input_container) {
     sandbox_memory := input_container.annotations["io.kubernetes.cri.sandbox-memory"]
     to_number(sandbox_memory) >= 0
 }
+alow_sandbox_memory_for_container(input_container) {
+    not input_container.annotations["io.kubernetes.cri.sandbox-memory"]
+}
 
 ######################################################################
 # "nerdctl/network-namespace" annotation
-
-alow_network_namespace_for_container(policy_container, input_container) {
-    not policy_container.annotations["nerdctl/network-namespace"]
-    not input_container.annotations["nerdctl/network-namespace"]
-}
 
 alow_network_namespace_for_sandbox(policy_container, input_container) {
     policy_network_namespace := policy_container.annotations["nerdctl/network-namespace"]
@@ -154,13 +168,13 @@ alow_network_namespace_for_sandbox(policy_container, input_container) {
     regex.match(policy_network_namespace, input_network_namespace)
 }
 
+alow_network_namespace_for_container(policy_container, input_container) {
+    not policy_container.annotations["nerdctl/network-namespace"]
+    not input_container.annotations["nerdctl/network-namespace"]
+}
+
 ######################################################################
 # "io.kubernetes.cri.sandbox-log-directory" and "io.kubernetes.cri.sandbox-name" annotations
-
-allow_sandbox_log_directory_for_container(policy_container, input_container) {
-    not policy_container.annotations["io.kubernetes.cri.sandbox-log-directory"]
-    not input_container.annotations["io.kubernetes.cri.sandbox-log-directory"]
-}
 
 allow_sandbox_log_directory_for_sandbox(policy_container, input_container) {
     policy_sandbox_name := policy_container.annotations["io.kubernetes.cri.sandbox-name"]
@@ -173,6 +187,11 @@ allow_sandbox_log_directory_for_sandbox(policy_container, input_container) {
 
     input_sandbox_log_directory := input_container.annotations["io.kubernetes.cri.sandbox-log-directory"]
     regex.match(directory_regex, input_sandbox_log_directory)
+}
+
+allow_sandbox_log_directory_for_container(policy_container, input_container) {
+    not policy_container.annotations["io.kubernetes.cri.sandbox-log-directory"]
+    not input_container.annotations["io.kubernetes.cri.sandbox-log-directory"]
 }
 
 ######################################################################
