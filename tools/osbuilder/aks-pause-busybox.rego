@@ -11,8 +11,14 @@ default CopyFileRequest := true
 default CreateContainerRequest := false
 default CreateSandboxRequest := true
 default DestroySandboxRequest := true
-default ExecProcessRequest := false
-default GetMetricsRequest := true
+
+# Haven't found a use case for it.
+#default ExecProcessRequest := false
+
+# Useful for diagnostics, but can be disabled in production.
+default GetMetricsRequest := false
+
+# No apparent reasons to reject these requests.
 default GetOOMEventRequest := true
 default GuestDetailsRequest := true
 
