@@ -251,8 +251,8 @@ allow_linux(policy_container, input_container) {
 }
 
 ######################################################################
-# Get bundle_id from "io.katacontainers.pkg.oci.bundle_path" and 
-# use it for various rules matching.
+# Get the input bundle_id from "io.katacontainers.pkg.oci.bundle_path"
+# and check its consistency with other rules.
 
 allow_by_bundle_id(policy_container, input_container) {
     bundle_path := input_container.annotations["io.katacontainers.pkg.oci.bundle_path"]
@@ -260,8 +260,8 @@ allow_by_bundle_id(policy_container, input_container) {
 
     allow_root_path(policy_container, input_container, bundle_id)
 
-    every mount in input.oci.mounts {
-        allow_mount(mount, policy_container, bundle_id)
+    every input_mount in input.oci.mounts {
+        allow_mount(input_mount, policy_container, bundle_id)
     }
 }
 
@@ -277,8 +277,11 @@ allow_process(policy_container, input_container) {
 
     allow_args(policy_process, input_process)
 
-    # Ignore any policy environment variables that are not
-    # present in the input.
+    # - Reject environment variables that are present in the input,
+    #   but not explicitly allowed by the policy.
+    #
+    # - Ignore any environment variables that are allowed by the
+    #   policy but not present in the input.
     every env_var in input_process.env {
         policy_process.env[_] == env_var
     }
@@ -297,6 +300,7 @@ allow_args(policy_process, input_process) {
     not input_process.args
 }
 allow_args(policy_process, input_process) {
+    # Both policy and input include identical args.
     policy_process.args == input_process.args
 }
 
@@ -304,7 +308,7 @@ allow_args(policy_process, input_process) {
 # root.path
 
 allow_root_path(policy_container, input_container, bundle_id) {
-    # "path": "/run/kata-containers/shared/containers/$(bundle-id)/rootfs",
+    # Example policy: "path": "/run/kata-containers/shared/containers/$(bundle-id)/rootfs",
     policy_root_path := replace(policy_container.root.path, "$(bundle-id)", bundle_id)
     policy_root_path == input_container.root.path
 }
@@ -312,24 +316,26 @@ allow_root_path(policy_container, input_container, bundle_id) {
 ######################################################################
 # mounts
 
-allow_mount(mount, policy_container, bundle_id) {
+allow_mount(input_mount, policy_container, bundle_id) {
+    # At least one policy mount rule allows the input mount.
     some policy_mount in policy_container.mounts
-    policy_mount_allows(policy_mount, mount, bundle_id)
+    policy_mount_allows(policy_mount, input_mount, bundle_id)
 }
 
-policy_mount_allows(policy_mount, mount, bundle_id) {
+policy_mount_allows(policy_mount, input_mount, bundle_id) {
     # Exact match of policy and input mount.
-    policy_mount == mount
+    policy_mount == input_mount
 }
-policy_mount_allows(policy_mount, mount, bundle_id) {
-    # Regex including $(bundle-id) - e.g.,
-    #"source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-resolv.conf$",
-    policy_mount.destination == mount.destination
-    policy_mount.type == mount.type
-    policy_mount.options == mount.options
+policy_mount_allows(policy_mount, input_mount, bundle_id) {
+    policy_mount.destination == input_mount.destination
+    policy_mount.type == input_mount.type
+    policy_mount.options == input_mount.options
 
+    # Policy mount source regex including $(bundle-id) alows the input mount - e.g.:
+    #
+    # "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-resolv.conf$",
     policy_source_regex := replace(policy_mount.source, "$(bundle-id)", bundle_id)
-    regex.match(policy_source_regex, mount.source)
+    regex.match(policy_source_regex, input_mount.source)
 }
 
 ######################################################################
