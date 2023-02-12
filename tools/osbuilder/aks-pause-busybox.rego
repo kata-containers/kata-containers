@@ -115,6 +115,7 @@ allow_by_container_type(input_cri_container_type, policy_container, input_contai
     input_kata_container_type := input_container.annotations["io.katacontainers.pkg.oci.container_type"]
     input_kata_container_type == "pod_sandbox"
 
+    alow_container_name_for_sandbox(policy_container, input_container)
     alow_image_name_for_sandbox(policy_container, input_container)
     alow_network_namespace_for_sandbox(policy_container, input_container)
     allow_sandbox_log_directory_for_sandbox(policy_container, input_container)
@@ -126,6 +127,7 @@ allow_by_container_type(input_cri_container_type, policy_container, input_contai
     input_kata_container_type := input_container.annotations["io.katacontainers.pkg.oci.container_type"]
     input_kata_container_type == "pod_container"
 
+    alow_container_name_for_container(policy_container, input_container)
     alow_image_name_for_container(policy_container, input_container)
     alow_network_namespace_for_container(policy_container, input_container)
     allow_sandbox_log_directory_for_container(policy_container, input_container)
@@ -145,6 +147,21 @@ alow_image_name_for_container(policy_container, input_container) {
     input_image_name := input_container.annotations["io.kubernetes.cri.image-name"]
 
     policy_image_name == input_image_name
+}
+
+######################################################################
+# "io.kubernetes.cri.image-name" annotation
+
+alow_container_name_for_sandbox(policy_container, input_container) {
+    not policy_container.annotations["io.kubernetes.cri.container-name"]
+    not input_container.annotations["io.kubernetes.cri.container-name"]
+}
+
+alow_container_name_for_container(policy_container, input_container) {
+    policy_container_name := input_container.annotations["io.kubernetes.cri.container-name"]
+    input_container_name := input_container.annotations["io.kubernetes.cri.container-name"]
+
+    policy_container_name == input_container_name
 }
 
 ######################################################################
