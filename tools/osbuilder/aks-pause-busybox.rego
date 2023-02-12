@@ -25,6 +25,7 @@ default PullImageRequest := true
 # Could check that "terminal": true.
 default ReadStreamRequest := true
 
+# Could validate container_id and/or timeout.
 default RemoveContainerRequest := true
 
 # Haven't found a use case for these.
@@ -109,19 +110,32 @@ CreateContainerRequest {
 
 allow_cri_container_types(policy_container, input_container) {
     policy_cri_container_type := policy_container.annotations["io.kubernetes.cri.container-type"]
-    allow_cri_container_type(policy_cri_container_type)
-
     input_cri_container_type := input_container.annotations["io.kubernetes.cri.container-type"]
-    allow_cri_container_type(input_cri_container_type)
 
     policy_cri_container_type == input_cri_container_type
+
+    allow_cri_container_type(policy_cri_container_type, input_container)
+    allow_cri_container_type(input_cri_container_type, input_container)
 }
 
-allow_cri_container_type(cri_container_type) {
-    cri_container_type == "container"
+allow_cri_container_type(input_cri_container_type, input_container) {
+    input_cri_container_type == "container"
+    alow_sandbox_memory_for_container(input_container)
 }
-allow_cri_container_type(cri_container_type) {
-    cri_container_type == "sandbox"
+allow_cri_container_type(input_cri_container_type, input_container) {
+    input_cri_container_type == "sandbox"
+    alow_sandbox_memory_for_sandbox(input_container)
+}
+
+######################################################################
+# "io.kubernetes.cri.sandbox-memory" annotation
+
+alow_sandbox_memory_for_container(input_container) {
+    not input_container.annotations["io.kubernetes.cri.sandbox-memory"]
+}
+alow_sandbox_memory_for_sandbox(input_container) {
+    sandbox_memory := input_container.annotations["io.kubernetes.cri.sandbox-memory"]
+    to_number(sandbox_memory) >= 0
 }
 
 ######################################################################

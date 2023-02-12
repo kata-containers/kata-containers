@@ -21,6 +21,8 @@ default OnlineCPUMemRequest := true
 default PauseContainerRequest := true
 default PullImageRequest := true
 default ReadStreamRequest := true
+
+# Could validate container_id and/or timeout.
 default RemoveContainerRequest := true
 
 # Haven't found a use case for these.
@@ -71,7 +73,7 @@ CreateContainerRequest {
 
     policy_container.ociVersion     == input_container.ociVersion
 
-    cri_container_types(policy_container, input_container)
+    allow_annotations(policy_container, input_container)
 
     policy_process := policy_container.process
     input_process := input_container.process
@@ -100,11 +102,11 @@ CreateContainerRequest {
 }
 
 ######################################################################
-# "io.kubernetes.cri.container-type" annotation
+# No annotations allowed for ctr based containers.
 
-cri_container_types(policy_container, input_container) {
-    not policy_container.annotations["io.kubernetes.cri.container-type"]
-    not input_container.annotations["io.kubernetes.cri.container-type"]
+allow_annotations(policy_container, input_container) {
+    not policy_container.annotations
+    not input_container.annotations
 }
 
 ######################################################################

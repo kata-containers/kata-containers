@@ -72,7 +72,6 @@ impl AgentPolicy {
 
         let status = response.status();
         if status != http::StatusCode::OK {
-            assert_eq!(allow, false);
             error!(sl!(), "post_to_opa: POST response status {}", status);
         } else {
             let result_json = response.text().await.unwrap().trim().to_string();
