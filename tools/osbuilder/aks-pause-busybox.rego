@@ -95,9 +95,10 @@ allow_annotations(policy_container, input_container) {
 ######################################################################
 # - Check that the "io.kubernetes.cri.container-type" and
 #   "io.katacontainers.pkg.oci.container_type" annotations
-#   designate either a "sandbox" or a "container".
+#   designate the expected type = either a "sandbox" or a
+#   "container" type.
 #
-# - Other annotations then get validated depending on this
+# - Then, validate other annotations based on the expected
 #   "sandbox" or "container" value.
 
 allow_by_container_types(policy_container, input_container) {
@@ -109,6 +110,7 @@ allow_by_container_types(policy_container, input_container) {
     allow_by_container_type(input_cri_container_type, policy_container, input_container)
 }
 
+# Rules applicable to the "sandbox" container type
 allow_by_container_type(input_cri_container_type, policy_container, input_container) {
     input_cri_container_type == "sandbox"
 
@@ -121,6 +123,8 @@ allow_by_container_type(input_cri_container_type, policy_container, input_contai
     allow_sandbox_log_directory_for_sandbox(policy_container, input_container)
     alow_sandbox_memory_for_sandbox(input_container)
 }
+
+# Rules applicable to the "container" container type
 allow_by_container_type(input_cri_container_type, policy_container, input_container) {
     input_cri_container_type == "container"
 
