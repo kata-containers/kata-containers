@@ -122,11 +122,13 @@ allow_cri_container_type(input_cri_container_type, policy_container, input_conta
     input_cri_container_type == "container"
     alow_sandbox_memory_for_container(input_container)
     alow_network_namespace_for_container(policy_container, input_container)
+    allow_sandbox_log_directory_for_container(policy_container, input_container)
 }
 allow_cri_container_type(input_cri_container_type, policy_container, input_container) {
     input_cri_container_type == "sandbox"
     alow_sandbox_memory_for_sandbox(input_container)
     alow_network_namespace_for_sandbox(policy_container, input_container)
+    allow_sandbox_log_directory_for_sandbox(policy_container, input_container)
 }
 
 ######################################################################
@@ -150,10 +152,31 @@ alow_network_namespace_for_container(policy_container, input_container) {
 }
 
 alow_network_namespace_for_sandbox(policy_container, input_container) {
-    policy_network_namespace = policy_container.annotations["nerdctl/network-namespace"]
-    input_network_namespace = input_container.annotations["nerdctl/network-namespace"]
+    policy_network_namespace := policy_container.annotations["nerdctl/network-namespace"]
+    input_network_namespace := input_container.annotations["nerdctl/network-namespace"]
 
     regex.match(policy_network_namespace, input_network_namespace)
+}
+
+######################################################################
+# "io.kubernetes.cri.sandbox-log-directory" and "io.kubernetes.cri.sandbox-name" annotations
+
+allow_sandbox_log_directory_for_container(policy_container, input_container) {
+    not policy_container.annotations["io.kubernetes.cri.sandbox-log-directory"]
+    not input_container.annotations["io.kubernetes.cri.sandbox-log-directory"]
+}
+
+allow_sandbox_log_directory_for_sandbox(policy_container, input_container) {
+    policy_sandbox_name := policy_container.annotations["io.kubernetes.cri.sandbox-name"]
+    input_sandbox_name := input_container.annotations["io.kubernetes.cri.sandbox-name"]
+
+    policy_sandbox_name == input_sandbox_name
+
+    policy_sandbox_log_directory := policy_container.annotations["io.kubernetes.cri.sandbox-log-directory"]
+    directory_regex := replace(policy_sandbox_log_directory, "$(sandbox-name)", policy_sandbox_name)
+
+    input_sandbox_log_directory := input_container.annotations["io.kubernetes.cri.sandbox-log-directory"]
+    regex.match(directory_regex, input_sandbox_log_directory)
 }
 
 ######################################################################
@@ -388,7 +411,7 @@ policy_containers := [
             "io.kubernetes.cri.container-type": "sandbox",
             "io.kubernetes.cri.sandbox-memory": "0",
             "nerdctl/network-namespace": "^/var/run/netns/cni-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-            "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_busybox-cc_47f1fbee-9c44-4968-8a6a-373887167617",
+            "io.kubernetes.cri.sandbox-log-directory": "^/var/log/pods/default_$(sandbox-name)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
             "io.kubernetes.cri.sandbox-cpu-shares": "2",
             "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
             "io.kubernetes.cri.sandbox-namespace": "default",
