@@ -142,30 +142,37 @@ allow_by_container_type(input_cri_container_type, policy_container, input_contai
 # "io.kubernetes.cri.image-name" annotation
 
 alow_image_name_for_sandbox(policy_container, input_container) {
-    not policy_container.annotations["io.kubernetes.cri.image-name"]
-    not input_container.annotations["io.kubernetes.cri.image-name"]
+    allow_sandbox_annotation(policy_container, input_container, "io.kubernetes.cri.image-name")
 }
 
 alow_image_name_for_container(policy_container, input_container) {
-    policy_image_name := input_container.annotations["io.kubernetes.cri.image-name"]
-    input_image_name := input_container.annotations["io.kubernetes.cri.image-name"]
-
-    policy_image_name == input_image_name
+    allow_container_annotation(policy_container, input_container, "io.kubernetes.cri.image-name")
 }
 
 ######################################################################
-# "io.kubernetes.cri.image-name" annotation
+# "io.kubernetes.cri.container-name" annotation
 
 alow_container_name_for_sandbox(policy_container, input_container) {
-    not policy_container.annotations["io.kubernetes.cri.container-name"]
-    not input_container.annotations["io.kubernetes.cri.container-name"]
+    allow_sandbox_annotation(policy_container, input_container, "io.kubernetes.cri.container-name")
 }
 
 alow_container_name_for_container(policy_container, input_container) {
-    policy_container_name := input_container.annotations["io.kubernetes.cri.container-name"]
-    input_container_name := input_container.annotations["io.kubernetes.cri.container-name"]
+    allow_container_annotation(policy_container, input_container, "io.kubernetes.cri.container-name")
+}
 
-    policy_container_name == input_container_name
+######################################################################
+# Annotions required for "container" type, and not allowed for "sandbox" type.
+
+allow_sandbox_annotation(policy_container, input_container, annotation_key) {
+    not policy_container.annotations[annotation_key]
+    not input_container.annotations[annotation_key]
+}
+
+allow_container_annotation(policy_container, input_container, annotation_key) {
+    policy_value := input_container.annotations[annotation_key]
+    input_value := input_container.annotations[annotation_key]
+
+    policy_value == input_value
 }
 
 ######################################################################
