@@ -15,9 +15,13 @@ default ExecProcessRequest := false
 default GetMetricsRequest := true
 default GetOOMEventRequest := true
 default GuestDetailsRequest := true
-default ListInterfacesRequest := true
-default ListRoutesRequest := true
-default MemHotplugByProbeRequest := true
+
+# Haven't found use cases for these.
+#default ListInterfacesRequest := false
+#default ListRoutesRequest := false
+#default MemHotplugByProbeRequest := false
+
+# Is there a good reason to ever reject OnlineCPUMemRequest?
 default OnlineCPUMemRequest := true
 
 # Haven't found a use case for it.
