@@ -103,6 +103,8 @@ CreateContainerRequest {
 
     allow_by_bundle_id(policy_container, input_container)
     allow_linux(policy_container, input_container)
+
+    allow_sandbox_namespace(policy_container, input_container)
 }
 
 ######################################################################
@@ -177,6 +179,14 @@ allow_sandbox_log_directory_for_sandbox(policy_container, input_container) {
 
     input_sandbox_log_directory := input_container.annotations["io.kubernetes.cri.sandbox-log-directory"]
     regex.match(directory_regex, input_sandbox_log_directory)
+}
+
+######################################################################
+# "io.kubernetes.cri.sandbox-namespace" annotation
+
+allow_sandbox_namespace(policy_container, input_container) {
+    policy_container.annotations["io.kubernetes.cri.sandbox-namespace"] == "default"
+    input_container.annotations["io.kubernetes.cri.sandbox-namespace"] == "default"
 }
 
 ######################################################################
