@@ -4,12 +4,16 @@ import future.keywords.in
 import future.keywords.every
 
 ######################################################################
-default AddARPNeighborsRequest := true
-default AddSwapRequest := true
-default CloseStdinRequest := true
+# Default values
+
+# Haven't found use cases for these.
+#default AddARPNeighborsRequest := false
+#default AddSwapRequest := false
+
+default CloseStdinRequest := false
 
 # Seems risky for confidentiality.
-default CopyFileRequest := false
+#default CopyFileRequest := false
 
 # Detailed policy rules are below.
 default CreateContainerRequest := false

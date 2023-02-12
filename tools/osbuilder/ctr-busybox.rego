@@ -3,9 +3,13 @@ package coco_policy
 import future.keywords.in
 import future.keywords.every
 
-default AddARPNeighborsRequest := true
-default AddSwapRequest := true
-default CloseStdinRequest := true
+######################################################################
+# Default values
+
+# Haven't found use cases for these.
+#default AddARPNeighborsRequest := false
+#default AddSwapRequest := true
+#default CloseStdinRequest := false
 
 # Seems risky for confidentiality.
 #default CopyFileRequest := false
