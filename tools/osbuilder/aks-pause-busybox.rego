@@ -4,46 +4,32 @@ import future.keywords.in
 import future.keywords.every
 
 ######################################################################
-# Default values
+# Default values:
+#
+# - true for requests that are allowed by default.
+# - false for requests that have additional policy rules, defined below.
+# - Requests that are not listed here get rejected by default.
 
-# Haven't found use cases for these.
-#default AddARPNeighborsRequest := false
-#default AddSwapRequest := false
-
-default CloseStdinRequest := false
-
-# Seems risky for confidentiality.
-#default CopyFileRequest := false
-
-# Detailed policy rules are below.
+# More detailed policy rules are below.
 default CreateContainerRequest := false
 
-# Required.
+# Requests that are always allowed.
 default CreateSandboxRequest := true
-
-# No apparent reasons to reject this request.
 default DestroySandboxRequest := true
-
-# Haven't found a use case for it.
-#default ExecProcessRequest := false
-
-# Useful for diagnostics, but can be disabled in production.
-default GetMetricsRequest := false
-
-# No apparent reasons to reject these requests.
 default GetOOMEventRequest := true
 default GuestDetailsRequest := true
-
-# Haven't found use cases for these.
-#default ListInterfacesRequest := false
-#default ListRoutesRequest := false
-#default MemHotplugByProbeRequest := false
-
-# Is there a good reason to ever reject OnlineCPUMemRequest?
 default OnlineCPUMemRequest := true
+default ReadStreamRequest := true
+default RemoveContainerRequest := true
+default SignalProcessRequest := true
+default StartContainerRequest := true
+default StatsContainerRequest := true
+default TtyWinResizeRequest := true
+default UpdateInterfaceRequest := true
+default UpdateRoutesRequest := true
+default WaitProcessRequest := true
+default WriteStreamRequest := true
 
-# Haven't found a use case for it.
-#default PauseContainerRequest := false
 
 # Image service should make is_allowed!() calls.
 #
@@ -51,50 +37,6 @@ default OnlineCPUMemRequest := true
 # not referenced by config.json.
 #default PullImageRequest := false
 
-# Could check that "terminal": true.
-default ReadStreamRequest := true
-
-# Could validate container_id and/or timeout.
-default RemoveContainerRequest := true
-
-# Haven't found a use case for these.
-#default ReseedRandomDevRequest := false
-#default ResumeContainerRequest := false
-#default SetGuestDateTimeRequest := false
-
-# Could validate container_id and/or exec_id.
-default SignalProcessRequest := true
-
-# Could validate container_id.
-default StartContainerRequest := true
-
-# Not found in agent.proto.
-#default StartTracingRequest := false
-
-# Could validate container_id.
-# Could disable if K8s works properly without these stats.
-default StatsContainerRequest := true
-
-# Not found in agent.proto.
-#default StopTracingRequest := false
-
-# Could check that "terminal": true.
-default TtyWinResizeRequest := true
-
-# Haven't found a use case for it.
-#default UpdateContainerRequest := false
-
-# Could validate the format and/or consistency of fields.
-default UpdateInterfaceRequest := true
-
-# Could validate the format and/or consistency of fields.
-default UpdateRoutesRequest := true
-
-# Could validate container_id and/or exec_id.
-default WaitProcessRequest := true
-
-# Could check that "terminal": true.
-default WriteStreamRequest := true
 
 ######################################################################
 CreateContainerRequest {
