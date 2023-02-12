@@ -114,17 +114,19 @@ allow_cri_container_types(policy_container, input_container) {
 
     policy_cri_container_type == input_cri_container_type
 
-    allow_cri_container_type(policy_cri_container_type, input_container)
-    allow_cri_container_type(input_cri_container_type, input_container)
+    allow_cri_container_type(policy_cri_container_type, policy_container, input_container)
+    allow_cri_container_type(input_cri_container_type, policy_container, input_container)
 }
 
-allow_cri_container_type(input_cri_container_type, input_container) {
+allow_cri_container_type(input_cri_container_type, policy_container, input_container) {
     input_cri_container_type == "container"
     alow_sandbox_memory_for_container(input_container)
+    alow_network_namespace_for_container(policy_container, input_container)
 }
-allow_cri_container_type(input_cri_container_type, input_container) {
+allow_cri_container_type(input_cri_container_type, policy_container, input_container) {
     input_cri_container_type == "sandbox"
     alow_sandbox_memory_for_sandbox(input_container)
+    alow_network_namespace_for_sandbox(policy_container, input_container)
 }
 
 ######################################################################
@@ -133,9 +135,25 @@ allow_cri_container_type(input_cri_container_type, input_container) {
 alow_sandbox_memory_for_container(input_container) {
     not input_container.annotations["io.kubernetes.cri.sandbox-memory"]
 }
+
 alow_sandbox_memory_for_sandbox(input_container) {
     sandbox_memory := input_container.annotations["io.kubernetes.cri.sandbox-memory"]
     to_number(sandbox_memory) >= 0
+}
+
+######################################################################
+# "nerdctl/network-namespace" annotation
+
+alow_network_namespace_for_container(policy_container, input_container) {
+    not policy_container.annotations["nerdctl/network-namespace"]
+    not input_container.annotations["nerdctl/network-namespace"]
+}
+
+alow_network_namespace_for_sandbox(policy_container, input_container) {
+    policy_network_namespace = policy_container.annotations["nerdctl/network-namespace"]
+    input_network_namespace = input_container.annotations["nerdctl/network-namespace"]
+
+    regex.match(policy_network_namespace, input_network_namespace)
 }
 
 ######################################################################
@@ -369,7 +387,7 @@ policy_containers := [
             "io.kubernetes.cri.sandbox-id": "^[a-z0-9]{64}$",
             "io.kubernetes.cri.container-type": "sandbox",
             "io.kubernetes.cri.sandbox-memory": "0",
-            "nerdctl/network-namespace": "/var/run/netns/cni-6b474def-e6ef-32e7-8f49-169e5d77706e",
+            "nerdctl/network-namespace": "^/var/run/netns/cni-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
             "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_busybox-cc_47f1fbee-9c44-4968-8a6a-373887167617",
             "io.kubernetes.cri.sandbox-cpu-shares": "2",
             "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
