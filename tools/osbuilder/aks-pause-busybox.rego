@@ -76,7 +76,7 @@ CreateContainerRequest {
 
     policy_container.ociVersion     == input_container.ociVersion
 
-    allow_cri_container_types(policy_container, input_container)
+    allow_container_types(policy_container, input_container)
     
     policy_process := policy_container.process
     input_process := input_container.process
@@ -108,26 +108,34 @@ CreateContainerRequest {
 }
 
 ######################################################################
-# "io.kubernetes.cri.container-type" annotation
+# "io.kubernetes.cri.container-type" and "io.katacontainers.pkg.oci.container_type" annotations
 
-allow_cri_container_types(policy_container, input_container) {
+allow_container_types(policy_container, input_container) {
     policy_cri_container_type := policy_container.annotations["io.kubernetes.cri.container-type"]
     input_cri_container_type := input_container.annotations["io.kubernetes.cri.container-type"]
 
     policy_cri_container_type == input_cri_container_type
 
-    allow_cri_container_type(policy_cri_container_type, policy_container, input_container)
-    allow_cri_container_type(input_cri_container_type, policy_container, input_container)
+    allow_container_type(policy_cri_container_type, policy_container, input_container)
+    allow_container_type(input_cri_container_type, policy_container, input_container)
 }
 
-allow_cri_container_type(input_cri_container_type, policy_container, input_container) {
+allow_container_type(input_cri_container_type, policy_container, input_container) {
     input_cri_container_type == "container"
+
+    input_kata_container_type := input_container.annotations["io.katacontainers.pkg.oci.container_type"]
+    input_kata_container_type == "pod_container"
+
     alow_sandbox_memory_for_container(input_container)
     alow_network_namespace_for_container(policy_container, input_container)
     allow_sandbox_log_directory_for_container(policy_container, input_container)
 }
-allow_cri_container_type(input_cri_container_type, policy_container, input_container) {
+allow_container_type(input_cri_container_type, policy_container, input_container) {
     input_cri_container_type == "sandbox"
+
+    input_kata_container_type := input_container.annotations["io.katacontainers.pkg.oci.container_type"]
+    input_kata_container_type == "pod_sandbox"
+
     alow_sandbox_memory_for_sandbox(input_container)
     alow_network_namespace_for_sandbox(policy_container, input_container)
     allow_sandbox_log_directory_for_sandbox(policy_container, input_container)
