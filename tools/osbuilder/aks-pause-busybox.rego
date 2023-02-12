@@ -75,52 +75,38 @@ CreateContainerRequest {
     policy_container := policy_containers[input.index]
 
     policy_container.ociVersion     == input_container.ociVersion
-
-    allow_container_types(policy_container, input_container)
-    
-    policy_process := policy_container.process
-    input_process := input_container.process
-
-    policy_process.terminal         == input_process.terminal
-    policy_process.user             == input_process.user
-
-    allow_args(policy_process, input_process)
-
-    # Ignore any policy environment variables that are not
-    # present in the input.
-    every env_var in input_process.env {
-        policy_process.env[_] == env_var
-    }
-
-    policy_process.cwd              == input_process.cwd
-    policy_process.capabilities     == input_process.capabilities
-    policy_process.noNewPrivileges  == input_process.noNewPrivileges
-
     policy_container.root.readonly  == input_container.root.readonly
 
-    sandbox_id := input_container.annotations["io.kubernetes.cri.sandbox-id"]
-    regex.match(input_container.annotations["io.kubernetes.cri.sandbox-id"], sandbox_id)
-
-    allow_by_bundle_id(policy_container, input_container)
+    allow_annotations(policy_container, input_container)
+    allow_process(policy_container, input_container)
     allow_linux(policy_container, input_container)
-
-    allow_sandbox_namespace(policy_container, input_container)
 }
 
 ######################################################################
-# "io.kubernetes.cri.container-type" and "io.katacontainers.pkg.oci.container_type" annotations
+# Rules for and/or based on annotations
 
-allow_container_types(policy_container, input_container) {
+allow_annotations(policy_container, input_container) {
+    allow_by_container_types(policy_container, input_container)
+    allow_by_bundle_id(policy_container, input_container)
+    allow_sandbox_namespace(policy_container, input_container)
+    allow_sandbox_id(policy_container, input_container)
+}
+
+######################################################################
+# Validate the "io.kubernetes.cri.container-type" and
+# "io.katacontainers.pkg.oci.container_type" annotations,
+# then use their values to check various other rules.
+
+allow_by_container_types(policy_container, input_container) {
     policy_cri_container_type := policy_container.annotations["io.kubernetes.cri.container-type"]
     input_cri_container_type := input_container.annotations["io.kubernetes.cri.container-type"]
 
     policy_cri_container_type == input_cri_container_type
 
-    allow_container_type(policy_cri_container_type, policy_container, input_container)
-    allow_container_type(input_cri_container_type, policy_container, input_container)
+    allow_by_container_type(input_cri_container_type, policy_container, input_container)
 }
 
-allow_container_type(input_cri_container_type, policy_container, input_container) {
+allow_by_container_type(input_cri_container_type, policy_container, input_container) {
     input_cri_container_type == "container"
 
     input_kata_container_type := input_container.annotations["io.katacontainers.pkg.oci.container_type"]
@@ -130,7 +116,7 @@ allow_container_type(input_cri_container_type, policy_container, input_container
     alow_network_namespace_for_container(policy_container, input_container)
     allow_sandbox_log_directory_for_container(policy_container, input_container)
 }
-allow_container_type(input_cri_container_type, policy_container, input_container) {
+allow_by_container_type(input_cri_container_type, policy_container, input_container) {
     input_cri_container_type == "sandbox"
 
     input_kata_container_type := input_container.annotations["io.katacontainers.pkg.oci.container_type"]
@@ -193,8 +179,19 @@ allow_sandbox_log_directory_for_sandbox(policy_container, input_container) {
 # "io.kubernetes.cri.sandbox-namespace" annotation
 
 allow_sandbox_namespace(policy_container, input_container) {
-    policy_container.annotations["io.kubernetes.cri.sandbox-namespace"] == "default"
-    input_container.annotations["io.kubernetes.cri.sandbox-namespace"] == "default"
+    policy_namespace := policy_container.annotations["io.kubernetes.cri.sandbox-namespace"]
+    input_namespace := input_container.annotations["io.kubernetes.cri.sandbox-namespace"]
+
+    policy_namespace == input_namespace
+}
+
+
+######################################################################
+# "io.kubernetes.cri.sandbox-id" annotation
+
+allow_sandbox_id(policy_container, input_container) {
+    sandbox_id := input_container.annotations["io.kubernetes.cri.sandbox-id"]
+    regex.match(input_container.annotations["io.kubernetes.cri.sandbox-id"], sandbox_id)
 }
 
 ######################################################################
@@ -219,6 +216,29 @@ allow_by_bundle_id(policy_container, input_container) {
     every mount in input.oci.mounts {
         allow_mount(mount, policy_container, bundle_id)
     }
+}
+
+######################################################################
+# Validate the config.json process fields.
+
+allow_process(policy_container, input_container) {
+    policy_process := policy_container.process
+    input_process := input_container.process
+
+    policy_process.terminal         == input_process.terminal
+    policy_process.user             == input_process.user
+
+    allow_args(policy_process, input_process)
+
+    # Ignore any policy environment variables that are not
+    # present in the input.
+    every env_var in input_process.env {
+        policy_process.env[_] == env_var
+    }
+
+    policy_process.cwd              == input_process.cwd
+    policy_process.capabilities     == input_process.capabilities
+    policy_process.noNewPrivileges  == input_process.noNewPrivileges
 }
 
 ######################################################################
