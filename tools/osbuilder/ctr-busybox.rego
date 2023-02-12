@@ -18,8 +18,17 @@ default ListInterfacesRequest := true
 default ListRoutesRequest := true
 default MemHotplugByProbeRequest := true
 default OnlineCPUMemRequest := true
-default PauseContainerRequest := true
-default PullImageRequest := true
+
+# Haven't found a use case for it.
+#default PauseContainerRequest := false
+
+# Image service should make is_allowed!() calls.
+#
+# Might use policy metadata to reject images that were
+# not referenced by config.json.
+#default PullImageRequest := true
+
+# Could check that "terminal": true.
 default ReadStreamRequest := true
 
 # Could validate container_id and/or timeout.

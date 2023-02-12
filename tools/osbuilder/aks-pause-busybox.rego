@@ -19,8 +19,15 @@ default ListInterfacesRequest := true
 default ListRoutesRequest := true
 default MemHotplugByProbeRequest := true
 default OnlineCPUMemRequest := true
-default PauseContainerRequest := true
-default PullImageRequest := true
+
+# Haven't found a use case for it.
+#default PauseContainerRequest := false
+
+# Image service should make is_allowed!() calls.
+#
+# Might use policy metadata to reject images that were
+# not referenced by config.json.
+#default PullImageRequest := false
 
 # Could check that "terminal": true.
 default ReadStreamRequest := true
@@ -323,7 +330,7 @@ allow_mount(input_mount, policy_container, bundle_id) {
 }
 
 policy_mount_allows(policy_mount, input_mount, bundle_id) {
-    # Exact match of policy and input mount.
+    # Exact match of policy and input mounts.
     policy_mount == input_mount
 }
 policy_mount_allows(policy_mount, input_mount, bundle_id) {
