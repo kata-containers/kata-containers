@@ -6,9 +6,17 @@ import future.keywords.every
 default AddARPNeighborsRequest := true
 default AddSwapRequest := true
 default CloseStdinRequest := true
-default CopyFileRequest := true
+
+# Seems risky for confidentiality.
+#default CopyFileRequest := false
+
+# Detailed policy rules are below.
 default CreateContainerRequest := false
+
+# Required.
 default CreateSandboxRequest := true
+
+# No apparent reasons to reject this request.
 default DestroySandboxRequest := true
 
 # Haven't found a use case for it.
