@@ -18,12 +18,14 @@ macro_rules! sl {
 #[derive(Debug)]
 pub struct AgentPolicy {
     opa_uri: String,
+    opa_client: reqwest::Client,
 }
 
 impl AgentPolicy {
     pub fn from_opa_uri(uri: &str) -> Result<AgentPolicy> {
         Ok(AgentPolicy {
             opa_uri: uri.to_string(),
+            opa_client: reqwest::Client::builder().http1_only().build()?
         })
     }
 
@@ -31,7 +33,6 @@ impl AgentPolicy {
     pub async fn initialize(&self) -> Result<()> {
         let request_uri = self.opa_uri.to_string() + "GuestDetailsRequest";
         let post_input = "{{ \"input\": {{}} }}".to_string();
-        let client = reqwest::Client::new();
 
         for i in 0..50 {
             if i > 0 {
@@ -39,7 +40,7 @@ impl AgentPolicy {
                 println!("policy initialize: POST failed, retrying");
             }
 
-            if let Ok(_) = client
+            if let Ok(_) = self.opa_client
                 .post(request_uri.to_owned())
                 .body(post_input.to_owned())
                 .send()
@@ -58,17 +59,16 @@ impl AgentPolicy {
         post_input: &str
     ) -> bool {
         let mut allow = false;
-        let client = reqwest::Client::new();
         let uri = self.opa_uri.to_string() + ep;
         let input_with_key = format!("{{\"input\":{}}}", post_input);
 
         info!(sl!(), "post_to_opa: uri {}, input <{}>", uri, input_with_key);
-        let response = client.post(uri)
+        let response = self.opa_client
+            .post(uri)
             .body(input_with_key)
             .send()
             .await
             .unwrap();
-        assert_eq!(allow, false);
 
         let status = response.status();
         if status != http::StatusCode::OK {
