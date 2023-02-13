@@ -1,0 +1,11 @@
+[Unit]
+Description=tardev containerd snapshotter daemon
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/tardev-snapshotter /var/lib/containerd/io.containerd.snapshotter.v1.tardev /run/containerd/tardev-snapshotter.sock
+Environment="RUST_LOG=tardev_snapshotter=trace"
+Restart=on-failure
+
+[Install]
+WantedBy=containerd.service

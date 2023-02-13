@@ -1,0 +1,8 @@
+[package]
+name = "tarindex"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tar = "0.4"
+zerocopy = "0.6.1"

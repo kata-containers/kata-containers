@@ -1,0 +1,20 @@
+[package]
+name = "tardev-snapshotter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-stream = "0.3.2"
+futures = "0.3.17"
+serde_json = "1.0"
+tonic = "0.8"
+oci-distribution = { git = "https://github.com/krustlet/oci-distribution", rev = "1ba0d94a900a97aa1bcac032a67ea23766bcfdef" }
+tokio = {version = "1.0", features = ["full"]}
+tokio-stream = "0.1.8"
+containerd-snapshots = { git = "https://github.com/wedsonaf/rust-extensions" }
+sha2 = "0.10.6"
+tarindex = { path = "./tarindex" }
+log = "0.4.17"
+env_logger = "0.10.0"
+tempfile = "3.3.0"
+openssl = { version = "=0.10.45", features = ["vendored"] }

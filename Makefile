@@ -12,6 +12,7 @@ COMPONENTS += dragonball
 COMPONENTS += runtime
 COMPONENTS += runtime-rs
 COMPONENTS += tarfs
+COMPONENTS += tardev-snapshotter
 
 # List of available tools
 TOOLS =
