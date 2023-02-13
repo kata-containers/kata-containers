@@ -887,7 +887,9 @@ mod hotplug {
             cpu_ids_array[..cpu_ids.len()].copy_from_slice(&cpu_ids[..cpu_ids.len()]);
             let req = DevMgrRequest::AddVcpu(CpuDevRequest {
                 count: cpu_ids.len() as u8,
+                #[cfg(target_arch = "x86_64")]
                 apic_ids: cpu_ids_array,
+                #[cfg(target_arch = "x86_64")]
                 apic_ver: APIC_VERSION,
             });
             self.send_upcall_action(upcall_client, req)?;
@@ -924,7 +926,9 @@ mod hotplug {
             cpu_ids_array[..cpu_ids.len()].copy_from_slice(&cpu_ids[..cpu_ids.len()]);
             let req = DevMgrRequest::DelVcpu(CpuDevRequest {
                 count: cpu_num_to_be_del as u8,
+                #[cfg(target_arch = "x86_64")]
                 apic_ids: cpu_ids_array,
+                #[cfg(target_arch = "x86_64")]
                 apic_ver: APIC_VERSION,
             });
             self.send_upcall_action(upcall_client, req)?;
@@ -969,7 +973,10 @@ mod hotplug {
                                 vcpu_state_sender
                                     .send(VcpuStateEvent::Hotplug((
                                         result,
+                                        #[cfg(target_arch = "x86_64")]
                                         resp.info.apic_id_index,
+                                        #[cfg(target_arch = "aarch64")]
+                                        resp.info.cpu_id,
                                     )))
                                     .unwrap();
                                 vcpu_state_event.write(1).unwrap();
