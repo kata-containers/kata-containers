@@ -23,10 +23,23 @@ ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 
 ifeq ($(ARCH), s390x)
 default:
-	@echo "s390x not support currently"
+	@echo "s390x is not currently supported"
 	exit 0
 test:
-	@echo "s390x not support currently"
+	@echo "s390x is not currently supported"
+	exit 0
+install:
+	@echo "s390x is not currently supported"
+	exit 0
+else ifeq ($(ARCH), powerpc64le)
+default:
+	@echo "PowerPC 64 LE is not currently supported"
+	exit 0
+test:
+	@echo "PowerPC 64 LE is not currently supported"
+	exit 0
+install:
+	@echo "PowerPC 64 LE is not currently supported"
 	exit 0
 else
 ##TARGET default: build code
@@ -34,6 +47,7 @@ default: runtime show-header
 ##TARGET test: run cargo tests
 test:
 	@cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
+install: install-runtime install-configs
 endif
 
 ifeq (,$(realpath $(ARCH_FILE)))
@@ -490,8 +504,6 @@ codecov: check_tarpaulin
 ##TARGET codecov-html: Generate code coverage html report
 codecov-html: check_tarpaulin
 	cargo tarpaulin $(TARPAULIN_ARGS) -o Html
-
-install: install-runtime install-configs
 
 install-runtime: runtime
 	install -D $(TARGET_PATH) $(DESTDIR)$(BINDIR)/$(notdir $(TARGET_PATH))
