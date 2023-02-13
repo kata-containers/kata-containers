@@ -647,7 +647,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 // StartVM will start the VMM and boot the virtual machine for the given sandbox.
 func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
-	span, _ := katatrace.Trace(ctx, clh.Logger(), "StartVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
+	span, ctx := katatrace.Trace(ctx, clh.Logger(), "StartVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
 	clh.Logger().WithField("function", "StartVM").Info("starting Sandbox")
