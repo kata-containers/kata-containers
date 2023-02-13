@@ -11,7 +11,7 @@ use std::fmt::Debug;
 use std::ops::Deref;
 
 use dbs_arch::gic::GICDevice;
-use dbs_arch::{DeviceInfoForFDT, DeviceType};
+use dbs_arch::{DeviceInfoForFDT, DeviceType, VpmuFeatureLevel};
 use dbs_boot::InitrdConfig;
 use dbs_utils::epoll_manager::EpollManager;
 use dbs_utils::time::TimestampUs;
@@ -51,6 +51,8 @@ fn configure_system<T: DeviceInfoForFDT + Clone + Debug, M: GuestMemory>(
         device_info,
         gic_device,
         initrd,
+        // We will add vpmu feature support in the future PRs. issue: #6168
+        &VpmuFeatureLevel::Disabled,
     )
     .map_err(Error::BootSystem)?;
     Ok(())
