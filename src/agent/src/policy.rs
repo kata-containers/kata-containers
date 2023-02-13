@@ -8,6 +8,7 @@ use reqwest;
 use tokio::time::{sleep, Duration};
 
 static EMPTY_JSON_INPUT: &str = "{\"input\":{}}";
+static ALLOWED_JSON_OUTPUT: &str = "{\"result\":true}";
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -30,6 +31,7 @@ impl AgentPolicy {
         })
     }
 
+    // Wait for OPA to start.
     pub async fn initialize(&mut self) -> Result<()> {
         for i in 0..50 {
             if i > 0 {
@@ -45,25 +47,25 @@ impl AgentPolicy {
         Err(anyhow!("failed to connect to OPA"))
     }
 
+    // Post query to OPA.
     async fn post_to_opa(
         &mut self,
         ep: &str,
         post_input: &str
     ) -> bool {
         let mut allow = false;
-        let uri = self.opa_uri.clone() + ep;
 
+        let uri = self.opa_uri.clone() + ep;
         info!(sl!(), "post_to_opa: uri {}, input <{}>", uri, post_input);
         let r = self.opa_client.post(uri).body(post_input.to_owned()).send().await;
 
         match r {
             Ok(response) => {
-                let status = response.status();
-                if status != http::StatusCode::OK {
-                    error!(sl!(), "post_to_opa: POST response status {}", status);
+                if response.status() != http::StatusCode::OK {
+                    error!(sl!(), "post_to_opa: POST response status {}", response.status());
                 } else {
                     let result_json = response.text().await.unwrap().trim().to_string();
-                    allow = result_json.eq("{\"result\":true}");
+                    allow = result_json.eq(ALLOWED_JSON_OUTPUT);
 
                     if !allow {
                         error!(sl!(), "post_to_opa: response <{}>", result_json);
@@ -78,6 +80,7 @@ impl AgentPolicy {
         allow
     }
 
+    // Post query without input data to OPA.
     pub async fn is_allowed_endpoint(
         &mut self,
         ep: &str
@@ -85,6 +88,7 @@ impl AgentPolicy {
         self.post_to_opa(ep, EMPTY_JSON_INPUT).await
     }
 
+    // Post query with CreateContainerRequest input data to OPA.
     pub async fn is_allowed_create_container_endpoint(
         &mut self,
         ep: &str,
@@ -110,7 +114,7 @@ impl AgentPolicy {
 
             self.post_to_opa(ep, &post_input).await
         } else {
-            error!(sl!(), "log_oci_spec: failed convert oci spec to json string");
+            error!(sl!(), "log_oci_spec: failed to convert oci spec to json string");
             false
         }
     }
