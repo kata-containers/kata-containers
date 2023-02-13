@@ -397,12 +397,7 @@ func (s *Sandbox) SignalProcess(ctx context.Context, containerID, processID stri
 		return err
 	}
 
-	if err = c.signalProcess(ctx, processID, signal, all); err != nil {
-		s.Logger().Errorf("Stopping sandbox due to error %s", err.Error())
-		err = s.Stop(ctx, true);
-	}
-
-	return err;
+	return c.signalProcess(ctx, processID, signal, all)
 }
 
 // WinsizeProcess resizes the tty window of a process
@@ -1465,10 +1460,6 @@ func (s *Sandbox) KillContainer(ctx context.Context, containerID string, signal 
 
 	// Send a signal to the process.
 	err = c.kill(ctx, signal, all)
-
-	if err != nil {
-		s.Logger().Errorf("KillContainer: %s", err.Error())
-	}
 
 	// SIGKILL should never fail otherwise it is
 	// impossible to clean things up.

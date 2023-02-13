@@ -986,13 +986,13 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 	// Force the container to be killed. For most of the cases, this
 	// should not matter and it should return an error that will be
 	// ignored.
-	if err := c.kill(ctx, syscall.SIGKILL, true); err == nil {
-		// Since the agent has supported the MultiWaitProcess, it's better to
-		// wait the process here to make sure the process has exited before to
-		// issue stopContainer, otherwise the RemoveContainerRequest in it will
-		// get failed if the process hasn't exited.
-		c.sandbox.agent.waitProcess(ctx, c, c.id)
-	}
+	c.kill(ctx, syscall.SIGKILL, true)
+
+	// Since the agent has supported the MultiWaitProcess, it's better to
+	// wait the process here to make sure the process has exited before to
+	// issue stopContainer, otherwise the RemoveContainerRequest in it will
+	// get failed if the process hasn't exited.
+	c.sandbox.agent.waitProcess(ctx, c, c.id)
 
 	defer func() {
 		// Save device and drive data.
