@@ -63,22 +63,28 @@ impl AgentPolicy {
         let input_with_key = format!("{{\"input\":{}}}", post_input);
 
         info!(sl!(), "post_to_opa: uri {}, input <{}>", uri, input_with_key);
-        let response = self.opa_client
+        let r = self.opa_client
             .post(uri)
             .body(input_with_key)
             .send()
-            .await
-            .unwrap();
+            .await;
 
-        let status = response.status();
-        if status != http::StatusCode::OK {
-            error!(sl!(), "post_to_opa: POST response status {}", status);
-        } else {
-            let result_json = response.text().await.unwrap().trim().to_string();
-            allow = result_json.eq("{\"result\":true}");
+        match r {
+            Ok(response) => {
+                let status = response.status();
+                if status != http::StatusCode::OK {
+                    error!(sl!(), "post_to_opa: POST response status {}", status);
+                } else {
+                    let result_json = response.text().await.unwrap().trim().to_string();
+                    allow = result_json.eq("{\"result\":true}");
 
-            if !allow {
-                error!(sl!(), "post_to_opa: response <{}>", result_json);
+                    if !allow {
+                        error!(sl!(), "post_to_opa: response <{}>", result_json);
+                    }
+                }
+            }
+            Err(e) => {
+                error!(sl!(), "post_to_opa: POST failed, <{}?", e);
             }
         }
 
