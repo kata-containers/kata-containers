@@ -232,7 +232,7 @@ allow_by_bundle_id(policy_container, input_container) {
     allow_root_path(policy_container, input_container, bundle_id)
 
     every input_mount in input.oci.mounts {
-        allow_mount(input_mount, policy_container, bundle_id)
+        allow_mount(policy_container, input_mount, bundle_id)
     }
 }
 
@@ -287,7 +287,7 @@ allow_root_path(policy_container, input_container, bundle_id) {
 ######################################################################
 # mounts
 
-allow_mount(input_mount, policy_container, bundle_id) {
+allow_mount(policy_container, input_mount, bundle_id) {
     # At least one policy mount rule allows the input mount.
     some policy_mount in policy_container.mounts
     policy_mount_allows(policy_mount, input_mount, bundle_id)
