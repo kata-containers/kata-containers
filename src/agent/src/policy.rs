@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use reqwest;
 use tokio::time::{sleep, Duration};
-use tracing::instrument;
+
+static EMPTY_JSON_INPUT: &str = "{\"input\":{}}";
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -22,52 +23,38 @@ pub struct AgentPolicy {
 }
 
 impl AgentPolicy {
-    pub fn from_opa_uri(uri: &str) -> Result<AgentPolicy> {
+    pub fn new() -> Result<Self> {
         Ok(AgentPolicy {
-            opa_uri: uri.to_string(),
+            opa_uri: "http://localhost:8181/v1/data/coco_policy/".to_string(),
             opa_client: reqwest::Client::builder().http1_only().build()?
         })
     }
 
-    #[instrument]
-    pub async fn initialize(&self) -> Result<()> {
-        let request_uri = self.opa_uri.to_string() + "GuestDetailsRequest";
-        let post_input = "{{ \"input\": {{}} }}".to_string();
-
+    pub async fn initialize(&mut self) -> Result<()> {
         for i in 0..50 {
             if i > 0 {
                 sleep(Duration::from_millis(100)).await;
                 println!("policy initialize: POST failed, retrying");
             }
 
-            if let Ok(_) = self.opa_client
-                .post(request_uri.to_owned())
-                .body(post_input.to_owned())
-                .send()
-                .await {
-
-                break;
+            // Post a request for a commonly used Agent request.
+            if self.post_to_opa("GuestDetailsRequest", EMPTY_JSON_INPUT).await {
+                return Ok(())
             }
         }
-        Ok(())
+        Err(anyhow!("failed to connect to OPA"))
     }
 
-    #[instrument]
     async fn post_to_opa(
         &mut self,
         ep: &str,
         post_input: &str
     ) -> bool {
         let mut allow = false;
-        let uri = self.opa_uri.to_string() + ep;
-        let input_with_key = format!("{{\"input\":{}}}", post_input);
+        let uri = self.opa_uri.clone() + ep;
 
-        info!(sl!(), "post_to_opa: uri {}, input <{}>", uri, input_with_key);
-        let r = self.opa_client
-            .post(uri)
-            .body(input_with_key)
-            .send()
-            .await;
+        info!(sl!(), "post_to_opa: uri {}, input <{}>", uri, post_input);
+        let r = self.opa_client.post(uri).body(post_input.to_owned()).send().await;
 
         match r {
             Ok(response) => {
@@ -84,28 +71,27 @@ impl AgentPolicy {
                 }
             }
             Err(e) => {
-                error!(sl!(), "post_to_opa: POST failed, <{}?", e);
+                error!(sl!(), "post_to_opa: POST failed, <{}>", e);
             }
         }
 
         allow
     }
 
-    #[instrument]
     pub async fn is_allowed_endpoint(
         &mut self,
         ep: &str
     ) -> bool {
-        self.post_to_opa(ep, "{}").await
+        self.post_to_opa(ep, EMPTY_JSON_INPUT).await
     }
 
-    #[instrument]
     pub async fn is_allowed_create_container_endpoint(
         &mut self,
         ep: &str,
         req: &protocols::agent::CreateContainerRequest,
         index: usize
     ) -> bool {
+        // Send container's OCI spec in json format as input data for OPA.
         let mut oci_spec = req.OCI.clone();
 
         let spec = match oci_spec.as_mut() {
@@ -117,12 +103,12 @@ impl AgentPolicy {
         };
 
         if let Ok(spec_str) = serde_json::to_string(&spec) {
-            let index_and_oci = format!(
-                "{{ \"index\":{}, \"oci\":{} }}",
+            let post_input = format!(
+                "{{\"input\":{{\"index\":{},\"oci\":{}}}}}",
                 index,
                 spec_str);
 
-            self.post_to_opa(ep, &index_and_oci).await
+            self.post_to_opa(ep, &post_input).await
         } else {
             error!(sl!(), "log_oci_spec: failed convert oci spec to json string");
             false
