@@ -24,6 +24,9 @@ const JSON_TYPE: &str = "application/json";
 const USER_AGT: &str = "kata";
 
 #[allow(dead_code)]
+const ERR_NO_CPUINFO: &str = "cpu_info string is empty";
+
+#[allow(dead_code)]
 pub const GENERIC_CPU_VENDOR_FIELD: &str = "vendor_id";
 #[allow(dead_code)]
 pub const GENERIC_CPU_MODEL_FIELD: &str = "model name";
@@ -44,7 +47,7 @@ pub fn get_single_cpu_info(cpu_info_file: &str, substring: &str) -> Result<Strin
     let contents = get_cpu_info(cpu_info_file)?;
 
     if contents.is_empty() {
-        return Err(anyhow!("cpu_info string is empty"));
+        return Err(anyhow!(ERR_NO_CPUINFO));
     }
 
     let subcontents: Vec<&str> = contents.split(substring).collect();
@@ -62,7 +65,11 @@ pub fn get_single_cpu_info(cpu_info_file: &str, substring: &str) -> Result<Strin
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 pub fn get_cpu_flags(cpu_info: &str, cpu_flags_tag: &str) -> Result<String> {
     if cpu_info.is_empty() {
-        return Err(anyhow!("cpu_info string is empty"));
+        return Err(anyhow!(ERR_NO_CPUINFO));
+    }
+
+    if cpu_flags_tag.is_empty() {
+        return Err(anyhow!("cpu flags delimiter string is empty"))?;
     }
 
     let subcontents: Vec<&str> = cpu_info.split('\n').collect();
@@ -195,58 +202,168 @@ pub fn check_official_releases() -> Result<()> {
 mod tests {
     use super::*;
     use semver::Version;
+    use std::fs;
+    use std::io::Write;
+    use tempfile::tempdir;
 
     #[test]
-    fn test_get_cpu_info_empty_input() {
-        let expected = "No such file or directory (os error 2)";
-        let actual = get_cpu_info("").err().unwrap().to_string();
-        assert_eq!(expected, actual);
+    fn test_get_single_cpu_info() {
+        // Valid cpuinfo example
+        let dir = tempdir().unwrap();
+        let file_path_full = dir.path().join("cpuinfo_full");
+        let path_full = file_path_full.clone();
+        let mut file_full = fs::File::create(file_path_full).unwrap();
+        let contents = "processor : 0\nvendor_id : VendorExample\nflags : flag_1 flag_2 flag_3 flag_4\nprocessor : 1\n".to_string();
+        writeln!(file_full, "{}", contents).unwrap();
 
-        let actual = get_single_cpu_info("", "\nprocessor")
-            .err()
-            .unwrap()
-            .to_string();
-        assert_eq!(expected, actual);
+        // Empty cpuinfo example
+        let file_path_empty = dir.path().join("cpuinfo_empty");
+        let path_empty = file_path_empty.clone();
+        let mut _file_empty = fs::File::create(file_path_empty).unwrap();
+
+        #[derive(Debug)]
+        struct TestData<'a> {
+            cpuinfo_path: &'a str,
+            processor_delimiter_str: &'a str,
+            result: Result<String>,
+        }
+        let tests = &[
+            // Failure scenarios
+            TestData {
+                cpuinfo_path: "",
+                processor_delimiter_str: "",
+                result: Err(anyhow!("No such file or directory (os error 2)")),
+            },
+            TestData {
+                cpuinfo_path: &path_empty.as_path().display().to_string(),
+                processor_delimiter_str: "\nprocessor",
+                result: Err(anyhow!(ERR_NO_CPUINFO)),
+            },
+            // Success scenarios
+            TestData {
+                cpuinfo_path: &path_full.as_path().display().to_string(),
+                processor_delimiter_str: "\nprocessor",
+                result: Ok(
+                    "processor : 0\nvendor_id : VendorExample\nflags : flag_1 flag_2 flag_3 flag_4"
+                        .to_string(),
+                ),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+            let result = get_single_cpu_info(d.cpuinfo_path, d.processor_delimiter_str);
+            let msg = format!("{}, result: {:?}", msg, result);
+
+            if d.result.is_ok() {
+                assert_eq!(
+                    result.as_ref().unwrap(),
+                    d.result.as_ref().unwrap(),
+                    "{}",
+                    msg
+                );
+                continue;
+            }
+
+            let expected_error = format!("{}", d.result.as_ref().unwrap_err());
+            let actual_error = format!("{}", result.unwrap_err());
+            assert!(actual_error == expected_error, "{}", msg);
+        }
     }
 
     #[test]
-    fn test_get_cpu_flags_empty_input() {
-        let expected = "cpu_info string is empty";
-        let actual = get_cpu_flags("", "").err().unwrap().to_string();
-        assert_eq!(expected, actual);
+    fn test_get_cpu_flags() {
+        let contents = "processor : 0\nvendor_id : VendorExample\nflags : flag_1 flag_2 flag_3 flag_4\nprocessor : 1\n";
+
+        #[derive(Debug)]
+        struct TestData<'a> {
+            cpu_info_str: &'a str,
+            cpu_flags_tag: &'a str,
+            result: Result<String>,
+        }
+        let tests = &[
+            // Failure scenarios
+            TestData {
+                cpu_info_str: "",
+                cpu_flags_tag: "",
+                result: Err(anyhow!(ERR_NO_CPUINFO)),
+            },
+            TestData {
+                cpu_info_str: "",
+                cpu_flags_tag: "flags",
+                result: Err(anyhow!(ERR_NO_CPUINFO)),
+            },
+            TestData {
+                cpu_info_str: contents,
+                cpu_flags_tag: "",
+                result: Err(anyhow!("cpu flags delimiter string is empty")),
+            },
+            // Success scenarios
+            TestData {
+                cpu_info_str: contents,
+                cpu_flags_tag: "flags",
+                result: Ok(" flag_1 flag_2 flag_3 flag_4".to_string()),
+            },
+            TestData {
+                cpu_info_str: contents,
+                cpu_flags_tag: "flags_err",
+                result: Ok("".to_string()),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+            let result = get_cpu_flags(d.cpu_info_str, d.cpu_flags_tag);
+            let msg = format!("{}, result: {:?}", msg, result);
+
+            if d.result.is_ok() {
+                assert_eq!(
+                    result.as_ref().unwrap(),
+                    d.result.as_ref().unwrap(),
+                    "{}",
+                    msg
+                );
+                continue;
+            }
+
+            let expected_error = format!("{}", d.result.as_ref().unwrap_err());
+            let actual_error = format!("{}", result.unwrap_err());
+            assert!(actual_error == expected_error, "{}", msg);
+        }
     }
 
     #[test]
-    fn check_version_by_empty_url() {
-        const TEST_URL: &str = "http:";
-        let expected = "builder error: empty host";
-        let actual = get_kata_all_releases_by_url(TEST_URL)
-            .err()
-            .unwrap()
-            .to_string();
-        assert_eq!(expected, actual);
-    }
+    fn test_get_kata_all_releases_by_url() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            test_url: &'a str,
+            expected: &'a str,
+        }
+        let tests = &[
+            // Failure scenarios
+            TestData {
+                test_url: "http:",
+                expected: "builder error: empty host",
+            },
+            TestData {
+                test_url: "_localhost_",
+                expected: "builder error: relative URL without a base",
+            },
+            TestData {
+                test_url: "http://localhost :80",
+                expected: "builder error: invalid domain character",
+            },
+        ];
 
-    #[test]
-    fn check_version_by_garbage_url() {
-        const TEST_URL: &str = "_localhost_";
-        let expected = "builder error: relative URL without a base";
-        let actual = get_kata_all_releases_by_url(TEST_URL)
-            .err()
-            .unwrap()
-            .to_string();
-        assert_eq!(expected, actual);
-    }
-
-    #[test]
-    fn check_version_by_invalid_url() {
-        const TEST_URL: &str = "http://localhost :80";
-        let expected = "builder error: invalid domain character";
-        let actual = get_kata_all_releases_by_url(TEST_URL)
-            .err()
-            .unwrap()
-            .to_string();
-        assert_eq!(expected, actual);
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+            let actual = get_kata_all_releases_by_url(d.test_url)
+                .err()
+                .unwrap()
+                .to_string();
+            let msg = format!("{}, result: {:?}", msg, actual);
+            assert_eq!(d.expected, actual, "{}", msg);
+        }
     }
 
     #[test]
