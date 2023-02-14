@@ -1524,7 +1524,7 @@ func (q *QMP) ExecuteGetFD(ctx context.Context, fdname string, fd *os.File) erro
 // ExecuteCharDevUnixSocketAdd adds a character device using as backend a unix socket,
 // id is an identifier for the device, path specifies the local path of the unix socket,
 // wait is to block waiting for a client to connect, server specifies that the socket is a listening socket.
-func (q *QMP) ExecuteCharDevUnixSocketAdd(ctx context.Context, id, path string, wait, server bool) error {
+func (q *QMP) ExecuteCharDevUnixSocketAdd(ctx context.Context, id, path string, wait, server bool, reconnect uint32) error {
 	data := map[string]interface{}{
 		"server": server,
 		"addr": map[string]interface{}{
@@ -1538,6 +1538,10 @@ func (q *QMP) ExecuteCharDevUnixSocketAdd(ctx context.Context, id, path string, 
 	// wait is only valid for server mode
 	if server {
 		data["wait"] = wait
+	}
+
+	if reconnect > 0 {
+		data["reconnect"] = reconnect
 	}
 
 	args := map[string]interface{}{

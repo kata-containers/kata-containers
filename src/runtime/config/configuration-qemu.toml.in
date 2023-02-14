@@ -301,6 +301,11 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 # Your distribution recommends: @DEFVALIDVHOSTUSERSTOREPATHS@
 valid_vhost_user_store_paths = @DEFVALIDVHOSTUSERSTOREPATHS@
 
+# The timeout for reconnecting on non-server spdk sockets when the remote end goes away.
+# qemu will delay this many seconds and then attempt to reconnect.
+# Zero disables reconnecting, and the default is zero.
+vhost_user_reconnect_timeout_sec = 0
+
 # Enable file based guest memory support. The default is an empty string which
 # will disable this feature. In the case of virtio-fs, this is enabled
 # automatically and '/dev/shm' is used as the backing folder.

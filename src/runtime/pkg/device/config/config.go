@@ -87,6 +87,8 @@ const (
 	// Define the string key for DriverOptions in DeviceInfo struct
 	FsTypeOpt      = "fstype"
 	BlockDriverOpt = "block-driver"
+
+	VhostUserReconnectTimeOutOpt = "vhost-user-reconnect-timeout"
 )
 
 const (
@@ -95,6 +97,15 @@ const (
 	// vhost-user devices.
 	VhostUserBlkMajor  = 241
 	VhostUserSCSIMajor = 242
+)
+
+const (
+
+	// The timeout for reconnecting on non-server sockets when the remote end
+	// goes away.
+	// qemu will delay this many seconds and then attempt to reconnect.  Zero
+	// disables reconnecting, and is the default.
+	DefaultVhostUserReconnectTimeOut = 0
 )
 
 // Defining these as a variable instead of a const, to allow
@@ -320,6 +331,9 @@ type VhostUserDeviceAttrs struct {
 	CacheSize uint32
 
 	QueueSize uint32
+
+	// Reconnect timeout for socket of vhost user block device
+	ReconnectTime uint32
 }
 
 // GetHostPathFunc is function pointer used to mock GetHostPath in tests.
