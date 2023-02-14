@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 OS_NAME=ubuntu
-# This should be Ubuntu's code name, e.g. "focal" (Focal Fossa) for 20.04
-OS_VERSION=${OS_VERSION:-focal}
+# This should be Ubuntu's code name, e.g. "jammy" (Jammy Jellyfish) for 22.04
+OS_VERSION=${OS_VERSION:-jammy}
 PACKAGES="chrony iptables dbus"
 [ "$AGENT_INIT" = no ] && PACKAGES+=" init"
 [ "$MEASURED_ROOTFS" = yes ] && PACKAGES+=" cryptsetup-bin e2fsprogs"
