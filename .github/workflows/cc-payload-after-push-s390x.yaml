@@ -135,6 +135,10 @@ jobs:
           username: ${{ secrets.COCO_QUAY_DEPLOYER_USERNAME }}
           password: ${{ secrets.COCO_QUAY_DEPLOYER_PASSWORD }}
 
+      - name: Adjust a permission for repo
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+
       - uses: actions/checkout@v3
       - name: get-kata-tarball
         uses: actions/download-artifact@v3
