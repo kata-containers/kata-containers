@@ -68,6 +68,10 @@ pub enum Error {
     /// Cannot open the VM file descriptor.
     #[error(transparent)]
     Vm(vm::VmError),
+
+    /// confidential vm type Error
+    #[error("confidential-vm-type can only be used in x86_64 now")]
+    ConfidentialVmType,
 }
 
 /// Errors associated with starting the instance.

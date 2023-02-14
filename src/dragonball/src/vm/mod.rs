@@ -203,7 +203,26 @@ impl Vm {
         let id = api_shared_info.read().unwrap().id.clone();
         let logger = slog_scope::logger().new(slog::o!("id" => id));
         let kvm = KvmContext::new(kvm_fd)?;
-        let vm_fd = Arc::new(kvm.create_vm()?);
+        let vm_fd = match api_shared_info
+            .as_ref()
+            .read()
+            .unwrap()
+            .confidential_vm_type
+        {
+            None => Arc::new(kvm.create_vm()?),
+            Some(confidential_vm_type) => {
+                #[cfg(not(any(target_arch = "x86_64")))]
+                {
+                    error!(
+                        "confidential-vm-type {} only can be used in x86_64",
+                        confidential_vm_type as u64
+                    );
+                    return Err(Error::ConfidentialVmType);
+                }
+                #[cfg(target_arch = "x86_64")]
+                Arc::new(kvm.create_vm_with_type(confidential_vm_type as u64)?)
+            }
+        };
         let resource_manager = Arc::new(ResourceManager::new(Some(kvm.max_memslots())));
         let device_manager = DeviceManager::new(
             vm_fd.clone(),
