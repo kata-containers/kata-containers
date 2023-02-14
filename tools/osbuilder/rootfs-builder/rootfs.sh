@@ -644,8 +644,6 @@ EOF
 		# TODO: clean-up OPA installation
 		cp /usr/bin/opa "${ROOTFS_DIR}/usr/bin"
 		chmod 755 "${ROOTFS_DIR}/usr/bin/opa"
-		cp ./coco-opa.service "${ROOTFS_DIR}/usr/lib/systemd/system"
-
 		samples_dir="${script_dir}/../../../src/agent/samples"
 		cp "${samples_dir}/policy-all-allowed.rego" "${ROOTFS_DIR}/coco-policy.rego"
 		chmod 644 "${ROOTFS_DIR}/coco-policy.rego"
