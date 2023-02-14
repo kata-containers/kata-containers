@@ -350,6 +350,15 @@ impl Vm {
         instance_state == InstanceState::Running
     }
 
+    /// return true if VM confidential type is TDX
+    pub fn is_tdx_enabled(&self) -> bool {
+        let shared_info = self
+            .shared_info()
+            .read()
+            .expect("failed to get instance state, because shared info is poisoned lock");
+        shared_info.is_tdx_enabled()
+    }
+
     /// Save VM instance exit state
     pub fn vm_exit(&self, exit_code: i32) {
         if let Ok(mut info) = self.shared_info.write() {
