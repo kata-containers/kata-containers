@@ -104,7 +104,7 @@ sudo dmsetup create "${POOL_NAME}" \
 
 cat << EOF
 #
-# Add this to your config.toml configuration file and restart `containerd` daemon
+# Add this to your config.toml configuration file and restart containerd daemon
 #
 [plugins]
   [plugins.devmapper]
