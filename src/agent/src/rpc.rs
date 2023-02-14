@@ -2032,6 +2032,11 @@ mod tests {
     use tempfile::{tempdir, TempDir};
     use test_utils::{assert_result, skip_if_not_root};
     use ttrpc::{r#async::TtrpcContext, MessageHeader};
+    use which::which;
+
+    fn check_command(cmd: &str) -> bool {
+        which(cmd).is_ok()
+    }
 
     fn mk_ttrpc_context() -> TtrpcContext {
         TtrpcContext {
@@ -2750,6 +2755,18 @@ OtherField:other
     #[tokio::test]
     async fn test_ip_tables() {
         skip_if_not_root!();
+
+        if !check_command(IPTABLES_SAVE)
+            || !check_command(IPTABLES_RESTORE)
+            || !check_command(IP6TABLES_SAVE)
+            || !check_command(IP6TABLES_RESTORE)
+        {
+            warn!(
+                sl!(),
+                "one or more commands for ip tables test are missing, skip it"
+            );
+            return;
+        }
 
         let logger = slog::Logger::root(slog::Discard, o!());
         let sandbox = Sandbox::new(&logger).unwrap();
