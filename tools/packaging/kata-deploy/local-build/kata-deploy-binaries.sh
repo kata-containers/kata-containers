@@ -394,24 +394,50 @@ install_cc_virtiofsd() {
 	sudo install -D --owner root --group root --mode 0744 virtiofsd/virtiofsd "${destdir}/${cc_prefix}/libexec/virtiofsd"
 }
 
-#Install CC kernel assert, with TEE support
-install_cc_tee_kernel() {
-	export KATA_BUILD_CC=yes
+# Install cached kernel compoenent
+install_cached_kernel_component() {
 	tee="${1}"
 	kernel_version="${2}"
+	module_dir="${3:-}"
 
-	[[ "${tee}" != "tdx" && "${tee}" != "sev" ]] && die "Non supported TEE"
-
-	export kernel_version=${kernel_version}
-
-	install_cached_component \
+	install_cached_compnent \
 		"kernel" \
 		"${jenkins_url}/job/kata-containers-2.0-kernel-${tee}-cc-$(uname -m)/${cached_artifacts_path}" \
 		"${kernel_version}" \
 		"$(get_kernel_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
-		&& return 0
+		|| return 1
+
+	[ "${tee}" == "tdx" ] && return 0
+
+	# SEV specific code path
+	install_cached_component \
+		"kernel-modules" \
+		"${jenkins_url}/job/kata-containers-2.0-kernel-sev-cc-$(uname -m)/${cached_artifacts_path}" \
+		"${kernel_version}" \
+		"$(get_kernel_image_name)" \
+		"kata-static-cc-sev-kernel-modules.tar.xz" \
+		"${workdir}/kata-static-cc-sev-kernel-modules.tar.xz" \
+	|| return 1
+		
+	tar xvf "${workdir}/kata-static-cc-sev-kernel-modules.tar.xz" -C  "${module_dir}" && return 0
+
+	return 1
+}
+
+#Install CC kernel assert, with TEE support
+install_cc_tee_kernel() {
+	export KATA_BUILD_CC=yes
+	tee="${1}"
+	kernel_version="${2}"
+	module_dir="${3:-}"
+
+	[[ "${tee}" != "tdx" && "${tee}" != "sev" ]] && die "Non supported TEE"
+
+	export kernel_version=${kernel_version}
+
+	install_cached_kernel_component "${tee}" "${kernel_version}" "${module_dir}" && return 0
 
 	info "build initramfs for TEE kernel"
 	"${initramfs_builder}"
