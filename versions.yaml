@@ -122,13 +122,13 @@ assets:
     architecture:
       aarch64:
         name: &default-image-name "ubuntu"
-        version: &default-image-version "latest"
+        version: &default-image-version "noble"
         nvidia-gpu:
           name: *default-image-name
-          version: "jammy"
+          version: "noble"
         nvidia-gpu-confidential:
           name: *default-image-name
-          version: "jammy"
+          version: "noble"
       ppc64le:
         name: *default-image-name
         version: *default-image-version
@@ -146,10 +146,10 @@ assets:
           version: *default-image-version
         nvidia-gpu:
           name: *default-image-name
-          version: "jammy"
+          version: "noble"
         nvidia-gpu-confidential:
           name: *default-image-name
-          version: "jammy"
+          version: "noble"
 
     meta:
       image-type: *default-image-name
@@ -165,15 +165,15 @@ assets:
         version: &default-initrd-version "3.18"
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy"
+          version: "noble"
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy"
+          version: "noble"
       # Do not use Alpine on ppc64le & s390x, the agent cannot use musl because
       # there is no such Rust target
       ppc64le:
         name: &glibc-initrd-name "ubuntu"
-        version: &glibc-initrd-version "20.04"
+        version: &glibc-initrd-version "noble"
       s390x:
         name: *glibc-initrd-name
         version: *glibc-initrd-version
@@ -191,10 +191,10 @@ assets:
           version: "2.0"
         nvidia-gpu:
           name: *glibc-initrd-name
-          version: "jammy"
+          version: "noble"
         nvidia-gpu-confidential:
           name: *glibc-initrd-name
-          version: "jammy"
+          version: "noble"
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
