@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/sirupsen/logrus"
@@ -42,6 +43,8 @@ type deviceManager struct {
 	sync.RWMutex
 
 	vhostUserStoreEnabled bool
+
+	vhostUserReconnectTimeout uint32
 }
 
 func deviceLogger() *logrus.Entry {
@@ -49,11 +52,12 @@ func deviceLogger() *logrus.Entry {
 }
 
 // NewDeviceManager creates a deviceManager object behaved as api.DeviceManager
-func NewDeviceManager(blockDriver string, vhostUserStoreEnabled bool, vhostUserStorePath string, devices []api.Device) api.DeviceManager {
+func NewDeviceManager(blockDriver string, vhostUserStoreEnabled bool, vhostUserStorePath string, vhostUserReconnect uint32, devices []api.Device) api.DeviceManager {
 	dm := &deviceManager{
-		vhostUserStoreEnabled: vhostUserStoreEnabled,
-		vhostUserStorePath:    vhostUserStorePath,
-		devices:               make(map[string]api.Device),
+		vhostUserStoreEnabled:     vhostUserStoreEnabled,
+		vhostUserStorePath:        vhostUserStorePath,
+		vhostUserReconnectTimeout: vhostUserReconnect,
+		devices:                   make(map[string]api.Device),
 	}
 	if blockDriver == config.VirtioMmio {
 		dm.blockDriver = config.VirtioMmio
@@ -119,6 +123,7 @@ func (dm *deviceManager) createDevice(devInfo config.DeviceInfo) (dev api.Device
 			devInfo.DriverOptions = make(map[string]string)
 		}
 		devInfo.DriverOptions[config.BlockDriverOpt] = dm.blockDriver
+		devInfo.DriverOptions[config.VhostUserReconnectTimeOutOpt] = fmt.Sprintf("%d", dm.vhostUserReconnectTimeout)
 		return drivers.NewVhostUserBlkDevice(&devInfo), nil
 	} else if isBlock(devInfo) {
 		if devInfo.DriverOptions == nil {

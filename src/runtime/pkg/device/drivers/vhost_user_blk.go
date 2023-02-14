@@ -8,6 +8,7 @@ package drivers
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
@@ -72,17 +73,19 @@ func (device *VhostUserBlkDevice) Attach(ctx context.Context, devReceiver api.De
 	}
 
 	vAttrs := &config.VhostUserDeviceAttrs{
-		DevID:      utils.MakeNameID("blk", device.DeviceInfo.ID, maxDevIDSize),
-		SocketPath: device.DeviceInfo.HostPath,
-		Type:       config.VhostUserBlk,
-		Index:      index,
+		DevID:         utils.MakeNameID("blk", device.DeviceInfo.ID, maxDevIDSize),
+		SocketPath:    device.DeviceInfo.HostPath,
+		Type:          config.VhostUserBlk,
+		Index:         index,
+		ReconnectTime: vhostUserReconnect(device.DeviceInfo.DriverOptions),
 	}
 
 	deviceLogger().WithFields(logrus.Fields{
-		"device":     device.DeviceInfo.HostPath,
-		"SocketPath": vAttrs.SocketPath,
-		"Type":       config.VhostUserBlk,
-		"Index":      index,
+		"device":        device.DeviceInfo.HostPath,
+		"SocketPath":    vAttrs.SocketPath,
+		"Type":          config.VhostUserBlk,
+		"Index":         index,
+		"ReconnectTime": vAttrs.ReconnectTime,
 	}).Info("Attaching device")
 
 	device.VhostUserDeviceAttrs = vAttrs
@@ -91,6 +94,24 @@ func (device *VhostUserBlkDevice) Attach(ctx context.Context, devReceiver api.De
 	}
 
 	return nil
+}
+
+func vhostUserReconnect(customOptions map[string]string) uint32 {
+	var vhostUserReconnectTimeout uint32
+
+	if customOptions == nil {
+		vhostUserReconnectTimeout = config.DefaultVhostUserReconnectTimeOut
+	} else {
+		reconnectTimeoutStr := customOptions[config.VhostUserReconnectTimeOutOpt]
+		if reconnectTimeout, err := strconv.Atoi(reconnectTimeoutStr); err != nil {
+			vhostUserReconnectTimeout = config.DefaultVhostUserReconnectTimeOut
+			deviceLogger().WithField("reconnect", reconnectTimeoutStr).WithError(err).Warn("Failed to get reconnect timeout for  vhost-user-blk device")
+		} else {
+			vhostUserReconnectTimeout = uint32(reconnectTimeout)
+		}
+	}
+
+	return vhostUserReconnectTimeout
 }
 
 func isVirtioBlkBlockDriver(customOptions map[string]string) bool {

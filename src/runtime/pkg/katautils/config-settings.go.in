@@ -84,6 +84,7 @@ const defaultGuestHookPath string = ""
 const defaultVirtioFSCacheMode = "never"
 const defaultDisableImageNvdimm = false
 const defaultVhostUserStorePath string = "/var/run/kata-containers/vhost-user/"
+const defaultVhostUserDeviceReconnect = 0
 const defaultRxRateLimiterMaxRate = uint64(0)
 const defaultTxRateLimiterMaxRate = uint64(0)
 const defaultConfidentialGuest = false
