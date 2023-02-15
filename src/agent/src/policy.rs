@@ -92,8 +92,7 @@ impl AgentPolicy {
     pub async fn is_allowed_create_container_endpoint(
         &mut self,
         ep: &str,
-        req: &protocols::agent::CreateContainerRequest,
-        index: usize
+        req: &protocols::agent::CreateContainerRequest
     ) -> bool {
         // Send container's OCI spec in json format as input data for OPA.
         let mut oci_spec = req.OCI.clone();
@@ -108,8 +107,7 @@ impl AgentPolicy {
 
         if let Ok(spec_str) = serde_json::to_string(&spec) {
             let post_input = format!(
-                "{{\"input\":{{\"index\":{},\"oci\":{}}}}}",
-                index,
+                "{{\"input\":{{\"oci\":{}}}}}",
                 spec_str);
 
             self.post_to_opa(ep, &post_input).await
