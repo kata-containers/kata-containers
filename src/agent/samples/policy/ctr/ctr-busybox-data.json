@@ -1,6 +1,6 @@
 {
     "coco": {
-        "policy_containers" : [
+        "policy_containers": [
             {
                 "ociVersion": "1.0.2-dev",
                 "process": {
