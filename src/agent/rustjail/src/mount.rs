@@ -770,7 +770,7 @@ fn mount_from(
             Path::new(&dest).parent().unwrap()
         };
 
-        let _ = fs::create_dir_all(&dir).map_err(|e| {
+        let _ = fs::create_dir_all(dir).map_err(|e| {
             log_child!(
                 cfd_log,
                 "create dir {}: {}",

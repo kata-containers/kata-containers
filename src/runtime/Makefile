@@ -176,7 +176,7 @@ DEFVALIDENTROPYSOURCES := [\"/dev/urandom\",\"/dev/random\",\"\"]
 DEFDISABLEBLOCK := false
 DEFSHAREDFS_CLH_VIRTIOFS := virtio-fs
 DEFSHAREDFS_QEMU_VIRTIOFS := virtio-fs
-DEFVIRTIOFSDAEMON := $(PKGLIBEXECDIR)/virtiofsd
+DEFVIRTIOFSDAEMON := $(LIBEXECDIR)/virtiofsd
 DEFVALIDVIRTIOFSDAEMONPATHS := [\"$(DEFVIRTIOFSDAEMON)\"]
 # Default DAX mapping cache size in MiB
 #if value is 0, DAX is not enabled

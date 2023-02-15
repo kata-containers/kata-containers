@@ -135,16 +135,9 @@ pub struct AgentService {
 fn verify_cid(id: &str) -> Result<()> {
     let mut chars = id.chars();
 
-    let valid = match chars.next() {
-        Some(first)
-            if first.is_alphanumeric()
+    let valid = matches!(chars.next(), Some(first) if first.is_alphanumeric()
                 && id.len() > 1
-                && chars.all(|c| c.is_alphanumeric() || ['.', '-', '_'].contains(&c)) =>
-        {
-            true
-        }
-        _ => false,
-    };
+                && chars.all(|c| c.is_alphanumeric() || ['.', '-', '_'].contains(&c)));
 
     match valid {
         true => Ok(()),
@@ -3071,7 +3064,7 @@ COMMIT
             .unwrap();
         assert!(!result.data.is_empty(), "we should have non-zero output:");
         assert!(
-            std::str::from_utf8(&*result.data).unwrap().contains(
+            std::str::from_utf8(&result.data).unwrap().contains(
                 "PREROUTING -d 192.168.103.153/32 -j DNAT --to-destination 192.168.188.153"
             ),
             "We should see the resulting rule"
@@ -3109,7 +3102,7 @@ COMMIT
             .unwrap();
         assert!(!result.data.is_empty(), "we should have non-zero output:");
         assert!(
-            std::str::from_utf8(&*result.data)
+            std::str::from_utf8(&result.data)
                 .unwrap()
                 .contains("INPUT -s 2001:db8:100::1/128 -i sit+ -p tcp -m tcp --sport 512:65535"),
             "We should see the resulting rule"
