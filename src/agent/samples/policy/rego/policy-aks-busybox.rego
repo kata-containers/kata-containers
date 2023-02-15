@@ -42,8 +42,7 @@ default WriteStreamRequest := true
 CreateContainerRequest {
     input_container := input.oci
 
-    # Enforce container creation order.
-    policy_container := policy_containers[input.index]
+    policy_container := policy_containers[_]
 
     policy_container.ociVersion     == input_container.ociVersion
     policy_container.root.readonly  == input_container.root.readonly
