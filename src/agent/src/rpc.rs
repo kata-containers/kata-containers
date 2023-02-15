@@ -222,6 +222,31 @@ fn merge_oci_process(target: &mut oci::Process, source: &oci::Process) {
     }
 }
 
+async fn log_oci_spec(spec: &oci::Spec) {
+    info!(sl!(), "log_oci_spec: starting");
+
+    if let Ok(spec_str) = serde_json::to_string(spec) {
+        let f = tokio::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/tmp/oci.json")
+            .await;
+
+        match f {
+            Ok(mut file) =>  {
+                if let Err(_) = file.write(spec_str.as_bytes()).await {
+                    error!(sl!(), "log_oci_spec: failed to write oci spec json string");
+                }
+            },
+            Err(e) => {
+                error!(sl!(), "log_oci_spec: failed to open json file - {:?}", e);
+            }
+        };
+    } else {
+        error!(sl!(), "log_oci_spec: failed convert oci spec to json string");
+    }
+}
+
 impl AgentService {
     #[instrument]
     async fn do_create_container(
@@ -245,6 +270,8 @@ impl AgentService {
                 return Err(anyhow!(nix::Error::EINVAL));
             }
         };
+
+        log_oci_spec(&oci).await;
 
         info!(sl!(), "receive createcontainer, spec: {:?}", &oci);
         info!(
