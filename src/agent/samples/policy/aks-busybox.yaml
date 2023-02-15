@@ -1,0 +1,11 @@
+apiVersion: v1 
+kind: Pod 
+metadata: 
+  labels: 
+    run: busybox 
+  name: busybox-cc
+spec:
+  runtimeClassName: kata-cc
+  containers: 
+  - image: docker.io/library/busybox:latest 
+    name: busybox 
