@@ -13,9 +13,19 @@ use lazy_static::lazy_static;
 
 lazy_static! {
     /// Default configuration file paths, vendor may extend the list
+    /// TODO:
+    /// * Drop the `-dragonball.toml` configs once
+    ///   https://github.com/kata-containers/kata-containers/issues/3961 is
+    ///   implemented.
     pub static ref DEFAULT_RUNTIME_CONFIGURATIONS: Vec::<&'static str> = vec![
+        "/etc/kata-containers/configuration-dragonball.toml",
+        "/usr/share/defaults/kata-containers/configuration-dragonball.toml",
+        "/opt/kata/share/defaults/kata-containers/configuration-dragonball.toml",
+        "/opt/confidential-containers/share/defaults/kata-containers/configuration-dragonball.toml",
         "/etc/kata-containers/configuration.toml",
         "/usr/share/defaults/kata-containers/configuration.toml",
+        "/opt/kata/share/defaults/kata-containers/configuration.toml",
+        "/opt/confidential-containers/share/defaults/kata-containers/configuration.toml",
     ];
 }
 
