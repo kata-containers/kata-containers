@@ -9,6 +9,10 @@ use anyhow::{anyhow, Result};
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+#[cfg(any(target_arch = "x86_64"))]
+use std::process::{Command, Stdio};
+
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 struct Release {
     tag_name: String,
@@ -16,6 +20,12 @@ struct Release {
     created_at: String,
     tarball_url: String,
 }
+
+#[allow(dead_code)]
+const MODPROBE_PATH: &str = "/sbin/modprobe";
+
+#[allow(dead_code)]
+const MODINFO_PATH: &str = "/sbin/modinfo";
 
 const KATA_GITHUB_RELEASE_URL: &str =
     "https://api.github.com/repos/kata-containers/kata-containers/releases";
@@ -29,6 +39,7 @@ const ERR_NO_CPUINFO: &str = "cpu_info string is empty";
 
 #[allow(dead_code)]
 pub const GENERIC_CPU_VENDOR_FIELD: &str = "vendor_id";
+
 #[allow(dead_code)]
 pub const GENERIC_CPU_MODEL_FIELD: &str = "model name";
 
@@ -36,8 +47,8 @@ pub const GENERIC_CPU_MODEL_FIELD: &str = "model name";
 pub const PROC_CPUINFO: &str = "/proc/cpuinfo";
 
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
-fn get_cpu_info(cpu_info_file: &str) -> Result<String> {
-    let contents = std::fs::read_to_string(cpu_info_file)?;
+fn read_file_contents(file_path: &str) -> Result<String> {
+    let contents = std::fs::read_to_string(file_path)?;
     Ok(contents)
 }
 
@@ -45,7 +56,7 @@ fn get_cpu_info(cpu_info_file: &str) -> Result<String> {
 // the specified cpuinfo file by parsing based on a specified delimiter
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 pub fn get_single_cpu_info(cpu_info_file: &str, substring: &str) -> Result<String> {
-    let contents = get_cpu_info(cpu_info_file)?;
+    let contents = read_file_contents(cpu_info_file)?;
 
     if contents.is_empty() {
         return Err(anyhow!(ERR_NO_CPUINFO));
@@ -57,7 +68,6 @@ pub fn get_single_cpu_info(cpu_info_file: &str, substring: &str) -> Result<Strin
         .ok_or("error splitting contents of cpuinfo")
         .map_err(|e| anyhow!(e))?
         .to_string();
-
     Ok(result)
 }
 
@@ -70,7 +80,7 @@ pub fn get_cpu_flags(cpu_info: &str, cpu_flags_tag: &str) -> Result<String> {
     }
 
     if cpu_flags_tag.is_empty() {
-        return Err(anyhow!("cpu flags delimiter string is empty"));
+        return Err(anyhow!("cpu flags delimiter string is empty"))?;
     }
 
     let subcontents: Vec<&str> = cpu_info.split('\n').collect();
@@ -220,6 +230,86 @@ pub fn check_official_releases() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(any(target_arch = "x86_64"))]
+pub fn check_kernel_module_loaded(module: &str, parameter: &str) -> Result<String, String> {
+    const MODPROBE_PARAMETERS_DRY_RUN: &str = "--dry-run";
+    const MODPROBE_PARAMETERS_FIRST_TIME: &str = "--first-time";
+    const MODULES_PATH: &str = "/sys/module";
+
+    let status_modinfo_success;
+
+    // Partial check w/ modinfo
+    // verifies that the module exists
+    match Command::new(MODINFO_PATH)
+        .arg(module)
+        .stdout(Stdio::piped())
+        .output()
+    {
+        Ok(v) => {
+            status_modinfo_success = v.status.success();
+
+            // The module is already not loaded.
+            if !status_modinfo_success {
+                let msg = String::from_utf8_lossy(&v.stderr).replace('\n', "");
+                return Err(msg);
+            }
+        }
+        Err(_e) => {
+            let msg = format!(
+                "Command {:} not found, verify that `kmod` package is already installed.",
+                MODINFO_PATH,
+            );
+            return Err(msg);
+        }
+    }
+
+    // Partial check w/ modprobe
+    // check that the module is already loaded
+    match Command::new(MODPROBE_PATH)
+        .arg(MODPROBE_PARAMETERS_DRY_RUN)
+        .arg(MODPROBE_PARAMETERS_FIRST_TIME)
+        .arg(module)
+        .stdout(Stdio::piped())
+        .output()
+    {
+        Ok(v) => {
+            // a successful simulated modprobe insert, means the module is not already loaded
+            let status_modprobe_success = v.status.success();
+
+            if status_modprobe_success && status_modinfo_success {
+                // This condition is true in the case that the module exist, but is not already loaded
+                let msg = format!("The kernel module `{:}` exist but is not already loaded. Try reloading it using 'modprobe {:}=Y'",
+                        module, module
+                    );
+                return Err(msg);
+            }
+        }
+
+        Err(_e) => {
+            let msg = format!(
+                "Command {:} not found, verify that `kmod` package is already installed.",
+                MODPROBE_PATH,
+            );
+            return Err(msg);
+        }
+    }
+
+    let module_path = format!("{}/{}/parameters/{}", MODULES_PATH, module, parameter);
+
+    // Here the currently loaded kernel parameter value
+    // is retrieved and returned on success
+    match read_file_contents(&module_path) {
+        Ok(result) => Ok(result.replace('\n', "")),
+        Err(_e) => {
+            let msg = format!(
+                "'{:}' kernel module parameter `{:}` not found.",
+                module, parameter
+            );
+            Err(msg)
+        }
+    }
 }
 
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
@@ -412,5 +502,65 @@ mod tests {
         assert!(!v.major.to_string().is_empty());
         assert!(!v.minor.to_string().is_empty());
         assert!(!v.patch.to_string().is_empty());
+    }
+
+    #[cfg(any(target_arch = "x86_64"))]
+    #[test]
+    fn check_module_loaded() {
+        #[allow(dead_code)]
+        #[derive(Debug)]
+        struct TestData<'a> {
+            module_name: &'a str,
+            param_name: &'a str,
+            param_value: &'a str,
+            result: Result<String>,
+        }
+
+        let tests = &[
+            // Failure scenarios
+            TestData {
+                module_name: "",
+                param_name: "",
+                param_value: "",
+                result: Err(anyhow!("modinfo: ERROR: Module {} not found.", "")),
+            },
+            TestData {
+                module_name: "kvm",
+                param_name: "",
+                param_value: "",
+                result: Err(anyhow!(
+                    "'{:}' kernel module parameter `{:}` not found.",
+                    "kvm",
+                    ""
+                )),
+            },
+            // Success scenarios
+            TestData {
+                module_name: "kvm",
+                param_name: "kvmclock_periodic_sync",
+                param_value: "Y",
+                result: Ok("Y".to_string()),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+            let result = check_kernel_module_loaded(d.module_name, d.param_name);
+            let msg = format!("{}, result: {:?}", msg, result);
+
+            if d.result.is_ok() {
+                assert_eq!(
+                    result.as_ref().unwrap(),
+                    d.result.as_ref().unwrap(),
+                    "{}",
+                    msg
+                );
+                continue;
+            }
+
+            let expected_error = format!("{}", &d.result.as_ref().unwrap_err());
+            let actual_error = result.unwrap_err().to_string();
+            assert!(actual_error == expected_error, "{}", msg);
+        }
     }
 }
