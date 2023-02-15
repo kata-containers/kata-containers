@@ -165,6 +165,8 @@ macro_rules! is_allowed {
 
 macro_rules! is_allowed_create_container {
     ($req:ident) => {
+        log_oci_spec(&$req).await;
+
         config_allows!($req);
 
         if !AGENT_POLICY
@@ -222,28 +224,28 @@ fn merge_oci_process(target: &mut oci::Process, source: &oci::Process) {
     }
 }
 
-async fn log_oci_spec(spec: &oci::Spec) {
+async fn log_oci_spec(req: &protocols::agent::CreateContainerRequest) {
     info!(sl!(), "log_oci_spec: starting");
 
-    if let Ok(spec_str) = serde_json::to_string(spec) {
-        let f = tokio::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("/tmp/oci.json")
-            .await;
+    if let Some(oci_spec) = req.OCI.clone().as_mut() {
+        let spec = rustjail::grpc_to_oci(oci_spec);
+        if let Ok(mut spec_str) = serde_json::to_string(&spec) {
+            spec_str += ",\n";
 
-        match f {
-            Ok(mut file) =>  {
-                if let Err(_) = file.write(spec_str.as_bytes()).await {
-                    error!(sl!(), "log_oci_spec: failed to write oci spec json string");
-                }
-            },
-            Err(e) => {
-                error!(sl!(), "log_oci_spec: failed to open json file - {:?}", e);
-            }
-        };
+            let mut f = tokio::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("/tmp/oci.json")
+                .await
+                .unwrap();
+
+            f.write(spec_str.as_bytes()).await.unwrap();
+            f.flush().await.unwrap();
+        } else {
+            error!(sl!(), "log_oci_spec: failed convert oci spec to json string");
+        }
     } else {
-        error!(sl!(), "log_oci_spec: failed convert oci spec to json string");
+        error!(sl!(), "cannot clone oci spec in the create container request!");
     }
 }
 
@@ -270,8 +272,6 @@ impl AgentService {
                 return Err(anyhow!(nix::Error::EINVAL));
             }
         };
-
-        log_oci_spec(&oci).await;
 
         info!(sl!(), "receive createcontainer, spec: {:?}", &oci);
         info!(
