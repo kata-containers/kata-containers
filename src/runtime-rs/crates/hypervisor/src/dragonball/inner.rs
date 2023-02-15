@@ -13,7 +13,7 @@ use crate::{
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use dragonball::{
-    api::v1::{BlockDeviceConfigInfo, BootSourceConfig},
+    api::v1::{BlockDeviceConfigInfo, BootSourceConfig, VcpuResizeInfo},
     vm::VmConfigInfo,
 };
 use kata_sys_util::mount;
@@ -325,6 +325,53 @@ impl DragonballInner {
                 }
             }
         }
+    }
+
+    // check if resizing info is valid
+    // the error in this function is not ok to be tolerated, the container boot will fail
+    fn precheck_resize_vcpus(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)> {
+        // old_vcpus > 0, safe for conversion
+        let current_vcpus = old_vcpus as u32;
+
+        // a non-zero positive is required
+        if new_vcpus == 0 {
+            return Err(anyhow!("resize vcpu error: 0 vcpu resizing is invalid"));
+        }
+
+        // cannot exceed maximum value
+        if new_vcpus > self.config.cpu_info.default_maxvcpus {
+            return Err(anyhow!("resize vcpu error: cannot greater than maxvcpus"));
+        }
+
+        Ok((current_vcpus, new_vcpus))
+    }
+
+    // do the check before resizing, returns Result<(old, new)>
+    pub(crate) async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)> {
+        if old_vcpus == new_vcpus {
+            info!(
+                sl!(),
+                "resize_vcpu: no need to resize vcpus because old_vcpus is equal to new_vcpus"
+            );
+            return Ok((new_vcpus, new_vcpus));
+        }
+
+        let (old_vcpus, new_vcpus) = self.precheck_resize_vcpus(old_vcpus, new_vcpus)?;
+        info!(
+            sl!(),
+            "check_resize_vcpus passed, passing new_vcpus = {:?} to vmm", new_vcpus
+        );
+
+        let cpu_resize_info = VcpuResizeInfo {
+            vcpu_count: Some(new_vcpus as u8),
+        };
+        self.vmm_instance
+            .resize_vcpu(&cpu_resize_info)
+            .context(format!(
+                "failed to do_resize_vcpus on new_vcpus={:?}",
+                new_vcpus
+            ))?;
+        Ok((old_vcpus, new_vcpus))
     }
 
     pub fn set_hypervisor_config(&mut self, config: HypervisorConfig) {
