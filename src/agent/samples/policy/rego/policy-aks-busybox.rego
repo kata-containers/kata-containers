@@ -57,9 +57,8 @@ CreateContainerRequest {
 
 allow_annotations(policy_container, input_container) {
     allow_by_container_types(policy_container, input_container)
-    allow_by_bundle_id(policy_container, input_container)
+    allow_by_bundle_or_sandbox_id(policy_container, input_container)
     allow_sandbox_namespace(policy_container, input_container)
-    allow_sandbox_id(policy_container, input_container)
 }
 
 ######################################################################
@@ -204,14 +203,6 @@ allow_sandbox_namespace(policy_container, input_container) {
 
 
 ######################################################################
-# "io.kubernetes.cri.sandbox-id" annotation
-
-allow_sandbox_id(policy_container, input_container) {
-    policy_sandbox_regex := policy_container.annotations["io.kubernetes.cri.sandbox-id"]
-    regex.match(policy_sandbox_regex, input_container.annotations["io.kubernetes.cri.sandbox-id"])
-}
-
-######################################################################
 # linux fields
 
 allow_linux(policy_container, input_container) {
@@ -221,17 +212,25 @@ allow_linux(policy_container, input_container) {
 }
 
 ######################################################################
-# Get the input bundle_id from "io.katacontainers.pkg.oci.bundle_path"
-# and check its consistency with other rules.
+# Get the input:
+#
+# - bundle_id from "io.katacontainers.pkg.oci.bundle_path"
+# - sandbox_id from "io.kubernetes.cri.sandbox-id"
+#
+# and check their consistency with other rules.
 
-allow_by_bundle_id(policy_container, input_container) {
+allow_by_bundle_or_sandbox_id(policy_container, input_container) {
     bundle_path := input_container.annotations["io.katacontainers.pkg.oci.bundle_path"]
     bundle_id := replace(bundle_path, "/run/containerd/io.containerd.runtime.v2.task/k8s.io/", "")
+
+    policy_sandbox_regex := policy_container.annotations["io.kubernetes.cri.sandbox-id"]
+    sandbox_id := input_container.annotations["io.kubernetes.cri.sandbox-id"]
+    regex.match(policy_sandbox_regex, sandbox_id)
 
     allow_root_path(policy_container, input_container, bundle_id)
 
     every input_mount in input.oci.mounts {
-        allow_mount(policy_container, input_mount, bundle_id)
+        allow_mount(policy_container, input_mount, bundle_id, sandbox_id)
     }
 }
 
@@ -286,25 +285,33 @@ allow_root_path(policy_container, input_container, bundle_id) {
 ######################################################################
 # mounts
 
-allow_mount(policy_container, input_mount, bundle_id) {
+allow_mount(policy_container, input_mount, bundle_id, sandbox_id) {
     # At least one policy mount rule allows the input mount.
     some policy_mount in policy_container.mounts
-    policy_mount_allows(policy_mount, input_mount, bundle_id)
+    policy_mount_allows(policy_mount, input_mount, bundle_id, sandbox_id)
 }
 
-policy_mount_allows(policy_mount, input_mount, bundle_id) {
+policy_mount_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
     # Exact match of policy and input mounts.
     policy_mount == input_mount
 }
-policy_mount_allows(policy_mount, input_mount, bundle_id) {
+policy_mount_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
     policy_mount.destination == input_mount.destination
     policy_mount.type == input_mount.type
     policy_mount.options == input_mount.options
 
-    # Policy mount source regex including $(bundle-id) alows the input mount - e.g.:
-    #
-    # "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-resolv.conf$",
+    policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id)
+
+}
+
+policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
+    # E.g., "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-resolv.conf$",
     policy_source_regex := replace(policy_mount.source, "$(bundle-id)", bundle_id)
+    regex.match(policy_source_regex, input_mount.source)
+}
+policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
+    # E.g., "source": "/run/kata-containers/shared/containers/$(sandbox-id)/rootfs/local/data",
+    policy_source_regex := replace(policy_mount.source, "$(sandbox-id)", sandbox_id)
     regex.match(policy_source_regex, input_mount.source)
 }
 
@@ -669,6 +676,16 @@ policy_containers := [
                     "nodev",
                     "relatime",
                     "ro"
+                ]
+            },
+            {
+                "destination": "/busy1",
+                "type": "local",
+                "source": "^/run/kata-containers/shared/containers/$(sandbox-id)/rootfs/local/data$",
+                "options": [
+                    "rbind",
+                    "rprivate",
+                    "rw"
                 ]
             },
             {

@@ -148,6 +148,16 @@
                 ]
             },
             {
+                "destination": "/busy1",
+                "type": "local",
+                "source": "/run/kata-containers/shared/containers/521dcee15a4b51edb91f5678d61372d7516e2efa045d9704c9fb1b433a4d41b4/rootfs/local/data",
+                "options": [
+                    "rbind",
+                    "rprivate",
+                    "rw"
+                ]
+            },
+            {
                 "destination": "/etc/hosts",
                 "type": "bind",
                 "source": "/run/kata-containers/shared/containers/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9-f34fbf5888dc7370-hosts",

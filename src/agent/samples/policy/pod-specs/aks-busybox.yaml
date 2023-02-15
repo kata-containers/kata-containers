@@ -8,4 +8,10 @@ spec:
   runtimeClassName: kata-cc
   containers: 
   - image: docker.io/library/busybox:latest 
-    name: busybox 
+    name: busybox
+    volumeMounts:
+    - mountPath: /busy1
+      name: data
+  volumes:
+  - name: data
+    emptyDir: {}
