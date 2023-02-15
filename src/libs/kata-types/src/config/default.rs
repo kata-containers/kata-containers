@@ -42,6 +42,7 @@ pub const MIN_SHARED_9PFS_SIZE_MB: u32 = 4 * 1024;
 pub const MAX_SHARED_9PFS_SIZE_MB: u32 = 8 * 1024 * 1024;
 
 pub const DEFAULT_GUEST_HOOK_PATH: &str = "/opt/kata/hooks";
+pub const DEFAULT_GUEST_DNS_FILE: &str = "/etc/resolv.conf";
 
 pub const DEFAULT_GUEST_VCPUS: u32 = 1;
 
