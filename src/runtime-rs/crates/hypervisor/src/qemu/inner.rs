@@ -104,6 +104,11 @@ impl QemuInner {
         todo!()
     }
 
+    pub(crate) async fn resize_vcpu(&self, _old_vcpus: u32, _new_vcpus: u32) -> Result<(u32, u32)> {
+        info!(sl!(), "QemuInner::resize_vcpu()");
+        todo!()
+    }
+
     pub(crate) async fn get_pids(&self) -> Result<Vec<u32>> {
         info!(sl!(), "QemuInner::get_pids()");
         todo!()

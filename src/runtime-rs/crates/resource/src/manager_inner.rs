@@ -4,13 +4,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{sync::Arc, thread, vec};
+use std::{sync::Arc, thread};
 
-use crate::{network::NetworkConfig, resource_persist::ResourceState};
 use agent::{types::Device, Agent, Storage};
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
-
 use hypervisor::{
     device::{
         device_manager::{do_handle_device, DeviceManager},
@@ -20,18 +18,20 @@ use hypervisor::{
 };
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
-use oci::{Linux, LinuxResources};
+use oci::{Linux, LinuxCpu, LinuxResources};
 use persist::sandbox_persist::Persist;
 use tokio::{runtime, sync::RwLock};
 
 use crate::{
     cgroups::{CgroupArgs, CgroupsResource},
+    cpu_mem::cpu::CpuResource,
     manager::ManagerArgs,
-    network::{self, Network},
+    network::{self, Network, NetworkConfig},
+    resource_persist::ResourceState,
     rootfs::{RootFsResource, Rootfs},
     share_fs::{self, sandbox_bind_mounts::SandboxBindMounts, ShareFs},
     volume::{Volume, VolumeResource},
-    ResourceConfig,
+    ResourceConfig, ResourceUpdateOp,
 };
 
 pub(crate) struct ResourceManagerInner {
@@ -46,6 +46,7 @@ pub(crate) struct ResourceManagerInner {
     pub rootfs_resource: RootFsResource,
     pub volume_resource: VolumeResource,
     pub cgroups_resource: CgroupsResource,
+    pub cpu_resource: CpuResource,
 }
 
 impl ResourceManagerInner {
@@ -55,12 +56,12 @@ impl ResourceManagerInner {
         hypervisor: Arc<dyn Hypervisor>,
         toml_config: Arc<TomlConfig>,
     ) -> Result<Self> {
-        let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
-
         // create device manager
         let dev_manager =
             DeviceManager::new(hypervisor.clone()).context("failed to create device manager")?;
 
+        let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
+        let cpu_resource = CpuResource::new(toml_config.clone())?;
         Ok(Self {
             sid: sid.to_string(),
             toml_config,
@@ -72,6 +73,7 @@ impl ResourceManagerInner {
             rootfs_resource: RootFsResource::new(),
             volume_resource: VolumeResource::new(),
             cgroups_resource,
+            cpu_resource,
         })
     }
 
@@ -354,6 +356,26 @@ impl ResourceManagerInner {
         self.rootfs_resource.dump().await;
         self.volume_resource.dump().await;
     }
+
+    pub async fn update_linux_resource(
+        &self,
+        cid: &str,
+        linux_resources: Option<&LinuxResources>,
+        op: ResourceUpdateOp,
+    ) -> Result<()> {
+        let linux_cpus = || -> Option<&LinuxCpu> { linux_resources.as_ref()?.cpu.as_ref() }();
+
+        self.cpu_resource
+            .update_cpu_resources(
+                cid,
+                linux_cpus,
+                op,
+                self.hypervisor.as_ref(),
+                self.agent.as_ref(),
+            )
+            .await?;
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -400,6 +422,7 @@ impl Persist for ResourceManagerInner {
             )
             .await?,
             toml_config: Arc::new(TomlConfig::default()),
+            cpu_resource: CpuResource::default(),
         })
     }
 }

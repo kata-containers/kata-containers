@@ -6,6 +6,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+
 use std::{collections::HashMap, sync::Arc};
 
 use agent::Agent;
@@ -59,12 +60,17 @@ impl VirtContainerManager {
 #[async_trait]
 impl ContainerManager for VirtContainerManager {
     async fn create_container(&self, config: ContainerConfig, spec: oci::Spec) -> Result<PID> {
+        let linux_resources = match spec.linux.clone() {
+            Some(linux) => linux.resources,
+            _ => None,
+        };
         let container = Container::new(
             self.pid,
             config.clone(),
             spec.clone(),
             self.agent.clone(),
             self.resource_manager.clone(),
+            linux_resources,
         )
         .context("new container")?;
 
@@ -96,7 +102,6 @@ impl ContainerManager for VirtContainerManager {
         let mut containers = self.containers.write().await;
         container.create(spec).await.context("create")?;
         containers.insert(container.container_id.to_string(), container);
-
         Ok(PID { pid: self.pid })
     }
 

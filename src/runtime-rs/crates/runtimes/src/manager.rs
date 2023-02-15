@@ -6,7 +6,6 @@
 
 use std::{path::PathBuf, str::from_utf8, sync::Arc};
 
-use crate::{shim_mgmt::server::MgmtServer, static_resource::StaticResourceManager};
 use anyhow::{anyhow, Context, Result};
 use common::{
     message::Message,
@@ -18,12 +17,11 @@ use kata_sys_util::spec::load_oci_spec;
 use kata_types::{
     annotations::Annotation, config::default::DEFAULT_GUEST_DNS_FILE, config::TomlConfig,
 };
-use netns_rs::NetNs;
-use resource::network::generate_netns_name;
-
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
+use netns_rs::NetNs;
 use persist::sandbox_persist::Persist;
+use resource::network::generate_netns_name;
 use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
 use tokio::fs;
 use tokio::sync::{mpsc::Sender, RwLock};
@@ -35,6 +33,9 @@ use virt_container::{
 };
 #[cfg(feature = "wasm")]
 use wasm_container::WasmContainer;
+
+use crate::shim_mgmt::server::MgmtServer;
+use crate::static_resource::StaticResourceManager;
 
 struct RuntimeHandlerManagerInner {
     id: String,
