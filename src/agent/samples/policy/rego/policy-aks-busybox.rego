@@ -310,7 +310,7 @@ policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
     regex.match(policy_source_regex, input_mount.source)
 }
 policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
-    # E.g., "source": "/run/kata-containers/shared/containers/$(sandbox-id)/rootfs/local/data",
+    # E.g., "source": "^/run/kata-containers/shared/containers/$(sandbox-id)/rootfs/local/data$",
     policy_source_regex := replace(policy_mount.source, "$(sandbox-id)", sandbox_id)
     regex.match(policy_source_regex, input_mount.source)
 }
