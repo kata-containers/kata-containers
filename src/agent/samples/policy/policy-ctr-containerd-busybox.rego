@@ -43,10 +43,7 @@ default WriteStreamRequest := true
 
 CreateContainerRequest {
     input_container := input.oci
-    input_index := input.index
-    input_index == 0
-
-    policy_container := policy_containers[input_index]
+    policy_container := policy_containers[0]
 
     policy_container.ociVersion     == input_container.ociVersion
 
