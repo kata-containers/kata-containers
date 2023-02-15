@@ -1,18 +1,21 @@
 {
-    "index": 0,
     "oci": {
         "ociVersion": "1.0.2-dev",
         "process": {
-            "terminal": false,
+            "terminal": true,
             "user": {
-                "uid": 65535,
-                "gid": 65535
+                "uid": 0,
+                "gid": 0,
+                "additionalGids": [
+                    10
+                ]
             },
             "args": [
-                "/pause"
+                "/bin/sh"
             ],
             "env": [
-                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "TERM=xterm"
             ],
             "cwd": "/",
             "capabilities": {
@@ -65,14 +68,20 @@
                     "CAP_AUDIT_WRITE"
                 ]
             },
+            "rlimits": [
+                {
+                    "type": "RLIMIT_NOFILE",
+                    "hard": 1024,
+                    "soft": 1024
+                }
+            ],
             "noNewPrivileges": true,
-            "oomScoreAdj": -998
+            "oomScoreAdj": 0
         },
         "root": {
-            "path": "/run/kata-containers/shared/containers/521dcee15a4b51edb91f5678d61372d7516e2efa045d9704c9fb1b433a4d41b4/rootfs",
-            "readonly": true
+            "path": "/run/kata-containers/shared/containers/hello6/rootfs",
+            "readonly": false
         },
-        "hostname": "busybox-cc",
         "mounts": [
             {
                 "destination": "/proc",
@@ -138,48 +147,28 @@
                 ]
             },
             {
-                "destination": "/dev/shm",
-                "type": "bind",
-                "source": "/run/kata-containers/sandbox/shm",
+                "destination": "/run",
+                "type": "tmpfs",
+                "source": "tmpfs",
                 "options": [
-                    "rbind"
-                ]
-            },
-            {
-                "destination": "/etc/resolv.conf",
-                "type": "bind",
-                "source": "/run/kata-containers/shared/containers/521dcee15a4b51edb91f5678d61372d7516e2efa045d9704c9fb1b433a4d41b4-d895fc8d16c4a8f7-resolv.conf",
-                "options": [
-                    "rbind",
-                    "ro"
+                    "nosuid",
+                    "strictatime",
+                    "mode=755",
+                    "size=65536k"
                 ]
             }
         ],
-        "annotations": {
-            "io.kubernetes.cri.sandbox-id": "521dcee15a4b51edb91f5678d61372d7516e2efa045d9704c9fb1b433a4d41b4",
-            "io.kubernetes.cri.container-type": "sandbox",
-            "io.kubernetes.cri.sandbox-memory": "0",
-            "nerdctl/network-namespace": "/var/run/netns/cni-6b474def-e6ef-32e7-8f49-169e5d77706e",
-            "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_busybox-cc_47f1fbee-9c44-4968-8a6a-373887167617",
-            "io.kubernetes.cri.sandbox-cpu-shares": "2",
-            "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
-            "io.kubernetes.cri.sandbox-namespace": "default",
-            "io.kubernetes.cri.sandbox-name": "busybox-cc",
-            "io.kubernetes.cri.sandbox-cpu-period": "100000",
-            "io.kubernetes.cri.sandbox-cpu-quota": "0",
-            "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/521dcee15a4b51edb91f5678d61372d7516e2efa045d9704c9fb1b433a4d41b4"
-        },
         "linux": {
             "resources": {
                 "cpu": {
-                    "shares": 2,
+                    "shares": 1024,
                     "quota": 0,
                     "period": 0,
                     "realtimeRuntime": 0,
                     "realtimePeriod": 0
                 }
             },
-            "cgroupsPath": "/kubepods/besteffort/pod47f1fbee-9c44-4968-8a6a-373887167617/521dcee15a4b51edb91f5678d61372d7516e2efa045d9704c9fb1b433a4d41b4",
+            "cgroupsPath": "/default/hello6",
             "namespaces": [
                 {
                     "type": "ipc"

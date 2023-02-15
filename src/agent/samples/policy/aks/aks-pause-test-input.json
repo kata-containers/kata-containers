@@ -1,24 +1,17 @@
 {
-    "index": 1,
     "oci": {
         "ociVersion": "1.0.2-dev",
         "process": {
             "terminal": false,
             "user": {
-                "uid": 0,
-                "gid": 0
+                "uid": 65535,
+                "gid": 65535
             },
+            "args": [
+                "/pause"
+            ],
             "env": [
-                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-                "HOSTNAME=busybox-cc",
-                "KUBERNETES_PORT_443_TCP_PROTO=tcp",
-                "KUBERNETES_PORT_443_TCP_PORT=443",
-                "KUBERNETES_PORT_443_TCP_ADDR=10.0.0.1",
-                "KUBERNETES_SERVICE_HOST=10.0.0.1",
-                "KUBERNETES_SERVICE_PORT=443",
-                "KUBERNETES_SERVICE_PORT_HTTPS=443",
-                "KUBERNETES_PORT=tcp://10.0.0.1:443",
-                "KUBERNETES_PORT_443_TCP=tcp://10.0.0.1:443"
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
             ],
             "cwd": "/",
             "capabilities": {
@@ -71,14 +64,14 @@
                     "CAP_AUDIT_WRITE"
                 ]
             },
-            "noNewPrivileges": false,
-            "apparmorProfile": "cri-containerd.apparmor.d",
-            "oomScoreAdj": 1000
+            "noNewPrivileges": true,
+            "oomScoreAdj": -998
         },
         "root": {
-            "path": "/run/kata-containers/shared/containers/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9/rootfs",
-            "readonly": false
+            "path": "/run/kata-containers/shared/containers/521dcee15a4b51edb91f5678d61372d7516e2efa045d9704c9fb1b433a4d41b4/rootfs",
+            "readonly": true
         },
+        "hostname": "busybox-cc",
         "mounts": [
             {
                 "destination": "/proc",
@@ -115,6 +108,14 @@
                 ]
             },
             {
+                "destination": "/dev/shm",
+                "type": "bind",
+                "source": "/run/kata-containers/sandbox/shm",
+                "options": [
+                    "rbind"
+                ]
+            },
+            {
                 "destination": "/dev/mqueue",
                 "type": "mqueue",
                 "source": "mqueue",
@@ -136,68 +137,6 @@
                 ]
             },
             {
-                "destination": "/sys/fs/cgroup",
-                "type": "cgroup",
-                "source": "cgroup",
-                "options": [
-                    "nosuid",
-                    "noexec",
-                    "nodev",
-                    "relatime",
-                    "ro"
-                ]
-            },
-            {
-                "destination": "/busy1",
-                "type": "local",
-                "source": "/run/kata-containers/shared/containers/521dcee15a4b51edb91f5678d61372d7516e2efa045d9704c9fb1b433a4d41b4/rootfs/local/data",
-                "options": [
-                    "rbind",
-                    "rprivate",
-                    "rw"
-                ]
-            },
-            {
-                "destination": "/etc/hosts",
-                "type": "bind",
-                "source": "/run/kata-containers/shared/containers/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9-f34fbf5888dc7370-hosts",
-                "options": [
-                    "rbind",
-                    "rprivate",
-                    "rw"
-                ]
-            },
-            {
-                "destination": "/dev/termination-log",
-                "type": "bind",
-                "source": "/run/kata-containers/shared/containers/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9-6f5eaef5c2560a2a-termination-log",
-                "options": [
-                    "rbind",
-                    "rprivate",
-                    "rw"
-                ]
-            },
-            {
-                "destination": "/etc/hostname",
-                "type": "bind",
-                "source": "/run/kata-containers/shared/containers/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9-2f8af54d8526ba82-hostname",
-                "options": [
-                    "rbind",
-                    "rprivate",
-                    "rw"
-                ]
-            },
-            {
-                "destination": "/etc/resolv.conf",
-                "type": "bind",
-                "source": "/run/kata-containers/shared/containers/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9-4f6d7d118d5aface-resolv.conf",
-                "options": [
-                    "rbind",
-                    "rprivate",
-                    "rw"
-                ]
-            },
-            {
                 "destination": "/dev/shm",
                 "type": "bind",
                 "source": "/run/kata-containers/sandbox/shm",
@@ -206,46 +145,40 @@
                 ]
             },
             {
-                "destination": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "destination": "/etc/resolv.conf",
                 "type": "bind",
-                "source": "/run/kata-containers/shared/containers/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9-5d587d83e5075102-serviceaccount",
+                "source": "/run/kata-containers/shared/containers/521dcee15a4b51edb91f5678d61372d7516e2efa045d9704c9fb1b433a4d41b4-d895fc8d16c4a8f7-resolv.conf",
                 "options": [
                     "rbind",
-                    "rprivate",
                     "ro"
                 ]
             }
         ],
         "annotations": {
-            "io.kubernetes.cri.image-name": "docker.io/library/busybox:latest",
-            "io.kubernetes.cri.container-name": "busybox",
-            "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9",
             "io.kubernetes.cri.sandbox-id": "521dcee15a4b51edb91f5678d61372d7516e2efa045d9704c9fb1b433a4d41b4",
-            "io.katacontainers.pkg.oci.container_type": "pod_container",
-            "io.kubernetes.cri.container-type": "container",
+            "io.kubernetes.cri.container-type": "sandbox",
+            "io.kubernetes.cri.sandbox-memory": "0",
+            "nerdctl/network-namespace": "/var/run/netns/cni-6b474def-e6ef-32e7-8f49-169e5d77706e",
+            "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_busybox-cc_47f1fbee-9c44-4968-8a6a-373887167617",
+            "io.kubernetes.cri.sandbox-cpu-shares": "2",
+            "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
             "io.kubernetes.cri.sandbox-namespace": "default",
-            "io.kubernetes.cri.sandbox-name": "busybox-cc"
+            "io.kubernetes.cri.sandbox-name": "busybox-cc",
+            "io.kubernetes.cri.sandbox-cpu-period": "100000",
+            "io.kubernetes.cri.sandbox-cpu-quota": "0",
+            "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/521dcee15a4b51edb91f5678d61372d7516e2efa045d9704c9fb1b433a4d41b4"
         },
         "linux": {
             "resources": {
-                "memory": {
-                    "limit": 0,
-                    "reservation": 0,
-                    "swap": 0,
-                    "kernel": 0,
-                    "kernelTCP": 0,
-                    "swappiness": 0,
-                    "disableOOMKiller": false
-                },
                 "cpu": {
                     "shares": 2,
                     "quota": 0,
-                    "period": 100000,
+                    "period": 0,
                     "realtimeRuntime": 0,
                     "realtimePeriod": 0
                 }
             },
-            "cgroupsPath": "/kubepods/besteffort/pod47f1fbee-9c44-4968-8a6a-373887167617/7993c467b3feaac32b3407694eb4e6e82573365164afae2f86d30a28e5944ed9",
+            "cgroupsPath": "/kubepods/besteffort/pod47f1fbee-9c44-4968-8a6a-373887167617/521dcee15a4b51edb91f5678d61372d7516e2efa045d9704c9fb1b433a4d41b4",
             "namespaces": [
                 {
                     "type": "ipc"
@@ -259,17 +192,17 @@
             ],
             "maskedPaths": [
                 "/proc/acpi",
+                "/proc/asound",
                 "/proc/kcore",
                 "/proc/keys",
                 "/proc/latency_stats",
                 "/proc/timer_list",
                 "/proc/timer_stats",
                 "/proc/sched_debug",
-                "/proc/scsi",
-                "/sys/firmware"
+                "/sys/firmware",
+                "/proc/scsi"
             ],
             "readonlyPaths": [
-                "/proc/asound",
                 "/proc/bus",
                 "/proc/fs",
                 "/proc/irq",
