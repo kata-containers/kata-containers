@@ -644,9 +644,13 @@ EOF
 		# TODO: clean-up OPA installation
 		cp /usr/bin/opa "${ROOTFS_DIR}/usr/bin"
 		chmod 755 "${ROOTFS_DIR}/usr/bin/opa"
-		samples_dir="${script_dir}/../../../src/agent/samples/policy/rego"
-		cp "${samples_dir}/policy-all-allowed.rego" "${ROOTFS_DIR}/coco-policy.rego"
+		samples_dir="${script_dir}/../../../src/agent/samples/policy/all-allowed"
+
+		cp "${samples_dir}/all-allowed.rego" "${ROOTFS_DIR}/coco-policy.rego"
 		chmod 644 "${ROOTFS_DIR}/coco-policy.rego"
+
+		cp "${samples_dir}/all-allowed-data.json" "${ROOTFS_DIR}/coco-policy-data.json"
+		chmod 644 "${ROOTFS_DIR}/coco-policy-data.json"
 	fi
 
 	info "Check init is installed"
