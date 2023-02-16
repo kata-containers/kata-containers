@@ -129,7 +129,7 @@ assets:
         name: "ubuntu"
         version: "latest"
       x86_64:
-        name: &default-image-name "clearlinux"
+        name: &default-image-name "ubuntu"
         version: "latest"
     meta:
       image-type: *default-image-name
