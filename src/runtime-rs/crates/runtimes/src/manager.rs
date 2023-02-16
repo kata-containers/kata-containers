@@ -15,11 +15,14 @@ use common::{
     RuntimeHandler, RuntimeInstance, Sandbox,
 };
 use hypervisor::Param;
-use kata_types::{annotations::Annotation, config::TomlConfig};
+use kata_types::{
+    annotations::Annotation, config::default::DEFAULT_GUEST_DNS_FILE, config::TomlConfig,
+};
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
 use persist::sandbox_persist::Persist;
 use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
+use tokio::fs;
 use tokio::sync::{mpsc::Sender, RwLock};
 #[cfg(feature = "virt")]
 use virt_container::{
@@ -48,6 +51,7 @@ impl RuntimeHandlerManagerInner {
     async fn init_runtime_handler(
         &mut self,
         netns: Option<String>,
+        dns: Vec<String>,
         config: Arc<TomlConfig>,
     ) -> Result<()> {
         info!(sl!(), "new runtime handler {}", &config.runtime.name);
@@ -70,7 +74,7 @@ impl RuntimeHandlerManagerInner {
         // start sandbox
         runtime_instance
             .sandbox
-            .start(netns)
+            .start(netns, dns)
             .await
             .context("start sandbox")?;
         self.runtime_instance = Some(Arc::new(runtime_instance));
@@ -82,6 +86,8 @@ impl RuntimeHandlerManagerInner {
         if self.runtime_instance.is_some() {
             return Ok(());
         }
+
+        let mut dns: Vec<String> = vec![];
 
         #[cfg(feature = "linux")]
         LinuxContainer::init().context("init linux container")?;
@@ -107,8 +113,15 @@ impl RuntimeHandlerManagerInner {
             None
         };
 
+        for m in &spec.mounts {
+            if m.destination == DEFAULT_GUEST_DNS_FILE {
+                let contents = fs::read_to_string(&m.source).await?;
+                dns = contents.split('\n').map(|e| e.to_string()).collect();
+            }
+        }
+
         let config = load_config(spec, options).context("load config")?;
-        self.init_runtime_handler(netns, Arc::new(config))
+        self.init_runtime_handler(netns, dns, Arc::new(config))
             .await
             .context("init runtime handler")?;
 
