@@ -91,13 +91,19 @@ github_get_latest_release()
 {
 	local url="${1:-}"
 
+	#parses the json response from github. Python is on every machine out there, not jq.
+	local python_jq="import json, sys
+response=json.loads(sys.stdin.read())
+for tag in response:
+    if not ('-' in tag['tag_name']):
+        print(tag['tag_name'])"
 	# Notes:
 	#
 	# - The sort(1) call; none of the standard utilities support semver
 	#   so attempt to perform a semver sort manually.
 	# - Pre-releases are excluded via the select() call.
 	local latest=$(curl -sL "$url" |\
-		jq -r '.[].tag_name | select(contains("-") | not)' |\
+		python3 -c "$python_jq" |\
 		sort -t "." -k1,1n -k2,2n -k3,3n |\
 		tail -1 || true)
 
@@ -155,9 +161,18 @@ github_get_release_file_url()
 
 	local download_url
 
+	#parses the json response from github. Python is on every machine out there, but not jq.
+	local python_jq="import json
+import sys
+response=json.loads(sys.stdin.read())
+version=sys.argv[1]
+for tag in response:
+    if tag['tag_name']==version:
+        for file in tag['assets']:
+            print(file['browser_download_url'])"
+
 	download_url=$(curl -sL "$url" |\
-		jq --arg version "$version" \
-		-r '.[] | select(.tag_name == $version) | .assets[].browser_download_url' |\
+		python -c "$python_jq", $version|\
 		grep "/${regex}$")
 
 	[ -z "$download_url" ] && die "Cannot determine download URL for version $version ($url)"
@@ -299,7 +314,6 @@ check_deps()
 
 	elems+=("curl:curl")
 	elems+=("git:git")
-	elems+=("jq:jq")
 	elems+=("tar:tar")
 
 	local pkgs_to_install=()
