@@ -103,7 +103,7 @@ for tag in response:
 	#   so attempt to perform a semver sort manually.
 	# - Pre-releases are excluded via the select() call.
 	local latest=$(curl -sL "$url" |\
-		python3 -c "$python_jq" |\
+		python -c "$python_jq" |\
 		sort -t "." -k1,1n -k2,2n -k3,3n |\
 		tail -1 || true)
 
