@@ -50,12 +50,37 @@ EOF
 
 trap finish EXIT
 
+go_version=${1:-}
 rust_version=${2:-}
+
 ARCH=${ARCH:-$(uname -m)}
-LIBC=${LIBC:-musl}
+case "${ARCH}" in
+	aarch64)
+		goarch=arm64
+		LIBC=musl
+		;;
+	ppc64le) 
+		goarch=${ARCH}
+		ARCH=powerpc64le
+		LIBC=gnu
+		;;
+	s390x)
+		goarch=${ARCH}
+		LIBC=gnu
+		;;
+	x86_64)
+		goarch=amd64
+		LIBC=musl
+		;;
+	*)
+		echo "unsupported architecture $(uname -m)"
+		exit 1
+		;;
+esac
+
 curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSLf | sh -s -- -y --default-toolchain ${rust_version} -t ${ARCH}-unknown-linux-${LIBC}
 source /root/.cargo/env
-rustup target add x86_64-unknown-linux-musl
+rustup target add ${ARCH}-unknown-linux-${LIBC}
 
 pushd "${tmp_dir}"
 
@@ -69,9 +94,6 @@ do
 done
 
 shift $(( $OPTIND - 1 ))
-
-
-go_version=${1:-}
 
 if [ -z "$go_version" ];then
 	echo "Missing go"
@@ -89,14 +111,6 @@ if command -v go; then
 		die "$(go version) is installed, use -f or remove it before install go ${go_version}"
 	fi
 fi
-
-case "$(uname -m)" in
-	aarch64) goarch="arm64";;
-	ppc64le) goarch="ppc64le";;
-	x86_64) goarch="amd64";;
-	s390x) goarch="s390x";;
-	*) echo "unsupported architecture: $(uname -m)"; exit 1;;
-esac
 
 info "Download go version ${go_version}"
 kernel_name=$(uname -s)
