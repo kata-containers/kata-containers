@@ -35,3 +35,9 @@ oci = { path = "../../../../libs/oci" }
 persist = { path = "../../persist"}
 resource = { path = "../../resource" }
 
+[features]
+default = []
+
+# Feature is not yet complete, so not enabled by default.
+# See https://github.com/kata-containers/kata-containers/issues/6264.
+cloud-hypervisor = []

@@ -19,11 +19,17 @@ pub use kernel_param::Param;
 mod utils;
 use std::collections::HashMap;
 
+#[cfg(feature = "cloud-hypervisor")]
+pub mod ch;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use hypervisor_persist::HypervisorState;
 use kata_types::capabilities::Capabilities;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
+
+pub use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
+
 // Config which driver to use as vm root dev
 const VM_ROOTFS_DRIVER_BLK: &str = "virtio-blk";
 const VM_ROOTFS_DRIVER_PMEM: &str = "virtio-pmem";
@@ -48,7 +54,7 @@ const SHMEM: &str = "shmem";
 pub const HYPERVISOR_DRAGONBALL: &str = "dragonball";
 pub const HYPERVISOR_QEMU: &str = "qemu";
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug, Clone)]
 pub(crate) enum VmmState {
     NotReady,
     VmmServerReady,
@@ -56,7 +62,7 @@ pub(crate) enum VmmState {
 }
 
 // vcpu mapping from vcpu number to thread number
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct VcpuThreadIds {
     pub vcpus: HashMap<u32, u32>,
 }
