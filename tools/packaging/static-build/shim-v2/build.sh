@@ -12,6 +12,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly repo_root_dir="$(cd "${script_dir}/../../../.." && pwd)"
 readonly kernel_builder="${repo_root_dir}/tools/packaging/kernel/build-kernel.sh"
 
+VMM_CONFIGS="qemu fc"
 
 GO_VERSION=${GO_VERSION}
 RUST_VERSION=${RUST_VERSION}
@@ -47,8 +48,12 @@ sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	"${container_image}" \
 	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}" install"
 
-sudo sed -i -e '/^initrd =/d' "${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-qemu.toml"
-sudo sed -i -e '/^initrd =/d' "${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-fc.toml"
+for vmm in ${VMM_CONFIGS}; do
+	config_file="${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-${vmm}.toml"
+	if [ -f ${config_file} ]; then
+		sudo sed -i -e '/^initrd =/d' ${config_file}
+	fi
+done
 
 pushd "${DESTDIR}/${PREFIX}/share/defaults/kata-containers"
 	sudo ln -sf "configuration-qemu.toml" configuration.toml
