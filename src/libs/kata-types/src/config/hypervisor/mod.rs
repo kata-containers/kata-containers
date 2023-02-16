@@ -40,6 +40,9 @@ pub use self::dragonball::{DragonballConfig, HYPERVISOR_NAME_DRAGONBALL};
 mod qemu;
 pub use self::qemu::{QemuConfig, HYPERVISOR_NAME_QEMU};
 
+mod ch;
+pub use self::ch::{CloudHypervisorConfig, HYPERVISOR_NAME_CH};
+
 const VIRTIO_BLK: &str = "virtio-blk";
 const VIRTIO_BLK_MMIO: &str = "virtio-mmio";
 const VIRTIO_BLK_CCW: &str = "virtio-blk-ccw";
