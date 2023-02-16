@@ -123,7 +123,7 @@ impl VirtSandbox {
 
 #[async_trait]
 impl Sandbox for VirtSandbox {
-    async fn start(&self, netns: Option<String>) -> Result<()> {
+    async fn start(&self, netns: Option<String>, dns: Vec<String>) -> Result<()> {
         let id = &self.sid;
 
         // if sandbox running, return
@@ -170,7 +170,7 @@ impl Sandbox for VirtSandbox {
         let kernel_modules = KernelModule::set_kernel_modules(agent_config.kernel_modules)?;
         let req = agent::CreateSandboxRequest {
             hostname: "".to_string(),
-            dns: vec![],
+            dns,
             storages: self
                 .resource_manager
                 .get_storage_for_sandbox()
