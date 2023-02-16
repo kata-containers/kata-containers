@@ -28,23 +28,6 @@
   $ ./update-repository-version.sh -p "$NEW_VERSION" "$BRANCH"
   ```
 
-### Point tests repository to stable branch
-
-  If you create a new stable branch, i.e. if your release changes a major or minor version number (not a patch release), then
-  you should modify the `tests` repository to point to that newly created stable branch and not the `main` branch.
-  The objective is that changes in the CI on the main branch will not impact the stable branch.
-
-  In the test directory, change references the main branch in:
-  * `README.md`
-  * `versions.yaml`
-  * `cmd/github-labels/labels.yaml.in`
-  * `cmd/pmemctl/pmemctl.sh`
-  * `.ci/lib.sh`
-  * `.ci/static-checks.sh`
-
-  See the commits in [the corresponding PR for stable-2.1](https://github.com/kata-containers/tests/pull/3504) for an example of the changes.
-
-
 ### Merge all bump version Pull requests
 
   - The above step will create a GitHub pull request in the Kata projects. Trigger the CI using `/test` command on each bump Pull request.
@@ -62,6 +45,24 @@
   $ git pull
   $ ./tag_repos.sh -p -b "$BRANCH" tag
   ```
+
+### Point tests repository to stable branch
+
+  If your release changes a major or minor version number(not a patch release), then the above 
+  `./tag_repos.sh` script will create a new stable branch in all the repositories in addition to tagging them.
+  This happens when you are making the first `rc` release for a new major or minor version in Kata.
+  In this case, you should modify the `tests` repository to point to the newly created stable branch and not the `main` branch.
+  The objective is that changes in the CI on the main branch will not impact the stable branch.
+
+  In the test directory, change references of the `main` branch to the new stable branch in:
+  * `README.md`
+  * `versions.yaml`
+  * `cmd/github-labels/labels.yaml.in`
+  * `cmd/pmemctl/pmemctl.sh`
+  * `.ci/lib.sh`
+  * `.ci/static-checks.sh`
+
+  See the commits in [the corresponding PR for stable-2.1](https://github.com/kata-containers/tests/pull/3504) for an example of the changes.
 
 ### Check Git-hub Actions
 
