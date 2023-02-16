@@ -83,6 +83,11 @@ impl InstanceInfo {
             confidential_vm_type: None,
         }
     }
+
+    /// return true if VM confidential type is TDX
+    pub fn is_tdx_enabled(&self) -> bool {
+        matches!(self.confidential_vm_type, Some(ConfidentialVmType::TDX))
+    }
 }
 
 impl Default for InstanceInfo {
