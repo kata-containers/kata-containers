@@ -35,8 +35,6 @@ use resource::ResourceManager;
 use sandbox::VIRTCONTAINER;
 use tokio::sync::mpsc::Sender;
 
-unsafe impl Send for VirtContainer {}
-unsafe impl Sync for VirtContainer {}
 pub struct VirtContainer {}
 
 #[async_trait]

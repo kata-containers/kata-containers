@@ -22,8 +22,6 @@ use tokio::sync::RwLock;
 
 use crate::{device::Device, Hypervisor, VcpuThreadIds};
 
-unsafe impl Send for Dragonball {}
-unsafe impl Sync for Dragonball {}
 pub struct Dragonball {
     inner: Arc<RwLock<DragonballInner>>,
 }
