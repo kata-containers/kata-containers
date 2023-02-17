@@ -327,7 +327,7 @@ check_deps()
 		debian|ubuntu) sudo apt-get -y install $packages ;;
 		fedora) sudo dnf -y install $packages ;;
 		opensuse*|sles) sudo zypper install -y $packages ;;
-		*) die "Unsupported distro: $ID, install $packages manually and re-run"
+		*) die "Cannot automatically install packages on $ID, install $packages manually and re-run"
 	esac
 }
 
