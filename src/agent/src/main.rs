@@ -393,7 +393,7 @@ fn init_agent_as_init(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result
 
 #[instrument]
 fn sethostname(hostname: &OsStr) -> Result<()> {
-    let size = hostname.len() as usize;
+    let size = hostname.len();
 
     let result =
         unsafe { libc::sethostname(hostname.as_bytes().as_ptr() as *const libc::c_char, size) };

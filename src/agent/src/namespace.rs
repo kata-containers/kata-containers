@@ -88,7 +88,7 @@ impl Namespace {
         }
         let logger = self.logger.clone();
 
-        let new_ns_path = ns_path.join(&ns_type.get());
+        let new_ns_path = ns_path.join(ns_type.get());
 
         File::create(new_ns_path.as_path())?;
 
@@ -96,13 +96,13 @@ impl Namespace {
         let hostname = self.hostname.clone();
 
         let new_thread = std::thread::spawn(move || {
-            if let Err(err) = || -> Result<()> {
+            || -> Result<()> {
                 let origin_ns_path = get_current_thread_ns_path(ns_type.get());
 
                 let source = Path::new(&origin_ns_path);
                 let destination = new_ns_path.as_path();
 
-                File::open(&source)?;
+                File::open(source)?;
 
                 // Create a new netns on the current thread.
                 let cf = ns_type.get_flags();
@@ -135,11 +135,9 @@ impl Namespace {
                 })?;
 
                 Ok(())
-            }() {
-                return Err(err);
-            }
+            }()?;
 
-            Ok(())
+            Ok::<(), anyhow::Error>(())
         });
 
         new_thread
