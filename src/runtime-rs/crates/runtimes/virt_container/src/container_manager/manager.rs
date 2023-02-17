@@ -25,8 +25,6 @@ use tokio::sync::RwLock;
 
 use super::{logger_with_process, Container};
 
-unsafe impl Send for VirtContainerManager {}
-unsafe impl Sync for VirtContainerManager {}
 pub struct VirtContainerManager {
     sid: String,
     pid: u32,

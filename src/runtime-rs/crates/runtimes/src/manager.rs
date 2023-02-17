@@ -145,8 +145,6 @@ impl RuntimeHandlerManagerInner {
     }
 }
 
-unsafe impl Send for RuntimeHandlerManager {}
-unsafe impl Sync for RuntimeHandlerManager {}
 pub struct RuntimeHandlerManager {
     inner: Arc<RwLock<RuntimeHandlerManagerInner>>,
 }
