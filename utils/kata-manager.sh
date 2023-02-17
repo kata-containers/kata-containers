@@ -327,7 +327,7 @@ check_deps()
 		debian|ubuntu) sudo apt-get -y install $packages ;;
 		fedora) sudo dnf -y install $packages ;;
 		opensuse*|sles) sudo zypper install -y $packages ;;
-		*) die "Unsupported distro: $ID"
+		*) die "Unsupported distro: $ID, install $packages manually and re-run"
 	esac
 }
 
@@ -343,10 +343,12 @@ setup()
 
 	source /etc/os-release || source /usr/lib/os-release
 
+	#these dependencies are needed inside this script, and should be checked regardless of the -f option.
+	check_deps
+
 	[ "$force" = "true" ] && return 0
 
 	pre_checks
-	check_deps
 }
 
 # Download the requested version of the specified project.
