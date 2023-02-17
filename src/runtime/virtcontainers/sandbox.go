@@ -454,9 +454,6 @@ func createAssets(ctx context.Context, sandboxConfig *SandboxConfig) error {
 }
 
 func (s *Sandbox) getAndStoreGuestDetails(ctx context.Context) error {
-	s.Logger().WithField("PolicyRules", s.config.AgentConfig.PolicyRules).Info()
-	s.Logger().WithField("PolicyData", s.config.AgentConfig.PolicyData).Info()
-
 	if err := s.agent.setPolicy(ctx, 
 		s.config.AgentConfig.PolicyRules, s.config.AgentConfig.PolicyData); err != nil {
 		s.Logger().WithError(err).Info("Set policy failed")

@@ -99,7 +99,7 @@ impl AgentPolicy {
         data: &str
     ) -> Result<()> {
         let mut uri = self.opa_policies_uri.clone();
-        info!(sl!(), "set_policy: rules uri {}, input <{}>", uri, rules);
+        info!(sl!(), "set_policy: rules uri {}", uri);
         self.opa_client
             .post(uri)
             .body(rules.to_string())
@@ -108,7 +108,7 @@ impl AgentPolicy {
             .map_err(|e| anyhow!(e))?;
 
         uri = self.opa_data_uri.clone();
-        info!(sl!(), "set_policy: data uri {}, input <{}>", uri, data);
+        info!(sl!(), "set_policy: data uri {}", uri);
         self.opa_client
             .post(uri)
             .body(data.to_string())
