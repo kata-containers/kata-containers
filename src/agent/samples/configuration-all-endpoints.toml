@@ -28,6 +28,7 @@ allowed = [
         "ResizeVolumeRequest",
         "ResumeContainerRequest",
         "SetGuestDateTimeRequest",
+        "SetPolicyRequest",
         "SignalProcessRequest",
         "StartContainerRequest",
         "StatsContainerRequest",

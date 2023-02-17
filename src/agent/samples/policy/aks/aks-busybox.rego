@@ -24,6 +24,7 @@ default GuestDetailsRequest := true
 default OnlineCPUMemRequest := true
 default ReadStreamRequest := true
 default RemoveContainerRequest := true
+default SetPolicyRequest := true
 default SignalProcessRequest := true
 default StartContainerRequest := true
 default StatsContainerRequest := true

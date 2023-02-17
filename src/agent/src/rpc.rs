@@ -1725,6 +1725,12 @@ impl agent_ttrpc::AgentService for AgentService {
         trace_rpc_call!(ctx, "set_policy", req);
         is_allowed!(req);
 
+        AGENT_POLICY.lock()
+            .await
+            .set_policy(&req.rules, &req.data)
+            .await
+            .map_err(|e| ttrpc_error!(ttrpc::Code::INTERNAL, e))?;
+
         Ok(Empty::new())
     }
 }

@@ -22,6 +22,7 @@ default RemoveContainerRequest := true
 default ReseedRandomDevRequest := false
 default ResumeContainerRequest := true
 default SetGuestDateTimeRequest := true
+default SetPolicyRequest := true
 default SignalProcessRequest := true
 default StartContainerRequest := true
 default StartTracingRequest := true
