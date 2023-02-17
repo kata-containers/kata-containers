@@ -1716,6 +1716,17 @@ impl agent_ttrpc::AgentService for AgentService {
 
         Ok(Empty::new())
     }
+
+    async fn set_policy(
+        &self,
+        ctx: &TtrpcContext,
+        req: protocols::agent::SetPolicyRequest,
+    ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "set_policy", req);
+        is_allowed!(req);
+
+        Ok(Empty::new())
+    }
 }
 
 #[derive(Clone)]

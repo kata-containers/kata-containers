@@ -152,6 +152,7 @@ const (
 	grpcResizeVolumeRequest      = "grpc.ResizeVolumeRequest"
 	grpcGetIPTablesRequest       = "grpc.GetIPTablesRequest"
 	grpcSetIPTablesRequest       = "grpc.SetIPTablesRequest"
+	grpcSetPolicyRequest         = "grpc.SetPolicyRequest"
 )
 
 // newKataAgent returns an agent from an agent type.
@@ -277,6 +278,8 @@ type KataAgentConfig struct {
 	Debug              bool
 	Trace              bool
 	EnableDebugConsole bool
+	PolicyRules        string
+	PolicyData         string
 }
 
 // KataAgentState is the structure describing the data stored from this
@@ -2038,6 +2041,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers[grpcSetIPTablesRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.SetIPTables(ctx, req.(*grpc.SetIPTablesRequest))
 	}
+	k.reqHandlers[grpcSetPolicyRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.SetPolicy(ctx, req.(*grpc.SetPolicyRequest))
+	}
 }
 
 func (k *kataAgent) getReqContext(ctx context.Context, reqName string) (newCtx context.Context, cancel context.CancelFunc) {
@@ -2332,4 +2338,9 @@ func (k *kataAgent) PullImage(ctx context.Context, req *image.PullImageReq) (*im
 	return &image.PullImageResp{
 		ImageRef: response.ImageRef,
 	}, nil
+}
+
+func (k *kataAgent) setPolicy(ctx context.Context, rules string, data string) error {
+	_, err := k.sendReq(ctx, &grpc.SetPolicyRequest{Rules: rules, Data: data})
+	return err
 }
