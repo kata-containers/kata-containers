@@ -21,6 +21,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -800,6 +801,9 @@ func (q *qemu) getMemArgs() (bool, string, string, error) {
 }
 
 func (q *qemu) setupVirtioMem(ctx context.Context) error {
+	if runtime.GOARCH == "arm64" && !q.config.EnablePciShpc {
+		return fmt.Errorf("set enable_pci_shpc to true in configuration before enable virtio-mem")
+	}
 	// backend memory size must be multiple of 4Mib
 	sizeMB := (int(q.config.DefaultMaxMemorySize) - int(q.config.MemorySize)) >> 2 << 2
 

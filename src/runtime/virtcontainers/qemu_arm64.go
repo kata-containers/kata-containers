@@ -112,6 +112,10 @@ func (q *qemuArm64) appendNvdimmImage(devices []govmmQemu.Device, path string) (
 	return devices, nil
 }
 
+func (q *qemuArm64) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {
+        return genericMemoryTopology(memoryMb, hostMemoryMb, slots, q.memoryOffset)
+}
+
 func (q *qemuArm64) setIgnoreSharedMemoryMigrationCaps(_ context.Context, _ *govmmQemu.QMP) error {
 	// x-ignore-shared not support in arm64 for now
 	return nil
