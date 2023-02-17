@@ -908,7 +908,7 @@ func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error
 
 	if value, ok := ocispec.Annotations["io.katacontainers.config.agent.policy-data"]; ok {
 		if decoded_data, err := base64.StdEncoding.DecodeString(value); err == nil {
-			c.PolicyRules = string(decoded_data)
+			c.PolicyData = string(decoded_data)
 			updateConfig = true
 		}
 	}
