@@ -103,8 +103,9 @@ pub struct Runtime {
     pub enable_pprof: bool,
 
     /// If enabled, static resource management will calculate the vcpu and memory for the sandbox/container
+    /// And pod configured this will not be able to further update its CPU/Memory resource
     #[serde(default)]
-    pub static_resource_mgmt: bool,
+    pub static_sandbox_resource_mgmt: bool,
 
     /// Determines whether container seccomp profiles are passed to the virtual machine and
     /// applied by the kata agent. If set to true, seccomp is not applied within the guest.
