@@ -57,8 +57,6 @@ impl SandboxInner {
     }
 }
 
-unsafe impl Send for VirtSandbox {}
-unsafe impl Sync for VirtSandbox {}
 #[derive(Clone)]
 pub struct VirtSandbox {
     sid: String,
