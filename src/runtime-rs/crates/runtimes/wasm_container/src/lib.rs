@@ -10,8 +10,6 @@ use async_trait::async_trait;
 use common::{message::Message, RuntimeHandler, RuntimeInstance};
 use kata_types::config::TomlConfig;
 use tokio::sync::mpsc::Sender;
-unsafe impl Send for WasmContainer {}
-unsafe impl Sync for WasmContainer {}
 pub struct WasmContainer {}
 
 #[async_trait]

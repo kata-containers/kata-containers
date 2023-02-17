@@ -11,8 +11,6 @@ use common::{message::Message, RuntimeHandler, RuntimeInstance};
 use kata_types::config::TomlConfig;
 use tokio::sync::mpsc::Sender;
 
-unsafe impl Send for LinuxContainer {}
-unsafe impl Sync for LinuxContainer {}
 pub struct LinuxContainer {}
 
 #[async_trait]
