@@ -427,7 +427,7 @@ func HybridVSockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 		case err = <-errChan:
 			if err != nil {
 				conn.Close()
-				agentClientLog.WithField("Error", err).Debug("HybridVsock trivial handshake failed")
+				// agentClientLog.WithField("Error", err).Debug("HybridVsock trivial handshake failed")
 				return nil, err
 
 			}
