@@ -29,9 +29,6 @@ macro_rules! sl {
 
 #[derive(Debug)]
 pub struct AgentPolicy {
-    rules: String,
-    data: String,
-
     _opa_data_uri: String,
     coco_policy_query_prefix: String,
     _coco_policy_id_uri: String,
@@ -42,9 +39,6 @@ pub struct AgentPolicy {
 impl AgentPolicy {
     pub fn new() -> Result<Self> {
         Ok(AgentPolicy {
-            rules: String::new(),
-            data: String::new(),
-
             _opa_data_uri:               OPA_V1_URI.to_string() + OPA_DATA_PATH,
             coco_policy_query_prefix:   OPA_V1_URI.to_string() + OPA_DATA_PATH + COCO_POLICY_NAME + "/",
             _coco_policy_id_uri:         OPA_V1_URI.to_string() + OPA_POLICIES_PATH + COCO_POLICY_NAME,
@@ -124,20 +118,11 @@ impl AgentPolicy {
 
     pub async fn set_policy(
         &mut self,
-        last_packet: bool,
         rules: &str,
         data: &str
     ) -> Result<()> {
-        self.rules += rules;
-        self.data += data;
-
-        if last_packet {
-            Self::log_string(self.rules.as_bytes(), "/tmp/rules.txt").await;
-            Self::log_string(self.data.as_bytes(), "/tmp/data.txt").await;
-
-            self.rules = String::new();
-            self.data = String::new();
-        }
+        Self::log_string(rules.as_bytes(), "/tmp/rules.txt").await;
+        Self::log_string(data.as_bytes(), "/tmp/data.txt").await;
 /*
         // Delete the old rules.
         let mut uri = self.coco_policy_id_uri.clone();

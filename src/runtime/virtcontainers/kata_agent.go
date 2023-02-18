@@ -2341,41 +2341,6 @@ func (k *kataAgent) PullImage(ctx context.Context, req *image.PullImageReq) (*im
 }
 
 func (k *kataAgent) setPolicy(ctx context.Context, rules string, data string) error {
-	// Avoid ttrpc field truncation by splitting long strings
-	// into multiple SetPolicy calls.
-	const maxSubstringLength = 16 * 1024;
-
-	rulesStart := 0
-	rulesLength := len(rules)
-	
-	dataStart := 0
-	dataLength := len(data)
-
-	for rulesLength > 0 || dataLength > 0 {
-		rulesSubstringLength := rulesLength
-		if rulesSubstringLength > maxSubstringLength {
-			rulesSubstringLength = maxSubstringLength
-		}
-		rulesSubstring := rules[rulesStart : rulesStart + rulesSubstringLength]
-		rulesLength -= rulesSubstringLength
-		rulesStart += rulesSubstringLength
-
-		dataSubstringLength := dataLength
-		if dataSubstringLength > maxSubstringLength {
-			dataSubstringLength = maxSubstringLength
-		}
-		dataSubstring := data[dataStart : dataStart + dataSubstringLength]
-		dataLength -= dataSubstringLength
-		dataStart += dataSubstringLength
-
-		last_packet := (rulesLength == 0 && dataLength == 0)
-
-		if _, err := k.sendReq(ctx, &grpc.SetPolicyRequest{
-			LastPacket: last_packet, Rules: rulesSubstring, Data: dataSubstring}); err != nil {
-
-			return err
-		}
-	}
-
-	return nil
+	_, err := k.sendReq(ctx, &grpc.SetPolicyRequest{Rules: rules, Data: data})
+	return err
 }

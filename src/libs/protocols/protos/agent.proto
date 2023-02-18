@@ -561,7 +561,6 @@ message ResizeVolumeRequest {
 }
 
 message SetPolicyRequest {
-	bool last_packet = 1;
-	string rules = 2;
-	string data = 3;
+	string rules = 1;
+	string data = 2;
 }
