@@ -4,6 +4,6 @@ Documentation=https://github.com/confidential-containers
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/opa run --server --addr 127.0.0.1:8181 --log-level debug /coco-policy.rego /coco-policy-data.json
+ExecStart=/usr/bin/opa run --server --addr 127.0.0.1:8181 --log-level debug /coco_policy /coco_policy_data
 DynamicUser=yes
 RuntimeDirectory=coco-opa

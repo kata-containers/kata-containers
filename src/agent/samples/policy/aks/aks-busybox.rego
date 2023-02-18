@@ -4,7 +4,7 @@ import future.keywords.in
 import future.keywords.every
 
 import input
-import data.coco
+import data.coco_data
 
 ######################################################################
 # Default values:
@@ -45,7 +45,7 @@ default WriteStreamRequest := true
 ######################################################################
 CreateContainerRequest {
     input_container := input.oci
-    policy_container := coco.policy_containers[_]
+    policy_container := coco_data.policy_containers[_]
 
     policy_container.ociVersion     == input_container.ociVersion
     policy_container.root.readonly  == input_container.root.readonly

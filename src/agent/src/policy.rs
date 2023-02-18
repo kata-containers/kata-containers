@@ -4,16 +4,21 @@
 //
 
 use anyhow::{anyhow, Result};
-use reqwest;
+use reqwest::Client;
 use tokio::time::{sleep, Duration};
+
+use tokio::io::{AsyncWriteExt};
+
 
 static EMPTY_JSON_INPUT: &str = "{\"input\":{}}";
 static ALLOWED_JSON_OUTPUT: &str = "{\"result\":true}";
 
-static OPA_V1_URI: &str                 = "http://localhost:8181/v1/";
-static OPA_DATA_PATH: &str              = "data/";
-static OPA_POLICIES_PATH: &str          = "policies";
-static OPA_COCO_POLICY_QUERY: &str      = "coco_policy/";
+static OPA_V1_URI: &str                 = "http://localhost:8181/v1";
+static OPA_DATA_PATH: &str              = "/data";
+static OPA_POLICIES_PATH: &str          = "/policies";
+
+static COCO_POLICY_NAME: &str           = "/coco_policy";
+static _COCO_DATA_NAME: &str             = "/coco_data";
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -24,19 +29,19 @@ macro_rules! sl {
 
 #[derive(Debug)]
 pub struct AgentPolicy {
-    opa_policies_uri: String,
-    opa_data_uri: String,
-    opa_query_uri: String,
-    opa_client: reqwest::Client,
+    _opa_data_uri: String,
+    coco_policy_query_prefix: String,
+    _coco_policy_id_uri: String,
+    opa_client: Client,
 }
 
 impl AgentPolicy {
     pub fn new() -> Result<Self> {
         Ok(AgentPolicy {
-            opa_policies_uri: OPA_V1_URI.to_string() + OPA_POLICIES_PATH,
-            opa_data_uri: OPA_V1_URI.to_string() + OPA_DATA_PATH,
-            opa_query_uri: OPA_V1_URI.to_string() + OPA_DATA_PATH + OPA_COCO_POLICY_QUERY,
-            opa_client: reqwest::Client::builder().http1_only().build()?
+            _opa_data_uri:               OPA_V1_URI.to_string() + OPA_DATA_PATH,
+            coco_policy_query_prefix:   OPA_V1_URI.to_string() + OPA_DATA_PATH + COCO_POLICY_NAME + "/",
+            _coco_policy_id_uri:         OPA_V1_URI.to_string() + OPA_POLICIES_PATH + COCO_POLICY_NAME,
+            opa_client: Client::builder().http1_only().build()?
         })
     }
 
@@ -93,20 +98,45 @@ impl AgentPolicy {
         }
     }
 
+    async fn log_string(s: &[u8], f: &str) {
+        let mut file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(f)
+            .await
+            .unwrap();
+
+        file.write(s).await.unwrap();
+        file.flush().await.unwrap();
+    }
+
     pub async fn set_policy(
         &mut self,
         rules: &str,
         data: &str
     ) -> Result<()> {
-        let mut uri = self.opa_policies_uri.clone();
-        info!(sl!(), "set_policy: rules uri {}", uri);
+        Self::log_string(rules.as_bytes(), "/tmp/rules.txt").await;
+        Self::log_string(data.as_bytes(), "/tmp/data.txt").await;
+/*
+        // Delete the old rules.
+        let mut uri = self.coco_policy_id_uri.clone();
+        info!(sl!(), "set_policy: deleting rules, uri {}", uri);
         self.opa_client
-            .post(uri)
-            .body(rules.to_string())
+            .delete(uri)
             .send()
             .await
             .map_err(|e| anyhow!(e))?;
 
+        // Delete the old data.
+        uri = self.opa_data_uri.clone() + COCO_DATA_NAME;
+        info!(sl!(), "set_policy: deleting data, uri {}", uri);
+        self.opa_client
+            .delete(uri)
+            .send()
+            .await
+            .map_err(|e| anyhow!(e))?;
+
+        // Post the new data.
         uri = self.opa_data_uri.clone();
         info!(sl!(), "set_policy: data uri {}", uri);
         self.opa_client
@@ -116,6 +146,16 @@ impl AgentPolicy {
             .await
             .map_err(|e| anyhow!(e))?;
 
+        // Post the new rules.
+        uri = self.coco_policy_id_uri.clone();
+        info!(sl!(), "set_policy: rules uri {}", uri);
+        self.opa_client
+            .post(uri)
+            .body(rules.to_string())
+            .send()
+            .await
+            .map_err(|e| anyhow!(e))?;
+*/
         Ok(())
     }
 
@@ -127,7 +167,7 @@ impl AgentPolicy {
     ) -> bool {
         let mut allow = false;
 
-        let uri = self.opa_query_uri.clone() + ep;
+        let uri = self.coco_policy_query_prefix.clone() + ep;
         info!(sl!(), "post_query: uri {}, input <{}>", uri, post_input);
         let r = self.opa_client.post(uri).body(post_input.to_owned()).send().await;
 

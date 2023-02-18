@@ -1,5 +1,5 @@
 {
-    "coco": {
+    "coco_data": {
         "policy_containers": [
             {
                 "ociVersion": "1.0.2-dev",

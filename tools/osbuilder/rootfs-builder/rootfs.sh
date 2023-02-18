@@ -646,11 +646,11 @@ EOF
 		chmod 755 "${ROOTFS_DIR}/usr/bin/opa"
 		samples_dir="${script_dir}/../../../src/agent/samples/policy/all-allowed"
 
-		cp "${samples_dir}/all-allowed.rego" "${ROOTFS_DIR}/coco-policy.rego"
-		chmod 644 "${ROOTFS_DIR}/coco-policy.rego"
+		cp "${samples_dir}/all-allowed.rego" "${ROOTFS_DIR}/coco_policy"
+		chmod 644 "${ROOTFS_DIR}/coco_policy"
 
-		cp "${samples_dir}/all-allowed-data.json" "${ROOTFS_DIR}/coco-policy-data.json"
-		chmod 644 "${ROOTFS_DIR}/coco-policy-data.json"
+		cp "${samples_dir}/all-allowed-data.json" "${ROOTFS_DIR}/coco_policy_data"
+		chmod 644 "${ROOTFS_DIR}/coco_policy_data"
 	fi
 
 	info "Check init is installed"
