@@ -2342,7 +2342,8 @@ func (k *kataAgent) PullImage(ctx context.Context, req *image.PullImageReq) (*im
 
 func (k *kataAgent) setPolicy(ctx context.Context, rules string, data string) error {
 	// Avoid ttrpc field truncation by splitting long strings
-	const maxSubstringLength = 16000;
+	// into multiple SetPolicy calls.
+	const maxSubstringLength = 16 * 1024;
 
 	rulesStart := 0
 	rulesLength := len(rules)
