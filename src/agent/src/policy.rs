@@ -112,11 +112,13 @@ impl AgentPolicy {
 
     pub async fn set_policy(
         &mut self,
+        _last_packet: bool,
         rules: &str,
         data: &str
     ) -> Result<()> {
         Self::log_string(rules.as_bytes(), "/tmp/rules.txt").await;
         Self::log_string(data.as_bytes(), "/tmp/data.txt").await;
+
 /*
         // Delete the old rules.
         let mut uri = self.coco_policy_id_uri.clone();

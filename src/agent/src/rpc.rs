@@ -1727,7 +1727,7 @@ impl agent_ttrpc::AgentService for AgentService {
 
         AGENT_POLICY.lock()
             .await
-            .set_policy(&req.rules, &req.data)
+            .set_policy(req.last_packet, &req.rules, &req.data)
             .await
             .map_err(|e| ttrpc_error!(ttrpc::Code::INTERNAL, e))?;
 
