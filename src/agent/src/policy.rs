@@ -127,48 +127,40 @@ impl AgentPolicy {
         // Delete the old rules.
         let mut uri = self.coco_policy_id_uri.clone();
         info!(sl!(), "set_policy: deleting rules, uri {}", uri);
-        /*
         self.opa_client
             .delete(uri)
             .send()
             .await
             .map_err(|e| anyhow!(e))?;
-            */
 
         // Delete the old data.
         uri = self.opa_data_uri.clone() + COCO_DATA_NAME;
         info!(sl!(), "set_policy: deleting data, uri {}", uri);
-        /*
         self.opa_client
             .delete(uri)
             .send()
             .await
             .map_err(|e| anyhow!(e))?;
-            */
 
-        // Post the new data.
+        // Put the new data.
         uri = self.opa_data_uri.clone();
         info!(sl!(), "set_policy: data uri {}", uri);
-        /*
         self.opa_client
-            .post(uri)
+            .put(uri)
             .body(data.to_string())
             .send()
             .await
             .map_err(|e| anyhow!(e))?;
-            */
 
-        // Post the new rules.
+        // Put the new rules.
         uri = self.coco_policy_id_uri.clone();
         info!(sl!(), "set_policy: rules uri {}", uri);
-        /*
         self.opa_client
-            .post(uri)
+            .put(uri)
             .body(rules.to_string())
             .send()
             .await
             .map_err(|e| anyhow!(e))?;
-            */
 
         Ok(())
     }
