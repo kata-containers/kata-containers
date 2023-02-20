@@ -47,8 +47,17 @@ docker build -q -t build-kata-deploy \
 docker run \
 	-v $HOME/.docker:/root/.docker \
 	-v /var/run/docker.sock:/var/run/docker.sock \
+	-v "${kata_dir}:${kata_dir}" \
 	--env CI="${CI:-}" \
-	--env USER=${USER} -v "${kata_dir}:${kata_dir}" \
+	--env USER=${USER} \
+	--env PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-"no"}" \
+	--env INITRAMFS_CONTAINER_BUILDER="${INITRAMFS_CONTAINER_BUILDER:-}" \
+	--env KERNEL_CONTAINER_BUILDER="${KERNEL_CONTAINER_BUILDER:-}" \
+	--env OVMF_CONTAINER_BUILDER="${OVMF_CONTAINER_BUILDER:-}" \
+	--env QEMU_CONTAINER_BUILDER="${QEMU_CONTAINER_BUILDER:-}" \
+	--env SHIM_V2_CONTAINER_BUILDER="${SHIM_V2_CONTAINER_BUILDER:-}" \
+	--env TDSHIM_CONTAINER_BUILDER="${TDSHIM_CONTAINER_BUILDER:-}" \
+	--env VIRTIOFSD_CONTAINER_BUILDER="${VIRTIOFSD_CONTAINER_BUILDER:-}" \
 	--rm \
 	-w ${script_dir} \
 	build-kata-deploy "${kata_deploy_create}" $@
