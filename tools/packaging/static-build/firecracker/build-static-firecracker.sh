@@ -18,6 +18,8 @@ firecracker_repo="${firecracker_repo:-}"
 firecracker_dir="firecracker"
 firecracker_version="${firecracker_version:-}"
 
+arch=$(uname -m)
+
 if [ -z "$firecracker_repo" ]; then
 	info "Get firecracker information from runtime versions.yaml"
 	firecracker_url=$(get_from_kata_deps "assets.hypervisor.firecracker.url")
@@ -37,5 +39,5 @@ git fetch
 git checkout ${firecracker_version}
 sudo ./tools/devtool --unattended build --release
 
-ln -sf ./build/cargo_target/x86_64-unknown-linux-musl/release/firecracker ./firecracker-static
-ln -sf ./build/cargo_target/x86_64-unknown-linux-musl/release/jailer ./jailer-static
+ln -sf ./build/cargo_target/${arch}-unknown-linux-musl/release/firecracker ./firecracker-static
+ln -sf ./build/cargo_target/${arch}-unknown-linux-musl/release/jailer ./jailer-static
