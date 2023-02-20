@@ -10,7 +10,8 @@ set -o pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly repo_root_dir="$(cd "${script_dir}/../../../.." && pwd)"
-readonly kernel_builder="${repo_root_dir}/tools/packaging/kernel/build-kernel.sh"
+
+source "${script_dir}/../../scripts/lib.sh"
 
 VMM_CONFIGS="qemu fc"
 
@@ -19,9 +20,15 @@ RUST_VERSION=${RUST_VERSION}
 
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
-container_image="shim-v2-builder"
+container_image="${SHIM_V2_CONTAINER_BUILDER:-${BUILDER_REGISTRY}:shim-v2-go-${GO_VERSION}-rust-${RUST_VERSION}-$(get_last_modification ${repo_root_dir} ${script_dir})-$(uname -m)}"
 
-sudo docker build  --build-arg GO_VERSION="${GO_VERSION}"  --build-arg RUST_VERSION="${RUST_VERSION}" -t "${container_image}" "${script_dir}"
+sudo docker pull ${container_image} || \
+       	(sudo docker build  \
+		--build-arg GO_VERSION="${GO_VERSION}" \
+		--build-arg RUST_VERSION="${RUST_VERSION}" \
+		-t "${container_image}" \
+		"${script_dir}" && \
+	 push_to_registry "${container_image}")
 
 arch=$(uname -m)
 if [ ${arch} = "ppc64le" ]; then

@@ -8,6 +8,8 @@
 export GOPATH=${GOPATH:-${HOME}/go}
 export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 export tests_repo_dir="$GOPATH/src/$tests_repo"
+export BUILDER_REGISTRY="quay.io/kata-containers/builders"
+export PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-"no"}"
 
 this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -96,4 +98,34 @@ get_kata_hash() {
 	repo=$1
 	ref=$2
 	git ls-remote --heads --tags "https://github.com/${project}/${repo}.git" | grep "${ref}" | awk '{print $1}'
+}
+
+# $1 - Repo's root dir
+# $2 - The file we're looking for the last modification
+get_last_modification() {
+	local repo_root_dir="${1}"
+	local file="${2}"
+
+	# This is a workaround needed for when running this code on Jenkins
+	git config --global --add safe.directory ${repo_root_dir} &> /dev/null
+
+	dirty=""
+	[ $(git status --porcelain | grep "${file#${repo_root_dir}/}" | wc -l) -gt 0 ] && dirty="-dirty"
+
+	echo "$(git log -1 --pretty=format:"%H" ${file})${dirty}"
+}
+
+# $1 - The tag to be pushed to the registry
+# $2 - "yes" to use sudo, "no" otherwise
+push_to_registry() {
+	local tag="${1}"
+	local use_sudo="${2:-"yes"}"
+
+	if [ "${PUSH_TO_REGISTRY}" == "yes" ]; then
+		if [ "${use_sudo}" == "yes" ]; then
+			sudo docker push ${tag}
+		else
+			docker push ${tag}
+		fi
+	fi
 }
