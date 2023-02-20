@@ -28,9 +28,8 @@ function main() {
   export CLUSTER_NAME="${CLUSTER_NAME:-kata-ci}"
   export PRIORITY_CLASS="${PRIORITY_CLASS:-p1}"
   export GLOBAL_CONFIG=${GLOBAL_CONFIG:-/kubeconfig}
-  IMAGE_URL="docker.apple.com/aci/rekursion/rekursion-allinone:latest"
 
-  ksmith spawn --force --priority "${PRIORITY_CLASS}" --image ${IMAGE_URL} --owner "$(whoami)" "${CLUSTER_NAME}" --kubeconfig "${GLOBAL_CONFIG}" --apc-system latest
+  ksmith --kubeconfig "${GLOBAL_CONFIG}" spawn kube --force --priority "${PRIORITY_CLASS}" --owner "$(whoami)" "${CLUSTER_NAME}" --apc-system latest
 
   CURRENT_DIR=$(pwd)
 
