@@ -114,7 +114,7 @@ impl CgroupsResource {
     pub async fn delete(&self) -> Result<()> {
         for cg_pid in self.cgroup_manager.tasks() {
             // For now, we can't guarantee that the thread in cgroup_manager does still
-            // exist. Once it exit, we should ignor that error returned by remove_task
+            // exist. Once it exit, we should ignore that error returned by remove_task
             // to let it go.
             if let Err(error) = self.cgroup_manager.remove_task(cg_pid) {
                 match error.source() {
