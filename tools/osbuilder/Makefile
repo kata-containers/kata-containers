@@ -85,6 +85,9 @@ endif
 
 ################################################################################
 
+.PHONY: all
+all: image initrd
+
 rootfs-%: $(ROOTFS_BUILD_DEST)/.%$(ROOTFS_MARKER_SUFFIX)
 	@ # DONT remove. This is not cancellation rule.
 
@@ -97,11 +100,13 @@ $(ROOTFS_BUILD_DEST)/.%$(ROOTFS_MARKER_SUFFIX):: rootfs-builder/%
 # extract it in a local folder.
 # Notes:
 # - assuming a not compressed initrd.
+ifeq (dracut,$(BUILD_METHOD))
 .PRECIOUS: $(ROOTFS_BUILD_DEST)/.dracut$(ROOTFS_MARKER_SUFFIX)
 $(ROOTFS_BUILD_DEST)/.dracut$(ROOTFS_MARKER_SUFFIX): $(TARGET_INITRD)
 	mkdir -p $(TARGET_ROOTFS)
 	(cd $(TARGET_ROOTFS); cat $< | cpio --extract --preserve-modification-time --make-directories)
 	@touch $@
+endif
 
 image-%: $(IMAGES_BUILD_DEST)/kata-containers-image-%.img
 	@ # DONT remove. This is not cancellation rule.
@@ -116,9 +121,6 @@ initrd-%: $(IMAGES_BUILD_DEST)/kata-containers-initrd-%.img
 .PRECIOUS: $(IMAGES_BUILD_DEST)/kata-containers-initrd-%.img
 $(IMAGES_BUILD_DEST)/kata-containers-initrd-%.img: rootfs-%
 	$(call silent_run,Creating initrd image for $*,$(INITRD_BUILDER) -o $@ $(ROOTFS_BUILD_DEST)/$*_rootfs)
-
-.PHONY: all
-all: image initrd
 
 .PHONY: rootfs
 rootfs: $(TARGET_ROOTFS_MARKER)
