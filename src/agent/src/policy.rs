@@ -197,4 +197,17 @@ impl AgentPolicy {
 
         allow
     }
+
+    // Post query with PullImageRequest input data to OPA.
+    pub async fn is_allowed_pull_image_endpoint(
+        &mut self,
+        ep: &str,
+        req: &protocols::image::PullImageRequest
+    ) -> bool {
+        let post_input = format!(
+            "{{\"input\":{{\"image\":\"{}\"}}}}",
+            req.image);
+
+        self.post_query(ep, &post_input).await
+    }
 }

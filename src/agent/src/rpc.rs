@@ -64,7 +64,6 @@ use crate::random;
 use crate::sandbox::Sandbox;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
-
 use crate::AGENT_POLICY;
 
 use crate::trace_rpc_call;
@@ -156,7 +155,7 @@ macro_rules! is_allowed {
             .await
         {
             return Err(ttrpc_error!(
-                ttrpc::Code::UNIMPLEMENTED,
+                ttrpc::Code::PERMISSION_DENIED,
                 format!("{} is blocked by policy", $req.descriptor().name()),
             ));
         }
@@ -176,7 +175,7 @@ macro_rules! is_allowed_create_container {
             .await
         {
             return Err(ttrpc_error!(
-                ttrpc::Code::UNIMPLEMENTED,
+                ttrpc::Code::PERMISSION_DENIED,
                 format!("{} is blocked by policy", $req.descriptor().name()),
             ));
         }

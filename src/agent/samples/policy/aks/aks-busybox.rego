@@ -15,6 +15,7 @@ import data.coco_data
 
 # More detailed policy rules are below.
 default CreateContainerRequest := false
+default PullImageRequest := false
 
 # Requests that are always allowed.
 default CreateSandboxRequest := true
@@ -33,14 +34,6 @@ default UpdateInterfaceRequest := true
 default UpdateRoutesRequest := true
 default WaitProcessRequest := true
 default WriteStreamRequest := true
-
-
-# Image service should make is_allowed!() calls.
-#
-# Might use policy metadata to reject images that were
-# not referenced by config.json.
-#default PullImageRequest := false
-
 
 ######################################################################
 CreateContainerRequest {
@@ -316,4 +309,13 @@ policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
     # E.g., "source": "^/run/kata-containers/shared/containers/$(sandbox-id)/rootfs/local/data$",
     policy_source_regex := replace(policy_mount.source, "$(sandbox-id)", sandbox_id)
     regex.match(policy_source_regex, input_mount.source)
+}
+
+######################################################################
+PullImageRequest {
+    policy_container := coco_data.policy_containers[_]
+    policy_value := policy_container.annotations["io.kubernetes.cri.image-name"]
+    input_value := input.image
+
+    policy_value == input_value
 }
