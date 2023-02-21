@@ -33,9 +33,6 @@ pub struct CloudHypervisor {
     inner: Arc<RwLock<CloudHypervisorInner>>,
 }
 
-unsafe impl Send for CloudHypervisor {}
-unsafe impl Sync for CloudHypervisor {}
-
 impl CloudHypervisor {
     pub fn new() -> Self {
         Self {

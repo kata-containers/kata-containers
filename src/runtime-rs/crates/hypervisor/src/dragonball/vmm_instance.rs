@@ -7,14 +7,12 @@
 use std::{
     fs::{File, OpenOptions},
     os::unix::{io::IntoRawFd, prelude::AsRawFd},
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        Arc, Mutex, RwLock,
-    },
+    sync::{Arc, Mutex, RwLock},
     thread,
 };
 
 use anyhow::{anyhow, Context, Result};
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use dragonball::{
     api::v1::{
         BlockDeviceConfigInfo, BootSourceConfig, FsDeviceConfigInfo, FsMountConfigInfo,
@@ -86,8 +84,8 @@ impl VmmInstance {
     pub fn run_vmm_server(&mut self, id: &str, netns: Option<String>) -> Result<()> {
         let kvm = OpenOptions::new().read(true).write(true).open(KVM_DEVICE)?;
 
-        let (to_vmm, from_runtime) = channel();
-        let (to_runtime, from_vmm) = channel();
+        let (to_vmm, from_runtime) = unbounded();
+        let (to_runtime, from_vmm) = unbounded();
 
         self.set_instance_id(id);
 

@@ -12,9 +12,6 @@ const VSOCK_SCHEME: &str = "vsock";
 const VSOCK_AGENT_CID: u32 = 3;
 const VSOCK_AGENT_PORT: u32 = 1024;
 
-unsafe impl Send for QemuInner {}
-unsafe impl Sync for QemuInner {}
-
 pub struct QemuInner {
     config: HypervisorConfig,
 }

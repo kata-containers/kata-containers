@@ -53,9 +53,6 @@ pub struct CloudHypervisorInner {
     pub(crate) tasks: Option<Vec<JoinHandle<Result<()>>>>,
 }
 
-unsafe impl Send for CloudHypervisorInner {}
-unsafe impl Sync for CloudHypervisorInner {}
-
 const CH_DEFAULT_TIMEOUT_SECS: u32 = 10;
 
 impl CloudHypervisorInner {
