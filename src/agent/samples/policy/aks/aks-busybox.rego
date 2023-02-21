@@ -141,7 +141,7 @@ allow_sandbox_annotation(policy_container, input_container, annotation_key) {
 }
 
 allow_container_annotation(policy_container, input_container, annotation_key) {
-    policy_value := input_container.annotations[annotation_key]
+    policy_value := policy_container.annotations[annotation_key]
     input_value := input_container.annotations[annotation_key]
 
     policy_value == input_value
