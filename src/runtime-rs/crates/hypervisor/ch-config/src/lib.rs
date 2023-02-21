@@ -492,5 +492,4 @@ pub struct NamedHypervisorConfig {
     pub cfg: HypervisorConfig,
 
     pub shared_fs_devices: Option<Vec<FsConfig>>,
-    pub pmem_devices: Option<Vec<PmemConfig>>,
 }

@@ -96,8 +96,6 @@ impl CloudHypervisorInner {
     async fn boot_vm(&mut self) -> Result<()> {
         let shared_fs_devices = self.get_shared_fs_devices().await?;
 
-        let pmem_devices = self.get_pmem_devices().await?;
-
         let socket = self
             .api_socket
             .as_ref()
@@ -129,7 +127,6 @@ impl CloudHypervisorInner {
             vsock_socket_path,
             cfg: hypervisor_config.clone(),
             shared_fs_devices,
-            pmem_devices,
         };
 
         let cfg = VmConfig::try_from(named_cfg)?;

@@ -7,7 +7,7 @@ use crate::NamedHypervisorConfig;
 use crate::VmConfig;
 use crate::{
     ConsoleConfig, ConsoleOutputMode, CpuFeatures, CpuTopology, CpusConfig, MacAddr, MemoryConfig,
-    PayloadConfig, RngConfig, VsockConfig,
+    PayloadConfig, PmemConfig, RngConfig, VsockConfig,
 };
 use anyhow::{anyhow, Context, Result};
 use kata_types::config::default::DEFAULT_CH_ENTROPY_SOURCE;
@@ -20,6 +20,8 @@ use std::path::PathBuf;
 // 1 MiB
 const MIB: u64 = 1024 * 1024;
 
+const PMEM_ALIGN_BYTES: u64 = 2 * MIB;
+
 const DEFAULT_CH_MAX_PHYS_BITS: u8 = 46;
 
 impl TryFrom<NamedHypervisorConfig> for VmConfig {
@@ -31,14 +33,42 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
         let vsock_socket_path = n.vsock_socket_path;
         let sandbox_path = n.sandbox_path;
         let fs = n.shared_fs_devices;
-        let pmem = n.pmem_devices;
 
         let cpus = CpusConfig::try_from(cfg.cpu_info)?;
 
         let rng = RngConfig::try_from(cfg.machine_info)?;
 
-        // Note that PmemConfig replaces the PayloadConfig.initrd.
-        let payload = PayloadConfig::try_from((cfg.boot_info, kernel_params))?;
+        // Note how CH handles the different image types:
+        //
+        // - An image is specified in PmemConfig.
+        // - An initrd/initramfs is specified in PayloadConfig.
+        let boot_info = cfg.boot_info;
+
+        let use_initrd = !boot_info.initrd.is_empty();
+        let use_image = !boot_info.image.is_empty();
+
+        if use_initrd && use_image {
+            return Err(anyhow!("cannot specify image and initrd"));
+        }
+
+        if !use_initrd && !use_image {
+            return Err(anyhow!("missing boot file (no image or initrd)"));
+        }
+
+        let initrd = if use_initrd {
+            Some(PathBuf::from(boot_info.initrd.clone()))
+        } else {
+            None
+        };
+
+        let pmem = if use_initrd {
+            None
+        } else {
+            let pmem = PmemConfig::try_from(&boot_info)?;
+            Some(vec![pmem])
+        };
+
+        let payload = PayloadConfig::try_from((boot_info, kernel_params, initrd))?;
 
         let serial = get_serial_cfg()?;
         let console = get_console_cfg()?;
@@ -90,18 +120,37 @@ impl TryFrom<MemoryInfo> for MemoryConfig {
             .ok_or("failed to calculate max hotplug size for CH")
             .map_err(|e| anyhow!(e))?;
 
+        let aligned_hotplug_size_bytes =
+            checked_next_multiple_of(hotplug_size_bytes, PMEM_ALIGN_BYTES)
+                .ok_or("cannot handle pmem alignment for CH")
+                .map_err(|e| anyhow!(e))?;
+
         let cfg = MemoryConfig {
             size: mem_bytes,
 
             // Required
             shared: true,
 
-            hotplug_size: Some(hotplug_size_bytes),
+            hotplug_size: Some(aligned_hotplug_size_bytes),
 
             ..Default::default()
         };
 
         Ok(cfg)
+    }
+}
+
+// Return the next multiple of 'multiple' starting from the specified value
+// (aka align value to multiple).
+//
+// This is a temporary solution until checked_next_multiple_of() integer
+// method is available in the rust language.
+//
+// See: https://github.com/rust-lang/rust/issues/88581
+fn checked_next_multiple_of(value: u64, multiple: u64) -> Option<u64> {
+    match value.checked_rem(multiple) {
+        None => Some(value),
+        Some(r) => value.checked_add(multiple - r),
     }
 }
 
@@ -153,20 +202,23 @@ impl TryFrom<String> for CpuFeatures {
 }
 
 // The 2nd tuple element is the space separated kernel parameters list.
+// The 3rd tuple element is an optional initramfs image to use.
 // This cannot be created only from BootInfo since that contains the
 // user-specified kernel parameters only.
-impl TryFrom<(BootInfo, String)> for PayloadConfig {
+impl TryFrom<(BootInfo, String, Option<PathBuf>)> for PayloadConfig {
     type Error = anyhow::Error;
 
-    fn try_from(args: (BootInfo, String)) -> Result<Self, Self::Error> {
+    fn try_from(args: (BootInfo, String, Option<PathBuf>)) -> Result<Self, Self::Error> {
         let b = args.0;
         let cmdline = args.1;
+        let initramfs = args.2;
 
         let kernel = PathBuf::from(b.kernel);
 
         let payload = PayloadConfig {
             kernel: Some(kernel),
             cmdline: Some(cmdline),
+            initramfs,
 
             ..Default::default()
         };
@@ -192,6 +244,27 @@ impl TryFrom<MachineInfo> for RngConfig {
         };
 
         Ok(rng)
+    }
+}
+
+impl TryFrom<&BootInfo> for PmemConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(b: &BootInfo) -> Result<Self, Self::Error> {
+        let file = if b.image.is_empty() {
+            return Err(anyhow!("CH PmemConfig only used for images"));
+        } else {
+            b.image.clone()
+        };
+
+        let cfg = PmemConfig {
+            file: PathBuf::from(file),
+            discard_writes: true,
+
+            ..Default::default()
+        };
+
+        Ok(cfg)
     }
 }
 
