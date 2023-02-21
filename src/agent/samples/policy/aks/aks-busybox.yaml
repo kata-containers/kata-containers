@@ -11,7 +11,7 @@ spec:
   restartPolicy: Never
   runtimeClassName: kata-cc
   containers: 
-  - image: docker.io/library/alpine:latest
+  - image: docker.io/library/busybox:latest
     name: busybox
     volumeMounts:
     - mountPath: /busy1
