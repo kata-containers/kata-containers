@@ -9,9 +9,11 @@ import (
 	"context"
 
 	cgroupsv1 "github.com/containerd/cgroups/stats/v1"
+	cgroupsv2 "github.com/containerd/cgroups/v2/stats"
 	"github.com/containerd/typeurl"
 
 	google_protobuf "github.com/gogo/protobuf/types"
+	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 )
 
@@ -21,7 +23,18 @@ func marshalMetrics(ctx context.Context, s *service, containerID string) (*googl
 		return nil, err
 	}
 
-	metrics := statsToMetrics(&stats)
+	isCgroupV1, err := resCtrl.IsCgroupV1()
+	if err != nil {
+		return nil, err
+	}
+
+	var metrics interface{}
+
+	if isCgroupV1 {
+		metrics = statsToMetricsV1(&stats)
+	} else {
+		metrics = statsToMetricsV2(&stats)
+	}
 
 	data, err := typeurl.MarshalAny(metrics)
 	if err != nil {
@@ -31,25 +44,40 @@ func marshalMetrics(ctx context.Context, s *service, containerID string) (*googl
 	return data, nil
 }
 
-func statsToMetrics(stats *vc.ContainerStats) *cgroupsv1.Metrics {
+func statsToMetricsV1(stats *vc.ContainerStats) *cgroupsv1.Metrics {
 	metrics := &cgroupsv1.Metrics{}
 
 	if stats.CgroupStats != nil {
 		metrics = &cgroupsv1.Metrics{
-			Hugetlb: setHugetlbStats(stats.CgroupStats.HugetlbStats),
-			Pids:    setPidsStats(stats.CgroupStats.PidsStats),
-			CPU:     setCPUStats(stats.CgroupStats.CPUStats),
-			Memory:  setMemoryStats(stats.CgroupStats.MemoryStats),
-			Blkio:   setBlkioStats(stats.CgroupStats.BlkioStats),
+			Hugetlb: setHugetlbStatsV1(stats.CgroupStats.HugetlbStats),
+			Pids:    setPidsStatsV1(stats.CgroupStats.PidsStats),
+			CPU:     setCPUStatsV1(stats.CgroupStats.CPUStats),
+			Memory:  setMemoryStatsV1(stats.CgroupStats.MemoryStats),
+			Blkio:   setBlkioStatsV1(stats.CgroupStats.BlkioStats),
 		}
 	}
-
 	metrics.Network = setNetworkStats(stats.NetworkStats)
 
 	return metrics
 }
 
-func setHugetlbStats(vcHugetlb map[string]vc.HugetlbStats) []*cgroupsv1.HugetlbStat {
+func statsToMetricsV2(stats *vc.ContainerStats) *cgroupsv2.Metrics {
+	metrics := &cgroupsv2.Metrics{}
+
+	if stats.CgroupStats != nil {
+		metrics = &cgroupsv2.Metrics{
+			Hugetlb: setHugetlbStatsV2(stats.CgroupStats.HugetlbStats),
+			Pids:    setPidsStatsV2(stats.CgroupStats.PidsStats),
+			CPU:     setCPUStatsV2(stats.CgroupStats.CPUStats),
+			Memory:  setMemoryStatsV2(stats.CgroupStats.MemoryStats),
+			Io:      setBlkioStatsV2(stats.CgroupStats.BlkioStats),
+		}
+	}
+
+	return metrics
+}
+
+func setHugetlbStatsV1(vcHugetlb map[string]vc.HugetlbStats) []*cgroupsv1.HugetlbStat {
 	var hugetlbStats []*cgroupsv1.HugetlbStat
 	for k, v := range vcHugetlb {
 		hugetlbStats = append(
@@ -65,7 +93,22 @@ func setHugetlbStats(vcHugetlb map[string]vc.HugetlbStats) []*cgroupsv1.HugetlbS
 	return hugetlbStats
 }
 
-func setPidsStats(vcPids vc.PidsStats) *cgroupsv1.PidsStat {
+func setHugetlbStatsV2(vcHugetlb map[string]vc.HugetlbStats) []*cgroupsv2.HugeTlbStat {
+	var hugetlbStats []*cgroupsv2.HugeTlbStat
+	for k, v := range vcHugetlb {
+		hugetlbStats = append(
+			hugetlbStats,
+			&cgroupsv2.HugeTlbStat{
+				Current:  v.Usage,
+				Max:      v.MaxUsage,
+				Pagesize: k,
+			})
+	}
+
+	return hugetlbStats
+}
+
+func setPidsStatsV1(vcPids vc.PidsStats) *cgroupsv1.PidsStat {
 	pidsStats := &cgroupsv1.PidsStat{
 		Current: vcPids.Current,
 		Limit:   vcPids.Limit,
@@ -74,8 +117,16 @@ func setPidsStats(vcPids vc.PidsStats) *cgroupsv1.PidsStat {
 	return pidsStats
 }
 
-func setCPUStats(vcCPU vc.CPUStats) *cgroupsv1.CPUStat {
+func setPidsStatsV2(vcPids vc.PidsStats) *cgroupsv2.PidsStat {
+	pidsStats := &cgroupsv2.PidsStat{
+		Current: vcPids.Current,
+		Limit:   vcPids.Limit,
+	}
 
+	return pidsStats
+}
+
+func setCPUStatsV1(vcCPU vc.CPUStats) *cgroupsv1.CPUStat {
 	var perCPU []uint64
 	perCPU = append(perCPU, vcCPU.CPUUsage.PercpuUsage...)
 
@@ -96,7 +147,20 @@ func setCPUStats(vcCPU vc.CPUStats) *cgroupsv1.CPUStat {
 	return cpuStats
 }
 
-func setMemoryStats(vcMemory vc.MemoryStats) *cgroupsv1.MemoryStat {
+func setCPUStatsV2(vcCPU vc.CPUStats) *cgroupsv2.CPUStat {
+	cpuStats := &cgroupsv2.CPUStat{
+		UsageUsec:     vcCPU.CPUUsage.TotalUsage / 1000,
+		UserUsec:      vcCPU.CPUUsage.UsageInKernelmode / 1000,
+		SystemUsec:    vcCPU.CPUUsage.UsageInUsermode / 1000,
+		NrPeriods:     vcCPU.ThrottlingData.Periods,
+		NrThrottled:   vcCPU.ThrottlingData.ThrottledPeriods,
+		ThrottledUsec: vcCPU.ThrottlingData.ThrottledTime / 1000,
+	}
+
+	return cpuStats
+}
+
+func setMemoryStatsV1(vcMemory vc.MemoryStats) *cgroupsv1.MemoryStat {
 	memoryStats := &cgroupsv1.MemoryStat{
 		Usage: &cgroupsv1.MemoryEntry{
 			Limit:   vcMemory.Usage.Limit,
@@ -146,22 +210,41 @@ func setMemoryStats(vcMemory vc.MemoryStats) *cgroupsv1.MemoryStat {
 	return memoryStats
 }
 
-func setBlkioStats(vcBlkio vc.BlkioStats) *cgroupsv1.BlkIOStat {
+func setMemoryStatsV2(vcMemory vc.MemoryStats) *cgroupsv2.MemoryStat {
+	memoryStats := &cgroupsv2.MemoryStat{
+		Usage:      vcMemory.Usage.Usage,
+		UsageLimit: vcMemory.Usage.Limit,
+		SwapUsage:  vcMemory.SwapUsage.Usage,
+		SwapLimit:  vcMemory.SwapUsage.Limit,
+	}
+
+	return memoryStats
+}
+
+func setBlkioStatsV1(vcBlkio vc.BlkioStats) *cgroupsv1.BlkIOStat {
 	blkioStats := &cgroupsv1.BlkIOStat{
-		IoServiceBytesRecursive: copyBlkio(vcBlkio.IoServiceBytesRecursive),
-		IoServicedRecursive:     copyBlkio(vcBlkio.IoServicedRecursive),
-		IoQueuedRecursive:       copyBlkio(vcBlkio.IoQueuedRecursive),
-		SectorsRecursive:        copyBlkio(vcBlkio.SectorsRecursive),
-		IoServiceTimeRecursive:  copyBlkio(vcBlkio.IoServiceTimeRecursive),
-		IoWaitTimeRecursive:     copyBlkio(vcBlkio.IoWaitTimeRecursive),
-		IoMergedRecursive:       copyBlkio(vcBlkio.IoMergedRecursive),
-		IoTimeRecursive:         copyBlkio(vcBlkio.IoTimeRecursive),
+		IoServiceBytesRecursive: copyBlkioV1(vcBlkio.IoServiceBytesRecursive),
+		IoServicedRecursive:     copyBlkioV1(vcBlkio.IoServicedRecursive),
+		IoQueuedRecursive:       copyBlkioV1(vcBlkio.IoQueuedRecursive),
+		SectorsRecursive:        copyBlkioV1(vcBlkio.SectorsRecursive),
+		IoServiceTimeRecursive:  copyBlkioV1(vcBlkio.IoServiceTimeRecursive),
+		IoWaitTimeRecursive:     copyBlkioV1(vcBlkio.IoWaitTimeRecursive),
+		IoMergedRecursive:       copyBlkioV1(vcBlkio.IoMergedRecursive),
+		IoTimeRecursive:         copyBlkioV1(vcBlkio.IoTimeRecursive),
 	}
 
 	return blkioStats
 }
 
-func copyBlkio(s []vc.BlkioStatEntry) []*cgroupsv1.BlkIOEntry {
+func setBlkioStatsV2(vcBlkio vc.BlkioStats) *cgroupsv2.IOStat {
+	ioStats := &cgroupsv2.IOStat{
+		Usage: copyBlkioV2(vcBlkio.IoServiceBytesRecursive),
+	}
+
+	return ioStats
+}
+
+func copyBlkioV1(s []vc.BlkioStatEntry) []*cgroupsv1.BlkIOEntry {
 	ret := make([]*cgroupsv1.BlkIOEntry, len(s))
 	for i, v := range s {
 		ret[i] = &cgroupsv1.BlkIOEntry{
@@ -171,6 +254,28 @@ func copyBlkio(s []vc.BlkioStatEntry) []*cgroupsv1.BlkIOEntry {
 			Value: v.Value,
 		}
 	}
+
+	return ret
+}
+
+func copyBlkioV2(s []vc.BlkioStatEntry) []*cgroupsv2.IOEntry {
+	var ret []*cgroupsv2.IOEntry
+	item := cgroupsv2.IOEntry{}
+	for _, v := range s {
+		switch v.Op {
+		case "read":
+			item.Rbytes = v.Value
+		case "write":
+			item.Wbytes = v.Value
+		case "rios":
+			item.Rios = v.Value
+		case "wios":
+			item.Wios = v.Value
+		}
+		item.Major = v.Major
+		item.Minor = v.Minor
+	}
+	ret = append(ret, &item)
 
 	return ret
 }

@@ -174,7 +174,9 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		q.qemuMachine.Options += "sgx-epc.0.memdev=epc0,sgx-epc.0.node=0"
 	}
 
-	q.handleImagePath(config)
+	if err := q.handleImagePath(config); err != nil {
+		return nil, err
+	}
 
 	return q, nil
 }
@@ -307,6 +309,16 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 				Debug:          false,
 				File:           firmware,
 				FirmwareVolume: firmwareVolume,
+			}), "", nil
+	case sevProtection:
+		return append(devices,
+			govmmQemu.Object{
+				Type:            govmmQemu.SEVGuest,
+				ID:              "sev",
+				Debug:           false,
+				File:            firmware,
+				CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
+				ReducedPhysBits: 1,
 			}), "", nil
 	case snpProtection:
 		return append(devices,

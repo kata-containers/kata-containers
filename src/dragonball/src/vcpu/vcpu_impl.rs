@@ -214,10 +214,20 @@ pub enum VcpuResponse {
     CacheRevalidated,
 }
 
+#[derive(Debug, PartialEq)]
+/// Vcpu Hotplug Result returned from the guest
+pub enum VcpuResizeResult {
+    /// All vCPU hotplug / hot-unplug operations are successful
+    Success = 0,
+    /// vCPU hotplug / hot-unplug failed
+    Failed = 1,
+}
+
 /// List of events that the vcpu_state_sender can send.
 pub enum VcpuStateEvent {
-    /// (result, response) for hotplug, result 0 means failure, 1 means success.
-    Hotplug((i32, u32)),
+    /// (result, response) for hotplug / hot-unplugged.
+    /// response records how many cpu has successfully being hotplugged / hot-unplugged.
+    Hotplug((VcpuResizeResult, u32)),
 }
 
 /// Wrapper over vCPU that hides the underlying interactions with the vCPU thread.

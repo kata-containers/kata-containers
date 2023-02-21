@@ -272,6 +272,26 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 	assert.Error(err)
 	assert.Empty(bios)
 
+	// sev protection
+	amd64.(*qemuAmd64).protection = sevProtection
+
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
+	assert.NoError(err)
+	assert.Empty(bios)
+
+	expectedOut := []govmmQemu.Device{
+		govmmQemu.Object{
+			Type:            govmmQemu.SEVGuest,
+			ID:              "sev",
+			Debug:           false,
+			File:            firmware,
+			CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
+			ReducedPhysBits: 1,
+		},
+	}
+
+	assert.Equal(expectedOut, devices)
+
 	// snp protection
 	amd64.(*qemuAmd64).protection = snpProtection
 

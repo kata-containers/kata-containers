@@ -139,7 +139,7 @@ type qemuArch interface {
 	setPFlash([]string)
 
 	// handleImagePath handles the Hypervisor Config image path
-	handleImagePath(config HypervisorConfig)
+	handleImagePath(config HypervisorConfig) error
 
 	// supportGuestMemoryHotplug returns if the guest supports memory hotplug
 	supportGuestMemoryHotplug() bool
@@ -735,23 +735,27 @@ func (q *qemuArchBase) appendRNGDevice(_ context.Context, devices []govmmQemu.De
 	return devices, nil
 }
 
-func (q *qemuArchBase) handleImagePath(config HypervisorConfig) {
+func (q *qemuArchBase) handleImagePath(config HypervisorConfig) error {
 	if config.ImagePath != "" {
-		kernelRootParams := commonVirtioblkKernelRootParams
+		kernelRootParams, err := GetKernelRootParams(config.RootfsType, q.disableNvdimm, false)
+		if err != nil {
+			return err
+		}
 		if !q.disableNvdimm {
 			q.qemuMachine.Options = strings.Join([]string{
 				q.qemuMachine.Options, qemuNvdimmOption,
 			}, ",")
-			if q.dax {
-				kernelRootParams = commonNvdimmKernelRootParams
-			} else {
-				kernelRootParams = commonNvdimmNoDAXKernelRootParams
+			kernelRootParams, err = GetKernelRootParams(config.RootfsType, q.disableNvdimm, q.dax)
+			if err != nil {
+				return err
 			}
 		}
 		q.kernelParams = append(q.kernelParams, kernelRootParams...)
 		q.kernelParamsNonDebug = append(q.kernelParamsNonDebug, kernelParamsSystemdNonDebug...)
 		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)
 	}
+
+	return nil
 }
 
 func (q *qemuArchBase) supportGuestMemoryHotplug() bool {

@@ -29,7 +29,7 @@ use crate::address_space_manager::GuestAddressSpaceImpl;
 use crate::api::v1::InstanceInfo;
 use crate::kvm_context::KvmContext;
 use crate::vcpu::vcpu_impl::{
-    Vcpu, VcpuError, VcpuEvent, VcpuHandle, VcpuResponse, VcpuStateEvent,
+    Vcpu, VcpuError, VcpuEvent, VcpuHandle, VcpuResizeResult, VcpuResponse, VcpuStateEvent,
 };
 use crate::vcpu::VcpuConfig;
 use crate::vm::VmConfigInfo;
@@ -113,11 +113,6 @@ pub enum VcpuManagerError {
     #[error("vcpu internal error: {0}")]
     Vcpu(#[source] VcpuError),
 
-    #[cfg(feature = "hotplug")]
-    /// vCPU resize error
-    #[error("resize vcpu error: {0}")]
-    VcpuResize(#[source] VcpuResizeError),
-
     /// Kvm Ioctl Error
     #[error("failure in issuing KVM ioctl command: {0}")]
     Kvm(#[source] kvm_ioctls::Error),
@@ -132,6 +127,10 @@ pub enum VcpuResizeError {
     VcpuIsHotplugging,
 
     /// Cannot update the configuration of the microvm pre boot.
+    #[error("resize vcpu operation is not allowed pre boot")]
+    UpdateNotAllowedPreBoot,
+
+    /// Cannot update the configuration of the microvm post boot.
     #[error("resize vcpu operation is not allowed after boot")]
     UpdateNotAllowedPostBoot,
 
@@ -147,10 +146,24 @@ pub enum VcpuResizeError {
     #[error("Removable vcpu not enough, removable vcpu num: {0}, number to remove: {1}, present vcpu count {2}")]
     LackRemovableVcpus(u16, u16, u16),
 
-    #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
+    #[cfg(feature = "dbs-upcall")]
     /// Cannot update the configuration by upcall channel.
     #[error("cannot update the configuration by upcall channel: {0}")]
     Upcall(#[source] dbs_upcall::UpcallClientError),
+
+    #[cfg(feature = "dbs-upcall")]
+    /// Cannot find upcall client
+    #[error("Cannot find upcall client")]
+    UpcallClientMissing,
+
+    #[cfg(feature = "dbs-upcall")]
+    /// Upcall server is not ready
+    #[error("Upcall server is not ready")]
+    UpcallServerNotReady,
+
+    /// Vcpu manager error
+    #[error("Vcpu manager error : {0}")]
+    Vcpu(#[source] VcpuManagerError),
 }
 
 /// Result for vCPU manager operations
@@ -161,6 +174,13 @@ enum VcpuAction {
     None,
     Hotplug,
     Hotunplug,
+}
+
+/// VcpuResizeInfo describes the information for vcpu hotplug / hot-unplug
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct VcpuResizeInfo {
+    /// The desired vcpu count to resize.
+    pub vcpu_count: Option<u8>,
 }
 
 /// Infos related to per vcpu
@@ -810,11 +830,9 @@ mod hotplug {
             &mut self,
             vcpu_count: u8,
             sync_tx: Option<Sender<bool>>,
-        ) -> std::result::Result<(), VcpuManagerError> {
+        ) -> std::result::Result<(), VcpuResizeError> {
             if self.get_vcpus_action() != VcpuAction::None {
-                return Err(VcpuManagerError::VcpuResize(
-                    VcpuResizeError::VcpuIsHotplugging,
-                ));
+                return Err(VcpuResizeError::VcpuIsHotplugging);
             }
             self.action_sycn_tx = sync_tx;
 
@@ -831,9 +849,7 @@ mod hotplug {
                     Ordering::Less => self.do_del_vcpu(vcpu_count, upcall),
                 }
             } else {
-                Err(VcpuManagerError::VcpuResize(
-                    VcpuResizeError::UpdateNotAllowedPostBoot,
-                ))
+                Err(VcpuResizeError::UpdateNotAllowedPostBoot)
             }
         }
 
@@ -841,28 +857,31 @@ mod hotplug {
             &mut self,
             vcpu_count: u8,
             upcall_client: Arc<UpcallClient<DevMgrService>>,
-        ) -> std::result::Result<(), VcpuManagerError> {
+        ) -> std::result::Result<(), VcpuResizeError> {
             info!("resize vcpu: add");
             if vcpu_count > self.vcpu_config.max_vcpu_count {
-                return Err(VcpuManagerError::VcpuResize(
-                    VcpuResizeError::ExpectedVcpuExceedMax,
-                ));
+                return Err(VcpuResizeError::ExpectedVcpuExceedMax);
             }
 
-            let created_vcpus = self.create_vcpus(vcpu_count, None, None)?;
-            let cpu_ids = self.activate_vcpus(vcpu_count, true).map_err(|e| {
-                // we need to rollback when activate vcpu error
-                error!("activate vcpu error, rollback! {:?}", e);
-                let activated_vcpus: Vec<u8> = created_vcpus
-                    .iter()
-                    .filter(|&cpu_id| self.vcpu_infos[*cpu_id as usize].handle.is_some())
-                    .copied()
-                    .collect();
-                if let Err(e) = self.exit_vcpus(&activated_vcpus) {
-                    error!("try to rollback error, stop_vcpu: {:?}", e);
-                }
-                e
-            })?;
+            let created_vcpus = self
+                .create_vcpus(vcpu_count, None, None)
+                .map_err(VcpuResizeError::Vcpu)?;
+            let cpu_ids = self
+                .activate_vcpus(vcpu_count, true)
+                .map_err(|e| {
+                    // we need to rollback when activate vcpu error
+                    error!("activate vcpu error, rollback! {:?}", e);
+                    let activated_vcpus: Vec<u8> = created_vcpus
+                        .iter()
+                        .filter(|&cpu_id| self.vcpu_infos[*cpu_id as usize].handle.is_some())
+                        .copied()
+                        .collect();
+                    if let Err(e) = self.exit_vcpus(&activated_vcpus) {
+                        error!("try to rollback error, stop_vcpu: {:?}", e);
+                    }
+                    e
+                })
+                .map_err(VcpuResizeError::Vcpu)?;
 
             let mut cpu_ids_array = [0u8; (u8::MAX as usize) + 1];
             cpu_ids_array[..cpu_ids.len()].copy_from_slice(&cpu_ids[..cpu_ids.len()]);
@@ -882,23 +901,19 @@ mod hotplug {
             &mut self,
             vcpu_count: u8,
             upcall_client: Arc<UpcallClient<DevMgrService>>,
-        ) -> std::result::Result<(), VcpuManagerError> {
+        ) -> std::result::Result<(), VcpuResizeError> {
             info!("resize vcpu: delete");
             if vcpu_count == 0 {
-                return Err(VcpuManagerError::VcpuResize(
-                    VcpuResizeError::Vcpu0CanNotBeRemoved,
-                ));
+                return Err(VcpuResizeError::Vcpu0CanNotBeRemoved);
             }
 
             let mut cpu_ids = self.calculate_removable_vcpus();
             let cpu_num_to_be_del = (self.present_vcpus_count() - vcpu_count) as usize;
             if cpu_num_to_be_del >= cpu_ids.len() {
-                return Err(VcpuManagerError::VcpuResize(
-                    VcpuResizeError::LackRemovableVcpus(
-                        cpu_ids.len() as u16,
-                        cpu_num_to_be_del as u16,
-                        self.present_vcpus_count() as u16,
-                    ),
+                return Err(VcpuResizeError::LackRemovableVcpus(
+                    cpu_ids.len() as u16,
+                    cpu_num_to_be_del as u16,
+                    self.present_vcpus_count() as u16,
                 ));
             }
 
@@ -924,7 +939,7 @@ mod hotplug {
             &self,
             _upcall_client: Arc<UpcallClient<DevMgrService>>,
             _request: DevMgrRequest,
-        ) -> std::result::Result<(), VcpuManagerError> {
+        ) -> std::result::Result<(), VcpuResizeError> {
             Ok(())
         }
 
@@ -933,7 +948,7 @@ mod hotplug {
             &self,
             upcall_client: Arc<UpcallClient<DevMgrService>>,
             request: DevMgrRequest,
-        ) -> std::result::Result<(), VcpuManagerError> {
+        ) -> std::result::Result<(), VcpuResizeError> {
             // This is used to fix clippy warnings.
             use dbs_upcall::{DevMgrResponse, UpcallClientRequest, UpcallClientResponse};
 
@@ -946,9 +961,14 @@ mod hotplug {
                     Box::new(move |result| match result {
                         UpcallClientResponse::DevMgr(response) => {
                             if let DevMgrResponse::CpuDev(resp) = response {
+                                let result: VcpuResizeResult = if resp.result == 0 {
+                                    VcpuResizeResult::Success
+                                } else {
+                                    VcpuResizeResult::Failed
+                                };
                                 vcpu_state_sender
                                     .send(VcpuStateEvent::Hotplug((
-                                        resp.result,
+                                        result,
                                         resp.info.apic_id_index,
                                     )))
                                     .unwrap();
@@ -957,7 +977,7 @@ mod hotplug {
                         }
                         UpcallClientResponse::UpcallReset => {
                             vcpu_state_sender
-                                .send(VcpuStateEvent::Hotplug((0, 0)))
+                                .send(VcpuStateEvent::Hotplug((VcpuResizeResult::Success, 0)))
                                 .unwrap();
                             vcpu_state_event.write(1).unwrap();
                         }
@@ -968,7 +988,6 @@ mod hotplug {
                     }),
                 )
                 .map_err(VcpuResizeError::Upcall)
-                .map_err(VcpuManagerError::VcpuResize)
         }
 
         /// Get removable vcpus.
@@ -993,16 +1012,19 @@ impl VcpuEpollHandler {
         while let Ok(event) = self.rx.try_recv() {
             match event {
                 VcpuStateEvent::Hotplug((success, cpu_count)) => {
-                    info!("get vcpu event, cpu_index {}", cpu_count);
-                    self.process_cpu_action(success != 0, cpu_count);
+                    info!(
+                        "get vcpu event, cpu_index {} success {:?}",
+                        cpu_count, success
+                    );
+                    self.process_cpu_action(success, cpu_count);
                 }
             }
         }
     }
 
-    fn process_cpu_action(&self, success: bool, _cpu_index: u32) {
+    fn process_cpu_action(&self, result: VcpuResizeResult, _cpu_index: u32) {
         let mut vcpu_manager = self.vcpu_manager.lock().unwrap();
-        if success {
+        if result == VcpuResizeResult::Success {
             match vcpu_manager.get_vcpus_action() {
                 VcpuAction::Hotplug => {
                     // Notify hotplug success
@@ -1362,12 +1384,7 @@ mod tests {
 
         // vcpu is already in hotplug process
         let res = vcpu_manager.resize_vcpu(1, None);
-        assert!(matches!(
-            res,
-            Err(VcpuManagerError::VcpuResize(
-                VcpuResizeError::VcpuIsHotplugging
-            ))
-        ));
+        assert!(matches!(res, Err(VcpuResizeError::VcpuIsHotplugging)));
 
         // clear vcpus action
         let cpu_ids = vec![0];
@@ -1377,9 +1394,7 @@ mod tests {
         let res = vcpu_manager.resize_vcpu(1, None);
         assert!(matches!(
             res,
-            Err(VcpuManagerError::VcpuResize(
-                VcpuResizeError::UpdateNotAllowedPostBoot
-            ))
+            Err(VcpuResizeError::UpdateNotAllowedPostBoot)
         ));
 
         // init upcall channel
@@ -1397,20 +1412,10 @@ mod tests {
 
         // exceeed max vcpu count
         let res = vcpu_manager.resize_vcpu(4, None);
-        assert!(matches!(
-            res,
-            Err(VcpuManagerError::VcpuResize(
-                VcpuResizeError::ExpectedVcpuExceedMax
-            ))
-        ));
+        assert!(matches!(res, Err(VcpuResizeError::ExpectedVcpuExceedMax)));
 
         // remove vcpu 0
         let res = vcpu_manager.resize_vcpu(0, None);
-        assert!(matches!(
-            res,
-            Err(VcpuManagerError::VcpuResize(
-                VcpuResizeError::Vcpu0CanNotBeRemoved
-            ))
-        ));
+        assert!(matches!(res, Err(VcpuResizeError::Vcpu0CanNotBeRemoved)));
     }
 }

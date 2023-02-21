@@ -89,7 +89,7 @@ merge-builds:
 	$(MK_DIR)/kata-deploy-merge-builds.sh build
 
 install-tarball:
-	tar -xvf ./kata-static.tar.xz -C /
+	tar -xf ./kata-static.tar.xz -C /
 
 cc-payload: cc-tarball
 	$(MK_DIR)kata-deploy-build-and-upload-payload.sh $(CURDIR)/kata-static.tar.xz

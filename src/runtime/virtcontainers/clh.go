@@ -80,7 +80,6 @@ const (
 	clhAPISocket                           = "clh-api.sock"
 	virtioFsSocket                         = "virtiofsd.sock"
 	defaultClhPath                         = "/usr/local/bin/cloud-hypervisor"
-	virtioFsCacheAlways                    = "always"
 )
 
 // Interface that hides the implementation of openAPI client
@@ -504,10 +503,9 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs), int32(clh.config.DefaultMaxVCPUs))
 
-	// First take the default parameters defined by this driver
-	params := commonNvdimmKernelRootParams
-	if clh.config.ConfidentialGuest {
-		params = commonVirtioblkKernelRootParams
+	params, err := GetKernelRootParams(hypervisorConfig.RootfsType, clh.config.ConfidentialGuest, false)
+	if err != nil {
+		return err
 	}
 	params = append(params, clhKernelParams...)
 
@@ -649,11 +647,8 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 // StartVM will start the VMM and boot the virtual machine for the given sandbox.
 func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
-	span, _ := katatrace.Trace(ctx, clh.Logger(), "StartVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
+	span, ctx := katatrace.Trace(ctx, clh.Logger(), "StartVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
-
-	ctx, cancel := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
-	defer cancel()
 
 	clh.Logger().WithField("function", "StartVM").Info("starting Sandbox")
 
@@ -692,6 +687,9 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 		return fmt.Errorf("failed to launch cloud-hypervisor: %q", err)
 	}
 	clh.state.PID = pid
+
+	ctx, cancel := context.WithTimeout(ctx, clh.getClhAPITimeout()*time.Second)
+	defer cancel()
 
 	if err := clh.bootVM(ctx); err != nil {
 		return err

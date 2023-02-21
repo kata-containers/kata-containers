@@ -589,7 +589,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 
 	s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver,
 		sandboxConfig.HypervisorConfig.EnableVhostUserStore,
-		sandboxConfig.HypervisorConfig.VhostUserStorePath, nil)
+		sandboxConfig.HypervisorConfig.VhostUserStorePath, sandboxConfig.HypervisorConfig.VhostUserDeviceReconnect, nil)
 
 	// Create the sandbox resource controllers.
 	if err := s.createResourceController(); err != nil {

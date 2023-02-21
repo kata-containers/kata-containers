@@ -18,6 +18,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// DefaultResourceControllerID runtime-determined location in the cgroups hierarchy.
+const DefaultResourceControllerID = "/vc"
+
 // ValidCgroupPathV1 returns a valid cgroup path for cgroup v1.
 // see https://github.com/opencontainers/runtime-spec/blob/master/config-linux.md#cgroups-path
 func ValidCgroupPathV1(path string, systemdCgroup bool) (string, error) {
@@ -138,6 +141,16 @@ func getSliceAndUnit(cgroupPath string) (string, string, error) {
 	}
 
 	return "", "", fmt.Errorf("Path: %s is not valid systemd's cgroups path", cgroupPath)
+}
+
+func IsCgroupV1() (bool, error) {
+	if cgroups.Mode() == cgroups.Legacy || cgroups.Mode() == cgroups.Hybrid {
+		return true, nil
+	} else if cgroups.Mode() == cgroups.Unified {
+		return false, nil
+	} else {
+		return false, ErrCgroupMode
+	}
 }
 
 func SetThreadAffinity(threadID int, cpuSetSlice []int) error {

@@ -13,6 +13,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/../../scripts/lib.sh"
 
 readonly kernel_builder="${repo_root_dir}/tools/packaging/kernel/build-kernel.sh"
+VMM_CONFIGS="qemu fc"
 
 GO_VERSION=${GO_VERSION}
 RUST_VERSION=${RUST_VERSION}

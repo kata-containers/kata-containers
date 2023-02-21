@@ -211,9 +211,9 @@ type RuntimeConfigOptions struct {
 	DefaultGuestHookPath string
 	KernelPath           string
 	ImagePath            string
+	RootfsType           string
 	KernelParams         string
 	MachineType          string
-	ShimPath             string
 	LogPath              string
 	BlockDeviceDriver    string
 	BlockDeviceAIO       string
@@ -236,7 +236,6 @@ type RuntimeConfigOptions struct {
 	HypervisorDebug      bool
 	RuntimeDebug         bool
 	RuntimeTrace         bool
-	ShimDebug            bool
 	AgentDebug           bool
 	AgentTrace           bool
 	EnablePprof          bool
@@ -309,6 +308,7 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	block_device_aio =  "` + config.BlockDeviceAIO + `"
 	kernel_params = "` + config.KernelParams + `"
 	image = "` + config.ImagePath + `"
+	rootfs_type = "` + config.RootfsType + `"
 	machine_type = "` + config.MachineType + `"
 	default_vcpus = ` + strconv.FormatUint(uint64(config.DefaultVCPUCount), 10) + `
 	default_maxvcpus = ` + strconv.FormatUint(uint64(config.DefaultMaxVCPUCount), 10) + `
@@ -322,10 +322,6 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	guest_hook_path = "` + config.DefaultGuestHookPath + `"
 	shared_fs = "` + config.SharedFS + `"
 	virtio_fs_daemon = "` + config.VirtioFSDaemon + `"
-
-	[shim.kata]
-	path = "` + config.ShimPath + `"
-	enable_debug = ` + strconv.FormatBool(config.ShimDebug) + `
 
 	[agent.kata]
 	enable_debug = ` + strconv.FormatBool(config.AgentDebug) + `

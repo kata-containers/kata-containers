@@ -84,6 +84,7 @@ type hypervisor struct {
 	CtlPath                        string   `toml:"ctlpath"`
 	Initrd                         string   `toml:"initrd"`
 	Image                          string   `toml:"image"`
+	RootfsType                     string   `toml:"rootfs_type"`
 	Firmware                       string   `toml:"firmware"`
 	FirmwareVolume                 string   `toml:"firmware_volume"`
 	MachineAccelerators            string   `toml:"machine_accelerators"`
@@ -146,6 +147,7 @@ type hypervisor struct {
 	BlockDeviceCacheDirect         bool     `toml:"block_device_cache_direct"`
 	BlockDeviceCacheNoflush        bool     `toml:"block_device_cache_noflush"`
 	EnableVhostUserStore           bool     `toml:"enable_vhost_user_store"`
+	VhostUserDeviceReconnect       uint32   `toml:"vhost_user_reconnect_timeout_sec"`
 	DisableBlockDeviceUse          bool     `toml:"disable_block_device_use"`
 	MemPrealloc                    bool     `toml:"enable_mem_prealloc"`
 	HugePages                      bool     `toml:"enable_hugepages"`
@@ -270,6 +272,16 @@ func (h hypervisor) image() (string, error) {
 	}
 
 	return ResolvePath(p)
+}
+
+func (h hypervisor) rootfsType() (string, error) {
+	p := h.RootfsType
+
+	if p == "" {
+		p = "ext4"
+	}
+
+	return p, nil
 }
 
 func (h hypervisor) firmware() (string, error) {
@@ -666,6 +678,11 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
+	rootfsType, err := h.rootfsType()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	firmware, err := h.firmware()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
@@ -689,6 +706,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		KernelPath:            kernel,
 		InitrdPath:            initrd,
 		ImagePath:             image,
+		RootfsType:            rootfsType,
 		FirmwarePath:          firmware,
 		KernelParams:          vc.DeserializeParams(strings.Fields(kernelParams)),
 		NumVCPUs:              h.defaultVCPUs(),
@@ -732,6 +750,11 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	}
 
 	image, err := h.image()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	rootfsType, err := h.rootfsType()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
 	}
@@ -866,6 +889,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		SNPGuestPolicy:                h.getSnpGuestPolicy(),
 		SEVCertChainPath:              h.SEVCertChainPath,
 		DisableGuestSeLinux:           h.DisableGuestSeLinux,
+		RootfsType:                    rootfsType,
 	}, nil
 }
 
@@ -895,6 +919,11 @@ func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 			errors.New("image must be defined in the configuration file")
 	}
 
+	rootfsType, err := h.rootfsType()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	firmware, err := h.firmware()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
@@ -912,6 +941,7 @@ func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		HypervisorPathList:    h.HypervisorPathList,
 		KernelPath:            kernel,
 		ImagePath:             image,
+		RootfsType:            rootfsType,
 		HypervisorCtlPath:     hypervisorctl,
 		HypervisorCtlPathList: h.CtlPathList,
 		FirmwarePath:          firmware,
@@ -962,6 +992,11 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 			errors.New("image or initrd must be defined in the configuration file")
 	}
 
+	rootfsType, err := h.rootfsType()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	firmware, err := h.firmware()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
@@ -996,6 +1031,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		KernelPath:                     kernel,
 		InitrdPath:                     initrd,
 		ImagePath:                      image,
+		RootfsType:                     rootfsType,
 		FirmwarePath:                   firmware,
 		MachineAccelerators:            machineAccelerators,
 		KernelParams:                   vc.DeserializeParams(strings.Fields(kernelParams)),
@@ -1055,15 +1091,23 @@ func newDragonballHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	if err != nil {
 		return vc.HypervisorConfig{}, err
 	}
+
 	image, err := h.image()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
 	}
+
+	rootfsType, err := h.rootfsType()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	kernelParams := h.kernelParams()
 
 	return vc.HypervisorConfig{
 		KernelPath:      kernel,
 		ImagePath:       image,
+		RootfsType:      rootfsType,
 		KernelParams:    vc.DeserializeParams(strings.Fields(kernelParams)),
 		NumVCPUs:        h.defaultVCPUs(),
 		DefaultMaxVCPUs: h.defaultMaxVCPUs(),
@@ -1287,6 +1331,8 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		SEVGuestPolicy:                defaultSEVGuestPolicy,
 		SNPGuestPolicy:                defaultSNPGuestPolicy,
 		SEVCertChainPath:              defaultSEVCertChainPath,
+		VhostUserDeviceReconnect:      defaultVhostUserDeviceReconnect,
+		RootfsType:                    defaultRootfsType,
 	}
 }
 
