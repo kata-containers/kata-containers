@@ -310,16 +310,6 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 				File:           firmware,
 				FirmwareVolume: firmwareVolume,
 			}), "", nil
-	case sevProtection:
-		return append(devices,
-			govmmQemu.Object{
-				Type:            govmmQemu.SEVGuest,
-				ID:              "sev",
-				Debug:           false,
-				File:            firmware,
-				CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
-				ReducedPhysBits: 1,
-			}), "", nil
 	case snpProtection:
 		return append(devices,
 			govmmQemu.Object{
