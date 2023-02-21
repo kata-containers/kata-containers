@@ -231,7 +231,7 @@ where
                         info.config.check_conflicts(config)?;
                     }
                 }
-                self.info_list[index] = device_info;
+                self.info_list[index].config = config.clone();
                 index
             }
             None => {
