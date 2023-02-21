@@ -413,6 +413,7 @@ version = "0.1.0"
 dependencies = [
  "arc-swap",
  "bytes",
+ "crossbeam-channel",
  "dbs-address-space",
  "dbs-allocator",
  "dbs-arch",

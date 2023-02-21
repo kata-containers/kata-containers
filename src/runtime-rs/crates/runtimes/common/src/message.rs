@@ -17,11 +17,8 @@ pub enum Action {
     Start,
     Stop,
     Shutdown,
-    Event(Arc<dyn Event>),
+    Event(Arc<dyn Event + Send + Sync>),
 }
-
-unsafe impl Send for Message {}
-unsafe impl Sync for Message {}
 
 #[derive(Debug)]
 pub struct Message {
