@@ -5,10 +5,9 @@
 
 use anyhow::{anyhow, Result};
 use reqwest::Client;
+use serde::{Serialize, Deserialize};
 use tokio::time::{sleep, Duration};
-
 use tokio::io::{AsyncWriteExt};
-
 
 static EMPTY_JSON_INPUT: &str = "{\"input\":{}}";
 static ALLOWED_JSON_OUTPUT: &str = "{\"result\":true}";
@@ -25,6 +24,23 @@ macro_rules! sl {
     () => {
         slog_scope::logger()
     };
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SerializedFsGroup {
+    group_id: u32,
+    group_change_policy: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SerializedStorage {
+    driver: String,
+    driver_options: Vec<String>,
+    source: String,
+    fstype: String,
+    options: Vec<String>,
+    mount_point: String,
+    fs_group: SerializedFsGroup,
 }
 
 #[derive(Debug)]
@@ -77,14 +93,25 @@ impl AgentPolicy {
         ep: &str,
         req: &protocols::agent::CreateContainerRequest
     ) -> bool {
-        let oci_spec = Self::get_oci_spec(req);
+        let oci_spec = Self::get_container_oci_spec(req);
         if oci_spec.is_err() {
             return false;
         }
 
+        let storages = Self::get_container_storages(req);
+        if storages.is_err() {
+            return false;
+        }
+
         let post_input = format!(
-            "{{\"input\":{{\"oci\":{}}}}}",
-            oci_spec.unwrap());
+            "{{\"input\":
+                {{
+                    \"oci\":{},
+                    \"storages\":{}
+                }}
+            }}",
+            oci_spec.unwrap(),
+            storages.unwrap());
 
         return self.post_query(ep, &post_input).await
     }
@@ -200,7 +227,7 @@ impl AgentPolicy {
         self.post_query(ep, &post_input).await
     }
 
-    fn get_oci_spec(
+    fn get_container_oci_spec(
         req: &protocols::agent::CreateContainerRequest
     ) -> Result<String> {
         let grpc_spec = req.OCI.clone();
@@ -211,5 +238,31 @@ impl AgentPolicy {
             let rustjail_spec = rustjail::grpc_to_oci(&grpc_spec.unwrap());
             Ok(serde_json::to_string(&rustjail_spec)?)
         }
+    }
+
+    fn get_container_storages(
+        req: &protocols::agent::CreateContainerRequest
+    ) -> Result<String> {
+        let mut serialized_storages: Vec<SerializedStorage> = Vec::new();
+        let protocol_storages = req.storages.to_vec();
+
+        for protocol_storage in protocol_storages {
+            let protocol_fsgroup = protocol_storage.get_fs_group();
+
+            serialized_storages.push( SerializedStorage {
+                driver: protocol_storage.driver.clone(),
+                driver_options: protocol_storage.driver_options.to_vec(),
+                source: protocol_storage.source.clone(),
+                fstype: protocol_storage.fstype.clone(),
+                options: protocol_storage.options.to_vec(),
+                mount_point: protocol_storage.mount_point.clone(),
+                fs_group: SerializedFsGroup {
+                    group_id: protocol_fsgroup.group_id,
+                    group_change_policy: protocol_fsgroup.group_change_policy as u32,
+                }
+            });
+        }
+
+        serde_json::to_string(&serialized_storages).map_err(|e| anyhow!(e))
     }
 }
