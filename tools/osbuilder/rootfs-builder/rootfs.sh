@@ -656,11 +656,11 @@ EOF
 	touch "$dns_file"
 
     if [ -n "${AA_KBC}" ]; then
-		if [ "${AA_KBC}" == "offline_sev_kbc" ]; then
+		if [[ "${AA_KBC}" == *"offline_sev_kbc"* ]]; then
 			info "Adding agent config for ${AA_KBC}"
 			AA_KBC_PARAMS="offline_sev_kbc::null" envsubst < "${script_dir}/agent-config.toml.in" | tee "${ROOTFS_DIR}/etc/agent-config.toml"
 		fi
-		if [ "${AA_KBC}" == "online_sev_kbc" ]; then
+		if [[ "${AA_KBC}" == *"online_sev_kbc"* ]]; then
 			info "Adding agent config for ${AA_KBC}"
 			#KBC URI will be specified in the config file via kernel params
 			AA_KBC_PARAMS="online_sev_kbc::123.123.123.123:44444" envsubst < "${script_dir}/agent-config.toml.in" | tee "${ROOTFS_DIR}/etc/agent-config.toml"
@@ -675,7 +675,7 @@ EOF
 		git checkout FETCH_HEAD
 		source "${HOME}/.cargo/env"
 		target="${ARCH}-unknown-linux-${LIBC}"
-		if [ "${AA_KBC}" == "eaa_kbc" ] && [ "${ARCH}" == "x86_64" ]; then
+		if [[ "${AA_KBC}" == *"eaa_kbc"* ]] && [ "${ARCH}" == "x86_64" ]; then
 			RUSTFLAGS="-C link-args=-Wl,-rpath,/usr/local/lib/rats-tls"
 			# Currently eaa_kbc module only support this specific platform
 			target="x86_64-unknown-linux-gnu"

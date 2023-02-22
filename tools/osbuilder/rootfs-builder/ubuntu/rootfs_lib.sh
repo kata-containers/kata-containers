@@ -38,7 +38,7 @@ EOF
 		cp --remove-destination "$file" "$rootfs_dir$file"
 	done
 
-	if [ "${AA_KBC}" == "eaa_kbc" ] && [ "${ARCH}" == "x86_64" ]; then
+	if [[ "${AA_KBC}" == *"eaa_kbc"* ]] && [ "${ARCH}" == "x86_64" ]; then
 		source /etc/os-release
 
 		if [ "${VERSION_ID}" == "20.04" ]; then
