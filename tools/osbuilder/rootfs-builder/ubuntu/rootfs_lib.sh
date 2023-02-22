@@ -58,6 +58,23 @@ EOF
 		fi
 	fi
 
+	if [[ "${AA_KBC}" == *"cc_kbc"* ]] && [ "${ARCH}" == "x86_64" ]; then
+		source /etc/os-release
+
+		if [ "${VERSION_ID}" == "20.04" ]; then
+			curl -L https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key | chroot "${rootfs_dir}" apt-key add -
+			cat << EOF | chroot "$rootfs_dir"
+echo 'deb [arch=amd64] http://security.ubuntu.com/ubuntu focal-security main universe' | tee /etc/apt/sources.list.d/universe.list
+echo 'deb [arch=amd64] https://download.01.org/intel-sgx/sgx_repo/ubuntu focal main' | tee /etc/apt/sources.list.d/intel-sgx.list
+apt-get update
+apt-get install -y libtdx-attest
+EOF
+		else
+			echo "libtdx-attest is only provided for Ubuntu 20.04, there's yet no packages for Ubuntu ${VERSION_ID}"
+			exit 1
+		fi
+	fi
+
 	# Reduce image size and memory footprint by removing unnecessary files and directories.
 	rm -rf $rootfs_dir/usr/share/{bash-completion,bug,doc,info,lintian,locale,man,menu,misc,pixmaps,terminfo,zsh}
 }

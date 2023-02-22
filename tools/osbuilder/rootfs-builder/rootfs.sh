@@ -685,7 +685,8 @@ EOF
 		fi
 		export RUSTFLAGS
 		# Foreign CC is incompatible with libgit2 -- CC is still handled by `-C linker=...` flag
-		CC= cargo build --release --target "${target}" --no-default-features --features "${AA_KBC}"
+		# AA_KBC=cc_kbc: tdx-attest-sys build fails unless a value is provided for SGX_SDK
+		CC= SGX_SDK= cargo build --release --target "${target}" --no-default-features --features "${AA_KBC}"
 		install -D -o root -g root -m 0755 "target/${target}/release/attestation-agent" -t "${ROOTFS_DIR}/usr/local/bin/"
 		popd
 	fi

@@ -37,6 +37,21 @@ RUN echo 'deb [arch=amd64] http://mirrors.openanolis.cn/inclavare-containers/ubu
 	fi
 fi
 
+if [[ "${AA_KBC}" == *"cc_kbc"* ]] && [ "${ARCH}" == "x86_64" ]; then
+	if [ "${OS_VERSION}" == "focal" ] || [ "${OS_VERSION}" == "20.04" ]; then
+		PACKAGES+=" apt gnupg"
+		AA_KBC_EXTRAS+="
+RUN curl -L https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key | apt-key add - ; \
+    echo 'deb [arch=amd64] https://download.01.org/intel-sgx/sgx_repo/ubuntu focal main' | tee /etc/apt/sources.list.d/intel-sgx.list ; \
+    apt-get update \&\& \
+    apt-get install -y libtdx-attest-dev libclang-dev
+"
+	else
+		echo "libtdx-attest-dev is only provided for Ubuntu 20.04; not for ${OS_VERSION}"
+		exit 1
+	fi
+fi
+
 if [ "$(uname -m)" != "$ARCH" ]; then
 	case "$ARCH" in
 		ppc64le) cc_arch=powerpc64le;;
