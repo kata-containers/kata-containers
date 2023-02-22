@@ -77,19 +77,16 @@ impl AgentPolicy {
         ep: &str,
         req: &protocols::agent::CreateContainerRequest
     ) -> bool {
-        match Self::get_oci_spec(req) {
-            Err(_) => {
-                return false
-            },
-            Ok(spec_str) => {
-                let post_input = format!(
-                    "{{\"input\":{{\"oci\":{}}}}}",
-                    spec_str);
-
-                return self.post_query(ep, &post_input).await
-            }
+        let oci_spec = Self::get_oci_spec(req);
+        if oci_spec.is_err() {
+            return false;
         }
 
+        let post_input = format!(
+            "{{\"input\":{{\"oci\":{}}}}}",
+            oci_spec.unwrap());
+
+        return self.post_query(ep, &post_input).await
     }
 
     async fn log_string(s: &[u8], f: &str) {
