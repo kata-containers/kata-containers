@@ -277,7 +277,7 @@ install_cc_image() {
 }
 
 install_cc_sev_image() {
-	AA_KBC="online_sev_kbc"
+	AA_KBC="online_sev_kbc cc_kbc"
 	image_type="initrd"
 	install_cc_image "${AA_KBC}" "${image_type}" "sev"
 }
