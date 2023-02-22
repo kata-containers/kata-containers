@@ -77,27 +77,19 @@ impl AgentPolicy {
         ep: &str,
         req: &protocols::agent::CreateContainerRequest
     ) -> bool {
-        // Send container's OCI spec in json format as input data for OPA.
-        let mut oci_spec = req.OCI.clone();
+        match Self::get_oci_spec(req) {
+            Err(_) => {
+                return false
+            },
+            Ok(spec_str) => {
+                let post_input = format!(
+                    "{{\"input\":{{\"oci\":{}}}}}",
+                    spec_str);
 
-        let spec = match oci_spec.as_mut() {
-            Some(s) => rustjail::grpc_to_oci(s),
-            None => {
-                error!(sl!(), "no oci spec in the create container request!");
-                return false;
+                return self.post_query(ep, &post_input).await
             }
-        };
-
-        if let Ok(spec_str) = serde_json::to_string(&spec) {
-            let post_input = format!(
-                "{{\"input\":{{\"oci\":{}}}}}",
-                spec_str);
-
-            self.post_query(ep, &post_input).await
-        } else {
-            error!(sl!(), "log_oci_spec: failed to convert oci spec to json string");
-            false
         }
+
     }
 
     async fn log_string(s: &[u8], f: &str) {
@@ -209,5 +201,18 @@ impl AgentPolicy {
             req.image);
 
         self.post_query(ep, &post_input).await
+    }
+
+    fn get_oci_spec(
+        req: &protocols::agent::CreateContainerRequest
+    ) -> Result<String> {
+        let grpc_spec = req.OCI.clone();
+
+        if grpc_spec.is_none() {
+            Err(anyhow!("no oci spec in the create container request!"))
+        } else {
+            let rustjail_spec = rustjail::grpc_to_oci(&grpc_spec.unwrap());
+            Ok(serde_json::to_string(&rustjail_spec)?)
+        }
     }
 }
