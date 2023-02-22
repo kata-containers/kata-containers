@@ -20,3 +20,6 @@ tokio = { version = "1.25.0", features = ["sync", "rt"] }
 # being used. This version is used to pin the CH config structure
 # which is relatively static.
 api_client = { git = "https://github.com/cloud-hypervisor/cloud-hypervisor", crate = "api_client", tag = "v27.0" }
+
+kata-types = { path = "../../../../libs/kata-types"}
+nix = "0.26.2"
