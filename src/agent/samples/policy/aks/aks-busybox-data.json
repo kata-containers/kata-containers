@@ -371,6 +371,16 @@
                         ]
                     },
                     {
+                        "destination": "/my-volume",
+                        "type": "bind",
+                        "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-my-volume$",
+                        "options": [
+                            "rbind",
+                            "rprivate",
+                            "rw"
+                        ]
+                    },
+                    {
                         "destination": "/etc/hosts",
                         "type": "bind",
                         "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-hosts$",

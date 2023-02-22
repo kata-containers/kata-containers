@@ -87,8 +87,7 @@ impl AgentPolicy {
         self.post_query(ep, EMPTY_JSON_INPUT).await
     }
 
-    // Post query with CreateContainerRequest input data to OPA.
-    pub async fn is_allowed_create_container_endpoint(
+    pub async fn is_allowed_create_container(
         &mut self,
         ep: &str,
         req: &protocols::agent::CreateContainerRequest
@@ -111,6 +110,27 @@ impl AgentPolicy {
                 }}
             }}",
             oci_spec.unwrap(),
+            storages.unwrap());
+
+        return self.post_query(ep, &post_input).await
+    }
+
+    pub async fn is_allowed_create_sandbox(
+        &mut self,
+        ep: &str,
+        req: &protocols::agent::CreateSandboxRequest
+    ) -> bool {
+        let storages = Self::get_sandbox_storages(req);
+        if storages.is_err() {
+            return false;
+        }
+
+        let post_input = format!(
+            "{{\"input\":
+                {{
+                    \"storages\":{}
+                }}
+            }}",
             storages.unwrap());
 
         return self.post_query(ep, &post_input).await
@@ -242,6 +262,32 @@ impl AgentPolicy {
 
     fn get_container_storages(
         req: &protocols::agent::CreateContainerRequest
+    ) -> Result<String> {
+        let mut serialized_storages: Vec<SerializedStorage> = Vec::new();
+        let protocol_storages = req.storages.to_vec();
+
+        for protocol_storage in protocol_storages {
+            let protocol_fsgroup = protocol_storage.get_fs_group();
+
+            serialized_storages.push( SerializedStorage {
+                driver: protocol_storage.driver.clone(),
+                driver_options: protocol_storage.driver_options.to_vec(),
+                source: protocol_storage.source.clone(),
+                fstype: protocol_storage.fstype.clone(),
+                options: protocol_storage.options.to_vec(),
+                mount_point: protocol_storage.mount_point.clone(),
+                fs_group: SerializedFsGroup {
+                    group_id: protocol_fsgroup.group_id,
+                    group_change_policy: protocol_fsgroup.group_change_policy as u32,
+                }
+            });
+        }
+
+        serde_json::to_string(&serialized_storages).map_err(|e| anyhow!(e))
+    }
+
+    fn get_sandbox_storages(
+        req: &protocols::agent::CreateSandboxRequest
     ) -> Result<String> {
         let mut serialized_storages: Vec<SerializedStorage> = Vec::new();
         let protocol_storages = req.storages.to_vec();
