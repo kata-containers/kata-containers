@@ -650,6 +650,20 @@ func (h hypervisor) getIOMMUPlatform() bool {
 	return h.IOMMUPlatform
 }
 
+func (h hypervisor) getRemoteHypervisorSocket() string {
+	if h.RemoteHypervisorSocket == "" {
+		return defaultRemoteHypervisorSocket
+	}
+	return h.RemoteHypervisorSocket
+}
+
+func (h hypervisor) getRemoteHypervisorTimeout() uint32 {
+	if h.RemoteHypervisorTimeout == 0 {
+		return defaultRemoteHypervisorTimeout
+	}
+	return h.RemoteHypervisorTimeout
+}
+
 func (a agent) debugConsoleEnabled() bool {
 	return a.DebugConsoleEnabled
 }
@@ -1248,9 +1262,9 @@ func newStratovirtHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 func newRemoteHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 
 	return vc.HypervisorConfig{
-		RemoteHypervisorSocket:  h.RemoteHypervisorSocket,
-		RemoteHypervisorTimeout: h.RemoteHypervisorTimeout,
-		DisableGuestSeLinux:     h.DisableGuestSeLinux,
+		RemoteHypervisorSocket:  h.getRemoteHypervisorSocket(),
+		RemoteHypervisorTimeout: h.getRemoteHypervisorTimeout(),
+		DisableGuestSeLinux:     true, // The remote hypervisor has a different guest, so Guest SELinux config doesn't work
 
 		// No valid value so avoid to append block device to list in kata_agent.appendDevices
 		BlockDeviceDriver: "dummy",

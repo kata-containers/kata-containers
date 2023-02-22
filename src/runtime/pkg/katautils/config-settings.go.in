@@ -110,3 +110,6 @@ var defaultRuntimeConfiguration = "@CONFIG_PATH@"
 
 const defaultHotPlugVFIO = config.NoPort
 const defaultColdPlugVFIO = config.NoPort
+
+const defaultRemoteHypervisorSocket = "/run/peerpod/hypervisor.sock"
+const defaultRemoteHypervisorTimeout = 600
