@@ -7,6 +7,7 @@ use anyhow::{anyhow, Result};
 use nix::mount::{self, MsFlags};
 use slog::Logger;
 use std::fs;
+use std::path;
 
 const KATA_GUEST_SANDBOX_DNS_FILE: &str = "/run/kata-containers/sandbox/resolv.conf";
 const GUEST_DNS_FILE: &str = "/etc/resolv.conf";
@@ -64,6 +65,12 @@ fn do_setup_guest_dns(logger: Logger, dns_list: Vec<String>, src: &str, dst: &st
         .map(|x| x.trim())
         .collect::<Vec<&str>>()
         .join("\n");
+
+    // make sure the src file's parent path exist.
+    let file_path = path::Path::new(src);
+    if let Some(p) = file_path.parent() {
+        fs::create_dir_all(p)?;
+    }
     fs::write(src, content)?;
 
     // bind mount to /etc/resolv.conf

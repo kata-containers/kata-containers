@@ -17,6 +17,8 @@ use super::Volume;
 use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
 use kata_types::mount;
 
+const SYS_MOUNT_PREFIX: [&str; 2] = ["/proc", "/sys"];
+
 // copy file to container's rootfs if filesystem sharing is not supported, otherwise
 // bind mount it in the shared directory.
 // Ignore /dev, directories and all other device files. We handle
@@ -229,6 +231,7 @@ impl Volume for ShareFsVolume {
 pub(crate) fn is_share_fs_volume(m: &oci::Mount) -> bool {
     (m.r#type == "bind" || m.r#type == mount::KATA_EPHEMERAL_VOLUME_TYPE)
         && !is_host_device(&m.destination)
+        && !is_system_mount(&m.source)
 }
 
 fn is_host_device(dest: &str) -> bool {
@@ -252,6 +255,20 @@ fn is_host_device(dest: &str) -> bool {
     false
 }
 
+// Skip mounting certain system paths("/sys/*", "/proc/*")
+// from source on the host side into the container as it does not
+// make sense to do so.
+// Agent will support this kind of bind mount.
+fn is_system_mount(src: &str) -> bool {
+    for p in SYS_MOUNT_PREFIX {
+        let sub_dir_p = format!("{}/", p);
+        if src == p || src.contains(sub_dir_p.as_str()) {
+            return true;
+        }
+    }
+    false
+}
+
 // Note, don't generate random name, attaching rafs depends on the predictable name.
 pub fn generate_mount_path(id: &str, file_name: &str) -> String {
     let mut nid = String::from(id);
@@ -264,4 +281,24 @@ pub fn generate_mount_path(id: &str, file_name: &str) -> String {
     uid = String::from(uid_vec[0]);
 
     format!("{}-{}-{}", nid, uid, file_name)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_is_system_mount() {
+        let sys_dir = "/sys";
+        let proc_dir = "/proc";
+        let sys_sub_dir = "/sys/fs/cgroup";
+        let proc_sub_dir = "/proc/cgroups";
+        let not_sys_dir = "/root";
+
+        assert!(is_system_mount(sys_dir));
+        assert!(is_system_mount(proc_dir));
+        assert!(is_system_mount(sys_sub_dir));
+        assert!(is_system_mount(proc_sub_dir));
+        assert!(!is_system_mount(not_sys_dir));
+    }
 }

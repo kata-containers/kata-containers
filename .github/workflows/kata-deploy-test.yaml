@@ -67,7 +67,7 @@ jobs:
                 ref="refs/pull/${{ github.event.inputs.pr }}/merge"
             fi
             echo "reference for PR: " ${ref} "event:" ${{ github.event_name }}
-            echo "##[set-output name=pr-ref;]${ref}"
+            echo "pr-ref=${ref}" >> $GITHUB_OUTPUT
       - uses: actions/checkout@v2
         with:
           ref: ${{ steps.get-PR-ref.outputs.pr-ref }}
@@ -107,7 +107,7 @@ jobs:
                 ref="refs/pull/${{ github.event.inputs.pr }}/merge"
             fi
             echo "reference for PR: " ${ref} "event:" ${{ github.event_name }}
-            echo "##[set-output name=pr-ref;]${ref}"
+            echo "pr-ref=${ref}" >> $GITHUB_OUTPUT
       - uses: actions/checkout@v2
         with:
           ref: ${{ steps.get-PR-ref.outputs.pr-ref }}
@@ -138,7 +138,7 @@ jobs:
                 ref="refs/pull/${{ github.event.inputs.pr }}/merge"
             fi
             echo "reference for PR: " ${ref} "event:" ${{ github.event_name }}
-            echo "##[set-output name=pr-ref;]${ref}"
+            echo "pr-ref=${ref}" >> $GITHUB_OUTPUT
       - uses: actions/checkout@v2
         with:
           ref: ${{ steps.get-PR-ref.outputs.pr-ref }}
@@ -156,7 +156,7 @@ jobs:
           docker push quay.io/kata-containers/kata-deploy-ci:$PR_SHA
           mkdir -p packaging/kata-deploy
           ln -s $GITHUB_WORKSPACE/tools/packaging/kata-deploy/action packaging/kata-deploy/action
-          echo "::set-output name=PKG_SHA::${PR_SHA}"
+          echo "PKG_SHA=${PR_SHA}" >> $GITHUB_OUTPUT
       - name: test-kata-deploy-ci-in-aks
         uses: ./packaging/kata-deploy/action
         with:

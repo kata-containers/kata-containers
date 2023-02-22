@@ -104,7 +104,7 @@ pub enum StartMicroVmError {
 
     /// Upcall is not ready
     #[error("the upcall client is not ready")]
-    UpcallNotReady,
+    UpcallServerNotReady,
 
     /// Configuration passed in is invalidate.
     #[error("invalid virtual machine configuration: {0} ")]

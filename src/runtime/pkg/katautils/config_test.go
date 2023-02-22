@@ -74,6 +74,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	kernelPath := path.Join(dir, "kernel")
 	kernelParams := "foo=bar xyz"
 	imagePath := path.Join(dir, "image")
+	rootfsType := "ext4"
 	logDir := path.Join(dir, "logs")
 	logPath := path.Join(logDir, "runtime.log")
 	machineType := "machineType"
@@ -94,6 +95,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		HypervisorPath:       hypervisorPath,
 		KernelPath:           kernelPath,
 		ImagePath:            imagePath,
+		RootfsType:           rootfsType,
 		KernelParams:         kernelParams,
 		MachineType:          machineType,
 		LogPath:              logPath,
@@ -153,6 +155,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		HypervisorPath:        hypervisorPath,
 		KernelPath:            kernelPath,
 		ImagePath:             imagePath,
+		RootfsType:            rootfsType,
 		KernelParams:          vc.DeserializeParams(strings.Fields(kernelParams)),
 		HypervisorMachineType: machineType,
 		NumVCPUs:              defaultVCPUCount,
@@ -543,6 +546,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		KernelPath:            defaultKernelPath,
 		ImagePath:             defaultImagePath,
 		InitrdPath:            defaultInitrdPath,
+		RootfsType:            defaultRootfsType,
 		HypervisorMachineType: defaultMachineType,
 		NumVCPUs:              defaultVCPUCount,
 		DefaultMaxVCPUs:       defaultMaxVCPUCount,

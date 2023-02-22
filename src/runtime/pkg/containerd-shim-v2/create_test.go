@@ -320,7 +320,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 	kernelPath := path.Join(dir, "kernel")
 	kernelParams := "foo=bar xyz"
 	imagePath := path.Join(dir, "image")
-	shimPath := path.Join(dir, "shim")
+	rootfsType := "ext4"
 	logDir := path.Join(dir, "logs")
 	logPath := path.Join(logDir, "runtime.log")
 	machineType := "machineType"
@@ -338,9 +338,9 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 		HypervisorPath:       hypervisorPath,
 		KernelPath:           kernelPath,
 		ImagePath:            imagePath,
+		RootfsType:           rootfsType,
 		KernelParams:         kernelParams,
 		MachineType:          machineType,
-		ShimPath:             shimPath,
 		LogPath:              logPath,
 		DisableBlock:         disableBlockDevice,
 		BlockDeviceDriver:    blockDeviceDriver,
@@ -360,7 +360,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 		return "", err
 	}
 
-	files := []string{hypervisorPath, kernelPath, imagePath, shimPath}
+	files := []string{hypervisorPath, kernelPath, imagePath}
 
 	for _, file := range files {
 		// create the resource (which must be >0 bytes)

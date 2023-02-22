@@ -6,7 +6,10 @@
 
 use anyhow::{anyhow, Result};
 
-use crate::{VM_ROOTFS_DRIVER_BLK, VM_ROOTFS_DRIVER_PMEM};
+use crate::{
+    VM_ROOTFS_DRIVER_BLK, VM_ROOTFS_DRIVER_PMEM, VM_ROOTFS_FILESYSTEM_EROFS,
+    VM_ROOTFS_FILESYSTEM_EXT4, VM_ROOTFS_FILESYSTEM_XFS, VM_ROOTFS_ROOT_BLK, VM_ROOTFS_ROOT_PMEM,
+};
 use kata_types::config::LOG_VPORT_OPTION;
 
 // Port where the agent will send the logs. Logs are sent through the vsock in cases
@@ -67,43 +70,49 @@ impl KernelParams {
         Self { params }
     }
 
-    pub(crate) fn new_rootfs_kernel_params(rootfs_driver: &str) -> Self {
-        let params = match rootfs_driver {
-            VM_ROOTFS_DRIVER_BLK => {
-                vec![
-                    Param {
-                        key: "root".to_string(),
-                        value: "/dev/vda1".to_string(),
-                    },
-                    Param {
-                        key: "rootflags".to_string(),
-                        value: "data=ordered,errors=remount-ro ro".to_string(),
-                    },
-                    Param {
-                        key: "rootfstype".to_string(),
-                        value: "ext4".to_string(),
-                    },
-                ]
-            }
+    pub(crate) fn new_rootfs_kernel_params(rootfs_driver: &str, rootfs_type: &str) -> Result<Self> {
+        let mut params = vec![];
+
+        match rootfs_driver {
             VM_ROOTFS_DRIVER_PMEM => {
-                vec![
-                    Param {
-                        key: "root".to_string(),
-                        value: "/dev/pmem0p1".to_string(),
-                    },
-                    Param {
-                        key: "rootflags".to_string(),
-                        value: "data=ordered,errors=remount-ro,dax ro".to_string(),
-                    },
-                    Param {
-                        key: "rootfstype".to_string(),
-                        value: "ext4".to_string(),
-                    },
-                ]
+                params.push(Param::new("root", VM_ROOTFS_ROOT_PMEM));
+                match rootfs_type {
+                    VM_ROOTFS_FILESYSTEM_EXT4 | VM_ROOTFS_FILESYSTEM_XFS => {
+                        params.push(Param::new(
+                            "rootflags",
+                            "dax,data=ordered,errors=remount-ro ro",
+                        ));
+                    }
+                    VM_ROOTFS_FILESYSTEM_EROFS => {
+                        params.push(Param::new("rootflags", "dax ro"));
+                    }
+                    _ => {
+                        return Err(anyhow!("Unsupported rootfs type"));
+                    }
+                }
             }
-            _ => vec![],
-        };
-        Self { params }
+            VM_ROOTFS_DRIVER_BLK => {
+                params.push(Param::new("root", VM_ROOTFS_ROOT_BLK));
+                match rootfs_type {
+                    VM_ROOTFS_FILESYSTEM_EXT4 | VM_ROOTFS_FILESYSTEM_XFS => {
+                        params.push(Param::new("rootflags", "data=ordered,errors=remount-ro ro"));
+                    }
+                    VM_ROOTFS_FILESYSTEM_EROFS => {
+                        params.push(Param::new("rootflags", "ro"));
+                    }
+                    _ => {
+                        return Err(anyhow!("Unsupported rootfs type"));
+                    }
+                }
+            }
+            _ => {
+                return Err(anyhow!("Unsupported rootfs driver"));
+            }
+        }
+
+        params.push(Param::new("rootfstype", rootfs_type));
+
+        Ok(Self { params })
     }
 
     pub(crate) fn append(&mut self, params: &mut KernelParams) {
@@ -155,6 +164,12 @@ mod tests {
 
     use super::*;
 
+    use crate::{
+        VM_ROOTFS_DRIVER_BLK, VM_ROOTFS_DRIVER_PMEM, VM_ROOTFS_FILESYSTEM_EROFS,
+        VM_ROOTFS_FILESYSTEM_EXT4, VM_ROOTFS_FILESYSTEM_XFS, VM_ROOTFS_ROOT_BLK,
+        VM_ROOTFS_ROOT_PMEM,
+    };
+
     #[test]
     fn test_params() {
         let param1 = Param::new("", "");
@@ -189,5 +204,143 @@ mod tests {
         assert_eq!(kernel_params_string, expect_params_string);
 
         Ok(())
+    }
+
+    #[derive(Debug)]
+    struct TestData<'a> {
+        rootfs_driver: &'a str,
+        rootfs_type: &'a str,
+        expect_params: KernelParams,
+        result: Result<()>,
+    }
+
+    #[test]
+    fn test_rootfs_kernel_params() {
+        let tests = &[
+            // EXT4
+            TestData {
+                rootfs_driver: VM_ROOTFS_DRIVER_PMEM,
+                rootfs_type: VM_ROOTFS_FILESYSTEM_EXT4,
+                expect_params: KernelParams {
+                    params: [
+                        Param::new("root", VM_ROOTFS_ROOT_PMEM),
+                        Param::new("rootflags", "dax,data=ordered,errors=remount-ro ro"),
+                        Param::new("rootfstype", VM_ROOTFS_FILESYSTEM_EXT4),
+                    ]
+                    .to_vec(),
+                },
+                result: Ok(()),
+            },
+            TestData {
+                rootfs_driver: VM_ROOTFS_DRIVER_BLK,
+                rootfs_type: VM_ROOTFS_FILESYSTEM_EXT4,
+                expect_params: KernelParams {
+                    params: [
+                        Param::new("root", VM_ROOTFS_ROOT_BLK),
+                        Param::new("rootflags", "data=ordered,errors=remount-ro ro"),
+                        Param::new("rootfstype", VM_ROOTFS_FILESYSTEM_EXT4),
+                    ]
+                    .to_vec(),
+                },
+                result: Ok(()),
+            },
+            // XFS
+            TestData {
+                rootfs_driver: VM_ROOTFS_DRIVER_PMEM,
+                rootfs_type: VM_ROOTFS_FILESYSTEM_XFS,
+                expect_params: KernelParams {
+                    params: [
+                        Param::new("root", VM_ROOTFS_ROOT_PMEM),
+                        Param::new("rootflags", "dax,data=ordered,errors=remount-ro ro"),
+                        Param::new("rootfstype", VM_ROOTFS_FILESYSTEM_XFS),
+                    ]
+                    .to_vec(),
+                },
+                result: Ok(()),
+            },
+            TestData {
+                rootfs_driver: VM_ROOTFS_DRIVER_BLK,
+                rootfs_type: VM_ROOTFS_FILESYSTEM_XFS,
+                expect_params: KernelParams {
+                    params: [
+                        Param::new("root", VM_ROOTFS_ROOT_BLK),
+                        Param::new("rootflags", "data=ordered,errors=remount-ro ro"),
+                        Param::new("rootfstype", VM_ROOTFS_FILESYSTEM_XFS),
+                    ]
+                    .to_vec(),
+                },
+                result: Ok(()),
+            },
+            // EROFS
+            TestData {
+                rootfs_driver: VM_ROOTFS_DRIVER_PMEM,
+                rootfs_type: VM_ROOTFS_FILESYSTEM_EROFS,
+                expect_params: KernelParams {
+                    params: [
+                        Param::new("root", VM_ROOTFS_ROOT_PMEM),
+                        Param::new("rootflags", "dax ro"),
+                        Param::new("rootfstype", VM_ROOTFS_FILESYSTEM_EROFS),
+                    ]
+                    .to_vec(),
+                },
+                result: Ok(()),
+            },
+            TestData {
+                rootfs_driver: VM_ROOTFS_DRIVER_BLK,
+                rootfs_type: VM_ROOTFS_FILESYSTEM_EROFS,
+                expect_params: KernelParams {
+                    params: [
+                        Param::new("root", VM_ROOTFS_ROOT_BLK),
+                        Param::new("rootflags", "ro"),
+                        Param::new("rootfstype", VM_ROOTFS_FILESYSTEM_EROFS),
+                    ]
+                    .to_vec(),
+                },
+                result: Ok(()),
+            },
+            // Unsupported rootfs driver
+            TestData {
+                rootfs_driver: "foo",
+                rootfs_type: VM_ROOTFS_FILESYSTEM_EXT4,
+                expect_params: KernelParams {
+                    params: [
+                        Param::new("root", VM_ROOTFS_ROOT_BLK),
+                        Param::new("rootflags", "data=ordered,errors=remount-ro ro"),
+                        Param::new("rootfstype", VM_ROOTFS_FILESYSTEM_EXT4),
+                    ]
+                    .to_vec(),
+                },
+                result: Err(anyhow!("Unsupported rootfs driver")),
+            },
+            // Unsupported rootfs type
+            TestData {
+                rootfs_driver: VM_ROOTFS_DRIVER_BLK,
+                rootfs_type: "foo",
+                expect_params: KernelParams {
+                    params: [
+                        Param::new("root", VM_ROOTFS_ROOT_BLK),
+                        Param::new("rootflags", "data=ordered,errors=remount-ro ro"),
+                        Param::new("rootfstype", VM_ROOTFS_FILESYSTEM_EXT4),
+                    ]
+                    .to_vec(),
+                },
+                result: Err(anyhow!("Unsupported rootfs type")),
+            },
+        ];
+
+        for (i, t) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, t);
+            let result = KernelParams::new_rootfs_kernel_params(t.rootfs_driver, t.rootfs_type);
+            let msg = format!("{}, result: {:?}", msg, result);
+
+            if t.result.is_ok() {
+                assert!(result.is_ok(), "{}", msg);
+                assert_eq!(t.expect_params, result.unwrap());
+            } else {
+                let expected_error = format!("{}", t.result.as_ref().unwrap_err());
+                let actual_error = format!("{}", result.unwrap_err());
+                assert!(actual_error == expected_error, "{}", msg);
+            }
+        }
     }
 }

@@ -42,6 +42,7 @@ pub const MIN_SHARED_9PFS_SIZE_MB: u32 = 4 * 1024;
 pub const MAX_SHARED_9PFS_SIZE_MB: u32 = 8 * 1024 * 1024;
 
 pub const DEFAULT_GUEST_HOOK_PATH: &str = "/opt/kata/hooks";
+pub const DEFAULT_GUEST_DNS_FILE: &str = "/etc/resolv.conf";
 
 pub const DEFAULT_GUEST_VCPUS: u32 = 1;
 
@@ -67,3 +68,17 @@ pub const DEFAULT_QEMU_PCI_BRIDGES: u32 = 2;
 pub const MAX_QEMU_PCI_BRIDGES: u32 = 5;
 pub const MAX_QEMU_VCPUS: u32 = 256;
 pub const MIN_QEMU_MEMORY_SIZE_MB: u32 = 64;
+
+// Default configuration for Cloud Hypervisor (CH)
+pub const DEFAULT_CH_BINARY_PATH: &str = "/usr/bin/cloud-hypervisor";
+pub const DEFAULT_CH_CONTROL_PATH: &str = "";
+pub const DEFAULT_CH_ENTROPY_SOURCE: &str = "/dev/urandom";
+pub const DEFAULT_CH_GUEST_KERNEL_IMAGE: &str = "vmlinuz";
+pub const DEFAULT_CH_GUEST_KERNEL_PARAMS: &str = "";
+pub const DEFAULT_CH_FIRMWARE_PATH: &str = "";
+pub const DEFAULT_CH_MEMORY_SIZE_MB: u32 = 128;
+pub const DEFAULT_CH_MEMORY_SLOTS: u32 = 128;
+pub const DEFAULT_CH_PCI_BRIDGES: u32 = 2;
+pub const MAX_CH_PCI_BRIDGES: u32 = 5;
+pub const MAX_CH_VCPUS: u32 = 256;
+pub const MIN_CH_MEMORY_SIZE_MB: u32 = 64;

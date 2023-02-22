@@ -18,6 +18,12 @@ image = "@IMAGEPATH@"
 # initrd = "@INITRDPATH@"
 machine_type = "@MACHINETYPE@"
 
+# rootfs filesystem type:
+#   - ext4 (default)
+#   - xfs
+#   - erofs
+rootfs_type=@DEFROOTFSTYPE@
+
 # Enable confidential guest support.
 # Toggling that setting may trigger different hardware features, ranging
 # from memory encryption to both memory and CPU-state encryption and integrity.
@@ -325,6 +331,11 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 # The default if not set is empty (all annotations rejected.)
 # Your distribution recommends: @DEFVALIDVHOSTUSERSTOREPATHS@
 valid_vhost_user_store_paths = @DEFVALIDVHOSTUSERSTOREPATHS@
+
+# The timeout for reconnecting on non-server spdk sockets when the remote end goes away.
+# qemu will delay this many seconds and then attempt to reconnect.
+# Zero disables reconnecting, and the default is zero.
+vhost_user_reconnect_timeout_sec = 0
 
 # Enable file based guest memory support. The default is an empty string which
 # will disable this feature. In the case of virtio-fs, this is enabled

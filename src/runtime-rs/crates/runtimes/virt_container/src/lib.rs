@@ -25,12 +25,16 @@ use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use kata_types::config::{
     hypervisor::register_hypervisor_plugin, DragonballConfig, QemuConfig, TomlConfig,
 };
+
+#[cfg(feature = "cloud-hypervisor")]
+use hypervisor::ch::CloudHypervisor;
+#[cfg(feature = "cloud-hypervisor")]
+use kata_types::config::{hypervisor::HYPERVISOR_NAME_CH, CloudHypervisorConfig};
+
 use resource::ResourceManager;
 use sandbox::VIRTCONTAINER;
 use tokio::sync::mpsc::Sender;
 
-unsafe impl Send for VirtContainer {}
-unsafe impl Sync for VirtContainer {}
 pub struct VirtContainer {}
 
 #[async_trait]
@@ -39,8 +43,16 @@ impl RuntimeHandler for VirtContainer {
         // register
         let dragonball_config = Arc::new(DragonballConfig::new());
         register_hypervisor_plugin("dragonball", dragonball_config);
+
         let qemu_config = Arc::new(QemuConfig::new());
         register_hypervisor_plugin("qemu", qemu_config);
+
+        #[cfg(feature = "cloud-hypervisor")]
+        {
+            let ch_config = Arc::new(CloudHypervisorConfig::new());
+            register_hypervisor_plugin(HYPERVISOR_NAME_CH, ch_config);
+        }
+
         Ok(())
     }
 
@@ -116,6 +128,17 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
             hypervisor
                 .set_hypervisor_config(hypervisor_config.clone())
                 .await;
+            Ok(Arc::new(hypervisor))
+        }
+
+        #[cfg(feature = "cloud-hypervisor")]
+        HYPERVISOR_NAME_CH => {
+            let mut hypervisor = CloudHypervisor::new();
+
+            hypervisor
+                .set_hypervisor_config(hypervisor_config.clone())
+                .await;
+
             Ok(Arc::new(hypervisor))
         }
         _ => Err(anyhow!("Unsupported hypervisor {}", &hypervisor_name)),

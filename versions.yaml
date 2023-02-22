@@ -268,7 +268,7 @@ externals:
     uscan-url: >-
       https://github.com/opencontainers/runc/tags
       .*/v?(\d\S+)\.tar\.gz
-    version: "v1.1.0"
+    version: "v1.1.4"
 
   skopeo:
     description: "Utility for container images and image repositories"

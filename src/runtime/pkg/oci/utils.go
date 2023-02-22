@@ -481,6 +481,12 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.VhostUserDeviceReconnect).setUint(func(reconnect uint64) {
+		config.HypervisorConfig.VhostUserDeviceReconnect = uint32(reconnect)
+	}); err != nil {
+		return err
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.GuestHookPath]; ok {
 		if value != "" {
 			config.HypervisorConfig.GuestHookPath = value

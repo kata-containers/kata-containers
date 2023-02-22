@@ -53,6 +53,7 @@ func newClhConfig() (HypervisorConfig, error) {
 	return HypervisorConfig{
 		KernelPath:                    testClhKernelPath,
 		ImagePath:                     testClhImagePath,
+		RootfsType:                    string(EXT4),
 		HypervisorPath:                testClhPath,
 		NumVCPUs:                      defaultVCPUs,
 		BlockDeviceDriver:             config.VirtioBlock,
@@ -60,7 +61,7 @@ func newClhConfig() (HypervisorConfig, error) {
 		DefaultBridges:                defaultBridges,
 		DefaultMaxVCPUs:               uint32(64),
 		SharedFS:                      config.VirtioFS,
-		VirtioFSCache:                 virtioFsCacheAlways,
+		VirtioFSCache:                 typeVirtioFSCacheModeAlways,
 		VirtioFSDaemon:                testVirtiofsdPath,
 		NetRateLimiterBwMaxRate:       int64(0),
 		NetRateLimiterBwOneTimeBurst:  int64(0),

@@ -208,7 +208,7 @@ func TestAttachBlockDevice(t *testing.T) {
 }
 
 func TestAttachDetachDevice(t *testing.T) {
-	dm := NewDeviceManager(config.VirtioSCSI, false, "", nil)
+	dm := NewDeviceManager(config.VirtioSCSI, false, "", 0, nil)
 
 	path := "/dev/hda"
 	deviceInfo := config.DeviceInfo{

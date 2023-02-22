@@ -93,7 +93,6 @@ var (
 	type9pFs                     = "9p"
 	typeVirtioFS                 = "virtiofs"
 	typeOverlayFS                = "overlay"
-	typeVirtioFSNoCache          = "never"
 	kata9pDevType                = "9p"
 	kataMmioBlkDevType           = "mmioblk"
 	kataBlkDevType               = "blk"
@@ -816,7 +815,7 @@ func setupStorages(ctx context.Context, sandbox *Sandbox) []*grpc.Storage {
 			// directly map contents from the host. When set to 'never', the mount
 			// options should not contain 'dax' lest the virtio-fs daemon crashing
 			// with an invalid address reference.
-			if sandbox.config.HypervisorConfig.VirtioFSCache != typeVirtioFSNoCache {
+			if sandbox.config.HypervisorConfig.VirtioFSCache != typeVirtioFSCacheModeNever {
 				// If virtio_fs_cache_size = 0, dax should not be used.
 				if sandbox.config.HypervisorConfig.VirtioFSCacheSize != 0 {
 					sharedDirVirtioFSOptions = append(sharedDirVirtioFSOptions, sharedDirVirtioFSDaxOptions)

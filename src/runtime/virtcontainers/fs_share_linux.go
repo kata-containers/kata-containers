@@ -43,16 +43,16 @@ func NewFilesystemShare(s *Sandbox) (FilesystemSharer, error) {
 	}, nil
 }
 
-// Logger returns a logrus logger appropriate for logging Filesystem sharing messages
+// Logger returns a logrus logger appropriate for logging filesystem sharing messages
 func (f *FilesystemShare) Logger() *logrus.Entry {
 	return virtLog.WithFields(logrus.Fields{
-		"subsystem": "filesystem share",
+		"subsystem": "fs_share",
 		"sandbox":   f.sandbox.ID(),
 	})
 }
 
 func (f *FilesystemShare) prepareBindMounts(ctx context.Context) error {
-	span, ctx := katatrace.Trace(ctx, f.Logger(), "setupBindMounts", fsShareTracingTags)
+	span, ctx := katatrace.Trace(ctx, f.Logger(), "prepareBindMounts", fsShareTracingTags)
 	defer span.End()
 
 	var err error

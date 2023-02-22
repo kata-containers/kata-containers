@@ -94,25 +94,74 @@ var (
 // cores.
 var defaultMaxVCPUs = govmm.MaxVCPUs()
 
-// agnostic list of kernel root parameters for NVDIMM
-var commonNvdimmKernelRootParams = []Param{ //nolint: unused, deadcode, varcheck
-	{"root", "/dev/pmem0p1"},
-	{"rootflags", "dax,data=ordered,errors=remount-ro ro"},
-	{"rootfstype", "ext4"},
-}
+// RootfsDriver describes a rootfs driver.
+type RootfsDriver string
 
-// agnostic list of kernel root parameters for NVDIMM
-var commonNvdimmNoDAXKernelRootParams = []Param{ //nolint: unused, deadcode, varcheck
-	{"root", "/dev/pmem0p1"},
-	{"rootflags", "data=ordered,errors=remount-ro ro"},
-	{"rootfstype", "ext4"},
-}
+const (
+	// VirtioBlk is the Virtio-Blk rootfs driver.
+	VirtioBlk RootfsDriver = "/dev/vda1"
 
-// agnostic list of kernel root parameters for virtio-blk
-var commonVirtioblkKernelRootParams = []Param{ //nolint: unused, deadcode, varcheck
-	{"root", "/dev/vda1"},
-	{"rootflags", "data=ordered,errors=remount-ro ro"},
-	{"rootfstype", "ext4"},
+	// Nvdimm is the Nvdimm rootfs driver.
+	Nvdimm RootfsType = "/dev/pmem0p1"
+)
+
+// RootfsType describes a rootfs type.
+type RootfsType string
+
+const (
+	// EXT4 is the ext4 filesystem.
+	EXT4 RootfsType = "ext4"
+
+	// XFS is the xfs filesystem.
+	XFS RootfsType = "xfs"
+
+	// EROFS is the erofs filesystem.
+	EROFS RootfsType = "erofs"
+)
+
+func GetKernelRootParams(rootfstype string, disableNvdimm bool, dax bool) ([]Param, error) {
+	var kernelRootParams []Param
+
+	// EXT4 filesystem is used by default.
+	if rootfstype == "" {
+		rootfstype = string(EXT4)
+	}
+
+	if disableNvdimm && dax {
+		return []Param{}, fmt.Errorf("Virtio-Blk does not support DAX")
+	}
+
+	if disableNvdimm {
+		// Virtio-Blk
+		kernelRootParams = append(kernelRootParams, Param{"root", string(VirtioBlk)})
+	} else {
+		// Nvdimm
+		kernelRootParams = append(kernelRootParams, Param{"root", string(Nvdimm)})
+	}
+
+	switch RootfsType(rootfstype) {
+	case EROFS:
+		if dax {
+			kernelRootParams = append(kernelRootParams, Param{"rootflags", "dax ro"})
+		} else {
+			kernelRootParams = append(kernelRootParams, Param{"rootflags", "ro"})
+		}
+	case XFS:
+		fallthrough
+	// EXT4 filesystem is used by default.
+	case EXT4:
+		if dax {
+			kernelRootParams = append(kernelRootParams, Param{"rootflags", "dax,data=ordered,errors=remount-ro ro"})
+		} else {
+			kernelRootParams = append(kernelRootParams, Param{"rootflags", "data=ordered,errors=remount-ro ro"})
+		}
+	default:
+		return []Param{}, fmt.Errorf("unsupported rootfs type")
+	}
+
+	kernelRootParams = append(kernelRootParams, Param{"rootfstype", rootfstype})
+
+	return kernelRootParams, nil
 }
 
 // DeviceType describes a virtualized device type.
@@ -261,6 +310,7 @@ type Param struct {
 }
 
 // HypervisorConfig is the hypervisor configuration.
+// nolint: govet
 type HypervisorConfig struct {
 	customAssets                   map[types.AssetType]*types.Asset
 	SeccompSandbox                 string
@@ -316,6 +366,8 @@ type HypervisorConfig struct {
 	HypervisorParams               []Param
 	DiskRateLimiterBwOneTimeBurst  int64
 	DiskRateLimiterOpsMaxRate      int64
+	RootfsType                     string
+	VhostUserDeviceReconnect       uint32
 	DiskRateLimiterOpsOneTimeBurst int64
 	SGXEPCSize                     int64
 	DefaultMaxMemorySize           uint64

@@ -27,7 +27,6 @@ use std::{collections::HashSet, fs::create_dir_all, path::PathBuf};
 const DRAGONBALL_KERNEL: &str = "vmlinux";
 const DRAGONBALL_ROOT_FS: &str = "rootfs";
 
-unsafe impl Send for DragonballInner {}
 unsafe impl Sync for DragonballInner {}
 pub struct DragonballInner {
     /// sandbox id
@@ -101,7 +100,10 @@ impl DragonballInner {
 
         // get kernel params
         let mut kernel_params = KernelParams::new(self.config.debug_info.enable_debug);
-        kernel_params.append(&mut KernelParams::new_rootfs_kernel_params(&rootfs_driver));
+        kernel_params.append(&mut KernelParams::new_rootfs_kernel_params(
+            &rootfs_driver,
+            &self.config.boot_info.rootfs_type,
+        )?);
         kernel_params.append(&mut KernelParams::from_string(
             &self.config.boot_info.kernel_params,
         ));

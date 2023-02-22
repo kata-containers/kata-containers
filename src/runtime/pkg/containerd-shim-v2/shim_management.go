@@ -315,11 +315,11 @@ func GetSandboxesStoragePathRust() string {
 // SocketAddress returns the address of the unix domain socket for communicating with the
 // shim management endpoint
 func SocketAddress(id string) string {
-	socketAddress := fmt.Sprintf("unix://%s", filepath.Join(string(filepath.Separator), GetSandboxesStoragePath(), id, "shim-monitor.sock"))
-	_, err := os.Stat(socketAddress)
-	// if the path not exist, check the rust runtime path
-	if err != nil {
+	// get the go runtime uds path
+	socketPath := filepath.Join(string(filepath.Separator), GetSandboxesStoragePath(), id, "shim-monitor.sock")
+	// if the path not exist, use the rust runtime uds path instead
+	if _, err := os.Stat(socketPath); err != nil {
 		return fmt.Sprintf("unix://%s", filepath.Join(string(filepath.Separator), GetSandboxesStoragePathRust(), id, "shim-monitor.sock"))
 	}
-	return socketAddress
+	return fmt.Sprintf("unix://%s", socketPath)
 }

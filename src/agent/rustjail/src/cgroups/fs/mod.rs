@@ -694,17 +694,6 @@ fn get_cpuacct_stats(cg: &cgroups::Cgroup) -> SingularPtrField<CpuUsage> {
         });
     }
 
-    if cg.v2() {
-        return SingularPtrField::some(CpuUsage {
-            total_usage: 0,
-            percpu_usage: vec![],
-            usage_in_kernelmode: 0,
-            usage_in_usermode: 0,
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
-        });
-    }
-
     // try to get from cpu controller
     let cpu_controller: &CpuController = get_controller_or_return_singular_none!(cg);
     let stat = cpu_controller.cpu().stat;
@@ -735,7 +724,7 @@ fn get_memory_stats(cg: &cgroups::Cgroup) -> SingularPtrField<MemoryStats> {
     let value = memory.use_hierarchy;
     let use_hierarchy = value == 1;
 
-    // gte memory datas
+    // get memory data
     let usage = SingularPtrField::some(MemoryData {
         usage: memory.usage_in_bytes,
         max_usage: memory.max_usage_in_bytes,

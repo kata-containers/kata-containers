@@ -8,7 +8,7 @@ use crate::HypervisorConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
 pub struct HypervisorState {
     // Type of hypervisor, E.g. dragonball/qemu/firecracker/acrn.
     pub hypervisor_type: String,
