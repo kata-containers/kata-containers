@@ -8,7 +8,7 @@ use std::{sync::Arc, thread};
 
 use crate::resource_persist::ResourceState;
 use agent::{Agent, Storage};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
 use hypervisor::Hypervisor;
 use kata_types::config::TomlConfig;
@@ -233,8 +233,22 @@ impl ResourceManagerInner {
             .await
     }
 
-    pub async fn delete_cgroups(&self) -> Result<()> {
-        self.cgroups_resource.delete().await
+    pub async fn cleanup(&self) -> Result<()> {
+        // clean up cgroup
+        self.cgroups_resource
+            .delete()
+            .await
+            .context("delete cgroup")?;
+        // clean up share fs mount
+        if let Some(share_fs) = &self.share_fs {
+            share_fs
+                .get_share_fs_mount()
+                .cleanup(&self.sid)
+                .await
+                .context("failed to cleanup host path")?;
+        }
+        // TODO cleanup other resources
+        Ok(())
     }
 
     pub async fn dump(&self) {

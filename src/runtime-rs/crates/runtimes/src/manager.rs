@@ -185,7 +185,7 @@ impl RuntimeHandlerManager {
                     .await
                     .context("failed to restore the sandbox")?;
                 sandbox
-                    .cleanup(&inner.id)
+                    .cleanup()
                     .await
                     .context("failed to cleanup the resource")?;
             }
