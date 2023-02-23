@@ -10,7 +10,7 @@ use crate::hypervisor_persist::HypervisorState;
 use crate::Hypervisor;
 use crate::{HypervisorConfig, VcpuThreadIds};
 use inner::QemuInner;
-use kata_types::capabilities::Capabilities;
+use kata_types::capabilities::{Capabilities, CapabilityBits};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -135,5 +135,20 @@ impl Hypervisor for Qemu {
     async fn capabilities(&self) -> Result<Capabilities> {
         let inner = self.inner.read().await;
         inner.capabilities().await
+    }
+
+    async fn set_capabilities(&self, flag: CapabilityBits) {
+        let mut inner = self.inner.write().await;
+        inner.set_capabilities(flag)
+    }
+
+    async fn set_guest_memory_block_size(&self, size: u32) {
+        let mut inner = self.inner.write().await;
+        inner.set_guest_memory_block_size(size);
+    }
+
+    async fn guest_memory_block_size(&self) -> u32 {
+        let inner = self.inner.read().await;
+        inner.guest_memory_block_size_mb()
     }
 }
