@@ -68,6 +68,9 @@ pub struct DragonballInner {
 
     /// dragonball capabilities
     pub(crate) capabilities: Capabilities,
+
+    /// the size of memory block of guest OS
+    pub(crate) guest_memory_block_size_mb: u32,
 }
 
 impl DragonballInner {
@@ -92,6 +95,7 @@ impl DragonballInner {
             run_dir: "".to_string(),
             cached_block_devices: Default::default(),
             capabilities,
+            guest_memory_block_size_mb: 0,
         }
     }
 
@@ -346,6 +350,18 @@ impl DragonballInner {
     pub fn hypervisor_config(&self) -> HypervisorConfig {
         self.config.clone()
     }
+
+    pub(crate) fn set_capabilities(&mut self, flag: CapabilityBits) {
+        self.capabilities.add(flag);
+    }
+
+    pub(crate) fn set_guest_memory_block_size(&mut self, size: u32) {
+        self.guest_memory_block_size_mb = size;
+    }
+
+    pub(crate) fn get_guest_memory_block_size(&self) -> u32 {
+        self.guest_memory_block_size_mb
+    }
 }
 
 #[async_trait]
@@ -387,6 +403,7 @@ impl Persist for DragonballInner {
             pending_devices: vec![],
             cached_block_devices: hypervisor_state.cached_block_devices,
             capabilities: Capabilities::new(),
+            guest_memory_block_size_mb: 0,
         })
     }
 }
