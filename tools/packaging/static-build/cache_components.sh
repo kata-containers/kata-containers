@@ -45,6 +45,15 @@ cache_kernel_artifacts() {
 		[ "${TEE}" == "sev" ] && current_kernel_version="$(get_from_kata_deps "assets.kernel.${TEE}.version")"
 	fi
 	create_cache_asset "${kernel_tarball_name}" "${current_kernel_version}" "${current_kernel_image}"
+
+	if [ "${TEE}" == "sev" ]; then
+		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/cc-sev-kernel/builddir/kata-linux-${kernel_version#v}-${get_config_version}/lib/modules/${kernel_version#v}"
+		pushd "${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/"
+		tar cvfJ "kata-static-cc-sev-kernel-modules.tar.xz" "${module_dir}/kernel/drivers/virt/coco/efi_secret/"
+		popd
+		create_cache_asset "kata-static-cc-kernel-modules.tar.xz" "${current_kernel_version}" "${current_kernel_image}"
+	fi
+
 }
 
 cache_firmware_artifacts() {
@@ -92,6 +101,7 @@ cache_rootfs_artifacts() {
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
 	local rootfs_tarball_name="kata-static-cc-rootfs-image.tar.xz"
 	local aa_kbc="offline_fs_kbc"
+	local initramfs_last_commit=""
 	local image_type="image"
 	local root_hash_vanilla="${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt"
 	local root_hash_tdx=""
@@ -103,8 +113,14 @@ cache_rootfs_artifacts() {
 			root_hash_vanilla=""
 			root_hash_tdx="${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt"
 		fi
+		if [ "${TEE}" == "sev" ]; then
+			rootfs_tarball_name="kata-static-cc-sev-rootfs-initrd.tar.xz"
+			aa_kbc="online_sev_kbc"
+			image_type="initrd"
+			initramfs_last_commit="$(get_initramfs_image_name)"
+		fi
 	fi
-	local current_rootfs_version="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${rust_version}-${image_type}-${aa_kbc}"
+	local current_rootfs_version="${osbuilder_last_commit}-${guest_image_last_commit}-${initramfs_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${rust_version}-${image_type}-${aa_kbc}"
 	create_cache_asset "${rootfs_tarball_name}" "${current_rootfs_version}" "" "${root_hash_vanilla}" "${root_hash_tdx}"
 }
 

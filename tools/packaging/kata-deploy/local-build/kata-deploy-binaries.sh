@@ -237,14 +237,20 @@ install_cc_image() {
 	local component="rootfs-image"
 	local root_hash_vanilla="root_hash_vanilla.txt"
 	local root_hash_tdx=""
+	local initramfs_last_commit=""
 	if [ -n "${tee}" ]; then
+		jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-image-${tee}-cc-$(uname -m)/${cached_artifacts_path}"
 		if [ "${tee}" == "tdx" ]; then
-			jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-image-${tee}-cc-$(uname -m)/${cached_artifacts_path}"
 			component="${tee}-rootfs-image"
 			root_hash_vanilla=""
 			root_hash_tdx="root_hash_${tee}.txt"
 		fi
-	fi
+		if [ "${tee}" == "sev" ]; then
+			component="${tee}-rootfs-initrd"
+			root_hash_vanilla=""
+			initramfs_last_commit="$(get_initramfs_image_name)"
+		fi
+	fi	
 
 	local osbuilder_last_commit="$(echo $(get_last_modification "${repo_root_dir}/tools/osbuilder") | sed s/-dirty//)"
 	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
@@ -259,7 +265,7 @@ install_cc_image() {
 	install_cached_component \
 		"${component}" \
 		"${jenkins}" \
-		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${rust_version}-${image_type}-${AA_KBC}" \
+		"${osbuilder_last_commit}-${guest_image_last_commit}$-${initramfs_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${rust_version}-${image_type}-${AA_KBC}" \
 		"" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
@@ -388,24 +394,50 @@ install_cc_virtiofsd() {
 	sudo install -D --owner root --group root --mode 0744 virtiofsd/virtiofsd "${destdir}/${cc_prefix}/libexec/virtiofsd"
 }
 
-#Install CC kernel assert, with TEE support
-install_cc_tee_kernel() {
-	export KATA_BUILD_CC=yes
+# Install cached kernel compoenent
+install_cached_kernel_component() {
 	tee="${1}"
 	kernel_version="${2}"
+	module_dir="${3:-}"
 
-	[[ "${tee}" != "tdx" && "${tee}" != "sev" ]] && die "Non supported TEE"
-
-	export kernel_version=${kernel_version}
-
-	install_cached_component \
+	install_cached_compnent \
 		"kernel" \
 		"${jenkins_url}/job/kata-containers-2.0-kernel-${tee}-cc-$(uname -m)/${cached_artifacts_path}" \
 		"${kernel_version}" \
 		"$(get_kernel_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
-		&& return 0
+		|| return 1
+
+	[ "${tee}" == "tdx" ] && return 0
+
+	# SEV specific code path
+	install_cached_component \
+		"kernel-modules" \
+		"${jenkins_url}/job/kata-containers-2.0-kernel-sev-cc-$(uname -m)/${cached_artifacts_path}" \
+		"${kernel_version}" \
+		"$(get_kernel_image_name)" \
+		"kata-static-cc-sev-kernel-modules.tar.xz" \
+		"${workdir}/kata-static-cc-sev-kernel-modules.tar.xz" \
+	|| return 1
+		
+	tar xvf "${workdir}/kata-static-cc-sev-kernel-modules.tar.xz" -C  "${module_dir}" && return 0
+
+	return 1
+}
+
+#Install CC kernel assert, with TEE support
+install_cc_tee_kernel() {
+	export KATA_BUILD_CC=yes
+	tee="${1}"
+	kernel_version="${2}"
+	module_dir="${3:-}"
+
+	[[ "${tee}" != "tdx" && "${tee}" != "sev" ]] && die "Non supported TEE"
+
+	export kernel_version=${kernel_version}
+
+	install_cached_kernel_component "${tee}" "${kernel_version}" "${module_dir}" && return 0
 
 	info "build initramfs for TEE kernel"
 	"${initramfs_builder}"
