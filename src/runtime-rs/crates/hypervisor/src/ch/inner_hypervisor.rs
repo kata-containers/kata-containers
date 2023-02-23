@@ -741,6 +741,18 @@ impl CloudHypervisorInner {
     pub(crate) async fn get_hypervisor_metrics(&self) -> Result<String> {
         todo!()
     }
+
+    pub(crate) fn set_capabilities(&mut self, _flag: CapabilityBits) {
+        todo!()
+    }
+
+    pub(crate) fn set_guest_memory_block_size(&mut self, _size: u32) {
+        todo!()
+    }
+
+    pub(crate) fn guest_memory_block_size_mb(&self) -> u32 {
+        todo!()
+    }
 }
 
 // Log all output from the CH process until a shutdown signal is received.

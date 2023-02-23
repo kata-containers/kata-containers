@@ -19,6 +19,8 @@ pub enum CapabilityBits {
     FsSharingSupport,
     /// hypervisor supports hybrid-vsock
     HybridVsockSupport,
+    /// hypervisor supports memory hotplug probe interface
+    GuestMemoryHotplugProbe,
 }
 
 /// Capabilities describe a virtcontainers hypervisor capabilities through a bit mask.
@@ -47,17 +49,22 @@ impl Capabilities {
         self.flags = flags;
     }
 
-    /// is_block_device_supported tells if an hypervisor supports block devices.
+    /// add CapabilityBits
+    pub fn add(&mut self, flags: CapabilityBits) {
+        self.flags |= flags;
+    }
+
+    /// is_block_device_supported tells if the hypervisor supports block devices.
     pub fn is_block_device_supported(&self) -> bool {
         self.flags.and(CapabilityBits::BlockDeviceSupport) != 0
     }
 
-    /// is_block_device_hotplug_supported tells if an hypervisor supports block devices.
+    /// is_block_device_hotplug_supported tells if the hypervisor supports block devices.
     pub fn is_block_device_hotplug_supported(&self) -> bool {
         self.flags.and(CapabilityBits::BlockDeviceHotplugSupport) != 0
     }
 
-    /// is_multi_queue_supported tells if an hypervisor supports device multi queue support.
+    /// is_multi_queue_supported tells if the hypervisor supports device multi queue support.
     pub fn is_multi_queue_supported(&self) -> bool {
         self.flags.and(CapabilityBits::MultiQueueSupport) != 0
     }
@@ -70,6 +77,11 @@ impl Capabilities {
     /// is_fs_sharing_supported tells if an hypervisor supports host filesystem sharing.
     pub fn is_fs_sharing_supported(&self) -> bool {
         self.flags.and(CapabilityBits::FsSharingSupport) != 0
+    }
+
+    /// is_mem_hotplug_probe_supported tells if the hypervisor supports hotplug probe interface
+    pub fn is_mem_hotplug_probe_supported(&self) -> bool {
+        self.flags.and(CapabilityBits::GuestMemoryHotplugProbe) != 0
     }
 }
 
@@ -117,5 +129,9 @@ mod tests {
         // test set hybrid-vsock support
         cap.set(CapabilityBits::HybridVsockSupport);
         assert!(cap.is_hybrid_vsock_supported());
+        // test append capabilities
+        cap.add(CapabilityBits::GuestMemoryHotplugProbe);
+        assert!(cap.is_mem_hotplug_probe_supported());
+        assert!(cap.is_fs_sharing_supported());
     }
 }

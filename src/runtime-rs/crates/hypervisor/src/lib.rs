@@ -26,7 +26,7 @@ pub mod ch;
 use anyhow::Result;
 use async_trait::async_trait;
 use hypervisor_persist::HypervisorState;
-use kata_types::capabilities::Capabilities;
+use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 
 pub use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
@@ -103,4 +103,7 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     async fn save_state(&self) -> Result<HypervisorState>;
     async fn capabilities(&self) -> Result<Capabilities>;
     async fn get_hypervisor_metrics(&self) -> Result<String>;
+    async fn set_capabilities(&self, flag: CapabilityBits);
+    async fn set_guest_memory_block_size(&self, size: u32);
+    async fn guest_memory_block_size(&self) -> u32;
 }
