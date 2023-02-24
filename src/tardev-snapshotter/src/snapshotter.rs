@@ -22,7 +22,9 @@ impl Store {
 
     /// Creates a temporary staging directory for layers.
     fn staging_dir(&self) -> io::Result<tempfile::TempDir> {
-        tempfile::tempdir_in(self.root.join("staging"))
+        let path = self.root.join("staging");
+        fs::create_dir_all(&path)?;
+        tempfile::tempdir_in(path)
     }
 
     /// Creates the snapshot file path from its name.
