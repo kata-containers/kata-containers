@@ -1877,23 +1877,18 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
         ));
     }
 
-    let parent = path.parent();
-
-    let dir = if let Some(parent) = parent {
-        parent.to_path_buf()
-    } else {
-        PathBuf::from("/")
-    };
-
-    fs::create_dir_all(&dir).or_else(|e| {
-        if e.kind() != std::io::ErrorKind::AlreadyExists {
-            return Err(e);
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            let dir = parent.to_path_buf();
+            if let Err(e) = fs::create_dir_all(&dir) {
+                if e.kind() != std::io::ErrorKind::AlreadyExists {
+                    return Err(e.into());
+                }
+            } else {
+                std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(req.dir_mode))?;
+            }
         }
-
-        Ok(())
-    })?;
-
-    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(req.dir_mode))?;
+    }
 
     let mut tmpfile = path.clone();
     tmpfile.set_extension("tmp");
