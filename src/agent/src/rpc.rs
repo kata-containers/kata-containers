@@ -36,7 +36,7 @@ use protocols::health::{
 use protocols::types::Interface;
 use protocols::{agent_ttrpc_async as agent_ttrpc, health_ttrpc_async as health_ttrpc};
 use rustjail::cgroups::notifier;
-use rustjail::container::{BaseContainer, Container, LinuxContainer};
+use rustjail::container::{BaseContainer, Container, LinuxContainer, SYSTEMD_CGROUP_PATH_FORMAT};
 use rustjail::process::Process;
 use rustjail::specconv::CreateOpts;
 
@@ -210,9 +210,15 @@ impl AgentService {
         // restore the cwd for kata-agent process.
         defer!(unistd::chdir(&olddir).unwrap());
 
+        // determine which cgroup driver to take and then assign to use_systemd_cgroup
+        // systemd: "[slice]:[prefix]:[name]"
+        // fs: "/path_a/path_b"
+        let cgroups_path = oci.linux.as_ref().map_or("", |linux| &linux.cgroups_path);
+        let use_systemd_cgroup = SYSTEMD_CGROUP_PATH_FORMAT.is_match(cgroups_path);
+
         let opts = CreateOpts {
             cgroup_name: "".to_string(),
-            use_systemd_cgroup: false,
+            use_systemd_cgroup,
             no_pivot_root: s.no_pivot_root,
             no_new_keyring: false,
             spec: Some(oci.clone()),
