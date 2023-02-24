@@ -11,6 +11,7 @@ build_dbus() {
 build_rootfs() {
 	local rootfs_dir=$1
 	local multistrap_conf=multistrap.conf
+	local devicetable=devicetable.txt
 
 	[ -z "$rootfs_dir" ] && die "need rootfs"
 	[ "$rootfs_dir" = "/" ] && die "rootfs cannot be slash"
@@ -28,6 +29,17 @@ keyring=ubuntu-keyring
 suite=focal
 packages=$PACKAGES $EXTRA_PKGS
 EOF
+	cat > "$devicetable" <<EOF
+/dev	d	755	0	0	-	-	-	-	-
+/dev/null	c	640	0	0	1	3	0	0	-
+/dev/urandom	c	640	0	0	1	9	0	0	-
+EOF
+	mkdir -p "$rootfs_dir"
+	# Create /dev/null and /dev/urandom, which are needed by apt/dpkg
+	# during the multistrap process.
+	/usr/share/multistrap/device-table.pl --no-fakeroot -d "$rootfs_dir" -f $devicetable
+	ls -R "$rootfs_dir"
+
 	if ! multistrap -a "$DEB_ARCH" -d "$rootfs_dir" -f "$multistrap_conf"; then
 		build_dbus $rootfs_dir
 	fi
