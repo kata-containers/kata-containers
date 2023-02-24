@@ -249,6 +249,9 @@ func TestIsHostDevice(t *testing.T) {
 		{"/dev/zero", true},
 		{"/dev/block", true},
 		{"/mnt/dev/block", false},
+		{"/../dev", true},
+		{"/../dev/block", true},
+		{"/../mnt/dev/block", false},
 	}
 
 	for _, test := range tests {
