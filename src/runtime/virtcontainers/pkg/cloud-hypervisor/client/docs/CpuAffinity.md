@@ -4,14 +4,14 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Vcpu** | Pointer to **int32** |  | [optional] 
-**HostCpus** | Pointer to **[]int32** |  | [optional] 
+**Vcpu** | **int32** |  | 
+**HostCpus** | **[]int32** |  | 
 
 ## Methods
 
 ### NewCpuAffinity
 
-`func NewCpuAffinity() *CpuAffinity`
+`func NewCpuAffinity(vcpu int32, hostCpus []int32, ) *CpuAffinity`
 
 NewCpuAffinity instantiates a new CpuAffinity object
 This constructor will assign default values to properties that have it defined,
@@ -45,11 +45,6 @@ and a boolean to check if the value has been set.
 
 SetVcpu sets Vcpu field to given value.
 
-### HasVcpu
-
-`func (o *CpuAffinity) HasVcpu() bool`
-
-HasVcpu returns a boolean if a field has been set.
 
 ### GetHostCpus
 
@@ -70,11 +65,6 @@ and a boolean to check if the value has been set.
 
 SetHostCpus sets HostCpus field to given value.
 
-### HasHostCpus
-
-`func (o *CpuAffinity) HasHostCpus() bool`
-
-HasHostCpus returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
