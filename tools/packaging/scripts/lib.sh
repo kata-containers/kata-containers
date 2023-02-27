@@ -19,6 +19,9 @@ short_commit_length=10
 
 hub_bin="hub-bin"
 
+patches_path=""
+default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
+
 # Jenkins URL
 jenkins_url="http://jenkins.katacontainers.io"
 # Path where cached artifacts are found.
@@ -115,7 +118,7 @@ get_config_and_patches() {
 
 get_config_version() {
 	get_config_and_patches
-	config_version_file="${default_patches_dir}/../kata_config_version"
+	config_version_file="${repo_root_dir}/tools/packaging/kernel/kata_config_version"
 	if [ -f "${config_version_file}" ]; then
 		cat "${config_version_file}"
 	else

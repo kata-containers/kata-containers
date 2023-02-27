@@ -19,9 +19,6 @@ source "${packaging_root_dir}/scripts/lib.sh"
 
 readonly osbuilder_dir="$(cd "${repo_root_dir}/tools/osbuilder" && pwd)"
 
-patches_path=""
-readonly default_patches_dir="${packaging_root_dir}/kernel/patches"
-
 export GOPATH=${GOPATH:-${HOME}/go}
 
 final_image_name="kata-containers"

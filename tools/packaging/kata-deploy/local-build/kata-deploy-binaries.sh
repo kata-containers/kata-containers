@@ -239,13 +239,14 @@ install_cc_image() {
 	local root_hash_tdx=""
 	local initramfs_last_commit=""
 	if [ -n "${tee}" ]; then
-		jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-image-${tee}-cc-$(uname -m)/${cached_artifacts_path}"
 		if [ "${tee}" == "tdx" ]; then
+			jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-image-${tee}-cc-$(uname -m)/${cached_artifacts_path}"
 			component="${tee}-rootfs-image"
 			root_hash_vanilla=""
 			root_hash_tdx="root_hash_${tee}.txt"
 		fi
 		if [ "${tee}" == "sev" ]; then
+			jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-initrd-${tee}-cc-$(uname -m)/${cached_artifacts_path}"
 			component="${tee}-rootfs-initrd"
 			root_hash_vanilla=""
 			initramfs_last_commit="$(get_initramfs_image_name)"
@@ -265,7 +266,7 @@ install_cc_image() {
 	install_cached_component \
 		"${component}" \
 		"${jenkins}" \
-		"${osbuilder_last_commit}-${guest_image_last_commit}$-${initramfs_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${rust_version}-${image_type}-${AA_KBC}" \
+		"${osbuilder_last_commit}-${guest_image_last_commit}-${initramfs_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${rust_version}-${image_type}-${AA_KBC}" \
 		"" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
@@ -285,7 +286,7 @@ install_cc_image() {
 install_cc_sev_image() {
 	AA_KBC="online_sev_kbc"
 	image_type="initrd"
-	install_cc_image "${AA_KBC}" "${image_type}" "sev"
+	install_cc_image "${AA_KBC}" "${image_type}" "" "" "sev"
 }
 
 install_cc_tdx_image() {
@@ -400,7 +401,7 @@ install_cached_kernel_component() {
 	kernel_version="${2}"
 	module_dir="${3:-}"
 
-	install_cached_compnent \
+	install_cached_component \
 		"kernel" \
 		"${jenkins_url}/job/kata-containers-2.0-kernel-${tee}-cc-$(uname -m)/${cached_artifacts_path}" \
 		"${kernel_version}" \
@@ -453,7 +454,9 @@ install_cc_tdx_kernel() {
 
 install_cc_sev_kernel() {
 	kernel_version="$(yq r $versions_yaml assets.kernel.sev.version)"
-	install_cc_tee_kernel "sev" "${kernel_version}"
+	default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
+	module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/cc-sev-kernel/builddir/kata-linux-${kernel_version#v}-$(get_config_version)/lib/modules/${kernel_version#v}"
+	install_cc_tee_kernel "sev" "${kernel_version}" "${module_dir}"
 }
 
 install_cc_tee_qemu() {

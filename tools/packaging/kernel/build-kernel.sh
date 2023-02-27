@@ -24,8 +24,6 @@ download_kernel=false
 # The repository where kernel configuration lives
 readonly kernel_config_repo="github.com/${project_name}/kata-containers/tools/packaging"
 readonly patches_repo="github.com/${project_name}/kata-containers/tools/packaging"
-# Default path to search patches to apply to kernel
-readonly default_patches_dir="${script_dir}/patches"
 # Default path to search config for kata
 readonly default_kernel_config_dir="${script_dir}/configs"
 # Default path to search for kernel config fragments

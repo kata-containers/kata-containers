@@ -47,11 +47,9 @@ cache_kernel_artifacts() {
 	create_cache_asset "${kernel_tarball_name}" "${current_kernel_version}" "${current_kernel_image}"
 
 	if [ "${TEE}" == "sev" ]; then
-		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/cc-sev-kernel/builddir/kata-linux-${kernel_version#v}-${get_config_version}/lib/modules/${kernel_version#v}"
-		pushd "${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/"
-		tar cvfJ "kata-static-cc-sev-kernel-modules.tar.xz" "${module_dir}/kernel/drivers/virt/coco/efi_secret/"
-		popd
-		create_cache_asset "kata-static-cc-kernel-modules.tar.xz" "${current_kernel_version}" "${current_kernel_image}"
+		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/cc-sev-kernel/builddir/kata-linux-${current_kernel_version#v}-$(get_config_version)/lib/modules/${current_kernel_version#v}"
+		tar cvfJ "${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kata-static-cc-sev-kernel-modules.tar.xz" "${module_dir}/kernel/drivers/virt/coco/efi_secret/"
+		create_cache_asset "kata-static-cc-sev-kernel-modules.tar.xz" "${current_kernel_version}" "${current_kernel_image}"
 	fi
 
 }
@@ -114,6 +112,7 @@ cache_rootfs_artifacts() {
 			root_hash_tdx="${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt"
 		fi
 		if [ "${TEE}" == "sev" ]; then
+			root_hash_vanilla=""
 			rootfs_tarball_name="kata-static-cc-sev-rootfs-initrd.tar.xz"
 			aa_kbc="online_sev_kbc"
 			image_type="initrd"
