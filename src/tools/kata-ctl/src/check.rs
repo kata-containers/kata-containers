@@ -395,6 +395,7 @@ mod tests {
     use std::fs;
     use std::io::Write;
     use tempfile::tempdir;
+    use test_utils::skip_if_root;
 
     #[test]
     fn test_get_single_cpu_info() {
@@ -520,6 +521,16 @@ mod tests {
             let actual_error = format!("{}", result.unwrap_err());
             assert!(actual_error == expected_error, "{}", msg);
         }
+    }
+
+    #[test]
+    fn test_check_kvm_is_usable_generic() {
+        skip_if_root!();
+        #[allow(dead_code)]
+        let result = check_kvm_is_usable_generic();
+        assert!(
+            result.err().unwrap().to_string() == "Will not perform kvm checks as non root user"
+        );
     }
 
     #[test]
