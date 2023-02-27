@@ -374,7 +374,7 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
     //   2. If this is not a sandbox infrastructure container, but instead a standalone single container (analogous to "docker run..."),
     //	then the container spec itself will contain appropriate sizing information for the entire sandbox (since it is
     //	a single container.
-    if toml_config.runtime.static_resource_mgmt {
+    if toml_config.runtime.static_sandbox_resource_mgmt {
         info!(sl!(), "static resource management enabled");
         let static_resource_manager = StaticResourceManager::new(spec)
             .context("failed to construct static resource manager")?;
@@ -382,6 +382,7 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
             .setup_config(&mut toml_config)
             .context("failed to setup static resource mgmt config")?;
     }
+
     info!(sl!(), "get config content {:?}", &toml_config);
     Ok(toml_config)
 }
