@@ -10,7 +10,7 @@ use crate::HybridVsockConfig;
 use crate::VmmState;
 use anyhow::{anyhow, Context, Result};
 use ch_config::ch_api::cloud_hypervisor_vm_fs_add;
-use ch_config::{FsConfig, PmemConfig};
+use ch_config::FsConfig;
 use safe_path::scoped_join;
 use std::convert::TryFrom;
 use std::path::PathBuf;
@@ -147,41 +147,6 @@ impl CloudHypervisorInner {
         } else {
             Ok(None)
         }
-    }
-
-    pub(crate) async fn get_boot_file(&mut self) -> Result<PathBuf> {
-        if let Some(ref config) = self.config {
-            let boot_info = &config.boot_info;
-
-            let file = if !boot_info.initrd.is_empty() {
-                boot_info.initrd.clone()
-            } else if !boot_info.image.is_empty() {
-                boot_info.image.clone()
-            } else {
-                return Err(anyhow!("missing boot file (no image or initrd)"));
-            };
-
-            Ok(PathBuf::from(file))
-        } else {
-            Err(anyhow!("no hypervisor config"))
-        }
-    }
-
-    pub(crate) async fn get_pmem_devices(&mut self) -> Result<Option<Vec<PmemConfig>>> {
-        let file = self.get_boot_file().await?;
-
-        let pmem_cfg = PmemConfig {
-            file,
-            size: None,
-            iommu: false,
-            discard_writes: true,
-            id: None,
-            pci_segment: 0,
-        };
-
-        let pmem_devices = vec![pmem_cfg];
-
-        Ok(Some(pmem_devices))
     }
 }
 

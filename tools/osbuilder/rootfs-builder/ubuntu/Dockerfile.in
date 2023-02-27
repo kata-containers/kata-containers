@@ -6,6 +6,8 @@ ARG IMAGE_REGISTRY=docker.io
 FROM ${IMAGE_REGISTRY}/ubuntu:@OS_VERSION@
 @SET_PROXY@
 
+# makedev tries to mknod from postinst
+RUN [ -x /usr/bin/systemd-detect-virt ] || ( echo "echo docker" >/usr/bin/systemd-detect-virt && chmod +x /usr/bin/systemd-detect-virt )
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     apt-get --no-install-recommends -y install \
@@ -20,6 +22,7 @@ RUN apt-get update && \
          echo "gcc-$gcc_arch-linux-gnu libc6-dev-$libc_arch-cross")) \
     git \
     make \
+    makedev \
     multistrap \
     musl-tools \
     protobuf-compiler

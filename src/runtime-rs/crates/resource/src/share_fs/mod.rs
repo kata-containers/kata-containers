@@ -131,6 +131,8 @@ pub trait ShareFsMount: Send + Sync {
     async fn umount_volume(&self, file_name: &str) -> Result<()>;
     /// Umount the rootfs
     async fn umount_rootfs(&self, config: &ShareFsRootfsConfig) -> Result<()>;
+    /// Clean up share fs mount
+    async fn cleanup(&self, sid: &str) -> Result<()>;
 }
 
 pub fn new(id: &str, config: &SharedFsInfo) -> Result<Arc<dyn ShareFs>> {

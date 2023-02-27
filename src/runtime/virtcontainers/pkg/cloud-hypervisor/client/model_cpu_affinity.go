@@ -16,16 +16,18 @@ import (
 
 // CpuAffinity struct for CpuAffinity
 type CpuAffinity struct {
-	Vcpu     *int32   `json:"vcpu,omitempty"`
-	HostCpus *[]int32 `json:"host_cpus,omitempty"`
+	Vcpu     int32   `json:"vcpu"`
+	HostCpus []int32 `json:"host_cpus"`
 }
 
 // NewCpuAffinity instantiates a new CpuAffinity object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewCpuAffinity() *CpuAffinity {
+func NewCpuAffinity(vcpu int32, hostCpus []int32) *CpuAffinity {
 	this := CpuAffinity{}
+	this.Vcpu = vcpu
+	this.HostCpus = hostCpus
 	return &this
 }
 
@@ -37,76 +39,60 @@ func NewCpuAffinityWithDefaults() *CpuAffinity {
 	return &this
 }
 
-// GetVcpu returns the Vcpu field value if set, zero value otherwise.
+// GetVcpu returns the Vcpu field value
 func (o *CpuAffinity) GetVcpu() int32 {
-	if o == nil || o.Vcpu == nil {
+	if o == nil {
 		var ret int32
 		return ret
 	}
-	return *o.Vcpu
+
+	return o.Vcpu
 }
 
-// GetVcpuOk returns a tuple with the Vcpu field value if set, nil otherwise
+// GetVcpuOk returns a tuple with the Vcpu field value
 // and a boolean to check if the value has been set.
 func (o *CpuAffinity) GetVcpuOk() (*int32, bool) {
-	if o == nil || o.Vcpu == nil {
+	if o == nil {
 		return nil, false
 	}
-	return o.Vcpu, true
+	return &o.Vcpu, true
 }
 
-// HasVcpu returns a boolean if a field has been set.
-func (o *CpuAffinity) HasVcpu() bool {
-	if o != nil && o.Vcpu != nil {
-		return true
-	}
-
-	return false
-}
-
-// SetVcpu gets a reference to the given int32 and assigns it to the Vcpu field.
+// SetVcpu sets field value
 func (o *CpuAffinity) SetVcpu(v int32) {
-	o.Vcpu = &v
+	o.Vcpu = v
 }
 
-// GetHostCpus returns the HostCpus field value if set, zero value otherwise.
+// GetHostCpus returns the HostCpus field value
 func (o *CpuAffinity) GetHostCpus() []int32 {
-	if o == nil || o.HostCpus == nil {
+	if o == nil {
 		var ret []int32
 		return ret
 	}
-	return *o.HostCpus
+
+	return o.HostCpus
 }
 
-// GetHostCpusOk returns a tuple with the HostCpus field value if set, nil otherwise
+// GetHostCpusOk returns a tuple with the HostCpus field value
 // and a boolean to check if the value has been set.
 func (o *CpuAffinity) GetHostCpusOk() (*[]int32, bool) {
-	if o == nil || o.HostCpus == nil {
+	if o == nil {
 		return nil, false
 	}
-	return o.HostCpus, true
+	return &o.HostCpus, true
 }
 
-// HasHostCpus returns a boolean if a field has been set.
-func (o *CpuAffinity) HasHostCpus() bool {
-	if o != nil && o.HostCpus != nil {
-		return true
-	}
-
-	return false
-}
-
-// SetHostCpus gets a reference to the given []int32 and assigns it to the HostCpus field.
+// SetHostCpus sets field value
 func (o *CpuAffinity) SetHostCpus(v []int32) {
-	o.HostCpus = &v
+	o.HostCpus = v
 }
 
 func (o CpuAffinity) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
-	if o.Vcpu != nil {
+	if true {
 		toSerialize["vcpu"] = o.Vcpu
 	}
-	if o.HostCpus != nil {
+	if true {
 		toSerialize["host_cpus"] = o.HostCpus
 	}
 	return json.Marshal(toSerialize)
