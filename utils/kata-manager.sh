@@ -269,16 +269,20 @@ containerd_installed()
 
 pre_checks()
 {
+	local skip_containerd="${1:-}"
+
 	info "Running pre-checks"
 
 	command -v "${kata_shim_v2}" &>/dev/null \
 		&& die "Please remove existing $kata_project installation"
 
-	local ret
+	if [ "$skip_containerd" != "true" ]; then
+		local ret
 
-	{ containerd_installed; ret=$?; } || true
+		{ containerd_installed; ret=$?; } || true
 
-	[ "$ret" -eq 0 ] && die "$containerd_project already installed"
+		[ "$ret" -eq 0 ] && die "$containerd_project already installed"
+	fi
 
 	local cgroups_v2_only=$(only_supports_cgroups_v2 || true)
 
@@ -339,6 +343,9 @@ setup()
 	local force="${2:-}"
 	[ -z "$force" ] && die "no force value"
 
+	local only_kata="${3:-}"
+	[ -z "$only_kata" ] && die "no only_kata value"
+
 	[ "$cleanup" = "true" ] && trap cleanup EXIT
 
 	source /etc/os-release || source /usr/lib/os-release
@@ -348,7 +355,7 @@ setup()
 
 	[ "$force" = "true" ] && return 0
 
-	pre_checks
+	pre_checks "$only_kata"
 }
 
 # Download the requested version of the specified project.
@@ -713,7 +720,7 @@ handle_installation()
 
 	[ "$only_run_test" = "true" ] && test_installation && return 0
 
-	setup "$cleanup" "$force"
+	setup "$cleanup" "$force" "$only_kata"
 
 	handle_kata "$kata_version" "$enable_debug"
 
