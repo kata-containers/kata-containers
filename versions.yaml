@@ -191,8 +191,7 @@ externals:
   attestation-agent:
     description: "Provide attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/attestation-agent"
-    # v0.3.0-4-gc6cdff6
-    version: "c6cdff6dcd4f4ca45fa0fb7df439057d2dba15ea"
+    version: "v0.4.0"
 
   cni-plugins:
     description: "CNI network plugins"
@@ -312,8 +311,7 @@ externals:
   td-shim:
     description: "Confidential Containers Shim Firmware"
     url: "https://github.com/confidential-containers/td-shim"
-    # v0.3.0-32-g5fa81ef
-    version: "5fa81efa1e43c8005d6d8099b5c099125c17b4b0"
+    version: "v0.4.0"
     toolchain: "nightly-2022-11-15"
 
   virtiofsd:
