@@ -22,11 +22,6 @@ jobs:
           - virtiofsd
     steps:
       - uses: actions/checkout@v2
-      - name: Install docker
-        run: |
-          curl -fsSL https://test.docker.com -o test-docker.sh
-          sh test-docker.sh
-
       - name: Build ${{ matrix.asset }}
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-copy-yq-installer.sh
