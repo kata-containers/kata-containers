@@ -1,0 +1,13 @@
+[package]
+name = "verity"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "verity"
+path = "src/bin/verity.rs"
+
+[dependencies]
+sha2 = "0.10.6"
+generic-array = "0.14.6"
+zerocopy = "0.6.1"
