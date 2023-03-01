@@ -1887,7 +1887,7 @@ dependencies = [
 [[package]]
 name = "image-rs"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/image-rs?rev=948db858579be538724266a650e840e75e7e824d#948db858579be538724266a650e840e75e7e824d"
+source = "git+https://github.com/confidential-containers/image-rs?rev=v0.4.0#948db858579be538724266a650e840e75e7e824d"
 dependencies = [
  "anyhow",
  "async-compression",
