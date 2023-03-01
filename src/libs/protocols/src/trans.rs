@@ -973,30 +973,29 @@ impl From<crate::oci::Hook> for oci::Hook {
 
 impl From<crate::oci::Hooks> for oci::Hooks {
     fn from(mut from: crate::oci::Hooks) -> Self {
-        let mut prestart = Vec::new();
-        for hook in from.take_Prestart().to_vec() {
-            prestart.push(hook.into())
-        }
-        let mut create_runtime = Vec::new();
-        for hook in from.take_CreateRuntime().to_vec() {
-            create_runtime.push(hook.into())
-        }
-        let mut create_container = Vec::new();
-        for hook in from.take_CreateContainer().to_vec() {
-            create_container.push(hook.into())
-        }
-        let mut start_container = Vec::new();
-        for hook in from.take_StartContainer().to_vec() {
-            start_container.push(hook.into())
-        }
-        let mut poststart = Vec::new();
-        for hook in from.take_Poststart().to_vec() {
-            poststart.push(hook.into());
-        }
-        let mut poststop = Vec::new();
-        for hook in from.take_Poststop().to_vec() {
-            poststop.push(hook.into());
-        }
+        let prestart = from.take_Prestart().into_iter().map(|i| i.into()).collect();
+        let create_runtime = from
+            .take_CreateRuntime()
+            .into_iter()
+            .map(|i| i.into())
+            .collect();
+        let create_container = from
+            .take_CreateContainer()
+            .into_iter()
+            .map(|i| i.into())
+            .collect();
+        let start_container = from
+            .take_StartContainer()
+            .into_iter()
+            .map(|i| i.into())
+            .collect();
+        let poststart = from
+            .take_Poststart()
+            .into_iter()
+            .map(|i| i.into())
+            .collect();
+        let poststop = from.take_Poststop().into_iter().map(|i| i.into()).collect();
+
         oci::Hooks {
             prestart,
             create_runtime,
