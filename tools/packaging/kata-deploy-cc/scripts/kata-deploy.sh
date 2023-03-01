@@ -207,7 +207,8 @@ function remove_artifacts() {
 		/opt/confidential-containers/bin/kata-collect-data.sh \
 		/opt/confidential-containers/bin/qemu-system-x86_64 \
 		/opt/confidential-containers/bin/qemu-system-x86_64-tdx \
-		/opt/confidential-containers/bin/cloud-hypervisor
+		/opt/confidential-containers/bin/cloud-hypervisor \
+		/opt/confidential-containers/runtime-rs
 
 	# Try to remove the /opt/confidential-containers directory.
 	# If it's not empty, don't bother force removing it, as the
