@@ -1005,6 +1005,7 @@ pub mod tests {
         assert!(vm.remove_devices().is_ok());
     }
 
+    #[cfg(target_arch = "x86_64")]
     #[test]
     fn test_run_code() {
         skip_if_not_root!();
