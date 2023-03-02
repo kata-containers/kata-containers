@@ -5,6 +5,7 @@
 //
 
 mod endpoint;
+pub use endpoint::endpoint_persist::EndpointState;
 pub use endpoint::Endpoint;
 mod network_entity;
 mod network_info;
@@ -17,7 +18,7 @@ use network_with_netns::NetworkWithNetns;
 mod network_pair;
 use network_pair::NetworkPair;
 mod utils;
-pub use endpoint::endpoint_persist::EndpointState;
+pub use utils::netns::NetnsGuard;
 
 use std::sync::Arc;
 
