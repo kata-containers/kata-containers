@@ -20,8 +20,8 @@ IMAGE_TAG="${REGISTRY}:kata-containers-$(git rev-parse HEAD)-$(uname -m)"
 echo "Building the image"
 if [ "$(uname -m)" = "s390x" ]; then
 	docker build \
-		--build-arg IMG_NAME=clefos \
-		--build-arg IMG_TAG=7 \
+		--build-arg BASE_IMAGE_NAME=clefos \
+		--build-arg BASE_IMAGE_TAG=7 \
 		--tag ${IMAGE_TAG} .
 else
 	docker build --tag ${IMAGE_TAG} .
@@ -36,8 +36,8 @@ if [ -n "${TAG}" ]; then
 	echo "Building the ${ADDITIONAL_TAG} image"
 	if [ "$(uname -m)" = "s390x" ]; then
 		docker build \
-			--build-arg IMG_NAME=clefos \
-			--build-arg IMG_TAG=7 \
+			--build-arg BASE_IMAGE_NAME=clefos \
+			--build-arg BASE_IMAGE_TAG=7 \
 			--tag ${ADDITIONAL_TAG} .
 	else
 		docker build --tag ${ADDITIONAL_TAG} .
