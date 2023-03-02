@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-KATA_DEPLOY_DIR="`dirname ${0}`/../../kata-deploy-cc"
+KATA_DEPLOY_DIR="`dirname ${0}`/../../kata-deploy"
 KATA_DEPLOY_ARTIFACT="${1:-"kata-static.tar.xz"}"
 REGISTRY="${2:-"quay.io/kata-containers/kata-deploy"}"
 TAG="${3:-}"
