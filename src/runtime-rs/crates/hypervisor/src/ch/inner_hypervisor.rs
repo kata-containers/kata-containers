@@ -472,6 +472,10 @@ impl CloudHypervisorInner {
         Ok(Vec::<u32>::new())
     }
 
+    pub(crate) async fn get_vmm_master_tid(&self) -> Result<u32> {
+        todo!()
+    }
+
     pub(crate) async fn check(&self) -> Result<()> {
         Ok(())
     }
