@@ -18,14 +18,23 @@ pushd ${KATA_DEPLOY_DIR}
 IMAGE_TAG="${REGISTRY}:kata-containers-$(git rev-parse HEAD)-$(uname -m)"
 
 echo "Building the image"
-if [ "$(uname -m)" = "s390x" ]; then
-	docker build \
-		--build-arg BASE_IMAGE_NAME=clefos \
-		--build-arg BASE_IMAGE_TAG=7 \
-		--tag ${IMAGE_TAG} .
-else
-	docker build --tag ${IMAGE_TAG} .
-fi
+case $(uname -m) in
+	aarch64)
+		docker build \
+			--build-arg BASE_IMAGE_NAME=cdocker.io/library/centos \
+			--build-arg BASE_IMAGE_TAG=7 \
+			--tag ${IMAGE_TAG} .
+		;;
+	s390x)
+		docker build \
+			--build-arg BASE_IMAGE_NAME=docker.io/library/clefos \
+			--build-arg BASE_IMAGE_TAG=7 \
+			--tag ${IMAGE_TAG} .
+		;;
+	*)
+		docker build --tag ${IMAGE_TAG} .
+		;;
+esac
 
 echo "Pushing the image to quay.io"
 docker push ${IMAGE_TAG}
@@ -34,14 +43,24 @@ if [ -n "${TAG}" ]; then
 	ADDITIONAL_TAG="${REGISTRY}:${TAG}"
 
 	echo "Building the ${ADDITIONAL_TAG} image"
-	if [ "$(uname -m)" = "s390x" ]; then
-		docker build \
-			--build-arg BASE_IMAGE_NAME=clefos \
-			--build-arg BASE_IMAGE_TAG=7 \
-			--tag ${ADDITIONAL_TAG} .
-	else
-		docker build --tag ${ADDITIONAL_TAG} .
-	fi
+
+	case $(uname -m) in
+		aarch64)
+			docker build \
+				--build-arg BASE_IMAGE_NAME=docker.io/library/centos  \
+				--build-arg BASE_IMAGE_TAG=7 \
+				--tag ${ADDITIONAL_TAG} .
+			;;
+		s390x)
+			docker build \
+				--build-arg BASE_IMAGE_NAME=docker.io/library/clefos \
+				--build-arg BASE_IMAGE_TAG=7 \
+				--tag ${ADDITIONAL_TAG} .
+			;;
+		*)
+			docker build --tag ${ADDITIONAL_TAG} .
+			;;
+	esac
 
 	echo "Pushing the image ${ADDITIONAL_TAG} to quay.io"
 	docker push ${ADDITIONAL_TAG}
