@@ -29,12 +29,6 @@ jobs:
           - nydus
     steps:
       - uses: actions/checkout@v2
-      - name: Install docker
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-        run: |
-          curl -fsSL https://test.docker.com -o test-docker.sh
-          sh test-docker.sh
-
       - name: Build ${{ matrix.asset }}
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         run: |
