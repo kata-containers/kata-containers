@@ -200,20 +200,22 @@ impl ContainerInner {
             return Ok(());
         }
 
-        self.check_state(vec![ProcessStatus::Running])
+        self.check_state(vec![ProcessStatus::Running, ProcessStatus::Exited])
             .await
             .context("check state")?;
 
-        // if use force mode to stop container, stop always successful
-        // send kill signal to container
-        // ignore the error of sending signal, since the process would
-        // have been killed and exited yet.
-        self.signal_process(process, Signal::SIGKILL as u32, false)
-            .await
-            .map_err(|e| {
-                warn!(logger, "failed to signal kill. {:?}", e);
-            })
-            .ok();
+        if state == ProcessStatus::Running {
+            // if use force mode to stop container, stop always successful
+            // send kill signal to container
+            // ignore the error of sending signal, since the process would
+            // have been killed and exited yet.
+            self.signal_process(process, Signal::SIGKILL as u32, false)
+                .await
+                .map_err(|e| {
+                    warn!(logger, "failed to signal kill. {:?}", e);
+                })
+                .ok();
+        }
 
         match process.process_type {
             ProcessType::Container => self
