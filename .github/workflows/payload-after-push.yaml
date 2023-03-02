@@ -7,19 +7,19 @@ on:
 
 jobs:
   build-assets-amd64:
-    uses: ./.github/workflows/cc-payload-after-push-amd64.yaml
+    uses: ./.github/workflows/payload-after-push-amd64.yaml
     with:
       target-arch: amd64
     secrets: inherit
 
   build-assets-arm64:
-    uses: ./.github/workflows/cc-payload-after-push-arm64.yaml
+    uses: ./.github/workflows/payload-after-push-arm64.yaml
     with:
       target-arch: arm64
     secrets: inherit
 
   build-assets-s390x:
-    uses: ./.github/workflows/cc-payload-after-push-s390x.yaml
+    uses: ./.github/workflows/payload-after-push-s390x.yaml
     with:
       target-arch: s390x
     secrets: inherit
