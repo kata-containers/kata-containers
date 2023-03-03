@@ -19,6 +19,7 @@ struct tarfs_super {
 
 struct tarfs_state {
 	struct tarfs_super super;
+	u64 data_size;
 };
 
 struct tarfs_inode {
@@ -45,13 +46,20 @@ struct tarfs_direntry {
 static struct dentry *tarfs_lookup(struct inode *dir, struct dentry *dentry,
 				   unsigned int flags);
 
-static int tarfs_dev_read(struct super_block *sb, unsigned long pos,
-			  void *buf, size_t buflen)
+static int tarfs_dev_read(struct super_block *sb, u64 pos, void *buf, size_t buflen)
 {
-	/* TODO: Check against the device size here. */
 	struct buffer_head *bh;
 	unsigned long offset;
 	size_t segment;
+	const struct tarfs_state *state = sb->s_fs_info;
+
+	/* Check for overflows. */
+	if (pos + buflen < pos)
+		return -ERANGE;
+
+	/* Check that the read range is within the data part of the device. */
+	if (pos + buflen > state->data_size)
+		return -EIO;
 
 	while (buflen > 0) {
 		offset = pos & (TARFS_BSIZE - 1);
@@ -84,11 +92,18 @@ static int tarfs_readdir(struct file *file, struct dir_context *ctx)
 	if (ctx->pos % sizeof(struct tarfs_direntry))
 		return -ENOENT;
 
+	/* Make sure we can't overflow the read offset. */
+	if (offset + size < offset)
+		return -ERANGE;
+
+	/* Make the increment of cur won't overflow by limiting size. */
+	if (size >= U64_MAX - sizeof(disk_dentry))
+		return -ERANGE;
+
 	for (cur = ctx->pos; cur < size; cur += sizeof(disk_dentry)) {
 		u64 disk_len;
 		u8 type;
 
-		/* TODO: Check for overflow in `offset + cur`. */
 		ret = tarfs_dev_read(inode->i_sb, offset + cur, &disk_dentry, sizeof(disk_dentry));
 		if (ret)
 			break;
@@ -96,7 +111,10 @@ static int tarfs_readdir(struct file *file, struct dir_context *ctx)
 		disk_len = le64_to_cpu(disk_dentry.namelen);
 		if (disk_len > name_len) {
 			kfree(name_buffer);
-			/* TODO: Check that we don't clamp the allocation here.*/
+
+			if (disk_len > SIZE_MAX)
+				return -ENOMEM;
+
 			name_buffer = kmalloc(disk_len, GFP_KERNEL);
 			if (!name_buffer)
 				return -ENOMEM;
@@ -223,16 +241,25 @@ static struct inode *tarfs_iget(struct super_block *sb, u64 ino)
 	if (!(inode->i_state & I_NEW))
 		return inode;
 
-	/* TODO: Check that we don't overflow here? */
-	ret = tarfs_dev_read(sb, state->super.inode_table_offset + sizeof(struct tarfs_inode) * (ino - 1), &disk_inode, sizeof(disk_inode));
+	/*
+	 * The checks in tarfs_fill_super ensure that we don't overflow while trying to calculate
+	 * offset of the inode table entry as long as the inode number is less than inode_count.
+	 */
+	ret = tarfs_dev_read(sb,
+			state->super.inode_table_offset + sizeof(struct tarfs_inode) * (ino - 1),
+			&disk_inode, sizeof(disk_inode));
 	if (ret < 0)
 		goto discard;
 
 	offset = le64_to_cpu(disk_inode.offset);
-	/* TODO: Check that we don't have any extra bits we don't
-	 * recognise in mode.
-	 */
 	mode = le16_to_cpu(disk_inode.mode);
+
+	/* Ignore inodes that have unknown mode bits. */
+	if (mode & ~(S_IFMT | 0777)) {
+		ret = -ENOENT;
+		goto discard;
+	}
+
 	switch (mode & S_IFMT) {
 	case S_IFREG:
 		inode->i_fop = &generic_ro_fops;
@@ -321,17 +348,23 @@ static struct dentry *tarfs_lookup(struct inode *dir, struct dentry *dentry,
 	u64 size = i_size_read(dir);
 	u64 cur;
 
+	/* Make sure we can't overflow the read offset. */
+	if (offset + size < offset)
+		return ERR_PTR(-ERANGE);
+
+	/* Make the increment of cur won't overflow by limiting size. */
+	if (size >= U64_MAX - sizeof(disk_dentry))
+		return ERR_PTR(-ERANGE);
+
 	for (cur = 0; cur < size; cur += sizeof(disk_dentry)) {
 		u64 disk_len;
 
-		/* TODO: Ensure we don't overflow here. */
 		ret = tarfs_dev_read(dir->i_sb, offset + cur, &disk_dentry, sizeof(disk_dentry));
 		if (ret)
 			return ERR_PTR(ret);
 
 		disk_len = le64_to_cpu(disk_dentry.namelen);
-		/* TODO: Check the name is not too long. */
-		if (len != disk_len)
+		if (len != disk_len || disk_len > SIZE_MAX)
 			continue;
 
 		ret = tarfs_strcmp(dir->i_sb, le64_to_cpu(disk_dentry.nameoffset), name, len);
@@ -396,6 +429,7 @@ static int tarfs_fill_super(struct super_block *sb, struct fs_context *fc)
 	struct tarfs_state *state;
 	struct buffer_head *bh;
 	const struct tarfs_super *super;
+	u64 inode_table_end;
 
 	sb_set_blocksize(sb, TARFS_BSIZE);
 
@@ -430,12 +464,28 @@ static int tarfs_fill_super(struct super_block *sb, struct fs_context *fc)
 	state->super.inode_count = le64_to_cpu(super->inode_count);
 	state->super.inode_table_offset =
 		le64_to_cpu(super->inode_table_offset);
+	state->data_size = scount * SECTOR_SIZE;
 
 	brelse(bh);
 
-	/* TODO: Validate that offset is within bounds and that adding
-	 * all inodes also remains within bounds.
-	 */
+	/* Check that the inode table starts within the device data. */
+	if (state->super.inode_table_offset >= state->data_size)
+		return -E2BIG;
+
+	/* Check that we don't overflow while calculating the offset of the last inode. */
+	if (state->super.inode_count > U64_MAX / sizeof(struct tarfs_inode))
+		return -ERANGE;
+
+	/* Check that we don't overflow calculating the end of the inode table. */
+	inode_table_end = state->super.inode_count * sizeof(struct tarfs_inode) +
+		state->super.inode_table_offset;
+
+	if (inode_table_end < state->super.inode_table_offset)
+		return -ERANGE;
+
+	/* Check that the inode tanble ends within the device data. */
+	if (inode_table_end > state->data_size)
+		return -E2BIG;
 
 	root = tarfs_iget(sb, 1);
 	if (IS_ERR(root))
