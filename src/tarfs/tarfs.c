@@ -387,13 +387,15 @@ static struct dentry *tarfs_lookup(struct inode *dir, struct dentry *dentry,
 static int tarfs_statfs(struct dentry *dentry, struct kstatfs *buf)
 {
 	struct super_block *sb = dentry->d_sb;
+	const struct tarfs_state *state = sb->s_fs_info;
 	u64 id = huge_encode_dev(sb->s_bdev->bd_dev);
 
 	buf->f_type = TARFS_MAGIC;
-	buf->f_namelen = 260; /* TODO: Fix this. */
+	buf->f_namelen = LONG_MAX;
 	buf->f_bsize = TARFS_BSIZE;
-	buf->f_bfree = buf->f_bavail = buf->f_ffree;
-	buf->f_blocks = bdev_nr_sectors(sb->s_bdev);
+	buf->f_bfree = buf->f_bavail = buf->f_ffree = 0;
+	buf->f_blocks = state->super.inode_table_offset / TARFS_BSIZE;
+	buf->f_files = state->super.inode_count;
 	buf->f_fsid = u64_to_fsid(id);
 	return 0;
 }
@@ -442,7 +444,6 @@ static int tarfs_fill_super(struct super_block *sb, struct fs_context *fc)
 	sb->s_time_min = 0;
 	sb->s_time_max = 0;
 	sb->s_op = &super_ops;
-	sb->s_export_op = &tarfs_export_ops;
 
 	scount = bdev_nr_sectors(sb->s_bdev);
 	if (!scount)
@@ -470,6 +471,10 @@ static int tarfs_fill_super(struct super_block *sb, struct fs_context *fc)
 	state->data_size = scount * SECTOR_SIZE;
 
 	brelse(bh);
+
+	/* This is used to indicate to overlayfs when this superblock limits inodes to 32 bits. */
+	if (state->super.inode_count <= U32_MAX)
+		sb->s_export_op = &tarfs_export_ops;
 
 	/* Check that the inode table starts within the device data. */
 	if (state->super.inode_table_offset >= state->data_size)
