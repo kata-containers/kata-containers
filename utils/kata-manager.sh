@@ -638,6 +638,8 @@ test_installation()
 {
 	info "Testing $kata_project\n"
 
+	sudo kata-runtime check -v
+
 	local image="docker.io/library/busybox:latest"
 	sudo ctr image pull "$image"
 
