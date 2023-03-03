@@ -35,22 +35,22 @@ struct SuperBlock {
 }
 
 const S_IFMT: u16 = 0o0170000;
+const S_IFSOCK: u16 = 0o0140000;
 const S_IFLNK: u16 = 0o0120000;
 const S_IFREG: u16 = 0o0100000;
+const S_IFBLK: u16 = 0o0060000;
 const S_IFDIR: u16 = 0o0040000;
+const S_IFCHR: u16 = 0o0020000;
+const S_IFIFO: u16 = 0o0010000;
 
 const DT_UNKNOWN: u8 = 0;
+const DT_FIFO: u8 = 1;
+const DT_CHR: u8 = 2;
 const DT_DIR: u8 = 4;
+const DT_BLK: u8 = 6;
 const DT_REG: u8 = 8;
 const DT_LNK: u8 = 10;
-
-/*
-#define DT_FIFO		1
-#define DT_CHR		2
-#define DT_BLK		6
-#define DT_SOCK		12
-#define DT_WHT		14
-*/
+const DT_SOCK: u8 = 12;
 
 #[derive(Default)]
 struct Entry {
@@ -114,8 +114,6 @@ fn read_all_entries(
             continue;
         };
 
-        // TODO: For now we only accept symlinks, regular files and directories. Need to support
-        // more in the future.
         let entry_size;
         let entry_offset;
         match h.entry_type() {
@@ -128,6 +126,57 @@ fn read_all_entries(
                 mode |= S_IFDIR;
                 entry_size = 0;
                 entry_offset = 0;
+            }
+            tar::EntryType::Fifo => {
+                mode |= S_IFIFO;
+                entry_size = 0;
+                entry_offset = 0;
+            }
+            tar::EntryType::Char => {
+                mode |= S_IFCHR;
+                let major = if let Ok(Some(v)) = h.device_major() {
+                    v as u64
+                } else {
+                    eprintln!(
+                        "Skipping chr device without a major device number: {}",
+                        String::from_utf8_lossy(&f.path_bytes())
+                    );
+                    continue;
+                };
+                let minor = if let Ok(Some(v)) = h.device_minor() {
+                    v as u64
+                } else {
+                    eprintln!(
+                        "Skipping chr device without a minor device number: {}",
+                        String::from_utf8_lossy(&f.path_bytes())
+                    );
+                    continue;
+                };
+                entry_offset = minor | (major << 32);
+                entry_size = 0;
+            }
+            tar::EntryType::Block => {
+                mode |= S_IFBLK;
+                let major = if let Ok(Some(v)) = h.device_major() {
+                    v as u64
+                } else {
+                    eprintln!(
+                        "Skipping blk device without a major device number: {}",
+                        String::from_utf8_lossy(&f.path_bytes())
+                    );
+                    continue;
+                };
+                let minor = if let Ok(Some(v)) = h.device_minor() {
+                    v as u64
+                } else {
+                    eprintln!(
+                        "Skipping blk device without a minor device number: {}",
+                        String::from_utf8_lossy(&f.path_bytes())
+                    );
+                    continue;
+                };
+                entry_offset = minor | (major << 32);
+                entry_size = 0;
             }
             tar::EntryType::Symlink => {
                 mode |= S_IFLNK;
@@ -271,9 +320,13 @@ fn write_direntry_bodies(
                 name_offset: offset.into(),
                 name_len: (name.len() as u64).into(),
                 etype: match child.mode & S_IFMT {
-                    S_IFREG => DT_REG,
-                    S_IFDIR => DT_DIR,
+                    S_IFSOCK => DT_SOCK,
                     S_IFLNK => DT_LNK,
+                    S_IFREG => DT_REG,
+                    S_IFBLK => DT_BLK,
+                    S_IFDIR => DT_DIR,
+                    S_IFCHR => DT_CHR,
+                    S_IFIFO => DT_FIFO,
                     _ => DT_UNKNOWN,
                 },
                 _padding: [0; 7],
@@ -406,7 +459,7 @@ pub fn append_index(data: &mut (impl io::Read + io::Write + io::Seek)) -> io::Re
             group: e.group.into(),
             lmtime: (e.mtime as u32).into(),
             size: e.size.into(),
-            offset: e.offset.into(), // TODO: Handle the dev case and encode minor/major instead.
+            offset: e.offset.into(),
         };
         data.write_all(inode.as_bytes())?;
         Ok(())
