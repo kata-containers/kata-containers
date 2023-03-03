@@ -240,27 +240,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-stream"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dad5c83079eae9969be7fadefe640a1c566901f05ff91ab221de4b6f68d9507e"
-dependencies = [
- "async-stream-impl",
- "futures-core",
-]
-
-[[package]]
-name = "async-stream-impl"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10f203db73a71dfa2fb6dd22763990fa26f3d2625a6da2da900d23b87d26be27"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "async-task"
 version = "4.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -268,9 +247,9 @@ checksum = "7a40729d2133846d9ed0ea60a8b9541bccddab49cd30f0715a1da672fe9a2524"
 
 [[package]]
 name = "async-trait"
-version = "0.1.60"
+version = "0.1.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "677d1d8ab452a3936018a687b20e6f7cf5363d713b732b8884001317b0e48aa3"
+checksum = "b84f9ebcc6c1f5b8cb160f6990096a5c127f423fcb6e1ccc46c370cbdfb75dfc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -308,52 +287,6 @@ name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
-
-[[package]]
-name = "axum"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08b108ad2665fa3f6e6a517c3d80ec3e77d224c47d605167aefaa5d7ef97fa48"
-dependencies = [
- "async-trait",
- "axum-core",
- "bitflags",
- "bytes 1.3.0",
- "futures-util",
- "http",
- "http-body",
- "hyper",
- "itoa",
- "matchit",
- "memchr",
- "mime",
- "percent-encoding",
- "pin-project-lite",
- "rustversion",
- "serde",
- "sync_wrapper",
- "tower",
- "tower-http",
- "tower-layer",
- "tower-service",
-]
-
-[[package]]
-name = "axum-core"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79b8558f5a0581152dc94dcd289132a1d377494bdeafcd41869b3258e3e2ad92"
-dependencies = [
- "async-trait",
- "bytes 1.3.0",
- "futures-util",
- "http",
- "http-body",
- "mime",
- "rustversion",
- "tower-layer",
- "tower-service",
-]
 
 [[package]]
 name = "base64"
@@ -1768,12 +1701,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "http-range-header"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bfe8eed0a9285ef776bb792479ea3834e8b94e13d615c2f66d03dd50a435a29"
-
-[[package]]
 name = "httparse"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1807,18 +1734,6 @@ dependencies = [
  "tower-service",
  "tracing",
  "want",
-]
-
-[[package]]
-name = "hyper-timeout"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbb958482e8c7be4bc3cf272a766a2b0bf1a6755e7a6ae777f017a31d11b13b1"
-dependencies = [
- "hyper",
- "pin-project-lite",
- "tokio",
- "tokio-io-timeout",
 ]
 
 [[package]]
@@ -1887,23 +1802,25 @@ dependencies = [
 [[package]]
 name = "image-rs"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/image-rs?rev=v0.4.0#948db858579be538724266a650e840e75e7e824d"
+source = "git+https://github.com/confidential-containers/image-rs?rev=cc626a97a8225475d3a4c3c7490f6b212ca32466#cc626a97a8225475d3a4c3c7490f6b212ca32466"
 dependencies = [
  "anyhow",
  "async-compression",
  "async-trait",
  "base64",
+ "cfg-if 1.0.0",
  "flate2",
  "flume",
  "futures-util",
  "hex",
+ "lazy_static",
  "libc",
  "log",
  "nix 0.26.2",
  "oci-distribution",
  "oci-spec",
  "ocicrypt-rs",
- "prost 0.11.5",
+ "protobuf 3.2.0",
  "sequoia-openpgp",
  "serde",
  "serde_json",
@@ -1914,8 +1831,8 @@ dependencies = [
  "strum_macros",
  "tar",
  "tokio",
- "tonic",
- "tonic-build",
+ "ttrpc 0.7.1",
+ "ttrpc-codegen 0.4.1",
  "url",
  "walkdir",
  "zstd",
@@ -2099,7 +2016,7 @@ dependencies = [
  "opentelemetry",
  "procfs 0.12.0",
  "prometheus",
- "protobuf",
+ "protobuf 2.28.0",
  "protocols",
  "regex",
  "rtnetlink",
@@ -2121,7 +2038,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
- "ttrpc",
+ "ttrpc 0.6.1",
  "url",
  "vsock-exporter",
  "which",
@@ -2306,12 +2223,6 @@ checksum = "f099785f7595cc4b4553a174ce30dd7589ef93391ff414dbb67f62392b9e0ce1"
 dependencies = [
  "regex-automata",
 ]
-
-[[package]]
-name = "matchit"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b87248edafb776e59e6ee64a79086f65890d3510f2c656c000bf2a7e8a0aea40"
 
 [[package]]
 name = "md-5"
@@ -2707,9 +2618,9 @@ dependencies = [
 [[package]]
 name = "oci-distribution"
 version = "0.9.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ac5b780ce1bd6c3c2ff72a3013f4b2d56d53ae03b20d424e99d2f6556125138"
+source = "git+https://github.com/krustlet/oci-distribution.git?rev=f44124c#f44124c3c0875821d0b84a6632bf70b6d6eaf9ef"
 dependencies = [
+ "chrono",
  "futures",
  "futures-util",
  "http",
@@ -2745,10 +2656,11 @@ dependencies = [
 [[package]]
 name = "ocicrypt-rs"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/ocicrypt-rs?rev=453c699#453c699a50326c2f55c7a357e90b9da1535d7c26"
+source = "git+https://github.com/confidential-containers/ocicrypt-rs.git?rev=1053963#105396323715ea6787b2241c93ed87a3307dec2a"
 dependencies = [
  "aes 0.8.2",
  "anyhow",
+ "async-trait",
  "base64",
  "base64-serde",
  "ctr 0.9.2",
@@ -2757,12 +2669,12 @@ dependencies = [
  "lazy_static",
  "openssl",
  "pin-project-lite",
- "prost 0.11.5",
+ "protobuf 3.2.0",
  "serde",
  "serde_json",
  "sha2 0.10.6",
  "tokio",
- "tonic",
+ "ttrpc 0.7.1",
 ]
 
 [[package]]
@@ -3288,16 +3200,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
-name = "prettyplease"
-version = "0.1.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c8992a85d8e93a28bdf76137db888d3874e3b230dee5ed8bebac4c9f7617773"
-dependencies = [
- "proc-macro2",
- "syn",
-]
-
-[[package]]
 name = "proc-macro-crate"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3382,7 +3284,7 @@ dependencies = [
  "memchr",
  "parking_lot 0.12.1",
  "procfs 0.14.2",
- "protobuf",
+ "protobuf 2.28.0",
  "thiserror",
 ]
 
@@ -3393,17 +3295,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de5e2533f59d08fcf364fd374ebda0692a70bd6d7e66ef97f306f45c6c5d8020"
 dependencies = [
  "bytes 1.3.0",
- "prost-derive 0.8.0",
-]
-
-[[package]]
-name = "prost"
-version = "0.11.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c01db6702aa05baa3f57dec92b8eeeeb4cb19e894e73996b32a4093289e54592"
-dependencies = [
- "bytes 1.3.0",
- "prost-derive 0.11.5",
+ "prost-derive",
 ]
 
 [[package]]
@@ -3418,30 +3310,8 @@ dependencies = [
  "log",
  "multimap",
  "petgraph 0.5.1",
- "prost 0.8.0",
- "prost-types 0.8.0",
- "tempfile",
- "which",
-]
-
-[[package]]
-name = "prost-build"
-version = "0.11.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb5320c680de74ba083512704acb90fe00f28f79207286a848e730c45dd73ed6"
-dependencies = [
- "bytes 1.3.0",
- "heck 0.4.0",
- "itertools",
- "lazy_static",
- "log",
- "multimap",
- "petgraph 0.6.2",
- "prettyplease",
- "prost 0.11.5",
- "prost-types 0.11.5",
- "regex",
- "syn",
+ "prost",
+ "prost-types",
  "tempfile",
  "which",
 ]
@@ -3460,36 +3330,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "prost-derive"
-version = "0.11.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8842bad1a5419bca14eac663ba798f6bc19c413c2fdceb5f3ba3b0932d96720"
-dependencies = [
- "anyhow",
- "itertools",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "prost-types"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "603bbd6394701d13f3f25aada59c7de9d35a6a5887cfc156181234a44002771b"
 dependencies = [
  "bytes 1.3.0",
- "prost 0.8.0",
-]
-
-[[package]]
-name = "prost-types"
-version = "0.11.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "017f79637768cde62820bc2d4fe0e45daaa027755c323ad077767c6c5f173091"
-dependencies = [
- "bytes 1.3.0",
- "prost 0.11.5",
+ "prost",
 ]
 
 [[package]]
@@ -3503,12 +3350,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "protobuf"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b55bad9126f378a853655831eb7363b7b01b81d19f8cb1218861086ca4a1a61e"
+dependencies = [
+ "once_cell",
+ "protobuf-support",
+ "thiserror",
+]
+
+[[package]]
 name = "protobuf-codegen"
 version = "2.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "033460afb75cf755fcfc16dfaed20b86468082a2ea24e05ac35ab4a099a017d6"
 dependencies = [
- "protobuf",
+ "protobuf 2.28.0",
+]
+
+[[package]]
+name = "protobuf-codegen"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0dd418ac3c91caa4032d37cb80ff0d44e2ebe637b2fb243b6234bf89cdac4901"
+dependencies = [
+ "anyhow",
+ "once_cell",
+ "protobuf 3.2.0",
+ "protobuf-parse",
+ "regex",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -3517,8 +3390,8 @@ version = "2.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95a29399fc94bcd3eeaa951c715f7bea69409b2445356b00519740bcd6ddd865"
 dependencies = [
- "protobuf",
- "protobuf-codegen",
+ "protobuf 2.28.0",
+ "protobuf-codegen 2.28.0",
 ]
 
 [[package]]
@@ -3527,8 +3400,33 @@ version = "2.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0a3cf0a7de7570cb67bfb9a9a585b5841b49790a1be0ef104340a2110b91135"
 dependencies = [
- "protobuf",
- "protobuf-codegen",
+ "protobuf 2.28.0",
+ "protobuf-codegen 2.28.0",
+]
+
+[[package]]
+name = "protobuf-parse"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d39b14605eaa1f6a340aec7f320b34064feb26c93aec35d6a9a2272a8ddfa49"
+dependencies = [
+ "anyhow",
+ "indexmap",
+ "log",
+ "protobuf 3.2.0",
+ "protobuf-support",
+ "tempfile",
+ "thiserror",
+ "which",
+]
+
+[[package]]
+name = "protobuf-support"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d4d7b8601c814cfb36bcebb79f0e61e45e1e93640cf778837833bbed05c372"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]
@@ -3537,9 +3435,9 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "oci",
- "protobuf",
- "ttrpc",
- "ttrpc-codegen",
+ "protobuf 2.28.0",
+ "ttrpc 0.6.1",
+ "ttrpc-codegen 0.2.2",
 ]
 
 [[package]]
@@ -3856,7 +3754,7 @@ dependencies = [
  "nix 0.24.3",
  "oci",
  "path-absolutize 1.2.1",
- "protobuf",
+ "protobuf 2.28.0",
  "protocols",
  "regex",
  "rlimit",
@@ -4499,12 +4397,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sync_wrapper"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20518fe4a4c9acf048008599e464deb21beeae3d3578418951a189c235a7a9a8"
-
-[[package]]
 name = "synstructure"
 version = "0.12.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4698,16 +4590,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-io-timeout"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30b74022ada614a1b4834de765f9bb43877f910cc8ce4be40e89042c9223a8bf"
-dependencies = [
- "pin-project-lite",
- "tokio",
-]
-
-[[package]]
 name = "tokio-macros"
 version = "1.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4791,51 +4673,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tonic"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f219fad3b929bef19b1f86fbc0358d35daed8f2cac972037ac0dc10bbb8d5fb"
-dependencies = [
- "async-stream",
- "async-trait",
- "axum",
- "base64",
- "bytes 1.3.0",
- "futures-core",
- "futures-util",
- "h2",
- "http",
- "http-body",
- "hyper",
- "hyper-timeout",
- "percent-encoding",
- "pin-project",
- "prost 0.11.5",
- "prost-derive 0.11.5",
- "tokio",
- "tokio-stream",
- "tokio-util 0.7.4",
- "tower",
- "tower-layer",
- "tower-service",
- "tracing",
- "tracing-futures",
-]
-
-[[package]]
-name = "tonic-build"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bf5e9b9c0f7e0a7c027dcfaba7b2c60816c7049171f679d99ee2ff65d0de8c4"
-dependencies = [
- "prettyplease",
- "proc-macro2",
- "prost-build 0.11.5",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "tough"
 version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4861,51 +4698,6 @@ dependencies = [
  "url",
  "walkdir",
 ]
-
-[[package]]
-name = "tower"
-version = "0.4.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8fa9be0de6cf49e536ce1851f987bd21a43b771b09473c3549a6c853db37c1c"
-dependencies = [
- "futures-core",
- "futures-util",
- "indexmap",
- "pin-project",
- "pin-project-lite",
- "rand 0.8.5",
- "slab",
- "tokio",
- "tokio-util 0.7.4",
- "tower-layer",
- "tower-service",
- "tracing",
-]
-
-[[package]]
-name = "tower-http"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f873044bf02dd1e8239e9c1293ea39dad76dc594ec16185d0a1bf31d8dc8d858"
-dependencies = [
- "bitflags",
- "bytes 1.3.0",
- "futures-core",
- "futures-util",
- "http",
- "http-body",
- "http-range-header",
- "pin-project-lite",
- "tower",
- "tower-layer",
- "tower-service",
-]
-
-[[package]]
-name = "tower-layer"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c20c8dbed6283a09604c3e69b4b7eeb54e298b8a600d4d5ecb5ad39de609f1d0"
 
 [[package]]
 name = "tower-service"
@@ -4945,16 +4737,6 @@ checksum = "24eb03ba0eab1fd845050058ce5e616558e8f8d8fca633e6b163fe25c797213a"
 dependencies = [
  "once_cell",
  "valuable",
-]
-
-[[package]]
-name = "tracing-futures"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
-dependencies = [
- "pin-project",
- "tracing",
 ]
 
 [[package]]
@@ -5031,8 +4813,27 @@ dependencies = [
  "libc",
  "log",
  "nix 0.23.2",
- "protobuf",
+ "protobuf 2.28.0",
  "protobuf-codegen-pure",
+ "thiserror",
+ "tokio",
+ "tokio-vsock",
+]
+
+[[package]]
+name = "ttrpc"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a35f22a2964bea14afee161665bb260b83cb48e665e0260ca06ec0e775c8b06c"
+dependencies = [
+ "async-trait",
+ "byteorder",
+ "futures",
+ "libc",
+ "log",
+ "nix 0.23.2",
+ "protobuf 3.2.0",
+ "protobuf-codegen 3.2.0",
  "thiserror",
  "tokio",
  "tokio-vsock",
@@ -5044,10 +4845,22 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df80affc2cf8c589172b05ba2b8e8a88722ebf4e28b86604615497a8b6fb78c0"
 dependencies = [
- "protobuf",
- "protobuf-codegen",
+ "protobuf 2.28.0",
+ "protobuf-codegen 2.28.0",
  "protobuf-codegen-pure3",
- "ttrpc-compiler",
+ "ttrpc-compiler 0.4.2",
+]
+
+[[package]]
+name = "ttrpc-codegen"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3eea6e6c3db96d8d6c5513de779b9ef1a0ae8371fd2adfe5f03eef1cc6b8320"
+dependencies = [
+ "protobuf 2.28.0",
+ "protobuf-codegen 3.2.0",
+ "protobuf-support",
+ "ttrpc-compiler 0.6.1",
 ]
 
 [[package]]
@@ -5057,11 +4870,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8db19ce6af25713061dd805d6733b6f0c45904bd63526ce5d2568c858b7edc71"
 dependencies = [
  "derive-new",
- "prost 0.8.0",
- "prost-build 0.8.0",
- "prost-types 0.8.0",
- "protobuf",
- "protobuf-codegen",
+ "prost",
+ "prost-build",
+ "prost-types",
+ "protobuf 2.28.0",
+ "protobuf-codegen 2.28.0",
+ "tempfile",
+]
+
+[[package]]
+name = "ttrpc-compiler"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec3cb5dbf1f0865a34fe3f722290fe776cacb16f50428610b779467b76ddf647"
+dependencies = [
+ "derive-new",
+ "prost",
+ "prost-build",
+ "prost-types",
+ "protobuf 2.28.0",
+ "protobuf-codegen 2.28.0",
  "tempfile",
 ]
 
