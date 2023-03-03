@@ -251,6 +251,9 @@ static struct inode *tarfs_iget(struct super_block *sb, u64 ino)
 	if (ret < 0)
 		goto discard;
 
+	i_uid_write(inode, le32_to_cpu(disk_inode.owner));
+	i_gid_write(inode, le32_to_cpu(disk_inode.group));
+
 	offset = le64_to_cpu(disk_inode.offset);
 	mode = le16_to_cpu(disk_inode.mode);
 
