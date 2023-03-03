@@ -291,8 +291,8 @@ static struct inode *tarfs_iget(struct super_block *sb, u64 ino)
 
 	set_nlink(inode, 1);
 
-	/* TODO: Initialise these from the disk inode. */
-	inode->i_mtime.tv_sec = inode->i_atime.tv_sec = inode->i_ctime.tv_sec = 0;
+	inode->i_mtime.tv_sec = inode->i_atime.tv_sec = inode->i_ctime.tv_sec =
+		(((u64)disk_inode.hmtime & 0xf) << 32) | le32_to_cpu(disk_inode.lmtime);
 	inode->i_mtime.tv_nsec = inode->i_atime.tv_nsec = inode->i_ctime.tv_nsec = 0;
 
 	inode->i_mode = mode;
