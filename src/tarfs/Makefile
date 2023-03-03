@@ -14,6 +14,7 @@ install:
 	$(MAKE) -C $(KDIR) M=$$PWD INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) modules_install
 
 clean:
+	rm -rf _install
 	$(MAKE) -C $(KDIR) M=$$PWD clean
 
 

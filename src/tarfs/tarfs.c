@@ -29,7 +29,7 @@ struct tarfs_inode {
 	u32 group;
 	u32 lmtime; /* Lower 32 bits of mtime. */
 	u64 size;
-	u64 offset;
+	u64 offset; /* 64 bits of offset, or 32 LSB are minor dev and 32 MSB are major dev. */
 }  __packed;
 
 struct tarfs_direntry {
@@ -86,6 +86,7 @@ static int tarfs_readdir(struct file *file, struct dir_context *ctx)
 
 	for (cur = ctx->pos; cur < size; cur += sizeof(disk_dentry)) {
 		u64 disk_len;
+		u8 type;
 
 		/* TODO: Check for overflow in `offset + cur`. */
 		ret = tarfs_dev_read(inode->i_sb, offset + cur, &disk_dentry, sizeof(disk_dentry));
@@ -108,7 +109,22 @@ static int tarfs_readdir(struct file *file, struct dir_context *ctx)
 		if (ret)
 			break;
 
-		if (!dir_emit(ctx, name_buffer, disk_len, le64_to_cpu(disk_dentry.ino), disk_dentry.type)) {
+		/* Filter out bad types. */
+		type = disk_dentry.type;
+		switch (type) {
+		case DT_FIFO:
+		case DT_CHR:
+		case DT_DIR:
+		case DT_BLK:
+		case DT_REG:
+		case DT_LNK:
+		case DT_SOCK:
+			break;
+		default:
+			type = DT_UNKNOWN;
+		}
+
+		if (!dir_emit(ctx, name_buffer, disk_len, le64_to_cpu(disk_dentry.ino), type)) {
 			kfree(name_buffer);
 			return 0;
 		}
@@ -195,6 +211,7 @@ static struct inode *tarfs_iget(struct super_block *sb, u64 ino)
 	const struct tarfs_state *state = sb->s_fs_info;
 	int ret;
 	u16 mode;
+	u64 offset;
 
 	if (!ino || ino > state->super.inode_count)
 		return ERR_PTR(-ENOENT);
@@ -211,6 +228,7 @@ static struct inode *tarfs_iget(struct super_block *sb, u64 ino)
 	if (ret < 0)
 		goto discard;
 
+	offset = le64_to_cpu(disk_inode.offset);
 	/* TODO: Check that we don't have any extra bits we don't
 	 * recognise in mode.
 	 */
@@ -232,6 +250,13 @@ static struct inode *tarfs_iget(struct super_block *sb, u64 ino)
 		inode_nohighmem(inode);
 		break;
 
+	case S_IFSOCK:
+	case S_IFIFO:
+	case S_IFCHR:
+	case S_IFBLK:
+		init_special_inode(inode, mode, MKDEV(offset >> 32, offset & MINORMASK));
+		break;
+
 	default:
 		ret = -ENOENT;
 		goto discard;
@@ -247,7 +272,7 @@ static struct inode *tarfs_iget(struct super_block *sb, u64 ino)
 	inode->i_size = le64_to_cpu(disk_inode.size);
 	inode->i_blocks = (inode->i_size + TARFS_BSIZE - 1) / TARFS_BSIZE;
 	/* TODO: What do we do if we're in a 32-bit machine? */
-	inode->i_private = (void *)le64_to_cpu(disk_inode.offset);
+	inode->i_private = (void *)offset;
 	unlock_new_inode(inode);
 	return inode;
 
