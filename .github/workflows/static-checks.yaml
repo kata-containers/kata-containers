@@ -21,6 +21,7 @@ jobs:
     env:
       RUST_BACKTRACE: "1"
       target_branch: ${{ github.base_ref }}
+      GOPATH: ${{ github.workspace }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
@@ -31,8 +32,6 @@ jobs:
       uses: actions/setup-go@v3
       with:
         go-version: 1.19.3
-      env:
-        GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Check kernel config version
       run: |
         cd "${{ github.workspace }}/src/github.com/${{ github.repository }}"
@@ -48,17 +47,14 @@ jobs:
           fi
           echo "Check passed"
         fi
-    - name: Set env
+    - name: Set PATH
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
-        echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
         echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
     - name: Setup
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/setup.sh
-      env:
-        GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Installing rust
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
