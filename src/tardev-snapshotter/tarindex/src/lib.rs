@@ -466,7 +466,7 @@ pub fn append_index(data: &mut (impl io::Read + io::Write + io::Seek)) -> io::Re
     })?;
 
     // Write the directory bodies.
-    let end_offset = write_direntry_bodies(root.clone(), string_table_offset, data)?;
+    let mut end_offset = write_direntry_bodies(root.clone(), string_table_offset, data)?;
 
     // Write the strings.
     visit_breadth_first_mut(root, |e| {
@@ -476,17 +476,15 @@ pub fn append_index(data: &mut (impl io::Read + io::Write + io::Seek)) -> io::Re
 
         for name in e.children.keys() {
             data.write_all(name)?;
+            end_offset += name.len() as u64;
         }
 
         Ok(())
     })?;
 
-    // Write padding to align to the 512-byte boundary.
-    for _ in 0..((512 - end_offset % 512) % 512) {
-        data.write_all(&[0])?;
-    }
-
     // Write the "super-block".
+    end_offset = (end_offset + 511) / 512 * 512;
+    data.seek(io::SeekFrom::Start(end_offset))?;
     let sb = SuperBlock {
         inode_table_offset: contents_size.into(),
         inode_count: ino_count.into(),
@@ -494,9 +492,8 @@ pub fn append_index(data: &mut (impl io::Read + io::Write + io::Seek)) -> io::Re
     data.write_all(sb.as_bytes())?;
 
     // Write padding to align to the 512-byte boundary.
-    for _ in 0..((512 - mem::size_of::<SuperBlock>() % 512) % 512) {
-        data.write_all(&[0])?;
-    }
+    data.seek(io::SeekFrom::Start(end_offset + 511))?;
+    data.write_all(&[0])?;
 
     Ok(())
 }
