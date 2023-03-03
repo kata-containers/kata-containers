@@ -307,7 +307,7 @@ func GetSandboxesStoragePath() string {
 	return "/run/vc/sbs"
 }
 
-// GetSandboxesStoragePath returns the storage path where sandboxes info are stored in runtime-rs
+// GetSandboxesStoragePathRust returns the storage path where sandboxes info are stored in runtime-rs
 func GetSandboxesStoragePathRust() string {
 	return "/run/kata"
 }
