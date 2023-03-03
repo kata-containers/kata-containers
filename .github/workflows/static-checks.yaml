@@ -19,7 +19,6 @@ jobs:
           - "make test"
           - "sudo -E PATH=\"$PATH\" make test"
     env:
-      TRAVIS: "true"
       RUST_BACKTRACE: "1"
       target_branch: ${{ github.base_ref }}
     steps:
