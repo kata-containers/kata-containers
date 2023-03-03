@@ -41,7 +41,16 @@ struct tarfs_direntry {
 	u8 padding[7];
 }  __packed;
 
+struct tarfs_inode_info {
+	struct inode inode;
+	u64 data_offset;
+};
+
+#define TARFS_I(ptr) (container_of(ptr, struct tarfs_inode_info, inode))
+
 #define TARFS_BSIZE 512
+
+static struct kmem_cache *tarfs_inode_cachep;
 
 static struct dentry *tarfs_lookup(struct inode *dir, struct dentry *dentry,
 				   unsigned int flags);
@@ -81,7 +90,7 @@ static int tarfs_readdir(struct file *file, struct dir_context *ctx)
 {
 	struct inode *inode = file_inode(file);
 	struct tarfs_direntry disk_dentry;
-	u64 offset = (u64)inode->i_private;
+	u64 offset = TARFS_I(inode)->data_offset;
 	int ret = 0;
 	char *name_buffer = NULL;
 	u64 name_len = 0;
@@ -176,7 +185,7 @@ static int tarfs_readpage(struct file *file, struct page *page)
 		size -= offset;
 		fillsize = size > PAGE_SIZE ? PAGE_SIZE : size;
 
-		pos = (u64)inode->i_private + offset;
+		pos = TARFS_I(inode)->data_offset + offset;
 
 		ret = tarfs_dev_read(inode->i_sb, pos, buf, fillsize);
 		if (ret < 0) {
@@ -201,6 +210,12 @@ static int tarfs_readpage(struct file *file, struct page *page)
 static int tarfs_read_folio(struct file *file, struct folio *folio)
 {
 	return tarfs_readpage(file, &folio->page);
+}
+#else
+static inline void *
+alloc_inode_sb(struct super_block *sb, struct kmem_cache *cache, gfp_t gfp)
+{
+	return kmem_cache_alloc(cache, gfp);
 }
 #endif
 
@@ -285,6 +300,7 @@ static struct inode *tarfs_iget(struct super_block *sb, u64 ino)
 	case S_IFCHR:
 	case S_IFBLK:
 		init_special_inode(inode, mode, MKDEV(offset >> 32, offset & MINORMASK));
+		offset = 0;
 		break;
 
 	default:
@@ -301,8 +317,8 @@ static struct inode *tarfs_iget(struct super_block *sb, u64 ino)
 	inode->i_mode = mode;
 	inode->i_size = le64_to_cpu(disk_inode.size);
 	inode->i_blocks = (inode->i_size + TARFS_BSIZE - 1) / TARFS_BSIZE;
-	/* TODO: What do we do if we're in a 32-bit machine? */
-	inode->i_private = (void *)offset;
+	TARFS_I(inode)->data_offset = offset;
+
 	unlock_new_inode(inode);
 	return inode;
 
@@ -344,7 +360,7 @@ static struct dentry *tarfs_lookup(struct inode *dir, struct dentry *dentry,
 {
 	struct inode *inode;
 	struct tarfs_direntry disk_dentry;
-	u64 offset = (u64)dir->i_private;
+	u64 offset = TARFS_I(dir)->data_offset;
 	int ret;
 	const char *name = dentry->d_name.name;
 	size_t len = dentry->d_name.len;
@@ -420,6 +436,22 @@ static struct dentry *tarfs_fh_to_parent(struct super_block *sb,
 			tarfs_nfs_get_inode);
 }
 
+static struct inode *tarfs_alloc_inode(struct super_block *sb)
+{
+	struct tarfs_inode_info *info;
+
+        info = alloc_inode_sb(sb, tarfs_inode_cachep, GFP_KERNEL);
+        if (!info)
+                return NULL;
+
+	return &info->inode;
+}
+
+static void tarfs_free_inode(struct inode *inode)
+{
+        kmem_cache_free(tarfs_inode_cachep, TARFS_I(inode));
+}
+
 static int tarfs_fill_super(struct super_block *sb, struct fs_context *fc)
 {
 	static const struct export_operations tarfs_export_ops = {
@@ -427,6 +459,8 @@ static int tarfs_fill_super(struct super_block *sb, struct fs_context *fc)
 		.fh_to_parent = tarfs_fh_to_parent,
 	};
 	static const struct super_operations super_ops = {
+		.alloc_inode = tarfs_alloc_inode,
+		.free_inode = tarfs_free_inode,
 		.statfs	= tarfs_statfs,
 	};
 	struct inode *root;
@@ -543,6 +577,12 @@ static void tarfs_kill_sb(struct super_block *sb)
 	kfree(sb->s_fs_info);
 }
 
+static void tarfs_inode_init_once(void *ptr)
+{
+	struct tarfs_inode_info *info = ptr;
+	inode_init_once(&info->inode);
+}
+
 static struct file_system_type tarfs_fs_type = {
 	.owner = THIS_MODULE,
 	.name = "tar",
@@ -556,9 +596,20 @@ static int __init tarfs_init(void)
 {
 	int ret;
 
+	tarfs_inode_cachep = kmem_cache_create("tarfs_inode_cache",
+			sizeof(struct tarfs_inode_info), 0,
+			(SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD|
+			 SLAB_ACCOUNT),
+			tarfs_inode_init_once);
+	if (!tarfs_inode_cachep) {
+		pr_err("kmem_cache_create failed\n");
+		return -ENOMEM;
+	}
+
 	ret = register_filesystem(&tarfs_fs_type);
 	if (ret) {
 		pr_err("register_filesystem failed: %d\n", ret);
+		kmem_cache_destroy(tarfs_inode_cachep);
 		return ret;
 	}
 
@@ -568,6 +619,7 @@ static int __init tarfs_init(void)
 static void __exit tarfs_exit(void)
 {
 	unregister_filesystem(&tarfs_fs_type);
+	kmem_cache_destroy(tarfs_inode_cachep);
 }
 
 module_init(tarfs_init);
