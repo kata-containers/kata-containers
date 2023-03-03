@@ -23,6 +23,10 @@ jobs:
       target_branch: ${{ github.base_ref }}
       GOPATH: ${{ github.workspace }}
     steps:
+    - name: Free disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
     - name: Checkout code
       uses: actions/checkout@v3
       with:
