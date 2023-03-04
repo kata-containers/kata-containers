@@ -34,6 +34,7 @@ service AgentService {
 	rpc SignalProcess(SignalProcessRequest) returns (google.protobuf.Empty);
 	rpc WaitProcess(WaitProcessRequest) returns (WaitProcessResponse); // wait & reap like waitpid(2)
 	rpc UpdateContainer(UpdateContainerRequest) returns (google.protobuf.Empty);
+	rpc UpdateEphemeralMounts(UpdateEphemeralMountsRequest) returns (google.protobuf.Empty);
 	rpc StatsContainer(StatsContainerRequest) returns (StatsContainerResponse);
 	rpc PauseContainer(PauseContainerRequest) returns (google.protobuf.Empty);
 	rpc ResumeContainer(ResumeContainerRequest) returns (google.protobuf.Empty);
@@ -314,6 +315,10 @@ message UpdateInterfaceRequest {
 
 message UpdateRoutesRequest {
 	Routes routes = 1;
+}
+
+message UpdateEphemeralMountsRequest {
+	repeated Storage storages = 1;
 }
 
 message ListInterfacesRequest {
