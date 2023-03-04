@@ -667,7 +667,7 @@ install-bin: $(BINLIST)
 
 install-runtime: runtime install-scripts install-completions install-configs install-bin
 
-install-containerd-shim-v2: $(SHIMV2)
+install-containerd-shim-v2: $(SHIMV2_OUTPUT)
 	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
 
 install-monitor: $(MONITOR)
