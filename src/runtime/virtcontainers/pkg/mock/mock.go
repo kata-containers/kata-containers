@@ -125,6 +125,10 @@ func (p *HybridVSockTTRPCMockImp) UpdateContainer(ctx context.Context, req *pb.U
 	return emptyResp, nil
 }
 
+func (p *HybridVSockTTRPCMockImp) UpdateEphemeralMounts(ctx context.Context, req *pb.UpdateEphemeralMountsRequest) (*gpb.Empty, error) {
+	return emptyResp, nil
+}
+
 func (p *HybridVSockTTRPCMockImp) RemoveContainer(ctx context.Context, req *pb.RemoveContainerRequest) (*gpb.Empty, error) {
 	return emptyResp, nil
 }

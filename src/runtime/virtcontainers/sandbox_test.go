@@ -179,6 +179,65 @@ func TestCalculateSandboxMem(t *testing.T) {
 	}
 }
 
+func TestPrepareEphemeralMounts(t *testing.T) {
+	sandbox := &Sandbox{}
+	sandbox.containers = map[string]*Container{
+		"container1": {
+			mounts: []Mount{
+				{
+					// happy path
+					Type: KataEphemeralDevType,
+					Options: []string{
+						"rw",
+						"relatime",
+					},
+					Source: "/tmp",
+				},
+				{
+					// should be ignored because it is not KataEphemeralDevType
+					Type: KataLocalDevType,
+					Options: []string{
+						"rw",
+						"relatime",
+					},
+					Source: "/tmp",
+				},
+				{
+					// should be ignored because it is sizeLimited
+					Type: KataLocalDevType,
+					Options: []string{
+						"rw",
+						"relatime",
+						"size=1M",
+					},
+					Source: "/tmp",
+				},
+			},
+		},
+	}
+
+	storages, err := sandbox.prepareEphemeralMounts(1024)
+	assert.NoError(t, err)
+	assert.Equal(t, len(storages), 1)
+	for _, s := range storages {
+		assert.Equal(t, s.Driver, KataEphemeralDevType)
+		assert.Equal(t, s.Source, "tmpfs")
+		assert.Equal(t, s.Fstype, "tmpfs")
+		assert.Equal(t, s.MountPoint, filepath.Join(ephemeralPath(), "tmp"))
+		assert.Equal(t, len(s.Options), 2) // remount, size=1024M
+
+		validSet := map[string]struct{}{
+			"remount":    {},
+			"size=1024M": {},
+		}
+		for _, opt := range s.Options {
+			if _, ok := validSet[opt]; !ok {
+				t.Error("invalid mount opt: " + opt)
+			}
+		}
+	}
+}
+
 func TestCalculateSandboxMemHandlesNegativeLimits(t *testing.T) {
 	sandbox := &Sandbox{}
 	sandbox.config = &SandboxConfig{}
