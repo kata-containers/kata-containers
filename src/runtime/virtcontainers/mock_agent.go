@@ -121,6 +121,11 @@ func (n *mockAgent) listRoutes(ctx context.Context) ([]*pbTypes.Route, error) {
 	return nil, nil
 }
 
+// updateEphemeralMounts is the Noop agent updateEphemeralMounts implementation. It does nothing.
+func (n *mockAgent) updateEphemeralMounts(ctx context.Context, storages []*grpc.Storage) error {
+	return nil
+}
+
 // check is the Noop agent health checker. It does nothing.
 func (n *mockAgent) check(ctx context.Context) error {
 	return nil
