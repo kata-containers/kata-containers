@@ -101,6 +101,10 @@ impl CgroupManager for Manager {
     fn as_any(&self) -> Result<&dyn Any> {
         Ok(self)
     }
+
+    fn name(&self) -> &str {
+        "systemd"
+    }
 }
 
 impl Manager {

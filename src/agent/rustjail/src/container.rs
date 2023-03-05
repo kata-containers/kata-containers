@@ -1473,7 +1473,7 @@ impl LinuxContainer {
     pub fn new<T: Into<String> + Display + Clone>(
         id: T,
         base: T,
-        mut config: Config,
+        config: Config,
         logger: &Logger,
     ) -> Result<Self> {
         let base = base.into();
@@ -1499,26 +1499,18 @@ impl LinuxContainer {
         .context(format!("Cannot change owner of container {} root", id))?;
 
         let spec = config.spec.as_ref().unwrap();
-
         let linux = spec.linux.as_ref().unwrap();
-
-        // determine which cgroup driver to take and then assign to config.use_systemd_cgroup
-        // systemd: "[slice]:[prefix]:[name]"
-        // fs: "/path_a/path_b"
-        let cpath = if SYSTEMD_CGROUP_PATH_FORMAT.is_match(linux.cgroups_path.as_str()) {
-            config.use_systemd_cgroup = true;
+        let cpath = if config.use_systemd_cgroup {
             if linux.cgroups_path.len() == 2 {
                 format!("system.slice:kata_agent:{}", id.as_str())
             } else {
                 linux.cgroups_path.clone()
             }
+        } else if linux.cgroups_path.is_empty() {
+            format!("/{}", id.as_str())
         } else {
-            config.use_systemd_cgroup = false;
-            if linux.cgroups_path.is_empty() {
-                format!("/{}", id.as_str())
-            } else {
-                linux.cgroups_path.clone()
-            }
+            // if we have a systemd cgroup path we need to convert it to a fs cgroup path
+            linux.cgroups_path.replace(':', "/")
         };
 
         let cgroup_manager: Box<dyn Manager + Send + Sync> = if config.use_systemd_cgroup {
