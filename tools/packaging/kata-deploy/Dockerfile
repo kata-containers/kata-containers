@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Specify alternative base image, e.g. clefos for s390x
-ARG IMAGE
-FROM ${IMAGE:-registry.centos.org/centos}:7
+ARG BASE_IMAGE_NAME=registry.centos.org/centos
+ARG BASE_IMAGE_TAG=7
+FROM $BASE_IMAGE_NAME:$BASE_IMAGE_TAG
 ARG KATA_ARTIFACTS=./kata-static.tar.xz
 ARG DESTINATION=/opt/kata-artifacts
 
