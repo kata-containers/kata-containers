@@ -11,6 +11,7 @@ use std::fmt::Debug;
 use std::ops::Deref;
 
 use dbs_arch::gic::GICDevice;
+use dbs_arch::pmu::initialize_pmu;
 use dbs_arch::{DeviceInfoForFDT, DeviceType, VpmuFeatureLevel};
 use dbs_boot::InitrdConfig;
 use dbs_utils::epoll_manager::EpollManager;
@@ -43,6 +44,7 @@ fn configure_system<T: DeviceInfoForFDT + Clone + Debug, M: GuestMemory>(
     device_info: Option<&HashMap<(DeviceType, String), T>>,
     gic_device: &Box<dyn GICDevice>,
     initrd: &Option<super::InitrdConfig>,
+    vpmu_feature: &VpmuFeatureLevel,
 ) -> super::Result<()> {
     dbs_boot::fdt::create_fdt(
         guest_mem,
@@ -51,8 +53,7 @@ fn configure_system<T: DeviceInfoForFDT + Clone + Debug, M: GuestMemory>(
         device_info,
         gic_device,
         initrd,
-        // We will add vpmu feature support in the future PRs. issue: #6168
-        &VpmuFeatureLevel::Disabled,
+        vpmu_feature,
     )
     .map_err(Error::BootSystem)?;
     Ok(())
@@ -74,6 +75,23 @@ impl Vm {
             dbs_arch::gic::create_gic(&self.vm_fd, vcpu_count.into())
                 .map_err(|e| StartMicroVmError::ConfigureVm(VmError::SetupGIC(e)))?,
         );
+
+        Ok(())
+    }
+
+    /// Setup pmu devices for guest vm.
+    pub fn setup_pmu_devices(&mut self) -> std::result::Result<(), StartMicroVmError> {
+        let vm = self.vm_fd();
+        let mut vcpu_manager = self.vcpu_manager().map_err(StartMicroVmError::Vcpu)?;
+        let vpmu_feature = vcpu_manager.vpmu_feature();
+        if vpmu_feature == VpmuFeatureLevel::Disabled {
+            return Ok(());
+        }
+
+        for vcpu in vcpu_manager.vcpus_mut() {
+            initialize_pmu(vm, vcpu.vcpu_fd())
+                .map_err(|e| StartMicroVmError::ConfigureVm(VmError::SetupPmu(e)))?;
+        }
 
         Ok(())
     }
@@ -115,6 +133,7 @@ impl Vm {
             .create_boot_vcpus(request_ts, kernel_loader_result.kernel_load)
             .map_err(StartMicroVmError::Vcpu)?;
         self.setup_interrupt_controller()?;
+        self.setup_pmu_devices()?;
         self.init_devices(epoll_mgr)?;
 
         Ok(())
@@ -131,6 +150,7 @@ impl Vm {
         initrd: Option<InitrdConfig>,
     ) -> std::result::Result<(), StartMicroVmError> {
         let vcpu_manager = self.vcpu_manager().map_err(StartMicroVmError::Vcpu)?;
+        let vpmu_feature = vcpu_manager.vpmu_feature();
         let vcpu_mpidr = vcpu_manager
             .vcpus()
             .into_iter()
@@ -145,6 +165,7 @@ impl Vm {
             self.device_manager.get_mmio_device_info(),
             self.get_irqchip(),
             &initrd,
+            &vpmu_feature,
         )
         .map_err(StartMicroVmError::ConfigureSystem)
     }
