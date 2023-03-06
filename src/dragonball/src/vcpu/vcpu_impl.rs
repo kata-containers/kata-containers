@@ -760,6 +760,11 @@ impl Vcpu {
         // State machine reached its end.
         StateMachine::finish(Self::exited)
     }
+
+    /// Get vcpu file descriptor.
+    pub fn vcpu_fd(&self) -> &VcpuFd {
+        self.fd.as_ref()
+    }
 }
 
 impl Drop for Vcpu {
