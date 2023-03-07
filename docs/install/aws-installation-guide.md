@@ -123,7 +123,7 @@ Refer to [this guide](https://docs.aws.amazon.com/cli/latest/userguide/cli-ec2-l
 SSH into the machine
 
 ```bash
-$ ssh -i MyKeyPair.pen ubuntu@${IP}
+$ ssh -i MyKeyPair.pem ubuntu@${IP}
 ```
 
 Go onto the next step.
