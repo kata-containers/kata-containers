@@ -423,6 +423,7 @@ dependencies = [
  "nix 0.26.2",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio",
 ]
 
