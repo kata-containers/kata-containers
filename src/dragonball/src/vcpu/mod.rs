@@ -7,9 +7,7 @@ mod sm;
 mod vcpu_impl;
 mod vcpu_manager;
 
-#[cfg(target_arch = "x86_64")]
-use dbs_arch::cpuid::VpmuFeatureLevel;
-
+use dbs_arch::VpmuFeatureLevel;
 pub use vcpu_manager::{VcpuManager, VcpuManagerError, VcpuResizeInfo};
 
 #[cfg(feature = "hotplug")]
@@ -32,6 +30,6 @@ pub struct VcpuConfig {
     /// if vpmu feature is Disabled, it means vpmu feature is off (by default)
     /// if vpmu feature is LimitedlyEnabled, it means minimal vpmu counters are supported (cycles and instructions)
     /// if vpmu feature is FullyEnabled, it means all vpmu counters are supported
-    #[cfg(target_arch = "x86_64")]
+    /// For aarch64, VpmuFeatureLevel only supports Disabled and FullyEnabled.
     pub vpmu_feature: VpmuFeatureLevel,
 }
