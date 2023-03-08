@@ -10,6 +10,8 @@ use std::sync::{Arc, Mutex, RwLock};
 use dbs_address_space::AddressSpace;
 #[cfg(target_arch = "aarch64")]
 use dbs_arch::gic::GICDevice;
+#[cfg(target_arch = "aarch64")]
+use dbs_arch::pmu::PmuError;
 use dbs_boot::InitrdConfig;
 use dbs_utils::epoll_manager::EpollManager;
 use dbs_utils::time::TimestampUs;
@@ -69,6 +71,11 @@ pub enum VmError {
     #[cfg(target_arch = "aarch64")]
     #[error("failed to configure GIC")]
     SetupGIC(GICError),
+
+    /// Cannot setup pmu device
+    #[cfg(target_arch = "aarch64")]
+    #[error("failed to setup pmu device")]
+    SetupPmu(#[source] PmuError),
 }
 
 /// Configuration information for user defined NUMA nodes.
