@@ -229,7 +229,13 @@ impl CloudHypervisorInner {
     async fn cloud_hypervisor_launch(&mut self, _timeout_secs: i32) -> Result<()> {
         self.cloud_hypervisor_ensure_not_launched().await?;
 
-        let debug = false;
+        let cfg = self
+            .config
+            .as_ref()
+            .ok_or("no hypervisor config for CH")
+            .map_err(|e| anyhow!(e))?;
+
+        let debug = cfg.debug_info.enable_debug;
 
         let disable_seccomp = true;
 
