@@ -29,7 +29,7 @@ package_output_dir="${package_output_dir:-}"
 [ -n "${tdshim_version}" ] || die "Failed to get TD-shim version or commit"
 [ -n "${tdshim_toolchain}" ] || die "Failed to get TD-shim toolchain to be used to build the project"
 
-container_image="${TDSHIM_CONTAINER_BUILDER:-${BUILDER_REGISTRY}:td-shim-${tdshim_toolchain}-$(get_last_modification ${repo_root_dir} ${script_dir})-$(uname -m)}"
+container_image="${TDSHIM_CONTAINER_BUILDER:-${BUILDER_REGISTRY}:td-shim-${tdshim_toolchain}-$(get_last_modification ${script_dir})-$(uname -m)}"
 
 sudo docker pull ${container_image} || (sudo docker build \
 	--build-arg RUST_TOOLCHAIN="${tdshim_toolchain}" \

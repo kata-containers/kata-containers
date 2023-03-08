@@ -16,7 +16,7 @@ readonly kernel_builder="${repo_root_dir}/tools/packaging/kernel/build-kernel.sh
 
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
-container_image="${KERNEL_CONTAINER_BUILDER:-${BUILDER_REGISTRY}:kernel-$(get_last_modification ${repo_root_dir} ${script_dir})-$(uname -m)}"
+container_image="${KERNEL_CONTAINER_BUILDER:-${BUILDER_REGISTRY}:kernel-$(get_last_modification ${script_dir})-$(uname -m)}"
 
 sudo docker pull ${container_image} || \
 	(sudo docker build -t "${container_image}" "${script_dir}" && \
