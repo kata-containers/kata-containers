@@ -14,11 +14,12 @@ set -o pipefail
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly packaging_root_dir="$(cd "${script_dir}/../" && pwd)"
-readonly repo_root_dir="$(cd "${script_dir}/../../../" && pwd)"
+
+source "${packaging_root_dir}/scripts/lib.sh"
+
 readonly osbuilder_dir="$(cd "${repo_root_dir}/tools/osbuilder" && pwd)"
 
 export GOPATH=${GOPATH:-${HOME}/go}
-source "${packaging_root_dir}/scripts/lib.sh"
 
 arch_target="$(uname -m)"
 
