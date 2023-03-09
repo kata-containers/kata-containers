@@ -127,6 +127,11 @@ impl DragonballInner {
         Ok(Vec::from_iter(pids.into_iter()))
     }
 
+    pub(crate) async fn get_vmm_master_tid(&self) -> Result<u32> {
+        let master_tid = self.vmm_instance.get_vmm_master_tid();
+        Ok(master_tid)
+    }
+
     pub(crate) async fn check(&self) -> Result<()> {
         Ok(())
     }

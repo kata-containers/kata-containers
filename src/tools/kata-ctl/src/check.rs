@@ -69,7 +69,7 @@ pub fn get_cpu_flags(cpu_info: &str, cpu_flags_tag: &str) -> Result<String> {
     }
 
     if cpu_flags_tag.is_empty() {
-        return Err(anyhow!("cpu flags delimiter string is empty"))?;
+        return Err(anyhow!("cpu flags delimiter string is empty"));
     }
 
     let subcontents: Vec<&str> = cpu_info.split('\n').collect();

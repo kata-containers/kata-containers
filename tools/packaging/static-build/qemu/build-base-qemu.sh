@@ -38,16 +38,15 @@ CACHE_TIMEOUT=$(date +"%Y-%m-%d")
 [ -n "${build_suffix}" ] && HYPERVISOR_NAME="kata-qemu-${build_suffix}" || HYPERVISOR_NAME="kata-qemu"
 [ -n "${build_suffix}" ] && PKGVERSION="kata-static-${build_suffix}" || PKGVERSION="kata-static"
 
-container_image="${QEMU_CONTAINER_BUILDER:-$(get_qemu_image_name)}"
+container_image="${QEMU_CONTAINER_BUILDER:-${BUILDER_REGISTRY}:qemu-$(get_last_modification ${script_dir})-$(uname -m)}"
 
-sudo docker pull ${container_image} || \
-	(sudo "${container_engine}" build \
-		--build-arg CACHE_TIMEOUT="${CACHE_TIMEOUT}" \
-		--build-arg http_proxy="${http_proxy}" \
-		--build-arg https_proxy="${https_proxy}" \
-		"${packaging_dir}" \
-		-f "${script_dir}/Dockerfile" \
-		-t "${container_image}" && \
+sudo docker pull ${container_image} || (sudo "${container_engine}" build \
+	--build-arg CACHE_TIMEOUT="${CACHE_TIMEOUT}" \
+	--build-arg http_proxy="${http_proxy}" \
+	--build-arg https_proxy="${https_proxy}" \
+	"${packaging_dir}" \
+	-f "${script_dir}/Dockerfile" \
+	-t "${container_image}" && \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
 	 push_to_registry "${container_image}")
 

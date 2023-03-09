@@ -39,7 +39,7 @@ use protocols::{
     image_ttrpc_async as image_ttrpc,
 };
 use rustjail::cgroups::notifier;
-use rustjail::container::{BaseContainer, Container, LinuxContainer};
+use rustjail::container::{BaseContainer, Container, LinuxContainer, SYSTEMD_CGROUP_PATH_FORMAT};
 use rustjail::process::Process;
 use rustjail::specconv::CreateOpts;
 
@@ -145,6 +145,7 @@ macro_rules! is_allowed {
 #[derive(Clone, Debug)]
 pub struct AgentService {
     sandbox: Arc<Mutex<Sandbox>>,
+    init_mode: bool,
 }
 
 // A container ID must match this regex:
@@ -280,9 +281,20 @@ impl AgentService {
         // restore the cwd for kata-agent process.
         defer!(unistd::chdir(&olddir).unwrap());
 
+        // determine which cgroup driver to take and then assign to use_systemd_cgroup
+        // systemd: "[slice]:[prefix]:[name]"
+        // fs: "/path_a/path_b"
+        // If agent is init we can't use systemd cgroup mode, no matter what the host tells us
+        let cgroups_path = oci.linux.as_ref().map_or("", |linux| &linux.cgroups_path);
+        let use_systemd_cgroup = if self.init_mode {
+            false
+        } else {
+            SYSTEMD_CGROUP_PATH_FORMAT.is_match(cgroups_path)
+        };
+
         let opts = CreateOpts {
             cgroup_name: "".to_string(),
-            use_systemd_cgroup: false,
+            use_systemd_cgroup,
             no_pivot_root: s.no_pivot_root,
             no_new_keyring: false,
             spec: Some(oci.clone()),
@@ -1791,9 +1803,12 @@ async fn read_stream(reader: Arc<Mutex<ReadHalf<PipeStream>>>, l: usize) -> Resu
     Ok(content)
 }
 
-pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> Result<TtrpcServer> {
-    let agent_service = Box::new(AgentService { sandbox: s.clone() })
-        as Box<dyn agent_ttrpc::AgentService + Send + Sync>;
+pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str, init_mode: bool) -> Result<TtrpcServer> {
+    let agent_service = Box::new(AgentService {
+        sandbox: s.clone(),
+        init_mode,
+    }) as Box<dyn agent_ttrpc::AgentService + Send + Sync>;
+
     let agent_worker = Arc::new(agent_service);
 
     let health_service = Box::new(HealthService {}) as Box<dyn health_ttrpc::Health + Send + Sync>;
@@ -2000,23 +2015,18 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
         ));
     }
 
-    let parent = path.parent();
-
-    let dir = if let Some(parent) = parent {
-        parent.to_path_buf()
-    } else {
-        PathBuf::from("/")
-    };
-
-    fs::create_dir_all(&dir).or_else(|e| {
-        if e.kind() != std::io::ErrorKind::AlreadyExists {
-            return Err(e);
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            let dir = parent.to_path_buf();
+            if let Err(e) = fs::create_dir_all(&dir) {
+                if e.kind() != std::io::ErrorKind::AlreadyExists {
+                    return Err(e.into());
+                }
+            } else {
+                std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(req.dir_mode))?;
+            }
         }
-
-        Ok(())
-    })?;
-
-    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(req.dir_mode))?;
+    }
 
     let sflag = stat::SFlag::from_bits_truncate(req.file_mode);
 
@@ -2314,6 +2324,7 @@ mod tests {
 
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
         });
 
         let req = protocols::agent::UpdateInterfaceRequest::default();
@@ -2331,6 +2342,7 @@ mod tests {
 
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
         });
 
         let req = protocols::agent::UpdateRoutesRequest::default();
@@ -2348,6 +2360,7 @@ mod tests {
 
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
         });
 
         let req = protocols::agent::AddARPNeighborsRequest::default();
@@ -2481,6 +2494,7 @@ mod tests {
 
             let agent_service = Box::new(AgentService {
                 sandbox: Arc::new(Mutex::new(sandbox)),
+                init_mode: true,
             });
 
             let result = agent_service
@@ -2961,6 +2975,7 @@ OtherField:other
         let sandbox = Sandbox::new(&logger).unwrap();
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
         });
 
         let ctx = mk_ttrpc_context();

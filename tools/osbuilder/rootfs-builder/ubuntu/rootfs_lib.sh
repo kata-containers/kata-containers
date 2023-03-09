@@ -60,4 +60,10 @@ EOF
 
 	# Reduce image size and memory footprint by removing unnecessary files and directories.
 	rm -rf $rootfs_dir/usr/share/{bash-completion,bug,doc,info,lintian,locale,man,menu,misc,pixmaps,terminfo,zsh}
+
+	# Minimal set of device nodes needed when AGENT_INIT=yes so that the
+	# kernel can properly setup stdout/stdin/stderr for us
+	pushd $rootfs_dir/dev
+	MAKEDEV -v console tty ttyS null zero fd
+	popd
 }

@@ -238,23 +238,6 @@ Advice:
 EOF
 }
 
-# Determine if the system only supports cgroups v2.
-#
-# - Writes "true" to stdout if only cgroups v2 are supported.
-# - Writes "false" to stdout if cgroups v1 or v1+v2 are available.
-# - Writes a blank string to stdout if cgroups are not available.
-only_supports_cgroups_v2()
-{
-	local v1=$(mount|awk '$5 ~ /^cgroup$/ { print; }' || true)
-	local v2=$(mount|awk '$5 ~ /^cgroup2$/ { print; }' || true)
-
-	[ -n "$v1" ] && [ -n "$v2" ] && { echo "false"; return 0; } || true
-	[ -n "$v1" ] && { echo "false"; return 0; } || true
-	[ -n "$v2" ] && { echo "true"; return 0; } || true
-
-	return 0
-}
-
 # Return 0 if containerd is already installed, else return 1.
 containerd_installed()
 {
@@ -279,13 +262,6 @@ pre_checks()
 	{ containerd_installed; ret=$?; } || true
 
 	[ "$ret" -eq 0 ] && die "$containerd_project already installed"
-
-	local cgroups_v2_only=$(only_supports_cgroups_v2 || true)
-
-	local url="https://github.com/kata-containers/kata-containers/issues/927"
-
-	[ "$cgroups_v2_only" = "true" ] && \
-		die "$kata_project does not yet fully support cgroups v2 - see $url"
 
 	return 0
 }
@@ -327,7 +303,7 @@ check_deps()
 		debian|ubuntu) sudo apt-get -y install $packages ;;
 		fedora) sudo dnf -y install $packages ;;
 		opensuse*|sles) sudo zypper install -y $packages ;;
-		*) die "Unsupported distro: $ID"
+		*) die "Cannot automatically install packages on $ID, install $packages manually and re-run"
 	esac
 }
 
@@ -343,10 +319,12 @@ setup()
 
 	source /etc/os-release || source /usr/lib/os-release
 
+	#these dependencies are needed inside this script, and should be checked regardless of the -f option.
+	check_deps
+
 	[ "$force" = "true" ] && return 0
 
 	pre_checks
-	check_deps
 }
 
 # Download the requested version of the specified project.
@@ -659,6 +637,8 @@ handle_containerd()
 test_installation()
 {
 	info "Testing $kata_project\n"
+
+	sudo kata-runtime check -v
 
 	local image="docker.io/library/busybox:latest"
 	sudo ctr image pull "$image"

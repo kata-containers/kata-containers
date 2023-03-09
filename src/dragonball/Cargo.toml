@@ -19,11 +19,11 @@ dbs-boot = "0.3.0"
 dbs-device = "0.2.0"
 dbs-interrupt = { version = "0.2.0", features = ["kvm-irq"] }
 dbs-legacy-devices = "0.1.0"
-dbs-upcall = { version = "0.1.0", optional = true }
+dbs-upcall = { version = "0.2.0", optional = true }
 dbs-utils = "0.2.0"
-dbs-virtio-devices = { version = "0.1.0", optional = true, features = ["virtio-mmio"] }
-kvm-bindings = "0.5.0"
-kvm-ioctls = "0.11.0"
+dbs-virtio-devices = { version = "0.2.0", optional = true, features = ["virtio-mmio"] }
+kvm-bindings = "0.6.0"
+kvm-ioctls = "0.12.0"
 lazy_static = "1.2"
 libc = "0.2.39"
 linux-loader = "0.6.0"
@@ -37,8 +37,9 @@ slog = "2.5.2"
 slog-scope = "4.4.0"
 thiserror = "1"
 vmm-sys-util = "0.11.0"
-virtio-queue = { version = "0.4.0", optional = true }
+virtio-queue = { version = "0.6.0", optional = true }
 vm-memory = { version = "0.9.0", features = ["backend-mmap"] }
+crossbeam-channel = "0.5.6"
 
 [dev-dependencies]
 slog-term = "2.9.0"
@@ -47,7 +48,7 @@ test-utils = { path = "../libs/test-utils" }
 
 [features]
 acpi = []
-atomic-guest-memory = [ "vm-memory/backend-atomic" ]
+atomic-guest-memory = ["vm-memory/backend-atomic"]
 hotplug = ["virtio-vsock"]
 virtio-vsock = ["dbs-virtio-devices/virtio-vsock", "virtio-queue"]
 virtio-blk = ["dbs-virtio-devices/virtio-blk", "virtio-queue"]

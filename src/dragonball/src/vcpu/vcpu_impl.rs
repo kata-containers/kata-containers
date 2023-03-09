@@ -441,75 +441,77 @@ impl Vcpu {
     /// Returns error or enum specifying whether emulation was handled or interrupted.
     fn run_emulation(&mut self) -> Result<VcpuEmulation> {
         match Vcpu::emulate(&self.fd) {
-            Ok(run) => match run {
-                #[cfg(target_arch = "x86_64")]
-                VcpuExit::IoIn(addr, data) => {
-                    let _ = self.io_mgr.pio_read(addr, data);
-                    METRICS.vcpu.exit_io_in.inc();
-                    Ok(VcpuEmulation::Handled)
-                }
-                #[cfg(target_arch = "x86_64")]
-                VcpuExit::IoOut(addr, data) => {
-                    if !self.check_io_port_info(addr, data)? {
-                        let _ = self.io_mgr.pio_write(addr, data);
+            Ok(run) => {
+                match run {
+                    #[cfg(target_arch = "x86_64")]
+                    VcpuExit::IoIn(addr, data) => {
+                        let _ = self.io_mgr.pio_read(addr, data);
+                        METRICS.vcpu.exit_io_in.inc();
+                        Ok(VcpuEmulation::Handled)
                     }
-                    METRICS.vcpu.exit_io_out.inc();
-                    Ok(VcpuEmulation::Handled)
-                }
-                VcpuExit::MmioRead(addr, data) => {
-                    let _ = self.io_mgr.mmio_read(addr, data);
-                    METRICS.vcpu.exit_mmio_read.inc();
-                    Ok(VcpuEmulation::Handled)
-                }
-                VcpuExit::MmioWrite(addr, data) => {
-                    let _ = self.io_mgr.mmio_write(addr, data);
-                    METRICS.vcpu.exit_mmio_write.inc();
-                    Ok(VcpuEmulation::Handled)
-                }
-                VcpuExit::Hlt => {
-                    info!("Received KVM_EXIT_HLT signal");
-                    Err(VcpuError::VcpuUnhandledKvmExit)
-                }
-                VcpuExit::Shutdown => {
-                    info!("Received KVM_EXIT_SHUTDOWN signal");
-                    Err(VcpuError::VcpuUnhandledKvmExit)
-                }
-                // Documentation specifies that below kvm exits are considered errors.
-                VcpuExit::FailEntry => {
-                    METRICS.vcpu.failures.inc();
-                    error!("Received KVM_EXIT_FAIL_ENTRY signal");
-                    Err(VcpuError::VcpuUnhandledKvmExit)
-                }
-                VcpuExit::InternalError => {
-                    METRICS.vcpu.failures.inc();
-                    error!("Received KVM_EXIT_INTERNAL_ERROR signal");
-                    Err(VcpuError::VcpuUnhandledKvmExit)
-                }
-                VcpuExit::SystemEvent(event_type, event_flags) => match event_type {
-                    KVM_SYSTEM_EVENT_RESET | KVM_SYSTEM_EVENT_SHUTDOWN => {
-                        info!(
-                            "Received KVM_SYSTEM_EVENT: type: {}, event: {}",
-                            event_type, event_flags
-                        );
-                        Ok(VcpuEmulation::Stopped)
+                    #[cfg(target_arch = "x86_64")]
+                    VcpuExit::IoOut(addr, data) => {
+                        if !self.check_io_port_info(addr, data)? {
+                            let _ = self.io_mgr.pio_write(addr, data);
+                        }
+                        METRICS.vcpu.exit_io_out.inc();
+                        Ok(VcpuEmulation::Handled)
                     }
-                    _ => {
-                        METRICS.vcpu.failures.inc();
-                        error!(
-                            "Received KVM_SYSTEM_EVENT signal type: {}, flag: {}",
-                            event_type, event_flags
-                        );
+                    VcpuExit::MmioRead(addr, data) => {
+                        let _ = self.io_mgr.mmio_read(addr, data);
+                        METRICS.vcpu.exit_mmio_read.inc();
+                        Ok(VcpuEmulation::Handled)
+                    }
+                    VcpuExit::MmioWrite(addr, data) => {
+                        let _ = self.io_mgr.mmio_write(addr, data);
+                        METRICS.vcpu.exit_mmio_write.inc();
+                        Ok(VcpuEmulation::Handled)
+                    }
+                    VcpuExit::Hlt => {
+                        info!("Received KVM_EXIT_HLT signal");
                         Err(VcpuError::VcpuUnhandledKvmExit)
                     }
-                },
-                r => {
-                    METRICS.vcpu.failures.inc();
-                    // TODO: Are we sure we want to finish running a vcpu upon
-                    // receiving a vm exit that is not necessarily an error?
-                    error!("Unexpected exit reason on vcpu run: {:?}", r);
-                    Err(VcpuError::VcpuUnhandledKvmExit)
+                    VcpuExit::Shutdown => {
+                        info!("Received KVM_EXIT_SHUTDOWN signal");
+                        Err(VcpuError::VcpuUnhandledKvmExit)
+                    }
+                    // Documentation specifies that below kvm exits are considered errors.
+                    VcpuExit::FailEntry(reason, cpu) => {
+                        METRICS.vcpu.failures.inc();
+                        error!("Received KVM_EXIT_FAIL_ENTRY signal, reason {reason}, cpu number {cpu}");
+                        Err(VcpuError::VcpuUnhandledKvmExit)
+                    }
+                    VcpuExit::InternalError => {
+                        METRICS.vcpu.failures.inc();
+                        error!("Received KVM_EXIT_INTERNAL_ERROR signal");
+                        Err(VcpuError::VcpuUnhandledKvmExit)
+                    }
+                    VcpuExit::SystemEvent(event_type, event_flags) => match event_type {
+                        KVM_SYSTEM_EVENT_RESET | KVM_SYSTEM_EVENT_SHUTDOWN => {
+                            info!(
+                                "Received KVM_SYSTEM_EVENT: type: {}, event: {}",
+                                event_type, event_flags
+                            );
+                            Ok(VcpuEmulation::Stopped)
+                        }
+                        _ => {
+                            METRICS.vcpu.failures.inc();
+                            error!(
+                                "Received KVM_SYSTEM_EVENT signal type: {}, flag: {}",
+                                event_type, event_flags
+                            );
+                            Err(VcpuError::VcpuUnhandledKvmExit)
+                        }
+                    },
+                    r => {
+                        METRICS.vcpu.failures.inc();
+                        // TODO: Are we sure we want to finish running a vcpu upon
+                        // receiving a vm exit that is not necessarily an error?
+                        error!("Unexpected exit reason on vcpu run: {:?}", r);
+                        Err(VcpuError::VcpuUnhandledKvmExit)
+                    }
                 }
-            },
+            }
             // The unwrap on raw_os_error can only fail if we have a logic
             // error in our code in which case it is better to panic.
             Err(ref e) => {
@@ -758,6 +760,11 @@ impl Vcpu {
         // State machine reached its end.
         StateMachine::finish(Self::exited)
     }
+
+    /// Get vcpu file descriptor.
+    pub fn vcpu_fd(&self) -> &VcpuFd {
+        self.fd.as_ref()
+    }
 }
 
 impl Drop for Vcpu {
@@ -786,7 +793,7 @@ pub mod tests {
         MmioWrite,
         Hlt,
         Shutdown,
-        FailEntry,
+        FailEntry(u64, u32),
         InternalError,
         Unknown,
         SystemEvent(u32, u64),
@@ -807,7 +814,9 @@ pub mod tests {
                 EmulationCase::MmioWrite => Ok(VcpuExit::MmioWrite(0, &[])),
                 EmulationCase::Hlt => Ok(VcpuExit::Hlt),
                 EmulationCase::Shutdown => Ok(VcpuExit::Shutdown),
-                EmulationCase::FailEntry => Ok(VcpuExit::FailEntry),
+                EmulationCase::FailEntry(error_type, cpu_num) => {
+                    Ok(VcpuExit::FailEntry(*error_type, *cpu_num))
+                }
                 EmulationCase::InternalError => Ok(VcpuExit::InternalError),
                 EmulationCase::Unknown => Ok(VcpuExit::Unknown),
                 EmulationCase::SystemEvent(event_type, event_flags) => {
@@ -850,6 +859,8 @@ pub mod tests {
 
     #[cfg(target_arch = "aarch64")]
     fn create_vcpu() -> (Vcpu, Receiver<VcpuStateEvent>) {
+        use kvm_ioctls::Kvm;
+        use std::os::fd::AsRawFd;
         // Call for kvm too frequently would cause error in some host kernel.
         std::thread::sleep(std::time::Duration::from_millis(5));
 
@@ -918,7 +929,7 @@ pub mod tests {
         assert!(matches!(res, Err(VcpuError::VcpuUnhandledKvmExit)));
 
         // KVM_EXIT_FAIL_ENTRY signal
-        *(EMULATE_RES.lock().unwrap()) = EmulationCase::FailEntry;
+        *(EMULATE_RES.lock().unwrap()) = EmulationCase::FailEntry(0, 0);
         let res = vcpu.run_emulation();
         assert!(matches!(res, Err(VcpuError::VcpuUnhandledKvmExit)));
 

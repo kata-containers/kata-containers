@@ -225,7 +225,7 @@ DEFSHAREDFS_CLH_VIRTIOFS := virtio-fs
 DEFSHAREDFS_QEMU_VIRTIOFS := virtio-fs
 DEFVIRTIOFSDAEMON := $(LIBEXECDIR)/virtiofsd
 ifeq ($(ARCH),ppc64le)
-DEFVIRTIOFSDAEMON := $(LIBEXECDIR)/kata-qemu/virtiofsd
+DEFVIRTIOFSDAEMON := $(LIBEXECDIR)/qemu/virtiofsd
 endif
 DEFVALIDVIRTIOFSDAEMONPATHS := [\"$(DEFVIRTIOFSDAEMON)\"]
 # Default DAX mapping cache size in MiB
@@ -789,7 +789,7 @@ install-bin: $(BINLIST)
 
 install-runtime: runtime install-scripts install-completions install-configs install-bin
 
-install-containerd-shim-v2: $(SHIMV2)
+install-containerd-shim-v2: $(SHIMV2_OUTPUT)
 	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
 
 install-monitor: $(MONITOR)

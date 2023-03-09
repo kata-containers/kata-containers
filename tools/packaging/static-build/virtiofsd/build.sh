@@ -48,7 +48,7 @@ case ${ARCH} in
 		;;
 esac
 
-container_image="${VIRTIOFSD_CONTAINER_BUILDER:-$(get_virtiofsd_image_name)}"
+container_image="${VIRTIOFSD_CONTAINER_BUILDER:-${BUILDER_REGISTRY}:virtiofsd-${virtiofsd_toolchain}-${libc}-$(get_last_modification ${script_dir})-$(uname -m)}"
 
 sudo docker pull ${container_image} || \
 	(sudo docker build \

@@ -48,6 +48,7 @@ docker run \
 	--privileged \
 	-v $HOME/.docker:/root/.docker \
 	-v /var/run/docker.sock:/var/run/docker.sock \
+	-v "${kata_dir}:${kata_dir}" \
 	--user ${uid}:${gid} \
 	--env CI="${CI:-}" \
 	--env USER=${USER} \
@@ -62,7 +63,6 @@ docker run \
 	--env SHIM_V2_CONTAINER_BUILDER="${SHIM_V2_CONTAINER_BUILDER:-}" \
 	--env TDSHIM_CONTAINER_BUILDER="${TDSHIM_CONTAINER_BUILDER:-}" \
 	--env VIRTIOFSD_CONTAINER_BUILDER="${VIRTIOFSD_CONTAINER_BUILDER:-}" \
-	-v "${kata_dir}:${kata_dir}" \
 	--rm \
 	-w ${script_dir} \
 	build-kata-deploy "${kata_deploy_create}" $@
