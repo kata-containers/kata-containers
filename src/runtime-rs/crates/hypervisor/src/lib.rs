@@ -88,6 +88,7 @@ pub trait Hypervisor: Send + Sync {
     async fn get_thread_ids(&self) -> Result<VcpuThreadIds>;
     async fn get_pids(&self) -> Result<Vec<u32>>;
     async fn get_vmm_master_tid(&self) -> Result<u32>;
+    async fn get_ns_path(&self) -> Result<String>;
     async fn cleanup(&self) -> Result<()>;
     async fn check(&self) -> Result<()>;
     async fn get_jailer_root(&self) -> Result<String>;
