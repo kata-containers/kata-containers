@@ -421,7 +421,8 @@ install_cached_kernel_component() {
 		"kata-static-cc-sev-kernel-modules.tar.xz" \
 		"${workdir}/kata-static-cc-sev-kernel-modules.tar.xz" \
 	|| return 1
-		
+	
+	mkdir -p "${module_dir}"
 	tar xvf "${workdir}/kata-static-cc-sev-kernel-modules.tar.xz" -C  "${module_dir}" && return 0
 
 	return 1
