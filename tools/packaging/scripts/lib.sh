@@ -13,6 +13,8 @@ export PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-"no"}"
 
 this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+export repo_root_dir="$(cd "${this_script_dir}/../../../" && pwd)"
+
 short_commit_length=10
 
 hub_bin="hub-bin"
@@ -100,11 +102,9 @@ get_kata_hash() {
 	git ls-remote --heads --tags "https://github.com/${project}/${repo}.git" | grep "${ref}" | awk '{print $1}'
 }
 
-# $1 - Repo's root dir
-# $2 - The file we're looking for the last modification
+# $1 - The file we're looking for the last modification
 get_last_modification() {
-	local repo_root_dir="${1}"
-	local file="${2}"
+	local file="${1}"
 
 	# This is a workaround needed for when running this code on Jenkins
 	git config --global --add safe.directory ${repo_root_dir} &> /dev/null

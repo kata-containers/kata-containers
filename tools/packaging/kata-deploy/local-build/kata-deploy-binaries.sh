@@ -15,8 +15,9 @@ readonly project="kata-containers"
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+source "${script_dir}/../../scripts/lib.sh"
+
 readonly prefix="/opt/kata"
-readonly repo_root_dir="$(cd "${script_dir}/../../../.." && pwd)"
 readonly static_build_dir="${repo_root_dir}/tools/packaging/static-build"
 readonly version_file="${repo_root_dir}/VERSION"
 readonly versions_yaml="${repo_root_dir}/versions.yaml"

@@ -9,14 +9,13 @@ set -o nounset
 set -o pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly repo_root_dir="$(cd "${script_dir}/../../../.." && pwd)"
 readonly ovmf_builder="${script_dir}/build-ovmf.sh"
 
 source "${script_dir}/../../scripts/lib.sh"
 
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
-container_image="${OVMF_CONTAINER_BUILDER:-${BUILDER_REGISTRY}:ovmf-$(get_last_modification ${repo_root_dir} ${script_dir})-$(uname -m)}"
+container_image="${OVMF_CONTAINER_BUILDER:-${BUILDER_REGISTRY}:ovmf-$(get_last_modification ${script_dir})-$(uname -m)}"
 ovmf_build="${ovmf_build:-x86_64}"
 kata_version="${kata_version:-}"
 ovmf_repo="${ovmf_repo:-}"
