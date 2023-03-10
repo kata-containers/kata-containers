@@ -93,12 +93,12 @@ mod tests {
         std::env::set_current_dir(bundle_path).unwrap();
 
         let args = Args {
-            id: "1dfc0567".to_string(),
-            namespace: "test_namespace".into(),
-            address: "containerd_socket".into(),
+            id: "default_id".into(),
+            namespace: "default_namespace".into(),
+            address: "default_address".into(),
             publish_binary: "containerd".into(),
             bundle: bundle_path.to_str().unwrap().into(),
-            debug: false,
+            ..Default::default()
         };
 
         let executor = ShimExecutor::new(args);

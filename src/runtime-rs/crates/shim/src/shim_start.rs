@@ -153,12 +153,12 @@ mod tests {
         std::env::set_current_dir(bundle_path).unwrap();
 
         let args = Args {
-            id: "sandbox1".into(),
-            namespace: "ns".into(),
-            address: "address".into(),
+            id: "default_id".into(),
+            namespace: "default_namespace".into(),
+            address: "default_address".into(),
             publish_binary: "containerd".into(),
             bundle: bundle_path.to_str().unwrap().into(),
-            debug: false,
+            ..Default::default()
         };
         let mut executor = ShimExecutor::new(args);
 
@@ -185,11 +185,11 @@ mod tests {
 
         let args = Args {
             id: sandbox_id.to_owned(),
-            namespace: "ns1".into(),
-            address: "containerd_socket".into(),
+            namespace: "default_namespace".into(),
+            address: "default_address".into(),
             publish_binary: "containerd".into(),
             bundle: bundle_path.to_str().unwrap().into(),
-            debug: false,
+            ..Default::default()
         };
         let executor = ShimExecutor::new(args);
 
@@ -204,11 +204,11 @@ mod tests {
 
         let args = Args {
             id: container_id,
-            namespace: "ns1".into(),
-            address: "containerd_socket".into(),
+            namespace: "default_namespace".into(),
+            address: "default_address".into(),
             publish_binary: "containerd".into(),
             bundle: bundle_path2.to_str().unwrap().into(),
-            debug: false,
+            ..Default::default()
         };
         let executor2 = ShimExecutor::new(args);
 
