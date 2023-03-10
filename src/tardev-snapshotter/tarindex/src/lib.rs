@@ -483,16 +483,20 @@ pub fn append_index(data: &mut (impl io::Read + io::Write + io::Seek)) -> io::Re
     })?;
 
     // Write the "super-block".
-    end_offset = (end_offset + 511) / 512 * 512;
-    data.seek(io::SeekFrom::Start(end_offset))?;
+    const ALIGNMENT: u64 = 4096;
+    const fn align(v: u64) -> u64 {
+        (v + (ALIGNMENT - 1)) / ALIGNMENT * ALIGNMENT
+    }
+    end_offset = align(end_offset);
+    data.seek(io::SeekFrom::Start(end_offset + ALIGNMENT - 512))?;
     let sb = SuperBlock {
         inode_table_offset: contents_size.into(),
         inode_count: ino_count.into(),
     };
     data.write_all(sb.as_bytes())?;
 
-    // Write padding to align to the 512-byte boundary.
-    data.seek(io::SeekFrom::Start(end_offset + 511))?;
+    // Write padding to align to a 4096-byte boundary.
+    data.seek(io::SeekFrom::Start(end_offset + (ALIGNMENT - 1)))?;
     data.write_all(&[0])?;
 
     Ok(())
