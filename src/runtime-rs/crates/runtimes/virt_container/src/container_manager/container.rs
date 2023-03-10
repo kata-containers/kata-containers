@@ -344,20 +344,33 @@ impl Container {
         height: u32,
     ) -> Result<()> {
         let logger = logger_with_process(process);
-        let inner = self.inner.read().await;
+        let mut inner = self.inner.write().await;
         if inner.init_process.get_status().await != ProcessStatus::Running {
             warn!(logger, "container is not running");
             return Ok(());
         }
-        self.agent
-            .tty_win_resize(agent::TtyWinResizeRequest {
-                process_id: process.clone().into(),
-                row: height,
-                column: width,
-            })
-            .await
-            .context("resize pty")?;
-        Ok(())
+
+        if process.exec_id.is_empty() {
+            inner.init_process.height = height;
+            inner.init_process.width = width;
+        } else if let Some(exec) = inner.exec_processes.get_mut(&process.exec_id) {
+            exec.process.height = height;
+            exec.process.width = width;
+
+            // for some case, resize_pty request should be handled while the process has not been started in agent
+            // just return here, and truly resize_pty will happen in start_process
+            if exec.process.get_status().await != ProcessStatus::Running {
+                return Ok(());
+            }
+        } else {
+            return Err(anyhow!(
+                "could not find process {} in container {}",
+                process.exec_id(),
+                process.container_id()
+            ));
+        }
+
+        inner.win_resize_process(process, height, width).await
     }
 
     pub async fn stats(&self) -> Result<Option<agent::StatsContainerResponse>> {
