@@ -712,6 +712,7 @@ fn oci_to_ttrpc(bundle_dir: &str, cid: &str, oci: &ociSpec) -> Result<ttrpcSpec>
         Process: process,
         Root: root,
         Hostname: hostname,
+        Domainname: "".to_string(),
         Mounts: mounts,
         Hooks: protobuf::SingularPtrField::none(),
         Annotations: HashMap::new(),
