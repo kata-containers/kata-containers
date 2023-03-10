@@ -47,6 +47,8 @@ pub struct Spec {
     pub root: Option<Root>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub hostname: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub domainname: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mounts: Vec<Mount>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -832,7 +832,10 @@ func (m *VolumeStatsResponse) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
+			if skippy < 0 {
+				return ErrInvalidLengthCsi
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthCsi
 			}
 			if (iNdEx + skippy) > l {
@@ -959,7 +962,10 @@ func (m *VolumeUsage) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
+			if skippy < 0 {
+				return ErrInvalidLengthCsi
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthCsi
 			}
 			if (iNdEx + skippy) > l {
@@ -1062,7 +1068,10 @@ func (m *VolumeCondition) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
+			if skippy < 0 {
+				return ErrInvalidLengthCsi
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthCsi
 			}
 			if (iNdEx + skippy) > l {
