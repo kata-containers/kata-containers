@@ -26,7 +26,7 @@ use crate::{
         UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest, VersionCheckResponse,
         WaitProcessRequest, WriteStreamRequest,
     },
-    OomEventResponse, WaitProcessResponse, WriteStreamResponse,
+    GetGuestDetailsRequest, OomEventResponse, WaitProcessResponse, WriteStreamResponse,
 };
 
 fn from_vec<F: Into<T>, T: Sized>(from: Vec<F>) -> ::protobuf::RepeatedField<T> {
@@ -750,6 +750,17 @@ impl From<SetGuestDateTimeRequest> for agent::SetGuestDateTimeRequest {
         Self {
             Sec: from.sec,
             Usec: from.usec,
+            unknown_fields: Default::default(),
+            cached_size: Default::default(),
+        }
+    }
+}
+
+impl From<GetGuestDetailsRequest> for agent::GuestDetailsRequest {
+    fn from(from: GetGuestDetailsRequest) -> Self {
+        Self {
+            mem_block_size: from.mem_block_size,
+            mem_hotplug_probe: from.mem_hotplug_probe,
             unknown_fields: Default::default(),
             cached_size: Default::default(),
         }

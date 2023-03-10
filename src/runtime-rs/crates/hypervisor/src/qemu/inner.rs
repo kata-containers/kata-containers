@@ -126,6 +126,18 @@ impl QemuInner {
         info!(sl!(), "QemuInner::hypervisor_config()");
         self.config.clone()
     }
+
+    pub(crate) fn set_capabilities(&mut self, _flag: CapabilityBits) {
+        todo!()
+    }
+
+    pub(crate) fn set_guest_memory_block_size(&mut self, _size: u32) {
+        todo!()
+    }
+
+    pub(crate) fn guest_memory_block_size_mb(&self) -> u32 {
+        todo!()
+    }
 }
 
 use crate::device::Device;

@@ -7,7 +7,8 @@
 use std::sync::Arc;
 
 use agent::{
-    self, kata::KataAgent, types::KernelModule, Agent, GetIPTablesRequest, SetIPTablesRequest,
+    self, kata::KataAgent, types::KernelModule, Agent, GetGuestDetailsRequest, GetIPTablesRequest,
+    SetIPTablesRequest,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -18,9 +19,12 @@ use common::{
 use containerd_shim_protos::events::task::TaskOOM;
 use hypervisor::{dragonball::Dragonball, Hypervisor, HYPERVISOR_DRAGONBALL};
 use kata_sys_util::hooks::HookStates;
-use kata_types::config::{
-    default::{DEFAULT_AGENT_LOG_PORT, DEFAULT_AGENT_VSOCK_PORT},
-    TomlConfig,
+use kata_types::{
+    capabilities::CapabilityBits,
+    config::{
+        default::{DEFAULT_AGENT_LOG_PORT, DEFAULT_AGENT_VSOCK_PORT},
+        TomlConfig,
+    },
 };
 use resource::{
     manager::ManagerArgs,
@@ -148,7 +152,41 @@ impl VirtSandbox {
         // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#createruntime-hooks
         let mut create_runtime_hook_states = HookStates::new();
         create_runtime_hook_states.execute_hooks(create_runtime_hooks, Some(st.clone()))?;
+        Ok(())
+    }
 
+    // store_guest_details will get the information from the guest OS, like memory block size, agent details and is memory hotplug probe support
+    async fn store_guest_details(&self) -> Result<()> {
+        // get the information from agent
+        let guest_details = self
+            .agent
+            .get_guest_details(GetGuestDetailsRequest {
+                mem_block_size: true,
+                mem_hotplug_probe: true,
+            })
+            .await
+            .context("failed to get guest details")?;
+
+        // set memory block size
+        self.hypervisor
+            .set_guest_memory_block_size(guest_details.mem_block_size_bytes as u32)
+            .await;
+
+        // set memory hotplug probe
+        if guest_details.support_mem_hotplug_probe {
+            self.hypervisor
+                .set_capabilities(CapabilityBits::GuestMemoryHotplugProbe)
+                .await;
+        }
+        info!(
+            sl!(),
+            "memory block size is {}, memory probe support {}",
+            self.hypervisor.guest_memory_block_size().await,
+            self.hypervisor
+                .capabilities()
+                .await?
+                .is_mem_hotplug_probe_supported()
+        );
         Ok(())
     }
 }
@@ -242,6 +280,12 @@ impl Sandbox for VirtSandbox {
             .context("create sandbox")?;
 
         inner.state = SandboxState::Running;
+
+        // get and store guest details
+        self.store_guest_details()
+            .await
+            .context("failed to get guest details")?;
+
         let agent = self.agent.clone();
         let sender = self.msg_sender.clone();
         info!(sl!(), "oom watcher start");
