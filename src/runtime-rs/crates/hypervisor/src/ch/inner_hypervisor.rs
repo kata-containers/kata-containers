@@ -473,7 +473,20 @@ impl CloudHypervisorInner {
     }
 
     pub(crate) async fn get_vmm_master_tid(&self) -> Result<u32> {
-        todo!()
+        if let Some(pid) = self.pid {
+            Ok(pid)
+        } else {
+            Err(anyhow!("could not get vmm master tid"))
+        }
+    }
+
+    pub(crate) async fn get_ns_path(&self) -> Result<String> {
+        if let Some(pid) = self.pid {
+            let ns_path = format!("/proc/{}/ns", pid);
+            Ok(ns_path)
+        } else {
+            Err(anyhow!("could not get ns path"))
+        }
     }
 
     pub(crate) async fn check(&self) -> Result<()> {
