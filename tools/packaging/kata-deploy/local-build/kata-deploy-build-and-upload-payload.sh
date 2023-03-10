@@ -18,14 +18,7 @@ pushd ${KATA_DEPLOY_DIR}
 IMAGE_TAG="${REGISTRY}:kata-containers-$(git rev-parse HEAD)-$(uname -m)"
 
 echo "Building the image"
-if [ "$(uname -m)" = "s390x" ]; then
-	docker build \
-		--build-arg BASE_IMAGE_NAME=clefos \
-		--build-arg BASE_IMAGE_TAG=7 \
-		--tag ${IMAGE_TAG} .
-else
-	docker build --tag ${IMAGE_TAG} .
-fi
+docker build --tag ${IMAGE_TAG} .
 
 echo "Pushing the image to quay.io"
 docker push ${IMAGE_TAG}
@@ -34,14 +27,7 @@ if [ -n "${TAG}" ]; then
 	ADDITIONAL_TAG="${REGISTRY}:${TAG}"
 
 	echo "Building the ${ADDITIONAL_TAG} image"
-	if [ "$(uname -m)" = "s390x" ]; then
-		docker build \
-			--build-arg IMG_NAME=clefos \
-			--build-arg IMG_TAG=7 \
-			--tag ${ADDITIONAL_TAG} .
-	else
-		docker build --tag ${ADDITIONAL_TAG} .
-	fi
+	docker build --tag ${ADDITIONAL_TAG} .
 
 	echo "Pushing the image ${ADDITIONAL_TAG} to quay.io"
 	docker push ${ADDITIONAL_TAG}
