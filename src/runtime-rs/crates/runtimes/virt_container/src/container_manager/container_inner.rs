@@ -164,9 +164,12 @@ impl ContainerInner {
         let exit_status = self.get_exit_status().await;
         let _locked_exit_status = exit_status.read().await;
         info!(self.logger, "container terminated");
-        let timeout: u32 = 10;
+        let remove_request = agent::RemoveContainerRequest {
+            container_id: cid.to_string(),
+            ..Default::default()
+        };
         self.agent
-            .remove_container(agent::RemoveContainerRequest::new(cid, timeout))
+            .remove_container(remove_request)
             .await
             .or_else(|e| {
                 if force {
