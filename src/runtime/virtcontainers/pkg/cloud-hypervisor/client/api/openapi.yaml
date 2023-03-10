@@ -1131,9 +1131,6 @@ components:
           items:
             type: integer
           type: array
-      required:
-      - host_cpus
-      - vcpu
       type: object
     CpuFeatures:
       example:

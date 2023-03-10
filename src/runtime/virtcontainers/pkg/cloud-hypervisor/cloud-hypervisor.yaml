@@ -578,9 +578,6 @@ components:
       description: Virtual machine configuration
 
     CpuAffinity:
-      required:
-        - vcpu
-        - host_cpus
       type: object
       properties:
         vcpu:
