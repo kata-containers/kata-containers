@@ -5,73 +5,83 @@ on:
       - '[0-9]+.[0-9]+.[0-9]+*'
 
 jobs:
-  build-kata-static-tarball-amd64:
-    uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
+  build-and-push-assets-amd64:
+    uses: ./.github/workflows/release-amd64.yaml
+    with:
+      target-arch: amd64
+    secrets: inherit
 
-  kata-deploy:
-    needs: build-kata-static-tarball-amd64
+  build-and-push-assets-arm64:
+    uses: ./.github/workflows/release-arm64.yaml
+    with:
+      target-arch: arm64
+    secrets: inherit
+
+  build-and-push-assets-s390x:
+    uses: ./.github/workflows/release-s390x.yaml
+    with:
+      target-arch: s390x
+    secrets: inherit
+
+  publish-multi-arch-images:
     runs-on: ubuntu-latest
+    needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x]
     steps:
-      - uses: actions/checkout@v3
-      - name: get-kata-tarball
-        uses: actions/download-artifact@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Login to Kata Containers docker.io
+        uses: docker/login-action@v3
         with:
-          name: kata-static-tarball-amd64
-      - name: build-and-push-kata-deploy-ci
-        id: build-and-push-kata-deploy-ci
-        run: |
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          pushd $GITHUB_WORKSPACE
-          git checkout $tag
-          pkg_sha=$(git rev-parse HEAD)
-          popd
-          mv kata-static.tar.xz $GITHUB_WORKSPACE/tools/packaging/kata-deploy/kata-static.tar.xz
-          docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t katadocker/kata-deploy-ci:$pkg_sha -t quay.io/kata-containers/kata-deploy-ci:$pkg_sha $GITHUB_WORKSPACE/tools/packaging/kata-deploy
-          docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
-          docker push katadocker/kata-deploy-ci:$pkg_sha
-          docker login -u ${{ secrets.QUAY_DEPLOYER_USERNAME }} -p ${{ secrets.QUAY_DEPLOYER_PASSWORD }} quay.io
-          docker push quay.io/kata-containers/kata-deploy-ci:$pkg_sha
-          mkdir -p packaging/kata-deploy
-          ln -s $GITHUB_WORKSPACE/tools/packaging/kata-deploy/action packaging/kata-deploy/action
-          echo "PKG_SHA=${pkg_sha}" >> $GITHUB_OUTPUT
-      - name: test-kata-deploy-ci-in-aks
-        uses: ./packaging/kata-deploy/action
+          registry: docker.io
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Login to Kata Containers quay.io
+        uses: docker/login-action@v3
         with:
-          packaging-sha: ${{steps.build-and-push-kata-deploy-ci.outputs.PKG_SHA}}
-        env:
-          PKG_SHA: ${{steps.build-and-push-kata-deploy-ci.outputs.PKG_SHA}}
-          AZ_APPID: ${{ secrets.AZ_APPID }}
-          AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
-          AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
-          AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
-      - name: push-tarball
+          registry: quay.io
+          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+      - name: Push multi-arch manifest
         run: |
           # tag the container image we created and push to DockerHub
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
           tags=($tag)
           tags+=($([[ "$tag" =~ "alpha"|"rc" ]] && echo "latest" || echo "stable"))
-          for tag in ${tags[@]}; do \
-            docker tag katadocker/kata-deploy-ci:${{steps.build-and-push-kata-deploy-ci.outputs.PKG_SHA}} katadocker/kata-deploy:${tag} && \
-            docker tag quay.io/kata-containers/kata-deploy-ci:${{steps.build-and-push-kata-deploy-ci.outputs.PKG_SHA}} quay.io/kata-containers/kata-deploy:${tag} && \
-            docker push katadocker/kata-deploy:${tag} && \
-            docker push quay.io/kata-containers/kata-deploy:${tag}; \
+          # push to quay.io and docker.io
+          for tag in ${tags[@]}; do
+            docker manifest create quay.io/kata-containers/kata-deploy:${tag} \
+              --amend quay.io/kata-containers/kata-deploy:${tag}-amd64 \
+              --amend quay.io/kata-containers/kata-deploy:${tag}-arm64 \
+              --amend quay.io/kata-containers/kata-deploy:${tag}-s390x
+
+            docker manifest create docker.io/katadocker/kata-deploy:${tag} \
+              --amend docker.io/katadocker/kata-deploy:${tag}-amd64 \
+              --amend docker.io/katadocker/kata-deploy:${tag}-arm64 \
+              --amend docker.io/katadocker/kata-deploy:${tag}-s390x
+
+            docker manifest push quay.io/kata-containers/kata-deploy:${tag}
+            docker manifest push docker.io/katadocker/kata-deploy:${tag}
           done
 
-  upload-static-tarball:
-    needs: kata-deploy
+  upload-multi-arch-static-tarball:
+    needs: publish-multi-arch-images
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: download-artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: kata-static-tarball
       - name: install hub
         run: |
           HUB_VER=$(curl -s "https://api.github.com/repos/github/hub/releases/latest" | jq -r .tag_name | sed 's/^v//')
           wget -q -O- https://github.com/github/hub/releases/download/v$HUB_VER/hub-linux-amd64-$HUB_VER.tgz | \
           tar xz --strip-components=2 --wildcards '*/bin/hub' && sudo mv hub /usr/local/bin/hub
-      - name: push static tarball to github
+
+      - name: download-artifacts-amd64
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-static-tarball-amd64
+      - name: push amd64 static tarball to github
         run: |
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
           tarball="kata-static-$tag-x86_64.tar.xz"
@@ -81,8 +91,36 @@ jobs:
           GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
           popd
 
+      - name: download-artifacts-arm64
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-static-tarball-arm64
+      - name: push arm64 static tarball to github
+        run: |
+          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
+          tarball="kata-static-$tag-aarch64.tar.xz"
+          mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
+          pushd $GITHUB_WORKSPACE
+          echo "uploading asset '${tarball}' for tag: ${tag}"
+          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
+          popd
+
+      - name: download-artifacts-s390x
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-static-tarball-s390x
+      - name: push s390x static tarball to github
+        run: |
+          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
+          tarball="kata-static-$tag-s390x.tar.xz"
+          mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
+          pushd $GITHUB_WORKSPACE
+          echo "uploading asset '${tarball}' for tag: ${tag}"
+          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
+          popd
+
   upload-cargo-vendored-tarball:
-    needs: upload-static-tarball
+    needs: upload-multi-arch-static-tarball
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
