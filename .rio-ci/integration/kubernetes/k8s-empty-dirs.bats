@@ -21,6 +21,7 @@ setup() {
 	pod_name="sharevol-kata"
 	get_pod_config_dir
 	pod_logs_file=""
+	mem_size_pod_name="empty-dir-mem-kata"
 }
 
 @test "Empty dir volumes" {
@@ -53,11 +54,24 @@ setup() {
 	done
 }
 
+@test "Empty dir volume occupies sandbox memory" {
+	kubectl create -f "${pod_config_dir}/pod-empty-dir-occupy-mem.yaml"
+	cmd="kubectl get pods/$mem_size_pod_name -o jsonpath='{.status.phase}' | grep Running"
+	waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
+
+	echo "size=" $(kubectl logs "$mem_size_pod_name")
+
+	# ensure that microvm empty volume occupies entire memory available to sandbox
+	kubectl exec -it pods/$mem_size_pod_name -- sh -c "mount | grep test-volume | size=2621440k"
+}
+
 teardown() {
 	# Debugging information
 	kubectl describe "pod/$pod_name"
+	kubectl describe "pod/$mem_size_pod_name"
 
 	kubectl delete pod "$pod_name"
-
+	kubectl delete pod "$mem_size_pod_name"
+	
 	[ ! -f "$pod_logs_file" ] || rm -f "$pod_logs_file"
 }

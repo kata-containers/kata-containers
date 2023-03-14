@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: empty-dir-mem-kata
+spec:
+  runtimeClassName: microvm
+  restartPolicy: Never
+  priorityClassName: p1
+  containers:
+  - name: container1
+    image: docker-upstream.apple.com/k8s-artifacts-prod/e2e-test-images/agnhost:2.21
+    volumeMounts:
+      - name: mem-emptydir-volume
+        mountPath: /test-volume
+  volumes:
+  - name: mem-emptydir-volume
+    emptyDir:
+      medium: Memory
