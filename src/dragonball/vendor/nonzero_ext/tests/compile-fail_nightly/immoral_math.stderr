@@ -1,0 +1,7 @@
+error[E0080]: evaluation of constant value failed
+ --> $DIR/immoral_math.rs:7:42
+  |
+7 |     const _MY_NON_ZERO_U32: NonZeroU32 = nonzero!((42 / 2 - 21) as u32);
+  |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ attempt to compute `0_usize - 1_usize`, which would overflow
+  |
+  = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)

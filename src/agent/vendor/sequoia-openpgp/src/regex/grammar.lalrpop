@@ -1,0 +1,250 @@
+// -*- mode: Rust; -*-
+
+use super::generate_class;
+use super::lexer;
+use super::lexer::{Token, LexicalError};
+use regex_syntax::hir::{self, Hir};
+
+// Pass in the original, untokenized input to facilitate error
+// recovery.
+grammar<'input>(input: &'input str);
+
+// This is a straightforward translation of the regular expression
+// grammar from section 8 of RFC 4880.
+//
+// https://tools.ietf.org/html/rfc4880#section-8
+pub(crate) Regex : Hir = {
+    <l:LBranch> <r:RBranch*> => {
+        let mut r = r;
+        r.insert(0, l);
+
+        // If any of the branches are empty, then that branch matches
+        // everything, and we can just short circuit the whole
+        // alternation.
+        //
+        // This is actually required for version 1.3.7 of the regex
+        // crate, which is the version that is in Debian Bullseye.
+        // See issue #694 for details.
+        if r.iter().any(|b| b.kind().is_empty()) {
+            hir::Hir::empty()
+        } else {
+            Hir::alternation(r)
+        }
+    },
+}
+
+LBranch : Hir = {
+    Branch,
+}
+
+RBranch : Hir = {
+    PIPE <Branch>,
+}
+
+Branch : Hir = {
+    => {
+        hir::Hir::empty()
+    },
+    <p:Piece+> => {
+        if p.iter().all(|p| p.kind().is_empty()) {
+            // All pieces are empty.  Just return empty.
+            hir::Hir::empty()
+        } else {
+            hir::Hir::group(hir::Group {
+                kind: hir::GroupKind::NonCapturing,
+                hir: Box::new(hir::Hir::concat(p)),
+            })
+        }
+    },
+}
+
+Piece : Hir = {
+    <a:Atom> => a,
+    <a:Atom> STAR => {
+        if a.kind().is_empty() {
+            // Piece is empty.  This is equivalent to empty so just
+            // return it.
+            a
+        } else {
+            hir::Hir::repetition(hir::Repetition {
+                kind: hir::RepetitionKind::ZeroOrMore,
+                greedy: true,
+                hir: Box::new(a)
+            })
+        }
+    },
+    <a:Atom> PLUS => {
+        if a.kind().is_empty() {
+            // Piece is empty.  This is equivalent to empty so just
+            // return it.
+            a
+        } else {
+            hir::Hir::repetition(hir::Repetition {
+                kind: hir::RepetitionKind::OneOrMore,
+                greedy: true,
+                hir: Box::new(a)
+            })
+        }
+    },
+    <a:Atom> QUESTION => {
+        if a.kind().is_empty() {
+            // Piece is empty.  This is equivalent to empty so just
+            // return it.
+            a
+        } else {
+            hir::Hir::repetition(hir::Repetition {
+                kind: hir::RepetitionKind::ZeroOrOne,
+                greedy: true,
+                hir: Box::new(a)
+            })
+        }
+    },
+}
+
+Atom : Hir = {
+    LPAREN <r:Regex> RPAREN => {
+        if r.kind().is_empty() {
+            r
+        } else {
+            hir::Hir::group(hir::Group {
+                kind: hir::GroupKind::NonCapturing,
+                hir: Box::new(r),
+            })
+        }
+    },
+
+    Range,
+
+    DOT => {
+        hir::Hir::any(false)
+    },
+    CARET => {
+        hir::Hir::anchor(hir::Anchor::StartText)
+    },
+    DOLLAR => {
+        hir::Hir::anchor(hir::Anchor::EndText)
+    },
+
+    BACKSLASH <t:AnyChar> => {
+        hir::Hir::literal(hir::Literal::Unicode(t.to_char()))
+    },
+
+    DASH => {
+        hir::Hir::literal(hir::Literal::Unicode('-'))
+    },
+
+    <t:OTHER> => {
+        hir::Hir::literal(hir::Literal::Unicode(t.to_char()))
+    },
+
+}
+
+Range : Hir = {
+    LBRACKET <c:CARET?> <class1:RBRACKET> <class2:NotRBracket*> RBRACKET => {
+        generate_class(c.is_some(),
+                       std::iter::once(class1.to_char())
+                       .chain(class2.into_iter().map(|t| t.to_char())))
+    },
+    LBRACKET CARET <class:NotRBracket+> RBRACKET => {
+        generate_class(true,
+                       class.into_iter().map(|t| t.to_char()))
+    },
+    LBRACKET <class1:NotCaretNotRBracket> <class2:NotRBracket*> RBRACKET => {
+        generate_class(false,
+                       std::iter::once(class1.to_char())
+                       .chain(class2.into_iter().map(|t| t.to_char())))
+    },
+}
+
+NotRBracket : Token = {
+    PIPE => Token::OTHER('|'),
+
+    STAR => Token::OTHER('*'),
+    PLUS => Token::OTHER('+'),
+    QUESTION => Token::OTHER('?'),
+
+    LPAREN => Token::OTHER('('),
+    RPAREN => Token::OTHER(')'),
+
+    DOT => Token::OTHER('.'),
+    CARET => Token::OTHER('^'),
+    DOLLAR => Token::OTHER('$'),
+    BACKSLASH => Token::OTHER('\\'),
+
+    LBRACKET => Token::OTHER('['),
+    // RBRACKET => Token::OTHER(']'),
+    DASH => Token::OTHER('-'),
+
+    OTHER,
+}
+
+NotCaretNotRBracket : Token = {
+    PIPE => Token::OTHER('|'),
+
+    STAR => Token::OTHER('*'),
+    PLUS => Token::OTHER('+'),
+    QUESTION => Token::OTHER('?'),
+
+    LPAREN => Token::OTHER('('),
+    RPAREN => Token::OTHER(')'),
+
+    DOT => Token::OTHER('.'),
+    // CARET => Token::OTHER('^'),
+    DOLLAR => Token::OTHER('$'),
+    BACKSLASH => Token::OTHER('\\'),
+
+    LBRACKET => Token::OTHER('['),
+    // RBRACKET => Token::OTHER(']'),
+    DASH => Token::OTHER('-'),
+
+    OTHER,
+}
+
+AnyChar : Token = {
+    PIPE => Token::OTHER('|'),
+
+    STAR => Token::OTHER('*'),
+    PLUS => Token::OTHER('+'),
+    QUESTION => Token::OTHER('?'),
+
+    LPAREN => Token::OTHER('('),
+    RPAREN => Token::OTHER(')'),
+
+    DOT => Token::OTHER('.'),
+    CARET => Token::OTHER('^'),
+    DOLLAR => Token::OTHER('$'),
+    BACKSLASH => Token::OTHER('\\'),
+
+    LBRACKET => Token::OTHER('['),
+    RBRACKET => Token::OTHER(']'),
+    DASH => Token::OTHER('-'),
+
+    OTHER,
+}
+
+extern {
+    type Location = usize;
+    type Error = LexicalError;
+
+    enum lexer::Token {
+        PIPE => lexer::Token::PIPE,
+
+        STAR => lexer::Token::STAR,
+        PLUS => lexer::Token::PLUS,
+        QUESTION => lexer::Token::QUESTION,
+
+        LPAREN => lexer::Token::LPAREN,
+        RPAREN => lexer::Token::RPAREN,
+
+        DOT => lexer::Token::DOT,
+        CARET => lexer::Token::CARET,
+        DOLLAR => lexer::Token::DOLLAR,
+        BACKSLASH => lexer::Token::BACKSLASH,
+
+        LBRACKET => lexer::Token::LBRACKET,
+        RBRACKET => lexer::Token::RBRACKET,
+        DASH => lexer::Token::DASH,
+
+        OTHER => lexer::Token::OTHER(_),
+    }
+}

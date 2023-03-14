@@ -1,0 +1,32 @@
+[advisories]
+ignore = [
+  # tokio 0.2 and 0.3 are both perma-vulnerable to these two advisories,
+  # will be removed once support for them is dropped
+  "RUSTSEC-2021-0072",
+  "RUSTSEC-2021-0124",
+]
+
+[licenses]
+unlicensed = "deny"
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "BSD-3-Clause",
+]
+default = "deny"
+
+[bans]
+multiple-versions = "warn"
+skip = [
+  # Used in the stream migration docs
+  { name = "tokio-util", version = "0.3" },
+  { name = "tokio-util", version = "0.4" },
+  { name = "tokio-util", version = "0.5" },
+  { name = "tokio-util", version = "0.6" },
+]
+skip-tree = [
+  { name = "tokio", version = "0.2" },
+  { name = "tokio", version = "0.3" },
+  { name = "proptest", version = "1.0" },
+  { name = "proptest-derive", version = "0.3" },
+]

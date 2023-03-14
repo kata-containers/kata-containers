@@ -1,0 +1,21 @@
+load(":defs.bzl", "cxx_hacks")
+
+prelude = native
+
+prelude.python_bootstrap_binary(
+    name = "make_comp_db",
+    main = "make_comp_db.py",
+    visibility = ["PUBLIC"],
+)
+
+prelude.python_bootstrap_binary(
+    name = "makefile_to_dep_file",
+    main = "makefile_to_dep_file.py",
+    visibility = ["PUBLIC"],
+)
+
+# Required to support the $(cxx-header-tree) macro
+cxx_hacks(
+    name = "cxx_hacks",
+    visibility = ["PUBLIC"],
+)

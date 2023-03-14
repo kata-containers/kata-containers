@@ -1,0 +1,74 @@
+{
+  "signed": {
+    "_type": "targets",
+    "spec_version": "1.0.0",
+    "version": 2,
+    "expires": "3021-01-27T00:57:00.468918Z",
+    "targets": {
+      "2.txt": {
+        "length": 2,
+        "hashes": {
+          "sha256": "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"
+        }
+      },
+      "1.txt": {
+        "length": 2,
+        "hashes": {
+          "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+        }
+      }
+    },
+    "delegations": {
+      "keys": {
+        "0f432a9dfff85a943dd7a4fb7ff3221ad6495ef81d0342cb74094c208aa8934b": {
+          "keytype": "rsa",
+          "keyval": {
+            "public": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq0Q5xtn047yiCQlsZELR\nnUbk5tnIXEresMBpxu9NC5t2ywjhA/EQ22aX6Sy85PAvSUlE+DBIbLmm5o0EPbF8\n7e6EkZxj5Nz3O/UYMCgqpLE1bNIFSZzQNXOAfYqWsTE9rIQpJnZfpmPSruZ95xdN\nZsXh6rCdM3HfSpID+hE3Mq97dehdoW18DGxnorkuzTTLD9oA+Wz+Ctq1wpmBKraH\npkI8Q4QQ0ej74dEgEXxdLlAjFnEWmU/yTwUoa5hXtYcwq7MB/haT9DkUmeI4Wyk7\n5gamMun1tFgnEXso+YePUQg2ySMam0/nWVCbVMqVBveWk+TawT5Z8SytNKXQTCNS\nswIDAQAB\n-----END PUBLIC KEY-----"
+          },
+          "scheme": "rsassa-pss-sha256"
+        }
+      },
+      "roles": [
+        {
+          "name": "../../path/like/dubious",
+          "keyids": [
+            "0f432a9dfff85a943dd7a4fb7ff3221ad6495ef81d0342cb74094c208aa8934b"
+          ],
+          "threshold": 1,
+          "paths": [
+            "foo"
+          ],
+          "terminating": false
+        },
+        {
+          "name": "🍺/30",
+          "keyids": [
+            "0f432a9dfff85a943dd7a4fb7ff3221ad6495ef81d0342cb74094c208aa8934b"
+          ],
+          "threshold": 1,
+          "paths": [
+            "foo"
+          ],
+          "terminating": false
+        },
+        {
+          "name": "ᚩ os, ᚱ rad, ᚳ cen, ᚷ gyfu, ᚹ ƿynn, ᚻ hægl, ...",
+          "keyids": [
+            "0f432a9dfff85a943dd7a4fb7ff3221ad6495ef81d0342cb74094c208aa8934b"
+          ],
+          "threshold": 1,
+          "paths": [
+            "foo"
+          ],
+          "terminating": false
+        }
+      ]
+    }
+  },
+  "signatures": [
+    {
+      "keyid": "0f432a9dfff85a943dd7a4fb7ff3221ad6495ef81d0342cb74094c208aa8934b",
+      "sig": "3bd8272207c4733e070795dce7e479eaae40c39443837f2bca17824a80ea62d8be74b23f2f7336bb310beb09199cc2120f934a1b5e34c3a296604825e7145d723b083aade5114c2ec1a4b10c070e386b6b9b95ae828e2a5072ce4b21f3f06129837965be17661c4295a4086c917da1bff443b29e877c3bcb8fc72a3c688c546718deb11b5e354a5de8ff46f568d75e26af870c5b606eda946903a1abc05022b9e12c2b0c2943daf04fa0ad98543ee8326fabb86720becce985e924cb308a84e4734562080ecf09e336c423b2e38701d4bdd0df56ffae8d7055897a73b2287b6dc9eec8cb1e3726ee563ac8de1de3b13ad2cf7206cc7f5e3e1d02d662a2bb71eb"
+    }
+  ]
+}

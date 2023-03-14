@@ -1,0 +1,22 @@
+error[E0277]: `PhantomPinned` cannot be unpinned
+  --> $DIR/overlapping_unpin_struct.rs:19:5
+   |
+16 | fn is_unpin<T: Unpin>() {}
+   |                ----- required by this bound in `is_unpin`
+...
+19 |     is_unpin::<Foo<PhantomPinned>>(); //~ ERROR E0277
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ within `_::__Origin<'_, PhantomPinned>`, the trait `Unpin` is not implemented for `PhantomPinned`
+   |
+   = note: consider using `Box::pin`
+note: required because it appears within the type `_::__Origin<'_, PhantomPinned>`
+  --> $DIR/overlapping_unpin_struct.rs:5:1
+   |
+5  | / pin_project! {
+6  | |     struct Foo<T> {
+7  | |         #[pin]
+8  | |         inner: T,
+9  | |     }
+10 | | }
+   | |_^
+   = note: required because of the requirements on the impl of `Unpin` for `Foo<PhantomPinned>`
+   = note: this error originates in the macro `$crate::__pin_project_internal` (in Nightly builds, run with -Z macro-backtrace for more info)

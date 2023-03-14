@@ -1,0 +1,19 @@
+{
+  "key-providers": {
+    "keyprovider1": {
+      "cmd": {
+        "path": "/usr/lib/keyprovider-wrapkey",
+        "args": []
+      }
+    },
+    "keyprovider2": {
+      "grpc": "localhost:32223"
+    },
+    "keyprovider3": {
+      "native": "attestation_agent"
+    },
+    "keyprovider4": {
+      "ttrpc": "unix:///tmp/keyprovider.sock"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+[std_coverage]
+
+[no_std_coverage]
+no-default-features = true
+
+[serde_std_coverage]
+features = "serde"
+
+[serde_no_std_coverage]
+no-default-features = true
+features = "serde"
+
+[report]
+out = ["Html"]

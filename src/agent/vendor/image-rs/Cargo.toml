@@ -1,0 +1,91 @@
+[package]
+name = "image-rs"
+version = "0.1.0"
+description = "The OCI Images Rust Crate"
+repository = "https://github.com/confidential-containers/image-rs"
+readme = "README.md"
+license = "Apache-2.0"
+authors = ["The image-rs Authors"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1"
+async-compression = { version = "0.3.15", features = ["futures-io", "tokio", "gzip", "zstd"] }
+async-trait = "0.1.56"
+attestation_agent = { git = "https://github.com/confidential-containers/attestation-agent", rev = "b45b0f8", optional = true }
+base64 = "0.13.0"
+dircpy = { version = "0.3.12", optional = true }
+flate2 = "1.0"
+flume = "0.10.14"
+fs_extra = { version = "1.2.0", optional = true }
+futures-util = "0.3"
+hex = { version = "0.4.3", optional = true }
+libc = "0.2"
+log = "0.4.14"
+nix = { version = "0.26", optional = true }
+oci-distribution = "0.9.4"
+oci-spec = "0.5.8"
+ocicrypt-rs = { git = "https://github.com/confidential-containers/ocicrypt-rs", rev = "453c699", default-features = false, features = ["keywrap-jwe", "async-io"], optional = true }
+prost = { version = "0.11", optional = true }
+sequoia-openpgp = { version = "1.7.0", default-features = false, features = ["compression", "crypto-rust", "allow-experimental-crypto", "allow-variable-time-crypto"], optional = true }
+protobuf = { version = "3.2.0", optional = true }
+serde = { version = ">=1.0.27", features = ["serde_derive", "rc"] }
+serde_json = ">=1.0.9"
+serde_yaml = { version = "0.8", optional = true }
+sha2 = ">=0.10"
+
+# Latest version of sigstore conflicts with sequoia-openpgp, so stick to v0.3
+sigstore = { version = "0.3.0",  optional = true}
+strum = { version = "0.24", features = ["derive"] }
+strum_macros = "0.24"
+tar = "0.4.37"
+tokio = "1.0"
+tonic = { version = "0.8", optional = true }
+url = { version = "2.2.2", optional = true }
+ttrpc = { version = "0.7.1", features = [ "async" ], optional = true }
+walkdir = "2"
+zstd = "0.11"
+
+[build-dependencies]
+anyhow = "1"
+tonic-build = { version = "0.8", optional = true }
+ttrpc-codegen = { version = "0.4.1", optional = true }
+
+[dev-dependencies]
+filetime = "0.2"
+nix = "0.26"
+openssl = "0.10.44"
+rstest = "0.16.0"
+serial_test = "0.9.0"
+strum = "0.24"
+strum_macros = "0.24"
+tempfile = "3.2"
+test-utils = { path = "libs/test-utils" }
+tokio = { version = "1", features = ["process"] }
+
+[workspace]
+members = ["libs/test-utils"]
+exclude = ["scripts/attestation_agent/app"]
+
+[features]
+default = ["snapshot-overlayfs", "signature-cosign", "keywrap-grpc"]
+kata-cc = ["encryption", "keywrap-grpc", "snapshot-overlayfs", "signature-cosign", "getresource"]
+kata-cc-s390x = ["encryption", "keywrap-grpc", "snapshot-overlayfs", "signature-simple", "getresource"]
+enclave-cc = ["encryption", "keywrap-native", "eaa-kbc", "snapshot-unionfs", "signature-simple", "getresource"]
+
+encryption = ["ocicrypt-rs/block-cipher"]
+keywrap-cmd = ["ocicrypt-rs/keywrap-keyprovider-cmd"]
+keywrap-grpc = ["ocicrypt-rs/keywrap-keyprovider-grpc", "prost", "tonic", "tonic-build"]
+keywrap-native = ["ocicrypt-rs/keywrap-keyprovider-native", "attestation_agent"]
+keywrap-ttrpc = ["ocicrypt-rs/keywrap-keyprovider-ttrpc", "dep:ttrpc", "dep:protobuf", "ttrpc-codegen"]
+
+eaa-kbc = ["attestation_agent/eaa_kbc", "ocicrypt-rs/eaa_kbc"]
+
+signature = ["hex"]
+signature-simple = ["signature", "sequoia-openpgp", "serde_yaml", "url"]
+signature-cosign = ["signature", "sigstore"]
+
+snapshot-overlayfs = ["nix"]
+snapshot-unionfs = ["nix", "dircpy", "fs_extra"]
+
+getresource = []

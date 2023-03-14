@@ -1,0 +1,19 @@
+warning: unused import: `displaydoc::Display`
+  --> $DIR/without.rs:20:5
+   |
+20 | use displaydoc::Display;
+   |     ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+error[E0277]: `FakeType` doesn't implement `std::fmt::Display`
+  --> $DIR/without.rs:25:44
+   |
+25 | static_assertions::assert_impl_all!(label; FakeType, core::fmt::Display);
+   | -------------------------------------------^^^^^^^^----------------------
+   | |                                          |
+   | |                                          `FakeType` cannot be formatted with the default formatter
+   | required by this bound in `assert_impl_all`
+   |
+   = help: the trait `std::fmt::Display` is not implemented for `FakeType`
+   = note: in format strings you may be able to use `{:?}` (or {:#?} for pretty-print) instead

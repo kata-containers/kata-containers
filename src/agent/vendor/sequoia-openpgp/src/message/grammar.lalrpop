@@ -1,0 +1,79 @@
+// -*- mode: Rust; -*-
+
+use crate::message::lexer;
+
+grammar;
+
+pub Message: () = {
+    LITERAL,
+    CompressedData,
+    EncryptedPart,
+    SignedPart,
+    OPAQUE_CONTENT,
+};
+
+CompressedData: () = {
+    COMPRESSED_DATA Message POP
+};
+
+Seipv1Part: () = {
+    SEIPv1 Message MDC POP,
+    SEIPv1 OPAQUE_CONTENT POP,
+}
+
+AedPart: () = {
+    AED Message POP,
+}
+
+// An encrypted part is 0 or more ESKs followed by an encryption container.
+EncryptedPart: () = {
+    EncryptionContainer,
+    ESKS EncryptionContainer,
+};
+
+EncryptionContainer: () = {
+    Seipv1Part,
+    AedPart,
+};
+
+ESKS: () = {
+    ESK,
+    ESKS ESK,
+};
+
+ESK: () = {
+    PKESK,
+    SKESK,
+};
+
+// Signatures bracket a message like so:
+//
+//   OPS OPS Message SIG SIG
+//
+// or, there are 1 or more signatures preceding a Message (this is an
+// artifact of old PGP versions):
+//
+//   SIG SIG Message
+SignedPart: () = {
+    SIG Message,
+    OPS Message SIG,
+}
+
+extern {
+    type Location = usize;
+    type Error = lexer::LexicalError;
+
+    enum lexer::Token {
+        LITERAL => lexer::Token::Literal,
+        COMPRESSED_DATA => lexer::Token::CompressedData,
+        SKESK => lexer::Token::SKESK,
+        PKESK => lexer::Token::PKESK,
+        SEIPv1 => lexer::Token::SEIPv1,
+        MDC => lexer::Token::MDC,
+        AED => lexer::Token::AED,
+        OPS => lexer::Token::OPS,
+        SIG => lexer::Token::SIG,
+        POP => lexer::Token::Pop,
+        OPAQUE_CONTENT => lexer::Token::OpaqueContent,
+    }
+}

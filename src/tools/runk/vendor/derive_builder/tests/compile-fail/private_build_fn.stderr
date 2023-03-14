@@ -1,0 +1,13 @@
+warning: unused import: `Lorem`
+  --> $DIR/private_build_fn.rs:23:21
+   |
+23 |     use container::{Lorem, LoremBuilder};
+   |                     ^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+error[E0624]: method `build` is private
+  --> $DIR/private_build_fn.rs:27:42
+   |
+27 |     let lorem2 = LoremBuilder::default().build().unwrap();
+   |                                          ^^^^^

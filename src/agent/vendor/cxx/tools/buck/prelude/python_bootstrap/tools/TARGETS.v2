@@ -1,0 +1,7 @@
+prelude = native
+
+prelude.sh_binary(
+    name = "win_python_wrapper",
+    main = "win_python_wrapper.bat",
+    visibility = ["PUBLIC"],
+)

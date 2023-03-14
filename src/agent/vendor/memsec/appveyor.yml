@@ -1,0 +1,20 @@
+environment:
+  matrix:
+    - TARGET: i686-pc-windows-msvc
+    - TARGET: x86_64-pc-windows-msvc
+
+install:
+  - appveyor-retry appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
+  - rustup-init.exe -y --default-host %TARGET% --default-toolchain nightly
+  - set PATH=%PATH%;C:\Users\appveyor\.cargo\bin
+  - rustc --version
+  - cargo --version
+
+build: false
+
+test_script:
+  - 'cd memsec-test'
+  - 'cargo test --no-default-features'
+  - 'cargo test'
+  - 'cargo test --features nightly'
+  - 'cargo bench --features nightly'

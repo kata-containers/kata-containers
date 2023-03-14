@@ -1,0 +1,27 @@
+{
+  "signed": {
+    "_type": "targets",
+    "spec_version": "1.0.0",
+    "version": 3,
+    "expires": "3021-01-27T00:56:48.450414Z",
+    "targets": {},
+    "delegations": {
+      "keys": {
+        "0f432a9dfff85a943dd7a4fb7ff3221ad6495ef81d0342cb74094c208aa8934b": {
+          "keytype": "rsa",
+          "keyval": {
+            "public": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq0Q5xtn047yiCQlsZELR\nnUbk5tnIXEresMBpxu9NC5t2ywjhA/EQ22aX6Sy85PAvSUlE+DBIbLmm5o0EPbF8\n7e6EkZxj5Nz3O/UYMCgqpLE1bNIFSZzQNXOAfYqWsTE9rIQpJnZfpmPSruZ95xdN\nZsXh6rCdM3HfSpID+hE3Mq97dehdoW18DGxnorkuzTTLD9oA+Wz+Ctq1wpmBKraH\npkI8Q4QQ0ej74dEgEXxdLlAjFnEWmU/yTwUoa5hXtYcwq7MB/haT9DkUmeI4Wyk7\n5gamMun1tFgnEXso+YePUQg2ySMam0/nWVCbVMqVBveWk+TawT5Z8SytNKXQTCNS\nswIDAQAB\n-----END PUBLIC KEY-----"
+          },
+          "scheme": "rsassa-pss-sha256"
+        }
+      },
+      "roles": []
+    }
+  },
+  "signatures": [
+    {
+      "keyid": "0f432a9dfff85a943dd7a4fb7ff3221ad6495ef81d0342cb74094c208aa8934b",
+      "sig": "4aba04bd0217a205b1d799a1b7b7163b46328e2192cc63a992b04858f5f6b4709dbe585f916141ba7ffe15f07915ae9d853a79c106dadb0782fd368842226c88b27de15f3a12e42a83c5e1332cb889dba5b833976c42f4007cc3606ef3a84851c92318f5fde2b1e8a6c99e8dc22f8651703f16dc7d220013cb9da3226a9836e1143670208a45e91b6b405d24667d355637b2b0f8ada410f1e819443102a6b270e23c41222c001399142a8abb3bfe63dc6d313b7b345dbb918f71c5c3ad6a02295fe224387175350c87c9e356740aafbad09fceae6354acbcc214cd504607a6867848f5460cea87e1ba73945dba2b155f08b61b58d6ee55bdebc2327ac5e854c3"
+    }
+  ]
+}

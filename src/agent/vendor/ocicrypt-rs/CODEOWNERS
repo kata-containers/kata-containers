@@ -1,0 +1,8 @@
+# The purpose of this file is to track project maintainers and
+# trigger review requests when someone opens a pull request.
+#
+# See https://help.github.com/articles/about-codeowners/
+# to learn more about CODEOWNERS file.
+
+# Global Owners
+* @sameo @jiangliu @arronwy @lumjjb

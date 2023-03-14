@@ -1,0 +1,48 @@
+{
+  "created": "2015-10-31T22:22:56.015925234Z",
+  "author": "Alyssa P. Hacker <alyspdev@example.com>",
+  "architecture": "amd64",
+  "os": "linux",
+  "config": {
+    "User": "alice",
+    "ExposedPorts": {
+      "8080/tcp": {}
+    },
+    "Env": [
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      "FOO=oci_is_a",
+      "BAR=well_written_spec"
+    ],
+    "Entrypoint": [
+      "/bin/my-app-binary"
+    ],
+    "Cmd": [
+      "--foreground",
+      "--config",
+      "/etc/my-app.d/default.cfg"
+    ],
+    "Volumes": {
+      "/var/job-result-data": {},
+      "/var/log/my-app-logs": {}
+    },
+    "WorkingDir": "/home/alice"
+  },
+  "rootfs": {
+    "type": "layers",
+    "diff_ids": [
+      "sha256:c6f988f4874bb0add23a778f753c65efe992244e148a1d2ec2a8b664fb66bbd1",
+      "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+    ]
+  },
+  "history": [
+    {
+      "created": "2015-10-31T22:22:54.690851953Z",
+      "created_by": "/bin/sh -c #(nop) ADD file:a3bc1e842b69636f9df5256c49c5374fb4eef1e281fe3f282c65fb853ee171c5 in /"
+    },
+    {
+      "created": "2015-10-31T22:22:55.613815829Z",
+      "created_by": "/bin/sh -c #(nop) CMD [\"sh\"]",
+      "empty_layer": true
+    }
+  ]
+}

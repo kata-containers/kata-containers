@@ -1,0 +1,511 @@
+openapi: 3.0.2
+info:
+  description:
+    RESTful public-facing management API. The API is accessible through
+    HTTP calls on specific URLs carrying JSON modeled data.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  title: Nydus-rs API
+  version: 0.1.0
+servers:
+  - url: http://localhost/api/v1
+paths:
+  /daemon:
+    summary: Returns general information about a nydus-rs daemon
+    get:
+      operationId: describeDaemon
+      responses:
+        "200":
+          description: Daemon information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DaemonInfo"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+    put:
+      operationId: configureDaemon
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DaemonConf"
+      responses:
+        "204":
+          description: "Successfully configure the daemon!"
+        "500":
+          description: "Can't configure the daemon!"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+  /daemon/events:
+    get:
+      operationId: getEvents
+      responses:
+        "200":
+          description: "Get events happened to nydusd"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Events"
+        "500":
+          description: Nydus api server can't process this request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+  /daemon/backend:
+    get:
+      operationId: queryFsBackend
+      responses:
+        "200":
+          description: "Query mounted file system backend"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DaemonFsBackend"
+        "500":
+          description: Nydus api server can't process this request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+  /daemon/exit:
+    put:
+      operationId: exitDaemon
+      responses:
+        "204":
+          description: "Let nydusd process exit"
+        "500":
+          description: Nydus api server can't process this request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+  /mount:
+    post:
+      operationId: mountFsBackend
+      summary: Operations on nydus file system instances.
+      parameters:
+        - name: mountpoint
+          in: query
+          description: Which directory(mountpoint) in pseudo fs hierarchy to mount to
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MountCmd"
+        required: true
+      responses:
+        "204":
+          description: The fs backend has already been successfully mounted
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+          description: Failed in mounting fs backend due to bad request
+    put:
+      operationId: remountFsBackend
+      parameters:
+        - name: mountpoint
+          in: query
+          description: Which directory(mountpoint) in pseudo fs hierarchy to mount to
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MountCmd"
+        required: true
+      responses:
+        "204":
+          description: The mount update was successful
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+          description: The mount update action cannot be executed due to bad input
+      summary: Updates a mount.
+    delete:
+      summary: Umount the specified file system backend
+      operationId: umountFsBackend
+      parameters:
+        - name: mountpoint
+          in: query
+          description: Which directory(mountpoint) in pseudo fs hierarchy to umount from
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Operation - umount - is successful
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+          description: Umount operation is not done successfully.
+  /metrics:
+    get:
+      operationId: exportRafsMetrics
+      summary: Rafs filesystem level global metrics.
+      parameters:
+        - name: id
+          in: query
+          description: "Specify rafs id to get its metrics"
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Rafs metrics export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RafsMetrics"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+          description: Perhaps no counter is found
+  /metrics/files:
+    get:
+      summary: Returns Rafs files' fop stats
+      operationId: exportRafsFilesMetrics
+      parameters:
+        - name: id
+          in: query
+          description: "Specify rafs id to get its all files metrics"
+          required: false
+          schema:
+            type: string
+        - name: latest
+          description: "The returned list represents all files that are ever read ignoring the frequency. The metics of each file will be cleared after this request."
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/RafsLatestReadFiles"
+                  - $ref: "#/components/schemas/RafsFilesMetrics"
+          description: Rafs all opened files metrics export
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+          description: Internal Server Error
+  /metrics/pattern:
+    get:
+      operationId: exportRafsFilesAccessPattern
+      summary: Rafs files' access patterns
+      parameters:
+        - name: id
+          in: query
+          description: "Specify rafs id to get its all files access patterns"
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RafsFilesAccessPatterns"
+          description: Rafs access pattern exporting
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+          description: Internal Server Error
+  /metrics/backend:
+    get:
+      parameters:
+        - name: id
+          in: query
+          description: It is equal to ID of rafs, the ID is also the mountpoint of backend fs.
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RafsBackend"
+          description: Rafs storage backend metrics
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+          description: Internal Server Error
+  /metrics/blobcache:
+    get:
+      parameters:
+        - name: id
+          in: query
+          description: It is equal to ID of rafs, the ID is also the mountpoint of backend fs.
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Blobcache"
+          description: Blobcache metrics
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+          description: Internal Server Error
+  /metrics/inflight:
+    get:
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FuseInflight"
+          description: A set including what fuse requests are being handled. External manager can query this info to judge if request is hang
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+          description: Internal Server Error
+
+components:
+  schemas:
+    DaemonInfo:
+      properties:
+        version:
+          type: object
+          properties:
+            package_ver:
+              type: string
+            git_commit:
+              type: string
+            build_time:
+              type: string
+            profile:
+              type: string
+            rustc:
+              type: string
+        id:
+          type: string
+        supervisor:
+          type: string
+        state:
+          type: string
+          enum:
+            - INIT
+            - RUNNING
+            - UPGRADING
+            - INTERRUPTED
+            - STOPPED
+            - UNKNOWN
+        backend_collection:
+          type: object
+      type: object
+    DaemonConf:
+      type: object
+      properties:
+        log_level:
+          type: string
+          enum: [trace, debug, info, warn, error]
+    DaemonFsBackend:
+      type: object
+    MountCmd:
+      type: object
+      properties:
+        fs_type:
+          type: string
+        source:
+          description: usually to be the metadata source
+          type: string
+        prefetch_files:
+          description: files that need to be prefetched
+          type: array
+          items:
+            type: string
+        config:
+          description: inline request, use to configure fs backend.
+          type: string
+    ErrorMsg:
+      type: object
+      properties:
+        code:
+          description: Nydus defined error code indicating certain error type
+          type: string
+        message:
+          description: Details about the error
+          type: string
+    RafsMetrics:
+      type: object
+      properties:
+        files_account_enabled:
+          type: boolean
+        measure_latency:
+          type: boolean
+        data_read:
+          type: integer
+        block_count_read:
+          type: array
+          items:
+            type: integer
+        fop_hits:
+          type: array
+          items:
+            type: integer
+        fop_errors:
+          type: array
+          items:
+            type: integer
+        fop_cumulative_latency_total:
+          type: array
+          items:
+            type: integer
+        read_latency_dist:
+          type: array
+          items:
+            type: integer
+        nr_opens:
+          type: integer
+    RafsFilesMetrics:
+      type: object
+      properties:
+        nr_open:
+          type: integer
+        total_fops:
+          type: integer
+        data_read:
+          type: integer
+        block_count_read:
+          type: array
+          items:
+            type: integer
+        fop_hits:
+          type: array
+          items:
+            type: integer
+        fop_errors:
+          type: array
+          items:
+            type: integer
+    RafsLatestReadFiles:
+      type: array
+      description: File ino array, [start,end] -- include inode from start to end, [ino] -- include inode ino
+      items:
+        type: array
+        items:
+          type: integer
+    RafsFilesAccessPatterns:
+      properties:
+        ino:
+          type: integer
+          description: File inode number to identify which file is against
+        nr_read:
+          type: integer
+          description: How many times a file is read regardless of io block size and request offset
+        first_access_time_secs:
+          type: integer
+          description: First time point at which this file is read. It's wall-time in unit of seconds
+    RafsBackend:
+      type: object
+      properties:
+        id:
+          type: string
+        backend_type:
+          type: string
+        read_count:
+          type: string
+        read_errors:
+          type: integer
+        read_amount_total:
+          type: integer
+        read_latency_dist:
+          type: array
+          items:
+            type: array
+            items:
+              type: integer
+    Blobcache:
+      type: object
+      properties:
+        id:
+          type: string
+        underlying_files:
+          type: string
+        store_path:
+          type: string
+        partial_hits:
+          type: integer
+        whole_hits:
+          type: integer
+        total:
+          type: integer
+        entries_count:
+          type: integer
+        prefetch_data_amount:
+          type: integer
+        prefetch_workers:
+          type: integer
+        prefetch_mr_count:
+          type: integer
+        prefetch_unmerged_chunks:
+          type: integer
+    FuseInflight:
+      type: array
+      items:
+        required:
+          - inode
+          - opcode
+          - unique
+          - timestamp_secs
+        type: object
+        properties:
+          inode:
+            type: integer
+          opcode:
+            type: integer
+          unique:
+            type: integer
+          timestamp_secs:
+            type: integer
+    Events:
+      type: object
+      properties:
+        max_errors:
+          type: integer
+        total_errors:
+          type: integer
+        max_size:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string

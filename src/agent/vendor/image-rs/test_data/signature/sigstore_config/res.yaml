@@ -1,0 +1,7 @@
+default-docker:
+  sigstore: file:///default/sigstore
+docker:
+  example1.com:
+    sigstore: file:///var/lib/containers/sigstore
+  example2.com:
+    sigstore: file:///var/lib/containers/sigstore

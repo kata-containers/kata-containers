@@ -1,0 +1,55 @@
+[advisories]
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+vulnerability = "deny"
+unmaintained = "warn"
+yanked = "warn"
+notice = "warn"
+
+[licenses]
+unlicensed = "deny"
+copyleft = "warn"
+allow-osi-fsf-free = "neither"
+confidence-threshold = 0.8
+allow = [
+	"MIT",
+	"Zlib",
+	"Apache-2.0",
+	"Unlicense",
+	"0BSD",
+	"BSL-1.0",
+	"BSD-3-Clause"
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+deny = [
+	{ name = "CoreFoundation-sys" },
+	{ name = "exif" },
+	{ name = "exif-sys" },
+	{ name = "gphoto" },
+	{ name = "gphoto2-sys" },
+	{ name = "ioctl-rs" },
+	{ name = "IOKit-rs" },
+	{ name = "libraw" },
+	{ name = "libraw-sys" },
+	{ name = "libudev" },
+	{ name = "libudev-sys" },
+	{ name = "libusb" },
+	{ name = "libusb-sys" },
+	{ name = "mach" },
+	{ name = "serial" },
+	{ name = "serial-core" },
+	{ name = "serial-unix" },
+	{ name = "serial-windows" },
+	{ name = "termios" },
+	{ name = "zwave" },
+]
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

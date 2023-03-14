@@ -1,0 +1,5 @@
+# we synchronize all versions, so one tag should be enough
+tag-prefix = ""
+tag-name = "v{{version}}"
+consolidate-commits = true
+consolidate-pushes = true

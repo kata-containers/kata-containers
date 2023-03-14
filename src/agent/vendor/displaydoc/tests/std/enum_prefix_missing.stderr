@@ -1,0 +1,19 @@
+error: proc-macro derive panicked
+  --> $DIR/enum_prefix_missing.rs:22:10
+   |
+22 | #[derive(Display)]
+   |          ^^^^^^^
+   |
+   = help: message: Missing doc comment on enum with #[prefix_enum_doc_attributes]. Please remove the attribute or add a doc comment to the enum itself.
+
+error[E0277]: `TestType` doesn't implement `std::fmt::Display`
+  --> $DIR/enum_prefix_missing.rs:32:44
+   |
+32 | static_assertions::assert_impl_all!(label; TestType, core::fmt::Display);
+   | -------------------------------------------^^^^^^^^----------------------
+   | |                                          |
+   | |                                          `TestType` cannot be formatted with the default formatter
+   | required by this bound in `assert_impl_all`
+   |
+   = help: the trait `std::fmt::Display` is not implemented for `TestType`
+   = note: in format strings you may be able to use `{:?}` (or {:#?} for pretty-print) instead

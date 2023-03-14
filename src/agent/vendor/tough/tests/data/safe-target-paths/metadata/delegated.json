@@ -1,0 +1,26 @@
+{
+  "signed": {
+    "_type": "targets",
+    "spec_version": "1.0.0",
+    "version": 1,
+    "expires": "2999-01-01T00:00:00Z",
+    "targets": {
+      "../delegated/foo/../subdir/data3.txt": {
+        "length": 14,
+        "hashes": {
+          "sha256": "ca4fb8d92326eccc3bf37bb1b5cb2c57bb558c884db3180e6e3ab65631ed9cd2"
+        }
+      }
+    },
+    "delegations": {
+      "keys": {},
+      "roles": []
+    }
+  },
+  "signatures": [
+    {
+      "keyid": "69f069cf595e3f09cbe99a9f0f82127f7c7d2fde859e30fd5c0f2b4fc9c4a507",
+      "sig": "2adaaef0b3e49a7bb88573e9fc6888543938c2e6784a6c464f59ba69804300da3a01fec06ddad9539f34722895bd799539c0e7645651abff6c1e8f7e4e4509f271989e92646b62ab14d39c7c2afba1dea350a9f019248b6972fca03992a1313f8a2b760c8c5c91a0216f5215a06123bfa39a195b6d3eb066c8796b68169679fbc21079f842c6dbf985eb3b1b54612f3c98a9300c291a7eec2dd16373fbabdedf6bf091a9edab5d9d36591a200aa1437f8cf238268798562d59edb6db1b1c75460a9f2a402d55e3e5d45286d51f6362b2daefa95cf7a3f99cec3fb086543cd15ab2ecd63469bb5bddaef50f9140b0af84fe37ed9fc30d6f019e94d0068006780258d9e8a643e17d34fe8f20ad19c7365f2b00c640c9c884a617d0b06c54203ca659799f33c0f4786e1dc0e8b6ab3650242e1d48ea5a0dae49ca0fda06b0ed597e2cdf9c141901d67997984e8816f744f54baaf29c2ff96e7afde644f364c9d175496f45fdb9a8584cd8289cf88337d4f7d968ecf9313725f362a7e05cd9873f55"
+    }
+  ]
+}

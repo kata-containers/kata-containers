@@ -1,0 +1,14 @@
+error: the async keyword is missing from the function declaration
+ --> $DIR/main-02-only-async.rs:2:1
+  |
+2 | fn main() {
+  | ^^
+
+error[E0601]: `main` function not found in crate `$CRATE`
+ --> $DIR/main-02-only-async.rs:1:1
+  |
+1 | / #[actix_rt::main]
+2 | | fn main() {
+3 | |     futures_util::future::ready(()).await
+4 | | }
+  | |_^ consider adding a `main` function to `$DIR/tests/trybuild/main-02-only-async.rs`

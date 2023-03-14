@@ -1,0 +1,3 @@
+pre-release-commit-message = "chore({{crate_name}}): release {{version}}"
+pro-release-commit-message = "chore({{crate_name}}): starting development cycle for {{next_version}}"
+no-dev-version = true

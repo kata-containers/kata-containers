@@ -1,0 +1,43 @@
+Some messages with a fair amount of recursion.  These messages were
+created by sequoia.  See serialize/serialize.rs:serialize_and_parse_1.
+
+recursive-1.gpg:
+
+  1: CompressedData(CompressedData { algo: 0 })
+   1: Literal(Literal { body: "one (3 bytes)" })
+   2: Literal(Literal { body: "two (3 bytes)" })
+  2: Literal(Literal { body: "three (5 bytes)" })
+
+recursive-2.gpg:
+
+  1: CompressedData(CompressedData { algo: 0 })
+   1: CompressedData(CompressedData { algo: 0 })
+    1: Literal(Literal { body: "one (3 bytes)" })
+    2: Literal(Literal { body: "two (3 bytes)" })
+   2: CompressedData(CompressedData { algo: 0 })
+    1: Literal(Literal { body: "three (5 bytes)" })
+    2: Literal(Literal { body: "four (4 bytes)" })
+
+recursive-3.gpg:
+
+  1: CompressedData(CompressedData { algo: 0 })
+   1: CompressedData(CompressedData { algo: 0 })
+    1: CompressedData(CompressedData { algo: 0 })
+     1: CompressedData(CompressedData { algo: 0 })
+      1: Literal(Literal { body: "one (3 bytes)" })
+      2: Literal(Literal { body: "two (3 bytes)" })
+   2: CompressedData(CompressedData { algo: 0 })
+    1: CompressedData(CompressedData { algo: 0 })
+     1: Literal(Literal { body: "three (5 bytes)" })
+    2: Literal(Literal { body: "four (4 bytes)" })
+
+recursive-4.gpg:
+
+  1: CompressedData(CompressedData { algo: 0 })
+   1: Literal(Literal { body: "one (3 bytes)" })
+   2: Literal(Literal { body: "two (3 bytes)" })
+  2: Literal(Literal { body: "three (5 bytes)" })
+  3: Literal(Literal { body: "four (4 bytes)" })
+  4: CompressedData(CompressedData { algo: 0 })
+   1: Literal(Literal { body: "five (4 bytes)" })
+   2: Literal(Literal { body: "six (3 bytes)" })

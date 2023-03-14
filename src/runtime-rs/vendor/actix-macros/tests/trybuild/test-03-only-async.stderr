@@ -1,0 +1,5 @@
+error: the async keyword is missing from the function declaration
+ --> $DIR/test-03-only-async.rs:2:1
+  |
+2 | fn my_test() {
+  | ^^

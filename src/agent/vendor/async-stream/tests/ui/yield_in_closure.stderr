@@ -1,0 +1,20 @@
+error[E0658]: yield syntax is experimental
+ --> tests/ui/yield_in_closure.rs:7:17
+  |
+7 |                 yield v;
+  |                 ^^^^^^^
+  |
+  = note: see issue #43122 <https://github.com/rust-lang/rust/issues/43122> for more information
+
+error[E0277]: expected a `FnOnce<(&str,)>` closure, found `[generator@$DIR/src/lib.rs:201:9: 201:67]`
+    --> tests/ui/yield_in_closure.rs:6:14
+     |
+6    |             .and_then(|v| {
+     |              ^^^^^^^^ expected an `FnOnce<(&str,)>` closure, found `[generator@$DIR/src/lib.rs:201:9: 201:67]`
+     |
+     = help: the trait `FnOnce<(&str,)>` is not implemented for `[generator@$DIR/src/lib.rs:201:9: 201:67]`
+note: required by a bound in `Result::<T, E>::and_then`
+    --> $RUST/core/src/result.rs
+     |
+     |     pub fn and_then<U, F: FnOnce(T) -> Result<U, E>>(self, op: F) -> Result<U, E> {
+     |                           ^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Result::<T, E>::and_then`

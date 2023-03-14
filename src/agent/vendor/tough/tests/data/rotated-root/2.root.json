@@ -1,0 +1,54 @@
+{
+  "signed": {
+    "_type": "root",
+    "spec_version": "1.0.0",
+    "consistent_snapshot": true,
+    "version": 2,
+    "expires": "2029-07-27T00:00:00Z",
+    "keys": {
+      "0f06306f1e0f91c5378abd5dce3dddf3a50f1c24c222f23d1dcf68d6757f4a66": {
+        "keytype": "rsa",
+        "keyval": {
+          "public": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxWuv6jUC2N1kw2/OUE+3\nny7t7y9pdu3WWemwiCQBKoxfhhBBcVtKbWcAQ6E3zb43B7gDma4JpbLRBjrL8cUE\nBTWow1SA2H65D+gUndHHf17GPRS6vnf95AANUnX+yRx9GDJ+/We40lx08v6x+1Cg\nP+18gsu8beZY7yFpole/RMePWXFIe8WINle+ipsOlkF+M3ScRou+2KJLp9NpXjl4\nGBgsfrZHDeQgnoWxW71Uwq7LAGsGqdC1P5LV72XGdhKyCnXZaTzBcG6hsEz4hbJr\ntLKyvDvIUVseScEGGqSo6JHA05ui90sDh8qpgjlE/wqEu/AC7U2ns56xl96kwTyq\nEwIDAQAB\n-----END PUBLIC KEY-----"
+        },
+        "scheme": "rsassa-pss-sha256"
+      }
+    },
+    "roles": {
+      "timestamp": {
+        "keyids": [
+          "0f06306f1e0f91c5378abd5dce3dddf3a50f1c24c222f23d1dcf68d6757f4a66"
+        ],
+        "threshold": 1
+      },
+      "snapshot": {
+        "keyids": [
+          "0f06306f1e0f91c5378abd5dce3dddf3a50f1c24c222f23d1dcf68d6757f4a66"
+        ],
+        "threshold": 1
+      },
+      "root": {
+        "keyids": [
+          "0f06306f1e0f91c5378abd5dce3dddf3a50f1c24c222f23d1dcf68d6757f4a66"
+        ],
+        "threshold": 1
+      },
+      "targets": {
+        "keyids": [
+          "0f06306f1e0f91c5378abd5dce3dddf3a50f1c24c222f23d1dcf68d6757f4a66"
+        ],
+        "threshold": 1
+      }
+    }
+  },
+  "signatures": [
+    {
+      "keyid": "5760559a44a80c1f4b546bf2f850a76a63a68ec861cfc466f204385dc0aecc67",
+      "sig": "bb0b04154886fe32c441e5024d5bb68933943732472ca9d15151743103f80049666a9d127bb9a9a0ee37dc3a4429a0aed883d209763889ebe280fe6b028a0f7aedc13bc8cc2f75e9d8eca1025e59753de27607c7f333b3b28e1e227e79dfdbc6221449ce05062c356e89527029bd797793b8f2e69f0cbea00d1f98dfa8851b7b6743b1a9cf00192c05fb2898924d96850f398566d2106a533c9842f9ca783acde299505c59bba075e5113c127cb1a531b8563635e768be95e9b770f8fbf9f433a1342f8b43f6d73b96c9e6b958d69b17ab6dac6e36689d1e13a897251441434aa249d5ffeb60b3a0c96318329a0ae13af032cb7fe3a4b34354a7619bf628e4f2"
+    },
+    {
+      "keyid": "0f06306f1e0f91c5378abd5dce3dddf3a50f1c24c222f23d1dcf68d6757f4a66",
+      "sig": "890ca89848b9e3b966a0292ec2fa13b39e33d56c0936facfa0e633f9369e2f14572f9406d114825ec7cfa97700eb9dfa3d6caa8371d88335b248c008797985a6ccd2ee9fe9d1b85efea7be1f4caa3914886ec9f757f393ead537341c8e432895ad502c83600a88a3fe64c288512e70333103918d53fa5d777e6b2270c06298a0e29efb24f69fec2337f3ce8863a1b70d1462b9cb9f6e24f97fdad78f0fcaca61acf690ccf215a65abab87dcb0771c07de653c0d8de57a4236ebc71fabff245779918a37628304bb41aad45f67ef4932f289798c33df7892d6d45a7f0437766aa624eb9992c2537806b1013061a746701037854b5a0ec04356de85c52adf9e239"
+    }
+  ]
+}

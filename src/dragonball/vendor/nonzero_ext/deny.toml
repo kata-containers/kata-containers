@@ -1,0 +1,38 @@
+[advisories]
+vulnerability = "deny"
+unmaintained = "warn"
+notice = "warn"
+ignore = []
+
+[licenses]
+unlicensed = "deny"
+allow = [
+    "Apache-2.0",
+    "MIT",
+]
+deny = []
+copyleft = "warn"
+# Blanket approval or denial for OSI-approved or FSF Free/Libre licenses
+# * both - The license will only be approved if it is both OSI-approved *AND* FSF/Free
+# * either - The license will be approved if it is either OSI-approved *OR* FSF/Free
+# * osi-only - The license will be approved if is OSI-approved *AND NOT* FSF/Free
+# * fsf-only - The license will be approved if is FSF/Free *AND NOT* OSI-approved
+# * neither - The license will be denied if is FSF/Free *OR* OSI-approved
+allow-osi-fsf-free = "neither"
+confidence-threshold = 0.8
+
+[bans]
+# Lint level for when multiple versions of the same crate are detected
+multiple-versions = "warn"
+highlight = "lowest-version"
+allow = [
+    #{ name = "ansi_term", version = "=0.11.0" },
+]
+deny = [
+]
+# Certain crates/versions that will be skipped when doing duplicate detection.
+skip = [
+    #{ name = "ansi_term", version = "=0.11.0" },
+]
+skip-tree = [
+]

@@ -1,0 +1,109 @@
+[advisories]
+ignore = [
+    # We are using some deprecated versions to support Windows
+    "RUSTSEC-2020-0016",
+
+    # a chrono issue, this is just a test dependency
+    "RUSTSEC-2020-0071",
+]
+
+[licenses]
+
+confidence-threshold = 1.0
+copyleft = "deny"
+unlicensed = "deny"
+allow-osi-fsf-free = "both"
+default = "deny"
+
+# List of explictly allowed licenses
+# See https://spdx.org/licenses/ for list of possible licenses
+# [possible values: any SPDX 3.11 short identifier (+ optional exception)].
+allow = [
+    "BSD-2-Clause",
+    "LicenseRef-krator",
+    "LicenseRef-krator-derive",
+    "LicenseRef-ring",
+    "LicenseRef-webpki",
+    "LicenseRef-webpki-roots",
+    "MPL-2.0",
+    "Unicode-DFS-2016",
+]
+
+deny = [
+    "AGPL-3.0",
+    "WTFPL",
+]
+
+[[licenses.clarify]]
+name = "ring"
+expression = "LicenseRef-ring"
+license-files = [
+    { path = "LICENSE", hash = 0xbd0eed23 },
+]
+
+[[licenses.clarify]]
+name = "webpki"
+expression = "LicenseRef-webpki"
+license-files = [
+    { path = "LICENSE", hash = 0x001c7e6c },
+]
+
+[[licenses.clarify]]
+name = "encoding_rs"
+version = "*"
+expression = "(Apache-2.0 OR MIT) AND BSD-3-Clause"
+license-files = [
+    { path = "COPYRIGHT", hash = 0x39f8ad31 }
+]
+
+[bans]
+skip = [
+    # Pretty much all of these are for duplicate versions
+
+    # Clap is using a lower version, so we can ignore it for now
+    { name = "ansi_term", version = "=0.11.0" },
+    # Currently there is an upper bound on later versions of hyperx that make it impossible to
+    # resolve dependencies. We need https://github.com/dekellum/hyperx/pull/34 merged in order to
+    # update the dependencies here
+    { name = "base64", version = "=0.10.1" },
+    { name = "bytes", version = "=0.4.12" },
+    { name = "http", version = "=0.1.21" },
+    { name = "percent-encoding", version = "=1.0.1" },
+
+    # Old bitflags comes from old dependency needed for Windows
+    { name = "bitflags", version = "=0.9.1" },
+    # Windows testing dep
+    { name = "bytes", version = "=0.3.0" },
+    # Windows dep
+    { name = "bytes", version = "=0.5.6" },
+
+    # Duplicate deps from kube dependencies
+    { name = "pin-project", version = "=0.4.28"},
+    { name = "pin-project-internal", version = "=0.4.28"},
+
+    # Used by tempfile in our tests
+    { name = "remove_dir_all", version = "=0.5.3"},
+
+    # We depend on www-authenticate, which depends on these older versions
+    { name = "unicase", version = "=1.4.2"},
+    { name = "version_check", version = "=0.1.5"},
+
+    # There appear to be several wasmtime-wasi dependencies that are out of sync. This skips those
+    # specific ones
+    { name = "wast", version = "=35.0.2" },
+]
+
+skip-tree = [
+    # Skip these windows specific crates that we know are using old versions, which trigger duplicates
+    { name = "mio", version = "^0.6" },
+    { name = "miow", version = "^0.2" },
+    { name = "tokio-compat-02", version = "=0.2.0"},
+    { name = "env_logger", version = "=0.4.3"},
+    { name = "version-sync", version = "^0.5"},
+
+    # Warp uses an older version of rand, we can ignore that version here
+    { name = "rand", version = "=0.7.3" },
+
+    # Earlier version used by some of the WASI stuff
+    { name = "rustc_version", version = "=0.3.3"},
+]

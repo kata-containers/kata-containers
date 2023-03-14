@@ -1,0 +1,151 @@
+name: ocicrypt-rs build
+on: [push, pull_request, create]
+
+jobs:
+  ci:
+    if: github.event_name == 'pull_request'
+    name: Check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust:
+          - stable
+          - beta
+          - nightly
+
+    # Run all steps in the compilation testing containers
+    container:
+      image: runetest/compilation-testing:ubuntu18.04
+      env:
+        LD_LIBRARY_PATH: /usr/local/lib/rats-tls
+
+    steps:
+      - name: Code checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+      - name: Update cargo home
+        run: |
+          apt-get update && apt-get install -y cargo
+          cp -r /root/.cargo /github/home/.cargo
+      - name: Install Rust toolchain (${{ matrix.rust }})
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+          components: rustfmt, clippy
+
+      - name: Install tonic's protoc dependencies
+        run: |
+          apt install apt protobuf-compiler libprotobuf-dev
+      - name: Build and install rats-tls
+        run: | 
+          apt-get install -y libcurl4-openssl-dev
+          git clone https://github.com/inclavare-containers/rats-tls
+          cd rats-tls
+          git reset --hard 8fbfdb6
+          cmake -DBUILD_SAMPLES=on -H. -Bbuild
+          make -C build install
+      - name: Run cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all-features
+
+      - name: Run cargo build - keywrap-none
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --no-default-features
+
+      - name: Run cargo build - block cipher
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --no-default-features --features=block-cipher
+
+      - name: Run cargo build - keywrap-jwe
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --no-default-features --features=keywrap-jwe
+
+      - name: Run cargo build - keywrap-keyprovider
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --no-default-features --features=keywrap-keyprovider
+
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all-features
+
+      - name: Run cargo test - keywrap-none
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features
+
+      - name: Run cargo test - keywrap-jwe
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features --features=keywrap-jwe
+
+      - name: Run cargo test - keywrap-keyprovider-cmd
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features --features=keywrap-keyprovider-cmd
+
+      - name: Run cargo test - keywrap-keyprovider-grpc
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features --features=keywrap-keyprovider-grpc
+
+      - name: Run cargo test - keywrap-keyprovider-ttrpc
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features --features=keywrap-keyprovider-ttrpc
+
+      - name: Run cargo test - keywrap-keyprovider-native
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features --features=keywrap-keyprovider-native
+
+      - name: Run cargo test - eaa-kbc
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features --features=eaa_kbc
+
+      - name: Run cargo test - default
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features
+
+      - name: Run cargo test - all features
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features --all-features
+
+      - name: Run cargo fmt check
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+      - name: Run rust lint check
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --all-targets --all-features -- -D warnings -A clippy::derive_partial_eq_without_eq

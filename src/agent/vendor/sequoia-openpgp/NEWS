@@ -1,0 +1,165 @@
+                                                              -*- org -*-
+#+TITLE: sequoia-openpgp NEWS – history of user-visible changes
+#+STARTUP: content hidestars
+
+* Changes in 1.11.0
+ * New functionality
+   - Signature3 implements support for parsing, verifying, and
+     reserializing version 3 signature packages.
+   - AsymmetricAlgorithm implements PartialEq, Eq, and Copy.
+   - AsymmetricAlgorithm::variants.
+   - PublicKeyAlgorithm::variants.
+   - SymmetricAlgorithm::variants.
+   - AEADAlgorithm::variants.
+   - CompressionAlgorithm::variants.
+   - HashAlgorithm::variants.
+   - SignatureType::variants.
+   - ReasonForRevocation::variants.
+   - DataFormat::variants.
+   - packet::Tag::variants.
+   - SubpacketTag::variants.
+   - StandardPolicy::reject_all_hashes
+   - StandardPolicy::reject_all_critical_subpackets
+   - StandardPolicy::reject_all_asymmetric_algos
+   - StandardPolicy::reject_all_symmetric_algos
+   - StandardPolicy::reject_all_aead_algos
+   - StandardPolicy::reject_all_packet_tags
+   - StandardPolicy::accept_packet_tag_version
+   - StandardPolicy::reject_packet_tag_version
+   - StandardPolicy::reject_packet_tag_version_at
+   - StandardPolicy::packet_tag_version_cutoff
+** Deprecated functionality
+   - StandardPolicy::packet_tag_cutoff
+* Changes in 1.10.0
+** New functionality
+   - Cert::insert_packets2
+   - Cert::insert_packets_merge
+   - crypto::ecdh::aes_key_wrap
+   - crypto::ecdh::aes_key_unwrap
+   - Error::UnsupportedCert2
+   - TryFrom<Packet> for Unknown
+   - types::{Curve, SymmetricAlgorithm, AEADAlgorithm,
+     PublicKeyAlgorithm}'s Display implementation now provides short
+     names by default. The long descriptions are provided by the
+     alternate formatter (e.g. =format!("{:#}", ...)=)
+   - cert::KeyBuilder
+   - cert::SubkeyBuilder
+   - HashAlgorithm::oid is available on all crypto backends
+     (previously only on Nettle)
+** Deprecated functionality
+   - Error::UnsupportedCert, use Error::UnsupportedCert2 instead
+   - DataFormat::MIME, no replacement, see #863 for details
+   - PacketParser::encrypted, use the negation of PacketParser::processed
+* Changes in 1.9.0
+** New functionality
+   - AEADAlgorithm::nonce_size replaces AEADAlgorithm::iv_size
+   - crypto::backend
+   - Curve::field_size
+   - MPI::is_zero
+   - MPI::zero
+   - packet::Any
+   - Packet::version
+   - SignatureBuilder::set_reference_time
+   - SignatureBuilder::effective_signature_creation_time
+** Deprecated functionality
+   - armor::Reader::new, use armor::Reader::from_reader instead
+   - message::Token is not covered by SemVer guarantees, DO NOT match on it
+   - AEADAlgorithm::iv_size, use AEADAlgorithm::nonce_size
+* Changes in 1.8.0
+** New functionality
+   - crypto::Signer::acceptable_hashes
+   - Fingerprint::V5
+* Changes in 1.7.0
+** Notable fixes
+   - sequoia-openpgp can now be compiled to WASM.
+   - The MSRV is now 1.56.1.
+* Changes in 1.6.0
+** Notable fixes
+   - Decryption of encrypted messages and verification of
+     inline-signed messages is now considerably faster, as is ASCII
+     Armor encoding and decoding.
+** New functionality
+   - CertRevocationBuilder::add_notation
+   - CertRevocationBuilder::set_notation
+   - KeyFlags::clear_group_key
+   - SubkeyRevocationBuilder::add_notation
+   - SubkeyRevocationBuilder::set_notation
+   - UserAttributeRevocationBuilder::add_notation
+   - UserAttributeRevocationBuilder::set_notation
+   - UserIDRevocationBuilder::add_notation
+   - UserIDRevocationBuilder::set_notation
+* Changes in 1.5.0
+** Notable changes
+   - This crate is now licensed under the LGPL 2.0 or later.
+* Changes in 1.4.0
+** New cryptographic backends
+   - We added a backend based on the RustCrypto crates.
+** New functionality
+   - CipherSuite::is_supported
+   - MPI::value_padded
+   - Preferences::policy_uri
+   - ProtectedMPI::value_padded
+   - TSK::eq
+   - ValidAmalgamation::revocation_keys
+   - ValidCert::policy_uri
+   - ValidCert::revocation_keys
+** Notable fixes
+   - Filters set using CertParser::unvalidated_cert_filter are now
+     preserved during iterations.
+* Changes in 1.3.1
+** Notable fixes
+   - Fixed a crash resulting from unconstrained, attacker-controlled
+     heap allocations.
+* Changes in 1.3.0
+** New functionality
+   - CertBuilder::add_subkey_with
+   - CertBuilder::add_user_attribute_with
+   - CertBuilder::add_userid_with
+   - ComponentBundle::attestations
+   - Encryptor::with_session_key
+   - Signature::verify_user_attribute_attestation
+   - Signature::verify_userid_attestation
+   - SignatureBuilder::pre_sign
+   - SignatureBuilder::set_attested_certifications
+   - SignatureType::AttestationKey
+   - SubpacketAreas::MAX_SIZE
+   - SubpacketAreas::attested_certifications
+   - SubpacketTag::AttestedCertifications
+   - SubpacketValue::AttestedCertifications
+   - UserAttributeAmalgamation::attest_certifications
+   - UserIDAmalgamation::attest_certifications
+   - ValidUserAttributeAmalgamation::attest_certifications
+   - ValidUserAttributeAmalgamation::attestation_key_signatures
+   - ValidUserAttributeAmalgamation::attested_certifications
+   - ValidUserIDAmalgamation::attest_certifications
+   - ValidUserIDAmalgamation::attestation_key_signatures
+   - ValidUserIDAmalgamation::attested_certifications
+** Notable fixes
+   - Improve Cert::insert_packets runtime from O(n^2) to O(n log n).
+   - CertParser returned errors out of order (#699).
+* Changes in 1.1.0
+** New functionality
+   - The new regex module provides regular expression support for
+     scoping trust signatures.
+   - Sequoia now supports the Cleartext Signature Framework.
+   - ComponentAmalgamation::signatures
+   - ComponentBundle::signatures
+   - Fingerprint::to_spaced_hex
+   - HashAlgorithm::text_name
+   - KeyHandle now implements FromStr
+   - KeyHandle::is_invalid
+   - KeyHandle::to_hex
+   - KeyHandle::to_spaced_hex
+   - KeyID::to_spaced_hex
+   - Signature4::hash_for_confirmation
+   - Signature::hash_for_confirmation
+   - TSK::armored
+   - ValidComponentAmalgamation::signatures
+** Notable fixes
+   - Fixed two crashes related to detached signature verification.
+   - Fixed a parsing bug where the parser did not consume all data in
+     an compressed data packet.
+
+* Changes in 1.0.0
+
+This is the initial stable release.

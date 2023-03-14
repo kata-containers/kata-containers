@@ -1,0 +1,42 @@
+config_setting(
+    name = "linux",
+    constraint_values = [
+        "//os/constraints:linux",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+config_setting(
+    name = "macos",
+    constraint_values = [
+        "//os/constraints:macos",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+config_setting(
+    name = "windows",
+    constraint_values = [
+        "//os/constraints:windows",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+config_setting(
+    name = "android",
+    constraint_values = [
+        "//os/constraints:android",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+native.constraint_setting(
+    name = "maybe_building_android_binary",
+    visibility = ["prelude//..."],
+)
+
+native.constraint_value(
+    name = "building_android_binary",
+    constraint_setting = ":maybe_building_android_binary",
+    visibility = ["prelude//..."],
+)

@@ -1,0 +1,11 @@
+error[E0603]: struct `LoremBuilder` is private
+  --> $DIR/private_builder.rs:17:18
+   |
+17 |     let x = foo::LoremBuilder::default()
+   |                  ^^^^^^^^^^^^
+
+error[E0624]: method `build` is private
+  --> $DIR/private_builder.rs:19:10
+   |
+19 |         .build()
+   |          ^^^^^

@@ -1,0 +1,11 @@
+load("@fbcode_macros//build_defs:native_rules.bzl", "buck_filegroup")
+load("@fbsource//tools/build_defs:glob_defs.bzl", "glob")
+
+buck_filegroup(
+    name = "prelude",
+    srcs = glob(
+        ["**"],
+        # Context: https://fb.workplace.com/groups/buck2users/posts/3121903854732641/
+        exclude = ["**/.pyre_configuration.local"],
+    ),
+)

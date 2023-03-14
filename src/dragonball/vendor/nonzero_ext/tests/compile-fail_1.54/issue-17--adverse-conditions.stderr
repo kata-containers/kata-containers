@@ -1,0 +1,21 @@
+error[E0277]: the trait bound `BadInt: literals::sealed::IntegerLiteral` is not satisfied
+  --> $DIR/issue-17--adverse-conditions.rs:31:21
+   |
+31 | impl OtherTrait for NonZeroLiteral<BadInt> {
+   |                     ^^^^^^^^^^^^^^^^^^^^^^ the trait `literals::sealed::IntegerLiteral` is not implemented for `BadInt`
+   |
+  ::: $WORKSPACE/src/literals.rs
+   |
+   | pub struct NonZeroLiteral<T: sealed::IntegerLiteral>(pub T);
+   |                              ---------------------- required by this bound in `NonZeroLiteral`
+
+error[E0277]: the trait bound `BadInt: literals::sealed::IntegerLiteral` is not satisfied
+  --> $DIR/issue-17--adverse-conditions.rs:32:28
+   |
+32 |     unsafe fn into_nonzero(self) -> NonZeroUsize {
+   |                            ^^^^ the trait `literals::sealed::IntegerLiteral` is not implemented for `BadInt`
+   |
+  ::: $WORKSPACE/src/literals.rs
+   |
+   | pub struct NonZeroLiteral<T: sealed::IntegerLiteral>(pub T);
+   |                              ---------------------- required by this bound in `NonZeroLiteral`

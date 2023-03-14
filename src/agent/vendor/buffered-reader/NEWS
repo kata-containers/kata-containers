@@ -1,0 +1,25 @@
+                                                              -*- org -*-
+#+TITLE: buffered-reader NEWS – history of user-visible changes
+#+STARTUP: content hidestars
+
+* Changes in 1.1.2
+** Notable changes
+   - The generic buffered reader now correctly handles end-of-file
+     situations.
+
+* Changes in 1.1.1
+** Notable changes
+   - The generic buffered reader now recycles buffers reducing
+     pressure on the heap allocator.
+
+* Changes in 1.1.0
+** Notable changes
+   - This crate is now licensed under the LGPL 2.0 or later.
+
+* Changes in 1.0.1
+** Notable fixes
+   - Fixed a crash in Dup::read.
+
+* Changes in 1.0.0
+
+This is the initial stable release.

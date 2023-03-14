@@ -1,0 +1,99 @@
+{
+    "default":[
+        {
+            "type": "reject"
+        }
+    ],
+    "transports": {
+        "dir": {
+            "": [
+                {
+                    "type": "insecureAcceptAnything"
+                }
+            ]
+        },
+        "docker": {
+            "example.com/playground": [
+                {
+                    "type": "insecureAcceptAnything"
+                }
+            ],
+            "example.com/hardened": [
+                {
+                    "type": "signedBy",
+                    "keyType": "GPGKeys",
+                    "keyPath": "/keys/public-gpg-keyring"
+                },
+                {
+                    "type": "signedBy",
+                    "keyType": "GPGKeys",
+                    "keyData": "bm9uc2Vuc2U="
+                }
+            ],
+            "registry.access.redhat.com": [
+                {
+                    "type": "signedBy",
+                    "keyType": "GPGKeys",
+                    "keyData": "bm9uc2Vuc2U="
+                },
+                {
+                    "type": "signedBy",
+                    "keyType": "GPGKeys",
+                    "keyPath": "/keys/public-gpg-keyring",
+                    "signedIdentity": {
+                        "type": "matchExact"
+                    }
+                }
+            ],
+            "*.access.redhat.com": [
+                {
+                    "type": "signedBy",
+                    "keyType": "GPGKeys",
+                    "keyData": "bm9uc2Vuc2U="
+                },
+                {
+                    "type": "signedBy",
+                    "keyType": "GPGKeys",
+                    "keyPath": "/keys/public-gpg-keyring",
+                    "signedIdentity": {
+                        "type": "exactReference",
+                        "dockerReference": "docker.io/example/busybox:latest"
+                    }
+                }
+            ],
+            "*.redhat.com": [
+                {
+                    "type": "signedBy",
+                    "keyType": "GPGKeys",
+                    "keyData": "bm9uc2Vuc2U="
+                },
+                {
+                    "type": "signedBy",
+                    "keyType": "GPGKeys",
+                    "keyPath": "/keys/public-gpg-keyring",
+                    "signedIdentity": {
+                        "type": "exactRepository",
+                        "dockerRepository": "docker.io/example/busybox"
+                    }
+                }
+            ],
+            "*.com": [
+                {
+                    "type": "signedBy",
+                    "keyType": "GPGKeys",
+                    "keyData": "bm9uc2Vuc2U="
+                },
+                {
+                    "type": "signedBy",
+                    "keyType": "GPGKeys",
+                    "keyPath": "/keys/public-gpg-keyring",
+                    "signedIdentity": {
+                        "type": "remapIdentity",
+                        "prefix": "example",
+                        "signedPrefix": "example"
+                    }
+                }
+            ]
+        }
+    }
+}

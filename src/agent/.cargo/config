@@ -13,3 +13,18 @@ linker = "aarch64-linux-musl-gcc"
 ## For now, the only functional workaround accepted by rust communities
 ## is to get them from libgcc.
 rustflags = [ "-C", "link-arg=-lgcc" ]
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source."https://github.com/confidential-containers/image-rs"]
+git = "https://github.com/confidential-containers/image-rs"
+rev = "v0.4.0"
+replace-with = "vendored-sources"
+
+[source."https://github.com/confidential-containers/ocicrypt-rs"]
+git = "https://github.com/confidential-containers/ocicrypt-rs"
+rev = "453c699"
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "vendor"

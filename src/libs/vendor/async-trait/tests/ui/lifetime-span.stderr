@@ -1,0 +1,21 @@
+error[E0726]: implicit elided lifetime not allowed here
+  --> tests/ui/lifetime-span.rs:12:6
+   |
+12 | impl Trait for A {
+   |      ^^^^^- help: indicate the anonymous lifetime: `<'_>`
+   |
+   = note: assuming a `'static` lifetime...
+
+error[E0107]: this trait takes 0 lifetime arguments but 1 lifetime argument was supplied
+  --> tests/ui/lifetime-span.rs:32:10
+   |
+32 | impl<'r> Trait2<'r> for B {
+   |          ^^^^^^---- help: remove these generics
+   |          |
+   |          expected 0 lifetime arguments
+   |
+note: trait defined here, with 0 lifetime parameters
+  --> tests/ui/lifetime-span.rs:22:11
+   |
+22 | pub trait Trait2 {
+   |           ^^^^^^

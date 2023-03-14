@@ -1,0 +1,16 @@
+This directory contains test vectors for the armor module.
+
+# literal-$n.*
+
+These files are generated using:
+
+  (cd ../../../.. && cargo build -p sequoia-openpgp --example wrap-literal)
+  for n in 0 1 2 3 47 48 49 50 51
+  do
+    dd if=/dev/urandom bs=1 count=$n \
+      | ../../../../target/debug/examples/wrap-literal > literal-$n.asc
+    sq dearmor -o literal-$n.bin literal-$n.asc
+    grep -v - literal-$n.asc > literal-$n-no-header-with-chksum.asc
+    grep -v - literal-$n.asc | head -n -1 > literal-$n-no-header.asc
+    tr "\n" " " <literal-$n.asc > literal-$n-no-newlines.asc
+  done

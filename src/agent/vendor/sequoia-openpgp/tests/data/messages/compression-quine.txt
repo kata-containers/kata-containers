@@ -1,0 +1,3 @@
+The compression quine is from:
+
+  http://mumble.net/~campbell/misc/pgp-quine/

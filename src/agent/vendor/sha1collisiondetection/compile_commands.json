@@ -1,0 +1,12 @@
+[
+    {
+        "command": "cc -c -O2 -Wall -Werror -Wextra -pedantic -std=c90 -Ilib -o obj_lib/sha1.lo lib/sha1.c",
+        "directory": "/home/teythoon/repos/pep/sha1collisiondetection",
+        "file": "/home/teythoon/repos/pep/sha1collisiondetection/lib/sha1.c"
+    },
+    {
+        "command": "cc -c -O2 -Wall -Werror -Wextra -pedantic -std=c90 -Ilib -o obj_lib/ubc_check.lo lib/ubc_check.c",
+        "directory": "/home/teythoon/repos/pep/sha1collisiondetection",
+        "file": "/home/teythoon/repos/pep/sha1collisiondetection/lib/ubc_check.c"
+    }
+]

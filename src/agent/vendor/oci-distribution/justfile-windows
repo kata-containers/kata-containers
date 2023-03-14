@@ -1,0 +1,9 @@
+set shell := ["powershell.exe", "-c"]
+
+build +FLAGS='--no-default-features --features rustls-tls':
+    cargo build {{FLAGS}}
+
+test:
+    cargo fmt --all -- --check
+    cargo clippy --no-default-features --features rustls-tls
+    cargo test --no-default-features --features rustls-tls

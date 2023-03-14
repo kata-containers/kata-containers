@@ -1,0 +1,6 @@
+{
+  "coverage_score": 76.2,
+  "exclude_path": "",
+  "crate_features": "bzimage,elf",
+  "exclude_path": "benches/,loader_gen/"
+}

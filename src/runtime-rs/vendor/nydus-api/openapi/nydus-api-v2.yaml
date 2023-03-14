@@ -1,0 +1,145 @@
+openapi: "3.0.2"
+info:
+  title: Nydus Service and Management APIs, version 2.
+  description:
+    This is the second version of RESTful Nydus service and management APIs to manage the global daemon and
+    individual services.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  version: "0.1"
+servers:
+  - url: https://localhost/v2
+paths:
+  /daemon:
+    summary: Returns general information about the nydus daemon
+    get:
+      operationId: describeDaemon
+      responses:
+        "200":
+          description: Daemon information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DaemonInfo"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+    put:
+      operationId: configureDaemon
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DaemonConf"
+      responses:
+        "204":
+          description: "Successfully configure the daemon!"
+        "500":
+          description: "Can't configure the daemon!"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+  /blob_objects:
+    summary: Manage cached blob objects
+    ####################################################################
+    get:
+      operationId: getBlobObject
+      responses:
+        "200":
+          description: Blob objects
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlobObjectList"
+        "404":
+          description: "Blob object not found"
+        "500":
+          description: "Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+    put:
+      operationId: createBlobObject
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlobObjectConf"
+      responses:
+        "204":
+          description: "Successfully created the blob object!"
+        "500":
+          description: "Can't create the blob object!"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+    delete:
+      operationId: deleteBlobObject
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlobObjectParam"
+      responses:
+        "204":
+          description: "Successfully deleted the blob object!"
+        "500":
+          description: "Can't delete the blob object!"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMsg"
+################################################################
+components:
+  schemas:
+    DaemonInfo:
+      type: object
+      properties:
+        version:
+          type: object
+          properties:
+            package_ver:
+              type: string
+            git_commit:
+              type: string
+            build_time:
+              type: string
+            profile:
+              type: string
+            rustc:
+              type: string
+        id:
+          type: string
+        supervisor:
+          type: string
+        state:
+          type: string
+          enum:
+            - INIT
+            - RUNNING
+            - UPGRADING
+            - INTERRUPTED
+            - STOPPED
+            - UNKNOWN
+    DaemonConf:
+      type: object
+      properties:
+        log_level:
+          type: string
+          enum: [trace, debug, info, warn, error]
+    ErrorMsg:
+      type: object
+      properties:
+        code:
+          description: Nydus defined error code indicating certain error type
+          type: string
+        message:
+          description: Details about the error
+          type: string

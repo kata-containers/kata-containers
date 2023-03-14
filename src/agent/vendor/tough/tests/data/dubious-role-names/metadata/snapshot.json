@@ -1,0 +1,44 @@
+{
+  "signed": {
+    "_type": "snapshot",
+    "spec_version": "1.0.0",
+    "version": 2,
+    "expires": "3021-01-27T00:57:00.468905Z",
+    "meta": {
+      "ᚩ os, ᚱ rad, ᚳ cen, ᚷ gyfu, ᚹ ƿynn, ᚻ hægl, ....json": {
+        "length": 1548,
+        "hashes": {
+          "sha256": "1f60219a41e50038468ab84e27a66e9c08674c6e064210acffe434a76de19dfb"
+        },
+        "version": 3
+      },
+      "targets.json": {
+        "length": 2775,
+        "hashes": {
+          "sha256": "e94a1efb2c7fb59b80d4d88a4b2a1bd8955d0472105befb279f3dbf80c632255"
+        },
+        "version": 2
+      },
+      "../../path/like/dubious.json": {
+        "length": 1548,
+        "hashes": {
+          "sha256": "67050f56e6d3d79a8393097b2f668fe1231299f97a015c81947d5caa06577a94"
+        },
+        "version": 3
+      },
+      "🍺/30.json": {
+        "length": 1548,
+        "hashes": {
+          "sha256": "1909ba25ca102c175566b93e6b1b6d3fb55f2b5a1ef88d50bcabd3064eb7fcc6"
+        },
+        "version": 3
+      }
+    }
+  },
+  "signatures": [
+    {
+      "keyid": "0f432a9dfff85a943dd7a4fb7ff3221ad6495ef81d0342cb74094c208aa8934b",
+      "sig": "0d0a5ff0a6a80cf574657dcaac159675734587493cf91fb54302bb33a99ef1841a4fbf7dfdbb10a7c104d5b9830a15f742898a2e656dcab1956ddeaa11cc1eae7a8413681a7de24a51342a18d77c843536c6c40aa2f7ce935a769ec853da70589432a9dcd95d5a130324bfb88d8be951a706d99ef76cf1f2677a2dde5d13ea75067d80aecafa91d6f2509a5e6a93c1b4649d101117c24000f4909ff30836409da975b6222b5e117692d96bec5c189371915b555d5f07588acd6c73eb0a94d7cff54080e547f1e4003b36f8cf37f388f88473011ea034ced32d998c1e9210a919c36003991c1d5284e4a6225a3dc4e969a3f172990c94fecf19b19a8feaad7fd5"
+    }
+  ]
+}

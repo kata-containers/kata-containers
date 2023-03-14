@@ -1,0 +1,5 @@
+error[E0616]: field `dolor` of struct `inner::LoremBuilder` is private
+  --> $DIR/private_fields.rs:25:5
+   |
+25 |     lorem.dolor = Some(0); // <-- private
+   |     ^^^^^^^^^^^

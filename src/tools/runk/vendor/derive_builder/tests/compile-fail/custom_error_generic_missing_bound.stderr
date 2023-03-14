@@ -1,0 +1,10 @@
+error[E0277]: the trait bound `N: Popular` is not satisfied
+  --> $DIR/custom_error_generic_missing_bound.rs:17:31
+   |
+17 | #[builder(build_fn(validate = "check_person", error = "Error<N>"))]
+   |                               ^^^^^^^^^^^^^^ the trait `Popular` is not implemented for `N`
+18 | struct Person<N> {
+   |               - consider adding a `where N: Popular` bound
+...
+34 | fn check_person<N: Popular + Clone>(builder: &PersonBuilder<N>) -> Result<(), Error<N>> {
+   |    ------------    ------- required by this bound in `check_person`

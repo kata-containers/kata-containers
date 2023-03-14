@@ -1,0 +1,10 @@
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source."https://github.com/cloud-hypervisor/cloud-hypervisor"]
+git = "https://github.com/cloud-hypervisor/cloud-hypervisor"
+tag = "v27.0"
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "vendor"

@@ -1,0 +1,13 @@
+prelude = native
+
+prelude.python_bootstrap_binary(
+    name = "rustc_action",
+    main = "rustc_action.py",
+    visibility = ["PUBLIC"],
+)
+
+prelude.python_bootstrap_binary(
+    name = "failure_filter_action",
+    main = "failure_filter_action.py",
+    visibility = ["PUBLIC"],
+)

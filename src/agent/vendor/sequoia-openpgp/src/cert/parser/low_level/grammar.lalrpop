@@ -1,0 +1,357 @@
+// -*- mode: Rust; -*-
+
+use std::convert::TryInto;
+
+use crate::Error;
+use crate::packet::Any;
+use crate::packet::Signature;
+use crate::packet::UserID;
+use crate::packet::UserAttribute;
+use crate::packet::{key, Key};
+use crate::packet::Unknown;
+use crate::Packet;
+use crate::policy::HashAlgoSecurity::SecondPreImageResistance;
+use crate::cert::prelude::*;
+
+use crate::cert::parser::low_level::lexer;
+use crate::cert::parser::low_level::lexer::{Token, Component};
+use crate::cert::parser::low_level::grammar_util::*;
+use crate::cert::ComponentBundles;
+use crate::cert::bundle::{
+    PrimaryKeyBundle,
+    SubkeyBundle,
+    UserIDBundle,
+    UserAttributeBundle,
+    UnknownBundle,
+};
+
+use lalrpop_util::ParseError;
+
+grammar;
+
+// The parser is used in two ways: it can either be used to check
+// whether a sequence of packets forms a Cert, or to build a Cert from a
+// sequence of packets.  In the former case, we only need the packet
+// tags; in the latter case, we also need the packets.  To handle both
+// situations, the token includes the tag and an optional packet.
+// When invoking the parser, it is essential, that either *all* tokens
+// have no packet, or they all have a packet; mixing the two types of
+// tokens will result in a crash.
+
+pub Cert: Option<Cert> = {
+    <p:Primary> <c:OptionalComponents> =>? {
+        match p {
+            Some((Packet::PublicKey(_), _))
+            | Some((Packet::SecretKey(_), _)) => {
+                let (key, sigs) = match p {
+                    Some((Packet::PublicKey(key), sigs)) => (key, sigs),
+                    Some((Packet::SecretKey(key), sigs)) => (key.into(), sigs),
+                    _ => unreachable!(),
+                };
+                let c = c.unwrap();
+                let sec = key.hash_algo_security();
+
+                let mut cert = Cert {
+                    primary: PrimaryKeyBundle {
+                        component: key,
+                        hash_algo_security: sec,
+                        self_signatures: vec![],
+                        certifications: sigs,
+                        attestations: vec![],
+                        self_revocations: vec![],
+                        other_revocations: vec![],
+                    },
+                    subkeys: ComponentBundles::new(),
+                    userids: ComponentBundles::new(),
+                    user_attributes: ComponentBundles::new(),
+                    unknowns: ComponentBundles::new(),
+                    bad: vec![],
+                };
+
+                for c in c.into_iter() {
+                    match c {
+                        Component::SubkeyBundle(b) =>
+                            cert.subkeys.push(b),
+                        Component::UserIDBundle(b) =>
+                            cert.userids.push(b),
+                        Component::UserAttributeBundle(b) =>
+                            cert.user_attributes.push(b),
+                        Component::UnknownBundle(b) =>
+                            cert.unknowns.push(b),
+                    }
+                }
+
+                Ok(Some(cert))
+            }
+            Some((Packet::Unknown(unknown), sigs)) => {
+                let mut packets: Vec<Packet> = Default::default();
+                packets.push(unknown.into());
+                for sig in sigs {
+                    packets.push(sig.into());
+                }
+                for c in c.unwrap_or_default().into_iter() {
+                    match c {
+                        Component::SubkeyBundle(b) =>
+                            b.into_packets().for_each(|p| packets.push(p)),
+                        Component::UserIDBundle(b) =>
+                            b.into_packets().for_each(|p| packets.push(p)),
+                        Component::UserAttributeBundle(b) =>
+                            b.into_packets().for_each(|p| packets.push(p)),
+                        Component::UnknownBundle(b) =>
+                            b.into_packets().for_each(|p| packets.push(p)),
+                    }
+                }
+                Err(ParseError::User {
+                    error: Error::UnsupportedCert2(
+                        "Unsupported primary key".into(),
+                        packets),
+                })
+            }
+            None => {
+                // Just validating a cert...
+                assert!(c.is_none() || c.unwrap().len() == 0);
+                Ok(None)
+            }
+            Some((pkt, _)) =>
+              unreachable!("Expected key or unknown packet, got {:?}", pkt),
+        }
+    }
+};
+
+Primary: Option<(Packet, Vec<Signature>)> = {
+    <pk:PrimaryKey> <sigs:OptionalSignatures> => {
+        if let Some(pk) = pk {
+            Some((pk, sigs.unwrap()))
+        } else {
+            // Just validating a cert...
+            assert!(sigs.is_none() || sigs.unwrap().len() == 0);
+            None
+        }
+    }
+}
+
+PrimaryKey: Option<Packet> = {
+    <t:PUBLIC_KEY> => t.into(),
+    <t:SECRET_KEY> => t.into(),
+};
+
+OptionalSignatures: Option<Vec<Signature>> = {
+    => Some(vec![]),
+    <sigs:OptionalSignatures> <sig:SIGNATURE> => {
+        match sig {
+            Token::Signature(Some(Packet::Signature(sig))) => {
+                assert!(sigs.is_some());
+                let mut sigs = sigs.unwrap();
+
+                sigs.push(sig);
+                Some(sigs)
+            }
+            Token::Signature(Some(Packet::Unknown(_sig))) => {
+                // Ignore unsupported / bad signatures.
+                assert!(sigs.is_some());
+                sigs
+            }
+            // Just validating a cert...
+            Token::Signature(None) => return None,
+            tok => unreachable!("Expected signature token, got {:?}", tok),
+        }
+    },
+
+    // A trust packet can go wherever a signature can go, but they
+    // are ignored.
+    <OptionalSignatures> TRUST,
+}
+
+OptionalComponents: Option<Vec<Component>> = {
+    => Some(vec![]),
+    <cs:OptionalComponents> <c:Component> => {
+        if let Some(c) = c {
+            let mut cs = cs.unwrap();
+            cs.push(c);
+            Some(cs)
+        } else {
+            // Just validating a cert...
+            None
+        }
+    },
+}
+
+Component: Option<Component> = {
+    <key:Subkey> <sigs:OptionalSignatures> => {
+        match key {
+            Some(Ok(key)) => {
+                let sigs = sigs.unwrap();
+                let sec = key.hash_algo_security();
+
+                Some(Component::SubkeyBundle(SubkeyBundle {
+                    component: key,
+                    hash_algo_security: sec,
+                    self_signatures: vec![],
+                    certifications: sigs,
+                    attestations: vec![],
+                    self_revocations: vec![],
+                    other_revocations: vec![],
+                }))
+            },
+            Some(Err(u)) => Some(Component::UnknownBundle(UnknownBundle {
+                component: u,
+                hash_algo_security: SecondPreImageResistance,
+                self_signatures: vec![],
+                certifications: sigs.unwrap_or_default(),
+                attestations: vec![],
+                self_revocations: vec![],
+                other_revocations: vec![],
+            })),
+            // Just validating a cert...
+            None => None,
+        }
+    },
+    <u:UserID> <sigs:OptionalSignatures> => {
+        match u {
+            Some(Ok(u)) => {
+                let sigs = sigs.unwrap();
+                let sec = u.hash_algo_security();
+
+                Some(Component::UserIDBundle(UserIDBundle {
+                    component: u,
+                    hash_algo_security: sec,
+                    self_signatures: vec![],
+                    certifications: sigs,
+                    attestations: vec![],
+                    self_revocations: vec![],
+                    other_revocations: vec![],
+                }))
+            },
+            Some(Err(u)) => Some(Component::UnknownBundle(UnknownBundle {
+                component: u,
+                hash_algo_security: SecondPreImageResistance,
+                self_signatures: vec![],
+                certifications: sigs.unwrap_or_default(),
+                attestations: vec![],
+                self_revocations: vec![],
+                other_revocations: vec![],
+            })),
+            // Just validating a cert...
+            None => None,
+        }
+    },
+    <u:UserAttribute> <sigs:OptionalSignatures> => {
+        match u {
+            Some(Ok(u)) => {
+                let sigs = sigs.unwrap();
+                let sec = u.hash_algo_security();
+
+                Some(Component::UserAttributeBundle(UserAttributeBundle {
+                    component: u,
+                    hash_algo_security: sec,
+                    self_signatures: vec![],
+                    certifications: sigs,
+                    attestations: vec![],
+                    self_revocations: vec![],
+                    other_revocations: vec![],
+                }))
+            },
+            Some(Err(u)) => Some(Component::UnknownBundle(UnknownBundle {
+                component: u,
+                hash_algo_security: SecondPreImageResistance,
+                self_signatures: vec![],
+                certifications: sigs.unwrap_or_default(),
+                attestations: vec![],
+                self_revocations: vec![],
+                other_revocations: vec![],
+            })),
+            // Just validating a cert...
+            None => None,
+        }
+    },
+    <u:Unknown> <sigs:OptionalSignatures> => {
+        match u {
+            Some(u) => {
+                let sigs = sigs.unwrap();
+                let sec = u.hash_algo_security();
+
+                Some(Component::UnknownBundle(UnknownBundle {
+                    component: u,
+                    hash_algo_security: sec,
+                    self_signatures: vec![],
+                    certifications: sigs,
+                    attestations: vec![],
+                    self_revocations: vec![],
+                    other_revocations: vec![],
+                }))
+            },
+            // Just validating a cert...
+            None => None,
+        }
+    },
+}
+
+Subkey: Option<PacketOrUnknown<Key<key::PublicParts, key::SubordinateRole>>> = {
+    <t:PUBLIC_SUBKEY> => {
+        match Option::<Packet>::from(t) {
+            Some(p) => Some(p.downcast().map_err(
+                |p| p.try_into().expect("infallible for unknown and this packet"))),
+            // Just validating a cert...
+            None => None,
+        }
+    },
+    <t:SECRET_SUBKEY> => {
+        match Option::<Packet>::from(t) {
+            Some(p) => Some(Any::<key::SecretSubkey>::downcast(p)
+                .map_err(
+                    |p| p.try_into().expect("infallible for unknown and this packet"))
+                .map(|sk| sk.parts_into_public())),
+            // Just validating a cert...
+            None => None,
+        }
+    },
+}
+
+UserID: Option<PacketOrUnknown<UserID>> = {
+    <t:USERID> => {
+        match Option::<Packet>::from(t) {
+            Some(p) => Some(p.downcast().map_err(
+                |p| p.try_into().expect("infallible for unknown and this packet"))),
+            // Just validating a cert...
+            None => None,
+        }
+    },
+}
+
+UserAttribute: Option<PacketOrUnknown<UserAttribute>> = {
+    <t:USER_ATTRIBUTE> => {
+        match Option::<Packet>::from(t) {
+            Some(p) => Some(p.downcast().map_err(
+                |p| p.try_into().expect("infallible for unknown and this packet"))),
+            // Just validating a cert...
+            None => None,
+        }
+    },
+}
+
+Unknown: Option<Unknown> = {
+    <t:UNKNOWN> => {
+        match Option::<Packet>::from(t) {
+            Some(p) => p.try_into().ok(),
+            // Just validating a cert...
+            None => None,
+        }
+    },
+}
+
+extern {
+    type Location = usize;
+    type Error = Error;
+
+    enum lexer::Token {
+        PUBLIC_KEY => lexer::Token::PublicKey(_),
+        SECRET_KEY => lexer::Token::SecretKey(_),
+        PUBLIC_SUBKEY => lexer::Token::PublicSubkey(_),
+        SECRET_SUBKEY => lexer::Token::SecretSubkey(_),
+        USERID => lexer::Token::UserID(_),
+        USER_ATTRIBUTE => lexer::Token::UserAttribute(_),
+        SIGNATURE => lexer::Token::Signature(_),
+        TRUST => lexer::Token::Trust(_),
+        UNKNOWN => lexer::Token::Unknown(_, _),
+    }
+}

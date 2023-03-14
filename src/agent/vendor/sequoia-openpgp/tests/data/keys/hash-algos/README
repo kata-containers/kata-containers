@@ -1,0 +1,7 @@
+These keys were created using GnuPG:
+
+    % export GNUPGHOME=$(mktemp -d)
+    % gpg --cert-digest-algo MD5 --quick-generate-key MD5
+    [...]
+    % gpg --export-secret-keys MD5 > MD5-private.gpg
+    % gpg --export MD5 > MD5.gpg

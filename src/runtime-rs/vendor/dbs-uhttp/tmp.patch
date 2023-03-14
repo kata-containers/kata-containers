@@ -1,0 +1,37 @@
+diff --git a/src/server.rs b/src/server.rs
+index 7bb5275..17e6462 100644
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -20,7 +20,11 @@ static SERVER_FULL_ERROR_MESSAGE: &[u8] = b"HTTP/1.1 503\r\n\
+                                             Server: Firecracker API\r\n\
+                                             Connection: close\r\n\
+                                             Content-Length: 40\r\n\r\n{ \"error\": \"Too many open connections\" }";
++#[cfg(target_os = "linux")]
++const MAX_CONNECTIONS: usize = 1024;
++#[cfg(not(target_os = "linux"))]
+ const MAX_CONNECTIONS: usize = 10;
++const MAX_EVENTS: usize = 64;
+ /// Payload max size
+ pub(crate) const MAX_PAYLOAD_SIZE: usize = 51200;
+ 
+@@ -374,17 +378,16 @@ impl HttpServer {
+     /// on a connection on which it is not possible.
+     pub fn requests(&mut self) -> Result<Vec<ServerRequest>> {
+         let mut parsed_requests: Vec<ServerRequest> = vec![];
+-        let mut events = mio::Events::with_capacity(MAX_CONNECTIONS);
+-        // let mut events = vec![epoll::EpollEvent::default(); MAX_CONNECTIONS];
++        let mut events = mio::Events::with_capacity(MAX_EVENTS);
+         // This is a wrapper over the syscall `epoll_wait` and it will block the
+         // current thread until at least one event is received.
+         // The received notifications will then populate the `events` array with
+-        // `event_count` elements, where 1 <= event_count <= MAX_CONNECTIONS.
++        // `event_count` elements, where 1 <= event_count <= MAX_EVENTS.
+         self.poll_events(&mut events)?;
+ 
+         // We use `take()` on the iterator over `events` as, even though only
+         // `events_count` events have been inserted into `events`, the size of
+-        // the array is still `MAX_CONNECTIONS`, so we discard empty elements
++        // the array is still `MAX_EVENTS`, so we discard empty elements
+         // at the end of the array.
+         for e in events.iter() {
+             // Check the file descriptor which produced the notification `e`.

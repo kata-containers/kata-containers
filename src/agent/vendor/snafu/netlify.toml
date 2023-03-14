@@ -1,0 +1,10 @@
+[build]
+command = """
+rustup install nightly --profile minimal && \
+cargo +nightly doc --no-deps --features=std,backtraces,futures,guide
+"""
+publish = "target/doc"
+
+[[redirects]]
+from = "/*"
+to = "/snafu/:splat"

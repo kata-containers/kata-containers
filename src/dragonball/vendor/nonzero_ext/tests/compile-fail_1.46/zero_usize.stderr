@@ -1,0 +1,7 @@
+error[E0080]: evaluation of constant value failed
+ --> $DIR/zero_usize.rs:8:28
+  |
+8 |     let _a: NonZeroUsize = nonzero!(0usize);
+  |                            ^^^^^^^^^^^^^^^^ attempt to compute `0_usize - 1_usize` which would overflow
+  |
+  = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)

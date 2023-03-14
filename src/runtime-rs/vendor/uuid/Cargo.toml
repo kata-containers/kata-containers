@@ -1,0 +1,24 @@
+[package]
+
+name = "uuid"
+version = "0.4.0"
+authors = ["The Rust Project Developers"]
+license = "MIT/Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/rust-lang/uuid"
+homepage = "https://github.com/rust-lang/uuid"
+documentation = "https://doc.rust-lang.org/uuid"
+description = """
+A library to generate and parse UUIDs.
+"""
+
+[dependencies]
+rustc-serialize = { version = "0.3", optional = true }
+serde = { version = "0.9", optional = true }
+rand = { version = "0.3", optional = true }
+sha1 = { version = "0.2", optional = true }
+
+[features]
+use_std = []
+v4 = ["rand"]
+v5 = ["sha1"]

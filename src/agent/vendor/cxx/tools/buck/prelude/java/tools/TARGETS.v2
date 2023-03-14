@@ -1,0 +1,7 @@
+prelude = native
+
+prelude.python_bootstrap_binary(
+    name = "used_classes_to_dep_file",
+    main = "used_classes_to_dep_file.py",
+    visibility = ["PUBLIC"],
+)

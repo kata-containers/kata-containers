@@ -1,0 +1,11 @@
+error: Unknown attribute specified
+ --> $DIR/main-06-unknown-attr.rs:1:18
+  |
+1 | #[actix_rt::main(foo = "bar")]
+  |                  ^^^^^^^^^^^
+
+error: Unknown attribute specified
+ --> $DIR/main-06-unknown-attr.rs:4:18
+  |
+4 | #[actix_rt::main(bar::baz)]
+  |                  ^^^^^^^^

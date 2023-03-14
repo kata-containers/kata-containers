@@ -1,0 +1,7 @@
+prelude = native
+
+prelude.sh_binary(
+    name = "find_and_replace.bat",
+    main = "find_and_replace.bat",
+    visibility = ["PUBLIC"],
+)

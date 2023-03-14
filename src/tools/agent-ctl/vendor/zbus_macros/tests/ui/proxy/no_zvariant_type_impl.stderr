@@ -1,0 +1,94 @@
+error[E0277]: the trait bound `Foo: Type` is not satisfied
+   --> tests/ui/proxy/no_zvariant_type_impl.rs:8:1
+    |
+8   | / #[dbus_proxy(
+9   | |     interface = "org.freedesktop.zbus.Test",
+10  | |     default_service = "org.freedesktop.zbus",
+11  | |     default_path = "/org/freedesktop/zbus/test"
+12  | | )]
+    | |__^ the trait `Type` is not implemented for `Foo`
+    |
+    = note: required because of the requirements on the impl of `Type` for `(Foo,)`
+    = note: required because of the requirements on the impl of `DynamicType` for `(Foo,)`
+note: required by a bound in `zbus::Proxy::<'a>::call`
+   --> $WORKSPACE/zbus/src/proxy.rs
+    |
+    |         B: serde::ser::Serialize + zvariant::DynamicType,
+    |                                    ^^^^^^^^^^^^^^^^^^^^^ required by this bound in `zbus::Proxy::<'a>::call`
+    = note: this error originates in the attribute macro `dbus_proxy` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `Foo: Type` is not satisfied
+   --> tests/ui/proxy/no_zvariant_type_impl.rs:8:1
+    |
+8   | / #[dbus_proxy(
+9   | |     interface = "org.freedesktop.zbus.Test",
+10  | |     default_service = "org.freedesktop.zbus",
+11  | |     default_path = "/org/freedesktop/zbus/test"
+12  | | )]
+    | |__^ the trait `Type` is not implemented for `Foo`
+    |
+note: required by a bound in `zbus::Proxy::<'a>::call`
+   --> $WORKSPACE/zbus/src/proxy.rs
+    |
+    |         R: serde::de::DeserializeOwned + zvariant::Type,
+    |                                          ^^^^^^^^^^^^^^ required by this bound in `zbus::Proxy::<'a>::call`
+    = note: this error originates in the attribute macro `dbus_proxy` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `Foo: From<OwnedValue>` is not satisfied
+  --> tests/ui/proxy/no_zvariant_type_impl.rs:19:35
+   |
+19 |     fn invalid_property(&self) -> fdo::Result<Foo>;
+   |                                   ^^^ the trait `From<OwnedValue>` is not implemented for `Foo`
+   |
+   = note: required because of the requirements on the impl of `Into<Foo>` for `OwnedValue`
+   = note: required because of the requirements on the impl of `TryFrom<OwnedValue>` for `Foo`
+
+error[E0277]: the trait bound `Foo: Type` is not satisfied
+   --> tests/ui/proxy/no_zvariant_type_impl.rs:8:1
+    |
+8   | / #[dbus_proxy(
+9   | |     interface = "org.freedesktop.zbus.Test",
+10  | |     default_service = "org.freedesktop.zbus",
+11  | |     default_path = "/org/freedesktop/zbus/test"
+12  | | )]
+    | |__^ the trait `Type` is not implemented for `Foo`
+    |
+    = note: required because of the requirements on the impl of `Type` for `(Foo,)`
+    = note: required because of the requirements on the impl of `DynamicType` for `(Foo,)`
+note: required by a bound in `zbus::blocking::Proxy::<'a>::call`
+   --> $WORKSPACE/zbus/src/blocking/proxy.rs
+    |
+    |         B: serde::ser::Serialize + zvariant::DynamicType,
+    |                                    ^^^^^^^^^^^^^^^^^^^^^ required by this bound in `zbus::blocking::Proxy::<'a>::call`
+    = note: this error originates in the attribute macro `dbus_proxy` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `Foo: Type` is not satisfied
+   --> tests/ui/proxy/no_zvariant_type_impl.rs:8:1
+    |
+8   | / #[dbus_proxy(
+9   | |     interface = "org.freedesktop.zbus.Test",
+10  | |     default_service = "org.freedesktop.zbus",
+11  | |     default_path = "/org/freedesktop/zbus/test"
+12  | | )]
+    | |__^ the trait `Type` is not implemented for `Foo`
+    |
+note: required by a bound in `zbus::blocking::Proxy::<'a>::call`
+   --> $WORKSPACE/zbus/src/blocking/proxy.rs
+    |
+    |         R: serde::de::DeserializeOwned + zvariant::Type,
+    |                                          ^^^^^^^^^^^^^^ required by this bound in `zbus::blocking::Proxy::<'a>::call`
+    = note: this error originates in the attribute macro `dbus_proxy` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `Foo: From<OwnedValue>` is not satisfied
+  --> tests/ui/proxy/no_zvariant_type_impl.rs:8:1
+   |
+8  | / #[dbus_proxy(
+9  | |     interface = "org.freedesktop.zbus.Test",
+10 | |     default_service = "org.freedesktop.zbus",
+11 | |     default_path = "/org/freedesktop/zbus/test"
+12 | | )]
+   | |__^ the trait `From<OwnedValue>` is not implemented for `Foo`
+   |
+   = note: required because of the requirements on the impl of `Into<Foo>` for `OwnedValue`
+   = note: required because of the requirements on the impl of `TryFrom<OwnedValue>` for `Foo`
+   = note: this error originates in the attribute macro `dbus_proxy` (in Nightly builds, run with -Z macro-backtrace for more info)

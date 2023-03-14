@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VERSION=${1:-}
+
+if [[ -z "$VERSION" ]]; then
+    echo "Please provide a version to be released"
+    exit 1
+fi
+
+git checkout -b "release-$VERSION"
+sed -Ei "s/^(version = ).*/\1\"$VERSION\"/g" Cargo.toml
+sed -Ei "s/^(oci-spec = ).*/\1\"$VERSION\"/g" README.md
+
+VERSION_DEV_FILES=(
+    src/distribution/version.rs
+    src/image/version.rs
+    src/runtime/version.rs
+)
+
+for FILE in "${VERSION_DEV_FILES[@]}"; do
+    sed -Ei "s/^(pub const VERSION_DEV: &str = ).*/\1\"\";/g" "$FILE"
+done
+git add .
+git commit -sm "Bump to $VERSION"
+
+for FILE in "${VERSION_DEV_FILES[@]}"; do
+    sed -Ei "s/^(pub const VERSION_DEV: &str = ).*/\1\"-dev\";/g" "$FILE"
+done
+git add .
+git commit -sm "Back to dev"

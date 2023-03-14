@@ -1,0 +1,68 @@
+name: image-rs eaa_kbc build
+on:
+  pull_request:
+    paths:
+      - 'src/signature/**'
+
+jobs:
+  ci:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    name: Check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust:
+          - stable
+          - beta
+          - nightly
+    # Run all steps in the compilation testing containers
+    container:
+      image: runetest/compilation-testing:ubuntu20.04
+      env:
+        LD_LIBRARY_PATH: /usr/local/lib/rats-tls
+
+    steps:
+      - name: Update cargo home
+        run: |
+          apt-get update && apt-get install -y cargo
+          cp -r /root/.cargo /github/home/.cargo
+
+      - name: Install Rust toolchain (${{ matrix.rust }})
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+          components: rustfmt, clippy
+
+      - name: Install nettle-sys building dependence
+        run: |
+          apt-get install -y clang llvm pkg-config nettle-dev protobuf-compiler libprotobuf-dev
+
+      - name: Build and install rats-tls
+        run: | 
+          apt-get install -y libcurl4-openssl-dev
+          git clone https://github.com/inclavare-containers/rats-tls
+          cd rats-tls
+          cmake -DBUILD_SAMPLES=on -H. -Bbuild
+          make -C build install
+
+      - name: Code checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Run cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --no-default-features --features enclave-cc,keywrap-native
+
+      - name: Run cargo test - enclave-cc,keywrap-native
+        run: |
+          cargo test --all --no-default-features --features=enclave-cc,keywrap-native
+
+      - name: Run cargo test - snapshot-unionfs
+        run: |
+          cargo test --all --no-default-features --features=snapshot-unionfs

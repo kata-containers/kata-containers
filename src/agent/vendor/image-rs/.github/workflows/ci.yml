@@ -1,0 +1,78 @@
+name: image-rs build
+on: [push, pull_request, create]
+
+jobs:
+  ci:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    name: Check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust:
+          - stable
+          - beta
+          - nightly
+    steps:
+      - name: Code checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Install Rust toolchain (${{ matrix.rust }})
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+          components: rustfmt, clippy
+
+      - name: Install nettle-sys building dependence
+        run: |
+          sudo apt install clang llvm pkg-config nettle-dev protobuf-compiler libprotobuf-dev
+
+      - name: Run cargo fmt check
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+      - name: Run rust lint check
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -- -D warnings
+
+      - name: Run cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --features default
+
+      - name: Run cargo test - default
+        run: |
+          sudo -E PATH=$PATH -s cargo test --all --features default
+
+      - name: Run cargo test - no-default-features,keywrap-grpc
+        run: |
+          sudo -E PATH=$PATH -s cargo test --all --no-default-features --features=keywrap-grpc
+
+      - name: Run cargo test - kata-cc,keywrap-grpc
+        run: |
+          sudo -E PATH=$PATH -s cargo test --all --no-default-features --features=kata-cc,keywrap-grpc
+
+      - name: Run cargo test - encryption,keywrap-grpc
+        run: |
+          sudo -E PATH=$PATH -s cargo test --all --no-default-features --features=encryption,keywrap-grpc
+
+      - name: Run cargo test - snapshot-overlayfs,keywrap-grpc
+        run: |
+          sudo -E PATH=$PATH -s cargo test --all --no-default-features --features=snapshot-overlayfs,keywrap-grpc
+
+      - name: Run cargo test - signature-cosign,keywrap-grpc
+        run: |
+          sudo -E PATH=$PATH -s cargo test --all --no-default-features --features=signature-cosign,keywrap-grpc
+
+      - name: Run cargo test - signature-simple,keywrap-grpc
+        run: |
+          sudo -E PATH=$PATH -s cargo test --all --no-default-features --features=signature-simple,keywrap-grpc

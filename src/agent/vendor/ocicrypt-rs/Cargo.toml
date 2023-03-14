@@ -1,0 +1,53 @@
+[package]
+name = "ocicrypt-rs"
+version = "0.1.0"
+description = "the OCI image spec implementation of container image encryption"
+repository = "https://github.com/containers/ocicrypt-rs"
+readme = "README.md"
+license = "Apache-2.0"
+authors = ["The ocicrypt Authors"]
+edition = "2018"
+
+[dependencies]
+anyhow = ">=1.0"
+aes = { version = ">=0.8", optional = true }
+async-trait = { version = "0.1.61", optional = true }
+base64 = "0.13"
+base64-serde = { version = "0.6", optional = true }
+ctr = { version = ">=0.9", optional = true }
+hmac = { version = ">=0.12", optional = true }
+josekit = { version = ">=0.7", optional = true }
+lazy_static = ">=1.4"
+openssl = { version = ">=0.10", features = ["vendored"], optional = true }
+pin-project-lite = { version = "0.2.9", optional = true }
+protobuf = { version = "3.2.0", optional = true }
+prost = { version = ">=0.11.0", optional = true }
+serde = { version = ">=1.0", features = ["derive"] }
+serde_json = ">=1.0"
+sha2 = { version = ">=0.10", optional = true }
+tokio = { version = "1.17.0", features = ["rt-multi-thread"], optional = true }
+tonic = { version = ">=0.8.0", optional = true }
+ttrpc = { version = "0.7.1", features = ["async"], default-features = false, optional = true }
+attestation_agent = { git = "https://github.com/confidential-containers/attestation-agent", rev = "b45b0f8", optional = true  }
+
+[build-dependencies]
+tonic-build = {version = "0.8.0", optional = true }
+ttrpc-codegen = { version = "0.4.1", optional = true }
+
+[dev-dependencies]
+aes-gcm = { version = "0.10" }
+tokio = { version = "1.17.0", features = ["time", "signal"] }
+
+[features]
+default = ["block-cipher", "keywrap-jwe", "keywrap-keyprovider-cmd"]
+eaa_kbc = ["keywrap-keyprovider-native", "attestation_agent/eaa_kbc"]
+async-io = ["tokio"]
+block-cipher = ["aes", "base64-serde", "ctr", "hmac", "openssl", "pin-project-lite", "sha2"]
+keywrap-jwe = ["josekit"]
+keywrap-keyprovider = []
+keywrap-keyprovider-cmd = ["keywrap-keyprovider"]
+keywrap-keyprovider-grpc = ["keywrap-keyprovider", "prost", "tonic", "tokio/net"]
+keywrap-keyprovider-ttrpc = ["keywrap-keyprovider", "protobuf", "async-trait", "ttrpc", "tokio"]
+keywrap-keyprovider-native = ["keywrap-keyprovider", "tokio/net", "tokio/sync", "attestation_agent"]
+gen-proto-grpc = ["tonic-build"]
+gen-proto-ttrpc = ["ttrpc-codegen"]

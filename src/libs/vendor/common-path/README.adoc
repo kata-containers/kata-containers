@@ -1,0 +1,57 @@
+= common-path
+
+https://docs.rs/common-path[Documentation]
+
+A small crate that provides functions for determining the common prefix, if any, between a set of paths
+
+== Installation
+
+In your `Cargo.toml`, add this to the `[dependencies]` section:
+
+----
+common-path = "1"
+----
+
+and in your crate root, add
+
+----
+// src/lib.rs, src/main.rs, etc
+extern crate common_path;
+----
+
+== Usage
+
+There are two functions provided: `common_path`, and `common_path_all`
+
+----
+extern crate common_path;
+use std::path::Path;
+
+fn main() {
+    let a = Path::new("/a/b/c/d");
+    let b = Path::new("/a/b/e/f");
+    let prefix = common_path::common_path(a, b); // => Some(Path::new("/a/b"))
+}
+----
+
+If you need to find a common prefix for more than 2 paths, `common_path_all` takes anything that can be turned into an iterator of `Path` references:
+
+----
+extern crate common_path;
+use std::path::Path;
+
+fn main() {
+    let a = Path::new("/a/b/c/d");
+    let b = Path::new("/a/b/e/f");
+    let c = Path::new("/a/g/h/i");
+    let prefix = common_path::common_path_all(vec![a, b, c]); // => Some(Path::new("/a"))
+}
+----
+
+=== Notes
+
+This library makes no attempt to canonicalize the paths, so 2 paths that should *theoretically* have a common prefix might get missed unless they are canonicalized beforehand.
+
+For example, `/foo/bar/baz` and `/foo/quux/../bar/baz/quuux` should have the common prefix `/foo/bar/baz`, once they are canonicalized, but in this form, this library will return a
+prefix of `/foo`. If you call `Path::canonicalize` on them beforehand, you will get the "correct" prefix, but `canonicalize` will return on an error on paths that don't actually exist,
+so I wanted to avoid using it in this library.

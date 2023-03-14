@@ -1,0 +1,32 @@
+error[E0658]: yield syntax is experimental
+ --> tests/ui/yield_in_async.rs:6:13
+  |
+6 |             yield 123;
+  |             ^^^^^^^^^
+  |
+  = note: see issue #43122 <https://github.com/rust-lang/rust/issues/43122> for more information
+
+error[E0727]: `async` generators are not yet supported
+ --> tests/ui/yield_in_async.rs:6:13
+  |
+6 |             yield 123;
+  |             ^^^^^^^^^
+
+error[E0271]: type mismatch resolving `<[static generator@$DIR/src/lib.rs:201:9: 201:67] as Generator<ResumeTy>>::Yield == ()`
+  --> tests/ui/yield_in_async.rs:4:5
+   |
+4  | /     stream! {
+5  | |         let f = async {
+6  | |             yield 123;
+7  | |         };
+8  | |
+9  | |         let v = f.await;
+10 | |     };
+   | |_____^ expected `()`, found integer
+   |
+note: required by a bound in `from_generator`
+  --> $RUST/core/src/future/mod.rs
+   |
+   |     T: Generator<ResumeTy, Yield = ()>,
+   |                            ^^^^^^^^^^ required by this bound in `from_generator`
+   = note: this error originates in the macro `stream` (in Nightly builds, run with -Z macro-backtrace for more info)

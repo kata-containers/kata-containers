@@ -1,0 +1,72 @@
+prelude = native
+
+prelude.python_bootstrap_binary(
+    name = "extract",
+    main = "extract.py",
+    visibility = ["PUBLIC"],
+)
+
+prelude.python_bootstrap_binary(
+    name = "create_manifest_for_source_dir",
+    main = "create_manifest_for_source_dir.py",
+    visibility = ["PUBLIC"],
+)
+
+prelude.python_bootstrap_binary(
+    name = "make_source_db",
+    main = "make_source_db.py",
+    visibility = ["PUBLIC"],
+)
+
+prelude.python_bootstrap_binary(
+    name = "make_source_db_no_deps",
+    main = "make_source_db_no_deps.py",
+    visibility = ["PUBLIC"],
+)
+
+prelude.export_file(
+    name = "__test_main__.py",
+    src = "__test_main__.py",
+    visibility = ["PUBLIC"],
+)
+
+prelude.python_bootstrap_binary(
+    name = "make_pex_inplace.py",
+    main = "make_pex_inplace.py",
+    visibility = ["PUBLIC"],
+)
+
+prelude.export_file(
+    name = "run_inplace_lite.py.in",
+    src = "run_inplace_lite.py.in",
+)
+
+prelude.export_file(
+    name = "run_inplace.py.in",
+    src = "run_inplace.py.in",
+)
+
+prelude.command_alias(
+    name = "make_pex_inplace",
+    exe = ":make_pex_inplace.py",
+    args = ["--template", "$(location :run_inplace.py.in)", "--template-lite", "$(location :run_inplace_lite.py.in)"],
+    visibility = ["PUBLIC"],
+)
+
+prelude.python_bootstrap_binary(
+    name = "make_pex_modules",
+    main = "make_pex_modules.py",
+    visibility = ["PUBLIC"],
+)
+
+prelude.export_file(
+    name = "compile.py",
+    src = "compile.py",
+    visibility = ["PUBLIC"],
+)
+
+prelude.python_bootstrap_binary(
+    name = "generate_static_extension_info",
+    main = "generate_static_extension_info.py",
+    visibility = ["PUBLIC"],
+)

@@ -1,0 +1,5 @@
+error: #[builder(default)] and #[builder(field(build="..."))] cannot be used together
+ --> tests/compile-fail/builder_field_custom.rs:6:25
+  |
+6 |     #[builder(default = "88", field(type = "usize", build = "self.ipsum + 42"))]
+  |                         ^^^^
