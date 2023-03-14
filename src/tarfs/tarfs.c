@@ -48,7 +48,7 @@ struct tarfs_inode_info {
 
 #define TARFS_I(ptr) (container_of(ptr, struct tarfs_inode_info, inode))
 
-#define TARFS_BSIZE 512
+#define TARFS_BSIZE 4096
 
 static struct kmem_cache *tarfs_inode_cachep;
 
@@ -494,11 +494,11 @@ static int tarfs_fill_super(struct super_block *sb, struct fs_context *fc)
 	sb->s_fs_info = state;
 
 	/* Read super block then init state. */
-	bh = sb_bread(sb, (scount - 1) * SECTOR_SIZE / TARFS_BSIZE);
+	bh = sb_bread(sb, scount * SECTOR_SIZE / TARFS_BSIZE - 1);
 	if (!bh)
 		return -EIO;
 
-	super = (const struct tarfs_super *)bh->b_data;
+	super = (const struct tarfs_super *)&bh->b_data[TARFS_BSIZE - 512];
 	state->super.inode_count = le64_to_cpu(super->inode_count);
 	state->super.inode_table_offset =
 		le64_to_cpu(super->inode_table_offset);
