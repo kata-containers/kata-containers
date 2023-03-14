@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -44,6 +45,9 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+
+	"google.golang.org/grpc/codes"
+	grpcStatus "google.golang.org/grpc/status"
 )
 
 // sandboxTracingTags defines tags for the trace span
@@ -2109,11 +2113,69 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 		if newMemoryMB == finalMemoryMB {
 			break
 		}
+	}
 
+	tmpfsMounts, err := s.prepareEphemeralMounts(finalMemoryMB)
+	if err != nil {
+		return err
+	}
+	if err := s.agent.updateEphemeralMounts(ctx, tmpfsMounts); err != nil {
+		// upgrade path: if runtime is newer version, but agent is old
+		// then ignore errUnimplemented
+		if grpcStatus.Convert(err).Code() == codes.Unimplemented {
+			s.Logger().Warnf("agent does not support updateMounts")
+			return nil
+		}
+		return err
 	}
 
 	return nil
+}
 
+func (s *Sandbox) prepareEphemeralMounts(memoryMB uint32) ([]*grpc.Storage, error) {
+	tmpfsMounts := []*grpc.Storage{}
+	for _, c := range s.containers {
+		for _, mount := range c.mounts {
+			// if a tmpfs ephemeral mount is present
+			// update its size to occupy the entire sandbox's memory
+			if mount.Type == KataEphemeralDevType {
+				sizeLimited := false
+				for _, opt := range mount.Options {
+					if strings.HasPrefix(opt, "size") {
+						sizeLimited = true
+					}
+				}
+				if sizeLimited { // do not resize sizeLimited emptyDirs
+					continue
+				}
+
+				mountOptions := []string{"remount", fmt.Sprintf("size=%dM", memoryMB)}
+
+				origin_src := mount.Source
+				stat := syscall.Stat_t{}
+				err := syscall.Stat(origin_src, &stat)
+				if err != nil {
+					return nil, err
+				}
+
+				// if volume's gid isn't root group(default group), this means there's
+				// an specific fsGroup is set on this local volume, then it should pass
+				// to guest.
+				if stat.Gid != 0 {
+					mountOptions = append(mountOptions, fmt.Sprintf("%s=%d", fsGid, stat.Gid))
+				}
+
+				tmpfsMounts = append(tmpfsMounts, &grpc.Storage{
+					Driver:     KataEphemeralDevType,
+					MountPoint: filepath.Join(ephemeralPath(), filepath.Base(mount.Source)),
+					Source:     "tmpfs",
+					Fstype:     "tmpfs",
+					Options:    mountOptions,
+				})
+			}
+		}
+	}
+	return tmpfsMounts, nil
 }
 
 func (s *Sandbox) updateMemory(ctx context.Context, newMemoryMB uint32) error {
