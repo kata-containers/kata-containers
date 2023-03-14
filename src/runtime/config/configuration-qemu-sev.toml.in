@@ -32,24 +32,21 @@ machine_type = "@MACHINETYPE@"
 # Default false
 confidential_guest = true
 
-# Enable pre-attestation AMD SEV and SEV-ES confidential guests.
+# Enable pre-attestation for AMD SEV and SEV-ES guests.
 # Applies only if confidential_guest is true.
 # (default: false)
 guest_pre_attestation = true
 
-# Guest owner proxy that handles remote attestation
-guest_pre_attestation_proxy = "@DEFGUESTPREATTESTATIONPROXY@"
-
-# Keyset ID for injected secrets
-guest_pre_attestation_keyset = "@DEFGUESTPREATTESTATIONKEYSET@"
-
-# GUID of injected secret
-# Key Broker Server for SEV(-ES) expects secrets with this guid
+# A remote key broker server (KBS) is required to validate the attestation
+# measurement and inject a secret key.  
 # See https://github.com/confidential-containers/simple-kbs
-guest_pre_attestation_secret_guid = "@DEFGUESTPREATTESTATIONSECRETGUID@"
+guest_pre_attestation_kbs_uri = "@DEFGUESTPREATTESTATIONPROXY@"
 
-# Type of injected secret
-guest_pre_attestation_secret_type = "@DEFGUESTPREATTESTATIONSECRETTYPE@"
+# The simple-kbs can be run in "online" and "offline" modes
+guest_pre_attestation_kbs_mode="@DEFGUESTPREATTESTATIONMODE@" 
+
+# Keyset ID for injected secrets (offline kbs)
+guest_pre_attestation_keyset = "@DEFGUESTPREATTESTATIONKEYSET@"
 
 # SEV guest policy
 sev_guest_policy = @DEFSEVGUESTPOLICY@
