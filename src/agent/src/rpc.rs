@@ -51,7 +51,7 @@ use crate::device::{
 };
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
-use crate::mount::{add_storages, baremount, STORAGE_HANDLER_LIST};
+use crate::mount::{add_storages, baremount, update_ephemeral_mounts, STORAGE_HANDLER_LIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
 use crate::pci;
@@ -995,6 +995,23 @@ impl agent_ttrpc::AgentService for AgentService {
             Routes: RepeatedField::from_vec(list),
             ..Default::default()
         })
+    }
+
+    async fn update_ephemeral_mounts(
+        &self,
+        ctx: &TtrpcContext,
+        req: protocols::agent::UpdateEphemeralMountsRequest,
+    ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "update_mounts", req);
+        is_allowed!(req);
+
+        match update_ephemeral_mounts(sl!(), req.storages.to_vec(), self.sandbox.clone()).await {
+            Ok(_) => Ok(Empty::new()),
+            Err(e) => Err(ttrpc_error!(
+                ttrpc::Code::INTERNAL,
+                format!("Failed to update mounts: {:?}", e),
+            )),
+        }
     }
 
     async fn get_ip_tables(
