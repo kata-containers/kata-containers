@@ -14,6 +14,7 @@ tokio-stream = "0.1.8"
 containerd-snapshots = { git = "https://github.com/containerd/rust-extensions.git", rev = "b284957f884ed440a233fc7900bd2d414ec5d130" }
 sha2 = "0.10.6"
 tarindex = { path = "./tarindex" }
+verity = { path = "./verity" }
 log = "0.4.17"
 env_logger = "0.10.0"
 tempfile = "3.3.0"

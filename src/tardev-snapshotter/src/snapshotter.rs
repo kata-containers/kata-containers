@@ -221,8 +221,12 @@ impl TarDevSnapshotter {
             // TODO: Use file that is already opened once the previous TODO is fixed.
             name.set_extension("");
             trace!("Appending index to {:?}", &name);
-            let mut file = OpenOptions::new().read(true).write(true).open(name)?;
+            let mut file = OpenOptions::new().read(true).write(true).open(&name)?;
             tarindex::append_index(&mut file)?;
+
+            trace!("Appending dm-verity tree to {:?}", &name);
+            let root_hash = verity::append_tree::<Sha256>(&mut file)?;
+            trace!("Root hash for {:?} is {:x}", &name, root_hash);
         }
 
         // Move file to its final location and write the snapshot.
