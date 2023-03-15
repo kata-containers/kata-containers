@@ -353,9 +353,10 @@ impl RuntimeHandlerManager {
 
 /// Config override ordering(high to low):
 /// 1. podsandbox annotation
-/// 2. shimv2 create task option
-/// TODO: https://github.com/kata-containers/kata-containers/issues/3961
-/// 3. environment
+/// 2. environment variable
+/// 3. shimv2 create task option
+/// 4. If above three are not set, then get default path from DEFAULT_RUNTIME_CONFIGURATIONS
+/// in kata-containers/src/libs/kata-types/src/config/default.rs, in array order.
 fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig> {
     const KATA_CONF_FILE: &str = "KATA_CONF_FILE";
     let annotation = Annotation::new(spec.annotations.clone());
