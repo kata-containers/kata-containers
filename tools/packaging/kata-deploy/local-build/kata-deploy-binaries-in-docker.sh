@@ -55,6 +55,7 @@ docker run \
 	--env AA_KBC="${AA_KBC:-}" \
 	--env KATA_BUILD_CC="${KATA_BUILD_CC:-}" \
 	--env INCLUDE_ROOTFS="$(realpath "${INCLUDE_ROOTFS:-}" 2> /dev/null || true)" \
+	--env HKD_PATH="$(realpath "${HKD_PATH:-}" 2> /dev/null || true)" \
 	--env PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-"no"}" \
 	--env INITRAMFS_CONTAINER_BUILDER="${INITRAMFS_CONTAINER_BUILDER:-}" \
 	--env KERNEL_CONTAINER_BUILDER="${KERNEL_CONTAINER_BUILDER:-}" \
