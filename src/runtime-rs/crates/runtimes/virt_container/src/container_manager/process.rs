@@ -182,7 +182,7 @@ impl Process {
             drop(exit_status);
 
             let mut status = status.write().await;
-            *status = ProcessStatus::Stopped;
+            *status = ProcessStatus::Exited;
             drop(status);
 
             drop(exit_notifier);

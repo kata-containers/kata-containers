@@ -18,6 +18,7 @@ use hypervisor::Param;
 use kata_types::{
     annotations::Annotation, config::default::DEFAULT_GUEST_DNS_FILE, config::TomlConfig,
 };
+
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
 use persist::sandbox_persist::Persist;
@@ -50,6 +51,8 @@ impl RuntimeHandlerManagerInner {
 
     async fn init_runtime_handler(
         &mut self,
+        spec: &oci::Spec,
+        state: &oci::State,
         netns: Option<String>,
         dns: Vec<String>,
         config: Arc<TomlConfig>,
@@ -74,14 +77,19 @@ impl RuntimeHandlerManagerInner {
         // start sandbox
         runtime_instance
             .sandbox
-            .start(netns, dns)
+            .start(netns, dns, spec, state)
             .await
             .context("start sandbox")?;
         self.runtime_instance = Some(Arc::new(runtime_instance));
         Ok(())
     }
 
-    async fn try_init(&mut self, spec: &oci::Spec, options: &Option<Vec<u8>>) -> Result<()> {
+    async fn try_init(
+        &mut self,
+        spec: &oci::Spec,
+        state: &oci::State,
+        options: &Option<Vec<u8>>,
+    ) -> Result<()> {
         // return if runtime instance has init
         if self.runtime_instance.is_some() {
             return Ok(());
@@ -121,7 +129,7 @@ impl RuntimeHandlerManagerInner {
         }
 
         let config = load_config(spec, options).context("load config")?;
-        self.init_runtime_handler(netns, dns, Arc::new(config))
+        self.init_runtime_handler(spec, state, netns, dns, Arc::new(config))
             .await
             .context("init runtime handler")?;
 
@@ -185,7 +193,7 @@ impl RuntimeHandlerManager {
                     .await
                     .context("failed to restore the sandbox")?;
                 sandbox
-                    .cleanup(&inner.id)
+                    .cleanup()
                     .await
                     .context("failed to cleanup the resource")?;
             }
@@ -207,10 +215,11 @@ impl RuntimeHandlerManager {
     async fn try_init_runtime_instance(
         &self,
         spec: &oci::Spec,
+        state: &oci::State,
         options: &Option<Vec<u8>>,
     ) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.try_init(spec, options).await
+        inner.try_init(spec, state, options).await
     }
 
     pub async fn handler_message(&self, req: Request) -> Result<Response> {
@@ -222,8 +231,16 @@ impl RuntimeHandlerManager {
                 oci::OCI_SPEC_CONFIG_FILE_NAME
             );
             let spec = oci::Spec::load(&bundler_path).context("load spec")?;
+            let state = oci::State {
+                version: spec.version.clone(),
+                id: container_config.container_id.to_string(),
+                status: oci::ContainerState::Creating,
+                pid: 0,
+                bundle: bundler_path,
+                annotations: spec.annotations.clone(),
+            };
 
-            self.try_init_runtime_instance(&spec, &container_config.options)
+            self.try_init_runtime_instance(&spec, &state, &container_config.options)
                 .await
                 .context("try init runtime instance")?;
             let instance = self
@@ -374,7 +391,7 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
     //   2. If this is not a sandbox infrastructure container, but instead a standalone single container (analogous to "docker run..."),
     //	then the container spec itself will contain appropriate sizing information for the entire sandbox (since it is
     //	a single container.
-    if toml_config.runtime.static_resource_mgmt {
+    if toml_config.runtime.static_sandbox_resource_mgmt {
         info!(sl!(), "static resource management enabled");
         let static_resource_manager = StaticResourceManager::new(spec)
             .context("failed to construct static resource manager")?;
@@ -382,6 +399,7 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
             .setup_config(&mut toml_config)
             .context("failed to setup static resource mgmt config")?;
     }
+
     info!(sl!(), "get config content {:?}", &toml_config);
     Ok(toml_config)
 }

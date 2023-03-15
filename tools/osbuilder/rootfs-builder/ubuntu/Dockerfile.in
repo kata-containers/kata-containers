@@ -17,6 +17,8 @@ RUN CGO_ENABLED=0 DISABLE_DOCS=1 make BUILDTAGS=containers_image_openpgp GO_DYN_
 FROM ${IMAGE_REGISTRY}/ubuntu:@OS_VERSION@
 @SET_PROXY@
 
+# makedev tries to mknod from postinst
+RUN [ -x /usr/bin/systemd-detect-virt ] || ( echo "echo docker" >/usr/bin/systemd-detect-virt && chmod +x /usr/bin/systemd-detect-virt )
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     apt-get --no-install-recommends -y install \
@@ -35,6 +37,7 @@ RUN apt-get update && \
     libgpgme-dev \
     libssl-dev \
     make \
+    makedev \
     multistrap \
     musl-tools \
     pkg-config \

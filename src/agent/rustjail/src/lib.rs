@@ -153,13 +153,17 @@ fn hook_grpc_to_oci(h: &[grpcHook]) -> Vec<oci::Hook> {
 
 fn hooks_grpc_to_oci(h: &grpc::Hooks) -> oci::Hooks {
     let prestart = hook_grpc_to_oci(h.Prestart.as_ref());
-
+    let create_runtime = hook_grpc_to_oci(h.CreateRuntime.as_ref());
+    let create_container = hook_grpc_to_oci(h.CreateContainer.as_ref());
+    let start_container = hook_grpc_to_oci(h.StartContainer.as_ref());
     let poststart = hook_grpc_to_oci(h.Poststart.as_ref());
-
     let poststop = hook_grpc_to_oci(h.Poststop.as_ref());
 
     oci::Hooks {
         prestart,
+        create_runtime,
+        create_container,
+        start_container,
         poststart,
         poststop,
     }
@@ -837,6 +841,45 @@ mod tests {
                         Timeout: 10,
                         ..Default::default()
                     }])),
+                    CreateRuntime: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                        Path: String::from("createruntimepath"),
+                        Args: protobuf::RepeatedField::from(Vec::from([
+                            String::from("arg1"),
+                            String::from("arg2"),
+                        ])),
+                        Env: protobuf::RepeatedField::from(Vec::from([
+                            String::from("env1"),
+                            String::from("env2"),
+                        ])),
+                        Timeout: 10,
+                        ..Default::default()
+                    }])),
+                    CreateContainer: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                        Path: String::from("createcontainerpath"),
+                        Args: protobuf::RepeatedField::from(Vec::from([
+                            String::from("arg1"),
+                            String::from("arg2"),
+                        ])),
+                        Env: protobuf::RepeatedField::from(Vec::from([
+                            String::from("env1"),
+                            String::from("env2"),
+                        ])),
+                        Timeout: 10,
+                        ..Default::default()
+                    }])),
+                    StartContainer: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                        Path: String::from("startcontainerpath"),
+                        Args: protobuf::RepeatedField::from(Vec::from([
+                            String::from("arg1"),
+                            String::from("arg2"),
+                        ])),
+                        Env: protobuf::RepeatedField::from(Vec::from([
+                            String::from("env1"),
+                            String::from("env2"),
+                        ])),
+                        Timeout: 10,
+                        ..Default::default()
+                    }])),
                     ..Default::default()
                 },
                 result: oci::Hooks {
@@ -862,6 +905,24 @@ mod tests {
                     }]),
                     poststop: Vec::from([oci::Hook {
                         path: String::from("poststoppath"),
+                        args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        env: Vec::from([String::from("env1"), String::from("env2")]),
+                        timeout: Some(10),
+                    }]),
+                    create_runtime: Vec::from([oci::Hook {
+                        path: String::from("createruntimepath"),
+                        args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        env: Vec::from([String::from("env1"), String::from("env2")]),
+                        timeout: Some(10),
+                    }]),
+                    create_container: Vec::from([oci::Hook {
+                        path: String::from("createcontainerpath"),
+                        args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        env: Vec::from([String::from("env1"), String::from("env2")]),
+                        timeout: Some(10),
+                    }]),
+                    start_container: Vec::from([oci::Hook {
+                        path: String::from("startcontainerpath"),
                         args: Vec::from([String::from("arg1"), String::from("arg2")]),
                         env: Vec::from([String::from("env1"), String::from("env2")]),
                         timeout: Some(10),
@@ -898,6 +959,45 @@ mod tests {
                         Timeout: 10,
                         ..Default::default()
                     }])),
+                    CreateRuntime: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                        Path: String::from("createruntimepath"),
+                        Args: protobuf::RepeatedField::from(Vec::from([
+                            String::from("arg1"),
+                            String::from("arg2"),
+                        ])),
+                        Env: protobuf::RepeatedField::from(Vec::from([
+                            String::from("env1"),
+                            String::from("env2"),
+                        ])),
+                        Timeout: 10,
+                        ..Default::default()
+                    }])),
+                    CreateContainer: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                        Path: String::from("createcontainerpath"),
+                        Args: protobuf::RepeatedField::from(Vec::from([
+                            String::from("arg1"),
+                            String::from("arg2"),
+                        ])),
+                        Env: protobuf::RepeatedField::from(Vec::from([
+                            String::from("env1"),
+                            String::from("env2"),
+                        ])),
+                        Timeout: 10,
+                        ..Default::default()
+                    }])),
+                    StartContainer: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                        Path: String::from("startcontainerpath"),
+                        Args: protobuf::RepeatedField::from(Vec::from([
+                            String::from("arg1"),
+                            String::from("arg2"),
+                        ])),
+                        Env: protobuf::RepeatedField::from(Vec::from([
+                            String::from("env1"),
+                            String::from("env2"),
+                        ])),
+                        Timeout: 10,
+                        ..Default::default()
+                    }])),
                     ..Default::default()
                 },
                 result: oci::Hooks {
@@ -910,6 +1010,24 @@ mod tests {
                     }]),
                     poststop: Vec::from([oci::Hook {
                         path: String::from("poststoppath"),
+                        args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        env: Vec::from([String::from("env1"), String::from("env2")]),
+                        timeout: Some(10),
+                    }]),
+                    create_runtime: Vec::from([oci::Hook {
+                        path: String::from("createruntimepath"),
+                        args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        env: Vec::from([String::from("env1"), String::from("env2")]),
+                        timeout: Some(10),
+                    }]),
+                    create_container: Vec::from([oci::Hook {
+                        path: String::from("createcontainerpath"),
+                        args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        env: Vec::from([String::from("env1"), String::from("env2")]),
+                        timeout: Some(10),
+                    }]),
+                    start_container: Vec::from([oci::Hook {
+                        path: String::from("startcontainerpath"),
                         args: Vec::from([String::from("arg1"), String::from("arg2")]),
                         env: Vec::from([String::from("env1"), String::from("env2")]),
                         timeout: Some(10),

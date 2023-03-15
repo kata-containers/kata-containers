@@ -20,8 +20,8 @@ container_image="${KERNEL_CONTAINER_BUILDER:-$(get_kernel_image_name)}"
 
 sudo docker pull ${container_image} || \
 	(sudo docker build -t "${container_image}" "${script_dir}" && \
- 	# No-op unless PUSH_TO_REGISTRY is exported as "yes"
- 	push_to_registry "${container_image}")
+	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
+	 push_to_registry "${container_image}")
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \

@@ -166,6 +166,15 @@ message Hooks {
 
 	// Poststop is a list of hooks to be run after the container process exits.
 	repeated Hook Poststop = 3  [(gogoproto.nullable) = false];
+
+	// Createruntime is a list of hooks to be run during the creation of runtime(sandbox).
+	repeated Hook CreateRuntime = 4  [(gogoproto.nullable) = false];
+
+	// CreateContainer is a list of hooks to be run after VM is started, and before container is created.
+	repeated Hook CreateContainer = 5  [(gogoproto.nullable) = false];
+
+	// StartContainer is a list of hooks to be run after container is created, but before it is started.
+	repeated Hook StartContainer = 6  [(gogoproto.nullable) = false];
 }
 
 message Hook {

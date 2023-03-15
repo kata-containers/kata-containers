@@ -103,6 +103,11 @@ impl Hypervisor for Qemu {
         inner.get_thread_ids().await
     }
 
+    async fn get_vmm_master_tid(&self) -> Result<u32> {
+        let inner = self.inner.read().await;
+        inner.get_vmm_master_tid().await
+    }
+
     async fn cleanup(&self) -> Result<()> {
         let inner = self.inner.read().await;
         inner.cleanup().await

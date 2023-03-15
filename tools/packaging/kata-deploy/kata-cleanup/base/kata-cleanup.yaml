@@ -27,19 +27,19 @@ spec:
             fieldRef:
               fieldPath: spec.nodeName
         securityContext:
-          privileged: false
+          privileged: true
         volumeMounts:
         - name: dbus
-          mountPath: /var/run/dbus
+          mountPath: /var/run/dbus/system_bus_socket
         - name: systemd
-          mountPath: /run/systemd
+          mountPath: /run/systemd/system
       volumes:
         - name: dbus
           hostPath:
-            path: /var/run/dbus
+            path: /var/run/dbus/system_bus_socket
         - name: systemd
           hostPath:
-            path: /run/systemd
+            path: /run/systemd/system
   updateStrategy:
     rollingUpdate:
       maxUnavailable: 1

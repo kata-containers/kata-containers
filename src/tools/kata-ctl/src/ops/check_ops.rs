@@ -108,10 +108,6 @@ pub fn handle_env() -> Result<()> {
     Ok(())
 }
 
-pub fn handle_exec() -> Result<()> {
-    Ok(())
-}
-
 pub fn handle_factory() -> Result<()> {
     Ok(())
 }

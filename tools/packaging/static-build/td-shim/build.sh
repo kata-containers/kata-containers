@@ -31,13 +31,12 @@ package_output_dir="${package_output_dir:-}"
 
 container_image="${TDSHIM_CONTAINER_BUILDER:-$(get_td_shim_image_name)}"
 
-sudo docker pull ${container_image} || \
-	(sudo docker build \
-		--build-arg RUST_TOOLCHAIN="${tdshim_toolchain}" \
-		-t "${container_image}" \
-		"${script_dir}" && \
-	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
-	 push_to_registry "${container_image}")
+sudo docker pull ${container_image} || (sudo docker build \
+	--build-arg RUST_TOOLCHAIN="${tdshim_toolchain}" \
+	-t "${container_image}" \
+	"${script_dir}" && \
+	# No-op unless PUSH_TO_REGISTRY is exported as "yes"
+	push_to_registry "${container_image}")
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \

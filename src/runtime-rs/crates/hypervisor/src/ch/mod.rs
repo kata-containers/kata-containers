@@ -33,9 +33,6 @@ pub struct CloudHypervisor {
     inner: Arc<RwLock<CloudHypervisorInner>>,
 }
 
-unsafe impl Send for CloudHypervisor {}
-unsafe impl Sync for CloudHypervisor {}
-
 impl CloudHypervisor {
     pub fn new() -> Self {
         Self {
@@ -119,6 +116,11 @@ impl Hypervisor for CloudHypervisor {
     async fn get_pids(&self) -> Result<Vec<u32>> {
         let inner = self.inner.read().await;
         inner.get_pids().await
+    }
+
+    async fn get_vmm_master_tid(&self) -> Result<u32> {
+        let inner = self.inner.read().await;
+        inner.get_vmm_master_tid().await
     }
 
     async fn check(&self) -> Result<()> {

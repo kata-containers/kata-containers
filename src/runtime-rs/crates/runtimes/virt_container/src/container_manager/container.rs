@@ -37,6 +37,7 @@ pub struct Container {
     pid: u32,
     pub container_id: ContainerID,
     config: ContainerConfig,
+    spec: oci::Spec,
     inner: Arc<RwLock<ContainerInner>>,
     agent: Arc<dyn Agent>,
     resource_manager: Arc<ResourceManager>,
@@ -47,6 +48,7 @@ impl Container {
     pub fn new(
         pid: u32,
         config: ContainerConfig,
+        spec: oci::Spec,
         agent: Arc<dyn Agent>,
         resource_manager: Arc<ResourceManager>,
     ) -> Result<Self> {
@@ -67,6 +69,7 @@ impl Container {
             pid,
             container_id,
             config,
+            spec,
             inner: Arc::new(RwLock::new(ContainerInner::new(
                 agent.clone(),
                 init_process,
@@ -382,11 +385,31 @@ impl Container {
             .context("agent update container")?;
         Ok(())
     }
+
+    pub async fn config(&self) -> ContainerConfig {
+        self.config.clone()
+    }
+
+    pub async fn spec(&self) -> oci::Spec {
+        self.spec.clone()
+    }
 }
 
 fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
-    // hook should be done on host
-    spec.hooks = None;
+    // Only the StartContainer hook needs to be reserved for execution in the guest
+    let start_container_hooks = match spec.hooks.as_ref() {
+        Some(hooks) => hooks.start_container.clone(),
+        None => Vec::new(),
+    };
+
+    spec.hooks = if start_container_hooks.is_empty() {
+        None
+    } else {
+        Some(oci::Hooks {
+            start_container: start_container_hooks,
+            ..Default::default()
+        })
+    };
 
     // special process K8s ephemeral volumes.
     update_ephemeral_storage_type(spec);

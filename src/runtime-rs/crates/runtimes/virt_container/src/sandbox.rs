@@ -17,6 +17,7 @@ use common::{
 };
 use containerd_shim_protos::events::task::TaskOOM;
 use hypervisor::{dragonball::Dragonball, Hypervisor, HYPERVISOR_DRAGONBALL};
+use kata_sys_util::hooks::HookStates;
 use kata_types::config::{
     default::{DEFAULT_AGENT_LOG_PORT, DEFAULT_AGENT_VSOCK_PORT},
     TomlConfig,
@@ -117,11 +118,50 @@ impl VirtSandbox {
 
         Ok(resource_configs)
     }
+
+    async fn execute_oci_hook_functions(
+        &self,
+        prestart_hooks: &[oci::Hook],
+        create_runtime_hooks: &[oci::Hook],
+        state: &oci::State,
+    ) -> Result<()> {
+        let mut st = state.clone();
+        // for dragonball, we use vmm_master_tid
+        let vmm_pid = self
+            .hypervisor
+            .get_vmm_master_tid()
+            .await
+            .context("get vmm master tid")?;
+        st.pid = vmm_pid as i32;
+
+        // Prestart Hooks [DEPRECATED in newest oci spec]:
+        // * should be run in runtime namespace
+        // * should be run after vm is started, but before container is created
+        //      if Prestart Hook and CreateRuntime Hook are both supported
+        // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#prestart
+        let mut prestart_hook_states = HookStates::new();
+        prestart_hook_states.execute_hooks(prestart_hooks, Some(st.clone()))?;
+
+        // CreateRuntime Hooks:
+        // * should be run in runtime namespace
+        // * should be run when creating the runtime
+        // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#createruntime-hooks
+        let mut create_runtime_hook_states = HookStates::new();
+        create_runtime_hook_states.execute_hooks(create_runtime_hooks, Some(st.clone()))?;
+
+        Ok(())
+    }
 }
 
 #[async_trait]
 impl Sandbox for VirtSandbox {
-    async fn start(&self, netns: Option<String>, dns: Vec<String>) -> Result<()> {
+    async fn start(
+        &self,
+        netns: Option<String>,
+        dns: Vec<String>,
+        spec: &oci::Spec,
+        state: &oci::State,
+    ) -> Result<()> {
         let id = &self.sid;
 
         // if sandbox running, return
@@ -148,6 +188,17 @@ impl Sandbox for VirtSandbox {
         // start vm
         self.hypervisor.start_vm(10_000).await.context("start vm")?;
         info!(sl!(), "start vm");
+
+        // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
+        let (prestart_hooks, create_runtime_hooks) = match spec.hooks.as_ref() {
+            Some(hooks) => (hooks.prestart.clone(), hooks.create_runtime.clone()),
+            None => (Vec::new(), Vec::new()),
+        };
+        self.execute_oci_hook_functions(&prestart_hooks, &create_runtime_hooks, state)
+            .await?;
+
+        // TODO: if prestart_hooks is not empty, rescan the network endpoints(rely on hotplug endpoints).
+        // see: https://github.com/kata-containers/kata-containers/issues/6378
 
         // connect agent
         // set agent socket
@@ -240,17 +291,7 @@ impl Sandbox for VirtSandbox {
 
         self.stop().await.context("stop")?;
 
-        info!(sl!(), "delete cgroup");
-        self.resource_manager
-            .delete_cgroups()
-            .await
-            .context("delete cgroups")?;
-
-        info!(sl!(), "delete hypervisor");
-        self.hypervisor
-            .cleanup()
-            .await
-            .context("delete hypervisor")?;
+        self.cleanup().await.context("do the clean up")?;
 
         info!(sl!(), "stop monitor");
         self.monitor.stop().await;
@@ -267,9 +308,19 @@ impl Sandbox for VirtSandbox {
         Ok(())
     }
 
-    async fn cleanup(&self, _id: &str) -> Result<()> {
-        self.resource_manager.delete_cgroups().await?;
-        self.hypervisor.cleanup().await?;
+    async fn cleanup(&self) -> Result<()> {
+        info!(sl!(), "delete hypervisor");
+        self.hypervisor
+            .cleanup()
+            .await
+            .context("delete hypervisor")?;
+
+        info!(sl!(), "resource clean up");
+        self.resource_manager
+            .cleanup()
+            .await
+            .context("resource clean up")?;
+
         // TODO: cleanup other snadbox resource
         Ok(())
     }
