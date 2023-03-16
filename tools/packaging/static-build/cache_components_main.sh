@@ -18,6 +18,12 @@ cache_clh_artifacts() {
 	create_cache_asset "${clh_tarball_name}" "${current_clh_version}" ""
 }
 
+cache_firecracker_artifacts() {
+	local fc_tarball_name="kata-static-firecracker.tar.xz"
+	local current_fc_version="$(get_from_kata_deps "assets.hypervisor.firecracker.version")"
+	create_cache_asset "${fc_tarball_name}" "${current_fc_version}" ""
+}
+
 create_cache_asset() {
 	local component_name="${1}"
 	local component_version="${2}"
@@ -40,6 +46,7 @@ Usage: $0 "[options]"
 	Builds the cache of several kata components.
 	Options:
 		-c	Cloud hypervisor cache
+		-F	Firecracker cache
 		-h	Shows help
 EOF
 )"
@@ -47,12 +54,16 @@ EOF
 
 main() {
 	local cloud_hypervisor_component="${cloud_hypervisor_component:-}"
+	local firecracker_component="${firecracker_component:-}"
 	local OPTIND
-	while getopts ":ch:" opt
+	while getopts ":cFh:" opt
 	do
 		case "$opt" in
 		c)
 			cloud_hypervisor_component="1"
+			;;
+		F)
+			firecracker_component="1"
 			;;
 		h)
 			help
@@ -68,6 +79,7 @@ main() {
 	shift $((OPTIND-1))
 
 	[[ -z "${cloud_hypervisor_component}" ]] && \
+	[[ -z "${firecracker_component}" ]] && \
 		help && die "Must choose at least one option"
 
 	mkdir -p "${WORKSPACE}/artifacts"
@@ -75,6 +87,7 @@ main() {
 	echo "Artifacts:"
 
 	[ "${cloud_hypervisor_component}" == "1" ] && cache_clh_artifacts
+	[ "${firecracker_component}" == "1" ] && cache_firecracker_artifacts
 
 	ls -la "${WORKSPACE}/artifacts/"
 	popd
