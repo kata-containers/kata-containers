@@ -13,6 +13,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/../scripts/lib.sh"
 
 KERNEL_FLAVOUR="${KERNEL_FLAVOUR:-kernel}" # kernel | kernel-experimental | kernel-arm-experimetnal | kernel-dragonball-experimental
+ROOTFS_IMAGE_TYPE="${ROOTFS_IMAGE_TYPE:-image}" # image | initrd
 
 cache_clh_artifacts() {
 	local clh_tarball_name="kata-static-cloud-hypervisor.tar.xz"
@@ -48,6 +49,19 @@ cache_qemu_artifacts() {
 	create_cache_asset "${qemu_tarball_name}" "${current_qemu_version}-${qemu_sha}" "${current_qemu_image}"
 }
 
+cache_rootfs_artifacts() {
+	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
+	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
+	local agent_last_commit="$(get_last_modification "${repo_root_dir}/src/agent")"
+	local libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
+	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
+	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
+	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+	local rootfs_tarball_name="kata-static-rootfs-${ROOTFS_IMAGE_TYPE}.tar.xz"
+	local current_rootfs_version="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${ROOTFS_IMAGE_TYPE}"
+	create_cache_asset "${rootfs_tarball_name}" "${current_rootfs_version}" ""
+}
+
 create_cache_asset() {
 	local component_name="${1}"
 	local component_version="${2}"
@@ -76,6 +90,9 @@ Usage: $0 "[options]"
 			  The default KERNEL_FLAVOUR value is "kernel"
 		-n	Nydus cache
 		-q 	QEMU cache
+		-r 	RootFS cache
+			* Export ROOTFS_IMAGE_TYPE="image|initrd" for one of those two types
+			  The default ROOTFS_IMAGE_TYPE value is "image"
 		-h	Shows help
 EOF
 )"
@@ -87,8 +104,9 @@ main() {
 	local kernel_component="${kernel_component:-}"
 	local nydus_component="${nydus_component:-}"
 	local qemu_component="${qemu_component:-}"
+	local rootfs_component="${rootfs_component:-}"
 	local OPTIND
-	while getopts ":cFknqh:" opt
+	while getopts ":cFknqrh:" opt
 	do
 		case "$opt" in
 		c)
@@ -105,6 +123,9 @@ main() {
 			;;
 		q)
 			qemu_component="1"
+			;;
+		r)
+			rootfs_component="1"
 			;;
 		h)
 			help
@@ -124,6 +145,7 @@ main() {
 	[[ -z "${kernel_component}" ]] && \
 	[[ -z "${nydus_component}" ]] && \
 	[[ -z "${qemu_component}" ]] && \
+	[[ -z "${rootfs_component}" ]] && \
 		help && die "Must choose at least one option"
 
 	mkdir -p "${WORKSPACE}/artifacts"
@@ -135,6 +157,7 @@ main() {
 	[ "${kernel_component}" == "1" ] && cache_kernel_artifacts
 	[ "${nydus_component}" == "1" ] && cache_nydus_artifacts
 	[ "${qemu_component}" == "1" ] && cache_qemu_artifacts
+	[ "${rootfs_component}" == "1" ] && cache_rootfs_artifacts
 
 	ls -la "${WORKSPACE}/artifacts/"
 	popd
