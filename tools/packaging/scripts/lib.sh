@@ -180,3 +180,24 @@ get_shim_v2_image_name() {
 	shim_v2_script_dir="${repo_root_dir}/tools/packaging/static-build/shim-v2"
 	echo "${BUILDER_REGISTRY}:shim-v2-go-$(get_from_kata_deps "languages.golang.meta.newest-version")-rust-$(get_from_kata_deps "languages.rust.meta.newest-version")-$(get_last_modification ${shim_v2_script_dir})-$(uname -m)"
 }
+
+get_virtiofsd_image_name() {
+	ARCH=$(uname -m)
+	case ${ARCH} in
+	        "aarch64")
+	                libc="musl"
+	                ;;
+	        "ppc64le")
+	                libc="gnu"
+	                ;;
+	        "s390x")
+	                libc="gnu"
+	                ;;
+	        "x86_64")
+	                libc="musl"
+	                ;;
+	esac
+
+	virtiofsd_script_dir="${repo_root_dir}/tools/packaging/static-build/virtiofsd"
+	echo "${BUILDER_REGISTRY}:virtiofsd-$(get_from_kata_deps "externals.virtiofsd.toolchain")-${libc}-$(get_last_modification ${virtiofsd_script_dir})-$(uname -m)"
+}
