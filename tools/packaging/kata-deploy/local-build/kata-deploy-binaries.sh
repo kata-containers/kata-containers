@@ -133,6 +133,17 @@ install_initrd() {
 #Install kernel asset
 install_kernel() {
 	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
+	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
+
+	install_cached_tarball_component \
+		"kernel" \
+		"${jenkins_url}/job/kata-containers-main-kernel-$(uname -m)/${cached_artifacts_path}" \
+		"${kernel_version}-${kernel_kata_config_version}" \
+		"$(get_kernel_image_name)" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -f -v "${kernel_version}"
 }
 
@@ -140,6 +151,17 @@ install_kernel() {
 install_dragonball_experimental_kernel() {
 	info "build dragonball experimental kernel"
 	export kernel_version="$(yq r $versions_yaml assets.kernel-dragonball-experimental.version)"
+	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
+
+	install_cached_tarball_component \
+		"kernel-dragonball-experimental" \
+		"${jenkins_url}/job/kata-containers-main-kernel-dragonball-experimental-$(uname -m)/${cached_artifacts_path}" \
+		"${kernel_version}-${kernel_kata_config_version}" \
+		"$(get_kernel_image_name)" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	info "kernel version ${kernel_version}"
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -e -t dragonball -v ${kernel_version}	
 }
@@ -148,6 +170,17 @@ install_dragonball_experimental_kernel() {
 install_experimental_kernel() {
 	info "build experimental kernel"
 	export kernel_version="$(yq r $versions_yaml assets.kernel-experimental.tag)"
+	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
+
+	install_cached_tarball_component \
+		"kernel-experimental" \
+		"${jenkins_url}/job/kata-containers-main-kernel-experimental-$(uname -m)/${cached_artifacts_path}" \
+		"${kernel_version}-${kernel_kata_config_version}" \
+		"$(get_kernel_image_name)" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	info "Kernel version ${kernel_version}"
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -f -b experimental -v ${kernel_version}
 }
