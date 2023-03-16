@@ -120,12 +120,52 @@ install_cached_tarball_component() {
 
 #Install guest image
 install_image() {
+	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-image-$(uname -m)/${cached_artifacts_path}"
+	local component="rootfs-image"
+
+	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
+	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
+	local agent_last_commit="$(get_last_modification "${repo_root_dir}/src/agent")"
+	local libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
+	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
+	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
+	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+
+	install_cached_tarball_component \
+		"${component}" \
+		"${jenkins}" \
+		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-image" \
+		"" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	info "Create image"
 	"${rootfs_builder}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}"
 }
 
 #Install guest initrd
 install_initrd() {
+	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-initrd-$(uname -m)/${cached_artifacts_path}"
+	local component="rootfs-initrd"
+
+	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
+	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
+	local agent_last_commit="$(get_last_modification "${repo_root_dir}/src/agent")"
+	local libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
+	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
+	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
+	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+
+	install_cached_tarball_component \
+		"${component}" \
+		"${jenkins}" \
+		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-initrd" \
+		"" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	info "Create initrd"
 	"${rootfs_builder}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}"
 }
