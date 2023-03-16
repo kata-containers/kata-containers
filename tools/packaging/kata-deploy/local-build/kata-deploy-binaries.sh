@@ -32,6 +32,9 @@ readonly nydus_builder="${static_build_dir}/nydus/build.sh"
 
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
 
+readonly jenkins_url="http://jenkins.katacontainers.io"
+readonly cached_artifacts_path="lastSuccessfulBuild/artifact/artifacts"
+
 ARCH=$(uname -m)
 
 workdir="${WORKDIR:-$PWD}"
@@ -85,6 +88,34 @@ options:
 EOF
 
 	exit "${return_code}"
+}
+
+
+cleanup_and_fail() {
+	rm -f "${component_tarball_path}"
+	return 1
+}
+
+install_cached_tarball_component() {
+	local component="${1}"
+	local jenkins_build_url="${2}"
+	local current_version="${3}"
+	local current_image_version="${4}"
+	local component_tarball_name="${5}"
+	local component_tarball_path="${6}"
+
+	local cached_version=$(curl -sfL "${jenkins_build_url}/latest" | awk '{print $1}') || cached_version="none"
+	local cached_image_version=$(curl -sfL "${jenkins_build_url}/latest_image" | awk '{print $1}') || cached_image_version="none"
+
+	[ "${cached_image_version}" != "${current_image_version}" ] && return 1
+	[ "${cached_version}" != "${current_version}" ] && return 1
+
+	info "Using cached tarball of ${component}"
+	echo "Downloading tarball from: ${jenkins_build_url}/${component_tarball_name}"
+	wget "${jenkins_build_url}/${component_tarball_name}" || return cleanup_and_fail
+	wget "${jenkins_build_url}/sha256sum-${component_tarball_name}" || return cleanup_and_fail
+	sha256sum -c "sha256sum-${component_tarball_name}" || return cleanup_and_fail
+	mv "${component_tarball_name}" "${component_tarball_path}"
 }
 
 #Install guest image
@@ -142,6 +173,15 @@ install_firecracker() {
 
 # Install static cloud-hypervisor asset
 install_clh() {
+	install_cached_tarball_component \
+		"cloud-hypervisor" \
+		"${jenkins_url}/job/kata-containers-main-clh-$(uname -m)/${cached_artifacts_path}" \
+		"$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")" \
+		"" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	if [[ "${ARCH}" == "x86_64" ]]; then
 		export features="tdx"
 	fi
@@ -192,6 +232,11 @@ handle_build() {
 	info "DESTDIR ${destdir}"
 	local build_target
 	build_target="$1"
+
+	export final_tarball_path="${workdir}/kata-static-${build_target}.tar.xz"
+	export final_tarball_name="$(basename ${final_tarball_path})"
+	rm -f ${final_tarball_name}
+
 	case "${build_target}" in
 	all)
 		install_clh
@@ -232,12 +277,11 @@ handle_build() {
 		;;
 	esac
 
-	tarball_name="${workdir}/kata-static-${build_target}.tar.xz"
-	(
+	if [ ! -f "${final_tarball_path}" ]; then
 		cd "${destdir}"
-		sudo tar cvfJ "${tarball_name}" "."
-	)
-	tar tvf "${tarball_name}"
+		sudo tar cvfJ "${final_tarball_path}" "."
+	fi
+	tar tvf "${final_tarball_path}"
 }
 
 silent_mode_error_trap() {
