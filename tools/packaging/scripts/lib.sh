@@ -129,3 +129,8 @@ push_to_registry() {
 		fi
 	fi
 }
+
+get_kernel_image_name() {
+	kernel_script_dir="${repo_root_dir}/tools/packaging/static-build/kernel"
+	echo "${BUILDER_REGISTRY}:kernel-$(get_last_modification ${kernel_script_dir})-$(uname -m)"
+}
