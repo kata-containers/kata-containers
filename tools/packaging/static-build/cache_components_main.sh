@@ -62,6 +62,18 @@ cache_rootfs_artifacts() {
 	create_cache_asset "${rootfs_tarball_name}" "${current_rootfs_version}" ""
 }
 
+cache_shim_v2_artifacts() {
+	local shim_v2_tarball_name="kata-static-shim-v2.tar.xz"
+	local shim_v2_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime")"
+	local protocols_last_commit="$(get_last_modification "${repo_root_dir}/src/libs/protocols")"
+	local runtime_rs_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime-rs")"
+	local golang_version="$(get_from_kata_deps "languages.golang.meta.newest-version")"
+	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+	local current_shim_v2_version="${shim_v2_last_commit}-${protocols_last_commit}-${runtime_rs_last_commit}-${golang_version}-${rust_version}"
+	local current_shim_v2_image="$(get_shim_v2_image_name)"
+	create_cache_asset "${shim_v2_tarball_name}" "${current_shim_v2_version}" "${current_shim_v2_image}"
+}
+
 create_cache_asset() {
 	local component_name="${1}"
 	local component_version="${2}"
@@ -93,6 +105,7 @@ Usage: $0 "[options]"
 		-r 	RootFS cache
 			* Export ROOTFS_IMAGE_TYPE="image|initrd" for one of those two types
 			  The default ROOTFS_IMAGE_TYPE value is "image"
+		-s	Shim v2 cache
 		-h	Shows help
 EOF
 )"
@@ -105,8 +118,9 @@ main() {
 	local nydus_component="${nydus_component:-}"
 	local qemu_component="${qemu_component:-}"
 	local rootfs_component="${rootfs_component:-}"
+	local shim_v2_component="${shim_v2_component:-}"
 	local OPTIND
-	while getopts ":cFknqrh:" opt
+	while getopts ":cFknqrsh:" opt
 	do
 		case "$opt" in
 		c)
@@ -127,6 +141,9 @@ main() {
 		r)
 			rootfs_component="1"
 			;;
+		s)
+			shim_v2_component="1"
+			;;
 		h)
 			help
 			exit 0;
@@ -146,6 +163,7 @@ main() {
 	[[ -z "${nydus_component}" ]] && \
 	[[ -z "${qemu_component}" ]] && \
 	[[ -z "${rootfs_component}" ]] && \
+	[[ -z "${shim_v2_component}" ]] && \
 		help && die "Must choose at least one option"
 
 	mkdir -p "${WORKSPACE}/artifacts"
@@ -158,6 +176,7 @@ main() {
 	[ "${nydus_component}" == "1" ] && cache_nydus_artifacts
 	[ "${qemu_component}" == "1" ] && cache_qemu_artifacts
 	[ "${rootfs_component}" == "1" ] && cache_rootfs_artifacts
+	[ "${shim_v2_component}" == "1" ] && cache_shim_v2_artifacts
 
 	ls -la "${WORKSPACE}/artifacts/"
 	popd
