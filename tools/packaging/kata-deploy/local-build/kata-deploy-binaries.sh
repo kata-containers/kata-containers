@@ -246,6 +246,15 @@ install_virtiofsd() {
 
 # Install static nydus asset
 install_nydus() {
+	install_cached_tarball_component \
+		"nydus" \
+		"${jenkins_url}/job/kata-containers-main-nydus-$(uname -m)/${cached_artifacts_path}" \
+		"$(get_from_kata_deps "externals.nydus.version")" \
+		"" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	info "build static nydus"
 	"${nydus_builder}"
 	info "Install static nydus"
