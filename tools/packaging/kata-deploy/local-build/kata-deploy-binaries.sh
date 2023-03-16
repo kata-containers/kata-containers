@@ -316,8 +316,22 @@ install_nydus() {
 
 #Install all components that are not assets
 install_shimv2() {
-	GO_VERSION="$(yq r ${versions_yaml} languages.golang.meta.newest-version)"
-	RUST_VERSION="$(yq r ${versions_yaml} languages.rust.meta.newest-version)"
+	local shim_v2_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime")"
+	local runtime_rs_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime-rs")"
+	local protocols_last_commit="$(get_last_modification "${repo_root_dir}/src/libs/protocols")"
+	local GO_VERSION="$(get_from_kata_deps "languages.golang.meta.newest-version")"
+	local RUST_VERSION="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+	local shim_v2_version="${shim_v2_last_commit}-${protocols_last_commit}-${runtime_rs_last_commit}-${GO_VERSION}-${RUST_VERSION}"
+
+	install_cached_tarball_component \
+		"shim-v2" \
+		"${jenkins_url}/job/kata-containers-main-shim-v2-$(uname -m)/${cached_artifacts_path}" \
+		"${shim_v2_version}" \
+		"$(get_shim_v2_image_name)" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	export GO_VERSION
 	export RUST_VERSION
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
