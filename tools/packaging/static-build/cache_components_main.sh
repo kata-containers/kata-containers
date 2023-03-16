@@ -34,6 +34,12 @@ cache_kernel_artifacts() {
 	create_cache_asset "${kernel_tarball_name}" "${current_kernel_version}" "${current_kernel_image}"
 }
 
+cache_nydus_artifacts() {
+	local nydus_tarball_name="kata-static-nydus.tar.xz"
+	local current_nydus_version="$(get_from_kata_deps "externals.nydus.version")"
+	create_cache_asset "${nydus_tarball_name}" "${current_nydus_version}" ""
+}
+
 create_cache_asset() {
 	local component_name="${1}"
 	local component_version="${2}"
@@ -60,6 +66,7 @@ Usage: $0 "[options]"
 		-k	Kernel cache
 			* Export KERNEL_FLAVOUR="kernel|kernek-experimental|kernel-arm-experimental|kernel-dragonball-experimental" for a specific build
 			  The default KERNEL_FLAVOUR value is "kernel"
+		-n	Nydus cache
 		-h	Shows help
 EOF
 )"
@@ -69,8 +76,9 @@ main() {
 	local cloud_hypervisor_component="${cloud_hypervisor_component:-}"
 	local firecracker_component="${firecracker_component:-}"
 	local kernel_component="${kernel_component:-}"
+	local nydus_component="${nydus_component:-}"
 	local OPTIND
-	while getopts ":cFkh:" opt
+	while getopts ":cFknh:" opt
 	do
 		case "$opt" in
 		c)
@@ -81,6 +89,9 @@ main() {
 			;;
 		k)
 			kernel_component="1"
+			;;
+		n)
+			nydus_component="1"
 			;;
 		h)
 			help
@@ -98,6 +109,7 @@ main() {
 	[[ -z "${cloud_hypervisor_component}" ]] && \
 	[[ -z "${firecracker_component}" ]] && \
 	[[ -z "${kernel_component}" ]] && \
+	[[ -z "${nydus_component}" ]] && \
 		help && die "Must choose at least one option"
 
 	mkdir -p "${WORKSPACE}/artifacts"
@@ -107,6 +119,7 @@ main() {
 	[ "${cloud_hypervisor_component}" == "1" ] && cache_clh_artifacts
 	[ "${firecracker_component}" == "1" ] && cache_firecracker_artifacts
 	[ "${kernel_component}" == "1" ] && cache_kernel_artifacts
+	[ "${nydus_component}" == "1" ] && cache_nydus_artifacts
 
 	ls -la "${WORKSPACE}/artifacts/"
 	popd
