@@ -364,7 +364,7 @@ impl Snapshotter for TarDevSnapshotter {
     }
 
     type InfoStream = impl tokio_stream::Stream<Item = Result<Info, Self::Error>> + Send + 'static;
-    async fn walk(&self) -> Result<Self::InfoStream, Self::Error> {
+    async fn list(&self) -> Result<Self::InfoStream, Self::Error> {
         trace!("walk()");
         let store = self.store.read().await;
         let snapshots_dir = store.root.join("snapshots");
