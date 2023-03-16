@@ -177,12 +177,12 @@ assets:
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     tag: "v5.13.10"
 
-  arm-kernel-experimental:
+  kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.15.7"
 
-  dragonball-kernel-experimental:
+  kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.10.25"

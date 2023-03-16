@@ -556,7 +556,7 @@ main() {
 			case "${arch_target}" in
 			"aarch64")
 				build_type="arm-experimental"
-				kernel_version=$(get_from_kata_deps "assets.arm-kernel-experimental.version")
+				kernel_version=$(get_from_kata_deps "assets.kernel-arm-experimental.version")
 			;;
 			*)
 				info "No arch-specific experimental kernel supported, using experimental one instead"
@@ -564,7 +564,7 @@ main() {
 			;;
 			esac
 		elif [[ ${build_type} == "dragonball-experimental" ]]; then
-			kernel_version=$(get_from_kata_deps "assets.dragonball-kernel-experimental.version")
+			kernel_version=$(get_from_kata_deps "assets.kernel-dragonball-experimental.version")
 		elif [[ "${conf_guest}" != "" ]]; then
 			#If specifying a tag for kernel_version, must be formatted version-like to avoid unintended parsing issues
 			kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)
