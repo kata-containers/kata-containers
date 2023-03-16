@@ -108,7 +108,7 @@ install_kernel() {
 #Install dragonball experimental kernel asset
 install_dragonball_experimental_kernel() {
 	info "build dragonball experimental kernel"
-	export kernel_version="$(yq r $versions_yaml assets.dragonball-kernel-experimental.version)"
+	export kernel_version="$(yq r $versions_yaml assets.kernel-dragonball-experimental.version)"
 	info "kernel version ${kernel_version}"
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -e -t dragonball -v ${kernel_version}	
 }
