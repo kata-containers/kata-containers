@@ -187,9 +187,19 @@ install_experimental_kernel() {
 
 # Install static qemu asset
 install_qemu() {
-	info "build static qemu"
 	export qemu_repo="$(yq r $versions_yaml assets.hypervisor.qemu.url)"
 	export qemu_version="$(yq r $versions_yaml assets.hypervisor.qemu.version)"
+
+	install_cached_tarball_component \
+		"QEMU" \
+		"${jenkins_url}/job/kata-containers-main-qemu-$(uname -m)/${cached_artifacts_path}" \
+		"${qemu_version}-$(calc_qemu_files_sha256sum)" \
+		"$(get_qemu_image_name)" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	info "build static qemu"
 	"${qemu_builder}"
 	tar xvf "${builddir}/kata-static-qemu.tar.gz" -C "${destdir}"
 }
