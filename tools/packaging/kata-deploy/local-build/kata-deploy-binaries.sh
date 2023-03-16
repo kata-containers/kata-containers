@@ -163,6 +163,15 @@ install_qemu() {
 
 # Install static firecracker asset
 install_firecracker() {
+	install_cached_tarball_component \
+		"firecracker" \
+		"${jenkins_url}/job/kata-containers-main-firecracker-$(uname -m)/${cached_artifacts_path}" \
+		"$(get_from_kata_deps "assets.hypervisor.firecracker.version")" \
+		"" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	info "build static firecracker"
 	"${firecracker_builder}"
 	info "Install static firecracker"
