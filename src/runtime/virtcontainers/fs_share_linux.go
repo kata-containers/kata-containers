@@ -443,7 +443,7 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 			f.Logger().Infof("adding shared file for layer %q", l)
 			storage.MountPoint = filepath.Join(kataGuestSandboxDir(), "layers", l)
 			storage.Fstype = "tar"
-			storage.Options = []string{"ro"}
+			storage.Options = []string{"ro", "kata.dm-verity"}
 
 			result = append(result, &SharedFile{
 				storage:   storage,
