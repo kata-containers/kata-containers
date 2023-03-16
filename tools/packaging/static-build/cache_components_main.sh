@@ -40,6 +40,14 @@ cache_nydus_artifacts() {
 	create_cache_asset "${nydus_tarball_name}" "${current_nydus_version}" ""
 }
 
+cache_qemu_artifacts() {
+	local qemu_tarball_name="kata-static-qemu.tar.xz"
+	local current_qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.version")
+	local qemu_sha=$(calc_qemu_files_sha256sum)
+	local current_qemu_image="$(get_qemu_image_name)"
+	create_cache_asset "${qemu_tarball_name}" "${current_qemu_version}-${qemu_sha}" "${current_qemu_image}"
+}
+
 create_cache_asset() {
 	local component_name="${1}"
 	local component_version="${2}"
@@ -67,6 +75,7 @@ Usage: $0 "[options]"
 			* Export KERNEL_FLAVOUR="kernel|kernek-experimental|kernel-arm-experimental|kernel-dragonball-experimental" for a specific build
 			  The default KERNEL_FLAVOUR value is "kernel"
 		-n	Nydus cache
+		-q 	QEMU cache
 		-h	Shows help
 EOF
 )"
@@ -77,8 +86,9 @@ main() {
 	local firecracker_component="${firecracker_component:-}"
 	local kernel_component="${kernel_component:-}"
 	local nydus_component="${nydus_component:-}"
+	local qemu_component="${qemu_component:-}"
 	local OPTIND
-	while getopts ":cFknh:" opt
+	while getopts ":cFknqh:" opt
 	do
 		case "$opt" in
 		c)
@@ -92,6 +102,9 @@ main() {
 			;;
 		n)
 			nydus_component="1"
+			;;
+		q)
+			qemu_component="1"
 			;;
 		h)
 			help
@@ -110,6 +123,7 @@ main() {
 	[[ -z "${firecracker_component}" ]] && \
 	[[ -z "${kernel_component}" ]] && \
 	[[ -z "${nydus_component}" ]] && \
+	[[ -z "${qemu_component}" ]] && \
 		help && die "Must choose at least one option"
 
 	mkdir -p "${WORKSPACE}/artifacts"
@@ -120,6 +134,7 @@ main() {
 	[ "${firecracker_component}" == "1" ] && cache_firecracker_artifacts
 	[ "${kernel_component}" == "1" ] && cache_kernel_artifacts
 	[ "${nydus_component}" == "1" ] && cache_nydus_artifacts
+	[ "${qemu_component}" == "1" ] && cache_qemu_artifacts
 
 	ls -la "${WORKSPACE}/artifacts/"
 	popd

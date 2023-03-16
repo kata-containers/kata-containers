@@ -134,3 +134,44 @@ get_kernel_image_name() {
 	kernel_script_dir="${repo_root_dir}/tools/packaging/static-build/kernel"
 	echo "${BUILDER_REGISTRY}:kernel-$(get_last_modification ${kernel_script_dir})-$(uname -m)"
 }
+
+sha256sum_from_files() {
+	local files_in=${@:-}
+	local files=""
+	local shasum=""
+
+	# Process the input files:
+	#  - discard the files/directories that don't exist.
+	#  - find the files if it is a directory
+	for f in $files_in; do
+		if [ -d "$f" ]; then
+			files+=" $(find $f -type f)"
+		elif [ -f "$f" ]; then
+			files+=" $f"
+		fi
+	done
+	# Return in case there is none input files.
+	[ -n "$files" ] || return 0
+
+	# Alphabetically sorting the files.
+	files="$(echo $files | tr ' ' '\n' | LC_ALL=C sort -u)"
+	# Concate the files and calculate a hash.
+	shasum="$(cat $files | sha256sum -b)" || true
+	if [ -n "$shasum" ];then
+		# Return only the SHA field.
+		echo $(awk '{ print $1 }' <<< $shasum)
+	fi
+}
+
+calc_qemu_files_sha256sum() {
+	local files="${repo_root_dir}/tools/packaging/qemu \
+		${repo_root_dir}/tools/packaging/static-build/qemu.blacklist \
+		${repo_root_dir}/tools/packaging/static-build/scripts"
+
+	sha256sum_from_files "$files"
+}
+
+get_qemu_image_name() {
+	qemu_script_dir="${repo_root_dir}/tools/packaging/static-build/qemu"
+	echo "${BUILDER_REGISTRY}:qemu-$(get_last_modification ${qemu_script_dir})-$(uname -m)"
+}
