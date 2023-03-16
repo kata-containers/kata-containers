@@ -74,6 +74,13 @@ cache_shim_v2_artifacts() {
 	create_cache_asset "${shim_v2_tarball_name}" "${current_shim_v2_version}" "${current_shim_v2_image}"
 }
 
+cache_virtiofsd_artifacts() {
+	local virtiofsd_tarball_name="kata-static-virtiofsd.tar.xz"
+	local current_virtiofsd_version="$(get_from_kata_deps "externals.virtiofsd.version")-$(get_from_kata_deps "externals.virtiofsd.toolchain")"
+	local current_virtiofsd_image="$(get_virtiofsd_image_name)"
+	create_cache_asset "${virtiofsd_tarball_name}" "${current_virtiofsd_version}" "${current_virtiofsd_image}"
+}
+
 create_cache_asset() {
 	local component_name="${1}"
 	local component_version="${2}"
@@ -106,6 +113,7 @@ Usage: $0 "[options]"
 			* Export ROOTFS_IMAGE_TYPE="image|initrd" for one of those two types
 			  The default ROOTFS_IMAGE_TYPE value is "image"
 		-s	Shim v2 cache
+		-v	VirtioFS cache
 		-h	Shows help
 EOF
 )"
@@ -119,8 +127,9 @@ main() {
 	local qemu_component="${qemu_component:-}"
 	local rootfs_component="${rootfs_component:-}"
 	local shim_v2_component="${shim_v2_component:-}"
+	local virtiofsd_component="${virtiofsd_component:-}"
 	local OPTIND
-	while getopts ":cFknqrsh:" opt
+	while getopts ":cFknqrsvh:" opt
 	do
 		case "$opt" in
 		c)
@@ -144,6 +153,9 @@ main() {
 		s)
 			shim_v2_component="1"
 			;;
+		v)
+			virtiofsd_component="1"
+			;;
 		h)
 			help
 			exit 0;
@@ -164,6 +176,7 @@ main() {
 	[[ -z "${qemu_component}" ]] && \
 	[[ -z "${rootfs_component}" ]] && \
 	[[ -z "${shim_v2_component}" ]] && \
+	[[ -z "${virtiofsd_component}" ]] && \
 		help && die "Must choose at least one option"
 
 	mkdir -p "${WORKSPACE}/artifacts"
@@ -177,6 +190,7 @@ main() {
 	[ "${qemu_component}" == "1" ] && cache_qemu_artifacts
 	[ "${rootfs_component}" == "1" ] && cache_rootfs_artifacts
 	[ "${shim_v2_component}" == "1" ] && cache_shim_v2_artifacts
+	[ "${virtiofsd_component}" == "1" ] && cache_virtiofsd_artifacts
 
 	ls -la "${WORKSPACE}/artifacts/"
 	popd
