@@ -287,6 +287,15 @@ install_clh() {
 
 # Install static virtiofsd asset
 install_virtiofsd() {
+	install_cached_tarball_component \
+		"virtiofsd" \
+		"${jenkins_url}/job/kata-containers-main-virtiofsd-$(uname -m)/${cached_artifacts_path}" \
+		"$(get_from_kata_deps "externals.virtiofsd.version")-$(get_from_kata_deps "externals.virtiofsd.toolchain")" \
+		"$(get_virtiofsd_image_name)" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	info "build static virtiofsd"
 	"${virtiofsd_builder}"
 	info "Install static virtiofsd"
