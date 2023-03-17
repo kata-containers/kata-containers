@@ -310,10 +310,12 @@ install_cc_kernel() {
 	export KATA_BUILD_CC=yes
 	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
 
+	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
+
 	install_cached_component \
 		"kernel" \
 		"${jenkins_url}/job/kata-containers-2.0-kernel-cc-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}" \
+		"${kernel_version}-${kernel_kata_config_version}" \
 		"$(get_kernel_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
@@ -409,10 +411,12 @@ install_cached_kernel_component() {
 	kernel_version="${2}"
 	module_dir="${3:-}"
 
+	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
+
 	install_cached_component \
 		"kernel" \
 		"${jenkins_url}/job/kata-containers-2.0-kernel-${tee}-cc-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}" \
+		"${kernel_version}-${kernel_kata_config_version}" \
 		"$(get_kernel_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
