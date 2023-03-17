@@ -25,4 +25,5 @@ done
 
 echo "create ${tar_path}"
 (cd "${tarball_content_dir}"; tar cvfJ "${tar_path}" .)
+rm -rf "${tarball_content_dir}"
 popd
