@@ -254,13 +254,13 @@ pre_checks()
 {
 	info "Running pre-checks"
 
-	local only_kata="${1:-}"
-	[ -z "$only_kata" ] && die "no only_kata value"
+	local skip_containerd="${1:-}"
+	[ -z "$skip_containerd" ] && die "no skip_containerd value"
 
 	command -v "${kata_shim_v2}" &>/dev/null \
 		&& die "Please remove existing $kata_project installation"
 
-	[only_kata = "false" ] && return 0
+	[skip_containerd = "false" ] && return 0
 
 	local ret
 
@@ -320,8 +320,8 @@ setup()
 	local force="${2:-}"
 	[ -z "$force" ] && die "no force value"
 
-	local only_kata="${3:-}"
-	[ -z "$only_kata" ] && die "no only_kata value"
+	local skip_containerd="${3:-}"
+	[ -z "$skip_containerd" ] && die "no skip_containerd value"
 
 	[ "$cleanup" = "true" ] && trap cleanup EXIT
 
@@ -332,7 +332,7 @@ setup()
 
 	[ "$force" = "true" ] && return 0
 
-	pre_checks "$only_kata"
+	pre_checks "$skip_containerd"
 }
 
 # Download the requested version of the specified project.
@@ -681,8 +681,8 @@ handle_installation()
 	local force="${2:-}"
 	[ -z "$force" ] && die "no force value"
 
-	local only_kata="${3:-}"
-	[ -z "$only_kata" ] && die "no only Kata value"
+	local skip_containerd="${3:-}"
+	[ -z "$skip_containerd" ] && die "no only Kata value"
 
 	local enable_debug="${4:-}"
 	[ -z "$enable_debug" ] && die "no enable debug value"
@@ -699,11 +699,11 @@ handle_installation()
 
 	[ "$only_run_test" = "true" ] && test_installation && return 0
 
-	setup "$cleanup" "$force" "$only_kata"
+	setup "$cleanup" "$force" "$skip_containerd"
 
 	handle_kata "$kata_version" "$enable_debug"
 
-	[ "$only_kata" = "false" ] && \
+	[ "$skip_containerd" = "false" ] && \
 		handle_containerd \
 		"$containerd_version" \
 		"$force" \
@@ -711,7 +711,7 @@ handle_installation()
 
 	[ "$disable_test" = "false" ] && test_installation
 
-	if [ "$only_kata" = "true" ]
+	if [ "$skip_containerd" = "true" ]
 	then
 		info "$kata_project is now installed"
 	else
@@ -725,7 +725,7 @@ handle_args()
 {
 	local cleanup="true"
 	local force="false"
-	local only_kata="false"
+	local skip_containerd="false"
 	local disable_test="false"
 	local only_run_test="false"
 	local enable_debug="false"
@@ -743,7 +743,7 @@ handle_args()
 			f) force="true" ;;
 			h) usage; exit 0 ;;
 			k) kata_version="$OPTARG" ;;
-			o) only_kata="true" ;;
+			o) skip_containerd="true" ;;
 			r) cleanup="false" ;;
 			t) disable_test="true" ;;
 			T) only_run_test="true" ;;
@@ -758,7 +758,7 @@ handle_args()
 	handle_installation \
 		"$cleanup" \
 		"$force" \
-		"$only_kata" \
+		"$skip_containerd" \
 		"$enable_debug" \
 		"$disable_test" \
 		"$only_run_test" \
