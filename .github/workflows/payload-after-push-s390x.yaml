@@ -13,10 +13,10 @@ jobs:
       matrix:
         asset:
           - kernel
-          - shim-v2
           - qemu
           - rootfs-image
           - rootfs-initrd
+          - shim-v2
           - virtiofsd
     steps:
       - name: Login to Kata Containers quay.io
