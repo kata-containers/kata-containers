@@ -32,6 +32,7 @@ readonly KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 readonly KATA_DEV_MODE="${KATA_DEV_MODE:-}"
 readonly ci_results_dir="/var/osbuilder/tests"
 readonly dracut_dir=${project_dir}/dracut
+readonly KVM_MISSING="$([ -e /dev/kvm ] || echo true)"
 
 build_images=1
 build_initrds=1
@@ -166,7 +167,7 @@ exit_handler()
 		rm -rf "${tmp_dir}"
 
 		# Restore the default image in config file
-		[ -n "${TRAVIS:-}" ] || run_mgr configure-image
+		[ -n "${KVM_MISSING:-}" ] || run_mgr configure-image
 
 		return
 	fi
@@ -258,8 +259,7 @@ set_runtime()
 
 	[ -n "${KATA_DEV_MODE}" ] && return
 
-	# Travis doesn't support VT-x
-	[ -n "${TRAVIS:-}" ] && return
+	[ -n "${KVM_MISSING:-}" ] && return
 
 	if [ "$KATA_HYPERVISOR" != "firecracker" ]; then
 		if [ -f "$sysconfig_docker_config_file" ]; then
@@ -285,8 +285,7 @@ setup()
 		sudo -E mkdir -p ${ci_results_dir}
 	fi
 
-	# Travis doesn't support VT-x
-	[ -n "${TRAVIS:-}" ] && return
+	[ -n "${KVM_MISSING:-}" ] && return
 
 	[ ! -d "${tests_repo_dir}" ] && git clone "https://${tests_repo}" "${tests_repo_dir}"
 
@@ -383,8 +382,7 @@ install_image_create_container()
 	[ -z "$file" ] && die "need file"
 	[ ! -e "$file" ] && die "file does not exist: $file"
 
-	# Travis doesn't support VT-x
-	[ -n "${TRAVIS:-}" ] && return
+	[ -n "${KVM_MISSING:-}" ] && return
 
 	showKataRunFailure=1
 	run_mgr reset-config
@@ -401,8 +399,7 @@ install_initrd_create_container()
 	[ -z "$file" ] && die "need file"
 	[ ! -e "$file" ] && die "file does not exist: $file"
 
-	# Travis doesn't support VT-x
-	[ -n "${TRAVIS:-}" ] && return
+	[ -n "${KVM_MISSING:-}" ] && return
 
 	showKataRunFailure=1
 	run_mgr reset-config
