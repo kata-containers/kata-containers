@@ -1856,11 +1856,15 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 		// adding a group of VFIO devices
 		for _, dev := range vfioDevices {
 			if _, err := s.hypervisor.HotplugAddDevice(ctx, dev, VfioDev); err != nil {
+				bdf := ""
+				if pciDevice, ok := (*dev).(config.VFIOPCIDev); ok {
+					bdf = pciDevice.BDF
+				}
 				s.Logger().
 					WithFields(logrus.Fields{
 						"sandbox":         s.id,
-						"vfio-device-ID":  dev.ID,
-						"vfio-device-BDF": dev.BDF,
+						"vfio-device-ID":  (*dev).GetID(),
+						"vfio-device-BDF": bdf,
 					}).WithError(err).Error("failed to hotplug VFIO device")
 				return err
 			}
@@ -1909,11 +1913,15 @@ func (s *Sandbox) HotplugRemoveDevice(ctx context.Context, device api.Device, de
 		// remove a group of VFIO devices
 		for _, dev := range vfioDevices {
 			if _, err := s.hypervisor.HotplugRemoveDevice(ctx, dev, VfioDev); err != nil {
+				bdf := ""
+				if pciDevice, ok := (*dev).(config.VFIOPCIDev); ok {
+					bdf = pciDevice.BDF
+				}
 				s.Logger().WithError(err).
 					WithFields(logrus.Fields{
 						"sandbox":         s.id,
-						"vfio-device-ID":  dev.ID,
-						"vfio-device-BDF": dev.BDF,
+						"vfio-device-ID":  (*dev).GetID(),
+						"vfio-device-BDF": bdf,
 					}).Error("failed to hot unplug VFIO device")
 				return err
 			}

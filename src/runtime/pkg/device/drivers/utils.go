@@ -89,18 +89,47 @@ func readPCIProperty(propertyPath string) (string, error) {
 	return strings.Split(string(buf), "\n")[0], nil
 }
 
-func GetVFIODeviceType(deviceFileName string) config.VFIODeviceType {
+func GetVFIODeviceType(deviceFilePath string) (config.VFIODeviceType, error) {
+	deviceFileName := filepath.Base(deviceFilePath)
+
 	//For example, 0000:04:00.0
 	tokens := strings.Split(deviceFileName, ":")
-	vfioDeviceType := config.VFIODeviceErrorType
 	if len(tokens) == 3 {
-		vfioDeviceType = config.VFIODeviceNormalType
-	} else {
-		//For example, 83b8f4f2-509f-382f-3c1e-e6bfe0fa1001
-		tokens = strings.Split(deviceFileName, "-")
-		if len(tokens) == 5 {
-			vfioDeviceType = config.VFIODeviceMediatedType
-		}
+		return config.VFIOPCIDeviceNormalType, nil
 	}
-	return vfioDeviceType
+
+	//For example, 83b8f4f2-509f-382f-3c1e-e6bfe0fa1001
+	tokens = strings.Split(deviceFileName, "-")
+	if len(tokens) != 5 {
+		return config.VFIODeviceErrorType, fmt.Errorf("Incorrect tokens found while parsing VFIO details: %s", deviceFileName)
+	}
+
+	deviceSysfsDev, err := GetSysfsDev(deviceFilePath)
+	if err != nil {
+		return config.VFIODeviceErrorType, err
+	}
+
+	if strings.HasPrefix(deviceSysfsDev, vfioAPSysfsDir) {
+		return config.VFIOAPDeviceMediatedType, nil
+	}
+
+	return config.VFIOPCIDeviceMediatedType, nil
+}
+
+// GetSysfsDev returns the sysfsdev of mediated device
+// Expected input string format is absolute path to the sysfs dev node
+// eg. /sys/kernel/iommu_groups/0/devices/f79944e4-5a3d-11e8-99ce-479cbab002e4
+func GetSysfsDev(sysfsDevStr string) (string, error) {
+	return filepath.EvalSymlinks(sysfsDevStr)
+}
+
+// GetAPVFIODevices retrieves all APQNs associated with a mediated VFIO-AP
+// device
+func GetAPVFIODevices(sysfsdev string) ([]string, error) {
+	data, err := os.ReadFile(filepath.Join(sysfsdev, "matrix"))
+	if err != nil {
+		return []string{}, err
+	}
+	// Split by newlines, omitting final newline
+	return strings.Split(string(data[:len(data)-1]), "\n"), nil
 }

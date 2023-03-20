@@ -16,13 +16,12 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-#[cfg(target_arch = "s390x")]
-use crate::ccw;
 use crate::linux_abi::*;
 use crate::pci;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
 use anyhow::{anyhow, Context, Result};
+use cfg_if::cfg_if;
 use oci::{LinuxDeviceCgroup, LinuxResources, Spec};
 use protocols::agent::Device;
 use tracing::instrument;
@@ -46,13 +45,21 @@ pub const DRIVER_NVDIMM_TYPE: &str = "nvdimm";
 pub const DRIVER_EPHEMERAL_TYPE: &str = "ephemeral";
 pub const DRIVER_LOCAL_TYPE: &str = "local";
 pub const DRIVER_WATCHABLE_BIND_TYPE: &str = "watchable-bind";
-// VFIO device to be bound to a guest kernel driver
-pub const DRIVER_VFIO_GK_TYPE: &str = "vfio-gk";
-// VFIO device to be bound to vfio-pci and made available inside the
+// VFIO PCI device to be bound to a guest kernel driver
+pub const DRIVER_VFIO_PCI_GK_TYPE: &str = "vfio-pci-gk";
+// VFIO PCI device to be bound to vfio-pci and made available inside the
 // container as a VFIO device node
-pub const DRIVER_VFIO_TYPE: &str = "vfio";
+pub const DRIVER_VFIO_PCI_TYPE: &str = "vfio-pci";
+pub const DRIVER_VFIO_AP_TYPE: &str = "vfio-ap";
 pub const DRIVER_OVERLAYFS_TYPE: &str = "overlayfs";
 pub const FS_TYPE_HUGETLB: &str = "hugetlbfs";
+
+cfg_if! {
+    if #[cfg(target_arch = "s390x")] {
+        use crate::ap;
+        use crate::ccw;
+    }
+}
 
 #[instrument]
 pub fn online_device(path: &str) -> Result<()> {
@@ -280,7 +287,7 @@ pub async fn get_virtio_blk_ccw_device_name(
     sandbox: &Arc<Mutex<Sandbox>>,
     device: &ccw::Device,
 ) -> Result<String> {
-    let matcher = VirtioBlkCCWMatcher::new(&create_ccw_root_bus_path(), device);
+    let matcher = VirtioBlkCCWMatcher::new(CCW_ROOT_BUS_PATH, device);
     let uev = wait_for_uevent(sandbox, matcher).await?;
     let devname = uev.devname;
     return match Path::new(SYSTEM_DEV_PATH).join(&devname).to_str() {
@@ -399,6 +406,39 @@ async fn get_vfio_device_name(sandbox: &Arc<Mutex<Sandbox>>, grp: IommuGroup) ->
 
     let uev = wait_for_uevent(sandbox, matcher).await?;
     Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
+}
+
+#[cfg(target_arch = "s390x")]
+#[derive(Debug)]
+struct ApMatcher {
+    syspath: String,
+}
+
+#[cfg(target_arch = "s390x")]
+impl ApMatcher {
+    fn new(address: ap::Address) -> ApMatcher {
+        ApMatcher {
+            syspath: format!(
+                "{}/card{:02x}/{}",
+                AP_ROOT_BUS_PATH, address.adapter_id, address
+            ),
+        }
+    }
+}
+
+#[cfg(target_arch = "s390x")]
+impl UeventMatcher for ApMatcher {
+    fn is_match(&self, uev: &Uevent) -> bool {
+        uev.action == "add" && uev.devpath == self.syspath
+    }
+}
+
+#[cfg(target_arch = "s390x")]
+#[instrument]
+async fn wait_for_ap_device(sandbox: &Arc<Mutex<Sandbox>>, address: ap::Address) -> Result<()> {
+    let matcher = ApMatcher::new(address);
+    wait_for_uevent(sandbox, matcher).await?;
+    Ok(())
 }
 
 /// Scan SCSI bus for the given SCSI address(SCSI-Id and LUN)
@@ -699,7 +739,7 @@ async fn virtio_nvdimm_device_handler(
     Ok(DevNumUpdate::from_vm_path(&device.vm_path)?.into())
 }
 
-fn split_vfio_option(opt: &str) -> Option<(&str, &str)> {
+fn split_vfio_pci_option(opt: &str) -> Option<(&str, &str)> {
     let mut tokens = opt.split('=');
     let hostbdf = tokens.next()?;
     let path = tokens.next()?;
@@ -714,14 +754,18 @@ fn split_vfio_option(opt: &str) -> Option<(&str, &str)> {
 // Each option should have the form "DDDD:BB:DD.F=<pcipath>"
 //     DDDD:BB:DD.F is the device's PCI address in the host
 //     <pcipath> is a PCI path to the device in the guest (see pci.rs)
-async fn vfio_device_handler(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> Result<SpecUpdate> {
-    let vfio_in_guest = device.field_type != DRIVER_VFIO_GK_TYPE;
+#[instrument]
+async fn vfio_pci_device_handler(
+    device: &Device,
+    sandbox: &Arc<Mutex<Sandbox>>,
+) -> Result<SpecUpdate> {
+    let vfio_in_guest = device.field_type != DRIVER_VFIO_PCI_GK_TYPE;
     let mut pci_fixups = Vec::<(pci::Address, pci::Address)>::new();
     let mut group = None;
 
     for opt in device.options.iter() {
-        let (host, pcipath) =
-            split_vfio_option(opt).ok_or_else(|| anyhow!("Malformed VFIO option {:?}", opt))?;
+        let (host, pcipath) = split_vfio_pci_option(opt)
+            .ok_or_else(|| anyhow!("Malformed VFIO PCI option {:?}", opt))?;
         let host =
             pci::Address::from_str(host).context("Bad host PCI address in VFIO option {:?}")?;
         let pcipath = pci::Path::from_str(pcipath)?;
@@ -761,6 +805,28 @@ async fn vfio_device_handler(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> 
         dev: dev_update,
         pci: pci_fixups,
     })
+}
+
+// The VFIO AP (Adjunct Processor) device handler takes all the APQNs provided as device options
+// and awaits them. It sets the minimum AP rescan time of 5 seconds and temporarily adds that
+// amount to the hotplug timeout.
+#[cfg(target_arch = "s390x")]
+#[instrument]
+async fn vfio_ap_device_handler(
+    device: &Device,
+    sandbox: &Arc<Mutex<Sandbox>>,
+) -> Result<SpecUpdate> {
+    // Force AP bus rescan
+    fs::write(AP_SCANS_PATH, "1")?;
+    for apqn in device.options.iter() {
+        wait_for_ap_device(sandbox, ap::Address::from_str(apqn)?).await?;
+    }
+    Ok(Default::default())
+}
+
+#[cfg(not(target_arch = "s390x"))]
+async fn vfio_ap_device_handler(_: &Device, _: &Arc<Mutex<Sandbox>>) -> Result<SpecUpdate> {
+    Err(anyhow!("AP is only supported on s390x"))
 }
 
 #[instrument]
@@ -828,7 +894,10 @@ async fn add_device(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> Result<Sp
         DRIVER_MMIO_BLK_TYPE => virtiommio_blk_device_handler(device, sandbox).await,
         DRIVER_NVDIMM_TYPE => virtio_nvdimm_device_handler(device, sandbox).await,
         DRIVER_SCSI_TYPE => virtio_scsi_device_handler(device, sandbox).await,
-        DRIVER_VFIO_GK_TYPE | DRIVER_VFIO_TYPE => vfio_device_handler(device, sandbox).await,
+        DRIVER_VFIO_PCI_GK_TYPE | DRIVER_VFIO_PCI_TYPE => {
+            vfio_pci_device_handler(device, sandbox).await
+        }
+        DRIVER_VFIO_AP_TYPE => vfio_ap_device_handler(device, sandbox).await,
         _ => Err(anyhow!("Unknown device type {}", device.field_type)),
     }
 }
@@ -1378,7 +1447,7 @@ mod tests {
     #[cfg(target_arch = "s390x")]
     #[tokio::test]
     async fn test_virtio_blk_ccw_matcher() {
-        let root_bus = create_ccw_root_bus_path();
+        let root_bus = CCW_ROOT_BUS_PATH;
         let subsystem = "block";
         let devname = "vda";
         let relpath = "0.0.0002";
@@ -1487,13 +1556,13 @@ mod tests {
     }
 
     #[test]
-    fn test_split_vfio_option() {
+    fn test_split_vfio_pci_option() {
         assert_eq!(
-            split_vfio_option("0000:01:00.0=02/01"),
+            split_vfio_pci_option("0000:01:00.0=02/01"),
             Some(("0000:01:00.0", "02/01"))
         );
-        assert_eq!(split_vfio_option("0000:01:00.0=02/01=rubbish"), None);
-        assert_eq!(split_vfio_option("0000:01:00.0"), None);
+        assert_eq!(split_vfio_pci_option("0000:01:00.0=02/01=rubbish"), None);
+        assert_eq!(split_vfio_pci_option("0000:01:00.0"), None);
     }
 
     #[test]
@@ -1571,5 +1640,36 @@ mod tests {
 
         // Test dev2
         assert!(pci_iommu_group(&syspci, dev2).is_err());
+    }
+
+    #[cfg(target_arch = "s390x")]
+    #[tokio::test]
+    async fn test_vfio_ap_matcher() {
+        let subsystem = "ap";
+        let card = "0a";
+        let relpath = format!("{}.0001", card);
+
+        let mut uev = Uevent::default();
+        uev.action = U_EVENT_ACTION_ADD.to_string();
+        uev.subsystem = subsystem.to_string();
+        uev.devpath = format!("{}/card{}/{}", AP_ROOT_BUS_PATH, card, relpath);
+
+        let ap_address = ap::Address::from_str(&relpath).unwrap();
+        let matcher = ApMatcher::new(ap_address);
+
+        assert!(matcher.is_match(&uev));
+
+        let mut uev_remove = uev.clone();
+        uev_remove.action = U_EVENT_ACTION_REMOVE.to_string();
+        assert!(!matcher.is_match(&uev_remove));
+
+        let mut uev_other_device = uev.clone();
+        uev_other_device.devpath = format!(
+            "{}/card{}/{}",
+            AP_ROOT_BUS_PATH,
+            card,
+            format!("{}.0002", card)
+        );
+        assert!(!matcher.is_match(&uev_other_device));
     }
 }

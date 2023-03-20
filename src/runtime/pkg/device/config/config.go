@@ -258,15 +258,24 @@ const (
 	// VFIODeviceErrorType is the error type of VFIO device
 	VFIODeviceErrorType VFIODeviceType = iota
 
-	// VFIODeviceNormalType is a normal VFIO device type
-	VFIODeviceNormalType
+	// VFIOPCIDeviceNormalType is a normal VFIO PCI device type
+	VFIOPCIDeviceNormalType
 
-	// VFIODeviceMediatedType is a VFIO mediated device type
-	VFIODeviceMediatedType
+	// VFIOPCIDeviceMediatedType is a VFIO PCI mediated device type
+	VFIOPCIDeviceMediatedType
+
+	// VFIOAPDeviceMediatedType is a VFIO AP mediated device type
+	VFIOAPDeviceMediatedType
 )
 
-// VFIODev represents a VFIO drive used for hotplugging
-type VFIODev struct {
+type VFIODev interface {
+	GetID() *string
+	GetType() VFIODeviceType
+	GetSysfsDev() *string
+}
+
+// VFIOPCIDev represents a VFIO PCI device used for hotplugging
+type VFIOPCIDev struct {
 	// ID is used to identify this drive in the hypervisor options.
 	ID string
 
@@ -296,6 +305,44 @@ type VFIODev struct {
 
 	// IsPCIe specifies device is PCIe or PCI
 	IsPCIe bool
+}
+
+func (d VFIOPCIDev) GetID() *string {
+	return &d.ID
+}
+
+func (d VFIOPCIDev) GetType() VFIODeviceType {
+	return d.Type
+}
+
+func (d VFIOPCIDev) GetSysfsDev() *string {
+	return &d.SysfsDev
+}
+
+type VFIOAPDev struct {
+	// ID is used to identify this drive in the hypervisor options.
+	ID string
+
+	// sysfsdev of VFIO mediated device
+	SysfsDev string
+
+	// APDevices are the Adjunct Processor devices assigned to the mdev
+	APDevices []string
+
+	// Type of VFIO device
+	Type VFIODeviceType
+}
+
+func (d VFIOAPDev) GetID() *string {
+	return &d.ID
+}
+
+func (d VFIOAPDev) GetType() VFIODeviceType {
+	return d.Type
+}
+
+func (d VFIOAPDev) GetSysfsDev() *string {
+	return &d.SysfsDev
 }
 
 // RNGDev represents a random number generator device

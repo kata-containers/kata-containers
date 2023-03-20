@@ -89,8 +89,7 @@ func FindContextID() (*os.File, uint64, error) {
 const (
 	procMountsFile = "/proc/mounts"
 
-	fieldsPerLine  = 6
-	vfioAPSysfsDir = "vfio_ap"
+	fieldsPerLine = 6
 )
 
 const (
@@ -140,18 +139,6 @@ func GetDevicePathAndFsTypeOptions(mountPoint string) (devicePath, fsType string
 			return
 		}
 	}
-}
-
-// IsAPVFIOMediatedDevice decides whether a device is a VFIO-AP device
-// by checking for the existence of "vfio_ap" in the path
-func IsAPVFIOMediatedDevice(sysfsdev string) bool {
-	split := strings.Split(sysfsdev, string(os.PathSeparator))
-	for _, el := range split {
-		if el == vfioAPSysfsDir {
-			return true
-		}
-	}
-	return false
 }
 
 func waitProcessUsingPidfd(pid int, timeoutSecs uint, logger *logrus.Entry) (bool, error) {
