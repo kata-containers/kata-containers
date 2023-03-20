@@ -24,11 +24,7 @@ ovmf_package="${ovmf_package:-}"
 package_output_dir="${package_output_dir:-}"
 
 if [ -z "$ovmf_repo" ]; then
-       if [ "${ovmf_build}" == "tdx" ]; then
-	       ovmf_repo=$(get_from_kata_deps "externals.ovmf.tdx.url" "${kata_version}")
-       else
-	       ovmf_repo=$(get_from_kata_deps "externals.ovmf.url" "${kata_version}")
-       fi
+	ovmf_repo=$(get_from_kata_deps "externals.ovmf.url" "${kata_version}")
 fi
 
 [ -n "$ovmf_repo" ] || die "failed to get ovmf repo"
