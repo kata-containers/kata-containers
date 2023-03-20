@@ -81,6 +81,13 @@ impl VmmInstance {
         result
     }
 
+    pub fn get_ns_path(&self) -> String {
+        let info_binding = self.vmm_shared_info.clone();
+        let info = info_binding.read().unwrap();
+        let result = format!("/proc/{}/task/{}/ns", info.pid, info.master_tid);
+        result
+    }
+
     pub fn get_vcpu_tids(&self) -> Vec<(u8, u32)> {
         let info = self.vmm_shared_info.clone();
         let result = info.read().unwrap().tids.clone();

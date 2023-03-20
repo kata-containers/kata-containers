@@ -240,6 +240,70 @@ async fn ephemeral_storage_handler(
     Ok("".to_string())
 }
 
+// update_ephemeral_mounts takes a list of ephemeral mounts and remounts them
+// with mount options passed by the caller
+#[instrument]
+pub async fn update_ephemeral_mounts(
+    logger: Logger,
+    storages: Vec<Storage>,
+    sandbox: Arc<Mutex<Sandbox>>,
+) -> Result<()> {
+    for (_, storage) in storages.iter().enumerate() {
+        let handler_name = storage.driver.clone();
+        let logger = logger.new(o!(
+	    "msg" => "updating tmpfs storage",
+            "subsystem" => "storage",
+            "storage-type" => handler_name.to_owned()));
+
+        match handler_name.as_str() {
+            DRIVER_EPHEMERAL_TYPE => {
+                fs::create_dir_all(Path::new(&storage.mount_point))?;
+
+                if storage.options.is_empty() {
+                    continue;
+                } else {
+                    // assume that fsGid has already been set
+                    let mut opts = Vec::<&str>::new();
+                    for (_, opt) in storage.options.iter().enumerate() {
+                        if opt.starts_with(FS_GID) {
+                            continue;
+                        }
+                        opts.push(opt)
+                    }
+                    let mount_path = Path::new(&storage.mount_point);
+                    let src_path = Path::new(&storage.source);
+
+                    let (flags, options) = parse_mount_flags_and_options(opts);
+
+                    info!(logger, "mounting storage";
+                    "mount-source" => src_path.display(),
+                    "mount-destination" => mount_path.display(),
+                    "mount-fstype"  => storage.fstype.as_str(),
+                    "mount-options" => options.as_str(),
+                    );
+
+                    return baremount(
+                        src_path,
+                        mount_path,
+                        storage.fstype.as_str(),
+                        flags,
+                        options.as_str(),
+                        &logger,
+                    );
+                }
+            }
+            _ => {
+                return Err(anyhow!(
+                    "Unsupported storage type for syncing mounts {}. Only ephemeral storage update is supported",
+                    storage.driver.to_owned()
+                ));
+            }
+        };
+    }
+
+    Ok(())
+}
+
 #[instrument]
 async fn overlayfs_storage_handler(
     logger: &Logger,

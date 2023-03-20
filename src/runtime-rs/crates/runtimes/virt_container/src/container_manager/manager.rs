@@ -73,7 +73,8 @@ impl ContainerManager for VirtContainerManager {
         // * should be run after the vm is started, before container is created, and after CreateRuntime Hooks
         // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#createcontainer-hooks
         let vmm_master_tid = self.hypervisor.get_vmm_master_tid().await?;
-        let vmm_netns_path = format!("/proc/{}/task/{}/ns/{}", self.pid, vmm_master_tid, "net");
+        let vmm_ns_path = self.hypervisor.get_ns_path().await?;
+        let vmm_netns_path = format!("{}/{}", vmm_ns_path, "net");
         let state = oci::State {
             version: spec.version.clone(),
             id: config.container_id.clone(),

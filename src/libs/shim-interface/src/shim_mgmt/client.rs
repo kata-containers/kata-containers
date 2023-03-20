@@ -53,7 +53,7 @@ impl MgmtClient {
             .method(Method::GET)
             .uri(url)
             .body(Body::empty())?;
-        return self.send_request(req).await;
+        self.send_request(req).await
     }
 
     /// The HTTP Post method for client
@@ -72,7 +72,7 @@ impl MgmtClient {
             .uri(url)
             .header("content-type", content_type)
             .body(body)?;
-        return self.send_request(req).await;
+        self.send_request(req).await
     }
 
     /// The http PUT method for client
@@ -82,7 +82,7 @@ impl MgmtClient {
             .method(Method::PUT)
             .uri(url)
             .body(Body::from(data))?;
-        return self.send_request(req).await;
+        self.send_request(req).await
     }
 
     async fn send_request(&self, req: Request<Body>) -> Result<Response<Body>> {
