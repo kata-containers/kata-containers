@@ -15,10 +15,12 @@ jobs:
           - cloud-hypervisor
           - firecracker
           - kernel
+          - kernel-dragonball-experimental
           - nydus
           - qemu
           - rootfs-image
           - rootfs-initrd
+          - shim-v2
           - virtiofsd
     steps:
       - name: Login to Kata Containers quay.io

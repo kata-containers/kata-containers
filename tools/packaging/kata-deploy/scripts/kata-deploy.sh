@@ -58,7 +58,8 @@ function install_artifacts() {
 	echo "copying kata artifacts onto host"
 	cp -au /opt/kata-artifacts/opt/kata/* /opt/kata/
 	chmod +x /opt/kata/bin/*
-	chmod +x /opt/kata/runtime-rs/bin/*
+	[ -d /opt/kata/runtime-rs/bin ] && \
+		chmod +x /opt/kata/runtime-rs/bin/*
 }
 
 function configure_cri_runtime() {
