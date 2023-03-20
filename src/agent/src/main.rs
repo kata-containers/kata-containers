@@ -20,6 +20,7 @@ extern crate scopeguard;
 extern crate slog;
 
 use anyhow::{anyhow, Context, Result};
+use cfg_if::cfg_if;
 use clap::{AppSettings, Parser};
 use nix::fcntl::OFlag;
 use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
@@ -34,8 +35,6 @@ use std::process::exit;
 use std::sync::Arc;
 use tracing::{instrument, span};
 
-#[cfg(target_arch = "s390x")]
-mod ccw;
 mod config;
 mod console;
 mod device;
@@ -73,6 +72,13 @@ use tokio::{
 
 mod rpc;
 mod tracer;
+
+cfg_if! {
+    if #[cfg(target_arch = "s390x")] {
+        mod ap;
+        mod ccw;
+    }
+}
 
 const NAME: &str = "kata-agent";
 

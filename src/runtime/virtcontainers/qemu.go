@@ -1713,7 +1713,7 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 		return err
 	}
 
-	devID := device.ID
+	devID := *(*device).GetID()
 	machineType := q.HypervisorConfig().HypervisorMachineType
 
 	if op == AddDevice {
@@ -1730,29 +1730,31 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 		// for pc machine type instead of bridge. This is useful for devices that require
 		// a large PCI BAR which is a currently a limitation with PCI bridges.
 		if q.state.HotplugVFIOOnRootBus {
-
-			// In case MachineType is q35, a PCIe device is hotplugged on a PCIe Root Port.
-			switch machineType {
-			case QemuQ35:
-				if device.IsPCIe && q.state.PCIeRootPort <= 0 {
-					q.Logger().WithField("dev-id", device.ID).Warn("VFIO device is a PCIe device. It's recommended to add the PCIe Root Port by setting the pcie_root_port parameter in the configuration for q35")
-					device.Bus = ""
+			switch (*device).GetType() {
+			case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
+				// In case MachineType is q35, a PCIe device is hotplugged on a PCIe Root Port.
+				pciDevice, ok := (*device).(config.VFIOPCIDev)
+				if !ok {
+					return fmt.Errorf("VFIO device %+v is not PCI, but its Type said otherwise", device)
 				}
-			default:
-				device.Bus = ""
-			}
+				switch machineType {
+				case QemuQ35:
+					if pciDevice.IsPCIe && q.state.PCIeRootPort <= 0 {
+						q.Logger().WithField("dev-id", (*device).GetID()).Warn("VFIO device is a PCIe device. It's recommended to add the PCIe Root Port by setting the pcie_root_port parameter in the configuration for q35")
+						pciDevice.Bus = ""
+					}
+				default:
+					pciDevice.Bus = ""
+				}
+				*device = pciDevice
 
-			switch device.Type {
-			case config.VFIODeviceNormalType:
-				err = q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, device.Bus, romFile)
-			case config.VFIODeviceMediatedType:
-				if utils.IsAPVFIOMediatedDevice(device.SysfsDev) {
-					err = q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev)
+				if pciDevice.Type == config.VFIOPCIDeviceNormalType {
+					err = q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, pciDevice.BDF, pciDevice.Bus, romFile)
 				} else {
-					err = q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, "", device.Bus, romFile)
+					err = q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, *(*device).GetSysfsDev(), "", pciDevice.Bus, romFile)
 				}
-			default:
-				return fmt.Errorf("Incorrect VFIO device type found")
+			case config.VFIOAPDeviceMediatedType:
+				err = q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, *(*device).GetSysfsDev())
 			}
 		} else {
 			addr, bridge, err := q.arch.addDeviceToBridge(ctx, devID, types.PCI)
@@ -1766,15 +1768,17 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 				}
 			}()
 
-			switch device.Type {
-			case config.VFIODeviceNormalType:
-				err = q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, addr, bridge.ID, romFile)
-			case config.VFIODeviceMediatedType:
-				if utils.IsAPVFIOMediatedDevice(device.SysfsDev) {
-					err = q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev)
-				} else {
-					err = q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, addr, bridge.ID, romFile)
+			switch (*device).GetType() {
+			case config.VFIOPCIDeviceNormalType:
+				pciDevice, ok := (*device).(config.VFIOPCIDev)
+				if !ok {
+					return fmt.Errorf("VFIO device %+v is not PCI, but its Type said otherwise", device)
 				}
+				err = q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, pciDevice.BDF, addr, bridge.ID, romFile)
+			case config.VFIOPCIDeviceMediatedType:
+				err = q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, *(*device).GetSysfsDev(), addr, bridge.ID, romFile)
+			case config.VFIOAPDeviceMediatedType:
+				err = q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, *(*device).GetSysfsDev())
 			default:
 				return fmt.Errorf("Incorrect VFIO device type found")
 			}
@@ -1782,13 +1786,24 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 		if err != nil {
 			return err
 		}
-		// XXX: Depending on whether we're doing root port or
-		// bridge hotplug, and how the bridge is set up in
-		// other parts of the code, we may or may not already
-		// have information about the slot number of the
-		// bridge and or the device.  For simplicity, just
-		// query both of them back from qemu
-		device.GuestPciPath, err = q.qomGetPciPath(devID)
+
+		switch (*device).GetType() {
+		case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
+			pciDevice, ok := (*device).(config.VFIOPCIDev)
+			if !ok {
+				return fmt.Errorf("VFIO device %+v is not PCI, but its Type said otherwise", device)
+			}
+			// XXX: Depending on whether we're doing root port or
+			// bridge hotplug, and how the bridge is set up in
+			// other parts of the code, we may or may not already
+			// have information about the slot number of the
+			// bridge and or the device.  For simplicity, just
+			// query both of them back from qemu
+			guestPciPath, err := q.qomGetPciPath(devID)
+			pciDevice.GuestPciPath = guestPciPath
+			*device = pciDevice
+			return err
+		}
 		return err
 	} else {
 		q.Logger().WithField("dev-id", devID).Info("Start hot-unplug VFIO device")

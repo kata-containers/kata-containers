@@ -32,9 +32,9 @@ func TestGetVFIODetails(t *testing.T) {
 		deviceBDF, deviceSysfsDev, vfioDeviceType, err := getVFIODetails(d.deviceStr, "")
 
 		switch vfioDeviceType {
-		case config.VFIODeviceNormalType:
+		case config.VFIOPCIDeviceNormalType:
 			assert.Equal(t, d.expectedStr, deviceBDF)
-		case config.VFIODeviceMediatedType:
+		case config.VFIOPCIDeviceMediatedType, config.VFIOAPDeviceMediatedType:
 			assert.Equal(t, d.expectedStr, deviceSysfsDev)
 		default:
 			assert.NotNil(t, err)
