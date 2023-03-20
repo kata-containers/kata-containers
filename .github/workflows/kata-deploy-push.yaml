@@ -72,6 +72,10 @@ jobs:
   make-kata-tarball:
     runs-on: ubuntu-latest
     steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
       - uses: actions/checkout@v2
       - name: make kata-tarball
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
