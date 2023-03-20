@@ -768,6 +768,16 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		kataUtilsLogger.Info("Setting 'disable_image_nvdimm = true' as microvm does not support NVDIMM")
 	}
 
+	// Nvdimm can only be support when UEFI/ACPI is enabled on arm64, otherwise disable it.
+	if goruntime.GOARCH == "arm64" && firmware == "" {
+		if p, err := h.PFlash(); err == nil {
+			if len(p) == 0 {
+				h.DisableImageNvdimm = true
+				kataUtilsLogger.Info("Setting 'disable_image_nvdimm = true' if there is no firmware specified")
+			}
+		}
+	}
+
 	blockDriver, err := h.blockDeviceDriver()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
