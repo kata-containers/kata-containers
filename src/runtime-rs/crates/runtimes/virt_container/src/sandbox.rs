@@ -216,7 +216,7 @@ impl Sandbox for VirtSandbox {
         let agent_config = self.agent.agent_config().await;
         let kernel_modules = KernelModule::set_kernel_modules(agent_config.kernel_modules)?;
         let req = agent::CreateSandboxRequest {
-            hostname: "".to_string(),
+            hostname: spec.hostname.clone(),
             dns,
             storages: self
                 .resource_manager
