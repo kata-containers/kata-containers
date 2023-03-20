@@ -209,12 +209,12 @@ get_ovmf_image_name() {
 
 get_qemu_image_name() {
 	qemu_script_dir="${repo_root_dir}/tools/packaging/static-build/qemu"
-	echo "${BUILDER_REGISTRY}:qemu-$(get_last_modification ${qemu_script_dir})-$(uname -m)"
+	echo "${CC_BUILDER_REGISTRY}:qemu-$(get_last_modification ${qemu_script_dir})-$(uname -m)"
 }
 
 get_shim_v2_image_name() {
 	shim_v2_script_dir="${repo_root_dir}/tools/packaging/static-build/shim-v2"
-	echo "${BUILDER_REGISTRY}:shim-v2-go-$(get_from_kata_deps "languages.golang.meta.newest-version")-rust-$(get_from_kata_deps "languages.rust.meta.newest-version")-$(get_last_modification ${shim_v2_script_dir})-$(uname -m)"
+	echo "${CC_BUILDER_REGISTRY}:shim-v2-go-$(get_from_kata_deps "languages.golang.meta.newest-version")-rust-$(get_from_kata_deps "languages.rust.meta.newest-version")-$(get_last_modification ${shim_v2_script_dir})-$(uname -m)"
 }
 
 get_td_shim_image_name() {
