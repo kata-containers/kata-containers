@@ -72,11 +72,6 @@ jobs:
         with:
           ref: ${{ steps.get-PR-ref.outputs.pr-ref }}
 
-      - name: Install docker
-        run: |
-          curl -fsSL https://test.docker.com -o test-docker.sh
-          sh test-docker.sh
-
       - name: Build ${{ matrix.asset }}
         run: |
           make "${KATA_ASSET}-tarball"
