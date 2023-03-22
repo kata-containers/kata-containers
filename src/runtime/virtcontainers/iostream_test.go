@@ -13,7 +13,7 @@ import (
 
 func TestIOStream(t *testing.T) {
 	hConfig := newHypervisorConfig(nil, nil)
-	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NetworkConfig{}, []ContainerConfig{}, nil)
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NetworkConfig{}, map[string]*ContainerConfig{}, nil)
 	assert.NoError(t, err)
 	defer cleanUp()
 

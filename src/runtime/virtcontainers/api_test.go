@@ -102,7 +102,7 @@ func newTestSandboxConfigNoop() SandboxConfig {
 		HypervisorType:   MockHypervisor,
 		HypervisorConfig: hypervisorConfig,
 
-		Containers: []ContainerConfig{container},
+		Containers: map[string]*ContainerConfig{containerID: &container},
 
 		Annotations: sandboxAnnotations,
 
@@ -287,7 +287,7 @@ func TestCleanupContainer(t *testing.T) {
 	for _, contID := range contIDs {
 		contConfig := newTestContainerConfigNoop(contID)
 
-		c, err := p.CreateContainer(ctx, contConfig)
+		c, err := p.CreateContainer(ctx, &contConfig)
 		if c == nil || err != nil {
 			t.Fatal(err)
 		}

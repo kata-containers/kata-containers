@@ -153,8 +153,7 @@ type SandboxConfig struct {
 	// Containers describe the list of containers within a Sandbox.
 	// This list can be empty and populated by adding containers
 	// to the Sandbox a posteriori.
-	// TODO: this should be a map to avoid duplicated containers
-	Containers []ContainerConfig
+	Containers map[string]*ContainerConfig
 
 	Volumes []types.Volume
 
@@ -1325,9 +1324,13 @@ func (s *Sandbox) addContainer(c *Container) error {
 // CreateContainer creates a new container in the sandbox
 // This should be called only when the sandbox is already created.
 // It will add new container config to sandbox.config.Containers
-func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfig) (VCContainer, error) {
+func (s *Sandbox) CreateContainer(ctx context.Context, contConfig *ContainerConfig) (VCContainer, error) {
 	// Update sandbox config to include the new container's config
-	s.config.Containers = append(s.config.Containers, contConfig)
+
+	if _, ok := s.config.Containers[contConfig.ID]; ok {
+		return nil, fmt.Errorf("duplicated container in sandbox.config.Containers: %s", contConfig.ID)
+	}
+	s.config.Containers[contConfig.ID] = contConfig
 
 	var err error
 
@@ -1335,13 +1338,13 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 		if err != nil {
 			if len(s.config.Containers) > 0 {
 				// delete container config
-				s.config.Containers = s.config.Containers[:len(s.config.Containers)-1]
+				delete(s.config.Containers, contConfig.ID)
 			}
 		}
 	}()
 
 	// Create the container object, add devices to the sandbox's device-manager:
-	c, err := newContainer(ctx, s, &s.config.Containers[len(s.config.Containers)-1])
+	c, err := newContainer(ctx, s, contConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -1481,12 +1484,7 @@ func (s *Sandbox) DeleteContainer(ctx context.Context, containerID string) (VCCo
 	}
 
 	// Update sandbox config
-	for idx, contConfig := range s.config.Containers {
-		if contConfig.ID == containerID {
-			s.config.Containers = append(s.config.Containers[:idx], s.config.Containers[idx+1:]...)
-			break
-		}
-	}
+	delete(s.config.Containers, containerID)
 
 	// update the sandbox resource controller
 	if err = s.resourceControllerUpdate(ctx); err != nil {
@@ -1660,9 +1658,9 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "createContainers", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
-	for i := range s.config.Containers {
+	for _, containerConfig := range s.config.Containers {
 
-		c, err := newContainer(ctx, s, &s.config.Containers[i])
+		c, err := newContainer(ctx, s, containerConfig)
 		if err != nil {
 			return err
 		}
@@ -2553,16 +2551,15 @@ func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err 
 // in the guest. This should only be used when fetching a
 // sandbox that already exists.
 func (s *Sandbox) fetchContainers(ctx context.Context) error {
-	for i, contConfig := range s.config.Containers {
+	for _, contConfig := range s.config.Containers {
 		// Add spec from bundle path
 		spec, err := compatoci.GetContainerSpec(contConfig.Annotations)
 		if err != nil {
 			return err
 		}
 		contConfig.CustomSpec = &spec
-		s.config.Containers[i] = contConfig
 
-		c, err := newContainer(ctx, s, &s.config.Containers[i])
+		c, err := newContainer(ctx, s, contConfig)
 		if err != nil {
 			return err
 		}

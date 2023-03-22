@@ -939,7 +939,7 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 
 		NetworkConfig: networkConfig,
 
-		Containers: []vc.ContainerConfig{containerConfig},
+		Containers: map[string]*vc.ContainerConfig{cid: &containerConfig},
 
 		Annotations: map[string]string{
 			vcAnnotations.BundlePathKey: bundlePath,

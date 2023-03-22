@@ -506,15 +506,16 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		LongLiveConn: savedConf.KataAgentConfig.LongLiveConn,
 	}
 
+	sconfig.Containers = make(map[string]*ContainerConfig)
 	for _, contConf := range savedConf.ContainerConfigs {
-		sconfig.Containers = append(sconfig.Containers, ContainerConfig{
+		sconfig.Containers[contConf.ID] = &ContainerConfig{
 			ID:          contConf.ID,
 			Annotations: contConf.Annotations,
 			Resources:   contConf.Resources,
 			RootFs: RootFs{
 				Target: contConf.RootFs,
 			},
-		})
+		}
 	}
 	return sconfig, nil
 }

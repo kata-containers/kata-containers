@@ -136,7 +136,7 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 			}
 			rootFs.Source = realPath
 		}
-		sandboxConfig.Containers[0].RootFs = rootFs
+		sandboxConfig.Containers[sandboxConfig.ID].RootFs = rootFs
 	}
 
 	// Important to create the network namespace before the sandbox is
@@ -252,7 +252,7 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 
 	katatrace.AddTags(span, "sandbox_id", sandboxID)
 
-	c, err = sandbox.CreateContainer(ctx, contConfig)
+	c, err = sandbox.CreateContainer(ctx, &contConfig)
 	if err != nil {
 		return vc.Process{}, err
 	}
