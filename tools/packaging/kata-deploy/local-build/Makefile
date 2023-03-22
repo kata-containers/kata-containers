@@ -30,6 +30,7 @@ all: serial-targets \
 	qemu-tarball \
 	qemu-tdx-experimental-tarball \
 	shim-v2-tarball \
+	tdvf-tarball \
 	virtiofsd-tarball
 
 serial-targets:
@@ -75,6 +76,9 @@ rootfs-initrd-tarball:
 	${MAKE} $@-build
 
 shim-v2-tarball:
+	${MAKE} $@-build
+
+tdvf-tarball:
 	${MAKE} $@-build
 
 virtiofsd-tarball:

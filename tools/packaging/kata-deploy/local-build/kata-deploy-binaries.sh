@@ -25,6 +25,7 @@ readonly versions_yaml="${repo_root_dir}/versions.yaml"
 readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
 readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
+readonly ovmf_builder="${static_build_dir}/ovmf/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
 readonly qemu_experimental_builder="${static_build_dir}/qemu/build-static-qemu-experimental.sh"
 readonly shimv2_builder="${static_build_dir}/shim-v2/build.sh"
@@ -87,6 +88,7 @@ options:
 	rootfs-image
 	rootfs-initrd
 	shim-v2
+	tdvf
 	virtiofsd
 EOF
 
@@ -375,6 +377,31 @@ install_shimv2() {
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }
 
+install_ovmf() {
+	ovmf_type="${1:-x86_64}"
+	tarball_name="${2:-edk2.tar.xz}"
+
+	local component_name="ovmf"
+	local component_version="$(get_from_kata_deps "externals.ovmf.${ovmf_type}.version")"
+	[ "${ovmf_type}" == "tdx" ] && component_name="tdvf"
+	install_cached_tarball_component \
+		"${component_name}" \
+		"${jenkins_url}/job/kata-containers-main-ovmf-${ovmf_type}-$(uname -m)/${cached_artifacts_path}" \
+		"${component_version}" \
+		"$(get_ovmf_image_name)" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	DESTDIR="${destdir}" PREFIX="${prefix}" ovmf_build="${ovmf_type}" "${ovmf_builder}"
+	tar xvf "${builddir}/${tarball_name}" -C "${destdir}"
+}
+
+# Install TDVF
+install_tdvf() {
+	install_ovmf "tdx" "edk2-tdx.tar.gz"
+}
+
 get_kata_version() {
 	local v
 	v=$(cat "${version_file}")
@@ -403,6 +430,7 @@ handle_build() {
 		install_qemu
 		install_qemu_tdx_experimental
 		install_shimv2
+		install_tdvf
 		install_virtiofsd
 		;;
 
@@ -429,6 +457,8 @@ handle_build() {
 	rootfs-initrd) install_initrd ;;
 
 	shim-v2) install_shimv2 ;;
+
+	tdvf) install_tdvf ;;
 
 	virtiofsd) install_virtiofsd ;;
 
