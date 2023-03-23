@@ -98,10 +98,6 @@ assets:
       uscan-url: >-
         https://github.com/qemu/qemu/tags
         .*/v?(\d\S+)\.tar\.gz
-      tdx:
-        description: "VMM that uses KVM and supports TDX"
-        url: "https://github.com/kata-containers/qemu"
-        tag: "TDX-v3.1"
       snp:
         description: "VMM that uses KVM and supports AMD SEV-SNP"
         url: "https://github.com/AMDESE/qemu"
@@ -112,6 +108,11 @@ assets:
       description: "QEMU with virtiofs support"
       url: "https://github.com/qemu/qemu"
       version: "7a800cf9496fddddf71b21a00991e0ec757a170a"
+
+    qemu-tdx-experimental:
+      description: "VMM that uses KVM and supports TDX"
+      url: "https://github.com/kata-containers/qemu"
+      tag: "TDX-v3.1"
 
   image:
     description: |
