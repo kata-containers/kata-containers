@@ -110,7 +110,7 @@ cache_rootfs_artifacts() {
 	if [ -n "${TEE}" ]; then
 		if [ "${TEE}" == "tdx" ]; then
 			rootfs_tarball_name="kata-static-cc-tdx-rootfs-image.tar.xz"
-			aa_kbc="eaa_kbc"
+			aa_kbc="cc_kbc_tdx"
 			image_type="image"
 			root_hash_vanilla=""
 			root_hash_tdx="${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt"

@@ -674,7 +674,7 @@ EOF
 		pushd attestation-agent
 		git fetch --depth=1 origin "${attestation_agent_version}"
 		git checkout FETCH_HEAD
-		[ "${AA_KBC}" == "eaa_kbc" ] && [ "${ARCH}" == "x86_64" ] && LIBC="gnu"
+		( [ "${AA_KBC}" == "eaa_kbc" ] || [ "${AA_KBC}" == "cc_kbc_tdx" ] ) && [ "${ARCH}" == "x86_64" ] && LIBC="gnu"
 		make KBC=${AA_KBC} && make install DESTDIR="${ROOTFS_DIR}/usr/local/bin/"
 		popd
 	fi
