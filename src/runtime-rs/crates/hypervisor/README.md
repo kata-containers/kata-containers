@@ -7,20 +7,6 @@ External hypervisor support is currently being developed.
 See [the main tracking issue](https://github.com/kata-containers/kata-containers/issues/4634)
 for further details.
 
-### Cloud Hypervisor
-
-A basic implementation currently exists for Cloud Hypervisor. However,
-since it is not yet fully functional, the feature is disabled by
-default. When the implementation matures, the feature will be enabled
-by default.
-
-> **Note:**
->
-> To enable the feature, follow the instructions on https://github.com/kata-containers/kata-containers/pull/6201.
-
-See the [Cloud Hypervisor tracking issue](https://github.com/kata-containers/kata-containers/issues/6263)
-for further details.
-
 Some key points for supporting multi-vmm in rust runtime.
 ## 1. Hypervisor Config
 

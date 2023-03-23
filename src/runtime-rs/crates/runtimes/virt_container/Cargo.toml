@@ -28,7 +28,7 @@ tracing = "0.1.36"
 
 agent = { path = "../../agent" }
 common = { path = "../common" }
-hypervisor = { path = "../../hypervisor" }
+hypervisor = { path = "../../hypervisor", features = ["cloud-hypervisor"] }
 kata-sys-util = { path = "../../../../libs/kata-sys-util" }
 kata-types = { path = "../../../../libs/kata-types" }
 logging = { path = "../../../../libs/logging"}
@@ -37,8 +37,7 @@ persist = { path = "../../persist"}
 resource = { path = "../../resource" }
 
 [features]
-default = []
+default = ["cloud-hypervisor"]
 
-# Feature is not yet complete, so not enabled by default.
-# See https://github.com/kata-containers/kata-containers/issues/6264.
+# Enable the Cloud Hypervisor driver
 cloud-hypervisor = []
