@@ -80,6 +80,7 @@ options:
 	kernel
 	kernel-dragonball-experimental
 	kernel-experimental
+	kernel-tdx-experimental
 	nydus
 	qemu
 	qemu-tdx-experimental
@@ -216,6 +217,16 @@ install_kernel_experimental() {
 		"assets.kernel-experimental.version" \
 		"kernel-experimental" \
 		"-f -b experimental"
+}
+
+#Install experimental TDX kernel asset
+install_kernel_tdx_experimental() {
+	local kernel_url="$(get_from_kata_deps assets.kernel-tdx-experimental.url)"
+
+	install_kernel_helper \
+		"assets.kernel-tdx-experimental.version" \
+		"kernel-tdx-experimental" \
+		"-x tdx -u ${kernel_url}"
 }
 
 install_qemu_helper() {
@@ -387,6 +398,7 @@ handle_build() {
 		install_initrd
 		install_kernel
 		install_kernel_dragonball_experimental
+		install_kernel_tdx_experimental
 		install_nydus
 		install_qemu
 		install_qemu_tdx_experimental
@@ -405,6 +417,8 @@ handle_build() {
 	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
 
 	kernel-experimental) install_kernel_experimental ;;
+
+	kernel-tdx-experimental) install_kernel_tdx_experimental ;;
 
 	qemu) install_qemu ;;
 
