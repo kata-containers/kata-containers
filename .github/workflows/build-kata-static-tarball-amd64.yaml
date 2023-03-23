@@ -27,6 +27,7 @@ jobs:
           - rootfs-image
           - rootfs-initrd
           - shim-v2
+          - tdvf
           - virtiofsd
     steps:
       - uses: actions/checkout@v3
