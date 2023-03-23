@@ -368,6 +368,7 @@ handle_build() {
 		install_image
 		install_initrd
 		install_kernel
+		install_kernel_dragonball_experimental
 		install_nydus
 		install_qemu
 		install_shimv2
