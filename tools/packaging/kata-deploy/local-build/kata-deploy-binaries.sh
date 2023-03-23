@@ -173,58 +173,49 @@ install_initrd() {
 }
 
 #Install kernel asset
-install_kernel() {
-	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
+install_kernel_helper() {
+	local kernel_version_yaml_path="${1}"
+	local kernel_name="${2}"
+	local extra_cmd=${3}
+
+	export kernel_version="$(get_from_kata_deps ${kernel_version_yaml_path})"
 	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
 
 	install_cached_tarball_component \
-		"kernel" \
-		"${jenkins_url}/job/kata-containers-main-kernel-$(uname -m)/${cached_artifacts_path}" \
+		"${kernel_name}" \
+		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
 		"${kernel_version}-${kernel_kata_config_version}" \
 		"$(get_kernel_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
 
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -f -v "${kernel_version}"
+	info "build ${kernel_name}"
+	info "Kernel version ${kernel_version}"
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -v "${kernel_version}" ${extra_cmd}
 }
 
-#Install dragonball experimental kernel asset
+#Install kernel asset
+install_kernel() {
+	install_kernel_helper \
+		"assets.kernel.version" \
+		"kernel" \
+		"-f"
+}
+
 install_kernel_dragonball_experimental() {
-	info "build dragonball experimental kernel"
-	export kernel_version="$(yq r $versions_yaml assets.kernel-dragonball-experimental.version)"
-	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
-
-	install_cached_tarball_component \
+	install_kernel_helper \
+		"assets.kernel-dragonball-experimental.version" \
 		"kernel-dragonball-experimental" \
-		"${jenkins_url}/job/kata-containers-main-kernel-dragonball-experimental-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}-${kernel_kata_config_version}" \
-		"$(get_kernel_image_name)" \
-		"${final_tarball_name}" \
-		"${final_tarball_path}" \
-		&& return 0
-
-	info "kernel version ${kernel_version}"
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -e -t dragonball -v ${kernel_version}	
+		"-e -t dragonball"
 }
 
 #Install experimental kernel asset
 install_kernel_experimental() {
-	info "build experimental kernel"
-	export kernel_version="$(yq r $versions_yaml assets.kernel-experimental.tag)"
-	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
-
-	install_cached_tarball_component \
+	install_kernel_helper \
+		"assets.kernel-experimental.version" \
 		"kernel-experimental" \
-		"${jenkins_url}/job/kata-containers-main-kernel-experimental-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}-${kernel_kata_config_version}" \
-		"$(get_kernel_image_name)" \
-		"${final_tarball_name}" \
-		"${final_tarball_path}" \
-		&& return 0
-
-	info "Kernel version ${kernel_version}"
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -f -b experimental -v ${kernel_version}
+		"-f -b experimental"
 }
 
 install_qemu_helper() {
