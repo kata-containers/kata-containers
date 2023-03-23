@@ -382,9 +382,9 @@ handle_build() {
 
 	nydus) install_nydus ;;
 
-	kernel-dragonball-experimental) install_dragonball_experimental_kernel;;
+	kernel-dragonball-experimental) install_dragonball_experimental_kernel ;;
 
-	kernel-experimental) install_experimental_kernel;;
+	kernel-experimental) install_experimental_kernel ;;
 
 	qemu) install_qemu ;;
 
