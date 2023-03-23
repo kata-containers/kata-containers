@@ -12,7 +12,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "${script_dir}/../scripts/lib.sh"
 
-KERNEL_FLAVOUR="${KERNEL_FLAVOUR:-kernel}" # kernel | kernel-experimental | kernel-arm-experimetnal | kernel-dragonball-experimental
+KERNEL_FLAVOUR="${KERNEL_FLAVOUR:-kernel}" # kernel | kernel-experimental | kernel-arm-experimental | kernel-dragonball-experimental
 QEMU_FLAVOUR="${QEMU_FLAVOUR:-qemu}" # qemu | qemu-tdx-experimental
 ROOTFS_IMAGE_TYPE="${ROOTFS_IMAGE_TYPE:-image}" # image | initrd
 
@@ -106,7 +106,7 @@ Usage: $0 "[options]"
 		-c	Cloud hypervisor cache
 		-F	Firecracker cache
 		-k	Kernel cache
-			* Export KERNEL_FLAVOUR="kernel|kernek-experimental|kernel-arm-experimental|kernel-dragonball-experimental" for a specific build
+			* Export KERNEL_FLAVOUR="kernel|kernel-experimental|kernel-arm-experimental|kernel-dragonball-experimental" for a specific build
 			  The default KERNEL_FLAVOUR value is "kernel"
 		-n	Nydus cache
 		-q 	QEMU cache
