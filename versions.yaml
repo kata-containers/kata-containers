@@ -110,9 +110,10 @@ assets:
       version: "7a800cf9496fddddf71b21a00991e0ec757a170a"
 
     qemu-tdx-experimental:
-      description: "VMM that uses KVM and supports TDX"
+      # yamllint disable-line rule:line-length
+      description: "QEMU with TDX support - based on https://github.com/intel/tdx-tools/releases/tag/2023ww01"
       url: "https://github.com/kata-containers/qemu"
-      tag: "TDX-v3.1"
+      tag: "ad4c7f529a279685da84297773b4ec8080153c2d-plus-TDX-v1.3"
 
   image:
     description: |
