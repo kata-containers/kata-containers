@@ -13,6 +13,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/../scripts/lib.sh"
 
 KERNEL_FLAVOUR="${KERNEL_FLAVOUR:-kernel}" # kernel | kernel-experimental | kernel-arm-experimental | kernel-dragonball-experimental | kernel-tdx-experimental
+OVMF_FLAVOUR="${OVMF_FLAVOUR:-x86_64}" # x86_64 | tdx
 QEMU_FLAVOUR="${QEMU_FLAVOUR:-qemu}" # qemu | qemu-tdx-experimental
 ROOTFS_IMAGE_TYPE="${ROOTFS_IMAGE_TYPE:-image}" # image | initrd
 
@@ -40,6 +41,13 @@ cache_nydus_artifacts() {
 	local nydus_tarball_name="kata-static-nydus.tar.xz"
 	local current_nydus_version="$(get_from_kata_deps "externals.nydus.version")"
 	create_cache_asset "${nydus_tarball_name}" "${current_nydus_version}" ""
+}
+
+cache_ovmf_artifacts() {
+	local ovmf_tarball_name="kata-static-${OVMF_FLAVOUR}.tar.xz"
+	local current_ovmf_version="$(get_from_kata_deps "externals.ovmf.${OVMF_FLAVOUR}.version")"
+	local current_ovmf_image="$(get_ovmf_image_name)"
+	create_cache_asset "${ovmf_tarball_name}" "${current_ovmf_version}" "${current_ovmf_image}"
 }
 
 cache_qemu_artifacts() {
@@ -127,12 +135,13 @@ main() {
 	local firecracker_component="${firecracker_component:-}"
 	local kernel_component="${kernel_component:-}"
 	local nydus_component="${nydus_component:-}"
+	local ovmf_component="${ovmf_component:-}"
 	local qemu_component="${qemu_component:-}"
 	local rootfs_component="${rootfs_component:-}"
 	local shim_v2_component="${shim_v2_component:-}"
 	local virtiofsd_component="${virtiofsd_component:-}"
 	local OPTIND
-	while getopts ":cFknqrsvh:" opt
+	while getopts ":cFknoqrsvh:" opt
 	do
 		case "$opt" in
 		c)
@@ -146,6 +155,9 @@ main() {
 			;;
 		n)
 			nydus_component="1"
+			;;
+		o)
+			ovmf_component="1"
 			;;
 		q)
 			qemu_component="1"
@@ -176,6 +188,7 @@ main() {
 	[[ -z "${firecracker_component}" ]] && \
 	[[ -z "${kernel_component}" ]] && \
 	[[ -z "${nydus_component}" ]] && \
+	[[ -z "${ovmf_component}" ]] && \
 	[[ -z "${qemu_component}" ]] && \
 	[[ -z "${rootfs_component}" ]] && \
 	[[ -z "${shim_v2_component}" ]] && \
@@ -190,6 +203,7 @@ main() {
 	[ "${firecracker_component}" == "1" ] && cache_firecracker_artifacts
 	[ "${kernel_component}" == "1" ] && cache_kernel_artifacts
 	[ "${nydus_component}" == "1" ] && cache_nydus_artifacts
+	[ "${ovmf_component}" == "1" ] && cache_ovmf_artifacts
 	[ "${qemu_component}" == "1" ] && cache_qemu_artifacts
 	[ "${rootfs_component}" == "1" ] && cache_rootfs_artifacts
 	[ "${shim_v2_component}" == "1" ] && cache_shim_v2_artifacts
