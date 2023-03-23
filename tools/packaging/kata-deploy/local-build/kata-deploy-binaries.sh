@@ -26,6 +26,7 @@ readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
 readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
+readonly qemu_experimental_builder="${static_build_dir}/qemu/build-static-qemu-experimental.sh"
 readonly shimv2_builder="${static_build_dir}/shim-v2/build.sh"
 readonly virtiofsd_builder="${static_build_dir}/virtiofsd/build.sh"
 readonly nydus_builder="${static_build_dir}/nydus/build.sh"
@@ -81,6 +82,7 @@ options:
 	kernel-experimental
 	nydus
 	qemu
+	qemu-tdx-experimental
 	rootfs-image
 	rootfs-initrd
 	shim-v2
@@ -225,23 +227,48 @@ install_kernel_experimental() {
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -f -b experimental -v ${kernel_version}
 }
 
-# Install static qemu asset
-install_qemu() {
-	export qemu_repo="$(yq r $versions_yaml assets.hypervisor.qemu.url)"
-	export qemu_version="$(yq r $versions_yaml assets.hypervisor.qemu.version)"
+install_qemu_helper() {
+	local qemu_repo_yaml_path="${1}"
+	local qemu_version_yaml_path="${2}"
+	local qemu_name="${3}"
+	local builder="${4}"
+	local qemu_tarball_name="${qemu_tarball_name:-kata-static-qemu.tar.gz}"
+
+	export qemu_repo="$(get_from_kata_deps ${qemu_repo_yaml_path})"
+	export qemu_version="$(get_from_kata_deps ${qemu_version_yaml_path})"
 
 	install_cached_tarball_component \
-		"QEMU" \
-		"${jenkins_url}/job/kata-containers-main-qemu-$(uname -m)/${cached_artifacts_path}" \
+		"${qemu_name}" \
+		"${jenkins_url}/job/kata-containers-main-${qemu_name}-$(uname -m)/${cached_artifacts_path}" \
 		"${qemu_version}-$(calc_qemu_files_sha256sum)" \
 		"$(get_qemu_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
 
-	info "build static qemu"
-	"${qemu_builder}"
-	tar xvf "${builddir}/kata-static-qemu.tar.gz" -C "${destdir}"
+	info "build static ${qemu_name}"
+	"${builder}"
+	tar xvf "${qemu_tarball_name}" -C "${destdir}"
+}
+
+# Install static qemu asset
+install_qemu() {
+	install_qemu_helper \
+		"assets.hypervisor.qemu.url" \
+		"assets.hypervisor.qemu.version" \
+		"qemu" \
+		"${qemu_builder}"
+}
+
+install_qemu_tdx_experimental() {
+	export qemu_suffix="tdx-experimental"
+	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
+
+	install_qemu_helper \
+		"assets.hypervisor.qemu-${qemu_suffix}.url" \
+		"assets.hypervisor.qemu-${qemu_suffix}.tag" \
+		"qemu-${qemu_suffix}" \
+		"${qemu_experimental_builder}"
 }
 
 # Install static firecracker asset
@@ -371,6 +398,7 @@ handle_build() {
 		install_kernel_dragonball_experimental
 		install_nydus
 		install_qemu
+		install_qemu_tdx_experimental
 		install_shimv2
 		install_virtiofsd
 		;;
@@ -388,6 +416,8 @@ handle_build() {
 	kernel-experimental) install_kernel_experimental ;;
 
 	qemu) install_qemu ;;
+
+	qemu-tdx-experimental) install_qemu_tdx_experimental ;;
 
 	rootfs-image) install_image ;;
 
