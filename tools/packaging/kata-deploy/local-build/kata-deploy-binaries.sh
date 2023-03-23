@@ -188,7 +188,7 @@ install_kernel() {
 }
 
 #Install dragonball experimental kernel asset
-install_dragonball_experimental_kernel() {
+install_kernel_dragonball_experimental() {
 	info "build dragonball experimental kernel"
 	export kernel_version="$(yq r $versions_yaml assets.kernel-dragonball-experimental.version)"
 	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
@@ -207,7 +207,7 @@ install_dragonball_experimental_kernel() {
 }
 
 #Install experimental kernel asset
-install_experimental_kernel() {
+install_kernel_experimental() {
 	info "build experimental kernel"
 	export kernel_version="$(yq r $versions_yaml assets.kernel-experimental.tag)"
 	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
@@ -382,9 +382,9 @@ handle_build() {
 
 	nydus) install_nydus ;;
 
-	kernel-dragonball-experimental) install_dragonball_experimental_kernel ;;
+	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
 
-	kernel-experimental) install_experimental_kernel ;;
+	kernel-experimental) install_kernel_experimental ;;
 
 	qemu) install_qemu ;;
 
