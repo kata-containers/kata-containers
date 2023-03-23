@@ -27,6 +27,7 @@ all: serial-targets \
 	kernel-dragonball-experimental-tarball \
 	nydus-tarball \
 	qemu-tarball \
+	qemu-tdx-experimental-tarball \
 	shim-v2-tarball \
 	virtiofsd-tarball
 
@@ -58,6 +59,9 @@ nydus-tarball:
 	${MAKE} $@-build
 
 qemu-tarball:
+	${MAKE} $@-build
+
+qemu-tdx-experimental-tarball:
 	${MAKE} $@-build
 
 rootfs-image-tarball:
