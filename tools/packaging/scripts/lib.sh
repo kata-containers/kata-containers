@@ -19,6 +19,8 @@ short_commit_length=10
 
 hub_bin="hub-bin"
 
+kata_versions_file="${script_dir}/../../../versions.yaml"
+
 clone_tests_repo() {
 	# KATA_CI_NO_NETWORK is (has to be) ignored if there is
 	# no existing clone.
@@ -36,14 +38,31 @@ install_yq() {
 	popd
 }
 
-get_from_kata_deps() {
-	local dependency="$1"
-	versions_file="${this_script_dir}/../../../versions.yaml"
 
-	command -v yq &>/dev/null || die 'yq command is not in your $PATH'
-	result=$("yq" read -X "$versions_file" "$dependency")
-	[ "$result" = "null" ] && result=""
-	echo "$result"
+get_package_version_from_kata_yaml()
+{
+    local yq_path="$1"
+    local yq_version
+    local yq_args
+
+	typeset -r yq=$(command -v yq || command -v "${GOPATH}/bin/yq" || echo "${GOPATH}/bin/yq")
+	if [ ! -f "$yq" ]; then
+		source "$yq_file"
+	fi
+
+    yq_version=$($yq -V)
+    case $yq_version in
+    *"version "[1-3]*)
+        yq_args="r -X - ${yq_path}"
+        ;;
+    *)
+        yq_args="e .${yq_path} -"
+        ;;
+    esac
+
+	PKG_VERSION="$(cat "${kata_versions_file}" | $yq ${yq_args})"
+
+	[ "$?" == "0" ] && [ "$PKG_VERSION" != "null" ] && echo "$PKG_VERSION" || echo ""
 }
 
 die() {
@@ -180,7 +199,7 @@ get_qemu_image_name() {
 
 get_shim_v2_image_name() {
 	shim_v2_script_dir="${repo_root_dir}/tools/packaging/static-build/shim-v2"
-	echo "${BUILDER_REGISTRY}:shim-v2-go-$(get_from_kata_deps "languages.golang.meta.newest-version")-rust-$(get_from_kata_deps "languages.rust.meta.newest-version")-$(get_last_modification ${shim_v2_script_dir})-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:shim-v2-go-$(get_package_version_from_kata_yaml "languages.golang.meta.newest-version")-rust-$(get_package_version_from_kata_yamls "languages.rust.meta.newest-version")-$(get_last_modification ${shim_v2_script_dir})-$(uname -m)"
 }
 
 get_virtiofsd_image_name() {
@@ -201,5 +220,5 @@ get_virtiofsd_image_name() {
 	esac
 
 	virtiofsd_script_dir="${repo_root_dir}/tools/packaging/static-build/virtiofsd"
-	echo "${BUILDER_REGISTRY}:virtiofsd-$(get_from_kata_deps "externals.virtiofsd.toolchain")-${libc}-$(get_last_modification ${virtiofsd_script_dir})-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:virtiofsd-$(get_package_version_from_kata_yaml "externals.virtiofsd.toolchain")-${libc}-$(get_last_modification ${virtiofsd_script_dir})-$(uname -m)"
 }
