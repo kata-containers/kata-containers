@@ -13,6 +13,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/../scripts/lib.sh"
 
 KERNEL_FLAVOUR="${KERNEL_FLAVOUR:-kernel}" # kernel | kernel-experimental | kernel-arm-experimetnal | kernel-dragonball-experimental
+QEMU_FLAVOUR="${QEMU_FLAVOUR:-qemu}" # qemu | qemu-tdx-experimental
 ROOTFS_IMAGE_TYPE="${ROOTFS_IMAGE_TYPE:-image}" # image | initrd
 
 cache_clh_artifacts() {
@@ -42,8 +43,8 @@ cache_nydus_artifacts() {
 }
 
 cache_qemu_artifacts() {
-	local qemu_tarball_name="kata-static-qemu.tar.xz"
-	local current_qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.version")
+	local qemu_tarball_name="kata-static-${QEMU_FLAVOUR}.tar.xz"
+	local current_qemu_version=$(get_from_kata_deps "assets.hypervisor.${QEMU_FLAVOUR}.version")
 	local qemu_sha=$(calc_qemu_files_sha256sum)
 	local current_qemu_image="$(get_qemu_image_name)"
 	create_cache_asset "${qemu_tarball_name}" "${current_qemu_version}-${qemu_sha}" "${current_qemu_image}"
@@ -109,6 +110,8 @@ Usage: $0 "[options]"
 			  The default KERNEL_FLAVOUR value is "kernel"
 		-n	Nydus cache
 		-q 	QEMU cache
+			* Export QEMU_FLAVOUR="qemu | qemu-tdx-experimental" for a specific build
+			  The default QEMU_FLAVOUR value is "qemu"
 		-r 	RootFS cache
 			* Export ROOTFS_IMAGE_TYPE="image|initrd" for one of those two types
 			  The default ROOTFS_IMAGE_TYPE value is "image"
