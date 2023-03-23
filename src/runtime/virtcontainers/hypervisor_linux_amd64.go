@@ -12,8 +12,6 @@ const (
 
 	tdxSysFirmwareDir = "/sys/firmware/tdx/"
 
-	tdxCPUFlag = "tdx"
-
 	sevKvmParameterPath = "/sys/module/kvm_amd/parameters/sev"
 
 	snpKvmParameterPath = "/sys/module/kvm_amd/parameters/sev_snp"
@@ -21,10 +19,6 @@ const (
 
 // TDX is supported and properly loaded when the firmware directory (either tdx or tdx_seam) exists or `tdx` is part of the CPU flag
 func checkTdxGuestProtection(flags map[string]bool) bool {
-	if flags[tdxCPUFlag] {
-		return true
-	}
-
 	if d, err := os.Stat(tdxSysFirmwareDir); err == nil && d.IsDir() {
 		return true
 	}
