@@ -25,6 +25,7 @@ all: serial-targets \
 	firecracker-tarball \
 	kernel-tarball \
 	kernel-dragonball-experimental-tarball \
+	kernel-tdx-experimental-tarball \
 	nydus-tarball \
 	qemu-tarball \
 	qemu-tdx-experimental-tarball \
@@ -53,6 +54,9 @@ kernel-dragonball-experimental-tarball:
 	${MAKE} $@-build
 
 kernel-experimental-tarball:
+	${MAKE} $@-build
+
+kernel-tdx-experimental-tarball:
 	${MAKE} $@-build
 
 nydus-tarball:
