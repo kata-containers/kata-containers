@@ -106,7 +106,7 @@ Usage: $0 "[options]"
 		-c	Cloud hypervisor cache
 		-F	Firecracker cache
 		-k	Kernel cache
-			* Export KERNEL_FLAVOUR="kernel|kernel-experimental|kernel-arm-experimental|kernel-dragonball-experimental" for a specific build
+			* Export KERNEL_FLAVOUR="kernel | kernel-experimental | kernel-arm-experimental | kernel-dragonball-experimental" for a specific build
 			  The default KERNEL_FLAVOUR value is "kernel"
 		-n	Nydus cache
 		-q 	QEMU cache
