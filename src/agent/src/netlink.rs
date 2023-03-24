@@ -16,6 +16,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::ops::Deref;
 use std::str::{self, FromStr};
 
+#[derive(Clone)]
 /// Search criteria to use when looking for a link in `find_link`.
 pub enum LinkFilter<'a> {
     /// Find by link name.
@@ -68,7 +69,9 @@ impl Handle {
         // target link. filter using name or family is supported, but
         // we cannot use that to find target link.
         // let's try if hardware address filter works. -_-
-        let link = self.find_link(LinkFilter::Address(&iface.hwAddr)).await?;
+        let link = self
+            .find_link_wrap(LinkFilter::Address(&iface.hwAddr))
+            .await?;
 
         // Bring down interface if it is UP
         if link.is_up() {
@@ -196,6 +199,16 @@ impl Handle {
 
         next.map(|msg| msg.into())
             .ok_or_else(|| anyhow!("Link not found ({})", filter))
+    }
+
+    async fn find_link_wrap(&self, filter: LinkFilter<'_>) -> Result<Link> {
+        match self.find_link(filter.clone()).await {
+            Ok(l) => Ok(l),
+            Err(_) => {
+                scan_pci_root_bus();
+                self.find_link(filter).await
+            }
+        }
     }
 
     async fn list_links(&self) -> Result<Vec<Link>> {
@@ -634,6 +647,18 @@ fn parse_mac_address(addr: &str) -> Result<[u8; 6]> {
     ];
 
     Ok(arr)
+}
+
+fn scan_pci_root_bus() {
+    use std::fs::File;
+    use std::io::Write;
+
+    let mut rescan = File::options()
+        .write(true)
+        .open("/sys/bus/pci/rescan")
+        .unwrap();
+
+    rescan.write_all(b"1").unwrap();
 }
 
 /// Wraps external type with the local one, so we can implement various extensions and type conversions.
