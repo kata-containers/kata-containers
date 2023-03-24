@@ -1,0 +1,41 @@
+name: CI | Create Azure VM
+on:
+  workflow_call:
+    inputs:
+      name:
+        required: true
+        type: string
+
+jobs:
+  create-az-vm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Azure CLI
+        run: |
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+      - name: Log into the Azure account
+        run: |
+          az login \
+            --service-principal \
+            -u "${{ secrets.AZ_APPID }}" \
+            -p "${{ secrets.AZ_PASSWORD }}" \
+            --tenant "${{ secrets.AZ_TENANT_ID }}"
+
+      - name: Create Azure VM
+        run: |
+          az vm create \
+            -g "kataCI" \
+            -n "${{ inputs.name }}" \
+            --image "UbuntuLTS" \ 
+            --size "Standard_D4s_v3" \
+            --admin-username "kataCI" \
+            --generate-ssh-keys
+
+      - name: Store SSH keys
+        uses: actions/upload-artifact@v3
+        with:
+          name: "{{ inputs.name }}-dot-ssh"
+          path: $HOME/.ssh/
+
+

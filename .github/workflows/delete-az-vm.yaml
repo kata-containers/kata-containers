@@ -1,0 +1,31 @@
+name: CI | Delete Azure VM
+on:
+  workflow_call:
+    inputs:
+      name:
+        required: true
+        type: string
+
+jobs:
+  delete-az-vm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Azure CLI
+        run: |
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+      - name: Log into the Azure account
+        run: |
+          az login \
+            --service-principal \
+            -u "${{ secrets.AZ_APPID }}" \
+            -p "${{ secrets.AZ_PASSWORD }}" \
+            --tenant "${{ secrets.AZ_TENANT_ID }}"
+
+      - name: Delete Azure VM
+        run: |
+          az vm delete \
+            -g "kataCI" \
+            -n "${{ inputs.name }}" \
+            --yes \
+            --no-wait

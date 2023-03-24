@@ -1,0 +1,190 @@
+name: Kata Containers CI
+on:
+  pull_request
+
+jobs:
+  build-kata-static-tarball-amd64:
+    uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
+
+      #  build-kata-static-tarball-arm64:
+      #    uses: ./.github/workflows/build-kata-static-tarball-arm64.yaml
+
+      #  build-kata-static-tarball-s390x:
+      #    uses: ./.github/workflows/build-kata-static-tarball-s390x.yaml
+
+  publish-kata-deploy-payload-amd64:
+    needs: build-kata-static-tarball-amd64
+    uses: ./.github/workflows/publish-kata-deploy-payload-amd64.yaml
+    secrets: inherit
+
+      #  publish-kata-deploy-payload-arm64:
+      #    needs: build-kata-static-tarball-arm64
+      #    uses: ./.github/workflows/publish-kata-deploy-payload-arm64.yaml
+      #    secrets: inherit
+
+      #  publish-kata-deploy-payload-s390x:
+      #    needs: build-kata-static-tarball-s390x
+      #    uses: ./.github/workflows/publish-kata-deploy-payload-s390x.yaml
+      #    secrets: inherit
+
+      #  publish-kata-deploy-manifest:
+      #    runs-on: ubuntu-latest
+      #      #    needs: [publish-kata-deploy-payload-amd64, publish-kata-deploy-payload-arm64, publish-kata-deploy-payload-s390x]
+      #    needs: [publish-kata-deploy-payload-amd64, publish-kata-deploy-payload-s390x]
+      #    steps:
+      #      - name: Checkout repository
+      #        uses: actions/checkout@v3
+      #
+      #      - name: Push multi-arch manifest
+      #        run: |
+      #          docker manifest create ghcr.io/kata-containers/kata-deploy-ci:${{ github.event.pull_request.number }}-${{ github.sha }} \
+      #          --amend ghcr.io/kata-containers/kata-deploy-ci:amd64-${{ github.event.pull_request.number }}-${{ github.sha }} \
+      #          #          --amend ghcr.io/kata-containers/kata-deploy-ci:arm64-${{ github.event.pull_request.number }}-${{ github.sha }} \
+      #          --amend ghcr.io/kata-containers/kata-deploy-ci:s390x-${{ github.event.pull_request.number }}-${{ github.sha }}
+      #          docker manifest push ghcr.io/kata-containers/kata-deploy-ci:${{ github.event.pull_request.number }}-${{ github.sha }}
+
+  create-az-vm:
+    strategy:
+      matrix:
+        vmm:
+          - clh
+          - dragonball
+          - qemu
+    needs: build-kata-static-tarball-amd64
+    uses: ./.github/workflows/create-az-vm.yaml
+    with:
+      name: ${{ github.event.pull_request.number }}-${{ github.sha }}-${{ matrix.vmm }}-amd64
+    secrets: inherit
+
+  create-aks:
+    strategy:
+      matrix:
+        vmm:
+          - clh
+          - dragonball
+          - qemu
+    needs: publish-kata-deploy-payload-amd64
+    uses: ./.github/workflows/create-aks.yaml
+    with:
+      name: ${{ github.event.pull_request.number }}-${{ github.sha }}-${{ matrix.vmm }}-amd64
+    secrets: inherit
+
+  run-ctr-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        vmm:
+          - clh
+          - dragonball
+          - qemu
+    runs-on: ubuntu-latest
+    needs: create-az-vm
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Log into the Azure account
+        run: |
+          az login \
+            --service-principal \
+            -u "${{ secrets.AZ_APPID }}" \
+            -p "${{ secrets.AZ_PASSWORD }}" \
+            --tenant "${{ secrets.AZ_TENANT_ID }}"
+
+      - name: Download SSH keys
+        uses: actions/download-artifact@v3
+        with:
+          name: "${{ github.event.pull_request.number }}-${{ github.sha }}-${{ matrix.vmm }}-amd64-dot-ssh" 
+          path: $HOME/.ssh
+
+      - name: Test execute something inside the VM
+        run: |
+          echo "Hello from the runner" && \
+          uname -a && \
+          az vm run-command invoke \
+            -g "kataCI" \
+            -n "${{ github.event.pull_request.number }}-${{ github.sha }}-${{ matrix.vmm }}-amd64" \
+            --command-id RunShellScript \
+            --scripts "echo \"Hello from inside the VM\" && uname -a"
+
+  run-k8s-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        vmm:
+          - clh
+          - dragonball
+          - qemu
+    runs-on: ubuntu-latest
+    needs: create-aks
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Adjust kata-deploy file
+        run: |
+         sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|ghcr.io/kata-containers/kata-deploy-ci:${{ github.event.pull_request.number }}-${{ github.sha }}|g" tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml 
+
+      - name: Install `kubectl`
+        run: |
+          sudo az aks install-cli
+
+      - name: Log into the Azure account
+        run: |
+          az login \
+            --service-principal \
+            -u "${{ secrets.AZ_APPID }}" \
+            -p "${{ secrets.AZ_PASSWORD }}" \
+            --tenant "${{ secrets.AZ_TENANT_ID }}"
+
+      - name: Download credentials for the Kubernetes CLI to use them
+        run: |
+          az aks get-credentials -g "kataCI" -n ${{ github.event.pull_request.number }}-${{ github.sha }}-${{ matrix.vmm }}-amd64
+
+      - name: Deploy kata-deploy
+        run: |
+          kubectl apply -f tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
+          kubectl apply -f tools/packaging/kata-deploy/kata-deploy/base/kata-deploy-stable.yaml
+          kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
+          kubectl apply -f tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
+
+      - name: Run tests
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install bats
+
+          pushd tests/integration/kubernetes
+          sed -i -e 's|runtimeClassName: kata|runtimeClassName: kata-${{ matrix.vmm }}|' runtimeclass_workloads/*.yaml
+          bash run_kubernetes_tests.sh
+          popd
+        env:
+          KATA_HYPERVISOR: ${{ matrix.vmm }}
+          K8S_TEST_DEBUG: true
+
+  delete-az-vm:
+    strategy:
+      matrix:
+        vmm:
+          - clh
+          - dragonball
+          - qemu
+    needs: run-ctr-tests
+    if: always()
+    uses: ./.github/workflows/delete-az-vm.yaml
+    with:
+      name: ${{ github.event.pull_request.number }}-${{ github.sha }}-${{ matrix.vmm }}-amd64
+    secrets: inherit
+
+  delete-aks:
+    strategy:
+      matrix:
+        vmm:
+          - clh
+          - dragonball
+          - qemu
+    needs: run-k8s-tests
+    if: always()
+    uses: ./.github/workflows/delete-aks.yaml
+    with:
+      name: ${{ github.event.pull_request.number }}-${{ github.sha }}-${{ matrix.vmm }}-amd64
+    secrets: inherit

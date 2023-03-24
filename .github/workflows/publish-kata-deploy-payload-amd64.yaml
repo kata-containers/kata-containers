@@ -1,0 +1,21 @@
+name: CI | Publish kata-deploy payload for amd64
+on:
+  workflow_call
+
+jobs:
+  kata-payload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-static-tarball-amd64-${{ github.event.pull_request.number }}-${{ github.sha }}
+
+      - name: build-and-push-kata-payload
+        id: build-and-push-kata-payload
+        run: |
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
+          $(pwd)/kata-static.tar.xz "ghcr.io/kata-containers/kata-deploy-ci" \
+          "amd64-${{ github.event.pull_request.number }}-${{ github.sha }}"
