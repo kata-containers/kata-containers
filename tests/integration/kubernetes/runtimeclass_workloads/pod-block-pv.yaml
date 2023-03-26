@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-block-pv
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+    - name: my-container
+      image: quay.io/libpod/ubuntu:latest
+      command: ["tail", "-f", "/dev/null"]
+      volumeDevices:
+        - devicePath: DEVICE_PATH
+          name: my-volume
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        capabilities:
+          add: ["SYS_ADMIN"]
+  volumes:
+    - name: my-volume
+      persistentVolumeClaim:
+        claimName: block-loop-pvc

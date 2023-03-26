@@ -1,0 +1,28 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    test: liveness
+  name: liveness-exec
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+  - name: liveness
+    image: quay.io/prometheus/busybox:latest
+    args:
+    - /bin/sh
+    - -c
+    - touch /tmp/healthy; echo "Check status"; sleep 6; rm -rf /tmp/healthy; echo "Check dead"; sleep 12
+    livenessProbe:
+      exec:
+        command:
+        - cat
+        - /tmp/healthy
+      initialDelaySeconds: 3
+      periodSeconds: 3

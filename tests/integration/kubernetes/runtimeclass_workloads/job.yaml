@@ -1,0 +1,20 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-pi-test
+spec:
+  template:
+    spec:
+      terminationGracePeriodSeconds: 0
+      runtimeClassName: kata
+      containers:
+      - name: pi
+        image: quay.io/prometheus/busybox:latest
+        command: ["/bin/sh", "-c", "echo 'scale=5; 4*a(1)' | bc -l"]
+      restartPolicy: Never
+  backoffLimit: 4
