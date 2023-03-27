@@ -83,7 +83,7 @@ assets:
       uscan-url: >-
         https://github.com/firecracker-microvm/firecracker/tags
         .*/v?(\d\S+)\.tar\.gz
-      version: "v1.1.0"
+      version: "v1.3.1"
 
     qemu:
       description: "VMM that uses KVM"
@@ -175,12 +175,12 @@ assets:
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     tag: "v5.13.10"
 
-  arm-kernel-experimental:
+  kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.15.7"
 
-  dragonball-kernel-experimental:
+  kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.10.25"

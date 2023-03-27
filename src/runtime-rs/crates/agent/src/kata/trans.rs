@@ -8,7 +8,7 @@ use std::convert::Into;
 
 use protocols::{
     agent::{self, OOMEvent},
-    empty, health, types,
+    csi, empty, health, types,
 };
 
 use crate::{
@@ -20,11 +20,12 @@ use crate::{
         GetIPTablesResponse, GuestDetailsResponse, HealthCheckResponse, HugetlbStats, IPAddress,
         IPFamily, Interface, Interfaces, KernelModule, MemHotplugByProbeRequest, MemoryData,
         MemoryStats, NetworkStats, OnlineCPUMemRequest, PidsStats, ReadStreamRequest,
-        ReadStreamResponse, RemoveContainerRequest, ReseedRandomDevRequest, Route, Routes,
-        SetGuestDateTimeRequest, SetIPTablesRequest, SetIPTablesResponse, SignalProcessRequest,
-        StatsContainerResponse, Storage, StringUser, ThrottlingData, TtyWinResizeRequest,
-        UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest, VersionCheckResponse,
-        WaitProcessRequest, WriteStreamRequest,
+        ReadStreamResponse, RemoveContainerRequest, ReseedRandomDevRequest, ResizeVolumeRequest,
+        Route, Routes, SetGuestDateTimeRequest, SetIPTablesRequest, SetIPTablesResponse,
+        SignalProcessRequest, StatsContainerResponse, Storage, StringUser, ThrottlingData,
+        TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
+        VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse, WaitProcessRequest,
+        WriteStreamRequest,
     },
     OomEventResponse, WaitProcessResponse, WriteStreamResponse,
 };
@@ -843,6 +844,38 @@ impl From<agent::OOMEvent> for OomEventResponse {
     fn from(from: OOMEvent) -> Self {
         Self {
             container_id: from.container_id,
+        }
+    }
+}
+
+impl From<VolumeStatsRequest> for agent::VolumeStatsRequest {
+    fn from(from: VolumeStatsRequest) -> Self {
+        Self {
+            volume_guest_path: from.volume_guest_path,
+            unknown_fields: Default::default(),
+            cached_size: Default::default(),
+        }
+    }
+}
+
+impl From<csi::VolumeStatsResponse> for VolumeStatsResponse {
+    fn from(from: csi::VolumeStatsResponse) -> Self {
+        let result: String = format!(
+            "Usage: {:?} Volume Condition: {:?}",
+            from.get_usage(),
+            from.get_volume_condition()
+        );
+        Self { data: result }
+    }
+}
+
+impl From<ResizeVolumeRequest> for agent::ResizeVolumeRequest {
+    fn from(from: ResizeVolumeRequest) -> Self {
+        Self {
+            volume_guest_path: from.volume_guest_path,
+            size: from.size,
+            unknown_fields: Default::default(),
+            cached_size: Default::default(),
         }
     }
 }

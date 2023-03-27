@@ -115,5 +115,7 @@ impl_agent!(
     copy_file | crate::CopyFileRequest | crate::Empty | None,
     get_oom_event | crate::Empty | crate::OomEventResponse | Some(0),
     get_ip_tables | crate::GetIPTablesRequest | crate::GetIPTablesResponse | None,
-    set_ip_tables | crate::SetIPTablesRequest | crate::SetIPTablesResponse | None
+    set_ip_tables | crate::SetIPTablesRequest | crate::SetIPTablesResponse | None,
+    get_volume_stats | crate::VolumeStatsRequest | crate::VolumeStatsResponse | None,
+    resize_volume | crate::ResizeVolumeRequest | crate::Empty | None
 );

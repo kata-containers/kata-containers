@@ -25,7 +25,7 @@ scan_fmt = "0.2.6"
 regex = "1.5.6"
 path-absolutize = "1.2.0"
 anyhow = "1.0.32"
-cgroups = { package = "cgroups-rs", version = "0.3.1" }
+cgroups = { package = "cgroups-rs", version = "0.3.2" }
 rlimit = "0.5.3"
 cfg-if = "0.1.0"
 

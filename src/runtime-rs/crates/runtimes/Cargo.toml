@@ -15,7 +15,9 @@ hyper = { version = "0.14.20", features = ["stream", "server", "http1"] }
 hyperlocal = "0.8"
 serde_json = "1.0.88"
 nix = "0.25.0"
+url = "2.3.1"
 
+agent = { path = "../agent" }
 common = { path = "./common" }
 kata-types = { path = "../../../libs/kata-types" }
 kata-sys-util = { path = "../../../libs/kata-sys-util" }

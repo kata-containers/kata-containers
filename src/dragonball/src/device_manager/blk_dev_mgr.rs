@@ -776,3 +776,587 @@ impl Default for BlockDeviceMgr {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use test_utils::skip_if_not_root;
+    use vmm_sys_util::tempfile::TempFile;
+
+    use super::*;
+    use crate::test_utils::tests::create_vm_for_test;
+
+    #[test]
+    fn test_block_device_type() {
+        let dev_type = BlockDeviceType::get_type("spool:/device1");
+        assert_eq!(dev_type, BlockDeviceType::Spool);
+        let dev_type = BlockDeviceType::get_type("/device1");
+        assert_eq!(dev_type, BlockDeviceType::RawBlock);
+    }
+
+    #[test]
+    fn test_create_block_devices_configs() {
+        let mgr = BlockDeviceMgr::default();
+        assert!(!mgr.has_root_block_device());
+        assert!(!mgr.has_part_uuid_root());
+        assert!(!mgr.is_read_only_root());
+        assert_eq!(mgr.get_index_of_drive_id(""), None);
+        assert_eq!(mgr.info_list.len(), 0);
+    }
+
+    #[test]
+    fn test_add_non_root_block_device() {
+        skip_if_not_root!();
+        let dummy_file = TempFile::new().unwrap();
+        let dummy_path = dummy_file.as_path().to_owned();
+        let dummy_id = String::from("1");
+        let dummy_block_device = BlockDeviceConfigInfo {
+            path_on_host: dummy_path.clone(),
+            device_type: BlockDeviceType::RawBlock,
+            is_root_device: false,
+            part_uuid: None,
+            is_read_only: false,
+            is_direct: false,
+            no_drop: false,
+            drive_id: dummy_id.clone(),
+            rate_limiter: None,
+            num_queues: BlockDeviceConfigInfo::default_num_queues(),
+            queue_size: 128,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+
+        let mut vm = crate::vm::tests::create_vm_instance();
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        assert!(BlockDeviceMgr::insert_device(
+            vm.device_manager_mut(),
+            ctx,
+            dummy_block_device.clone(),
+        )
+        .is_ok());
+
+        assert_eq!(vm.device_manager().block_manager.info_list.len(), 1);
+        assert!(!vm.device_manager().block_manager.has_root_block_device());
+        assert!(!vm.device_manager().block_manager.has_part_uuid_root());
+        assert!(!vm.device_manager().block_manager.is_read_only_root());
+        assert_eq!(vm.device_manager().block_manager.info_list.len(), 1);
+        assert_eq!(
+            vm.device_manager().block_manager.info_list[0]
+                .config
+                .device_type(),
+            BlockDeviceType::RawBlock
+        );
+        assert_eq!(
+            vm.device_manager().block_manager.info_list[0]
+                .config
+                .queue_sizes(),
+            [128u16]
+        );
+
+        let dev_config = vm.device_manager().block_manager.iter().next().unwrap();
+        assert_eq!(dev_config.config, dummy_block_device);
+        assert!(vm
+            .device_manager()
+            .block_manager
+            .get_index_of_drive_path(&dummy_path)
+            .is_some());
+        assert!(vm
+            .device_manager()
+            .block_manager
+            .get_index_of_drive_id(&dummy_id)
+            .is_some());
+    }
+
+    #[test]
+    fn test_update_blk_device_ratelimiters() {
+        skip_if_not_root!();
+        //Init vm for test.
+        let mut vm = create_vm_for_test();
+        let device_op_ctx = DeviceOpContext::new(
+            Some(vm.epoll_manager().clone()),
+            vm.device_manager(),
+            Some(vm.vm_as().unwrap().clone()),
+            None,
+            false,
+        );
+
+        let dummy_file = TempFile::new().unwrap();
+        let dummy_path = dummy_file.as_path().to_owned();
+
+        let dummy_block_device = BlockDeviceConfigInfo {
+            path_on_host: dummy_path,
+            device_type: BlockDeviceType::RawBlock,
+            is_root_device: true,
+            part_uuid: None,
+            is_read_only: true,
+            is_direct: false,
+            no_drop: false,
+            drive_id: String::from("1"),
+            rate_limiter: None,
+            num_queues: BlockDeviceConfigInfo::default_num_queues(),
+            queue_size: 128,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+        BlockDeviceMgr::insert_device(vm.device_manager_mut(), device_op_ctx, dummy_block_device)
+            .unwrap();
+
+        let cfg = BlockDeviceConfigUpdateInfo {
+            drive_id: String::from("1"),
+            rate_limiter: None,
+        };
+
+        let mut device_op_ctx = DeviceOpContext::new(
+            Some(vm.epoll_manager().clone()),
+            vm.device_manager(),
+            Some(vm.vm_as().unwrap().clone()),
+            None,
+            false,
+        );
+
+        vm.device_manager_mut()
+            .block_manager
+            .attach_devices(&mut device_op_ctx)
+            .unwrap();
+        assert_eq!(vm.device_manager().block_manager.info_list.len(), 1);
+
+        //Patch while the epoll handler is invalid.
+        let expected_error = "could not send patch message to the block epoll handler".to_string();
+
+        assert_eq!(
+            BlockDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), cfg)
+                .unwrap_err()
+                .to_string(),
+            expected_error
+        );
+
+        //Invalid drive id
+        let cfg2 = BlockDeviceConfigUpdateInfo {
+            drive_id: String::from("2"),
+            rate_limiter: None,
+        };
+
+        let expected_error = format!("invalid block device id '{0}'", cfg2.drive_id);
+
+        assert_eq!(
+            BlockDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), cfg2)
+                .unwrap_err()
+                .to_string(),
+            expected_error
+        );
+    }
+
+    #[test]
+    fn test_add_one_root_block_device() {
+        skip_if_not_root!();
+        let dummy_file = TempFile::new().unwrap();
+        let dummy_path = dummy_file.as_path().to_owned();
+        let dummy_block_device = BlockDeviceConfigInfo {
+            path_on_host: dummy_path,
+            device_type: BlockDeviceType::RawBlock,
+            is_root_device: true,
+            part_uuid: None,
+            is_read_only: true,
+            is_direct: false,
+            no_drop: false,
+            drive_id: String::from("1"),
+            rate_limiter: None,
+            num_queues: BlockDeviceConfigInfo::default_num_queues(),
+            queue_size: 128,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+
+        let mut vm = crate::vm::tests::create_vm_instance();
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        assert!(BlockDeviceMgr::insert_device(
+            vm.device_manager_mut(),
+            ctx,
+            dummy_block_device.clone(),
+        )
+        .is_ok());
+
+        assert_eq!(vm.device_manager().block_manager.info_list.len(), 1);
+        assert!(vm.device_manager().block_manager.has_root_block);
+        assert!(!vm.device_manager().block_manager.has_part_uuid_root);
+        assert!(vm.device_manager().block_manager.read_only_root);
+        assert_eq!(vm.device_manager().block_manager.info_list.len(), 1);
+
+        let dev_config = vm.device_manager().block_manager.iter().next().unwrap();
+        assert_eq!(dev_config.config, dummy_block_device);
+        assert!(vm.device_manager().block_manager.is_read_only_root());
+    }
+
+    #[test]
+    fn test_add_two_root_block_devices_configs() {
+        skip_if_not_root!();
+        let dummy_file_1 = TempFile::new().unwrap();
+        let dummy_path_1 = dummy_file_1.as_path().to_owned();
+        let root_block_device_1 = BlockDeviceConfigInfo {
+            path_on_host: dummy_path_1,
+            device_type: BlockDeviceType::RawBlock,
+            is_root_device: true,
+            part_uuid: None,
+            is_read_only: false,
+            is_direct: false,
+            no_drop: false,
+            drive_id: String::from("1"),
+            rate_limiter: None,
+            num_queues: BlockDeviceConfigInfo::default_num_queues(),
+            queue_size: 128,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+
+        let dummy_file_2 = TempFile::new().unwrap();
+        let dummy_path_2 = dummy_file_2.as_path().to_owned();
+        let root_block_device_2 = BlockDeviceConfigInfo {
+            path_on_host: dummy_path_2,
+            device_type: BlockDeviceType::RawBlock,
+            is_root_device: true,
+            part_uuid: None,
+            is_read_only: false,
+            is_direct: false,
+            no_drop: false,
+            drive_id: String::from("2"),
+            rate_limiter: None,
+            num_queues: BlockDeviceConfigInfo::default_num_queues(),
+            queue_size: 128,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+
+        let mut vm = crate::vm::tests::create_vm_instance();
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, root_block_device_1).unwrap();
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        assert!(
+            BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, root_block_device_2)
+                .is_err()
+        );
+    }
+
+    #[test]
+    // Test BlockDevicesConfigs::add when you first add the root device and then the other devices.
+    fn test_add_root_block_device_first() {
+        skip_if_not_root!();
+        let dummy_file_1 = TempFile::new().unwrap();
+        let dummy_path_1 = dummy_file_1.as_path().to_owned();
+        let root_block_device = BlockDeviceConfigInfo {
+            path_on_host: dummy_path_1,
+            device_type: BlockDeviceType::RawBlock,
+            is_root_device: true,
+            part_uuid: None,
+            is_read_only: false,
+            is_direct: false,
+            no_drop: false,
+            drive_id: String::from("1"),
+            rate_limiter: None,
+            num_queues: BlockDeviceConfigInfo::default_num_queues(),
+            queue_size: 128,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+
+        let dummy_file_2 = TempFile::new().unwrap();
+        let dummy_path_2 = dummy_file_2.as_path().to_owned();
+        let dummy_block_device_2 = BlockDeviceConfigInfo {
+            path_on_host: dummy_path_2,
+            device_type: BlockDeviceType::RawBlock,
+            is_root_device: false,
+            part_uuid: None,
+            is_read_only: false,
+            is_direct: false,
+            no_drop: false,
+            drive_id: String::from("2"),
+            rate_limiter: None,
+            num_queues: BlockDeviceConfigInfo::default_num_queues(),
+            queue_size: 128,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+
+        let dummy_file_3 = TempFile::new().unwrap();
+        let dummy_path_3 = dummy_file_3.as_path().to_owned();
+        let dummy_block_device_3 = BlockDeviceConfigInfo {
+            path_on_host: dummy_path_3,
+            device_type: BlockDeviceType::RawBlock,
+            is_root_device: false,
+            part_uuid: None,
+            is_read_only: false,
+            is_direct: false,
+            no_drop: false,
+            drive_id: String::from("3"),
+            rate_limiter: None,
+            num_queues: BlockDeviceConfigInfo::default_num_queues(),
+            queue_size: 128,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+
+        let mut vm = crate::vm::tests::create_vm_instance();
+        vm.device_manager_mut()
+            .block_manager
+            .create(root_block_device.clone())
+            .unwrap();
+        vm.device_manager_mut()
+            .block_manager
+            .create(dummy_block_device_2.clone())
+            .unwrap();
+        vm.device_manager_mut()
+            .block_manager
+            .create(dummy_block_device_3.clone())
+            .unwrap();
+
+        assert!(vm.device_manager().block_manager.has_root_block_device(),);
+        assert!(!vm.device_manager().block_manager.has_part_uuid_root());
+        assert_eq!(vm.device_manager().block_manager.info_list.len(), 3);
+
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, root_block_device).unwrap();
+
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, dummy_block_device_2).unwrap();
+
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, dummy_block_device_3).unwrap();
+    }
+
+    #[test]
+    // Test BlockDevicesConfigs::add when you add other devices first and then the root device.
+    fn test_root_block_device_add_last() {
+        skip_if_not_root!();
+        let dummy_file_1 = TempFile::new().unwrap();
+        let dummy_path_1 = dummy_file_1.as_path().to_owned();
+        let root_block_device = BlockDeviceConfigInfo {
+            path_on_host: dummy_path_1,
+            device_type: BlockDeviceType::RawBlock,
+            is_root_device: true,
+            part_uuid: None,
+            is_read_only: false,
+            is_direct: false,
+            no_drop: false,
+            drive_id: String::from("1"),
+            rate_limiter: None,
+            num_queues: BlockDeviceConfigInfo::default_num_queues(),
+            queue_size: 128,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+
+        let dummy_file_2 = TempFile::new().unwrap();
+        let dummy_path_2 = dummy_file_2.as_path().to_owned();
+        let dummy_block_device_2 = BlockDeviceConfigInfo {
+            path_on_host: dummy_path_2,
+            device_type: BlockDeviceType::RawBlock,
+            is_root_device: false,
+            part_uuid: None,
+            is_read_only: false,
+            is_direct: false,
+            no_drop: false,
+            drive_id: String::from("2"),
+            rate_limiter: None,
+            num_queues: BlockDeviceConfigInfo::default_num_queues(),
+            queue_size: 128,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+
+        let dummy_file_3 = TempFile::new().unwrap();
+        let dummy_path_3 = dummy_file_3.as_path().to_owned();
+        let dummy_block_device_3 = BlockDeviceConfigInfo {
+            path_on_host: dummy_path_3,
+            device_type: BlockDeviceType::RawBlock,
+            is_root_device: false,
+            part_uuid: None,
+            is_read_only: false,
+            is_direct: false,
+            no_drop: false,
+            drive_id: String::from("3"),
+            rate_limiter: None,
+            num_queues: BlockDeviceConfigInfo::default_num_queues(),
+            queue_size: 128,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+
+        let mut vm = crate::vm::tests::create_vm_instance();
+
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, dummy_block_device_2.clone())
+            .unwrap();
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, dummy_block_device_3.clone())
+            .unwrap();
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, root_block_device.clone())
+            .unwrap();
+
+        assert!(vm.device_manager().block_manager.has_root_block_device(),);
+        assert!(!vm.device_manager().block_manager.has_part_uuid_root());
+        assert_eq!(vm.device_manager().block_manager.info_list.len(), 3);
+
+        let mut block_dev_iter = vm.device_manager().block_manager.iter();
+        // The root device should be first in the list no matter of the order in
+        // which the devices were added.
+        assert_eq!(
+            block_dev_iter.next().unwrap().config.drive_id,
+            root_block_device.drive_id
+        );
+        assert_eq!(
+            block_dev_iter.next().unwrap().config.drive_id,
+            dummy_block_device_2.drive_id
+        );
+        assert_eq!(
+            block_dev_iter.next().unwrap().config.drive_id,
+            dummy_block_device_3.drive_id
+        );
+    }
+
+    #[test]
+    fn test_block_device_update() {
+        skip_if_not_root!();
+        let dummy_file_1 = TempFile::new().unwrap();
+        let dummy_path_1 = dummy_file_1.as_path().to_owned();
+        let root_block_device = BlockDeviceConfigInfo {
+            path_on_host: dummy_path_1.clone(),
+            device_type: BlockDeviceType::RawBlock,
+            is_root_device: true,
+            part_uuid: None,
+            is_read_only: false,
+            is_direct: false,
+            no_drop: false,
+            drive_id: String::from("1"),
+            rate_limiter: None,
+            num_queues: BlockDeviceConfigInfo::default_num_queues(),
+            queue_size: 128,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+
+        let dummy_file_2 = TempFile::new().unwrap();
+        let dummy_path_2 = dummy_file_2.as_path().to_owned();
+        let mut dummy_block_device_2 = BlockDeviceConfigInfo {
+            path_on_host: dummy_path_2.clone(),
+            device_type: BlockDeviceType::RawBlock,
+            is_root_device: false,
+            part_uuid: None,
+            is_read_only: false,
+            is_direct: false,
+            no_drop: false,
+            drive_id: String::from("2"),
+            rate_limiter: None,
+            num_queues: BlockDeviceConfigInfo::default_num_queues(),
+            queue_size: 128,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+
+        let mut vm = crate::vm::tests::create_vm_instance();
+
+        // Add 2 block devices.
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, root_block_device).unwrap();
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, dummy_block_device_2.clone())
+            .unwrap();
+
+        // Get index zero.
+        assert_eq!(
+            vm.device_manager()
+                .block_manager
+                .get_index_of_drive_id(&String::from("1"))
+                .unwrap(),
+            0
+        );
+
+        // Get None.
+        assert!(vm
+            .device_manager()
+            .block_manager
+            .get_index_of_drive_id(&String::from("foo"))
+            .is_none());
+
+        // Test several update cases using dummy_block_device_2.
+        // Validate `dummy_block_device_2` is already in the list
+        assert!(vm
+            .device_manager()
+            .block_manager
+            .get_index_of_drive_id(&dummy_block_device_2.drive_id)
+            .is_some());
+        // Update OK.
+        dummy_block_device_2.is_read_only = true;
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, dummy_block_device_2.clone())
+            .unwrap();
+
+        let index = vm
+            .device_manager()
+            .block_manager
+            .get_index_of_drive_id(&dummy_block_device_2.drive_id)
+            .unwrap();
+        // Validate update was successful.
+        assert!(
+            vm.device_manager().block_manager.info_list[index]
+                .config
+                .is_read_only
+        );
+
+        // Update with invalid path.
+        let dummy_filename_3 = String::from("test_update_3");
+        let dummy_path_3 = PathBuf::from(dummy_filename_3);
+        dummy_block_device_2.path_on_host = dummy_path_3;
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        assert!(BlockDeviceMgr::insert_device(
+            vm.device_manager_mut(),
+            ctx,
+            dummy_block_device_2.clone(),
+        )
+        .is_err());
+
+        // Update with 2 root block devices.
+        dummy_block_device_2.path_on_host = dummy_path_2.clone();
+        dummy_block_device_2.is_root_device = true;
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        assert!(
+            BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, dummy_block_device_2,)
+                .is_err(),
+        );
+
+        // Switch roots and add a PARTUUID for the new one.
+        let root_block_device_old = BlockDeviceConfigInfo {
+            path_on_host: dummy_path_1,
+            device_type: BlockDeviceType::RawBlock,
+            is_root_device: false,
+            part_uuid: None,
+            is_read_only: false,
+            is_direct: false,
+            no_drop: false,
+            drive_id: String::from("1"),
+            rate_limiter: None,
+            num_queues: BlockDeviceConfigInfo::default_num_queues(),
+            queue_size: 128,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+        let root_block_device_new = BlockDeviceConfigInfo {
+            path_on_host: dummy_path_2,
+            device_type: BlockDeviceType::RawBlock,
+            is_root_device: true,
+            part_uuid: Some("0eaa91a0-01".to_string()),
+            is_read_only: false,
+            is_direct: false,
+            no_drop: false,
+            drive_id: String::from("2"),
+            rate_limiter: None,
+            num_queues: BlockDeviceConfigInfo::default_num_queues(),
+            queue_size: 128,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, root_block_device_old).unwrap();
+        let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, root_block_device_new).unwrap();
+        assert!(vm.device_manager().block_manager.has_part_uuid_root);
+    }
+}

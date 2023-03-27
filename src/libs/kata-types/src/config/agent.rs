@@ -9,14 +9,16 @@ use crate::config::{ConfigOps, TomlConfig};
 
 pub use vendor::AgentVendor;
 
-use super::default::{DEFAULT_AGENT_LOG_PORT, DEFAULT_AGENT_VSOCK_PORT};
+use super::default::{
+    DEFAULT_AGENT_DIAL_TIMEOUT_MS, DEFAULT_AGENT_LOG_PORT, DEFAULT_AGENT_VSOCK_PORT,
+};
 use crate::eother;
 
 /// agent name of Kata agent.
 pub const AGENT_NAME_KATA: &str = "kata";
 
 /// Kata agent configuration information.
-#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Agent {
     /// If enabled, the agent will log additional debug messages to the system log.
     #[serde(default, rename = "enable_debug")]
@@ -79,6 +81,24 @@ pub struct Agent {
 
     /// container pipe size
     pub container_pipe_size: u32,
+}
+
+impl std::default::Default for Agent {
+    fn default() -> Self {
+        Self {
+            debug: true,
+            enable_tracing: false,
+            debug_console_enabled: false,
+            server_port: DEFAULT_AGENT_VSOCK_PORT,
+            log_port: DEFAULT_AGENT_LOG_PORT,
+            dial_timeout_ms: DEFAULT_AGENT_DIAL_TIMEOUT_MS,
+            reconnect_timeout_ms: 3_000,
+            request_timeout_ms: 30_000,
+            health_check_request_timeout_ms: 90_000,
+            kernel_modules: Default::default(),
+            container_pipe_size: 0,
+        }
+    }
 }
 
 fn default_server_port() -> u32 {
