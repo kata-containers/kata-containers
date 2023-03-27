@@ -49,7 +49,7 @@ echo 'deb [arch=amd64] http://security.ubuntu.com/ubuntu focal-security main uni
 echo 'deb [arch=amd64] https://download.01.org/intel-sgx/sgx_repo/ubuntu focal main' | tee /etc/apt/sources.list.d/intel-sgx.list
 echo 'deb [arch=amd64] http://mirrors.openanolis.cn/inclavare-containers/ubuntu${VERSION_ID} focal main' | tee /etc/apt/sources.list.d/inclavare-containers.list
 apt-get update
-apt-get install -y rats-tls-tdx
+apt-get install -y rats-tls-tdx libtdx-attest=1.15\*
 
 echo 'port=4050' | tee /etc/tdx-attest.conf
 EOF
