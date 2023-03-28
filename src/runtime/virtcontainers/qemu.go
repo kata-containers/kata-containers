@@ -21,6 +21,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -2399,6 +2400,11 @@ func (q *qemu) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSiz
 // genericAppendBridges appends to devices the given bridges
 // nolint: unused, deadcode
 func genericAppendBridges(devices []govmmQemu.Device, bridges []types.Bridge, machineType string) []govmmQemu.Device {
+	shpc := false
+	if runtime.GOARCH == "arm64" {
+		shpc = true
+	}
+
 	bus := defaultPCBridgeBus
 	switch machineType {
 	case QemuQ35, QemuVirt:
@@ -2423,7 +2429,7 @@ func genericAppendBridges(devices []govmmQemu.Device, bridges []types.Bridge, ma
 				ID:   b.ID,
 				// Each bridge is required to be assigned a unique chassis id > 0
 				Chassis: idx + 1,
-				SHPC:    false,
+				SHPC:    shpc,
 				Addr:    strconv.FormatInt(int64(bridges[idx].Addr), 10),
 				// Certain guest BIOS versions think
 				// !SHPC means no hotplug, and won't
