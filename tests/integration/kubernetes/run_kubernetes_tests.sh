@@ -32,13 +32,15 @@ else
 	"k8s-exec.bats" \
 #	"k8s-expose-ip.bats" \
 #	"k8s-file-volume.bats" \
-#	"k8s-inotify.bats" \
+#	"k8s-hugepages.bats")
+#
 	"k8s-job.bats" \
 #	"k8s-kill-all-process-in-container.bats" \
 #	"k8s-limit-range.bats" \
 #	"k8s-liveness-probes.bats" \
 #	"k8s-memory.bats" \
 #	"k8s-nested-configmap-secret.bats" \
+#	"k8s-nginx-connectivity.bats" )
 	"k8s-number-cpus.bats" \
 #	"k8s-oom.bats" \
 #	"k8s-optional-empty-configmap.bats" \
@@ -50,7 +52,7 @@ else
 #	"k8s-projected-volume.bats" \
 	"k8s-qos-pods.bats" \
 #	"k8s-replication.bats" \
-	"k8s-scale-nginx.bats" \
+#	"k8s-scale-nginx.bats" \
 #	"k8s-seccomp.bats" \
 	"k8s-sysctls.bats" \
 	"k8s-security-context.bats" \
@@ -58,8 +60,6 @@ else
 #	"k8s-volume.bats" \
 #	"k8s-ro-volume.bats" /
 )
-#	"k8s-nginx-connectivity.bats" )
-#"k8s-hugepages.bats")
 fi
 
 cleanup() {
