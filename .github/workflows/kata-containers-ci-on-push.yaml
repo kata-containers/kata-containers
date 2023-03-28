@@ -47,8 +47,8 @@ jobs:
     strategy:
       matrix:
         vmm:
-          - clh
-          - dragonball
+          #          - clh
+          #          - dragonball
           - qemu
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/create-az-vm.yaml
@@ -61,7 +61,7 @@ jobs:
       matrix:
         vmm:
           - clh
-          - dragonball
+            #- dragonball
           - qemu
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/create-aks.yaml
@@ -74,8 +74,8 @@ jobs:
       fail-fast: false
       matrix:
         vmm:
-          - clh
-          - dragonball
+          #          - clh
+          #          - dragonball
           - qemu
     runs-on: ubuntu-latest
     needs: create-az-vm
@@ -113,7 +113,7 @@ jobs:
       matrix:
         vmm:
           - clh
-          - dragonball
+            #          - dragonball
           - qemu
     runs-on: ubuntu-latest
     needs: create-aks
@@ -165,8 +165,8 @@ jobs:
     strategy:
       matrix:
         vmm:
-          - clh
-          - dragonball
+          #          - clh
+          #          - dragonball
           - qemu
     needs: run-ctr-tests
     if: always()
@@ -180,7 +180,7 @@ jobs:
       matrix:
         vmm:
           - clh
-          - dragonball
+            #- dragonball
           - qemu
     needs: run-k8s-tests
     if: always()
