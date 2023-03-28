@@ -17,8 +17,6 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 setup() {
 	deployment="hello-world"
 	service="my-service"
-	agnhost_name=$(get_test_version "container_images.agnhost.name")
-	agnhost_version=$(get_test_version "container_images.agnhost.version")
 
 	get_pod_config_dir
 }
@@ -26,7 +24,7 @@ setup() {
 @test "Expose IP Address" {
 
 	# Create deployment
-	sed -e "s#\${agnhost_image}#${agnhost_name}:${agnhost_version}#" \
+	sed -e "s#\${agnhost_image}#${agnhost}:${agnhost_version}#" \
 		"${pod_config_dir}/deployment-expose-ip.yaml" |\
 		kubectl create -f -
 

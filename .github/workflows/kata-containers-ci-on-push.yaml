@@ -2,6 +2,14 @@ name: Kata Containers CI
 on:
   pull_request
 
+env:
+  nginx_version: "1.15-alpine"
+  registry_version: "2"
+  registry_ibm_version: "2.6.2.5"
+
+  agnhost: "k8s.gcr.io/e2e-test-images/agnhost"
+  agnhost_version: "2.21"
+
 jobs:
   build-kata-static-tarball-amd64:
     uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml

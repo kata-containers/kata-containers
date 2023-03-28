@@ -9,8 +9,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 
 setup() {
-	nginx_version=$(get_test_version "docker_images.nginx.version")
-	nginx_image="nginx:$nginx_version"
+	nginx_image="nginx:${nginx_version}"
 
 	get_pod_config_dir
 }

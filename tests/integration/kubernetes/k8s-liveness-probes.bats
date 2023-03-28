@@ -10,8 +10,6 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 
 setup() {
 	sleep_liveness=20
-	agnhost_name=$(get_test_version "container_images.agnhost.name")
-	agnhost_version=$(get_test_version "container_images.agnhost.version")
 
 	get_pod_config_dir
 }
@@ -37,7 +35,7 @@ setup() {
 	pod_name="liveness-http"
 
 	# Create pod
-	sed -e "s#\${agnhost_image}#${agnhost_name}:${agnhost_version}#" \
+	sed -e "s#\${agnhost_image}#${agnhost}:${agnhost_version}#" \
 		"${pod_config_dir}/pod-http-liveness.yaml" |\
 		kubectl create -f -
 

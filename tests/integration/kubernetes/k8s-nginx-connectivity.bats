@@ -9,19 +9,14 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 
 setup() {
-	nginx_version=$(get_test_version "docker_images.nginx.version")
-	nginx_image="nginx:$nginx_version"
+	nginx_image="nginx:${nginx_version}"
 	busybox_image="busybox"
 	deployment="nginx-deployment"
-	# Pull the images before launching workload.
-	crictl_pull "$busybox_image"
-	crictl_pull "$nginx_image"
 
 	get_pod_config_dir
 }
 
 @test "Verify nginx connectivity between pods" {
-
 	# Create test .yaml
 	sed -e "s/\${nginx_version}/${nginx_image}/" \
 		"${pod_config_dir}/${deployment}.yaml" > "${pod_config_dir}/test-${deployment}.yaml"

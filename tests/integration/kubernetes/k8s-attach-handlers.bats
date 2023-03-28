@@ -8,8 +8,7 @@
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	nginx_version="1.15-alpine"
-	nginx_image="nginx:$nginx_version"
+	nginx_image="nginx:${nginx_version}"
 
 	pod_name="handlers"
 
