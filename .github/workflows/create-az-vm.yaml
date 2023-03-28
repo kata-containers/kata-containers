@@ -29,7 +29,7 @@ jobs:
             -n "${{ inputs.name }}" \
             --image "UbuntuLTS" \ 
             --size "Standard_D4s_v3" \
-            --admin-username "kataCI" \
+            --admin-username "kataci" \
             --generate-ssh-keys
 
       - name: Store SSH keys
@@ -37,5 +37,3 @@ jobs:
         with:
           name: "{{ inputs.name }}-dot-ssh"
           path: $HOME/.ssh/
-
-
