@@ -156,7 +156,7 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    version: "v5.19.2"
+    version: "v6.1.21"
     tdx:
       description: "Linux kernel that supports TDX"
       url: "https://github.com/kata-containers/linux/archive/refs/tags"
@@ -164,11 +164,11 @@ assets:
     sev:
       description: "Linux kernel that supports SEV"
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-      version: "v5.19.2"
+      version: "v6.1.21"
     snp:
       description: "Linux kernel that supports AMD SEV-SNP for VMs"
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-      version: "v5.19.2"
+      version: "v6.1.21"
 
   kernel-experimental:
     description: "Linux kernel with virtio-fs support"
