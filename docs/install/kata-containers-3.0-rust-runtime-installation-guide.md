@@ -49,7 +49,7 @@ Follow the [`kata-deploy`](../../tools/packaging/kata-deploy/README.md).
 
 * Download `Rustup` and install  `Rust`
     > **Notes:**
-    > Rust version 1.62.0 is needed
+    > For Rust version, please see [`versions.yaml`](../../versions.yaml)  file's rust section.
 
     Example for `x86_64`
     ```
