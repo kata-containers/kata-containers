@@ -144,6 +144,12 @@ pub fn get_generic_cpu_details(cpu_info_file: &str) -> Result<(String, String)> 
     Ok((vendor, model))
 }
 
+const VHOST_VSOCK_DEVICE: &str = "/dev/vhost-vsock";
+pub fn supports_vsocks(vsock_path: &str) -> Result<bool> {
+    let metadata = fs::metadata(vsock_path)?;
+    Ok(metadata.is_file())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -286,5 +292,31 @@ mod tests {
             path.to_str().unwrap()
         );
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn check_supports_vsocks_valid() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("vhost-vsock");
+        let path = file_path.clone();
+        let _file = fs::File::create(file_path).unwrap();
+        let res = supports_vsocks(path.to_str().unwrap()).unwrap();
+        assert!(res);
+    }
+
+    #[test]
+    fn check_supports_vsocks_dir() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("vhost-vsock");
+        let path = file_path.clone();
+        fs::create_dir(file_path).unwrap();
+        let res = supports_vsocks(path.to_str().unwrap()).unwrap();
+        assert!(!res);
+    }
+
+    #[test]
+    fn check_supports_vsocks_missing_file() {
+        let res = supports_vsocks("/xyz/vhost-vsock");
+        assert!(res.is_err());
     }
 }
