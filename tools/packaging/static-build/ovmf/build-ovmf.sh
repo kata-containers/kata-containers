@@ -71,7 +71,6 @@ if [ "${ovmf_build}" == "tdx" ]; then
 	build_path_arch="${build_path_target_toolchain}/X64"
 	stat "${build_path_fv}/OVMF_CODE.fd"
 	stat "${build_path_fv}/OVMF_VARS.fd"
-	stat "${build_path_arch}/DumpTdxEventLog.efi"
 fi
 
 #need to leave tmp dir
@@ -92,7 +91,6 @@ fi
 if [ "${ovmf_build}" == "tdx" ]; then
 	install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF_CODE.fd ${install_dir}
 	install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF_VARS.fd ${install_dir}
-	install $build_root/$ovmf_dir/"${build_path_arch}"/DumpTdxEventLog.efi ${install_dir}
 fi
 
 local_dir=${PWD}
