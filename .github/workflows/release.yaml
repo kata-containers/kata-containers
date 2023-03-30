@@ -12,9 +12,9 @@ jobs:
     needs: build-kata-static-tarball-amd64
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: get-kata-tarball
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball-amd64
       - name: build-and-push-kata-deploy-ci
@@ -61,9 +61,9 @@ jobs:
     needs: kata-deploy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: download-artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball
       - name: install hub
@@ -85,7 +85,7 @@ jobs:
     needs: upload-static-tarball
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: generate-and-upload-tarball
         run: |
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
@@ -99,7 +99,7 @@ jobs:
     needs: upload-cargo-vendored-tarball
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: download-and-upload-tarball
         env:
           GITHUB_TOKEN: ${{ secrets.GIT_UPLOAD_TOKEN }}
