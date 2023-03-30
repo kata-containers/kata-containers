@@ -55,7 +55,7 @@ setup() {
 	pod_name="tcptest"
 
 	# Create pod
-	sed -e "s#\${agnhost_image}#${agnhost_name}:${agnhost_version}#" \
+	sed -e "s#\${agnhost_image}#${agnhost}:${agnhost_version}#" \
 		"${pod_config_dir}/pod-tcp-liveness.yaml" |\
 		kubectl create -f -
 
