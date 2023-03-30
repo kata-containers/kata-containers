@@ -69,7 +69,7 @@ jobs:
       matrix:
         vmm:
           - clh
-            #- dragonball
+          - dragonball
           - qemu
             #    needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/create-aks.yaml
@@ -121,7 +121,7 @@ jobs:
       matrix:
         vmm:
           - clh
-            #          - dragonball
+          - dragonball
           - qemu
     runs-on: ubuntu-latest
     needs: create-aks

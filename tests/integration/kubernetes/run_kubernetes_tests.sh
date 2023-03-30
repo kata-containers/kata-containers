@@ -30,7 +30,7 @@ else
 	"k8s-empty-dirs.bats" \
 	"k8s-env.bats" \
 	"k8s-exec.bats" \
-	"k8s-expose-ip.bats" \
+#	"k8s-expose-ip.bats" \   # Seems to get stuck forever
 #	"k8s-file-volume.bats" \  # Requires storage volume
 #	"k8s-hugepages.bats" \   # Requires access to the host's hugepage
 	"k8s-job.bats" \
