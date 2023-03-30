@@ -675,7 +675,7 @@ EOF
 		git fetch --depth=1 origin "${attestation_agent_version}"
 		git checkout FETCH_HEAD
 		[ "${AA_KBC}" == "eaa_kbc" ] && [ "${ARCH}" == "x86_64" ] && LIBC="gnu"
-		make KBC=${AA_KBC} && make install DESTDIR="${ROOTFS_DIR}/usr/local/bin/"
+		make KBC=${AA_KBC} ttrpc=true && make install DESTDIR="${ROOTFS_DIR}/usr/local/bin/"
 		popd
 	fi
 
