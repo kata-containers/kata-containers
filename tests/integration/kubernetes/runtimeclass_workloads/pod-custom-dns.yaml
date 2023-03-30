@@ -1,0 +1,23 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  name: custom-dns-test
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+    - name: test
+      image: quay.io/prometheus/busybox:latest
+      command: ["tail", "-f", "/dev/null"]
+  dnsPolicy: "None"
+  dnsConfig:
+    nameservers:
+      - 1.2.3.4
+    searches:
+      - dns.test.search

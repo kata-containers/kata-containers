@@ -1,0 +1,21 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: burstable-test
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+  - name: qos-burstable
+    image: quay.io/prometheus/busybox:latest
+    command: ["/bin/sh", "-c", "tail -f /dev/null"]
+    resources:
+      limits:
+        memory: "200Mi"
+      requests:
+        memory: "100Mi"

@@ -1,0 +1,29 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: initcontainer-shared-volume
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  initContainers:
+  - name: first
+    image: quay.io/prometheus/busybox:latest
+    command: [ "sh", "-c", "echo ${EPOCHREALTIME//.} > /volume/initContainer" ]
+    volumeMounts:
+      - mountPath: /volume
+        name: volume
+  containers:
+  - name: last
+    image: quay.io/prometheus/busybox:latest
+    command: [ "sh", "-c", "echo ${EPOCHREALTIME//.} > /volume/container; tail -f /dev/null" ]
+    volumeMounts:
+    - mountPath: /volume
+      name: volume
+  volumes:
+  - name: volume
+    emptyDir: {}
