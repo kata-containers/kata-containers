@@ -1,0 +1,59 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: footubuntu
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  volumes:
+  - name: runv
+    emptyDir:
+      medium: "Memory"
+  - name: runlockv
+    emptyDir:
+      medium: "Memory"
+  - name: tmpv
+    emptyDir:
+      medium: "Memory"
+  - name: fakecgroup
+    hostPath:
+      path: /sys/fs/cgroup
+  - name: ssh-dir
+    emptyDir:
+      medium: "Memory"
+  - name: ssh-config-map
+    configMap:
+      name: ssh-config-map
+      defaultMode: 384
+  containers:
+  - name: vmcontainer
+    image: quay.io/footloose/ubuntu18.04:latest
+    command: ["/sbin/init"]
+    volumeMounts:
+    - name: runv
+      mountPath: /run
+    - name: runlockv
+      mountPath: /run/lock
+    - name: tmpv
+      mountPath: /tmp
+    - name: fakecgroup
+      readOnly: true
+      mountPath: /sys/fs/cgroup
+    - name: ssh-dir
+      mountPath: /root/.ssh
+    - name: ssh-config-map
+      mountPath: /root/.ssh/authorized_keys
+      subPath: authorized_keys
+  # These containers are run during pod initialization
+  initContainers:
+  - name: install
+    image: quay.io/prometheus/busybox:latest
+    command: ["sh", "-c", "chmod 700 /root/.ssh"]
+    volumeMounts:
+    - name: ssh-dir
+      mountPath: /root/.ssh

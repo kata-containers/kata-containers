@@ -1,0 +1,28 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sysctl-test
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  securityContext:
+    sysctls:
+    - name: kernel.shm_rmid_forced
+      value: "0"
+  containers:
+  - name: test
+    securityContext:
+      privileged: true
+    image: quay.io/prometheus/busybox:latest
+    command: ["tail", "-f", "/dev/null"]
+  initContainers:
+  - name: init-sys
+    securityContext:
+      privileged: true
+    image: quay.io/prometheus/busybox:latest
+    command: ['sh', '-c', 'echo "64000" > /proc/sys/vm/max_map_count']
