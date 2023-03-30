@@ -26,7 +26,7 @@ pub trait SystemdInterface {
 
     fn get_version(&self) -> Result<String>;
 
-    fn unit_exist(&self, unit_name: &str) -> Result<bool>;
+    fn unit_exists(&self, unit_name: &str) -> Result<bool>;
 
     fn add_process(&self, pid: i32, unit_name: &str) -> Result<()>;
 }
@@ -108,7 +108,7 @@ impl SystemdInterface for DBusClient {
         Ok(systemd_version)
     }
 
-    fn unit_exist(&self, unit_name: &str) -> Result<bool> {
+    fn unit_exists(&self, unit_name: &str) -> Result<bool> {
         let proxy = self.build_proxy()?;
 
         Ok(proxy.get_unit(unit_name).is_ok())
