@@ -19,6 +19,7 @@ EXTRA_TARBALL=cc-cloud-hypervisor-tarball \
 	cc-sev-ovmf-tarball \
 	cc-x86_64-ovmf-tarball \
 	cc-sev-rootfs-initrd-tarball \
+	cc-snp-qemu-tarball \
 	cc-tdx-rootfs-image-tarball
 endif
 
@@ -113,6 +114,9 @@ cc-kernel-tarball:
 	${MAKE} $@-build
 
 cc-qemu-tarball:
+	${MAKE} $@-build
+
+cc-snp-qemu-tarball:
 	${MAKE} $@-build
 
 cc-rootfs-image-tarball:
