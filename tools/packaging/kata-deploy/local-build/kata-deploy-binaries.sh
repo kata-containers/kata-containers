@@ -108,6 +108,7 @@ options:
 	cc-shimv2
 	cc-virtiofsd
 	cc-sev-ovmf
+	cc-x86_64-ovmf
 EOF
 
 	exit "${return_code}"
@@ -543,6 +544,10 @@ install_cc_sev_ovmf(){
  	install_cc_tee_ovmf "sev" "edk2-sev.tar.gz"
 }
 
+install_cc_x86_64_ovmf(){
+ 	install_cc_tee_ovmf "x86_64" "edk2-x86_64.tar.gz"
+}
+
 #Install guest image
 install_image() {
 	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-image-$(uname -m)/${cached_artifacts_path}"
@@ -845,6 +850,8 @@ handle_build() {
 	cc-tdx-tdvf) install_cc_tdx_tdvf ;;
 
 	cc-sev-ovmf) install_cc_sev_ovmf ;;
+	
+	cc-x86_64-ovmf) install_cc_x86_64_ovmf ;;
 
 	cloud-hypervisor) install_clh ;;
 
