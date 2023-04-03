@@ -419,6 +419,8 @@ install_kata() {
 	local kernel_path=${1:-}
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
 	[ -d "${kernel_path}" ] || die "path to kernel does not exist, use ${script_name} setup"
+	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
+	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
 	config_version=$(get_config_version)
 	[ -n "${config_version}" ] || die "failed to get config version"
@@ -593,7 +595,6 @@ main() {
 			build_kernel "${kernel_path}"
 			;;
 		install)
-			build_kernel "${kernel_path}"
 			install_kata "${kernel_path}"
 			;;
 		setup)
