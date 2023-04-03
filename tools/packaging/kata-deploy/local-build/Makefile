@@ -84,7 +84,7 @@ qemu-tdx-experimental-tarball:
 rootfs-image-tarball:
 	${MAKE} $@-build
 
-rootfs-nvidia-gpu-image-tarball: kernel-gpu-tarball kernel-gpu-snp-tarball kernel-gpu-tdx-experimental-tarball
+rootfs-nvidia-gpu-image-tarball: #kernel-gpu-tarball kernel-gpu-snp-tarball kernel-gpu-tdx-experimental-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-tarball:

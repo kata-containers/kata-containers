@@ -10,6 +10,9 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
+# Use mulit-threaded XZ compression
+export XZ_OPT="-T0"
+
 readonly project="kata-containers"
 
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
@@ -178,7 +181,7 @@ install_nvidia_gpu_image() {
 
 	info "Create NVIDIA GPU image"
 
-	EXTRA_PKGS="apt software-properties-common" OS_VERSION=jammy "${rootfs_builder}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --gpuvendor="nvidia"
+	EXTRA_PKGS="apt software-properties-common udev" OS_VERSION=jammy "${rootfs_builder}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --gpuvendor="nvidia"
 }
 
 
