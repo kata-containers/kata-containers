@@ -34,6 +34,7 @@ jobs:
           - rootfs-image
           - rootfs-initrd
           - rootfs-initrd-sev
+          - rootfs-nvidia-gpu-image-tarball
           - shim-v2
           - tdvf
           - virtiofsd
