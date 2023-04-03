@@ -382,7 +382,7 @@ build_rootfs_distro()
 
 		# setup to install rust here
 		generate_dockerfile "${distro_config_dir}"
-		"$container_engine" build \
+		"$container_engine" build  \
 			${engine_build_args} \
 			--build-arg http_proxy="${http_proxy}" \
 			--build-arg https_proxy="${https_proxy}" \
@@ -426,7 +426,7 @@ build_rootfs_distro()
 		#Make sure we use a compatible runtime to build rootfs
 		# In case Clear Containers Runtime is installed we dont want to hit issue:
 		#https://github.com/clearcontainers/runtime/issues/828
-		"$container_engine" run \
+		"$container_engine" run  \
 			--env https_proxy="${https_proxy}" \
 			--env http_proxy="${http_proxy}" \
 			--env AGENT_VERSION="${AGENT_VERSION}" \
@@ -685,10 +685,10 @@ mkdir -p /var/log/apt
 touch /var/lib/dpkg/status
 rm -f /etc/apt/sources.list.d/*
 
-cat << 'CHROOT_EOF' > /etc/apt/sources.list.d/jammy.list
-deb http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse
-deb http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse
-deb http://archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse
+cat <<-'CHROOT_EOF' > /etc/apt/sources.list.d/jammy.list
+	deb http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse
+	deb http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse
+	deb http://archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse
 CHROOT_EOF
 
 apt update
@@ -697,7 +697,7 @@ dpkg -i  /root/linux-*deb
 rm -f    /root/linux-*deb
 
 apt install -yqq --no-install-recommends nvidia-headless-no-dkms-525-open \
-	nvidia-utils-525 make gcc curl kmod
+	nvidia-utils-525 make gcc curl kmod nvidia-modprobe 
 
 
 distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
@@ -729,18 +729,20 @@ sed -i "s/#no-cgroups = false/no-cgroups = true/g" /etc/nvidia-container-runtime
 hooks_dir=/etc/oci/hooks.d
 
 mkdir -p ${hooks_dir}/prestart
-cat << 'CHROOT_EOF' > ${hooks_dir}/prestart/nvidia-container-toolkit.sh
-#!/bin/bash -x
-/usr/bin/nvidia-container-runtime-hook -debug $@
+
+cat <<-'CHROOT_EOF' > ${hooks_dir}/prestart/nvidia-container-toolkit.sh
+	#!/bin/bash -x
+	/usr/bin/nvidia-container-runtime-hook -debug $@
 CHROOT_EOF
 
 chmod +x ${hooks_dir}/prestart/nvidia-container-toolkit.sh
 
 echo "chroot: Cleanup NVIDIA GPU rootfs"
 echo "chroot: apt-mark important packages"
-apt-mark hold libnvidia-cfg1-525 libstdc++6            \
-	nvidia-compute-utils-525 nvidia-utils-525      \
-	nvidia-kernel-common-525 libnvidia-compute-525
+apt-mark hold libnvidia-cfg1-525 libstdc++6 libgnutls30  \
+	nvidia-compute-utils-525 nvidia-utils-525        \
+	nvidia-kernel-common-525 libnvidia-compute-525   \
+	nvidia-modprobe
 
 apt remove make gcc curl gpg software-properties-common \
 	linux-libc-dev linux-headers-*                  \
@@ -748,16 +750,21 @@ apt remove make gcc curl gpg software-properties-common \
 
 apt autoremove -yqq
 
-echo "options nvidia NVreg_OpenRmEnableUnsupportedGpus=1 NVreg_EnableGpuFirmware=1" | tee /etc/modprobe.d/nvreg_fix.conf > /dev/null
+#echo "options nvidia NVreg_OpenRmEnableUnsupportedGpus=1 NVreg_EnableGpuFirmware=1" | tee /etc/modprobe.d/nvreg_fix.conf > /dev/null
 
 apt clean
 apt autoclean
 
-#rm -rf /etc/apt/sources.list* /var/lib/apt /usr/share
+rm -rf /etc/apt/sources.list* /var/lib/apt /usr/share
 
 # Clear the cache and regenerate the ld cache
 > /etc/ld.so.cache
 ldconfig
+
+
+cat <<-'CHROOT_EOF' > /etc/udev/rules.d/99-nvidia.rules
+	ATTRS{vendor}=="0x10de", DRIVER=="nvidia",  RUN+="/usr/bin/nvidia-ctk cdi generate --output=/var/run/cdi/nvidia.json"
+CHROOT_EOF
 
 EOF
         #cat -n ."${gpu_setup_rootfs_chroot}"

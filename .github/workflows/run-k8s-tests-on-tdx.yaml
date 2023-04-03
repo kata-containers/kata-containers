@@ -59,7 +59,7 @@ jobs:
           cat tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml | grep "${{ inputs.registry }}/${{ inputs.repo }}:${{ inputs.tag }}" || die "Failed to setup the tests image"
           kubectl apply -f tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
           sleep 180s
-          
+
           kubectl delete -f tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
           kubectl delete -f tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
           kubectl delete -f tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml

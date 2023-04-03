@@ -4,6 +4,7 @@
 
 build_dbus() {
 	local rootfs_dir=$1
+
 	ln -sf /lib/systemd/system/dbus.service $rootfs_dir/etc/systemd/system/dbus.service
 	ln -sf /lib/systemd/system/dbus.socket $rootfs_dir/etc/systemd/system/dbus.socket
 }
@@ -13,22 +14,28 @@ build_rootfs() {
 	local multistrap_conf=multistrap.conf
 
 	# For simplicity's sake, use multistrap for foreign and native bootstraps.
-	cat > "$multistrap_conf" << EOF
-[General]
-cleanup=true
-aptsources=Ubuntu
-bootstrap=Ubuntu
+	cat <<-EOF > "$multistrap_conf"
+	[General]
+	cleanup=true
+	aptsources=Ubuntu
+	bootstrap=Ubuntu
 
-[Ubuntu]
-source=$REPO_URL
-omitdebsrc=true
-keyring=ubuntu-keyring
-suite=${OS_VERSION:-focal}
-packages=$PACKAGES $EXTRA_PKGS
-EOF
-	if ! multistrap -a "$DEB_ARCH" -d "$rootfs_dir" -f "$multistrap_conf"; then
-		build_dbus $rootfs_dir
-	fi
+	[Ubuntu]
+	source=$REPO_URL
+	omitdebsrc=true
+	keyring=ubuntu-keyring
+	suite=${OS_VERSION:-focal}
+	packages=$PACKAGES $EXTRA_PKGS
+	EOF
+
+	# Regenerate the apt sources list, multistrap can fail if the outer
+	# environment has not been updated and ubuntu-keyring cannot be found.	
+	apt-get update
+
+	multistrap -a "$DEB_ARCH" -d "$rootfs_dir" -f "$multistrap_conf" 
+
+	build_dbus $rootfs_dir
+
 	rm -rf "$rootfs_dir/var/run"
 	ln -s /run "$rootfs_dir/var/run"
 	cp --remove-destination /etc/resolv.conf "$rootfs_dir/etc"
