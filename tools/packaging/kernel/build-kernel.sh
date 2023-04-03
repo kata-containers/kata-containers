@@ -61,6 +61,8 @@ DESTDIR="${DESTDIR:-/}"
 PREFIX="${PREFIX:-/usr}"
 #Kernel URL
 kernel_url=""
+#Linux headers for GPU guest fs module building
+linux_headers=""
 
 packaging_scripts_dir="${script_dir}/../scripts"
 source "${packaging_scripts_dir}/lib.sh"
@@ -239,6 +241,8 @@ get_kernel_frag_path() {
 
 	if [[ "${gpu_vendor}" != "" ]];then
 		info "Add kernel config for GPU due to '-g ${gpu_vendor}'"
+		local gpu_configs="$(ls ${gpu_path}/${gpu_vendor}.conf)"
+		all_configs="${all_configs} ${gpu_configs}"
 		# If conf_guest is set we need to update the CONFIG_LOCALVERSION
 		# to match the suffix created in install_kata
 		# -nvidia-gpu-{snp|tdx}, the linux headers will be named the very
@@ -430,6 +434,24 @@ build_kernel() {
 	popd >>/dev/null
 }
 
+build_kernel_headers() {
+	local kernel_path=${1:-}
+	[ -n "${kernel_path}" ] || die "kernel_path not provided"
+	[ -d "${kernel_path}" ] || die "path to kernel does not exist, use ${script_name} setup"
+	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
+	arch_target=$(arch_to_kernel "${arch_target}")
+	pushd "${kernel_path}" >>/dev/null
+
+	if [ "$linux_headers" == "deb" ]; then
+		make -j $(nproc ${CI:+--ignore 1}) deb-pkg ARCH="${arch_target}"
+	fi
+	if [ "$linux_headers" == "rpm" ]; then
+		make -j $(nproc ${CI:+--ignore 1}) rpm-pkg ARCH="${arch_target}"
+	fi
+
+	popd >>/dev/null
+}
+
 install_kata() {
 	local kernel_path=${1:-}
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
@@ -445,12 +467,13 @@ install_kata() {
 	if [[ ${build_type} != "" ]]; then
 		suffix="-${build_type}"
 	fi
-	if [[ ${gpu_vendor} != "" ]];then
-		suffix="-${gpu_vendor}-gpu${suffix}"
-	fi
 
 	if [[ ${conf_guest} != "" ]];then
 		suffix="-${conf_guest}${suffix}"
+	fi
+
+	if [[ ${gpu_vendor} != "" ]];then
+		suffix="-${gpu_vendor}-gpu${suffix}"
 	fi
 
 	vmlinuz="vmlinuz-${kernel_version}-${config_version}${suffix}"
@@ -487,10 +510,12 @@ install_kata() {
 	ls -la "${install_path}/vmlinux${suffix}.container"
 	ls -la "${install_path}/vmlinuz${suffix}.container"
 	popd >>/dev/null
+
+	set +x
 }
 
 main() {
-	while getopts "a:b:c:deEfg:hk:p:t:u:v:x:" opt; do
+	while getopts "a:b:c:deEfg:hH:k:p:t:u:v:x:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -520,6 +545,9 @@ main() {
 				;;
 			h)
 				usage 0
+				;;
+			H)
+				linux_headers="${OPTARG}"
 				;;
 			k)
 				kernel_path="$(realpath ${OPTARG})"
@@ -608,6 +636,9 @@ main() {
 	case "${subcmd}" in
 		build)
 			build_kernel "${kernel_path}"
+			;;
+		build-headers)
+			build_kernel_headers "${kernel_path}"
 			;;
 		install)
 			install_kata "${kernel_path}"
