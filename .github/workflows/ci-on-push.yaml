@@ -1,14 +1,21 @@
 name: Kata Containers CI
 on:
-  pull_request
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - labeled
+      - synchronize
 
 jobs:
   build-kata-static-tarball-amd64:
+    if: contains(github.event.pull_request.labels.*.name, 'ok-to-test')
     uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
     with:
       tarball-suffix: -${{ github.event.pull_request.number}}-${{ github.sha }}
 
   publish-kata-deploy-payload-amd64:
+    if: contains(github.event.pull_request.labels.*.name, 'ok-to-test')
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/publish-kata-deploy-payload-amd64.yaml
     with:
@@ -20,6 +27,7 @@ jobs:
     secrets: inherit
 
   run-k8s-tests-on-aks:
+    if: contains(github.event.pull_request.labels.*.name, 'ok-to-test')
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
     with:
