@@ -307,6 +307,7 @@ check_env_variables()
 	[ -n "${KERNEL_MODULES_DIR}" ] && [ ! -d "${KERNEL_MODULES_DIR}" ] && die "KERNEL_MODULES_DIR defined but is not an existing directory"
 
 	[ -n "${OSBUILDER_VERSION}" ] || die "need osbuilder version"
+	[ "${GPU_VENDOR}" = "nvidia" ] || die "only NVIDIA GPUs supported"
 }
 
 # Builds a rootfs based on the distro name provided as argument
@@ -381,7 +382,7 @@ build_rootfs_distro()
 
 		# setup to install rust here
 		generate_dockerfile "${distro_config_dir}"
-		"$container_engine" build  \
+		"$container_engine" build \
 			${engine_build_args} \
 			--build-arg http_proxy="${http_proxy}" \
 			--build-arg https_proxy="${https_proxy}" \
@@ -425,7 +426,7 @@ build_rootfs_distro()
 		#Make sure we use a compatible runtime to build rootfs
 		# In case Clear Containers Runtime is installed we dont want to hit issue:
 		#https://github.com/clearcontainers/runtime/issues/828
-		"$container_engine" run  \
+		"$container_engine" run \
 			--env https_proxy="${https_proxy}" \
 			--env http_proxy="${http_proxy}" \
 			--env AGENT_VERSION="${AGENT_VERSION}" \
@@ -439,6 +440,7 @@ build_rootfs_distro()
 			--env EXTRA_PKGS="${EXTRA_PKGS}" \
 			--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
 			--env OS_VERSION="${OS_VERSION}" \
+			--env GPU_VENDOR="${GPU_VENDOR}" \
 			--env INSIDE_CONTAINER=1 \
 			--env SECCOMP="${SECCOMP}" \
 			--env SELINUX="${SELINUX}" \
@@ -602,7 +604,7 @@ EOF
 			git checkout "${AGENT_VERSION}" && OK "git checkout successful" || die "checkout agent ${AGENT_VERSION} failed!"
 		fi
 		make clean
-		make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
+		make -j $(nproc) LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
 		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
 		if [ "${SECCOMP}" == "yes" ]; then
 			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
@@ -643,6 +645,134 @@ EOF
 
 	info "Creating summary file"
 	create_summary_file "${ROOTFS_DIR}"
+}
+
+setup_nvidia_gpu_rootfs()
+{
+	set -x
+
+	echo "Setup NVIDIA GPU rootfs"
+	pushd "${ROOTFS_DIR}" >> /dev/null
+
+
+        local gpu_setup_rootfs_chroot=$(mktemp).sh
+        touch .${gpu_setup_rootfs_chroot}
+        chmod +x .${gpu_setup_rootfs_chroot}
+
+	BUILDDIR="/kata-containers/tools/packaging/kata-deploy/local-build/build/"
+	
+	cp ${BUILDDIR}/kernel-gpu/builddir/linux-*.deb ./root/.
+	cp ${BUILDDIR}/kernel-gpu-snp/builddir/linux-*.deb ./root/.
+	cp ${BUILDDIR}/kernel-gpu-tdx-experimental/builddir/linux-*.deb ./root/.
+
+
+
+cat << 'EOF' > .${gpu_setup_rootfs_chroot}
+#!/bin/bash
+
+set -xe
+
+export DEBIAN_FRONTEND=noninteractive
+
+uname_r=$1
+
+echo "chroot: Setup NVIDIA GPU rootfs"
+
+echo "chroot: Setup APT repositories"
+mkdir -p /var/lib/dpkg
+mkdir -p /var/cache/apt/archives/partial
+mkdir -p /var/log/apt
+touch /var/lib/dpkg/status
+rm -f /etc/apt/sources.list.d/*
+
+cat << 'CHROOT_EOF' > /etc/apt/sources.list.d/jammy.list
+deb http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse
+CHROOT_EOF
+
+apt update
+
+dpkg -i  /root/linux-*deb
+rm -f    /root/linux-*deb
+
+apt install -yqq --no-install-recommends nvidia-headless-no-dkms-525-open \
+	nvidia-utils-525 make gcc curl kmod
+
+
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/experimental/$distribution/libnvidia-container.list | \
+         sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+         tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+apt update
+
+pushd /usr/src/nvidia-* >> /dev/null
+
+for linux_headers in $(ls /lib/modules/); do
+        echo "chroot: Building GPU modules for: ${linux_headers}"
+	cp /boot/System.map-${linux_headers} /lib/modules/${linux_headers}/build/System.map
+        make CC=gcc SYSSRC=/lib/modules/${linux_headers}/build > /dev/null
+        make CC=gcc SYSSRC=/lib/modules/${linux_headers}/build modules_install
+        make CC=gcc SYSSRC=/lib/modules/${linux_headers}/build clean > /dev/null
+done
+
+popd >> /dev/null
+
+echo "chroot: Installing NVIDIA GPU container runtime"
+
+apt install  -yqq --no-install-recommends  nvidia-container-toolkit
+sed -i "s/#debug/debug/g" /etc/nvidia-container-runtime/config.toml
+sed -i "s/#no-cgroups = false/no-cgroups = true/g" /etc/nvidia-container-runtime/config.toml
+
+hooks_dir=/etc/oci/hooks.d
+
+mkdir -p ${hooks_dir}/prestart
+cat << 'CHROOT_EOF' > ${hooks_dir}/prestart/nvidia-container-toolkit.sh
+#!/bin/bash -x
+/usr/bin/nvidia-container-runtime-hook -debug $@
+CHROOT_EOF
+
+chmod +x ${hooks_dir}/prestart/nvidia-container-toolkit.sh
+
+echo "chroot: Cleanup NVIDIA GPU rootfs"
+echo "chroot: apt-mark important packages"
+apt-mark hold libnvidia-cfg1-525 libstdc++6            \
+	nvidia-compute-utils-525 nvidia-utils-525      \
+	nvidia-kernel-common-525 libnvidia-compute-525
+
+apt remove make gcc curl gpg software-properties-common \
+	linux-libc-dev linux-headers-*                  \
+	nvidia-headless-no-dkms-525-open nvidia-kernel-source-525-open -yqq
+
+apt autoremove -yqq
+
+echo "options nvidia NVreg_OpenRmEnableUnsupportedGpus=1 NVreg_EnableGpuFirmware=1" | tee /etc/modprobe.d/nvreg_fix.conf > /dev/null
+
+apt clean
+apt autoclean
+
+#rm -rf /etc/apt/sources.list* /var/lib/apt /usr/share
+
+# Clear the cache and regenerate the ld cache
+> /etc/ld.so.cache
+ldconfig
+
+EOF
+        #cat -n ."${gpu_setup_rootfs_chroot}"
+
+	mount --rbind /dev ./dev
+	mount --make-rslave ./dev
+
+	uname_r=$(uname -r)
+
+        chroot . /bin/bash -c "${gpu_setup_rootfs_chroot} ${uname_r}"
+
+	umount -R ./dev
+
+
+	popd  >> /dev/null
 }
 
 parse_arguments()
@@ -702,6 +832,10 @@ main()
 
 	init="${ROOTFS_DIR}/sbin/init"
 	setup_rootfs
+
+	if [ "${GPU_VENDOR}" = "nvidia" ]; then
+		setup_nvidia_gpu_rootfs
+	fi
 }
 
 main $*

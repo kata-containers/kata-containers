@@ -21,8 +21,9 @@ bootstrap=Ubuntu
 
 [Ubuntu]
 source=$REPO_URL
+omitdebsrc=true
 keyring=ubuntu-keyring
-suite=focal
+suite=${OS_VERSION:-focal}
 packages=$PACKAGES $EXTRA_PKGS
 EOF
 	if ! multistrap -a "$DEB_ARCH" -d "$rootfs_dir" -f "$multistrap_conf"; then

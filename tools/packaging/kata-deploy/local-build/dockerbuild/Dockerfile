@@ -10,6 +10,9 @@ COPY install_yq.sh /usr/bin/install_yq.sh
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+# Multithreaded XZ compression
+ENV XZ_DEFAULTS="-T 0"
+
 # Install yq and docker
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

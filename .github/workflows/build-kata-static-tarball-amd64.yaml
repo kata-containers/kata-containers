@@ -29,6 +29,7 @@ jobs:
           - qemu-tdx-experimental
           - rootfs-image
           - rootfs-initrd
+          - rootfs-nvidia-gpu-image-tarball
           - shim-v2
           - tdvf
           - virtiofsd

@@ -45,10 +45,12 @@ build_image() {
 	info "Build image"
 	info "image os: $img_distro"
 	info "image os version: $img_os_version"
+	info "image gpu vendor: $gpu_vendor"
 	sudo -E PATH="${PATH}" make image \
 		DISTRO="${img_distro}" \
 		DEBUG="${DEBUG:-}" \
 		USE_DOCKER="1" \
+		GPU_VENDOR=${gpu_vendor} \
 		IMG_OS_VERSION="${img_os_version}" \
 		ROOTFS_BUILD_DEST="${builddir}/rootfs-image"
 	mv -f "kata-containers.img" "${install_dir}/${image_name}"
@@ -77,10 +79,23 @@ EOF
 }
 
 main() {
+	gpu_vendor="none"
 	image_type=image
+
+	img_distro="none"
+	img_os_version="none"
+	image_name="none"
+
+	initrd_distro="none"
+	initrd_os_version="none"
+	initrd_name="none"
+
 	destdir="$PWD"
 	prefix="/opt/kata"
 	builddir="${PWD}"
+
+	OS_VERSION=${OS_VERSION:-""}
+
 	while getopts "h-:" opt; do
 		case "$opt" in
 		-)
@@ -108,6 +123,9 @@ main() {
 			builddir=*)
 				builddir=${OPTARG#*=}
 				;;
+			gpuvendor=*)
+				gpu_vendor=${OPTARG#*=}
+				;;
 			*)
 				echo >&2 "ERROR: Invalid option -$opt${OPTARG}"
 				usage 1
@@ -121,6 +139,17 @@ main() {
 			;;
 		esac
 	done
+
+	if [[ "${OS_VERSION}" != "" ]]; then
+		img_os_version="${OS_VERSION}"
+		initrd_os_version="${OS_VERSION}"
+	fi
+
+	if [[ "${gpu_vendor}" != "none" ]]; then
+		image_name="kata-${img_distro}-${img_os_version}-${gpu_vendor}-gpu.${image_type}"
+		initrd_name="kata-${initrd_distro}-${initrd_os_version}-${gpu_vendor}-gpu.${image_type}"
+	fi
+
 	readonly destdir
 	readonly builddir
 
