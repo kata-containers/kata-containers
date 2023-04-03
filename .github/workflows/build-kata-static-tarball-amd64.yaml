@@ -21,6 +21,8 @@ jobs:
           - kernel
           - kernel-dragonball-experimental
           - kernel-tdx-experimental
+          - kernel-gpu-snp
+          - kernel-gpu-tdx
           - nydus
           - qemu
           - qemu-tdx-experimental
