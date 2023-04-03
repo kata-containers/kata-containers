@@ -1,0 +1,27 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cpu-test
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+  - name: c1
+    image: quay.io/prometheus/busybox:latest
+    command: ["tail", "-f", "/dev/null"]
+    resources:
+      limits:
+        cpu: "500m"
+  - name: c2
+    image: quay.io/prometheus/busybox:latest
+    command:
+      - sleep
+      - "10"
+    resources:
+      limits:
+        cpu: "500m"

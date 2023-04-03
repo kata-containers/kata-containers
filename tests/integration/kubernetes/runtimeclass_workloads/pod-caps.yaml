@@ -1,0 +1,18 @@
+#
+# Copyright (c) 2021 Apple Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-caps
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+    - name: test-container
+      image: quay.io/prometheus/busybox:latest
+      command: ["sh"]
+      args: ["-c", "cat /proc/self/status | grep Cap && sleep infinity"]
+  restartPolicy: Never

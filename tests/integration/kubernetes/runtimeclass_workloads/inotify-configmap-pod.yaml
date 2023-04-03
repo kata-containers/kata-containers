@@ -1,0 +1,32 @@
+#
+# Copyright (c) 2021 Apple Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: inotify-configmap-testing
+spec:
+  containers:
+  - name: c1
+    image: quay.io/kata-containers/fsnotify:latest
+    command: ["bash"]
+    args: ["-c", "inotifywait --timeout 120 -r /config/ && [[ -L /config/config.toml ]] && echo success" ]
+    resources:
+      requests:
+        cpu: 1
+        memory: 50Mi
+      limits:
+        cpu: 1
+        memory: 1024Mi
+    volumeMounts:
+      - name: config
+        mountPath: /config
+  runtimeClassName: kata
+  restartPolicy: Never
+  volumes:
+    - name: config
+      configMap:
+        name: cm

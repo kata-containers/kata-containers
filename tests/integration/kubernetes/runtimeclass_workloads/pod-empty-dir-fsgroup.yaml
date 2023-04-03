@@ -1,0 +1,44 @@
+#
+# Copyright (c) 2021 Red Hat, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sharevol-kata
+spec:
+  runtimeClassName: kata
+  restartPolicy: Never
+  securityContext:
+    runAsUser: 1001
+    fsGroup: 123
+  containers:
+  - name: mounttest-container
+    image: ${agnhost_image}
+    args:
+      - mounttest
+      - --fs_type=/test-volume
+      - --new_file_0660=/test-volume/test-file
+      - --file_perm=/test-volume/test-file
+      - --file_owner=/test-volume/test-file
+    volumeMounts:
+      - name: emptydir-volume
+        mountPath: /test-volume
+  - name: mounttest-container-2
+    image: ${agnhost_image}
+    args:
+      - mounttest
+      - --fs_type=/test-volume-2
+      - --new_file_0660=/test-volume-2/test-file
+      - --file_perm=/test-volume-2/test-file
+      - --file_owner=/test-volume-2/test-file
+    volumeMounts:
+      - name: mem-emptydir-volume
+        mountPath: /test-volume-2
+  volumes:
+  - name: emptydir-volume
+    emptyDir: {}
+  - name: mem-emptydir-volume
+    emptyDir:
+      medium: Memory
