@@ -1,0 +1,12 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+data:
+    authorized_keys: |
+      ${ssh_key}
+kind: ConfigMap
+metadata:
+  name: ssh-config-map

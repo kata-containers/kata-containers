@@ -1,14 +1,14 @@
-name: CI | Publish kata-deploy payload for arm64
+name: CI | Build kata-static tarball for amd64
 on:
   workflow_call:
     inputs:
-      target-arch:
-        required: true
+      tarball-suffix:
+        required: false
         type: string
 
 jobs:
   build-asset:
-    runs-on: arm64
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         asset:
@@ -23,17 +23,6 @@ jobs:
           - shim-v2
           - virtiofsd
     steps:
-      - name: Login to Kata Containers quay.io
-        uses: docker/login-action@v2
-        with:
-          registry: quay.io
-          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
-
-      - name: Adjust a permission for repo
-        run: |
-          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
-
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0 # This is needed in order to keep the commit ids history
@@ -51,24 +40,20 @@ jobs:
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@v3
         with:
-          name: kata-artifacts-arm64
+          name: kata-artifacts-amd64${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
           retention-days: 1
           if-no-files-found: error
 
   create-kata-tarball:
-    runs-on: arm64
+    runs-on: ubuntu-latest
     needs: build-asset
     steps:
-      - name: Adjust a permission for repo
-        run: |
-          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
-
       - uses: actions/checkout@v3
       - name: get-artifacts
         uses: actions/download-artifact@v3
         with:
-          name: kata-artifacts-arm64
+          name: kata-artifacts-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
       - name: merge-artifacts
         run: |
@@ -76,35 +61,7 @@ jobs:
       - name: store-artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: kata-static-tarball-arm64
+          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-static.tar.xz
           retention-days: 1
           if-no-files-found: error
-
-  kata-payload:
-    needs: create-kata-tarball
-    runs-on: arm64
-    steps:
-      - name: Login to Kata Containers quay.io
-        uses: docker/login-action@v2
-        with:
-          registry: quay.io
-          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
-
-      - name: Adjust a permission for repo
-        run: |
-          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
-
-      - uses: actions/checkout@v3
-      - name: get-kata-tarball
-        uses: actions/download-artifact@v3
-        with:
-          name: kata-static-tarball-arm64
-
-      - name: build-and-push-kata-payload
-        id: build-and-push-kata-payload
-        run: |
-          ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-          $(pwd)/kata-static.tar.xz "quay.io/kata-containers/kata-deploy-ci" \
-          "kata-containers-${{ inputs.target-arch }}"

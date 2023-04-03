@@ -1,0 +1,8 @@
+#
+# Copyright (c) 2021 IBM
+#
+# SPDX-License-Identifier: Apache-2.0
+
+kubernetes:
+  - k8s-caps
+  - k8s-inotify

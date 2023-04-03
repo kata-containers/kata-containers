@@ -1,0 +1,23 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: memory-test
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+  - name: memory-test-ctr
+    image: quay.io/kata-containers/sysbench-kata:latest
+    imagePullPolicy: IfNotPresent
+    resources:
+      limits:
+        memory: "${memory_size}"
+      requests:
+        memory: "500Mi"
+    command: ["stress"]
+    args: ["--vm", "1", "--vm-bytes", "${memory_allocated}", "--vm-hang", "1"]

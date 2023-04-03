@@ -1,0 +1,16 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: default-cpu-test
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+  - name: default-cpu-demo-ctr
+    image: quay.io/prometheus/busybox:latest
+    command: ["tail", "-f", "/dev/null"]

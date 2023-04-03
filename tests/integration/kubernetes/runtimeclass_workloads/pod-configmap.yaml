@@ -1,0 +1,28 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: config-env-test-pod
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+    - name: test-container
+      image: quay.io/prometheus/busybox:latest
+      command: ["tail", "-f", "/dev/null"]
+      env:
+        - name: KUBE_CONFIG_1
+          valueFrom:
+            configMapKeyRef:
+              name: test-configmap
+              key: data-1
+        - name: KUBE_CONFIG_2
+          valueFrom:
+            configMapKeyRef:
+              name: test-configmap
+              key: data-2
+  restartPolicy: Never

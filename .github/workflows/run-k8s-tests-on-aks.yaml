@@ -1,0 +1,85 @@
+name: CI | Run kubernetes tests on AKS
+on:
+  workflow_call:
+    inputs:
+      image-tag:
+        required: true
+        type: string
+
+jobs:
+  create-aks:
+    strategy:
+      matrix:
+        vmm:
+          - clh
+          - qemu
+    uses: ./.github/workflows/create-aks.yaml
+    with:
+      name: ${{ github.event.pull_request.number }}-${{ github.sha }}-${{ matrix.vmm }}-amd64
+    secrets: inherit
+
+  run-k8s-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        vmm:
+          - clh
+          - qemu
+    runs-on: ubuntu-latest
+    needs: create-aks
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install `bats`
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install bats
+
+      - name: Install `kubectl`
+        run: |
+          sudo az aks install-cli
+
+      - name: Log into the Azure account
+        run: |
+          az login \
+            --service-principal \
+            -u "${{ secrets.AZ_APPID }}" \
+            -p "${{ secrets.AZ_PASSWORD }}" \
+            --tenant "${{ secrets.AZ_TENANT_ID }}"
+
+      - name: Download credentials for the Kubernetes CLI to use them
+        run: |
+          az aks get-credentials -g "kataCI" -n ${{ github.event.pull_request.number }}-${{ github.sha }}-${{ matrix.vmm }}-amd64
+
+      - name: Deploy kata-deploy
+        run: |
+          sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|quay.io/kata-containers/kata-deploy-ci:${{ inputs.image-tag }}|g" tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
+          cat tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
+          cat tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml | grep "quay.io/kata-containers/kata-deploy-ci:${{ inputs.image-tag }}" || die "Failed to setup the tests image"
+
+          kubectl apply -f tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
+          kubectl apply -f tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
+          kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
+          kubectl apply -f tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
+
+      - name: Run tests
+        timeout-minutes: 30
+        run: |
+          pushd tests/integration/kubernetes
+          sed -i -e 's|runtimeClassName: kata|runtimeClassName: kata-${{ matrix.vmm }}|' runtimeclass_workloads/*.yaml
+          bash run_kubernetes_tests.sh
+          popd
+        env:
+          KATA_HYPERVISOR: ${{ matrix.vmm }}
+
+  delete-aks:
+    strategy:
+      matrix:
+        vmm:
+          - clh
+          - qemu
+    needs: run-k8s-tests
+    if: always()
+    uses: ./.github/workflows/delete-aks.yaml
+    with:
+      name: ${{ github.event.pull_request.number }}-${{ github.sha }}-${{ matrix.vmm }}-amd64
+    secrets: inherit
