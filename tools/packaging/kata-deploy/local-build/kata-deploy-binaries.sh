@@ -79,6 +79,8 @@ options:
 	kernel
 	kernel-dragonball-experimental
 	kernel-experimental
+	kernel-gpu-snp
+	kernel-gpu-tdx
 	nydus
 	qemu
 	rootfs-image
@@ -171,20 +173,35 @@ install_initrd() {
 }
 
 #Install kernel asset
-install_kernel() {
-	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
+install_kernel_helper() {
+	local kernel_version_yaml_path="${1}"
+	local kernel_name="${2}"
+	local extra_cmd=${3}
+
+	export kernel_version="$(get_from_kata_deps ${kernel_version_yaml_path})"
 	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
 
 	install_cached_tarball_component \
-		"kernel" \
-		"${jenkins_url}/job/kata-containers-main-kernel-$(uname -m)/${cached_artifacts_path}" \
+		"${kernel_name}" \
+		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
 		"${kernel_version}-${kernel_kata_config_version}" \
 		"$(get_kernel_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
 
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -f -v "${kernel_version}"
+	info "build ${kernel_name}"
+	info "Kernel version ${kernel_version}"
+	echo "DESTDIR=\"${destdir}\" PREFIX=\"${prefix}\" \"${kernel_builder}\" -v \"${kernel_version}\" ${extra_cmd}"
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -v "${kernel_version}" ${extra_cmd}
+}
+
+#Install kernel asset
+install_kernel() {
+	install_kernel_helper \
+		"assets.kernel.version" \
+		"kernel" \
+		"-f"
 }
 
 #Install dragonball experimental kernel asset
@@ -203,7 +220,27 @@ install_dragonball_experimental_kernel() {
 		&& return 0
 
 	info "kernel version ${kernel_version}"
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -e -t dragonball -v ${kernel_version}	
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -e -t dragonball -v ${kernel_version}
+}
+
+#Install GPU and SNP enabled kernel asset
+install_kernel_gpu_snp() {
+	local kernel_url="$(get_from_kata_deps assets.kernel.snp.url)"
+
+	install_kernel_helper \
+		"assets.kernel.snp.version" \
+		"kernel-gpu-snp" \
+		"-x snp -g nvidia -u ${kernel_url} -H deb"
+}
+
+#Install GPU and TDX enabled kernel asset
+install_kernel_gpu_tdx() {
+	local kernel_url="$(get_from_kata_deps assets.kernel-tdx-experimental.url)"
+
+	install_kernel_helper \
+		"assets.kernel-tdx-experimental.version" \
+		"kernel-gpu-tdx" \
+		"-x tdx -g nvidia -u ${kernel_url} -H deb"
 }
 
 #Install experimental kernel asset
@@ -385,6 +422,10 @@ handle_build() {
 	kernel-dragonball-experimental) install_dragonball_experimental_kernel;;
 
 	kernel-experimental) install_experimental_kernel;;
+
+	kernel-gpu-snp) install_kernel_gpu_snp;;
+
+	kernel-gpu-tdx) install_kernel_gpu_tdx;;
 
 	qemu) install_qemu ;;
 

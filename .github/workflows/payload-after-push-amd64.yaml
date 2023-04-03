@@ -16,6 +16,8 @@ jobs:
           - firecracker
           - kernel
           - kernel-dragonball-experimental
+          - kernel-gpu-snp
+          - kernel-gpu-tdx
           - nydus
           - qemu
           - rootfs-image

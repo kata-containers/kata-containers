@@ -14,6 +14,8 @@ jobs:
           - firecracker
           - kernel
           - kernel-dragonball-experimental
+          - kernel-gpu-snp
+          - kernel-gpu-tdx
           - nydus
           - qemu
           - rootfs-image
@@ -143,7 +145,7 @@ jobs:
           tarball="kata-containers-$tag-vendor.tar.gz"
           pushd $GITHUB_WORKSPACE
           bash -c "tools/packaging/release/generate_vendor.sh ${tarball}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}" 
+          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
           popd
 
   upload-libseccomp-tarball:

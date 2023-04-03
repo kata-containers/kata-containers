@@ -12,7 +12,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "${script_dir}/../scripts/lib.sh"
 
-KERNEL_FLAVOUR="${KERNEL_FLAVOUR:-kernel}" # kernel | kernel-experimental | kernel-arm-experimetnal | kernel-dragonball-experimental
+KERNEL_FLAVOUR="${KERNEL_FLAVOUR:-kernel}" # kernel | kernel-experimental | kernel-arm-experimetnal | kernel-dragonball-experimental | kernel-gpu-snp | kernel-gpu-tdx
 ROOTFS_IMAGE_TYPE="${ROOTFS_IMAGE_TYPE:-image}" # image | initrd
 
 cache_clh_artifacts() {

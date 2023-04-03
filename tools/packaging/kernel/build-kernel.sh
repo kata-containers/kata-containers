@@ -399,6 +399,7 @@ setup_kernel() {
 }
 
 build_kernel() {
+	echo "### BUILD KERNEL"
 	local kernel_path=${1:-}
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
 	[ -d "${kernel_path}" ] || die "path to kernel does not exist, use ${script_name} setup"
@@ -415,10 +416,37 @@ build_kernel() {
 	popd >>/dev/null
 }
 
-install_kata() {
+build_kernel_headers() {
+	echo "### BUILD KERNEL HEADERS"
 	local kernel_path=${1:-}
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
 	[ -d "${kernel_path}" ] || die "path to kernel does not exist, use ${script_name} setup"
+	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
+	arch_target=$(arch_to_kernel "${arch_target}")
+	pushd "${kernel_path}" >>/dev/null
+
+	if [ "$linux_headers" == "deb" ]; then
+		make -j $(nproc ${CI:+--ignore 1}) deb-pkg ARCH="${arch_target}"
+	fi
+	if [ "$linux_headers" == "rpm" ]; then
+		make -j $(nproc ${CI:+--ignore 1}) rpm-pkg ARCH="${arch_target}"
+	fi
+
+	popd >>/dev/null
+}
+
+install_kernel_headers() {
+	echo "### INSTALL KERNEL HEADERS"
+
+}
+
+install_kata() {
+	echo "### INSTALL KATA"
+	local kernel_path=${1:-}
+	[ -n "${kernel_path}" ] || die "kernel_path not provided"
+	[ -d "${kernel_path}" ] || die "path to kernel does not exist, use ${script_name} setup"
+	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
+	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
 	config_version=$(get_config_version)
 	[ -n "${config_version}" ] || die "failed to get config version"
@@ -473,7 +501,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:deEfg:hk:p:t:u:v:x:" opt; do
+	while getopts "a:b:c:deEfg:hH:k:p:t:u:v:x:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -503,6 +531,9 @@ main() {
 				;;
 			h)
 				usage 0
+				;;
+			H)
+				linux_headers="${OPTARG}"
 				;;
 			k)
 				kernel_path="$(realpath ${OPTARG})"
@@ -543,7 +574,7 @@ main() {
 		if [ -n "$kernel_version" ];  then
 			kernel_major_version=$(get_major_kernel_version "${kernel_version}")
 			if [[ ${kernel_major_version} != "5.10" ]]; then
-				info "dragonball-experimental kernel patches are only tested on 5.10.x kernel now, other kernel version may cause confliction"	
+				info "dragonball-experimental kernel patches are only tested on 5.10.x kernel now, other kernel version may cause confliction"
 			fi
 		fi
 	fi
@@ -592,8 +623,13 @@ main() {
 		build)
 			build_kernel "${kernel_path}"
 			;;
+		build-headers)
+			build_kernel_headers "${kernel_path}"
+			;;
+		install-headers)
+			install_kernel_headers "${kernel_path}"
+			;;
 		install)
-			build_kernel "${kernel_path}"
 			install_kata "${kernel_path}"
 			;;
 		setup)

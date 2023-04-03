@@ -1,6 +1,6 @@
 name: kata deploy build
 
-on: 
+on:
   pull_request:
     types:
       - opened
@@ -19,6 +19,8 @@ jobs:
         asset:
           - kernel
           - kernel-dragonball-experimental
+          - kernel-gpu-snp
+          - kernel-gpu-tdx
           - shim-v2
           - qemu
           - cloud-hypervisor
