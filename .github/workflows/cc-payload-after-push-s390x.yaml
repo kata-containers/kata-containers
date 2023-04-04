@@ -15,6 +15,7 @@ jobs:
           - cc-kernel
           - cc-qemu
           - cc-rootfs-image
+          - cc-rootfs-initrd
           - cc-se-image
           - cc-virtiofsd
     steps:
