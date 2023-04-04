@@ -1,0 +1,18 @@
+name: CI | Publish kata-deploy payload
+on:
+  workflow_run:
+    workflows:
+      - CI | Build Kata Containers artefacts
+    types:
+      - completed
+
+jobs:
+  publish-kata-deploy-payload-amd64:
+    uses: ./.github/workflows/publish-kata-deploy-payload-amd64.yaml
+    with:
+      tarball-suffix: -${{ github.event.pull_request.number}}-${{ github.sha }}
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ github.event.pull_request.number }}-${{ github.sha }}-amd64
+      quay-io-login-continue-on-error: true
+    secrets: inherit
