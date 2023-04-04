@@ -30,24 +30,32 @@ jobs:
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
 
-      - name: Login to Kata Containers quay.io
-        uses: docker/login-action@v2
-        with:
-          registry: quay.io
-          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
-        continue-on-error: ${{ inputs.quay-io-login-continue-on-error }}
-
-      - name: Login to Kata Containers ghcr.io
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: build-and-push-kata-payload
-        id: build-and-push-kata-payload
+      - name: debug
         run: |
-          ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-          $(pwd)/kata-static.tar.xz \
-          ${{ inputs.registry }}/${{ inputs.repo }} ${{ inputs.tag }}
+          echo "registry: ${{ inputs.registry }}"
+          echo "repo: ${{ inputs.repo }}"
+          echo "tag: ${{ inputs.tag }}"
+          echo "github actor: ${{ github.actor }}"
+          echo "quay user: ${{ secrets.QUAY_DEPLOYER_USERNAME }}"
+
+      #- name: Login to Kata Containers quay.io
+      #  uses: docker/login-action@v2
+      #  with:
+      #    registry: quay.io
+      #    username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+      #    password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+      #  continue-on-error: ${{ inputs.quay-io-login-continue-on-error }}
+
+      #- name: Login to Kata Containers ghcr.io
+      #  uses: docker/login-action@v2
+      #  with:
+      #    registry: ghcr.io
+      #    username: ${{ github.actor }}
+      #    password: ${{ secrets.GITHUB_TOKEN }}
+
+      #- name: build-and-push-kata-payload
+      #  id: build-and-push-kata-payload
+      #  run: |
+      #    ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
+      #    $(pwd)/kata-static.tar.xz \
+      #    ${{ inputs.registry }}/${{ inputs.repo }} ${{ inputs.tag }}
