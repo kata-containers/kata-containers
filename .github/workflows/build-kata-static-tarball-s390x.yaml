@@ -9,6 +9,10 @@ on:
       tarball-suffix:
         required: false
         type: string
+      push-to-registry:
+        required: false
+        type: string
+        default: no
 
 jobs:
   build-asset:
@@ -41,7 +45,7 @@ jobs:
         env:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
-          PUSH_TO_REGISTRY: yes
+          PUSH_TO_REGISTRY: ${{ inputs.push-to-registry }}
 
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@v3
