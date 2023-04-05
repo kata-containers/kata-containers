@@ -11,12 +11,14 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
     with:
+      checkout-ref: ${{ github.event.workflow_run.head_sha }}
       tarball-suffix: -${{ github.event.workflow_run.head_sha }}
 
   publish-kata-deploy-payload-amd64:
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/publish-kata-deploy-payload-amd64.yaml
     with:
+      checkout-ref: ${{ github.event.workflow_run.head_sha }}
       tarball-suffix: -${{ github.event.workflow_run.head_sha }}
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
@@ -28,6 +30,7 @@ jobs:
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
     with:
+      checkout-ref: ${{ github.event.workflow_run.head_sha }}
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
       tag: ${{ github.event.workflow_run.head_sha }}-amd64
