@@ -25,6 +25,7 @@ timeout=90s
 
 # issues that can't test yet.
 fc_limitations="https://github.com/kata-containers/documentation/issues/351"
+dragonball_limitations="https://github.com/kata-containers/kata-containers/issues/6621"
 
 # Path to the kubeconfig file which is used by kubectl and other tools.
 # Note: the init script sets that variable but if you want to run the tests in
