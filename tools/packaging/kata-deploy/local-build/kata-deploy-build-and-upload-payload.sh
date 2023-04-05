@@ -20,7 +20,7 @@ IMAGE_TAG="${REGISTRY}:kata-containers-$(git rev-parse HEAD)-$(uname -m)"
 echo "Building the image"
 docker build --tag ${IMAGE_TAG} .
 
-echo "Pushing the image to quay.io"
+echo "Pushing the image to the registry"
 docker push ${IMAGE_TAG}
 
 if [ -n "${TAG}" ]; then
@@ -30,7 +30,7 @@ if [ -n "${TAG}" ]; then
 
 	docker build --tag ${ADDITIONAL_TAG} .
 
-	echo "Pushing the image ${ADDITIONAL_TAG} to quay.io"
+	echo "Pushing the image ${ADDITIONAL_TAG} to the registry"
 	docker push ${ADDITIONAL_TAG}
 fi
 
