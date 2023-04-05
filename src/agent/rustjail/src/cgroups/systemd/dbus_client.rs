@@ -26,7 +26,7 @@ pub trait SystemdInterface {
 
     fn get_version(&self) -> Result<String>;
 
-    fn unit_exist(&self, unit_name: &str) -> Result<bool>;
+    fn unit_exists(&self, unit_name: &str) -> Result<bool>;
 
     fn add_process(&self, pid: i32, unit_name: &str) -> Result<()>;
 }
@@ -36,8 +36,9 @@ pub struct DBusClient {}
 
 impl DBusClient {
     fn build_proxy(&self) -> Result<SystemManager<'static>> {
-        let connection = zbus::blocking::Connection::system()?;
-        let proxy = SystemManager::new(&connection)?;
+        let connection =
+            zbus::blocking::Connection::system().context("Establishing a D-Bus connection")?;
+        let proxy = SystemManager::new(&connection).context("Building a D-Bus proxy manager")?;
         Ok(proxy)
     }
 }
@@ -108,8 +109,10 @@ impl SystemdInterface for DBusClient {
         Ok(systemd_version)
     }
 
-    fn unit_exist(&self, unit_name: &str) -> Result<bool> {
-        let proxy = self.build_proxy()?;
+    fn unit_exists(&self, unit_name: &str) -> Result<bool> {
+        let proxy = self
+            .build_proxy()
+            .with_context(|| format!("Checking if systemd unit {} exists", unit_name))?;
 
         Ok(proxy.get_unit(unit_name).is_ok())
     }
