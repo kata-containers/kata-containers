@@ -18,10 +18,6 @@ on:
       tag:
         required: true
         type: string
-      quay-io-login-continue-on-error:
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   kata-payload:
@@ -41,14 +37,15 @@ jobs:
           name: kata-static-tarball-arm64${{ inputs.tarball-suffix }}
 
       - name: Login to Kata Containers quay.io
+        if: ${{ inputs.registry == 'quay.io' }}
         uses: docker/login-action@v2
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
           password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
-        continue-on-error: ${{ inputs.quay-io-login-continue-on-error }}
 
       - name: Login to Kata Containers ghcr.io
+        if: ${{ inputs.registry == 'ghcr.io' }}
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
