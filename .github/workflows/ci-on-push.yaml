@@ -11,16 +11,16 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
     with:
-      tarball-suffix: -${{ github.event.pull_request.number}}-${{ github.sha }}
+      tarball-suffix: -${{ github.event.workflow_run.head_sha }}
 
   publish-kata-deploy-payload-amd64:
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/publish-kata-deploy-payload-amd64.yaml
     with:
-      tarball-suffix: -${{ github.event.pull_request.number}}-${{ github.sha }}
+      tarball-suffix: -${{ github.event.workflow_run.head_sha }}
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ github.event.pull_request.number }}-${{ github.sha }}-amd64
+      tag: ${{ github.event.workflow_run.head_sha }}-amd64
       quay-io-login-continue-on-error: true
     secrets: inherit
 
@@ -30,5 +30,5 @@ jobs:
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ github.event.pull_request.number }}-${{ github.sha }}-amd64
+      tag: ${{ github.event.workflow_run.head_sha }}-amd64
     secrets: inherit
