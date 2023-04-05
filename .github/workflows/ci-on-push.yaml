@@ -23,7 +23,6 @@ jobs:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
       tag: ${{ github.event.workflow_run.head_sha }}-amd64
-      quay-io-login-continue-on-error: true
     secrets: inherit
 
   run-k8s-tests-on-aks:
