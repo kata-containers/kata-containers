@@ -41,7 +41,7 @@ pub struct Manager {
 impl CgroupManager for Manager {
     fn apply(&self, pid: pid_t) -> Result<()> {
         let unit_name = self.unit_name.as_str();
-        if self.dbus_client.unit_exist(unit_name).unwrap() {
+        if self.dbus_client.unit_exists(unit_name)? {
             self.dbus_client.add_process(pid, self.unit_name.as_str())?;
         } else {
             self.dbus_client.start_unit(
