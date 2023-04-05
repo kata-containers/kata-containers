@@ -27,6 +27,6 @@ jobs:
           az aks create \
             -g "kataCI" \
             -n "${{ inputs.name }}" \
-            -s "Standard_D4s_v3" \
+            -s "Standard_D4s_v5" \
             --node-count 1 \
             --generate-ssh-keys
