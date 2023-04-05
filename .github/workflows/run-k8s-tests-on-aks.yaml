@@ -2,6 +2,10 @@ name: CI | Run kubernetes tests on AKS
 on:
   workflow_call:
     inputs:
+      checkout-ref:
+        required: false
+        type: string
+        default: ${{ github.sha }}
       registry:
         required: true
         type: string
@@ -35,6 +39,8 @@ jobs:
     needs: create-aks
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.checkout-ref }}
       - name: Install `bats`
         run: |
           sudo apt-get update

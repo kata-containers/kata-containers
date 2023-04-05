@@ -8,12 +8,18 @@ on:
 jobs:
   build-assets-amd64:
     uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
+    with:
+      push-to-registry: yes
 
   build-assets-arm64:
     uses: ./.github/workflows/build-kata-static-tarball-arm64.yaml
+    with:
+      push-to-registry: yes
 
   build-assets-s390x:
     uses: ./.github/workflows/build-kata-static-tarball-s390x.yaml
+    with:
+      push-to-registry: yes
 
   publish-kata-deploy-payload-amd64:
     needs: build-assets-amd64
@@ -28,7 +34,8 @@ jobs:
     needs: build-assets-arm64
     uses: ./.github/workflows/publish-kata-deploy-payload-arm64.yaml
     with:
-      registry: quay.io/kata-containers/kata-deploy-ci
+      registry: quay.io
+      repo: kata-containers/kata-deploy-ci
       tag: kata-containers-arm64
     secrets: inherit
 
@@ -36,7 +43,8 @@ jobs:
     needs: build-assets-s390x
     uses: ./.github/workflows/publish-kata-deploy-payload-s390x.yaml
     with:
-      registry: quay.io/kata-containers/kata-deploy-ci
+      registry: quay.io
+      repo: kata-containers/kata-deploy-ci
       tag: kata-containers-s390x
     secrets: inherit
 
