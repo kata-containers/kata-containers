@@ -2,6 +2,10 @@ name: CI | Build kata-static tarball for s390x
 on:
   workflow_call:
     inputs:
+      checkout-ref:
+        required: false
+        type: string
+        default: ${{ github.sha }}
       tarball-suffix:
         required: false
         type: string
@@ -25,6 +29,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
+          ref: ${{ inputs.checkout-ref }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
       - name: Build ${{ matrix.asset }}
         run: |
@@ -55,6 +60,8 @@ jobs:
           sudo chown -R $USER:$USER $GITHUB_WORKSPACE
 
       - uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.checkout-ref }}
       - name: get-artifacts
         uses: actions/download-artifact@v3
         with:

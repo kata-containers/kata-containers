@@ -2,6 +2,10 @@ name: CI | Publish kata-deploy payload for s390x
 on:
   workflow_call:
     inputs:
+      checkout-ref:
+        required: false
+        type: string
+        default: ${{ github.sha }}
       tarball-suffix:
         required: false
         type: string
@@ -28,6 +32,8 @@ jobs:
           sudo chown -R $USER:$USER $GITHUB_WORKSPACE
 
       - uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.checkout-ref }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@v3
