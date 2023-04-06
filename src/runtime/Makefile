@@ -344,6 +344,18 @@ ifneq (,$(QEMUCMD))
 
     CONFIGS += $(CONFIG_QEMU_SEV)
 
+    CONFIG_FILE_QEMU_SE = configuration-qemu-se.toml
+    CONFIG_QEMU_SE = config/$(CONFIG_FILE_QEMU_SE)
+    CONFIG_QEMU_SE_IN = $(CONFIG_QEMU_SE).in
+
+    CONFIG_PATH_QEMU_SE = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU_SE))
+    CONFIG_PATHS += $(CONFIG_PATH_QEMU_SE)
+
+    SYSCONFIG_QEMU_SE = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU_SE))
+    SYSCONFIG_PATHS += $(SYSCONFIG_QEMU_SE)
+
+    CONFIGS += $(CONFIG_QEMU_SE)
+
     CONFIG_FILE_QEMU_SNP = configuration-qemu-snp.toml
     CONFIG_QEMU_SNP = config/$(CONFIG_FILE_QEMU_SNP)
     CONFIG_QEMU_SNP_IN = $(CONFIG_QEMU_SNP).in
@@ -355,8 +367,6 @@ ifneq (,$(QEMUCMD))
     SYSCONFIG_PATHS += $(SYSCONFIG_QEMU_SNP)
 
     CONFIGS += $(CONFIG_QEMU_SNP)
-    
-    CONFIGS += $(CONFIG_QEMU_SE)
 	
     CONFIG_FILE_REMOTE = configuration-remote.toml
     CONFIG_REMOTE = config/$(CONFIG_FILE_REMOTE)
