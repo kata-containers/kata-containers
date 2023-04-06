@@ -30,7 +30,7 @@ jobs:
       - name: Create AKS cluster to test ${{ matrix.vmm }}
         uses: ./.github/workflows-create-aks.yaml
         with:
-          name: ${{ inputs.checkout-ref }}-${{ matrix.vmm }}-amd64
+          name: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-amd64
 
       - uses: actions/checkout@v3
         with:
@@ -54,7 +54,7 @@ jobs:
 
       - name: Download credentials for the Kubernetes CLI to use them
         run: |
-          az aks get-credentials -g "kataCI" -n ${{ inputs.checkout-ref }}-${{ matrix.vmm }}-amd64
+          az aks get-credentials -g "kataCI" -n ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-amd64
 
       - name: Deploy kata-deploy
         run: |
@@ -81,4 +81,4 @@ jobs:
         if: always()
         uses: ./.github/workflows/delete-aks.yaml
         with:
-          name: ${{ inputs.checkout-ref }}-${{ matrix.vmm }}-amd64
+          name: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-amd64
