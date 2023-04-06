@@ -26,7 +26,7 @@ jobs:
           - qemu
     uses: ./.github/workflows/create-aks.yaml
     with:
-      name: ${{ github.event.pull_request.number }}-${{ github.sha }}-${{ matrix.vmm }}-amd64
+      name: ${{ inputs.checkout-ref }}-${{ matrix.vmm }}-amd64
     secrets: inherit
 
   run-k8s-tests:
@@ -62,7 +62,7 @@ jobs:
 
       - name: Download credentials for the Kubernetes CLI to use them
         run: |
-          az aks get-credentials -g "kataCI" -n ${{ github.event.pull_request.number }}-${{ github.sha }}-${{ matrix.vmm }}-amd64
+          az aks get-credentials -g "kataCI" -n ${{ inputs.checkout-ref }}-${{ matrix.vmm }}-amd64
 
       - name: Deploy kata-deploy
         run: |
@@ -96,5 +96,5 @@ jobs:
     if: always()
     uses: ./.github/workflows/delete-aks.yaml
     with:
-      name: ${{ github.event.pull_request.number }}-${{ github.sha }}-${{ matrix.vmm }}-amd64
+      name: ${{ inputs.checkout-ref }}-${{ matrix.vmm }}-amd64
     secrets: inherit
