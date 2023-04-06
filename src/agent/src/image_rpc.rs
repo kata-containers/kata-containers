@@ -26,8 +26,12 @@ use image_rs::image::ImageClient;
 use std::io::Write;
 
 const AA_PATH: &str = "/usr/local/bin/attestation-agent";
-const AA_KEYPROVIDER_PORT: &str = "127.0.0.1:50000";
-const AA_GETRESOURCE_PORT: &str = "127.0.0.1:50001";
+
+const AA_KEYPROVIDER_URI: &str =
+    "unix:///run/confidential-containers/attestation-agent/keyprovider.sock";
+const AA_GETRESOURCE_URI: &str =
+    "unix:///run/confidential-containers/attestation-agent/getresource.sock";
+
 const OCICRYPT_CONFIG_PATH: &str = "/tmp/ocicrypt_config.json";
 // kata rootfs is readonly, use tmpfs before CC storage is implemented.
 const KATA_CC_IMAGE_WORK_DIR: &str = "/run/image/";
@@ -95,7 +99,7 @@ impl ImageService {
         let ocicrypt_config = serde_json::json!({
             "key-providers": {
                 "attestation-agent":{
-                    "grpc":AA_KEYPROVIDER_PORT
+                    "ttrpc":AA_KEYPROVIDER_URI
                 }
             }
         });
@@ -106,9 +110,9 @@ impl ImageService {
         // The Attestation Agent will run for the duration of the guest.
         Command::new(AA_PATH)
             .arg("--keyprovider_sock")
-            .arg(AA_KEYPROVIDER_PORT)
+            .arg(AA_KEYPROVIDER_URI)
             .arg("--getresource_sock")
-            .arg(AA_GETRESOURCE_PORT)
+            .arg(AA_GETRESOURCE_URI)
             .spawn()?;
         Ok(())
     }

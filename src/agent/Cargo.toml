@@ -72,10 +72,13 @@ openssl = { version = "0.10.38", features = ["vendored"] }
 
 # Image pull/decrypt
 [target.'cfg(target_arch = "s390x")'.dependencies]
-image-rs = { git = "https://github.com/confidential-containers/image-rs", rev = "v0.4.0", default-features = false, features = ["kata-cc-s390x"] }
+image-rs = { git = "https://github.com/confidential-containers/image-rs", rev = "cc626a97a8225475d3a4c3c7490f6b212ca32466", default-features = false, features = ["kata-cc-s390x"] }
 
 [target.'cfg(not(target_arch = "s390x"))'.dependencies]
-image-rs = { git = "https://github.com/confidential-containers/image-rs", rev = "v0.4.0", default-features = true, features = ["kata-cc", "signature-simple"] }
+image-rs = { git = "https://github.com/confidential-containers/image-rs", rev = "cc626a97a8225475d3a4c3c7490f6b212ca32466", default-features = false, features = ["kata-cc"] }
+
+[patch.crates-io]
+oci-distribution = { git = "https://github.com/krustlet/oci-distribution.git", rev = "f44124c" }
 
 [dev-dependencies]
 tempfile = "3.1.0"
