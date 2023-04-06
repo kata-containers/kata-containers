@@ -243,7 +243,7 @@ func (s *service) genericIPTablesHandler(w http.ResponseWriter, r *http.Request,
 
 func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec) {
 	// metrics socket will under sandbox's bundle path
-	metricsAddress := SocketAddress(s.id)
+	metricsAddress := ServerSocketAddress(s.id)
 
 	listener, err := cdshim.NewSocket(metricsAddress)
 	if err != nil {
@@ -312,14 +312,38 @@ func GetSandboxesStoragePathRust() string {
 	return "/run/kata"
 }
 
-// SocketAddress returns the address of the unix domain socket for communicating with the
+// SocketPath returns the path of the socket using the given storagePath
+func SocketPath(id string, storagePath string) string {
+	return filepath.Join(string(filepath.Separator), storagePath, id, "shim-monitor.sock")
+}
+
+// SocketPathGo returns the path of the socket to be used with the go runtime
+func SocketPathGo(id string) string {
+	return SocketPath(id, GetSandboxesStoragePath())
+}
+
+// SocketPathRust returns the path of the socket to be used with the rust runtime
+func SocketPathRust(id string) string {
+	return SocketPath(id, GetSandboxesStoragePathRust())
+}
+
+// ServerSocketAddress returns the address of the unix domain socket the shim management endpoint
+// should listen.
+// NOTE: this code is only called by the go shim management implementation.
+func ServerSocketAddress(id string) string {
+	return fmt.Sprintf("unix://%s", SocketPathGo(id))
+}
+
+// ClientSocketAddress returns the address of the unix domain socket for communicating with the
 // shim management endpoint
-func SocketAddress(id string) string {
+// NOTE: this code allows various go clients, e.g. kata-runtime or kata-monitor commands, to
+// connect to the rust shim management implementation.
+func ClientSocketAddress(id string) string {
 	// get the go runtime uds path
-	socketPath := filepath.Join(string(filepath.Separator), GetSandboxesStoragePath(), id, "shim-monitor.sock")
+	socketPath := SocketPathGo(id)
 	// if the path not exist, use the rust runtime uds path instead
 	if _, err := os.Stat(socketPath); err != nil {
-		return fmt.Sprintf("unix://%s", filepath.Join(string(filepath.Separator), GetSandboxesStoragePathRust(), id, "shim-monitor.sock"))
+		socketPath = SocketPathRust(id)
 	}
 	return fmt.Sprintf("unix://%s", socketPath)
 }

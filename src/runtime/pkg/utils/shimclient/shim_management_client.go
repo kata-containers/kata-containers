@@ -19,7 +19,7 @@ import (
 
 // BuildShimClient builds and returns an http client for communicating with the provided sandbox
 func BuildShimClient(sandboxID string, timeout time.Duration) (*http.Client, error) {
-	return buildUnixSocketClient(shim.SocketAddress(sandboxID), timeout)
+	return buildUnixSocketClient(shim.ClientSocketAddress(sandboxID), timeout)
 }
 
 // buildUnixSocketClient build http client for Unix socket
