@@ -2,10 +2,6 @@ name: CI | Publish kata-deploy payload for amd64
 on:
   workflow_call:
     inputs:
-      checkout-ref:
-        required: false
-        type: string
-        default: ${{ github.sha }}
       tarball-suffix:
         required: false
         type: string
@@ -25,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          ref: ${{ inputs.checkout-ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@v3
