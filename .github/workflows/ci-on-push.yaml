@@ -1,14 +1,9 @@
 name: Kata Containers CI
 on:
-  workflow_run:
-    workflows:
-      - Commit Message Check
-    types:
-      - completed
+  pull_request_target:
 
 jobs:
   build-kata-static-tarball-amd64:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
     with:
       tarball-suffix: -${{ github.event.pull_request.number}}-${{ github.event.pull_request.head.sha }}
