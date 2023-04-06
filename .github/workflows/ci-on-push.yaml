@@ -1,6 +1,8 @@
 name: Kata Containers CI
 on:
   pull_request_target:
+    branches:
+      - 'main'
 
 jobs:
   build-kata-static-tarball-amd64:
