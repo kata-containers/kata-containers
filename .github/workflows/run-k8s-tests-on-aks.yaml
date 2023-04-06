@@ -17,18 +17,6 @@ on:
         type: string
 
 jobs:
-  create-aks:
-    strategy:
-      matrix:
-        vmm:
-          - clh
-          - dragonball
-          - qemu
-    uses: ./.github/workflows/create-aks.yaml
-    with:
-      name: ${{ inputs.checkout-ref }}-${{ matrix.vmm }}-amd64
-    secrets: inherit
-
   run-k8s-tests:
     strategy:
       fail-fast: false
@@ -38,8 +26,12 @@ jobs:
           - dragonball
           - qemu
     runs-on: ubuntu-latest
-    needs: create-aks
     steps:
+      - name: Create AKS cluster to test ${{ matrix.vmm }}
+        uses: ./.github/workflows-create-aks.yaml
+        with:
+          name: ${{ inputs.checkout-ref }}-${{ matrix.vmm }}-amd64
+
       - uses: actions/checkout@v3
         with:
           ref: ${{ inputs.checkout-ref }}
@@ -85,16 +77,8 @@ jobs:
         env:
           KATA_HYPERVISOR: ${{ matrix.vmm }}
 
-  delete-aks:
-    strategy:
-      matrix:
-        vmm:
-          - clh
-          - dragonball
-          - qemu
-    needs: run-k8s-tests
-    if: always()
-    uses: ./.github/workflows/delete-aks.yaml
-    with:
-      name: ${{ inputs.checkout-ref }}-${{ matrix.vmm }}-amd64
-    secrets: inherit
+      - name: Delete AKS cluster used to test ${{ matrix.vmm }}
+        if: always()
+        uses: ./.github/workflows/delete-aks.yaml
+        with:
+          name: ${{ inputs.checkout-ref }}-${{ matrix.vmm }}-amd64
