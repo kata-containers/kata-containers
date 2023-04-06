@@ -244,6 +244,16 @@ disable_new_netns = true
 # See: https://pkg.go.dev/github.com/kata-containers/kata-containers/src/runtime/virtcontainers#ContainerType
 sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
 
+# If enabled, the runtime will attempt to determine appropriate sandbox size (memory, CPU) before booting the virtual machine. In
+# this case, the runtime will not dynamically update the amount of memory and CPU in the virtual machine. This is generally helpful
+# when a hardware architecture or hypervisor solutions is utilized which does not support CPU and/or memory hotplug.
+# Compatibility for determining appropriate sandbox (VM) size:
+# - When running with pods, sandbox sizing information will only be available if using Kubernetes >= 1.23 and containerd >= 1.6. CRI-O
+#   does not yet support sandbox sizing annotations.
+# - When running single containers using a tool like ctr, container sizing information will be available.
+# Note: the remote hypervisor uses the peer pod config to determine the sandbox size, so requires this to be set to true
+static_sandbox_resource_mgmt=true
+
 # VFIO Mode
 # Determines how VFIO devices should be be presented to the container.
 # Options:
