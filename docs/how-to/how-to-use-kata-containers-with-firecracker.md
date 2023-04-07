@@ -104,10 +104,10 @@ sudo dmsetup create "${POOL_NAME}" \
 
 cat << EOF
 #
-# Add this to your config.toml configuration file and restart containerd daemon
+# Add this to your /etc/containerd/config.toml configuration file and restart containerd daemon with `sudo systemctl restart containerd`
 #
 [plugins]
-  [plugins.devmapper]
+  [plugins."io.containerd.snapshotter.v1.devmapper"]
     pool_name = "${POOL_NAME}"
     root_path = "${DATA_DIR}"
     base_image_size = "10GB"
