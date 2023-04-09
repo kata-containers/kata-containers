@@ -236,7 +236,7 @@ impl RuntimeHandlerManager {
                 id: container_config.container_id.to_string(),
                 status: oci::ContainerState::Creating,
                 pid: 0,
-                bundle: bundler_path,
+                bundle: container_config.bundle.clone(),
                 annotations: spec.annotations.clone(),
             };
 

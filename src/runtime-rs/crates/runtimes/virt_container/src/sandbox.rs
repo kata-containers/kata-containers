@@ -188,9 +188,9 @@ impl Sandbox for VirtSandbox {
         info!(sl!(), "start vm");
 
         // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
-        let (prestart_hooks, create_runtime_hooks) = match spec.hooks.as_ref() {
-            Some(hooks) => (hooks.prestart.clone(), hooks.create_runtime.clone()),
-            None => (Vec::new(), Vec::new()),
+        let (prestart_hooks, create_runtime_hooks, _has_oci_hook) = match spec.hooks.as_ref() {
+            Some(hooks) => (hooks.prestart.clone(), hooks.create_runtime.clone(), true),
+            None => (Vec::new(), Vec::new(), false),
         };
         self.execute_oci_hook_functions(&prestart_hooks, &create_runtime_hooks, state)
             .await?;
