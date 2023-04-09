@@ -33,6 +33,7 @@ pub struct NetworkWithNetNsConfig {
     pub network_model: String,
     pub netns_path: String,
     pub queues: usize,
+    pub network_created: bool,
 }
 
 struct NetworkWithNetnsInner {

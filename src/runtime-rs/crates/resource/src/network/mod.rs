@@ -18,7 +18,7 @@ use network_with_netns::NetworkWithNetns;
 mod network_pair;
 use network_pair::NetworkPair;
 mod utils;
-pub use utils::netns::NetnsGuard;
+pub use utils::netns::{generate_netns_name, NetnsGuard};
 
 use std::sync::Arc;
 

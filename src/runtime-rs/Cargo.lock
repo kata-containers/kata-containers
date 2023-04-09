@@ -1735,6 +1735,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "netns-rs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23541694f1d7d18cd1a0da3a1352a6ea48b01cbb4a8e7a6e547963823fd5276e"
+dependencies = [
+ "nix 0.23.2",
+ "thiserror",
+]
+
+[[package]]
 name = "nix"
 version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2401,6 +2411,7 @@ dependencies = [
  "byte-unit 4.0.18",
  "cgroups-rs",
  "futures 0.3.26",
+ "hex",
  "hypervisor",
  "kata-sys-util",
  "kata-types",
@@ -2464,9 +2475,11 @@ dependencies = [
  "lazy_static",
  "linux_container",
  "logging",
+ "netns-rs",
  "nix 0.25.1",
  "oci",
  "persist",
+ "resource",
  "serde_json",
  "shim-interface",
  "slog",
