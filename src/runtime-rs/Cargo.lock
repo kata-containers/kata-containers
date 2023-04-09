@@ -2420,6 +2420,7 @@ dependencies = [
  "logging",
  "netlink-packet-route",
  "netlink-sys",
+ "netns-rs",
  "nix 0.24.3",
  "oci",
  "persist",
