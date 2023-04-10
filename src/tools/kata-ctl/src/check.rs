@@ -8,6 +8,7 @@
 use anyhow::{anyhow, Result};
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use thiserror::Error;
 
 #[cfg(any(target_arch = "x86_64"))]
@@ -145,6 +146,19 @@ pub enum GuestProtection {
     Snp,
     Pef,
     Se,
+}
+
+impl fmt::Display for GuestProtection {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            GuestProtection::Tdx => write!(f, "tdx"),
+            GuestProtection::Sev => write!(f, "sev"),
+            GuestProtection::Snp => write!(f, "snp"),
+            GuestProtection::Pef => write!(f, "pef"),
+            GuestProtection::Se => write!(f, "se"),
+            GuestProtection::NoProtection => write!(f, "none"),
+        }
+    }
 }
 
 #[allow(dead_code)]
