@@ -27,7 +27,7 @@ pub fn drop_privs() -> Result<()> {
     Ok(())
 }
 
-const PROC_VERSION_FILE: &str = "/proc/version";
+pub const PROC_VERSION_FILE: &str = "/proc/version";
 
 pub fn get_kernel_version(proc_version_file: &str) -> Result<String> {
     let contents = fs::read_to_string(proc_version_file)
@@ -43,10 +43,10 @@ pub fn get_kernel_version(proc_version_file: &str) -> Result<String> {
     Ok(kernel_version)
 }
 
-const OS_RELEASE: &str = "/etc/os-release";
+pub const OS_RELEASE: &str = "/etc/os-release";
 
 // Clear Linux has a different path (for stateless support)
-const OS_RELEASE_CLR: &str = "/usr/lib/os-release";
+pub const OS_RELEASE_CLR: &str = "/usr/lib/os-release";
 
 const UNKNOWN: &str = "unknown";
 
@@ -144,7 +144,7 @@ pub fn get_generic_cpu_details(cpu_info_file: &str) -> Result<(String, String)> 
     Ok((vendor, model))
 }
 
-const VHOST_VSOCK_DEVICE: &str = "/dev/vhost-vsock";
+pub const VHOST_VSOCK_DEVICE: &str = "/dev/vhost-vsock";
 pub fn supports_vsocks(vsock_path: &str) -> Result<bool> {
     let metadata = fs::metadata(vsock_path)?;
     Ok(metadata.is_file())
