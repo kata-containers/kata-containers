@@ -23,22 +23,13 @@ jobs:
           - qemu
     runs-on: ubuntu-latest
     steps:
-      - name: Create AKS cluster to test ${{ matrix.vmm }}
-        uses: ./.github/workflows-create-aks.yaml
-        with:
-          name: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-amd64
-
       - uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - name: Install `bats`
-        run: |
-          sudo apt-get update
-          sudo apt-get -y install bats
 
-      - name: Install `kubectl`
+      - name: Download Azure CLI
         run: |
-          sudo az aks install-cli
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 
       - name: Log into the Azure account
         run: |
@@ -47,6 +38,24 @@ jobs:
             -u "${{ secrets.AZ_APPID }}" \
             -p "${{ secrets.AZ_PASSWORD }}" \
             --tenant "${{ secrets.AZ_TENANT_ID }}"
+
+      - name: Create AKS cluster
+        run: |
+          az aks create \
+            -g "kataCI" \
+            -n "${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-amd64" \
+            -s "Standard_D4s_v5" \
+            --node-count 1 \
+            --generate-ssh-keys
+
+      - name: Install `bats`
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install bats
+
+      - name: Install `kubectl`
+        run: |
+          sudo az aks install-cli
 
       - name: Download credentials for the Kubernetes CLI to use them
         run: |
@@ -73,8 +82,10 @@ jobs:
         env:
           KATA_HYPERVISOR: ${{ matrix.vmm }}
 
-      - name: Delete AKS cluster used to test ${{ matrix.vmm }}
-        if: always()
-        uses: ./.github/workflows/delete-aks.yaml
-        with:
-          name: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-amd64
+      - name: Delete AKS cluster
+        run: |
+          az aks delete \
+            -g "kataCI" \
+            -n "${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-amd64" \
+            --yes \
+            --no-wait
