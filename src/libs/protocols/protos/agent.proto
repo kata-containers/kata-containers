@@ -71,6 +71,7 @@ service AgentService {
 	rpc AddSwap(AddSwapRequest) returns (google.protobuf.Empty);
 	rpc GetVolumeStats(VolumeStatsRequest) returns (VolumeStatsResponse);
 	rpc ResizeVolume(ResizeVolumeRequest) returns (google.protobuf.Empty);
+	rpc DropCache(DropCacheRequest) returns (google.protobuf.Empty);
 }
 
 message CreateContainerRequest {
@@ -561,4 +562,9 @@ message ResizeVolumeRequest {
 	// Full VM guest path of the volume (outside the container)
 	string volume_guest_path = 1;
 	uint64 size = 2;
+}
+
+message DropCacheRequest {
+	// drop cache option, and valid value is 1, 2, 3.
+	uint32 drop_option = 1;
 }
