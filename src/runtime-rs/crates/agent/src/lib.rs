@@ -13,6 +13,7 @@ pub mod kata;
 mod log_forwarder;
 mod sock;
 pub mod types;
+use protocols::agent::DropCacheRequest;
 pub use types::{
     ARPNeighbor, ARPNeighbors, AddArpNeighborRequest, BlkioStatsEntry, CheckRequest,
     CloseStdinRequest, ContainerID, ContainerProcessID, CopyFileRequest, CreateContainerRequest,
@@ -90,4 +91,5 @@ pub trait Agent: AgentManager + HealthService + Send + Sync {
     async fn set_ip_tables(&self, req: SetIPTablesRequest) -> Result<SetIPTablesResponse>;
     async fn get_volume_stats(&self, req: VolumeStatsRequest) -> Result<VolumeStatsResponse>;
     async fn resize_volume(&self, req: ResizeVolumeRequest) -> Result<Empty>;
+    async fn drop_cache(&self, req: DropCacheRequest) -> Result<Empty>;
 }

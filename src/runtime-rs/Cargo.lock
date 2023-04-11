@@ -3298,6 +3298,7 @@ dependencies = [
  "oci",
  "persist",
  "protobuf",
+ "protocols",
  "resource",
  "serde",
  "serde_derive",

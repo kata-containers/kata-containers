@@ -13,6 +13,7 @@ use common::{
     types::{ContainerID, ContainerProcess, ProcessExitStatus, ProcessStatus, ProcessType},
 };
 use nix::sys::signal::Signal;
+use protocols::agent::DropCacheRequest;
 use resource::{rootfs::Rootfs, volume::Volume};
 use tokio::sync::RwLock;
 
@@ -182,6 +183,17 @@ impl ContainerInner {
                     Err(e)
                 }
             })?;
+
+        self.agent
+            .drop_cache(DropCacheRequest {
+                drop_option: 2,
+                ..Default::default()
+            })
+            .await
+            .map_err(|e| {
+                warn!(self.logger, "failed to drop cache: {:?}", e);
+            })
+            .ok();
 
         // close the exit channel to wakeup wait service
         // send to notify watchers who are waiting for the process exit

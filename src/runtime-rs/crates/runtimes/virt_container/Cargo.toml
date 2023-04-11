@@ -34,6 +34,7 @@ logging = { path = "../../../../libs/logging"}
 oci = { path = "../../../../libs/oci" }
 persist = { path = "../../persist"}
 resource = { path = "../../resource" }
+protocols = { path = "../../../../libs/protocols", features=["async"] }
 
 [features]
 default = []
