@@ -8,14 +8,27 @@ package virtcontainers
 import "os"
 
 const (
-	tdxSysFirmwareDir = "/sys/firmware/tdx_seam/"
+	tdxSeamSysFirmwareDir = "/sys/firmware/tdx_seam/"
 
-	tdxCPUFlag = "tdx"
+	tdxSysFirmwareDir = "/sys/firmware/tdx/"
 
 	sevKvmParameterPath = "/sys/module/kvm_amd/parameters/sev"
 
 	snpKvmParameterPath = "/sys/module/kvm_amd/parameters/sev_snp"
 )
+
+// TDX is supported and properly loaded when the firmware directory (either tdx or tdx_seam) exists or `tdx` is part of the CPU flag
+func checkTdxGuestProtection(flags map[string]bool) bool {
+	if d, err := os.Stat(tdxSysFirmwareDir); err == nil && d.IsDir() {
+		return true
+	}
+
+	if d, err := os.Stat(tdxSeamSysFirmwareDir); err == nil && d.IsDir() {
+		return true
+	}
+
+	return false
+}
 
 // Implementation of this function is architecture specific
 func availableGuestProtection() (guestProtection, error) {
@@ -24,10 +37,10 @@ func availableGuestProtection() (guestProtection, error) {
 		return noneProtection, err
 	}
 
-	// TDX is supported and properly loaded when the firmware directory exists or `tdx` is part of the CPU flags
-	if d, err := os.Stat(tdxSysFirmwareDir); (err == nil && d.IsDir()) || flags[tdxCPUFlag] {
+	if checkTdxGuestProtection(flags) {
 		return tdxProtection, nil
 	}
+
 	// SEV-SNP is supported and enabled when the kvm module `sev_snp` parameter is set to `Y`
 	// SEV-SNP support infers SEV (-ES) support
 	if _, err := os.Stat(snpKvmParameterPath); err == nil {

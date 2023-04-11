@@ -28,3 +28,11 @@ jobs:
       repo: ${{ github.repository_owner }}/kata-deploy-ci
       tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64
     secrets: inherit
+
+  run-k8s-tests-on-tdx:
+    needs: publish-kata-deploy-payload-amd64
+    uses: ./.github/workflows/run-k8s-tests-on-tdx.yaml
+    with:
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64

@@ -233,7 +233,7 @@ func (q *qemuAmd64) enableProtection() error {
 		if q.qemuMachine.Options != "" {
 			q.qemuMachine.Options += ","
 		}
-		q.qemuMachine.Options += "kvm-type=tdx,confidential-guest-support=tdx"
+		q.qemuMachine.Options += "confidential-guest-support=tdx"
 		logger.Info("Enabling TDX guest protection")
 		return nil
 	case sevProtection:

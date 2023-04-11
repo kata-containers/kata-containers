@@ -56,7 +56,7 @@ fi
 info "Building ovmf"
 build_cmd="build -b ${build_target} -t ${toolchain} -a ${architecture} -p ${ovmf_package}"
 if [ "${ovmf_build}" == "tdx" ]; then
-	build_cmd+=" -D DEBUG_ON_SERIAL_PORT=TRUE -D TDX_MEM_PARTIAL_ACCEPT=512 -D TDX_EMULATION_ENABLE=FALSE -D TDX_ACCEPT_PAGE_SIZE=2M"
+	build_cmd+=" -D DEBUG_ON_SERIAL_PORT=FALSE -D TDX_MEM_PARTIAL_ACCEPT=512 -D TDX_EMULATION_ENABLE=FALSE -D SECURE_BOOT_ENABLE=TRUE -D TDX_ACCEPT_PAGE_SIZE=2M"
 fi
 
 eval "${build_cmd}"
@@ -70,7 +70,6 @@ if [ "${ovmf_build}" == "tdx" ]; then
 	build_path_arch="${build_path_target_toolchain}/X64"
 	stat "${build_path_fv}/OVMF_CODE.fd"
 	stat "${build_path_fv}/OVMF_VARS.fd"
-	stat "${build_path_arch}/DumpTdxEventLog.efi"
 fi
 
 #need to leave tmp dir
@@ -87,7 +86,6 @@ install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF.fd "${install_dir}"
 if [ "${ovmf_build}" == "tdx" ]; then
 	install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF_CODE.fd ${install_dir}
 	install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF_VARS.fd ${install_dir}
-	install $build_root/$ovmf_dir/"${build_path_arch}"/DumpTdxEventLog.efi ${install_dir}
 fi
 
 local_dir=${PWD}
