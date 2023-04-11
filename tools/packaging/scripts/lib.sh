@@ -183,6 +183,11 @@ get_shim_v2_image_name() {
 	echo "${BUILDER_REGISTRY}:shim-v2-go-$(get_from_kata_deps "languages.golang.meta.newest-version")-rust-$(get_from_kata_deps "languages.rust.meta.newest-version")-$(get_last_modification ${shim_v2_script_dir})-$(uname -m)"
 }
 
+get_ovmf_image_name() {
+	ovmf_script_dir="${repo_root_dir}/tools/packaging/static-build/ovmf"
+	echo "${BUILDER_REGISTRY}:ovmf-$(get_last_modification ${ovmf_script_dir})-$(uname -m)"
+}
+
 get_virtiofsd_image_name() {
 	ARCH=$(uname -m)
 	case ${ARCH} in

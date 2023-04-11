@@ -20,11 +20,14 @@ jobs:
           - firecracker
           - kernel
           - kernel-dragonball-experimental
+          - kernel-tdx-experimental
           - nydus
           - qemu
+          - qemu-tdx-experimental
           - rootfs-image
           - rootfs-initrd
           - shim-v2
+          - tdvf
           - virtiofsd
     steps:
       - uses: actions/checkout@v3

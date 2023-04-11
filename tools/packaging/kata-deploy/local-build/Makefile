@@ -25,9 +25,12 @@ all: serial-targets \
 	firecracker-tarball \
 	kernel-tarball \
 	kernel-dragonball-experimental-tarball \
+	kernel-tdx-experimental-tarball \
 	nydus-tarball \
 	qemu-tarball \
+	qemu-tdx-experimental-tarball \
 	shim-v2-tarball \
+	tdvf-tarball \
 	virtiofsd-tarball
 
 serial-targets:
@@ -54,10 +57,16 @@ kernel-dragonball-experimental-tarball:
 kernel-experimental-tarball:
 	${MAKE} $@-build
 
+kernel-tdx-experimental-tarball:
+	${MAKE} $@-build
+
 nydus-tarball:
 	${MAKE} $@-build
 
 qemu-tarball:
+	${MAKE} $@-build
+
+qemu-tdx-experimental-tarball:
 	${MAKE} $@-build
 
 rootfs-image-tarball:
@@ -67,6 +76,9 @@ rootfs-initrd-tarball:
 	${MAKE} $@-build
 
 shim-v2-tarball:
+	${MAKE} $@-build
+
+tdvf-tarball:
 	${MAKE} $@-build
 
 virtiofsd-tarball:
