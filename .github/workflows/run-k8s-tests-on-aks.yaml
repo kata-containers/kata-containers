@@ -83,6 +83,7 @@ jobs:
           KATA_HYPERVISOR: ${{ matrix.vmm }}
 
       - name: Delete AKS cluster
+        if: always()
         run: |
           az aks delete \
             -g "kataCI" \
