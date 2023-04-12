@@ -71,7 +71,7 @@ impl Cpu {
     }
 
     // v2:
-    // cpu.shares <-> CPUShares
+    // cpu.shares <-> CPUWeight
     // cpu.period <-> CPUQuotaPeriodUSec
     // cpu.period & cpu.quota <-> CPUQuotaPerSecUSec
     fn unified_apply(
@@ -80,8 +80,8 @@ impl Cpu {
         systemd_version: &str,
     ) -> Result<()> {
         if let Some(shares) = cpu_resources.shares {
-            let unified_shares = get_unified_cpushares(shares);
-            properties.push(("CPUShares", Value::U64(unified_shares)));
+            let weight = shares_to_weight(shares);
+            properties.push(("CPUWeight", Value::U64(weight)));
         }
 
         if let Some(period) = cpu_resources.period {
@@ -104,7 +104,7 @@ impl Cpu {
 
 // ref: https://github.com/containers/crun/blob/main/crun.1.md#cgroup-v2
 // [2-262144] to [1-10000]
-fn get_unified_cpushares(shares: u64) -> u64 {
+fn shares_to_weight(shares: u64) -> u64 {
     if shares == 0 {
         return 100;
     }
