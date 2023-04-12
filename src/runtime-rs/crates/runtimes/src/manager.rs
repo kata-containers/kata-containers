@@ -4,20 +4,21 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{str::from_utf8, sync::Arc};
-
-use anyhow::{anyhow, Context, Result};
+use std::{path::PathBuf, str::from_utf8, sync::Arc};
 
 use crate::{shim_mgmt::server::MgmtServer, static_resource::StaticResourceManager};
+use anyhow::{anyhow, Context, Result};
 use common::{
     message::Message,
     types::{Request, Response},
-    RuntimeHandler, RuntimeInstance, Sandbox,
+    RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
 use hypervisor::Param;
 use kata_types::{
     annotations::Annotation, config::default::DEFAULT_GUEST_DNS_FILE, config::TomlConfig,
 };
+use netns_rs::NetNs;
+use resource::network::generate_netns_name;
 
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
@@ -53,7 +54,7 @@ impl RuntimeHandlerManagerInner {
         &mut self,
         spec: &oci::Spec,
         state: &oci::State,
-        netns: Option<String>,
+        network_env: SandboxNetworkEnv,
         dns: Vec<String>,
         config: Arc<TomlConfig>,
     ) -> Result<()> {
@@ -77,7 +78,7 @@ impl RuntimeHandlerManagerInner {
         // start sandbox
         runtime_instance
             .sandbox
-            .start(netns, dns, spec, state)
+            .start(dns, spec, state, network_env)
             .await
             .context("start sandbox")?;
         self.runtime_instance = Some(Arc::new(runtime_instance));
@@ -104,23 +105,6 @@ impl RuntimeHandlerManagerInner {
         #[cfg(feature = "virt")]
         VirtContainer::init().context("init virt container")?;
 
-        let netns = if let Some(linux) = &spec.linux {
-            let mut netns = None;
-            for ns in &linux.namespaces {
-                if ns.r#type.as_str() != oci::NETWORKNAMESPACE {
-                    continue;
-                }
-
-                if !ns.path.is_empty() {
-                    netns = Some(ns.path.clone());
-                    break;
-                }
-            }
-            netns
-        } else {
-            None
-        };
-
         for m in &spec.mounts {
             if m.destination == DEFAULT_GUEST_DNS_FILE {
                 let contents = fs::read_to_string(&m.source).await?;
@@ -129,7 +113,42 @@ impl RuntimeHandlerManagerInner {
         }
 
         let config = load_config(spec, options).context("load config")?;
-        self.init_runtime_handler(spec, state, netns, dns, Arc::new(config))
+
+        let mut network_created = false;
+        // set netns to None if we want no network for the VM
+        let netns = if config.runtime.disable_new_netns {
+            None
+        } else {
+            let mut netns_path = None;
+            if let Some(linux) = &spec.linux {
+                for ns in &linux.namespaces {
+                    if ns.r#type.as_str() != oci::NETWORKNAMESPACE {
+                        continue;
+                    }
+                    // get netns path from oci spec
+                    if !ns.path.is_empty() {
+                        netns_path = Some(ns.path.clone());
+                    }
+                    // if we get empty netns from oci spec, we need to create netns for the VM
+                    else {
+                        let ns_name = generate_netns_name();
+                        let netns = NetNs::new(ns_name)?;
+                        let path = PathBuf::from(netns.path()).to_str().map(|s| s.to_string());
+                        info!(sl!(), "the netns path is {:?}", path);
+                        netns_path = path;
+                        network_created = true;
+                    }
+                    break;
+                }
+            }
+            netns_path
+        };
+
+        let network_env = SandboxNetworkEnv {
+            netns,
+            network_created,
+        };
+        self.init_runtime_handler(spec, state, network_env, dns, Arc::new(config))
             .await
             .context("init runtime handler")?;
 
@@ -236,7 +255,7 @@ impl RuntimeHandlerManager {
                 id: container_config.container_id.to_string(),
                 status: oci::ContainerState::Creating,
                 pid: 0,
-                bundle: bundler_path,
+                bundle: container_config.bundle.clone(),
                 annotations: spec.annotations.clone(),
             };
 

@@ -4,9 +4,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Arc,
+use std::{
+    fs,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
 };
 
 use super::endpoint::endpoint_persist::EndpointState;
@@ -14,6 +17,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use futures::stream::TryStreamExt;
 use hypervisor::Hypervisor;
+use netns_rs::get_from_path;
 use scopeguard::defer;
 use tokio::sync::RwLock;
 
@@ -33,11 +37,13 @@ pub struct NetworkWithNetNsConfig {
     pub network_model: String,
     pub netns_path: String,
     pub queues: usize,
+    pub network_created: bool,
 }
 
 struct NetworkWithNetnsInner {
     netns_path: String,
     entity_list: Vec<NetworkEntity>,
+    network_created: bool,
 }
 
 impl NetworkWithNetnsInner {
@@ -54,6 +60,7 @@ impl NetworkWithNetnsInner {
         Ok(Self {
             netns_path: config.netns_path.to_string(),
             entity_list,
+            network_created: config.network_created,
         })
     }
 }
@@ -119,6 +126,26 @@ impl Network for NetworkWithNetns {
             }
         }
         Some(endpoint)
+    }
+
+    async fn remove(&self, h: &dyn Hypervisor) -> Result<()> {
+        let inner = self.inner.read().await;
+        // The network namespace would have been deleted at this point
+        // if it has not been created by virtcontainers.
+        if !inner.network_created {
+            return Ok(());
+        }
+        {
+            let _netns_guard =
+                netns::NetnsGuard::new(&inner.netns_path).context("net netns guard")?;
+            for e in &inner.entity_list {
+                e.endpoint.detach(h).await.context("detach")?;
+            }
+        }
+        let netns = get_from_path(inner.netns_path.clone())?;
+        netns.remove()?;
+        fs::remove_dir_all(inner.netns_path.clone()).context("failed to remove netns path")?;
+        Ok(())
     }
 }
 
