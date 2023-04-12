@@ -62,6 +62,15 @@ function install_artifacts() {
 		chmod +x /opt/kata/runtime-rs/bin/*
 }
 
+function wait_till_node_is_ready() {
+	local ready="False"
+
+	while ! [[ "${ready}" == "True" ]]; do
+		sleep 2s
+		ready=$(kubectl get node $NODE_NAME -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+	done
+}
+
 function configure_cri_runtime() {
 	configure_different_shims_base
 
@@ -75,6 +84,8 @@ function configure_cri_runtime() {
 	esac
 	systemctl daemon-reload
 	systemctl restart "$1"
+
+	wait_till_node_is_ready
 }
 
 function configure_different_shims_base() {
@@ -265,6 +276,8 @@ function reset_runtime() {
 	if [ "$1" == "crio" ] || [ "$1" == "containerd" ]; then
 		systemctl restart kubelet
 	fi
+
+	wait_till_node_is_ready
 }
 
 function main() {
