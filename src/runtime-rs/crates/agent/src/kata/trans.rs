@@ -30,30 +30,18 @@ use crate::{
     OomEventResponse, WaitProcessResponse, WriteStreamResponse,
 };
 
-fn from_vec<F: Into<T>, T: Sized>(from: Vec<F>) -> ::protobuf::RepeatedField<T> {
-    let mut to: Vec<T> = vec![];
-    for data in from {
-        to.push(data.into());
-    }
-    ::protobuf::RepeatedField::from_vec(to)
+fn trans_vec<F: Sized + Clone, T: From<F>>(from: Vec<F>) -> Vec<T> {
+    from.into_iter().map(|f| f.into()).collect()
 }
 
-fn into_vec<F: Sized + Clone, T: From<F>>(from: ::protobuf::RepeatedField<F>) -> Vec<T> {
-    let mut to: Vec<T> = vec![];
-    for data in from.to_vec() {
-        to.push(data.into());
-    }
-    to
-}
-
-fn from_option<F: Sized, T: From<F>>(from: Option<F>) -> ::protobuf::SingularPtrField<T> {
+fn from_option<F: Sized, T: From<F>>(from: Option<F>) -> protobuf::MessageField<T> {
     match from {
-        Some(f) => ::protobuf::SingularPtrField::from_option(Some(T::from(f))),
-        None => ::protobuf::SingularPtrField::none(),
+        Some(f) => protobuf::MessageField::from_option(Some(T::from(f))),
+        None => protobuf::MessageField::none(),
     }
 }
 
-fn into_option<F: Into<T>, T: Sized>(from: ::protobuf::SingularPtrField<F>) -> Option<T> {
+fn into_option<F: Into<T>, T: Sized>(from: protobuf::MessageField<F>) -> Option<T> {
     from.into_option().map(|f| f.into())
 }
 
@@ -84,9 +72,8 @@ impl From<FSGroup> for agent::FSGroup {
 
         Self {
             group_id: from.group_id,
-            group_change_policy: policy,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            group_change_policy: policy.into(),
+            ..Default::default()
         }
     }
 }
@@ -96,9 +83,8 @@ impl From<StringUser> for agent::StringUser {
         Self {
             uid: from.uid,
             gid: from.gid,
-            additionalGids: ::protobuf::RepeatedField::from_vec(from.additional_gids),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            additionalGids: from.additional_gids,
+            ..Default::default()
         }
     }
 }
@@ -107,12 +93,11 @@ impl From<Device> for agent::Device {
     fn from(from: Device) -> Self {
         Self {
             id: from.id,
-            field_type: from.field_type,
+            type_: from.field_type,
             vm_path: from.vm_path,
             container_path: from.container_path,
-            options: from_vec(from.options),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            options: trans_vec(from.options),
+            ..Default::default()
         }
     }
 }
@@ -121,14 +106,13 @@ impl From<Storage> for agent::Storage {
     fn from(from: Storage) -> Self {
         Self {
             driver: from.driver,
-            driver_options: from_vec(from.driver_options),
+            driver_options: trans_vec(from.driver_options),
             source: from.source,
             fstype: from.fs_type,
             fs_group: from_option(from.fs_group),
-            options: from_vec(from.options),
+            options: trans_vec(from.options),
             mount_point: from.mount_point,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -137,9 +121,8 @@ impl From<KernelModule> for agent::KernelModule {
     fn from(from: KernelModule) -> Self {
         Self {
             name: from.name,
-            parameters: from_vec(from.parameters),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            parameters: trans_vec(from.parameters),
+            ..Default::default()
         }
     }
 }
@@ -166,11 +149,10 @@ impl From<types::IPFamily> for IPFamily {
 impl From<IPAddress> for types::IPAddress {
     fn from(from: IPAddress) -> Self {
         Self {
-            family: from.family.into(),
+            family: protobuf::EnumOrUnknown::new(from.family.into()),
             address: from.address,
             mask: from.mask,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -178,7 +160,7 @@ impl From<IPAddress> for types::IPAddress {
 impl From<types::IPAddress> for IPAddress {
     fn from(src: types::IPAddress) -> Self {
         Self {
-            family: src.family.into(),
+            family: src.family.unwrap().into(),
             address: "".to_string(),
             mask: "".to_string(),
         }
@@ -190,14 +172,13 @@ impl From<Interface> for types::Interface {
         Self {
             device: from.device,
             name: from.name,
-            IPAddresses: from_vec(from.ip_addresses),
+            IPAddresses: trans_vec(from.ip_addresses),
             mtu: from.mtu,
             hwAddr: from.hw_addr,
             pciPath: from.pci_addr,
-            field_type: from.field_type,
+            type_: from.field_type,
             raw_flags: from.raw_flags,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -207,11 +188,11 @@ impl From<types::Interface> for Interface {
         Self {
             device: src.device,
             name: src.name,
-            ip_addresses: into_vec(src.IPAddresses),
+            ip_addresses: trans_vec(src.IPAddresses),
             mtu: src.mtu,
             hw_addr: src.hwAddr,
             pci_addr: src.pciPath,
-            field_type: src.field_type,
+            field_type: src.type_,
             raw_flags: src.raw_flags,
         }
     }
@@ -220,7 +201,7 @@ impl From<types::Interface> for Interface {
 impl From<agent::Interfaces> for Interfaces {
     fn from(src: agent::Interfaces) -> Self {
         Self {
-            interfaces: into_vec(src.Interfaces),
+            interfaces: trans_vec(src.Interfaces),
         }
     }
 }
@@ -233,9 +214,8 @@ impl From<Route> for types::Route {
             device: from.device,
             source: from.source,
             scope: from.scope,
-            family: from.family.into(),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            family: protobuf::EnumOrUnknown::new(from.family.into()),
+            ..Default::default()
         }
     }
 }
@@ -248,7 +228,7 @@ impl From<types::Route> for Route {
             device: src.device,
             source: src.source,
             scope: src.scope,
-            family: src.family.into(),
+            family: src.family.unwrap().into(),
         }
     }
 }
@@ -256,9 +236,8 @@ impl From<types::Route> for Route {
 impl From<Routes> for agent::Routes {
     fn from(from: Routes) -> Self {
         Self {
-            Routes: from_vec(from.routes),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            Routes: trans_vec(from.routes),
+            ..Default::default()
         }
     }
 }
@@ -266,7 +245,7 @@ impl From<Routes> for agent::Routes {
 impl From<agent::Routes> for Routes {
     fn from(src: agent::Routes) -> Self {
         Self {
-            routes: into_vec(src.Routes),
+            routes: trans_vec(src.Routes),
         }
     }
 }
@@ -277,12 +256,11 @@ impl From<CreateContainerRequest> for agent::CreateContainerRequest {
             container_id: from.process_id.container_id(),
             exec_id: from.process_id.exec_id(),
             string_user: from_option(from.string_user),
-            devices: from_vec(from.devices),
-            storages: from_vec(from.storages),
+            devices: trans_vec(from.devices),
+            storages: trans_vec(from.storages),
             OCI: from_option(from.oci),
             sandbox_pidns: from.sandbox_pidns,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -292,8 +270,7 @@ impl From<RemoveContainerRequest> for agent::RemoveContainerRequest {
         Self {
             container_id: from.container_id,
             timeout: from.timeout,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -302,8 +279,7 @@ impl From<ContainerID> for agent::StartContainerRequest {
     fn from(from: ContainerID) -> Self {
         Self {
             container_id: from.container_id,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -312,8 +288,7 @@ impl From<ContainerID> for agent::StatsContainerRequest {
     fn from(from: ContainerID) -> Self {
         Self {
             container_id: from.container_id,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -322,8 +297,7 @@ impl From<ContainerID> for agent::PauseContainerRequest {
     fn from(from: ContainerID) -> Self {
         Self {
             container_id: from.container_id,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -332,8 +306,7 @@ impl From<ContainerID> for agent::ResumeContainerRequest {
     fn from(from: ContainerID) -> Self {
         Self {
             container_id: from.container_id,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -344,8 +317,7 @@ impl From<SignalProcessRequest> for agent::SignalProcessRequest {
             container_id: from.process_id.container_id(),
             exec_id: from.process_id.exec_id(),
             signal: from.signal,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -355,8 +327,7 @@ impl From<WaitProcessRequest> for agent::WaitProcessRequest {
         Self {
             container_id: from.process_id.container_id(),
             exec_id: from.process_id.exec_id(),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -366,8 +337,7 @@ impl From<UpdateContainerRequest> for agent::UpdateContainerRequest {
         Self {
             container_id: from.container_id,
             resources: from_option(Some(from.resources)),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -378,8 +348,7 @@ impl From<WriteStreamRequest> for agent::WriteStreamRequest {
             container_id: from.process_id.container_id(),
             exec_id: from.process_id.exec_id(),
             data: from.data,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -402,7 +371,7 @@ impl From<GetIPTablesRequest> for agent::GetIPTablesRequest {
 impl From<agent::GetIPTablesResponse> for GetIPTablesResponse {
     fn from(from: agent::GetIPTablesResponse) -> Self {
         Self {
-            data: from.get_data().to_vec(),
+            data: from.data().to_vec(),
         }
     }
 }
@@ -420,7 +389,7 @@ impl From<SetIPTablesRequest> for agent::SetIPTablesRequest {
 impl From<agent::SetIPTablesResponse> for SetIPTablesResponse {
     fn from(from: agent::SetIPTablesResponse) -> Self {
         Self {
-            data: from.get_data().to_vec(),
+            data: from.data().to_vec(),
         }
     }
 }
@@ -432,8 +401,7 @@ impl From<ExecProcessRequest> for agent::ExecProcessRequest {
             exec_id: from.process_id.exec_id(),
             string_user: from_option(from.string_user),
             process: from_option(from.process),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -515,14 +483,14 @@ impl From<agent::BlkioStatsEntry> for BlkioStatsEntry {
 impl From<agent::BlkioStats> for BlkioStats {
     fn from(src: agent::BlkioStats) -> Self {
         Self {
-            io_service_bytes_recursive: into_vec(src.io_service_bytes_recursive),
-            io_serviced_recursive: into_vec(src.io_serviced_recursive),
-            io_queued_recursive: into_vec(src.io_queued_recursive),
-            io_service_time_recursive: into_vec(src.io_service_time_recursive),
-            io_wait_time_recursive: into_vec(src.io_wait_time_recursive),
-            io_merged_recursive: into_vec(src.io_merged_recursive),
-            io_time_recursive: into_vec(src.io_time_recursive),
-            sectors_recursive: into_vec(src.sectors_recursive),
+            io_service_bytes_recursive: trans_vec(src.io_service_bytes_recursive),
+            io_serviced_recursive: trans_vec(src.io_serviced_recursive),
+            io_queued_recursive: trans_vec(src.io_queued_recursive),
+            io_service_time_recursive: trans_vec(src.io_service_time_recursive),
+            io_wait_time_recursive: trans_vec(src.io_wait_time_recursive),
+            io_merged_recursive: trans_vec(src.io_merged_recursive),
+            io_time_recursive: trans_vec(src.io_time_recursive),
+            sectors_recursive: trans_vec(src.sectors_recursive),
         }
     }
 }
@@ -570,7 +538,7 @@ impl From<agent::StatsContainerResponse> for StatsContainerResponse {
     fn from(src: agent::StatsContainerResponse) -> Self {
         Self {
             cgroup_stats: into_option(src.cgroup_stats),
-            network_stats: into_vec(src.network_stats),
+            network_stats: trans_vec(src.network_stats),
         }
     }
 }
@@ -581,8 +549,7 @@ impl From<ReadStreamRequest> for agent::ReadStreamRequest {
             container_id: from.process_id.container_id(),
             exec_id: from.process_id.exec_id(),
             len: from.len,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -598,8 +565,7 @@ impl From<CloseStdinRequest> for agent::CloseStdinRequest {
         Self {
             container_id: from.process_id.container_id(),
             exec_id: from.process_id.exec_id(),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -611,8 +577,7 @@ impl From<TtyWinResizeRequest> for agent::TtyWinResizeRequest {
             exec_id: from.process_id.exec_id(),
             row: from.row,
             column: from.column,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -621,8 +586,7 @@ impl From<UpdateInterfaceRequest> for agent::UpdateInterfaceRequest {
     fn from(from: UpdateInterfaceRequest) -> Self {
         Self {
             interface: from_option(from.interface),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -630,8 +594,7 @@ impl From<UpdateInterfaceRequest> for agent::UpdateInterfaceRequest {
 impl From<Empty> for agent::ListInterfacesRequest {
     fn from(_: Empty) -> Self {
         Self {
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -640,8 +603,7 @@ impl From<UpdateRoutesRequest> for agent::UpdateRoutesRequest {
     fn from(from: UpdateRoutesRequest) -> Self {
         Self {
             routes: from_option(from.route),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -649,8 +611,7 @@ impl From<UpdateRoutesRequest> for agent::UpdateRoutesRequest {
 impl From<Empty> for agent::ListRoutesRequest {
     fn from(_: Empty) -> Self {
         Self {
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -663,8 +624,7 @@ impl From<ARPNeighbor> for types::ARPNeighbor {
             lladdr: from.ll_addr,
             state: from.state,
             flags: from.flags,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -672,9 +632,8 @@ impl From<ARPNeighbor> for types::ARPNeighbor {
 impl From<ARPNeighbors> for agent::ARPNeighbors {
     fn from(from: ARPNeighbors) -> Self {
         Self {
-            ARPNeighbors: from_vec(from.neighbors),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ARPNeighbors: trans_vec(from.neighbors),
+            ..Default::default()
         }
     }
 }
@@ -683,8 +642,7 @@ impl From<AddArpNeighborRequest> for agent::AddARPNeighborsRequest {
     fn from(from: AddArpNeighborRequest) -> Self {
         Self {
             neighbors: from_option(from.neighbors),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -693,14 +651,13 @@ impl From<CreateSandboxRequest> for agent::CreateSandboxRequest {
     fn from(from: CreateSandboxRequest) -> Self {
         Self {
             hostname: from.hostname,
-            dns: from_vec(from.dns),
-            storages: from_vec(from.storages),
+            dns: trans_vec(from.dns),
+            storages: trans_vec(from.storages),
             sandbox_pidns: from.sandbox_pidns,
             sandbox_id: from.sandbox_id,
             guest_hook_path: from.guest_hook_path,
-            kernel_modules: from_vec(from.kernel_modules),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            kernel_modules: trans_vec(from.kernel_modules),
+            ..Default::default()
         }
     }
 }
@@ -708,8 +665,7 @@ impl From<CreateSandboxRequest> for agent::CreateSandboxRequest {
 impl From<Empty> for agent::DestroySandboxRequest {
     fn from(_: Empty) -> Self {
         Self {
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -720,8 +676,7 @@ impl From<OnlineCPUMemRequest> for agent::OnlineCPUMemRequest {
             wait: from.wait,
             nb_cpus: from.nb_cpus,
             cpu_only: from.cpu_only,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -730,8 +685,7 @@ impl From<ReseedRandomDevRequest> for agent::ReseedRandomDevRequest {
     fn from(from: ReseedRandomDevRequest) -> Self {
         Self {
             data: from.data,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -740,8 +694,7 @@ impl From<MemHotplugByProbeRequest> for agent::MemHotplugByProbeRequest {
     fn from(from: MemHotplugByProbeRequest) -> Self {
         Self {
             memHotplugProbeAddr: from.mem_hotplug_probe_addr,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -751,8 +704,7 @@ impl From<SetGuestDateTimeRequest> for agent::SetGuestDateTimeRequest {
         Self {
             Sec: from.sec,
             Usec: from.usec,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -762,8 +714,8 @@ impl From<agent::AgentDetails> for AgentDetails {
         Self {
             version: src.version,
             init_daemon: src.init_daemon,
-            device_handlers: into_vec(src.device_handlers),
-            storage_handlers: into_vec(src.storage_handlers),
+            device_handlers: trans_vec(src.device_handlers),
+            storage_handlers: trans_vec(src.storage_handlers),
             supports_seccomp: src.supports_seccomp,
         }
     }
@@ -790,8 +742,7 @@ impl From<CopyFileRequest> for agent::CopyFileRequest {
             gid: from.gid,
             offset: from.offset,
             data: from.data,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -807,8 +758,7 @@ impl From<agent::WaitProcessResponse> for WaitProcessResponse {
 impl From<Empty> for agent::GetOOMEventRequest {
     fn from(_: Empty) -> Self {
         Self {
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -817,8 +767,7 @@ impl From<CheckRequest> for health::CheckRequest {
     fn from(from: CheckRequest) -> Self {
         Self {
             service: from.service,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -826,7 +775,7 @@ impl From<CheckRequest> for health::CheckRequest {
 impl From<health::HealthCheckResponse> for HealthCheckResponse {
     fn from(from: health::HealthCheckResponse) -> Self {
         Self {
-            status: from.status as u32,
+            status: from.status.value() as u32,
         }
     }
 }
@@ -852,8 +801,7 @@ impl From<VolumeStatsRequest> for agent::VolumeStatsRequest {
     fn from(from: VolumeStatsRequest) -> Self {
         Self {
             volume_guest_path: from.volume_guest_path,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -862,8 +810,8 @@ impl From<csi::VolumeStatsResponse> for VolumeStatsResponse {
     fn from(from: csi::VolumeStatsResponse) -> Self {
         let result: String = format!(
             "Usage: {:?} Volume Condition: {:?}",
-            from.get_usage(),
-            from.get_volume_condition()
+            from.usage(),
+            from.volume_condition()
         );
         Self { data: result }
     }
@@ -874,8 +822,7 @@ impl From<ResizeVolumeRequest> for agent::ResizeVolumeRequest {
         Self {
             volume_guest_path: from.volume_guest_path,
             size: from.size,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }

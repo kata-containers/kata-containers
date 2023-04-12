@@ -26,12 +26,12 @@ impl ShimExecutor {
     async fn do_cleanup(&self) -> Result<api::DeleteResponse> {
         let mut rsp = api::DeleteResponse::new();
         rsp.set_exit_status(128 + libc::SIGKILL as u32);
-        let mut exited_time = protobuf::well_known_types::Timestamp::new();
+        let mut exited_time = protobuf::well_known_types::timestamp::Timestamp::new();
         let seconds = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(Error::SystemTime)?
             .as_secs() as i64;
-        exited_time.set_seconds(seconds);
+        exited_time.seconds = seconds;
         rsp.set_exited_at(exited_time);
 
         let address = self
