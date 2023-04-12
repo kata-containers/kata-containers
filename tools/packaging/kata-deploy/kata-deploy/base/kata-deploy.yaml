@@ -18,6 +18,9 @@ spec:
       - name: kube-kata
         image: quay.io/kata-containers/kata-deploy:latest
         imagePullPolicy: Always
+        readinessProbe:
+          exec:
+            command: [ "bash", "-c", "[ -f /opt/kata/kata-deployed ]", "&&", "bash", "-c", "[ $? == 0 ]" ]
         lifecycle:
           preStop:
             exec:
