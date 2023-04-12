@@ -11,6 +11,7 @@ pub mod agent_ttrpc;
 pub mod agent_ttrpc_async;
 pub mod csi;
 pub mod empty;
+mod gogo;
 pub mod health;
 pub mod health_ttrpc;
 #[cfg(feature = "async")]

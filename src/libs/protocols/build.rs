@@ -7,6 +7,7 @@ use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
 use std::process::exit;
+
 use ttrpc_codegen::{Codegen, Customize, ProtobufCustomize};
 
 fn replace_text_in_file(file_name: &str, from: &str, to: &str) -> Result<(), std::io::Error> {
@@ -103,10 +104,10 @@ fn codegen(path: &str, protos: &[&str], async_all: bool) -> Result<(), std::io::
         ..Default::default()
     };
 
-    let protobuf_options = ProtobufCustomize {
-        serde_derive: Some(true),
-        ..Default::default()
-    };
+    let protobuf_options = ProtobufCustomize::default()
+        .gen_mod_rs(false)
+        .generate_getter(true)
+        .generate_accessors(true);
 
     let out_dir = Path::new("src");
 
@@ -147,6 +148,7 @@ fn real_main() -> Result<(), std::io::Error> {
         "src",
         &[
             "protos/google/protobuf/empty.proto",
+            "protos/gogo/protobuf/gogoproto/gogo.proto",
             "protos/oci.proto",
             "protos/types.proto",
             "protos/csi.proto",
