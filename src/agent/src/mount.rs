@@ -214,7 +214,7 @@ async fn ephemeral_storage_handler(
     if storage.options.len() > 0 {
         // ephemeral_storage didn't support mount options except fsGroup.
         let mut new_storage = storage.clone();
-        new_storage.options = protobuf::RepeatedField::default();
+        new_storage.options = Default::default();
         common_storage_handler(logger, &new_storage)?;
 
         let opts_vec: Vec<String> = storage.options.to_vec();
@@ -654,7 +654,7 @@ pub fn set_ownership(logger: &Logger, storage: &Storage) -> Result<()> {
     if storage.fs_group.is_none() {
         return Ok(());
     }
-    let fs_group = storage.get_fs_group();
+    let fs_group = storage.fs_group();
 
     let mut read_only = false;
     let opts_vec: Vec<String> = storage.options.to_vec();
@@ -671,7 +671,7 @@ pub fn set_ownership(logger: &Logger, storage: &Storage) -> Result<()> {
         err
     })?;
 
-    if fs_group.group_change_policy == FSGroupChangePolicy::OnRootMismatch
+    if fs_group.group_change_policy == FSGroupChangePolicy::OnRootMismatch.into()
         && metadata.gid() == fs_group.group_id
     {
         let mut mask = if read_only { RO_MASK } else { RW_MASK };

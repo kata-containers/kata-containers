@@ -82,11 +82,11 @@ pub fn process_grpc_to_oci(p: &grpc::Process) -> oci::Process {
         let cap = p.Capabilities.as_ref().unwrap();
 
         Some(oci::LinuxCapabilities {
-            bounding: cap.Bounding.clone().into_vec(),
-            effective: cap.Effective.clone().into_vec(),
-            inheritable: cap.Inheritable.clone().into_vec(),
-            permitted: cap.Permitted.clone().into_vec(),
-            ambient: cap.Ambient.clone().into_vec(),
+            bounding: cap.Bounding.clone(),
+            effective: cap.Effective.clone(),
+            inheritable: cap.Inheritable.clone(),
+            permitted: cap.Permitted.clone(),
+            ambient: cap.Ambient.clone(),
         })
     } else {
         None
@@ -108,8 +108,8 @@ pub fn process_grpc_to_oci(p: &grpc::Process) -> oci::Process {
         terminal: p.Terminal,
         console_size,
         user,
-        args: p.Args.clone().into_vec(),
-        env: p.Env.clone().into_vec(),
+        args: p.Args.clone(),
+        env: p.Env.clone(),
         cwd: p.Cwd.clone(),
         capabilities,
         rlimits,
@@ -130,9 +130,9 @@ fn root_grpc_to_oci(root: &grpc::Root) -> oci::Root {
 fn mount_grpc_to_oci(m: &grpc::Mount) -> oci::Mount {
     oci::Mount {
         destination: m.destination.clone(),
-        r#type: m.field_type.clone(),
+        r#type: m.type_.clone(),
         source: m.source.clone(),
-        options: m.options.clone().into_vec(),
+        options: m.options.clone(),
     }
 }
 
@@ -143,8 +143,8 @@ fn hook_grpc_to_oci(h: &[grpcHook]) -> Vec<oci::Hook> {
     for e in h.iter() {
         r.push(oci::Hook {
             path: e.Path.clone(),
-            args: e.Args.clone().into_vec(),
-            env: e.Env.clone().into_vec(),
+            args: e.Args.clone(),
+            env: e.Env.clone(),
             timeout: Some(e.Timeout as i32),
         });
     }
@@ -359,7 +359,7 @@ fn seccomp_grpc_to_oci(sec: &grpc::LinuxSeccomp) -> oci::LinuxSeccomp {
             let mut args = Vec::new();
 
             let errno_ret: u32 = if sys.has_errnoret() {
-                sys.get_errnoret()
+                sys.errnoret()
             } else {
                 libc::EPERM as u32
             };
@@ -374,7 +374,7 @@ fn seccomp_grpc_to_oci(sec: &grpc::LinuxSeccomp) -> oci::LinuxSeccomp {
             }
 
             r.push(oci::LinuxSyscall {
-                names: sys.Names.clone().into_vec(),
+                names: sys.Names.clone(),
                 action: sys.Action.clone(),
                 errno_ret,
                 args,
@@ -385,8 +385,8 @@ fn seccomp_grpc_to_oci(sec: &grpc::LinuxSeccomp) -> oci::LinuxSeccomp {
 
     oci::LinuxSeccomp {
         default_action: sec.DefaultAction.clone(),
-        architectures: sec.Architectures.clone().into_vec(),
-        flags: sec.Flags.clone().into_vec(),
+        architectures: sec.Architectures.clone(),
+        flags: sec.Flags.clone(),
         syscalls,
     }
 }
@@ -456,8 +456,8 @@ fn linux_grpc_to_oci(l: &grpc::Linux) -> oci::Linux {
         devices,
         seccomp,
         rootfs_propagation: l.RootfsPropagation.clone(),
-        masked_paths: l.MaskedPaths.clone().into_vec(),
-        readonly_paths: l.ReadonlyPaths.clone().into_vec(),
+        masked_paths: l.MaskedPaths.clone(),
+        readonly_paths: l.ReadonlyPaths.clone(),
         mount_label: l.MountLabel.clone(),
         intel_rdt,
     }

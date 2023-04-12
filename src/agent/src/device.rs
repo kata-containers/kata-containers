@@ -759,7 +759,7 @@ async fn vfio_pci_device_handler(
     device: &Device,
     sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<SpecUpdate> {
-    let vfio_in_guest = device.field_type != DRIVER_VFIO_PCI_GK_TYPE;
+    let vfio_in_guest = device.type_ != DRIVER_VFIO_PCI_GK_TYPE;
     let mut pci_fixups = Vec::<(pci::Address, pci::Address)>::new();
     let mut group = None;
 
@@ -874,9 +874,9 @@ pub async fn add_devices(
 async fn add_device(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> Result<SpecUpdate> {
     // log before validation to help with debugging gRPC protocol version differences.
     info!(sl!(), "device-id: {}, device-type: {}, device-vm-path: {}, device-container-path: {}, device-options: {:?}",
-          device.id, device.field_type, device.vm_path, device.container_path, device.options);
+          device.id, device.type_, device.vm_path, device.container_path, device.options);
 
-    if device.field_type.is_empty() {
+    if device.type_.is_empty() {
         return Err(anyhow!("invalid type for device {:?}", device));
     }
 
@@ -888,7 +888,7 @@ async fn add_device(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> Result<Sp
         return Err(anyhow!("invalid container path for device {:?}", device));
     }
 
-    match device.field_type.as_str() {
+    match device.type_.as_str() {
         DRIVER_BLK_TYPE => virtio_blk_device_handler(device, sandbox).await,
         DRIVER_BLK_CCW_TYPE => virtio_blk_ccw_device_handler(device, sandbox).await,
         DRIVER_MMIO_BLK_TYPE => virtiommio_blk_device_handler(device, sandbox).await,
@@ -898,7 +898,7 @@ async fn add_device(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> Result<Sp
             vfio_pci_device_handler(device, sandbox).await
         }
         DRIVER_VFIO_AP_TYPE => vfio_ap_device_handler(device, sandbox).await,
-        _ => Err(anyhow!("Unknown device type {}", device.field_type)),
+        _ => Err(anyhow!("Unknown device type {}", device.type_)),
     }
 }
 
