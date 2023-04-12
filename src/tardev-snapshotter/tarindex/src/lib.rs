@@ -1,56 +1,8 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::{cell::RefCell, io, mem, rc::Rc};
 use tar::Archive;
-use zerocopy::byteorder::{LE, U16, U32, U64};
 use zerocopy::AsBytes;
-
-#[derive(zerocopy::AsBytes, zerocopy::Unaligned)]
-#[repr(C)]
-struct Inode {
-    mode: U16<LE>,
-    _padding: u8,
-    hmtime: u8, // High 4 bits of mtime.
-    owner: U32<LE>,
-    group: U32<LE>,
-    lmtime: U32<LE>, // Lower 32 bits of mtime.
-    size: U64<LE>,
-    offset: U64<LE>, // 64 bits of offset, or 32 LSB are minor dev and 32 MSB are major dev.
-}
-
-#[derive(zerocopy::AsBytes, zerocopy::Unaligned)]
-#[repr(C)]
-struct DirEntry {
-    ino: U64<LE>,
-    name_offset: U64<LE>,
-    name_len: U64<LE>,
-    etype: u8,
-    _padding: [u8; 7],
-}
-
-#[derive(zerocopy::AsBytes, zerocopy::Unaligned)]
-#[repr(C)]
-struct SuperBlock {
-    inode_table_offset: U64<LE>,
-    inode_count: U64<LE>,
-}
-
-const S_IFMT: u16 = 0o0170000;
-const S_IFSOCK: u16 = 0o0140000;
-const S_IFLNK: u16 = 0o0120000;
-const S_IFREG: u16 = 0o0100000;
-const S_IFBLK: u16 = 0o0060000;
-const S_IFDIR: u16 = 0o0040000;
-const S_IFCHR: u16 = 0o0020000;
-const S_IFIFO: u16 = 0o0010000;
-
-const DT_UNKNOWN: u8 = 0;
-const DT_FIFO: u8 = 1;
-const DT_CHR: u8 = 2;
-const DT_DIR: u8 = 4;
-const DT_BLK: u8 = 6;
-const DT_REG: u8 = 8;
-const DT_LNK: u8 = 10;
-const DT_SOCK: u8 = 12;
+use tarfs_defs::*;
 
 #[derive(Default)]
 struct Entry {

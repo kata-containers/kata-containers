@@ -1458,10 +1458,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tarfs-defs"
+version = "0.1.0"
+dependencies = [
+ "zerocopy",
+]
+
+[[package]]
 name = "tarindex"
 version = "0.1.0"
 dependencies = [
  "tar",
+ "tarfs-defs",
  "zerocopy",
 ]
 
