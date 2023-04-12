@@ -95,7 +95,7 @@ static int tarfs_readdir(struct file *file, struct dir_context *ctx)
 	char *name_buffer = NULL;
 	u64 name_len = 0;
 	u64 cur = ctx->pos;
-	u64 size = i_size_read(inode);
+	u64 size = i_size_read(inode) / sizeof(disk_dentry) * sizeof(disk_dentry);
 
 	/* cur must be aligned to a directory entry. */
 	if (ctx->pos % sizeof(struct tarfs_direntry))
@@ -105,7 +105,7 @@ static int tarfs_readdir(struct file *file, struct dir_context *ctx)
 	if (offset + size < offset)
 		return -ERANGE;
 
-	/* Make the increment of cur won't overflow by limiting size. */
+	/* Make sure the increment of cur won't overflow by limiting size. */
 	if (size >= U64_MAX - sizeof(disk_dentry))
 		return -ERANGE;
 
@@ -364,14 +364,14 @@ static struct dentry *tarfs_lookup(struct inode *dir, struct dentry *dentry,
 	int ret;
 	const char *name = dentry->d_name.name;
 	size_t len = dentry->d_name.len;
-	u64 size = i_size_read(dir);
+	u64 size = i_size_read(dir) / sizeof(disk_dentry) * sizeof(disk_dentry);
 	u64 cur;
 
 	/* Make sure we can't overflow the read offset. */
 	if (offset + size < offset)
 		return ERR_PTR(-ERANGE);
 
-	/* Make the increment of cur won't overflow by limiting size. */
+	/* Make sure the increment of cur won't overflow by limiting size. */
 	if (size >= U64_MAX - sizeof(disk_dentry))
 		return ERR_PTR(-ERANGE);
 
