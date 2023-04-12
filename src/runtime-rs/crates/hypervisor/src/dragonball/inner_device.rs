@@ -188,6 +188,9 @@ impl DragonballInner {
             let args: Vec<&str> = opt_list.split(',').collect();
             for arg in args {
                 match arg {
+                    "cache=none" => fs_cfg.cache_policy = String::from("none"),
+                    "cache=auto" => fs_cfg.cache_policy = String::from("auto"),
+                    "cache=always" => fs_cfg.cache_policy = String::from("always"),
                     "no_open" => fs_cfg.no_open = true,
                     "open" => fs_cfg.no_open = false,
                     "writeback_cache" => fs_cfg.writeback_cache = true,
