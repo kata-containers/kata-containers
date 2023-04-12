@@ -48,7 +48,7 @@ use nix::unistd::{self, fork, ForkResult, Gid, Pid, Uid, User};
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::io::AsRawFd;
 
-use protobuf::SingularPtrField;
+use protobuf::MessageField;
 
 use oci::State as OCIState;
 use regex::Regex;
@@ -875,7 +875,7 @@ impl BaseContainer for LinuxContainer {
         // what about network interface stats?
 
         Ok(StatsContainerResponse {
-            cgroup_stats: SingularPtrField::some(self.cgroup_manager.as_ref().get_stats()?),
+            cgroup_stats: MessageField::some(self.cgroup_manager.as_ref().get_stats()?),
             ..Default::default()
         })
     }
