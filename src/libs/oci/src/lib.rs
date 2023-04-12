@@ -192,11 +192,23 @@ pub struct Hook {
 pub struct Hooks {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub prestart: Vec<Hook>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        rename = "createRuntime",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub create_runtime: Vec<Hook>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        rename = "createContainer",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub create_container: Vec<Hook>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        rename = "startContainer",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub start_container: Vec<Hook>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub poststart: Vec<Hook>,
@@ -837,6 +849,8 @@ pub struct State {
 
 #[cfg(test)]
 mod tests {
+    use std::vec;
+
     use super::*;
 
     #[test]
@@ -1025,6 +1039,11 @@ mod tests {
                     },
                     {
                         "path": "/usr/bin/setup-network"
+                    }
+                ],
+                "createRuntime": [
+                    {
+                        "path": "/usr/local/bin/nerdctl"
                     }
                 ],
                 "poststart": [
@@ -1395,6 +1414,12 @@ mod tests {
                         timeout: None,
                     },
                 ],
+                create_runtime: vec![crate::Hook {
+                    path: "/usr/local/bin/nerdctl".to_string(),
+                    args: vec![],
+                    env: vec![],
+                    timeout: None,
+                }],
                 poststart: vec![crate::Hook {
                     path: "/usr/bin/notify-start".to_string(),
                     args: vec![],

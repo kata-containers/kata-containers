@@ -7,14 +7,20 @@
 use anyhow::Result;
 use async_trait::async_trait;
 
+#[derive(Clone)]
+pub struct SandboxNetworkEnv {
+    pub netns: Option<String>,
+    pub network_created: bool,
+}
+
 #[async_trait]
 pub trait Sandbox: Send + Sync {
     async fn start(
         &self,
-        netns: Option<String>,
         dns: Vec<String>,
         spec: &oci::Spec,
         state: &oci::State,
+        network_env: SandboxNetworkEnv,
     ) -> Result<()>;
     async fn stop(&self) -> Result<()>;
     async fn cleanup(&self) -> Result<()>;
