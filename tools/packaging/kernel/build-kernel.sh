@@ -239,8 +239,23 @@ get_kernel_frag_path() {
 
 	if [[ "${gpu_vendor}" != "" ]];then
 		info "Add kernel config for GPU due to '-g ${gpu_vendor}'"
-		local gpu_configs="$(ls ${gpu_path}/${gpu_vendor}.conf)"
-		all_configs="${all_configs} ${gpu_configs}"
+		# If conf_guest is set we need to update the CONFIG_LOCALVERSION
+		# to match the suffix created in install_kata
+		# -nvidia-gpu-{snp|tdx}, the linux headers will be named the very
+		# same if build with make deb-pkg for TDX or SNP.
+		if [[ "${conf_guest}" != "" ]];then
+			local gpu_cc_configs=$(mktemp).conf
+			local gpu_subst_configs="$(ls ${gpu_path}/${gpu_vendor}.conf.in)"
+
+			export CONF_GUEST_SUFFIX="-${conf_guest}"
+			envsubst <${gpu_subst_configs} >${gpu_cc_configs}
+			unset CONF_GUEST_SUFFIX
+
+			all_configs="${all_configs} ${gpu_cc_configs}"
+		else
+			local gpu_configs="$(ls ${gpu_path}/${gpu_vendor}.conf)"
+			all_configs="${all_configs} ${gpu_configs}"
+		fi
 	fi
 
 	if [[ "${conf_guest}" != "" ]];then
@@ -545,7 +560,7 @@ main() {
 		if [ -n "$kernel_version" ];  then
 			kernel_major_version=$(get_major_kernel_version "${kernel_version}")
 			if [[ ${kernel_major_version} != "5.10" ]]; then
-				info "dragonball-experimental kernel patches are only tested on 5.10.x kernel now, other kernel version may cause confliction"	
+				info "dragonball-experimental kernel patches are only tested on 5.10.x kernel now, other kernel version may cause confliction"
 			fi
 		fi
 	fi
