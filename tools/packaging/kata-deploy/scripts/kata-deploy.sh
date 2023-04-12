@@ -310,11 +310,13 @@ function main() {
 			install_artifacts
 			configure_cri_runtime "$runtime"
 			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
+			touch /opt/kata/kata-deployed
 			;;
 		cleanup)
 			cleanup_cri_runtime "$runtime"
 			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=cleanup
 			remove_artifacts
+			rm /opt/kata/kata-deployed
 			;;
 		reset)
 			reset_runtime $runtime
