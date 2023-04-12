@@ -979,6 +979,13 @@ pub struct Hypervisor {
     #[serde(default, flatten)]
     pub shared_fs: SharedFsInfo,
 
+    /// A sandbox annotation used to specify prefetch_files.list host path container image
+    /// being used, and runtime will pass it to Hypervisor to  search for corresponding
+    /// prefetch list file:
+    ///   prefetch_list_path = /path/to/<uid>/xyz.com/fedora:36/prefetch_file.list
+    #[serde(default)]
+    pub prefetch_list_path: String,
+
     /// Vendor customized runtime configuration.
     #[serde(default, flatten)]
     pub vendor: HypervisorVendor,
@@ -1022,6 +1029,10 @@ impl ConfigOps for Hypervisor {
                 hv.network_info.adjust_config()?;
                 hv.security_info.adjust_config()?;
                 hv.shared_fs.adjust_config()?;
+                resolve_path!(
+                    hv.prefetch_list_path,
+                    "prefetch_list_path `{}` is invalid: {}"
+                )?;
             } else {
                 return Err(eother!("Can not find plugin for hypervisor {}", hypervisor));
             }
@@ -1056,6 +1067,10 @@ impl ConfigOps for Hypervisor {
                     "Hypervisor control executable `{}` is invalid: {}"
                 )?;
                 validate_path!(hv.jailer_path, "Hypervisor jailer path `{}` is invalid: {}")?;
+                validate_path!(
+                    hv.prefetch_list_path,
+                    "prefetch_files.list path `{}` is invalid: {}"
+                )?;
             } else {
                 return Err(eother!("Can not find plugin for hypervisor {}", hypervisor));
             }
