@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use futures::StreamExt;
 use std::io;
 use std::io::ErrorKind;
@@ -15,6 +15,7 @@ use tracing::instrument;
 
 // Size of I/O read buffer
 const BUF_SIZE: usize = 8192;
+const DROP_CACHE_FILE: &str = "/proc/sys/vm/drop_caches";
 
 // Interruptable I/O copy using readers and writers
 // (an interruptable version of "io::copy()").
@@ -70,6 +71,22 @@ pub async fn get_vsock_stream(fd: RawFd) -> Result<VsockStream> {
         .ok_or_else(|| anyhow!("cannot handle incoming vsock connection"))?;
 
     Ok(stream?)
+}
+
+/// Drop cache in guest
+/// * Args:
+/// - drop: determines which cache will be droped. Value should be in {1, 2, 3}
+/// 1: page cache is dropped
+/// 2: dentries and inodes are dropped
+/// 3: page cache, dentries and inodes are dropped
+pub(crate) async fn drop_cache(drop: u32) -> Result<()> {
+    if drop == 0 || drop > 3 {
+        return Err(anyhow!("wrong drop cache value"));
+    }
+
+    tokio::fs::write(DROP_CACHE_FILE, format!("{}", drop))
+        .await
+        .context("write drop cache file")
 }
 
 #[cfg(test)]

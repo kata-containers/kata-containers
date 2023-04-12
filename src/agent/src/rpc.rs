@@ -57,6 +57,7 @@ use crate::network::setup_guest_dns;
 use crate::pci;
 use crate::random;
 use crate::sandbox::Sandbox;
+use crate::util::drop_cache;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
 
@@ -1553,6 +1554,20 @@ impl agent_ttrpc::AgentService for AgentService {
         is_allowed!(req);
 
         do_add_swap(&self.sandbox, &req)
+            .await
+            .map_err(|e| ttrpc_error!(ttrpc::Code::INTERNAL, e))?;
+
+        Ok(Empty::new())
+    }
+
+    async fn drop_cache(
+        &self,
+        ctx: &TtrpcContext,
+        req: protocols::agent::DropCacheRequest,
+    ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "drop_cache", req);
+
+        drop_cache(req.drop_option)
             .await
             .map_err(|e| ttrpc_error!(ttrpc::Code::INTERNAL, e))?;
 
