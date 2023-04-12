@@ -20,6 +20,8 @@ jobs:
         vmm:
           - qemu-tdx
     runs-on: tdx
+    env:
+      KUBECONFIG: /etc/rancher/k3s/k3s.yaml
     steps:
       - uses: actions/checkout@v3
         with:
@@ -35,8 +37,6 @@ jobs:
           kubectl apply -f tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
           kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
           kubectl apply -f tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
-        env:
-          KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
       - name: Run tests
         timeout-minutes: 30
@@ -47,7 +47,6 @@ jobs:
           popd
         env:
           KATA_HYPERVISOR: ${{ matrix.vmm }}
-          KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
       - name: Delete kata-deploy
         if: always()
@@ -64,5 +63,3 @@ jobs:
           kubectl delete -f tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
           kubectl delete -f tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
           kubectl delete -f tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
-        env:
-          KUBECONFIG: /etc/rancher/k3s/k3s.yaml
