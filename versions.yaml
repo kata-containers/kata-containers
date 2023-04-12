@@ -310,7 +310,7 @@ externals:
   td-shim:
     description: "Confidential Containers Shim Firmware"
     url: "https://github.com/confidential-containers/td-shim"
-    version: "v0.4.0"
+    version: "10568bab569bc40034cc973f26fbb0a768dcc3e3"
     toolchain: "nightly-2022-11-15"
 
   virtiofsd:
