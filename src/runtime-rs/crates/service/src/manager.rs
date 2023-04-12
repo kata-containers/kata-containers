@@ -14,7 +14,7 @@ use std::{
 use anyhow::{Context, Result};
 use common::message::{Action, Event, Message};
 use containerd_shim_protos::{
-    protobuf::{well_known_types::Any, Message as ProtobufMessage},
+    protobuf::{well_known_types::any::Any, Message as ProtobufMessage},
     shim_async,
 };
 use runtimes::RuntimeHandlerManager;
