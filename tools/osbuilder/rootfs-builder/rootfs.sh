@@ -475,6 +475,8 @@ prepare_overlay()
 	# Kata systemd unit file
 	mkdir -p ./etc/systemd/system/basic.target.wants/
 	ln -sf /usr/lib/systemd/system/kata-containers.target ./etc/systemd/system/basic.target.wants/kata-containers.target
+	mkdir -p ./etc/systemd/system/kata-containers.target.wants/
+	ln -sf /usr/lib/systemd/system/dbus.socket  ./etc/systemd/system/kata-containers.target.wants/dbus.socket
 	popd  > /dev/null
 }
 
