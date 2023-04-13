@@ -73,12 +73,12 @@ const (
 	// Values based on:
 	clhTimeout                     = 10
 	clhAPITimeout                  = 1
-	clhAPITimeoutConfidentialGuest = 10
+	clhAPITimeoutConfidentialGuest = 20
 	// Timeout for hot-plug - hotplug devices can take more time, than usual API calls
 	// Use longer time timeout for it.
 	clhHotPlugAPITimeout                   = 5
 	clhStopSandboxTimeout                  = 3
-	clhStopSandboxTimeoutConfidentialGuest = 5
+	clhStopSandboxTimeoutConfidentialGuest = 10
 	clhSocket                              = "clh.sock"
 	clhAPISocket                           = "clh-api.sock"
 	virtioFsSocket                         = "virtiofsd.sock"
