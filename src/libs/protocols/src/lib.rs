@@ -17,5 +17,13 @@ pub mod health_ttrpc;
 #[cfg(feature = "async")]
 pub mod health_ttrpc_async;
 pub mod oci;
+#[cfg(feature = "with-serde")]
+mod serde_config;
 pub mod trans;
 pub mod types;
+
+#[cfg(feature = "with-serde")]
+pub use serde_config::{
+    deserialize_enum_or_unknown, deserialize_message_field, serialize_enum_or_unknown,
+    serialize_message_field,
+};
