@@ -145,7 +145,12 @@ pub fn get_generic_cpu_details(cpu_info_file: &str) -> Result<(String, String)> 
 
 pub const VHOST_VSOCK_DEVICE: &str = "/dev/vhost-vsock";
 pub fn supports_vsocks(vsock_path: &str) -> Result<bool> {
-    let metadata = fs::metadata(vsock_path)?;
+    let metadata = fs::metadata(vsock_path).map_err(|err| {
+        anyhow!(
+            "Host system does not support vhost-vsock (try running (`sudo modprobe vhost_vsock`) : {}",
+            err.to_string()
+        )
+    })?;
     Ok(metadata.is_file())
 }
 
