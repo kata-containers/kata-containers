@@ -196,7 +196,7 @@ impl TomlConfig {
     }
 
     /// Probe configuration file according to the default configuration file list.
-    fn get_default_config_file() -> Result<PathBuf> {
+    pub fn get_default_config_file() -> Result<PathBuf> {
         for f in default::DEFAULT_RUNTIME_CONFIGURATIONS.iter() {
             if let Ok(path) = fs::canonicalize(f) {
                 return Ok(path);
