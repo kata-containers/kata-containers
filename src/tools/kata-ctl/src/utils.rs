@@ -110,7 +110,6 @@ pub fn get_distro_details(os_release: &str, os_release_clr: &str) -> Result<(Str
 pub fn get_generic_cpu_details(cpu_info_file: &str) -> Result<(String, String)> {
     let cpu_info = get_single_cpu_info(cpu_info_file, "\n\n")?;
     let lines = cpu_info.lines();
-    println!("Single cpu info: {}", cpu_info);
     let mut vendor = String::new();
     let mut model = String::new();
 
