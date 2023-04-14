@@ -25,6 +25,8 @@ serde = { version = "1.0.149", features = ["derive"] }
 url = "2.3.1"
 futures = "0.3.24"
 base64 = "0.13.0"
+toml = "0.5.8"
+sys-info = "0.9.1"
 
 shim-interface = { path = "../../libs/shim-interface"}
 kata-types = { path = "../../libs/kata-types" }
