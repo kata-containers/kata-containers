@@ -20,7 +20,7 @@ dependencies = [
  "slog",
  "slog-scope",
  "tokio",
- "ttrpc 0.7.1",
+ "ttrpc",
  "url",
 ]
 
@@ -657,7 +657,6 @@ dependencies = [
  "test-utils",
  "thiserror",
  "tokio",
- "ttrpc 0.6.1",
  "url",
  "vmm-sys-util",
 ]
@@ -1145,16 +1144,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "protobuf-codegen-pure"
-version = "2.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95a29399fc94bcd3eeaa951c715f7bea69409b2445356b00519740bcd6ddd865"
-dependencies = [
- "protobuf 2.28.0",
- "protobuf-codegen 2.28.0",
-]
-
-[[package]]
 name = "protobuf-parse"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1186,7 +1175,7 @@ dependencies = [
  "async-trait",
  "oci",
  "protobuf 3.2.0",
- "ttrpc 0.7.1",
+ "ttrpc",
  "ttrpc-codegen",
 ]
 
@@ -1808,21 +1797,6 @@ checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
 
 [[package]]
 name = "ttrpc"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ecfff459a859c6ba6668ff72b34c2f1d94d9d58f7088414c2674ad0f31cc7d8"
-dependencies = [
- "byteorder",
- "libc",
- "log",
- "nix 0.23.2",
- "protobuf 2.28.0",
- "protobuf-codegen-pure",
- "thiserror",
-]
-
-[[package]]
-name = "ttrpc"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a35f22a2964bea14afee161665bb260b83cb48e665e0260ca06ec0e775c8b06c"
@@ -1842,7 +1816,9 @@ dependencies = [
 
 [[package]]
 name = "ttrpc-codegen"
-version = "0.4.1"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94d7f7631d7a9ebed715a47cd4cb6072cbc7ae1d4ec01598971bbec0024340c2"
 dependencies = [
  "protobuf 2.28.0",
  "protobuf-codegen 3.2.0",
