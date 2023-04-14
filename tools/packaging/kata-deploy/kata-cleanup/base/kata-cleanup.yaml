@@ -21,6 +21,9 @@ spec:
         image: quay.io/kata-containers/kata-deploy:latest
         imagePullPolicy: Always
         command: [ "bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh reset" ]
+        readinessProbe:
+          exec:
+            command: [ "bash", "-c", "[ -f /opt/kata/kata-deployed ]", "&&", "bash", "-c", "[ $? == 1 ]" ]
         env:
         - name: NODE_NAME
           valueFrom:
