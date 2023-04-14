@@ -1056,7 +1056,7 @@ mod tests {
     #[test]
     fn test_from_vec_len_0() {
         let from: Vec<TestA> = vec![];
-        let to: ::protobuf::RepeatedField<TestB> = from_vec(from.clone());
+        let to: Vec<TestB> = from_vec(from.clone());
         assert_eq!(from.len(), to.len());
     }
 
@@ -1065,7 +1065,7 @@ mod tests {
         let from: Vec<TestA> = vec![TestA {
             from: "a".to_string(),
         }];
-        let to: ::protobuf::RepeatedField<TestB> = from_vec(from.clone());
+        let to: Vec<TestB> = from_vec(from.clone());
 
         assert_eq!(from.len(), to.len());
         assert_eq!(from[0].from, to[0].to);
