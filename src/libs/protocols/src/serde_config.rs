@@ -36,3 +36,33 @@ pub fn deserialize_message_field<'de, E: Deserialize<'de>, D: serde::Deserialize
 ) -> Result<protobuf::MessageField<E>, D::Error> {
     Option::deserialize(d).map(MessageField::from_option)
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::agent::{ExecProcessRequest, StringUser};
+    use crate::health::{health_check_response::ServingStatus, HealthCheckResponse};
+
+    #[test]
+    fn test_serde_for_enum_or_unknown() {
+        let mut hc = HealthCheckResponse::new();
+        hc.set_status(ServingStatus::SERVING);
+
+        let json = serde_json::to_string(&hc).unwrap();
+        let from_json: HealthCheckResponse = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(from_json, hc);
+    }
+
+    #[test]
+    fn test_serde_for_message_field() {
+        let mut epr = ExecProcessRequest::new();
+        let mut str_user = StringUser::new();
+        str_user.uid = "Someone's id".to_string();
+        epr.set_string_user(str_user);
+
+        let json = serde_json::to_string(&epr).unwrap();
+        let from_json: ExecProcessRequest = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(from_json, epr);
+    }
+}
