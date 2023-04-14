@@ -8,7 +8,45 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
 use std::process::exit;
 
-use ttrpc_codegen::{Codegen, Customize, ProtobufCustomize};
+use protobuf::{
+    descriptor::field_descriptor_proto::Type,
+    reflect::{EnumDescriptor, FieldDescriptor, MessageDescriptor, OneofDescriptor},
+};
+use ttrpc_codegen::{Codegen, Customize, ProtobufCustomize, ProtobufCustomizeCallback};
+
+struct GenSerde;
+
+impl ProtobufCustomizeCallback for GenSerde {
+    fn message(&self, _message: &MessageDescriptor) -> ProtobufCustomize {
+        ProtobufCustomize::default().before("#[cfg_attr(feature = \"with-serde\", derive(::serde::Serialize, ::serde::Deserialize))]")
+    }
+
+    fn enumeration(&self, _enum_type: &EnumDescriptor) -> ProtobufCustomize {
+        ProtobufCustomize::default().before("#[cfg_attr(feature = \"with-serde\", derive(::serde::Serialize, ::serde::Deserialize))]")
+    }
+
+    fn oneof(&self, _oneof: &OneofDescriptor) -> ProtobufCustomize {
+        ProtobufCustomize::default().before("#[cfg_attr(feature = \"with-serde\", derive(::serde::Serialize, ::serde::Deserialize))]")
+    }
+
+    fn field(&self, field: &FieldDescriptor) -> ProtobufCustomize {
+        if field.proto().type_() == Type::TYPE_ENUM {
+            ProtobufCustomize::default().before(
+                    "#[cfg_attr(feature = \"with-serde\", serde(serialize_with = \"crate::serialize_enum_or_unknown\", deserialize_with = \"crate::deserialize_enum_or_unknown\"))]",
+                )
+        } else if field.proto().type_() == Type::TYPE_MESSAGE && field.is_singular() {
+            ProtobufCustomize::default().before(
+                "#[cfg_attr(feature = \"with-serde\", serde(serialize_with = \"crate::serialize_message_field\", deserialize_with = \"crate::deserialize_message_field\"))]",
+            )
+        } else {
+            ProtobufCustomize::default()
+        }
+    }
+
+    fn special_field(&self, _message: &MessageDescriptor, _field: &str) -> ProtobufCustomize {
+        ProtobufCustomize::default().before("#[cfg_attr(feature = \"with-serde\", serde(skip))]")
+    }
+}
 
 fn replace_text_in_file(file_name: &str, from: &str, to: &str) -> Result<(), std::io::Error> {
     let mut src = File::open(file_name)?;
