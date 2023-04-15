@@ -53,6 +53,7 @@ cache_ovmf_artifacts() {
 cache_qemu_artifacts() {
 	local qemu_tarball_name="kata-static-${QEMU_FLAVOUR}.tar.xz"
 	local current_qemu_version=$(get_from_kata_deps "assets.hypervisor.${QEMU_FLAVOUR}.version")
+	[ -z "${current_qemu_version}" ] && current_qemu_version=$(get_from_kata_deps "assets.hypervisor.${QEMU_FLAVOUR}.tag")
 	local qemu_sha=$(calc_qemu_files_sha256sum)
 	local current_qemu_image="$(get_qemu_image_name)"
 	create_cache_asset "${qemu_tarball_name}" "${current_qemu_version}-${qemu_sha}" "${current_qemu_image}"
