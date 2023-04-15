@@ -15,6 +15,10 @@ pub mod fdt;
 /// Helper structs for constructing  fdt.
 pub mod fdt_utils;
 
+/// Read cache information from host.
+pub mod cache_info;
+use cache_info::Error as CacheInfoError;
+
 /// Default (smallest) memory page size for the supported architectures.
 pub const PAGE_SIZE: usize = 4096;
 
@@ -30,6 +34,9 @@ pub enum Error {
     /// Failed to compute the initrd address.
     #[error("Failed to compute the initrd address.")]
     InitrdAddress,
+    /// Failed to read cache information from host.
+    #[error("Failed to read cache information: {0}")]
+    ReadCacheInfoError(#[from] CacheInfoError),
     /// Invalid arguments
     #[error("invalid arguments")]
     InvalidArguments,

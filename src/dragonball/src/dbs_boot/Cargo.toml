@@ -16,6 +16,7 @@ kvm-bindings = { version = "0.6.0", features = ["fam-wrappers"] }
 kvm-ioctls = "0.12.0"
 lazy_static = "1"
 libc = "0.2.39"
+log = "0.4.14"
 thiserror = "1"
 vm-memory = "0.9.0"
 vm-fdt = "0.2.0"

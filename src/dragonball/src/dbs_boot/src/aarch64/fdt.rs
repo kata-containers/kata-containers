@@ -16,10 +16,11 @@ use dbs_arch::gic::GICDevice;
 use dbs_arch::{pmu::VIRTUAL_PMU_IRQ, VpmuFeatureLevel};
 use dbs_arch::{DeviceInfoForFDT, DeviceType};
 
-use vm_fdt::FdtWriter;
+use vm_fdt::{FdtWriter, FdtWriterNode};
 use vm_memory::GuestMemoryRegion;
 use vm_memory::{Address, Bytes, GuestAddress, GuestMemory};
 
+use super::cache_info::{cache_entry::CacheEntry, read_cache_config};
 use super::fdt_utils::*;
 use super::Error;
 use crate::Result;
@@ -34,6 +35,12 @@ const GIC_PLATFORM_MSI_ITS_PHANDLE: u32 = 3;
 const GIC_PCI_MSI_ITS_PHANDLE: u32 = 4;
 // According to the arm, gic-v3.txt document, ITS' #msi-cells is fixed at 1.
 const GIC_PLATFORM_MSI_ITS_CELLS_SIZE: u32 = 1;
+// You may be wondering why this big value?
+// This phandle is used to uniquely identify the FDT nodes containing cache information. Each cpu
+// can have a variable number of caches, some of these caches may be shared with other cpus.
+// So, we start the indexing of the phandles used from a really big number and then substract from
+// it as we need more and more phandle for each cache representation.
+const LAST_CACHE_PHANDLE: u32 = 4000;
 
 // Read the documentation specified when appending the root node to the FDT.
 const ADDRESS_CELLS: u32 = 0x2;
@@ -52,7 +59,7 @@ const IRQ_TYPE_LEVEL_HI: u32 = 4;
 /// Creates the flattened device tree for this aarch64 microVM.
 pub fn create_fdt<T>(
     fdt_vm_info: FdtVmInfo,
-    _fdt_numa_info: FdtNumaInfo,
+    fdt_numa_info: FdtNumaInfo,
     fdt_device_info: FdtDeviceInfo<T>,
 ) -> Result<Vec<u8>>
 where
@@ -74,7 +81,7 @@ where
     // This is not mandatory but we use it to point the root node to the node
     // containing description of the interrupt controller for this VM.
     fdt.property_u32("interrupt-parent", GIC_PHANDLE)?;
-    create_cpu_nodes(&mut fdt, &fdt_vm_info)?;
+    create_cpu_nodes(&mut fdt, &fdt_vm_info, fdt_numa_info.get_cpu_maps())?;
     create_memory_node(&mut fdt, fdt_vm_info.get_guest_memory())?;
     create_chosen_node(&mut fdt, &fdt_vm_info)?;
     create_gic_node(&mut fdt, fdt_device_info.get_irqchip())?;
@@ -101,7 +108,11 @@ where
 }
 
 // Following are the auxiliary function for creating the different nodes that we append to our FDT.
-fn create_cpu_nodes(fdt: &mut FdtWriter, fdt_vm_info: &FdtVmInfo) -> Result<()> {
+fn create_cpu_nodes(
+    fdt: &mut FdtWriter,
+    fdt_vm_info: &FdtVmInfo,
+    cpu_maps: Option<Vec<u8>>,
+) -> Result<()> {
     // See https://github.com/torvalds/linux/blob/master/Documentation/devicetree/bindings/arm/cpus.yaml.
     let cpus_node = fdt.begin_node("cpus")?;
     // As per documentation, on ARM v8 64-bit systems value should be set to 2.
@@ -110,6 +121,13 @@ fn create_cpu_nodes(fdt: &mut FdtWriter, fdt_vm_info: &FdtVmInfo) -> Result<()> 
     let vcpu_mpidr = fdt_vm_info.get_vcpu_mpidr();
     let vcpu_boot_onlined = fdt_vm_info.get_boot_onlined();
     let num_cpus = vcpu_mpidr.len();
+    let cache_info = if fdt_vm_info.get_cache_passthrough_enabled() {
+        // Unwrap cpu_maps here is safe because it is Some(value) only when cache_passthrough_enabled is true.
+        // The vmm should ensure the this condition.
+        read_cache_config(cpu_maps.unwrap(), Some(3)).map_err(Error::ReadCacheInfoError)?
+    } else {
+        HashMap::new()
+    };
 
     for (cpu_index, mpidr) in vcpu_mpidr.iter().enumerate().take(num_cpus) {
         let cpu_name = format!("cpu@{cpu_index:x}");
@@ -126,10 +144,144 @@ fn create_cpu_nodes(fdt: &mut FdtWriter, fdt_vm_info: &FdtVmInfo) -> Result<()> 
         // Set the field to first 24 bits of the MPIDR - Multiprocessor Affinity Register.
         // See http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0488c/BABHBJCI.html.
         fdt.property_u64("reg", mpidr & 0x7FFFFF)?;
+
+        // Currently, dragonball only support binding vcpu on numa level, which means the cache information
+        // can be assured correct on numa level.
+        if !cache_info.is_empty() && cache_info.contains_key(&cpu_index) {
+            // Append L1 cache information to each cpu node.
+            append_l1_cache_property(fdt, cache_info.get(&cpu_index).unwrap().0.as_slice())?;
+            // Append L2/L3 cache node into each cpu node.
+            create_non_l1_cache_node(
+                fdt,
+                cache_info.get(&cpu_index).unwrap().1.as_slice(),
+                num_cpus,
+                cpu_index,
+            )?;
+        }
+
         fdt.end_node(cpu_node)?;
     }
     fdt.end_node(cpus_node)?;
+
     Ok(())
+}
+
+fn append_l1_cache_property(fdt: &mut FdtWriter, l1_caches: &[CacheEntry]) -> Result<()> {
+    // Please check out
+    // https://github.com/devicetree-org/devicetree-specification/releases/download/v0.3/devicetree-specification-v0.3.pdf,
+    // section 3.8.
+    // L1 cache contians l1-instruction-cache and l1-data-cache
+    for cache in l1_caches.iter() {
+        if let Some(size) = cache.size_ {
+            fdt.property_u32(cache.type_.of_cache_size(), size as u32)?;
+        }
+        if let Some(line_size) = cache.line_size {
+            fdt.property_u32(cache.type_.of_cache_line_size(), line_size as u32)?;
+        }
+        if let Some(number_of_sets) = cache.number_of_sets {
+            fdt.property_u32(cache.type_.of_cache_sets(), number_of_sets)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn create_non_l1_cache_node(
+    fdt: &mut FdtWriter,
+    non_l1_caches: &[CacheEntry],
+    num_cpus: usize,
+    cpu_index: usize,
+) -> Result<()> {
+    // Some of the non-l1 caches can be shared amongst CPUs. You can see an example of a shared
+    // scenario in https://github.com/devicetree-org/devicetree-specification/releases/download/v0.3/devicetree-specification-v0.3.pdf,
+    // 3.8.1 Example.
+    let mut prev_level = 1;
+    // Initialize a l2_cache_node for fdt.end_node.
+    // As non-l1 caches contains two entries: l2 cache and l3 cache. So the variable will
+    // only be assigned once in the loop. To be compatible with vm_fdt crate, create a
+    // temporary FdtWriter for passing compiling check.
+    let mut l2_cache_node = FdtWriter::new()?.begin_node("TEMP")?;
+
+    for cache in non_l1_caches.iter() {
+        // We append the next-level-cache property (the node that specifies the cache hierarchy)
+        // in the next iteration. For example,
+        // L2-cache {
+        //      cache-size = <0x8000> ----> first iteration
+        //      next-level-cache = <&l3-cache> ---> second iteration
+        // }
+        // The cpus per unit cannot be 0 since the sysfs will also include the current cpu
+        // in the list of shared cpus so it needs to be at least 1. Firecracker trusts the host.
+        // The operation is safe since we already checked when creating cache attributes that
+        // cpus_per_unit is not 0 (.e look for mask_str2bit_count function).
+        let cache_phandle = LAST_CACHE_PHANDLE
+            - (num_cpus * (cache.level - 2) as usize + cpu_index / cache.cpus_per_unit as usize)
+                as u32;
+
+        // In L2 cache, cpus_per_unit = 1, so it belongs to a specific cpu.
+        // In L3 cache, it is shared by all the cpus on the same numa node.
+        let is_append_l3_cache: bool =
+            cache.cpus_per_unit != 1 && (cpu_index % cache.cpus_per_unit as usize) == 0;
+
+        // Add next-level-cache in the parent node.
+        if prev_level != cache.level {
+            fdt.property_u32("next-level-cache", cache_phandle)?;
+        }
+
+        // Currently, the kernel only expose L0~L3 caches.
+        match cache.level {
+            // L2 cache.
+            2 => {
+                l2_cache_node = append_non_l1_cache_node(fdt, cpu_index, cache, cache_phandle)?;
+                prev_level = 2;
+            }
+            // L3 cache.
+            3 => {
+                // L3 cache only attach to the first cpu node in its
+                // shared_cpu_map structure.
+                if !is_append_l3_cache {
+                    break;
+                }
+                let l3_cache_node = append_non_l1_cache_node(fdt, cpu_index, cache, cache_phandle)?;
+                fdt.end_node(l3_cache_node)?;
+                prev_level = 3;
+            }
+            _ => {}
+        }
+    }
+    fdt.end_node(l2_cache_node)?;
+
+    Ok(())
+}
+
+fn append_non_l1_cache_node(
+    fdt: &mut FdtWriter,
+    cpu_index: usize,
+    cache: &CacheEntry,
+    cache_phandle: u32,
+) -> Result<FdtWriterNode> {
+    let cache_node_name = format!(
+        "l{}-{}-cache",
+        cache.level,
+        cpu_index / cache.cpus_per_unit as usize
+    );
+    let cache_node = fdt.begin_node(cache_node_name.as_str())?;
+    fdt.property_phandle(cache_phandle)?;
+    fdt.property_string("compatible", "cache")?;
+    fdt.property_u32("cache_level", cache.level as u32)?;
+    if let Some(cache_type) = cache.type_.of_cache_type() {
+        fdt.property_null(cache_type)?;
+    }
+    if let Some(size) = cache.size_ {
+        fdt.property_u32(cache.type_.of_cache_size(), size as u32)?;
+    }
+    if let Some(line_size) = cache.line_size {
+        fdt.property_u32(cache.type_.of_cache_line_size(), line_size as u32)?;
+    }
+    if let Some(number_of_sets) = cache.number_of_sets {
+        fdt.property_u32(cache.type_.of_cache_sets(), number_of_sets)?;
+    }
+
+    Ok(cache_node)
 }
 
 fn create_memory_node<M: GuestMemory>(fdt: &mut FdtWriter, guest_mem: &M) -> Result<()> {
@@ -481,6 +633,7 @@ mod tests {
         .collect();
         let kvm = Kvm::new().unwrap();
         let vm = kvm.create_vm().unwrap();
+        let _ = vm.create_vcpu(0).unwrap();
         let gic = create_gic(&vm, 1).unwrap();
         let vpmu_feature = VpmuFeatureLevel::Disabled;
         assert!(create_fdt(
@@ -502,6 +655,7 @@ mod tests {
         let mem = GuestMemoryMmap::<()>::from_ranges(&regions).expect("Cannot initialize memory");
         let kvm = Kvm::new().unwrap();
         let vm = kvm.create_vm().unwrap();
+        let _ = vm.create_vcpu(0).unwrap();
         let gic = create_gic(&vm, 1).unwrap();
         let vpmu_feature = VpmuFeatureLevel::Disabled;
         let dtb = create_fdt(
@@ -536,6 +690,7 @@ mod tests {
         let mem = GuestMemoryMmap::<()>::from_ranges(&regions).expect("Cannot initialize memory");
         let kvm = Kvm::new().unwrap();
         let vm = kvm.create_vm().unwrap();
+        let _ = vm.create_vcpu(0).unwrap();
         let gic = create_gic(&vm, 1).unwrap();
         let initrd = InitrdConfig {
             address: GuestAddress(0x10000000),
@@ -604,5 +759,47 @@ mod tests {
         let original_fdt = DeviceTree::load(&buf).unwrap();
         let generated_fdt = DeviceTree::load(&dtb).unwrap();
         assert_eq!(format!("{original_fdt:?}"), format!("{generated_fdt:?}"));
+    }
+
+    #[test]
+    fn test_create_fdt_with_cache() {
+        let regions = arch_memory_regions(FDT_MAX_SIZE + 0x1000);
+        let mem = GuestMemoryMmap::<()>::from_ranges(&regions).expect("Cannot initialize memory");
+        let kvm = Kvm::new().unwrap();
+        let vm = kvm.create_vm().unwrap();
+        let vcpu_id = (0..128).collect::<Vec<u64>>();
+        assert!(vcpu_id
+            .as_slice()
+            .iter()
+            .enumerate()
+            .map(|(id, _)| vm.create_vcpu(id as u64))
+            .all(|result| result.is_ok()));
+        let gic = create_gic(&vm, 128).unwrap();
+        let vpmu_feature = VpmuFeatureLevel::Disabled;
+        let cpu_maps = Some((0..128).collect::<Vec<u8>>());
+        let dtb = create_fdt(
+            FdtVmInfo::new(
+                &mem,
+                "console=tty0",
+                None,
+                FdtVcpuInfo::new(vcpu_id, vec![1; 128], vpmu_feature, true),
+            ),
+            FdtNumaInfo::new(cpu_maps, None, None),
+            FdtDeviceInfo::<MMIODeviceInfo>::new(None, gic.as_ref()),
+        )
+        .unwrap();
+
+        create_dtb_file("output_with_cache.dtb", &dtb);
+
+        let bytes = include_bytes!("test/output_with_cache.dtb");
+        let pos = 4;
+        let val = FDT_MAX_SIZE;
+        let mut buf = vec![];
+        buf.extend_from_slice(bytes);
+        set_size(&mut buf, pos, val);
+
+        let original_fdt = DeviceTree::load(&buf).unwrap();
+        let generated_fdt = DeviceTree::load(&dtb).unwrap();
+        assert!(format!("{original_fdt:?}") == format!("{generated_fdt:?}"));
     }
 }

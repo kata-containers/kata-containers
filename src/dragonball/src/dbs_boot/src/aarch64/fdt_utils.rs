@@ -19,7 +19,6 @@ pub struct FdtVcpuInfo {
     vcpu_boot_onlined: Vec<u32>,
     /// vpmu feature
     vpmu_feature: VpmuFeatureLevel,
-    // TODO: #274 cache passthrough
     /// cache passthrough
     cache_passthrough_enabled: bool,
 }
@@ -106,7 +105,6 @@ impl FdtVmInfo<'_> {
 }
 
 // This struct is used for cache passthrough and numa passthrough
-// TODO: #274 cache passthrough
 // TODO: #275 numa passthrough
 /// Struct to save numa information.
 #[derive(Default)]
