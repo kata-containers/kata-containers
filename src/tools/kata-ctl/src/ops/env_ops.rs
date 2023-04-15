@@ -299,15 +299,27 @@ pub fn get_runtime_info(toml_config: &TomlConfig) -> Result<RuntimeInfo> {
         sandbox_cgroup_only: toml_config.runtime.sandbox_cgroup_only,
         static_sandbox_resource_mgmt: toml_config.runtime.static_sandbox_resource_mgmt,
         config: RuntimeConfigInfo { path: toml_path },
-    }
+    })
 }
 
 pub fn get_agent_info(toml_config: &TomlConfig) -> Result<AgentInfo> {
-    let agent_config = toml_config
-        .agent
-        .get(&toml_config.runtime.agent_name)
-        .ok_or("could not find agent config in configuration")
-        .map_err(|e| anyhow!(e))?;
+    // Assign the first entry to the agent config, to make this
+    // work for configs where agent_name is absent.
+    // This is a workaround for https://github.com/kata-containers/kata-containers/issues/5954
+    let key_val = toml_config.agent.iter().next();
+    let mut agent_config = match key_val {
+        Some(x) => Ok(x.1),
+        None => Err(anyhow!("Missing agent config")),
+    }?;
+
+    // If the agent_name config is present, use that
+    if !&toml_config.runtime.agent_name.is_empty() {
+        agent_config = toml_config
+            .agent
+            .get(&toml_config.runtime.agent_name)
+            .ok_or("could not find agent config in configuration")
+            .map_err(|e| anyhow!(e))?;
+    }
 
     Ok(AgentInfo {
         debug: agent_config.debug,
@@ -333,11 +345,23 @@ pub fn get_command_version(cmd: &str) -> Result<String> {
 pub fn get_hypervisor_info(
     toml_config: &TomlConfig,
 ) -> Result<(HypervisorInfo, ImageInfo, KernelInfo, InitrdInfo)> {
-    let hypervisor_config = toml_config
-        .hypervisor
-        .get(&toml_config.runtime.hypervisor_name)
-        .ok_or("could not find hypervisor config in configuration")
-        .map_err(|e| anyhow!(e))?;
+    // Assign the first entry in the hashmap to the hypervisor config, to make this
+    // work for configs where hypervisor_name is absent.
+    // This is a workaround for https://github.com/kata-containers/kata-containers/issues/5954
+    let key_val = toml_config.hypervisor.iter().next();
+    let mut hypervisor_config = match key_val {
+        Some(x) => Ok(x.1),
+        None => Err(anyhow!("Missing hypervisor config")),
+    }?;
+
+    // If hypervisor_name config is present, use that
+    if !&toml_config.runtime.hypervisor_name.is_empty() {
+        hypervisor_config = toml_config
+            .hypervisor
+            .get(&toml_config.runtime.hypervisor_name)
+            .ok_or("could not find hypervisor config in configuration")
+            .map_err(|e| anyhow!(e))?;
+    }
 
     let version =
         get_command_version(&hypervisor_config.path).context("error getting hypervisor version")?;
