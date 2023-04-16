@@ -34,7 +34,7 @@ jobs:
           cat tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml | grep "${{ inputs.registry }}/${{ inputs.repo }}:${{ inputs.tag }}" || die "Failed to setup the tests image"
 
           kubectl apply -f tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
-          kubectl apply -k tools/packaging/kata-deploy/kata-deploy/overlay/k3s
+          kubectl apply -k tools/packaging/kata-deploy/kata-deploy/overlays/k3s
           kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
           kubectl apply -f tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
 
@@ -51,7 +51,7 @@ jobs:
       - name: Delete kata-deploy
         if: always()
         run: |
-          kubectl delete -k tools/packaging/kata-deploy/kata-deploy/overlay/k3s
+          kubectl delete -k tools/packaging/kata-deploy/kata-deploy/overlays/k3s
           kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
 
           sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${{ inputs.registry }}/${{ inputs.repo }}:${{ inputs.tag }}|g" tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
