@@ -82,8 +82,9 @@ options:
 	kernel-dragonball-experimental
 	kernel-experimental
 	kernel-tdx-experimental
+	kernel-gpu
 	kernel-gpu-snp
-	kernel-gpu-tdx
+	kernel-gpu-tdx-experimental
 	nydus
 	qemu
 	qemu-tdx-experimental
@@ -225,8 +226,8 @@ install_kernel_gpu_snp() {
 		"-x snp -g nvidia -u ${kernel_url} -H deb"
 }
 
-#Install GPU and TDX enabled kernel asset
-install_kernel_gpu_tdx() {
+#Install GPU and TDX experimental enabled kernel asset
+install_kernel_gpu_tdx_experimental() {
 	local kernel_url="$(get_from_kata_deps assets.kernel-tdx-experimental.url)"
 
 	install_kernel_helper \
@@ -472,7 +473,7 @@ handle_build() {
 
 	kernel-gpu-snp) install_kernel_gpu_snp;;
 
-	kernel-gpu-tdx) install_kernel_gpu_tdx;;
+	kernel-gpu-tdx-experimental) install_kernel_gpu_tdx_experimental;;
 
 	qemu) install_qemu ;;
 

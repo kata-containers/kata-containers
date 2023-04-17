@@ -78,7 +78,7 @@ jobs:
           mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
           pushd $GITHUB_WORKSPACE
           echo "uploading asset '${tarball}' for tag: ${tag}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
+          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}" 
           popd
 
   upload-cargo-vendored-tarball:
