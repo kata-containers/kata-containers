@@ -23,5 +23,4 @@ RUN apt-get update && \
 	    rsync \
 	    cpio \
 	    patch && \
-    if [ "$(uname -m)" = "s390x" ]; then apt-get install -y --no-install-recommends libssl-dev; fi && \
-    apt-get clean && rm -rf /var/lib/lists/
+    apt-get clean && apt-get autoclean

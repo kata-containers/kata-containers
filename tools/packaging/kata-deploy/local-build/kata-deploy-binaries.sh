@@ -81,7 +81,6 @@ options:
 	kernel
 	kernel-dragonball-experimental
 	kernel-experimental
-	kernel-gpu
 	kernel-tdx-experimental
 	kernel-gpu
 	kernel-gpu-snp
