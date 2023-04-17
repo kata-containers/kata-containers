@@ -510,8 +510,6 @@ install_kata() {
 	ls -la "${install_path}/vmlinux${suffix}.container"
 	ls -la "${install_path}/vmlinuz${suffix}.container"
 	popd >>/dev/null
-
-	set +x
 }
 
 main() {
@@ -588,7 +586,7 @@ main() {
 		if [ -n "$kernel_version" ];  then
 			kernel_major_version=$(get_major_kernel_version "${kernel_version}")
 			if [[ ${kernel_major_version} != "5.10" ]]; then
-				info "dragonball-experimental kernel patches are only tested on 5.10.x kernel now, other kernel version may cause confliction"
+				info "dragonball-experimental kernel patches are only tested on 5.10.x kernel now, other kernel version may cause confliction"	
 			fi
 		fi
 	fi

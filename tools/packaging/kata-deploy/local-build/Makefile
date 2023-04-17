@@ -27,7 +27,7 @@ all: serial-targets \
 	kernel-dragonball-experimental-tarball \
 	kernel-tdx-experimental-tarball \
 	kernel-gpu-snp-tarball \
-	kernel-gpu-tdx-tarball \
+	kernel-gpu-tdx-experimental-tarball \
 	nydus-tarball \
 	qemu-tarball \
 	qemu-tdx-experimental-tarball \
@@ -59,8 +59,8 @@ kernel-dragonball-experimental-tarball:
 kernel-gpu-snp-tarball:
 	${MAKE} $@-build
 
-kernel-gpu-tdx-tarball:
-	${MAKE} $@-build
+kernel-gpu-tdx-experimental-tarball:
+	${MAKE} $@-build	
 
 kernel-experimental-tarball:
 	${MAKE} $@-build
