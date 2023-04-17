@@ -2034,7 +2034,7 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
 
     let mut args = vec!["-v".to_string(), module.name.clone()];
 
-    if module.parameters.len() > 0 {
+    if !module.parameters.is_empty() {
         args.extend(module.parameters.to_vec())
     }
 

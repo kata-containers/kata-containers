@@ -211,7 +211,7 @@ async fn ephemeral_storage_handler(
     // By now we only support one option field: "fsGroup" which
     // isn't an valid mount option, thus we should remove it when
     // do mount.
-    if storage.options.len() > 0 {
+    if !storage.options.is_empty() {
         // ephemeral_storage didn't support mount options except fsGroup.
         let mut new_storage = storage.clone();
         new_storage.options = Default::default();
