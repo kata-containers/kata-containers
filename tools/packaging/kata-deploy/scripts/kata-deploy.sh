@@ -64,6 +64,11 @@ function install_artifacts() {
 	chmod +x /opt/kata/bin/*
 	[ -d /opt/kata/runtime-rs/bin ] && \
 		chmod +x /opt/kata/runtime-rs/bin/*
+
+	# Allow Mariner to specify a Mariner guest initrd.
+	if [ "${HOST_OS:-}" == "cbl-mariner" ]; then
+		sed -i -E 's|(enable_annotations) = .+|\1 = ["enable_iommu", "initrd"]|' /opt/kata/share/defaults/kata-containers/configuration-clh.toml
+	fi
 }
 
 function wait_till_node_is_ready() {
