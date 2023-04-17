@@ -91,6 +91,7 @@ options:
 	qemu-tdx-experimental
 	rootfs-image
 	rootfs-initrd
+	rootfs-initrd-sev
 	shim-v2
 	tdvf
 	virtiofsd
@@ -155,8 +156,10 @@ install_image() {
 
 #Install guest initrd
 install_initrd() {
-	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-initrd-$(uname -m)/${cached_artifacts_path}"
-	local component="rootfs-initrd"
+	local initrd_type="${1:-""}"
+	local initrd_suffix="${2:-""}"
+	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${initrd_type}-$(uname -m)/${cached_artifacts_path}"
+	local component="rootfs-${initrd_type}"
 
 	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
 	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
@@ -169,7 +172,7 @@ install_initrd() {
 	install_cached_tarball_component \
 		"${component}" \
 		"${jenkins}" \
-		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-initrd" \
+		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}" \
 		"" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
@@ -182,39 +185,6 @@ install_initrd() {
 #Install guest initrd for sev
 install_initrd_sev() {
 	install_initrd "initrd-sev" "sev"
-}
-
-#Install kernel component helper
-install_cached_kernel_tarball_component() {
-	local kernel_name=${1}
-
-	install_cached_tarball_component \
-		"${kernel_name}" \
-		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}-${kernel_kata_config_version}" \
-		"$(get_kernel_image_name)" \
-		"${final_tarball_name}" \
-		"${final_tarball_path}" \
-		|| return 1
-	
-	if [[ "${kernel_name}" != "kernel-sev" ]]; then
-		return 0
-	fi
-
-	# SEV specific code path
-	install_cached_tarball_component \
-		"${kernel_name}" \
-		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}-${kernel_kata_config_version}" \
-		"$(get_kernel_image_name)" \
-		"kata-static-kernel-sev-modules.tar.xz" \
-		"${workdir}/kata-static-kernel-sev-modules.tar.xz" \
-		|| return 1
-
-	mkdir -p "${module_dir}"
-	tar xvf "${workdir}/kata-static-kernel-sev-modules.tar.xz" -C  "${module_dir}" && return 0
-
-	return 1
 }
 
 #Install kernel asset
@@ -504,6 +474,7 @@ handle_build() {
 		install_firecracker
 		install_image
 		install_initrd
+		install_initrd_sev
 		install_kernel
 		install_kernel_dragonball_experimental
 		install_kernel_tdx_experimental
@@ -545,6 +516,8 @@ handle_build() {
 
 	rootfs-initrd) install_initrd ;;
 
+	rootfs-initrd-sev) install_initrd_sev ;;
+	
 	shim-v2) install_shimv2 ;;
 
 	tdvf) install_tdvf ;;
