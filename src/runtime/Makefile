@@ -96,6 +96,7 @@ GENERATED_VARS = \
 		CONFIG_ACRN_IN \
 		CONFIG_QEMU_IN \
 		CONFIG_QEMU_TDX_IN \
+		CONFIG_QEMU_GPU_IN \
 		CONFIG_CLH_IN \
 		CONFIG_FC_IN \
 		$(USER_VARS)
@@ -284,6 +285,12 @@ ifneq (,$(QEMUCMD))
     SYSCONFIG_PATHS_TDX += $(SYSCONFIG_QEMU_TDX)
 
     CONFIGS += $(CONFIG_QEMU_TDX)
+
+    CONFIG_FILE_QEMU_GPU = configuration-qemu-gpu.toml
+    CONFIG_QEMU_GPU = config/$(CONFIG_FILE_QEMU_GPU)
+    CONFIG_QEMU_GPU_IN = $(CONFIG_QEMU_GPU).in
+
+    CONFIGS += $(CONFIG_QEMU_GPU)
 
     # qemu-specific options (all should be suffixed by "_QEMU")
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
