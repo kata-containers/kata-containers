@@ -14,6 +14,7 @@ use common::{
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
 use hypervisor::Param;
+use kata_sys_util::spec::load_oci_spec;
 use kata_types::{
     annotations::Annotation, config::default::DEFAULT_GUEST_DNS_FILE, config::TomlConfig,
 };
@@ -190,9 +191,16 @@ impl RuntimeHandlerManager {
         let sender = inner.msg_sender.clone();
         let sandbox_state = persist::from_disk::<SandboxState>(&inner.id)
             .context("failed to load the sandbox state")?;
+
+        let config = if let Ok(spec) = load_oci_spec() {
+            load_config(&spec, &None).context("load config")?
+        } else {
+            TomlConfig::default()
+        };
+
         let sandbox_args = SandboxRestoreArgs {
             sid: inner.id.clone(),
-            toml_config: TomlConfig::default(),
+            toml_config: config,
             sender,
         };
         match sandbox_state.sandbox_type.clone() {
@@ -208,6 +216,10 @@ impl RuntimeHandlerManager {
             }
             #[cfg(feature = "virt")]
             name if name == VirtContainer::name() => {
+                if sandbox_args.toml_config.runtime.keep_abnormal {
+                    info!(sl!(), "skip cleanup for keep_abnormal");
+                    return Ok(());
+                }
                 let sandbox = VirtSandbox::restore(sandbox_args, sandbox_state)
                     .await
                     .context("failed to restore the sandbox")?;
