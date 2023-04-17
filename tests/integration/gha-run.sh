@@ -9,7 +9,8 @@ set -o nounset
 set -o pipefail
 
 integration_dir="$(dirname "$(readlink -f "$0")")"
-tools_dir="${integration_dir}/../../tools"
+repo_root_dir="$(cd "${integration_dir}/../../" && pwd)"
+tools_dir="${repo_root_dir}/tools"
 
 function _print_cluster_name() {
     short_sha="$(git rev-parse --short=12 HEAD)"
@@ -56,9 +57,13 @@ function get_cluster_credentials() {
 }
 
 function run_tests() {
+    INSTALL_IN_GOPATH=false bash "${repo_root_dir}/ci/install_yq.sh"
+
     platform="${1}"
 
     sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+    yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[+].name' "HOST_OS"
+    yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[-1].value' "${KATA_HOST_OS}"
     cat "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
     cat "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" | grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" || die "Failed to setup the tests image"
 
