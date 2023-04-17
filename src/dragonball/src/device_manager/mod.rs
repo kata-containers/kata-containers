@@ -1019,6 +1019,7 @@ mod tests {
     use vm_memory::{GuestAddress, MmapRegion};
 
     use super::*;
+    #[cfg(target_arch = "x86_64")]
     use crate::vm::CpuTopology;
 
     impl DeviceManager {
