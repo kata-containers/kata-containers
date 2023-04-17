@@ -1185,6 +1185,7 @@ mod tests {
                 sockets: 1,
             },
             vpmu_feature: 0,
+            enable_cache_passthrough: false,
         };
         vm.set_vm_config(vm_config.clone());
         vm.init_guest_memory().unwrap();

@@ -128,6 +128,8 @@ pub struct VmConfigInfo {
     pub cpu_topology: CpuTopology,
     /// vpmu support level
     pub vpmu_feature: u8,
+    /// enable cache passthrough
+    pub enable_cache_passthrough: bool,
 
     /// Memory type that can be either hugetlbfs or shmem, default is shmem
     pub mem_type: String,
@@ -135,6 +137,8 @@ pub struct VmConfigInfo {
     pub mem_file_path: String,
     /// The memory size in MiB.
     pub mem_size_mib: usize,
+    /// Numa region information
+    pub numa_regions: Vec<NumaRegionInfo>,
 
     /// sock path
     pub serial_path: Option<String>,
@@ -153,9 +157,11 @@ impl Default for VmConfigInfo {
                 sockets: 1,
             },
             vpmu_feature: 0,
+            enable_cache_passthrough: false,
             mem_type: String::from("shmem"),
             mem_file_path: String::from(""),
             mem_size_mib: 128,
+            numa_regions: Vec::new(),
             serial_path: None,
         }
     }
@@ -922,6 +928,7 @@ pub mod tests {
             mem_type: "shmem".to_string(),
             mem_file_path: "".to_string(),
             mem_size_mib: 16,
+            numa_regions: Vec::new(),
             serial_path: None,
             cpu_topology: CpuTopology {
                 threads_per_core: 1,
@@ -930,6 +937,7 @@ pub mod tests {
                 sockets: 1,
             },
             vpmu_feature: 0,
+            enable_cache_passthrough: false,
         };
 
         let mut vm = create_vm_instance();
@@ -954,6 +962,7 @@ pub mod tests {
             mem_type: "shmem".to_string(),
             mem_file_path: "".to_string(),
             mem_size_mib: 16,
+            numa_regions: Vec::new(),
             serial_path: None,
             cpu_topology: CpuTopology {
                 threads_per_core: 1,
@@ -962,6 +971,7 @@ pub mod tests {
                 sockets: 1,
             },
             vpmu_feature: 0,
+            enable_cache_passthrough: false,
         };
         vm.set_vm_config(vm_config);
         assert!(vm.init_guest_memory().is_ok());
@@ -1002,6 +1012,7 @@ pub mod tests {
             mem_type: "shmem".to_string(),
             mem_file_path: "".to_string(),
             mem_size_mib: 16,
+            numa_regions: Vec::new(),
             serial_path: None,
             cpu_topology: CpuTopology {
                 threads_per_core: 1,
@@ -1010,6 +1021,7 @@ pub mod tests {
                 sockets: 1,
             },
             vpmu_feature: 0,
+            enable_cache_passthrough: false,
         };
 
         vm.set_vm_config(vm_config);
@@ -1086,6 +1098,7 @@ pub mod tests {
                 sockets: 1,
             },
             vpmu_feature: 0,
+            enable_cache_passthrough: false,
         };
 
         vm.set_vm_config(vm_config);

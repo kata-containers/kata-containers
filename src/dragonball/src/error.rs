@@ -136,7 +136,7 @@ pub enum StartMicroVmError {
 
     /// Cannot process command line string.
     #[error("failure while processing guest kernel commandline: {0}.")]
-    ProcessCommandlne(#[source] linux_loader::cmdline::Error),
+    ProcessCommandline(#[source] linux_loader::cmdline::Error),
 
     /// The device manager was not configured.
     #[error("the device manager failed to manage devices: {0}")]

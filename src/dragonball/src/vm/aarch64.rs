@@ -122,8 +122,8 @@ impl Vm {
         vcpu_boot_onlined.resize(vm_config.max_vcpu_count as usize, 0);
         let vpmu_feature = vcpu_manager.vpmu_feature();
         // This configuration is used for passing cache information into guest.
-        // TODO: dragonball-sandbox #274; kata-containers #6969
-        let cache_passthrough_enabled = false;
+        let cache_passthrough_enabled =
+            vm_config.enable_cache_passthrough && !vm_config.numa_regions.is_empty();
         let fdt_vcpu_info = FdtVcpuInfo::new(
             vcpu_mpidr,
             vcpu_boot_onlined,
@@ -135,10 +135,64 @@ impl Vm {
     }
 
     // This method is used for passing cache/numa information into guest
-    // TODO: dragonball-sandbox #274,#275; kata-containers #6969
     /// Generate fdt information about cache/numa
-    fn get_fdt_numa_info(&self) -> FdtNumaInfo {
-        FdtNumaInfo::default()
+    fn get_fdt_numa_info(&self, enable_cache: bool) -> FdtNumaInfo {
+        // Get numa_regions from vm_config.
+        let mut numa_regions = self.vm_config().numa_regions.clone();
+        // Generate vcpu(index)->pcpu(value) maps.
+        // Currently only assure mappings from vcpu to numa.
+        // Vcpu to pcpu mappings is a future feature.
+        // When numa_regions is empty, there is no meaning to passthrough
+        // cache information into guest, so just skip it.
+        let cpu_maps = if enable_cache {
+            numa_regions.sort_by_key(|numa_info| numa_info.host_numa_node_id);
+            Some(
+                numa_regions
+                    .iter()
+                    .flat_map(|numa_info| numa_info.vcpu_ids.iter().map(|val| *val as u8))
+                    .collect::<Vec<u8>>(),
+            )
+        } else {
+            None
+        };
+
+        // generate vectors of numa id for each memory region
+        let numa_nodes = self.address_space.get_numa_nodes();
+        let memory_numa_id = numa_nodes
+            .iter()
+            .flat_map(|(numa_id, numa_node)| {
+                numa_node
+                    .region_infos()
+                    .iter()
+                    .map(|_| *numa_id)
+                    .collect::<Vec<u32>>()
+            })
+            .collect::<Vec<u32>>();
+        // generate vectors of numa id for each cpu
+        let cpu_numa_id = numa_nodes
+            .iter()
+            .flat_map(|(numa_id, numa_node)| {
+                numa_node
+                    .vcpu_ids()
+                    .iter()
+                    .map(|_| *numa_id)
+                    .collect::<Vec<u32>>()
+            })
+            .collect::<Vec<u32>>();
+        // generate vector that saves shared cpu count on the same numa node
+        let mut cpu_l3_cache_map = vec![0u32; cpu_numa_id.len()];
+        for (_, numa_info) in numa_nodes.iter() {
+            let count = numa_info.vcpu_ids().iter().min().unwrap();
+            for id in numa_info.vcpu_ids().iter() {
+                cpu_l3_cache_map[*id as usize] = *count;
+            }
+        }
+        FdtNumaInfo::new(
+            cpu_maps,
+            Some(memory_numa_id),
+            Some(cpu_numa_id),
+            Some(cpu_l3_cache_map),
+        )
     }
 
     /// Generate fdt information about devices
@@ -162,16 +216,16 @@ impl Vm {
         let vcpu_manager = self.vcpu_manager().map_err(StartMicroVmError::Vcpu)?;
         let cmdline_cstring = cmdline
             .as_cstring()
-            .map_err(StartMicroVmError::ProcessCommandlne)?;
+            .map_err(StartMicroVmError::ProcessCommandline)?;
         let fdt_vm_info = self.get_fdt_vm_info(
             vm_memory,
             cmdline_cstring
                 .to_str()
-                .map_err(|_| StartMicroVmError::ProcessCommandlne(CmdlineError::InvalidAscii))?,
+                .map_err(|_| StartMicroVmError::ProcessCommandline(CmdlineError::InvalidAscii))?,
             initrd.as_ref(),
             &vcpu_manager,
         );
-        let fdt_numa_info = self.get_fdt_numa_info();
+        let fdt_numa_info = self.get_fdt_numa_info(fdt_vm_info.get_cache_passthrough_enabled());
         let fdt_device_info = self.get_fdt_device_info();
 
         dbs_boot::fdt::create_fdt(fdt_vm_info, fdt_numa_info, fdt_device_info)

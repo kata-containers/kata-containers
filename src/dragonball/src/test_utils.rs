@@ -31,6 +31,7 @@ pub mod tests {
             mem_type: "shmem".to_string(),
             mem_file_path: "".to_string(),
             mem_size_mib: 1,
+            numa_regions: Vec::new(),
             serial_path: None,
             cpu_topology: CpuTopology {
                 threads_per_core: 1,
@@ -39,6 +40,7 @@ pub mod tests {
                 sockets: 1,
             },
             vpmu_feature: 0,
+            enable_cache_passthrough: false,
         };
         vm.set_vm_config(vm_config);
         vm.init_guest_memory().unwrap();

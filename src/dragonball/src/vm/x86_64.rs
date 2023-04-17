@@ -215,7 +215,7 @@ impl Vm {
 
         let cmdline_size = cmdline
             .as_cstring()
-            .map_err(StartMicroVmError::ProcessCommandlne)?
+            .map_err(StartMicroVmError::ProcessCommandline)?
             .as_bytes_with_nul()
             .len();
 

@@ -114,6 +114,8 @@ pub struct FdtNumaInfo {
     memory_numa_id_map: Option<Vec<u32>>,
     /// numa id map vector for vcpu
     vcpu_numa_id_map: Option<Vec<u32>>,
+    /// vcpu id -> vcpu node id that should append l3 cache
+    vcpu_l3_cache_map: Option<Vec<u32>>,
 }
 
 impl FdtNumaInfo {
@@ -122,11 +124,13 @@ impl FdtNumaInfo {
         cpu_maps: Option<Vec<u8>>,
         memory_numa_id_map: Option<Vec<u32>>,
         vcpu_numa_id_map: Option<Vec<u32>>,
+        vcpu_l3_cache_map: Option<Vec<u32>>,
     ) -> Self {
         FdtNumaInfo {
             cpu_maps,
             memory_numa_id_map,
             vcpu_numa_id_map,
+            vcpu_l3_cache_map,
         }
     }
 
@@ -143,6 +147,11 @@ impl FdtNumaInfo {
     /// Get vcpu_numa_id_map struct.
     pub fn get_vcpu_numa_id_map(&self) -> Option<&Vec<u32>> {
         self.vcpu_numa_id_map.as_ref()
+    }
+
+    /// Get vcpu_l3_cache_map struct.
+    pub fn get_vcpu_l3_cache_map(&self) -> Option<&Vec<u32>> {
+        self.vcpu_l3_cache_map.as_ref()
     }
 }
 
