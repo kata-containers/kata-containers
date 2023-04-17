@@ -156,6 +156,9 @@ assets:
       x86_64:
         name: *default-initrd-name
         version: *default-initrd-version
+        sev:
+          name: *glibc-initrd-name
+          version: *glibc-initrd-version
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
