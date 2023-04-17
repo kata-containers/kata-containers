@@ -99,12 +99,11 @@ impl Vm {
     /// Initialize the virtual machine instance.
     ///
     /// It initialize the virtual machine instance by:
-    /// 1) initialize virtual machine global state and configuration.
-    /// 2) create system devices, such as interrupt controller.
-    /// 3) create and start IO devices, such as serial, console, block, net, vsock etc.
-    /// 4) create and initialize vCPUs.
-    /// 5) configure CPU power management features.
-    /// 6) load guest kernel image.
+    /// 1) Initialize virtual machine reset event fd.
+    /// 2) Create and initialize vCPUs.
+    /// 3) Create and initialize interrupt controller.
+    /// 4) Create and initialize vPMU device.
+    /// 5) Create and initialize devices, such as virtio, block, net, vsock, vfio etc.
     pub fn init_microvm(
         &mut self,
         epoll_mgr: EpollManager,
