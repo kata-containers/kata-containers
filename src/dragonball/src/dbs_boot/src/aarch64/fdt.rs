@@ -81,8 +81,12 @@ where
     // This is not mandatory but we use it to point the root node to the node
     // containing description of the interrupt controller for this VM.
     fdt.property_u32("interrupt-parent", GIC_PHANDLE)?;
-    create_cpu_nodes(&mut fdt, &fdt_vm_info, fdt_numa_info.get_cpu_maps())?;
-    create_memory_node(&mut fdt, fdt_vm_info.get_guest_memory())?;
+    create_cpu_nodes(&mut fdt, &fdt_vm_info, &fdt_numa_info)?;
+    create_memory_node(
+        &mut fdt,
+        fdt_vm_info.get_guest_memory(),
+        fdt_numa_info.get_memory_numa_id_map(),
+    )?;
     create_chosen_node(&mut fdt, &fdt_vm_info)?;
     create_gic_node(&mut fdt, fdt_device_info.get_irqchip())?;
     create_timer_node(&mut fdt)?;
@@ -111,7 +115,7 @@ where
 fn create_cpu_nodes(
     fdt: &mut FdtWriter,
     fdt_vm_info: &FdtVmInfo,
-    cpu_maps: Option<Vec<u8>>,
+    fdt_numa_info: &FdtNumaInfo,
 ) -> Result<()> {
     // See https://github.com/torvalds/linux/blob/master/Documentation/devicetree/bindings/arm/cpus.yaml.
     let cpus_node = fdt.begin_node("cpus")?;
@@ -124,7 +128,8 @@ fn create_cpu_nodes(
     let cache_info = if fdt_vm_info.get_cache_passthrough_enabled() {
         // Unwrap cpu_maps here is safe because it is Some(value) only when cache_passthrough_enabled is true.
         // The vmm should ensure the this condition.
-        read_cache_config(cpu_maps.unwrap(), Some(3)).map_err(Error::ReadCacheInfoError)?
+        read_cache_config(fdt_numa_info.get_cpu_maps().unwrap(), Some(3))
+            .map_err(Error::ReadCacheInfoError)?
     } else {
         HashMap::new()
     };
@@ -144,6 +149,16 @@ fn create_cpu_nodes(
         // Set the field to first 24 bits of the MPIDR - Multiprocessor Affinity Register.
         // See http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0488c/BABHBJCI.html.
         fdt.property_u64("reg", mpidr & 0x7FFFFF)?;
+
+        // See https://github.com/torvalds/linux/blob/master/Documentation/devicetree/bindings/numa.txt
+        if let Some(cpu_numa_id_map) = fdt_numa_info.get_vcpu_numa_id_map() {
+            // Check index here because in cpu hotplug scenario, the length of vcpu_mpidr equals max_vcpu_count,
+            // while numa information is set at boot. To be compatible with this circumstance, add a check here
+            // to ensure the index won't overflow.
+            if cpu_index < cpu_numa_id_map.len() {
+                fdt.property_u32("numa-node-id", cpu_numa_id_map[cpu_index])?;
+            }
+        }
 
         // Currently, dragonball only support binding vcpu on numa level, which means the cache information
         // can be assured correct on numa level.
@@ -284,14 +299,22 @@ fn append_non_l1_cache_node(
     Ok(cache_node)
 }
 
-fn create_memory_node<M: GuestMemory>(fdt: &mut FdtWriter, guest_mem: &M) -> Result<()> {
+fn create_memory_node<M: GuestMemory>(
+    fdt: &mut FdtWriter,
+    guest_mem: &M,
+    memory_numa_id: Option<&Vec<u32>>,
+) -> Result<()> {
     // See https://github.com/torvalds/linux/blob/v5.9/Documentation/devicetree/booting-without-of.rst
-    for region in guest_mem.iter() {
+    for (index, region) in guest_mem.iter().enumerate() {
         let memory_name = format!("memory@{:x}", region.start_addr().raw_value());
         let mem_reg_prop = &[region.start_addr().raw_value(), region.len()];
         let memory_node = fdt.begin_node(&memory_name)?;
         fdt.property_string("device_type", "memory")?;
         fdt.property_array_u64("reg", mem_reg_prop)?;
+        // See https://github.com/torvalds/linux/blob/master/Documentation/devicetree/bindings/numa.txt
+        if let Some(memory_numa_id_map) = memory_numa_id {
+            fdt.property_u32("numa-node-id", memory_numa_id_map[index])?;
+        }
         fdt.end_node(memory_node)?;
     }
     Ok(())
@@ -801,5 +824,41 @@ mod tests {
         let original_fdt = DeviceTree::load(&buf).unwrap();
         let generated_fdt = DeviceTree::load(&dtb).unwrap();
         assert!(format!("{original_fdt:?}") == format!("{generated_fdt:?}"));
+    }
+
+    #[test]
+    fn test_create_fdt_with_numa() {
+        let regions = arch_memory_regions(FDT_MAX_SIZE + 0x1000);
+        let mem = GuestMemoryMmap::<()>::from_ranges(&regions).expect("Cannot initialize memory");
+        let kvm = Kvm::new().unwrap();
+        let vm = kvm.create_vm().unwrap();
+        let _ = vm.create_vcpu(0).unwrap();
+        let _ = vm.create_vcpu(1).unwrap();
+        let gic = create_gic(&vm, 2).unwrap();
+        let vpmu_feature = VpmuFeatureLevel::Disabled;
+        let dtb = create_fdt(
+            FdtVmInfo::new(
+                &mem,
+                "console=tty0",
+                None,
+                FdtVcpuInfo::new(vec![0, 1], vec![1; 2], vpmu_feature, false),
+            ),
+            FdtNumaInfo::new(None, Some(vec![1, 0]), Some(vec![1, 0])),
+            FdtDeviceInfo::<MMIODeviceInfo>::new(None, gic.as_ref()),
+        )
+        .unwrap();
+
+        create_dtb_file("output_with_numa.dtb", &dtb);
+
+        let bytes = include_bytes!("test/output_with_numa.dtb");
+        let pos = 4;
+        let val = FDT_MAX_SIZE;
+        let mut buf = vec![];
+        buf.extend_from_slice(bytes);
+        set_size(&mut buf, pos, val);
+
+        let original_fdt = DeviceTree::load(&buf).unwrap();
+        let generated_fdt = DeviceTree::load(&dtb).unwrap();
+        assert_eq!(format!("{original_fdt:?}"), format!("{generated_fdt:?}"));
     }
 }

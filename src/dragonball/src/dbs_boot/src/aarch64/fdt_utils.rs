@@ -105,7 +105,6 @@ impl FdtVmInfo<'_> {
 }
 
 // This struct is used for cache passthrough and numa passthrough
-// TODO: #275 numa passthrough
 /// Struct to save numa information.
 #[derive(Default)]
 pub struct FdtNumaInfo {
