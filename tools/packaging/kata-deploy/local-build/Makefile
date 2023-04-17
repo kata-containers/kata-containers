@@ -72,6 +72,9 @@ kernel-experimental-tarball:
 kernel-tdx-experimental-tarball:
 	${MAKE} $@-build
 
+kernel-sev-tarball:
+	${MAKE} $@-build
+
 nydus-tarball:
 	${MAKE} $@-build
 

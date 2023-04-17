@@ -82,6 +82,7 @@ options:
 	kernel-dragonball-experimental
 	kernel-experimental
 	kernel-tdx-experimental
+	kernel-sev-tarball
 	kernel-gpu
 	kernel-gpu-snp
 	kernel-gpu-tdx-experimental
@@ -175,7 +176,45 @@ install_initrd() {
 		&& return 0
 
 	info "Create initrd"
-	"${rootfs_builder}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}"
+	"${rootfs_builder}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${initrd_suffix}"
+}
+
+#Install guest initrd for sev
+install_initrd_sev() {
+	install_initrd "initrd-sev" "sev"
+}
+
+#Install kernel component helper
+install_cached_kernel_tarball_component() {
+	local kernel_name=${1}
+
+	install_cached_tarball_component \
+		"${kernel_name}" \
+		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
+		"${kernel_version}-${kernel_kata_config_version}" \
+		"$(get_kernel_image_name)" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		|| return 1
+	
+	if [[ "${kernel_name}" != "kernel-sev" ]]; then
+		return 0
+	fi
+
+	# SEV specific code path
+	install_cached_tarball_component \
+		"${kernel_name}" \
+		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
+		"${kernel_version}-${kernel_kata_config_version}" \
+		"$(get_kernel_image_name)" \
+		"kata-static-kernel-sev-modules.tar.xz" \
+		"${workdir}/kata-static-kernel-sev-modules.tar.xz" \
+		|| return 1
+
+	mkdir -p "${module_dir}"
+	tar xvf "${workdir}/kata-static-kernel-sev-modules.tar.xz" -C  "${module_dir}" && return 0
+
+	return 1
 }
 
 #Install kernel asset
@@ -185,16 +224,14 @@ install_kernel_helper() {
 	local extra_cmd=${3}
 
 	export kernel_version="$(get_from_kata_deps ${kernel_version_yaml_path})"
-	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
+	export kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
+	local module_dir=""
 
-	install_cached_tarball_component \
-		"${kernel_name}" \
-		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}-${kernel_kata_config_version}" \
-		"$(get_kernel_image_name)" \
-		"${final_tarball_name}" \
-		"${final_tarball_path}" \
-		&& return 0
+	if [[ "${kernel_name}" == "kernel-sev" ]]; then
+		job_name="kata-containers-main-${kernel_name}-sev-$(uname -m)"
+	fi
+
+	install_cached_kernel_tarball_component ${kernel_name} ${module_dir} && return 0
 
 	info "build ${kernel_name}"
 	info "Kernel version ${kernel_version}"
@@ -262,6 +299,17 @@ install_kernel_tdx_experimental() {
 		"assets.kernel-tdx-experimental.version" \
 		"kernel-tdx-experimental" \
 		"-x tdx -u ${kernel_url}"
+}
+
+#Install sev kernel asset
+install_kernel_sev() {
+	info "build sev kernel"
+	local kernel_url="$(get_from_kata_deps assets.kernel.sev.url)"
+
+	install_kernel_helper \
+		"assets.kernel.sev.version" \
+		"kernel-sev" \
+		"-x sev -u ${kernel_url}"
 }
 
 install_qemu_helper() {
@@ -480,6 +528,8 @@ handle_build() {
 	kernel-experimental) install_kernel_experimental ;;
 
 	kernel-tdx-experimental) install_kernel_tdx_experimental ;;
+
+	kernel-sev) install_kernel_sev ;;
 
 	kernel-gpu) install_kernel_gpu ;;
 
