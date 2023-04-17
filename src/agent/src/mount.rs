@@ -1094,7 +1094,6 @@ fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use protobuf::RepeatedField;
     use protocols::agent::FSGroup;
     use std::fs::File;
     use std::fs::OpenOptions;
@@ -2015,9 +2014,8 @@ mod tests {
                 mount_path: "rw_mount",
                 fs_group: Some(FSGroup {
                     group_id: 3000,
-                    group_change_policy: FSGroupChangePolicy::Always,
-                    unknown_fields: Default::default(),
-                    cached_size: Default::default(),
+                    group_change_policy: FSGroupChangePolicy::Always.into(),
+                    ..Default::default()
                 }),
                 read_only: false,
                 expected_group_id: 3000,
@@ -2027,9 +2025,8 @@ mod tests {
                 mount_path: "ro_mount",
                 fs_group: Some(FSGroup {
                     group_id: 3000,
-                    group_change_policy: FSGroupChangePolicy::OnRootMismatch,
-                    unknown_fields: Default::default(),
-                    cached_size: Default::default(),
+                    group_change_policy: FSGroupChangePolicy::OnRootMismatch.into(),
+                    ..Default::default()
                 }),
                 read_only: true,
                 expected_group_id: 3000,
@@ -2049,10 +2046,7 @@ mod tests {
             let directory_mode = mount_dir.as_path().metadata().unwrap().permissions().mode();
             let mut storage_data = Storage::new();
             if d.read_only {
-                storage_data.set_options(RepeatedField::from_slice(&[
-                    "foo".to_string(),
-                    "ro".to_string(),
-                ]));
+                storage_data.set_options(vec!["foo".to_string(), "ro".to_string()]);
             }
             if let Some(fs_group) = d.fs_group.clone() {
                 storage_data.set_fs_group(fs_group);
