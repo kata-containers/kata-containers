@@ -54,6 +54,25 @@ func NewVFIODevice(devInfo *config.DeviceInfo) *VFIODevice {
 	}
 }
 
+// Ignore specific PCI devices, supply the pciClass and the bitmask to check
+// against the device class, deviceBDF for meaningfull info message
+func (device *VFIODevice) checkIgnorePCIClass(pciClass string, deviceBDF string, bitmask uint64) (bool, error) {
+	if pciClass == "" {
+		return false, nil
+	}
+	pciClassID, err := strconv.ParseUint(pciClass, 0, 32)
+	if err != nil {
+		return false, err
+	}
+	// ClassID is 16 bits, remove the two trailing zeros
+	pciClassID = pciClassID >> 8
+	if pciClassID&bitmask == bitmask {
+		deviceLogger().Infof("Ignoring PCI (Host) Bridge deviceBDF %v Class %x", deviceBDF, pciClassID)
+		return true, nil
+	}
+	return false, nil
+}
+
 // Attach is standard interface of api.Device, it's used to add device to some
 // DeviceReceiver
 func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceReceiver) (retErr error) {
@@ -88,6 +107,18 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 		}
 		id := utils.MakeNameID("vfio", device.DeviceInfo.ID+strconv.Itoa(i), maxDevIDSize)
 
+		pciClass := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesClass)
+		// We need to ignore Host or PCI Bridges that are in the same IOMMU group as the
+		// passed-through devices. One CANNOT pass-through a PCI bridge or Host bridge.
+		// Class 0x0604 is PCI bridge, 0x0600 is Host bridge
+		ignorePCIDevice, err := device.checkIgnorePCIClass(pciClass, deviceBDF, 0x0600)
+		if err != nil {
+			return err
+		}
+		if ignorePCIDevice {
+			continue
+		}
+
 		var vfio config.VFIODev
 
 		switch vfioDeviceType {
@@ -100,7 +131,7 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 				BDF:      deviceBDF,
 				SysfsDev: deviceSysfsDev,
 				IsPCIe:   isPCIe,
-				Class:    getPCIDeviceProperty(deviceBDF, PCISysFsDevicesClass),
+				Class:    pciClass,
 			}
 			if isPCIe {
 				vfioPCI.Bus = fmt.Sprintf("%s%d", pcieRootPortPrefix, len(AllPCIeDevs))
@@ -121,6 +152,7 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 		default:
 			return fmt.Errorf("Failed to append device: VFIO device type unrecognized")
 		}
+
 		device.VfioDevs = append(device.VfioDevs, &vfio)
 	}
 
