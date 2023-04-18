@@ -1186,6 +1186,7 @@ mod tests {
             },
             vpmu_feature: 0,
             enable_cache_passthrough: false,
+            numa_regions: Vec::new(),
         };
         vm.set_vm_config(vm_config.clone());
         vm.init_guest_memory().unwrap();

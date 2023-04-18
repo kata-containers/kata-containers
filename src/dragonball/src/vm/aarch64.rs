@@ -122,8 +122,12 @@ impl Vm {
         vcpu_boot_onlined.resize(vm_config.max_vcpu_count as usize, 0);
         let vpmu_feature = vcpu_manager.vpmu_feature();
         // This configuration is used for passing cache information into guest.
-        let cache_passthrough_enabled =
-            vm_config.enable_cache_passthrough && !vm_config.numa_regions.is_empty();
+        let cache_passthrough_enabled = vm_config.enable_cache_passthrough
+            && !vm_config.numa_regions.is_empty()
+            && vm_config
+                .numa_regions
+                .iter()
+                .all(|info| info.pcpu_ids.is_some());
         let fdt_vcpu_info = FdtVcpuInfo::new(
             vcpu_mpidr,
             vcpu_boot_onlined,
@@ -146,10 +150,18 @@ impl Vm {
         // cache information into guest, so just skip it.
         let cpu_maps = if enable_cache {
             numa_regions.sort_by_key(|numa_info| numa_info.host_numa_node_id);
+            // Unwrap pcpu_ids here is safe because we have check it in get_fdt_vm_info.
             Some(
                 numa_regions
                     .iter()
-                    .flat_map(|numa_info| numa_info.vcpu_ids.iter().map(|val| *val as u8))
+                    .flat_map(|numa_info| {
+                        numa_info
+                            .pcpu_ids
+                            .as_ref()
+                            .unwrap()
+                            .iter()
+                            .map(|val| *val as u8)
+                    })
                     .collect::<Vec<u8>>(),
             )
         } else {

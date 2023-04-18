@@ -89,6 +89,8 @@ pub struct NumaRegionInfo {
     pub guest_numa_node_id: Option<u32>,
     /// vcpu ids belonging to this region
     pub vcpu_ids: Vec<u32>,
+    /// pcpu ids belonging to this region
+    pub pcpu_ids: Option<Vec<u32>>,
 }
 
 /// Information for cpu topology to guide guest init
@@ -565,20 +567,23 @@ impl Vm {
             mem_file_path.push_str(shared_info.id.as_str());
         }
 
-        let mut vcpu_ids: Vec<u32> = Vec::new();
-        for i in 0..self.vm_config().max_vcpu_count {
-            vcpu_ids.push(i as u32);
-        }
+        let mut numa_regions = self.vm_config().numa_regions.clone();
+        if numa_regions.is_empty() {
+            // init default regions.
+            let mut vcpu_ids: Vec<u32> = Vec::new();
+            for i in 0..self.vm_config().max_vcpu_count {
+                vcpu_ids.push(i as u32);
+            }
 
-        // init default regions.
-        let mut numa_regions = Vec::with_capacity(1);
-        let numa_node = NumaRegionInfo {
-            size: self.vm_config.mem_size_mib as u64,
-            host_numa_node_id: None,
-            guest_numa_node_id: Some(0),
-            vcpu_ids,
-        };
-        numa_regions.push(numa_node);
+            let numa_node = NumaRegionInfo {
+                size: self.vm_config.mem_size_mib as u64,
+                host_numa_node_id: None,
+                guest_numa_node_id: Some(0),
+                vcpu_ids,
+                pcpu_ids: None,
+            };
+            numa_regions.push(numa_node);
+        }
 
         info!(
             self.logger,
@@ -1099,6 +1104,7 @@ pub mod tests {
             },
             vpmu_feature: 0,
             enable_cache_passthrough: false,
+            numa_regions: Vec::new(),
         };
 
         vm.set_vm_config(vm_config);

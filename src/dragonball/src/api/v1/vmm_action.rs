@@ -474,7 +474,45 @@ impl VmmService {
         if config.mem_type == "hugetlbfs" && config.mem_file_path.is_empty() {
             return Err(MachineConfig(InvalidMemFilePath("".to_owned())));
         }
+
+        if !machine_config.numa_regions.is_empty() {
+            let numa_regions = machine_config.numa_regions.clone();
+            // check total memory size of NUMA regions
+            let total_numa_memory_size = numa_regions.iter().map(|x| x.size).sum::<u64>() as usize;
+            if total_numa_memory_size > config.mem_size_mib {
+                return Err(MachineConfig(InvalidNumaRegionMemorySize(
+                    total_numa_memory_size,
+                )));
+            }
+            // check total vCPU counts of NUMA regions
+            let total_numa_cpu_counts =
+                numa_regions.iter().map(|x| x.vcpu_ids.len()).sum::<usize>() as u16;
+            // vcpu counts should be represented as u16
+            if total_numa_cpu_counts > config.max_vcpu_count as u16 {
+                return Err(MachineConfig(InvalidNumaRegionCpuCount(
+                    total_numa_cpu_counts,
+                )));
+            }
+            // check max vCPU id of NUMA regions
+            if let Some(max_vcpu_id) = numa_regions
+                .iter()
+                .flat_map(|x| x.vcpu_ids.clone())
+                .collect::<Vec<u32>>()
+                .iter()
+                .max()
+            {
+                if *max_vcpu_id as u16 > config.max_vcpu_count as u16 - 1 {
+                    return Err(MachineConfig(InvalidNumaRegionCpuMaxId(
+                        *max_vcpu_id as u16,
+                    )));
+                }
+            }
+
+            config.numa_regions = numa_regions;
+        }
+
         config.vpmu_feature = machine_config.vpmu_feature;
+        config.enable_cache_passthrough = machine_config.enable_cache_passthrough;
 
         // If serial_path is:
         // - None, legacy_manager will create_stdio_console.

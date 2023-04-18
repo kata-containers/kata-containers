@@ -713,6 +713,7 @@ mod tests {
             host_numa_node_id: None,
             guest_numa_node_id: Some(0),
             vcpu_ids: vec![1, 2],
+            pcpu_ids: None,
         }];
         let builder = AddressSpaceMgrBuilder::new("shmem", "").unwrap();
         let as_mgr = builder.build(&res_mgr, &numa_region_infos).unwrap();
@@ -760,6 +761,7 @@ mod tests {
             host_numa_node_id: None,
             guest_numa_node_id: Some(0),
             vcpu_ids: vec![1, 2],
+            pcpu_ids: None,
         }];
         let builder = AddressSpaceMgrBuilder::new("shmem", "").unwrap();
         let as_mgr = builder.build(&res_mgr, &numa_region_infos).unwrap();
@@ -780,6 +782,7 @@ mod tests {
                 host_numa_node_id: None,
                 guest_numa_node_id: Some(0),
                 vcpu_ids: vec![1, 2],
+                pcpu_ids: None,
             }];
             let builder = AddressSpaceMgrBuilder::new("shmem", "").unwrap();
             let _as_mgr = builder.build(&res_mgr, &numa_region_infos).unwrap();
@@ -804,6 +807,7 @@ mod tests {
             host_numa_node_id: None,
             guest_numa_node_id: Some(0),
             vcpu_ids: vec![1, 2],
+            pcpu_ids: None,
         }];
         let builder = AddressSpaceMgrBuilder::new("shmem", "").unwrap();
         let as_mgr = builder.build(&res_mgr, &numa_region_infos).unwrap();
@@ -820,6 +824,7 @@ mod tests {
             host_numa_node_id: None,
             guest_numa_node_id: Some(0),
             vcpu_ids: cpu_vec.clone(),
+            pcpu_ids: None,
         }];
         let builder = AddressSpaceMgrBuilder::new("shmem", "").unwrap();
         let as_mgr = builder.build(&res_mgr, &numa_region_infos).unwrap();
@@ -843,6 +848,7 @@ mod tests {
             host_numa_node_id: None,
             guest_numa_node_id: Some(0),
             vcpu_ids: cpu_vec,
+            pcpu_ids: None,
         }];
         let mut builder = AddressSpaceMgrBuilder::new("hugeshmem", "").unwrap();
         builder.toggle_prealloc(true);
@@ -887,6 +893,7 @@ mod tests {
             host_numa_node_id: None,
             guest_numa_node_id: Some(0),
             vcpu_ids: vec![1, 2],
+            pcpu_ids: None,
         }];
         let builder = AddressSpaceMgrBuilder::new("shmem", "").unwrap();
         let as_mgr = builder.build(&res_mgr, &numa_region_infos).unwrap();
