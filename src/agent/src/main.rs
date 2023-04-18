@@ -442,9 +442,8 @@ mod tests {
             let msg = format!("test[{}]: {:?}", i, d);
             let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap();
             defer!({
-                // rfd is closed by the use of PipeStream in the crate_logger_task function,
-                // but we will attempt to close in case of a failure
-                let _ = unistd::close(rfd);
+                // XXX: Never try to close rfd, because it will be closed by PipeStream in
+                // create_logger_task() and it's not safe to close the same fd twice time.
                 unistd::close(wfd).unwrap();
             });
 
