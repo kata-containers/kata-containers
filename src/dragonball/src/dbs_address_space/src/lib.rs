@@ -25,7 +25,7 @@ mod memory;
 pub use memory::{GuestMemoryHybrid, GuestMemoryManager, GuestRegionHybrid, GuestRegionRaw};
 
 mod numa;
-pub use self::numa::{NumaIdTable, NumaNode, NumaNodeInfo, MPOL_MF_MOVE, MPOL_PREFERRED};
+pub use self::numa::{NumaNode, NumaNodeInfo, MPOL_MF_MOVE, MPOL_PREFERRED};
 
 mod region;
 pub use region::{AddressSpaceRegion, AddressSpaceRegionType};

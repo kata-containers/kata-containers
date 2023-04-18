@@ -11,14 +11,6 @@ pub const MPOL_PREFERRED: u32 = 1;
 /// Strategy of mbind()
 pub const MPOL_MF_MOVE: u32 = 2;
 
-/// Type for recording numa ids of different devices
-pub struct NumaIdTable {
-    /// vectors of numa id for each memory region
-    pub memory: Vec<u32>,
-    /// vectors of numa id for each cpu
-    pub cpu: Vec<u32>,
-}
-
 /// Record numa node memory information.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct NumaNodeInfo {
