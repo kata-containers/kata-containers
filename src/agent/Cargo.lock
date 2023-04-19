@@ -362,12 +362,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
+name = "base64"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4a4ddaa51a5bc52a6948f74c06d20aaaddb71924eab79b8c97a8c556e942d6a"
+
+[[package]]
 name = "base64-serde"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2e964e3e0a930303c7c0bdb28ebf691dd98d9eee4b8b68019d2c995710b58a18"
 dependencies = [
- "base64",
+ "base64 0.13.1",
  "serde",
 ]
 
@@ -1892,7 +1898,7 @@ dependencies = [
  "anyhow",
  "async-compression",
  "async-trait",
- "base64",
+ "base64 0.13.1",
  "flate2",
  "flume",
  "futures-util",
@@ -2036,7 +2042,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dee6af62ad98bdf699ad2ecc8323479a1fdc7aa5faa6043d93119d83f6c5fca8"
 dependencies = [
  "anyhow",
- "base64",
+ "base64 0.13.1",
  "flate2",
  "once_cell",
  "openssl",
@@ -2062,7 +2068,7 @@ version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6204285f77fe7d9784db3fdc449ecce1a0114927a51d5a41c4c7a292011c015f"
 dependencies = [
- "base64",
+ "base64 0.13.1",
  "crypto-common",
  "digest 0.10.6",
  "hmac 0.12.1",
@@ -2082,6 +2088,7 @@ dependencies = [
  "cgroups-rs",
  "clap",
  "futures",
+ "http",
  "image-rs",
  "ipnetwork",
  "kata-sys-util",
@@ -2101,6 +2108,7 @@ dependencies = [
  "protobuf",
  "protocols",
  "regex",
+ "reqwest",
  "rtnetlink",
  "rustjail",
  "scan_fmt",
@@ -2154,7 +2162,7 @@ name = "kata-types"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "base64",
+ "base64 0.13.1",
  "bitmask-enum",
  "byte-unit",
  "glob",
@@ -2679,7 +2687,7 @@ version = "4.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eeaf26a72311c087f8c5ba617c96fac67a5c04f430e716ac8d8ab2de62e23368"
 dependencies = [
- "base64",
+ "base64 0.13.1",
  "chrono",
  "getrandom 0.2.8",
  "http",
@@ -2748,7 +2756,7 @@ source = "git+https://github.com/confidential-containers/ocicrypt-rs?rev=453c699
 dependencies = [
  "aes 0.8.2",
  "anyhow",
- "base64",
+ "base64 0.13.1",
  "base64-serde",
  "ctr 0.9.2",
  "hmac 0.12.1",
@@ -2821,7 +2829,7 @@ version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "87af7097640fedbe64718ac1c9b0549d72da747a3f527cd089215f96c6f691d5"
 dependencies = [
- "base64",
+ "base64 0.13.1",
  "chrono",
  "http",
  "itertools",
@@ -3059,7 +3067,7 @@ version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd56cbd21fea48d0c440b41cd69c589faacade08c992d9a54e471b79d0fd13eb"
 dependencies = [
- "base64",
+ "base64 0.13.1",
  "once_cell",
  "regex",
 ]
@@ -3070,7 +3078,7 @@ version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03c64931a1a212348ec4f3b4362585eca7159d0d09cbdf4a7f74f02173596fd4"
 dependencies = [
- "base64",
+ "base64 0.13.1",
 ]
 
 [[package]]
@@ -3123,7 +3131,7 @@ version = "7.0.0-rc.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b467d8082dcc552d4ca8c9aecdc94a09b0e092b961c542bb78b6feff8f1b3ea"
 dependencies = [
- "base64",
+ "base64 0.13.1",
  "digest 0.10.6",
  "md-5 0.10.5",
  "num-bigint-dig 0.8.2",
@@ -3181,7 +3189,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25ffcd92e3f788f0f76506f3b86310876cc0014ade835d68a6365ee0fd1009dc"
 dependencies = [
- "base64",
+ "base64 0.13.1",
  "num-bigint-dig 0.8.2",
  "oid",
  "picky-asn1 0.6.0",
@@ -3684,11 +3692,11 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.11.13"
+version = "0.11.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68cc60575865c7831548863cc02356512e3f1dc2f3f82cb837d7fc4cc8f3c97c"
+checksum = "27b71749df584b7f4cac2c426c127a7c785a5106cc98f7a8feb044115f0fa254"
 dependencies = [
- "base64",
+ "base64 0.21.0",
  "bytes 1.3.0",
  "encoding_rs",
  "futures-core",
@@ -3716,6 +3724,7 @@ dependencies = [
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-streams",
  "web-sys",
  "winreg",
 ]
@@ -3957,7 +3966,7 @@ checksum = "6aab653aad177cc40f34dbbc119127715f609d7e28481595506f1645bc67cd53"
 dependencies = [
  "aes 0.6.0",
  "anyhow",
- "base64",
+ "base64 0.13.1",
  "block-modes",
  "block-padding",
  "blowfish",
@@ -4245,7 +4254,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9fffeeee5fc70b65f62e2b75b4bf5a7fbb54867a949c32088be67032d6eded74"
 dependencies = [
  "async-trait",
- "base64",
+ "base64 0.13.1",
  "cached",
  "lazy_static",
  "oci-distribution",
@@ -4798,7 +4807,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "axum",
- "base64",
+ "base64 0.13.1",
  "bytes 1.3.0",
  "futures-core",
  "futures-util",
@@ -5314,6 +5323,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c38c045535d93ec4f0b4defec448e4291638ee608530863b1e2ba115d4fff7f"
 
 [[package]]
+name = "wasm-streams"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bbae3363c08332cadccd13b67db371814cd214c2524020932f0804b8cf7c078"
+dependencies = [
+ "futures-util",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "web-sys"
 version = "0.3.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5507,7 +5529,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0ecbeb7b67ce215e40e3cc7f2ff902f94a223acf44995934763467e7b1febc8"
 dependencies = [
  "asn1-rs",
- "base64",
+ "base64 0.13.1",
  "data-encoding",
  "der-parser",
  "lazy_static",
