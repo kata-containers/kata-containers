@@ -204,4 +204,7 @@ type agent interface {
 
 	// setIPTables sets the iptables from the guest
 	setIPTables(ctx context.Context, isIPv6 bool, data []byte) error
+
+	// setPolicy sends a new security policy to the guest
+	setPolicy(ctx context.Context, rules string, data string) error
 }

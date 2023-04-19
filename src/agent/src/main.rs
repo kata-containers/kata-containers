@@ -74,6 +74,7 @@ use tokio::{
 mod image_rpc;
 mod rpc;
 mod tracer;
+mod policy;
 
 const NAME: &str = "kata-agent";
 
@@ -83,6 +84,12 @@ lazy_static! {
         // clap::Parser::parse() greedily process all command line input including cargo test parameters,
         // so should only be used inside main.
         AgentConfig::from_cmdline("/proc/cmdline", env::args().collect()).unwrap()
+    ));
+}
+
+lazy_static! {
+    static ref AGENT_POLICY: Arc<Mutex<AgentPolicy>> = Arc::new(Mutex::new(
+        AgentPolicy::new().unwrap()
     ));
 }
 
@@ -216,6 +223,8 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     }
 
     let root_span = span!(tracing::Level::TRACE, "root-span");
+
+    AGENT_POLICY.lock().await.initialize().await?;
 
     // XXX: Start the root trace transaction.
     //
@@ -395,6 +404,7 @@ fn reset_sigpipe() {
 }
 
 use crate::config::AgentConfig;
+use crate::policy::AgentPolicy;
 use std::os::unix::io::{FromRawFd, RawFd};
 
 #[cfg(test)]

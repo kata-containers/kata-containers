@@ -83,6 +83,10 @@ ifeq ($(INIT),no)
     GENERATED_FILES += $(UNIT_FILES)
     # Target to be reached in systemd services
     UNIT_FILES += kata-containers.target
+
+    # Unit file to start OPA in systemd systems
+    # TODO: clean-up OPA installation
+    UNIT_FILES += coco-opa.service
 endif
 
 # Display name of command and it's version (or a message if not available).

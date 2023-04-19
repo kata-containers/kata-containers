@@ -537,6 +537,16 @@ func (s *Sandbox) RemoveLayerDevice(path string) error {
 }
 
 func (s *Sandbox) getAndStoreGuestDetails(ctx context.Context) error {
+	if len(s.config.AgentConfig.PolicyRules) > 0 || len(s.config.AgentConfig.PolicyData) > 0 {
+		os.WriteFile("/tmp/policy_rules.txt", []byte(s.config.AgentConfig.PolicyRules), 0644)
+		os.WriteFile("/tmp/policy_data.txt", []byte(s.config.AgentConfig.PolicyData), 0644)
+
+		if err := s.agent.setPolicy(ctx, s.config.AgentConfig.PolicyRules, s.config.AgentConfig.PolicyData); err != nil {
+			s.Logger().WithError(err).Info("Set policy failed")
+			return err
+		}
+	}
+
 	guestDetailRes, err := s.agent.getGuestDetails(ctx, &grpc.GuestDetailsRequest{
 		MemBlockSize:    true,
 		MemHotplugProbe: true,

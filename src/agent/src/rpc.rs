@@ -12,6 +12,7 @@ use std::ffi::CString;
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
+
 use ttrpc::{
     self,
     error::get_rpc_status,
@@ -63,6 +64,7 @@ use crate::random;
 use crate::sandbox::Sandbox;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
+use crate::AGENT_POLICY;
 
 use crate::trace_rpc_call;
 use crate::tracer::extract_carrier_from_ttrpc;
@@ -127,7 +129,7 @@ macro_rules! ttrpc_error {
     };
 }
 
-macro_rules! is_allowed {
+macro_rules! config_allows {
     ($req:ident) => {
         if !AGENT_CONFIG
             .read()
@@ -139,7 +141,63 @@ macro_rules! is_allowed {
                 format!("{} is blocked", $req.descriptor().name()),
             ));
         }
-    };
+    }
+}
+
+macro_rules! is_allowed {
+    ($req:ident) => {
+        config_allows!($req);
+
+        if !AGENT_POLICY
+            .lock()
+            .await
+            .is_allowed_endpoint($req.descriptor().name())
+            .await
+        {
+            return Err(ttrpc_error!(
+                ttrpc::Code::PERMISSION_DENIED,
+                format!("{} is blocked by policy", $req.descriptor().name()),
+            ));
+        }
+    }
+}
+
+macro_rules! is_allowed_create_container {
+    ($req:ident) => {
+        log_oci_spec(&$req).await;
+
+        config_allows!($req);
+
+        if !AGENT_POLICY
+            .lock()
+            .await
+            .is_allowed_create_container($req.descriptor().name(), &$req)
+            .await
+        {
+            return Err(ttrpc_error!(
+                ttrpc::Code::PERMISSION_DENIED,
+                format!("{} is blocked by policy", $req.descriptor().name()),
+            ));
+        }
+    }
+}
+
+macro_rules! is_allowed_create_sandbox {
+    ($req:ident) => {
+        config_allows!($req);
+
+        if !AGENT_POLICY
+            .lock()
+            .await
+            .is_allowed_create_sandbox($req.descriptor().name(), &$req)
+            .await
+        {
+            return Err(ttrpc_error!(
+                ttrpc::Code::PERMISSION_DENIED,
+                format!("{} is blocked by policy", $req.descriptor().name()),
+            ));
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -179,6 +237,31 @@ fn merge_oci_process(target: &mut oci::Process, source: &oci::Process) {
         if !target.env.iter().any(|i| i.contains(variable_name[0])) {
             target.env.push(source_env.to_string());
         }
+    }
+}
+
+async fn log_oci_spec(req: &protocols::agent::CreateContainerRequest) {
+    info!(sl!(), "log_oci_spec: starting");
+
+    if let Some(oci_spec) = req.OCI.clone().as_mut() {
+        let spec = rustjail::grpc_to_oci(oci_spec);
+        if let Ok(mut spec_str) = serde_json::to_string(&spec) {
+            spec_str += ",\n";
+
+            let mut f = tokio::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("/tmp/oci.json")
+                .await
+                .unwrap();
+
+            f.write(spec_str.as_bytes()).await.unwrap();
+            f.flush().await.unwrap();
+        } else {
+            error!(sl!(), "log_oci_spec: failed convert oci spec to json string");
+        }
+    } else {
+        error!(sl!(), "cannot clone oci spec in the create container request!");
     }
 }
 
@@ -754,7 +837,9 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CreateContainerRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_container", req);
-        is_allowed!(req);
+
+        is_allowed_create_container!(req);
+
         match self.do_create_container(req).await {
             Err(e) => Err(ttrpc_error!(ttrpc::Code::INTERNAL, e)),
             Ok(_) => Ok(Empty::new()),
@@ -1314,7 +1399,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CreateSandboxRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_sandbox", req);
-        is_allowed!(req);
+        is_allowed_create_sandbox!(req);
 
         {
             let sandbox = self.sandbox.clone();
@@ -1642,6 +1727,23 @@ impl agent_ttrpc::AgentService for AgentService {
         is_allowed!(req);
 
         do_add_swap(&self.sandbox, &req)
+            .await
+            .map_err(|e| ttrpc_error!(ttrpc::Code::INTERNAL, e))?;
+
+        Ok(Empty::new())
+    }
+
+    async fn set_policy(
+        &self,
+        ctx: &TtrpcContext,
+        req: protocols::agent::SetPolicyRequest,
+    ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "set_policy", req);
+        is_allowed!(req);
+
+        AGENT_POLICY.lock()
+            .await
+            .set_policy(&req.rules, &req.data)
             .await
             .map_err(|e| ttrpc_error!(ttrpc::Code::INTERNAL, e))?;
 

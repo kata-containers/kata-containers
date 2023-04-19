@@ -8,6 +8,7 @@ package oci
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -888,10 +889,31 @@ func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, r
 
 func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error {
 	c := config.AgentConfig
+	updateConfig := false
 
 	if value, ok := ocispec.Annotations[vcAnnotations.KernelModules]; ok {
+		ociLog.WithField("vcAnnotations.KernelModules", value).Info()
+
 		modules := strings.Split(value, KernelModulesSeparator)
 		c.KernelModules = modules
+		updateConfig = true
+	}
+
+	if value, ok := ocispec.Annotations["io.katacontainers.config.agent.policy-rules"]; ok {
+		if decoded_rules, err := base64.StdEncoding.DecodeString(value); err == nil {
+			c.PolicyRules = string(decoded_rules)
+			updateConfig = true
+		}
+	}
+
+	if value, ok := ocispec.Annotations["io.katacontainers.config.agent.policy-data"]; ok {
+		if decoded_data, err := base64.StdEncoding.DecodeString(value); err == nil {
+			c.PolicyData = string(decoded_data)
+			updateConfig = true
+		}
+	}
+
+	if updateConfig {
 		config.AgentConfig = c
 	}
 

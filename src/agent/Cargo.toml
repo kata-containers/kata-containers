@@ -69,6 +69,10 @@ clap = { version = "3.0.1", features = ["derive"] }
 # "vendored" feature for openssl is required by musl build
 openssl = { version = "0.10.38", features = ["vendored"] }
 
+# OPA requests
+http = "0.2.8"
+reqwest = { version = "0.11.14" }
+
 # Image pull/decrypt
 [target.'cfg(target_arch = "s390x")'.dependencies]
 image-rs = { git = "https://github.com/confidential-containers/image-rs", rev = "v0.4.0", default-features = false, features = ["kata-cc-s390x"] }

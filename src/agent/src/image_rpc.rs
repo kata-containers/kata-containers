@@ -21,6 +21,7 @@ use ttrpc::{self, error::get_rpc_status as ttrpc_error};
 use crate::rpc::{verify_cid, CONTAINER_BASE};
 use crate::sandbox::Sandbox;
 use crate::AGENT_CONFIG;
+use crate::AGENT_POLICY;
 
 use image_rs::image::ImageClient;
 use std::io::Write;
@@ -40,6 +41,20 @@ macro_rules! sl {
         slog_scope::logger()
     };
 }
+
+macro_rules! is_allowed_pull_image {
+    ($req:ident) => {
+        if !AGENT_POLICY
+            .lock()
+            .await
+            .is_allowed_pull_image_endpoint("PullImageRequest", &$req)
+            .await
+        {
+            return Err(anyhow!("Image {} is blocked by policy", $req.image));
+        }
+    }
+}
+
 
 pub struct ImageService {
     sandbox: Arc<Mutex<Sandbox>>,
@@ -130,6 +145,8 @@ impl ImageService {
     }
 
     async fn pull_image(&self, req: &image::PullImageRequest) -> Result<String> {
+        is_allowed_pull_image!(req);
+
         env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
 
         let https_proxy = &AGENT_CONFIG.read().await.https_proxy;
