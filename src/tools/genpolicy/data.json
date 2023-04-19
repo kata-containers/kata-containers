@@ -1,0 +1,100 @@
+{
+    "shared_files": {
+        "source_path": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-"
+    },
+    "pause_container": {
+        "root": {
+            "path": "/run/kata-containers/shared/containers/$(bundle-id)/rootfs",
+            "readonly": true
+        },
+        "mounts": [
+            {
+                "destination": "/dev/shm",
+                "type": "bind",
+                "source": "/run/kata-containers/sandbox/shm",
+                "options": [
+                    "rbind"
+                ]
+            },
+            {
+                "destination": "/etc/resolv.conf",
+                "type": "bind",
+                "options": [
+                    "rbind",
+                    "ro"
+                ]
+            }
+        ]
+    },
+    "other_container": {
+        "root": {
+            "path": "/run/kata-containers/shared/containers/$(bundle-id)/rootfs"
+        },
+        "mounts": [
+            {
+                "destination": "/etc/hosts",
+                "type": "bind",
+                "options": [
+                    "rbind",
+                    "rprivate",
+                    "rw"
+                ]
+            },
+            {
+                "destination": "/dev/termination-log",
+                "type": "bind",
+                "options": [
+                    "rbind",
+                    "rprivate",
+                    "rw"
+                ]
+            },
+            {
+                "destination": "/etc/hostname",
+                "type": "bind",
+                "options": [
+                    "rbind",
+                    "rprivate"
+                ]
+            },
+            {
+                "destination": "/etc/resolv.conf",
+                "type": "bind",
+                "options": [
+                    "rbind",
+                    "rprivate"
+                ]
+            },
+            {
+                "destination": "/dev/shm",
+                "type": "bind",
+                "source": "/run/kata-containers/sandbox/shm",
+                "options": [
+                    "rbind"
+                ]
+            },
+            {
+                "destination": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "type": "bind",
+                "options": [
+                    "rbind",
+                    "rprivate",
+                    "ro"
+                ]
+            }
+        ]
+    },
+    "volumes": {
+        "emptyDir": {
+            "mount_type": "local",
+            "mount_source": "^/run/kata-containers/shared/containers/$(sandbox-id)/rootfs/local/",
+            "mount_point": "^/run/kata-containers/shared/containers/$(sandbox-id)/rootfs/local/",
+            "driver": "local",
+            "source": "local",
+            "fstype": "local",
+            "options": [
+                "mode=0777"
+            ]
+        }
+    }
+}
