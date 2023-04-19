@@ -12,7 +12,6 @@ use std::ffi::CString;
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
-
 use ttrpc::{
     self,
     error::get_rpc_status,
@@ -164,8 +163,6 @@ macro_rules! is_allowed {
 
 macro_rules! is_allowed_create_container {
     ($req:ident) => {
-        log_oci_spec(&$req).await;
-
         config_allows!($req);
 
         if !AGENT_POLICY
@@ -237,31 +234,6 @@ fn merge_oci_process(target: &mut oci::Process, source: &oci::Process) {
         if !target.env.iter().any(|i| i.contains(variable_name[0])) {
             target.env.push(source_env.to_string());
         }
-    }
-}
-
-async fn log_oci_spec(req: &protocols::agent::CreateContainerRequest) {
-    info!(sl!(), "log_oci_spec: starting");
-
-    if let Some(oci_spec) = req.OCI.clone().as_mut() {
-        let spec = rustjail::grpc_to_oci(oci_spec);
-        if let Ok(mut spec_str) = serde_json::to_string(&spec) {
-            spec_str += ",\n";
-
-            let mut f = tokio::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("/tmp/oci.json")
-                .await
-                .unwrap();
-
-            f.write(spec_str.as_bytes()).await.unwrap();
-            f.flush().await.unwrap();
-        } else {
-            error!(sl!(), "log_oci_spec: failed convert oci spec to json string");
-        }
-    } else {
-        error!(sl!(), "cannot clone oci spec in the create container request!");
     }
 }
 
@@ -837,9 +809,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CreateContainerRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_container", req);
-
         is_allowed_create_container!(req);
-
         match self.do_create_container(req).await {
             Err(e) => Err(ttrpc_error!(ttrpc::Code::INTERNAL, e)),
             Ok(_) => Ok(Empty::new()),
@@ -1743,7 +1713,7 @@ impl agent_ttrpc::AgentService for AgentService {
 
         AGENT_POLICY.lock()
             .await
-            .set_policy(&req.rules, &req.data)
+            .set_policy(&req.policy)
             .await
             .map_err(|e| ttrpc_error!(ttrpc::Code::INTERNAL, e))?;
 

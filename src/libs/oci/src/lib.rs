@@ -8,7 +8,13 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
 
+#[cfg(target_family = "unix")]
 use libc::{self, mode_t};
+
+#[cfg(target_family = "windows")]
+#[allow(non_camel_case_types)]
+type mode_t = u32;
+
 use std::collections::HashMap;
 
 mod serialize;

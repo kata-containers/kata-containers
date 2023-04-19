@@ -162,10 +162,8 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 	ociSpec.Annotations["nerdctl/network-namespace"] = sandboxConfig.NetworkConfig.NetworkID
 	sandboxConfig.Annotations["nerdctl/network-namespace"] = ociSpec.Annotations["nerdctl/network-namespace"]
 
-	delete(ociSpec.Annotations, "io.katacontainers.config.agent.policy-rules")
-	delete(ociSpec.Annotations, "io.katacontainers.config.agent.policy-data")
-	delete(sandboxConfig.Annotations, "io.katacontainers.config.agent.policy-rules")
-	delete(sandboxConfig.Annotations, "io.katacontainers.config.agent.policy-data")
+	delete(ociSpec.Annotations, "io.katacontainers.config.agent.policy")
+	delete(sandboxConfig.Annotations, "io.katacontainers.config.agent.policy")
 
 	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig, func(ctx context.Context) error {
 		// Run pre-start OCI hooks, in the runtime namespace.
@@ -233,8 +231,7 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 	katatrace.AddTags(span, "container_id", containerID)
 	defer span.End()
 
-	delete(ociSpec.Annotations, "io.katacontainers.config.agent.policy-rules")
-	delete(ociSpec.Annotations, "io.katacontainers.config.agent.policy-data")
+	delete(ociSpec.Annotations, "io.katacontainers.config.agent.policy")
 
 	ociSpec = SetEphemeralStorageType(ociSpec, disableGuestEmptyDir)
 
