@@ -124,7 +124,9 @@ where
         // If the driver incorrectly sets up the queues, the following check will fail and take
         // the device into an unusable state.
         if !self.check_queues_valid() {
-            return Err(Error::ActivateError(ActivateError::InvalidQueueConfig));
+            return Err(Error::ActivateError(Box::new(
+                ActivateError::InvalidQueueConfig,
+            )));
         }
 
         self.register_ioevent()?;
@@ -138,7 +140,7 @@ where
             .map(|_| self.device_activated = true)
             .map_err(|e| {
                 error!("device activate error: {:?}", e);
-                Error::ActivateError(e)
+                Error::ActivateError(Box::new(e))
             })
     }
 
