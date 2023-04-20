@@ -32,7 +32,7 @@ pub struct PodPolicy {
 //   "containers": [
 //     {
 //       "oci": {
-//         "ociVersion": "1.0.2-dev",
+//         "ociVersion": "1.1.0-rc.1",
 // ...
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct PolicyData {
@@ -275,7 +275,7 @@ impl PodPolicy {
         }
 
         let mut oci_spec: OciSpec = Default::default();
-        oci_spec.version = "1.0.2-dev".to_string();
+        oci_spec.version = "1.1.0-rc.1".to_string();
         oci_spec.hostname = pod_name.to_string();
 
         let registry_container = registry::Container::new(&pod_container.image).await?;
