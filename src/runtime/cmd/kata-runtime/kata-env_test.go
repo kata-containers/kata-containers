@@ -24,7 +24,6 @@ import (
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 
-	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
@@ -86,7 +85,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	blockStorageDriver := "virtio-scsi"
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
-	coldPlugVFIO := hv.RootPort
 	pcieRootPort := uint32(2)
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
@@ -131,7 +129,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		BlockDeviceDriver:    blockStorageDriver,
 		EnableIOThreads:      enableIOThreads,
 		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
-		ColdPlugVFIO:         coldPlugVFIO,
 		PCIeRootPort:         pcieRootPort,
 		DisableNewNetNs:      disableNewNetNs,
 		DefaultVCPUCount:     hypConfig.NumVCPUs,
