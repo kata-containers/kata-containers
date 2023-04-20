@@ -53,6 +53,11 @@ const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
 const MAX_BRIDGE_SIZE: u32 = 5;
 
+/// use transparent huge page as VM RAM's backend
+pub const HUGE_PAGE_MODE_THP: &str = "thp";
+/// use hugetlbfs as VM RAM's backend
+pub const HUGE_PAGE_MODE_HUGETLBFS: &str = "hugetlbfs";
+
 const KERNEL_PARAM_DELIMITER: &str = " ";
 
 lazy_static! {
@@ -558,6 +563,10 @@ pub struct MemoryInfo {
     /// result in memory pre allocation.
     #[serde(default)]
     pub enable_hugepages: bool,
+
+    /// Hugepage mode for VM RAM, default Hugetlbfs
+    #[serde(default)]
+    pub hugepages_mode: String,
 
     /// Specifies virtio-mem will be enabled or not.
     ///

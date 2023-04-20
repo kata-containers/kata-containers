@@ -11,6 +11,7 @@ use std::u32;
 use super::{default, register_hypervisor_plugin};
 use crate::config::default::MAX_DRAGONBALL_VCPUS;
 use crate::config::default::MIN_DRAGONBALL_MEMORY_SIZE_MB;
+use crate::config::hypervisor::{HUGE_PAGE_MODE_HUGETLBFS, HUGE_PAGE_MODE_THP};
 use crate::config::hypervisor::{
     VIRTIO_BLK, VIRTIO_BLK_MMIO, VIRTIO_FS, VIRTIO_FS_INLINE, VIRTIO_PMEM,
 };
@@ -190,6 +191,17 @@ impl ConfigPlugin for DragonballConfig {
                     "dragonball hypervisor has minimal memory limitation {}",
                     MIN_DRAGONBALL_MEMORY_SIZE_MB
                 ));
+            }
+            if db.memory_info.enable_hugepages {
+                if !db.memory_info.hugepages_mode.is_empty()
+                    && db.memory_info.hugepages_mode != HUGE_PAGE_MODE_THP
+                    && db.memory_info.hugepages_mode != HUGE_PAGE_MODE_HUGETLBFS
+                {
+                    return Err(eother!(
+                        "{} is unsupported huge page type.",
+                        db.memory_info.hugepages_mode
+                    ));
+                }
             }
         }
 

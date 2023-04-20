@@ -7,7 +7,7 @@
 use super::vmm_instance::VmmInstance;
 use crate::{
     device::Device, hypervisor_persist::HypervisorState, kernel_param::KernelParams, VmmState,
-    DEV_HUGEPAGES, HUGETLBFS, HYPERVISOR_DRAGONBALL, SHMEM, VM_ROOTFS_DRIVER_BLK,
+    DEV_HUGEPAGES, HUGETLBFS, HUGE_SHMEM, HYPERVISOR_DRAGONBALL, SHMEM, VM_ROOTFS_DRIVER_BLK,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -19,6 +19,7 @@ use kata_sys_util::mount;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
     config::hypervisor::Hypervisor as HypervisorConfig,
+    config::hypervisor::{HUGE_PAGE_MODE_HUGETLBFS, HUGE_PAGE_MODE_THP},
 };
 use persist::sandbox_persist::Persist;
 use shim_interface::KATA_PATH;
@@ -189,7 +190,11 @@ impl DragonballInner {
     fn set_vm_base_config(&mut self) -> Result<()> {
         let serial_path = [&self.run_dir, "console.sock"].join("/");
         let (mem_type, mem_file_path) = if self.config.memory_info.enable_hugepages {
-            (String::from(HUGETLBFS), String::from(DEV_HUGEPAGES))
+            match self.config.memory_info.hugepages_mode.as_str() {
+                HUGE_PAGE_MODE_THP => (String::from(HUGE_SHMEM), String::from("")),
+                HUGE_PAGE_MODE_HUGETLBFS => (String::from(HUGETLBFS), String::from(DEV_HUGEPAGES)),
+                _ => return Err(anyhow!("invalid huge page mode")),
+            }
         } else {
             (String::from(SHMEM), String::from(""))
         };

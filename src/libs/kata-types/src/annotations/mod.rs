@@ -227,6 +227,9 @@ pub const KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC: &str =
 /// A sandbox annotation to specify if the memory should be pre-allocated from huge pages.
 pub const KATA_ANNO_CFG_HYPERVISOR_HUGE_PAGES: &str =
     "io.katacontainers.config.hypervisor.enable_hugepages";
+/// A sandbox annotation to specify huge page mode.
+pub const KATA_ANNO_CFG_HYPERVISOR_HUGE_PAGES_MODE: &str =
+    "io.katacontainers.config.hypervisor.enable_hugepages_mode";
 /// A sandbox annotation to soecify file based memory backend root directory.
 pub const KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR: &str =
     "io.katacontainers.config.hypervisor.file_mem_backend";
@@ -744,6 +747,9 @@ impl Annotation {
                             return Err(bool_err);
                         }
                     },
+                    KATA_ANNO_CFG_HYPERVISOR_HUGE_PAGES_MODE => {
+                        hv.memory_info.hugepages_mode = value.to_string();
+                    }
                     KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR => {
                         hv.memory_info.validate_memory_backend_path(value)?;
                         hv.memory_info.file_mem_backend = value.to_string();
