@@ -907,6 +907,8 @@ func (k *kataAgent) removeIgnoredOCIMount(spec *specs.Spec, ignoredMounts map[st
 	for _, m := range spec.Mounts {
 		if _, found := ignoredMounts[m.Source]; found {
 			k.Logger().WithField("removed-mount", m.Source).Debug("Removing OCI mount")
+		} else if HasOption(m.Options, vcAnnotations.IsFileSystemLayer) {
+			k.Logger().WithField("removed-mount", m.Source).Debug("Removing layer")
 		} else {
 			mounts = append(mounts, m)
 		}
@@ -1293,12 +1295,16 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	// Block based volumes will require some adjustments in the OCI spec, and creation of
 	// storage objects to pass to the agent.
-	volumeStorages, err := k.handleBlkOCIMounts(c, ociSpec)
+	layerStorages, volumeStorages, err := k.handleBlkOCIMounts(c, ociSpec)
 	if err != nil {
 		return nil, err
 	}
 
 	ctrStorages = append(ctrStorages, volumeStorages...)
+
+	// Layer storage objects are prepended to the list so that they come _before_ the
+	// rootfs because the rootfs depends on them (it's an overlay of the layers).
+	ctrStorages = append(layerStorages, ctrStorages...)
 
 	grpcSpec, err := grpc.OCItoGRPC(ociSpec)
 	if err != nil {
@@ -1611,9 +1617,10 @@ func (k *kataAgent) createBlkStorageObject(c *Container, m Mount) (*grpc.Storage
 // handleBlkOCIMounts will create a unique destination mountpoint in the guest for each volume in the
 // given container and will update the OCI spec to utilize this mount point as the new source for the
 // container volume. The container mount structure is updated to store the guest destination mountpoint.
-func (k *kataAgent) handleBlkOCIMounts(c *Container, spec *specs.Spec) ([]*grpc.Storage, error) {
+func (k *kataAgent) handleBlkOCIMounts(c *Container, spec *specs.Spec) ([]*grpc.Storage, []*grpc.Storage, error) {
 
 	var volumeStorages []*grpc.Storage
+	var layerStorages []*grpc.Storage
 
 	for i, m := range c.mounts {
 		id := m.BlockDeviceID
@@ -1629,7 +1636,12 @@ func (k *kataAgent) handleBlkOCIMounts(c *Container, spec *specs.Spec) ([]*grpc.
 		// Create Storage structure
 		vol, err := k.createBlkStorageObject(c, m)
 		if vol == nil || err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+
+		if HasOption(m.Options, vcAnnotations.IsFileSystemLayer) {
+			layerStorages = append(layerStorages, vol)
+			continue
 		}
 
 		// Each device will be mounted at a unique location within the VM only once. Mounting
@@ -1660,7 +1672,7 @@ func (k *kataAgent) handleBlkOCIMounts(c *Container, spec *specs.Spec) ([]*grpc.
 		volumeStorages = append(volumeStorages, vol)
 	}
 
-	return volumeStorages, nil
+	return layerStorages, volumeStorages, nil
 }
 
 // handlePidNamespace checks if Pid namespace for a container needs to be shared with its sandbox
