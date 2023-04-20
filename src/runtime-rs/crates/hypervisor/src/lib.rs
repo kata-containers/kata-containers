@@ -52,6 +52,7 @@ const VM_ROOTFS_FILESYSTEM_EROFS: &str = "erofs";
 const DEV_HUGEPAGES: &str = "/dev/hugepages";
 pub const HUGETLBFS: &str = "hugetlbfs";
 const SHMEM: &str = "shmem";
+const HUGE_SHMEM: &str = "hugeshmem";
 
 pub const HYPERVISOR_DRAGONBALL: &str = "dragonball";
 pub const HYPERVISOR_QEMU: &str = "qemu";

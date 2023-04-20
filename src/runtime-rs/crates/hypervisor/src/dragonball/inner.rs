@@ -7,7 +7,7 @@
 use super::vmm_instance::VmmInstance;
 use crate::{
     device::DeviceType, hypervisor_persist::HypervisorState, kernel_param::KernelParams, VmmState,
-    DEV_HUGEPAGES, HUGETLBFS, HYPERVISOR_DRAGONBALL, SHMEM,
+    DEV_HUGEPAGES, HUGETLBFS, HUGE_SHMEM, HYPERVISOR_DRAGONBALL, SHMEM,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -19,7 +19,10 @@ use dragonball::{
 use kata_sys_util::mount;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
-    config::{hypervisor::Hypervisor as HypervisorConfig, KATA_PATH},
+    config::{
+        hypervisor::{HugePageType, Hypervisor as HypervisorConfig},
+        KATA_PATH,
+    },
 };
 use nix::mount::MsFlags;
 use persist::sandbox_persist::Persist;
@@ -175,7 +178,10 @@ impl DragonballInner {
     fn set_vm_base_config(&mut self) -> Result<()> {
         let serial_path = [&self.run_dir, "console.sock"].join("/");
         let (mem_type, mem_file_path) = if self.config.memory_info.enable_hugepages {
-            (String::from(HUGETLBFS), String::from(DEV_HUGEPAGES))
+            match self.config.memory_info.hugepage_type {
+                HugePageType::THP => (String::from(HUGE_SHMEM), String::from("")),
+                HugePageType::Hugetlbfs => (String::from(HUGETLBFS), String::from(DEV_HUGEPAGES)),
+            }
         } else {
             (String::from(SHMEM), String::from(""))
         };
