@@ -813,10 +813,14 @@ fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
                     }
                 }
                 None => {
+                    if opt.starts_with("io.katacontainers.") {
+                        continue;
+                    }
+
                     if !options.is_empty() {
                         options.push_str(format!(",{}", opt).as_str());
                     } else {
-                        options.push_str(opt.to_string().as_str());
+                        options.push_str(opt);
                     }
                 }
             };
