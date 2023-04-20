@@ -25,6 +25,7 @@ slog-scope = "4.4.0"
 serde_json = "1.0.73"
 thiserror = "1.0"
 toml = "0.5.8"
+serde-enum-str = "0.4"
 
 oci = { path = "../oci" }
 safe-path = { path = "../safe-path" }

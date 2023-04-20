@@ -15,7 +15,7 @@ use serde::Deserialize;
 use crate::config::default::DEFAULT_AGENT_TYPE_NAME;
 use crate::config::default::DEFAULT_HYPERVISOR;
 use crate::config::default::DEFAULT_RUNTIME_NAME;
-use crate::config::hypervisor::get_hypervisor_plugin;
+use crate::config::hypervisor::{get_hypervisor_plugin, HugePageType};
 
 use crate::config::TomlConfig;
 use crate::sl;
@@ -225,8 +225,11 @@ pub const KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS: &str =
 pub const KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC: &str =
     "io.katacontainers.config.hypervisor.enable_mem_prealloc";
 /// A sandbox annotation to specify if the memory should be pre-allocated from huge pages.
-pub const KATA_ANNO_CFG_HYPERVISOR_HUGE_PAGES: &str =
+pub const KATA_ANNO_CFG_HYPERVISOR_ENABLE_HUGEPAGES: &str =
     "io.katacontainers.config.hypervisor.enable_hugepages";
+/// A sandbox annotation to specify huge page mode of memory backend.
+pub const KATA_ANNO_CFG_HYPERVISOR_HUGEPAGE_TYPE: &str =
+    "io.katacontainers.config.hypervisor.hugepage_type";
 /// A sandbox annotation to soecify file based memory backend root directory.
 pub const KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR: &str =
     "io.katacontainers.config.hypervisor.file_mem_backend";
@@ -740,14 +743,29 @@ impl Annotation {
                             return Err(bool_err);
                         }
                     },
-                    KATA_ANNO_CFG_HYPERVISOR_HUGE_PAGES => match self.get_value::<bool>(key) {
-                        Ok(r) => {
-                            hv.memory_info.enable_hugepages = r.unwrap_or_default();
+                    KATA_ANNO_CFG_HYPERVISOR_ENABLE_HUGEPAGES => {
+                        match self.get_value::<bool>(key) {
+                            Ok(r) => {
+                                hv.memory_info.enable_hugepages = r.unwrap_or_default();
+                            }
+                            Err(_e) => {
+                                return Err(bool_err);
+                            }
                         }
-                        Err(_e) => {
-                            return Err(bool_err);
+                    }
+                    KATA_ANNO_CFG_HYPERVISOR_HUGEPAGE_TYPE => {
+                        match self.get_value::<HugePageType>(key) {
+                            Ok(r) => {
+                                hv.memory_info.hugepage_type = r.unwrap_or_default();
+                            }
+                            Err(e) => {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::InvalidData,
+                                    format!("parse huge pages type: {}, error: {}", value, e),
+                                ));
+                            }
                         }
-                    },
+                    }
                     KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR => {
                         hv.memory_info.validate_memory_backend_path(value)?;
                         hv.memory_info.file_mem_backend = value.to_string();
