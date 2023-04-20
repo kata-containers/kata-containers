@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use protobuf::{CachedSize, SingularPtrField, UnknownFields};
+use protobuf::MessageField;
 
 use crate::cgroups::Manager as CgroupManager;
 use crate::protocols::agent::{BlkioStats, CgroupStats, CpuStats, MemoryStats, PidsStats};
@@ -33,13 +33,12 @@ impl CgroupManager for Manager {
 
     fn get_stats(&self) -> Result<CgroupStats> {
         Ok(CgroupStats {
-            cpu_stats: SingularPtrField::some(CpuStats::default()),
-            memory_stats: SingularPtrField::some(MemoryStats::new()),
-            pids_stats: SingularPtrField::some(PidsStats::new()),
-            blkio_stats: SingularPtrField::some(BlkioStats::new()),
+            cpu_stats: MessageField::some(CpuStats::default()),
+            memory_stats: MessageField::some(MemoryStats::new()),
+            pids_stats: MessageField::some(PidsStats::new()),
+            blkio_stats: MessageField::some(BlkioStats::new()),
             hugetlb_stats: HashMap::new(),
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            ..Default::default()
         })
     }
 

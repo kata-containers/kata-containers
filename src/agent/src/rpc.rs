@@ -21,17 +21,20 @@ use ttrpc::{
 use anyhow::{anyhow, Context, Result};
 use cgroups::freezer::FreezerState;
 use oci::{LinuxNamespace, Root, Spec};
-use protobuf::{Message, RepeatedField, SingularPtrField};
+use protobuf::{MessageDyn, MessageField};
 use protocols::agent::{
     AddSwapRequest, AgentDetails, CopyFileRequest, GetIPTablesRequest, GetIPTablesResponse,
     GuestDetailsResponse, Interfaces, Metrics, OOMEvent, ReadStreamResponse, Routes,
     SetIPTablesRequest, SetIPTablesResponse, StatsContainerResponse, VolumeStatsRequest,
     WaitProcessResponse, WriteStreamResponse,
 };
-use protocols::csi::{VolumeCondition, VolumeStatsResponse, VolumeUsage, VolumeUsage_Unit};
+use protocols::csi::{
+    volume_usage::Unit as VolumeUsage_Unit, VolumeCondition, VolumeStatsResponse, VolumeUsage,
+};
 use protocols::empty::Empty;
 use protocols::health::{
-    HealthCheckResponse, HealthCheckResponse_ServingStatus, VersionCheckResponse,
+    health_check_response::ServingStatus as HealthCheckResponse_ServingStatus, HealthCheckResponse,
+    VersionCheckResponse,
 };
 use protocols::types::Interface;
 use protocols::{agent_ttrpc_async as agent_ttrpc, health_ttrpc_async as health_ttrpc};
@@ -124,11 +127,11 @@ macro_rules! is_allowed {
         if !AGENT_CONFIG
             .read()
             .await
-            .is_allowed_endpoint($req.descriptor().name())
+            .is_allowed_endpoint($req.descriptor_dyn().name())
         {
             return Err(ttrpc_error!(
                 ttrpc::Code::UNIMPLEMENTED,
-                format!("{} is blocked", $req.descriptor().name()),
+                format!("{} is blocked", $req.descriptor_dyn().name()),
             ));
         }
     };
@@ -151,7 +154,7 @@ impl AgentService {
         kata_sys_util::validate::verify_id(&cid)?;
 
         let mut oci_spec = req.OCI.clone();
-        let use_sandbox_pidns = req.get_sandbox_pidns();
+        let use_sandbox_pidns = req.sandbox_pidns();
 
         let sandbox;
         let mut s;
@@ -785,7 +788,7 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<protocols::empty::Empty> {
         trace_rpc_call!(ctx, "pause_container", req);
         is_allowed!(req);
-        let cid = req.get_container_id();
+        let cid = req.container_id();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().await;
 
@@ -809,7 +812,7 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<protocols::empty::Empty> {
         trace_rpc_call!(ctx, "resume_container", req);
         is_allowed!(req);
-        let cid = req.get_container_id();
+        let cid = req.container_id();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().await;
 
@@ -964,16 +967,12 @@ impl agent_ttrpc::AgentService for AgentService {
         trace_rpc_call!(ctx, "update_routes", req);
         is_allowed!(req);
 
-        let new_routes = req
-            .routes
-            .into_option()
-            .map(|r| r.Routes.into_vec())
-            .ok_or_else(|| {
-                ttrpc_error!(
-                    ttrpc::Code::INVALID_ARGUMENT,
-                    "empty update routes request".to_string(),
-                )
-            })?;
+        let new_routes = req.routes.into_option().map(|r| r.Routes).ok_or_else(|| {
+            ttrpc_error!(
+                ttrpc::Code::INVALID_ARGUMENT,
+                "empty update routes request".to_string(),
+            )
+        })?;
 
         let mut sandbox = self.sandbox.lock().await;
 
@@ -992,7 +991,7 @@ impl agent_ttrpc::AgentService for AgentService {
         })?;
 
         Ok(protocols::agent::Routes {
-            Routes: RepeatedField::from_vec(list),
+            Routes: list,
             ..Default::default()
         })
     }
@@ -1191,7 +1190,7 @@ impl agent_ttrpc::AgentService for AgentService {
             })?;
 
         Ok(protocols::agent::Interfaces {
-            Interfaces: RepeatedField::from_vec(list),
+            Interfaces: list,
             ..Default::default()
         })
     }
@@ -1214,7 +1213,7 @@ impl agent_ttrpc::AgentService for AgentService {
             .map_err(|e| ttrpc_error!(ttrpc::Code::INTERNAL, format!("list routes: {:?}", e)))?;
 
         Ok(protocols::agent::Routes {
-            Routes: RepeatedField::from_vec(list),
+            Routes: list,
             ..Default::default()
         })
     }
@@ -1330,7 +1329,7 @@ impl agent_ttrpc::AgentService for AgentService {
         let neighs = req
             .neighbors
             .into_option()
-            .map(|n| n.ARPNeighbors.into_vec())
+            .map(|n| n.ARPNeighbors)
             .ok_or_else(|| {
                 ttrpc_error!(
                     ttrpc::Code::INVALID_ARGUMENT,
@@ -1414,7 +1413,7 @@ impl agent_ttrpc::AgentService for AgentService {
 
         // to get agent details
         let detail = get_agent_details();
-        resp.agent_details = SingularPtrField::some(detail);
+        resp.agent_details = MessageField::some(detail);
 
         Ok(resp)
     }
@@ -1539,8 +1538,8 @@ impl agent_ttrpc::AgentService for AgentService {
             .map(|u| usage_vec.push(u))
             .map_err(|e| ttrpc_error!(ttrpc::Code::INTERNAL, e))?;
 
-        resp.usage = RepeatedField::from_vec(usage_vec);
-        resp.volume_condition = SingularPtrField::some(condition);
+        resp.usage = usage_vec;
+        resp.volume_condition = MessageField::some(condition);
         Ok(resp)
     }
 
@@ -1644,7 +1643,7 @@ fn get_volume_capacity_stats(path: &str) -> Result<VolumeUsage> {
     usage.total = stat.blocks() * block_size;
     usage.available = stat.blocks_free() * block_size;
     usage.used = usage.total - usage.available;
-    usage.unit = VolumeUsage_Unit::BYTES;
+    usage.unit = VolumeUsage_Unit::BYTES.into();
 
     Ok(usage)
 }
@@ -1656,7 +1655,7 @@ fn get_volume_inode_stats(path: &str) -> Result<VolumeUsage> {
     usage.total = stat.files();
     usage.available = stat.files_free();
     usage.used = usage.total - usage.available;
-    usage.unit = VolumeUsage_Unit::INODES;
+    usage.unit = VolumeUsage_Unit::INODES.into();
 
     Ok(usage)
 }
@@ -1676,14 +1675,12 @@ fn get_agent_details() -> AgentDetails {
     detail.set_supports_seccomp(have_seccomp());
     detail.init_daemon = unistd::getpid() == Pid::from_raw(1);
 
-    detail.device_handlers = RepeatedField::new();
-    detail.storage_handlers = RepeatedField::from_vec(
-        STORAGE_HANDLER_LIST
-            .to_vec()
-            .iter()
-            .map(|x| x.to_string())
-            .collect(),
-    );
+    detail.device_handlers = Vec::new();
+    detail.storage_handlers = STORAGE_HANDLER_LIST
+        .to_vec()
+        .iter()
+        .map(|x| x.to_string())
+        .collect();
 
     detail
 }
@@ -2037,7 +2034,7 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
 
     let mut args = vec!["-v".to_string(), module.name.clone()];
 
-    if module.parameters.len() > 0 {
+    if !module.parameters.is_empty() {
         args.extend(module.parameters.to_vec())
     }
 

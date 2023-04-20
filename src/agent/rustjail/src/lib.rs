@@ -82,11 +82,11 @@ pub fn process_grpc_to_oci(p: &grpc::Process) -> oci::Process {
         let cap = p.Capabilities.as_ref().unwrap();
 
         Some(oci::LinuxCapabilities {
-            bounding: cap.Bounding.clone().into_vec(),
-            effective: cap.Effective.clone().into_vec(),
-            inheritable: cap.Inheritable.clone().into_vec(),
-            permitted: cap.Permitted.clone().into_vec(),
-            ambient: cap.Ambient.clone().into_vec(),
+            bounding: cap.Bounding.clone(),
+            effective: cap.Effective.clone(),
+            inheritable: cap.Inheritable.clone(),
+            permitted: cap.Permitted.clone(),
+            ambient: cap.Ambient.clone(),
         })
     } else {
         None
@@ -108,8 +108,8 @@ pub fn process_grpc_to_oci(p: &grpc::Process) -> oci::Process {
         terminal: p.Terminal,
         console_size,
         user,
-        args: p.Args.clone().into_vec(),
-        env: p.Env.clone().into_vec(),
+        args: p.Args.clone(),
+        env: p.Env.clone(),
         cwd: p.Cwd.clone(),
         capabilities,
         rlimits,
@@ -130,9 +130,9 @@ fn root_grpc_to_oci(root: &grpc::Root) -> oci::Root {
 fn mount_grpc_to_oci(m: &grpc::Mount) -> oci::Mount {
     oci::Mount {
         destination: m.destination.clone(),
-        r#type: m.field_type.clone(),
+        r#type: m.type_.clone(),
         source: m.source.clone(),
-        options: m.options.clone().into_vec(),
+        options: m.options.clone(),
     }
 }
 
@@ -143,8 +143,8 @@ fn hook_grpc_to_oci(h: &[grpcHook]) -> Vec<oci::Hook> {
     for e in h.iter() {
         r.push(oci::Hook {
             path: e.Path.clone(),
-            args: e.Args.clone().into_vec(),
-            env: e.Env.clone().into_vec(),
+            args: e.Args.clone(),
+            env: e.Env.clone(),
             timeout: Some(e.Timeout as i32),
         });
     }
@@ -359,7 +359,7 @@ fn seccomp_grpc_to_oci(sec: &grpc::LinuxSeccomp) -> oci::LinuxSeccomp {
             let mut args = Vec::new();
 
             let errno_ret: u32 = if sys.has_errnoret() {
-                sys.get_errnoret()
+                sys.errnoret()
             } else {
                 libc::EPERM as u32
             };
@@ -374,7 +374,7 @@ fn seccomp_grpc_to_oci(sec: &grpc::LinuxSeccomp) -> oci::LinuxSeccomp {
             }
 
             r.push(oci::LinuxSyscall {
-                names: sys.Names.clone().into_vec(),
+                names: sys.Names.clone(),
                 action: sys.Action.clone(),
                 errno_ret,
                 args,
@@ -385,8 +385,8 @@ fn seccomp_grpc_to_oci(sec: &grpc::LinuxSeccomp) -> oci::LinuxSeccomp {
 
     oci::LinuxSeccomp {
         default_action: sec.DefaultAction.clone(),
-        architectures: sec.Architectures.clone().into_vec(),
-        flags: sec.Flags.clone().into_vec(),
+        architectures: sec.Architectures.clone(),
+        flags: sec.Flags.clone(),
         syscalls,
     }
 }
@@ -456,8 +456,8 @@ fn linux_grpc_to_oci(l: &grpc::Linux) -> oci::Linux {
         devices,
         seccomp,
         rootfs_propagation: l.RootfsPropagation.clone(),
-        masked_paths: l.MaskedPaths.clone().into_vec(),
-        readonly_paths: l.ReadonlyPaths.clone().into_vec(),
+        masked_paths: l.MaskedPaths.clone(),
+        readonly_paths: l.ReadonlyPaths.clone(),
         mount_label: l.MountLabel.clone(),
         intel_rdt,
     }
@@ -558,35 +558,30 @@ mod tests {
                 // All fields specified
                 grpcproc: grpc::Process {
                     Terminal: true,
-                    ConsoleSize: protobuf::SingularPtrField::<grpc::Box>::some(grpc::Box {
+                    ConsoleSize: protobuf::MessageField::<grpc::Box>::some(grpc::Box {
                         Height: 123,
                         Width: 456,
                         ..Default::default()
                     }),
-                    User: protobuf::SingularPtrField::<grpc::User>::some(grpc::User {
+                    User: protobuf::MessageField::<grpc::User>::some(grpc::User {
                         UID: 1234,
                         GID: 5678,
                         AdditionalGids: Vec::from([910, 1112]),
                         Username: String::from("username"),
                         ..Default::default()
                     }),
-                    Args: protobuf::RepeatedField::from(Vec::from([
-                        String::from("arg1"),
-                        String::from("arg2"),
-                    ])),
-                    Env: protobuf::RepeatedField::from(Vec::from([String::from("env")])),
+                    Args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                    Env: Vec::from([String::from("env")]),
                     Cwd: String::from("cwd"),
-                    Capabilities: protobuf::SingularPtrField::some(grpc::LinuxCapabilities {
-                        Bounding: protobuf::RepeatedField::from(Vec::from([String::from("bnd")])),
-                        Effective: protobuf::RepeatedField::from(Vec::from([String::from("eff")])),
-                        Inheritable: protobuf::RepeatedField::from(Vec::from([String::from(
-                            "inher",
-                        )])),
-                        Permitted: protobuf::RepeatedField::from(Vec::from([String::from("perm")])),
-                        Ambient: protobuf::RepeatedField::from(Vec::from([String::from("amb")])),
+                    Capabilities: protobuf::MessageField::some(grpc::LinuxCapabilities {
+                        Bounding: Vec::from([String::from("bnd")]),
+                        Effective: Vec::from([String::from("eff")]),
+                        Inheritable: Vec::from([String::from("inher")]),
+                        Permitted: Vec::from([String::from("perm")]),
+                        Ambient: Vec::from([String::from("amb")]),
                         ..Default::default()
                     }),
-                    Rlimits: protobuf::RepeatedField::from(Vec::from([
+                    Rlimits: Vec::from([
                         grpc::POSIXRlimit {
                             Type: String::from("r#type"),
                             Hard: 123,
@@ -599,7 +594,7 @@ mod tests {
                             Soft: 1011,
                             ..Default::default()
                         },
-                    ])),
+                    ]),
                     NoNewPrivileges: true,
                     ApparmorProfile: String::from("apparmor profile"),
                     OOMScoreAdj: 123456,
@@ -649,7 +644,7 @@ mod tests {
             TestData {
                 // None ConsoleSize
                 grpcproc: grpc::Process {
-                    ConsoleSize: protobuf::SingularPtrField::<grpc::Box>::none(),
+                    ConsoleSize: protobuf::MessageField::<grpc::Box>::none(),
                     OOMScoreAdj: 0,
                     ..Default::default()
                 },
@@ -662,7 +657,7 @@ mod tests {
             TestData {
                 // None User
                 grpcproc: grpc::Process {
-                    User: protobuf::SingularPtrField::<grpc::User>::none(),
+                    User: protobuf::MessageField::<grpc::User>::none(),
                     OOMScoreAdj: 0,
                     ..Default::default()
                 },
@@ -680,7 +675,7 @@ mod tests {
             TestData {
                 // None Capabilities
                 grpcproc: grpc::Process {
-                    Capabilities: protobuf::SingularPtrField::none(),
+                    Capabilities: protobuf::MessageField::none(),
                     OOMScoreAdj: 0,
                     ..Default::default()
                 },
@@ -781,99 +776,57 @@ mod tests {
             TestData {
                 // All specified
                 grpchooks: grpc::Hooks {
-                    Prestart: protobuf::RepeatedField::from(Vec::from([
+                    Prestart: Vec::from([
                         grpc::Hook {
                             Path: String::from("prestartpath"),
-                            Args: protobuf::RepeatedField::from(Vec::from([
-                                String::from("arg1"),
-                                String::from("arg2"),
-                            ])),
-                            Env: protobuf::RepeatedField::from(Vec::from([
-                                String::from("env1"),
-                                String::from("env2"),
-                            ])),
+                            Args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                            Env: Vec::from([String::from("env1"), String::from("env2")]),
                             Timeout: 10,
                             ..Default::default()
                         },
                         grpc::Hook {
                             Path: String::from("prestartpath2"),
-                            Args: protobuf::RepeatedField::from(Vec::from([
-                                String::from("arg3"),
-                                String::from("arg4"),
-                            ])),
-                            Env: protobuf::RepeatedField::from(Vec::from([
-                                String::from("env3"),
-                                String::from("env4"),
-                            ])),
+                            Args: Vec::from([String::from("arg3"), String::from("arg4")]),
+                            Env: Vec::from([String::from("env3"), String::from("env4")]),
                             Timeout: 25,
                             ..Default::default()
                         },
-                    ])),
-                    Poststart: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                    ]),
+                    Poststart: Vec::from([grpc::Hook {
                         Path: String::from("poststartpath"),
-                        Args: protobuf::RepeatedField::from(Vec::from([
-                            String::from("arg1"),
-                            String::from("arg2"),
-                        ])),
-                        Env: protobuf::RepeatedField::from(Vec::from([
-                            String::from("env1"),
-                            String::from("env2"),
-                        ])),
+                        Args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        Env: Vec::from([String::from("env1"), String::from("env2")]),
                         Timeout: 10,
                         ..Default::default()
-                    }])),
-                    Poststop: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                    }]),
+                    Poststop: Vec::from([grpc::Hook {
                         Path: String::from("poststoppath"),
-                        Args: protobuf::RepeatedField::from(Vec::from([
-                            String::from("arg1"),
-                            String::from("arg2"),
-                        ])),
-                        Env: protobuf::RepeatedField::from(Vec::from([
-                            String::from("env1"),
-                            String::from("env2"),
-                        ])),
+                        Args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        Env: Vec::from([String::from("env1"), String::from("env2")]),
                         Timeout: 10,
                         ..Default::default()
-                    }])),
-                    CreateRuntime: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                    }]),
+                    CreateRuntime: Vec::from([grpc::Hook {
                         Path: String::from("createruntimepath"),
-                        Args: protobuf::RepeatedField::from(Vec::from([
-                            String::from("arg1"),
-                            String::from("arg2"),
-                        ])),
-                        Env: protobuf::RepeatedField::from(Vec::from([
-                            String::from("env1"),
-                            String::from("env2"),
-                        ])),
+                        Args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        Env: Vec::from([String::from("env1"), String::from("env2")]),
                         Timeout: 10,
                         ..Default::default()
-                    }])),
-                    CreateContainer: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                    }]),
+                    CreateContainer: Vec::from([grpc::Hook {
                         Path: String::from("createcontainerpath"),
-                        Args: protobuf::RepeatedField::from(Vec::from([
-                            String::from("arg1"),
-                            String::from("arg2"),
-                        ])),
-                        Env: protobuf::RepeatedField::from(Vec::from([
-                            String::from("env1"),
-                            String::from("env2"),
-                        ])),
+                        Args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        Env: Vec::from([String::from("env1"), String::from("env2")]),
                         Timeout: 10,
                         ..Default::default()
-                    }])),
-                    StartContainer: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                    }]),
+                    StartContainer: Vec::from([grpc::Hook {
                         Path: String::from("startcontainerpath"),
-                        Args: protobuf::RepeatedField::from(Vec::from([
-                            String::from("arg1"),
-                            String::from("arg2"),
-                        ])),
-                        Env: protobuf::RepeatedField::from(Vec::from([
-                            String::from("env1"),
-                            String::from("env2"),
-                        ])),
+                        Args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        Env: Vec::from([String::from("env1"), String::from("env2")]),
                         Timeout: 10,
                         ..Default::default()
-                    }])),
+                    }]),
                     ..Default::default()
                 },
                 result: oci::Hooks {
@@ -926,72 +879,42 @@ mod tests {
             TestData {
                 // Prestart empty
                 grpchooks: grpc::Hooks {
-                    Prestart: protobuf::RepeatedField::from(Vec::from([])),
-                    Poststart: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                    Prestart: Vec::from([]),
+                    Poststart: Vec::from([grpc::Hook {
                         Path: String::from("poststartpath"),
-                        Args: protobuf::RepeatedField::from(Vec::from([
-                            String::from("arg1"),
-                            String::from("arg2"),
-                        ])),
-                        Env: protobuf::RepeatedField::from(Vec::from([
-                            String::from("env1"),
-                            String::from("env2"),
-                        ])),
+                        Args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        Env: Vec::from([String::from("env1"), String::from("env2")]),
                         Timeout: 10,
                         ..Default::default()
-                    }])),
-                    Poststop: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                    }]),
+                    Poststop: Vec::from([grpc::Hook {
                         Path: String::from("poststoppath"),
-                        Args: protobuf::RepeatedField::from(Vec::from([
-                            String::from("arg1"),
-                            String::from("arg2"),
-                        ])),
-                        Env: protobuf::RepeatedField::from(Vec::from([
-                            String::from("env1"),
-                            String::from("env2"),
-                        ])),
+                        Args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        Env: Vec::from([String::from("env1"), String::from("env2")]),
                         Timeout: 10,
                         ..Default::default()
-                    }])),
-                    CreateRuntime: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                    }]),
+                    CreateRuntime: Vec::from([grpc::Hook {
                         Path: String::from("createruntimepath"),
-                        Args: protobuf::RepeatedField::from(Vec::from([
-                            String::from("arg1"),
-                            String::from("arg2"),
-                        ])),
-                        Env: protobuf::RepeatedField::from(Vec::from([
-                            String::from("env1"),
-                            String::from("env2"),
-                        ])),
+                        Args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        Env: Vec::from([String::from("env1"), String::from("env2")]),
                         Timeout: 10,
                         ..Default::default()
-                    }])),
-                    CreateContainer: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                    }]),
+                    CreateContainer: Vec::from([grpc::Hook {
                         Path: String::from("createcontainerpath"),
-                        Args: protobuf::RepeatedField::from(Vec::from([
-                            String::from("arg1"),
-                            String::from("arg2"),
-                        ])),
-                        Env: protobuf::RepeatedField::from(Vec::from([
-                            String::from("env1"),
-                            String::from("env2"),
-                        ])),
+                        Args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        Env: Vec::from([String::from("env1"), String::from("env2")]),
                         Timeout: 10,
                         ..Default::default()
-                    }])),
-                    StartContainer: protobuf::RepeatedField::from(Vec::from([grpc::Hook {
+                    }]),
+                    StartContainer: Vec::from([grpc::Hook {
                         Path: String::from("startcontainerpath"),
-                        Args: protobuf::RepeatedField::from(Vec::from([
-                            String::from("arg1"),
-                            String::from("arg2"),
-                        ])),
-                        Env: protobuf::RepeatedField::from(Vec::from([
-                            String::from("env1"),
-                            String::from("env2"),
-                        ])),
+                        Args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        Env: Vec::from([String::from("env1"), String::from("env2")]),
                         Timeout: 10,
                         ..Default::default()
-                    }])),
+                    }]),
                     ..Default::default()
                 },
                 result: oci::Hooks {
@@ -1063,11 +986,8 @@ mod tests {
                 grpcmount: grpc::Mount {
                     destination: String::from("destination"),
                     source: String::from("source"),
-                    field_type: String::from("fieldtype"),
-                    options: protobuf::RepeatedField::from(Vec::from([
-                        String::from("option1"),
-                        String::from("option2"),
-                    ])),
+                    type_: String::from("fieldtype"),
+                    options: Vec::from([String::from("option1"), String::from("option2")]),
                     ..Default::default()
                 },
                 result: oci::Mount {
@@ -1081,8 +1001,8 @@ mod tests {
                 grpcmount: grpc::Mount {
                     destination: String::from("destination"),
                     source: String::from("source"),
-                    field_type: String::from("fieldtype"),
-                    options: protobuf::RepeatedField::from(Vec::new()),
+                    type_: String::from("fieldtype"),
+                    options: Vec::new(),
                     ..Default::default()
                 },
                 result: oci::Mount {
@@ -1096,8 +1016,8 @@ mod tests {
                 grpcmount: grpc::Mount {
                     destination: String::new(),
                     source: String::from("source"),
-                    field_type: String::from("fieldtype"),
-                    options: protobuf::RepeatedField::from(Vec::from([String::from("option1")])),
+                    type_: String::from("fieldtype"),
+                    options: Vec::from([String::from("option1")]),
                     ..Default::default()
                 },
                 result: oci::Mount {
@@ -1111,8 +1031,8 @@ mod tests {
                 grpcmount: grpc::Mount {
                     destination: String::from("destination"),
                     source: String::from("source"),
-                    field_type: String::new(),
-                    options: protobuf::RepeatedField::from(Vec::from([String::from("option1")])),
+                    type_: String::new(),
+                    options: Vec::from([String::from("option1")]),
                     ..Default::default()
                 },
                 result: oci::Mount {
@@ -1172,27 +1092,15 @@ mod tests {
                 grpchook: &[
                     grpc::Hook {
                         Path: String::from("path"),
-                        Args: protobuf::RepeatedField::from(Vec::from([
-                            String::from("arg1"),
-                            String::from("arg2"),
-                        ])),
-                        Env: protobuf::RepeatedField::from(Vec::from([
-                            String::from("env1"),
-                            String::from("env2"),
-                        ])),
+                        Args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                        Env: Vec::from([String::from("env1"), String::from("env2")]),
                         Timeout: 10,
                         ..Default::default()
                     },
                     grpc::Hook {
                         Path: String::from("path2"),
-                        Args: protobuf::RepeatedField::from(Vec::from([
-                            String::from("arg3"),
-                            String::from("arg4"),
-                        ])),
-                        Env: protobuf::RepeatedField::from(Vec::from([
-                            String::from("env3"),
-                            String::from("env4"),
-                        ])),
+                        Args: Vec::from([String::from("arg3"), String::from("arg4")]),
+                        Env: Vec::from([String::from("env3"), String::from("env4")]),
                         Timeout: 20,
                         ..Default::default()
                     },

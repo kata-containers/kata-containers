@@ -15,19 +15,19 @@ use oci::{
 };
 
 // translate from interface to ttprc tools
-fn from_option<F: Sized, T: From<F>>(from: Option<F>) -> ::protobuf::SingularPtrField<T> {
+fn from_option<F: Sized, T: From<F>>(from: Option<F>) -> protobuf::MessageField<T> {
     match from {
-        Some(f) => ::protobuf::SingularPtrField::from_option(Some(T::from(f))),
-        None => ::protobuf::SingularPtrField::none(),
+        Some(f) => protobuf::MessageField::from_option(Some(f.into())),
+        None => protobuf::MessageField::none(),
     }
 }
 
-fn from_vec<F: Sized, T: From<F>>(from: Vec<F>) -> ::protobuf::RepeatedField<T> {
+fn from_vec<F: Sized, T: From<F>>(from: Vec<F>) -> Vec<T> {
     let mut to: Vec<T> = vec![];
     for data in from {
-        to.push(T::from(data));
+        to.push(data.into());
     }
-    ::protobuf::RepeatedField::from_vec(to)
+    to
 }
 
 impl From<oci::Box> for crate::oci::Box {
@@ -35,8 +35,7 @@ impl From<oci::Box> for crate::oci::Box {
         crate::oci::Box {
             Height: from.height,
             Width: from.width,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -48,8 +47,7 @@ impl From<oci::User> for crate::oci::User {
             GID: from.gid,
             AdditionalGids: from.additional_gids,
             Username: from.username,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -57,13 +55,12 @@ impl From<oci::User> for crate::oci::User {
 impl From<oci::LinuxCapabilities> for crate::oci::LinuxCapabilities {
     fn from(from: LinuxCapabilities) -> Self {
         crate::oci::LinuxCapabilities {
-            Bounding: from_vec(from.bounding),
-            Effective: from_vec(from.effective),
-            Inheritable: from_vec(from.inheritable),
-            Permitted: from_vec(from.permitted),
-            Ambient: from_vec(from.ambient),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            Bounding: from.bounding,
+            Effective: from.effective,
+            Inheritable: from.inheritable,
+            Permitted: from.permitted,
+            Ambient: from.ambient,
+            ..Default::default()
         }
     }
 }
@@ -74,8 +71,7 @@ impl From<oci::PosixRlimit> for crate::oci::POSIXRlimit {
             Type: from.r#type,
             Hard: from.hard,
             Soft: from.soft,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -86,8 +82,8 @@ impl From<oci::Process> for crate::oci::Process {
             Terminal: from.terminal,
             ConsoleSize: from_option(from.console_size),
             User: from_option(Some(from.user)),
-            Args: from_vec(from.args),
-            Env: from_vec(from.env),
+            Args: from.args,
+            Env: from.env,
             Cwd: from.cwd,
             Capabilities: from_option(from.capabilities),
             Rlimits: from_vec(from.rlimits),
@@ -95,8 +91,7 @@ impl From<oci::Process> for crate::oci::Process {
             ApparmorProfile: from.apparmor_profile,
             OOMScoreAdj: from.oom_score_adj.map_or(0, |t| t as i64),
             SelinuxLabel: from.selinux_label,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -109,8 +104,7 @@ impl From<oci::LinuxDeviceCgroup> for crate::oci::LinuxDeviceCgroup {
             Major: from.major.map_or(0, |t| t),
             Minor: from.minor.map_or(0, |t| t),
             Access: from.access,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -125,8 +119,7 @@ impl From<oci::LinuxMemory> for crate::oci::LinuxMemory {
             KernelTCP: from.kernel_tcp.map_or(0, |t| t),
             Swappiness: from.swappiness.map_or(0, |t| t),
             DisableOOMKiller: from.disable_oom_killer.map_or(false, |t| t),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -141,8 +134,7 @@ impl From<oci::LinuxCpu> for crate::oci::LinuxCPU {
             RealtimePeriod: from.realtime_period.map_or(0, |t| t),
             Cpus: from.cpus,
             Mems: from.mems,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -151,8 +143,7 @@ impl From<oci::LinuxPids> for crate::oci::LinuxPids {
     fn from(from: LinuxPids) -> Self {
         crate::oci::LinuxPids {
             Limit: from.limit,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -165,8 +156,7 @@ impl From<oci::LinuxWeightDevice> for crate::oci::LinuxWeightDevice {
             Minor: 0,
             Weight: from.weight.map_or(0, |t| t as u32),
             LeafWeight: from.leaf_weight.map_or(0, |t| t as u32),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -178,8 +168,7 @@ impl From<oci::LinuxThrottleDevice> for crate::oci::LinuxThrottleDevice {
             Major: 0,
             Minor: 0,
             Rate: from.rate,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -194,8 +183,7 @@ impl From<oci::LinuxBlockIo> for crate::oci::LinuxBlockIO {
             ThrottleWriteBpsDevice: from_vec(from.throttle_write_bps_device),
             ThrottleReadIOPSDevice: from_vec(from.throttle_read_iops_device),
             ThrottleWriteIOPSDevice: from_vec(from.throttle_write_iops_device),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -205,8 +193,7 @@ impl From<oci::LinuxHugepageLimit> for crate::oci::LinuxHugepageLimit {
         crate::oci::LinuxHugepageLimit {
             Pagesize: from.page_size,
             Limit: from.limit,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -216,8 +203,7 @@ impl From<oci::LinuxInterfacePriority> for crate::oci::LinuxInterfacePriority {
         crate::oci::LinuxInterfacePriority {
             Name: from.name,
             Priority: from.priority,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -227,8 +213,7 @@ impl From<oci::LinuxNetwork> for crate::oci::LinuxNetwork {
         crate::oci::LinuxNetwork {
             ClassID: from.class_id.map_or(0, |t| t),
             Priorities: from_vec(from.priorities),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -243,8 +228,7 @@ impl From<oci::LinuxResources> for crate::oci::LinuxResources {
             BlockIO: from_option(from.block_io),
             HugepageLimits: from_vec(from.hugepage_limits),
             Network: from_option(from.network),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -254,8 +238,7 @@ impl From<oci::Root> for crate::oci::Root {
         crate::oci::Root {
             Path: from.path,
             Readonly: from.readonly,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -265,10 +248,9 @@ impl From<oci::Mount> for crate::oci::Mount {
         crate::oci::Mount {
             destination: from.destination,
             source: from.source,
-            field_type: from.r#type,
-            options: from_vec(from.options),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            type_: from.r#type,
+            options: from.options,
+            ..Default::default()
         }
     }
 }
@@ -281,11 +263,10 @@ impl From<oci::Hook> for crate::oci::Hook {
         }
         crate::oci::Hook {
             Path: from.path,
-            Args: from_vec(from.args),
-            Env: from_vec(from.env),
+            Args: from.args,
+            Env: from.env,
             Timeout: timeout,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -299,8 +280,7 @@ impl From<oci::Hooks> for crate::oci::Hooks {
             StartContainer: from_vec(from.start_container),
             Poststart: from_vec(from.poststart),
             Poststop: from_vec(from.poststop),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -311,8 +291,7 @@ impl From<oci::LinuxIdMapping> for crate::oci::LinuxIDMapping {
             HostID: from.host_id,
             ContainerID: from.container_id,
             Size: from.size,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -322,8 +301,7 @@ impl From<oci::LinuxNamespace> for crate::oci::LinuxNamespace {
         crate::oci::LinuxNamespace {
             Type: from.r#type,
             Path: from.path,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -338,8 +316,7 @@ impl From<oci::LinuxDevice> for crate::oci::LinuxDevice {
             FileMode: from.file_mode.map_or(0, |v| v),
             UID: from.uid.map_or(0, |v| v),
             GID: from.gid.map_or(0, |v| v),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -351,8 +328,7 @@ impl From<oci::LinuxSeccompArg> for crate::oci::LinuxSeccompArg {
             Value: from.value,
             ValueTwo: from.value_two,
             Op: from.op,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -360,14 +336,13 @@ impl From<oci::LinuxSeccompArg> for crate::oci::LinuxSeccompArg {
 impl From<oci::LinuxSyscall> for crate::oci::LinuxSyscall {
     fn from(from: LinuxSyscall) -> Self {
         crate::oci::LinuxSyscall {
-            Names: from_vec(from.names),
+            Names: from.names,
             Action: from.action,
             Args: from_vec(from.args),
-            ErrnoRet: Some(crate::oci::LinuxSyscall_oneof_ErrnoRet::errnoret(
+            ErrnoRet: Some(crate::oci::linux_syscall::ErrnoRet::Errnoret(
                 from.errno_ret,
             )),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -376,11 +351,10 @@ impl From<oci::LinuxSeccomp> for crate::oci::LinuxSeccomp {
     fn from(from: LinuxSeccomp) -> Self {
         crate::oci::LinuxSeccomp {
             DefaultAction: from.default_action,
-            Architectures: from_vec(from.architectures),
+            Architectures: from.architectures,
             Syscalls: from_vec(from.syscalls),
-            Flags: from_vec(from.flags),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            Flags: from.flags,
+            ..Default::default()
         }
     }
 }
@@ -389,8 +363,7 @@ impl From<oci::LinuxIntelRdt> for crate::oci::LinuxIntelRdt {
     fn from(from: LinuxIntelRdt) -> Self {
         crate::oci::LinuxIntelRdt {
             L3CacheSchema: from.l3_cache_schema,
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -407,12 +380,11 @@ impl From<oci::Linux> for crate::oci::Linux {
             Devices: from_vec(from.devices),
             Seccomp: from_option(from.seccomp),
             RootfsPropagation: from.rootfs_propagation,
-            MaskedPaths: from_vec(from.masked_paths),
-            ReadonlyPaths: from_vec(from.readonly_paths),
+            MaskedPaths: from.masked_paths,
+            ReadonlyPaths: from.readonly_paths,
             MountLabel: from.mount_label,
             IntelRdt: from_option(from.intel_rdt),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -430,8 +402,7 @@ impl From<oci::Spec> for crate::oci::Spec {
             Linux: from_option(from.linux),
             Solaris: Default::default(),
             Windows: Default::default(),
-            unknown_fields: Default::default(),
-            cached_size: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -449,7 +420,7 @@ impl From<crate::oci::Mount> for oci::Mount {
     fn from(mut from: crate::oci::Mount) -> Self {
         let options = from.take_options().to_vec();
         Self {
-            r#type: from.take_field_type(),
+            r#type: from.take_type_(),
             destination: from.take_destination(),
             source: from.take_source(),
             options,
@@ -460,9 +431,9 @@ impl From<crate::oci::Mount> for oci::Mount {
 impl From<crate::oci::LinuxIDMapping> for oci::LinuxIdMapping {
     fn from(from: crate::oci::LinuxIDMapping) -> Self {
         LinuxIdMapping {
-            container_id: from.get_ContainerID(),
-            host_id: from.get_HostID(),
-            size: from.get_Size(),
+            container_id: from.ContainerID(),
+            host_id: from.HostID(),
+            size: from.Size(),
         }
     }
 }
@@ -470,17 +441,17 @@ impl From<crate::oci::LinuxIDMapping> for oci::LinuxIdMapping {
 impl From<crate::oci::LinuxDeviceCgroup> for oci::LinuxDeviceCgroup {
     fn from(mut from: crate::oci::LinuxDeviceCgroup) -> Self {
         let mut major = None;
-        if from.get_Major() > 0 {
-            major = Some(from.get_Major());
+        if from.Major() > 0 {
+            major = Some(from.Major());
         }
 
         let mut minor = None;
-        if from.get_Minor() > 0 {
-            minor = Some(from.get_Minor())
+        if from.Minor() > 0 {
+            minor = Some(from.Minor())
         }
 
         oci::LinuxDeviceCgroup {
-            allow: from.get_Allow(),
+            allow: from.Allow(),
             r#type: from.take_Type(),
             major,
             minor,
@@ -492,36 +463,36 @@ impl From<crate::oci::LinuxDeviceCgroup> for oci::LinuxDeviceCgroup {
 impl From<crate::oci::LinuxMemory> for oci::LinuxMemory {
     fn from(from: crate::oci::LinuxMemory) -> Self {
         let mut limit = None;
-        if from.get_Limit() > 0 {
-            limit = Some(from.get_Limit());
+        if from.Limit() > 0 {
+            limit = Some(from.Limit());
         }
 
         let mut reservation = None;
-        if from.get_Reservation() > 0 {
-            reservation = Some(from.get_Reservation());
+        if from.Reservation() > 0 {
+            reservation = Some(from.Reservation());
         }
 
         let mut swap = None;
-        if from.get_Swap() > 0 {
-            swap = Some(from.get_Swap());
+        if from.Swap() > 0 {
+            swap = Some(from.Swap());
         }
 
         let mut kernel = None;
-        if from.get_Kernel() > 0 {
-            kernel = Some(from.get_Kernel());
+        if from.Kernel() > 0 {
+            kernel = Some(from.Kernel());
         }
 
         let mut kernel_tcp = None;
-        if from.get_KernelTCP() > 0 {
-            kernel_tcp = Some(from.get_KernelTCP());
+        if from.KernelTCP() > 0 {
+            kernel_tcp = Some(from.KernelTCP());
         }
 
         let mut swappiness = None;
-        if from.get_Swappiness() > 0 {
-            swappiness = Some(from.get_Swappiness());
+        if from.Swappiness() > 0 {
+            swappiness = Some(from.Swappiness());
         }
 
-        let disable_oom_killer = Some(from.get_DisableOOMKiller());
+        let disable_oom_killer = Some(from.DisableOOMKiller());
 
         oci::LinuxMemory {
             limit,
@@ -538,28 +509,28 @@ impl From<crate::oci::LinuxMemory> for oci::LinuxMemory {
 impl From<crate::oci::LinuxCPU> for oci::LinuxCpu {
     fn from(mut from: crate::oci::LinuxCPU) -> Self {
         let mut shares = None;
-        if from.get_Shares() > 0 {
-            shares = Some(from.get_Shares());
+        if from.Shares() > 0 {
+            shares = Some(from.Shares());
         }
 
         let mut quota = None;
-        if from.get_Quota() > 0 {
-            quota = Some(from.get_Quota());
+        if from.Quota() > 0 {
+            quota = Some(from.Quota());
         }
 
         let mut period = None;
-        if from.get_Period() > 0 {
-            period = Some(from.get_Period());
+        if from.Period() > 0 {
+            period = Some(from.Period());
         }
 
         let mut realtime_runtime = None;
-        if from.get_RealtimeRuntime() > 0 {
-            realtime_runtime = Some(from.get_RealtimeRuntime());
+        if from.RealtimeRuntime() > 0 {
+            realtime_runtime = Some(from.RealtimeRuntime());
         }
 
         let mut realtime_period = None;
-        if from.get_RealtimePeriod() > 0 {
-            realtime_period = Some(from.get_RealtimePeriod());
+        if from.RealtimePeriod() > 0 {
+            realtime_period = Some(from.RealtimePeriod());
         }
 
         let cpus = from.take_Cpus();
@@ -580,7 +551,7 @@ impl From<crate::oci::LinuxCPU> for oci::LinuxCpu {
 impl From<crate::oci::LinuxPids> for oci::LinuxPids {
     fn from(from: crate::oci::LinuxPids) -> Self {
         oci::LinuxPids {
-            limit: from.get_Limit(),
+            limit: from.Limit(),
         }
     }
 }
@@ -588,35 +559,35 @@ impl From<crate::oci::LinuxPids> for oci::LinuxPids {
 impl From<crate::oci::LinuxBlockIO> for oci::LinuxBlockIo {
     fn from(from: crate::oci::LinuxBlockIO) -> Self {
         let mut weight = None;
-        if from.get_Weight() > 0 {
-            weight = Some(from.get_Weight() as u16);
+        if from.Weight() > 0 {
+            weight = Some(from.Weight() as u16);
         }
         let mut leaf_weight = None;
-        if from.get_LeafWeight() > 0 {
-            leaf_weight = Some(from.get_LeafWeight() as u16);
+        if from.LeafWeight() > 0 {
+            leaf_weight = Some(from.LeafWeight() as u16);
         }
         let mut weight_device = Vec::new();
-        for wd in from.get_WeightDevice() {
+        for wd in from.WeightDevice() {
             weight_device.push(wd.clone().into());
         }
 
         let mut throttle_read_bps_device = Vec::new();
-        for td in from.get_ThrottleReadBpsDevice() {
+        for td in from.ThrottleReadBpsDevice() {
             throttle_read_bps_device.push(td.clone().into());
         }
 
         let mut throttle_write_bps_device = Vec::new();
-        for td in from.get_ThrottleWriteBpsDevice() {
+        for td in from.ThrottleWriteBpsDevice() {
             throttle_write_bps_device.push(td.clone().into());
         }
 
         let mut throttle_read_iops_device = Vec::new();
-        for td in from.get_ThrottleReadIOPSDevice() {
+        for td in from.ThrottleReadIOPSDevice() {
             throttle_read_iops_device.push(td.clone().into());
         }
 
         let mut throttle_write_iops_device = Vec::new();
-        for td in from.get_ThrottleWriteIOPSDevice() {
+        for td in from.ThrottleWriteIOPSDevice() {
             throttle_write_iops_device.push(td.clone().into());
         }
 
@@ -661,7 +632,7 @@ impl From<crate::oci::LinuxInterfacePriority> for oci::LinuxInterfacePriority {
     fn from(mut from: crate::oci::LinuxInterfacePriority) -> Self {
         oci::LinuxInterfacePriority {
             name: from.take_Name(),
-            priority: from.get_Priority(),
+            priority: from.Priority(),
         }
     }
 }
@@ -669,11 +640,11 @@ impl From<crate::oci::LinuxInterfacePriority> for oci::LinuxInterfacePriority {
 impl From<crate::oci::LinuxNetwork> for oci::LinuxNetwork {
     fn from(mut from: crate::oci::LinuxNetwork) -> Self {
         let mut class_id = None;
-        if from.get_ClassID() > 0 {
-            class_id = Some(from.get_ClassID());
+        if from.ClassID() > 0 {
+            class_id = Some(from.ClassID());
         }
         let mut priorities = Vec::new();
-        for p in from.take_Priorities().to_vec() {
+        for p in from.take_Priorities() {
             priorities.push(p.into())
         }
 
@@ -688,7 +659,7 @@ impl From<crate::oci::LinuxHugepageLimit> for oci::LinuxHugepageLimit {
     fn from(mut from: crate::oci::LinuxHugepageLimit) -> Self {
         oci::LinuxHugepageLimit {
             page_size: from.take_Pagesize(),
-            limit: from.get_Limit(),
+            limit: from.Limit(),
         }
     }
 }
@@ -696,7 +667,7 @@ impl From<crate::oci::LinuxHugepageLimit> for oci::LinuxHugepageLimit {
 impl From<crate::oci::LinuxResources> for oci::LinuxResources {
     fn from(mut from: crate::oci::LinuxResources) -> Self {
         let mut devices = Vec::new();
-        for d in from.take_Devices().to_vec() {
+        for d in from.take_Devices() {
             devices.push(d.into());
         }
 
@@ -712,16 +683,16 @@ impl From<crate::oci::LinuxResources> for oci::LinuxResources {
 
         let mut pids = None;
         if from.has_Pids() {
-            pids = Some(from.get_Pids().clone().into())
+            pids = Some(from.Pids().clone().into())
         }
 
         let mut block_io = None;
         if from.has_BlockIO() {
-            block_io = Some(from.get_BlockIO().clone().into());
+            block_io = Some(from.BlockIO().clone().into());
         }
 
         let mut hugepage_limits = Vec::new();
-        for hl in from.get_HugepageLimits() {
+        for hl in from.HugepageLimits() {
             hugepage_limits.push(hl.clone().into());
         }
 
@@ -750,11 +721,11 @@ impl From<crate::oci::LinuxDevice> for oci::LinuxDevice {
         oci::LinuxDevice {
             path: from.take_Path(),
             r#type: from.take_Type(),
-            major: from.get_Major(),
-            minor: from.get_Minor(),
-            file_mode: Some(from.get_FileMode()),
-            uid: Some(from.get_UID()),
-            gid: Some(from.get_GID()),
+            major: from.Major(),
+            minor: from.Minor(),
+            file_mode: Some(from.FileMode()),
+            uid: Some(from.UID()),
+            gid: Some(from.GID()),
         }
     }
 }
@@ -762,9 +733,9 @@ impl From<crate::oci::LinuxDevice> for oci::LinuxDevice {
 impl From<crate::oci::LinuxSeccompArg> for oci::LinuxSeccompArg {
     fn from(mut from: crate::oci::LinuxSeccompArg) -> Self {
         oci::LinuxSeccompArg {
-            index: from.get_Index() as u32,
-            value: from.get_Value(),
-            value_two: from.get_ValueTwo(),
+            index: from.Index() as u32,
+            value: from.Value(),
+            value_two: from.ValueTwo(),
             op: from.take_Op(),
         }
     }
@@ -773,14 +744,14 @@ impl From<crate::oci::LinuxSeccompArg> for oci::LinuxSeccompArg {
 impl From<crate::oci::LinuxSyscall> for oci::LinuxSyscall {
     fn from(mut from: crate::oci::LinuxSyscall) -> Self {
         let mut args = Vec::new();
-        for ag in from.take_Args().to_vec() {
+        for ag in from.take_Args() {
             args.push(ag.into());
         }
         oci::LinuxSyscall {
             names: from.take_Names().to_vec(),
             action: from.take_Action(),
             args,
-            errno_ret: from.get_errnoret(),
+            errno_ret: from.errnoret(),
         }
     }
 }
@@ -788,7 +759,7 @@ impl From<crate::oci::LinuxSyscall> for oci::LinuxSyscall {
 impl From<crate::oci::LinuxSeccomp> for oci::LinuxSeccomp {
     fn from(mut from: crate::oci::LinuxSeccomp) -> Self {
         let mut syscalls = Vec::new();
-        for s in from.take_Syscalls().to_vec() {
+        for s in from.take_Syscalls() {
             syscalls.push(s.into());
         }
 
@@ -813,16 +784,16 @@ impl From<crate::oci::LinuxNamespace> for oci::LinuxNamespace {
 impl From<crate::oci::Linux> for oci::Linux {
     fn from(mut from: crate::oci::Linux) -> Self {
         let mut uid_mappings = Vec::new();
-        for id_map in from.take_UIDMappings().to_vec() {
+        for id_map in from.take_UIDMappings() {
             uid_mappings.push(id_map.into())
         }
 
         let mut gid_mappings = Vec::new();
-        for id_map in from.take_GIDMappings().to_vec() {
+        for id_map in from.take_GIDMappings() {
             gid_mappings.push(id_map.into())
         }
 
-        let sysctl = from.get_Sysctl().clone();
+        let sysctl = from.Sysctl().clone();
         let mut resources = None;
         if from.has_Resources() {
             resources = Some(from.take_Resources().into());
@@ -830,12 +801,12 @@ impl From<crate::oci::Linux> for oci::Linux {
 
         let cgroups_path = from.take_CgroupsPath();
         let mut namespaces = Vec::new();
-        for ns in from.take_Namespaces().to_vec() {
+        for ns in from.take_Namespaces() {
             namespaces.push(ns.into())
         }
 
         let mut devices = Vec::new();
-        for d in from.take_Devices().to_vec() {
+        for d in from.take_Devices() {
             devices.push(d.into());
         }
 
@@ -874,8 +845,8 @@ impl From<crate::oci::POSIXRlimit> for oci::PosixRlimit {
     fn from(mut from: crate::oci::POSIXRlimit) -> Self {
         oci::PosixRlimit {
             r#type: from.take_Type(),
-            hard: from.get_Hard(),
-            soft: from.get_Soft(),
+            hard: from.Hard(),
+            soft: from.Soft(),
         }
     }
 }
@@ -895,8 +866,8 @@ impl From<crate::oci::LinuxCapabilities> for oci::LinuxCapabilities {
 impl From<crate::oci::User> for oci::User {
     fn from(mut from: crate::oci::User) -> Self {
         oci::User {
-            uid: from.get_UID(),
-            gid: from.get_GID(),
+            uid: from.UID(),
+            gid: from.GID(),
             additional_gids: from.take_AdditionalGids().to_vec(),
             username: from.take_Username(),
         }
@@ -906,8 +877,8 @@ impl From<crate::oci::User> for oci::User {
 impl From<crate::oci::Box> for oci::Box {
     fn from(from: crate::oci::Box) -> Self {
         oci::Box {
-            height: from.get_Height(),
-            width: from.get_Width(),
+            height: from.Height(),
+            width: from.Width(),
         }
     }
 }
@@ -920,22 +891,22 @@ impl From<crate::oci::Process> for oci::Process {
         }
 
         let user = from.take_User().into();
-        let args = from.take_Args().into_vec();
-        let env = from.take_Env().into_vec();
+        let args = from.take_Args();
+        let env = from.take_Env();
         let cwd = from.take_Cwd();
         let mut capabilities = None;
         if from.has_Capabilities() {
             capabilities = Some(from.take_Capabilities().into());
         }
         let mut rlimits = Vec::new();
-        for rl in from.take_Rlimits().to_vec() {
+        for rl in from.take_Rlimits() {
             rlimits.push(rl.into());
         }
-        let no_new_privileges = from.get_NoNewPrivileges();
+        let no_new_privileges = from.NoNewPrivileges();
         let apparmor_profile = from.take_ApparmorProfile();
         let mut oom_score_adj = None;
-        if from.get_OOMScoreAdj() != 0 {
-            oom_score_adj = Some(from.get_OOMScoreAdj() as i32);
+        if from.OOMScoreAdj() != 0 {
+            oom_score_adj = Some(from.OOMScoreAdj() as i32);
         }
         let selinux_label = from.take_SelinuxLabel();
 
@@ -959,8 +930,8 @@ impl From<crate::oci::Process> for oci::Process {
 impl From<crate::oci::Hook> for oci::Hook {
     fn from(mut from: crate::oci::Hook) -> Self {
         let mut timeout = None;
-        if from.get_Timeout() > 0 {
-            timeout = Some(from.get_Timeout() as i32);
+        if from.Timeout() > 0 {
+            timeout = Some(from.Timeout() as i32);
         }
         oci::Hook {
             path: from.take_Path(),
@@ -1020,7 +991,7 @@ impl From<crate::oci::Spec> for oci::Spec {
         }
 
         let mut mounts = Vec::new();
-        for m in from.take_Mounts().into_vec() {
+        for m in from.take_Mounts() {
             mounts.push(m.into())
         }
 
@@ -1085,7 +1056,7 @@ mod tests {
     #[test]
     fn test_from_vec_len_0() {
         let from: Vec<TestA> = vec![];
-        let to: ::protobuf::RepeatedField<TestB> = from_vec(from.clone());
+        let to: Vec<TestB> = from_vec(from.clone());
         assert_eq!(from.len(), to.len());
     }
 
@@ -1094,7 +1065,7 @@ mod tests {
         let from: Vec<TestA> = vec![TestA {
             from: "a".to_string(),
         }];
-        let to: ::protobuf::RepeatedField<TestB> = from_vec(from.clone());
+        let to: Vec<TestB> = from_vec(from.clone());
 
         assert_eq!(from.len(), to.len());
         assert_eq!(from[0].from, to[0].to);

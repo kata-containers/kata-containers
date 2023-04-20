@@ -27,7 +27,7 @@ use oci::{
     LinuxNetwork, LinuxPids, LinuxResources,
 };
 
-use protobuf::{CachedSize, RepeatedField, SingularPtrField, UnknownFields};
+use protobuf::MessageField;
 use protocols::agent::{
     BlkioStats, BlkioStatsEntry, CgroupStats, CpuStats, CpuUsage, HugetlbStats, MemoryData,
     MemoryStats, PidsStats, ThrottlingData,
@@ -50,7 +50,7 @@ macro_rules! get_controller_or_return_singular_none {
     ($cg:ident) => {
         match $cg.controller_of() {
             Some(c) => c,
-            None => return SingularPtrField::none(),
+            None => return MessageField::none(),
         }
     };
 }
@@ -134,11 +134,10 @@ impl CgroupManager for Manager {
 
         let throttling_data = get_cpu_stats(&self.cgroup);
 
-        let cpu_stats = SingularPtrField::some(CpuStats {
+        let cpu_stats = MessageField::some(CpuStats {
             cpu_usage,
             throttling_data,
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            ..Default::default()
         });
 
         // Memorystats
@@ -160,8 +159,7 @@ impl CgroupManager for Manager {
             pids_stats,
             blkio_stats,
             hugetlb_stats,
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            ..Default::default()
         })
     }
 
@@ -446,14 +444,14 @@ fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool
         let memstat = get_memory_stats(cg)
             .into_option()
             .ok_or_else(|| anyhow!("failed to get the cgroup memory stats"))?;
-        let memusage = memstat.get_usage();
+        let memusage = memstat.usage();
 
         // When update memory limit, the kernel would check the current memory limit
         // set against the new swap setting, if the current memory limit is large than
         // the new swap, then set limit first, otherwise the kernel would complain and
         // refused to set; on the other hand, if the current memory limit is smaller than
         // the new swap, then we should set the swap first and then set the memor limit.
-        if swap == -1 || memusage.get_limit() < swap as u64 {
+        if swap == -1 || memusage.limit() < swap as u64 {
             mem_controller.set_memswap_limit(swap)?;
             set_resource!(mem_controller, set_limit, memory, limit);
         } else {
@@ -657,21 +655,20 @@ lazy_static! {
     };
 }
 
-fn get_cpu_stats(cg: &cgroups::Cgroup) -> SingularPtrField<ThrottlingData> {
+fn get_cpu_stats(cg: &cgroups::Cgroup) -> MessageField<ThrottlingData> {
     let cpu_controller: &CpuController = get_controller_or_return_singular_none!(cg);
     let stat = cpu_controller.cpu().stat;
     let h = lines_to_map(&stat);
 
-    SingularPtrField::some(ThrottlingData {
+    MessageField::some(ThrottlingData {
         periods: *h.get("nr_periods").unwrap_or(&0),
         throttled_periods: *h.get("nr_throttled").unwrap_or(&0),
         throttled_time: *h.get("throttled_time").unwrap_or(&0),
-        unknown_fields: UnknownFields::default(),
-        cached_size: CachedSize::default(),
+        ..Default::default()
     })
 }
 
-fn get_cpuacct_stats(cg: &cgroups::Cgroup) -> SingularPtrField<CpuUsage> {
+fn get_cpuacct_stats(cg: &cgroups::Cgroup) -> MessageField<CpuUsage> {
     if let Some(cpuacct_controller) = cg.controller_of::<CpuAcctController>() {
         let cpuacct = cpuacct_controller.cpuacct();
 
@@ -685,13 +682,12 @@ fn get_cpuacct_stats(cg: &cgroups::Cgroup) -> SingularPtrField<CpuUsage> {
 
         let percpu_usage = line_to_vec(&cpuacct.usage_percpu);
 
-        return SingularPtrField::some(CpuUsage {
+        return MessageField::some(CpuUsage {
             total_usage,
             percpu_usage,
             usage_in_kernelmode,
             usage_in_usermode,
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            ..Default::default()
         });
     }
 
@@ -704,17 +700,16 @@ fn get_cpuacct_stats(cg: &cgroups::Cgroup) -> SingularPtrField<CpuUsage> {
     let total_usage = *h.get("usage_usec").unwrap_or(&0);
     let percpu_usage = vec![];
 
-    SingularPtrField::some(CpuUsage {
+    MessageField::some(CpuUsage {
         total_usage,
         percpu_usage,
         usage_in_kernelmode,
         usage_in_usermode,
-        unknown_fields: UnknownFields::default(),
-        cached_size: CachedSize::default(),
+        ..Default::default()
     })
 }
 
-fn get_memory_stats(cg: &cgroups::Cgroup) -> SingularPtrField<MemoryStats> {
+fn get_memory_stats(cg: &cgroups::Cgroup) -> MessageField<MemoryStats> {
     let memory_controller: &MemController = get_controller_or_return_singular_none!(cg);
 
     // cache from memory stat
@@ -726,52 +721,48 @@ fn get_memory_stats(cg: &cgroups::Cgroup) -> SingularPtrField<MemoryStats> {
     let use_hierarchy = value == 1;
 
     // get memory data
-    let usage = SingularPtrField::some(MemoryData {
+    let usage = MessageField::some(MemoryData {
         usage: memory.usage_in_bytes,
         max_usage: memory.max_usage_in_bytes,
         failcnt: memory.fail_cnt,
         limit: memory.limit_in_bytes as u64,
-        unknown_fields: UnknownFields::default(),
-        cached_size: CachedSize::default(),
+        ..Default::default()
     });
 
     // get swap usage
     let memswap = memory_controller.memswap();
 
-    let swap_usage = SingularPtrField::some(MemoryData {
+    let swap_usage = MessageField::some(MemoryData {
         usage: memswap.usage_in_bytes,
         max_usage: memswap.max_usage_in_bytes,
         failcnt: memswap.fail_cnt,
         limit: memswap.limit_in_bytes as u64,
-        unknown_fields: UnknownFields::default(),
-        cached_size: CachedSize::default(),
+        ..Default::default()
     });
 
     // get kernel usage
     let kmem_stat = memory_controller.kmem_stat();
 
-    let kernel_usage = SingularPtrField::some(MemoryData {
+    let kernel_usage = MessageField::some(MemoryData {
         usage: kmem_stat.usage_in_bytes,
         max_usage: kmem_stat.max_usage_in_bytes,
         failcnt: kmem_stat.fail_cnt,
         limit: kmem_stat.limit_in_bytes as u64,
-        unknown_fields: UnknownFields::default(),
-        cached_size: CachedSize::default(),
+        ..Default::default()
     });
 
-    SingularPtrField::some(MemoryStats {
+    MessageField::some(MemoryStats {
         cache,
         usage,
         swap_usage,
         kernel_usage,
         use_hierarchy,
         stats: memory.stat.raw,
-        unknown_fields: UnknownFields::default(),
-        cached_size: CachedSize::default(),
+        ..Default::default()
     })
 }
 
-fn get_pids_stats(cg: &cgroups::Cgroup) -> SingularPtrField<PidsStats> {
+fn get_pids_stats(cg: &cgroups::Cgroup) -> MessageField<PidsStats> {
     let pid_controller: &PidController = get_controller_or_return_singular_none!(cg);
 
     let current = pid_controller.get_pid_current().unwrap_or(0);
@@ -785,11 +776,10 @@ fn get_pids_stats(cg: &cgroups::Cgroup) -> SingularPtrField<PidsStats> {
         },
     } as u64;
 
-    SingularPtrField::some(PidsStats {
+    MessageField::some(PidsStats {
         current,
         limit,
-        unknown_fields: UnknownFields::default(),
-        cached_size: CachedSize::default(),
+        ..Default::default()
     })
 }
 
@@ -825,8 +815,8 @@ https://github.com/opencontainers/runc/blob/a5847db387ae28c0ca4ebe4beee1a76900c8
     Total 0
 */
 
-fn get_blkio_stat_blkiodata(blkiodata: &[BlkIoData]) -> RepeatedField<BlkioStatsEntry> {
-    let mut m = RepeatedField::new();
+fn get_blkio_stat_blkiodata(blkiodata: &[BlkIoData]) -> Vec<BlkioStatsEntry> {
+    let mut m = Vec::new();
     if blkiodata.is_empty() {
         return m;
     }
@@ -839,16 +829,15 @@ fn get_blkio_stat_blkiodata(blkiodata: &[BlkIoData]) -> RepeatedField<BlkioStats
             minor: d.minor as u64,
             op: op.clone(),
             value: d.data,
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            ..Default::default()
         });
     }
 
     m
 }
 
-fn get_blkio_stat_ioservice(services: &[IoService]) -> RepeatedField<BlkioStatsEntry> {
-    let mut m = RepeatedField::new();
+fn get_blkio_stat_ioservice(services: &[IoService]) -> Vec<BlkioStatsEntry> {
+    let mut m = Vec::new();
 
     if services.is_empty() {
         return m;
@@ -872,17 +861,16 @@ fn build_blkio_stats_entry(major: i16, minor: i16, op: &str, value: u64) -> Blki
         minor: minor as u64,
         op: op.to_string(),
         value,
-        unknown_fields: UnknownFields::default(),
-        cached_size: CachedSize::default(),
+        ..Default::default()
     }
 }
 
-fn get_blkio_stats_v2(cg: &cgroups::Cgroup) -> SingularPtrField<BlkioStats> {
+fn get_blkio_stats_v2(cg: &cgroups::Cgroup) -> MessageField<BlkioStats> {
     let blkio_controller: &BlkIoController = get_controller_or_return_singular_none!(cg);
     let blkio = blkio_controller.blkio();
 
     let mut resp = BlkioStats::new();
-    let mut blkio_stats = RepeatedField::new();
+    let mut blkio_stats = Vec::new();
 
     let stat = blkio.io_stat;
     for s in stat {
@@ -898,10 +886,10 @@ fn get_blkio_stats_v2(cg: &cgroups::Cgroup) -> SingularPtrField<BlkioStats> {
 
     resp.io_service_bytes_recursive = blkio_stats;
 
-    SingularPtrField::some(resp)
+    MessageField::some(resp)
 }
 
-fn get_blkio_stats(cg: &cgroups::Cgroup) -> SingularPtrField<BlkioStats> {
+fn get_blkio_stats(cg: &cgroups::Cgroup) -> MessageField<BlkioStats> {
     if cg.v2() {
         return get_blkio_stats_v2(cg);
     }
@@ -934,7 +922,7 @@ fn get_blkio_stats(cg: &cgroups::Cgroup) -> SingularPtrField<BlkioStats> {
         m.sectors_recursive = get_blkio_stat_blkiodata(&blkio.sectors_recursive);
     }
 
-    SingularPtrField::some(m)
+    MessageField::some(m)
 }
 
 fn get_hugetlb_stats(cg: &cgroups::Cgroup) -> HashMap<String, HugetlbStats> {
@@ -958,8 +946,7 @@ fn get_hugetlb_stats(cg: &cgroups::Cgroup) -> HashMap<String, HugetlbStats> {
                 usage,
                 max_usage,
                 failcnt,
-                unknown_fields: UnknownFields::default(),
-                cached_size: CachedSize::default(),
+                ..Default::default()
             },
         );
     }
