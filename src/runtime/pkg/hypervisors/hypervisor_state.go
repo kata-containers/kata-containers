@@ -26,6 +26,20 @@ type CPUDevice struct {
 	ID string
 }
 
+// PCIePort distinguish only between root and switch port
+type PCIePort string
+
+const (
+	// RootPort attach VFIO devices to a root-port
+	RootPort PCIePort = "root-port"
+	// SwitchPort attach VFIO devices to a switch-port
+	SwitchPort = "switch-port"
+	// BridgePort is the default
+	BridgePort = "bridge-port"
+	// NoPort is for disabling VFIO hotplug/coldplug
+	NoPort = "no-port"
+)
+
 type HypervisorState struct {
 	BlockIndexMap map[int]struct{}
 
@@ -41,10 +55,10 @@ type HypervisorState struct {
 	// HotpluggedCPUs is the list of CPUs that were hot-added
 	HotpluggedVCPUs []CPUDevice
 
-	HotpluggedMemory  int
-	VirtiofsDaemonPid int
-	Pid               int
-	PCIeRootPort      int
-
+	HotpluggedMemory     int
+	VirtiofsDaemonPid    int
+	Pid                  int
+	PCIeRootPort         int
+	ColdPlugVFIO         PCIePort
 	HotplugVFIOOnRootBus bool
 }
