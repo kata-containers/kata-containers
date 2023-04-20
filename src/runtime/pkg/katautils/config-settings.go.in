@@ -103,3 +103,5 @@ const defaultVMCacheEndpoint string = "/var/run/kata-containers/cache.sock"
 
 // Default config file used by stateless systems.
 var defaultRuntimeConfiguration = "@CONFIG_PATH@"
+
+const defaultColdPlugVFIO = "no-port"

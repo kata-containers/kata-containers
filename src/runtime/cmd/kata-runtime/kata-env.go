@@ -17,6 +17,7 @@ import (
 	"github.com/prometheus/procfs"
 	"github.com/urfave/cli"
 
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
@@ -113,6 +114,7 @@ type HypervisorInfo struct {
 	Msize9p              uint32
 	MemorySlots          uint32
 	PCIeRootPort         uint32
+	ColdPlugVFIO         hv.PCIePort
 	HotplugVFIOOnRootBus bool
 	Debug                bool
 }

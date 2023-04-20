@@ -1177,7 +1177,8 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 		case config.VhostUserBlk:
 			kataDevice = k.appendVhostUserBlkDevice(dev, device, c)
 		case config.DeviceVFIO:
-			kataDevice = k.appendVfioDevice(dev, device, c)
+			k.Logger().Infof("### ColdPlugging container is not adding any VFIO devices")
+			//kataDevice = k.appendVfioDevice(dev, device, c)
 		}
 
 		if kataDevice == nil {
