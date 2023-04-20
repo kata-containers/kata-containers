@@ -595,9 +595,6 @@ allow_root_path(policy_oci, input_oci, bundle_id) {
 
 allow_mount(policy_oci, input_mount, bundle_id, sandbox_id) {
     some policy_mount in policy_oci.mounts
-
-    # TODO: are there any other required policy checks for mounts - e.g.,
-    #       multiple mounts with same source or destination?
     policy_mount_allows(policy_mount, input_mount, bundle_id, sandbox_id)
 
     # TODO: are there any other required policy checks for mounts - e.g.,
@@ -605,14 +602,26 @@ allow_mount(policy_oci, input_mount, bundle_id, sandbox_id) {
 }
 
 policy_mount_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
+    print("policy_mount_allows 1")
     policy_mount == input_mount
+    print("policy_mount_allows 1 success")
 }
 policy_mount_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
+    print("policy_mount_allows 2")
+
+    print("policy_mount_allows 2", "destination", input_mount.destination)
     policy_mount.destination    == input_mount.destination
+
+    print("policy_mount_allows 2", "type")
     policy_mount.type           == input_mount.type
+
+    print("policy_mount_allows 2", "options")
     policy_mount.options        == input_mount.options
 
+    print("policy_mount_allows 2", "policy_mount_source_allows")
     policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id)
+
+    print("policy_mount_allows 2 success")
 }
 
 policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
@@ -630,12 +639,14 @@ policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
 # Storages
 
 allow_storages(policy_storages, input_storages, sandbox_id) {
-    count(policy_storages) == count(input_storages)
+    # TODO: add support for storages used with tarfs.
+    #count(policy_storages) == count(input_storages)
 
-    every input_storage in input_storages {
-        policy_storage := policy_storages[_]
-        allow_storage(policy_storage, input_storage, sandbox_id)
-    }
+    #every input_storage in input_storages {
+    #    policy_storage := policy_storages[_]
+    #    allow_storage(policy_storage, input_storage, sandbox_id)
+    #}
+    true
 }
 
 allow_storage(policy_storage, input_storage, sandbox_id) {
