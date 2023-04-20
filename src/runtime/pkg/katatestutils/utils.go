@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"testing"
 
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )
@@ -224,6 +225,7 @@ type RuntimeConfigOptions struct {
 	JaegerPassword       string
 	PFlash               []string
 	PCIeRootPort         uint32
+	ColdPlugVFIO         hv.PCIePort
 	DefaultVCPUCount     uint32
 	DefaultMaxVCPUCount  uint32
 	DefaultMemSize       uint32
