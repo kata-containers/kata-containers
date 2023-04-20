@@ -4,7 +4,7 @@
     },
     "pause_container": {
         "root": {
-            "path": "/run/kata-containers/shared/containers/$(bundle-id)/rootfs",
+            "path": "/run/kata-containers/shared/containers/$(bundle-id)",
             "readonly": true
         },
         "mounts": [
@@ -21,14 +21,17 @@
                 "type": "bind",
                 "options": [
                     "rbind",
-                    "ro"
+                    "ro",
+                    "nosuid",
+                    "nodev",
+                    "noexec"
                 ]
             }
         ]
     },
     "other_container": {
         "root": {
-            "path": "/run/kata-containers/shared/containers/$(bundle-id)/rootfs"
+            "path": "/run/kata-containers/shared/containers/$(bundle-id)"
         },
         "mounts": [
             {
