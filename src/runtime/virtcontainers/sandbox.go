@@ -619,6 +619,12 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	if err := validateHypervisorConfig(&sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
 	}
+	// Aggregate all the container devices and update the HV config
+	var devices []config.DeviceInfo
+	for _, ct := range sandboxConfig.Containers {
+		devices = append(devices, ct.DeviceInfos...)
+	}
+	sandboxConfig.HypervisorConfig.RawDevices = devices
 
 	// store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
