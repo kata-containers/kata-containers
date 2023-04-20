@@ -79,10 +79,21 @@ func NewDeviceManager(blockDriver string, vhostUserStoreEnabled bool, vhostUserS
 	return dm
 }
 
-func (dm *deviceManager) findDeviceByMajorMinor(major, minor int64) api.Device {
+func (dm *deviceManager) findDevice(devInfo *config.DeviceInfo) api.Device {
+	// For devices with a major of -1, we use the host path to find existing instances.
+	if devInfo.Major == -1 {
+		for _, dev := range dm.devices {
+			dma, _ := dev.GetMajorMinor()
+			if dma == -1 && dev.GetHostPath() == devInfo.HostPath {
+				return dev
+			}
+		}
+		return nil
+	}
+
 	for _, dev := range dm.devices {
 		dma, dmi := dev.GetMajorMinor()
-		if dma == major && dmi == minor {
+		if dma == devInfo.Major && dmi == devInfo.Minor {
 			return dev
 		}
 	}
@@ -107,7 +118,7 @@ func (dm *deviceManager) createDevice(devInfo config.DeviceInfo) (dev api.Device
 		}
 	}()
 
-	if existingDev := dm.findDeviceByMajorMinor(devInfo.Major, devInfo.Minor); existingDev != nil {
+	if existingDev := dm.findDevice(&devInfo); existingDev != nil {
 		return existingDev, nil
 	}
 

@@ -23,6 +23,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -405,6 +406,20 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 
 	if c.rootFs.Type == NydusRootFSType {
 		return f.shareRootFilesystemWithNydus(ctx, c)
+	}
+
+	if HasOptionPrefix(c.rootFs.Options, annotations.FileSystemLayer) {
+		path := filepath.Join("/run/kata-containers", c.id, "rootfs")
+		return &SharedFile{
+			storage: &grpc.Storage{
+				MountPoint: path,
+				Source:     "none",
+				Fstype:     c.rootFs.Type,
+				Driver:     kataOverlayDevType,
+				Options:    c.rootFs.Options,
+			},
+			guestPath: path,
+		}, nil
 	}
 
 	if c.state.Fstype != "" && c.state.BlockDeviceID != "" {

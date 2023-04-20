@@ -312,6 +312,21 @@ const (
 	ContainerResourcesSwapInBytes = kataAnnotContainerResourcePrefix + "swap_in_bytes"
 )
 
+// Annotations related to file system options.
+const (
+	kataAnnotFsOptPrefix = kataAnnotationsPrefix + "fs-opt."
+
+	// FileSystemLayer describes a layer of an overlay filesystem.
+	FileSystemLayer = kataAnnotFsOptPrefix + "layer="
+
+	// IsFileSystemLayer indicates that the annotated filesystem is a layer of an overlay fs.
+	IsFileSystemLayer = kataAnnotFsOptPrefix + "is-layer"
+
+	// IsFileBlockDevice indicates that the annotated filesystem is mounted on a block device
+	// backed by a host file.
+	IsFileBlockDevice = kataAnnotFsOptPrefix + "block_device=file"
+)
+
 const (
 	// SHA512 is the SHA-512 (64) hash algorithm
 	SHA512 string = "sha512"
