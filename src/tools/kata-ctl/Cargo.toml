@@ -37,7 +37,6 @@ libc = "0.2.138"
 slog = "2.7.0"
 slog-scope = "4.4.0"
 hyper = "0.14.20"
-ttrpc = "0.6.0"
 tokio = "1.8.0"
 
 [target.'cfg(target_arch = "s390x")'.dependencies]

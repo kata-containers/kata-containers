@@ -16,24 +16,24 @@ use containerd_shim_protos::api;
 use super::{ProcessExitStatus, ProcessStateInfo, ProcessStatus, Response};
 use crate::error::Error;
 
-fn system_time_into(time: time::SystemTime) -> ::protobuf::well_known_types::Timestamp {
-    let mut proto_time = ::protobuf::well_known_types::Timestamp::new();
-    proto_time.set_seconds(
-        time.duration_since(time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-            .try_into()
-            .unwrap_or_default(),
-    );
+fn system_time_into(time: time::SystemTime) -> ::protobuf::well_known_types::timestamp::Timestamp {
+    let mut proto_time = ::protobuf::well_known_types::timestamp::Timestamp::new();
+    proto_time.seconds = time
+        .duration_since(time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        .try_into()
+        .unwrap_or_default();
+
     proto_time
 }
 
 fn option_system_time_into(
     time: Option<time::SystemTime>,
-) -> ::protobuf::SingularPtrField<::protobuf::well_known_types::Timestamp> {
+) -> protobuf::MessageField<protobuf::well_known_types::timestamp::Timestamp> {
     match time {
-        Some(v) => ::protobuf::SingularPtrField::some(system_time_into(v)),
-        None => ::protobuf::SingularPtrField::none(),
+        Some(v) => ::protobuf::MessageField::some(system_time_into(v)),
+        None => ::protobuf::MessageField::none(),
     }
 }
 
@@ -66,7 +66,7 @@ impl From<ProcessStateInfo> for api::StateResponse {
             id: from.container_id.clone(),
             bundle: from.bundle.clone(),
             pid: from.pid.pid,
-            status: from.status.into(),
+            status: protobuf::EnumOrUnknown::new(from.status.into()),
             stdin: from.stdin.unwrap_or_default(),
             stdout: from.stdout.unwrap_or_default(),
             stderr: from.stderr.unwrap_or_default(),
@@ -164,13 +164,13 @@ impl TryFrom<Response> for api::StateResponse {
 impl TryFrom<Response> for api::StatsResponse {
     type Error = anyhow::Error;
     fn try_from(from: Response) -> Result<Self> {
-        let mut any = ::protobuf::well_known_types::Any::new();
+        let mut any = ::protobuf::well_known_types::any::Any::new();
         let mut response = api::StatsResponse::new();
         match from {
             Response::StatsContainer(resp) => {
                 if let Some(value) = resp.value {
-                    any.set_type_url(value.type_url);
-                    any.set_value(value.value);
+                    any.type_url = value.type_url;
+                    any.value = value.value;
                     response.set_stats(any);
                 }
                 Ok(response)
@@ -193,8 +193,7 @@ impl TryFrom<Response> for api::PidsResponse {
                 let mut res = api::PidsResponse::new();
                 p_info.set_pid(resp.pid);
                 processes.push(p_info);
-                let v = protobuf::RepeatedField::<api::ProcessInfo>::from_vec(processes);
-                res.set_processes(v);
+                res.set_processes(processes);
                 Ok(res)
             }
             _ => Err(anyhow!(Error::UnexpectedResponse(
