@@ -337,7 +337,7 @@ impl InfraPolicy {
                 // {
                 //    "destination": "/busy1",
                 //    "type": "local",
-                //    "source": "^/run/kata-containers/shared/containers/$(sandbox-id)/rootfs/local/data$",
+                //    "source": "^/run/kata-containers/shared/containers/$(sandbox-id)/local/data$",
                 //    "options": [
                 //          "rbind",
                 //          "rprivate",
@@ -354,7 +354,7 @@ impl InfraPolicy {
                 //      "options": [
                 //          "mode=0777"
                 //      ],
-                //      "mount_point": "/run/kata-containers/shared/containers/$(sandbox-id)/rootfs/local/data",
+                //      "mount_point": "/run/kata-containers/shared/containers/$(sandbox-id)/local/data",
                 //      "fs_group": {
                 //          "group_id": 0,
                 //          "group_change_policy": 0

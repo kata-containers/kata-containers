@@ -90,8 +90,8 @@
     "volumes": {
         "emptyDir": {
             "mount_type": "local",
-            "mount_source": "^/run/kata-containers/shared/containers/$(sandbox-id)/rootfs/local/",
-            "mount_point": "^/run/kata-containers/shared/containers/$(sandbox-id)/rootfs/local/",
+            "mount_source": "^/run/kata-containers/shared/containers/$(sandbox-id)/local/",
+            "mount_point": "^/run/kata-containers/shared/containers/$(sandbox-id)/local/",
             "driver": "local",
             "source": "local",
             "fstype": "local",
