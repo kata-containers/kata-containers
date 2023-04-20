@@ -125,6 +125,32 @@ pub enum ActivateError {
     InvalidQueueConfig,
     #[error("IO: {0}.")]
     IOError(#[from] IOError),
+    #[error("Virtio error")]
+    VirtioError(Error),
+    #[error("Epoll manager error")]
+    EpollMgr(dbs_utils::epoll_manager::Error),
+    #[cfg(feature = "vhost")]
+    #[error("Vhost activate error")]
+    VhostActivate(vhost_rs::Error),
+}
+
+impl std::convert::From<Error> for ActivateError {
+    fn from(error: Error) -> ActivateError {
+        ActivateError::VirtioError(error)
+    }
+}
+
+impl std::convert::From<dbs_utils::epoll_manager::Error> for ActivateError {
+    fn from(error: dbs_utils::epoll_manager::Error) -> ActivateError {
+        ActivateError::EpollMgr(error)
+    }
+}
+
+#[cfg(feature = "vhost")]
+impl std::convert::From<vhost_rs::Error> for ActivateError {
+    fn from(error: vhost_rs::Error) -> ActivateError {
+        ActivateError::VhostActivate(error)
+    }
 }
 
 /// Error code for VirtioDevice::read_config()/write_config().
@@ -155,6 +181,9 @@ pub enum Error {
     /// Guest gave us a descriptor that was too big to use.
     #[error("descriptor length too big.")]
     DescriptorLengthTooBig,
+    /// Error from the epoll event manager
+    #[error("dbs_utils error: {0:?}.")]
+    EpollMgr(dbs_utils::epoll_manager::Error),
     /// Guest gave us a write only descriptor that protocol says to read from.
     #[error("unexpected write only descriptor.")]
     UnexpectedWriteOnlyDescriptor,
@@ -181,7 +210,7 @@ pub enum Error {
     VirtioQueueError(#[from] VqError),
     /// Error from Device activate.
     #[error("Device activate error: {0}")]
-    ActivateError(#[from] ActivateError),
+    ActivateError(#[from] Box<ActivateError>),
     /// Error from Interrupt.
     #[error("Interrupt error: {0}")]
     InterruptError(IOError),
@@ -229,6 +258,15 @@ pub enum Error {
     #[cfg(feature = "virtio-balloon")]
     #[error("Virtio-balloon error: {0}")]
     VirtioBalloonError(#[from] balloon::BalloonError),
+    
+    #[cfg(feature = "vhost")]
+    /// Error from the vhost subsystem
+    #[error("Vhost error: {0:?}")]
+    VhostError(vhost_rs::Error),
+    #[cfg(feature = "vhost")]
+    /// Error from the vhost user subsystem
+    #[error("Vhost-user error: {0:?}")]
+    VhostUserError(vhost_rs::vhost_user::Error),
 }
 
 // Error for tap devices

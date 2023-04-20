@@ -6,3 +6,21 @@
 
 #[cfg(feature = "vhost-net")]
 pub mod vhost_kern;
+
+pub use vhost_rs::vhost_user::Error as VhostUserError;
+pub use vhost_rs::Error as VhostError;
+
+#[cfg(feature = "vhost-user")]
+pub mod vhost_user;
+
+impl std::convert::From<VhostError> for super::Error {
+    fn from(e: VhostError) -> Self {
+        super::Error::VhostError(e)
+    }
+}
+
+impl std::convert::From<VhostUserError> for super::Error {
+    fn from(e: VhostUserError) -> Self {
+        super::Error::VhostUserError(e)
+    }
+}
