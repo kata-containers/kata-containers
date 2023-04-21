@@ -87,6 +87,7 @@ options:
 	kernel-gpu-snp
 	kernel-gpu-tdx-experimental
 	nydus
+	ovmf-sev
 	qemu
 	qemu-tdx-experimental
 	rootfs-image
@@ -453,6 +454,11 @@ install_tdvf() {
 	install_ovmf "tdx" "edk2-tdx.tar.gz"
 }
 
+# Install OVMF SEV
+install_ovmf_sev() {
+	install_ovmf "sev" "edk2-sev.tar.gz"
+}
+
 get_kata_version() {
 	local v
 	v=$(cat "${version_file}")
@@ -479,6 +485,7 @@ handle_build() {
 		install_kernel_dragonball_experimental
 		install_kernel_tdx_experimental
 		install_nydus
+		install_ovmf_sev
 		install_qemu
 		install_qemu_tdx_experimental
 		install_shimv2
@@ -501,6 +508,8 @@ handle_build() {
 	kernel-tdx-experimental) install_kernel_tdx_experimental ;;
 
 	kernel-sev) install_kernel_sev ;;
+
+	ovmf-sev) install_ovmf_sev ;;
 
 	kernel-gpu) install_kernel_gpu ;;
 
