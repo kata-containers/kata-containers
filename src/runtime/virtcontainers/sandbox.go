@@ -32,6 +32,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	deviceManager "github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
@@ -619,12 +620,30 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	if err := validateHypervisorConfig(&sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
 	}
-	// Aggregate all the container devices and update the HV config
-	var devices []config.DeviceInfo
-	for _, ct := range sandboxConfig.Containers {
-		devices = append(devices, ct.DeviceInfos...)
+
+	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
+	// until we have TDISP/IDE PCIe support.
+	coldPlugVFIO := (sandboxConfig.HypervisorConfig.ColdPlugVFIO != hv.NoPort)
+	var devs []config.DeviceInfo
+	for cnt, containers := range sandboxConfig.Containers {
+		for dev, device := range containers.DeviceInfos {
+			if coldPlugVFIO && deviceManager.IsVFIO(device.ContainerPath) {
+				device.ColdPlug = true
+				devs = append(devs, device)
+				// We need to remove the devices marked for cold-plug
+				// otherwise at the container level the kata-agent
+				// will try to hot-plug them.
+				infos := sandboxConfig.Containers[cnt].DeviceInfos
+				infos = append(infos[:dev], infos[dev+1:]...)
+				sandboxConfig.Containers[cnt].DeviceInfos = infos
+			}
+		}
 	}
-	sandboxConfig.HypervisorConfig.RawDevices = devices
+	// If we have a confidential guest, we need to add a specific
+	// firmware configuration to the hypervisor. We cannot do it here at
+	// the sandbox level we need to do that at the hypervisor level, capturing
+	// the devices here and processing in CreateVM().
+	sandboxConfig.HypervisorConfig.VFIODevices = devs
 
 	// store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
@@ -635,6 +654,17 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
+	if !coldPlugVFIO {
+		return s, nil
+	}
+
+	for _, dev := range devs {
+		_, err := s.AddDevice(ctx, dev)
+		if err != nil {
+			s.Logger().WithError(err).Debug("Cannot cold-plug add device")
+			return nil, err
+		}
+	}
 	return s, nil
 }
 
