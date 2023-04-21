@@ -160,6 +160,8 @@ github_get_release_file_url()
 		-r '.[] | select(.tag_name == $version) | .assets[].browser_download_url' |\
 		grep "/${regex}$")
 
+        download_url=$(echo $download_url | awk '{print $1}')
+
 	[ -z "$download_url" ] && die "Cannot determine download URL for version $version ($url)"
 
 	echo "$download_url"
