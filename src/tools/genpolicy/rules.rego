@@ -64,42 +64,44 @@ CreateContainerRequest {
 # annotations and process fields.
 
 allow_by_annotations(policy_oci, input_oci, policy_storages, input_storages) {
-    print("allow_by_annotations", "no policy io.kubernetes.cri.sandbox-name")
+    print("allow_by_annotations 1: no io.kubernetes.cri.sandbox-name in policy")
     not policy_oci.annotations["io.kubernetes.cri.sandbox-name"]
 
     input_sandbox_name := input_oci.annotations["io.kubernetes.cri.sandbox-name"]
 
-    print("allow_by_annotations", "allow_by_sandbox_name")
+    print("allow_by_annotations 1: allow_by_sandbox_name", input_sandbox_name)
     allow_by_sandbox_name(policy_oci, input_oci, policy_storages, input_storages, input_sandbox_name)
 
-    print("allow_by_annotations", "success")
+    print("allow_by_annotations 1: success")
 }
 allow_by_annotations(policy_oci, input_oci, policy_storages, input_storages) {
-    print("allow_by_annotations", "io.kubernetes.cri.sandbox-name")
+    print("allow_by_annotations 2: io.kubernetes.cri.sandbox-name")
     policy_sandbox_name := policy_oci.annotations["io.kubernetes.cri.sandbox-name"]
     input_sandbox_name := input_oci.annotations["io.kubernetes.cri.sandbox-name"]
+
+    print("allow_by_annotations 2:", input_sandbox_name)
     policy_sandbox_name == input_sandbox_name
 
-    print("allow_by_annotations", "allow_by_sandbox_name")
+    print("allow_by_annotations 2: allow_by_sandbox_name", input_sandbox_name)
     allow_by_sandbox_name(policy_oci, input_oci, policy_storages, input_storages, input_sandbox_name)
 
-    print("allow_by_annotations", "success")
+    print("allow_by_annotations 2: success")
 }
 
 allow_by_sandbox_name(policy_oci, input_oci, policy_storages, input_storages, sandbox_name) {
-    print("allow_by_sandbox_name", "allow_by_container_types")
+    print("allow_by_sandbox_name: allow_by_container_types")
     allow_by_container_types(policy_oci, input_oci, sandbox_name)
 
-    print("allow_by_sandbox_name", "allow_by_bundle_or_sandbox_id")
+    print("allow_by_sandbox_name: allow_by_bundle_or_sandbox_id")
     allow_by_bundle_or_sandbox_id(policy_oci, input_oci, policy_storages, input_storages)
 
-    print("allow_by_sandbox_name", "allow_sandbox_namespace")
+    print("allow_by_sandbox_name: allow_sandbox_namespace")
     allow_sandbox_namespace(policy_oci, input_oci)
 
-    print("allow_by_sandbox_name", "allow_process")
+    print("allow_by_sandbox_name: allow_process")
     allow_process(policy_oci, input_oci, sandbox_name)
 
-    print("allow_by_sandbox_name", "success")
+    print("allow_by_sandbox_name: success")
 }
 
 ######################################################################
@@ -112,26 +114,28 @@ allow_by_sandbox_name(policy_oci, input_oci, policy_storages, input_storages, sa
 #   "sandbox" or "container" value from the input container.
 
 allow_by_container_types(policy_oci, input_oci, sandbox_name) {
+    print("allow_by_container_types: checking io.kubernetes.cri.container-type")
     policy_cri_type := policy_oci.annotations["io.kubernetes.cri.container-type"]
     input_cri_type := input_oci.annotations["io.kubernetes.cri.container-type"]
     policy_cri_type == input_cri_type
 
-    print("allow_by_container_types", "allow_by_container_type")
+    print("allow_by_container_types: allow_by_container_type")
     allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name)
 
-    print("allow_by_container_types", "success")
+    print("allow_by_container_types: success")
 }
 
 # Rules applicable to the "sandbox" container type
 allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name) {
     input_cri_type == "sandbox"
-    print("allow_by_container_type", "sandbox")
+    print("allow_by_container_type 1: sandbox")
 
     # TODO: Enable hostname validation after researching how that works
     #       for pods including multiple containers.
     #policy_oci.hostname == input_oci.hostname
 
     input_kata_type := input_oci.annotations["io.katacontainers.pkg.oci.container_type"]
+    print("allow_by_container_type 1: input container type", input_kata_type)
     input_kata_type == "pod_sandbox"
 
     allow_sandbox_container_name(policy_oci, input_oci)
@@ -139,31 +143,31 @@ allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name) {
     allow_sandbox_net_namespace(policy_oci, input_oci)
     allow_sandbox_log_directory(policy_oci, input_oci, sandbox_name)
 
-    print("allow_by_container_type", "success")
+    print("allow_by_container_type 1: success")
 }
 
 # Rules applicable to the "container" container type
 allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name) {
     input_cri_type == "container"
-    print("allow_by_container_type", "container")
+    print("allow_by_container_type 2: container")
 
     input_kata_type := input_oci.annotations["io.katacontainers.pkg.oci.container_type"]
-    print("allow_by_container_type", input_kata_type)
+    print("allow_by_container_type 2: input container type", input_kata_type)
     input_kata_type == "pod_container"
 
-    print("allow_by_container_type", "allow_container_name")
+    print("allow_by_container_type 2: allow_container_name")
     allow_container_name(policy_oci, input_oci)
 
-    print("allow_by_container_type", "allow_image_name")
+    print("allow_by_container_type 2: allow_image_name")
     allow_image_name(policy_oci, input_oci)
 
-    print("allow_by_container_type", "allow_net_namespace")
+    print("allow_by_container_type 2: allow_net_namespace")
     allow_net_namespace(policy_oci, input_oci)
 
-    print("allow_by_container_type", "allow_log_directory")
+    print("allow_by_container_type 2: allow_log_directory")
     allow_log_directory(policy_oci, input_oci)
 
-    print("allow_by_container_type", "success")
+    print("allow_by_container_type 2: success")
 }
 
 ######################################################################
@@ -186,6 +190,7 @@ allow_sandbox_container_name(policy_oci, input_oci) {
 }
 
 allow_container_name(policy_oci, input_oci) {
+    print("allow_container_name: allow_container_annotation")
     allow_container_annotation(policy_oci, input_oci, "io.kubernetes.cri.container-name")
 }
 
@@ -198,14 +203,16 @@ container_annotation_missing(policy_oci, input_oci, annotation_key) {
 }
 
 allow_container_annotation(policy_oci, input_oci, annotation_key) {
+    print("allow_container_annotation: annotation_key =", annotation_key)
+
     policy_value := policy_oci.annotations[annotation_key]
-    print("allow_container_annotation", policy_value)
+    print("allow_container_annotation: policy_value =", policy_value)
 
     input_value := input_oci.annotations[annotation_key]
-    print("allow_container_annotation", input_value)
+    print("allow_container_annotation: input_value = ", input_value)
 
     policy_value == input_value
-    print("allow_container_annotation", "success")
+    print("allow_container_annotation: success")
 }
 
 ######################################################################
@@ -275,27 +282,28 @@ allow_array(policy_array, input_array) {
 # and check their consistency with other rules.
 
 allow_by_bundle_or_sandbox_id(policy_oci, input_oci, policy_storages, input_storages) {
+    print("allow_by_bundle_or_sandbox_id: checking io.katacontainers.pkg.oci.bundle_path")
     bundle_path := input_oci.annotations["io.katacontainers.pkg.oci.bundle_path"]
     bundle_id := replace(bundle_path, "/run/containerd/io.containerd.runtime.v2.task/k8s.io/", "")
 
     policy_sandbox_regex := policy_oci.annotations["io.kubernetes.cri.sandbox-id"]
     sandbox_id := input_oci.annotations["io.kubernetes.cri.sandbox-id"]
 
-    print("allow_by_bundle_or_sandbox_id", "regex.match")
+    print("allow_by_bundle_or_sandbox_id: regex.match sandbox_id =", sandbox_id, "regex =", policy_sandbox_regex)
     regex.match(policy_sandbox_regex, sandbox_id)
 
-    print("allow_by_bundle_or_sandbox_id", "allow_root_path")
+    print("allow_by_bundle_or_sandbox_id: allow_root_path")
     allow_root_path(policy_oci, input_oci, bundle_id)
 
     every input_mount in input.oci.mounts {
-        print("allow_by_bundle_or_sandbox_id", "allow_mount")
+        print("allow_by_bundle_or_sandbox_id: allow_mount")
         allow_mount(policy_oci, input_mount, bundle_id, sandbox_id)
     }
 
-    print("allow_by_bundle_or_sandbox_id", "allow_storages")
+    print("allow_by_bundle_or_sandbox_id: allow_storages")
     allow_storages(policy_storages, input_storages, sandbox_id)
 
-    print("allow_by_bundle_or_sandbox_id", "success")
+    print("allow_by_bundle_or_sandbox_id: success")
 }
 
 ######################################################################
@@ -305,28 +313,28 @@ allow_process(policy_oci, input_oci, sandbox_name) {
     policy_process := policy_oci.process
     input_process := input_oci.process
 
-    print("allow_process", "terminal")
+    print("allow_process: input terminal =", input_process.terminal, "policy terminal =", policy_process.terminal)
     policy_process.terminal         == input_process.terminal
 
-    print("allow_process", "cwd")
+    print("allow_process: input cwd =", input_process.cwd, "policy cwd =", policy_process.cwd)
     policy_process.cwd              == input_process.cwd
 
-    print("allow_process", "capabilities")
+    print("allow_process: input capabilities =", input_process.capabilities, "policy capabilities =", policy_process.capabilities)
     policy_process.capabilities     == input_process.capabilities
 
-    print("allow_process", "noNewPrivileges")
+    print("allow_process: input noNewPrivileges =", input_process.noNewPrivileges, "policy noNewPrivileges =", policy_process.noNewPrivileges)
     policy_process.noNewPrivileges  == input_process.noNewPrivileges
 
-    print("allow_process", "allow_user")
+    print("allow_process: allow_user")
     allow_user(policy_process, input_process)
 
-    print("allow_process", "allow_args")
+    print("allow_process: allow_args")
     allow_args(policy_process, input_process)
 
-    print("allow_process", "allow_env")
+    print("allow_process: allow_env")
     allow_env(policy_process, input_process, sandbox_name)
 
-    print("allow_process", "success")
+    print("allow_process: success")
 }
 
 ######################################################################
@@ -336,10 +344,17 @@ allow_user(policy_process, input_process) {
     policy_user := policy_process.user
     input_user := input_process.user
 
+    # TODO: track down the reason for mcr.microsoft.com/oss/bitnami/redis:6.0.8 being
+    #       executed with uid = 0 despite having "User": "1001" in its container image
+    #       config.
+    #print("allow_user: input uid =", input_user.uid, "policy uid =", policy_user.uid)
+    #policy_user.uid                 == input_user.uid
+
+    print("allow_user: input gid =", input_user.gid, "policy gid =", policy_user.gid)
+    policy_user.gid                 == input_user.gid
+
     # TODO: compare the additionalGids field too after computing its value
     # based on /etc/passwd and /etc/group from the container image.
-    policy_user.uid                 == input_user.uid
-    policy_user.gid                 == input_user.gid
 }
 
 ######################################################################
@@ -594,6 +609,8 @@ allow_root_path(policy_oci, input_oci, bundle_id) {
 # mounts
 
 allow_mount(policy_oci, input_mount, bundle_id, sandbox_id) {
+    print("allow_mount: input_mount.destination =", input_mount.destination)
+
     some policy_mount in policy_oci.mounts
     policy_mount_allows(policy_mount, input_mount, bundle_id, sandbox_id)
 
@@ -602,26 +619,24 @@ allow_mount(policy_oci, input_mount, bundle_id, sandbox_id) {
 }
 
 policy_mount_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
-    print("policy_mount_allows 1")
+    print("policy_mount_allows 1: input_mount.destination =", input_mount.destination, "policy_mount.destination =", policy_mount.destination)
     policy_mount == input_mount
     print("policy_mount_allows 1 success")
 }
 policy_mount_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
-    print("policy_mount_allows 2")
-
-    print("policy_mount_allows 2", "destination", input_mount.destination)
+    print("policy_mount_allows 2: input_mount.destination =", input_mount.destination, "policy_mount.destination =", policy_mount.destination)
     policy_mount.destination    == input_mount.destination
 
-    print("policy_mount_allows 2", "type")
+    print("policy_mount_allows 2: input type =", input_mount.type, "policy type =", policy_mount.type)
     policy_mount.type           == input_mount.type
 
-    print("policy_mount_allows 2", "options")
+    print("policy_mount_allows 2: input options =", input_mount.options, "policy options =", policy_mount.options)
     policy_mount.options        == input_mount.options
 
-    print("policy_mount_allows 2", "policy_mount_source_allows")
+    print("policy_mount_allows 2: policy_mount_source_allows")
     policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id)
 
-    print("policy_mount_allows 2 success")
+    print("policy_mount_allows 2: success")
 }
 
 policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
