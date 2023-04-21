@@ -83,6 +83,7 @@ type QemuState struct {
 	VirtiofsDaemonPid    int
 	PCIeRootPort         int
 	HotplugVFIOOnRootBus bool
+	ColdPlugVFIO         hv.PCIePort
 }
 
 // qemu is an Hypervisor interface implementation for the Linux qemu hypervisor.
@@ -282,6 +283,7 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 		q.Logger().Debug("Creating UUID")
 		q.state.UUID = uuid.Generate().String()
 
+		q.state.ColdPlugVFIO = q.config.ColdPlugVFIO
 		q.state.HotplugVFIOOnRootBus = q.config.HotplugVFIOOnRootBus
 		q.state.PCIeRootPort = int(q.config.PCIeRootPort)
 
@@ -708,9 +710,25 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, hypervisorConfig.PCIeRootPort, memSize32bit, memSize64bit)
 	}
 
+	q.virtiofsDaemon, err = q.createVirtiofsDaemon(hypervisorConfig.SharedPath)
+
+	// If we have a VFIO device we need to update the firmware configuration
+	// if executed in a trusted execution environment.
+	if hypervisorConfig.ConfidentialGuest {
+		// At the sandbox level we alreaady checked that we have a
+		// VFIO device, pass-through of a PCIe device needs allocated
+		// mmemory in the firmware otherwise BARs cannot be mapped
+		if len(hypervisorConfig.VFIODevices) > 0 {
+			fwCfg := govmmQemu.FwCfg{
+				Name: "opt/ovmf/X-PciMmio64Mb",
+				Str:  "262144",
+			}
+			qemuConfig.FwCfg = append(qemuConfig.FwCfg, fwCfg)
+		}
+	}
+
 	q.qemuConfig = qemuConfig
 
-	q.virtiofsDaemon, err = q.createVirtiofsDaemon(hypervisorConfig.SharedPath)
 	return err
 }
 
