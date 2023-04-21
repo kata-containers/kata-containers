@@ -44,12 +44,11 @@ $ popd
 - Build a custom QEMU
 ```bash
 $ source kata-containers/tools/packaging/scripts/lib.sh
-$ qemu_url="$(get_from_kata_deps "assets.hypervisor.qemu.snp.url")"
-$ qemu_branch="$(get_from_kata_deps "assets.hypervisor.qemu.snp.branch")"
-$ qemu_commit="$(get_from_kata_deps "assets.hypervisor.qemu.snp.commit")"
-$ git clone -b "${qemu_branch}" "${qemu_url}"
+$ qemu_url="$(get_from_kata_deps "assets.hypervisor.qemu-snp-experimental.url")"
+$ qemu_tag="$(get_from_kata_deps "assets.hypervisor.qemu-snp-experimental.tag")"
+$ git clone "${qemu_url}"
 $ pushd qemu
-$ git checkout "${qemu_commit}"
+$ git checkout "${qemu_tag}"
 $ ./configure --enable-virtfs --target-list=x86_64-softmmu --enable-debug
 $ make -j "$(nproc)"
 $ popd
