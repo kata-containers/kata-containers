@@ -165,7 +165,7 @@ assets:
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.19.2"
     sev:
-      description: "Linux kernel that supports SEV"
+      description: "Linux kernel that supports SEV and SNP"
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
       version: "v5.19.2"
     snp:
