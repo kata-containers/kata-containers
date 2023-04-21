@@ -718,18 +718,48 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		// At the sandbox level we alreaady checked that we have a
 		// VFIO device, pass-through of a PCIe device needs allocated
 		// mmemory in the firmware otherwise BARs cannot be mapped
-		if len(hypervisorConfig.VFIODevices) > 0 {
-			fwCfg := govmmQemu.FwCfg{
-				Name: "opt/ovmf/X-PciMmio64Mb",
-				Str:  "262144",
-			}
-			qemuConfig.FwCfg = append(qemuConfig.FwCfg, fwCfg)
+		// First check if we have a PCIe devices, otherwise ignore
+		err, fwCfg := q.appendFwCfgForConfidentialGuest(hypervisorConfig.VFIODevices)
+		if err != nil {
+			return err
+		}
+		if fwCfg != nil {
+			qemuConfig.FwCfg = append(qemuConfig.FwCfg, *fwCfg)
 		}
 	}
-
 	q.qemuConfig = qemuConfig
 
 	return err
+}
+
+// appendFwCfgForConfidentialGuest appends the firmware configuration for a
+// VFIO and PCIe device, otherwise it will be ignored.
+func (q *qemu) appendFwCfgForConfidentialGuest(vfioDevices []config.DeviceInfo) (error, *govmmQemu.FwCfg) {
+	var err error
+	for _, dev := range vfioDevices {
+		dev.HostPath, err = config.GetHostPath(dev, false, "")
+		if err != nil {
+			return err, nil
+		}
+		vfioDevs, err := drivers.GetAllVFIODevicesFromIOMMUGroup(dev, true)
+		if err != nil {
+			return err, nil
+		}
+		fwCfg := govmmQemu.FwCfg{}
+		for _, vfioDev := range vfioDevs {
+			switch (*vfioDev).GetType() {
+			case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
+				if (*vfioDev).(config.VFIOPCIDev).IsPCIe {
+					fwCfg = govmmQemu.FwCfg{
+						Name: "opt/ovmf/X-PciMmio64Mb",
+						Str:  "262144",
+					}
+					return nil, &fwCfg
+				}
+			}
+		}
+	}
+	return nil, nil
 }
 
 func (q *qemu) checkBpfEnabled() {

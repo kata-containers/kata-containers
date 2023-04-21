@@ -307,17 +307,17 @@ func getHypervisorInfo(config oci.RuntimeConfig) (HypervisorInfo, error) {
 	}
 
 	return HypervisorInfo{
-		Debug:             config.HypervisorConfig.Debug,
-		MachineType:       config.HypervisorConfig.HypervisorMachineType,
-		Version:           version,
-		Path:              hypervisorPath,
-		BlockDeviceDriver: config.HypervisorConfig.BlockDeviceDriver,
-		Msize9p:           config.HypervisorConfig.Msize9p,
-		MemorySlots:       config.HypervisorConfig.MemSlots,
-		EntropySource:     config.HypervisorConfig.EntropySource,
-		SharedFS:          config.HypervisorConfig.SharedFS,
-		VirtioFSDaemon:    config.HypervisorConfig.VirtioFSDaemon,
-
+		Debug:                config.HypervisorConfig.Debug,
+		MachineType:          config.HypervisorConfig.HypervisorMachineType,
+		Version:              version,
+		Path:                 hypervisorPath,
+		BlockDeviceDriver:    config.HypervisorConfig.BlockDeviceDriver,
+		Msize9p:              config.HypervisorConfig.Msize9p,
+		MemorySlots:          config.HypervisorConfig.MemSlots,
+		EntropySource:        config.HypervisorConfig.EntropySource,
+		SharedFS:             config.HypervisorConfig.SharedFS,
+		VirtioFSDaemon:       config.HypervisorConfig.VirtioFSDaemon,
+		ColdPlugVFIO:         config.HypervisorConfig.ColdPlugVFIO,
 		HotplugVFIOOnRootBus: config.HypervisorConfig.HotplugVFIOOnRootBus,
 		PCIeRootPort:         config.HypervisorConfig.PCIeRootPort,
 		SocketPath:           socketPath,

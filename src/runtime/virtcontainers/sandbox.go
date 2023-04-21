@@ -623,7 +623,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 
 	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
 	// until we have TDISP/IDE PCIe support.
-	coldPlugVFIO := (sandboxConfig.HypervisorConfig.ColdPlugVFIO != hv.NoPort)
+	coldPlugVFIO := (sandboxConfig.HypervisorConfig.ColdPlugVFIO == hv.RootPort)
 	var devs []config.DeviceInfo
 	for cnt, containers := range sandboxConfig.Containers {
 		for dev, device := range containers.DeviceInfos {
