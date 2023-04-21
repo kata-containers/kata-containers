@@ -30,7 +30,7 @@ pub use crate::device_manager::balloon_dev_mgr::{BalloonDeviceConfigInfo, Balloo
 pub use crate::device_manager::blk_dev_mgr::{
     BlockDeviceConfigInfo, BlockDeviceConfigUpdateInfo, BlockDeviceError, BlockDeviceMgr,
 };
-#[cfg(feature = "virtio-fs")]
+#[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
 pub use crate::device_manager::fs_dev_mgr::{
     FsDeviceConfigInfo, FsDeviceConfigUpdateInfo, FsDeviceError, FsDeviceMgr, FsMountConfigInfo,
 };
@@ -110,7 +110,7 @@ pub enum VmmActionError {
     /// Vhost-net device relared errors.
     VhostNet(#[source] VhostNetDeviceError),
 
-    #[cfg(feature = "virtio-fs")]
+    #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
     /// The action `InsertFsDevice` failed either because of bad user input or an internal error.
     #[error("virtio-fs device error: {0}")]
     FsDevice(#[source] FsDeviceError),
@@ -204,7 +204,7 @@ pub enum VmmAction {
     /// https://github.com/kata-containers/kata-containers/issues/8327
     UpdateNetworkInterface(VirtioNetDeviceConfigUpdateInfo),
 
-    #[cfg(feature = "virtio-fs")]
+    #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
     /// Add a new shared fs device or update one that already exists using the
     /// `FsDeviceConfig` as input. This action can only be called before the microVM has
     /// booted.
@@ -331,14 +331,14 @@ impl VmmService {
             VmmAction::UpdateNetworkInterface(netif_update) => {
                 self.update_net_rate_limiters(vmm, netif_update)
             }
-            #[cfg(feature = "virtio-fs")]
+            #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
             VmmAction::InsertFsDevice(fs_cfg) => self.add_fs_device(vmm, fs_cfg),
 
             #[cfg(feature = "virtio-fs")]
             VmmAction::ManipulateFsBackendFs(fs_mount_cfg) => {
                 self.manipulate_fs_backend_fs(vmm, fs_mount_cfg)
             }
-            #[cfg(feature = "virtio-fs")]
+            #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
             VmmAction::UpdateFsDevice(fs_update_cfg) => {
                 self.update_fs_rate_limiters(vmm, fs_update_cfg)
             }
@@ -712,7 +712,7 @@ impl VmmService {
             .map_err(VmmActionError::VhostNet)
     }
 
-    #[cfg(feature = "virtio-fs")]
+    #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
     #[instrument(skip(self))]
     fn add_fs_device(&mut self, vmm: &mut Vmm, config: FsDeviceConfigInfo) -> VmmRequestResult {
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
