@@ -126,6 +126,8 @@ FIRMWAREVOLUMEPATH :=
 FIRMWARETDVFPATH := $(PREFIXDEPS)/share/tdvf/OVMF.fd
 FIRMWARETDVFVOLUMEPATH :=
 
+FIRMWARESEVPATH := $(PREFIXDEPS)/share/ovmf/AMDSEV.fd
+
 # Name of default configuration file the runtime will use.
 CONFIG_FILE = configuration.toml
 
