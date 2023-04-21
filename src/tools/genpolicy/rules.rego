@@ -79,7 +79,7 @@ allow_by_annotations(policy_oci, input_oci, policy_storages, input_storages) {
     policy_sandbox_name := policy_oci.annotations["io.kubernetes.cri.sandbox-name"]
     input_sandbox_name := input_oci.annotations["io.kubernetes.cri.sandbox-name"]
 
-    print("allow_by_annotations 2:", input_sandbox_name)
+    print("allow_by_annotations 2: input sandbox =", input_sandbox_name, "policy sandbox =", policy_sandbox_name)
     policy_sandbox_name == input_sandbox_name
 
     print("allow_by_annotations 2: allow_by_sandbox_name", input_sandbox_name)
@@ -127,12 +127,11 @@ allow_by_container_types(policy_oci, input_oci, sandbox_name) {
 
 # Rules applicable to the "sandbox" container type
 allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name) {
+    print("allow_by_container_type 1: input_cri_type =", input_cri_type)
     input_cri_type == "sandbox"
-    print("allow_by_container_type 1: sandbox")
 
-    # TODO: Enable hostname validation after researching how that works
-    #       for pods including multiple containers.
-    #policy_oci.hostname == input_oci.hostname
+    print("allow_by_container_type 1: input hostname =", input_oci.hostname, "policy hostname =", policy_oci.hostname)
+    regex.match(policy_oci.hostname, input_oci.hostname)
 
     input_kata_type := input_oci.annotations["io.katacontainers.pkg.oci.container_type"]
     print("allow_by_container_type 1: input container type", input_kata_type)
@@ -148,11 +147,11 @@ allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name) {
 
 # Rules applicable to the "container" container type
 allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name) {
+    print("allow_by_container_type 2: input_cri_type =", input_cri_type)
     input_cri_type == "container"
-    print("allow_by_container_type 2: container")
 
     input_kata_type := input_oci.annotations["io.katacontainers.pkg.oci.container_type"]
-    print("allow_by_container_type 2: input container type", input_kata_type)
+    print("allow_by_container_type 2: input type", input_kata_type)
     input_kata_type == "pod_container"
 
     print("allow_by_container_type 2: allow_container_name")

@@ -268,6 +268,7 @@ impl PodPolicy {
         pod_container: &yaml::Container,
     ) -> Result<ContainerPolicy> {
         let is_pause_container = container_index == 0;
+        let is_deployment_yaml = self.yaml.is_deployment();
 
         let mut pod_name = String::new();
         if let Some(name) = &self.yaml.metadata.name {
@@ -276,7 +277,14 @@ impl PodPolicy {
 
         let mut oci_spec: OciSpec = Default::default();
         oci_spec.version = "1.1.0-rc.1".to_string();
-        oci_spec.hostname = pod_name.to_string();
+
+        // Example: "hostname": "^busybox-cc$",
+        oci_spec.hostname = "^".to_string() + &pod_name;
+        if is_deployment_yaml {
+            // Example: "hostname": "^busybox-cc-5bdd867667-xxmdz$",
+            oci_spec.hostname += "-[a-z0-9]{10}-[a-z0-9]{5}"
+        }
+        oci_spec.hostname += "$";
 
         let registry_container = registry::Container::new(&pod_container.image).await?;
         let mut infra_container = &self.infra_policy.pause_container;
@@ -293,7 +301,7 @@ impl PodPolicy {
             oci_spec.root = Some(policy_root);
         }
 
-        if !self.yaml.is_deployment() {
+        if !is_deployment_yaml {
             oci_spec.annotations.insert(
                 "io.kubernetes.cri.sandbox-name".to_string(),
                 pod_name.to_string(),

@@ -72,10 +72,10 @@
                 "oomScoreAdj": -998
             },
             "root": {
-                "path": "/run/kata-containers/shared/containers/bdd1dd027221a6c81ba10366024de77381934da2eab48f7371e63aea6ca33af8",
+                "path": "/run/kata-containers/shared/containers/431c46d78f6783655b2fa2d98dd22805a59d412cf9d5955b33bf1ec7209ad497",
                 "readonly": true
             },
-            "hostname": "azure-vote-back-5bdd867667-s5tfh",
+            "hostname": "three-containers",
             "mounts": [
                 {
                     "destination": "/proc",
@@ -143,7 +143,7 @@
                 {
                     "destination": "/etc/resolv.conf",
                     "type": "bind",
-                    "source": "/run/kata-containers/shared/containers/bdd1dd027221a6c81ba10366024de77381934da2eab48f7371e63aea6ca33af8-2d2dd931b8b74d81-resolv.conf",
+                    "source": "/run/kata-containers/shared/containers/431c46d78f6783655b2fa2d98dd22805a59d412cf9d5955b33bf1ec7209ad497-ad10d90e71748c04-resolv.conf",
                     "options": [
                         "rbind",
                         "ro",
@@ -154,19 +154,19 @@
                 }
             ],
             "annotations": {
-                "io.kubernetes.cri.sandbox-cpu-period": "100000",
-                "io.kubernetes.cri.sandbox-id": "bdd1dd027221a6c81ba10366024de77381934da2eab48f7371e63aea6ca33af8",
-                "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_azure-vote-back-5bdd867667-s5tfh_344803f3-67b2-49e7-986e-e9ba7e9e7394",
-                "nerdctl/network-namespace": "/var/run/netns/cni-6e55fb7c-53e0-3e8e-399a-b3a89dfc41a8",
+                "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_three-containers_09275d01-3943-48df-a4e3-1ff902b3c31d",
+                "io.kubernetes.cri.sandbox-cpu-shares": "2",
+                "io.kubernetes.cri.sandbox-uid": "09275d01-3943-48df-a4e3-1ff902b3c31d",
+                "io.kubernetes.cri.sandbox-cpu-quota": "0",
+                "io.kubernetes.cri.sandbox-memory": "0",
+                "io.kubernetes.cri.sandbox-name": "three-containers",
+                "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
                 "io.kubernetes.cri.sandbox-namespace": "default",
                 "io.kubernetes.cri.container-type": "sandbox",
-                "io.kubernetes.cri.sandbox-name": "azure-vote-back-5bdd867667-s5tfh",
-                "io.kubernetes.cri.sandbox-memory": "268435456",
-                "io.kubernetes.cri.sandbox-cpu-shares": "102",
-                "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bdd1dd027221a6c81ba10366024de77381934da2eab48f7371e63aea6ca33af8",
-                "io.kubernetes.cri.sandbox-uid": "344803f3-67b2-49e7-986e-e9ba7e9e7394",
-                "io.kubernetes.cri.sandbox-cpu-quota": "25000",
-                "io.katacontainers.pkg.oci.container_type": "pod_sandbox"
+                "io.kubernetes.cri.sandbox-id": "431c46d78f6783655b2fa2d98dd22805a59d412cf9d5955b33bf1ec7209ad497",
+                "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/431c46d78f6783655b2fa2d98dd22805a59d412cf9d5955b33bf1ec7209ad497",
+                "nerdctl/network-namespace": "/var/run/netns/cni-adcda22c-d8a4-3c58-64a9-2bdc3efd98f0",
+                "io.kubernetes.cri.sandbox-cpu-period": "100000"
             },
             "linux": {
                 "resources": {
@@ -178,7 +178,7 @@
                         "realtimePeriod": 0
                     }
                 },
-                "cgroupsPath": "/kubepods/burstable/pod344803f3-67b2-49e7-986e-e9ba7e9e7394/bdd1dd027221a6c81ba10366024de77381934da2eab48f7371e63aea6ca33af8",
+                "cgroupsPath": "/kubepods/besteffort/pod09275d01-3943-48df-a4e3-1ff902b3c31d/431c46d78f6783655b2fa2d98dd22805a59d412cf9d5955b33bf1ec7209ad497",
                 "namespaces": [
                     {
                         "type": "ipc"
@@ -234,7 +234,7 @@
                 "options": [
                     "5a5aad80055ff20012a50dc25f8df7a29924474324d65f7d5306ee8ee27ff71d"
                 ],
-                "mount_point": "/run/kata-containers/shared/containers/bdd1dd027221a6c81ba10366024de77381934da2eab48f7371e63aea6ca33af8",
+                "mount_point": "/run/kata-containers/shared/containers/431c46d78f6783655b2fa2d98dd22805a59d412cf9d5955b33bf1ec7209ad497",
                 "fs_group": {
                     "group_id": 0,
                     "group_change_policy": 0
