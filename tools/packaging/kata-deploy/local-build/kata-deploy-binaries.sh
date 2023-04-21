@@ -89,6 +89,7 @@ options:
 	nydus
 	ovmf-sev
 	qemu
+	qemu-snp-experimental
 	qemu-tdx-experimental
 	rootfs-image
 	rootfs-initrd
@@ -362,6 +363,17 @@ install_qemu_tdx_experimental() {
 		"${qemu_experimental_builder}"
 }
 
+install_qemu_snp_experimental() {
+	export qemu_suffix="snp-experimental"
+	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
+
+	install_qemu_helper \
+		"assets.hypervisor.qemu-${qemu_suffix}.url" \
+		"assets.hypervisor.qemu-${qemu_suffix}.tag" \
+		"qemu-${qemu_suffix}" \
+		"${qemu_experimental_builder}"
+}
+
 # Install static firecracker asset
 install_firecracker() {
 	install_cached_tarball_component \
@@ -522,6 +534,7 @@ handle_build() {
 		install_nydus
 		install_ovmf_sev
 		install_qemu
+		install_qemu_snp_experimental
 		install_qemu_tdx_experimental
 		install_shimv2
 		install_tdvf
@@ -553,6 +566,8 @@ handle_build() {
 	kernel-gpu-tdx-experimental) install_kernel_gpu_tdx_experimental;;
 
 	qemu) install_qemu ;;
+
+	qemu-snp-experimental) install_qemu_snp_experimental ;;
 
 	qemu-tdx-experimental) install_qemu_tdx_experimental ;;
 

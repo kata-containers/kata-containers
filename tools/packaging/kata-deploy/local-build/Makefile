@@ -31,6 +31,7 @@ all: serial-targets \
 	kernel-gpu-tdx-experimental-tarball \
 	nydus-tarball \
 	ovmf-sev-tarball \
+	qemu-snp-experimental-tarball \
 	qemu-tarball \
 	qemu-tdx-experimental-tarball \
 	shim-v2-tarball \
@@ -81,6 +82,9 @@ nydus-tarball:
 	${MAKE} $@-build
 
 ovmf-sev-tarball:
+	${MAKE} $@-build
+
+qemu-snp-experimental-tarball:
 	${MAKE} $@-build
 
 qemu-tarball:
