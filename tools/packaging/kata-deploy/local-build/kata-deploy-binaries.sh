@@ -87,6 +87,7 @@ options:
 	kernel-gpu-snp
 	kernel-gpu-tdx-experimental
 	nydus
+	ovmf
 	ovmf-sev
 	qemu
 	qemu-snp-experimental
@@ -532,6 +533,7 @@ handle_build() {
 		install_kernel_dragonball_experimental
 		install_kernel_tdx_experimental
 		install_nydus
+		install_ovmf
 		install_ovmf_sev
 		install_qemu
 		install_qemu_snp_experimental
@@ -547,8 +549,6 @@ handle_build() {
 
 	kernel) install_kernel ;;
 
-	nydus) install_nydus ;;
-
 	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
 
 	kernel-experimental) install_kernel_experimental ;;
@@ -557,13 +557,17 @@ handle_build() {
 
 	kernel-sev) install_kernel_sev ;;
 
-	ovmf-sev) install_ovmf_sev ;;
-
 	kernel-gpu) install_kernel_gpu ;;
 
 	kernel-gpu-snp) install_kernel_gpu_snp;;
 
 	kernel-gpu-tdx-experimental) install_kernel_gpu_tdx_experimental;;
+
+	nydus) install_nydus ;;
+
+	ovmf) install_ovmf ;;
+
+	ovmf-sev) install_ovmf_sev ;;
 
 	qemu) install_qemu ;;
 
