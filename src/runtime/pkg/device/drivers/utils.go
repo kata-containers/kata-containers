@@ -156,8 +156,10 @@ func checkIgnorePCIClass(pciClass string, deviceBDF string, bitmask uint64) (boo
 }
 
 // GetAllVFIODevicesFromIOMMUGroup returns all the VFIO devices in the IOMMU group
-// We can reuse this function at various leverls, sandbox, container.
-func GetAllVFIODevicesFromIOMMUGroup(device *config.DeviceInfo) ([]*config.VFIODev, error) {
+// We can reuse this function at various levels, sandbox, container.
+// Only the VFIO module is allowed to do bus assignments, all other modules need to
+// ignore it if used as helper function to get VFIO information.
+func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo, ignoreBusAssignment bool) ([]*config.VFIODev, error) {
 
 	vfioDevs := []*config.VFIODev{}
 
@@ -204,7 +206,7 @@ func GetAllVFIODevicesFromIOMMUGroup(device *config.DeviceInfo) ([]*config.VFIOD
 				IsPCIe:   isPCIe,
 				Class:    pciClass,
 			}
-			if isPCIe {
+			if isPCIe && !ignoreBusAssignment {
 				vfioPCI.Bus = fmt.Sprintf("%s%d", pcieRootPortPrefix, len(AllPCIeDevs))
 				AllPCIeDevs[deviceBDF] = true
 			}
