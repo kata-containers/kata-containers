@@ -28,6 +28,7 @@ jobs:
           - nydus
           - ovmf-sev
           - qemu
+          - qemu-snp-experimental
           - qemu-tdx-experimental
           - rootfs-image
           - rootfs-initrd
