@@ -21,16 +21,43 @@ mod arch_specific {
     const CPUINFO_FLAGS_TAG: &str = "flags";
     const CPU_FLAGS_INTEL: &[&str] = &["lm", "sse4_1", "vmx"];
     const CPU_ATTRIBS_INTEL: &[&str] = &["GenuineIntel"];
+    const VMM_FLAGS: &[&str] = &["hypervisor"];
+
     pub const ARCH_CPU_VENDOR_FIELD: &str = check::GENERIC_CPU_VENDOR_FIELD;
     pub const ARCH_CPU_MODEL_FIELD: &str = check::GENERIC_CPU_MODEL_FIELD;
 
     // List of check functions
-    static CHECK_LIST: &[CheckItem] = &[CheckItem {
-        name: CheckType::CheckCpu,
-        descr: "This parameter performs the cpu check",
-        fp: check_cpu,
-        perm: PermissionType::NonPrivileged,
-    }];
+    static CHECK_LIST: &[CheckItem] = &[
+        CheckItem {
+            name: CheckType::Cpu,
+            descr: "This parameter performs the cpu check",
+            fp: check_cpu,
+            perm: PermissionType::NonPrivileged,
+        },
+        CheckItem {
+            name: CheckType::KernelModules,
+            descr: "This parameter performs the kvm check",
+            fp: check_kernel_modules,
+            perm: PermissionType::NonPrivileged,
+        },
+    ];
+
+    static MODULE_LIST: &[KernelModule] = &[
+        KernelModule {
+            name: "kvm",
+            parameter: KernelParam {
+                name: "kvmclock_periodic_sync",
+                value: KernelParamType::Simple("Y"),
+            },
+        },
+        KernelModule {
+            name: "kvm_intel",
+            parameter: KernelParam {
+                name: "unrestricted_guest",
+                value: KernelParamType::Predicate(unrestricted_guest_param_check),
+            },
+        },
+    ];
 
     pub fn get_checks() -> Option<&'static [CheckItem<'static>]> {
         Some(CHECK_LIST)
@@ -140,6 +167,120 @@ mod arch_specific {
         }
 
         Ok(GuestProtection::NoProtection)
+    }
+
+    fn running_on_vmm() -> Result<bool> {
+        match check::get_single_cpu_info(check::PROC_CPUINFO, CPUINFO_DELIMITER) {
+            Ok(cpu_info) => {
+                // check if the 'hypervisor' flag exist in the cpu features
+                let missing_hypervisor_flag = check::check_cpu_attribs(&cpu_info, VMM_FLAGS)?;
+
+                if missing_hypervisor_flag.is_empty() {
+                    return Ok(true);
+                }
+            }
+            Err(e) => {
+                return Err(anyhow!(
+                    "Unable to determine if the OS is running on a VM: {}: {}",
+                    e,
+                    check::PROC_CPUINFO
+                ));
+            }
+        }
+
+        Ok(false)
+    }
+
+    // check the host kernel parameter value is valid
+    // and check if we are running inside a VMM
+    fn unrestricted_guest_param_check(
+        module: &str,
+        param_name: &str,
+        param_value_host: &str,
+    ) -> Result<()> {
+        let expected_param_value: char = 'Y';
+
+        let running_on_vmm_alt = running_on_vmm()?;
+
+        if running_on_vmm_alt {
+            let msg = format!("You are running in a VM, where the kernel module '{}' parameter '{:}' has a value '{:}'. This causes conflict when running kata.",
+                module,
+                param_name,
+                param_value_host
+            );
+            return Err(anyhow!(msg));
+        }
+
+        if param_value_host == expected_param_value.to_string() {
+            Ok(())
+        } else {
+            let error_msg = format!(
+                "Kernel Module: '{:}' parameter '{:}' should have value '{:}', but found '{:}.'.",
+                module, param_name, expected_param_value, param_value_host
+            );
+
+            let action_msg = format!("Remove the '{:}' module using `rmmod` and then reload using `modprobe`, setting '{:}={:}'",
+                module,
+                param_name,
+                expected_param_value
+            );
+
+            return Err(anyhow!("{} {}", error_msg, action_msg));
+        }
+    }
+
+    fn check_kernel_param(
+        module: &str,
+        param_name: &str,
+        param_value_host: &str,
+        param_type: KernelParamType,
+    ) -> Result<()> {
+        match param_type {
+            KernelParamType::Simple(param_value_req) => {
+                if param_value_host != param_value_req {
+                    return Err(anyhow!(
+                        "Kernel module '{}': parameter '{}' should have value '{}', but found '{}'",
+                        module,
+                        param_name,
+                        param_value_req,
+                        param_value_host
+                    ));
+                }
+                Ok(())
+            }
+            KernelParamType::Predicate(pred_func) => {
+                pred_func(module, param_name, param_value_host)
+            }
+        }
+    }
+
+    fn check_kernel_modules(_args: &str) -> Result<()> {
+        println!("INFO: check kernel modules for: x86_64");
+
+        for module in MODULE_LIST {
+            let module_loaded =
+                check::check_kernel_module_loaded(module.name, module.parameter.name);
+
+            match module_loaded {
+                Ok(param_value_host) => {
+                    let parameter_check = check_kernel_param(
+                        module.name,
+                        module.parameter.name,
+                        &param_value_host,
+                        module.parameter.value.clone(),
+                    );
+
+                    match parameter_check {
+                        Ok(_v) => println!("{} Ok", module.name),
+                        Err(e) => return Err(e),
+                    }
+                }
+                Err(err) => {
+                    eprintln!("WARNING {:}", err.replace('\n', ""))
+                }
+            }
+        }
+        Ok(())
     }
 }
 

@@ -20,7 +20,7 @@ mod arch_specific {
 
     // List of check functions
     static CHECK_LIST: &[CheckItem] = &[CheckItem {
-        name: CheckType::CheckCpu,
+        name: CheckType::Cpu,
         descr: "This parameter performs the host check",
         fp: check,
         perm: PermissionType::NonPrivileged,
