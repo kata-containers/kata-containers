@@ -59,6 +59,7 @@ cache_nydus_artifacts() {
 cache_ovmf_artifacts() {
 	local current_ovmf_version="$(get_from_kata_deps "externals.ovmf.${OVMF_FLAVOUR}.version")"
 	[ "${OVMF_FLAVOUR}" == "tdx" ] && OVMF_FLAVOUR="tdvf"
+	[ "${OVMF_FLAVOUR}" == "sev" ] && OVMF_FLAVOUR="ovmf-sev"
 	local ovmf_tarball_name="kata-static-${OVMF_FLAVOUR}.tar.xz"
 	local current_ovmf_image="$(get_ovmf_image_name)"
 	create_cache_asset "${ovmf_tarball_name}" "${current_ovmf_version}" "${current_ovmf_image}"
