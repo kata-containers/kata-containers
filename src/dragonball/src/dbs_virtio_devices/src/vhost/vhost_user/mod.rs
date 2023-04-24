@@ -6,3 +6,6 @@
 use super::VhostError;
 
 pub mod connection;
+
+#[cfg(test)]
+mod test_utils;
