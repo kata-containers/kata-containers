@@ -135,3 +135,35 @@ func TestSignalBacktrace(t *testing.T) {
 	assert.True(strings.Contains(b, "contention:"))
 	assert.True(strings.Contains(b, `level=error`))
 }
+
+func TestSignalHandlePanic(t *testing.T) {
+    assert := assert.New(t)
+
+    savedLog := signalLog
+    defer func() {
+        signalLog = savedLog
+    }()
+
+    signalLog = logrus.WithFields(logrus.Fields{
+		"name":        "name",
+		"pid":         os.Getpid(),
+		"source":      "throttler",
+		"test-logger": true})
+
+    // create buffer to save logger output
+	buf := &bytes.Buffer{}
+
+    savedOut := signalLog.Logger.Out
+	defer func() {
+		signalLog.Logger.Out = savedOut
+	}()
+
+    // capture output to buffer
+	signalLog.Logger.Out = buf
+
+    HandlePanic(nil)
+
+    b := buf.String()
+
+    assert.True(len(b) == 0)
+}
