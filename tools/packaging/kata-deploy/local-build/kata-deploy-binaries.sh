@@ -188,6 +188,39 @@ install_initrd_sev() {
 	install_initrd "initrd-sev" "sev"
 }
 
+#Install kernel component helper
+install_cached_kernel_tarball_component() {
+	local kernel_name=${1}
+
+	install_cached_tarball_component \
+		"${kernel_name}" \
+		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
+		"${kernel_version}-${kernel_kata_config_version}" \
+		"$(get_kernel_image_name)" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		|| return 1
+	
+	if [[ "${kernel_name}" != "kernel-sev" ]]; then
+		return 0
+	fi
+
+	# SEV specific code path
+	install_cached_tarball_component \
+		"${kernel_name}" \
+		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
+		"${kernel_version}-${kernel_kata_config_version}" \
+		"$(get_kernel_image_name)" \
+		"kata-static-kernel-sev-modules.tar.xz" \
+		"${workdir}/kata-static-kernel-sev-modules.tar.xz" \
+		|| return 1
+
+	mkdir -p "${module_dir}"
+	tar xvf "${workdir}/kata-static-kernel-sev-modules.tar.xz" -C  "${module_dir}" && return 0
+
+	return 1
+}
+
 #Install kernel asset
 install_kernel_helper() {
 	local kernel_version_yaml_path="${1}"
@@ -199,7 +232,9 @@ install_kernel_helper() {
 	local module_dir=""
 
 	if [[ "${kernel_name}" == "kernel-sev" ]]; then
-		job_name="kata-containers-main-${kernel_name}-sev-$(uname -m)"
+		kernel_version="$(get_from_kata_deps assets.kernel.sev.version)"
+		default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
+		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kernel-sev/builddir/kata-linux-${kernel_version#v}-${kernel_kata_config_version}/lib/modules/${kernel_version#v}"
 	fi
 
 	install_cached_kernel_tarball_component ${kernel_name} ${module_dir} && return 0
