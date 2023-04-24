@@ -773,3 +773,201 @@ where
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
+
+    use dbs_device::resources::DeviceResources;
+    use dbs_interrupt::{InterruptManager, InterruptSourceType, MsiNotifier, NoopNotifier};
+    use dbs_utils::epoll_manager::EpollManager;
+    use kvm_ioctls::Kvm;
+    use vhost_rs::vhost_user::message::{
+        VhostUserProtocolFeatures, VhostUserU64, VhostUserVirtioFeatures,
+    };
+    use vhost_rs::vhost_user::Listener;
+    use virtio_queue::QueueSync;
+    use vm_memory::{FileOffset, GuestMemoryMmap, GuestRegionMmap};
+    use vmm_sys_util::tempfile::TempFile;
+
+    use crate::device::VirtioDevice;
+    use crate::vhost::vhost_user::fs::VhostUserFs;
+    use crate::vhost::vhost_user::test_utils::*;
+    use crate::{GuestAddress, VirtioDeviceConfig, VirtioQueueConfig, TYPE_VIRTIO_FS};
+
+    pub(crate) const GUEST_PHYS_END: u64 = (1 << 46) - 1;
+    pub(crate) const GUEST_MEM_START: u64 = 0;
+    pub(crate) const GUEST_MEM_END: u64 = GUEST_PHYS_END >> 1;
+
+    fn create_vhost_user_fs_slave(slave: &mut Endpoint<MasterReq>) {
+        let (hdr, rfds) = slave.recv_header().unwrap();
+        assert_eq!(hdr.get_code(), MasterReq::GET_FEATURES);
+        assert!(rfds.is_none());
+        let vfeatures = 0x15 | VhostUserVirtioFeatures::PROTOCOL_FEATURES.bits();
+        let hdr = VhostUserMsgHeader::new(MasterReq::GET_FEATURES, 0x4, 8);
+        let msg = VhostUserU64::new(vfeatures);
+        slave.send_message(&hdr, &msg, None).unwrap();
+    }
+
+    #[test]
+    fn test_vhost_user_fs_virtio_device_normal() {
+        let device_socket = "/var/tmp/vhost.1";
+        let tag = "test_fs";
+
+        let handler = thread::spawn(move || {
+            let listener = Listener::new(device_socket, true).unwrap();
+            let mut slave = Endpoint::<MasterReq>::from_stream(listener.accept().unwrap().unwrap());
+            create_vhost_user_fs_slave(&mut slave);
+        });
+
+        thread::sleep(Duration::from_millis(20));
+
+        let epoll_mgr = EpollManager::default();
+
+        let mut dev: VhostUserFs<Arc<GuestMemoryMmap>> = VhostUserFs::new(
+            String::from(device_socket),
+            String::from(tag),
+            2,
+            2,
+            2,
+            epoll_mgr,
+        )
+        .unwrap();
+
+        assert_eq!(
+            VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::device_type(&dev),
+            TYPE_VIRTIO_FS
+        );
+
+        let queue_size = vec![2, 2, 2];
+        assert_eq!(
+            VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
+                &dev
+            ),
+            &queue_size[..]
+        );
+        assert_eq!(
+            VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::get_avail_features(&dev, 0),
+            dev.device().device_info.get_avail_features(0)
+        );
+        assert_eq!(
+            VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::get_avail_features(&dev, 1),
+            dev.device().device_info.get_avail_features(1)
+        );
+        assert_eq!(
+            VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::get_avail_features(&dev, 2),
+            dev.device().device_info.get_avail_features(2)
+        );
+        VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::set_acked_features(
+            &mut dev, 2, 0,
+        );
+        assert_eq!(
+            VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::get_avail_features(&dev, 2),
+            0
+        );
+        let config: [u8; 8] = [0; 8];
+        VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::write_config(
+            &mut dev, 0, &config,
+        );
+        let mut data: [u8; 8] = [1; 8];
+        VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::read_config(
+            &mut dev, 0, &mut data,
+        );
+        assert_eq!(config, data);
+
+        handler.join().unwrap();
+    }
+
+    #[test]
+    fn test_vhost_user_fs_virtio_device_activate() {
+        let device_socket = "/var/tmp/vhost.1";
+        let tag = "test_fs";
+
+        let handler = thread::spawn(move || {
+            let listener = Listener::new(device_socket, true).unwrap();
+            let mut slave = Endpoint::<MasterReq>::from_stream(listener.accept().unwrap().unwrap());
+            create_vhost_user_fs_slave(&mut slave);
+
+            let pfeatures = VhostUserProtocolFeatures::CONFIG;
+            negotiate_slave(&mut slave, pfeatures, false, 3);
+        });
+
+        thread::sleep(Duration::from_millis(20));
+
+        let epoll_mgr = EpollManager::default();
+        let mut dev: VhostUserFs<Arc<GuestMemoryMmap>> = VhostUserFs::new(
+            String::from(device_socket),
+            String::from(tag),
+            2,
+            2,
+            2,
+            epoll_mgr,
+        )
+        .unwrap();
+
+        // invalid queue size
+        {
+            let kvm = Kvm::new().unwrap();
+            let vm_fd = Arc::new(kvm.create_vm().unwrap());
+            let mem = GuestMemoryMmap::from_ranges(&[(GuestAddress(0), 0x10000)]).unwrap();
+            let resources = DeviceResources::new();
+            let queues = vec![VirtioQueueConfig::<QueueSync>::create(128, 0).unwrap()];
+            let config = VirtioDeviceConfig::new(
+                Arc::new(mem),
+                vm_fd,
+                resources,
+                queues,
+                None,
+                Arc::new(NoopNotifier::new()),
+            );
+            assert!(dev.activate(config).is_err());
+        }
+
+        // success
+        {
+            let kvm = Kvm::new().unwrap();
+            let vm_fd = Arc::new(kvm.create_vm().unwrap());
+
+            let (_vmfd, irq_manager) = crate::tests::create_vm_and_irq_manager();
+            let group = irq_manager
+                .create_group(InterruptSourceType::MsiIrq, 0, 3)
+                .unwrap();
+
+            let notifier = MsiNotifier::new(group.clone(), 1);
+            let notifier2 = MsiNotifier::new(group.clone(), 1);
+            let notifier3 = MsiNotifier::new(group.clone(), 1);
+            let mut queues = vec![
+                VirtioQueueConfig::<QueueSync>::create(128, 0).unwrap(),
+                VirtioQueueConfig::<QueueSync>::create(128, 0).unwrap(),
+                VirtioQueueConfig::<QueueSync>::create(128, 0).unwrap(),
+            ];
+            queues[0].set_interrupt_notifier(Arc::new(notifier));
+            queues[1].set_interrupt_notifier(Arc::new(notifier2));
+            queues[2].set_interrupt_notifier(Arc::new(notifier3));
+
+            let f = TempFile::new().unwrap().into_file();
+            f.set_len(0x400).unwrap();
+            let mem = GuestMemoryMmap::from_ranges_with_files(&[(
+                GuestAddress(0),
+                0x400,
+                Some(FileOffset::new(f, 0)),
+            )])
+            .unwrap();
+            let resources = DeviceResources::new();
+            let config = VirtioDeviceConfig::new(
+                Arc::new(mem),
+                vm_fd,
+                resources,
+                queues,
+                None,
+                Arc::new(NoopNotifier::new()),
+            );
+
+            dev.activate(config).unwrap();
+        }
+
+        handler.join().unwrap();
+    }
+}
