@@ -53,12 +53,30 @@ pub struct ImageService {
 }
 
 impl ImageService {
-    pub fn new(sandbox: Arc<Mutex<Sandbox>>) -> Self {
+    pub async fn new(sandbox: Arc<Mutex<Sandbox>>) -> Self {
         env::set_var("CC_IMAGE_WORK_DIR", KATA_CC_IMAGE_WORK_DIR);
+        let mut image_client = ImageClient::default();
+
+        let image_policy_file = &AGENT_CONFIG.read().await.image_policy_file;
+        if !image_policy_file.is_empty() {
+            image_client.config.file_paths.sigstore_config = image_policy_file.clone();
+        }
+
+        let simple_signing_sigstore_config =
+            &AGENT_CONFIG.read().await.simple_signing_sigstore_config;
+        if !simple_signing_sigstore_config.is_empty() {
+            image_client.config.file_paths.sigstore_config = simple_signing_sigstore_config.clone();
+        }
+
+        let image_registry_auth_file = &AGENT_CONFIG.read().await.image_registry_auth_file;
+        if !image_registry_auth_file.is_empty() {
+            image_client.config.file_paths.auth_file = image_registry_auth_file.clone();
+        }
+
         Self {
             sandbox,
             attestation_agent_started: AtomicBool::new(false),
-            image_client: Arc::new(Mutex::new(ImageClient::default())),
+            image_client: Arc::new(Mutex::new(image_client)),
             container_count: Arc::new(AtomicU16::new(0)),
         }
     }
@@ -333,7 +351,7 @@ mod tests {
 
         let logger = slog::Logger::root(slog::Discard, o!());
         let s = Sandbox::new(&logger).unwrap();
-        let image_service = ImageService::new(Arc::new(Mutex::new(s)));
+        let image_service = ImageService::new(Arc::new(Mutex::new(s))).await;
         for case in &cases {
             let mut req = image::PullImageRequest::new();
             req.set_image(case.image.to_string());
