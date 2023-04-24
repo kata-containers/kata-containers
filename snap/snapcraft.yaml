@@ -63,6 +63,9 @@ parts:
       echo "Adding $USER into docker group"
       sudo -E gpasswd -a $USER docker
       echo "Starting docker"
+      # docker may fail to start using "fd://" in docker.service
+      sudo sed -i 's/fd:\/\//unix:\/\//g' /lib/systemd/system/docker.service
+      sudo systemctl daemon-reload
       sudo -E systemctl start docker || true
 
   image:
