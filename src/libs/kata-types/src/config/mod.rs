@@ -127,6 +127,14 @@ impl TomlConfig {
         result
     }
 
+    /// Load raw Kata configuration information from default configuration file.
+    ///
+    /// Configuration file is probed according to the default configuration file list
+    /// default::DEFAULT_RUNTIME_CONFIGURATIONS.
+    pub fn load_from_default() -> Result<(TomlConfig, PathBuf)> {
+        Self::load_raw_from_file("")
+    }
+
     /// Load raw Kata configuration information from configuration files.
     ///
     /// If `config_file` is valid, it will used, otherwise a built-in default path list will be
