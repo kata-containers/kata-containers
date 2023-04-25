@@ -449,7 +449,7 @@ pub fn handle_env(env_args: EnvArgument) -> Result<()> {
         Box::new(io::stdout())
     };
 
-    let (toml_config, _) = TomlConfig::load_raw_from_file("").context("load toml config")?;
+    let (toml_config, _) = TomlConfig::load_from_default().context("load toml config")?;
 
     let env_info = get_env_info(&toml_config)?;
 
