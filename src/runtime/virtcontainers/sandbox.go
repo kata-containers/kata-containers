@@ -639,11 +639,6 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 			}
 		}
 	}
-	// If we have a confidential guest, we need to add a specific
-	// firmware configuration to the hypervisor. We cannot do it here at
-	// the sandbox level we need to do that at the hypervisor level, capturing
-	// the devices here and processing in CreateVM().
-	sandboxConfig.HypervisorConfig.VFIODevices = devs
 
 	// store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
