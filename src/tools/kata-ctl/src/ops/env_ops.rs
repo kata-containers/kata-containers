@@ -14,6 +14,8 @@ use kata_types::config::TomlConfig;
 
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::{self, Write};
 use std::process::Command;
 use sys_info;
 
@@ -439,16 +441,24 @@ pub fn get_env_info(toml_config: &TomlConfig) -> Result<EnvInfo> {
 }
 
 pub fn handle_env(env_args: EnvArgument) -> Result<()> {
+    let mut file: Box<dyn Write> = if let Some(path) = env_args.file {
+        Box::new(
+            File::create(path.as_str()).with_context(|| format!("Error creating file {}", path))?,
+        )
+    } else {
+        Box::new(io::stdout())
+    };
+
     let (toml_config, _) = TomlConfig::load_raw_from_file("").context("load toml config")?;
 
     let env_info = get_env_info(&toml_config)?;
 
     if env_args.json {
         let serialized_json = serde_json::to_string_pretty(&env_info)?;
-        println!("{}", serialized_json);
+        write!(file, "{}", serialized_json)?;
     } else {
         let toml = toml::to_string(&env_info)?;
-        println!("{}", toml);
+        write!(file, "{}", toml)?;
     }
 
     Ok(())
