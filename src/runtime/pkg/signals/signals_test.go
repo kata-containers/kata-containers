@@ -14,6 +14,8 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"os/exec"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -137,33 +139,66 @@ func TestSignalBacktrace(t *testing.T) {
 }
 
 func TestSignalHandlePanic(t *testing.T) {
-    assert := assert.New(t)
+	assert := assert.New(t)
 
-    savedLog := signalLog
-    defer func() {
-        signalLog = savedLog
-    }()
+	savedLog := signalLog
+	defer func() {
+		signalLog = savedLog
+	}()
 
-    signalLog = logrus.WithFields(logrus.Fields{
+	signalLog = logrus.WithFields(logrus.Fields{
 		"name":        "name",
 		"pid":         os.Getpid(),
 		"source":      "throttler",
 		"test-logger": true})
 
-    // create buffer to save logger output
+	// create buffer to save logger output
 	buf := &bytes.Buffer{}
 
-    savedOut := signalLog.Logger.Out
+	savedOut := signalLog.Logger.Out
 	defer func() {
 		signalLog.Logger.Out = savedOut
 	}()
 
-    // capture output to buffer
+	// capture output to buffer
 	signalLog.Logger.Out = buf
 
-    HandlePanic(nil)
+	HandlePanic(nil)
 
-    b := buf.String()
+	b := buf.String()
+	assert.True(len(b) == 0)
+}
 
-    assert.True(len(b) == 0)
+func TestSignalHandlePanicWithError(t *testing.T) {
+	assert := assert.New(t)
+
+	if os.Getenv("CALL_EXIT") != "1" {
+		cmd := exec.Command(os.Args[0], "-test.run=TestSignalHandlePanicWithError")
+		cmd.Env = append(os.Environ(), "CALL_EXIT=1")
+
+		err := cmd.Run()
+		assert.True(err != nil)
+
+		exitError, ok := err.(*exec.ExitError)
+		assert.True(ok)
+		assert.True(exitError.ExitCode() == 1)
+
+		return
+	}
+
+	signalLog = logrus.WithFields(logrus.Fields{
+		"name":        "name",
+		"pid":         os.Getpid(),
+		"source":      "throttler",
+		"test-logger": true})
+
+	// create buffer to save logger output
+	buf := &bytes.Buffer{}
+
+	// capture output to buffer
+	signalLog.Logger.Out = buf
+
+	dieCallBack := func(){}
+	defer HandlePanic(dieCallBack)
+	panic(fmt.Sprintf("test-panic"))
 }
