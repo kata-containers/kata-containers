@@ -76,24 +76,10 @@ func TestQemuKernelParameters(t *testing.T) {
 }
 
 func TestQemuCreateVM(t *testing.T) {
-	qemuConfig := newQemuConfig()
 	assert := assert.New(t)
 
 	store, err := persist.GetDriver()
 	assert.NoError(err)
-	q := &qemu{
-		config: HypervisorConfig{
-			VMStorePath:  store.RunVMStoragePath(),
-			RunStorePath: store.RunStoragePath(),
-		},
-	}
-	sandbox := &Sandbox{
-		ctx: context.Background(),
-		id:  "testSandbox",
-		config: &SandboxConfig{
-			HypervisorConfig: qemuConfig,
-		},
-	}
 
 	// Create the hypervisor fake binary
 	testQemuPath := filepath.Join(testDir, testHypervisor)
@@ -101,15 +87,142 @@ func TestQemuCreateVM(t *testing.T) {
 	assert.NoError(err)
 
 	// Create parent dir path for hypervisor.json
-	parentDir := filepath.Join(store.RunStoragePath(), sandbox.id)
+	parentDir := filepath.Join(store.RunStoragePath(), "testSandbox")
 	assert.NoError(os.MkdirAll(parentDir, DirMode))
 
 	network, err := NewNetwork()
 	assert.NoError(err)
-	err = q.CreateVM(context.Background(), sandbox.id, network, &sandbox.config.HypervisorConfig)
-	assert.NoError(err)
+
+	config0 := newQemuConfig()
+
+	config1 := newQemuConfig()
+	config1.SeccompSandbox = "enable=1"
+
+	config2 := newQemuConfig()
+	config2.InitrdPath = ""
+	config2.ImagePath = testQemuImagePath
+
+	config3 := newQemuConfig()
+	config3.Debug = true
+
+	config5 := newQemuConfig()
+	config5.GuestMemoryDumpPath = "/tmp"
+
+	config6 := newQemuConfig()
+	config6.DisableGuestSeLinux = false
+
+	config7 := newQemuConfig()
+	config7.PCIeRootPort = 1
+
+	config8 := newQemuConfig()
+	config8.EnableVhostUserStore = true
+	config8.HugePages = true
+
+	config9 := newQemuConfig()
+	config9.EnableVhostUserStore = true
+	config9.HugePages = false
+
+	config10 := newQemuConfig()
+	config10.BootToBeTemplate = true
+
+	config11 := newQemuConfig()
+	config11.BootFromTemplate = true
+
+	config12 := newQemuConfig()
+	config12.BootToBeTemplate = true
+	config12.SharedFS = config.VirtioFS
+
+	config13 := newQemuConfig()
+	config13.FileBackedMemRootDir = "/tmp/xyzabc"
+	config13.HugePages = true
+
+	config14 := newQemuConfig()
+	config14.SharedFS = config.VirtioFS
+
+	config15 := newQemuConfig()
+	config15.BlockDeviceDriver = ""
+
+	config16 := newQemuConfig()
+	config16.SharedFS = config.VirtioFSNydus
+
+	config17 := newQemuConfig()
+	config17.VMid = "testSandbox"
+
+	type testData struct {
+		config      HypervisorConfig
+		expectError bool
+		configMatch bool
+	}
+
+	data := []testData{
+		{config0, false, true},
+		{config1, false, true},
+		{config2, false, true},
+		{config3, false, true},
+		{config5, false, true},
+		{config6, false, false},
+		{config7, false, true},
+		{config8, false, true},
+		{config9, true, false},
+		{config10, false, true},
+		{config11, false, true},
+		{config12, true, false},
+		{config13, false, true},
+		{config14, false, true},
+		{config15, false, true},
+		{config16, false, true},
+		{config17, false, true},
+	}
+
+	for i, d := range data {
+		msg := fmt.Sprintf("test[%d]", i)
+
+		q := &qemu{
+			config: HypervisorConfig{
+				VMStorePath:  store.RunVMStoragePath(),
+				RunStorePath: store.RunStoragePath(),
+			},
+		}
+
+		err = q.CreateVM(context.Background(), "testSandbox", network, &d.config)
+
+		if d.expectError {
+			assert.Error(err, msg)
+			continue
+		}
+
+		assert.NoError(err, msg)
+
+		if d.configMatch {
+			assert.Exactly(d.config, q.config, msg)
+		}
+
+		mem := q.GetTotalMemoryMB(context.Background())
+		assert.True(mem > 0)
+
+		err = q.canDumpGuestMemory("/tmp")
+		assert.NoError(err)
+
+		err = q.dumpGuestMemory("")
+		assert.NoError(err)
+
+		q.dumpSandboxMetaInfo("/tmp/")
+
+		// now we exercise code that should fail since the VM isn't running
+		err = q.dumpGuestMemory("/tmp")
+		assert.Error(err)
+
+		err = q.setupVirtioMem(context.Background())
+		assert.Error(err)
+
+		err = q.SaveVM()
+		assert.Error(err)
+
+		err = q.StopVM(context.Background(), true)
+		assert.Error(err)
+	}
+
 	assert.NoError(os.RemoveAll(parentDir))
-	assert.Exactly(qemuConfig, q.config)
 }
 
 func TestQemuCreateVMMissingParentDirFail(t *testing.T) {
@@ -635,4 +748,28 @@ func TestQemuSetConfig(t *testing.T) {
 	assert.NoError(err)
 
 	assert.Equal(q.config, config)
+}
+
+func TestQemuStartSandbox(t *testing.T) {
+	assert := assert.New(t)
+
+	sandbox, err := createQemuSandboxConfig()
+	assert.NoError(err)
+
+	network, err := NewNetwork()
+	assert.NoError(err)
+
+	q := &qemu{
+		config: HypervisorConfig{
+			VMStorePath:  sandbox.store.RunVMStoragePath(),
+			RunStorePath: sandbox.store.RunStoragePath(),
+		},
+		virtiofsDaemon: &virtiofsdMock{},
+	}
+
+	err = q.CreateVM(context.Background(), sandbox.id, network, &sandbox.config.HypervisorConfig)
+	assert.NoError(err)
+
+	err = q.StartVM(context.Background(), 10)
+	assert.Error(err)
 }
