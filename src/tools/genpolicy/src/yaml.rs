@@ -227,21 +227,26 @@ pub struct Port {
 }
 
 impl Yaml {
-    pub fn new(yaml_file: &str) -> Result<Self> {
-        info!("Loading yaml file...");
-        let f = File::open(yaml_file)?;
-        let mut yaml: Yaml = serde_yaml::from_reader(f)?;
-        info!("\nRead from {:?} => {:#?}", yaml_file, yaml);
+    pub fn new(yaml_file: &Option<String>) -> Result<Self> {
+        info!("Reading YAML...");
 
-        if yaml.is_deployment() {
-            if let Some(template) = &mut yaml.spec.template {
+        let mut yaml_data: Yaml = if let Some(yaml) = yaml_file {
+            serde_yaml::from_reader(File::open(yaml)?)?
+        } else {
+            serde_yaml::from_reader(std::io::stdin())?
+        };
+
+        info!("\nRead YAML => {:#?}", yaml_data);
+
+        if yaml_data.is_deployment() {
+            if let Some(template) = &mut yaml_data.spec.template {
                 Self::add_pause_container(&mut template.spec.containers);
             }
         } else {
-            Self::add_pause_container(&mut yaml.spec.containers);
+            Self::add_pause_container(&mut yaml_data.spec.containers);
         }
 
-        Ok(yaml)
+        Ok(yaml_data)
     }
 
     pub fn is_deployment(&self) -> bool {
@@ -268,10 +273,10 @@ impl Yaml {
         &self,
         json_data: &str,
         rules_input_file: &str,
-        yaml_file: &str,
-        output_policy_file: Option<String>,
+        yaml_file: &Option<String>,
+        output_policy_file: &Option<String>,
     ) -> Result<()> {
-        info!("Adding policy to {:?}", yaml_file);
+        info!("Adding policy to YAML");
 
         let mut policy = read_to_string(&rules_input_file)?;
         policy += "\npolicy_data := ";
@@ -283,16 +288,9 @@ impl Yaml {
 
         let encoded_policy = general_purpose::STANDARD.encode(policy.as_bytes());
 
-        let f = std::fs::OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .create(true)
-            .open(yaml_file)
-            .map_err(|e| anyhow!(e))?;
-
-        let mut yaml = self.clone();
-        if yaml.is_deployment() {
-            if let Some(template) = &mut yaml.spec.template {
+        let mut yaml_data = self.clone();
+        if yaml_data.is_deployment() {
+            if let Some(template) = &mut yaml_data.spec.template {
                 template
                     .metadata
                     .annotations
@@ -308,19 +306,33 @@ impl Yaml {
                 return Err(anyhow!("Deployment spec without pod template!"));
             }
         } else {
-            yaml.metadata
+            yaml_data
+                .metadata
                 .annotations
                 .entry("io.katacontainers.config.agent.policy".to_string())
                 .and_modify(|v| *v = encoded_policy.to_string())
                 .or_insert(encoded_policy.to_string());
 
-            if let Some(containers) = &mut yaml.spec.containers {
+            if let Some(containers) = &mut yaml_data.spec.containers {
                 // Remove the pause container before serializing.
                 containers.remove(0);
             }
         }
 
-        serde_yaml::to_writer(f, &yaml)?;
+        if let Some(yaml) = yaml_file {
+            serde_yaml::to_writer(
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .create(true)
+                    .open(yaml)
+                    .map_err(|e| anyhow!(e))?,
+                &yaml_data,
+            )?;
+        } else {
+            serde_yaml::to_writer(std::io::stdout(), &yaml_data)?;
+        }
+
         Ok(())
     }
 }

@@ -10,6 +10,7 @@ use crate::containerd;
 use crate::infra;
 use crate::kata;
 use crate::registry;
+use crate::utils;
 use crate::yaml;
 
 use anyhow::{anyhow, Result};
@@ -20,7 +21,7 @@ use std::collections::BTreeMap;
 pub struct PodPolicy {
     yaml: yaml::Yaml,
 
-    yaml_file: String,
+    yaml_file: Option<String>,
     rules_input_file: String,
 
     infra_policy: infra::InfraPolicy,
@@ -175,24 +176,24 @@ pub struct PersistentVolumeClaimVolume {
 }
 
 impl PodPolicy {
-    pub fn from_files(
-        yaml_file: &str,
-        rules_input_file: &str,
-        infra_data_file: &str,
-    ) -> Result<Self> {
-        let yaml = yaml::Yaml::new(yaml_file)?;
+    pub fn from_files(in_out_files: &utils::InOutFiles) -> Result<Self> {
+        let yaml = yaml::Yaml::new(&in_out_files.yaml_file)?;
+        let infra_policy = infra::InfraPolicy::new(&in_out_files.infra_data_file)?;
 
-        let infra_policy = infra::InfraPolicy::new(infra_data_file)?;
+        let mut yaml_file = None;
+        if let Some(yaml_path) = &in_out_files.yaml_file {
+            yaml_file = Some(yaml_path.to_string());
+        }
 
         Ok(PodPolicy {
-            yaml: yaml,
-            yaml_file: yaml_file.to_string(),
-            rules_input_file: rules_input_file.to_string(),
+            yaml,
+            yaml_file,
+            rules_input_file: in_out_files.rules_file.to_string(),
             infra_policy: infra_policy,
         })
     }
 
-    pub async fn export_policy(&self, output_policy_file: Option<String>) -> Result<()> {
+    pub async fn export_policy(&self, in_out_files: &utils::InOutFiles) -> Result<()> {
         let mut policy_data: PolicyData = Default::default();
 
         if self.yaml.is_deployment() {
@@ -211,7 +212,7 @@ impl PodPolicy {
             &json_data,
             &self.rules_input_file,
             &self.yaml_file,
-            output_policy_file,
+            &in_out_files.output_policy_file,
         )?;
 
         Ok(())
@@ -241,11 +242,8 @@ impl PodPolicy {
         if self.yaml.is_deployment() {
             if let Some(template) = &self.yaml.spec.template {
                 if let Some(containers) = &template.spec.containers {
-                    self.get_pod_container_policy(
-                        container_index,
-                        &containers[container_index],
-                    )
-                    .await
+                    self.get_pod_container_policy(container_index, &containers[container_index])
+                        .await
                 } else {
                     Err(anyhow!("No containers in Deployment pod template!"))
                 }
