@@ -74,6 +74,9 @@ pub struct EnvArgument {
     /// Format output as JSON
     #[arg(long)]
     pub json: bool,
+    /// File to write env output to
+    #[arg(short = 'f', long = "file")]
+    pub file: Option<String>,
 }
 #[derive(Debug, Args)]
 pub struct MetricsCommand {
