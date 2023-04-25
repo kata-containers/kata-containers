@@ -1,77 +1,28 @@
+// Copyright (c) 2022 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
 use clap::{App, Arg, SubCommand};
 use reqwest::{Url};
 use std::{fs, process};
 use shimclient::MgmtClient;
+use ops::check_ops::{handle_iptables};
 
 //kata-proxy management API endpoint, without code would not know the location of the unix sockets
 const DEFAULT_TIMEOUT: u64 = 30;
 const IP_TABLES_SOCKET: &str = "unix:///run/vc/sbs/{sandbox_id}/ip_tables";
 const IP6_TABLES_SOCKET: &str = "unix:///run/vc/sbs/{sandbox_id}/ip6_tables";
 
-//main function for error handeling
-fn main() {
-    if let Err(e) = new_main() {
-        eprintln!("Error: {}", e);
-        process::exit(1);
+fn handle_iptables() -> Result<()> {
+
+    //implement handle_iptables
+    let args = KataCtlCli::parsse();
+    match args.command{
+        Commands::Iptables(args) => handle_iptables(args),
     }
-}
 
-// Define the function signature. It returns `Result<(), Box<dyn std::error::Error>>`,
-// which means it can either return an `Ok(())` value indicating success or an `Err` value
-// containing a boxed error type that implements the `std::error::Error` trait.
-fn new_main() -> Result<(), Box<dyn std::error::Error>> {
-
-    // Define the command line interface using the `clap` library.
-    let matches = App::new("kata-iptables") // Set the name of the program.
-        .about("Get or set iptables within the Kata Containers guest") // Set a description of the program.
-        .subcommand(
-            SubCommand::with_name("get") // Add a subcommand named "get".
-                .about("Get iptables from the Kata Containers guest") // Set a description of the "get" subcommand.
-                .arg(
-                    Arg::with_name("sandbox-id") // Add an argument named "sandbox-id".
-                        .long("sandbox-id") // Set the long-form flag name for this argument.
-                        .value_name("ID") // Set the value name that will be shown in the help message.
-                        .required(true) // Indicate that this argument is required.
-                        .takes_value(true) // Indicate that this argument takes a value.
-                        .help("The target sandbox for getting the iptables"), // Set a description of this argument.
-                )
-                .arg(
-                    Arg::with_name("v6") // Add an argument named "v6".
-                        .long("v6") // Set the long-form flag name for this argument.
-                        .help("Indicate we're requesting ipv6 iptables"), // Set a description of this argument.
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("set") // Add a subcommand named "set".
-                .about("Set iptables in a specific Kata Containers guest based on file") // Set a description of the "set" subcommand.
-                .arg(
-                    Arg::with_name("sandbox-id") // Add an argument named "sandbox-id".
-                        .long("sandbox-id") // Set the long-form flag name for this argument.
-                        .value_name("ID") // Set the value name that will be shown in the help message.
-                        .required(true) // Indicate that this argument is required.
-                        .takes_value(true) // Indicate that this argument takes a value.
-                        .help("The target sandbox for setting the iptables"), // Set a description of this argument.
-                )
-                .arg(
-                    Arg::with_name("v6") // Add an argument named "v6".
-                        .long("v6") // Set the long-form flag name for this argument.
-                        .help("Indicate we're requesting ipv6 iptables"), // Set a description of this argument.
-                )
-                .arg(
-                    Arg::with_name("file") // Add an argument named "file".
-                        .value_name("FILE") // Set the value name that will be shown in the help message.
-                        .required(true) // Indicate that this argument is required.
-                        .takes_value(true) // Indicate that this argument takes a value.
-                        .help("The iptables file to set"), // Set a description of this argument.
-                ),
-        )
-        .get_matches(); // Parse the command line arguments and return a `clap::ArgMatches` struct.
-
-    // Return an `Ok` value indicating success.
-    Ok(())
-}
-
-//checking for subcommand entered form user 
+    //checking for subcommand entered form user 
     match matches.subcommand() {
         ("get", Some(get_matches)) => {
             // retrieve the sandbox ID from the command line arguments
@@ -151,3 +102,61 @@ fn new_main() -> Result<(), Box<dyn std::error::Error>> {
         }
         
     }
+
+}
+// Define the function signature. It returns `Result<(), Box<dyn std::error::Error>>`,
+// which means it can either return an `Ok(())` value indicating success or an `Err` value
+// containing a boxed error type that implements the `std::error::Error` trait.
+fn new_main() -> Result<(), Box<dyn std::error::Error>> {
+    
+
+    // Define the command line interface using the `clap` library.
+    let matches = App::new("kata-iptables") // Set the name of the program.
+        .about("Get or set iptables within the Kata Containers guest") // Set a description of the program.
+        .subcommand(
+            SubCommand::with_name("get") // Add a subcommand named "get".
+                .about("Get iptables from the Kata Containers guest") // Set a description of the "get" subcommand.
+                .arg(
+                    Arg::with_name("sandbox-id") // Add an argument named "sandbox-id".
+                        .long("sandbox-id") // Set the long-form flag name for this argument.
+                        .value_name("ID") // Set the value name that will be shown in the help message.
+                        .required(true) // Indicate that this argument is required.
+                        .takes_value(true) // Indicate that this argument takes a value.
+                        .help("The target sandbox for getting the iptables"), // Set a description of this argument.
+                )
+                .arg(
+                    Arg::with_name("v6") // Add an argument named "v6".
+                        .long("v6") // Set the long-form flag name for this argument.
+                        .help("Indicate we're requesting ipv6 iptables"), // Set a description of this argument.
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("set") // Add a subcommand named "set".
+                .about("Set iptables in a specific Kata Containers guest based on file") // Set a description of the "set" subcommand.
+                .arg(
+                    Arg::with_name("sandbox-id") // Add an argument named "sandbox-id".
+                        .long("sandbox-id") // Set the long-form flag name for this argument.
+                        .value_name("ID") // Set the value name that will be shown in the help message.
+                        .required(true) // Indicate that this argument is required.
+                        .takes_value(true) // Indicate that this argument takes a value.
+                        .help("The target sandbox for setting the iptables"), // Set a description of this argument.
+                )
+                .arg(
+                    Arg::with_name("v6") // Add an argument named "v6".
+                        .long("v6") // Set the long-form flag name for this argument.
+                        .help("Indicate we're requesting ipv6 iptables"), // Set a description of this argument.
+                )
+                .arg(
+                    Arg::with_name("file") // Add an argument named "file".
+                        .value_name("FILE") // Set the value name that will be shown in the help message.
+                        .required(true) // Indicate that this argument is required.
+                        .takes_value(true) // Indicate that this argument takes a value.
+                        .help("The iptables file to set"), // Set a description of this argument.
+                ),
+        )
+        .get_matches(); // Parse the command line arguments and return a `clap::ArgMatches` struct.
+
+    // Return an `Ok` value indicating success.
+    Ok(())
+}
+  

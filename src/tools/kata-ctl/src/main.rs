@@ -9,6 +9,7 @@ mod check;
 mod ops;
 mod types;
 mod utils;
+mod iptables;
 
 use anyhow::Result;
 use clap::Parser;
