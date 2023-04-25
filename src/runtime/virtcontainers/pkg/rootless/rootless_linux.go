@@ -100,11 +100,17 @@ func NewNS() (ns.NetNS, error) {
 		}()
 
 		// create a new netns on the current thread
-		err = unix.Unshare(unix.CLONE_NEWNET)
-		if err != nil {
-			rootlessLog.Warnf("cannot create a new network namespace: %q", err)
-			return
-		}
+		if os.Getuid() == 0 { 
+			err = unix.Unshare(unix.CLONE_NEWNET)
+			if err != nil {
+				rootlessLog.Warnf("cannot create a new network namespace: %q", err)
+				return
+			}
+		} else {
+			err = fmt.Errorf("no root permission")
+			rootlessLog.Warnf("cannot create a new network namespace without root permissions")
+			return 
+		}	
 
 		// Put this thread back to the orig ns, since it might get reused (pre go1.10)
 		defer func() {
