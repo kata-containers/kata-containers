@@ -35,7 +35,7 @@ func TestGetDriverByName(t *testing.T) {
     assert.NotNil(t, err)
     assert.Nil(t, nonexist)
 
-    b := expErr.Error()
+    b := err.Error()
     assert.True(t, strings.Contains(b, "TEST-ERROR"))
 }
 
@@ -56,10 +56,17 @@ func TestGetDriver(t *testing.T) {
 	assert.Equal(expectedFS, fsd)
 
     expErr = errors.New("TEST-ERROR")
-    defer func() {
-        expErr = nil
-    }()
 	nonexist, err := GetDriver()
     assert.NotNil(err)
     assert.Nil(nonexist)
+    expErr = nil
+
+    supportedDriversBU := supportedDrivers
+    supportedDrivers = nil
+    fsd, err = GetDriver()
+    assert.Nil(fsd)
+    assert.NotNil(err)
+    b := err.Error()
+    assert.True(strings.Contains(b, "Could not find a FS driver"))
+    supportedDrivers = supportedDriversBU
 }
