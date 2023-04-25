@@ -6,8 +6,8 @@
 // Allow OCI spec field names.
 #![allow(non_snake_case)]
 
-use crate::yaml;
 use crate::policy;
+use crate::yaml;
 
 use anyhow::Result;
 use log::info;
@@ -152,7 +152,7 @@ impl InfraPolicy {
                 let mut mount = infra_mount.clone();
 
                 if mount.source.is_empty() && mount.r#type.eq("bind") {
-                    if let Some(file_name) = Path::new(&mount.destination).file_name() { 
+                    if let Some(file_name) = Path::new(&mount.destination).file_name() {
                         if let Some(file_name) = file_name.to_str() {
                             mount.source += &self.shared_files.source_path;
                             mount.source += file_name;
@@ -189,7 +189,7 @@ impl InfraPolicy {
 
 fn keep_infra_mount(
     infra_mount: &oci::Mount,
-    volume_mounts: &Option<Vec<yaml::VolumeMount>>,
+    yaml_mounts: &Option<Vec<yaml::VolumeMount>>,
 ) -> bool {
     if INFRA_MOUNT_DESTINATIONS
         .iter()
@@ -198,7 +198,7 @@ fn keep_infra_mount(
         return true;
     }
 
-    if let Some(mounts) = volume_mounts {
+    if let Some(mounts) = yaml_mounts {
         for mount in mounts {
             if mount.mountPath.eq(&infra_mount.destination) {
                 return true;
@@ -310,120 +310,152 @@ impl InfraPolicy {
         &self,
         policy_mounts: &mut Vec<oci::Mount>,
         storages: &mut Vec<policy::SerializedStorage>,
-        volume: &yaml::Volume,
-        volume_mount: &yaml::VolumeMount,
+        yaml_volume: &yaml::Volume,
+        yaml_mount: &yaml::VolumeMount,
     ) -> Result<()> {
-        let mut mount_type = String::new();
-        let mut mount_source = String::new();
-
         if let Some(infra_volumes) = &self.volumes {
-            if volume.emptyDir.is_some() {
-                // Example of input yaml:
-                //
-                // containers:
-                // - image: docker.io/library/busybox:1.36.0
-                //   name: busybox
-                //   volumeMounts:
-                //   - mountPath: /busy1
-                //     name: data
-                // ...
-                // volumes:
-                // - name: data
-                //   emptyDir: {}
-                // ...
-                //
-                // Corresponding output policy json:
-                //
-                // {
-                //    "destination": "/busy1",
-                //    "type": "local",
-                //    "source": "^/run/kata-containers/shared/containers/$(sandbox-id)/local/data$",
-                //    "options": [
-                //          "rbind",
-                //          "rprivate",
-                //          "rw"
-                //     ]
-                // }
-                // ...
-                // "storages": [
-                //  {
-                //      "driver": "local",
-                //      "driver_options": [],
-                //      "source": "local",
-                //      "fstype": "local",
-                //      "options": [
-                //          "mode=0777"
-                //      ],
-                //      "mount_point": "/run/kata-containers/shared/containers/$(sandbox-id)/local/data",
-                //      "fs_group": {
-                //          "group_id": 0,
-                //          "group_change_policy": 0
-                //      }
-                //  }
-                // ]
-                if let Some(infra_empty_dir) = &infra_volumes.emptyDir {
-                    info!("Infra emptyDir: {:?}", infra_empty_dir);
-                    mount_type += &infra_empty_dir.mount_type;
-                    mount_source += &infra_empty_dir.mount_source;
-                    mount_source += &volume_mount.name;
-
-                    storages.push(policy::SerializedStorage {
-                        driver: infra_empty_dir.driver.clone(),
-                        driver_options: Vec::new(),
-                        source: infra_empty_dir.source.clone(),
-                        fstype: infra_empty_dir.fstype.clone(),
-                        options: infra_empty_dir.options.clone(),
-                        mount_point: infra_empty_dir.mount_point.clone()
-                            + &volume_mount.name
-                            + "$",
-                        fs_group: policy::SerializedFsGroup {
-                            group_id: 0,
-                            group_change_policy: 0,
-                        },
-                    });
-                }
-            } else if volume.persistentVolumeClaim.is_some() {
-                // Example of input yaml:
-                //
-                // containers:
-                // - image: docker.io/library/busybox:1.36.0
-                //   name: busybox
-                //   volumeMounts:
-                //   - mountPath: /my-volume
-                //     name: my-pod-volume
-                // ...
-                // volumes:
-                // - name: my-pod-volume
-                //   persistentVolumeClaim:
-                //   claimName: my-volume-claim
-                // ...
-                //
-                // Corresponding output policy json:
-                //
-                // {
-                //    "destination": "/my-volume",
-                //    "type": "bind",
-                //    "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-my-volume$",
-                //    "options": [
-                //          "rbind",
-                //          "rprivate",
-                //          "rw"
-                //    ]
-                // }
-                mount_type += "bind";
-                mount_source += &self.shared_files.source_path;
-                if let Some(mount_path) = volume_mount.mountPath.strip_prefix("/") {
-                    mount_source += &mount_path;
-                }
+            if yaml_volume.emptyDir.is_some() {
+                Self::get_mount_and_storage_empty_dir(
+                    &infra_volumes,
+                    &yaml_mount,
+                    policy_mounts,
+                    storages,
+                );
+            } else if yaml_volume.persistentVolumeClaim.is_some() {
+                self.get_mount_and_storage_claim(&yaml_mount, policy_mounts);
             } else {
-                todo!("Unsupported volume type {:?}", volume);
+                todo!("Unsupported volume type {:?}", yaml_volume);
             }
+        }
+
+        Ok(())
+    }
+
+    // Example of input yaml:
+    //
+    // containers:
+    // - image: docker.io/library/busybox:1.36.0
+    //   name: busybox
+    //   volumeMounts:
+    //   - mountPath: /busy1
+    //     name: data
+    // ...
+    // volumes:
+    // - name: data
+    //   emptyDir: {}
+    // ...
+    //
+    // Corresponding output policy json:
+    //
+    // {
+    //    "destination": "/busy1",
+    //    "type": "local",
+    //    "source": "^/run/kata-containers/shared/containers/$(sandbox-id)/local/data$",
+    //    "options": [
+    //          "rbind",
+    //          "rprivate",
+    //          "rw"
+    //     ]
+    // }
+    // ...
+    // "storages": [
+    //  {
+    //      "driver": "local",
+    //      "driver_options": [],
+    //      "source": "local",
+    //      "fstype": "local",
+    //      "options": [
+    //          "mode=0777"
+    //      ],
+    //      "mount_point": "/run/kata-containers/shared/containers/$(sandbox-id)/local/data",
+    //      "fs_group": {
+    //          "group_id": 0,
+    //          "group_change_policy": 0
+    //      }
+    //  }
+    // ]
+    fn get_mount_and_storage_empty_dir(
+        infra_volumes: &Volumes,
+        yaml_mount: &yaml::VolumeMount,
+        policy_mounts: &mut Vec<oci::Mount>,
+        storages: &mut Vec<policy::SerializedStorage>,
+    ) {
+        if let Some(infra_empty_dir) = &infra_volumes.emptyDir {
+            info!("Infra emptyDir: {:?}", infra_empty_dir);
+            let mount_type = infra_empty_dir.mount_type.to_string();
+            let mut mount_source = infra_empty_dir.mount_source.to_string();
+            mount_source += &yaml_mount.name;
+
+            storages.push(policy::SerializedStorage {
+                driver: infra_empty_dir.driver.clone(),
+                driver_options: Vec::new(),
+                source: infra_empty_dir.source.clone(),
+                fstype: infra_empty_dir.fstype.clone(),
+                options: infra_empty_dir.options.clone(),
+                mount_point: infra_empty_dir.mount_point.clone() + &yaml_mount.name + "$",
+                fs_group: policy::SerializedFsGroup {
+                    group_id: 0,
+                    group_change_policy: 0,
+                },
+            });
+
+            mount_source += "$";
+
+            policy_mounts.push(oci::Mount {
+                destination: yaml_mount.mountPath.to_string(),
+                r#type: mount_type,
+                source: mount_source,
+                options: vec![
+                    "rbind".to_string(),
+                    "rprivate".to_string(),
+                    "rw".to_string(),
+                ],
+            });
+        }
+    }
+
+    // Example of input yaml:
+    //
+    // containers:
+    // - image: docker.io/library/busybox:1.36.0
+    //   name: busybox
+    //   volumeMounts:
+    //   - mountPath: /my-volume
+    //     name: my-pod-volume
+    // ...
+    // volumes:
+    // - name: my-pod-volume
+    //   persistentVolumeClaim:
+    //   claimName: my-volume-claim
+    // ...
+    //
+    // Corresponding output policy json:
+    //
+    // {
+    //    "destination": "/my-volume",
+    //    "type": "bind",
+    //    "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-my-volume$",
+    //    "options": [
+    //          "rbind",
+    //          "rprivate",
+    //          "rw"
+    //    ]
+    // }
+    fn get_mount_and_storage_claim(
+        &self,
+        yaml_mount: &yaml::VolumeMount,
+        policy_mounts: &mut Vec<oci::Mount>,
+    ) {
+        let mount_type = "bind".to_string();
+        let mut mount_source = self.shared_files.source_path.to_string();
+        if let Some(mount_path) = yaml_mount.mountPath.strip_prefix("/") {
+            mount_source += &mount_path;
         }
 
         mount_source += "$";
 
         policy_mounts.push(oci::Mount {
-            destination: volume_mount.mountPath.to_string(),
+            destination: yaml_mount.mountPath.to_string(),
             r#type: mount_type,
             source: mount_source,
             options: vec![
@@ -432,7 +464,5 @@ impl InfraPolicy {
                 "rw".to_string(),
             ],
         });
-
-        Ok(())
     }
 }
