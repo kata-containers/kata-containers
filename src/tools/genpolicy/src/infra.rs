@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::path::Path;
+use std::str;
 
 const INFRA_MOUNT_DESTINATIONS: [&'static str; 7] = [
     "/sys/fs/cgroup",
@@ -315,14 +316,16 @@ impl InfraPolicy {
     ) -> Result<()> {
         if let Some(infra_volumes) = &self.volumes {
             if yaml_volume.emptyDir.is_some() {
-                Self::get_mount_and_storage_empty_dir(
+                Self::mount_and_storage_empty_dir(
                     &infra_volumes,
                     &yaml_mount,
                     policy_mounts,
                     storages,
                 );
             } else if yaml_volume.persistentVolumeClaim.is_some() {
-                self.get_mount_and_storage_claim(&yaml_mount, policy_mounts);
+                self.volume_claim_mount(&yaml_mount, policy_mounts)?;
+            } else if yaml_volume.hostPath.is_some() {
+                self.host_path_mount(&yaml_mount, policy_mounts)?;
             } else {
                 todo!("Unsupported volume type {:?}", yaml_volume);
             }
@@ -345,7 +348,7 @@ impl InfraPolicy {
     //   emptyDir: {}
     // ...
     //
-    // Corresponding output policy json:
+    // Corresponding output policy data:
     //
     // {
     //    "destination": "/busy1",
@@ -374,7 +377,7 @@ impl InfraPolicy {
     //      }
     //  }
     // ]
-    fn get_mount_and_storage_empty_dir(
+    fn mount_and_storage_empty_dir(
         infra_volumes: &Volumes,
         yaml_mount: &yaml::VolumeMount,
         policy_mounts: &mut Vec<oci::Mount>,
@@ -382,7 +385,6 @@ impl InfraPolicy {
     ) {
         if let Some(infra_empty_dir) = &infra_volumes.emptyDir {
             info!("Infra emptyDir: {:?}", infra_empty_dir);
-            let mount_type = infra_empty_dir.mount_type.to_string();
             let mut mount_source = infra_empty_dir.mount_source.to_string();
             mount_source += &yaml_mount.name;
 
@@ -403,7 +405,7 @@ impl InfraPolicy {
 
             policy_mounts.push(oci::Mount {
                 destination: yaml_mount.mountPath.to_string(),
-                r#type: mount_type,
+                r#type: infra_empty_dir.mount_type.to_string(),
                 source: mount_source,
                 options: vec![
                     "rbind".to_string(),
@@ -429,7 +431,7 @@ impl InfraPolicy {
     //   claimName: my-volume-claim
     // ...
     //
-    // Corresponding output policy json:
+    // Corresponding output policy data:
     //
     // {
     //    "destination": "/my-volume",
@@ -441,22 +443,24 @@ impl InfraPolicy {
     //          "rw"
     //    ]
     // }
-    fn get_mount_and_storage_claim(
+    fn volume_claim_mount(
         &self,
         yaml_mount: &yaml::VolumeMount,
         policy_mounts: &mut Vec<oci::Mount>,
-    ) {
-        let mount_type = "bind".to_string();
+    ) -> Result<()> {
         let mut mount_source = self.shared_files.source_path.to_string();
-        if let Some(mount_path) = yaml_mount.mountPath.strip_prefix("/") {
-            mount_source += &mount_path;
+
+        if let Some(byte_index) = str::rfind(&yaml_mount.mountPath, '/') {
+            mount_source += str::from_utf8(&yaml_mount.mountPath.as_bytes()[byte_index + 1..])?;
+        } else {
+            mount_source += &yaml_mount.mountPath;
         }
 
         mount_source += "$";
 
         policy_mounts.push(oci::Mount {
             destination: yaml_mount.mountPath.to_string(),
-            r#type: mount_type,
+            r#type: "bind".to_string(),
             source: mount_source,
             options: vec![
                 "rbind".to_string(),
@@ -464,5 +468,53 @@ impl InfraPolicy {
                 "rw".to_string(),
             ],
         });
+
+        Ok(())
+    }
+
+    // Example of input yaml:
+    //
+    // containers:
+    // - image: docker.io/library/busybox:1.36.0
+    //   name: busybox
+    //   volumeMounts:
+    //    - mountPath: /dev/ttyS0
+    //      name: dev-ttys0
+    // ...
+    // volumes:
+    //   - name: dev-ttys0
+    //     hostPath:
+    //       path: /dev/ttyS0
+    // ...
+    //
+    // Corresponding output policy data:
+    //
+    // {
+    //     "destination": "/dev/ttyS0",
+    //     "type": "bind",
+    //     "source": "/dev/ttyS0",
+    //     "options": [
+    //         "rbind",
+    //         "rprivate",
+    //         "rw"
+    //     ]
+    // }
+    fn host_path_mount(
+        &self,
+        yaml_mount: &yaml::VolumeMount,
+        policy_mounts: &mut Vec<oci::Mount>,
+    ) -> Result<()> {
+        policy_mounts.push(oci::Mount {
+            destination: yaml_mount.mountPath.to_string(),
+            r#type: "bind".to_string(),
+            source: yaml_mount.mountPath.to_string(),
+            options: vec![
+                "rbind".to_string(),
+                "rprivate".to_string(),
+                "rw".to_string(),
+            ],
+        });
+
+        Ok(())
     }
 }
