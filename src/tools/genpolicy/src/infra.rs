@@ -363,26 +363,24 @@ impl InfraPolicy {
                 // ]
                 if let Some(infra_empty_dir) = &infra_volumes.emptyDir {
                     info!("Infra emptyDir: {:?}", infra_empty_dir);
-                    if volume.emptyDir.is_some() {
-                        mount_type += &infra_empty_dir.mount_type;
-                        mount_source += &infra_empty_dir.mount_source;
-                        mount_source += &volume_mount.name;
+                    mount_type += &infra_empty_dir.mount_type;
+                    mount_source += &infra_empty_dir.mount_source;
+                    mount_source += &volume_mount.name;
 
-                        storages.push(policy::SerializedStorage {
-                            driver: infra_empty_dir.driver.clone(),
-                            driver_options: Vec::new(),
-                            source: infra_empty_dir.source.clone(),
-                            fstype: infra_empty_dir.fstype.clone(),
-                            options: infra_empty_dir.options.clone(),
-                            mount_point: infra_empty_dir.mount_point.clone()
-                                + &volume_mount.name
-                                + "$",
-                            fs_group: policy::SerializedFsGroup {
-                                group_id: 0,
-                                group_change_policy: 0,
-                            },
-                        });
-                    }
+                    storages.push(policy::SerializedStorage {
+                        driver: infra_empty_dir.driver.clone(),
+                        driver_options: Vec::new(),
+                        source: infra_empty_dir.source.clone(),
+                        fstype: infra_empty_dir.fstype.clone(),
+                        options: infra_empty_dir.options.clone(),
+                        mount_point: infra_empty_dir.mount_point.clone()
+                            + &volume_mount.name
+                            + "$",
+                        fs_group: policy::SerializedFsGroup {
+                            group_id: 0,
+                            group_change_policy: 0,
+                        },
+                    });
                 }
             } else if volume.persistentVolumeClaim.is_some() {
                 // Example of input yaml:
