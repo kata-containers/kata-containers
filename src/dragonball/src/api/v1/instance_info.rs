@@ -50,6 +50,8 @@ pub struct InstanceInfo {
     pub vmm_version: String,
     /// The pid of the current VMM process.
     pub pid: u32,
+    /// The tid of the current VMM master thread.
+    pub master_tid: u32,
     /// The state of async actions.
     pub async_state: AsyncState,
     /// List of tids of vcpu threads (vcpu index, tid)
@@ -66,6 +68,7 @@ impl InstanceInfo {
             state: InstanceState::Uninitialized,
             vmm_version,
             pid: std::process::id(),
+            master_tid: 0,
             async_state: AsyncState::Uninitialized,
             tids: Vec::new(),
             last_instance_downtime: 0,
@@ -80,6 +83,7 @@ impl Default for InstanceInfo {
             state: InstanceState::Uninitialized,
             vmm_version: env!("CARGO_PKG_VERSION").to_string(),
             pid: std::process::id(),
+            master_tid: 0,
             async_state: AsyncState::Uninitialized,
             tids: Vec::new(),
             last_instance_downtime: 0,

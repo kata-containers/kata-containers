@@ -117,6 +117,16 @@ impl Hypervisor for Dragonball {
         inner.get_pids().await
     }
 
+    async fn get_vmm_master_tid(&self) -> Result<u32> {
+        let inner = self.inner.read().await;
+        inner.get_vmm_master_tid().await
+    }
+
+    async fn get_ns_path(&self) -> Result<String> {
+        let inner = self.inner.read().await;
+        inner.get_ns_path().await
+    }
+
     async fn check(&self) -> Result<()> {
         let inner = self.inner.read().await;
         inner.check().await

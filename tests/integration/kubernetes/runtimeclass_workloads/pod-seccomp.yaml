@@ -1,0 +1,22 @@
+#
+# Copyright (c) 2021 Red Hat
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seccomp-container
+  annotations:
+    io.katacontainers.config.runtime.disable_guest_seccomp: "false"
+spec:
+  runtimeClassName: kata
+  terminationGracePeriodSeconds: 0
+  restartPolicy: Never
+  containers:
+  - name: busybox
+    image: quay.io/prometheus/busybox:latest
+    command: ["grep", "Seccomp:", "/proc/self/status"]
+    securityContext:
+      seccompProfile:
+        type: RuntimeDefault

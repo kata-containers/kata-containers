@@ -10,8 +10,8 @@ oci = { path = "../libs/oci" }
 rustjail = { path = "rustjail" }
 protocols = { path = "../libs/protocols", features = ["async"] }
 lazy_static = "1.3.0"
-ttrpc = { version = "0.6.0", features = ["async"], default-features = false }
-protobuf = "2.27.0"
+ttrpc = { version = "0.7.1", features = ["async"], default-features = false }
+protobuf = "3.2.0"
 libc = "0.2.58"
 nix = "0.24.2"
 capctl = "0.2.0"
@@ -48,10 +48,11 @@ slog-scope = "4.1.2"
 slog-stdlog = "4.0.0"
 log = "0.4.11"
 
+cfg-if = "1.0.0"
 prometheus = { version = "0.13.0", features = ["process"] }
 procfs = "0.12.0"
 anyhow = "1.0.32"
-cgroups = { package = "cgroups-rs", version = "0.3.1" }
+cgroups = { package = "cgroups-rs", version = "0.3.2" }
 
 # Tracing
 tracing = "0.1.26"

@@ -15,6 +15,7 @@ use std::sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender};
 use std::sync::{Arc, Barrier, Mutex, RwLock};
 use std::time::Duration;
 
+use dbs_arch::VpmuFeatureLevel;
 #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
 use dbs_upcall::{DevMgrService, UpcallClient};
 use dbs_utils::epoll_manager::{EpollManager, EventOps, EventSet, Events, MutEventSubscriber};
@@ -281,11 +282,20 @@ impl VcpuManager {
         let supported_cpuid = kvm_context
             .supported_cpuid(kvm_bindings::KVM_MAX_CPUID_ENTRIES)
             .map_err(VcpuManagerError::Kvm)?;
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
         let vpmu_feature_level = match vm_config_info.vpmu_feature {
-            1 => dbs_arch::cpuid::VpmuFeatureLevel::LimitedlyEnabled,
-            2 => dbs_arch::cpuid::VpmuFeatureLevel::FullyEnabled,
-            _ => dbs_arch::cpuid::VpmuFeatureLevel::Disabled,
+            #[cfg(target_arch = "x86_64")]
+            1 => VpmuFeatureLevel::LimitedlyEnabled,
+            #[cfg(target_arch = "aarch64")]
+            1 => {
+                log::warn!(
+                    "Limitedly enabled vpmu feature isn't supported on aarch64 for now.\
+                       This will be supported in the future. The vpmu_feature will be set disabled!"
+                );
+                VpmuFeatureLevel::Disabled
+            }
+            2 => VpmuFeatureLevel::FullyEnabled,
+            _ => VpmuFeatureLevel::Disabled,
         };
 
         let vcpu_manager = Arc::new(Mutex::new(VcpuManager {
@@ -297,7 +307,6 @@ impl VcpuManager {
                 cores_per_die: vm_config_info.cpu_topology.cores_per_die,
                 dies_per_socket: vm_config_info.cpu_topology.dies_per_socket,
                 sockets: vm_config_info.cpu_topology.sockets,
-                #[cfg(target_arch = "x86_64")]
                 vpmu_feature: vpmu_feature_level,
             },
             vcpu_seccomp_filter,
@@ -799,6 +808,11 @@ impl VcpuManager {
         )
         .map_err(VcpuManagerError::Vcpu)
     }
+
+    /// get vpmu_feature config
+    pub fn vpmu_feature(&self) -> VpmuFeatureLevel {
+        self.vcpu_config.vpmu_feature
+    }
 }
 
 #[cfg(feature = "hotplug")]
@@ -887,7 +901,9 @@ mod hotplug {
             cpu_ids_array[..cpu_ids.len()].copy_from_slice(&cpu_ids[..cpu_ids.len()]);
             let req = DevMgrRequest::AddVcpu(CpuDevRequest {
                 count: cpu_ids.len() as u8,
+                #[cfg(target_arch = "x86_64")]
                 apic_ids: cpu_ids_array,
+                #[cfg(target_arch = "x86_64")]
                 apic_ver: APIC_VERSION,
             });
             self.send_upcall_action(upcall_client, req)?;
@@ -924,7 +940,9 @@ mod hotplug {
             cpu_ids_array[..cpu_ids.len()].copy_from_slice(&cpu_ids[..cpu_ids.len()]);
             let req = DevMgrRequest::DelVcpu(CpuDevRequest {
                 count: cpu_num_to_be_del as u8,
+                #[cfg(target_arch = "x86_64")]
                 apic_ids: cpu_ids_array,
+                #[cfg(target_arch = "x86_64")]
                 apic_ver: APIC_VERSION,
             });
             self.send_upcall_action(upcall_client, req)?;
@@ -969,7 +987,10 @@ mod hotplug {
                                 vcpu_state_sender
                                     .send(VcpuStateEvent::Hotplug((
                                         result,
+                                        #[cfg(target_arch = "x86_64")]
                                         resp.info.apic_id_index,
+                                        #[cfg(target_arch = "aarch64")]
+                                        resp.info.cpu_id,
                                     )))
                                     .unwrap();
                                 vcpu_state_event.write(1).unwrap();

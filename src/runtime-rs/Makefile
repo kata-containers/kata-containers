@@ -203,7 +203,7 @@ ifneq (,$(DBCMD))
     DEFNETWORKMODEL_DB := tcfilter
     KERNELPARAMS = console=ttyS1 agent.log_vport=1025
 	KERNELTYPE_DB = uncompressed
-    KERNEL_NAME_DB = $(call MAKE_KERNEL_NAME,$(KERNELTYPE_DB))
+    KERNEL_NAME_DB = $(call MAKE_KERNEL_NAME_DB,$(KERNELTYPE_DB))
     KERNELPATH_DB = $(KERNELDIR)/$(KERNEL_NAME_DB)
     DEFSANDBOXCGROUPONLY = true
     RUNTIMENAME := virt_container
@@ -371,8 +371,8 @@ endef
 
 # Returns the name of the kernel file to use based on the provided KERNELTYPE.
 # $1 : KERNELTYPE (compressed or uncompressed)
-define MAKE_KERNEL_NAME
-$(if $(findstring uncompressed,$1),vmlinux.container,vmlinuz.container)
+define MAKE_KERNEL_NAME_DB
+$(if $(findstring uncompressed,$1),vmlinux-dragonball-experimental.container,vmlinuz-dragonball-experimental.container)
 endef
 
 .DEFAULT_GOAL := default

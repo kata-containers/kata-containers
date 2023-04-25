@@ -419,6 +419,8 @@ install_kata() {
 	local kernel_path=${1:-}
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
 	[ -d "${kernel_path}" ] || die "path to kernel does not exist, use ${script_name} setup"
+	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
+	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
 	config_version=$(get_config_version)
 	[ -n "${config_version}" ] || die "failed to get config version"
@@ -556,7 +558,7 @@ main() {
 			case "${arch_target}" in
 			"aarch64")
 				build_type="arm-experimental"
-				kernel_version=$(get_from_kata_deps "assets.arm-kernel-experimental.version")
+				kernel_version=$(get_from_kata_deps "assets.kernel-arm-experimental.version")
 			;;
 			*)
 				info "No arch-specific experimental kernel supported, using experimental one instead"
@@ -564,7 +566,7 @@ main() {
 			;;
 			esac
 		elif [[ ${build_type} == "dragonball-experimental" ]]; then
-			kernel_version=$(get_from_kata_deps "assets.dragonball-kernel-experimental.version")
+			kernel_version=$(get_from_kata_deps "assets.kernel-dragonball-experimental.version")
 		elif [[ "${conf_guest}" != "" ]]; then
 			#If specifying a tag for kernel_version, must be formatted version-like to avoid unintended parsing issues
 			kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)
@@ -593,7 +595,6 @@ main() {
 			build_kernel "${kernel_path}"
 			;;
 		install)
-			build_kernel "${kernel_path}"
 			install_kata "${kernel_path}"
 			;;
 		setup)

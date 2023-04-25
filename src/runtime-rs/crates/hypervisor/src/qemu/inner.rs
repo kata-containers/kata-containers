@@ -89,6 +89,16 @@ impl QemuInner {
         todo!()
     }
 
+    pub(crate) async fn get_vmm_master_tid(&self) -> Result<u32> {
+        info!(sl!(), "QemuInner::get_vmm_master_tid()");
+        todo!()
+    }
+
+    pub(crate) async fn get_ns_path(&self) -> Result<String> {
+        info!(sl!(), "QemuInner::get_ns_path()");
+        todo!()
+    }
+
     pub(crate) async fn cleanup(&self) -> Result<()> {
         info!(sl!(), "QemuInner::cleanup()");
         todo!()

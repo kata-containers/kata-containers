@@ -9,14 +9,13 @@ set -o nounset
 set -o pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly repo_root_dir="$(cd "${script_dir}/../../../.." && pwd)"
 readonly ovmf_builder="${script_dir}/build-ovmf.sh"
 
 source "${script_dir}/../../scripts/lib.sh"
 
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
-container_image="${OVMF_CONTAINER_BUILDER:-${BUILDER_REGISTRY}:ovmf-$(get_last_modification ${repo_root_dir} ${script_dir})-$(uname -m)}"
+container_image="${OVMF_CONTAINER_BUILDER:-$(get_ovmf_image_name)}"
 ovmf_build="${ovmf_build:-x86_64}"
 kata_version="${kata_version:-}"
 ovmf_repo="${ovmf_repo:-}"
@@ -25,11 +24,7 @@ ovmf_package="${ovmf_package:-}"
 package_output_dir="${package_output_dir:-}"
 
 if [ -z "$ovmf_repo" ]; then
-       if [ "${ovmf_build}" == "tdx" ]; then
-	       ovmf_repo=$(get_from_kata_deps "externals.ovmf.tdx.url" "${kata_version}")
-       else
-	       ovmf_repo=$(get_from_kata_deps "externals.ovmf.url" "${kata_version}")
-       fi
+	ovmf_repo=$(get_from_kata_deps "externals.ovmf.url" "${kata_version}")
 fi
 
 [ -n "$ovmf_repo" ] || die "failed to get ovmf repo"

@@ -43,6 +43,7 @@ RUN apt-get update && \
   git \
   make \
   unzip \
+  wget \
   xz-utils && \
   apt-get clean && rm -rf /var/lib/apt/lists
 

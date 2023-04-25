@@ -164,9 +164,12 @@ impl ContainerInner {
         let exit_status = self.get_exit_status().await;
         let _locked_exit_status = exit_status.read().await;
         info!(self.logger, "container terminated");
-        let timeout: u32 = 10;
+        let remove_request = agent::RemoveContainerRequest {
+            container_id: cid.to_string(),
+            ..Default::default()
+        };
         self.agent
-            .remove_container(agent::RemoveContainerRequest::new(cid, timeout))
+            .remove_container(remove_request)
             .await
             .or_else(|e| {
                 if force {
@@ -200,20 +203,22 @@ impl ContainerInner {
             return Ok(());
         }
 
-        self.check_state(vec![ProcessStatus::Running])
+        self.check_state(vec![ProcessStatus::Running, ProcessStatus::Exited])
             .await
             .context("check state")?;
 
-        // if use force mode to stop container, stop always successful
-        // send kill signal to container
-        // ignore the error of sending signal, since the process would
-        // have been killed and exited yet.
-        self.signal_process(process, Signal::SIGKILL as u32, false)
-            .await
-            .map_err(|e| {
-                warn!(logger, "failed to signal kill. {:?}", e);
-            })
-            .ok();
+        if state == ProcessStatus::Running {
+            // if use force mode to stop container, stop always successful
+            // send kill signal to container
+            // ignore the error of sending signal, since the process would
+            // have been killed and exited yet.
+            self.signal_process(process, Signal::SIGKILL as u32, false)
+                .await
+                .map_err(|e| {
+                    warn!(logger, "failed to signal kill. {:?}", e);
+                })
+                .ok();
+        }
 
         match process.process_type {
             ProcessType::Container => self

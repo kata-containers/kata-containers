@@ -11,6 +11,7 @@ Kata Containers design documents:
 - [Host cgroups](host-cgroups.md)
 - [Agent systemd cgroup](agent-systemd-cgroup.md)
 - [`Inotify` support](inotify.md)
+- [`Hooks` support](hooks-handling.md)
 - [Metrics(Kata 2.0)](kata-2-0-metrics.md)
 - [Design for Kata Containers `Lazyload` ability with `nydus`](kata-nydus-design.md)
 - [Design for direct-assigned volume](direct-blk-device-assignment.md)

@@ -14,9 +14,15 @@ RUN apt-get update && \
         git \
         iasl  \
         make \
-        nasm \
         python \
         python3 \
         python3-distutils \
         uuid-dev && \
-    apt-get clean && rm -rf /var/lib/lists/
+    apt-get clean && rm -rf /var/lib/lists/ && \
+    cd /tmp && curl -fsLO https://www.nasm.us/pub/nasm/releasebuilds/2.15.05/nasm-2.15.05.tar.gz && \
+    tar xf nasm-2.15.05.tar.gz && \
+    cd nasm-2.15.05 && \
+    ./configure && \
+    make -j"$(nproc)" && \
+    make install && \
+    cd /tmp && rm -r nasm-2.15.05*

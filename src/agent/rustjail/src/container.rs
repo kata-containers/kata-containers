@@ -48,7 +48,7 @@ use nix::unistd::{self, fork, ForkResult, Gid, Pid, Uid, User};
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::io::AsRawFd;
 
-use protobuf::SingularPtrField;
+use protobuf::MessageField;
 
 use oci::State as OCIState;
 use regex::Regex;
@@ -374,13 +374,18 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let buf = read_sync(crfd)?;
     let spec_str = std::str::from_utf8(&buf)?;
     let spec: oci::Spec = serde_json::from_str(spec_str)?;
-
     log_child!(cfd_log, "notify parent to send oci process");
     write_sync(cwfd, SYNC_SUCCESS, "")?;
 
     let buf = read_sync(crfd)?;
     let process_str = std::str::from_utf8(&buf)?;
     let oci_process: oci::Process = serde_json::from_str(process_str)?;
+    log_child!(cfd_log, "notify parent to send oci state");
+    write_sync(cwfd, SYNC_SUCCESS, "")?;
+
+    let buf = read_sync(crfd)?;
+    let state_str = std::str::from_utf8(&buf)?;
+    let mut state: oci::State = serde_json::from_str(state_str)?;
     log_child!(cfd_log, "notify parent to send cgroup manager");
     write_sync(cwfd, SYNC_SUCCESS, "")?;
 
@@ -743,6 +748,19 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         unistd::read(fd, buf)?;
     }
 
+    if init {
+        // StartContainer Hooks:
+        // * should be run in container namespace
+        // * should be run after container is created and before container is started (before user-specific command is executed)
+        // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#startcontainer-hooks
+        state.pid = std::process::id() as i32;
+        state.status = oci::ContainerState::Created;
+        if let Some(hooks) = spec.hooks.as_ref() {
+            let mut start_container_states = HookStates::new();
+            start_container_states.execute_hooks(&hooks.start_container, Some(state))?;
+        }
+    }
+
     // With NoNewPrivileges, we should set seccomp as close to
     // do_exec as possible in order to reduce the amount of
     // system calls in the seccomp profiles.
@@ -857,7 +875,7 @@ impl BaseContainer for LinuxContainer {
         // what about network interface stats?
 
         Ok(StatsContainerResponse {
-            cgroup_stats: SingularPtrField::some(self.cgroup_manager.as_ref().get_stats()?),
+            cgroup_stats: MessageField::some(self.cgroup_manager.as_ref().get_stats()?),
             ..Default::default()
         })
     }
@@ -1323,7 +1341,6 @@ async fn join_namespaces(
     write_async(pipe_w, SYNC_DATA, spec_str.as_str()).await?;
 
     info!(logger, "wait child received oci spec");
-
     read_async(pipe_r).await?;
 
     info!(logger, "send oci process from parent to child");
@@ -1331,6 +1348,13 @@ async fn join_namespaces(
     write_async(pipe_w, SYNC_DATA, process_str.as_str()).await?;
 
     info!(logger, "wait child received oci process");
+    read_async(pipe_r).await?;
+
+    info!(logger, "try to send state from parent to child");
+    let state_str = serde_json::to_string(st)?;
+    write_async(pipe_w, SYNC_DATA, state_str.as_str()).await?;
+
+    info!(logger, "wait child received oci state");
     read_async(pipe_r).await?;
 
     let cm_str = if use_systemd_cgroup {
@@ -1449,7 +1473,7 @@ impl LinuxContainer {
     pub fn new<T: Into<String> + Display + Clone>(
         id: T,
         base: T,
-        mut config: Config,
+        config: Config,
         logger: &Logger,
     ) -> Result<Self> {
         let base = base.into();
@@ -1475,26 +1499,18 @@ impl LinuxContainer {
         .context(format!("Cannot change owner of container {} root", id))?;
 
         let spec = config.spec.as_ref().unwrap();
-
         let linux = spec.linux.as_ref().unwrap();
-
-        // determine which cgroup driver to take and then assign to config.use_systemd_cgroup
-        // systemd: "[slice]:[prefix]:[name]"
-        // fs: "/path_a/path_b"
-        let cpath = if SYSTEMD_CGROUP_PATH_FORMAT.is_match(linux.cgroups_path.as_str()) {
-            config.use_systemd_cgroup = true;
+        let cpath = if config.use_systemd_cgroup {
             if linux.cgroups_path.len() == 2 {
                 format!("system.slice:kata_agent:{}", id.as_str())
             } else {
                 linux.cgroups_path.clone()
             }
+        } else if linux.cgroups_path.is_empty() {
+            format!("/{}", id.as_str())
         } else {
-            config.use_systemd_cgroup = false;
-            if linux.cgroups_path.is_empty() {
-                format!("/{}", id.as_str())
-            } else {
-                linux.cgroups_path.clone()
-            }
+            // if we have a systemd cgroup path we need to convert it to a fs cgroup path
+            linux.cgroups_path.replace(':', "/")
         };
 
         let cgroup_manager: Box<dyn Manager + Send + Sync> = if config.use_systemd_cgroup {

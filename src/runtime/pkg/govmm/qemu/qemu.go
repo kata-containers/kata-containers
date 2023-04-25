@@ -343,16 +343,12 @@ func (object Object) QemuParams(config *Config) []string {
 
 	case TDXGuest:
 		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, "sept-ve-disable=on")
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
 		if object.Debug {
 			objectParams = append(objectParams, "debug=on")
 		}
-		deviceParams = append(deviceParams, string(object.Driver))
-		deviceParams = append(deviceParams, fmt.Sprintf("id=%s", object.DeviceID))
-		deviceParams = append(deviceParams, fmt.Sprintf("file=%s", object.File))
-		if object.FirmwareVolume != "" {
-			deviceParams = append(deviceParams, fmt.Sprintf("config-firmware-volume=%s", object.FirmwareVolume))
-		}
+		config.Bios = object.File
 	case SEVGuest:
 		fallthrough
 	case SNPGuest:

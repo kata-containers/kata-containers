@@ -1,0 +1,25 @@
+#
+# Copyright (c) 2020 Ant Group
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-oom
+  namespace: default
+spec:
+  runtimeClassName: kata
+  restartPolicy: Never
+  containers:
+    - image: quay.io/kata-containers/sysbench-kata:latest
+      imagePullPolicy: IfNotPresent
+      name: oom-test
+      command: ["/bin/sh"]
+      args: ["-c", "sleep 2; stress --vm 2 --vm-bytes 400M --timeout 30s"]
+      resources:
+        limits:
+          memory: 500Mi
+        requests:
+          memory: 500Mi

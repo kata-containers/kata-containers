@@ -117,12 +117,11 @@ mod tests {
             result: Result<()>,
         }
 
-        let default_id = "1dfc0567".to_string();
-        let default_namespace = "ns1".to_string();
+        let default_id = "default_id".to_string();
+        let default_namespace = "default_namespace".to_string();
         let default_address = bind_address.to_string();
         let default_publish_binary = "containerd".to_string();
         let default_bundle = path.to_string();
-        let default_debug = false;
 
         let mut arg = Args {
             id: default_id.clone(),
@@ -130,7 +129,7 @@ mod tests {
             address: default_address.clone(),
             publish_binary: default_publish_binary.clone(),
             bundle: default_bundle.clone(),
-            debug: default_debug,
+            ..Default::default()
         };
 
         let tests = &[

@@ -147,17 +147,13 @@ pub type Result<T> = ::std::result::Result<T, DeviceMgrError>;
 /// Type of the dragonball virtio devices.
 #[cfg(feature = "dbs-virtio-devices")]
 pub type DbsVirtioDevice = Box<
-    dyn VirtioDevice<
-        GuestAddressSpaceImpl,
-        virtio_queue::QueueStateSync,
-        vm_memory::GuestRegionMmap,
-    >,
+    dyn VirtioDevice<GuestAddressSpaceImpl, virtio_queue::QueueSync, vm_memory::GuestRegionMmap>,
 >;
 
 /// Type of the dragonball virtio mmio devices.
 #[cfg(feature = "dbs-virtio-devices")]
 pub type DbsMmioV2Device =
-    MmioV2Device<GuestAddressSpaceImpl, virtio_queue::QueueStateSync, vm_memory::GuestRegionMmap>;
+    MmioV2Device<GuestAddressSpaceImpl, virtio_queue::QueueSync, vm_memory::GuestRegionMmap>;
 
 /// Struct to support transactional operations for device management.
 pub struct DeviceManagerTx {

@@ -8,6 +8,7 @@ package katamonitor
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	shim "github.com/kata-containers/kata-containers/src/runtime/pkg/containerd-shim-v2"
@@ -35,4 +36,12 @@ func getSandboxIDFromReq(r *http.Request) (string, error) {
 
 func getSandboxFS() string {
 	return shim.GetSandboxesStoragePath()
+}
+
+func getFilterFamilyFromReq(r *http.Request) ([]string, error) {
+	filterFamilies := r.URL.Query().Get("filter_family")
+	if filterFamilies != "" {
+		return strings.Split(filterFamilies, ","), nil
+	}
+	return nil, nil
 }

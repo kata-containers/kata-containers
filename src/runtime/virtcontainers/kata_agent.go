@@ -77,75 +77,77 @@ const (
 )
 
 var (
-	checkRequestTimeout          = 30 * time.Second
-	defaultRequestTimeout        = 60 * time.Second
-	errorMissingOCISpec          = errors.New("Missing OCI specification")
-	defaultKataHostSharedDir     = "/run/kata-containers/shared/sandboxes/"
-	defaultKataGuestSharedDir    = "/run/kata-containers/shared/containers/"
-	defaultKataGuestNydusRootDir = "/run/kata-containers/shared/"
-	mountGuestTag                = "kataShared"
-	defaultKataGuestSandboxDir   = "/run/kata-containers/sandbox/"
-	type9pFs                     = "9p"
-	typeVirtioFS                 = "virtiofs"
-	typeOverlayFS                = "overlay"
-	kata9pDevType                = "9p"
-	kataMmioBlkDevType           = "mmioblk"
-	kataBlkDevType               = "blk"
-	kataBlkCCWDevType            = "blk-ccw"
-	kataSCSIDevType              = "scsi"
-	kataNvdimmDevType            = "nvdimm"
-	kataVirtioFSDevType          = "virtio-fs"
-	kataOverlayDevType           = "overlayfs"
-	kataWatchableBindDevType     = "watchable-bind"
-	kataVfioDevType              = "vfio"    // VFIO device to used as VFIO in the container
-	kataVfioGuestKernelDevType   = "vfio-gk" // VFIO device for consumption by the guest kernel
-	sharedDir9pOptions           = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
-	sharedDirVirtioFSOptions     = []string{}
-	sharedDirVirtioFSDaxOptions  = "dax"
-	shmDir                       = "shm"
-	kataEphemeralDevType         = "ephemeral"
-	defaultEphemeralPath         = filepath.Join(defaultKataGuestSandboxDir, kataEphemeralDevType)
-	grpcMaxDataSize              = int64(1024 * 1024)
-	localDirOptions              = []string{"mode=0777"}
-	maxHostnameLen               = 64
-	GuestDNSFile                 = "/etc/resolv.conf"
+	checkRequestTimeout           = 30 * time.Second
+	defaultRequestTimeout         = 60 * time.Second
+	errorMissingOCISpec           = errors.New("Missing OCI specification")
+	defaultKataHostSharedDir      = "/run/kata-containers/shared/sandboxes/"
+	defaultKataGuestSharedDir     = "/run/kata-containers/shared/containers/"
+	defaultKataGuestNydusRootDir  = "/run/kata-containers/shared/"
+	mountGuestTag                 = "kataShared"
+	defaultKataGuestSandboxDir    = "/run/kata-containers/sandbox/"
+	type9pFs                      = "9p"
+	typeVirtioFS                  = "virtiofs"
+	typeOverlayFS                 = "overlay"
+	kata9pDevType                 = "9p"
+	kataMmioBlkDevType            = "mmioblk"
+	kataBlkDevType                = "blk"
+	kataBlkCCWDevType             = "blk-ccw"
+	kataSCSIDevType               = "scsi"
+	kataNvdimmDevType             = "nvdimm"
+	kataVirtioFSDevType           = "virtio-fs"
+	kataOverlayDevType            = "overlayfs"
+	kataWatchableBindDevType      = "watchable-bind"
+	kataVfioPciDevType            = "vfio-pci"    // VFIO PCI device to used as VFIO in the container
+	kataVfioPciGuestKernelDevType = "vfio-pci-gk" // VFIO PCI device for consumption by the guest kernel
+	kataVfioApDevType             = "vfio-ap"
+	sharedDir9pOptions            = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
+	sharedDirVirtioFSOptions      = []string{}
+	sharedDirVirtioFSDaxOptions   = "dax"
+	shmDir                        = "shm"
+	kataEphemeralDevType          = "ephemeral"
+	defaultEphemeralPath          = filepath.Join(defaultKataGuestSandboxDir, kataEphemeralDevType)
+	grpcMaxDataSize               = int64(1024 * 1024)
+	localDirOptions               = []string{"mode=0777"}
+	maxHostnameLen                = 64
+	GuestDNSFile                  = "/etc/resolv.conf"
 )
 
 const (
-	grpcCheckRequest             = "grpc.CheckRequest"
-	grpcExecProcessRequest       = "grpc.ExecProcessRequest"
-	grpcCreateSandboxRequest     = "grpc.CreateSandboxRequest"
-	grpcDestroySandboxRequest    = "grpc.DestroySandboxRequest"
-	grpcCreateContainerRequest   = "grpc.CreateContainerRequest"
-	grpcStartContainerRequest    = "grpc.StartContainerRequest"
-	grpcRemoveContainerRequest   = "grpc.RemoveContainerRequest"
-	grpcSignalProcessRequest     = "grpc.SignalProcessRequest"
-	grpcUpdateRoutesRequest      = "grpc.UpdateRoutesRequest"
-	grpcUpdateInterfaceRequest   = "grpc.UpdateInterfaceRequest"
-	grpcListInterfacesRequest    = "grpc.ListInterfacesRequest"
-	grpcListRoutesRequest        = "grpc.ListRoutesRequest"
-	grpcAddARPNeighborsRequest   = "grpc.AddARPNeighborsRequest"
-	grpcOnlineCPUMemRequest      = "grpc.OnlineCPUMemRequest"
-	grpcUpdateContainerRequest   = "grpc.UpdateContainerRequest"
-	grpcWaitProcessRequest       = "grpc.WaitProcessRequest"
-	grpcTtyWinResizeRequest      = "grpc.TtyWinResizeRequest"
-	grpcWriteStreamRequest       = "grpc.WriteStreamRequest"
-	grpcCloseStdinRequest        = "grpc.CloseStdinRequest"
-	grpcStatsContainerRequest    = "grpc.StatsContainerRequest"
-	grpcPauseContainerRequest    = "grpc.PauseContainerRequest"
-	grpcResumeContainerRequest   = "grpc.ResumeContainerRequest"
-	grpcReseedRandomDevRequest   = "grpc.ReseedRandomDevRequest"
-	grpcGuestDetailsRequest      = "grpc.GuestDetailsRequest"
-	grpcMemHotplugByProbeRequest = "grpc.MemHotplugByProbeRequest"
-	grpcCopyFileRequest          = "grpc.CopyFileRequest"
-	grpcSetGuestDateTimeRequest  = "grpc.SetGuestDateTimeRequest"
-	grpcGetOOMEventRequest       = "grpc.GetOOMEventRequest"
-	grpcGetMetricsRequest        = "grpc.GetMetricsRequest"
-	grpcAddSwapRequest           = "grpc.AddSwapRequest"
-	grpcVolumeStatsRequest       = "grpc.VolumeStatsRequest"
-	grpcResizeVolumeRequest      = "grpc.ResizeVolumeRequest"
-	grpcGetIPTablesRequest       = "grpc.GetIPTablesRequest"
-	grpcSetIPTablesRequest       = "grpc.SetIPTablesRequest"
+	grpcCheckRequest                 = "grpc.CheckRequest"
+	grpcExecProcessRequest           = "grpc.ExecProcessRequest"
+	grpcCreateSandboxRequest         = "grpc.CreateSandboxRequest"
+	grpcDestroySandboxRequest        = "grpc.DestroySandboxRequest"
+	grpcCreateContainerRequest       = "grpc.CreateContainerRequest"
+	grpcStartContainerRequest        = "grpc.StartContainerRequest"
+	grpcRemoveContainerRequest       = "grpc.RemoveContainerRequest"
+	grpcSignalProcessRequest         = "grpc.SignalProcessRequest"
+	grpcUpdateRoutesRequest          = "grpc.UpdateRoutesRequest"
+	grpcUpdateInterfaceRequest       = "grpc.UpdateInterfaceRequest"
+	grpcUpdateEphemeralMountsRequest = "grpc.UpdateEphemeralMountsRequest"
+	grpcListInterfacesRequest        = "grpc.ListInterfacesRequest"
+	grpcListRoutesRequest            = "grpc.ListRoutesRequest"
+	grpcAddARPNeighborsRequest       = "grpc.AddARPNeighborsRequest"
+	grpcOnlineCPUMemRequest          = "grpc.OnlineCPUMemRequest"
+	grpcUpdateContainerRequest       = "grpc.UpdateContainerRequest"
+	grpcWaitProcessRequest           = "grpc.WaitProcessRequest"
+	grpcTtyWinResizeRequest          = "grpc.TtyWinResizeRequest"
+	grpcWriteStreamRequest           = "grpc.WriteStreamRequest"
+	grpcCloseStdinRequest            = "grpc.CloseStdinRequest"
+	grpcStatsContainerRequest        = "grpc.StatsContainerRequest"
+	grpcPauseContainerRequest        = "grpc.PauseContainerRequest"
+	grpcResumeContainerRequest       = "grpc.ResumeContainerRequest"
+	grpcReseedRandomDevRequest       = "grpc.ReseedRandomDevRequest"
+	grpcGuestDetailsRequest          = "grpc.GuestDetailsRequest"
+	grpcMemHotplugByProbeRequest     = "grpc.MemHotplugByProbeRequest"
+	grpcCopyFileRequest              = "grpc.CopyFileRequest"
+	grpcSetGuestDateTimeRequest      = "grpc.SetGuestDateTimeRequest"
+	grpcGetOOMEventRequest           = "grpc.GetOOMEventRequest"
+	grpcGetMetricsRequest            = "grpc.GetMetricsRequest"
+	grpcAddSwapRequest               = "grpc.AddSwapRequest"
+	grpcVolumeStatsRequest           = "grpc.VolumeStatsRequest"
+	grpcResizeVolumeRequest          = "grpc.ResizeVolumeRequest"
+	grpcGetIPTablesRequest           = "grpc.GetIPTablesRequest"
+	grpcSetIPTablesRequest           = "grpc.SetIPTablesRequest"
 )
 
 // newKataAgent returns an agent from an agent type.
@@ -605,6 +607,21 @@ func (k *kataAgent) updateRoutes(ctx context.Context, routes []*pbTypes.Route) (
 		return nil, err
 	}
 	return nil, nil
+}
+
+func (k *kataAgent) updateEphemeralMounts(ctx context.Context, storages []*grpc.Storage) error {
+	if storages != nil {
+		storagesReq := &grpc.UpdateEphemeralMountsRequest{
+			Storages: storages,
+		}
+
+		if _, err := k.sendReq(ctx, storagesReq); err != nil {
+			k.Logger().WithError(err).Error("update mounts request failed")
+			return err
+		}
+		return nil
+	}
+	return nil
 }
 
 func (k *kataAgent) addARPNeighbors(ctx context.Context, neighs []*pbTypes.ARPNeighbor) error {
@@ -1101,20 +1118,25 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 
 	groupNum := filepath.Base(dev.ContainerPath)
 
-	// Each /dev/vfio/NN device represents a VFIO group, which
-	// could include several PCI devices.  So we give group
-	// information in the main structure, then list each
-	// individual PCI device in the Options array.
+	// For VFIO-PCI, each /dev/vfio/NN device represents a VFIO group,
+	// which could include several PCI devices. So we give group
+	// information in the main structure, then list each individual PCI
+	// device in the Options array.
 	//
 	// Each option is formatted as "DDDD:BB:DD.F=<pcipath>"
 	// DDDD:BB:DD.F is the device's PCI address on the
 	// *host*. <pcipath> is the device's PCI path in the guest
 	// (see qomGetPciPath() for details).
+	//
+	// For VFIO-AP, one VFIO group could include several queue devices. They are
+	// identified by APQNs (Adjunct Processor Queue Numbers), which do not differ
+	// between host and guest. They are passed as options so they can be awaited
+	// by the agent.
 	kataDevice := &grpc.Device{
 		ContainerPath: dev.ContainerPath,
-		Type:          kataVfioDevType,
+		Type:          kataVfioPciDevType,
 		Id:            groupNum,
-		Options:       make([]string, len(devList)),
+		Options:       nil,
 	}
 
 	// We always pass the device information to the agent, since
@@ -1122,11 +1144,18 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 	// on the vfio_mode, we need to use a different device type so
 	// the agent can handle it properly
 	if c.sandbox.config.VfioMode == config.VFIOModeGuestKernel {
-		kataDevice.Type = kataVfioGuestKernelDevType
+		kataDevice.Type = kataVfioPciGuestKernelDevType
 	}
 
-	for i, pciDev := range devList {
-		kataDevice.Options[i] = fmt.Sprintf("0000:%s=%s", pciDev.BDF, pciDev.GuestPciPath)
+	if (*devList[0]).GetType() == config.VFIOAPDeviceMediatedType {
+		kataDevice.Type = kataVfioApDevType
+		kataDevice.Options = (*devList[0]).(config.VFIOAPDev).APDevices
+	} else {
+		kataDevice.Options = make([]string, len(devList))
+		for i, device := range devList {
+			pciDevice := (*device).(config.VFIOPCIDev)
+			kataDevice.Options[i] = fmt.Sprintf("0000:%s=%s", pciDevice.BDF, pciDevice.GuestPciPath)
+		}
 	}
 
 	return kataDevice
@@ -1951,6 +1980,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	}
 	k.reqHandlers[grpcUpdateInterfaceRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.UpdateInterface(ctx, req.(*grpc.UpdateInterfaceRequest))
+	}
+	k.reqHandlers[grpcUpdateEphemeralMountsRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.UpdateEphemeralMounts(ctx, req.(*grpc.UpdateEphemeralMountsRequest))
 	}
 	k.reqHandlers[grpcListInterfacesRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.ListInterfaces(ctx, req.(*grpc.ListInterfacesRequest))

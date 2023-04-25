@@ -91,7 +91,7 @@ pub async fn cloud_hypervisor_vm_fs_add(
     mut socket: UnixStream,
     fs_config: FsConfig,
 ) -> Result<Option<String>> {
-    let result = task::spawn_blocking(move || -> Result<Option<String>> {
+    task::spawn_blocking(move || -> Result<Option<String>> {
         let response = simple_api_full_command_and_response(
             &mut socket,
             "PUT",
@@ -102,7 +102,5 @@ pub async fn cloud_hypervisor_vm_fs_add(
 
         Ok(response)
     })
-    .await?;
-
-    result
+    .await?
 }

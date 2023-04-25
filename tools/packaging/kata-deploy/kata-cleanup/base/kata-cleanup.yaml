@@ -21,25 +21,28 @@ spec:
         image: quay.io/kata-containers/kata-deploy:latest
         imagePullPolicy: Always
         command: [ "bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh reset" ]
+        readinessProbe:
+          exec:
+            command: [ "bash", "-c", "[ -f /opt/kata/kata-deployed ]", "&&", "bash", "-c", "[ $? == 1 ]" ]
         env:
         - name: NODE_NAME
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
         securityContext:
-          privileged: false
+          privileged: true
         volumeMounts:
         - name: dbus
-          mountPath: /var/run/dbus
+          mountPath: /var/run/dbus/system_bus_socket
         - name: systemd
-          mountPath: /run/systemd
+          mountPath: /run/systemd/system
       volumes:
         - name: dbus
           hostPath:
-            path: /var/run/dbus
+            path: /var/run/dbus/system_bus_socket
         - name: systemd
           hostPath:
-            path: /run/systemd
+            path: /run/systemd/system
   updateStrategy:
     rollingUpdate:
       maxUnavailable: 1

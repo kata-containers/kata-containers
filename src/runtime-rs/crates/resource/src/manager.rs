@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::network::NetworkConfig;
 use crate::resource_persist::ResourceState;
 use crate::{manager_inner::ResourceManagerInner, rootfs::Rootfs, volume::Volume, ResourceConfig};
 use agent::{Agent, Storage};
@@ -53,6 +54,11 @@ impl ResourceManager {
     pub async fn prepare_before_start_vm(&self, device_configs: Vec<ResourceConfig>) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_before_start_vm(device_configs).await
+    }
+
+    pub async fn handle_network(&self, network_config: NetworkConfig) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.handle_network(network_config).await
     }
 
     pub async fn setup_after_start_vm(&self) -> Result<()> {
