@@ -509,10 +509,6 @@ type HypervisorConfig struct {
 	// The PCIe Root Port device is used to hot-plug the PCIe device
 	PCIeRootPort uint32
 
-	// VFIODevics are used to get PCIe device info early before the sandbox
-	// is started to make better PCIe topology decisions
-	VFIODevices []config.DeviceInfo
-
 	// ColdPlugVFIO is used to indicate if devices need to be coldplugged on the
 	// root port, switch or no port
 	ColdPlugVFIO hv.PCIePort

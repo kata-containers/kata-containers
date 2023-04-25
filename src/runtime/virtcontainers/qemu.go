@@ -712,54 +712,21 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 
 	q.virtiofsDaemon, err = q.createVirtiofsDaemon(hypervisorConfig.SharedPath)
 
-	// If we have a VFIO device we need to update the firmware configuration
-	// if executed in a trusted execution environment.
-	if hypervisorConfig.ConfidentialGuest {
-		// At the sandbox level we alreaady checked that we have a
-		// VFIO device, pass-through of a PCIe device needs allocated
-		// mmemory in the firmware otherwise BARs cannot be mapped
-		// First check if we have a PCIe devices, otherwise ignore
-		err, fwCfg := q.appendFwCfgForConfidentialGuest(hypervisorConfig.VFIODevices)
-		if err != nil {
-			return err
+	// The default OVMF MMIO aperture is too small for some PCIe devices
+	// with huge BARs so we need to increase it.
+	// memSize64bit is in bytes, convert to MB, OVMF expects MB as a string
+	if strings.Contains(strings.ToLower(hypervisorConfig.FirmwarePath), "ovmf") {
+		pciMmio64Mb := fmt.Sprintf("%d", (memSize64bit / 1024 / 1024))
+		fwCfg := govmmQemu.FwCfg{
+			Name: "opt/ovmf/X-PciMmio64Mb",
+			Str:  pciMmio64Mb,
 		}
-		if fwCfg != nil {
-			qemuConfig.FwCfg = append(qemuConfig.FwCfg, *fwCfg)
-		}
+		qemuConfig.FwCfg = append(qemuConfig.FwCfg, fwCfg)
 	}
+
 	q.qemuConfig = qemuConfig
 
 	return err
-}
-
-// appendFwCfgForConfidentialGuest appends the firmware configuration for a
-// VFIO and PCIe device, otherwise it will be ignored.
-func (q *qemu) appendFwCfgForConfidentialGuest(vfioDevices []config.DeviceInfo) (error, *govmmQemu.FwCfg) {
-	var err error
-	for _, dev := range vfioDevices {
-		dev.HostPath, err = config.GetHostPath(dev, false, "")
-		if err != nil {
-			return err, nil
-		}
-		vfioDevs, err := drivers.GetAllVFIODevicesFromIOMMUGroup(dev, true)
-		if err != nil {
-			return err, nil
-		}
-		fwCfg := govmmQemu.FwCfg{}
-		for _, vfioDev := range vfioDevs {
-			switch (*vfioDev).GetType() {
-			case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
-				if (*vfioDev).(config.VFIOPCIDev).IsPCIe {
-					fwCfg = govmmQemu.FwCfg{
-						Name: "opt/ovmf/X-PciMmio64Mb",
-						Str:  "262144",
-					}
-					return nil, &fwCfg
-				}
-			}
-		}
-	}
-	return nil, nil
 }
 
 func (q *qemu) checkBpfEnabled() {
