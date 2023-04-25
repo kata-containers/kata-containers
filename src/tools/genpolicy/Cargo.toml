@@ -1,0 +1,41 @@
+[package]
+name = "genpolicy"
+version = "0.1.0"
+authors = ["The Confidential Containers community https://github.com/confidential-containers"]
+edition = "2021"
+
+[dependencies]
+# Logging.
+env_logger = "0.10.0"
+log = "0.4.17"
+
+# Command line parsing.
+clap = { version = "4.1.8", features = ["derive"] }
+
+# YAML file serialization/deserialization.
+base64 = "0.21.0"
+serde = { version = "1.0.159", features = ["derive"] }
+
+# Newer serde_yaml versions are using unsafe-libyaml instead of yaml-rust,
+# and incorrectly change on serialization:
+#
+# value: "yes"
+#
+# to:
+#
+# value: yes
+#
+# In YAML, the value yes without quotes is reserved for boolean,
+# and confuses kubectl, that expects a string value.
+serde_yaml = "0.8"
+
+# Container repository.
+anyhow = "1.0.32"
+oci-distribution = { git = "https://github.com/krustlet/oci-distribution", rev = "1ba0d94a900a97aa1bcac032a67ea23766bcfdef" }
+openssl = { version = "=0.10.45", features = ["vendored"] }
+serde_json = "1.0.39"
+serde-transcode = "1.1.1"
+tokio = {version = "1.0", features = ["full"]}
+
+# OCI container specs.
+oci = { path = "../../libs/oci" }

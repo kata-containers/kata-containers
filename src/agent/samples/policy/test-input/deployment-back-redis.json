@@ -1,0 +1,467 @@
+{
+    "input": {
+        "oci": {
+            "ociVersion": "1.1.0-rc.1",
+            "process": {
+                "terminal": false,
+                "user": {
+                    "uid": 0,
+                    "gid": 0,
+                    "additionalGids": [
+                        0
+                    ]
+                },
+                "args": [
+                    "/opt/bitnami/scripts/redis/entrypoint.sh",
+                    "/opt/bitnami/scripts/redis/run.sh"
+                ],
+                "env": [
+                    "PATH=/opt/bitnami/common/bin:/opt/bitnami/redis/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                    "HOSTNAME=azure-vote-back-5bdd867667-xxmdz",
+                    "HOME=/",
+                    "OS_ARCH=amd64",
+                    "OS_FLAVOUR=debian-10",
+                    "OS_NAME=linux",
+                    "BITNAMI_APP_NAME=redis",
+                    "BITNAMI_IMAGE_VERSION=6.0.8-debian-10-r23",
+                    "ALLOW_EMPTY_PASSWORD=yes",
+                    "KUBERNETES_SERVICE_PORT_HTTPS=443",
+                    "KUBERNETES_PORT=tcp://10.0.0.1:443",
+                    "KUBERNETES_PORT_443_TCP=tcp://10.0.0.1:443",
+                    "KUBERNETES_PORT_443_TCP_PROTO=tcp",
+                    "KUBERNETES_PORT_443_TCP_PORT=443",
+                    "KUBERNETES_PORT_443_TCP_ADDR=10.0.0.1",
+                    "KUBERNETES_SERVICE_HOST=10.0.0.1",
+                    "KUBERNETES_SERVICE_PORT=443"
+                ],
+                "cwd": "/",
+                "capabilities": {
+                    "bounding": [
+                        "CAP_CHOWN",
+                        "CAP_DAC_OVERRIDE",
+                        "CAP_FSETID",
+                        "CAP_FOWNER",
+                        "CAP_MKNOD",
+                        "CAP_NET_RAW",
+                        "CAP_SETGID",
+                        "CAP_SETUID",
+                        "CAP_SETFCAP",
+                        "CAP_SETPCAP",
+                        "CAP_NET_BIND_SERVICE",
+                        "CAP_SYS_CHROOT",
+                        "CAP_KILL",
+                        "CAP_AUDIT_WRITE"
+                    ],
+                    "effective": [
+                        "CAP_CHOWN",
+                        "CAP_DAC_OVERRIDE",
+                        "CAP_FSETID",
+                        "CAP_FOWNER",
+                        "CAP_MKNOD",
+                        "CAP_NET_RAW",
+                        "CAP_SETGID",
+                        "CAP_SETUID",
+                        "CAP_SETFCAP",
+                        "CAP_SETPCAP",
+                        "CAP_NET_BIND_SERVICE",
+                        "CAP_SYS_CHROOT",
+                        "CAP_KILL",
+                        "CAP_AUDIT_WRITE"
+                    ],
+                    "permitted": [
+                        "CAP_CHOWN",
+                        "CAP_DAC_OVERRIDE",
+                        "CAP_FSETID",
+                        "CAP_FOWNER",
+                        "CAP_MKNOD",
+                        "CAP_NET_RAW",
+                        "CAP_SETGID",
+                        "CAP_SETUID",
+                        "CAP_SETFCAP",
+                        "CAP_SETPCAP",
+                        "CAP_NET_BIND_SERVICE",
+                        "CAP_SYS_CHROOT",
+                        "CAP_KILL",
+                        "CAP_AUDIT_WRITE"
+                    ]
+                },
+                "noNewPrivileges": false,
+                "apparmorProfile": "cri-containerd.apparmor.d",
+                "oomScoreAdj": 996
+            },
+            "root": {
+                "path": "/run/kata-containers/shared/containers/194643fdfd590cc15d5e4c5a77f2b307615a5f4267a20e36e62b663b2fec2804",
+                "readonly": false
+            },
+            "mounts": [
+                {
+                    "destination": "/proc",
+                    "type": "proc",
+                    "source": "proc",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "nodev"
+                    ]
+                },
+                {
+                    "destination": "/dev",
+                    "type": "tmpfs",
+                    "source": "tmpfs",
+                    "options": [
+                        "nosuid",
+                        "strictatime",
+                        "mode=755",
+                        "size=65536k"
+                    ]
+                },
+                {
+                    "destination": "/dev/pts",
+                    "type": "devpts",
+                    "source": "devpts",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "newinstance",
+                        "ptmxmode=0666",
+                        "mode=0620",
+                        "gid=5"
+                    ]
+                },
+                {
+                    "destination": "/dev/mqueue",
+                    "type": "mqueue",
+                    "source": "mqueue",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "nodev"
+                    ]
+                },
+                {
+                    "destination": "/sys",
+                    "type": "sysfs",
+                    "source": "sysfs",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "nodev",
+                        "ro"
+                    ]
+                },
+                {
+                    "destination": "/sys/fs/cgroup",
+                    "type": "cgroup",
+                    "source": "cgroup",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "nodev",
+                        "relatime",
+                        "ro"
+                    ]
+                },
+                {
+                    "destination": "/etc/hosts",
+                    "type": "bind",
+                    "source": "/run/kata-containers/shared/containers/194643fdfd590cc15d5e4c5a77f2b307615a5f4267a20e36e62b663b2fec2804-0b3c2cb99f26a987-hosts",
+                    "options": [
+                        "rbind",
+                        "rprivate",
+                        "rw"
+                    ]
+                },
+                {
+                    "destination": "/dev/termination-log",
+                    "type": "bind",
+                    "source": "/run/kata-containers/shared/containers/194643fdfd590cc15d5e4c5a77f2b307615a5f4267a20e36e62b663b2fec2804-59a1df8f1949193f-termination-log",
+                    "options": [
+                        "rbind",
+                        "rprivate",
+                        "rw"
+                    ]
+                },
+                {
+                    "destination": "/etc/hostname",
+                    "type": "bind",
+                    "source": "/run/kata-containers/shared/containers/194643fdfd590cc15d5e4c5a77f2b307615a5f4267a20e36e62b663b2fec2804-17ac8ec327ab29c6-hostname",
+                    "options": [
+                        "rbind",
+                        "rprivate",
+                        "rw"
+                    ]
+                },
+                {
+                    "destination": "/etc/resolv.conf",
+                    "type": "bind",
+                    "source": "/run/kata-containers/shared/containers/194643fdfd590cc15d5e4c5a77f2b307615a5f4267a20e36e62b663b2fec2804-dce5e413bf2a3edc-resolv.conf",
+                    "options": [
+                        "rbind",
+                        "rprivate",
+                        "rw"
+                    ]
+                },
+                {
+                    "destination": "/dev/shm",
+                    "type": "bind",
+                    "source": "/run/kata-containers/sandbox/shm",
+                    "options": [
+                        "rbind"
+                    ]
+                },
+                {
+                    "destination": "/var/run/secrets/kubernetes.io/serviceaccount",
+                    "type": "bind",
+                    "source": "/run/kata-containers/shared/containers/194643fdfd590cc15d5e4c5a77f2b307615a5f4267a20e36e62b663b2fec2804-fcdd0a43ca86cf06-serviceaccount",
+                    "options": [
+                        "rbind",
+                        "rprivate",
+                        "ro"
+                    ]
+                }
+            ],
+            "annotations": {
+                "io.kubernetes.cri.sandbox-namespace": "default",
+                "io.kubernetes.cri.sandbox-name": "azure-vote-back-5bdd867667-xxmdz",
+                "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/194643fdfd590cc15d5e4c5a77f2b307615a5f4267a20e36e62b663b2fec2804",
+                "io.kubernetes.cri.sandbox-id": "0a26150c8479d361d992a7bd1f90953d0c4f952678042e415fc95ad182ce40bc",
+                "io.kubernetes.cri.container-name": "azure-vote-back",
+                "io.kubernetes.cri.sandbox-uid": "7184b17d-5987-4c7b-9cc3-6a30acf13e43",
+                "io.katacontainers.pkg.oci.container_type": "pod_container",
+                "io.kubernetes.cri.image-name": "mcr.microsoft.com/oss/bitnami/redis:6.0.8",
+                "io.kubernetes.cri.container-type": "container"
+            },
+            "linux": {
+                "resources": {
+                    "memory": {
+                        "limit": 268435456,
+                        "reservation": 0,
+                        "swap": 268435456,
+                        "kernel": 0,
+                        "kernelTCP": 0,
+                        "swappiness": 0,
+                        "disableOOMKiller": false
+                    },
+                    "cpu": {
+                        "shares": 102,
+                        "quota": 25000,
+                        "period": 100000,
+                        "realtimeRuntime": 0,
+                        "realtimePeriod": 0
+                    }
+                },
+                "cgroupsPath": "/kubepods/burstable/pod7184b17d-5987-4c7b-9cc3-6a30acf13e43/194643fdfd590cc15d5e4c5a77f2b307615a5f4267a20e36e62b663b2fec2804",
+                "namespaces": [
+                    {
+                        "type": "ipc"
+                    },
+                    {
+                        "type": "uts"
+                    },
+                    {
+                        "type": "mount"
+                    }
+                ],
+                "maskedPaths": [
+                    "/proc/acpi",
+                    "/proc/kcore",
+                    "/proc/keys",
+                    "/proc/latency_stats",
+                    "/proc/timer_list",
+                    "/proc/timer_stats",
+                    "/proc/sched_debug",
+                    "/proc/scsi",
+                    "/sys/firmware"
+                ],
+                "readonlyPaths": [
+                    "/proc/asound",
+                    "/proc/bus",
+                    "/proc/fs",
+                    "/proc/irq",
+                    "/proc/sys",
+                    "/proc/sysrq-trigger"
+                ]
+            }
+        },
+        "storages": [
+            {
+                "driver": "blk",
+                "driver_options": [],
+                "source": "07",
+                "fstype": "tar",
+                "options": [
+                    "ro"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/layers/fcbeb9959f44231cfbf3f4b67982819af62cf1f6147634cf6b17aa387d68a0b7",
+                "fs_group": {
+                    "group_id": 0,
+                    "group_change_policy": 0
+                }
+            },
+            {
+                "driver": "blk",
+                "driver_options": [],
+                "source": "08",
+                "fstype": "tar",
+                "options": [
+                    "ro"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/layers/6b767046ef077714983a6753b9f9fb4112d410d360eaba5970c2f73b3464b822",
+                "fs_group": {
+                    "group_id": 0,
+                    "group_change_policy": 0
+                }
+            },
+            {
+                "driver": "blk",
+                "driver_options": [],
+                "source": "09",
+                "fstype": "tar",
+                "options": [
+                    "ro"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/layers/3f52cb6525d8e68d573c381f6d104dd168cc0b33a1168f16b00c877ce8b8b615",
+                "fs_group": {
+                    "group_id": 0,
+                    "group_change_policy": 0
+                }
+            },
+            {
+                "driver": "blk",
+                "driver_options": [],
+                "source": "0a",
+                "fstype": "tar",
+                "options": [
+                    "ro"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/layers/574b73e66daf2c735729d74a69546093fdc068131aeddb5802bdd9ec97f41030",
+                "fs_group": {
+                    "group_id": 0,
+                    "group_change_policy": 0
+                }
+            },
+            {
+                "driver": "blk",
+                "driver_options": [],
+                "source": "0b",
+                "fstype": "tar",
+                "options": [
+                    "ro"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/layers/94442d7d77352813206f1dc099bdb3c990f3bc0d2ea66615514c990ce1076364",
+                "fs_group": {
+                    "group_id": 0,
+                    "group_change_policy": 0
+                }
+            },
+            {
+                "driver": "blk",
+                "driver_options": [],
+                "source": "0c",
+                "fstype": "tar",
+                "options": [
+                    "ro"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/layers/c6d4758db4c09104b0554a3ff25d37e42e4f0795a022f2a42f714129436ce143",
+                "fs_group": {
+                    "group_id": 0,
+                    "group_change_policy": 0
+                }
+            },
+            {
+                "driver": "blk",
+                "driver_options": [],
+                "source": "0d",
+                "fstype": "tar",
+                "options": [
+                    "ro"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/layers/31e6c24a4c1d1ad4ac714013c400a1e0d3eda6de604950f546c8c5decc59c19d",
+                "fs_group": {
+                    "group_id": 0,
+                    "group_change_policy": 0
+                }
+            },
+            {
+                "driver": "blk",
+                "driver_options": [],
+                "source": "0e",
+                "fstype": "tar",
+                "options": [
+                    "ro"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/layers/e9108213f658355f13128c2db0f2bde8a9cf268ae6269917756b98f6ccd21255",
+                "fs_group": {
+                    "group_id": 0,
+                    "group_change_policy": 0
+                }
+            },
+            {
+                "driver": "blk",
+                "driver_options": [],
+                "source": "0f",
+                "fstype": "tar",
+                "options": [
+                    "ro"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/layers/5ade73e90ea578e8e10c3ba0e4065b4467e153096bbdbb736e1e24a83a8b7422",
+                "fs_group": {
+                    "group_id": 0,
+                    "group_change_policy": 0
+                }
+            },
+            {
+                "driver": "blk",
+                "driver_options": [],
+                "source": "10",
+                "fstype": "tar",
+                "options": [
+                    "ro"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/layers/a6e7b1e11675402c304983e57798aeb189d415d492202666a18c8a88436a56e5",
+                "fs_group": {
+                    "group_id": 0,
+                    "group_change_policy": 0
+                }
+            },
+            {
+                "driver": "blk",
+                "driver_options": [],
+                "source": "11",
+                "fstype": "tar",
+                "options": [
+                    "ro"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/layers/bdfe2d24fac24b376ecf41da9fa69fec86321dc1551b8ccc5ccb84bd04e03bb5",
+                "fs_group": {
+                    "group_id": 0,
+                    "group_change_policy": 0
+                }
+            },
+            {
+                "driver": "blk",
+                "driver_options": [],
+                "source": "11",
+                "fstype": "tar-overlay",
+                "options": [
+                    "fcbeb9959f44231cfbf3f4b67982819af62cf1f6147634cf6b17aa387d68a0b7",
+                    "6b767046ef077714983a6753b9f9fb4112d410d360eaba5970c2f73b3464b822",
+                    "3f52cb6525d8e68d573c381f6d104dd168cc0b33a1168f16b00c877ce8b8b615",
+                    "574b73e66daf2c735729d74a69546093fdc068131aeddb5802bdd9ec97f41030",
+                    "94442d7d77352813206f1dc099bdb3c990f3bc0d2ea66615514c990ce1076364",
+                    "c6d4758db4c09104b0554a3ff25d37e42e4f0795a022f2a42f714129436ce143",
+                    "31e6c24a4c1d1ad4ac714013c400a1e0d3eda6de604950f546c8c5decc59c19d",
+                    "e9108213f658355f13128c2db0f2bde8a9cf268ae6269917756b98f6ccd21255",
+                    "5ade73e90ea578e8e10c3ba0e4065b4467e153096bbdbb736e1e24a83a8b7422",
+                    "a6e7b1e11675402c304983e57798aeb189d415d492202666a18c8a88436a56e5",
+                    "bdfe2d24fac24b376ecf41da9fa69fec86321dc1551b8ccc5ccb84bd04e03bb5"
+                ],
+                "mount_point": "/run/kata-containers/shared/containers/194643fdfd590cc15d5e4c5a77f2b307615a5f4267a20e36e62b663b2fec2804",
+                "fs_group": {
+                    "group_id": 0,
+                    "group_change_policy": 0
+                }
+            }
+        ]
+    }
+}

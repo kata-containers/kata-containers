@@ -279,8 +279,7 @@ type KataAgentConfig struct {
 	Debug              bool
 	Trace              bool
 	EnableDebugConsole bool
-	PolicyRules        string
-	PolicyData         string
+	Policy             string
 }
 
 // KataAgentState is the structure describing the data stored from this
@@ -740,6 +739,12 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 		// Check grpc server is serving
 		if err = k.check(ctx); err != nil {
 			return err
+		}
+
+		if len(sandbox.config.AgentConfig.Policy) > 0 {
+			if err := sandbox.agent.setPolicy(ctx, sandbox.config.AgentConfig.Policy); err != nil {
+				return err
+			}
 		}
 
 		// Setup network interfaces and routes
@@ -2344,7 +2349,7 @@ func (k *kataAgent) PullImage(ctx context.Context, req *image.PullImageReq) (*im
 	}, nil
 }
 
-func (k *kataAgent) setPolicy(ctx context.Context, rules string, data string) error {
-	_, err := k.sendReq(ctx, &grpc.SetPolicyRequest{Rules: rules, Data: data})
+func (k *kataAgent) setPolicy(ctx context.Context, policy string) error {
+	_, err := k.sendReq(ctx, &grpc.SetPolicyRequest{Policy: policy})
 	return err
 }

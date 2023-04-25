@@ -892,23 +892,14 @@ func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error
 	updateConfig := false
 
 	if value, ok := ocispec.Annotations[vcAnnotations.KernelModules]; ok {
-		ociLog.WithField("vcAnnotations.KernelModules", value).Info()
-
 		modules := strings.Split(value, KernelModulesSeparator)
 		c.KernelModules = modules
 		updateConfig = true
 	}
 
-	if value, ok := ocispec.Annotations["io.katacontainers.config.agent.policy-rules"]; ok {
+	if value, ok := ocispec.Annotations["io.katacontainers.config.agent.policy"]; ok {
 		if decoded_rules, err := base64.StdEncoding.DecodeString(value); err == nil {
-			c.PolicyRules = string(decoded_rules)
-			updateConfig = true
-		}
-	}
-
-	if value, ok := ocispec.Annotations["io.katacontainers.config.agent.policy-data"]; ok {
-		if decoded_data, err := base64.StdEncoding.DecodeString(value); err == nil {
-			c.PolicyData = string(decoded_data)
+			c.Policy = string(decoded_rules)
 			updateConfig = true
 		}
 	}

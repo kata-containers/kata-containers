@@ -561,6 +561,5 @@ message ResizeVolumeRequest {
 }
 
 message SetPolicyRequest {
-	string rules = 1;
-	string data = 2;
+	string policy = 1;
 }
