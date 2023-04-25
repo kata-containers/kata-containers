@@ -54,4 +54,12 @@ func TestGetDriver(t *testing.T) {
 
 	assert.NoError(err)
 	assert.Equal(expectedFS, fsd)
+
+    expErr = errors.New("TEST-ERROR")
+    defer func() {
+        expErr = nil
+    }()
+	nonexist, err := GetDriver()
+    assert.NotNil(err)
+    assert.Nil(nonexist)
 }
