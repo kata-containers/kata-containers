@@ -6,6 +6,7 @@
 #[macro_use]
 extern crate slog;
 
+pub mod cpu;
 pub mod device;
 pub mod fs;
 pub mod hooks;
