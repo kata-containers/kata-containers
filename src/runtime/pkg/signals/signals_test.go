@@ -7,7 +7,9 @@ package signals
 
 import (
 	"bytes"
+	"errors"
 	"os"
+	"os/exec"
 	"reflect"
 	goruntime "runtime"
 	"sort"
@@ -134,4 +136,70 @@ func TestSignalBacktrace(t *testing.T) {
 	// very basic tests to check if a backtrace was produced
 	assert.True(strings.Contains(b, "contention:"))
 	assert.True(strings.Contains(b, `level=error`))
+}
+
+func TestSignalHandlePanic(t *testing.T) {
+	assert := assert.New(t)
+
+	savedLog := signalLog
+	defer func() {
+		signalLog = savedLog
+	}()
+
+	signalLog = logrus.WithFields(logrus.Fields{
+		"name":        "name",
+		"pid":         os.Getpid(),
+		"source":      "throttler",
+		"test-logger": true})
+
+	// Create buffer to save logger output.
+	buf := &bytes.Buffer{}
+
+	savedOut := signalLog.Logger.Out
+	defer func() {
+		signalLog.Logger.Out = savedOut
+	}()
+
+	// Capture output to buffer.
+	signalLog.Logger.Out = buf
+
+	HandlePanic(nil)
+
+	b := buf.String()
+	assert.True(len(b) == 0)
+}
+
+func TestSignalHandlePanicWithError(t *testing.T) {
+	assert := assert.New(t)
+
+	if os.Getenv("CALL_EXIT") != "1" {
+		cmd := exec.Command(os.Args[0], "-test.run=TestSignalHandlePanicWithError")
+		cmd.Env = append(os.Environ(), "CALL_EXIT=1")
+
+		err := cmd.Run()
+		assert.True(err != nil)
+
+		exitError, ok := err.(*exec.ExitError)
+		assert.True(ok)
+		assert.True(exitError.ExitCode() == 1)
+
+		return
+	}
+
+	signalLog = logrus.WithFields(logrus.Fields{
+		"name":        "name",
+		"pid":         os.Getpid(),
+		"source":      "throttler",
+		"test-logger": true})
+
+	// Create buffer to save logger output.
+	buf := &bytes.Buffer{}
+
+	// Capture output to buffer.
+	signalLog.Logger.Out = buf
+
+	dieCallBack := func() {}
+	defer HandlePanic(dieCallBack)
+	e := errors.New("test-panic")
+	panic(e)
 }
