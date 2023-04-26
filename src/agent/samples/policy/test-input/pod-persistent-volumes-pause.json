@@ -72,7 +72,7 @@
                 "oomScoreAdj": -998
             },
             "root": {
-                "path": "/run/kata-containers/shared/containers/4d662f3c8cbbf81c4c9d513aef83d3f7cacf3367f6467626c04dc2b12dee7098",
+                "path": "/run/kata-containers/shared/containers/a30518db940af3f8fa53c2e3f8e443dbe88cec1b6d658f39407005417b16d6ab",
                 "readonly": true
             },
             "hostname": "busybox-cc",
@@ -143,7 +143,7 @@
                 {
                     "destination": "/etc/resolv.conf",
                     "type": "bind",
-                    "source": "/run/kata-containers/shared/containers/4d662f3c8cbbf81c4c9d513aef83d3f7cacf3367f6467626c04dc2b12dee7098-6e1bb34e174b7e42-resolv.conf",
+                    "source": "/run/kata-containers/shared/containers/a30518db940af3f8fa53c2e3f8e443dbe88cec1b6d658f39407005417b16d6ab-991c6a8a285e5288-resolv.conf",
                     "options": [
                         "rbind",
                         "ro",
@@ -154,19 +154,19 @@
                 }
             ],
             "annotations": {
-                "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
-                "io.kubernetes.cri.container-type": "sandbox",
-                "io.kubernetes.cri.sandbox-namespace": "default",
                 "io.kubernetes.cri.sandbox-cpu-shares": "2",
-                "io.kubernetes.cri.sandbox-uid": "0d4bb37f-41f9-4b94-88f6-b708e714769a",
+                "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/a30518db940af3f8fa53c2e3f8e443dbe88cec1b6d658f39407005417b16d6ab",
+                "io.kubernetes.cri.sandbox-uid": "fc6c3d7c-4cf4-49d6-9146-52b13663abdf",
                 "io.kubernetes.cri.sandbox-cpu-quota": "0",
+                "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
+                "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_busybox-cc_fc6c3d7c-4cf4-49d6-9146-52b13663abdf",
+                "io.kubernetes.cri.container-type": "sandbox",
                 "io.kubernetes.cri.sandbox-name": "busybox-cc",
+                "io.kubernetes.cri.sandbox-cpu-period": "100000",
+                "io.kubernetes.cri.sandbox-namespace": "default",
+                "io.kubernetes.cri.sandbox-id": "a30518db940af3f8fa53c2e3f8e443dbe88cec1b6d658f39407005417b16d6ab",
                 "io.kubernetes.cri.sandbox-memory": "0",
-                "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_busybox-cc_0d4bb37f-41f9-4b94-88f6-b708e714769a",
-                "io.kubernetes.cri.sandbox-id": "4d662f3c8cbbf81c4c9d513aef83d3f7cacf3367f6467626c04dc2b12dee7098",
-                "nerdctl/network-namespace": "/var/run/netns/cni-027efe6c-3909-1a53-2810-59921e86942f",
-                "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/4d662f3c8cbbf81c4c9d513aef83d3f7cacf3367f6467626c04dc2b12dee7098",
-                "io.kubernetes.cri.sandbox-cpu-period": "100000"
+                "nerdctl/network-namespace": "/var/run/netns/cni-83b92cea-2270-22e1-a2ff-9d841585825c"
             },
             "linux": {
                 "resources": {
@@ -178,7 +178,7 @@
                         "realtimePeriod": 0
                     }
                 },
-                "cgroupsPath": "/kubepods/besteffort/pod0d4bb37f-41f9-4b94-88f6-b708e714769a/4d662f3c8cbbf81c4c9d513aef83d3f7cacf3367f6467626c04dc2b12dee7098",
+                "cgroupsPath": "/kubepods/besteffort/podfc6c3d7c-4cf4-49d6-9146-52b13663abdf/a30518db940af3f8fa53c2e3f8e443dbe88cec1b6d658f39407005417b16d6ab",
                 "namespaces": [
                     {
                         "type": "ipc"
@@ -234,7 +234,7 @@
                 "options": [
                     "5a5aad80055ff20012a50dc25f8df7a29924474324d65f7d5306ee8ee27ff71d"
                 ],
-                "mount_point": "/run/kata-containers/shared/containers/4d662f3c8cbbf81c4c9d513aef83d3f7cacf3367f6467626c04dc2b12dee7098",
+                "mount_point": "/run/kata-containers/shared/containers/a30518db940af3f8fa53c2e3f8e443dbe88cec1b6d658f39407005417b16d6ab",
                 "fs_group": {
                     "group_id": 0,
                     "group_change_policy": 0

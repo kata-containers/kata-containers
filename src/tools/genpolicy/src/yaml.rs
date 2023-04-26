@@ -148,10 +148,24 @@ pub struct VolumeMount {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Volume {
     pub name: String,
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emptyDir: Option<EmptyDirVolume>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hostPath: Option<HostPathVolume>,
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub persistentVolumeClaim: Option<VolumeClaimVolume>,
+}
+
+// Example:
+//
+// hostPath:
+//   path: /dev/sev
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct HostPathVolume {
+    pub path: String,
 }
 
 // Example:
