@@ -75,6 +75,8 @@ impl VirtSandbox {
         hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
     ) -> Result<Self> {
+        let config = resource_manager.config().await;
+        let keep_abnormal = config.runtime.keep_abnormal;
         Ok(Self {
             sid: sid.to_string(),
             msg_sender: Arc::new(Mutex::new(msg_sender)),
@@ -82,7 +84,7 @@ impl VirtSandbox {
             agent,
             hypervisor,
             resource_manager,
-            monitor: Arc::new(HealthCheck::new(true, false)),
+            monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
         })
     }
 
@@ -440,6 +442,7 @@ impl Persist for VirtSandbox {
         }?;
         let agent = Arc::new(KataAgent::new(kata_types::config::Agent::default()));
         let sid = sandbox_args.sid;
+        let keep_abnormal = config.runtime.keep_abnormal;
         let args = ManagerArgs {
             sid: sid.clone(),
             agent: agent.clone(),
@@ -454,7 +457,7 @@ impl Persist for VirtSandbox {
             agent,
             hypervisor,
             resource_manager,
-            monitor: Arc::new(HealthCheck::new(true, false)),
+            monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
         })
     }
 }

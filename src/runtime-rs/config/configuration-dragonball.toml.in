@@ -214,7 +214,14 @@ dial_timeout = 45
 # system log
 # (default: disabled)
 #enable_debug = true
-#
+
+# If enabled, enabled, it means that 1) if the runtime exits abnormally,
+# the cleanup process will be skipped, and 2) the runtime will not exit
+# even if the health check fails.
+# This option is typically used to retain abnormal information for debugging.
+# (default: false)
+#keep_abnormal = true
+
 # Internetworking model
 # Determines how the VM should be connected to the
 # the container network interface
