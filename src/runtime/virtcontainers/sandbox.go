@@ -503,7 +503,7 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 
 	s, err := newSandbox(ctx, sandboxConfig, factory)
 	if err != nil {
-		return nil, err
+		return s, err
 	}
 
 	if len(s.config.Experimental) != 0 {
@@ -522,16 +522,16 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	// re-creating it. The above check for the sandbox state enforces that.
 
 	if err := s.fsShare.Prepare(ctx); err != nil {
-		return nil, err
+		return s, err
 	}
 
 	if err := s.agent.createSandbox(ctx, s); err != nil {
-		return nil, err
+		return s, err
 	}
 
 	// Set sandbox state
 	if err := s.setSandboxState(types.StateReady); err != nil {
-		return nil, err
+		return s, err
 	}
 
 	return s, nil
@@ -580,12 +580,12 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 
 	fsShare, err := NewFilesystemShare(s)
 	if err != nil {
-		return nil, err
+		return s, err
 	}
 	s.fsShare = fsShare
 
 	if s.store, err = persist.GetDriver(); err != nil || s.store == nil {
-		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
+		return s, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}
 	defer func() {
 		if retErr != nil {
@@ -608,7 +608,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 
 	// Create the sandbox resource controllers.
 	if err := s.createResourceController(); err != nil {
-		return nil, err
+		return s, err
 	}
 
 	// Ignore the error. Restore can fail for a new sandbox
@@ -617,16 +617,16 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 
 	if err := validateHypervisorConfig(&sandboxConfig.HypervisorConfig); err != nil {
-		return nil, err
+		return s, err
 	}
 
 	// store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
-		return nil, err
+		return s, err
 	}
 
 	if s.disableVMShutdown, err = s.agent.init(ctx, s, sandboxConfig.AgentConfig); err != nil {
-		return nil, err
+		return s, err
 	}
 
 	return s, nil
@@ -809,10 +809,12 @@ func (s *Sandbox) removeContainer(containerID string) error {
 // Delete deletes an already created sandbox.
 // The VM in which the sandbox is running will be shut down.
 func (s *Sandbox) Delete(ctx context.Context) error {
-	if s.state.State != types.StateReady &&
+	// When sandbox create failed,the sandbox.State would be "".
+	if s.state.State != "" &&
+		s.state.State != types.StateReady &&
 		s.state.State != types.StatePaused &&
 		s.state.State != types.StateStopped {
-		return fmt.Errorf("Sandbox not ready, paused or stopped, impossible to delete")
+		return fmt.Errorf("Sandbox not ready, paused and stopped, impossible to delete")
 	}
 
 	for _, c := range s.containers {

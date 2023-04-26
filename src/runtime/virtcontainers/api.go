@@ -59,21 +59,20 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 
 	// Create the sandbox.
 	s, err := createSandbox(ctx, sandboxConfig, factory)
-	if err != nil {
-		return nil, err
-	}
 
 	// Cleanup sandbox resources in case of any failure
 	defer func() {
-		if err != nil {
+		if err != nil && s != nil {
 			s.Delete(ctx)
 		}
 	}()
 
-	// Create the sandbox network
-	if err = s.createNetwork(ctx); err != nil {
+	if err != nil {
 		return nil, err
 	}
+
+	// Create the sandbox network
+	err = s.createNetwork(ctx)
 
 	// network rollback
 	defer func() {
@@ -82,15 +81,17 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 		}
 	}()
 
+	if err != nil {
+		return nil, err
+	}
+
 	// Set the sandbox host cgroups.
 	if err := s.setupResourceController(); err != nil {
 		return nil, err
 	}
 
 	// Start the VM
-	if err = s.startVM(ctx, prestartHookFunc); err != nil {
-		return nil, err
-	}
+	err = s.startVM(ctx, prestartHookFunc)
 
 	// rollback to stop VM if error occurs
 	defer func() {
@@ -98,6 +99,10 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 			s.stopVM(ctx)
 		}
 	}()
+
+	if err != nil {
+		return nil, err
+	}
 
 	s.postCreatedNetwork(ctx)
 
