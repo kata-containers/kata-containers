@@ -53,7 +53,7 @@ const UNKNOWN: &str = "unknown";
 fn get_field_fn(line: &str, delimiter: &str, file_name: &str) -> Result<String> {
     let fields: Vec<&str> = line.split(delimiter).collect();
     if fields.len() < 2 {
-        return Err(anyhow!("Unexpected file contents for {}", file_name));
+        Err(anyhow!("Unexpected file contents for {}", file_name))
     } else {
         let val = fields[1].trim();
         Ok(String::from(val))
