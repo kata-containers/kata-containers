@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # kernel deps
@@ -18,6 +18,9 @@ RUN apt-get update && \
 	    iptables \
 	    kmod \
 	    libelf-dev \
+	    libssl-dev \
+	    gettext \
+	    rsync \
+	    cpio \
 	    patch && \
-    if [ "$(uname -m)" = "s390x" ]; then apt-get install -y --no-install-recommends libssl-dev; fi && \
-    apt-get clean && rm -rf /var/lib/lists/
+    apt-get clean && apt-get autoclean
