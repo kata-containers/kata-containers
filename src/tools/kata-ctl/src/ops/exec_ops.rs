@@ -326,9 +326,7 @@ fn setup_client(server_url: String, dbg_console_port: u32) -> anyhow::Result<Uni
             vsock.setup_sock().context("set up vsock")
         }
         // Others will be INVALID URI.
-        _ => {
-            return Err(anyhow!("invalid URI scheme: {:?}", scheme));
-        }
+        _ => Err(anyhow!("invalid URI scheme: {:?}", scheme)),
     }
 }
 
