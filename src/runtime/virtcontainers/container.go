@@ -1020,6 +1020,10 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 		}
 	}
 
+	if err := c.sandbox.agent.removeStaleVirtiofsShareMounts(ctx); err != nil && !force {
+		return err
+	}
+
 	if err := c.detachDevices(ctx); err != nil && !force {
 		return err
 	}
