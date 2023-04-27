@@ -1,10 +1,5 @@
 on:
-  pull_request:
-    types:
-      - opened
-      - edited
-      - reopened
-      - synchronize
+  workflow_call:
 
 name: Static checks
 jobs:
@@ -52,22 +47,18 @@ jobs:
           echo "Check passed"
         fi
     - name: Set PATH
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
     - name: Setup
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/setup.sh
     - name: Installing rust
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/install_rust.sh
         PATH=$PATH:"$HOME/.cargo/bin"
         rustup target add x86_64-unknown-linux-musl
         rustup component add rustfmt clippy
     - name: Setup seccomp
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
         gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
@@ -76,6 +67,5 @@ jobs:
         echo "LIBSECCOMP_LINK_TYPE=static" >> $GITHUB_ENV
         echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> $GITHUB_ENV
     - name: Run check
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && ${{ matrix.cmd }}

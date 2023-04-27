@@ -1,0 +1,40 @@
+# Copyright (c) 2023 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+name: Kata Containers PR CI on label change
+on:
+  pull_request:
+    types:
+      - labeled
+      - unlabeled
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  skip:
+    uses: ./.github/workflows/skip-pr-check.yaml
+    with:
+      pr: ${{ github.event.pull_request.number }}
+    secrets: inherit
+
+  run-PR-wip-checks:
+    needs: [skip]
+    if: needs.skip.outputs.skip != '1'
+    uses: ./.github/workflows/PR-wip-checks.yaml
+    secrets: inherit
+
+  run-require-pr-porting-labels:
+    needs: [skip]
+    if: needs.skip.outputs.skip != '1'
+    uses: ./.github/workflows/require-pr-porting-labels.yaml
+    secrets: inherit
+
+  run-add-backport-label:
+    needs: [skip]
+    if: needs.skip.outputs.skip != '1'
+    uses: ./.github/workflows/add-backport-label.yaml
+    secrets: inherit

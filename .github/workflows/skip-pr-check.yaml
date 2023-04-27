@@ -1,0 +1,38 @@
+# Copyright (c) 2023 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+on:
+  workflow_call:
+    inputs:
+      pr:
+        required: true
+        type: number
+    outputs:
+      skip:
+        description: 'Can we skip this PR?'
+        value: ${{ jobs.skip.outputs.skip }}
+jobs:
+  skip:
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.skip.outputs.skip }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: check if we can skip CI on this PR
+        id: skip
+        run: |
+          skip=1
+          for file in $(gh pr view ${{ inputs.pr }} --json files --jq '.files.[].path'); do
+            [[ $file != docs/* ]] && skip=0 && break
+            [[ $file != *.md ]] && skip=0 && break
+            [[ $file != *.png ]] && skip=0 && break
+            [[ $file != *.jpg ]] && skip=0 && break
+            [[ $file != *.jpeg ]] && skip=0 && break
+            [[ $file != *.svg ]] && skip=0 && break
+          done
+
+          echo "skip=$skip" >> $GITHUB_OUTPUT

@@ -6,17 +6,13 @@
 name: Move issues to "In progress" in backlog project when referenced by a PR
 
 on:
-  pull_request_target:
-    types:
-      - opened
-      - reopened
+  workflow_call:
 
 jobs:
   move-linked-issues-to-in-progress:
     runs-on: ubuntu-latest
     steps:
       - name: Install hub
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         run: |
           HUB_ARCH="amd64"
           HUB_VER=$(curl -sL "https://api.github.com/repos/github/hub/releases/latest" |\
@@ -27,7 +23,6 @@ jobs:
           sudo install hub /usr/local/bin
 
       - name: Install hub extension script
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         run: |
           # Clone into a temporary directory to avoid overwriting
           # any existing github directory.
@@ -37,11 +32,9 @@ jobs:
           popd &>/dev/null
 
       - name: Checkout code to allow hub to communicate with the project
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         uses: actions/checkout@v2
 
       - name: Move issue to "In progress"
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         env:
           GITHUB_TOKEN: ${{ secrets.KATA_GITHUB_ACTIONS_TOKEN }}
         run: |

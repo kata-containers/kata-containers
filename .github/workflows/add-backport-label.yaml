@@ -1,14 +1,7 @@
 name: Add backport label
 
 on:
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - edited
-      - labeled
-      - unlabeled
+  workflow_call:
 
 jobs:
   check-issues:
@@ -16,7 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code to allow hub to communicate with the project
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         uses: actions/checkout@v3
 
       - name: Install hub extension script
@@ -27,7 +19,6 @@ jobs:
           popd &>/dev/null
 
       - name: Determine whether to add label 
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CONTAINS_AUTO_BACKPORT: ${{ contains(github.event.pull_request.labels.*.name, 'auto-backport') }}
@@ -51,7 +42,7 @@ jobs:
               exit 1
             }
             labels=$(hub-util.sh list-labels-for-issue "$issue")
-            
+
             label_names=$(echo $labels | jq -r '.[].name' || true)
             if [[ "$label_names" =~ "bug" ]]; then
               has_bug=true
@@ -73,7 +64,7 @@ jobs:
           echo "auto_backport_added=$CONTAINS_AUTO_BACKPORT" >> $GITHUB_OUTPUT
 
       - name: Add comment
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && steps.add_label.outputs.add_backport_label == 'true' && steps.add_label.outputs.auto_backport_added == 'false' }}
+        if: ${{ steps.add_label.outputs.add_backport_label == 'true' && steps.add_label.outputs.auto_backport_added == 'false' }}
         uses: actions/github-script@v6
         with:
           script: |
@@ -86,14 +77,14 @@ jobs:
 
       # Allow label to be removed by adding no-backport-needed label
       - name: Remove auto-backport label
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && steps.add_label.outputs.add_backport_label == 'false' }}
+        if: ${{ steps.add_label.outputs.add_backport_label == 'false' }}
         uses: andymckay/labeler@e6c4322d0397f3240f0e7e30a33b5c5df2d39e90
         with:
           remove-labels: "auto-backport"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Add auto-backport label
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && steps.add_label.outputs.add_backport_label == 'true' }}
+        if: ${{ steps.add_label.outputs.add_backport_label == 'true' }}
         uses: andymckay/labeler@e6c4322d0397f3240f0e7e30a33b5c5df2d39e90
         with:
           add-labels: "auto-backport"

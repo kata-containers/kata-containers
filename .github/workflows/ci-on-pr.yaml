@@ -1,0 +1,78 @@
+# Copyright (c) 2023 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+name: Kata Containers PR CI
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  skip:
+    uses: ./.github/workflows/skip-pr-check.yaml
+    with:
+      pr: ${{ github.event.pull_request.number }}
+    secrets: inherit
+
+  run-static-checks:
+    needs: [skip]
+    if: needs.skip.outputs.skip != '1'
+    uses: ./.github/workflows/static-checks.yaml
+    secrets: inherit
+
+  run-static-checks-dragonball:
+    needs: [skip]
+    if: needs.skip.outputs.skip != '1'
+    uses: ./.github/workflows/static-checks-dragonball.yaml
+    secrets: inherit
+
+  run-snap:
+    needs: [skip]
+    if: needs.skip.outputs.skip != '1'
+    uses: ./.github/workflows/snap.yaml
+    secrets: inherit
+
+  run-require-pr-porting-labels:
+    needs: [skip]
+    if: needs.skip.outputs.skip != '1'
+    uses: ./.github/workflows/require-pr-porting-labels.yaml
+    secrets: inherit
+
+  run-PR-wip-checks:
+    needs: [skip]
+    if: needs.skip.outputs.skip != '1'
+    uses: ./.github/workflows/PR-wip-checks.yaml
+    secrets: inherit
+
+  run-move-issues-to-in-progress:
+    needs: [skip]
+    if: needs.skip.outputs.skip != '1'
+    uses: ./.github/workflows/move-issues-to-in-progress.yaml
+    secrets: inherit
+
+  run-commit-message-check:
+    needs: [skip]
+    if: needs.skip.outputs.skip != '1'
+    uses: ./.github/workflows/commit-message-check.yaml
+    secrets: inherit
+
+  run-cargo-deny-runner:
+    needs: [skip]
+    if: needs.skip.outputs.skip != '1'
+    uses: ./.github/workflows/cargo-deny-runner.yaml
+    secrets: inherit
+
+  run-add-backport-label:
+    needs: [skip]
+    if: needs.skip.outputs.skip != '1'
+    uses: ./.github/workflows/add-backport-label.yaml
+    secrets: inherit
