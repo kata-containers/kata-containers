@@ -452,7 +452,7 @@ impl From<crate::oci::LinuxDeviceCgroup> for oci::LinuxDeviceCgroup {
 
         oci::LinuxDeviceCgroup {
             allow: from.Allow(),
-            r#type: from.take_Type(),
+            r#type: Some(from.take_Type()),
             major,
             minor,
             access: from.take_Access(),
