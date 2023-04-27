@@ -5,6 +5,8 @@
 
 package hypervisors
 
+import "fmt"
+
 // Bridge is a bridge where devices can be hot plugged
 type Bridge struct {
 	// DeviceAddr contains information about devices plugged and its address in the bridge
@@ -39,6 +41,18 @@ const (
 	// NoPort is for disabling VFIO hotplug/coldplug
 	NoPort = "no-port"
 )
+
+func (p PCIePort) String() string {
+	switch p {
+	case RootPort:
+		return "root-port"
+	case SwitchPort:
+		return "switch-port"
+	case NoPort:
+		return "no-port"
+	}
+	return fmt.Sprintf("unknown PCIePort: %s", string(p))
+}
 
 type HypervisorState struct {
 	BlockIndexMap map[int]struct{}

@@ -710,8 +710,6 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, hypervisorConfig.PCIeRootPort, memSize32bit, memSize64bit)
 	}
 
-	q.virtiofsDaemon, err = q.createVirtiofsDaemon(hypervisorConfig.SharedPath)
-
 	// The default OVMF MMIO aperture is too small for some PCIe devices
 	// with huge BARs so we need to increase it.
 	// memSize64bit is in bytes, convert to MB, OVMF expects MB as a string
@@ -726,6 +724,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 
 	q.qemuConfig = qemuConfig
 
+	q.virtiofsDaemon, err = q.createVirtiofsDaemon(hypervisorConfig.SharedPath)
 	return err
 }
 
