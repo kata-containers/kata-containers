@@ -47,7 +47,6 @@ pub const GENERIC_CPU_MODEL_FIELD: &str = "model name";
 #[allow(dead_code)]
 pub const PROC_CPUINFO: &str = "/proc/cpuinfo";
 
-#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 fn read_file_contents(file_path: &str) -> Result<String> {
     let contents = std::fs::read_to_string(file_path)?;
     Ok(contents)
@@ -55,7 +54,6 @@ fn read_file_contents(file_path: &str) -> Result<String> {
 
 // get_single_cpu_info returns the contents of the first cpu from
 // the specified cpuinfo file by parsing based on a specified delimiter
-#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 pub fn get_single_cpu_info(cpu_info_file: &str, substring: &str) -> Result<String> {
     let contents = read_file_contents(cpu_info_file)?;
 

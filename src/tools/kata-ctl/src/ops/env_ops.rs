@@ -7,7 +7,6 @@
 
 use crate::arch::arch_specific;
 use crate::args::EnvArgument;
-use crate::check;
 use crate::ops::version;
 use crate::utils;
 use kata_types::config::TomlConfig;
@@ -232,7 +231,7 @@ fn get_host_info() -> Result<HostInfo> {
     let host_kernel_version = utils::get_kernel_version(utils::PROC_VERSION_FILE)?;
     let (host_distro_name, host_distro_version) =
         utils::get_distro_details(utils::OS_RELEASE, utils::OS_RELEASE_CLR)?;
-    let (cpu_vendor, cpu_model) = utils::get_generic_cpu_details(check::PROC_CPUINFO)?;
+    let (cpu_vendor, cpu_model) = arch_specific::get_cpu_details()?;
 
     let host_distro = DistroInfo {
         name: host_distro_name,

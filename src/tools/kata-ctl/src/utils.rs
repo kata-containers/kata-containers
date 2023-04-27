@@ -5,9 +5,7 @@
 
 #![allow(dead_code)]
 
-#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 use crate::arch::arch_specific;
-#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 use crate::check::get_single_cpu_info;
 
 use anyhow::{anyhow, Context, Result};
@@ -106,7 +104,7 @@ pub fn get_distro_details(os_release: &str, os_release_clr: &str) -> Result<(Str
     Ok((name, version))
 }
 
-#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64", target_arch = "aarch64"))]
 pub fn get_generic_cpu_details(cpu_info_file: &str) -> Result<(String, String)> {
     let cpu_info = get_single_cpu_info(cpu_info_file, "\n\n")?;
     let lines = cpu_info.lines();
