@@ -128,7 +128,7 @@ impl ContainerInner {
     }
 
     pub(crate) async fn start_container(&mut self, cid: &ContainerID) -> Result<()> {
-        self.check_state(vec![ProcessStatus::Created, ProcessStatus::Stopped])
+        self.check_state(vec![ProcessStatus::Created, ProcessStatus::Exited])
             .await
             .context("check state")?;
 
