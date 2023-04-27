@@ -213,9 +213,13 @@ impl ContainerInner {
             return Ok(());
         }
 
-        self.check_state(vec![ProcessStatus::Running, ProcessStatus::Exited])
-            .await
-            .context("check state")?;
+        self.check_state(vec![
+            ProcessStatus::Created,
+            ProcessStatus::Running,
+            ProcessStatus::Exited,
+        ])
+        .await
+        .context("check state")?;
 
         if state == ProcessStatus::Running {
             // if use force mode to stop container, stop always successful

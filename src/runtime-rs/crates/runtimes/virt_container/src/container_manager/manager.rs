@@ -120,6 +120,9 @@ impl ContainerManager for VirtContainerManager {
                     .remove(container_id)
                     .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
 
+                // Delete the container that is created but never started
+                c.stop_process(process).await.context("delete container")?;
+
                 // Poststop Hooks:
                 // * should be run in runtime namespace
                 // * should be run after the container is deleted but before delete operation returns
