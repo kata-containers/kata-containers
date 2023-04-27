@@ -122,17 +122,17 @@ impl ImageService {
     /// If the request specifies a non-empty id, use it; otherwise derive it from the image path.
     /// In either case, verify that the chosen id is valid.
     fn cid_from_request(&self, req: &image::PullImageRequest) -> Result<String> {
-        let req_cid = req.get_container_id();
+        let req_cid = req.container_id();
         let cid = if !req_cid.is_empty() {
             req_cid.to_string()
-        } else if let Some(last) = req.get_image().rsplit('/').next() {
+        } else if let Some(last) = req.image().rsplit('/').next() {
             // Support multiple containers with same image
             let index = self.container_count.fetch_add(1, Ordering::Relaxed);
 
             // ':' not valid for container id
             format!("{}_{}", last.replace(':', "_"), index)
         } else {
-            return Err(anyhow!("Invalid image name. {}", req.get_image()));
+            return Err(anyhow!("Invalid image name. {}", req.image()));
         };
         verify_cid(&cid)?;
         Ok(cid)
@@ -152,7 +152,7 @@ impl ImageService {
         }
 
         let cid = self.cid_from_request(req)?;
-        let image = req.get_image();
+        let image = req.image();
         if cid.starts_with("pause") {
             Self::unpack_pause_image(&cid)?;
 
@@ -190,7 +190,7 @@ impl ImageService {
         );
         self.image_client.lock().await.config.security_validate = *enable_signature_verification;
 
-        let source_creds = (!req.get_source_creds().is_empty()).then(|| req.get_source_creds());
+        let source_creds = (!req.source_creds().is_empty()).then(|| req.source_creds());
 
         let bundle_path = Path::new(CONTAINER_BASE).join(&cid);
         fs::create_dir_all(&bundle_path)?;
