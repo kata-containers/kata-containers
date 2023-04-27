@@ -123,6 +123,9 @@ pub struct SecurityContext {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allowPrivilegeEscalation: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub privileged: Option<bool>,
 }
 
 // Example:
@@ -270,6 +273,7 @@ impl Yaml {
                 securityContext: Some(SecurityContext {
                     readOnlyRootFilesystem: Some(true),
                     allowPrivilegeEscalation: Some(false),
+                    privileged: None,
                 }),
                 ..Default::default()
             };
