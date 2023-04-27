@@ -118,14 +118,11 @@ pub struct Container {
 //   allowPrivilegeEscalation: false
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SecurityContext {
-    #[serde(default = "default_false")]
-    pub readOnlyRootFilesystem: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub readOnlyRootFilesystem: Option<bool>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allowPrivilegeEscalation: Option<bool>,
-}
-fn default_false() -> bool {
-    false
 }
 
 // Example:
@@ -271,7 +268,7 @@ impl Yaml {
             let pause_container = Container {
                 image: "mcr.microsoft.com/oss/kubernetes/pause:3.6".to_string(),
                 securityContext: Some(SecurityContext {
-                    readOnlyRootFilesystem: true,
+                    readOnlyRootFilesystem: Some(true),
                     allowPrivilegeEscalation: Some(false),
                 }),
                 ..Default::default()
@@ -369,6 +366,15 @@ impl Container {
             }
         }
         true
+    }
+
+    pub fn read_only_root_filesystem(&self) -> bool {
+        if let Some(context) = &self.securityContext {
+            if let Some(read_only) = context.readOnlyRootFilesystem {
+                return read_only;
+            }
+        }
+        false
     }
 }
 

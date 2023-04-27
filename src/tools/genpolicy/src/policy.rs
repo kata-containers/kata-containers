@@ -294,9 +294,7 @@ impl PodPolicy {
 
         if let Some(root) = &infra_container.root {
             let mut policy_root = root.clone();
-            if let Some(security_context) = &yaml_container.securityContext {
-                policy_root.readonly = security_context.readOnlyRootFilesystem;
-            }
+            policy_root.readonly = yaml_container.read_only_root_filesystem();
             oci_spec.root = Some(policy_root);
         }
 
