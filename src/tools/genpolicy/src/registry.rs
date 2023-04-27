@@ -103,13 +103,15 @@ impl Container {
             process.env.push(env.clone());
         }
 
-        if let Some(entry_points) = &docker_config.Entrypoint {
-            for entry_point in entry_points {
-                process.args.push(entry_point.clone());
+        if process.args.is_empty() {
+            if let Some(entry_points) = &docker_config.Entrypoint {
+                for entry_point in entry_points {
+                    process.args.push(entry_point.clone());
+                }
             }
-        }
-        for cmd in &docker_config.Cmd {
-            process.args.push(cmd.clone());
+            for cmd in &docker_config.Cmd {
+                process.args.push(cmd.clone());
+            }
         }
 
         if !docker_config.WorkingDir.is_empty() {

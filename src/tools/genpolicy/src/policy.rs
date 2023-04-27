@@ -330,11 +330,13 @@ impl PodPolicy {
         // Start with the Default Unix Spec from
         // https://github.com/containerd/containerd/blob/release/1.6/oci/spec.go#L132
         let mut process = containerd::get_process();
+        yaml_container.get_process_args(&mut process.args);
         registry_container.get_process(&mut process)?;
 
         if container_index != 0 {
             process.env.push("HOSTNAME=".to_string() + &pod_name);
         }
+
         yaml_container.get_env_variables(&mut process.env);
 
         infra::get_process(&mut process, &infra_container)?;

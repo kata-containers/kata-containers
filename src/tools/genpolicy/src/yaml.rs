@@ -109,6 +109,9 @@ pub struct Container {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ports: Option<Vec<Port>>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<Vec<String>>,
 }
 
 // Example:
@@ -379,6 +382,14 @@ impl Container {
             }
         }
         false
+    }
+
+    pub fn get_process_args(&self, args: &mut Vec<String>) {
+        if let Some(commands) = &self.command {
+            for command in commands {
+                args.push(command.clone());
+            }
+        }
     }
 }
 
