@@ -112,6 +112,9 @@ pub struct Container {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command: Option<Vec<String>>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub args: Option<Vec<String>>,
 }
 
 // Example:
@@ -384,12 +387,27 @@ impl Container {
         false
     }
 
-    pub fn get_process_args(&self, args: &mut Vec<String>) {
+    pub fn get_process_args(&self, policy_args: &mut Vec<String>) -> (bool, bool) {
+        let mut yaml_has_command = true;
+        let mut yaml_has_args = true;
+
         if let Some(commands) = &self.command {
             for command in commands {
-                args.push(command.clone());
+                policy_args.push(command.clone());
             }
+        } else {
+            yaml_has_command = false;
         }
+
+        if let Some(args) = &self.args {
+            for arg in args {
+                policy_args.push(arg.clone());
+            }
+        } else {
+            yaml_has_args = false;
+        }
+
+        (yaml_has_command, yaml_has_args)
     }
 }
 

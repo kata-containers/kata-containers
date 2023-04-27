@@ -10,8 +10,8 @@ use crate::policy;
 
 use anyhow::Result;
 use log::{info, LevelFilter};
-use oci_distribution::{secrets::RegistryAuth, Client, Reference};
 use oci_distribution::client::{linux_amd64_resolver, ClientConfig};
+use oci_distribution::{secrets::RegistryAuth, Client, Reference};
 use serde::{Deserialize, Serialize};
 use std::io;
 
@@ -54,7 +54,8 @@ impl Container {
         let reference: Reference = image.to_string().parse().unwrap();
         let mut client = Client::new(ClientConfig {
             platform_resolver: Some(Box::new(linux_amd64_resolver)),
-            ..Default::default()});
+            ..Default::default()
+        });
 
         let (manifest, _digest_hash, config_layer) = client
             .pull_manifest_and_config(&reference, &RegistryAuth::Anonymous)
@@ -73,11 +74,16 @@ impl Container {
             serde_transcode::transcode(&mut deserializer, &mut serializer).unwrap();
         }
 
-        Ok(Container {config_layer})
+        Ok(Container { config_layer })
     }
 
     // Convert Docker image config to policy data.
-    pub fn get_process(&self, process: &mut policy::OciProcess) -> Result<()> {
+    pub fn get_process(
+        &self,
+        process: &mut policy::OciProcess,
+        yaml_has_command: bool,
+        yaml_has_args: bool,
+    ) -> Result<()> {
         info!("Getting process field from docker config layer...");
         let config_layer: DockerConfigLayer = serde_json::from_str(&self.config_layer)?;
         let docker_config = &config_layer.config;
@@ -103,14 +109,20 @@ impl Container {
             process.env.push(env.clone());
         }
 
-        if process.args.is_empty() {
+        let policy_args = &mut process.args;
+        if !yaml_has_command {
             if let Some(entry_points) = &docker_config.Entrypoint {
-                for entry_point in entry_points {
-                    process.args.push(entry_point.clone());
+                let mut reversed_entry_points = entry_points.clone();
+                reversed_entry_points.reverse();
+
+                for entry_point in reversed_entry_points {
+                    policy_args.insert(0, entry_point.clone());
                 }
             }
+        }
+        if !yaml_has_args {
             for cmd in &docker_config.Cmd {
-                process.args.push(cmd.clone());
+                policy_args.push(cmd.clone());
             }
         }
 
