@@ -151,7 +151,7 @@ DEFVCPUS := 1
 # Default maximum number of vCPUs
 DEFMAXVCPUS := 0
 # Default memory size in MiB
-DEFMEMSZ := 2048
+DEFMEMSZ := 384
 # Default memory slots
 # Cases to consider :
 # - nvdimm rootfs image
