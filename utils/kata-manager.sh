@@ -365,6 +365,16 @@ github_download_package()
 	echo "${version}:${file}"
 }
 
+# get the actual latest version of the module
+get_latest_version()
+{
+	local release_url="${1:-}"
+
+	local latest_version=$(curl -sL "$release_url/latest" | grep "tag_name" | sed -E 's/.*"([^"]+)".*/\1/')
+
+	echo "$latest_version"
+}
+
 install_containerd()
 {
 	local requested_version="${1:-}"
@@ -374,7 +384,10 @@ install_containerd()
 	local version_desc="latest version"
 	[ -n "$requested_version" ] && version_desc="version $requested_version"
 
-	info "Downloading $project release ($version_desc)"
+	local version=$(get_latest_version \
+		"$containerd_releases_url")
+
+	info "Downloading $project release ($version)"
 
 	local results=$(github_download_package \
 		"$containerd_releases_url" \
@@ -518,7 +531,10 @@ install_kata()
 	local version_desc="latest version"
 	[ -n "$requested_version" ] && version_desc="version $requested_version"
 
-	info "Downloading $project release ($version_desc)"
+	local version=$(get_latest_version \
+		"$kata_releases_url")
+
+	info "Downloading $project release ($version)"
 
 	local results=$(github_download_package \
 		"$kata_releases_url" \
