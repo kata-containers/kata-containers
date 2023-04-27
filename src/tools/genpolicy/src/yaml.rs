@@ -120,14 +120,12 @@ pub struct Container {
 pub struct SecurityContext {
     #[serde(default = "default_false")]
     pub readOnlyRootFilesystem: bool,
-    #[serde(default = "default_true")]
-    pub allowPrivilegeEscalation: bool,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowPrivilegeEscalation: Option<bool>,
 }
 fn default_false() -> bool {
     false
-}
-fn default_true() -> bool {
-    true
 }
 
 // Example:
@@ -274,7 +272,7 @@ impl Yaml {
                 image: "mcr.microsoft.com/oss/kubernetes/pause:3.6".to_string(),
                 securityContext: Some(SecurityContext {
                     readOnlyRootFilesystem: true,
-                    allowPrivilegeEscalation: false,
+                    allowPrivilegeEscalation: Some(false),
                 }),
                 ..Default::default()
             };
@@ -362,6 +360,15 @@ impl Container {
                 }
             }
         }
+    }
+
+    pub fn allow_privilege_escalation(&self) -> bool {
+        if let Some(context) = &self.securityContext {
+            if let Some(allow) = context.allowPrivilegeEscalation {
+                return allow;
+            }
+        }
+        true
     }
 }
 
