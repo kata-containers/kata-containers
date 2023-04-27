@@ -6,14 +6,6 @@
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use nix::sys::{stat, stat::SFlag};
-use tokio::sync::RwLock;
-
-use super::Volume;
-use crate::volume::utils::{
-    generate_shared_path, get_direct_volume_path, volume_mount_info, DEFAULT_VOLUME_FS_TYPE,
-    KATA_DIRECT_VOLUME_TYPE, KATA_MOUNT_BIND_TYPE,
-};
 use hypervisor::{
     device::{
         device_manager::{do_handle_device, DeviceManager},
@@ -21,9 +13,18 @@ use hypervisor::{
     },
     BlockConfig,
 };
+use nix::sys::{stat, stat::SFlag};
+use tokio::sync::RwLock;
+
+use super::{generate_volume_id, Volume};
+use crate::volume::utils::{
+    generate_shared_path, get_direct_volume_path, volume_mount_info, DEFAULT_VOLUME_FS_TYPE,
+    KATA_DIRECT_VOLUME_TYPE, KATA_MOUNT_BIND_TYPE,
+};
 
 #[derive(Clone)]
 pub(crate) struct BlockVolume {
+    id: String,
     storage: Option<agent::Storage>,
     mount: oci::Mount,
     device_id: String,
@@ -38,6 +39,8 @@ impl BlockVolume {
         cid: &str,
         sid: &str,
     ) -> Result<Self> {
+        let id = generate_volume_id();
+
         let mnt_src: &str = &m.source;
         // default block device fs type: ext4.
         let mut blk_dev_fstype = DEFAULT_VOLUME_FS_TYPE.to_string();
@@ -140,6 +143,7 @@ impl BlockVolume {
         };
 
         Ok(Self {
+            id,
             storage: Some(storage),
             mount,
             device_id,
@@ -149,6 +153,10 @@ impl BlockVolume {
 
 #[async_trait]
 impl Volume for BlockVolume {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
     fn get_volume_mount(&self) -> Result<Vec<oci::Mount>> {
         Ok(vec![self.mount.clone()])
     }
@@ -163,16 +171,16 @@ impl Volume for BlockVolume {
         Ok(s)
     }
 
+    fn get_device_id(&self) -> Result<Option<String>> {
+        Ok(Some(self.device_id.clone()))
+    }
+
     async fn cleanup(&self, device_manager: &RwLock<DeviceManager>) -> Result<()> {
         device_manager
             .write()
             .await
             .try_remove_device(&self.device_id)
             .await
-    }
-
-    fn get_device_id(&self) -> Result<Option<String>> {
-        Ok(Some(self.device_id.clone()))
     }
 }
 

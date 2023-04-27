@@ -4,8 +4,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use super::{Rootfs, ROOTFS};
-use crate::share_fs::{do_get_guest_path, do_get_host_path};
+use std::fs;
+
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -18,10 +18,13 @@ use hypervisor::{
 };
 use kata_types::mount::Mount;
 use nix::sys::stat::{self, SFlag};
-use std::fs;
 use tokio::sync::RwLock;
 
+use super::{generate_rootfs_id, Rootfs, ROOTFS};
+use crate::share_fs::{do_get_guest_path, do_get_host_path};
+
 pub(crate) struct BlockRootfs {
+    id: String,
     guest_path: String,
     device_id: String,
     mount: oci::Mount,
@@ -36,6 +39,8 @@ impl BlockRootfs {
         dev_id: u64,
         rootfs: &Mount,
     ) -> Result<Self> {
+        let id = generate_rootfs_id();
+
         let container_path = do_get_guest_path(ROOTFS, cid, false, false);
         let host_path = do_get_host_path(ROOTFS, sid, cid, false, false);
         // Create rootfs dir on host to make sure mount point in guest exists, as readonly dir is
@@ -69,6 +74,7 @@ impl BlockRootfs {
         }
 
         Ok(Self {
+            id,
             guest_path: container_path.clone(),
             device_id,
             mount: oci::Mount {
@@ -81,6 +87,10 @@ impl BlockRootfs {
 
 #[async_trait]
 impl Rootfs for BlockRootfs {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
     async fn get_guest_rootfs_path(&self) -> Result<String> {
         Ok(self.guest_path.clone())
     }

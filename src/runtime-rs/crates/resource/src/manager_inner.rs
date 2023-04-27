@@ -385,6 +385,26 @@ impl ResourceManagerInner {
         Ok(())
     }
 
+    pub async fn remove_container_resources(
+        &self,
+        cid: &str,
+        rootfs: Vec<Arc<dyn Rootfs>>,
+        volumes: Vec<Arc<dyn Volume>>,
+    ) -> Result<(Vec<Arc<dyn Rootfs>>, Vec<Arc<dyn Volume>>)> {
+        // remove rootfs
+        let unremoved_rootfs = self
+            .rootfs_resource
+            .remove(&self.device_manager, cid.to_owned(), rootfs)
+            .await?;
+        // remove volumes
+        let unremoved_volumes = self
+            .volume_resource
+            .remove(&self.device_manager, cid.to_owned(), volumes)
+            .await?;
+
+        Ok((unremoved_rootfs, unremoved_volumes))
+    }
+
     pub async fn dump(&self) {
         self.rootfs_resource.dump().await;
         self.volume_resource.dump().await;

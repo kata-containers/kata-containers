@@ -10,7 +10,6 @@ use std::{
     io::{BufRead, BufReader},
 };
 
-use crate::share_fs::EPHEMERAL_PATH;
 use agent::Storage;
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
@@ -20,7 +19,8 @@ use kata_sys_util::{fs::get_base_name, mount::PROC_MOUNTS_FILE};
 use kata_types::mount::KATA_EPHEMERAL_VOLUME_TYPE;
 use tokio::sync::RwLock;
 
-use super::{Volume, BIND};
+use super::{generate_volume_id, Volume, BIND};
+use crate::share_fs::EPHEMERAL_PATH;
 
 type PageSize = Byte;
 type Limit = u64;
@@ -29,9 +29,8 @@ const NODEV: &str = "nodev";
 
 // container hugepage
 pub(crate) struct Hugepage {
-    // storage info
+    id: String,
     storage: Option<Storage>,
-    // mount info
     mount: oci::Mount,
 }
 
@@ -42,6 +41,8 @@ impl Hugepage {
         hugepage_limits_map: HashMap<PageSize, Limit>,
         fs_options: Vec<String>,
     ) -> Result<Self> {
+        let id = generate_volume_id();
+
         // Create mount option string
         let page_size = get_page_size(fs_options).context("failed to get page size")?;
         let option = hugepage_limits_map
@@ -68,6 +69,7 @@ impl Hugepage {
             ..Default::default()
         };
         Ok(Self {
+            id,
             storage: Some(storage),
             mount,
         })
@@ -76,6 +78,10 @@ impl Hugepage {
 
 #[async_trait]
 impl Volume for Hugepage {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
     fn get_volume_mount(&self) -> Result<Vec<oci::Mount>> {
         Ok(vec![self.mount.clone()])
     }

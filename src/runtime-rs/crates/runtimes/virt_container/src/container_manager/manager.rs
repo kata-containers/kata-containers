@@ -116,12 +116,17 @@ impl ContainerManager for VirtContainerManager {
         match process.process_type {
             ProcessType::Container => {
                 let mut containers = self.containers.write().await;
+
+                let c = containers
+                    .get(container_id)
+                    .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
+
+                // delete the container that is created but never started
+                c.stop_process(process).await.context("delete container")?;
+
                 let c = containers
                     .remove(container_id)
                     .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
-
-                // Delete the container that is created but never started
-                c.stop_process(process).await.context("delete container")?;
 
                 // Poststop Hooks:
                 // * should be run in runtime namespace

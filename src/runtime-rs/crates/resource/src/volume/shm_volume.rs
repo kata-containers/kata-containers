@@ -4,14 +4,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::path::Path;
-
 use anyhow::Result;
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
 use tokio::sync::RwLock;
 
-use super::Volume;
+use std::path::Path;
+
+use super::{generate_volume_id, Volume};
 use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
 
 pub const SHM_DIR: &str = "shm";
@@ -24,12 +24,15 @@ pub const KATA_EPHEMERAL_DEV_TYPE: &str = "ephemeral";
 
 #[derive(Debug)]
 pub(crate) struct ShmVolume {
+    id: String,
     mount: oci::Mount,
     storage: Option<agent::Storage>,
 }
 
 impl ShmVolume {
     pub(crate) fn new(m: &oci::Mount, shm_size: u64) -> Result<Self> {
+        let id = generate_volume_id();
+
         let (storage, mount) = if shm_size > 0 {
             // storage
             let mount_path = Path::new(DEFAULT_KATA_GUEST_SANDBOX_DIR).join(SHM_DIR);
@@ -82,12 +85,16 @@ impl ShmVolume {
             (None, mount)
         };
 
-        Ok(Self { storage, mount })
+        Ok(Self { id, storage, mount })
     }
 }
 
 #[async_trait]
 impl Volume for ShmVolume {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
     fn get_volume_mount(&self) -> anyhow::Result<Vec<oci::Mount>> {
         Ok(vec![self.mount.clone()])
     }

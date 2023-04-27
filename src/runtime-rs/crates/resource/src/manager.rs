@@ -12,8 +12,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
 use hypervisor::Hypervisor;
-use kata_types::config::TomlConfig;
-use kata_types::mount::Mount;
+use kata_types::{config::TomlConfig, mount::Mount};
 use oci::{Linux, LinuxResources};
 use persist::sandbox_persist::Persist;
 use tokio::sync::RwLock;
@@ -123,6 +122,16 @@ impl ResourceManager {
     pub async fn cleanup(&self) -> Result<()> {
         let inner = self.inner.read().await;
         inner.cleanup().await
+    }
+
+    pub async fn remove_container_resources(
+        &self,
+        cid: &str,
+        rootfs: Vec<Arc<dyn Rootfs>>,
+        volumes: Vec<Arc<dyn Volume>>,
+    ) -> Result<(Vec<Arc<dyn Rootfs>>, Vec<Arc<dyn Volume>>)> {
+        let inner = self.inner.read().await;
+        inner.remove_container_resources(cid, rootfs, volumes).await
     }
 }
 

@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use nix::sys::{stat, stat::SFlag};
 use tokio::sync::RwLock;
 
-use super::Volume;
+use super::{generate_volume_id, Volume};
 use crate::volume::utils::{
     generate_shared_path, volume_mount_info, DEFAULT_VOLUME_FS_TYPE, KATA_SPDK_VOLUME_TYPE,
     KATA_SPOOL_VOLUME_TYPE,
@@ -25,6 +25,7 @@ use hypervisor::{
 /// SPDKVolume: spdk block device volume
 #[derive(Clone)]
 pub(crate) struct SPDKVolume {
+    id: String,
     storage: Option<agent::Storage>,
     mount: oci::Mount,
     device_id: String,
@@ -38,6 +39,7 @@ impl SPDKVolume {
         cid: &str,
         sid: &str,
     ) -> Result<Self> {
+        let id = generate_volume_id();
         let mnt_src: &str = &m.source;
 
         // deserde Information from mountinfo.json
@@ -142,6 +144,7 @@ impl SPDKVolume {
         };
 
         Ok(Self {
+            id,
             storage: Some(storage),
             mount,
             device_id,
@@ -151,6 +154,10 @@ impl SPDKVolume {
 
 #[async_trait]
 impl Volume for SPDKVolume {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
     fn get_volume_mount(&self) -> Result<Vec<oci::Mount>> {
         Ok(vec![self.mount.clone()])
     }

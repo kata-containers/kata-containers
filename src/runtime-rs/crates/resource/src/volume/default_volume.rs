@@ -10,17 +10,20 @@ use tokio::sync::RwLock;
 use anyhow::Result;
 use async_trait::async_trait;
 
-use super::Volume;
+use super::{generate_volume_id, Volume};
 
 #[derive(Debug)]
 pub(crate) struct DefaultVolume {
+    id: String,
     mount: oci::Mount,
 }
 
 /// DefaultVolume: passthrough the mount to guest
 impl DefaultVolume {
     pub fn new(mount: &oci::Mount) -> Result<Self> {
+        let id = generate_volume_id();
         Ok(Self {
+            id,
             mount: mount.clone(),
         })
     }
@@ -28,6 +31,10 @@ impl DefaultVolume {
 
 #[async_trait]
 impl Volume for DefaultVolume {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
     fn get_volume_mount(&self) -> anyhow::Result<Vec<oci::Mount>> {
         Ok(vec![self.mount.clone()])
     }
