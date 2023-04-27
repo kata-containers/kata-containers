@@ -17,7 +17,7 @@ use std::process::exit;
 use args::{Commands, KataCtlCli};
 
 use ops::check_ops::{
-    handle_check, handle_factory, handle_iptables, handle_metrics, handle_version,
+    handle_check, handle_factory, handle_iptables, handle_metrics, handle_version, handle_timeout,
 };
 use ops::env_ops::handle_env;
 use ops::exec_ops::handle_exec;
@@ -35,6 +35,7 @@ fn real_main() -> Result<()> {
         Commands::Iptables(args) => handle_iptables(args),
         Commands::Metrics(args) => handle_metrics(args),
         Commands::Version => handle_version(),
+        Commands::Timeout(args) => handle_timeout(args)
     }
 }
 

@@ -5,13 +5,17 @@
 
 use crate::arch::arch_specific::get_checks;
 
-use crate::args::{CheckArgument, CheckSubCommand, IptablesCommand, MetricsCommand};
+use crate::args::{
+    CheckArgument, CheckSubCommand, IptablesCommand, MetricsCommand, TimeoutArguments,
+};
 
 use crate::check;
 
 use crate::ops::version;
 
 use crate::types::*;
+
+pub static mut KATA_TIMEOUT: u64 = 1;
 
 use anyhow::{anyhow, Result};
 
@@ -123,5 +127,11 @@ pub fn handle_version() -> Result<()> {
     let version = version::get().unwrap();
 
     println!("{} version {:?} (type: rust)", NAME, version);
+    Ok(())
+}
+
+pub fn handle_timeout(_args: TimeoutArguments) -> Result<()> {
+    unsafe { KATA_TIMEOUT = _args.timeout };
+
     Ok(())
 }

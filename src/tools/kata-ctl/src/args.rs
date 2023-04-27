@@ -39,6 +39,9 @@ pub enum Commands {
 
     /// Display version details
     Version,
+
+    /// Set Timeout value
+    Timeout(TimeoutArguments),
 }
 
 #[derive(Debug, Args, Error)]
@@ -153,4 +156,10 @@ pub struct ExecArguments {
     #[clap(short = 'p', long = "kata-debug-port", default_value_t = 1026)]
     /// kata debug console vport same as configuration, default is 1026.
     pub vport: u32,
+}
+
+#[derive(Debug, Args)]
+pub struct TimeoutArguments {
+    /// timeout value
+    pub timeout: u64,
 }
