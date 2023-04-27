@@ -36,7 +36,7 @@ compatibility, and performance on par with MACVTAP.
 Kata Containers has deprecated support for bridge due to lacking performance relative to TC-filter and MACVTAP.
 
 Kata Containers supports both
-[CNM](https://github.com/docker/libnetwork/blob/master/docs/design.md#the-container-network-model)
+[CNM](https://github.com/moby/libnetwork/blob/master/docs/design.md#the-container-network-model)
 and [CNI](https://github.com/containernetworking/cni) for networking management.
 
 ## Network Hotplug

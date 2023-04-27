@@ -52,6 +52,8 @@ The **log-level** allows the chose how verbose the logs should be. The default i
 
 **NOTE: The debug endpoints are available only if the [Kata Containers configuration file](https://github.com/kata-containers/kata-containers/blob/9d5b03a1b70bbd175237ec4b9f821d6ccee0a1f6/src/runtime/config/configuration-qemu.toml.in#L590-L592) includes** `enable_pprof = true` **in the** `[runtime]` **section**.
 
+The `/metrics` has a query parameter `filter_family`, which filter Kata sandboxes metrics with specific names. If `filter_family` is set to `A` (and `B`, split with `,`), metrics with prefix `A` (and `B`) will only be returned.
+
 The `/sandboxes` endpoint lists the _sandbox ID_ of all the detected Kata runtimes. If accessed via a web browser, it provides html links to the endpoints available for each sandbox.
 
 In order to retrieve data for a specific Kata workload, the _sandbox ID_ should be passed in the query string using the _sandbox_ key. The `/agent-url`, and all the `/debug/`* endpoints require `sandbox_id` to be specified in the query string.

@@ -1,0 +1,26 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: replicationtest
+spec:
+  replicas: 1
+  selector:
+    app: nginx-rc-test
+  template:
+    metadata:
+      name: nginx
+      labels:
+        app: nginx-rc-test
+    spec:
+      terminationGracePeriodSeconds: 0
+      runtimeClassName: kata
+      containers:
+      - name: nginxtest
+        image: quay.io/sjenning/${nginx_version}
+        ports:
+        - containerPort: 80

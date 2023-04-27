@@ -1,0 +1,26 @@
+#
+# Copyright (c) 2022 AntGroup Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox
+spec:
+  terminationGracePeriodSeconds: 0
+  shareProcessNamespace: true
+  runtimeClassName: kata
+  initContainers:
+  - name: first
+    image: quay.io/prometheus/busybox:latest
+    command: [ "sh", "-c", "echo 'nohup tail -f /dev/null  >/dev/null 2>&1 &' > /init.sh && chmod +x /init.sh && /init.sh" ]
+  containers:
+  - name: first-test-container
+    image: quay.io/prometheus/busybox:latest
+    env:
+    - name: CONTAINER_NAME
+      value: "first-test-container"
+    command:
+        - sleep
+        - "300"

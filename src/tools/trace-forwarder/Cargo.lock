@@ -289,7 +289,6 @@ dependencies = [
  "opentelemetry 0.14.0",
  "opentelemetry-jaeger",
  "privdrop",
- "protobuf",
  "serde",
  "serde_json",
  "slog",
@@ -526,12 +525,6 @@ checksum = "2f84e92c0f7c9d58328b85a78557813e4bd845130db68d7184635344399423b1"
 dependencies = [
  "unicode-xid",
 ]
-
-[[package]]
-name = "protobuf"
-version = "2.27.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf7e6d18738ecd0902d30d1ad232c9125985a3422929b16c65517b38adc14f96"
 
 [[package]]
 name = "quote"

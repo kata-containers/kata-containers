@@ -41,6 +41,11 @@ rootfs_type=@DEFROOTFSTYPE@
 # Default false
 # confidential_guest = true
 
+# Enable running clh VMM as a non-root user.
+# By default clh VMM run as root. When this is set to true, clh VMM process runs as
+# a non-root random user. See documentation for the limitations of this mode.
+# rootless = true
+
 # disable applying SELinux on the VMM process (default false)
 disable_selinux=@DEFDISABLESELINUX@
 
@@ -300,8 +305,8 @@ block_device_driver = "virtio-blk"
 #debug_console_enabled = true
 
 # Agent connection dialing timeout value in seconds
-# (default: 30)
-#dial_timeout = 30
+# (default: 45)
+dial_timeout = 45
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the

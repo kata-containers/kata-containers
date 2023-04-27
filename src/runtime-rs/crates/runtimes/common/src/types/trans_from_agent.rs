@@ -151,7 +151,7 @@ impl From<Option<agent::StatsContainerResponse>> for StatsInfo {
             }
 
             if !cg_stats.hugetlb_stats.is_empty() {
-                let mut p_huge = ::protobuf::RepeatedField::new();
+                let mut p_huge = Vec::new();
                 for (k, v) in cg_stats.hugetlb_stats {
                     let mut h = metrics::HugetlbStat::new();
                     h.set_pagesize(k);
@@ -166,7 +166,7 @@ impl From<Option<agent::StatsContainerResponse>> for StatsInfo {
 
         let net_stats = stats.network_stats;
         if !net_stats.is_empty() {
-            let mut p_net = ::protobuf::RepeatedField::new();
+            let mut p_net = Vec::new();
             for v in net_stats.iter() {
                 let mut h = metrics::NetworkStat::new();
                 h.set_name(v.name.clone());
@@ -195,10 +195,8 @@ impl From<Option<agent::StatsContainerResponse>> for StatsInfo {
     }
 }
 
-fn copy_blkio_entry(
-    entry: &[agent::BlkioStatsEntry],
-) -> ::protobuf::RepeatedField<metrics::BlkIOEntry> {
-    let mut p_entry = ::protobuf::RepeatedField::new();
+fn copy_blkio_entry(entry: &[agent::BlkioStatsEntry]) -> Vec<metrics::BlkIOEntry> {
+    let mut p_entry = Vec::new();
 
     for e in entry.iter() {
         let mut blk = metrics::BlkIOEntry::new();

@@ -16,6 +16,8 @@ containerd_conf_file_backup="${containerd_conf_file}.bak"
 shims=(
 	"fc"
 	"qemu"
+	"qemu-tdx"
+	"qemu-gpu"
 	"clh"
 	"dragonball"
 )
@@ -58,7 +60,17 @@ function install_artifacts() {
 	echo "copying kata artifacts onto host"
 	cp -au /opt/kata-artifacts/opt/kata/* /opt/kata/
 	chmod +x /opt/kata/bin/*
-	chmod +x /opt/kata/runtime-rs/bin/*
+	[ -d /opt/kata/runtime-rs/bin ] && \
+		chmod +x /opt/kata/runtime-rs/bin/*
+}
+
+function wait_till_node_is_ready() {
+	local ready="False"
+
+	while ! [[ "${ready}" == "True" ]]; do
+		sleep 2s
+		ready=$(kubectl get node $NODE_NAME -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+	done
 }
 
 function configure_cri_runtime() {
@@ -74,6 +86,8 @@ function configure_cri_runtime() {
 	esac
 	systemctl daemon-reload
 	systemctl restart "$1"
+
+	wait_till_node_is_ready
 }
 
 function configure_different_shims_base() {
@@ -264,6 +278,8 @@ function reset_runtime() {
 	if [ "$1" == "crio" ] || [ "$1" == "containerd" ]; then
 		systemctl restart kubelet
 	fi
+
+	wait_till_node_is_ready
 }
 
 function main() {
@@ -308,11 +324,13 @@ function main() {
 			install_artifacts
 			configure_cri_runtime "$runtime"
 			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
+			touch /opt/kata/kata-deployed
 			;;
 		cleanup)
 			cleanup_cri_runtime "$runtime"
 			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=cleanup
 			remove_artifacts
+			rm /opt/kata/kata-deployed
 			;;
 		reset)
 			reset_runtime $runtime

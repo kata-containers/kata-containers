@@ -130,6 +130,12 @@ pub struct Runtime {
     /// Vendor customized runtime configuration.
     #[serde(default, flatten)]
     pub vendor: RuntimeVendor,
+
+    /// If keep_abnormal is enabled, it means that 1) if the runtime exits abnormally, the cleanup process
+    /// will be skipped, and 2) the runtime will not exit even if the health check fails.
+    /// This option is typically used to retain abnormal information for debugging.
+    #[serde(default)]
+    pub keep_abnormal: bool,
 }
 
 impl ConfigOps for Runtime {

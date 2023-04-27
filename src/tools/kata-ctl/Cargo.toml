@@ -37,7 +37,6 @@ libc = "0.2.138"
 slog = "2.7.0"
 slog-scope = "4.4.0"
 hyper = "0.14.20"
-ttrpc = "0.6.0"
 tokio = "1.8.0"
 
 [target.'cfg(target_arch = "s390x")'.dependencies]
@@ -49,5 +48,6 @@ reqwest = { version = "0.11", default-features = false, features = ["json", "blo
 [dev-dependencies]
 semver = "1.0.12"
 tempfile = "3.1.0"
+nix = "0.25.0"
 test-utils = { path = "../../libs/test-utils" }
 micro_http = { git = "https://github.com/firecracker-microvm/micro-http", branch = "main" }

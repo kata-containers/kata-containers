@@ -25,9 +25,6 @@ package_output_dir="${package_output_dir:-}"
 
 if [ -z "$ovmf_repo" ]; then
 	case "${ovmf_build}" in
-		"tdx")
-			ovmf_repo=$(get_from_kata_deps "externals.ovmf.tdx.url" "${kata_version}")
-			;;
 		"sev")
 			ovmf_repo=$(get_from_kata_deps "externals.ovmf.sev.url" "${kata_version}")
 			;;

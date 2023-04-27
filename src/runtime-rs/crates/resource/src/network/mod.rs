@@ -18,7 +18,7 @@ use network_with_netns::NetworkWithNetns;
 mod network_pair;
 use network_pair::NetworkPair;
 mod utils;
-pub use utils::netns::NetnsGuard;
+pub use utils::netns::{generate_netns_name, NetnsGuard};
 
 use std::sync::Arc;
 
@@ -38,6 +38,7 @@ pub trait Network: Send + Sync {
     async fn routes(&self) -> Result<Vec<agent::Route>>;
     async fn neighs(&self) -> Result<Vec<agent::ARPNeighbor>>;
     async fn save(&self) -> Option<Vec<EndpointState>>;
+    async fn remove(&self, h: &dyn Hypervisor) -> Result<()>;
 }
 
 pub async fn new(config: &NetworkConfig) -> Result<Arc<dyn Network>> {

@@ -9,6 +9,7 @@ use std::{fs::File, os::unix::io::AsRawFd};
 use anyhow::{Context, Result};
 use nix::sched::{setns, CloneFlags};
 use nix::unistd::{getpid, gettid};
+use rand::Rng;
 
 pub struct NetnsGuard {
     old_netns: Option<File>,
@@ -50,6 +51,20 @@ impl Drop for NetnsGuard {
     }
 }
 
+// generate the network namespace name
+pub fn generate_netns_name() -> String {
+    let mut rng = rand::thread_rng();
+    let random_bytes: [u8; 16] = rng.gen();
+    format!(
+        "cnitest-{}-{}-{}-{}-{}",
+        hex::encode(&random_bytes[..4]),
+        hex::encode(&random_bytes[4..6]),
+        hex::encode(&random_bytes[6..8]),
+        hex::encode(&random_bytes[8..10]),
+        hex::encode(&random_bytes[10..])
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -66,5 +81,15 @@ mod tests {
 
         let empty_path = "";
         assert!(NetnsGuard::new(empty_path).unwrap().old_netns.is_none());
+    }
+
+    #[test]
+    fn test_generate_netns_name() {
+        let name1 = generate_netns_name();
+        let name2 = generate_netns_name();
+        let name3 = generate_netns_name();
+        assert_ne!(name1, name2);
+        assert_ne!(name2, name3);
+        assert_ne!(name1, name3);
     }
 }

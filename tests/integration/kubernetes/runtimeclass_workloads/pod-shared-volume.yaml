@@ -1,0 +1,31 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-shared-volume
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  restartPolicy: Never
+  volumes:
+  - name: shared-data
+    emptyDir: {}
+  containers:
+  - name: busybox-first-container
+    image: quay.io/prometheus/busybox:latest
+    volumeMounts:
+    - name: shared-data
+      mountPath: /tmp
+    command: ["/bin/sh"]
+    args: ["-c", "tail -f /dev/null"]
+  - name: busybox-second-container
+    image: quay.io/prometheus/busybox:latest
+    volumeMounts:
+    - name: shared-data
+      mountPath: /tmp
+    command: ["/bin/sh"]
+    args: ["-c", "echo Hello from the busybox-second-container > /tmp/pod-data && tail -f /dev/null"]

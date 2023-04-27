@@ -99,13 +99,13 @@ func TestNydusdArgs(t *testing.T) {
 		apiSockPath: "/var/lib/api.sock",
 		debug:       true,
 	}
-	expected := "virtiofs --hybrid-mode --log-level debug --apisock /var/lib/api.sock --sock /var/lib/vhost-user.sock"
+	expected := "virtiofs --log-level debug --apisock /var/lib/api.sock --sock /var/lib/vhost-user.sock"
 	args, err := nd.args()
 	assert.NoError(err)
 	assert.Equal(expected, strings.Join(args, " "))
 
 	nd.debug = false
-	expected = "virtiofs --hybrid-mode --log-level info --apisock /var/lib/api.sock --sock /var/lib/vhost-user.sock"
+	expected = "virtiofs --log-level info --apisock /var/lib/api.sock --sock /var/lib/vhost-user.sock"
 	args, err = nd.args()
 	assert.NoError(err)
 	assert.Equal(expected, strings.Join(args, " "))
