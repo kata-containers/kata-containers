@@ -199,7 +199,7 @@ type HypervisorConfig struct {
 	// root bus instead of a bridge.
 	HotplugVFIOOnRootBus bool
 
-	// ColdPlugVFIO is used to indicate if devices need to be coldlugged on the
+	// ColdPlugVFIO is used to indicate if devices need to be coldplugged on the
 	// root port or a switch or no-port
 	ColdPlugVFIO hv.PCIePort
 
