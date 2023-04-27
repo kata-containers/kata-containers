@@ -12,6 +12,7 @@ mod arch_specific {
     use crate::check;
     use crate::check::{GuestProtection, ProtectionError};
     use crate::types::*;
+    use crate::utils;
     use anyhow::{anyhow, Result};
     use nix::unistd::Uid;
     use std::fs;
@@ -107,6 +108,10 @@ mod arch_specific {
         })?;
 
         Ok(cpu_flags)
+    }
+
+    pub fn get_cpu_details() -> Result<(String, String)> {
+        utils::get_generic_cpu_details(check::PROC_CPUINFO)
     }
 
     pub const TDX_SYS_FIRMWARE_DIR: &str = "/sys/firmware/tdx_seam/";
