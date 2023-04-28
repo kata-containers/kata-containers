@@ -19,7 +19,7 @@ use std::{
 use anyhow::{anyhow, Context};
 use nix::sys::socket::{connect, socket, AddressFamily, SockFlag, SockType, VsockAddr};
 use reqwest::StatusCode;
-use slog::debug;
+use slog::{debug, error, o};
 use vmm_sys_util::terminal::Terminal;
 
 use crate::args::ExecArguments;
@@ -40,7 +40,7 @@ type Result<T> = std::result::Result<T, Error>;
 #[macro_export]
 macro_rules! sl {
     () => {
-        slog_scope::logger()
+        slog_scope::logger().new(o!("subsystem" => "exec_ops"))
     };
 }
 
@@ -142,7 +142,7 @@ impl EpollContext {
                                 return Ok(());
                             }
                             Err(e) => {
-                                println!("error with errno {:?} while reading stdin", e);
+                                error!(sl!(), "errno {:?} while reading stdin", e);
                                 return Ok(());
                             }
                             Ok(count) => {
@@ -159,7 +159,7 @@ impl EpollContext {
                                 return Ok(());
                             }
                             Err(e) => {
-                                println!("error with errno {:?} while reading server", e);
+                                error!(sl!(), "errno {:?} while reading server", e);
                                 return Ok(());
                             }
                             Ok(count) => {
