@@ -193,7 +193,7 @@ impl PodPolicy {
         })
     }
 
-    pub async fn export_policy(&self, in_out_files: &utils::InOutFiles) -> Result<()> {
+    pub async fn export_policy(&mut self, in_out_files: &utils::InOutFiles) -> Result<()> {
         let mut policy_data: PolicyData = Default::default();
 
         if self.yaml.is_deployment() {
@@ -312,10 +312,11 @@ impl PodPolicy {
             );
         }
 
-        let mut namespace = self.yaml.metadata.namespace.to_string();
-        if namespace.is_empty() {
-            namespace = "default".to_string();
-        }
+        let namespace = if let Some(ns) = &self.yaml.metadata.namespace {
+            ns.clone()
+        } else {
+            "default".to_string()
+        };
         oci_spec
             .annotations
             .insert("io.kubernetes.cri.sandbox-namespace".to_string(), namespace);
