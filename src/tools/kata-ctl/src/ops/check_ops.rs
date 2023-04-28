@@ -15,7 +15,11 @@ use crate::ops::version;
 
 use crate::types::*;
 
-pub static mut KATA_TIMEOUT: u64 = 1;
+use std::sync::Mutex;
+
+lazy_static! {
+    pub static ref KATA_TIMEOUT_SECS: Mutex<u64> = Mutex::new(1);
+}
 
 use anyhow::{anyhow, Result};
 
@@ -130,8 +134,8 @@ pub fn handle_version() -> Result<()> {
     Ok(())
 }
 
-pub fn handle_timeout(_args: TimeoutArguments) -> Result<()> {
-    unsafe { KATA_TIMEOUT = _args.timeout };
+pub fn handle_timeout(args: TimeoutArguments) -> Result<()> {
+    *KATA_TIMEOUT_SECS.lock().unwrap() = args.timeout;
 
     Ok(())
 }

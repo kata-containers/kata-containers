@@ -23,6 +23,9 @@ use ops::env_ops::handle_env;
 use ops::exec_ops::handle_exec;
 use ops::volume_ops::handle_direct_volume;
 
+#[macro_use]
+extern crate lazy_static;
+
 fn real_main() -> Result<()> {
     let args = KataCtlCli::parse();
 

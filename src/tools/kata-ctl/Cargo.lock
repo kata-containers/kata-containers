@@ -727,6 +727,7 @@ dependencies = [
  "futures",
  "hyper",
  "kata-types",
+ "lazy_static",
  "libc",
  "micro_http",
  "nix 0.25.1",

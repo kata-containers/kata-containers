@@ -160,6 +160,5 @@ pub struct ExecArguments {
 
 #[derive(Debug, Args)]
 pub struct TimeoutArguments {
-    /// timeout value
     pub timeout: u64,
 }

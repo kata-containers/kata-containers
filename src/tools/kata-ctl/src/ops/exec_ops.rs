@@ -25,7 +25,7 @@ use vmm_sys_util::terminal::Terminal;
 use crate::args::ExecArguments;
 use shim_interface::shim_mgmt::{client::MgmtClient, AGENT_URL};
 
-use super::check_ops::KATA_TIMEOUT;
+use super::check_ops::KATA_TIMEOUT_SECS;
 
 const CMD_CONNECT: &str = "CONNECT";
 const CMD_OK: &str = "OK";
@@ -244,8 +244,8 @@ impl SockHandler for HvsockConfig {
         {
             let test_msg = format!("{} {}\n", CMD_CONNECT, self.sock_port);
 
-            stream.set_read_timeout(Some(Duration::new(unsafe { KATA_TIMEOUT }, 0)))?;
-            stream.set_write_timeout(Some(Duration::new(unsafe { KATA_TIMEOUT }, 0)))?;
+            stream.set_read_timeout(Some(Duration::new(*KATA_TIMEOUT_SECS.lock().unwrap(), 0)))?;
+            stream.set_write_timeout(Some(Duration::new(*KATA_TIMEOUT_SECS.lock().unwrap(), 0)))?;
 
             stream.write_all(test_msg.as_bytes())?;
             // Now, see if we get the expected response
@@ -333,7 +333,10 @@ fn setup_client(server_url: String, dbg_console_port: u32) -> anyhow::Result<Uni
 }
 
 async fn get_agent_socket(sandbox_id: &str) -> anyhow::Result<String> {
-    let shim_client = MgmtClient::new(sandbox_id, Some(Duration::from_secs(unsafe { KATA_TIMEOUT })))?;
+    let shim_client = MgmtClient::new(
+        sandbox_id,
+        Some(Duration::from_secs(*KATA_TIMEOUT_SECS.lock().unwrap())),
+    )?;
 
     // get agent sock from body when status code is OK.
     let response = shim_client.get(AGENT_URL).await?;
