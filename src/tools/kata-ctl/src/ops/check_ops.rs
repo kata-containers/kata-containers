@@ -107,10 +107,6 @@ pub fn handle_check(checkcmd: CheckArgument) -> Result<()> {
     Ok(())
 }
 
-pub fn handle_env() -> Result<()> {
-    Ok(())
-}
-
 pub fn handle_factory() -> Result<()> {
     Ok(())
 }
