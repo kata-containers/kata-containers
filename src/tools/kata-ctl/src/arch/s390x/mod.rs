@@ -13,6 +13,7 @@ mod arch_specific {
     use crate::utils;
     use anyhow::{anyhow, Result};
     use nix::unistd::Uid;
+    use slog::{info, o, warn};
     use std::collections::HashMap;
     use std::io::BufRead;
     use std::io::BufReader;
@@ -21,6 +22,12 @@ mod arch_specific {
     const CPUINFO_FEATURES_TAG: &str = "features";
     const CPU_FEATURES_REQ: &[&str] = &["sie"];
 
+    macro_rules! sl {
+        () => {
+            slog_scope::logger().new(o!("subsystem" => "s390x"))
+        };
+    }
+
     #[allow(dead_code)]
     pub const ARCH_CPU_VENDOR_FIELD: &str = check::GENERIC_CPU_VENDOR_FIELD;
     #[allow(dead_code)]
@@ -28,7 +35,7 @@ mod arch_specific {
 
     // check cpu
     fn check_cpu() -> Result<()> {
-        println!("INFO: check CPU: s390x");
+        info!(sl!(), "check CPU: s390x");
 
         let cpu_info = check::get_single_cpu_info(check::PROC_CPUINFO, CPUINFO_DELIMITER)?;
 
@@ -42,14 +49,14 @@ mod arch_specific {
 
         let missing_cpu_features = check::check_cpu_flags(&cpu_features, CPU_FEATURES_REQ)?;
         if !missing_cpu_features.is_empty() {
-            eprintln!("WARNING: Missing CPU flags {:?}", missing_cpu_features);
+            warn!(sl!(), "Missing CPU flags {:?}", missing_cpu_features);
         }
 
         Ok(())
     }
 
     pub fn check(_args: &str) -> Result<()> {
-        println!("INFO: check: s390x");
+        info!(sl!(), "check: s390x");
 
         let _cpu_result = check_cpu();
 
