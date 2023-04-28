@@ -226,7 +226,7 @@ impl PodPolicy {
 
         if let Some(containers) = spec_containers {
             for index in 0..containers.len() {
-                policy_containers.push(self.get_container_policy(index).await?);
+                policy_containers.push(self.get_container_policy_by_yaml_type(index).await?);
             }
         }
 
@@ -238,11 +238,14 @@ impl PodPolicy {
     // - containerd default values for each container.
     // - Kata Containers namespaces.
     // - K8s infrastructure information.
-    pub async fn get_container_policy(&self, container_index: usize) -> Result<ContainerPolicy> {
+    pub async fn get_container_policy_by_yaml_type(
+        &self,
+        container_index: usize,
+    ) -> Result<ContainerPolicy> {
         if self.yaml.is_deployment() {
             if let Some(template) = &self.yaml.spec.template {
                 if let Some(containers) = &template.spec.containers {
-                    self.get_pod_container_policy(container_index, &containers[container_index])
+                    self.get_container_policy(container_index, &containers[container_index])
                         .await
                 } else {
                     Err(anyhow!("No containers in Deployment pod template!"))
@@ -250,20 +253,18 @@ impl PodPolicy {
             } else {
                 Err(anyhow!("No pod template in Deployment spec!"))
             }
+        } else if let Some(containers) = &self.yaml.spec.containers {
+            self.get_container_policy(container_index, &containers[container_index])
+                .await
         } else {
-            if let Some(containers) = &self.yaml.spec.containers {
-                self.get_pod_container_policy(container_index, &containers[container_index])
-                    .await
-            } else {
-                Err(anyhow!("No containers in Pod spec!"))
-            }
+            Err(anyhow!("No containers in Pod spec!"))
         }
     }
 
-    pub async fn get_pod_container_policy(
+    pub async fn get_container_policy(
         &self,
         container_index: usize,
-        pod_container: &yaml::Container,
+        yaml_container: &yaml::Container,
     ) -> Result<ContainerPolicy> {
         let is_pause_container = container_index == 0;
         let is_deployment_yaml = self.yaml.is_deployment();
@@ -284,7 +285,7 @@ impl PodPolicy {
         }
         oci_spec.hostname += "$";
 
-        let registry_container = registry::Container::new(&pod_container.image).await?;
+        let registry_container = registry::Container::new(&yaml_container.image).await?;
         let mut infra_container = &self.infra_policy.pause_container;
         if !is_pause_container {
             infra_container = &self.infra_policy.other_container;
@@ -293,9 +294,7 @@ impl PodPolicy {
 
         if let Some(root) = &infra_container.root {
             let mut policy_root = root.clone();
-            if let Some(security_context) = &pod_container.securityContext {
-                policy_root.readonly = security_context.readOnlyRootFilesystem;
-            }
+            policy_root.readonly = yaml_container.read_only_root_filesystem();
             oci_spec.root = Some(policy_root);
         }
 
@@ -309,7 +308,7 @@ impl PodPolicy {
         if !is_pause_container {
             oci_spec.annotations.insert(
                 "io.kubernetes.cri.image-name".to_string(),
-                pod_container.image.to_string(),
+                yaml_container.image.to_string(),
             );
         }
 
@@ -321,36 +320,35 @@ impl PodPolicy {
             .annotations
             .insert("io.kubernetes.cri.sandbox-namespace".to_string(), namespace);
 
-        if !pod_container.name.is_empty() {
+        if !yaml_container.name.is_empty() {
             oci_spec.annotations.insert(
                 "io.kubernetes.cri.container-name".to_string(),
-                pod_container.name.to_string(),
+                yaml_container.name.to_string(),
             );
         }
 
         // Start with the Default Unix Spec from
         // https://github.com/containerd/containerd/blob/release/1.6/oci/spec.go#L132
-        let mut process = containerd::get_process();
-        registry_container.get_process(&mut process)?;
+        let privileged_container = yaml_container.is_privileged();
+        let mut process = containerd::get_process(privileged_container);
+        let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.args);
+        registry_container.get_process(&mut process, yaml_has_command, yaml_has_args)?;
 
         if container_index != 0 {
             process.env.push("HOSTNAME=".to_string() + &pod_name);
         }
-        pod_container.get_env_variables(&mut process.env);
+
+        yaml_container.get_env_variables(&mut process.env);
 
         infra::get_process(&mut process, &infra_container)?;
-        if let Some(security_context) = &pod_container.securityContext {
-            process.no_new_privileges = !security_context.allowPrivilegeEscalation;
-        } else {
-            process.no_new_privileges = false;
-        }
+        process.no_new_privileges = !yaml_container.allow_privilege_escalation();
         oci_spec.process = Some(process);
 
-        oci_spec.mounts = containerd::get_mounts(is_pause_container);
+        oci_spec.mounts = containerd::get_mounts(is_pause_container, privileged_container);
         self.infra_policy.get_policy_mounts(
             &mut oci_spec.mounts,
             &infra_container.mounts,
-            &pod_container,
+            &yaml_container,
             container_index == 0,
         )?;
 
@@ -359,11 +357,11 @@ impl PodPolicy {
         self.get_mounts_and_storages(
             &mut oci_spec.mounts,
             &mut storages,
-            pod_container,
+            yaml_container,
             &self.infra_policy,
         )?;
 
-        let mut linux = containerd::get_linux();
+        let mut linux = containerd::get_linux(privileged_container);
         linux.namespaces = kata::get_namespaces();
         infra::get_linux(&mut linux, &infra_container.linux)?;
         oci_spec.linux = Some(linux);

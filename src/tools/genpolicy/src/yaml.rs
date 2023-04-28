@@ -109,6 +109,12 @@ pub struct Container {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ports: Option<Vec<Port>>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<Vec<String>>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub args: Option<Vec<String>>,
 }
 
 // Example:
@@ -118,16 +124,14 @@ pub struct Container {
 //   allowPrivilegeEscalation: false
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SecurityContext {
-    #[serde(default = "default_false")]
-    pub readOnlyRootFilesystem: bool,
-    #[serde(default = "default_true")]
-    pub allowPrivilegeEscalation: bool,
-}
-fn default_false() -> bool {
-    false
-}
-fn default_true() -> bool {
-    true
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub readOnlyRootFilesystem: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowPrivilegeEscalation: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub privileged: Option<bool>,
 }
 
 // Example:
@@ -273,8 +277,9 @@ impl Yaml {
             let pause_container = Container {
                 image: "mcr.microsoft.com/oss/kubernetes/pause:3.6".to_string(),
                 securityContext: Some(SecurityContext {
-                    readOnlyRootFilesystem: true,
-                    allowPrivilegeEscalation: false,
+                    readOnlyRootFilesystem: Some(true),
+                    allowPrivilegeEscalation: Some(false),
+                    privileged: None,
                 }),
                 ..Default::default()
             };
@@ -362,6 +367,56 @@ impl Container {
                 }
             }
         }
+    }
+
+    pub fn allow_privilege_escalation(&self) -> bool {
+        if let Some(context) = &self.securityContext {
+            if let Some(allow) = context.allowPrivilegeEscalation {
+                return allow;
+            }
+        }
+        true
+    }
+
+    pub fn read_only_root_filesystem(&self) -> bool {
+        if let Some(context) = &self.securityContext {
+            if let Some(read_only) = context.readOnlyRootFilesystem {
+                return read_only;
+            }
+        }
+        false
+    }
+
+    pub fn get_process_args(&self, policy_args: &mut Vec<String>) -> (bool, bool) {
+        let mut yaml_has_command = true;
+        let mut yaml_has_args = true;
+
+        if let Some(commands) = &self.command {
+            for command in commands {
+                policy_args.push(command.clone());
+            }
+        } else {
+            yaml_has_command = false;
+        }
+
+        if let Some(args) = &self.args {
+            for arg in args {
+                policy_args.push(arg.clone());
+            }
+        } else {
+            yaml_has_args = false;
+        }
+
+        (yaml_has_command, yaml_has_args)
+    }
+
+    pub fn is_privileged(&self) -> bool {
+        if let Some(context) = &self.securityContext {
+            if let Some(privileged) = context.privileged {
+                return privileged;
+            }
+        }
+        false
     }
 }
 

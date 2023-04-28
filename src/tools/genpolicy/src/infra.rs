@@ -138,18 +138,16 @@ impl InfraPolicy {
         &self,
         policy_mounts: &mut Vec<oci::Mount>,
         infra_mounts: &Vec<oci::Mount>,
-        pod_container: &yaml::Container,
+        yaml_container: &yaml::Container,
         is_pause_container: bool,
     ) -> Result<()> {
         let mut rootfs_access = "rw".to_string();
-        if let Some(security_context) = &pod_container.securityContext {
-            if security_context.readOnlyRootFilesystem {
-                rootfs_access = "ro".to_string();
-            }
+        if yaml_container.read_only_root_filesystem() {
+            rootfs_access = "ro".to_string();
         }
 
         for infra_mount in infra_mounts {
-            if keep_infra_mount(&infra_mount, &pod_container.volumeMounts) {
+            if keep_infra_mount(&infra_mount, &yaml_container.volumeMounts) {
                 let mut mount = infra_mount.clone();
 
                 if mount.source.is_empty() && mount.r#type.eq("bind") {

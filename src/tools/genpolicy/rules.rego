@@ -44,19 +44,20 @@ CreateContainerRequest {
     input_oci := input.oci
     input_storages := input.storages
 
-    print("CreateContainerRequest", "policy_oci.ociVersion")
+    print("==============================================")
+    print("CreateContainerRequest: policy_oci.ociVersion")
     policy_oci.ociVersion     == input_oci.ociVersion
 
-    print("CreateContainerRequest", "policy_oci.root.readonly")
+    print("CreateContainerRequest: policy_oci.root.readonly")
     policy_oci.root.readonly  == input_oci.root.readonly
 
-    print("CreateContainerRequest", "allow_by_annotations")
+    print("CreateContainerRequest: allow_by_annotations")
     allow_by_annotations(policy_oci, input_oci, policy_storages, input_storages)
 
-    print("CreateContainerRequest", "allow_linux")
+    print("CreateContainerRequest: allow_linux")
     allow_linux(policy_oci, input_oci)
 
-    print("CreateContainerRequest", "success")
+    print("CreateContainerRequest: success")
 }
 
 ######################################################################
@@ -177,8 +178,34 @@ allow_sandbox_image_name(policy_oci, input_oci) {
 }
 
 allow_image_name(policy_oci, input_oci) {
-    # TODO: compare properly "docker.io/library/hello-world:latest" with  "hello-world"
-    allow_container_annotation(policy_oci, input_oci, "io.kubernetes.cri.image-name")
+    print("allow_image_name: ", "io.kubernetes.cri.image-name")
+
+    policy_name := policy_oci.annotations["io.kubernetes.cri.image-name"]
+    print("allow_image_name: policy_name =", policy_name)
+
+    input_name := input_oci.annotations["io.kubernetes.cri.image-name"]
+    print("allow_image_name: input_name = ", input_name)
+
+    match_image_name(policy_name, input_name)
+
+    print("allow_image_name: success")
+}
+
+match_image_name(policy_name, input_name) {
+    print("match_image_name 1: policy_name =", policy_name, "input_name =", input_name)
+    policy_name == input_name
+    print("match_image_name 1: success")
+}
+match_image_name(policy_name, input_name) {
+    print("match_image_name 2: policy_name =", policy_name, "input_name =", input_name)
+
+    # TODO: is it reasonable to add this prefix?
+    policy_path := concat("", ["docker.io/", policy_name])
+
+    print("match_image_name 2: policy_path =", policy_path, "input_name =", input_name)
+    policy_path == input_name
+
+    print("match_image_name 2: success")
 }
 
 ######################################################################
@@ -259,12 +286,49 @@ allow_sandbox_namespace(policy_oci, input_oci) {
 # Validate the linux fields from config.json.
 
 allow_linux(policy_oci, input_oci) {
+    print("allow_linux: policy namespaces =", policy_oci.linux.namespaces, "input namespaces =", input_oci.linux.namespaces)
     policy_oci.linux.namespaces     == input_oci.linux.namespaces
 
-    allow_array(policy_oci.linux.maskedPaths, input_oci.linux.maskedPaths)
-    allow_array(policy_oci.linux.readonlyPaths, input_oci.linux.readonlyPaths)
+    print("allow_linux: allow_masked_paths")
+    allow_masked_paths(policy_oci, input_oci)
+
+    print("allow_linux: allow_readonly_paths")
+    allow_readonly_paths(policy_oci, input_oci)
+
+    print("allow_linux: success")
 }
 
+######################################################################
+allow_masked_paths(policy_oci, input_oci) {
+    print("allow_masked_paths 1: policy maskedPaths =", policy_oci.linux.maskedPaths, "input maskedPaths =", input_oci.linux.maskedPaths)
+    allow_array(policy_oci.linux.maskedPaths, input_oci.linux.maskedPaths)
+
+    print("allow_masked_paths 1: success")
+}
+allow_masked_paths(policy_oci, input_oci) {
+    print("allow_masked_paths 2: no maskedPaths")
+    not policy_oci.linux.maskedPaths
+    not input_oci.linux.maskedPaths
+
+    print("allow_masked_paths 2: success")
+}
+
+######################################################################
+allow_readonly_paths(policy_oci, input_oci) {
+    print("allow_readonly_paths 1: policy readonlyPaths =", policy_oci.linux.readonlyPaths, "input readonlyPaths =", input_oci.linux.readonlyPaths)
+    allow_array(policy_oci.linux.readonlyPaths, input_oci.linux.readonlyPaths)
+
+    print("allow_readonly_paths 1: success")
+}
+allow_readonly_paths(policy_oci, input_oci) {
+    print("allow_readonly_paths 2: no readonlyPaths")
+    not policy_oci.linux.readonlyPaths
+    not input_oci.linux.readonlyPaths
+
+    print("allow_readonly_paths 2: success")
+}
+
+######################################################################
 allow_array(policy_array, input_array) {
     policy_element := policy_array[_]
     input_element := input_array[_]
@@ -360,11 +424,19 @@ allow_user(policy_process, input_process) {
 # OCI process.args field
 
 allow_args(policy_process, input_process) {
+    print("allow_args 1: no policy or input args")
+
     not policy_process.args
     not input_process.args
+
+    print("allow_args 1: success")
 }
 allow_args(policy_process, input_process) {
+    print("allow_args 2: policy args =", policy_process.args, "input args =", input_process.arg)
+
     policy_process.args == input_process.args
+
+    print("allow_args 2: success")
 }
 
 ######################################################################
@@ -376,32 +448,32 @@ allow_env(policy_process, input_process, sandbox_name) {
         allow_env_var(policy_process, input_process, env_var, sandbox_name)
     }
 
-    print("allow_env", "success")
+    print("allow_env: success")
 }
 
 # Allow input env variables that are present in the policy data too.
 allow_env_var(policy_process, input_process, env_var, sandbox_name) {
-    print("allow_env_var 1", "policy_process.env[_] == env_var")
+    print("allow_env_var 1: policy_process.env[_] == env_var")
     policy_process.env[_] == env_var
-    print("allow_env_var 1", "success")
+    print("allow_env_var 1: success")
 }
 
 # Allow "HOSTNAME=<sandbox_name>".
 allow_env_var(policy_process, input_process, env_var, sandbox_name) {
-    print("allow_env_var 2", "HOSTNAME")
+    print("allow_env_var 2: HOSTNAME")
     host_name_env_var := concat("", ["HOSTNAME=", sandbox_name])
 
     print(host_name_env_var, env_var)
     host_name_env_var == env_var
 
-    print("allow_env_var 2", "success")
+    print("allow_env_var 2: success")
 }
 
 # Allow service-related env variables:
 
 # "KUBERNETES_PORT_443_TCP_PROTO=tcp"
 allow_env_var(policy_process, input_process, env_var, sandbox_name) {
-    print("allow_env_var 3", "KUBERNETES_PORT_443_TCP_PROTO=tcp")
+    print("allow_env_var 3: KUBERNETES_PORT_443_TCP_PROTO=tcp")
 
     name_value := split(env_var, "=")
     count(name_value) == 2
@@ -417,12 +489,12 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     port := name_components[components_count - 3]
     is_port(port)
 
-    print("allow_env_var 3", "success")
+    print("allow_env_var 3: success")
 }
 
 # "KUBERNETES_PORT_443_TCP_PORT=443"
 allow_env_var(policy_process, input_process, env_var, sandbox_name) {
-    print("allow_env_var 4", "KUBERNETES_PORT_443_TCP_PORT=443")
+    print("allow_env_var 4: KUBERNETES_PORT_443_TCP_PORT=443")
 
     name_value := split(env_var, "=")
     count(name_value) == 2
@@ -438,12 +510,12 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     name_components[components_count - 3] == port
     name_components[components_count - 4] == "PORT"
 
-    print("allow_env_var 4", "success")
+    print("allow_env_var 4: success")
 }
 
 # "KUBERNETES_PORT_443_TCP_ADDR=10.0.0.1"
 allow_env_var(policy_process, input_process, env_var, sandbox_name) {
-    print("allow_env_var 5", "KUBERNETES_PORT_443_TCP_ADDR=10.0.0.1")
+    print("allow_env_var 5: KUBERNETES_PORT_443_TCP_ADDR=10.0.0.1")
 
     name_value := split(env_var, "=")
     count(name_value) == 2
@@ -459,12 +531,12 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     port := name_components[components_count - 3]
     is_port(port)
 
-    print("allow_env_var 5", "success")
+    print("allow_env_var 5: success")
 }
 
 # "KUBERNETES_SERVICE_HOST=10.0.0.1",
 allow_env_var(policy_process, input_process, env_var, sandbox_name) {
-    print("allow_env_var 6", "KUBERNETES_SERVICE_HOST=10.0.0.1")
+    print("allow_env_var 6: KUBERNETES_SERVICE_HOST=10.0.0.1")
 
     name_value := split(env_var, "=")
     count(name_value) == 2
@@ -477,12 +549,12 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     name_components[components_count - 1] == "HOST"
     name_components[components_count - 2] == "SERVICE"
 
-    print("allow_env_var 6", "success")
+    print("allow_env_var 6: success")
 }
 
 # "KUBERNETES_SERVICE_PORT=443",
 allow_env_var(policy_process, input_process, env_var, sandbox_name) {
-    print("allow_env_var 7", "KUBERNETES_SERVICE_PORT=443")
+    print("allow_env_var 7: KUBERNETES_SERVICE_PORT=443")
 
     name_value := split(env_var, "=")
     count(name_value) == 2
@@ -495,12 +567,12 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     name_components[components_count - 1] == "PORT"
     name_components[components_count - 2] == "SERVICE"
 
-    print("allow_env_var 7", "success")
+    print("allow_env_var 7: success")
 }
 
 # "KUBERNETES_SERVICE_PORT_HTTPS=443",
 allow_env_var(policy_process, input_process, env_var, sandbox_name) {
-    print("allow_env_var 8", "KUBERNETES_SERVICE_PORT_HTTPS=443")
+    print("allow_env_var 8: KUBERNETES_SERVICE_PORT_HTTPS=443")
 
     name_value := split(env_var, "=")
     count(name_value) == 2
@@ -514,12 +586,12 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     name_components[components_count - 2] == "PORT"
     name_components[components_count - 3] == "SERVICE"
 
-    print("allow_env_var 8", "success")
+    print("allow_env_var 8: success")
 }
 
 # "KUBERNETES_PORT=tcp://10.0.0.1:443",
 allow_env_var(policy_process, input_process, env_var, sandbox_name) {
-    print("allow_env_var 9", "KUBERNETES_PORT=tcp://10.0.0.1:443")
+    print("allow_env_var 9: KUBERNETES_PORT=tcp://10.0.0.1:443")
 
     name_value := split(env_var, "=")
     count(name_value) == 2
@@ -531,12 +603,12 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     components_count >= 2
     name_components[components_count - 1] == "PORT"
 
-    print("allow_env_var 9", "success")
+    print("allow_env_var 9: success")
 }
 
 # "KUBERNETES_PORT_443_TCP=tcp://10.0.0.1:443",
 allow_env_var(policy_process, input_process, env_var, sandbox_name) {
-    print("allow_env_var 10", "KUBERNETES_PORT_443_TCP=tcp://10.0.0.1:443")
+    print("allow_env_var 10: KUBERNETES_PORT_443_TCP=tcp://10.0.0.1:443")
 
     name_value := split(env_var, "=")
     count(name_value) == 2
@@ -554,7 +626,7 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     count(value_components) == 3
     value_components[2] == port
 
-    print("allow_env_var 10", "success")
+    print("allow_env_var 10: success")
 }
 
 is_ip(value) {
