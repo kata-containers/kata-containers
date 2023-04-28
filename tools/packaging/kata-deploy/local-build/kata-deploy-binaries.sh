@@ -412,7 +412,7 @@ install_shimv2() {
 
 install_ovmf() {
 	ovmf_type="${1:-x86_64}"
-	tarball_name="${2:-edk2.tar.xz}"
+	tarball_name="${2:-edk2-x86_64.tar.gz}"
 
 	local component_name="ovmf"
 	local component_version="$(get_from_kata_deps "externals.ovmf.${ovmf_type}.version")"
