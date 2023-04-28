@@ -409,6 +409,15 @@ impl Container {
 
         (yaml_has_command, yaml_has_args)
     }
+
+    pub fn is_privileged(&self) -> bool {
+        if let Some(context) = &self.securityContext {
+            if let Some(privileged) = context.privileged {
+                return privileged;
+            }
+        }
+        false
+    }
 }
 
 fn export_policy_data(policy: &str, file_name: &str) -> Result<()> {

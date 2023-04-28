@@ -329,7 +329,8 @@ impl PodPolicy {
 
         // Start with the Default Unix Spec from
         // https://github.com/containerd/containerd/blob/release/1.6/oci/spec.go#L132
-        let mut process = containerd::get_process();
+        let privileged_container = yaml_container.is_privileged();
+        let mut process = containerd::get_process(privileged_container);
         let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.args);
         registry_container.get_process(&mut process, yaml_has_command, yaml_has_args)?;
 
@@ -343,7 +344,7 @@ impl PodPolicy {
         process.no_new_privileges = !yaml_container.allow_privilege_escalation();
         oci_spec.process = Some(process);
 
-        oci_spec.mounts = containerd::get_mounts(is_pause_container);
+        oci_spec.mounts = containerd::get_mounts(is_pause_container, privileged_container);
         self.infra_policy.get_policy_mounts(
             &mut oci_spec.mounts,
             &infra_container.mounts,
@@ -360,7 +361,7 @@ impl PodPolicy {
             &self.infra_policy,
         )?;
 
-        let mut linux = containerd::get_linux();
+        let mut linux = containerd::get_linux(privileged_container);
         linux.namespaces = kata::get_namespaces();
         infra::get_linux(&mut linux, &infra_container.linux)?;
         oci_spec.linux = Some(linux);
