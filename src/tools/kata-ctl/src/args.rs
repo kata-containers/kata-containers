@@ -23,7 +23,7 @@ pub enum Commands {
     DirectVolume(DirectVolumeCommand),
 
     /// Display settings
-    Env,
+    Env(EnvArgument),
 
     /// Enter into guest VM by debug console
     Exec(ExecArguments),
@@ -69,6 +69,15 @@ pub enum CheckSubCommand {
     List,
 }
 
+#[derive(Debug, Args)]
+pub struct EnvArgument {
+    /// Format output as JSON
+    #[arg(long)]
+    pub json: bool,
+    /// File to write env output to
+    #[arg(short = 'f', long = "file")]
+    pub file: Option<String>,
+}
 #[derive(Debug, Args)]
 pub struct MetricsCommand {
     #[clap(subcommand)]
