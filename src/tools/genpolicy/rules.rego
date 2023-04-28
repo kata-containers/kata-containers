@@ -177,8 +177,34 @@ allow_sandbox_image_name(policy_oci, input_oci) {
 }
 
 allow_image_name(policy_oci, input_oci) {
-    # TODO: compare properly "docker.io/library/hello-world:latest" with  "hello-world"
-    allow_container_annotation(policy_oci, input_oci, "io.kubernetes.cri.image-name")
+    print("allow_image_name: ", "io.kubernetes.cri.image-name")
+
+    policy_name := policy_oci.annotations["io.kubernetes.cri.image-name"]
+    print("allow_image_name: policy_name =", policy_name)
+
+    input_name := input_oci.annotations["io.kubernetes.cri.image-name"]
+    print("allow_image_name: input_name = ", input_name)
+
+    match_image_name(policy_name, input_name)
+
+    print("allow_image_name: success")
+}
+
+match_image_name(policy_name, input_name) {
+    print("match_image_name 1: policy_name =", policy_name, "input_name =", input_name)
+    policy_name == input_name
+    print("match_image_name 1: success")
+}
+match_image_name(policy_name, input_name) {
+    print("match_image_name 2: policy_name =", policy_name, "input_name =", input_name)
+
+    # TODO: is it reasonable to add this prefix?
+    policy_path := concat("", ["docker.io/", policy_name])
+
+    print("match_image_name 2: policy_path =", policy_path, "input_name =", input_name)
+    policy_path == input_name
+
+    print("match_image_name 2: success")
 }
 
 ######################################################################
