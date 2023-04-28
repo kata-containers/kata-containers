@@ -50,6 +50,7 @@ struct DockerImageConfig {
 
 impl Container {
     pub async fn new(image: &str) -> Result<Self> {
+        info!("============================================");
         info!("Pulling manifest and config for {:?}", image);
         let reference: Reference = image.to_string().parse().unwrap();
         let mut client = Client::new(ClientConfig {
@@ -110,21 +111,41 @@ impl Container {
         }
 
         let policy_args = &mut process.args;
-        if !yaml_has_command {
-            if let Some(entry_points) = &docker_config.Entrypoint {
-                let mut reversed_entry_points = entry_points.clone();
-                reversed_entry_points.reverse();
+        info!("Already existing policy args: {:?}", policy_args);
 
-                for entry_point in reversed_entry_points {
-                    policy_args.insert(0, entry_point.clone());
-                }
+        if let Some(entry_points) = &docker_config.Entrypoint {
+            info!("Image Entrypoint: {:?}", entry_points);
+            if !yaml_has_command {
+                    info!("Inserting Entrypoint into policy args");
+
+                    let mut reversed_entry_points = entry_points.clone();
+                    reversed_entry_points.reverse();
+
+                    for entry_point in reversed_entry_points {
+                        policy_args.insert(0, entry_point.clone());
+                    }
+            } else {
+                info!("Ignoring image Entrypoint because YAML specified the container command");
             }
+        } else {
+            info!("No image Entrypoint");
         }
-        if !yaml_has_args {
+
+        info!("Updated policy args: {:?}", policy_args);
+
+        if yaml_has_command {
+            info!("Ignoring image Cmd because YAML specified the container command");
+        } else if yaml_has_args {
+            info!("Ignoring image Cmd because YAML specified the container args");
+        } else {
+            info!("Adding to policy args the image Cmd: {:?}", docker_config.Cmd);
+
             for cmd in &docker_config.Cmd {
                 policy_args.push(cmd.clone());
             }
         }
+
+        info!("Updated policy args: {:?}", policy_args);
 
         if !docker_config.WorkingDir.is_empty() {
             process.cwd = docker_config.WorkingDir.clone();

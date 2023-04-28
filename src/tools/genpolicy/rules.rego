@@ -44,6 +44,7 @@ CreateContainerRequest {
     input_oci := input.oci
     input_storages := input.storages
 
+    print("==============================================")
     print("CreateContainerRequest: policy_oci.ociVersion")
     policy_oci.ociVersion     == input_oci.ociVersion
 
@@ -423,11 +424,19 @@ allow_user(policy_process, input_process) {
 # OCI process.args field
 
 allow_args(policy_process, input_process) {
+    print("allow_args 1: no policy or input args")
+
     not policy_process.args
     not input_process.args
+
+    print("allow_args 1: success")
 }
 allow_args(policy_process, input_process) {
+    print("allow_args 2: policy args =", policy_process.args, "input args =", input_process.arg)
+
     policy_process.args == input_process.args
+
+    print("allow_args 2: success")
 }
 
 ######################################################################
