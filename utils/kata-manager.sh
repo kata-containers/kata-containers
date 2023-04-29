@@ -10,6 +10,15 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
+#Added code :- simple checker, just sudo would require a 
+# passwword if sudo is not used before a restart
+if sudo modprobe vhost_vsock && sudo modprobe vhost_net; then
+  echo "VSOCK sockets and are supported"
+else
+  echo "Error: Host environment is too old to support VSOCK sockets"
+  exit 1
+fi
+
 [ -n "${DEBUG:-}" ] && set -o xtrace
 
 readonly script_name=${0##*/}
