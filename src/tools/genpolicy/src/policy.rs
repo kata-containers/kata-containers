@@ -6,6 +6,7 @@
 // Allow OCI spec field names.
 #![allow(non_snake_case)]
 
+use crate::config_maps;
 use crate::containerd;
 use crate::infra;
 use crate::kata;
@@ -20,6 +21,7 @@ use std::collections::BTreeMap;
 
 pub struct PodPolicy {
     yaml: yaml::Yaml,
+    config_maps: Vec<config_maps::ConfigMap>,
 
     yaml_file: Option<String>,
     rules_input_file: String,
@@ -178,6 +180,14 @@ pub struct PersistentVolumeClaimVolume {
 impl PodPolicy {
     pub fn from_files(in_out_files: &utils::InOutFiles) -> Result<Self> {
         let yaml = yaml::Yaml::new(&in_out_files.yaml_file)?;
+
+        let mut config_maps = Vec::new();
+        if let Some(config_map_files) = &in_out_files.config_map_files {
+            for file in config_map_files {
+                config_maps.push(config_maps::ConfigMap::new(&file)?);
+            }
+        }
+
         let infra_policy = infra::InfraPolicy::new(&in_out_files.infra_data_file)?;
 
         let mut yaml_file = None;
@@ -189,7 +199,8 @@ impl PodPolicy {
             yaml,
             yaml_file,
             rules_input_file: in_out_files.rules_file.to_string(),
-            infra_policy: infra_policy,
+            infra_policy,
+            config_maps,
         })
     }
 
@@ -339,7 +350,7 @@ impl PodPolicy {
             process.env.push("HOSTNAME=".to_string() + &pod_name);
         }
 
-        yaml_container.get_env_variables(&mut process.env);
+        yaml_container.get_env_variables(&mut process.env, &self.config_maps);
 
         infra::get_process(&mut process, &infra_container)?;
         process.no_new_privileges = !yaml_container.allow_privilege_escalation();

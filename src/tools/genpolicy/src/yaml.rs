@@ -6,6 +6,8 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
+use crate::config_maps;
+
 use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose, Engine as _};
 use log::info;
@@ -229,7 +231,12 @@ pub struct TemplateSpec {
 #[serde(deny_unknown_fields)]
 pub struct EnvVariable {
     name: String,
-    value: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    value: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub valueFrom: Option<ValueFrom>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -259,6 +266,19 @@ pub struct Port {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ValueFrom {
+    pub configMapKeyRef: ConfigMapKeyRef,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConfigMapKeyRef {
+    pub name: String,
+    pub key: String,
 }
 
 impl Yaml {
@@ -379,11 +399,15 @@ impl Yaml {
 }
 
 impl Container {
-    pub fn get_env_variables(&self, dest_env: &mut Vec<String>) {
+    pub fn get_env_variables(
+        &self,
+        dest_env: &mut Vec<String>,
+        config_maps: &Vec<config_maps::ConfigMap>,
+    ) {
         if let Some(source_env) = &self.env {
             for env_variable in source_env {
                 let mut src_string = env_variable.name.clone() + "=";
-                src_string += &env_variable.value;
+                src_string += &env_variable.get_value(config_maps);
                 if !dest_env.contains(&src_string) {
                     dest_env.push(src_string.clone());
                 }
@@ -452,4 +476,20 @@ fn export_policy_data(policy: &str, file_name: &str) -> Result<()> {
     f.write_all(policy.as_bytes()).map_err(|e| anyhow!(e))?;
     f.flush().map_err(|e| anyhow!(e))?;
     Ok(())
+}
+
+impl EnvVariable {
+    pub fn get_value(&self, config_maps: &Vec<config_maps::ConfigMap>) -> String {
+        if let Some(value) = &self.value {
+            return value.clone();
+        } else if let Some(value_from) = &self.valueFrom {
+            if let Some(value) = config_maps::get_value(value_from, config_maps) {
+                return value.clone();
+            }
+        } else {
+            panic!("Environment variable without value or valueFrom!");
+        }
+
+        "".to_string()
+    }
 }
