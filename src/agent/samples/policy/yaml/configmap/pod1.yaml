@@ -13,6 +13,12 @@ spec:
       name: busybox
       securityContext:
         privileged: true
+      env:
+        - name: CONFIG_MAP_VALUE1
+          valueFrom:
+            configMapKeyRef:
+              name: config-map1
+              key: simple_value1
       command:
         - /bin/sh
       args:
