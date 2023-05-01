@@ -1,0 +1,26 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cm-pod2
+spec:
+  restartPolicy: Never
+  runtimeClassName: kata-cc
+  containers:
+    - image: "docker.io/library/busybox:1.36.0"
+      name: busybox
+      volumeMounts:
+        - mountPath: /cm2
+          name: cm2-volume
+      command:
+        - /bin/sh
+      args:
+        - "-c"
+        - while true; do echo hello; sleep 10; done
+  volumes:
+    - name: cm2-volume
+      configMap:
+        name: config-map2
+        items:
+          - key: file1.json
+            path: my-keys

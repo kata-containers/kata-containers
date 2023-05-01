@@ -324,6 +324,8 @@ impl InfraPolicy {
                 self.volume_claim_mount(&yaml_mount, policy_mounts)?;
             } else if yaml_volume.hostPath.is_some() {
                 self.host_path_mount(&yaml_mount, policy_mounts)?;
+            } else if yaml_volume.configMap.is_some() {
+                self.config_map_mount(&yaml_mount, policy_mounts)?;
             } else {
                 todo!("Unsupported volume type {:?}", yaml_volume);
             }
@@ -513,6 +515,18 @@ impl InfraPolicy {
             ],
         });
 
+        Ok(())
+    }
+
+    // Example of input yaml:
+    //
+    // TBD
+    fn config_map_mount(
+        &self,
+        _yaml_mount: &yaml::VolumeMount,
+        _policy_mounts: &mut Vec<oci::Mount>,
+    ) -> Result<()> {
+        // TODO
         Ok(())
     }
 }

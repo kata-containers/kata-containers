@@ -170,6 +170,9 @@ pub struct Volume {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub persistentVolumeClaim: Option<VolumeClaimVolume>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub configMap: Option<ConfigMapVolume>,
 }
 
 // Example:
@@ -199,6 +202,29 @@ pub struct EmptyDirVolume {
 #[serde(deny_unknown_fields)]
 pub struct VolumeClaimVolume {
     pub claimName: String,
+}
+
+// Example:
+//
+// volumes:
+// - name: config-volume
+//   configMap:
+//     name: name-of-your-configmap
+//     items:
+//     - key: your-file.json
+//       path: keys
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConfigMapVolume {
+    pub name: String,
+    pub items: Vec<ConfigMapVolumeItem>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConfigMapVolumeItem {
+    pub key: String,
+    pub path: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -338,19 +364,24 @@ impl Yaml {
         yaml_file: &Option<String>,
         output_policy_file: &Option<String>,
     ) -> Result<()> {
+        info!("============================================");
         info!("Adding policy to YAML");
 
         let mut policy = read_to_string(&rules_input_file)?;
         policy += "\npolicy_data := ";
         policy += json_data;
+        info!("Decoded policy size {:?} characters", policy.len());
 
         if let Some(file_name) = output_policy_file {
-            export_policy_data(&policy, &file_name)?;
+            export_decoded_policy(&policy, &file_name)?;
         }
 
         let encoded_policy = general_purpose::STANDARD.encode(policy.as_bytes());
+        info!("Encoded policy size {:?} characters", encoded_policy.len());
 
         if self.is_deployment() {
+            info!("Adding policy to Deployment YAML");
+
             if let Some(template) = &mut self.spec.template {
                 if let Some(annotations) = &mut template.metadata.annotations {
                     annotations
@@ -367,6 +398,8 @@ impl Yaml {
                 return Err(anyhow!("Deployment YAML without pod template!"));
             }
         } else {
+            info!("Adding policy to Pod YAML");
+
             if let Some(annotations) = &mut self.metadata.annotations {
                 annotations
                     .entry("io.katacontainers.config.agent.policy".to_string())
@@ -466,7 +499,7 @@ impl Container {
     }
 }
 
-fn export_policy_data(policy: &str, file_name: &str) -> Result<()> {
+fn export_decoded_policy(policy: &str, file_name: &str) -> Result<()> {
     let mut f = std::fs::OpenOptions::new()
         .write(true)
         .truncate(true)
