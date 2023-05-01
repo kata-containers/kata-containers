@@ -17,6 +17,8 @@ use std::collections::BTreeMap;
 use std::fs::{read_to_string, File};
 use std::io::Write;
 
+const POLICY_ANNOTATION_KEY: &str = "io.katacontainers.config.agent.policy";
+
 // Example:
 //
 // apiVersion: v1
@@ -370,25 +372,20 @@ impl Yaml {
         let mut policy = read_to_string(&rules_input_file)?;
         policy += "\npolicy_data := ";
         policy += json_data;
-        info!("Decoded policy size {:?} characters", policy.len());
+        info!("Decoded policy length {:?} characters", policy.len());
 
         if let Some(file_name) = output_policy_file {
             export_decoded_policy(&policy, &file_name)?;
         }
 
         let encoded_policy = general_purpose::STANDARD.encode(policy.as_bytes());
-        info!("Encoded policy size {:?} characters", encoded_policy.len());
+        info!("Encoded policy length {:?} characters", encoded_policy.len());
 
         if self.is_deployment() {
             info!("Adding policy to Deployment YAML");
 
             if let Some(template) = &mut self.spec.template {
-                if let Some(annotations) = &mut template.metadata.annotations {
-                    annotations
-                        .entry("io.katacontainers.config.agent.policy".to_string())
-                        .and_modify(|v| *v = encoded_policy.to_string())
-                        .or_insert(encoded_policy.to_string());
-                }
+                Self::add_policy_annotation(&mut template.metadata.annotations, &encoded_policy);
 
                 if let Some(containers) = &mut template.spec.containers {
                     // Remove the pause container before serializing.
@@ -400,12 +397,7 @@ impl Yaml {
         } else {
             info!("Adding policy to Pod YAML");
 
-            if let Some(annotations) = &mut self.metadata.annotations {
-                annotations
-                    .entry("io.katacontainers.config.agent.policy".to_string())
-                    .and_modify(|v| *v = encoded_policy.to_string())
-                    .or_insert(encoded_policy.to_string());
-            }
+            Self::add_policy_annotation(&mut self.metadata.annotations, &encoded_policy);
 
             if let Some(containers) = &mut self.spec.containers {
                 // Remove the pause container before serializing.
@@ -428,6 +420,22 @@ impl Yaml {
         }
 
         Ok(())
+    }
+
+    fn add_policy_annotation(anno: &mut Option<BTreeMap<String, String>>, encoded_policy: &str) {
+        if let Some(annotations) = anno {
+            annotations
+                .entry(POLICY_ANNOTATION_KEY.to_string())
+                .and_modify(|v| *v = encoded_policy.to_string())
+                .or_insert(encoded_policy.to_string());
+        } else {
+            let mut annotations = BTreeMap::new();
+            annotations.insert(
+                POLICY_ANNOTATION_KEY.to_string(),
+                encoded_policy.to_string(),
+            );
+            *anno = Some(annotations);
+        }
     }
 }
 
