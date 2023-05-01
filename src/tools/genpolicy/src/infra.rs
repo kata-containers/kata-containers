@@ -508,7 +508,51 @@ impl InfraPolicy {
 
     // Example of input yaml:
     //
-    // TBD
+    // containers:
+    //   - image: "docker.io/library/busybox:1.36.0"
+    //     name: busybox
+    //     volumeMounts:
+    //       - mountPath: /cm2
+    //         name: cm2-volume
+    // volumes:
+    //   - name: cm2-volume
+    //     configMap:
+    //       name: config-map2
+    //       items:
+    //         - key: file1.json
+    //           path: my-keys
+    //
+    // Corresponding output policy data:
+    //
+    // {
+    //     "destination": "/cm2",
+    //     "type": "bind",
+    //     "source": "^/run/kata-containers/shared/containers/watchable/$(bundle-id)-[a-z0-9]{16}-cm2$",
+    //     "options": [
+    //       "rbind",
+    //       "rprivate",
+    //       "ro"
+    //     ]
+    // }
+    //...
+    // "storages": [
+    //     {
+    //       "driver": "watchable-bind",
+    //       "driver_options": [],
+    //       "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-cm2-volume$",
+    //       "fstype": "bind",
+    //       "options": [
+    //         "rbind",
+    //         "rprivate",
+    //         "ro"
+    //       ],
+    //       "mount_point": "^/run/kata-containers/shared/containers/watchable/$(bundle-id)-[a-z0-9]{16}-cm2-volume$",
+    //       "fs_group": {
+    //         "group_id": 0,
+    //         "group_change_policy": 0
+    //       }
+    //     }
+    //  ]
     fn config_map_mount_and_storage(
         infra_volumes: &Volumes,
         policy_mounts: &mut Vec<oci::Mount>,
