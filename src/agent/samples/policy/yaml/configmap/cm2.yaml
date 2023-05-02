@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-map2
+data:
+  file1.json: |
+     {key1: value1, key2: value2, key123: value123, 321key: value321}

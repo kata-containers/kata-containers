@@ -14,6 +14,7 @@ use log::info;
 use oci;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 use std::fs::File;
 use std::path::Path;
 use std::str;
@@ -48,32 +49,8 @@ const OTHER_CONTAINERS_ANNOTATIONS: [(&'static str, &'static str); 4] = [
     ("io.kubernetes.cri.container-type", "container"),
 ];
 
-// Attempting to validate IP addresses and/or port numbers related
-// to the Kubernetes and any other services would be futile because
-// the Guest VM's Host controls how these addresses and ports are
-// implemented. For example, if the Guest VM tries to connect to
-// some service listening on port 5000, the Host virtualization
-// stack can redirect that connect request to a roque service listening
-// on port 6000. To ensure that a container connects to the service
-// that it expects, rather than some rogue service, is to implement
-// mutually-authenticated TLS - or a similar protocol - between these
-// two communication peers. The port and/or IP address values don't
-// help with authenticating these peers and/or with the confidentiality
-// of their communication.
-/*
-const OTHER_CONTAINERS_ENV: [&'static str; 8] = [
-    "KUBERNETES_PORT_443_TCP_PROTO=tcp",
-    "KUBERNETES_PORT_443_TCP_PORT=443",
-    "KUBERNETES_PORT_443_TCP_ADDR=10.0.0.1",
-    "KUBERNETES_SERVICE_HOST=10.0.0.1",
-    "KUBERNETES_SERVICE_PORT=443",
-    "KUBERNETES_SERVICE_PORT_HTTPS=443",
-    "KUBERNETES_PORT=tcp://10.0.0.1:443",
-    "KUBERNETES_PORT_443_TCP=tcp://10.0.0.1:443",
-];
-*/
-
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct InfraPolicy {
     pub pause_container: policy::OciSpec,
     pub other_container: policy::OciSpec,
@@ -81,23 +58,39 @@ pub struct InfraPolicy {
     shared_files: SharedFiles,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Volumes {
-    pub emptyDir: Option<EmptyDirVolume>,
+    pub emptyDir: EmptyDirVolume,
+    pub configMap: ConfigMapVolume,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct EmptyDirVolume {
     pub mount_type: String,
-    pub mount_point: String,
     pub mount_source: String,
+    pub mount_point: String,
     pub driver: String,
+    pub fstype: String,
+    pub options: Vec<String>,
+
     pub source: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConfigMapVolume {
+    pub mount_type: String,
+    pub mount_source: String,
+    pub mount_point: String,
+    pub driver: String,
     pub fstype: String,
     pub options: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct SharedFiles {
     source_path: String,
 }
@@ -286,17 +279,6 @@ fn add_other_container_data(oci: &mut policy::OciSpec) {
         oci.process = Some(Default::default());
     }
 
-    /*
-    if let Some(process) = &mut oci.process {
-        for env_var in OTHER_CONTAINERS_ENV {
-            let env_var_str = env_var.to_string();
-            if !process.env.contains(&env_var_str) {
-                process.env.push(env_var_str);
-            }
-        }
-    }
-    */
-
     for annotation in OTHER_CONTAINERS_ANNOTATIONS {
         oci.annotations
             .entry(annotation.0.to_string())
@@ -314,16 +296,24 @@ impl InfraPolicy {
     ) -> Result<()> {
         if let Some(infra_volumes) = &self.volumes {
             if yaml_volume.emptyDir.is_some() {
-                Self::mount_and_storage_empty_dir(
+                Self::empty_dir_mount_and_storage(
                     &infra_volumes,
-                    &yaml_mount,
+                    yaml_mount,
                     policy_mounts,
                     storages,
                 );
             } else if yaml_volume.persistentVolumeClaim.is_some() {
-                self.volume_claim_mount(&yaml_mount, policy_mounts)?;
+                self.volume_claim_mount(yaml_mount, policy_mounts)?;
             } else if yaml_volume.hostPath.is_some() {
-                self.host_path_mount(&yaml_mount, policy_mounts)?;
+                self.host_path_mount(yaml_mount, policy_mounts)?;
+            } else if yaml_volume.configMap.is_some() {
+                Self::config_map_mount_and_storage(
+                    &infra_volumes,
+                    policy_mounts,
+                    storages,
+                    yaml_volume,
+                    yaml_mount,
+                )?;
             } else {
                 todo!("Unsupported volume type {:?}", yaml_volume);
             }
@@ -375,43 +365,43 @@ impl InfraPolicy {
     //      }
     //  }
     // ]
-    fn mount_and_storage_empty_dir(
+    fn empty_dir_mount_and_storage(
         infra_volumes: &Volumes,
         yaml_mount: &yaml::VolumeMount,
         policy_mounts: &mut Vec<oci::Mount>,
         storages: &mut Vec<policy::SerializedStorage>,
     ) {
-        if let Some(infra_empty_dir) = &infra_volumes.emptyDir {
-            info!("Infra emptyDir: {:?}", infra_empty_dir);
-            let mut mount_source = infra_empty_dir.mount_source.to_string();
-            mount_source += &yaml_mount.name;
+        let infra_empty_dir = &infra_volumes.emptyDir;
+        info!("Infra emptyDir: {:?}", infra_empty_dir);
 
-            storages.push(policy::SerializedStorage {
-                driver: infra_empty_dir.driver.clone(),
-                driver_options: Vec::new(),
-                source: infra_empty_dir.source.clone(),
-                fstype: infra_empty_dir.fstype.clone(),
-                options: infra_empty_dir.options.clone(),
-                mount_point: infra_empty_dir.mount_point.clone() + &yaml_mount.name + "$",
-                fs_group: policy::SerializedFsGroup {
-                    group_id: 0,
-                    group_change_policy: 0,
-                },
-            });
+        let mut mount_source = infra_empty_dir.mount_source.to_string();
+        mount_source += &yaml_mount.name;
 
-            mount_source += "$";
+        storages.push(policy::SerializedStorage {
+            driver: infra_empty_dir.driver.clone(),
+            driver_options: Vec::new(),
+            source: infra_empty_dir.source.clone(),
+            fstype: infra_empty_dir.fstype.clone(),
+            options: infra_empty_dir.options.clone(),
+            mount_point: infra_empty_dir.mount_point.clone() + &yaml_mount.name + "$",
+            fs_group: policy::SerializedFsGroup {
+                group_id: 0,
+                group_change_policy: 0,
+            },
+        });
 
-            policy_mounts.push(oci::Mount {
-                destination: yaml_mount.mountPath.to_string(),
-                r#type: infra_empty_dir.mount_type.to_string(),
-                source: mount_source,
-                options: vec![
-                    "rbind".to_string(),
-                    "rprivate".to_string(),
-                    "rw".to_string(),
-                ],
-            });
-        }
+        mount_source += "$";
+
+        policy_mounts.push(oci::Mount {
+            destination: yaml_mount.mountPath.to_string(),
+            r#type: infra_empty_dir.mount_type.to_string(),
+            source: mount_source,
+            options: vec![
+                "rbind".to_string(),
+                "rprivate".to_string(),
+                "rw".to_string(),
+            ],
+        });
     }
 
     // Example of input yaml:
@@ -512,6 +502,94 @@ impl InfraPolicy {
                 "rw".to_string(),
             ],
         });
+
+        Ok(())
+    }
+
+    // Example of input yaml:
+    //
+    // containers:
+    //   - image: "docker.io/library/busybox:1.36.0"
+    //     name: busybox
+    //     volumeMounts:
+    //       - mountPath: /cm2
+    //         name: cm2-volume
+    // volumes:
+    //   - name: cm2-volume
+    //     configMap:
+    //       name: config-map2
+    //       items:
+    //         - key: file1.json
+    //           path: my-keys
+    //
+    // Corresponding output policy data:
+    //
+    // {
+    //     "destination": "/cm2",
+    //     "type": "bind",
+    //     "source": "^/run/kata-containers/shared/containers/watchable/$(bundle-id)-[a-z0-9]{16}-cm2$",
+    //     "options": [
+    //       "rbind",
+    //       "rprivate",
+    //       "ro"
+    //     ]
+    // }
+    //...
+    // "storages": [
+    //     {
+    //       "driver": "watchable-bind",
+    //       "driver_options": [],
+    //       "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-cm2-volume$",
+    //       "fstype": "bind",
+    //       "options": [
+    //         "rbind",
+    //         "rprivate",
+    //         "ro"
+    //       ],
+    //       "mount_point": "^/run/kata-containers/shared/containers/watchable/$(bundle-id)-[a-z0-9]{16}-cm2-volume$",
+    //       "fs_group": {
+    //         "group_id": 0,
+    //         "group_change_policy": 0
+    //       }
+    //     }
+    //  ]
+    fn config_map_mount_and_storage(
+        infra_volumes: &Volumes,
+        policy_mounts: &mut Vec<oci::Mount>,
+        storages: &mut Vec<policy::SerializedStorage>,
+        _yaml_volume: &yaml::Volume,
+        yaml_mount: &yaml::VolumeMount,
+    ) -> Result<()> {
+        let infra_config_map = &infra_volumes.configMap;
+        info!("Infra configMap: {:?}", infra_config_map);
+
+        storages.push(policy::SerializedStorage {
+            driver: infra_config_map.driver.clone(),
+            driver_options: Vec::new(),
+            source: infra_config_map.mount_source.clone() + &yaml_mount.name + "$",
+            fstype: infra_config_map.fstype.clone(),
+            options: infra_config_map.options.clone(),
+            mount_point: infra_config_map.mount_point.clone() + &yaml_mount.name + "$",
+            fs_group: policy::SerializedFsGroup {
+                group_id: 0,
+                group_change_policy: 0,
+            },
+        });
+
+        if let Some(file_name) = Path::new(&yaml_mount.mountPath).file_name() {
+            if let Ok(name) = OsString::from(file_name).into_string() {
+                policy_mounts.push(oci::Mount {
+                    destination: yaml_mount.mountPath.to_string(),
+                    r#type: infra_config_map.mount_type.to_string(),
+                    source: infra_config_map.mount_point.clone() + &name + "$",
+                    options: infra_config_map.options.clone(),
+                });
+            } else {
+                panic!("Unsupported mount path: {:?}", &yaml_mount.mountPath);
+            }
+        } else {
+            panic!("No file name in mount path: {:?}", &yaml_mount.mountPath);
+        }
 
         Ok(())
     }
