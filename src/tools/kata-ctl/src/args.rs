@@ -100,7 +100,41 @@ pub struct IptablesCommand {
 #[derive(Debug, Subcommand)]
 pub enum IpTablesArguments {
     /// Configure iptables
-    Metrics,
+    #[derive(Debug, Args)]
+pub struct IptablesCommand {
+    #[clap(subcommand)]
+    pub iptables: IpTablesArguments,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum IpTablesArguments {
+    /// Configure iptables
+    /// Getters
+    #[clap(about = "Get iptables from the Kata Containers guest")]
+    get{
+        #[arg(long = "sand-box", value_name = "ID", required = true, 
+        takes_value = true, help = "The target sandbox for getting the iptables")]
+        sandbox-id:String,
+
+        #[arg(long = "v6", help = "Indicate we're requesting ipv6 iptables")]
+        v6:bool,
+
+    }
+
+    //Setters
+    set{
+        #[arg(long = "sand-box", value_name = "ID", required = true, 
+        takes_value = true, help = "The target sandbox for setting the iptables")]
+        sandbox-id:String,
+
+        #[arg(long = "v6", help = "Indicate we're requesting ipv6 iptables")]
+        v6:bool,
+    }
+
+    #[arg(value_name = "FILE", required = true, takes_value = true, help = "The iptables file to set")]
+    file:String,
+
+}
 }
 
 #[derive(Debug, Args)]
