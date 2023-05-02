@@ -1,4 +1,4 @@
-name: CI | Run kubernetes tests on SEV
+name: CI | Run kubernetes tests on SEV-SNP
 on:
   workflow_call:
     inputs:
@@ -18,8 +18,8 @@ jobs:
       fail-fast: false
       matrix:
         vmm:
-          - qemu-sev
-    runs-on: sev
+          - qemu-snp
+    runs-on: sev-snp
     env:
       KUBECONFIG: /home/kata/.kube/config
     steps:

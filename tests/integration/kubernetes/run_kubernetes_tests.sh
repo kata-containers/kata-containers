@@ -58,6 +58,10 @@ if [ ${KATA_HYPERVISOR} == "qemu-sev" ]; then
 	exit 0
 fi
 
+if [ ${KATA_HYPERVISOR} == "qemu-snp" ]; then
+	exit 0
+fi
+
 # we may need to skip a few test cases when running on non-x86_64 arch
 arch_config_file="${kubernetes_dir}/filter_out_per_arch/${TARGET_ARCH}.yaml"
 if [ -f "${arch_config_file}" ]; then
