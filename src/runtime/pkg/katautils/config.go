@@ -287,6 +287,13 @@ func (h hypervisor) firmware() (string, error) {
 	return ResolvePath(p)
 }
 
+func (h hypervisor) coldPlugVFIO() hv.PCIePort {
+	if h.ColdPlugVFIO == "" {
+		return defaultColdPlugVFIO
+	}
+	return h.ColdPlugVFIO
+}
+
 func (h hypervisor) firmwareVolume() (string, error) {
 	p := h.FirmwareVolume
 
@@ -856,7 +863,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		Msize9p:                 h.msize9p(),
 		DisableImageNvdimm:      h.DisableImageNvdimm,
 		HotplugVFIOOnRootBus:    h.HotplugVFIOOnRootBus,
-		ColdPlugVFIO:            h.ColdPlugVFIO,
+		ColdPlugVFIO:            h.coldPlugVFIO(),
 		PCIeRootPort:            h.PCIeRootPort,
 		DisableVhostNet:         h.DisableVhostNet,
 		EnableVhostUserStore:    h.EnableVhostUserStore,
@@ -1051,7 +1058,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EnableIOThreads:                h.EnableIOThreads,
 		Msize9p:                        h.msize9p(),
 		HotplugVFIOOnRootBus:           h.HotplugVFIOOnRootBus,
-		ColdPlugVFIO:                   h.ColdPlugVFIO,
+		ColdPlugVFIO:                   h.coldPlugVFIO(),
 		PCIeRootPort:                   h.PCIeRootPort,
 		DisableVhostNet:                true,
 		GuestHookPath:                  h.guestHookPath(),
@@ -1655,7 +1662,30 @@ func checkConfig(config oci.RuntimeConfig) error {
 		return err
 	}
 
+	coldPlugVFIO := config.HypervisorConfig.ColdPlugVFIO
+	machineType := config.HypervisorConfig.HypervisorMachineType
+	if err := checkPCIeConfig(coldPlugVFIO, machineType); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// checkPCIeConfig ensures the PCIe configuration is valid.
+// Only allow one of the following settings for cold-plug:
+// no-port, root-port, switch-port
+func checkPCIeConfig(vfioPort hv.PCIePort, machineType string) error {
+	// Currently only QEMU q35 supports advanced PCIe topologies
+	// firecracker, dragonball do not have right now any PCIe support
+	if machineType != "q35" {
+		return nil
+	}
+	if vfioPort == hv.NoPort || vfioPort == hv.RootPort || vfioPort == hv.SwitchPort {
+		return nil
+	}
+
+	return fmt.Errorf("invalid vfio_port=%s setting, allowed values %s, %s, %s",
+		vfioPort, hv.NoPort, hv.RootPort, hv.SwitchPort)
 }
 
 // checkNetNsConfig performs sanity checks on disable_new_netns config.

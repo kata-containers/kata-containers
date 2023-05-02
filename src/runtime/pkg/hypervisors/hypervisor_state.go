@@ -48,10 +48,12 @@ func (p PCIePort) String() string {
 		return "root-port"
 	case SwitchPort:
 		return "switch-port"
+	case BridgePort:
+		return "bridge-port"
 	case NoPort:
 		return "no-port"
 	}
-	return fmt.Sprintf("unknown PCIePort: %s", string(p))
+	return fmt.Sprintf("<unknown PCIePort: %s>", string(p))
 }
 
 type HypervisorState struct {
