@@ -102,8 +102,7 @@ pub enum IpTablesArguments {
     /// Configure iptables
     #[derive(Debug, Args)]
 pub struct IptablesCommand {
-    #[clap(subcommand)]
-    pub iptables: IpTablesArguments,
+    get, set
 }
 
 #[derive(Debug, Subcommand)]

@@ -7,7 +7,7 @@ use clap::{App, Arg, Parser, SubCommand, Command, Parser};
 use crate::args::{IptablesCommand};
 use reqwest::{Url};
 use std::{fs};
-use anyhow::Result;
+use anyhow::{Result, Context} ;
 use shimclient::MgmtClient;
 use args::{Commands};
 use std::process::Command;
@@ -38,28 +38,16 @@ pub fn verify_id(id:&str) -> Result<(), Error>{
     }
 }
 
-pub fn handle_iptables(_args: IptablesCommand) -> Result<()> {
-
-    //implement handle_iptables
-    // let args = KataCtlCli::parse();
-    // match args.command{
-    //     Commands::Iptables(args) => handle_iptables(args),
-    // }
-
-    let matches = Command::new("iptables")
-    .subcommand(Command::new("get"))
-    .subcommand(Command::new("set"))
-    .get_matches();
-
+pub fn handle_iptables(args: IptablesCommand) -> Result<()> {
     //checking for subcommand entered form user 
     match matches.subcommand() {
         Some(("get", get_matches)) => {
             // retrieve the sandbox ID from the command line arguments
-            let sandbox_id = get_matches.value_of("sandbox-id").unwrap();
-            // check if ipv6 is requested
+            let sandbox_id = get_matches.value_of("sandbox-id")?;
+
             let is_ipv6 = get_matches.is_present("v6");
-            // verify the container ID before proceeding
-            verify_id(sandbox_id)?;//validate::verify_id(sandbox_id)
+           
+            verify_id(sandbox_id)?;
             // generate the appropriate URL for the iptables request to connect Kata to agent within guest
             let url = if is_ipv6 {
                 Url::parse(&format!("{}{}", IP6_TABLES_SOCKET, sandbox_id))?
@@ -81,7 +69,7 @@ pub fn handle_iptables(_args: IptablesCommand) -> Result<()> {
             let iptables_file = set_matches.value_of("file").unwrap();
             
             // Verify the specified sandbox ID is valid
-            verify_id(sandbox_id)?;//verify_container_id(sandbox_id)?;
+            verify_id(sandbox_id)?;
         
             // Check if the iptables file was provided
             if iptables_file.is_empty() {
@@ -105,17 +93,15 @@ pub fn handle_iptables(_args: IptablesCommand) -> Result<()> {
             } else {
                 Url::parse(&format!("{}{}", IP_TABLES_SOCKET, sandbox_id))?
             };
-        
+
             // Create a new management client for the specified sandbox ID
-            let shim_client = match MgmtClient::new(sandbox_id, Some(DEFAULT_TIMEOUT)) {
+            let shim_client = MgmtClient::new(sandbox_id, Some(DEFAULT_TIMEOUT)).context("error creating management client") {
                 Ok(client) => client,
-                Err(e) => return Err(format!("Error creating management client: {}", e).into()),
             };
         
             // Send a PUT request to set the iptables rules
-            let response = match shim_client.put(url, content_type, &buf) {
+            let response = match shim_client.put(url, content_type, &buf).context("error sending request")? {
                 Ok(res) => res,
-                Err(e) => return Err(format!("Error sending request: {}", e).into()),
             };
         
             // Check if the request was successful
@@ -129,7 +115,5 @@ pub fn handle_iptables(_args: IptablesCommand) -> Result<()> {
             // Return Ok to indicate success
             Ok(())
         }
-        
     }
-
 }
