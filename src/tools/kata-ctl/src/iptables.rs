@@ -69,7 +69,6 @@ pub fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error> {
             
             // Verify the specified sandbox ID is valid
             verify_id(sandbox_id)?;
-
         
             // Read the contents of the specified iptables file into a buffer
             let buf = fs::read(iptables_file).map_err(|err| anyhow::Error::msg(format!("iptables file not provided: {}", err)))?;
