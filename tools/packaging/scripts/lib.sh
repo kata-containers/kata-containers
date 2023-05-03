@@ -224,7 +224,7 @@ get_td_shim_image_name() {
 
 get_ovmf_image_name() {
 	ovmf_script_dir="${repo_root_dir}/tools/packaging/static-build/ovmf"
-	echo "${BUILDER_REGISTRY}:ovmf-$(get_last_modification ${ovmf_script_dir})-$(uname -m)"
+	echo "${CC_BUILDER_REGISTRY}:ovmf-$(get_last_modification ${ovmf_script_dir})-$(uname -m)"
 }
 
 get_virtiofsd_image_name() {
