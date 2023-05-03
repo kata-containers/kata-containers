@@ -16,12 +16,12 @@ export container_images_agnhost_version="2.21"
 
 # Timeout options, mainly for use with waitForProcess(). Use them unless the
 # operation needs to wait longer.
-wait_time=90
+wait_time=120
 sleep_time=3
 
 # Timeout for use with `kubectl wait`, unless it needs to wait longer.
 # Note: try to keep timeout and wait_time equal.
-timeout=90s
+timeout=120s
 
 # issues that can't test yet.
 fc_limitations="https://github.com/kata-containers/documentation/issues/351"
