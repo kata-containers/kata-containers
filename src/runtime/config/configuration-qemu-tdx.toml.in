@@ -529,8 +529,8 @@ kernel_modules=[]
 #debug_console_enabled = true
 
 # Agent connection dialing timeout value in seconds
-# (default: 60)
-dial_timeout = 60
+# (default: 90)
+dial_timeout = 90
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the

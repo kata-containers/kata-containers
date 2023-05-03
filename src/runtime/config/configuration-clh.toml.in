@@ -305,8 +305,8 @@ block_device_driver = "virtio-blk"
 #debug_console_enabled = true
 
 # Agent connection dialing timeout value in seconds
-# (default: 45)
-dial_timeout = 45
+# (default: 60)
+dial_timeout = 60
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
