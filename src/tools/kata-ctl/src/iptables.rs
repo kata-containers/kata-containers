@@ -12,6 +12,7 @@ use shimclient::MgmtClient;
 use args::{Commands};
 use std::process::Command;
 use thiserror::Error;
+use super::*;
 
 //kata-proxy management API endpoint, without code would not know the location of the unix sockets
 const DEFAULT_TIMEOUT: u64 = 30;
@@ -64,26 +65,17 @@ pub fn handle_iptables(args: IptablesCommand) -> Result<()> {
         }
         Some(("set", set_matches)) => {
             // Extract sandbox ID and IPv6 flag from command-line arguments
-            let sandbox_id = set_matches.value_of("sandbox-id").unwrap();
+            let sandbox_id = set_matches.value_of("sandbox-id")?;
             let is_ipv6 = set_matches.is_present("v6");
-            let iptables_file = set_matches.value_of("file").unwrap();
+            let iptables_file = set_matches.value_of("file")?;
             
             // Verify the specified sandbox ID is valid
             verify_id(sandbox_id)?;
-        
-            // Check if the iptables file was provided
-            if iptables_file.is_empty() {
-                return Err("iptables file not provided".into());
-            }
-            
-            // Check if the iptables file exists
-            if !std::path::Path::new(iptables_file).exists() {
-                return Err(format!("iptables file does not exist: {}", iptables_file).into());
-            }
+
         
             // Read the contents of the specified iptables file into a buffer
-            let buf = fs::read(iptables_file)?;
-        
+            let buf = fs::read(iptables_file).map_err(|_| Err("iptables file not provided".into()))?;
+
             // Set the content type for the request
             let content_type = "application/octet-stream";
         
@@ -116,4 +108,72 @@ pub fn handle_iptables(args: IptablesCommand) -> Result<()> {
             Ok(())
         }
     }
+}
+
+//Still a work in progress for the unit tests
+//Unit tests
+#[test]
+fn test_verify_id_valid() {
+    let result = verify_id("abc123");
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_verify_id_invalid() {
+    let result = verify_id("123!abc");
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert_eq!(error.to_string(), "Invalid Container ID 123!abc");
+}
+
+#[test]
+fn test_handle_iptables_set_valid() {
+    let args = IptablesCommand {
+        command: Commands::Set,
+        sandbox_id: "abc123".to_string(),
+        v6: false,
+        file: "/path/to/iptables".to_string(),
+    };
+    let result = handle_iptables(args);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_handle_iptables_set_invalid() {
+    let args = IptablesCommand {
+        command: Commands::Set,
+        sandbox_id: "123!abc".to_string(),
+        v6: false,
+        file: "/path/to/iptables".to_string(),
+    };
+    let result = handle_iptables(args);
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert_eq!(error.to_string(), "Invalid Container ID 123!abc");
+}
+
+#[test]
+fn test_handle_iptables_get_valid() {
+    let args = IptablesCommand {
+        command: Commands::Get,
+        sandbox_id: "abc123".to_string(),
+        v6: false,
+        file: "/path/to/iptables".to_string(),
+    };
+    let result = handle_iptables(args);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_handle_iptables_get_invalid() {
+    let args = IptablesCommand {
+        command: Commands::Get,
+        sandbox_id: "123!abc".to_string(),
+        v6: false,
+        file: "/path/to/iptables".to_string(),
+    };
+    let result = handle_iptables(args);
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert_eq!(error.to_string(), "Invalid Container ID 123!abc");
 }
