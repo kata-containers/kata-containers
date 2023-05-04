@@ -19,6 +19,7 @@ jobs:
           - cloud-hypervisor
           - firecracker
           - kernel
+          - kernel-sev
           - kernel-dragonball-experimental
           - kernel-tdx-experimental
           - kernel-gpu
