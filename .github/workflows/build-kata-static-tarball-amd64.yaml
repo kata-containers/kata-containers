@@ -26,6 +26,7 @@ jobs:
           - kernel-gpu-snp
           - kernel-gpu-tdx-experimental
           - nydus
+          - ovmf-sev
           - qemu
           - qemu-tdx-experimental
           - rootfs-image
