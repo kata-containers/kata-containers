@@ -106,9 +106,9 @@ assets:
 
     qemu-tdx-experimental:
       # yamllint disable-line rule:line-length
-      description: "QEMU with TDX support - based on https://github.com/intel/tdx-tools/releases/tag/2023ww01"
+      description: "QEMU with TDX support - based on https://github.com/intel/tdx-tools/releases/tag/2023ww15"
       url: "https://github.com/kata-containers/qemu"
-      tag: "ad4c7f529a279685da84297773b4ec8080153c2d-plus-TDX-v1.3"
+      tag: "b67b00e6b4c7831a3f5bc684bc0df7a9bfd1bd56-plus-TDX-v1.10"
 
     qemu-snp-experimental:
       description: "QEMU with experimental SNP support (no UPM)"
