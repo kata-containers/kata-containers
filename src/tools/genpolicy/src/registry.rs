@@ -23,6 +23,7 @@ pub struct Container {
 struct DockerConfigLayer {
     architecture: String,
     config: DockerImageConfig,
+    rootfs: DockerRootfs,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -33,6 +34,12 @@ struct DockerImageConfig {
     Cmd: Option<Vec<String>>,
     WorkingDir: Option<String>,
     Entrypoint: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct DockerRootfs {
+    r#type: String,
+    diff_ids: Vec<String>,
 }
 
 impl Container {
