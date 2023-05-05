@@ -487,6 +487,7 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		DisableNestingChecks:    hconf.DisableNestingChecks,
 		DisableImageNvdimm:      hconf.DisableImageNvdimm,
 		HotplugVFIOOnRootBus:    hconf.HotplugVFIOOnRootBus,
+		ColdPlugVFIO:            hconf.ColdPlugVFIO,
 		PCIeRootPort:            hconf.PCIeRootPort,
 		BootToBeTemplate:        hconf.BootToBeTemplate,
 		BootFromTemplate:        hconf.BootFromTemplate,
