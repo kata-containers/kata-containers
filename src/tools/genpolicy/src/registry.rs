@@ -15,34 +15,23 @@ use oci_distribution::{secrets::RegistryAuth, Client, Reference};
 use serde::{Deserialize, Serialize};
 use std::io;
 
-#[derive(Default)]
 pub struct Container {
     config_layer: String,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct DockerConfigLayer {
     architecture: String,
-    #[serde(default)]
     config: DockerImageConfig,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct DockerImageConfig {
-    #[serde(default)]
-    User: String,
-
-    #[serde(default)]
-    Tty: bool,
-
-    #[serde(default)]
+    User: Option<String>,
+    Tty: Option<bool>,
     Env: Vec<String>,
-
-    #[serde(default)]
-    Cmd: Vec<String>,
-
-    #[serde(default)]
-    WorkingDir: String,
+    Cmd: Option<Vec<String>>,
+    WorkingDir: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     Entrypoint: Option<Vec<String>>,
@@ -89,22 +78,28 @@ impl Container {
         let config_layer: DockerConfigLayer = serde_json::from_str(&self.config_layer)?;
         let docker_config = &config_layer.config;
 
-        if !docker_config.User.is_empty() {
-            info!("Splitting Docker config user = {:?}", docker_config.User);
-            let user: Vec<&str> = docker_config.User.split(':').collect();
-            if user.len() > 0 {
-                info!("Parsing user[0] = {:?}", user[0]);
-                process.user.uid = user[0].parse()?;
-                info!("string: {:?} => uid: {}", user[0], process.user.uid);
-            }
-            if user.len() > 1 {
-                info!("Parsing user[1] = {:?}", user[1]);
-                process.user.gid = user[1].parse()?;
-                info!("string: {:?} => gid: {}", user[1], process.user.gid);
+        if let Some(image_user) = &docker_config.User {
+            if !image_user.is_empty() {
+                info!("Splitting Docker config user = {:?}", image_user);
+                let user: Vec<&str> = image_user.split(':').collect();
+                if !user.is_empty() {
+                    info!("Parsing user[0] = {:?}", user[0]);
+                    process.user.uid = user[0].parse()?;
+                    info!("string: {:?} => uid: {}", user[0], process.user.uid);
+                }
+                if user.len() > 1 {
+                    info!("Parsing user[1] = {:?}", user[1]);
+                    process.user.gid = user[1].parse()?;
+                    info!("string: {:?} => gid: {}", user[1], process.user.gid);
+                }
             }
         }
 
-        process.terminal = docker_config.Tty;
+        if let Some(terminal) = docker_config.Tty {
+            process.terminal = terminal;
+        } else {
+            process.terminal = false;
+        }
 
         for env in &docker_config.Env {
             process.env.push(env.clone());
@@ -116,14 +111,14 @@ impl Container {
         if let Some(entry_points) = &docker_config.Entrypoint {
             info!("Image Entrypoint: {:?}", entry_points);
             if !yaml_has_command {
-                    info!("Inserting Entrypoint into policy args");
+                info!("Inserting Entrypoint into policy args");
 
-                    let mut reversed_entry_points = entry_points.clone();
-                    reversed_entry_points.reverse();
+                let mut reversed_entry_points = entry_points.clone();
+                reversed_entry_points.reverse();
 
-                    for entry_point in reversed_entry_points {
-                        policy_args.insert(0, entry_point.clone());
-                    }
+                for entry_point in reversed_entry_points {
+                    policy_args.insert(0, entry_point.clone());
+                }
             } else {
                 info!("Ignoring image Entrypoint because YAML specified the container command");
             }
@@ -137,18 +132,22 @@ impl Container {
             info!("Ignoring image Cmd because YAML specified the container command");
         } else if yaml_has_args {
             info!("Ignoring image Cmd because YAML specified the container args");
-        } else {
-            info!("Adding to policy args the image Cmd: {:?}", docker_config.Cmd);
+        } else if let Some(commands) = &docker_config.Cmd {
+            info!("Adding to policy args the image Cmd: {:?}", commands);
 
-            for cmd in &docker_config.Cmd {
+            for cmd in commands {
                 policy_args.push(cmd.clone());
             }
+        } else {
+            info!("Image Cmd field is not present");
         }
 
         info!("Updated policy args: {:?}", policy_args);
 
-        if !docker_config.WorkingDir.is_empty() {
-            process.cwd = docker_config.WorkingDir.clone();
+        if let Some(working_dir) = &docker_config.WorkingDir {
+            if !working_dir.is_empty() {
+                process.cwd = working_dir.clone();
+            }
         }
 
         info!("get_process succeeded.");
