@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::io;
 
 pub struct Container {
-    config_layer: String,
+    config_layer: DockerConfigLayer,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -32,8 +32,6 @@ struct DockerImageConfig {
     Env: Vec<String>,
     Cmd: Option<Vec<String>>,
     WorkingDir: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
     Entrypoint: Option<Vec<String>>,
 }
 
@@ -64,7 +62,7 @@ impl Container {
             serde_transcode::transcode(&mut deserializer, &mut serializer).unwrap();
         }
 
-        Ok(Container { config_layer })
+        Ok(Container { config_layer: serde_json::from_str(&config_layer)?})
     }
 
     // Convert Docker image config to policy data.
@@ -75,8 +73,7 @@ impl Container {
         yaml_has_args: bool,
     ) -> Result<()> {
         info!("Getting process field from docker config layer...");
-        let config_layer: DockerConfigLayer = serde_json::from_str(&self.config_layer)?;
-        let docker_config = &config_layer.config;
+        let docker_config = &self.config_layer.config;
 
         if let Some(image_user) = &docker_config.User {
             if !image_user.is_empty() {
