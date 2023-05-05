@@ -103,26 +103,53 @@ pub fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error> {
             // Print a message indicating that the iptables rules were set successfully
             println!("iptables set successfully");
         
-            // Return Ok to indicate success
             Ok(())
         }
     }
 }
 
-//Still a work in progress for the unit tests
-//Unit tests
+//unit tests 
 #[test]
-fn test_verify_id_valid() {
-    let result = verify_id("abc123");
-    assert!(result.is_ok());
+fn test_verify_id(){
+    assert!(verify_id("aasdf").is_ok());
+    assert!(verify_id("aas-df").is_ok());
+    assert!(verify_id("ABC.asdf02").is_ok());
+    assert!(verify_id("a123af_01").is_ok());
+    assert!(verify_id("123_ABC.def-456").is_ok());
 }
 
 #[test]
-fn test_verify_id_invalid() {
-    let result = verify_id("123!abc");
-    assert!(result.is_err());
-    let error = result.unwrap_err();
-    assert_eq!(error.to_string(), "Invalid Container ID 123!abc");
+fn test_invalid_verify_id(){
+    //invalid
+    assert!(verify_id("").is_err());
+    assert!(verify_id("#invalid").is_err());
+    assert!(verify_id("a").is_err());
+    assert!(verify_id("a**dd").is_err());
+    assert!(verify_id("%invalid/id").is_err());
+    assert!(verify_id("add-").is_err());
+    assert!(verify_id("a<bb").is_err());
+    assert!(verify_id("ad?blocker").is_err());
+}
+#[test]
+fn test_handle_iptables_get_valid() {
+    let args = IptablesCommand {
+        command: Commands::Get,
+        sandbox_id: "abc123".to_string(),
+        v6: false,
+        file: "/path/to/iptables".to_string(),
+    };
+    assert!(handle_iptables(args).is_ok());
+}
+
+#[test]
+fn test_handle_iptables_get_invalid() {
+    let args = IptablesCommand {
+        command: Commands::Get,
+        sandbox_id: "abc$123".to_string(),
+        v6: false,
+        file: "/path/to/iptables".to_string(),
+    };
+    assert!(handle_iptables(args).is_err());
 }
 
 #[test]
@@ -133,46 +160,69 @@ fn test_handle_iptables_set_valid() {
         v6: false,
         file: "/path/to/iptables".to_string(),
     };
-    let result = handle_iptables(args);
-    assert!(result.is_ok());
+    assert!(handle_iptables(args).is_ok());
 }
 
 #[test]
 fn test_handle_iptables_set_invalid() {
     let args = IptablesCommand {
         command: Commands::Set,
-        sandbox_id: "123!abc".to_string(),
+        sandbox_id: "abc$123".to_string(),
         v6: false,
         file: "/path/to/iptables".to_string(),
     };
-    let result = handle_iptables(args);
-    assert!(result.is_err());
-    let error = result.unwrap_err();
-    assert_eq!(error.to_string(), "Invalid Container ID 123!abc");
+    assert!(handle_iptables(args).is_err());
+}
+
+//get and set invalid sandbox id
+#[test]
+fn test_handle_iptables_get_invalid_sandboxid() {
+    let args = IptablesCommand{
+        command: Commands::Get,
+        sandbox_id: "invalid_sandboxid".to_string(),
+        v6: false,
+        file: "/path/to/iptables".to_string(),
+    };
+    assert!(handle_iptables(args).is_err());
 }
 
 #[test]
-fn test_handle_iptables_get_valid() {
-    let args = IptablesCommand {
-        command: Commands::Get,
-        sandbox_id: "abc123".to_string(),
+fn test_handle_iptables_set_invalid_sandboxid() {
+    let args = IptablesCommand{
+        command: Commands::Set,
+        sandbox_id: "invalid_sandboxid".to_string(),
         v6: false,
         file: "/path/to/iptables".to_string(),
     };
-    let result = handle_iptables(args);
-    assert!(result.is_ok());
+    assert!(handle_iptables(args).is_err());
 }
 
+//check for invalid file
 #[test]
-fn test_handle_iptables_get_invalid() {
-    let args = IptablesCommand {
-        command: Commands::Get,
-        sandbox_id: "123!abc".to_string(),
-        v6: false,
-        file: "/path/to/iptables".to_string(),
-    };
-    let result = handle_iptables(args);
-    assert!(result.is_err());
-    let error = result.unwrap_err();
-    assert_eq!(error.to_string(), "Invalid Container ID 123!abc");
+fn test_invalid_iptables_file(){
+    let iptables_text = "check iptables";
+    let iptables_File = tempfile::NamedTempFile::new()?;
+    fs::write(iptables_file.path(), iptables_text)?;
+
+    //Call set subcommand in handle_iptables
+    let args = IptablesCommand::from_iter_safe(&[
+        "iptables",
+        "set",
+        "--sandox-id",
+        "1234",
+        "--file",
+        iptables_file.path().to_str()?,
+    ])?;
+    assert!(handle_iptables(args).is_ok());
+
+    //Call get subcommand in handle_iptables
+    let args = IptablesCommand::from_iter_safe(&[
+        "iptables",
+        "get",
+        "--sandox-id",
+        "1234",
+        "--file",
+        iptables_file.path().to_str()?,
+    ])?;
+    assert!(handle_iptables(args).is_ok());
 }
