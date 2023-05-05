@@ -10,10 +10,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -132,4 +134,100 @@ func GetAPVFIODevices(sysfsdev string) ([]string, error) {
 	}
 	// Split by newlines, omitting final newline
 	return strings.Split(string(data[:len(data)-1]), "\n"), nil
+}
+
+// Ignore specific PCI devices, supply the pciClass and the bitmask to check
+// against the device class, deviceBDF for meaningfull info message
+func checkIgnorePCIClass(pciClass string, deviceBDF string, bitmask uint64) (bool, error) {
+	if pciClass == "" {
+		return false, nil
+	}
+	pciClassID, err := strconv.ParseUint(pciClass, 0, 32)
+	if err != nil {
+		return false, err
+	}
+	// ClassID is 16 bits, remove the two trailing zeros
+	pciClassID = pciClassID >> 8
+	if pciClassID&bitmask == bitmask {
+		deviceLogger().Infof("Ignoring PCI (Host) Bridge deviceBDF %v Class %x", deviceBDF, pciClassID)
+		return true, nil
+	}
+	return false, nil
+}
+
+// GetAllVFIODevicesFromIOMMUGroup returns all the VFIO devices in the IOMMU group
+// We can reuse this function at various levels, sandbox, container.
+// Only the VFIO module is allowed to do bus assignments, all other modules need to
+// ignore it if used as helper function to get VFIO information.
+func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo, ignoreBusAssignment bool) ([]*config.VFIODev, error) {
+
+	vfioDevs := []*config.VFIODev{}
+
+	vfioGroup := filepath.Base(device.HostPath)
+	iommuDevicesPath := filepath.Join(config.SysIOMMUPath, vfioGroup, "devices")
+
+	deviceFiles, err := os.ReadDir(iommuDevicesPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Pass all devices in iommu group
+	for i, deviceFile := range deviceFiles {
+		//Get bdf of device eg 0000:00:1c.0
+		deviceBDF, deviceSysfsDev, vfioDeviceType, err := getVFIODetails(deviceFile.Name(), iommuDevicesPath)
+		if err != nil {
+			return nil, err
+		}
+		id := utils.MakeNameID("vfio", device.ID+strconv.Itoa(i), maxDevIDSize)
+
+		pciClass := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesClass)
+		// We need to ignore Host or PCI Bridges that are in the same IOMMU group as the
+		// passed-through devices. One CANNOT pass-through a PCI bridge or Host bridge.
+		// Class 0x0604 is PCI bridge, 0x0600 is Host bridge
+		ignorePCIDevice, err := checkIgnorePCIClass(pciClass, deviceBDF, 0x0600)
+		if err != nil {
+			return nil, err
+		}
+		if ignorePCIDevice {
+			continue
+		}
+
+		var vfio config.VFIODev
+
+		switch vfioDeviceType {
+		case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
+			isPCIe := isPCIeDevice(deviceBDF)
+			// Do not directly assign to `vfio` -- need to access field still
+			vfioPCI := config.VFIOPCIDev{
+				ID:       id,
+				Type:     vfioDeviceType,
+				BDF:      deviceBDF,
+				SysfsDev: deviceSysfsDev,
+				IsPCIe:   isPCIe,
+				Class:    pciClass,
+			}
+			if isPCIe && !ignoreBusAssignment {
+				vfioPCI.Bus = fmt.Sprintf("%s%d", pcieRootPortPrefix, len(AllPCIeDevs))
+				AllPCIeDevs[deviceBDF] = true
+			}
+			vfio = vfioPCI
+		case config.VFIOAPDeviceMediatedType:
+			devices, err := GetAPVFIODevices(deviceSysfsDev)
+			if err != nil {
+				return nil, err
+			}
+			vfio = config.VFIOAPDev{
+				ID:        id,
+				SysfsDev:  deviceSysfsDev,
+				Type:      config.VFIOAPDeviceMediatedType,
+				APDevices: devices,
+			}
+		default:
+			return nil, fmt.Errorf("Failed to append device: VFIO device type unrecognized")
+		}
+
+		vfioDevs = append(vfioDevs, &vfio)
+	}
+
+	return vfioDevs, nil
 }
