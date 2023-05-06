@@ -317,17 +317,7 @@ impl ResourceManagerInner {
             sb_bindmnt.cleanup_sandbox_bind_mounts()
         }
     }
-
-    pub async fn update_cgroups(
-        &self,
-        cid: &str,
-        linux_resources: Option<&LinuxResources>,
-    ) -> Result<()> {
-        self.cgroups_resource
-            .update_cgroups(cid, linux_resources, self.hypervisor.as_ref())
-            .await
-    }
-
+    
     pub async fn cleanup(&self) -> Result<()> {
         // clean up cgroup
         self.cgroups_resource
@@ -365,15 +355,24 @@ impl ResourceManagerInner {
     ) -> Result<()> {
         let linux_cpus = || -> Option<&LinuxCpu> { linux_resources.as_ref()?.cpu.as_ref() }();
 
-        self.cpu_resource
-            .update_cpu_resources(
-                cid,
-                linux_cpus,
-                op,
-                self.hypervisor.as_ref(),
-                self.agent.as_ref(),
-            )
+        // if static_sandbox_resource_mgmt, we will not have to update sandbox's cpu or mem resource
+        if !self.toml_config.runtime.static_sandbox_resource_mgmt {
+            self.cpu_resource
+                .update_cpu_resources(
+                    cid,
+                    linux_cpus,
+                    op,
+                    self.hypervisor.as_ref(),
+                    self.agent.as_ref(),
+                )
+                .await?;
+        }
+
+        // we should firstly update the vcpus and mems, and then update the host cgroups
+        self.cgroups_resource
+            .update_cgroups(cid, linux_resources, op, self.hypervisor.as_ref())
             .await?;
+
         Ok(())
     }
 }

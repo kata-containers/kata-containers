@@ -19,7 +19,7 @@ use common::{
 use kata_sys_util::k8s::update_ephemeral_storage_type;
 
 use oci::{LinuxResources, Process as OCIProcess};
-use resource::ResourceManager;
+use resource::{ResourceManager, ResourceUpdateOp};
 use tokio::sync::RwLock;
 
 use super::{
@@ -155,11 +155,12 @@ impl Container {
 
         // update cgroups
         self.resource_manager
-            .update_cgroups(
+            .update_linux_resource(
                 &config.container_id,
                 spec.linux
                     .as_ref()
                     .and_then(|linux| linux.resources.as_ref()),
+                ResourceUpdateOp::Add,
             )
             .await?;
 
@@ -402,7 +403,11 @@ impl Container {
 
     pub async fn update(&self, resources: &LinuxResources) -> Result<()> {
         self.resource_manager
-            .update_cgroups(&self.config.container_id, Some(resources))
+            .update_linux_resource(
+                &self.config.container_id,
+                Some(resources),
+                ResourceUpdateOp::Update,
+            )
             .await?;
 
         let req = agent::UpdateContainerRequest {

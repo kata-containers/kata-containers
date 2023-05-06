@@ -113,15 +113,6 @@ impl ResourceManager {
         inner.dump().await
     }
 
-    pub async fn update_cgroups(
-        &self,
-        cid: &str,
-        linux_resources: Option<&LinuxResources>,
-    ) -> Result<()> {
-        let inner = self.inner.read().await;
-        inner.update_cgroups(cid, linux_resources).await
-    }
-
     pub async fn update_linux_resource(
         &self,
         cid: &str,

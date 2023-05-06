@@ -32,7 +32,7 @@ pub enum ResourceConfig {
     ShareFs(SharedFsInfo),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ResourceUpdateOp {
     Add,
     Del,
