@@ -36,8 +36,8 @@ struct DockerImageConfig {
     Entrypoint: Option<Vec<String>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct DockerRootfs {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DockerRootfs {
     r#type: String,
     diff_ids: Vec<String>,
 }
@@ -156,5 +156,9 @@ impl Container {
 
         info!("get_process succeeded.");
         Ok(())
+    }
+
+    pub fn get_rootfs(&self) -> DockerRootfs {
+        self.config_layer.rootfs.clone()
     }
 }

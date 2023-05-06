@@ -95,9 +95,8 @@ pub struct OciProcess {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ContainerPolicy {
     pub oci: OciSpec,
-
-    #[serde(default)]
     storages: Vec<SerializedStorage>,
+    rootfs: registry::DockerRootfs,
 }
 
 // TODO: can struct Storage from agent.proto be used here?
@@ -353,6 +352,7 @@ impl PodPolicy {
                 linux: Some(linux),
             },
             storages,
+            rootfs: registry_container.get_rootfs(),
         })
     }
 
