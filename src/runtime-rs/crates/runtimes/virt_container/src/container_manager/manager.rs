@@ -60,17 +60,12 @@ impl VirtContainerManager {
 #[async_trait]
 impl ContainerManager for VirtContainerManager {
     async fn create_container(&self, config: ContainerConfig, spec: oci::Spec) -> Result<PID> {
-        let linux_resources = match spec.linux.clone() {
-            Some(linux) => linux.resources,
-            _ => None,
-        };
         let container = Container::new(
             self.pid,
             config.clone(),
             spec.clone(),
             self.agent.clone(),
             self.resource_manager.clone(),
-            linux_resources,
         )
         .context("new container")?;
 

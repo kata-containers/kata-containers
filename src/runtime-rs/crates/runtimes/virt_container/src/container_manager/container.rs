@@ -42,7 +42,6 @@ pub struct Container {
     agent: Arc<dyn Agent>,
     resource_manager: Arc<ResourceManager>,
     logger: slog::Logger,
-    pub linux_resources: Option<LinuxResources>,
 }
 
 impl Container {
@@ -52,7 +51,6 @@ impl Container {
         spec: oci::Spec,
         agent: Arc<dyn Agent>,
         resource_manager: Arc<ResourceManager>,
-        linux_resources: Option<LinuxResources>,
     ) -> Result<Self> {
         let container_id = ContainerID::new(&config.container_id).context("new container id")?;
         let logger = sl!().new(o!("container_id" => config.container_id.clone()));
@@ -66,6 +64,10 @@ impl Container {
             config.stderr.clone(),
             config.terminal,
         );
+        let linux_resources = spec
+            .linux
+            .as_ref()
+            .and_then(|linux| linux.resources.clone());
 
         Ok(Self {
             pid,
@@ -76,11 +78,11 @@ impl Container {
                 agent.clone(),
                 init_process,
                 logger.clone(),
+                linux_resources,
             ))),
             agent,
             resource_manager,
             logger,
-            linux_resources,
         })
     }
 
@@ -153,13 +155,11 @@ impl Container {
             .handler_devices(&config.container_id, linux)
             .await?;
 
-        // update cgroups
+        // update vcpus, mems and host cgroups
         self.resource_manager
             .update_linux_resource(
                 &config.container_id,
-                spec.linux
-                    .as_ref()
-                    .and_then(|linux| linux.resources.as_ref()),
+                inner.linux_resources.as_ref(),
                 ResourceUpdateOp::Add,
             )
             .await?;
@@ -327,7 +327,20 @@ impl Container {
         inner
             .stop_process(container_process, true, &device_manager)
             .await
-            .context("stop process")
+            .context("stop process")?;
+
+        // update vcpus, mems and host cgroups
+        if container_process.process_type == ProcessType::Container {
+            self.resource_manager
+                .update_linux_resource(
+                    &self.config.container_id,
+                    inner.linux_resources.as_ref(),
+                    ResourceUpdateOp::Del,
+                )
+                .await?;
+        }
+
+        Ok(())
     }
 
     pub async fn pause(&self) -> Result<()> {
@@ -402,6 +415,9 @@ impl Container {
     }
 
     pub async fn update(&self, resources: &LinuxResources) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.linux_resources = Some(resources.clone());
+        // update vcpus, mems and host cgroups
         self.resource_manager
             .update_linux_resource(
                 &self.config.container_id,
