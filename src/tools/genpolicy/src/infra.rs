@@ -205,8 +205,10 @@ pub fn get_annotations(
     annotations: &mut BTreeMap<String, String>,
     infra_policy: &policy::OciSpec,
 ) -> Result<()> {
-    for annotation in &infra_policy.annotations {
-        annotations.insert(annotation.0.clone(), annotation.1.clone());
+    if let Some(infra_annotations) = &infra_policy.annotations {
+        for annotation in infra_annotations {
+            annotations.insert(annotation.0.clone(), annotation.1.clone());
+        }
     }
 
     Ok(())
@@ -235,17 +237,20 @@ fn add_missing_strings(src: &Vec<String>, dest: &mut Vec<String>) {
 }
 
 fn add_pause_container_data(oci: &mut policy::OciSpec) {
-    if oci.process.is_none() {
-        oci.process = Some(Default::default());
-    }
     if let Some(process) = &mut oci.process {
         process.args = vec!["/pause".to_string()];
     }
 
     for annotation in PAUSE_CONTAINER_ANNOTATIONS {
-        oci.annotations
-            .entry(annotation.0.to_string())
-            .or_insert(annotation.1.to_string());
+        if let Some(annotations) = &mut oci.annotations {
+            annotations
+                .entry(annotation.0.to_string())
+                .or_insert(annotation.1.to_string());
+        } else {
+            let mut annotations = BTreeMap::new();
+            annotations.insert(annotation.0.to_string(), annotation.1.to_string());
+            oci.annotations = Some(annotations);
+        }
     }
 
     if oci.linux.is_none() {
@@ -275,14 +280,16 @@ fn add_pause_container_data(oci: &mut policy::OciSpec) {
 }
 
 fn add_other_container_data(oci: &mut policy::OciSpec) {
-    if oci.process.is_none() {
-        oci.process = Some(Default::default());
-    }
-
     for annotation in OTHER_CONTAINERS_ANNOTATIONS {
-        oci.annotations
-            .entry(annotation.0.to_string())
-            .or_insert(annotation.1.to_string());
+        if let Some(annotations) = &mut oci.annotations {
+            annotations
+                .entry(annotation.0.to_string())
+                .or_insert(annotation.1.to_string());
+        } else {
+            let mut annotations = BTreeMap::new();
+            annotations.insert(annotation.0.to_string(), annotation.1.to_string());
+            oci.annotations = Some(annotations);
+        }
     }
 }
 
