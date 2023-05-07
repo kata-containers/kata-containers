@@ -199,8 +199,7 @@ func TestFCGetTotalMemoryMB(t *testing.T) {
 	fc := firecracker{}
 	ctx := context.Background()
 
-	var initialMemSize uint32
-	initialMemSize = 1024
+	var initialMemSize uint32 = 1024
 
 	fc.config.MemorySize = 1024
 	memSize := fc.GetTotalMemoryMB(ctx)
