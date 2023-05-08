@@ -32,7 +32,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	deviceManager "github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
-	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
@@ -616,10 +615,10 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 
 	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
 	// until we have TDISP/IDE PCIe support.
-	coldPlugVFIO := (sandboxConfig.HypervisorConfig.ColdPlugVFIO != hv.NoPort)
+	coldPlugVFIO := (sandboxConfig.HypervisorConfig.ColdPlugVFIO != config.NoPort)
 	// Aggregate all the containner devices for hot-plug and use them to dedcue
 	// the correct amount of ports to reserve for the hypervisor.
-	hotPlugVFIO := (sandboxConfig.HypervisorConfig.HotPlugVFIO != hv.NoPort)
+	hotPlugVFIO := (sandboxConfig.HypervisorConfig.HotPlugVFIO != config.NoPort)
 
 	var vfioHotPlugDevices []config.DeviceInfo
 	var vfioColdPlugDevices []config.DeviceInfo
@@ -629,9 +628,11 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 			isVFIO := deviceManager.IsVFIO(device.ContainerPath)
 			if hotPlugVFIO && isVFIO {
 				vfioHotPlugDevices = append(vfioHotPlugDevices, device)
+				sandboxConfig.Containers[cnt].DeviceInfos[dev].Port = sandboxConfig.HypervisorConfig.HotPlugVFIO
 			}
 			if coldPlugVFIO && isVFIO {
 				device.ColdPlug = true
+				device.Port = sandboxConfig.HypervisorConfig.ColdPlugVFIO
 				vfioColdPlugDevices = append(vfioColdPlugDevices, device)
 				// We need to remove the devices marked for cold-plug
 				// otherwise at the container level the kata-agent
@@ -639,6 +640,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 				infos := sandboxConfig.Containers[cnt].DeviceInfos
 				infos = append(infos[:dev], infos[dev+1:]...)
 				sandboxConfig.Containers[cnt].DeviceInfos = infos
+
 			}
 		}
 	}
@@ -2015,7 +2017,9 @@ func (s *Sandbox) AppendDevice(ctx context.Context, device api.Device) error {
 		return s.hypervisor.AddDevice(ctx, device.GetDeviceInfo().(*config.VhostUserDeviceAttrs), VhostuserDev)
 	case config.DeviceVFIO:
 		vfioDevs := device.GetDeviceInfo().([]*config.VFIODev)
+		s.Logger().Info("### vfioDevs: ", vfioDevs)
 		for _, d := range vfioDevs {
+			s.Logger().Info("### vfioDev: ", d)
 			return s.hypervisor.AddDevice(ctx, *d, VfioDev)
 		}
 	default:

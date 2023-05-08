@@ -208,7 +208,9 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 			if isPCIe {
 				vfioPCI.Rank = len(AllPCIeDevs)
 				AllPCIeDevs[deviceBDF] = true
+				vfioPCI.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[device.Port], vfioPCI.Rank)
 			}
+
 			vfio = vfioPCI
 		case config.VFIOAPDeviceMediatedType:
 			devices, err := GetAPVFIODevices(deviceSysfsDev)

@@ -76,7 +76,7 @@ type qmpChannel struct {
 // QemuState keeps Qemu's state
 type QemuState struct {
 	UUID                 string
-	HotPlugVFIO          hv.PCIePort
+	HotPlugVFIO          config.PCIePort
 	Bridges              []types.Bridge
 	HotpluggedVCPUs      []hv.CPUDevice
 	HotpluggedMemory     int
@@ -84,8 +84,8 @@ type QemuState struct {
 	PCIeRootPort         int
 	PCIeSwitchPort       int
 	HotplugVFIOOnRootBus bool
-	HotplugVFIO          hv.PCIePort
-	ColdPlugVFIO         hv.PCIePort
+	HotplugVFIO          config.PCIePort
+	ColdPlugVFIO         config.PCIePort
 }
 
 // qemu is an Hypervisor interface implementation for the Linux qemu hypervisor.
@@ -748,7 +748,7 @@ func (q *qemu) checkBpfEnabled() {
 // only 16 ports possible.
 func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig *HypervisorConfig) error {
 	// If no-port set just return no need to add PCIe Root Port or PCIe Switches
-	if hypervisorConfig.HotPlugVFIO == hv.NoPort && hypervisorConfig.ColdPlugVFIO == hv.NoPort {
+	if hypervisorConfig.HotPlugVFIO == config.NoPort && hypervisorConfig.ColdPlugVFIO == config.NoPort {
 		return nil
 	}
 	// Add PCIe Root Port or PCIe Switches to the hypervisor
@@ -787,11 +787,14 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 			if drivers.IsPCIeDevice(vfioDevice.BDF) {
 				numOfPluggablePorts = numOfPluggablePorts + 1
 			}
-			// Reset the Rank, the vfio module is going to assign the correct one
-			vfioDevice.Rank = -1
+			// Reset the Rank and AllPCIeDevsthe vfio module is going
+			// to assign the correct one in the case of hot-plug
+			if hypervisorConfig.HotPlugVFIO != config.NoPort {
+				vfioDevice.Rank = -1
+				drivers.AllPCIeDevs = map[string]bool{}
+			}
 		}
 	}
-	drivers.AllPCIeDevs = make(map[string]bool)
 
 	// If number of PCIe root ports > 16 then bail out otherwise we may
 	// use up all slots or IO memory on the root bus and vfio-XXX-pci devices
@@ -815,10 +818,10 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		numOfPluggablePorts = hypervisorConfig.PCIeSwitchPort
 	}
 
-	if q.state.HotPlugVFIO == hv.RootPort || q.state.ColdPlugVFIO == hv.RootPort || q.state.HotplugVFIOOnRootBus {
+	if q.state.HotPlugVFIO == config.RootPort || q.state.ColdPlugVFIO == config.RootPort || q.state.HotplugVFIOOnRootBus {
 		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
 	}
-	if q.state.HotPlugVFIO == hv.SwitchPort || q.state.ColdPlugVFIO == hv.SwitchPort {
+	if q.state.HotPlugVFIO == config.SwitchPort || q.state.ColdPlugVFIO == config.SwitchPort {
 		qemuConfig.Devices = q.arch.appendPCIeSwitchPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
 	}
 	return nil
@@ -1629,7 +1632,7 @@ func (q *qemu) hotplugAddVhostUserBlkDevice(ctx context.Context, vAttr *config.V
 		//Since the dev is the first and only one on this bus(root port), it should be 0.
 		addr := "00"
 
-		bridgeID := fmt.Sprintf("%s%d", pcieRootPortPrefix, len(drivers.AllPCIeDevs))
+		bridgeID := fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(drivers.AllPCIeDevs))
 		drivers.AllPCIeDevs[devID] = true
 
 		bridgeQomPath := fmt.Sprintf("%s%s", qomPathPrefix, bridgeID)
@@ -1824,7 +1827,6 @@ func (q *qemu) hotplugVFIODeviceRootPort(ctx context.Context, device *config.VFI
 			q.state.HotPlugVFIO, q.state.PCIeRootPort, q.state.PCIeSwitchPort)
 	}
 
-	device.Bus = fmt.Sprintf("%s%d", pcieRootPortPrefix, device.Rank)
 	return q.executeVFIODeviceAdd(device)
 }
 
@@ -1837,7 +1839,6 @@ func (q *qemu) hotplugVFIODeviceSwitchPort(ctx context.Context, device *config.V
 			q.state.HotPlugVFIO, q.state.PCIeRootPort, q.state.PCIeSwitchPort)
 	}
 
-	device.Bus = fmt.Sprintf("%s%d", pcieSwitchDownstreamPortPrefix, device.Rank)
 	return q.executeVFIODeviceAdd(device)
 }
 
@@ -1904,9 +1905,9 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 			// In case HotplugVFIOOnRootBus is true, devices are hotplugged on the root bus
 			// for pc machine type instead of bridge. This is useful for devices that require
 			// a large PCI BAR which is a currently a limitation with PCI bridges.
-			if q.state.HotPlugVFIO == hv.RootPort || q.state.HotplugVFIOOnRootBus {
+			if q.state.HotPlugVFIO == config.RootPort || q.state.HotplugVFIOOnRootBus {
 				err = q.hotplugVFIODeviceRootPort(ctx, device)
-			} else if q.state.HotPlugVFIO == hv.SwitchPort {
+			} else if q.state.HotPlugVFIO == config.SwitchPort {
 				err = q.hotplugVFIODeviceSwitchPort(ctx, device)
 			} else {
 				err = q.hotplugVFIODeviceBridgePort(ctx, device)
@@ -2632,7 +2633,7 @@ func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machin
 	for i := uint32(0); i < number; i++ {
 		devices = append(devices,
 			govmmQemu.PCIeRootPortDevice{
-				ID:            fmt.Sprintf("%s%d", pcieRootPortPrefix, i),
+				ID:            fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, i),
 				Bus:           bus,
 				Chassis:       chassis,
 				Slot:          strconv.FormatUint(uint64(i), 10),
@@ -2679,7 +2680,7 @@ func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, number uint32, mach
 	// Using an own ID for the root port, so we do not clash with already
 	// existing root ports adding "s" for switch prefix
 	pcieRootPort := govmmQemu.PCIeRootPortDevice{
-		ID:            fmt.Sprintf("%s%s%d", pcieSwitchPrefix, pcieRootPortPrefix, 0),
+		ID:            fmt.Sprintf("%s%s%d", config.PCIeSwitchPortPrefix, config.PCIeRootPortPrefix, 0),
 		Bus:           defaultBridgeBus,
 		Chassis:       "0",
 		Slot:          strconv.FormatUint(uint64(0), 10),
@@ -2692,7 +2693,7 @@ func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, number uint32, mach
 	devices = append(devices, pcieRootPort)
 
 	pcieSwitchUpstreamPort := govmmQemu.PCIeSwitchUpstreamPortDevice{
-		ID:  fmt.Sprintf("%s%d", pcieSwitchUpstreamPortPrefix, 0),
+		ID:  fmt.Sprintf("%s%d", config.PCIeSwitchUpstreamPortPrefix, 0),
 		Bus: pcieRootPort.ID,
 	}
 	devices = append(devices, pcieSwitchUpstreamPort)
@@ -2706,7 +2707,7 @@ func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, number uint32, mach
 	for i := uint32(0); i < number; i++ {
 
 		pcieSwitchDownstreamPort := govmmQemu.PCIeSwitchDownstreamPortDevice{
-			ID:      fmt.Sprintf("%s%d", pcieSwitchDownstreamPortPrefix, i),
+			ID:      fmt.Sprintf("%s%d", config.PCIeSwitchhDownstreamPortPrefix, i),
 			Bus:     pcieSwitchUpstreamPort.ID,
 			Chassis: fmt.Sprintf("%d", nextChassis),
 			Slot:    strconv.FormatUint(uint64(i), 10),

@@ -18,8 +18,8 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
-	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
@@ -63,16 +63,16 @@ func createConfig(configPath string, fileData string) error {
 
 // createAllRuntimeConfigFiles creates all files necessary to call
 // loadConfiguration().
-func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConfig, err error) {
+func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntimeConfig, err error) {
 	if dir == "" {
-		return config, fmt.Errorf("BUG: need directory")
+		return testConfig, fmt.Errorf("BUG: need directory")
 	}
 
 	if hypervisor == "" {
-		return config, fmt.Errorf("BUG: need hypervisor")
+		return testConfig, fmt.Errorf("BUG: need hypervisor")
 	}
-	var hotPlugVFIO hv.PCIePort
-	var coldPlugVFIO hv.PCIePort
+	var hotPlugVFIO config.PCIePort
+	var coldPlugVFIO config.PCIePort
 	hypervisorPath := path.Join(dir, "hypervisor")
 	kernelPath := path.Join(dir, "kernel")
 	kernelParams := "foo=bar xyz"
@@ -88,8 +88,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
 	pcieSwitchPort := uint32(3)
-	hotPlugVFIO = hv.BridgePort
-	coldPlugVFIO = hv.RootPort
+	hotPlugVFIO = config.BridgePort
+	coldPlugVFIO = config.RootPort
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := path.Join(dir, "virtiofsd")
@@ -139,7 +139,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	configPath := path.Join(dir, "runtime.toml")
 	err = createConfig(configPath, runtimeConfigFileData)
 	if err != nil {
-		return config, err
+		return testConfig, err
 	}
 
 	configPathLink := path.Join(filepath.Dir(configPath), "link-to-configuration.toml")
@@ -147,7 +147,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	// create a link to the config file
 	err = syscall.Symlink(configPath, configPathLink)
 	if err != nil {
-		return config, err
+		return testConfig, err
 	}
 
 	files := []string{hypervisorPath, kernelPath, imagePath}
@@ -156,7 +156,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		// create the resource (which must be >0 bytes)
 		err := WriteFile(file, "foo", testFileMode)
 		if err != nil {
-			return config, err
+			return testConfig, err
 		}
 	}
 
@@ -223,10 +223,10 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 
 	err = SetKernelParams(&runtimeConfig)
 	if err != nil {
-		return config, err
+		return testConfig, err
 	}
 
-	config = testRuntimeConfig{
+	rtimeConfig := testRuntimeConfig{
 		RuntimeConfig:     runtimeConfig,
 		RuntimeConfigFile: configPath,
 		ConfigPath:        configPath,
@@ -235,7 +235,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		LogPath:           logPath,
 	}
 
-	return config, nil
+	return rtimeConfig, nil
 }
 
 // testLoadConfiguration accepts an optional function that can be used
@@ -610,7 +610,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 
 func TestNewQemuHypervisorConfig(t *testing.T) {
 	dir := t.TempDir()
-	var coldPlugVFIO hv.PCIePort
+	var coldPlugVFIO config.PCIePort
 	hypervisorPath := path.Join(dir, "hypervisor")
 	kernelPath := path.Join(dir, "kernel")
 	imagePath := path.Join(dir, "image")
@@ -619,7 +619,7 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
-	coldPlugVFIO = hv.RootPort
+	coldPlugVFIO = config.RootPort
 	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
 	blockDeviceAIO := "io_uring"
 	defer func() {

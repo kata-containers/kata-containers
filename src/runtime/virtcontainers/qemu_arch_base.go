@@ -180,18 +180,14 @@ type qemuArchBase struct {
 }
 
 const (
-	defaultCores                   uint32 = 1
-	defaultThreads                 uint32 = 1
-	defaultCPUModel                       = "host"
-	defaultBridgeBus                      = "pcie.0"
-	defaultPCBridgeBus                    = "pci.0"
-	maxDevIDSize                          = 31
-	maxPCIeRootPort                       = 16 // Limitation from QEMU
-	maxPCIeSwitchPort                     = 16 // Limitation from QEMU
-	pcieRootPortPrefix                    = "rp"
-	pcieSwitchPrefix                      = "sw"
-	pcieSwitchUpstreamPortPrefix          = "swup"
-	pcieSwitchDownstreamPortPrefix        = "swdp"
+	defaultCores       uint32 = 1
+	defaultThreads     uint32 = 1
+	defaultCPUModel           = "host"
+	defaultBridgeBus          = "pcie.0"
+	defaultPCBridgeBus        = "pci.0"
+	maxDevIDSize              = 31
+	maxPCIeRootPort           = 16 // Limitation from QEMU
+	maxPCIeSwitchPort         = 16 // Limitation from QEMU
 )
 
 // This is the PCI start address assigned to the first bridge that
