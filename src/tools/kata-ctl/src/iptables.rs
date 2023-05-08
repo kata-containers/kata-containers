@@ -7,7 +7,7 @@
 use reqwest::{Url};
 use std::{fs};
 use anyhow::{Result};//Context
-use crate::shim_mgmt::client::MgmtClient;
+use shim_interface::shim_mgmt::client::MgmtClient;
 use crate::args::{IptablesCommand, IpTablesArguments};//Commands
 use thiserror::Error;
 //use super::*;
