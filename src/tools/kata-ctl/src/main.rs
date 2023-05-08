@@ -15,7 +15,7 @@ use anyhow::Result;
 use clap::Parser;
 use std::process::exit;
 use crate::iptables::handle_iptables;
-use crate::client::MgmtClient;
+use shim_interface::shim_mgmt::client::MgmtClient;
 
 use crate::args::{Commands, KataCtlCli};
 
