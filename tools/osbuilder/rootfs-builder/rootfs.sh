@@ -651,133 +651,44 @@ setup_nvidia_gpu_rootfs()
 {
 	set -x
 
+	local nvidia_gpu_rootfs_chroot="${script_dir}/nvidia/chroot.sh"
+
 	echo "Setup NVIDIA GPU rootfs"
 	pushd "${ROOTFS_DIR}" >> /dev/null
 
-
-        local gpu_setup_rootfs_chroot=$(mktemp).sh
-        touch .${gpu_setup_rootfs_chroot}
-        chmod +x .${gpu_setup_rootfs_chroot}
+	cp ${nvidia_gpu_rootfs_chroot} ./root/chroot.sh
+	chmod +x ./root/chroot.sh	
 
 	BUILDDIR="/kata-containers/tools/packaging/kata-deploy/local-build/build/"
 	
+	# We need the kernel packages for building the drivers cleanly will be
+	# deinstalled and removed from the roofs once the build finishes. 
 	cp ${BUILDDIR}/kernel-gpu/builddir/linux-*.deb ./root/.
 	cp ${BUILDDIR}/kernel-gpu-snp/builddir/linux-*.deb ./root/.
-	cp ${BUILDDIR}/kernel-gpu-tdx-experimental/builddir/linux-*.deb ./root/.
+#	cp ${BUILDDIR}/kernel-gpu-tdx-experimental/builddir/linux-*.deb ./root/.
 
-
-
-cat << 'EOF' > .${gpu_setup_rootfs_chroot}
-#!/bin/bash
-
-set -xe
-
-export DEBIAN_FRONTEND=noninteractive
-
-uname_r=$1
-
-echo "chroot: Setup NVIDIA GPU rootfs"
-
-echo "chroot: Setup APT repositories"
-mkdir -p /var/lib/dpkg
-mkdir -p /var/cache/apt/archives/partial
-mkdir -p /var/log/apt
-touch /var/lib/dpkg/status
-rm -f /etc/apt/sources.list.d/*
-
-cat <<-'CHROOT_EOF' > /etc/apt/sources.list.d/jammy.list
-	deb http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse
-	deb http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse
-	deb http://archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse
-CHROOT_EOF
-
-apt update
-
-dpkg -i  /root/linux-*deb
-rm -f    /root/linux-*deb
-
-apt install -yqq --no-install-recommends nvidia-headless-no-dkms-525-open \
-	nvidia-utils-525 make gcc curl kmod nvidia-modprobe 
-
-
-distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
-curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-curl -s -L https://nvidia.github.io/libnvidia-container/experimental/$distribution/libnvidia-container.list | \
-         sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
-         tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-
-apt update
-
-pushd /usr/src/nvidia-* >> /dev/null
-
-for linux_headers in $(ls /lib/modules/); do
-        echo "chroot: Building GPU modules for: ${linux_headers}"
-	cp /boot/System.map-${linux_headers} /lib/modules/${linux_headers}/build/System.map
-        make CC=gcc SYSSRC=/lib/modules/${linux_headers}/build > /dev/null
-        make CC=gcc SYSSRC=/lib/modules/${linux_headers}/build modules_install
-        make CC=gcc SYSSRC=/lib/modules/${linux_headers}/build clean > /dev/null
-done
-
-popd >> /dev/null
-
-echo "chroot: Installing NVIDIA GPU container runtime"
-
-apt install  -yqq --no-install-recommends  nvidia-container-toolkit
-sed -i "s/#debug/debug/g" /etc/nvidia-container-runtime/config.toml
-sed -i "s/#no-cgroups = false/no-cgroups = true/g" /etc/nvidia-container-runtime/config.toml
-
-hooks_dir=/etc/oci/hooks.d
-
-mkdir -p ${hooks_dir}/prestart
-
-cat <<-'CHROOT_EOF' > ${hooks_dir}/prestart/nvidia-container-toolkit.sh
-	#!/bin/bash -x
-	/usr/bin/nvidia-container-runtime-hook -debug $@
-CHROOT_EOF
-
-chmod +x ${hooks_dir}/prestart/nvidia-container-toolkit.sh
-
-echo "chroot: Cleanup NVIDIA GPU rootfs"
-echo "chroot: apt-mark important packages"
-apt-mark hold libnvidia-cfg1-525 libstdc++6 libgnutls30  \
-	nvidia-compute-utils-525 nvidia-utils-525        \
-	nvidia-kernel-common-525 libnvidia-compute-525   \
-	nvidia-modprobe
-
-apt remove make gcc curl gpg software-properties-common \
-	linux-libc-dev linux-headers-*                  \
-	nvidia-headless-no-dkms-525-open nvidia-kernel-source-525-open -yqq
-
-apt autoremove -yqq
-
-#echo "options nvidia NVreg_OpenRmEnableUnsupportedGpus=1 NVreg_EnableGpuFirmware=1" | tee /etc/modprobe.d/nvreg_fix.conf > /dev/null
-
-apt clean
-apt autoclean
-
-rm -rf /etc/apt/sources.list* /var/lib/apt /usr/share
-
-# Clear the cache and regenerate the ld cache
-> /etc/ld.so.cache
-ldconfig
-
-
-cat <<-'CHROOT_EOF' > /etc/udev/rules.d/99-nvidia.rules
-	ATTRS{vendor}=="0x10de", DRIVER=="nvidia",  RUN+="/usr/bin/nvidia-ctk cdi generate --output=/var/run/cdi/nvidia.json"
-CHROOT_EOF
-
-EOF
-        #cat -n ."${gpu_setup_rootfs_chroot}"
+	# If we find a local downloaded run file build the kernel modules
+	# with it, otherwise use the distribution packages. Run files may have 
+	# more recent drivers available then the distribution packages.
+	local run_file_name="nvidia.run"
+	if [ -f ${BUILDDIR}/${run_file_name} ]; then 
+		cp -L ${BUILDDIR}/${run_file_name} ./root/${run_file_name}
+	fi
 
 	mount --rbind /dev ./dev
 	mount --make-rslave ./dev
+	mount -t proc /proc ./proc
 
-	uname_r=$(uname -r)
-
-        chroot . /bin/bash -c "${gpu_setup_rootfs_chroot} ${uname_r}"
+	local uname_r=$(uname -r)
+        chroot . /bin/bash -c "/root/chroot.sh ${uname_r} ${run_file_name}"
 
 	umount -R ./dev
+	umount ./proc
 
+	# Remove artifacts needed for building the rootfs
+	rm -f ./root/chroot.sh
+	rm -f ./root/${run_file_name}
+	rm -f ./root/linux-*.deb
 
 	popd  >> /dev/null
 }
