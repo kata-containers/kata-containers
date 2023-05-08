@@ -111,10 +111,6 @@ pub fn handle_factory() -> Result<()> {
     Ok(())
 }
 
-pub fn handle_iptables(_args: IptablesCommand) -> Result<()> {
-    Ok(())
-}
-
 pub fn handle_metrics(_args: MetricsCommand) -> Result<()> {
     Ok(())
 }
