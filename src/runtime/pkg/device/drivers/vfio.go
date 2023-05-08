@@ -28,7 +28,6 @@ const (
 	vfioRemoveIDPath    = "/sys/bus/pci/drivers/vfio-pci/remove_id"
 	iommuGroupPath      = "/sys/bus/pci/devices/%s/iommu_group"
 	vfioDevPath         = "/dev/vfio/%s"
-	pcieRootPortPrefix  = "rp"
 	vfioAPSysfsDir      = "/sys/devices/vfio_ap"
 )
 

@@ -20,7 +20,7 @@ import (
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 
-	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
@@ -308,9 +308,9 @@ func TestCreateContainerConfigFail(t *testing.T) {
 	assert.Error(err)
 }
 
-func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err error) {
-	var hotPlugVFIO hv.PCIePort
-	var coldPlugVFIO hv.PCIePort
+func createAllRuntimeConfigFiles(dir, hypervisor string) (runtimeConfig string, err error) {
+	var hotPlugVFIO config.PCIePort
+	var coldPlugVFIO config.PCIePort
 	if dir == "" {
 		return "", fmt.Errorf("BUG: need directory")
 	}
@@ -336,8 +336,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := path.Join(dir, "virtiofsd")
-	hotPlugVFIO = hv.BridgePort
-	coldPlugVFIO = hv.RootPort
+	hotPlugVFIO = config.BridgePort
+	coldPlugVFIO = config.RootPort
 
 	configFileOptions := ktu.RuntimeConfigOptions{
 		Hypervisor:           "qemu",

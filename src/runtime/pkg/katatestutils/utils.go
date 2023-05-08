@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"testing"
 
-	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )
@@ -226,8 +226,8 @@ type RuntimeConfigOptions struct {
 	PFlash               []string
 	PCIeRootPort         uint32
 	PCIeSwitchPort       uint32
-	HotPlugVFIO          hv.PCIePort
-	ColdPlugVFIO         hv.PCIePort
+	HotPlugVFIO          config.PCIePort
+	ColdPlugVFIO         config.PCIePort
 	DefaultVCPUCount     uint32
 	DefaultMaxVCPUCount  uint32
 	DefaultMemSize       uint32

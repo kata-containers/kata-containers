@@ -19,12 +19,12 @@ import (
 	"testing"
 
 	"github.com/BurntSushi/toml"
-	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vcUtils "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
@@ -74,9 +74,9 @@ func createConfig(configPath string, fileData string) error {
 	return nil
 }
 
-func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeConfig, err error) {
-	var hotPlugVFIO hv.PCIePort
-	var coldPlugVFIO hv.PCIePort
+func makeRuntimeConfig(prefixDir string) (configFile string, ociConfig oci.RuntimeConfig, err error) {
+	var hotPlugVFIO config.PCIePort
+	var coldPlugVFIO config.PCIePort
 	const logPath = "/log/path"
 	hypervisorPath := filepath.Join(prefixDir, "hypervisor")
 	kernelPath := filepath.Join(prefixDir, "kernel")
@@ -90,8 +90,8 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
 	pcieSwitchPort := uint32(2)
-	hotPlugVFIO = hv.BridgePort
-	coldPlugVFIO = hv.NoPort
+	hotPlugVFIO = config.BridgePort
+	coldPlugVFIO = config.NoPort
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := filepath.Join(prefixDir, "virtiofsd")
@@ -161,12 +161,12 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		return "", oci.RuntimeConfig{}, err
 	}
 
-	_, config, err = katautils.LoadConfiguration(configFile, true)
+	_, ociConfig, err = katautils.LoadConfiguration(configFile, true)
 	if err != nil {
 		return "", oci.RuntimeConfig{}, err
 	}
 
-	return configFile, config, nil
+	return configFile, ociConfig, nil
 }
 
 func getExpectedAgentDetails(config oci.RuntimeConfig) (AgentInfo, error) {

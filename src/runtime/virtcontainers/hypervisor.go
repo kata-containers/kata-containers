@@ -511,11 +511,11 @@ type HypervisorConfig struct {
 
 	// HotplugVFIO is used to indicate if devices need to be hotplugged on the
 	// root port or a switch
-	HotPlugVFIO hv.PCIePort
+	HotPlugVFIO config.PCIePort
 
 	// ColdPlugVFIO is used to indicate if devices need to be coldplugged on the
 	// root port, switch or no port
-	ColdPlugVFIO hv.PCIePort
+	ColdPlugVFIO config.PCIePort
 
 	// PCIeRootPort is used to indicate the number of PCIe Root Port devices
 	// The PCIe Root Port device is used to hot-plug the PCIe device

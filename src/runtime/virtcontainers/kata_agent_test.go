@@ -1048,16 +1048,16 @@ func TestKataAgentKernelParams(t *testing.T) {
 		{true, true, 0, []Param{debugParam, traceParam}},
 
 		// pipesize
-		{false, false, 0, []Param{containerPipeSizeParam}},
+		{false, false, 2097152, []Param{containerPipeSizeParam}},
 
 		// Debug + pipesize
-		{true, false, 0, []Param{debugParam, containerPipeSizeParam}},
+		{true, false, 2097152, []Param{debugParam, containerPipeSizeParam}},
 
 		// Tracing + pipesize
-		{false, true, 0, []Param{traceParam, containerPipeSizeParam}},
+		{false, true, 2097152, []Param{traceParam, containerPipeSizeParam}},
 
 		// Debug + Tracing + pipesize
-		{true, true, 0, []Param{debugParam, traceParam, containerPipeSizeParam}},
+		{true, true, 2097152, []Param{debugParam, traceParam, containerPipeSizeParam}},
 	}
 
 	for i, d := range data {

@@ -122,6 +122,68 @@ var SysBusPciDevicesPath = "/sys/bus/pci/devices"
 
 var getSysDevPath = getSysDevPathImpl
 
+// PCIePortBusPrefix gives us the correct bus nameing dependeing on the port
+// used to hot(cold)-plug the device
+type PCIePortBusPrefix string
+
+const (
+	PCIeRootPortPrefix              PCIePortBusPrefix = "rp"
+	PCIeSwitchPortPrefix            PCIePortBusPrefix = "sw"
+	PCIeSwitchUpstreamPortPrefix    PCIePortBusPrefix = "swup"
+	PCIeSwitchhDownstreamPortPrefix PCIePortBusPrefix = "swdp"
+	PCIBridgePortPrefix             PCIePortBusPrefix = "bp"
+)
+
+func (p PCIePortBusPrefix) String() string {
+	switch p {
+	case PCIeRootPortPrefix:
+		fallthrough
+	case PCIeSwitchPortPrefix:
+		fallthrough
+	case PCIeSwitchUpstreamPortPrefix:
+		fallthrough
+	case PCIeSwitchhDownstreamPortPrefix:
+		fallthrough
+	case PCIBridgePortPrefix:
+		return string(p)
+	}
+	return fmt.Sprintf("<unknown PCIePortBusPrefix: %s>", string(p))
+}
+
+// PCIePort distinguish only between root and switch port
+type PCIePort string
+
+const (
+	// RootPort attach VFIO devices to a root-port
+	RootPort PCIePort = "root-port"
+	// SwitchPort attach VFIO devices to a switch-port
+	SwitchPort = "switch-port"
+	// BridgePort is the default
+	BridgePort = "bridge-port"
+	// NoPort is for disabling VFIO hotplug/coldplug
+	NoPort = "no-port"
+)
+
+func (p PCIePort) String() string {
+	switch p {
+	case RootPort:
+		fallthrough
+	case SwitchPort:
+		fallthrough
+	case BridgePort:
+		fallthrough
+	case NoPort:
+		return string(p)
+	}
+	return fmt.Sprintf("<unknown PCIePort: %s>", string(p))
+}
+
+var PCIePortPrefixMapping = map[PCIePort]PCIePortBusPrefix{
+	RootPort:   PCIeRootPortPrefix,
+	SwitchPort: PCIeSwitchhDownstreamPortPrefix,
+	BridgePort: PCIBridgePortPrefix,
+}
+
 // DeviceInfo is an embedded type that contains device data common to all types of devices.
 type DeviceInfo struct {
 	// DriverOptions is specific options for each device driver
@@ -167,6 +229,9 @@ type DeviceInfo struct {
 	// ColdPlug specifies whether the device must be cold plugged (true)
 	// or hot plugged (false).
 	ColdPlug bool
+
+	// Specifies the PCIe port type to which the device is attached
+	Port PCIePort
 }
 
 // BlockDrive represents a block storage drive which may be used in case the storage
