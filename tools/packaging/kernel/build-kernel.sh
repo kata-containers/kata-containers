@@ -200,6 +200,8 @@ get_major_kernel_version() {
 # - arg2 - path to kernel sources
 #
 get_kernel_frag_path() {
+	set -x
+
 	local arch_path="$1"
 	local common_path="${arch_path}/../common"
 	local gpu_path="${arch_path}/../gpu"
@@ -242,25 +244,21 @@ get_kernel_frag_path() {
 
 	if [[ "${gpu_vendor}" != "" ]];then
 		info "Add kernel config for GPU due to '-g ${gpu_vendor}'"
-		local gpu_configs="$(ls ${gpu_path}/${gpu_vendor}.conf)"
-		all_configs="${all_configs} ${gpu_configs}"
 		# If conf_guest is set we need to update the CONFIG_LOCALVERSION
 		# to match the suffix created in install_kata
 		# -nvidia-gpu-{snp|tdx}, the linux headers will be named the very
 		# same if build with make deb-pkg for TDX or SNP.
+		local gpu_configs=$(mktemp).conf
+		local gpu_subst_configs="$(ls ${gpu_path}/${gpu_vendor}.conf.in)"
 		if [[ "${conf_guest}" != "" ]];then
-			local gpu_cc_configs=$(mktemp).conf
-			local gpu_subst_configs="$(ls ${gpu_path}/${gpu_vendor}.conf.in)"
-
 			export CONF_GUEST_SUFFIX="-${conf_guest}"
-			envsubst <${gpu_subst_configs} >${gpu_cc_configs}
-			unset CONF_GUEST_SUFFIX
-
-			all_configs="${all_configs} ${gpu_cc_configs}"
 		else
-			local gpu_configs="$(ls ${gpu_path}/${gpu_vendor}.conf)"
-			all_configs="${all_configs} ${gpu_configs}"
+			export CONF_GUEST_SUFFIX=""
 		fi
+		envsubst <${gpu_subst_configs} >${gpu_configs}
+		unset CONF_GUEST_SUFFIX
+
+		all_configs="${all_configs} ${gpu_configs}"
 	fi
 
 	if [[ "${conf_guest}" != "" ]];then
@@ -287,6 +285,8 @@ get_kernel_frag_path() {
 
 	# Did we request any entries that did not make it?
 	local missing=$(echo $results | grep -v -q "${not_in_string}"; echo $?)
+
+
 	if [ ${missing} -ne 0 ]; then
 		info "Some CONFIG elements failed to make the final .config:"
 		info "${results}"
