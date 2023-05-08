@@ -125,6 +125,7 @@ func TestUnmountHostMountsRemoveBindHostPath(t *testing.T) {
 		ctx:    context.Background(),
 		id:     "foobar",
 		config: &SandboxConfig{},
+		agent:  newMockAgent(),
 	}
 
 	fsShare, err := NewFilesystemShare(sandbox)
