@@ -40,6 +40,7 @@ use protocols::types::Interface;
 use protocols::{agent_ttrpc_async as agent_ttrpc, health_ttrpc_async as health_ttrpc};
 use rustjail::cgroups::notifier;
 use rustjail::container::{BaseContainer, Container, LinuxContainer, SYSTEMD_CGROUP_PATH_FORMAT};
+use rustjail::mount::parse_mount_table;
 use rustjail::process::Process;
 use rustjail::specconv::CreateOpts;
 
@@ -96,6 +97,7 @@ const USR_IP6TABLES_SAVE: &str = "/usr/sbin/ip6tables-save";
 const IP6TABLES_SAVE: &str = "/sbin/ip6tables-save";
 const USR_IP6TABLES_RESTORE: &str = "/usr/sbin/ip6tables-save";
 const IP6TABLES_RESTORE: &str = "/sbin/ip6tables-restore";
+const KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
 
 const ERR_CANNOT_GET_WRITER: &str = "Cannot get writer";
 const ERR_INVALID_BLOCK_SIZE: &str = "Invalid block size";
@@ -825,6 +827,29 @@ impl agent_ttrpc::AgentService for AgentService {
 
         ctr.resume()
             .map_err(|e| ttrpc_error!(ttrpc::Code::INTERNAL, e))?;
+
+        Ok(Empty::new())
+    }
+
+    async fn remove_stale_virtiofs_share_mounts(
+        &self,
+        ctx: &TtrpcContext,
+        req: protocols::agent::RemoveStaleVirtiofsShareMountsRequest,
+    ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "remove_stale_virtiofs_share_mounts", req);
+        is_allowed!(req);
+        let mount_infos = parse_mount_table("/proc/self/mountinfo")
+            .map_err(|e| ttrpc_error!(ttrpc::Code::INTERNAL, e))?;
+        for m in &mount_infos {
+            if m.mount_point.starts_with(KATA_GUEST_SHARE_DIR) {
+                // stat the mount point, virtiofs daemon will remove the stale cache and release the fds if the mount point doesn't exist any more.
+                // More details in https://github.com/kata-containers/kata-containers/issues/6455#issuecomment-1477137277
+                match stat::stat(Path::new(&m.mount_point)) {
+                    Ok(_) => info!(sl!(), "stat {} success", m.mount_point),
+                    Err(e) => info!(sl!(), "stat {} failed: {}", m.mount_point, e),
+                }
+            }
+        }
 
         Ok(Empty::new())
     }
