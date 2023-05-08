@@ -84,6 +84,7 @@ type QemuState struct {
 	PCIeRootPort         int
 	PCIeSwitchPort       int
 	HotplugVFIOOnRootBus bool
+	HotplugVFIO          hv.PCIePort
 	ColdPlugVFIO         hv.PCIePort
 }
 
@@ -283,7 +284,7 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 
 		q.Logger().Debug("Creating UUID")
 		q.state.UUID = uuid.Generate().String()
-
+		q.state.HotPlugVFIO = q.config.HotPlugVFIO
 		q.state.ColdPlugVFIO = q.config.ColdPlugVFIO
 		q.state.HotplugVFIOOnRootBus = q.config.HotplugVFIOOnRootBus
 		q.state.PCIeRootPort = int(q.config.PCIeRootPort)

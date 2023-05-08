@@ -203,8 +203,12 @@ type HypervisorConfig struct {
 	// root bus instead of a bridge.
 	HotplugVFIOOnRootBus bool
 
+	// HotPlugVFIO is used to indicate if devices need to be hotplugged on the
+	// root, switch, bridge or no-port
+	HotPlugVFIO hv.PCIePort
+
 	// ColdPlugVFIO is used to indicate if devices need to be coldplugged on the
-	// root port or a switch or no-port
+	// root, bridge, switch or no-port
 	ColdPlugVFIO hv.PCIePort
 
 	// BootToBeTemplate used to indicate if the VM is created to be a template VM

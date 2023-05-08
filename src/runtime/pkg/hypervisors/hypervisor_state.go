@@ -45,13 +45,13 @@ const (
 func (p PCIePort) String() string {
 	switch p {
 	case RootPort:
-		return "root-port"
+		fallthrough
 	case SwitchPort:
-		return "switch-port"
+		fallthrough
 	case BridgePort:
-		return "bridge-port"
+		fallthrough
 	case NoPort:
-		return "no-port"
+		return string(p)
 	}
 	return fmt.Sprintf("<unknown PCIePort: %s>", string(p))
 }
@@ -76,7 +76,7 @@ type HypervisorState struct {
 	Pid                  int
 	PCIeRootPort         int
 	PCIeSwitchPort       int
-	ColdPlugVFIO         PCIePort
 	HotPlugVFIO          PCIePort
+	ColdPlugVFIO         PCIePort
 	HotplugVFIOOnRootBus bool
 }

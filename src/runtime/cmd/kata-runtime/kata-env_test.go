@@ -75,6 +75,7 @@ func createConfig(configPath string, fileData string) error {
 }
 
 func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeConfig, err error) {
+	var hotPlugVFIO hv.PCIePort
 	var coldPlugVFIO hv.PCIePort
 	const logPath = "/log/path"
 	hypervisorPath := filepath.Join(prefixDir, "hypervisor")
@@ -88,6 +89,8 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
+	pcieSwitchPort := uint32(2)
+	hotPlugVFIO = hv.BridgePort
 	coldPlugVFIO = hv.NoPort
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
@@ -132,8 +135,10 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		BlockDeviceDriver:    blockStorageDriver,
 		EnableIOThreads:      enableIOThreads,
 		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
+		HotPlugVFIO:          hotPlugVFIO,
 		ColdPlugVFIO:         coldPlugVFIO,
 		PCIeRootPort:         pcieRootPort,
+		PCIeSwitchPort:       pcieSwitchPort,
 		DisableNewNetNs:      disableNewNetNs,
 		DefaultVCPUCount:     hypConfig.NumVCPUs,
 		DefaultMaxVCPUCount:  hypConfig.DefaultMaxVCPUs,
@@ -278,6 +283,8 @@ func getExpectedHypervisor(config oci.RuntimeConfig) HypervisorInfo {
 
 		HotplugVFIOOnRootBus: config.HypervisorConfig.HotplugVFIOOnRootBus,
 		PCIeRootPort:         config.HypervisorConfig.PCIeRootPort,
+		PCIeSwitchPort:       config.HypervisorConfig.PCIeSwitchPort,
+		HotPlugVFIO:          config.HypervisorConfig.HotPlugVFIO,
 		ColdPlugVFIO:         config.HypervisorConfig.ColdPlugVFIO,
 	}
 

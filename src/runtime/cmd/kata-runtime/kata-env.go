@@ -114,8 +114,9 @@ type HypervisorInfo struct {
 	Msize9p              uint32
 	MemorySlots          uint32
 	PCIeRootPort         uint32
-	ColdPlugVFIO         hv.PCIePort
 	PCIeSwitchPort       uint32
+	HotPlugVFIO          hv.PCIePort
+	ColdPlugVFIO         hv.PCIePort
 	HotplugVFIOOnRootBus bool
 	Debug                bool
 }
@@ -318,9 +319,11 @@ func getHypervisorInfo(config oci.RuntimeConfig) (HypervisorInfo, error) {
 		EntropySource:        config.HypervisorConfig.EntropySource,
 		SharedFS:             config.HypervisorConfig.SharedFS,
 		VirtioFSDaemon:       config.HypervisorConfig.VirtioFSDaemon,
+		HotPlugVFIO:          config.HypervisorConfig.HotPlugVFIO,
 		ColdPlugVFIO:         config.HypervisorConfig.ColdPlugVFIO,
 		HotplugVFIOOnRootBus: config.HypervisorConfig.HotplugVFIOOnRootBus,
 		PCIeRootPort:         config.HypervisorConfig.PCIeRootPort,
+		PCIeSwitchPort:       config.HypervisorConfig.PCIeSwitchPort,
 		SocketPath:           socketPath,
 	}, nil
 }

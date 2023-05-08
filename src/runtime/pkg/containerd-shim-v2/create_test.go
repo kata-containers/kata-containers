@@ -309,6 +309,7 @@ func TestCreateContainerConfigFail(t *testing.T) {
 }
 
 func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err error) {
+	var hotPlugVFIO hv.PCIePort
 	var coldPlugVFIO hv.PCIePort
 	if dir == "" {
 		return "", fmt.Errorf("BUG: need directory")
@@ -331,9 +332,11 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
+	pcieSwitchPort := uint32(3)
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := path.Join(dir, "virtiofsd")
+	hotPlugVFIO = hv.BridgePort
 	coldPlugVFIO = hv.RootPort
 
 	configFileOptions := ktu.RuntimeConfigOptions{
@@ -350,9 +353,11 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 		EnableIOThreads:      enableIOThreads,
 		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
 		PCIeRootPort:         pcieRootPort,
+		PCIeSwitchPort:       pcieSwitchPort,
 		DisableNewNetNs:      disableNewNetNs,
 		SharedFS:             sharedFS,
 		VirtioFSDaemon:       virtioFSdaemon,
+		HotPlugVFIO:          hotPlugVFIO,
 		ColdPlugVFIO:         coldPlugVFIO,
 	}
 
