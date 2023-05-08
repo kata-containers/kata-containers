@@ -149,7 +149,7 @@ type hypervisor struct {
 	EnableIOThreads                bool        `toml:"enable_iothreads"`
 	DisableImageNvdimm             bool        `toml:"disable_image_nvdimm"`
 	HotplugVFIOOnRootBus           bool        `toml:"hotplug_vfio_on_root_bus"`
-	HotPlugVFIO                    hv.PCIePort `toml:"hotplug_vfio"`
+	HotPlugVFIO                    hv.PCIePort `toml:"hot_plug_vfio"`
 	ColdPlugVFIO                   hv.PCIePort `toml:"cold_plug_vfio"`
 	DisableVhostNet                bool        `toml:"disable_vhost_net"`
 	GuestMemoryDumpPaging          bool        `toml:"guest_memory_dump_paging"`
@@ -870,8 +870,8 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		Msize9p:                 h.msize9p(),
 		DisableImageNvdimm:      h.DisableImageNvdimm,
 		HotplugVFIOOnRootBus:    h.HotplugVFIOOnRootBus,
+		HotPlugVFIO:             h.hotPlugVFIO(),
 		ColdPlugVFIO:            h.coldPlugVFIO(),
-		HotPlugVFIO:             h.HotPlugVFIO,
 		PCIeRootPort:            h.PCIeRootPort,
 		PCIeSwitchPort:          h.PCIeSwitchPort,
 		DisableVhostNet:         h.DisableVhostNet,
@@ -1674,9 +1674,13 @@ func checkConfig(config oci.RuntimeConfig) error {
 		return err
 	}
 
+	hotPlugVFIO := config.HypervisorConfig.HotPlugVFIO
 	coldPlugVFIO := config.HypervisorConfig.ColdPlugVFIO
 	machineType := config.HypervisorConfig.HypervisorMachineType
 	if err := checkPCIeConfig(coldPlugVFIO, machineType); err != nil {
+		return err
+	}
+	if err := checkPCIeConfig(hotPlugVFIO, machineType); err != nil {
 		return err
 	}
 
@@ -1692,12 +1696,13 @@ func checkPCIeConfig(vfioPort hv.PCIePort, machineType string) error {
 	if machineType != "q35" {
 		return nil
 	}
-	if vfioPort == hv.NoPort || vfioPort == hv.RootPort || vfioPort == hv.SwitchPort {
+	if vfioPort == hv.NoPort || vfioPort == hv.BridgePort ||
+		vfioPort == hv.RootPort || vfioPort == hv.SwitchPort {
 		return nil
 	}
 
-	return fmt.Errorf("invalid vfio_port=%s setting, allowed values %s, %s, %s",
-		vfioPort, hv.NoPort, hv.RootPort, hv.SwitchPort)
+	return fmt.Errorf("invalid vfio_port=%s setting, allowed values %s, %s, %s, %s",
+		vfioPort, hv.NoPort, hv.BridgePort, hv.RootPort, hv.SwitchPort)
 }
 
 // checkNetNsConfig performs sanity checks on disable_new_netns config.

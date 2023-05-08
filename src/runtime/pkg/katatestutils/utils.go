@@ -225,6 +225,8 @@ type RuntimeConfigOptions struct {
 	JaegerPassword       string
 	PFlash               []string
 	PCIeRootPort         uint32
+	PCIeSwitchPort       uint32
+	HotPlugVFIO          hv.PCIePort
 	ColdPlugVFIO         hv.PCIePort
 	DefaultVCPUCount     uint32
 	DefaultMaxVCPUCount  uint32
@@ -319,6 +321,7 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	enable_iothreads =  ` + strconv.FormatBool(config.EnableIOThreads) + `
 	hotplug_vfio_on_root_bus =  ` + strconv.FormatBool(config.HotplugVFIOOnRootBus) + `
 	pcie_root_port = ` + strconv.FormatUint(uint64(config.PCIeRootPort), 10) + `
+	pcie_switch_port = ` + strconv.FormatUint(uint64(config.PCIeSwitchPort), 10) + `
 	cold_plug_vfio =  "` + config.ColdPlugVFIO.String() + `"
 	msize_9p = ` + strconv.FormatUint(uint64(config.DefaultMsize9p), 10) + `
 	enable_debug = ` + strconv.FormatBool(config.HypervisorDebug) + `

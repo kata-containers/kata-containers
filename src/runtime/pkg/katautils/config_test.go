@@ -71,6 +71,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	if hypervisor == "" {
 		return config, fmt.Errorf("BUG: need hypervisor")
 	}
+	var hotPlugVFIO hv.PCIePort
 	var coldPlugVFIO hv.PCIePort
 	hypervisorPath := path.Join(dir, "hypervisor")
 	kernelPath := path.Join(dir, "kernel")
@@ -86,6 +87,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
+	pcieSwitchPort := uint32(3)
+	hotPlugVFIO = hv.BridgePort
 	coldPlugVFIO = hv.RootPort
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
@@ -109,6 +112,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		EnableIOThreads:      enableIOThreads,
 		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
 		PCIeRootPort:         pcieRootPort,
+		PCIeSwitchPort:       pcieSwitchPort,
+		HotPlugVFIO:          hotPlugVFIO,
 		ColdPlugVFIO:         coldPlugVFIO,
 		DisableNewNetNs:      disableNewNetNs,
 		DefaultVCPUCount:     defaultVCPUCount,
@@ -173,6 +178,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		PCIeRootPort:          pcieRootPort,
+		PCIeSwitchPort:        pcieSwitchPort,
+		HotPlugVFIO:           hotPlugVFIO,
 		ColdPlugVFIO:          coldPlugVFIO,
 		Msize9p:               defaultMsize9p,
 		MemSlots:              defaultMemSlots,
@@ -566,9 +573,9 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		GuestHookPath:         defaultGuestHookPath,
 		VhostUserStorePath:    defaultVhostUserStorePath,
 		VirtioFSCache:         defaultVirtioFSCacheMode,
-		HotPlugVFIO:           defaultHotPlugVFIO,
 		BlockDeviceAIO:        defaultBlockDeviceAIO,
 		DisableGuestSeLinux:   defaultDisableGuestSeLinux,
+		HotPlugVFIO:           defaultHotPlugVFIO,
 		ColdPlugVFIO:          defaultColdPlugVFIO,
 	}
 
