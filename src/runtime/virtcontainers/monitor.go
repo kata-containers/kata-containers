@@ -22,12 +22,15 @@ var monitorLog = virtLog.WithField("subsystem", "virtcontainers/monitor")
 
 // nolint: govet
 type monitor struct {
-	sandbox       *Sandbox
-	stopCh        chan bool
-	watchers      []chan error
-	checkInterval time.Duration
-	wg            sync.WaitGroup
+	watchers []chan error
+	sandbox  *Sandbox
+
+	wg sync.WaitGroup
 	sync.Mutex
+
+	stopCh        chan bool
+	checkInterval time.Duration
+
 	running bool
 }
 

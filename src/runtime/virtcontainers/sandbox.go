@@ -613,22 +613,26 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	if err := validateHypervisorConfig(&sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
 	}
-	// Aggregate all the container devices and update the HV config
-	var devices []config.DeviceInfo
-	for _, ct := range sandboxConfig.Containers {
-		devices = append(devices, ct.DeviceInfos...)
-	}
-	sandboxConfig.HypervisorConfig.RawDevices = devices
 
 	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
 	// until we have TDISP/IDE PCIe support.
 	coldPlugVFIO := (sandboxConfig.HypervisorConfig.ColdPlugVFIO != hv.NoPort)
-	var devs []config.DeviceInfo
+	// Aggregate all the containner devices for hot-plug and use them to dedcue
+	// the correct amount of ports to reserve for the hypervisor.
+	hotPlugVFIO := (sandboxConfig.HypervisorConfig.HotPlugVFIO != hv.NoPort)
+
+	var vfioHotPlugDevices []config.DeviceInfo
+	var vfioColdPlugDevices []config.DeviceInfo
+
 	for cnt, containers := range sandboxConfig.Containers {
 		for dev, device := range containers.DeviceInfos {
-			if coldPlugVFIO && deviceManager.IsVFIO(device.ContainerPath) {
+			isVFIO := deviceManager.IsVFIO(device.ContainerPath)
+			if hotPlugVFIO && isVFIO {
+				vfioHotPlugDevices = append(vfioHotPlugDevices, device)
+			}
+			if coldPlugVFIO && isVFIO {
 				device.ColdPlug = true
-				devs = append(devs, device)
+				vfioColdPlugDevices = append(vfioColdPlugDevices, device)
 				// We need to remove the devices marked for cold-plug
 				// otherwise at the container level the kata-agent
 				// will try to hot-plug them.
@@ -638,6 +642,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 			}
 		}
 	}
+	sandboxConfig.HypervisorConfig.VFIODevices = vfioHotPlugDevices
 
 	// store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
@@ -652,7 +657,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return s, nil
 	}
 
-	for _, dev := range devs {
+	for _, dev := range vfioColdPlugDevices {
 		_, err := s.AddDevice(ctx, dev)
 		if err != nil {
 			s.Logger().WithError(err).Debug("Cannot cold-plug add device")

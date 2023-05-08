@@ -73,7 +73,7 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 		}
 	}()
 
-	device.VfioDevs, err = GetAllVFIODevicesFromIOMMUGroup(*device.DeviceInfo, false)
+	device.VfioDevs, err = GetAllVFIODevicesFromIOMMUGroup(*device.DeviceInfo)
 	if err != nil {
 		return err
 	}

@@ -246,15 +246,15 @@ func (s *CloudHypervisorState) reset() {
 }
 
 type cloudHypervisor struct {
-	vmconfig        chclient.VmConfig
 	console         console.Console
 	virtiofsDaemon  VirtiofsDaemon
-	ctx             context.Context
 	APIClient       clhClient
+	ctx             context.Context
+	id              string
 	netDevices      *[]chclient.NetConfig
 	devicesIds      map[string]string
 	netDevicesFiles map[string][]*os.File
-	id              string
+	vmconfig        chclient.VmConfig
 	state           CloudHypervisorState
 	config          HypervisorConfig
 	stopped         int32

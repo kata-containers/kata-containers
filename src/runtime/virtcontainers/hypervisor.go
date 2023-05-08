@@ -507,7 +507,7 @@ type HypervisorConfig struct {
 
 	// RawDevics are used to get PCIe device info early before the sandbox
 	// is started to make better PCIe topology decisions
-	RawDevices []config.DeviceInfo
+	VFIODevices []config.DeviceInfo
 
 	// HotplugVFIO is used to indicate if devices need to be hotplugged on the
 	// root port or a switch
