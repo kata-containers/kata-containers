@@ -13,8 +13,10 @@ mod utils;
 use anyhow::Result;
 use clap::Parser;
 use std::process::exit;
+use crate::iptables::handle_iptables;
+use crate::client::MgmtClient;
 
-use args::{Commands, KataCtlCli};
+use crate::args::{Commands, KataCtlCli};
 
 use ops::check_ops::{
     handle_check, handle_factory, handle_iptables, handle_metrics, handle_version,

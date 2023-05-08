@@ -4,8 +4,8 @@
 //
 
 use clap::{Args, Parser, Subcommand};
-
 use thiserror::Error;
+use std::str::FromStr;
 
 #[derive(Parser, Debug)]
 #[clap(name = "kata-ctl", author, about = "Kata Containers control tool")]
@@ -72,10 +72,10 @@ pub enum CheckSubCommand {
 #[derive(Debug, Args)]
 pub struct EnvArgument {
     /// Format output as JSON
-    #[arg(long)]
+    #[clap(long)]//arg
     pub json: bool,
     /// File to write env output to
-    #[arg(short = 'f', long = "file")]
+    #[clap(short = 'f', long = "file")]//arg
     pub file: Option<String>,
 }
 #[derive(Debug, Args)]
@@ -90,17 +90,56 @@ pub enum MetricsSubCommand {
     MetricsArgs,
 }
 
-// #[derive(Parser, Debug)]
-#[derive(Debug, Args)]
+#[derive(Debug, Args)]//Parser
 pub struct IptablesCommand {
     #[clap(subcommand)]
     pub iptables: IpTablesArguments,
 }
 
-#[derive(Debug, Subcommand)]
+impl IptablesCommand {
+    pub fn subcommand(&self) -> &IpTablesArguments {
+        &self.iptables//command
+    }
+}
+
+#[derive(Debug, Subcommand)]//Clap
 pub enum IpTablesArguments {
     /// Configure iptables
-    Metrics,
+    /// Getters
+    #[clap(about = "Get iptables from the Kata Containers guest")]
+    Get{
+        #[clap(long = "sand-box", value_name = "ID", required = true, 
+        takes_value = true, help = "The target sandbox for getting the iptables")]
+        sandbox_id:String,
+
+        #[clap(long = "v6", help = "Indicate we're requesting ipv6 iptables")]
+        v6:bool,
+    },
+
+    //Setters
+    Set{
+        #[clap(long = "sand-box", value_name = "ID", required = true, 
+        takes_value = true, help = "The target sandbox for setting the iptables")]
+        sandbox_id:String,
+
+        #[clap(long = "v6", help = "Indicate we're requesting ipv6 iptables")]
+        v6:bool,
+
+        #[clap(name = "FILE", required = true, takes_value = true, help = "The iptables file to set")]
+        file: String,
+    },
+}
+
+impl FromStr for IpTablesArguments{
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err>{
+        match s{
+            "Get" => Ok(IpTablesArguments::Get {sandbox_id: String::new(), v6:false}),
+            "Set" => Ok(IpTablesArguments::Set {sandbox_id: String::new(), v6:false, file: String::new()}),
+            _=> Err(format!("Invalid argument: {}", s)),
+        }
+    }
 }
 
 #[derive(Debug, Args)]
