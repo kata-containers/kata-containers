@@ -45,10 +45,10 @@ type AcrnState struct {
 
 // Acrn is an Hypervisor interface implementation for the Linux acrn hypervisor.
 type Acrn struct {
+	sandbox    *Sandbox
 	ctx        context.Context
 	arch       acrnArch
 	store      persistapi.PersistDriver
-	sandbox    *Sandbox
 	id         string
 	acrnConfig Config
 	config     HypervisorConfig

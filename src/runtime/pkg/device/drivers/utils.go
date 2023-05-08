@@ -47,7 +47,7 @@ func deviceLogger() *logrus.Entry {
 	return api.DeviceLogger()
 }
 
-// IsPCIeDevice Identify PCIe device by reading the size of the PCI config space
+// IsPCIeDevice Identifies PCIe device by reading the size of the PCI config space
 // Plain PCI device have 256 bytes of config space where PCIe devices have 4K
 func IsPCIeDevice(bdf string) bool {
 	if len(strings.Split(bdf, ":")) == 2 {
@@ -157,9 +157,7 @@ func checkIgnorePCIClass(pciClass string, deviceBDF string, bitmask uint64) (boo
 
 // GetAllVFIODevicesFromIOMMUGroup returns all the VFIO devices in the IOMMU group
 // We can reuse this function at various levels, sandbox, container.
-// Only the VFIO module is allowed to do bus assignments, all other modules need to
-// ignore it if used as helper function to get VFIO information.
-func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo, ignoreBusAssignment bool) ([]*config.VFIODev, error) {
+func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODev, error) {
 
 	vfioDevs := []*config.VFIODev{}
 
@@ -207,8 +205,8 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo, ignoreBusAssignme
 				Class:    pciClass,
 				Rank:     -1,
 			}
-			if isPCIe && !ignoreBusAssignment {
-				vfioPCI.Bus = fmt.Sprintf("%s%d", pcieRootPortPrefix, len(AllPCIeDevs))
+			if isPCIe {
+				vfioPCI.Rank = len(AllPCIeDevs)
 				AllPCIeDevs[deviceBDF] = true
 			}
 			vfio = vfioPCI

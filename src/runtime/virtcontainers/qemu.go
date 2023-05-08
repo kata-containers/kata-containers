@@ -747,9 +747,8 @@ func (q *qemu) checkBpfEnabled() {
 // There is only 64kB of IO memory each root,switch port will consume 4k hence
 // only 16 ports possible.
 func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig *HypervisorConfig) error {
-	// We do not need to do anything if we want to hotplug a VFIO to a
-	// pcie-pci-bridge, just return
-	if hypervisorConfig.HotPlugVFIO == hv.BridgePort {
+	// If no-port set just return no need to add PCIe Root Port or PCIe Switches
+	if hypervisorConfig.HotPlugVFIO == hv.NoPort && hypervisorConfig.ColdPlugVFIO == hv.NoPort {
 		return nil
 	}
 	// Add PCIe Root Port or PCIe Switches to the hypervisor
@@ -772,37 +771,27 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		qemuConfig.FwCfg = append(qemuConfig.FwCfg, fwCfg)
 	}
 
-	// Get the number of hotpluggable ports needed from the provided devices
-	var numOfHotPluggablePorts uint32 = 0
-	for _, dev := range hypervisorConfig.RawDevices {
-		hostPath, _ := config.GetHostPath(dev, false, "")
-		if hostPath == "" {
-			continue
-		}
-
-		vfioNumberOrContainer := filepath.Base(hostPath)
-		// If we want to have VFIO inside of the VM we need to passthrough
-		// additionally /dev/vfio/vfio which is the VFIO "container".
-		// Ignore it and handle the remaining devices.
-		if strings.Compare(vfioNumberOrContainer, "vfio") == 0 {
-			continue
-		}
-		iommuDevicesPath := filepath.Join(config.SysIOMMUGroupPath, vfioNumberOrContainer, "devices")
-		deviceFiles, err := os.ReadDir(iommuDevicesPath)
+	// Get the number of hot(cold)-pluggable ports needed from the provided devices
+	var numOfPluggablePorts uint32 = 0
+	for _, dev := range hypervisorConfig.VFIODevices {
+		var err error
+		dev.HostPath, err = config.GetHostPath(dev, false, "")
 		if err != nil {
-			return err
+			return fmt.Errorf("Cannot get host path for device: %v err: %v", dev, err)
 		}
-
-		for _, deviceFile := range deviceFiles {
-			deviceBDF, _, _, err := drivers.GetVFIODetails(deviceFile.Name(), iommuDevicesPath)
-			if err != nil {
-				return err
+		devicesPerIOMMUGroup, err := drivers.GetAllVFIODevicesFromIOMMUGroup(dev)
+		if err != nil {
+			return fmt.Errorf("Cannot get all VFIO devices from IOMMU group with device: %v err: %v", dev, err)
+		}
+		for _, vfioDevice := range devicesPerIOMMUGroup {
+			if drivers.IsPCIeDevice(vfioDevice.BDF) {
+				numOfPluggablePorts = numOfPluggablePorts + 1
 			}
-			if drivers.IsPCIeDevice(deviceBDF) {
-				numOfHotPluggablePorts = numOfHotPluggablePorts + 1
-			}
+			// Reset the Rank, the vfio module is going to assign the correct one
+			vfioDevice.Rank = -1
 		}
 	}
+	drivers.AllPCIeDevs = make(map[string]bool)
 
 	// If number of PCIe root ports > 16 then bail out otherwise we may
 	// use up all slots or IO memory on the root bus and vfio-XXX-pci devices
@@ -817,20 +806,20 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 
 	// If the user provided more root ports than we have detected
 	// use the user provided number of PCIe root ports
-	if numOfHotPluggablePorts < hypervisorConfig.PCIeRootPort {
-		numOfHotPluggablePorts = hypervisorConfig.PCIeRootPort
+	if numOfPluggablePorts < hypervisorConfig.PCIeRootPort {
+		numOfPluggablePorts = hypervisorConfig.PCIeRootPort
 	}
 	// If the user provided more switch ports than we have detected
 	// use the user provided number of PCIe root ports
-	if numOfHotPluggablePorts < hypervisorConfig.PCIeSwitchPort {
-		numOfHotPluggablePorts = hypervisorConfig.PCIeSwitchPort
+	if numOfPluggablePorts < hypervisorConfig.PCIeSwitchPort {
+		numOfPluggablePorts = hypervisorConfig.PCIeSwitchPort
 	}
 
-	if q.state.HotPlugVFIO == hv.RootPort || q.state.HotplugVFIOOnRootBus {
-		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfHotPluggablePorts, memSize32bit, memSize64bit)
+	if q.state.HotPlugVFIO == hv.RootPort || q.state.ColdPlugVFIO == hv.RootPort || q.state.HotplugVFIOOnRootBus {
+		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
 	}
-	if q.state.HotPlugVFIO == hv.SwitchPort {
-		qemuConfig.Devices = q.arch.appendPCIeSwitchPortDevice(qemuConfig.Devices, numOfHotPluggablePorts, memSize32bit, memSize64bit)
+	if q.state.HotPlugVFIO == hv.SwitchPort || q.state.ColdPlugVFIO == hv.SwitchPort {
+		qemuConfig.Devices = q.arch.appendPCIeSwitchPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
 	}
 	return nil
 }
@@ -1847,6 +1836,7 @@ func (q *qemu) hotplugVFIODeviceSwitchPort(ctx context.Context, device *config.V
 		return fmt.Errorf("VFIO device is a PCIe device. Hotplug (%v) only supported on PCIe Root (%d) or PCIe Switch Ports (%v)",
 			q.state.HotPlugVFIO, q.state.PCIeRootPort, q.state.PCIeSwitchPort)
 	}
+
 	device.Bus = fmt.Sprintf("%s%d", pcieSwitchDownstreamPortPrefix, device.Rank)
 	return q.executeVFIODeviceAdd(device)
 }
@@ -1897,11 +1887,10 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 	}
 
 	if op == AddDevice {
-
 		buf, _ := json.Marshal(device)
 		q.Logger().WithFields(logrus.Fields{
 			"machine-type":     q.HypervisorConfig().HypervisorMachineType,
-			"hotplug-vfio":     q.state.HotPlugVFIO,
+			"hot-plug-vfio":    q.state.HotPlugVFIO,
 			"pcie-root-port":   q.state.PCIeRootPort,
 			"pcie-switch-port": q.state.PCIeSwitchPort,
 			"device-info":      string(buf),

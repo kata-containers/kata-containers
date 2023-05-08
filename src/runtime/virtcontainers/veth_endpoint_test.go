@@ -85,16 +85,16 @@ func TestCreateVethNetworkEndpointChooseIfaceName(t *testing.T) {
 func TestCreateVethNetworkEndpointInvalidArgs(t *testing.T) {
 	// nolint: govet
 	type endpointValues struct {
-		ifName string
 		idx    int
+		ifName string
 	}
 
 	assert := assert.New(t)
 
 	// all elements are expected to result in failure
 	failingValues := []endpointValues{
-		{idx: -1, ifName: "bar"},
-		{idx: -1, ifName: ""},
+		{-1, "bar"},
+		{-1, ""},
 	}
 
 	for _, d := range failingValues {

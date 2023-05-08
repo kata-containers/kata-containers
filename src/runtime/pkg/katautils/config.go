@@ -76,6 +76,7 @@ type factory struct {
 	VMCacheNumber   uint   `toml:"vm_cache_number"`
 	Template        bool   `toml:"enable_template"`
 }
+
 type hypervisor struct {
 	Path                           string      `toml:"path"`
 	JailerPath                     string      `toml:"jailer_path"`
@@ -886,6 +887,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		GuestMemoryDumpPath:     h.GuestMemoryDumpPath,
 		GuestMemoryDumpPaging:   h.GuestMemoryDumpPaging,
 		ConfidentialGuest:       h.ConfidentialGuest,
+		SevSnpGuest:             h.SevSnpGuest,
 		GuestSwap:               h.GuestSwap,
 		Rootless:                h.Rootless,
 		LegacySerial:            h.LegacySerial,
@@ -1677,10 +1679,7 @@ func checkConfig(config oci.RuntimeConfig) error {
 	hotPlugVFIO := config.HypervisorConfig.HotPlugVFIO
 	coldPlugVFIO := config.HypervisorConfig.ColdPlugVFIO
 	machineType := config.HypervisorConfig.HypervisorMachineType
-	if err := checkPCIeConfig(coldPlugVFIO, machineType); err != nil {
-		return err
-	}
-	if err := checkPCIeConfig(hotPlugVFIO, machineType); err != nil {
+	if err := checkPCIeConfig(coldPlugVFIO, hotPlugVFIO, machineType); err != nil {
 		return err
 	}
 
@@ -1690,19 +1689,29 @@ func checkConfig(config oci.RuntimeConfig) error {
 // checkPCIeConfig ensures the PCIe configuration is valid.
 // Only allow one of the following settings for cold-plug:
 // no-port, root-port, switch-port
-func checkPCIeConfig(vfioPort hv.PCIePort, machineType string) error {
+func checkPCIeConfig(coldPlug hv.PCIePort, hotPlug hv.PCIePort, machineType string) error {
 	// Currently only QEMU q35 supports advanced PCIe topologies
 	// firecracker, dragonball do not have right now any PCIe support
 	if machineType != "q35" {
 		return nil
 	}
-	if vfioPort == hv.NoPort || vfioPort == hv.BridgePort ||
-		vfioPort == hv.RootPort || vfioPort == hv.SwitchPort {
+
+	if coldPlug != hv.NoPort && hotPlug != hv.NoPort {
+		return fmt.Errorf("invalid hot-plug=%s and cold-plug=%s settings, only one of them can be set", coldPlug, hotPlug)
+	}
+	var port hv.PCIePort
+	if coldPlug != hv.NoPort {
+		port = coldPlug
+	}
+	if hotPlug != hv.NoPort {
+		port = hotPlug
+	}
+	if port == hv.NoPort || port == hv.BridgePort || port == hv.RootPort || port == hv.SwitchPort {
 		return nil
 	}
 
 	return fmt.Errorf("invalid vfio_port=%s setting, allowed values %s, %s, %s, %s",
-		vfioPort, hv.NoPort, hv.BridgePort, hv.RootPort, hv.SwitchPort)
+		coldPlug, hv.NoPort, hv.BridgePort, hv.RootPort, hv.SwitchPort)
 }
 
 // checkNetNsConfig performs sanity checks on disable_new_netns config.
