@@ -331,8 +331,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (runtimeConfig string, 
 	blockDeviceDriver := "virtio-scsi"
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
-	pcieRootPort := uint32(2)
-	pcieSwitchPort := uint32(3)
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := path.Join(dir, "virtiofsd")
@@ -352,8 +350,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (runtimeConfig string, 
 		BlockDeviceDriver:    blockDeviceDriver,
 		EnableIOThreads:      enableIOThreads,
 		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
-		PCIeRootPort:         pcieRootPort,
-		PCIeSwitchPort:       pcieSwitchPort,
 		DisableNewNetNs:      disableNewNetNs,
 		SharedFS:             sharedFS,
 		VirtioFSDaemon:       virtioFSdaemon,

@@ -244,6 +244,7 @@ const (
 
 	// SecExecGuest represents an s390x Secure Execution (Protected Virtualization in QEMU) object
 	SecExecGuest ObjectType = "s390-pv-guest"
+
 	// PEFGuest represent ppc64le PEF(Protected Execution Facility) object.
 	PEFGuest ObjectType = "pef-guest"
 )
@@ -377,7 +378,6 @@ func (object Object) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, string(object.Driver))
 		deviceParams = append(deviceParams, fmt.Sprintf("id=%s", object.DeviceID))
 		deviceParams = append(deviceParams, fmt.Sprintf("host-path=%s", object.File))
-
 	}
 
 	if len(deviceParams) > 0 {

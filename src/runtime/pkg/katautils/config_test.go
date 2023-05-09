@@ -86,8 +86,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 	blockDeviceAIO := "io_uring"
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
-	pcieRootPort := uint32(2)
-	pcieSwitchPort := uint32(3)
 	hotPlugVFIO = config.BridgePort
 	coldPlugVFIO = config.RootPort
 	disableNewNetNs := false
@@ -111,8 +109,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		BlockDeviceAIO:       blockDeviceAIO,
 		EnableIOThreads:      enableIOThreads,
 		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
-		PCIeRootPort:         pcieRootPort,
-		PCIeSwitchPort:       pcieSwitchPort,
 		HotPlugVFIO:          hotPlugVFIO,
 		ColdPlugVFIO:         coldPlugVFIO,
 		DisableNewNetNs:      disableNewNetNs,
@@ -177,8 +173,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		DefaultBridges:        defaultBridgesCount,
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
-		PCIeRootPort:          pcieRootPort,
-		PCIeSwitchPort:        pcieSwitchPort,
 		HotPlugVFIO:           hotPlugVFIO,
 		ColdPlugVFIO:          coldPlugVFIO,
 		Msize9p:               defaultMsize9p,
@@ -618,7 +612,6 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 	disableBlock := true
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
-	pcieRootPort := uint32(2)
 	coldPlugVFIO = config.RootPort
 	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
 	blockDeviceAIO := "io_uring"
@@ -638,7 +631,6 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		DisableBlockDeviceUse: disableBlock,
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
-		PCIeRootPort:          pcieRootPort,
 		ColdPlugVFIO:          coldPlugVFIO,
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
@@ -692,10 +684,6 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 
 	if config.HotplugVFIOOnRootBus != hotplugVFIOOnRootBus {
 		t.Errorf("Expected value for HotplugVFIOOnRootBus %v, got %v", hotplugVFIOOnRootBus, config.HotplugVFIOOnRootBus)
-	}
-
-	if config.PCIeRootPort != pcieRootPort {
-		t.Errorf("Expected value for PCIeRootPort %v, got %v", pcieRootPort, config.PCIeRootPort)
 	}
 
 	if config.RxRateLimiterMaxRate != rxRateLimiterMaxRate {
@@ -820,7 +808,6 @@ func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
 	disableBlock := true
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
-	pcieRootPort := uint32(2)
 
 	hypervisor := hypervisor{
 		Path:                  hypervisorPath,
@@ -831,7 +818,6 @@ func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
 		DisableBlockDeviceUse: disableBlock,
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
-		PCIeRootPort:          pcieRootPort,
 	}
 
 	_, err := newQemuHypervisorConfig(hypervisor)

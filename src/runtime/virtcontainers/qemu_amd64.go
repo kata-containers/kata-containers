@@ -305,6 +305,7 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 				ReducedPhysBits: 1,
 			}), "", nil
 	case noneProtection:
+
 		return devices, firmware, nil
 
 	default:

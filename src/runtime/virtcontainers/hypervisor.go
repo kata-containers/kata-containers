@@ -517,14 +517,6 @@ type HypervisorConfig struct {
 	// root port, switch or no port
 	ColdPlugVFIO config.PCIePort
 
-	// PCIeRootPort is used to indicate the number of PCIe Root Port devices
-	// The PCIe Root Port device is used to hot-plug the PCIe device
-	PCIeRootPort uint32
-
-	// PCIeSwitchPort is used to indicate the number of PCIe Switch devices
-	// The PCIe Switch Port device is sued to hot-plug PCIe devices
-	PCIeSwitchPort uint32
-
 	// NumVCPUs specifies default number of vCPUs for the VM.
 	NumVCPUs uint32
 
