@@ -39,7 +39,6 @@ type HypervisorState struct {
 	// Belows are qemu specific
 	// Refs: virtcontainers/qemu.go:QemuState
 	Bridges []Bridge
-
 	// HotpluggedCPUs is the list of CPUs that were hot-added
 	HotpluggedVCPUs []CPUDevice
 

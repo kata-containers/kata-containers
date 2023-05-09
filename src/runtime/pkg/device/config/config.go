@@ -370,6 +370,9 @@ type VFIODev struct {
 
 	// Rank identifies a device in a IOMMU group
 	Rank int
+
+	// Port is the PCIe port type to which the device is attached
+	Port PCIePort
 }
 
 // RNGDev represents a random number generator device

@@ -76,6 +76,13 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 	if err != nil {
 		return err
 	}
+	for _, vfio := range device.VfioDevs {
+		if vfio.IsPCIe {
+			vfio.Rank = len(AllPCIeDevs)
+			AllPCIeDevs[vfio.BDF] = true
+			vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], vfio.Rank)
+		}
+	}
 
 	coldPlug := device.DeviceInfo.ColdPlug
 	deviceLogger().WithField("cold-plug", coldPlug).Info("Attaching VFIO device")
