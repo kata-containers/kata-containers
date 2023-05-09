@@ -352,7 +352,7 @@ impl ResourceManagerInner {
         cid: &str,
         linux_resources: Option<&LinuxResources>,
         op: ResourceUpdateOp,
-    ) -> Result<()> {
+    ) -> Result<Option<LinuxResources>> {
         let linux_cpus = || -> Option<&LinuxCpu> { linux_resources.as_ref()?.cpu.as_ref() }();
 
         // if static_sandbox_resource_mgmt, we will not have to update sandbox's cpu or mem resource
@@ -373,7 +373,29 @@ impl ResourceManagerInner {
             .update_cgroups(cid, linux_resources, op, self.hypervisor.as_ref())
             .await?;
 
-        Ok(())
+        // update the linux resources for agent
+        self.agent_linux_resources(linux_resources)
+    }
+
+    fn agent_linux_resources(
+        &self,
+        linux_resources: Option<&LinuxResources>,
+    ) -> Result<Option<LinuxResources>> {
+        let mut resources = match linux_resources {
+            Some(linux_resources) => linux_resources.clone(),
+            None => {
+                return Ok(None);
+            }
+        };
+
+        // clear the cpuset
+        // for example, if there are only 5 vcpus now, and the cpuset in LinuxResources is 0-2,6, guest os will report
+        // error when creating the container. so we choose to clear the cpuset here.
+        if let Some(cpu) = &mut resources.cpu {
+            cpu.cpus = String::new();
+        }
+
+        Ok(Some(resources))
     }
 }
 

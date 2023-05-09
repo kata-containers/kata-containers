@@ -336,7 +336,7 @@ impl From<UpdateContainerRequest> for agent::UpdateContainerRequest {
     fn from(from: UpdateContainerRequest) -> Self {
         Self {
             container_id: from.container_id,
-            resources: from_option(Some(from.resources)),
+            resources: from_option(from.resources),
             ..Default::default()
         }
     }

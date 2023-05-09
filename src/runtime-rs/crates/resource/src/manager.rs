@@ -118,7 +118,7 @@ impl ResourceManager {
         cid: &str,
         linux_resources: Option<&LinuxResources>,
         op: ResourceUpdateOp,
-    ) -> Result<()> {
+    ) -> Result<Option<LinuxResources>> {
         let inner = self.inner.read().await;
         inner.update_linux_resource(cid, linux_resources, op).await
     }
