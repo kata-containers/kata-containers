@@ -494,6 +494,10 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
+    pub(crate) async fn resize_vcpu(&self, old_vcpu: u32, new_vcpu: u32) -> Result<(u32, u32)> {
+        Ok((old_vcpu, new_vcpu))
+    }
+
     pub(crate) async fn get_pids(&self) -> Result<Vec<u32>> {
         Ok(Vec::<u32>::new())
     }

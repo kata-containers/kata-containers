@@ -331,7 +331,7 @@ impl DragonballInner {
     // the error in this function is not ok to be tolerated, the container boot will fail
     fn precheck_resize_vcpus(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)> {
         // old_vcpus > 0, safe for conversion
-        let current_vcpus = old_vcpus as u32;
+        let current_vcpus = old_vcpus;
 
         // a non-zero positive is required
         if new_vcpus == 0 {
