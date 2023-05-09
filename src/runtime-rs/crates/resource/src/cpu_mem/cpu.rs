@@ -176,7 +176,7 @@ impl CpuResource {
             agent
                 .online_cpu_mem(OnlineCPUMemRequest {
                     wait: false,
-                    nb_cpus: add,
+                    nb_cpus: new,
                     cpu_only: true,
                 })
                 .await
