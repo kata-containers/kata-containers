@@ -201,7 +201,7 @@ pub struct ListProcessesRequest {
 #[derive(PartialEq, Clone, Default)]
 pub struct UpdateContainerRequest {
     pub container_id: String,
-    pub resources: oci::LinuxResources,
+    pub resources: Option<oci::LinuxResources>,
     pub mounts: Vec<oci::Mount>,
 }
 

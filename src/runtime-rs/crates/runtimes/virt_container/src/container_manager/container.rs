@@ -156,13 +156,17 @@ impl Container {
             .await?;
 
         // update vcpus, mems and host cgroups
-        self.resource_manager
+        let resources = self
+            .resource_manager
             .update_linux_resource(
                 &config.container_id,
                 inner.linux_resources.as_ref(),
                 ResourceUpdateOp::Add,
             )
             .await?;
+        if let Some(linux) = &mut spec.linux {
+            linux.resources = resources;
+        }
 
         // create container
         let r = agent::CreateContainerRequest {
@@ -418,7 +422,8 @@ impl Container {
         let mut inner = self.inner.write().await;
         inner.linux_resources = Some(resources.clone());
         // update vcpus, mems and host cgroups
-        self.resource_manager
+        let agent_resources = self
+            .resource_manager
             .update_linux_resource(
                 &self.config.container_id,
                 Some(resources),
@@ -428,7 +433,7 @@ impl Container {
 
         let req = agent::UpdateContainerRequest {
             container_id: self.container_id.container_id.clone(),
-            resources: resources.clone(),
+            resources: agent_resources,
             mounts: Vec::new(),
         };
         self.agent
