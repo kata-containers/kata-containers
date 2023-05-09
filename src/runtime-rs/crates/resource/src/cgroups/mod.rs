@@ -173,7 +173,7 @@ impl CgroupsResource {
                     }
                     ResourceUpdateOp::Update | ResourceUpdateOp::Del => {
                         if let Some(old_resource) = old_resources {
-                            resources.insert(cid.to_owned(), old_resource.clone());
+                            resources.insert(cid.to_owned(), old_resource);
                         }
                     }
                 }
