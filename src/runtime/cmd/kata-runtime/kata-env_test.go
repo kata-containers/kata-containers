@@ -88,8 +88,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, ociConfig oci.Runti
 	blockStorageDriver := "virtio-scsi"
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
-	pcieRootPort := uint32(2)
-	pcieSwitchPort := uint32(2)
 	hotPlugVFIO = config.BridgePort
 	coldPlugVFIO = config.NoPort
 	disableNewNetNs := false
@@ -137,8 +135,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, ociConfig oci.Runti
 		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
 		HotPlugVFIO:          hotPlugVFIO,
 		ColdPlugVFIO:         coldPlugVFIO,
-		PCIeRootPort:         pcieRootPort,
-		PCIeSwitchPort:       pcieSwitchPort,
 		DisableNewNetNs:      disableNewNetNs,
 		DefaultVCPUCount:     hypConfig.NumVCPUs,
 		DefaultMaxVCPUCount:  hypConfig.DefaultMaxVCPUs,
@@ -282,8 +278,6 @@ func getExpectedHypervisor(config oci.RuntimeConfig) HypervisorInfo {
 		VirtioFSDaemon:    config.HypervisorConfig.VirtioFSDaemon,
 
 		HotplugVFIOOnRootBus: config.HypervisorConfig.HotplugVFIOOnRootBus,
-		PCIeRootPort:         config.HypervisorConfig.PCIeRootPort,
-		PCIeSwitchPort:       config.HypervisorConfig.PCIeSwitchPort,
 		HotPlugVFIO:          config.HypervisorConfig.HotPlugVFIO,
 		ColdPlugVFIO:         config.HypervisorConfig.ColdPlugVFIO,
 	}

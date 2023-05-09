@@ -508,12 +508,6 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
-	if err := newAnnotationConfiguration(ocispec, vcAnnotations.PCIeRootPort).setUint(func(pcieRootPort uint64) {
-		config.HypervisorConfig.PCIeRootPort = uint32(pcieRootPort)
-	}); err != nil {
-		return err
-	}
-
 	if value, ok := ocispec.Annotations[vcAnnotations.EntropySource]; ok {
 		if !checkPathIsInGlobs(runtime.HypervisorConfig.EntropySourceList, value) {
 			return fmt.Errorf("entropy source %v required from annotation is not valid", value)

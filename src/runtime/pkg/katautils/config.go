@@ -130,8 +130,6 @@ type hypervisor struct {
 	MemSlots                       uint32          `toml:"memory_slots"`
 	DefaultBridges                 uint32          `toml:"default_bridges"`
 	Msize9p                        uint32          `toml:"msize_9p"`
-	PCIeSwitchPort                 uint32          `toml:"pcie_switch_port"`
-	PCIeRootPort                   uint32          `toml:"pcie_root_port"`
 	NumVCPUs                       int32           `toml:"default_vcpus"`
 	BlockDeviceCacheSet            bool            `toml:"block_device_cache_set"`
 	BlockDeviceCacheDirect         bool            `toml:"block_device_cache_direct"`
@@ -872,8 +870,6 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		HotplugVFIOOnRootBus:    h.HotplugVFIOOnRootBus,
 		HotPlugVFIO:             h.hotPlugVFIO(),
 		ColdPlugVFIO:            h.coldPlugVFIO(),
-		PCIeRootPort:            h.PCIeRootPort,
-		PCIeSwitchPort:          h.PCIeSwitchPort,
 		DisableVhostNet:         h.DisableVhostNet,
 		EnableVhostUserStore:    h.EnableVhostUserStore,
 		VhostUserStorePath:      h.vhostUserStorePath(),
@@ -1069,8 +1065,6 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		HotplugVFIOOnRootBus:           h.HotplugVFIOOnRootBus,
 		ColdPlugVFIO:                   h.coldPlugVFIO(),
 		HotPlugVFIO:                    h.hotPlugVFIO(),
-		PCIeRootPort:                   h.PCIeRootPort,
-		PCIeSwitchPort:                 h.PCIeSwitchPort,
 		DisableVhostNet:                true,
 		GuestHookPath:                  h.guestHookPath(),
 		VirtioFSExtraArgs:              h.VirtioFSExtraArgs,
@@ -1302,8 +1296,6 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		HotplugVFIOOnRootBus:     defaultHotplugVFIOOnRootBus,
 		ColdPlugVFIO:             defaultColdPlugVFIO,
 		HotPlugVFIO:              defaultHotPlugVFIO,
-		PCIeSwitchPort:           defaultPCIeSwitchPort,
-		PCIeRootPort:             defaultPCIeRootPort,
 		GuestHookPath:            defaultGuestHookPath,
 		VhostUserStorePath:       defaultVhostUserStorePath,
 		VhostUserDeviceReconnect: defaultVhostUserDeviceReconnect,
@@ -1697,6 +1689,9 @@ func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineT
 
 	if coldPlug != config.NoPort && hotPlug != config.NoPort {
 		return fmt.Errorf("invalid hot-plug=%s and cold-plug=%s settings, only one of them can be set", coldPlug, hotPlug)
+	}
+	if coldPlug == config.NoPort && hotPlug == config.NoPort {
+		return nil
 	}
 	var port config.PCIePort
 	if coldPlug != config.NoPort {
