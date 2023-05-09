@@ -191,9 +191,9 @@ assets:
 
   kernel-tdx-experimental:
     # yamllint disable-line rule:line-length
-    description: "Linux kernel with TDX support -- based on https://github.com/intel/tdx-tools/releases/tag/2023ww01"
+    description: "Linux kernel with TDX support -- based on https://github.com/intel/tdx-tools/releases/tag/2023ww15"
     url: "https://github.com/kata-containers/linux/archive/refs/tags"
-    version: "5.19-TDX-v2.2"
+    version: "6.2-TDX-v1.8"
 
 externals:
   description: "Third-party projects used by the system"
