@@ -40,7 +40,7 @@ slog = "2.7.0"
 slog-scope = "4.4.0"
 hyper = "0.14.20"
 tokio = "1.8.0"
-kata-sys-util = { path ="../libs/kata-sys-util}
+kata-sys-util = { path ="../libs/kata-sys-util"}
 
 [target.'cfg(target_arch = "s390x")'.dependencies]
 reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "native-tls"] }
