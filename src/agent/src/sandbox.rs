@@ -12,6 +12,7 @@ use crate::pci;
 use crate::uevent::{Uevent, UeventMatcher};
 use crate::watcher::BindWatcher;
 use anyhow::{anyhow, Context, Result};
+use kata_types::cpu::CpuSet;
 use libc::pid_t;
 use oci::{Hook, Hooks};
 use protocols::agent::OnlineCPUMemRequest;
@@ -25,6 +26,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::{thread, time};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -263,12 +265,12 @@ impl Sandbox {
     pub fn online_cpu_memory(&self, req: &OnlineCPUMemRequest) -> Result<()> {
         if req.nb_cpus > 0 {
             // online cpus
-            online_cpus(&self.logger, req.nb_cpus as i32)?;
+            online_cpus(&self.logger, req.nb_cpus as i32).context("online cpus")?;
         }
 
         if !req.cpu_only {
             // online memory
-            online_memory(&self.logger)?;
+            online_memory(&self.logger).context("online memory")?;
         }
 
         if req.nb_cpus == 0 {
@@ -432,23 +434,33 @@ fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Res
 
 // max wait for all CPUs to online will use 50 * 100 = 5 seconds.
 const ONLINE_CPUMEM_WATI_MILLIS: u64 = 50;
-const ONLINE_CPUMEM_MAX_RETRIES: u32 = 100;
+const ONLINE_CPUMEM_MAX_RETRIES: i32 = 100;
 
 #[instrument]
 fn online_cpus(logger: &Logger, num: i32) -> Result<i32> {
-    let mut onlined_count: i32 = 0;
+    let mut onlined_cpu_count = onlined_cpus().context("onlined cpu count")?;
+    // for some vmms, like dragonball, they will online cpus for us
+    // so check first whether agent need to do the online operation
+    if onlined_cpu_count >= num {
+        return Ok(num);
+    }
 
     for i in 0..ONLINE_CPUMEM_MAX_RETRIES {
-        let r = online_resources(
+        // online num resources
+        online_resources(
             logger,
-            SYSFS_CPU_ONLINE_PATH,
+            SYSFS_CPU_PATH,
             r"cpu[0-9]+",
-            num - onlined_count,
-        );
+            num - onlined_cpu_count,
+        )
+        .context("online cpu resource")?;
 
-        onlined_count += r?;
-        if onlined_count == num {
-            info!(logger, "online {} CPU(s) after {} retries", num, i);
+        onlined_cpu_count = onlined_cpus().context("onlined cpu count")?;
+        if onlined_cpu_count >= num {
+            info!(
+                logger,
+                "Currently {} onlined CPU(s) after {} retries", onlined_cpu_count, i
+            );
             return Ok(num);
         }
         thread::sleep(time::Duration::from_millis(ONLINE_CPUMEM_WATI_MILLIS));
@@ -463,8 +475,16 @@ fn online_cpus(logger: &Logger, num: i32) -> Result<i32> {
 
 #[instrument]
 fn online_memory(logger: &Logger) -> Result<()> {
-    online_resources(logger, SYSFS_MEMORY_ONLINE_PATH, r"memory[0-9]+", -1)?;
+    online_resources(logger, SYSFS_MEMORY_ONLINE_PATH, r"memory[0-9]+", -1)
+        .context("online memory resource")?;
     Ok(())
+}
+
+fn onlined_cpus() -> Result<i32> {
+    let content =
+        fs::read_to_string(SYSFS_CPU_ONLINE_PATH).context("read sysfs cpu online file")?;
+    let online_cpu_set = CpuSet::from_str(content.trim())?;
+    Ok(online_cpu_set.len() as i32)
 }
 
 #[cfg(test)]
