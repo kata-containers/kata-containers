@@ -194,24 +194,18 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 
 		switch vfioDeviceType {
 		case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
-			isPCIe := IsPCIeDevice(deviceBDF)
 			// Do not directly assign to `vfio` -- need to access field still
-			vfioPCI := config.VFIODev{
+			vfio = config.VFIODev{
 				ID:       id,
 				Type:     vfioDeviceType,
 				BDF:      deviceBDF,
 				SysfsDev: deviceSysfsDev,
-				IsPCIe:   isPCIe,
+				IsPCIe:   IsPCIeDevice(deviceBDF),
 				Class:    pciClass,
 				Rank:     -1,
-			}
-			if isPCIe {
-				vfioPCI.Rank = len(AllPCIeDevs)
-				AllPCIeDevs[deviceBDF] = true
-				vfioPCI.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[device.Port], vfioPCI.Rank)
+				Port:     device.Port,
 			}
 
-			vfio = vfioPCI
 		case config.VFIOAPDeviceMediatedType:
 			devices, err := GetAPVFIODevices(deviceSysfsDev)
 			if err != nil {

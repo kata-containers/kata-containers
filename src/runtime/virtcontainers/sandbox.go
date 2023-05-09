@@ -640,7 +640,6 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 				infos := sandboxConfig.Containers[cnt].DeviceInfos
 				infos = append(infos[:dev], infos[dev+1:]...)
 				sandboxConfig.Containers[cnt].DeviceInfos = infos
-
 			}
 		}
 	}
@@ -2017,9 +2016,7 @@ func (s *Sandbox) AppendDevice(ctx context.Context, device api.Device) error {
 		return s.hypervisor.AddDevice(ctx, device.GetDeviceInfo().(*config.VhostUserDeviceAttrs), VhostuserDev)
 	case config.DeviceVFIO:
 		vfioDevs := device.GetDeviceInfo().([]*config.VFIODev)
-		s.Logger().Info("### vfioDevs: ", vfioDevs)
 		for _, d := range vfioDevs {
-			s.Logger().Info("### vfioDev: ", d)
 			return s.hypervisor.AddDevice(ctx, *d, VfioDev)
 		}
 	default:

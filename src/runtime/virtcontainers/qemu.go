@@ -704,14 +704,12 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 			return err
 		}
 	}
-
 	if machine.Type == QemuQ35 {
 		if err := q.createPCIeTopology(&qemuConfig, hypervisorConfig); err != nil {
 			q.Logger().WithError(err).Errorf("Cannot create PCIe topology")
 			return err
 		}
 	}
-
 	q.qemuConfig = qemuConfig
 
 	q.virtiofsDaemon, err = q.createVirtiofsDaemon(hypervisorConfig.SharedPath)
@@ -786,12 +784,6 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		for _, vfioDevice := range devicesPerIOMMUGroup {
 			if drivers.IsPCIeDevice(vfioDevice.BDF) {
 				numOfPluggablePorts = numOfPluggablePorts + 1
-			}
-			// Reset the Rank and AllPCIeDevsthe vfio module is going
-			// to assign the correct one in the case of hot-plug
-			if hypervisorConfig.HotPlugVFIO != config.NoPort {
-				vfioDevice.Rank = -1
-				drivers.AllPCIeDevs = map[string]bool{}
 			}
 		}
 	}
