@@ -117,7 +117,9 @@ impl Vm {
             .into_iter()
             .map(|cpu| cpu.get_mpidr())
             .collect();
-        let vcpu_boot_onlined = vec![];
+        let vm_config = self.vm_config();
+        let mut vcpu_boot_onlined = vec![1; vm_config.vcpu_count as usize];
+        vcpu_boot_onlined.resize(vm_config.max_vcpu_count as usize, 0);
         let vpmu_feature = vcpu_manager.vpmu_feature();
         // This configuration is used for passing cache information into guest.
         // TODO: dragonball-sandbox #274; kata-containers #6969
