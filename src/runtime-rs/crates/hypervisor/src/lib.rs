@@ -11,7 +11,8 @@ logging::logger_with_subsystem!(sl, "hypervisor");
 
 pub mod device;
 pub mod hypervisor_persist;
-pub use device::*;
+use device::driver;
+pub use device::driver::*;
 pub mod dragonball;
 mod kernel_param;
 pub mod qemu;
@@ -78,8 +79,8 @@ pub trait Hypervisor: Send + Sync {
     async fn resume_vm(&self) -> Result<()>;
 
     // device manager
-    async fn add_device(&self, device: device::Device) -> Result<()>;
-    async fn remove_device(&self, device: device::Device) -> Result<()>;
+    async fn add_device(&self, device: driver::DeviceConfig) -> Result<()>;
+    async fn remove_device(&self, device: driver::DeviceConfig) -> Result<()>;
 
     // utils
     async fn get_agent_socket(&self) -> Result<String>;

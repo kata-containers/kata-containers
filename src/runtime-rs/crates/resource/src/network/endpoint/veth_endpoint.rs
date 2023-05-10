@@ -11,7 +11,7 @@ use super::Endpoint;
 use crate::network::{utils, NetworkPair};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use hypervisor::{device::NetworkConfig, Device, Hypervisor};
+use hypervisor::{device::driver::NetworkConfig, DeviceConfig, Hypervisor};
 
 #[derive(Debug)]
 pub struct VethEndpoint {
@@ -64,7 +64,7 @@ impl Endpoint for VethEndpoint {
             .await
             .context("add network model")?;
         let config = self.get_network_config().context("get network config")?;
-        h.add_device(Device::Network(config))
+        h.add_device(DeviceConfig::Network(config))
             .await
             .context("Error add device")?;
         Ok(())
@@ -76,7 +76,7 @@ impl Endpoint for VethEndpoint {
             .await
             .context("del network model")?;
         let config = self.get_network_config().context("get network config")?;
-        h.remove_device(Device::Network(config))
+        h.remove_device(DeviceConfig::Network(config))
             .await
             .context("remove device")?;
         Ok(())
