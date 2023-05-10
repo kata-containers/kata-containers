@@ -38,6 +38,7 @@ service AgentService {
 	rpc StatsContainer(StatsContainerRequest) returns (StatsContainerResponse);
 	rpc PauseContainer(PauseContainerRequest) returns (google.protobuf.Empty);
 	rpc ResumeContainer(ResumeContainerRequest) returns (google.protobuf.Empty);
+	rpc RemoveStaleVirtiofsShareMounts(RemoveStaleVirtiofsShareMountsRequest) returns (google.protobuf.Empty);
 
 	// stdio
 	rpc WriteStdin(WriteStreamRequest) returns (WriteStreamResponse);
@@ -300,6 +301,8 @@ message CreateSandboxRequest {
 
 message DestroySandboxRequest {
 }
+
+message RemoveStaleVirtiofsShareMountsRequest {}
 
 message Interfaces {
 	repeated types.Interface Interfaces = 1;

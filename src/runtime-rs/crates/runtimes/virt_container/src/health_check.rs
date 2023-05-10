@@ -47,7 +47,7 @@ impl HealthCheck {
 
         let stop_rx = self.stop_rx.clone();
         let keep_abnormal = self.keep_abnormal;
-        let _ = tokio::spawn(async move {
+        tokio::spawn(async move {
             let mut version_check_threshold_count = 0;
 
             loop {

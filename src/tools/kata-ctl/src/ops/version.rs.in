@@ -10,6 +10,8 @@
 use clap::crate_version;
 
 const KATA_CTL_VERSION: &str = "@KATA_CTL_VERSION@";
+pub const VERSION: &str = "@VERSION@";
+pub const COMMIT: &str = "@COMMIT@";
 
 pub fn get() -> Result<String, String> {
     if KATA_CTL_VERSION.trim().is_empty() {

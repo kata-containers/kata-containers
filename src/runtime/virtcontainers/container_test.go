@@ -302,6 +302,7 @@ func TestMountSharedDirMounts(t *testing.T) {
 	sandbox := &Sandbox{
 		ctx:        context.Background(),
 		id:         "foobar",
+		agent:      newMockAgent(),
 		hypervisor: &mockHypervisor{},
 		config: &SandboxConfig{
 			HypervisorConfig: HypervisorConfig{

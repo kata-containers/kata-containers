@@ -162,7 +162,7 @@ pub fn get_sandbox_id_for_volume(volume_path: &str) -> Result<String> {
         return Ok(String::from(file_name));
     }
 
-    return Err(anyhow!("no sandbox found for {}", volume_path));
+    Err(anyhow!("no sandbox found for {}", volume_path))
 }
 
 #[cfg(test)]

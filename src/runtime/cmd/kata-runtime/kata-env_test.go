@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/BurntSushi/toml"
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vcUtils "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -74,6 +75,7 @@ func createConfig(configPath string, fileData string) error {
 }
 
 func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeConfig, err error) {
+	var coldPlugVFIO hv.PCIePort
 	const logPath = "/log/path"
 	hypervisorPath := filepath.Join(prefixDir, "hypervisor")
 	kernelPath := filepath.Join(prefixDir, "kernel")
@@ -86,6 +88,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
+	coldPlugVFIO = hv.NoPort
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := filepath.Join(prefixDir, "virtiofsd")
@@ -129,6 +132,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		BlockDeviceDriver:    blockStorageDriver,
 		EnableIOThreads:      enableIOThreads,
 		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
+		ColdPlugVFIO:         coldPlugVFIO,
 		PCIeRootPort:         pcieRootPort,
 		DisableNewNetNs:      disableNewNetNs,
 		DefaultVCPUCount:     hypConfig.NumVCPUs,
@@ -191,12 +195,13 @@ func genericGetExpectedHostDetails(tmpdir string, expectedVendor string, expecte
 
 	expectedSupportVSocks, _ := vcUtils.SupportsVsocks()
 	expectedHostDetails := HostInfo{
-		Kernel:             expectedKernelVersion,
-		Architecture:       expectedArch,
-		Distro:             expectedDistro,
-		CPU:                expectedCPU,
-		VMContainerCapable: expectedVMContainerCapable,
-		SupportVSocks:      expectedSupportVSocks,
+		AvailableGuestProtections: vc.AvailableGuestProtections(),
+		Kernel:                    expectedKernelVersion,
+		Architecture:              expectedArch,
+		Distro:                    expectedDistro,
+		CPU:                       expectedCPU,
+		VMContainerCapable:        expectedVMContainerCapable,
+		SupportVSocks:             expectedSupportVSocks,
 	}
 
 	testProcCPUInfo := filepath.Join(tmpdir, "cpuinfo")
@@ -273,6 +278,7 @@ func getExpectedHypervisor(config oci.RuntimeConfig) HypervisorInfo {
 
 		HotplugVFIOOnRootBus: config.HypervisorConfig.HotplugVFIOOnRootBus,
 		PCIeRootPort:         config.HypervisorConfig.PCIeRootPort,
+		ColdPlugVFIO:         config.HypervisorConfig.ColdPlugVFIO,
 	}
 
 	if os.Geteuid() == 0 {

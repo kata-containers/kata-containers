@@ -10,6 +10,7 @@ pub use arch_specific::*;
 mod arch_specific {
     use crate::check;
     use crate::types::*;
+    use crate::utils;
     use anyhow::{anyhow, Result};
     use nix::unistd::Uid;
     use std::collections::HashMap;
@@ -142,6 +143,14 @@ mod arch_specific {
             }
         }
         Ok(false)
+    }
+
+    pub fn get_cpu_details() -> Result<(String, String)> {
+        utils::get_generic_cpu_details(check::PROC_CPUINFO)
+
+        // TODO: In case of error from get_generic_cpu_details, implement functionality
+        // to get cpu details specific to s390x architecture similar
+        // to the goloang implementation of function getS390xCPUDetails()
     }
 
     #[allow(dead_code)]

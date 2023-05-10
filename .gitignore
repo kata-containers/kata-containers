@@ -6,6 +6,8 @@
 **/.vscode
 **/.idea
 **/.fleet
+**/*.swp
+**/*.swo
 pkg/logging/Cargo.lock
 src/agent/src/version.rs
 src/agent/kata-agent.service

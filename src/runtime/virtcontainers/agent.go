@@ -138,6 +138,9 @@ type agent interface {
 	// resumeContainer will resume a paused container
 	resumeContainer(ctx context.Context, sandbox *Sandbox, c Container) error
 
+	// removeStaleVirtiofsShareMounts will tell the agent to remove stale virtiofs share mounts in the guest.
+	removeStaleVirtiofsShareMounts(ctx context.Context) error
+
 	// configure will update agent settings based on provided arguments
 	configure(ctx context.Context, h Hypervisor, id, sharePath string, config KataAgentConfig) error
 

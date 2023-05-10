@@ -8,6 +8,7 @@
 use anyhow::{anyhow, Result};
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use thiserror::Error;
 
 #[cfg(any(target_arch = "x86_64"))]
@@ -46,7 +47,6 @@ pub const GENERIC_CPU_MODEL_FIELD: &str = "model name";
 #[allow(dead_code)]
 pub const PROC_CPUINFO: &str = "/proc/cpuinfo";
 
-#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 fn read_file_contents(file_path: &str) -> Result<String> {
     let contents = std::fs::read_to_string(file_path)?;
     Ok(contents)
@@ -54,7 +54,6 @@ fn read_file_contents(file_path: &str) -> Result<String> {
 
 // get_single_cpu_info returns the contents of the first cpu from
 // the specified cpuinfo file by parsing based on a specified delimiter
-#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 pub fn get_single_cpu_info(cpu_info_file: &str, substring: &str) -> Result<String> {
     let contents = read_file_contents(cpu_info_file)?;
 
@@ -145,6 +144,19 @@ pub enum GuestProtection {
     Snp,
     Pef,
     Se,
+}
+
+impl fmt::Display for GuestProtection {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            GuestProtection::Tdx => write!(f, "tdx"),
+            GuestProtection::Sev => write!(f, "sev"),
+            GuestProtection::Snp => write!(f, "snp"),
+            GuestProtection::Pef => write!(f, "pef"),
+            GuestProtection::Se => write!(f, "se"),
+            GuestProtection::NoProtection => write!(f, "none"),
+        }
+    }
 }
 
 #[allow(dead_code)]

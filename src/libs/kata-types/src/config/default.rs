@@ -16,6 +16,7 @@ lazy_static! {
     pub static ref DEFAULT_RUNTIME_CONFIGURATIONS: Vec::<&'static str> = vec![
         "/etc/kata-containers/configuration.toml",
         "/usr/share/defaults/kata-containers/configuration.toml",
+        "/opt/kata/share/defaults/kata-containers/configuration.toml",
     ];
 }
 

@@ -5,9 +5,7 @@
 
 #![allow(dead_code)]
 
-#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 use crate::arch::arch_specific;
-#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 use crate::check::get_single_cpu_info;
 
 use anyhow::{anyhow, Context, Result};
@@ -27,7 +25,7 @@ pub fn drop_privs() -> Result<()> {
     Ok(())
 }
 
-const PROC_VERSION_FILE: &str = "/proc/version";
+pub const PROC_VERSION_FILE: &str = "/proc/version";
 
 pub fn get_kernel_version(proc_version_file: &str) -> Result<String> {
     let contents = fs::read_to_string(proc_version_file)
@@ -43,17 +41,17 @@ pub fn get_kernel_version(proc_version_file: &str) -> Result<String> {
     Ok(kernel_version)
 }
 
-const OS_RELEASE: &str = "/etc/os-release";
+pub const OS_RELEASE: &str = "/etc/os-release";
 
 // Clear Linux has a different path (for stateless support)
-const OS_RELEASE_CLR: &str = "/usr/lib/os-release";
+pub const OS_RELEASE_CLR: &str = "/usr/lib/os-release";
 
 const UNKNOWN: &str = "unknown";
 
 fn get_field_fn(line: &str, delimiter: &str, file_name: &str) -> Result<String> {
     let fields: Vec<&str> = line.split(delimiter).collect();
     if fields.len() < 2 {
-        return Err(anyhow!("Unexpected file contents for {}", file_name));
+        Err(anyhow!("Unexpected file contents for {}", file_name))
     } else {
         let val = fields[1].trim();
         Ok(String::from(val))
@@ -106,11 +104,10 @@ pub fn get_distro_details(os_release: &str, os_release_clr: &str) -> Result<(Str
     Ok((name, version))
 }
 
-#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64", target_arch = "aarch64"))]
 pub fn get_generic_cpu_details(cpu_info_file: &str) -> Result<(String, String)> {
     let cpu_info = get_single_cpu_info(cpu_info_file, "\n\n")?;
     let lines = cpu_info.lines();
-    println!("Single cpu info: {}", cpu_info);
     let mut vendor = String::new();
     let mut model = String::new();
 
@@ -144,9 +141,14 @@ pub fn get_generic_cpu_details(cpu_info_file: &str) -> Result<(String, String)> 
     Ok((vendor, model))
 }
 
-const VHOST_VSOCK_DEVICE: &str = "/dev/vhost-vsock";
+pub const VHOST_VSOCK_DEVICE: &str = "/dev/vhost-vsock";
 pub fn supports_vsocks(vsock_path: &str) -> Result<bool> {
-    let metadata = fs::metadata(vsock_path)?;
+    let metadata = fs::metadata(vsock_path).map_err(|err| {
+        anyhow!(
+            "Host system does not support vhost-vsock (try running (`sudo modprobe vhost_vsock`) : {}",
+            err.to_string()
+        )
+    })?;
     Ok(metadata.is_file())
 }
 

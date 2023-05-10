@@ -31,7 +31,7 @@ func TestIsVFIO(t *testing.T) {
 	}
 
 	for _, d := range data {
-		isVFIO := isVFIO(d.path)
+		isVFIO := IsVFIO(d.path)
 		assert.Equal(t, d.expected, isVFIO)
 	}
 }

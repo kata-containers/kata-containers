@@ -9,6 +9,10 @@
 
 package katautils
 
+import (
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
+)
+
 // name is the name of the runtime
 var NAME = "@RUNTIME_NAME@"
 
@@ -103,3 +107,5 @@ const defaultVMCacheEndpoint string = "/var/run/kata-containers/cache.sock"
 
 // Default config file used by stateless systems.
 var defaultRuntimeConfiguration = "@CONFIG_PATH@"
+
+const defaultColdPlugVFIO = hv.NoPort

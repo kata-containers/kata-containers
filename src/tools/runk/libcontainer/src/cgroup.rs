@@ -27,7 +27,7 @@ pub fn remove_cgroup_dir(cgroup: &cgroups::Cgroup) -> Result<()> {
         retries -= 1;
     }
 
-    return Err(anyhow!("failed to remove cgroups paths"));
+    Err(anyhow!("failed to remove cgroups paths"))
 }
 
 // Make sure we get a stable freezer state, so retry if the cgroup is still undergoing freezing.

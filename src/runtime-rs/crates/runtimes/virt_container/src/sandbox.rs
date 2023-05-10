@@ -285,7 +285,7 @@ impl Sandbox for VirtSandbox {
         let agent = self.agent.clone();
         let sender = self.msg_sender.clone();
         info!(sl!(), "oom watcher start");
-        let _ = tokio::spawn(async move {
+        tokio::spawn(async move {
             loop {
                 match agent
                     .get_oom_event(agent::Empty::new())

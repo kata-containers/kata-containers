@@ -42,7 +42,7 @@ impl CloudHypervisorInner {
         match device {
             Device::ShareFsDevice(cfg) => self.handle_share_fs_device(cfg).await,
             Device::HybridVsock(cfg) => self.handle_hvsock_device(&cfg).await,
-            _ => return Err(anyhow!("unhandled device: {:?}", device)),
+            _ => Err(anyhow!("unhandled device: {:?}", device)),
         }
     }
 

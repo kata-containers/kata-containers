@@ -7,6 +7,7 @@
 package persistapi
 
 import (
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
@@ -197,6 +198,10 @@ type HypervisorConfig struct {
 	// HotplugVFIOOnRootBus is used to indicate if devices need to be hotplugged on the
 	// root bus instead of a bridge.
 	HotplugVFIOOnRootBus bool
+
+	// ColdPlugVFIO is used to indicate if devices need to be coldplugged on the
+	// root port or a switch or no-port
+	ColdPlugVFIO hv.PCIePort
 
 	// BootToBeTemplate used to indicate if the VM is created to be a template VM
 	BootToBeTemplate bool

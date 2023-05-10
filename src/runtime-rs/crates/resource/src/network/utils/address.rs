@@ -80,9 +80,7 @@ pub(crate) fn parse_ip(ip: &[u8], family: u8) -> Result<IpAddr> {
             octets.copy_from_slice(&ip[..16]);
             Ok(IpAddr::V6(Ipv6Addr::from(octets)))
         }
-        _ => {
-            return Err(anyhow!("unknown IP network family {}", family));
-        }
+        _ => Err(anyhow!("unknown IP network family {}", family)),
     }
 }
 

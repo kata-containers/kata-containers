@@ -79,7 +79,7 @@ impl RootFsResource {
                         .context("new share fs rootfs")?,
                     ))
                 } else {
-                    return Err(anyhow!("share fs is unavailable"));
+                    Err(anyhow!("share fs is unavailable"))
                 }
             }
             mounts_vec if is_single_layer_rootfs(mounts_vec) => {
@@ -114,12 +114,10 @@ impl RootFsResource {
                 inner.rootfs.push(Arc::clone(&rootfs));
                 Ok(rootfs)
             }
-            _ => {
-                return Err(anyhow!(
-                    "unsupported rootfs mounts count {}",
-                    rootfs_mounts.len()
-                ))
-            }
+            _ => Err(anyhow!(
+                "unsupported rootfs mounts count {}",
+                rootfs_mounts.len()
+            )),
         }
     }
 

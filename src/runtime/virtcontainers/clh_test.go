@@ -9,6 +9,7 @@ package virtcontainers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -422,6 +423,7 @@ func TestCloudHypervisorCleanupVM(t *testing.T) {
 	assert.Error(err, "persist.GetDriver() expected error")
 
 	clh.id = "cleanVMID"
+	clh.config.VMid = "cleanVMID"
 
 	err = clh.cleanupVM(true)
 	assert.NoError(err, "persist.GetDriver() unexpected error")
@@ -438,77 +440,86 @@ func TestCloudHypervisorCleanupVM(t *testing.T) {
 	assert.True(os.IsNotExist(err), "persist.GetDriver() unexpected error")
 }
 
-func TestClhCreateVMWithInitrd(t *testing.T) {
-	assert := assert.New(t)
-
-	clhConfig, err := newClhConfig()
-	assert.NoError(err)
-	clhConfig.ImagePath = ""
-	clhConfig.InitrdPath = testClhInitrdPath
-
-	store, err := persist.GetDriver()
-	assert.NoError(err)
-
-	clhConfig.VMStorePath = store.RunVMStoragePath()
-	clhConfig.RunStorePath = store.RunStoragePath()
-
-	network, err := NewNetwork()
-	assert.NoError(err)
-
-	clh := &cloudHypervisor{
-		config: clhConfig,
-	}
-
-	sandbox := &Sandbox{
-		ctx: context.Background(),
-		id:  "testSandbox",
-		config: &SandboxConfig{
-			HypervisorConfig: clhConfig,
-		},
-	}
-
-	err = clh.CreateVM(context.Background(), sandbox.id, network, &sandbox.config.HypervisorConfig)
-	assert.NoError(err)
-	assert.Exactly(clhConfig, clh.config)
-}
-
 func TestClhCreateVM(t *testing.T) {
 	assert := assert.New(t)
 
-	clhConfig, err := newClhConfig()
-	assert.NoError(err)
-	assert.NotEmpty(clhConfig.ImagePath)
-
 	store, err := persist.GetDriver()
 	assert.NoError(err)
-
-	clhConfig.VMStorePath = store.RunVMStoragePath()
-	clhConfig.RunStorePath = store.RunStoragePath()
 
 	network, err := NewNetwork()
 	assert.NoError(err)
 
 	clh := &cloudHypervisor{
-		config: clhConfig,
-	}
-
-	sandbox := &Sandbox{
-		ctx: context.Background(),
-		id:  "testSandbox",
-		config: &SandboxConfig{
-			HypervisorConfig: clhConfig,
+		config: HypervisorConfig{
+			VMStorePath:  store.RunVMStoragePath(),
+			RunStorePath: store.RunStoragePath(),
 		},
 	}
 
-	err = clh.CreateVM(context.Background(), sandbox.id, network, &sandbox.config.HypervisorConfig)
+	config0, err := newClhConfig()
 	assert.NoError(err)
-	assert.Exactly(clhConfig, clh.config)
+
+	config1, err := newClhConfig()
+	assert.NoError(err)
+	config1.ImagePath = ""
+	config1.InitrdPath = testClhInitrdPath
+
+	config2, err := newClhConfig()
+	assert.NoError(err)
+	config2.Debug = true
+
+	config3, err := newClhConfig()
+	assert.NoError(err)
+	config3.Debug = true
+	config3.ConfidentialGuest = true
+
+	config4, err := newClhConfig()
+	assert.NoError(err)
+	config4.SGXEPCSize = 1
+
+	config5, err := newClhConfig()
+	assert.NoError(err)
+	config5.SharedFS = config.VirtioFSNydus
+
+	type testData struct {
+		config      HypervisorConfig
+		expectError bool
+		configMatch bool
+	}
+
+	data := []testData{
+		{config0, false, true},
+		{config1, false, true},
+		{config2, false, true},
+		{config3, true, false},
+		{config4, false, true},
+		{config5, false, true},
+	}
+
+	for i, d := range data {
+		msg := fmt.Sprintf("test[%d]", i)
+
+		err = clh.CreateVM(context.Background(), "testSandbox", network, &d.config)
+
+		if d.expectError {
+			assert.Error(err, msg)
+			continue
+		}
+
+		assert.NoError(err, msg)
+
+		if d.configMatch {
+			assert.Exactly(d.config, clh.config, msg)
+		}
+	}
 }
 
 func TestCloudHypervisorStartSandbox(t *testing.T) {
 	assert := assert.New(t)
 	clhConfig, err := newClhConfig()
 	assert.NoError(err)
+	clhConfig.Debug = true
+	clhConfig.DisableSeccomp = true
 
 	store, err := persist.GetDriver()
 	assert.NoError(err)
@@ -529,6 +540,44 @@ func TestCloudHypervisorStartSandbox(t *testing.T) {
 	}
 
 	err = clh.StartVM(context.Background(), 10)
+	assert.NoError(err)
+
+	_, err = clh.loadVirtiofsDaemon("/tmp/xyzabc")
+	assert.NoError(err)
+
+	err = clh.stopVirtiofsDaemon(context.Background())
+	assert.NoError(err)
+
+	_, _, err = clh.GetVMConsole(context.Background(), "test")
+	assert.NoError(err)
+
+	_, err = clh.GetThreadIDs(context.Background())
+	assert.NoError(err)
+
+	assert.True(clh.getClhStopSandboxTimeout().Nanoseconds() != 0)
+
+	pid := clh.GetPids()
+	assert.True(pid[0] != 0)
+
+	pid2 := *clh.GetVirtioFsPid()
+	assert.True(pid2 == 0)
+
+	mem := clh.GetTotalMemoryMB(context.Background())
+	assert.True(mem == 0)
+
+	err = clh.PauseVM(context.Background())
+	assert.NoError(err)
+
+	err = clh.SaveVM()
+	assert.NoError(err)
+
+	err = clh.ResumeVM(context.Background())
+	assert.NoError(err)
+
+	err = clh.Check()
+	assert.NoError(err)
+
+	err = clh.Cleanup(context.Background())
 	assert.NoError(err)
 }
 
