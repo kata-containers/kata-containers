@@ -81,11 +81,11 @@ options:
 	kernel
 	kernel-dragonball-experimental
 	kernel-experimental
-	kernel-tdx-experimental
-	kernel-sev-tarball
 	kernel-gpu
 	kernel-gpu-snp
 	kernel-gpu-tdx-experimental
+	kernel-sev-tarball
+	kernel-tdx-experimental
 	nydus
 	ovmf
 	ovmf-sev
@@ -553,15 +553,15 @@ handle_build() {
 
 	kernel-experimental) install_kernel_experimental ;;
 
-	kernel-tdx-experimental) install_kernel_tdx_experimental ;;
-
-	kernel-sev) install_kernel_sev ;;
-
 	kernel-gpu) install_kernel_gpu ;;
 
 	kernel-gpu-snp) install_kernel_gpu_snp;;
 
 	kernel-gpu-tdx-experimental) install_kernel_gpu_tdx_experimental;;
+
+	kernel-tdx-experimental) install_kernel_tdx_experimental ;;
+
+	kernel-sev) install_kernel_sev ;;
 
 	nydus) install_nydus ;;
 
