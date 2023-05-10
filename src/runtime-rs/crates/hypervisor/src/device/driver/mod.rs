@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+mod vhost_user;
 mod virtio_blk;
 pub use virtio_blk::{
     BlockConfig, KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI,
