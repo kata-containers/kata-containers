@@ -109,5 +109,3 @@ var defaultRuntimeConfiguration = "@CONFIG_PATH@"
 
 const defaultHotPlugVFIO = config.NoPort
 const defaultColdPlugVFIO = config.NoPort
-
-

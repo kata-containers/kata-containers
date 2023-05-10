@@ -453,6 +453,10 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
+	if err := addHypervisorHotColdPlugVfioOverrides(ocispec, config); err != nil {
+		return err
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.MachineType]; ok {
 		if value != "" {
 			config.HypervisorConfig.HypervisorMachineType = value
@@ -567,6 +571,33 @@ func addHypervisorPathOverrides(ocispec specs.Spec, config *vc.SandboxConfig, ru
 		}
 	}
 
+	return nil
+}
+
+func addHypervisorPCIePortOverride(value string) (config.PCIePort, error) {
+	if value == "" {
+		return config.NoPort, nil
+	}
+	port := config.PCIePort(value)
+	if port.InValid() {
+		return config.InvalidPort, fmt.Errorf("Invalid PCIe port \"%v\" specified in annotation", value)
+	}
+	return port, nil
+}
+
+func addHypervisorHotColdPlugVfioOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+
+	var err error
+	if value, ok := ocispec.Annotations[vcAnnotations.HotPlugVFIO]; ok {
+		if sbConfig.HypervisorConfig.HotPlugVFIO, err = addHypervisorPCIePortOverride(value); err != nil {
+			return err
+		}
+	}
+	if value, ok := ocispec.Annotations[vcAnnotations.ColdPlugVFIO]; ok {
+		if sbConfig.HypervisorConfig.ColdPlugVFIO, err = addHypervisorPCIePortOverride(value); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
