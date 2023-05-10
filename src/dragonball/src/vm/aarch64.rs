@@ -34,7 +34,7 @@ impl Vm {
 
     /// Creates the irq chip in-kernel device model.
     pub fn setup_interrupt_controller(&mut self) -> std::result::Result<(), StartMicroVmError> {
-        let vcpu_count = self.vm_config.vcpu_count;
+        let vcpu_count = self.vm_config.max_vcpu_count;
 
         self.irqchip_handle = Some(
             dbs_arch::gic::create_gic(&self.vm_fd, vcpu_count.into())

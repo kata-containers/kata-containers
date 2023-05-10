@@ -626,12 +626,6 @@ impl VmmService {
 
     #[cfg(feature = "hotplug")]
     fn resize_vcpu(&mut self, vmm: &mut Vmm, config: VcpuResizeInfo) -> VmmRequestResult {
-        if !cfg!(target_arch = "x86_64") {
-            // TODO: Arm need to support vcpu hotplug. issue: #6010
-            warn!("This arch do not support vm resize!");
-            return Ok(VmmData::Empty);
-        }
-
         if !cfg!(feature = "dbs-upcall") {
             warn!("We only support cpu resize through upcall server in the guest kernel now, please enable dbs-upcall feature.");
             return Ok(VmmData::Empty);
