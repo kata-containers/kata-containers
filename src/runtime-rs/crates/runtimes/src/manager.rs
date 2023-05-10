@@ -397,12 +397,11 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
         path
     } else if let Some(option) = option {
         // get rid of the special characters in options to get the config path
-        let path = if option.len() > 2 {
+        if option.len() > 2 {
             from_utf8(&option[2..])?.to_string()
         } else {
             String::from("")
-        };
-        path
+        }
     } else {
         String::from("")
     };

@@ -230,7 +230,7 @@ mod arch_specific {
                 expected_param_value
             );
 
-            return Err(anyhow!("{} {}", error_msg, action_msg));
+            Err(anyhow!("{} {}", error_msg, action_msg))
         }
     }
 
