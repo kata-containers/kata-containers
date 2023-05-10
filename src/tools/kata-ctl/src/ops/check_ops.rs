@@ -80,6 +80,9 @@ pub fn handle_check(checkcmd: CheckArgument) -> Result<()> {
 
             // run kernel module checks
             handle_builtin_check(CheckType::KernelModules, "")?;
+
+            // run kvm checks
+            handle_builtin_check(CheckType::KvmIsUsable, "")?;
         }
 
         CheckSubCommand::NoNetworkChecks => {

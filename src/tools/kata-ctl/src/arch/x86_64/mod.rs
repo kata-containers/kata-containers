@@ -13,7 +13,7 @@ mod arch_specific {
     use crate::check::{GuestProtection, ProtectionError};
     use crate::types::*;
     use crate::utils;
-    use anyhow::{anyhow, Result};
+    use anyhow::{anyhow, Context, Result};
     use nix::unistd::Uid;
     use std::fs;
     use std::path::Path;
@@ -40,6 +40,12 @@ mod arch_specific {
             descr: "This parameter performs the kvm check",
             fp: check_kernel_modules,
             perm: PermissionType::NonPrivileged,
+        },
+        CheckItem {
+            name: CheckType::KvmIsUsable,
+            descr: "This parameter performs check to see if KVM is usable",
+            fp: check_kvm_is_usable,
+            perm: PermissionType::Privileged,
         },
     ];
 
@@ -112,6 +118,15 @@ mod arch_specific {
 
     pub fn get_cpu_details() -> Result<(String, String)> {
         utils::get_generic_cpu_details(check::PROC_CPUINFO)
+    }
+
+    // check if kvm is usable
+    fn check_kvm_is_usable(_args: &str) -> Result<()> {
+        println!("INFO: check if kvm is usable: x86_64");
+
+        let result = check::check_kvm_is_usable_generic();
+
+        result.context("KVM check failed")
     }
 
     pub const TDX_SYS_FIRMWARE_DIR: &str = "/sys/firmware/tdx_seam/";
