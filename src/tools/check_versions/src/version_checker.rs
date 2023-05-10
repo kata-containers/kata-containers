@@ -6,101 +6,98 @@
 use serde_json;
 use reqwest;
 
-use std::error::Error;
-
 use crate::model::*;
 use crate::error::*;
 use crate::cli::Args;
 use crate::output::write_output;
+use anyhow::bail;
+use anyhow::Result;
+use serde_json::Value;
 
-pub fn check_versions(versions: Versions, args: &Args) -> Result<(), Box<dyn Error>> {
-    check_asset_versions(&versions.assets, &args)?;
-    check_externals_versions(&versions.externals, &args)?;
-    check_languages_versions(&versions.languages, &args)?;
-    check_specs_versions(&versions.specs, &args)?;
-    check_plugins_versions(&versions.plugins, &args)?;
+fn parse_project_from_value(value: &Value) -> Result<Project> {
+    let project = serde_json::from_value::<Project>(value.clone());
+    match project {
+        Ok(project) => {
+            if project.url.is_none() && project.version.is_none() && project.tag.is_none() && project.branch.is_none() {
+                bail!("Value parsed as project but has no url, version, tag, or branch. Probably an intermediate level")
+            } else {
+                Ok(project)
+            }
+        }
+        Err(err) => {
+            bail!(err)
+        }
+    }
+}
+pub fn check_versions_recursive(key: &str, versions: &Value, args: &Args) -> Result<()> {
+    match &versions {
+        Value::Null => {
+            // Nothing to do, this value doesn't contain anything useful
+            if args.verbose {
+                println!("Value is Null");
+            }
+        },
+        Value::Bool(value) => {
+            // Nothing to do, this value doesn't contain anything useful
+            if args.verbose {
+                println!("Value is Bool({})", value);
+            }
+        },
+        Value::Number(value) => {
+            // Nothing to do, this value doesn't contain anything useful
+            if args.verbose {
+                println!("Value is Number({})", value);
+            }
+        },
+        Value::String(value) => {
+            // Nothing to do, this value doesn't contain anything useful
+            if args.verbose {
+                println!("Value is String({})", value);
+            }
+        },
+        Value::Array(value) => {
+            // Recurse into array elements
+            if args.verbose {
+                println!("Value is Array({:?})", value);
+            }
+            for item in value.iter() {
+                // Use the key from this level
+                check_versions_recursive(key, item, args)?;
+            }
+        },
+        Value::Object(value) => {
+            if args.verbose {
+                println!("Value is Object({:?})", value);
+            }
+            let project = parse_project_from_value(versions);
+            match project {
+                Ok(project) => {
+                    // Found a versioned item "Project" - check its version
+                    if args.verbose {
+                        println!("Value is Project({:?})", project);
+                    }
+                    check_project_version(&project, key, args)?;
+                }
+                Err(_) => {
+                    // Not a project - recurse into object elements
+                    if args.verbose {
+                        println!("Value is not a Project");
+                    }
+                    for (subkey, value) in value.iter() {
+                        if args.verbose {
+                            println!("Recursing into subkey={}", subkey);
+                        }
+                        check_versions_recursive(&format!("{}.{}", key, subkey), value, args)?;
+                    }
+                }
+            }
+        },
+    }
     Ok(())
 }
 
-fn check_asset_versions(assets: &Assets, args: &Args) -> Result<(), Box<dyn Error>> {
-    check_hypervisor_versions(&assets.hypervisor, &args)?;
-    check_image_versions(&assets.image, &args)?;
-    check_initrd_versions(&assets.initrd, &args)?;
-    check_kernel_versions(&assets, &args)?;
-    Ok(())
-}
-
-fn check_hypervisor_versions(hypervisor: &Hypervisor, args: &Args) -> Result<(), Box<dyn Error>> {
-    check_project_version(&hypervisor.cloud_hypervisor, "cloud_hypervisor", &args)?;
-    check_project_version(&hypervisor.firecracker, "firecracker", &args)?;
-    check_project_version(&hypervisor.qemu, "qemu", &args)?;
-    check_project_version(&hypervisor.qemu_experimental, "qemu-experimental", &args)?;
-    check_project_version(&hypervisor.qemu_tdx_experimental, "qemu-tdx-experimental", &args)?;
-    Ok(())
-}
-
-fn check_image_versions(image: &ArchitectureProject, args: &Args) -> Result<(), Box<dyn Error>> {
-    check_architecture_project_version(&image, &image.architecture.aarch64, "image-aarch64", &args)?;
-    check_architecture_project_version(&image, &image.architecture.ppc64le, "image-ppc64le", &args)?;
-    check_architecture_project_version(&image, &image.architecture.s390x, "image-s390x", &args)?;
-    check_architecture_project_version(&image, &image.architecture.x86_64, "image-x86_64", &args)?;
-    Ok(())
-}
-
-fn check_initrd_versions(initrd: &ArchitectureProject, args: &Args) -> Result<(), Box<dyn Error>> {
-    check_architecture_project_version(&initrd, &initrd.architecture.aarch64, "initrd-aarch64", &args)?;
-    check_architecture_project_version(&initrd, &initrd.architecture.ppc64le, "initrd-ppc64le", &args)?;
-    check_architecture_project_version(&initrd, &initrd.architecture.s390x, "initrd-s390x", &args)?;
-    check_architecture_project_version(&initrd, &initrd.architecture.x86_64, "initrd-x86_64", &args)?;
-    Ok(())
-}
-
-fn check_kernel_versions(assets: &Assets, args: &Args) -> Result<(), Box<dyn Error>> {
-   check_project_version(&assets.kernel, "kernel", &args)?;
-   check_project_version(&assets.kernel_experimental, "kernel-experimental", &args)?;
-   check_project_version(&assets.kernel_arm_experimental, "kernel-arm-experimental", &args)?;
-   check_project_version(&assets.kernel_dragonball_experimental, "kernel-dragonball-experimental", &args)?;
-   check_project_version(&assets.kernel_tdx_experimental, "kernel-tdx-experimental", &args)?;
-   Ok(())
-}
-
-fn check_externals_versions(externals: &Externals, args: &Args) -> Result<(), Box<dyn Error>> {
-    check_project_version(&externals.cni_plugins, "cni-plugins", &args)?;
-    check_project_version(&externals.conmon, "conmon", &args)?;
-    check_project_version(&externals.crio, "crio", &args)?;
-    check_project_version(&externals.containerd, "containerd", &args)?;
-    check_project_version(&externals.critools, "critools", &args)?;
-    check_project_version(&externals.gperf, "gperf", &args)?;
-    check_project_version(&externals.kubernetes, "kubernetes", &args)?;
-    check_project_version(&externals.libseccomp, "libseccomp", &args)?;
-    check_project_version(&externals.runc, "runc", &args)?;
-    check_project_version(&externals.nydus, "nydus", &args)?;
-    check_project_version(&externals.nydus_snapshotter, "nydus-snapshotter", &args)?;
-    check_project_version(&externals.ovmf, "ovmf", &args)?;
-    check_project_version(&externals.td_shim, "td-shim", &args)?;
-    check_project_version(&externals.virtiofsd, "virtiofsd", &args)?;
-    Ok(())
-}
-
-fn check_languages_versions(languages: &Languages, args: &Args) -> Result<(), Box<dyn Error>> {
-    check_project_version(&languages.golang, "golang", &args)?;
-    check_project_version(&languages.rust, "rust", &args)?;
-    check_project_version(&languages.golangci_lint, "golangci-lint", &args)?;
-    Ok(())
-}
-
-fn check_specs_versions(specs: &Specs, args: &Args) -> Result<(), Box<dyn Error>> {
-    check_project_version(&specs.oci, "oci", &args)?;
-    Ok(())
-}
-
-fn check_plugins_versions(plugins: &Plugins, args: &Args) -> Result<(), Box<dyn Error>> {
-    check_project_version(&plugins.sriov_network_device, "sriov-network-device", &args)?;
-    Ok(())
-}
-
-fn check_project_version(project: &Project, name: &str, args: &Args) -> Result<(), Box<dyn Error>> {
-    let current_version = match get_version_string(&project) {
+fn check_project_version(project: &Project, name: &str, args: &Args) -> Result<()> {
+    let current_version = match get_version_string(name, &project) {
         Ok(version) => version,
         Err(_e) => {
             let message = format!("Warning! Failed to read version for {}\n", name);
@@ -109,20 +106,26 @@ fn check_project_version(project: &Project, name: &str, args: &Args) -> Result<(
         }
     };
 
-    match &project.url {
-        Some(url) => {
-            if is_github_url(url.as_str()) {
-               check_github_version(url.as_str(), current_version.as_str(), name, &args)?;
-            } else {
-                match name {
-                    "virtiofsd" => check_virtiofsd_version(name, current_version.as_str(), &args)?,
-                    _ => ()
+    if let Some(architectures) = &project.architecture {
+        for (arch_name, _arch_value) in architectures.iter() {
+            println!("project: {}.{}, Architectures not implemented yet\n", name, arch_name);
+        }
+    } else {
+        match &project.url {
+            Some(url) => {
+                if is_github_url(url.as_str()) {
+                   check_github_version(url.as_str(), current_version.as_str(), name, &args)?;
+                } else {
+                    match name {
+                        "virtiofsd" => check_virtiofsd_version(name, current_version.as_str(), &args)?,
+                        _ => ()
+                    }
                 }
+            },
+            None => {
+                // Assume project is a language if url is not present
+                check_language_version(name, current_version.as_str(), &args)?;
             }
-        },
-        None => {
-            // Assume project is a language if url is not present
-            check_language_version(name, current_version.as_str(), &args)?;
         }
     }
 
@@ -132,7 +135,7 @@ fn check_project_version(project: &Project, name: &str, args: &Args) -> Result<(
 fn check_language_version(
     name: &str,
     current_version: &str,
-    args: &Args) -> Result<(), Box<dyn Error>> {
+    args: &Args) -> Result<()> {
     match name {
         "golang" => {
             let url = "https://golang.org/VERSION?m=text";
@@ -182,32 +185,20 @@ fn check_language_version(
     Ok(())
 }
 
-fn check_architecture_project_version(
-    project: &ArchitectureProject,
-    arch: &Arch,
-    name: &str,
-    args: &Args) -> Result<(), Box<dyn Error>> {
-    if is_github_url(project.url.as_str()) {
-        check_github_version(project.url.as_str(), arch.version.as_str(), name, &args)?;
-    }
-
-    Ok(())
-}
-
-fn get_version_string(project: &Project) -> Result<String, Box<dyn Error>> {
+fn get_version_string(key: &str, project: &Project) -> Result<String> {
     match &project.tag {
         Some(tag) => Ok(tag.clone()),
         None => match &project.branch {
             Some(branch) => Ok(branch.clone()),
             None => match &project.version {
                 Some(version) => Ok(version.clone()),
-                None => Err(Box::new(MissingVersionError {}))
+                None => bail!("Project {} is missing version (no version, branch, or tag)", key)
             }
         }
     }
 }
 
-fn get_github_latest_version(url: &str, args: &Args) -> Result<String, Box<dyn Error>> {
+fn get_github_latest_version(url: &str, args: &Args) -> Result<String> {
     let github_url = to_github_api_url(url);
     let mut client = reqwest::blocking::Client::new()
         .get(github_url)
@@ -215,7 +206,7 @@ fn get_github_latest_version(url: &str, args: &Args) -> Result<String, Box<dyn E
 
     match &args.github_token {
         Some(github_token) => {
-            if !github_token.is_empty() { 
+            if !github_token.is_empty() {
                 client = client.header("Authorization", "Bearer ".to_owned() + github_token)
             }
         },
@@ -236,7 +227,7 @@ fn check_github_version(
     url: &str,
     current_version: &str,
     name: &str,
-    args: &Args) -> Result<(), Box<dyn Error>> {
+    args: &Args) -> Result<()> {
     match get_github_latest_version(url, &args) {
         Ok(latest_version) => {
             let message = format!("project: {}, current_version: {}, latest_version: {}\n",
@@ -255,7 +246,7 @@ fn check_github_version(
 fn check_virtiofsd_version(
     name: &str,
     current_version: &str,
-    args: &Args) -> Result<(), Box<dyn Error>> {
+    args: &Args) -> Result<()> {
     let url = "https://gitlab.com/api/v4/projects/21523468/repository/tags";
     match get_virtiofsd_latest_version(url) {
         Ok(latest_version) => {
@@ -272,7 +263,7 @@ fn check_virtiofsd_version(
     Ok(())
 }
 
-fn get_rust_latest_version(url: &str, args: &Args) -> Result<String, Box<dyn Error>> {
+fn get_rust_latest_version(url: &str, args: &Args) -> Result<String> {
     let mut client = reqwest::blocking::Client::new()
         .get(url)
         .header("User-Agent", "Check Versions v1.0");
@@ -292,7 +283,7 @@ fn get_rust_latest_version(url: &str, args: &Args) -> Result<String, Box<dyn Err
     Ok(String::from(tag))
 }
 
-fn get_virtiofsd_latest_version(url: &str) -> Result<String, Box<dyn Error>> {
+fn get_virtiofsd_latest_version(url: &str) -> Result<String> {
     let client = reqwest::blocking::Client::new()
         .get(url)
         .header("User-Agent", "Check Versions v1.0");
@@ -310,7 +301,7 @@ fn get_virtiofsd_latest_version(url: &str) -> Result<String, Box<dyn Error>> {
 }
 
 
-fn get_latest_version(url: &str) -> Result<String, Box<dyn Error>> {
+fn get_latest_version(url: &str) -> Result<String> {
     let version_response = reqwest::blocking::Client::new()
                             .get(url).send()?.text()?;
 

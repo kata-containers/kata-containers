@@ -26,9 +26,14 @@ pub struct Args {
     /// If specified, output will not be printed to the console. Useful with --outfile
     pub quiet: bool,
 
+    // TODO: short, remove versions_file
+    #[arg(long, default_value_t = false)]
+    /// If specified, output will not be printed to the console. Useful with --outfile
+    pub verbose: bool,
+
     #[arg(short, long, env = "GITHUB_TOKEN")]
     /// GitHub authentication token to enable more API requests per hour.
     /// Can also be set via GITHUB_TOKEN environment variable.
     /// This argument overrides the environment variable if both are specified.
-    pub github_token: Option<String>
+    pub github_token: Option<String>,
 }

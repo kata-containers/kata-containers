@@ -4,12 +4,12 @@
 //
 
 use std::fs::OpenOptions;
-use std::error::Error;
 use std::io::Write;
+use anyhow::Result;
 
 use crate::cli::Args;
 
-pub fn write_output(content: String, args: &Args) -> Result<(), Box<dyn Error>> {
+pub fn write_output(content: String, args: &Args) -> Result<()> {
     match &args.outfile {
         Some(outfile) => {
             let mut file = OpenOptions::new()

@@ -14,7 +14,7 @@ use std::fs;
 
 fn main() {
     let args = cli::Args::parse();
-    
+
     let contents = match fs::read_to_string(&args.versions_file) {
         Ok(contents) => contents,
         Err(_e) => {
@@ -22,8 +22,8 @@ fn main() {
             return;
         }
     };
-    
-    let versions: model::Versions = match serde_yaml::from_str(contents.as_str()) {
+
+    let versions: serde_json::Value = match serde_yaml::from_str(contents.as_str()) {
         Ok(versions) => versions,
         Err(_e) => {
             println!("Unable to parse {}", &args.versions_file.display());
@@ -31,14 +31,12 @@ fn main() {
         }
     };
 
-    match version_checker::check_versions(versions, &args) {
-        Err(_e) => {
-            println!("Unable to check versions in {}", &args.versions_file.display());
+    match version_checker::check_versions_recursive("root", &versions, &args) {
+        Err(error) => {
+            println!("Unable to check versions in {}: {:?}", &args.versions_file.display(), error);
             return;
         },
         _ => ()
     }
 }
-
-
 
