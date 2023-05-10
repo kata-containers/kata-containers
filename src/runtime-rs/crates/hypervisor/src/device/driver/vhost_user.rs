@@ -4,8 +4,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::Device;
-use crate::{driver::hypervisor, DeviceConfig};
+use crate::Hypervisor as hypervisor;
+use crate::{device::Device, DeviceConfig};
 use anyhow::Result;
 use async_trait::async_trait;
 
@@ -31,11 +31,11 @@ pub struct VhostUserConfig {
 
 #[async_trait]
 impl Device for VhostUserConfig {
-    async fn attach(&self, _h: &dyn hypervisor) -> Result<()> {
+    async fn attach(&mut self, _h: &dyn hypervisor) -> Result<()> {
         todo!()
     }
 
-    async fn detach(&self, _h: &dyn hypervisor) -> Result<u64> {
+    async fn detach(&mut self, _h: &dyn hypervisor) -> Result<Option<u64>> {
         todo!()
     }
 

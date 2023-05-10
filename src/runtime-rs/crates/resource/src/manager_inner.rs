@@ -10,12 +10,12 @@ use crate::{network::NetworkConfig, resource_persist::ResourceState};
 use agent::{Agent, Storage};
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
-use hypervisor::Hypervisor;
+use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
 use oci::LinuxResources;
 use persist::sandbox_persist::Persist;
-use tokio::runtime;
+use tokio::{runtime, sync::RwLock};
 
 use crate::{
     cgroups::{CgroupArgs, CgroupsResource},
@@ -32,6 +32,7 @@ pub(crate) struct ResourceManagerInner {
     toml_config: Arc<TomlConfig>,
     agent: Arc<dyn Agent>,
     hypervisor: Arc<dyn Hypervisor>,
+    device_manager: Arc<RwLock<DeviceManager>>,
     network: Option<Arc<dyn Network>>,
     share_fs: Option<Arc<dyn ShareFs>>,
 
@@ -48,11 +49,17 @@ impl ResourceManagerInner {
         toml_config: Arc<TomlConfig>,
     ) -> Result<Self> {
         let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
+
+        // create device manager
+        let dev_manager =
+            DeviceManager::new(hypervisor.clone()).context("failed to create device manager")?;
+
         Ok(Self {
             sid: sid.to_string(),
             toml_config,
             agent,
             hypervisor,
+            device_manager: Arc::new(RwLock::new(dev_manager)),
             network: None,
             share_fs: None,
             rootfs_resource: RootFsResource::new(),
@@ -212,6 +219,7 @@ impl ResourceManagerInner {
         self.rootfs_resource
             .handler_rootfs(
                 &self.share_fs,
+                self.device_manager.as_ref(),
                 self.hypervisor.as_ref(),
                 &self.sid,
                 cid,
@@ -298,7 +306,8 @@ impl Persist for ResourceManagerInner {
         Ok(Self {
             sid: resource_args.sid,
             agent: resource_args.agent,
-            hypervisor: resource_args.hypervisor,
+            hypervisor: resource_args.hypervisor.clone(),
+            device_manager: Arc::new(RwLock::new(DeviceManager::new(resource_args.hypervisor)?)),
             network: None,
             share_fs: None,
             rootfs_resource: RootFsResource::new(),

@@ -66,7 +66,7 @@ pub struct DeviceManager {
 }
 
 impl DeviceManager {
-    pub async fn new(hypervisor: Arc<dyn Hypervisor>) -> Result<Self> {
+    pub fn new(hypervisor: Arc<dyn Hypervisor>) -> Result<Self> {
         let devices = HashMap::<String, ArcMutexBoxDevice>::new();
         Ok(DeviceManager {
             devices,
@@ -75,7 +75,7 @@ impl DeviceManager {
         })
     }
 
-    pub async fn new_device(&mut self, device_config: DeviceConfig) -> Result<String> {
+    pub async fn new_device(&mut self, device_config: &DeviceConfig) -> Result<String> {
         let device_id = if let Some(dev) = self.find_device(&device_config).await {
             dev
         } else {
@@ -86,11 +86,10 @@ impl DeviceManager {
         Ok(device_id)
     }
 
-    pub async fn try_add_device(&mut self, device_id: String) -> Result<()> {
-        // get device
+    pub async fn try_add_device(&mut self, device_id: &str) -> Result<()> {
         let device = self
             .devices
-            .get(&device_id)
+            .get(device_id)
             .context("failed to find device")?;
         // attach device
         let result = device.lock().await.attach(self.hypervisor.as_ref()).await;
@@ -99,10 +98,20 @@ impl DeviceManager {
             if let DeviceConfig::Block(config) = device.lock().await.get_device_info().await {
                 self.shared_info.release_device_index(config.index);
             };
-            self.devices.remove(&device_id);
+            self.devices.remove(device_id);
             return Err(e);
         }
         Ok(())
+    }
+
+    pub async fn get_device_info(&self, device_id: &str) -> Result<DeviceConfig> {
+        if let Some(dev) = self.devices.get(device_id) {
+            return Ok(dev.lock().await.get_device_info().await);
+        }
+        Err(anyhow!(
+            "device with specified ID hasn't been created. {}",
+            device_id
+        ))
     }
 
     async fn find_device(&self, device_config: &DeviceConfig) -> Option<String> {
