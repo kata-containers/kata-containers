@@ -6,13 +6,12 @@
 
 use std::{fs, path::Path, process::Command};
 
-use crate::{driver::hypervisor, DeviceConfig};
+use crate::Hypervisor as hypervisor;
+use crate::{device::Device, DeviceConfig};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use anyhow::anyhow;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-
-use crate::Device;
 
 fn override_driver(bdf: &str, driver: &str) -> Result<()> {
     let driver_override = format!("/sys/bus/pci/devices/{}/driver_override", bdf);
@@ -152,11 +151,11 @@ pub fn bind_device_to_host(bdf: &str, host_driver: &str, _vendor_device_id: &str
 
 #[async_trait]
 impl Device for VfioConfig {
-    async fn attach(&self, _h: &dyn hypervisor) -> Result<()> {
+    async fn attach(&mut self, _h: &dyn hypervisor) -> Result<()> {
         todo!()
     }
 
-    async fn detach(&self, _h: &dyn hypervisor) -> Result<u64> {
+    async fn detach(&mut self, _h: &dyn hypervisor) -> Result<Option<u64>> {
         todo!()
     }
 
