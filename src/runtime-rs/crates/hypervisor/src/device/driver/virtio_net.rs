@@ -6,6 +6,7 @@
 
 use std::fmt;
 
+#[derive(Clone)]
 pub struct Address(pub [u8; 6]);
 
 impl fmt::Debug for Address {
@@ -19,7 +20,7 @@ impl fmt::Debug for Address {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NetworkConfig {
     /// Unique identifier of the device
     pub id: String,

@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::HypervisorState;
-use crate::{device::Device, Hypervisor, VcpuThreadIds};
+use crate::{driver::DeviceConfig, Hypervisor, VcpuThreadIds};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use kata_types::capabilities::Capabilities;
@@ -78,12 +78,12 @@ impl Hypervisor for CloudHypervisor {
         inner.save_vm().await
     }
 
-    async fn add_device(&self, device: Device) -> Result<()> {
+    async fn add_device(&self, device: DeviceConfig) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.add_device(device).await
     }
 
-    async fn remove_device(&self, device: Device) -> Result<()> {
+    async fn remove_device(&self, device: DeviceConfig) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.remove_device(device).await
     }

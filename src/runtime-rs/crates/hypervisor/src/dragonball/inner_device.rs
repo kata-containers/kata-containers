@@ -15,8 +15,8 @@ use dragonball::api::v1::{
 
 use super::DragonballInner;
 use crate::{
-    device::Device, HybridVsockConfig, NetworkConfig, ShareFsDeviceConfig, ShareFsMountConfig,
-    ShareFsMountType, ShareFsOperation, VmmState,
+    driver::DeviceConfig, HybridVsockConfig, NetworkConfig, ShareFsDeviceConfig,
+    ShareFsMountConfig, ShareFsMountType, ShareFsOperation, VmmState,
 };
 
 const MB_TO_B: u32 = 1024 * 1024;
@@ -31,7 +31,7 @@ pub(crate) fn drive_index_to_id(index: u64) -> String {
 }
 
 impl DragonballInner {
-    pub(crate) async fn add_device(&mut self, device: Device) -> Result<()> {
+    pub(crate) async fn add_device(&mut self, device: DeviceConfig) -> Result<()> {
         if self.state == VmmState::NotReady {
             info!(sl!(), "VMM not ready, queueing device {}", device);
 
@@ -44,11 +44,11 @@ impl DragonballInner {
 
         info!(sl!(), "dragonball add device {:?}", &device);
         match device {
-            Device::Network(config) => self.add_net_device(&config).context("add net device"),
-            Device::Vfio(_config) => {
+            DeviceConfig::Network(config) => self.add_net_device(&config).context("add net device"),
+            DeviceConfig::Vfio(_config) => {
                 todo!()
             }
-            Device::Block(config) => self
+            DeviceConfig::Block(config) => self
                 .add_block_device(
                     config.path_on_host.as_str(),
                     config.id.as_str(),
@@ -56,29 +56,29 @@ impl DragonballInner {
                     config.no_drop,
                 )
                 .context("add block device"),
-            Device::HybridVsock(config) => self.add_hvsock(&config).context("add vsock"),
-            Device::ShareFsDevice(config) => self
+            DeviceConfig::HybridVsock(config) => self.add_hvsock(&config).context("add vsock"),
+            DeviceConfig::ShareFsDevice(config) => self
                 .add_share_fs_device(&config)
                 .context("add share fs device"),
-            Device::ShareFsMount(config) => self
+            DeviceConfig::ShareFsMount(config) => self
                 .add_share_fs_mount(&config)
                 .context("add share fs mount"),
-            Device::Vsock(_) => {
+            DeviceConfig::Vsock(_) => {
                 todo!()
             }
         }
     }
 
-    pub(crate) async fn remove_device(&mut self, device: Device) -> Result<()> {
+    pub(crate) async fn remove_device(&mut self, device: DeviceConfig) -> Result<()> {
         info!(sl!(), "remove device {} ", device);
 
         match device {
-            Device::Block(config) => {
+            DeviceConfig::Block(config) => {
                 let drive_id = drive_index_to_id(config.index);
                 self.remove_block_drive(drive_id.as_str())
                     .context("remove block drive")
             }
-            Device::Vfio(_config) => {
+            DeviceConfig::Vfio(_config) => {
                 todo!()
             }
             _ => Err(anyhow!("unsupported device {:?}", device)),

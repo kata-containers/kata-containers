@@ -6,8 +6,8 @@
 
 use super::vmm_instance::VmmInstance;
 use crate::{
-    device::Device, hypervisor_persist::HypervisorState, kernel_param::KernelParams, VmmState,
-    DEV_HUGEPAGES, HUGETLBFS, HYPERVISOR_DRAGONBALL, SHMEM, VM_ROOTFS_DRIVER_BLK,
+    driver::DeviceConfig, hypervisor_persist::HypervisorState, kernel_param::KernelParams,
+    VmmState, DEV_HUGEPAGES, HUGETLBFS, HYPERVISOR_DRAGONBALL, SHMEM, VM_ROOTFS_DRIVER_BLK,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -56,7 +56,7 @@ pub struct DragonballInner {
     pub(crate) run_dir: String,
 
     /// pending device
-    pub(crate) pending_devices: Vec<Device>,
+    pub(crate) pending_devices: Vec<DeviceConfig>,
 
     /// cached block device
     pub(crate) cached_block_devices: HashSet<String>,

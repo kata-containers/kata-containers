@@ -25,7 +25,7 @@ const VFIO_UNBIND_PATH: &str = "/sys/bus/pci/drivers/vfio-pci/unbind";
 
 pub const VFIO_PCI: &str = "vfio-pci";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum VfioBusMode {
     PCI,
     MMIO,
@@ -40,7 +40,7 @@ impl VfioBusMode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VfioConfig {
     /// Unique identifier of the device
     pub id: String,

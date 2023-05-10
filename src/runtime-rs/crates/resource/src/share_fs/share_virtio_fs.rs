@@ -8,7 +8,9 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use hypervisor::{
-    device::{Device as HypervisorDevice, ShareFsMountConfig, ShareFsMountType, ShareFsOperation},
+    device::driver::{
+        DeviceConfig as HypervisorDevice, ShareFsMountConfig, ShareFsMountType, ShareFsOperation,
+    },
     Hypervisor, ShareFsDeviceConfig,
 };
 use kata_sys_util::mount;

@@ -13,7 +13,7 @@ use async_trait::async_trait;
 use super::Endpoint;
 use crate::network::network_model::TC_FILTER_NET_MODEL_STR;
 use crate::network::{utils, NetworkPair};
-use hypervisor::{device::NetworkConfig, Device, Hypervisor};
+use hypervisor::{device::driver::NetworkConfig, DeviceConfig, Hypervisor};
 
 // IPVlanEndpoint is the endpoint bridged to VM
 #[derive(Debug)]
@@ -67,7 +67,7 @@ impl Endpoint for IPVlanEndpoint {
             .await
             .context("error adding network model")?;
         let config = self.get_network_config().context("get network config")?;
-        h.add_device(Device::Network(config))
+        h.add_device(DeviceConfig::Network(config))
             .await
             .context("error adding device by hypervisor")?;
 
@@ -82,7 +82,7 @@ impl Endpoint for IPVlanEndpoint {
         let config = self
             .get_network_config()
             .context("error getting network config")?;
-        h.remove_device(Device::Network(config))
+        h.remove_device(DeviceConfig::Network(config))
             .await
             .context("error removing device by hypervisor")?;
 

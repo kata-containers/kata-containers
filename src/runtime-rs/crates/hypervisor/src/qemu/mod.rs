@@ -5,7 +5,7 @@
 
 mod inner;
 
-use crate::device::Device;
+use crate::driver::DeviceConfig;
 use crate::hypervisor_persist::HypervisorState;
 use crate::Hypervisor;
 use crate::{HypervisorConfig, VcpuThreadIds};
@@ -73,12 +73,12 @@ impl Hypervisor for Qemu {
         inner.save_vm().await
     }
 
-    async fn add_device(&self, device: Device) -> Result<()> {
+    async fn add_device(&self, device: DeviceConfig) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.add_device(device).await
     }
 
-    async fn remove_device(&self, device: Device) -> Result<()> {
+    async fn remove_device(&self, device: DeviceConfig) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.remove_device(device).await
     }

@@ -11,14 +11,14 @@ pub enum ShareFsOperation {
     Update,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ShareFsMountType {
     PASSTHROUGH,
     RAFS,
 }
 
 /// ShareFsMountConfig: share fs mount config
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ShareFsMountConfig {
     /// source: the passthrough fs exported dir or rafs meta file of rafs
     pub source: String,
@@ -40,4 +40,26 @@ pub struct ShareFsMountConfig {
 
     /// prefetch_list_path: path to file that contains file lists that should be prefetched by rafs
     pub prefetch_list_path: Option<String>,
+}
+
+/// ShareFsDeviceConfig: share fs device config
+#[derive(Debug, Clone)]
+pub struct ShareFsDeviceConfig {
+    /// fs_type: virtiofs or inline-virtiofs
+    pub fs_type: String,
+
+    /// socket_path: socket path for virtiofs
+    pub sock_path: String,
+
+    /// mount_tag: a label used as a hint to the guest.
+    pub mount_tag: String,
+
+    /// host_path: the host filesystem path for this volume.
+    pub host_path: String,
+
+    /// queue_size: queue size
+    pub queue_size: u64,
+
+    /// queue_num: queue number
+    pub queue_num: u64,
 }
