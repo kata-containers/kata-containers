@@ -126,6 +126,12 @@ const (
 	// root bus instead of a bridge.
 	HotplugVFIOOnRootBus = kataAnnotHypervisorPrefix + "hotplug_vfio_on_root_bus"
 
+	// ColdPlugVFIO is a sandbox annotation used to indicate if devices need to be coldplugged.
+	ColdPlugVFIO = kataAnnotHypervisorPrefix + "cold_plug_vfio"
+
+	// HotPlugVFIO is a sandbox annotation used to indicate if devices need to be hotplugged.
+	HotPlugVFIO = kataAnnotHypervisorPrefix + "hot_plug_vfio"
+
 	// EntropySource is a sandbox annotation to specify the path to a host source of
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
 	EntropySource = kataAnnotHypervisorPrefix + "entropy_source"

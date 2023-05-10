@@ -162,6 +162,8 @@ const (
 	BridgePort = "bridge-port"
 	// NoPort is for disabling VFIO hotplug/coldplug
 	NoPort = "no-port"
+	// InvalidPort is for invalid port
+	InvalidPort = "invalid-port"
 )
 
 func (p PCIePort) String() string {
@@ -173,6 +175,8 @@ func (p PCIePort) String() string {
 	case BridgePort:
 		fallthrough
 	case NoPort:
+		fallthrough
+	case InvalidPort:
 		return string(p)
 	}
 	return fmt.Sprintf("<unknown PCIePort: %s>", string(p))
@@ -182,6 +186,34 @@ var PCIePortPrefixMapping = map[PCIePort]PCIePortBusPrefix{
 	RootPort:   PCIeRootPortPrefix,
 	SwitchPort: PCIeSwitchhDownstreamPortPrefix,
 	BridgePort: PCIBridgePortPrefix,
+}
+
+func (p PCIePort) InValid() bool {
+	switch p {
+	case RootPort:
+		fallthrough
+	case SwitchPort:
+		fallthrough
+	case BridgePort:
+		fallthrough
+	case NoPort:
+		return false
+	}
+	return true
+}
+
+func (p PCIePort) Valid() bool {
+	switch p {
+	case RootPort:
+		fallthrough
+	case SwitchPort:
+		fallthrough
+	case BridgePort:
+		fallthrough
+	case NoPort:
+		return true
+	}
+	return false
 }
 
 // DeviceInfo is an embedded type that contains device data common to all types of devices.

@@ -746,6 +746,8 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 	if hypervisorConfig.HotPlugVFIO == config.NoPort && hypervisorConfig.ColdPlugVFIO == config.NoPort {
 		return nil
 	}
+
+	q.Logger().Info("### PCIe Topology ###")
 	// Add PCIe Root Port or PCIe Switches to the hypervisor
 	// The pcie.0 bus do not support hot-plug, but PCIe device can be hot-plugged
 	// into a PCIe Root Port or PCIe Switch.
@@ -778,12 +780,15 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		if err != nil {
 			return fmt.Errorf("Cannot get all VFIO devices from IOMMU group with device: %v err: %v", dev, err)
 		}
+		q.Logger().Info("### PCIe Topology devices ", devicesPerIOMMUGroup)
 		for _, vfioDevice := range devicesPerIOMMUGroup {
+			q.Logger().Info("### PCIe Topology vfioDevice ", vfioDevice)
 			if drivers.IsPCIeDevice(vfioDevice.BDF) {
 				numOfPluggablePorts = numOfPluggablePorts + 1
 			}
 		}
 	}
+	q.Logger().Info("### PCIe Topology numOfPluggablePorts ", numOfPluggablePorts)
 
 	// If number of PCIe root ports > 16 then bail out otherwise we may
 	// use up all slots or IO memory on the root bus and vfio-XXX-pci devices
@@ -2642,7 +2647,7 @@ func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, number uint32, mach
 	pcieRootPort := govmmQemu.PCIeRootPortDevice{
 		ID:            fmt.Sprintf("%s%s%d", config.PCIeSwitchPortPrefix, config.PCIeRootPortPrefix, 0),
 		Bus:           defaultBridgeBus,
-		Chassis:       "0",
+		Chassis:       "1",
 		Slot:          strconv.FormatUint(uint64(0), 10),
 		Multifunction: false,
 		Addr:          "0",

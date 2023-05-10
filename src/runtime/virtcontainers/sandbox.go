@@ -620,20 +620,20 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	// the correct amount of ports to reserve for the hypervisor.
 	hotPlugVFIO := (sandboxConfig.HypervisorConfig.HotPlugVFIO != config.NoPort)
 
-	var vfioHotPlugDevices []config.DeviceInfo
-	var vfioColdPlugDevices []config.DeviceInfo
+	var vfioDevices []config.DeviceInfo
 
 	for cnt, containers := range sandboxConfig.Containers {
 		for dev, device := range containers.DeviceInfos {
 			isVFIO := deviceManager.IsVFIO(device.ContainerPath)
 			if hotPlugVFIO && isVFIO {
-				vfioHotPlugDevices = append(vfioHotPlugDevices, device)
+				vfioDevices = append(vfioDevices, device)
 				sandboxConfig.Containers[cnt].DeviceInfos[dev].Port = sandboxConfig.HypervisorConfig.HotPlugVFIO
 			}
 			if coldPlugVFIO && isVFIO {
+				s.Logger().Info("### coldplug and vfio ", device, "coldplug ", sandboxConfig.HypervisorConfig.ColdPlugVFIO)
 				device.ColdPlug = true
 				device.Port = sandboxConfig.HypervisorConfig.ColdPlugVFIO
-				vfioColdPlugDevices = append(vfioColdPlugDevices, device)
+				vfioDevices = append(vfioDevices, device)
 				// We need to remove the devices marked for cold-plug
 				// otherwise at the container level the kata-agent
 				// will try to hot-plug them.
@@ -643,7 +643,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 			}
 		}
 	}
-	sandboxConfig.HypervisorConfig.VFIODevices = vfioHotPlugDevices
+	sandboxConfig.HypervisorConfig.VFIODevices = vfioDevices
 
 	// store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
@@ -658,7 +658,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return s, nil
 	}
 
-	for _, dev := range vfioColdPlugDevices {
+	for _, dev := range vfioDevices {
 		_, err := s.AddDevice(ctx, dev)
 		if err != nil {
 			s.Logger().WithError(err).Debug("Cannot cold-plug add device")
