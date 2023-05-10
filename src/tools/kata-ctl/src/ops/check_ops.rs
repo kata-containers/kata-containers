@@ -5,7 +5,7 @@
 
 use crate::arch::arch_specific::get_checks;
 
-use crate::args::{CheckArgument, CheckSubCommand, IptablesCommand, MetricsCommand};
+use crate::args::{CheckArgument, CheckSubCommand, MetricsCommand};//IptablesCommand
 
 use crate::check;
 

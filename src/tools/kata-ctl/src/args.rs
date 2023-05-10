@@ -109,7 +109,7 @@ pub enum IpTablesArguments {
     #[clap(about = "Get iptables from the Kata Containers guest")]
     Get{
         #[clap(long = "sand-box", value_name = "ID", required = true, 
-        takes_value = true, help = "The target sandbox for getting the iptables")]
+	help = "The target sandbox for getting the iptables")]
         sandbox_id:String,
 
         #[clap(long = "v6", help = "Indicate we're requesting ipv6 iptables")]
@@ -119,13 +119,13 @@ pub enum IpTablesArguments {
     //Setters
     Set{
         #[clap(long = "sand-box", value_name = "ID", required = true, 
-        takes_value = true, help = "The target sandbox for setting the iptables")]
+        help = "The target sandbox for setting the iptables")]//takes_value  =true
         sandbox_id:String,
 
         #[clap(long = "v6", help = "Indicate we're requesting ipv6 iptables")]
         v6:bool,
 
-        #[clap(name = "FILE", required = true, takes_value = true, help = "The iptables file to set")]
+        #[clap(name = "FILE", required = true, help = "The iptables file to set")]
         file: String,
     },
 }

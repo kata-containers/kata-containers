@@ -6,10 +6,11 @@
 //use clap::{App, arg, Parser, SubCommand, Command};
 use reqwest::{Url};
 use std::{fs};
-use anyhow::{Result};//Context
+use anyhow::{Result, Context};//Context
 use shim_interface::shim_mgmt::client::MgmtClient;
 use crate::args::{IptablesCommand, IpTablesArguments};//Commands
 use thiserror::Error;
+use std::time::Duration;
 //use super::*;
 
 //kata-proxy management API endpoint, without code would not know the location of the unix sockets
@@ -37,7 +38,7 @@ pub fn verify_id(id:&str) -> Result<(), Error>{
     }
 }
 
-pub fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error> {
+pub async fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error> {//pub fn handle
     //checking for subcommand entered form user 
     match args.subcommand() {//.subcommand()
         IpTablesArguments::Get{sandbox_id, v6} =>{//Some(("get", get_matches)) => {
@@ -54,10 +55,13 @@ pub fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error> {
                 Url::parse(&format!("{}{}", IP_TABLES_SOCKET, sandbox_id))?
             };
             // create a new management client for the specified sandbox ID
-            let shim_client = MgmtClient::new(sandbox_id, Some(DEFAULT_TIMEOUT))?;
+            let timeout = Duration::from_secs(DEFAULT_TIMEOUT);
+            let shim_client = MgmtClient::new(sandbox_id, Some(timeout))?;
+            
             // make the GET request to retrieve the iptables
-            let response = shim_client.get(url)?;
-            let body = response.text()?;
+            let mut response = shim_client.get(url.as_str()).await?;
+            let body_bytes = hyper::body::to_bytes(response.body_mut()).await?;
+	    let _body_str = std::str::from_utf8(&body_bytes)?;
             // Return an `Ok` value indicating success.
             Ok(())
         }
@@ -74,7 +78,7 @@ pub fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error> {
             let buf = fs::read(iptables_file).map_err(|err| anyhow::Error::msg(format!("iptables file not provided: {}", err)))?;
 
             // Set the content type for the request
-            let content_type = "application/octet-stream";
+            let _content_type = "application/octet-stream";
         
             // Determine the URL for the management API endpoint based on the IPv6 flag
             let url = if *is_ipv6 {
@@ -84,20 +88,22 @@ pub fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error> {
             };
 
             // Create a new management client for the specified sandbox ID
-            let shim_client = MgmtClient::new(sandbox_id, Some(DEFAULT_TIMEOUT)).context("error creating management client")?;
+	    let timeout = Duration::from_secs(DEFAULT_TIMEOUT);
+            let shim_client = MgmtClient::new(sandbox_id, Some(timeout)).context("error creating management client")?;
             //     Ok(client) => client,
             //     Err(err) => return Err(err.into()),
             // };
         
             // Send a PUT request to set the iptables rules
-            let response = shim_client.put(url, content_type, &buf).context("error sending request")?;
+            let response = shim_client.put(url.as_str(), buf).await.context("error sending request")?;//content_type
             //     Ok(res) => res,
             // };
         
             // Check if the request was successful
             if !response.status().is_success() {
-                let body = format!("{:?}", response.into_body());
-                return Err(anyhow::Error::msg(format!("Request failed with status code: {}", response.status())));
+                let status = response.status();
+                let _body = format!("{:?}", response.into_body());
+                return Err(anyhow::Error::msg(format!("Request failed with status code: {}", status)));
             }
         
             // Print a message indicating that the iptables rules were set successfully
