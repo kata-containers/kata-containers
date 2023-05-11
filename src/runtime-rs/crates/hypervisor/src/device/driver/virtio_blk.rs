@@ -74,6 +74,7 @@ impl Device for BlockConfig {
     }
 
     async fn detach(&mut self, h: &dyn hypervisor) -> Result<Option<u64>> {
+        // get the count of device detached, skip detach once it reaches the 0
         if self
             .decrease_attach_count()
             .await

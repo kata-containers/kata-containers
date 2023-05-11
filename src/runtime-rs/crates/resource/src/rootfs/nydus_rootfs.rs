@@ -16,8 +16,9 @@ use crate::{
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use hypervisor::Hypervisor;
+use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 use kata_types::mount::{Mount, NydusExtraOptions};
+use tokio::sync::RwLock;
 
 // Used for nydus rootfs
 pub(crate) const NYDUS_ROOTFS_TYPE: &str = "fuse.nydus-overlayfs";
@@ -154,7 +155,7 @@ impl Rootfs for NydusRootfs {
         Ok(None)
     }
 
-    async fn cleanup(&self) -> Result<()> {
+    async fn cleanup(&self, _device_manager: &RwLock<DeviceManager>) -> Result<()> {
         // TODO: Clean up NydusRootfs after the container is killed
         warn!(sl!(), "Cleaning up NydusRootfs is still unimplemented.");
         Ok(())

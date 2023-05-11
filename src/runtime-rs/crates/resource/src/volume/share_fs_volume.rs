@@ -12,6 +12,8 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use hypervisor::device::device_manager::DeviceManager;
+use tokio::sync::RwLock;
 
 use super::Volume;
 use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
@@ -158,7 +160,7 @@ impl Volume for ShareFsVolume {
         Ok(self.storages.clone())
     }
 
-    async fn cleanup(&self) -> Result<()> {
+    async fn cleanup(&self, _device_manager: &RwLock<DeviceManager>) -> Result<()> {
         let share_fs = match self.share_fs.as_ref() {
             Some(fs) => fs,
             None => return Ok(()),

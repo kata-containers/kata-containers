@@ -104,8 +104,13 @@ impl Rootfs for BlockRootfs {
     async fn get_device_id(&self) -> Result<Option<String>> {
         Ok(Some(self.device_id.clone()))
     }
-    async fn cleanup(&self) -> Result<()> {
-        Ok(())
+
+    async fn cleanup(&self, device_manager: &RwLock<DeviceManager>) -> Result<()> {
+        device_manager
+            .write()
+            .await
+            .try_remove_device(&self.device_id)
+            .await
     }
 }
 
