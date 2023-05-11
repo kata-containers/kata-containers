@@ -6,7 +6,6 @@
 use protobuf::{EnumOrUnknown, MessageField};
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "with-serde")]
 pub fn serialize_enum_or_unknown<E: protobuf::EnumFull, S: serde::Serializer>(
     e: &protobuf::EnumOrUnknown<E>,
     s: S,
