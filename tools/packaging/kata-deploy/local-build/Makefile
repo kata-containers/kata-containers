@@ -30,6 +30,7 @@ all: serial-targets \
 	kernel-gpu-snp-tarball \
 	kernel-gpu-tdx-experimental-tarball \
 	nydus-tarball \
+	ovmf-sev-tarball \
 	qemu-tarball \
 	qemu-tdx-experimental-tarball \
 	shim-v2-tarball \
@@ -39,6 +40,7 @@ all: serial-targets \
 serial-targets:
 	${MAKE} -f $(MK_PATH) -j 1 V= \
 	rootfs-image-tarball \
+	rootfs-initrd-sev-tarball \
 	rootfs-initrd-tarball \
 	cloud-hypervisor-tarball
 
@@ -72,7 +74,13 @@ kernel-experimental-tarball:
 kernel-tdx-experimental-tarball:
 	${MAKE} $@-build
 
+kernel-sev-tarball:
+	${MAKE} $@-build
+
 nydus-tarball:
+	${MAKE} $@-build
+
+ovmf-sev-tarball:
 	${MAKE} $@-build
 
 qemu-tarball:
@@ -82,6 +90,9 @@ qemu-tdx-experimental-tarball:
 	${MAKE} $@-build
 
 rootfs-image-tarball:
+	${MAKE} $@-build
+
+rootfs-initrd-sev-tarball: kernel-sev-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-tarball:
