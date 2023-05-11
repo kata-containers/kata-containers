@@ -48,10 +48,16 @@ cache_kernel_artifacts() {
 			;;
 	esac
 
-	local current_kernel_version="$(get_from_kata_deps "assets.${KERNEL_FLAVOUR}.version")"
-	if [[ "${KERNEL_FLAVOUR}" == "kernel-sev" ]]; then
-		current_kernel_version="$(get_from_kata_deps "assets.kernel.sev.version")"
-	fi
+	case ${KERNEL_FLAVOUR} in
+		"kernel-sev"|"kernel-snp")
+			# In these cases, like "kernel-foo", it must be set to "kernel.foo" when looking at
+			# the versions.yaml file
+			current_kernel_version="$(get_from_kata_deps "assets.${KERNEL_FLAVOUR/-/.}.version")"
+			;;
+		*)
+			current_kernel_version="$(get_from_kata_deps "assets.${KERNEL_FLAVOUR}.version")"
+			;;
+	esac
 
 	create_cache_asset "${kernel_tarball_name}" "${current_kernel_version}-${current_kernel_kata_config_version}" "${current_kernel_image}"
 	if [[ "${KERNEL_FLAVOUR}" == "kernel-sev" ]]; then
