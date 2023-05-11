@@ -317,7 +317,7 @@ impl ResourceManagerInner {
             sb_bindmnt.cleanup_sandbox_bind_mounts()
         }
     }
-    
+
     pub async fn cleanup(&self) -> Result<()> {
         // clean up cgroup
         self.cgroups_resource
