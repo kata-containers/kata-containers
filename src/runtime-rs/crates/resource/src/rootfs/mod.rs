@@ -27,7 +27,7 @@ pub trait Rootfs: Send + Sync {
     async fn get_guest_rootfs_path(&self) -> Result<String>;
     async fn get_rootfs_mount(&self) -> Result<Vec<oci::Mount>>;
     async fn get_storage(&self) -> Option<Storage>;
-    async fn cleanup(&self) -> Result<()>;
+    async fn cleanup(&self, device_manager: &RwLock<DeviceManager>) -> Result<()>;
     async fn get_device_id(&self) -> Result<Option<String>>;
 }
 

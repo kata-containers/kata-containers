@@ -72,6 +72,10 @@ impl ResourceManagerInner {
         self.toml_config.clone()
     }
 
+    pub fn get_device_manager(&self) -> Arc<RwLock<DeviceManager>> {
+        self.device_manager.clone()
+    }
+
     pub async fn prepare_before_start_vm(
         &mut self,
         device_configs: Vec<ResourceConfig>,

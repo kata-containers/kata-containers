@@ -13,7 +13,7 @@ use crate::share_fs::{do_get_guest_path, do_get_host_path};
 use super::{share_fs_volume::generate_mount_path, Volume};
 use agent::Storage;
 use anyhow::{anyhow, Context};
-use hypervisor::{device::DeviceManager, BlockConfig, DeviceConfig};
+use hypervisor::{device::device_manager::DeviceManager, BlockConfig, DeviceConfig};
 use nix::sys::stat::{self, SFlag};
 use tokio::sync::RwLock;
 #[derive(Debug)]
@@ -128,10 +128,12 @@ impl Volume for BlockVolume {
         Ok(s)
     }
 
-    async fn cleanup(&self) -> Result<()> {
-        // TODO: Clean up BlockVolume
-        warn!(sl!(), "Cleaning up BlockVolume is still unimplemented.");
-        Ok(())
+    async fn cleanup(&self, device_manager: &RwLock<DeviceManager>) -> Result<()> {
+        device_manager
+            .write()
+            .await
+            .try_remove_device(&self.device_id)
+            .await
     }
 
     fn get_device_id(&self) -> Result<Option<String>> {

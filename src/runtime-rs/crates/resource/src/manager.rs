@@ -11,6 +11,7 @@ use agent::types::Device;
 use agent::{Agent, Storage};
 use anyhow::Result;
 use async_trait::async_trait;
+use hypervisor::device::device_manager::DeviceManager;
 use hypervisor::Hypervisor;
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
@@ -50,6 +51,11 @@ impl ResourceManager {
     pub async fn config(&self) -> Arc<TomlConfig> {
         let inner = self.inner.read().await;
         inner.config()
+    }
+
+    pub async fn get_device_manager(&self) -> Arc<RwLock<DeviceManager>> {
+        let inner = self.inner.read().await;
+        inner.get_device_manager()
     }
 
     pub async fn prepare_before_start_vm(&self, device_configs: Vec<ResourceConfig>) -> Result<()> {

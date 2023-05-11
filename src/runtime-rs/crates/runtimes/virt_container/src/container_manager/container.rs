@@ -183,7 +183,8 @@ impl Container {
         match process.process_type {
             ProcessType::Container => {
                 if let Err(err) = inner.start_container(&process.container_id).await {
-                    let _ = inner.stop_process(process, true).await;
+                    let device_manager = self.resource_manager.get_device_manager().await;
+                    let _ = inner.stop_process(process, true, &device_manager).await;
                     return Err(err);
                 }
 
@@ -195,7 +196,8 @@ impl Container {
             }
             ProcessType::Exec => {
                 if let Err(e) = inner.start_exec_process(process).await {
-                    let _ = inner.stop_process(process, true).await;
+                    let device_manager = self.resource_manager.get_device_manager().await;
+                    let _ = inner.stop_process(process, true, &device_manager).await;
                     return Err(e).context("enter process");
                 }
 
@@ -277,7 +279,10 @@ impl Container {
         all: bool,
     ) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.signal_process(container_process, signal, all).await
+        let device_manager = self.resource_manager.get_device_manager().await;
+        inner
+            .signal_process(container_process, signal, all, &device_manager)
+            .await
     }
 
     pub async fn exec_process(
@@ -314,8 +319,9 @@ impl Container {
 
     pub async fn stop_process(&self, container_process: &ContainerProcess) -> Result<()> {
         let mut inner = self.inner.write().await;
+        let device_manager = self.resource_manager.get_device_manager().await;
         inner
-            .stop_process(container_process, true)
+            .stop_process(container_process, true, &device_manager)
             .await
             .context("stop process")
     }
