@@ -24,6 +24,9 @@ serial_test = "0.5.1"
 kata-sys-util = { path = "../libs/kata-sys-util" }
 kata-types = { path = "../libs/kata-types" }
 url = "2.2.2"
+bzip2 = "0.4.4"
+h2 = "0.3.17"
+simple_asn1 = "0.6.1"
 
 # Async helpers
 async-trait = "0.1.42"
@@ -31,7 +34,7 @@ async-recursion = "0.3.2"
 futures = "0.3.17"
 
 # Async runtime
-tokio = { version = "1.21.2", features = ["full"] }
+tokio = { version = "1.23.1", features = ["full"] }
 tokio-vsock = "0.3.1"
 
 netlink-sys = { version = "0.7.0", features = ["tokio_socket",]}
@@ -67,7 +70,8 @@ toml = "0.5.8"
 clap = { version = "3.0.1", features = ["derive"] }
 
 # "vendored" feature for openssl is required by musl build
-openssl = { version = "0.10.38", features = ["vendored"] }
+openssl = "0.10.48"
+openssl-src = "111.25.3"
 
 # OPA requests
 http = "0.2.8"
