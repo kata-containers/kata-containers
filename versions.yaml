@@ -98,11 +98,6 @@ assets:
       uscan-url: >-
         https://github.com/qemu/qemu/tags
         .*/v?(\d\S+)\.tar\.gz
-      snp:
-        description: "VMM that uses KVM and supports AMD SEV-SNP"
-        url: "https://github.com/AMDESE/qemu"
-        branch: "snp-v3"
-        commit: "ffa95097ee"
 
     qemu-experimental:
       description: "QEMU with virtiofs support"
@@ -114,6 +109,11 @@ assets:
       description: "QEMU with TDX support - based on https://github.com/intel/tdx-tools/releases/tag/2023ww01"
       url: "https://github.com/kata-containers/qemu"
       tag: "ad4c7f529a279685da84297773b4ec8080153c2d-plus-TDX-v1.3"
+
+    qemu-snp-experimental:
+      description: "QEMU with experimental SNP support (no UPM)"
+      url: "https://github.com/AMDESE/qemu"
+      tag: "3b6a2b6b7466f6dea53243900b7516c3f29027b7"
 
   image:
     description: |
@@ -165,7 +165,7 @@ assets:
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.19.2"
     sev:
-      description: "Linux kernel that supports SEV"
+      description: "Linux kernel that supports SEV and SNP"
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
       version: "v5.19.2"
     snp:
