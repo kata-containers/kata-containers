@@ -140,7 +140,15 @@ impl Container {
         }
         spec.mounts = oci_mounts;
 
-        // TODO: handler device
+        let linux = spec
+            .linux
+            .as_ref()
+            .context("OCI spec missing linux field")?;
+
+        let devices_agent = self
+            .resource_manager
+            .handler_devices(&config.container_id, linux)
+            .await?;
 
         // update cgroups
         self.resource_manager
@@ -158,6 +166,7 @@ impl Container {
             storages,
             oci: Some(spec),
             sandbox_pidns,
+            devices: devices_agent,
             ..Default::default()
         };
 

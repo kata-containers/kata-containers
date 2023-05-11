@@ -7,13 +7,14 @@
 use crate::network::NetworkConfig;
 use crate::resource_persist::ResourceState;
 use crate::{manager_inner::ResourceManagerInner, rootfs::Rootfs, volume::Volume, ResourceConfig};
+use agent::types::Device;
 use agent::{Agent, Storage};
 use anyhow::Result;
 use async_trait::async_trait;
 use hypervisor::Hypervisor;
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
-use oci::LinuxResources;
+use oci::{Linux, LinuxResources};
 use persist::sandbox_persist::Persist;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -91,6 +92,11 @@ impl ResourceManager {
     ) -> Result<Vec<Arc<dyn Volume>>> {
         let inner = self.inner.read().await;
         inner.handler_volumes(cid, spec).await
+    }
+
+    pub async fn handler_devices(&self, cid: &str, linux: &Linux) -> Result<Vec<Device>> {
+        let inner = self.inner.read().await;
+        inner.handler_devices(cid, linux).await
     }
 
     pub async fn dump(&self) {

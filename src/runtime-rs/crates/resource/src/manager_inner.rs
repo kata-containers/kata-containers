@@ -4,16 +4,16 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{sync::Arc, thread};
+use std::{sync::Arc, thread, vec};
 
 use crate::{network::NetworkConfig, resource_persist::ResourceState};
-use agent::{Agent, Storage};
+use agent::{types::Device, Agent, Storage};
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
-use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
+use hypervisor::{device::device_manager::DeviceManager, BlockConfig, DeviceConfig, Hypervisor};
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
-use oci::LinuxResources;
+use oci::{Linux, LinuxResources};
 use persist::sandbox_persist::Persist;
 use tokio::{runtime, sync::RwLock};
 
@@ -244,6 +244,61 @@ impl ResourceManagerInner {
                 &self.sid,
             )
             .await
+    }
+
+    pub async fn handler_devices(&self, _cid: &str, linux: &Linux) -> Result<Vec<Device>> {
+        let mut devices = vec![];
+        for d in linux.devices.iter() {
+            match d.r#type.as_str() {
+                "b" => {
+                    let device_info = DeviceConfig::Block(BlockConfig {
+                        major: d.major,
+                        minor: d.minor,
+                        ..Default::default()
+                    });
+                    let device_id = self
+                        .device_manager
+                        .write()
+                        .await
+                        .new_device(&device_info)
+                        .await
+                        .context("failed to create deviec")?;
+
+                    self.device_manager
+                        .write()
+                        .await
+                        .try_add_device(&device_id)
+                        .await
+                        .context("failed to add deivce")?;
+
+                    // get complete device information
+                    let dev_info = self
+                        .device_manager
+                        .read()
+                        .await
+                        .get_device_info(&device_id)
+                        .await
+                        .context("failed to get device info")?;
+
+                    // create agent device
+                    if let DeviceConfig::Block(config) = dev_info {
+                        let agent_device = Device {
+                            id: device_id.clone(),
+                            container_path: d.path.clone(),
+                            field_type: config.driver_option,
+                            vm_path: config.virt_path,
+                            ..Default::default()
+                        };
+                        devices.push(agent_device);
+                    }
+                }
+                _ => {
+                    // TODO enable other devices type
+                    continue;
+                }
+            }
+        }
+        Ok(devices)
     }
 
     pub async fn update_cgroups(

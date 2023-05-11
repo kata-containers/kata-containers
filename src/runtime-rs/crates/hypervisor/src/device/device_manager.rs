@@ -76,10 +76,10 @@ impl DeviceManager {
     }
 
     pub async fn new_device(&mut self, device_config: &DeviceConfig) -> Result<String> {
-        let device_id = if let Some(dev) = self.find_device(&device_config).await {
+        let device_id = if let Some(dev) = self.find_device(device_config).await {
             dev
         } else {
-            self.create_device(&device_config)
+            self.create_device(device_config)
                 .await
                 .context("failed to create device")?
         };
