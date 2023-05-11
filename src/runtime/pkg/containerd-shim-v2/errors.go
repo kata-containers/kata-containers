@@ -58,7 +58,8 @@ func isInvalidArgument(err error) bool {
 
 func isNotFound(err error) bool {
 	return err == vc.ErrNoSuchContainer || err == syscall.ENOENT ||
-		strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not exist")
+		strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not exist") ||
+		strings.Contains(err.Error(), "no such file or directory")
 }
 
 func isGRPCErrorCode(code codes.Code, err error) bool {

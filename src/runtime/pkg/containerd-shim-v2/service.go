@@ -331,6 +331,11 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 	logrus.SetOutput(os.Stderr)
 
 	defer func() {
+		// if sandbox/container is not found in path
+		// it means that it is already deleted
+		if err != nil && isNotFound(err) {
+			err = nil
+		}
 		err = toGRPC(err)
 	}()
 
@@ -498,6 +503,11 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 
 	start := time.Now()
 	defer func() {
+		// if sandbox/container is not found in path
+		// it means that it is already deleted
+		if err != nil && isNotFound(err) {
+			err = nil
+		}
 		err = toGRPC(err)
 		rpcDurationsHistogram.WithLabelValues("delete").Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
@@ -769,6 +779,11 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 
 	start := time.Now()
 	defer func() {
+		// if sandbox/container is not found in path
+		// it means that it is already deleted
+		if err != nil && isNotFound(err) {
+			err = nil
+		}
 		err = toGRPC(err)
 		rpcDurationsHistogram.WithLabelValues("kill").Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
