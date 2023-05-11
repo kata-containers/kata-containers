@@ -8,6 +8,16 @@
 ## `rust-agent` could be totally statically linked.
 linker = "aarch64-linux-musl-gcc"
 
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/firecracker-microvm/micro-http?branch=main"]
+git = "https://github.com/firecracker-microvm/micro-http"
+branch = "main"
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "vendor"
 ## The __addtf3, __subtf3 and __multf3 symbols are used by aarch64-musl,
 ## but are not provided by rust compiler-builtins.
 ## For now, the only functional workaround accepted by rust communities

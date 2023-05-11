@@ -3,20 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-//use clap::{App, arg, Parser, SubCommand, Command};
-use reqwest::{Url};
 use std::{fs};
 use anyhow::{Result, Context};//Context
 use shim_interface::shim_mgmt::client::MgmtClient;
-use crate::args::{IptablesCommand, IpTablesArguments};//Commands
+use crate::args::{IptablesCommand, IpTablesArguments};
 use thiserror::Error;
 use std::time::Duration;
-//use super::*;
+use std::fmt;
 
 //kata-proxy management API endpoint, without code would not know the location of the unix sockets
 const DEFAULT_TIMEOUT: u64 = 30;
-const IP_TABLES_SOCKET: &str = "unix:///run/vc/sbs/{sandbox_id}/ip_tables";
-const IP6_TABLES_SOCKET: &str = "unix:///run/vc/sbs/{sandbox_id}/ip6_tables";
 
 #[derive(Error, Debug)]
 pub enum Error{
@@ -24,7 +20,6 @@ pub enum Error{
     InvalidContainerID(String),
 }
 
-//Verify Id for validating sandboxID
 pub fn verify_id(id:&str) -> Result<(), Error>{
     let mut chars = id.chars();
 
@@ -38,10 +33,23 @@ pub fn verify_id(id:&str) -> Result<(), Error>{
     }
 }
 
-pub async fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error> {//pub fn handle
+fn mk_ip_tables_socket_path(sandbox_id: &str, ipv6: bool) -> Result<String, fmt::Error> {
+    const IP_TABLES_SOCKET: &str = "unix:///run/vc/sbs/{sandbox_id}/ip_tables";
+    const IP6_TABLES_SOCKET: &str = "unix:///run/vc/sbs/{sandbox_id}/ip6_tables";
+
+    let url = if ipv6{
+        format!("{}{}", IP6_TABLES_SOCKET, sandbox_id)
+    }
+    else{
+        format!("{}{}", IP_TABLES_SOCKET, sandbox_id)
+    };
+    Ok(url)
+}
+
+pub async fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error> {
     //checking for subcommand entered form user 
     match args.subcommand() {//.subcommand()
-        IpTablesArguments::Get{sandbox_id, v6} =>{//Some(("get", get_matches)) => {
+        IpTablesArguments::Get{sandbox_id, v6} =>{
             // retrieve the sandbox ID from the command line arguments
             let sandbox_id = sandbox_id;//get_matches.value_of("sandbox-id")?;
 
@@ -49,29 +57,24 @@ pub async fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error>
            
             verify_id(sandbox_id)?;
             // generate the appropriate URL for the iptables request to connect Kata to agent within guest
-            let url = if *is_ipv6 {
-                Url::parse(&format!("{}{}", IP6_TABLES_SOCKET, sandbox_id))?
-            } else {
-                Url::parse(&format!("{}{}", IP_TABLES_SOCKET, sandbox_id))?
-            };
+	    let url = mk_ip_tables_socket_path(sandbox_id, *is_ipv6);
             // create a new management client for the specified sandbox ID
             let timeout = Duration::from_secs(DEFAULT_TIMEOUT);
             let shim_client = MgmtClient::new(sandbox_id, Some(timeout))?;
             
             // make the GET request to retrieve the iptables
-            let mut response = shim_client.get(url.as_str()).await?;
+            let mut response = shim_client.get(url?.as_str()).await?;
             let body_bytes = hyper::body::to_bytes(response.body_mut()).await?;
 	    let _body_str = std::str::from_utf8(&body_bytes)?;
             // Return an `Ok` value indicating success.
             Ok(())
         }
-        IpTablesArguments::Set {sandbox_id, v6, file} => {//Some(("set", set_matches)) => {
+        IpTablesArguments::Set {sandbox_id, v6, file} => {
             // Extract sandbox ID and IPv6 flag from command-line arguments
             let sandbox_id = sandbox_id;//set_matches.value_of("sandbox-id")?;
             let is_ipv6 = v6;//set_matches.is_present("v6");
             let iptables_file = file;//set_matches.value_of("file")?;
             
-            // Verify the specified sandbox ID is valid
             verify_id(sandbox_id)?;
         
             // Read the contents of the specified iptables file into a buffer
@@ -81,24 +84,15 @@ pub async fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error>
             let _content_type = "application/octet-stream";
         
             // Determine the URL for the management API endpoint based on the IPv6 flag
-            let url = if *is_ipv6 {
-                Url::parse(&format!("{}{}", IP6_TABLES_SOCKET, sandbox_id))?
-            } else {
-                Url::parse(&format!("{}{}", IP_TABLES_SOCKET, sandbox_id))?
-            };
+	    let url = mk_ip_tables_socket_path(sandbox_id, *is_ipv6);
 
             // Create a new management client for the specified sandbox ID
 	    let timeout = Duration::from_secs(DEFAULT_TIMEOUT);
             let shim_client = MgmtClient::new(sandbox_id, Some(timeout)).context("error creating management client")?;
-            //     Ok(client) => client,
-            //     Err(err) => return Err(err.into()),
-            // };
-        
+ 
             // Send a PUT request to set the iptables rules
-            let response = shim_client.put(url.as_str(), buf).await.context("error sending request")?;//content_type
-            //     Ok(res) => res,
-            // };
-        
+            let response = shim_client.put(url?.as_str(), buf).await.context("error sending request")?;
+
             // Check if the request was successful
             if !response.status().is_success() {
                 let status = response.status();
@@ -106,7 +100,6 @@ pub async fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error>
                 return Err(anyhow::Error::msg(format!("Request failed with status code: {}", status)));
             }
         
-            // Print a message indicating that the iptables rules were set successfully
             println!("iptables set successfully");
         
             Ok(())
@@ -232,3 +225,20 @@ fn test_invalid_iptables_file(){
     ])?;
     assert!(handle_iptables(args).is_ok());
 }
+#[test]
+fn test_mk_ip_tables_socket_path_valid() {
+    let sandbox_id = "sandbox1";
+    let ipv6 = true;
+    let expected_url = "unix://run/vc/sbs/sandbox1/ip6_tables";
+    assert_eq!(mk_ip_tables_socket_path(sandbox_id, ipv6)?, expected_url);
+}
+
+#[test]
+fn test_mk_ip_tables_socket_path_invalid() {
+    let sandbox_id = "sandbox2";
+    let ipv6 = false;
+    let expected_url = "unix://run/vc/sbs/sandbox2/ip6_tables";
+    assert_eq!(mk_ip_tables_socket_path(sandbox_id, ipv6)?, expected_url);
+}
+
+
