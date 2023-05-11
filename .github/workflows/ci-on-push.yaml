@@ -20,6 +20,23 @@ jobs:
       tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64
     secrets: inherit
 
+  run-vfio-tests:
+    needs: build-kata-static-tarball-amd64
+    runs-on: vfio
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Get kata-static-tarnall-amd64 artefact
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-static-tarball-amd64-${{ github.event.pull_request.number}}-${{ github.event.pull_request.head.sha }}
+
+      - name: Run VFIO tests
+        run: |
+          ./tests/vfio/run.sh
+
   run-k8s-tests-on-aks:
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
