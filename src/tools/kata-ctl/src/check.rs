@@ -5,6 +5,7 @@
 
 // Contains checks that are not architecture-specific
 
+use crate::types::KernelModule;
 use anyhow::{anyhow, Result};
 use nix::fcntl::{open, OFlag};
 use nix::sys::stat::Mode;
@@ -324,17 +325,16 @@ pub fn check_official_releases() -> Result<()> {
 }
 
 #[cfg(any(target_arch = "x86_64"))]
-pub fn check_kernel_module_loaded(module: &str, parameter: &str) -> Result<String, String> {
+pub fn check_kernel_module_loaded(kernel_module: &KernelModule) -> Result<(), String> {
     const MODPROBE_PARAMETERS_DRY_RUN: &str = "--dry-run";
     const MODPROBE_PARAMETERS_FIRST_TIME: &str = "--first-time";
-    const MODULES_PATH: &str = "/sys/module";
 
     let status_modinfo_success;
 
     // Partial check w/ modinfo
     // verifies that the module exists
     match Command::new(MODINFO_PATH)
-        .arg(module)
+        .arg(kernel_module.name)
         .stdout(Stdio::piped())
         .output()
     {
@@ -361,7 +361,7 @@ pub fn check_kernel_module_loaded(module: &str, parameter: &str) -> Result<Strin
     match Command::new(MODPROBE_PATH)
         .arg(MODPROBE_PARAMETERS_DRY_RUN)
         .arg(MODPROBE_PARAMETERS_FIRST_TIME)
-        .arg(module)
+        .arg(kernel_module.name)
         .stdout(Stdio::piped())
         .output()
     {
@@ -371,8 +371,8 @@ pub fn check_kernel_module_loaded(module: &str, parameter: &str) -> Result<Strin
 
             if status_modprobe_success && status_modinfo_success {
                 // This condition is true in the case that the module exist, but is not already loaded
-                let msg = format!("The kernel module `{:}` exist but is not already loaded. Try reloading it using 'modprobe {:}=Y'",
-                        module, module
+                let msg = format!("The kernel module `{:}` exist but is not already loaded. Try reloading it using 'modprobe {:}'",
+                kernel_module.name, kernel_module.name
                     );
                 return Err(msg);
             }
@@ -386,27 +386,14 @@ pub fn check_kernel_module_loaded(module: &str, parameter: &str) -> Result<Strin
             return Err(msg);
         }
     }
-
-    let module_path = format!("{}/{}/parameters/{}", MODULES_PATH, module, parameter);
-
-    // Here the currently loaded kernel parameter value
-    // is retrieved and returned on success
-    match read_file_contents(&module_path) {
-        Ok(result) => Ok(result.replace('\n', "")),
-        Err(_e) => {
-            let msg = format!(
-                "'{:}' kernel module parameter `{:}` not found.",
-                module, parameter
-            );
-            Err(msg)
-        }
-    }
+    Ok(())
 }
 
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{KernelModule, KernelParam, KernelParamType};
     use semver::Version;
     use slog::warn;
     use std::fs;
@@ -612,12 +599,13 @@ mod tests {
     #[test]
     fn check_module_loaded() {
         #[allow(dead_code)]
-        #[derive(Debug)]
+
         struct TestData<'a> {
             module_name: &'a str,
             param_name: &'a str,
+            kernel_module: &'a KernelModule<'a>,
             param_value: &'a str,
-            result: Result<String>,
+            result: Result<()>,
         }
 
         let tests = &[
@@ -625,45 +613,58 @@ mod tests {
             TestData {
                 module_name: "",
                 param_name: "",
+                kernel_module: &KernelModule {
+                    name: "",
+                    params: &[KernelParam {
+                        name: "",
+                        value: KernelParamType::Simple("Y"),
+                    }],
+                },
                 param_value: "",
                 result: Err(anyhow!("modinfo: ERROR: Module {} not found.", "")),
-            },
-            TestData {
-                module_name: "kvm",
-                param_name: "",
-                param_value: "",
-                result: Err(anyhow!(
-                    "'{:}' kernel module parameter `{:}` not found.",
-                    "kvm",
-                    ""
-                )),
             },
             // Success scenarios
             TestData {
                 module_name: "kvm",
+                param_name: "",
+                kernel_module: &KernelModule {
+                    name: "kvm",
+                    params: &[KernelParam {
+                        name: "nonexistantparam",
+                        value: KernelParamType::Simple("Y"),
+                    }],
+                },
+                param_value: "",
+                result: Ok(()),
+            },
+            TestData {
+                module_name: "kvm",
                 param_name: "kvmclock_periodic_sync",
+                kernel_module: &KernelModule {
+                    name: "kvm",
+                    params: &[KernelParam {
+                        name: "kvmclock_periodic_sync",
+                        value: KernelParamType::Simple("Y"),
+                    }],
+                },
                 param_value: "Y",
-                result: Ok("Y".to_string()),
+                result: Ok(()),
             },
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-            let result = check_kernel_module_loaded(d.module_name, d.param_name);
+            let msg = format!("test[{}]", i);
+            let result = check_kernel_module_loaded(d.kernel_module);
             let msg = format!("{}, result: {:?}", msg, result);
 
             if d.result.is_ok() {
-                assert_eq!(
-                    result.as_ref().unwrap(),
-                    d.result.as_ref().unwrap(),
-                    "{}",
-                    msg
-                );
+                assert_eq!(result, Ok(()));
                 continue;
             }
 
             let expected_error = format!("{}", &d.result.as_ref().unwrap_err());
             let actual_error = result.unwrap_err().to_string();
+            println!("testing for {}", d.module_name);
             assert!(actual_error == expected_error, "{}", msg);
         }
     }

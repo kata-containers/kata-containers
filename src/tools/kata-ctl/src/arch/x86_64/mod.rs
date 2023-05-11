@@ -59,17 +59,29 @@ mod arch_specific {
     static MODULE_LIST: &[KernelModule] = &[
         KernelModule {
             name: "kvm",
-            parameter: KernelParam {
+            params: &[KernelParam {
                 name: "kvmclock_periodic_sync",
                 value: KernelParamType::Simple("Y"),
-            },
+            }],
         },
         KernelModule {
             name: "kvm_intel",
-            parameter: KernelParam {
+            params: &[KernelParam {
                 name: "unrestricted_guest",
                 value: KernelParamType::Predicate(unrestricted_guest_param_check),
-            },
+            }],
+        },
+        KernelModule {
+            name: "vhost",
+            params: &[],
+        },
+        KernelModule {
+            name: "vhost_net",
+            params: &[],
+        },
+        KernelModule {
+            name: "vhost_vsock",
+            params: &[],
         },
     ];
 
@@ -253,6 +265,38 @@ mod arch_specific {
         }
     }
 
+    fn check_kernel_params(kernel_module: &KernelModule) -> Result<()> {
+        const MODULES_PATH: &str = "/sys/module";
+
+        for param in kernel_module.params {
+            let module_param_path = format!(
+                "{}/{}/parameters/{}",
+                MODULES_PATH, kernel_module.name, param.name
+            );
+
+            // Here the currently loaded kernel parameter value
+            // is retrieved and returned on success
+            let param_value_host = std::fs::read_to_string(module_param_path)
+                .map(|val| val.replace('\n', ""))
+                .map_err(|_err| {
+                    anyhow!(
+                        "'{:}' kernel module parameter `{:}` not found.",
+                        kernel_module.name,
+                        param.name
+                    )
+                })?;
+
+            check_kernel_param(
+                kernel_module.name,
+                param.name,
+                &param_value_host,
+                param.value.clone(),
+            )
+            .map_err(|e| anyhow!(e.to_string()))?;
+        }
+        Ok(())
+    }
+
     fn check_kernel_param(
         module: &str,
         param_name: &str,
@@ -282,19 +326,12 @@ mod arch_specific {
         info!(sl!(), "check kernel modules for: x86_64");
 
         for module in MODULE_LIST {
-            let module_loaded =
-                check::check_kernel_module_loaded(module.name, module.parameter.name);
+            let module_loaded = check::check_kernel_module_loaded(module);
 
             match module_loaded {
-                Ok(param_value_host) => {
-                    let parameter_check = check_kernel_param(
-                        module.name,
-                        module.parameter.name,
-                        &param_value_host,
-                        module.parameter.value.clone(),
-                    );
-
-                    match parameter_check {
+                Ok(_) => {
+                    let check = check_kernel_params(module);
+                    match check {
                         Ok(_v) => info!(sl!(), "{} Ok", module.name),
                         Err(e) => return Err(e),
                     }
