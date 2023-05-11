@@ -81,14 +81,16 @@ options:
 	kernel
 	kernel-dragonball-experimental
 	kernel-experimental
-	kernel-tdx-experimental
-	kernel-sev-tarball
 	kernel-gpu
 	kernel-gpu-snp
 	kernel-gpu-tdx-experimental
+	kernel-sev-tarball
+	kernel-tdx-experimental
 	nydus
+	ovmf
 	ovmf-sev
 	qemu
+	qemu-snp-experimental
 	qemu-tdx-experimental
 	rootfs-image
 	rootfs-initrd
@@ -362,6 +364,17 @@ install_qemu_tdx_experimental() {
 		"${qemu_experimental_builder}"
 }
 
+install_qemu_snp_experimental() {
+	export qemu_suffix="snp-experimental"
+	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
+
+	install_qemu_helper \
+		"assets.hypervisor.qemu-${qemu_suffix}.url" \
+		"assets.hypervisor.qemu-${qemu_suffix}.tag" \
+		"qemu-${qemu_suffix}" \
+		"${qemu_experimental_builder}"
+}
+
 # Install static firecracker asset
 install_firecracker() {
 	install_cached_tarball_component \
@@ -466,7 +479,7 @@ install_shimv2() {
 
 install_ovmf() {
 	ovmf_type="${1:-x86_64}"
-	tarball_name="${2:-edk2.tar.xz}"
+	tarball_name="${2:-edk2-x86_64.tar.gz}"
 
 	local component_name="ovmf"
 	local component_version="$(get_from_kata_deps "externals.ovmf.${ovmf_type}.version")"
@@ -520,8 +533,10 @@ handle_build() {
 		install_kernel_dragonball_experimental
 		install_kernel_tdx_experimental
 		install_nydus
+		install_ovmf
 		install_ovmf_sev
 		install_qemu
+		install_qemu_snp_experimental
 		install_qemu_tdx_experimental
 		install_shimv2
 		install_tdvf
@@ -534,17 +549,9 @@ handle_build() {
 
 	kernel) install_kernel ;;
 
-	nydus) install_nydus ;;
-
 	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
 
 	kernel-experimental) install_kernel_experimental ;;
-
-	kernel-tdx-experimental) install_kernel_tdx_experimental ;;
-
-	kernel-sev) install_kernel_sev ;;
-
-	ovmf-sev) install_ovmf_sev ;;
 
 	kernel-gpu) install_kernel_gpu ;;
 
@@ -552,7 +559,19 @@ handle_build() {
 
 	kernel-gpu-tdx-experimental) install_kernel_gpu_tdx_experimental;;
 
+	kernel-tdx-experimental) install_kernel_tdx_experimental ;;
+
+	kernel-sev) install_kernel_sev ;;
+
+	nydus) install_nydus ;;
+
+	ovmf) install_ovmf ;;
+
+	ovmf-sev) install_ovmf_sev ;;
+
 	qemu) install_qemu ;;
+
+	qemu-snp-experimental) install_qemu_snp_experimental ;;
 
 	qemu-tdx-experimental) install_qemu_tdx_experimental ;;
 

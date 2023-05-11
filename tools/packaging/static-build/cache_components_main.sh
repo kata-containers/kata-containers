@@ -14,7 +14,7 @@ source "${script_dir}/../scripts/lib.sh"
 
 KERNEL_FLAVOUR="${KERNEL_FLAVOUR:-kernel}" # kernel | kernel-experimental | kernel-arm-experimental | kernel-dragonball-experimental | kernel-tdx-experimental
 OVMF_FLAVOUR="${OVMF_FLAVOUR:-x86_64}" # x86_64 | tdx
-QEMU_FLAVOUR="${QEMU_FLAVOUR:-qemu}" # qemu | qemu-tdx-experimental
+QEMU_FLAVOUR="${QEMU_FLAVOUR:-qemu}" # qemu | qemu-tdx-experimental | qemu-snp-experimental
 ROOTFS_IMAGE_TYPE="${ROOTFS_IMAGE_TYPE:-image}" # image | initrd
 
 cache_clh_artifacts() {
@@ -134,7 +134,7 @@ Usage: $0 "[options]"
 			  The default KERNEL_FLAVOUR value is "kernel"
 		-n	Nydus cache
 		-q 	QEMU cache
-			* Export QEMU_FLAVOUR="qemu | qemu-tdx-experimental" for a specific build
+			* Export QEMU_FLAVOUR="qemu | qemu-tdx-experimental | qemu-snp-experimental" for a specific build
 			  The default QEMU_FLAVOUR value is "qemu"
 		-r 	RootFS cache
 			* Export ROOTFS_IMAGE_TYPE="image|initrd" for one of those two types
