@@ -33,8 +33,21 @@ cache_kernel_artifacts() {
 	local kernel_tarball_name="kata-static-${KERNEL_FLAVOUR}.tar.xz"
 	local current_kernel_image="$(get_kernel_image_name)"
 	local current_kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
-	local current_kernel_version="$(get_from_kata_deps "assets.${KERNEL_FLAVOUR}.version")-${current_kernel_kata_config_version}"
-	create_cache_asset "${kernel_tarball_name}" "${current_kernel_version}" "${current_kernel_image}"
+	local current_kernel_version="$(get_from_kata_deps "assets.${KERNEL_FLAVOUR}.version")"
+	local kernel_modules_tarball_path="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kata-static-kernel-sev-modules.tar.xz"
+
+	if [[ "${KERNEL_FLAVOUR}" == "kernel-sev" ]]; then
+		current_kernel_version="$(get_from_kata_deps "assets.kernel.sev.version")"
+	fi
+
+	create_cache_asset "${kernel_tarball_name}" "${current_kernel_version}-${current_kernel_kata_config_version}" "${current_kernel_image}"
+	if [[ "${KERNEL_FLAVOUR}" == "kernel-sev" ]]; then
+		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kernel-sev/builddir/kata-linux-${current_kernel_version#v}-${current_kernel_kata_config_version}/lib/modules/${current_kernel_version#v}"
+		if [ ! -f "${kernel_modules_tarball_path}" ]; then
+			tar cvfJ "${kernel_modules_tarball_path}" "${module_dir}/kernel/drivers/virt/coco/efi_secret/"
+		fi
+		create_cache_asset "kata-static-kernel-sev-modules.tar.xz" "${current_kernel_version}-${current_kernel_kata_config_version}" "${current_kernel_image}"
+	fi
 }
 
 cache_nydus_artifacts() {
@@ -46,6 +59,7 @@ cache_nydus_artifacts() {
 cache_ovmf_artifacts() {
 	local current_ovmf_version="$(get_from_kata_deps "externals.ovmf.${OVMF_FLAVOUR}.version")"
 	[ "${OVMF_FLAVOUR}" == "tdx" ] && OVMF_FLAVOUR="tdvf"
+	[ "${OVMF_FLAVOUR}" == "sev" ] && OVMF_FLAVOUR="ovmf-sev"
 	local ovmf_tarball_name="kata-static-${OVMF_FLAVOUR}.tar.xz"
 	local current_ovmf_image="$(get_ovmf_image_name)"
 	create_cache_asset "${ovmf_tarball_name}" "${current_ovmf_version}" "${current_ovmf_image}"
