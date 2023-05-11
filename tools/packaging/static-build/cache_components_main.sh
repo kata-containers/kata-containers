@@ -33,7 +33,6 @@ cache_kernel_artifacts() {
 	local kernel_tarball_name="kata-static-${KERNEL_FLAVOUR}.tar.xz"
 	local current_kernel_image="$(get_kernel_image_name)"
 	local current_kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
-	local current_kernel_version="$(get_from_kata_deps "assets.${KERNEL_FLAVOUR}.version")"
 	local kernel_modules_tarball_path="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kata-static-kernel-sev-modules.tar.xz"
 
 	# The ${vendor}-gpu kernels are based on an already existing entry, and does not require
@@ -49,6 +48,7 @@ cache_kernel_artifacts() {
 			;;
 	esac
 
+	local current_kernel_version="$(get_from_kata_deps "assets.${KERNEL_FLAVOUR}.version")"
 	if [[ "${KERNEL_FLAVOUR}" == "kernel-sev" ]]; then
 		current_kernel_version="$(get_from_kata_deps "assets.kernel.sev.version")"
 	fi
