@@ -22,9 +22,9 @@ jobs:
           - kernel-sev
           - kernel-dragonball-experimental
           - kernel-tdx-experimental
-          - kernel-gpu
-          - kernel-gpu-snp
-          - kernel-gpu-tdx-experimental
+          - kernel-nvidia-gpu
+          - kernel-nvidia-gpu-snp
+          - kernel-nvidia-gpu-tdx-experimental
           - nydus
           - ovmf
           - ovmf-sev
