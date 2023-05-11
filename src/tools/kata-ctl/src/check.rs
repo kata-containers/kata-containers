@@ -5,7 +5,9 @@
 
 // Contains checks that are not architecture-specific
 
+#[cfg(any(target_arch = "x86_64"))]
 use crate::types::KernelModule;
+
 use anyhow::{anyhow, Result};
 use nix::fcntl::{open, OFlag};
 use nix::sys::stat::Mode;
@@ -393,6 +395,7 @@ pub fn check_kernel_module_loaded(kernel_module: &KernelModule) -> Result<(), St
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(any(target_arch = "x86_64"))]
     use crate::types::{KernelModule, KernelParam, KernelParamType};
     use semver::Version;
     use slog::warn;

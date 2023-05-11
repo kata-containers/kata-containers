@@ -343,6 +343,23 @@ mod arch_specific {
         }
         Ok(())
     }
+
+    pub fn host_is_vmcontainer_capable() -> Result<bool> {
+        let mut count = 0;
+        if check_cpu("check_cpu").is_err() {
+            count += 1;
+        };
+
+        if check_kernel_modules("check_modules").is_err() {
+            count += 1;
+        };
+
+        if count == 0 {
+            return Ok(true);
+        };
+
+        Err(anyhow!("System is not capable of running a VM"))
+    }
 }
 
 #[cfg(target_arch = "x86_64")]
