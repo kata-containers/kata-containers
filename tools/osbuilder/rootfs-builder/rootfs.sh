@@ -663,9 +663,16 @@ setup_nvidia_gpu_rootfs()
 	
 	# We need the kernel packages for building the drivers cleanly will be
 	# deinstalled and removed from the roofs once the build finishes. 
-	cp ${BUILDDIR}/kernel-gpu/builddir/linux-*.deb ./root/.
-	cp ${BUILDDIR}/kernel-gpu-snp/builddir/linux-*.deb ./root/.
-#	cp ${BUILDDIR}/kernel-gpu-tdx-experimental/builddir/linux-*.deb ./root/.
+	# Depending on the architecture copy the right kenrel-headers
+	if [ "${ARCH}" == "x86_64" ]; then
+		cp ${BUILDDIR}/kernel-gpu/builddir/linux-*.deb ./root/.
+		cp ${BUILDDIR}/kernel-gpu-snp/builddir/linux-*.deb ./root/.
+		cp ${BUILDDIR}/kernel-gpu-tdx-experimental/builddir/linux-*.deb ./root/.
+	elif [ "${ARCH}" == "aarch64" ]; then
+		cp ${BUILDDIR}/kernel-gpu/builddir/linux-*.deb ./root/.
+	else
+		die "Unsupported architecture=${ARCH} for NVIDIA GPU"
+	fi
 
 	# If we find a local downloaded run file build the kernel modules
 	# with it, otherwise use the distribution packages. Run files may have 
@@ -680,7 +687,7 @@ setup_nvidia_gpu_rootfs()
 	mount -t proc /proc ./proc
 
 	local uname_r=$(uname -r)
-        chroot . /bin/bash -c "/root/chroot.sh ${uname_r} ${run_file_name}"
+        chroot . /bin/bash -c "/root/chroot.sh ${uname_r} ${run_file_name} ${ARCH}"
 
 	umount -R ./dev
 	umount ./proc

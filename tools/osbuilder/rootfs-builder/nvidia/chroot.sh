@@ -6,6 +6,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 export uname_r=$1
 export run_file_name=$2
+export arch_target=$3
 export driver_source=""
 export driver_version=""
 
@@ -66,6 +67,11 @@ function build_nvidia_drivers() {
 	for linux_headers in $(ls /lib/modules/); do
 	        echo "chroot: Building GPU modules for: ${linux_headers}"
 		cp /boot/System.map-${linux_headers} /lib/modules/${linux_headers}/build/System.map
+
+		if [ ${arch_target} == "aarch64" ]; then
+			ln -sf /lib/modules/${linux_headers}/build/arch/arm64 /lib/modules/${linux_headers}/build/arch/aarch64
+		fi 
+
 	        make CC=gcc SYSSRC=/lib/modules/${linux_headers}/build > /dev/null
 	        make CC=gcc SYSSRC=/lib/modules/${linux_headers}/build modules_install
 	        make CC=gcc SYSSRC=/lib/modules/${linux_headers}/build clean > /dev/null
@@ -100,9 +106,10 @@ function setup_apt_repositories() {
 	touch /var/lib/dpkg/status
 	rm -f /etc/apt/sources.list.d/*
 	cat <<-'CHROOT_EOF' > /etc/apt/sources.list.d/jammy.list
-		deb http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse
-		deb http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse
-		deb http://archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse
+		deb http://ports.ubuntu.com/ubuntu-ports/ jammy main restricted universe multiverse
+		deb http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main restricted universe multiverse
+		deb http://ports.ubuntu.com/ubuntu-ports/ jammy-security main restricted universe multiverse
+		deb http://ports.ubuntu.com/ubuntu-ports/ jammy-backports main restricted universe multiverse
 	CHROOT_EOF
 	
 	apt update 
