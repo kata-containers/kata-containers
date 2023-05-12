@@ -436,6 +436,8 @@ install_virtiofsd() {
 
 # Install static nydus asset
 install_nydus() {
+	[ "${ARCH}" == "aarch64" ] && ARCH=arm64
+
 	install_cached_tarball_component \
 		"nydus" \
 		"${jenkins_url}/job/kata-containers-main-nydus-$(uname -m)/${cached_artifacts_path}" \
