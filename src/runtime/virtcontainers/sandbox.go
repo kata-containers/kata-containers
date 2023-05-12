@@ -630,18 +630,23 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 				sandboxConfig.Containers[cnt].DeviceInfos[dev].Port = sandboxConfig.HypervisorConfig.HotPlugVFIO
 			}
 			if coldPlugVFIO && isVFIO {
-				s.Logger().Info("### coldplug and vfio ", device, "coldplug ", sandboxConfig.HypervisorConfig.ColdPlugVFIO)
 				device.ColdPlug = true
 				device.Port = sandboxConfig.HypervisorConfig.ColdPlugVFIO
 				vfioDevices = append(vfioDevices, device)
 				// We need to remove the devices marked for cold-plug
 				// otherwise at the container level the kata-agent
 				// will try to hot-plug them.
-				infos := sandboxConfig.Containers[cnt].DeviceInfos
-				infos = append(infos[:dev], infos[dev+1:]...)
-				sandboxConfig.Containers[cnt].DeviceInfos = infos
+				sandboxConfig.Containers[cnt].DeviceInfos[dev].ID = "remove-we-are-cold-plugging"
 			}
 		}
+		var filteredDevices []config.DeviceInfo
+		for _, device := range containers.DeviceInfos {
+			if device.ID != "remove-we-are-cold-plugging" {
+				filteredDevices = append(filteredDevices, device)
+			}
+		}
+		sandboxConfig.Containers[cnt].DeviceInfos = filteredDevices
+
 	}
 	sandboxConfig.HypervisorConfig.VFIODevices = vfioDevices
 

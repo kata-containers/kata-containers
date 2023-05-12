@@ -701,7 +701,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		}
 	}
 
-	if machine.Type == QemuQ35 {
+	if machine.Type == QemuQ35 || machine.Type == QemuVirt {
 		if err := q.createPCIeTopology(&qemuConfig, hypervisorConfig); err != nil {
 			q.Logger().WithError(err).Errorf("Cannot create PCIe topology")
 			return err
@@ -747,7 +747,6 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		return nil
 	}
 
-	q.Logger().Info("### PCIe Topology ###")
 	// Add PCIe Root Port or PCIe Switches to the hypervisor
 	// The pcie.0 bus do not support hot-plug, but PCIe device can be hot-plugged
 	// into a PCIe Root Port or PCIe Switch.
@@ -780,16 +779,12 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		if err != nil {
 			return fmt.Errorf("Cannot get all VFIO devices from IOMMU group with device: %v err: %v", dev, err)
 		}
-		q.Logger().Info("### PCIe Topology devices ", devicesPerIOMMUGroup)
 		for _, vfioDevice := range devicesPerIOMMUGroup {
-			q.Logger().Info("### PCIe Topology vfioDevice ", vfioDevice)
 			if drivers.IsPCIeDevice(vfioDevice.BDF) {
 				numOfPluggablePorts = numOfPluggablePorts + 1
 			}
 		}
 	}
-	q.Logger().Info("### PCIe Topology numOfPluggablePorts ", numOfPluggablePorts)
-
 	// If number of PCIe root ports > 16 then bail out otherwise we may
 	// use up all slots or IO memory on the root bus and vfio-XXX-pci devices
 	// cannot be added which are crucial for Kata max slots on root bus is 32
@@ -798,7 +793,7 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		return fmt.Errorf("Number of PCIe Root Ports exceeed allowed max of %d", maxPCIeRootPort)
 	}
 	if numOfPluggablePorts > maxPCIeSwitchPort {
-		return fmt.Errorf("Number of PCIe Switch Ports exceeed allowed max of %d", maxPCIeRootPort)
+		return fmt.Errorf("Number of PCIe Switch Ports exceeed allowed max of %d", maxPCIeSwitchPort)
 	}
 
 	if q.state.HotPlugVFIO == config.RootPort || q.state.ColdPlugVFIO == config.RootPort || q.state.HotplugVFIOOnRootBus {
@@ -1757,6 +1752,8 @@ func (q *qemu) qomGetPciPath(qemuID string) (types.PciPath, error) {
 	}
 	slots = append(slots, devSlot)
 
+	r, _ := regexp.Compile(`^/machine/.*/pcie.0`)
+
 	var parentPath = qemuID
 	// We do not want to use a forever loop here, a deeper PCIe topology
 	// than 5 is already not advisable just for the sake of having enough
@@ -1775,7 +1772,7 @@ func (q *qemu) qomGetPciPath(qemuID string) (types.PciPath, error) {
 
 		// If we hit /machine/q35/pcie.0 we're done this is the root bus
 		// we climbed the complete hierarchy
-		if strings.Contains(busQOM, "/machine/q35/pcie.0") {
+		if r.Match([]byte(busQOM)) {
 			break
 		}
 
@@ -1863,7 +1860,7 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 		}).Info("Start hot-plug VFIO device")
 		// In case MachineType is q35, a PCIe device is hotplugged on
 		// a PCIe Root Port or alternatively on a PCIe Switch Port
-		if q.HypervisorConfig().HypervisorMachineType != QemuQ35 {
+		if q.HypervisorConfig().HypervisorMachineType != QemuQ35 && q.HypervisorConfig().HypervisorMachineType != QemuVirt {
 			device.Bus = ""
 		} else {
 			var err error
@@ -2636,9 +2633,9 @@ func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machin
 // genericAppendPCIeSwitch adds a PCIe Swtich
 func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, number uint32, machineType string, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
 
-	// Q35 has the correct PCIe support,
+	// Q35, Virt have the correct PCIe support,
 	// hence ignore all other machines
-	if machineType != QemuQ35 {
+	if machineType != QemuQ35 && machineType != QemuVirt {
 		return devices
 	}
 
