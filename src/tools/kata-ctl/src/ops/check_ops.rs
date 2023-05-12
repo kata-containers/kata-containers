@@ -5,7 +5,7 @@
 
 use crate::arch::arch_specific::get_checks;
 
-use crate::args::{CheckArgument, CheckSubCommand, IptablesCommand, MetricsCommand};
+use crate::args::{CheckArgument, CheckSubCommand, MetricsCommand};//IptablesCommand
 
 use crate::check;
 
@@ -111,10 +111,6 @@ pub fn handle_check(checkcmd: CheckArgument) -> Result<()> {
 }
 
 pub fn handle_factory() -> Result<()> {
-    Ok(())
-}
-
-pub fn handle_iptables(_args: IptablesCommand) -> Result<()> {
     Ok(())
 }
 
