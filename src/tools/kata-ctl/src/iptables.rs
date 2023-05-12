@@ -4,7 +4,7 @@
 //
 
 use std::{fs};
-use anyhow::{Result, Context};//Context
+use anyhow::{Result, Context};
 use shim_interface::shim_mgmt::client::MgmtClient;
 use crate::args::{IptablesCommand, IpTablesArguments};
 use thiserror::Error;
@@ -18,19 +18,6 @@ const DEFAULT_TIMEOUT: u64 = 30;
 pub enum Error{
     #[error("Invalid Container ID {0}")]
     InvalidContainerID(String),
-}
-
-pub fn verify_id(id:&str) -> Result<(), Error>{
-    let mut chars = id.chars();
-
-    let valid = matches!(chars.next(), Some(first) if first.is_alphanumeric()
-    &&id.len() >1
-    && chars.all(|c| c.is_alphanumeric() || ['.', '-', '_'].contains(&c)));
-
-    match valid {
-        true => Ok(()),
-        false => Err(Error::InvalidContainerID(id.to_string())),
-    }
 }
 
 fn mk_ip_tables_socket_path(sandbox_id: &str, ipv6: bool) -> Result<String, fmt::Error> {
@@ -50,15 +37,12 @@ pub async fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error>
     //checking for subcommand entered form user 
     match args.subcommand() {//.subcommand()
         IpTablesArguments::Get{sandbox_id, v6} =>{
-            // retrieve the sandbox ID from the command line arguments
-            let sandbox_id = sandbox_id;//get_matches.value_of("sandbox-id")?;
+            let sandbox_id = sandbox_id;
 
-            let is_ipv6 = v6;//v6;get_matches.is_present("v6");
+            let is_ipv6 = v6;
            
-            verify_id(sandbox_id)?;
             // generate the appropriate URL for the iptables request to connect Kata to agent within guest
 	    let url = mk_ip_tables_socket_path(sandbox_id, *is_ipv6);
-            // create a new management client for the specified sandbox ID
             let timeout = Duration::from_secs(DEFAULT_TIMEOUT);
             let shim_client = MgmtClient::new(sandbox_id, Some(timeout))?;
             
@@ -71,11 +55,9 @@ pub async fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error>
         }
         IpTablesArguments::Set {sandbox_id, v6, file} => {
             // Extract sandbox ID and IPv6 flag from command-line arguments
-            let sandbox_id = sandbox_id;//set_matches.value_of("sandbox-id")?;
-            let is_ipv6 = v6;//set_matches.is_present("v6");
-            let iptables_file = file;//set_matches.value_of("file")?;
-            
-            verify_id(sandbox_id)?;
+            let sandbox_id = sandbox_id;
+            let is_ipv6 = v6;
+            let iptables_file = file;
         
             // Read the contents of the specified iptables file into a buffer
             let buf = fs::read(iptables_file).map_err(|err| anyhow::Error::msg(format!("iptables file not provided: {}", err)))?;
@@ -107,28 +89,6 @@ pub async fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error>
     }
 }
 
-//unit tests 
-#[test]
-fn test_verify_id(){
-    assert!(verify_id("aasdf").is_ok());
-    assert!(verify_id("aas-df").is_ok());
-    assert!(verify_id("ABC.asdf02").is_ok());
-    assert!(verify_id("a123af_01").is_ok());
-    assert!(verify_id("123_ABC.def-456").is_ok());
-}
-
-#[test]
-fn test_invalid_verify_id(){
-    //invalid
-    assert!(verify_id("").is_err());
-    assert!(verify_id("#invalid").is_err());
-    assert!(verify_id("a").is_err());
-    assert!(verify_id("a**dd").is_err());
-    assert!(verify_id("%invalid/id").is_err());
-    assert!(verify_id("add-").is_err());
-    assert!(verify_id("a<bb").is_err());
-    assert!(verify_id("ad?blocker").is_err());
-}
 #[test]
 fn test_handle_iptables_get_valid() {
     let args = IptablesCommand {
@@ -173,7 +133,7 @@ fn test_handle_iptables_set_invalid() {
     assert!(handle_iptables(args).is_err());
 }
 
-//get and set invalid sandbox id
+
 #[test]
 fn test_handle_iptables_get_invalid_sandboxid() {
     let args = IptablesCommand{
@@ -196,14 +156,13 @@ fn test_handle_iptables_set_invalid_sandboxid() {
     assert!(handle_iptables(args).is_err());
 }
 
-//check for invalid file
+
 #[test]
 fn test_invalid_iptables_file(){
     let iptables_text = "check iptables";
     let iptables_File = tempfile::NamedTempFile::new()?;
     fs::write(iptables_file.path(), iptables_text)?;
 
-    //Call set subcommand in handle_iptables
     let args = IptablesCommand::from_iter_safe(&[
         "iptables",
         "set",
@@ -214,7 +173,6 @@ fn test_invalid_iptables_file(){
     ])?;
     assert!(handle_iptables(args).is_ok());
 
-    //Call get subcommand in handle_iptables
     let args = IptablesCommand::from_iter_safe(&[
         "iptables",
         "get",
@@ -225,6 +183,7 @@ fn test_invalid_iptables_file(){
     ])?;
     assert!(handle_iptables(args).is_ok());
 }
+
 #[test]
 fn test_mk_ip_tables_socket_path_valid() {
     let sandbox_id = "sandbox1";
