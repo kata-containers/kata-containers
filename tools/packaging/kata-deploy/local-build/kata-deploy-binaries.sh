@@ -377,10 +377,12 @@ install_qemu_snp_experimental() {
 
 # Install static firecracker asset
 install_firecracker() {
+	local firecracker_version=$(get_from_kata_deps "assets.hypervisor.firecracker.version")
+
 	install_cached_tarball_component \
 		"firecracker" \
 		"${jenkins_url}/job/kata-containers-main-firecracker-$(uname -m)/${cached_artifacts_path}" \
-		"$(get_from_kata_deps "assets.hypervisor.firecracker.version")" \
+		"${firecracker_version}" \
 		"" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
@@ -390,8 +392,8 @@ install_firecracker() {
 	"${firecracker_builder}"
 	info "Install static firecracker"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode 0744 firecracker/firecracker-static "${destdir}/opt/kata/bin/firecracker"
-	sudo install -D --owner root --group root --mode 0744 firecracker/jailer-static "${destdir}/opt/kata/bin/jailer"
+	sudo install -D --owner root --group root --mode 0744 release-${firecracker_version}-${ARCH}/firecracker-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/firecracker"
+	sudo install -D --owner root --group root --mode 0744 release-${firecracker_version}-${ARCH}/jailer-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/jailer"
 }
 
 # Install static cloud-hypervisor asset
