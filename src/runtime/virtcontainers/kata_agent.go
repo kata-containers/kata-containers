@@ -21,6 +21,7 @@ import (
 	"github.com/docker/go-units"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
@@ -1152,7 +1153,9 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 			kataDevice.Type = kataVfioApDevType
 			kataDevice.Options = dev.APDevices
 		} else {
-			kataDevice.Options[i] = fmt.Sprintf("0000:%s=%s", dev.BDF, dev.GuestPciPath)
+
+			devBDF := drivers.GetBDF(dev.BDF)
+			kataDevice.Options[i] = fmt.Sprintf("0000:%s=%s", devBDF, dev.GuestPciPath)
 		}
 
 	}

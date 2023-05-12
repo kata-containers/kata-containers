@@ -214,14 +214,18 @@ func GetVFIODetails(deviceFileName, iommuDevicesPath string) (deviceBDF, deviceS
 	switch vfioDeviceType {
 	case config.VFIOPCIDeviceNormalType:
 		// Get bdf of device eg. 0000:00:1c.0
-		deviceBDF = getBDF(deviceFileName)
+		//deviceBDF = getBDF(deviceFileName)
+		// The old implementation did not consider the case where
+		// vfio devices are located on differente root busses. The
+		// kata-agent will handle the case now, here use the full PCI addr
+		deviceBDF = deviceFileName
 		// Get sysfs path used by cloud-hypervisor
 		deviceSysfsDev = filepath.Join(config.SysBusPciDevicesPath, deviceFileName)
 	case config.VFIOPCIDeviceMediatedType:
 		// Get sysfsdev of device eg. /sys/devices/pci0000:00/0000:00:02.0/f79944e4-5a3d-11e8-99ce-479cbab002e4
 		sysfsDevStr := filepath.Join(iommuDevicesPath, deviceFileName)
 		deviceSysfsDev, err = GetSysfsDev(sysfsDevStr)
-		deviceBDF = getBDF(getMediatedBDF(deviceSysfsDev))
+		deviceBDF = GetBDF(getMediatedBDF(deviceSysfsDev))
 	case config.VFIOAPDeviceMediatedType:
 		sysfsDevStr := filepath.Join(iommuDevicesPath, deviceFileName)
 		deviceSysfsDev, err = GetSysfsDev(sysfsDevStr)
@@ -244,7 +248,7 @@ func getMediatedBDF(deviceSysfsDev string) string {
 
 // getBDF returns the BDF of pci device
 // Expected input string format is [<domain>]:[<bus>][<slot>].[<func>] eg. 0000:02:10.0
-func getBDF(deviceSysStr string) string {
+func GetBDF(deviceSysStr string) string {
 	tokens := strings.SplitN(deviceSysStr, ":", 2)
 	if len(tokens) == 1 {
 		return ""
