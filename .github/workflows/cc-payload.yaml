@@ -31,7 +31,14 @@ jobs:
           username: ${{ secrets.COCO_QUAY_DEPLOYER_USERNAME }}
           password: ${{ secrets.COCO_QUAY_DEPLOYER_PASSWORD }}
 
-      - name: Push multi-arch manifest
+      - name: Push commit multi-arch manifest
+        run: |
+          docker manifest create quay.io/confidential-containers/runtime-payload:kata-containers-${GITHUB_SHA} \
+          --amend quay.io/confidential-containers/runtime-payload:kata-containers-${GITHUB_SHA}-amd64 \
+          --amend quay.io/confidential-containers/runtime-payload:kata-containers-${GITHUB_SHA}-s390x
+          docker manifest push quay.io/confidential-containers/runtime-payload:kata-containers-${GITHUB_SHA}
+
+      - name: Push latest multi-arch manifest
         run: |
           docker manifest create quay.io/confidential-containers/runtime-payload:kata-containers-latest \
           --amend quay.io/confidential-containers/runtime-payload:kata-containers-amd64 \
