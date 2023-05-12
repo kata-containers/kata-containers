@@ -42,14 +42,14 @@ pub async fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error>
             let is_ipv6 = v6;
            
             // generate the appropriate URL for the iptables request to connect Kata to agent within guest
-	    let url = mk_ip_tables_socket_path(sandbox_id, *is_ipv6);
+	        let url = mk_ip_tables_socket_path(sandbox_id, *is_ipv6);
             let timeout = Duration::from_secs(DEFAULT_TIMEOUT);
             let shim_client = MgmtClient::new(sandbox_id, Some(timeout))?;
             
             // make the GET request to retrieve the iptables
             let mut response = shim_client.get(url?.as_str()).await?;
             let body_bytes = hyper::body::to_bytes(response.body_mut()).await?;
-	    let _body_str = std::str::from_utf8(&body_bytes)?;
+	        let _body_str = std::str::from_utf8(&body_bytes)?;
             // Return an `Ok` value indicating success.
             Ok(())
         }
@@ -66,10 +66,10 @@ pub async fn handle_iptables(args: IptablesCommand) -> Result<(), anyhow::Error>
             let _content_type = "application/octet-stream";
         
             // Determine the URL for the management API endpoint based on the IPv6 flag
-	    let url = mk_ip_tables_socket_path(sandbox_id, *is_ipv6);
+	        let url = mk_ip_tables_socket_path(sandbox_id, *is_ipv6);
 
             // Create a new management client for the specified sandbox ID
-	    let timeout = Duration::from_secs(DEFAULT_TIMEOUT);
+	        let timeout = Duration::from_secs(DEFAULT_TIMEOUT);
             let shim_client = MgmtClient::new(sandbox_id, Some(timeout)).context("error creating management client")?;
  
             // Send a PUT request to set the iptables rules
