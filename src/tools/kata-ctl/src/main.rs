@@ -10,7 +10,7 @@ mod ops;
 mod types;
 mod utils;
 
-use anyhow::Result;
+use anyhow::{Result, Ok};
 use clap::Parser;
 use std::process::exit;
 
@@ -29,6 +29,14 @@ extern crate lazy_static;
 fn real_main() -> Result<()> {
     let args = KataCtlCli::parse();
 
+    _ = match args.timeout {
+        Some(i) => handle_timeout(i),
+        None => {
+            println!("Use default timeout value: 1 second");
+            Ok(())
+        },
+    };
+
     match args.command {
         Commands::Check(args) => handle_check(args),
         Commands::DirectVolume(args) => handle_direct_volume(args),
@@ -38,7 +46,6 @@ fn real_main() -> Result<()> {
         Commands::Iptables(args) => handle_iptables(args),
         Commands::Metrics(args) => handle_metrics(args),
         Commands::Version => handle_version(),
-        Commands::Timeout(args) => handle_timeout(args)
     }
 }
 

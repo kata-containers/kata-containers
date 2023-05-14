@@ -12,6 +12,10 @@ use thiserror::Error;
 pub struct KataCtlCli {
     #[clap(subcommand)]
     pub command: Commands,
+    /// Set timeout value (seconds)
+    /// default value: 1 second
+    #[arg(short = 't', long = "timeout")]
+    pub timeout: Option<u64>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -39,9 +43,6 @@ pub enum Commands {
 
     /// Display version details
     Version,
-
-    /// Set Timeout value
-    Timeout(TimeoutArguments),
 }
 
 #[derive(Debug, Args, Error)]
@@ -156,9 +157,4 @@ pub struct ExecArguments {
     #[clap(short = 'p', long = "kata-debug-port", default_value_t = 1026)]
     /// kata debug console vport same as configuration, default is 1026.
     pub vport: u32,
-}
-
-#[derive(Debug, Args)]
-pub struct TimeoutArguments {
-    pub timeout: u64,
 }

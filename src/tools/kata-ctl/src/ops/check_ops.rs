@@ -5,9 +5,7 @@
 
 use crate::arch::arch_specific::get_checks;
 
-use crate::args::{
-    CheckArgument, CheckSubCommand, IptablesCommand, MetricsCommand, TimeoutArguments,
-};
+use crate::args::{CheckArgument, CheckSubCommand, IptablesCommand, MetricsCommand};
 
 use crate::check;
 
@@ -134,8 +132,8 @@ pub fn handle_version() -> Result<()> {
     Ok(())
 }
 
-pub fn handle_timeout(args: TimeoutArguments) -> Result<()> {
-    *KATA_TIMEOUT_SECS.lock().unwrap() = args.timeout;
+pub fn handle_timeout(timeout: u64) -> Result<()> {
+    *KATA_TIMEOUT_SECS.lock().unwrap() = timeout;
 
     Ok(())
 }
