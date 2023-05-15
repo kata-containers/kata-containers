@@ -15,6 +15,8 @@ kata_dir=$(realpath "${script_dir}/../../../../")
 kata_deploy_create="${script_dir}/kata-deploy-binaries.sh"
 uid=$(id -u ${USER})
 gid=$(id -g ${USER})
+http_proxy="${http_proxy:-}"
+https_proxy="${https_proxy:-}"
 
 if [ "${script_dir}" != "${PWD}" ]; then
 	ln -sf "${script_dir}/build" "${PWD}/build"
@@ -41,6 +43,8 @@ docker build -q -t build-kata-deploy \
 	--build-arg IMG_USER="${USER}" \
 	--build-arg UID=${uid} \
 	--build-arg GID=${gid} \
+	--build-arg http_proxy="${http_proxy}" \
+	--build-arg https_proxy="${https_proxy}" \
 	--build-arg HOST_DOCKER_GID=${docker_gid} \
 	"${script_dir}/dockerbuild/"
 
