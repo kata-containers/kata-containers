@@ -39,3 +39,7 @@ tokio = {version = "1.0", features = ["full"]}
 
 # OCI container specs.
 oci = { path = "../../libs/oci" }
+
+# dm-verity root hash support
+tarindex = { path = "../../tardev-snapshotter/tarindex" }
+tempfile = "3.5.0"
