@@ -97,6 +97,7 @@ function setup_apt_repositories() {
 	mkdir -p /var/lib/dpkg
 	mkdir -p /var/cache/apt/archives/partial
 	mkdir -p /var/log/apt
+	mkdir -p /var/lib/dpkg/updates
 	touch /var/lib/dpkg/status
 	rm -f /etc/apt/sources.list.d/*
 	cat <<-'CHROOT_EOF' > /etc/apt/sources.list.d/jammy.list
