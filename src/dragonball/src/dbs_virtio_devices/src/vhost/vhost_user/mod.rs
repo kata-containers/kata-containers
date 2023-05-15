@@ -3,6 +3,8 @@
 
 //! Vhost-based virtio device backend implementations.
 
+#[cfg(feature = "vhost-user-blk")]
+pub mod block;
 pub mod connection;
 #[cfg(feature = "vhost-user-fs")]
 pub mod fs;
