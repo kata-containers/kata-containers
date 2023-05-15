@@ -9,11 +9,13 @@
 use crate::policy;
 
 use anyhow::Result;
-use log::{info, LevelFilter};
+use log::{debug, info, LevelFilter};
 use oci_distribution::client::{linux_amd64_resolver, ClientConfig};
-use oci_distribution::{secrets::RegistryAuth, Client, Reference};
+use oci_distribution::{manifest, secrets::RegistryAuth, Client, Reference};
 use serde::{Deserialize, Serialize};
 use std::io;
+use tokio::fs;
+use tokio::io::AsyncWriteExt;
 
 pub struct Container {
     config_layer: DockerConfigLayer,
@@ -67,9 +69,15 @@ impl Container {
             let mut deserializer = serde_json::Deserializer::from_str(&config_layer);
             let mut serializer = serde_json::Serializer::pretty(io::stderr());
             serde_transcode::transcode(&mut deserializer, &mut serializer).unwrap();
+            println!("");
         }
 
-        Ok(Container { config_layer: serde_json::from_str(&config_layer)?})
+        let config_layer_data = serde_json::from_str(&config_layer)?;
+        test_image_layers(&mut client, &reference, &manifest).await?;
+
+        Ok(Container {
+            config_layer: config_layer_data,
+        })
     }
 
     // Convert Docker image config to policy data.
@@ -161,4 +169,32 @@ impl Container {
     pub fn get_rootfs(&self) -> DockerRootfs {
         self.config_layer.rootfs.clone()
     }
+}
+
+async fn test_image_layers(
+    client: &mut Client,
+    reference: &Reference,
+    manifest: &manifest::OciImageManifest,
+) -> Result<()> {
+    let mut count = 0;
+
+    for layer in &manifest.layers {
+        if layer.media_type.eq(manifest::IMAGE_DOCKER_LAYER_GZIP_MEDIA_TYPE) {
+            let file_path = "/tmp/layer".to_string() + &count.to_string() + ".tar.gz";
+            let mut file = tokio::fs::File::create(&file_path).await?;
+            info!("Downloading layer {:?} to {:?}", &layer.digest, &file_path);
+
+            if let Err(err) = client.pull_blob(&reference, &layer.digest, &mut file).await {
+                drop(file);
+                debug!("Download failed: {:?}", err);
+                let _ = fs::remove_file(&file_path);
+            } else {
+                file.flush().await.unwrap();
+            }
+
+            count += 1;
+        }
+    }
+
+    Ok(())
 }
