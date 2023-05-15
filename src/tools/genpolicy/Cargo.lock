@@ -1280,6 +1280,7 @@ dependencies = [
 [[package]]
 name = "tarindex"
 version = "0.1.0"
+source = "git+https://github.com/microsoft/kata-containers?branch=wedsonaf/tardev-rebased#22666aa60814fbe70e510ce1e729e99e5e307fce"
 dependencies = [
  "tar",
  "zerocopy",
