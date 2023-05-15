@@ -31,16 +31,21 @@ setup() {
         # Create pod
         kubectl create -f "${pod_config_dir}/pod-caps.yaml"
         # Check pod creation
+        echo "FIDENCIO | creating pod"
         kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	echo "FIDENCIO | pod is created"
+	kubectl get pods -A
 
         # Verify expected capabilities for the running container. Add retry to ensure
         # that the container had time to execute:
         wait_time=5
         sleep_time=1
         cmd="kubectl logs $pod_name | grep -q $expected"
+	echo "FIDENCIO | getting logs"
         waitForProcess "$wait_time" "$sleep_time" "$cmd"
 
         # Verify expected capabilities from exec context:
+        echo "FIDENCIO | execing into the pod"
         kubectl exec "$pod_name" -- sh -c "cat /proc/self/status" | grep -q "$expected"
 }
 
