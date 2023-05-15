@@ -7,6 +7,7 @@
 set -o errexit
 set -o pipefail
 set -o nounset
+set -x
 
 crio_drop_in_conf_dir="/etc/crio/crio.conf.d/"
 crio_drop_in_conf_file="${crio_drop_in_conf_dir}/99-kata-deploy"
