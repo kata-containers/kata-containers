@@ -156,7 +156,7 @@ func IsCgroupV1() (bool, error) {
 func SetThreadAffinity(threadID int, cpuSetSlice []int) error {
 	unixCPUSet := unix.CPUSet{}
 
-	for cpuId := range cpuSetSlice {
+	for _, cpuId := range cpuSetSlice {
 		unixCPUSet.Set(cpuId)
 	}
 
