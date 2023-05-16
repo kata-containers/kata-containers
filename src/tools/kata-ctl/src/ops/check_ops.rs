@@ -13,12 +13,6 @@ use crate::ops::version;
 
 use crate::types::*;
 
-use std::sync::Mutex;
-
-lazy_static! {
-    pub static ref KATA_TIMEOUT_SECS: Mutex<u64> = Mutex::new(1);
-}
-
 use anyhow::{anyhow, Result};
 
 const NAME: &str = "kata-ctl";
@@ -129,11 +123,5 @@ pub fn handle_version() -> Result<()> {
     let version = version::get().unwrap();
 
     println!("{} version {:?} (type: rust)", NAME, version);
-    Ok(())
-}
-
-pub fn handle_timeout(timeout: u64) -> Result<()> {
-    *KATA_TIMEOUT_SECS.lock().unwrap() = timeout;
-
     Ok(())
 }

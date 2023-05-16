@@ -17,15 +17,13 @@ use std::{
 };
 
 use anyhow::{anyhow, Context};
-use nix::sys::socket::{connect, socket, AddressFamily, SockFlag, SockType, VsockAddr};
+use nix::{sys::socket::{connect, socket, AddressFamily, SockFlag, SockType, VsockAddr}};
 use reqwest::StatusCode;
 use slog::debug;
 use vmm_sys_util::terminal::Terminal;
 
 use crate::args::ExecArguments;
 use shim_interface::shim_mgmt::{client::MgmtClient, AGENT_URL};
-
-use super::check_ops::KATA_TIMEOUT_SECS;
 
 const CMD_CONNECT: &str = "CONNECT";
 const CMD_OK: &str = "OK";
@@ -177,7 +175,7 @@ impl EpollContext {
 }
 
 trait SockHandler {
-    fn setup_sock(&self) -> anyhow::Result<UnixStream>;
+    fn setup_sock(&self, timeout: &u64) -> anyhow::Result<UnixStream>;
 }
 
 struct VsockConfig {
@@ -195,7 +193,7 @@ impl VsockConfig {
 }
 
 impl SockHandler for VsockConfig {
-    fn setup_sock(&self) -> anyhow::Result<UnixStream> {
+    fn setup_sock(&self, _timeout: &u64) -> anyhow::Result<UnixStream> {
         let sock_addr = VsockAddr::new(self.sock_cid, self.sock_port);
 
         // Create socket fd
@@ -233,7 +231,7 @@ impl HvsockConfig {
 }
 
 impl SockHandler for HvsockConfig {
-    fn setup_sock(&self) -> anyhow::Result<UnixStream> {
+    fn setup_sock(&self, timeout: &u64) -> anyhow::Result<UnixStream> {
         let mut stream = match UnixStream::connect(self.sock_addr.clone()) {
             Ok(s) => s,
             Err(e) => return Err(anyhow!(e).context("failed to create UNIX Stream socket")),
@@ -244,8 +242,8 @@ impl SockHandler for HvsockConfig {
         {
             let test_msg = format!("{} {}\n", CMD_CONNECT, self.sock_port);
 
-            stream.set_read_timeout(Some(Duration::new(*KATA_TIMEOUT_SECS.lock().unwrap(), 0)))?;
-            stream.set_write_timeout(Some(Duration::new(*KATA_TIMEOUT_SECS.lock().unwrap(), 0)))?;
+            stream.set_read_timeout(Some(Duration::new(*timeout, 0)))?;
+            stream.set_write_timeout(Some(Duration::new(*timeout, 0)))?;
 
             stream.write_all(test_msg.as_bytes())?;
             // Now, see if we get the expected response
@@ -284,7 +282,7 @@ impl SockHandler for HvsockConfig {
     }
 }
 
-fn setup_client(server_url: String, dbg_console_port: u32) -> anyhow::Result<UnixStream> {
+fn setup_client(server_url: String, dbg_console_port: u32, timeout: &u64) -> anyhow::Result<UnixStream> {
     // server address format: scheme://[cid|/x/domain.sock]:port
     let url_fields: Vec<&str> = server_url.split("://").collect();
     if url_fields.len() != 2 {
@@ -308,7 +306,7 @@ fn setup_client(server_url: String, dbg_console_port: u32) -> anyhow::Result<Uni
             }
 
             let hvsock = HvsockConfig::new(hvsock_path, dbg_console_port);
-            hvsock.setup_sock().context("set up hvsock")
+            hvsock.setup_sock(timeout).context("set up hvsock")
         }
         // Vsock: vsock://<cid>:<port>
         // Example: "vsock://31513974:1024"
@@ -323,7 +321,7 @@ fn setup_client(server_url: String, dbg_console_port: u32) -> anyhow::Result<Uni
             };
 
             let vsock = VsockConfig::new(sock_cid, dbg_console_port);
-            vsock.setup_sock().context("set up vsock")
+            vsock.setup_sock(timeout).context("set up vsock")
         }
         // Others will be INVALID URI.
         _ => {
@@ -332,10 +330,10 @@ fn setup_client(server_url: String, dbg_console_port: u32) -> anyhow::Result<Uni
     }
 }
 
-async fn get_agent_socket(sandbox_id: &str) -> anyhow::Result<String> {
+async fn get_agent_socket(sandbox_id: &str, timeout: &u64) -> anyhow::Result<String> {
     let shim_client = MgmtClient::new(
         sandbox_id,
-        Some(Duration::from_secs(*KATA_TIMEOUT_SECS.lock().unwrap())),
+        Some(Duration::from_secs(*timeout)),
     )?;
 
     // get agent sock from body when status code is OK.
@@ -351,23 +349,23 @@ async fn get_agent_socket(sandbox_id: &str) -> anyhow::Result<String> {
     Ok(agent_sock)
 }
 
-fn get_server_socket(sandbox_id: &str) -> anyhow::Result<String> {
+fn get_server_socket(sandbox_id: &str, timeout: &u64) -> anyhow::Result<String> {
     let server_url = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?
-        .block_on(get_agent_socket(sandbox_id))
+        .block_on(get_agent_socket(sandbox_id, timeout))
         .context("get connection vsock")?;
 
     Ok(server_url)
 }
 
-fn do_run_exec(sandbox_id: &str, dbg_console_vport: u32) -> anyhow::Result<()> {
+fn do_run_exec(sandbox_id: &str, dbg_console_vport: u32, timeout: &u64) -> anyhow::Result<()> {
     // sandbox_id MUST be a long ID.
-    let server_url = get_server_socket(sandbox_id).context("get debug console socket URL")?;
+    let server_url = get_server_socket(sandbox_id, timeout).context("get debug console socket URL")?;
     if server_url.is_empty() {
         return Err(anyhow!("server url is empty."));
     }
-    let sock_stream = setup_client(server_url, dbg_console_vport)?;
+    let sock_stream = setup_client(server_url, dbg_console_vport, timeout)?;
 
     let mut epoll_context = EpollContext::new().expect("create epoll context");
     epoll_context
@@ -389,8 +387,8 @@ fn do_run_exec(sandbox_id: &str, dbg_console_vport: u32) -> anyhow::Result<()> {
 }
 
 // kata-ctl handle exec command starts here.
-pub fn handle_exec(exec_args: ExecArguments) -> anyhow::Result<()> {
-    do_run_exec(exec_args.sandbox_id.as_str(), exec_args.vport)?;
+pub fn handle_exec(exec_args: ExecArguments, timeout: &u64) -> anyhow::Result<()> {
+    do_run_exec(exec_args.sandbox_id.as_str(), exec_args.vport, timeout)?;
 
     Ok(())
 }
@@ -427,12 +425,13 @@ mod tests {
     fn test_setup_hvsock_failed() {
         let kata_hybrid_addr = "/tmp/kata_hybrid_vsock02.hvsock";
         let hybrid_sock_addr = "hvsock:///tmp/kata_hybrid_vsock02.hvsock:1024";
+        let timeout: u64 = 1;
         std::fs::remove_file(kata_hybrid_addr).unwrap_or_default();
         let dbg_console_port: u32 = 1026;
         let mut server = HttpServer::new(kata_hybrid_addr).unwrap();
         server.start_server().unwrap();
 
-        let stream = setup_client(hybrid_sock_addr.to_string(), dbg_console_port);
+        let stream = setup_client(hybrid_sock_addr.to_string(), dbg_console_port, &timeout);
         assert!(stream.is_err());
         std::fs::remove_file(kata_hybrid_addr).unwrap_or_default();
     }
@@ -441,7 +440,8 @@ mod tests {
     fn test_setup_vsock_client_failed() {
         let hybrid_sock_addr = "hvsock://8:1024";
         let dbg_console_port: u32 = 1026;
-        let stream = setup_client(hybrid_sock_addr.to_string(), dbg_console_port);
+        let timeout: u64 = 1;
+        let stream = setup_client(hybrid_sock_addr.to_string(), dbg_console_port, &timeout);
         assert!(stream.is_err());
     }
 }

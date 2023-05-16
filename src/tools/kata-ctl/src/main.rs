@@ -17,20 +17,21 @@ use std::process::exit;
 use args::{Commands, KataCtlCli};
 
 use ops::check_ops::{
-    handle_check, handle_factory, handle_iptables, handle_metrics, handle_version, handle_timeout,
+    handle_check, handle_factory, handle_iptables, handle_metrics, handle_version,
 };
 use ops::env_ops::handle_env;
 use ops::exec_ops::handle_exec;
 use ops::volume_ops::handle_direct_volume;
 
-#[macro_use]
-extern crate lazy_static;
-
 fn real_main() -> Result<()> {
     let args = KataCtlCli::parse();
+    let mut timeout: u64 = 1; 
 
     _ = match args.timeout {
-        Some(i) => handle_timeout(i),
+        Some(i) => {
+            timeout = i;
+            Ok(())
+        },
         None => {
             println!("Use default timeout value: 1 second");
             Ok(())
@@ -39,8 +40,8 @@ fn real_main() -> Result<()> {
 
     match args.command {
         Commands::Check(args) => handle_check(args),
-        Commands::DirectVolume(args) => handle_direct_volume(args),
-        Commands::Exec(args) => handle_exec(args),
+        Commands::DirectVolume(args) => handle_direct_volume(args, &timeout),
+        Commands::Exec(args) => handle_exec(args, &timeout),
         Commands::Env(args) => handle_env(args),
         Commands::Factory => handle_factory(),
         Commands::Iptables(args) => handle_iptables(args),
