@@ -14,10 +14,9 @@ use oci_distribution::client::{linux_amd64_resolver, ClientConfig};
 use oci_distribution::{manifest, secrets::RegistryAuth, Client, Reference};
 use serde::{Deserialize, Serialize};
 use sha2::{digest::typenum::Unsigned, digest::OutputSizeUser, Sha256};
-use std::{io, io::Read, io::Seek, io::Write};
+use std::{io, io::Seek, io::Write};
 use tempfile::tempdir;
 use tokio::{fs, io::AsyncWriteExt};
-use zerocopy::AsBytes;
 
 pub struct Container {
     config_layer: DockerConfigLayer,
@@ -250,31 +249,10 @@ fn create_verity_hash(path: &str) -> Result<String> {
         return Err(anyhow!("Block device ({path}) is too small: {size}"));
     }
 
-    file.seek(std::io::SeekFrom::End(-4096))?;
-    let mut buf = [0u8; 4096];
-    file.read_exact(&mut buf)?;
-
-    let mut sb = verity::SuperBlock::default();
-    sb.as_bytes_mut()
-        .copy_from_slice(&buf[4096 - 512..][..std::mem::size_of::<verity::SuperBlock>()]);
-    let data_block_size = u64::from(sb.data_block_size.get());
-    let hash_block_size = u64::from(sb.hash_block_size.get());
-    let data_size = sb
-        .data_block_count
-        .get()
-        .checked_mul(data_block_size)
-        .ok_or_else(|| anyhow!("Invalid data size"))?;
-    if data_size > size {
-        return Err(anyhow!(
-            "Data size ({data_size}) is greater than device size ({size}) for device {path}"
-        ));
-    }
-
-    // TODO: Store other parameters in super block: version, hash type, salt.
     let salt = [0u8; <Sha256 as OutputSizeUser>::OutputSize::USIZE];
-    let v = verity::Verity::<Sha256>::new(data_size, 4096, 4096, &salt, None)?;
+    let v = verity::Verity::<Sha256>::new(size, 4096, 4096, &salt, None)?;
     let hash = verity::traverse_file(&file, 0, false, v)?;
-    let result = format!("1 {path} {path} {data_block_size} {hash_block_size} {} {} sha256 {:x} 0000000000000000000000000000000000000000000000000000000000000000", data_size / data_block_size, (data_size + hash_block_size - 1) / hash_block_size, hash);
+    let result = format!("{:x}", hash);
     info!("dm-verity root hash: {:?}", &result);
 
     Ok(result)
