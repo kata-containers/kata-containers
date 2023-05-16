@@ -1,4 +1,3 @@
-
 #!/bin/bash
 set -xe
 
@@ -36,7 +35,7 @@ function cleanup_rootfs() {
 
 	linux_headers=$(dpkg --get-selections | cut -f1 | grep linux-headers)
 	apt remove make gcc curl gpg software-properties-common \
-		linux-libc-dev ${linux_headers}                 \
+		linux-libc-dev ${linux_headers}                  \
 		nvidia-headless-no-dkms-${driver_version}-open nvidia-kernel-source-${driver_version}-open -yqq
 
 	apt autoremove -yqq
