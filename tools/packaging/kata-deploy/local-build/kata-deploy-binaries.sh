@@ -293,7 +293,7 @@ install_kernel_nvidia_gpu_snp() {
 	install_kernel_helper \
 		"assets.kernel.snp.version" \
 		"kernel-nvidia-gpu-snp" \
-		"-x snp -g nvidia -u ${kernel_url} -H deb"
+		"-x sev -g nvidia -u ${kernel_url} -H deb"
 }
 
 #Install GPU and TDX experimental enabled kernel asset
