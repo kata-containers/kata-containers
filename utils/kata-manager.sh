@@ -262,7 +262,7 @@ pre_checks()
 	command -v "${kata_shim_v2}" &>/dev/null \
 		&& die "Please remove existing $kata_project installation"
 
-	[skip_containerd = "false" ] && return 0
+	[ "$skip_containerd" = 'true' ] && return 0
 
 	local ret
 
