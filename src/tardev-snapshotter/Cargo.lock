@@ -170,11 +170,12 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "containerd-snapshots"
 version = "0.1.0"
-source = "git+https://github.com/wedsonaf/rust-extensions#2ff8199b8880ed6746364329b32fdf16b1d3c17a"
+source = "git+https://github.com/containerd/rust-extensions.git?rev=b284957f884ed440a233fc7900bd2d414ec5d130#b284957f884ed440a233fc7900bd2d414ec5d130"
 dependencies = [
  "async-stream",
  "axum-core",
  "futures",
+ "pin-utils",
  "prost",
  "prost-types",
  "serde",
@@ -1453,6 +1454,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic",
+ "verity",
 ]
 
 [[package]]
@@ -1793,6 +1795,15 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
+name = "verity"
+version = "0.1.0"
+dependencies = [
+ "generic-array",
+ "sha2 0.10.6",
+ "zerocopy",
+]
 
 [[package]]
 name = "version_check"
