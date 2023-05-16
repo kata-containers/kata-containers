@@ -663,8 +663,8 @@ setup_nvidia_gpu_rootfs()
 	
 	# We need the kernel packages for building the drivers cleanly will be
 	# deinstalled and removed from the roofs once the build finishes. 
-	cp ${BUILDDIR}/kernel-gpu/builddir/linux-*.deb ./root/.
-	cp ${BUILDDIR}/kernel-gpu-snp/builddir/linux-*.deb ./root/.
+	#cp ${BUILDDIR}/kernel-gpu/builddir/linux-*.deb ./root/.
+	cp ${BUILDDIR}/kernel-nvidia-gpu-snp/builddir/linux-*.deb ./root/.
 #	cp ${BUILDDIR}/kernel-gpu-tdx-experimental/builddir/linux-*.deb ./root/.
 
 	# If we find a local downloaded run file build the kernel modules

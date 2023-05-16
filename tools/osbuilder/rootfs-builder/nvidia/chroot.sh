@@ -9,6 +9,8 @@ export run_file_name=$2
 export driver_source=""
 export driver_version=""
 
+APT_INSTALL="apt -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' -yqq --no-install-recommends install"
+
 
 function install_userspace_components() {
 	pushd /root/NVIDIA-* >> /dev/null
@@ -25,13 +27,15 @@ function create_udev_rule() {
 
 function cleanup_rootfs() {
 	echo "chroot: Cleanup NVIDIA GPU rootfs"
+	driver_version=$(apt-cache  search --names-only 'nvidia-headless-no-dkms-' | grep open | tail -n 1 | cut -d' ' -f1 | cut -d'-' -f5)
 	apt-mark hold libnvidia-cfg1-${driver_version} libstdc++6 libgnutls30  \
 		nvidia-compute-utils-${driver_version} nvidia-utils-${driver_version}        \
 		nvidia-kernel-common-${driver_version} libnvidia-compute-${driver_version}   \
 		nvidia-modprobe
 
+	linux_headers=$(dpkg --get-selections | cut -f1 | grep linux-headers)
 	apt remove make gcc curl gpg software-properties-common \
-		linux-libc-dev linux-headers-*                  \
+		linux-libc-dev ${linux-headers}                  \
 		nvidia-headless-no-dkms-${driver_version}-open nvidia-kernel-source-${driver_version}-open -yqq
 
 	apt autoremove -yqq
@@ -47,7 +51,9 @@ function cleanup_rootfs() {
 
 function install_nvidia_container_runtime() {
 	echo "chroot: Installing NVIDIA GPU container runtime"
-	apt -yqq --no-install-recommends install nvidia-container-toolkit
+
+	eval ${APT_INSTALL} nvidia-container-toolkit
+	
 	sed -i "s/#debug/debug/g" /etc/nvidia-container-runtime/config.toml
 	sed -i "s/#no-cgroups = false/no-cgroups = true/g" /etc/nvidia-container-runtime/config.toml
 	hooks_dir=/etc/oci/hooks.d
@@ -66,6 +72,9 @@ function build_nvidia_drivers() {
 	for linux_headers in $(ls /lib/modules/); do
 	        echo "chroot: Building GPU modules for: ${linux_headers}"
 		cp /boot/System.map-${linux_headers} /lib/modules/${linux_headers}/build/System.map
+		#if [ "${arch_target}" == "aarch64" ]; then
+		#	ln -sf /lib/modules/${linux_headers}/build/arch/arm64 /lib/modules/${linux_headers}/build/arch/aarch64
+		#fi
 	        make CC=gcc SYSSRC=/lib/modules/${linux_headers}/build > /dev/null
 	        make CC=gcc SYSSRC=/lib/modules/${linux_headers}/build modules_install
 	        make CC=gcc SYSSRC=/lib/modules/${linux_headers}/build clean > /dev/null
@@ -84,30 +93,34 @@ function prepare_run_file_drivers() {
 function prepare_distribution_drivers() {
 	driver_version=$(apt-cache  search --names-only 'nvidia-headless-no-dkms-' | grep open | tail -n 1 | cut -d' ' -f1 | cut -d'-' -f5)
 	echo "chroot: Prepare NVIDIA distribution drivers"
-	apt -yqq --no-install-recommends install nvidia-headless-no-dkms-${driver_version}-open nvidia-utils-${driver_version}
+	eval ${APT_INSTALL} nvidia-headless-no-dkms-${driver_version}-open nvidia-utils-${driver_version}
 }
 
 function install_build_dependencies() {
 	echo "chroot: Install NVIDIA drivers build dependencies"
-	apt -yqq --no-install-recommends install make gcc kmod libvulkan1 
+	eval ${APT_INSTALL} make gcc kmod libvulkan1 
 }
 
 function setup_apt_repositories() {
 	echo "chroot: Setup APT repositories"
-	mkdir -p /var/lib/dpkg
 	mkdir -p /var/cache/apt/archives/partial
 	mkdir -p /var/log/apt
-	mkdir -p /var/lib/dpkg/updates
+        mkdir -p /var/lib/dpkg/info
+        mkdir -p /var/lib/dpkg/updates
+        mkdir -p /var/lib/dpkg/alternatives
+        mkdir -p /var/lib/dpkg/triggers
+        mkdir -p /var/lib/dpkg/parts
 	touch /var/lib/dpkg/status
 	rm -f /etc/apt/sources.list.d/*
+
 	cat <<-'CHROOT_EOF' > /etc/apt/sources.list.d/jammy.list
 		deb http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse
 		deb http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse
 		deb http://archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse
 	CHROOT_EOF
-	
+
 	apt update 
-	apt -yqq --no-install-recommends install curl
+	eval ${APT_INSTALL} curl
 
 	distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
 	curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
