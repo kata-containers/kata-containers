@@ -28,7 +28,7 @@ url = "2.2.2"
 # Async helpers
 async-trait = "0.1.42"
 async-recursion = "0.3.2"
-futures = "0.3.17"
+futures = "0.3.28"
 
 # Async runtime
 tokio = { version = "1.28.1", features = ["full"] }
@@ -71,11 +71,7 @@ clap = { version = "3.0.1", features = ["derive"] }
 openssl = { version = "0.10.38", features = ["vendored"] }
 
 # Image pull/decrypt
-[target.'cfg(target_arch = "s390x")'.dependencies]
-image-rs = { git = "https://github.com/confidential-containers/image-rs", tag = "v0.5.1", default-features = false, features = ["kata-cc-s390x"] }
-
-[target.'cfg(not(target_arch = "s390x"))'.dependencies]
-image-rs = { git = "https://github.com/confidential-containers/image-rs", tag = "v0.5.1", default-features = false, features = ["kata-cc"] }
+image-rs = { git = "https://github.com/confidential-containers/image-rs", rev = "22224d9", default-features = false, features = ["kata-cc-native-tls"] }
 
 [patch.crates-io]
 oci-distribution = { git = "https://github.com/krustlet/oci-distribution.git", rev = "f44124c" }
