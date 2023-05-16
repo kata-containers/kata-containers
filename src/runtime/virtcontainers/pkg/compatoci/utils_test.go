@@ -7,6 +7,8 @@ package compatoci
 
 import (
 	"encoding/json"
+	"os"
+	"path"
 	"path/filepath"
 	"testing"
 
@@ -78,6 +80,18 @@ func TestContainerCapabilities(t *testing.T) {
 	assert.Equal(t, c.Inheritable, []string{"CAP_KILL", "CAP_LEASE", "CAP_SYS_ADMIN"})
 	assert.Equal(t, c.Ambient, []string{""})
 
+	ociSpec.Process.Capabilities = map[string]interface{}{
+		"unexpected": interface{}(""),
+	}
+
+	c, err = ContainerCapabilities(ociSpec)
+	assert.NotNil(t, err)
+	assert.Equal(t, len(c.Bounding), 0)
+	assert.Equal(t, len(c.Effective), 0)
+	assert.Equal(t, len(c.Permitted), 0)
+	assert.Equal(t, len(c.Inheritable), 0)
+	assert.Equal(t, len(c.Ambient), 0)
+
 	ociSpec.Process.Capabilities = []interface{}{"CAP_LEASE", "CAP_SETUID"}
 
 	c, err = ContainerCapabilities(ociSpec)
@@ -92,11 +106,31 @@ func TestContainerCapabilities(t *testing.T) {
 
 	c, err = ContainerCapabilities(ociSpec)
 	assert.Nil(t, err)
-	assert.Equal(t, c.Bounding, []string(nil))
-	assert.Equal(t, c.Effective, []string(nil))
-	assert.Equal(t, c.Permitted, []string(nil))
-	assert.Equal(t, c.Inheritable, []string(nil))
-	assert.Equal(t, c.Ambient, []string(nil))
+	assert.Equal(t, len(c.Bounding), 0)
+	assert.Equal(t, len(c.Effective), 0)
+	assert.Equal(t, len(c.Permitted), 0)
+	assert.Equal(t, len(c.Inheritable), 0)
+	assert.Equal(t, len(c.Ambient), 0)
+
+	ociSpec.Process.Capabilities = interface{}("")
+
+	c, err = ContainerCapabilities(ociSpec)
+	assert.NotNil(t, err)
+	assert.Equal(t, len(c.Bounding), 0)
+	assert.Equal(t, len(c.Effective), 0)
+	assert.Equal(t, len(c.Permitted), 0)
+	assert.Equal(t, len(c.Inheritable), 0)
+	assert.Equal(t, len(c.Ambient), 0)
+
+	ociSpec.Process = nil
+
+	c, err = ContainerCapabilities(ociSpec)
+	assert.NotNil(t, err)
+	assert.Equal(t, len(c.Bounding), 0)
+	assert.Equal(t, len(c.Effective), 0)
+	assert.Equal(t, len(c.Permitted), 0)
+	assert.Equal(t, len(c.Inheritable), 0)
+	assert.Equal(t, len(c.Ambient), 0)
 }
 
 // use specs.Spec to decode the spec, the content of capabilities is [] string
@@ -144,4 +178,56 @@ func TestGetConfigPath(t *testing.T) {
 	expected := filepath.Join(tempBundlePath, "config.json")
 	configPath := getConfigPath(tempBundlePath)
 	assert.Equal(t, configPath, expected)
+}
+
+func TestParseConfigJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	var ociSpec compatOCISpec
+	var configByte []byte
+
+	ociSpec.Spec.Version = "1.0.0"
+	ociSpec.Process = &compatOCIProcess{}
+	ociSpec.Process.Capabilities = map[string]interface{}{
+		"bounding":    []interface{}{"CAP_KILL"},
+		"effective":   []interface{}{"CAP_KILL", "CAP_LEASE"},
+		"permitted":   []interface{}{"CAP_SETUID"},
+		"inheritable": []interface{}{"CAP_KILL", "CAP_LEASE", "CAP_SYS_ADMIN"},
+		"ambient":     []interface{}{""},
+	}
+
+	file, err := os.Create(path.Join(tmpDir, "config.json"))
+	if err != nil {
+		t.Error("cannot create file")
+	}
+	defer file.Close()
+
+	if configByte, err = json.Marshal(ociSpec); err != nil {
+		t.Error("cannot marshal compat oci spec")
+	}
+
+	_, err = file.Write(configByte)
+	if err != nil {
+		t.Error("cannot write config data into file")
+	}
+
+	spec, err := ParseConfigJSON(tmpDir)
+	assert.Nil(t, err)
+	assert.Equal(t, spec.Version, "1.0.0")
+}
+
+func TestGetContainerSpec(t *testing.T) {
+	annotations := map[string]string{
+		"io.katacontainers.pkg.oci.bundle_path": "",
+	}
+
+	_, err := GetContainerSpec(annotations)
+	assert.NotNil(t, err)
+
+	annotations = map[string]string{
+		"io.katacontainers.pkg.oci.wrong_path": "",
+	}
+
+	_, err = GetContainerSpec(annotations)
+	assert.NotNil(t, err)
 }
