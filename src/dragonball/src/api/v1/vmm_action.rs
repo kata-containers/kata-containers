@@ -486,7 +486,9 @@ impl VmmService {
                 VmmActionError::Block(BlockDeviceError::UpdateNotAllowedPostBoot)
             })?;
 
-        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, config)
+        vm.device_manager_mut()
+            .block_manager
+            .insert_device(ctx, config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::Block)
     }
@@ -500,7 +502,9 @@ impl VmmService {
     ) -> VmmRequestResult {
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
 
-        BlockDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), config)
+        vm.device_manager_mut()
+            .block_manager
+            .update_device_ratelimiters(config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::Block)
     }
@@ -518,7 +522,9 @@ impl VmmService {
             .create_device_op_context(Some(event_mgr.epoll_manager()))
             .map_err(|_| VmmActionError::Block(BlockDeviceError::UpdateNotAllowedPostBoot))?;
 
-        BlockDeviceMgr::remove_device(vm.device_manager_mut(), ctx, drive_id)
+        vm.device_manager_mut()
+            .block_manager
+            .remove_device(ctx, drive_id)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::Block)
     }
