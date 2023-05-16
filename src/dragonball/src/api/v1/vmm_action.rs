@@ -549,7 +549,9 @@ impl VmmService {
                 }
             })?;
 
-        VirtioNetDeviceMgr::insert_device(vm.device_manager_mut(), ctx, config)
+        vm.device_manager_mut()
+            .virtio_net_manager
+            .insert_device(ctx, config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::VirtioNet)
     }
@@ -562,7 +564,9 @@ impl VmmService {
     ) -> VmmRequestResult {
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
 
-        VirtioNetDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), config)
+        vm.device_manager_mut()
+            .virtio_net_manager
+            .update_device_ratelimiters(config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::VirtioNet)
     }
