@@ -241,7 +241,7 @@ get_kernel_frag_path() {
 	local redefined_string="redefined"
 	local redundant_string="redundant"
 
-	# Later, if we need to add kernel version specific subdirs in order to
+	# Later, if we need to add kernel version specifqic subdirs in order to
 	# handle specific cases, then add the path definition and search/list/cat
 	# here.
 	local all_configs="${common_configs} ${arch_configs}"
@@ -251,25 +251,21 @@ get_kernel_frag_path() {
 
 	if [[ "${gpu_vendor}" != "" ]];then
 		info "Add kernel config for GPU due to '-g ${gpu_vendor}'"
-		local gpu_configs="$(ls ${gpu_path}/${gpu_vendor}.conf)"
-		all_configs="${all_configs} ${gpu_configs}"
 		# If conf_guest is set we need to update the CONFIG_LOCALVERSION
 		# to match the suffix created in install_kata
 		# -nvidia-gpu-{snp|tdx}, the linux headers will be named the very
 		# same if build with make deb-pkg for TDX or SNP.
+		local gpu_configs=$(mktemp).conf
+		local gpu_subst_configs="$(ls ${gpu_path}/${gpu_vendor}.${arch_target}.conf.in)"
 		if [[ "${conf_guest}" != "" ]];then
-			local gpu_cc_configs=$(mktemp).conf
-			local gpu_subst_configs="$(ls ${gpu_path}/${gpu_vendor}.conf.in)"
-
 			export CONF_GUEST_SUFFIX="-${conf_guest}"
-			envsubst <${gpu_subst_configs} >${gpu_cc_configs}
-			unset CONF_GUEST_SUFFIX
-
-			all_configs="${all_configs} ${gpu_cc_configs}"
 		else
-			local gpu_configs="$(ls ${gpu_path}/${gpu_vendor}.conf)"
-			all_configs="${all_configs} ${gpu_configs}"
+			export CONF_GUEST_SUFFIX=""
 		fi
+		envsubst <${gpu_subst_configs} >${gpu_configs}
+		unset CONF_GUEST_SUFFIX
+
+		all_configs="${all_configs} ${gpu_configs}"
 	fi
 
 	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
