@@ -15,7 +15,7 @@ cp ${KATA_DEPLOY_ARTIFACT} ${KATA_DEPLOY_DIR}
 
 pushd ${KATA_DEPLOY_DIR}
 
-local arch=$(uname -m)
+arch=$(uname -m)
 [ "$arch" = "x86_64" ] && arch="amd64"
 IMAGE_TAG="${REGISTRY}:kata-containers-$(git rev-parse HEAD)-${arch}"
 
