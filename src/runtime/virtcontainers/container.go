@@ -60,6 +60,8 @@ var cdromMajors = map[int64]string{
 // #define FLOPPY_MAJOR		2
 const floppyMajor = int64(2)
 
+const layerOption = "kata.layer="
+
 // Process gathers data related to a container process.
 type Process struct {
 	StartTime time.Time
@@ -1204,7 +1206,17 @@ func (c *Container) resume(ctx context.Context) error {
 
 func (c *Container) hotplugTarDrives(ctx context.Context) error {
 	// TODO: We need to remember the ones that succeeded so that we can cleanup.
-	for _, l := range c.rootFs.Options {
+	for _, opt := range c.rootFs.Options {
+		if !strings.HasPrefix(opt, layerOption) {
+			continue
+		}
+
+		strs := strings.Split(opt[len(layerOption):], ",")
+		if len(strs) != 2 {
+			continue
+		}
+		l := strs[0]
+
 		id, ok := c.sandbox.GetLayerDevice(l)
 		if !ok {
 			path := filepath.Join(c.rootFs.Source, l)

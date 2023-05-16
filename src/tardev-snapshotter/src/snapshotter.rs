@@ -114,7 +114,15 @@ impl Store {
                 ));
             }
 
-            parents.push(name_to_hash(&p));
+            let root_hash = if let Some(rh) = info.labels.get("kata.dm-verity") {
+                rh
+            } else {
+                return Err(Status::failed_precondition(
+                    "parent snapshot has no root hash stored",
+                ));
+            };
+
+            parents.push(format!("kata.layer={},{}", name_to_hash(&p), root_hash));
 
             next_parent = (!info.parent.is_empty()).then_some(info.parent);
         }
@@ -153,7 +161,7 @@ impl TarDevSnapshotter {
         &self,
         key: String,
         parent: String,
-        labels: HashMap<String, String>,
+        mut labels: HashMap<String, String>,
     ) -> Result<Vec<api::types::Mount>, Status> {
         let reference: Reference = {
             let image_ref = if let Some(r) = labels.get(TARGET_REF_LABEL) {
@@ -227,6 +235,9 @@ impl TarDevSnapshotter {
             trace!("Appending dm-verity tree to {:?}", &name);
             let root_hash = verity::append_tree::<Sha256>(&mut file)?;
             trace!("Root hash for {:?} is {:x}", &name, root_hash);
+
+            // Store a label with the root hash so that we can recall it later when mounting.
+            labels.insert("kata.dm-verity".to_string(), format!("{:x}", root_hash));
         }
 
         // Move file to its final location and write the snapshot.

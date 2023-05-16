@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -401,8 +402,19 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 
 	result := []*SharedFile{}
 	if c.rootFs.Type == TarRootFSType {
-		for _, l := range c.rootFs.Options {
+		for _, opt := range c.rootFs.Options {
 			storage := &grpc.Storage{}
+
+			if !strings.HasPrefix(opt, layerOption) {
+				continue
+			}
+
+			strs := strings.Split(opt[len(layerOption):], ",")
+			if len(strs) != 2 {
+				return nil, fmt.Errorf("Unknown layer/roothash pair: %q", opt)
+			}
+			l := strs[0]
+			root_hash := strs[1]
 
 			id, ok := c.sandbox.GetLayerDevice(l)
 			if !ok {
@@ -443,7 +455,7 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 			f.Logger().Infof("adding shared file for layer %q", l)
 			storage.MountPoint = filepath.Join(kataGuestSandboxDir(), "layers", l)
 			storage.Fstype = "tar"
-			storage.Options = []string{"ro", "kata.dm-verity"}
+			storage.Options = []string{"ro", fmt.Sprintf("kata.dm-verity=%s", root_hash)}
 
 			result = append(result, &SharedFile{
 				storage:   storage,
