@@ -105,7 +105,7 @@ setup() {
 	create_test_pod
 
 	assert_container_fail "$container_config"
-	assert_logs_contain 'Validate image failed: \[PublicKeyVerifier { key: CosignVerificationKey'
+	assert_logs_contain 'Validate image failed: \[PublicKeyVerifier { key: ECDSA_P256_SHA256_ASN1'
 }
 
 @test "$test_tag Test pull an unencrypted unsigned image from an authenticated registry with correct credentials" {

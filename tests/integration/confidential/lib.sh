@@ -274,7 +274,7 @@ setup_cosign_signatures_files() {
 
 	# Set-up required files in guest image
 	add_kernel_params "agent.aa_kbc_params=offline_fs_kbc::null"
-	cp_to_guest_img "etc" "${SHARED_FIXTURES_DIR}/cosign/offline-fs-kbc/aa-offline_fs_kbc-resources.json"
+	cp_to_guest_img "etc" "${SHARED_FIXTURES_DIR}/cosign/offline-fs-kbc/$(uname -m)/aa-offline_fs_kbc-resources.json"
 }
 
 setup_signature_files() {
