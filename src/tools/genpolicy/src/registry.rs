@@ -169,6 +169,10 @@ impl Container {
     pub fn get_rootfs(&self) -> DockerRootfs {
         self.config_layer.rootfs.clone()
     }
+
+    pub fn get_verity_hashes(&self) -> Vec<String> {
+        self.dm_verity_hashes.clone()
+    }
 }
 
 async fn get_dm_verity_hashes(

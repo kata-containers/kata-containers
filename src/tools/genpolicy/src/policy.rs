@@ -97,6 +97,7 @@ pub struct ContainerPolicy {
     pub oci: OciSpec,
     storages: Vec<SerializedStorage>,
     rootfs: registry::DockerRootfs,
+    verity_hashes: Vec<String>,
 }
 
 // TODO: can struct Storage from agent.proto be used here?
@@ -353,6 +354,7 @@ impl PodPolicy {
             },
             storages,
             rootfs: registry_container.get_rootfs(),
+            verity_hashes: registry_container.get_verity_hashes(),
         })
     }
 
