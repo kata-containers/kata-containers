@@ -217,9 +217,6 @@ DEFSHAREDFS_QEMU_TDX_VIRTIOFS := virtio-9p
 DEFSHAREDFS_QEMU_SEV_VIRTIOFS := virtio-9p
 DEFSHAREDFS_QEMU_SNP_VIRTIOFS := virtio-9p
 DEFVIRTIOFSDAEMON := $(LIBEXECDIR)/virtiofsd
-ifeq ($(ARCH),ppc64le)
-DEFVIRTIOFSDAEMON := $(LIBEXECDIR)/qemu/virtiofsd
-endif
 DEFVALIDVIRTIOFSDAEMONPATHS := [\"$(DEFVIRTIOFSDAEMON)\"]
 # Default DAX mapping cache size in MiB
 #if value is 0, DAX is not enabled
