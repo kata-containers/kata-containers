@@ -508,6 +508,7 @@ dependencies = [
  "oci",
  "persist",
  "protobuf 3.2.0",
+ "resource",
  "serde_json",
  "slog",
  "slog-scope",
@@ -1761,6 +1762,7 @@ dependencies = [
  "async-trait",
  "common",
  "kata-types",
+ "resource",
  "tokio",
 ]
 
@@ -4273,6 +4275,7 @@ dependencies = [
  "async-trait",
  "common",
  "kata-types",
+ "resource",
  "tokio",
 ]
 

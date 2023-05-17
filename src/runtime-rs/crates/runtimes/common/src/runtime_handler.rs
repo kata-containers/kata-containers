@@ -6,12 +6,12 @@
 
 use std::sync::Arc;
 
+use crate::{message::Message, ContainerManager, Sandbox};
 use anyhow::Result;
 use async_trait::async_trait;
 use kata_types::config::TomlConfig;
+use resource::cpu_mem::initial_size::InitialSizeManager;
 use tokio::sync::mpsc::Sender;
-
-use crate::{message::Message, ContainerManager, Sandbox};
 
 #[derive(Clone)]
 pub struct RuntimeInstance {
@@ -38,6 +38,7 @@ pub trait RuntimeHandler: Send + Sync {
         sid: &str,
         msg_sender: Sender<Message>,
         config: Arc<TomlConfig>,
+        init_size_manager: InitialSizeManager,
     ) -> Result<RuntimeInstance>;
 
     fn cleanup(&self, id: &str) -> Result<()>;

@@ -19,6 +19,7 @@ use kata_types::{
 struct InitialSize {
     vcpu: u32,
     mem_mb: u32,
+    orig_toml_default_mem: u32,
 }
 
 // generate initial resource(vcpu and memory in MiB) from spec's information
@@ -66,7 +67,11 @@ impl TryFrom<&oci::Spec> for InitialSize {
             sl!(),
             "(from PodSandbox's annotation / SingleContainer's spec) initial size: vcpu={}, mem_mb={}", vcpu, mem_mb
         );
-        Ok(Self { vcpu, mem_mb })
+        Ok(Self {
+            vcpu,
+            mem_mb,
+            orig_toml_default_mem: 0,
+        })
     }
 }
 
@@ -93,7 +98,7 @@ impl InitialSizeManager {
         })
     }
 
-    pub fn setup_config(&self, config: &mut TomlConfig) -> Result<()> {
+    pub fn setup_config(&mut self, config: &mut TomlConfig) -> Result<()> {
         // update this data to the hypervisor config for later use by hypervisor
         let hypervisor_name = &config.runtime.hypervisor_name;
         let hv = config
@@ -104,6 +109,7 @@ impl InitialSizeManager {
         if self.resource.vcpu > 0 {
             hv.cpu_info.default_vcpus = self.resource.vcpu as i32
         }
+        self.resource.orig_toml_default_mem = hv.memory_info.default_memory;
         if self.resource.mem_mb > 0 {
             // since the memory overhead introduced by kata-agent and system components
             // will really affect the amount of memory the user can use, so we choose to
@@ -113,6 +119,10 @@ impl InitialSizeManager {
             hv.memory_info.default_memory += self.resource.mem_mb;
         }
         Ok(())
+    }
+
+    pub fn get_orig_toml_default_mem(&self) -> u32 {
+        self.resource.orig_toml_default_mem
     }
 }
 
@@ -173,7 +183,11 @@ mod tests {
                     quota: None,
                     memory: None,
                 },
-                result: InitialSize { vcpu: 0, mem_mb: 0 },
+                result: InitialSize {
+                    vcpu: 0,
+                    mem_mb: 0,
+                    orig_toml_default_mem: 0,
+                },
             },
             TestData {
                 desc: "normal resource limit",
@@ -186,6 +200,7 @@ mod tests {
                 result: InitialSize {
                     vcpu: 3,
                     mem_mb: 512,
+                    orig_toml_default_mem: 0,
                 },
             },
         ]

@@ -73,6 +73,9 @@ pub struct DragonballInner {
 
     /// the size of memory block of guest OS
     pub(crate) guest_memory_block_size_mb: u32,
+
+    /// the hotplug memory size
+    pub(crate) mem_hotplug_size_mb: u32,
 }
 
 impl DragonballInner {
@@ -98,6 +101,7 @@ impl DragonballInner {
             cached_block_devices: Default::default(),
             capabilities,
             guest_memory_block_size_mb: 0,
+            mem_hotplug_size_mb: 0,
         }
     }
 
@@ -345,36 +349,14 @@ impl DragonballInner {
         Ok((old_vcpus, new_vcpus))
     }
 
-    // curr_mem_m size = default + hotplug
-    pub(crate) fn resize_memory(
-        &self,
-        req_mem_mb: u32,
-        curr_mem_mb: u32,
-    ) -> Result<(u32, MemoryConfig)> {
-        let mem_device_to_insert = match req_mem_mb.cmp(&curr_mem_mb) {
+    pub(crate) fn resize_memory(&mut self, req_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
+        let had_mem_mb = self.config.memory_info.default_memory + self.mem_hotplug_size_mb;
+        match req_mem_mb.cmp(&had_mem_mb) {
             Ordering::Greater => {
-                // We need to insert a new memory device
-                let add_mem_mb = req_mem_mb - curr_mem_mb;
-                if self.config.memory_info.enable_virtio_mem {
-                    Some(MemDeviceConfigInfo {
-                        mem_id: format!("mem{}", curr_mem_mb),
-                        size_mib: add_mem_mb as u64,
-                        capacity_mib: add_mem_mb as u64,
-                        multi_region: false,
-                        host_numa_node_id: None,
-                        guest_numa_node_id: None,
-                        use_shared_irq: None,
-                        use_generic_irq: None,
-                    })
-                } else {
-                    None
-                }
-            }
-            Ordering::Less => {
-                // We need to insert a new balloon device to release memory
+                // clean virtio-ballon device before hotplug memory, resize to 0
                 let balloon_config = BalloonDeviceConfigInfo {
-                    balloon_id: format!("mem{}", curr_mem_mb),
-                    size_mib: (curr_mem_mb - req_mem_mb) as u64,
+                    balloon_id: "balloon0".to_owned(),
+                    size_mib: 0,
                     use_shared_irq: None,
                     use_generic_irq: None,
                     f_deflate_on_oom: false,
@@ -383,17 +365,46 @@ impl DragonballInner {
                 self.vmm_instance
                     .insert_balloon_device(balloon_config)
                     .context("failed to insert balloon device")?;
-                None
-            }
-            Ordering::Equal => None, // Everything is already set up
-        };
 
-        // If we have a memory device to insert, do it now
-        if let Some(mem_config) = mem_device_to_insert {
-            self.vmm_instance
-                .insert_mem_device(mem_config)
-                .context("failed to insert memory device")?;
-        }
+                // update the hotplug size
+                self.mem_hotplug_size_mb = req_mem_mb - self.config.memory_info.default_memory;
+
+                // insert a new memory device
+                let add_mem_mb = req_mem_mb - had_mem_mb;
+                self.vmm_instance.insert_mem_device(MemDeviceConfigInfo {
+                    mem_id: format!("mem{}", self.mem_hotplug_size_mb),
+                    size_mib: add_mem_mb as u64,
+                    capacity_mib: add_mem_mb as u64,
+                    multi_region: false,
+                    host_numa_node_id: None,
+                    guest_numa_node_id: None,
+                    use_shared_irq: None,
+                    use_generic_irq: None,
+                })?;
+            }
+            Ordering::Less => {
+                // we only use one balloon device here, and resize it to release memory
+                // the operation we do here is inserting a new balloon0 device or resizing it
+                let balloon_config = BalloonDeviceConfigInfo {
+                    balloon_id: "balloon0".to_owned(),
+                    size_mib: (had_mem_mb - req_mem_mb) as u64,
+                    use_shared_irq: None,
+                    use_generic_irq: None,
+                    f_deflate_on_oom: false,
+                    f_reporting: false,
+                };
+                self.vmm_instance
+                    .insert_balloon_device(balloon_config)
+                    .context("failed to insert balloon device")?;
+            }
+            Ordering::Equal => {
+                // Everything is already set up
+                info!(
+                    sl!(),
+                    "memory size unchanged, no need to do memory resizing"
+                );
+            }
+        };
 
         Ok((
             req_mem_mb,
@@ -464,6 +475,7 @@ impl Persist for DragonballInner {
             cached_block_devices: hypervisor_state.cached_block_devices,
             capabilities: Capabilities::new(),
             guest_memory_block_size_mb: 0,
+            mem_hotplug_size_mb: 0,
         })
     }
 }

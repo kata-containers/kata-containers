@@ -194,13 +194,9 @@ impl Hypervisor for Dragonball {
         inner.guest_memory_block_size_mb()
     }
 
-    async fn resize_memory(
-        &self,
-        req_mem_mb: u32,
-        curr_mem_mb: u32,
-    ) -> Result<(u32, MemoryConfig)> {
-        let inner = self.inner.read().await;
-        inner.resize_memory(req_mem_mb, curr_mem_mb)
+    async fn resize_memory(&self, req_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
+        let mut inner = self.inner.write().await;
+        inner.resize_memory(req_mem_mb)
     }
 }
 

@@ -11,3 +11,4 @@ tokio = { version = "1.28.1" }
 
 common = { path = "../common" }
 kata-types = { path = "../../../../libs/kata-types" }
+resource = { path = "../../resource" }
