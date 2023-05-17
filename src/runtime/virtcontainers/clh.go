@@ -1180,6 +1180,8 @@ func (clh *cloudHypervisor) AddDevice(ctx context.Context, devInfo interface{}, 
 		clh.addVSock(defaultGuestVSockCID, v.UdsPath)
 	case types.Volume:
 		err = clh.addVolume(v)
+	case config.VFIODev:
+		err = clh.addVfioDevice(v)
 	default:
 		clh.Logger().WithField("function", "AddDevice").Warnf("Add device of type %v is not supported.", v)
 		return fmt.Errorf("Not implemented support for %s", v)
@@ -1639,6 +1641,22 @@ func (clh *cloudHypervisor) addVolume(volume types.Volume) error {
 	clh.vmconfig.Fs = &[]chclient.FsConfig{*fs}
 
 	clh.Logger().Debug("Adding share volume to hypervisor: ", volume.MountTag)
+	return nil
+}
+
+// Add vfio device to virtual machine
+func (clh *cloudHypervisor) addVfioDevice(vfiodev config.VFIODev) error {
+	vfioConfig := &chclient.DeviceConfig{
+		Path: *vfiodev.GetSysfsDev(),
+		Id:   vfiodev.GetID(),
+	}
+
+	if clh.vmconfig.Devices != nil {
+		*clh.vmconfig.Devices = append(*clh.vmconfig.Devices, *vfioConfig)
+	} else {
+		clh.vmconfig.Devices = &[]chclient.DeviceConfig{*vfioConfig}
+	}
+
 	return nil
 }
 
