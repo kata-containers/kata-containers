@@ -18,6 +18,7 @@ shims=(
 	"qemu"
 	"qemu-nvidia-gpu"
 	"qemu-tdx"
+	"qemu-sev"
 	"qemu-snp"
 	"clh"
 	"dragonball"
