@@ -17,6 +17,7 @@ use crate::yaml;
 use anyhow::{anyhow, Result};
 use oci::*;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 pub struct PodPolicy {
@@ -96,8 +97,6 @@ pub struct OciProcess {
 pub struct ContainerPolicy {
     pub oci: OciSpec,
     storages: Vec<SerializedStorage>,
-    rootfs: registry::DockerRootfs,
-    verity_hashes: Vec<String>,
 }
 
 // TODO: can struct Storage from agent.proto be used here?
@@ -308,7 +307,7 @@ impl PodPolicy {
         let privileged_container = yaml_container.is_privileged();
         let mut process = containerd::get_process(privileged_container);
         let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.args);
-        
+
         registry_container.get_process(&mut process, yaml_has_command, yaml_has_args)?;
 
         if container_index != 0 {
@@ -328,7 +327,6 @@ impl PodPolicy {
             container_index == 0,
         )?;
 
-        // let mut storages = infra_container.storages.clone();
         let mut storages = Default::default();
         self.get_mounts_and_storages(
             &mut mounts,
@@ -336,6 +334,9 @@ impl PodPolicy {
             yaml_container,
             &self.infra_policy,
         )?;
+
+        let image_layers = registry_container.get_image_layers();
+        get_image_layer_storages(&mut storages, &image_layers)?;
 
         let mut linux = containerd::get_linux(privileged_container);
         linux.namespaces = kata::get_namespaces();
@@ -353,8 +354,6 @@ impl PodPolicy {
                 linux: Some(linux),
             },
             storages,
-            rootfs: registry_container.get_rootfs(),
-            verity_hashes: registry_container.get_verity_hashes(),
         })
     }
 
@@ -401,4 +400,41 @@ impl PodPolicy {
         }
         Ok(())
     }
+}
+
+fn get_image_layer_storages(
+    storages: &mut Vec<SerializedStorage>,
+    image_layers: &Vec<registry::ImageLayer>,
+) -> Result<()> {
+    // TODO: load this path from data.json.
+    let layers_path = "/run/kata-containers/sandbox/layers/".to_string();
+
+    for layer in image_layers {
+        let verity_option = "kata.dm-verity=".to_string() + &layer.verity_hash;
+        let layer_name = name_to_hash(&layer.diff_id);
+        // let layer_name = name_to_hash("sha256:9760f55e20e3f4eb6b837e1b323b3c6f29b1ef4a4617fe98625ead879e91b1c1");
+
+        storages.push(SerializedStorage {
+            driver: "blk".to_string(),
+            driver_options: Vec::new(),
+            source: String::new(), // TODO
+            fstype: "tar".to_string(),
+            options: vec!["ro".to_string(), verity_option],
+            mount_point: layers_path.clone() + &layer_name,
+            fs_group: SerializedFsGroup {
+                group_id: 0,
+                group_change_policy: 0,
+            },
+        });
+    }
+
+    Ok(())
+}
+
+// TODO: avoid copying this code from snapshotter.rs
+/// Converts the given name to a string representation of its sha256 hash.
+fn name_to_hash(name: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(name);
+    format!("{:x}", hasher.finalize())
 }

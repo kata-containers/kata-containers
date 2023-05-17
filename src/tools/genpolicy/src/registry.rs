@@ -20,7 +20,7 @@ use tokio::{fs, io::AsyncWriteExt};
 
 pub struct Container {
     config_layer: DockerConfigLayer,
-    dm_verity_hashes: Vec<String>,
+    image_layers: Vec<ImageLayer>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -41,9 +41,15 @@ struct DockerImageConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DockerRootfs {
+struct DockerRootfs {
     r#type: String,
     diff_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ImageLayer {
+    pub diff_id: String,
+    pub verity_hash: String,
 }
 
 impl Container {
@@ -74,9 +80,13 @@ impl Container {
             println!("");
         }
 
+        let config_layer: DockerConfigLayer = serde_json::from_str(&config_layer_str)?;
+        let image_layers =
+            get_image_layers(&mut client, &reference, &manifest, &config_layer).await?;
+
         Ok(Container {
-            config_layer: serde_json::from_str(&config_layer_str)?,
-            dm_verity_hashes: get_dm_verity_hashes(&mut client, &reference, &manifest).await?,
+            config_layer,
+            image_layers,
         })
     }
 
@@ -166,38 +176,45 @@ impl Container {
         Ok(())
     }
 
-    pub fn get_rootfs(&self) -> DockerRootfs {
-        self.config_layer.rootfs.clone()
-    }
-
-    pub fn get_verity_hashes(&self) -> Vec<String> {
-        self.dm_verity_hashes.clone()
+    pub fn get_image_layers(&self) -> Vec<ImageLayer> {
+        self.image_layers.clone()
     }
 }
 
-async fn get_dm_verity_hashes(
+async fn get_image_layers(
     client: &mut Client,
     reference: &Reference,
     manifest: &manifest::OciImageManifest,
-) -> Result<Vec<String>> {
-    let mut hashes = Vec::new();
+    config_layer: &DockerConfigLayer,
+) -> Result<Vec<ImageLayer>> {
+    let mut layer_index = 0;
+    let mut layers = Vec::new();
 
     for layer in &manifest.layers {
         if layer
             .media_type
             .eq(manifest::IMAGE_DOCKER_LAYER_GZIP_MEDIA_TYPE)
         {
-            hashes.push(get_dm_verity_hash(client, reference, layer).await?)
+            if layer_index < config_layer.rootfs.diff_ids.len() {
+                layers.push(ImageLayer {
+                    diff_id: config_layer.rootfs.diff_ids[layer_index].clone(),
+                    verity_hash: get_verity_hash(client, reference, &layer.digest).await?,
+                });
+            } else {
+                return Err(anyhow!("Too many Docker gzip layers"));
+            }
+
+            layer_index += 1;
         }
     }
 
-    Ok(hashes)
+    Ok(layers)
 }
 
-async fn get_dm_verity_hash(
+async fn get_verity_hash(
     client: &mut Client,
     reference: &Reference,
-    layer: &manifest::OciDescriptor,
+    layer_digest: &str,
 ) -> Result<String> {
     let base_dir = tempdir().unwrap();
     let mut file_path = base_dir.path().join("image_layer");
@@ -206,8 +223,8 @@ async fn get_dm_verity_hash(
     {
         let mut file = tokio::fs::File::create(&file_path).await?;
 
-        info!("Downloading layer {:?} to {:?}", &layer.digest, &file_path);
-        if let Err(err) = client.pull_blob(&reference, &layer.digest, &mut file).await {
+        info!("Downloading layer {:?} to {:?}", layer_digest, &file_path);
+        if let Err(err) = client.pull_blob(&reference, layer_digest, &mut file).await {
             drop(file);
             debug!("Download failed: {:?}", err);
             let _ = fs::remove_file(&file_path);
