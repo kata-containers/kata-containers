@@ -7,7 +7,7 @@ mod inner;
 
 use crate::device::DeviceType;
 use crate::hypervisor_persist::HypervisorState;
-use crate::Hypervisor;
+use crate::{Hypervisor, MemoryConfig};
 use crate::{HypervisorConfig, VcpuThreadIds};
 use inner::QemuInner;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
@@ -171,5 +171,14 @@ impl Hypervisor for Qemu {
     async fn guest_memory_block_size(&self) -> u32 {
         let inner = self.inner.read().await;
         inner.guest_memory_block_size_mb()
+    }
+
+    async fn resize_memory(
+        &self,
+        req_mem_mb: u32,
+        curr_mem_mb: u32,
+    ) -> Result<(u32, MemoryConfig)> {
+        let inner = self.inner.read().await;
+        inner.resize_memory(req_mem_mb, curr_mem_mb)
     }
 }
