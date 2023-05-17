@@ -98,10 +98,6 @@ assets:
       uscan-url: >-
         https://github.com/qemu/qemu/tags
         .*/v?(\d\S+)\.tar\.gz
-      tdx:
-        description: "VMM that uses KVM and supports TDX"
-        url: "https://github.com/kata-containers/qemu"
-        tag: "TDX-v3.1"
       snp:
         description: "VMM that uses KVM and supports AMD SEV-SNP"
         url: "https://github.com/AMDESE/qemu"
@@ -111,6 +107,12 @@ assets:
       description: "QEMU with virtiofs support"
       url: "https://github.com/qemu/qemu"
       version: "7a800cf9496fddddf71b21a00991e0ec757a170a"
+
+    qemu-tdx-experimental:
+      # yamllint disable-line rule:line-length
+      description: "QEMU with TDX support - based on https://github.com/intel/tdx-tools/releases/tag/2023ww01"
+      url: "https://github.com/kata-containers/qemu"
+      tag: "ad4c7f529a279685da84297773b4ec8080153c2d-plus-TDX-v1.3"
 
   image:
     description: |
@@ -156,10 +158,6 @@ assets:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.19.2"
-    tdx:
-      description: "Linux kernel that supports TDX"
-      url: "https://github.com/kata-containers/linux/archive/refs/tags"
-      tag: "5.15-plus-TDX"
     sev:
       description: "Linux kernel that supports SEV"
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
@@ -183,6 +181,12 @@ assets:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.10.25"
+
+  kernel-tdx-experimental:
+    # yamllint disable-line rule:line-length
+    description: "Linux kernel with TDX support -- based on https://github.com/intel/tdx-tools/releases/tag/2023ww01"
+    url: "https://github.com/kata-containers/linux/archive/refs/tags"
+    version: "5.19-TDX-v2.2"
 
 externals:
   description: "Third-party projects used by the system"
@@ -277,7 +281,7 @@ externals:
   nydus:
     description: "Nydus image acceleration service"
     url: "https://github.com/dragonflyoss/image-service"
-    version: "v2.1.1"
+    version: "v2.2.0"
 
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
@@ -301,11 +305,11 @@ externals:
       package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
       package_output_dir: "AmdSev"
     tdx:
-      url: "https://github.com/tianocore/edk2-staging"
-      description: "TDVF build needed for TDX measured direct boot."
-      version: "2022-tdvf-ww28.5"
-      package: "OvmfPkg/OvmfPkgX64.dsc"
-      package_output_dir: "OvmfX64"
+      # yamllint disable-line rule:line-length
+      description: "QEMU with TDX support - based on https://github.com/intel/tdx-tools/releases/tag/2023ww01"
+      version: "edk2-stable202211"
+      package: "OvmfPkg/IntelTdx/IntelTdxX64.dsc"
+      package_output_dir: "IntelTdx"
 
   td-shim:
     description: "Confidential Containers Shim Firmware"

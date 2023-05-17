@@ -1,0 +1,28 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sharevol-kata
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+  - name: test
+    image: quay.io/prometheus/busybox:latest
+    command: ["tail", "-f", "/dev/null"]
+    volumeMounts:
+      - name: host-empty-vol
+        mountPath: "/host/cache"
+      - name: memory-empty-vol
+        mountPath: "/tmp/cache"
+  volumes:
+  - name: host-empty-vol
+    emptyDir: {}
+  - name: memory-empty-vol
+    emptyDir:
+      medium: Memory
+      sizeLimit: "50M"

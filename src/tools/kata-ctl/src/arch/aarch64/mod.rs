@@ -7,6 +7,7 @@
 pub use arch_specific::*;
 
 mod arch_specific {
+    use crate::check;
     use crate::types::*;
     use anyhow::Result;
     use std::path::Path;
@@ -19,7 +20,7 @@ mod arch_specific {
 
     // List of check functions
     static CHECK_LIST: &[CheckItem] = &[CheckItem {
-        name: CheckType::CheckCpu,
+        name: CheckType::Cpu,
         descr: "This parameter performs the host check",
         fp: check,
         perm: PermissionType::NonPrivileged,
@@ -38,5 +39,11 @@ mod arch_specific {
 
     pub fn get_checks() -> Option<&'static [CheckItem<'static>]> {
         Some(CHECK_LIST)
+    }
+
+    #[allow(dead_code)]
+    // Guest protection is not supported on ARM64.
+    pub fn available_guest_protection() -> Result<check::GuestProtection, check::ProtectionError> {
+        Ok(check::GuestProtection::NoProtection)
     }
 }

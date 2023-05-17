@@ -1,0 +1,65 @@
+name: CI | Run kubernetes tests on TDX
+on:
+  workflow_call:
+    inputs:
+      registry:
+        required: true
+        type: string
+      repo:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+
+jobs:
+  run-k8s-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        vmm:
+          - qemu-tdx
+    runs-on: tdx
+    env:
+      KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Deploy kata-deploy
+        run: |
+          sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${{ inputs.registry }}/${{ inputs.repo }}:${{ inputs.tag }}|g" tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
+          cat tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
+          cat tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml | grep "${{ inputs.registry }}/${{ inputs.repo }}:${{ inputs.tag }}" || die "Failed to setup the tests image"
+
+          kubectl apply -f tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
+          kubectl apply -k tools/packaging/kata-deploy/kata-deploy/overlays/k3s
+          kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
+          kubectl apply -f tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
+
+      - name: Run tests
+        timeout-minutes: 30
+        run: |
+          pushd tests/integration/kubernetes
+          sed -i -e 's|runtimeClassName: kata|runtimeClassName: kata-${{ matrix.vmm }}|' runtimeclass_workloads/*.yaml
+          bash run_kubernetes_tests.sh
+          popd
+        env:
+          KATA_HYPERVISOR: ${{ matrix.vmm }}
+
+      - name: Delete kata-deploy
+        if: always()
+        run: |
+          kubectl delete -k tools/packaging/kata-deploy/kata-deploy/overlays/k3s
+          kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
+
+          sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${{ inputs.registry }}/${{ inputs.repo }}:${{ inputs.tag }}|g" tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+          cat tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+          cat tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml | grep "${{ inputs.registry }}/${{ inputs.repo }}:${{ inputs.tag }}" || die "Failed to setup the tests image"
+          kubectl apply -f tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+          sleep 180s
+
+          kubectl delete -f tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+          kubectl delete -f tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
+          kubectl delete -f tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml

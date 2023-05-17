@@ -1,0 +1,23 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: constraints-cpu-test
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+  - name: first-cpu-container
+    image: quay.io/prometheus/busybox:latest
+    command:
+        - sleep
+        - "30"
+    resources:
+      limits:
+        cpu: "1"
+      requests:
+        cpu: "500m"

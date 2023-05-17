@@ -47,6 +47,7 @@ Options:
 	-f          	: Enable force generate config when setup.
 	-g <vendor> 	: GPU vendor, intel or nvidia.
 	-h          	: Display this help.
+  -H <deb|rpm>  : Linux headers for guest fs module building.
 	-k <path>   	: Path to kernel to build.
 	-p <path>   	: Path to a directory with patches to apply to kernel, only patches in top-level directory are applied.
 	-t <hypervisor>	: Hypervisor_target.

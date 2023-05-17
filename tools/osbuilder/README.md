@@ -80,7 +80,7 @@ filesystem components to generate an initrd.
 3. When generating an image, the initrd is extracted to obtain the base rootfs for
 the image.
 
-Ubuntu is the default distro for building the rootfs, to use a different one, you can set `DISTRO=alpine|clearlinux|debian|ubuntu`.
+Ubuntu is the default distro for building the rootfs, to use a different one, you can set `DISTRO=alpine|clearlinux|debian|ubuntu|cbl-mariner`.
 For example `make USE_DOCKER=true DISTRO=alpine rootfs` will make an Alpine rootfs using Docker.
 
 ### Rootfs creation
@@ -209,9 +209,9 @@ of the the osbuilder distributions.
 > Note: this table is not relevant for the dracut build method, since it supports
 any Linux distribution and architecture where dracut is available.
 
-|           |Alpine            |CentOS Stream     |Clear Linux       |Debian/Ubuntu     |
-|--         |--                |--                |--                |--                |
-|**ARM64**  |:heavy_check_mark:|:heavy_check_mark:|                  |                  |
-|**PPC64le**|                  |:heavy_check_mark:|                  |:heavy_check_mark:|
-|**s390x**  |                  |:heavy_check_mark:|                  |:heavy_check_mark:|
-|**x86_64** |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|
+|           |Alpine            |CentOS Stream     |Clear Linux       |Debian/Ubuntu     |CBL-Mariner       |
+|--         |--                |--                |--                |--                |--                |
+|**ARM64**  |:heavy_check_mark:|:heavy_check_mark:|                  |                  |                  |
+|**PPC64le**|                  |:heavy_check_mark:|                  |:heavy_check_mark:|                  |
+|**s390x**  |                  |:heavy_check_mark:|                  |:heavy_check_mark:|                  |
+|**x86_64** |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|

@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	goruntime "runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -180,6 +181,10 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		PFlash:                []string{},
 		SGXEPCSize:            epcSize,
 		SNPGuestPolicy:        defaultSNPGuestPolicy,
+	}
+
+	if goruntime.GOARCH == "arm64" && len(hypervisorConfig.PFlash) == 0 && hypervisorConfig.FirmwarePath == "" {
+		hypervisorConfig.DisableImageNvdimm = true
 	}
 
 	agentConfig := vc.KataAgentConfig{

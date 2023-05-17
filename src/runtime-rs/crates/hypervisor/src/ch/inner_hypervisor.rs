@@ -68,6 +68,8 @@ impl CloudHypervisorInner {
 
         let enable_debug = cfg.debug_info.enable_debug;
 
+        let confidential_guest = cfg.security_info.confidential_guest;
+
         // Note that the configuration option hypervisor.block_device_driver is not used.
         let rootfs_driver = VM_ROOTFS_DRIVER_PMEM;
 
@@ -80,6 +82,18 @@ impl CloudHypervisorInner {
         let mut params = KernelParams::new(enable_debug);
 
         let mut rootfs_param = KernelParams::new_rootfs_kernel_params(rootfs_driver, rootfs_type)?;
+
+        let mut extra_params = if enable_debug {
+            if confidential_guest {
+                KernelParams::from_string("console=hvc0")
+            } else {
+                KernelParams::from_string("console=ttyS0,115200n8")
+            }
+        } else {
+            KernelParams::from_string("quiet")
+        };
+
+        params.append(&mut extra_params);
 
         // Add the rootfs device
         params.append(&mut rootfs_param);
@@ -121,11 +135,18 @@ impl CloudHypervisorInner {
 
         let kernel_params = self.get_kernel_params().await?;
 
+        // FIXME: See:
+        //
+        // - https://github.com/kata-containers/kata-containers/issues/6383
+        // - https://github.com/kata-containers/kata-containers/pull/6257
+        let tdx_enabled = false;
+
         let named_cfg = NamedHypervisorConfig {
             kernel_params,
             sandbox_path,
             vsock_socket_path,
             cfg: hypervisor_config.clone(),
+            tdx_enabled,
             shared_fs_devices,
         };
 
@@ -229,7 +250,13 @@ impl CloudHypervisorInner {
     async fn cloud_hypervisor_launch(&mut self, _timeout_secs: i32) -> Result<()> {
         self.cloud_hypervisor_ensure_not_launched().await?;
 
-        let debug = false;
+        let cfg = self
+            .config
+            .as_ref()
+            .ok_or("no hypervisor config for CH")
+            .map_err(|e| anyhow!(e))?;
+
+        let debug = cfg.debug_info.enable_debug;
 
         let disable_seccomp = true;
 

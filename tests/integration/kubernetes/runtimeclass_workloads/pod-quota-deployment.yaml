@@ -1,0 +1,26 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deploymenttest
+  namespace: test-quota-ns
+spec:
+  selector:
+    matchLabels:
+      purpose: quota-demo
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        purpose: quota-demo
+    spec:
+      terminationGracePeriodSeconds: 0
+      runtimeClassName: kata
+      containers:
+      - name: pod-quota-demo
+        image: quay.io/prometheus/busybox:latest
+        command: ["tail", "-f", "/dev/null"]
