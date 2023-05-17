@@ -107,7 +107,7 @@ func (n *LinuxNetwork) trace(ctx context.Context, name string) (otelTrace.Span, 
 	return networkTrace(ctx, name, nil)
 }
 
-func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInfo NetworkInfo, hotplug bool) (Endpoint, error) {
+func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, idx int, s *Sandbox, netInfo NetworkInfo) (Endpoint, error) {
 	var endpoint Endpoint
 	// TODO: This is the incoming interface
 	// based on the incoming interface we should create
@@ -126,7 +126,6 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 		endpoint, err = createPhysicalEndpoint(netInfo)
 	} else {
 		var socketPath string
-		idx := len(n.eps)
 
 		// Check if this is a dummy interface which has a vhost-user socket associated with it
 		socketPath, err = vhostUserSocketPath(netInfo)
@@ -176,38 +175,6 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 		return nil, err
 	}
 
-	endpoint.SetProperties(netInfo)
-
-	networkLogger().WithField("endpoint-type", endpoint.Type()).WithField("hotplug", hotplug).Info("Attaching endpoint")
-	if hotplug {
-		if err := endpoint.HotAttach(ctx, s.hypervisor); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := endpoint.Attach(ctx, s); err != nil {
-			return nil, err
-		}
-	}
-
-	if !s.hypervisor.IsRateLimiterBuiltin() {
-		rxRateLimiterMaxRate := s.hypervisor.HypervisorConfig().RxRateLimiterMaxRate
-		if rxRateLimiterMaxRate > 0 {
-			networkLogger().Info("Add Rx Rate Limiter")
-			if err := addRxRateLimiter(endpoint, rxRateLimiterMaxRate); err != nil {
-				return nil, err
-			}
-		}
-		txRateLimiterMaxRate := s.hypervisor.HypervisorConfig().TxRateLimiterMaxRate
-		if txRateLimiterMaxRate > 0 {
-			networkLogger().Info("Add Tx Rate Limiter")
-			if err := addTxRateLimiter(endpoint, txRateLimiterMaxRate); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	n.eps = append(n.eps, endpoint)
-
 	return endpoint, nil
 }
 
@@ -252,31 +219,31 @@ func (n *LinuxNetwork) removeSingleEndpoint(ctx context.Context, s *Sandbox, idx
 	return nil
 }
 
-// Scan the networking namespace through netlink and then:
-// 1. Create the endpoints for the relevant interfaces found there.
-// 2. Attach them to the VM.
-func (n *LinuxNetwork) addAllEndpoints(ctx context.Context, s *Sandbox, hotplug bool) error {
+// Scan the networking namespace through netlink
+func (n *LinuxNetwork) discoverAllNicInfo(ctx context.Context, s *Sandbox, hotplug bool) ([]NetworkInfo, error) {
+	var netInfoList []NetworkInfo
+
 	netnsHandle, err := netns.GetFromPath(n.netNSPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer netnsHandle.Close()
 
 	netlinkHandle, err := netlink.NewHandleAt(netnsHandle)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer netlinkHandle.Close()
 
 	linkList, err := netlinkHandle.LinkList()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, link := range linkList {
 		netInfo, err := networkInfoFromLink(netlinkHandle, link)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Ignore unconfigured network interfaces. These are
@@ -292,22 +259,10 @@ func (n *LinuxNetwork) addAllEndpoints(ctx context.Context, s *Sandbox, hotplug 
 			continue
 		}
 
-		if err := doNetNS(n.netNSPath, func(_ ns.NetNS) error {
-			_, err = n.addSingleEndpoint(ctx, s, netInfo, hotplug)
-			return err
-		}); err != nil {
-			return err
-		}
-
+		netInfoList = append(netInfoList, netInfo)
 	}
 
-	sort.Slice(n.eps, func(i, j int) bool {
-		return n.eps[i].Name() < n.eps[j].Name()
-	})
-
-	networkLogger().WithField("endpoints", n.eps).Info("endpoints found after scan")
-
-	return nil
+	return netInfoList, nil
 }
 
 // Run runs a callback in the specified network namespace.
@@ -321,29 +276,85 @@ func (n *LinuxNetwork) Run(ctx context.Context, cb func() error) error {
 }
 
 // Add adds all needed interfaces inside the network namespace.
-func (n *LinuxNetwork) AddEndpoints(ctx context.Context, s *Sandbox, endpointsInfo []NetworkInfo, hotplug bool) ([]Endpoint, error) {
+func (n *LinuxNetwork) AddEndpoints(ctx context.Context, s *Sandbox, netInfoList []NetworkInfo, hotplug bool) ([]Endpoint, error) {
 	span, ctx := n.trace(ctx, "AddEndpoints")
 	katatrace.AddTags(span, "type", n.interworkingModel.GetModel())
 	defer span.End()
 
-	if endpointsInfo == nil {
-		if err := n.addAllEndpoints(ctx, s, hotplug); err != nil {
+	var endpoints []Endpoint
+
+	// discover all netInfo
+	if netInfoList == nil {
+		var err error
+		if netInfoList, err = n.discoverAllNicInfo(ctx, s, hotplug); err != nil {
 			return nil, err
 		}
-	} else {
-		for _, ep := range endpointsInfo {
-			if err := doNetNS(n.netNSPath, func(_ ns.NetNS) error {
-				if _, err := n.addSingleEndpoint(ctx, s, ep, hotplug); err != nil {
-					n.eps = nil
+	}
+
+	// discover all endpoints
+	for idx, netInfo := range netInfoList {
+		var (
+			endpoint  Endpoint
+			errCreate error
+		)
+
+		if err := doNetNS(n.netNSPath, func(_ ns.NetNS) error {
+			if endpoint, errCreate = n.addSingleEndpoint(ctx, idx, s, netInfo); errCreate != nil {
+				n.eps = nil
+				return errCreate
+			}
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+		endpoint.SetProperties(netInfo)
+		endpoints = append(endpoints, endpoint)
+	}
+
+	// sort by name
+	sort.Slice(endpoints, func(i, j int) bool {
+		return endpoints[i].Name() < endpoints[j].Name()
+	})
+
+	networkLogger().WithField("endpoints", endpoints).Info("endpoints found after scan")
+
+	// attach endponits
+	if err := doNetNS(n.netNSPath, func(_ ns.NetNS) error {
+		for _, endpoint := range endpoints {
+			networkLogger().WithField("endpoint-type", endpoint.Type()).WithField("hotplug", hotplug).Info("Attaching endpoint")
+			if hotplug {
+				if err := endpoint.HotAttach(ctx, s.hypervisor); err != nil {
 					return err
 				}
+			} else {
+				if err := endpoint.Attach(ctx, s); err != nil {
+					return err
+				}
+			}
 
-				return nil
-			}); err != nil {
-				return nil, err
+			if !s.hypervisor.IsRateLimiterBuiltin() {
+				rxRateLimiterMaxRate := s.hypervisor.HypervisorConfig().RxRateLimiterMaxRate
+				if rxRateLimiterMaxRate > 0 {
+					networkLogger().Info("Add Rx Rate Limiter")
+					if err := addRxRateLimiter(endpoint, rxRateLimiterMaxRate); err != nil {
+						return err
+					}
+				}
+				txRateLimiterMaxRate := s.hypervisor.HypervisorConfig().TxRateLimiterMaxRate
+				if txRateLimiterMaxRate > 0 {
+					networkLogger().Info("Add Tx Rate Limiter")
+					if err := addTxRateLimiter(endpoint, txRateLimiterMaxRate); err != nil {
+						return err
+					}
+				}
 			}
 		}
+
+		return nil
+	}); err != nil {
+		return nil, err
 	}
+	n.eps = endpoints
 
 	katatrace.AddTags(span, "endpoints", n.eps, "hotplug", hotplug)
 	networkLogger().Debug("Endpoints added")
