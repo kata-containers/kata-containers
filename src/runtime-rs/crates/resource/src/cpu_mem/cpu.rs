@@ -11,7 +11,6 @@ use std::{
     sync::Arc,
 };
 
-use agent::{Agent, OnlineCPUMemRequest};
 use anyhow::{Context, Ok, Result};
 use hypervisor::Hypervisor;
 use kata_types::{config::TomlConfig, cpu::LinuxContainerCpuResources};
@@ -52,7 +51,6 @@ impl CpuResource {
         linux_cpus: Option<&LinuxCpu>,
         op: ResourceUpdateOp,
         hypervisor: &dyn Hypervisor,
-        agent: &dyn Agent,
     ) -> Result<()> {
         self.update_container_cpu_resources(cid, linux_cpus, op)
             .await
@@ -67,13 +65,13 @@ impl CpuResource {
         }
 
         let curr_vcpus = self
-            .do_update_cpu_resources(vcpu_required, op, hypervisor, agent)
+            .do_update_cpu_resources(vcpu_required, op, hypervisor)
             .await?;
         self.update_current_vcpu(curr_vcpus).await;
         Ok(())
     }
 
-    async fn current_vcpu(&self) -> u32 {
+    pub(crate) async fn current_vcpu(&self) -> u32 {
         let current_vcpu = self.current_vcpu.read().await;
         *current_vcpu
     }
@@ -148,7 +146,6 @@ impl CpuResource {
         new_vcpus: u32,
         op: ResourceUpdateOp,
         hypervisor: &dyn Hypervisor,
-        agent: &dyn Agent,
     ) -> Result<u32> {
         let old_vcpus = self.current_vcpu().await;
 
@@ -164,24 +161,10 @@ impl CpuResource {
         // the number of vcpus would not be lower than the default size
         let new_vcpus = cmp::max(new_vcpus, self.default_vcpu);
 
-        let (old, new) = hypervisor
+        let (_, new) = hypervisor
             .resize_vcpu(old_vcpus, new_vcpus)
             .await
             .context("resize vcpus")?;
-
-        if old < new {
-            let add = new - old;
-            info!(sl!(), "request to onlineCpuMem with {:?} cpus", add);
-
-            agent
-                .online_cpu_mem(OnlineCPUMemRequest {
-                    wait: false,
-                    nb_cpus: new,
-                    cpu_only: true,
-                })
-                .await
-                .context("online vcpus")?;
-        }
 
         Ok(new)
     }

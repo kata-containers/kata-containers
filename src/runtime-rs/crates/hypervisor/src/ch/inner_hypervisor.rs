@@ -756,11 +756,7 @@ impl CloudHypervisorInner {
         todo!()
     }
 
-    pub(crate) fn resize_memory(
-        &self,
-        _req_mem_mb: u32,
-        _curr_mem_mb: u32,
-    ) -> Result<(u32, MemoryConfig)> {
+    pub(crate) fn resize_memory(&self, _req_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
         todo!()
     }
 }

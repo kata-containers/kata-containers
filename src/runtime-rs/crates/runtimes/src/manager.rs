@@ -91,6 +91,7 @@ impl RuntimeHandlerManagerInner {
         network_env: SandboxNetworkEnv,
         dns: Vec<String>,
         config: Arc<TomlConfig>,
+        init_size_manager: InitialSizeManager,
     ) -> Result<()> {
         info!(sl!(), "new runtime handler {}", &config.runtime.name);
         let runtime_handler = match config.runtime.name.as_str() {
@@ -105,7 +106,12 @@ impl RuntimeHandlerManagerInner {
             _ => return Err(anyhow!("Unsupported runtime: {}", &config.runtime.name)),
         };
         let runtime_instance = runtime_handler
-            .new_instance(&self.id, self.msg_sender.clone(), config.clone())
+            .new_instance(
+                &self.id,
+                self.msg_sender.clone(),
+                config.clone(),
+                init_size_manager,
+            )
             .await
             .context("new runtime instance")?;
 
@@ -160,7 +166,21 @@ impl RuntimeHandlerManagerInner {
             }
         }
 
-        let config = load_config(spec, options).context("load config")?;
+        let mut config = load_config(spec, options).context("load config")?;
+
+        // Sandbox sizing information *may* be provided in two scenarios:
+        //   1. The upper layer runtime (ie, containerd or crio) provide sandbox sizing information as an annotation
+        //	in the 'sandbox container's' spec. This would typically be a scenario where as part of a create sandbox
+        //	request the upper layer runtime receives this information as part of a pod, and makes it available to us
+        //	for sizing purposes.
+        //   2. If this is not a sandbox infrastructure container, but instead a standalone single container (analogous to "docker run..."),
+        //	then the container spec itself will contain appropriate sizing information for the entire sandbox (since it is
+        //	a single container.
+        let mut initial_size_manager =
+            InitialSizeManager::new(spec).context("failed to construct static resource manager")?;
+        initial_size_manager
+            .setup_config(&mut config)
+            .context("failed to setup static resource mgmt config")?;
 
         update_component_log_level(&config);
 
@@ -202,10 +222,16 @@ impl RuntimeHandlerManagerInner {
             netns,
             network_created,
         };
-
-        self.init_runtime_handler(spec, state, network_env, dns, Arc::new(config))
-            .await
-            .context("init runtime handler")?;
+        self.init_runtime_handler(
+            spec,
+            state,
+            network_env,
+            dns,
+            Arc::new(config),
+            initial_size_manager,
+        )
+        .await
+        .context("init runtime handler")?;
 
         // the sandbox creation can reach here only once and the sandbox is created
         // so we can safely create the shim management socket right now
@@ -507,7 +533,7 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
     //   2. If this is not a sandbox infrastructure container, but instead a standalone single container (analogous to "docker run..."),
     //	then the container spec itself will contain appropriate sizing information for the entire sandbox (since it is
     //	a single container.
-    let initial_size_manager =
+    let mut initial_size_manager =
         InitialSizeManager::new(spec).context("failed to construct static resource manager")?;
     initial_size_manager
         .setup_config(&mut toml_config)
