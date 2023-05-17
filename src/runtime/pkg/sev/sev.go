@@ -4,7 +4,7 @@
 //
 
 // Package sev can be used to compute the expected hash values for
-// SEV/-ES pre-launch attestation
+// SEV/-ES pre-launch attestation.
 package sev
 
 import (
