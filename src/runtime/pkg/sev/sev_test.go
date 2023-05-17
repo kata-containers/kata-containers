@@ -31,6 +31,17 @@ func TestCalculateLaunchDigestWithKernelHashes(t *testing.T) {
 	}
 }
 
+func TestCalculateLaunchDigestWithKernelHashesWithoutInitrd(t *testing.T) {
+	ld, err := CalculateLaunchDigest("testdata/ovmf_suffix.bin", "/dev/null", "", "")
+	if err != nil {
+		t.Fatalf("unexpected err value: %s", err)
+	}
+	hexld := hex.EncodeToString(ld[:])
+	if hexld != "d59d7696efd7facfaa653758586e6120c4b6eaec3e327771d278cc6a44786ba5" {
+		t.Fatalf("wrong measurement: %s", hexld)
+	}
+}
+
 func TestCalculateLaunchDigestWithKernelHashesSevEs(t *testing.T) {
 	ld, err := CalculateSEVESLaunchDigest(1, SigEpycV4, "testdata/ovmf_suffix.bin", "/dev/null", "/dev/null", "")
 	if err != nil {

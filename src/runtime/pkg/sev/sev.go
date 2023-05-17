@@ -66,13 +66,27 @@ func fileSha256(filename string) (res [sha256.Size]byte, err error) {
 	return res, nil
 }
 
+// Calculate the SHA256 of the initrd file.  If an initrd file is not given,
+// return the SHA256 of the empty string.
+func hashInitrd(initrdPath string) (res [sha256.Size]byte, err error) {
+	if initrdPath == "" {
+		return sha256.Sum256([]byte{}), nil
+	}
+
+	initrdHash, err := fileSha256(initrdPath)
+	if err != nil {
+		return res, err
+	}
+	return initrdHash, nil
+}
+
 func constructSevHashesTable(kernelPath, initrdPath, cmdline string) ([]byte, error) {
 	kernelHash, err := fileSha256(kernelPath)
 	if err != nil {
 		return []byte{}, err
 	}
 
-	initrdHash, err := fileSha256(initrdPath)
+	initrdHash, err := hashInitrd(initrdPath)
 	if err != nil {
 		return []byte{}, err
 	}
@@ -125,7 +139,8 @@ func constructSevHashesTable(kernelPath, initrdPath, cmdline string) ([]byte, er
 }
 
 // CalculateLaunchDigest returns the sha256 encoded SEV launch digest based off
-// the current firmware, kernel, initrd, and the kernel cmdline
+// the given firmware, kernel, initrd, and the kernel cmdline. kernelPath,
+// initrdPath, and cmdline may be empty.
 func CalculateLaunchDigest(firmwarePath, kernelPath, initrdPath, cmdline string) (res [sha256.Size]byte, err error) {
 	f, err := os.Open(firmwarePath)
 	if err != nil {
@@ -139,9 +154,9 @@ func CalculateLaunchDigest(firmwarePath, kernelPath, initrdPath, cmdline string)
 	}
 
 	// When used for confidential containers in kata-containers, kernelPath
-	// is always set (direct boot).  However, this current package can also
-	// be used by other programs which may calculate launch digests of
-	// arbitrary SEV guests without SEV kernel hashes table.
+	// is always set (direct boot).  However, this package can also be used
+	// by other programs which may calculate launch digests of arbitrary
+	// SEV guests without SEV kernel hashes table.
 	if kernelPath != "" {
 		ht, err := constructSevHashesTable(kernelPath, initrdPath, cmdline)
 		if err != nil {
@@ -155,8 +170,9 @@ func CalculateLaunchDigest(firmwarePath, kernelPath, initrdPath, cmdline string)
 }
 
 // CalculateSEVESLaunchDigest returns the sha256 encoded SEV-ES launch digest
-// based off the current firmware, kernel, initrd, and the kernel cmdline, and
-// the number of vcpus and their type
+// based off the given firmware, kernel, initrd, and the kernel cmdline, and
+// the number of vcpus and their type. kernelPath, initrdPath and cmdline may
+// be empty.
 func CalculateSEVESLaunchDigest(vcpus int, vcpuSig VCPUSig, firmwarePath, kernelPath, initrdPath, cmdline string) (res [sha256.Size]byte, err error) {
 	f, err := os.Open(firmwarePath)
 	if err != nil {
@@ -170,9 +186,9 @@ func CalculateSEVESLaunchDigest(vcpus int, vcpuSig VCPUSig, firmwarePath, kernel
 	}
 
 	// When used for confidential containers in kata-containers, kernelPath
-	// is always set (direct boot).  However, this current package can also
-	// be used by other programs which may calculate launch digests of
-	// arbitrary SEV guests without SEV kernel hashes table.
+	// is always set (direct boot).  However, this package can also be used
+	// by other programs which may calculate launch digests of arbitrary
+	// SEV guests without SEV kernel hashes table.
 	if kernelPath != "" {
 		ht, err := constructSevHashesTable(kernelPath, initrdPath, cmdline)
 		if err != nil {
