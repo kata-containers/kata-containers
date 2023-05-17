@@ -45,6 +45,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.KATA_GITHUB_ACTIONS_TOKEN }}
         run: |
+          [[ -z $GITHUB_TOKEN ]] && echo "I don't have GITHUB_TOKEN!" && exit 1
+          [[ ! -z $GITHUB_TOKEN ]] && echo "I do have GITHUB_TOKEN!" && exit 0
+
           pr=${{ github.event.pull_request.number }}
 
           linked_issue_urls=$(hub-util.sh \
