@@ -963,6 +963,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 
 		DisableGuestSeccomp: runtime.DisableGuestSeccomp,
 
+		EnableVCPUsPinning: runtime.EnableVCPUsPinning,
+
 		GuestSeLinuxLabel: runtime.GuestSeLinuxLabel,
 
 		Experimental: runtime.Experimental,
