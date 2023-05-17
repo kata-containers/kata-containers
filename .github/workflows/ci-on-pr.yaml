@@ -41,22 +41,10 @@ jobs:
     uses: ./.github/workflows/snap.yaml
     secrets: inherit
 
-  run-require-pr-porting-labels:
-    needs: [skip]
-    if: needs.skip.outputs.skip != '1'
-    uses: ./.github/workflows/require-pr-porting-labels.yaml
-    secrets: inherit
-
   run-PR-wip-checks:
     needs: [skip]
     if: needs.skip.outputs.skip != '1'
     uses: ./.github/workflows/PR-wip-checks.yaml
-    secrets: inherit
-
-  run-move-issues-to-in-progress:
-    needs: [skip]
-    if: needs.skip.outputs.skip != '1'
-    uses: ./.github/workflows/move-issues-to-in-progress.yaml
     secrets: inherit
 
   run-commit-message-check:

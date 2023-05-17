@@ -6,10 +6,26 @@
 name: Ensure PR has required porting labels
 
 on:
-  workflow_call:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - labeled
+      - unlabeled
+    branches:
+      - main
 
 jobs:
+  skip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/workflows/skip-pr-check.yaml
+        with:
+          pr: ${{ github.event.pull_request.number }}
+
   check-pr-porting-labels:
+    needs: skip
+    if: needs.skip.outputs.skip != '1'
     runs-on: ubuntu-latest
     steps:
       - name: Install hub

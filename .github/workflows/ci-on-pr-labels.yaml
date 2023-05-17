@@ -27,12 +27,6 @@ jobs:
     uses: ./.github/workflows/PR-wip-checks.yaml
     secrets: inherit
 
-  run-require-pr-porting-labels:
-    needs: [skip]
-    if: needs.skip.outputs.skip != '1'
-    uses: ./.github/workflows/require-pr-porting-labels.yaml
-    secrets: inherit
-
   run-add-backport-label:
     needs: [skip]
     if: needs.skip.outputs.skip != '1'

@@ -6,10 +6,22 @@
 name: Move issues to "In progress" in backlog project when referenced by a PR
 
 on:
-  workflow_call:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
 
 jobs:
+  skip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/workflows/skip-pr-check.yaml
+        with:
+          pr: ${{ github.event.pull_request.number }}
+
   move-linked-issues-to-in-progress:
+    needs: skip
+    if: needs.skip.outputs.skip != '1'
     runs-on: ubuntu-latest
     steps:
       - name: Install hub
