@@ -130,7 +130,7 @@ FIRMWAREVOLUMEPATH :=
 FIRMWARETDVFPATH := $(PREFIXDEPS)/share/tdvf/OVMF.fd
 FIRMWARETDVFVOLUMEPATH :=
 
-FIRMWARESEVPATH := $(PREFIXDEPS)/share/ovmf/AMDSEV.fd
+FIRMWARESEVPATH := $(PREFIXDEPS)/share/ovmf/OVMF.fd
 FIRMWARESNPPATH := $(PREFIXDEPS)/share/ovmf/OVMF.fd
 
 # Name of default configuration file the runtime will use.
