@@ -26,7 +26,7 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use tokio::sync::RwLock;
 use tracing::instrument;
 
-use crate::{DeviceType, Hypervisor, NetworkConfig, VcpuThreadIds};
+use crate::{DeviceType, Hypervisor, MemoryConfig, NetworkConfig, VcpuThreadIds};
 
 pub struct Dragonball {
     inner: Arc<RwLock<DragonballInner>>,
@@ -191,7 +191,16 @@ impl Hypervisor for Dragonball {
 
     async fn guest_memory_block_size(&self) -> u32 {
         let inner = self.inner.read().await;
-        inner.get_guest_memory_block_size()
+        inner.guest_memory_block_size_mb()
+    }
+
+    async fn resize_memory(
+        &self,
+        req_mem_mb: u32,
+        curr_mem_mb: u32,
+    ) -> Result<(u32, MemoryConfig)> {
+        let inner = self.inner.read().await;
+        inner.resize_memory(req_mem_mb, curr_mem_mb)
     }
 }
 

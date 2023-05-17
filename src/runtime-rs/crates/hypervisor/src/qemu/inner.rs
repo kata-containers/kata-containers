@@ -5,7 +5,7 @@
 
 use anyhow::Result;
 
-use crate::{HypervisorConfig, VcpuThreadIds};
+use crate::{HypervisorConfig, MemoryConfig, VcpuThreadIds};
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 
 const VSOCK_SCHEME: &str = "vsock";
@@ -150,6 +150,14 @@ impl QemuInner {
     }
 
     pub(crate) fn guest_memory_block_size_mb(&self) -> u32 {
+        todo!()
+    }
+
+    pub(crate) fn resize_memory(
+        &self,
+        _req_mem_mb: u32,
+        _curr_mem_mb: u32,
+    ) -> Result<(u32, MemoryConfig)> {
         todo!()
     }
 }

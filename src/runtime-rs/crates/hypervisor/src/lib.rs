@@ -73,6 +73,14 @@ pub struct VcpuThreadIds {
     pub vcpus: HashMap<u32, u32>,
 }
 
+#[derive(Debug, Default)]
+pub struct MemoryConfig {
+    pub slot: u32,
+    pub size_mb: u32,
+    pub addr: u64,
+    pub probe: bool,
+}
+
 #[async_trait]
 pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     // vm manager
@@ -106,4 +114,6 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     async fn set_capabilities(&self, flag: CapabilityBits);
     async fn set_guest_memory_block_size(&self, size: u32);
     async fn guest_memory_block_size(&self) -> u32;
+    async fn resize_memory(&self, req_mem_mb: u32, curr_mem_mb: u32)
+        -> Result<(u32, MemoryConfig)>;
 }

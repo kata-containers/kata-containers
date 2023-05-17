@@ -19,6 +19,7 @@ use dragonball::{
         InstanceInfo, InstanceState, NetworkInterfaceConfig, VcpuResizeInfo, VmmAction,
         VmmActionError, VmmData, VmmRequest, VmmResponse, VmmService, VsockDeviceConfigInfo,
     },
+    device_manager::{balloon_dev_mgr::BalloonDeviceConfigInfo, mem_dev_mgr::MemDeviceConfigInfo},
     vm::VmConfigInfo,
     Vmm,
 };
@@ -252,6 +253,18 @@ impl VmmInstance {
     pub fn resize_vcpu(&self, cfg: &VcpuResizeInfo) -> Result<()> {
         self.handle_request(Request::Sync(VmmAction::ResizeVcpu(cfg.clone())))
             .with_context(|| format!("Failed to resize_vm(hotplug vcpu), cfg: {:?}", cfg))?;
+        Ok(())
+    }
+
+    pub fn insert_mem_device(&self, cfg: MemDeviceConfigInfo) -> Result<()> {
+        self.handle_request(Request::Sync(VmmAction::InsertMemDevice(cfg.clone())))
+            .with_context(|| format!("Failed to insert memory device : {:?}", cfg))?;
+        Ok(())
+    }
+
+    pub fn insert_balloon_device(&self, cfg: BalloonDeviceConfigInfo) -> Result<()> {
+        self.handle_request(Request::Sync(VmmAction::InsertBalloonDevice(cfg.clone())))
+            .with_context(|| format!("Failed to insert balloon device: {:?}", cfg))?;
         Ok(())
     }
 

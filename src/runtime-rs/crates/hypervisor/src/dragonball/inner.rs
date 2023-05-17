@@ -6,13 +6,14 @@
 
 use super::vmm_instance::VmmInstance;
 use crate::{
-    device::DeviceType, hypervisor_persist::HypervisorState, kernel_param::KernelParams, VmmState,
-    DEV_HUGEPAGES, HUGETLBFS, HUGE_SHMEM, HYPERVISOR_DRAGONBALL, SHMEM,
+    device::DeviceType, hypervisor_persist::HypervisorState, kernel_param::KernelParams,
+    MemoryConfig, VmmState, DEV_HUGEPAGES, HUGETLBFS, HUGE_SHMEM, HYPERVISOR_DRAGONBALL, SHMEM,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use dragonball::{
     api::v1::{BootSourceConfig, VcpuResizeInfo},
+    device_manager::{balloon_dev_mgr::BalloonDeviceConfigInfo, mem_dev_mgr::MemDeviceConfigInfo},
     vm::VmConfigInfo,
 };
 
@@ -26,6 +27,7 @@ use kata_types::{
 };
 use nix::mount::MsFlags;
 use persist::sandbox_persist::Persist;
+use std::cmp::Ordering;
 use std::{collections::HashSet, fs::create_dir_all};
 
 const DRAGONBALL_KERNEL: &str = "vmlinux";
@@ -343,6 +345,64 @@ impl DragonballInner {
         Ok((old_vcpus, new_vcpus))
     }
 
+    // curr_mem_m size = default + hotplug
+    pub(crate) fn resize_memory(
+        &self,
+        req_mem_mb: u32,
+        curr_mem_mb: u32,
+    ) -> Result<(u32, MemoryConfig)> {
+        let mem_device_to_insert = match req_mem_mb.cmp(&curr_mem_mb) {
+            Ordering::Greater => {
+                // We need to insert a new memory device
+                let add_mem_mb = req_mem_mb - curr_mem_mb;
+                if self.config.memory_info.enable_virtio_mem {
+                    Some(MemDeviceConfigInfo {
+                        mem_id: format!("mem{}", curr_mem_mb),
+                        size_mib: add_mem_mb as u64,
+                        capacity_mib: add_mem_mb as u64,
+                        multi_region: false,
+                        host_numa_node_id: None,
+                        guest_numa_node_id: None,
+                        use_shared_irq: None,
+                        use_generic_irq: None,
+                    })
+                } else {
+                    None
+                }
+            }
+            Ordering::Less => {
+                // We need to insert a new balloon device to release memory
+                let balloon_config = BalloonDeviceConfigInfo {
+                    balloon_id: format!("mem{}", curr_mem_mb),
+                    size_mib: (curr_mem_mb - req_mem_mb) as u64,
+                    use_shared_irq: None,
+                    use_generic_irq: None,
+                    f_deflate_on_oom: false,
+                    f_reporting: false,
+                };
+                self.vmm_instance
+                    .insert_balloon_device(balloon_config)
+                    .context("failed to insert balloon device")?;
+                None
+            }
+            Ordering::Equal => None, // Everything is already set up
+        };
+
+        // If we have a memory device to insert, do it now
+        if let Some(mem_config) = mem_device_to_insert {
+            self.vmm_instance
+                .insert_mem_device(mem_config)
+                .context("failed to insert memory device")?;
+        }
+
+        Ok((
+            req_mem_mb,
+            MemoryConfig {
+                ..Default::default()
+            },
+        ))
+    }
+
     pub fn set_hypervisor_config(&mut self, config: HypervisorConfig) {
         self.config = config;
     }
@@ -359,7 +419,7 @@ impl DragonballInner {
         self.guest_memory_block_size_mb = size;
     }
 
-    pub(crate) fn get_guest_memory_block_size(&self) -> u32 {
+    pub(crate) fn guest_memory_block_size_mb(&self) -> u32 {
         self.guest_memory_block_size_mb
     }
 }

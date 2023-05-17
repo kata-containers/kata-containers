@@ -5,7 +5,7 @@
 
 use super::HypervisorState;
 use crate::device::DeviceType;
-use crate::{Hypervisor, VcpuThreadIds};
+use crate::{Hypervisor, MemoryConfig, VcpuThreadIds};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
@@ -176,6 +176,15 @@ impl Hypervisor for CloudHypervisor {
     async fn guest_memory_block_size(&self) -> u32 {
         let inner = self.inner.read().await;
         inner.guest_memory_block_size_mb()
+    }
+
+    async fn resize_memory(
+        &self,
+        req_mem_mb: u32,
+        curr_mem_mb: u32,
+    ) -> Result<(u32, MemoryConfig)> {
+        let inner = self.inner.read().await;
+        inner.resize_memory(req_mem_mb, curr_mem_mb)
     }
 }
 
