@@ -181,7 +181,7 @@ func CalculateSEVESLaunchDigest(vcpus int, vcpuSig VCPUSig, firmwarePath, kernel
 		digest.Write(ht)
 	}
 
-	o, err := NewOvmf(firmwarePath)
+	o, err := newOvmf(firmwarePath)
 	if err != nil {
 		return res, err
 	}

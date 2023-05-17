@@ -26,7 +26,7 @@ type ovmf struct {
 	table map[guidLE][]byte
 }
 
-func NewOvmf(filename string) (ovmf, error) {
+func newOvmf(filename string) (ovmf, error) {
 	buf, err := os.ReadFile(filename)
 	if err != nil {
 		return ovmf{}, err
@@ -38,7 +38,13 @@ func NewOvmf(filename string) (ovmf, error) {
 	return ovmf{table}, nil
 }
 
-// Parse the OVMF footer table and return a map from GUID to entry value
+// Parse the OVMF footer table and return a map from GUID to entry value.
+//
+// The OVMF footer table is described in this source file:
+// https://github.com/tianocore/edk2/blob/master/OvmfPkg/ResetVector/Ia16/ResetVectorVtf0.asm
+//
+// This table is also parsed in QEMU and described in its documentation:
+// https://qemu.readthedocs.io/en/latest/specs/sev-guest-firmware.html
 func parseFooterTable(data []byte) (map[guidLE][]byte, error) {
 	table := make(map[guidLE][]byte)
 
