@@ -104,6 +104,9 @@ pub struct Container {
     pub name: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub imagePullPolicy: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub securityContext: Option<SecurityContext>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -342,6 +345,7 @@ impl Yaml {
             let pause_container = Container {
                 image: "mcr.microsoft.com/oss/kubernetes/pause:3.6".to_string(),
                 name: String::new(),
+                imagePullPolicy: None,
                 securityContext: Some(SecurityContext {
                     readOnlyRootFilesystem: Some(true),
                     allowPrivilegeEscalation: Some(false),
