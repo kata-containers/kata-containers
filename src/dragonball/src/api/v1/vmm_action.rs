@@ -692,6 +692,7 @@ impl VmmService {
             ));
         }
 
+        #[cfg(feature = "dbs-upcall")]
         vm.resize_vcpu(config, None).map_err(|e| {
             if let VcpuResizeError::UpcallServerNotReady = e {
                 return VmmActionError::UpcallServerNotReady;
