@@ -763,7 +763,6 @@ impl Vm {
 impl Vm {
     #[cfg(feature = "dbs-upcall")]
     /// initialize upcall client for guest os
-    #[cfg(feature = "dbs-upcall")]
     fn new_upcall(&mut self) -> std::result::Result<(), StartMicroVmError> {
         // get vsock inner connector for upcall
         let inner_connector = self
@@ -805,7 +804,6 @@ impl Vm {
 
     #[cfg(feature = "dbs-upcall")]
     /// Get upcall client.
-    #[cfg(feature = "dbs-upcall")]
     pub fn upcall_client(&self) -> &Option<Arc<UpcallClient<DevMgrService>>> {
         &self.upcall_client
     }
@@ -825,7 +823,7 @@ impl Vm {
     }
 
     /// Resize MicroVM vCPU number
-    #[cfg(feature = "hotplug")]
+    #[cfg(feature = "dbs-upcall")]
     pub fn resize_vcpu(
         &mut self,
         config: VcpuResizeInfo,
