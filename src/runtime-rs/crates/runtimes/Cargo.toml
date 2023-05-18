@@ -10,7 +10,7 @@ anyhow = "^1.0"
 lazy_static = "1.4.0"
 slog = "2.5.2"
 slog-scope = "4.4.0"
-tokio = { version = "1.8.0", features = ["rt-multi-thread"] }
+tokio = { version = "1.28.1", features = ["rt-multi-thread"] }
 hyper = { version = "0.14.20", features = ["stream", "server", "http1"] }
 hyperlocal = "0.8"
 
