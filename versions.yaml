@@ -158,6 +158,10 @@ assets:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.19.2"
+    tdx:
+      description: "Linux kernel that supports TDX"
+      url: "https://github.com/kata-containers/linux/archive/refs/tags"
+      tag: "5.15-plus-TDX"
     sev:
       description: "Linux kernel that supports SEV"
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
@@ -181,11 +185,6 @@ assets:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.10.25"
-
-  kernel-tdx-experimental:
-    description: "Linux kernel that supports TDX"
-    url: "https://github.com/kata-containers/linux/archive/refs/tags"
-    tag: "5.15-plus-TDX"
 
 externals:
   description: "Third-party projects used by the system"
