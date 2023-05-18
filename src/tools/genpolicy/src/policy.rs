@@ -337,7 +337,7 @@ impl PodPolicy {
         )?;
 
         let image_layers = registry_container.get_image_layers();
-        get_image_layer_storages(&mut storages, &image_layers)?;
+        get_image_layer_storages(&mut storages, &image_layers, &root)?;
 
         let mut linux = containerd::get_linux(privileged_container);
         linux.namespaces = kata::get_namespaces();
@@ -406,37 +406,64 @@ impl PodPolicy {
 fn get_image_layer_storages(
     storages: &mut Vec<SerializedStorage>,
     image_layers: &Vec<registry::ImageLayer>,
+    root: &Option<Root>,
 ) -> Result<()> {
-    let mut previous_chain_id = String::new();
-    // TODO: load this path from data.json.
-    let layers_path = "/run/kata-containers/sandbox/layers/".to_string();
-
-    for layer in image_layers {
-        let verity_option = "kata.dm-verity=".to_string() + &layer.verity_hash;
-        let chain_id = if previous_chain_id.is_empty() {
-            layer.diff_id.clone()
-        } else {
-            let mut hasher = Sha256::new();
-            hasher.update(previous_chain_id.clone() + " " + &layer.diff_id);
-            format!("sha256:{:x}", hasher.finalize())
-        };
-        info!("previous_chain_id = {}, chain_id = {}", &previous_chain_id, &chain_id);
-        previous_chain_id = chain_id.clone();
-
-        let layer_name = name_to_hash(&chain_id);
-
-        storages.push(SerializedStorage {
+    if let Some(root_mount) = root {
+        let mut overlay_storage = SerializedStorage {
             driver: "blk".to_string(),
             driver_options: Vec::new(),
             source: String::new(), // TODO
-            fstype: "tar".to_string(),
-            options: vec!["ro".to_string(), verity_option],
-            mount_point: layers_path.clone() + &layer_name,
+            fstype: "tar-overlay".to_string(),
+            options: Vec::new(),
+            mount_point: root_mount.path.clone(),
             fs_group: SerializedFsGroup {
                 group_id: 0,
                 group_change_policy: 0,
             },
-        });
+        };
+
+        // TODO: load this path from data.json.
+        let layers_path = "/run/kata-containers/sandbox/layers/".to_string();
+
+        let mut previous_chain_id = String::new();
+        for layer in image_layers {
+            let verity_option = "kata.dm-verity=".to_string() + &layer.verity_hash;
+
+            // See https://github.com/opencontainers/image-spec/blob/main/config.md#layer-chainid
+            let chain_id = if previous_chain_id.is_empty() {
+                layer.diff_id.clone()
+            } else {
+                let mut hasher = Sha256::new();
+                hasher.update(previous_chain_id.clone() + " " + &layer.diff_id);
+                format!("sha256:{:x}", hasher.finalize())
+            };
+            info!(
+                "previous_chain_id = {}, chain_id = {}",
+                &previous_chain_id, &chain_id
+            );
+            previous_chain_id = chain_id.clone();
+
+            let layer_name = name_to_hash(&chain_id);
+
+            storages.push(SerializedStorage {
+                driver: "blk".to_string(),
+                driver_options: Vec::new(),
+                source: String::new(), // TODO
+                fstype: "tar".to_string(),
+                options: vec!["ro".to_string(), verity_option],
+                mount_point: layers_path.clone() + &layer_name,
+                fs_group: SerializedFsGroup {
+                    group_id: 0,
+                    group_change_policy: 0,
+                },
+            });
+
+            overlay_storage
+                .options
+                .push("kata.layer=".to_string() + &layer_name + "," + &layer.verity_hash);
+        }
+
+        storages.push(overlay_storage);
     }
 
     Ok(())
