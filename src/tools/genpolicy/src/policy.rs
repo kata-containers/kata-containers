@@ -15,6 +15,7 @@ use crate::utils;
 use crate::yaml;
 
 use anyhow::{anyhow, Result};
+use log::info;
 use oci::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -406,13 +407,23 @@ fn get_image_layer_storages(
     storages: &mut Vec<SerializedStorage>,
     image_layers: &Vec<registry::ImageLayer>,
 ) -> Result<()> {
+    let mut previous_chain_id = String::new();
     // TODO: load this path from data.json.
     let layers_path = "/run/kata-containers/sandbox/layers/".to_string();
 
     for layer in image_layers {
         let verity_option = "kata.dm-verity=".to_string() + &layer.verity_hash;
-        let layer_name = name_to_hash(&layer.diff_id);
-        // let layer_name = name_to_hash("sha256:9760f55e20e3f4eb6b837e1b323b3c6f29b1ef4a4617fe98625ead879e91b1c1");
+        let chain_id = if previous_chain_id.is_empty() {
+            layer.diff_id.clone()
+        } else {
+            let mut hasher = Sha256::new();
+            hasher.update(previous_chain_id.clone() + " " + &layer.diff_id);
+            format!("sha256:{:x}", hasher.finalize())
+        };
+        info!("previous_chain_id = {}, chain_id = {}", &previous_chain_id, &chain_id);
+        previous_chain_id = chain_id.clone();
+
+        let layer_name = name_to_hash(&chain_id);
 
         storages.push(SerializedStorage {
             driver: "blk".to_string(),

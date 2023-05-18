@@ -62,10 +62,11 @@ impl Container {
             ..Default::default()
         });
 
-        let (manifest, _digest_hash, config_layer_str) = client
+        let (manifest, digest_hash, config_layer_str) = client
             .pull_manifest_and_config(&reference, &RegistryAuth::Anonymous)
             .await?;
 
+        info!("digest_hash: {:?}", digest_hash);
         info!(
             "manifest: {}",
             serde_json::to_string_pretty(&manifest).unwrap()
