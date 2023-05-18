@@ -733,18 +733,38 @@ policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
 # Storages
 
 allow_storages(policy_storages, input_storages, sandbox_id) {
-    # TODO: verify the storages array
-    true
+    policy_count := count(policy_storages)
+    input_count := count(input_storages)
+    print("allow_storages: policy_count =", policy_count, "input_count =", input_count)
+    policy_count == input_count
+
+    some i, input_storage in input_storages
+    allow_input_storage(i, input_storage, policy_storages, policy_count, sandbox_id)
+
+    print("allow_storages: success")
 }
 
-allow_storage(policy_storage, input_storage, sandbox_id) {
+allow_input_storage(i, input_storage, policy_storages, count, sandbox_id) {
+    print("allow_input_storage: i =", i, "input_storage =", input_storage)
+
+    policy_storage := policy_storages[i]
+    print("allow_input_storage: i =", i, "policy_storage =", policy_storage)
+
+    storages_match(policy_storage, input_storage, sandbox_id)
+
+    # Stop when reaching the last element of the storages array.
+    i == count - 1
+}
+
+storages_match(policy_storage, input_storage, sandbox_id) {
     policy_storage.driver           == input_storage.driver
     policy_storage.driver_options   == input_storage.driver_options
-    policy_storage.source           == input_storage.source
     policy_storage.options          == input_storage.options
     policy_storage.fs_group         == input_storage.fs_group
 
-    allow_storage_mount_point(policy_storage, input_storage, sandbox_id)
+    # TODO: validate the source and mount_point fields too.
+
+    print("storages_match: success")
 }
 
 allow_storage_mount_point(policy_storage, input_storage, sandbox_id) {

@@ -328,16 +328,16 @@ impl PodPolicy {
             container_index == 0,
         )?;
 
+        let image_layers = registry_container.get_image_layers();
         let mut storages = Default::default();
+        get_image_layer_storages(&mut storages, &image_layers, &root)?;
+
         self.get_mounts_and_storages(
             &mut mounts,
             &mut storages,
             yaml_container,
             &self.infra_policy,
         )?;
-
-        let image_layers = registry_container.get_image_layers();
-        get_image_layer_storages(&mut storages, &image_layers, &root)?;
 
         let mut linux = containerd::get_linux(privileged_container);
         linux.namespaces = kata::get_namespaces();
