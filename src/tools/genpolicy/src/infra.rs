@@ -570,32 +570,35 @@ impl InfraPolicy {
         let infra_config_map = &infra_volumes.configMap;
         info!("Infra configMap: {:?}", infra_config_map);
 
-        storages.push(policy::SerializedStorage {
-            driver: infra_config_map.driver.clone(),
-            driver_options: Vec::new(),
-            source: infra_config_map.mount_source.clone() + &yaml_mount.name + "$",
-            fstype: infra_config_map.fstype.clone(),
-            options: infra_config_map.options.clone(),
-            mount_point: infra_config_map.mount_point.clone() + &yaml_mount.name + "$",
-            fs_group: policy::SerializedFsGroup {
-                group_id: 0,
-                group_change_policy: 0,
-            },
-        });
+        // Remove the / prefix from the the mount path.
+        if let Some(mount_path) = yaml_mount.mountPath.get(1..) {
+            storages.push(policy::SerializedStorage {
+                driver: infra_config_map.driver.clone(),
+                driver_options: Vec::new(),
+                source: infra_config_map.mount_source.clone() + &yaml_mount.name + "$",
+                fstype: infra_config_map.fstype.clone(),
+                options: infra_config_map.options.clone(),
+                mount_point: infra_config_map.mount_point.clone() + mount_path + "$",
+                fs_group: policy::SerializedFsGroup {
+                    group_id: 0,
+                    group_change_policy: 0,
+                },
+            });
 
-        if let Some(file_name) = Path::new(&yaml_mount.mountPath).file_name() {
-            if let Ok(name) = OsString::from(file_name).into_string() {
-                policy_mounts.push(oci::Mount {
-                    destination: yaml_mount.mountPath.to_string(),
-                    r#type: infra_config_map.mount_type.to_string(),
-                    source: infra_config_map.mount_point.clone() + &name + "$",
-                    options: infra_config_map.options.clone(),
-                });
+            if let Some(file_name) = Path::new(&yaml_mount.mountPath).file_name() {
+                if let Ok(name) = OsString::from(file_name).into_string() {
+                    policy_mounts.push(oci::Mount {
+                        destination: yaml_mount.mountPath.to_string(),
+                        r#type: infra_config_map.mount_type.to_string(),
+                        source: infra_config_map.mount_point.clone() + &name + "$",
+                        options: infra_config_map.options.clone(),
+                    });
+                } else {
+                    panic!("Unsupported mount path: {:?}", &yaml_mount.mountPath);
+                }
             } else {
-                panic!("Unsupported mount path: {:?}", &yaml_mount.mountPath);
+                panic!("No file name in mount path: {:?}", &yaml_mount.mountPath);
             }
-        } else {
-            panic!("No file name in mount path: {:?}", &yaml_mount.mountPath);
         }
 
         Ok(())

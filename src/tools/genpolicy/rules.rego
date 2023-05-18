@@ -364,7 +364,7 @@ allow_by_bundle_or_sandbox_id(policy_oci, input_oci, policy_storages, input_stor
     }
 
     print("allow_by_bundle_or_sandbox_id: allow_storages")
-    allow_storages(policy_storages, input_storages, sandbox_id)
+    allow_storages(policy_storages, input_storages, bundle_id, sandbox_id)
 
     print("allow_by_bundle_or_sandbox_id: success")
 }
@@ -671,7 +671,6 @@ is_tcp_uri(value) {
 # OCI root.path
 
 allow_root_path(policy_oci, input_oci, bundle_id) {
-    # Example policy: "path": "/run/kata-containers/shared/containers/$(bundle-id)/rootfs",
     policy_path := replace(policy_oci.root.path, "$(bundle-id)", bundle_id)
     policy_path == input_oci.root.path
 }
@@ -732,43 +731,82 @@ policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
 ######################################################################
 # Storages
 
-allow_storages(policy_storages, input_storages, sandbox_id) {
+allow_storages(policy_storages, input_storages, bundle_id, sandbox_id) {
     policy_count := count(policy_storages)
     input_count := count(input_storages)
     print("allow_storages: policy_count =", policy_count, "input_count =", input_count)
     policy_count == input_count
 
     some i, input_storage in input_storages
-    allow_input_storage(i, input_storage, policy_storages, policy_count, sandbox_id)
+    allow_input_storage(i, input_storage, policy_storages, policy_count, bundle_id, sandbox_id)
 
     print("allow_storages: success")
 }
 
-allow_input_storage(i, input_storage, policy_storages, count, sandbox_id) {
+allow_input_storage(i, input_storage, policy_storages, count, bundle_id, sandbox_id) {
     print("allow_input_storage: i =", i, "input_storage =", input_storage)
 
     policy_storage := policy_storages[i]
     print("allow_input_storage: i =", i, "policy_storage =", policy_storage)
 
-    storages_match(policy_storage, input_storage, sandbox_id)
+    storages_match(policy_storage, input_storage, bundle_id, sandbox_id)
 
     # Stop when reaching the last element of the storages array.
     i == count - 1
 }
 
-storages_match(policy_storage, input_storage, sandbox_id) {
+storages_match(policy_storage, input_storage, bundle_id, sandbox_id) {
     policy_storage.driver           == input_storage.driver
     policy_storage.driver_options   == input_storage.driver_options
     policy_storage.options          == input_storage.options
     policy_storage.fs_group         == input_storage.fs_group
 
-    # TODO: validate the source and mount_point fields too.
+    allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id)
+
+    # TODO: validate the source field too.
 
     print("storages_match: success")
 }
 
-allow_storage_mount_point(policy_storage, input_storage, sandbox_id) {
-    # E.g., "mount_point": "^/run/kata-containers/shared/containers/$(sandbox-id)/rootfs/local/data$",
+allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id) {
+    print("allow_mount_point 1: fstype == tar")
+    policy_storage.fstype == "tar"
+
+    print("allow_mount_point 1: policy_storage.mount_point == input_storage.mount_point")
+    policy_storage.mount_point == input_storage.mount_point
+
+    print("allow_mount_point 1: success")
+}
+allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id) {
+    print("allow_mount_point 2: fstype == tar-overlay")
+    policy_storage.fstype == "tar-overlay"
+
+    policy_mount_point := replace(policy_storage.mount_point, "$(bundle-id)", bundle_id)
+    print("allow_mount_point 2: policy_mount_point =", policy_mount_point)
+
+    policy_mount_point == input_storage.mount_point
+
+    print("allow_mount_point 2: success")
+}
+allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id) {
+    print("allow_mount_point 3: fstype == local")
+    policy_storage.fstype == "local"
+
     mount_point_regex := replace(policy_storage.mount_point, "$(sandbox-id)", sandbox_id)
+    print("allow_mount_point 3: mount_point_regex =", mount_point_regex)
+
     regex.match(mount_point_regex, input_storage.mount_point)
+
+    print("allow_mount_point 3: success")
+}
+allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id) {
+    print("allow_mount_point 4: fstype == bind")
+    policy_storage.fstype == "bind"
+
+    mount_point_regex := replace(policy_storage.mount_point, "$(bundle-id)", bundle_id)
+    print("allow_mount_point 4: mount_point_regex =", mount_point_regex)
+
+    regex.match(mount_point_regex, input_storage.mount_point)
+
+    print("allow_mount_point 4: success")
 }
