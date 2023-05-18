@@ -733,13 +733,7 @@ policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
 # Storages
 
 allow_storages(policy_storages, input_storages, sandbox_id) {
-    # TODO: add support for storages used with tarfs.
-    #count(policy_storages) == count(input_storages)
-
-    #every input_storage in input_storages {
-    #    policy_storage := policy_storages[_]
-    #    allow_storage(policy_storage, input_storage, sandbox_id)
-    #}
+    # TODO: verify the storages array
     true
 }
 
