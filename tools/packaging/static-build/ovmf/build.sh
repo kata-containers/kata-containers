@@ -28,6 +28,9 @@ if [ -z "$ovmf_repo" ]; then
 		"sev")
 			ovmf_repo=$(get_from_kata_deps "externals.ovmf.sev.url" "${kata_version}")
 			;;
+		"tdx")
+			ovmf_repo=$(get_from_kata_deps "externals.ovmf.tdx.url" "${kata_version}")
+			;;
 		*)
 			ovmf_repo=$(get_from_kata_deps "externals.ovmf.url" "${kata_version}")
 			;;

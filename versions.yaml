@@ -305,11 +305,11 @@ externals:
       package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
       package_output_dir: "AmdSev"
     tdx:
-      # yamllint disable-line rule:line-length
-      description: "QEMU with TDX support - based on https://github.com/intel/tdx-tools/releases/tag/2023ww01"
-      version: "edk2-stable202211"
-      package: "OvmfPkg/IntelTdx/IntelTdxX64.dsc"
-      package_output_dir: "IntelTdx"
+      url: "https://github.com/tianocore/edk2-staging"
+      description: "TDVF build needed for TDX measured direct boot."
+      version: "2022-tdvf-ww28.5"
+      package: "OvmfPkg/OvmfPkgX64.dsc"
+      package_output_dir: "OvmfX64"
 
   td-shim:
     description: "Confidential Containers Shim Firmware"
