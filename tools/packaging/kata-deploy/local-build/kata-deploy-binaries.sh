@@ -148,6 +148,14 @@ install_cached_component() {
 	wget "${jenkins_build_url}/${component_tarball_name}" || return $(cleanup_and_fail)
 	wget "${jenkins_build_url}/sha256sum-${component_tarball_name}" || return $(cleanup_and_fail)
 	sha256sum -c "sha256sum-${component_tarball_name}" || return $(cleanup_and_fail)
+	if [ -n "${root_hash_vanilla}" ]; then
+		wget "${jenkins_build_url}/${root_hash_vanilla}" || return cleanup_and_fail
+		mv "${root_hash_vanilla}" "${repo_root_dir}/tools/osbuilder/"
+	fi
+	if [ -n "${root_hash_tdx}" ]; then
+		wget "${jenkins_build_url}/${root_hash_tdx}" || return cleanup_and_fail
+		mv "${root_hash_tdx}" "${repo_root_dir}/tools/osbuilder/"
+	fi
 	mv "${component_tarball_name}" "${component_tarball_path}"
 }
 
