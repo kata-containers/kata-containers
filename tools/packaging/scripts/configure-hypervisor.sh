@@ -247,7 +247,6 @@ generate_qemu_options() {
 	else
 		qemu_options+=(size:--disable-png)
 	fi
-
 	qemu_options+=(size:--disable-vnc-sasl)
 
 	# Disable PAM authentication: it's a feature used together with VNC access
