@@ -1280,7 +1280,7 @@ dependencies = [
 [[package]]
 name = "tarindex"
 version = "0.1.0"
-source = "git+https://github.com/microsoft/kata-containers?branch=wedsonaf/tardev-rebased#22666aa60814fbe70e510ce1e729e99e5e307fce"
+source = "git+https://github.com/microsoft/kata-containers?branch=danmihai1/demo-tardev#944f7cb8635b0fc92e844023672a75e5cfc59606"
 dependencies = [
  "tar",
  "zerocopy",
@@ -1499,7 +1499,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 [[package]]
 name = "verity"
 version = "0.1.0"
-source = "git+https://github.com/microsoft/kata-containers?branch=wedsonaf/tardev-rebased#22666aa60814fbe70e510ce1e729e99e5e307fce"
+source = "git+https://github.com/microsoft/kata-containers?branch=danmihai1/demo-tardev#944f7cb8635b0fc92e844023672a75e5cfc59606"
 dependencies = [
  "generic-array",
  "sha2 0.10.6",
