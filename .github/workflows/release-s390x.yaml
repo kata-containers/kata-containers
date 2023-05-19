@@ -11,7 +11,7 @@ jobs:
     uses: ./.github/workflows/build-kata-static-tarball-s390x.yaml
 
   kata-deploy:
-    needs: create-kata-tarball
+    needs: build-kata-static-tarball-s390x
     runs-on: s390x
     steps:
       - name: Login to Kata Containers docker.io
