@@ -15,7 +15,7 @@ use crate::utils;
 use crate::yaml;
 
 use anyhow::{anyhow, Result};
-use log::info;
+use log::debug;
 use oci::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -437,7 +437,7 @@ fn get_image_layer_storages(
                 hasher.update(previous_chain_id.clone() + " " + &layer.diff_id);
                 format!("sha256:{:x}", hasher.finalize())
             };
-            info!(
+            debug!(
                 "previous_chain_id = {}, chain_id = {}",
                 &previous_chain_id, &chain_id
             );

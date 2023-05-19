@@ -10,7 +10,7 @@ use crate::policy;
 use crate::yaml;
 
 use anyhow::Result;
-use log::info;
+use log::debug;
 use oci;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -97,11 +97,11 @@ struct SharedFiles {
 
 impl InfraPolicy {
     pub fn new(infra_data_file: &str) -> Result<Self> {
-        info!("Loading containers policy data...");
+        debug!("Loading containers policy data...");
         let mut infra_policy: Self = serde_json::from_reader(File::open(infra_data_file)?)?;
         add_pause_container_data(&mut infra_policy.pause_container);
         add_other_container_data(&mut infra_policy.other_container);
-        info!("Finished loading containers policy data.");
+        debug!("Finished loading containers policy data.");
         Ok(infra_policy)
     }
 }
@@ -233,7 +233,7 @@ fn add_missing_strings(src: &Vec<String>, dest: &mut Vec<String>) {
             dest.push(src_string.clone());
         }
     }
-    info!("src = {:?}, dest = {:?}", src, dest)
+    debug!("src = {:?}, dest = {:?}", src, dest)
 }
 
 fn add_pause_container_data(oci: &mut policy::OciSpec) {
@@ -379,7 +379,7 @@ impl InfraPolicy {
         storages: &mut Vec<policy::SerializedStorage>,
     ) {
         let infra_empty_dir = &infra_volumes.emptyDir;
-        info!("Infra emptyDir: {:?}", infra_empty_dir);
+        debug!("Infra emptyDir: {:?}", infra_empty_dir);
 
         let mut mount_source = infra_empty_dir.mount_source.to_string();
         mount_source += &yaml_mount.name;
@@ -568,7 +568,7 @@ impl InfraPolicy {
         yaml_mount: &yaml::VolumeMount,
     ) -> Result<()> {
         let infra_config_map = &infra_volumes.configMap;
-        info!("Infra configMap: {:?}", infra_config_map);
+        debug!("Infra configMap: {:?}", infra_config_map);
 
         // Remove the / prefix from the the mount path.
         if let Some(mount_path) = yaml_mount.mountPath.get(1..) {

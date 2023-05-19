@@ -66,14 +66,14 @@ impl Container {
             .pull_manifest_and_config(&reference, &RegistryAuth::Anonymous)
             .await?;
 
-        info!("digest_hash: {:?}", digest_hash);
-        info!(
+        debug!("digest_hash: {:?}", digest_hash);
+        debug!(
             "manifest: {}",
             serde_json::to_string_pretty(&manifest).unwrap()
         );
 
         // Log the contents of the config layer.
-        if log::max_level() >= LevelFilter::Info {
+        if log::max_level() >= LevelFilter::Debug {
             println!("config layer:");
             let mut deserializer = serde_json::Deserializer::from_str(&config_layer_str);
             let mut serializer = serde_json::Serializer::pretty(io::stderr());
@@ -98,22 +98,22 @@ impl Container {
         yaml_has_command: bool,
         yaml_has_args: bool,
     ) -> Result<()> {
-        info!("Getting process field from docker config layer...");
+        debug!("Getting process field from docker config layer...");
         let docker_config = &self.config_layer.config;
 
         if let Some(image_user) = &docker_config.User {
             if !image_user.is_empty() {
-                info!("Splitting Docker config user = {:?}", image_user);
+                debug!("Splitting Docker config user = {:?}", image_user);
                 let user: Vec<&str> = image_user.split(':').collect();
                 if !user.is_empty() {
-                    info!("Parsing user[0] = {:?}", user[0]);
+                    debug!("Parsing user[0] = {:?}", user[0]);
                     process.user.uid = user[0].parse()?;
-                    info!("string: {:?} => uid: {}", user[0], process.user.uid);
+                    debug!("string: {:?} => uid: {}", user[0], process.user.uid);
                 }
                 if user.len() > 1 {
-                    info!("Parsing user[1] = {:?}", user[1]);
+                    debug!("Parsing user[1] = {:?}", user[1]);
                     process.user.gid = user[1].parse()?;
-                    info!("string: {:?} => gid: {}", user[1], process.user.gid);
+                    debug!("string: {:?} => gid: {}", user[1], process.user.gid);
                 }
             }
         }
@@ -129,12 +129,12 @@ impl Container {
         }
 
         let policy_args = &mut process.args;
-        info!("Already existing policy args: {:?}", policy_args);
+        debug!("Already existing policy args: {:?}", policy_args);
 
         if let Some(entry_points) = &docker_config.Entrypoint {
-            info!("Image Entrypoint: {:?}", entry_points);
+            debug!("Image Entrypoint: {:?}", entry_points);
             if !yaml_has_command {
-                info!("Inserting Entrypoint into policy args");
+                debug!("Inserting Entrypoint into policy args");
 
                 let mut reversed_entry_points = entry_points.clone();
                 reversed_entry_points.reverse();
@@ -143,29 +143,29 @@ impl Container {
                     policy_args.insert(0, entry_point.clone());
                 }
             } else {
-                info!("Ignoring image Entrypoint because YAML specified the container command");
+                debug!("Ignoring image Entrypoint because YAML specified the container command");
             }
         } else {
-            info!("No image Entrypoint");
+            debug!("No image Entrypoint");
         }
 
-        info!("Updated policy args: {:?}", policy_args);
+        debug!("Updated policy args: {:?}", policy_args);
 
         if yaml_has_command {
-            info!("Ignoring image Cmd because YAML specified the container command");
+            debug!("Ignoring image Cmd because YAML specified the container command");
         } else if yaml_has_args {
-            info!("Ignoring image Cmd because YAML specified the container args");
+            debug!("Ignoring image Cmd because YAML specified the container args");
         } else if let Some(commands) = &docker_config.Cmd {
-            info!("Adding to policy args the image Cmd: {:?}", commands);
+            debug!("Adding to policy args the image Cmd: {:?}", commands);
 
             for cmd in commands {
                 policy_args.push(cmd.clone());
             }
         } else {
-            info!("Image Cmd field is not present");
+            debug!("Image Cmd field is not present");
         }
 
-        info!("Updated policy args: {:?}", policy_args);
+        debug!("Updated policy args: {:?}", policy_args);
 
         if let Some(working_dir) = &docker_config.WorkingDir {
             if !working_dir.is_empty() {
@@ -173,7 +173,7 @@ impl Container {
             }
         }
 
-        info!("get_process succeeded.");
+        debug!("get_process succeeded.");
         Ok(())
     }
 
@@ -224,7 +224,7 @@ async fn get_verity_hash(
     {
         let mut file = tokio::fs::File::create(&file_path).await?;
 
-        info!("Downloading layer {:?} to {:?}", layer_digest, &file_path);
+        info!("Pulling layer {:?}", layer_digest);
         if let Err(err) = client.pull_blob(&reference, layer_digest, &mut file).await {
             drop(file);
             debug!("Download failed: {:?}", err);
@@ -235,7 +235,7 @@ async fn get_verity_hash(
         }
     }
 
-    info!("Decompressing {:?}", &file_path);
+    info!("Decompressing layer");
     if !tokio::process::Command::new("gunzip")
         .arg(&file_path)
         .arg("-f")
@@ -252,7 +252,7 @@ async fn get_verity_hash(
     {
         file_path.set_extension("");
 
-        info!("Appending index to {:?}", &file_path);
+        info!("Adding tarfs index to layer");
         let mut file = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
@@ -261,6 +261,7 @@ async fn get_verity_hash(
         file.flush().unwrap();
     }
 
+    info!("Calculating dm-verity root hash for layer");
     create_verity_hash(&file_path.to_string_lossy())
 }
 
