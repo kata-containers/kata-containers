@@ -8,6 +8,7 @@ use super::vmm_instance::VmmInstance;
 use crate::{
     device::DeviceType, hypervisor_persist::HypervisorState, kernel_param::KernelParams, VmmState,
     DEV_HUGEPAGES, HUGETLBFS, HYPERVISOR_DRAGONBALL, SHMEM, VM_ROOTFS_DRIVER_BLK,
+    VM_ROOTFS_DRIVER_MMIO,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -265,7 +266,7 @@ impl DragonballInner {
             .get_resource(path, DRAGONBALL_ROOT_FS)
             .context("get resource")?;
 
-        if driver == VM_ROOTFS_DRIVER_BLK {
+        if driver == VM_ROOTFS_DRIVER_BLK || driver == VM_ROOTFS_DRIVER_MMIO {
             let blk_cfg = BlockDeviceConfigInfo {
                 path_on_host: PathBuf::from(jail_drive),
                 drive_id: DRAGONBALL_ROOT_FS.to_string(),
