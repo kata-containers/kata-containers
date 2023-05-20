@@ -32,8 +32,9 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 pub use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 
 // Config which driver to use as vm root dev
-const VM_ROOTFS_DRIVER_BLK: &str = "virtio-blk";
+const VM_ROOTFS_DRIVER_BLK: &str = "virtio-blk-pci";
 const VM_ROOTFS_DRIVER_PMEM: &str = "virtio-pmem";
+const VM_ROOTFS_DRIVER_MMIO: &str = "virtio-blk-mmio";
 
 //Configure the root corresponding to the driver
 const VM_ROOTFS_ROOT_BLK: &str = "/dev/vda1";
