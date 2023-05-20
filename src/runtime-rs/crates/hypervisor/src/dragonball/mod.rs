@@ -20,7 +20,7 @@ use kata_types::capabilities::Capabilities;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use tokio::sync::RwLock;
 
-use crate::{driver::DeviceConfig, Hypervisor, VcpuThreadIds};
+use crate::{DeviceType, Hypervisor, VcpuThreadIds};
 
 pub struct Dragonball {
     inner: Arc<RwLock<DragonballInner>>,
@@ -77,12 +77,12 @@ impl Hypervisor for Dragonball {
         inner.save_vm().await
     }
 
-    async fn add_device(&self, device: DeviceConfig) -> Result<()> {
+    async fn add_device(&self, device: DeviceType) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.add_device(device).await
     }
 
-    async fn remove_device(&self, device: DeviceConfig) -> Result<()> {
+    async fn remove_device(&self, device: DeviceType) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.remove_device(device).await
     }

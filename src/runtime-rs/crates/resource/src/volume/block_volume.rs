@@ -13,7 +13,10 @@ use crate::share_fs::{do_get_guest_path, do_get_host_path};
 use super::{share_fs_volume::generate_mount_path, Volume};
 use agent::Storage;
 use anyhow::{anyhow, Context};
-use hypervisor::{device::device_manager::DeviceManager, BlockConfig, DeviceConfig};
+use hypervisor::{
+    device::{device_manager::DeviceManager, DeviceConfig},
+    BlockConfig,
+};
 use nix::sys::stat::{self, SFlag};
 use tokio::sync::RwLock;
 #[derive(Debug)]
@@ -48,7 +51,7 @@ impl BlockVolume {
         let device_id = d
             .write()
             .await
-            .new_device(&DeviceConfig::Block(block_device_config.clone()))
+            .new_device(&DeviceConfig::BlockCfg(block_device_config.clone()))
             .await
             .context("failed to create deviec")?;
 
@@ -76,7 +79,7 @@ impl BlockVolume {
         // storage
         let mut storage = Storage::default();
 
-        if let DeviceConfig::Block(config) = dev_info {
+        if let DeviceConfig::BlockCfg(config) = dev_info {
             storage.driver = config.driver_option;
             storage.source = config.virt_path;
         }

@@ -5,8 +5,9 @@
 //
 
 pub const VIRTIO_BLOCK_MMIO: &str = "virtio-blk-mmio";
+use crate::device::Device;
+use crate::device::{DeviceConfig, DeviceType};
 use crate::Hypervisor as hypervisor;
-use crate::{device::Device, DeviceConfig};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 /// VIRTIO_BLOCK_PCI indicates block driver is virtio-pci based
@@ -16,9 +17,6 @@ pub const KATA_BLK_DEV_TYPE: &str = "blk";
 
 #[derive(Debug, Clone, Default)]
 pub struct BlockConfig {
-    /// Unique identifier of the drive.
-    pub id: String,
-
     /// Path of the drive.
     pub path_on_host: String,
 
@@ -48,15 +46,26 @@ pub struct BlockConfig {
     pub minor: i64,
 }
 
-impl BlockConfig {
+#[derive(Debug, Clone, Default)]
+pub struct BlockDevice {
+    pub device_id: String,
+    pub attach_count: u64,
+    pub config: BlockConfig,
+}
+
+impl BlockDevice {
     // new creates a new VirtioBlkDevice
-    pub fn new(dev_info: BlockConfig) -> Self {
-        dev_info
+    pub fn new(device_id: String, config: BlockConfig) -> Self {
+        BlockDevice {
+            device_id,
+            attach_count: 0,
+            config,
+        }
     }
 }
 
 #[async_trait]
-impl Device for BlockConfig {
+impl Device for BlockDevice {
     async fn attach(&mut self, h: &dyn hypervisor) -> Result<()> {
         // increase attach count, skip attach the device if the device is already attached
         if self
@@ -66,7 +75,7 @@ impl Device for BlockConfig {
         {
             return Ok(());
         }
-        if let Err(e) = h.add_device(DeviceConfig::Block(self.clone())).await {
+        if let Err(e) = h.add_device(DeviceType::Block(self.clone())).await {
             self.decrease_attach_count().await?;
             return Err(e);
         }
@@ -82,15 +91,15 @@ impl Device for BlockConfig {
         {
             return Ok(None);
         }
-        if let Err(e) = h.remove_device(DeviceConfig::Block(self.clone())).await {
+        if let Err(e) = h.remove_device(DeviceType::Block(self.clone())).await {
             self.increase_attach_count().await?;
             return Err(e);
         }
-        Ok(Some(self.index))
+        Ok(Some(self.config.index))
     }
 
     async fn get_device_info(&self) -> DeviceConfig {
-        DeviceConfig::Block(self.clone())
+        DeviceConfig::BlockCfg(self.config.clone())
     }
 
     async fn increase_attach_count(&mut self) -> Result<bool> {

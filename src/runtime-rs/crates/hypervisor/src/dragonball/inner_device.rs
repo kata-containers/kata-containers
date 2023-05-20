@@ -15,8 +15,8 @@ use dragonball::api::v1::{
 
 use super::DragonballInner;
 use crate::{
-    driver::DeviceConfig, HybridVsockConfig, NetworkConfig, ShareFsDeviceConfig,
-    ShareFsMountConfig, ShareFsMountType, ShareFsOperation, VmmState,
+    device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsDeviceConfig, ShareFsMountConfig,
+    ShareFsMountType, ShareFsOperation, VmmState,
 };
 
 const MB_TO_B: u32 = 1024 * 1024;
@@ -31,7 +31,7 @@ pub(crate) fn drive_index_to_id(index: u64) -> String {
 }
 
 impl DragonballInner {
-    pub(crate) async fn add_device(&mut self, device: DeviceConfig) -> Result<()> {
+    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<()> {
         if self.state == VmmState::NotReady {
             info!(sl!(), "VMM not ready, queueing device {}", device);
 
@@ -44,41 +44,43 @@ impl DragonballInner {
 
         info!(sl!(), "dragonball add device {:?}", &device);
         match device {
-            DeviceConfig::Network(config) => self.add_net_device(&config).context("add net device"),
-            DeviceConfig::Vfio(_config) => {
+            DeviceType::Network(network) => self
+                .add_net_device(&network.config, network.id)
+                .context("add net device"),
+            DeviceType::Vfio(_) => {
                 todo!()
             }
-            DeviceConfig::Block(config) => self
+            DeviceType::Block(block) => self
                 .add_block_device(
-                    config.path_on_host.as_str(),
-                    config.id.as_str(),
-                    config.is_readonly,
-                    config.no_drop,
+                    block.config.path_on_host.as_str(),
+                    block.device_id.as_str(),
+                    block.config.is_readonly,
+                    block.config.no_drop,
                 )
                 .context("add block device"),
-            DeviceConfig::HybridVsock(config) => self.add_hvsock(&config).context("add vsock"),
-            DeviceConfig::ShareFsDevice(config) => self
-                .add_share_fs_device(&config)
+            DeviceType::HybridVsock(hvsock) => self.add_hvsock(&hvsock.config).context("add vsock"),
+            DeviceType::ShareFs(sharefs) => self
+                .add_share_fs_device(&sharefs.config)
                 .context("add share fs device"),
-            DeviceConfig::ShareFsMount(config) => self
-                .add_share_fs_mount(&config)
+            DeviceType::ShareFsMount(sharefs_mount) => self
+                .add_share_fs_mount(&sharefs_mount.config)
                 .context("add share fs mount"),
-            DeviceConfig::Vsock(_) => {
+            DeviceType::Vsock(_) => {
                 todo!()
             }
         }
     }
 
-    pub(crate) async fn remove_device(&mut self, device: DeviceConfig) -> Result<()> {
+    pub(crate) async fn remove_device(&mut self, device: DeviceType) -> Result<()> {
         info!(sl!(), "remove device {} ", device);
 
         match device {
-            DeviceConfig::Block(config) => {
-                let drive_id = drive_index_to_id(config.index);
+            DeviceType::Block(block) => {
+                let drive_id = drive_index_to_id(block.config.index);
                 self.remove_block_drive(drive_id.as_str())
                     .context("remove block drive")
             }
-            DeviceConfig::Vfio(_config) => {
+            DeviceType::Vfio(_config) => {
                 todo!()
             }
             _ => Err(anyhow!("unsupported device {:?}", device)),
@@ -121,9 +123,9 @@ impl DragonballInner {
         Ok(())
     }
 
-    fn add_net_device(&mut self, config: &NetworkConfig) -> Result<()> {
+    fn add_net_device(&mut self, config: &NetworkConfig, device_id: String) -> Result<()> {
         let iface_cfg = VirtioNetDeviceConfigInfo {
-            iface_id: config.id.clone(),
+            iface_id: device_id,
             host_dev_name: config.host_dev_name.clone(),
             guest_mac: match &config.guest_mac {
                 Some(mac) => MacAddr::from_bytes(&mac.0).ok(),

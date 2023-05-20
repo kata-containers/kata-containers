@@ -6,8 +6,9 @@
 
 use std::{fs, path::Path, process::Command};
 
+use crate::device::Device;
+use crate::device::DeviceConfig;
 use crate::Hypervisor as hypervisor;
-use crate::{device::Device, DeviceConfig};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use anyhow::anyhow;
 use anyhow::{Context, Result};
@@ -45,9 +46,6 @@ impl VfioBusMode {
 
 #[derive(Debug, Clone)]
 pub struct VfioConfig {
-    /// Unique identifier of the device
-    pub id: String,
-
     /// Sysfs path for mdev bus type device
     pub sysfs_path: String,
 
@@ -56,6 +54,15 @@ pub struct VfioConfig {
 
     /// Bus Mode, PCI or MMIO
     pub mode: VfioBusMode,
+}
+
+#[derive(Debug, Clone)]
+pub struct VfioDevice {
+    /// Unique identifier of the device
+    pub id: String,
+
+    /// Config info for Vfio Device
+    pub config: VfioConfig,
 }
 
 /// binds the device to vfio driver after unbinding from host.

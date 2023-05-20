@@ -9,7 +9,10 @@ use crate::share_fs::{do_get_guest_path, do_get_host_path};
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use hypervisor::{device::device_manager::DeviceManager, BlockConfig, DeviceConfig};
+use hypervisor::{
+    device::{device_manager::DeviceManager, DeviceConfig},
+    BlockConfig,
+};
 use kata_types::mount::Mount;
 use nix::sys::stat::{self, SFlag};
 use std::fs;
@@ -46,7 +49,7 @@ impl BlockRootfs {
         let device_id = d
             .write()
             .await
-            .new_device(&DeviceConfig::Block(block_device_config.clone()))
+            .new_device(&DeviceConfig::BlockCfg(block_device_config.clone()))
             .await
             .context("failed to create deviec")?;
 
@@ -71,7 +74,7 @@ impl BlockRootfs {
             .await
             .context("failed to get device info")?;
 
-        if let DeviceConfig::Block(config) = dev_info {
+        if let DeviceConfig::BlockCfg(config) = dev_info {
             storage.driver = config.driver_option;
             storage.source = config.virt_path;
         }

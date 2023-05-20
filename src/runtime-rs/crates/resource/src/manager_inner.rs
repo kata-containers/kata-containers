@@ -10,7 +10,10 @@ use crate::{network::NetworkConfig, resource_persist::ResourceState};
 use agent::{types::Device, Agent, Storage};
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
-use hypervisor::{device::device_manager::DeviceManager, BlockConfig, DeviceConfig, Hypervisor};
+use hypervisor::{
+    device::{device_manager::DeviceManager, DeviceConfig},
+    BlockConfig, Hypervisor,
+};
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
 use oci::{Linux, LinuxResources};
@@ -255,7 +258,7 @@ impl ResourceManagerInner {
         for d in linux.devices.iter() {
             match d.r#type.as_str() {
                 "b" => {
-                    let device_info = DeviceConfig::Block(BlockConfig {
+                    let device_info = DeviceConfig::BlockCfg(BlockConfig {
                         major: d.major,
                         minor: d.minor,
                         ..Default::default()
@@ -285,7 +288,7 @@ impl ResourceManagerInner {
                         .context("failed to get device info")?;
 
                     // create agent device
-                    if let DeviceConfig::Block(config) = dev_info {
+                    if let DeviceConfig::BlockCfg(config) = dev_info {
                         let agent_device = Device {
                             id: device_id.clone(),
                             container_path: d.path.clone(),

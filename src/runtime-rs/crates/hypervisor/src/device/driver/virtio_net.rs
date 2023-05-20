@@ -22,12 +22,18 @@ impl fmt::Debug for Address {
 
 #[derive(Debug, Clone)]
 pub struct NetworkConfig {
-    /// Unique identifier of the device
-    pub id: String,
-
     /// Host level path for the guest network interface.
     pub host_dev_name: String,
 
     /// Guest MAC address.
     pub guest_mac: Option<Address>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NetworkDevice {
+    /// Unique identifier of the device
+    pub id: String,
+
+    /// Network Device config info
+    pub config: NetworkConfig,
 }

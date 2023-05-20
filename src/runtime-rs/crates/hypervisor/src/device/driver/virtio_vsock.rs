@@ -11,9 +11,6 @@ use tokio::fs::{File, OpenOptions};
 
 #[derive(Debug)]
 pub struct HybridVsockConfig {
-    /// Unique identifier of the device
-    pub id: String,
-
     /// A 32-bit Context Identifier (CID) used to identify the guest.
     pub guest_cid: u32,
 
@@ -22,15 +19,30 @@ pub struct HybridVsockConfig {
 }
 
 #[derive(Debug)]
-pub struct VsockConfig {
+pub struct HybridVsockDevice {
     /// Unique identifier of the device
     pub id: String,
 
+    /// config information for HybridVsockDevice
+    pub config: HybridVsockConfig,
+}
+
+#[derive(Debug)]
+pub struct VsockConfig {
     /// A 32-bit Context Identifier (CID) used to identify the guest.
     pub guest_cid: u32,
 
     /// Vhost vsock fd. Hold to ensure CID is not used by other VM.
     pub vhost_fd: File,
+}
+
+#[derive(Debug)]
+pub struct VsockDevice {
+    /// Unique identifier of the device
+    pub id: String,
+
+    /// config information for VsockDevice
+    pub config: VsockConfig,
 }
 
 const VHOST_VSOCK_DEVICE: &str = "/dev/vhost-vsock";
@@ -50,7 +62,7 @@ nix::ioctl_write_ptr!(
 
 const CID_RETRY_COUNT: u32 = 50;
 
-impl VsockConfig {
+impl VsockDevice {
     pub async fn new(id: String) -> Result<Self> {
         let vhost_fd = OpenOptions::new()
             .read(true)
@@ -72,10 +84,12 @@ impl VsockConfig {
                 unsafe { vhost_vsock_set_guest_cid(vhost_fd.as_raw_fd(), &(rand_cid as u64)) };
             match guest_cid {
                 Ok(_) => {
-                    return Ok(VsockConfig {
+                    return Ok(VsockDevice {
                         id,
-                        guest_cid: rand_cid,
-                        vhost_fd,
+                        config: VsockConfig {
+                            guest_cid: rand_cid,
+                            vhost_fd,
+                        },
                     });
                 }
                 Err(nix::Error::EADDRINUSE) => {
