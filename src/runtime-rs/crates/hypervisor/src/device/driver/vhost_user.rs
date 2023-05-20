@@ -4,11 +4,13 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::device::Device;
+use crate::device::DeviceConfig;
 use crate::Hypervisor as hypervisor;
-use crate::{device::Device, DeviceConfig};
 use anyhow::Result;
 use async_trait::async_trait;
 
+#[derive(Debug, Clone, Default)]
 /// VhostUserConfig represents data shared by most vhost-user devices
 pub struct VhostUserConfig {
     /// Device id
@@ -27,6 +29,12 @@ pub struct VhostUserConfig {
     pub index: u8,
     pub cache_size: u32,
     pub queue_siez: u32,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct VhostUserDevice {
+    pub device_id: String,
+    pub config: VhostUserConfig,
 }
 
 #[async_trait]

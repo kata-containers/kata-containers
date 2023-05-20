@@ -4,13 +4,47 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::{DeviceConfig, Hypervisor as hypervisor};
+use std::fmt;
+
+use crate::{
+    BlockConfig, BlockDevice, HybridVsockConfig, HybridVsockDevice, Hypervisor as hypervisor,
+    NetworkConfig, NetworkDevice, ShareFsDevice, ShareFsDeviceConfig, ShareFsMountConfig,
+    ShareFsMountDevice, VfioConfig, VfioDevice, VsockConfig, VsockDevice,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 
 pub mod device_manager;
 pub mod driver;
 pub mod util;
+
+#[derive(Debug)]
+pub enum DeviceConfig {
+    BlockCfg(BlockConfig),
+    NetworkCfg(NetworkConfig),
+    ShareFsCfg(ShareFsDeviceConfig),
+    VfioCfg(VfioConfig),
+    ShareFsMountCfg(ShareFsMountConfig),
+    VsockCfg(VsockConfig),
+    HybridVsockCfg(HybridVsockConfig),
+}
+
+#[derive(Debug)]
+pub enum DeviceType {
+    Block(BlockDevice),
+    Vfio(VfioDevice),
+    Network(NetworkDevice),
+    ShareFs(ShareFsDevice),
+    ShareFsMount(ShareFsMountDevice),
+    HybridVsock(HybridVsockDevice),
+    Vsock(VsockDevice),
+}
+
+impl fmt::Display for DeviceType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
 #[async_trait]
 pub trait Device: Send + Sync {

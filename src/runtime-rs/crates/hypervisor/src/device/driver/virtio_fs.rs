@@ -42,6 +42,11 @@ pub struct ShareFsMountConfig {
     pub prefetch_list_path: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ShareFsMountDevice {
+    pub config: ShareFsMountConfig,
+}
+
 /// ShareFsDeviceConfig: share fs device config
 #[derive(Debug, Clone)]
 pub struct ShareFsDeviceConfig {
@@ -62,4 +67,9 @@ pub struct ShareFsDeviceConfig {
 
     /// queue_num: queue number
     pub queue_num: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct ShareFsDevice {
+    pub config: ShareFsDeviceConfig,
 }
