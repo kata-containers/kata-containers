@@ -32,6 +32,7 @@ jobs:
           - qemu-snp-experimental
           - qemu-tdx-experimental
           - rootfs-image
+          - rootfs-image-tdx
           - rootfs-initrd
           - rootfs-initrd-sev
           - shim-v2

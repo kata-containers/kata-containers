@@ -42,6 +42,7 @@ all: serial-targets \
 serial-targets:
 	${MAKE} -f $(MK_PATH) -j 1 V= \
 	rootfs-image-tarball \
+	rootfs-image-tdx-tarball \
 	rootfs-initrd-sev-tarball \
 	rootfs-initrd-tarball \
 	cloud-hypervisor-tarball
@@ -98,6 +99,9 @@ qemu-tdx-experimental-tarball:
 	${MAKE} $@-build
 
 rootfs-image-tarball:
+	${MAKE} $@-build
+
+rootfs-image-tdx-tarball: kernel-tdx-experimental-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-sev-tarball: kernel-sev-tarball
