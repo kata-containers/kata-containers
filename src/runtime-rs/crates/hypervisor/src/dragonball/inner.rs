@@ -96,45 +96,40 @@ impl DragonballInner {
 
         self.set_vm_base_config().context("set vm base config")?;
 
-        // get rootfs driver
-        let rootfs_driver = self.config.blockdev_info.block_device_driver.clone();
-
         // get kernel params
         let mut kernel_params = KernelParams::new(self.config.debug_info.enable_debug);
-        kernel_params.append(&mut KernelParams::new_rootfs_kernel_params(
-            &rootfs_driver,
-            &self.config.boot_info.rootfs_type,
-        )?);
         kernel_params.append(&mut KernelParams::from_string(
             &self.config.boot_info.kernel_params,
         ));
+
+        let initrd_path = self.config.boot_info.initrd.clone();
+        if initrd_path.is_empty() {
+            let image_path = self.config.boot_info.image.clone();
+            if image_path.is_empty() {
+                return Err(anyhow!("failed to get image"));
+            }
+            // get rootfs driver
+            let rootfs_driver = self.config.blockdev_info.block_device_driver.clone();
+            kernel_params.append(&mut KernelParams::new_rootfs_kernel_params(
+                &rootfs_driver,
+                &self.config.boot_info.rootfs_type,
+            )?);
+            self.set_vm_rootfs(&image_path, &rootfs_driver)
+                .context("set vm rootfs")?;
+        }
+
         info!(sl!(), "prepared kernel_params={:?}", kernel_params);
 
         // set boot source
         let kernel_path = self.config.boot_info.kernel.clone();
         self.set_boot_source(
             &kernel_path,
+            &initrd_path,
             &kernel_params
                 .to_string()
                 .context("kernel params to string")?,
         )
         .context("set_boot_source")?;
-
-        // get vm rootfs
-        let image = {
-            let initrd_path = self.config.boot_info.initrd.clone();
-            let image_path = self.config.boot_info.image.clone();
-            if !initrd_path.is_empty() {
-                Ok(initrd_path)
-            } else if !image_path.is_empty() {
-                Ok(image_path)
-            } else {
-                Err(anyhow!("failed to get image"))
-            }
-        }
-        .context("get image")?;
-        self.set_vm_rootfs(&image, &rootfs_driver)
-            .context("set vm rootfs")?;
 
         // add pending devices
         while let Some(dev) = self.pending_devices.pop() {
@@ -239,7 +234,12 @@ impl DragonballInner {
         Ok(abs_path)
     }
 
-    fn set_boot_source(&mut self, kernel_path: &str, kernel_params: &str) -> Result<()> {
+    fn set_boot_source(
+        &mut self,
+        kernel_path: &str,
+        initrd_path: &str,
+        kernel_params: &str,
+    ) -> Result<()> {
         info!(
             sl!(),
             "kernel path {} kernel params {}", kernel_path, kernel_params
@@ -251,6 +251,10 @@ impl DragonballInner {
                 .context("get resource")?,
             ..Default::default()
         };
+
+        if !initrd_path.is_empty() {
+            boot_cfg.initrd_path = Some(initrd_path.to_string());
+        }
 
         if !kernel_params.is_empty() {
             boot_cfg.boot_args = Some(kernel_params.to_string());

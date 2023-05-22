@@ -122,13 +122,10 @@ impl ConfigPlugin for DragonballConfig {
                     "Guest kernel image for dragonball hypervisor is empty"
                 ));
             }
-            if db.boot_info.image.is_empty() {
+            if db.boot_info.image.is_empty() && db.boot_info.initrd.is_empty() {
                 return Err(eother!(
-                    "Guest boot image for dragonball hypervisor is empty"
+                    "Both guest boot image and initrd for dragonball hypervisor are empty"
                 ));
-            }
-            if !db.boot_info.initrd.is_empty() {
-                return Err(eother!("Initrd for dragonball hypervisor should be empty"));
             }
             if !db.boot_info.firmware.is_empty() {
                 return Err(eother!(
