@@ -18,4 +18,7 @@ func TestNewVCPUSig(t *testing.T) {
 	if NewVCPUSig(25, 1, 1) != SigEpycMilan {
 		t.Errorf("wrong EPYC-Milan CPU signature")
 	}
+	if NewVCPUSig(25, 17, 0) != SigEpycGenoa {
+		t.Errorf("wrong EPYC-Genoa CPU signature")
+	}
 }

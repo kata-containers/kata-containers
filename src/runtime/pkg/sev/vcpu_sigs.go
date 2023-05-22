@@ -45,6 +45,12 @@ const (
 
 	// 'EPYC-Milan-v2': family=25, model=1, stepping=1
 	SigEpycMilanV2 VCPUSig = 0xa00f11
+
+	// 'EPYC-Genoa': family=25, model=17, stepping=0
+	SigEpycGenoa VCPUSig = 0xa10f10
+
+	// 'EPYC-Genoa-v1': family=25, model=17, stepping=0
+	SigEpycGenoaV1 VCPUSig = 0xa10f10
 )
 
 // NewVCPUSig computes the CPU signature (32-bit value) from the given family,
