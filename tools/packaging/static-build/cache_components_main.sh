@@ -77,8 +77,18 @@ cache_nydus_artifacts() {
 
 cache_ovmf_artifacts() {
 	local current_ovmf_version="$(get_from_kata_deps "externals.ovmf.${OVMF_FLAVOUR}.version")"
-	local ovmf_tarball_name="kata-static-ovmf-${OVMF_FLAVOUR}.tar.xz"
-	[ "${OVMF_FLAVOUR}" == "tdx" ] && ovmf_tarball_name="kata-static-tdvf.tar.xz"
+	case ${OVMF_FLAVOUR} in
+		"tdx")
+			ovmf_tarball_name="kata-static-tdvf.tar.xz"
+			;;
+		"x86_64")
+			ovmf_tarball_name="kata-static-ovmf.tar.xz"
+			;;
+		*)
+			ovmf_tarball_name="kata-static-ovmf-${OVMF_FLAVOUR}.tar.xz"
+			;;
+	esac
+			
 	local current_ovmf_image="$(get_ovmf_image_name)"
 	create_cache_asset "${ovmf_tarball_name}" "${current_ovmf_version}" "${current_ovmf_image}"
 }
