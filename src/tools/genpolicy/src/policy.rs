@@ -10,6 +10,7 @@ use crate::config_maps;
 use crate::containerd;
 use crate::infra;
 use crate::kata;
+use crate::pod;
 use crate::registry;
 use crate::utils;
 use crate::yaml;
@@ -199,7 +200,7 @@ impl PodPolicy {
 
     async fn get_policy_data(
         &self,
-        spec_containers: &Option<Vec<yaml::Container>>,
+        spec_containers: &Option<Vec<pod::Container>>,
     ) -> Result<Vec<ContainerPolicy>> {
         let mut policy_containers = Vec::new();
 
@@ -243,7 +244,7 @@ impl PodPolicy {
     pub async fn get_container_policy(
         &self,
         container_index: usize,
-        yaml_container: &yaml::Container,
+        yaml_container: &pod::Container,
     ) -> Result<ContainerPolicy> {
         let is_pause_container = container_index == 0;
         let is_deployment_yaml = self.yaml.is_deployment();
@@ -362,7 +363,7 @@ impl PodPolicy {
         &self,
         policy_mounts: &mut Vec<oci::Mount>,
         storages: &mut Vec<SerializedStorage>,
-        container: &yaml::Container,
+        container: &pod::Container,
         infra_policy: &infra::InfraPolicy,
     ) -> Result<()> {
         if let Some(volumes) = &self.yaml.spec.volumes {
@@ -383,7 +384,7 @@ impl PodPolicy {
         &self,
         policy_mounts: &mut Vec<oci::Mount>,
         storages: &mut Vec<SerializedStorage>,
-        container: &yaml::Container,
+        container: &pod::Container,
         infra_policy: &infra::InfraPolicy,
         volume: &yaml::Volume,
     ) -> Result<()> {

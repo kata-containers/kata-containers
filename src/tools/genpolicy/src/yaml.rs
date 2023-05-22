@@ -6,7 +6,9 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
-use crate::config_maps;
+use crate::obj_meta;
+use crate::pod;
+use crate::pod_template;
 
 use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose, Engine as _};
@@ -19,41 +21,13 @@ use std::io::Write;
 
 const POLICY_ANNOTATION_KEY: &str = "io.katacontainers.config.agent.policy";
 
-// Example:
-//
-// apiVersion: v1
-// kind: Pod
-// metadata:
-// ...
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Yaml {
     apiVersion: String,
     kind: String,
-    pub metadata: Metadata,
+    pub metadata: obj_meta::ObjectMeta,
     pub spec: Spec,
-}
-
-// Example:
-//
-// metadata:
-//   labels:
-//     run: busybox
-//   name: busybox-cc
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Metadata {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    labels: Option<BTreeMap<String, String>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    annotations: Option<BTreeMap<String, String>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub namespace: Option<String>,
 }
 
 // Example:
@@ -74,7 +48,7 @@ pub struct Spec {
     runtimeClassName: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub containers: Option<Vec<Container>>,
+    pub containers: Option<Vec<pod::Container>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub volumes: Option<Vec<Volume>>,
@@ -86,75 +60,7 @@ pub struct Spec {
     selector: Option<Selector>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub template: Option<Template>,
-}
-
-// Example:
-//
-// - image: docker.io/library/busybox:1.36.0
-//   name: busybox
-//   volumeMounts:
-//   - mountPath: /busy1
-//     name: data
-// ...
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Container {
-    pub image: String,
-    pub name: String,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub imagePullPolicy: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub securityContext: Option<SecurityContext>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub volumeMounts: Option<Vec<VolumeMount>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub env: Option<Vec<EnvVariable>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub resources: Option<Resources>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ports: Option<Vec<Port>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub command: Option<Vec<String>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub args: Option<Vec<String>>,
-}
-
-// Example:
-//
-// securityContext:
-//   readOnlyRootFilesystem: true
-//   allowPrivilegeEscalation: false
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SecurityContext {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub readOnlyRootFilesystem: Option<bool>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub allowPrivilegeEscalation: Option<bool>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub privileged: Option<bool>,
-}
-
-// Example:
-//
-// - mountPath: /busy1
-//   name: data
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct VolumeMount {
-    pub mountPath: String,
-    pub name: String,
+    pub template: Option<pod_template::PodTemplate>,
 }
 
 // Example:
@@ -238,80 +144,6 @@ struct Selector {
     matchLabels: Option<BTreeMap<String, String>>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Template {
-    pub metadata: Metadata,
-    pub spec: TemplateSpec,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TemplateSpec {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub nodeSelector: Option<BTreeMap<String, String>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    runtimeClassName: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub containers: Option<Vec<Container>>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct EnvVariable {
-    name: String,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    value: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub valueFrom: Option<ValueFrom>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Resources {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    requests: Option<HardwareResources>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    limits: Option<HardwareResources>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct HardwareResources {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    cpu: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    memory: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Port {
-    containerPort: u16,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    name: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ValueFrom {
-    pub configMapKeyRef: ConfigMapKeyRef,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ConfigMapKeyRef {
-    pub name: String,
-    pub key: String,
-}
-
 impl Yaml {
     pub fn new(yaml_file: &Option<String>) -> Result<Self> {
         debug!("Reading YAML...");
@@ -339,14 +171,14 @@ impl Yaml {
         self.kind.eq("Deployment")
     }
 
-    fn add_pause_container(spec_containers: &mut Option<Vec<Container>>) {
+    fn add_pause_container(spec_containers: &mut Option<Vec<pod::Container>>) {
         if let Some(containers) = spec_containers {
             debug!("Adding pause container...");
-            let pause_container = Container {
+            let pause_container = pod::Container {
                 image: "mcr.microsoft.com/oss/kubernetes/pause:3.6".to_string(),
                 name: String::new(),
                 imagePullPolicy: None,
-                securityContext: Some(SecurityContext {
+                securityContext: Some(pod::SecurityContext {
                     readOnlyRootFilesystem: Some(true),
                     allowPrivilegeEscalation: Some(false),
                     privileged: None,
@@ -383,7 +215,10 @@ impl Yaml {
         }
 
         let encoded_policy = general_purpose::STANDARD.encode(policy.as_bytes());
-        debug!("Encoded policy length {:?} characters", encoded_policy.len());
+        debug!(
+            "Encoded policy length {:?} characters",
+            encoded_policy.len()
+        );
 
         if self.is_deployment() {
             debug!("Adding policy to Deployment YAML");
@@ -443,74 +278,6 @@ impl Yaml {
     }
 }
 
-impl Container {
-    pub fn get_env_variables(
-        &self,
-        dest_env: &mut Vec<String>,
-        config_maps: &Vec<config_maps::ConfigMap>,
-    ) {
-        if let Some(source_env) = &self.env {
-            for env_variable in source_env {
-                let mut src_string = env_variable.name.clone() + "=";
-                src_string += &env_variable.get_value(config_maps);
-                if !dest_env.contains(&src_string) {
-                    dest_env.push(src_string.clone());
-                }
-            }
-        }
-    }
-
-    pub fn allow_privilege_escalation(&self) -> bool {
-        if let Some(context) = &self.securityContext {
-            if let Some(allow) = context.allowPrivilegeEscalation {
-                return allow;
-            }
-        }
-        true
-    }
-
-    pub fn read_only_root_filesystem(&self) -> bool {
-        if let Some(context) = &self.securityContext {
-            if let Some(read_only) = context.readOnlyRootFilesystem {
-                return read_only;
-            }
-        }
-        false
-    }
-
-    pub fn get_process_args(&self, policy_args: &mut Vec<String>) -> (bool, bool) {
-        let mut yaml_has_command = true;
-        let mut yaml_has_args = true;
-
-        if let Some(commands) = &self.command {
-            for command in commands {
-                policy_args.push(command.clone());
-            }
-        } else {
-            yaml_has_command = false;
-        }
-
-        if let Some(args) = &self.args {
-            for arg in args {
-                policy_args.push(arg.clone());
-            }
-        } else {
-            yaml_has_args = false;
-        }
-
-        (yaml_has_command, yaml_has_args)
-    }
-
-    pub fn is_privileged(&self) -> bool {
-        if let Some(context) = &self.securityContext {
-            if let Some(privileged) = context.privileged {
-                return privileged;
-            }
-        }
-        false
-    }
-}
-
 fn export_decoded_policy(policy: &str, file_name: &str) -> Result<()> {
     let mut f = std::fs::OpenOptions::new()
         .write(true)
@@ -521,20 +288,4 @@ fn export_decoded_policy(policy: &str, file_name: &str) -> Result<()> {
     f.write_all(policy.as_bytes()).map_err(|e| anyhow!(e))?;
     f.flush().map_err(|e| anyhow!(e))?;
     Ok(())
-}
-
-impl EnvVariable {
-    pub fn get_value(&self, config_maps: &Vec<config_maps::ConfigMap>) -> String {
-        if let Some(value) = &self.value {
-            return value.clone();
-        } else if let Some(value_from) = &self.valueFrom {
-            if let Some(value) = config_maps::get_value(value_from, config_maps) {
-                return value.clone();
-            }
-        } else {
-            panic!("Environment variable without value or valueFrom!");
-        }
-
-        "".to_string()
-    }
 }

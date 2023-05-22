@@ -6,6 +6,7 @@
 // Allow OCI spec field names.
 #![allow(non_snake_case)]
 
+use crate::pod;
 use crate::policy;
 use crate::yaml;
 
@@ -131,7 +132,7 @@ impl InfraPolicy {
         &self,
         policy_mounts: &mut Vec<oci::Mount>,
         infra_mounts: &Vec<oci::Mount>,
-        yaml_container: &yaml::Container,
+        yaml_container: &pod::Container,
         is_pause_container: bool,
     ) -> Result<()> {
         let mut rootfs_access = "rw".to_string();
@@ -179,10 +180,7 @@ impl InfraPolicy {
     }
 }
 
-fn keep_infra_mount(
-    infra_mount: &oci::Mount,
-    yaml_mounts: &Option<Vec<yaml::VolumeMount>>,
-) -> bool {
+fn keep_infra_mount(infra_mount: &oci::Mount, yaml_mounts: &Option<Vec<pod::VolumeMount>>) -> bool {
     if INFRA_MOUNT_DESTINATIONS
         .iter()
         .any(|&i| i == infra_mount.destination)
@@ -299,7 +297,7 @@ impl InfraPolicy {
         policy_mounts: &mut Vec<oci::Mount>,
         storages: &mut Vec<policy::SerializedStorage>,
         yaml_volume: &yaml::Volume,
-        yaml_mount: &yaml::VolumeMount,
+        yaml_mount: &pod::VolumeMount,
     ) -> Result<()> {
         if let Some(infra_volumes) = &self.volumes {
             if yaml_volume.emptyDir.is_some() {
@@ -374,7 +372,7 @@ impl InfraPolicy {
     // ]
     fn empty_dir_mount_and_storage(
         infra_volumes: &Volumes,
-        yaml_mount: &yaml::VolumeMount,
+        yaml_mount: &pod::VolumeMount,
         policy_mounts: &mut Vec<oci::Mount>,
         storages: &mut Vec<policy::SerializedStorage>,
     ) {
@@ -440,7 +438,7 @@ impl InfraPolicy {
     // }
     fn volume_claim_mount(
         &self,
-        yaml_mount: &yaml::VolumeMount,
+        yaml_mount: &pod::VolumeMount,
         policy_mounts: &mut Vec<oci::Mount>,
     ) -> Result<()> {
         let mut mount_source = self.shared_files.source_path.to_string();
@@ -496,7 +494,7 @@ impl InfraPolicy {
     // }
     fn host_path_mount(
         &self,
-        yaml_mount: &yaml::VolumeMount,
+        yaml_mount: &pod::VolumeMount,
         policy_mounts: &mut Vec<oci::Mount>,
     ) -> Result<()> {
         policy_mounts.push(oci::Mount {
@@ -565,7 +563,7 @@ impl InfraPolicy {
         policy_mounts: &mut Vec<oci::Mount>,
         storages: &mut Vec<policy::SerializedStorage>,
         _yaml_volume: &yaml::Volume,
-        yaml_mount: &yaml::VolumeMount,
+        yaml_mount: &pod::VolumeMount,
     ) -> Result<()> {
         let infra_config_map = &infra_volumes.configMap;
         debug!("Infra configMap: {:?}", infra_config_map);
