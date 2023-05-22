@@ -27,6 +27,7 @@ jobs:
     strategy:
       matrix:
         asset:
+          - boot-image-se
           - kernel
           - qemu
           - rootfs-image
@@ -59,6 +60,13 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
+      - name: Place a host key document
+        run: |
+          mkdir -p "host-key-document"
+          cp "${CI_HKD_PATH}" "host-key-document"
+        env:
+          CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
+
       - name: Build ${{ matrix.asset }}
         run: |
           make "${KATA_ASSET}-tarball"
@@ -74,6 +82,7 @@ jobs:
           ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
+          HKD_PATH: "host-key-document"
 
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@v3
