@@ -134,6 +134,9 @@ qemu-snp-experimental-tarball:
 qemu-tarball:
 	${MAKE} $@-build
 
+boot-image-se-tarball: kernel-tarball rootfs-initrd-tarball
+	${MAKE} $@-build
+
 qemu-tdx-experimental-tarball:
 	${MAKE} $@-build
 
