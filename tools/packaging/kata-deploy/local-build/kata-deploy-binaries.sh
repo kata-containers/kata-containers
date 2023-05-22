@@ -159,7 +159,7 @@ install_image() {
 
 #Install guest initrd
 install_initrd() {
-	local initrd_type="${1:-""}"
+	local initrd_type="${1:-"initrd"}"
 	local initrd_suffix="${2:-""}"
 	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${initrd_type}-$(uname -m)/${cached_artifacts_path}"
 	local component="rootfs-${initrd_type}"
