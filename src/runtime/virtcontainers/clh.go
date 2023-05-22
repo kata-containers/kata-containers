@@ -506,40 +506,18 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs), int32(clh.config.DefaultMaxVCPUs))
 
-	params, err := GetKernelRootParams(hypervisorConfig.RootfsType, clh.config.ConfidentialGuest, false)
-	if err != nil {
-		return err
-	}
-	params = append(params, clhKernelParams...)
-
-	// Followed by extra debug parameters if debug enabled in configuration file
-	if clh.config.Debug {
-		if clh.config.ConfidentialGuest {
-			params = append(params, clhDebugConfidentialGuestKernelParams...)
-		} else {
-			params = append(params, clhDebugKernelParams...)
-		}
-		params = append(params, clhDebugKernelParamsCommon...)
-	} else {
-		// start the guest kernel with 'quiet' in non-debug mode
-		params = append(params, Param{"quiet", ""})
-	}
-
-	// Followed by extra kernel parameters defined in the configuration file
-	params = append(params, clh.config.KernelParams...)
-
-	clh.vmconfig.Payload.SetCmdline(kernelParamsToString(params))
-
-	// set random device generator to hypervisor
-	clh.vmconfig.Rng = chclient.NewRngConfig(clh.config.EntropySource)
-
 	// set the initial root/boot disk of hypervisor
 	imagePath, err := clh.config.ImageAssetPath()
 	if err != nil {
 		return err
 	}
 
+	var params []Param
 	if imagePath != "" {
+		params, err = GetKernelRootParams(hypervisorConfig.RootfsType, clh.config.ConfidentialGuest, false)
+		if err != nil {
+			return err
+		}
 		if clh.config.ConfidentialGuest {
 			disk := chclient.NewDiskConfig(imagePath)
 			disk.SetReadonly(true)
@@ -572,6 +550,29 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 		clh.vmconfig.Payload.SetInitramfs(initrdPath)
 	}
+
+	params = append(params, clhKernelParams...)
+
+	// Followed by extra debug parameters if debug enabled in configuration file
+	if clh.config.Debug {
+		if clh.config.ConfidentialGuest {
+			params = append(params, clhDebugConfidentialGuestKernelParams...)
+		} else {
+			params = append(params, clhDebugKernelParams...)
+		}
+		params = append(params, clhDebugKernelParamsCommon...)
+	} else {
+		// start the guest kernel with 'quiet' in non-debug mode
+		params = append(params, Param{"quiet", ""})
+	}
+
+	// Followed by extra kernel parameters defined in the configuration file
+	params = append(params, clh.config.KernelParams...)
+
+	clh.vmconfig.Payload.SetCmdline(kernelParamsToString(params))
+
+	// set random device generator to hypervisor
+	clh.vmconfig.Rng = chclient.NewRngConfig(clh.config.EntropySource)
 
 	if clh.config.ConfidentialGuest {
 		// Use HVC as the guest console only in debug mode, only
