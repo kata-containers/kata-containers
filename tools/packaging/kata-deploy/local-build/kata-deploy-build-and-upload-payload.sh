@@ -5,6 +5,12 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+[ -z "${DEBUG}" ] || set -x
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+
 KATA_DEPLOY_DIR="`dirname ${0}`/../../kata-deploy"
 KATA_DEPLOY_ARTIFACT="${1:-"kata-static.tar.xz"}"
 REGISTRY="${2:-"quay.io/kata-containers/kata-deploy"}"
