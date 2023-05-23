@@ -308,10 +308,9 @@ pub fn check_official_releases() -> Result<()> {
 }
 
 #[cfg(any(target_arch = "x86_64"))]
-pub fn check_kernel_module_loaded(module: &str, parameter: &str) -> Result<String, String> {
+pub fn check_kernel_module_loaded(module: &str) -> Result<String, String> {
     const MODPROBE_PARAMETERS_DRY_RUN: &str = "--dry-run";
     const MODPROBE_PARAMETERS_FIRST_TIME: &str = "--first-time";
-    const MODULES_PATH: &str = "/sys/module";
 
     let status_modinfo_success;
 
@@ -370,6 +369,12 @@ pub fn check_kernel_module_loaded(module: &str, parameter: &str) -> Result<Strin
             return Err(msg);
         }
     }
+    Ok(module.to_string())
+}
+
+#[cfg(any(target_arch = "x86_64"))]
+pub fn get_kernel_param_value(module: &str, parameter: &str) -> Result<String, String> {
+    const MODULES_PATH: &str = "/sys/module";
 
     let module_path = format!("{}/{}/parameters/{}", MODULES_PATH, module, parameter);
 

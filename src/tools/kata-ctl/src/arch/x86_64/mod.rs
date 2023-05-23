@@ -52,17 +52,17 @@ mod arch_specific {
     static MODULE_LIST: &[KernelModule] = &[
         KernelModule {
             name: "kvm",
-            parameter: KernelParam {
+            parameter: Some(KernelParam {
                 name: "kvmclock_periodic_sync",
                 value: KernelParamType::Simple("Y"),
-            },
+            }),
         },
         KernelModule {
             name: "kvm_intel",
-            parameter: KernelParam {
+            parameter: Some(KernelParam {
                 name: "unrestricted_guest",
                 value: KernelParamType::Predicate(unrestricted_guest_param_check),
-            },
+            }),
         },
     ];
 
@@ -278,21 +278,34 @@ mod arch_specific {
         println!("INFO: check kernel modules for: x86_64");
 
         for module in MODULE_LIST {
-            let module_loaded =
-                check::check_kernel_module_loaded(module.name, module.parameter.name);
+            let module_loaded = check::check_kernel_module_loaded(module.name);
 
             match module_loaded {
-                Ok(param_value_host) => {
-                    let parameter_check = check_kernel_param(
-                        module.name,
-                        module.parameter.name,
-                        &param_value_host,
-                        module.parameter.value.clone(),
-                    );
+                Ok(_module_loaded) => {
+                    if let Some(parameter) = &module.parameter {
+                        let module_param_value =
+                            check::get_kernel_param_value(module.name, parameter.name);
 
-                    match parameter_check {
-                        Ok(_v) => println!("{} Ok", module.name),
-                        Err(e) => return Err(e),
+                        match module_param_value {
+                            Ok(param_value_host) => {
+                                let parameter_check = check_kernel_param(
+                                    module.name,
+                                    parameter.name,
+                                    &param_value_host,
+                                    parameter.value.clone(),
+                                );
+
+                                match parameter_check {
+                                    Ok(_v) => println!("{} Ok", module.name),
+                                    Err(e) => return Err(e),
+                                }
+                            }
+                            Err(err) => {
+                                eprintln!("WARNING {:}", err.replace('\n', ""))
+                            }
+                        }
+                    } else {
+                        println!("{} Ok", module.name)
                     }
                 }
                 Err(err) => {

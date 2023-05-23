@@ -69,5 +69,5 @@ pub struct KernelParam<'a> {
 #[allow(dead_code)]
 pub struct KernelModule<'a> {
     pub name: &'a str,
-    pub parameter: KernelParam<'a>,
+    pub parameter: Option<KernelParam<'a>>,
 }
