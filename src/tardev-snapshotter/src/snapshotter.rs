@@ -42,16 +42,16 @@ impl Store {
     }
 
     /// Creates the layer file path from its name.
-    ///
-    /// If `write` is `true`, it also ensures that the directory exists.
-    fn layer_path(&self, name: &str, write: bool) -> Result<PathBuf, Status> {
-        let path = self.root.join("layers").join(name_to_hash(name));
-        if write {
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-        }
+    fn layer_path(&self, name: &str) -> PathBuf {
+        self.root.join("layers").join(name_to_hash(name))
+    }
 
+    /// Creates the layer file path from its name and ensures that the directory exists.
+    fn layer_path_to_write(&self, name: &str) -> Result<PathBuf, Status> {
+        let path = self.layer_path(name);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
         Ok(path)
     }
 
@@ -231,7 +231,7 @@ impl TarDevSnapshotter {
         {
             let from = dir.path().join(&key);
             let mut store = self.store.write().await;
-            let to = store.layer_path(&key, true)?;
+            let to = store.layer_path_to_write(&key)?;
             trace!("Renaming from {:?} to {:?}", &from, &to);
             tokio::fs::rename(from, to).await?;
             store.write_snapshot(Kind::Committed, key, parent, labels)?;
@@ -270,7 +270,7 @@ impl Snapshotter for TarDevSnapshotter {
             return Ok(Usage { inodes: 0, size: 0 });
         }
 
-        let mut file = fs::File::open(store.layer_path(&key, false)?)?;
+        let mut file = fs::File::open(store.layer_path(&key))?;
         let len = file.seek(io::SeekFrom::End(0))?;
         Ok(Usage {
             // TODO: Read the index "header" to determine the inode count.
@@ -348,11 +348,9 @@ impl Snapshotter for TarDevSnapshotter {
                     // TODO: We need to ref-count the layer file so that we don't remove it here
                     // when the first reference goes away. For now we're using the snapshot name
                     // as the layer name, but eventually we want to use `digest`.
-                    if let Ok(layer_path) = store.layer_path(&key, false) {
-                        if let Err(e) = fs::remove_file(layer_path) {
-                            if e.kind() != io::ErrorKind::NotFound {
-                                return Err(e.into());
-                            }
+                    if let Err(e) = fs::remove_file(store.layer_path(&key)) {
+                        if e.kind() != io::ErrorKind::NotFound {
+                            return Err(e.into());
                         }
                     }
                 }
