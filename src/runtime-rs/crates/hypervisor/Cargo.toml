@@ -8,6 +8,7 @@ license = "Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+actix-rt = "2.7.0"
 anyhow = "^1.0"
 async-trait = "0.1.48"
 dbs-utils = "0.2.0"
@@ -15,6 +16,7 @@ go-flag = "0.1.0"
 libc = ">=0.2.39"
 nix = "0.24.2"
 persist = { path = "../persist" }
+rust-ini = "0.18.0"
 seccompiler = "0.2.0"
 serde = { version = "1.0.138", features = ["derive"] }
 serde_json = ">=1.0.9"
