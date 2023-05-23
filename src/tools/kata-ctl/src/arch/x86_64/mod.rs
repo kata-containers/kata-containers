@@ -64,6 +64,18 @@ mod arch_specific {
                 value: KernelParamType::Predicate(unrestricted_guest_param_check),
             }),
         },
+        KernelModule {
+            name: "vhost",
+            parameter: None,
+        },
+        KernelModule {
+            name: "vhost_vsock",
+            parameter: None,
+        },
+        KernelModule {
+            name: "vhost_net",
+            parameter: None,
+        },
     ];
 
     pub fn get_checks() -> Option<&'static [CheckItem<'static>]> {
