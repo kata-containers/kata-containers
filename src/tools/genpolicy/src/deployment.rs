@@ -46,6 +46,9 @@ pub struct DeploymentSpec {
     selector: Option<pod::Selector>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    strategy: Option<DeploymentStrategy>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<pod_template::PodTemplate>,
 }
 
@@ -164,4 +167,24 @@ pub struct ResourceRequirements {
     #[serde(skip_serializing_if = "Option::is_none")]
     limits: Option<BTreeMap<String, String>>,
     // TODO: claims field.
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DeploymentStrategy {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    r#type: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rollingUpdate: Option<RollingUpdateDeployment>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RollingUpdateDeployment {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    maxSurge: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    maxUnavailable: Option<i32>,
 }
