@@ -22,7 +22,11 @@ use kata_types::{
 };
 use persist::sandbox_persist::Persist;
 use shim_interface::KATA_PATH;
-use std::{collections::HashSet, fs::create_dir_all, path::PathBuf};
+use std::{
+    collections::HashSet,
+    fs::create_dir_all,
+    path::{Path, PathBuf},
+};
 
 const DRAGONBALL_KERNEL: &str = "vmlinux";
 const DRAGONBALL_ROOT_FS: &str = "rootfs";
@@ -32,13 +36,13 @@ pub struct DragonballInner {
     pub(crate) id: String,
 
     /// vm path
-    pub(crate) vm_path: String,
+    pub(crate) vm_path: PathBuf,
 
     /// jailed flag
     pub(crate) jailed: bool,
 
     /// chroot base for the jailer
-    pub(crate) jailer_root: String,
+    pub(crate) jailer_root: PathBuf,
 
     /// netns
     pub(crate) netns: Option<String>,
@@ -53,7 +57,7 @@ pub struct DragonballInner {
     pub(crate) vmm_instance: VmmInstance,
 
     /// hypervisor run dir
-    pub(crate) run_dir: String,
+    pub(crate) run_dir: PathBuf,
 
     /// pending device
     pub(crate) pending_devices: Vec<Device>,
@@ -75,15 +79,15 @@ impl DragonballInner {
         );
         DragonballInner {
             id: "".to_string(),
-            vm_path: "".to_string(),
-            jailer_root: "".to_string(),
+            vm_path: PathBuf::new(),
+            jailer_root: PathBuf::new(),
             netns: None,
             config: Default::default(),
             pending_devices: vec![],
             state: VmmState::NotReady,
             jailed: false,
             vmm_instance: VmmInstance::new(""),
-            run_dir: "".to_string(),
+            run_dir: PathBuf::new(),
             cached_block_devices: Default::default(),
             capabilities,
         }
@@ -152,13 +156,18 @@ impl DragonballInner {
         }
 
         // create jailer root
-        create_dir_all(self.jailer_root.as_str())
-            .map_err(|e| anyhow!("Failed to create dir {} err : {:?}", self.jailer_root, e))?;
+        create_dir_all(&self.jailer_root).map_err(|e| {
+            anyhow!(
+                "Failed to create dir {} err : {:?}",
+                self.jailer_root.display(),
+                e
+            )
+        })?;
 
         // create run dir
-        self.run_dir = [KATA_PATH, self.id.as_str()].join("/");
-        create_dir_all(self.run_dir.as_str())
-            .with_context(|| format!("failed to create dir {}", self.run_dir.as_str()))?;
+        self.run_dir = Path::new(KATA_PATH).join(&self.id);
+        create_dir_all(&self.run_dir)
+            .with_context(|| format!("failed to create dir {}", self.run_dir.display()))?;
 
         // run vmm server
         self.vmm_instance
@@ -180,21 +189,25 @@ impl DragonballInner {
 
         std::fs::remove_dir_all(&self.vm_path)
             .map_err(|err| {
-                error!(sl!(), "failed to remove dir all for {}", &self.vm_path);
+                error!(
+                    sl!(),
+                    "failed to remove dir all for {}",
+                    &self.vm_path.display()
+                );
                 err
             })
             .ok();
     }
 
     fn set_vm_base_config(&mut self) -> Result<()> {
-        let serial_path = [&self.run_dir, "console.sock"].join("/");
+        let serial_path = self.run_dir.join("console.sock");
         let (mem_type, mem_file_path) = if self.config.memory_info.enable_hugepages {
             (String::from(HUGETLBFS), String::from(DEV_HUGEPAGES))
         } else {
             (String::from(SHMEM), String::from(""))
         };
         let vm_config = VmConfigInfo {
-            serial_path: Some(serial_path),
+            serial_path: Some(serial_path.to_string_lossy().to_string()),
             mem_size_mib: self.config.memory_info.default_memory as usize,
             vcpu_count: self.config.cpu_info.default_vcpus as u8,
             max_vcpu_count: self.config.cpu_info.default_maxvcpus as u8,
@@ -210,9 +223,9 @@ impl DragonballInner {
     }
 
     pub(crate) fn umount_jail_resource(&self, jailed_path: &str) -> Result<()> {
-        let path = [self.jailer_root.as_str(), jailed_path].join("/");
-        nix::mount::umount2(path.as_str(), nix::mount::MntFlags::MNT_DETACH)
-            .with_context(|| format!("umount path {}", &path))
+        let path = self.jailer_root.join(jailed_path);
+        nix::mount::umount2(&path, nix::mount::MntFlags::MNT_DETACH)
+            .with_context(|| format!("umount path {}", path.display()))
     }
 
     pub(crate) fn get_resource(&self, src: &str, dst: &str) -> Result<String> {
@@ -229,8 +242,8 @@ impl DragonballInner {
             return Err(anyhow!("invalid param src {} dst {}", src, dst));
         }
 
-        let jailed_location = [self.jailer_root.as_str(), dst].join("/");
-        mount::bind_mount_unchecked(src, jailed_location.as_str(), false).context("bind_mount")?;
+        let jailed_location = self.jailer_root.join(dst);
+        mount::bind_mount_unchecked(src, jailed_location, false).context("bind_mount")?;
 
         let mut abs_path = String::from("/");
         abs_path.push_str(dst);
@@ -345,12 +358,12 @@ impl Persist for DragonballInner {
         Ok(HypervisorState {
             hypervisor_type: HYPERVISOR_DRAGONBALL.to_string(),
             id: self.id.clone(),
-            vm_path: self.vm_path.clone(),
+            vm_path: self.vm_path.to_string_lossy().to_string(),
             jailed: self.jailed,
-            jailer_root: self.jailer_root.clone(),
+            jailer_root: self.jailer_root.to_string_lossy().to_string(),
             netns: self.netns.clone(),
             config: self.hypervisor_config(),
-            run_dir: self.run_dir.clone(),
+            run_dir: self.run_dir.to_string_lossy().to_string(),
             cached_block_devices: self.cached_block_devices.clone(),
             ..Default::default()
         })
@@ -363,14 +376,14 @@ impl Persist for DragonballInner {
     ) -> Result<Self> {
         Ok(DragonballInner {
             id: hypervisor_state.id,
-            vm_path: hypervisor_state.vm_path,
+            vm_path: PathBuf::from(hypervisor_state.vm_path),
             jailed: hypervisor_state.jailed,
-            jailer_root: hypervisor_state.jailer_root,
+            jailer_root: PathBuf::from(hypervisor_state.jailer_root),
             netns: hypervisor_state.netns,
             config: hypervisor_state.config,
             state: VmmState::NotReady,
             vmm_instance: VmmInstance::new(""),
-            run_dir: hypervisor_state.run_dir,
+            run_dir: PathBuf::from(hypervisor_state.run_dir),
             pending_devices: vec![],
             cached_block_devices: hypervisor_state.cached_block_devices,
             capabilities: Capabilities::new(),

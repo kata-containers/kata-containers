@@ -134,7 +134,10 @@ impl Hypervisor for Dragonball {
 
     async fn get_jailer_root(&self) -> Result<String> {
         let inner = self.inner.read().await;
-        inner.get_jailer_root().await
+        inner
+            .get_jailer_root()
+            .await
+            .map(|p| p.to_string_lossy().to_string())
     }
 
     async fn save_state(&self) -> Result<HypervisorState> {

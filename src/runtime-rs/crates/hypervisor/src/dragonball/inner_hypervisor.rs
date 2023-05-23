@@ -7,6 +7,7 @@
 use std::{
     collections::{HashMap, HashSet},
     iter::FromIterator,
+    path::{Path, PathBuf},
 };
 
 use anyhow::{Context, Ok, Result};
@@ -17,8 +18,8 @@ use crate::{utils, VcpuThreadIds, VmmState};
 use shim_interface::KATA_PATH;
 const DEFAULT_HYBRID_VSOCK_NAME: &str = "kata.hvsock";
 
-fn get_vsock_path(root: &str) -> String {
-    [root, DEFAULT_HYBRID_VSOCK_NAME].join("/")
+fn get_vsock_path(root: &Path) -> PathBuf {
+    root.join(DEFAULT_HYBRID_VSOCK_NAME)
 }
 
 impl DragonballInner {
@@ -26,16 +27,16 @@ impl DragonballInner {
         self.id = id.to_string();
         self.state = VmmState::NotReady;
 
-        self.vm_path = [KATA_PATH, id].join("/");
-        self.jailer_root = [self.vm_path.as_str(), "root"].join("/");
+        self.vm_path = Path::new(KATA_PATH).join(id);
+        self.jailer_root = self.vm_path.join("root");
         self.netns = netns;
 
         // prepare vsock
-        let uds_path = [&self.jailer_root, DEFAULT_HYBRID_VSOCK_NAME].join("/");
+        let uds_path = self.jailer_root.join(DEFAULT_HYBRID_VSOCK_NAME);
         let d = crate::device::Device::HybridVsock(crate::device::HybridVsockConfig {
             id: format!("vsock-{}", &self.id),
             guest_cid: 3,
-            uds_path,
+            uds_path: uds_path.to_string_lossy().to_string(),
         });
 
         self.add_device(d).await.context("add device")?;
@@ -84,7 +85,7 @@ impl DragonballInner {
         Ok(format!(
             "{}://{}",
             HYBRID_VSOCK_SCHEME,
-            get_vsock_path(&self.jailer_root),
+            get_vsock_path(&self.jailer_root).display(),
         ))
     }
 
@@ -141,7 +142,7 @@ impl DragonballInner {
         Ok(())
     }
 
-    pub(crate) async fn get_jailer_root(&self) -> Result<String> {
+    pub(crate) async fn get_jailer_root(&self) -> Result<PathBuf> {
         Ok(self.jailer_root.clone())
     }
 

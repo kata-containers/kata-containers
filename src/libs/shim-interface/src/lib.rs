@@ -15,9 +15,9 @@
 //! HTTP request to the server. The server inside shim will multiplex the request
 //! to its corresponding handler and run certain methods.
 
-use std::path::Path;
+use std::path::PathBuf;
 
-use anyhow::{anyhow, Result};
+use anyhow::{bail, Result};
 
 pub mod shim_mgmt;
 
@@ -25,8 +25,8 @@ pub const KATA_PATH: &str = "/run/kata";
 pub const SHIM_MGMT_SOCK_NAME: &str = "shim-monitor.sock";
 
 // return sandbox's storage path
-pub fn sb_storage_path() -> String {
-    String::from(KATA_PATH)
+pub fn sb_storage_path() -> PathBuf {
+    PathBuf::from(KATA_PATH)
 }
 
 // returns the address of the unix domain socket(UDS) for communication with shim
@@ -34,20 +34,11 @@ pub fn sb_storage_path() -> String {
 // normally returns "unix:///run/kata/{sid}/shim_monitor.sock"
 pub fn mgmt_socket_addr(sid: &str) -> Result<String> {
     if sid.is_empty() {
-        return Err(anyhow!(
-            "Empty sandbox id for acquiring socket address for shim_mgmt"
-        ));
+        bail!("Empty sandbox id for acquiring socket address for shim_mgmt");
     }
 
-    let p = Path::new(&sb_storage_path())
-        .join(sid)
-        .join(SHIM_MGMT_SOCK_NAME);
-
-    if let Some(p) = p.to_str() {
-        Ok(format!("unix://{}", p))
-    } else {
-        Err(anyhow!("Bad socket path"))
-    }
+    let p = sb_storage_path().join(sid).join(SHIM_MGMT_SOCK_NAME);
+    Ok(format!("unix://{}", p.display()))
 }
 
 #[cfg(test)]
