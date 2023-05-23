@@ -8,7 +8,7 @@
 
 use crate::pod;
 use crate::policy;
-use crate::yaml;
+use crate::volumes;
 
 use anyhow::Result;
 use log::debug;
@@ -296,7 +296,7 @@ impl InfraPolicy {
         &self,
         policy_mounts: &mut Vec<oci::Mount>,
         storages: &mut Vec<policy::SerializedStorage>,
-        yaml_volume: &yaml::Volume,
+        yaml_volume: &volumes::Volume,
         yaml_mount: &pod::VolumeMount,
     ) -> Result<()> {
         if let Some(infra_volumes) = &self.volumes {
@@ -562,7 +562,7 @@ impl InfraPolicy {
         infra_volumes: &Volumes,
         policy_mounts: &mut Vec<oci::Mount>,
         storages: &mut Vec<policy::SerializedStorage>,
-        _yaml_volume: &yaml::Volume,
+        _yaml_volume: &volumes::Volume,
         yaml_mount: &pod::VolumeMount,
     ) -> Result<()> {
         let infra_config_map = &infra_volumes.configMap;

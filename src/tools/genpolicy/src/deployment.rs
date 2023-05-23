@@ -6,27 +6,27 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
-use crate::config_maps;
 use crate::obj_meta;
+use crate::pod;
 use crate::pod_template;
 use crate::volumes;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// See Pod in the Kubernetes API reference.
+/// See Deployment in the Kubernetes API reference.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Pod {
+pub struct Deployment {
     apiVersion: String,
     kind: String,
     pub metadata: obj_meta::ObjectMeta,
-    pub spec: PodSpec,
+    pub spec: DeploymentSpec,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct PodSpec {
+pub struct DeploymentSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     restartPolicy: Option<String>,
 
@@ -43,7 +43,7 @@ pub struct PodSpec {
     replicas: Option<u32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    selector: Option<Selector>,
+    selector: Option<pod::Selector>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<pod_template::PodTemplate>,
@@ -66,7 +66,7 @@ pub struct Container {
     pub volumeMounts: Option<Vec<VolumeMount>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub env: Option<Vec<EnvVar>>,
+    pub env: Option<Vec<pod::EnvVar>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resources: Option<ResourceRequirements>,
@@ -118,7 +118,7 @@ pub struct ContainerPort {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EnvVar {
-    pub name: String,
+    name: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     value: Option<String>,
@@ -164,94 +164,4 @@ pub struct ResourceRequirements {
     #[serde(skip_serializing_if = "Option::is_none")]
     limits: Option<BTreeMap<String, String>>,
     // TODO: claims field.
-}
-
-impl Container {
-    pub fn get_env_variables(
-        &self,
-        dest_env: &mut Vec<String>,
-        config_maps: &Vec<config_maps::ConfigMap>,
-    ) {
-        if let Some(source_env) = &self.env {
-            for env_variable in source_env {
-                let mut src_string = env_variable.name.clone() + "=";
-                src_string += &env_variable.get_value(config_maps);
-                if !dest_env.contains(&src_string) {
-                    dest_env.push(src_string.clone());
-                }
-            }
-        }
-    }
-
-    pub fn allow_privilege_escalation(&self) -> bool {
-        if let Some(context) = &self.securityContext {
-            if let Some(allow) = context.allowPrivilegeEscalation {
-                return allow;
-            }
-        }
-        true
-    }
-
-    pub fn read_only_root_filesystem(&self) -> bool {
-        if let Some(context) = &self.securityContext {
-            if let Some(read_only) = context.readOnlyRootFilesystem {
-                return read_only;
-            }
-        }
-        false
-    }
-
-    pub fn get_process_args(&self, policy_args: &mut Vec<String>) -> (bool, bool) {
-        let mut yaml_has_command = true;
-        let mut yaml_has_args = true;
-
-        if let Some(commands) = &self.command {
-            for command in commands {
-                policy_args.push(command.clone());
-            }
-        } else {
-            yaml_has_command = false;
-        }
-
-        if let Some(args) = &self.args {
-            for arg in args {
-                policy_args.push(arg.clone());
-            }
-        } else {
-            yaml_has_args = false;
-        }
-
-        (yaml_has_command, yaml_has_args)
-    }
-
-    pub fn is_privileged(&self) -> bool {
-        if let Some(context) = &self.securityContext {
-            if let Some(privileged) = context.privileged {
-                return privileged;
-            }
-        }
-        false
-    }
-}
-
-impl EnvVar {
-    pub fn get_value(&self, config_maps: &Vec<config_maps::ConfigMap>) -> String {
-        if let Some(value) = &self.value {
-            return value.clone();
-        } else if let Some(value_from) = &self.valueFrom {
-            if let Some(value) = config_maps::get_value(value_from, config_maps) {
-                return value.clone();
-            }
-        } else {
-            panic!("Environment variable without value or valueFrom!");
-        }
-
-        "".to_string()
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Selector {
-    matchLabels: Option<BTreeMap<String, String>>,
 }
