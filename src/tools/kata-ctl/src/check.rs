@@ -602,6 +602,57 @@ mod tests {
         #[derive(Debug)]
         struct TestData<'a> {
             module_name: &'a str,
+            result: Result<String>,
+        }
+
+        let tests = &[
+            // Failure scenarios
+            TestData {
+                module_name: "",
+                result: Err(anyhow!("modinfo: ERROR: Module {} not found.", "")),
+            },
+            TestData {
+                module_name: "kvm_test_fail",
+                result: Err(anyhow!(
+                    "modinfo: ERROR: Module {} not found.",
+                    "kvm_test_fail"
+                )),
+            },
+            // Success scenarios
+            TestData {
+                module_name: "kvm",
+                result: Ok("kvm".to_string()),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+            let result = check_kernel_module_loaded(d.module_name);
+            let msg = format!("{}, result: {:?}", msg, result);
+
+            if d.result.is_ok() {
+                assert_eq!(
+                    result.as_ref().unwrap(),
+                    d.result.as_ref().unwrap(),
+                    "{}",
+                    msg
+                );
+                continue;
+            } else if d.result.is_err() {
+                let expected_error = format!("{}", &d.result.as_ref().unwrap_err());
+                let actual_error = result.unwrap_err().to_string();
+                assert!(actual_error == expected_error, "{}", msg);
+            }
+        }
+    }
+
+    #[cfg(any(target_arch = "x86_64"))]
+    #[test]
+    fn test_get_kernel_param_value() {
+        #[allow(dead_code)]
+        #[derive(Debug)]
+        struct TestData<'a> {
+            module_name: &'a str,
             param_name: &'a str,
             param_value: &'a str,
             result: Result<String>,
@@ -610,12 +661,6 @@ mod tests {
         let tests = &[
             // Failure scenarios
             TestData {
-                module_name: "",
-                param_name: "",
-                param_value: "",
-                result: Err(anyhow!("modinfo: ERROR: Module {} not found.", "")),
-            },
-            TestData {
                 module_name: "kvm",
                 param_name: "",
                 param_value: "",
@@ -623,6 +668,16 @@ mod tests {
                     "'{:}' kernel module parameter `{:}` not found.",
                     "kvm",
                     ""
+                )),
+            },
+            TestData {
+                module_name: "kvm",
+                param_name: "fake_parameter",
+                param_value: "",
+                result: Err(anyhow!(
+                    "'{:}' kernel module parameter `{:}` not found.",
+                    "kvm",
+                    "fake_parameter"
                 )),
             },
             // Success scenarios
@@ -636,7 +691,7 @@ mod tests {
 
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
-            let result = check_kernel_module_loaded(d.module_name, d.param_name);
+            let result = get_kernel_param_value(d.module_name, d.param_name);
             let msg = format!("{}, result: {:?}", msg, result);
 
             if d.result.is_ok() {
@@ -647,11 +702,11 @@ mod tests {
                     msg
                 );
                 continue;
+            } else if d.result.is_err() {
+                let expected_error = format!("{}", &d.result.as_ref().unwrap_err());
+                let actual_error = result.unwrap_err().to_string();
+                assert!(actual_error == expected_error, "{}", msg);
             }
-
-            let expected_error = format!("{}", &d.result.as_ref().unwrap_err());
-            let actual_error = result.unwrap_err().to_string();
-            assert!(actual_error == expected_error, "{}", msg);
         }
     }
 }
