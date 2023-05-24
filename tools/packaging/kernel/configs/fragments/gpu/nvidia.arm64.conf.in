@@ -1,7 +1,3 @@
-# Support mmconfig PCI config space access.
-# It's used to enable the MMIO access method for PCIe devices.
-CONFIG_PCI_MMCONFIG=y
-
 # Support for loading modules.
 # It is used to support loading GPU drivers.
 CONFIG_MODULES=y
@@ -14,8 +10,15 @@ CONFIG_MODULE_SIG=y
 CONFIG_LOCALVERSION="-nvidia-gpu${CONF_GUEST_SUFFIX}"
 
 # Newer NVIDIA drivers need additional symbols
-CONFIG_X86_MCE=y
 CONFIG_ARCH_SUPPORTS_MEMORY_FAILURE=y
-CONFIG_X86_SUPPORTS_MEMORY_FAILURE=y
 CONFIG_MEMORY_FAILURE=y
 
+
+# VFIO/IOMMU setttings 
+CONFIG_MMU_NOTIFIER=y
+CONFIG_IOASID=y
+CONFIG_IOMMU_IO_PGTABLE=y
+CONFIG_IOMMU_IO_PGTABLE_LPAE=y
+CONFIG_IOMMU_SVA=y
+CONFIG_ARM_SMMU_V3=y
+CONFIG_ARM_SMMU_V3_SVA=y

@@ -256,7 +256,7 @@ get_kernel_frag_path() {
 		# -nvidia-gpu-{snp|tdx}, the linux headers will be named the very
 		# same if build with make deb-pkg for TDX or SNP.
 		local gpu_configs=$(mktemp).conf
-		local gpu_subst_configs="$(ls ${gpu_path}/${gpu_vendor}.${arch_target}.conf.in)"
+		local gpu_subst_configs="${gpu_path}/${gpu_vendor}.${arch_target}.conf.in"
 		if [[ "${conf_guest}" != "" ]];then
 			export CONF_GUEST_SUFFIX="-${conf_guest}"
 		else
