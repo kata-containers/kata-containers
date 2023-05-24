@@ -64,6 +64,15 @@ function install_artifacts() {
 	chmod +x /opt/confidential-containers/bin/*
 }
 
+function wait_till_node_is_ready() {
+	local ready="False"
+
+	while ! [[ "${ready}" == "True" ]]; do
+		sleep 2s
+		ready=$(kubectl get node $NODE_NAME -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+	done
+}
+
 function configure_cri_runtime() {
 	configure_different_shims_base
 
@@ -77,6 +86,8 @@ function configure_cri_runtime() {
 	esac
 	systemctl daemon-reload
 	systemctl restart "$1"
+
+	wait_till_node_is_ready
 }
 
 function backup_shim() {
@@ -303,6 +314,8 @@ function reset_runtime() {
 	if [ "$1" == "crio" ] || [ "$1" == "containerd" ]; then
 		systemctl restart kubelet
 	fi
+
+	wait_till_node_is_ready
 }
 
 function main() {
@@ -314,7 +327,10 @@ function main() {
 
 	runtime=$(get_container_runtime)
 
-	if [ "$runtime" == "k3s" ] || [ "$runtime" == "k3s-agent" ] || [ "$runtime" == "rke2-agent" ] || [ "$runtime" == "rke2-server" ]; then
+	# CRI-O isn't consistent with the naming -- let's use crio to match the service file
+	if [ "$runtime" == "cri-o" ]; then
+		runtime="crio"
+	elif [ "$runtime" == "k3s" ] || [ "$runtime" == "k3s-agent" ] || [ "$runtime" == "rke2-agent" ] || [ "$runtime" == "rke2-server" ]; then
 		containerd_conf_tmpl_file="${containerd_conf_file}.tmpl"
 		if [ ! -f "$containerd_conf_tmpl_file" ]; then
 			cp "$containerd_conf_file" "$containerd_conf_tmpl_file"
@@ -322,15 +338,12 @@ function main() {
 
 		containerd_conf_file="${containerd_conf_tmpl_file}"
 		containerd_conf_file_backup="${containerd_conf_file}.bak"
-	elif [ "$runtime" == "containerd" ]; then
+	else
 		# runtime == containerd
 		if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && \
 			[ -x $(command -v containerd) ]; then
 			containerd config default > "$containerd_conf_file"
 		fi
-	# CRI-O isn't consistent with the naming -- let's use crio to match the service file
-	elif [ "$runtime" == "cri-o" ]; then
-		runtime="crio"
 	fi
 
 	action=${1:-}
@@ -339,8 +352,8 @@ function main() {
 		die "invalid arguments"
 	fi
 
-	# only install / remove / update if we are dealing with containerd
-	if [[ "$runtime" =~ ^(containerd|k3s|k3s-agent|rke2-agent|rke2-server|crio)$ ]]; then
+	# only install / remove / update if we are dealing with CRIO or containerd
+	if [[ "$runtime" =~ ^(crio|containerd|k3s|k3s-agent|rke2-agent|rke2-server)$ ]]; then
 
 		case "$action" in
 		install)
