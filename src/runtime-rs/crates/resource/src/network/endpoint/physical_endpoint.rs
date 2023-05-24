@@ -8,7 +8,9 @@ use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use hypervisor::{device, Hypervisor};
+use hypervisor::device::DeviceType;
+use hypervisor::{device::driver, Hypervisor};
+use hypervisor::{VfioConfig, VfioDevice};
 
 use super::endpoint_persist::{EndpointState, PhysicalEndpointState};
 use super::Endpoint;
@@ -94,7 +96,7 @@ impl Endpoint for PhysicalEndpoint {
 
     async fn attach(&self, hypervisor: &dyn Hypervisor) -> Result<()> {
         // bind physical interface from host driver and bind to vfio
-        device::bind_device_to_vfio(
+        driver::bind_device_to_vfio(
             &self.bdf,
             &self.driver,
             &self.vendor_device_id.vendor_device_id(),
@@ -108,12 +110,14 @@ impl Endpoint for PhysicalEndpoint {
         };
 
         // add vfio device
-        let d = device::Device::Vfio(device::VfioConfig {
+        let d = DeviceType::Vfio(VfioDevice {
             id: format!("physical_nic_{}", self.name().await),
-            sysfs_path: "".to_string(),
-            bus_slot_func: self.bdf.clone(),
-            mode: device::VfioBusMode::new(mode)
-                .with_context(|| format!("new vfio bus mode {:?}", mode))?,
+            config: VfioConfig {
+                sysfs_path: "".to_string(),
+                bus_slot_func: self.bdf.clone(),
+                mode: driver::VfioBusMode::new(mode)
+                    .with_context(|| format!("new vfio bus mode {:?}", mode))?,
+            },
         });
         hypervisor.add_device(d).await.context("add device")?;
         Ok(())
@@ -128,7 +132,7 @@ impl Endpoint for PhysicalEndpoint {
 
         // we do not need to enter the network namespace to bind back the
         // physical interface to host driver.
-        device::bind_device_to_host(
+        driver::bind_device_to_host(
             &self.bdf,
             &self.driver,
             &self.vendor_device_id.vendor_device_id(),

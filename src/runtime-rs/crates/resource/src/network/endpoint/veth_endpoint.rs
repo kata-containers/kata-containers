@@ -11,7 +11,9 @@ use super::Endpoint;
 use crate::network::{utils, NetworkPair};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use hypervisor::{device::NetworkConfig, Device, Hypervisor};
+use hypervisor::device::DeviceType;
+use hypervisor::NetworkDevice;
+use hypervisor::{device::driver::NetworkConfig, Hypervisor};
 
 #[derive(Debug)]
 pub struct VethEndpoint {
@@ -41,7 +43,6 @@ impl VethEndpoint {
             )
         })?;
         Ok(NetworkConfig {
-            id: self.net_pair.virt_iface.name.clone(),
             host_dev_name: iface.name.clone(),
             guest_mac: Some(guest_mac),
         })
@@ -64,9 +65,12 @@ impl Endpoint for VethEndpoint {
             .await
             .context("add network model")?;
         let config = self.get_network_config().context("get network config")?;
-        h.add_device(Device::Network(config))
-            .await
-            .context("Error add device")?;
+        h.add_device(DeviceType::Network(NetworkDevice {
+            id: self.net_pair.virt_iface.name.clone(),
+            config,
+        }))
+        .await
+        .context("error adding device by hypervisor")?;
         Ok(())
     }
 
@@ -76,9 +80,12 @@ impl Endpoint for VethEndpoint {
             .await
             .context("del network model")?;
         let config = self.get_network_config().context("get network config")?;
-        h.remove_device(Device::Network(config))
-            .await
-            .context("remove device")?;
+        h.remove_device(DeviceType::Network(NetworkDevice {
+            id: self.net_pair.virt_iface.name.clone(),
+            config,
+        }))
+        .await
+        .context("error removing device by hypervisor")?;
         Ok(())
     }
     async fn save(&self) -> Option<EndpointState> {

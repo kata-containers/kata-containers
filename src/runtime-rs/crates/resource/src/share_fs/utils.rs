@@ -97,7 +97,7 @@ pub fn do_get_guest_share_path(target: &str, cid: &str, is_rafs: bool) -> String
     do_get_guest_any_path(target, cid, false, is_rafs, true)
 }
 
-pub(crate) fn do_get_host_path(
+pub fn do_get_host_path(
     target: &str,
     sid: &str,
     cid: &str,

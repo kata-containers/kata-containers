@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v31.0"
+      version: "v32.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -261,7 +261,7 @@ externals:
   nydus:
     description: "Nydus image acceleration service"
     url: "https://github.com/dragonflyoss/image-service"
-    version: "v2.2.0"
+    version: "v2.2.1"
 
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"

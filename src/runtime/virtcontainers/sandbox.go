@@ -697,6 +697,7 @@ func (s *Sandbox) createResourceController() error {
 			// Determine if device /dev/null and /dev/urandom exist, and add if they don't
 			nullDeviceExist := false
 			urandomDeviceExist := false
+			ptmxDeviceExist := false
 			for _, device := range resources.Devices {
 				if device.Type == "c" && device.Major == intptr(1) && device.Minor == intptr(3) {
 					nullDeviceExist = true
@@ -704,6 +705,10 @@ func (s *Sandbox) createResourceController() error {
 
 				if device.Type == "c" && device.Major == intptr(1) && device.Minor == intptr(9) {
 					urandomDeviceExist = true
+				}
+
+				if device.Type == "c" && device.Major == intptr(5) && device.Minor == intptr(2) {
+					ptmxDeviceExist = true
 				}
 			}
 
@@ -718,6 +723,18 @@ func (s *Sandbox) createResourceController() error {
 				resources.Devices = append(resources.Devices, []specs.LinuxDeviceCgroup{
 					{Type: "c", Major: intptr(1), Minor: intptr(9), Access: rwm, Allow: true},
 				}...)
+			}
+
+			// If the hypervisor debug console is enabled and
+			// sandbox_cgroup_only are configured, then the vmm needs access to
+			// /dev/ptmx.  Add this to the device allowlist if it is not
+			// already present in the config.
+			if s.config.HypervisorConfig.Debug && s.config.SandboxCgroupOnly && !ptmxDeviceExist {
+				// "/dev/ptmx"
+				resources.Devices = append(resources.Devices, []specs.LinuxDeviceCgroup{
+					{Type: "c", Major: intptr(5), Minor: intptr(2), Access: rwm, Allow: true},
+				}...)
+
 			}
 
 			if spec.Linux.Resources.CPU != nil {

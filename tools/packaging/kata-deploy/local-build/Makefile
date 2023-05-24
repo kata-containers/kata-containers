@@ -24,7 +24,7 @@ all-parallel: $(MK_DIR)/dockerbuild/install_yq.sh
 all: serial-targets \
 	firecracker-tarball \
 	kernel-dragonball-experimental-tarball \
-	kernel-nvidia-gpu \
+	kernel-nvidia-gpu-tarball \
 	kernel-nvidia-gpu-snp-tarball \
 	kernel-nvidia-gpu-tdx-experimental-tarball \
 	kernel-tarball \
