@@ -266,7 +266,7 @@ install_cc_image() {
 			root_hash_vanilla=""
 			initramfs_last_commit="$(get_initramfs_image_name)"
 		fi
-	fi	
+	fi
 
 	local osbuilder_last_commit="$(echo $(get_last_modification "${repo_root_dir}/tools/osbuilder") | sed s/-dirty//)"
 	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
@@ -445,7 +445,7 @@ install_cached_kernel_component() {
 		"kata-static-cc-sev-kernel-modules.tar.xz" \
 		"${workdir}/kata-static-cc-sev-kernel-modules.tar.xz" \
 	|| return 1
-	
+
 	mkdir -p "${module_dir}"
 	tar xvf "${workdir}/kata-static-cc-sev-kernel-modules.tar.xz" -C  "${module_dir}" && return 0
 
@@ -949,7 +949,7 @@ handle_build() {
 	cc-tdx-tdvf) install_cc_tdx_tdvf ;;
 
 	cc-sev-ovmf) install_cc_sev_ovmf ;;
-	
+
 	cc-x86_64-ovmf) install_cc_x86_64_ovmf ;;
 
 	cloud-hypervisor) install_clh ;;
