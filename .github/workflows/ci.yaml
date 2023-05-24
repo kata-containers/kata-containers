@@ -31,7 +31,6 @@ jobs:
     secrets: inherit
 
   run-k8s-tests-on-aks:
-    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
     with:
@@ -42,7 +41,6 @@ jobs:
     secrets: inherit
 
   run-k8s-tests-on-sev:
-    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-on-sev.yaml
     with:
@@ -52,7 +50,6 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
 
   run-k8s-tests-on-snp:
-    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-on-snp.yaml
     with:
@@ -63,7 +60,6 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
 
   run-k8s-tests-on-tdx:
-    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-on-tdx.yaml
     with:
@@ -73,7 +69,6 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
 
   run-metrics-tests:
-    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/run-metrics.yaml
     with:
