@@ -25,6 +25,7 @@ RUN apt-get update && \
     makedev \
     multistrap \
     musl \
+    musl-dev \
     musl-tools \
     protobuf-compiler && rm -rf /var/lib/apt/lists/*
 

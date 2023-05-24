@@ -116,11 +116,19 @@ function setup_apt_repositories() {
 	touch /var/lib/dpkg/status
 	rm -f /etc/apt/sources.list.d/*
 
-	cat <<-'CHROOT_EOF' > /etc/apt/sources.list.d/jammy.list
-		deb http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse
-		deb http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse
-		deb http://archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse
-	CHROOT_EOF
+	if [ "${arch_target}" == "aarch64" ]; then
+		cat <<-'CHROOT_EOF' > /etc/apt/sources.list.d/jammy.list
+			deb http://ports.ubuntu.com/ubuntu-ports/ jammy main restricted universe multiverse
+			deb http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main restricted universe multiverse
+			deb http://ports.ubuntu.com/ubuntu-ports/ jammy-security main restricted universe multiverse
+		CHROOT_EOF
+	else
+		cat <<-'CHROOT_EOF' > /etc/apt/sources.list.d/jammy.list
+			deb http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse
+			deb http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse
+			deb http://archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse
+		CHROOT_EOF
+	fi
 
 	apt update 
 	eval ${APT_INSTALL} curl
