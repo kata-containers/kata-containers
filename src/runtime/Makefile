@@ -152,7 +152,7 @@ SEVKERNELPARAMS := $(AGENTCONFIGFILEKERNELPARAM) agent.enable_signature_verifica
 SNPKERNELPARAMS := $(AGENTCONFIGFILEKERNELPARAM) agent.enable_signature_verification=false $(AGENT_AA_KBC_PARAMS_SNP)
 KERNELPARAMS += $(ROOTMEASURECONFIG) agent.enable_signature_verification=false $(AGENT_AA_KBC_PARAMS)
 
-FIRMWARETDVFPATH := $(PREFIXDEPS)/share/tdvf/OVMF.fd
+FIRMWARETDVFPATH := $(PREFIXDEPS)/share/tdvf/OVMF_CODE.fd
 FIRMWARETDVFVOLUMEPATH := $(PREFIXDEPS)/share/tdvf/OVMF_VARS.fd
 
 # Name of default configuration file the runtime will use.
