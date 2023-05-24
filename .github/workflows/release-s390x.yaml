@@ -36,27 +36,16 @@ jobs:
       - name: build-and-push-kata-deploy-ci-s390x
         id: build-and-push-kata-deploy-ci-s390x
         run: |
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          pushd $GITHUB_WORKSPACE
-          git checkout $tag
-          pkg_sha=$(git rev-parse HEAD)
-          popd
-          ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-            $(pwd)/kata-static.tar.xz "docker.io/katadocker/kata-deploy-ci" \
-            "${pkg_sha}-${{ inputs.target-arch }}"
-          ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-            $(pwd)/kata-static.tar.xz "quay.io/kata-containers/kata-deploy-ci" \
-            "${pkg_sha}-${{ inputs.target-arch }}"
-
-      - name: push-tarball
-        run: |
-          # tag the container image we created and push to DockerHub
+          # We need to do such trick here as the format of the $GITHUB_REF 
+          # is "refs/tags/<tag>"
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
           tags=($tag)
           tags+=($([[ "$tag" =~ "alpha"|"rc" ]] && echo "latest" || echo "stable"))
           for tag in ${tags[@]}; do
-            docker tag docker.io/katadocker/kata-deploy-ci:${{steps.build-and-push-kata-deploy-ci-s390x.outputs.PKG_SHA}}-${{ inputs.target-arch }} docker.io/katadocker/kata-deploy:${tag}-${{ inputs.target-arch }}
-            docker tag quay.io/kata-containers/kata-deploy-ci:${{steps.build-and-push-kata-deploy-ci-s390x.outputs.PKG_SHA}}-${{ inputs.target-arch }} quay.io/kata-containers/kata-deploy:${tag}-${{ inputs.target-arch }}
-            docker push docker.io/katadocker/kata-deploy:${tag}-${{ inputs.target-arch }}
-            docker push quay.io/kata-containers/kata-deploy:${tag}-${{ inputs.target-arch }}
+              ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
+                  $(pwd)/kata-static.tar.xz "docker.io/katadocker/kata-deploy" \
+                  "${tag}-${{ inputs.target-arch }}"
+              ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
+                  $(pwd)/kata-static.tar.xz "quay.io/kata-containers/kata-deploy" \
+                  "${tag}-${{ inputs.target-arch }}"
           done
