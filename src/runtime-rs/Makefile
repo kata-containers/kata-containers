@@ -203,7 +203,7 @@ ifneq (,$(DBCMD))
     CONFIGS += $(CONFIG_DB)
     # dragonball-specific options (all should be suffixed by "_DB")
     DEFMAXVCPUS_DB := 1
-    DEFBLOCKSTORAGEDRIVER_DB := virtio-blk
+    DEFBLOCKSTORAGEDRIVER_DB := virtio-blk-mmio
     DEFNETWORKMODEL_DB := tcfilter
     KERNELPARAMS = console=ttyS1 agent.log_vport=1025
 	KERNELTYPE_DB = uncompressed

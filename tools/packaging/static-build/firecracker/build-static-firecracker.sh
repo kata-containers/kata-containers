@@ -28,7 +28,7 @@ arch=$(uname -m)
 
 firecracker_tarball_url="${firecracker_url}/releases/download"
 
-file_name="firecracker-${firecracker_version}-${ARCH}.tgz"
+file_name="firecracker-${firecracker_version}-${arch}.tgz"
 download_url="${firecracker_tarball_url}/${firecracker_version}/${file_name}"
 
 info "Download firecracker version: ${firecracker_version} from ${download_url}"
