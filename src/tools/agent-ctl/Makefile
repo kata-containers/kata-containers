@@ -5,6 +5,10 @@
 
 include ../../../utils.mk
 
+ifeq ($(ARCH), ppc64le)
+     override ARCH = powerpc64le
+ endif
+
 .DEFAULT_GOAL := default
 default: build
 

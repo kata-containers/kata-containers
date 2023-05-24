@@ -846,6 +846,7 @@ func TestAgentCreateContainer(t *testing.T) {
 			},
 		},
 		hypervisor: &mockHypervisor{},
+		agent:      newMockAgent(),
 	}
 
 	fsShare, err := NewFilesystemShare(sandbox)

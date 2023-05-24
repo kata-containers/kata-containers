@@ -23,13 +23,16 @@ all-parallel: $(MK_DIR)/dockerbuild/install_yq.sh
 
 all: serial-targets \
 	firecracker-tarball \
-	kernel-tarball \
 	kernel-dragonball-experimental-tarball \
+	kernel-nvidia-gpu \
+	kernel-nvidia-gpu-snp-tarball \
+	kernel-nvidia-gpu-tdx-experimental-tarball \
+	kernel-tarball \
 	kernel-tdx-experimental-tarball \
-	kernel-gpu \
-	kernel-gpu-snp-tarball \
-	kernel-gpu-tdx-experimental-tarball \
 	nydus-tarball \
+	ovmf-sev-tarball \
+	ovmf-tarball \
+	qemu-snp-experimental-tarball \
 	qemu-tarball \
 	qemu-tdx-experimental-tarball \
 	shim-v2-tarball \
@@ -39,6 +42,7 @@ all: serial-targets \
 serial-targets:
 	${MAKE} -f $(MK_PATH) -j 1 V= \
 	rootfs-image-tarball \
+	rootfs-initrd-sev-tarball \
 	rootfs-initrd-tarball \
 	cloud-hypervisor-tarball
 
@@ -51,28 +55,40 @@ cloud-hypervisor-tarball:
 firecracker-tarball:
 	${MAKE} $@-build
 
-kernel-tarball:
-	${MAKE} $@-build
-
 kernel-dragonball-experimental-tarball:
 	${MAKE} $@-build
 
-kernel-gpu-tarball:
+kernel-experimental-tarball:
 	${MAKE} $@-build
 
-kernel-gpu-snp-tarball:
+kernel-nvidia-gpu-tarball:
 	${MAKE} $@-build
 
-kernel-gpu-tdx-experimental-tarball:
+kernel-nvidia-gpu-snp-tarball:
+	${MAKE} $@-build
+
+kernel-nvidia-gpu-tdx-experimental-tarball:
 	${MAKE} $@-build	
 
-kernel-experimental-tarball:
+kernel-tarball:
 	${MAKE} $@-build
 
 kernel-tdx-experimental-tarball:
 	${MAKE} $@-build
 
+kernel-sev-tarball:
+	${MAKE} $@-build
+
 nydus-tarball:
+	${MAKE} $@-build
+
+ovmf-sev-tarball:
+	${MAKE} $@-build
+
+ovmf-tarball:
+	${MAKE} $@-build
+
+qemu-snp-experimental-tarball:
 	${MAKE} $@-build
 
 qemu-tarball:
@@ -82,6 +98,9 @@ qemu-tdx-experimental-tarball:
 	${MAKE} $@-build
 
 rootfs-image-tarball:
+	${MAKE} $@-build
+
+rootfs-initrd-sev-tarball: kernel-sev-tarball
 	${MAKE} $@-build
 
 rootfs-nvidia-gpu-image-tarball: #kernel-gpu-snp-tarball #kernel-gpu-tarball kernel-gpu-snp-tarball kernel-gpu-tdx-experimental-tarball

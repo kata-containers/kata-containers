@@ -228,11 +228,9 @@ impl CloudHypervisorInner {
 
         let join_handle = self.cloud_hypervisor_ping_until_ready(CH_POLL_TIME_MS);
 
-        let result = tokio::time::timeout(Duration::new(timeout_secs as u64, 0), join_handle)
+        tokio::time::timeout(Duration::new(timeout_secs as u64, 0), join_handle)
             .await
-            .context(timeout_msg)?;
-
-        result
+            .context(timeout_msg)?
     }
 
     async fn cloud_hypervisor_ensure_not_launched(&self) -> Result<()> {

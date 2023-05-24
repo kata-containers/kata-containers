@@ -1,11 +1,41 @@
 # Kata Containers snap package
 
+> **WARNING:**
+>
+> The Snap package method is **unmaintained** and only provides an old
+> version of Kata Containers:
+> The [latest Kata Containers snap](https://snapcraft.io/kata-containers)
+> provides Kata Containers
+> [version 2.4.2](https://github.com/kata-containers/kata-containers/releases/tag/2.4.2)
+> but the latest stable Kata Containers release at the time of writing is
+> [version 3.1.0](https://github.com/kata-containers/kata-containers/releases/tag/3.1.0).
+>
+> We recommend strongly that you switch to an alternative Kata Containers installation method.
+>
+> See: https://github.com/kata-containers/kata-containers/issues/6769
+> for further details.
+
 ## Install Kata Containers
 
 Kata Containers can be installed in any Linux distribution that supports
 [snapd](https://docs.snapcraft.io/installing-snapd).
 
 Run the following command to install **Kata Containers**:
+
+> **WARNING:**
+>
+> The Snap package method is **unmaintained** and only provides an old
+> version of Kata Containers:
+> The [latest Kata Containers snap](https://snapcraft.io/kata-containers)
+> provides Kata Containers
+> [version 2.4.2](https://github.com/kata-containers/kata-containers/releases/tag/2.4.2)
+> but the latest stable Kata Containers release at the time of writing is
+> [version 3.1.0](https://github.com/kata-containers/kata-containers/releases/tag/3.1.0).
+>
+> We recommend strongly that you switch to an alternative Kata Containers installation method.
+>
+> See: https://github.com/kata-containers/kata-containers/issues/6769
+> for further details.
 
 ```sh
 $ sudo snap install kata-containers --stable --classic

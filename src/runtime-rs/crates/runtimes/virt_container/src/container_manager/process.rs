@@ -132,7 +132,7 @@ impl Process {
         info!(self.logger, "run io copy for {}", io_name);
         let io_name = io_name.to_string();
         let logger = self.logger.new(o!("io_name" => io_name));
-        let _ = tokio::spawn(async move {
+        tokio::spawn(async move {
             match tokio::io::copy(&mut reader, &mut writer).await {
                 Err(e) => {
                     warn!(logger, "run_io_copy: failed to copy stream: {}", e);
@@ -156,7 +156,7 @@ impl Process {
         let exit_notifier = self.exit_watcher_tx.take();
         let status = self.status.clone();
 
-        let _ = tokio::spawn(async move {
+        tokio::spawn(async move {
             // wait on all of the container's io stream terminated
             info!(logger, "begin wait group io");
             wg.wait().await;

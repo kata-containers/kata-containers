@@ -17,8 +17,9 @@ use std::process::exit;
 use args::{Commands, KataCtlCli};
 
 use ops::check_ops::{
-    handle_check, handle_env, handle_factory, handle_iptables, handle_metrics, handle_version,
+    handle_check, handle_factory, handle_iptables, handle_metrics, handle_version,
 };
+use ops::env_ops::handle_env;
 use ops::exec_ops::handle_exec;
 use ops::volume_ops::handle_direct_volume;
 
@@ -29,7 +30,7 @@ fn real_main() -> Result<()> {
         Commands::Check(args) => handle_check(args),
         Commands::DirectVolume(args) => handle_direct_volume(args),
         Commands::Exec(args) => handle_exec(args),
-        Commands::Env => handle_env(),
+        Commands::Env(args) => handle_env(args),
         Commands::Factory => handle_factory(),
         Commands::Iptables(args) => handle_iptables(args),
         Commands::Metrics(args) => handle_metrics(args),

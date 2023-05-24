@@ -12,9 +12,9 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "${script_dir}/../scripts/lib.sh"
 
-KERNEL_FLAVOUR="${KERNEL_FLAVOUR:-kernel}" # kernel | kernel-experimental | kernel-arm-experimental | kernel-dragonball-experimental | kernel-tdx-experimental
+KERNEL_FLAVOUR="${KERNEL_FLAVOUR:-kernel}" # kernel | kernel-nvidia-gpu | kernel-experimental | kernel-arm-experimental | kernel-dragonball-experimental | kernel-tdx-experimental | kernel-nvidia-gpu-tdx-experimental | kernel-nvidia-gpu-snp
 OVMF_FLAVOUR="${OVMF_FLAVOUR:-x86_64}" # x86_64 | tdx
-QEMU_FLAVOUR="${QEMU_FLAVOUR:-qemu}" # qemu | qemu-tdx-experimental
+QEMU_FLAVOUR="${QEMU_FLAVOUR:-qemu}" # qemu | qemu-tdx-experimental | qemu-snp-experimental
 ROOTFS_IMAGE_TYPE="${ROOTFS_IMAGE_TYPE:-image}" # image | initrd
 
 cache_clh_artifacts() {
@@ -33,8 +33,40 @@ cache_kernel_artifacts() {
 	local kernel_tarball_name="kata-static-${KERNEL_FLAVOUR}.tar.xz"
 	local current_kernel_image="$(get_kernel_image_name)"
 	local current_kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
-	local current_kernel_version="$(get_from_kata_deps "assets.${KERNEL_FLAVOUR}.version")-${current_kernel_kata_config_version}"
-	create_cache_asset "${kernel_tarball_name}" "${current_kernel_version}" "${current_kernel_image}"
+	local kernel_modules_tarball_path="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kata-static-kernel-sev-modules.tar.xz"
+
+	# The ${vendor}-gpu kernels are based on an already existing entry, and does not require
+	# adding a new entry to the versions.yaml.
+	#
+	# With this in mind, let's just make sure we get the version from correct entry in the
+	# versions.yaml file.
+	case ${KERNEL_FLAVOUR} in
+		*"nvidia-gpu"*)
+			KERNEL_FLAVOUR=${KERNEL_FLAVOUR//"-nvidia-gpu"/}
+			;;
+		*)
+			;;
+	esac
+
+	case ${KERNEL_FLAVOUR} in
+		"kernel-sev"|"kernel-snp")
+			# In these cases, like "kernel-foo", it must be set to "kernel.foo" when looking at
+			# the versions.yaml file
+			current_kernel_version="$(get_from_kata_deps "assets.${KERNEL_FLAVOUR/-/.}.version")"
+			;;
+		*)
+			current_kernel_version="$(get_from_kata_deps "assets.${KERNEL_FLAVOUR}.version")"
+			;;
+	esac
+
+	create_cache_asset "${kernel_tarball_name}" "${current_kernel_version}-${current_kernel_kata_config_version}" "${current_kernel_image}"
+	if [[ "${KERNEL_FLAVOUR}" == "kernel-sev" ]]; then
+		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kernel-sev/builddir/kata-linux-${current_kernel_version#v}-${current_kernel_kata_config_version}/lib/modules/${current_kernel_version#v}"
+		if [ ! -f "${kernel_modules_tarball_path}" ]; then
+			tar cvfJ "${kernel_modules_tarball_path}" "${module_dir}/kernel/drivers/virt/coco/efi_secret/"
+		fi
+		create_cache_asset "kata-static-kernel-sev-modules.tar.xz" "${current_kernel_version}-${current_kernel_kata_config_version}" "${current_kernel_image}"
+	fi
 }
 
 cache_nydus_artifacts() {
@@ -46,6 +78,7 @@ cache_nydus_artifacts() {
 cache_ovmf_artifacts() {
 	local current_ovmf_version="$(get_from_kata_deps "externals.ovmf.${OVMF_FLAVOUR}.version")"
 	[ "${OVMF_FLAVOUR}" == "tdx" ] && OVMF_FLAVOUR="tdvf"
+	[ "${OVMF_FLAVOUR}" == "sev" ] && OVMF_FLAVOUR="ovmf-sev"
 	local ovmf_tarball_name="kata-static-${OVMF_FLAVOUR}.tar.xz"
 	local current_ovmf_image="$(get_ovmf_image_name)"
 	create_cache_asset "${ovmf_tarball_name}" "${current_ovmf_version}" "${current_ovmf_image}"
@@ -116,11 +149,11 @@ Usage: $0 "[options]"
 		-c	Cloud hypervisor cache
 		-F	Firecracker cache
 		-k	Kernel cache
-			* Export KERNEL_FLAVOUR="kernel | kernel-experimental | kernel-arm-experimental | kernel-dragonball-experimental | kernel-tdx-experimental" for a specific build
+			* Export KERNEL_FLAVOUR="kernel | kernel-nvidia-gpu | kernel-experimental | kernel-arm-experimental | kernel-dragonball-experimental | kernel-tdx-experimental | kernel-nvidia-gpu-tdx-experimental | kernel-nvidia-gpu-snp" for a specific build
 			  The default KERNEL_FLAVOUR value is "kernel"
 		-n	Nydus cache
 		-q 	QEMU cache
-			* Export QEMU_FLAVOUR="qemu | qemu-tdx-experimental" for a specific build
+			* Export QEMU_FLAVOUR="qemu | qemu-tdx-experimental | qemu-snp-experimental" for a specific build
 			  The default QEMU_FLAVOUR value is "qemu"
 		-r 	RootFS cache
 			* Export ROOTFS_IMAGE_TYPE="image|initrd" for one of those two types

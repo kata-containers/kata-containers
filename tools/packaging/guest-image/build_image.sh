@@ -22,6 +22,8 @@ readonly osbuilder_dir="$(cd "${repo_root_dir}/tools/osbuilder" && pwd)"
 export GOPATH=${GOPATH:-${HOME}/go}
 
 arch_target="$(uname -m)"
+final_initrd_name="kata-containers-initrd"
+image_initrd_extension=".img"
 
 build_initrd() {
 	info "Build initrd"
@@ -37,7 +39,7 @@ build_initrd() {
 	mv "kata-containers-initrd.img" "${install_dir}/${initrd_name}"
 	(
 		cd "${install_dir}"
-		ln -sf "${initrd_name}" kata-containers-initrd.img
+		ln -sf "${initrd_name}" "${final_initrd_name}${image_initrd_extension}"
 	)
 }
 
@@ -73,6 +75,7 @@ Options:
  --imagetype=${image_type}
  --prefix=${prefix}
  --destdir=${destdir}
+ --image_initrd_suffix=${image_initrd_suffix}
 EOF
 
 	exit "${return_code}"
@@ -92,6 +95,7 @@ main() {
 
 	destdir="$PWD"
 	prefix="/opt/kata"
+	image_initrd_suffix=""
 	builddir="${PWD}"
 
 	OS_VERSION=${OS_VERSION:-""}
@@ -113,6 +117,15 @@ main() {
 				initrd_distro=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.name")
 				initrd_os_version=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.version")
 				initrd_name="kata-${initrd_distro}-${initrd_os_version}.${image_type}"
+				;;
+			image_initrd_suffix=*)
+				image_initrd_suffix=${OPTARG#*=}
+				if [ "${image_initrd_suffix}" == "sev" ]; then
+					initrd_distro=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.sev.name")
+					initrd_os_version=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.sev.version")
+					initrd_name="kata-${initrd_distro}-${initrd_os_version}-${image_initrd_suffix}.${image_type}"
+					final_initrd_name="${final_initrd_name}-${image_initrd_suffix}"
+				fi
 				;;
 			prefix=*)
 				prefix=${OPTARG#*=}

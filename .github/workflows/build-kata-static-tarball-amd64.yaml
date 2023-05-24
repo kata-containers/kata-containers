@@ -19,16 +19,21 @@ jobs:
           - cloud-hypervisor
           - firecracker
           - kernel
+          - kernel-sev
           - kernel-dragonball-experimental
           - kernel-tdx-experimental
-          - kernel-gpu
-          - kernel-gpu-snp
-          - kernel-gpu-tdx-experimental
+          - kernel-nvidia-gpu
+          - kernel-nvidia-gpu-snp
+          - kernel-nvidia-gpu-tdx-experimental
           - nydus
+          - ovmf
+          - ovmf-sev
           - qemu
+          - qemu-snp-experimental
           - qemu-tdx-experimental
           - rootfs-image
           - rootfs-initrd
+          - rootfs-initrd-sev
           - rootfs-nvidia-gpu-image-tarball
           - shim-v2
           - tdvf
