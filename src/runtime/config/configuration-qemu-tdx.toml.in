@@ -664,7 +664,7 @@ experimental=@DEFAULTEXPFEATURES@
 #
 # Offload the CRI image management service to the Kata agent.
 # (default: false)
-#service_offload = true
+service_offload = true
 
 # Container image decryption keys provisioning.
 # Applies only if service_offload is true.
