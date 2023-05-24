@@ -188,6 +188,34 @@ install_nvidia_gpu_image() {
 
 	EXTRA_PKGS="apt software-properties-common udev" OS_VERSION=jammy "${rootfs_builder}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --gpuvendor="nvidia"
 }
+install_nvidia_gpu_initrd() {
+	set -x 
+
+	local initrd_type="${1:-""}"
+	local initrd_suffix="${2:-""}"
+	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${initrd_type}-$(uname -m)/${cached_artifacts_path}"
+	local component="rootfs-${initrd_type}"
+
+	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
+	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
+	local agent_last_commit="$(get_last_modification "${repo_root_dir}/src/agent")"
+	local libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
+	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
+	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
+	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+
+	#install_cached_tarball_component \
+	#	"${component}" \
+	#	"${jenkins}" \
+	#	"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}" \
+	#	"" \
+	#	"${final_tarball_name}" \
+	#	"${final_tarball_path}" \
+	#	&& return 0
+
+	info "Create initrd"
+	EXTRA_PKGS="apt software-properties-common udev" OS_VERSION=jammy  "${rootfs_builder}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${initrd_suffix}" --gpuvendor="nvidia"
+}
 
 
 #Install guest initrd
@@ -565,6 +593,7 @@ handle_build() {
 		install_firecracker
 		install_image
 		install_nvidia_gpu_image
+		install_nvidia_gpu_initrd
 		install_initrd
 		install_initrd_sev
 		install_kernel
@@ -618,6 +647,8 @@ handle_build() {
 	rootfs-image) install_image ;;
 
 	rootfs-nvidia-gpu-image) install_nvidia_gpu_image ;;
+
+	rootfs-nvidia-gpu-initrd) install_nvidia_gpu_initrd ;;
 
 	rootfs-initrd) install_initrd ;;
 

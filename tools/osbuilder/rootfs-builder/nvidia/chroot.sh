@@ -28,7 +28,7 @@ function create_udev_rule() {
 function cleanup_rootfs() {
 	echo "chroot: Cleanup NVIDIA GPU rootfs"
 	driver_version=$(apt-cache  search --names-only 'nvidia-headless-no-dkms-' | grep open | tail -n 1 | cut -d' ' -f1 | cut -d'-' -f5)
-	apt-mark hold libnvidia-cfg1-${driver_version} libstdc++6 libgnutls30  \
+	apt-mark hold libnvidia-cfg1-${driver_version} libstdc++6 libzstd1 libgnutls30  \
 		nvidia-compute-utils-${driver_version} nvidia-utils-${driver_version}        \
 		nvidia-kernel-common-${driver_version} libnvidia-compute-${driver_version}   \
 		nvidia-modprobe

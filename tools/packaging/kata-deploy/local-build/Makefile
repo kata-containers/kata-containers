@@ -106,6 +106,10 @@ rootfs-initrd-sev-tarball: kernel-sev-tarball
 rootfs-nvidia-gpu-image-tarball: #kernel-gpu-snp-tarball #kernel-gpu-tarball kernel-gpu-snp-tarball kernel-gpu-tdx-experimental-tarball
 	${MAKE} $@-build
 
+rootfs-nvidia-gpu-initrd-tarball: #kernel-gpu-snp-tarball #kernel-gpu-tarball kernel-gpu-snp-tarball kernel-gpu-tdx-experimental-tarball
+	${MAKE} $@-build
+
+
 rootfs-initrd-tarball:
 	${MAKE} $@-build
 

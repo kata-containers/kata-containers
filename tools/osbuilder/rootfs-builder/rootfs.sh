@@ -692,9 +692,7 @@ setup_nvidia_gpu_rootfs()
 	umount ./proc
 
 	# Remove artifacts needed for building the rootfs
-	rm -f ./root/chroot.sh
-	rm -f ./root/${run_file_name}
-	rm -f ./root/linux-*.deb
+	rm -rf ./root/*
 
 	popd  >> /dev/null
 }

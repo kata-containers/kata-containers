@@ -32,10 +32,11 @@ build_initrd() {
 	sudo -E PATH="$PATH" make initrd \
 		DISTRO="$initrd_distro" \
 		DEBUG="${DEBUG:-}" \
-		OS_VERSION="${initrd_os_version}" \
+		IMG_OS_VERSION="${initrd_os_version}" \
+		GPU_VENDOR=${gpu_vendor} \
 		ROOTFS_BUILD_DEST="${builddir}/initrd-image" \
 		USE_DOCKER=1 \
-		AGENT_INIT="yes"
+		AGENT_INIT="no"
 	mv "kata-containers-initrd.img" "${install_dir}/${initrd_name}"
 	(
 		cd "${install_dir}"
@@ -114,15 +115,15 @@ main() {
 			imagetype=initrd)
 				image_type=initrd
 				#initrd information
-				initrd_distro=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.name")
-				initrd_os_version=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.version")
+				initrd_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name")
+				initrd_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version")
 				initrd_name="kata-${initrd_distro}-${initrd_os_version}.${image_type}"
 				;;
 			image_initrd_suffix=*)
 				image_initrd_suffix=${OPTARG#*=}
 				if [ "${image_initrd_suffix}" == "sev" ]; then
-					initrd_distro=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.sev.name")
-					initrd_os_version=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.sev.version")
+					initrd_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.sev.name")
+					initrd_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.sev.version")
 					initrd_name="kata-${initrd_distro}-${initrd_os_version}-${image_initrd_suffix}.${image_type}"
 					final_initrd_name="${final_initrd_name}-${image_initrd_suffix}"
 				fi

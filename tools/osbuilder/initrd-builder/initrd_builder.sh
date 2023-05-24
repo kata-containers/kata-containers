@@ -75,5 +75,9 @@ OK "Agent is installed"
 # initramfs expects /init
 ln -sf /sbin/init "${ROOTFS}/init"
 
+# create an initrd-release file systemd uses the existence of this file as a 
+# flag whether to run in initial RAM disk mode, or not.
+cp "${ROOTFS}/etc/os-release" "${ROOTFS}/etc/initrd-release"
+
 info "Creating ${IMAGE_DIR}/${IMAGE_NAME} based on rootfs at ${ROOTFS}"
 ( cd "${ROOTFS}" && find . | cpio -H newc -o | gzip -9 ) > "${IMAGE_DIR}"/"${IMAGE_NAME}"

@@ -200,8 +200,6 @@ get_major_kernel_version() {
 # - arg2 - path to kernel sources
 #
 get_kernel_frag_path() {
-	set -x
-
 	local arch_path="$1"
 	local common_path="${arch_path}/../common"
 	local gpu_path="${arch_path}/../gpu"
@@ -234,7 +232,7 @@ get_kernel_frag_path() {
 	local redefined_string="redefined"
 	local redundant_string="redundant"
 
-	# Later, if we need to add kernel version specific subdirs in order to
+	# Later, if we need to add kernel version specifqic subdirs in order to
 	# handle specific cases, then add the path definition and search/list/cat
 	# here.
 	local all_configs="${common_configs} ${arch_configs}"
@@ -249,7 +247,7 @@ get_kernel_frag_path() {
 		# -nvidia-gpu-{snp|tdx}, the linux headers will be named the very
 		# same if build with make deb-pkg for TDX or SNP.
 		local gpu_configs=$(mktemp).conf
-		local gpu_subst_configs="$(ls ${gpu_path}/${gpu_vendor}.conf.in)"
+		local gpu_subst_configs="$(ls ${gpu_path}/${gpu_vendor}.${arch_target}.conf.in)"
 		if [[ "${conf_guest}" != "" ]];then
 			export CONF_GUEST_SUFFIX="-${conf_guest}"
 		else
@@ -285,8 +283,6 @@ get_kernel_frag_path() {
 
 	# Did we request any entries that did not make it?
 	local missing=$(echo $results | grep -v -q "${not_in_string}"; echo $?)
-
-
 	if [ ${missing} -ne 0 ]; then
 		info "Some CONFIG elements failed to make the final .config:"
 		info "${results}"
@@ -504,7 +500,10 @@ install_kata() {
 		install --mode 0644 -D "vmlinux" "${install_path}/${vmlinux}"
 	fi
 
-	install --mode 0644 -D ./.config "${install_path}/config-${kernel_version}"
+	# Add the full kernel-version config-version suffix string to the config, 
+	# otherwise it will be overwritten by builds that use the same base version 
+	# but different config settings.
+	install --mode 0644 -D ./.config "${install_path}/config-${kernel_version}-${config_version}${suffix}"
 
 	ln -sf "${vmlinuz}" "${install_path}/vmlinuz${suffix}.container"
 	ln -sf "${vmlinux}" "${install_path}/vmlinux${suffix}.container"
@@ -512,8 +511,6 @@ install_kata() {
 	ls -la "${install_path}/vmlinuz${suffix}.container"
 	popd >>/dev/null
 }
-
-
 
 main() {
 	while getopts "a:b:c:deEfg:hH:k:p:t:u:v:x:" opt; do
