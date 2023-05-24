@@ -16,13 +16,13 @@ be utilized to install Kata Containers on a running Kubernetes cluster.
 For your [k3s](https://k3s.io/) cluster, run:
 
 ```sh
-$ git clone github.com/kata-containers/kata-containers
+$ git clone https://github.com/kata-containers/kata-containers.git
 ```
 
 Check and switch to the stable branch of your choice, if wanted, and then run:
 
 ```bash
-$ cd kata-containers/kata-containers/tools/packaging/kata-deploy
+$ cd kata-containers/tools/packaging/kata-deploy
 $ kubectl apply -f kata-rbac/base/kata-rbac.yaml
 $ kubectl apply -k kata-deploy/overlays/k3s
 ```
@@ -32,13 +32,13 @@ $ kubectl apply -k kata-deploy/overlays/k3s
 For your [RKE2](https://docs.rke2.io/) cluster, run:
 
 ```sh
-$ git clone github.com/kata-containers/kata-containers
+$ git clone https://github.com/kata-containers/kata-containers.git
 ```
 
 Check and switch to the stable branch of your choice, if wanted, and then run:
 
 ```bash
-$ cd kata-containers/kata-containers/tools/packaging/kata-deploy
+$ cd kata-containers/tools/packaging/kata-deploy
 $ kubectl apply -f kata-rbac/base/kata-rbac.yaml
 $ kubectl apply -k kata-deploy/overlays/rke2
 ```
