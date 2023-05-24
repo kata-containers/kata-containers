@@ -241,7 +241,7 @@ get_kernel_frag_path() {
 	local redefined_string="redefined"
 	local redundant_string="redundant"
 
-	# Later, if we need to add kernel version specifqic subdirs in order to
+	# Later, if we need to add kernel version specific subdirs in order to
 	# handle specific cases, then add the path definition and search/list/cat
 	# here.
 	local all_configs="${common_configs} ${arch_configs}"
