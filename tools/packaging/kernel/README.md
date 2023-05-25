@@ -70,7 +70,7 @@ $ ./build-kernel.sh -v 5.10.25 -g nvidia -f -d setup
 ## Setup kernel source code
 
 ```bash
-$ git clone github.com/kata-containers/kata-containers
+$ git clone https://github.com/kata-containers/kata-containers.git
 $ cd kata-containers/tools/packaging/kernel
 $ ./build-kernel.sh setup
 ```
