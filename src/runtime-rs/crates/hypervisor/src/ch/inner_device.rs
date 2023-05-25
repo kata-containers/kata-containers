@@ -5,8 +5,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::inner::CloudHypervisorInner;
-use crate::device::{Device, ShareFsDeviceConfig};
+use crate::device::DeviceType;
 use crate::HybridVsockConfig;
+use crate::ShareFsDeviceConfig;
 use crate::VmmState;
 use anyhow::{anyhow, Context, Result};
 use ch_config::ch_api::cloud_hypervisor_vm_fs_add;
@@ -18,9 +19,9 @@ use std::path::PathBuf;
 const VIRTIO_FS: &str = "virtio-fs";
 
 impl CloudHypervisorInner {
-    pub(crate) async fn add_device(&mut self, device: Device) -> Result<()> {
+    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<()> {
         if self.state != VmmState::VmRunning {
-            let mut devices: Vec<Device> = if let Some(devices) = self.pending_devices.take() {
+            let mut devices: Vec<DeviceType> = if let Some(devices) = self.pending_devices.take() {
                 devices
             } else {
                 vec![]
@@ -38,11 +39,11 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    async fn handle_add_device(&mut self, device: Device) -> Result<()> {
+    async fn handle_add_device(&mut self, device: DeviceType) -> Result<()> {
         match device {
-            Device::ShareFsDevice(cfg) => self.handle_share_fs_device(cfg).await,
-            Device::HybridVsock(cfg) => self.handle_hvsock_device(&cfg).await,
-            _ => return Err(anyhow!("unhandled device: {:?}", device)),
+            DeviceType::ShareFs(sharefs) => self.handle_share_fs_device(sharefs.config).await,
+            DeviceType::HybridVsock(hvsock) => self.handle_hvsock_device(&hvsock.config).await,
+            _ => Err(anyhow!("unhandled device: {:?}", device)),
         }
     }
 
@@ -66,7 +67,7 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    pub(crate) async fn remove_device(&mut self, _device: Device) -> Result<()> {
+    pub(crate) async fn remove_device(&mut self, _device: DeviceType) -> Result<()> {
         Ok(())
     }
 
@@ -132,8 +133,8 @@ impl CloudHypervisorInner {
         if let Some(devices) = pending_root_devices {
             for dev in devices {
                 match dev {
-                    Device::ShareFsDevice(dev) => {
-                        let settings = ShareFsSettings::new(dev, self.vm_path.clone());
+                    DeviceType::ShareFs(dev) => {
+                        let settings = ShareFsSettings::new(dev.config, self.vm_path.clone());
 
                         let fs_cfg = FsConfig::try_from(settings)?;
 

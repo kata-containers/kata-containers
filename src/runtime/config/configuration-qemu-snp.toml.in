@@ -1,24 +1,30 @@
+# Copyright (c) 2017-2019 Intel Corporation
+# Copyright (c) 2021 Adobe Inc.
 # Copyright 2022 Advanced Micro Devices, Inc.
+# Copyright (c) 2023 IBM Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
 # XXX: WARNING: this file is auto-generated.
 # XXX:
-# XXX: Source file: "@CONFIG_QEMU_IN@"
+# XXX: Source file: "@CONFIG_QEMU_SNP_IN@"
 # XXX: Project:
 # XXX:   Name: @PROJECT_NAME@
 # XXX:   Type: @PROJECT_TYPE@
 
-# Basing SNP updates on this post from Joana
-# https://github.com/kata-containers/kata-containers/blob/main/docs/how-to/how-to-run-kata-containers-with-SNP-VMs.md
-
 [hypervisor.qemu]
 path = "@QEMUSNPPATH@"
-kernel = "@KERNELSEVPATH@"
-#SNP should be able to use SEV kernel and initrd with things being passed via kernel params
+kernel = "@KERNELSNPPATH@"
+#image = "@IMAGEPATH@"
 initrd = "@INITRDSEVPATH@"
 machine_type = "@MACHINETYPE@"
+
+# rootfs filesystem type:
+#   - ext4 (default)
+#   - xfs
+#   - erofs
+rootfs_type=@DEFROOTFSTYPE@
 
 # Enable confidential guest support.
 # Toggling that setting may trigger different hardware features, ranging
@@ -76,7 +82,7 @@ kernel_params = "@SNPKERNELPARAMS@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
-firmware = "@SNPFIRMWAREPATH@"
+firmware = "@FIRMWARESNPPATH@"
 
 # Path to the firmware volume.
 # firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables
@@ -178,10 +184,10 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 #   - virtio-fs (default)
 #   - virtio-9p
 #   - virtio-fs-nydus
-shared_fs = "virtio-9p"
+shared_fs = "@DEFSHAREDFS_QEMU_SNP_VIRTIOFS@"
 
 # Path to vhost-user-fs daemon.
-# virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
+virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
 
 # List of valid annotations values for the virtiofs daemon
 # The default if not set is empty (all annotations rejected.)
@@ -190,6 +196,9 @@ valid_virtio_fs_daemon_paths = @DEFVALIDVIRTIOFSDAEMONPATHS@
 
 # Default size of DAX cache in MiB
 virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
+
+# Default size of virtqueues
+virtio_fs_queue_size = @DEFVIRTIOFSQUEUESIZE@
 
 # Extra args for virtiofsd daemon
 #
@@ -203,7 +212,7 @@ virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
 
 # Cache mode:
 #
-#  - none
+#  - never
 #    Metadata, data, and pathname lookup are not cached in guest. They are
 #    always fetched from host and any changes are immediately pushed to host.
 #
@@ -220,6 +229,20 @@ virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 # rootfs is backed by a block device. This is virtio-scsi, virtio-blk
 # or nvdimm.
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER_QEMU@"
+
+# aio is the I/O mechanism used by qemu
+# Options:
+#
+#   - threads
+#     Pthread based disk I/O.
+#
+#   - native
+#     Native Linux I/O.
+#
+#   - io_uring
+#     Linux io_uring API. This provides the fastest I/O operations on Linux, requires kernel>5.1 and
+#     qemu >=5.0.
+block_device_aio = "@DEFBLOCKDEVICEAIO_QEMU@"
 
 # Specifies cache-related options will be set to block devices or not.
 # Default false
@@ -284,11 +307,16 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 # Your distribution recommends: @DEFVALIDVHOSTUSERSTOREPATHS@
 valid_vhost_user_store_paths = @DEFVALIDVHOSTUSERSTOREPATHS@
 
+# The timeout for reconnecting on non-server spdk sockets when the remote end goes away.
+# qemu will delay this many seconds and then attempt to reconnect.
+# Zero disables reconnecting, and the default is zero.
+vhost_user_reconnect_timeout_sec = 0
+
 # Enable file based guest memory support. The default is an empty string which
 # will disable this feature. In the case of virtio-fs, this is enabled
 # automatically and '/dev/shm' is used as the backing folder.
 # This option will be ignored if VM templating is enabled.
-file_mem_backend = "@DEFFILEMEMBACKEND@"
+file_mem_backend = ""
 
 # List of valid annotations values for the file_mem_backend annotation
 # The default if not set is empty (all annotations rejected.)
@@ -300,7 +328,7 @@ valid_file_mem_backends = @DEFVALIDFILEMEMBACKENDS@
 pflashes = []
 
 # This option changes the default hypervisor and kernel parameters
-# to enable debug output where available.
+# to enable debug output where available. And Debug also enable the hmp socket.
 #
 # Default false
 #enable_debug = true
@@ -512,8 +540,8 @@ kernel_modules=[]
 #debug_console_enabled = true
 
 # Agent connection dialing timeout value in seconds
-# (default: 30)
-#dial_timeout = 30
+# (default: 90)
+dial_timeout = 90
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
@@ -545,6 +573,11 @@ internetworking_model="@DEFNETWORKMODEL_QEMU@"
 # within the guest
 # (default: true)
 disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
+
+# vCPUs pinning settings
+# if enabled, each vCPU thread will be scheduled to a fixed CPU
+# qualified condition: num(vCPU threads) == num(CPUs in sandbox's CPUSet)
+# enable_vcpus_pinning = false
 
 # Apply a custom SELinux security policy to the container process inside the VM.
 # This is used when you want to apply a type other than the default `container_t`,

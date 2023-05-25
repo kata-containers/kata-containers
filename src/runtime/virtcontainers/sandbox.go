@@ -17,8 +17,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-
-	//"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -30,16 +28,14 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	cri "github.com/containerd/containerd/pkg/cri/annotations"
-	crio "github.com/containers/podman/v4/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	deviceManager "github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/image"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
@@ -138,38 +134,52 @@ type SandboxResourceSizing struct {
 // SandboxConfig is a Sandbox configuration.
 type SandboxConfig struct {
 	// Annotations keys must be unique strings and must be name-spaced
-	// with e.g. reverse domain notation (org.clearlinux.key).
-	Annotations    map[string]string
-	Hostname       string
-	ID             string
-	HypervisorType HypervisorType
+	Annotations map[string]string
+
 	// Custom SELinux security policy to the container process inside the VM
 	GuestSeLinuxLabel string
-	// Volumes is a list of shared volumes between the host and the Sandbox.
-	Volumes []types.Volume
+
+	HypervisorType HypervisorType
+
+	ID string
+
+	Hostname string
+
 	// SandboxBindMounts - list of paths to mount into guest
 	SandboxBindMounts []string
+
 	// Experimental features enabled
 	Experimental []exp.Feature
+
 	// Containers describe the list of containers within a Sandbox.
 	// This list can be empty and populated by adding containers
 	// to the Sandbox a posteriori.
-	//TODO: this should be a map to avoid duplicated containers
-	Containers       []ContainerConfig
-	NetworkConfig    NetworkConfig
-	AgentConfig      KataAgentConfig
+	// TODO: this should be a map to avoid duplicated containers
+	Containers []ContainerConfig
+
+	Volumes []types.Volume
+
+	NetworkConfig NetworkConfig
+
+	AgentConfig KataAgentConfig
+
 	HypervisorConfig HypervisorConfig
-	ShmSize          uint64
+
+	ShmSize uint64
+
 	SandboxResources SandboxResourceSizing
-	VfioMode         config.VFIOModeType
+
+	VfioMode config.VFIOModeType
+
 	// StaticResourceMgmt indicates if the shim should rely on statically sizing the sandbox (VM)
 	StaticResourceMgmt bool
-	// Offload the CRI image management service to the Kata agent.
-	ServiceOffload bool
+
 	// SharePidNs sets all containers to share the same sandbox level pid namespace.
 	SharePidNs bool
+
 	// SystemdCgroup enables systemd cgroup support
 	SystemdCgroup bool
+
 	// SandboxCgroupOnly enables cgroup only at podlevel in the host
 	SandboxCgroupOnly bool
 
@@ -329,7 +339,6 @@ func (s *Sandbox) Release(ctx context.Context) error {
 	if s.monitor != nil {
 		s.monitor.stop()
 	}
-	s.fsShare.StopFileEventWatcher(ctx)
 	s.hypervisor.Disconnect(ctx)
 	return s.agent.disconnect(ctx)
 }
@@ -612,17 +621,21 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
-	if len(sandboxConfig.Containers) > 0 {
-		// These values are required by remove hypervisor
-		for _, a := range []string{cri.SandboxName, crio.SandboxName} {
-			if value, ok := sandboxConfig.Containers[0].Annotations[a]; ok {
-				sandboxConfig.HypervisorConfig.SandboxName = value
-			}
-		}
-
-		for _, a := range []string{cri.SandboxNamespace, crio.Namespace} {
-			if value, ok := sandboxConfig.Containers[0].Annotations[a]; ok {
-				sandboxConfig.HypervisorConfig.SandboxNamespace = value
+	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
+	// until we have TDISP/IDE PCIe support.
+	coldPlugVFIO := (sandboxConfig.HypervisorConfig.ColdPlugVFIO != hv.NoPort)
+	var devs []config.DeviceInfo
+	for cnt, containers := range sandboxConfig.Containers {
+		for dev, device := range containers.DeviceInfos {
+			if coldPlugVFIO && deviceManager.IsVFIO(device.ContainerPath) {
+				device.ColdPlug = true
+				devs = append(devs, device)
+				// We need to remove the devices marked for cold-plug
+				// otherwise at the container level the kata-agent
+				// will try to hot-plug them.
+				infos := sandboxConfig.Containers[cnt].DeviceInfos
+				infos = append(infos[:dev], infos[dev+1:]...)
+				sandboxConfig.Containers[cnt].DeviceInfos = infos
 			}
 		}
 	}
@@ -636,6 +649,17 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
+	if !coldPlugVFIO {
+		return s, nil
+	}
+
+	for _, dev := range devs {
+		_, err := s.AddDevice(ctx, dev)
+		if err != nil {
+			s.Logger().WithError(err).Debug("Cannot cold-plug add device")
+			return nil, err
+		}
+	}
 	return s, nil
 }
 
@@ -673,6 +697,7 @@ func (s *Sandbox) createResourceController() error {
 			// Determine if device /dev/null and /dev/urandom exist, and add if they don't
 			nullDeviceExist := false
 			urandomDeviceExist := false
+			ptmxDeviceExist := false
 			for _, device := range resources.Devices {
 				if device.Type == "c" && device.Major == intptr(1) && device.Minor == intptr(3) {
 					nullDeviceExist = true
@@ -680,6 +705,10 @@ func (s *Sandbox) createResourceController() error {
 
 				if device.Type == "c" && device.Major == intptr(1) && device.Minor == intptr(9) {
 					urandomDeviceExist = true
+				}
+
+				if device.Type == "c" && device.Major == intptr(5) && device.Minor == intptr(2) {
+					ptmxDeviceExist = true
 				}
 			}
 
@@ -694,6 +723,18 @@ func (s *Sandbox) createResourceController() error {
 				resources.Devices = append(resources.Devices, []specs.LinuxDeviceCgroup{
 					{Type: "c", Major: intptr(1), Minor: intptr(9), Access: rwm, Allow: true},
 				}...)
+			}
+
+			// If the hypervisor debug console is enabled and
+			// sandbox_cgroup_only are configured, then the vmm needs access to
+			// /dev/ptmx.  Add this to the device allowlist if it is not
+			// already present in the config.
+			if s.config.HypervisorConfig.Debug && s.config.SandboxCgroupOnly && !ptmxDeviceExist {
+				// "/dev/ptmx"
+				resources.Devices = append(resources.Devices, []specs.LinuxDeviceCgroup{
+					{Type: "c", Major: intptr(5), Minor: intptr(2), Access: rwm, Allow: true},
+				}...)
+
 			}
 
 			if spec.Linux.Resources.CPU != nil {
@@ -1249,13 +1290,6 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 		return s.hypervisor.StartVM(ctx, VmStartTimeout)
 	}); err != nil {
 		return err
-	}
-
-	// not sure how we know that this callback has been executed
-	if s.config.HypervisorConfig.ConfidentialGuest && s.config.HypervisorConfig.GuestPreAttestation {
-		if err := s.hypervisor.AttestVM(ctx); err != nil {
-			return err
-		}
 	}
 
 	if prestartHookFunc != nil {
@@ -2648,9 +2682,4 @@ func (s *Sandbox) resetVCPUsPinning(ctx context.Context, vCPUThreadsMap VcpuThre
 		}
 	}
 	return nil
-}
-
-// PullImage pulls an image on a sandbox.
-func (s *Sandbox) PullImage(ctx context.Context, req *image.PullImageReq) (*image.PullImageResp, error) {
-	return s.agent.PullImage(ctx, req)
 }

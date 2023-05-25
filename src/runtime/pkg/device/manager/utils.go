@@ -17,8 +17,8 @@ const (
 	vfioPath = "/dev/vfio/"
 )
 
-// isVFIO checks if the device provided is a vfio group.
-func isVFIO(hostPath string) bool {
+// IsVFIO checks if the device provided is a vfio group.
+func IsVFIO(hostPath string) bool {
 	// Ignore /dev/vfio/vfio character device
 	if strings.HasPrefix(hostPath, filepath.Join(vfioPath, "vfio")) {
 		return false

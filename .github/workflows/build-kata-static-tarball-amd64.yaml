@@ -19,24 +19,38 @@ jobs:
           - cloud-hypervisor
           - firecracker
           - kernel
+          - kernel-sev
           - kernel-dragonball-experimental
           - kernel-tdx-experimental
-          - kernel-gpu
-          - kernel-gpu-snp
-          - kernel-gpu-tdx-experimental
+          - kernel-nvidia-gpu
+          - kernel-nvidia-gpu-snp
+          - kernel-nvidia-gpu-tdx-experimental
           - nydus
+          - ovmf
+          - ovmf-sev
           - qemu
+          - qemu-snp-experimental
           - qemu-tdx-experimental
           - rootfs-image
           - rootfs-initrd
+          - rootfs-initrd-sev
           - shim-v2
           - tdvf
           - virtiofsd
     steps:
+      - name: Login to Kata Containers quay.io
+        if: ${{ inputs.push-to-registry == 'yes' }}
+        uses: docker/login-action@v2
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
       - uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
+
       - name: Build ${{ matrix.asset }}
         run: |
           make "${KATA_ASSET}-tarball"

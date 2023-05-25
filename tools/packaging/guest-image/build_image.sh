@@ -26,6 +26,8 @@ final_initrd_name="kata-containers-initrd"
 image_initrd_extension=".img"
 
 arch_target="$(uname -m)"
+final_initrd_name="kata-containers-initrd"
+image_initrd_extension=".img"
 
 build_initrd() {
 	info "Build initrd"
@@ -93,7 +95,7 @@ Options:
  --imagetype=${image_type}
  --prefix=${prefix}
  --destdir=${destdir}
- --image_initrd_sufix=${image_initrd_suffix}
+ --image_initrd_suffix=${image_initrd_suffix}
 EOF
 
 	exit "${return_code}"
@@ -126,7 +128,12 @@ main() {
 				;;
 			image_initrd_suffix=*)
 				image_initrd_suffix=${OPTARG#*=}
-				if [ -n "${image_initrd_suffix}" ]; then
+				if [ "${image_initrd_suffix}" == "sev" ]; then
+					initrd_distro=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.sev.name")
+					initrd_os_version=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.sev.version")
+					initrd_name="kata-${initrd_distro}-${initrd_os_version}-${image_initrd_suffix}.${image_type}"
+					final_initrd_name="${final_initrd_name}-${image_initrd_suffix}"
+				elif [ -n "${image_initrd_suffix}" ]; then
 					img_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name")
 					img_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version")
 					image_name="kata-${img_distro}-${img_os_version}-${image_initrd_suffix}.${image_type}"
