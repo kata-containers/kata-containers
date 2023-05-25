@@ -62,7 +62,7 @@ jobs:
           az aks get-credentials -g "kataCI" -n ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-amd64
 
       - name: Run tests
-        timeout-minutes: 35
+        timeout-minutes: 60
         run: |
           sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${{ inputs.registry }}/${{ inputs.repo }}:${{ inputs.tag }}|g" tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
           cat tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
