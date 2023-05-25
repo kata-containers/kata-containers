@@ -42,7 +42,7 @@ oci = { path = "../../libs/oci" }
 
 # dm-verity root hash support
 sha2 = "0.10.6"
-tarindex = { git = "https://github.com/microsoft/kata-containers", branch = "danmihai1/demo-tardev" }
+tarindex = { path = "../../tardev-snapshotter/tarindex" }
 tempfile = "3.5.0"
-verity = { git = "https://github.com/microsoft/kata-containers", branch = "danmihai1/demo-tardev" }
+verity = { path = "../../tardev-snapshotter/verity" }
 zerocopy = "0.6.1"
