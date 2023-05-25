@@ -93,15 +93,6 @@ function run_tests() {
     kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
     kubectl apply -f "${tools_dir}/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml"
 
-    # This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
-    # which may cause issues like not having the node properly labeled or the artefacts
-    # properly deployed when the tests actually start running.
-    if [ "${platform}" = "aks" ]; then
-        sleep 240s
-    else
-        sleep 60s
-    fi
-
     # Create a new namespace for the tests and switch to it
     kubectl apply -f ${integration_dir}/kubernetes/runtimeclass_workloads/tests-namespace.yaml
     kubectl config set-context --current --namespace=kata-containers-k8s-tests
