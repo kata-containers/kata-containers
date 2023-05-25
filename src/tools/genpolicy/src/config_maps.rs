@@ -9,7 +9,7 @@
 use crate::yaml;
 
 use anyhow::Result;
-use log::info;
+use log::debug;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -37,9 +37,9 @@ pub struct Data {
 
 impl ConfigMap {
     pub fn new(file: &str) -> Result<Self> {
-        info!("Reading ConfigMap...");
+        debug!("Reading ConfigMap...");
         let config_map: ConfigMap = serde_yaml::from_reader(File::open(file)?)?;
-        info!("\nRead ConfigMap => {:#?}", config_map);
+        debug!("\nRead ConfigMap => {:#?}", config_map);
 
         Ok(config_map)
     }

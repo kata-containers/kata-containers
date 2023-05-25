@@ -8,44 +8,48 @@
 
 use crate::policy;
 
-use anyhow::Result;
-use log::{info, LevelFilter};
+use anyhow::{anyhow, Result};
+use log::{debug, info, LevelFilter};
 use oci_distribution::client::{linux_amd64_resolver, ClientConfig};
-use oci_distribution::{secrets::RegistryAuth, Client, Reference};
+use oci_distribution::{manifest, secrets::RegistryAuth, Client, Reference};
 use serde::{Deserialize, Serialize};
-use std::io;
+use sha2::{digest::typenum::Unsigned, digest::OutputSizeUser, Sha256};
+use std::{io, io::Seek, io::Write};
+use tempfile::tempdir;
+use tokio::{fs, io::AsyncWriteExt};
 
-#[derive(Default)]
 pub struct Container {
-    config_layer: String,
+    config_layer: DockerConfigLayer,
+    image_layers: Vec<ImageLayer>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct DockerConfigLayer {
     architecture: String,
-    #[serde(default)]
     config: DockerImageConfig,
+    rootfs: DockerRootfs,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct DockerImageConfig {
-    #[serde(default)]
-    User: String,
-
-    #[serde(default)]
-    Tty: bool,
-
-    #[serde(default)]
+    User: Option<String>,
+    Tty: Option<bool>,
     Env: Vec<String>,
-
-    #[serde(default)]
-    Cmd: Vec<String>,
-
-    #[serde(default)]
-    WorkingDir: String,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
+    Cmd: Option<Vec<String>>,
+    WorkingDir: Option<String>,
     Entrypoint: Option<Vec<String>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct DockerRootfs {
+    r#type: String,
+    diff_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ImageLayer {
+    pub diff_id: String,
+    pub verity_hash: String,
 }
 
 impl Container {
@@ -58,24 +62,33 @@ impl Container {
             ..Default::default()
         });
 
-        let (manifest, _digest_hash, config_layer) = client
+        let (manifest, digest_hash, config_layer_str) = client
             .pull_manifest_and_config(&reference, &RegistryAuth::Anonymous)
             .await?;
 
-        info!(
+        debug!("digest_hash: {:?}", digest_hash);
+        debug!(
             "manifest: {}",
             serde_json::to_string_pretty(&manifest).unwrap()
         );
 
         // Log the contents of the config layer.
-        if log::max_level() >= LevelFilter::Info {
+        if log::max_level() >= LevelFilter::Debug {
             println!("config layer:");
-            let mut deserializer = serde_json::Deserializer::from_str(&config_layer);
+            let mut deserializer = serde_json::Deserializer::from_str(&config_layer_str);
             let mut serializer = serde_json::Serializer::pretty(io::stderr());
             serde_transcode::transcode(&mut deserializer, &mut serializer).unwrap();
+            println!("");
         }
 
-        Ok(Container { config_layer })
+        let config_layer: DockerConfigLayer = serde_json::from_str(&config_layer_str)?;
+        let image_layers =
+            get_image_layers(&mut client, &reference, &manifest, &config_layer).await?;
+
+        Ok(Container {
+            config_layer,
+            image_layers,
+        })
     }
 
     // Convert Docker image config to policy data.
@@ -85,73 +98,185 @@ impl Container {
         yaml_has_command: bool,
         yaml_has_args: bool,
     ) -> Result<()> {
-        info!("Getting process field from docker config layer...");
-        let config_layer: DockerConfigLayer = serde_json::from_str(&self.config_layer)?;
-        let docker_config = &config_layer.config;
+        debug!("Getting process field from docker config layer...");
+        let docker_config = &self.config_layer.config;
 
-        if !docker_config.User.is_empty() {
-            info!("Splitting Docker config user = {:?}", docker_config.User);
-            let user: Vec<&str> = docker_config.User.split(':').collect();
-            if user.len() > 0 {
-                info!("Parsing user[0] = {:?}", user[0]);
-                process.user.uid = user[0].parse()?;
-                info!("string: {:?} => uid: {}", user[0], process.user.uid);
-            }
-            if user.len() > 1 {
-                info!("Parsing user[1] = {:?}", user[1]);
-                process.user.gid = user[1].parse()?;
-                info!("string: {:?} => gid: {}", user[1], process.user.gid);
+        if let Some(image_user) = &docker_config.User {
+            if !image_user.is_empty() {
+                debug!("Splitting Docker config user = {:?}", image_user);
+                let user: Vec<&str> = image_user.split(':').collect();
+                if !user.is_empty() {
+                    debug!("Parsing user[0] = {:?}", user[0]);
+                    process.user.uid = user[0].parse()?;
+                    debug!("string: {:?} => uid: {}", user[0], process.user.uid);
+                }
+                if user.len() > 1 {
+                    debug!("Parsing user[1] = {:?}", user[1]);
+                    process.user.gid = user[1].parse()?;
+                    debug!("string: {:?} => gid: {}", user[1], process.user.gid);
+                }
             }
         }
 
-        process.terminal = docker_config.Tty;
+        if let Some(terminal) = docker_config.Tty {
+            process.terminal = terminal;
+        } else {
+            process.terminal = false;
+        }
 
         for env in &docker_config.Env {
             process.env.push(env.clone());
         }
 
         let policy_args = &mut process.args;
-        info!("Already existing policy args: {:?}", policy_args);
+        debug!("Already existing policy args: {:?}", policy_args);
 
         if let Some(entry_points) = &docker_config.Entrypoint {
-            info!("Image Entrypoint: {:?}", entry_points);
+            debug!("Image Entrypoint: {:?}", entry_points);
             if !yaml_has_command {
-                    info!("Inserting Entrypoint into policy args");
+                debug!("Inserting Entrypoint into policy args");
 
-                    let mut reversed_entry_points = entry_points.clone();
-                    reversed_entry_points.reverse();
+                let mut reversed_entry_points = entry_points.clone();
+                reversed_entry_points.reverse();
 
-                    for entry_point in reversed_entry_points {
-                        policy_args.insert(0, entry_point.clone());
-                    }
+                for entry_point in reversed_entry_points {
+                    policy_args.insert(0, entry_point.clone());
+                }
             } else {
-                info!("Ignoring image Entrypoint because YAML specified the container command");
+                debug!("Ignoring image Entrypoint because YAML specified the container command");
             }
         } else {
-            info!("No image Entrypoint");
+            debug!("No image Entrypoint");
         }
 
-        info!("Updated policy args: {:?}", policy_args);
+        debug!("Updated policy args: {:?}", policy_args);
 
         if yaml_has_command {
-            info!("Ignoring image Cmd because YAML specified the container command");
+            debug!("Ignoring image Cmd because YAML specified the container command");
         } else if yaml_has_args {
-            info!("Ignoring image Cmd because YAML specified the container args");
-        } else {
-            info!("Adding to policy args the image Cmd: {:?}", docker_config.Cmd);
+            debug!("Ignoring image Cmd because YAML specified the container args");
+        } else if let Some(commands) = &docker_config.Cmd {
+            debug!("Adding to policy args the image Cmd: {:?}", commands);
 
-            for cmd in &docker_config.Cmd {
+            for cmd in commands {
                 policy_args.push(cmd.clone());
+            }
+        } else {
+            debug!("Image Cmd field is not present");
+        }
+
+        debug!("Updated policy args: {:?}", policy_args);
+
+        if let Some(working_dir) = &docker_config.WorkingDir {
+            if !working_dir.is_empty() {
+                process.cwd = working_dir.clone();
             }
         }
 
-        info!("Updated policy args: {:?}", policy_args);
-
-        if !docker_config.WorkingDir.is_empty() {
-            process.cwd = docker_config.WorkingDir.clone();
-        }
-
-        info!("get_process succeeded.");
+        debug!("get_process succeeded.");
         Ok(())
     }
+
+    pub fn get_image_layers(&self) -> Vec<ImageLayer> {
+        self.image_layers.clone()
+    }
+}
+
+async fn get_image_layers(
+    client: &mut Client,
+    reference: &Reference,
+    manifest: &manifest::OciImageManifest,
+    config_layer: &DockerConfigLayer,
+) -> Result<Vec<ImageLayer>> {
+    let mut layer_index = 0;
+    let mut layers = Vec::new();
+
+    for layer in &manifest.layers {
+        if layer
+            .media_type
+            .eq(manifest::IMAGE_DOCKER_LAYER_GZIP_MEDIA_TYPE)
+        {
+            if layer_index < config_layer.rootfs.diff_ids.len() {
+                layers.push(ImageLayer {
+                    diff_id: config_layer.rootfs.diff_ids[layer_index].clone(),
+                    verity_hash: get_verity_hash(client, reference, &layer.digest).await?,
+                });
+            } else {
+                return Err(anyhow!("Too many Docker gzip layers"));
+            }
+
+            layer_index += 1;
+        }
+    }
+
+    Ok(layers)
+}
+
+async fn get_verity_hash(
+    client: &mut Client,
+    reference: &Reference,
+    layer_digest: &str,
+) -> Result<String> {
+    let base_dir = tempdir().unwrap();
+    let mut file_path = base_dir.path().join("image_layer");
+    file_path.set_extension("gz");
+
+    {
+        let mut file = tokio::fs::File::create(&file_path).await?;
+
+        info!("Pulling layer {:?}", layer_digest);
+        if let Err(err) = client.pull_blob(&reference, layer_digest, &mut file).await {
+            drop(file);
+            debug!("Download failed: {:?}", err);
+            let _ = fs::remove_file(&file_path);
+            return Err(anyhow!("unable to pull blob"));
+        } else {
+            file.flush().await.unwrap();
+        }
+    }
+
+    info!("Decompressing layer");
+    if !tokio::process::Command::new("gunzip")
+        .arg(&file_path)
+        .arg("-f")
+        .arg("-k")
+        .spawn()?
+        .wait()
+        .await?
+        .success()
+    {
+        let _ = fs::remove_file(&file_path);
+        return Err(anyhow!("unable to decompress layer"));
+    }
+
+    {
+        file_path.set_extension("");
+
+        info!("Adding tarfs index to layer");
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&file_path)?;
+        tarindex::append_index(&mut file)?;
+        file.flush().unwrap();
+    }
+
+    info!("Calculating dm-verity root hash for layer");
+    create_verity_hash(&file_path.to_string_lossy())
+}
+
+fn create_verity_hash(path: &str) -> Result<String> {
+    let mut file = std::fs::File::open(path)?;
+    let size = file.seek(std::io::SeekFrom::End(0))?;
+    if size < 4096 {
+        return Err(anyhow!("Block device ({path}) is too small: {size}"));
+    }
+
+    let salt = [0u8; <Sha256 as OutputSizeUser>::OutputSize::USIZE];
+    let v = verity::Verity::<Sha256>::new(size, 4096, 4096, &salt, None)?;
+    let hash = verity::traverse_file(&file, 0, false, v)?;
+    let result = format!("{:x}", hash);
+    info!("dm-verity root hash: {:?}", &result);
+
+    Ok(result)
 }

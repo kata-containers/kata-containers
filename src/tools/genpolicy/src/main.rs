@@ -5,7 +5,7 @@
 
 use clap::Parser;
 use env_logger;
-use log::info;
+use log::debug;
 
 mod config_maps;
 mod containerd;
@@ -49,14 +49,14 @@ async fn main() {
         &config_map_files,
     );
 
-    info!("Creating policy from yaml, infra data and rules files...");
+    debug!("Creating policy from yaml, infra data and rules files...");
     let mut policy = policy::PodPolicy::from_files(&in_out_files).unwrap();
 
-    info!("Exporting policy to yaml file...");
+    debug!("Exporting policy to yaml file...");
     if let Err(e) = policy.export_policy(&in_out_files).await {
         println!("export_policy failed: {:?}", e);
         std::process::exit(1);
     }
 
-    info!("Success!");
+    debug!("Success!");
 }
