@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2021, 2022 IBM Corporation
+# Copyright (c) 2021, 2023 IBM Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -24,6 +24,10 @@ export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 export KUBERNETES=${KUBERNETES:-"no"}
 export AGENT_INIT="${AGENT_INIT:-${TEST_INITRD:-no}}"
 export AA_KBC="${AA_KBC:-offline_fs_kbc}"
+export KATA_BUILD_CC=${KATA_BUILD_CC:-"yes"}
+export TEE_TYPE=${TEE_TYPE:-}
+export PREFIX="${PREFIX:-/opt/confidential-containers}"
+export RUNTIME_CONFIG_PATH="${RUNTIME_CONFIG_PATH:-${PREFIX}/share/defaults/kata-containers/configuration.toml}"
 
 # Allow the user to overwrite the default repo and branch names if they want to build from a fork
 export katacontainers_repo="${katacontainers_repo:-github.com/kata-containers/kata-containers}"
@@ -65,8 +69,6 @@ else
 fi
 
 [ -d "${BATS_TEST_DIRNAME}" ] && source "${BATS_TEST_DIRNAME}/../../confidential/lib.sh"
-
-export RUNTIME_CONFIG_PATH=/etc/kata-containers/configuration.toml
 
 usage() {
     exit_code="$1"
@@ -210,13 +212,14 @@ checkout_kata_containers_repo() {
 }
 
 build_and_install_kata_runtime() {
-    pushd ${katacontainers_repo_dir}/src/runtime
-    make clean && make DEFAULT_HYPERVISOR=${KATA_HYPERVISOR} && sudo -E PATH=$PATH make DEFAULT_HYPERVISOR=${KATA_HYPERVISOR} install
-    popd
+    export DEFAULT_HYPERVISOR=${KATA_HYPERVISOR}
+    ${tests_repo_dir}/.ci/install_runtime.sh
 }
 
 configure() {
-    configure_kata_to_use_rootfs
+    # configure kata to use rootfs, not initrd
+    sudo sed -i 's/^\(initrd =.*\)/# \1/g' ${RUNTIME_CONFIG_PATH}
+
     enable_full_debug
     enable_agent_console
 
@@ -226,12 +229,9 @@ configure() {
     configure_cc_containerd
     # From crictl v1.24.1 the default timoout leads to the pod creation failing, so update it
     sudo crictl config --set timeout=10
-}
 
-configure_kata_to_use_rootfs() {
-    sudo mkdir -p /etc/kata-containers/
-    sudo install -o root -g root -m 0640 /usr/share/defaults/kata-containers/configuration.toml /etc/kata-containers
-    sudo sed -i 's/^\(initrd =.*\)/# \1/g' ${RUNTIME_CONFIG_PATH}
+    # Verity checks aren't working locally, as we aren't re-genning the hash maybe? so remove it from the kernel parameters
+    remove_kernel_param "cc_rootfs_verity.scheme"
 }
 
 build_and_add_agent_to_rootfs() {
@@ -306,20 +306,15 @@ install_rootfs_image() {
     local commit=$(git log --format=%h -1 HEAD)
     local date=$(date +%Y-%m-%d-%T.%N%z)
     local image="kata-containers-${date}-${commit}"
-    sudo install -o root -g root -m 0640 -D kata-containers.img "/usr/share/kata-containers/${image}"
-    (cd /usr/share/kata-containers && sudo ln -sf "$image" kata-containers.img)
-    echo "Built Rootfs from ${ROOTFS_DIR} to /usr/share/kata-containers/${image}"
-    ls -al /usr/share/kata-containers/
+    sudo install -o root -g root -m 0640 -D kata-containers.img "${PREFIX}/share/kata-containers/${image}"
+    (cd ${PREFIX}/share/kata-containers && sudo ln -sf "$image" kata-containers.img)
+    echo "Built Rootfs from ${ROOTFS_DIR} to ${PREFIX}/share/kata-containers/${image}"
+    ls -al ${PREFIX}/share/kata-containers
     popd
 }
 
 install_guest_kernel_image() {
-    pushd ${katacontainers_repo_dir}/tools/packaging/kernel
-    sudo -E PATH=$PATH ./build-kernel.sh setup
-    sudo -E PATH=$PATH ./build-kernel.sh build
-    sudo chmod u+wrx /usr/share/kata-containers/ # Give user permission to install kernel
-    sudo -E PATH=$PATH ./build-kernel.sh install
-    popd
+   ${tests_repo_dir}/.ci/install_kata_kernel.sh
 }
 
 build_qemu() {
@@ -428,7 +423,7 @@ crictl_delete_cc() {
 test_kata_runtime() {
     echo "Running ctr with the kata runtime..."
     local test_image="quay.io/kata-containers/confidential-containers:signed"
-    if [ -z $(ctr images ls -q name=="${test_image}") ]; then
+    if [ -z $(sudo ctr images ls -q name=="${test_image}") ]; then
         sudo ctr image pull "${test_image}"
     fi
     sudo ctr run --runtime "io.containerd.kata.v2" --rm -t "${test_image}" test-kata uname -a
