@@ -374,6 +374,21 @@ impl VirtioNetDeviceMgr {
 
         Ok(Box::new(net_device))
     }
+
+    /// Remove all virtio-net devices.
+    pub fn remove_devices(&mut self, ctx: &mut DeviceOpContext) -> Result<(), DeviceMgrError> {
+        while let Some(mut info) = self.info_list.pop() {
+            slog::info!(
+                ctx.logger(),
+                "remove virtio-net device: {}",
+                info.config.iface_id
+            );
+            if let Some(device) = info.device.take() {
+                DeviceManager::destroy_mmio_virtio_device(device, ctx)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Default for VirtioNetDeviceMgr {
