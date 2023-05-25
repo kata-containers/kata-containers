@@ -4,12 +4,26 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::path::{Path, PathBuf};
+use std::{
+    os::unix::fs::PermissionsExt,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Result;
 use kata_sys_util::mount;
 
 use super::*;
+
+pub(crate) fn mkdir_with_permissions(path_target: PathBuf, mode: u32) -> Result<()> {
+    let new_path = &path_target;
+    std::fs::create_dir_all(new_path)
+        .context(format!("unable to create new path: {:?}", new_path))?;
+
+    // mode format: 0o750, ...
+    std::fs::set_permissions(new_path, std::fs::Permissions::from_mode(mode))?;
+
+    Ok(())
+}
 
 pub(crate) fn ensure_dir_exist(path: &Path) -> Result<()> {
     if !path.exists() {
