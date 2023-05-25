@@ -76,7 +76,7 @@ jobs:
           # This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
           # which may cause issues like not having the node properly labeled or the artefacts
           # properly deployed when the tests actually start running.
-          sleep 150s
+          sleep 240s
 
           pushd tests/integration/kubernetes
           sed -i -e 's|runtimeClassName: kata|runtimeClassName: kata-${{ matrix.vmm }}|' runtimeclass_workloads/*.yaml
