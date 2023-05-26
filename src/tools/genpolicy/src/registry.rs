@@ -14,7 +14,7 @@ use oci_distribution::client::{linux_amd64_resolver, ClientConfig};
 use oci_distribution::{manifest, secrets::RegistryAuth, Client, Reference};
 use serde::{Deserialize, Serialize};
 use sha2::{digest::typenum::Unsigned, digest::OutputSizeUser, Sha256};
-use std::{io, io::Seek, io::Write};
+use std::{io, io::Seek, io::Write, path::Path};
 use tempfile::tempdir;
 use tokio::{fs, io::AsyncWriteExt};
 
@@ -236,15 +236,7 @@ async fn get_verity_hash(
     }
 
     info!("Decompressing layer");
-    if !tokio::process::Command::new("gunzip")
-        .arg(&file_path)
-        .arg("-f")
-        .arg("-k")
-        .spawn()?
-        .wait()
-        .await?
-        .success()
-    {
+    if !gunzip_file(&file_path, &base_dir.path()).await? {
         let _ = fs::remove_file(&file_path);
         return Err(anyhow!("unable to decompress layer"));
     }
@@ -273,10 +265,38 @@ fn create_verity_hash(path: &str) -> Result<String> {
     }
 
     let salt = [0u8; <Sha256 as OutputSizeUser>::OutputSize::USIZE];
-    let v = verity::Verity::<Sha256>::new(size, 4096, 4096, &salt, None)?;
-    let hash = verity::traverse_file(&file, 0, false, v)?;
+    let v = verity::Verity::<Sha256>::new(size, 4096, 4096, &salt, 0)?;
+    let hash = verity::traverse_file(&mut file, 0, false, v, &mut verity::no_write)?;
     let result = format!("{:x}", hash);
     info!("dm-verity root hash: {:?}", &result);
 
     Ok(result)
+}
+
+#[cfg(target_family = "unix")]
+async fn gunzip_file(file: &Path, _output_directory: &Path) -> Result<bool> {
+    Ok(tokio::process::Command::new("gunzip")
+        .arg(file)
+        .arg("-f")
+        .arg("-k")
+        .spawn()?
+        .wait()
+        .await?
+        .success())
+}
+
+#[cfg(target_family = "windows")]
+async fn gunzip_file(file: &Path, output_directory: &Path) -> Result<bool> {
+    if let Some(dir) = output_directory.to_str() {
+        Ok(tokio::process::Command::new("7z.exe")
+            .arg("x")
+            .arg(file)
+            .arg("-o".to_string() + &dir)
+            .output()
+            .await?
+            .status
+            .success())
+    } else {
+        Err(anyhow!("Unexpected output directory format: {:?}", &output_directory))
+    }
 }
