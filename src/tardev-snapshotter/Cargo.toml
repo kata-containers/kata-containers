@@ -21,3 +21,4 @@ tempfile = "3.3.0"
 openssl = "0.10.48"
 openssl-src = "111.25.3"
 h2 = "0.3.17"
+flate2 = { version = "1.0.26", features = ["zlib-ng"], default-features = false }
