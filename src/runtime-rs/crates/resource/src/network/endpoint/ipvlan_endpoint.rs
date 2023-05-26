@@ -9,11 +9,13 @@ use std::io::{self, Error};
 use super::endpoint_persist::{EndpointState, IpVlanEndpointState};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use hypervisor::device::DeviceType;
+use hypervisor::NetworkDevice;
 
 use super::Endpoint;
 use crate::network::network_model::TC_FILTER_NET_MODEL_STR;
 use crate::network::{utils, NetworkPair};
-use hypervisor::{device::NetworkConfig, Device, Hypervisor};
+use hypervisor::{device::driver::NetworkConfig, Hypervisor};
 
 // IPVlanEndpoint is the endpoint bridged to VM
 #[derive(Debug)]
@@ -44,7 +46,6 @@ impl IPVlanEndpoint {
             )
         })?;
         Ok(NetworkConfig {
-            id: self.net_pair.virt_iface.name.clone(),
             host_dev_name: iface.name.clone(),
             guest_mac: Some(guest_mac),
         })
@@ -67,9 +68,12 @@ impl Endpoint for IPVlanEndpoint {
             .await
             .context("error adding network model")?;
         let config = self.get_network_config().context("get network config")?;
-        h.add_device(Device::Network(config))
-            .await
-            .context("error adding device by hypervisor")?;
+        h.add_device(DeviceType::Network(NetworkDevice {
+            id: self.net_pair.virt_iface.name.clone(),
+            config,
+        }))
+        .await
+        .context("error adding device by hypervisor")?;
 
         Ok(())
     }
@@ -82,9 +86,12 @@ impl Endpoint for IPVlanEndpoint {
         let config = self
             .get_network_config()
             .context("error getting network config")?;
-        h.remove_device(Device::Network(config))
-            .await
-            .context("error removing device by hypervisor")?;
+        h.remove_device(DeviceType::Network(NetworkDevice {
+            id: self.net_pair.virt_iface.name.clone(),
+            config,
+        }))
+        .await
+        .context("error removing device by hypervisor")?;
 
         Ok(())
     }

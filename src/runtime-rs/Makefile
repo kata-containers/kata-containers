@@ -17,6 +17,10 @@ CONTAINERD_RUNTIME_NAME = io.containerd.kata.v2
 
 include ../../utils.mk
 
+ifeq ($(ARCH), ppc64le)
+    override ARCH = powerpc64le
+endif
+
 ARCH_DIR = arch
 ARCH_FILE_SUFFIX = -options.mk
 ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
@@ -199,7 +203,7 @@ ifneq (,$(DBCMD))
     CONFIGS += $(CONFIG_DB)
     # dragonball-specific options (all should be suffixed by "_DB")
     DEFMAXVCPUS_DB := 1
-    DEFBLOCKSTORAGEDRIVER_DB := virtio-blk
+    DEFBLOCKSTORAGEDRIVER_DB := virtio-blk-mmio
     DEFNETWORKMODEL_DB := tcfilter
     KERNELPARAMS = console=ttyS1 agent.log_vport=1025
 	KERNELTYPE_DB = uncompressed

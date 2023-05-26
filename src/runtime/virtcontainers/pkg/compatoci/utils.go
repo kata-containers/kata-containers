@@ -74,7 +74,7 @@ func containerCapabilities(s compatOCISpec) (specs.LinuxCapabilities, error) {
 				}
 
 			default:
-				return c, fmt.Errorf("Unexpected format for capabilities: %v", caps)
+				return c, fmt.Errorf("unexpected format for capabilities: %v", caps)
 			}
 		}
 	case []interface{}:
@@ -94,7 +94,7 @@ func containerCapabilities(s compatOCISpec) (specs.LinuxCapabilities, error) {
 		ociLog.Debug("Empty capabilities have been passed")
 		return c, nil
 	default:
-		return c, fmt.Errorf("Unexpected format for capabilities: %v", caps)
+		return c, fmt.Errorf("unexpected format for capabilities: %v", caps)
 	}
 
 	return c, nil
@@ -154,5 +154,5 @@ func GetContainerSpec(annotations map[string]string) (specs.Spec, error) {
 
 	ociLog.Errorf("Annotations[%s] not found, cannot find container spec",
 		vcAnnotations.BundlePathKey)
-	return specs.Spec{}, fmt.Errorf("Could not find container spec")
+	return specs.Spec{}, fmt.Errorf("could not find container spec")
 }

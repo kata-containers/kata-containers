@@ -15,6 +15,7 @@ pub enum CheckType {
     Cpu,
     Network,
     KernelModules,
+    KvmIsUsable,
 }
 
 // PermissionType is used to show whether a check needs to run with elevated (super-user)

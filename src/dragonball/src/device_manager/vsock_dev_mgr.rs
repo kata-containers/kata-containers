@@ -17,7 +17,7 @@ use dbs_virtio_devices::vsock::Vsock;
 use dbs_virtio_devices::Error as VirtioError;
 use serde_derive::{Deserialize, Serialize};
 
-use super::StartMicroVmError;
+use super::{DeviceMgrError, StartMicroVmError};
 use crate::config_manager::{ConfigItem, DeviceConfigInfo, DeviceConfigInfos};
 use crate::device_manager::{DeviceManager, DeviceOpContext};
 
@@ -283,6 +283,21 @@ impl VsockDeviceMgr {
 
         // safe to unwrap, because we created the inner connector before
         Ok(self.default_inner_connector.clone().unwrap())
+    }
+
+    /// Remove all virtio-vsock devices
+    pub fn remove_devices(&mut self, ctx: &mut DeviceOpContext) -> Result<(), DeviceMgrError> {
+        while let Some(mut info) = self.info_list.pop() {
+            slog::info!(
+                ctx.logger(),
+                "remove virtio-vsock device: {}",
+                info.config.id
+            );
+            if let Some(device) = info.device.take() {
+                DeviceManager::destroy_mmio_virtio_device(device, ctx)?;
+            }
+        }
+        Ok(())
     }
 }
 

@@ -6,6 +6,10 @@
 // Contains checks that are not architecture-specific
 
 use anyhow::{anyhow, Result};
+use nix::fcntl::{open, OFlag};
+use nix::sys::stat::Mode;
+use nix::unistd::close;
+use nix::{ioctl_write_int_bad, request_code_none};
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -176,6 +180,65 @@ pub fn run_network_checks() -> Result<()> {
     Ok(())
 }
 
+// Set of basic checks for kvm. Architectures should implement more specific checks if needed
+#[allow(dead_code)]
+pub fn check_kvm_is_usable_generic() -> Result<()> {
+    // check for root user
+    if !nix::unistd::Uid::effective().is_root() {
+        return Err(anyhow!("Will not perform kvm checks as non root user"));
+    }
+
+    // we do not want to create syscalls to any device besides /dev/kvm
+    const KVM_DEVICE: &str = "/dev/kvm";
+
+    // constants specific to kvm ioctls found in kvm.h
+    const KVM_IOCTL_ID: u8 = 0xAE;
+    const KVM_CREATE_VM: u8 = 0x01;
+    const KVM_GET_API_VERSION: u8 = 0x00;
+    // per kvm api documentation, this number should always be 12
+    // https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-get-api-version
+    const API_VERSION: i32 = 12;
+
+    // open kvm device
+    // since file is not being created, mode argument is not relevant
+    let mode = Mode::empty();
+    let flags = OFlag::O_RDWR | OFlag::O_CLOEXEC;
+    let fd = open(KVM_DEVICE, flags, mode)?;
+
+    // check kvm api version
+    ioctl_write_int_bad!(
+        kvm_api_version,
+        request_code_none!(KVM_IOCTL_ID, KVM_GET_API_VERSION)
+    );
+    // 0 is not used but required to produce output
+    let v = unsafe { kvm_api_version(fd, 0)? };
+    if v != API_VERSION {
+        return Err(anyhow!("KVM API version is not correct"));
+    }
+
+    // check if you can create vm
+    ioctl_write_int_bad!(
+        kvm_create_vm,
+        request_code_none!(KVM_IOCTL_ID, KVM_CREATE_VM)
+    );
+    // 0 is default machine type
+    let vmfd = unsafe { kvm_create_vm(fd, 0) };
+    let _vmfd = match vmfd {
+        Ok(vm) => vm,
+        Err(ref error) if error.to_string() == "EBUSY: Device or resource busy" => {
+            return Err(anyhow!(
+                "Another hypervisor is running. KVM_CREATE_VM error: {:?}",
+                error
+            ))
+        }
+        Err(error) => return Err(anyhow!("Other KVM_CREATE_VM error: {:?}", error)),
+    };
+
+    let _ = close(fd);
+
+    Ok(())
+}
+
 fn get_kata_all_releases_by_url(url: &str) -> std::result::Result<Vec<Release>, reqwest::Error> {
     let releases: Vec<Release> = reqwest::blocking::Client::new()
         .get(url)
@@ -332,6 +395,7 @@ mod tests {
     use std::fs;
     use std::io::Write;
     use tempfile::tempdir;
+    use test_utils::skip_if_root;
 
     #[test]
     fn test_get_single_cpu_info() {
@@ -457,6 +521,16 @@ mod tests {
             let actual_error = format!("{}", result.unwrap_err());
             assert!(actual_error == expected_error, "{}", msg);
         }
+    }
+
+    #[test]
+    fn test_check_kvm_is_usable_generic() {
+        skip_if_root!();
+        #[allow(dead_code)]
+        let result = check_kvm_is_usable_generic();
+        assert!(
+            result.err().unwrap().to_string() == "Will not perform kvm checks as non root user"
+        );
     }
 
     #[test]

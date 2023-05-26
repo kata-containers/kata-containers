@@ -4,18 +4,21 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{sync::Arc, thread};
+use std::{sync::Arc, thread, vec};
 
 use crate::{network::NetworkConfig, resource_persist::ResourceState};
-use agent::{Agent, Storage};
+use agent::{types::Device, Agent, Storage};
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
-use hypervisor::Hypervisor;
+use hypervisor::{
+    device::{device_manager::DeviceManager, DeviceConfig},
+    BlockConfig, Hypervisor,
+};
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
-use oci::LinuxResources;
+use oci::{Linux, LinuxResources};
 use persist::sandbox_persist::Persist;
-use tokio::runtime;
+use tokio::{runtime, sync::RwLock};
 
 use crate::{
     cgroups::{CgroupArgs, CgroupsResource},
@@ -32,6 +35,7 @@ pub(crate) struct ResourceManagerInner {
     toml_config: Arc<TomlConfig>,
     agent: Arc<dyn Agent>,
     hypervisor: Arc<dyn Hypervisor>,
+    device_manager: Arc<RwLock<DeviceManager>>,
     network: Option<Arc<dyn Network>>,
     share_fs: Option<Arc<dyn ShareFs>>,
 
@@ -48,11 +52,17 @@ impl ResourceManagerInner {
         toml_config: Arc<TomlConfig>,
     ) -> Result<Self> {
         let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
+
+        // create device manager
+        let dev_manager =
+            DeviceManager::new(hypervisor.clone()).context("failed to create device manager")?;
+
         Ok(Self {
             sid: sid.to_string(),
             toml_config,
             agent,
             hypervisor,
+            device_manager: Arc::new(RwLock::new(dev_manager)),
             network: None,
             share_fs: None,
             rootfs_resource: RootFsResource::new(),
@@ -63,6 +73,10 @@ impl ResourceManagerInner {
 
     pub fn config(&self) -> Arc<TomlConfig> {
         self.toml_config.clone()
+    }
+
+    pub fn get_device_manager(&self) -> Arc<RwLock<DeviceManager>> {
+        self.device_manager.clone()
     }
 
     pub async fn prepare_before_start_vm(
@@ -212,6 +226,7 @@ impl ResourceManagerInner {
         self.rootfs_resource
             .handler_rootfs(
                 &self.share_fs,
+                self.device_manager.as_ref(),
                 self.hypervisor.as_ref(),
                 &self.sid,
                 cid,
@@ -228,8 +243,69 @@ impl ResourceManagerInner {
         spec: &oci::Spec,
     ) -> Result<Vec<Arc<dyn Volume>>> {
         self.volume_resource
-            .handler_volumes(&self.share_fs, cid, spec)
+            .handler_volumes(
+                &self.share_fs,
+                cid,
+                spec,
+                self.device_manager.as_ref(),
+                &self.sid,
+            )
             .await
+    }
+
+    pub async fn handler_devices(&self, _cid: &str, linux: &Linux) -> Result<Vec<Device>> {
+        let mut devices = vec![];
+        for d in linux.devices.iter() {
+            match d.r#type.as_str() {
+                "b" => {
+                    let device_info = DeviceConfig::BlockCfg(BlockConfig {
+                        major: d.major,
+                        minor: d.minor,
+                        ..Default::default()
+                    });
+                    let device_id = self
+                        .device_manager
+                        .write()
+                        .await
+                        .new_device(&device_info)
+                        .await
+                        .context("failed to create deviec")?;
+
+                    self.device_manager
+                        .write()
+                        .await
+                        .try_add_device(&device_id)
+                        .await
+                        .context("failed to add deivce")?;
+
+                    // get complete device information
+                    let dev_info = self
+                        .device_manager
+                        .read()
+                        .await
+                        .get_device_info(&device_id)
+                        .await
+                        .context("failed to get device info")?;
+
+                    // create agent device
+                    if let DeviceConfig::BlockCfg(config) = dev_info {
+                        let agent_device = Device {
+                            id: device_id.clone(),
+                            container_path: d.path.clone(),
+                            field_type: config.driver_option,
+                            vm_path: config.virt_path,
+                            ..Default::default()
+                        };
+                        devices.push(agent_device);
+                    }
+                }
+                _ => {
+                    // TODO enable other devices type
+                    continue;
+                }
+            }
+        }
+        Ok(devices)
     }
 
     pub async fn update_cgroups(
@@ -298,7 +374,8 @@ impl Persist for ResourceManagerInner {
         Ok(Self {
             sid: resource_args.sid,
             agent: resource_args.agent,
-            hypervisor: resource_args.hypervisor,
+            hypervisor: resource_args.hypervisor.clone(),
+            device_manager: Arc::new(RwLock::new(DeviceManager::new(resource_args.hypervisor)?)),
             network: None,
             share_fs: None,
             rootfs_resource: RootFsResource::new(),
