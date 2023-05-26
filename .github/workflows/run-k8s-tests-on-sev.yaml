@@ -21,6 +21,10 @@ jobs:
           - qemu-sev
     runs-on: sev
     env:
+      DOCKER_REGISTRY: ${{ inputs.registry }}
+      DOCKER_REPO: ${{ inputs.repo }}
+      DOCKER_TAG: ${{ inputs.tag }}
+      KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBECONFIG: /home/kata/.kube/config
     steps:
       - uses: actions/checkout@v3
@@ -29,40 +33,8 @@ jobs:
 
       - name: Run tests
         timeout-minutes: 30
-        run: |
-          sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${{ inputs.registry }}/${{ inputs.repo }}:${{ inputs.tag }}|g" tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-          cat tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-          cat tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml | grep "${{ inputs.registry }}/${{ inputs.repo }}:${{ inputs.tag }}" || die "Failed to setup the tests image"
-
-          kubectl apply -f tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
-          kubectl apply -f tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-          kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
-          kubectl apply -f tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
-
-          # This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
-          # which may cause issues like not having the node properly labeled or the artefacts
-          # properly deployed when the tests actually start running.
-          sleep 60s
-
-          pushd tests/integration/kubernetes
-          sed -i -e 's|runtimeClassName: kata|runtimeClassName: kata-${{ matrix.vmm }}|' runtimeclass_workloads/*.yaml
-          bash run_kubernetes_tests.sh
-          popd
-        env:
-          KATA_HYPERVISOR: ${{ matrix.vmm }}
+        run: bash tests/integration/gha-run.sh run-tests-sev
 
       - name: Delete kata-deploy
         if: always()
-        run: |
-          kubectl delete -f tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-          kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
-
-          sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${{ inputs.registry }}/${{ inputs.repo }}:${{ inputs.tag }}|g" tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
-          cat tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
-          cat tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml | grep "${{ inputs.registry }}/${{ inputs.repo }}:${{ inputs.tag }}" || die "Failed to setup the tests image"
-          kubectl apply -f tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
-          sleep 180s
-
-          kubectl delete -f tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
-          kubectl delete -f tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
-          kubectl delete -f tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
+        run: bash tests/integration/gha-run.sh cleanup-sev
