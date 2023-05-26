@@ -70,10 +70,6 @@ const DEFAULT_UNIX_CAPS_PRIVILEGED: [&'static str; 41] = [
 
 // Default process field from containerd.
 pub fn get_process(privileged_container: bool) -> policy::OciProcess {
-    let mut process: policy::OciProcess = Default::default();
-    process.cwd = "/".to_string();
-    process.no_new_privileges = true;
-
     let mut capabilities: LinuxCapabilities = Default::default();
 
     if privileged_container {
@@ -86,8 +82,15 @@ pub fn get_process(privileged_container: bool) -> policy::OciProcess {
         capabilities.effective = DEFAULT_UNIX_CAPS.into_iter().map(String::from).collect();
     }
 
-    process.capabilities = Some(capabilities);
-    process
+    policy::OciProcess {
+        terminal: false,
+        user: Default::default(),
+        args: Vec::new(),
+        env: Vec::new(),
+        cwd: "/".to_string(),
+        capabilities: Some(capabilities),
+        noNewPrivileges: true,
+    }
 }
 
 // Default mounts field from containerd.

@@ -10,7 +10,7 @@ use crate::config_maps;
 
 use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose, Engine as _};
-use log::info;
+use log::debug;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
 use std::collections::BTreeMap;
@@ -102,6 +102,9 @@ pub struct Spec {
 pub struct Container {
     pub image: String,
     pub name: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub imagePullPolicy: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub securityContext: Option<SecurityContext>,
@@ -311,7 +314,7 @@ pub struct ConfigMapKeyRef {
 
 impl Yaml {
     pub fn new(yaml_file: &Option<String>) -> Result<Self> {
-        info!("Reading YAML...");
+        debug!("Reading YAML...");
 
         let mut yaml_data: Yaml = if let Some(yaml) = yaml_file {
             serde_yaml::from_reader(File::open(yaml)?)?
@@ -319,7 +322,7 @@ impl Yaml {
             serde_yaml::from_reader(std::io::stdin())?
         };
 
-        info!("\nRead YAML => {:#?}", yaml_data);
+        debug!("\nRead YAML => {:#?}", yaml_data);
 
         if yaml_data.is_deployment() {
             if let Some(template) = &mut yaml_data.spec.template {
@@ -338,10 +341,11 @@ impl Yaml {
 
     fn add_pause_container(spec_containers: &mut Option<Vec<Container>>) {
         if let Some(containers) = spec_containers {
-            info!("Adding pause container...");
+            debug!("Adding pause container...");
             let pause_container = Container {
                 image: "mcr.microsoft.com/oss/kubernetes/pause:3.6".to_string(),
                 name: String::new(),
+                imagePullPolicy: None,
                 securityContext: Some(SecurityContext {
                     readOnlyRootFilesystem: Some(true),
                     allowPrivilegeEscalation: Some(false),
@@ -355,7 +359,7 @@ impl Yaml {
                 args: None,
             };
             containers.insert(0, pause_container);
-            info!("pause container added.");
+            debug!("pause container added.");
         }
     }
 
@@ -366,23 +370,23 @@ impl Yaml {
         yaml_file: &Option<String>,
         output_policy_file: &Option<String>,
     ) -> Result<()> {
-        info!("============================================");
-        info!("Adding policy to YAML");
+        debug!("============================================");
+        debug!("Adding policy to YAML");
 
         let mut policy = read_to_string(&rules_input_file)?;
         policy += "\npolicy_data := ";
         policy += json_data;
-        info!("Decoded policy length {:?} characters", policy.len());
+        debug!("Decoded policy length {:?} characters", policy.len());
 
         if let Some(file_name) = output_policy_file {
             export_decoded_policy(&policy, &file_name)?;
         }
 
         let encoded_policy = general_purpose::STANDARD.encode(policy.as_bytes());
-        info!("Encoded policy length {:?} characters", encoded_policy.len());
+        debug!("Encoded policy length {:?} characters", encoded_policy.len());
 
         if self.is_deployment() {
-            info!("Adding policy to Deployment YAML");
+            debug!("Adding policy to Deployment YAML");
 
             if let Some(template) = &mut self.spec.template {
                 Self::add_policy_annotation(&mut template.metadata.annotations, &encoded_policy);
@@ -395,7 +399,7 @@ impl Yaml {
                 return Err(anyhow!("Deployment YAML without pod template!"));
             }
         } else {
-            info!("Adding policy to Pod YAML");
+            debug!("Adding policy to Pod YAML");
 
             Self::add_policy_annotation(&mut self.metadata.annotations, &encoded_policy);
 
