@@ -8,21 +8,32 @@
 
 use crate::config_maps;
 use crate::containerd;
+use crate::deployment;
 use crate::infra;
 use crate::kata;
+use crate::pause_container;
+use crate::pod;
 use crate::registry;
 use crate::utils;
+use crate::volumes;
 use crate::yaml;
 
 use anyhow::{anyhow, Result};
+use base64::{engine::general_purpose, Engine as _};
 use log::debug;
 use oci::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use std::fs::read_to_string;
+use std::io::Write;
+
+const POLICY_ANNOTATION_KEY: &str = "io.katacontainers.config.agent.policy";
 
 pub struct PodPolicy {
-    yaml: yaml::Yaml,
+    pod: Option<pod::Pod>,
+    deployment: Option<deployment::Deployment>,
+
     config_maps: Vec<config_maps::ConfigMap>,
 
     yaml_file: Option<String>,
@@ -144,7 +155,25 @@ pub struct PersistentVolumeClaimVolume {
 
 impl PodPolicy {
     pub fn from_files(in_out_files: &utils::InOutFiles) -> Result<Self> {
-        let yaml = yaml::Yaml::new(&in_out_files.yaml_file)?;
+        let mut pod = None;
+        let mut deployment = None;
+
+        let yaml_string = yaml::get_input_yaml(&in_out_files.yaml_file)?;
+        let header = yaml::get_yaml_header(&yaml_string)?;
+
+        if header.kind.eq("Pod") {
+            let mut pod_object: pod::Pod = serde_yaml::from_str(&yaml_string)?;
+            pause_container::add_pause_container(&mut pod_object.spec.containers);
+            pod = Some(pod_object);
+        } else if header.kind.eq("Deployment") {
+            let mut deployment_object: deployment::Deployment = serde_yaml::from_str(&yaml_string)?;
+
+            if let Some(template) = &mut deployment_object.spec.template {
+                pause_container::add_pause_container(&mut template.spec.containers);
+            }
+
+            deployment = Some(deployment_object);
+        }
 
         let mut config_maps = Vec::new();
         if let Some(config_map_files) = &in_out_files.config_map_files {
@@ -161,7 +190,8 @@ impl PodPolicy {
         }
 
         Ok(PodPolicy {
-            yaml,
+            pod,
+            deployment,
             yaml_file,
             rules_input_file: in_out_files.rules_file.to_string(),
             infra_policy,
@@ -175,31 +205,87 @@ impl PodPolicy {
             volumes: None,
         };
 
-        if self.yaml.is_deployment() {
-            if let Some(template) = &self.yaml.spec.template {
+        if let Some(deployment) = &self.deployment {
+            if let Some(template) = &deployment.spec.template {
                 policy_data.containers = self.get_policy_data(&template.spec.containers).await?;
             }
+        } else if let Some(pod) = &self.pod {
+            policy_data.containers = self.get_policy_data(&pod.spec.containers).await?;
         } else {
-            policy_data.containers = self.get_policy_data(&self.yaml.spec.containers).await?;
+            panic!("Neither a pod nor a deployment!");
         }
 
         let json_data = serde_json::to_string_pretty(&policy_data)
             .map_err(|e| anyhow!(e))
             .unwrap();
 
-        self.yaml.export_policy(
-            &json_data,
-            &self.rules_input_file,
-            &self.yaml_file,
-            &in_out_files.output_policy_file,
-        )?;
+        debug!("============================================");
+        debug!("Adding policy to YAML");
+
+        let mut policy = read_to_string(&self.rules_input_file)?;
+        policy += "\npolicy_data := ";
+        policy += &json_data;
+
+        if let Some(file_name) = &in_out_files.output_policy_file {
+            export_decoded_policy(&policy, &file_name)?;
+        }
+
+        let encoded_policy = general_purpose::STANDARD.encode(policy.as_bytes());
+
+        if let Some(deployment) = &mut self.deployment {
+            if let Some(template) = &mut deployment.spec.template {
+                add_policy_annotation(&mut template.metadata.annotations, &encoded_policy);
+
+                if let Some(containers) = &mut template.spec.containers {
+                    // Remove the pause container before serializing.
+                    containers.remove(0);
+                }
+            } else {
+                return Err(anyhow!("Deployment YAML without pod template!"));
+            }
+
+            if let Some(yaml) = &self.yaml_file {
+                serde_yaml::to_writer(
+                    std::fs::OpenOptions::new()
+                        .write(true)
+                        .truncate(true)
+                        .create(true)
+                        .open(yaml)
+                        .map_err(|e| anyhow!(e))?,
+                    &deployment,
+                )?;
+            } else {
+                serde_yaml::to_writer(std::io::stdout(), &deployment)?;
+            }
+        } else if let Some(pod) = &mut self.pod {
+            add_policy_annotation(&mut pod.metadata.annotations, &encoded_policy);
+
+            if let Some(containers) = &mut pod.spec.containers {
+                // Remove the pause container before serializing.
+                containers.remove(0);
+            }
+
+            if let Some(yaml) = &self.yaml_file {
+                serde_yaml::to_writer(
+                    std::fs::OpenOptions::new()
+                        .write(true)
+                        .truncate(true)
+                        .create(true)
+                        .open(yaml)
+                        .map_err(|e| anyhow!(e))?,
+                    &pod,
+                )?;
+            } else {
+                serde_yaml::to_writer(std::io::stdout(), &pod)?;
+            }
+        }
 
         Ok(())
     }
 
     async fn get_policy_data(
         &self,
-        spec_containers: &Option<Vec<yaml::Container>>,
+        spec_containers: &Option<Vec<pod::Container>>,
     ) -> Result<Vec<ContainerPolicy>> {
         let mut policy_containers = Vec::new();
 
@@ -221,8 +307,8 @@ impl PodPolicy {
         &self,
         container_index: usize,
     ) -> Result<ContainerPolicy> {
-        if self.yaml.is_deployment() {
-            if let Some(template) = &self.yaml.spec.template {
+        if let Some(deployment) = &self.deployment {
+            if let Some(template) = &deployment.spec.template {
                 if let Some(containers) = &template.spec.containers {
                     self.get_container_policy(container_index, &containers[container_index])
                         .await
@@ -232,30 +318,39 @@ impl PodPolicy {
             } else {
                 Err(anyhow!("No pod template in Deployment spec!"))
             }
-        } else if let Some(containers) = &self.yaml.spec.containers {
-            self.get_container_policy(container_index, &containers[container_index])
-                .await
+        } else if let Some(pod) = &self.pod {
+            if let Some(containers) = &pod.spec.containers {
+                self.get_container_policy(container_index, &containers[container_index])
+                    .await
+            } else {
+                Err(anyhow!("No containers in Pod spec!"))
+            }
         } else {
-            Err(anyhow!("No containers in Pod spec!"))
+            panic!("Neither a pod nor a deployment!");
         }
     }
 
     pub async fn get_container_policy(
         &self,
         container_index: usize,
-        yaml_container: &yaml::Container,
+        yaml_container: &pod::Container,
     ) -> Result<ContainerPolicy> {
         let is_pause_container = container_index == 0;
-        let is_deployment_yaml = self.yaml.is_deployment();
 
         let mut pod_name = String::new();
-        if let Some(name) = &self.yaml.metadata.name {
-            pod_name = name.clone();
+        if let Some(deployment) = &self.deployment {
+            if let Some(name) = &deployment.metadata.name {
+                pod_name = name.clone();
+            }
+        } else if let Some(pod) = &self.pod {
+            if let Some(name) = &pod.metadata.name {
+                pod_name = name.clone();
+            }
         }
 
         // Example: "hostname": "^busybox-cc$",
         let mut hostname = "^".to_string() + &pod_name;
-        if is_deployment_yaml {
+        if self.deployment.is_some() {
             // Example: "hostname": "^busybox-cc-5bdd867667-xxmdz$",
             hostname += "-[a-z0-9]{10}-[a-z0-9]{5}"
         }
@@ -276,7 +371,7 @@ impl PodPolicy {
 
         let mut annotations = BTreeMap::new();
         infra::get_annotations(&mut annotations, infra_container)?;
-        if !is_deployment_yaml {
+        if self.deployment.is_none() {
             annotations.insert(
                 "io.kubernetes.cri.sandbox-name".to_string(),
                 pod_name.to_string(),
@@ -289,11 +384,16 @@ impl PodPolicy {
             );
         }
 
-        let namespace = if let Some(ns) = &self.yaml.metadata.namespace {
-            ns.clone()
-        } else {
-            "default".to_string()
-        };
+        let mut namespace = "default".to_string();
+        if let Some(deployment) = &self.deployment {
+            if let Some(yaml_namespace) = &deployment.metadata.namespace {
+                namespace = yaml_namespace.clone();
+            }
+        } else if let Some(pod) = &self.pod {
+            if let Some(yaml_namespace) = &pod.metadata.namespace {
+                namespace = yaml_namespace.clone();
+            }
+        }
         annotations.insert("io.kubernetes.cri.sandbox-namespace".to_string(), namespace);
 
         if !yaml_container.name.is_empty() {
@@ -362,20 +462,35 @@ impl PodPolicy {
         &self,
         policy_mounts: &mut Vec<oci::Mount>,
         storages: &mut Vec<SerializedStorage>,
-        container: &yaml::Container,
+        container: &pod::Container,
         infra_policy: &infra::InfraPolicy,
     ) -> Result<()> {
-        if let Some(volumes) = &self.yaml.spec.volumes {
-            for volume in volumes {
-                self.get_container_mounts_and_storages(
-                    policy_mounts,
-                    storages,
-                    container,
-                    infra_policy,
-                    volume,
-                )?;
+        if let Some(deployment) = &self.deployment {
+            if let Some(volumes) = &deployment.spec.volumes {
+                for volume in volumes {
+                    self.get_container_mounts_and_storages(
+                        policy_mounts,
+                        storages,
+                        container,
+                        infra_policy,
+                        volume,
+                    )?;
+                }
+            }
+        } else if let Some(pod) = &self.pod {
+            if let Some(volumes) = &pod.spec.volumes {
+                for volume in volumes {
+                    self.get_container_mounts_and_storages(
+                        policy_mounts,
+                        storages,
+                        container,
+                        infra_policy,
+                        volume,
+                    )?;
+                }
             }
         }
+
         Ok(())
     }
 
@@ -383,9 +498,9 @@ impl PodPolicy {
         &self,
         policy_mounts: &mut Vec<oci::Mount>,
         storages: &mut Vec<SerializedStorage>,
-        container: &yaml::Container,
+        container: &pod::Container,
         infra_policy: &infra::InfraPolicy,
-        volume: &yaml::Volume,
+        volume: &volumes::Volume,
     ) -> Result<()> {
         if let Some(volume_mounts) = &container.volumeMounts {
             for volume_mount in volume_mounts {
@@ -475,4 +590,32 @@ fn name_to_hash(name: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(name);
     format!("{:x}", hasher.finalize())
+}
+
+fn export_decoded_policy(policy: &str, file_name: &str) -> Result<()> {
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .create(true)
+        .open(file_name)
+        .map_err(|e| anyhow!(e))?;
+    f.write_all(policy.as_bytes()).map_err(|e| anyhow!(e))?;
+    f.flush().map_err(|e| anyhow!(e))?;
+    Ok(())
+}
+
+fn add_policy_annotation(anno: &mut Option<BTreeMap<String, String>>, encoded_policy: &str) {
+    if let Some(annotations) = anno {
+        annotations
+            .entry(POLICY_ANNOTATION_KEY.to_string())
+            .and_modify(|v| *v = encoded_policy.to_string())
+            .or_insert(encoded_policy.to_string());
+    } else {
+        let mut annotations = BTreeMap::new();
+        annotations.insert(
+            POLICY_ANNOTATION_KEY.to_string(),
+            encoded_policy.to_string(),
+        );
+        *anno = Some(annotations);
+    }
 }

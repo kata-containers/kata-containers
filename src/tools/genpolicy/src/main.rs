@@ -9,11 +9,17 @@ use log::debug;
 
 mod config_maps;
 mod containerd;
+mod deployment;
 mod infra;
 mod kata;
+mod obj_meta;
+mod pause_container;
+mod pod;
+mod pod_template;
 mod policy;
 mod registry;
 mod utils;
+mod volumes;
 mod yaml;
 
 #[derive(Debug, Parser)]
