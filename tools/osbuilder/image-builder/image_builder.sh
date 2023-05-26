@@ -53,6 +53,9 @@ readonly -a systemd_units=(
 #	"systemd-udevd-control"
 #	"systemd-udevd-kernel"
 #	"systemd-udev-trigger"
+	"initrd-cleanup"
+	"initrd-udevadm-cleanup-db"
+	"initrd-switch-root"
 )
 
 readonly -a systemd_files=(

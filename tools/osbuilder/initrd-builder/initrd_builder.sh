@@ -10,6 +10,8 @@ set -o errexit
 # set -o nounset
 set -o pipefail
 
+set -x
+
 script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 
@@ -19,6 +21,54 @@ source "$lib_file"
 INITRD_IMAGE="${INITRD_IMAGE:-kata-containers-initrd.img}"
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
+
+# The list of systemd units and files that are not needed in Kata Containers
+readonly -a systemd_units=(
+	"systemd-coredump@"
+	"systemd-journald"
+	"systemd-journald-dev-log"
+	"systemd-journal-flush"
+	"systemd-random-seed"
+	"systemd-timesyncd"
+	"systemd-tmpfiles-setup"
+	"systemd-update-utmp"
+#	"systemd-udevd"
+#	"systemd-udevd-control"
+#	"systemd-udevd-kernel"
+#	"systemd-udev-trigger"
+	"initrd-cleanup.service"
+	"initrd-udevadm-cleanup-db.service"
+	"initrd-switch-root.service"
+)
+
+readonly -a systemd_files=(
+	"systemd-bless-boot-generator"
+	"systemd-fstab-generator"
+	"systemd-getty-generator"
+	"systemd-gpt-auto-generator"
+	"systemd-tmpfiles-cleanup.timer"
+)
+
+setup_systemd() {
+		local mount_dir="$1"
+
+		info "Removing unneeded systemd services and sockets"
+		for u in "${systemd_units[@]}"; do
+			find "${mount_dir}" -type f \( \
+				 -name "${u}.service" -o \
+				 -name "${u}.socket" \) \
+				 -exec rm -f {} \;
+		done
+
+		info "Removing unneeded systemd files"
+		for u in "${systemd_files[@]}"; do
+			find "${mount_dir}" -type f -name "${u}" -exec rm -f {} \;
+		done
+
+		info "Creating empty machine-id to allow systemd to bind-mount it"
+		touch "${mount_dir}/etc/machine-id"
+}
+
 
 usage()
 {
@@ -73,11 +123,38 @@ OK "init is installed"
 OK "Agent is installed"
 
 # initramfs expects /init
-ln -sf /sbin/init "${ROOTFS}/init"
+#ln -sf /sbin/init  "${ROOTFS}/init"
+# For the gpu use-case we're creating our own init script not reyling on systemd
+
+cat <<-'CHROOT_EOF' > "${ROOTFS}/init"
+	#!/bin/bash -x
+
+#	> /etc/ld.so.cache
+#	ldconfig
+
+	/usr/lib/systemd/systemd-udevd --daemon --resolve-names=never
+
+	modprobe nvidia
+	ls -l /dev/nvidia*
+
+
+	exec /usr/bin/kata-agent
+CHROOT_EOF
+
+OK "init script created"
+cat ${ROOTFS}/init
+
+OK "make executable"
+chmod +x "${ROOTFS}/init"
 
 # create an initrd-release file systemd uses the existence of this file as a 
 # flag whether to run in initial RAM disk mode, or not.
-cp "${ROOTFS}/etc/os-release" "${ROOTFS}/etc/initrd-release"
+#cp "${ROOTFS}/etc/os-release" "${ROOTFS}/etc/initrd-release"
+
+#OK "Systemd Setup"
+
+#setup_systemd "${ROOTFS}"
+
 
 info "Creating ${IMAGE_DIR}/${IMAGE_NAME} based on rootfs at ${ROOTFS}"
-( cd "${ROOTFS}" && find . | cpio -H newc -o | gzip -9 ) > "${IMAGE_DIR}"/"${IMAGE_NAME}"
+( cd "${ROOTFS}" && find . | cpio -H newc -o | pigz -9 ) > "${IMAGE_DIR}"/"${IMAGE_NAME}"

@@ -646,7 +646,6 @@ EOF
 	info "Creating summary file"
 	create_summary_file "${ROOTFS_DIR}"
 }
-
 setup_nvidia_gpu_rootfs()
 {
 	set -x
@@ -668,9 +667,9 @@ setup_nvidia_gpu_rootfs()
 	fi
 
 	if [ "${ARCH}" == "x86_64" ]; then 
-		cp ${BUILDDIR}/kernel-nvidia-gpu/builddir/linux-*.deb ./root/.
-		cp ${BUILDDIR}/kernel-nvidia-gpu-snp/builddir/linux-*.deb ./root/.
-		cp ${BUILDDIR}/kernel-nvidia-gpu-tdx-experimental/builddir/linux-*.deb ./root/.
+		#cp ${BUILDDIR}/kernel-nvidia-gpu/builddir/linux-*.deb ./root/.
+		cp ${BUILDDIR}/kernel-nvidia-gpu-sev/builddir/linux-*.deb ./root/.
+		#cp ${BUILDDIR}/kernel-nvidia-gpu-tdx-experimental/builddir/linux-*.deb ./root/.
 	fi
 
 	# If we find a local downloaded run file build the kernel modules
