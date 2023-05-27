@@ -6,9 +6,14 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
-use crate::pod;
+use crate::config_maps;
+use crate::infra;
+use crate::policy;
+use crate::registry;
 use crate::volumes;
+use crate::yaml;
 
+use async_trait::async_trait;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
@@ -20,16 +25,27 @@ pub struct YamlHeader {
     pub kind: String,
 }
 
+#[async_trait]
 pub trait K8sObject {
     fn get_metadata_name(&self) -> String;
     fn get_host_name(&self) -> String;
     fn get_sandbox_name(&self) -> Option<String>;
     fn get_namespace(&self) -> String;
-    fn add_policy_annotation(&self, encoded_policy: &str);
-    fn get_containers(&self) -> Vec<pod::Container>;
+    fn add_policy_annotation(&mut self, encoded_policy: &str);
+
+    async fn get_registry_containers(&self) -> Result<Vec<registry::Container>>;
+
+    fn get_policy_data(
+        &self,
+        k8s_object: &dyn yaml::K8sObject,
+        infra_policy: &infra::InfraPolicy,
+        config_maps: &Vec<config_maps::ConfigMap>,
+        registry_containers: &Vec<registry::Container>,
+    ) -> Result<policy::PolicyData>;
+
     fn remove_container(&self, i: usize);
     fn get_volumes(&self) -> Option<Vec<volumes::Volume>>;
-    fn serialize(&self, file_name: &Option<String>);
+    fn serialize(&mut self, file_name: &Option<String>) -> Result<()>;
 }
 
 pub fn get_input_yaml(yaml_file: &Option<String>) -> Result<String> {

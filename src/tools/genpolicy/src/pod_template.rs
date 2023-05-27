@@ -30,6 +30,5 @@ pub struct PodTemplateSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     runtimeClassName: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub containers: Option<Vec<pod::Container>>,
+    pub containers: Vec<pod::Container>,
 }

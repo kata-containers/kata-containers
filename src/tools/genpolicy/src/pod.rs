@@ -7,10 +7,16 @@
 #![allow(non_snake_case)]
 
 use crate::config_maps;
+use crate::infra;
 use crate::obj_meta;
+use crate::policy;
+use crate::registry;
+use crate::utils;
 use crate::volumes;
 use crate::yaml;
 
+use async_trait::async_trait;
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -33,8 +39,7 @@ pub struct PodSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     runtimeClassName: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub containers: Option<Vec<Container>>,
+    pub containers: Vec<Container>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub volumes: Option<Vec<volumes::Volume>>,
@@ -241,40 +246,72 @@ impl EnvVar {
     }
 }
 
+#[async_trait]
 impl yaml::K8sObject for Pod {
     fn get_metadata_name(&self) -> String {
-        return "".to_string();
+        utils::get_metadata_name(&self.metadata)
     }
 
     fn get_host_name(&self) -> String {
-        return "".to_string();
+        // Example: "hostname": "^busybox-cc$",
+        "^".to_string() + &self.get_metadata_name() + "$"
     }
 
     fn get_sandbox_name(&self) -> Option<String> {
-        None
+        Some(self.get_metadata_name())
     }
 
     fn get_namespace(&self) -> String {
-        return "default".to_string();
+        utils::get_metadata_namespace(&self.metadata)
     }
 
-    fn add_policy_annotation(&self, _encoded_policy: &str) {
-
+    fn add_policy_annotation(&mut self, encoded_policy: &str) {
+        utils::add_policy_annotation(&mut self.metadata, encoded_policy)
     }
 
-    fn get_containers(&self) -> Vec<Container> {
-        return Vec::new();
+    async fn get_registry_containers(&self) -> Result<Vec<registry::Container>> {
+        utils::get_registry_containers(&self.spec.containers).await
     }
-    
-    fn remove_container(&self, _i: usize) {
 
+    fn get_policy_data(
+        &self,
+        k8s_object: &dyn yaml::K8sObject,
+        infra_policy: &infra::InfraPolicy,
+        config_maps: &Vec<config_maps::ConfigMap>,
+        registry_containers: &Vec<registry::Container>,
+    ) -> Result<policy::PolicyData> {
+        policy::get_policy_data(
+            k8s_object,
+            infra_policy,
+            config_maps,
+            &self.spec.containers,
+            registry_containers,
+        )
     }
-    
+
+    fn remove_container(&self, _i: usize) {}
+
     fn get_volumes(&self) -> Option<Vec<volumes::Volume>> {
         None
     }
 
-    fn serialize(&self, _file_name: &Option<String>) {
+    fn serialize(&mut self, file_name: &Option<String>) -> Result<()> {
+        self.spec.containers.remove(0);
 
+        if let Some(yaml) = file_name {
+            serde_yaml::to_writer(
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .create(true)
+                    .open(yaml)
+                    .map_err(|e| anyhow!(e))?,
+                &self,
+            )?;
+        } else {
+            serde_yaml::to_writer(std::io::stdout(), &self)?;
+        }
+
+        Ok(())
     }
 }
