@@ -7,7 +7,10 @@
 #![allow(non_snake_case)]
 
 use crate::obj_meta;
+use crate::pod;
 use crate::pod_template;
+use crate::volumes;
+use crate::yaml;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -67,4 +70,42 @@ struct RollingUpdateDeployment {
 #[serde(deny_unknown_fields)]
 pub struct LabelSelector {
     matchLabels: Option<BTreeMap<String, String>>,
+}
+
+impl yaml::K8sObject for Deployment {
+    fn get_metadata_name(&self) -> String {
+        return "".to_string();
+    }
+
+    fn get_host_name(&self) -> String {
+        return "".to_string();
+    }
+
+    fn get_sandbox_name(&self) -> Option<String> {
+        None
+    }
+
+    fn get_namespace(&self) -> String {
+        return "default".to_string();
+    }
+
+    fn add_policy_annotation(&self, _encoded_policy: &str) {
+
+    }
+
+    fn get_containers(&self) -> Vec<pod::Container> {
+        return Vec::new();
+    }
+    
+    fn remove_container(&self, _i: usize) {
+
+    }
+    
+    fn get_volumes(&self) -> Option<Vec<volumes::Volume>> {
+        None
+    }
+
+    fn serialize(&self, _file_name: &Option<String>) {
+
+    }
 }

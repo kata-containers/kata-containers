@@ -57,7 +57,7 @@ async fn main() {
     );
 
     debug!("Creating policy from yaml, infra data and rules files...");
-    let mut policy = policy::PodPolicy::from_files(&in_out_files).unwrap();
+    let mut policy = policy::AgentPolicy::from_files(&in_out_files).unwrap();
 
     debug!("Exporting policy to yaml file...");
     if let Err(e) = policy.export_policy(&in_out_files).await {

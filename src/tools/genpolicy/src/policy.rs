@@ -25,16 +25,42 @@ use log::debug;
 use oci::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::boxed;
 use std::collections::BTreeMap;
 use std::fs::read_to_string;
 use std::io::Write;
 
 const POLICY_ANNOTATION_KEY: &str = "io.katacontainers.config.agent.policy";
 
-pub struct PodPolicy {
-    pod: Option<pod::Pod>,
-    deployment: Option<deployment::Deployment>,
-    replication_controller: Option<replication_controller::ReplicationController>,
+fn get_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn yaml::K8sObject>> {
+    match kind {
+        "Pod" => {
+            let mut pod_object: pod::Pod = serde_yaml::from_str(&yaml)?;
+            pause_container::add_pause_container(&mut pod_object.spec.containers);
+            Ok(boxed::Box::new(pod_object))
+        },
+        "Deployment" => {
+            let mut deployment_object: deployment::Deployment = serde_yaml::from_str(&yaml)?;
+            pause_container::add_pause_container(
+                &mut deployment_object.spec.template.spec.containers,
+            );
+            Ok(boxed::Box::new(deployment_object))
+        },
+        "ReplicationController" => {
+            let mut controller_object: replication_controller::ReplicationController =
+            serde_yaml::from_str(&yaml)?;
+            pause_container::add_pause_container(
+                &mut controller_object.spec.template.spec.containers,
+            );
+            Ok(boxed::Box::new(controller_object))
+        },
+        _ => Err(anyhow!("Unsupported YAML spec kind: {}", kind))
+    }
+}
+
+// pub struct AgentPolicy<T> {
+pub struct AgentPolicy {
+    k8s_object: boxed::Box<dyn yaml::K8sObject>,
 
     config_maps: Vec<config_maps::ConfigMap>,
 
@@ -155,67 +181,91 @@ pub struct PersistentVolumeClaimVolume {
     pub mount_source: String,
 }
 
-impl PodPolicy {
-    pub fn from_files(in_out_files: &utils::InOutFiles) -> Result<Self> {
-        let mut pod = None;
-        let mut deployment = None;
-        let mut replication_controller = None;
-
+// impl<T: yaml::K8sObject> AgentPolicy<T> {
+impl AgentPolicy {
+    pub fn from_files(
+        in_out_files: &utils::InOutFiles,
+    // ) -> Result<AgentPolicy<T>> {
+    ) -> Result<AgentPolicy> {
         let yaml_string = yaml::get_input_yaml(&in_out_files.yaml_file)?;
         let header = yaml::get_yaml_header(&yaml_string)?;
-
-        if header.kind.eq("Pod") {
-            let mut pod_object: pod::Pod = serde_yaml::from_str(&yaml_string)?;
-            pause_container::add_pause_container(&mut pod_object.spec.containers);
-            pod = Some(pod_object);
-        } else if header.kind.eq("Deployment") {
-            let mut deployment_object: deployment::Deployment = serde_yaml::from_str(&yaml_string)?;
-            pause_container::add_pause_container(
-                &mut deployment_object.spec.template.spec.containers,
-            );
-            deployment = Some(deployment_object);
-        } else if header.kind.eq("ReplicationController") {
-            let mut controller_object: replication_controller::ReplicationController =
-                serde_yaml::from_str(&yaml_string)?;
-            pause_container::add_pause_container(
-                &mut controller_object.spec.template.spec.containers,
-            );
-            replication_controller = Some(controller_object);
-        } else {
-            panic!("Unsupported YAML spec kind: {}", &header.kind);
-        }
-
+    
         let mut config_maps = Vec::new();
         if let Some(config_map_files) = &in_out_files.config_map_files {
             for file in config_map_files {
                 config_maps.push(config_maps::ConfigMap::new(&file)?);
             }
         }
-
+    
         let infra_policy = infra::InfraPolicy::new(&in_out_files.infra_data_file)?;
-
+    
         let mut yaml_file = None;
         if let Some(yaml_path) = &in_out_files.yaml_file {
             yaml_file = Some(yaml_path.to_string());
         }
-
-        Ok(PodPolicy {
-            pod,
-            deployment,
-            replication_controller,
+    
+        /*
+        if header.kind.eq("Pod") {
+            let mut pod_object: pod::Pod = serde_yaml::from_str(&yaml_string)?;
+            pause_container::add_pause_container(&mut pod_object.spec.containers);
+    
+            Ok(AgentPolicy {
+                k8s_object: pod_object,
+                yaml_file,
+                rules_input_file: in_out_files.rules_file.to_string(),
+                infra_policy,
+                config_maps,
+            })
+        } else if header.kind.eq("Deployment") {
+            let mut deployment_object: deployment::Deployment = serde_yaml::from_str(&yaml_string)?;
+            pause_container::add_pause_container(
+                &mut deployment_object.spec.template.spec.containers,
+            );
+    
+            Ok(AgentPolicy {
+                k8s_object: deployment_object,
+                yaml_file,
+                rules_input_file: in_out_files.rules_file.to_string(),
+                infra_policy,
+                config_maps,
+            })
+        } else if header.kind.eq("ReplicationController") {
+            let mut controller_object: replication_controller::ReplicationController =
+            serde_yaml::from_str(&yaml_string)?;
+            pause_container::add_pause_container(
+                &mut controller_object.spec.template.spec.containers,
+            );
+    
+            Ok(AgentPolicy {
+                k8s_object: controller_object,
+                yaml_file,
+                rules_input_file: in_out_files.rules_file.to_string(),
+                infra_policy,
+                config_maps,
+            })
+        } else {
+            Err(anyhow!("Unsupported YAML spec kind: {}", &header.kind))
+        }
+        */
+        Ok(AgentPolicy {
+            k8s_object: get_k8s_object(&header.kind, &yaml_string)?,
             yaml_file,
             rules_input_file: in_out_files.rules_file.to_string(),
             infra_policy,
             config_maps,
         })
     }
-
+    
     pub async fn export_policy(&mut self, in_out_files: &utils::InOutFiles) -> Result<()> {
         let mut policy_data = PolicyData {
             containers: Vec::new(),
             volumes: None,
         };
 
+        policy_data.containers = self
+        .get_policy_data()
+        .await?;
+/*
         if let Some(deployment) = &self.deployment {
             policy_data.containers = self
                 .get_policy_data(&deployment.spec.template.spec.containers)
@@ -229,6 +279,7 @@ impl PodPolicy {
         } else {
             panic!("Unsupported YAML spec kind!");
         }
+        */
 
         let json_data = serde_json::to_string_pretty(&policy_data)
             .map_err(|e| anyhow!(e))
@@ -247,6 +298,14 @@ impl PodPolicy {
 
         let encoded_policy = general_purpose::STANDARD.encode(policy.as_bytes());
 
+
+        // Remove the pause container before serializing.
+        self.k8s_object.remove_container(0);
+
+        self.k8s_object.add_policy_annotation(&encoded_policy);
+        self.k8s_object.serialize(&self.yaml_file);
+
+        /*
         if let Some(deployment) = &mut self.deployment {
             add_policy_annotation(
                 &mut deployment.spec.template.metadata.annotations,
@@ -317,20 +376,17 @@ impl PodPolicy {
                 serde_yaml::to_writer(std::io::stdout(), &pod)?;
             }
         }
+        */
 
         Ok(())
     }
 
-    async fn get_policy_data(
-        &self,
-        spec_containers: &Option<Vec<pod::Container>>,
-    ) -> Result<Vec<ContainerPolicy>> {
+    async fn get_policy_data(&self) -> Result<Vec<ContainerPolicy>> {
         let mut policy_containers = Vec::new();
+        let containers = self.k8s_object.get_containers();
 
-        if let Some(containers) = spec_containers {
-            for index in 0..containers.len() {
-                policy_containers.push(self.get_container_policy_by_yaml_type(index).await?);
-            }
+        for index in 0..containers.len() {
+            policy_containers.push(self.get_container_policy_by_yaml_type(index).await?);
         }
 
         Ok(policy_containers)
@@ -345,6 +401,11 @@ impl PodPolicy {
         &self,
         container_index: usize,
     ) -> Result<ContainerPolicy> {
+        let yaml_containers = self.k8s_object.get_containers();
+
+        self.get_container_policy(&yaml_containers, container_index).await
+
+        /*
         if let Some(deployment) = &self.deployment {
             if let Some(containers) = &deployment.spec.template.spec.containers {
                 self.get_container_policy(container_index, &containers[container_index])
@@ -369,15 +430,17 @@ impl PodPolicy {
         } else {
             panic!("Unsupported YAML spec kind!");
         }
+        */
     }
 
     pub async fn get_container_policy(
         &self,
+        yaml_containers: &Vec<pod::Container>,
         container_index: usize,
-        yaml_container: &pod::Container,
     ) -> Result<ContainerPolicy> {
         let is_pause_container = container_index == 0;
 
+        /*
         let mut pod_name = String::new();
         if let Some(deployment) = &self.deployment {
             if let Some(name) = &deployment.metadata.name {
@@ -394,7 +457,10 @@ impl PodPolicy {
         } else {
             panic!("Unsupported YAML spec kind!");
         }
+        */
+        let pod_name = self.k8s_object.get_metadata_name();
 
+        /*
         // Example: "hostname": "^busybox-cc$",
         let mut hostname = "^".to_string() + &pod_name;
         if self.deployment.is_some() {
@@ -405,7 +471,10 @@ impl PodPolicy {
             hostname += "-[a-z0-9]{5}";
         }
         hostname += "$";
+        */
+        let hostname = self.k8s_object.get_host_name();
 
+        let yaml_container = yaml_containers[container_index].clone();
         let registry_container = registry::Container::new(&yaml_container.image).await?;
         let mut infra_container = &self.infra_policy.pause_container;
         if !is_pause_container {
@@ -421,23 +490,31 @@ impl PodPolicy {
 
         let mut annotations = BTreeMap::new();
         infra::get_annotations(&mut annotations, infra_container)?;
+
+        /*
         if self.pod.is_some() {
             annotations.insert(
                 "io.kubernetes.cri.sandbox-name".to_string(),
                 pod_name.to_string(),
             );
         }
+        */
+        if let Some(name) = self.k8s_object.get_sandbox_name() {
+            annotations.insert(
+                "io.kubernetes.cri.sandbox-name".to_string(),
+                name,
+            );
+        }
+
         if !is_pause_container {
             let mut image_name = yaml_container.image.to_string();
             if image_name.find(':').is_none() {
                 image_name += ":latest";
             }
-            annotations.insert(
-                "io.kubernetes.cri.image-name".to_string(),
-                image_name,
-            );
+            annotations.insert("io.kubernetes.cri.image-name".to_string(), image_name);
         }
 
+        /*
         let mut namespace = "default".to_string();
         if let Some(deployment) = &self.deployment {
             if let Some(yaml_namespace) = &deployment.metadata.namespace {
@@ -448,6 +525,8 @@ impl PodPolicy {
                 namespace = yaml_namespace.clone();
             }
         }
+        */
+        let namespace = self.k8s_object.get_namespace();
         annotations.insert("io.kubernetes.cri.sandbox-namespace".to_string(), namespace);
 
         if !yaml_container.name.is_empty() {
@@ -489,7 +568,7 @@ impl PodPolicy {
         self.get_mounts_and_storages(
             &mut mounts,
             &mut storages,
-            yaml_container,
+            &yaml_container,
             &self.infra_policy,
         )?;
 
@@ -519,6 +598,7 @@ impl PodPolicy {
         container: &pod::Container,
         infra_policy: &infra::InfraPolicy,
     ) -> Result<()> {
+        /*
         if let Some(pod) = &self.pod {
             if let Some(volumes) = &pod.spec.volumes {
                 for volume in volumes {
@@ -530,6 +610,18 @@ impl PodPolicy {
                         volume,
                     )?;
                 }
+            }
+        }
+        */
+        if let Some(volumes) = self.k8s_object.get_volumes() {
+            for volume in volumes {
+                self.get_container_mounts_and_storages(
+                    policy_mounts,
+                    storages,
+                    container,
+                    infra_policy,
+                    &volume,
+                )?;
             }
         }
 
