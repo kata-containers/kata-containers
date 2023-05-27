@@ -7,10 +7,10 @@
 #![allow(non_snake_case)]
 
 use crate::obj_meta;
-use crate::pod;
 use crate::pod_template;
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// See Deployment in the Kubernetes API reference.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -30,7 +30,7 @@ pub struct DeploymentSpec {
     replicas: Option<u32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    selector: Option<pod::Selector>,
+    selector: Option<LabelSelector>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     strategy: Option<DeploymentStrategy>,
@@ -60,4 +60,11 @@ struct RollingUpdateDeployment {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     maxUnavailable: Option<i32>,
+}
+
+/// See LabelSelector in the Kubernetes API reference.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LabelSelector {
+    matchLabels: Option<BTreeMap<String, String>>,
 }

@@ -8,7 +8,6 @@
 
 use crate::config_maps;
 use crate::obj_meta;
-use crate::pod_template;
 use crate::volumes;
 
 use serde::{Deserialize, Serialize};
@@ -38,15 +37,6 @@ pub struct PodSpec {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub volumes: Option<Vec<volumes::Volume>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    replicas: Option<u32>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    selector: Option<Selector>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub template: Option<pod_template::PodTemplate>,
 }
 
 /// See Container in the Kubernetes API reference.
@@ -248,10 +238,4 @@ impl EnvVar {
 
         "".to_string()
     }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Selector {
-    matchLabels: Option<BTreeMap<String, String>>,
 }
