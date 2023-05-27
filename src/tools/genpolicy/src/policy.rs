@@ -272,12 +272,10 @@ impl PodPolicy {
                 serde_yaml::to_writer(std::io::stdout(), &deployment)?;
             }
         } else if let Some(controller) = &mut self.replication_controller {
-            /*
             add_policy_annotation(
                 &mut controller.spec.template.metadata.annotations,
                 &encoded_policy,
             );
-            */
 
             if let Some(containers) = &mut controller.spec.template.spec.containers {
                 // Remove the pause container before serializing.
@@ -385,10 +383,16 @@ impl PodPolicy {
             if let Some(name) = &deployment.metadata.name {
                 pod_name = name.clone();
             }
+        } else if let Some(controller) = &self.replication_controller {
+            if let Some(name) = &controller.metadata.name {
+                pod_name = name.clone();
+            }
         } else if let Some(pod) = &self.pod {
             if let Some(name) = &pod.metadata.name {
                 pod_name = name.clone();
             }
+        } else {
+            panic!("Unsupported YAML spec kind!");
         }
 
         // Example: "hostname": "^busybox-cc$",
@@ -396,6 +400,9 @@ impl PodPolicy {
         if self.deployment.is_some() {
             // Example: "hostname": "^busybox-cc-5bdd867667-xxmdz$",
             hostname += "-[a-z0-9]{10}-[a-z0-9]{5}"
+        } else if self.replication_controller.is_some() {
+            // Example: "hostname": "no-exist-tdtd7",
+            hostname += "-[a-z0-9]{5}";
         }
         hostname += "$";
 
@@ -414,16 +421,20 @@ impl PodPolicy {
 
         let mut annotations = BTreeMap::new();
         infra::get_annotations(&mut annotations, infra_container)?;
-        if self.deployment.is_none() {
+        if self.pod.is_some() {
             annotations.insert(
                 "io.kubernetes.cri.sandbox-name".to_string(),
                 pod_name.to_string(),
             );
         }
         if !is_pause_container {
+            let mut image_name = yaml_container.image.to_string();
+            if image_name.find(':').is_none() {
+                image_name += ":latest";
+            }
             annotations.insert(
                 "io.kubernetes.cri.image-name".to_string(),
-                yaml_container.image.to_string(),
+                image_name,
             );
         }
 
