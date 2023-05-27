@@ -167,11 +167,9 @@ impl PodPolicy {
             pod = Some(pod_object);
         } else if header.kind.eq("Deployment") {
             let mut deployment_object: deployment::Deployment = serde_yaml::from_str(&yaml_string)?;
-
-            if let Some(template) = &mut deployment_object.spec.template {
-                pause_container::add_pause_container(&mut template.spec.containers);
-            }
-
+            pause_container::add_pause_container(
+                &mut deployment_object.spec.template.spec.containers,
+            );
             deployment = Some(deployment_object);
         }
 
@@ -206,9 +204,9 @@ impl PodPolicy {
         };
 
         if let Some(deployment) = &self.deployment {
-            if let Some(template) = &deployment.spec.template {
-                policy_data.containers = self.get_policy_data(&template.spec.containers).await?;
-            }
+            policy_data.containers = self
+                .get_policy_data(&deployment.spec.template.spec.containers)
+                .await?;
         } else if let Some(pod) = &self.pod {
             policy_data.containers = self.get_policy_data(&pod.spec.containers).await?;
         } else {
@@ -233,15 +231,14 @@ impl PodPolicy {
         let encoded_policy = general_purpose::STANDARD.encode(policy.as_bytes());
 
         if let Some(deployment) = &mut self.deployment {
-            if let Some(template) = &mut deployment.spec.template {
-                add_policy_annotation(&mut template.metadata.annotations, &encoded_policy);
+            add_policy_annotation(
+                &mut deployment.spec.template.metadata.annotations,
+                &encoded_policy,
+            );
 
-                if let Some(containers) = &mut template.spec.containers {
-                    // Remove the pause container before serializing.
-                    containers.remove(0);
-                }
-            } else {
-                return Err(anyhow!("Deployment YAML without pod template!"));
+            if let Some(containers) = &mut deployment.spec.template.spec.containers {
+                // Remove the pause container before serializing.
+                containers.remove(0);
             }
 
             if let Some(yaml) = &self.yaml_file {
@@ -308,15 +305,11 @@ impl PodPolicy {
         container_index: usize,
     ) -> Result<ContainerPolicy> {
         if let Some(deployment) = &self.deployment {
-            if let Some(template) = &deployment.spec.template {
-                if let Some(containers) = &template.spec.containers {
-                    self.get_container_policy(container_index, &containers[container_index])
-                        .await
-                } else {
-                    Err(anyhow!("No containers in Deployment pod template!"))
-                }
+            if let Some(containers) = &deployment.spec.template.spec.containers {
+                self.get_container_policy(container_index, &containers[container_index])
+                    .await
             } else {
-                Err(anyhow!("No pod template in Deployment spec!"))
+                Err(anyhow!("No containers in Deployment pod template!"))
             }
         } else if let Some(pod) = &self.pod {
             if let Some(containers) = &pod.spec.containers {
@@ -465,19 +458,7 @@ impl PodPolicy {
         container: &pod::Container,
         infra_policy: &infra::InfraPolicy,
     ) -> Result<()> {
-        if let Some(deployment) = &self.deployment {
-            if let Some(volumes) = &deployment.spec.volumes {
-                for volume in volumes {
-                    self.get_container_mounts_and_storages(
-                        policy_mounts,
-                        storages,
-                        container,
-                        infra_policy,
-                        volume,
-                    )?;
-                }
-            }
-        } else if let Some(pod) = &self.pod {
+        if let Some(pod) = &self.pod {
             if let Some(volumes) = &pod.spec.volumes {
                 for volume in volumes {
                     self.get_container_mounts_and_storages(
