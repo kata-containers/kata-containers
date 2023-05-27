@@ -18,6 +18,7 @@ mod pod;
 mod pod_template;
 mod policy;
 mod registry;
+mod replication_controller;
 mod utils;
 mod volumes;
 mod yaml;

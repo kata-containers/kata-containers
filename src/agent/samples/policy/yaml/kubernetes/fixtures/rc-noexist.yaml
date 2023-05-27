@@ -1,0 +1,22 @@
+---
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  labels:
+    name: no-exist
+  name: no-exist
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: no-exist
+    spec:
+      runtimeClassName: kata-cc
+      containers:
+        - image: nginx
+          name: no-exist
+          ports:
+            - containerPort: 80
+          command:
+            - /bin/sh

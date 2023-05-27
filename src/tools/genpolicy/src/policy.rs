@@ -14,6 +14,7 @@ use crate::kata;
 use crate::pause_container;
 use crate::pod;
 use crate::registry;
+use crate::replication_controller;
 use crate::utils;
 use crate::volumes;
 use crate::yaml;
@@ -33,6 +34,7 @@ const POLICY_ANNOTATION_KEY: &str = "io.katacontainers.config.agent.policy";
 pub struct PodPolicy {
     pod: Option<pod::Pod>,
     deployment: Option<deployment::Deployment>,
+    replication_controller: Option<replication_controller::ReplicationController>,
 
     config_maps: Vec<config_maps::ConfigMap>,
 
@@ -157,6 +159,7 @@ impl PodPolicy {
     pub fn from_files(in_out_files: &utils::InOutFiles) -> Result<Self> {
         let mut pod = None;
         let mut deployment = None;
+        let mut replication_controller = None;
 
         let yaml_string = yaml::get_input_yaml(&in_out_files.yaml_file)?;
         let header = yaml::get_yaml_header(&yaml_string)?;
@@ -171,6 +174,15 @@ impl PodPolicy {
                 &mut deployment_object.spec.template.spec.containers,
             );
             deployment = Some(deployment_object);
+        } else if header.kind.eq("ReplicationController") {
+            let mut controller_object: replication_controller::ReplicationController =
+                serde_yaml::from_str(&yaml_string)?;
+            pause_container::add_pause_container(
+                &mut controller_object.spec.template.spec.containers,
+            );
+            replication_controller = Some(controller_object);
+        } else {
+            panic!("Unsupported YAML spec kind: {}", &header.kind);
         }
 
         let mut config_maps = Vec::new();
@@ -190,6 +202,7 @@ impl PodPolicy {
         Ok(PodPolicy {
             pod,
             deployment,
+            replication_controller,
             yaml_file,
             rules_input_file: in_out_files.rules_file.to_string(),
             infra_policy,
@@ -207,10 +220,14 @@ impl PodPolicy {
             policy_data.containers = self
                 .get_policy_data(&deployment.spec.template.spec.containers)
                 .await?;
+        } else if let Some(controller) = &self.replication_controller {
+            policy_data.containers = self
+                .get_policy_data(&controller.spec.template.spec.containers)
+                .await?;
         } else if let Some(pod) = &self.pod {
             policy_data.containers = self.get_policy_data(&pod.spec.containers).await?;
         } else {
-            panic!("Neither a pod nor a deployment!");
+            panic!("Unsupported YAML spec kind!");
         }
 
         let json_data = serde_json::to_string_pretty(&policy_data)
@@ -253,6 +270,32 @@ impl PodPolicy {
                 )?;
             } else {
                 serde_yaml::to_writer(std::io::stdout(), &deployment)?;
+            }
+        } else if let Some(controller) = &mut self.replication_controller {
+            /*
+            add_policy_annotation(
+                &mut controller.spec.template.metadata.annotations,
+                &encoded_policy,
+            );
+            */
+
+            if let Some(containers) = &mut controller.spec.template.spec.containers {
+                // Remove the pause container before serializing.
+                containers.remove(0);
+            }
+
+            if let Some(yaml) = &self.yaml_file {
+                serde_yaml::to_writer(
+                    std::fs::OpenOptions::new()
+                        .write(true)
+                        .truncate(true)
+                        .create(true)
+                        .open(yaml)
+                        .map_err(|e| anyhow!(e))?,
+                    &controller,
+                )?;
+            } else {
+                serde_yaml::to_writer(std::io::stdout(), &controller)?;
             }
         } else if let Some(pod) = &mut self.pod {
             add_policy_annotation(&mut pod.metadata.annotations, &encoded_policy);
@@ -311,6 +354,13 @@ impl PodPolicy {
             } else {
                 Err(anyhow!("No containers in Deployment pod template!"))
             }
+        } else if let Some(controller) = &self.replication_controller {
+            if let Some(containers) = &controller.spec.template.spec.containers {
+                self.get_container_policy(container_index, &containers[container_index])
+                    .await
+            } else {
+                Err(anyhow!("No containers in Deployment pod template!"))
+            }
         } else if let Some(pod) = &self.pod {
             if let Some(containers) = &pod.spec.containers {
                 self.get_container_policy(container_index, &containers[container_index])
@@ -319,7 +369,7 @@ impl PodPolicy {
                 Err(anyhow!("No containers in Pod spec!"))
             }
         } else {
-            panic!("Neither a pod nor a deployment!");
+            panic!("Unsupported YAML spec kind!");
         }
     }
 
