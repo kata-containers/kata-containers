@@ -721,6 +721,9 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let _ = unistd::close(crfd);
     let _ = unistd::close(cwfd);
 
+    // The signal sent by container to process group might leak to kata-agent. And the TERM signal
+    // will cause agent exit. So we must setsid when container is initialized.
+    unistd::setsid().context("create a new session")?;
     if oci_process.terminal {
         cfg_if::cfg_if! {
             if #[cfg(feature = "standard-oci-runtime")] {
@@ -731,7 +734,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
                 }
             }
             else {
-                unistd::setsid().context("create a new session")?;
                 unsafe { libc::ioctl(0, libc::TIOCSCTTY) };
             }
         }
