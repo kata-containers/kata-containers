@@ -6,6 +6,7 @@
 // Allow Docker image config field names.
 #![allow(non_snake_case)]
 
+use crate::pod;
 use crate::policy;
 
 use anyhow::{anyhow, Result};
@@ -279,4 +280,16 @@ fn create_verity_hash(path: &str) -> Result<String> {
     info!("dm-verity root hash: {:?}", &result);
 
     Ok(result)
+}
+
+pub async fn get_registry_containers(
+    yaml_containers: &Vec<pod::Container>,
+) -> Result<Vec<Container>> {
+    let mut registry_containers = Vec::new();
+
+    for yaml_container in yaml_containers {
+        registry_containers.push(Container::new(&yaml_container.image).await?);
+    }
+
+    Ok(registry_containers)
 }

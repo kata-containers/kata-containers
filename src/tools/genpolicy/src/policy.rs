@@ -57,7 +57,6 @@ fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn yaml::K8sObje
     }
 }
 
-// pub struct AgentPolicy<T> {
 pub struct AgentPolicy {
     k8s_object: boxed::Box<dyn yaml::K8sObject>,
 

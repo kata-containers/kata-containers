@@ -13,7 +13,6 @@ use crate::pod;
 use crate::pod_template;
 use crate::policy;
 use crate::registry;
-use crate::utils;
 use crate::yaml;
 
 use anyhow::{anyhow, Result};
@@ -50,7 +49,7 @@ pub struct ReplicationControllerSpec {
 #[async_trait]
 impl yaml::K8sObject for ReplicationController {
     fn get_metadata_name(&self) -> String {
-        utils::get_metadata_name(&self.metadata)
+        self.metadata.get_name()
     }
 
     fn get_host_name(&self) -> String {
@@ -63,15 +62,15 @@ impl yaml::K8sObject for ReplicationController {
     }
 
     fn get_namespace(&self) -> String {
-        utils::get_metadata_namespace(&self.metadata)
+        self.metadata.get_namespace()
     }
 
     fn add_policy_annotation(&mut self, encoded_policy: &str) {
-        utils::add_policy_annotation(&mut self.spec.template.metadata, encoded_policy)
+        self.spec.template.metadata.add_policy_annotation(encoded_policy)
     }
 
     async fn get_registry_containers(&self) -> Result<Vec<registry::Container>> {
-        utils::get_registry_containers(&self.spec.template.spec.containers).await
+        registry::get_registry_containers(&self.spec.template.spec.containers).await
     }
 
     fn get_policy_data(
