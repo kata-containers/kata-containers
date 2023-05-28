@@ -25,6 +25,15 @@ pub const KATA_MOUNT_INFO_FILE_NAME: &str = "mountInfo.json";
 /// KATA_DIRECT_VOLUME_ROOT_PATH is the root path used for concatenating with the direct-volume mount info file path
 pub const KATA_DIRECT_VOLUME_ROOT_PATH: &str = "/run/kata-containers/shared/direct-volumes";
 
+/// SANDBOX_BIND_MOUNTS_DIR is for sandbox bindmounts
+pub const SANDBOX_BIND_MOUNTS_DIR: &str = "sandbox-mounts";
+
+/// SANDBOX_BIND_MOUNTS_RO is for sandbox bindmounts with readonly
+pub const SANDBOX_BIND_MOUNTS_RO: &str = ":ro";
+
+/// SANDBOX_BIND_MOUNTS_RO is for sandbox bindmounts with readwrite
+pub const SANDBOX_BIND_MOUNTS_RW: &str = ":rw";
+
 /// Information about a mount.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Mount {
@@ -149,6 +158,28 @@ impl NydusExtraOptions {
         serde_json::from_slice(&extra_options_buf).context("deserialize nydus's extraoption")
     }
 }
+
+/// sandbox bindmount format:  /path/to/dir, or /path/to/dir:ro[:rw]
+/// the real path is without suffix ":ro" or ":rw".
+pub fn split_bind_mounts(bindmount: &str) -> (&str, &str) {
+    let (real_path, mode) = if bindmount.ends_with(SANDBOX_BIND_MOUNTS_RO) {
+        (
+            bindmount.trim_end_matches(SANDBOX_BIND_MOUNTS_RO),
+            SANDBOX_BIND_MOUNTS_RO,
+        )
+    } else if bindmount.ends_with(SANDBOX_BIND_MOUNTS_RW) {
+        (
+            bindmount.trim_end_matches(SANDBOX_BIND_MOUNTS_RW),
+            SANDBOX_BIND_MOUNTS_RW,
+        )
+    } else {
+        // default bindmount format
+        (bindmount, "")
+    };
+
+    (real_path, mode)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,6 +187,18 @@ mod tests {
     fn test_is_kata_special_volume() {
         assert!(is_kata_special_volume("kata:guest-mount:nfs"));
         assert!(!is_kata_special_volume("kata:"));
+    }
+
+    #[test]
+    fn test_split_bind_mounts() {
+        let test01 = "xxx0:ro";
+        let test02 = "xxx2:rw";
+        let test03 = "xxx3:is";
+        let test04 = "xxx4";
+        assert_eq!(split_bind_mounts(test01), ("xxx0", ":ro"));
+        assert_eq!(split_bind_mounts(test02), ("xxx2", ":rw"));
+        assert_eq!(split_bind_mounts(test03), ("xxx3:is", ""));
+        assert_eq!(split_bind_mounts(test04), ("xxx4", ""));
     }
 
     #[test]

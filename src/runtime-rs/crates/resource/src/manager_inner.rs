@@ -25,7 +25,7 @@ use crate::{
     manager::ManagerArgs,
     network::{self, Network},
     rootfs::{RootFsResource, Rootfs},
-    share_fs::{self, ShareFs},
+    share_fs::{self, sandbox_bind_mounts::SandboxBindMounts, ShareFs},
     volume::{Volume, VolumeResource},
     ResourceConfig,
 };
@@ -97,6 +97,12 @@ impl ResourceManagerInner {
                             .setup_device_before_start_vm(self.hypervisor.as_ref())
                             .await
                             .context("setup share fs device before start vm")?;
+
+                        // setup sandbox bind mounts: setup = true
+                        self.handle_sandbox_bindmounts(true)
+                            .await
+                            .context("failed setup sandbox bindmounts")?;
+
                         Some(share_fs)
                     } else {
                         None
@@ -308,6 +314,22 @@ impl ResourceManagerInner {
         Ok(devices)
     }
 
+    async fn handle_sandbox_bindmounts(&self, setup: bool) -> Result<()> {
+        let bindmounts = self.toml_config.runtime.sandbox_bind_mounts.clone();
+        if bindmounts.is_empty() {
+            info!(sl!(), "sandbox bindmounts empty, just skip it.");
+            return Ok(());
+        }
+
+        let sb_bindmnt = SandboxBindMounts::new(self.sid.clone(), bindmounts)?;
+
+        if setup {
+            sb_bindmnt.setup_sandbox_bind_mounts()
+        } else {
+            sb_bindmnt.cleanup_sandbox_bind_mounts()
+        }
+    }
+
     pub async fn update_cgroups(
         &self,
         cid: &str,
@@ -324,6 +346,12 @@ impl ResourceManagerInner {
             .delete()
             .await
             .context("delete cgroup")?;
+
+        // cleanup sandbox bind mounts: setup = false
+        self.handle_sandbox_bindmounts(false)
+            .await
+            .context("failed to cleanup sandbox bindmounts")?;
+
         // clean up share fs mount
         if let Some(share_fs) = &self.share_fs {
             share_fs

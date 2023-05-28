@@ -18,6 +18,7 @@ pub use utils::{
 mod virtio_fs_share_mount;
 use virtio_fs_share_mount::VirtiofsShareMount;
 pub use virtio_fs_share_mount::EPHEMERAL_PATH;
+pub mod sandbox_bind_mounts;
 
 use std::{collections::HashMap, fmt::Debug, path::PathBuf, sync::Arc};
 
