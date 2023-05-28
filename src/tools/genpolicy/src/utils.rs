@@ -66,7 +66,7 @@ pub fn get_metadata_namespace(meta: &obj_meta::ObjectMeta) -> String {
     if let Some(namespace) = &meta.namespace {
         namespace.clone()
     } else {
-        String::new()
+        "default".to_string()
     }
 }
 
