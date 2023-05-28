@@ -9,11 +9,11 @@
 use crate::config_maps;
 use crate::infra;
 use crate::obj_meta;
+use crate::pod;
 use crate::pod_template;
 use crate::policy;
 use crate::registry;
 use crate::utils;
-use crate::volumes;
 use crate::yaml;
 
 use async_trait::async_trait;
@@ -120,10 +120,16 @@ impl yaml::K8sObject for Deployment {
         )
     }
 
-    fn remove_container(&self, _i: usize) {}
+    // fn remove_container(&self, _i: usize) {}
 
-    fn get_volumes(&self) -> Option<Vec<volumes::Volume>> {
-        None
+    fn get_container_mounts_and_storages(
+        &self,
+        _policy_mounts: &mut Vec<oci::Mount>,
+        _storages: &mut Vec<policy::SerializedStorage>,
+        _container: &pod::Container,
+        _infra_policy: &infra::InfraPolicy,
+    ) -> Result<()> {
+        Ok(())
     }
 
     fn serialize(&mut self, file_name: &Option<String>) -> Result<()> {

@@ -284,7 +284,7 @@ impl AgentPolicy {
         let encoded_policy = general_purpose::STANDARD.encode(policy.as_bytes());
 
         // Remove the pause container before serializing.
-        self.k8s_object.remove_container(0);
+        // self.k8s_object.remove_container(0);
 
         self.k8s_object.add_policy_annotation(&encoded_policy);
         self.k8s_object.serialize(&self.yaml_file)?;
@@ -864,6 +864,14 @@ fn get_mounts_and_storages(
     container: &pod::Container,
     infra_policy: &infra::InfraPolicy,
 ) -> Result<()> {
+    k8s_object.get_container_mounts_and_storages(
+        policy_mounts,
+        storages,
+        container,
+        infra_policy,
+    )
+
+    /*
     if let Some(volumes) = k8s_object.get_volumes() {
         for volume in volumes {
             get_container_mounts_and_storages(
@@ -877,9 +885,10 @@ fn get_mounts_and_storages(
     }
 
     Ok(())
+    */
 }
 
-fn get_container_mounts_and_storages(
+pub fn get_container_mounts_and_storages(
     policy_mounts: &mut Vec<oci::Mount>,
     storages: &mut Vec<SerializedStorage>,
     container: &pod::Container,

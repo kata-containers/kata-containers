@@ -289,10 +289,28 @@ impl yaml::K8sObject for Pod {
         )
     }
 
-    fn remove_container(&self, _i: usize) {}
+    // fn remove_container(&self, _i: usize) {}
 
-    fn get_volumes(&self) -> Option<Vec<volumes::Volume>> {
-        None
+    fn get_container_mounts_and_storages(
+        &self,
+        policy_mounts: &mut Vec<oci::Mount>,
+        storages: &mut Vec<policy::SerializedStorage>,
+        container: &Container,
+        infra_policy: &infra::InfraPolicy,
+    ) -> Result<()> {
+        if let Some(volumes) = &self.spec.volumes {
+            for volume in volumes {
+                policy::get_container_mounts_and_storages(
+                    policy_mounts,
+                    storages,
+                    container,
+                    infra_policy,
+                    &volume,
+                )?;
+            }
+        }
+
+        Ok(())
     }
 
     fn serialize(&mut self, file_name: &Option<String>) -> Result<()> {

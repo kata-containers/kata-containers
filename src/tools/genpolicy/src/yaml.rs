@@ -8,9 +8,9 @@
 
 use crate::config_maps;
 use crate::infra;
+use crate::pod;
 use crate::policy;
 use crate::registry;
-use crate::volumes;
 use crate::yaml;
 
 use async_trait::async_trait;
@@ -43,8 +43,15 @@ pub trait K8sObject {
         registry_containers: &Vec<registry::Container>,
     ) -> Result<policy::PolicyData>;
 
-    fn remove_container(&self, i: usize);
-    fn get_volumes(&self) -> Option<Vec<volumes::Volume>>;
+    // fn remove_container(&self, i: usize);
+    fn get_container_mounts_and_storages(
+        &self,
+        policy_mounts: &mut Vec<oci::Mount>,
+        storages: &mut Vec<policy::SerializedStorage>,
+        container: &pod::Container,
+        infra_policy: &infra::InfraPolicy,
+    ) -> Result<()>;
+
     fn serialize(&mut self, file_name: &Option<String>) -> Result<()>;
 }
 
