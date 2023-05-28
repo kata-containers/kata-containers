@@ -5,7 +5,7 @@
 //
 
 use anyhow::{anyhow, Context, Result};
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, fs, path::PathBuf};
 
 /// Prefix to mark a volume as Kata special.
 pub const KATA_VOLUME_TYPE_PREFIX: &str = "kata:";
@@ -69,6 +69,27 @@ pub struct DirectVolumeMountInfo {
     pub metadata: HashMap<String, String>,
     /// Additional mount options.
     pub options: Vec<String>,
+}
+
+/// join_path joins user provided volumepath with kata direct-volume root path
+/// the volume_path is base64-encoded and then safely joined to the end of path prefix
+pub fn join_path(prefix: &str, volume_path: &str) -> Result<PathBuf> {
+    if volume_path.is_empty() {
+        return Err(anyhow!("volume path must not be empty"));
+    }
+    let b64_encoded_path = base64::encode(volume_path.as_bytes());
+
+    Ok(safe_path::scoped_join(prefix, b64_encoded_path)?)
+}
+
+/// get DirectVolume mountInfo from mountinfo.json.
+pub fn get_volume_mount_info(volume_path: &str) -> Result<DirectVolumeMountInfo> {
+    let mount_info_file_path =
+        join_path(KATA_DIRECT_VOLUME_ROOT_PATH, volume_path)?.join(KATA_MOUNT_INFO_FILE_NAME);
+    let mount_info_file = fs::read_to_string(mount_info_file_path)?;
+    let mount_info: DirectVolumeMountInfo = serde_json::from_str(&mount_info_file)?;
+
+    Ok(mount_info)
 }
 
 /// Check whether a mount type is a marker for Kata specific volume.

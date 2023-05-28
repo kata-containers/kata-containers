@@ -1481,6 +1481,7 @@ dependencies = [
  "num_cpus",
  "oci",
  "regex",
+ "safe-path 0.1.0",
  "serde",
  "serde_json",
  "slog",

@@ -882,6 +882,7 @@ dependencies = [
  "num_cpus",
  "oci",
  "regex",
+ "safe-path",
  "serde",
  "serde_json",
  "slog",
@@ -1766,6 +1767,13 @@ name = "ryu"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3f6f92acf49d1b98f7a81226834412ada05458b7364277387724a237f062695"
+
+[[package]]
+name = "safe-path"
+version = "0.1.0"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "scan_fmt"
