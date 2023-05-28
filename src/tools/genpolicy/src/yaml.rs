@@ -13,8 +13,8 @@ use crate::policy;
 use crate::registry;
 use crate::yaml;
 
-use async_trait::async_trait;
 use anyhow::Result;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
 use std::fs::read_to_string;
@@ -43,7 +43,6 @@ pub trait K8sObject {
         registry_containers: &Vec<registry::Container>,
     ) -> Result<policy::PolicyData>;
 
-    // fn remove_container(&self, i: usize);
     fn get_container_mounts_and_storages(
         &self,
         policy_mounts: &mut Vec<oci::Mount>,

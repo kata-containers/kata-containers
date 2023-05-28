@@ -16,8 +16,8 @@ use crate::registry;
 use crate::utils;
 use crate::yaml;
 
-use async_trait::async_trait;
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -119,8 +119,6 @@ impl yaml::K8sObject for Deployment {
             registry_containers,
         )
     }
-
-    // fn remove_container(&self, _i: usize) {}
 
     fn get_container_mounts_and_storages(
         &self,
