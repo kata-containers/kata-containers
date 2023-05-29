@@ -78,20 +78,24 @@ pub struct LabelSelector {
 
 #[async_trait]
 impl yaml::K8sObject for Deployment {
-    fn get_metadata_name(&self) -> String {
+    fn requires_policy(&self) -> bool {
+        false
+    }
+
+    fn get_metadata_name(&self) -> Result<String> {
         self.metadata.get_name()
     }
 
-    fn get_host_name(&self) -> String {
+    fn get_host_name(&self) -> Result<String> {
         // Example: "hostname": "^busybox-cc-5bdd867667-xxmdz$",
-        "^".to_string() + &self.get_metadata_name() + "-[a-z0-9]{10}-[a-z0-9]{5}$"
+        Ok("^".to_string() + &self.get_metadata_name()? + "-[a-z0-9]{10}-[a-z0-9]{5}$")
     }
 
-    fn get_sandbox_name(&self) -> Option<String> {
-        None
+    fn get_sandbox_name(&self) -> Result<Option<String>> {
+        Ok(None)
     }
 
-    fn get_namespace(&self) -> String {
+    fn get_namespace(&self) -> Result<String> {
         self.metadata.get_namespace()
     }
 

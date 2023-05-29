@@ -27,10 +27,12 @@ pub struct YamlHeader {
 
 #[async_trait]
 pub trait K8sObject {
-    fn get_metadata_name(&self) -> String;
-    fn get_host_name(&self) -> String;
-    fn get_sandbox_name(&self) -> Option<String>;
-    fn get_namespace(&self) -> String;
+    fn requires_policy(&self) -> bool;
+
+    fn get_metadata_name(&self) -> Result<String>;
+    fn get_host_name(&self) -> Result<String>;
+    fn get_sandbox_name(&self) -> Result<Option<String>>;
+    fn get_namespace(&self) -> Result<String>;
     fn add_policy_annotation(&mut self, encoded_policy: &str);
 
     async fn get_registry_containers(&self) -> Result<Vec<registry::Container>>;

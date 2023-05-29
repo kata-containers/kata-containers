@@ -15,6 +15,7 @@ use crate::pause_container;
 use crate::pod;
 use crate::registry;
 use crate::replication_controller;
+use crate::service;
 use crate::utils;
 use crate::volumes;
 use crate::yaml;
@@ -34,24 +35,28 @@ use std::io::Write;
 fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn yaml::K8sObject>> {
     match kind {
         "Pod" => {
-            let mut pod_object: pod::Pod = serde_yaml::from_str(&yaml)?;
-            pause_container::add_pause_container(&mut pod_object.spec.containers);
-            Ok(boxed::Box::new(pod_object))
+            let mut pod: pod::Pod = serde_yaml::from_str(&yaml)?;
+            pause_container::add_pause_container(&mut pod.spec.containers);
+            debug!("pod = {:#?}", &pod);
+            Ok(boxed::Box::new(pod))
         }
         "Deployment" => {
-            let mut deployment_object: deployment::Deployment = serde_yaml::from_str(&yaml)?;
-            pause_container::add_pause_container(
-                &mut deployment_object.spec.template.spec.containers,
-            );
-            Ok(boxed::Box::new(deployment_object))
+            let mut deployment: deployment::Deployment = serde_yaml::from_str(&yaml)?;
+            pause_container::add_pause_container(&mut deployment.spec.template.spec.containers);
+            debug!("deployment = {:#?}", &deployment);
+            Ok(boxed::Box::new(deployment))
         }
         "ReplicationController" => {
-            let mut controller_object: replication_controller::ReplicationController =
+            let mut controller: replication_controller::ReplicationController =
                 serde_yaml::from_str(&yaml)?;
-            pause_container::add_pause_container(
-                &mut controller_object.spec.template.spec.containers,
-            );
-            Ok(boxed::Box::new(controller_object))
+            pause_container::add_pause_container(&mut controller.spec.template.spec.containers);
+            debug!("controller = {:#?}", &controller);
+            Ok(boxed::Box::new(controller))
+        }
+        "Service" => {
+            let service: service::Service = serde_yaml::from_str(&yaml)?;
+            debug!("service = {:#?}", &service);
+            Ok(boxed::Box::new(service))
         }
         _ => Err(anyhow!("Unsupported YAML spec kind: {}", kind)),
     }
@@ -208,6 +213,10 @@ impl AgentPolicy {
     }
 
     pub async fn export_policy(&mut self, in_out_files: &utils::InOutFiles) -> Result<()> {
+        if !self.k8s_object.as_ref().requires_policy() {
+            return Ok(());
+        }
+
         let registry_containers = self.k8s_object.get_registry_containers().await?;
 
         let policy_data = self.k8s_object.get_policy_data(
@@ -361,8 +370,8 @@ fn get_container_policy(
     is_pause_container: bool,
     registry_container: &registry::Container,
 ) -> Result<ContainerPolicy> {
-    let pod_name = k8s_object.get_metadata_name();
-    let hostname = k8s_object.get_host_name();
+    let pod_name = k8s_object.get_metadata_name()?;
+    let hostname = k8s_object.get_host_name()?;
 
     let mut infra_container = &infra_policy.pause_container;
     if !is_pause_container {
@@ -378,7 +387,7 @@ fn get_container_policy(
 
     let mut annotations = BTreeMap::new();
     infra::get_annotations(&mut annotations, infra_container)?;
-    if let Some(name) = k8s_object.get_sandbox_name() {
+    if let Some(name) = k8s_object.get_sandbox_name()? {
         annotations.insert("io.kubernetes.cri.sandbox-name".to_string(), name);
     }
 
@@ -390,7 +399,7 @@ fn get_container_policy(
         annotations.insert("io.kubernetes.cri.image-name".to_string(), image_name);
     }
 
-    let namespace = k8s_object.get_namespace();
+    let namespace = k8s_object.get_namespace()?;
     annotations.insert("io.kubernetes.cri.sandbox-namespace".to_string(), namespace);
 
     if !yaml_container.name.is_empty() {
