@@ -14,10 +14,12 @@ use crate::pod;
 use crate::pod_template;
 use crate::policy;
 use crate::registry;
+use crate::utils;
 use crate::yaml;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -80,6 +82,50 @@ pub struct LabelSelector {
     matchLabels: Option<BTreeMap<String, String>>,
 }
 
+impl Deployment {
+    fn add_policy_annotation(&mut self, encoded_policy: &str) {
+        self.spec
+            .template
+            .metadata
+            .add_policy_annotation(encoded_policy)
+    }
+
+    fn get_policy_data(
+        &self,
+        k8s_object: &dyn yaml::K8sObject,
+        infra_policy: &infra::InfraPolicy,
+        config_maps: &Vec<config_maps::ConfigMap>,
+    ) -> Result<policy::PolicyData> {
+        policy::get_policy_data(
+            k8s_object,
+            infra_policy,
+            config_maps,
+            &self.spec.template.spec.containers,
+            &self.registry_containers,
+        )
+    }
+
+    fn serialize(&mut self, file_name: &Option<String>) -> Result<()> {
+        self.spec.template.spec.containers.remove(0);
+
+        if let Some(yaml) = file_name {
+            serde_yaml::to_writer(
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .create(true)
+                    .open(yaml)
+                    .map_err(|e| anyhow!(e))?,
+                &self,
+            )?;
+        } else {
+            serde_yaml::to_writer(std::io::stdout(), &self)?;
+        }
+
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl yaml::K8sObject for Deployment {
     async fn initialize(&mut self) -> Result<()> {
@@ -110,28 +156,6 @@ impl yaml::K8sObject for Deployment {
         self.metadata.get_namespace()
     }
 
-    fn add_policy_annotation(&mut self, encoded_policy: &str) {
-        self.spec
-            .template
-            .metadata
-            .add_policy_annotation(encoded_policy)
-    }
-
-    fn get_policy_data(
-        &self,
-        k8s_object: &dyn yaml::K8sObject,
-        infra_policy: &infra::InfraPolicy,
-        config_maps: &Vec<config_maps::ConfigMap>,
-    ) -> Result<policy::PolicyData> {
-        policy::get_policy_data(
-            k8s_object,
-            infra_policy,
-            config_maps,
-            &self.spec.template.spec.containers,
-            &self.registry_containers,
-        )
-    }
-
     fn get_container_mounts_and_storages(
         &self,
         _policy_mounts: &mut Vec<oci::Mount>,
@@ -142,23 +166,26 @@ impl yaml::K8sObject for Deployment {
         Ok(())
     }
 
-    fn serialize(&mut self, file_name: &Option<String>) -> Result<()> {
-        self.spec.template.spec.containers.remove(0);
+    fn export_policy(
+        &mut self,
+        rules: &str,
+        infra_policy: &infra::InfraPolicy,
+        config_maps: &Vec<config_maps::ConfigMap>,
+        in_out_files: &utils::InOutFiles,
+    ) -> Result<()> {
+        let policy_data = self.get_policy_data(self, infra_policy, config_maps)?;
+        let json_data = serde_json::to_string_pretty(&policy_data)
+            .map_err(|e| anyhow!(e))
+            .unwrap();
 
-        if let Some(yaml) = file_name {
-            serde_yaml::to_writer(
-                std::fs::OpenOptions::new()
-                    .write(true)
-                    .truncate(true)
-                    .create(true)
-                    .open(yaml)
-                    .map_err(|e| anyhow!(e))?,
-                &self,
-            )?;
-        } else {
-            serde_yaml::to_writer(std::io::stdout(), &self)?;
+        let policy = rules.to_string() + "\npolicy_data := " + &json_data;
+
+        if let Some(file_name) = &in_out_files.output_policy_file {
+            policy::export_decoded_policy(&policy, &file_name)?;
         }
 
-        Ok(())
+        let encoded_policy = general_purpose::STANDARD.encode(policy.as_bytes());
+        self.add_policy_annotation(&encoded_policy);
+        self.serialize(&in_out_files.yaml_file)
     }
 }

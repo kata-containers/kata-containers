@@ -10,7 +10,7 @@ use crate::config_maps;
 use crate::infra;
 use crate::pod;
 use crate::policy;
-use crate::yaml;
+use crate::utils;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -27,20 +27,20 @@ pub struct YamlHeader {
 #[async_trait]
 pub trait K8sObject {
     async fn initialize(&mut self) -> Result<()>;
+
     fn requires_policy(&self) -> bool;
+    fn export_policy(
+        &mut self,
+        rules: &str,
+        infra_policy: &infra::InfraPolicy,
+        config_maps: &Vec<config_maps::ConfigMap>,
+        in_out_files: &utils::InOutFiles,
+    ) -> Result<()>;
 
     fn get_metadata_name(&self) -> Result<String>;
     fn get_host_name(&self) -> Result<String>;
     fn get_sandbox_name(&self) -> Result<Option<String>>;
     fn get_namespace(&self) -> Result<String>;
-    fn add_policy_annotation(&mut self, encoded_policy: &str);
-
-    fn get_policy_data(
-        &self,
-        k8s_object: &dyn yaml::K8sObject,
-        infra_policy: &infra::InfraPolicy,
-        config_maps: &Vec<config_maps::ConfigMap>,
-    ) -> Result<policy::PolicyData>;
 
     fn get_container_mounts_and_storages(
         &self,
@@ -49,8 +49,6 @@ pub trait K8sObject {
         container: &pod::Container,
         infra_policy: &infra::InfraPolicy,
     ) -> Result<()>;
-
-    fn serialize(&mut self, file_name: &Option<String>) -> Result<()>;
 }
 
 pub fn get_input_yaml(yaml_file: &Option<String>) -> Result<String> {

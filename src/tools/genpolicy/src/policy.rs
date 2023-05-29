@@ -21,7 +21,6 @@ use crate::volumes;
 use crate::yaml;
 
 use anyhow::{anyhow, Result};
-use base64::{engine::general_purpose, Engine as _};
 use log::debug;
 use oci::*;
 use serde::{Deserialize, Serialize};
@@ -66,12 +65,8 @@ fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn yaml::K8sObje
 
 pub struct AgentPolicy {
     k8s_object: boxed::Box<dyn yaml::K8sObject>,
-
     config_maps: Vec<config_maps::ConfigMap>,
-
-    yaml_file: Option<String>,
     rules_input_file: String,
-
     infra_policy: infra::InfraPolicy,
 }
 
@@ -200,17 +195,11 @@ impl AgentPolicy {
 
         let infra_policy = infra::InfraPolicy::new(&in_out_files.infra_data_file)?;
 
-        let mut yaml_file = None;
-        if let Some(yaml_path) = &in_out_files.yaml_file {
-            yaml_file = Some(yaml_path.to_string());
-        }
-
         let mut k8s_object = new_k8s_object(&header.kind, &yaml_string)?;
         k8s_object.initialize().await?;
 
         Ok(AgentPolicy {
             k8s_object,
-            yaml_file,
             rules_input_file: in_out_files.rules_file.to_string(),
             infra_policy,
             config_maps,
@@ -222,8 +211,18 @@ impl AgentPolicy {
             return Ok(());
         }
 
+        let rules = read_to_string(&self.rules_input_file)?;
+        self.k8s_object.export_policy(
+            &rules,
+            &self.infra_policy,
+            &self.config_maps,
+            in_out_files,
+        )?;
+
+        /*
         let policy_data = self.k8s_object.get_policy_data(
             self.k8s_object.as_ref(),
+            &rules,
             &self.infra_policy,
             &self.config_maps,
         )?;
@@ -232,10 +231,6 @@ impl AgentPolicy {
             .map_err(|e| anyhow!(e))
             .unwrap();
 
-        debug!("============================================");
-        debug!("Adding policy to YAML");
-
-        let mut policy = read_to_string(&self.rules_input_file)?;
         policy += "\npolicy_data := ";
         policy += &json_data;
 
@@ -246,6 +241,7 @@ impl AgentPolicy {
         let encoded_policy = general_purpose::STANDARD.encode(policy.as_bytes());
         self.k8s_object.add_policy_annotation(&encoded_policy);
         self.k8s_object.serialize(&self.yaml_file)?;
+        */
 
         Ok(())
     }
@@ -326,7 +322,7 @@ fn name_to_hash(name: &str) -> String {
 }
 
 /// Creates a text file including the Rego rules and data.
-fn export_decoded_policy(policy: &str, file_name: &str) -> Result<()> {
+pub fn export_decoded_policy(policy: &str, file_name: &str) -> Result<()> {
     let mut f = std::fs::OpenOptions::new()
         .write(true)
         .truncate(true)

@@ -13,6 +13,7 @@ use crate::pod;
 use crate::policy;
 use crate::replication_controller;
 use crate::service;
+use crate::utils;
 use crate::yaml;
 
 use anyhow::{anyhow, Result};
@@ -46,6 +47,25 @@ enum ListEntry {
     },
 }
 
+/*
+impl List {
+    fn add_policy_annotation(&mut self, _encoded_policy: &str) {}
+
+    fn get_policy_data(
+        &self,
+        _k8s_object: &dyn yaml::K8sObject,
+        _infra_policy: &infra::InfraPolicy,
+        _config_maps: &Vec<config_maps::ConfigMap>,
+    ) -> Result<policy::PolicyData> {
+        Err(anyhow!("Unsupported"))?
+    }
+
+    fn serialize(&mut self, _file_name: &Option<String>) -> Result<()> {
+        Err(anyhow!("Unsupported"))?
+    }
+}
+*/
+
 #[async_trait]
 impl yaml::K8sObject for List {
     async fn initialize(&mut self) -> Result<()> {
@@ -58,30 +78,19 @@ impl yaml::K8sObject for List {
     }
 
     fn get_metadata_name(&self) -> Result<String> {
-        Err(anyhow!("Unsupported"))?
+        Err(anyhow!("Unsupported"))
     }
 
     fn get_host_name(&self) -> Result<String> {
-        Err(anyhow!("Unsupported"))?
+        Err(anyhow!("Unsupported"))
     }
 
     fn get_sandbox_name(&self) -> Result<Option<String>> {
-        Err(anyhow!("Unsupported"))?
+        Err(anyhow!("Unsupported"))
     }
 
     fn get_namespace(&self) -> Result<String> {
-        Err(anyhow!("Unsupported"))?
-    }
-
-    fn add_policy_annotation(&mut self, _encoded_policy: &str) {}
-
-    fn get_policy_data(
-        &self,
-        _k8s_object: &dyn yaml::K8sObject,
-        _infra_policy: &infra::InfraPolicy,
-        _config_maps: &Vec<config_maps::ConfigMap>,
-    ) -> Result<policy::PolicyData> {
-        Err(anyhow!("Unsupported"))?
+        Err(anyhow!("Unsupported"))
     }
 
     fn get_container_mounts_and_storages(
@@ -91,10 +100,16 @@ impl yaml::K8sObject for List {
         _container: &pod::Container,
         _infra_policy: &infra::InfraPolicy,
     ) -> Result<()> {
-        Err(anyhow!("Unsupported"))?
+        Err(anyhow!("Unsupported"))
     }
 
-    fn serialize(&mut self, _file_name: &Option<String>) -> Result<()> {
-        Err(anyhow!("Unsupported"))?
+    fn export_policy(
+        &mut self,
+        _rules: &str,
+        _infra_policy: &infra::InfraPolicy,
+        _config_maps: &Vec<config_maps::ConfigMap>,
+        _in_out_files: &utils::InOutFiles,
+    ) -> Result<()> {
+        Err(anyhow!("Unsupported"))
     }
 }
