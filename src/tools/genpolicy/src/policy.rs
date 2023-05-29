@@ -11,6 +11,7 @@ use crate::containerd;
 use crate::deployment;
 use crate::infra;
 use crate::kata;
+use crate::list;
 use crate::pause_container;
 use crate::pod;
 use crate::registry;
@@ -34,17 +35,23 @@ use std::io::Write;
 /// Creates one of the supported K8s objects from a YAML string.
 fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn yaml::K8sObject>> {
     match kind {
-        "Pod" => {
-            let mut pod: pod::Pod = serde_yaml::from_str(&yaml)?;
-            pause_container::add_pause_container(&mut pod.spec.containers);
-            debug!("pod = {:#?}", &pod);
-            Ok(boxed::Box::new(pod))
-        }
         "Deployment" => {
             let mut deployment: deployment::Deployment = serde_yaml::from_str(&yaml)?;
             pause_container::add_pause_container(&mut deployment.spec.template.spec.containers);
             debug!("deployment = {:#?}", &deployment);
             Ok(boxed::Box::new(deployment))
+        }
+        "List" => {
+            let list: list::List = serde_yaml::from_str(&yaml).unwrap();
+            // pause_container::add_pause_container(&mut deployment.spec.template.spec.containers);
+            debug!("list = {:#?}", &list);
+            Ok(boxed::Box::new(list))
+        }
+        "Pod" => {
+            let mut pod: pod::Pod = serde_yaml::from_str(&yaml)?;
+            pause_container::add_pause_container(&mut pod.spec.containers);
+            debug!("pod = {:#?}", &pod);
+            Ok(boxed::Box::new(pod))
         }
         "ReplicationController" => {
             let mut controller: replication_controller::ReplicationController =

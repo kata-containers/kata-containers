@@ -12,6 +12,7 @@ mod containerd;
 mod deployment;
 mod infra;
 mod kata;
+mod list;
 mod obj_meta;
 mod pause_container;
 mod pod;
