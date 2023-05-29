@@ -2656,6 +2656,9 @@ type qemuGrpc struct {
 	// q.qemuConfig.SMP.
 	// So just transport q.qemuConfig.SMP from VM Cache server to runtime.
 	QemuSMP govmmQemu.SMP
+
+	// send vsock contextid to client
+	ContextID uint64
 }
 
 func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
@@ -2681,6 +2684,13 @@ func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig,
 	q.qemuConfig.SMP = qp.QemuSMP
 
 	q.arch.setBridges(q.state.Bridges)
+
+	vsock := types.VSock{ContextID: qp.ContextID, Port: uint32(vSockPort)}
+	q.qemuConfig.Devices, err = q.arch.appendVSock(ctx, q.qemuConfig.Devices, vsock)
+	if err != nil {
+		return err
+	}
+	q.qemuConfig.PidFile = filepath.Join(q.config.VMStorePath, q.id, "pid")
 	return nil
 }
 
@@ -2688,6 +2698,10 @@ func (q *qemu) toGrpc(ctx context.Context) ([]byte, error) {
 	q.qmpShutdown()
 
 	q.Cleanup(ctx)
+
+	//update state.Bridges from arch.Bridges
+	q.state.Bridges = q.arch.getBridges()
+
 	qp := qemuGrpc{
 		ID:             q.id,
 		QmpChannelpath: q.qmpMonitorCh.path,
@@ -2697,6 +2711,13 @@ func (q *qemu) toGrpc(ctx context.Context) ([]byte, error) {
 		QemuSMP: q.qemuConfig.SMP,
 	}
 
+	// set vsock contextid
+	for _, device := range q.qemuConfig.Devices {
+		if vsockdev, ok := device.(govmmQemu.VSOCKDevice); ok {
+			qp.ContextID = vsockdev.ContextID
+			break
+		}
+	}
 	return json.Marshal(&qp)
 }
 
@@ -2778,6 +2799,17 @@ func (q *qemu) Check() error {
 }
 
 func (q *qemu) GenerateSocket(id string) (interface{}, error) {
+	// if vsock already exsist, return it directly
+	// for vmcache, we don't need another random vsock
+	for _, device := range q.qemuConfig.Devices {
+		if vsockdev, ok := device.(govmmQemu.VSOCKDevice); ok {
+			return types.VSock{
+				VhostFd:   vsockdev.VHostFD,
+				ContextID: vsockdev.ContextID,
+				Port:      uint32(vSockPort),
+			}, nil
+		}
+	}
 	return generateVMSocket(id, q.config.VMStorePath)
 }
 
