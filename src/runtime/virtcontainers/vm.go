@@ -116,6 +116,12 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		}
 	}()
 
+	// set default path if store path is not set
+	if config.HypervisorConfig.VMStorePath == "" && config.HypervisorConfig.RunStorePath == "" {
+		config.HypervisorConfig.VMStorePath = store.RunVMStoragePath()
+		config.HypervisorConfig.RunStorePath = store.RunStoragePath()
+	}
+
 	if err = hypervisor.CreateVM(ctx, id, network, &config.HypervisorConfig); err != nil {
 		return nil, err
 	}
@@ -188,6 +194,12 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 		}
 	}()
 
+	// set default path if store path is not set
+	if config.HypervisorConfig.VMStorePath == "" && config.HypervisorConfig.RunStorePath == "" {
+		config.HypervisorConfig.VMStorePath = store.RunVMStoragePath()
+		config.HypervisorConfig.RunStorePath = store.RunStoragePath()
+	}
+
 	err = hypervisor.fromGrpc(ctx, &config.HypervisorConfig, v.Hypervisor)
 	if err != nil {
 		return nil, err
@@ -197,6 +209,11 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 	newAagentFunc := getNewAgentFunc(ctx)
 	agent := newAagentFunc()
 	agent.configureFromGrpc(ctx, hypervisor, v.Id, config.AgentConfig)
+
+	err = agent.setAgentURL()
+	if err != nil {
+		return nil, err
+	}
 
 	return &VM{
 		id:         v.Id,
