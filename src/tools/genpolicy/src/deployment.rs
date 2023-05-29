@@ -83,28 +83,6 @@ pub struct LabelSelector {
 }
 
 impl Deployment {
-    fn add_policy_annotation(&mut self, encoded_policy: &str) {
-        self.spec
-            .template
-            .metadata
-            .add_policy_annotation(encoded_policy)
-    }
-
-    fn get_policy_data(
-        &self,
-        k8s_object: &dyn yaml::K8sObject,
-        infra_policy: &infra::InfraPolicy,
-        config_maps: &Vec<config_maps::ConfigMap>,
-    ) -> Result<policy::PolicyData> {
-        policy::get_policy_data(
-            k8s_object,
-            infra_policy,
-            config_maps,
-            &self.spec.template.spec.containers,
-            &self.registry_containers,
-        )
-    }
-
     fn serialize(&mut self, file_name: &Option<String>) -> Result<()> {
         self.spec.template.spec.containers.remove(0);
 
@@ -173,7 +151,23 @@ impl yaml::K8sObject for Deployment {
         config_maps: &Vec<config_maps::ConfigMap>,
         in_out_files: &utils::InOutFiles,
     ) -> Result<()> {
-        let policy_data = self.get_policy_data(self, infra_policy, config_maps)?;
+        let mut policy_containers = Vec::new();
+
+        for i in 0..self.spec.template.spec.containers.len() {
+            policy_containers.push(policy::get_container_policy(
+                self,
+                infra_policy,
+                config_maps,
+                &self.spec.template.spec.containers[i],
+                i == 0,
+                &self.registry_containers[i],
+            )?);
+        }
+
+        let policy_data = policy::PolicyData {
+            containers: policy_containers,
+        };
+
         let json_data = serde_json::to_string_pretty(&policy_data)
             .map_err(|e| anyhow!(e))
             .unwrap();
@@ -185,7 +179,10 @@ impl yaml::K8sObject for Deployment {
         }
 
         let encoded_policy = general_purpose::STANDARD.encode(policy.as_bytes());
-        self.add_policy_annotation(&encoded_policy);
+        self.spec
+            .template
+            .metadata
+            .add_policy_annotation(&encoded_policy);
         self.serialize(&in_out_files.yaml_file)
     }
 }

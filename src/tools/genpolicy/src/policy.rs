@@ -81,9 +81,6 @@ pub struct AgentPolicy {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PolicyData {
     pub containers: Vec<ContainerPolicy>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub volumes: Option<Volumes>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -219,31 +216,7 @@ impl AgentPolicy {
             in_out_files,
         )?;
 
-        /*
-        let policy_data = self.k8s_object.get_policy_data(
-            self.k8s_object.as_ref(),
-            &rules,
-            &self.infra_policy,
-            &self.config_maps,
-        )?;
-
-        let json_data = serde_json::to_string_pretty(&policy_data)
-            .map_err(|e| anyhow!(e))
-            .unwrap();
-
-        policy += "\npolicy_data := ";
-        policy += &json_data;
-
-        if let Some(file_name) = &in_out_files.output_policy_file {
-            export_decoded_policy(&policy, &file_name)?;
-        }
-
-        let encoded_policy = general_purpose::STANDARD.encode(policy.as_bytes());
-        self.k8s_object.add_policy_annotation(&encoded_policy);
-        self.k8s_object.serialize(&self.yaml_file)?;
-        */
-
-        Ok(())
+       Ok(())
     }
 }
 
@@ -334,33 +307,7 @@ pub fn export_decoded_policy(policy: &str, file_name: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn get_policy_data(
-    k8s_object: &dyn yaml::K8sObject,
-    infra_policy: &infra::InfraPolicy,
-    config_maps: &Vec<config_maps::ConfigMap>,
-    yaml_containers: &Vec<pod::Container>,
-    registry_containers: &Vec<registry::Container>,
-) -> Result<PolicyData> {
-    let mut policy_containers = Vec::new();
-
-    for i in 0..yaml_containers.len() {
-        policy_containers.push(get_container_policy(
-            k8s_object,
-            infra_policy,
-            config_maps,
-            &yaml_containers[i],
-            i == 0,
-            &registry_containers[i],
-        )?);
-    }
-
-    Ok(PolicyData {
-        containers: policy_containers,
-        volumes: None,
-    })
-}
-
-fn get_container_policy(
+pub fn get_container_policy(
     k8s_object: &dyn yaml::K8sObject,
     infra_policy: &infra::InfraPolicy,
     config_maps: &Vec<config_maps::ConfigMap>,

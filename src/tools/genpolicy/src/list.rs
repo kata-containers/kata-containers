@@ -49,17 +49,6 @@ enum ListEntry {
 
 /*
 impl List {
-    fn add_policy_annotation(&mut self, _encoded_policy: &str) {}
-
-    fn get_policy_data(
-        &self,
-        _k8s_object: &dyn yaml::K8sObject,
-        _infra_policy: &infra::InfraPolicy,
-        _config_maps: &Vec<config_maps::ConfigMap>,
-    ) -> Result<policy::PolicyData> {
-        Err(anyhow!("Unsupported"))?
-    }
-
     fn serialize(&mut self, _file_name: &Option<String>) -> Result<()> {
         Err(anyhow!("Unsupported"))?
     }
