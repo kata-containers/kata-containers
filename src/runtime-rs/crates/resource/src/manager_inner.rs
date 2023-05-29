@@ -10,6 +10,7 @@ use crate::{network::NetworkConfig, resource_persist::ResourceState};
 use agent::{types::Device, Agent, Storage};
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
+
 use hypervisor::{
     device::{device_manager::DeviceManager, DeviceConfig},
     BlockConfig, Hypervisor,
@@ -255,6 +256,7 @@ impl ResourceManagerInner {
                 spec,
                 self.device_manager.as_ref(),
                 &self.sid,
+                self.agent.clone(),
             )
             .await
     }
