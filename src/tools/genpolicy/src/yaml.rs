@@ -29,11 +29,17 @@ pub trait K8sObject {
     async fn initialize(&mut self) -> Result<()>;
 
     fn requires_policy(&self) -> bool;
-    fn export_policy(
+
+    fn generate_policy(
         &mut self,
         rules: &str,
         infra_policy: &infra::InfraPolicy,
         config_maps: &Vec<config_maps::ConfigMap>,
+        in_out_files: &utils::InOutFiles,
+    ) -> Result<()>;
+
+    fn serialize(
+        &self,
         in_out_files: &utils::InOutFiles,
     ) -> Result<()>;
 

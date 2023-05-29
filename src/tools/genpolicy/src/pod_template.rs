@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// See PodTemplate in the Kubernetes API reference.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PodTemplate {
     pub metadata: obj_meta::ObjectMeta,
@@ -21,7 +21,7 @@ pub struct PodTemplate {
 }
 
 /// See PodTemplateSpec in the Kubernetes API reference.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PodTemplateSpec {
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -82,28 +82,6 @@ pub struct LabelSelector {
     matchLabels: Option<BTreeMap<String, String>>,
 }
 
-impl Deployment {
-    fn serialize(&mut self, file_name: &Option<String>) -> Result<()> {
-        self.spec.template.spec.containers.remove(0);
-
-        if let Some(yaml) = file_name {
-            serde_yaml::to_writer(
-                std::fs::OpenOptions::new()
-                    .write(true)
-                    .truncate(true)
-                    .create(true)
-                    .open(yaml)
-                    .map_err(|e| anyhow!(e))?,
-                &self,
-            )?;
-        } else {
-            serde_yaml::to_writer(std::io::stdout(), &self)?;
-        }
-
-        Ok(())
-    }
-}
-
 #[async_trait]
 impl yaml::K8sObject for Deployment {
     async fn initialize(&mut self) -> Result<()> {
@@ -144,7 +122,7 @@ impl yaml::K8sObject for Deployment {
         Ok(())
     }
 
-    fn export_policy(
+    fn generate_policy(
         &mut self,
         rules: &str,
         infra_policy: &infra::InfraPolicy,
@@ -173,7 +151,6 @@ impl yaml::K8sObject for Deployment {
             .unwrap();
 
         let policy = rules.to_string() + "\npolicy_data := " + &json_data;
-
         if let Some(file_name) = &in_out_files.output_policy_file {
             policy::export_decoded_policy(&policy, &file_name)?;
         }
@@ -183,6 +160,27 @@ impl yaml::K8sObject for Deployment {
             .template
             .metadata
             .add_policy_annotation(&encoded_policy);
-        self.serialize(&in_out_files.yaml_file)
+
+        // Remove the pause container before serializing.
+        self.spec.template.spec.containers.remove(0);
+        Ok(())
+    }
+
+    fn serialize(&self, in_out_files: &utils::InOutFiles) -> Result<()> {
+        if let Some(yaml) = &in_out_files.yaml_file {
+            serde_yaml::to_writer(
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .create(true)
+                    .open(yaml)
+                    .map_err(|e| anyhow!(e))?,
+                &self,
+            )?;
+        } else {
+            serde_yaml::to_writer(std::io::stdout(), &self)?;
+        }
+
+        Ok(())
     }
 }

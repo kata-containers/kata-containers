@@ -24,20 +24,20 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// See ReplicationController in the Kubernetes API reference.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReplicationController {
-    apiVersion: String,
-    kind: String,
+    pub apiVersion: String,
+    pub kind: String,
     pub metadata: obj_meta::ObjectMeta,
     pub spec: ReplicationControllerSpec,
 
     #[serde(skip)]
-    registry_containers: Vec<registry::Container>,
+    pub registry_containers: Vec<registry::Container>,
 }
 
 /// See ReplicationControllerSpec in the Kubernetes API reference.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReplicationControllerSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -50,28 +50,6 @@ pub struct ReplicationControllerSpec {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     minReadySeconds: Option<i32>,
-}
-
-impl ReplicationController {
-    fn serialize(&mut self, file_name: &Option<String>) -> Result<()> {
-        self.spec.template.spec.containers.remove(0);
-
-        if let Some(yaml) = file_name {
-            serde_yaml::to_writer(
-                std::fs::OpenOptions::new()
-                    .write(true)
-                    .truncate(true)
-                    .create(true)
-                    .open(yaml)
-                    .map_err(|e| anyhow!(e))?,
-                &self,
-            )?;
-        } else {
-            serde_yaml::to_writer(std::io::stdout(), &self)?;
-        }
-
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -114,7 +92,7 @@ impl yaml::K8sObject for ReplicationController {
         Ok(())
     }
 
-    fn export_policy(
+    fn generate_policy(
         &mut self,
         rules: &str,
         infra_policy: &infra::InfraPolicy,
@@ -153,6 +131,26 @@ impl yaml::K8sObject for ReplicationController {
             .template
             .metadata
             .add_policy_annotation(&encoded_policy);
-        self.serialize(&in_out_files.yaml_file)
+
+        self.spec.template.spec.containers.remove(0);
+        Ok(())
+    }
+
+    fn serialize(&self, in_out_files: &utils::InOutFiles) -> Result<()> {
+        if let Some(yaml) = &in_out_files.yaml_file {
+            serde_yaml::to_writer(
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .create(true)
+                    .open(yaml)
+                    .map_err(|e| anyhow!(e))?,
+                &self,
+            )?;
+        } else {
+            serde_yaml::to_writer(std::io::stdout(), &self)?;
+        }
+
+        Ok(())
     }
 }

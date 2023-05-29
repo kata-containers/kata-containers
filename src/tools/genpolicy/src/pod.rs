@@ -251,28 +251,6 @@ impl EnvVar {
     }
 }
 
-impl Pod {
-    fn serialize(&mut self, file_name: &Option<String>) -> Result<()> {
-        self.spec.containers.remove(0);
-
-        if let Some(yaml) = file_name {
-            serde_yaml::to_writer(
-                std::fs::OpenOptions::new()
-                    .write(true)
-                    .truncate(true)
-                    .create(true)
-                    .open(yaml)
-                    .map_err(|e| anyhow!(e))?,
-                &self,
-            )?;
-        } else {
-            serde_yaml::to_writer(std::io::stdout(), &self)?;
-        }
-
-        Ok(())
-    }
-}
-
 #[async_trait]
 impl yaml::K8sObject for Pod {
     async fn initialize(&mut self) -> Result<()> {
@@ -324,7 +302,7 @@ impl yaml::K8sObject for Pod {
         Ok(())
     }
 
-    fn export_policy(
+    fn generate_policy(
         &mut self,
         rules: &str,
         infra_policy: &infra::InfraPolicy,
@@ -360,6 +338,27 @@ impl yaml::K8sObject for Pod {
 
         let encoded_policy = general_purpose::STANDARD.encode(policy.as_bytes());
         self.metadata.add_policy_annotation(&encoded_policy);
-        self.serialize(&in_out_files.yaml_file)
+
+        // Remove the pause container before serializing.
+        self.spec.containers.remove(0);
+        Ok(())
+    }
+
+    fn serialize(&self, in_out_files: &utils::InOutFiles) -> Result<()> {
+        if let Some(yaml) = &in_out_files.yaml_file {
+            serde_yaml::to_writer(
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .create(true)
+                    .open(yaml)
+                    .map_err(|e| anyhow!(e))?,
+                &self,
+            )?;
+        } else {
+            serde_yaml::to_writer(std::io::stdout(), &self)?;
+        }
+
+        Ok(())
     }
 }

@@ -164,13 +164,17 @@ impl yaml::K8sObject for Service {
         Err(anyhow!("Unsupported"))?
     }
 
-    fn export_policy(
+    fn generate_policy(
         &mut self,
         _rules: &str,
         _infra_policy: &infra::InfraPolicy,
         _config_maps: &Vec<config_maps::ConfigMap>,
         _in_out_files: &utils::InOutFiles,
     ) -> Result<()> {
+        Err(anyhow!("Unsupported"))
+    }
+
+    fn serialize(&self, _in_out_files: &utils::InOutFiles) -> Result<()> {
         Err(anyhow!("Unsupported"))
     }
 }

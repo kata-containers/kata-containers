@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 const POLICY_ANNOTATION_KEY: &str = "io.katacontainers.config.agent.policy";
 
 /// See ObjectMeta in the Kubernetes API reference.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ObjectMeta {
     #[serde(skip_serializing_if = "Option::is_none")]

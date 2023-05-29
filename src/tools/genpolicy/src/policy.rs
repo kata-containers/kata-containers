@@ -209,12 +209,13 @@ impl AgentPolicy {
         }
 
         let rules = read_to_string(&self.rules_input_file)?;
-        self.k8s_object.export_policy(
+        self.k8s_object.generate_policy(
             &rules,
             &self.infra_policy,
             &self.config_maps,
             in_out_files,
         )?;
+        self.k8s_object.serialize(in_out_files)?;
 
        Ok(())
     }
