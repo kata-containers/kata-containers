@@ -19,19 +19,20 @@ use std::{io, io::Seek, io::Write};
 use tempfile::tempdir;
 use tokio::{fs, io::AsyncWriteExt};
 
+#[derive(Clone, Debug)]
 pub struct Container {
     config_layer: DockerConfigLayer,
     image_layers: Vec<ImageLayer>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct DockerConfigLayer {
     architecture: String,
     config: DockerImageConfig,
     rootfs: DockerRootfs,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct DockerImageConfig {
     User: Option<String>,
     Tty: Option<bool>,
@@ -41,7 +42,7 @@ struct DockerImageConfig {
     Entrypoint: Option<Vec<String>>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct DockerRootfs {
     r#type: String,
     diff_ids: Vec<String>,
@@ -65,7 +66,8 @@ impl Container {
 
         let (manifest, digest_hash, config_layer_str) = client
             .pull_manifest_and_config(&reference, &RegistryAuth::Anonymous)
-            .await?;
+            .await
+            .unwrap();
 
         debug!("digest_hash: {:?}", digest_hash);
         debug!(
@@ -82,9 +84,9 @@ impl Container {
             println!("");
         }
 
-        let config_layer: DockerConfigLayer = serde_json::from_str(&config_layer_str)?;
+        let config_layer: DockerConfigLayer = serde_json::from_str(&config_layer_str).unwrap();
         let image_layers =
-            get_image_layers(&mut client, &reference, &manifest, &config_layer).await?;
+            get_image_layers(&mut client, &reference, &manifest, &config_layer).await.unwrap();
 
         Ok(Container {
             config_layer,

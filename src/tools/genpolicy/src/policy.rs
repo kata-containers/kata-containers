@@ -220,17 +220,16 @@ impl AgentPolicy {
     }
 
     pub async fn export_policy(&mut self, in_out_files: &utils::InOutFiles) -> Result<()> {
-        if !self.k8s_object.as_ref().requires_policy() {
+        if !self.k8s_object.requires_policy() {
             return Ok(());
         }
 
-        let registry_containers = self.k8s_object.get_registry_containers().await?;
+        self.k8s_object.get_containers_from_registry().await?;
 
         let policy_data = self.k8s_object.get_policy_data(
             self.k8s_object.as_ref(),
             &self.infra_policy,
             &self.config_maps,
-            &registry_containers,
         )?;
 
         let json_data = serde_json::to_string_pretty(&policy_data)
@@ -348,7 +347,7 @@ pub fn get_policy_data(
     infra_policy: &infra::InfraPolicy,
     config_maps: &Vec<config_maps::ConfigMap>,
     yaml_containers: &Vec<pod::Container>,
-    registry_containers: &Vec<registry::Container>,
+    registry_containers: &Vec<registry::Container>
 ) -> Result<PolicyData> {
     let mut policy_containers = Vec::new();
 

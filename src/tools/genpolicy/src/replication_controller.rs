@@ -28,6 +28,9 @@ pub struct ReplicationController {
     kind: String,
     pub metadata: obj_meta::ObjectMeta,
     pub spec: ReplicationControllerSpec,
+
+    #[serde(skip)]
+    registry_containers: Vec<registry::Container>,
 }
 
 /// See ReplicationControllerSpec in the Kubernetes API reference.
@@ -73,8 +76,9 @@ impl yaml::K8sObject for ReplicationController {
         self.spec.template.metadata.add_policy_annotation(encoded_policy)
     }
 
-    async fn get_registry_containers(&self) -> Result<Vec<registry::Container>> {
-        registry::get_registry_containers(&self.spec.template.spec.containers).await
+    async fn get_containers_from_registry(&mut self) -> Result<()> {
+        self.registry_containers = registry::get_registry_containers(&self.spec.template.spec.containers).await?;
+        Ok(())
     }
 
     fn get_policy_data(
@@ -82,14 +86,13 @@ impl yaml::K8sObject for ReplicationController {
         k8s_object: &dyn yaml::K8sObject,
         infra_policy: &infra::InfraPolicy,
         config_maps: &Vec<config_maps::ConfigMap>,
-        registry_containers: &Vec<registry::Container>,
     ) -> Result<policy::PolicyData> {
         policy::get_policy_data(
             k8s_object,
             infra_policy,
             config_maps,
             &self.spec.template.spec.containers,
-            registry_containers,
+            &self.registry_containers,
         )
     }
 

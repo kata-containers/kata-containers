@@ -28,6 +28,9 @@ pub struct Deployment {
     kind: String,
     pub metadata: obj_meta::ObjectMeta,
     pub spec: DeploymentSpec,
+
+    #[serde(skip)]
+    registry_containers: Vec<registry::Container>,
 }
 
 /// See DeploymentSpec in the Kubernetes API reference.
@@ -79,7 +82,7 @@ pub struct LabelSelector {
 #[async_trait]
 impl yaml::K8sObject for Deployment {
     fn requires_policy(&self) -> bool {
-        false
+        true
     }
 
     fn get_metadata_name(&self) -> Result<String> {
@@ -100,11 +103,16 @@ impl yaml::K8sObject for Deployment {
     }
 
     fn add_policy_annotation(&mut self, encoded_policy: &str) {
-        self.spec.template.metadata.add_policy_annotation(encoded_policy)
+        self.spec
+            .template
+            .metadata
+            .add_policy_annotation(encoded_policy)
     }
 
-    async fn get_registry_containers(&self) -> Result<Vec<registry::Container>> {
-        registry::get_registry_containers(&self.spec.template.spec.containers).await
+    async fn get_containers_from_registry(&mut self) -> Result<()> {
+        self.registry_containers =
+            registry::get_registry_containers(&self.spec.template.spec.containers).await?;
+        Ok(())
     }
 
     fn get_policy_data(
@@ -112,14 +120,13 @@ impl yaml::K8sObject for Deployment {
         k8s_object: &dyn yaml::K8sObject,
         infra_policy: &infra::InfraPolicy,
         config_maps: &Vec<config_maps::ConfigMap>,
-        registry_containers: &Vec<registry::Container>,
     ) -> Result<policy::PolicyData> {
         policy::get_policy_data(
             k8s_object,
             infra_policy,
             config_maps,
             &self.spec.template.spec.containers,
-            registry_containers,
+            &self.registry_containers,
         )
     }
 

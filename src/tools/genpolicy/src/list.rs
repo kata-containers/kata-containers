@@ -11,7 +11,6 @@ use crate::infra;
 use crate::obj_meta;
 use crate::pod;
 use crate::policy;
-use crate::registry;
 use crate::replication_controller;
 use crate::service;
 use crate::yaml;
@@ -30,7 +29,7 @@ pub struct List {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(untagged)]
+#[serde(deny_unknown_fields, untagged)]
 enum ListEntry {
     Service {
         apiVersion: String,
@@ -71,7 +70,7 @@ impl yaml::K8sObject for List {
 
     fn add_policy_annotation(&mut self, _encoded_policy: &str) {}
 
-    async fn get_registry_containers(&self) -> Result<Vec<registry::Container>> {
+    async fn get_containers_from_registry(&mut self) -> Result<()> {
         Err(anyhow!("Unsupported"))?
     }
 
@@ -80,7 +79,6 @@ impl yaml::K8sObject for List {
         _k8s_object: &dyn yaml::K8sObject,
         _infra_policy: &infra::InfraPolicy,
         _config_maps: &Vec<config_maps::ConfigMap>,
-        _registry_containers: &Vec<registry::Container>,
     ) -> Result<policy::PolicyData> {
         Err(anyhow!("Unsupported"))?
     }

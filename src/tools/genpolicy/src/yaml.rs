@@ -10,7 +10,6 @@ use crate::config_maps;
 use crate::infra;
 use crate::pod;
 use crate::policy;
-use crate::registry;
 use crate::yaml;
 
 use anyhow::Result;
@@ -35,14 +34,13 @@ pub trait K8sObject {
     fn get_namespace(&self) -> Result<String>;
     fn add_policy_annotation(&mut self, encoded_policy: &str);
 
-    async fn get_registry_containers(&self) -> Result<Vec<registry::Container>>;
+    async fn get_containers_from_registry(&mut self) -> Result<()>;
 
     fn get_policy_data(
         &self,
         k8s_object: &dyn yaml::K8sObject,
         infra_policy: &infra::InfraPolicy,
         config_maps: &Vec<config_maps::ConfigMap>,
-        registry_containers: &Vec<registry::Container>,
     ) -> Result<policy::PolicyData>;
 
     fn get_container_mounts_and_storages(
