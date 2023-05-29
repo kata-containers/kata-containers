@@ -26,6 +26,7 @@ pub struct YamlHeader {
 
 #[async_trait]
 pub trait K8sObject {
+    async fn initialize(&mut self) -> Result<()>;
     fn requires_policy(&self) -> bool;
 
     fn get_metadata_name(&self) -> Result<String>;
@@ -33,8 +34,6 @@ pub trait K8sObject {
     fn get_sandbox_name(&self) -> Result<Option<String>>;
     fn get_namespace(&self) -> Result<String>;
     fn add_policy_annotation(&mut self, encoded_policy: &str);
-
-    async fn get_containers_from_registry(&mut self) -> Result<()>;
 
     fn get_policy_data(
         &self,

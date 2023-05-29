@@ -9,6 +9,7 @@
 use crate::config_maps;
 use crate::infra;
 use crate::obj_meta;
+use crate::pause_container;
 use crate::policy;
 use crate::registry;
 use crate::volumes;
@@ -250,6 +251,12 @@ impl EnvVar {
 
 #[async_trait]
 impl yaml::K8sObject for Pod {
+    async fn initialize(&mut self) -> Result<()> {
+        pause_container::add_pause_container(&mut self.spec.containers);
+        self.registry_containers = registry::get_registry_containers(&self.spec.containers).await?;
+        Ok(())
+    }
+
     fn requires_policy(&self) -> bool {
         true
     }
@@ -273,11 +280,6 @@ impl yaml::K8sObject for Pod {
 
     fn add_policy_annotation(&mut self, encoded_policy: &str) {
         self.metadata.add_policy_annotation(encoded_policy)
-    }
-
-    async fn get_containers_from_registry(&mut self) -> Result<()> {
-        self.registry_containers = registry::get_registry_containers(&self.spec.containers).await?;
-        Ok(())
     }
 
     fn get_policy_data(

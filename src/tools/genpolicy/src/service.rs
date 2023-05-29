@@ -129,6 +129,10 @@ pub struct ClientIPConfig {
 
 #[async_trait]
 impl yaml::K8sObject for Service {
+    async fn initialize(&mut self) -> Result<()> {
+        Ok(())
+    }
+
     fn requires_policy(&self) -> bool {
         false
     }
@@ -150,10 +154,6 @@ impl yaml::K8sObject for Service {
     }
 
     fn add_policy_annotation(&mut self, _encoded_policy: &str) {}
-
-    async fn get_containers_from_registry(&mut self) -> Result<()> {
-        Err(anyhow!("Unsupported"))?
-    }
 
     fn get_policy_data(
         &self,

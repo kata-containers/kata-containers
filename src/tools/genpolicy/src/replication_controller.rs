@@ -9,6 +9,7 @@
 use crate::config_maps;
 use crate::infra;
 use crate::obj_meta;
+use crate::pause_container;
 use crate::pod;
 use crate::pod_template;
 use crate::policy;
@@ -51,6 +52,13 @@ pub struct ReplicationControllerSpec {
 
 #[async_trait]
 impl yaml::K8sObject for ReplicationController {
+    async fn initialize(&mut self) -> Result<()> {
+        pause_container::add_pause_container(&mut self.spec.template.spec.containers);
+        self.registry_containers =
+            registry::get_registry_containers(&self.spec.template.spec.containers).await?;
+        Ok(())
+    }
+
     fn requires_policy(&self) -> bool {
         true
     }
@@ -73,12 +81,10 @@ impl yaml::K8sObject for ReplicationController {
     }
 
     fn add_policy_annotation(&mut self, encoded_policy: &str) {
-        self.spec.template.metadata.add_policy_annotation(encoded_policy)
-    }
-
-    async fn get_containers_from_registry(&mut self) -> Result<()> {
-        self.registry_containers = registry::get_registry_containers(&self.spec.template.spec.containers).await?;
-        Ok(())
+        self.spec
+            .template
+            .metadata
+            .add_policy_annotation(encoded_policy)
     }
 
     fn get_policy_data(

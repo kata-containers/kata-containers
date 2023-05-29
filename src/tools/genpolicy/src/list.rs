@@ -33,7 +33,7 @@ pub struct List {
 enum ListEntry {
     Service {
         apiVersion: String,
-        kind: String, 
+        kind: String,
         metadata: obj_meta::ObjectMeta,
         spec: service::ServiceSpec,
     },
@@ -48,6 +48,11 @@ enum ListEntry {
 
 #[async_trait]
 impl yaml::K8sObject for List {
+    async fn initialize(&mut self) -> Result<()> {
+        // pause_container::add_pause_container(&mut deployment.spec.template.spec.containers);
+        Ok(())
+    }
+
     fn requires_policy(&self) -> bool {
         false
     }
@@ -69,10 +74,6 @@ impl yaml::K8sObject for List {
     }
 
     fn add_policy_annotation(&mut self, _encoded_policy: &str) {}
-
-    async fn get_containers_from_registry(&mut self) -> Result<()> {
-        Err(anyhow!("Unsupported"))?
-    }
 
     fn get_policy_data(
         &self,

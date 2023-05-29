@@ -12,7 +12,6 @@ use crate::deployment;
 use crate::infra;
 use crate::kata;
 use crate::list;
-use crate::pause_container;
 use crate::pod;
 use crate::registry;
 use crate::replication_controller;
@@ -36,33 +35,29 @@ use std::io::Write;
 fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn yaml::K8sObject>> {
     match kind {
         "Deployment" => {
-            let mut deployment: deployment::Deployment = serde_yaml::from_str(&yaml)?;
-            pause_container::add_pause_container(&mut deployment.spec.template.spec.containers);
-            debug!("deployment = {:#?}", &deployment);
+            let deployment: deployment::Deployment = serde_yaml::from_str(&yaml)?;
+            debug!("{:#?}", &deployment);
             Ok(boxed::Box::new(deployment))
         }
         "List" => {
-            let list: list::List = serde_yaml::from_str(&yaml).unwrap();
-            // pause_container::add_pause_container(&mut deployment.spec.template.spec.containers);
-            debug!("list = {:#?}", &list);
+            let list: list::List = serde_yaml::from_str(&yaml)?;
+            debug!("{:#?}", &list);
             Ok(boxed::Box::new(list))
         }
         "Pod" => {
-            let mut pod: pod::Pod = serde_yaml::from_str(&yaml)?;
-            pause_container::add_pause_container(&mut pod.spec.containers);
-            debug!("pod = {:#?}", &pod);
+            let pod: pod::Pod = serde_yaml::from_str(&yaml)?;
+            debug!("{:#?}", &pod);
             Ok(boxed::Box::new(pod))
         }
         "ReplicationController" => {
-            let mut controller: replication_controller::ReplicationController =
+            let controller: replication_controller::ReplicationController =
                 serde_yaml::from_str(&yaml)?;
-            pause_container::add_pause_container(&mut controller.spec.template.spec.containers);
-            debug!("controller = {:#?}", &controller);
+            debug!("{:#?}", &controller);
             Ok(boxed::Box::new(controller))
         }
         "Service" => {
             let service: service::Service = serde_yaml::from_str(&yaml)?;
-            debug!("service = {:#?}", &service);
+            debug!("{:#?}", &service);
             Ok(boxed::Box::new(service))
         }
         _ => Err(anyhow!("Unsupported YAML spec kind: {}", kind)),
@@ -192,7 +187,7 @@ pub struct PersistentVolumeClaimVolume {
 }
 
 impl AgentPolicy {
-    pub fn from_files(in_out_files: &utils::InOutFiles) -> Result<AgentPolicy> {
+    pub async fn from_files(in_out_files: &utils::InOutFiles) -> Result<AgentPolicy> {
         let yaml_string = yaml::get_input_yaml(&in_out_files.yaml_file)?;
         let header = yaml::get_yaml_header(&yaml_string)?;
 
@@ -210,8 +205,11 @@ impl AgentPolicy {
             yaml_file = Some(yaml_path.to_string());
         }
 
+        let mut k8s_object = new_k8s_object(&header.kind, &yaml_string)?;
+        k8s_object.initialize().await?;
+
         Ok(AgentPolicy {
-            k8s_object: new_k8s_object(&header.kind, &yaml_string)?,
+            k8s_object,
             yaml_file,
             rules_input_file: in_out_files.rules_file.to_string(),
             infra_policy,
@@ -219,12 +217,10 @@ impl AgentPolicy {
         })
     }
 
-    pub async fn export_policy(&mut self, in_out_files: &utils::InOutFiles) -> Result<()> {
+    pub fn export_policy(&mut self, in_out_files: &utils::InOutFiles) -> Result<()> {
         if !self.k8s_object.requires_policy() {
             return Ok(());
         }
-
-        self.k8s_object.get_containers_from_registry().await?;
 
         let policy_data = self.k8s_object.get_policy_data(
             self.k8s_object.as_ref(),
@@ -347,7 +343,7 @@ pub fn get_policy_data(
     infra_policy: &infra::InfraPolicy,
     config_maps: &Vec<config_maps::ConfigMap>,
     yaml_containers: &Vec<pod::Container>,
-    registry_containers: &Vec<registry::Container>
+    registry_containers: &Vec<registry::Container>,
 ) -> Result<PolicyData> {
     let mut policy_containers = Vec::new();
 
