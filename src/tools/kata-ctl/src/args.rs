@@ -12,6 +12,10 @@ use thiserror::Error;
 pub struct KataCtlCli {
     #[clap(subcommand)]
     pub command: Commands,
+    /// Set timeout value (seconds)
+    /// default value: 1 second
+    #[arg(short = 't', long = "timeout")]
+    pub timeout: Option<u64>,
 }
 
 #[derive(Debug, Subcommand)]

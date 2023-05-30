@@ -10,7 +10,7 @@ mod ops;
 mod types;
 mod utils;
 
-use anyhow::Result;
+use anyhow::{Result, Ok};
 use clap::Parser;
 use std::process::exit;
 
@@ -25,11 +25,23 @@ use ops::volume_ops::handle_direct_volume;
 
 fn real_main() -> Result<()> {
     let args = KataCtlCli::parse();
+    let mut timeout: u64 = 1; 
+
+    _ = match args.timeout {
+        Some(i) => {
+            timeout = i;
+            Ok(())
+        },
+        None => {
+            println!("Use default timeout value: 1 second");
+            Ok(())
+        },
+    };
 
     match args.command {
         Commands::Check(args) => handle_check(args),
-        Commands::DirectVolume(args) => handle_direct_volume(args),
-        Commands::Exec(args) => handle_exec(args),
+        Commands::DirectVolume(args) => handle_direct_volume(args, &timeout),
+        Commands::Exec(args) => handle_exec(args, &timeout),
         Commands::Env(args) => handle_env(args),
         Commands::Factory => handle_factory(),
         Commands::Iptables(args) => handle_iptables(args),

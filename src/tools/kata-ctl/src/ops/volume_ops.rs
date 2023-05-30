@@ -22,10 +22,9 @@ use shim_interface::shim_mgmt::{
     DIRECT_VOLUME_PATH_KEY, DIRECT_VOLUME_RESIZE_URL, DIRECT_VOLUME_STATS_URL,
 };
 
-const TIMEOUT: Duration = Duration::from_millis(2000);
 const CONTENT_TYPE_JSON: &str = "application/json";
 
-pub fn handle_direct_volume(vol_cmd: DirectVolumeCommand) -> Result<()> {
+pub fn handle_direct_volume(vol_cmd: DirectVolumeCommand, timeout: &u64) -> Result<()> {
     if !nix::unistd::Uid::effective().is_root() {
         return Err(anyhow!(
             "super-user privileges are required for the direct-volume subcommand"
@@ -35,9 +34,9 @@ pub fn handle_direct_volume(vol_cmd: DirectVolumeCommand) -> Result<()> {
     let cmd_result: Option<String> = match command {
         DirectVolSubcommand::Add(args) => add(&args.volume_path, &args.mount_info)?,
         DirectVolSubcommand::Remove(args) => remove(&args.volume_path)?,
-        DirectVolSubcommand::Stats(args) => executor::block_on(stats(&args.volume_path))?,
+        DirectVolSubcommand::Stats(args) => executor::block_on(stats(&args.volume_path, timeout))?,
         DirectVolSubcommand::Resize(args) => {
-            executor::block_on(resize(&args.volume_path, args.resize_size))?
+            executor::block_on(resize(&args.volume_path, args.resize_size, timeout))?
         }
     };
     if let Some(cmd_result) = cmd_result {
@@ -47,7 +46,7 @@ pub fn handle_direct_volume(vol_cmd: DirectVolumeCommand) -> Result<()> {
     Ok(())
 }
 
-async fn resize(volume_path: &str, size: u64) -> Result<Option<String>> {
+async fn resize(volume_path: &str, size: u64, timeout: &u64) -> Result<Option<String>> {
     let sandbox_id = get_sandbox_id_for_volume(volume_path)?;
     let mount_info = get_volume_mount_info(volume_path)?;
     let resize_req = ResizeVolumeRequest {
@@ -55,7 +54,10 @@ async fn resize(volume_path: &str, size: u64) -> Result<Option<String>> {
         volume_guest_path: mount_info.device,
     };
     let encoded = serde_json::to_string(&resize_req)?;
-    let shim_client = MgmtClient::new(&sandbox_id, Some(TIMEOUT))?;
+    let shim_client = MgmtClient::new(
+        &sandbox_id,
+        Some(Duration::from_millis(*timeout * 1000)),
+    )?;
 
     let url = DIRECT_VOLUME_RESIZE_URL;
     let response = shim_client
@@ -74,7 +76,7 @@ async fn resize(volume_path: &str, size: u64) -> Result<Option<String>> {
     Ok(None)
 }
 
-async fn stats(volume_path: &str) -> Result<Option<String>> {
+async fn stats(volume_path: &str, timeout: &u64) -> Result<Option<String>> {
     let sandbox_id = get_sandbox_id_for_volume(volume_path)?;
     let mount_info = get_volume_mount_info(volume_path)?;
 
@@ -82,7 +84,10 @@ async fn stats(volume_path: &str) -> Result<Option<String>> {
         .append_pair(DIRECT_VOLUME_PATH_KEY, &mount_info.device)
         .finish();
 
-    let shim_client = MgmtClient::new(&sandbox_id, Some(TIMEOUT))?;
+    let shim_client = MgmtClient::new(
+        &sandbox_id,
+        Some(Duration::from_millis(*timeout * 1000)),
+    )?;
     let response = shim_client.get(&req_url).await?;
     // turn body into string
     let body = format!("{:?}", response.into_body());
