@@ -553,6 +553,10 @@ func (f *FilesystemShare) UnshareRootFilesystem(ctx context.Context, c *Containe
 		if err2 := nydusContainerCleanup(ctx, getMountPath(c.sandbox.id), c); err2 != nil {
 			f.Logger().WithError(err2).Error("rollback failed nydusContainerCleanup")
 		}
+	} else if c.rootFs.Type == TarRootFSType {
+		for _, l := range c.rootFs.Options {
+			c.sandbox.RemoveLayerDevice(l)
+		}
 	} else {
 		if err := bindUnmountContainerRootfs(ctx, getMountPath(f.sandbox.ID()), c.id); err != nil {
 			return err
