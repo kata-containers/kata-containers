@@ -860,6 +860,7 @@ impl Vm {
 
 #[cfg(test)]
 pub mod tests {
+    #[cfg(target_arch = "x86_64")]
     use kvm_ioctls::VcpuExit;
     use linux_loader::cmdline::Cmdline;
     use test_utils::skip_if_not_root;

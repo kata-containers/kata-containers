@@ -1,0 +1,163 @@
+From 16e3b3da9fb8b79b006d8c9d1f68b2dec9980d72 Mon Sep 17 00:00:00 2001
+Message-Id: <16e3b3da9fb8b79b006d8c9d1f68b2dec9980d72.1685428663.git.jiyunxue@linux.alibaba.com>
+From: xuejun-xj <jiyunxue@linux.alibaba.com>
+Date: Wed, 10 May 2023 13:55:43 +0800
+Subject: [PATCH 1/3] upcall: dragonball-devmgr suppots cpu hotplug on arm64
+
+Enable vcpuhotplug feature on aarch64 in guest kernel. It communicates
+with dragonball by using upcall. This commit does these changes:
+
+1. Wraps x86 related fields with CONFIG_X86_64.
+2. Add "cpu_event_notification" for arm64.
+3. Add "add_cpu_dev" and "del_cpu_dev" for arm64.
+
+Signed-off-by: xuejun-xj <jiyunxue@linux.alibaba.com>
+Reviewed-by : Chao Wu <chaowu@linux.alibaba.com>
+Reviewed-by: Zizheng Bian <zizheng.bian@linux.alibaba.com>
+Reviewed-by: Baolin Wang <baolin.wang@linux.alibaba.com>
+---
+ .../upcall_srv/dragonball_device_manager.c    | 84 ++++++++++++++++++-
+ 1 file changed, 81 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c b/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c
+index 5a95b2ba63e8..088d38623b8d 100644
+--- a/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c
++++ b/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c
+@@ -85,15 +85,21 @@ struct devmgr_req {
+ #if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU)
+ 		struct {
+ 			uint8_t count;
++#ifdef CONFIG_X86_64
+ 			uint8_t apic_ver;
+ 			uint8_t apic_ids[256];
++#endif
+ 		} cpu_dev_info;
+ #endif
+ 	} msg_load;
+ };
+ 
+ struct cpu_dev_reply_info {
++#if defined(CONFIG_X86_64)
+ 	uint32_t apic_index;
++#elif defined(CONFIG_ARM64)
++	uint32_t cpu_id;
++#endif
+ };
+ 
+ struct devmgr_reply {
+@@ -190,7 +196,8 @@ static void _fill_msg_header(struct devmgr_msg_header *msg, uint32_t msg_size,
+ 	msg->msg_flags     = msg_flags;
+ }
+ 
+-#if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU) && defined(CONFIG_X86_64)
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU)
++#if defined(CONFIG_X86_64)
+ static int get_cpu_id(int apic_id)
+ {
+ 	int i;
+@@ -219,6 +226,24 @@ static void cpu_event_notification(
+ 	_fill_msg_header(&rep->msg_header,
+ 	sizeof(struct cpu_dev_reply_info), action_type, 0);
+ }
++#elif defined(CONFIG_ARM64)
++/**
++ * Return the first failed hotplug index of the cpu_id to dragonball.
++ * If hotplug/hotunplug succeeds, it will equals to the expected cpu count.
++ */
++static void cpu_event_notification(
++	uint8_t cpu_id,
++	int ret,
++	uint32_t action_type,
++	struct devmgr_reply *rep)
++{
++	pr_info("cpu event notification: cpu_id %d\n", cpu_id);
++	rep->msg_load.cpu_dev_info.cpu_id = cpu_id;
++	rep->ret = ret;
++	_fill_msg_header(&rep->msg_header,
++	sizeof(struct cpu_dev_reply_info), action_type, 0);
++}
++#endif
+ #endif
+ 
+ #if defined(CONFIG_DRAGONBALL_HOTPLUG_VIRTIO_MMIO)
+@@ -262,7 +287,8 @@ static int del_mmio_dev(struct devmgr_req *req,
+ #endif
+ 
+ 
+-#if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU) && defined(CONFIG_X86_64)
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU)
++#if defined(CONFIG_X86_64)
+ static int add_cpu_upcall(int apic_id, uint8_t apic_ver)
+ {
+ 	int cpu_id, node_id;
+@@ -430,6 +456,58 @@ static int del_cpu_dev(struct devmgr_req *req,
+ 		cpu_event_notification(i, ret, DEL_CPU, rep);
+ 	return ret;
+ }
++#elif defined(CONFIG_ARM64)
++static int add_cpu_dev(struct devmgr_req *req, struct devmgr_reply *rep)
++{
++	int i, ret = 0;
++	unsigned int cpu_id, nr_online_cpus;
++	uint8_t count = req->msg_load.cpu_dev_info.count;
++
++	nr_online_cpus = num_online_cpus();
++
++	pr_info("Current vcpu number: %d, Add vcpu number: %d\n",
++		nr_online_cpus, count);
++
++	for (i = 0; i < count; ++i) {
++		cpu_id = nr_online_cpus + i;
++		ret = add_cpu(cpu_id);
++		if (ret != 0)
++			break;
++	}
++
++	cpu_event_notification(nr_online_cpus + i, ret, ADD_CPU, rep);
++	return ret;
++}
++
++static int del_cpu_dev(struct devmgr_req *req, struct devmgr_reply *rep)
++{
++	int i, ret = 0;
++	unsigned int cpu_id, nr_online_cpus;
++	uint8_t count = req->msg_load.cpu_dev_info.count;
++
++	nr_online_cpus = num_online_cpus();
++
++	pr_info("Current vcpu number: %d, Delete vcpu number: %d\n",
++		nr_online_cpus, count);
++
++	if (count >= nr_online_cpus) {
++		pr_err("cpu del parameter check error: cannot remove all vcpus\n");
++		ret = -EINVAL;
++		cpu_event_notification(0, ret, DEL_CPU, rep);
++		return ret;
++	}
++
++	for (i = 0; i < count; ++i) {
++		cpu_id = nr_online_cpus - i - 1;
++		ret = remove_cpu(cpu_id);
++		if (ret != 0)
++			break;
++	}
++
++	cpu_event_notification(nr_online_cpus - i, ret, DEL_CPU, rep);
++	return ret;
++}
++#endif
+ #endif
+ 
+ static struct {
+@@ -440,7 +518,7 @@ static struct {
+ 	{ADD_MMIO, add_mmio_dev},
+ 	{DEL_MMIO, del_mmio_dev},
+ #endif
+-#if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU) && defined(CONFIG_X86_64)
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU)
+ 	{ADD_CPU, add_cpu_dev},
+ 	{DEL_CPU, del_cpu_dev},
+ #endif
+-- 
+2.28.0
+
