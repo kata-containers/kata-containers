@@ -77,11 +77,9 @@ impl Container {
 
         // Log the contents of the config layer.
         if log::max_level() >= LevelFilter::Debug {
-            println!("config layer:");
             let mut deserializer = serde_json::Deserializer::from_str(&config_layer_str);
             let mut serializer = serde_json::Serializer::pretty(io::stderr());
             serde_transcode::transcode(&mut deserializer, &mut serializer).unwrap();
-            println!("");
         }
 
         let config_layer: DockerConfigLayer = serde_json::from_str(&config_layer_str).unwrap();
