@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -32,6 +32,7 @@ jobs:
         run: |
           # Removing man-db, workflow kept failing, fixes: #4480
           sudo apt -y remove --purge man-db
+          sudo apt-get update
           sudo apt-get install -y git git-extras
           kata_url="https://github.com/kata-containers/kata-containers"
           latest_version=$(git ls-remote --tags ${kata_url}  | egrep -o "refs.*" | egrep -v "\-alpha|\-rc|{}" | egrep -o "[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+" | sort -V -r | head -1)

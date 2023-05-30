@@ -340,7 +340,7 @@ impl BlockDeviceMgr {
     /// the existing entry.
     /// Inserting a secondary root block device will fail.
     pub fn insert_device(
-        device_mgr: &mut DeviceManager,
+        &mut self,
         mut ctx: DeviceOpContext,
         config: BlockDeviceConfigInfo,
     ) -> std::result::Result<(), BlockDeviceError> {
@@ -348,10 +348,8 @@ impl BlockDeviceMgr {
             return Err(BlockDeviceError::UpdateNotAllowedPostBoot);
         }
 
-        let mgr = &mut device_mgr.block_manager;
-
         // If the id of the drive already exists in the list, the operation is update.
-        match mgr.get_index_of_drive_id(config.id()) {
+        match self.get_index_of_drive_id(config.id()) {
             Some(index) => {
                 // No support for runtime update yet.
                 if ctx.is_hotplug {
@@ -359,19 +357,19 @@ impl BlockDeviceMgr {
                         config.path_on_host.clone(),
                     ))
                 } else {
-                    for (idx, info) in mgr.info_list.iter().enumerate() {
+                    for (idx, info) in self.info_list.iter().enumerate() {
                         if idx != index {
                             info.config.check_conflicts(&config)?;
                         }
                     }
-                    mgr.update(index, config)
+                    self.update(index, config)
                 }
             }
             None => {
-                for info in mgr.info_list.iter() {
+                for info in self.info_list.iter() {
                     info.config.check_conflicts(&config)?;
                 }
-                let index = mgr.create(config.clone())?;
+                let index = self.create(config.clone())?;
                 if !ctx.is_hotplug {
                     return Ok(());
                 }
@@ -383,17 +381,16 @@ impl BlockDeviceMgr {
                         let dev = DeviceManager::create_mmio_virtio_device(
                             device,
                             &mut ctx,
-                            config.use_shared_irq.unwrap_or(mgr.use_shared_irq),
+                            config.use_shared_irq.unwrap_or(self.use_shared_irq),
                             config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
                         )
                         .map_err(BlockDeviceError::DeviceManager)?;
-                        mgr.update_device_by_index(index, Arc::clone(&dev))?;
+                        self.update_device_by_index(index, Arc::clone(&dev))?;
                         // live-upgrade need save/restore device from info.device.
-                        mgr.info_list[index].set_device(dev.clone());
+                        self.info_list[index].set_device(dev.clone());
                         ctx.insert_hotplug_mmio_device(&dev, None).map_err(|e| {
                             let logger = ctx.logger().new(slog::o!());
-                            BlockDeviceMgr::remove_device(device_mgr, ctx, &config.drive_id)
-                                .unwrap();
+                            self.remove_device(ctx, &config.drive_id).unwrap();
                             error!(
                                 logger,
                                 "failed to hot-add virtio block device {}, {:?}",
@@ -466,7 +463,7 @@ impl BlockDeviceMgr {
 
     /// remove a block device, it basically is the inverse operation of `insert_device``
     pub fn remove_device(
-        dev_mgr: &mut DeviceManager,
+        &mut self,
         mut ctx: DeviceOpContext,
         drive_id: &str,
     ) -> std::result::Result<(), BlockDeviceError> {
@@ -474,8 +471,7 @@ impl BlockDeviceMgr {
             return Err(BlockDeviceError::UpdateNotAllowedPostBoot);
         }
 
-        let mgr = &mut dev_mgr.block_manager;
-        match mgr.remove(drive_id) {
+        match self.remove(drive_id) {
             Some(mut info) => {
                 info!(ctx.logger(), "remove drive {}", info.config.drive_id);
                 if let Some(device) = info.device.take() {
@@ -731,15 +727,14 @@ impl BlockDeviceMgr {
 
     /// Update the ratelimiter settings of a virtio blk device.
     pub fn update_device_ratelimiters(
-        device_mgr: &mut DeviceManager,
+        &mut self,
         new_cfg: BlockDeviceConfigUpdateInfo,
     ) -> std::result::Result<(), BlockDeviceError> {
-        let mgr = &mut device_mgr.block_manager;
-        match mgr.get_index_of_drive_id(&new_cfg.drive_id) {
+        match self.get_index_of_drive_id(&new_cfg.drive_id) {
             Some(index) => {
-                let config = &mut mgr.info_list[index].config;
+                let config = &mut self.info_list[index].config;
                 config.rate_limiter = new_cfg.rate_limiter.clone();
-                let device = mgr.info_list[index]
+                let device = self.info_list[index]
                     .device
                     .as_mut()
                     .ok_or_else(|| BlockDeviceError::InvalidDeviceId("".to_owned()))?;
@@ -827,12 +822,11 @@ mod tests {
 
         let mut vm = crate::vm::tests::create_vm_instance();
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        assert!(BlockDeviceMgr::insert_device(
-            vm.device_manager_mut(),
-            ctx,
-            dummy_block_device.clone(),
-        )
-        .is_ok());
+        assert!(vm
+            .device_manager_mut()
+            .block_manager
+            .insert_device(ctx, dummy_block_device.clone(),)
+            .is_ok());
 
         assert_eq!(vm.device_manager().block_manager.info_list.len(), 1);
         assert!(!vm.device_manager().block_manager.has_root_block_device());
@@ -897,7 +891,9 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
         };
-        BlockDeviceMgr::insert_device(vm.device_manager_mut(), device_op_ctx, dummy_block_device)
+        vm.device_manager_mut()
+            .block_manager
+            .insert_device(device_op_ctx, dummy_block_device)
             .unwrap();
 
         let cfg = BlockDeviceConfigUpdateInfo {
@@ -923,7 +919,9 @@ mod tests {
         let expected_error = "could not send patch message to the block epoll handler".to_string();
 
         assert_eq!(
-            BlockDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), cfg)
+            vm.device_manager_mut()
+                .block_manager
+                .update_device_ratelimiters(cfg)
                 .unwrap_err()
                 .to_string(),
             expected_error
@@ -938,7 +936,9 @@ mod tests {
         let expected_error = format!("invalid block device id '{0}'", cfg2.drive_id);
 
         assert_eq!(
-            BlockDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), cfg2)
+            vm.device_manager_mut()
+                .block_manager
+                .update_device_ratelimiters(cfg2)
                 .unwrap_err()
                 .to_string(),
             expected_error
@@ -968,12 +968,11 @@ mod tests {
 
         let mut vm = crate::vm::tests::create_vm_instance();
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        assert!(BlockDeviceMgr::insert_device(
-            vm.device_manager_mut(),
-            ctx,
-            dummy_block_device.clone(),
-        )
-        .is_ok());
+        assert!(vm
+            .device_manager_mut()
+            .block_manager
+            .insert_device(ctx, dummy_block_device.clone(),)
+            .is_ok());
 
         assert_eq!(vm.device_manager().block_manager.info_list.len(), 1);
         assert!(vm.device_manager().block_manager.has_root_block);
@@ -1027,12 +1026,16 @@ mod tests {
 
         let mut vm = crate::vm::tests::create_vm_instance();
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, root_block_device_1).unwrap();
+        vm.device_manager_mut()
+            .block_manager
+            .insert_device(ctx, root_block_device_1)
+            .unwrap();
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        assert!(
-            BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, root_block_device_2)
-                .is_err()
-        );
+        assert!(vm
+            .device_manager_mut()
+            .block_manager
+            .insert_device(ctx, root_block_device_2)
+            .is_err());
     }
 
     #[test]
@@ -1112,13 +1115,22 @@ mod tests {
         assert_eq!(vm.device_manager().block_manager.info_list.len(), 3);
 
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, root_block_device).unwrap();
+        vm.device_manager_mut()
+            .block_manager
+            .insert_device(ctx, root_block_device)
+            .unwrap();
 
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, dummy_block_device_2).unwrap();
+        vm.device_manager_mut()
+            .block_manager
+            .insert_device(ctx, dummy_block_device_2)
+            .unwrap();
 
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, dummy_block_device_3).unwrap();
+        vm.device_manager_mut()
+            .block_manager
+            .insert_device(ctx, dummy_block_device_3)
+            .unwrap();
     }
 
     #[test]
@@ -1182,13 +1194,19 @@ mod tests {
         let mut vm = crate::vm::tests::create_vm_instance();
 
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, dummy_block_device_2.clone())
+        vm.device_manager_mut()
+            .block_manager
+            .insert_device(ctx, dummy_block_device_2.clone())
             .unwrap();
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, dummy_block_device_3.clone())
+        vm.device_manager_mut()
+            .block_manager
+            .insert_device(ctx, dummy_block_device_3.clone())
             .unwrap();
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, root_block_device.clone())
+        vm.device_manager_mut()
+            .block_manager
+            .insert_device(ctx, root_block_device.clone())
             .unwrap();
 
         assert!(vm.device_manager().block_manager.has_root_block_device(),);
@@ -1255,9 +1273,14 @@ mod tests {
 
         // Add 2 block devices.
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, root_block_device).unwrap();
+        vm.device_manager_mut()
+            .block_manager
+            .insert_device(ctx, root_block_device)
+            .unwrap();
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, dummy_block_device_2.clone())
+        vm.device_manager_mut()
+            .block_manager
+            .insert_device(ctx, dummy_block_device_2.clone())
             .unwrap();
 
         // Get index zero.
@@ -1286,7 +1309,9 @@ mod tests {
         // Update OK.
         dummy_block_device_2.is_read_only = true;
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, dummy_block_device_2.clone())
+        vm.device_manager_mut()
+            .block_manager
+            .insert_device(ctx, dummy_block_device_2.clone())
             .unwrap();
 
         let index = vm
@@ -1306,21 +1331,21 @@ mod tests {
         let dummy_path_3 = PathBuf::from(dummy_filename_3);
         dummy_block_device_2.path_on_host = dummy_path_3;
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        assert!(BlockDeviceMgr::insert_device(
-            vm.device_manager_mut(),
-            ctx,
-            dummy_block_device_2.clone(),
-        )
-        .is_err());
+        assert!(vm
+            .device_manager_mut()
+            .block_manager
+            .insert_device(ctx, dummy_block_device_2.clone(),)
+            .is_err());
 
         // Update with 2 root block devices.
         dummy_block_device_2.path_on_host = dummy_path_2.clone();
         dummy_block_device_2.is_root_device = true;
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        assert!(
-            BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, dummy_block_device_2,)
-                .is_err(),
-        );
+        assert!(vm
+            .device_manager_mut()
+            .block_manager
+            .insert_device(ctx, dummy_block_device_2,)
+            .is_err(),);
 
         // Switch roots and add a PARTUUID for the new one.
         let root_block_device_old = BlockDeviceConfigInfo {
@@ -1354,9 +1379,15 @@ mod tests {
             use_generic_irq: None,
         };
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, root_block_device_old).unwrap();
+        vm.device_manager_mut()
+            .block_manager
+            .insert_device(ctx, root_block_device_old)
+            .unwrap();
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
-        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, root_block_device_new).unwrap();
+        vm.device_manager_mut()
+            .block_manager
+            .insert_device(ctx, root_block_device_new)
+            .unwrap();
         assert!(vm.device_manager().block_manager.has_part_uuid_root);
     }
 }

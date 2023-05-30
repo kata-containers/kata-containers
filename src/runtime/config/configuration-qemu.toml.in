@@ -380,6 +380,11 @@ pflashes = []
 # Default false
 #hotplug_vfio_on_root_bus = true
 
+# In a confidential compute environment hot-plugging can compromise
+# security. Enable cold-plugging of VFIO devices to a root-port.
+# The default setting is  "no-port", which means disabled. 
+#cold_plug_vfio = "root-port" 
+
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
 # The value means the number of pcie_root_port

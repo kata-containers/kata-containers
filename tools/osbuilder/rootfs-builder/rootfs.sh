@@ -214,11 +214,11 @@ docker_extra_args()
 		args+=" -v ${gentoo_local_portage_dir}:/usr/portage/packages"
 		args+=" --volumes-from ${gentoo_portage_container}"
 		;;
-        debian | ubuntu | suse)
+	debian | ubuntu | suse)
 		source /etc/os-release
 
 		case "$ID" in
-                fedora | centos | rhel)
+		fedora | centos | rhel)
 			# Depending on the podman version, we'll face issues when passing
 		        # `--security-opt apparmor=unconfined` on a system where not apparmor is not installed.
 			# Because of this, let's just avoid adding this option when the host OS comes from Red Hat.

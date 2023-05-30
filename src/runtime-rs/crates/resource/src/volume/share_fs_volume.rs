@@ -12,6 +12,8 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use hypervisor::device::device_manager::DeviceManager;
+use tokio::sync::RwLock;
 
 use super::Volume;
 use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
@@ -36,6 +38,7 @@ impl ShareFsVolume {
         share_fs: &Option<Arc<dyn ShareFs>>,
         m: &oci::Mount,
         cid: &str,
+        readonly: bool,
     ) -> Result<Self> {
         // The file_name is in the format of "sandbox-{uuid}-{file_name}"
         let file_name = Path::new(&m.source).file_name().unwrap().to_str().unwrap();
@@ -69,8 +72,6 @@ impl ShareFsVolume {
                 }
             }
             Some(share_fs) => {
-                let readonly = m.options.iter().any(|opt| opt == "ro");
-
                 let share_fs_mount = share_fs.get_share_fs_mount();
                 let mounted_info_set = share_fs.mounted_info_set();
                 let mut mounted_info_set = mounted_info_set.lock().await;
@@ -159,7 +160,7 @@ impl Volume for ShareFsVolume {
         Ok(self.storages.clone())
     }
 
-    async fn cleanup(&self) -> Result<()> {
+    async fn cleanup(&self, _device_manager: &RwLock<DeviceManager>) -> Result<()> {
         let share_fs = match self.share_fs.as_ref() {
             Some(fs) => fs,
             None => return Ok(()),
@@ -225,6 +226,10 @@ impl Volume for ShareFsVolume {
         }
 
         Ok(())
+    }
+
+    fn get_device_id(&self) -> Result<Option<String>> {
+        Ok(None)
     }
 }
 

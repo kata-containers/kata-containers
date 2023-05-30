@@ -245,6 +245,10 @@ func (p *HybridVSockTTRPCMockImp) ResizeVolume(ctx context.Context, req *pb.Resi
 	return &gpb.Empty{}, nil
 }
 
+func (p *HybridVSockTTRPCMockImp) RemoveStaleVirtiofsShareMounts(ctx context.Context, req *pb.RemoveStaleVirtiofsShareMountsRequest) (*gpb.Empty, error) {
+	return &gpb.Empty{}, nil
+}
+
 func (p *HybridVSockTTRPCMockImp) PullImage(ctx context.Context, req *pb.PullImageRequest) (*gpb.Empty, error) {
 	return &gpb.Empty{}, nil
 }

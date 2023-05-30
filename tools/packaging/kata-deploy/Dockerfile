@@ -24,6 +24,7 @@ apt-get update && \
 apt-get install -y --no-install-recommends kubectl && \
 apt-get clean && rm -rf /var/lib/apt/lists/ && \
 mkdir -p ${DESTINATION} && \
-tar xvf ${KATA_ARTIFACTS} -C ${DESTINATION}
+tar xvf ${WORKDIR}/${KATA_ARTIFACTS} -C ${DESTINATION} && \
+rm -f ${WORKDIR}/${KATA_ARTIFACTS}
 
 COPY scripts ${DESTINATION}/scripts

@@ -340,7 +340,7 @@ generate_qemu_options() {
 		qemu_options+=(functionality:--disable-virtiofsd)
 		;;
 	ppc64le)
-		qemu_options+=(functionality:--enable-virtiofsd)
+		qemu_options+=(functionality:--disable-virtiofsd)
 		;;
 	s390x)
 		qemu_options+=(functionality:--disable-virtiofsd)
