@@ -52,7 +52,7 @@ jobs:
             -s "Standard_D4s_v5" \
             --node-count 1 \
             --generate-ssh-keys \
-            ${{ matrix.host_os == 'cbl-mariner' && '--os-sku mariner --workload-runtime KataMshvVmIsolation' }}
+            $([ "${{ matrix.host_os == 'cbl-mariner' }}" = "true" ] && echo "--os-sku mariner --workload-runtime KataMshvVmIsolation")
 
       - name: Install `bats`
         run: |
