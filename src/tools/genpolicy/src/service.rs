@@ -174,7 +174,7 @@ impl yaml::K8sObject for Service {
         Err(anyhow!("Unsupported"))
     }
 
-    fn serialize(&self, _in_out_files: &utils::InOutFiles) -> Result<()> {
-        Err(anyhow!("Unsupported"))
+    fn serialize(&self) -> Result<String> {
+        Ok(serde_yaml::to_string(&self)?)
     }
 }

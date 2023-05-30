@@ -38,10 +38,7 @@ pub trait K8sObject {
         in_out_files: &utils::InOutFiles,
     ) -> Result<()>;
 
-    fn serialize(
-        &self,
-        in_out_files: &utils::InOutFiles,
-    ) -> Result<()>;
+    fn serialize(&self) -> Result<String>;
 
     fn get_metadata_name(&self) -> Result<String>;
     fn get_host_name(&self) -> Result<String>;
