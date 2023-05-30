@@ -344,21 +344,7 @@ impl yaml::K8sObject for Pod {
         Ok(())
     }
 
-    fn serialize(&self, in_out_files: &utils::InOutFiles) -> Result<()> {
-        if let Some(yaml) = &in_out_files.yaml_file {
-            serde_yaml::to_writer(
-                std::fs::OpenOptions::new()
-                    .write(true)
-                    .truncate(true)
-                    .create(true)
-                    .open(yaml)
-                    .map_err(|e| anyhow!(e))?,
-                &self,
-            )?;
-        } else {
-            serde_yaml::to_writer(std::io::stdout(), &self)?;
-        }
-
-        Ok(())
+    fn serialize(&self) -> Result<String> {
+        Ok(serde_yaml::to_string(&self)?)
     }
 }

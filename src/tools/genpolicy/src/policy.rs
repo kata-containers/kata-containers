@@ -24,6 +24,7 @@ use anyhow::{anyhow, Result};
 use log::debug;
 use oci::*;
 use serde::{Deserialize, Serialize};
+use serde_yaml::Value;
 use sha2::{Digest, Sha256};
 use std::boxed;
 use std::collections::BTreeMap;
@@ -64,7 +65,7 @@ fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn yaml::K8sObje
 }
 
 pub struct AgentPolicy {
-    k8s_object: boxed::Box<dyn yaml::K8sObject>,
+    k8s_objects: Vec<boxed::Box<dyn yaml::K8sObject>>,
     config_maps: Vec<config_maps::ConfigMap>,
     rules_input_file: String,
     infra_policy: infra::InfraPolicy,
@@ -180,8 +181,19 @@ pub struct PersistentVolumeClaimVolume {
 
 impl AgentPolicy {
     pub async fn from_files(in_out_files: &utils::InOutFiles) -> Result<AgentPolicy> {
-        let yaml_string = yaml::get_input_yaml(&in_out_files.yaml_file)?;
-        let header = yaml::get_yaml_header(&yaml_string)?;
+        let mut k8s_objects = Vec::new();
+        let yaml_contents = yaml::get_input_yaml(&in_out_files.yaml_file)?;
+
+        for document in serde_yaml::Deserializer::from_str(&yaml_contents) {
+            let doc_mapping = Value::deserialize(document)?;
+            let yaml_string = serde_yaml::to_string(&doc_mapping)?;
+            let header = yaml::get_yaml_header(&yaml_string)?;
+            let mut k8s_object = new_k8s_object(&header.kind, &yaml_string)?;
+            k8s_object.initialize().await?;
+            k8s_objects.push(k8s_object);
+        }
+
+        let infra_policy = infra::InfraPolicy::new(&in_out_files.infra_data_file)?;
 
         let mut config_maps = Vec::new();
         if let Some(config_map_files) = &in_out_files.config_map_files {
@@ -190,13 +202,8 @@ impl AgentPolicy {
             }
         }
 
-        let infra_policy = infra::InfraPolicy::new(&in_out_files.infra_data_file)?;
-
-        let mut k8s_object = new_k8s_object(&header.kind, &yaml_string)?;
-        k8s_object.initialize().await?;
-
         Ok(AgentPolicy {
-            k8s_object,
+            k8s_objects,
             rules_input_file: in_out_files.rules_file.to_string(),
             infra_policy,
             config_maps,
@@ -204,20 +211,36 @@ impl AgentPolicy {
     }
 
     pub fn export_policy(&mut self, in_out_files: &utils::InOutFiles) -> Result<()> {
-        if !self.k8s_object.requires_policy() {
-            return Ok(());
+        let mut yaml_string = String::new();
+
+        for k8s_object in &mut self.k8s_objects {
+            if k8s_object.requires_policy() {
+                let rules = read_to_string(&self.rules_input_file)?;
+                k8s_object.generate_policy(
+                    &rules,
+                    &self.infra_policy,
+                    &self.config_maps,
+                    in_out_files,
+                )?;
+            }
+
+            yaml_string += &k8s_object.serialize()?;
         }
 
-        let rules = read_to_string(&self.rules_input_file)?;
-        self.k8s_object.generate_policy(
-            &rules,
-            &self.infra_policy,
-            &self.config_maps,
-            in_out_files,
-        )?;
-        self.k8s_object.serialize(in_out_files)?;
-
-       Ok(())
+        if let Some(yaml_file) = &in_out_files.yaml_file {
+            std::fs::OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .create(true)
+                .open(yaml_file)
+                .map_err(|e| anyhow!(e))?
+                .write_all(&yaml_string.as_bytes())
+                .map_err(|e| anyhow!(e))
+        } else {
+            std::io::stdout()
+                .write_all(&yaml_string.as_bytes())
+                .map_err(|e| anyhow!(e))
+        }
     }
 }
 
