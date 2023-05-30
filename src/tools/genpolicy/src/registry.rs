@@ -236,23 +236,21 @@ async fn get_verity_hash(
         }
     }
 
-    info!("Decompressing layer");
-    if !tokio::process::Command::new("gunzip")
-        .arg(&file_path)
-        .arg("-f")
-        .arg("-k")
-        .spawn()?
-        .wait()
-        .await?
-        .success()
     {
-        let _ = fs::remove_file(&file_path);
-        return Err(anyhow!("unable to decompress layer"));
+        info!("Decompressing layer");
+        let compressed = std::fs::File::open(&file_path)?;
+        file_path.set_extension("");
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&file_path)?;
+        let mut gz_decoder = flate2::read::GzDecoder::new(compressed);
+        std::io::copy(&mut gz_decoder, &mut file)?;
     }
 
     {
-        file_path.set_extension("");
-
         info!("Adding tarfs index to layer");
         let mut file = std::fs::OpenOptions::new()
             .read(true)
