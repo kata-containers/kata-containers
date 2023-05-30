@@ -8,10 +8,16 @@
 
 use crate::config_maps;
 use crate::containerd;
+use crate::deployment;
 use crate::infra;
 use crate::kata;
+use crate::list;
+use crate::pod;
 use crate::registry;
+use crate::replication_controller;
+use crate::service;
 use crate::utils;
+use crate::volumes;
 use crate::yaml;
 
 use anyhow::{anyhow, Result};
@@ -19,15 +25,48 @@ use log::debug;
 use oci::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::boxed;
 use std::collections::BTreeMap;
+use std::fs::read_to_string;
+use std::io::Write;
 
-pub struct PodPolicy {
-    yaml: yaml::Yaml,
+/// Creates one of the supported K8s objects from a YAML string.
+fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn yaml::K8sObject>> {
+    match kind {
+        "Deployment" => {
+            let deployment: deployment::Deployment = serde_yaml::from_str(&yaml)?;
+            debug!("{:#?}", &deployment);
+            Ok(boxed::Box::new(deployment))
+        }
+        "List" => {
+            let list: list::List = serde_yaml::from_str(&yaml)?;
+            debug!("{:#?}", &list);
+            Ok(boxed::Box::new(list))
+        }
+        "Pod" => {
+            let pod: pod::Pod = serde_yaml::from_str(&yaml)?;
+            debug!("{:#?}", &pod);
+            Ok(boxed::Box::new(pod))
+        }
+        "ReplicationController" => {
+            let controller: replication_controller::ReplicationController =
+                serde_yaml::from_str(&yaml)?;
+            debug!("{:#?}", &controller);
+            Ok(boxed::Box::new(controller))
+        }
+        "Service" => {
+            let service: service::Service = serde_yaml::from_str(&yaml)?;
+            debug!("{:#?}", &service);
+            Ok(boxed::Box::new(service))
+        }
+        _ => Err(anyhow!("Unsupported YAML spec kind: {}", kind)),
+    }
+}
+
+pub struct AgentPolicy {
+    k8s_object: boxed::Box<dyn yaml::K8sObject>,
     config_maps: Vec<config_maps::ConfigMap>,
-
-    yaml_file: Option<String>,
     rules_input_file: String,
-
     infra_policy: infra::InfraPolicy,
 }
 
@@ -42,9 +81,6 @@ pub struct PodPolicy {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PolicyData {
     pub containers: Vec<ContainerPolicy>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub volumes: Option<Volumes>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -142,9 +178,10 @@ pub struct PersistentVolumeClaimVolume {
     pub mount_source: String,
 }
 
-impl PodPolicy {
-    pub fn from_files(in_out_files: &utils::InOutFiles) -> Result<Self> {
-        let yaml = yaml::Yaml::new(&in_out_files.yaml_file)?;
+impl AgentPolicy {
+    pub async fn from_files(in_out_files: &utils::InOutFiles) -> Result<AgentPolicy> {
+        let yaml_string = yaml::get_input_yaml(&in_out_files.yaml_file)?;
+        let header = yaml::get_yaml_header(&yaml_string)?;
 
         let mut config_maps = Vec::new();
         if let Some(config_map_files) = &in_out_files.config_map_files {
@@ -155,251 +192,32 @@ impl PodPolicy {
 
         let infra_policy = infra::InfraPolicy::new(&in_out_files.infra_data_file)?;
 
-        let mut yaml_file = None;
-        if let Some(yaml_path) = &in_out_files.yaml_file {
-            yaml_file = Some(yaml_path.to_string());
-        }
+        let mut k8s_object = new_k8s_object(&header.kind, &yaml_string)?;
+        k8s_object.initialize().await?;
 
-        Ok(PodPolicy {
-            yaml,
-            yaml_file,
+        Ok(AgentPolicy {
+            k8s_object,
             rules_input_file: in_out_files.rules_file.to_string(),
             infra_policy,
             config_maps,
         })
     }
 
-    pub async fn export_policy(&mut self, in_out_files: &utils::InOutFiles) -> Result<()> {
-        let mut policy_data = PolicyData {
-            containers: Vec::new(),
-            volumes: None,
-        };
-
-        if self.yaml.is_deployment() {
-            if let Some(template) = &self.yaml.spec.template {
-                policy_data.containers = self.get_policy_data(&template.spec.containers).await?;
-            }
-        } else {
-            policy_data.containers = self.get_policy_data(&self.yaml.spec.containers).await?;
+    pub fn export_policy(&mut self, in_out_files: &utils::InOutFiles) -> Result<()> {
+        if !self.k8s_object.requires_policy() {
+            return Ok(());
         }
 
-        let json_data = serde_json::to_string_pretty(&policy_data)
-            .map_err(|e| anyhow!(e))
-            .unwrap();
-
-        self.yaml.export_policy(
-            &json_data,
-            &self.rules_input_file,
-            &self.yaml_file,
-            &in_out_files.output_policy_file,
-        )?;
-
-        Ok(())
-    }
-
-    async fn get_policy_data(
-        &self,
-        spec_containers: &Option<Vec<yaml::Container>>,
-    ) -> Result<Vec<ContainerPolicy>> {
-        let mut policy_containers = Vec::new();
-
-        if let Some(containers) = spec_containers {
-            for index in 0..containers.len() {
-                policy_containers.push(self.get_container_policy_by_yaml_type(index).await?);
-            }
-        }
-
-        Ok(policy_containers)
-    }
-
-    // Create ContainerPolicy object based on:
-    // - Container image configuration, pulled from the registry.
-    // - containerd default values for each container.
-    // - Kata Containers namespaces.
-    // - K8s infrastructure information.
-    pub async fn get_container_policy_by_yaml_type(
-        &self,
-        container_index: usize,
-    ) -> Result<ContainerPolicy> {
-        if self.yaml.is_deployment() {
-            if let Some(template) = &self.yaml.spec.template {
-                if let Some(containers) = &template.spec.containers {
-                    self.get_container_policy(container_index, &containers[container_index])
-                        .await
-                } else {
-                    Err(anyhow!("No containers in Deployment pod template!"))
-                }
-            } else {
-                Err(anyhow!("No pod template in Deployment spec!"))
-            }
-        } else if let Some(containers) = &self.yaml.spec.containers {
-            self.get_container_policy(container_index, &containers[container_index])
-                .await
-        } else {
-            Err(anyhow!("No containers in Pod spec!"))
-        }
-    }
-
-    pub async fn get_container_policy(
-        &self,
-        container_index: usize,
-        yaml_container: &yaml::Container,
-    ) -> Result<ContainerPolicy> {
-        let is_pause_container = container_index == 0;
-        let is_deployment_yaml = self.yaml.is_deployment();
-
-        let mut pod_name = String::new();
-        if let Some(name) = &self.yaml.metadata.name {
-            pod_name = name.clone();
-        }
-
-        // Example: "hostname": "^busybox-cc$",
-        let mut hostname = "^".to_string() + &pod_name;
-        if is_deployment_yaml {
-            // Example: "hostname": "^busybox-cc-5bdd867667-xxmdz$",
-            hostname += "-[a-z0-9]{10}-[a-z0-9]{5}"
-        }
-        hostname += "$";
-
-        let registry_container = registry::Container::new(&yaml_container.image).await?;
-        let mut infra_container = &self.infra_policy.pause_container;
-        if !is_pause_container {
-            infra_container = &self.infra_policy.other_container;
-        }
-
-        let mut root: Option<Root> = None;
-        if let Some(infra_root) = &infra_container.root {
-            let mut policy_root = infra_root.clone();
-            policy_root.readonly = yaml_container.read_only_root_filesystem();
-            root = Some(policy_root);
-        }
-
-        let mut annotations = BTreeMap::new();
-        infra::get_annotations(&mut annotations, infra_container)?;
-        if !is_deployment_yaml {
-            annotations.insert(
-                "io.kubernetes.cri.sandbox-name".to_string(),
-                pod_name.to_string(),
-            );
-        }
-        if !is_pause_container {
-            annotations.insert(
-                "io.kubernetes.cri.image-name".to_string(),
-                yaml_container.image.to_string(),
-            );
-        }
-
-        let namespace = if let Some(ns) = &self.yaml.metadata.namespace {
-            ns.clone()
-        } else {
-            "default".to_string()
-        };
-        annotations.insert("io.kubernetes.cri.sandbox-namespace".to_string(), namespace);
-
-        if !yaml_container.name.is_empty() {
-            annotations.insert(
-                "io.kubernetes.cri.container-name".to_string(),
-                yaml_container.name.to_string(),
-            );
-        }
-
-        // Start with the Default Unix Spec from
-        // https://github.com/containerd/containerd/blob/release/1.6/oci/spec.go#L132
-        let privileged_container = yaml_container.is_privileged();
-        let mut process = containerd::get_process(privileged_container);
-        let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.args);
-
-        registry_container.get_process(&mut process, yaml_has_command, yaml_has_args)?;
-
-        if container_index != 0 {
-            process.env.push("HOSTNAME=".to_string() + &pod_name);
-        }
-
-        yaml_container.get_env_variables(&mut process.env, &self.config_maps);
-
-        infra::get_process(&mut process, &infra_container)?;
-        process.noNewPrivileges = !yaml_container.allow_privilege_escalation();
-
-        let mut mounts = containerd::get_mounts(is_pause_container, privileged_container);
-        self.infra_policy.get_policy_mounts(
-            &mut mounts,
-            &infra_container.mounts,
-            &yaml_container,
-            container_index == 0,
-        )?;
-
-        let image_layers = registry_container.get_image_layers();
-        let mut storages = Default::default();
-        get_image_layer_storages(&mut storages, &image_layers, &root)?;
-
-        self.get_mounts_and_storages(
-            &mut mounts,
-            &mut storages,
-            yaml_container,
+        let rules = read_to_string(&self.rules_input_file)?;
+        self.k8s_object.generate_policy(
+            &rules,
             &self.infra_policy,
+            &self.config_maps,
+            in_out_files,
         )?;
+        self.k8s_object.serialize(in_out_files)?;
 
-        let mut linux = containerd::get_linux(privileged_container);
-        linux.namespaces = kata::get_namespaces();
-        infra::get_linux(&mut linux, &infra_container.linux)?;
-
-        Ok(ContainerPolicy {
-            oci: OciSpec {
-                ociVersion: Some("1.1.0-rc.1".to_string()),
-                process: Some(process),
-                root,
-                hostname: Some(hostname),
-                mounts,
-                hooks: None,
-                annotations: Some(annotations),
-                linux: Some(linux),
-            },
-            storages,
-        })
-    }
-
-    fn get_mounts_and_storages(
-        &self,
-        policy_mounts: &mut Vec<oci::Mount>,
-        storages: &mut Vec<SerializedStorage>,
-        container: &yaml::Container,
-        infra_policy: &infra::InfraPolicy,
-    ) -> Result<()> {
-        if let Some(volumes) = &self.yaml.spec.volumes {
-            for volume in volumes {
-                self.get_container_mounts_and_storages(
-                    policy_mounts,
-                    storages,
-                    container,
-                    infra_policy,
-                    volume,
-                )?;
-            }
-        }
-        Ok(())
-    }
-
-    fn get_container_mounts_and_storages(
-        &self,
-        policy_mounts: &mut Vec<oci::Mount>,
-        storages: &mut Vec<SerializedStorage>,
-        container: &yaml::Container,
-        infra_policy: &infra::InfraPolicy,
-        volume: &yaml::Volume,
-    ) -> Result<()> {
-        if let Some(volume_mounts) = &container.volumeMounts {
-            for volume_mount in volume_mounts {
-                if volume_mount.name.eq(&volume.name) {
-                    infra_policy.get_mount_and_storage(
-                        policy_mounts,
-                        storages,
-                        volume,
-                        volume_mount,
-                    )?;
-                }
-            }
-        }
-        Ok(())
+       Ok(())
     }
 }
 
@@ -475,4 +293,141 @@ fn name_to_hash(name: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(name);
     format!("{:x}", hasher.finalize())
+}
+
+/// Creates a text file including the Rego rules and data.
+pub fn export_decoded_policy(policy: &str, file_name: &str) -> Result<()> {
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .create(true)
+        .open(file_name)
+        .map_err(|e| anyhow!(e))?;
+    f.write_all(policy.as_bytes()).map_err(|e| anyhow!(e))?;
+    f.flush().map_err(|e| anyhow!(e))?;
+    Ok(())
+}
+
+pub fn get_container_policy(
+    k8s_object: &dyn yaml::K8sObject,
+    infra_policy: &infra::InfraPolicy,
+    config_maps: &Vec<config_maps::ConfigMap>,
+    yaml_container: &pod::Container,
+    is_pause_container: bool,
+    registry_container: &registry::Container,
+) -> Result<ContainerPolicy> {
+    let pod_name = k8s_object.get_metadata_name()?;
+    let hostname = k8s_object.get_host_name()?;
+
+    let mut infra_container = &infra_policy.pause_container;
+    if !is_pause_container {
+        infra_container = &infra_policy.other_container;
+    }
+
+    let mut root: Option<Root> = None;
+    if let Some(infra_root) = &infra_container.root {
+        let mut policy_root = infra_root.clone();
+        policy_root.readonly = yaml_container.read_only_root_filesystem();
+        root = Some(policy_root);
+    }
+
+    let mut annotations = BTreeMap::new();
+    infra::get_annotations(&mut annotations, infra_container)?;
+    if let Some(name) = k8s_object.get_sandbox_name()? {
+        annotations.insert("io.kubernetes.cri.sandbox-name".to_string(), name);
+    }
+
+    if !is_pause_container {
+        let mut image_name = yaml_container.image.to_string();
+        if image_name.find(':').is_none() {
+            image_name += ":latest";
+        }
+        annotations.insert("io.kubernetes.cri.image-name".to_string(), image_name);
+    }
+
+    let namespace = k8s_object.get_namespace()?;
+    annotations.insert("io.kubernetes.cri.sandbox-namespace".to_string(), namespace);
+
+    if !yaml_container.name.is_empty() {
+        annotations.insert(
+            "io.kubernetes.cri.container-name".to_string(),
+            yaml_container.name.to_string(),
+        );
+    }
+
+    // Start with the Default Unix Spec from
+    // https://github.com/containerd/containerd/blob/release/1.6/oci/spec.go#L132
+    let privileged_container = yaml_container.is_privileged();
+    let mut process = containerd::get_process(privileged_container);
+    let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.args);
+
+    registry_container.get_process(&mut process, yaml_has_command, yaml_has_args)?;
+
+    if !is_pause_container {
+        process.env.push("HOSTNAME=".to_string() + &pod_name);
+    }
+
+    yaml_container.get_env_variables(&mut process.env, config_maps);
+
+    infra::get_process(&mut process, &infra_container)?;
+    process.noNewPrivileges = !yaml_container.allow_privilege_escalation();
+
+    let mut mounts = containerd::get_mounts(is_pause_container, privileged_container);
+    infra_policy.get_policy_mounts(
+        &mut mounts,
+        &infra_container.mounts,
+        &yaml_container,
+        is_pause_container,
+    )?;
+
+    let image_layers = registry_container.get_image_layers();
+    let mut storages = Default::default();
+    get_image_layer_storages(&mut storages, &image_layers, &root)?;
+
+    k8s_object.get_container_mounts_and_storages(
+        &mut mounts,
+        &mut storages,
+        &yaml_container,
+        infra_policy,
+    )?;
+
+    let mut linux = containerd::get_linux(privileged_container);
+    linux.namespaces = kata::get_namespaces();
+    infra::get_linux(&mut linux, &infra_container.linux)?;
+
+    Ok(ContainerPolicy {
+        oci: OciSpec {
+            ociVersion: Some("1.1.0-rc.1".to_string()),
+            process: Some(process),
+            root,
+            hostname: Some(hostname),
+            mounts,
+            hooks: None,
+            annotations: Some(annotations),
+            linux: Some(linux),
+        },
+        storages,
+    })
+}
+
+pub fn get_container_mounts_and_storages(
+    policy_mounts: &mut Vec<oci::Mount>,
+    storages: &mut Vec<SerializedStorage>,
+    container: &pod::Container,
+    infra_policy: &infra::InfraPolicy,
+    volume: &volumes::Volume,
+) -> Result<()> {
+    if let Some(volume_mounts) = &container.volumeMounts {
+        for volume_mount in volume_mounts {
+            if volume_mount.name.eq(&volume.name) {
+                infra_policy.get_mount_and_storage(
+                    policy_mounts,
+                    storages,
+                    volume,
+                    volume_mount,
+                )?;
+            }
+        }
+    }
+    Ok(())
 }

@@ -207,6 +207,17 @@ match_image_name(policy_name, input_name) {
 
     print("match_image_name 2: success")
 }
+match_image_name(policy_name, input_name) {
+    print("match_image_name 3: policy_name =", policy_name, "input_name =", input_name)
+
+    # TODO: is it reasonable to add this prefix?
+    policy_path := concat("", ["docker.io/library/", policy_name])
+
+    print("match_image_name 3: policy_path =", policy_path, "input_name =", input_name)
+    policy_path == input_name
+
+    print("match_image_name 3: success")
+}
 
 ######################################################################
 # "io.kubernetes.cri.container-name" annotation

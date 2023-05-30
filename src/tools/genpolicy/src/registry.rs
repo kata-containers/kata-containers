@@ -6,6 +6,7 @@
 // Allow Docker image config field names.
 #![allow(non_snake_case)]
 
+use crate::pod;
 use crate::policy;
 
 use anyhow::{anyhow, Result};
@@ -18,19 +19,20 @@ use std::{io, io::Seek, io::Write};
 use tempfile::tempdir;
 use tokio::{fs, io::AsyncWriteExt};
 
+#[derive(Clone, Debug)]
 pub struct Container {
     config_layer: DockerConfigLayer,
     image_layers: Vec<ImageLayer>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct DockerConfigLayer {
     architecture: String,
     config: DockerImageConfig,
     rootfs: DockerRootfs,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct DockerImageConfig {
     User: Option<String>,
     Tty: Option<bool>,
@@ -40,7 +42,7 @@ struct DockerImageConfig {
     Entrypoint: Option<Vec<String>>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct DockerRootfs {
     r#type: String,
     diff_ids: Vec<String>,
@@ -64,7 +66,8 @@ impl Container {
 
         let (manifest, digest_hash, config_layer_str) = client
             .pull_manifest_and_config(&reference, &RegistryAuth::Anonymous)
-            .await?;
+            .await
+            .unwrap();
 
         debug!("digest_hash: {:?}", digest_hash);
         debug!(
@@ -81,9 +84,9 @@ impl Container {
             println!("");
         }
 
-        let config_layer: DockerConfigLayer = serde_json::from_str(&config_layer_str)?;
+        let config_layer: DockerConfigLayer = serde_json::from_str(&config_layer_str).unwrap();
         let image_layers =
-            get_image_layers(&mut client, &reference, &manifest, &config_layer).await?;
+            get_image_layers(&mut client, &reference, &manifest, &config_layer).await.unwrap();
 
         Ok(Container {
             config_layer,
@@ -279,4 +282,16 @@ fn create_verity_hash(path: &str) -> Result<String> {
     info!("dm-verity root hash: {:?}", &result);
 
     Ok(result)
+}
+
+pub async fn get_registry_containers(
+    yaml_containers: &Vec<pod::Container>,
+) -> Result<Vec<Container>> {
+    let mut registry_containers = Vec::new();
+
+    for yaml_container in yaml_containers {
+        registry_containers.push(Container::new(&yaml_container.image).await?);
+    }
+
+    Ok(registry_containers)
 }

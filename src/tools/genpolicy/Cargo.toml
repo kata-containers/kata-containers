@@ -36,6 +36,7 @@ openssl = { version = "=0.10.45", features = ["vendored"] }
 serde_json = "1.0.39"
 serde-transcode = "1.1.1"
 tokio = {version = "1.0", features = ["full"]}
+async-trait = {version = "0.1.68"}
 
 # OCI container specs.
 oci = { path = "../../libs/oci" }
