@@ -25,7 +25,7 @@ die()
 [ -n "${SNAPCRAFT_STAGE:-}" ] ||\
 	die "must be sourced from a snapcraft config file"
 
-snap_yq_version=3.4.1
+snap_yq_version=4.32.2
 
 snap_common_install_yq()
 {
