@@ -1,11 +1,5 @@
 on:
-  pull_request:
-    types:
-      - opened
-      - edited
-      - reopened
-      - synchronize
-    paths-ignore: [ '**.md', '**.png', '**.jpg', '**.jpeg', '**.svg', '/docs/**' ]
+  workflow_call:
 
 name: Static checks dragonball
 jobs:
@@ -16,16 +10,13 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Set env
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         run: |
           echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
       - name: Install Rust
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         run: |
           ./ci/install_rust.sh
           PATH=$PATH:"$HOME/.cargo/bin"
       - name: Run Unit Test
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         run: |
           cd src/dragonball
           cargo version

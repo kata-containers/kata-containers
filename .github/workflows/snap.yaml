@@ -1,25 +1,17 @@
 name: snap CI
 on:
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - edited
-    paths-ignore: [ '**.md', '**.png', '**.jpg', '**.jpeg', '**.svg', '/docs/**' ]
+  workflow_call:
 
 jobs:
   test:
     runs-on: ubuntu-20.04
     steps:
       - name: Check out
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
       - name: Install Snapcraft
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         run: |
           # Required to avoid snapcraft install failure
           sudo chown root:root /
@@ -32,6 +24,5 @@ jobs:
           echo /snap/bin >> "$GITHUB_PATH"
 
       - name: Build snap
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         run: |
           snapcraft snap --debug --destructive-mode
