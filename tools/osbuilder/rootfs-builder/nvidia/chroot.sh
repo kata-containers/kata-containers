@@ -56,6 +56,8 @@ function install_nvidia_container_runtime() {
 
 	sed -i "s/#debug/debug/g" /etc/nvidia-container-runtime/config.toml
 	sed -i "s/#no-cgroups = false/no-cgroups = true/g" /etc/nvidia-container-runtime/config.toml
+	sed -i "/\[nvidia-container-cli\]/a no-pivot = true"  /etc/nvidia-container-runtime/config.toml
+
 	hooks_dir=/etc/oci/hooks.d
 	mkdir -p ${hooks_dir}/prestart
 	
