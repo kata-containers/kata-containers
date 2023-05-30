@@ -34,3 +34,13 @@ spec:
           ports:
             - containerPort: 6379
               name: redis
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: azure-vote-back
+spec:
+  selector:
+    app: azure-vote-back
+  ports:
+    - port: 6379
