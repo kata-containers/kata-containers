@@ -17,10 +17,10 @@ const POLICY_ANNOTATION_KEY: &str = "io.katacontainers.config.agent.policy";
 #[serde(deny_unknown_fields)]
 pub struct ObjectMeta {
     #[serde(skip_serializing_if = "Option::is_none")]
-    labels: Option<BTreeMap<String, String>>,
+    pub name: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    labels: Option<BTreeMap<String, String>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<BTreeMap<String, String>>,

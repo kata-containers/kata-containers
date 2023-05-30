@@ -54,8 +54,8 @@ pub struct PodSpec {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Container {
-    pub image: String,
     pub name: String,
+    pub image: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub imagePullPolicy: Option<String>,
