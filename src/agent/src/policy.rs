@@ -85,6 +85,7 @@ struct PullImageRequestData {
 #[derive(Debug)]
 pub struct AgentPolicy {
     allow_failures: bool,
+    request_count: u64,
 
     // opa_data_uri: String,
     coco_policy_query_prefix: String,
@@ -98,6 +99,7 @@ impl AgentPolicy {
     pub fn new() -> Result<Self> {
         Ok(AgentPolicy {
             allow_failures: false,
+            request_count: 0,
 
             // opa_data_uri: OPA_V1_URI.to_string() + OPA_DATA_PATH,
             coco_policy_query_prefix: OPA_V1_URI.to_string()
@@ -236,9 +238,16 @@ impl AgentPolicy {
 
     // Post query to OPA.
     async fn post_query(&mut self, ep: &str, post_input: &str) -> Result<bool> {
-        let uri = self.coco_policy_query_prefix.clone() + ep;
+        if self.request_count == 0 {
+            info!(
+                sl!(),
+                "policy: post_query: base uri {}", &self.coco_policy_query_prefix
+            );
+        }
+        self.request_count += 1;
+        info!(sl!(), "policy check: {}", ep);
 
-        info!(sl!(), "policy: post_query: uri {}", uri);
+        let uri = self.coco_policy_query_prefix.clone() + ep;
         let response = self
             .opa_client
             .post(uri)
