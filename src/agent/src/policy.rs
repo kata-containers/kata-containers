@@ -84,7 +84,7 @@ struct PullImageRequestData {
 // Singleton policy object.
 #[derive(Debug)]
 pub struct AgentPolicy {
-    initialized: bool,
+    allow_failures: bool,
 
     // opa_data_uri: String,
     coco_policy_query_prefix: String,
@@ -97,7 +97,7 @@ impl AgentPolicy {
     // Create AgentPolicy object.
     pub fn new() -> Result<Self> {
         Ok(AgentPolicy {
-            initialized: false,
+            allow_failures: false,
 
             // opa_data_uri: OPA_V1_URI.to_string() + OPA_DATA_PATH,
             coco_policy_query_prefix: OPA_V1_URI.to_string()
@@ -118,15 +118,19 @@ impl AgentPolicy {
                 println!("policy initialize: POST failed, retrying");
             }
 
-            // Query some OPA data just to get the opa_client connected
-            // to the OPA service. Future requests are expected to work
-            // without retrying the requests, once the OPA Service had
-            // a chance to start.
-            if let Ok(_) = self
-                .post_query("GuestDetailsRequest", EMPTY_JSON_INPUT)
+            // Check in a loop if requests causing policy errors should
+            // actually be allowed. That is an unsecure configuration but is
+            // useful for allowing unsecure pods to start, then connect to
+            // them and inspect OPA logs for the root cause of a failure.
+            //
+            // The loop is necessary to get the opa_client connected to the
+            // OPA service. Future requests to OPA are expected to work
+            // without retrying, once the OPA Service had a chance to start.
+            if let Ok(allow_failures) = self
+                .post_query("AllowRequestsFailingPolicy", EMPTY_JSON_INPUT)
                 .await
             {
-                self.initialized = true;
+                self.allow_failures = allow_failures;
                 return Ok(());
             }
         }
@@ -220,6 +224,13 @@ impl AgentPolicy {
             .await
             .map_err(|e| anyhow!(e))?;
 
+        // Check if requests causing policy errors should actually be allowed.
+        // That is an unsecure configuration but is useful for allowing unsecure
+        // pods to start, then connect to them and inspect OPA logs for the root
+        // cause of a failure.
+        self.allow_failures = self
+            .post_query("AllowRequestsFailingPolicy", EMPTY_JSON_INPUT)
+            .await?;
         Ok(())
     }
 
@@ -249,21 +260,25 @@ impl AgentPolicy {
         match opa_response {
             Ok(resp) => {
                 if !resp.result {
-                    error!(sl!(), "policy: post_query: response <{}>", http_response);
+                    if self.allow_failures {
+                        warn!(
+                            sl!(),
+                            "policy: post_query: response <{}>. Ignoring error!", http_response
+                        );
+                        return Ok(true);
+                    } else {
+                        error!(sl!(), "policy: post_query: response <{}>", http_response);
+                    }
                 }
                 Ok(resp.result)
             }
-            Err(e) => {
-                if self.initialized {
-                    Err(anyhow!(
-                        "policy: post_query: failed to convert response <{}>, error {}",
-                        http_response,
-                        e
-                    ))
-                } else {
-                    // Ignore non-existent policy while initializing this policy module.
-                    Ok(false)
-                }
+            Err(_) => {
+                // Return a policy failure for undefined requests.
+                warn!(
+                    sl!(),
+                    "policy: post_query: {} not found in policy. Returning false.", ep,
+                );
+                Ok(false)
             }
         }
     }

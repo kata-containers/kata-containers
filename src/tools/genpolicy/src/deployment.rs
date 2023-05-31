@@ -100,35 +100,8 @@ impl yaml::K8sObject for Deployment {
     }
 
     fn get_host_name(&self) -> Result<String> {
-        // Example: "hostname": "^busybox-cc-5bdd867667-xxmdz$",
-
-        // This simpler regex was good enough for the vast majority my
-        // test cases. However every once in a while, *apparently depending
-        // on the length of the Security Policy annotation*, the auto-generated
-        // k8s pod name lost a character!!! The usual suffix:
-        //
-        // "-[a-z0-9]{10}-[a-z0-9]{5}$"
-        //
-        // changed automatically to:
-        //
-        // "-[a-z0-9]{9}-[a-z0-9]{5}$"
-        //
-        // TODO: figure out why sometimes one of the pod name characters
-        //       got lost, and what is the link to the (length of) the YAML
-        //       policy annotation.
-        //
-        // Ok("^".to_string() + &self.get_metadata_name()? + "-[a-z0-9]{10}-[a-z0-9]{5}$")
-
-        let metadata_name = self.get_metadata_name()?;
-
-        let suffix1 = "-[a-z0-9]{10}-[a-z0-9]{5})";
-        let regex1 = "(".to_string() + &metadata_name + suffix1;
-
-        let suffix2 = "-[a-z0-9]{9}-[a-z0-9]{5})";
-        let regex2 = "(".to_string() + &metadata_name + suffix2;
-
-        // Either regex1 or regex2.
-        Ok("^(?:".to_string() + &regex1 + "|" + &regex2 + ")$")
+        // Deployment pod names have variable lengths for some reason.
+        Ok("^".to_string() + &self.get_metadata_name()? + "-[a-z0-9]*-[a-z0-9]{5}$")
     }
 
     fn get_sandbox_name(&self) -> Result<Option<String>> {
