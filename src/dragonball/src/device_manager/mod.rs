@@ -90,6 +90,12 @@ mod memory_region_handler;
 #[cfg(feature = "virtio-fs")]
 pub use self::memory_region_handler::*;
 
+#[cfg(feature = "virtio-mem")]
+/// Device manager for virtio-mem devices.
+pub mod mem_dev_mgr;
+#[cfg(feature = "virtio-mem")]
+use self::mem_dev_mgr::MemDeviceMgr;
+
 macro_rules! info(
     ($l:expr, $($args:tt)+) => {
         slog::info!($l, $($args)+; slog::o!("subsystem" => "device_manager"))
@@ -311,6 +317,27 @@ impl DeviceOpContext {
         }
     }
 
+    pub(crate) fn get_vm_config(&self) -> Result<VmConfigInfo> {
+        match self.vm_config.as_ref() {
+            Some(v) => Ok(v.clone()),
+            None => Err(DeviceMgrError::InvalidOperation),
+        }
+    }
+
+    pub(crate) fn get_address_space(&self) -> Result<AddressSpace> {
+        match self.address_space.as_ref() {
+            Some(v) => Ok(v.clone()),
+            None => Err(DeviceMgrError::InvalidOperation),
+        }
+    }
+
+    pub(crate) fn get_epoll_mgr(&self) -> Result<EpollManager> {
+        match self.epoll_mgr.as_ref() {
+            Some(v) => Ok(v.clone()),
+            None => Err(DeviceMgrError::InvalidOperation),
+        }
+    }
+
     pub(crate) fn logger(&self) -> &slog::Logger {
         &self.logger
     }
@@ -498,6 +525,9 @@ pub struct DeviceManager {
 
     #[cfg(feature = "virtio-fs")]
     fs_manager: Arc<Mutex<FsDeviceMgr>>,
+
+    #[cfg(feature = "virtio-mem")]
+    pub(crate) mem_manager: MemDeviceMgr,
 }
 
 impl DeviceManager {
@@ -530,6 +560,8 @@ impl DeviceManager {
             virtio_net_manager: VirtioNetDeviceMgr::default(),
             #[cfg(feature = "virtio-fs")]
             fs_manager: Arc::new(Mutex::new(FsDeviceMgr::default())),
+            #[cfg(feature = "virtio-mem")]
+            mem_manager: MemDeviceMgr::default(),
         }
     }
 
@@ -899,6 +931,24 @@ impl DeviceManager {
         )
     }
 
+    /// Create an Virtio MMIO transport layer device for the virtio backend device with configure
+    /// change notification enabled.
+    pub fn create_mmio_virtio_device_with_device_change_notification(
+        device: DbsVirtioDevice,
+        ctx: &mut DeviceOpContext,
+        use_shared_irq: bool,
+        use_generic_irq: bool,
+    ) -> std::result::Result<Arc<DbsMmioV2Device>, DeviceMgrError> {
+        let features = DRAGONBALL_FEATURE_PER_QUEUE_NOTIFY;
+        DeviceManager::create_mmio_virtio_device_with_features(
+            device,
+            ctx,
+            Some(features),
+            use_shared_irq,
+            use_generic_irq,
+        )
+    }
+
     /// Create an Virtio MMIO transport layer device for the virtio backend device with specified
     /// features.
     pub fn create_mmio_virtio_device_with_features(
@@ -1077,6 +1127,8 @@ mod tests {
                 virtio_net_manager: VirtioNetDeviceMgr::default(),
                 #[cfg(feature = "virtio-vsock")]
                 vsock_manager: VsockDeviceMgr::default(),
+                #[cfg(feature = "virtio-mem")]
+                mem_manager: MemDeviceMgr::default(),
                 #[cfg(target_arch = "aarch64")]
                 mmio_device_info: HashMap::new(),
 

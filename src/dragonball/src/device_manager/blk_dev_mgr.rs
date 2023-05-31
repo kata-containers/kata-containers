@@ -871,6 +871,8 @@ mod tests {
             Some(vm.vm_as().unwrap().clone()),
             None,
             false,
+            Some(vm.vm_config().clone()),
+            vm.shared_info().clone(),
         );
 
         let dummy_file = TempFile::new().unwrap();
@@ -907,6 +909,8 @@ mod tests {
             Some(vm.vm_as().unwrap().clone()),
             None,
             false,
+            Some(vm.vm_config().clone()),
+            vm.shared_info().clone(),
         );
 
         vm.device_manager_mut()
