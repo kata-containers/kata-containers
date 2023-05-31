@@ -1126,9 +1126,9 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU, memSizeMB uint32) {
 
 	annotation, ok = spec.Annotations[ctrAnnotations.SandboxMem]
 	if ok {
-		memory, err = strconv.ParseInt(annotation, 10, 32)
+		memory, err = strconv.ParseInt(annotation, 10, 64)
 		if err != nil {
-			ociLog.Warningf("sandbox-sizing: failure to parse SandboxMem: %s", annotation)
+			ociLog.WithError(err).Warningf("sandbox-sizing: failure to parse SandboxMem: %s", annotation)
 			memory = 0
 		}
 	}
@@ -1149,7 +1149,7 @@ func CalculateContainerSizing(spec *specs.Spec) (numCPU, memSizeMB uint32) {
 	resources := spec.Linux.Resources
 
 	if resources.CPU != nil && resources.CPU.Quota != nil && resources.CPU.Period != nil {
-		quota = *resources.CPU.Quota
+		quota = int64(*resources.CPU.Quota)
 		period = *resources.CPU.Period
 	}
 
