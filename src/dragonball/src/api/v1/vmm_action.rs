@@ -27,6 +27,8 @@ pub use crate::device_manager::blk_dev_mgr::{
 pub use crate::device_manager::fs_dev_mgr::{
     FsDeviceConfigInfo, FsDeviceConfigUpdateInfo, FsDeviceError, FsDeviceMgr, FsMountConfigInfo,
 };
+#[cfg(feature = "virtio-mem")]
+pub use crate::device_manager::mem_dev_mgr::{MemDeviceConfigInfo, MemDeviceError};
 #[cfg(feature = "virtio-net")]
 pub use crate::device_manager::virtio_net_dev_mgr::{
     VirtioNetDeviceConfigInfo, VirtioNetDeviceConfigUpdateInfo, VirtioNetDeviceError,
@@ -97,6 +99,15 @@ pub enum VmmActionError {
     /// The action `ResizeVcpu` Failed
     #[error("vcpu resize error : {0}")]
     ResizeVcpu(#[source] VcpuResizeError),
+
+    /// Cannot access address space.
+    #[error("Cannot access address space.")]
+    AddressSpaceNotInitialized,
+
+    #[cfg(feature = "virtio-mem")]
+    /// Mem device related errors.
+    #[error("virtio-mem device error: {0}")]
+    Mem(#[source] MemDeviceError),
 }
 
 /// This enum represents the public interface of the VMM. Each action contains various
@@ -172,6 +183,10 @@ pub enum VmmAction {
     #[cfg(feature = "hotplug")]
     /// Resize Vcpu number in the guest.
     ResizeVcpu(VcpuResizeInfo),
+
+    #[cfg(feature = "virtio-mem")]
+    /// Add a new mem device or update one that already exists using the `MemDeviceConfig` as input.
+    InsertMemDevice(MemDeviceConfigInfo),
 }
 
 /// The enum represents the response sent by the VMM in case of success. The response is either
@@ -274,6 +289,8 @@ impl VmmService {
             }
             #[cfg(feature = "hotplug")]
             VmmAction::ResizeVcpu(vcpu_resize_cfg) => self.resize_vcpu(vmm, vcpu_resize_cfg),
+            #[cfg(feature = "virtio-mem")]
+            VmmAction::InsertMemDevice(mem_cfg) => self.add_mem_device(vmm, event_mgr, mem_cfg),
         };
 
         debug!("send vmm response: {:?}", response);
@@ -647,6 +664,32 @@ impl VmmService {
         })?;
 
         Ok(VmmData::Empty)
+    }
+
+    #[cfg(feature = "virtio-mem")]
+    fn add_mem_device(
+        &mut self,
+        vmm: &mut Vmm,
+        event_mgr: &mut EventManager,
+        config: MemDeviceConfigInfo,
+    ) -> VmmRequestResult {
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
+
+        let ctx = vm
+            .create_device_op_context(Some(event_mgr.epoll_manager()))
+            .map_err(|e| {
+                if let StartMicroVmError::UpcallServerNotReady = e {
+                    VmmActionError::UpcallServerNotReady
+                } else {
+                    VmmActionError::StartMicroVm(e)
+                }
+            })?;
+
+        vm.device_manager_mut()
+            .mem_manager
+            .insert_or_update_device(ctx, config)
+            .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::Mem)
     }
 }
 
@@ -1445,6 +1488,46 @@ mod tests {
                     guest_cid: 3,
                     ..Default::default()
                 }),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(result.is_ok());
+                },
+            ),
+        ];
+
+        for t in tests.iter_mut() {
+            t.check_request();
+        }
+    }
+
+    #[cfg(feature = "virtio-mem")]
+    #[test]
+    fn test_vmm_action_insert_mem_device() {
+        skip_if_not_root!();
+
+        let tests = &mut [
+            // hotplug unready
+            TestData::new(
+                VmmAction::InsertMemDevice(MemDeviceConfigInfo::default()),
+                InstanceState::Running,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::StartMicroVm(
+                            StartMicroVmError::UpcallMissVsock
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "failed to boot the VM: \
+                        the upcall client needs a virtio-vsock device for communication",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+            // success
+            TestData::new(
+                VmmAction::InsertMemDevice(MemDeviceConfigInfo::default()),
                 InstanceState::Uninitialized,
                 &|result| {
                     assert!(result.is_ok());
