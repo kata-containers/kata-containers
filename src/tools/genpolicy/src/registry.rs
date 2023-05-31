@@ -15,8 +15,7 @@ use oci_distribution::client::{linux_amd64_resolver, ClientConfig};
 use oci_distribution::{manifest, secrets::RegistryAuth, Client, Reference};
 use serde::{Deserialize, Serialize};
 use sha2::{digest::typenum::Unsigned, digest::OutputSizeUser, Sha256};
-use std::{io, io::Seek, io::Write};
-use tempfile::tempdir;
+use std::{io, io::Seek, io::SeekFrom, io::Write};
 use tokio::{fs, io::AsyncWriteExt};
 
 #[derive(Clone, Debug)]
@@ -83,8 +82,9 @@ impl Container {
         }
 
         let config_layer: DockerConfigLayer = serde_json::from_str(&config_layer_str).unwrap();
-        let image_layers =
-            get_image_layers(&mut client, &reference, &manifest, &config_layer).await.unwrap();
+        let image_layers = get_image_layers(&mut client, &reference, &manifest, &config_layer)
+            .await
+            .unwrap();
 
         Ok(Container {
             config_layer,
@@ -218,50 +218,90 @@ async fn get_verity_hash(
     reference: &Reference,
     layer_digest: &str,
 ) -> Result<String> {
-    let base_dir = tempdir().unwrap();
-    let mut file_path = base_dir.path().join("image_layer");
-    file_path.set_extension("gz");
+    let base_dir = std::path::Path::new("./layers_cache");
+    std::fs::create_dir_all(&base_dir).unwrap();
+    let mut compressed_path = base_dir.join(layer_digest);
+    compressed_path.set_extension("gz");
 
-    {
-        let mut file = tokio::fs::File::create(&file_path).await?;
+    if compressed_path.exists() {
+        info!("Using cached file {:?}", &compressed_path);
+    } else {
+        let mut file = tokio::fs::File::create(&compressed_path).await.unwrap();
 
         info!("Pulling layer {:?}", layer_digest);
         if let Err(err) = client.pull_blob(&reference, layer_digest, &mut file).await {
             drop(file);
-            debug!("Download failed: {:?}", err);
-            let _ = fs::remove_file(&file_path);
-            return Err(anyhow!("unable to pull blob"));
+            let _ = fs::remove_file(&compressed_path);
+            panic!("Unable to pull blob {}, error {:?}", layer_digest, &err);
         } else {
             file.flush().await.unwrap();
         }
     }
 
-    {
-        info!("Decompressing layer");
-        let compressed = std::fs::File::open(&file_path)?;
-        file_path.set_extension("");
-        let mut file = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&file_path)?;
-        let mut gz_decoder = flate2::read::GzDecoder::new(compressed);
-        std::io::copy(&mut gz_decoder, &mut file)?;
-    }
+    let mut decompressed_path = compressed_path.clone();
+    decompressed_path.set_extension("");
 
-    {
-        info!("Adding tarfs index to layer");
-        let mut file = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(&file_path)?;
-        tarindex::append_index(&mut file)?;
-        file.flush().unwrap();
+    if decompressed_path.exists() {
+        info!("Using cached file {:?}", &decompressed_path);
+    } else {
+        info!("Decompressing layer");
+
+        if let Ok(compressed) = std::fs::File::open(&compressed_path) {
+            if let Ok(mut decompressed) = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&decompressed_path) {
+
+                let mut gz_decoder = flate2::read::GzDecoder::new(&compressed);
+                if let Err(err) = std::io::copy(&mut gz_decoder, &mut decompressed) {
+                    drop(compressed);
+                    let _ = fs::remove_file(&compressed_path);
+                    drop(decompressed);
+                    let _ = fs::remove_file(&decompressed_path);
+                    panic!("Unable to decompress file {:?}, error {:?}", &compressed_path, &err);
+                }
+
+                if let Err(err) = decompressed.seek(SeekFrom::Start(0)) {
+                    drop(compressed);
+                    let _ = fs::remove_file(&compressed_path);
+                    drop(decompressed);
+                    let _ = fs::remove_file(&decompressed_path);
+                    panic!("Unable to rewind file {:?}, error {:?}", &decompressed_path, &err);
+                }
+
+                info!("Adding tarfs index to layer");
+                if let Err(err) = tarindex::append_index(&mut decompressed) {
+                    drop(compressed);
+                    let _ = fs::remove_file(&compressed_path);
+                    drop(decompressed);
+                    let _ = fs::remove_file(&decompressed_path);
+                    panic!("Unable to add tarfs index to file {:?}, error {:?}", &decompressed_path, &err);
+                }
+
+                if let Err(err) = decompressed.flush() {
+                    drop(compressed);
+                    let _ = fs::remove_file(&compressed_path);
+                    drop(decompressed);
+                    let _ = fs::remove_file(&decompressed_path);
+                    panic!("Unable to flush file {:?}, error {:?}", &decompressed_path, &err);
+                }
+            } else {
+                drop(compressed);
+                let _ = fs::remove_file(&compressed_path);
+                let _ = fs::remove_file(&decompressed_path);
+                panic!("Unable to create file {:?}", &decompressed_path);
+            }
+        } else {
+            let _ = fs::remove_file(&compressed_path);
+            let _ = fs::remove_file(&decompressed_path);
+            panic!("Unable to create file {:?}", &decompressed_path);
+        }
     }
 
     info!("Calculating dm-verity root hash for layer");
-    create_verity_hash(&file_path.to_string_lossy())
+    create_verity_hash(&decompressed_path.to_string_lossy())
 }
 
 fn create_verity_hash(path: &str) -> Result<String> {
