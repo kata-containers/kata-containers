@@ -50,7 +50,7 @@ jobs:
         run: |
           az aks create \
             -g "kataCI" \
-            -n "${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-amd64" \
+            -n "${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-${{ matrix.host_os }}-amd64" \
             -s "Standard_D4s_v5" \
             --node-count 1 \
             --generate-ssh-keys \
