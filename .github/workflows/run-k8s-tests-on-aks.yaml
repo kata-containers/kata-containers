@@ -67,7 +67,7 @@ jobs:
 
       - name: Download credentials for the Kubernetes CLI to use them
         run: |
-          az aks get-credentials -g "kataCI" -n ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-amd64
+          az aks get-credentials -g "kataCI" -n ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-${{ matrix.host_os }}-amd64
 
       - name: Run tests
         timeout-minutes: 60
@@ -99,6 +99,6 @@ jobs:
         run: |
           az aks delete \
             -g "kataCI" \
-            -n "${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-amd64" \
+            -n "${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-${{ matrix.host_os }}-amd64" \
             --yes \
             --no-wait
