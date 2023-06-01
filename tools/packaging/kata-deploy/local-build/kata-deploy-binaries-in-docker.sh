@@ -75,6 +75,7 @@ docker build -q -t build-kata-deploy \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
 	--build-arg HOST_DOCKER_GID=${docker_gid} \
+	--build-arg ARCH="${ARCH}" \
 	"${script_dir}/dockerbuild/"
 
 CI="${CI:-}"

@@ -17,7 +17,10 @@ readonly kata_root_dir="$(cd "${packaging_root_dir}/../../" && pwd)"
 source "$kata_root_dir/ci/lib.sh"
 source "${packaging_root_dir}/scripts/lib.sh"
 
-[ "$(uname -m)" = s390x ] || die "Building a Secure Execution image is currently only supported on s390x."
+ARCH=${ARCH:-$(uname -m)}
+if [ $(uname -m) == "${ARCH}" ]; then
+	[ "${ARCH}" == "s390x" ] || die "Building a Secure Execution image is currently only supported on s390x."
+fi
 
 finish() {
 	if [ -e "${parmfile}" ]; then
