@@ -3,7 +3,11 @@ Description=OPA for Confidential Containers
 Documentation=https://github.com/confidential-containers
 
 [Service]
+# Send agent output to tty to allow capture debug logs
+# from a VM vsock port
+StandardOutput=tty
+StandardError=tty
 Type=simple
-ExecStart=/usr/bin/opa run --server --addr 127.0.0.1:8181 --log-level debug /coco_policy /coco_policy_data
+ExecStart=/usr/local/bin/opa run --server --addr 127.0.0.1:8181 --log-level info /coco_policy /coco_policy_data
 DynamicUser=yes
 RuntimeDirectory=coco-opa
