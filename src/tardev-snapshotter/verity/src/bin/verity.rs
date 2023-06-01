@@ -35,15 +35,27 @@ fn main() -> io::Result<()> {
                 process::exit(1);
             }
 
-            let writer = File::create(&argv[3])?;
-            let verity = Verity::<Sha256>::new(file_size, 4096, 4096, &salt, Some((&writer, 0)))?;
-            println!("Root hash: {:x}", traverse_file(&reader, 0, false, verity)?);
+            let mut writer = File::create(&argv[3])?;
+            let verity = Verity::<Sha256>::new(file_size, 4096, 4096, &salt, 0)?;
+            println!(
+                "Root hash: {:x}",
+                traverse_file(
+                    &mut reader,
+                    0,
+                    false,
+                    verity,
+                    &mut verity::write_to(&mut writer)
+                )?
+            );
         }
 
         // Calculate the root hash without writing the tree.
         "r" => {
-            let verity = Verity::<Sha256>::new(file_size, 4096, 4096, &salt, None)?;
-            println!("Root hash: {:x}", traverse_file(&reader, 0, false, verity)?);
+            let verity = Verity::<Sha256>::new(file_size, 4096, 4096, &salt, 0)?;
+            println!(
+                "Root hash: {:x}",
+                traverse_file(&mut reader, 0, false, verity, &mut verity::no_write)?
+            );
         }
 
         _ => {

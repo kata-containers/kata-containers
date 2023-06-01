@@ -198,38 +198,36 @@ impl TarDevSnapshotter {
 
             // TODO: Eventually when we have the layer reference-count, switch to use `digest_str`
             // here.
-            let mut name = dir.path().join(&key);
-            name.set_extension("gz");
-            trace!("Downloading to {:?}", &name);
+            let name = dir.path().join(&key);
+            let mut gzname = name.clone();
+            gzname.set_extension("gz");
+            trace!("Downloading to {:?}", &gzname);
             {
-                let mut file = tokio::fs::File::create(&name).await?;
+                let mut file = tokio::fs::File::create(&gzname).await?;
                 if let Err(err) = client.pull_blob(&reference, digest_str, &mut file).await {
-                    drop(file);
                     debug!("Download failed: {:?}", err);
-                    let _ = fs::remove_file(&name);
                     return Err(Status::unknown("unable to pull blob"));
                 }
             }
 
-            // TODO: Decompress in stream instead of doing this.
+            // TODO: Decompress in stream instead of reopening.
             // Decompress data.
-            trace!("Decompressing {:?}", &name);
-            if !tokio::process::Command::new("gunzip")
-                .arg(&name)
-                .arg("-f")
-                .spawn()?
-                .wait()
-                .await?
-                .success()
+            let mut file;
+            trace!("Decompressing {:?} to {:?}", &gzname, &name);
             {
-                let _ = fs::remove_file(&name);
-                return Err(Status::unknown("unable to decompress layer"));
+                let compressed = fs::File::open(&gzname)?;
+                file = OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .open(&name)?;
+                let mut gz_decoder = flate2::read::GzDecoder::new(compressed);
+                std::io::copy(&mut gz_decoder, &mut file)?;
             }
 
-            // TODO: Use file that is already opened once the previous TODO is fixed.
-            name.set_extension("");
             trace!("Appending index to {:?}", &name);
-            let mut file = OpenOptions::new().read(true).write(true).open(&name)?;
+            file.rewind()?;
             tarindex::append_index(&mut file)?;
 
             trace!("Appending dm-verity tree to {:?}", &name);

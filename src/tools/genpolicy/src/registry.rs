@@ -349,8 +349,8 @@ fn do_create_verity_hash_file(path: &Path, verity_path: &Path) -> Result<()> {
     }
 
     let salt = [0u8; <Sha256 as OutputSizeUser>::OutputSize::USIZE];
-    let v = verity::Verity::<Sha256>::new(size, 4096, 4096, &salt, None)?;
-    let hash = verity::traverse_file(&file, 0, false, v)?;
+    let v = verity::Verity::<Sha256>::new(size, 4096, 4096, &salt, 0)?;
+    let hash = verity::traverse_file(&mut file, 0, false, v, &mut verity::no_write)?;
     let result = format!("{:x}", hash);
 
     let mut verity_file = std::fs::File::create(verity_path).map_err(|e| anyhow!(e))?;
