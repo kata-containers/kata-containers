@@ -18,6 +18,8 @@ DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
 container_image="${KERNEL_CONTAINER_BUILDER:-$(get_kernel_image_name)}"
 
+sudo docker image pull ubuntu:22.04
+
 sudo docker pull ${container_image} || \
 	(sudo docker build -t "${container_image}" "${script_dir}" && \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
