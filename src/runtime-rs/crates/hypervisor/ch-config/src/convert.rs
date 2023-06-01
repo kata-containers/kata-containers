@@ -59,6 +59,13 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
 
         let fs = n.shared_fs_devices;
 
+        let mut net = n.network_devices;
+        if let Some(network_devices) = net.as_mut() {
+            for mut nic in network_devices {
+                nic.num_queues = cfg.network_info.network_queues as usize;
+            }
+        }
+
         let cpus = CpusConfig::try_from(cfg.cpu_info).map_err(VmConfigError::CPUError)?;
 
         let rng = RngConfig::from(cfg.machine_info);
@@ -129,6 +136,7 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
             console,
             payload,
             fs,
+            net,
             pmem,
             disks,
             vsock: Some(vsock),

@@ -11,7 +11,7 @@ use crate::ShareFsDeviceConfig;
 use crate::VmmState;
 use anyhow::{anyhow, Context, Result};
 use ch_config::ch_api::cloud_hypervisor_vm_fs_add;
-use ch_config::FsConfig;
+use ch_config::{net_util::MacAddr, FsConfig, NetConfig};
 use safe_path::scoped_join;
 use std::convert::TryFrom;
 use std::path::PathBuf;
@@ -125,10 +125,13 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    pub(crate) async fn get_shared_fs_devices(&mut self) -> Result<Option<Vec<FsConfig>>> {
+    pub(crate) async fn get_configs_from_pending_devices(
+        &mut self,
+    ) -> Result<(Option<Vec<FsConfig>>, Option<Vec<NetConfig>>)> {
         let pending_root_devices = self.pending_devices.take();
 
-        let mut root_devices = Vec::<FsConfig>::new();
+        let mut shared_fs_devices = Vec::<FsConfig>::new();
+        let mut network_devices = Vec::<NetConfig>::new();
 
         if let Some(devices) = pending_root_devices {
             for dev in devices {
@@ -138,16 +141,24 @@ impl CloudHypervisorInner {
 
                         let fs_cfg = FsConfig::try_from(settings)?;
 
-                        root_devices.push(fs_cfg);
+                        shared_fs_devices.push(fs_cfg);
+                    }
+                    DeviceType::Network(network) => {
+                        let mut net = NetConfig {
+                            tap: Some(network.config.host_dev_name.clone()),
+                            ..Default::default()
+                        };
+                        if let Some(mac) = network.config.guest_mac {
+                            net.mac = MacAddr { bytes: mac.0 };
+                        }
+                        network_devices.push(net);
                     }
                     _ => continue,
                 };
             }
-
-            Ok(Some(root_devices))
-        } else {
-            Ok(None)
         }
+
+        Ok((Some(shared_fs_devices), Some(network_devices)))
     }
 }
 

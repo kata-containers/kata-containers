@@ -108,7 +108,7 @@ impl CloudHypervisorInner {
     }
 
     async fn boot_vm(&mut self) -> Result<()> {
-        let shared_fs_devices = self.get_shared_fs_devices().await?;
+        let (shared_fs_devices, network_devices) = self.get_configs_from_pending_devices().await?;
 
         let socket = self
             .api_socket
@@ -148,6 +148,7 @@ impl CloudHypervisorInner {
             cfg: hypervisor_config.clone(),
             tdx_enabled,
             shared_fs_devices,
+            network_devices,
         };
 
         let cfg = VmConfig::try_from(named_cfg)?;
