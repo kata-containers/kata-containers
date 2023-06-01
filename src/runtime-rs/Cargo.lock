@@ -682,9 +682,9 @@ dependencies = [
 
 [[package]]
 name = "dbs-boot"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a74a8c05a1674d3032e610b4f201c7440c345559bad3dfe6b455ce195785108"
+checksum = "5466a92f75aa928a9103dcb2088f6d1638ef9da8945fad7389a73864dfa0182c"
 dependencies = [
  "dbs-arch",
  "kvm-bindings",
