@@ -60,7 +60,7 @@ func Example_createAndStartSandbox() {
 
 		AgentConfig: agConfig,
 
-		Containers: []vc.ContainerConfig{container},
+		Containers: map[string]*vc.ContainerConfig{container.ID: &container},
 	}
 
 	// Create the sandbox

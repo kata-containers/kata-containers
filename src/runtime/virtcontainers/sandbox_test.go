@@ -47,11 +47,15 @@ func newHypervisorConfig(kernelParams []Param, hParams []Param) HypervisorConfig
 
 func testCreateSandbox(t *testing.T, id string,
 	htype HypervisorType, hconfig HypervisorConfig,
-	nconfig NetworkConfig, containers []ContainerConfig,
+	nconfig NetworkConfig, containers map[string]*ContainerConfig,
 	volumes []types.Volume) (*Sandbox, error) {
 
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
+	}
+
+	if containers == nil {
+		containers = make(map[string]*ContainerConfig)
 	}
 
 	sconfig := SandboxConfig{
@@ -125,18 +129,18 @@ func TestCalculateSandboxCPUs(t *testing.T) {
 	constrainedCpusets0_7.Resources.CPU = &specs.LinuxCPU{Period: &period, Quota: &quota, Cpus: "0-7"}
 	tests := []struct {
 		name       string
-		containers []ContainerConfig
+		containers map[string]*ContainerConfig
 		want       uint32
 	}{
-		{"1-unconstrained", []ContainerConfig{unconstrained}, 0},
-		{"2-unconstrained", []ContainerConfig{unconstrained, unconstrained}, 0},
-		{"1-constrained", []ContainerConfig{constrained}, 4},
-		{"2-constrained", []ContainerConfig{constrained, constrained}, 8},
-		{"3-mix-constraints", []ContainerConfig{unconstrained, constrained, constrained}, 8},
-		{"3-constrained", []ContainerConfig{constrained, constrained, constrained}, 12},
-		{"unconstrained-1-cpuset", []ContainerConfig{unconstrained, unconstrained, unconstrainedCpusets0_1}, 2},
-		{"unconstrained-2-cpuset", []ContainerConfig{unconstrainedCpusets0_1, unconstrainedCpusets2}, 3},
-		{"constrained-cpuset", []ContainerConfig{constrainedCpusets0_7}, 4},
+		{"1-unconstrained", map[string]*ContainerConfig{"0": &unconstrained}, 0},
+		{"2-unconstrained", map[string]*ContainerConfig{"0": &unconstrained, "1": &unconstrained}, 0},
+		{"1-constrained", map[string]*ContainerConfig{"0": &constrained}, 4},
+		{"2-constrained", map[string]*ContainerConfig{"0": &constrained, "1": &constrained}, 8},
+		{"3-mix-constraints", map[string]*ContainerConfig{"0": &unconstrained, "1": &constrained, "2": &constrained}, 8},
+		{"3-constrained", map[string]*ContainerConfig{"0": &constrained, "1": &constrained, "2": &constrained}, 12},
+		{"unconstrained-1-cpuset", map[string]*ContainerConfig{"0": &unconstrained, "1": &unconstrained, unconstrainedCpusets0_1.ID: &unconstrainedCpusets0_1}, 2},
+		{"unconstrained-2-cpuset", map[string]*ContainerConfig{unconstrainedCpusets0_1.ID: &unconstrainedCpusets0_1, unconstrainedCpusets2.ID: &unconstrainedCpusets2}, 3},
+		{"constrained-cpuset", map[string]*ContainerConfig{constrainedCpusets0_7.ID: &constrainedCpusets0_7}, 4},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -158,15 +162,15 @@ func TestCalculateSandboxMem(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		containers []ContainerConfig
+		containers map[string]*ContainerConfig
 		want       uint64
 	}{
-		{"1-unconstrained", []ContainerConfig{unconstrained}, 0},
-		{"2-unconstrained", []ContainerConfig{unconstrained, unconstrained}, 0},
-		{"1-constrained", []ContainerConfig{constrained}, limit},
-		{"2-constrained", []ContainerConfig{constrained, constrained}, limit * 2},
-		{"3-mix-constraints", []ContainerConfig{unconstrained, constrained, constrained}, limit * 2},
-		{"3-constrained", []ContainerConfig{constrained, constrained, constrained}, limit * 3},
+		{"1-unconstrained", map[string]*ContainerConfig{unconstrained.ID: &unconstrained}, 0},
+		{"2-unconstrained", map[string]*ContainerConfig{"0": &unconstrained, "1": &unconstrained}, 0},
+		{"1-constrained", map[string]*ContainerConfig{constrained.ID: &constrained}, limit},
+		{"2-constrained", map[string]*ContainerConfig{"0": &constrained, "1": &constrained}, limit * 2},
+		{"3-mix-constraints", map[string]*ContainerConfig{"0": &unconstrained, "1": &constrained, "2": &constrained}, limit * 2},
+		{"3-constrained", map[string]*ContainerConfig{"0": &constrained, "1": &constrained, "2": &constrained}, limit * 3},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -245,7 +249,7 @@ func TestCalculateSandboxMemHandlesNegativeLimits(t *testing.T) {
 	limit := int64(-1)
 	container.Resources.Memory = &specs.LinuxMemory{Limit: &limit}
 
-	sandbox.config.Containers = []ContainerConfig{container}
+	sandbox.config.Containers = map[string]*ContainerConfig{container.ID: &container}
 	mem, needSwap, swap := sandbox.calculateSandboxMemory()
 	assert.Equal(t, mem, uint64(0))
 	assert.Equal(t, needSwap, false)
@@ -358,7 +362,7 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 	hConfig := newHypervisorConfig(nil, nil)
 
 	// create a sandbox
-	p, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NetworkConfig{}, []ContainerConfig{contConfig}, nil)
+	p, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NetworkConfig{}, map[string]*ContainerConfig{contConfig.ID: &contConfig}, nil)
 	assert.NoError(err)
 	defer cleanUp()
 
@@ -546,8 +550,8 @@ func TestContainerStateSetFstype(t *testing.T) {
 	var err error
 	assert := assert.New(t)
 
-	containers := []ContainerConfig{
-		{
+	containers := map[string]*ContainerConfig{
+		"100": {
 			ID:          "100",
 			Annotations: containerAnnotations,
 			CustomSpec:  newEmptySpec(),
@@ -838,12 +842,12 @@ func TestCreateContainer(t *testing.T) {
 
 	contID := "999"
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(context.Background(), contConfig)
+	_, err = s.CreateContainer(context.Background(), &contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	assert.Equal(t, len(s.config.Containers), 1, "Container config list length from sandbox structure should be 1")
 
-	_, err = s.CreateContainer(context.Background(), contConfig)
+	_, err = s.CreateContainer(context.Background(), &contConfig)
 	assert.NotNil(t, err, "Should failed to create a duplicated container")
 	assert.Equal(t, len(s.config.Containers), 1, "Container config list length from sandbox structure should be 1")
 }
@@ -858,7 +862,7 @@ func TestDeleteContainer(t *testing.T) {
 	assert.NotNil(t, err, "Deletng non-existing container should fail")
 
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(context.Background(), contConfig)
+	_, err = s.CreateContainer(context.Background(), &contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	_, err = s.DeleteContainer(context.Background(), contID)
@@ -878,7 +882,7 @@ func TestStartContainer(t *testing.T) {
 	assert.Nil(t, err, "Failed to start sandbox: %v", err)
 
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(context.Background(), contConfig)
+	_, err = s.CreateContainer(context.Background(), &contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	_, err = s.StartContainer(context.Background(), contID)
@@ -895,7 +899,7 @@ func TestStatusContainer(t *testing.T) {
 	assert.NotNil(t, err, "Status non-existing container should fail")
 
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(context.Background(), contConfig)
+	_, err = s.CreateContainer(context.Background(), &contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	_, err = s.StatusContainer(contID)
@@ -924,7 +928,7 @@ func TestEnterContainer(t *testing.T) {
 	assert.NotNil(t, err, "Entering non-existing container should fail")
 
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(context.Background(), contConfig)
+	_, err = s.CreateContainer(context.Background(), &contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	_, _, err = s.EnterContainer(context.Background(), contID, cmd)
@@ -997,7 +1001,7 @@ func TestWaitProcess(t *testing.T) {
 	assert.NotNil(t, err, "Wait process in non-existing container should fail")
 
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(context.Background(), contConfig)
+	_, err = s.CreateContainer(context.Background(), &contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	_, err = s.WaitProcess(context.Background(), contID, execID)
@@ -1027,7 +1031,7 @@ func TestSignalProcess(t *testing.T) {
 	assert.NotNil(t, err, "Wait process in non-existing container should fail")
 
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(context.Background(), contConfig)
+	_, err = s.CreateContainer(context.Background(), &contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	err = s.SignalProcess(context.Background(), contID, execID, syscall.SIGKILL, true)
@@ -1057,7 +1061,7 @@ func TestWinsizeProcess(t *testing.T) {
 	assert.NotNil(t, err, "Winsize process in non-existing container should fail")
 
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(context.Background(), contConfig)
+	_, err = s.CreateContainer(context.Background(), &contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	err = s.WinsizeProcess(context.Background(), contID, execID, 100, 200)
@@ -1087,7 +1091,7 @@ func TestContainerProcessIOStream(t *testing.T) {
 	assert.NotNil(t, err, "Winsize process in non-existing container should fail")
 
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(context.Background(), contConfig)
+	_, err = s.CreateContainer(context.Background(), &contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	_, _, _, err = s.IOStream(contID, execID)
@@ -1332,7 +1336,7 @@ func TestSandboxUpdateResources(t *testing.T) {
 		MockHypervisor,
 		hConfig,
 		NetworkConfig{},
-		[]ContainerConfig{contConfig1, contConfig2},
+		map[string]*ContainerConfig{contConfig1.ID: &contConfig1, contConfig2.ID: &contConfig2},
 		nil)
 	assert.NoError(t, err)
 
@@ -1427,17 +1431,15 @@ func TestSandbox_Cgroups(t *testing.T) {
 		{
 			"sandbox, container no sandbox type",
 			&Sandbox{
-				config: &SandboxConfig{Containers: []ContainerConfig{
-					{},
-				}}},
+				config: &SandboxConfig{Containers: map[string]*ContainerConfig{}}},
 			false,
 			true,
 		},
 		{
 			"sandbox, container sandbox type",
 			&Sandbox{
-				config: &SandboxConfig{Containers: []ContainerConfig{
-					sandboxContainer,
+				config: &SandboxConfig{Containers: map[string]*ContainerConfig{
+					sandboxContainer.ID: &sandboxContainer,
 				}}},
 			false,
 			true,
@@ -1445,8 +1447,8 @@ func TestSandbox_Cgroups(t *testing.T) {
 		{
 			"sandbox, empty linux json",
 			&Sandbox{
-				config: &SandboxConfig{Containers: []ContainerConfig{
-					emptyJSONLinux,
+				config: &SandboxConfig{Containers: map[string]*ContainerConfig{
+					emptyJSONLinux.ID: &emptyJSONLinux,
 				}}},
 			false,
 			true,
@@ -1454,8 +1456,8 @@ func TestSandbox_Cgroups(t *testing.T) {
 		{
 			"sandbox, successful config",
 			&Sandbox{
-				config: &SandboxConfig{Containers: []ContainerConfig{
-					successfulContainer,
+				config: &SandboxConfig{Containers: map[string]*ContainerConfig{
+					successfulContainer.ID: &successfulContainer,
 				}}},
 			false,
 			true,
@@ -1482,8 +1484,8 @@ func TestSandbox_Cgroups(t *testing.T) {
 	}
 }
 
-func getContainerConfigWithCPUSet(cpuset, memset string) ContainerConfig {
-	return ContainerConfig{
+func getContainerConfigWithCPUSet(cpuset, memset string) *ContainerConfig {
+	return &ContainerConfig{
 		Resources: specs.LinuxResources{
 			CPU: &specs.LinuxCPU{
 				Cpus: cpuset,
@@ -1497,10 +1499,10 @@ func getSimpleSandbox(cpusets, memsets [3]string) *Sandbox {
 	sandbox := Sandbox{}
 
 	sandbox.config = &SandboxConfig{
-		Containers: []ContainerConfig{
-			getContainerConfigWithCPUSet(cpusets[0], memsets[0]),
-			getContainerConfigWithCPUSet(cpusets[1], memsets[1]),
-			getContainerConfigWithCPUSet(cpusets[2], memsets[2]),
+		Containers: map[string]*ContainerConfig{
+			"0_0": getContainerConfigWithCPUSet(cpusets[0], memsets[0]),
+			"1_1": getContainerConfigWithCPUSet(cpusets[1], memsets[1]),
+			"2_2": getContainerConfigWithCPUSet(cpusets[2], memsets[2]),
 		},
 	}
 
@@ -1621,7 +1623,7 @@ func TestSandboxHugepageLimit(t *testing.T) {
 		MockHypervisor,
 		hConfig,
 		NetworkConfig{},
-		[]ContainerConfig{contConfig1, contConfig2},
+		map[string]*ContainerConfig{contConfig1.ID: &contConfig1, contConfig2.ID: &contConfig2},
 		nil)
 
 	assert.NoError(t, err)

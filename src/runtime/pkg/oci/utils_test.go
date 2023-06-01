@@ -169,7 +169,7 @@ func TestMinimalSandboxConfig(t *testing.T) {
 
 		NetworkConfig: expectedNetworkConfig,
 
-		Containers: []vc.ContainerConfig{expectedContainerConfig},
+		Containers: map[string]*vc.ContainerConfig{containerID: &expectedContainerConfig},
 
 		Annotations: map[string]string{
 			vcAnnotations.BundlePathKey: tempBundlePath,
