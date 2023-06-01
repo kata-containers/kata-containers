@@ -15,14 +15,16 @@ mod kata;
 mod list;
 mod obj_meta;
 mod pause_container;
+mod persistent_volume_claim;
 mod pod;
 mod pod_template;
 mod policy;
 mod registry;
 mod replication_controller;
 mod service;
+mod stateful_set;
 mod utils;
-mod volumes;
+mod volume;
 mod yaml;
 
 #[derive(Debug, Parser)]
