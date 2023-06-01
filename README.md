@@ -1,5 +1,7 @@
 <img src="https://www.openstack.org/assets/kata/kata-vertical-on-white.png" width="150">
 
+[![CI | Publish Kata Containers payload](https://github.com/kata-containers/kata-containers/actions/workflows/payload-after-push.yaml/badge.svg)](https://github.com/kata-containers/kata-containers/actions/workflows/payload-after-push.yaml)
+
 # Kata Containers
 
 Welcome to Kata Containers!
