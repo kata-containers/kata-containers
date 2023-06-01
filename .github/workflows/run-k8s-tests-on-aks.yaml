@@ -46,11 +46,16 @@ jobs:
             -p "${{ secrets.AZ_PASSWORD }}" \
             --tenant "${{ secrets.AZ_TENANT_ID }}"
 
+      - name: Format cluster name
+        run: |
+          rev=$(git rev-parse --short=12 HEAD)
+          echo "cluster_name=${{ github.event.pull_request.number }}-$rev-${{ matrix.vmm }}-${{ matrix.host_os }}-amd64" >> $GITHUB_ENV
+
       - name: Create AKS cluster
         run: |
           az aks create \
             -g "kataCI" \
-            -n "${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-${{ matrix.host_os }}-amd64" \
+            -n "${{ env.cluster_name }}" \
             -s "Standard_D4s_v5" \
             --node-count 1 \
             --generate-ssh-keys \
@@ -67,7 +72,7 @@ jobs:
 
       - name: Download credentials for the Kubernetes CLI to use them
         run: |
-          az aks get-credentials -g "kataCI" -n ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-${{ matrix.host_os }}-amd64
+          az aks get-credentials -g "kataCI" -n "${{ env.cluster_name }}"
 
       - name: Run tests
         timeout-minutes: 60
@@ -99,6 +104,6 @@ jobs:
         run: |
           az aks delete \
             -g "kataCI" \
-            -n "${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-${{ matrix.host_os }}-amd64" \
+            -n "${{ env.cluster_name }}" \
             --yes \
             --no-wait
