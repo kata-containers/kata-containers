@@ -9,6 +9,7 @@
 #include <linux/statfs.h>
 #include <linux/exportfs.h>
 #include <linux/version.h>
+#include <linux/xattr.h>
 
 #define TARFS_MAGIC (0x54415246535f)
 
@@ -22,9 +23,11 @@ struct tarfs_state {
 	u64 data_size;
 };
 
+#define TARFS_INODE_FLAG_OPAQUE 0x1
+
 struct tarfs_inode {
 	u16 mode;
-	u8 padding;
+	u8 flags;
 	u8 hmtime; /* High 4 bits of mtime. */
 	u32 owner;
 	u32 group;
@@ -44,6 +47,7 @@ struct tarfs_direntry {
 struct tarfs_inode_info {
 	struct inode inode;
 	u64 data_offset;
+	u8 flags;
 };
 
 #define TARFS_I(ptr) (container_of(ptr, struct tarfs_inode_info, inode))
@@ -239,6 +243,7 @@ static struct inode *tarfs_iget(struct super_block *sb, u64 ino)
 		.readpage = tarfs_readpage,
 #endif
 	};
+	struct tarfs_inode_info *info;
 	struct tarfs_inode disk_inode;
 	struct inode *inode;
 	const struct tarfs_state *state = sb->s_fs_info;
@@ -317,7 +322,10 @@ static struct inode *tarfs_iget(struct super_block *sb, u64 ino)
 	inode->i_mode = mode;
 	inode->i_size = le64_to_cpu(disk_inode.size);
 	inode->i_blocks = (inode->i_size + TARFS_BSIZE - 1) / TARFS_BSIZE;
-	TARFS_I(inode)->data_offset = offset;
+
+	info = TARFS_I(inode);
+	info->data_offset = offset;
+	info->flags = disk_inode.flags;
 
 	unlock_new_inode(inode);
 	return inode;
@@ -452,6 +460,24 @@ static void tarfs_free_inode(struct inode *inode)
         kmem_cache_free(tarfs_inode_cachep, TARFS_I(inode));
 }
 
+int tarfs_xattr_trusted_get(const struct xattr_handler *handler,
+			    struct dentry *unused, struct inode *inode,
+			    const char *name, void *buffer, size_t size)
+{
+	struct tarfs_inode_info *info = TARFS_I(inode);
+	bool opaque = (info->flags & TARFS_INODE_FLAG_OPAQUE) != 0;
+
+	if (opaque && strcmp(name, "overlay.opaque") == 0) {
+		if (size < 1)
+			return -ERANGE;
+
+		*(char *)buffer = 'y';
+		return 1;
+	}
+
+	return -ENODATA;
+}
+
 static int tarfs_fill_super(struct super_block *sb, struct fs_context *fc)
 {
 	static const struct export_operations tarfs_export_ops = {
@@ -462,6 +488,14 @@ static int tarfs_fill_super(struct super_block *sb, struct fs_context *fc)
 		.alloc_inode = tarfs_alloc_inode,
 		.free_inode = tarfs_free_inode,
 		.statfs	= tarfs_statfs,
+	};
+	static const struct xattr_handler xattr_trusted_handler = {
+		.prefix = XATTR_TRUSTED_PREFIX,
+		.get = tarfs_xattr_trusted_get,
+	};
+	static const struct xattr_handler *xattr_handlers[] = {
+		&xattr_trusted_handler,
+		NULL,
 	};
 	struct inode *root;
 	sector_t scount;
@@ -478,6 +512,7 @@ static int tarfs_fill_super(struct super_block *sb, struct fs_context *fc)
 	sb->s_time_min = 0;
 	sb->s_time_max = 0;
 	sb->s_op = &super_ops;
+	sb->s_xattr = xattr_handlers;
 
 	scount = bdev_nr_sectors(sb->s_bdev);
 	if (!scount)
