@@ -242,9 +242,12 @@ async fn get_verity_hash(
     reference: &Reference,
     layer_digest: &str,
 ) -> Result<String> {
-    let base_dir = std::path::Path::new("./layers_cache");
+    let base_dir = std::path::Path::new("layers_cache");
 
-    let mut decompressed_path = base_dir.join(layer_digest);
+    // Use file names supported by both Linux and Windows.
+    let file_name = str::replace(&layer_digest, ":", "-");
+
+    let mut decompressed_path = base_dir.join(file_name);
     decompressed_path.set_extension("tar");
 
     let mut compressed_path = decompressed_path.clone();
