@@ -1,5 +1,13 @@
 use zerocopy::byteorder::{LE, U16, U32, U64};
 
+/// Flags used in [`Inode::flags`].
+pub mod inode_flags {
+    /// Indicates that the inode is opaque.
+    ///
+    /// When set, inode will have the "trusted.overlay.opaque" set to "y" at runtime.
+    pub const OPAQUE: u8 = 0x1;
+}
+
 /// An inode in the tarfs inode table.
 #[derive(zerocopy::AsBytes, zerocopy::FromBytes, zerocopy::Unaligned)]
 #[repr(C)]
@@ -11,8 +19,10 @@ pub struct Inode {
     /// The bits in the [`S_IFMT`] mask represent the file mode.
     pub mode: U16<LE>,
 
-    /// Unused padding byte.
-    pub _padding: u8,
+    /// Tarfs flags for the inode.
+    ///
+    /// Values are drawn from the [`inode_flags`] module.
+    pub flags: u8,
 
     /// The bottom 4 bits represent the top 4 bits of mtime.
     pub hmtime: u8,
