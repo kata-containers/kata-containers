@@ -130,7 +130,7 @@ pub struct ClientIPConfig {
 
 #[async_trait]
 impl yaml::K8sObject for Service {
-    async fn initialize(&mut self) -> Result<()> {
+    async fn initialize(&mut self, _use_cached_files: bool) -> Result<()> {
         Ok(())
     }
 

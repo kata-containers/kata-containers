@@ -51,7 +51,7 @@ enum Item {
 
 #[async_trait]
 impl yaml::K8sObject for List {
-    async fn initialize(&mut self) -> Result<()> {
+    async fn initialize(&mut self, use_cached_files: bool) -> Result<()> {
         for item in &mut self.items {
             match item {
                 Item::ReplicationController {
@@ -68,7 +68,7 @@ impl yaml::K8sObject for List {
                         spec: spec.clone(),
                         registry_containers: Vec::new(),
                     };
-                    controller.initialize().await?;
+                    controller.initialize(use_cached_files).await?;
                     *replication_controller = Some(controller);
                 }
                 _ => {}

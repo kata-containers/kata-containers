@@ -26,7 +26,7 @@ pub struct YamlHeader {
 
 #[async_trait]
 pub trait K8sObject {
-    async fn initialize(&mut self) -> Result<()>;
+    async fn initialize(&mut self, use_cached_files: bool) -> Result<()>;
 
     fn requires_policy(&self) -> bool;
 

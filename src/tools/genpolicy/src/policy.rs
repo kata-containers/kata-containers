@@ -189,7 +189,7 @@ impl AgentPolicy {
             let yaml_string = serde_yaml::to_string(&doc_mapping)?;
             let header = yaml::get_yaml_header(&yaml_string)?;
             let mut k8s_object = new_k8s_object(&header.kind, &yaml_string)?;
-            k8s_object.initialize().await?;
+            k8s_object.initialize(in_out_files.use_cached_files).await?;
             k8s_objects.push(k8s_object);
         }
 

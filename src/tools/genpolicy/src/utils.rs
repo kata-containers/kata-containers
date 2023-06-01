@@ -6,6 +6,8 @@
 use log::debug;
 
 pub struct InOutFiles {
+    pub use_cached_files: bool,
+
     pub yaml_file: Option<String>,
     pub rules_file: String,
     pub infra_data_file: String,
@@ -15,6 +17,7 @@ pub struct InOutFiles {
 
 impl InOutFiles {
     pub fn new(
+        use_cached_files: bool,
         yaml_file: Option<String>,
         input_files_path: Option<String>,
         output_policy_file: Option<String>,
@@ -37,6 +40,7 @@ impl InOutFiles {
         };
 
         Self {
+            use_cached_files,
             yaml_file,
             rules_file,
             infra_data_file,

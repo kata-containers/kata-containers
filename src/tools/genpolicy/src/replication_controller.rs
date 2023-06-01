@@ -54,10 +54,13 @@ pub struct ReplicationControllerSpec {
 
 #[async_trait]
 impl yaml::K8sObject for ReplicationController {
-    async fn initialize(&mut self) -> Result<()> {
+    async fn initialize(&mut self, use_cached_files: bool) -> Result<()> {
         pause_container::add_pause_container(&mut self.spec.template.spec.containers);
-        self.registry_containers =
-            registry::get_registry_containers(&self.spec.template.spec.containers).await?;
+        self.registry_containers = registry::get_registry_containers(
+            use_cached_files,
+            &self.spec.template.spec.containers,
+        )
+        .await?;
         Ok(())
     }
 

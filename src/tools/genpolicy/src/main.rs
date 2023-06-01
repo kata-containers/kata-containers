@@ -38,6 +38,9 @@ struct CommandLineOptions {
 
     #[clap(short, long)]
     config_map_file: Option<String>,
+
+    #[clap(short, long)]
+    use_cached_files: bool,
 }
 
 #[tokio::main]
@@ -52,6 +55,7 @@ async fn main() {
     }
 
     let in_out_files = utils::InOutFiles::new(
+        args.use_cached_files,
         args.yaml_file,
         args.input_files_path,
         args.output_policy_file,
