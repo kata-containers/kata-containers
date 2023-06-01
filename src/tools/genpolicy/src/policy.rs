@@ -16,8 +16,9 @@ use crate::pod;
 use crate::registry;
 use crate::replication_controller;
 use crate::service;
+use crate::stateful_set;
 use crate::utils;
-use crate::volumes;
+use crate::volume;
 use crate::yaml;
 
 use anyhow::{anyhow, Result};
@@ -59,6 +60,11 @@ fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn yaml::K8sObje
             let service: service::Service = serde_yaml::from_str(&yaml)?;
             debug!("{:#?}", &service);
             Ok(boxed::Box::new(service))
+        }
+        "StatefulSet" => {
+            let set: stateful_set::StatefulSet = serde_yaml::from_str(&yaml)?;
+            debug!("{:#?}", &set);
+            Ok(boxed::Box::new(set))
         }
         _ => Err(anyhow!("Unsupported YAML spec kind: {}", kind)),
     }
@@ -438,7 +444,7 @@ pub fn get_container_mounts_and_storages(
     storages: &mut Vec<SerializedStorage>,
     container: &pod::Container,
     infra_policy: &infra::InfraPolicy,
-    volume: &volumes::Volume,
+    volume: &volume::Volume,
 ) -> Result<()> {
     if let Some(volume_mounts) = &container.volumeMounts {
         for volume_mount in volume_mounts {

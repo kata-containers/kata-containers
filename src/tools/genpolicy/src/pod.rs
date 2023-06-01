@@ -13,7 +13,7 @@ use crate::pause_container;
 use crate::policy;
 use crate::registry;
 use crate::utils;
-use crate::volumes;
+use crate::volume;
 use crate::yaml;
 
 use anyhow::{anyhow, Result};
@@ -47,7 +47,7 @@ pub struct PodSpec {
     pub containers: Vec<Container>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub volumes: Option<Vec<volumes::Volume>>,
+    pub volumes: Option<Vec<volume::Volume>>,
 }
 
 /// See Container in the Kubernetes API reference.
