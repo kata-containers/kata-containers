@@ -5,10 +5,11 @@
 
 use clap::Parser;
 use env_logger;
-use log::debug;
+use log::{debug, info};
 
 mod config_maps;
 mod containerd;
+mod daemon_set;
 mod deployment;
 mod infra;
 mod kata;
@@ -73,5 +74,5 @@ async fn main() {
         std::process::exit(1);
     }
 
-    debug!("Success!");
+    info!("Success!");
 }

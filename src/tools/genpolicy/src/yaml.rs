@@ -7,6 +7,7 @@
 #![allow(non_snake_case)]
 
 use crate::config_maps;
+use crate::daemon_set;
 use crate::deployment;
 use crate::list;
 use crate::infra;
@@ -24,6 +25,7 @@ use core::fmt::Debug;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
 use std::boxed;
+use std::collections::BTreeMap;
 use std::fs::read_to_string;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -62,9 +64,24 @@ pub trait K8sObject {
     ) -> Result<()>;
 }
 
+/// See Reference / Kubernetes API / Common Definitions / LabelSelector.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LabelSelector {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    matchLabels: Option<BTreeMap<String, String>>,
+
+    // TODO: additional fields.
+}
+
 /// Creates one of the supported K8s objects from a YAML string.
 pub fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn K8sObject + Sync + Send>> {
     match kind {
+        "DaemonSet" => {
+            let daemon: daemon_set::DaemonSet = serde_yaml::from_str(&yaml)?;
+            debug!("{:#?}", &daemon);
+            Ok(boxed::Box::new(daemon))
+        }
         "Deployment" => {
             let deployment: deployment::Deployment = serde_yaml::from_str(&yaml)?;
             debug!("{:#?}", &deployment);

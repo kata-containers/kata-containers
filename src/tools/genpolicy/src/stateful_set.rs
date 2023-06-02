@@ -22,7 +22,6 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::path::Path;
 
 /// See Reference Kubernetes API / Workload Resources / StatefulSet.
@@ -47,21 +46,12 @@ pub struct StatefulSetSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     replicas: Option<i32>,
 
-    selector: LabelSelector,
+    selector: yaml::LabelSelector,
 
     pub template: pod_template::PodTemplate,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     volumeClaimTemplates: Option<Vec<persistent_volume_claim::PersistentVolumeClaim>>, // TODO: additional fields.
-}
-
-/// See Reference / Kubernetes API / Common Definitions / LabelSelector.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct LabelSelector {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    matchLabels: Option<BTreeMap<String, String>>,
-    // TODO: additional fields.
 }
 
 #[async_trait]

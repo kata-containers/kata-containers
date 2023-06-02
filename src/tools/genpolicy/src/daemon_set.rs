@@ -22,51 +22,53 @@ use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 
-/// See Deployment in the Kubernetes API reference.
+/// See Reference Kubernetes API / Workload Resources / DaemonSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Deployment {
+pub struct DaemonSet {
     apiVersion: String,
     kind: String,
     pub metadata: obj_meta::ObjectMeta,
-    pub spec: DeploymentSpec,
+    pub spec: DaemonSetSpec,
 
     #[serde(skip)]
     registry_containers: Vec<registry::Container>,
 }
 
-/// See DeploymentSpec in the Kubernetes API reference.
+/// See Reference Kubernetes API / Workload Resources / DaemonSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DeploymentSpec {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    replicas: Option<u32>,
-
+pub struct DaemonSetSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     selector: Option<yaml::LabelSelector>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    strategy: Option<DeploymentStrategy>,
-
     pub template: pod_template::PodTemplate,
-    // TODO: additional fields.
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    minReadySeconds: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    updateStrategy: Option<DaemonSetUpdateStrategy>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    revisionHistoryLimit: Option<i32>,
 }
 
-/// See DeploymentStrategy in the Kubernetes API reference.
+/// See Reference Kubernetes API / Workload Resources / DaemonSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct DeploymentStrategy {
+struct DaemonSetUpdateStrategy {
     #[serde(skip_serializing_if = "Option::is_none")]
     r#type: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    rollingUpdate: Option<RollingUpdateDeployment>,
+    rollingUpdate: Option<RollingUpdateDaemonSet>,
 }
 
-/// See RollingUpdateDeployment in the Kubernetes API reference.
+/// See Reference Kubernetes API / Workload Resources / DaemonSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RollingUpdateDeployment {
+struct RollingUpdateDaemonSet {
     #[serde(skip_serializing_if = "Option::is_none")]
     maxSurge: Option<i32>,
 
@@ -75,7 +77,7 @@ struct RollingUpdateDeployment {
 }
 
 #[async_trait]
-impl yaml::K8sObject for Deployment {
+impl yaml::K8sObject for DaemonSet {
     async fn initialize(&mut self, use_cached_files: bool) -> Result<()> {
         pause_container::add_pause_container(&mut self.spec.template.spec.containers);
         self.registry_containers = registry::get_registry_containers(
@@ -95,8 +97,7 @@ impl yaml::K8sObject for Deployment {
     }
 
     fn get_host_name(&self) -> Result<String> {
-        // Deployment pod names have variable lengths for some reason.
-        Ok("^".to_string() + &self.get_metadata_name()? + "-[a-z0-9]*-[a-z0-9]{5}$")
+        Ok("^".to_string() + &self.get_metadata_name()? + "-[a-z0-9]{5}$")
     }
 
     fn get_sandbox_name(&self) -> Result<Option<String>> {
@@ -127,14 +128,16 @@ impl yaml::K8sObject for Deployment {
         let mut policy_containers = Vec::new();
 
         for i in 0..self.spec.template.spec.containers.len() {
-            policy_containers.push(policy::get_container_policy(
+            let mut policy = policy::get_container_policy(
                 self,
                 infra_policy,
                 config_maps,
                 &self.spec.template.spec.containers[i],
                 i == 0,
                 &self.registry_containers[i],
-            )?);
+            )?;
+            policy.oci.hostname = Some(self.get_host_name()?);
+            policy_containers.push(policy);
         }
 
         let policy_data = policy::PolicyData {

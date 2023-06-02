@@ -10,6 +10,7 @@ use crate::pod;
 use crate::policy;
 
 use anyhow::{anyhow, Result};
+use log::warn;
 use log::{debug, info, LevelFilter};
 use oci_distribution::client::{linux_amd64_resolver, ClientConfig};
 use oci_distribution::{manifest, secrets::RegistryAuth, Client, Reference};
@@ -113,14 +114,23 @@ impl Container {
                 debug!("Splitting Docker config user = {:?}", image_user);
                 let user: Vec<&str> = image_user.split(':').collect();
                 if !user.is_empty() {
-                    debug!("Parsing user[0] = {:?}", user[0]);
-                    process.user.uid = user[0].parse()?;
-                    debug!("string: {:?} => uid: {}", user[0], process.user.uid);
+                    debug!("Parsing uid from user[0] = {}", &user[0]);
+                    match user[0].parse() {
+                        Ok(id) => process.user.uid = id,
+                        Err(e) => {
+                            // "image: prom/prometheus" has user = "nobody", but
+                            // process.user.uid is an u32 value.
+                            warn!(
+                                "Failed to parse {} as u32, using uid = 0 - error {:?}",
+                                &user[0], &e
+                            );
+                            process.user.uid = 0;
+                        }
+                    }
                 }
                 if user.len() > 1 {
-                    debug!("Parsing user[1] = {:?}", user[1]);
+                    debug!("Parsing gid from user[1] = {:?}", user[1]);
                     process.user.gid = user[1].parse()?;
-                    debug!("string: {:?} => gid: {}", user[1], process.user.gid);
                 }
             }
         }
@@ -226,11 +236,7 @@ async fn get_image_layers(
     Ok(layers)
 }
 
-fn delete_files(
-    decompressed_path: &Path,
-    compressed_path: &Path,
-    verity_path: &Path,
-) {
+fn delete_files(decompressed_path: &Path, compressed_path: &Path, verity_path: &Path) {
     let _ = fs::remove_file(&decompressed_path);
     let _ = fs::remove_file(&compressed_path);
     let _ = fs::remove_file(&verity_path);
@@ -259,27 +265,32 @@ async fn get_verity_hash(
     if use_cached_files && verity_path.exists() {
         info!("Using cached file {:?}", &verity_path);
     } else if let Err(e) = create_verity_hash_file(
-            use_cached_files,
-            client,
-            reference,
-            layer_digest,
-            &base_dir,
-            &decompressed_path,
-            &compressed_path,
-            &verity_path,
-        ).await {
-            delete_files(&decompressed_path, &compressed_path, &verity_path);
-            panic!("Failed to create verity hash for {}, error {:?}", layer_digest, &e);
+        use_cached_files,
+        client,
+        reference,
+        layer_digest,
+        &base_dir,
+        &decompressed_path,
+        &compressed_path,
+        &verity_path,
+    )
+    .await
+    {
+        delete_files(&decompressed_path, &compressed_path, &verity_path);
+        panic!(
+            "Failed to create verity hash for {}, error {:?}",
+            layer_digest, &e
+        );
     }
 
     match std::fs::read_to_string(&verity_path) {
         Err(e) => {
             delete_files(&decompressed_path, &compressed_path, &verity_path);
             panic!("Failed to read {:?}, error {:?}", &verity_path, &e);
-        },
+        }
         Ok(v) => {
             info!("dm-verity root hash: {}", &v);
-            return Ok(v)
+            return Ok(v);
         }
     }
 }
@@ -306,7 +317,8 @@ async fn create_verity_hash_file(
             layer_digest,
             &decompressed_path,
             &compressed_path,
-        ).await?;
+        )
+        .await?;
     }
 
     do_create_verity_hash_file(decompressed_path, verity_path)
@@ -324,14 +336,24 @@ async fn create_decompressed_layer_file(
         info!("Using cached file {:?}", &compressed_path);
     } else {
         info!("Pulling layer {:?}", layer_digest);
-        let mut file = tokio::fs::File::create(&compressed_path).await.map_err(|e| anyhow!(e))?;
-        client.pull_blob(&reference, layer_digest, &mut file).await.map_err(|e| anyhow!(e))?;
+        let mut file = tokio::fs::File::create(&compressed_path)
+            .await
+            .map_err(|e| anyhow!(e))?;
+        client
+            .pull_blob(&reference, layer_digest, &mut file)
+            .await
+            .map_err(|e| anyhow!(e))?;
         file.flush().await.map_err(|e| anyhow!(e))?;
     }
 
     info!("Decompressing layer");
     let compressed_file = std::fs::File::open(&compressed_path).map_err(|e| anyhow!(e))?;
-    let mut decompressed_file = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(true).open(&decompressed_path)?;
+    let mut decompressed_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&decompressed_path)?;
     let mut gz_decoder = flate2::read::GzDecoder::new(compressed_file);
     std::io::copy(&mut gz_decoder, &mut decompressed_file).map_err(|e| anyhow!(e))?;
 
@@ -357,7 +379,9 @@ fn do_create_verity_hash_file(path: &Path, verity_path: &Path) -> Result<()> {
     let result = format!("{:x}", hash);
 
     let mut verity_file = std::fs::File::create(verity_path).map_err(|e| anyhow!(e))?;
-    verity_file.write_all(result.as_bytes()).map_err(|e| anyhow!(e))?;
+    verity_file
+        .write_all(result.as_bytes())
+        .map_err(|e| anyhow!(e))?;
     verity_file.flush().map_err(|e| anyhow!(e))?;
 
     Ok(())
