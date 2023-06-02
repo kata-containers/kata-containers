@@ -14,4 +14,5 @@ pub struct CreateOpts {
     pub spec: Option<Spec>,
     pub rootless_euid: bool,
     pub rootless_cgroup: bool,
+    pub wasm_runtime: bool,
 }

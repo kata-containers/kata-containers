@@ -82,6 +82,7 @@ lto = true
 [features]
 seccomp = ["rustjail/seccomp"]
 standard-oci-runtime = ["rustjail/standard-oci-runtime"]
+wasm-runtime = ["rustjail/wasm-runtime"]
 
 [[bin]]
 name = "kata-agent"
