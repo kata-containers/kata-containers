@@ -22,7 +22,6 @@ mod pod_template;
 mod policy;
 mod registry;
 mod replication_controller;
-mod service;
 mod stateful_set;
 mod utils;
 mod volume;
