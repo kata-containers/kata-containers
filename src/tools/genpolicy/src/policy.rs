@@ -12,10 +12,10 @@ use crate::deployment;
 use crate::infra;
 use crate::kata;
 use crate::list;
+use crate::no_policy_obj;
 use crate::pod;
 use crate::registry;
 use crate::replication_controller;
-use crate::service;
 use crate::stateful_set;
 use crate::utils;
 use crate::volume;
@@ -57,9 +57,9 @@ fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn yaml::K8sObje
             Ok(boxed::Box::new(controller))
         }
         "Service" => {
-            let service: service::Service = serde_yaml::from_str(&yaml)?;
-            debug!("{:#?}", &service);
-            Ok(boxed::Box::new(service))
+            let no_policy = no_policy_obj::NoPolicyObject {yaml: yaml.to_string()};
+            debug!("{:#?}", &no_policy);
+            Ok(boxed::Box::new(no_policy))
         }
         "StatefulSet" => {
             let set: stateful_set::StatefulSet = serde_yaml::from_str(&yaml)?;
