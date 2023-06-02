@@ -91,7 +91,7 @@ pub fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn K8sObject
             debug!("{:#?}", &set);
             Ok(boxed::Box::new(set))
         }
-        "LimitRange" | "Service" | "ResourceQuota" => {
+        "LimitRange" | "Namespace" | "ResourceQuota" | "Service" => {
             let no_policy = no_policy_obj::NoPolicyObject {
                 yaml: yaml.to_string(),
             };
