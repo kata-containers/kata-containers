@@ -43,6 +43,7 @@ serial-targets:
 	${MAKE} -f $(MK_PATH) -j 1 V= \
 	rootfs-image-tarball \
 	rootfs-image-tdx-tarball \
+	rootfs-initrd-mariner-tarball \
 	rootfs-initrd-sev-tarball \
 	rootfs-initrd-tarball \
 	cloud-hypervisor-tarball \
@@ -107,6 +108,9 @@ rootfs-image-tarball:
 
 rootfs-image-tdx-tarball: kernel-tdx-experimental-tarball
 	${MAKE} $@-build
+
+rootfs-initrd-mariner-tarball:
+	exit 0
 
 rootfs-initrd-sev-tarball: kernel-sev-tarball
 	${MAKE} $@-build

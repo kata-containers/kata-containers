@@ -40,6 +40,7 @@ jobs:
           - rootfs-image
           - rootfs-image-tdx
           - rootfs-initrd
+          - rootfs-initrd-mariner
           - rootfs-initrd-sev
           - shim-v2
           - tdvf
