@@ -1,56 +1,8 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::{cell::RefCell, io, mem, rc::Rc};
 use tar::Archive;
-use zerocopy::byteorder::{LE, U16, U32, U64};
+use tarfs_defs::*;
 use zerocopy::AsBytes;
-
-#[derive(zerocopy::AsBytes, zerocopy::Unaligned)]
-#[repr(C)]
-struct Inode {
-    mode: U16<LE>,
-    _padding: u8,
-    hmtime: u8, // High 4 bits of mtime.
-    owner: U32<LE>,
-    group: U32<LE>,
-    lmtime: U32<LE>, // Lower 32 bits of mtime.
-    size: U64<LE>,
-    offset: U64<LE>, // 64 bits of offset, or 32 LSB are minor dev and 32 MSB are major dev.
-}
-
-#[derive(zerocopy::AsBytes, zerocopy::Unaligned)]
-#[repr(C)]
-struct DirEntry {
-    ino: U64<LE>,
-    name_offset: U64<LE>,
-    name_len: U64<LE>,
-    etype: u8,
-    _padding: [u8; 7],
-}
-
-#[derive(zerocopy::AsBytes, zerocopy::Unaligned)]
-#[repr(C)]
-struct SuperBlock {
-    inode_table_offset: U64<LE>,
-    inode_count: U64<LE>,
-}
-
-const S_IFMT: u16 = 0o0170000;
-const S_IFSOCK: u16 = 0o0140000;
-const S_IFLNK: u16 = 0o0120000;
-const S_IFREG: u16 = 0o0100000;
-const S_IFBLK: u16 = 0o0060000;
-const S_IFDIR: u16 = 0o0040000;
-const S_IFCHR: u16 = 0o0020000;
-const S_IFIFO: u16 = 0o0010000;
-
-const DT_UNKNOWN: u8 = 0;
-const DT_FIFO: u8 = 1;
-const DT_CHR: u8 = 2;
-const DT_DIR: u8 = 4;
-const DT_BLK: u8 = 6;
-const DT_REG: u8 = 8;
-const DT_LNK: u8 = 10;
-const DT_SOCK: u8 = 12;
 
 #[derive(Default)]
 struct Entry {
@@ -60,6 +12,7 @@ struct Entry {
     mode: u16,
     ino: u64,
     emitted: bool,
+    is_opaque: bool,
 
     mtime: u64,
     owner: u32,
@@ -93,9 +46,6 @@ fn visit_breadth_first_mut(
     Ok(())
 }
 
-// TODO: Handle white-outs.
-// https://www.kernel.org/doc/Documentation/filesystems/overlayfs.txt contains information about
-// how overlayfs handles this.
 fn read_all_entries(
     reader: &mut (impl io::Read + io::Seek),
     root: &mut Rc<RefCell<Entry>>,
@@ -237,6 +187,7 @@ fn read_all_entries(
                 size: entry_size,
                 offset: entry_offset,
                 children: BTreeMap::new(),
+                is_opaque: false,
                 mode,
                 ino: 0,
                 emitted: false,
@@ -340,6 +291,16 @@ fn write_direntry_bodies(
     Ok(offset)
 }
 
+fn traverse_path(root: &Rc<RefCell<Entry>>, path: &[&[u8]]) -> Rc<RefCell<Entry>> {
+    let mut ptr = root.clone();
+    for component in path {
+        let new = ptr.borrow_mut().find_or_create_child(component);
+        ptr = new;
+    }
+
+    ptr
+}
+
 pub fn append_index(data: &mut (impl io::Read + io::Write + io::Seek)) -> io::Result<()> {
     let mut root = Rc::new(RefCell::new(Entry {
         mode: S_IFDIR | 0o555,
@@ -351,7 +312,7 @@ pub fn append_index(data: &mut (impl io::Read + io::Write + io::Seek)) -> io::Re
         &mut root,
         |root, name, e| {
             // Break the name into path components.
-            let path = if let Some(p) = clean_path(name) {
+            let mut path = if let Some(p) = clean_path(name) {
                 p
             } else {
                 // Skip files that don't point into the root.
@@ -359,22 +320,45 @@ pub fn append_index(data: &mut (impl io::Read + io::Write + io::Seek)) -> io::Re
                 return;
             };
 
-            // Find the right entry in the tree.
-            let mut ptr = root.clone();
-            for component in path {
-                let new = ptr.borrow_mut().find_or_create_child(component);
-                ptr = new;
+            if let Some(n) = path.last_mut() {
+                if n == b".wh..wh..opq" {
+                    // Set the opaque flag on the parent directory.
+                    let ptr = traverse_path(&root, &path[..path.len() - 1]);
+                    ptr.borrow_mut().is_opaque = true;
+                    return;
+                }
+
+                if n.starts_with(b".wh.") {
+                    // Find the file and make it a char device with (0, 0) as major and minor. This
+                    // indicates to overlayfs that it shouldn't look at lower layers.
+                    *n = &n[4..];
+                    let ptr = traverse_path(&root, &path);
+                    let mut cur = ptr.borrow_mut();
+                    cur.children = BTreeMap::new();
+                    cur.mode = (cur.mode & !S_IFMT) | S_IFCHR;
+                    cur.size = 0;
+                    cur.offset = 0;
+                    return;
+                }
             }
 
+            // Find the right entry in the tree.
+            let ptr = traverse_path(&root, &path);
             let mut cur = ptr.borrow_mut();
+
             // Update the entry. We remove any previous existing entry.
-            cur.children = BTreeMap::new();
-            cur.mode = e.mode;
-            cur.size = e.size;
-            cur.offset = e.offset;
-            cur.mtime = e.mtime;
-            cur.owner = e.owner;
-            cur.group = e.group;
+            *cur = Entry {
+                children: BTreeMap::new(),
+                mode: e.mode,
+                size: e.size,
+                offset: e.offset,
+                mtime: e.mtime,
+                owner: e.owner,
+                group: e.group,
+                ino: e.ino,
+                emitted: e.emitted,
+                is_opaque: e.is_opaque,
+            };
         },
         |root, name, linkname| {
             // Find the destination.
@@ -453,7 +437,11 @@ pub fn append_index(data: &mut (impl io::Read + io::Write + io::Seek)) -> io::Re
         e.emitted = true;
         let inode = Inode {
             mode: e.mode.into(),
-            _padding: 0,
+            flags: if e.is_opaque {
+                tarfs_defs::inode_flags::OPAQUE
+            } else {
+                0
+            },
             hmtime: (e.mtime >> 32 & 0xf) as u8,
             owner: e.owner.into(),
             group: e.group.into(),
