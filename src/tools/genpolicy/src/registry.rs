@@ -10,13 +10,13 @@ use crate::pod;
 use crate::policy;
 
 use anyhow::{anyhow, Result};
+use log::warn;
 use log::{debug, info, LevelFilter};
 use oci_distribution::client::{linux_amd64_resolver, ClientConfig};
 use oci_distribution::{manifest, secrets::RegistryAuth, Client, Reference};
 use serde::{Deserialize, Serialize};
 use sha2::{digest::typenum::Unsigned, digest::OutputSizeUser, Sha256};
-use std::{io, io::Seek, io::Write};
-use tempfile::tempdir;
+use std::{io, io::Seek, io::Write, path::Path};
 use tokio::{fs, io::AsyncWriteExt};
 
 #[derive(Clone, Debug)]
@@ -55,7 +55,7 @@ pub struct ImageLayer {
 }
 
 impl Container {
-    pub async fn new(image: &str) -> Result<Self> {
+    pub async fn new(use_cached_files: bool, image: &str) -> Result<Self> {
         info!("============================================");
         info!("Pulling manifest and config for {:?}", image);
         let reference: Reference = image.to_string().parse().unwrap();
@@ -83,8 +83,15 @@ impl Container {
         }
 
         let config_layer: DockerConfigLayer = serde_json::from_str(&config_layer_str).unwrap();
-        let image_layers =
-            get_image_layers(&mut client, &reference, &manifest, &config_layer).await.unwrap();
+        let image_layers = get_image_layers(
+            use_cached_files,
+            &mut client,
+            &reference,
+            &manifest,
+            &config_layer,
+        )
+        .await
+        .unwrap();
 
         Ok(Container {
             config_layer,
@@ -107,14 +114,23 @@ impl Container {
                 debug!("Splitting Docker config user = {:?}", image_user);
                 let user: Vec<&str> = image_user.split(':').collect();
                 if !user.is_empty() {
-                    debug!("Parsing user[0] = {:?}", user[0]);
-                    process.user.uid = user[0].parse()?;
-                    debug!("string: {:?} => uid: {}", user[0], process.user.uid);
+                    debug!("Parsing uid from user[0] = {}", &user[0]);
+                    match user[0].parse() {
+                        Ok(id) => process.user.uid = id,
+                        Err(e) => {
+                            // "image: prom/prometheus" has user = "nobody", but
+                            // process.user.uid is an u32 value.
+                            warn!(
+                                "Failed to parse {} as u32, using uid = 0 - error {:?}",
+                                &user[0], &e
+                            );
+                            process.user.uid = 0;
+                        }
+                    }
                 }
                 if user.len() > 1 {
-                    debug!("Parsing user[1] = {:?}", user[1]);
+                    debug!("Parsing gid from user[1] = {:?}", user[1]);
                     process.user.gid = user[1].parse()?;
-                    debug!("string: {:?} => gid: {}", user[1], process.user.gid);
                 }
             }
         }
@@ -184,6 +200,7 @@ impl Container {
 }
 
 async fn get_image_layers(
+    use_cached_files: bool,
     client: &mut Client,
     reference: &Reference,
     manifest: &manifest::OciImageManifest,
@@ -200,7 +217,13 @@ async fn get_image_layers(
             if layer_index < config_layer.rootfs.diff_ids.len() {
                 layers.push(ImageLayer {
                     diff_id: config_layer.rootfs.diff_ids[layer_index].clone(),
-                    verity_hash: get_verity_hash(client, reference, &layer.digest).await?,
+                    verity_hash: get_verity_hash(
+                        use_cached_files,
+                        client,
+                        reference,
+                        &layer.digest,
+                    )
+                    .await?,
                 });
             } else {
                 return Err(anyhow!("Too many Docker gzip layers"));
@@ -213,82 +236,165 @@ async fn get_image_layers(
     Ok(layers)
 }
 
+fn delete_files(decompressed_path: &Path, compressed_path: &Path, verity_path: &Path) {
+    let _ = fs::remove_file(&decompressed_path);
+    let _ = fs::remove_file(&compressed_path);
+    let _ = fs::remove_file(&verity_path);
+}
+
 async fn get_verity_hash(
+    use_cached_files: bool,
     client: &mut Client,
     reference: &Reference,
     layer_digest: &str,
 ) -> Result<String> {
-    let base_dir = tempdir().unwrap();
-    let mut file_path = base_dir.path().join("image_layer");
-    file_path.set_extension("gz");
+    let base_dir = std::path::Path::new("layers_cache");
 
+    // Use file names supported by both Linux and Windows.
+    let file_name = str::replace(&layer_digest, ":", "-");
+
+    let mut decompressed_path = base_dir.join(file_name);
+    decompressed_path.set_extension("tar");
+
+    let mut compressed_path = decompressed_path.clone();
+    compressed_path.set_extension("gz");
+
+    let mut verity_path = decompressed_path.clone();
+    verity_path.set_extension("verity");
+
+    if use_cached_files && verity_path.exists() {
+        info!("Using cached file {:?}", &verity_path);
+    } else if let Err(e) = create_verity_hash_file(
+        use_cached_files,
+        client,
+        reference,
+        layer_digest,
+        &base_dir,
+        &decompressed_path,
+        &compressed_path,
+        &verity_path,
+    )
+    .await
     {
-        let mut file = tokio::fs::File::create(&file_path).await?;
+        delete_files(&decompressed_path, &compressed_path, &verity_path);
+        panic!(
+            "Failed to create verity hash for {}, error {:?}",
+            layer_digest, &e
+        );
+    }
 
-        info!("Pulling layer {:?}", layer_digest);
-        if let Err(err) = client.pull_blob(&reference, layer_digest, &mut file).await {
-            drop(file);
-            debug!("Download failed: {:?}", err);
-            let _ = fs::remove_file(&file_path);
-            return Err(anyhow!("unable to pull blob"));
-        } else {
-            file.flush().await.unwrap();
+    match std::fs::read_to_string(&verity_path) {
+        Err(e) => {
+            delete_files(&decompressed_path, &compressed_path, &verity_path);
+            panic!("Failed to read {:?}, error {:?}", &verity_path, &e);
         }
+        Ok(v) => {
+            info!("dm-verity root hash: {}", &v);
+            return Ok(v);
+        }
+    }
+}
+
+async fn create_verity_hash_file(
+    use_cached_files: bool,
+    client: &mut Client,
+    reference: &Reference,
+    layer_digest: &str,
+    base_dir: &Path,
+    decompressed_path: &Path,
+    compressed_path: &Path,
+    verity_path: &Path,
+) -> Result<()> {
+    if use_cached_files && decompressed_path.exists() {
+        info!("Using cached file {:?}", &decompressed_path);
+    } else {
+        std::fs::create_dir_all(&base_dir)?;
+
+        create_decompressed_layer_file(
+            use_cached_files,
+            client,
+            reference,
+            layer_digest,
+            &decompressed_path,
+            &compressed_path,
+        )
+        .await?;
+    }
+
+    do_create_verity_hash_file(decompressed_path, verity_path)
+}
+
+async fn create_decompressed_layer_file(
+    use_cached_files: bool,
+    client: &mut Client,
+    reference: &Reference,
+    layer_digest: &str,
+    decompressed_path: &Path,
+    compressed_path: &Path,
+) -> Result<()> {
+    if use_cached_files && compressed_path.exists() {
+        info!("Using cached file {:?}", &compressed_path);
+    } else {
+        info!("Pulling layer {:?}", layer_digest);
+        let mut file = tokio::fs::File::create(&compressed_path)
+            .await
+            .map_err(|e| anyhow!(e))?;
+        client
+            .pull_blob(&reference, layer_digest, &mut file)
+            .await
+            .map_err(|e| anyhow!(e))?;
+        file.flush().await.map_err(|e| anyhow!(e))?;
     }
 
     info!("Decompressing layer");
-    if !tokio::process::Command::new("gunzip")
-        .arg(&file_path)
-        .arg("-f")
-        .arg("-k")
-        .spawn()?
-        .wait()
-        .await?
-        .success()
-    {
-        let _ = fs::remove_file(&file_path);
-        return Err(anyhow!("unable to decompress layer"));
-    }
+    let compressed_file = std::fs::File::open(&compressed_path).map_err(|e| anyhow!(e))?;
+    let mut decompressed_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&decompressed_path)?;
+    let mut gz_decoder = flate2::read::GzDecoder::new(compressed_file);
+    std::io::copy(&mut gz_decoder, &mut decompressed_file).map_err(|e| anyhow!(e))?;
 
-    {
-        file_path.set_extension("");
+    info!("Adding tarfs index to layer");
+    decompressed_file.seek(std::io::SeekFrom::Start(0))?;
+    tarindex::append_index(&mut decompressed_file).map_err(|e| anyhow!(e))?;
+    decompressed_file.flush().map_err(|e| anyhow!(e))?;
 
-        info!("Adding tarfs index to layer");
-        let mut file = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(&file_path)?;
-        tarindex::append_index(&mut file)?;
-        file.flush().unwrap();
-    }
-
-    info!("Calculating dm-verity root hash for layer");
-    create_verity_hash(&file_path.to_string_lossy())
+    Ok(())
 }
 
-fn create_verity_hash(path: &str) -> Result<String> {
+fn do_create_verity_hash_file(path: &Path, verity_path: &Path) -> Result<()> {
+    info!("Calculating dm-verity root hash");
     let mut file = std::fs::File::open(path)?;
     let size = file.seek(std::io::SeekFrom::End(0))?;
     if size < 4096 {
-        return Err(anyhow!("Block device ({path}) is too small: {size}"));
+        return Err(anyhow!("Block device {:?} is too small: {}", path, size));
     }
 
     let salt = [0u8; <Sha256 as OutputSizeUser>::OutputSize::USIZE];
-    let v = verity::Verity::<Sha256>::new(size, 4096, 4096, &salt, None)?;
-    let hash = verity::traverse_file(&file, 0, false, v)?;
+    let v = verity::Verity::<Sha256>::new(size, 4096, 4096, &salt, 0)?;
+    let hash = verity::traverse_file(&mut file, 0, false, v, &mut verity::no_write)?;
     let result = format!("{:x}", hash);
-    info!("dm-verity root hash: {:?}", &result);
 
-    Ok(result)
+    let mut verity_file = std::fs::File::create(verity_path).map_err(|e| anyhow!(e))?;
+    verity_file
+        .write_all(result.as_bytes())
+        .map_err(|e| anyhow!(e))?;
+    verity_file.flush().map_err(|e| anyhow!(e))?;
+
+    Ok(())
 }
 
 pub async fn get_registry_containers(
+    use_cached_files: bool,
     yaml_containers: &Vec<pod::Container>,
 ) -> Result<Vec<Container>> {
     let mut registry_containers = Vec::new();
 
     for yaml_container in yaml_containers {
-        registry_containers.push(Container::new(&yaml_container.image).await?);
+        registry_containers.push(Container::new(use_cached_files, &yaml_container.image).await?);
     }
 
     Ok(registry_containers)

@@ -21,7 +21,6 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 /// See Deployment in the Kubernetes API reference.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -44,7 +43,7 @@ pub struct DeploymentSpec {
     replicas: Option<u32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    selector: Option<LabelSelector>,
+    selector: Option<yaml::LabelSelector>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     strategy: Option<DeploymentStrategy>,
@@ -75,19 +74,15 @@ struct RollingUpdateDeployment {
     maxUnavailable: Option<i32>,
 }
 
-/// See LabelSelector in the Kubernetes API reference.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct LabelSelector {
-    matchLabels: Option<BTreeMap<String, String>>,
-}
-
 #[async_trait]
 impl yaml::K8sObject for Deployment {
-    async fn initialize(&mut self) -> Result<()> {
+    async fn initialize(&mut self, use_cached_files: bool) -> Result<()> {
         pause_container::add_pause_container(&mut self.spec.template.spec.containers);
-        self.registry_containers =
-            registry::get_registry_containers(&self.spec.template.spec.containers).await?;
+        self.registry_containers = registry::get_registry_containers(
+            use_cached_files,
+            &self.spec.template.spec.containers,
+        )
+        .await?;
         Ok(())
     }
 
@@ -100,8 +95,8 @@ impl yaml::K8sObject for Deployment {
     }
 
     fn get_host_name(&self) -> Result<String> {
-        // Example: "hostname": "^busybox-cc-5bdd867667-xxmdz$",
-        Ok("^".to_string() + &self.get_metadata_name()? + "-[a-z0-9]{10}-[a-z0-9]{5}$")
+        // Deployment pod names have variable lengths for some reason.
+        Ok("^".to_string() + &self.get_metadata_name()? + "-[a-z0-9]*-[a-z0-9]{5}$")
     }
 
     fn get_sandbox_name(&self) -> Result<Option<String>> {
@@ -166,7 +161,7 @@ impl yaml::K8sObject for Deployment {
         Ok(())
     }
 
-    fn serialize(&self) -> Result<String> {
+    fn serialize(&mut self) -> Result<String> {
         Ok(serde_yaml::to_string(&self)?)
     }
 }

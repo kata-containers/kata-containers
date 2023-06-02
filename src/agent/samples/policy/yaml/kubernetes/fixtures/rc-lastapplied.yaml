@@ -18,7 +18,7 @@ spec:
     spec:
       runtimeClassName: kata-cc
       containers:
-        - image: nginx
+        - image: "mcr.microsoft.com/cbl-mariner/base/nginx:1-cm2.0"
           name: test-rc
           ports:
             - containerPort: 80

@@ -5,24 +5,27 @@
 
 use clap::Parser;
 use env_logger;
-use log::debug;
+use log::{debug, info};
 
 mod config_maps;
 mod containerd;
+mod daemon_set;
 mod deployment;
 mod infra;
 mod kata;
 mod list;
+mod no_policy_obj;
 mod obj_meta;
 mod pause_container;
+mod persistent_volume_claim;
 mod pod;
 mod pod_template;
 mod policy;
 mod registry;
 mod replication_controller;
-mod service;
+mod stateful_set;
 mod utils;
-mod volumes;
+mod volume;
 mod yaml;
 
 #[derive(Debug, Parser)]
@@ -38,6 +41,9 @@ struct CommandLineOptions {
 
     #[clap(short, long)]
     config_map_file: Option<String>,
+
+    #[clap(short, long)]
+    use_cached_files: bool,
 }
 
 #[tokio::main]
@@ -52,6 +58,7 @@ async fn main() {
     }
 
     let in_out_files = utils::InOutFiles::new(
+        args.use_cached_files,
         args.yaml_file,
         args.input_files_path,
         args.output_policy_file,
@@ -67,5 +74,5 @@ async fn main() {
         std::process::exit(1);
     }
 
-    debug!("Success!");
+    info!("Success!");
 }

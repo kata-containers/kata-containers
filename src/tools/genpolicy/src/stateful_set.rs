@@ -10,6 +10,7 @@ use crate::config_maps;
 use crate::infra;
 use crate::obj_meta;
 use crate::pause_container;
+use crate::persistent_volume_claim;
 use crate::pod;
 use crate::pod_template;
 use crate::policy;
@@ -21,39 +22,40 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::path::Path;
 
-/// See ReplicationController in the Kubernetes API reference.
+/// See Reference Kubernetes API / Workload Resources / StatefulSet.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ReplicationController {
+pub struct StatefulSet {
     pub apiVersion: String,
     pub kind: String,
     pub metadata: obj_meta::ObjectMeta,
-    pub spec: ReplicationControllerSpec,
+    pub spec: StatefulSetSpec,
 
     #[serde(skip)]
     pub registry_containers: Vec<registry::Container>,
 }
 
-/// See ReplicationControllerSpec in the Kubernetes API reference.
+/// See Reference Kubernetes API / Workload Resources / StatefulSet.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ReplicationControllerSpec {
+pub struct StatefulSetSpec {
+    serviceName: String,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     replicas: Option<i32>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    selector: Option<BTreeMap<String, String>>,
+    selector: yaml::LabelSelector,
 
     pub template: pod_template::PodTemplate,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    minReadySeconds: Option<i32>,
+    volumeClaimTemplates: Option<Vec<persistent_volume_claim::PersistentVolumeClaim>>, // TODO: additional fields.
 }
 
 #[async_trait]
-impl yaml::K8sObject for ReplicationController {
+impl yaml::K8sObject for StatefulSet {
     async fn initialize(&mut self, use_cached_files: bool) -> Result<()> {
         pause_container::add_pause_container(&mut self.spec.template.spec.containers);
         self.registry_containers = registry::get_registry_containers(
@@ -74,7 +76,7 @@ impl yaml::K8sObject for ReplicationController {
 
     fn get_host_name(&self) -> Result<String> {
         // Example: "hostname": "no-exist-tdtd7",
-        Ok("^".to_string() + &self.get_metadata_name()? + "-[a-z0-9]{5}$")
+        Ok("^".to_string() + &self.get_metadata_name()? + "-[a-z0-9]*$")
     }
 
     fn get_sandbox_name(&self) -> Result<Option<String>> {
@@ -87,11 +89,60 @@ impl yaml::K8sObject for ReplicationController {
 
     fn get_container_mounts_and_storages(
         &self,
-        _policy_mounts: &mut Vec<oci::Mount>,
+        policy_mounts: &mut Vec<oci::Mount>,
         _storages: &mut Vec<policy::SerializedStorage>,
         _container: &pod::Container,
         _infra_policy: &infra::InfraPolicy,
     ) -> Result<()> {
+        // Example:
+        //
+        // containers:
+        //   - name: nginx
+        //     image: "nginx"
+        //     volumeMounts:
+        //       - mountPath: /usr/share/nginx/html
+        //         name: www
+        // ...
+        //
+        // volumeClaimTemplates:
+        //   - metadata:
+        //       name: www
+        //     spec:
+        //       accessModes:
+        //         - ReadWriteOnce
+        //       resources:
+        //         requests:
+        //           storage: 1Gi
+        for container in &self.spec.template.spec.containers {
+            if let Some(volume_mounts) = &container.volumeMounts {
+                for mount in volume_mounts {
+                    if let Some(claims) = &self.spec.volumeClaimTemplates {
+                        for claim in claims {
+                            if let Some(claim_name) = &claim.metadata.name {
+                                if claim_name.eq(&mount.name) {
+                                    if let Some(file_name) = Path::new(&mount.mountPath).file_name()
+                                    {
+                                        if let Some(file_name) = file_name.to_str() {
+                                            // TODO:
+                                            // - Get the source path below from the infra module.
+                                            // - Generate proper options value.
+                                            policy_mounts.push(oci::Mount {
+                                                destination: mount.mountPath.clone(),
+                                                r#type: "bind".to_string(),
+                                                source: "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-".to_string() 
+                                                    + &file_name + "$",
+                                                options: vec!["rbind".to_string(), "rprivate".to_string(), "rw".to_string()],
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 

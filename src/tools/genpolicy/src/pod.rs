@@ -13,7 +13,7 @@ use crate::pause_container;
 use crate::policy;
 use crate::registry;
 use crate::utils;
-use crate::volumes;
+use crate::volume;
 use crate::yaml;
 
 use anyhow::{anyhow, Result};
@@ -47,7 +47,7 @@ pub struct PodSpec {
     pub containers: Vec<Container>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub volumes: Option<Vec<volumes::Volume>>,
+    pub volumes: Option<Vec<volume::Volume>>,
 }
 
 /// See Container in the Kubernetes API reference.
@@ -253,9 +253,10 @@ impl EnvVar {
 
 #[async_trait]
 impl yaml::K8sObject for Pod {
-    async fn initialize(&mut self) -> Result<()> {
+    async fn initialize(&mut self, use_cached_files: bool) -> Result<()> {
         pause_container::add_pause_container(&mut self.spec.containers);
-        self.registry_containers = registry::get_registry_containers(&self.spec.containers).await?;
+        self.registry_containers =
+            registry::get_registry_containers(use_cached_files, &self.spec.containers).await?;
         Ok(())
     }
 
@@ -344,7 +345,7 @@ impl yaml::K8sObject for Pod {
         Ok(())
     }
 
-    fn serialize(&self) -> Result<String> {
+    fn serialize(&mut self) -> Result<String> {
         Ok(serde_yaml::to_string(&self)?)
     }
 }

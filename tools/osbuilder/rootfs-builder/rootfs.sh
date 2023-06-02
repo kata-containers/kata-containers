@@ -641,14 +641,24 @@ EOF
 		mkdir -p "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants"
 		ln -sf "/usr/lib/systemd/system/kata-containers.target" "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants/kata-containers.target"
 
-		# TODO: clean-up OPA installation
-		cp /usr/bin/opa "${ROOTFS_DIR}/usr/bin"
-		chmod 755 "${ROOTFS_DIR}/usr/bin/opa"
-		samples_dir="${script_dir}/../../../src/agent/samples/policy/all-allowed"
+		open_policy_agent_url="$(get_package_version_from_kata_yaml externals.open-policy-agent.url)"
+		open_policy_agent_version="$(get_package_version_from_kata_yaml externals.open-policy-agent.version)"
+		info "Install Open Policy Agent"
+		OPA_DIR="${script_dir}/opa"
+		if [ ! -d "${OPA_DIR}" ] ; then
+			git clone --depth=1 "${open_policy_agent_url}" "$OPA_DIR"
+		fi
+		pushd "$OPA_DIR"
+		git fetch --depth=1 origin "${open_policy_agent_version}"
+		git checkout FETCH_HEAD
+		make build WASM_ENABLED=0
+		install -D -o root -g root -m 0755 opa_linux_amd64 -T "${ROOTFS_DIR}/usr/local/bin/opa"
+		popd
 
+		# TODO: clean-up OPA installation
+		samples_dir="${script_dir}/../../../src/agent/samples/policy/all-allowed"
 		cp "${samples_dir}/all-allowed.rego" "${ROOTFS_DIR}/coco_policy"
 		chmod 644 "${ROOTFS_DIR}/coco_policy"
-
 		cp "${samples_dir}/all-allowed-data.json" "${ROOTFS_DIR}/coco_policy_data"
 		chmod 644 "${ROOTFS_DIR}/coco_policy_data"
 	fi

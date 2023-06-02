@@ -1,6 +1,7 @@
 use generic_array::{typenum::Unsigned, GenericArray};
 use sha2::{digest::OutputSizeUser, Digest};
-use std::{fs::File, io, io::Seek, os::unix::fs::FileExt};
+use std::fs::File;
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use zerocopy::byteorder::{LE, U32, U64};
 use zerocopy::AsBytes;
 
@@ -19,17 +20,16 @@ struct Level {
     data: Vec<u8>,
 }
 
-pub struct Verity<'a, T: Digest + Clone> {
+pub struct Verity<T: Digest + Clone> {
     levels: Vec<Level>,
     seeded: T,
     data_block_size: usize,
     hash_block_size: usize,
     block_remaining_count: u64,
-    writer: Option<&'a File>,
     super_block: SuperBlock,
 }
 
-impl<'a, T: Digest + Clone> Verity<'a, T> {
+impl<T: Digest + Clone> Verity<T> {
     const HASH_SIZE: usize = T::OutputSize::USIZE;
 
     /// Creates a new `Verity` instance.
@@ -38,7 +38,7 @@ impl<'a, T: Digest + Clone> Verity<'a, T> {
         data_block_size: usize,
         hash_block_size: usize,
         salt: &[u8],
-        write: Option<(&'a File, u64)>,
+        mut write_file_offset: u64,
     ) -> io::Result<Self> {
         let level_count = {
             let mut max_size = data_block_size as u64;
@@ -64,17 +64,12 @@ impl<'a, T: Digest + Clone> Verity<'a, T> {
             },
         );
 
-        let (writer, mut offset) = match write {
-            Some((w, offset)) => (Some(w), offset),
-            None => (None, 0),
-        };
-
         for (i, l) in levels.iter_mut().enumerate() {
             let entry_size = (data_block_size as u64)
                 * ((hash_block_size / Self::HASH_SIZE) as u64).pow(level_count as u32 - i as u32);
             let count = (data_size + entry_size - 1) / entry_size;
-            l.file_offset = offset;
-            offset += hash_block_size as u64 * count;
+            l.file_offset = write_file_offset;
+            write_file_offset += hash_block_size as u64 * count;
         }
 
         let block_count = data_size / (data_block_size as u64);
@@ -84,7 +79,6 @@ impl<'a, T: Digest + Clone> Verity<'a, T> {
             data_block_size,
             block_remaining_count: block_count,
             hash_block_size,
-            writer,
             super_block: SuperBlock {
                 data_block_size: (data_block_size as u32).into(),
                 hash_block_size: (hash_block_size as u32).into(),
@@ -122,11 +116,12 @@ impl<'a, T: Digest + Clone> Verity<'a, T> {
         level.next_index = 0;
     }
 
-    fn uplevel(&mut self, l: usize) -> io::Result<bool> {
+    fn uplevel<F>(&mut self, l: usize, reader: &mut File, writer: &mut F) -> io::Result<bool>
+    where
+        F: FnMut(&mut File, &[u8], u64) -> io::Result<()>,
+    {
         self.finalize_level(l);
-        if let Some(w) = self.writer {
-            w.write_all_at(&self.levels[l].data, self.levels[l].file_offset)?;
-        }
+        writer(reader, &self.levels[l].data, self.levels[l].file_offset)?;
         self.levels[l].file_offset += self.hash_block_size as u64;
         let h = self.digest(&self.levels[l].data);
         Ok(self.add_hash(l - 1, h.as_slice()))
@@ -138,7 +133,10 @@ impl<'a, T: Digest + Clone> Verity<'a, T> {
         hasher.finalize()
     }
 
-    fn add_block(&mut self, b: &[u8]) -> io::Result<()> {
+    fn add_block<F>(&mut self, b: &[u8], reader: &mut File, writer: &mut F) -> io::Result<()>
+    where
+        F: FnMut(&mut File, &[u8], u64) -> io::Result<()>,
+    {
         if self.block_remaining_count == 0 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -153,7 +151,7 @@ impl<'a, T: Digest + Clone> Verity<'a, T> {
         if self.add_hash(count - 1, hash.as_slice()) {
             // Go up the levels as far as it can.
             for l in (1..count).rev() {
-                if !self.uplevel(l)? {
+                if !self.uplevel(l, reader, writer)? {
                     break;
                 }
             }
@@ -161,12 +159,17 @@ impl<'a, T: Digest + Clone> Verity<'a, T> {
         Ok(())
     }
 
-    fn finalize(mut self, write_superblock: bool) -> io::Result<GenericArray<u8, T::OutputSize>> {
+    fn finalize(
+        mut self,
+        write_superblock: bool,
+        reader: &mut File,
+        writer: &mut impl FnMut(&mut File, &[u8], u64) -> io::Result<()>,
+    ) -> io::Result<GenericArray<u8, T::OutputSize>> {
         let len = self.levels.len();
         for mut l in (1..len).rev() {
             if self.levels[l].next_index != 0 {
                 while l > 0 {
-                    self.uplevel(l)?;
+                    self.uplevel(l, reader, writer)?;
                     l -= 1;
                 }
                 break;
@@ -174,20 +177,20 @@ impl<'a, T: Digest + Clone> Verity<'a, T> {
         }
 
         self.finalize_level(0);
-        if let Some(w) = self.writer {
-            w.write_all_at(&self.levels[0].data, self.levels[0].file_offset)?;
-            self.levels[0].file_offset += self.hash_block_size as u64;
 
-            if write_superblock {
-                w.write_all_at(
-                    self.super_block.as_bytes(),
-                    self.levels[len - 1].file_offset + 4096 - 512,
-                )?;
+        writer(reader, &self.levels[0].data, self.levels[0].file_offset)?;
+        self.levels[0].file_offset += self.hash_block_size as u64;
 
-                // TODO: Align to the hash_block_size...
-                // Align to 4096 bytes.
-                w.write_all_at(&[0u8], self.levels[len - 1].file_offset + 4095)?;
-            }
+        if write_superblock {
+            writer(
+                reader,
+                self.super_block.as_bytes(),
+                self.levels[len - 1].file_offset + 4096 - 512,
+            )?;
+
+            // TODO: Align to the hash_block_size...
+            // Align to 4096 bytes.
+            writer(reader, &[0u8], self.levels[len - 1].file_offset + 4095)?;
         }
 
         Ok(self.digest(&self.levels[0].data))
@@ -195,19 +198,32 @@ impl<'a, T: Digest + Clone> Verity<'a, T> {
 }
 
 pub fn traverse_file<T: Digest + Clone>(
-    reader: &File,
+    file: &mut File,
     mut read_offset: u64,
     write_superblock: bool,
-    mut verity: Verity<'_, T>,
+    mut verity: Verity<T>,
+    writer: &mut impl FnMut(&mut File, &[u8], u64) -> io::Result<()>,
 ) -> io::Result<GenericArray<u8, T::OutputSize>> {
     let mut buf = Vec::new();
     buf.resize(verity.data_block_size, 0);
     while verity.more_blocks() {
-        reader.read_exact_at(&mut buf, read_offset)?;
-        verity.add_block(&buf)?;
+        file.seek(SeekFrom::Start(read_offset))?;
+        file.read_exact(&mut buf)?;
+        verity.add_block(&buf, file, writer)?;
         read_offset += verity.data_block_size as u64;
     }
-    verity.finalize(write_superblock)
+    verity.finalize(write_superblock, file, writer)
+}
+
+pub fn no_write(_: &mut File, _: &[u8], _: u64) -> io::Result<()> {
+    Ok(())
+}
+
+pub fn write_to(f: &mut File) -> impl FnMut(&mut File, &[u8], u64) -> io::Result<()> + '_ {
+    |_, data, offset| {
+        f.seek(SeekFrom::Start(offset))?;
+        f.write_all(data)
+    }
 }
 
 pub fn append_tree<T: Digest + Clone>(
@@ -217,6 +233,9 @@ pub fn append_tree<T: Digest + Clone>(
     file.rewind()?;
     let mut salt = Vec::new();
     salt.resize(<T as OutputSizeUser>::OutputSize::USIZE, 0);
-    let verity = Verity::<T>::new(file_size, 4096, 4096, &salt, Some((file, file_size)))?;
-    traverse_file(file, 0, true, verity)
+    let verity = Verity::<T>::new(file_size, 4096, 4096, &salt, file_size)?;
+    traverse_file(file, 0, true, verity, &mut |f, data, offset| {
+        f.seek(SeekFrom::Start(offset))?;
+        f.write_all(data)
+    })
 }
