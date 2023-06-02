@@ -79,6 +79,7 @@ options:
 --build=<asset>       :
 	all
 	cloud-hypervisor
+	cloud-hypervisor-glibc
 	firecracker
 	kernel
 	kernel-dragonball-experimental
@@ -447,26 +448,47 @@ install_firecracker() {
 	sudo install -D --owner root --group root --mode 0744 release-${firecracker_version}-${ARCH}/jailer-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/jailer"
 }
 
-# Install static cloud-hypervisor asset
-install_clh() {
+install_clh_helper() {
+	libc="${1}"
+	features="${2}"
+	suffix="${3:-""}"
+
 	install_cached_tarball_component \
-		"cloud-hypervisor" \
-		"${jenkins_url}/job/kata-containers-main-clh-$(uname -m)/${cached_artifacts_path}" \
+		"cloud-hypervisor${suffix}" \
+		"${jenkins_url}/job/kata-containers-main-clh-$(uname -m)${suffix}/${cached_artifacts_path}" \
 		"$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")" \
 		"" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
 
-	if [[ "${ARCH}" == "x86_64" ]]; then
-		export features="tdx"
-	fi
-
 	info "build static cloud-hypervisor"
-	"${clh_builder}"
+	libc="${libc}" features="${features}" "${clh_builder}"
 	info "Install static cloud-hypervisor"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor/cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor"
+	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor/cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor${suffix}"
+}
+
+# Install static cloud-hypervisor asset
+install_clh() {
+	if [[ "${ARCH}" == "x86_64" ]]; then
+		features="mshv,tdx"
+	else
+		features=""
+	fi
+
+	install_clh_helper "musl" "${features}"
+}
+
+# Install static cloud-hypervisor-glibc asset
+install_clh_glibc() {
+	if [[ "${ARCH}" == "x86_64" ]]; then
+		features="mshv"
+	else
+		features=""
+	fi
+
+	install_clh_helper "gnu" "${features}" "-glibc"
 }
 
 # Install static virtiofsd asset
@@ -613,7 +635,7 @@ handle_build() {
 
 	cloud-hypervisor) install_clh ;;
 
-	cloud-hypervisor-glibc) ;;
+	cloud-hypervisor-glibc) install_clh_glibc ;;
 
 	firecracker) install_firecracker ;;
 
