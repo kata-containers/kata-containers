@@ -33,7 +33,7 @@ use std::fs::read_to_string;
 use std::io::Write;
 
 /// Creates one of the supported K8s objects from a YAML string.
-fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn yaml::K8sObject>> {
+pub fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn yaml::K8sObject + Sync + Send>> {
     match kind {
         "Deployment" => {
             let deployment: deployment::Deployment = serde_yaml::from_str(&yaml)?;
@@ -57,7 +57,9 @@ fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn yaml::K8sObje
             Ok(boxed::Box::new(controller))
         }
         "Service" => {
-            let no_policy = no_policy_obj::NoPolicyObject {yaml: yaml.to_string()};
+            let no_policy = no_policy_obj::NoPolicyObject {
+                yaml: yaml.to_string(),
+            };
             debug!("{:#?}", &no_policy);
             Ok(boxed::Box::new(no_policy))
         }
@@ -71,7 +73,7 @@ fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn yaml::K8sObje
 }
 
 pub struct AgentPolicy {
-    k8s_objects: Vec<boxed::Box<dyn yaml::K8sObject>>,
+    k8s_objects: Vec<boxed::Box<dyn yaml::K8sObject + Send + Sync>>,
     config_maps: Vec<config_maps::ConfigMap>,
     rules_input_file: String,
     infra_policy: infra::InfraPolicy,

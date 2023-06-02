@@ -14,6 +14,7 @@ use crate::utils;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use core::fmt::Debug;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
 use std::fs::read_to_string;
@@ -38,7 +39,7 @@ pub trait K8sObject {
         in_out_files: &utils::InOutFiles,
     ) -> Result<()>;
 
-    fn serialize(&self) -> Result<String>;
+    fn serialize(&mut self) -> Result<String>;
 
     fn get_metadata_name(&self) -> Result<String>;
     fn get_host_name(&self) -> Result<String>;

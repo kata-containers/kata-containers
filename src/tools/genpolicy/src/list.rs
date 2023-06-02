@@ -8,17 +8,18 @@
 
 use crate::config_maps;
 use crate::infra;
-use crate::obj_meta;
 use crate::pod;
 use crate::policy;
-use crate::replication_controller;
-use crate::service;
 use crate::utils;
 use crate::yaml;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use core::fmt::Debug;
 use serde::{Deserialize, Serialize};
+use serde_yaml::{Mapping, Value};
+use std::boxed;
+use std::marker::{Send, Sync};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -26,72 +27,39 @@ pub struct List {
     apiVersion: String,
     kind: String,
 
-    items: Vec<Item>,
+    items: Vec<Mapping>,
+
+    #[serde(skip)]
+    k8s_objects: Vec<boxed::Box<dyn yaml::K8sObject + Sync + Send>>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields, untagged)]
-enum Item {
-    Service {
-        apiVersion: String,
-        kind: String,
-        metadata: obj_meta::ObjectMeta,
-        spec: service::ServiceSpec,
-    },
-    ReplicationController {
-        apiVersion: String,
-        kind: String,
-        metadata: obj_meta::ObjectMeta,
-        spec: replication_controller::ReplicationControllerSpec,
-
-        #[serde(skip)]
-        replication_controller: Option<replication_controller::ReplicationController>,
-    },
+impl Debug for dyn yaml::K8sObject + Send + Sync {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "K8sObject")
+    }
 }
 
 #[async_trait]
 impl yaml::K8sObject for List {
     async fn initialize(&mut self, use_cached_files: bool) -> Result<()> {
-        for item in &mut self.items {
-            match item {
-                Item::ReplicationController {
-                    apiVersion,
-                    kind,
-                    metadata,
-                    spec,
-                    replication_controller,
-                } => {
-                    let mut controller = replication_controller::ReplicationController {
-                        apiVersion: apiVersion.clone(),
-                        kind: kind.clone(),
-                        metadata: metadata.clone(),
-                        spec: spec.clone(),
-                        registry_containers: Vec::new(),
-                    };
-                    controller.initialize(use_cached_files).await?;
-                    *replication_controller = Some(controller);
-                }
-                _ => {}
-            };
+        for item in &self.items {
+            let yaml_string = serde_yaml::to_string(&item)?;
+            let header = yaml::get_yaml_header(&yaml_string)?;
+            let mut k8s_object = policy::new_k8s_object(&header.kind, &yaml_string)?;
+            k8s_object.initialize(use_cached_files).await?;
+            self.k8s_objects.push(k8s_object);
         }
+
         Ok(())
     }
 
     fn requires_policy(&self) -> bool {
-        for item in &self.items {
-            match item {
-                Item::ReplicationController {
-                    apiVersion: _,
-                    kind: _,
-                    metadata: _,
-                    spec: _,
-                    replication_controller: _,
-                } => {
-                    return true;
-                }
-                _ => {}
+        for k8s_object in &self.k8s_objects {
+            if k8s_object.requires_policy() {
+                return true;
             }
         }
+
         false
     }
 
@@ -128,35 +96,26 @@ impl yaml::K8sObject for List {
         config_maps: &Vec<config_maps::ConfigMap>,
         in_out_files: &utils::InOutFiles,
     ) -> Result<()> {
-        for item in &mut self.items {
-            match item {
-                Item::ReplicationController {
-                    apiVersion: _,
-                    kind: _,
-                    metadata: _,
-                    spec,
-                    replication_controller,
-                } => {
-                    if let Some(controller) = replication_controller {
-                        controller.generate_policy(
-                            rules,
-                            infra_policy,
-                            config_maps,
-                            in_out_files,
-                        )?;
-                        // Copy the policy annotation.
-                        spec.template.metadata.annotations =
-                            controller.spec.template.metadata.annotations.clone();
-                    }
-                }
-                _ => {}
+        for k8s_object in &mut self.k8s_objects {
+            if k8s_object.requires_policy() {
+                k8s_object.generate_policy(rules, infra_policy, config_maps, in_out_files)?;
             }
         }
 
         Ok(())
     }
 
-    fn serialize(&self) -> Result<String> {
+    fn serialize(&mut self) -> Result<String> {
+        self.items.clear();
+        for k8s_object in &mut self.k8s_objects {
+            let yaml = k8s_object.serialize()?;
+            let document = serde_yaml::Deserializer::from_str(&yaml);
+            let doc_value = Value::deserialize(document)?;
+            if let Some(doc_mapping) = doc_value.as_mapping() {
+                self.items.push(doc_mapping.clone());
+            }
+        }
+
         Ok(serde_yaml::to_string(&self)?)
     }
 }

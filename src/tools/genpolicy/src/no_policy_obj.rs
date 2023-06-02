@@ -67,7 +67,7 @@ impl yaml::K8sObject for NoPolicyObject {
         Err(anyhow!("Unsupported"))
     }
 
-    fn serialize(&self) -> Result<String> {
+    fn serialize(&mut self) -> Result<String> {
         Ok(self.yaml.clone())
     }
 }

@@ -200,7 +200,7 @@ impl yaml::K8sObject for StatefulSet {
         Ok(())
     }
 
-    fn serialize(&self) -> Result<String> {
+    fn serialize(&mut self) -> Result<String> {
         Ok(serde_yaml::to_string(&self)?)
     }
 }
