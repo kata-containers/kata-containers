@@ -45,13 +45,17 @@ serial-targets:
 	rootfs-image-tdx-tarball \
 	rootfs-initrd-sev-tarball \
 	rootfs-initrd-tarball \
-	cloud-hypervisor-tarball
+	cloud-hypervisor-tarball \
+	cloud-hypervisor-glibc-tarball
 
 %-tarball-build: $(MK_DIR)/dockerbuild/install_yq.sh
 	$(call BUILD,$*)
 
 cloud-hypervisor-tarball:
 	${MAKE} $@-build
+
+cloud-hypervisor-glibc-tarball:
+	exit 0
 
 firecracker-tarball:
 	${MAKE} $@-build
