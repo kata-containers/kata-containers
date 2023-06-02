@@ -8,15 +8,10 @@
 
 use crate::config_maps;
 use crate::containerd;
-use crate::deployment;
 use crate::infra;
 use crate::kata;
-use crate::list;
-use crate::no_policy_obj;
 use crate::pod;
 use crate::registry;
-use crate::replication_controller;
-use crate::stateful_set;
 use crate::utils;
 use crate::volume;
 use crate::yaml;
@@ -31,46 +26,6 @@ use std::boxed;
 use std::collections::BTreeMap;
 use std::fs::read_to_string;
 use std::io::Write;
-
-/// Creates one of the supported K8s objects from a YAML string.
-pub fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn yaml::K8sObject + Sync + Send>> {
-    match kind {
-        "Deployment" => {
-            let deployment: deployment::Deployment = serde_yaml::from_str(&yaml)?;
-            debug!("{:#?}", &deployment);
-            Ok(boxed::Box::new(deployment))
-        }
-        "List" => {
-            let list: list::List = serde_yaml::from_str(&yaml)?;
-            debug!("{:#?}", &list);
-            Ok(boxed::Box::new(list))
-        }
-        "Pod" => {
-            let pod: pod::Pod = serde_yaml::from_str(&yaml)?;
-            debug!("{:#?}", &pod);
-            Ok(boxed::Box::new(pod))
-        }
-        "ReplicationController" => {
-            let controller: replication_controller::ReplicationController =
-                serde_yaml::from_str(&yaml)?;
-            debug!("{:#?}", &controller);
-            Ok(boxed::Box::new(controller))
-        }
-        "Service" => {
-            let no_policy = no_policy_obj::NoPolicyObject {
-                yaml: yaml.to_string(),
-            };
-            debug!("{:#?}", &no_policy);
-            Ok(boxed::Box::new(no_policy))
-        }
-        "StatefulSet" => {
-            let set: stateful_set::StatefulSet = serde_yaml::from_str(&yaml)?;
-            debug!("{:#?}", &set);
-            Ok(boxed::Box::new(set))
-        }
-        _ => Err(anyhow!("Unsupported YAML spec kind: {}", kind)),
-    }
-}
 
 pub struct AgentPolicy {
     k8s_objects: Vec<boxed::Box<dyn yaml::K8sObject + Send + Sync>>,
@@ -196,7 +151,7 @@ impl AgentPolicy {
             let doc_mapping = Value::deserialize(document)?;
             let yaml_string = serde_yaml::to_string(&doc_mapping)?;
             let header = yaml::get_yaml_header(&yaml_string)?;
-            let mut k8s_object = new_k8s_object(&header.kind, &yaml_string)?;
+            let mut k8s_object = yaml::new_k8s_object(&header.kind, &yaml_string)?;
             k8s_object.initialize(in_out_files.use_cached_files).await?;
             k8s_objects.push(k8s_object);
         }

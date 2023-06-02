@@ -45,7 +45,7 @@ impl yaml::K8sObject for List {
         for item in &self.items {
             let yaml_string = serde_yaml::to_string(&item)?;
             let header = yaml::get_yaml_header(&yaml_string)?;
-            let mut k8s_object = policy::new_k8s_object(&header.kind, &yaml_string)?;
+            let mut k8s_object = yaml::new_k8s_object(&header.kind, &yaml_string)?;
             k8s_object.initialize(use_cached_files).await?;
             self.k8s_objects.push(k8s_object);
         }
