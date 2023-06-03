@@ -901,6 +901,12 @@ func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error
 		if decoded_rules, err := base64.StdEncoding.DecodeString(value); err == nil {
 			c.Policy = string(decoded_rules)
 			updateConfig = true
+		} else {
+			// A policy rejecting all requests.
+			c.Policy = " ";
+
+			// Cancel sandbox creation.
+			return err;
 		}
 	}
 
