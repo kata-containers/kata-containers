@@ -68,7 +68,7 @@ impl yaml::K8sObject for Job {
 
     fn get_host_name(&self) -> Result<String> {
         // Deployment pod names have variable lengths for some reason.
-        Ok("^".to_string() + &self.get_metadata_name()? + "-[a-z0-9]*-[a-z0-9]{5}$")
+        Ok("^".to_string() + &self.get_metadata_name()? + "-[a-z0-9]{5}$")
     }
 
     fn get_sandbox_name(&self) -> Result<Option<String>> {
