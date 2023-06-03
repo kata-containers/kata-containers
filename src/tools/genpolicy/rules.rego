@@ -144,7 +144,6 @@ allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name) {
     input_kata_type == "pod_sandbox"
 
     allow_sandbox_container_name(policy_oci, input_oci)
-    allow_sandbox_image_name(policy_oci, input_oci)
     allow_sandbox_net_namespace(policy_oci, input_oci)
     allow_sandbox_log_directory(policy_oci, input_oci, sandbox_name)
 
@@ -163,9 +162,6 @@ allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name) {
     print("allow_by_container_type 2: allow_container_name")
     allow_container_name(policy_oci, input_oci)
 
-    print("allow_by_container_type 2: allow_image_name")
-    allow_image_name(policy_oci, input_oci)
-
     print("allow_by_container_type 2: allow_net_namespace")
     allow_net_namespace(policy_oci, input_oci)
 
@@ -173,55 +169,6 @@ allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name) {
     allow_log_directory(policy_oci, input_oci)
 
     print("allow_by_container_type 2: success")
-}
-
-######################################################################
-# "io.kubernetes.cri.image-name" annotation
-
-allow_sandbox_image_name(policy_oci, input_oci) {
-    container_annotation_missing(policy_oci, input_oci, "io.kubernetes.cri.image-name")
-}
-
-allow_image_name(policy_oci, input_oci) {
-    print("allow_image_name: ", "io.kubernetes.cri.image-name")
-
-    policy_name := policy_oci.annotations["io.kubernetes.cri.image-name"]
-    print("allow_image_name: policy_name =", policy_name)
-
-    input_name := input_oci.annotations["io.kubernetes.cri.image-name"]
-    print("allow_image_name: input_name = ", input_name)
-
-    match_image_name(policy_name, input_name)
-
-    print("allow_image_name: success")
-}
-
-match_image_name(policy_name, input_name) {
-    print("match_image_name 1: policy_name =", policy_name, "input_name =", input_name)
-    policy_name == input_name
-    print("match_image_name 1: success")
-}
-match_image_name(policy_name, input_name) {
-    print("match_image_name 2: policy_name =", policy_name, "input_name =", input_name)
-
-    # TODO: is it reasonable to add this prefix?
-    policy_path := concat("", ["docker.io/", policy_name])
-
-    print("match_image_name 2: policy_path =", policy_path, "input_name =", input_name)
-    policy_path == input_name
-
-    print("match_image_name 2: success")
-}
-match_image_name(policy_name, input_name) {
-    print("match_image_name 3: policy_name =", policy_name, "input_name =", input_name)
-
-    # TODO: is it reasonable to add this prefix?
-    policy_path := concat("", ["docker.io/library/", policy_name])
-
-    print("match_image_name 3: policy_path =", policy_path, "input_name =", input_name)
-    policy_path == input_name
-
-    print("match_image_name 3: success")
 }
 
 ######################################################################
