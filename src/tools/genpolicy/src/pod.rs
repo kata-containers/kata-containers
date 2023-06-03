@@ -6,7 +6,7 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
-use crate::config_maps;
+use crate::config_map;
 use crate::infra;
 use crate::obj_meta;
 use crate::pause_container;
@@ -174,7 +174,7 @@ impl Container {
     pub fn get_env_variables(
         &self,
         dest_env: &mut Vec<String>,
-        config_maps: &Vec<config_maps::ConfigMap>,
+        config_maps: &Vec<config_map::ConfigMap>,
     ) {
         if let Some(source_env) = &self.env {
             for env_variable in source_env {
@@ -239,11 +239,11 @@ impl Container {
 }
 
 impl EnvVar {
-    pub fn get_value(&self, config_maps: &Vec<config_maps::ConfigMap>) -> String {
+    pub fn get_value(&self, config_maps: &Vec<config_map::ConfigMap>) -> String {
         if let Some(value) = &self.value {
             return value.clone();
         } else if let Some(value_from) = &self.valueFrom {
-            if let Some(value) = config_maps::get_value(value_from, config_maps) {
+            if let Some(value) = config_map::get_value(value_from, config_maps) {
                 return value.clone();
             }
         } else {
@@ -310,7 +310,7 @@ impl yaml::K8sObject for Pod {
         &mut self,
         rules: &str,
         infra_policy: &infra::InfraPolicy,
-        config_maps: &Vec<config_maps::ConfigMap>,
+        config_maps: &Vec<config_map::ConfigMap>,
         in_out_files: &utils::InOutFiles,
     ) -> Result<()> {
         let mut policy_containers = Vec::new();

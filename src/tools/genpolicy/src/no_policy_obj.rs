@@ -6,7 +6,7 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
-use crate::config_maps;
+use crate::config_map;
 use crate::infra;
 use crate::pod;
 use crate::policy;
@@ -61,7 +61,7 @@ impl yaml::K8sObject for NoPolicyObject {
         &mut self,
         _rules: &str,
         _infra_policy: &infra::InfraPolicy,
-        _config_maps: &Vec<config_maps::ConfigMap>,
+        _config_maps: &Vec<config_map::ConfigMap>,
         _in_out_files: &utils::InOutFiles,
     ) -> Result<()> {
         Err(anyhow!("Unsupported"))

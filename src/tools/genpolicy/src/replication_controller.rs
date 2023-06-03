@@ -6,7 +6,7 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
-use crate::config_maps;
+use crate::config_map;
 use crate::infra;
 use crate::obj_meta;
 use crate::pause_container;
@@ -99,7 +99,7 @@ impl yaml::K8sObject for ReplicationController {
         &mut self,
         rules: &str,
         infra_policy: &infra::InfraPolicy,
-        config_maps: &Vec<config_maps::ConfigMap>,
+        config_map: &Vec<config_map::ConfigMap>,
         in_out_files: &utils::InOutFiles,
     ) -> Result<()> {
         let mut policy_containers = Vec::new();
@@ -108,7 +108,7 @@ impl yaml::K8sObject for ReplicationController {
             policy_containers.push(policy::get_container_policy(
                 self,
                 infra_policy,
-                config_maps,
+                config_map,
                 &self.spec.template.spec.containers[i],
                 i == 0,
                 &self.registry_containers[i],

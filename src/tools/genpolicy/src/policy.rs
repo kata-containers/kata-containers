@@ -6,7 +6,7 @@
 // Allow OCI spec field names.
 #![allow(non_snake_case)]
 
-use crate::config_maps;
+use crate::config_map;
 use crate::containerd;
 use crate::infra;
 use crate::kata;
@@ -29,7 +29,7 @@ use std::io::Write;
 
 pub struct AgentPolicy {
     k8s_objects: Vec<boxed::Box<dyn yaml::K8sObject + Send + Sync>>,
-    config_maps: Vec<config_maps::ConfigMap>,
+    config_maps: Vec<config_map::ConfigMap>,
     rules_input_file: String,
     infra_policy: infra::InfraPolicy,
 }
@@ -144,6 +144,7 @@ pub struct PersistentVolumeClaimVolume {
 
 impl AgentPolicy {
     pub async fn from_files(in_out_files: &utils::InOutFiles) -> Result<AgentPolicy> {
+        let mut config_maps = Vec::new();
         let mut k8s_objects = Vec::new();
         let yaml_contents = yaml::get_input_yaml(&in_out_files.yaml_file)?;
 
@@ -154,14 +155,19 @@ impl AgentPolicy {
             let mut k8s_object = yaml::new_k8s_object(&header.kind, &yaml_string)?;
             k8s_object.initialize(in_out_files.use_cached_files).await?;
             k8s_objects.push(k8s_object);
+
+            if header.kind.eq("ConfigMap") {
+                let config_map: config_map::ConfigMap = serde_yaml::from_str(&yaml_string)?;
+                debug!("{:#?}", &config_map);
+                config_maps.push(config_map);
+            }
         }
 
         let infra_policy = infra::InfraPolicy::new(&in_out_files.infra_data_file)?;
 
-        let mut config_maps = Vec::new();
         if let Some(config_map_files) = &in_out_files.config_map_files {
             for file in config_map_files {
-                config_maps.push(config_maps::ConfigMap::new(&file)?);
+                config_maps.push(config_map::ConfigMap::new(&file)?);
             }
         }
 
@@ -297,7 +303,7 @@ pub fn export_decoded_policy(policy: &str, file_name: &str) -> Result<()> {
 pub fn get_container_policy(
     k8s_object: &dyn yaml::K8sObject,
     infra_policy: &infra::InfraPolicy,
-    config_maps: &Vec<config_maps::ConfigMap>,
+    config_maps: &Vec<config_map::ConfigMap>,
     yaml_container: &pod::Container,
     is_pause_container: bool,
     registry_container: &registry::Container,

@@ -6,7 +6,7 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
-use crate::config_maps;
+use crate::config_map;
 use crate::daemon_set;
 use crate::deployment;
 use crate::job;
@@ -45,7 +45,7 @@ pub trait K8sObject {
         &mut self,
         rules: &str,
         infra_policy: &infra::InfraPolicy,
-        config_maps: &Vec<config_maps::ConfigMap>,
+        config_maps: &Vec<config_map::ConfigMap>,
         in_out_files: &utils::InOutFiles,
     ) -> Result<()>;
 
@@ -113,6 +113,11 @@ pub fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn K8sObject
             let job: job::Job = serde_yaml::from_str(&yaml)?;
             debug!("{:#?}", &job);
             Ok(boxed::Box::new(job))
+        }
+        "ConfigMap" => {
+            let config_map: config_map::ConfigMap = serde_yaml::from_str(&yaml)?;
+            debug!("{:#?}", &config_map);
+            Ok(boxed::Box::new(config_map))
         }
         "LimitRange" | "Namespace" | "ResourceQuota" | "Service" => {
             let no_policy = no_policy_obj::NoPolicyObject {
