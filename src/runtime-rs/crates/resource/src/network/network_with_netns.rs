@@ -173,7 +173,7 @@ async fn get_entity_from_netns(config: &NetworkWithNetNsConfig) -> Result<Vec<Ne
         let link = link::get_link_from_message(link);
         let attrs = link.attrs();
 
-        if (attrs.flags & libc::IFF_LOOPBACK as u32) != 0 {
+        if (attrs.flags & (libc::IFF_LOOPBACK as u32 | libc::IFF_NOARP as u32)) != 0 {
             continue;
         }
 
