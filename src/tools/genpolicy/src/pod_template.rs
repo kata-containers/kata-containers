@@ -10,25 +10,21 @@ use crate::obj_meta;
 use crate::pod;
 
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
-/// See PodTemplate in the Kubernetes API reference.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+/// Reference / Kubernetes API / Workload/  Resources / PodTemplate.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PodTemplate {
+    apiVersion: String,
+    kind: String,
     pub metadata: obj_meta::ObjectMeta,
     pub spec: PodTemplateSpec,
 }
 
-/// See PodTemplateSpec in the Kubernetes API reference.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+/// Reference / Kubernetes API / Workload/  Resources / PodTemplate.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PodTemplateSpec {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub nodeSelector: Option<BTreeMap<String, String>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    runtimeClassName: Option<String>,
-
-    pub containers: Vec<pod::Container>,
+    pub metadata: obj_meta::ObjectMeta,
+    pub spec: pod::PodSpec,
 }

@@ -24,8 +24,8 @@ use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-/// See Reference Kubernetes API / Workload Resources / StatefulSet.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+/// See Reference / Kubernetes API / Workload Resources / StatefulSet.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StatefulSet {
     pub apiVersion: String,
@@ -37,8 +37,8 @@ pub struct StatefulSet {
     pub registry_containers: Vec<registry::Container>,
 }
 
-/// See Reference Kubernetes API / Workload Resources / StatefulSet.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+/// See Reference / Kubernetes API / Workload Resources / StatefulSet.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StatefulSetSpec {
     serviceName: String,
@@ -48,7 +48,7 @@ pub struct StatefulSetSpec {
 
     selector: yaml::LabelSelector,
 
-    pub template: pod_template::PodTemplate,
+    pub template: pod_template::PodTemplateSpec,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     volumeClaimTemplates: Option<Vec<persistent_volume_claim::PersistentVolumeClaim>>, // TODO: additional fields.

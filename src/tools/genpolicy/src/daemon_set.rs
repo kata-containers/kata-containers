@@ -42,7 +42,7 @@ pub struct DaemonSetSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     selector: Option<yaml::LabelSelector>,
 
-    pub template: pod_template::PodTemplate,
+    pub template: pod_template::PodTemplateSpec,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     minReadySeconds: Option<i32>,

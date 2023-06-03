@@ -22,60 +22,32 @@ use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 
-/// Reference / Kubernetes API / Workload Resources / Deployment.
+/// See Reference / Kubernetes API / Workload Resources / Job.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Deployment {
+pub struct Job {
     apiVersion: String,
     kind: String,
     pub metadata: obj_meta::ObjectMeta,
-    pub spec: DeploymentSpec,
+    pub spec: JobSpec,
 
     #[serde(skip)]
     registry_containers: Vec<registry::Container>,
 }
 
-/// Reference / Kubernetes API / Workload Resources / Deployment.
+/// See Reference / Kubernetes API / Workload Resources / Job.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DeploymentSpec {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    replicas: Option<i32>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    selector: Option<yaml::LabelSelector>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    strategy: Option<DeploymentStrategy>,
-
+pub struct JobSpec {
     pub template: pod_template::PodTemplateSpec,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    backoffLimit: Option<i32>,
     // TODO: additional fields.
 }
 
-/// Reference / Kubernetes API / Workload Resources / Deployment.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct DeploymentStrategy {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    r#type: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    rollingUpdate: Option<RollingUpdateDeployment>,
-}
-
-/// Reference / Kubernetes API / Workload Resources / Deployment.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RollingUpdateDeployment {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    maxSurge: Option<i32>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    maxUnavailable: Option<i32>,
-}
-
 #[async_trait]
-impl yaml::K8sObject for Deployment {
+impl yaml::K8sObject for Job {
     async fn initialize(&mut self, use_cached_files: bool) -> Result<()> {
         pause_container::add_pause_container(&mut self.spec.template.spec.containers);
         self.registry_containers = registry::get_registry_containers(
@@ -146,6 +118,7 @@ impl yaml::K8sObject for Deployment {
             .unwrap();
 
         let policy = rules.to_string() + "\npolicy_data := " + &json_data;
+
         if let Some(file_name) = &in_out_files.output_policy_file {
             policy::export_decoded_policy(&policy, &file_name)?;
         }

@@ -9,6 +9,7 @@
 use crate::config_maps;
 use crate::daemon_set;
 use crate::deployment;
+use crate::job;
 use crate::list;
 use crate::infra;
 use crate::no_policy_obj;
@@ -107,6 +108,11 @@ pub fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn K8sObject
             let set: stateful_set::StatefulSet = serde_yaml::from_str(&yaml)?;
             debug!("{:#?}", &set);
             Ok(boxed::Box::new(set))
+        }
+        "Job" => {
+            let job: job::Job = serde_yaml::from_str(&yaml)?;
+            debug!("{:#?}", &job);
+            Ok(boxed::Box::new(job))
         }
         "LimitRange" | "Namespace" | "ResourceQuota" | "Service" => {
             let no_policy = no_policy_obj::NoPolicyObject {

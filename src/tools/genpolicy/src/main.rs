@@ -12,6 +12,7 @@ mod containerd;
 mod daemon_set;
 mod deployment;
 mod infra;
+mod job;
 mod kata;
 mod list;
 mod no_policy_obj;
@@ -66,7 +67,9 @@ async fn main() {
     );
 
     debug!("Creating policy from yaml, infra data and rules files...");
-    let mut policy = policy::AgentPolicy::from_files(&in_out_files).await.unwrap();
+    let mut policy = policy::AgentPolicy::from_files(&in_out_files)
+        .await
+        .unwrap();
 
     debug!("Exporting policy to yaml file...");
     if let Err(e) = policy.export_policy(&in_out_files) {

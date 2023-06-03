@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// See ReplicationController in the Kubernetes API reference.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReplicationController {
     pub apiVersion: String,
@@ -37,7 +37,7 @@ pub struct ReplicationController {
 }
 
 /// See ReplicationControllerSpec in the Kubernetes API reference.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReplicationControllerSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -46,7 +46,7 @@ pub struct ReplicationControllerSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     selector: Option<BTreeMap<String, String>>,
 
-    pub template: pod_template::PodTemplate,
+    pub template: pod_template::PodTemplateSpec,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     minReadySeconds: Option<i32>,

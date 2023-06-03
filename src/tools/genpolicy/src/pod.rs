@@ -39,6 +39,9 @@ pub struct Pod {
 #[serde(deny_unknown_fields)]
 pub struct PodSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
+    nodeSelector: Option<BTreeMap<String, String>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     restartPolicy: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
