@@ -9,21 +9,21 @@
 use crate::config_map;
 use crate::daemon_set;
 use crate::deployment;
+use crate::infra;
 use crate::job;
 use crate::list;
-use crate::infra;
 use crate::no_policy_obj;
 use crate::pod;
 use crate::policy;
-use crate::replication_controller;
 use crate::replica_set;
+use crate::replication_controller;
 use crate::stateful_set;
 use crate::utils;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use log::debug;
 use core::fmt::Debug;
+use log::debug;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
 use std::boxed;
@@ -72,7 +72,6 @@ pub trait K8sObject {
 pub struct LabelSelector {
     #[serde(skip_serializing_if = "Option::is_none")]
     matchLabels: Option<BTreeMap<String, String>>,
-
     // TODO: additional fields.
 }
 
@@ -125,7 +124,8 @@ pub fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn K8sObject
             debug!("{:#?}", &set);
             Ok(boxed::Box::new(set))
         }
-        "LimitRange" | "Namespace" | "ResourceQuota" | "Service" => {
+        "ClusterRole" | "ClusterRoleBinding" | "LimitRange" | "Namespace" | "ResourceQuota"
+        | "Service" | "ServiceAccount" => {
             let no_policy = no_policy_obj::NoPolicyObject {
                 yaml: yaml.to_string(),
             };

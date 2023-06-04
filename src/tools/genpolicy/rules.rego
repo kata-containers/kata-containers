@@ -95,14 +95,18 @@ allow_by_annotations(policy_oci, input_oci, policy_storages, input_storages) {
 }
 
 allow_by_sandbox_name(policy_oci, input_oci, policy_storages, input_storages, sandbox_name) {
+    print("allow_by_sandbox_name: starting")
+
+    policy_namespace := policy_oci.annotations["io.kubernetes.cri.sandbox-namespace"]
+    input_namespace := input_oci.annotations["io.kubernetes.cri.sandbox-namespace"]
+    print("allow_by_sandbox_name: policy_namespace =", policy_namespace, "input_namespace =", input_namespace)
+    policy_namespace == input_namespace
+
     print("allow_by_sandbox_name: allow_by_container_types")
-    allow_by_container_types(policy_oci, input_oci, sandbox_name)
+    allow_by_container_types(policy_oci, input_oci, sandbox_name, policy_namespace)
 
     print("allow_by_sandbox_name: allow_by_bundle_or_sandbox_id")
     allow_by_bundle_or_sandbox_id(policy_oci, input_oci, policy_storages, input_storages)
-
-    print("allow_by_sandbox_name: allow_sandbox_namespace")
-    allow_sandbox_namespace(policy_oci, input_oci)
 
     print("allow_by_sandbox_name: allow_process")
     allow_process(policy_oci, input_oci, sandbox_name)
@@ -119,20 +123,20 @@ allow_by_sandbox_name(policy_oci, input_oci, policy_storages, input_storages, sa
 # - Then, validate other annotations based on the actual
 #   "sandbox" or "container" value from the input container.
 
-allow_by_container_types(policy_oci, input_oci, sandbox_name) {
+allow_by_container_types(policy_oci, input_oci, sandbox_name, sandbox_namespace) {
     print("allow_by_container_types: checking io.kubernetes.cri.container-type")
     policy_cri_type := policy_oci.annotations["io.kubernetes.cri.container-type"]
     input_cri_type := input_oci.annotations["io.kubernetes.cri.container-type"]
     policy_cri_type == input_cri_type
 
     print("allow_by_container_types: allow_by_container_type")
-    allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name)
+    allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name, sandbox_namespace)
 
     print("allow_by_container_types: success")
 }
 
 # Rules applicable to the "sandbox" container type
-allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name) {
+allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name, sandbox_namespace) {
     print("allow_by_container_type 1: input_cri_type =", input_cri_type)
     input_cri_type == "sandbox"
 
@@ -145,13 +149,13 @@ allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name) {
 
     allow_sandbox_container_name(policy_oci, input_oci)
     allow_sandbox_net_namespace(policy_oci, input_oci)
-    allow_sandbox_log_directory(policy_oci, input_oci, sandbox_name)
+    allow_sandbox_log_directory(policy_oci, input_oci, sandbox_name, sandbox_namespace)
 
     print("allow_by_container_type 1: success")
 }
 
 # Rules applicable to the "container" container type
-allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name) {
+allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name, sandbox_namespace) {
     print("allow_by_container_type 2: input_cri_type =", input_cri_type)
     input_cri_type == "container"
 
@@ -175,20 +179,27 @@ allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name) {
 # "io.kubernetes.cri.container-name" annotation
 
 allow_sandbox_container_name(policy_oci, input_oci) {
+    print("allow_sandbox_container_name: container_annotation_missing")
     container_annotation_missing(policy_oci, input_oci, "io.kubernetes.cri.container-name")
+    print("allow_sandbox_container_name: success")
 }
 
 allow_container_name(policy_oci, input_oci) {
     print("allow_container_name: allow_container_annotation")
     allow_container_annotation(policy_oci, input_oci, "io.kubernetes.cri.container-name")
+    print("allow_container_name: success")
 }
 
 ######################################################################
 # Annotions required for "container" type, and not allowed for "sandbox" type.
 
 container_annotation_missing(policy_oci, input_oci, annotation_key) {
+    print("container_annotation_missing:", annotation_key)
+
     not policy_oci.annotations[annotation_key]
     not input_oci.annotations[annotation_key]
+
+    print("container_annotation_missing: success")
 }
 
 allow_container_annotation(policy_oci, input_oci, annotation_key) {
@@ -208,41 +219,45 @@ allow_container_annotation(policy_oci, input_oci, annotation_key) {
 # "nerdctl/network-namespace" annotation
 
 allow_sandbox_net_namespace(policy_oci, input_oci) {
+    print("allow_sandbox_net_namespace: start")
     policy_namespace := policy_oci.annotations["nerdctl/network-namespace"]
     input_namespace := input_oci.annotations["nerdctl/network-namespace"]
 
     regex.match(policy_namespace, input_namespace)
+    print("allow_sandbox_net_namespace: success")
 }
 
 allow_net_namespace(policy_oci, input_oci) {
+    print("allow_net_namespace: start")
+
     not policy_oci.annotations["nerdctl/network-namespace"]
     not input_oci.annotations["nerdctl/network-namespace"]
+
+    print("allow_net_namespace: success")
 }
 
 ######################################################################
 # "io.kubernetes.cri.sandbox-log-directory" annotation
 
-allow_sandbox_log_directory(policy_oci, input_oci, sandbox_name) {
+allow_sandbox_log_directory(policy_oci, input_oci, sandbox_name, sandbox_namespace) {
+    print("allow_sandbox_log_directory: start")
+
     policy_log_directory := policy_oci.annotations["io.kubernetes.cri.sandbox-log-directory"]
-    directory_regex := replace(policy_log_directory, "$(sandbox-name)", sandbox_name)
+    directory_regex_tmp := replace(policy_log_directory, "$(sandbox-name)", sandbox_name)
+    directory_regex := replace(directory_regex_tmp, "$(sandbox-namespace)", sandbox_namespace)
+    print("allow_sandbox_log_directory: policy regex =", directory_regex)
 
     input_log_directory := input_oci.annotations["io.kubernetes.cri.sandbox-log-directory"]
+    print("allow_sandbox_log_directory: input =", input_log_directory)
+
     regex.match(directory_regex, input_log_directory)
+
+    print("allow_sandbox_log_directory: success")
 }
 
 allow_log_directory(policy_oci, input_oci) {
     not policy_oci.annotations["io.kubernetes.cri.sandbox-log-directory"]
     not input_oci.annotations["io.kubernetes.cri.sandbox-log-directory"]
-}
-
-######################################################################
-# "io.kubernetes.cri.sandbox-namespace" annotation
-
-allow_sandbox_namespace(policy_oci, input_oci) {
-    policy_namespace := policy_oci.annotations["io.kubernetes.cri.sandbox-namespace"]
-    input_namespace := input_oci.annotations["io.kubernetes.cri.sandbox-namespace"]
-
-    policy_namespace == input_namespace
 }
 
 ######################################################################
@@ -666,7 +681,8 @@ policy_mount_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
     print("policy_mount_allows 2: input type =", input_mount.type, "policy type =", policy_mount.type)
     policy_mount.type           == input_mount.type
 
-    print("policy_mount_allows 2: input options =", input_mount.options, "policy options =", policy_mount.options)
+    print("policy_mount_allows 2: input options =", input_mount.options)
+    print("policy_mount_allows 2: policy options =", policy_mount.options)
     policy_mount.options        == input_mount.options
 
     print("policy_mount_allows 2: policy_mount_source_allows")
@@ -678,8 +694,9 @@ policy_mount_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
 policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
     # E.g., "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-resolv.conf$",
     policy_source_regex := replace(policy_mount.source, "$(bundle-id)", bundle_id)
+    print("policy_mount_source_allows 1: policy_source_regex =", policy_source_regex)
 
-    print("policy_mount_source_allows 1: policy_source_regex =", policy_source_regex, "input_mount.source=", input_mount.source)
+    print("policy_mount_source_allows 1: input_mount.source=", input_mount.source)
     regex.match(policy_source_regex, input_mount.source)
 
     print("policy_mount_source_allows 1: success")

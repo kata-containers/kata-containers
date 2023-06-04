@@ -34,7 +34,7 @@ const PAUSE_CONTAINER_ANNOTATIONS: [(&'static str, &'static str); 7] = [
     ("io.kubernetes.cri.container-type", "sandbox"),
     ("io.kubernetes.cri.sandbox-id", "^[a-z0-9]{64}$"),
     ("nerdctl/network-namespace", "^/var/run/netns/cni-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
-    ("io.kubernetes.cri.sandbox-log-directory", "^/var/log/pods/default_$(sandbox-name)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
+    ("io.kubernetes.cri.sandbox-log-directory", "^/var/log/pods/$(sandbox-namespace)_$(sandbox-name)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
     ("io.katacontainers.pkg.oci.container_type", "pod_sandbox"),
     ("io.kubernetes.cri.sandbox-namespace", "default"),
     ("io.katacontainers.pkg.oci.bundle_path", "/run/containerd/io.containerd.runtime.v2.task/k8s.io/$(bundle-id)")
@@ -497,16 +497,24 @@ impl InfraPolicy {
         yaml_mount: &pod::VolumeMount,
         policy_mounts: &mut Vec<oci::Mount>,
     ) -> Result<()> {
-        policy_mounts.push(oci::Mount {
-            destination: yaml_mount.mountPath.to_string(),
-            r#type: "bind".to_string(),
-            source: yaml_mount.mountPath.to_string(),
-            options: vec![
-                "rbind".to_string(),
-                "rprivate".to_string(),
-                "rw".to_string(),
-            ],
-        });
+        if let Some(file_name) = Path::new(&yaml_mount.mountPath).file_name() {
+            if let Some(file_name) = file_name.to_str() {
+                let mut source = self.shared_files.source_path.to_string();
+                source += file_name;
+                source += "$";
+
+                policy_mounts.push(oci::Mount {
+                    destination: yaml_mount.mountPath.to_string(),
+                    r#type: "bind".to_string(),
+                    source,
+                    options: vec![
+                        "rbind".to_string(),
+                        "rprivate".to_string(),
+                        "rw".to_string(),
+                    ],
+                });
+            }
+        }
 
         Ok(())
     }

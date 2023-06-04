@@ -22,7 +22,7 @@ use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// See Pod in the Kubernetes API reference.
+/// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Pod {
@@ -35,6 +35,7 @@ pub struct Pod {
     registry_containers: Vec<registry::Container>,
 }
 
+/// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PodSpec {
@@ -51,9 +52,12 @@ pub struct PodSpec {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub volumes: Option<Vec<volume::Volume>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub serviceAccountName: Option<String>,
 }
 
-/// See Container in the Kubernetes API reference.
+/// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Container {
@@ -85,7 +89,7 @@ pub struct Container {
     pub args: Option<Vec<String>>,
 }
 
-/// See SecurityContext in the Kubernetes API reference.
+/// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SecurityContext {
@@ -99,7 +103,7 @@ pub struct SecurityContext {
     pub privileged: Option<bool>,
 }
 
-/// See ContainerPort in the Kubernetes API reference.
+/// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ContainerPort {
@@ -118,7 +122,7 @@ pub struct ContainerPort {
     protocol: Option<String>,
 }
 
-/// See EnvVar in the Kubernetes API reference.
+/// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EnvVar {
@@ -131,14 +135,14 @@ pub struct EnvVar {
     pub valueFrom: Option<EnvVarSource>,
 }
 
-/// See EnvVarSource in the Kubernetes API reference.
+/// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EnvVarSource {
     pub configMapKeyRef: ConfigMapKeySelector,
 }
 
-/// See ConfigMapKeySelector in the Kubernetes API reference.
+/// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigMapKeySelector {
@@ -149,6 +153,7 @@ pub struct ConfigMapKeySelector {
     // TODO: optional field.
 }
 
+/// See Reference / Kubernetes API / Workload Resources / Pod.
 /// See VolumeMount in the Kubernetes API reference.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
