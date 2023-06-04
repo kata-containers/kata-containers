@@ -16,6 +16,7 @@ use crate::no_policy_obj;
 use crate::pod;
 use crate::policy;
 use crate::replication_controller;
+use crate::replica_set;
 use crate::stateful_set;
 use crate::utils;
 
@@ -78,6 +79,11 @@ pub struct LabelSelector {
 /// Creates one of the supported K8s objects from a YAML string.
 pub fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn K8sObject + Sync + Send>> {
     match kind {
+        "ConfigMap" => {
+            let config_map: config_map::ConfigMap = serde_yaml::from_str(&yaml)?;
+            debug!("{:#?}", &config_map);
+            Ok(boxed::Box::new(config_map))
+        }
         "DaemonSet" => {
             let daemon: daemon_set::DaemonSet = serde_yaml::from_str(&yaml)?;
             debug!("{:#?}", &daemon);
@@ -87,6 +93,11 @@ pub fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn K8sObject
             let deployment: deployment::Deployment = serde_yaml::from_str(&yaml)?;
             debug!("{:#?}", &deployment);
             Ok(boxed::Box::new(deployment))
+        }
+        "Job" => {
+            let job: job::Job = serde_yaml::from_str(&yaml)?;
+            debug!("{:#?}", &job);
+            Ok(boxed::Box::new(job))
         }
         "List" => {
             let list: list::List = serde_yaml::from_str(&yaml)?;
@@ -104,20 +115,15 @@ pub fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn K8sObject
             debug!("{:#?}", &controller);
             Ok(boxed::Box::new(controller))
         }
+        "ReplicaSet" => {
+            let set: replica_set::ReplicaSet = serde_yaml::from_str(&yaml)?;
+            debug!("{:#?}", &set);
+            Ok(boxed::Box::new(set))
+        }
         "StatefulSet" => {
             let set: stateful_set::StatefulSet = serde_yaml::from_str(&yaml)?;
             debug!("{:#?}", &set);
             Ok(boxed::Box::new(set))
-        }
-        "Job" => {
-            let job: job::Job = serde_yaml::from_str(&yaml)?;
-            debug!("{:#?}", &job);
-            Ok(boxed::Box::new(job))
-        }
-        "ConfigMap" => {
-            let config_map: config_map::ConfigMap = serde_yaml::from_str(&yaml)?;
-            debug!("{:#?}", &config_map);
-            Ok(boxed::Box::new(config_map))
         }
         "LimitRange" | "Namespace" | "ResourceQuota" | "Service" => {
             let no_policy = no_policy_obj::NoPolicyObject {
