@@ -139,18 +139,34 @@ pub struct EnvVar {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EnvVarSource {
-    pub configMapKeyRef: ConfigMapKeySelector,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub configMapKeyRef: Option<ConfigMapKeySelector>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fieldRef: Option<ObjectFieldSelector>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigMapKeySelector {
+    pub key: String,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 
-    pub key: String,
-    // TODO: optional field.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub optional: Option<bool>,
+}
+
+/// See Reference / Kubernetes API / Common Definitions / ObjectFieldSelector.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ObjectFieldSelector {
+    pub fieldPath : String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub apiVersion: Option<String>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.

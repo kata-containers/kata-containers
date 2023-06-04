@@ -49,12 +49,14 @@ impl ConfigMap {
     }
 
     pub fn get_value(&self, value_from: &pod::EnvVarSource) -> Option<String> {
-        if let Some(name) = &value_from.configMapKeyRef.name {
-            if let Some(my_name) = &self.metadata.name {
-                if my_name.eq(name) {
-                    if let Some(data) = &self.data {
-                        if let Some(value) = data.get(&value_from.configMapKeyRef.key) {
-                            return Some(value.clone());
+        if let Some(key_ref) = &value_from.configMapKeyRef {
+            if let Some(name) = &key_ref.name {
+                if let Some(my_name) = &self.metadata.name {
+                    if my_name.eq(name) {
+                        if let Some(data) = &self.data {
+                            if let Some(value) = data.get(&key_ref.key) {
+                                return Some(value.clone());
+                            }
                         }
                     }
                 }
