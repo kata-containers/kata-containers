@@ -21,6 +21,7 @@ pub fn add_pause_container(containers: &mut Vec<pod::Container>) {
             readOnlyRootFilesystem: Some(true),
             allowPrivilegeEscalation: Some(false),
             privileged: None,
+            capabilities: None,
         }),
         volumeMounts: None,
         env: None,
@@ -28,6 +29,8 @@ pub fn add_pause_container(containers: &mut Vec<pod::Container>) {
         ports: None,
         command: None,
         args: None,
+        lifecycle: None,
+        readinessProbe: None,
     };
     containers.insert(0, pause_container);
     debug!("pause container added.");

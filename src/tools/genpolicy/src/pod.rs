@@ -87,6 +87,28 @@ pub struct Container {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub args: Option<Vec<String>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lifecycle: Option<Lifecycle>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub readinessProbe: Option<Probe>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Probe {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exec: Option<ExecAction>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub initialDelaySeconds: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeoutSeconds: Option<i32>,
+
+    // TODO: additional fiels.
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -101,6 +123,48 @@ pub struct SecurityContext {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub privileged: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<Capabilities>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Lifecycle {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub postStart: Option<LifecycleHandler>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preStop: Option<LifecycleHandler>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LifecycleHandler {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exec: Option<ExecAction>,
+
+    // TODO: additional fiels.
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecAction {
+    pub command: Vec<String>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Capabilities {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub add: Option<Vec<String>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub drop: Option<Vec<String>>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
