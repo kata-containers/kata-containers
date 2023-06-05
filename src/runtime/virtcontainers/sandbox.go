@@ -2027,7 +2027,20 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	}
 
 	if s.config.StaticResourceMgmt {
-		s.Logger().Debug("no resources updated: static resource management is set")
+		finalMemoryMB = s.HypervisorConfig.MemorySize
+		tmpfsMounts, err := s.prepareEphemeralMounts(finalMemoryMB)
+		if err != nil {
+			return err
+		}
+		if err := s.agent.updateEphemeralMounts(ctx, tmpfsMounts); err != nil {
+			// upgrade path: if runtime is newer version, but agent is old
+			// then ignore errUnimplemented
+			if grpcStatus.Convert(err).Code() == codes.Unimplemented {
+				s.Logger().Warnf("agent does not support updateMounts")
+				return nil
+			}
+			return err
+		}
 		return nil
 	}
 	sandboxVCPUs, err := s.calculateSandboxCPUs()
