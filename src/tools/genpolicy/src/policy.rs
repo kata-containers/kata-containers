@@ -338,7 +338,10 @@ pub fn get_container_policy(
     }
 
     let namespace = k8s_object.get_namespace()?;
-    annotations.insert("io.kubernetes.cri.sandbox-namespace".to_string(), namespace);
+    annotations.insert(
+        "io.kubernetes.cri.sandbox-namespace".to_string(),
+        namespace.clone(),
+    );
 
     if !yaml_container.name.is_empty() {
         annotations.insert(
@@ -359,7 +362,7 @@ pub fn get_container_policy(
         process.env.push("HOSTNAME=".to_string() + &pod_name);
     }
 
-    yaml_container.get_env_variables(&mut process.env, config_maps);
+    yaml_container.get_env_variables(&mut process.env, config_maps, &namespace)?;
 
     infra::get_process(&mut process, &infra_container)?;
     process.noNewPrivileges = !yaml_container.allow_privilege_escalation();

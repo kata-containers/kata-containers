@@ -163,7 +163,7 @@ pub struct ConfigMapKeySelector {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ObjectFieldSelector {
-    pub fieldPath : String,
+    pub fieldPath: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub apiVersion: Option<String>,
@@ -196,16 +196,18 @@ impl Container {
         &self,
         dest_env: &mut Vec<String>,
         config_maps: &Vec<config_map::ConfigMap>,
-    ) {
+        namespace: &str,
+    ) -> Result<()> {
         if let Some(source_env) = &self.env {
             for env_variable in source_env {
                 let mut src_string = env_variable.name.clone() + "=";
-                src_string += &env_variable.get_value(config_maps);
+                src_string += &env_variable.get_value(config_maps, namespace)?;
                 if !dest_env.contains(&src_string) {
                     dest_env.push(src_string.clone());
                 }
             }
         }
+        Ok(())
     }
 
     pub fn allow_privilege_escalation(&self) -> bool {
@@ -260,18 +262,34 @@ impl Container {
 }
 
 impl EnvVar {
-    pub fn get_value(&self, config_maps: &Vec<config_map::ConfigMap>) -> String {
+    pub fn get_value(
+        &self,
+        config_maps: &Vec<config_map::ConfigMap>,
+        namespace: &str,
+    ) -> Result<String> {
         if let Some(value) = &self.value {
-            return value.clone();
+            return Ok(value.clone());
         } else if let Some(value_from) = &self.valueFrom {
             if let Some(value) = config_map::get_value(value_from, config_maps) {
-                return value.clone();
+                return Ok(value.clone());
+            } else if let Some(field_ref) = &value_from.fieldRef {
+                let path: &str = &field_ref.fieldPath;
+                match path {
+                    "metadata.namespace" => return Ok(namespace.to_string()),
+                    "status.podIP" => return Ok("$(pod-ip)".to_string()),
+                    _ => {
+                        return Err(anyhow!(
+                            "Unsupported field reference {}",
+                            &field_ref.fieldPath
+                        ))
+                    }
+                }
             }
         } else {
             panic!("Environment variable without value or valueFrom!");
         }
 
-        "".to_string()
+        Err(anyhow!("Unknown EnvVar value - {}", &self.name))
     }
 }
 

@@ -89,7 +89,7 @@ impl yaml::K8sObject for ReplicationController {
         &self,
         policy_mounts: &mut Vec<oci::Mount>,
         storages: &mut Vec<policy::SerializedStorage>,
-        _container: &pod::Container,
+        container: &pod::Container,
         infra_policy: &infra::InfraPolicy,
     ) -> Result<()> {
         // Example:
@@ -101,17 +101,15 @@ impl yaml::K8sObject for ReplicationController {
         // volumes:
         //   - name: data
         //     emptyDir: {}
-        for container in &self.spec.template.spec.containers {
-            if let Some(volumes) = &self.spec.template.spec.volumes {
-                for volume in volumes {
-                    policy::get_container_mounts_and_storages(
-                        policy_mounts,
-                        storages,
-                        container,
-                        infra_policy,
-                        &volume,
-                    )?;
-                }
+        if let Some(volumes) = &self.spec.template.spec.volumes {
+            for volume in volumes {
+                policy::get_container_mounts_and_storages(
+                    policy_mounts,
+                    storages,
+                    container,
+                    infra_policy,
+                    &volume,
+                )?;
             }
         }
 
