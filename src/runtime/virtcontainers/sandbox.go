@@ -2027,7 +2027,7 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	}
 
 	if s.config.StaticResourceMgmt {
-		finalMemoryMB = s.HypervisorConfig.MemorySize
+		finalMemoryMB := s.config.HypervisorConfig.MemorySize
 		tmpfsMounts, err := s.prepareEphemeralMounts(finalMemoryMB)
 		if err != nil {
 			return err
