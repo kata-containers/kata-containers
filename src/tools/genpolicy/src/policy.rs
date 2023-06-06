@@ -367,6 +367,7 @@ pub fn get_container_policy(
     }
 
     yaml_container.get_env_variables(&mut process.env, config_maps, &namespace)?;
+    substitute_env_variables(&mut process.env);
 
     infra::get_process(&mut process, &infra_container)?;
     process.noNewPrivileges = !yaml_container.allow_privilege_escalation();
@@ -429,4 +430,71 @@ pub fn get_container_mounts_and_storages(
         }
     }
     Ok(())
+}
+
+fn substitute_env_variables(env: &mut Vec<String>) {
+    loop {
+        let mut substituted = false;
+
+        for i in 0..env.len() {
+            let env_var = env[i].clone();
+            let components: Vec<&str> = env_var.split('=').collect();
+            if components.len() == 2 {
+                if let Some((start, end)) = find_subst_target(&components[1]) {
+                    if let Some(new_value) = substitute_variable(&components[1], start, end, env) {
+                        let new_var = components[0].to_string() + "=" + &new_value;
+                        debug!("Replacing env variable <{}> with <{}>", &env[i], &new_var);
+                        env[i] = new_var;
+                        substituted = true;
+                    }
+                }
+            }
+        }
+
+        if !substituted {
+            break;
+        }
+    }
+}
+
+fn find_subst_target(env_value: &str) -> Option<(usize, usize)> {
+    if let Some(mut start) = env_value.find("$(") {
+        start += 2;
+        if env_value.len() > start {
+            if let Some(end) = env_value[start..].find(")") {
+                return Some((start, start + end));
+            }
+        }
+    }
+
+    None
+}
+
+fn substitute_variable(
+    env_var: &str,
+    name_start: usize,
+    name_end: usize,
+    env: &Vec<String>,
+) -> Option<String> {
+    assert!(name_start < name_end);
+    assert!(name_end < env_var.len());
+    let name = env_var[name_start..name_end].to_string();
+    debug!("Searching for the value of <{}>", &name);
+
+    for other_var in env {
+        let components: Vec<&str> = other_var.split('=').collect();
+        if components[0].eq(&name) {
+            debug!("Found {} in <{}>", &name, &other_var);
+            if components.len() == 2 {
+                // Don't substitute if the value includes variable to be substituted,
+                // to avoid recursive substitutions.
+                if find_subst_target(&components[1]).is_none() {
+                    let from = "$(".to_string() + &name + ")";
+                    return Some(env_var.replace(&from, &components[1]));
+                }
+            }
+        }
+    }
+
+    None
 }
