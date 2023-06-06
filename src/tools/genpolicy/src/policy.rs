@@ -98,6 +98,7 @@ pub struct OciProcess {
 pub struct ContainerPolicy {
     pub oci: OciSpec,
     storages: Vec<SerializedStorage>,
+    exec_commands: Vec<String>,
 }
 
 // TODO: can struct Storage from agent.proto be used here?
@@ -395,6 +396,8 @@ pub fn get_container_policy(
     linux.namespaces = kata::get_namespaces();
     infra::get_linux(&mut linux, &infra_container.linux)?;
 
+    let exec_commands = yaml_container.get_exec_commands();
+
     Ok(ContainerPolicy {
         oci: OciSpec {
             ociVersion: Some("1.1.0-rc.1".to_string()),
@@ -407,6 +410,7 @@ pub fn get_container_policy(
             linux: Some(linux),
         },
         storages,
+        exec_commands,
     })
 }
 

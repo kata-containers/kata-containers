@@ -153,6 +153,7 @@ macro_rules! is_allowed {
             .is_allowed_endpoint($req.descriptor().name())
             .await
         {
+            warn!(sl!(), "{} is blocked by policy", $req.descriptor().name());
             return Err(ttrpc_error!(
                 ttrpc::Code::PERMISSION_DENIED,
                 format!("{} is blocked by policy", $req.descriptor().name()),
@@ -171,6 +172,7 @@ macro_rules! is_allowed_create_container {
             .is_allowed_create_container($req.descriptor().name(), &$req)
             .await
         {
+            warn!(sl!(), "{} is blocked by policy", $req.descriptor().name());
             return Err(ttrpc_error!(
                 ttrpc::Code::PERMISSION_DENIED,
                 format!("{} is blocked by policy", $req.descriptor().name()),
@@ -189,6 +191,26 @@ macro_rules! is_allowed_create_sandbox {
             .is_allowed_create_sandbox($req.descriptor().name(), &$req)
             .await
         {
+            warn!(sl!(), "{} is blocked by policy", $req.descriptor().name());
+            return Err(ttrpc_error!(
+                ttrpc::Code::PERMISSION_DENIED,
+                format!("{} is blocked by policy", $req.descriptor().name()),
+            ));
+        }
+    }
+}
+
+macro_rules! is_allowed_exec_process {
+    ($req:ident) => {
+        config_allows!($req);
+
+        if !AGENT_POLICY
+            .lock()
+            .await
+            .is_allowed_exec_process($req.descriptor().name(), &$req)
+            .await
+        {
+            warn!(sl!(), "{} is blocked by policy", $req.descriptor().name());
             return Err(ttrpc_error!(
                 ttrpc::Code::PERMISSION_DENIED,
                 format!("{} is blocked by policy", $req.descriptor().name()),
@@ -849,7 +871,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::ExecProcessRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "exec_process", req);
-        is_allowed!(req);
+        is_allowed_exec_process!(req);
         match self.do_exec_process(req).await {
             Err(e) => Err(ttrpc_error!(ttrpc::Code::INTERNAL, e)),
             Ok(_) => Ok(Empty::new()),

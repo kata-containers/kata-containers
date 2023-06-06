@@ -59,7 +59,7 @@ struct SerializedFsGroup {
     group_change_policy: u32,
 }
 
-// OPA input data for CreateSandboxRequest.
+/// OPA input data for CreateSandboxRequest.
 #[derive(Debug, Serialize, Deserialize)]
 struct CreateSandboxRequestInput {
     input: CreateSandboxRequestData,
@@ -70,7 +70,21 @@ struct CreateSandboxRequestData {
     storages: Vec<SerializedStorage>,
 }
 
-// OPA input data for PullImageRequest.
+/// OPA input data for ExecProcessRequest.
+#[derive(Debug, Serialize)]
+struct ExecProcessRequestInput {
+    input: ExecProcessRequestData,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ExecProcessRequestData {
+	// container_id: String,
+	// exec_id: String,
+	// user: oci::User,
+	process: oci::Process,
+}
+
+/// OPA input data for PullImageRequest.
 #[derive(Debug, Serialize, Deserialize)]
 struct PullImageRequestInput {
     input: PullImageRequestData,
@@ -185,6 +199,29 @@ impl AgentPolicy {
         };
 
         Self::convert_storages(req.storages.to_vec(), &mut opa_input.input.storages);
+        let post_input = serde_json::to_string(&opa_input).unwrap();
+        self.post_query(ep, &post_input).await.unwrap_or(false)
+    }
+
+    // Post ExecProcessRequest input to OPA.
+    pub async fn is_allowed_exec_process(
+        &mut self,
+        ep: &str,
+        req: &protocols::agent::ExecProcessRequest,
+    ) -> bool {
+        let grpc_process = req.process.clone();
+        if grpc_process.is_none() {
+            error!(sl!(), "failed to convert process for ExecProcess request!");
+            return false;
+        }
+
+        let opa_input = ExecProcessRequestInput {
+            input: ExecProcessRequestData {
+                // TODO: should other fields of grpc_process be validated as well?
+                process: rustjail::process_grpc_to_oci(&grpc_process.unwrap()),
+            },
+        };
+
         let post_input = serde_json::to_string(&opa_input).unwrap();
         self.post_query(ep, &post_input).await.unwrap_or(false)
     }

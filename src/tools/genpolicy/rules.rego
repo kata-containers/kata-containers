@@ -14,6 +14,7 @@ import input
 
 # More detailed policy rules are below.
 default CreateContainerRequest := false
+default ExecProcessRequest := false
 
 # Requests that are always allowed.
 default CreateSandboxRequest := true
@@ -819,4 +820,20 @@ allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id) {
     regex.match(mount_point_regex, input_storage.mount_point)
 
     print("allow_mount_point 4: success")
+}
+
+######################################################################
+ExecProcessRequest {
+    print("==============================================")
+    input_command = concat(" ", input.process.args)
+    print("ExecProcessRequest: input_command =", input_command)
+
+    some container in policy_data.containers
+    some policy_command in container.exec_commands
+    print("ExecProcessRequest: policy_command =", policy_command)
+
+    # TODO: should other input data fields be validated as well?
+    policy_command == input_command
+
+    print("ExecProcessRequest: success")
 }

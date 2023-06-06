@@ -321,6 +321,25 @@ impl Container {
         }
         false
     }
+
+    pub fn get_exec_commands(&self) -> Vec<String> {
+        let mut commands = Vec::new();
+
+        if let Some(probe) = &self.readinessProbe {
+            if let Some(exec) = &probe.exec {
+                commands.push(exec.command.join(" "));
+            }
+        }
+        if let Some(lifecycle) = &self.lifecycle {
+            if let Some(preStop) = &lifecycle.preStop {
+                if let Some(exec) = &preStop.exec {
+                    commands.push(exec.command.join(" "));
+                }
+            }
+        }
+
+        commands
+    }
 }
 
 impl EnvVar {
