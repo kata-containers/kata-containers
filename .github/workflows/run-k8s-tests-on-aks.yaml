@@ -27,83 +27,44 @@ jobs:
           - host_os: cbl-mariner
             vmm: clh
     runs-on: ubuntu-latest
+    env:
+      DOCKER_REGISTRY: ${{ inputs.registry }}
+      DOCKER_REPO: ${{ inputs.repo }}
+      DOCKER_TAG: ${{ inputs.tag }}
+      GH_PR_NUMBER: ${{ github.event.pull_request.number }}
+      KATA_HOST_OS: ${{ matrix.host_os }}
+      KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
       - uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Download Azure CLI
-        run: |
-          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-          # The aks-preview extension is required while the Mariner Kata host is in preview.
-          az extension add --name aks-preview
+        run: bash tests/integration/gha-run.sh install-az-cli
 
       - name: Log into the Azure account
-        run: |
-          az login \
-            --service-principal \
-            -u "${{ secrets.AZ_APPID }}" \
-            -p "${{ secrets.AZ_PASSWORD }}" \
-            --tenant "${{ secrets.AZ_TENANT_ID }}"
-
-      - name: Format cluster name
-        run: |
-          rev=$(git rev-parse --short=12 HEAD)
-          echo "cluster_name=${{ github.event.pull_request.number }}-$rev-${{ matrix.vmm }}-${{ matrix.host_os }}-amd64" >> $GITHUB_ENV
+        run: bash tests/integration/gha-run.sh login-azure
+        env:
+          AZ_APPID: ${{ secrets.AZ_APPID }}
+          AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
+          AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
 
       - name: Create AKS cluster
-        run: |
-          az aks create \
-            -g "kataCI" \
-            -n "${{ env.cluster_name }}" \
-            -s "Standard_D4s_v5" \
-            --node-count 1 \
-            --generate-ssh-keys \
-            $([ "${{ matrix.host_os == 'cbl-mariner' }}" = "true" ] && echo "--os-sku mariner --workload-runtime KataMshvVmIsolation")
+        run: bash tests/integration/gha-run.sh create-cluster
 
       - name: Install `bats`
-        run: |
-          sudo apt-get update
-          sudo apt-get -y install bats
+        run: bash tests/integration/gha-run.sh install-bats
 
       - name: Install `kubectl`
-        run: |
-          sudo az aks install-cli
+        run: bash tests/integration/gha-run.sh install-kubectl
 
       - name: Download credentials for the Kubernetes CLI to use them
-        run: |
-          az aks get-credentials -g "kataCI" -n "${{ env.cluster_name }}"
+        run: bash tests/integration/gha-run.sh get-cluster-credentials
 
       - name: Run tests
         timeout-minutes: 60
-        run: |
-          sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${{ inputs.registry }}/${{ inputs.repo }}:${{ inputs.tag }}|g" tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-          cat tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-          cat tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml | grep "${{ inputs.registry }}/${{ inputs.repo }}:${{ inputs.tag }}" || die "Failed to setup the tests image"
-
-          kubectl apply -f tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
-          kubectl apply -f tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-          kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
-          kubectl apply -f tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
-
-          # This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
-          # which may cause issues like not having the node properly labeled or the artefacts
-          # properly deployed when the tests actually start running.
-          sleep 240s
-
-          pushd tests/integration/kubernetes
-          bash setup.sh
-          bash run_kubernetes_tests.sh
-          popd
-        env:
-          KATA_HOST_OS: ${{ matrix.host_os }}
-          KATA_HYPERVISOR: ${{ matrix.vmm }}
+        run: bash tests/integration/gha-run.sh run-tests-aks
 
       - name: Delete AKS cluster
         if: always()
-        run: |
-          az aks delete \
-            -g "kataCI" \
-            -n "${{ env.cluster_name }}" \
-            --yes \
-            --no-wait
+        run: bash tests/integration/gha-run.sh delete-cluster
