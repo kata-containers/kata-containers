@@ -1,0 +1,17 @@
+# Copyright (c) 2022 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: latency-client
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+    - name: client-container
+      image: quay.io/prometheus/busybox:latest
+      command:
+        - sleep
+        - "180"
