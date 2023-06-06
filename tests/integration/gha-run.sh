@@ -137,7 +137,7 @@ function main() {
         cleanup-snp) cleanup "snp" ;;
         cleanup-tdx) cleanup "tdx" ;;
         delete-cluster) delete_cluster ;;
-        *) >&2 echo "Invalid action"; exit 2 ;;
+        *) >&2 echo "Invalid argument"; exit 2 ;;
     esac
 }
 
