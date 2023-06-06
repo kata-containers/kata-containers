@@ -2125,7 +2125,7 @@ dependencies = [
  "nix 0.24.3",
  "oci",
  "once_cell",
- "rand 0.7.3",
+ "rand 0.8.5",
  "serde_json",
  "slog",
  "slog-scope",
