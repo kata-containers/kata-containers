@@ -352,10 +352,14 @@ pub fn get_container_policy(
 
     // Start with the Default Unix Spec from
     // https://github.com/containerd/containerd/blob/release/1.6/oci/spec.go#L132
-    let privileged_container = yaml_container.is_privileged();
-    let mut process = containerd::get_process(privileged_container);
-    let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.args);
+    let is_privileged = yaml_container.is_privileged();
+    let mut process = containerd::get_process(is_privileged);
 
+    if let Some(capabilities) = &mut process.capabilities {
+        yaml_container.apply_capabilities(capabilities)?;
+    }
+
+    let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.args);
     registry_container.get_process(&mut process, yaml_has_command, yaml_has_args)?;
 
     if !is_pause_container {
@@ -367,7 +371,7 @@ pub fn get_container_policy(
     infra::get_process(&mut process, &infra_container)?;
     process.noNewPrivileges = !yaml_container.allow_privilege_escalation();
 
-    let mut mounts = containerd::get_mounts(is_pause_container, privileged_container);
+    let mut mounts = containerd::get_mounts(is_pause_container, is_privileged);
     infra_policy.get_policy_mounts(
         &mut mounts,
         &infra_container.mounts,
@@ -386,7 +390,7 @@ pub fn get_container_policy(
         infra_policy,
     )?;
 
-    let mut linux = containerd::get_linux(privileged_container);
+    let mut linux = containerd::get_linux(is_privileged);
     linux.namespaces = kata::get_namespaces();
     infra::get_linux(&mut linux, &infra_container.linux)?;
 

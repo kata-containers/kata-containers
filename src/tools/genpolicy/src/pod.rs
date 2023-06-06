@@ -107,7 +107,6 @@ pub struct Probe {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeoutSeconds: Option<i32>,
-
     // TODO: additional fiels.
 }
 
@@ -145,7 +144,6 @@ pub struct Lifecycle {
 pub struct LifecycleHandler {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exec: Option<ExecAction>,
-
     // TODO: additional fiels.
 }
 
@@ -453,5 +451,40 @@ impl yaml::K8sObject for Pod {
 
     fn serialize(&mut self) -> Result<String> {
         Ok(serde_yaml::to_string(&self)?)
+    }
+}
+
+impl Container {
+    pub fn apply_capabilities(&self, capabilities: &mut oci::LinuxCapabilities) -> Result<()> {
+        if let Some(securityContext) = &self.securityContext {
+            if let Some(yaml_capabilities) = &securityContext.capabilities {
+                if let Some(add) = &yaml_capabilities.add {
+                    for c in add {
+                        let cap = "CAP_".to_string() + &c;
+
+                        if !capabilities.bounding.contains(&cap) {
+                            capabilities.bounding.push(cap.clone());
+                        }
+                        if !capabilities.permitted.contains(&cap) {
+                            capabilities.permitted.push(cap.clone());
+                        }
+                        if !capabilities.effective.contains(&cap) {
+                            capabilities.effective.push(cap.clone());
+                        }
+                    }
+                }
+                if let Some(drop) = &yaml_capabilities.drop {
+                    for c in drop {
+                        let cap = "CAP_".to_string() + &c;
+
+                        capabilities.bounding.retain(|x| !x.eq(&cap));
+                        capabilities.permitted.retain(|x| !x.eq(&cap));
+                        capabilities.effective.retain(|x| !x.eq(&cap));
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 }

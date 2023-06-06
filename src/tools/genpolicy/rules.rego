@@ -360,7 +360,8 @@ allow_process(policy_oci, input_oci, sandbox_name) {
     print("allow_process: input cwd =", input_process.cwd, "policy cwd =", policy_process.cwd)
     policy_process.cwd              == input_process.cwd
 
-    print("allow_process: input capabilities =", input_process.capabilities, "policy capabilities =", policy_process.capabilities)
+    print("allow_process: input capabilities =", input_process.capabilities)
+    print("allow_process: policy capabilities =", policy_process.capabilities)
     policy_process.capabilities     == input_process.capabilities
 
     print("allow_process: input noNewPrivileges =", input_process.noNewPrivileges, "policy noNewPrivileges =", policy_process.noNewPrivileges)
