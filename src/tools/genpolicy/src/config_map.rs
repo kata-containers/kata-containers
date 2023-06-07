@@ -78,8 +78,8 @@ pub fn get_value(value_from: &pod::EnvVarSource, config_maps: &Vec<ConfigMap>) -
 }
 
 #[async_trait]
-impl yaml::K8sObject for ConfigMap {
-    async fn initialize(&mut self, _use_cached_files: bool) -> Result<()> {
+impl yaml::K8sResource for ConfigMap {
+    async fn init(&mut self, _use_cache: bool, _yaml: &str) -> Result<()> {
         Ok(())
     }
 

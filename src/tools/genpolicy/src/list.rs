@@ -30,32 +30,31 @@ pub struct List {
     items: Vec<Mapping>,
 
     #[serde(skip)]
-    k8s_objects: Vec<boxed::Box<dyn yaml::K8sObject + Sync + Send>>,
+    resources: Vec<boxed::Box<dyn yaml::K8sResource + Sync + Send>>,
 }
 
-impl Debug for dyn yaml::K8sObject + Send + Sync {
+impl Debug for dyn yaml::K8sResource + Send + Sync {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "K8sObject")
+        write!(f, "K8sResource")
     }
 }
 
 #[async_trait]
-impl yaml::K8sObject for List {
-    async fn initialize(&mut self, use_cached_files: bool) -> Result<()> {
+impl yaml::K8sResource for List {
+    async fn init(&mut self, use_cache: bool, _yaml: &str) -> Result<()> {
         for item in &self.items {
             let yaml_string = serde_yaml::to_string(&item)?;
-            let header = yaml::get_yaml_header(&yaml_string)?;
-            let mut k8s_object = yaml::new_k8s_object(&header.kind, &yaml_string)?;
-            k8s_object.initialize(use_cached_files).await?;
-            self.k8s_objects.push(k8s_object);
+            let (mut resource, _kind) = yaml::new_k8s_resource(&yaml_string)?;
+            resource.init(use_cache, &yaml_string).await?;
+            self.resources.push(resource);
         }
 
         Ok(())
     }
 
     fn requires_policy(&self) -> bool {
-        for k8s_object in &self.k8s_objects {
-            if k8s_object.requires_policy() {
+        for resource in &self.resources {
+            if resource.requires_policy() {
                 return true;
             }
         }
@@ -96,9 +95,9 @@ impl yaml::K8sObject for List {
         config_maps: &Vec<config_map::ConfigMap>,
         in_out_files: &utils::InOutFiles,
     ) -> Result<()> {
-        for k8s_object in &mut self.k8s_objects {
-            if k8s_object.requires_policy() {
-                k8s_object.generate_policy(rules, infra_policy, config_maps, in_out_files)?;
+        for resource in &mut self.resources {
+            if resource.requires_policy() {
+                resource.generate_policy(rules, infra_policy, config_maps, in_out_files)?;
             }
         }
 
@@ -107,8 +106,8 @@ impl yaml::K8sObject for List {
 
     fn serialize(&mut self) -> Result<String> {
         self.items.clear();
-        for k8s_object in &mut self.k8s_objects {
-            let yaml = k8s_object.serialize()?;
+        for resource in &mut self.resources {
+            let yaml = resource.serialize()?;
             let document = serde_yaml::Deserializer::from_str(&yaml);
             let doc_value = Value::deserialize(document)?;
             if let Some(doc_mapping) = doc_value.as_mapping() {

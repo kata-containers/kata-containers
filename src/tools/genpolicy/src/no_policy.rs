@@ -17,13 +17,13 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 
 #[derive(Clone, Debug)]
-pub struct NoPolicyObject {
+pub struct NoPolicyResource {
     pub yaml: String,
 }
 
 #[async_trait]
-impl yaml::K8sObject for NoPolicyObject {
-    async fn initialize(&mut self, _use_cached_files: bool) -> Result<()> {
+impl yaml::K8sResource for NoPolicyResource {
+    async fn init(&mut self, _use_cache: bool, _yaml: &str) -> Result<()> {
         Ok(())
     }
 

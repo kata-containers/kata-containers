@@ -12,7 +12,7 @@ use crate::deployment;
 use crate::infra;
 use crate::job;
 use crate::list;
-use crate::no_policy_obj;
+use crate::no_policy;
 use crate::pause_container;
 use crate::pod;
 use crate::policy;
@@ -41,8 +41,8 @@ pub struct YamlHeader {
 }
 
 #[async_trait]
-pub trait K8sObject {
-    async fn initialize(&mut self, use_cached_files: bool) -> Result<()>;
+pub trait K8sResource {
+    async fn init(&mut self, use_cache: bool, yaml: &str) -> Result<()>;
 
     fn requires_policy(&self) -> bool;
 
@@ -80,61 +80,66 @@ pub struct LabelSelector {
 }
 
 /// Creates one of the supported K8s objects from a YAML string.
-pub fn new_k8s_object(kind: &str, yaml: &str) -> Result<boxed::Box<dyn K8sObject + Sync + Send>> {
+pub fn new_k8s_resource(
+    yaml: &str,
+) -> Result<(boxed::Box<dyn K8sResource + Sync + Send>, String)> {
+    let header = get_yaml_header(yaml)?;
+    let kind: &str = &header.kind;
+
     match kind {
         "ConfigMap" => {
             let config_map: config_map::ConfigMap = serde_yaml::from_str(&yaml)?;
             debug!("{:#?}", &config_map);
-            Ok(boxed::Box::new(config_map))
+            Ok((boxed::Box::new(config_map), header.kind))
         }
         "DaemonSet" => {
             let daemon: daemon_set::DaemonSet = serde_yaml::from_str(&yaml)?;
             debug!("{:#?}", &daemon);
-            Ok(boxed::Box::new(daemon))
+            Ok((boxed::Box::new(daemon), header.kind))
         }
         "Deployment" => {
             let deployment: deployment::Deployment = serde_yaml::from_str(&yaml)?;
             debug!("{:#?}", &deployment);
-            Ok(boxed::Box::new(deployment))
+            Ok((boxed::Box::new(deployment), header.kind))
         }
         "Job" => {
             let job: job::Job = serde_yaml::from_str(&yaml)?;
             debug!("{:#?}", &job);
-            Ok(boxed::Box::new(job))
+            Ok((boxed::Box::new(job), header.kind))
         }
         "List" => {
             let list: list::List = serde_yaml::from_str(&yaml)?;
             debug!("{:#?}", &list);
-            Ok(boxed::Box::new(list))
+            Ok((boxed::Box::new(list), header.kind))
         }
         "Pod" => {
             let pod: pod::Pod = serde_yaml::from_str(&yaml)?;
             debug!("{:#?}", &pod);
-            Ok(boxed::Box::new(pod))
+            Ok((boxed::Box::new(pod), header.kind))
         }
         "ReplicationController" => {
             let controller: replication_controller::ReplicationController =
                 serde_yaml::from_str(&yaml)?;
             debug!("{:#?}", &controller);
-            Ok(boxed::Box::new(controller))
+            Ok((boxed::Box::new(controller), header.kind))
         }
         "ReplicaSet" => {
             let set: replica_set::ReplicaSet = serde_yaml::from_str(&yaml)?;
             debug!("{:#?}", &set);
-            Ok(boxed::Box::new(set))
+            Ok((boxed::Box::new(set), header.kind))
         }
         "StatefulSet" => {
             let set: stateful_set::StatefulSet = serde_yaml::from_str(&yaml)?;
             debug!("{:#?}", &set);
-            Ok(boxed::Box::new(set))
+            Ok((boxed::Box::new(set), header.kind))
         }
         "ClusterRole" | "ClusterRoleBinding" | "LimitRange" | "Namespace" | "ResourceQuota"
         | "Service" | "ServiceAccount" => {
-            let no_policy = no_policy_obj::NoPolicyObject {
+            let no_policy = no_policy::NoPolicyResource {
                 yaml: yaml.to_string(),
             };
             debug!("{:#?}", &no_policy);
-            Ok(boxed::Box::new(no_policy))
+            Ok((boxed::Box::new(no_policy), header.kind))
         }
         _ => Err(anyhow!("Unsupported YAML spec kind: {}", kind)),
     }
@@ -154,14 +159,20 @@ pub fn get_yaml_header(yaml: &str) -> Result<YamlHeader> {
     return Ok(serde_yaml::from_str(yaml)?);
 }
 
-pub async fn init_k8s_object(
-    yaml_containers: &mut Vec<pod::Container>,
+pub async fn k8s_resource_init(
+    spec: &mut pod::PodSpec,
     registry_containers: &mut Vec<registry::Container>,
-    use_cached_files: bool,
+    use_cache: bool,
 ) -> Result<()> {
-    pause_container::add_pause_container(yaml_containers);
-    *registry_containers =
-        registry::get_registry_containers(use_cached_files, yaml_containers).await?;
+    pause_container::add_pause_container(&mut spec.containers);
+
+    if let Some(init_containers) = &spec.initContainers {
+        for container in init_containers {
+            spec.containers.insert(1, container.clone());
+        }
+    }
+
+    *registry_containers = registry::get_registry_containers(use_cache, &spec.containers).await?;
     Ok(())
 }
 
@@ -190,7 +201,7 @@ pub fn generate_policy(
     infra_policy: &infra::InfraPolicy,
     config_maps: &Vec<config_map::ConfigMap>,
     in_out_files: &utils::InOutFiles,
-    k8s_object: &dyn K8sObject,
+    k8s_object: &dyn K8sResource,
     registry_containers: &Vec<registry::Container>,
     yaml_containers: &Vec<pod::Container>,
 ) -> Result<String> {

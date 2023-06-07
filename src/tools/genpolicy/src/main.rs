@@ -15,7 +15,7 @@ mod infra;
 mod job;
 mod kata;
 mod list;
-mod no_policy_obj;
+mod no_policy;
 mod obj_meta;
 mod pause_container;
 mod persistent_volume_claim;

@@ -31,7 +31,13 @@ pub struct ReplicationController {
     pub spec: ReplicationControllerSpec,
 
     #[serde(skip)]
+    yaml: String,
+
+    #[serde(skip)]
     pub registry_containers: Vec<registry::Container>,
+
+    #[serde(skip)]
+    encoded_policy: String,
 }
 
 /// See ReplicationControllerSpec in the Kubernetes API reference.
@@ -51,14 +57,16 @@ pub struct ReplicationControllerSpec {
 }
 
 #[async_trait]
-impl yaml::K8sObject for ReplicationController {
-    async fn initialize(&mut self, use_cached_files: bool) -> Result<()> {
-        yaml::init_k8s_object(
-            &mut self.spec.template.spec.containers,
+impl yaml::K8sResource for ReplicationController {
+    async fn init(&mut self, use_cache: bool, yaml: &str) -> Result<()> {
+        yaml::k8s_resource_init(
+            &mut self.spec.template.spec,
             &mut self.registry_containers,
-            use_cached_files,
+            use_cache,
         )
-        .await
+        .await?;
+        self.yaml = yaml.to_string();
+        Ok(())
     }
 
     fn requires_policy(&self) -> bool {
@@ -109,7 +117,7 @@ impl yaml::K8sObject for ReplicationController {
         config_maps: &Vec<config_map::ConfigMap>,
         in_out_files: &utils::InOutFiles,
     ) -> Result<()> {
-        let encoded_policy = yaml::generate_policy(
+        self.encoded_policy = yaml::generate_policy(
             rules,
             infra_policy,
             config_maps,
@@ -118,18 +126,16 @@ impl yaml::K8sObject for ReplicationController {
             &self.registry_containers,
             &self.spec.template.spec.containers,
         )?;
-
-        self.spec
-            .template
-            .metadata
-            .add_policy_annotation(&encoded_policy);
-
-        // Remove the pause container before serializing.
-        self.spec.template.spec.containers.remove(0);
         Ok(())
     }
 
     fn serialize(&mut self) -> Result<String> {
-        Ok(serde_yaml::to_string(&self)?)
+        let mut resource: Self = serde_yaml::from_str(&self.yaml).unwrap();
+        resource
+            .spec
+            .template
+            .metadata
+            .add_policy_annotation(&self.encoded_policy);
+        Ok(serde_yaml::to_string(&resource)?)
     }
 }
