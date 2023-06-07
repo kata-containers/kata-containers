@@ -21,6 +21,7 @@ use crate::replica_set;
 use crate::replication_controller;
 use crate::stateful_set;
 use crate::utils;
+use crate::volume;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -160,5 +161,25 @@ pub async fn init_k8s_object(
     pause_container::add_pause_container(yaml_containers);
     *registry_containers =
         registry::get_registry_containers(use_cached_files, yaml_containers).await?;
+    Ok(())
+}
+
+pub fn get_container_mounts_and_storages(
+    policy_mounts: &mut Vec<oci::Mount>,
+    storages: &mut Vec<policy::SerializedStorage>,
+    container: &pod::Container,
+    infra_policy: &infra::InfraPolicy,
+    volumes: &Vec<volume::Volume>,
+) -> Result<()> {
+    for volume in volumes {
+        policy::get_container_mounts_and_storages(
+            policy_mounts,
+            storages,
+            container,
+            infra_policy,
+            &volume,
+        )?;
+    }
+
     Ok(())
 }

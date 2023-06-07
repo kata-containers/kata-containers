@@ -422,18 +422,15 @@ impl yaml::K8sObject for Pod {
         infra_policy: &infra::InfraPolicy,
     ) -> Result<()> {
         if let Some(volumes) = &self.spec.volumes {
-            for volume in volumes {
-                policy::get_container_mounts_and_storages(
-                    policy_mounts,
-                    storages,
-                    container,
-                    infra_policy,
-                    &volume,
-                )?;
-            }
+            yaml::get_container_mounts_and_storages(
+                policy_mounts,
+                storages,
+                container,
+                infra_policy,
+                volumes)
+        } else {
+            Ok(())
         }
-
-        Ok(())
     }
 
     fn generate_policy(

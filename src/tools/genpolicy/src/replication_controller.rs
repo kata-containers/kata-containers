@@ -88,28 +88,16 @@ impl yaml::K8sObject for ReplicationController {
         container: &pod::Container,
         infra_policy: &infra::InfraPolicy,
     ) -> Result<()> {
-        // Example:
-        //
-        // volumeMounts:
-        //   - mountPath: /cassandra_data
-        // name: data
-        // ...
-        // volumes:
-        //   - name: data
-        //     emptyDir: {}
         if let Some(volumes) = &self.spec.template.spec.volumes {
-            for volume in volumes {
-                policy::get_container_mounts_and_storages(
-                    policy_mounts,
-                    storages,
-                    container,
-                    infra_policy,
-                    &volume,
-                )?;
-            }
+            yaml::get_container_mounts_and_storages(
+                policy_mounts,
+                storages,
+                container,
+                infra_policy,
+                volumes)
+        } else {
+            Ok(())
         }
-
-        Ok(())
     }
 
     fn generate_policy(

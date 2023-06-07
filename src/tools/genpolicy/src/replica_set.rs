@@ -80,12 +80,21 @@ impl yaml::K8sObject for ReplicaSet {
 
     fn get_container_mounts_and_storages(
         &self,
-        _policy_mounts: &mut Vec<oci::Mount>,
-        _storages: &mut Vec<policy::SerializedStorage>,
-        _container: &pod::Container,
-        _infra_policy: &infra::InfraPolicy,
+        policy_mounts: &mut Vec<oci::Mount>,
+        storages: &mut Vec<policy::SerializedStorage>,
+        container: &pod::Container,
+        infra_policy: &infra::InfraPolicy,
     ) -> Result<()> {
-        Ok(())
+        if let Some(volumes) = &self.spec.template.spec.volumes {
+            yaml::get_container_mounts_and_storages(
+                policy_mounts,
+                storages,
+                container,
+                infra_policy,
+                volumes)
+        } else {
+            Ok(())
+        }
     }
 
     fn generate_policy(
