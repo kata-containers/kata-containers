@@ -520,6 +520,15 @@ Options=mode=1777,strictatime,nosuid,nodev
 EOF
 	fi
 
+    if [ "$AGENT_INIT" != "yes" ]; then
+		local unitFile="./etc/fstab"
+		info "Create or append /etc/fstab listing for /run in ./etc/fstab"
+		mkdir -p `dirname "$unitFile"`
+        cat >> "$unitFile" << EOF
+tmpfs /run tmpfs defaults,size=50% 0 2
+EOF
+    fi
+
 	popd  >> /dev/null
 
 	[ -n "${KERNEL_MODULES_DIR}" ] && copy_kernel_modules ${KERNEL_MODULES_DIR} ${ROOTFS_DIR}
