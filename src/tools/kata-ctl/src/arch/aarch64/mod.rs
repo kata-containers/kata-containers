@@ -11,6 +11,7 @@ mod arch_specific {
     use crate::types::*;
     use crate::utils;
     use anyhow::Result;
+    use slog::{info, o, warn};
     use std::path::Path;
 
     const KVM_DEV: &str = "/dev/kvm";
@@ -18,6 +19,12 @@ mod arch_specific {
     pub const ARCH_CPU_VENDOR_FIELD: &str = "CPU implementer";
     #[allow(dead_code)]
     pub const ARCH_CPU_MODEL_FIELD: &str = "CPU architecture";
+
+    macro_rules! sl {
+        () => {
+            slog_scope::logger().new(o!("subsystem" => "aarch64"))
+        };
+    }
 
     // List of check functions
     static CHECK_LIST: &[CheckItem] = &[CheckItem {
@@ -28,11 +35,14 @@ mod arch_specific {
     }];
 
     pub fn check(_args: &str) -> Result<()> {
-        println!("INFO: check: aarch64");
+        info!(sl!(), "check: aarch64");
         if Path::new(KVM_DEV).exists() {
-            println!("Kata Containers can run on this host\n");
+            info!(sl!(), "Kata Containers can run on this host\n");
         } else {
-            eprintln!("WARNING: Kata Containers can't run on this host as lack of virtulization support\n");
+            warn!(
+                sl!(),
+                "Kata Containers can't run on this host as lack of virtulization support\n"
+            );
         }
 
         Ok(())

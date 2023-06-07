@@ -36,6 +36,10 @@ serial_test = "0.5.1"
 vmm-sys-util = "0.11.0"
 epoll = "4.0.1"
 libc = "0.2.138"
+
+# Note: this crate sets the slog 'max_*' features which allows the log level
+# to be modified at runtime.
+logging = { path = "../../libs/logging" }
 slog = "2.7.0"
 slog-scope = "4.4.0"
 hyper = "0.14.20"

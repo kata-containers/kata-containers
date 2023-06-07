@@ -13,6 +13,7 @@ use kata_types::mount::{
 };
 use nix;
 use reqwest::StatusCode;
+use slog::{info, o};
 use std::{fs, time::Duration};
 use url;
 
@@ -24,6 +25,12 @@ use shim_interface::shim_mgmt::{
 
 const TIMEOUT: Duration = Duration::from_millis(2000);
 const CONTENT_TYPE_JSON: &str = "application/json";
+
+macro_rules! sl {
+    () => {
+        slog_scope::logger().new(o!("subsystem" => "volume_ops"))
+    };
+}
 
 pub fn handle_direct_volume(vol_cmd: DirectVolumeCommand) -> Result<()> {
     if !nix::unistd::Uid::effective().is_root() {
@@ -41,7 +48,7 @@ pub fn handle_direct_volume(vol_cmd: DirectVolumeCommand) -> Result<()> {
         }
     };
     if let Some(cmd_result) = cmd_result {
-        println!("{:?}", cmd_result);
+        info!(sl!(), "{:?}", cmd_result);
     }
 
     Ok(())
