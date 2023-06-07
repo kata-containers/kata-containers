@@ -100,9 +100,9 @@ function cleanup() {
     kubectl delete ${deploy_spec}
     kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
 
-    sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
+    sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
     cat "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
-    cat "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" | grep "${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}" || die "Failed to setup the tests image"
+    cat "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" | grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" || die "Failed to setup the tests image"
     kubectl apply ${cleanup_spec}
     sleep 180s
 
@@ -137,7 +137,7 @@ function main() {
         cleanup-snp) cleanup "snp" ;;
         cleanup-tdx) cleanup "tdx" ;;
         delete-cluster) delete_cluster ;;
-        *) >&2 echo "Invalid action"; exit 2 ;;
+        *) >&2 echo "Invalid argument"; exit 2 ;;
     esac
 }
 

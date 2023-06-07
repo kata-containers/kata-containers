@@ -40,7 +40,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Download Azure CLI
-        run: bash tests/integration/gha-run.sh install-az-cli
+        run: bash tests/integration/gha-run.sh install-azure-cli
 
       - name: Log into the Azure account
         run: bash tests/integration/gha-run.sh login-azure
