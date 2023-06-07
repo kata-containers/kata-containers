@@ -25,6 +25,7 @@ use crate::volume;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use base64::{engine::general_purpose, Engine as _};
 use core::fmt::Debug;
 use log::debug;
 use serde::{Deserialize, Serialize};
@@ -182,4 +183,43 @@ pub fn get_container_mounts_and_storages(
     }
 
     Ok(())
+}
+
+pub fn generate_policy(
+    rules: &str,
+    infra_policy: &infra::InfraPolicy,
+    config_maps: &Vec<config_map::ConfigMap>,
+    in_out_files: &utils::InOutFiles,
+    k8s_object: &dyn K8sObject,
+    registry_containers: &Vec<registry::Container>,
+    yaml_containers: &Vec<pod::Container>,
+) -> Result<String> {
+    let mut policy_containers = Vec::new();
+
+    for i in 0..yaml_containers.len() {
+        policy_containers.push(policy::get_container_policy(
+            k8s_object,
+            infra_policy,
+            config_maps,
+            &yaml_containers[i],
+            i == 0,
+            &registry_containers[i],
+        )?);
+    }
+
+    let policy_data = policy::PolicyData {
+        containers: policy_containers,
+    };
+
+    let json_data = serde_json::to_string_pretty(&policy_data)
+        .map_err(|e| anyhow!(e))
+        .unwrap();
+
+    let policy = rules.to_string() + "\npolicy_data := " + &json_data;
+
+    if let Some(file_name) = &in_out_files.output_policy_file {
+        policy::export_decoded_policy(&policy, &file_name)?;
+    }
+
+    Ok(general_purpose::STANDARD.encode(policy.as_bytes()))
 }

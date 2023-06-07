@@ -17,7 +17,6 @@ use crate::yaml;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -427,7 +426,8 @@ impl yaml::K8sObject for Pod {
                 storages,
                 container,
                 infra_policy,
-                volumes)
+                volumes,
+            )
         } else {
             Ok(())
         }
@@ -440,34 +440,16 @@ impl yaml::K8sObject for Pod {
         config_maps: &Vec<config_map::ConfigMap>,
         in_out_files: &utils::InOutFiles,
     ) -> Result<()> {
-        let mut policy_containers = Vec::new();
+        let encoded_policy = yaml::generate_policy(
+            rules,
+            infra_policy,
+            config_maps,
+            in_out_files,
+            self,
+            &self.registry_containers,
+            &self.spec.containers,
+        )?;
 
-        for i in 0..self.spec.containers.len() {
-            policy_containers.push(policy::get_container_policy(
-                self,
-                infra_policy,
-                config_maps,
-                &self.spec.containers[i],
-                i == 0,
-                &self.registry_containers[i],
-            )?);
-        }
-
-        let policy_data = policy::PolicyData {
-            containers: policy_containers,
-        };
-
-        let json_data = serde_json::to_string_pretty(&policy_data)
-            .map_err(|e| anyhow!(e))
-            .unwrap();
-
-        let policy = rules.to_string() + "\npolicy_data := " + &json_data;
-
-        if let Some(file_name) = &in_out_files.output_policy_file {
-            policy::export_decoded_policy(&policy, &file_name)?;
-        }
-
-        let encoded_policy = general_purpose::STANDARD.encode(policy.as_bytes());
         self.metadata.add_policy_annotation(&encoded_policy);
 
         // Remove the pause container before serializing.

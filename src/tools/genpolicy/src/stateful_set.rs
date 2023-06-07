@@ -17,9 +17,8 @@ use crate::registry;
 use crate::utils;
 use crate::yaml;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
-use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -149,6 +148,23 @@ impl yaml::K8sObject for StatefulSet {
         config_maps: &Vec<config_map::ConfigMap>,
         in_out_files: &utils::InOutFiles,
     ) -> Result<()> {
+        let encoded_policy = yaml::generate_policy(
+            rules,
+            infra_policy,
+            config_maps,
+            in_out_files,
+            self,
+            &self.registry_containers,
+            &self.spec.template.spec.containers,
+        )?;
+
+        self.spec.template.metadata.add_policy_annotation(&encoded_policy);
+
+        // Remove the pause container before serializing.
+        self.spec.template.spec.containers.remove(0);
+        Ok(())
+
+        /*
         let mut policy_containers = Vec::new();
 
         for i in 0..self.spec.template.spec.containers.len() {
@@ -184,6 +200,7 @@ impl yaml::K8sObject for StatefulSet {
 
         self.spec.template.spec.containers.remove(0);
         Ok(())
+        */
     }
 
     fn serialize(&mut self) -> Result<String> {
