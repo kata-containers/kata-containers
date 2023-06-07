@@ -76,7 +76,20 @@ pub trait K8sResource {
 pub struct LabelSelector {
     #[serde(skip_serializing_if = "Option::is_none")]
     matchLabels: Option<BTreeMap<String, String>>,
-    // TODO: additional fields.
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    matchExpressions: Option<Vec<LabelSelectorRequirement>>,
+}
+
+/// See Reference / Kubernetes API / Common Definitions / LabelSelector.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LabelSelectorRequirement {
+    key: String,
+    operator: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    values: Option<Vec<String>>,
 }
 
 /// Creates one of the supported K8s objects from a YAML string.

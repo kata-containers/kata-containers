@@ -55,6 +55,9 @@ pub struct PodSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub initContainers: Option<Vec<Container>>,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub affinity: Option<Affinity>,
+
     pub containers: Vec<Container>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -62,6 +65,9 @@ pub struct PodSpec {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub serviceAccountName: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub terminationGracePeriodSeconds: Option<i64>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -100,6 +106,43 @@ pub struct Container {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub readinessProbe: Option<Probe>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Affinity {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub podAntiAffinity: Option<PodAntiAffinity>,
+    // TODO: additional fields.
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PodAntiAffinity {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preferredDuringSchedulingIgnoredDuringExecution: Option<Vec<WeightedPodAffinityTerm>>,
+    // TODO: additional fields.
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WeightedPodAffinityTerm {
+    pub weight: i32,
+    pub podAffinityTerm: PodAffinityTerm,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PodAffinityTerm {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    labelSelector: Option<yaml::LabelSelector>,
+
+    topologyKey: String,
+    // TODO: additional fields.
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -390,12 +433,7 @@ impl EnvVar {
 #[async_trait]
 impl yaml::K8sResource for Pod {
     async fn init(&mut self, use_cache: bool, yaml: &str) -> Result<()> {
-        yaml::k8s_resource_init(
-            &mut self.spec,
-            &mut self.registry_containers,
-            use_cache,
-        )
-        .await?;
+        yaml::k8s_resource_init(&mut self.spec, &mut self.registry_containers, use_cache).await?;
         self.yaml = yaml.to_string();
         Ok(())
     }
@@ -463,7 +501,9 @@ impl yaml::K8sResource for Pod {
 
     fn serialize(&mut self) -> Result<String> {
         let mut resource: Self = serde_yaml::from_str(&self.yaml).unwrap();
-        resource.metadata.add_policy_annotation(&self.encoded_policy);
+        resource
+            .metadata
+            .add_policy_annotation(&self.encoded_policy);
         Ok(serde_yaml::to_string(&resource)?)
     }
 }
