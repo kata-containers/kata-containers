@@ -48,6 +48,9 @@ pub struct PodSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     runtimeClassName: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub initContainers: Option<Vec<Container>>,
+
     pub containers: Vec<Container>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -107,6 +110,12 @@ pub struct Probe {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeoutSeconds: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failureThreshold: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub successThreshold: Option<i32>,
     // TODO: additional fiels.
 }
 
