@@ -13,8 +13,10 @@ use crate::infra;
 use crate::job;
 use crate::list;
 use crate::no_policy_obj;
+use crate::pause_container;
 use crate::pod;
 use crate::policy;
+use crate::registry;
 use crate::replica_set;
 use crate::replication_controller;
 use crate::stateful_set;
@@ -148,4 +150,15 @@ pub fn get_input_yaml(yaml_file: &Option<String>) -> Result<String> {
 
 pub fn get_yaml_header(yaml: &str) -> Result<YamlHeader> {
     return Ok(serde_yaml::from_str(yaml)?);
+}
+
+pub async fn init_k8s_object(
+    yaml_containers: &mut Vec<pod::Container>,
+    registry_containers: &mut Vec<registry::Container>,
+    use_cached_files: bool,
+) -> Result<()> {
+    pause_container::add_pause_container(yaml_containers);
+    *registry_containers =
+        registry::get_registry_containers(use_cached_files, yaml_containers).await?;
+    Ok(())
 }

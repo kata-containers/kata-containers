@@ -9,7 +9,6 @@
 use crate::config_map;
 use crate::infra;
 use crate::obj_meta;
-use crate::pause_container;
 use crate::persistent_volume_claim;
 use crate::pod;
 use crate::pod_template;
@@ -57,13 +56,10 @@ pub struct StatefulSetSpec {
 #[async_trait]
 impl yaml::K8sObject for StatefulSet {
     async fn initialize(&mut self, use_cached_files: bool) -> Result<()> {
-        pause_container::add_pause_container(&mut self.spec.template.spec.containers);
-        self.registry_containers = registry::get_registry_containers(
-            use_cached_files,
-            &self.spec.template.spec.containers,
-        )
-        .await?;
-        Ok(())
+        yaml::init_k8s_object(
+            &mut self.spec.template.spec.containers,
+            &mut self.registry_containers,
+            use_cached_files).await
     }
 
     fn requires_policy(&self) -> bool {
