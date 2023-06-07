@@ -119,7 +119,7 @@ build_image() {
 	popd
 
 	protimg_source_dir="${image_source_dir}${prefix}/share/kata-containers"
-	local kernel_params=""
+	local kernel_params="${SE_KERNEL_PARAMS:-}"
 	if ! build_secure_image "${kernel_params}" "${protimg_source_dir}" "${install_dir}"; then
 		usage 1
 	fi

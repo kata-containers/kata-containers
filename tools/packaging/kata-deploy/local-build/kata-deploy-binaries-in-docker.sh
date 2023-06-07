@@ -122,6 +122,7 @@ docker run \
 	--env USE_CACHE="${USE_CACHE}" \
 	--env AA_KBC="${AA_KBC:-}" \
 	--env HKD_PATH="$(realpath "${HKD_PATH:-}" 2> /dev/null || true)" \
+	--env SE_KERNEL_PARAMS="${SE_KERNEL_PARAMS:-}" \
 	--env CROSS_BUILD="${CROSS_BUILD}" \
 	--env TARGET_ARCH="${TARGET_ARCH}" \
 	--env ARCH="${ARCH}" \
