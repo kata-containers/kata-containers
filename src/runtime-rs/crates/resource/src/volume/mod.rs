@@ -9,16 +9,18 @@ mod default_volume;
 pub mod hugepage;
 mod share_fs_volume;
 mod shm_volume;
-use async_trait::async_trait;
+pub mod utils;
 
-use crate::{share_fs::ShareFs, volume::block_volume::is_block_volume};
-use agent::Agent;
-use anyhow::{Context, Result};
-use hypervisor::device::device_manager::DeviceManager;
 use std::{sync::Arc, vec::Vec};
+
+use anyhow::{Context, Result};
+use async_trait::async_trait;
 use tokio::sync::RwLock;
 
 use self::hugepage::{get_huge_page_limits_map, get_huge_page_option};
+use crate::{share_fs::ShareFs, volume::block_volume::is_block_volume};
+use agent::Agent;
+use hypervisor::device::device_manager::DeviceManager;
 
 const BIND: &str = "bind";
 
@@ -66,7 +68,7 @@ impl VolumeResource {
                     shm_volume::ShmVolume::new(m, shm_size)
                         .with_context(|| format!("new shm volume {:?}", m))?,
                 )
-            } else if is_block_volume(m) {
+            } else if is_block_volume(m).context("block volume type")? {
                 // handle block volume
                 Arc::new(
                     block_volume::BlockVolume::new(d, m, read_only, cid, sid)
