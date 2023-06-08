@@ -310,7 +310,7 @@ impl InfraPolicy {
             } else if yaml_volume.persistentVolumeClaim.is_some() {
                 self.volume_claim_mount(yaml_mount, policy_mounts)?;
             } else if yaml_volume.hostPath.is_some() {
-                self.host_path_mount(yaml_mount, policy_mounts)?;
+                self.host_path_mount(yaml_mount, yaml_volume, policy_mounts)?;
             } else if yaml_volume.configMap.is_some() {
                 Self::config_map_mount_and_storage(
                     &infra_volumes,
@@ -495,27 +495,47 @@ impl InfraPolicy {
     fn host_path_mount(
         &self,
         yaml_mount: &pod::VolumeMount,
+        yaml_volume: &volume::Volume,
         policy_mounts: &mut Vec<oci::Mount>,
     ) -> Result<()> {
-        if let Some(file_name) = Path::new(&yaml_mount.mountPath).file_name() {
-            if let Some(file_name) = file_name.to_str() {
-                let mut source = self.shared_files.source_path.to_string();
-                source += file_name;
-                source += "$";
+        let host_path = yaml_volume.hostPath.as_ref().unwrap().path.clone();
+        let path = Path::new(&host_path);
 
-                policy_mounts.push(oci::Mount {
-                    destination: yaml_mount.mountPath.to_string(),
-                    r#type: "bind".to_string(),
-                    source,
-                    options: vec![
-                        "rbind".to_string(),
-                        "rprivate".to_string(),
-                        "rw".to_string(),
-                    ],
-                });
-            }
+        // TODO:
+        //
+        // - When volume.hostPath.path: /dev/ttyS0
+        //      "source": "/dev/ttyS0"
+        // - When volume.hostPath.path: /tmp/results
+        //      "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-results$"
+        //
+        // What is the reason for this source path difference in the Guest OS?
+        if path.starts_with("/dev/") {
+            policy_mounts.push(oci::Mount {
+                destination: yaml_mount.mountPath.to_string(),
+                r#type: "bind".to_string(),
+                source: host_path,
+                options: vec![
+                    "rbind".to_string(),
+                    "rprivate".to_string(),
+                    "rw".to_string(),
+                ],
+            });
+        } else {
+            let mut source = self.shared_files.source_path.to_string();
+            source += &path.file_name().unwrap().to_str().unwrap();
+            source += "$";
+
+            policy_mounts.push(oci::Mount {
+                destination: yaml_mount.mountPath.to_string(),
+                r#type: "bind".to_string(),
+                source,
+                options: vec![
+                    "rbind".to_string(),
+                    "rprivate".to_string(),
+                    "rw".to_string(),
+                ],
+            });
         }
-
         Ok(())
     }
 

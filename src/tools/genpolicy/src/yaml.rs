@@ -93,9 +93,7 @@ pub struct LabelSelectorRequirement {
 }
 
 /// Creates one of the supported K8s objects from a YAML string.
-pub fn new_k8s_resource(
-    yaml: &str,
-) -> Result<(boxed::Box<dyn K8sResource + Sync + Send>, String)> {
+pub fn new_k8s_resource(yaml: &str) -> Result<(boxed::Box<dyn K8sResource + Sync + Send>, String)> {
     let header = get_yaml_header(yaml)?;
     let kind: &str = &header.kind;
 
@@ -146,8 +144,15 @@ pub fn new_k8s_resource(
             debug!("{:#?}", &set);
             Ok((boxed::Box::new(set), header.kind))
         }
-        "ClusterRole" | "ClusterRoleBinding" | "LimitRange" | "Namespace" | "ResourceQuota"
-        | "Service" | "ServiceAccount" => {
+        "ClusterRole"
+        | "ClusterRoleBinding"
+        | "LimitRange"
+        | "Namespace"
+        | "PersistentVolume"
+        | "PersistentVolumeClaim"
+        | "ResourceQuota"
+        | "Service"
+        | "ServiceAccount" => {
             let no_policy = no_policy::NoPolicyResource {
                 yaml: yaml.to_string(),
             };
