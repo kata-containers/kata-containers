@@ -106,6 +106,9 @@ pub struct Container {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub readinessProbe: Option<Probe>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub livenessProbe: Option<Probe>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -163,6 +166,26 @@ pub struct Probe {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub successThreshold: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub httpGet: Option<HTTPGetAction>,
+    // TODO: additional fiels.
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HTTPGetAction {
+    pub port: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scheme: Option<String>,
     // TODO: additional fiels.
 }
 
