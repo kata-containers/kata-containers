@@ -128,10 +128,12 @@ func TestCloudHypervisorAddVSock(t *testing.T) {
 }
 
 func TestCloudHypervisorAddVfioDevice(t *testing.T) {
-	bdf := "02:10.1"
+	Id := "vfio123"
+	path := "/dev/vfio/101"
 
 	vfDevice := config.VFIOPCIDev{
-		BDF: bdf,
+		ID:       Id,
+		SysfsDev: path,
 	}
 	testCloudHypervisorAddDevice(t, vfDevice)
 }
@@ -141,7 +143,13 @@ func testCloudHypervisorAddDevice(t *testing.T, structure interface{}) {
 	clh := cloudHypervisor{}
 	switch s := structure.(type) {
 	case config.VFIODev:
+		Id := "vfio123"
+		path := "/dev/vfio/101"
 		err := clh.addVfioDevice(s)
+
+		assert.Equal(*s.GetID(), Id)
+		assert.Equal(*s.GetSysfsDev(), path)
+
 		assert.Nil(err)
 	}
 }

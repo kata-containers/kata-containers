@@ -48,7 +48,7 @@ For a comprehensive (and guaranteed up to date) list, please run `log-parser-rs 
 
 ## Usage
 
-1. Make sure containerd is in [debug mode](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#enabling-full-containerd-debug)
+1. Make sure containerd is in [debug mode](https://github.com/kata-containers/kata-containers/blob/main/docs/Developer-Guide.md#enabling-full-containerd-debug)
 1. Make sure you are running runtime-rs:
    ```
    $ containerd-shim-kata-v2 --version|grep -qi rust && echo rust || echo golang

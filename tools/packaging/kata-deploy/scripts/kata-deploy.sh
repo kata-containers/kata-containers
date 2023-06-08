@@ -92,6 +92,20 @@ function configure_cri_runtime() {
 	wait_till_node_is_ready
 }
 
+function backup_shim() {
+	local shim_file="$1"
+	local shim_backup="${shim_file}.bak"
+
+	if [ -f "${shim_file}" ]; then
+		echo "warning: ${shim_file} already exists" >&2
+		if [ ! -f "${shim_backup}" ]; then
+			mv "${shim_file}" "${shim_backup}"
+		else
+			rm "${shim_file}"
+		fi
+	fi
+}
+
 function configure_different_shims_base() {
 	# Currently containerd has an assumption on the location of the shimv2 implementation
 	# This forces kata-deploy to create files in a well-defined location that's part of
@@ -100,21 +114,15 @@ function configure_different_shims_base() {
 	#   https://github.com/containerd/containerd/issues/3073
 	#   https://github.com/containerd/containerd/issues/5006
 
+	local default_shim_file="/usr/local/bin/containerd-shim-kata-v2"
+
 	mkdir -p /usr/local/bin
 
 	for shim in "${shims[@]}"; do
 		local shim_binary="containerd-shim-kata-${shim}-v2"
 		local shim_file="/usr/local/bin/${shim_binary}"
-		local shim_backup="/usr/local/bin/${shim_binary}.bak"
 
-		if [ -f "${shim_file}" ]; then
-			echo "warning: ${shim_binary} already exists" >&2
-			if [ ! -f "${shim_backup}" ]; then
-				mv "${shim_file}" "${shim_backup}"
-			else
-				rm "${shim_file}"
-			fi
-		fi
+		backup_shim "${shim_file}"
 
 		if [[ "${shim}" == "dragonball" ]]; then
 			ln -sf /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 "${shim_file}"
@@ -124,26 +132,37 @@ function configure_different_shims_base() {
 		chmod +x "$shim_file"
 
 		if [ "${shim}" == "${default_shim}" ]; then
+			backup_shim "${default_shim_file}"
+
 			echo "Creating the default shim-v2 binary"
-			ln -sf "${shim_file}" /usr/local/bin/containerd-shim-kata-v2
+			ln -sf "${shim_file}" "${default_shim_file}"
 		fi
 	done
 }
 
+function restore_shim() {
+	local shim_file="$1"
+	local shim_backup="${shim_file}.bak"
+
+	if [ -f "${shim_backup}" ]; then
+		mv "$shim_backup" "$shim_file"
+	fi
+}
+
 function cleanup_different_shims_base() {
+	local default_shim_file="/usr/local/bin/containerd-shim-kata-v2"
+
 	for shim in "${shims[@]}"; do
 		local shim_binary="containerd-shim-kata-${shim}-v2"
 		local shim_file="/usr/local/bin/${shim_binary}"
-		local shim_backup="/usr/local/bin/${shim_binary}.bak"
 
 		rm "${shim_file}" || true
 
-		if [ -f "${shim_backup}" ]; then
-			mv "$shim_backup" "$shim_file"
-		fi
+		restore_shim "${shim_file}"
 	done
 
-	rm /usr/local/bin/containerd-shim-kata-v2
+	rm "${default_shim_file}" || true
+	restore_shim "${default_shim_file}"
 }
 
 function configure_crio_runtime() {

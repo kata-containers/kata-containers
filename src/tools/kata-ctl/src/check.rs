@@ -12,6 +12,7 @@ use nix::unistd::close;
 use nix::{ioctl_write_int_bad, request_code_none};
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use serde::{Deserialize, Serialize};
+use slog::{info, o};
 use std::fmt;
 use thiserror::Error;
 
@@ -50,6 +51,12 @@ pub const GENERIC_CPU_MODEL_FIELD: &str = "model name";
 
 #[allow(dead_code)]
 pub const PROC_CPUINFO: &str = "/proc/cpuinfo";
+
+macro_rules! sl {
+    () => {
+        slog_scope::logger().new(o!("subsystem" => "check"))
+    };
+}
 
 fn read_file_contents(file_path: &str) -> Result<String> {
     let contents = std::fs::read_to_string(file_path)?;
@@ -276,14 +283,20 @@ pub fn check_all_releases() -> Result<()> {
 
     for release in releases {
         if !release.prerelease {
-            println!(
+            info!(
+                sl!(),
                 "Official  : Release {:15}; created {} ; {}",
-                release.tag_name, release.created_at, release.tarball_url
+                release.tag_name,
+                release.created_at,
+                release.tarball_url
             );
         } else {
-            println!(
+            info!(
+                sl!(),
                 "PreRelease: Release {:15}; created {} ; {}",
-                release.tag_name, release.created_at, release.tarball_url
+                release.tag_name,
+                release.created_at,
+                release.tarball_url
             );
         }
     }
@@ -294,12 +307,15 @@ pub fn check_official_releases() -> Result<()> {
     let releases: Vec<Release> =
         get_kata_all_releases_by_url(KATA_GITHUB_RELEASE_URL).map_err(handle_reqwest_error)?;
 
-    println!("Official Releases...");
+    info!(sl!(), "Official Releases...");
     for release in releases {
         if !release.prerelease {
-            println!(
+            info!(
+                sl!(),
                 "Release {:15}; created {} ; {}",
-                release.tag_name, release.created_at, release.tarball_url
+                release.tag_name,
+                release.created_at,
+                release.tarball_url
             );
         }
     }
@@ -392,6 +408,7 @@ pub fn check_kernel_module_loaded(module: &str, parameter: &str) -> Result<Strin
 mod tests {
     use super::*;
     use semver::Version;
+    use slog::warn;
     use std::fs;
     use std::io::Write;
     use tempfile::tempdir;
@@ -573,8 +590,9 @@ mod tests {
         // sometime in GitHub action accessing to github.com API may fail
         // we can skip this test to prevent the whole test fail.
         if releases.is_err() {
-            println!(
-                "WARNING!!!\nget kata version failed({:?}), this maybe a temporary error, just skip the test.",
+            warn!(
+                sl!(),
+                "get kata version failed({:?}), this maybe a temporary error, just skip the test.",
                 releases.unwrap_err()
             );
             return;

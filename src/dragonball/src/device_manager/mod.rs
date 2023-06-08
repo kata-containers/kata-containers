@@ -714,6 +714,14 @@ impl DeviceManager {
 
         #[cfg(feature = "virtio-blk")]
         self.block_manager.remove_devices(&mut ctx)?;
+        // FIXME: To acquire the full abilities for gracefully removing
+        // virtio-net and virtio-vsock devices, updating dragonball-sandbox
+        // is required.
+        #[cfg(feature = "virtio-net")]
+        self.virtio_net_manager.remove_devices(&mut ctx)?;
+        #[cfg(feature = "virtio-vsock")]
+        self.vsock_manager.remove_devices(&mut ctx)?;
+
         Ok(())
     }
 }
@@ -1011,6 +1019,7 @@ mod tests {
     use vm_memory::{GuestAddress, MmapRegion};
 
     use super::*;
+    #[cfg(target_arch = "x86_64")]
     use crate::vm::CpuTopology;
 
     impl DeviceManager {

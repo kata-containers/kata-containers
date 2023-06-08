@@ -15,7 +15,7 @@ bytes = "1.1.0"
 dbs-address-space = "0.2.0"
 dbs-allocator = "0.1.0"
 dbs-arch = "0.2.0"
-dbs-boot = "0.3.0"
+dbs-boot = "0.4.0"
 dbs-device = "0.2.0"
 dbs-interrupt = { version = "0.2.0", features = ["kvm-irq"] }
 dbs-legacy-devices = "0.1.0"

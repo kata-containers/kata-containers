@@ -55,6 +55,7 @@ docker run \
 	-v "${kata_dir}:${kata_dir}" \
 	--env CI="${CI:-}" \
 	--env USER=${USER} \
+	--env BUILDER_REGISTRY="${BUILDER_REGISTRY:-}" \
 	--env PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-"no"}" \
 	--env INITRAMFS_CONTAINER_BUILDER="${INITRAMFS_CONTAINER_BUILDER:-}" \
 	--env KERNEL_CONTAINER_BUILDER="${KERNEL_CONTAINER_BUILDER:-}" \

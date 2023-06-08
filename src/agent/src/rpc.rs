@@ -603,15 +603,16 @@ impl AgentService {
         let cid = req.container_id;
         let eid = req.exec_id;
 
-        let mut term_exit_notifier = Arc::new(tokio::sync::Notify::new());
+        let term_exit_notifier;
         let reader = {
             let s = self.sandbox.clone();
             let mut sandbox = s.lock().await;
 
             let p = sandbox.find_container_process(cid.as_str(), eid.as_str())?;
 
+            term_exit_notifier = p.term_exit_notifier.clone();
+
             if p.term_master.is_some() {
-                term_exit_notifier = p.term_exit_notifier.clone();
                 p.get_reader(StreamType::TermMaster)
             } else if stdout {
                 if p.parent_stdout.is_some() {

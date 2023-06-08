@@ -83,7 +83,7 @@ jobs:
       - name: push amd64 static tarball to github
         run: |
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          tarball="kata-static-$tag-x86_64.tar.xz"
+          tarball="kata-static-$tag-amd64.tar.xz"
           mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
           pushd $GITHUB_WORKSPACE
           echo "uploading asset '${tarball}' for tag: ${tag}"
@@ -97,7 +97,7 @@ jobs:
       - name: push arm64 static tarball to github
         run: |
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          tarball="kata-static-$tag-aarch64.tar.xz"
+          tarball="kata-static-$tag-arm64.tar.xz"
           mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
           pushd $GITHUB_WORKSPACE
           echo "uploading asset '${tarball}' for tag: ${tag}"

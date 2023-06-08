@@ -11,12 +11,12 @@ mod share_fs_volume;
 mod shm_volume;
 use async_trait::async_trait;
 
+use crate::{share_fs::ShareFs, volume::block_volume::is_block_volume};
+use agent::Agent;
 use anyhow::{Context, Result};
 use hypervisor::device::device_manager::DeviceManager;
 use std::{sync::Arc, vec::Vec};
 use tokio::sync::RwLock;
-
-use crate::{share_fs::ShareFs, volume::block_volume::is_block_volume};
 
 use self::hugepage::{get_huge_page_limits_map, get_huge_page_option};
 
@@ -52,6 +52,7 @@ impl VolumeResource {
         spec: &oci::Spec,
         d: &RwLock<DeviceManager>,
         sid: &str,
+        agent: Arc<dyn Agent>,
     ) -> Result<Vec<Arc<dyn Volume>>> {
         let mut volumes: Vec<Arc<dyn Volume>> = vec![];
         let oci_mounts = &spec.mounts;
@@ -85,7 +86,7 @@ impl VolumeResource {
                 )
             } else if share_fs_volume::is_share_fs_volume(m) {
                 Arc::new(
-                    share_fs_volume::ShareFsVolume::new(share_fs, m, cid, read_only)
+                    share_fs_volume::ShareFsVolume::new(share_fs, m, cid, read_only, agent.clone())
                         .await
                         .with_context(|| format!("new share fs volume {:?}", m))?,
                 )

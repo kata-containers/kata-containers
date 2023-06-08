@@ -682,9 +682,9 @@ dependencies = [
 
 [[package]]
 name = "dbs-boot"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a74a8c05a1674d3032e610b4f201c7440c345559bad3dfe6b455ce195785108"
+checksum = "5466a92f75aa928a9103dcb2088f6d1638ef9da8945fad7389a73864dfa0182c"
 dependencies = [
  "dbs-arch",
  "kvm-bindings",
@@ -1460,7 +1460,7 @@ dependencies = [
  "nix 0.24.3",
  "oci",
  "once_cell",
- "rand 0.7.3",
+ "rand 0.8.5",
  "serde_json",
  "slog",
  "slog-scope",
@@ -1481,6 +1481,7 @@ dependencies = [
  "num_cpus",
  "oci",
  "regex",
+ "safe-path 0.1.0",
  "serde",
  "serde_json",
  "slog",
