@@ -492,7 +492,7 @@ install_cc_sev_kernel() {
 install_cc_tee_qemu() {
 	tee="${1}"
 
-	[[ "${tee}" != "tdx" && "${tee}" != "snp" ]] && die "Non supported TEE"
+	[ "${tee}" != "tdx" ] && die "Non supported TEE"
 
 	export qemu_repo="$(yq r $versions_yaml assets.hypervisor.qemu.${tee}.url)"
 	export qemu_version="$(yq r $versions_yaml assets.hypervisor.qemu.${tee}.tag)"
@@ -513,10 +513,6 @@ install_cc_tee_qemu() {
 
 install_cc_tdx_qemu() {
 	install_cc_tee_qemu "tdx"
-}
-
-install_cc_snp_qemu() {
-	install_cc_tee_qemu "snp"
 }
 
 install_cc_tdx_td_shim() {
@@ -1002,7 +998,7 @@ handle_build() {
 
 	cc-qemu) install_cc_qemu ;;
 
-	cc-snp-qemu) install_cc_snp_qemu ;;
+	cc-snp-qemu) install_qemu_snp_experimental ;;
 
 	cc-rootfs-image) install_cc_image ;;
 
