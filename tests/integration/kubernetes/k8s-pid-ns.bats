@@ -25,17 +25,22 @@ setup() {
 
 	# Check PID from first container
 	first_pid_container=$(kubectl exec $pod_name -c $first_container_name \
-		-- ps | grep "/pause")
+		-- ps | grep "/pause") || echo "#=========first_pid_container=$first_pid_container" >&3
+
 	# Verify that is not empty
 	check_first_pid=$(echo $first_pid_container | wc -l)
 	[ "$check_first_pid" == "1" ]
 
+	tmp=$(kubectl exec $pod_name -c $second_container_name -- ps)
+	echo "#----------$tmp" >&3
 	# Check PID from second container
 	second_pid_container=$(kubectl exec $pod_name -c $second_container_name \
-		-- ps | grep "/pause")
+		-- ps | grep "/pause") || echo "#========second_pid_container=$second_pid_container" >&3
+
 	# Verify that is not empty
 	check_second_pid=$(echo $second_pid_container | wc -l)
 	[ "$check_second_pid" == "1" ]
+	
 
 	[ "$first_pid_container" == "$second_pid_container" ]
 }

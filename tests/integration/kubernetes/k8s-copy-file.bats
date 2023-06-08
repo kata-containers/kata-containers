@@ -68,6 +68,9 @@ setup() {
 	# Copy file from pod to host
 	kubectl cp "$pod_name":/tmp/"$file_name" "$file_name"
 
+	echo "# ===============cat $file_name =========" >&3
+	cat $file_name >&3
+	echo "# ============end" >&3
 	# Verify content
 	cat "$file_name" | grep "$content"
 }
