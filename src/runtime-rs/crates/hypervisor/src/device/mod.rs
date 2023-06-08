@@ -53,7 +53,7 @@ pub trait Device: Send + Sync {
     // detach is to unplug device from VM
     async fn detach(&mut self, h: &dyn hypervisor) -> Result<Option<u64>>;
     // get_device_info returns device config
-    async fn get_device_info(&self) -> DeviceConfig;
+    async fn get_device_info(&self) -> DeviceType;
     // increase_attach_count is used to increase the attach count for a device
     // return values:
     // * true: no need to do real attach when current attach count is zero, skip following actions.

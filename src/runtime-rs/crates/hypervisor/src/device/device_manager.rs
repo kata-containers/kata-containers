@@ -8,18 +8,20 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::rand::RandomBytes;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 
+use super::{
+    util::{get_host_path, get_virt_drive_name},
+    Device, DeviceConfig, DeviceType,
+};
 use crate::{
     BlockConfig, BlockDevice, Hypervisor, KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
     VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI,
 };
 
-use super::{
-    util::{get_host_path, get_virt_drive_name},
-    Device, DeviceConfig,
-};
 pub type ArcMutexDevice = Arc<Mutex<dyn Device>>;
+
+const DEVICE_TYPE_BLOCK: &str = "b";
 
 /// block_index and released_block_index are used to search an available block index
 /// in Sandbox.
@@ -75,35 +77,27 @@ impl DeviceManager {
         })
     }
 
-    pub async fn new_device(&mut self, device_config: &DeviceConfig) -> Result<String> {
-        let device_id = if let Some(dev) = self.find_device(device_config).await {
-            dev
-        } else {
-            self.create_device(device_config)
-                .await
-                .context("failed to create device")?
-        };
-        Ok(device_id)
-    }
-
-    pub async fn try_add_device(&mut self, device_id: &str) -> Result<()> {
+    async fn try_add_device(&mut self, device_id: &str) -> Result<()> {
         // find the device
         let device = self
             .devices
             .get(device_id)
             .context("failed to find device")?;
-        let mut device_guard = device.lock().await;
+
         // attach device
+        let mut device_guard = device.lock().await;
         let result = device_guard.attach(self.hypervisor.as_ref()).await;
+
         // handle attach error
         if let Err(e) = result {
-            if let DeviceConfig::BlockCfg(config) = device_guard.get_device_info().await {
-                self.shared_info.release_device_index(config.index);
+            if let DeviceType::Block(device) = device_guard.get_device_info().await {
+                self.shared_info.release_device_index(device.config.index);
             };
             drop(device_guard);
             self.devices.remove(device_id);
             return Err(e);
         }
+
         Ok(())
     }
 
@@ -120,66 +114,97 @@ impl DeviceManager {
                 }
                 Err(e) => Err(e),
             };
+
+            // if detach success, remove it from device manager
             if result.is_ok() {
                 drop(device_guard);
-                // if detach success, remove it from device manager
                 self.devices.remove(device_id);
             }
+
             return result;
         }
+
         Err(anyhow!(
             "device with specified ID hasn't been created. {}",
             device_id
         ))
     }
 
-    pub async fn get_device_info(&self, device_id: &str) -> Result<DeviceConfig> {
+    async fn get_device_info(&self, device_id: &str) -> Result<DeviceType> {
         if let Some(dev) = self.devices.get(device_id) {
             return Ok(dev.lock().await.get_device_info().await);
         }
+
         Err(anyhow!(
             "device with specified ID hasn't been created. {}",
             device_id
         ))
     }
 
-    async fn find_device(&self, device_config: &DeviceConfig) -> Option<String> {
+    async fn find_device(&self, host_path: String) -> Option<String> {
         for (device_id, dev) in &self.devices {
             match dev.lock().await.get_device_info().await {
-                DeviceConfig::BlockCfg(config) => match device_config {
-                    DeviceConfig::BlockCfg(ref config_new) => {
-                        if config_new.path_on_host == config.path_on_host {
-                            return Some(device_id.to_string());
-                        }
+                DeviceType::Block(device) => {
+                    if device.config.path_on_host == host_path {
+                        return Some(device_id.to_string());
                     }
-                    _ => {
-                        continue;
-                    }
-                },
+                }
                 _ => {
                     // TODO: support find other device type
                     continue;
                 }
             }
         }
+
         None
     }
 
-    async fn create_device(&mut self, device_config: &DeviceConfig) -> Result<String> {
+    fn get_dev_virt_path(&mut self, dev_type: &str) -> Result<Option<(u64, String)>> {
+        let virt_path = if dev_type == DEVICE_TYPE_BLOCK {
+            // generate virt path
+            let current_index = self.shared_info.declare_device_index()?;
+            let drive_name = get_virt_drive_name(current_index as i32)?;
+            let virt_path_name = format!("/dev/{}", drive_name);
+
+            Some((current_index, virt_path_name))
+        } else {
+            // only dev_type is block, otherwise, it's useless.
+            None
+        };
+
+        Ok(virt_path)
+    }
+
+    async fn new_device(&mut self, device_config: &DeviceConfig) -> Result<String> {
         // device ID must be generated by manager instead of device itself
         // in case of ID collision
         let device_id = self.new_device_id()?;
         let dev: ArcMutexDevice = match device_config {
-            DeviceConfig::BlockCfg(config) => self
-                .create_block_device(config, device_id.clone())
-                .await
-                .context("failed to create device")?,
+            DeviceConfig::BlockCfg(config) => {
+                // try to find the device, found and just return id.
+                if let Some(dev_id_matched) = self.find_device(config.path_on_host.clone()).await {
+                    info!(
+                        sl!(),
+                        "device with host path:{:?} found. just return device id: {:?}",
+                        config.path_on_host.clone(),
+                        dev_id_matched
+                    );
+
+                    return Ok(dev_id_matched);
+                }
+
+                self.create_block_device(config, device_id.clone())
+                    .await
+                    .context("failed to create device")?
+            }
             _ => {
                 return Err(anyhow!("invliad device type"));
             }
         };
+
         // register device to devices
         self.devices.insert(device_id.clone(), dev.clone());
+
         Ok(device_id)
     }
 
@@ -204,17 +229,23 @@ impl DeviceManager {
             _ => "".to_string(),
         };
         block_config.driver_option = block_driver;
-        // generate virt path
-        let current_index = self.shared_info.declare_device_index()?;
-        block_config.index = current_index;
-        let drive_name = get_virt_drive_name(current_index as i32)?;
-        block_config.virt_path = format!("/dev/{}", drive_name);
-        // if the path on host is empty, we need to get device host path from the device major and minor number
-        // Otherwise, it might be rawfile based block device, the host path is already passed from the runtime, so we don't need to do anything here
-        if block_config.path_on_host.is_empty() {
-            block_config.path_on_host = get_host_path("b".to_owned(), config.major, config.minor)
-                .context("failed to get host path")?;
+
+        // generate block device index and virt path
+        // safe here, Block device always has virt_path.
+        if let Some(virt_path) = self.get_dev_virt_path(DEVICE_TYPE_BLOCK)? {
+            block_config.index = virt_path.0;
+            block_config.virt_path = virt_path.1;
         }
+
+        // if the path on host is empty, we need to get device host path from the device major and minor number
+        // Otherwise, it might be rawfile based block device, the host path is already passed from the runtime,
+        // so we don't need to do anything here
+        if block_config.path_on_host.is_empty() {
+            block_config.path_on_host =
+                get_host_path(DEVICE_TYPE_BLOCK.to_owned(), config.major, config.minor)
+                    .context("failed to get host path")?;
+        }
+
         Ok(Arc::new(Mutex::new(BlockDevice::new(
             device_id,
             block_config,
@@ -236,4 +267,37 @@ impl DeviceManager {
 
         Err(anyhow!("ID are exhausted"))
     }
+}
+
+// Many scenarios have similar steps when adding devices. so to reduce duplicated code,
+// we should create a common method abstracted and use it in various scenarios.
+// do_handle_device:
+// (1) new_device with DeviceConfig and return device_id;
+// (2) try_add_device with device_id and do really add device;
+// (3) return device info of device's info;
+pub async fn do_handle_device(
+    d: &RwLock<DeviceManager>,
+    dev_info: &DeviceConfig,
+) -> Result<DeviceType> {
+    let device_id = d
+        .write()
+        .await
+        .new_device(dev_info)
+        .await
+        .context("failed to create deviec")?;
+
+    d.write()
+        .await
+        .try_add_device(&device_id)
+        .await
+        .context("failed to add deivce")?;
+
+    let device_info = d
+        .read()
+        .await
+        .get_device_info(&device_id)
+        .await
+        .context("failed to get device info")?;
+
+    Ok(device_info)
 }

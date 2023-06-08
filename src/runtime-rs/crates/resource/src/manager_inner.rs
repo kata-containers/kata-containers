@@ -12,7 +12,10 @@ use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
 
 use hypervisor::{
-    device::{device_manager::DeviceManager, DeviceConfig},
+    device::{
+        device_manager::{do_handle_device, DeviceManager},
+        DeviceConfig, DeviceType,
+    },
     BlockConfig, Hypervisor,
 };
 use kata_types::config::TomlConfig;
@@ -266,42 +269,23 @@ impl ResourceManagerInner {
         for d in linux.devices.iter() {
             match d.r#type.as_str() {
                 "b" => {
-                    let device_info = DeviceConfig::BlockCfg(BlockConfig {
+                    let dev_info = DeviceConfig::BlockCfg(BlockConfig {
                         major: d.major,
                         minor: d.minor,
                         ..Default::default()
                     });
-                    let device_id = self
-                        .device_manager
-                        .write()
-                        .await
-                        .new_device(&device_info)
-                        .await
-                        .context("failed to create deviec")?;
 
-                    self.device_manager
-                        .write()
+                    let device_info = do_handle_device(&self.device_manager, &dev_info)
                         .await
-                        .try_add_device(&device_id)
-                        .await
-                        .context("failed to add deivce")?;
-
-                    // get complete device information
-                    let dev_info = self
-                        .device_manager
-                        .read()
-                        .await
-                        .get_device_info(&device_id)
-                        .await
-                        .context("failed to get device info")?;
+                        .context("do handle device")?;
 
                     // create agent device
-                    if let DeviceConfig::BlockCfg(config) = dev_info {
+                    if let DeviceType::Block(device) = device_info {
                         let agent_device = Device {
-                            id: device_id.clone(),
+                            id: device.device_id.clone(),
                             container_path: d.path.clone(),
-                            field_type: config.driver_option,
-                            vm_path: config.virt_path,
+                            field_type: device.config.driver_option,
+                            vm_path: device.config.virt_path,
                             ..Default::default()
                         };
                         devices.push(agent_device);

@@ -6,7 +6,7 @@
 
 pub const VIRTIO_BLOCK_MMIO: &str = "virtio-blk-mmio";
 use crate::device::Device;
-use crate::device::{DeviceConfig, DeviceType};
+use crate::device::DeviceType;
 use crate::Hypervisor as hypervisor;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -98,8 +98,8 @@ impl Device for BlockDevice {
         Ok(Some(self.config.index))
     }
 
-    async fn get_device_info(&self) -> DeviceConfig {
-        DeviceConfig::BlockCfg(self.config.clone())
+    async fn get_device_info(&self) -> DeviceType {
+        DeviceType::Block(self.clone())
     }
 
     async fn increase_attach_count(&mut self) -> Result<bool> {
