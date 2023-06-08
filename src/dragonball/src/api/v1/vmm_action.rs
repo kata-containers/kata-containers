@@ -486,7 +486,9 @@ impl VmmService {
                 VmmActionError::Block(BlockDeviceError::UpdateNotAllowedPostBoot)
             })?;
 
-        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, config)
+        vm.device_manager_mut()
+            .block_manager
+            .insert_device(ctx, config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::Block)
     }
@@ -500,7 +502,9 @@ impl VmmService {
     ) -> VmmRequestResult {
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
 
-        BlockDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), config)
+        vm.device_manager_mut()
+            .block_manager
+            .update_device_ratelimiters(config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::Block)
     }
@@ -518,7 +522,9 @@ impl VmmService {
             .create_device_op_context(Some(event_mgr.epoll_manager()))
             .map_err(|_| VmmActionError::Block(BlockDeviceError::UpdateNotAllowedPostBoot))?;
 
-        BlockDeviceMgr::remove_device(vm.device_manager_mut(), ctx, drive_id)
+        vm.device_manager_mut()
+            .block_manager
+            .remove_device(ctx, drive_id)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::Block)
     }
@@ -543,7 +549,9 @@ impl VmmService {
                 }
             })?;
 
-        VirtioNetDeviceMgr::insert_device(vm.device_manager_mut(), ctx, config)
+        vm.device_manager_mut()
+            .virtio_net_manager
+            .insert_device(ctx, config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::VirtioNet)
     }
@@ -556,7 +564,9 @@ impl VmmService {
     ) -> VmmRequestResult {
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
 
-        VirtioNetDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), config)
+        vm.device_manager_mut()
+            .virtio_net_manager
+            .update_device_ratelimiters(config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::VirtioNet)
     }
@@ -616,12 +626,6 @@ impl VmmService {
 
     #[cfg(feature = "hotplug")]
     fn resize_vcpu(&mut self, vmm: &mut Vmm, config: VcpuResizeInfo) -> VmmRequestResult {
-        if !cfg!(target_arch = "x86_64") {
-            // TODO: Arm need to support vcpu hotplug. issue: #6010
-            warn!("This arch do not support vm resize!");
-            return Ok(VmmData::Empty);
-        }
-
         if !cfg!(feature = "dbs-upcall") {
             warn!("We only support cpu resize through upcall server in the guest kernel now, please enable dbs-upcall feature.");
             return Ok(VmmData::Empty);

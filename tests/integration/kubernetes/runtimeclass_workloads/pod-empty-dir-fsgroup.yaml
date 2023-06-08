@@ -16,6 +16,8 @@ spec:
   containers:
   - name: mounttest-container
     image: ${agnhost_image}
+    command:
+      - /agnhost
     args:
       - mounttest
       - --fs_type=/test-volume
@@ -27,6 +29,8 @@ spec:
         mountPath: /test-volume
   - name: mounttest-container-2
     image: ${agnhost_image}
+    command:
+      - /agnhost
     args:
       - mounttest
       - --fs_type=/test-volume-2

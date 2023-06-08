@@ -1,0 +1,139 @@
+From a05086142be13d43c7fc92500bcb870a2f37e485 Mon Sep 17 00:00:00 2001
+Message-Id: <a05086142be13d43c7fc92500bcb870a2f37e485.1685428663.git.jiyunxue@linux.alibaba.com>
+In-Reply-To: <16e3b3da9fb8b79b006d8c9d1f68b2dec9980d72.1685428663.git.jiyunxue@linux.alibaba.com>
+References: <16e3b3da9fb8b79b006d8c9d1f68b2dec9980d72.1685428663.git.jiyunxue@linux.alibaba.com>
+From: xuejun-xj <jiyunxue@linux.alibaba.com>
+Date: Tue, 23 May 2023 09:43:02 +0800
+Subject: [PATCH 3/3] smp: update bringup_nonboot_cpus parameters
+
+On aarch64, kvm doesn't allow vmm to call KVM_CREATE_VCPU ioctls after
+vm has already started, which is caused by vgic_initialized check in
+kvm_arch_vcpu_precreate() function. Therefore, to support vcpu hotplug
+feature on aarch64, all the vcpus should be created and configured ready
+for start at booting procedure.
+
+To solve the problem, dragonball will add a property in each cpu node,
+called "boot-onlined". This property indicates whether this cpu should
+be onlined at first boot. It has two values: 0 and 1. 0 means offline,
+while 1 means online.
+
+This commit also add a helper function called "of_get_cpu_boot_onlined",
+which parse the cpu node and get the value of boot-onlined property.
+Then update the global variable "boot_onlined_cpu".
+
+When kernel calling smp_init(), bringup_nonboot_cpus will start all the
+other cpus except cpu0. The activated cpu number equals setup_max_cpus.
+In vcpu hotplug scenario, vmm will create all the vcpufd before vm is
+initialized, while activating only a few vcpus at first boot. The
+setup_max_cpus variable will be initialized as all vcpu count. This
+cause that the other cpus cannot find enough cpu threads, and they will
+wait for 5 seconds each cpu.
+
+Therefore, we use boot_onlined_cpu instead of setup_max_cpus to give
+"bringup_nonboot_cpus" correct cpu number it needs.
+
+Signed-off-by: xuejun-xj <jiyunxue@linux.alibaba.com>
+---
+ .../devicetree/bindings/arm/cpus.yaml         | 11 +++++++++
+ arch/arm64/kernel/smp.c                       | 24 +++++++++++++++++++
+ kernel/smp.c                                  | 10 +++++++-
+ 3 files changed, 44 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/devicetree/bindings/arm/cpus.yaml b/Documentation/devicetree/bindings/arm/cpus.yaml
+index 14cd727d3c4b..691bb352d842 100644
+--- a/Documentation/devicetree/bindings/arm/cpus.yaml
++++ b/Documentation/devicetree/bindings/arm/cpus.yaml
+@@ -316,6 +316,17 @@ properties:
+       formed by encoding the target CPU id into the low bits of the
+       physical start address it should jump to.
+ 
++  boot-onlined:
++    $ref: '/schemas/types.yaml#/definitions/uint32'
++    description: |
++      The boot-onlined property is an optional u32 value that indicates
++      whether the cpu device should be activated at first boot. This is
++      useful in vcpu hotplug scenario to pass correct value of activated
++      cpu number.
++
++      This property has two values: 0 and 1. 1 means the cpu should be
++      activated while 0 means it shouldn't.
++
+ if:
+   # If the enable-method property contains one of those values
+   properties:
+diff --git a/arch/arm64/kernel/smp.c b/arch/arm64/kernel/smp.c
+index 18e9727d3f64..5db8041929a6 100644
+--- a/arch/arm64/kernel/smp.c
++++ b/arch/arm64/kernel/smp.c
+@@ -464,6 +464,27 @@ void __init smp_prepare_boot_cpu(void)
+ 		init_gic_priority_masking();
+ }
+ 
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU) && defined(CONFIG_ARM64)
++extern unsigned int boot_onlined_cpu;
++static void __init of_get_cpu_boot_onlined(struct device_node *dn)
++{
++	unsigned int boot_onlined;
++	int r;
++
++	r = of_property_read_u32(dn, "boot-onlined", &boot_onlined);
++	if (r) {
++		pr_err("%pOF: missing boot-onlined property\n", dn);
++		return;
++	}
++	/*
++	 * Property boot-onlined has two values: 0 and 1.
++	 * 0 means offline, and 1 means online.
++	 * Here just count the number of boot_onlined_cpu.
++	 */
++	boot_onlined_cpu += boot_onlined;
++}
++#endif
++
+ static u64 __init of_get_cpu_mpidr(struct device_node *dn)
+ {
+ 	const __be32 *cell;
+@@ -654,6 +675,9 @@ static void __init of_parse_and_init_cpus(void)
+ 	struct device_node *dn;
+ 
+ 	for_each_of_cpu_node(dn) {
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU) && defined(CONFIG_ARM64)
++		of_get_cpu_boot_onlined(dn);
++#endif
+ 		u64 hwid = of_get_cpu_mpidr(dn);
+ 
+ 		if (hwid == INVALID_HWID)
+diff --git a/kernel/smp.c b/kernel/smp.c
+index 25240fb2df94..567615b9a008 100644
+--- a/kernel/smp.c
++++ b/kernel/smp.c
+@@ -801,17 +801,25 @@ void __init setup_nr_cpu_ids(void)
+ 	nr_cpu_ids = find_last_bit(cpumask_bits(cpu_possible_mask),NR_CPUS) + 1;
+ }
+ 
++/* Setup number of CPUs to activate */
++unsigned int boot_onlined_cpu = 0;
++
+ /* Called by boot processor to activate the rest. */
+ void __init smp_init(void)
+ {
+ 	int num_nodes, num_cpus;
++	int num_onlined_cpu = setup_max_cpus;
+ 
+ 	idle_threads_init();
+ 	cpuhp_threads_init();
+ 
+ 	pr_info("Bringing up secondary CPUs ...\n");
+ 
+-	bringup_nonboot_cpus(setup_max_cpus);
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU) && defined(CONFIG_ARM64)
++	if (boot_onlined_cpu != 0)
++		num_onlined_cpu = boot_onlined_cpu;
++#endif
++	bringup_nonboot_cpus(num_onlined_cpu);
+ 
+ 	num_nodes = num_online_nodes();
+ 	num_cpus  = num_online_cpus();
+-- 
+2.28.0
+
