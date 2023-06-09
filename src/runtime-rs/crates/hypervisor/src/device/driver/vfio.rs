@@ -7,7 +7,7 @@
 use std::{fs, path::Path, process::Command};
 
 use crate::device::Device;
-use crate::device::DeviceConfig;
+use crate::device::DeviceType;
 use crate::Hypervisor as hypervisor;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use anyhow::anyhow;
@@ -166,7 +166,7 @@ impl Device for VfioConfig {
         todo!()
     }
 
-    async fn get_device_info(&self) -> DeviceConfig {
+    async fn get_device_info(&self) -> DeviceType {
         todo!()
     }
 
