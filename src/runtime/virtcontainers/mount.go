@@ -43,15 +43,38 @@ func mountLogger() *logrus.Entry {
 	return virtLog.WithField("subsystem", "mount")
 }
 
-func isSystemMount(m string) bool {
-	m = filepath.Clean(m)
+func isSystemMount(m string) (bool, error) {
+	realPath, err := resolveSymlink(m)
+	if err != nil {
+		return false, err
+	}
+
 	for _, p := range systemMountPrefixes {
-		if m == p || strings.HasPrefix(m, p+"/") {
-			return true
+		if realPath == p || strings.HasPrefix(realPath, p+"/") {
+			return true, nil
 		}
 	}
 
-	return false
+	return false, nil
+}
+
+func resolveSymlink(path string) (string, error) {
+	for {
+		fileInfo, err := os.Lstat(path)
+		if err != nil {
+			return "", err
+		}
+
+		if fileInfo.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(path)
+			if err != nil {
+				return "", err
+			}
+			path = filepath.Join(filepath.Dir(path), target)
+		} else {
+			return filepath.Clean(path), nil
+		}
+	}
 }
 
 func isHostDevice(m string) bool {

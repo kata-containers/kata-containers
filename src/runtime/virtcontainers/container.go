@@ -435,13 +435,6 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 	}()
 
 	for idx, m := range c.mounts {
-		// Skip mounting certain system paths from the source on the host side
-		// into the container as it does not make sense to do so.
-		// Example sources could be /sys/fs/cgroup etc.
-		if isSystemMount(m.Source) {
-			continue
-		}
-
 		// Check if mount is a block device file. If it is, the block device will be attached to the host
 		// instead of passing this as a shared mount:
 		if len(m.BlockDeviceID) > 0 {
@@ -450,6 +443,20 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 				return storages, err
 			}
 			devicesToDetach = append(devicesToDetach, m.BlockDeviceID)
+			continue
+		}
+
+		sm, err := isSystemMount(m.Source)
+		if err != nil {
+			return storages, fmt.Errorf("unable to check whether a mount path is a system mount: %s: %v", m.Source, err)
+		}
+		// Skip mounting certain system paths from the source on the host side
+		// into the container as it does not make sense to do so.
+		// Example sources could be /sys/fs/cgroup etc.
+		if sm {
+			c.Logger().WithFields(logrus.Fields{
+				"mount-path": m.Source,
+			}).Warn("Skip the mount because it's a host system mount")
 			continue
 		}
 

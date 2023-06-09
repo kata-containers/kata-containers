@@ -48,9 +48,21 @@ func TestIsSystemMount(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := isSystemMount(test.mnt)
+		result, err := isSystemMount(test.mnt)
+		assert.NoError(err)
 		assert.Exactly(result, test.expected)
 	}
+}
+
+func TestIsSystemMountWithSymlink(t *testing.T) {
+	assert := assert.New(t)
+
+	testPath := t.TempDir()
+	err := os.Symlink("/sys", testPath)
+	assert.NoError(err)
+	result, err := isSystemMount(testPath)
+	assert.NoError(err)
+	assert.Exactly(result, true)
 }
 
 func TestIsHostDeviceCreateFile(t *testing.T) {
