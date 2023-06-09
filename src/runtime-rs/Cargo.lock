@@ -655,11 +655,12 @@ dependencies = [
 
 [[package]]
 name = "dbs-address-space"
-version = "0.2.2"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bcc37dc0b8ffae1c5911d13ae630dc7a9020fa0de0edd178d6ab71daf56c8fc"
+checksum = "95e20d28a9cd13bf00d0ecd1bd073d242242b04f0acb663d7adfc659f8879322"
 dependencies = [
  "arc-swap",
+ "lazy_static",
  "libc",
  "nix 0.23.2",
  "thiserror",
@@ -746,9 +747,9 @@ dependencies = [
 
 [[package]]
 name = "dbs-upcall"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "699e62afa444ae4b00d474fd91bc37785ba050acdfbe179731c81898e32efc3f"
+checksum = "ea3a78128fd0be8b8b10257675c262b378dc5d00b1e18157736a6c27e45ce4fb"
 dependencies = [
  "anyhow",
  "dbs-utils",
@@ -776,9 +777,9 @@ dependencies = [
 
 [[package]]
 name = "dbs-virtio-devices"
-version = "0.2.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88e5c6c48b766afb95851b04b6b193871a59d0b2a3ed19990d4f8f651ae5c668"
+checksum = "24d671cc3e5f98b84ef6b6bed007d28f72f16d3aea8eb38e2d42b00b2973c1d8"
 dependencies = [
  "byteorder",
  "caps",
@@ -792,7 +793,7 @@ dependencies = [
  "kvm-ioctls",
  "libc",
  "log",
- "nix 0.23.2",
+ "nix 0.24.3",
  "nydus-api",
  "nydus-blobfs",
  "nydus-rafs",
