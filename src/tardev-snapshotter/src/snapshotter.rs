@@ -103,9 +103,12 @@ impl Store {
     }
 
     fn mounts_from_snapshot(&self, parent: &str) -> Result<Vec<api::types::Mount>, Status> {
-        // Get chain of parents.
+        const PREFIX: &str = "io.katacontainers.fs-opt";
+
+        // Get chain of layers.
         let mut next_parent = Some(parent.to_string());
-        let mut parents = Vec::new();
+        let mut layers = Vec::new();
+        let mut opts = Vec::new();
         while let Some(p) = next_parent {
             let info = self.read_snapshot(&p)?;
             if info.kind != Kind::Committed {
@@ -114,18 +117,24 @@ impl Store {
                 ));
             }
 
-            parents.push(name_to_hash(&p));
+            let name = name_to_hash(&p);
+            layers.push(format!("/run/kata-containers/sandbox/layers/{name}"));
+            opts.push(format!(
+                "{PREFIX}.layer={},tar,ro,{PREFIX}.block_device=file,{PREFIX}.is-layer",
+                self.layer_path(&p).to_string_lossy()
+            ));
 
             next_parent = (!info.parent.is_empty()).then_some(info.parent);
         }
 
-        parents.reverse();
+        opts.push(format!("{PREFIX}.overlay-rw"));
+        opts.push(format!("lowerdir={}", layers.join(":")));
 
         Ok(vec![api::types::Mount {
             r#type: "tar-overlay".to_string(),
-            source: self.root.join("layers").to_string_lossy().into_owned(),
+            source: "/".to_string(),
             target: String::new(),
-            options: parents,
+            options: opts,
         }])
     }
 }
