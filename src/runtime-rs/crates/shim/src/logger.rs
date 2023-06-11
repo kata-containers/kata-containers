@@ -4,15 +4,15 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::os::unix::fs::OpenOptionsExt;
-
 use anyhow::{Context, Result};
 
 use crate::Error;
 
 pub(crate) fn set_logger(path: &str, sid: &str, is_debug: bool) -> Result<slog_async::AsyncGuard> {
+    // Since slog-async-logger is a synchronous thread actually, the log fifo can not be
+    // asynchronous. Otherwise, writer might report EAGAIN(11) when it writes large amounts
+    // of log to nonblock fifo, which will cause shim panic.
     let fifo = std::fs::OpenOptions::new()
-        .custom_flags(libc::O_NONBLOCK)
         .create(true)
         .write(true)
         .append(true)
