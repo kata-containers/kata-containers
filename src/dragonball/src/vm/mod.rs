@@ -222,6 +222,7 @@ impl Vm {
             resource_manager.clone(),
             epoll_manager.clone(),
             &logger,
+            api_shared_info.clone(),
         );
 
         Ok(Vm {
@@ -385,6 +386,19 @@ impl Vm {
 
         (dragonball_version, instance_id)
     }
+
+    pub(crate) fn stop_prealloc(&mut self) -> std::result::Result<(), StartMicroVmError> {
+        if self.address_space.is_initialized() {
+            return self
+                .address_space
+                .wait_prealloc(true)
+                .map_err(StartMicroVmError::AddressManagerError);
+        }
+
+        Err(StartMicroVmError::AddressManagerError(
+            AddressManagerError::GuestMemoryNotInitialized,
+        ))
+    }
 }
 
 impl Vm {
@@ -453,7 +467,6 @@ impl Vm {
     ) -> std::result::Result<(), StartMicroVmError> {
         info!(self.logger, "VM: initializing devices ...");
 
-        let com1_sock_path = self.vm_config.serial_path.clone();
         let kernel_config = self
             .kernel_config
             .as_mut()
@@ -475,9 +488,9 @@ impl Vm {
             vm_as.clone(),
             epoll_manager,
             kernel_config,
-            com1_sock_path,
             self.dmesg_fifo.take(),
             self.address_space.address_space(),
+            &self.vm_config,
         )?;
 
         info!(self.logger, "VM: start devices");
