@@ -81,7 +81,16 @@ impl CgroupManager for Manager {
     }
 
     fn destroy(&mut self) -> Result<()> {
-        self.dbus_client.stop_unit(self.unit_name.as_str())?;
+        self.dbus_client
+            .stop_unit(self.unit_name.as_str())
+            .or_else(|e| {
+                if let Some(zbus::Error::MethodError(error_name, _, _)) = e.downcast_ref() {
+                    if error_name.as_str() == "org.freedesktop.systemd1.NoSuchUnit" {
+                        return Ok(());
+                    }
+                }
+                Err(e)
+            })?;
         self.fs_manager.destroy()
     }
 
