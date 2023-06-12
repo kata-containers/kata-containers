@@ -211,9 +211,11 @@ function configure_containerd_runtime() {
 	fi
 	local runtime_table="plugins.${pluginid}.containerd.runtimes.$runtime"
 	local runtime_type="io.containerd.$runtime.v2"
-	local cri_handler_value=""
-        if echo "${runtime_type}" | grep -q -v -e "kata-remote\.v2" -e "kata\.v2"; then
-                cri_handler_value="cc"
+	local cri_handler_value="cc"
+	local pod_annotations='["io.katacontainers.*"]'
+	if [ "$runtime" == "kata-remote" ]; then
+		cri_handler_value=""
+		pod_annotations='[]'
 	fi
 	local options_table="$runtime_table.options"
 	local config_path="/opt/confidential-containers/share/defaults/kata-containers/$configuration.toml"
@@ -226,7 +228,7 @@ function configure_containerd_runtime() {
   cri_handler = "${cri_handler_value}"
   runtime_type = "${runtime_type}"
   privileged_without_host_devices = true
-  pod_annotations = ["io.katacontainers.*"]
+  pod_annotations = ${pod_annotations}
 EOF
 	fi
 
