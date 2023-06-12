@@ -146,8 +146,6 @@ The table below lists the remaining parts of the project:
 
 Kata Containers is now
 [available natively for most distributions](docs/install/README.md#packaged-installation-methods).
-However, packaging scripts and metadata are still used to generate [snap](snap/local) and GitHub releases. See
-the [components](#components) section for further details.
 
 ## Glossary of Terms
 
