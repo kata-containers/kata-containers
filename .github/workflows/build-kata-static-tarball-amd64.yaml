@@ -19,7 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        stage: ${{ inputs.stage }}
+        stage:
+          - ${{ inputs.stage }}
         asset:
           - cloud-hypervisor
           - cloud-hypervisor-glibc
