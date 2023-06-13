@@ -7,6 +7,7 @@ use std::{collections::HashMap, fs, fs::OpenOptions, io, io::Seek};
 use tokio::sync::RwLock;
 use tonic::Status;
 
+const ROOT_HASH_LABEL: &str = "io.katacontainers.dm-verity.root-hash";
 const SNAPSHOT_REF_LABEL: &str = "containerd.io/snapshot.ref";
 const TARGET_LAYER_DIGEST_LABEL: &str = "containerd.io/snapshot/cri.layer-digest";
 const TARGET_REF_LABEL: &str = "containerd.io/snapshot/cri.image-ref";
@@ -117,10 +118,18 @@ impl Store {
                 ));
             }
 
+            let root_hash = if let Some(rh) = info.labels.get(ROOT_HASH_LABEL) {
+                rh
+            } else {
+                return Err(Status::failed_precondition(
+                    "parent snapshot has no root hash stored",
+                ));
+            };
+
             let name = name_to_hash(&p);
             layers.push(format!("/run/kata-containers/sandbox/layers/{name}"));
             opts.push(format!(
-                "{PREFIX}.layer={},tar,ro,{PREFIX}.block_device=file,{PREFIX}.is-layer",
+                "{PREFIX}.layer={},tar,ro,{PREFIX}.block_device=file,{PREFIX}.is-layer,{PREFIX}.root-hash={root_hash}",
                 self.layer_path(&p).to_string_lossy()
             ));
 
@@ -162,7 +171,7 @@ impl TarDevSnapshotter {
         &self,
         key: String,
         parent: String,
-        labels: HashMap<String, String>,
+        mut labels: HashMap<String, String>,
     ) -> Result<Vec<api::types::Mount>, Status> {
         let reference: Reference = {
             let image_ref = if let Some(r) = labels.get(TARGET_REF_LABEL) {
@@ -234,6 +243,9 @@ impl TarDevSnapshotter {
             trace!("Appending dm-verity tree to {:?}", &name);
             let root_hash = verity::append_tree::<Sha256>(&mut file)?;
             trace!("Root hash for {:?} is {:x}", &name, root_hash);
+
+            // Store a label with the root hash so that we can recall it later when mounting.
+            labels.insert(ROOT_HASH_LABEL.into(), format!("{:x}", root_hash));
         }
 
         // Move file to its final location and write the snapshot.
