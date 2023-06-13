@@ -67,7 +67,6 @@ const (
 	vfioPath = "/dev/vfio/"
 
 	NydusRootFSType = "fuse.nydus-overlayfs"
-	TarRootFSType   = "tar-overlay"
 
 	// enable debug console
 	kernelParamDebugConsole           = "agent.debug_console"
@@ -1216,19 +1215,16 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	// Share the container rootfs -- if its block based, we'll receive a non-nil storage object representing
 	// the block device for the rootfs, which us utilized for mounting in the guest. This'll be handled
 	// already for non-block based rootfs
-	shares, err := sandbox.fsShare.ShareRootFilesystem(ctx, c)
-	if err != nil {
+	if sharedRootfs, err = sandbox.fsShare.ShareRootFilesystem(ctx, c); err != nil {
 		return nil, err
 	}
 
-	for _, sharedRootfs = range shares {
-		if sharedRootfs.storage != nil {
-			// Add rootfs to the list of container storage.
-			// We only need to do this for block based rootfs, as we
-			// want the agent to mount it into the right location
-			// (kataGuestSharedDir/ctrID/
-			ctrStorages = append(ctrStorages, sharedRootfs.storage)
-		}
+	if sharedRootfs.storage != nil {
+		// Add rootfs to the list of container storage.
+		// We only need to do this for block based rootfs, as we
+		// want the agent to mount it into the right location
+		// (kataGuestSharedDir/ctrID/
+		ctrStorages = append(ctrStorages, sharedRootfs.storage)
 	}
 
 	ociSpec := c.GetPatchedOCISpec()
