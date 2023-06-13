@@ -56,6 +56,7 @@ pub(crate) async fn prepare_virtiofs(
             fs_type: fs_type.to_string(),
             queue_size: 0,
             queue_num: 0,
+            options: vec![],
         },
     };
     h.add_device(DeviceType::ShareFs(share_fs_device))

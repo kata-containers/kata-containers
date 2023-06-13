@@ -67,6 +67,9 @@ pub struct ShareFsDeviceConfig {
 
     /// queue_num: queue number
     pub queue_num: u64,
+
+    /// options: virtiofs device's config options.
+    pub options: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
