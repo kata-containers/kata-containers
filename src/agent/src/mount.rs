@@ -485,65 +485,6 @@ async fn virtio_blk_storage_handler(
         storage.source = dev_path;
     }
 
-    // Filter out all kata-specific options.
-    let mut has_dmverity = false;
-    storage.options.retain(|opt| {
-        has_dmverity |= opt == "kata.dm-verity";
-        !opt.starts_with("kata.")
-    });
-
-    // Enable dm-verity if the option was specified.
-    if has_dmverity {
-        let mount_path = Path::new(&storage.mount_point);
-
-        info!(
-            logger,
-            "dm-verity enabled for mount source={:?}, dest={:?}", storage.source, mount_path
-        );
-
-        let hash = mount_path
-            .file_name()
-            .ok_or_else(|| anyhow!("Unable to get file name from mount path: {:?}", mount_path))?
-            .to_str()
-            .ok_or_else(|| {
-                anyhow!(
-                    "Unable to convert file name to utf8 string: {:?}",
-                    mount_path
-                )
-            })?;
-
-        // TODO: Remove device on failure.
-        let dm = devicemapper::DM::new()?;
-        let name = devicemapper::DmName::new(hash)?;
-        let opts = devicemapper::DmOptions::default().set_flags(devicemapper::DmFlags::DM_READONLY);
-        dm.device_create(&name, None, opts)?;
-        let id = devicemapper::DevId::Name(name);
-        dm.table_load(&id, &[prepare_dm_target(&storage.source)?], opts)?;
-        dm.device_suspend(&id, opts)?;
-        storage.source = format!("/dev/mapper/{hash}");
-    }
-
-    // TODO: Should we try to mount something else?
-    if storage.get_fstype() == "tar-overlay" {
-        let mount_point = storage.mount_point.to_string();
-        info!(
-            logger,
-            "tar-overlay mount source={:?}, dest={:?}", storage.source, mount_point
-        );
-        let mut lower = Vec::new();
-        for l in &storage.options {
-            lower.push("/run/kata-containers/sandbox/layers/".to_string() + l);
-        }
-        let status = std::process::Command::new("mount_tar.sh")
-            .arg(lower.join(":"))
-            .arg(&mount_point)
-            .status()?;
-        if !status.success() {
-            return Err(anyhow!("mount_script failed: {status}"));
-        }
-        return Ok(mount_point);
-    }
-
     common_storage_handler(logger, &storage)
 }
 
