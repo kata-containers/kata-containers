@@ -244,8 +244,33 @@ async fn ephemeral_storage_handler(
 async fn overlayfs_storage_handler(
     logger: &Logger,
     storage: &Storage,
+    cid: Option<&str>,
     _sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
+    if storage
+        .options
+        .iter()
+        .any(|e| e == "io.katacontainers.fs-opt.overlay-rw")
+    {
+        let cid = cid.ok_or_else(|| anyhow!("No container id in rw overlay"))?;
+        let cpath = Path::new(crate::rpc::CONTAINER_BASE).join(cid);
+        let work = cpath.join("work");
+        let upper = cpath.join("upper");
+
+        fs::create_dir_all(&work)?;
+        fs::create_dir_all(&upper)?;
+
+        let mut storage = storage.clone();
+        storage.fstype = "overlay".into();
+        storage
+            .options
+            .push(format!("upperdir={}", upper.to_string_lossy()));
+        storage
+            .options
+            .push(format!("workdir={}", work.to_string_lossy()));
+        return common_storage_handler(logger, &storage);
+    }
+
     common_storage_handler(logger, storage)
 }
 
@@ -759,7 +784,7 @@ pub async fn add_storages(
                 ephemeral_storage_handler(&logger, &storage, sandbox.clone()).await
             }
             DRIVER_OVERLAYFS_TYPE => {
-                overlayfs_storage_handler(&logger, &storage, sandbox.clone()).await
+                overlayfs_storage_handler(&logger, &storage, cid.as_deref(), sandbox.clone()).await
             }
             DRIVER_MMIO_BLK_TYPE => {
                 virtiommio_blk_storage_handler(&logger, &storage, sandbox.clone()).await
