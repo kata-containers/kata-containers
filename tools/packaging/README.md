@@ -12,10 +12,6 @@ Kata build artifacts are available within a container image, created by a
 [`kata-deploy`](kata-deploy), which make installation of Kata Containers in a
 running Kubernetes Cluster very straightforward.
 
-## Build a snap package
-
-See [the snap documentation](../../snap/local).
-
 ## Build static binaries
 
 See [the static build documentation](static-build).
