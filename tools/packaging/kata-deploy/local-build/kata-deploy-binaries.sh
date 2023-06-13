@@ -578,6 +578,8 @@ handle_build() {
 
 	cloud-hypervisor) install_clh ;;
 
+	cloud-hypervisor-glibc) ;;
+
 	firecracker) install_firecracker ;;
 
 	kernel) install_kernel ;;
@@ -613,6 +615,8 @@ handle_build() {
 	rootfs-image-tdx) install_image_tdx ;;
 
 	rootfs-initrd) install_initrd ;;
+
+	rootfs-initrd-mariner) ;;
 
 	rootfs-initrd-sev) install_initrd_sev ;;
 	
