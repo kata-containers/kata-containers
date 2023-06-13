@@ -6,12 +6,14 @@
 use std::collections::HashMap;
 use std::fs;
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{self, BufRead, BufReader, Read, Seek, Write};
 use std::iter;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
+
+use zerocopy::AsBytes;
 
 use tokio::sync::Mutex;
 
@@ -448,6 +450,47 @@ async fn virtiofs_storage_handler(
     common_storage_handler(logger, storage)
 }
 
+fn prepare_dm_target(path: &str, hash: &str) -> Result<(u64, u64, String, String)> {
+    let mut file = File::open(path)?;
+    let size = file.seek(std::io::SeekFrom::End(0))?;
+    if size < 4096 {
+        return Err(anyhow!("Block device ({path}) is too small: {size}"));
+    }
+
+    file.seek(std::io::SeekFrom::End(-4096))?;
+    let mut buf = [0u8; 4096];
+    file.read_exact(&mut buf)?;
+
+    let mut sb = verity::SuperBlock::default();
+    sb.as_bytes_mut()
+        .copy_from_slice(&buf[4096 - 512..][..std::mem::size_of::<verity::SuperBlock>()]);
+    let data_block_size = u64::from(sb.data_block_size.get());
+    let hash_block_size = u64::from(sb.hash_block_size.get());
+    let data_size = sb
+        .data_block_count
+        .get()
+        .checked_mul(data_block_size)
+        .ok_or_else(|| anyhow!("Invalid data size"))?;
+    if data_size > size {
+        return Err(anyhow!(
+            "Data size ({data_size}) is greater than device size ({size}) for device {path}"
+        ));
+    }
+
+    // TODO: Store other parameters in super block: version, hash type, salt.
+    Ok((
+        0,
+        data_size / 512,
+        "verity".into(),
+        format!(
+            "1 {path} {path} {data_block_size} {hash_block_size
+} {} {} sha256 {hash} 0000000000000000000000000000000000000000000000000000000000000000",
+            data_size / data_block_size,
+            (data_size + hash_block_size - 1) / hash_block_size
+        ),
+    ))
+}
+
 // virtio_blk_storage_handler handles the storage for blk driver.
 #[instrument]
 async fn virtio_blk_storage_handler(
@@ -516,14 +559,68 @@ async fn virtio_scsi_storage_handler(
     common_storage_handler(logger, &storage)
 }
 
-#[instrument]
-fn common_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> {
+fn mount_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> {
     // Mount the storage device.
     let mount_point = storage.mount_point.to_string();
 
     mount_storage(logger, storage)?;
     set_ownership(logger, storage)?;
     Ok(mount_point)
+}
+
+#[instrument]
+fn common_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> {
+    const DM_VERITY: &str = "io.katacontainers.fs-opt.root-hash=";
+    let opt = if let Some(o) = storage.options.iter().find(|e| e.starts_with(DM_VERITY)) {
+        o
+    } else {
+        // No dm-verity, so just run the regular handler.
+        return mount_storage_handler(logger, storage);
+    };
+
+    // Enable dm-verity then call the handler.
+    let mount_path = Path::new(&storage.mount_point);
+    info!(
+        logger,
+        "dm-verity enabled for mount source={:?}, dest={:?}", storage.source, mount_path
+    );
+
+    let fname = mount_path
+        .file_name()
+        .ok_or_else(|| anyhow!("Unable to get file name from mount path: {:?}", mount_path))?
+        .to_str()
+        .ok_or_else(|| {
+            anyhow!(
+                "Unable to convert file name to utf8 string: {:?}",
+                mount_path
+            )
+        })?;
+
+    let dm = devicemapper::DM::new()?;
+    let name = devicemapper::DmName::new(fname)?;
+    let opts = devicemapper::DmOptions::default().set_flags(devicemapper::DmFlags::DM_READONLY);
+    dm.device_create(&name, None, opts)?;
+
+    let id = devicemapper::DevId::Name(name);
+
+    (|| {
+        dm.table_load(
+            &id,
+            &[prepare_dm_target(&storage.source, &opt[DM_VERITY.len()..])?],
+            opts,
+        )?;
+        dm.device_suspend(&id, opts)?;
+
+        let mut storage = storage.clone();
+        storage.source = format!("/dev/mapper/{fname}");
+        mount_storage_handler(logger, &storage)
+    })()
+    .map_err(|e| {
+        if let Err(err) = dm.device_remove(&id, devicemapper::DmOptions::default()) {
+            error!(logger, "Unable to remove dm device ({fname}): {:?}", err);
+        }
+        e
+    })
 }
 
 // nvdimm_storage_handler handles the storage for NVDIMM driver.
@@ -1014,10 +1111,43 @@ pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<
     Ok(())
 }
 
+pub fn find_dm_name(mount_point: &str) -> io::Result<Option<String>> {
+    let mapper = Path::new("/dev/mapper");
+    let target = Path::new(mount_point);
+
+    for mount in proc_mounts::MountIter::new()? {
+        if let Ok(m) = mount {
+            if m.dest != target {
+                continue;
+            }
+
+            if let Some(p) = m.source.parent() {
+                if p == mapper {
+                    if let Some(f) = m.source.file_name() {
+                        return Ok(Some(f.to_string_lossy().into()));
+                    }
+                }
+            }
+
+            break;
+        }
+    }
+    Ok(None)
+}
+
 #[instrument]
 pub fn remove_mounts(mounts: &[String]) -> Result<()> {
     for m in mounts.iter() {
+        let dm_target = find_dm_name(&m);
         nix::mount::umount(m.as_str()).context(format!("failed to umount {:?}", m))?;
+        if let Some(dm_name) = dm_target? {
+            let dm = devicemapper::DM::new()?;
+            let name = devicemapper::DmName::new(&dm_name)?;
+            dm.device_remove(
+                &devicemapper::DevId::Name(&name),
+                devicemapper::DmOptions::default(),
+            )?;
+        }
     }
     Ok(())
 }
