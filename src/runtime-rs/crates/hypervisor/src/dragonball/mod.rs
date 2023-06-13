@@ -77,6 +77,12 @@ impl Hypervisor for Dragonball {
         inner.save_vm().await
     }
 
+    // returns Result<(old_vcpus, new_vcpus)>
+    async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)> {
+        let inner = self.inner.read().await;
+        inner.resize_vcpu(old_vcpus, new_vcpus).await
+    }
+
     async fn add_device(&self, device: DeviceType) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.add_device(device).await

@@ -6,7 +6,6 @@
 
 use std::{path::PathBuf, str::from_utf8, sync::Arc};
 
-use crate::{shim_mgmt::server::MgmtServer, static_resource::StaticResourceManager};
 use anyhow::{anyhow, Context, Result};
 use common::{
     message::Message,
@@ -18,12 +17,11 @@ use kata_sys_util::spec::load_oci_spec;
 use kata_types::{
     annotations::Annotation, config::default::DEFAULT_GUEST_DNS_FILE, config::TomlConfig,
 };
-use netns_rs::NetNs;
-use resource::network::generate_netns_name;
-
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
+use netns_rs::NetNs;
 use persist::sandbox_persist::Persist;
+use resource::{cpu_mem::initial_size::InitialSizeManager, network::generate_netns_name};
 use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
 use tokio::fs;
 use tokio::sync::{mpsc::Sender, RwLock};
@@ -35,6 +33,8 @@ use virt_container::{
 };
 #[cfg(feature = "wasm")]
 use wasm_container::WasmContainer;
+
+use crate::shim_mgmt::server::MgmtServer;
 
 struct RuntimeHandlerManagerInner {
     id: String,
@@ -422,14 +422,11 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
     //   2. If this is not a sandbox infrastructure container, but instead a standalone single container (analogous to "docker run..."),
     //	then the container spec itself will contain appropriate sizing information for the entire sandbox (since it is
     //	a single container.
-    if toml_config.runtime.static_sandbox_resource_mgmt {
-        info!(sl!(), "static resource management enabled");
-        let static_resource_manager = StaticResourceManager::new(spec)
-            .context("failed to construct static resource manager")?;
-        static_resource_manager
-            .setup_config(&mut toml_config)
-            .context("failed to setup static resource mgmt config")?;
-    }
+    let initial_size_manager =
+        InitialSizeManager::new(spec).context("failed to construct static resource manager")?;
+    initial_size_manager
+        .setup_config(&mut toml_config)
+        .context("failed to setup static resource mgmt config")?;
 
     info!(sl!(), "get config content {:?}", &toml_config);
     Ok(toml_config)

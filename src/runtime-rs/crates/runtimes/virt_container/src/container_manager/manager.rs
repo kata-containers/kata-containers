@@ -6,6 +6,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+
 use std::{collections::HashMap, sync::Arc};
 
 use agent::Agent;
@@ -96,7 +97,6 @@ impl ContainerManager for VirtContainerManager {
         let mut containers = self.containers.write().await;
         container.create(spec).await.context("create")?;
         containers.insert(container.container_id.to_string(), container);
-
         Ok(PID { pid: self.pid })
     }
 

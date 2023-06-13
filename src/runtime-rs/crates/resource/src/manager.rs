@@ -4,9 +4,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::network::NetworkConfig;
-use crate::resource_persist::ResourceState;
-use crate::{manager_inner::ResourceManagerInner, rootfs::Rootfs, volume::Volume, ResourceConfig};
+use std::sync::Arc;
+
 use agent::types::Device;
 use agent::{Agent, Storage};
 use anyhow::Result;
@@ -17,8 +16,12 @@ use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
 use oci::{Linux, LinuxResources};
 use persist::sandbox_persist::Persist;
-use std::sync::Arc;
 use tokio::sync::RwLock;
+
+use crate::network::NetworkConfig;
+use crate::resource_persist::ResourceState;
+use crate::ResourceUpdateOp;
+use crate::{manager_inner::ResourceManagerInner, rootfs::Rootfs, volume::Volume, ResourceConfig};
 
 pub struct ManagerArgs {
     pub sid: String,
@@ -110,13 +113,14 @@ impl ResourceManager {
         inner.dump().await
     }
 
-    pub async fn update_cgroups(
+    pub async fn update_linux_resource(
         &self,
         cid: &str,
         linux_resources: Option<&LinuxResources>,
-    ) -> Result<()> {
+        op: ResourceUpdateOp,
+    ) -> Result<Option<LinuxResources>> {
         let inner = self.inner.read().await;
-        inner.update_cgroups(cid, linux_resources).await
+        inner.update_linux_resource(cid, linux_resources, op).await
     }
 
     pub async fn cleanup(&self) -> Result<()> {

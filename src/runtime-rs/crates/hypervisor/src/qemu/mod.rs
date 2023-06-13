@@ -118,6 +118,11 @@ impl Hypervisor for Qemu {
         inner.cleanup().await
     }
 
+    async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)> {
+        let inner = self.inner.read().await;
+        inner.resize_vcpu(old_vcpus, new_vcpus).await
+    }
+
     async fn get_pids(&self) -> Result<Vec<u32>> {
         let inner = self.inner.read().await;
         inner.get_pids().await

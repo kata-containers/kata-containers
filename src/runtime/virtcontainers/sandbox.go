@@ -2117,9 +2117,8 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	s.Logger().Debugf("Request to hypervisor to update oldCPUs/newCPUs: %d/%d", oldCPUs, newCPUs)
 	// If the CPUs were increased, ask agent to online them
 	if oldCPUs < newCPUs {
-		vcpusAdded := newCPUs - oldCPUs
-		s.Logger().Debugf("Request to onlineCPUMem with %d CPUs", vcpusAdded)
-		if err := s.agent.onlineCPUMem(ctx, vcpusAdded, true); err != nil {
+		s.Logger().Debugf("Request to onlineCPUMem with %d CPUs", newCPUs)
+		if err := s.agent.onlineCPUMem(ctx, newCPUs, true); err != nil {
 			return err
 		}
 	}

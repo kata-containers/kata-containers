@@ -114,6 +114,11 @@ impl Hypervisor for CloudHypervisor {
         inner.cleanup().await
     }
 
+    async fn resize_vcpu(&self, old_vcpu: u32, new_vcpu: u32) -> Result<(u32, u32)> {
+        let inner = self.inner.read().await;
+        inner.resize_vcpu(old_vcpu, new_vcpu).await
+    }
+
     async fn get_pids(&self) -> Result<Vec<u32>> {
         let inner = self.inner.read().await;
         inner.get_pids().await
