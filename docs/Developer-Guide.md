@@ -587,10 +587,15 @@ $ sudo kata-monitor
 
 #### Connect to debug console
 
-Command `kata-runtime exec` is used to connect to the debug console.
+You need to start a container for example:
+```bash
+$ sudo ctr run  --runtime io.containerd.kata.v2 -d docker.io/library/ubuntu:latest testdebug
+```
+
+Then, you can use the command `kata-runtime exec <sandbox id>` to connect to the debug console.
 
 ```
-$ kata-runtime exec 1a9ab65be63b8b03dfd0c75036d27f0ed09eab38abb45337fea83acd3cd7bacd
+$ kata-runtime exec testdebug
 bash-4.2# id
 uid=0(root) gid=0(root) groups=0(root)
 bash-4.2# pwd
