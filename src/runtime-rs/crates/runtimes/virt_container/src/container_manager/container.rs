@@ -19,7 +19,7 @@ use common::{
 use kata_sys_util::k8s::update_ephemeral_storage_type;
 
 use oci::{LinuxResources, Process as OCIProcess};
-use resource::ResourceManager;
+use resource::{ResourceManager, ResourceUpdateOp};
 use tokio::sync::RwLock;
 
 use super::{
@@ -64,6 +64,10 @@ impl Container {
             config.stderr.clone(),
             config.terminal,
         );
+        let linux_resources = spec
+            .linux
+            .as_ref()
+            .and_then(|linux| linux.resources.clone());
 
         Ok(Self {
             pid,
@@ -74,6 +78,7 @@ impl Container {
                 agent.clone(),
                 init_process,
                 logger.clone(),
+                linux_resources,
             ))),
             agent,
             resource_manager,
@@ -150,15 +155,18 @@ impl Container {
             .handler_devices(&config.container_id, linux)
             .await?;
 
-        // update cgroups
-        self.resource_manager
-            .update_cgroups(
+        // update vcpus, mems and host cgroups
+        let resources = self
+            .resource_manager
+            .update_linux_resource(
                 &config.container_id,
-                spec.linux
-                    .as_ref()
-                    .and_then(|linux| linux.resources.as_ref()),
+                inner.linux_resources.as_ref(),
+                ResourceUpdateOp::Add,
             )
             .await?;
+        if let Some(linux) = &mut spec.linux {
+            linux.resources = resources;
+        }
 
         // create container
         let r = agent::CreateContainerRequest {
@@ -323,7 +331,20 @@ impl Container {
         inner
             .stop_process(container_process, true, &device_manager)
             .await
-            .context("stop process")
+            .context("stop process")?;
+
+        // update vcpus, mems and host cgroups
+        if container_process.process_type == ProcessType::Container {
+            self.resource_manager
+                .update_linux_resource(
+                    &self.config.container_id,
+                    inner.linux_resources.as_ref(),
+                    ResourceUpdateOp::Del,
+                )
+                .await?;
+        }
+
+        Ok(())
     }
 
     pub async fn pause(&self) -> Result<()> {
@@ -398,13 +419,21 @@ impl Container {
     }
 
     pub async fn update(&self, resources: &LinuxResources) -> Result<()> {
-        self.resource_manager
-            .update_cgroups(&self.config.container_id, Some(resources))
+        let mut inner = self.inner.write().await;
+        inner.linux_resources = Some(resources.clone());
+        // update vcpus, mems and host cgroups
+        let agent_resources = self
+            .resource_manager
+            .update_linux_resource(
+                &self.config.container_id,
+                Some(resources),
+                ResourceUpdateOp::Update,
+            )
             .await?;
 
         let req = agent::UpdateContainerRequest {
             container_id: self.container_id.container_id.clone(),
-            resources: resources.clone(),
+            resources: agent_resources,
             mounts: Vec::new(),
         };
         self.agent

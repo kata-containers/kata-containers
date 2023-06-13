@@ -13,17 +13,16 @@ use kata_types::{
     cpu::LinuxContainerCpuResources, k8s::container_type,
 };
 
-// static resource that StaticResourceManager needs, this is the spec for the
+// initial resource that InitialSizeManager needs, this is the spec for the
 // sandbox/container's workload
 #[derive(Clone, Copy, Debug)]
-struct StaticResource {
+struct InitialSize {
     vcpu: u32,
     mem_mb: u32,
 }
 
-// generate static resource(vcpu and memory in MiB) from spec's information
-// used for static resource management
-impl TryFrom<&oci::Spec> for StaticResource {
+// generate initial resource(vcpu and memory in MiB) from spec's information
+impl TryFrom<&oci::Spec> for InitialSize {
     type Error = anyhow::Error;
     fn try_from(spec: &oci::Spec) -> Result<Self> {
         let mut vcpu: u32 = 0;
@@ -65,31 +64,32 @@ impl TryFrom<&oci::Spec> for StaticResource {
         }
         info!(
             sl!(),
-            "static resource mgmt result: vcpu={}, mem_mb={}", vcpu, mem_mb
+            "(from PodSandbox's annotation / SingleContainer's spec) initial size: vcpu={}, mem_mb={}", vcpu, mem_mb
         );
         Ok(Self { vcpu, mem_mb })
     }
 }
 
-// StaticResourceManager is responsible for static resource management
+// InitialSizeManager is responsible for initial vcpu/mem management
 //
-// static resource management sizing information is optionally provided, either by
+// inital vcpu/mem management sizing information is optionally provided, either by
 // upper layer runtime (containerd / crio) or by the container spec itself (when it
 // is a standalone single container such as the one started with *docker run*)
 //
 // the sizing information uses three values, cpu quota, cpu period and memory limit,
-// and with above values it calculates the # vcpus and memory for the workload and
-// add them to default value of the config
+// and with above values it calculates the # vcpus and memory for the workload
+//
+// if the workload # of vcpus and memory is invalid for vmms, we still use default
+// value in toml_config
 #[derive(Clone, Copy, Debug)]
-pub struct StaticResourceManager {
-    resource: StaticResource,
+pub struct InitialSizeManager {
+    resource: InitialSize,
 }
 
-impl StaticResourceManager {
+impl InitialSizeManager {
     pub fn new(spec: &oci::Spec) -> Result<Self> {
         Ok(Self {
-            resource: StaticResource::try_from(spec)
-                .context("failed to construct static resource")?,
+            resource: InitialSize::try_from(spec).context("failed to construct static resource")?,
         })
     }
 
@@ -100,8 +100,13 @@ impl StaticResourceManager {
             .hypervisor
             .get_mut(hypervisor_name)
             .context("failed to get hypervisor config")?;
-        hv.cpu_info.default_vcpus += self.resource.vcpu as i32;
-        hv.memory_info.default_memory += self.resource.mem_mb;
+
+        if self.resource.vcpu > 0 {
+            hv.cpu_info.default_vcpus = self.resource.vcpu as i32
+        }
+        if self.resource.mem_mb > 0 {
+            hv.memory_info.default_memory = self.resource.mem_mb;
+        }
         Ok(())
     }
 }
@@ -151,7 +156,7 @@ mod tests {
     struct TestData<'a> {
         desc: &'a str,
         input: InputData,
-        result: StaticResource,
+        result: InitialSize,
     }
 
     fn get_test_data() -> Vec<TestData<'static>> {
@@ -163,7 +168,7 @@ mod tests {
                     quota: None,
                     memory: None,
                 },
-                result: StaticResource { vcpu: 0, mem_mb: 0 },
+                result: InitialSize { vcpu: 0, mem_mb: 0 },
             },
             TestData {
                 desc: "normal resource limit",
@@ -173,7 +178,7 @@ mod tests {
                     quota: Some(220_000),
                     memory: Some(1024 * 1024 * 512),
                 },
-                result: StaticResource {
+                result: InitialSize {
                     vcpu: 3,
                     mem_mb: 512,
                 },
@@ -183,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn test_static_resource_mgmt_sandbox() {
+    fn test_initial_size_sandbox() {
         let tests = get_test_data();
 
         // run tests
@@ -210,22 +215,22 @@ mod tests {
                 ..Default::default()
             };
 
-            let static_resource = StaticResource::try_from(&spec);
+            let initial_size = InitialSize::try_from(&spec);
             assert!(
-                static_resource.is_ok(),
+                initial_size.is_ok(),
                 "test[{}]: {:?} should be ok",
                 i,
                 d.desc
             );
 
-            let static_resource = static_resource.unwrap();
+            let initial_size = initial_size.unwrap();
             assert_eq!(
-                static_resource.vcpu, d.result.vcpu,
+                initial_size.vcpu, d.result.vcpu,
                 "test[{}]: {:?} vcpu should be {}",
                 i, d.desc, d.result.vcpu,
             );
             assert_eq!(
-                static_resource.mem_mb, d.result.mem_mb,
+                initial_size.mem_mb, d.result.mem_mb,
                 "test[{}]: {:?} memory should be {}",
                 i, d.desc, d.result.mem_mb,
             );
@@ -233,7 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn test_static_resource_mgmt_container() {
+    fn test_initial_size_container() {
         let tests = get_test_data();
 
         // run tests
@@ -261,22 +266,22 @@ mod tests {
                 ..Default::default()
             };
 
-            let static_resource = StaticResource::try_from(&spec);
+            let initial_size = InitialSize::try_from(&spec);
             assert!(
-                static_resource.is_ok(),
+                initial_size.is_ok(),
                 "test[{}]: {:?} should be ok",
                 i,
                 d.desc
             );
 
-            let static_resource = static_resource.unwrap();
+            let initial_size = initial_size.unwrap();
             assert_eq!(
-                static_resource.vcpu, d.result.vcpu,
+                initial_size.vcpu, d.result.vcpu,
                 "test[{}]: {:?} vcpu should be {}",
                 i, d.desc, d.result.vcpu,
             );
             assert_eq!(
-                static_resource.mem_mb, d.result.mem_mb,
+                initial_size.mem_mb, d.result.mem_mb,
                 "test[{}]: {:?} memory should be {}",
                 i, d.desc, d.result.mem_mb,
             );

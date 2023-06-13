@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"context"
+
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
@@ -119,7 +120,7 @@ type agent interface {
 
 	// onlineCPUMem will online CPUs and Memory inside the Sandbox.
 	// This function should be called after hot adding vCPUs or Memory.
-	// cpus specifies the number of CPUs that were added and the agent should online
+	// cpus specifies the number of CPUs that should be onlined in the guest, and special value 0 means agent will skip this check.
 	// cpuOnly specifies that we should online cpu or online memory or both
 	onlineCPUMem(ctx context.Context, cpus uint32, cpuOnly bool) error
 
