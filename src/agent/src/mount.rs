@@ -543,7 +543,6 @@ async fn virtio_blk_storage_handler(
             logger,
             "mounts are: {}", layers.join(":")
         );
-        layers.reverse();
         let status = std::process::Command::new("mount_tar.sh")
             .arg(layers.join(":"))
             .arg(&mount_point)
