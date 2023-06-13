@@ -65,6 +65,7 @@ docker run \
 	--env TDSHIM_CONTAINER_BUILDER="${TDSHIM_CONTAINER_BUILDER:-}" \
 	--env VIRTIOFSD_CONTAINER_BUILDER="${VIRTIOFSD_CONTAINER_BUILDER:-}" \
 	--env MEASURED_ROOTFS="${MEASURED_ROOTFS:-}" \
+	--env USE_CACHE="${USE_CACHE:-}" \
 	--rm \
 	-w ${script_dir} \
 	build-kata-deploy "${kata_deploy_create}" $@

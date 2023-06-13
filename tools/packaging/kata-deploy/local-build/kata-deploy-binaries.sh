@@ -40,6 +40,7 @@ readonly cached_artifacts_path="lastSuccessfulBuild/artifact/artifacts"
 
 ARCH=$(uname -m)
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+USE_CACHE="${USE_CACHE:-"yes"}"
 
 workdir="${WORKDIR:-$PWD}"
 
@@ -115,6 +116,10 @@ cleanup_and_fail() {
 }
 
 install_cached_tarball_component() {
+	if [ "${USE_CACHE}" != "yes" ]; then
+		return 1
+	fi
+
 	local component="${1}"
 	local jenkins_build_url="${2}"
 	local current_version="${3}"
