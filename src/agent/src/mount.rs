@@ -13,6 +13,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use sha2::{digest::typenum::Unsigned, digest::OutputSizeUser, Sha256};
 use zerocopy::AsBytes;
 
 use tokio::sync::Mutex;
@@ -425,7 +426,7 @@ async fn virtiofs_storage_handler(
     common_storage_handler(logger, storage)
 }
 
-fn prepare_dm_target(path: &str, hash: &str) -> Result<(u64, u64, String, String)> {
+fn prepare_dm_target(path: &str) -> Result<(u64, u64, String, String)> {
     let mut file = File::open(path)?;
     let size = file.seek(std::io::SeekFrom::End(0))?;
     if size < 4096 {
@@ -453,7 +454,11 @@ fn prepare_dm_target(path: &str, hash: &str) -> Result<(u64, u64, String, String
     }
 
     // TODO: Store other parameters in super block: version, hash type, salt.
-    Ok((0, data_size / 512, "verity".into(), format!("1 {path} {path} {data_block_size} {hash_block_size} {} {} sha256 {hash} 0000000000000000000000000000000000000000000000000000000000000000", data_size / data_block_size, (data_size + hash_block_size - 1) / hash_block_size)))
+    let salt = [0u8; <Sha256 as OutputSizeUser>::OutputSize::USIZE];
+    let v = verity::Verity::<Sha256>::new(data_size, 4096, 4096, &salt, None)?;
+    let hash = verity::traverse_file(&file, 0, false, v)?;
+
+    Ok((0, data_size / 512, "verity".into(), format!("1 {path} {path} {data_block_size} {hash_block_size} {} {} sha256 {:x} 0000000000000000000000000000000000000000000000000000000000000000", data_size / data_block_size, (data_size + hash_block_size - 1) / hash_block_size, hash)))
 }
 
 // virtio_blk_storage_handler handles the storage for blk driver.
@@ -481,19 +486,14 @@ async fn virtio_blk_storage_handler(
     }
 
     // Filter out all kata-specific options.
-    let mut layers = Vec::new();
-    let mut root_hash: Option<String> = None;
+    let mut has_dmverity = false;
     storage.options.retain(|opt| {
-        if opt.starts_with("kata.dm-verity=") {
-            root_hash = Some(opt["kata.dm-verity=".len()..].to_string());
-        } else if opt.starts_with("kata.layer=") {
-            layers.push(opt["kata.layer=".len()..].to_string());
-        }
+        has_dmverity |= opt == "kata.dm-verity";
         !opt.starts_with("kata.")
     });
 
     // Enable dm-verity if the option was specified.
-    if let Some(rh) = root_hash {
+    if has_dmverity {
         let mount_path = Path::new(&storage.mount_point);
 
         info!(
@@ -518,7 +518,7 @@ async fn virtio_blk_storage_handler(
         let opts = devicemapper::DmOptions::default().set_flags(devicemapper::DmFlags::DM_READONLY);
         dm.device_create(&name, None, opts)?;
         let id = devicemapper::DevId::Name(name);
-        dm.table_load(&id, &[prepare_dm_target(&storage.source, &rh)?], opts)?;
+        dm.table_load(&id, &[prepare_dm_target(&storage.source)?], opts)?;
         dm.device_suspend(&id, opts)?;
         storage.source = format!("/dev/mapper/{hash}");
     }
@@ -530,21 +530,12 @@ async fn virtio_blk_storage_handler(
             logger,
             "tar-overlay mount source={:?}, dest={:?}", storage.source, mount_point
         );
-        for layer in &mut layers {
-            let l = if let Some(i) = layer.find(',') {
-                &layer[..i]
-            } else {
-                &layer
-            };
-            let new = format!("/run/kata-containers/sandbox/layers/{l}");
-            *layer = new;
+        let mut lower = Vec::new();
+        for l in &storage.options {
+            lower.push("/run/kata-containers/sandbox/layers/".to_string() + l);
         }
-        info!(
-            logger,
-            "mounts are: {}", layers.join(":")
-        );
         let status = std::process::Command::new("mount_tar.sh")
-            .arg(layers.join(":"))
+            .arg(lower.join(":"))
             .arg(&mount_point)
             .status()?;
         if !status.success() {
