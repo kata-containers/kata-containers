@@ -56,6 +56,9 @@ pub struct PodSpec {
     pub initContainers: Option<Vec<Container>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub imagePullSecrets: Option<Vec<LocalObjectReference>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub affinity: Option<Affinity>,
 
     pub containers: Vec<Container>,
@@ -330,6 +333,13 @@ pub struct ResourceRequirements {
     #[serde(skip_serializing_if = "Option::is_none")]
     limits: Option<BTreeMap<String, String>>,
     // TODO: claims field.
+}
+
+/// See Reference / Kubernetes API / Common Definitions / LocalObjectReference.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LocalObjectReference {
+    pub name: String,
 }
 
 impl Container {
