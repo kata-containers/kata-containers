@@ -11,7 +11,7 @@ use crate::policy;
 use crate::volume;
 
 use anyhow::Result;
-use log::{debug, info};
+use log::debug;
 use oci;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -466,7 +466,7 @@ impl InfraPolicy {
             .iter_mut()
             .find(|m| m.destination.eq(&destination))
         {
-            info!(
+            debug!(
                 "shared_bind_mount: updating destination = {}, source = {}",
                 &destination, &source
             );
@@ -474,7 +474,7 @@ impl InfraPolicy {
             policy_mount.source = source;
             policy_mount.options = options;
         } else {
-            info!(
+            debug!(
                 "shared_bind_mount: adding destination = {}, source = {}",
                 &destination, &source
             );
@@ -528,7 +528,7 @@ impl InfraPolicy {
         let mut biderectional = false;
         if let Some(mount_propagation) = &yaml_mount.mountPropagation {
             if mount_propagation.eq("Bidirectional") {
-                info!("host_path_mount: Bidirectional");
+                debug!("host_path_mount: Bidirectional");
                 biderectional = true;
             }
         }
@@ -542,50 +542,41 @@ impl InfraPolicy {
         //
         // What is the reason for this source path difference in the Guest OS?
         if !path.starts_with("/dev/") && !path.starts_with("/sys/") {
-            info!("host_path_mount: calling shared_bind_mount");
-            return self.shared_bind_mount(yaml_mount, policy_mounts, biderectional);
-            /*
-            source = self.shared_files.source_path.to_string();
-            source += &path.file_name().unwrap().to_str().unwrap();
-            source += "$";
-            */
-        }
-
-        let source = host_path.clone();
-        let destination = yaml_mount.mountPath.to_string();
-        let r#type = "bind".to_string();
-
-        let mut mount_option = "rprivate".to_string();
-        if biderectional {
-            mount_option = "rshared".to_string();
-        }
-        let options = vec!["rbind".to_string(), mount_option, "rw".to_string()];
-
-        if let Some(policy_mount) = policy_mounts
-            .iter_mut()
-            .find(|m| m.destination.eq(&destination))
-        {
-            info!(
-                "host_path_mount: updating destination = {}, source = {}",
-                &destination, &source
-            );
-            policy_mount.r#type = r#type;
-            policy_mount.source = source;
-            policy_mount.options = options;
+            debug!("host_path_mount: calling shared_bind_mount");
+            self.shared_bind_mount(yaml_mount, policy_mounts, biderectional)
         } else {
-            info!(
-                "host_path_mount: adding destination = {}, source = {}",
-                &destination, &source
-            );
-            policy_mounts.push(oci::Mount {
-                destination,
-                r#type,
-                source,
-                options,
-            });
-        }
+            let dest = yaml_mount.mountPath.to_string();
+            let r#type = "bind".to_string();
+            let mount_option = if biderectional { "rshared" } else { "rprivate" };
+            let options = vec![
+                "rbind".to_string(),
+                mount_option.to_string(),
+                "rw".to_string(),
+            ];
 
-        Ok(())
+            if let Some(policy_mount) = policy_mounts.iter_mut().find(|m| m.destination.eq(&dest)) {
+                debug!(
+                    "host_path_mount: updating destination = {}, source = {}",
+                    &dest, &host_path
+                );
+                policy_mount.r#type = r#type;
+                policy_mount.source = host_path;
+                policy_mount.options = options;
+            } else {
+                debug!(
+                    "host_path_mount: adding destination = {}, source = {}",
+                    &dest, &host_path
+                );
+                policy_mounts.push(oci::Mount {
+                    destination: dest,
+                    r#type,
+                    source: host_path,
+                    options,
+                });
+            }
+
+            Ok(())
+        }
     }
 
     // Example of input yaml:
