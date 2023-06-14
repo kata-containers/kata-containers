@@ -186,9 +186,9 @@ func (v *virtiofsd) args(FdSocketNumber uint) ([]string, error) {
 		// Send logs to syslog
 		"--syslog",
 		// cache mode for virtiofsd
-		"-o", "cache=" + v.cache,
+		"--cache=" + v.cache,
 		// shared directory tree
-		"-o", "source=" + v.sourcePath,
+		"--shared-dir=" + v.sourcePath,
 		// fd number of vhost-user socket
 		fmt.Sprintf("--fd=%v", FdSocketNumber),
 	}

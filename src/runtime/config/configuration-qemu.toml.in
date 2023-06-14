@@ -197,9 +197,9 @@ virtio_fs_queue_size = @DEFVIRTIOFSQUEUESIZE@
 # Extra args for virtiofsd daemon
 #
 # Format example:
-#   ["-o", "arg1=xxx,arg2", "-o", "hello world", "--arg3=yyy"]
+#   ["--arg1=xxx", "--arg2=yyy"]
 # Examples:
-#   Set virtiofsd log level to debug : ["-o", "log_level=debug"] or ["-d"]
+#   Set virtiofsd log level to debug : ["--log-level=debug"]
 #
 # see `virtiofsd -h` for possible options.
 virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
