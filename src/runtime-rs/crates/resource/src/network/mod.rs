@@ -5,6 +5,8 @@
 //
 
 mod endpoint;
+use std::sync::Arc;
+
 pub use endpoint::endpoint_persist::EndpointState;
 pub use endpoint::Endpoint;
 mod network_entity;
@@ -20,11 +22,11 @@ use network_pair::NetworkPair;
 mod utils;
 pub use utils::netns::{generate_netns_name, NetnsGuard};
 
-use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use hypervisor::Hypervisor;
+use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 
 #[derive(Debug)]
 pub enum NetworkConfig {
@@ -41,10 +43,13 @@ pub trait Network: Send + Sync {
     async fn remove(&self, h: &dyn Hypervisor) -> Result<()>;
 }
 
-pub async fn new(config: &NetworkConfig) -> Result<Arc<dyn Network>> {
+pub async fn new(
+    config: &NetworkConfig,
+    d: Arc<RwLock<DeviceManager>>,
+) -> Result<Arc<dyn Network>> {
     match config {
         NetworkConfig::NetworkResourceWithNetNs(c) => Ok(Arc::new(
-            NetworkWithNetns::new(c)
+            NetworkWithNetns::new(c, d)
                 .await
                 .context("new network with netns")?,
         )),
