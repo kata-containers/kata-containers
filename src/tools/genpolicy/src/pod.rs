@@ -365,12 +365,11 @@ impl Container {
         dest_env: &mut Vec<String>,
         config_maps: &Vec<config_map::ConfigMap>,
         namespace: &str,
-        hostname: &str,
     ) -> Result<()> {
         if let Some(source_env) = &self.env {
             for env_variable in source_env {
                 let mut src_string = env_variable.name.clone() + "=";
-                src_string += &env_variable.get_value(config_maps, namespace, hostname)?;
+                src_string += &env_variable.get_value(config_maps, namespace)?;
                 if !dest_env.contains(&src_string) {
                     dest_env.push(src_string.clone());
                 }
@@ -454,7 +453,6 @@ impl EnvVar {
         &self,
         config_maps: &Vec<config_map::ConfigMap>,
         namespace: &str,
-        hostname: &str,
     ) -> Result<String> {
         if let Some(value) = &self.value {
             return Ok(value.clone());
@@ -466,7 +464,7 @@ impl EnvVar {
                 match path {
                     "metadata.namespace" => return Ok(namespace.to_string()),
                     "status.podIP" => return Ok("$(pod-ip)".to_string()),
-                    "spec.nodeName" => return Ok(hostname.to_string()),
+                    "spec.nodeName" => return Ok("$(node-name)".to_string()),
                     _ => panic!("Unsupported field reference: {}", &field_ref.fieldPath),
                 }
             }

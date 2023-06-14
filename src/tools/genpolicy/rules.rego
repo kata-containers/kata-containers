@@ -626,6 +626,24 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     print("allow_env_var 11: success")
 }
 
+# Allow fieldRef "fieldPath: spec.nodeName" values.
+allow_env_var(policy_process, input_process, env_var, sandbox_name) {
+    print("allow_env_var 12: fieldPath: spec.nodeName")
+
+    name_value := split(env_var, "=")
+    count(name_value) == 2
+    # TODO: check that name_value[1] looks like a hostname.
+
+    some policy_env_var in policy_process.env
+    policy_name_value := split(policy_env_var, "=")
+    count(policy_name_value) == 2
+
+    policy_name_value[0] == name_value[0]
+    policy_name_value[1] == "$(node-name)"
+
+    print("allow_env_var 12: success")
+}
+
 allow_pod_ip_var(var_name, policy_env_var) {
     print("allow_pod_ip_var: var_name =", var_name, "policy_env_var =", policy_env_var)
 
@@ -698,8 +716,11 @@ allow_mount(policy_oci, input_mount, bundle_id, sandbox_id) {
 }
 
 policy_mount_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
-    print("policy_mount_allows 1: input_mount.destination =", input_mount.destination, "policy_mount.destination =", policy_mount.destination)
+    print("policy_mount_allows 1: policy_mount =", policy_mount)
+    print("policy_mount_allows 1: input_mount =", input_mount)
+
     policy_mount == input_mount
+
     print("policy_mount_allows 1 success")
 }
 policy_mount_allows(policy_mount, input_mount, bundle_id, sandbox_id) {

@@ -11,7 +11,7 @@ use crate::policy;
 use crate::volume;
 
 use anyhow::Result;
-use log::debug;
+use log::{debug, info};
 use oci;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -308,9 +308,9 @@ impl InfraPolicy {
                     storages,
                 );
             } else if yaml_volume.persistentVolumeClaim.is_some() {
-                self.shared_bind_mount(yaml_mount, policy_mounts)?;
+                self.shared_bind_mount(yaml_mount, policy_mounts, false)?;
             } else if yaml_volume.azureFile.is_some() {
-                self.shared_bind_mount(yaml_mount, policy_mounts)?;
+                self.shared_bind_mount(yaml_mount, policy_mounts, false)?;
             } else if yaml_volume.hostPath.is_some() {
                 self.host_path_mount(yaml_mount, yaml_volume, policy_mounts)?;
             } else if yaml_volume.configMap.is_some() {
@@ -442,27 +442,49 @@ impl InfraPolicy {
         &self,
         yaml_mount: &pod::VolumeMount,
         policy_mounts: &mut Vec<oci::Mount>,
+        shared: bool,
     ) -> Result<()> {
-        let mut mount_source = self.shared_files.source_path.to_string();
+        let mut source = self.shared_files.source_path.to_string();
 
         if let Some(byte_index) = str::rfind(&yaml_mount.mountPath, '/') {
-            mount_source += str::from_utf8(&yaml_mount.mountPath.as_bytes()[byte_index + 1..])?;
+            source += str::from_utf8(&yaml_mount.mountPath.as_bytes()[byte_index + 1..])?;
         } else {
-            mount_source += &yaml_mount.mountPath;
+            source += &yaml_mount.mountPath;
         }
 
-        mount_source += "$";
+        source += "$";
+        let destination = yaml_mount.mountPath.to_string();
+        let r#type = "bind".to_string();
 
-        policy_mounts.push(oci::Mount {
-            destination: yaml_mount.mountPath.to_string(),
-            r#type: "bind".to_string(),
-            source: mount_source,
-            options: vec![
-                "rbind".to_string(),
-                "rprivate".to_string(),
-                "rw".to_string(),
-            ],
-        });
+        let mut mount_option = "rprivate".to_string();
+        if shared {
+            mount_option = "rshared".to_string();
+        }
+        let options = vec!["rbind".to_string(), mount_option, "rw".to_string()];
+
+        if let Some(policy_mount) = policy_mounts
+            .iter_mut()
+            .find(|m| m.destination.eq(&destination))
+        {
+            info!(
+                "shared_bind_mount: updating destination = {}, source = {}",
+                &destination, &source
+            );
+            policy_mount.r#type = r#type;
+            policy_mount.source = source;
+            policy_mount.options = options;
+        } else {
+            info!(
+                "shared_bind_mount: adding destination = {}, source = {}",
+                &destination, &source
+            );
+            policy_mounts.push(oci::Mount {
+                destination,
+                r#type,
+                source,
+                options,
+            });
+        }
 
         Ok(())
     }
@@ -503,6 +525,14 @@ impl InfraPolicy {
         let host_path = yaml_volume.hostPath.as_ref().unwrap().path.clone();
         let path = Path::new(&host_path);
 
+        let mut biderectional = false;
+        if let Some(mount_propagation) = &yaml_mount.mountPropagation {
+            if mount_propagation.eq("Bidirectional") {
+                info!("host_path_mount: Bidirectional");
+                biderectional = true;
+            }
+        }
+
         // TODO:
         //
         // - When volume.hostPath.path: /dev/ttyS0
@@ -511,33 +541,50 @@ impl InfraPolicy {
         //      "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-results$"
         //
         // What is the reason for this source path difference in the Guest OS?
-        if path.starts_with("/dev/") {
-            policy_mounts.push(oci::Mount {
-                destination: yaml_mount.mountPath.to_string(),
-                r#type: "bind".to_string(),
-                source: host_path,
-                options: vec![
-                    "rbind".to_string(),
-                    "rprivate".to_string(),
-                    "rw".to_string(),
-                ],
-            });
-        } else {
-            let mut source = self.shared_files.source_path.to_string();
+        if !path.starts_with("/dev/") && !path.starts_with("/sys/") {
+            info!("host_path_mount: calling shared_bind_mount");
+            return self.shared_bind_mount(yaml_mount, policy_mounts, biderectional);
+            /*
+            source = self.shared_files.source_path.to_string();
             source += &path.file_name().unwrap().to_str().unwrap();
             source += "$";
+            */
+        }
 
+        let source = host_path.clone();
+        let destination = yaml_mount.mountPath.to_string();
+        let r#type = "bind".to_string();
+
+        let mut mount_option = "rprivate".to_string();
+        if biderectional {
+            mount_option = "rshared".to_string();
+        }
+        let options = vec!["rbind".to_string(), mount_option, "rw".to_string()];
+
+        if let Some(policy_mount) = policy_mounts
+            .iter_mut()
+            .find(|m| m.destination.eq(&destination))
+        {
+            info!(
+                "host_path_mount: updating destination = {}, source = {}",
+                &destination, &source
+            );
+            policy_mount.r#type = r#type;
+            policy_mount.source = source;
+            policy_mount.options = options;
+        } else {
+            info!(
+                "host_path_mount: adding destination = {}, source = {}",
+                &destination, &source
+            );
             policy_mounts.push(oci::Mount {
-                destination: yaml_mount.mountPath.to_string(),
-                r#type: "bind".to_string(),
+                destination,
+                r#type,
                 source,
-                options: vec![
-                    "rbind".to_string(),
-                    "rprivate".to_string(),
-                    "rw".to_string(),
-                ],
+                options,
             });
         }
+
         Ok(())
     }
 
