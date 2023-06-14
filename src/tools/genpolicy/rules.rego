@@ -43,7 +43,8 @@ default WriteStreamRequest := true
 
 ######################################################################
 CreateContainerRequest {
-    policy_container := policy_data.containers[_]
+    some policy_container in policy_data.containers
+
     policy_oci := policy_container.oci
     policy_storages := policy_container.storages
 
@@ -279,13 +280,16 @@ allow_linux(policy_oci, input_oci) {
 
 ######################################################################
 allow_masked_paths(policy_oci, input_oci) {
-    print("allow_masked_paths 1: policy maskedPaths =", policy_oci.linux.maskedPaths, "input maskedPaths =", input_oci.linux.maskedPaths)
+    print("allow_masked_paths 1: policy maskedPaths =", policy_oci.linux.maskedPaths)
+    print("allow_masked_paths 1: input maskedPaths =", input_oci.linux.maskedPaths)
+
     allow_array(policy_oci.linux.maskedPaths, input_oci.linux.maskedPaths)
 
     print("allow_masked_paths 1: success")
 }
 allow_masked_paths(policy_oci, input_oci) {
     print("allow_masked_paths 2: no maskedPaths")
+
     not policy_oci.linux.maskedPaths
     not input_oci.linux.maskedPaths
 
@@ -294,13 +298,16 @@ allow_masked_paths(policy_oci, input_oci) {
 
 ######################################################################
 allow_readonly_paths(policy_oci, input_oci) {
-    print("allow_readonly_paths 1: policy readonlyPaths =", policy_oci.linux.readonlyPaths, "input readonlyPaths =", input_oci.linux.readonlyPaths)
+    print("allow_readonly_paths 1: policy readonlyPaths =", policy_oci.linux.readonlyPaths)
+    print("allow_readonly_paths 1: input readonlyPaths =", input_oci.linux.readonlyPaths)
+
     allow_array(policy_oci.linux.readonlyPaths, input_oci.linux.readonlyPaths)
 
     print("allow_readonly_paths 1: success")
 }
 allow_readonly_paths(policy_oci, input_oci) {
     print("allow_readonly_paths 2: no readonlyPaths")
+
     not policy_oci.linux.readonlyPaths
     not input_oci.linux.readonlyPaths
 
@@ -309,10 +316,18 @@ allow_readonly_paths(policy_oci, input_oci) {
 
 ######################################################################
 allow_array(policy_array, input_array) {
-    policy_element := policy_array[_]
-    input_element := input_array[_]
+    every input_element in input_array {
+        allow_array_element(policy_array, input_element)
+    }
+}
 
+allow_array_element(policy_array, input_element) {
+    print("allow_array_element: input_element =", input_element)
+
+    some policy_element in policy_array
     policy_element == input_element
+
+    print("allow_array_element: success")
 }
 
 ######################################################################
@@ -436,8 +451,11 @@ allow_env(policy_process, input_process, sandbox_name) {
 
 # Allow input env variables that are present in the policy data too.
 allow_env_var(policy_process, input_process, env_var, sandbox_name) {
-    print("allow_env_var 1: policy_process.env[_] == env_var")
-    policy_process.env[_] == env_var
+    print("allow_env_var 1: some policy_env_var == env_var")
+
+    some policy_env_var in policy_process.env
+    policy_env_var == env_var
+
     print("allow_env_var 1: success")
 }
 
