@@ -6,15 +6,12 @@
 use std::collections::HashMap;
 use std::fs;
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, Read, Seek, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::iter;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
-
-use sha2::{digest::typenum::Unsigned, digest::OutputSizeUser, Sha256};
-use zerocopy::AsBytes;
 
 use tokio::sync::Mutex;
 
@@ -424,41 +421,6 @@ async fn virtiofs_storage_handler(
     _sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     common_storage_handler(logger, storage)
-}
-
-fn prepare_dm_target(path: &str) -> Result<(u64, u64, String, String)> {
-    let mut file = File::open(path)?;
-    let size = file.seek(std::io::SeekFrom::End(0))?;
-    if size < 4096 {
-        return Err(anyhow!("Block device ({path}) is too small: {size}"));
-    }
-
-    file.seek(std::io::SeekFrom::End(-4096))?;
-    let mut buf = [0u8; 4096];
-    file.read_exact(&mut buf)?;
-
-    let mut sb = verity::SuperBlock::default();
-    sb.as_bytes_mut()
-        .copy_from_slice(&buf[4096 - 512..][..std::mem::size_of::<verity::SuperBlock>()]);
-    let data_block_size = u64::from(sb.data_block_size.get());
-    let hash_block_size = u64::from(sb.hash_block_size.get());
-    let data_size = sb
-        .data_block_count
-        .get()
-        .checked_mul(data_block_size)
-        .ok_or_else(|| anyhow!("Invalid data size"))?;
-    if data_size > size {
-        return Err(anyhow!(
-            "Data size ({data_size}) is greater than device size ({size}) for device {path}"
-        ));
-    }
-
-    // TODO: Store other parameters in super block: version, hash type, salt.
-    let salt = [0u8; <Sha256 as OutputSizeUser>::OutputSize::USIZE];
-    let v = verity::Verity::<Sha256>::new(data_size, 4096, 4096, &salt, None)?;
-    let hash = verity::traverse_file(&file, 0, false, v)?;
-
-    Ok((0, data_size / 512, "verity".into(), format!("1 {path} {path} {data_block_size} {hash_block_size} {} {} sha256 {:x} 0000000000000000000000000000000000000000000000000000000000000000", data_size / data_block_size, (data_size + hash_block_size - 1) / hash_block_size, hash)))
 }
 
 // virtio_blk_storage_handler handles the storage for blk driver.
