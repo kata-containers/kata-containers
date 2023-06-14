@@ -361,7 +361,7 @@ pub fn get_container_policy(
         process.env.push("HOSTNAME=".to_string() + &pod_name);
     }
 
-    yaml_container.get_env_variables(&mut process.env, config_maps, &namespace)?;
+    yaml_container.get_env_variables(&mut process.env, config_maps, &namespace, &hostname)?;
     substitute_env_variables(&mut process.env);
 
     infra::get_process(&mut process, &infra_container)?;

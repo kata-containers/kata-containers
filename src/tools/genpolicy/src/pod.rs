@@ -71,6 +71,9 @@ pub struct PodSpec {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub terminationGracePeriodSeconds: Option<i64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tolerations: Option<Vec<Toleration>>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -163,6 +166,9 @@ pub struct Probe {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeoutSeconds: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub periodSeconds: Option<i32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub failureThreshold: Option<i32>,
@@ -314,16 +320,18 @@ pub struct ObjectFieldSelector {
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
-/// See VolumeMount in the Kubernetes API reference.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VolumeMount {
     pub mountPath: String,
     pub name: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mountPropagation: Option<String>,
     // TODO: additional fields.
 }
 
-/// See ResourceRequirements in the Kubernetes API reference.
+/// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ResourceRequirements {
@@ -333,6 +341,15 @@ pub struct ResourceRequirements {
     #[serde(skip_serializing_if = "Option::is_none")]
     limits: Option<BTreeMap<String, String>>,
     // TODO: claims field.
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Toleration {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    operator: Option<String>,
+    // TODO: additional fields.
 }
 
 /// See Reference / Kubernetes API / Common Definitions / LocalObjectReference.
@@ -348,11 +365,12 @@ impl Container {
         dest_env: &mut Vec<String>,
         config_maps: &Vec<config_map::ConfigMap>,
         namespace: &str,
+        hostname: &str,
     ) -> Result<()> {
         if let Some(source_env) = &self.env {
             for env_variable in source_env {
                 let mut src_string = env_variable.name.clone() + "=";
-                src_string += &env_variable.get_value(config_maps, namespace)?;
+                src_string += &env_variable.get_value(config_maps, namespace, hostname)?;
                 if !dest_env.contains(&src_string) {
                     dest_env.push(src_string.clone());
                 }
@@ -436,6 +454,7 @@ impl EnvVar {
         &self,
         config_maps: &Vec<config_map::ConfigMap>,
         namespace: &str,
+        hostname: &str,
     ) -> Result<String> {
         if let Some(value) = &self.value {
             return Ok(value.clone());
@@ -447,19 +466,15 @@ impl EnvVar {
                 match path {
                     "metadata.namespace" => return Ok(namespace.to_string()),
                     "status.podIP" => return Ok("$(pod-ip)".to_string()),
-                    _ => {
-                        return Err(anyhow!(
-                            "Unsupported field reference {}",
-                            &field_ref.fieldPath
-                        ))
-                    }
+                    "spec.nodeName" => return Ok(hostname.to_string()),
+                    _ => panic!("Unsupported field reference: {}", &field_ref.fieldPath),
                 }
             }
         } else {
             panic!("Environment variable without value or valueFrom!");
         }
 
-        Err(anyhow!("Unknown EnvVar value - {}", &self.name))
+        Err(anyhow!("Unknown EnvVar value: {}", &self.name))
     }
 }
 
