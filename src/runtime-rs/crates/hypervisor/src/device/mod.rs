@@ -50,7 +50,7 @@ impl fmt::Display for DeviceType {
 }
 
 #[async_trait]
-pub trait Device: Send + Sync {
+pub trait Device: std::fmt::Debug + Send + Sync {
     // attach is to plug device into VM
     async fn attach(&mut self, h: &dyn hypervisor) -> Result<()>;
     // detach is to unplug device from VM
