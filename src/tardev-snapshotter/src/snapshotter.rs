@@ -222,11 +222,10 @@ impl TarDevSnapshotter {
 
             // TODO: Decompress in stream instead of reopening.
             // Decompress data.
-            let mut file;
             trace!("Decompressing {:?} to {:?}", &gzname, &name);
-            {
+            let root_hash = tokio::task::spawn_blocking(move || -> io::Result<_> {
                 let compressed = fs::File::open(&gzname)?;
-                file = OpenOptions::new()
+                let mut file = OpenOptions::new()
                     .read(true)
                     .write(true)
                     .create(true)
@@ -234,15 +233,19 @@ impl TarDevSnapshotter {
                     .open(&name)?;
                 let mut gz_decoder = flate2::read::GzDecoder::new(compressed);
                 std::io::copy(&mut gz_decoder, &mut file)?;
-            }
 
-            trace!("Appending index to {:?}", &name);
-            file.rewind()?;
-            tarindex::append_index(&mut file)?;
+                trace!("Appending index to {:?}", &name);
+                file.rewind()?;
+                tarindex::append_index(&mut file)?;
 
-            trace!("Appending dm-verity tree to {:?}", &name);
-            let root_hash = verity::append_tree::<Sha256>(&mut file)?;
-            trace!("Root hash for {:?} is {:x}", &name, root_hash);
+                trace!("Appending dm-verity tree to {:?}", &name);
+                let root_hash = verity::append_tree::<Sha256>(&mut file)?;
+
+                trace!("Root hash for {:?} is {:x}", &name, root_hash);
+                Ok(root_hash)
+            })
+            .await
+            .map_err(|_| Status::unknown("error in worker task"))??;
 
             // Store a label with the root hash so that we can recall it later when mounting.
             labels.insert(ROOT_HASH_LABEL.into(), format!("{:x}", root_hash));
