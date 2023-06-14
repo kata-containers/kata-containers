@@ -157,6 +157,12 @@ USE_PODMAN          If set and USE_DOCKER not set, then build the rootfs inside
                     a podman container (requires podman).
                     Default value: <not set>
 
+AA_KBC              Key broker client module for attestation-agent. This is
+                    required for confidential containers.
+                    See https://github.com/containers/attestation-agent
+                    for more information on available modules.
+                    Default value: <not set>
+
 Refer to the Platform-OS Compatibility Matrix for more details on the supported
 architectures:
 https://github.com/kata-containers/kata-containers/tree/main/tools/osbuilder#platform-distro-compatibility-matrix
@@ -442,6 +448,7 @@ build_rootfs_distro()
 			--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
 			--env OS_VERSION="${OS_VERSION}" \
 			--env INSIDE_CONTAINER=1 \
+			--env AA_KBC="${AA_KBC}" \
 			--env SECCOMP="${SECCOMP}" \
 			--env SELINUX="${SELINUX}" \
 			--env DEBUG="${DEBUG}" \
@@ -642,6 +649,23 @@ EOF
 	fi
 	info "Create /etc/resolv.conf file in rootfs if not exist"
 	touch "$dns_file"
+
+
+	if [ -n "${AA_KBC}" ]; then
+		attestation_agent_url="$(get_package_version_from_kata_yaml externals.attestation-agent.url)"
+		attestation_agent_version="$(get_package_version_from_kata_yaml externals.attestation-agent.version)"
+		info "Install attestation-agent with KBC ${AA_KBC}"
+
+		git clone --depth=1 "${attestation_agent_url}" attestation-agent
+		pushd attestation-agent
+		git fetch --depth=1 origin "${attestation_agent_version}"
+		git checkout FETCH_HEAD
+
+		[ "${AA_KBC}" == "cc_kbc_tdx" ] && [ "${ARCH}" == "x86_64" ] && LIBC="gnu"
+		make KBC=${AA_KBC} grpc=true && make install DESTDIR="${ROOTFS_DIR}/usr/local/bin/"
+		popd
+
+	fi
 
 	info "Creating summary file"
 	create_summary_file "${ROOTFS_DIR}"

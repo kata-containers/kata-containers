@@ -198,6 +198,11 @@ assets:
 externals:
   description: "Third-party projects used by the system"
 
+  attestation-agent:
+    description: "In-guest utility for attestation and secret delivery"
+    url: "https://github.com/confidential-containers/attestation-agent"
+    version: "v0.6.0"
+
   cni-plugins:
     description: "CNI network plugins"
     url: "https://github.com/containernetworking/plugins"
