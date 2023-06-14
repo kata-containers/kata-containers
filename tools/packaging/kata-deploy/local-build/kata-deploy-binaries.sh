@@ -199,6 +199,8 @@ install_initrd() {
 
 	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${initrd_type}-$(uname -m)/${cached_artifacts_path}"
 	local component="rootfs-${initrd_type}"
+	
+	export AA_KBC="${3:-""}"
 
 	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
 	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
@@ -237,7 +239,7 @@ install_initrd_mariner() {
 
 #Install guest initrd for sev
 install_initrd_sev() {
-	install_initrd "sev"
+	install_initrd "initrd-sev" "sev" "online_sev_kbc,cc_kbc_snp" 
 }
 
 #Install kernel component helper
