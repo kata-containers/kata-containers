@@ -308,7 +308,9 @@ impl InfraPolicy {
                     storages,
                 );
             } else if yaml_volume.persistentVolumeClaim.is_some() {
-                self.volume_claim_mount(yaml_mount, policy_mounts)?;
+                self.shared_bind_mount(yaml_mount, policy_mounts)?;
+            } else if yaml_volume.azureFile.is_some() {
+                self.shared_bind_mount(yaml_mount, policy_mounts)?;
             } else if yaml_volume.hostPath.is_some() {
                 self.host_path_mount(yaml_mount, yaml_volume, policy_mounts)?;
             } else if yaml_volume.configMap.is_some() {
@@ -436,7 +438,7 @@ impl InfraPolicy {
     //          "rw"
     //    ]
     // }
-    fn volume_claim_mount(
+    fn shared_bind_mount(
         &self,
         yaml_mount: &pod::VolumeMount,
         policy_mounts: &mut Vec<oci::Mount>,

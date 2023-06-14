@@ -25,6 +25,9 @@ pub struct Volume {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub configMap: Option<ConfigMapVolume>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub azureFile: Option<AzureFileVolumeSource>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -58,4 +61,14 @@ pub struct ConfigMapVolume {
 pub struct ConfigMapVolumeItem {
     pub key: String,
     pub path: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AzureFileVolumeSource {
+    pub secretName: String,
+    pub shareName: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub readOnly: Option<bool>,
 }
