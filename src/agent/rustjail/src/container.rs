@@ -80,6 +80,7 @@ const CLOG_FD: &str = "CLOG_FD";
 const FIFO_FD: &str = "FIFO_FD";
 const HOME_ENV_KEY: &str = "HOME";
 const PIDNS_FD: &str = "PIDNS_FD";
+const PIDNS_ENABLED: &str = "PIDNS_ENABLED";
 const CONSOLE_SOCKET_FD: &str = "CONSOLE_SOCKET_FD";
 
 #[derive(Debug)]
@@ -280,6 +281,17 @@ pub struct SyncPc {
     pid: pid_t,
 }
 
+#[derive(Debug, Clone)]
+pub struct PidNs {
+    enabled: bool,
+    fd: Option<i32>,
+}
+impl PidNs {
+    pub fn new(enabled: bool, fd: Option<i32>) -> Self {
+        Self { enabled, fd }
+    }
+}
+
 pub trait Container: BaseContainer {
     fn pause(&mut self) -> Result<()>;
     fn resume(&mut self) -> Result<()>;
@@ -339,16 +351,20 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let crfd = std::env::var(CRFD_FD)?.parse::<i32>().unwrap();
     let cfd_log = std::env::var(CLOG_FD)?.parse::<i32>().unwrap();
 
-    // get the pidns fd from parent, if parent had passed the pidns fd,
-    // then get it and join in this pidns; otherwise, create a new pidns
-    // by unshare from the parent pidns.
-    match std::env::var(PIDNS_FD) {
-        Ok(fd) => {
-            let pidns_fd = fd.parse::<i32>().context("get parent pidns fd")?;
-            sched::setns(pidns_fd, CloneFlags::CLONE_NEWPID).context("failed to join pidns")?;
-            let _ = unistd::close(pidns_fd);
+    if std::env::var(PIDNS_ENABLED)?.eq(format!("{}", true).as_str()) {
+        // get the pidns fd from parent, if parent had passed the pidns fd,
+        // then get it and join in this pidns; otherwise, create a new pidns
+        // by unshare from the parent pidns.
+        match std::env::var(PIDNS_FD) {
+            Ok(fd) => {
+                let pidns_fd = fd.parse::<i32>().context("get parent pidns fd")?;
+                sched::setns(pidns_fd, CloneFlags::CLONE_NEWPID).context("failed to join pidns")?;
+                let _ = unistd::close(pidns_fd);
+            }
+            Err(_e) => {
+                sched::unshare(CloneFlags::CLONE_NEWPID)?;
+            }
         }
-        Err(_e) => sched::unshare(CloneFlags::CLONE_NEWPID)?,
     }
 
     match unsafe { fork() } {
@@ -983,9 +999,13 @@ impl BaseContainer for LinuxContainer {
         }
 
         let pidns = get_pid_namespace(&self.logger, linux)?;
+        #[cfg(not(feature = "standard-oci-runtime"))]
+        if !pidns.enabled {
+            return Err(anyhow!("cannot find the pid ns"));
+        }
 
-        defer!(if let Some(pid) = pidns {
-            let _ = unistd::close(pid);
+        defer!(if let Some(fd) = pidns.fd {
+            let _ = unistd::close(fd);
         });
 
         let exec_path = std::env::current_exe()?;
@@ -1008,14 +1028,15 @@ impl BaseContainer for LinuxContainer {
             .env(CRFD_FD, format!("{}", crfd))
             .env(CWFD_FD, format!("{}", cwfd))
             .env(CLOG_FD, format!("{}", cfd_log))
-            .env(CONSOLE_SOCKET_FD, console_name);
+            .env(CONSOLE_SOCKET_FD, console_name)
+            .env(PIDNS_ENABLED, format!("{}", pidns.enabled));
 
         if p.init {
             child = child.env(FIFO_FD, format!("{}", fifofd));
         }
 
-        if pidns.is_some() {
-            child = child.env(PIDNS_FD, format!("{}", pidns.unwrap()));
+        if pidns.fd.is_some() {
+            child = child.env(PIDNS_FD, format!("{}", pidns.fd.unwrap()));
         }
 
         child.spawn()?;
@@ -1249,11 +1270,11 @@ pub fn update_namespaces(logger: &Logger, spec: &mut Spec, init_pid: RawFd) -> R
     Ok(())
 }
 
-fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<Option<RawFd>> {
+fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<PidNs> {
     for ns in &linux.namespaces {
         if ns.r#type == "pid" {
             if ns.path.is_empty() {
-                return Ok(None);
+                return Ok(PidNs::new(true, None));
             }
 
             let fd =
@@ -1269,11 +1290,11 @@ fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<Option<RawFd>> {
                     e
                 })?;
 
-            return Ok(Some(fd));
+            return Ok(PidNs::new(true, Some(fd)));
         }
     }
 
-    Err(anyhow!("cannot find the pid ns"))
+    Ok(PidNs::new(false, None))
 }
 
 fn is_userns_enabled(linux: &Linux) -> bool {
