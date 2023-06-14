@@ -206,8 +206,6 @@ impl TarDevSnapshotter {
                 .await
                 .map_err(|_| Status::internal("unable to authenticate"))?;
 
-            // TODO: Eventually when we have the layer reference-count, switch to use `digest_str`
-            // here.
             let name = dir.path().join(&key);
             let mut gzname = name.clone();
             gzname.set_extension("gz");
@@ -371,9 +369,6 @@ impl Snapshotter for TarDevSnapshotter {
             if info.kind == Kind::Committed {
                 if let Some(_digest) = info.labels.get(TARGET_LAYER_DIGEST_LABEL) {
                     // Try to delete a layer. It's ok if it's not found.
-                    // TODO: We need to ref-count the layer file so that we don't remove it here
-                    // when the first reference goes away. For now we're using the snapshot name
-                    // as the layer name, but eventually we want to use `digest`.
                     if let Err(e) = fs::remove_file(store.layer_path(&key)) {
                         if e.kind() != io::ErrorKind::NotFound {
                             return Err(e.into());
