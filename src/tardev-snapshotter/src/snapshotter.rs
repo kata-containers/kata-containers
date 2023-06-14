@@ -8,9 +8,7 @@ use tokio::sync::RwLock;
 use tonic::Status;
 
 const ROOT_HASH_LABEL: &str = "io.katacontainers.dm-verity.root-hash";
-const SNAPSHOT_REF_LABEL: &str = "containerd.io/snapshot.ref";
 const TARGET_LAYER_DIGEST_LABEL: &str = "containerd.io/snapshot/cri.layer-digest";
-const TARGET_REF_LABEL: &str = "containerd.io/snapshot/cri.image-ref";
 
 struct Store {
     root: PathBuf,
@@ -173,6 +171,8 @@ impl TarDevSnapshotter {
         parent: String,
         mut labels: HashMap<String, String>,
     ) -> Result<Vec<api::types::Mount>, Status> {
+        const TARGET_REF_LABEL: &str = "containerd.io/snapshot/cri.image-ref";
+
         let reference: Reference = {
             let image_ref = if let Some(r) = labels.get(TARGET_REF_LABEL) {
                 r
@@ -319,6 +319,8 @@ impl Snapshotter for TarDevSnapshotter {
         parent: String,
         labels: HashMap<String, String>,
     ) -> Result<Vec<api::types::Mount>, Status> {
+        const SNAPSHOT_REF_LABEL: &str = "containerd.io/snapshot.ref";
+
         trace!("prepare({}, {}, {:?})", key, parent, labels);
 
         // There are two reasons for preparing a snapshot: to build an image and to actually use it
