@@ -1,0 +1,7 @@
+arch:
+  - amd64
+  - ppc64le
+language: go
+
+before_script:
+  - go get golang.org/x/sys/unix
