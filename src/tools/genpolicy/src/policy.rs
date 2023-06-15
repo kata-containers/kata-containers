@@ -191,13 +191,17 @@ impl AgentPolicy {
 
         for k8s_object in &mut self.k8s_objects {
             if k8s_object.requires_policy() {
-                let rules = read_to_string(&self.rules_input_file)?;
-                k8s_object.generate_policy(
-                    &rules,
-                    &self.infra_policy,
-                    &self.config_maps,
-                    config,
-                )?;
+                if let Ok(rules) = read_to_string(&self.rules_input_file) {
+                    k8s_object.generate_policy(
+                        &rules,
+                        &self.infra_policy,
+                        &self.config_maps,
+                        config,
+                    )?;
+                } else {
+                    panic!("Cannot open file {}. Please copy it to the current directory or specify the path to it using the -i parameter.", 
+                        &self.rules_input_file);
+                }
             }
 
             yaml_string += &k8s_object.serialize()?;

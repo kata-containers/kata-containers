@@ -99,11 +99,17 @@ struct SharedFiles {
 impl InfraPolicy {
     pub fn new(infra_data_file: &str) -> Result<Self> {
         debug!("Loading containers policy data...");
-        let mut infra_policy: Self = serde_json::from_reader(File::open(infra_data_file)?)?;
-        add_pause_container_data(&mut infra_policy.pause_container);
-        add_other_container_data(&mut infra_policy.other_container);
-        debug!("Finished loading containers policy data.");
-        Ok(infra_policy)
+
+        if let Ok(file) = File::open(infra_data_file) {
+            let mut infra_policy: Self = serde_json::from_reader(file).unwrap();
+            add_pause_container_data(&mut infra_policy.pause_container);
+            add_other_container_data(&mut infra_policy.other_container);
+            debug!("Finished loading containers policy data.");
+            Ok(infra_policy)
+        } else {
+            panic!("Cannot open file {}. Please copy it to the current directory or specify the path to it using the -i parameter.", 
+                infra_data_file);
+        }
     }
 }
 
