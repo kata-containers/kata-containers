@@ -592,11 +592,15 @@ func addHypervisorHotColdPlugVfioOverrides(ocispec specs.Spec, sbConfig *vc.Sand
 		if sbConfig.HypervisorConfig.HotPlugVFIO, err = addHypervisorPCIePortOverride(value); err != nil {
 			return err
 		}
+		// If hot-plug is specified disable cold-plug and vice versa
+		sbConfig.HypervisorConfig.ColdPlugVFIO = config.NoPort
 	}
 	if value, ok := ocispec.Annotations[vcAnnotations.ColdPlugVFIO]; ok {
 		if sbConfig.HypervisorConfig.ColdPlugVFIO, err = addHypervisorPCIePortOverride(value); err != nil {
 			return err
 		}
+		// If cold-plug is specified disable hot-plug and vice versa
+		sbConfig.HypervisorConfig.HotPlugVFIO = config.NoPort
 	}
 	return nil
 }

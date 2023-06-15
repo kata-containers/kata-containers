@@ -71,8 +71,6 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 	}
 	for _, vfio := range device.VfioDevs {
 		if vfio.IsPCIe {
-			//vfio.Rank = len(AllPCIeDevs)
-			//AllPCIeDevs[vfio.BDF] = true
 			busIndex := len(config.PCIeDevices[vfio.Port])
 			vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], busIndex)
 			config.PCIeDevices[vfio.Port][vfio.BDF] = true
